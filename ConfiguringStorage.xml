@@ -19,7 +19,7 @@
     </listitem>
     <listitem>
       <para>
-            <xref linkend="dbdoclet.50438208_51921"/>
+            <xref linkend="dbdoclet.ldiskfs_raid_opts"/>
         </para>
     </listitem>
     <listitem>
@@ -66,17 +66,31 @@
     <para>If writeback cache is enabled, a file system check is required after the array loses power. Data may also be lost because of this.</para>
     <para>Therefore, we recommend against the use of writeback cache when data integrity is critical. You should carefully consider whether the benefits of using writeback cache outweigh the risks.</para>
   </section>
-  <section xml:id="dbdoclet.50438208_51921">
-    <title><indexterm><primary>storage</primary><secondary>configuring</secondary><tertiary>RAID options</tertiary></indexterm>Formatting Options for RAID Devices</title>
-    <para>When formatting a file system on a RAID device, it is beneficial to ensure that I/O
-      requests are aligned with the underlying RAID geometry. This ensures that Lustre RPCs do not
-      generate unnecessary disk operations which may reduce performance dramatically. Use the
-        <literal>--mkfsoptions</literal> parameter to specify additional parameters when formatting
-      the OST or MDT.</para>
-    <para>For RAID 5, RAID 6, or RAID 1+0 storage, specifying the following option to the <literal>--mkfsoptions</literal> parameter option improves the layout of the file system metadata, ensuring that no single disk contains all of the allocation bitmaps:</para>
+  <section xml:id="dbdoclet.ldiskfs_raid_opts">
+    <title>
+      <indexterm>
+        <primary>storage</primary>
+        <secondary>configuring</secondary>
+	<tertiary>RAID options</tertiary>
+      </indexterm>Formatting Options for ldiskfs RAID Devices</title>
+    <para>When formatting an ldiskfs file system on a RAID device, it can be
+    beneficial to ensure that I/O requests are aligned with the underlying
+    RAID geometry. This ensures that Lustre RPCs do not generate unnecessary
+    disk operations which may reduce performance dramatically. Use the
+    <literal>--mkfsoptions</literal> parameter to specify additional parameters
+    when formatting the OST or MDT.</para>
+    <para>For RAID 5, RAID 6, or RAID 1+0 storage, specifying the following
+    option to the <literal>--mkfsoptions</literal> parameter option improves
+    the layout of the file system metadata, ensuring that no single disk
+    contains all of the allocation bitmaps:</para>
     <screen>-E stride = <replaceable>chunk_blocks</replaceable> </screen>
-    <para>The <literal><replaceable>chunk_blocks</replaceable></literal> variable is in units of 4096-byte blocks and represents the amount of contiguous data written to a single disk before moving to the next disk. This is alternately referred to as the RAID stripe size. This is applicable to both MDT and OST file systems.</para>
-    <para>For more information on how to override the defaults while formatting MDT or OST file systems, see <xref linkend="dbdoclet.50438256_84701"/>.</para>
+    <para>The <literal><replaceable>chunk_blocks</replaceable></literal>
+    variable is in units of 4096-byte blocks and represents the amount of
+    contiguous data written to a single disk before moving to the next disk.
+    This is alternately referred to as the RAID stripe size. This is
+    applicable to both MDT and OST file systems.</para>
+    <para>For more information on how to override the defaults while formatting
+    MDT or OST file systems, see <xref linkend="dbdoclet.ldiskfs_mkfs_opts"/>.</para>
     <section remap="h3">
       <title><indexterm><primary>storage</primary><secondary>configuring</secondary><tertiary>for mkfs</tertiary></indexterm>Computing file system parameters for mkfs</title>
       <para>For best results, use RAID 5 with 5 or 9 disks or RAID 6 with 6 or 10 disks, each on a different controller. The stripe width is the optimal minimum I/O size. Ideally, the RAID configuration should allow 1 MB Lustre RPCs to fit evenly on a single RAID stripe without an expensive read-modify-write cycle. Use this formula to determine the
@@ -132,7 +146,7 @@
         <listitem>
           <para>Create the OST.</para>
           <para>In this example, <literal>/dev/sdc</literal> is the RAID 6 device to be used as the OST, run:</para>
-          <screen>[oss#] mkfs.lustre --mgsnode=mds@osib --ost --index=0 \
+          <screen>[oss#] mkfs.lustre --ost ... \
 --mkfsoptions=&quot;-J device=/dev/sdb1&quot; /dev/sdc</screen>
         </listitem>
         <listitem>

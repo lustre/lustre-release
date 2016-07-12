@@ -17,7 +17,7 @@
     </listitem>
     <listitem>
       <para>
-          <xref linkend="dbdoclet.50438256_84701"/>
+          <xref linkend="dbdoclet.ldiskfs_mkfs_opts"/>
       </para>
     </listitem>
     <listitem>
@@ -276,14 +276,22 @@
       See <xref linkend="dbdoclet.ldiskfs_ost_mkfs"/> for more details.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438256_84701">
-      <title>
-          <indexterm><primary>file system</primary><secondary>formatting options</secondary></indexterm>
-          <indexterm><primary>setup</primary><secondary>file system</secondary></indexterm>
-          Setting File System Formatting Options</title>
-    <para>By default, the <literal>mkfs.lustre</literal> utility applies these options to the Lustre
-      backing file system used to store data and metadata in order to enhance Lustre file system
-      performance and scalability. These options include:</para>
+  <section xml:id="dbdoclet.ldiskfs_mkfs_opts">
+    <title>
+      <indexterm>
+        <primary>ldiskfs</primary>
+	<secondary>formatting options</secondary>
+      </indexterm>
+      <indexterm>
+        <primary>setup</primary>
+	<secondary>ldiskfs</secondary>
+      </indexterm>
+      Setting ldiskfs File System Formatting Options
+    </title>
+    <para>By default, the <literal>mkfs.lustre</literal> utility applies these
+    options to the Lustre backing file system used to store data and metadata
+    in order to enhance Lustre file system performance and scalability. These
+    options include:</para>
         <itemizedlist>
             <listitem>
               <para><literal>flex_bg</literal> - When the flag is set to enable this
@@ -359,7 +367,7 @@
           <primary>inodes</primary>
           <secondary>OST</secondary>
         </indexterm>Setting Formatting Options for an ldiskfs OST</title>
-      <para>When formatting an OST file system, it is normally advantageous
+      <para>When formatting an OST file system, it can be beneficial
       to take local file system usage into account. When doing so, try to
       reduce the number of inodes on each OST, while keeping enough margin
       for potential variations in future usage. This helps reduce the format
@@ -369,8 +377,8 @@
       used for OSTs of various sizes when they are formatted.</para>
       <para>
         <table frame="all">
-          <title xml:id="settinguplustresystem.tab1">Inode Ratios Used for Newly Formatted
-            OSTs</title>
+          <title xml:id="settinguplustresystem.tab1">Default Inode Ratios
+	  Used for Newly Formatted OSTs</title>
           <tgroup cols="3">
             <colspec colname="c1" colwidth="3*"/>
             <colspec colname="c2" colwidth="2*"/>
@@ -381,7 +389,7 @@
                   <para><emphasis role="bold">LUN/OST size</emphasis></para>
                 </entry>
                 <entry>
-                  <para><emphasis role="bold">Inode ratio</emphasis></para>
+                  <para><emphasis role="bold">Default Inode ratio</emphasis></para>
                 </entry>
                 <entry>
                   <para><emphasis role="bold">Total inodes</emphasis></para>
@@ -441,9 +449,22 @@
       may result in far too many inodes for the average file size. In this
       case, performance can be improved by increasing the number of
       <emphasis role="italic">bytes-per-inode</emphasis>.  To set the inode
-      ratio, use the <literal>-i</literal> argument to
-      <literal>mkfs.lustre</literal> to specify the
-      <emphasis role="italic">bytes-per-inode</emphasis> value.</para>
+      ratio, use the <literal>--mkfsoptions="-i <replaceable>bytes-per-inode</replaceable>"</literal>
+      argument to <literal>mkfs.lustre</literal> to specify the expected
+      average (mean) size of OST objects.  For example, to create an OST
+      with an expected average object size of 8MB run:
+      <screen>[oss#] mkfs.lustre --ost --mkfsoptions=&quot;-i $((8192 * 1024))&quot; ...</screen>
+      </para>
+      <note>
+        <para>OSTs formatted with ldiskfs are limited to a maximum of
+	320 million to 1 billion objects.  Specifying a very small
+	bytes-per-inode ratio for a large OST that causes this limit to be
+	exceeded can cause either premature out-of-space errors and prevent
+	the full OST space from being used, or will waste space and slow down
+	e2fsck more than necessary.  The default inode ratios are chosen to
+	ensure that the total number of inodes remain below this limit.
+	</para>
+      </note>
       <note>
         <para>File system check time on OSTs is affected by a number of
 	variables in addition to the number of inodes, including the size of
@@ -454,7 +475,7 @@
 	if substantial errors are detected and need to be required.</para>
       </note>
       <para>For more details about formatting MDT and OST file systems,
-      see <xref linkend="dbdoclet.50438208_51921"/>.</para>
+      see <xref linkend="dbdoclet.ldiskfs_raid_opts"/>.</para>
     </section>
     <section remap="h3">
       <title><indexterm>
