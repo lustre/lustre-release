@@ -235,18 +235,16 @@ int check_mtab_entry(char *spec1, char *spec2, char *mtpt, char *type)
 	return 0;
 }
 
-#define PROC_DIR	"/proc/"
+#include <sys/vfs.h>
+#include <linux/magic.h>
+
 static int mtab_is_proc(const char *mtab)
 {
-	char path[16];
-
-	if (readlink(mtab, path, sizeof(path)) < 0)
+	struct statfs s;
+	if (statfs(mtab, &s) < 0)
 		return 0;
 
-	if (strncmp(path, PROC_DIR, strlen(PROC_DIR)))
-		return 0;
-
-	return 1;
+	return (s.f_type == PROC_SUPER_MAGIC);
 }
 
 #ifdef HAVE_LIBMOUNT
@@ -315,12 +313,12 @@ int update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 
 	fp = setmntent(MOUNTED, "a+");
 	if (fp == NULL) {
-		fprintf(stderr, "%s: setmntent(%s): %s:",
+		fprintf(stderr, "%s: setmntent(%s): %s\n",
 			progname, MOUNTED, strerror (errno));
 		rc = 16;
 	} else {
 		if ((addmntent(fp, &mnt)) == 1) {
-			fprintf(stderr, "%s: addmntent: %s:",
+			fprintf(stderr, "%s: addmntent: %s\n",
 				progname, strerror (errno));
 			rc = 16;
 		}
