@@ -329,32 +329,27 @@ struct osc_lock {
  * Page state private for osc layer.
  */
 struct osc_page {
-        struct cl_page_slice  ops_cl;
-        /**
-         * Page queues used by osc to detect when RPC can be formed.
-         */
-        struct osc_async_page ops_oap;
-        /**
-         * An offset within page from which next transfer starts. This is used
-         * by cl_page_clip() to submit partial page transfers.
-         */
-        int                   ops_from;
-        /**
-         * An offset within page at which next transfer ends.
-         *
-         * \see osc_page::ops_from.
-         */
-        int                   ops_to;
-        /**
-         * Boolean, true iff page is under transfer. Used for sanity checking.
-         */
-        unsigned              ops_transfer_pinned:1,
-        /**
-         * True for a `temporary page' created by read-ahead code, probably
-         * outside of any DLM lock.
-         */
-                              ops_temp:1,
-        /**
+	struct cl_page_slice  ops_cl;
+	/**
+	 * Page queues used by osc to detect when RPC can be formed.
+	 */
+	struct osc_async_page ops_oap;
+	/**
+	 * An offset within page from which next transfer starts. This is used
+	 * by cl_page_clip() to submit partial page transfers.
+	 */
+	int                   ops_from;
+	/**
+	 * An offset within page at which next transfer ends.
+	 *
+	 * \see osc_page::ops_from.
+	 */
+	int                   ops_to;
+	/**
+	 * Boolean, true iff page is under transfer. Used for sanity checking.
+	 */
+	unsigned              ops_transfer_pinned:1,
+	/**
 	 * in LRU?
 	 */
 			      ops_in_lru:1,

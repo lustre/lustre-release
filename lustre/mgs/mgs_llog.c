@@ -3713,40 +3713,6 @@ end:
         RETURN(rc ?: rc2);
 }
 
-/* Not implementing automatic failover nid addition at this time. */
-int mgs_check_failnid(const struct lu_env *env, struct mgs_device *mgs,
-		      struct mgs_target_info *mti)
-{
-#if 0
-        struct fs_db *fsdb;
-        int rc;
-        ENTRY;
-
-        rc = mgs_find_or_make_fsdb(obd, fsname, &fsdb);
-        if (rc)
-                RETURN(rc);
-
-        if (mgs_log_is_empty(obd, mti->mti_svname))
-                /* should never happen */
-                RETURN(-ENOENT);
-
-        CDEBUG(D_MGS, "Checking for new failnids for %s\n", mti->mti_svname);
-
-        /* FIXME We can just check mti->params to see if we're already in
-           the failover list.  Modify mti->params for rewriting back at
-           server_register_target(). */
-
-	mutex_lock(&fsdb->fsdb_mutex);
-        rc = mgs_write_log_add_failnid(obd, fsdb, mti);
-	mutex_unlock(&fsdb->fsdb_mutex);
-	char	*buf, *params;
-	int	 rc = -EINVAL;
-
-        RETURN(rc);
-#endif
-        return 0;
-}
-
 int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs,
 			 struct mgs_target_info *mti, struct fs_db *fsdb)
 {

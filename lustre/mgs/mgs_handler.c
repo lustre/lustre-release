@@ -304,10 +304,7 @@ static int mgs_check_target(const struct lu_env *env,
                 rc = 1;
         } else {
                 /* Index is correctly marked as used */
-
-                /* If the logs don't contain the mti_nids then add
-                   them as failover nids */
-		rc = mgs_check_failnid(env, mgs, mti);
+		rc = 0;
         }
 
         RETURN(rc);

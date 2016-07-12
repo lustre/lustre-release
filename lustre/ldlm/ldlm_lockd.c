@@ -1268,23 +1268,6 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                 GOTO(out, rc = -EPROTO);
         }
 
-#if 0
-        /* FIXME this makes it impossible to use LDLM_PLAIN locks -- check
-           against server's _CONNECT_SUPPORTED flags? (I don't want to use
-           ibits for mgc/mgs) */
-
-        /* INODEBITS_INTEROP: Perform conversion from plain lock to
-         * inodebits lock if client does not support them. */
-	if (!(exp_connect_flags(req->rq_export) & OBD_CONNECT_IBITS) &&
-            (dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN)) {
-                dlm_req->lock_desc.l_resource.lr_type = LDLM_IBITS;
-                dlm_req->lock_desc.l_policy_data.l_inodebits.bits =
-                        MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE;
-                if (dlm_req->lock_desc.l_req_mode == LCK_PR)
-                        dlm_req->lock_desc.l_req_mode = LCK_CR;
-        }
-#endif
-
 	if (unlikely((flags & LDLM_FL_REPLAY) ||
 		     (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))) {
                 /* Find an existing lock in the per-export lock hash */

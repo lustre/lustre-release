@@ -126,29 +126,6 @@ struct gss_header *gss_swab_header(struct lustre_msg *msg, int segment,
         return ghdr;
 }
 
-#if 0
-static
-void gss_netobj_swabber(netobj_t *obj)
-{
-        __swab32s(&obj->len);
-}
-
-netobj_t *gss_swab_netobj(struct lustre_msg *msg, int segment)
-{
-        netobj_t  *obj;
-
-        obj = lustre_swab_buf(msg, segment, sizeof(*obj), gss_netobj_swabber);
-        if (obj && sizeof(*obj) + obj->len > msg->lm_buflens[segment]) {
-                CERROR("netobj require length %u but only %u received\n",
-                       (unsigned int) sizeof(*obj) + obj->len,
-                       msg->lm_buflens[segment]);
-                return NULL;
-        }
-
-        return obj;
-}
-#endif
-
 /*
  * payload should be obtained from mechanism. but currently since we
  * only support kerberos, we could simply use fixed value.

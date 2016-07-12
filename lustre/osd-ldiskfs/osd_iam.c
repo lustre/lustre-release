@@ -424,32 +424,31 @@ static int iam_leaf_keyeq(const struct iam_leaf *leaf,
 }
 
 #if LDISKFS_INVARIANT_ON
-static int iam_leaf_check(struct iam_leaf *leaf);
 extern int dx_node_check(struct iam_path *p, struct iam_frame *f);
 
 static int iam_path_check(struct iam_path *p)
 {
-        int i;
-        int result;
-        struct iam_frame *f;
-        struct iam_descr *param;
+	int i;
+	int result;
+	struct iam_frame *f;
+	struct iam_descr *param;
 
-        result = 1;
-        param = iam_path_descr(p);
-        for (i = 0; result && i < ARRAY_SIZE(p->ip_frames); ++i) {
-                f = &p->ip_frames[i];
-                if (f->bh != NULL) {
-                        result = dx_node_check(p, f);
-                        if (result)
-                                result = !param->id_ops->id_node_check(p, f);
-                }
-        }
-        if (result && p->ip_leaf.il_bh != NULL)
-                result = iam_leaf_check(&p->ip_leaf);
-        if (result == 0) {
-                ldiskfs_std_error(iam_path_obj(p)->i_sb, result);
-        }
-        return result;
+	result = 1;
+	param = iam_path_descr(p);
+	for (i = 0; result && i < ARRAY_SIZE(p->ip_frames); ++i) {
+		f = &p->ip_frames[i];
+		if (f->bh != NULL) {
+			result = dx_node_check(p, f);
+			if (result)
+				result = !param->id_ops->id_node_check(p, f);
+		}
+	}
+	if (result && p->ip_leaf.il_bh != NULL)
+		result = 1;
+	if (result == 0)
+		ldiskfs_std_error(iam_path_obj(p)->i_sb, result);
+
+	return result;
 }
 #endif
 
@@ -479,7 +478,6 @@ static int iam_leaf_load(struct iam_path *path)
 		leaf->il_bh = bh;
 		leaf->il_curidx = block;
 		err = iam_leaf_ops(leaf)->init(leaf);
-		assert_inv(ergo(err == 0, iam_leaf_check(leaf)));
 	}
 	return err;
 }
@@ -506,7 +504,6 @@ static void iam_leaf_fini(struct iam_leaf *leaf)
 {
         if (leaf->il_path != NULL) {
                 iam_leaf_unlock(leaf);
-                assert_inv(ergo(leaf->il_bh != NULL, iam_leaf_check(leaf)));
                 iam_leaf_ops(leaf)->fini(leaf);
                 if (leaf->il_bh) {
                         brelse(leaf->il_bh);
@@ -558,46 +555,6 @@ int iam_leaf_can_add(const struct iam_leaf *l,
 {
         return iam_leaf_ops(l)->can_add(l, k, r);
 }
-
-#if LDISKFS_INVARIANT_ON
-static int iam_leaf_check(struct iam_leaf *leaf)
-{
-        return 1;
-#if 0
-        struct iam_lentry    *orig;
-        struct iam_path      *path;
-        struct iam_container *bag;
-        struct iam_ikey       *k0;
-        struct iam_ikey       *k1;
-        int result;
-        int first;
-
-        orig = leaf->il_at;
-        path = iam_leaf_path(leaf);
-        bag  = iam_leaf_container(leaf);
-
-        result = iam_leaf_ops(leaf)->init(leaf);
-        if (result != 0)
-                return result;
-
-        first = 1;
-        iam_leaf_start(leaf);
-        k0 = iam_path_ikey(path, 0);
-        k1 = iam_path_ikey(path, 1);
-        while (!iam_leaf_at_end(leaf)) {
-                iam_ikeycpy(bag, k0, k1);
-                iam_ikeycpy(bag, k1, iam_leaf_ikey(leaf, k1));
-                if (!first && iam_ikeycmp(bag, k0, k1) > 0) {
-                        return 0;
-                }
-                first = 0;
-                iam_leaf_next(leaf);
-        }
-        leaf->il_at = orig;
-        return 1;
-#endif
-}
-#endif
 
 static int iam_txn_dirty(handle_t *handle,
                          struct iam_path *path, struct buffer_head *bh)
@@ -1078,7 +1035,6 @@ static int iam_path_lookup(struct iam_path *path, int index)
         do_corr(schedule());
         if (result == 0) {
                 result = iam_leaf_load(path);
-                assert_inv(ergo(result == 0, iam_leaf_check(leaf)));
                 if (result == 0) {
                         do_corr(schedule());
                         if (index)
@@ -1782,8 +1738,6 @@ static int iam_new_leaf(handle_t *handle, struct iam_leaf *leaf)
         struct inode         *obj;
         struct iam_path      *path;
 
-        assert_inv(iam_leaf_check(leaf));
-
         c = iam_leaf_container(leaf);
         path = leaf->il_path;
 
@@ -1818,8 +1772,6 @@ static int iam_new_leaf(handle_t *handle, struct iam_leaf *leaf)
                         err = -ENOMEM;
 		brelse(new_leaf);
         }
-        assert_inv(iam_leaf_check(leaf));
-        assert_inv(iam_leaf_check(&iam_leaf_path(leaf)->ip_leaf));
         assert_inv(iam_path_check(iam_leaf_path(leaf)));
         return err;
 }
@@ -2153,7 +2105,6 @@ static int iam_add_rec(handle_t *handle, struct iam_iterator *it,
         struct iam_leaf *leaf;
 
         leaf = &path->ip_leaf;
-        assert_inv(iam_leaf_check(leaf));
         assert_inv(iam_path_check(path));
         err = iam_txn_add(handle, path, leaf->il_bh);
         if (err == 0) {
@@ -2196,8 +2147,6 @@ static int iam_add_rec(handle_t *handle, struct iam_iterator *it,
                         err = iam_txn_dirty(handle, path, leaf->il_bh);
                 }
         }
-        assert_inv(iam_leaf_check(leaf));
-        assert_inv(iam_leaf_check(&path->ip_leaf));
         assert_inv(iam_path_check(path));
         return err;
 }
@@ -2440,7 +2389,6 @@ int iam_it_rec_delete(handle_t *h, struct iam_iterator *it)
         path = &it->ii_path;
         leaf = &path->ip_leaf;
 
-        assert_inv(iam_leaf_check(leaf));
         assert_inv(iam_path_check(path));
 
         result = iam_txn_add(h, path, leaf->il_bh);
@@ -2467,7 +2415,6 @@ int iam_it_rec_delete(handle_t *h, struct iam_iterator *it)
 			}
 		}
         }
-        assert_inv(iam_leaf_check(leaf));
         assert_inv(iam_path_check(path));
         assert_corr(it_state(it) == IAM_IT_ATTACHED ||
                     it_state(it) == IAM_IT_DETACHED);

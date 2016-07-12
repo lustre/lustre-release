@@ -1079,24 +1079,23 @@ cache_check:
         rc = SECSVC_OK;
 
 out:
-        /* it looks like here we should put rsip also, but this mess up
-         * with NFS cache mgmt code... FIXME */
-#if 0
-        if (rsip)
-                rsi_put(&rsip->h, &rsi_cache);
-#endif
+	/* it looks like here we should put rsip also, but this mess up
+	 * with NFS cache mgmt code... FIXME
+	 * something like:
+	 * if (rsip)
+	 *     rsi_put(&rsip->h, &rsi_cache); */
 
-        if (rsci) {
-                /* if anything went wrong, we don't keep the context too */
-                if (rc != SECSVC_OK)
+	if (rsci) {
+		/* if anything went wrong, we don't keep the context too */
+		if (rc != SECSVC_OK)
 			set_bit(CACHE_NEGATIVE, &rsci->h.flags);
-                else
-                        CDEBUG(D_SEC, "create rsc with idx "LPX64"\n",
-                               gss_handle_to_u64(&rsci->handle));
+		else
+			CDEBUG(D_SEC, "create rsc with idx "LPX64"\n",
+			       gss_handle_to_u64(&rsci->handle));
 
-                COMPAT_RSC_PUT(&rsci->h, &rsc_cache);
-        }
-        RETURN(rc);
+		COMPAT_RSC_PUT(&rsci->h, &rsc_cache);
+	}
+	RETURN(rc);
 }
 
 struct gss_svc_ctx *gss_svc_upcall_get_ctx(struct ptlrpc_request *req,

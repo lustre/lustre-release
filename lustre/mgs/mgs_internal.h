@@ -201,8 +201,6 @@ int mgs_get_fsdb_srpc_from_llog(const struct lu_env *env,
 				struct mgs_device *mgs, struct fs_db *fsdb);
 int mgs_check_index(const struct lu_env *env, struct mgs_device *mgs,
 		    struct mgs_target_info *mti);
-int mgs_check_failnid(const struct lu_env *env, struct mgs_device *mgs,
-		      struct mgs_target_info *mti);
 int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs,
 			 struct mgs_target_info *mti, struct fs_db *fsdb);
 int mgs_replace_nids(const struct lu_env *env, struct mgs_device *mgs,

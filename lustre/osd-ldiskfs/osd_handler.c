@@ -2489,23 +2489,19 @@ static int osd_inode_setattr(const struct lu_env *env,
 	if (bits == 0)
 		return 0;
 
-        if (bits & LA_ATIME)
-                inode->i_atime  = *osd_inode_time(env, inode, attr->la_atime);
-        if (bits & LA_CTIME)
-                inode->i_ctime  = *osd_inode_time(env, inode, attr->la_ctime);
-        if (bits & LA_MTIME)
-                inode->i_mtime  = *osd_inode_time(env, inode, attr->la_mtime);
-        if (bits & LA_SIZE) {
-                LDISKFS_I(inode)->i_disksize = attr->la_size;
-                i_size_write(inode, attr->la_size);
-        }
+	if (bits & LA_ATIME)
+		inode->i_atime  = *osd_inode_time(env, inode, attr->la_atime);
+	if (bits & LA_CTIME)
+		inode->i_ctime  = *osd_inode_time(env, inode, attr->la_ctime);
+	if (bits & LA_MTIME)
+		inode->i_mtime  = *osd_inode_time(env, inode, attr->la_mtime);
+	if (bits & LA_SIZE) {
+		LDISKFS_I(inode)->i_disksize = attr->la_size;
+		i_size_write(inode, attr->la_size);
+	}
 
-#if 0
-        /* OSD should not change "i_blocks" which is used by quota.
-         * "i_blocks" should be changed by ldiskfs only. */
-        if (bits & LA_BLOCKS)
-                inode->i_blocks = attr->la_blocks;
-#endif
+	/* OSD should not change "i_blocks" which is used by quota.
+	 * "i_blocks" should be changed by ldiskfs only. */
 	if (bits & LA_MODE)
 		inode->i_mode = (inode->i_mode & S_IFMT) |
 				(attr->la_mode & ~S_IFMT);
@@ -2518,12 +2514,12 @@ static int osd_inode_setattr(const struct lu_env *env,
 	if (bits & LA_RDEV)
 		inode->i_rdev = attr->la_rdev;
 
-        if (bits & LA_FLAGS) {
-                /* always keep S_NOCMTIME */
-                inode->i_flags = ll_ext_to_inode_flags(attr->la_flags) |
-                                 S_NOCMTIME;
-        }
-        return 0;
+	if (bits & LA_FLAGS) {
+		/* always keep S_NOCMTIME */
+		inode->i_flags = ll_ext_to_inode_flags(attr->la_flags) |
+				 S_NOCMTIME;
+	}
+	return 0;
 }
 
 static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)

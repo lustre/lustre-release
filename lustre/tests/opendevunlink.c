@@ -132,15 +132,6 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
-#if 0
-        /* We cannot do this any longer, we do not store open special nodes
-         * on MDS after unlink */
-        if (st1.st_mode != st2.st_mode) {  // can we do this?
-                fprintf(stderr, "fstat different value on %s and %s\n",                                 dname1, dname2);
-                exit(1);
-        }
-#endif
-
         fprintf(stderr, "Ok, everything goes well.\n");
         return 0;
 }

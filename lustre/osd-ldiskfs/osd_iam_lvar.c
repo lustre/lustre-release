@@ -158,17 +158,6 @@ static void e_print(const struct lvar_leaf_entry *ent)
         printk("        %p %8.8x \"%*.*s\"\n", ent, e_hash(ent),
                e_keysize(ent), e_keysize(ent), e_char(ent));
 }
-#if 0
-static int e_check(const struct iam_leaf *leaf,
-                   const struct lvar_leaf_entry *ent)
-{
-        const void *point = ent;
-        const void *start = leaf->il_bh->b_data;
-        return
-                start + sizeof(struct lvar_leaf_header) <= point &&
-                point + e_size(leaf, ent) < start + blocksize(leaf);
-}
-#endif
 
 static inline struct lvar_leaf_entry *e_next(const struct iam_leaf *leaf,
                                              const struct lvar_leaf_entry *ent)

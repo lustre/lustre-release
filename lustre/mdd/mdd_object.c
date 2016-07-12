@@ -1665,21 +1665,6 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 			RETURN(-EPERM);
 	}
 
-#if 0
-        /*
-         * Now, flag -- O_NOATIME does not be packed by client.
-         */
-        if (flag & O_NOATIME) {
-		struct lu_ucred *uc = lu_ucred(env);
-
-		if (uc && ((uc->uc_valid == UCRED_OLD) ||
-			   (uc->uc_valid == UCRED_NEW)) &&
-		    (uc->uc_fsuid != attr->la_uid) &&
-		    !md_capable(uc, CFS_CAP_FOWNER))
-			RETURN(-EPERM);
-        }
-#endif
-
 	RETURN(0);
 }
 

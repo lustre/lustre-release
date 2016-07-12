@@ -492,34 +492,30 @@ static inline void enc_pools_wakeup(void)
 
 static int enc_pools_should_grow(int page_needed, long now)
 {
-        /* don't grow if someone else is growing the pools right now,
-         * or the pools has reached its full capacity
-         */
-        if (page_pools.epp_growing ||
-            page_pools.epp_total_pages == page_pools.epp_max_pages)
-                return 0;
+	/* don't grow if someone else is growing the pools right now,
+	 * or the pools has reached its full capacity
+	 */
+	if (page_pools.epp_growing ||
+	    page_pools.epp_total_pages == page_pools.epp_max_pages)
+		return 0;
 
-        /* if total pages is not enough, we need to grow */
-        if (page_pools.epp_total_pages < page_needed)
-                return 1;
+	/* if total pages is not enough, we need to grow */
+	if (page_pools.epp_total_pages < page_needed)
+		return 1;
 
-        /*
-         * we wanted to return 0 here if there was a shrink just happened
-         * moment ago, but this may cause deadlock if both client and ost
-         * live on single node.
-         */
-#if 0
-        if (now - page_pools.epp_last_shrink < 2)
-                return 0;
-#endif
+	/*
+	 * we wanted to return 0 here if there was a shrink just
+	 * happened a moment ago, but this may cause deadlock if both
+	 * client and ost live on single node.
+	 */
 
-        /*
-         * here we perhaps need consider other factors like wait queue
-         * length, idle index, etc. ?
-         */
+	/*
+	 * here we perhaps need consider other factors like wait queue
+	 * length, idle index, etc. ?
+	 */
 
-        /* grow the pools in any other cases */
-        return 1;
+	/* grow the pools in any other cases */
+	return 1;
 }
 
 /*

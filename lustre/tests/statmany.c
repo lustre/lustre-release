@@ -50,21 +50,19 @@
 #include <lustre_ioctl.h>
 
 struct option longopts[] = {
-	{"ea", 0, 0, 'e'},
 	{"lookup", 0, 0, 'l'},
 	{"random", 0, 0, 'r'},
 	{"stat", 0, 0, 's'},
 	{NULL, 0, 0, 0},
 };
-char *shortopts = "ehlr:s0123456789";
+char *shortopts = "hlr:s0123456789";
 
 static int usage(char *prog, FILE *out)
 {
         fprintf(out,
-		"Usage: %s [-r rand_seed] {-s|-e|-l} filenamebase total_files iterations\n"
+		"Usage: %s [-r rand_seed] {-s|-l} filenamebase total_files iterations\n"
                "-r : random seed\n"
                "-s : regular stat() calls\n"
-               "-e : open then GET_EA ioctl\n"
                "-l : lookup ioctl only\n", prog);
         exit(out == stderr);
 }
@@ -92,7 +90,6 @@ int main(int argc, char ** argv)
 				usage(prog, stderr);
 			}
 			break;
-		case 'e':
 		case 'l':
 		case 's':
 			mode = rc;
@@ -176,24 +173,7 @@ int main(int argc, char ** argv)
                 tmp = random() % count;
                 sprintf(filename, "%s%d", base, tmp);
 
-                if (mode == 'e') {
-#if 0
-                        fd = open(filename, O_RDWR|O_LARGEFILE);
-                        if (fd < 0) {
-                                printf("open(%s) error: %s\n", filename,
-                                       strerror(errno));
-                                break;
-                        }
-                        rc = ioctl(fd, LDISKFS_IOC_GETEA, NULL);
-                        if (rc < 0) {
-                                printf("ioctl(%s) error: %s\n", filename,
-                                       strerror(errno));
-                                break;
-                        }
-                        close(fd);
-                        break;
-#endif
-		} else if (mode == 's') {
+		if (mode == 's') {
                         struct stat buf;
 
                         rc = stat(filename, &buf);

@@ -2503,56 +2503,51 @@ static int mdc_fsync(struct obd_export *exp, const struct lu_fid *fid,
 }
 
 static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
-                            enum obd_import_event event)
+			    enum obd_import_event event)
 {
-        int rc = 0;
+	int rc = 0;
 
-        LASSERT(imp->imp_obd == obd);
+	LASSERT(imp->imp_obd == obd);
 
-        switch (event) {
-        case IMP_EVENT_DISCON: {
-#if 0
-                /* XXX Pass event up to OBDs stack. used only for FLD now */
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_DISCON, NULL);
-#endif
-                break;
-        }
-        case IMP_EVENT_INACTIVE: {
-                struct client_obd *cli = &obd->u.cli;
-                /*
-                 * Flush current sequence to make client obtain new one
-                 * from server in case of disconnect/reconnect.
-                 */
-                if (cli->cl_seq != NULL)
-                        seq_client_flush(cli->cl_seq);
+	switch (event) {
 
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE, NULL);
-                break;
-        }
-        case IMP_EVENT_INVALIDATE: {
-                struct ldlm_namespace *ns = obd->obd_namespace;
+	case IMP_EVENT_INACTIVE: {
+		struct client_obd *cli = &obd->u.cli;
+		/*
+		 * Flush current sequence to make client obtain new one
+		 * from server in case of disconnect/reconnect.
+		 */
+		if (cli->cl_seq != NULL)
+			seq_client_flush(cli->cl_seq);
 
-                ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
+		rc = obd_notify_observer(obd, obd, OBD_NOTIFY_INACTIVE, NULL);
+		break;
+	}
+	case IMP_EVENT_INVALIDATE: {
+		struct ldlm_namespace *ns = obd->obd_namespace;
 
-                break;
-        }
+		ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
+
+		break;
+	}
 	case IMP_EVENT_ACTIVE:
 		rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE, NULL);
 		/* redo the kuc registration after reconnecting */
 		if (rc == 0)
 			rc = mdc_kuc_reregister(imp);
 		break;
-        case IMP_EVENT_OCD:
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD, NULL);
-                break;
-        case IMP_EVENT_DEACTIVATE:
-        case IMP_EVENT_ACTIVATE:
-                break;
-        default:
-                CERROR("Unknown import event %x\n", event);
-                LBUG();
-        }
-        RETURN(rc);
+	case IMP_EVENT_OCD:
+		rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD, NULL);
+		break;
+	case IMP_EVENT_DISCON:
+	case IMP_EVENT_DEACTIVATE:
+	case IMP_EVENT_ACTIVATE:
+		break;
+	default:
+		CERROR("Unknown import event %x\n", event);
+		LBUG();
+	}
+	RETURN(rc);
 }
 
 int mdc_fid_alloc(const struct lu_env *env, struct obd_export *exp,
