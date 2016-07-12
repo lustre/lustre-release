@@ -1,5 +1,5 @@
 lnxmaj="2.6.32"
-lnxrel="642.1.1.el6"
+lnxrel="642.3.1.el6"
 
 KERNEL_SRPM=kernel-${lnxmaj}-${lnxrel}.src.rpm
 SERIES=2.6-rhel6.8.series
