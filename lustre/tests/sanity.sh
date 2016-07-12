@@ -8888,9 +8888,9 @@ test_129() {
 		return
 	fi
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	ENOSPC=28
-	EFBIG=27
-	has_warning=0
+	local ENOSPC=28
+	local EFBIG=27
+	local has_warning=0
 
 	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
@@ -8922,7 +8922,7 @@ test_129() {
 			check_mds_dmesg '"has reached"' ||
 				error_exit "has reached message should be output"
 
-			[ $has_warning ] ||
+			[ $has_warning -eq 0 ] &&
 				error_exit "warning message should be output"
 
 			I=$(stat -c%s "$DIR/$tdir")
