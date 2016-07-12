@@ -175,7 +175,6 @@ srpm: @PACKAGE_TARNAME@.spec dist Makefile
 	$(RPMBUILD) \
 		--define "_tmppath $$rpmbuilddir/TMP" \
 		--define "_topdir $$rpmbuilddir" \
-		--define "build_src_rpm 1" \
 		--define "dist %{nil}" \
 		-ts $(distdir).tar.gz || exit 1; \
 	cp $$rpmbuilddir/SRPMS/$(distdir)-*.src.rpm $(top_srcdir) || exit 1; \
