@@ -2901,6 +2901,9 @@ test_37() {
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f || error "cannot release $f"
 
+	# Allow previous archive request to expire from the actions log.
+	wait_for_grace_delay
+
 	# Dirty file.
 	dd if=/dev/urandom of=$f bs=1M count=1 || error "cannot dirty file"
 
