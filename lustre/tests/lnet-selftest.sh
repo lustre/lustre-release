@@ -31,6 +31,25 @@ fi
 nodes=$(comma_list "$(osts_nodes) $(mdts_nodes)")
 lst_SERVERS=${lst_SERVERS:-$(comma_list "$(host_nids_address $nodes $NETTYPE)")}
 lst_CLIENTS=${lst_CLIENTS:-$(comma_list "$(host_nids_address $CLIENTS $NETTYPE)")}
+interim_umount=false
+interim_umount1=false
+
+#
+# _restore_mount(): This function calls restore_mount function for "MOUNT" and
+# "MOUNT2" paths to mount clients if they were not mounted and were umounted
+# in this file earlier.
+# Parameter: None
+# Returns: None. Exit with error if client mount fails.
+#
+_restore_mount () {
+	if $interim_umount && ! is_mounted $MOUNT; then
+		restore_mount $MOUNT || error "Restore $MOUNT failed"
+	fi
+
+	if $interim_umount1 && ! is_mounted $MOUNT2; then
+		restore_mount $MOUNT2 || error "Restore $MOUNT2 failed"
+	fi
+}
 
 is_mounted () {
     local mntpt=$1
@@ -50,15 +69,14 @@ fi
 # 1) because lustre messages clutter logs - we needn't them for testing LNET
 # 2) it's theoretically possible that lst tests congest comm paths so tightly
 # that mounted lustre wouldn't able to perform some of its background activities
-if is_mounted $MOUNT || is_mounted $MOUNT2; then
-	if local_mode; then
-		CLIENTONLY=yes
-		stopall
-	else
-		LOAD_MODULES_REMOTE=true
-		cleanupall
-	fi
-	RESTORE_MOUNT=yes
+if is_mounted $MOUNT; then
+	cleanup_mount $MOUNT || error "Fail to unmount client $MOUNT"
+	interim_umount=true
+fi
+
+if is_mounted $MOUNT2; then
+	cleanup_mount $MOUNT2 || error "Fail to unmount client $MOUNT2"
+	interim_umount1=true
 fi
 
 build_test_filter
@@ -126,44 +144,43 @@ run_lst () {
 }
 
 check_lst_err () {
-   local log=$1
+	local log=$1
 
-   grep ^Total $log
+	grep ^Total $log
 
-   if awk '/^Total.*nodes/ {print $2}' $log | grep -vq '^0$'; then
-        error 'lst Error found'
-   fi
+	if awk '/^Total.*nodes/ {print $2}' $log | grep -vq '^0$'; then
+		_restore_mount
+		error 'lst Error found'
+	fi
 }
 
 test_smoke () {
-    lst_prepare
+	lst_prepare
 
-    local servers=$lst_SERVERS
-    local clients=$lst_CLIENTS
+	local servers=$lst_SERVERS
+	local clients=$lst_CLIENTS
 
-    local runlst=$TMP/smoke.sh
+	local runlst=$TMP/smoke.sh
 
-    local log=$TMP/$tfile.log
-    local rc=0
+	local log=$TMP/$tfile.log
+	local rc=0
 
-    test_smoke_sub $servers $clients 2>&1 > $runlst 
+	test_smoke_sub $servers $clients 2>&1 > $runlst
 
-    cat $runlst
+	cat $runlst
 
-    run_lst $runlst | tee $log
-    rc=${PIPESTATUS[0]}
-    [ $rc = 0 ] || error "$runlst failed: $rc"
-    
-    lst_end_session --verbose | tee -a $log
+	run_lst $runlst | tee $log
+	rc=${PIPESTATUS[0]}
+	[ $rc = 0 ] || { _restore_mount; error "$runlst failed: $rc"; }
 
-    # error counters in "lst show_error" should be checked
-    check_lst_err $log
-    lst_cleanup_all    
+	lst_end_session --verbose | tee -a $log
+
+	# error counters in "lst show_error" should be checked
+	check_lst_err $log
+	lst_cleanup_all
 }
 run_test smoke "lst regression test"
 
 complete $SECONDS
-if [ "$RESTORE_MOUNT" = yes ]; then
-    setupall
-fi 
+_restore_mount
 exit_status
