@@ -1901,15 +1901,11 @@ static int check_for_next_transno(struct lu_target *lut)
 		wake_up = 1;
 	} else if (queue_len > 0 &&
 		   queue_len == atomic_read(&obd->obd_req_replay_clients)) {
-		int d_lvl = D_HA;
 		/** handle gaps occured due to lost reply or VBR */
 		LASSERTF(req_transno >= next_transno,
 			 "req_transno: "LPU64", next_transno: "LPU64"\n",
 			 req_transno, next_transno);
-		if (req_transno > obd->obd_last_committed &&
-		    !obd->obd_version_recov)
-			d_lvl = D_ERROR;
-		CDEBUG(d_lvl,
+		CDEBUG(D_HA,
 		       "%s: waking for gap in transno, VBR is %s (skip: "
 		       LPD64", ql: %d, comp: %d, conn: %d, next: "LPD64
 		       ", next_update "LPD64" last_committed: "LPD64")\n",
