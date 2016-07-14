@@ -2848,10 +2848,10 @@ ksocknal_startup (lnet_ni_t *ni)
 				  net->ksnn_interfaces[0].ksni_name);
 	if (net_dev != NULL) {
 		node_id = dev_to_node(&net_dev->dev);
-		ni->dev_cpt = cfs_cpt_of_node(lnet_cpt_table(), node_id);
+		ni->ni_dev_cpt = cfs_cpt_of_node(lnet_cpt_table(), node_id);
 		dev_put(net_dev);
 	} else {
-		ni->dev_cpt = CFS_CPT_ANY;
+		ni->ni_dev_cpt = CFS_CPT_ANY;
 	}
 
 	/* call it before add it to ksocknal_data.ksnd_nets */

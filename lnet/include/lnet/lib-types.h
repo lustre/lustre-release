@@ -394,7 +394,7 @@ typedef struct lnet_ni {
 	struct lnet_element_stats ni_stats;
 
 	/* physical device CPT */
-	int			dev_cpt;
+	int			ni_dev_cpt;
 
 	/* sequence number used to round robin over nis within a net */
 	__u32			ni_seq;
@@ -501,6 +501,8 @@ struct lnet_peer_ni {
 	int			lpni_rtr_refcount;
 	/* sequence number used to round robin over peer nis within a net */
 	__u32			lpni_seq;
+	/* sequence number used to round robin over gateways */
+	__u32			lpni_gw_seq;
 	/* health flag */
 	bool			lpni_healthy;
 	/* returned RC ping features. Protected with lpni_lock */

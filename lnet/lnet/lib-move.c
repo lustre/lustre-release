@@ -1310,6 +1310,69 @@ lnet_find_route_locked(struct lnet_net *net, lnet_nid_t target,
 	return lpni_best;
 }
 
+static struct lnet_ni *
+lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *cur_ni,
+		 int md_cpt)
+{
+	struct lnet_ni *ni = NULL, *best_ni = cur_ni;
+	unsigned int shortest_distance;
+	int best_credits;
+
+	if (best_ni == NULL) {
+		shortest_distance = UINT_MAX;
+		best_credits = INT_MIN;
+	} else {
+		shortest_distance = cfs_cpt_distance(lnet_cpt_table(), md_cpt,
+						     best_ni->ni_dev_cpt);
+		best_credits = atomic_read(&best_ni->ni_tx_credits);
+	}
+
+	while ((ni = lnet_get_next_ni_locked(local_net, ni))) {
+		unsigned int distance;
+		int ni_credits;
+
+		if (!lnet_is_ni_healthy_locked(ni))
+			continue;
+
+		ni_credits = atomic_read(&ni->ni_tx_credits);
+
+		/*
+		 * calculate the distance from the CPT on which
+		 * the message memory is allocated to the CPT of
+		 * the NI's physical device
+		 */
+		distance = cfs_cpt_distance(lnet_cpt_table(),
+					    md_cpt,
+					    ni->ni_dev_cpt);
+
+		/*
+		 * All distances smaller than the NUMA range
+		 * are treated equally.
+		 */
+		if (distance < lnet_numa_range)
+			distance = lnet_numa_range;
+
+		/*
+		 * Select on shorter distance, then available
+		 * credits, then round-robin.
+		 */
+		if (distance > shortest_distance) {
+			continue;
+		} else if (distance < shortest_distance) {
+			shortest_distance = distance;
+		} else if (ni_credits < best_credits) {
+			continue;
+		} else if (ni_credits == best_credits) {
+			if (best_ni && (best_ni)->ni_seq <= ni->ni_seq)
+				continue;
+		}
+		best_ni = ni;
+		best_credits = ni_credits;
+	}
+
+	return best_ni;
+}
+
 static int
 lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
 		    struct lnet_msg *msg, lnet_nid_t rtr_nid)
@@ -1318,20 +1381,19 @@ lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
 	struct lnet_peer_ni	*best_lpni;
 	struct lnet_peer_ni	*best_gw;
 	struct lnet_peer_ni	*lpni;
+	struct lnet_peer_ni	*final_dst;
 	struct lnet_peer	*peer;
 	struct lnet_peer_net	*peer_net;
 	struct lnet_net		*local_net;
-	struct lnet_ni		*ni;
 	__u32			seq;
 	int			cpt, cpt2, rc;
 	bool			routing;
 	bool			routing2;
 	bool			ni_is_pref;
 	bool			preferred;
-	int			best_credits;
+	bool			local_found;
 	int			best_lpni_credits;
 	int			md_cpt;
-	unsigned int		shortest_distance;
 
 	/*
 	 * get an initial CPT to use for locking. The idea here is not to
@@ -1347,9 +1409,11 @@ again:
 	best_ni = NULL;
 	best_lpni = NULL;
 	best_gw = NULL;
+	final_dst = NULL;
 	local_net = NULL;
 	routing = false;
 	routing2 = false;
+	local_found = false;
 
 	seq = lnet_get_dlc_seq_locked();
 
@@ -1514,62 +1578,68 @@ again:
 		goto pick_peer;
 
 	/*
-	 * Decide whether we need to route to peer_ni.
-	 * Get the local net that I need to be on to be able to directly
-	 * send to that peer.
+	 * pick the best_ni by going through all the possible networks of
+	 * that peer and see which local NI is best suited to talk to that
+	 * peer.
 	 *
-	 * a. Find the peer which the dst_nid belongs to.
-	 * b. Iterate through each of the peer_nets/nis to decide
-	 * the best peer/local_ni pair to use
+	 * Locally connected networks will always be preferred over
+	 * a routed network. If there are only routed paths to the peer,
+	 * then the best route is chosen. If all routes are equal then
+	 * they are used in round robin.
 	 */
-	shortest_distance = UINT_MAX;
-	best_credits = INT_MIN;
 	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_on_peer_list) {
 		if (!lnet_is_peer_net_healthy_locked(peer_net))
 			continue;
 
 		local_net = lnet_get_net_locked(peer_net->lpn_net_id);
-		if (!local_net && !routing) {
+		if (!local_net && !routing && !local_found) {
 			struct lnet_peer_ni *net_gw;
-			/*
-			 * go through each peer_ni on that peer_net and
-			 * determine the best possible gw to go through
-			 */
-			list_for_each_entry(lpni, &peer_net->lpn_peer_nis,
-					    lpni_on_peer_net_list) {
-				net_gw = lnet_find_route_locked(NULL,
-								lpni->lpni_nid,
-								rtr_nid);
 
-				/*
-				 * if no route is found for that network then
-				 * move onto the next peer_ni in the peer
-				 */
-				if (!net_gw)
-					continue;
+			lpni = list_entry(peer_net->lpn_peer_nis.next,
+					  struct lnet_peer_ni,
+					  lpni_on_peer_net_list);
 
-				if (!best_gw) {
-					best_gw = net_gw;
-				} else  {
-					rc = lnet_compare_peers(net_gw,
-								best_gw);
-					if (rc > 0)
-						best_gw = net_gw;
-				}
-			}
-
-			if (!best_gw)
+			net_gw = lnet_find_route_locked(NULL,
+							lpni->lpni_nid,
+							rtr_nid);
+			if (!net_gw)
 				continue;
 
-			local_net = lnet_get_net_locked
-					(LNET_NIDNET(best_gw->lpni_nid));
+			if (best_gw) {
+				/*
+				 * lnet_find_route_locked() call
+				 * will return the best_Gw on the
+				 * lpni->lpni_nid network.
+				 * However, best_gw and net_gw can
+				 * be on different networks.
+				 * Therefore need to compare them
+				 * to pick the better of either.
+				 */
+				if (lnet_compare_peers(best_gw, net_gw) > 0)
+					continue;
+				if (best_gw->lpni_gw_seq <= net_gw->lpni_gw_seq)
+					continue;
+			}
+			best_gw = net_gw;
+			final_dst = lpni;
+
 			routing2 = true;
 		} else {
-			routing2 = false;
 			best_gw = NULL;
+			final_dst = NULL;
+			routing2 = false;
+			local_found = true;
 		}
 
-		/* no routable net found go on to a different net */
+		/*
+		 * a gw on this network is found, but there could be
+		 * other better gateways on other networks. So don't pick
+		 * the best_ni until we determine the best_gw.
+		 */
+		if (best_gw)
+			continue;
+
+		/* if no local_net found continue */
 		if (!local_net)
 			continue;
 
@@ -1581,68 +1651,28 @@ again:
 		 *	2. NI available credits
 		 *	3. Round Robin
 		 */
-		ni = NULL;
-		while ((ni = lnet_get_next_ni_locked(local_net, ni))) {
-			unsigned int distance;
-			int ni_credits;
-
-			if (!lnet_is_ni_healthy_locked(ni))
-				continue;
-
-			ni_credits = atomic_read(&ni->ni_tx_credits);
-
-			/*
-			 * calculate the distance from the CPT on which
-			 * the message memory is allocated to the CPT of
-			 * the NI's physical device
-			 */
-			distance = cfs_cpt_distance(lnet_cpt_table(),
-						    md_cpt,
-						    ni->dev_cpt);
-
-			/*
-			 * All distances smaller than the NUMA range
-			 * are treated equally.
-			 */
-			if (distance < lnet_numa_range)
-				distance = lnet_numa_range;
-
-			/*
-			 * Select on shorter distance, then available
-			 * credits, then round-robin.
-			 */
-			if (distance > shortest_distance) {
-				continue;
-			} else if (distance < shortest_distance) {
-				shortest_distance = distance;
-			} else if (ni_credits < best_credits) {
-				continue;
-			} else if (ni_credits == best_credits) {
-				if (best_ni && best_ni->ni_seq <= ni->ni_seq)
-					continue;
-			}
-			best_ni = ni;
-			best_credits = ni_credits;
-		}
+		best_ni = lnet_get_best_ni(local_net, best_ni, md_cpt);
 	}
 
-	if (routing2) {
+	if (!best_ni && !best_gw) {
+		lnet_net_unlock(cpt);
+		LCONSOLE_WARN("No local ni found to send from to %s\n",
+			libcfs_nid2str(dst_nid));
+		return -EINVAL;
+	}
+
+	if (!best_ni) {
+		best_ni = lnet_get_best_ni(best_gw->lpni_net, best_ni, md_cpt);
+		LASSERT(best_gw && best_ni);
+
 		/*
-		 * RULE: Each node considers only the next-hop
-		 *
 		 * We're going to route the message, so change the peer to
 		 * the router.
 		 */
 		LASSERT(best_gw->lpni_peer_net);
 		LASSERT(best_gw->lpni_peer_net->lpn_peer);
+		best_gw->lpni_gw_seq++;
 		peer = best_gw->lpni_peer_net->lpn_peer;
-	}
-
-	if (!best_ni) {
-		lnet_net_unlock(cpt);
-		LCONSOLE_WARN("No local ni found to send from to %s\n",
-			libcfs_nid2str(dst_nid));
-		return -EINVAL;
 	}
 
 	/*
@@ -1770,6 +1800,7 @@ pick_peer:
 		return -EHOSTUNREACH;
 	}
 
+
 send:
 	routing = routing || routing2;
 
@@ -1851,7 +1882,8 @@ send:
 		 * the router receives this message it knows how to route
 		 * it.
 		 */
-		msg->msg_hdr.dest_nid = cpu_to_le64(dst_nid);
+		msg->msg_hdr.dest_nid =
+			cpu_to_le64(final_dst ? final_dst->lpni_nid : dst_nid);
 	} else {
 		/*
 		 * if we're not routing set the dest_nid to the best peer

@@ -3233,7 +3233,7 @@ kiblnd_startup (lnet_ni_t *ni)
 		goto failed;
 
 	node_id = dev_to_node(ibdev->ibd_hdev->ibh_ibdev->dma_device);
-	ni->dev_cpt = cfs_cpt_of_node(lnet_cpt_table(), node_id);
+	ni->ni_dev_cpt = cfs_cpt_of_node(lnet_cpt_table(), node_id);
 
 	net->ibn_dev = ibdev;
 	ni->ni_nid = LNET_MKNID(LNET_NIDNET(ni->ni_nid), ibdev->ibd_ifip);

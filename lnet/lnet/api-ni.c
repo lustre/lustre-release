@@ -1981,7 +1981,7 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 	cfg_ni->lic_nid = ni->ni_nid;
 	cfg_ni->lic_status = ni->ni_status->ns_status;
 	cfg_ni->lic_tcp_bonding = use_tcp_bonding;
-	cfg_ni->lic_dev_cpt = ni->dev_cpt;
+	cfg_ni->lic_dev_cpt = ni->ni_dev_cpt;
 
 	memcpy(&tun->lt_cmn, &ni->ni_net->net_tunables, sizeof(tun->lt_cmn));
 
