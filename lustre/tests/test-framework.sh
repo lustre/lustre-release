@@ -7137,7 +7137,7 @@ is_sanity_benchmark() {
 }
 
 min_ost_size () {
-    $LCTL get_param -n osc.*.kbytesavail | sort -n | head -n1
+	$LFS df | grep OST | awk '{print $4}' | sort -un | head -1
 }
 
 #
