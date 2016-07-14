@@ -1311,7 +1311,7 @@ static int lmv_statfs_update(void *cookie, int rc)
 		tgt->ltd_statfs = *osfs;
 		tgt->ltd_statfs_age = ktime_get_seconds();
 		spin_unlock(&lmv->lmv_lock);
-		lmv->lmv_qos.lq_dirty = 1;
+		set_bit(LQ_DIRTY, &lmv->lmv_qos.lq_flags);
 	}
 
 	return rc;

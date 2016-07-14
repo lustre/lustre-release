@@ -1519,6 +1519,14 @@ static inline bool lu_object_is_cl(const struct lu_object *o)
 	return lu_device_is_cl(o->lo_dev);
 }
 
+/* bitflags used in rr / qos allocation */
+enum lq_flag {
+	LQ_DIRTY	= 0, /* recalc qos data */
+	LQ_SAME_SPACE,	     /* the OSTs all have approx.
+			      * the same space avail */
+	LQ_RESET,	     /* zero current penalties */
+};
+
 /* round-robin QoS data for LOD/LMV */
 struct lu_qos_rr {
 	spinlock_t		 lqr_alloc;	/* protect allocation index */
@@ -1526,7 +1534,7 @@ struct lu_qos_rr {
 	__u32			 lqr_offset_idx;/* aliasing for start_idx */
 	int			 lqr_start_count;/* reseed counter */
 	struct lu_tgt_pool	 lqr_pool;	/* round-robin optimized list */
-	unsigned long		 lqr_dirty:1;	/* recalc round-robin list */
+	unsigned long		 lqr_flags;
 };
 
 /* QoS data per MDS/OSS */
@@ -1594,10 +1602,13 @@ struct lu_qos {
 	unsigned int		 lq_prio_free;   /* priority for free space */
 	unsigned int		 lq_threshold_rr;/* priority for rr */
 	struct lu_qos_rr	 lq_rr;          /* round robin qos data */
+	unsigned long		 lq_flags;
+#if 0
 	unsigned long		 lq_dirty:1,     /* recalc qos data */
 				 lq_same_space:1,/* the servers all have approx.
 						  * the same space avail */
 				 lq_reset:1;     /* zero current penalties */
+#endif
 };
 
 struct lu_tgt_descs {

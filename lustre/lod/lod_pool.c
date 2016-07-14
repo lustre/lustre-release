@@ -565,7 +565,7 @@ int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname)
 	if (rc)
 		GOTO(out, rc);
 
-	pool->pool_rr.lqr_dirty = 1;
+	set_bit(LQ_DIRTY, &pool->pool_rr.lqr_flags);
 
 	CDEBUG(D_CONFIG, "Added %s to "LOV_POOLNAMEF" as member %d\n",
 			ostname, poolname,  pool_tgt_count(pool));
@@ -625,7 +625,7 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname)
 		GOTO(out, rc);
 
 	tgt_pool_remove(&pool->pool_obds, ost->ltd_index);
-	pool->pool_rr.lqr_dirty = 1;
+	set_bit(LQ_DIRTY, &pool->pool_rr.lqr_flags);
 
 	CDEBUG(D_CONFIG, "%s removed from "LOV_POOLNAMEF"\n", ostname,
 	       poolname);

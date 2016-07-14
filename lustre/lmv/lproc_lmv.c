@@ -132,8 +132,8 @@ static ssize_t qos_prio_free_store(struct kobject *kobj,
 		return -EINVAL;
 
 	lmv->lmv_qos.lq_prio_free = (val << 8) / 100;
-	lmv->lmv_qos.lq_dirty = 1;
-	lmv->lmv_qos.lq_reset = 1;
+	set_bit(LQ_DIRTY, &lmv->lmv_qos.lq_flags);
+	set_bit(LQ_RESET, &lmv->lmv_qos.lq_flags);
 
 	return count;
 }
@@ -169,7 +169,7 @@ static ssize_t qos_threshold_rr_store(struct kobject *kobj,
 		return -EINVAL;
 
 	lmv->lmv_qos.lq_threshold_rr = (val << 8) / 100;
-	lmv->lmv_qos.lq_dirty = 1;
+	set_bit(LQ_DIRTY, &lmv->lmv_qos.lq_flags);
 
 	return count;
 }

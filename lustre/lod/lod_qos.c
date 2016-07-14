@@ -137,8 +137,8 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 
 			LASSERT(desc->ld_active_tgt_count > 0);
 			desc->ld_active_tgt_count--;
-			ltd->ltd_qos.lq_dirty = 1;
-			ltd->ltd_qos.lq_rr.lqr_dirty = 1;
+			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
+			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_rr.lqr_flags);
 			CDEBUG(D_CONFIG, "%s: turns inactive\n",
 			       tgt->ltd_exp->exp_obd->obd_name);
 		}
@@ -153,8 +153,8 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 			tgt->ltd_active = 1;
 			tgt->ltd_connecting = 0;
 			desc->ld_active_tgt_count++;
-			ltd->ltd_qos.lq_dirty = 1;
-			ltd->ltd_qos.lq_rr.lqr_dirty = 1;
+			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
+			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_rr.lqr_flags);
 			CDEBUG(D_CONFIG, "%s: turns active\n",
 			       tgt->ltd_exp->exp_obd->obd_name);
 		}
@@ -223,7 +223,7 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 
 		if (tgt->ltd_statfs.os_bavail != avail)
 			/* recalculate weigths */
-			ltd->ltd_qos.lq_dirty = 1;
+			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
 	}
 	obd->obd_osfs_age = ktime_get_seconds();
 
@@ -262,7 +262,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 	int rc;
 	ENTRY;
 
-	if (!lqr->lqr_dirty) {
+	if (!test_bit(LQ_DIRTY, &lqr->lqr_flags)) {
 		LASSERT(lqr->lqr_pool.op_size);
 		RETURN(0);
 	}
@@ -274,7 +274,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 	 * Check again. While we were sleeping on @lq_rw_sem something could
 	 * change.
 	 */
-	if (!lqr->lqr_dirty) {
+	if (!test_bit(LQ_DIRTY, &lqr->lqr_flags)) {
 		LASSERT(lqr->lqr_pool.op_size);
 		up_write(&ltd->ltd_qos.lq_rw_sem);
 		RETURN(0);
@@ -323,7 +323,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 		}
 	}
 
-	lqr->lqr_dirty = 0;
+	clear_bit(LQ_DIRTY, &lqr->lqr_flags);
 	up_write(&ltd->ltd_qos.lq_rw_sem);
 
 	if (placed != real_count) {
@@ -335,7 +335,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 			LCONSOLE(D_WARNING, "rr #%d tgt idx=%d\n", i,
 				 lqr->lqr_pool.op_array[i]);
 		}
-		lqr->lqr_dirty = 1;
+		set_bit(LQ_DIRTY, &lqr->lqr_flags);
 		RETURN(-EAGAIN);
 	}
 
@@ -1603,9 +1603,8 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		}
 
 		/* makes sense to rebalance next time */
-		lod->lod_ost_descs.ltd_qos.lq_dirty = 1;
-		lod->lod_ost_descs.ltd_qos.lq_same_space = 0;
-
+		set_bit(LQ_DIRTY, &lod->lod_ost_descs.ltd_qos.lq_flags);
+		clear_bit(LQ_SAME_SPACE, &lod->lod_ost_descs.ltd_qos.lq_flags);
 		rc = -EAGAIN;
 	}
 
@@ -1824,8 +1823,8 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		}
 
 		/* makes sense to rebalance next time */
-		ltd->ltd_qos.lq_dirty = 1;
-		ltd->ltd_qos.lq_same_space = 0;
+		set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
+		clear_bit(LQ_SAME_SPACE, &ltd->ltd_qos.lq_flags);
 
 		rc = -EAGAIN;
 	} else {

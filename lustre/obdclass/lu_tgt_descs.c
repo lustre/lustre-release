@@ -82,7 +82,7 @@ EXPORT_SYMBOL(lu_prandom_u64_max);
 void lu_qos_rr_init(struct lu_qos_rr *lqr)
 {
 	spin_lock_init(&lqr->lqr_alloc);
-	lqr->lqr_dirty = 1;
+	set_bit(LQ_DIRTY, &lqr->lqr_flags);
 }
 EXPORT_SYMBOL(lu_qos_rr_init);
 
@@ -160,9 +160,8 @@ int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *tgt)
 	 */
 	list_add_tail(&svr->lsq_svr_list, &tempsvr->lsq_svr_list);
 
-	qos->lq_dirty = 1;
-	qos->lq_rr.lqr_dirty = 1;
-
+	set_bit(LQ_DIRTY, &qos->lq_flags);
+	set_bit(LQ_DIRTY, &qos->lq_rr.lqr_flags);
 out:
 	up_write(&qos->lq_rw_sem);
 	RETURN(rc);
@@ -202,8 +201,8 @@ static int lu_qos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd)
 		OBD_FREE_PTR(svr);
 	}
 
-	qos->lq_dirty = 1;
-	qos->lq_rr.lqr_dirty = 1;
+	set_bit(LQ_DIRTY, &qos->lq_flags);
+	set_bit(LQ_DIRTY, &qos->lq_rr.lqr_flags);
 out:
 	up_write(&qos->lq_rw_sem);
 	RETURN(rc);
@@ -275,8 +274,8 @@ int lu_tgt_descs_init(struct lu_tgt_descs *ltd, bool is_mdt)
 	/* Set up allocation policy (QoS and RR) */
 	INIT_LIST_HEAD(&ltd->ltd_qos.lq_svr_list);
 	init_rwsem(&ltd->ltd_qos.lq_rw_sem);
-	ltd->ltd_qos.lq_dirty = 1;
-	ltd->ltd_qos.lq_reset = 1;
+	set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
+	set_bit(LQ_RESET, &ltd->ltd_qos.lq_flags);
 	/* Default priority is toward free space balance */
 	ltd->ltd_qos.lq_prio_free = 232;
 	/* Default threshold for rr (roughly 17%) */
@@ -421,7 +420,8 @@ EXPORT_SYMBOL(ltd_del_tgt);
  */
 bool ltd_qos_is_usable(struct lu_tgt_descs *ltd)
 {
-	if (!ltd->ltd_qos.lq_dirty && ltd->ltd_qos.lq_same_space)
+	if (!test_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags) && 
+	     test_bit(LQ_SAME_SPACE, &ltd->ltd_qos.lq_flags))
 		return false;
 
 	if (ltd->ltd_lov_desc.ld_active_tgt_count < 2)
@@ -463,7 +463,7 @@ int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd)
 
 	ENTRY;
 
-	if (!qos->lq_dirty)
+	if (!test_bit(LQ_DIRTY, &qos->lq_flags))
 		GOTO(out, rc = 0);
 
 	num_active = desc->ld_active_tgt_count - 1;
@@ -534,7 +534,8 @@ int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd)
 		tgt->ltd_qos.ltq_penalty_per_obj >>= 1;
 
 		age = (now - tgt->ltd_qos.ltq_used) >> 3;
-		if (qos->lq_reset || age > 32 * desc->ld_qos_maxage)
+		if (test_bit(LQ_RESET, &qos->lq_flags) || 
+		    age > 32 * desc->ld_qos_maxage)
 			tgt->ltd_qos.ltq_penalty = 0;
 		else if (age > desc->ld_qos_maxage)
 			/* Decay tgt penalty. */
@@ -569,31 +570,32 @@ int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd)
 		svr->lsq_penalty_per_obj >>= 1;
 
 		age = (now - svr->lsq_used) >> 3;
-		if (qos->lq_reset || age > 32 * desc->ld_qos_maxage)
+		if (test_bit(LQ_RESET, &qos->lq_flags) || 
+		    age > 32 * desc->ld_qos_maxage)
 			svr->lsq_penalty = 0;
 		else if (age > desc->ld_qos_maxage)
 			/* Decay server penalty. */
 			svr->lsq_penalty >>= age / desc->ld_qos_maxage;
 	}
 
-	qos->lq_dirty = 0;
-	qos->lq_reset = 0;
+	clear_bit(LQ_DIRTY, &qos->lq_flags);
+	clear_bit(LQ_RESET, &qos->lq_flags);
 
 	/*
 	 * If each tgt has almost same free space, do rr allocation for better
 	 * creation performance
 	 */
-	qos->lq_same_space = 0;
+	clear_bit(LQ_SAME_SPACE, &qos->lq_flags);
 	if ((ba_max * (256 - qos->lq_threshold_rr)) >> 8 < ba_min &&
 	    (ia_max * (256 - qos->lq_threshold_rr)) >> 8 < ia_min) {
-		qos->lq_same_space = 1;
+		set_bit(LQ_SAME_SPACE, &qos->lq_flags);
 		/* Reset weights for the next time we enter qos mode */
-		qos->lq_reset = 1;
+		set_bit(LQ_RESET, &qos->lq_flags);
 	}
 	rc = 0;
 
 out:
-	if (!rc && qos->lq_same_space)
+	if (!rc && test_bit(LQ_SAME_SPACE, &qos->lq_flags))
 		RETURN(-EAGAIN);
 
 	RETURN(rc);

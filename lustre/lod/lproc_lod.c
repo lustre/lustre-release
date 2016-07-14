@@ -564,8 +564,8 @@ static ssize_t __qos_prio_free_store(struct kobject *kobj,
 	if (val > 100)
 		return -EINVAL;
 	ltd->ltd_qos.lq_prio_free = (val << 8) / 100;
-	ltd->ltd_qos.lq_dirty = 1;
-	ltd->ltd_qos.lq_reset = 1;
+	set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
+	set_bit(LQ_RESET, &ltd->ltd_qos.lq_flags);
 
 	return count;
 }
@@ -655,7 +655,7 @@ static ssize_t __qos_threshold_rr_store(struct kobject *kobj,
 	if (val > 100)
 		return -EINVAL;
 	ltd->ltd_qos.lq_threshold_rr = (val << 8) / 100;
-	ltd->ltd_qos.lq_dirty = 1;
+	set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
 
 	return count;
 }
