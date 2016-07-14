@@ -1,9 +1,5 @@
 MODULES := ksocklnd
 
-# Need to make sure that an external OFED source pool overrides
-# # any in-kernel OFED sources
-NOSTDINC_FLAGS += @EXTRA_OFED_CONFIG@ @EXTRA_OFED_INCLUDE@
-
 ksocklnd-objs := \
 	socklnd.o \
 	socklnd_cb.o \

@@ -28,9 +28,6 @@
 #ifndef _GNILND_GNILND_H_
 #define _GNILND_GNILND_H_
 
-#ifdef HAVE_COMPAT_RDMA
-#include <linux/compat-2.6.h>
-#endif
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>

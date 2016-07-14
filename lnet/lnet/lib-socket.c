@@ -35,9 +35,6 @@
  */
 #define DEBUG_SUBSYSTEM S_LNET
 
-#ifdef HAVE_COMPAT_RDMA
-#include <linux/compat-2.6.h>
-#endif
 #include <linux/if.h>
 #include <linux/in.h>
 #include <linux/net.h>

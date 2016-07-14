@@ -31,9 +31,6 @@
 #define DEBUG_PORTAL_ALLOC
 #define DEBUG_SUBSYSTEM S_LND
 
-#ifdef HAVE_COMPAT_RDMA
-#include <linux/compat-2.6.h>
-#endif
 #include <linux/crc32.h>
 #include <linux/errno.h>
 #include <linux/if.h>

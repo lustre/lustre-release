@@ -7,8 +7,4 @@ lnet-objs += router.o router_proc.o acceptor.o peer.o net_fault.o
 
 default: all
 
-# Need to make sure that an external OFED source pool overrides
-# # any in-kernel OFED sources
-NOSTDINC_FLAGS += @EXTRA_OFED_CONFIG@ @EXTRA_OFED_INCLUDE@
-
 @INCLUDE_RULES@
