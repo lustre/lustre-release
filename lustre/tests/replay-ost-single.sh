@@ -413,6 +413,25 @@ test_9() {
 }
 run_test 9 "Verify that no req deadline happened during recovery"
 
+test_10() {
+	rm -f $TDIR/$tfile
+
+	dd if=/dev/zero of=$TDIR/$tfile count=10 || error "dd failed"
+
+	#define OBD_FAIL_OSC_DELAY_IO            0x414
+	$LCTL set_param fail_val=60 fail_loc=0x414
+	cancel_lru_locks OST0000-osc &
+	sleep 2
+	facet_failover ost1 || error "failover: $?"
+
+	#define OBD_FAIL_LDLM_GRANT_CHECK        0x32a
+	$LCTL set_param fail_loc=0x32a
+	stat $TDIR/$tfile
+
+	wait
+}
+run_test 10 "conflicting PW & PR locks on a client"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
