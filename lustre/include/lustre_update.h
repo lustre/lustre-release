@@ -131,6 +131,21 @@ update_records_get_params(const struct update_records *record)
 		update_ops_size(&record->ur_ops, record->ur_update_count));
 }
 
+static inline struct update_param *
+update_param_next_param(const struct update_param *param)
+{
+	return (struct update_param *)((char *)param +
+				       object_update_param_size(
+					  (struct object_update_param *)param));
+}
+
+static inline size_t
+__update_records_size(size_t raw_size)
+{
+	return cfs_size_round(offsetof(struct update_records, ur_ops) +
+			      raw_size);
+}
+
 static inline size_t
 update_records_size(const struct update_records *record)
 {
@@ -147,16 +162,21 @@ update_records_size(const struct update_records *record)
 		param_size = update_params_size(params, record->ur_param_count);
 	}
 
-	return cfs_size_round(offsetof(struct update_records, ur_ops) +
-			      op_size + param_size);
+	return __update_records_size(op_size + param_size);
+}
+
+static inline size_t
+__llog_update_record_size(size_t records_size)
+{
+	return cfs_size_round(sizeof(struct llog_rec_hdr) + records_size +
+			      sizeof(struct llog_rec_tail));
 }
 
 static inline size_t
 llog_update_record_size(const struct llog_update_record *lur)
 {
-	return cfs_size_round(sizeof(lur->lur_hdr) +
-			      update_records_size(&lur->lur_update_rec) +
-			      sizeof(struct llog_rec_tail));
+	return __llog_update_record_size(
+			update_records_size(&lur->lur_update_rec));
 }
 
 static inline struct update_op *

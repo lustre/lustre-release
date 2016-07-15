@@ -168,19 +168,20 @@ static int sub_updates_write(const struct lu_env *env,
 			     struct llog_update_record *record,
 			     struct sub_thandle *sub_th)
 {
-	struct dt_device	*dt = sub_th->st_dt;
-	struct llog_ctxt	*ctxt;
-	int			rc;
+	struct dt_device *dt = sub_th->st_dt;
+	struct llog_ctxt *ctxt;
 	struct llog_update_record *lur = NULL;
-	struct update_params	*params = NULL;
-	__u32			update_count = 0;
-	__u32			param_count = 0;
-	__u32			last_update_count = 0;
-	__u32			last_param_count = 0;
-	void			*src;
-	void			*start;
-	void			*next;
+	__u32 update_count = 0;
+	__u32 param_count = 0;
+	__u32 last_update_count = 0;
+	__u32 last_param_count = 0;
+	char *start;
+	char *cur;
+	char *next;
 	struct sub_thandle_cookie *stc;
+	size_t reclen;
+	bool eof = false;
+	int rc;
 	ENTRY;
 
 	ctxt = llog_get_context(dt->dd_lu_dev.ld_obd,
@@ -233,87 +234,83 @@ static int sub_updates_write(const struct lu_env *env,
 	memcpy(lur, &record->lur_hdr, sizeof(record->lur_hdr));
 	lur->lur_update_rec.ur_update_count = 0;
 	lur->lur_update_rec.ur_param_count = 0;
-	src = &record->lur_update_rec.ur_ops;
-	start = next = src;
-	lur->lur_hdr.lrh_len = llog_update_record_size(lur);
-	params = update_records_get_params(&record->lur_update_rec);
+	start = (char *)&record->lur_update_rec.ur_ops;
+	cur = next = start;
 	do {
-		size_t rec_len;
-
-		if (update_count < record->lur_update_rec.ur_update_count) {
-			next = update_op_next_op((struct update_op *)src);
-		} else {
-			if (param_count == 0)
-				next = update_records_get_params(
-						&record->lur_update_rec);
-			else
-				next = (char *)src +
-					object_update_param_size(
-					(struct object_update_param *)src);
-		}
-
-		rec_len = cfs_size_round((unsigned long)(next - src));
-		/* If its size > llog chunk_size, then write current chunk to
-		 * the update llog. */
-		if (lur->lur_hdr.lrh_len + rec_len + LLOG_MIN_REC_SIZE >
-		    ctxt->loc_chunk_size ||
-		    param_count == record->lur_update_rec.ur_param_count) {
-			lur->lur_update_rec.ur_update_count =
-				update_count > last_update_count ?
-				update_count - last_update_count : 0;
-			lur->lur_update_rec.ur_param_count = param_count -
-							     last_param_count;
-
-			memcpy(&lur->lur_update_rec.ur_ops, start,
-			       (unsigned long)(src - start));
-			if (last_update_count != 0)
-				lur->lur_update_rec.ur_flags |=
-						UPDATE_RECORD_CONTINUE;
-
-			update_records_dump(&lur->lur_update_rec, D_INFO, true);
-			lur->lur_hdr.lrh_len = llog_update_record_size(lur);
-			LASSERT(lur->lur_hdr.lrh_len <= ctxt->loc_chunk_size);
-
-			OBD_ALLOC_PTR(stc);
-			if (stc == NULL)
-				GOTO(llog_put, rc = -ENOMEM);
-			INIT_LIST_HEAD(&stc->stc_list);
-
-			rc = llog_add(env, ctxt->loc_handle,
-				      &lur->lur_hdr,
-				      &stc->stc_cookie, sub_th->st_sub_th);
-
-			CDEBUG(D_INFO, "%s: Add update log "DOSTID":%u"
-			       " rc = %d\n", dt->dd_lu_dev.ld_obd->obd_name,
-			       POSTID(&stc->stc_cookie.lgc_lgl.lgl_oi),
-			       stc->stc_cookie.lgc_index, rc);
-
-			if (rc > 0) {
-				list_add(&stc->stc_list,
-					 &sub_th->st_cookie_list);
-				rc = 0;
-			} else {
-				OBD_FREE_PTR(stc);
-				GOTO(llog_put, rc);
-			}
-
-			last_update_count = update_count;
-			last_param_count = param_count;
-			start = src;
-			lur->lur_update_rec.ur_update_count = 0;
-			lur->lur_update_rec.ur_param_count = 0;
-			lur->lur_hdr.lrh_len = llog_update_record_size(lur);
-		}
-
-		src = next;
-		lur->lur_hdr.lrh_len += cfs_size_round(rec_len);
 		if (update_count < record->lur_update_rec.ur_update_count)
-			update_count++;
+			next = (char *)update_op_next_op(
+						(struct update_op *)cur);
 		else if (param_count < record->lur_update_rec.ur_param_count)
-			param_count++;
+			next = (char *)update_param_next_param(
+						(struct update_param *)cur);
 		else
-			break;
-	} while (1);
+			eof = true;
+
+		/*
+		 * If its size > llog chunk_size, then write current chunk to
+		 * the update llog, NB the padding should >= LLOG_MIN_REC_SIZE.
+		 *
+		 * So check padding length is either >= LLOG_MIN_REC_SIZE or is
+		 * 0 (record length just matches the chunk size).
+		 */
+		reclen = __llog_update_record_size(
+				__update_records_size(next - start));
+		if ((reclen + LLOG_MIN_REC_SIZE <= ctxt->loc_chunk_size ||
+		     reclen == ctxt->loc_chunk_size) &&
+		    !eof) {
+			cur = next;
+
+			if (update_count <
+			    record->lur_update_rec.ur_update_count)
+				update_count++;
+			else if (param_count <
+				 record->lur_update_rec.ur_param_count)
+				param_count++;
+			continue;
+		}
+
+		lur->lur_update_rec.ur_update_count = update_count -
+						      last_update_count;
+		lur->lur_update_rec.ur_param_count = param_count -
+						     last_param_count;
+		memcpy(&lur->lur_update_rec.ur_ops, start, cur - start);
+		lur->lur_hdr.lrh_len = llog_update_record_size(lur);
+
+		LASSERT(lur->lur_hdr.lrh_len ==
+			 __llog_update_record_size(
+				__update_records_size(cur - start)));
+		LASSERT(lur->lur_hdr.lrh_len <= ctxt->loc_chunk_size);
+
+		update_records_dump(&lur->lur_update_rec, D_INFO, true);
+
+		OBD_ALLOC_PTR(stc);
+		if (stc == NULL)
+			GOTO(llog_put, rc = -ENOMEM);
+		INIT_LIST_HEAD(&stc->stc_list);
+
+		rc = llog_add(env, ctxt->loc_handle, &lur->lur_hdr,
+			      &stc->stc_cookie, sub_th->st_sub_th);
+
+		CDEBUG(D_INFO, "%s: Add update log "DOSTID":%u rc = %d\n",
+			dt->dd_lu_dev.ld_obd->obd_name,
+			POSTID(&stc->stc_cookie.lgc_lgl.lgl_oi),
+			stc->stc_cookie.lgc_index, rc);
+
+		if (rc > 0) {
+			list_add(&stc->stc_list, &sub_th->st_cookie_list);
+			rc = 0;
+		} else {
+			OBD_FREE_PTR(stc);
+			GOTO(llog_put, rc);
+		}
+
+		last_update_count = update_count;
+		last_param_count = param_count;
+		start = cur;
+		lur->lur_update_rec.ur_update_count = 0;
+		lur->lur_update_rec.ur_param_count = 0;
+		lur->lur_update_rec.ur_flags |= UPDATE_RECORD_CONTINUE;
+	} while (!eof);
 
 llog_put:
 	if (lur != NULL)
