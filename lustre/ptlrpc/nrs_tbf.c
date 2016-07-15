@@ -281,8 +281,11 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 		   struct nrs_tbf_head *head,
 		   struct nrs_tbf_cmd *start)
 {
-	struct nrs_tbf_rule *rule, *tmp_rule;
-	int rc;
+	struct nrs_tbf_rule	*rule;
+	struct nrs_tbf_rule	*tmp_rule;
+	struct nrs_tbf_rule	*next_rule;
+	char			*next_name = start->u.tc_start.ts_next_name;
+	int			 rc;
 
 	rule = nrs_tbf_rule_find(head, start->tc_name);
 	if (rule) {
@@ -321,7 +324,21 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 		nrs_tbf_rule_put(rule);
 		return -EEXIST;
 	}
-	list_add(&rule->tr_linkage, &head->th_list);
+
+	if (next_name) {
+		next_rule = nrs_tbf_rule_find_nolock(head, next_name);
+		if (!next_rule) {
+			spin_unlock(&head->th_rule_lock);
+			nrs_tbf_rule_put(rule);
+			return -ENOENT;
+		}
+
+		list_add(&rule->tr_linkage, next_rule->tr_linkage.prev);
+		nrs_tbf_rule_put(next_rule);
+	} else {
+		/* Add on the top of the rule list */
+		list_add(&rule->tr_linkage, &head->th_list);
+	}
 	spin_unlock(&head->th_rule_lock);
 	atomic_inc(&head->th_rule_sequence);
 	if (start->u.tc_start.ts_rule_flags & NTRS_DEFAULT) {
@@ -333,24 +350,97 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 	return 0;
 }
 
+/**
+ * Change the rank of a rule in the rule list
+ *
+ * The matched rule will be moved to the position right before another
+ * given rule.
+ *
+ * \param[in] policy	the policy instance
+ * \param[in] head	the TBF policy instance
+ * \param[in] name	the rule name to be moved
+ * \param[in] next_name	the rule name before which the matched rule will be
+ *			moved
+ *
+ */
 static int
-nrs_tbf_rule_change(struct ptlrpc_nrs_policy *policy,
-		    struct nrs_tbf_head *head,
-		    struct nrs_tbf_cmd *change)
+nrs_tbf_rule_change_rank(struct ptlrpc_nrs_policy *policy,
+			 struct nrs_tbf_head *head,
+			 char *name,
+			 char *next_name)
+{
+	struct nrs_tbf_rule	*rule = NULL;
+	struct nrs_tbf_rule	*next_rule = NULL;
+	int			 rc = 0;
+
+	LASSERT(head != NULL);
+
+	spin_lock(&head->th_rule_lock);
+	rule = nrs_tbf_rule_find_nolock(head, name);
+	if (!rule)
+		GOTO(out, rc = -ENOENT);
+
+	if (strcmp(name, next_name) == 0)
+		GOTO(out_put, rc);
+
+	next_rule = nrs_tbf_rule_find_nolock(head, next_name);
+	if (!next_rule)
+		GOTO(out_put, rc = -ENOENT);
+
+	list_move(&rule->tr_linkage, next_rule->tr_linkage.prev);
+	nrs_tbf_rule_put(next_rule);
+out_put:
+	nrs_tbf_rule_put(rule);
+out:
+	spin_unlock(&head->th_rule_lock);
+	return rc;
+}
+
+static int
+nrs_tbf_rule_change_rate(struct ptlrpc_nrs_policy *policy,
+			 struct nrs_tbf_head *head,
+			 char *name,
+			 __u64 rate)
 {
 	struct nrs_tbf_rule *rule;
 
 	assert_spin_locked(&policy->pol_nrs->nrs_lock);
 
-	rule = nrs_tbf_rule_find(head, change->tc_name);
+	rule = nrs_tbf_rule_find(head, name);
 	if (rule == NULL)
 		return -ENOENT;
 
-	rule->tr_rpc_rate = change->u.tc_change.tc_rpc_rate;
+	rule->tr_rpc_rate = rate;
 	rule->tr_nsecs = NSEC_PER_SEC;
 	do_div(rule->tr_nsecs, rule->tr_rpc_rate);
 	rule->tr_generation++;
 	nrs_tbf_rule_put(rule);
+
+	return 0;
+}
+
+static int
+nrs_tbf_rule_change(struct ptlrpc_nrs_policy *policy,
+		    struct nrs_tbf_head *head,
+		    struct nrs_tbf_cmd *change)
+{
+	__u64	 rate = change->u.tc_change.tc_rpc_rate;
+	char	*next_name = change->u.tc_change.tc_next_name;
+	int	 rc;
+
+	if (rate != 0) {
+		rc = nrs_tbf_rule_change_rate(policy, head, change->tc_name,
+					      rate);
+		if (rc)
+			return rc;
+	}
+
+	if (next_name) {
+		rc = nrs_tbf_rule_change_rank(policy, head, change->tc_name,
+					      next_name);
+		if (rc)
+			return rc;
+	}
 
 	return 0;
 }
@@ -1741,6 +1831,16 @@ nrs_tbf_parse_value_pair(struct nrs_tbf_cmd *cmd, char *buffer)
 			cmd->u.tc_change.tc_rpc_rate = rate;
 		else
 			return -EINVAL;
+	}  else if (strcmp(key, "rank") == 0) {
+		if (!name_is_valid(val))
+			return -EINVAL;
+
+		if (cmd->tc_cmd == NRS_CTL_TBF_START_RULE)
+			cmd->u.tc_start.ts_next_name = val;
+		else if (cmd->tc_cmd == NRS_CTL_TBF_CHANGE_RULE)
+			cmd->u.tc_change.tc_next_name = val;
+		else
+			return -EINVAL;
 	} else {
 		return -EINVAL;
 	}
@@ -1768,7 +1868,8 @@ nrs_tbf_parse_value_pairs(struct nrs_tbf_cmd *cmd, char *buffer)
 			cmd->u.tc_start.ts_rpc_rate = tbf_rate;
 		break;
 	case NRS_CTL_TBF_CHANGE_RULE:
-		if (cmd->u.tc_change.tc_rpc_rate == 0)
+		if (cmd->u.tc_change.tc_rpc_rate == 0 &&
+		    cmd->u.tc_change.tc_next_name == NULL)
 			return -EINVAL;
 		break;
 	case NRS_CTL_TBF_STOP_RULE:
