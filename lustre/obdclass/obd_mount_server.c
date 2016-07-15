@@ -407,6 +407,7 @@ int lustre_register_lwp_item(const char *lwpname, struct obd_export **exp,
 {
 	struct obd_device	 *lwp;
 	struct lwp_register_item *lri;
+	bool cb = false;
 	ENTRY;
 
 	LASSERTF(strlen(lwpname) < MTI_NAME_MAXLEN, "lwpname is too long %s\n",
@@ -445,9 +446,11 @@ int lustre_register_lwp_item(const char *lwpname, struct obd_export **exp,
 
 	spin_lock(&lwp_register_list_lock);
 	list_add(&lri->lri_list, &lwp_register_list);
+	if (*exp != NULL)
+		cb = true;
 	spin_unlock(&lwp_register_list_lock);
 
-	if (*exp != NULL && cb_func != NULL)
+	if (cb && cb_func != NULL)
 		cb_func(cb_data);
 	lustre_put_lwp_item(lri);
 
@@ -527,11 +530,12 @@ again:
 		if (*lri->lri_exp != NULL)
 			continue;
 		*lri->lri_exp = class_export_get(exp);
+		if (lri->lri_cb_func == NULL)
+			continue;
 		atomic_inc(&lri->lri_ref);
 		spin_unlock(&lwp_register_list_lock);
 
-		if (lri->lri_cb_func != NULL)
-			lri->lri_cb_func(lri->lri_cb_data);
+		lri->lri_cb_func(lri->lri_cb_data);
 		lustre_put_lwp_item(lri);
 
 		/* Others may have changed the list after we unlock, we have
