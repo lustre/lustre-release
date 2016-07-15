@@ -5150,10 +5150,8 @@ run_test 76c "verify changelog_mask is applied with set_param -P"
 
 test_77() { # LU-3445
 	local server_version=$(lustre_version_code $SINGLEMDS)
-
-	[[ $server_version -ge $(version_code 2.2.60) ]] &&
-	[[ $server_version -le $(version_code 2.4.0) ]] &&
-		skip "Need MDS version < 2.2.60 or > 2.4.0" && return
+	[[ $server_version -ge $(version_code 2.8.55) ]] ||
+		{ skip "Need MDS version 2.8.55+ "; return; }
 
 	if [[ -z "$fs2ost_DEV" || -z "$fs2mds_DEV" ]]; then
 		is_blkdev $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) &&
@@ -5174,7 +5172,7 @@ test_77() { # LU-3445
 		error "start fs2mds failed"
 
 	mgsnid=$(do_facet fs2mds $LCTL list_nids | xargs | tr ' ' ,)
-	[[ $mgsnid = *,* ]] || mgsnid+=",$mgsnid"
+	mgsnid="$mgsnid,$mgsnid:$mgsnid"
 
 	add fs2ost $(mkfs_opts ost1 $fs2ostdev) --mgsnode=$mgsnid \
 		--failnode=$failnid --fsname=$fsname \
