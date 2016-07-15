@@ -764,3 +764,141 @@ int osd_options_init(void)
 
 	return 0;
 }
+
+/*
+ * the following set of functions are used to maintain per-thread
+ * cache of FID->ino mapping. this mechanism is used to avoid
+ * expensive LU/OI lookups.
+ */
+struct osd_idmap_cache *osd_idc_find(const struct lu_env *env,
+				     struct osd_device *osd,
+				     const struct lu_fid *fid)
+{
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_idmap_cache *idc = oti->oti_ins_cache;
+	int i;
+
+	for (i = 0; i < oti->oti_ins_cache_used; i++) {
+		if (!lu_fid_eq(&idc[i].oic_fid, fid))
+			continue;
+		if (idc[i].oic_dev != osd)
+			continue;
+
+		return idc + i;
+	}
+
+	return NULL;
+}
+
+struct osd_idmap_cache *osd_idc_add(const struct lu_env *env,
+				    struct osd_device *osd,
+				    const struct lu_fid *fid)
+{
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_idmap_cache *idc;
+	int i;
+
+	if (unlikely(oti->oti_ins_cache_used >= oti->oti_ins_cache_size)) {
+		i = oti->oti_ins_cache_size * 2;
+		LASSERT(i < 1000);
+		if (i == 0)
+			i = OSD_INS_CACHE_SIZE;
+		OBD_ALLOC(idc, sizeof(*idc) * i);
+		if (idc == NULL)
+			return ERR_PTR(-ENOMEM);
+		if (oti->oti_ins_cache != NULL) {
+			memcpy(idc, oti->oti_ins_cache,
+			       oti->oti_ins_cache_used * sizeof(*idc));
+			OBD_FREE(oti->oti_ins_cache,
+				 oti->oti_ins_cache_used * sizeof(*idc));
+		}
+		oti->oti_ins_cache = idc;
+		oti->oti_ins_cache_size = i;
+	}
+
+	idc = &oti->oti_ins_cache[oti->oti_ins_cache_used++];
+	idc->oic_fid = *fid;
+	idc->oic_dev = osd;
+	idc->oic_dnode = 0;
+	idc->oic_remote = 0;
+
+	return idc;
+}
+
+/**
+ * Lookup mapping for the given fid in the cache
+ *
+ * Initialize a new one if not found. the initialization checks whether
+ * the object is local or remote. for the local objects, OI is used to
+ * learn dnode#. the function is used when the caller has no information
+ * about the object, e.g. at dt_insert().
+ */
+struct osd_idmap_cache *osd_idc_find_or_init(const struct lu_env *env,
+					     struct osd_device *osd,
+					     const struct lu_fid *fid)
+{
+	struct osd_idmap_cache *idc;
+	int rc;
+
+	idc = osd_idc_find(env, osd, fid);
+	if (idc != NULL)
+		return idc;
+
+	/* new mapping is needed */
+	idc = osd_idc_add(env, osd, fid);
+	if (IS_ERR(idc))
+		return idc;
+
+	/* initialize it */
+	rc = osd_remote_fid(env, osd, fid);
+	if (unlikely(rc < 0))
+		return ERR_PTR(rc);
+
+	if (rc == 0) {
+		/* the object is local, lookup in OI */
+		uint64_t dnode;
+
+		rc = osd_fid_lookup(env, osd, fid, &dnode);
+		if (unlikely(rc < 0)) {
+			CERROR("%s: can't lookup: rc = %d\n",
+			       osd->od_svname, rc);
+			return ERR_PTR(rc);
+		}
+		LASSERT(dnode < (1ULL << DN_MAX_OBJECT_SHIFT));
+		idc->oic_dnode = dnode;
+	} else {
+		/* the object is remote */
+		idc->oic_remote = 1;
+	}
+
+	return idc;
+}
+
+/*
+ * lookup mapping for given FID and fill it from the given object.
+ * the object is local by definition.
+ */
+int osd_idc_find_and_init(const struct lu_env *env, struct osd_device *osd,
+			  struct osd_object *obj)
+{
+	const struct lu_fid *fid = lu_object_fid(&obj->oo_dt.do_lu);
+	struct osd_idmap_cache *idc;
+
+	idc = osd_idc_find(env, osd, fid);
+	if (idc != NULL) {
+		if (obj->oo_db == NULL)
+			return 0;
+		idc->oic_dnode = obj->oo_db->db_object;
+		return 0;
+	}
+
+	/* new mapping is needed */
+	idc = osd_idc_add(env, osd, fid);
+	if (IS_ERR(idc))
+		return PTR_ERR(idc);
+
+	if (obj->oo_db)
+		idc->oic_dnode = obj->oo_db->db_object;
+
+	return 0;
+}

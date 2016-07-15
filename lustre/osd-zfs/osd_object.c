@@ -543,6 +543,10 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 	else
 		dmu_tx_hold_zap(oh->ot_tx, osd->od_unlinkedid, TRUE, NULL);
 
+	/* will help to find FID->ino when this object is being
+	 * added to PENDING/ */
+	osd_idc_find_and_init(env, osd, obj);
+
 	RETURN(0);
 }
 
@@ -1124,6 +1128,13 @@ static void osd_ah_init(const struct lu_env *env, struct dt_allocation_hint *ah,
 
 	ah->dah_parent = parent;
 	ah->dah_mode = child_mode;
+
+	if (parent != NULL && !dt_object_remote(parent)) {
+		/* will help to find FID->ino at dt_insert("..") */
+		struct osd_object *pobj = osd_dt_obj(parent);
+
+		osd_idc_find_and_init(env, osd_obj2dev(pobj), pobj);
+	}
 }
 
 static int osd_declare_object_create(const struct lu_env *env,
@@ -1193,8 +1204,12 @@ static int osd_declare_object_create(const struct lu_env *env,
 	dmu_tx_hold_zap(oh->ot_tx, osd->od_iusr_oid, FALSE, NULL);
 	dmu_tx_hold_zap(oh->ot_tx, osd->od_igrp_oid, FALSE, NULL);
 
+	/* will help to find FID->ino mapping at dt_insert() */
+	osd_idc_find_and_init(env, osd, obj);
+
 	rc = osd_declare_quota(env, osd, attr->la_uid, attr->la_gid, 1, oh,
 			       false, NULL, false);
+
 	RETURN(rc);
 }
 
@@ -1555,6 +1570,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 	rc = __osd_sa_xattr_update(env, obj, oh);
 	if (rc)
 		GOTO(out, rc);
+	osd_idc_find_and_init(env, osd, obj);
 
 	/* Add new object to inode accounting.
 	 * Errors are not considered as fatal */

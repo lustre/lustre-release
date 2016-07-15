@@ -280,6 +280,8 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	oh = container_of0(th, struct osd_thandle, ot_super);
 	INIT_LIST_HEAD(&unlinked);
 	list_splice_init(&oh->ot_unlinked_list, &unlinked);
+	/* reset OI cache for safety */
+	osd_oti_get(env)->oti_ins_cache_used = 0;
 
 	if (oh->ot_assigned == 0) {
 		LASSERT(oh->ot_tx);
@@ -697,16 +699,20 @@ static void osd_key_fini(const struct lu_context *ctx,
 			 struct lu_context_key *key, void *data)
 {
 	struct osd_thread_info *info = data;
+	struct osd_idmap_cache *idc = info->oti_ins_cache;
 
+	if (idc != NULL) {
+		LASSERT(info->oti_ins_cache_size > 0);
+		OBD_FREE(idc, sizeof(*idc) * info->oti_ins_cache_size);
+		info->oti_ins_cache = NULL;
+		info->oti_ins_cache_size = 0;
+	}
 	OBD_FREE_PTR(info);
 }
 
 static void osd_key_exit(const struct lu_context *ctx,
 			 struct lu_context_key *key, void *data)
 {
-	struct osd_thread_info *info = data;
-
-	memset(info, 0, sizeof(*info));
 }
 
 struct lu_context_key osd_key = {

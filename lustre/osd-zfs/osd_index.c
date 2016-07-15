@@ -455,10 +455,18 @@ static int osd_declare_dir_insert(const struct lu_env *env,
 				  const struct dt_key *key,
 				  struct thandle *th)
 {
-	struct osd_object  *obj = osd_dt_obj(dt);
-	struct osd_thandle *oh;
-	uint64_t object;
+	struct osd_object	*obj = osd_dt_obj(dt);
+	struct osd_device	*osd = osd_obj2dev(obj);
+	const struct dt_insert_rec *rec1;
+	const struct lu_fid	*fid;
+	struct osd_thandle	*oh;
+	uint64_t		 object;
 	ENTRY;
+
+	rec1 = (struct dt_insert_rec *)rec;
+	fid = rec1->rec_fid;
+	LASSERT(fid != NULL);
+	LASSERT(rec1->rec_type != 0);
 
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
@@ -474,64 +482,9 @@ static int osd_declare_dir_insert(const struct lu_env *env,
 	 * before insertion */
 	dmu_tx_hold_zap(oh->ot_tx, object, TRUE, NULL);
 
+	osd_idc_find_or_init(env, osd, fid);
+
 	RETURN(0);
-}
-
-/**
- * Find the osd object for given fid.
- *
- * \param fid need to find the osd object having this fid
- *
- * \retval osd_object on success
- * \retval        -ve on error
- */
-struct osd_object *osd_object_find(const struct lu_env *env,
-				   struct dt_object *dt,
-				   const struct lu_fid *fid)
-{
-	struct lu_device         *ludev = dt->do_lu.lo_dev;
-	struct osd_object        *child = NULL;
-	struct lu_object         *luch;
-	struct lu_object         *lo;
-
-	/*
-	 * at this point topdev might not exist yet
-	 * (i.e. MGS is preparing profiles). so we can
-	 * not rely on topdev and instead lookup with
-	 * our device passed as topdev. this can't work
-	 * if the object isn't cached yet (as osd doesn't
-	 * allocate lu_header). IOW, the object must be
-	 * in the cache, otherwise lu_object_alloc() crashes
-	 * -bzzz
-	 */
-	luch = lu_object_find_at(env, ludev, fid, NULL);
-	if (IS_ERR(luch))
-		return (void *)luch;
-
-	if (lu_object_exists(luch)) {
-		lo = lu_object_locate(luch->lo_header, ludev->ld_type);
-		if (lo != NULL)
-			child = osd_obj(lo);
-		else
-			LU_OBJECT_DEBUG(D_ERROR, env, luch,
-					"%s: object can't be located "DFID,
-					osd_dev(ludev)->od_svname, PFID(fid));
-
-		if (child == NULL) {
-			lu_object_put(env, luch);
-			CERROR("%s: Unable to get osd_object "DFID"\n",
-			       osd_dev(ludev)->od_svname, PFID(fid));
-			child = ERR_PTR(-ENOENT);
-		}
-	} else {
-		LU_OBJECT_DEBUG(D_ERROR, env, luch,
-				"%s: lu_object does not exists "DFID,
-				osd_dev(ludev)->od_svname, PFID(fid));
-		lu_object_put(env, luch);
-		child = ERR_PTR(-ENOENT);
-	}
-
-	return child;
 }
 
 /**
@@ -567,8 +520,8 @@ static int osd_seq_exists(const struct lu_env *env, struct osd_device *osd,
 	RETURN(ss->ss_node_id == range->lsr_index);
 }
 
-static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
-			  const struct lu_fid *fid)
+int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
+		   const struct lu_fid *fid)
 {
 	struct seq_server_site	*ss = osd_seq_site(osd);
 	ENTRY;
@@ -611,9 +564,8 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	struct osd_device   *osd = osd_obj2dev(parent);
 	struct dt_insert_rec *rec1 = (struct dt_insert_rec *)rec;
 	const struct lu_fid *fid = rec1->rec_fid;
-	struct osd_thandle  *oh;
-	struct osd_object   *child = NULL;
-	__u32                attr;
+	struct osd_thandle *oh;
+	struct osd_idmap_cache *idc;
 	char		    *name = (char *)key;
 	int                  rc;
 	ENTRY;
@@ -626,61 +578,54 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
-	rc = osd_remote_fid(env, osd, fid);
-	if (rc < 0) {
-		CERROR("%s: Can not find object "DFID": rc = %d\n",
-		       osd->od_svname, PFID(fid), rc);
-		RETURN(rc);
+	idc = osd_idc_find(env, osd, fid);
+	if (unlikely(idc == NULL)) {
+		/* this dt_insert() wasn't declared properly, so
+		 * FID is missing in OI cache. we better do not
+		 * lookup FID in FLDB/OI and don't risk to deadlock,
+		 * but in some special cases (lfsck testing, etc)
+		 * it's much simpler than fixing a caller */
+		CERROR("%s: "DFID" wasn't declared for insert\n",
+		       osd_name(osd), PFID(fid));
+		idc = osd_idc_find_or_init(env, osd, fid);
+		if (IS_ERR(idc))
+			RETURN(PTR_ERR(idc));
 	}
 
-	if (unlikely(rc == 1)) {
+	if (idc->oic_remote) {
 		/* Insert remote entry */
 		memset(&oti->oti_zde.lzd_reg, 0, sizeof(oti->oti_zde.lzd_reg));
 		oti->oti_zde.lzd_reg.zde_type = IFTODT(rec1->rec_type & S_IFMT);
 	} else {
-		/*
-		 * To simulate old Orion setups with ./..  stored in the
-		 * directories
-		 */
-		/* Insert local entry */
-		child = osd_object_find(env, dt, fid);
-		if (IS_ERR(child))
-			RETURN(PTR_ERR(child));
-
-		LASSERT(child->oo_db);
+		if (unlikely(idc->oic_dnode == 0)) {
+			/* for a reason OI cache wasn't filled properly */
+			CERROR("%s: OIC for "DFID" isn't filled\n",
+			       osd_name(osd), PFID(fid));
+			RETURN(-EINVAL);
+		}
 		if (name[0] == '.') {
 			if (name[1] == 0) {
 				/* do not store ".", instead generate it
 				 * during iteration */
 				GOTO(out, rc = 0);
 			} else if (name[1] == '.' && name[2] == 0) {
-				if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT)) {
-					struct lu_fid tfid = *fid;
-
-					osd_object_put(env, child);
-					tfid.f_oid--;
-					child = osd_object_find(env, dt, &tfid);
-					if (IS_ERR(child))
-						RETURN(PTR_ERR(child));
-
-					LASSERT(child->oo_db);
-				}
+				uint64_t dnode = idc->oic_dnode;
+				if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PARENT))
+					dnode--;
 
 				/* update parent dnode in the child.
 				 * later it will be used to generate ".." */
 				rc = osd_object_sa_update(parent,
 						 SA_ZPL_PARENT(osd),
-						 &child->oo_db->db_object,
-						 8, oh);
+						 &dnode, 8, oh);
 
 				GOTO(out, rc);
 			}
 		}
 		CLASSERT(sizeof(oti->oti_zde.lzd_reg) == 8);
 		CLASSERT(sizeof(oti->oti_zde) % 8 == 0);
-		attr = child->oo_dt.do_lu.lo_header ->loh_attr;
-		oti->oti_zde.lzd_reg.zde_type = IFTODT(attr & S_IFMT);
-		oti->oti_zde.lzd_reg.zde_dnode = child->oo_db->db_object;
+		oti->oti_zde.lzd_reg.zde_type = IFTODT(rec1->rec_type & S_IFMT);
+		oti->oti_zde.lzd_reg.zde_dnode = idc->oic_dnode;
 	}
 
 	oti->oti_zde.lzd_fid = *fid;
@@ -696,8 +641,6 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 				(void *)&oti->oti_zde, oh->ot_tx);
 
 out:
-	if (child != NULL)
-		osd_object_put(env, child);
 
 	RETURN(rc);
 }

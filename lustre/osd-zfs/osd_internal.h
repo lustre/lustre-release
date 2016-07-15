@@ -160,6 +160,18 @@ struct osa_attr {
 	uint64_t	ctime[2];
 };
 
+
+#define OSD_INS_CACHE_SIZE	8
+
+/* OI cache entry */
+struct osd_idmap_cache {
+	struct osd_device	*oic_dev;
+	struct lu_fid		oic_fid;
+	/** max 2^48 dnodes per dataset, avoid spilling into another word */
+	uint64_t		oic_dnode:DN_MAX_OBJECT_SHIFT,
+				oic_remote:1;      /* FID isn't local */
+};
+
 /* max.number of regular attrubites the callers may ask for */
 #define OSD_MAX_IN_BULK		13
 
@@ -192,6 +204,11 @@ struct osd_thread_info {
 
 	struct lquota_id_info	 oti_qi;
 	struct lu_seq_range	 oti_seq_range;
+
+	/* dedicated OI cache for insert (which needs inum) */
+	struct osd_idmap_cache *oti_ins_cache;
+	int		       oti_ins_cache_size;
+	int		       oti_ins_cache_used;
 };
 
 extern struct lu_context_key osd_key;
@@ -485,6 +502,15 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 int osd_options_init(void);
 int osd_ost_seq_exists(const struct lu_env *env, struct osd_device *osd,
 		       __u64 seq);
+int osd_idc_find_and_init(const struct lu_env *env, struct osd_device *osd,
+			  struct osd_object *obj);
+struct osd_idmap_cache *osd_idc_find_or_init(const struct lu_env *env,
+					     struct osd_device *osd,
+					     const struct lu_fid *fid);
+struct osd_idmap_cache *osd_idc_find(const struct lu_env *env,
+				     struct osd_device *osd,
+				     const struct lu_fid *fid);
+
 /* osd_index.c */
 int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		  const struct dt_index_features *feat);
@@ -496,6 +522,8 @@ int osd_zap_cursor_init(zap_cursor_t **zc, struct objset *os,
 			uint64_t id, uint64_t dirhash);
 void osd_zap_cursor_fini(zap_cursor_t *zc);
 uint64_t osd_zap_cursor_serialize(zap_cursor_t *zc);
+int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
+		   const struct lu_fid *fid);
 
 /* osd_xattr.c */
 int __osd_xattr_load(struct osd_device *osd, uint64_t dnode,
