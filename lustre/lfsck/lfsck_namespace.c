@@ -6266,6 +6266,10 @@ static void lfsck_namespace_assistant_fill_pos(const struct lu_env *env,
 	struct lfsck_assistant_data	*lad = com->lc_data;
 	struct lfsck_namespace_req	*lnr;
 
+	if (((struct lfsck_namespace *)(com->lc_file_ram))->ln_status !=
+	    LS_SCANNING_PHASE1)
+		return;
+
 	if (list_empty(&lad->lad_req_list))
 		return;
 

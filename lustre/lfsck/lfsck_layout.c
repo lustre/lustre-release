@@ -5535,6 +5535,10 @@ static void lfsck_layout_assistant_fill_pos(const struct lu_env *env,
 	struct lfsck_assistant_data	*lad = com->lc_data;
 	struct lfsck_layout_req		*llr;
 
+	if (((struct lfsck_layout *)(com->lc_file_ram))->ll_status !=
+	    LS_SCANNING_PHASE1)
+		return;
+
 	if (list_empty(&lad->lad_req_list))
 		return;
 
