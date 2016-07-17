@@ -2428,25 +2428,27 @@ wait_remote_prog () {
     return $rc
 }
 
+lfs_df_check() {
+	local clients=${1:-$CLIENTS}
+
+	if [ -z "$clients" ]; then
+		$LFS df $MOUNT
+	else
+		$PDSH $clients "$LFS df $MOUNT" > /dev/null
+	fi
+}
+
+
 clients_up() {
-    # not every config has many clients
-    sleep 1
-    if [ ! -z "$CLIENTS" ]; then
-        $PDSH $CLIENTS "stat -f $MOUNT" > /dev/null
-    else
-        stat -f $MOUNT > /dev/null
-    fi
+	# not every config has many clients
+	sleep 1
+	lfs_df_check
 }
 
 client_up() {
-    local client=$1
-    # usually checked on particular client or locally
-    sleep 1
-    if [ ! -z "$client" ]; then
-        $PDSH $client "stat -f $MOUNT" > /dev/null
-    else
-        stat -f $MOUNT > /dev/null
-    fi
+	# usually checked on particular client or locally
+	sleep 1
+	lfs_df_check $1
 }
 
 client_evicted() {
