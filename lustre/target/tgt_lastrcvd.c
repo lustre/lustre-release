@@ -1343,7 +1343,11 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 
 	if (!lw_client) {
 		tti->tti_off = ted->ted_lr_off;
-		rc = tgt_client_data_write(env, tgt, ted->ted_lcd, &tti->tti_off, th);
+		if (CFS_FAIL_CHECK(OBD_FAIL_TGT_RCVD_EIO))
+			rc = -EIO;
+		else
+			rc = tgt_client_data_write(env, tgt, ted->ted_lcd,
+						   &tti->tti_off, th);
 		if (rc < 0) {
 			mutex_unlock(&ted->ted_lcd_lock);
 			RETURN(rc);

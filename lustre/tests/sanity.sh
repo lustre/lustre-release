@@ -13,8 +13,8 @@ ALWAYS_EXCEPT="                42a  42b  42c  42d  45   68b   $SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # with LOD/OSP landing
-# bug number for skipped tests: LU-2036 LU-8139
-ALWAYS_EXCEPT="                 76	101g	$ALWAYS_EXCEPT"
+# bug number for skipped tests: LU-2036 LU-8139 LU-8411
+ALWAYS_EXCEPT="                 76	101g	407 $ALWAYS_EXCEPT"
 
 is_sles11()						# LU-4341
 {
@@ -15423,6 +15423,20 @@ test_312() { # LU-4856
 	[ $blksz -eq 65536 ] || error "rewrite error: $blksz, expected: 64k"
 }
 run_test 312 "make sure ZFS adjusts its block size by write pattern"
+
+test_313() {
+	local file=$DIR/$tfile
+	rm -f $file
+	$SETSTRIPE -c 1 -i 0 $file || error "setstripe failed"
+
+	# define OBD_FAIL_TGT_RCVD_EIO		 0x720
+	do_facet ost1 "$LCTL set_param fail_loc=0x720"
+	dd if=/dev/zero of=$file bs=4096 oflag=direct count=1 &&
+		error "write should failed"
+	do_facet ost1 "$LCTL set_param fail_loc=0"
+	rm -f $file
+}
+run_test 313 "io should fail after last_rcvd update fail"
 
 test_399() { # LU-7655 for OST fake write
 	# turn off debug for performance testing

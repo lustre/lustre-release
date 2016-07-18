@@ -1013,6 +1013,7 @@ ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 	struct dt_object *o;
 	struct thandle *th;
 	int rc = 0;
+	int rc2 = 0;
 	int retries = 0;
 	int i;
 	bool soft_sync = false;
@@ -1136,7 +1137,9 @@ out_stop:
 			granted = 0;
 	}
 
-	ofd_trans_stop(env, ofd, th, rc);
+	rc2 = ofd_trans_stop(env, ofd, th, rc);
+	if (!rc)
+		rc = rc2;
 	if (rc == -ENOSPC && retries++ < 3) {
 		CDEBUG(D_INODE, "retry after force commit, retries:%d\n",
 		       retries);

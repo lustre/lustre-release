@@ -380,7 +380,7 @@ struct thandle *ofd_trans_create(const struct lu_env *env,
 int ofd_trans_start(const struct lu_env *env,
 		    struct ofd_device *ofd, struct ofd_object *fo,
 		    struct thandle *th);
-void ofd_trans_stop(const struct lu_env *env, struct ofd_device *ofd,
+int ofd_trans_stop(const struct lu_env *env, struct ofd_device *ofd,
 		    struct thandle *th, int rc);
 int ofd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
 		    void *cookie);

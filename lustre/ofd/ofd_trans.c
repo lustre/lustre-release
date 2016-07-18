@@ -106,10 +106,13 @@ int ofd_trans_start(const struct lu_env *env, struct ofd_device *ofd,
  * \param[in] ofd	OFD device
  * \param[in] th	transaction handle
  * \param[in] rc	result code of whole operation
+ *
+ * \retval		0 if successful
+ * \retval		negative value if case of error
  */
-void ofd_trans_stop(const struct lu_env *env, struct ofd_device *ofd,
+int ofd_trans_stop(const struct lu_env *env, struct ofd_device *ofd,
 		    struct thandle *th, int rc)
 {
 	th->th_result = rc;
-	dt_trans_stop(env, ofd->ofd_osd, th);
+	return dt_trans_stop(env, ofd->ofd_osd, th);
 }
