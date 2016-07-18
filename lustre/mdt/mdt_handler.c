@@ -4509,11 +4509,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	struct lfsck_stop	 stop;
 	ENTRY;
 
-	if (m->mdt_md_root != NULL) {
-		mdt_object_put(env, m->mdt_md_root);
-		m->mdt_md_root = NULL;
-	}
-
 	stop.ls_status = LS_PAUSED;
 	stop.ls_flags = 0;
 	next->md_ops->mdo_iocontrol(env, next, OBD_IOC_STOP_LFSCK, 0, &stop);
@@ -4546,6 +4541,11 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	if (m->mdt_namespace != NULL) {
 		ldlm_namespace_free_post(m->mdt_namespace);
 		d->ld_obd->obd_namespace = m->mdt_namespace = NULL;
+	}
+
+	if (m->mdt_md_root != NULL) {
+		mdt_object_put(env, m->mdt_md_root);
+		m->mdt_md_root = NULL;
 	}
 
 	mdt_quota_fini(env, m);
