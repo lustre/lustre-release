@@ -534,18 +534,9 @@ enum obd_notify_event {
         OBD_NOTIFY_INACTIVE,
         /* Connect data for import were changed */
         OBD_NOTIFY_OCD,
-        /* Configuration event */
-        OBD_NOTIFY_CONFIG,
         /* Administratively deactivate/activate event */
         OBD_NOTIFY_DEACTIVATE,
         OBD_NOTIFY_ACTIVATE
-};
-
-/* bit-mask flags for config events */
-enum config_flags {
-        CONFIG_LOG      = 0x1,  /* finished processing config log */
-        CONFIG_SYNC     = 0x2,  /* mdt synced 1 ost */
-        CONFIG_TARGET   = 0x4   /* one target is added */
 };
 
 /*

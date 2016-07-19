@@ -1377,9 +1377,6 @@ static int server_start_targets(struct super_block *sb)
 	/* calculate recovery timeout, do it after lustre_process_log */
 	server_calc_timeout(lsi, obd);
 
-	/* log has been fully processed */
-	obd_notify(obd, NULL, OBD_NOTIFY_CONFIG, (void *)CONFIG_LOG);
-
 	/* log has been fully processed, let clients connect */
 	dev = obd->obd_lu_dev;
 	if (dev && dev->ld_ops->ldo_prepare) {
