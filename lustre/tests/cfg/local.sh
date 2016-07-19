@@ -145,7 +145,7 @@ POWER_UP=${POWER_UP:-"powerman --on"}
 SLOW=${SLOW:-no}
 FAIL_ON_ERROR=${FAIL_ON_ERROR:-true}
 
-MPIRUN=$(which mpirun 2>/dev/null) || true
+MPIRUN=${MPIRUN:-$(which mpirun 2>/dev/null || true)}
 MPI_USER=${MPI_USER:-mpiuser}
 SHARED_DIR_LOGS=${SHARED_DIR_LOGS:-""}
 MACHINEFILE_OPTION=${MACHINEFILE_OPTION:-"-machinefile"}
