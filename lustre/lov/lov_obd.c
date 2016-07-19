@@ -444,85 +444,51 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
 }
 
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
-                      enum obd_notify_event ev, void *data)
+		      enum obd_notify_event ev, void *data)
 {
-        int rc = 0;
+	int rc = 0;
 	struct lov_obd *lov = &obd->u.lov;
-        ENTRY;
+	ENTRY;
 
 	down_read(&lov->lov_notify_lock);
-	if (!lov->lov_connects) {
-		up_read(&lov->lov_notify_lock);
-		RETURN(rc);
+	if (!lov->lov_connects)
+		GOTO(out_notify_lock, rc = 0);
+
+	if (ev == OBD_NOTIFY_ACTIVE || ev == OBD_NOTIFY_INACTIVE ||
+	    ev == OBD_NOTIFY_ACTIVATE || ev == OBD_NOTIFY_DEACTIVATE) {
+		struct obd_uuid *uuid;
+
+		LASSERT(watched);
+
+		if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
+			CERROR("unexpected notification of %s %s\n",
+			       watched->obd_type->typ_name, watched->obd_name);
+			GOTO(out_notify_lock, rc = -EINVAL);
+		}
+
+		uuid = &watched->u.cli.cl_target_uuid;
+
+		/* Set OSC as active before notifying the observer, so the
+		 * observer can use the OSC normally.
+		 */
+		rc = lov_set_osc_active(obd, uuid, ev);
+		if (rc < 0) {
+			CERROR("%s: event %d failed: rc = %d\n", obd->obd_name,
+			       ev, rc);
+			GOTO(out_notify_lock, rc);
+		}
+
+		/* active event should be pass lov target index as data */
+		data = &rc;
 	}
 
-        if (ev == OBD_NOTIFY_ACTIVE || ev == OBD_NOTIFY_INACTIVE ||
-            ev == OBD_NOTIFY_ACTIVATE || ev == OBD_NOTIFY_DEACTIVATE) {
-                struct obd_uuid *uuid;
+	/* Pass the notification up the chain. */
+	rc = obd_notify_observer(obd, watched, ev, data);
 
-                LASSERT(watched);
-
-                if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
-			up_read(&lov->lov_notify_lock);
-                        CERROR("unexpected notification of %s %s!\n",
-                               watched->obd_type->typ_name,
-                               watched->obd_name);
-                        RETURN(-EINVAL);
-                }
-                uuid = &watched->u.cli.cl_target_uuid;
-
-                /* Set OSC as active before notifying the observer, so the
-                 * observer can use the OSC normally.
-                 */
-                rc = lov_set_osc_active(obd, uuid, ev);
-                if (rc < 0) {
-			up_read(&lov->lov_notify_lock);
-                        CERROR("event(%d) of %s failed: %d\n", ev,
-                               obd_uuid2str(uuid), rc);
-                        RETURN(rc);
-                }
-                /* active event should be pass lov target index as data */
-                data = &rc;
-        }
-
-        /* Pass the notification up the chain. */
-        if (watched) {
-                rc = obd_notify_observer(obd, watched, ev, data);
-        } else {
-                /* NULL watched means all osc's in the lov (only for syncs) */
-                /* sync event should be send lov idx as data */
-                struct lov_obd *lov = &obd->u.lov;
-                int i, is_sync;
-
-                data = &i;
-                is_sync = (ev == OBD_NOTIFY_SYNC) ||
-                          (ev == OBD_NOTIFY_SYNC_NONBLOCK);
-
-                obd_getref(obd);
-                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                        if (!lov->lov_tgts[i])
-                                continue;
-
-                        /* don't send sync event if target not
-                         * connected/activated */
-                        if (is_sync &&  !lov->lov_tgts[i]->ltd_active)
-                                continue;
-
-                        rc = obd_notify_observer(obd, lov->lov_tgts[i]->ltd_obd,
-                                                 ev, data);
-                        if (rc) {
-                                CERROR("%s: notify %s of %s failed %d\n",
-                                       obd->obd_name,
-                                       obd->obd_observer->obd_name,
-                                       lov->lov_tgts[i]->ltd_obd->obd_name,
-                                       rc);
-                        }
-                }
-                obd_putref(obd);
-        }
-
+out_notify_lock:
 	up_read(&lov->lov_notify_lock);
-        RETURN(rc);
+
+	RETURN(rc);
 }
 
 static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
