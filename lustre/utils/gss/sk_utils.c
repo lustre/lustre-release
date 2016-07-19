@@ -1057,6 +1057,10 @@ int sk_kdf(struct sk_cred *skc, lnet_nid_t client_nid,
 	int i;
 	int rc = -1;
 
+	/* No keys computed unless privacy mode is in use */
+	if ((skc->sc_flags & LGSS_SVC_PRIV) == 0)
+		return 0;
+
 	session_key->length = sk_crypt_types[kctx->skc_crypt_alg].sct_bytes;
 	session_key->value = malloc(session_key->length);
 	if (!session_key->value) {
