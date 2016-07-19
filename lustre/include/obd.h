@@ -526,8 +526,6 @@ static inline int is_lwp_on_ost(char *name)
  * Events signalled through obd_notify() upcall-chain.
  */
 enum obd_notify_event {
-        /* target added */
-        OBD_NOTIFY_CREATE,
         /* Device connect start */
         OBD_NOTIFY_CONNECT,
         /* Device activated */
