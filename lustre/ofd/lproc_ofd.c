@@ -510,10 +510,9 @@ static int ofd_brw_size_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device	*obd = m->private;
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
-	int			 rc;
 
-	rc = seq_printf(m, "%u\n", ofd->ofd_brw_size / ONE_MB_BRW_SIZE);
-	return rc;
+	seq_printf(m, "%u\n", ofd->ofd_brw_size / ONE_MB_BRW_SIZE);
+	return 0;
 }
 
 static ssize_t

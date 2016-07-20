@@ -176,7 +176,8 @@ static int qpi_soft_least_qunit_seq_show(struct seq_file *m, void *data)
 	struct qmt_pool_info	*pool = m->private;
 	LASSERT(pool != NULL);
 
-	return seq_printf(m, "%lu\n", pool->qpi_soft_least_qunit);
+	seq_printf(m, "%lu\n", pool->qpi_soft_least_qunit);
+	return 0;
 }
 
 static ssize_t

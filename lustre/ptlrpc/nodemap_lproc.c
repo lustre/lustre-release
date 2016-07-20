@@ -177,7 +177,7 @@ static int nodemap_ranges_open(struct inode *inode, struct file *file)
 static int nodemap_fileset_seq_show(struct seq_file *m, void *data)
 {
 	struct lu_nodemap *nodemap;
-	int rc;
+	int rc = 0;
 
 	mutex_lock(&active_config_lock);
 	nodemap = nodemap_lookup(m->private);
@@ -189,7 +189,7 @@ static int nodemap_fileset_seq_show(struct seq_file *m, void *data)
 		return rc;
 	}
 
-	rc = seq_printf(m, "%s\n", nodemap->nm_fileset);
+	seq_printf(m, "%s\n", nodemap->nm_fileset);
 	nodemap_putref(nodemap);
 	return rc;
 }
