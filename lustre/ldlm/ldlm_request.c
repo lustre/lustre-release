@@ -954,74 +954,61 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 	lock->l_flags |= (*flags & (LDLM_FL_NO_LRU | LDLM_FL_EXCL));
         lock->l_last_activity = cfs_time_current_sec();
 
-        /* lock not sent to server yet */
+	/* lock not sent to server yet */
+	if (reqp == NULL || *reqp == NULL) {
+		req = ldlm_enqueue_pack(exp, lvb_len);
+		if (IS_ERR(req)) {
+			failed_lock_cleanup(ns, lock, einfo->ei_mode);
+			LDLM_LOCK_RELEASE(lock);
+			RETURN(PTR_ERR(req));
+		}
 
-        if (reqp == NULL || *reqp == NULL) {
-                req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
-                                                &RQF_LDLM_ENQUEUE,
-                                                LUSTRE_DLM_VERSION,
-                                                LDLM_ENQUEUE);
-                if (req == NULL) {
-                        failed_lock_cleanup(ns, lock, einfo->ei_mode);
-                        LDLM_LOCK_RELEASE(lock);
-                        RETURN(-ENOMEM);
-                }
-                req_passed_in = 0;
-                if (reqp)
-                        *reqp = req;
-        } else {
-                int len;
+		req_passed_in = 0;
+		if (reqp)
+			*reqp = req;
+	} else {
+		int len;
 
-                req = *reqp;
-                len = req_capsule_get_size(&req->rq_pill, &RMF_DLM_REQ,
-                                           RCL_CLIENT);
-                LASSERTF(len >= sizeof(*body), "buflen[%d] = %d, not %d\n",
-                         DLM_LOCKREQ_OFF, len, (int)sizeof(*body));
-        }
+		req = *reqp;
+		len = req_capsule_get_size(&req->rq_pill, &RMF_DLM_REQ,
+					   RCL_CLIENT);
+		LASSERTF(len >= sizeof(*body), "buflen[%d] = %d, not %d\n",
+			 DLM_LOCKREQ_OFF, len, (int)sizeof(*body));
+	}
 
-        /* Dump lock data into the request buffer */
-        body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
-        ldlm_lock2desc(lock, &body->lock_desc);
+	/* Dump lock data into the request buffer */
+	body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
+	ldlm_lock2desc(lock, &body->lock_desc);
 	body->lock_flags = ldlm_flags_to_wire(*flags);
-        body->lock_handle[0] = *lockh;
+	body->lock_handle[0] = *lockh;
 
-        /* Continue as normal. */
-        if (!req_passed_in) {
-		if (lvb_len > 0)
-			req_capsule_extend(&req->rq_pill,
-					   &RQF_LDLM_ENQUEUE_LVB);
-		req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
-				     lvb_len);
-		ptlrpc_request_set_replen(req);
-        }
+	if (async) {
+		LASSERT(reqp != NULL);
+		RETURN(0);
+	}
 
-        if (async) {
-                LASSERT(reqp != NULL);
-                RETURN(0);
-        }
+	LDLM_DEBUG(lock, "sending request");
 
-        LDLM_DEBUG(lock, "sending request");
+	rc = ptlrpc_queue_wait(req);
 
-        rc = ptlrpc_queue_wait(req);
+	err = ldlm_cli_enqueue_fini(exp, req, einfo->ei_type, policy ? 1 : 0,
+				    einfo->ei_mode, flags, lvb, lvb_len,
+				    lockh, rc);
 
-        err = ldlm_cli_enqueue_fini(exp, req, einfo->ei_type, policy ? 1 : 0,
-                                    einfo->ei_mode, flags, lvb, lvb_len,
-                                    lockh, rc);
+	/* If ldlm_cli_enqueue_fini did not find the lock, we need to free
+	 * one reference that we took */
+	if (err == -ENOLCK)
+		LDLM_LOCK_RELEASE(lock);
+	else
+		rc = err;
 
-        /* If ldlm_cli_enqueue_fini did not find the lock, we need to free
-         * one reference that we took */
-        if (err == -ENOLCK)
-                LDLM_LOCK_RELEASE(lock);
-        else
-                rc = err;
+	if (!req_passed_in && req != NULL) {
+		ptlrpc_req_finished(req);
+		if (reqp)
+			*reqp = NULL;
+	}
 
-        if (!req_passed_in && req != NULL) {
-                ptlrpc_req_finished(req);
-                if (reqp)
-                        *reqp = NULL;
-        }
-
-        RETURN(rc);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(ldlm_cli_enqueue);
 
