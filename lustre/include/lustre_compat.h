@@ -351,6 +351,13 @@ static inline struct dentry *d_make_root(struct inode *root)
 # define set_file_inode(file, inode)
 #endif
 
+#ifndef HAVE_FILE_INODE
+static inline struct inode *file_inode(const struct file *file)
+{
+	return file->f_path.dentry->d_inode;
+}
+#endif
+
 #ifdef HAVE_OLDSIZE_TRUNCATE_PAGECACHE
 #define ll_truncate_pagecache(inode, size) truncate_pagecache(inode, 0, size)
 #else

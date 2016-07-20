@@ -62,13 +62,6 @@ static inline struct dentry *file_dentry(const struct file *file)
 }
 #endif
 
-#ifndef HAVE_FILE_INODE
-static inline struct inode *file_inode(const struct file *file)
-{
-	return file->f_path.dentry->d_inode;
-}
-#endif
-
 #if defined(HAVE_FILE_FSYNC_4ARGS) || defined(HAVE_FILE_FSYNC_2ARGS)
 #define ll_vfs_fsync_range(fp, start, end, datasync) \
 	vfs_fsync_range(fp, start, end, datasync)
