@@ -1317,6 +1317,10 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 		 "Next FID "DFID"\n", PFID(&d->opd_pre_last_created_fid),
 		 PFID(&d->opd_pre_used_fid));
 
+	/* opd_pre_max_create_count 0 to not use specified OST. */
+	if (d->opd_pre_max_create_count == 0)
+		RETURN(-ENOBUFS);
+
 	/*
 	 * wait till:
 	 *  - preallocation is done
