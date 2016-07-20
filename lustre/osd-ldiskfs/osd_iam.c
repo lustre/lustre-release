@@ -174,20 +174,21 @@ iam_load_idle_blocks(struct iam_container *c, iam_ptr_t blk)
 	struct inode *inode = c->ic_object;
 	struct iam_idle_head *head;
 	struct buffer_head *bh;
-	int err = 0;
 
 	LASSERT(mutex_is_locked(&c->ic_idle_mutex));
 
 	if (blk == 0)
 		return NULL;
 
-	bh = ldiskfs_bread(NULL, inode, blk, 0, &err);
-	if (bh == NULL) {
-		CERROR("%.16s: cannot load idle blocks, blk = %u, err = %d\n",
-		       LDISKFS_SB(inode->i_sb)->s_es->s_volume_name, blk, err);
+	bh = __ldiskfs_bread(NULL, inode, blk, 0);
+	if (IS_ERR_OR_NULL(bh)) {
+		CERROR("%.16s: cannot load idle blocks, blk = %u, err = %ld\n",
+		       LDISKFS_SB(inode->i_sb)->s_es->s_volume_name, blk,
+		       bh ? PTR_ERR(bh) : -EIO);
 		c->ic_idle_failed = 1;
-		err = err ? err : -EIO;
-		return ERR_PTR(err);
+		if (bh == NULL)
+			bh = ERR_PTR(-EIO);
+		return bh;
 	}
 
 	head = (struct iam_idle_head *)(bh->b_data);
@@ -359,8 +360,6 @@ void iam_ipd_free(struct iam_path_descr *ipd)
 int iam_node_read(struct iam_container *c, iam_ptr_t ptr,
                   handle_t *h, struct buffer_head **bh)
 {
-        int result = 0;
-
         /* NB: it can be called by iam_lfix_guess() which is still at
          * very early stage, c->ic_root_bh and c->ic_descr->id_ops
          * haven't been intialized yet.
@@ -373,10 +372,14 @@ int iam_node_read(struct iam_container *c, iam_ptr_t ptr,
                 return 0;
         }
 
-        *bh = ldiskfs_bread(h, c->ic_object, (int)ptr, 0, &result);
-        if (*bh == NULL)
-		result = result ? result : -EIO;
-        return result;
+	*bh = __ldiskfs_bread(h, c->ic_object, (int)ptr, 0);
+	if (IS_ERR(*bh))
+		return PTR_ERR(*bh);
+
+	if (*bh == NULL)
+		return -EIO;
+
+	return 0;
 }
 
 /*
@@ -1632,9 +1635,12 @@ iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 			goto fail;
 
 		mutex_unlock(&c->ic_idle_mutex);
-		bh = ldiskfs_bread(NULL, inode, *b, 0, e);
-		if (bh == NULL) {
-			*e = *e ? *e : -EIO;
+		bh = __ldiskfs_bread(NULL, inode, *b, 0);
+		if (IS_ERR_OR_NULL(bh)) {
+			if (IS_ERR(bh))
+				*e = PTR_ERR(bh);
+			else
+				*e = -EIO;
 			return NULL;
 		}
 		goto got;

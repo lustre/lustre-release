@@ -125,6 +125,23 @@ ext4_map_blocks, [
 ])
 
 #
+# LB_EXT4_BREAD_4ARGS
+#
+# 3.18 ext4_bread has 4 arguments
+#
+AC_DEFUN([LB_EXT4_BREAD_4ARGS], [
+LB_CHECK_COMPILE([if ext4_bread takes 4 arguments],
+ext4_bread, [
+	#include <linux/fs.h>
+	#include "$EXT4_SRC_DIR/ext4.h"
+],[
+	ext4_bread(NULL, NULL, 0, 0);
+],[
+	AC_DEFINE(HAVE_EXT4_BREAD_4ARGS, 1, [ext4_bread takes 4 arguments])
+])
+]) # LB_EXT4_BREAD_4ARGS
+
+#
 # LDISKFS_AC_PATCH_PROGRAM
 #
 # Determine which program should be used to apply the patches to
@@ -203,6 +220,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_EXT_PBLOCK
 	LB_EXT4_JOURNAL_START_3ARGS
 	LB_LDISKFS_MAP_BLOCKS
+	LB_EXT4_BREAD_4ARGS
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])
