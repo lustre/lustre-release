@@ -17,21 +17,25 @@ OST index of a stripe of a Lustre file
 .B llapi_layout_ost_index_get()
 stores into
 .I ost_index
-the index number of the Lustre OST associated with stripe number
+the index number of the Lustre OST associated with
 .I stripe_number
-in layout
+in
 .IR layout .
 .PP
 .B llapi_layout_ost_index_set()
-sets the OST index of stripe number
+sets the OST index of
 .I stripe_number
-in layout
+in
 .I layout
 to
 .IR ost_index .
 This allows an application to control which OSTs will be used to
-allocate storage for a file.  Setting the OST index is currently only
-supported for stripe 0.
+allocate storage for a file.  Setting the starting OST index for a file
+.RI ( stripe_number =0)
+is supported with all versions of Lustre, and other stripes in the file
+will be assigned sequentially by the filesystem.  Setting the OST indices
+other than stripe 0 is only supported with Lustre 2.7 and later, and will
+return an error at file creation time for 2.6 and earlier.
 .PP
 It is an error to call
 .B llapi_layout_ost_index_get()
@@ -47,7 +51,12 @@ An
 .I ost_index
 value of
 .B LLAPI_LAYOUT_DEFAULT
-means that an index will be automatically assigned by the filesystem.
+is only valid for
+.IR stripe_number =0
+and means that an OST index will be automatically assigned by the
+filesystem and will reset previously-set
+.I stripe_number
+assignments.
 .SH RETURN VALUES
 .LP
 .B llapi_layout_ost_index_get()

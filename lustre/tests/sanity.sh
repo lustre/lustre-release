@@ -2032,8 +2032,13 @@ test_27D() {
 	test_mkdir -p $DIR/$tdir
 	pool_add $POOL || error "pool_add failed"
 	pool_add_targets $POOL $ost_range || error "pool_add_targets failed"
-	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT ||
+
+	local skip27D
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
+		skip27D = "-s 29"
+	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $skip27D ||
 		error "llapi_layout_test failed"
+
 	cleanup_pools || error "cleanup_pools failed"
 }
 run_test 27D "validate llapi_layout API"

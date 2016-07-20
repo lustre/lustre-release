@@ -70,8 +70,8 @@ static int num_osts = -1;
 
 void usage(char *prog)
 {
-	printf("Usage: %s [-d lustre_dir] [-p pool_name] [-o num_osts]\n",
-	       prog);
+	printf("Usage: %s [-d lustre_dir] [-p pool_name] [-o num_osts] "
+	       "[-s $n,$m,..]\n", prog);
 	exit(0);
 }
 
@@ -555,12 +555,6 @@ void test13(void)
 
 	layout = llapi_layout_alloc();
 	ASSERTF(layout != NULL, "errno = %d", errno);
-
-	/* Only setting OST index for stripe 0 is supported for now. */
-	errno = 0;
-	rc = llapi_layout_ost_index_set(layout, 1, 1);
-	ASSERTF(rc == -1 && errno == EOPNOTSUPP, "rc = %d, errno = %d",
-		rc, errno);
 
 	/* invalid OST index */
 	errno = 0;
@@ -1202,6 +1196,119 @@ void test28(void)
 	llapi_layout_free(layout);
 }
 
+#define T29FILE		"f29"
+#define T29_DESC	"set ost index to non-zero stripe number"
+void test29(void)
+{
+	int rc, fd, i;
+	uint64_t ost0, ost1, nost;
+	struct llapi_layout *layout;
+	char path[PATH_MAX];
+
+	if (num_osts < 2)
+		return;
+
+	layout = llapi_layout_alloc();
+	ASSERTF(layout != NULL, "errno %d", errno);
+
+	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T29FILE);
+
+	rc = unlink(path);
+	ASSERTF(rc >= 0 || errno == ENOENT, "errno = %d", errno);
+
+	/* set ost index to LLAPI_LAYOUT_IDX_MAX should fail */
+	rc = llapi_layout_ost_index_set(layout, 1, LLAPI_LAYOUT_IDX_MAX);
+	ASSERTF(rc == -1 && errno == EINVAL, "rc = %d, errno = %d\n",
+		rc, errno);
+
+	/* specify ost index partially */
+	rc = llapi_layout_ost_index_set(layout, 1, 0);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* create a partially specified layout will fail */
+	fd = llapi_layout_file_create(path, 0, 0660, layout);
+	ASSERTF(fd == -1 && errno == EINVAL, "path = %s, fd = %d, errno = %d",
+		path, fd, errno);
+
+	rc = unlink(path);
+	ASSERTF(rc >= 0 || errno == ENOENT, "errno = %d", errno);
+
+	/* specify all stripes */
+	rc = llapi_layout_ost_index_set(layout, 0, 1);
+	ASSERTF(rc == 0, "errno = %d", errno);
+
+	/* create */
+	fd = llapi_layout_file_create(path, 0, 0660, layout);
+	ASSERTF(fd >= 0, "path = %s, fd = %d, errno = %d", path, fd, errno);
+
+	rc = close(fd);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	llapi_layout_free(layout);
+
+	/* get layout from file */
+	layout = llapi_layout_get_by_path(path, 0);
+	ASSERTF(layout != NULL, "errno = %d", errno);
+
+	rc = llapi_layout_ost_index_get(layout, 0, &ost0);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	rc = llapi_layout_ost_index_get(layout, 1, &ost1);
+	ASSERTF(rc == 0, "errno = %d", errno);
+	ASSERTF(ost0 == 1, "%"PRIu64" != %d", ost0, 1);
+	ASSERTF(ost1 == 0, "%"PRIu64" != %d", ost1, 0);
+	llapi_layout_free(layout);
+
+	/* specify more ost indexes to test realloc */
+	nost = 0;
+	layout = llapi_layout_alloc();
+	ASSERTF(layout != NULL, "errno %d", errno);
+	for (i = 0; i < LOV_MAX_STRIPE_COUNT; i++) {
+		rc = llapi_layout_ost_index_set(layout, i, nost);
+		ASSERTF(rc == 0, "errno = %d", errno);
+		rc = llapi_layout_ost_index_get(layout, i, &ost0);
+		ASSERTF(rc == 0, "errno = %d", errno);
+		nost++;
+		if (nost == num_osts)
+			nost = 0;
+	}
+
+	nost = 0;
+	for (i = 0; i < LOV_MAX_STRIPE_COUNT; i++) {
+		rc = llapi_layout_ost_index_get(layout, i, &ost0);
+		ASSERTF(rc == 0, "errno = %d", errno);
+		ASSERTF(ost0 == nost, "ost=%"PRIu64" nost=%"PRIu64"",
+			ost0, nost);
+		nost++;
+		if (nost == num_osts)
+			nost = 0;
+	}
+	llapi_layout_free(layout);
+
+	nost = 0;
+	layout = llapi_layout_alloc();
+	ASSERTF(layout != NULL, "errno %d", errno);
+	for (i = LOV_MAX_STRIPE_COUNT-1; i >= 0; i--) {
+		rc = llapi_layout_ost_index_set(layout, i, nost);
+		ASSERTF(rc == 0, "errno = %d", errno);
+		rc = llapi_layout_ost_index_get(layout, i, &ost0);
+		ASSERTF(rc == 0, "errno = %d", errno);
+		nost++;
+		if (nost == num_osts)
+			nost = 0;
+	}
+
+	nost = 0;
+	for (i = LOV_MAX_STRIPE_COUNT-1; i <= 0; i--) {
+		rc = llapi_layout_ost_index_get(layout, i, &ost0);
+		ASSERTF(rc == 0, "errno = %d", errno);
+		ASSERTF(ost0 == nost, "ost=%"PRIu64", nost=%"PRIu64"",
+			ost0, nost);
+		nost++;
+		if (nost == num_osts)
+			nost = 0;
+	}
+	llapi_layout_free(layout);
+}
+
 #define TEST_DESC_LEN	50
 struct test_tbl_entry {
 	void (*tte_fn)(void);
@@ -1239,6 +1346,7 @@ static struct test_tbl_entry test_tbl[] = {
 	{ &test26, T26_DESC, false },
 	{ &test27, T27_DESC, false },
 	{ &test28, T28_DESC, false },
+	{ &test29, T29_DESC, false },
 };
 #define NUM_TESTS	(sizeof(test_tbl) / sizeof(struct test_tbl_entry))
 
@@ -1296,11 +1404,31 @@ int test(void (*test_fn)(), const char *test_desc, bool test_skip, int test_num)
 	return rc;
 }
 
+/* 'str_tests' are the tests to be skipped, such as "1,3,4,.." */
+static void set_tests_skipped(char *str_tests)
+{
+	char *ptr = str_tests;
+	int tstno;
+
+	if (ptr == NULL || strlen(ptr) == 0)
+		return;
+
+	while (*ptr != '\0') {
+		tstno = strtoul(ptr, &ptr, 0);
+		if (tstno >= 0 && tstno < NUM_TESTS)
+			test_tbl[tstno].tte_skip = true;
+		if (*ptr == ',')
+			ptr++;
+		else
+			break;
+	}
+}
+
 static void process_args(int argc, char *argv[])
 {
 	int c;
 
-	while ((c = getopt(argc, argv, "d:p:o:")) != -1) {
+	while ((c = getopt(argc, argv, "d:p:o:s:")) != -1) {
 		switch (c) {
 		case 'd':
 			lustre_dir = optarg;
@@ -1310,6 +1438,9 @@ static void process_args(int argc, char *argv[])
 			break;
 		case 'o':
 			num_osts = atoi(optarg);
+			break;
+		case 's':
+			set_tests_skipped(optarg);
 			break;
 		case '?':
 			fprintf(stderr, "Unknown option '%c'\n", optopt);

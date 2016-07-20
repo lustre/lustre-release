@@ -489,6 +489,16 @@ void llapi_layout_free(struct llapi_layout *layout);
 #define LLAPI_LAYOUT_RAID0	0
 
 /**
+* The layout includes a specific set of OSTs on which to allocate.
+*/
+#define LLAPI_LAYOUT_SPECIFIC	0x2000000000000000ULL
+
+/**
+ * A valid ost index should be less than maximum valid OST index (UINT_MAX).
+ */
+#define LLAPI_LAYOUT_IDX_MAX	0x00000000FFFFFFFFULL
+
+/**
  * Flags to modify how layouts are retrieved.
  */
 /******************** Stripe Count ********************/
