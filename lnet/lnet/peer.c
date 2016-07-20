@@ -304,7 +304,7 @@ lnet_peer_ni_del_locked(struct lnet_peer_ni *lpni)
 	return 0;
 }
 
-void lnet_peer_uninit()
+void lnet_peer_uninit(void)
 {
 	struct lnet_peer_ni *lpni, *tmp;
 

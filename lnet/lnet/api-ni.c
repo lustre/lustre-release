@@ -2516,7 +2516,7 @@ lnet_dyn_add_net(struct lnet_ioctl_config_data *conf)
 
 	LASSERT(lnet_net_unique(net->net_id, &the_lnet.ln_nets, NULL));
 
-	memset(&tun, sizeof(tun), 0);
+	memset(&tun, 0, sizeof(tun));
 
 	tun.lt_cmn.lct_peer_timeout =
 	  conf->cfg_config_u.cfg_net.net_peer_timeout;

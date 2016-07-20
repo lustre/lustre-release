@@ -1793,7 +1793,8 @@ pick_peer:
 
 	/* if we still can't find a peer ni then we can't reach it */
 	if (!best_lpni) {
-		__u32 net_id = peer_net->lpn_net_id;
+		__u32 net_id = (peer_net) ? peer_net->lpn_net_id :
+			LNET_NIDNET(dst_nid);
 		lnet_net_unlock(cpt);
 		LCONSOLE_WARN("no peer_ni found on peer net %s\n",
 				libcfs_net2str(net_id));
