@@ -2152,19 +2152,6 @@ enum {
 	LUSTRE_LMA_FL_MASKS = LUSTRE_ORPHAN_FL,
 };
 
-/* LUSTRE_LMA_FL_MASKS defines which flags will be stored in LMA */
-
-static inline int lma_to_lustre_flags(__u32 lma_flags)
-{
-	return (lma_flags & LMAI_ORPHAN) ? LUSTRE_ORPHAN_FL : 0;
-}
-
-static inline int lustre_to_lma_flags(__u32 la_flags)
-{
-	return (la_flags & LUSTRE_ORPHAN_FL) ? LMAI_ORPHAN : 0;
-}
-
-
 #ifdef __KERNEL__
 /* Convert wire LUSTRE_*_FL to corresponding client local VFS S_* values
  * for the client inode i_flags.  The LUSTRE_*_FL are the Lustre wire
@@ -2401,17 +2388,6 @@ struct mdt_rec_create {
         __u32           cr_umask;       /* umask for create */
         __u32           cr_padding_4;   /* rr_padding_4 */
 };
-
-static inline void set_mrc_cr_flags(struct mdt_rec_create *mrc, __u64 flags)
-{
-        mrc->cr_flags_l = (__u32)(flags & 0xFFFFFFFFUll);
-        mrc->cr_flags_h = (__u32)(flags >> 32);
-}
-
-static inline __u64 get_mrc_cr_flags(struct mdt_rec_create *mrc)
-{
-        return ((__u64)(mrc->cr_flags_l) | ((__u64)mrc->cr_flags_h << 32));
-}
 
 /* instance of mdt_reint_rec */
 struct mdt_rec_link {
@@ -2681,22 +2657,6 @@ static inline int lmv_mds_md_stripe_count_get(const union lmv_mds_md *lmm)
 	}
 }
 
-static inline int lmv_mds_md_stripe_count_set(union lmv_mds_md *lmm,
-					      unsigned int stripe_count)
-{
-	switch (le32_to_cpu(lmm->lmv_magic)) {
-	case LMV_MAGIC_V1:
-		lmm->lmv_md_v1.lmv_stripe_count = cpu_to_le32(stripe_count);
-		break;
-	case LMV_USER_MAGIC:
-		lmm->lmv_user_md.lum_stripe_count = cpu_to_le32(stripe_count);
-		break;
-	default:
-		return -EINVAL;
-	}
-	return 0;
-}
-
 enum fld_rpc_opc {
 	FLD_QUERY	= 900,
 	FLD_READ	= 901,
@@ -2786,12 +2746,6 @@ struct ldlm_res_id {
 			(unsigned long long)(res)->lr_name.name[2],	\
 			(unsigned long long)(res)->lr_name.name[3]
 
-static inline bool ldlm_res_eq(const struct ldlm_res_id *res0,
-			       const struct ldlm_res_id *res1)
-{
-	return memcmp(res0, res1, sizeof(*res0)) == 0;
-}
-
 /* lock types */
 typedef enum ldlm_mode {
 	LCK_MINMODE	= 0,
@@ -2823,19 +2777,6 @@ struct ldlm_extent {
         __u64 end;
         __u64 gid;
 };
-
-static inline int ldlm_extent_overlap(const struct ldlm_extent *ex1,
-				      const struct ldlm_extent *ex2)
-{
-	return ex1->start <= ex2->end && ex2->start <= ex1->end;
-}
-
-/* check if @ex1 contains @ex2 */
-static inline int ldlm_extent_contain(const struct ldlm_extent *ex1,
-				      const struct ldlm_extent *ex2)
-{
-	return ex1->start <= ex2->start && ex1->end >= ex2->end;
-}
 
 struct ldlm_inodebits {
         __u64 bits;
@@ -2909,17 +2850,6 @@ struct ldlm_request {
         struct ldlm_lock_desc lock_desc;
         struct lustre_handle lock_handle[LDLM_LOCKREQ_HANDLES];
 };
-
-/* If LDLM_ENQUEUE, 1 slot is already occupied, 1 is available.
- * Otherwise, 2 are available. */
-#define ldlm_request_bufsize(count,type)                                \
-({                                                                      \
-        int _avail = LDLM_LOCKREQ_HANDLES;                              \
-        _avail -= (type == LDLM_ENQUEUE ? LDLM_ENQUEUE_CANCEL_OFF : 0); \
-        sizeof(struct ldlm_request) +                                   \
-        (count > _avail ? count - _avail : 0) *                         \
-        sizeof(struct lustre_handle);                                   \
-})
 
 struct ldlm_reply {
         __u32 lock_flags;
@@ -3130,12 +3060,6 @@ struct llog_rec_tail {
 	(rec->lrh_len - sizeof(struct llog_rec_hdr) -		\
 	 sizeof(struct llog_rec_tail))
 
-static inline void *rec_tail(struct llog_rec_hdr *rec)
-{
-	return (void *)((char *)rec + rec->lrh_len -
-			sizeof(struct llog_rec_tail));
-}
-
 struct llog_logid_rec {
 	struct llog_rec_hdr	lid_hdr;
 	struct llog_logid	lid_id;
@@ -3244,12 +3168,6 @@ static inline const char *agent_req_status2name(enum agent_req_status ars)
 	default:
 		return "UNKNOWN";
 	}
-}
-
-static inline bool agent_req_in_final_state(enum agent_req_status ars)
-{
-	return ((ars == ARS_SUCCEED) || (ars == ARS_FAILED) ||
-		(ars == ARS_CANCELED));
 }
 
 struct llog_agent_req_rec {
@@ -3493,15 +3411,6 @@ struct ll_fiemap_info_key {
 	struct fiemap	lfik_fiemap;
 };
 
-void lustre_print_user_md(unsigned int level, struct lov_user_md *lum,
-			  const char *msg);
-
-/* Functions for dumping PTLRPC fields */
-void dump_rniobuf(struct niobuf_remote *rnb);
-void dump_ioo(struct obd_ioobj *nb);
-void dump_ost_body(struct ost_body *ob);
-void dump_rcs(__u32 *rc);
-
 #define IDX_INFO_MAGIC 0x3D37CC37
 
 /* Index file transfer through the network. The server serializes the index into
@@ -3640,16 +3549,6 @@ enum {
          CAPA_OPC_OSS_DESTROY)
 #define CAPA_OPC_MDS_DEFAULT ~CAPA_OPC_OSS_ONLY
 #define CAPA_OPC_OSS_DEFAULT ~(CAPA_OPC_MDS_ONLY | CAPA_OPC_OSS_ONLY)
-
-static inline bool lovea_slot_is_dummy(const struct lov_ost_data_v1 *obj)
-{
-	/* zero area does not care about the bytes-order. */
-	if (obj->l_ost_oi.oi.oi_id == 0 && obj->l_ost_oi.oi.oi_seq == 0 &&
-	    obj->l_ost_idx == 0 && obj->l_ost_gen == 0)
-		return true;
-
-	return false;
-}
 
 /* lustre_capa::lc_hmac_alg */
 enum {

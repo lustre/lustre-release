@@ -128,6 +128,12 @@ static int llog_osd_exist(struct llog_handle *handle)
 		!lu_object_is_dying(handle->lgh_obj->do_lu.lo_header);
 }
 
+static void *rec_tail(struct llog_rec_hdr *rec)
+{
+	return (void *)((char *)rec + rec->lrh_len -
+			sizeof(struct llog_rec_tail));
+}
+
 /**
  * Write a padding record to the llog
  *

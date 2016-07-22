@@ -355,3 +355,9 @@ void ldlm_reclaim_cleanup(void);
 void ldlm_reclaim_add(struct ldlm_lock *lock);
 void ldlm_reclaim_del(struct ldlm_lock *lock);
 bool ldlm_reclaim_full(void);
+
+static inline bool ldlm_res_eq(const struct ldlm_res_id *res0,
+			       const struct ldlm_res_id *res1)
+{
+	return memcmp(res0, res1, sizeof(*res0)) == 0;
+}

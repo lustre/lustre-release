@@ -760,6 +760,12 @@ static inline struct dt_object *mdt_obj2dt(struct mdt_object *mo)
 	return lu2dt(lo);
 }
 
+static inline bool agent_req_in_final_state(enum agent_req_status ars)
+{
+	return ((ars == ARS_SUCCEED) || (ars == ARS_FAILED) ||
+		(ars == ARS_CANCELED));
+}
+
 /* mdt/mdt_identity.c */
 #define MDT_IDENTITY_UPCALL_PATH        "/usr/sbin/l_getidentity"
 

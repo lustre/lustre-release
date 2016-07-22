@@ -62,6 +62,11 @@ typedef enum ucred_init_type {
         REC_INIT        = 2
 } ucred_init_type_t;
 
+static __u64 get_mrc_cr_flags(struct mdt_rec_create *mrc)
+{
+	return (__u64)(mrc->cr_flags_l) | ((__u64)mrc->cr_flags_h << 32);
+}
+
 void mdt_exit_ucred(struct mdt_thread_info *info)
 {
 	struct lu_ucred   *uc  = mdt_ucred(info);

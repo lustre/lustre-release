@@ -885,4 +885,16 @@ do {                                                                          \
 #define KEY_IS(str) \
         (keylen >= (sizeof(str)-1) && memcmp(key, str, (sizeof(str)-1)) == 0)
 
+/* LUSTRE_LMA_FL_MASKS defines which flags will be stored in LMA */
+
+static inline int lma_to_lustre_flags(__u32 lma_flags)
+{
+	return (lma_flags & LMAI_ORPHAN) ? LUSTRE_ORPHAN_FL : 0;
+}
+
+static inline int lustre_to_lma_flags(__u32 la_flags)
+{
+	return (la_flags & LUSTRE_ORPHAN_FL) ? LMAI_ORPHAN : 0;
+}
+
 #endif

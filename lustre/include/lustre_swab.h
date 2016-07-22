@@ -118,4 +118,13 @@ void lustre_swab_lmv_user_md(struct lmv_user_md *lum);
 void lustre_swab_ladvise(struct lu_ladvise *ladvise);
 void lustre_swab_ladvise_hdr(struct ladvise_hdr *ladvise_hdr);
 
+/* Functions for dumping PTLRPC fields */
+void dump_rniobuf(struct niobuf_remote *rnb);
+void dump_ioo(struct obd_ioobj *nb);
+void dump_ost_body(struct ost_body *ob);
+void dump_rcs(__u32 *rc);
+
+void lustre_print_user_md(unsigned int level, struct lov_user_md *lum,
+			  const char *msg);
+
 #endif

@@ -94,4 +94,14 @@ static inline void lfsck_pack_rfa(struct lfsck_request *lr,
 	lr->lr_active = com;
 }
 
+static inline bool lovea_slot_is_dummy(const struct lov_ost_data_v1 *obj)
+{
+	/* zero area does not care about the bytes-order. */
+	if (obj->l_ost_oi.oi.oi_id == 0 && obj->l_ost_oi.oi.oi_seq == 0 &&
+	    obj->l_ost_idx == 0 && obj->l_ost_gen == 0)
+		return true;
+
+	return false;
+}
+
 #endif /* _LUSTRE_LFSCK_H */

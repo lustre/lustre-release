@@ -46,6 +46,11 @@
 #include <cl_object.h>
 #include "mdc_internal.h"
 
+static void set_mrc_cr_flags(struct mdt_rec_create *mrc, __u64 flags)
+{
+	mrc->cr_flags_l = (__u32)(flags & 0xFFFFFFFFUll);
+	mrc->cr_flags_h = (__u32)(flags >> 32);
+}
 
 static void __mdc_pack_body(struct mdt_body *b, __u32 suppgid)
 {
