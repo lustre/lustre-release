@@ -1573,6 +1573,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 static int mgc_process_recover_nodemap_log(struct obd_device *obd,
 					   struct config_llog_data *cld)
 {
+	struct ptlrpc_connection *mgc_conn;
 	struct ptlrpc_request *req = NULL;
 	struct config_llog_instance *cfg = &cld->cld_cfg;
 	struct mgs_config_body *body;
@@ -1580,16 +1581,22 @@ static int mgc_process_recover_nodemap_log(struct obd_device *obd,
 	struct nodemap_config *new_config = NULL;
 	struct lu_nodemap *recent_nodemap = NULL;
 	struct ptlrpc_bulk_desc *desc;
-	struct page **pages;
+	struct page **pages = NULL;
 	__u64 config_read_offset = 0;
-	int nrpages;
+	int nrpages = 0;
 	bool eof = true;
 	bool mne_swab = false;
 	int i;
 	int ealen;
 	int rc;
-
 	ENTRY;
+
+	mgc_conn = class_exp2cliimp(cld->cld_mgcexp)->imp_connection;
+
+	/* don't need to get local config */
+	if (cld_is_nodemap(cld) &&
+	    (LNET_NETTYP(LNET_NIDNET(mgc_conn->c_peer.nid)) == LOLND))
+		GOTO(out, rc = 0);
 
         /* allocate buffer for bulk transfer.
          * if this is the first time for this mgs to read logs,
