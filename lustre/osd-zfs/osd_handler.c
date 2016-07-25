@@ -884,7 +884,7 @@ static int osd_objset_open(struct osd_device *o)
 	    DMU_GROUPUSED_DNODE(o->od_os)->dn_type != DMU_OT_USERGROUP_USED) {
 		CERROR("%s: Space accounting not supported by this target, "
 			"aborting\n", o->od_svname);
-		GOTO(out, -ENOTSUPP);
+		GOTO(out, rc = -ENOTSUPP);
 	}
 
 out:
