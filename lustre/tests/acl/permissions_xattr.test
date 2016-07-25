@@ -1,0 +1,143 @@
+This script tests if extended attributes permissions are properly checked
+with and without ACLs. The script must be run as root to allow switching
+users. The following users are required.
+
+	bin
+	nobody
+
+
+Cry immediately if we are not running as root.
+
+	$ id -u
+	> 0
+
+
+First, set up a temporary directory and create a regular file with
+defined permissions.
+
+	$ mkdir d
+	$ cd d
+	$ umask 027
+	$ touch f
+	$ chown nobody:nobody f
+	$ ls -l f | awk -- '{ print $1, $3, $4 }'
+	> -rw-r----- nobody nobody
+	$ su nobody
+	$ echo nobody > f
+
+
+Verify that the user bin don't have enough permission to set
+extended attributes in user.* namespace.
+
+	$ su bin
+	$ setfattr -n user.test.xattr -v 123456 f
+	> setfattr: f: Permission denied
+
+
+Now, add an ACL entry for user bin that grants him rw- access. File
+owners and users capable of CAP_FOWNER are allowed to change ACLs.
+
+	$ su nobody
+	$ setfacl -m g:bin:rw f
+	$ getfacl --omit-header f
+	> user::rw-
+	> group::r--
+	> group:bin:rw-
+	> mask::rw-
+	> other::---
+	>
+
+
+Verify that the additional ACL entry grants user bin permission
+to set extended attributes in user.* namespace for files.
+
+	$ su bin
+	$ setfattr -n user.test.xattr -v 123456 f
+	$ getfattr -d f
+	> # file: f
+	> user.test.xattr="123456"
+	>
+
+
+Test if symlinks are properly followed.
+
+	$ su
+	$ ln -s f l
+	$ ls -l l | awk -- '{ print $1, $3, $4 }'
+	> lrwxrwxrwx root root
+	$ su bin
+	$ getfattr -d l
+	> # file: l
+	> user.test.xattr="123456"
+	>
+
+
+Test the sticky directories. Only the owner and privileged user can
+write attributes.
+
+	$ su
+	$ mkdir t
+	$ chown nobody:nobody t
+	$ chmod 1750 t
+	$ ls -dl t | awk -- '{ print $1, $3, $4 }'
+	> drwxr-x--T nobody nobody
+	$ su nobody
+	$ setfacl -m g:bin:rwx t
+	$ getfacl --omit-header t
+	> user::rwx
+	> group::r-x
+	> group:bin:rwx
+	> mask::rwx
+	> other::---
+	>
+	$ su bin
+	$ setfattr -n user.test.xattr -v 654321 t
+	> setfattr: t: Operation not permitted
+
+
+Verify that the additional ACL entry grants user bin permission
+to set extended attributes in user.* namespace for directories.
+
+	$ su
+	$ mkdir d
+	$ chown nobody:nobody d
+	$ chmod 750 d
+	$ ls -dl d | awk -- '{ print $1, $3, $4 }'
+	> drwxr-x--- nobody nobody
+	$ su nobody
+	$ setfacl -m g:bin:rwx d
+	$ getfacl --omit-header d
+	> user::rwx
+	> group::r-x
+	> group:bin:rwx
+	> mask::rwx
+	> other::---
+	>
+	$ su bin
+	$ setfattr -n user.test.xattr -v 654321 d
+	$ getfattr -d d
+	> # file: d
+	> user.test.xattr="654321"
+	>
+
+
+Test that in user.* namespace, only regular files and directories can have
+extended attributes.
+
+	$ su
+	$ mknod -m 0660 hdt b 91 64     # /dev/hdt
+	$ mknod -m 0660 null c 1 3      # /dev/null
+	$ mkfifo -m 0660 fifo
+	$ setfattr -n user.test.xattr -v 123456 hdt
+	> setfattr: hdt: Operation not permitted
+	$ setfattr -n user.test.xattr -v 123456 null
+	> setfattr: null: Operation not permitted
+	$ setfattr -n user.test.xattr -v 123456 fifo
+	> setfattr: fifo: Operation not permitted
+
+
+Clean up.
+
+	$ su
+	$ cd ..
+	$ rm -rf d

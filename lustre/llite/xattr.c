@@ -151,15 +151,22 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 		 strcmp(name, "lustre.lov") == 0))
 		RETURN(0);
 
-        /* b15587: ignore security.capability xattr for now */
-        if ((xattr_type == XATTR_SECURITY_T &&
-            strcmp(name, "security.capability") == 0))
-                RETURN(0);
+	/* b15587: ignore security.capability xattr for now */
+	if ((xattr_type == XATTR_SECURITY_T &&
+	    strcmp(name, "security.capability") == 0))
+		RETURN(0);
 
-        /* LU-549:  Disable security.selinux when selinux is disabled */
-        if (xattr_type == XATTR_SECURITY_T && !selinux_is_enabled() &&
-            strcmp(name, "security.selinux") == 0)
-                RETURN(-EOPNOTSUPP);
+	/* LU-549:  Disable security.selinux when selinux is disabled */
+	if (xattr_type == XATTR_SECURITY_T && !selinux_is_enabled() &&
+	    strcmp(name, "security.selinux") == 0)
+		RETURN(-EOPNOTSUPP);
+
+	/* In user.* namespace, only regular files and directories can have
+	 * extended attributes. */
+	if (xattr_type == XATTR_USER_T) {
+		if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode))
+			RETURN(-EPERM);
+	}
 
 	rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode), valid, name, pv,
 			 size, 0, flags, ll_i2suppgid(inode), &req);

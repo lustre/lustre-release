@@ -7303,6 +7303,15 @@ test_103a() {
 	run_acl_subtest misc || error  "misc test failed"
 	echo "performing permissions..."
 	run_acl_subtest permissions || error "permissions failed"
+	# LU-1482 mdd: Setting xattr are properly checked with and without ACLs
+	if [ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.8.55) -o \
+	     \( $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6) -a \
+	     $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.5.29) \) ]
+	then
+		echo "performing permissions xattr..."
+		run_acl_subtest permissions_xattr ||
+			error "permissions_xattr failed"
+	fi
 	echo "performing setfacl..."
 	run_acl_subtest setfacl || error  "setfacl test failed"
 
