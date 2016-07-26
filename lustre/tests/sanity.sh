@@ -4459,6 +4459,26 @@ test_56a() {	# was test_56
 }
 run_test 56a "check $GETSTRIPE"
 
+test_56b() {
+	test_mkdir $DIR/$tdir
+	NUMDIRS=3
+	for i in $(seq 1 $NUMDIRS); do
+		test_mkdir $DIR/$tdir/dir$i
+	done
+
+	# test lfs getdirstripe default mode is non-recursion, which is
+	# different from lfs getstripe
+	dircnt=$($LFS getdirstripe $DIR/$tdir | grep -c lmv_stripe_count)
+	[[ $dircnt -eq 1 ]] ||
+		error "$LFS getdirstripe: found $dircnt, not 1"
+	dircnt=$($LFS getdirstripe --recursive $DIR/$tdir |
+		grep -c lmv_stripe_count)
+	[[ $dircnt -eq $((NUMDIRS + 1)) ]] ||
+		error "$LFS getdirstripe --recursive: found $dircnt, \
+			not $((NUMDIRS + 1))"
+}
+run_test 56b "check $LFS getdirstripe"
+
 NUMFILES=3
 NUMDIRS=3
 setup_56() {
