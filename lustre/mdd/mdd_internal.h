@@ -42,6 +42,7 @@
 #define _MDD_INTERNAL_H
 
 #include <lustre_acl.h>
+#include <lustre_compat.h>
 #include <lustre_eacl.h>
 #include <md_object.h>
 #include <dt_object.h>

@@ -49,6 +49,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
+#include <linux/pagemap.h>
 
 #include <dt_object.h>
 #include <lustre_acl.h>

@@ -39,8 +39,10 @@
 
 #include <linux/fs_struct.h>
 #include <linux/namei.h>
+#include <linux/pagemap.h>
 #include <linux/bio.h>
 
+#include <libcfs/libcfs.h>
 #include <lustre_patchless_compat.h>
 
 #ifdef HAVE_FS_STRUCT_RWLOCK
@@ -278,6 +280,14 @@ unsigned int ll_crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
 # define TIMES_SET_FLAGS (ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_TIMES_SET)
 #else
 # define TIMES_SET_FLAGS (ATTR_MTIME_SET | ATTR_ATIME_SET)
+#endif
+
+#ifndef XATTR_NAME_POSIX_ACL_ACCESS
+# define XATTR_NAME_POSIX_ACL_ACCESS POSIX_ACL_XATTR_ACCESS
+#endif
+
+#ifndef XATTR_NAME_POSIX_ACL_DEFAULT
+# define XATTR_NAME_POSIX_ACL_DEFAULT POSIX_ACL_XATTR_DEFAULT
 #endif
 
 #ifndef HAVE_LM_XXX_LOCK_MANAGER_OPS

@@ -1098,10 +1098,10 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 					      handle);
 	else if (strncmp(XATTR_USER_PREFIX, name,
 			sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
-	    strncmp(POSIX_ACL_XATTR_ACCESS, name,
-			sizeof(POSIX_ACL_XATTR_ACCESS) - 1) == 0 ||
-	    strncmp(POSIX_ACL_XATTR_DEFAULT, name,
-			sizeof(POSIX_ACL_XATTR_DEFAULT) - 1) == 0)
+	    strncmp(XATTR_NAME_POSIX_ACL_ACCESS, name,
+		    sizeof(XATTR_NAME_POSIX_ACL_ACCESS) - 1) == 0 ||
+	    strncmp(XATTR_NAME_POSIX_ACL_DEFAULT, name,
+		    sizeof(XATTR_NAME_POSIX_ACL_DEFAULT) - 1) == 0)
 		rc = mdd_changelog_data_store(env, mdd, CL_XATTR, 0, mdd_obj,
 					      handle);
 
@@ -1126,10 +1126,10 @@ static int mdd_declare_xattr_del(const struct lu_env *env,
 	/* Only record system & user xattr changes */
 	if (strncmp(XATTR_USER_PREFIX, name,
 			sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
-		strncmp(POSIX_ACL_XATTR_ACCESS, name,
-			sizeof(POSIX_ACL_XATTR_ACCESS) - 1) == 0 ||
-		strncmp(POSIX_ACL_XATTR_DEFAULT, name,
-			sizeof(POSIX_ACL_XATTR_DEFAULT) - 1) == 0)
+		strncmp(XATTR_NAME_POSIX_ACL_ACCESS, name,
+			sizeof(XATTR_NAME_POSIX_ACL_ACCESS) - 1) == 0 ||
+		strncmp(XATTR_NAME_POSIX_ACL_DEFAULT, name,
+			sizeof(XATTR_NAME_POSIX_ACL_DEFAULT) - 1) == 0)
 		rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
 
 	return rc;
@@ -1178,10 +1178,10 @@ static int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
         /* Only record system & user xattr changes */
 	if (strncmp(XATTR_USER_PREFIX, name,
                                   sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
-                          strncmp(POSIX_ACL_XATTR_ACCESS, name,
-                                  sizeof(POSIX_ACL_XATTR_ACCESS) - 1) == 0 ||
-                          strncmp(POSIX_ACL_XATTR_DEFAULT, name,
-				  sizeof(POSIX_ACL_XATTR_DEFAULT) - 1) == 0)
+			  strncmp(XATTR_NAME_POSIX_ACL_ACCESS, name,
+				  sizeof(XATTR_NAME_POSIX_ACL_ACCESS) - 1) == 0 ||
+			  strncmp(XATTR_NAME_POSIX_ACL_DEFAULT, name,
+				  sizeof(XATTR_NAME_POSIX_ACL_DEFAULT) - 1) == 0)
                 rc = mdd_changelog_data_store(env, mdd, CL_XATTR, 0, mdd_obj,
                                               handle);
 

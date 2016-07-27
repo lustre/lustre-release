@@ -57,14 +57,6 @@
 #define XATTR_NAME_EVM		"security.evm"
 #endif
 
-#ifndef XATTR_NAME_POSIX_ACL_ACCESS
-# define XATTR_NAME_POSIX_ACL_ACCESS POSIX_ACL_XATTR_ACCESS
-#endif
-
-#ifndef XATTR_NAME_POSIX_ACL_DEFAULT
-# define XATTR_NAME_POSIX_ACL_DEFAULT POSIX_ACL_XATTR_DEFAULT
-#endif
-
 #define XATTR_USER_T            (1)
 #define XATTR_TRUSTED_T         (2)
 #define XATTR_SECURITY_T        (3)
