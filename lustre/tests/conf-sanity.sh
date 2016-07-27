@@ -7790,6 +7790,73 @@ test_108b() {
 }
 run_test 108b "migrate from ZFS to ldiskfs"
 
+cleanup_115()
+{
+	trap 0
+	stopall
+	rm -f $TMP/$tdir/lustre-mdt
+	formatall
+}
+
+test_115() {
+	IMAGESIZE=$((3072 << 30)) # 3072 GiB
+
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
+	stopall
+	# We need MDT size 3072GB, because it is smallest
+	# partition that can store 2B inodes
+	do_facet $SINGLEMDS "mkdir -p $TMP/$tdir"
+	local mdsimgname=$TMP/$tdir/lustre-mdt
+	do_facet $SINGLEMDS "rm -f $mdsimgname"
+	do_facet $SINGLEMDS "touch $mdsimgname"
+	trap cleanup_115 RETURN EXIT
+	do_facet $SINGLEMDS "$TRUNCATE $mdsimgname $IMAGESIZE" ||
+		{ skip "Backend FS doesn't support sparse files"; return 0; }
+	local mdsdev=$(do_facet $SINGLEMDS "losetup -f")
+	do_facet $SINGLEMDS "losetup $mdsdev $mdsimgname"
+
+	local mds_opts="$(mkfs_opts mds1 ${mdsdev}) --device-size=$IMAGESIZE   \
+		--mkfsoptions='-O lazy_itable_init,large_xattr,^resize_inode,meta_bg \
+		-i 1024'"
+	add mds1 $mds_opts --mgs --reformat $mdsdev ||
+		{ skip_env "format large MDT failed"; return 0; }
+	add ost1 $(mkfs_opts ost1 $(ostdevname 1)) --index=$i \
+			--reformat $(ostdevname 1) $(ostvdevname 1)
+
+	start $SINGLEMDS ${mdsdev} $MDS_MOUNT_OPTS || error "start MDS failed"
+	start_ost || error "start OSS failed"
+	mount_client $MOUNT || error "mount client failed"
+
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir fail"
+	for goal in $(do_facet $SINGLEMDS "ls /sys/fs/ldiskfs/*/inode_goal"); do
+		do_facet $SINGLEMDS "echo 2147483947 >> $goal; grep . $goal"
+	done
+
+	touch $DIR/$tdir/$tfile
+
+	# Add > 5k bytes to xattr
+	for i in {1..30}; do
+		ln $DIR/$tdir/$tfile $DIR/$tdir/$(printf "link%0250d" $i) ||
+			error "Can't make link"
+	done
+
+	sync; sleep 5; sync
+
+	local inode_num=$(do_facet $SINGLEMDS \
+			 "$DEBUGFS -c -R 'stat ROOT/$tdir/$tfile' $mdsimgname" |
+			 awk '/link =/ { print $4 }' |
+			 sed -e 's/>//' -e 's/<//' -e 's/\"//')
+	echo "inode num: $inode_num"
+	[ $inode_num -ge 2147483947 ] || error "inode $inode_num too small"
+	do_facet $SINGLEMDS "losetup -d $mdsdev"
+	cleanup_115
+}
+run_test 115 "Access large xattr with inodes number over 2TB"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
