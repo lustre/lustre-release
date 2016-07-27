@@ -513,7 +513,6 @@ static int tgt_client_data_update(const struct lu_env *env,
 		RETURN(PTR_ERR(th));
 
 	tti_buf_lcd(tti);
-	mutex_lock(&ted->ted_lcd_lock);
 	rc = dt_declare_record_write(env, tgt->lut_last_rcvd,
 				     &tti->tti_buf,
 				     ted->ted_lr_off, th);
@@ -523,6 +522,9 @@ static int tgt_client_data_update(const struct lu_env *env,
 	rc = dt_trans_start_local(env, tgt->lut_bottom, th);
 	if (rc)
 		GOTO(out, rc);
+
+	mutex_lock(&ted->ted_lcd_lock);
+
 	/*
 	 * Until this operations will be committed the sync is needed
 	 * for this export. This should be done _after_ starting the
@@ -541,9 +543,11 @@ static int tgt_client_data_update(const struct lu_env *env,
 
 	tti->tti_off = ted->ted_lr_off;
 	rc = tgt_client_data_write(env, tgt, ted->ted_lcd, &tti->tti_off, th);
+
+	mutex_unlock(&ted->ted_lcd_lock);
+
 	EXIT;
 out:
-	mutex_unlock(&ted->ted_lcd_lock);
 	dt_trans_stop(env, tgt->lut_bottom, th);
 	CDEBUG(D_INFO, "%s: update last_rcvd client data for UUID = %s, "
 	       "last_transno = %llu: rc = %d\n", tgt->lut_obd->obd_name,
