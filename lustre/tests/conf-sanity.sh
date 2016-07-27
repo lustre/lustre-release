@@ -6796,6 +6796,37 @@ test_97() {
 }
 run_test 97 "ldev returns correct ouput when querying based on role"
 
+test_99()
+{
+	[[ $(facet_fstype ost1) != ldiskfs ]] &&
+		{ skip "Only applicable to ldiskfs-based OSTs" && return; }
+
+	local ost_opts="$(mkfs_opts ost1 $(ostdevname 1)) \
+		--reformat $(ostdevname 1) $(ostvdevname 1)"
+	do_facet ost1 $DEBUGFS -c -R stats `ostdevname 1` | grep "meta_bg" &&
+		skip "meta_bg already set" && return
+
+	local opts=ost_opts
+	if [[ ${!opts} != *mkfsoptions* ]]; then
+		eval opts=\"${!opts} \
+		--mkfsoptions='\\\"-O ^resize_inode,meta_bg\\\"'\"
+	else
+		local val=${!opts//--mkfsoptions=\\\"/ \
+		--mkfsoptions=\\\"-O ^resize_inode,meta_bg }
+		eval opts='${val}'
+	fi
+
+	echo "params: $opts"
+
+	add ost1 $opts || error "add ost1 failed with new params"
+
+	do_facet ost1 $DEBUGFS -c -R stats `ostdevname 1` | grep "meta_bg" ||
+		error "meta_bg is not set"
+
+	return 0
+}
+run_test 99 "Adding meta_bg option"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

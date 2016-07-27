@@ -889,7 +889,8 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 		 * descriptor blocks, but leave one block for the superblock.
 		 * Only useful for filesystems with < 2^32 blocks due to resize
 		 * limitations. */
-		if (IS_OST(&mop->mo_ldd) && mop->mo_device_kb > 100 * 1024 &&
+		if (strstr(mop->mo_mkfsopts, "meta_bg") == NULL &&
+		    IS_OST(&mop->mo_ldd) && mop->mo_device_kb > 100 * 1024 &&
 		    mop->mo_device_kb * 1024 / L_BLOCK_SIZE <= 0xffffffffULL) {
 			unsigned group_blocks = L_BLOCK_SIZE * 8;
 			unsigned desc_per_block = L_BLOCK_SIZE / 32;
