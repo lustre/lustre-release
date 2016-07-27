@@ -78,8 +78,8 @@ if [[ "$LDISKFS_MKFS_OPTS" != *lazy_itable_init* ]]; then
 fi
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:        LU-4444
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 69"
+# bug number for skipped test:
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT"
 
 init_logging
 
@@ -3669,7 +3669,7 @@ test_50i() {
 	# prepare MDT/OST, make OSC inactive for OST1
 	[ "$MDSCOUNT" -lt "2" ] && skip_env "$MDSCOUNT < 2, skipping" && return
 
-	[ $(facet_fstype ost1) == zfs ] && import_zpool ost1
+	[ $(facet_fstype mds2) == zfs ] && import_zpool mds2
 	do_facet mds2 "$TUNEFS --param mdc.active=0 $(mdsdevname 2)" ||
 		error "tunefs MDT2 failed"
 	start_mds  || error "Unable to start MDT"
