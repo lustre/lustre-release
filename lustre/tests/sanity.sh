@@ -5660,6 +5660,12 @@ test_65l() { # bug 12836
 }
 run_test 65l "lfs find on -1 stripe dir ========================"
 
+test_65m() {
+	$RUNAS $SETSTRIPE -c 2 $MOUNT && error "setstripe should fail"
+	true
+}
+run_test 65m "normal user can't set filesystem default stripe"
+
 # bug 2543 - update blocks count on client
 test_66() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return

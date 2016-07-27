@@ -1228,7 +1228,7 @@ static int lfs_setstripe(int argc, char **argv)
 				argv[0], migrate_mode ? "migrate" : "create",
 				fname,
 				pool_name_arg != NULL && result == EINVAL ?
-				"OST not in pool?" : strerror(result));
+				"OST not in pool?" : strerror(errno));
 			continue;
 		}
 	}
