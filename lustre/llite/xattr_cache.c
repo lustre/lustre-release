@@ -316,12 +316,6 @@ static int ll_xattr_find_get_lock(struct inode *inode,
 	struct lustre_handle lockh = { 0 };
 	struct md_op_data *op_data;
 	struct ll_inode_info *lli = ll_i2info(inode);
-	struct ldlm_enqueue_info einfo = {
-		.ei_type = LDLM_IBITS,
-		.ei_mode = it_to_lock_mode(oit),
-		.ei_cb_bl = &ll_md_blocking_ast,
-		.ei_cb_cp = &ldlm_completion_ast,
-	};
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct obd_export *exp = sbi->ll_md_exp;
 	int rc;
@@ -353,8 +347,9 @@ static int ll_xattr_find_get_lock(struct inode *inode,
 
 	op_data->op_valid = OBD_MD_FLXATTR | OBD_MD_FLXATTRLS;
 
-	rc = md_enqueue(exp, &einfo, NULL, oit, op_data, &lockh, 0);
+	rc = md_intent_lock(exp, op_data, oit, req, &ll_md_blocking_ast, 0);
 	ll_finish_md_op_data(op_data);
+	*req = oit->it_request;
 
 	if (rc < 0) {
 		CDEBUG(D_CACHE, "md_intent_lock failed with %d for fid "DFID"\n",
@@ -363,7 +358,6 @@ static int ll_xattr_find_get_lock(struct inode *inode,
 		RETURN(rc);
 	}
 
-	*req = oit->it_request;
 out:
 	down_write(&lli->lli_xattrs_list_rwsem);
 	mutex_unlock(&lli->lli_xattrs_enq_lock);
@@ -374,16 +368,15 @@ out:
 /**
  * Refill the xattr cache.
  *
- * Fetch and cache the whole of xattrs for @inode, acquiring
- * a read or a write xattr lock depending on operation in @oit.
- * Intent is dropped on exit unless the operation is setxattr.
+ * Fetch and cache the whole of xattrs for @inode, acquiring a read lock.
  *
  * \retval 0       no error occured
  * \retval -EPROTO network protocol error
  * \retval -ENOMEM not enough memory for the cache
  */
-static int ll_xattr_cache_refill(struct inode *inode, struct lookup_intent *oit)
+static int ll_xattr_cache_refill(struct inode *inode)
 {
+	struct lookup_intent oit = { .it_op = IT_GETXATTR };
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	struct ptlrpc_request *req = NULL;
 	const char *xdata, *xval, *xtail, *xvtail;
@@ -394,36 +387,28 @@ static int ll_xattr_cache_refill(struct inode *inode, struct lookup_intent *oit)
 
 	ENTRY;
 
-	rc = ll_xattr_find_get_lock(inode, oit, &req);
+	rc = ll_xattr_find_get_lock(inode, &oit, &req);
 	if (rc)
-		GOTO(out_no_unlock, rc);
+		GOTO(err_req, rc);
 
 	/* Do we have the data at this point? */
 	if (ll_xattr_cache_valid(lli)) {
 		ll_stats_ops_tally(sbi, LPROC_LL_GETXATTR_HITS, 1);
-		GOTO(out_maybe_drop, rc = 0);
+		ll_intent_drop_lock(&oit);
+		GOTO(err_req, rc = 0);
 	}
 
 	/* Matched but no cache? Cancelled on error by a parallel refill. */
 	if (unlikely(req == NULL)) {
 		CDEBUG(D_CACHE, "cancelled by a parallel getxattr\n");
-		GOTO(out_maybe_drop, rc = -EIO);
-	}
-
-	if (oit->it_status < 0) {
-		CDEBUG(D_CACHE, "getxattr intent returned %d for fid "DFID"\n",
-		       oit->it_status, PFID(ll_inode2fid(inode)));
-		rc = oit->it_status;
-		/* xattr data is so large that we don't want to cache it */
-		if (rc == -ERANGE)
-			rc = -EAGAIN;
-		GOTO(out_destroy, rc);
+		ll_intent_drop_lock(&oit);
+		GOTO(err_unlock, rc = -EIO);
 	}
 
 	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
 	if (body == NULL) {
 		CERROR("no MDT BODY in the refill xattr reply\n");
-		GOTO(out_destroy, rc = -EPROTO);
+		GOTO(err_cancel, rc = -EPROTO);
 	}
 	/* do not need swab xattr data */
 	xdata = req_capsule_server_sized_get(&req->rq_pill, &RMF_EADATA,
@@ -435,7 +420,7 @@ static int ll_xattr_cache_refill(struct inode *inode, struct lookup_intent *oit)
 					      sizeof(__u32));
 	if (xdata == NULL || xval == NULL || xsizes == NULL) {
 		CERROR("wrong setxattr reply\n");
-		GOTO(out_destroy, rc = -EPROTO);
+		GOTO(err_cancel, rc = -EPROTO);
 	}
 
 	xtail = xdata + body->mbo_eadatasize;
@@ -471,7 +456,7 @@ static int ll_xattr_cache_refill(struct inode *inode, struct lookup_intent *oit)
 		}
 		if (rc < 0) {
 			ll_xattr_cache_destroy_locked(lli);
-			GOTO(out_destroy, rc);
+			GOTO(err_cancel, rc);
 		}
 		xdata += strlen(xdata) + 1;
 		xval  += *xsizes;
@@ -481,28 +466,24 @@ static int ll_xattr_cache_refill(struct inode *inode, struct lookup_intent *oit)
 	if (xdata != xtail || xval != xvtail)
 		CERROR("a hole in xattr data\n");
 
-	ll_set_lock_data(sbi->ll_md_exp, inode, oit, NULL);
+	ll_set_lock_data(sbi->ll_md_exp, inode, &oit, NULL);
+	ll_intent_drop_lock(&oit);
 
-	GOTO(out_maybe_drop, rc);
-out_maybe_drop:
-
-	ll_intent_drop_lock(oit);
-
-	if (rc != 0)
-		up_write(&lli->lli_xattrs_list_rwsem);
-out_no_unlock:
 	ptlrpc_req_finished(req);
+	RETURN(0);
 
-	return rc;
-
-out_destroy:
-	up_write(&lli->lli_xattrs_list_rwsem);
-
+err_cancel:
 	ldlm_lock_decref_and_cancel((struct lustre_handle *)
-					&oit->it_lock_handle,
-					oit->it_lock_mode);
+				    &oit.it_lock_handle,
+				    oit.it_lock_mode);
+err_unlock:
+	up_write(&lli->lli_xattrs_list_rwsem);
+err_req:
+	if (rc == -ERANGE)
+		rc = -EAGAIN;
 
-	goto out_no_unlock;
+	ptlrpc_req_finished(req);
+	return rc;
 }
 
 /**
@@ -525,7 +506,6 @@ int ll_xattr_cache_get(struct inode *inode,
 			size_t size,
 			__u64 valid)
 {
-	struct lookup_intent oit = { .it_op = IT_GETXATTR };
 	struct ll_inode_info *lli = ll_i2info(inode);
 	int rc = 0;
 
@@ -536,7 +516,7 @@ int ll_xattr_cache_get(struct inode *inode,
 	down_read(&lli->lli_xattrs_list_rwsem);
 	if (!ll_xattr_cache_valid(lli)) {
 		up_read(&lli->lli_xattrs_list_rwsem);
-		rc = ll_xattr_cache_refill(inode, &oit);
+		rc = ll_xattr_cache_refill(inode);
 		if (rc)
 			RETURN(rc);
 		downgrade_write(&lli->lli_xattrs_list_rwsem);

@@ -14305,6 +14305,29 @@ test_256() {
 }
 run_test 256 "Check llog delete for empty and not full state"
 
+test_257() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.55) ]] &&
+		skip "Need MDS version at least 2.8.55" && return
+
+	test_mkdir -p $DIR/$tdir
+
+	setfattr -n trusted.name1 -v value1 $DIR/$tdir ||
+		error "setfattr -n trusted.name1=value1 $DIR/$tdir failed"
+	stat $DIR/$tdir
+
+#define OBD_FAIL_MDS_XATTR_REP			0x161
+	local mdtidx=$($LFS getstripe -M $DIR/$tdir)
+	local facet=mds$((mdtidx + 1))
+	set_nodes_failloc $(facet_active_host $facet) 0x80000161
+	getfattr -n trusted.name1 $DIR/$tdir 2> /dev/null
+
+	stop $facet || error "stop MDS failed"
+	start $facet $(mdsdevname $((mdtidx + 1))) $MDS_MOUNT_OPTS ||
+		error "start MDS fail"
+}
+run_test 257 "xattr locks are not lost"
+
 test_260() {
 #define OBD_FAIL_MDC_CLOSE               0x806
 	$LCTL set_param fail_loc=0x80000806

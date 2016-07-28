@@ -444,6 +444,9 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 		}
 	}
 
+	if (!it_has_reply_body(it))
+		RETURN(0);
+
 	/*
 	 * MDS has returned success. Probably name has been resolved in
 	 * remote inode. Let's check this.
@@ -482,7 +485,7 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 		(int)op_data->op_namelen, op_data->op_name,
 		PFID(&op_data->op_fid1));
 
-	if (it->it_op & (IT_LOOKUP | IT_GETATTR | IT_LAYOUT))
+	if (it->it_op & (IT_LOOKUP | IT_GETATTR | IT_LAYOUT | IT_GETXATTR))
 		rc = lmv_intent_lookup(exp, op_data, it, reqp, cb_blocking,
 				       extra_lock_flags);
 	else if (it->it_op & IT_OPEN)
@@ -496,8 +499,8 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
 		if (it->it_lock_mode != 0) {
 			lock_handle.cookie = it->it_lock_handle;
-			ldlm_lock_decref(&lock_handle,
-					 it->it_lock_mode);
+			ldlm_lock_decref_and_cancel(&lock_handle,
+						    it->it_lock_mode);
 		}
 
 		it->it_lock_handle = 0;
@@ -505,8 +508,8 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
 		if (it->it_remote_lock_mode != 0) {
 			lock_handle.cookie = it->it_remote_lock_handle;
-			ldlm_lock_decref(&lock_handle,
-					 it->it_remote_lock_mode);
+			ldlm_lock_decref_and_cancel(&lock_handle,
+						    it->it_remote_lock_mode);
 		}
 
 		it->it_remote_lock_handle = 0;

@@ -792,6 +792,16 @@ enum md_cli_flags {
 	CLI_MIGRATE     = 1 << 4,
 };
 
+/**
+ * GETXATTR is not included as only a couple of fields in the reply body
+ * is filled, but not FID which is needed for common intent handling in
+ * mdc_finish_intent_lock()
+ */
+static inline bool it_has_reply_body(const struct lookup_intent *it)
+{
+	return it->it_op & (IT_OPEN | IT_UNLINK | IT_LOOKUP | IT_GETATTR);
+}
+
 struct md_op_data {
         struct lu_fid           op_fid1; /* operation fid1 (usualy parent) */
         struct lu_fid           op_fid2; /* operation fid2 (usualy child) */
@@ -1018,8 +1028,7 @@ struct md_ops {
 			cfs_cap_t, __u64, struct ptlrpc_request **);
 
 	int (*m_enqueue)(struct obd_export *, struct ldlm_enqueue_info *,
-			 const union ldlm_policy_data *,
-			 struct lookup_intent *, struct md_op_data *,
+			 const union ldlm_policy_data *, struct md_op_data *,
 			 struct lustre_handle *, __u64);
 
 	int (*m_getattr)(struct obd_export *, struct md_op_data *,

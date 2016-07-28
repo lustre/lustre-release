@@ -63,9 +63,6 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         int                     size, rc;
         ENTRY;
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
-                RETURN(-ENOMEM);
-
 	valid = info->mti_body->mbo_valid & (OBD_MD_FLXATTR | OBD_MD_FLXATTRLS);
 
         /* Determine how many bytes we need */
@@ -113,6 +110,9 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 LASSERT(rc < 0);
                 RETURN(rc);
         }
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
+                RETURN(-ENOMEM);
 
         RETURN(size);
 }

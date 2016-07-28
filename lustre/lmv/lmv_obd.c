@@ -1707,8 +1707,7 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 
 static int
 lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
-	    const union ldlm_policy_data *policy,
-	    struct lookup_intent *it, struct md_op_data *op_data,
+	    const union ldlm_policy_data *policy, struct md_op_data *op_data,
 	    struct lustre_handle *lockh, __u64 extra_lock_flags)
 {
 	struct obd_device        *obd = exp->exp_obd;
@@ -1717,17 +1716,16 @@ lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 	int                       rc;
 	ENTRY;
 
-	CDEBUG(D_INODE, "ENQUEUE '%s' on "DFID"\n",
-	       LL_IT2STR(it), PFID(&op_data->op_fid1));
+	CDEBUG(D_INODE, "ENQUEUE on "DFID"\n", PFID(&op_data->op_fid1));
 
 	tgt = lmv_locate_mds(lmv, op_data, &op_data->op_fid1);
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
-	CDEBUG(D_INODE, "ENQUEUE '%s' on "DFID" -> mds #%u\n",
-	       LL_IT2STR(it), PFID(&op_data->op_fid1), tgt->ltd_idx);
+	CDEBUG(D_INODE, "ENQUEUE on "DFID" -> mds #%u\n",
+	       PFID(&op_data->op_fid1), tgt->ltd_idx);
 
-	rc = md_enqueue(tgt->ltd_exp, einfo, policy, it, op_data, lockh,
+	rc = md_enqueue(tgt->ltd_exp, einfo, policy, op_data, lockh,
 			extra_lock_flags);
 
 	RETURN(rc);
