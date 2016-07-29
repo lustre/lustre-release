@@ -5,11 +5,11 @@ current and unsafe implementation with ext4_ext_path[] array
 re-[sizing,allocation], even with more recent and related patches
 that will be integrated in more recent Kernels.
 
-Index: linux-2.6.32-504.el6.x86_64/fs/ext4/ext4.h
+Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-2.6.32-504.el6.x86_64.orig/fs/ext4/ext4.h
-+++ linux-2.6.32-504.el6.x86_64/fs/ext4/ext4.h
-@@ -1147,6 +1147,9 @@
+--- linux-stage.orig/fs/ext4/ext4.h	2016-07-15 10:55:51.000000000 +0300
++++ linux-stage/fs/ext4/ext4.h	2016-07-15 10:56:19.000000000 +0300
+@@ -1153,6 +1153,9 @@ struct ext4_sb_info {
  	unsigned long s_ext_extents;
  #endif
  
@@ -19,32 +19,11 @@ Index: linux-2.6.32-504.el6.x86_64/fs/ext4/ext4.h
  	/* for buddy allocator */
  	struct ext4_group_info ***s_group_info;
  	struct inode *s_buddy_cache;
-Index: linux-2.6.32-504.el6.x86_64/fs/ext4/super.c
+Index: linux-stage/fs/ext4/extents.c
 ===================================================================
---- linux-2.6.32-504.el6.x86_64.orig/fs/ext4/super.c
-+++ linux-2.6.32-504.el6.x86_64/fs/ext4/super.c
-@@ -3529,6 +3529,8 @@
- 		if (ext4_multi_mount_protect(sb, le64_to_cpu(es->s_mmp_block)))
- 			goto failed_mount3;
- 
-+	ext4_ext_init(sb); /* needed before using extent-mapped journal */
-+
- 	/*
- 	 * The first inode we look at is the journal inode.  Don't try
- 	 * root first: it may be modified in the journal!
-@@ -3722,7 +3724,6 @@
- 		goto failed_mount4a;
- 	}
- 
--	ext4_ext_init(sb);
- 	err = ext4_mb_init(sb, needs_recovery);
- 	if (err) {
- 		ext4_msg(sb, KERN_ERR, "failed to initalize mballoc (%d)",
-Index: linux-2.6.32-504.el6.x86_64/fs/ext4/extents.c
-===================================================================
---- linux-2.6.32-504.el6.x86_64.orig/fs/ext4/extents.c
-+++ linux-2.6.32-504.el6.x86_64/fs/ext4/extents.c
-@@ -699,8 +699,9 @@
+--- linux-stage.orig/fs/ext4/extents.c	2016-07-15 10:55:51.000000000 +0300
++++ linux-stage/fs/ext4/extents.c	2016-07-15 10:56:19.000000000 +0300
+@@ -698,8 +698,9 @@ ext4_ext_find_extent(struct inode *inode
  
  	/* account possible depth increase */
  	if (!path) {
@@ -56,7 +35,7 @@ Index: linux-2.6.32-504.el6.x86_64/fs/ext4/extents.c
  		if (!path)
  			return ERR_PTR(-ENOMEM);
  		alloc = 1;
-@@ -1915,11 +1916,8 @@
+@@ -1907,11 +1908,8 @@ static int ext4_fill_fiemap_extents(stru
  		/* find extent for this block */
  		down_read(&EXT4_I(inode)->i_data_sem);
  
@@ -70,19 +49,17 @@ Index: linux-2.6.32-504.el6.x86_64/fs/ext4/extents.c
  
  		path = ext4_ext_find_extent(inode, block, path);
  		if (IS_ERR(path)) {
-@@ -2664,8 +2662,9 @@
+@@ -2656,7 +2654,8 @@ again:
  			path[k].p_block =
  				le16_to_cpu(path[k].p_hdr->eh_entries)+1;
  	} else {
 -		path = kzalloc(sizeof(struct ext4_ext_path) * (depth + 1),
--			       GFP_NOFS);
 +		path = kzalloc(sizeof(struct ext4_ext_path) *
 +			       EXT4_SB(inode->i_sb)->s_max_ext_tree_depth,
-+			       GFP_NOFS);
+ 			       GFP_NOFS);
  		if (path == NULL) {
  			ext4_journal_stop(handle);
- 			return -ENOMEM;
-@@ -2790,13 +2789,15 @@
+@@ -2781,13 +2780,15 @@ out:
   */
  void ext4_ext_init(struct super_block *sb)
  {
@@ -100,7 +77,7 @@ Index: linux-2.6.32-504.el6.x86_64/fs/ext4/extents.c
  #ifdef AGGRESSIVE_TEST
  		printk(", aggressive tests");
  #endif
-@@ -2805,14 +2806,35 @@
+@@ -2796,14 +2797,35 @@ void ext4_ext_init(struct super_block *s
  #endif
  #ifdef EXTENTS_STATS
  		printk(", stats");
@@ -140,17 +117,24 @@ Index: linux-2.6.32-504.el6.x86_64/fs/ext4/extents.c
  	}
  }
  
-@@ -4614,11 +4636,8 @@
- 			break;
- 		}
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c	2016-07-15 10:55:51.000000000 +0300
++++ linux-stage/fs/ext4/super.c	2016-07-15 10:56:19.000000000 +0300
+@@ -3529,6 +3529,8 @@ static int ext4_fill_super(struct super_
+ 		if (ext4_multi_mount_protect(sb, le64_to_cpu(es->s_mmp_block)))
+ 			goto failed_mount3;
  
--		if (ext_depth(inode) != depth) {
--			/* depth was changed. we have to realloc path */
--			kfree(path);
--			path = NULL;
--		}
-+		/* path of max possible depth will be allocated during
-+		 * first pass, so its space can be re-used for each loop */
- 
- 		block = cbex.ec_block + cbex.ec_len;
++	ext4_ext_init(sb); /* needed before using extent-mapped journal */
++
+ 	/*
+ 	 * The first inode we look at is the journal inode.  Don't try
+ 	 * root first: it may be modified in the journal!
+@@ -3722,7 +3724,6 @@ no_journal:
+ 		goto failed_mount4a;
  	}
+ 
+-	ext4_ext_init(sb);
+ 	err = ext4_mb_init(sb, needs_recovery);
+ 	if (err) {
+ 		ext4_msg(sb, KERN_ERR, "failed to initalize mballoc (%d)",
