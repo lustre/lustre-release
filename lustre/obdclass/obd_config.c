@@ -674,7 +674,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		   by other things as well, so don't count on it. */
 		CDEBUG(D_IOCTL, "%s: forcing exports to disconnect: %d\n",
 		       obd->obd_name, atomic_read(&obd->obd_refcount) - 3);
-		dump_exports(obd, 0);
+		dump_exports(obd, 0, D_HA);
 		class_disconnect_exports(obd);
 	}
 

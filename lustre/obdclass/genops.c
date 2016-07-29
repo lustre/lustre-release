@@ -62,7 +62,7 @@ static void obd_zombie_impexp_notify(void);
 static void obd_zombie_export_add(struct obd_export *exp);
 static void obd_zombie_import_add(struct obd_import *imp);
 static void print_export_data(struct obd_export *exp,
-                              const char *status, int locks);
+                              const char *status, int locks, int debug_level);
 
 struct list_head obd_stale_exports;
 spinlock_t       obd_stale_export_lock;
@@ -1380,7 +1380,7 @@ void class_disconnect_stale_exports(struct obd_device *obd,
                        obd->obd_name, exp->exp_client_uuid.uuid,
                        exp->exp_connection == NULL ? "<unknown>" :
                        libcfs_nid2str(exp->exp_connection->c_peer.nid));
-                print_export_data(exp, "EVICTING", 0);
+                print_export_data(exp, "EVICTING", 0, D_HA);
         }
 	spin_unlock(&obd->obd_dev_lock);
 
@@ -1535,7 +1535,7 @@ EXPORT_SYMBOL(class_export_dump_hook);
 #endif
 
 static void print_export_data(struct obd_export *exp, const char *status,
-			      int locks)
+			      int locks, int debug_level)
 {
 	struct ptlrpc_reply_state *rs;
 	struct ptlrpc_reply_state *first_reply = NULL;
@@ -1550,36 +1550,37 @@ static void print_export_data(struct obd_export *exp, const char *status,
 	}
 	spin_unlock(&exp->exp_lock);
 
-	CDEBUG(D_HA, "%s: %s %p %s %s %d (%d %d %d) %d %d %d %d: %p %s %llu\n",
-               exp->exp_obd->obd_name, status, exp, exp->exp_client_uuid.uuid,
+	CDEBUG(debug_level, "%s: %s %p %s %s %d (%d %d %d) %d %d %d %d: "
+	       "%p %s %llu stale:%d\n",
+	       exp->exp_obd->obd_name, status, exp, exp->exp_client_uuid.uuid,
 	       obd_export_nid2str(exp), atomic_read(&exp->exp_refcount),
 	       atomic_read(&exp->exp_rpc_count),
 	       atomic_read(&exp->exp_cb_count),
 	       atomic_read(&exp->exp_locks_count),
-               exp->exp_disconnected, exp->exp_delayed, exp->exp_failed,
-               nreplies, first_reply, nreplies > 3 ? "..." : "",
-               exp->exp_last_committed);
+	       exp->exp_disconnected, exp->exp_delayed, exp->exp_failed,
+	       nreplies, first_reply, nreplies > 3 ? "..." : "",
+	       exp->exp_last_committed, !list_empty(&exp->exp_stale_list));
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
-        if (locks && class_export_dump_hook != NULL)
-                class_export_dump_hook(exp);
+	if (locks && class_export_dump_hook != NULL)
+		class_export_dump_hook(exp);
 #endif
 }
 
-void dump_exports(struct obd_device *obd, int locks)
+void dump_exports(struct obd_device *obd, int locks, int debug_level)
 {
         struct obd_export *exp;
 
 	spin_lock(&obd->obd_dev_lock);
 	list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain)
-		print_export_data(exp, "ACTIVE", locks);
+		print_export_data(exp, "ACTIVE", locks, debug_level);
 	list_for_each_entry(exp, &obd->obd_unlinked_exports, exp_obd_chain)
-		print_export_data(exp, "UNLINKED", locks);
+		print_export_data(exp, "UNLINKED", locks, debug_level);
 	list_for_each_entry(exp, &obd->obd_delayed_exports, exp_obd_chain)
-		print_export_data(exp, "DELAYED", locks);
+		print_export_data(exp, "DELAYED", locks, debug_level);
 	spin_unlock(&obd->obd_dev_lock);
 	spin_lock(&obd_zombie_impexp_lock);
 	list_for_each_entry(exp, &obd_zombie_exports, exp_obd_chain)
-		print_export_data(exp, "ZOMBIE", locks);
+		print_export_data(exp, "ZOMBIE", locks, debug_level);
 	spin_unlock(&obd_zombie_impexp_lock);
 }
 
@@ -1598,7 +1599,7 @@ void obd_exports_barrier(struct obd_device *obd)
 				      "The obd refcount = %d. Is it stuck?\n",
 				      obd->obd_name, waited,
 				      atomic_read(&obd->obd_refcount));
-			dump_exports(obd, 1);
+			dump_exports(obd, 1, D_CONSOLE | D_WARNING);
 		}
 		waited *= 2;
 		spin_lock(&obd->obd_dev_lock);
