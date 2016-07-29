@@ -511,69 +511,68 @@ static struct inode *osd_iget_check(struct osd_thread_info *info,
 				    struct osd_device *dev,
 				    const struct lu_fid *fid,
 				    struct osd_inode_id *id,
-				    bool cached)
+				    bool trusted)
 {
-	struct inode	*inode;
-	int		 rc	= 0;
+	struct inode *inode;
+	int rc = 0;
 	ENTRY;
 
 	/* The cached OI mapping is trustable. If we cannot locate the inode
 	 * via the cached OI mapping, then return the failure to the caller
 	 * directly without further OI checking. */
 
+again:
 	inode = ldiskfs_iget(osd_sb(dev), id->oii_ino);
 	if (IS_ERR(inode)) {
 		rc = PTR_ERR(inode);
-		if (cached || (rc != -ENOENT && rc != -ESTALE)) {
-			CDEBUG(D_INODE, "no inode: ino = %u, rc = %d\n",
-			       id->oii_ino, rc);
+		if (!trusted && (rc == -ENOENT || rc == -ESTALE))
+			goto check_oi;
 
-			GOTO(put, rc);
-		}
-
-		goto check_oi;
+		CDEBUG(D_INODE, "no inode for FID: "DFID", ino = %u, rc = %d\n",
+		       PFID(fid), id->oii_ino, rc);
+		GOTO(put, rc);
 	}
 
 	if (is_bad_inode(inode)) {
 		rc = -ENOENT;
-		if (cached) {
-			CDEBUG(D_INODE, "bad inode: ino = %u\n", id->oii_ino);
+		if (!trusted)
+			goto check_oi;
 
-			GOTO(put, rc);
-		}
-
-		goto check_oi;
+		CDEBUG(D_INODE, "bad inode for FID: "DFID", ino = %u\n",
+		       PFID(fid), id->oii_ino);
+		GOTO(put, rc);
 	}
 
 	if (id->oii_gen != OSD_OII_NOGEN &&
 	    inode->i_generation != id->oii_gen) {
 		rc = -ESTALE;
-		if (cached) {
-			CDEBUG(D_INODE, "unmatched inode: ino = %u, "
-			       "oii_gen = %u, i_generation = %u\n",
-			       id->oii_ino, id->oii_gen, inode->i_generation);
+		if (!trusted)
+			goto check_oi;
 
-			GOTO(put, rc);
-		}
-
-		goto check_oi;
+		CDEBUG(D_INODE, "unmatched inode for FID: "DFID", ino = %u, "
+		       "oii_gen = %u, i_generation = %u\n", PFID(fid),
+		       id->oii_ino, id->oii_gen, inode->i_generation);
+		GOTO(put, rc);
 	}
 
 	if (inode->i_nlink == 0) {
 		rc = -ENOENT;
-		if (cached) {
-			CDEBUG(D_INODE, "stale inode: ino = %u\n", id->oii_ino);
+		if (!trusted)
+			goto check_oi;
 
-			GOTO(put, rc);
-		}
-
-		goto check_oi;
+		CDEBUG(D_INODE, "stale inode for FID: "DFID", ino = %u\n",
+		       PFID(fid), id->oii_ino);
+		GOTO(put, rc);
 	}
 
 	ldiskfs_clear_inode_state(inode, LDISKFS_STATE_LUSTRE_DESTROY);
 
 check_oi:
 	if (rc != 0) {
+		__u32 saved_ino = id->oii_ino;
+		__u32 saved_gen = id->oii_gen;
+
+		LASSERT(!trusted);
 		LASSERTF(rc == -ESTALE || rc == -ENOENT, "rc = %d\n", rc);
 
 		rc = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
@@ -604,10 +603,27 @@ check_oi:
 			 * normal race case. */
 			GOTO(put, rc);
 
-		if ((!IS_ERR(inode) && inode->i_generation != 0 &&
-		     inode->i_generation == id->oii_gen) ||
-		    (IS_ERR(inode) && !(dev->od_scrub.os_file.sf_flags &
-					SF_INCONSISTENT)))
+		/* It is the OI scrub updated the OI mapping by race.
+		 * The new OI mapping must be valid. */
+		if (saved_ino != id->oii_ino || saved_gen != id->oii_gen) {
+			trusted = true;
+			goto again;
+		}
+
+		if (IS_ERR(inode)) {
+			if (dev->od_scrub.os_file.sf_flags & SF_INCONSISTENT)
+				/* It still can be the case 2, but we cannot
+				 * distinguish it from the case 1. So return
+				 * -EREMCHG to block current operation until
+				 *  OI scrub rebuilt the OI mappings. */
+				rc = -EREMCHG;
+			else
+				rc = -ENOENT;
+
+			GOTO(put, rc);
+		}
+
+		if (inode->i_generation == id->oii_gen)
 			rc = -ENOENT;
 		else
 			rc = -EREMCHG;
@@ -954,22 +970,21 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 			  const struct lu_object_conf *conf)
 {
 	struct osd_thread_info *info;
-	struct lu_device       *ldev   = obj->oo_dt.do_lu.lo_dev;
-	struct osd_device      *dev;
+	struct lu_device *ldev = obj->oo_dt.do_lu.lo_dev;
+	struct osd_device *dev;
 	struct osd_idmap_cache *oic;
-	struct osd_inode_id    *id;
-	struct osd_inode_id    *tid;
-	struct inode	       *inode = NULL;
-	struct osd_scrub       *scrub;
-	struct scrub_file      *sf;
-	__u32			flags = SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT |
-					SS_AUTO_FULL;
-	__u32			saved_ino;
-	__u32			saved_gen;
-	int			result  = 0;
-	int			rc1	= 0;
-	bool			cached	= true;
-	bool			remote	= false;
+	struct osd_inode_id *id;
+	struct inode *inode = NULL;
+	struct osd_scrub *scrub;
+	struct scrub_file *sf;
+	__u32 flags = SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT | SS_AUTO_FULL;
+	__u32 saved_ino;
+	__u32 saved_gen;
+	int result = 0;
+	int rc1 = 0;
+	bool remote = false;
+	bool trusted = true;
+	bool updated = false;
 	ENTRY;
 
 	LINVRNT(osd_invariant(obj));
@@ -1009,7 +1024,10 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 			goto iget;
 	}
 
-	cached = false;
+	/* The OI mapping in the OI file can be updated by the OI scrub
+	 * when we locate the inode via FID. So it may be not trustable. */
+	trusted = false;
+
 	/* Search order: 3. OI files. */
 	result = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
 	if (result == -ENOENT) {
@@ -1026,7 +1044,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 		GOTO(out, result);
 
 iget:
-	inode = osd_iget_check(info, dev, fid, id, cached);
+	inode = osd_iget_check(info, dev, fid, id, trusted);
 	if (IS_ERR(inode)) {
 		result = PTR_ERR(inode);
 		if (result == -ENOENT || result == -ESTALE)
@@ -1056,7 +1074,7 @@ trigger:
 								  fid, id);
 				if (rc1 == 0) {
 					remote = true;
-					cached = true;
+					trusted = true;
 					flags |= SS_AUTO_PARTIAL;
 					flags &= ~SS_AUTO_FULL;
 					goto iget;
@@ -1117,45 +1135,50 @@ join:
 	if (result == 0)
 		goto found;
 
-	tid = &info->oti_id3;
-	LASSERT(tid != id);
-
-	if (result == -ENODATA) {
-		if (!cached)
-			/* The current OI mapping is from the OI file,
-			 * since the inode has been found via
-			 * osd_iget_check(), no need recheck OI. */
-			goto found;
-
-		result = osd_oi_lookup(info, dev, fid, tid, OI_CHECK_FLD);
-		if (result == 0) {
-			LASSERTF(tid->oii_ino == id->oii_ino &&
-				 tid->oii_gen == id->oii_gen,
-				 "OI mapping changed(1): %u/%u => %u/%u",
-				 tid->oii_ino, tid->oii_gen,
-				 id->oii_ino, id->oii_gen);
-
-			LASSERTF(tid->oii_ino == inode->i_ino &&
-				 tid->oii_gen == inode->i_generation,
-				 "locate wrong inode(1): %u/%u => %ld/%u",
-				 tid->oii_ino, tid->oii_gen,
-				 inode->i_ino, inode->i_generation);
-
-			/* "result == 0" means the cached OI mapping is still in
-			 * the OI file, so the target the inode is valid. */
-			goto found;
-		}
-
-		/* "result == -ENOENT" means that the OI mappinghas been removed
-		 * by race, the target inode belongs to other object.
-		 *
-		 * Others error can be returned  directly. */
-		if (result == -ENOENT)
-			result = 0;
-	}
+	LASSERTF(id->oii_ino == inode->i_ino &&
+		 id->oii_gen == inode->i_generation,
+		 "locate wrong inode for FID: "DFID", %u/%u => %ld/%u\n",
+		 PFID(fid), id->oii_ino, id->oii_gen,
+		 inode->i_ino, inode->i_generation);
 
 	saved_ino = inode->i_ino;
 	saved_gen = inode->i_generation;
+
+	if (unlikely(result == -ENODATA)) {
+		/* If the OI scrub updated the OI mapping by race, it
+		 * must be valid. Trust the inode that has no LMA EA. */
+		if (updated)
+			goto found;
+
+		result = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
+		if (result == 0) {
+			/* The OI mapping is still there, the inode is still
+			 * valid. It is just becaues the inode has no LMA EA. */
+			if (saved_ino == id->oii_ino &&
+			    saved_gen == id->oii_gen)
+				goto found;
+
+			/* It is the OI scrub updated the OI mapping by race.
+			 * The new OI mapping must be valid. */
+			iput(inode);
+			inode = NULL;
+			obj->oo_inode = NULL;
+			trusted = true;
+			updated = true;
+			goto iget;
+		}
+
+		/* "result == -ENOENT" means that the OI mappinghas been
+		 * removed by race, so the inode belongs to other object.
+		 *
+		 * Others error can be returned  directly. */
+		if (result == -ENOENT) {
+			LASSERT(trusted);
+
+			result = 0;
+		}
+	}
+
 	iput(inode);
 	inode = NULL;
 	obj->oo_inode = NULL;
@@ -1163,29 +1186,28 @@ join:
 	if (result != -EREMCHG)
 		GOTO(out, result);
 
-	if (!cached)
-		/* The current OI mapping is from the OI file,
-		 * since the inode has been found via
-		 * osd_iget_check(), no need recheck OI. */
+	LASSERT(!updated);
+
+	result = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
+	/* "result == -ENOENT" means the cached OI mapping has been removed
+	 * from the OI file by race, above inode belongs to other object. */
+	if (result == -ENOENT) {
+		LASSERT(trusted);
+
+		GOTO(out, result = 0);
+	}
+
+	if (result != 0)
+		GOTO(out, result);
+
+	if (saved_ino == id->oii_ino && saved_gen == id->oii_gen)
 		goto trigger;
 
-	result = osd_oi_lookup(info, dev, fid, tid, OI_CHECK_FLD);
-	/* "result == -ENOENT" means the cached OI mapping has been removed from
-	 * the OI file by race, above target inode belongs to other object.
-	 *
-	 * Others error can be returned directly. */
-	if (result != 0)
-		GOTO(out, result = (result == -ENOENT ? 0 : result));
-
-	LASSERTF(tid->oii_ino == id->oii_ino && tid->oii_gen == id->oii_gen,
-		 "OI mapping changed(2): %u/%u => %u/%u",
-		 tid->oii_ino, tid->oii_gen, id->oii_ino, id->oii_gen);
-
-	LASSERTF(tid->oii_ino == saved_ino && tid->oii_gen == saved_gen,
-		 "locate wrong inode(2): %u/%u => %u/%u",
-		 tid->oii_ino, tid->oii_gen, saved_ino, saved_gen);
-
-	goto trigger;
+	/* It is the OI scrub updated the OI mapping by race.
+	 * The new OI mapping must be valid. */
+	trusted = true;
+	updated = true;
+	goto iget;
 
 found:
 	obj->oo_compat_dot_created = 1;
@@ -1215,7 +1237,7 @@ found:
 	GOTO(out, result = 0);
 
 out:
-	if (result != 0 && cached)
+	if (result != 0 && trusted)
 		fid_zero(&oic->oic_fid);
 
 	LINVRNT(osd_invariant(obj));
