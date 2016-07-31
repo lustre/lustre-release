@@ -470,9 +470,12 @@ static int lfsck_namespace_load_sub_trace_files(const struct lu_env *env,
 	for (i = 0, lsto = &com->lc_sub_trace_objs[0];
 	     i < LFSCK_STF_COUNT; i++, lsto++) {
 		snprintf(name, NAME_MAX, "%s_%02d", LFSCK_NAMESPACE, i);
+		mutex_lock(&lsto->lsto_mutex);
 		if (lsto->lsto_obj != NULL) {
-			if (!reset)
+			if (!reset) {
+				mutex_unlock(&lsto->lsto_mutex);
 				continue;
+			}
 
 			lfsck_object_put(env, lsto->lsto_obj);
 			lsto->lsto_obj = NULL;
@@ -480,11 +483,15 @@ static int lfsck_namespace_load_sub_trace_files(const struct lu_env *env,
 
 		obj = lfsck_namespace_load_one_trace_file(env, com,
 				com->lc_lfsck->li_lfsck_dir, name, reset);
-		if (IS_ERR(obj))
-			return PTR_ERR(obj);
-
-		lsto->lsto_obj = obj;
-		rc = obj->do_ops->do_index_try(env, obj, &dt_lfsck_features);
+		LASSERT(obj != NULL);
+		if (IS_ERR(obj)) {
+			rc = PTR_ERR(obj);
+		} else {
+			lsto->lsto_obj = obj;
+			rc = obj->do_ops->do_index_try(env, obj,
+						       &dt_lfsck_features);
+		}
+		mutex_unlock(&lsto->lsto_mutex);
 		if (rc != 0)
 			return rc;
 	}
@@ -544,9 +551,15 @@ int lfsck_namespace_trace_update(const struct lu_env *env,
 		RETURN(0);
 
 	idx = lfsck_sub_trace_file_fid2idx(fid);
-	obj = com->lc_sub_trace_objs[idx].lsto_obj;
-	dev = lfsck_obj2dev(obj);
 	mutex_lock(&com->lc_sub_trace_objs[idx].lsto_mutex);
+	obj = com->lc_sub_trace_objs[idx].lsto_obj;
+	if (unlikely(obj == NULL)) {
+		mutex_unlock(&com->lc_sub_trace_objs[idx].lsto_mutex);
+		RETURN(0);
+	}
+
+	lfsck_object_get(obj);
+	dev = lfsck_obj2dev(obj);
 	fid_cpu_to_be(key, fid);
 	rc = dt_lookup(env, obj, (struct dt_rec *)&old,
 		       (const struct dt_key *)key);
@@ -621,6 +634,7 @@ log:
 
 unlock:
 	mutex_unlock(&com->lc_sub_trace_objs[idx].lsto_mutex);
+	lfsck_object_put(env, obj);
 
 	return rc;
 }
@@ -4594,9 +4608,15 @@ static int lfsck_namespace_in_notify(const struct lu_env *env,
 		LASSERT(th != NULL);
 
 		idx = lfsck_sub_trace_file_fid2idx(&lr->lr_fid);
-		obj = com->lc_sub_trace_objs[idx].lsto_obj;
-		fid_cpu_to_be(key, &lr->lr_fid);
 		mutex_lock(&com->lc_sub_trace_objs[idx].lsto_mutex);
+		obj = com->lc_sub_trace_objs[idx].lsto_obj;
+		if (unlikely(obj == NULL)) {
+			mutex_unlock(&com->lc_sub_trace_objs[idx].lsto_mutex);
+			RETURN(0);
+		}
+
+		lfsck_object_get(obj);
+		fid_cpu_to_be(key, &lr->lr_fid);
 		rc = dt_declare_delete(env, obj,
 				       (const struct dt_key *)key, th);
 		if (rc == 0)
@@ -4604,6 +4624,7 @@ static int lfsck_namespace_in_notify(const struct lu_env *env,
 					       (const struct dt_rec *)&flags,
 					       (const struct dt_key *)key, th);
 		mutex_unlock(&com->lc_sub_trace_objs[idx].lsto_mutex);
+		lfsck_object_put(env, obj);
 
 		RETURN(rc);
 	}
@@ -4618,15 +4639,22 @@ static int lfsck_namespace_in_notify(const struct lu_env *env,
 		LASSERT(th != NULL);
 
 		idx = lfsck_sub_trace_file_fid2idx(&lr->lr_fid);
-		obj = com->lc_sub_trace_objs[idx].lsto_obj;
-		fid_cpu_to_be(key, &lr->lr_fid);
 		mutex_lock(&com->lc_sub_trace_objs[idx].lsto_mutex);
+		obj = com->lc_sub_trace_objs[idx].lsto_obj;
+		if (unlikely(obj == NULL)) {
+			mutex_unlock(&com->lc_sub_trace_objs[idx].lsto_mutex);
+			RETURN(0);
+		}
+
+		lfsck_object_get(obj);
+		fid_cpu_to_be(key, &lr->lr_fid);
 		rc = dt_lookup(env, obj, (struct dt_rec *)&flags,
 			       (const struct dt_key *)key);
 		if (rc == 0) {
 			if (flags & LNTF_SKIP_NLINK) {
 				mutex_unlock(
 				&com->lc_sub_trace_objs[idx].lsto_mutex);
+				lfsck_object_put(env, obj);
 
 				RETURN(0);
 			}
@@ -4651,6 +4679,7 @@ static int lfsck_namespace_in_notify(const struct lu_env *env,
 
 log:
 		mutex_unlock(&com->lc_sub_trace_objs[idx].lsto_mutex);
+		lfsck_object_put(env, obj);
 		CDEBUG(D_LFSCK, "%s: RPC service thread mark the "DFID
 		       " to be skipped for namespace double scan: rc = %d\n",
 		       lfsck_lfsck2name(com->lc_lfsck), PFID(&lr->lr_fid), rc);
