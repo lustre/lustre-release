@@ -1038,7 +1038,7 @@ static inline void iam_lock_bh(struct buffer_head volatile *bh)
 {
         DX_DEVAL(iam_lock_stats.dls_bh_lock++);
 #ifdef CONFIG_SMP
-	while (test_and_set_bit(BH_DXLock, &bh->b_state)) {
+	while (test_and_set_bit_lock(BH_DXLock, &bh->b_state)) {
 		DX_DEVAL(iam_lock_stats.dls_bh_busy++);
 		while (test_bit(BH_DXLock, &bh->b_state))
                         cpu_relax();
@@ -1049,8 +1049,7 @@ static inline void iam_lock_bh(struct buffer_head volatile *bh)
 static inline void iam_unlock_bh(struct buffer_head *bh)
 {
 #ifdef CONFIG_SMP
-        smp_mb__before_clear_bit();
-        clear_bit(BH_DXLock, &bh->b_state);
+	clear_bit_unlock(BH_DXLock, &bh->b_state);
 #endif
 }
 
