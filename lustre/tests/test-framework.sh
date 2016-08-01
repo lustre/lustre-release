@@ -5314,8 +5314,9 @@ check_grant() {
 	export base=$(basetest $1)
 	[ "$CHECK_GRANT" == "no" ] && return 0
 
-	testname=GCHECK_ONLY_${base}
-	[ ${!testname}x == x ] && return 0
+	testnamebase=GCHECK_ONLY_${base}
+	testname=GCHECK_ONLY_$1
+	[ ${!testnamebase}x == x -a ${!testname}x == x ] && return 0
 
 	echo -n "checking grant......"
 
@@ -5331,17 +5332,22 @@ check_grant() {
 		awk '{ total += $1 } END { printf("%0.0f", total) }')
 
 	# get server grant
+	# which is tot_granted less grant_precreate
 	server_grant=$(do_nodes $(comma_list $(osts_nodes)) \
-		"$LCTL get_param -n obdfilter.${FSNAME}-OST*.tot_granted" |
-		awk '{ total += $1 } END { printf("%0.0f", total) }')
+		"$LCTL get_param "\
+		"obdfilter.${FSNAME}-OST*.{tot_granted,tot_pending,grant_precreate}" |
+		sed 's/=/ /'| awk '/tot_granted/{ total += $2 }; 
+				/tot_pending/{ total -= $2 };
+				/grant_precreate/{ total -= $2 };
+				END { printf("%0.0f", total) }')
 
 	# check whether client grant == server grant
 	if [[ $client_grant -ne $server_grant ]]; then
-		echo "failed: client:${client_grant} server: ${server_grant}."
 		do_nodes $(comma_list $(osts_nodes)) \
-			"$LCTL get_param obdfilter.${FSNAME}-OST*.tot*"
+			"$LCTL get_param obdfilter.${FSNAME}-OST*.tot*" \
+		        "obdfilter.${FSNAME}-OST*.grant_*"
 		do_nodes $clients "$LCTL get_param osc.${FSNAME}-*.cur_*_bytes"
-		return 1
+		error "failed: client:${client_grant} server: ${server_grant}."
 	else
 		echo "pass: client:${client_grant} server: ${server_grant}"
 	fi

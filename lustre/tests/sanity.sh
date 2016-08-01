@@ -8,12 +8,15 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 13297 2108 9789 3637 9789 3561 5188
-ALWAYS_EXCEPT="                42a  42b  42c  42d  45   68b   $SANITY_EXCEPT"
+# bug number for skipped test:  LU-6493 3561 5188
+ALWAYS_EXCEPT="                 42b     45   68b   $SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # bug number for skipped tests: LU-2036 LU-8411 LU-9096
 ALWAYS_EXCEPT="                 76	407     253 $ALWAYS_EXCEPT"
+
+# Check Grants after these tests
+GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c"
 
 is_sles11()						# LU-4341
 {
