@@ -2630,10 +2630,13 @@ EXPORT_SYMBOL(lustre_swab_orphan_ent);
 
 void lustre_swab_ladvise(struct lu_ladvise *ladvise)
 {
+	__swab16s(&ladvise->lla_advice);
+	__swab16s(&ladvise->lla_value1);
+	__swab32s(&ladvise->lla_value2);
 	__swab64s(&ladvise->lla_start);
 	__swab64s(&ladvise->lla_end);
-	__swab64s(&ladvise->lla_advice);
-	CLASSERT(offsetof(typeof(*ladvise), lla_padding) != 0);
+	__swab32s(&ladvise->lla_value3);
+	__swab32s(&ladvise->lla_value4);
 }
 EXPORT_SYMBOL(lustre_swab_ladvise);
 
@@ -2642,7 +2645,8 @@ void lustre_swab_ladvise_hdr(struct ladvise_hdr *ladvise_hdr)
 	__swab32s(&ladvise_hdr->lah_magic);
 	__swab32s(&ladvise_hdr->lah_count);
 	__swab64s(&ladvise_hdr->lah_flags);
-	CLASSERT(offsetof(typeof(*ladvise_hdr), lah_padding1) != 0);
-	CLASSERT(offsetof(typeof(*ladvise_hdr), lah_padding2) != 0);
+	__swab32s(&ladvise_hdr->lah_value1);
+	__swab32s(&ladvise_hdr->lah_value2);
+	__swab64s(&ladvise_hdr->lah_value3);
 }
 EXPORT_SYMBOL(lustre_swab_ladvise_hdr);

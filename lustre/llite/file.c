@@ -2293,7 +2293,7 @@ static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
  * much more data being sent to the client.
  */
 static int ll_ladvise(struct inode *inode, struct file *file, __u64 flags,
-		      struct lu_ladvise *ladvise)
+		      struct llapi_lu_ladvise *ladvise)
 {
 	struct lu_env *env;
 	struct cl_io *io;
@@ -2673,7 +2673,7 @@ out:
 		RETURN(ll_file_futimes_3(file, &lfu));
 	}
 	case LL_IOC_LADVISE: {
-		struct ladvise_hdr *ladvise_hdr;
+		struct llapi_ladvise_hdr *ladvise_hdr;
 		int i;
 		int num_advise;
 		int alloc_size = sizeof(*ladvise_hdr);
@@ -2684,7 +2684,7 @@ out:
 			RETURN(-ENOMEM);
 
 		if (copy_from_user(ladvise_hdr,
-				   (const struct ladvise_hdr __user *)arg,
+				   (const struct llapi_ladvise_hdr __user *)arg,
 				   alloc_size))
 			GOTO(out_ladvise, rc = -EFAULT);
 
@@ -2707,7 +2707,7 @@ out:
 		 * TODO: submit multiple advices to one server in a single RPC
 		 */
 		if (copy_from_user(ladvise_hdr,
-				   (const struct ladvise_hdr __user *)arg,
+				   (const struct llapi_ladvise_hdr __user *)arg,
 				   alloc_size))
 			GOTO(out_ladvise, rc = -EFAULT);
 

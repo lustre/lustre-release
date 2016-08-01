@@ -408,7 +408,7 @@ int llapi_group_unlock(int fd, int gid);
 
 /* Ladvise */
 int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
-		  struct lu_ladvise *ladvise);
+		  struct llapi_lu_ladvise *ladvise);
 /** @} llapi */
 
 /* llapi_layout user interface */

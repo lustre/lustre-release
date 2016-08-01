@@ -4273,7 +4273,7 @@ static int lfs_ladvise(int argc, char **argv)
 	int			 rc = 0;
 	const char		*path;
 	int			 fd;
-	struct lu_ladvise	 advice;
+	struct llapi_lu_ladvise	 advice;
 	enum lu_ladvise_type	 advice_type = LU_LADVISE_INVALID;
 	unsigned long long	 start = 0;
 	unsigned long long	 end = LUSTRE_EOF;
@@ -4397,7 +4397,10 @@ static int lfs_ladvise(int argc, char **argv)
 		advice.lla_start = start;
 		advice.lla_end = end;
 		advice.lla_advice = advice_type;
-		advice.lla_padding = 0;
+		advice.lla_value1 = 0;
+		advice.lla_value2 = 0;
+		advice.lla_value3 = 0;
+		advice.lla_value4 = 0;
 		rc2 = llapi_ladvise(fd, flags, 1, &advice);
 		close(fd);
 		if (rc2 < 0) {

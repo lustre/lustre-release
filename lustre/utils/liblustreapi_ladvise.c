@@ -48,13 +48,13 @@
  * \param ladvise  Advice to give.
  *
  * \retval 0 on success.
- * \retval -errno on failure.
+ * \retval -1 on failure, errno set
  */
 int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
-		  struct lu_ladvise *ladvise)
+		  struct llapi_lu_ladvise *ladvise)
 {
 	int rc;
-	struct ladvise_hdr *ladvise_hdr;
+	struct llapi_ladvise_hdr *ladvise_hdr;
 
 	if (num_advise < 1 || num_advise >= LAH_COUNT_MAX) {
 		errno = EINVAL;
