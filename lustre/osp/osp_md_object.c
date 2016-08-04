@@ -92,7 +92,7 @@ static int osp_object_create_interpreter(const struct lu_env *env,
 	 * invalidate opo cache for the object after the object is created, so
 	 * attr_get will try to get attr from remote object.
 	 */
-	osp_invalidate(env, &obj->opo_obj);
+	osp_obj_invalidate_cache(obj);
 
 	return 0;
 }

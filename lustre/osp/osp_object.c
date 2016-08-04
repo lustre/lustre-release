@@ -1204,6 +1204,21 @@ int osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	return 0;
 }
 
+void osp_obj_invalidate_cache(struct osp_object *obj)
+{
+	struct osp_xattr_entry *oxe;
+	struct osp_xattr_entry *tmp;
+
+	spin_lock(&obj->opo_lock);
+	list_for_each_entry_safe(oxe, tmp, &obj->opo_xattr_list, oxe_list) {
+		oxe->oxe_ready = 0;
+		list_del_init(&oxe->oxe_list);
+		osp_oac_xattr_put(oxe);
+	}
+	obj->opo_attr.la_valid = 0;
+	spin_unlock(&obj->opo_lock);
+}
+
 /**
  * Implement OSP layer dt_object_operations::do_invalidate() interface.
  *
@@ -1218,17 +1233,11 @@ int osp_xattr_del(const struct lu_env *env, struct dt_object *dt,
 int osp_invalidate(const struct lu_env *env, struct dt_object *dt)
 {
 	struct osp_object *obj = dt2osp_obj(dt);
-	struct osp_xattr_entry *oxe;
-	struct osp_xattr_entry *tmp;
 	ENTRY;
 
+	osp_obj_invalidate_cache(obj);
+
 	spin_lock(&obj->opo_lock);
-	list_for_each_entry_safe(oxe, tmp, &obj->opo_xattr_list, oxe_list) {
-		oxe->oxe_ready = 0;
-		list_del_init(&oxe->oxe_list);
-		osp_oac_xattr_put(oxe);
-	}
-	obj->opo_attr.la_valid = 0;
 	obj->opo_stale = 1;
 	spin_unlock(&obj->opo_lock);
 
