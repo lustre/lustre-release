@@ -1,10 +1,11 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0"
   xml:lang="en-US" xml:id="lustreproc">
-  <title xml:id="lustreproc.title">LustreProc</title>
-  <para>The <literal>/proc</literal> file system acts as an interface to internal data structures in
-    the kernel. This chapter describes entries in <literal>/proc</literal> that are useful for
-    tuning and monitoring aspects of a Lustre file system. It includes these sections:</para>
+  <title xml:id="lustreproc.title">Lustre Parameters</title>
+  <para>The <literal>/proc</literal> and <literal>/sys</literal> file systems
+  acts as an interface to internal data structures in the kernel. This chapter
+  describes parameters and tunables that are useful for optimizing and
+  monitoring aspects of a Lustre file system. It includes these sections:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438271_83523"/></para>
@@ -12,26 +13,26 @@
     </listitem>
   </itemizedlist>
   <section>
-    <title>Introduction to <literal>/proc</literal></title>
-    <para>The <literal>/proc</literal> directory provides an interface to internal data structures
-      in the kernel that enables monitoring and tuning of many aspects of Lustre file system and
-      application performance These data structures include settings and metrics for components such
-      as memory, networking, file systems, and kernel housekeeping routines, which are available
-      throughout the hierarchical file layout in <literal>/proc.</literal>
+    <title>Introduction to Lustre Parameters</title>
+    <para>Lustre parameters and statistics files provide an interface to
+    internal data structures in the kernel that enables monitoring and
+    tuning of many aspects of Lustre file system and application performance.
+    These data structures include settings and metrics for components such
+    as memory, networking, file systems, and kernel housekeeping routines,
+    which are available throughout the hierarchical file layout.
     </para>
-    <para>Typically, metrics are accessed by reading from <literal>/proc</literal> files and
-      settings are changed by writing to <literal>/proc</literal> files. Some data is server-only,
-      some data is client-only, and some data is exported from the client to the server and is thus
-      duplicated in both locations.</para>
+    <para>Typically, metrics are accessed via <literal>lctl get_param</literal>
+    files and settings are changed by via <literal>lctl set_param</literal>.
+    Some data is server-only, some data is client-only, and some data is
+    exported from the client to the server and is thus duplicated in both
+    locations.</para>
     <note>
-      <para>In the examples in this chapter, <literal>#</literal> indicates a command is entered as
-        root.  Servers are named according to the convention
-            <literal><replaceable>fsname</replaceable>-<replaceable>MDT|OSTnumber</replaceable></literal>.
+      <para>In the examples in this chapter, <literal>#</literal> indicates
+      a command is entered as root.  Lustre servers are named according to the
+      convention <literal><replaceable>fsname</replaceable>-<replaceable>MDT|OSTnumber</replaceable></literal>.
         The standard UNIX wildcard designation (*) is used.</para>
     </note>
-    <para>In most cases, information is accessed using the <literal>lctl get_param</literal> command
-      and settings are changed using the <literal>lctl set_param</literal> command. Some examples
-      are shown below:</para>
+    <para>Some examples are shown below:</para>
     <itemizedlist>
       <listitem>
         <para> To obtain data from a Lustre client:</para>
@@ -45,8 +46,8 @@ osc.testfs-OST0005-osc-ffff881071d5cc00
 osc.testfs-OST0006-osc-ffff881071d5cc00
 osc.testfs-OST0007-osc-ffff881071d5cc00
 osc.testfs-OST0008-osc-ffff881071d5cc00</screen>
-        <para>In this example, information about OST connections available on a client is displayed
-          (indicated by "osc").</para>
+        <para>In this example, information about OST connections available
+	on a client is displayed (indicated by "osc").</para>
       </listitem>
     </itemizedlist>
     <itemizedlist>
@@ -66,22 +67,32 @@ osc.testfs-OST0000-osc-ffff881071d5cc00.rpc_stats</screen></para>
     </itemizedlist>
     <itemizedlist>
       <listitem>
-        <para> To view a specific file, use <literal>lctl get_param</literal>
-          :<screen># lctl get_param osc.lustre-OST0000-osc-ffff881071d5cc00.rpc_stats</screen></para>
+        <para> To view a specific file, use <literal>lctl get_param</literal>:
+          <screen># lctl get_param osc.lustre-OST0000*.rpc_stats</screen></para>
       </listitem>
     </itemizedlist>
     <para>For more information about using <literal>lctl</literal>, see <xref
         xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438194_51490"/>.</para>
-    <para>Data can also be viewed using the <literal>cat</literal> command with the full path to the
-      file. The form of the <literal>cat</literal> command is similar to that of the <literal>lctl
-        get_param</literal> command with these differences. In the <literal>cat</literal> command: </para>
+    <para>Data can also be viewed using the <literal>cat</literal> command
+    with the full path to the file. The form of the <literal>cat</literal>
+    command is similar to that of the <literal>lctl get_param</literal>
+    command with some differences.  Unfortunately, as the Linux kernel has
+    changed over the years, the location of statistics and parameter files
+    has also changed, which means that the Lustre parameter files may be
+    located in either the <literal>/proc</literal> directory, in the
+    <literal>/sys</literal> directory, and/or in the
+    <literal>/sys/kernel/debug</literal> directory, depending on the kernel
+    version and the Lustre version being used.  The <literal>lctl</literal>
+    command insulates scripts from these changes and is preferred over direct
+    file access, unless as part of a high-performance monitoring system.
+    In the <literal>cat</literal> command:</para>
     <itemizedlist>
       <listitem>
-        <para> Replace the dots in the path with slashes.</para>
+        <para>Replace the dots in the path with slashes.</para>
       </listitem>
       <listitem>
-        <para> Prepend the path with the following as
-          appropriate:<screen>/proc/{fs,sys}/{lustre,lnet}</screen></para>
+        <para>Prepend the path with the following as appropriate:
+	  <screen>/{proc,sys}/{fs,sys}/{lustre,lnet}</screen></para>
       </listitem>
     </itemizedlist>
     <para>For example, an <literal>lctl get_param</literal> command may look like
@@ -89,23 +100,30 @@ osc.testfs-OST0000-osc-ffff881071d5cc00.rpc_stats</screen></para>
 osc.testfs-OST0000-osc-ffff881071d5cc00.uuid=594db456-0685-bd16-f59b-e72ee90e9819
 osc.testfs-OST0001-osc-ffff881071d5cc00.uuid=594db456-0685-bd16-f59b-e72ee90e9819
 ...</screen></para>
-    <para>The equivalent <literal>cat</literal> command looks like
-      this:<screen># cat /proc/fs/lustre/osc/*/uuid
+    <para>The equivalent <literal>cat</literal> command may look like this:
+     <screen># cat /proc/fs/lustre/osc/*/uuid
 594db456-0685-bd16-f59b-e72ee90e9819
 594db456-0685-bd16-f59b-e72ee90e9819
 ...</screen></para>
-    <para>The <literal>llstat</literal> utility can be used to monitor some Lustre file system I/O
-      activity over a specified time period. For more details, see <xref
-        xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438219_23232"/></para>
-    <para>Some data is imported from attached clients and is available in a directory called
-        <literal>exports</literal> located in the corresponding per-service directory on a Lustre
-      server. For
-      example:<screen># ls /proc/fs/lustre/obdfilter/testfs-OST0000/exports/192.168.124.9\@o2ib1/
+    <para>or like this:
+     <screen># cat /sys/fs/lustre/osc/*/uuid
+594db456-0685-bd16-f59b-e72ee90e9819
+594db456-0685-bd16-f59b-e72ee90e9819
+...</screen></para>
+    <para>The <literal>llstat</literal> utility can be used to monitor some
+    Lustre file system I/O activity over a specified time period. For more
+    details, see
+    <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="dbdoclet.50438219_23232"/></para>
+    <para>Some data is imported from attached clients and is available in a
+    directory called <literal>exports</literal> located in the corresponding
+    per-service directory on a Lustre server. For example:
+    <screen>oss:/root# lctl list_param obdfilter.testfs-OST0000.exports.*
 # hash ldlm_stats stats uuid</screen></para>
     <section remap="h3">
       <title>Identifying Lustre File Systems and Servers</title>
-      <para>Several <literal>/proc</literal> files on the MGS list existing Lustre file systems and
-        file system servers. The examples below are for a Lustre file system called
+      <para>Several <literal>/proc</literal> files on the MGS list existing
+      Lustre file systems and file system servers. The examples below are for
+      a Lustre file system called
           <literal>testfs</literal> with one MDT and three OSTs.</para>
       <itemizedlist>
         <listitem>
@@ -2724,8 +2742,9 @@ ost_write    21   2    59   [bytes] 7648424 15019  332725.08 910694 180397.87
         <para>See also <xref linkend="dbdoclet.50438219_84890"/> (<literal>llobdstat</literal>) and
             <xref linkend="dbdoclet.50438273_80593"/> (<literal>collectl</literal>).</para>
       </note>
-      <para>MDT <literal>stats</literal> files can be used to track MDT statistics for the MDS. The
-        example below shows sample output from an MDT <literal>stats</literal> file.</para>
+      <para>MDT <literal>stats</literal> files can be used to track MDT
+      statistics for the MDS. The example below shows sample output from an
+      MDT <literal>stats</literal> file.</para>
       <screen># lctl get_param mds.*-MDT0000.stats
 snapshot_time                   1244832003.676892 secs.usecs 
 open                            2 samples [reqs]

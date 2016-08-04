@@ -1020,7 +1020,7 @@ llstat</title>
       <title>Files</title>
       <para>The llstat files are located at:</para>
       <screen>/proc/fs/lustre/mdt/MDS/*/stats
-/proc/fs/lustre/mds/*/exports/*/stats
+/proc/fs/lustre/mdt/*/exports/*/stats
 /proc/fs/lustre/mdc/*/stats
 /proc/fs/lustre/ldlm/services/*/stats
 /proc/fs/lustre/ldlm/namespaces/*/pool/stats
@@ -2594,7 +2594,9 @@ Application Profiling Utilities</title>
           <para> Per-client statistics tracked on the servers</para>
         </listitem>
       </itemizedlist>
-      <para>Each MDT and OST now tracks LDLM and operations statistics for every connected client, for comparisons and simpler collection of distributed job statistics.</para>
+      <para>Each MDS and OSS now tracks LDLM and operations statistics for
+      every connected client, for comparisons and simpler collection of
+      distributed job statistics.</para>
       <screen>/proc/fs/lustre/mds|obdfilter/*/exports/
 </screen>
       <itemizedlist>
@@ -2602,8 +2604,9 @@ Application Profiling Utilities</title>
           <para> Improved MDT statistics</para>
         </listitem>
       </itemizedlist>
-      <para>More detailed MDT operations statistics are collected for better profiling.</para>
-      <screen>/proc/fs/lustre/mds/*/stats
+      <para>More detailed MDT operations statistics are collected for better
+      profiling.</para>
+      <screen>/proc/fs/lustre/mdt/*/md_stats
 </screen>
     </section>
     <section remap="h3">

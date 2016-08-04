@@ -65,41 +65,43 @@
     <para>To mount a client or an MDT with one or more inactive OSTs, run commands similar to this:</para>
     <screen>client# mount -o exclude=testfs-OST0000 -t lustre \
            uml1:/testfs /mnt/testfs
-            client# cat /proc/fs/lustre/lov/testfs-clilov-*/target_obd</screen>
-    <para>To activate an inactive OST on a live client or MDT, use the <literal>lctl activate</literal> command on the OSC device. For example:</para>
+            client# lctl get_param lov.testfs-clilov-*.target_obd</screen>
+    <para>To activate an inactive OST on a live client or MDT, use the
+    <literal>lctl activate</literal> command on the OSC device. For example:</para>
     <screen>lctl --device 7 activate</screen>
     <note>
-      <para>A colon-separated list can also be specified. For example, <literal>exclude=testfs-OST0000:testfs-OST0001</literal>.</para>
+      <para>A colon-separated list can also be specified. For example,
+      <literal>exclude=testfs-OST0000:testfs-OST0001</literal>.</para>
     </note>
     </section>
     <section xml:id="dbdoclet.50438199_15240">
       <title><indexterm><primary>maintenance</primary><secondary>finding nodes</secondary></indexterm>
 Finding Nodes in the Lustre File System</title>
-      <para>There may be situations in which you need to find all nodes in your Lustre file system or get the names of all OSTs.</para>
+      <para>There may be situations in which you need to find all nodes in
+      your Lustre file system or get the names of all OSTs.</para>
       <para>To get a list of all Lustre nodes, run this command on the MGS:</para>
-      <screen># cat /proc/fs/lustre/mgs/MGS/live/*</screen>
+      <screen># lctl get_param mgs.MGS.live.*</screen>
       <note>
-        <para>This command must be run on the MGS.
-                </para>
+        <para>This command must be run on the MGS.</para>
       </note>
-      <para>In this example, file system <literal>testfs</literal> has three nodes,
-        <literal>testfs-MDT0000</literal>, <literal>testfs-OST0000</literal>, and
-        <literal>testfs-OST0001</literal>.</para>
-      <screen>cfs21:/tmp# cat /proc/fs/lustre/mgs/MGS/live/* 
+      <para>In this example, file system <literal>testfs</literal> has three
+      nodes, <literal>testfs-MDT0000</literal>,
+      <literal>testfs-OST0000</literal>, and
+      <literal>testfs-OST0001</literal>.</para>
+      <screen>mgs:/root# lctl get_param mgs.MGS.live.* 
                 fsname: testfs 
                 flags: 0x0     gen: 26 
                 testfs-MDT0000 
                 testfs-OST0000 
                 testfs-OST0001 </screen>
       <para>To get the names of all OSTs, run this command on the MDS:</para>
-      <screen># cat /proc/fs/lustre/lov/<replaceable>fsname</replaceable>-mdtlov/target_obd </screen>
+      <screen>mds:/root# lctl get_param lov.*-mdtlov.target_obd </screen>
       <note>
-        <para>This command must be run on the MDS.
-                </para>
+        <para>This command must be run on the MDS.</para>
       </note>
-      <para>In this example, there are two OSTs, testfs-OST0000 and testfs-OST0001, which are both
-      active.</para>
-      <screen>cfs21:/tmp# cat /proc/fs/lustre/lov/testfs-mdtlov/target_obd 
+      <para>In this example, there are two OSTs, testfs-OST0000 and
+      testfs-OST0001, which are both active.</para>
+      <screen>mgs:/root# lctl get_param lov.testfs-mdtlov.target_obd 
 0: testfs-OST0000_UUID ACTIVE 
 1: testfs-OST0001_UUID ACTIVE </screen>
     </section>
@@ -659,7 +661,7 @@ Separate a combined MGS/MDT</title>
           <para>Start the MGS.</para>
 	      <screen>mgs# mount -t lustre <replaceable>/dev/mgs_device</replaceable> <replaceable>/mgs_mount_point</replaceable></screen>
           <para>Check to make sure it knows about all your file system</para>
-	      <screen>cat /proc/fs/lustre/mgs/MGS/filesystems</screen>
+	      <screen>mgs:/root# lctl get_param mgs.MGS.filesystems</screen>
         </listitem>
         <listitem>
           <para>Remove the MGS option from the MDT, and set the new MGS nid.</para>
@@ -668,8 +670,8 @@ Separate a combined MGS/MDT</title>
         <listitem>
           <para>Start the MDT.</para>
 	      <screen>mds# mount -t lustre <replaceable>/dev/mdt_device /mdt_mount_point</replaceable></screen>
-          <para>Check to make sure the MGS configuration look right</para>
-	      <screen>mds# cat /proc/fs/lustre/mgs/MGS/live/<replaceable>filesystem_name</replaceable></screen>
+          <para>Check to make sure the MGS configuration looks right:</para>
+	      <screen>mgs# lctl get_param mgs.MGS.live.<replaceable>filesystem_name</replaceable></screen>
         </listitem>
       </orderedlist>
     </section>

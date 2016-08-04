@@ -732,7 +732,7 @@ client# mount -t lustre 192.168.10.1@tcp0:192.168.10.2@tcp0:/testfs \
         /mnt/testfs
 mds0# umount /mnt/mdt
 mds1# mount -t lustre /dev/sda1 /mnt/test/mdt
-mds1# cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status
+mds1# lctl get_param mdt.testfs-MDT0000.recovery_status
 </screen>
     <para>Where multiple NIDs are specified separated by commas (for example, 
     <literal>10.67.73.200@tcp,192.168.10.1@tcp</literal>), the two NIDs refer
