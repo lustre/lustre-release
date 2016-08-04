@@ -361,7 +361,7 @@ mgs# lctl pool_new
 <replaceable>poolname</replaceable>
 </screen>
       <note>
-        <para>The pool name is an ASCII string up to 16 characters.</para>
+        <para>The pool name is an ASCII string up to 15 characters.</para>
       </note>
       <para>To add the named OST to a pool, run:</para>
       <screen>
