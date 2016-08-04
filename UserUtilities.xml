@@ -43,7 +43,7 @@ lfs setstripe [--size|-s stripe_size] [--count|-c <replaceable>stripe_count</rep
               <replaceable>dirname|filename</replaceable>
 lfs setstripe -d <replaceable>dir</replaceable>
 lfs osts [path]
-lfs poollist <replaceable>filesystem</replaceable>[.<replaceable>pool</replaceable>]| <replaceable>pathname</replaceable>
+lfs pool_list <replaceable>filesystem</replaceable>[.<replaceable>pool</replaceable>]| <replaceable>pathname</replaceable>
 lfs quota [-q] [-v] [-h] [-o <replaceable>obd_uuid</replaceable>|-I <replaceable>ost_idx</replaceable>|-i <replaceable>mdt_idx</replaceable>]
           [-u <replaceable>username|uid|-g</replaceable> <replaceable>group|gid</replaceable>] <replaceable>/mount_point</replaceable>
 lfs quota -t -u|-g <replaceable>/mount_point</replaceable>
@@ -716,8 +716,7 @@ lfs help
             <row>
               <entry nameend="c2" namest="c1">
                 <para>
-                  <literal>poollist {filesystem}
-                  [.poolname]|{pathname}</literal>
+                  <literal>pool_list {filesystem}[.poolname]|{pathname}</literal>
                 </para>
               </entry>
               <entry>
@@ -1030,13 +1029,13 @@ $ lfs setstripe --pool my_pool -c 2 /mnt/lustre/file
       <para>Lists the pools defined for the mounted Lustre file system 
       <literal>/mnt/lustre</literal></para>
       <screen>
-$ lfs poollist /mnt/lustre/
+$ lfs pool_list /mnt/lustre/
 </screen>
       <para>Lists the OSTs which are members of the pool 
       <literal>my_pool</literal> in file system 
       <literal>my_fs</literal></para>
       <screen>
-$ lfs poollist my_fs.my_pool
+$ lfs pool_list my_fs.my_pool
 </screen>
       <para>Finds all directories/files associated with 
       <literal>poolA</literal>.</para>
