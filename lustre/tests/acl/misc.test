@@ -248,12 +248,13 @@ Add some users and groups
 	> default:group::r-x
 	> default:mask::r-x
 	> default:other::---
-	> 
-	 
+	>
+ 
 Symlink in directory with default ACL?
-	 
+# Need to remove trailing '.' when SELinux is enabled
+
 	$ ln -s d d/l
-	$ ls -dl d/l | awk 'sub(/\\./, "", $1); {print $1}'
+	$ ls -dl d/l | awk '{ sub(/\\.$/, "", $1); print $1 }'
 	> lrwxrwxrwx
 
 	$ ls -dl -L d/l | awk '{print $1}'
