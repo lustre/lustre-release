@@ -604,6 +604,31 @@ lnet_peer_primary_nid(lnet_nid_t nid)
 	return primary_nid;
 }
 
+lnet_nid_t
+LNetPrimaryNID(lnet_nid_t nid)
+{
+	struct lnet_peer_ni *lpni;
+	lnet_nid_t primary_nid = nid;
+	int rc = 0;
+	int cpt;
+
+	cpt = lnet_net_lock_current();
+	lpni = lnet_nid2peerni_locked(nid, cpt);
+	if (IS_ERR(lpni)) {
+		rc = PTR_ERR(lpni);
+		goto out_unlock;
+	}
+	primary_nid = lpni->lpni_peer_net->lpn_peer->lp_primary_nid;
+	lnet_peer_ni_decref_locked(lpni);
+out_unlock:
+	lnet_net_unlock(cpt);
+
+	CDEBUG(D_NET, "NID %s primary NID %s rc %d\n", libcfs_nid2str(nid),
+	       libcfs_nid2str(primary_nid), rc);
+	return primary_nid;
+}
+EXPORT_SYMBOL(LNetPrimaryNID);
+
 struct lnet_peer_net *
 lnet_peer_get_net_locked(struct lnet_peer *peer, __u32 net_id)
 {
