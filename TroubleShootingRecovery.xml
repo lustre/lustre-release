@@ -210,7 +210,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
     an internal table called the OI Table. An OI Scrub traverses this the IO
     Table and makes corrections where necessary. An OI Scrub is required after
     restoring from a file-level MDT backup (
-    <xref linkend="dbdoclet.50438207_71633" />), or in case the OI Table is
+    <xref linkend="dbdoclet.backup_device" />), or in case the OI Table is
     otherwise corrupted. Later phases of LFSCK will add further checks to the
     Lustre distributed file system state.</para>
     <para condition='l24'>In Lustre software release 2.4, LFSCK namespace

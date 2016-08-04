@@ -10,31 +10,49 @@ xml:id="backupandrestore">
   <itemizedlist>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438207_56395" />
+        <xref linkend="dbdoclet.backup_file"/>
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438207_71633" />
+        <xref linkend="dbdoclet.backup_device"/>
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438207_21638" />
+        <xref linkend="dbdoclet.backup_target_filesystem"/>
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438207_22325" />
+        <xref linkend="dbdoclet.restore_target_filesystem"/>
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.50438207_31553" />
+        <xref linkend="dbdoclet.backup_lvm_snapshot"/>
       </para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438207_56395">
+  <para>It is <emphasis>strongly</emphasis> recommended that sites perform
+  periodic device-level backup of the MDT(s)
+  (<xref linkend="dbdoclet.backup_device"/>),
+  for example twice a week with alternate backups going to a separate
+  device, even if there is not enough capacity to do a full backup of all
+  of the filesystem data.  Even if there are separate file-level backups of
+  some or all files in the filesystem, having a device-level backup of the
+  MDT can be very useful in case of MDT failure or corruption.  Being able to
+  restore a device-level MDT backup can avoid the significantly longer process
+  of restoring the entire filesystem from backup.  Since the MDT is required
+  for access to all files, its loss would otherwise force full restore of the
+  filesystem (if that is even possible) even if the OSTs are still OK.</para>
+  <para>Performing a periodic device-level MDT backup can be done relatively
+  inexpensively because the storage need only be connected to the primary
+  MDS (it can be manually connected to the backup MDS in the rare case
+  it is needed), and only needs good linear read/write performance.  While
+  the device-level MDT backup is not useful for restoring individual files,
+  it is most efficient to handle the case of MDT failure or corruption.</para>
+  <section xml:id="dbdoclet.backup_file">
     <title>
     <indexterm>
       <primary>backup</primary>
@@ -59,17 +77,15 @@ xml:id="backupandrestore">
     clients working parallel in different directories) rather than on
     individual server nodes; this is no different than backing up any other
     file system.</para>
-    <para>However, due to the large size of most Lustre file systems, it is not
-    always possible to get a complete backup. We recommend that you back up
-    subsets of a file system. This includes subdirectories of the entire file
-    system, filesets for a single user, files incremented by date, and so
-    on.</para>
+    <para>However, due to the large size of most Lustre file systems, it is
+    not always possible to get a complete backup. We recommend that you back
+    up subsets of a file system. This includes subdirectories of the entire
+    file system, filesets for a single user, files incremented by date, and
+    so on, so that restores can be done more efficiently.</para>
     <note>
-      <para>In order to allow the file system namespace to scale for future
-      applications, Lustre software release 2.x internally uses a 128-bit file
-      identifier for all files. To interface with user applications, the Lustre
-      software presents 64-bit inode numbers for the 
-      <literal>stat()</literal>, 
+      <para>Lustre internally uses a 128-bit file identifier (FID) for all
+      files. To interface with user applications, the 64-bit inode numbers
+      are returned by the <literal>stat()</literal>,
       <literal>fstat()</literal>, and 
       <literal>readdir()</literal> system calls on 64-bit applications, and
       32-bit inode numbers to 32-bit applications.</para>
@@ -87,9 +103,8 @@ xml:id="backupandrestore">
       they return 
       <literal>EOVERFLOW</literal> errors when accessing the Lustre files. To
       avoid this problem, Linux NFS clients can use the kernel command-line
-      option "
-      <literal>nfs.enable_ino64=0</literal>" in order to force the NFS client
-      to export 32-bit inode numbers to the client.</para>
+      option "<literal>nfs.enable_ino64=0</literal>" in order to force the
+      NFS client to export 32-bit inode numbers to the client.</para>
       <para>
       <emphasis role="bold">Workaround</emphasis>: We very strongly recommend
       that backups using 
@@ -97,7 +112,9 @@ xml:id="backupandrestore">
       number to uniquely identify an inode to be run on 64-bit clients. The
       128-bit Lustre file identifiers cannot be uniquely mapped to a 32-bit
       inode number, and as a result these utilities may operate incorrectly on
-      32-bit clients.</para>
+      32-bit clients.  While there is still a small chance of inode number
+      collisions with 64-bit inodes, the FID allocation pattern is designed
+      to avoid collisions for long periods of usage.</para>
     </note>
     <section remap="h3">
       <title>
@@ -386,12 +403,12 @@ Changelog records consumed: 42</screen>
       </section>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438207_71633">
+  <section xml:id="dbdoclet.backup_device">
     <title>
     <indexterm>
       <primary>backup</primary>
       <secondary>MDT/OST device level</secondary>
-    </indexterm>Backing Up and Restoring an MDT or OST (Device Level)</title>
+    </indexterm>Backing Up and Restoring an MDT or OST (ldiskfs Device Level)</title>
     <para>In some cases, it is useful to do a full device-level backup of an
     individual device (MDT or OST), before replacing hardware, performing
     maintenance, etc. Doing full device-level backups ensures that all of the
@@ -402,13 +419,16 @@ Changelog records consumed: 42</screen>
     underlying devices.</para>
     <note>
       <para>Keeping an updated full backup of the MDT is especially important
-      because a permanent failure of the MDT file system renders the much
-      larger amount of data in all the OSTs largely inaccessible and
-      unusable.</para>
+      because permanent failure or corruption of the MDT file system renders
+      the much larger amount of data in all the OSTs largely inaccessible and
+      unusable.  The storage needed for one or two full MDT device backups
+      is much smaller than doing a full filesystem backup, and can use less
+      expensive storage than the actual MDT device(s) since it only needs to
+      have good streaming read/write speed instead of high random IOPS.</para>
     </note>
     <warning condition='l23'>
-      <para>In Lustre software release 2.0 through 2.2, the only successful way
-      to backup and restore an MDT is to do a device-level backup as is
+      <para>In Lustre software release 2.0 through 2.2, the only successful
+      way to backup and restore an MDT is to do a device-level backup as is
       described in this section. File-level restore of an MDT is not possible
       before Lustre software release 2.3, as the Object Index (OI) file cannot
       be rebuilt after restore without the OI Scrub functionality. 
@@ -417,20 +437,20 @@ Changelog records consumed: 42</screen>
       restore is detected (see 
       <link xl:href="http://jira.hpdd.intel.com/browse/LU-957">LU-957</link>),
       and file-level backup is supported (see 
-      <xref linkend="dbdoclet.50438207_21638" />).</para>
+      <xref linkend="dbdoclet.backup_target_filesystem"/>).</para>
     </warning>
     <para>If hardware replacement is the reason for the backup or if a spare
     storage device is available, it is possible to do a raw copy of the MDT or
     OST from one block device to the other, as long as the new device is at
     least as large as the original device. To do this, run:</para>
-    <screen>dd if=/dev/{original} of=/dev/{newdev} bs=1M</screen>
+    <screen>dd if=/dev/{original} of=/dev/{newdev} bs=4M</screen>
     <para>If hardware errors cause read problems on the original device, use
     the command below to allow as much data as possible to be read from the
     original device while skipping sections of the disk with errors:</para>
     <screen>dd if=/dev/{original} of=/dev/{newdev} bs=4k conv=sync,noerror /
       count={original size in 4kB blocks}</screen>
-    <para>Even in the face of hardware errors, the 
-    <literal>ldiskfs</literal> file system is very robust and it may be possible
+    <para>Even in the face of hardware errors, the <literal>ldiskfs</literal>
+    file system is very robust and it may be possible
     to recover the file system data after running 
     <literal>e2fsck -fy /dev/{newdev}</literal> on the new device, along with 
     <literal>ll_recover_lost_found_objs</literal> for OST devices.</para>
@@ -440,8 +460,21 @@ Changelog records consumed: 42</screen>
     <literal>LFSCK</literal> scanning will automatically move objects from 
     <literal>lost+found</literal> back into its correct location on the OST
     after directory corruption.</para>
+    <para>In order to ensure that the backup is fully consistent, the MDT or
+    OST must be unmounted, so that there are no changes being made to the
+    device while the data is being transferred.  If the reason for the
+    backup is preventative (i.e. MDT backup on a running MDS in case of
+    future failures) then it is possible to perform a consistent backup from
+    an LVM snapshot.  If an LVM snapshot is not available, and taking the
+    MDS offline for a backup is unacceptable, it is also possible to perform
+    a backup from the raw MDT block device.  While the backup from the raw
+    device will not be fully consistent due to ongoing changes, the vast
+    majority of ldiskfs metadata is statically allocated, and inconsistencies
+    in the backup can be fixed by running <literal>e2fsck</literal> on the
+    backup device, and is still much better than not having any backup at all.
+    </para>
   </section>
-  <section xml:id="dbdoclet.50438207_21638">
+  <section xml:id="dbdoclet.backup_target_filesystem">
     <title>
     <indexterm>
       <primary>backup</primary>
@@ -450,7 +483,7 @@ Changelog records consumed: 42</screen>
     <indexterm>
       <primary>backup</primary>
       <secondary>MDT file system</secondary>
-    </indexterm>Making a File-Level Backup of an OST or MDT File System</title>
+    </indexterm>Backing Up an OST or MDT (ldiskfs File System Level)</title>
     <para>This procedure provides an alternative to backup or migrate the data
     of an OST or MDT at the file level. At the file-level, unused space is
     omitted from the backed up and the process may be completed quicker with
@@ -465,7 +498,7 @@ Changelog records consumed: 42</screen>
       <para>Prior to Lustre software release 2.3, the only successful way to
       perform an MDT backup and restore is to do a device-level backup as is
       described in 
-      <xref linkend="dbdoclet.50438207_71633" />. The ability to do MDT
+      <xref linkend="dbdoclet.backup_device" />. The ability to do MDT
       file-level backups is not available for Lustre software release 2.0
       through 2.2, because restoration of the Object Index (OI) file does not
       return the MDT to a functioning state. 
@@ -583,7 +616,7 @@ trusted.fid= \
       </listitem>
     </orderedlist>
   </section>
-  <section xml:id="dbdoclet.50438207_22325">
+  <section xml:id="dbdoclet.restore_target_filesystem">
     <title>
     <indexterm>
       <primary>backup</primary>
@@ -647,7 +680,7 @@ trusted.fid= \
     were created after the MDT backup will not be accessible or visible. See 
     <xref linkend="dbdoclet.lfsckadmin" />for details on using LFSCK.</para>
   </section>
-  <section xml:id="dbdoclet.50438207_31553">
+  <section xml:id="dbdoclet.backup_lvm_snapshot">
     <title>
     <indexterm>
       <primary>backup</primary>

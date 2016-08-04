@@ -533,8 +533,9 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
           <secondary>restoring OST config</secondary>
         </indexterm> Restoring OST Configuration Files</title>
       <para>If the original OST is still available, it is best to follow the OST backup and restore
-        procedure given in either <xref linkend="dbdoclet.50438207_71633"/>, or <xref
-          linkend="dbdoclet.50438207_21638"/> and <xref linkend="dbdoclet.50438207_22325"/>. </para>
+        procedure given in either <xref linkend="dbdoclet.backup_device"/>, or
+	<xref linkend="dbdoclet.backup_target_filesystem"/> and
+	<xref linkend="dbdoclet.restore_target_filesystem"/>.</para>
       <para>To replace an OST that was removed from service due to corruption or hardware failure,
         the file system needs to be formatted using <literal>mkfs.lustre</literal>, and the Lustre
         file system configuration should be restored, if available. </para>
