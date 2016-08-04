@@ -384,7 +384,8 @@ Removing and Restoring OSTs</title>
 	<para>If the MDT is permanently inaccessible, <literal>lfs rmdir {directory}</literal> can be used to delete the directory entry. A normal <literal>rmdir</literal> will report an IO error due to the remote MDT being inactive. After the remote directory has been removed, the administrator should mark the MDT as permanently inactive with:</para>
 <screen>lctl conf_param {MDT name}.mdc.active=0
 </screen>
-<para>A user can identify the location of a remote sub-directory using the <literal>lfs</literal> utility. For example:</para>
+<para>A user can identify which MDT holds a remote sub-directory using
+the <literal>lfs</literal> utility. For example:</para>
 <screen>client$ lfs getstripe -M /mnt/lustre/remote_dir1
 1
 client$ mkdir /mnt/lustre/local_dir0
@@ -471,21 +472,26 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
           <para>Deactivate the OST.</para>
           <orderedlist>
             <listitem>
-              <para>To temporarily disable the deactivated OST, enter:
-                <screen>[client]# lctl set_param osc.<replaceable>fsname</replaceable>-<replaceable>OSTnumber</replaceable>-*.active=0</screen>If
-                there is expected to be a replacement OST in some short time (a few days), the OST
-                can temporarily be deactivated on the clients: <note>
-                  <para>This setting is only temporary and will be reset if the clients or MDS are
-                    rebooted. It needs to be run on all clients.</para>
+              <para>
+		If there is expected to be a replacement OST in some short
+		time (a few days), the OST can temporarily be deactivated on
+		the clients using:
+                <screen>client# lctl set_param osc.<replaceable>fsname</replaceable>-OST<replaceable>number</replaceable>-*.active=0</screen>
+		<note><para>This setting is only temporary and will be reset
+		if the clients are remounted or rebooted. It needs to be run
+		on all clients.</para>
                 </note></para>
             </listitem>
           </orderedlist>
-          <para>If there is not expected to be a replacement for this OST in the near future,
-            permanently deactivate the OST on all clients and the MDS:
-            <screen>[mgs]# lctl conf_param <replaceable>ost_name</replaceable>.osc.active=0</screen></para>
+          <para>If there is not expected to be a replacement for this OST in
+	  the near future, permanently deactivate it on all clients and the MDS
+	  by running the following command on the MGS:
+            <screen>mgs# lctl conf_param <replaceable>ost_name</replaceable>.osc.active=0</screen></para>
           <note>
-            <para>A removed OST still appears in the file system; do not create a new OST with the
-              same name.</para>
+            <para>A deactivated OST still appears in the file system
+	    configuration, though a new OST with the same name can be
+	    created using the <literal>--replace</literal> option for
+	    <literal>mkfs.lustre</literal>.</para>
           </note>
         </listitem>
       </orderedlist>
@@ -583,13 +589,14 @@ oss0# dd if=/tmp/ldd of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 skip=5 co
       <title><indexterm>
           <primary>maintenance</primary>
           <secondary>reintroducing an OSTs</secondary>
-        </indexterm> Returning a Deactivated OST to Service</title>
-      <para> If the OST was permanently deactivated, it needs to be reactivated in the MGS
-        configuration.
-        <screen>mgs# lctl conf_param <replaceable>ost_name</replaceable>.osc.active=1</screen> If
-        the OST was temporarily deactivated, it needs to be reactivated on the MDS and clients.
+        </indexterm>Returning a Deactivated OST to Service</title>
+      <para>If the OST was permanently deactivated, it needs to be
+      reactivated in the MGS configuration.
+        <screen>mgs# lctl conf_param <replaceable>ost_name</replaceable>.osc.active=1</screen>
+	If the OST was temporarily deactivated, it needs to be reactivated on
+	the MDS and clients.
         <screen>mds# lctl --device <replaceable>lustre_devno</replaceable> activate
-                    client# lctl set_param osc.<replaceable>fsname</replaceable>-<replaceable>OSTnumber</replaceable>-*.active=0</screen></para>
+client# lctl set_param osc.<replaceable>fsname</replaceable>-OST<replaceable>number</replaceable>-*.active=1</screen></para>
     </section>
     </section>
     <section xml:id="dbdoclet.50438199_77819">
@@ -610,8 +617,8 @@ Determining Which Machine is Serving an OST </title>
       as such, LNET does not use IP addresses as node identifiers, but NIDs instead. To identify the
       NID that is serving a specific OST, run one of the following commands on a client (you do not
       need to be a root user):
-      <screen>client$ lctl get_param osc.<replaceable>fsname</replaceable>-<replaceable>OSTnumber</replaceable>*.ost_conn_uuid</screen>For
-      example:
+      <screen>client$ lctl get_param osc.<replaceable>fsname</replaceable>-OST<replaceable>number</replaceable>*.ost_conn_uuid</screen>
+      For example:
       <screen>client$ lctl get_param osc.*-OST0000*.ost_conn_uuid 
 osc.testfs-OST0000-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp</screen>-
       OR -
