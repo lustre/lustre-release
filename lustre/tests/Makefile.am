@@ -1,5 +1,4 @@
 LIBCFS = $(top_builddir)/libcfs/libcfs/libcfs.a
-LIBLUSTREAPI = $(top_builddir)/lustre/utils/liblustreapi.a
 
 # Lustre test Makefile
 AM_CFLAGS := -fPIC -D_GNU_SOURCE \
@@ -85,7 +84,8 @@ test_SCRIPTS = $(noinst_SCRIPTS) $(noinst_PROGRAMS)
 nobase_test_SCRIPTS = $(nobase_noinst_SCRIPTS)
 test_DATA = $(noinst_DATA)
 nobase_test_DATA = $(nobase_noinst_DATA)
-endif # TESTS
+
+LIBLUSTREAPI = $(top_builddir)/lustre/utils/liblustreapi.a
 
 mmap_sanity_SOURCES= mmap_sanity.c
 mmap_sanity_LDADD=$(LIBCFS)
@@ -107,3 +107,4 @@ ll_dirstripe_verify_LDADD = $(LIBLUSTREAPI) $(LIBCFS) $(PTHREAD_LIBS)
 
 flocks_test_SOURCES=flocks_test.c
 flocks_test_LDADD=$(PTHREAD_LIBS)
+endif # TESTS

@@ -1,22 +1,43 @@
 %bcond_without servers
+%bcond_without zfs
+%bcond_with ldiskfs
 
 # Set the package name prefix
 %if %{with servers}
-    %define module  @PACKAGE@
+    %if %{with zfs}
+	%if %{with ldiskfs}
+	    %define module @PACKAGE@-all
+	%else
+	    %define module @PACKAGE@-zfs
+	%endif
+    %else
+	%if %{without ldiskfs}
+	    %define module @PACKAGE@-BADSTATE
+	%else
+	    %define module @PACKAGE@-ldiskfs
+	%endif
+    %endif
+    %define lustre_name @PACKAGE@
+
 %else
-    %define module  @PACKAGE@-client
+    %define module @PACKAGE@-client
+    %define lustre_name @PACKAGE@-client
 %endif
 
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
-	%global requires_kmod_name kmod-%{module}
+	%global kmod_name kmod-%{lustre_name}
 	%define mkconf_options
 %else	#for Suse / Ubuntu
-	%global requires_kmod_name %{module}-kmp
+	%global kmod_name %{lustre_name}-kmp
 	%define mkconf_options "-k updates"
 %endif
 
 %define buildid 1
 %define mkconf  lustre/scripts/dkms.mkconf
+
+# There should be a better (non-arch dependent) way to require ext4
+# sources
+%define ext4_source_rpm kernel-debuginfo-common-x86_64
 
 Name:           %{module}-dkms
 
@@ -35,28 +56,57 @@ BuildArch:      noarch
 # (ie, "BUILD_DEPENDS[#]=<pkg>"), and have latest DKMS fixes integrated
 # for bugs that prevented our module to build/install.
 Requires:       dkms >= 2.2.0.3-28.git.7c3e7c5
+# for lnetctl
+Requires:	libyaml-devel
 %if %{with servers}
-# Only zfs Lustre DKMS Server is supported
-Requires:       spl-dkms >= 0.6.1
-Requires:       zfs-dkms >= 0.6.1
-Requires:       %{module}-osd-zfs-mount
 # If client package is installed when installing server, remove it since
 # the server package also includes the client.  This can be removed if/when
 # the packages are split into independent client/server/common packages.
 Obsoletes:	@PACKAGE@-client < %{version}
+%if %{with zfs}
+Requires:       spl-dkms >= 0.6.5
+Requires:       zfs-dkms >= 0.6.5
+Requires:	@PACKAGE@-osd-zfs-mount
+Conflicts:	@PACKAGE@-ldiskfs-dkms
+Conflicts:	@PACKAGE@-client-dkms
+Obsoletes:	@PACKAGE@-dkms
+%endif
+%if %{with ldiskfs}
+Requires:	%{ext4_source_rpm}
+Requires:	@PACKAGE@-osd-ldiskfs-mount
+Conflicts:	@PACKAGE@-zfs-dkms
+Conflicts:	@PACKAGE@-client-dkms
+%if "%{module}" != "@PACKAGE@-all"
+Conflicts:	@PACKAGE@-dkms
+%endif
+%endif
+%if "%{module}" != "@PACKAGE@-all"
+Conflicts:	@PACKAGE@-all-dkms
+%endif
 %endif
 Requires:       gcc, make, perl
 Requires:       kernel-devel
-Provides:       %{requires_kmod_name} = %{version}
-Provides:       %{module}-modules = %{version}
+Provides:	%{kmod_name} = %{version}
+Provides:	@PACKAGE@-modules = %{version}
 %if %{with servers}
-# Only zfs Lustre DKMS Server is supported
-Provides:       %{module}-osd-zfs = %{version}
-Provides:       %{module}-osd
+%if %{with zfs}
+Provides:	@PACKAGE@-osd-zfs = %{version}
+%endif
+%if %{with ldiskfs}
+Provides:	@PACKAGE@-osd-ldiskfs = %{version}
+%endif
+Provides:	@PACKAGE@-osd
+%else
+Provides:	@PACKAGE@-client
 %endif
 
 %description
 This package contains the dkms Lustre kernel modules.
+%if %{with ldiskfs}
+
+The required %{ext4_source_rpm} package is available from
+the repository with other debuginfo rpms.
+%endif
 
 %prep
 %setup -q -n @PACKAGE@-%{version}
@@ -70,10 +120,7 @@ if [ "$RPM_BUILD_ROOT" != "/" ]; then
 fi
 mkdir -p $RPM_BUILD_ROOT/usr/src/
 cp -rfp ${RPM_BUILD_DIR}/@PACKAGE@-%{version} $RPM_BUILD_ROOT/usr/src/
-%if %{without servers}
-# To have the directory reflect the DKMS RPM name!
 mv $RPM_BUILD_ROOT/usr/src/@PACKAGE@-%{version} $RPM_BUILD_ROOT/usr/src/%{module}-%{version}
-%endif
 
 %clean
 if [ "$RPM_BUILD_ROOT" != "/" ]; then
@@ -103,6 +150,8 @@ dkms remove -m %{module} -v %{version} --all --rpm_safe_upgrade
 exit 0
 
 %changelog
+* Mon Aug  1 2016 Nathaniel Clark <nathaniel.l.clark@intel.com>
+- Add option to build either ldiskfs or zfs flavour of server version
 * Sat Jan 23 2016 Bruno Faccini <bruno.faccini@intel.com>
  - detect and handle cases where [spl,zfs]-dkms packages are not built
  - also handle on-target configure issues

@@ -7,10 +7,18 @@
 # $6 : $source_tree
 # $7 : $dkms_tree
 
-if [ $1 = "lustre-client" ] ; then
+case $1 in
+    lustre-client)
 	SERVER="--disable-server"
 	KERNEL_STUFF=""
-else
+	;;
+
+    lustre-zfs|lustre-all)
+	LDISKFS=""
+	if [ "$1" == "lustre-zfs" ]; then
+	    LDISKFS="--disable-ldiskfs"
+	fi
+
 	SPL_VERSION=$(dkms status -m spl -k $3 -a $5 | awk -F', ' '{print $2; exit 0}' | grep -v ': added$')
 	if [ -z $SPL_VERSION ] ; then
 		echo "spl-dkms package must already be installed and built under DKMS control"
@@ -22,14 +30,23 @@ else
 		exit 1
 	fi
 
-	SERVER="--enable-server --disable-ldiskfs --with-linux=$4 --with-linux-obj=$4 \
-	       --with-spl=$6/spl-${SPL_VERSION} \
-	       --with-spl-obj=$7/spl/${SPL_VERSION}/$3/$5 \
-	       --with-zfs=$6/zfs-${ZFS_VERSION} \
-	       --with-zfs-obj=$7/zfs/${ZFS_VERSION}/$3/$5"
+	SERVER="--enable-server $LDISKFS \
+		--with-linux=$4 --with-linux-obj=$4 \
+		--with-spl=$6/spl-${SPL_VERSION} \
+		--with-spl-obj=$7/spl/${SPL_VERSION}/$3/$5 \
+		--with-zfs=$6/zfs-${ZFS_VERSION} \
+		--with-zfs-obj=$7/zfs/${ZFS_VERSION}/$3/$5"
 
 	KERNEL_STUFF="--with-linux=$4 --with-linux-obj=$4"
-fi
+	;;
+
+    lustre-ldiskfs)
+	SERVER="--enable-server --without-zfs --without-spl \
+		--with-linux=$4 --with-linux-obj=$4"
+
+	KERNEL_STUFF="--with-linux=$4 --with-linux-obj=$4"
+	;;
+esac
 
 PACKAGE_CONFIG="/etc/sysconfig/lustre"
 DKMS_CONFIG_OPTS=$(
@@ -66,7 +83,7 @@ fi
 ./configure --prefix=/usr --enable-modules --disable-iokit --disable-snmp \
 	--disable-doc --disable-utils --disable-tests --disable-maintainer-mode \
 	$KERNEL_STUFF $GSS $SERVER $DKMS_CONFIG_OPTS \
-	--disable-manpages --disable-dlc
+	--disable-manpages --disable-mpitests --disable-dlc
 
 if [ $? != 0 ] ; then
 	echo "configure error, check $7/$1/$2/build/config.log"
