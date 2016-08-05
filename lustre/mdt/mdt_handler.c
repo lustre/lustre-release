@@ -5502,7 +5502,7 @@ static int mdt_export_cleanup(struct obd_export *exp)
 				rc = mdt_ctxt_add_dirty_flag(&env, info, mfd);
 
 			/* Don't unlink orphan on failover umount, LU-184 */
-			if (exp->exp_flags & OBD_OPT_FAILOVER) {
+			if (exp->exp_obd->obd_fail) {
 				ma->ma_valid = MA_FLAGS;
 				ma->ma_attr_flags |= MDS_KEEP_ORPHAN;
 			}
@@ -5511,9 +5511,7 @@ static int mdt_export_cleanup(struct obd_export *exp)
         }
         info->mti_mdt = NULL;
         /* cleanup client slot early */
-        /* Do not erase record for recoverable client. */
-        if (!(exp->exp_flags & OBD_OPT_FAILOVER) || exp->exp_failed)
-		tgt_client_del(&env, exp);
+	tgt_client_del(&env, exp);
         lu_env_fini(&env);
 
         RETURN(rc);
