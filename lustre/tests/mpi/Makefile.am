@@ -13,8 +13,6 @@ test_PROGRAMS = $(THETESTS)
 else
 noinst_PROGRAMS = $(THETESTS)
 endif
-else
-noinst_PROGRAMS = $(THETESTS)
 endif
 
 write_append_truncate_SOURCES=write_append_truncate.c

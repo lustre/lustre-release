@@ -2,8 +2,6 @@
 AM_CFLAGS := -fPIC -D_GNU_SOURCE \
 	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64
 
-LIBLUSTREAPI = $(top_builddir)/lustre/utils/liblustreapi.la
-
 DIST_SUBDIRS = mpi
 
 noinst_DATA = disk1_8_up_2_5-ldiskfs.tar.bz2 disk2_1_up_2_5-ldiskfs.tar.bz2
@@ -90,9 +88,8 @@ test_PROGRAMS = $(THETESTS)
 nobase_test_SCRIPTS = $(nobase_noinst_SCRIPTS)
 test_DATA = $(noinst_DATA)
 nobase_test_DATA = $(nobase_noinst_DATA)
-else # !TESTS
-noinst_PROGRAMS = $(THETESTS)
-endif # TESTS
+
+LIBLUSTREAPI = $(top_builddir)/lustre/utils/liblustreapi.la
 
 mmap_sanity_LDADD = $(LIBLUSTREAPI)
 multiop_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
@@ -109,3 +106,4 @@ lockahead_test_LDADD = $(LIBLUSTREAPI)
 mirror_io_LDADD = $(LIBLUSTREAPI)
 ll_dirstripe_verify_LDADD = $(LIBLUSTREAPI)
 flocks_test_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
+endif # TESTS

@@ -30,7 +30,7 @@ PRE_BUILD="lustre-dkms_pre-build.sh \$module \$module_version \$kernelver \$kern
 POST_BUILD="lustre-dkms_post-build.sh \$module \$module_version \$kernelver \$kernel_source_dir \
 	 \$arch \$source_tree \$dkms_tree"
 EOF
-if [ $pkgname = "lustre" ] ; then
+if [ $pkgname = "lustre-zfs" -o $pkgname = "lustre-all" ] ; then
 	cat >>${filename} <<EOF
 BUILD_DEPENDS[0]="zfs"
 EOF
@@ -103,7 +103,7 @@ BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/ptlrpc/gss/"
 DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
 fi
 EOF
-if [ $pkgname = "lustre" ] ; then
+if [ $pkgname != "lustre-client" ] ; then
 	cat >>${filename} <<EOF
 # Server Modules
 BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="ofd"
@@ -114,9 +114,6 @@ BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/ost/"
 DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
 BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lfsck"
 BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/lfsck/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="osd_zfs"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/osd-zfs/"
 DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
 BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="mgs"
 BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/mgs/"
@@ -138,6 +135,22 @@ BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/obdclass/"
 DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
 BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lod"
 BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/lod/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
+EOF
+fi
+if [ $pkgname = "lustre-zfs" -o $pkgname = "lustre-all" ] ; then
+	cat >>${filename} <<EOF
+# Module for ZFS backing
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="osd_zfs"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/osd-zfs/"
+DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
+EOF
+fi
+if [ $pkgname = "lustre-ldiskfs" -o $pkgname = "lustre-all" ] ; then
+	cat >>${filename} <<EOF
+# Module for ldiskfs backing
+BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="osd_ldiskfs"
+BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/osd-ldiskfs/"
 DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/${kmoddir}/lustre/"
 EOF
 fi

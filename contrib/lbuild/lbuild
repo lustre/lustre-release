@@ -951,10 +951,8 @@ build_lustre() {
     return 0
 }
 
-# Only zfs Lustre DKMS Server is supported
 build_lustre_dkms() {
     local build_args=""
-    local name_prefix="lustre"
     local ver=$(sed -n -e 's/^LUSTRE_VERSION = //p' LUSTRE-VERSION-FILE)
 
     echo "Building Lustre DKMS RPMs for: $TARGET_ARCH"
@@ -962,14 +960,36 @@ build_lustre_dkms() {
 
     if $PATCHLESS; then
         build_args="--without servers"
-        name_prefix="lustre-client"
     fi
 
     rpmbuild --define "_topdir $TOPDIR" $build_args -bs lustre-dkms.spec ||
         fatal 1 "Error building DKMS .src.rpm for $TARGET_ARCH."
-    rpmbuild --define "_topdir $TOPDIR" $build_args \
-             --rebuild $TOPDIR/SRPMS/$name_prefix-dkms-$ver-*.src.rpm ||
+
+    if $PATCHLESS; then
+	rpmbuild --define "_topdir $TOPDIR" $build_args \
+             --rebuild $TOPDIR/SRPMS/lustre-client-dkms-$ver-*.src.rpm ||
         fatal 1 "Error building DKMS .rpm for $TARGET_ARCH."
+    else
+	rpmbuild --define="_topdir $TOPDIR" --with servers \
+	    --with zfs --without ldiskfs -bs lustre-dkms.spec ||
+	fatal 1 "Error creating DKMS (zfs) .srpm for $TARGET_ARCH."
+	rpmbuild --define="_topdir $TOPDIR" --with servers \
+	    --without zfs --with ldiskfs -bs lustre-dkms.spec ||
+	fatal 1 "Error creating DKMS (ldiskfs) .srpm for $TARGET_ARCH."
+	rpmbuild --define="_topdir $TOPDIR" --with servers \
+	    --with zfs --with ldiskfs -bs lustre-dkms.spec ||
+	fatal 1 "Error creating DKMS (all) .srpm for $TARGET_ARCH."
+
+	rpmbuild --rebuild --define="_topdir $TOPDIR" --with servers \
+	    --with zfs --without ldiskfs $TOPDIR/SRPMS/lustre-zfs-dkms-$ver-*.src.rpm ||
+	fatal 1 "Error building DKMS (zfs) .rpm for $TARGET_ARCH."
+	rpmbuild --rebuild --define="_topdir $TOPDIR" --with servers \
+	    --without zfs --with ldiskfs $TOPDIR/SRPMS/lustre-ldiskfs-dkms-$ver-*.src.rpm ||
+	fatal 1 "Error building DKMS (ldiskfs) .rpm for $TARGET_ARCH."
+	rpmbuild --rebuild --define="_topdir $TOPDIR" --with servers \
+	    --with zfs --with ldiskfs $TOPDIR/SRPMS/lustre-all-dkms-$ver-*.src.rpm ||
+	fatal 1 "Error building DKMS (all) .rpm for $TARGET_ARCH."
+    fi
 
     return 0
 }
