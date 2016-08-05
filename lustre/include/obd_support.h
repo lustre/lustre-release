@@ -627,6 +627,13 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OSP_CHECK_ENOMEM		0x2101
 #define OBD_FAIL_OSP_FAKE_PRECREATE		0x2102
 
+ /* barrier */
+#define OBD_FAIL_MGS_BARRIER_READ_NET		0x2200
+#define OBD_FAIL_MGS_BARRIER_NOTIFY_NET		0x2201
+
+#define OBD_FAIL_BARRIER_DELAY			0x2202
+#define OBD_FAIL_BARRIER_FAILURE		0x2203
+
 /* Assign references to moved code to reduce code changes */
 #define OBD_FAIL_PRECHECK(id)                   CFS_FAIL_PRECHECK(id)
 #define OBD_FAIL_CHECK(id)                      CFS_FAIL_CHECK(id)
