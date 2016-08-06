@@ -15,7 +15,11 @@ advices from Lustre clients to servers.
 .SH OPTIONS
 .TP
 \fB\-a\fR, \fB\-\-advice\fR=\fIADVICE\fR
-Give advice or hint of type \fIADVICE\fR.
+Give advice or hint of type \fIADVICE\fR. Advice types are:
+.RS 1.2i
+.TP
+\fBwillread\fR to prefetch data into server cache
+.RE
 .TP
 \fB\-b\fR, \fB\-\-background
 Enable the advices to be sent and handled asynchronously.
@@ -49,6 +53,11 @@ The main difference between Linux fadvise() system call and ladvise is that
 fadvise() is only a client side mechanism that does not pass the advice to the
 filesystem, while ladvise can send advices or hints to Lustre server sides.
 
+.SH EXAMPLES
+.TP
+.B $ lfs ladvise -a willread -s 0 -e 1048576000 /mnt/lustre/file1
+This gives the OST(s) holding the first 1GB of \fB/mnt/lustre/file1\fR a hint
+that the first 1GB of the file will be read soon.
 .SH AVAILABILITY
 The lfs ladvise command is part of the Lustre filesystem.
 .SH SEE ALSO

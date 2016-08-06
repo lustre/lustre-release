@@ -1378,9 +1378,11 @@ struct llapi_json_item_list {
 
 enum lu_ladvise_type {
 	LU_LADVISE_INVALID	= 0,
+	LU_LADVISE_WILLREAD	= 1,
 };
 
 #define LU_LADVISE_NAMES {						\
+	[LU_LADVISE_WILLREAD]	= "willread",				\
 }
 
 /* This is the userspace argument for ladvise.  It is currently the same as

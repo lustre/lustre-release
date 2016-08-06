@@ -13962,6 +13962,175 @@ test_254() {
 }
 run_test 254 "Check changelog size"
 
+ladvise_no_type()
+{
+	local type=$1
+	local file=$2
+
+	lfs ladvise -a invalid $file 2>&1 | grep "Valid types" |
+		awk -F: '{print $2}' | grep $type > /dev/null
+	if [ $? -ne 0 ]; then
+		return 0
+	fi
+	return 1
+}
+
+ladvise_no_ioctl()
+{
+	local file=$1
+
+	lfs ladvise -a willread $file > /dev/null 2>&1
+	if [ $? -eq 0 ]; then
+		return 1
+	fi
+
+	lfs ladvise -a willread $file 2>&1 |
+		grep "Inappropriate ioctl for device" > /dev/null
+	if [ $? -eq 0 ]; then
+		return 0
+	fi
+	return 1
+}
+
+ladvise_willread_performance()
+{
+	local repeat=10
+	local average_cache=0
+	local average_ladvise=0
+	for ((i = 1; i <= $repeat; i++)); do
+		echo "Iter $i/$repeat: reading without willread hint"
+		cancel_lru_locks osc
+		do_nodes $(comma_list $(osts_nodes)) \
+			"echo 3 > /proc/sys/vm/drop_caches"
+		local speed_origin=$($READS -f $DIR/$tfile -s $size \
+			-b 4096 -n $((size / 4096)) -t 60 |
+			sed -e '/^$/d' -e 's#.*s, ##' -e 's#MB/s##')
+
+		echo "Iter $i/$repeat: Reading again without willread hint"
+		cancel_lru_locks osc
+		local speed_cache=$($READS -f $DIR/$tfile -s $size \
+			-b 4096 -n $((size / 4096)) -t 60 |
+			sed -e '/^$/d' -e 's#.*s, ##' -e 's#MB/s##')
+
+		echo "Iter $i/$repeat: reading with willread hint"
+		cancel_lru_locks osc
+		do_nodes $(comma_list $(osts_nodes)) \
+			"echo 3 > /proc/sys/vm/drop_caches"
+		lfs ladvise -a willread $DIR/$tfile ||
+			error "Ladvise failed"
+		local speed_ladvise=$($READS -f $DIR/$tfile -s $size \
+			-b 4096 -n $((size / 4096)) -t 60 |
+			sed -e '/^$/d' -e 's#.*s, ##' -e 's#MB/s##')
+
+		local cache_speedup=$(echo "scale=2; \
+			($speed_cache-$speed_origin)/$speed_origin*100" | bc)
+		cache_speedup=$(echo ${cache_speedup%.*})
+		echo "Iter $i/$repeat: cache speedup: $cache_speedup%"
+		average_cache=$((average_cache + cache_speedup))
+
+		local ladvise_speedup=$(echo "scale=2; \
+			($speed_ladvise-$speed_origin)/$speed_origin*100" | bc)
+		ladvise_speedup=$(echo ${ladvise_speedup%.*})
+		echo "Iter $i/$repeat: ladvise speedup: $ladvise_speedup%"
+		average_ladvise=$((average_ladvise + ladvise_speedup))
+	done
+	average_cache=$((average_cache / repeat))
+	average_ladvise=$((average_ladvise / repeat))
+
+	if [ $average_cache -lt 20 ]; then
+		echo "Speedup with cache is less than 20% ($average_cache%),"\
+			"skipping check of speedup with willread:"\
+			"$average_ladvise%"
+		return 0
+	fi
+
+	local lowest_speedup=$((average_cache / 2))
+	[ $average_ladvise -gt $lowest_speedup ] ||
+		error "Speedup with willread is less than $lowest_speedup%,"\
+			"got $average_ladvise%"
+	echo "Speedup with willread ladvise: $average_ladvise%"
+	echo "Speedup with cache: $average_cache%"
+}
+
+test_255a() {
+	lfs setstripe -c -1 -i 0 $DIR/$tfile || error "$tfile failed"
+
+	ladvise_no_type willread $DIR/$tfile &&
+		skip "willread ladvise is not supported" && return
+
+	ladvise_no_ioctl $DIR/$tfile &&
+		skip "ladvise ioctl is not supported" && return
+
+	[ $(lustre_version_code ost1) -lt $(version_code 2.8.54) ] &&
+		skip "lustre < 2.8.54 does not support ladvise " && return
+
+	local size_mb=100
+	local size=$((size_mb * 1048576))
+	dd if=/dev/zero of=$DIR/$tfile bs=1048576 count=$size_mb ||
+		error "dd to $DIR/$tfile failed"
+
+	lfs ladvise -a willread $DIR/$tfile ||
+		error "Ladvise failed with no range argument"
+
+	lfs ladvise -a willread -s 0 $DIR/$tfile ||
+		error "Ladvise failed with no -l or -e argument"
+
+	lfs ladvise -a willread -e 1 $DIR/$tfile ||
+		error "Ladvise failed with only -e argument"
+
+	lfs ladvise -a willread -l 1 $DIR/$tfile ||
+		error "Ladvise failed with only -l argument"
+
+	lfs ladvise -a willread -s 2 -e 1 $DIR/$tfile &&
+		error "End offset should not be smaller than start offset"
+
+	lfs ladvise -a willread -s 2 -e 2 $DIR/$tfile &&
+		error "End offset should not be equal to start offset"
+
+	lfs ladvise -a willread -s $size -l 1 $DIR/$tfile ||
+		error "Ladvise failed with overflowing -s argument"
+
+	lfs ladvise -a willread -s 1 -e $((size + 1)) $DIR/$tfile ||
+		error "Ladvise failed with overflowing -e argument"
+
+	lfs ladvise -a willread -s 1 -l $size $DIR/$tfile ||
+		error "Ladvise failed with overflowing -l argument"
+
+	lfs ladvise -a willread -l 1 -e 2 $DIR/$tfile &&
+		error "Ladvise succeeded with conflicting -l and -e arguments"
+
+	echo "Synchronous ladvise should wait"
+	local delay=4
+#define OBD_FAIL_OST_LADVISE_PAUSE	 0x237
+	do_nodes $(comma_list $(osts_nodes)) \
+		$LCTL set_param fail_val=$delay fail_loc=0x237
+
+	local start_ts=$SECONDS
+	lfs ladvise -a willread $DIR/$tfile ||
+		error "Ladvise failed with no range argument"
+	local end_ts=$SECONDS
+	local inteval_ts=$((end_ts - start_ts))
+
+	if [ $inteval_ts -lt $(($delay - 1)) ]; then
+		error "Synchronous advice didn't wait reply"
+	fi
+
+	echo "Asynchronous ladvise shouldn't wait"
+	local start_ts=$SECONDS
+	lfs ladvise -a willread -b $DIR/$tfile ||
+		error "Ladvise failed with no range argument"
+	local end_ts=$SECONDS
+	local inteval_ts=$((end_ts - start_ts))
+
+	if [ $inteval_ts -gt $(($delay / 2)) ]; then
+		error "Asynchronous advice blocked"
+	fi
+
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0
+	ladvise_willread_performance
+}
+run_test 255a "check 'lfs ladvise -a willread'"
+
 test_256() {
 	local cl_user
 	local cat_sl

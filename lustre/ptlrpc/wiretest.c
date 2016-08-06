@@ -5013,6 +5013,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lu_ladvise, lla_value4));
 	LASSERTF((int)sizeof(((struct lu_ladvise *)0)->lla_value4) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lu_ladvise *)0)->lla_value4));
+	LASSERTF(LU_LADVISE_WILLREAD == 1, "found %lld\n",
+		 (long long)LU_LADVISE_WILLREAD);
 
 	/* Checks for struct ladvise_hdr */
 	LASSERTF(LADVISE_MAGIC == 0x1ADF1CE0, "found 0x%.8x\n",
@@ -5047,4 +5049,6 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ladvise_hdr, lah_advise));
 	LASSERTF((int)sizeof(((struct ladvise_hdr *)0)->lah_advise) == 0, "found %lld\n",
 		 (long long)(int)sizeof(((struct ladvise_hdr *)0)->lah_advise));
+	LASSERTF(LF_ASYNC == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)LF_ASYNC);
 }
