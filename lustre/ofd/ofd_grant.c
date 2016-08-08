@@ -246,10 +246,11 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 		tot_dirty += fed->fed_dirty;
 	}
 
-	spin_unlock(&obd->obd_dev_lock);
 	fo_tot_granted = ofd->ofd_tot_granted;
 	fo_tot_pending = ofd->ofd_tot_pending;
 	fo_tot_dirty = ofd->ofd_tot_dirty;
+	spin_unlock(&obd->obd_dev_lock);
+	spin_unlock(&ofd->ofd_grant_lock);
 
 	if (tot_granted != fo_tot_granted)
 		CERROR("%s: tot_granted "LPU64" != fo_tot_granted "LPU64"\n",
@@ -269,7 +270,6 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 	if (tot_dirty > maxsize)
 		CERROR("%s: tot_dirty "LPU64" > maxsize "LPU64"\n",
 		       func, tot_dirty, maxsize);
-	spin_unlock(&ofd->ofd_grant_lock);
 }
 
 /**
