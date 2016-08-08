@@ -1678,7 +1678,7 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 	it->ooi_pages = pages;
 	it->ooi_total_npages = npages;
 	for (i = 0; i < npages; i++) {
-		pages[i] = alloc_page(GFP_IOFS);
+		pages[i] = alloc_page(GFP_NOFS);
 		if (pages[i] == NULL)
 			RETURN(-ENOMEM);
 	}

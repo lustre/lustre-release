@@ -1792,7 +1792,7 @@ static int mdt_readpage(struct tgt_session_info *tsi)
                 RETURN(-ENOMEM);
 
         for (i = 0; i < rdpg->rp_npages; ++i) {
-		rdpg->rp_pages[i] = alloc_page(GFP_IOFS);
+		rdpg->rp_pages[i] = alloc_page(GFP_NOFS);
                 if (rdpg->rp_pages[i] == NULL)
                         GOTO(free_rdpg, rc = -ENOMEM);
         }

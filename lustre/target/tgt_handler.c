@@ -1117,7 +1117,7 @@ static int tgt_obd_idx_read(struct tgt_session_info *tsi)
 	if (rdpg->rp_pages == NULL)
 		GOTO(out, rc = -ENOMEM);
 	for (i = 0; i < rdpg->rp_npages; i++) {
-		rdpg->rp_pages[i] = alloc_page(GFP_IOFS);
+		rdpg->rp_pages[i] = alloc_page(GFP_NOFS);
 		if (rdpg->rp_pages[i] == NULL)
 			GOTO(out, rc = -ENOMEM);
 	}

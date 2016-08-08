@@ -1234,7 +1234,7 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	if (rdpg.rp_pages == NULL)
 		RETURN(-ENOMEM);
 	for (i = 0; i < rdpg.rp_npages; i++) {
-		rdpg.rp_pages[i] = alloc_page(GFP_IOFS);
+		rdpg.rp_pages[i] = alloc_page(GFP_NOFS);
 		if (rdpg.rp_pages[i] == NULL)
 			GOTO(out, rc = -ENOMEM);
 	}

@@ -203,7 +203,7 @@ static int qsd_reint_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 	if (pages == NULL)
 		GOTO(out, rc = -ENOMEM);
 	for (i = 0; i < npages; i++) {
-		pages[i] = alloc_page(GFP_IOFS);
+		pages[i] = alloc_page(GFP_NOFS);
 		if (pages[i] == NULL)
 			GOTO(out, rc = -ENOMEM);
 	}
