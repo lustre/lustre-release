@@ -178,7 +178,8 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_SIZE)) {
 		data->ocd_brw_size = 65536;
 	} else if (OCD_HAS_FLAG(data, BRW_SIZE)) {
-		data->ocd_brw_size = min(data->ocd_brw_size, ofd->ofd_brw_size);
+		if (data->ocd_brw_size > ofd->ofd_brw_size)
+			data->ocd_brw_size = ofd->ofd_brw_size;
 		if (data->ocd_brw_size == 0) {
 			CERROR("%s: cli %s/%p ocd_connect_flags: "LPX64
 			       " ocd_version: %x ocd_grant: %d ocd_index: %u "

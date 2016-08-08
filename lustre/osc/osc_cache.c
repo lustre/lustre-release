@@ -647,15 +647,20 @@ static struct osc_extent *osc_extent_find(const struct lu_env *env,
 	descr = &olck->ols_cl.cls_lock->cll_descr;
 	LASSERT(descr->cld_mode >= CLM_WRITE);
 
-	LASSERT(cli->cl_chunkbits >= PAGE_CACHE_SHIFT);
-	ppc_bits   = cli->cl_chunkbits - PAGE_CACHE_SHIFT;
+	LASSERTF(cli->cl_chunkbits >= PAGE_SHIFT,
+		 "chunkbits: %u\n", cli->cl_chunkbits);
+	ppc_bits   = cli->cl_chunkbits - PAGE_SHIFT;
 	chunk_mask = ~((1 << ppc_bits) - 1);
 	chunksize  = 1 << cli->cl_chunkbits;
 	chunk      = index >> ppc_bits;
 
-	/* align end to rpc edge, rpc size may not be a power 2 integer. */
+	/* align end to RPC edge. */
 	max_pages = cli->cl_max_pages_per_rpc;
-	LASSERT((max_pages & ~chunk_mask) == 0);
+	if ((max_pages & ~chunk_mask) != 0) {
+		CERROR("max_pages: %#x chunkbits: %u chunk_mask: %#lx\n",
+		       max_pages, cli->cl_chunkbits, chunk_mask);
+		RETURN(ERR_PTR(-EINVAL));
+	}
 	max_end = index - (index % max_pages) + max_pages - 1;
 	max_end = min_t(pgoff_t, max_end, descr->cld_end);
 

@@ -533,7 +533,8 @@ ofd_brw_size_seq_write(struct file *file, const char __user *buffer,
 		return -EINVAL;
 
 	val = val * ONE_MB_BRW_SIZE;
-	if (val <= 0 || val > DT_MAX_BRW_SIZE)
+	if (val <= 0 || val > DT_MAX_BRW_SIZE ||
+	    val < (1 << ofd->ofd_blockbits))
 		return -ERANGE;
 
 	spin_lock(&ofd->ofd_flags_lock);
