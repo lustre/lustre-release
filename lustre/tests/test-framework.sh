@@ -700,6 +700,18 @@ fs_log_size() {
 	echo -n $size
 }
 
+fs_inode_ksize() {
+	local facet=${1:-$SINGLEMDS}
+	local fstype=$(facet_fstype $facet)
+	local size=0
+	case $fstype in
+		ldiskfs) size=4;;  # ~4KB per inode
+		zfs)     size=11;; # 10 to 11KB per inode
+	esac
+
+	echo -n $size
+}
+
 check_gss_daemon_nodes() {
     local list=$1
     dname=$2

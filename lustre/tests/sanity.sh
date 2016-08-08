@@ -81,8 +81,8 @@ init_logging
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
 	# bug number for skipped test: LU-4536 LU-1957
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  65ic    180"
-	#                                               4   13    (min)"
-	[ "$SLOW" = "no" ] && EXCEPT_SLOW="$EXCEPT_SLOW 51b 51ba"
+	#                                               13    (min)"
+	[ "$SLOW" = "no" ] && EXCEPT_SLOW="$EXCEPT_SLOW 51b"
 fi
 
 FAIL_ON_ERROR=false
@@ -4097,6 +4097,12 @@ test_51a() {	# was test_51
 }
 run_test 51a "special situations: split htree with empty entry =="
 
+cleanup_print_lfs_df () {
+	trap 0
+	$LFS df
+	$LFS df -i
+}
+
 test_51b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	local dir=$DIR/$tdir
@@ -4118,9 +4124,11 @@ test_51b() {
 
 	# need to check free space for the directories as well
 	local blkfree=$(lctl get_param -n mdc.$FSNAME-MDT$mdtidx*.kbytesavail)
-	numfree=$((blkfree / 4))
+	numfree=$(( blkfree / $(fs_inode_ksize) ))
 	[[ $numfree -lt $nrdirs ]] && skip "not enough blocks ($numfree)" &&
 		return
+
+	trap cleanup_print_lfsdf EXIT
 
 	# create files
 	createmany -d $dir/d $nrdirs ||
@@ -4132,6 +4140,9 @@ test_51b() {
 	# unlink all but 100 subdirectories, then check it still works
 	local left=100
 	local delete=$((nrdirs - left))
+
+	$LFS df
+	$LFS df -i
 
 	# for ldiskfs the nlink count should be 1, but this is OSD specific
 	# and so this is listed for informational purposes only
@@ -4151,6 +4162,8 @@ test_51b() {
 	local after=$(stat -c %h $dir)
 	[[ $after -gt 2 ]] && error "nlink after: $after > 2" ||
 		echo "nlink after: $after"
+
+	cleanup_print_lfs_df
 }
 run_test 51b "exceed 64k subdirectory nlink limit on create, verify unlink"
 
