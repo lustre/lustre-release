@@ -6155,6 +6155,11 @@ run_test 77j "client only supporting ADLER32"
 rm -f $F77_TMP
 unset F77_TMP
 
+cleanup_test_78() {
+	trap 0
+	rm -f $DIR/$tfile
+}
+
 test_78() { # bug 10901
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_ost || { skip_env "local OST" && return; }
@@ -6184,6 +6189,8 @@ test_78() { # bug 10901
 	[[ $SMALLESTOST -lt 10240 ]] &&
 		skip "too small OSTSIZE, useless to run large O_DIRECT test" && return 0
 
+	trap cleanup_test_78 EXIT
+
 	[[ $F78SIZE -gt $((SMALLESTOST * $OSTCOUNT / 1024 - 80)) ]] &&
 		F78SIZE=$((SMALLESTOST * $OSTCOUNT / 1024 - 80))
 
@@ -6196,7 +6203,7 @@ test_78() { # bug 10901
 		$DIRECTIO rdwr $DIR/$tfile 0 $FSIZE 1048576||error "rdwr failed"
 	done
 
-	rm -f $DIR/$tfile
+	cleanup_test_78
 }
 run_test 78 "handle large O_DIRECT writes correctly ============"
 
