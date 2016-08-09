@@ -362,57 +362,72 @@ int handle_sk(struct svc_nego_data *snd)
 #ifdef HAVE_OPENSSL_SSK
 	struct sk_cred *skc = NULL;
 	struct svc_cred cred;
-	gss_buffer_desc bufs[7];
+	gss_buffer_desc bufs[SK_INIT_BUFFERS];
 	gss_buffer_desc remote_pub_key = GSS_C_EMPTY_BUFFER;
 	char *target;
-	uint32_t rc = GSS_S_FAILURE;
+	uint32_t rc = GSS_S_DEFECTIVE_TOKEN;
+	uint32_t version;
 	uint32_t flags;
-	int numbufs = 7;
 	int i;
 
 	printerr(3, "Handling sk request\n");
+	memset(bufs, 0, sizeof(gss_buffer_desc) * SK_INIT_BUFFERS);
 
-	/* See lgss_sk_using_cred() for client side token
-	 * bufs returned are in this order:
-	 * bufs[0] - iv
-	 * bufs[1] - p
-	 * bufs[2] - remote_pub_key
-	 * bufs[3] - target
-	 * bufs[4] - nodemap_hash
-	 * bufs[5] - flags
-	 * bufs[6] - hmac */
-	i = sk_decode_netstring(bufs, numbufs, &snd->in_tok);
-	if (i < numbufs) {
+	/* See lgss_sk_using_cred() for client side token formation.
+	 * Decoding initiator buffers */
+	i = sk_decode_netstring(bufs, SK_INIT_BUFFERS, &snd->in_tok);
+	if (i < SK_INIT_BUFFERS) {
 		printerr(0, "Invalid netstring token received from peer\n");
-		rc = GSS_S_DEFECTIVE_TOKEN;
-		goto out_err;
+		goto cleanup_buffers;
 	}
+
+	/* Allowing for a larger length first buffer in the future */
+	if (bufs[SK_INIT_VERSION].length < sizeof(version)) {
+		printerr(0, "Invalid version received (wrong size)\n");
+		goto cleanup_buffers;
+	}
+	memcpy(&version, bufs[SK_INIT_VERSION].value, sizeof(version));
+	version = be32toh(version);
+	if (version != SK_MSG_VERSION) {
+		printerr(0, "Invalid version received: %d\n", version);
+		goto cleanup_buffers;
+	}
+
+	rc = GSS_S_FAILURE;
 
 	/* target must be a null terminated string */
-	i = bufs[3].length - 1;
-	target = bufs[3].value;
+	i = bufs[SK_INIT_TARGET].length - 1;
+	target = bufs[SK_INIT_TARGET].value;
 	if (i >= 0 && target[i] != '\0') {
 		printerr(0, "Invalid target from netstring\n");
-		for (i = 0; i < numbufs; i++)
-			free(bufs[i].value);
-		goto out_err;
+		goto cleanup_buffers;
 	}
 
-	memcpy(&flags, bufs[5].value, sizeof(flags));
+	if (bufs[SK_INIT_FLAGS].length != sizeof(flags)) {
+		printerr(0, "Invalid flags from netstring\n");
+		goto cleanup_buffers;
+	}
+	memcpy(&flags, bufs[SK_INIT_FLAGS].value, sizeof(flags));
+
 	skc = sk_create_cred(target, snd->nm_name, be32toh(flags));
 	if (!skc) {
 		printerr(0, "Failed to create sk credentials\n");
-		for (i = 0; i < numbufs; i++)
-			free(bufs[i].value);
-		goto out_err;
+		goto cleanup_buffers;
 	}
 
 	/* Take control of all the allocated buffers from decoding */
-	skc->sc_kctx.skc_iv = bufs[0];
-	skc->sc_p = bufs[1];
-	remote_pub_key = bufs[2];
-	skc->sc_nodemap_hash = bufs[4];
-	skc->sc_hmac = bufs[6];
+	if (bufs[SK_INIT_RANDOM].length !=
+	    sizeof(skc->sc_kctx.skc_peer_random)) {
+		printerr(0, "Invalid size for client random\n");
+		goto cleanup_buffers;
+	}
+
+	memcpy(&skc->sc_kctx.skc_peer_random, bufs[SK_INIT_RANDOM].value,
+	       sizeof(skc->sc_kctx.skc_peer_random));
+	skc->sc_p = bufs[SK_INIT_P];
+	remote_pub_key = bufs[SK_INIT_PUB_KEY];
+	skc->sc_nodemap_hash = bufs[SK_INIT_NODEMAP];
+	skc->sc_hmac = bufs[SK_INIT_HMAC];
 
 	/* Verify that the peer has used a key size greater to or equal
 	 * the size specified by the key file */
@@ -420,61 +435,75 @@ int handle_sk(struct svc_nego_data *snd)
 	    skc->sc_p.length < skc->sc_session_keylen) {
 		printerr(0, "Peer DH parameters do not meet the size required "
 			 "by keyfile\n");
-		goto out_err;
+		goto cleanup_partial;
 	}
 
 	/* Verify HMAC from peer.  Ideally this would happen before anything
 	 * else but we don't have enough information to lookup key without the
-	 * token (fsname and cluster_hash) so it's done shortly after. */
-	rc = sk_verify_hmac(skc, bufs, numbufs - 1, EVP_sha256(),
+	 * token (fsname and cluster_hash) so it's done after. */
+	rc = sk_verify_hmac(skc, bufs, SK_INIT_BUFFERS - 1, EVP_sha256(),
 			    &skc->sc_hmac);
-	free(bufs[3].value);
-	free(bufs[5].value);
 	if (rc != GSS_S_COMPLETE) {
 		printerr(0, "HMAC verification error: 0x%x from peer %s\n",
-			 rc, libcfs_nid2str((lnet_nid_t) snd->nid));
-		goto out_err;
+			 rc, libcfs_nid2str((lnet_nid_t)snd->nid));
+		goto cleanup_partial;
 	}
 
 	/* Check that the cluster hash matches the hash of nodemap name */
 	rc = sk_verify_hash(snd->nm_name, EVP_sha256(), &skc->sc_nodemap_hash);
 	if (rc != GSS_S_COMPLETE) {
 		printerr(0, "Cluster hash failed validation: 0x%x\n", rc);
-		goto out_err;
+		goto cleanup_partial;
 	}
 
 	rc = sk_gen_params(skc, false);
 	if (rc != GSS_S_COMPLETE) {
 		printerr(0, "Failed to generate DH params for responder\n");
-		goto out_err;
+		goto cleanup_partial;
 	}
-	if (sk_compute_key(skc, &remote_pub_key)) {
+	if (sk_compute_dh_key(skc, &remote_pub_key)) {
 		printerr(0, "Failed to compute session key from DH params\n");
+		goto cleanup_partial;
+	}
+
+	/* Cleanup init buffers we have copied or don't need anymore */
+	free(bufs[SK_INIT_VERSION].value);
+	free(bufs[SK_INIT_RANDOM].value);
+	free(bufs[SK_INIT_TARGET].value);
+	free(bufs[SK_INIT_FLAGS].value);
+
+	/* Server reply contains the servers public key, random,  and HMAC */
+	version = htobe32(SK_MSG_VERSION);
+	bufs[SK_RESP_VERSION].value = &version;
+	bufs[SK_RESP_VERSION].length = sizeof(version);
+	bufs[SK_RESP_RANDOM].value = &skc->sc_kctx.skc_host_random;
+	bufs[SK_RESP_RANDOM].length = sizeof(skc->sc_kctx.skc_host_random);
+	bufs[SK_RESP_PUB_KEY] = skc->sc_pub_key;
+	if (sk_sign_bufs(&skc->sc_kctx.skc_shared_key, bufs,
+			 SK_RESP_BUFFERS - 1, EVP_sha256(),
+			 &skc->sc_hmac)) {
+		printerr(0, "Failed to sign parameters\n");
 		goto out_err;
 	}
-	if (sk_kdf(skc, snd->nid, &snd->in_tok)) {
+	bufs[SK_RESP_HMAC] = skc->sc_hmac;
+	if (sk_encode_netstring(bufs, SK_RESP_BUFFERS, &snd->out_tok)) {
+		printerr(0, "Failed to encode netstring for token\n");
+		goto out_err;
+	}
+	printerr(2, "Created netstring of %zd bytes\n", snd->out_tok.length);
+
+	if (sk_session_kdf(skc, snd->nid, &snd->in_tok, &snd->out_tok)) {
 		printerr(0, "Failed to calulate derviced session key\n");
+		goto out_err;
+	}
+	if (sk_compute_keys(skc)) {
+		printerr(0, "Failed to compute HMAC and encryption keys\n");
 		goto out_err;
 	}
 	if (sk_serialize_kctx(skc, &snd->ctx_token)) {
 		printerr(0, "Failed to serialize context for kernel\n");
 		goto out_err;
 	}
-
-	/* Server reply only contains the servers public key and HMAC */
-	bufs[0] = skc->sc_pub_key;
-	if (sk_sign_bufs(&skc->sc_kctx.skc_shared_key, bufs, 1, EVP_sha256(),
-			 &skc->sc_hmac)) {
-		printerr(0, "Failed to sign parameters\n");
-		goto out_err;
-	}
-	bufs[1] = skc->sc_hmac;
-	if (sk_encode_netstring(bufs, 2, &snd->out_tok)) {
-		printerr(0, "Failed to encode netstring for token\n");
-		goto out_err;
-	}
-
-	printerr(2, "Created netstring of %zd bytes\n", snd->out_tok.length);
 
 	snd->out_handle.length = sizeof(snd->handle_seq);
 	memcpy(snd->out_handle.value, &snd->handle_seq,
@@ -502,16 +531,32 @@ int handle_sk(struct svc_nego_data *snd)
 	printerr(3, "sk returning success\n");
 	return 0;
 
+cleanup_buffers:
+	for (i = 0; i < SK_INIT_BUFFERS; i++)
+		free(bufs[i].value);
+	sk_free_cred(skc);
+	snd->maj_stat = rc;
+	return -1;
+
+cleanup_partial:
+	free(bufs[SK_INIT_VERSION].value);
+	free(bufs[SK_INIT_RANDOM].value);
+	free(bufs[SK_INIT_TARGET].value);
+	free(bufs[SK_INIT_FLAGS].value);
+	free(remote_pub_key.value);
+	sk_free_cred(skc);
+	snd->maj_stat = rc;
+	return -1;
+
 out_err:
 	snd->maj_stat = rc;
-	if (remote_pub_key.value)
-		free(remote_pub_key.value);
-	if (snd->ctx_token.value)
+	if (snd->ctx_token.value) {
 		free(snd->ctx_token.value);
-	snd->ctx_token.length = 0;
-
-	if (skc)
-		sk_free_cred(skc);
+		snd->ctx_token.value = 0;
+		snd->ctx_token.length = 0;
+	}
+	free(remote_pub_key.value);
+	sk_free_cred(skc);
 	printerr(3, "sk returning failure\n");
 #else /* !HAVE_OPENSSL_SSK */
 	printerr(0, "ERROR: shared key subflavour is not enabled\n");

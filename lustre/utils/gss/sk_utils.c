@@ -42,6 +42,8 @@
 #include "sk_utils.h"
 #include "write_bytes.h"
 
+#define SK_PBKDF2_ITERATIONS 10000
+
 static struct sk_crypt_type sk_crypt_types[] = {
 	[SK_CRYPT_AES256_CTR] = {
 		.sct_name = "ctr(aes)",
@@ -663,11 +665,26 @@ struct sk_cred *sk_create_cred(const char *tgt, const char *nodemap,
 	return skc;
 
 out_err:
-	if (skc)
-		sk_free_cred(skc);
+	sk_free_cred(skc);
 
 	free(config);
 	return NULL;
+}
+
+static void sk_free_parameters(struct sk_cred *skc)
+{
+	if (skc->sc_params)
+		DH_free(skc->sc_params);
+	if (skc->sc_p.value)
+		free(skc->sc_p.value);
+	if (skc->sc_pub_key.value)
+		free(skc->sc_pub_key.value);
+
+	skc->sc_params = NULL;
+	skc->sc_p.value = NULL;
+	skc->sc_p.length = 0;
+	skc->sc_pub_key.value = NULL;
+	skc->sc_pub_key.length = 0;
 }
 
 /**
@@ -739,21 +756,6 @@ static uint32_t sk_gen_responder_params(struct sk_cred *skc)
 	return GSS_S_COMPLETE;
 }
 
-static void sk_free_parameters(struct sk_cred *skc)
-{
-	if (skc->sc_params)
-		DH_free(skc->sc_params);
-	if (skc->sc_p.value)
-		free(skc->sc_p.value);
-	if (skc->sc_pub_key.value)
-		free(skc->sc_pub_key.value);
-
-	skc->sc_p.value = NULL;
-	skc->sc_p.length = 0;
-	skc->sc_pub_key.value = NULL;
-	skc->sc_pub_key.length = 0;
-}
-
 /**
  * Generates shared key Diffie Hellman parameters used for the DH key exchange
  * between host and peer if privacy mode is enabled
@@ -766,30 +768,10 @@ static void sk_free_parameters(struct sk_cred *skc)
  */
 static uint32_t sk_gen_initiator_params(struct sk_cred *skc)
 {
-	gss_buffer_desc *iv = &skc->sc_kctx.skc_iv;
 	int rc;
 
 	/* The credential could be used so free existing parameters */
 	sk_free_parameters(skc);
-
-	/* Pseudo random should be sufficient here because the IV will be used
-	 * with a key that is used only once.  This also should ensure we have
-	 * unqiue tokens that are sent to the remote server which is important
-	 * because the token is hashed for the sunrpc cache lookups and a
-	 * failure there would cause connection attempts to fail indefinitely
-	 * due to the large timeout value on the server side sunrpc cache
-	 * (INT_MAX) */
-	iv->length = SK_IV_SIZE;
-	iv->value = malloc(iv->length);
-	if (!iv->value) {
-		printerr(0, "Failed to allocate memory for IV\n");
-		return GSS_S_FAILURE;
-	}
-	memset(iv->value, 0, iv->length);
-	if (RAND_bytes(iv->value, iv->length) != 1) {
-		printerr(0, "Failed to get data for IV\n");
-		return GSS_S_FAILURE;
-	}
 
 	/* Only privacy mode needs the rest of the parameter generation
 	 * but we use IV in other modes as well so tokens should be
@@ -847,6 +829,23 @@ static uint32_t sk_gen_initiator_params(struct sk_cred *skc)
  */
 uint32_t sk_gen_params(struct sk_cred *skc, const bool initiator)
 {
+	uint32_t random;
+
+	/* Random value used by both the request and response as part of the
+	 * key binding material.  This also should ensure we have unqiue
+	 * tokens that are sent to the remote server which is important because
+	 * the token is hashed for the sunrpc cache lookups and a failure there
+	 * would cause connection attempts to fail indefinitely due to the large
+	 * timeout value on the server side */
+	if (RAND_bytes((unsigned char *)&random, sizeof(random)) != 1) {
+		printerr(0, "Failed to get data for random parameter\n");
+		return GSS_S_FAILURE;
+	}
+
+	/* The random value will always be used in byte range operations
+	 * so we keep it as big endian from this point on */
+	skc->sc_kctx.skc_host_random = htobe32(random);
+
 	if (initiator)
 		return sk_gen_initiator_params(skc);
 
@@ -988,6 +987,9 @@ uint32_t sk_verify_hmac(struct sk_cred *skc, gss_buffer_desc *bufs,
  */
 void sk_free_cred(struct sk_cred *skc)
 {
+	if (!skc)
+		return;
+
 	if (skc->sc_p.value)
 		free(skc->sc_p.value);
 	if (skc->sc_pub_key.value)
@@ -1005,15 +1007,20 @@ void sk_free_cred(struct sk_cred *skc)
 		       skc->sc_dh_shared_key.length);
 		free(skc->sc_dh_shared_key.value);
 	}
+	if (skc->sc_kctx.skc_hmac_key.value) {
+		memset(skc->sc_kctx.skc_hmac_key.value, 0,
+		       skc->sc_kctx.skc_hmac_key.length);
+		free(skc->sc_kctx.skc_hmac_key.value);
+	}
+	if (skc->sc_kctx.skc_encrypt_key.value) {
+		memset(skc->sc_kctx.skc_encrypt_key.value, 0,
+		       skc->sc_kctx.skc_encrypt_key.length);
+		free(skc->sc_kctx.skc_encrypt_key.value);
+	}
 	if (skc->sc_kctx.skc_shared_key.value) {
 		memset(skc->sc_kctx.skc_shared_key.value, 0,
 		       skc->sc_kctx.skc_shared_key.length);
 		free(skc->sc_kctx.skc_shared_key.value);
-	}
-	if (skc->sc_kctx.skc_iv.value) {
-		memset(skc->sc_kctx.skc_iv.value, 0,
-		       skc->sc_kctx.skc_iv.length);
-		free(skc->sc_kctx.skc_iv.value);
 	}
 	if (skc->sc_kctx.skc_session_key.value) {
 		memset(skc->sc_kctx.skc_session_key.value, 0,
@@ -1025,6 +1032,66 @@ void sk_free_cred(struct sk_cred *skc)
 		DH_free(skc->sc_params);
 
 	free(skc);
+	skc = NULL;
+}
+
+/* This function handles key derivation using the hash algorithm specified in
+ * \a hash_alg, buffers in \a key_binding_bufs, and original key in
+ * \a origin_key to produce a \a derived_key.  The first element of the
+ * key_binding_bufs array is reserved for the counter used in the KDF.  The
+ * derived key in \a derived_key could differ in size from \a origin_key and
+ * must be populated with the expected size and a valid buffer to hold the
+ * contents.
+ *
+ * If the derived key size is greater than the HMAC algorithm size it will be
+ * a done using several iterations of a counter and the key binding bufs.
+ *
+ * If the size is smaller it will take copy the first N bytes necessary to
+ * fill the derived key. */
+int sk_kdf(gss_buffer_desc *derived_key , gss_buffer_desc *origin_key,
+	   gss_buffer_desc *key_binding_bufs, int numbufs, int hmac_alg)
+{
+	size_t remain;
+	size_t bytes;
+	uint32_t counter;
+	char *keydata;
+	gss_buffer_desc tmp_hash;
+	int i;
+	int rc;
+
+	if (numbufs < 1)
+		return -EINVAL;
+
+	/* Use a counter as the first buffer followed by the key binding
+	 * buffers in the event we need more than one a single cycle to
+	 * produced a symmetric key large enough in size */
+	key_binding_bufs[0].value = &counter;
+	key_binding_bufs[0].length = sizeof(counter);
+
+	remain = derived_key->length;
+	keydata = derived_key->value;
+	i = 0;
+	while (remain > 0) {
+		counter = htobe32(i++);
+		rc = sk_sign_bufs(origin_key, key_binding_bufs, numbufs,
+				  sk_hash_to_evp_md(hmac_alg), &tmp_hash);
+		if (rc) {
+			if (tmp_hash.value)
+				free(tmp_hash.value);
+			return rc;
+		}
+
+		LASSERT(sk_hmac_types[hmac_alg].sht_bytes ==
+			tmp_hash.length);
+
+		bytes = (remain < tmp_hash.length) ? remain : tmp_hash.length;
+		memcpy(keydata, tmp_hash.value, bytes);
+		free(tmp_hash.value);
+		remain -= bytes;
+		keydata += bytes;
+	}
+
+	return 0;
 }
 
 /* Populates the sk_cred's session_key using the a Key Derviation Function (KDF)
@@ -1036,23 +1103,13 @@ void sk_free_cred(struct sk_cred *skc)
  * \return	-1		failure
  * \return	0		success
  */
-int sk_kdf(struct sk_cred *skc, lnet_nid_t client_nid,
-	   gss_buffer_desc *key_binding_input)
+int sk_session_kdf(struct sk_cred *skc, lnet_nid_t client_nid,
+		   gss_buffer_desc *client_token, gss_buffer_desc *server_token)
 {
 	struct sk_kernel_ctx *kctx = &skc->sc_kctx;
 	gss_buffer_desc *session_key = &kctx->skc_session_key;
-	gss_buffer_desc bufs[4];
-	gss_buffer_desc tmp_hash;
-	char *skp;
-	size_t remain;
-	size_t bytes;
-	uint32_t counter;
-	int i;
+	gss_buffer_desc bufs[5];
 	int rc = -1;
-
-	/* No keys computed unless privacy mode is in use */
-	if ((skc->sc_flags & LGSS_SVC_PRIV) == 0)
-		return 0;
 
 	session_key->length = sk_crypt_types[kctx->skc_crypt_alg].sct_bytes;
 	session_key->value = malloc(session_key->length);
@@ -1061,42 +1118,84 @@ int sk_kdf(struct sk_cred *skc, lnet_nid_t client_nid,
 		return rc;
 	}
 
-	/* Use the HMAC algorithm provided by in the shared key file to derive
-	 * a session key.  eg: HMAC(key, msg)
-	 * key: the shared key provided in the shared key file
-	 * msg is the bytes in the following order:
-	 * 1. big_endian(counter)
-	 * 2. DH shared key
-	 * 3. Clients NIDs
-	 * 4. key_binding_input */
-	bufs[0].value = &counter;
-	bufs[0].length = sizeof(counter);
+	/* Key binding info ordering
+	 * 1. Reserved for counter
+	 * 1. DH shared key
+	 * 2. Client's NIDs
+	 * 3. Client's token
+	 * 4. Server's token */
+	bufs[0].value = NULL;
+	bufs[0].length = 0;
 	bufs[1] = skc->sc_dh_shared_key;
 	bufs[2].value = &client_nid;
 	bufs[2].length = sizeof(client_nid);
-	bufs[3] = *key_binding_input;
+	bufs[3] = *client_token;
+	bufs[4] = *server_token;
 
-	remain = session_key->length;
-	skp = session_key->value;
-	i = 0;
-	while (remain > 0) {
-		counter = be32toh(i++);
-		rc = sk_sign_bufs(&kctx->skc_shared_key, bufs, 4,
-			     sk_hash_to_evp_md(kctx->skc_hmac_alg), &tmp_hash);
-		if (rc) {
-			free(tmp_hash.value);
-			return rc;
-		}
+	return sk_kdf(&kctx->skc_session_key, &kctx->skc_shared_key, bufs,
+		      5, kctx->skc_hmac_alg);
+}
 
-		LASSERT(sk_hmac_types[kctx->skc_hmac_alg].sht_bytes ==
-			tmp_hash.length);
+/* Uses the session key to create an HMAC key and encryption key.  In
+ * integrity mode the session key used to generate the HMAC key uses
+ * session information which is available on the wire but by creating
+ * a session based HMAC key we can prevent potential replay as both the
+ * client and server have random numbers used as part of the key creation.
+ *
+ * The keys used for integrity and privacy are formulated as below using
+ * the session key that is the output of the key derivation function.  The
+ * HMAC algorithm is determined by the shared key algorithm selected in the
+ * key file.
+ *
+ * For ski mode:
+ * Session HMAC Key = PBKDF2("Integrity", KDF derived Session Key)
+ *
+ * For skpi mode:
+ * Session HMAC Key = PBKDF2("Integrity", KDF derived Session Key)
+ * Session Encryption Key = PBKDF2("Encrypt", KDF derived Session Key)
+ *
+ * \param[in,out]	skc		Shared key credentials structure with
+ *
+ * \return	-1		failure
+ * \return	0		success
+ */
+int sk_compute_keys(struct sk_cred *skc)
+{
+	struct sk_kernel_ctx *kctx = &skc->sc_kctx;
+	gss_buffer_desc *session_key = &kctx->skc_session_key;
+	gss_buffer_desc *hmac_key = &kctx->skc_hmac_key;
+	gss_buffer_desc *encrypt_key = &kctx->skc_encrypt_key;
+	char *encrypt = "Encrypt";
+	char *integrity = "Integrity";
+	int rc;
 
-		bytes = (remain < tmp_hash.length) ? remain : tmp_hash.length;
-		memcpy(skp, tmp_hash.value, bytes);
-		free(tmp_hash.value);
-		remain -= bytes;
-		skp += bytes;
-	}
+	hmac_key->length = sk_hmac_types[kctx->skc_hmac_alg].sht_bytes;
+	hmac_key->value = malloc(hmac_key->length);
+	if (!hmac_key->value)
+		return -ENOMEM;
+
+	rc = PKCS5_PBKDF2_HMAC(integrity, -1, session_key->value,
+			       session_key->length, SK_PBKDF2_ITERATIONS,
+			       sk_hash_to_evp_md(kctx->skc_hmac_alg),
+			       hmac_key->length, hmac_key->value);
+	if (rc == 0)
+		return -EINVAL;
+
+	/* Encryption key is only populated in privacy mode */
+	if ((skc->sc_flags & LGSS_SVC_PRIV) == 0)
+		return 0;
+
+	encrypt_key->length = sk_crypt_types[kctx->skc_crypt_alg].sct_bytes;
+	encrypt_key->value = malloc(encrypt_key->length);
+	if (!encrypt_key->value)
+		return -ENOMEM;
+
+	rc = PKCS5_PBKDF2_HMAC(encrypt, -1, session_key->value,
+			       session_key->length, SK_PBKDF2_ITERATIONS,
+			       sk_hash_to_evp_md(kctx->skc_hmac_alg),
+			       encrypt_key->length, encrypt_key->value);
+	if (rc == 0)
+		return -EINVAL;
 
 	return 0;
 }
@@ -1112,7 +1211,7 @@ int sk_kdf(struct sk_cred *skc, lnet_nid_t client_nid,
  * \return	gss error		failure
  * \return	GSS_S_COMPLETE		success
  */
-uint32_t sk_compute_key(struct sk_cred *skc, const gss_buffer_desc *pub_key)
+uint32_t sk_compute_dh_key(struct sk_cred *skc, const gss_buffer_desc *pub_key)
 {
 	gss_buffer_desc *dh_shared = &skc->sc_dh_shared_key;
 	BIGNUM *remote_pub_key;
@@ -1175,8 +1274,8 @@ int sk_serialize_kctx(struct sk_cred *skc, gss_buffer_desc *ctx_token)
 	char *p, *end;
 	size_t bufsize;
 
-	bufsize = sizeof(*kctx) + kctx->skc_session_key.length +
-		  kctx->skc_iv.length + kctx->skc_shared_key.length;
+	bufsize = sizeof(*kctx) + kctx->skc_hmac_key.length +
+		  kctx->skc_encrypt_key.length;
 
 	ctx_token->value = malloc(bufsize);
 	if (!ctx_token->value)
@@ -1194,11 +1293,13 @@ int sk_serialize_kctx(struct sk_cred *skc, gss_buffer_desc *ctx_token)
 		return -1;
 	if (WRITE_BYTES(&p, end, kctx->skc_expire))
 		return -1;
-	if (write_buffer(&p, end, &kctx->skc_shared_key))
+	if (WRITE_BYTES(&p, end, kctx->skc_host_random))
 		return -1;
-	if (write_buffer(&p, end, &kctx->skc_iv))
+	if (WRITE_BYTES(&p, end, kctx->skc_peer_random))
 		return -1;
-	if (write_buffer(&p, end, &kctx->skc_session_key))
+	if (write_buffer(&p, end, &kctx->skc_hmac_key))
+		return -1;
+	if (write_buffer(&p, end, &kctx->skc_encrypt_key))
 		return -1;
 
 	printerr(2, "Serialized buffer of %zu bytes for kernel\n", bufsize);

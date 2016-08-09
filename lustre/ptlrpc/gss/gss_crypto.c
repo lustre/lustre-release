@@ -424,11 +424,8 @@ int gss_add_padding(rawobj_t *msg, int msg_buflen, int blocksize)
 	return 0;
 }
 
-int gss_crypt_rawobjs(struct crypto_blkcipher *tfm,
-		      int use_internal_iv,
-		      int inobj_cnt,
-		      rawobj_t *inobjs,
-		      rawobj_t *outobj,
+int gss_crypt_rawobjs(struct crypto_blkcipher *tfm, __u8 *iv,
+		      int inobj_cnt, rawobj_t *inobjs, rawobj_t *outobj,
 		      int enc)
 {
 	struct blkcipher_desc desc;
@@ -436,14 +433,14 @@ int gss_crypt_rawobjs(struct crypto_blkcipher *tfm,
 	struct scatterlist dst;
 	struct sg_table sg_dst;
 	struct sg_table sg_src;
-	__u8 local_iv[16] = {0}, *buf;
+	__u8 *buf;
 	__u32 datalen = 0;
 	int i, rc;
 	ENTRY;
 
 	buf = outobj->data;
 	desc.tfm  = tfm;
-	desc.info = local_iv;
+	desc.info = iv;
 	desc.flags = 0;
 
 	for (i = 0; i < inobj_cnt; i++) {
@@ -461,14 +458,7 @@ int gss_crypt_rawobjs(struct crypto_blkcipher *tfm,
 			RETURN(rc);
 		}
 
-		if (use_internal_iv) {
-			if (enc)
-				rc = crypto_blkcipher_encrypt(&desc, &dst, &src,
-							      src.length);
-			else
-				rc = crypto_blkcipher_decrypt(&desc, &dst, &src,
-							      src.length);
-		} else {
+		if (iv) {
 			if (enc)
 				rc = crypto_blkcipher_encrypt_iv(&desc, &dst,
 								 &src,
@@ -477,6 +467,13 @@ int gss_crypt_rawobjs(struct crypto_blkcipher *tfm,
 				rc = crypto_blkcipher_decrypt_iv(&desc, &dst,
 								 &src,
 								 src.length);
+		} else {
+			if (enc)
+				rc = crypto_blkcipher_encrypt(&desc, &dst, &src,
+							      src.length);
+			else
+				rc = crypto_blkcipher_decrypt(&desc, &dst, &src,
+							      src.length);
 		}
 
 		gss_teardown_sgtable(&sg_src);

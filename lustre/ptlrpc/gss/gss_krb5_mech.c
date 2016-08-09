@@ -940,6 +940,7 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
         rawobj_t             cksum = RAWOBJ_EMPTY;
         rawobj_t             data_desc[3], cipher;
         __u8                 conf[GSS_MAX_CIPHER_BLOCK];
+	__u8                 local_iv[16] = {0};
         int                  rc = 0;
 
         LASSERT(ke);
@@ -1038,7 +1039,8 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
                         GOTO(arc4_out_tfm, rc = -EACCES);
                 }
 
-		rc = gss_crypt_rawobjs(arc4_tfm, 1, 3, data_desc, &cipher, 1);
+		rc = gss_crypt_rawobjs(arc4_tfm, NULL, 3, data_desc,
+				       &cipher, 1);
 arc4_out_tfm:
 		crypto_free_blkcipher(arc4_tfm);
 arc4_out_key:
@@ -1046,8 +1048,8 @@ arc4_out_key:
 arc4_out:
                 do {} while(0); /* just to avoid compile warning */
         } else {
-		rc = gss_crypt_rawobjs(kctx->kc_keye.kb_tfm, 0, 3, data_desc,
-				       &cipher, 1);
+		rc = gss_crypt_rawobjs(kctx->kc_keye.kb_tfm, local_iv, 3,
+				       data_desc, &cipher, 1);
         }
 
         if (rc != 0) {
@@ -1231,6 +1233,7 @@ __u32 gss_unwrap_kerberos(struct gss_ctx  *gctx,
         rawobj_t             hash_objs[3];
         int                  rc = 0;
         __u32                major;
+	__u8                 local_iv[16] = {0};
 
         LASSERT(ke);
 
@@ -1317,7 +1320,7 @@ __u32 gss_unwrap_kerberos(struct gss_ctx  *gctx,
                         GOTO(arc4_out_tfm, rc = -EACCES);
                 }
 
-		rc = gss_crypt_rawobjs(arc4_tfm, 1, 1, &cipher_in,
+		rc = gss_crypt_rawobjs(arc4_tfm, NULL, 1, &cipher_in,
 				       &plain_out, 0);
 arc4_out_tfm:
 		crypto_free_blkcipher(arc4_tfm);
@@ -1326,8 +1329,8 @@ arc4_out_key:
 arc4_out:
                 cksum = RAWOBJ_EMPTY;
         } else {
-		rc = gss_crypt_rawobjs(kctx->kc_keye.kb_tfm, 0, 1, &cipher_in,
-				       &plain_out, 0);
+		rc = gss_crypt_rawobjs(kctx->kc_keye.kb_tfm, local_iv, 1,
+				       &cipher_in, &plain_out, 0);
         }
 
         if (rc != 0) {

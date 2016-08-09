@@ -39,11 +39,32 @@
 
 /* Some limits and defaults */
 #define SK_CONF_VERSION 1
+#define SK_MSG_VERSION 1
 #define SK_GENERATOR 2
 #define SK_SESSION_MAX_KEYLEN_BYTES 1024
 #define SK_MAX_KEYLEN_BYTES 128
-#define SK_IV_SIZE 16
+#define SK_NONCE_SIZE 4
 #define MAX_MGSNIDS 16
+
+enum sk_ctx_init_buffers {
+	/* Initiator netstring buffer ordering */
+	SK_INIT_VERSION	= 0,
+	SK_INIT_RANDOM	= 1,
+	SK_INIT_P	= 2,
+	SK_INIT_PUB_KEY	= 3,
+	SK_INIT_TARGET	= 4,
+	SK_INIT_NODEMAP	= 5,
+	SK_INIT_FLAGS	= 6,
+	SK_INIT_HMAC	= 7,
+	SK_INIT_BUFFERS = 8,
+
+	/* Responder netstring buffer ordering */
+	SK_RESP_VERSION	= 0,
+	SK_RESP_RANDOM	= 1,
+	SK_RESP_PUB_KEY	= 2,
+	SK_RESP_HMAC	= 3,
+	SK_RESP_BUFFERS	= 4,
+};
 
 /* String consisting of "lustre:fsname:nodemap_hash" */
 #define SK_DESCRIPTION_SIZE (9 + MTI_NAME_MAXLEN + LUSTRE_NODEMAP_NAME_LENGTH)
@@ -90,8 +111,11 @@ struct sk_kernel_ctx {
 	uint16_t	skc_hmac_alg;
 	uint16_t	skc_crypt_alg;
 	uint32_t	skc_expire;
+	uint32_t	skc_host_random;
+	uint32_t	skc_peer_random;
+	gss_buffer_desc	skc_hmac_key;
+	gss_buffer_desc	skc_encrypt_key;
 	gss_buffer_desc	skc_shared_key;
-	gss_buffer_desc	skc_iv;
 	gss_buffer_desc	skc_session_key;
 };
 
@@ -126,9 +150,10 @@ uint32_t sk_verify_hmac(struct sk_cred *skc, gss_buffer_desc *bufs,
 			const int numbufs, const EVP_MD *hash_alg,
 			gss_buffer_desc *hmac);
 void sk_free_cred(struct sk_cred *skc);
-int sk_kdf(struct sk_cred *skc, lnet_nid_t client_nid,
-	   gss_buffer_desc *key_binding_input);
-uint32_t sk_compute_key(struct sk_cred *skc, const gss_buffer_desc *pub_key);
+int sk_session_kdf(struct sk_cred *skc, lnet_nid_t client_nid,
+		   gss_buffer_desc *client_token, gss_buffer_desc *server_token);
+uint32_t sk_compute_dh_key(struct sk_cred *skc, const gss_buffer_desc *pub_key);
+int sk_compute_keys(struct sk_cred *skc);
 int sk_serialize_kctx(struct sk_cred *skc, gss_buffer_desc *ctx_token);
 int sk_decode_netstring(gss_buffer_desc *bufs, int numbufs,
 			gss_buffer_desc *ns);
