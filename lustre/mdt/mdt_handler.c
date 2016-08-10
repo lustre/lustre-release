@@ -4506,12 +4506,12 @@ static struct tgt_opc_slice mdt_common_slice[] = {
 
 static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 {
-	struct md_device	*next = m->mdt_child;
-	struct lu_device	*d    = &m->mdt_lu_dev;
-	struct obd_device	*obd  = mdt2obd_dev(m);
-	struct lfsck_stop	 stop;
-	ENTRY;
+	struct md_device *next = m->mdt_child;
+	struct lu_device *d = &m->mdt_lu_dev;
+	struct obd_device *obd = mdt2obd_dev(m);
+	struct lfsck_stop stop;
 
+	ENTRY;
 	stop.ls_status = LS_PAUSED;
 	stop.ls_flags = 0;
 	next->md_ops->mdo_iocontrol(env, next, OBD_IOC_STOP_LFSCK, 0, &stop);
@@ -4522,24 +4522,34 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 	if (m->mdt_opts.mo_coordinator)
 		mdt_hsm_cdt_stop(m);
 
-	mdt_hsm_cdt_fini(m);
-
 	mdt_llog_ctxt_unclone(env, m, LLOG_AGENT_ORIG_CTXT);
-        mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
+	mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
 
 	if (m->mdt_namespace != NULL)
 		ldlm_namespace_free_prior(m->mdt_namespace, NULL,
 					  d->ld_obd->obd_force);
 
-        obd_exports_barrier(obd);
-        obd_zombie_barrier();
+	obd_exports_barrier(obd);
+	obd_zombie_barrier();
 
-        mdt_procfs_fini(m);
+	mdt_quota_fini(env, m);
 
-        tgt_fini(env, &m->mdt_lut);
-        mdt_fs_cleanup(env, m);
-        upcall_cache_cleanup(m->mdt_identity_cache);
-        m->mdt_identity_cache = NULL;
+	cfs_free_nidlist(&m->mdt_squash.rsi_nosquash_nids);
+
+	/* Calling the cleanup functions in the same order as in the mdt_init0
+	 * error path
+	 */
+	mdt_procfs_fini(m);
+
+	target_recovery_fini(obd);
+	upcall_cache_cleanup(m->mdt_identity_cache);
+	m->mdt_identity_cache = NULL;
+
+	mdt_fs_cleanup(env, m);
+
+	tgt_fini(env, &m->mdt_lut);
+
+	mdt_hsm_cdt_fini(m);
 
 	if (m->mdt_namespace != NULL) {
 		ldlm_namespace_free_post(m->mdt_namespace);
@@ -4551,12 +4561,9 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 		m->mdt_md_root = NULL;
 	}
 
-	mdt_quota_fini(env, m);
+	mdt_seq_fini(env, m);
 
-	cfs_free_nidlist(&m->mdt_squash.rsi_nosquash_nids);
-
-        mdt_seq_fini(env, m);
-        mdt_fld_fini(env, m);
+	mdt_fld_fini(env, m);
 
 	/*
 	 * Finish the stack
