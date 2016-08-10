@@ -210,15 +210,32 @@ nodemap_fileset_seq_write(struct file *file,
 				      size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
+	char *nm_fileset;
 	int rc = 0;
+	ENTRY;
 
-	if (count > 0)
-		rc = nodemap_set_fileset(m->private, buffer);
+	if (count == 0)
+		RETURN(0);
 
+	if (count > PATH_MAX)
+		RETURN(-EINVAL);
+
+	OBD_ALLOC(nm_fileset, count);
+	if (nm_fileset == NULL)
+		RETURN(-ENOMEM);
+
+	if (copy_from_user(nm_fileset, buffer, count))
+		GOTO(out, rc = -EFAULT);
+
+	rc = nodemap_set_fileset(m->private, nm_fileset);
 	if (rc != 0)
-		return -EINVAL;
+		GOTO(out, rc = -EINVAL);
 
-	return count;
+	rc = count;
+out:
+	OBD_FREE(nm_fileset, count);
+
+	return rc;
 }
 LPROC_SEQ_FOPS(nodemap_fileset);
 
