@@ -196,7 +196,6 @@ struct osd_thread_info {
 
 	struct lquota_id_info	 oti_qi;
 	struct lu_seq_range	 oti_seq_range;
-	struct lu_buf		 oti_xattr_lbuf;
 };
 
 extern struct lu_context_key osd_key;
@@ -212,6 +211,7 @@ struct osd_thandle {
 	struct list_head	 ot_stop_dcb_list;
 	struct list_head	 ot_unlinked_list;
 	struct list_head	 ot_sa_list;
+	struct semaphore	 ot_sa_lock;
 	dmu_tx_t		*ot_tx;
 	struct lquota_trans	 ot_quota_trans;
 	__u32			 ot_write_commit:1,
@@ -343,8 +343,7 @@ struct osd_object {
 	uint64_t		 oo_xattr;
 	enum osd_destroy_type	 oo_destroy;
 
-	__u32			 oo_destroyed:1,
-				 oo_late_xattr:1;
+	__u32			 oo_destroyed:1;
 
 	/* the i_flags in LMA */
 	__u32			 oo_lma_flags;
@@ -456,8 +455,7 @@ int osd_procfs_fini(struct osd_device *osd);
 
 /* osd_object.c */
 extern char *osd_obj_tag;
-void osd_object_sa_dirty_rele(const struct lu_env *env, struct osd_thandle *oh);
-void osd_object_sa_dirty_add(struct osd_object *obj, struct osd_thandle *oh);
+void osd_object_sa_dirty_rele(struct osd_thandle *oh);
 int __osd_obj2dbuf(const struct lu_env *env, objset_t *os,
 		   uint64_t oid, dmu_buf_t **dbp);
 struct lu_object *osd_object_alloc(const struct lu_env *env,
@@ -495,8 +493,6 @@ void osd_zap_cursor_fini(zap_cursor_t *zc);
 uint64_t osd_zap_cursor_serialize(zap_cursor_t *zc);
 
 /* osd_xattr.c */
-int __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
-			  struct osd_thandle *oh);
 int __osd_xattr_load(struct osd_device *osd, uint64_t dnode,
 		     nvlist_t **sa_xattr);
 int __osd_xattr_get_large(const struct lu_env *env, struct osd_device *osd,

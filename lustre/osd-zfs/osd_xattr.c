@@ -353,41 +353,6 @@ int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	RETURN(0);
 }
 
-int __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
-			   struct osd_thandle *oh)
-{
-	struct lu_buf	  *lb = &osd_oti_get(env)->oti_xattr_lbuf;
-	struct osd_device *osd = osd_obj2dev(obj);
-	char              *dxattr;
-	size_t             size;
-	int                rc;
-
-	obj->oo_late_xattr = 0;
-
-	/* Update the SA for additions, modifications, and removals. */
-	rc = -nvlist_size(obj->oo_sa_xattr, &size, NV_ENCODE_XDR);
-	if (rc)
-		return rc;
-
-	lu_buf_check_and_alloc(lb, size);
-	if (lb->lb_buf == NULL) {
-		CERROR("%s: can't allocate buffer for xattr update\n",
-				osd->od_svname);
-		return -ENOMEM;
-	}
-
-	dxattr = lb->lb_buf;
-	rc = -nvlist_pack(obj->oo_sa_xattr, &dxattr, &size,
-			NV_ENCODE_XDR, KM_SLEEP);
-	if (rc)
-		return rc;
-	LASSERT(dxattr == lb->lb_buf);
-
-	sa_update(obj->oo_sa_hdl, SA_ZPL_DXATTR(osd), dxattr, size, oh->ot_tx);
-
-	return 0;
-}
-
 /*
  * Set an extended attribute.
  * This transaction must have called udmu_xattr_declare_set() first.
@@ -396,27 +361,43 @@ int __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
  *
  * No locking is done here.
  */
-int __osd_sa_xattr_schedule_update(const struct lu_env *env,
-				   struct osd_object *obj,
-				   struct osd_thandle *oh)
+static int
+__osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
+		      struct osd_thandle *oh)
 {
+	struct osd_device *osd = osd_obj2dev(obj);
+	char              *dxattr;
+	size_t             sa_size;
+	int                rc;
+
 	ENTRY;
 	LASSERT(obj->oo_sa_hdl);
 	LASSERT(obj->oo_sa_xattr);
 
-	/* schedule batched SA update in osd_object_sa_dirty_rele() */
-	obj->oo_late_xattr = 1;
-	osd_object_sa_dirty_add(obj, oh);
+	/* Update the SA for additions, modifications, and removals. */
+	rc = -nvlist_size(obj->oo_sa_xattr, &sa_size, NV_ENCODE_XDR);
+	if (rc)
+		return rc;
 
-	RETURN(0);
+	dxattr = osd_zio_buf_alloc(sa_size);
+	if (dxattr == NULL)
+		RETURN(-ENOMEM);
 
+	rc = -nvlist_pack(obj->oo_sa_xattr, &dxattr, &sa_size,
+				NV_ENCODE_XDR, KM_SLEEP);
+	if (rc)
+		GOTO(out_free, rc);
+
+	rc = osd_object_sa_update(obj, SA_ZPL_DXATTR(osd), dxattr, sa_size, oh);
+out_free:
+	osd_zio_buf_free(dxattr, sa_size);
+	RETURN(rc);
 }
 
 int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		       const struct lu_buf *buf, const char *name, int fl,
 		       struct osd_thandle *oh)
 {
-	dmu_buf_impl_t *db;
 	uchar_t *nv_value;
 	size_t  size;
 	int	nv_size;
@@ -457,7 +438,7 @@ int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 						DATA_TYPE_BYTE_ARRAY);
 			if (rc < 0)
 				return rc;
-			rc = __osd_sa_xattr_schedule_update(env, obj, oh);
+			rc = __osd_sa_xattr_update(env, obj, oh);
 			return rc == 0 ? -EFBIG : rc;
 		}
 	} else if (rc == -ENOENT) {
@@ -488,14 +469,7 @@ int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 	if (rc)
 		return rc;
 
-	/* batch updates only for just created dnodes where we
-	 * used to set number of EAs in a single transaction */
-	db = (dmu_buf_impl_t *)obj->oo_db;
-	if (DB_DNODE(db)->dn_allocated_txg == oh->ot_tx->tx_txg)
-		rc = __osd_sa_xattr_schedule_update(env, obj, oh);
-	else
-		rc = __osd_sa_xattr_update(env, obj, oh);
-
+	rc = __osd_sa_xattr_update(env, obj, oh);
 	return rc;
 }
 
@@ -716,7 +690,7 @@ static int __osd_sa_xattr_del(const struct lu_env *env, struct osd_object *obj,
 
 	rc = -nvlist_remove(obj->oo_sa_xattr, name, DATA_TYPE_BYTE_ARRAY);
 	if (rc == 0)
-		rc = __osd_sa_xattr_schedule_update(env, obj, oh);
+		rc = __osd_sa_xattr_update(env, obj, oh);
 	return rc;
 }
 
