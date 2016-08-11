@@ -964,7 +964,7 @@ void gss_pipe_destroy_msg(struct rpc_pipe_msg *msg)
 	gumd = &gmsg->gum_data;
 	LASSERT(atomic_read(&gmsg->gum_refcount) > 0);
 
-	CERROR("failed msg %p (seq %u, uid %u, svc %u, nid "LPX64", obd %.*s): "
+	CERROR("failed msg %p (seq %u, uid %u, svc %u, nid %#llx, obd %.*s): "
 	       "errno %d\n", msg, gumd->gum_seq, gumd->gum_uid, gumd->gum_svc,
 	       gumd->gum_nid, (int) sizeof(gumd->gum_obd),
 	       gumd->gum_obd, msg->errno);
@@ -1005,7 +1005,7 @@ void gss_pipe_release(struct inode *inode)
 		LASSERT(list_empty(&gmsg->gum_base.list));
 
                 CERROR("failing remaining msg %p:seq %u, uid %u, svc %u, "
-                       "nid "LPX64", obd %.*s\n", gmsg,
+		       "nid %#llx, obd %.*s\n", gmsg,
                        gumd->gum_seq, gumd->gum_uid, gumd->gum_svc,
                        gumd->gum_nid, (int) sizeof(gumd->gum_obd),
                        gumd->gum_obd);

@@ -853,7 +853,7 @@ int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
         rscp->target = imp->imp_obd;
         rawobj_dup(&gctx->gc_svc_handle, &rscp->handle);
 
-        CWARN("create reverse svc ctx %p to %s: idx "LPX64"\n",
+	CWARN("create reverse svc ctx %p to %s: idx %#llx\n",
               &rscp->ctx, obd2cli_tgt(imp->imp_obd), gsec->gs_rvs_hdl);
         rc = 0;
 out:
@@ -862,7 +862,7 @@ out:
         rsc_free(&rsci);
 
         if (rc)
-                CERROR("create reverse svc ctx: idx "LPX64", rc %d\n",
+		CERROR("create reverse svc ctx: idx %#llx, rc %d\n",
                        gsec->gs_rvs_hdl, rc);
         RETURN(rc);
 }
@@ -1090,7 +1090,7 @@ out:
 		if (rc != SECSVC_OK)
 			set_bit(CACHE_NEGATIVE, &rsci->h.flags);
 		else
-			CDEBUG(D_SEC, "create rsc with idx "LPX64"\n",
+			CDEBUG(D_SEC, "create rsc with idx %#llx\n",
 			       gss_handle_to_u64(&rsci->handle));
 
 		COMPAT_RSC_PUT(&rsci->h, &rsc_cache);
@@ -1105,7 +1105,7 @@ struct gss_svc_ctx *gss_svc_upcall_get_ctx(struct ptlrpc_request *req,
 
         rsc = gss_svc_searchbyctx(&gw->gw_handle);
         if (!rsc) {
-                CWARN("Invalid gss ctx idx "LPX64" from %s\n",
+		CWARN("Invalid gss ctx idx %#llx from %s\n",
                       gss_handle_to_u64(&gw->gw_handle),
                       libcfs_nid2str(req->rq_peer.nid));
                 return NULL;

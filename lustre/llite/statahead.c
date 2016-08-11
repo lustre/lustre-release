@@ -197,7 +197,7 @@ sa_alloc(struct ll_statahead_info *sai, __u64 index, const char *name, int len,
 	if (unlikely(entry == NULL))
 		RETURN(ERR_PTR(-ENOMEM));
 
-	CDEBUG(D_READA, "alloc sa entry %.*s(%p) index "LPU64"\n",
+	CDEBUG(D_READA, "alloc sa entry %.*s(%p) index %llu\n",
 	       len, name, entry, index);
 
 	entry->se_index = index;
@@ -227,7 +227,7 @@ sa_alloc(struct ll_statahead_info *sai, __u64 index, const char *name, int len,
 /* free sa_entry, which should have been unhashed and not in any list */
 static void sa_free(struct ll_statahead_info *sai, struct sa_entry *entry)
 {
-	CDEBUG(D_READA, "free sa entry %.*s(%p) index "LPU64"\n",
+	CDEBUG(D_READA, "free sa entry %.*s(%p) index %llu\n",
 	       entry->se_qstr.len, entry->se_qstr.name, entry,
 	       entry->se_index);
 
@@ -540,7 +540,7 @@ static void ll_agl_trigger(struct inode *inode, struct ll_statahead_info *sai)
         }
 
         CDEBUG(D_READA, "Handling (init) async glimpse: inode = "
-               DFID", idx = "LPU64"\n", PFID(&lli->lli_fid), index);
+	       DFID", idx = %llu\n", PFID(&lli->lli_fid), index);
 
         cl_agl(inode);
         lli->lli_agl_index = 0;
@@ -548,7 +548,7 @@ static void ll_agl_trigger(struct inode *inode, struct ll_statahead_info *sai)
 	up_write(&lli->lli_glimpse_sem);
 
         CDEBUG(D_READA, "Handled (init) async glimpse: inode= "
-               DFID", idx = "LPU64", rc = %d\n",
+	       DFID", idx = %llu, rc = %d\n",
                PFID(&lli->lli_fid), index, rc);
 
         iput(inode);
@@ -1019,8 +1019,8 @@ static int ll_statahead_thread(void *arg)
 		sai->sai_in_readpage = 0;
 		if (IS_ERR(page)) {
 			rc = PTR_ERR(page);
-			CDEBUG(D_READA, "error reading dir "DFID" at "LPU64
-			       "/"LPU64" opendir_pid = %u: rc = %d\n",
+			CDEBUG(D_READA, "error reading dir "DFID" at %llu"
+			       "/%llu opendir_pid = %u: rc = %d\n",
 			       PFID(ll_inode2fid(dir)), pos, sai->sai_index,
 			       lli->lli_opendir_pid, rc);
 			break;
@@ -1119,8 +1119,8 @@ static int ll_statahead_thread(void *arg)
 			rc = -EFAULT;
 			atomic_inc(&sbi->ll_sa_wrong);
 			CDEBUG(D_READA, "Statahead for dir "DFID" hit "
-			       "ratio too low: hit/miss "LPU64"/"LPU64
-			       ", sent/replied "LPU64"/"LPU64", stopping "
+			       "ratio too low: hit/miss %llu/%llu"
+			       ", sent/replied %llu/%llu, stopping "
 			       "statahead thread: pid %d\n",
 			       PFID(&lli->lli_fid), sai->sai_hit,
 			       sai->sai_miss, sai->sai_sent,
@@ -1291,7 +1291,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 			struct ll_inode_info *lli = ll_i2info(dir);
 
 			rc = PTR_ERR(page);
-			CERROR("%s: reading dir "DFID" at "LPU64
+			CERROR("%s: reading dir "DFID" at %llu"
 			       "opendir_pid = %u : rc = %d\n",
 			       ll_get_fsname(dir->i_sb, NULL, 0),
 			       PFID(ll_inode2fid(dir)), pos,

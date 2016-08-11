@@ -72,7 +72,7 @@ static ssize_t mdc_active_seq_write(struct file *file,
 	if (dev->u.cli.cl_import->imp_deactive == val)
 		rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
 	else
-		CDEBUG(D_CONFIG, "activate "LPD64": ignoring repeat request\n",
+		CDEBUG(D_CONFIG, "activate %llu: ignoring repeat request\n",
 		       val);
 
 	return count;

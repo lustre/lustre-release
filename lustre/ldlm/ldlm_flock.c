@@ -134,7 +134,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, enum ldlm_mode mode, __u64 flags)
 {
 	ENTRY;
 
-	LDLM_DEBUG(lock, "ldlm_flock_destroy(mode: %d, flags: "LPX64")",
+	LDLM_DEBUG(lock, "ldlm_flock_destroy(mode: %d, flags: %#llx)",
 		   mode, flags);
 
 	/* Safe to not lock here, since it should be empty anyway */
@@ -304,8 +304,8 @@ ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags, int first_enq,
 	const struct ldlm_callback_suite null_cbs = { NULL };
 	ENTRY;
 
-	CDEBUG(D_DLMTRACE, "flags "LPX64" owner "LPU64" pid %u mode %u start "
-	       LPU64" end "LPU64"\n", *flags,
+	CDEBUG(D_DLMTRACE, "flags %#llx owner %llu pid %u mode %u start "
+	       "%llu end %llu\n", *flags,
 	       new->l_policy_data.l_flock.owner,
                new->l_policy_data.l_flock.pid, mode,
                req->l_policy_data.l_flock.start,
@@ -677,7 +677,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 		unlock_res_and_lock(lock);
 		OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CP_CB_WAIT3, 4);
 	}
-	CDEBUG(D_DLMTRACE, "flags: "LPX64" data: %p getlk: %p\n",
+	CDEBUG(D_DLMTRACE, "flags: %#llx data: %p getlk: %p\n",
 	       flags, data, getlk);
 
 	LASSERT(flags != LDLM_FL_WAIT_NOREPROC);

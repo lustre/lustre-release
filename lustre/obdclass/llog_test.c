@@ -298,7 +298,7 @@ static int test3_check_n_add_cb(const struct lu_env *env,
 		LASSERT(lgh->lgh_hdr->llh_size > 0);
 		if (lgh->lgh_cur_offset != lgh->lgh_hdr->llh_hdr.lrh_len +
 					(cur_idx - 1) * lgh->lgh_hdr->llh_size)
-			CERROR("Wrong record offset in cur_off: "LPU64", should be %u\n",
+			CERROR("Wrong record offset in cur_off: %llu, should be %u\n",
 			       lgh->lgh_cur_offset,
 			       lgh->lgh_hdr->llh_hdr.lrh_len +
 			       (cur_idx - 1) * lgh->lgh_hdr->llh_size);
@@ -320,7 +320,7 @@ static int test3_check_n_add_cb(const struct lu_env *env,
 				test_3_rec_off = lgh->lgh_cur_offset;
 				test_3_paddings++;
 			} else {
-				CERROR("Wrong record offset in cur_off: "LPU64
+				CERROR("Wrong record offset in cur_off: %llu"
 				       ", should be %lld (rec len %u)\n",
 				       lgh->lgh_cur_offset,
 				       (long long)test_3_rec_off,
@@ -1166,10 +1166,10 @@ static int llog_truncate(const struct lu_env *env, struct dt_object *o)
 	if (rc)
 		RETURN(rc);
 
-	CDEBUG(D_OTHER, "original size "LPU64"\n", la.la_size);
+	CDEBUG(D_OTHER, "original size %llu\n", la.la_size);
 	rc = sizeof(struct llog_log_hdr) + sizeof(struct llog_mini_rec);
 	if (la.la_size < rc) {
-		CERROR("too small llog: "LPU64"\n", la.la_size);
+		CERROR("too small llog: %llu\n", la.la_size);
 		RETURN(0);
 	}
 
@@ -1687,7 +1687,7 @@ static int llog_test_10(const struct lu_env *env, struct obd_device *obd)
 
 	if (la.la_size != cat_max_size) {
 		CERROR("10e: catalog size has changed after it has wrap around,"
-		       " current size = "LPU64", expected size = "LPU64"\n",
+		       " current size = %llu, expected size = %llu\n",
 		       la.la_size, cat_max_size);
 		GOTO(out, rc = -EINVAL);
 	}
@@ -1793,7 +1793,7 @@ static int llog_test_10(const struct lu_env *env, struct obd_device *obd)
 
 	if (la.la_size != cat_max_size) {
 		CERROR("10f: catalog size has changed after it has wrap around,"
-		       " current size = "LPU64", expected size = "LPU64"\n",
+		       " current size = %llu, expected size = %llu\n",
 		       la.la_size, cat_max_size);
 		GOTO(out, rc = -EINVAL);
 	}

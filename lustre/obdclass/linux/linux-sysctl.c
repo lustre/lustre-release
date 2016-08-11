@@ -84,7 +84,7 @@ proc_memory_alloc(struct ctl_table *table, int write, void __user *buffer,
         if (write)
                 return -EINVAL;
 
-        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_memory_sum());
+	len = snprintf(buf, sizeof(buf), "%llu\n", obd_memory_sum());
         if (len > *lenp)
                 len = *lenp;
         buf[len] = '\0';
@@ -109,7 +109,7 @@ proc_mem_max(struct ctl_table *table, int write, void __user *buffer,
         if (write)
                 return -EINVAL;
 
-        len = snprintf(buf, sizeof(buf), LPU64"\n", obd_memory_max());
+	len = snprintf(buf, sizeof(buf), "%llu\n", obd_memory_max());
         if (len > *lenp)
                 len = *lenp;
         buf[len] = '\0';
@@ -144,7 +144,7 @@ proc_max_dirty_pages_in_mb(struct ctl_table *table, int write,
 		/* Don't allow them to let dirty pages exceed 90% of system
 		 * memory and set a hard minimum of 4MB. */
 		if (val > ((totalram_pages / 10) * 9)) {
-			CERROR("Refusing to set max dirty pages to "LPD64", "
+			CERROR("Refusing to set max dirty pages to %lld, "
 			       "which is more than 90%% of available RAM; "
 			       "setting to %lu\n", val,
 			       ((totalram_pages / 10) * 9));

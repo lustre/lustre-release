@@ -1047,7 +1047,7 @@ static int do_cli_unwrap_reply(struct ptlrpc_request *req)
         case 0:
                 break;
         default:
-                CERROR("failed unpack reply: x"LPU64"\n", req->rq_xid);
+		CERROR("failed unpack reply: x%llu\n", req->rq_xid);
                 RETURN(-EPROTO);
         }
 
@@ -2070,7 +2070,7 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
         case 0:
                 break;
         default:
-                CERROR("error unpacking request from %s x"LPU64"\n",
+		CERROR("error unpacking request from %s x%llu\n",
                        libcfs_id2str(req->rq_peer), req->rq_xid);
                 RETURN(SECSVC_DROP);
         }

@@ -2294,7 +2294,7 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 	INIT_LIST_HEAD(&oap->oap_rpc_item);
 
 	spin_lock_init(&oap->oap_lock);
-	CDEBUG(D_INFO, "oap %p page %p obj off "LPU64"\n",
+	CDEBUG(D_INFO, "oap %p page %p obj off %llu\n",
 	       oap, page, oap->oap_obj_off);
 	RETURN(0);
 }
@@ -2753,7 +2753,7 @@ again:
 			break;
 		}
 
-		OSC_EXTENT_DUMP(D_CACHE, ext, "try to trunc:"LPU64".\n", size);
+		OSC_EXTENT_DUMP(D_CACHE, ext, "try to trunc:%llu.\n", size);
 
 		osc_extent_get(ext);
 		if (ext->oe_state == OES_ACTIVE) {
@@ -2816,7 +2816,7 @@ again:
 			LASSERT(*extp == NULL);
 			*extp = osc_extent_get(ext);
 			OSC_EXTENT_DUMP(D_CACHE, ext,
-					"trunc at "LPU64"\n", size);
+					"trunc at %llu\n", size);
 		}
 		osc_extent_put(env, ext);
 	}

@@ -753,7 +753,7 @@ do {									      \
 	if (unlikely((ptr) == NULL)) {                                        \
 		CERROR("vmalloc of '" #ptr "' (%d bytes) failed\n",           \
 		       (int)(size));                                          \
-		CERROR(LPU64" total bytes allocated by Lustre, %d by LNET\n", \
+		CERROR("%llu total bytes allocated by Lustre, %d by LNET\n", \
 		       obd_memory_sum(), atomic_read(&libcfs_kmemory));       \
 	} else {                                                              \
 		OBD_ALLOC_POST(ptr, size, "vmalloced");                       \

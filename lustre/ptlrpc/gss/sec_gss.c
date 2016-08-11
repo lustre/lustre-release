@@ -364,13 +364,13 @@ void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
 	set_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
 	if (sec_is_reverse(ctx->cc_sec)) {
-		CWARN("server installed reverse ctx %p idx "LPX64", "
+		CWARN("server installed reverse ctx %p idx %#llx, "
 		      "expiry %lu(%+lds)\n", ctx,
 		      gss_handle_to_u64(&gctx->gc_handle),
 		      ctx->cc_expire,
 		      cfs_time_sub(ctx->cc_expire, cfs_time_current_sec()));
         } else {
-		CWARN("client refreshed ctx %p idx "LPX64" (%u->%s), "
+		CWARN("client refreshed ctx %p idx %#llx (%u->%s), "
 		      "expiry %lu(%+lds)\n", ctx,
 		      gss_handle_to_u64(&gctx->gc_handle),
 		      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
@@ -680,7 +680,7 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
 
         errhdr = (struct gss_err_header *) ghdr;
 
-        CWARN("req x"LPU64"/t"LPU64", ctx %p idx "LPX64"(%u->%s): "
+	CWARN("req x%llu/t%llu, ctx %p idx %#llx(%u->%s): "
               "%sserver respond (%08x/%08x)\n",
               req->rq_xid, req->rq_transno, ctx,
               gss_handle_to_u64(&ctx2gctx(ctx)->gc_handle),
@@ -2279,8 +2279,8 @@ int gss_svc_handle_data(struct ptlrpc_request *req,
         if (rc == 0)
                 RETURN(SECSVC_OK);
 
-        CERROR("svc %u failed: major 0x%08x: req xid "LPU64" ctx %p idx "
-               LPX64"(%u->%s)\n", gw->gw_svc, major, req->rq_xid,
+	CERROR("svc %u failed: major 0x%08x: req xid %llu ctx %p idx "
+	       "%#llx(%u->%s)\n", gw->gw_svc, major, req->rq_xid,
                grctx->src_ctx, gss_handle_to_u64(&gw->gw_handle),
                grctx->src_ctx->gsc_uid, libcfs_nid2str(req->rq_peer.nid));
 error:
@@ -2318,7 +2318,7 @@ int gss_svc_handle_destroy(struct ptlrpc_request *req,
         if (gss_svc_verify_request(req, grctx, gw, &major))
                 RETURN(SECSVC_DROP);
 
-        CWARN("destroy svc ctx %p idx "LPX64" (%u->%s)\n",
+	CWARN("destroy svc ctx %p idx %#llx (%u->%s)\n",
               grctx->src_ctx, gss_handle_to_u64(&gw->gw_handle),
               grctx->src_ctx->gsc_uid, libcfs_nid2str(req->rq_peer.nid));
 

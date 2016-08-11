@@ -667,21 +667,21 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 	if (!req->rq_replied || (rc && rc != -EINVAL)) {
 		if (lock->l_export && lock->l_export->exp_libclient) {
 			LDLM_DEBUG(lock,
-				   "%s AST (req@%p x"LPU64") to liblustre client (nid %s) timeout, just cancelling lock",
+				   "%s AST (req@%p x%llu) to liblustre client (nid %s) timeout, just cancelling lock",
 				   ast_type, req, req->rq_xid,
 				   libcfs_nid2str(peer.nid));
 			ldlm_lock_cancel(lock);
 			rc = -ERESTART;
 		} else if (ldlm_is_cancel(lock)) {
 			LDLM_DEBUG(lock,
-				   "%s AST (req@%p x"LPU64") timeout from nid %s, but cancel was received (AST reply lost?)",
+				   "%s AST (req@%p x%llu) timeout from nid %s, but cancel was received (AST reply lost?)",
 				   ast_type, req, req->rq_xid,
 				   libcfs_nid2str(peer.nid));
 			ldlm_lock_cancel(lock);
 			rc = -ERESTART;
 		} else {
 			LDLM_ERROR(lock,
-				   "client (nid %s) %s %s AST (req@%p x"LPU64" status %d rc %d), evict it",
+				   "client (nid %s) %s %s AST (req@%p x%llu status %d rc %d), evict it",
 				   libcfs_nid2str(peer.nid),
 				   req->rq_replied ? "returned error from" :
 				   "failed to reply to",
@@ -698,7 +698,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 		struct ldlm_resource *res = lock->l_resource;
 
 		LDLM_DEBUG(lock,
-			   "client (nid %s) returned %d from %s AST (req@%p x"LPU64") - normal race",
+			   "client (nid %s) returned %d from %s AST (req@%p x%llu) - normal race",
 			   libcfs_nid2str(peer.nid),
 			   req->rq_repmsg ?
 			   lustre_msg_get_status(req->rq_repmsg) : -1,
@@ -1277,8 +1277,8 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                 lock = cfs_hash_lookup(req->rq_export->exp_lock_hash,
                                        (void *)&dlm_req->lock_handle[0]);
                 if (lock != NULL) {
-                        DEBUG_REQ(D_DLMTRACE, req, "found existing lock cookie "
-                                  LPX64, lock->l_handle.h_cookie);
+			DEBUG_REQ(D_DLMTRACE, req, "found existing lock cookie %#llx",
+				  lock->l_handle.h_cookie);
 			flags |= LDLM_FL_RESENT;
                         GOTO(existing_lock, rc = 0);
 		}
@@ -1427,7 +1427,7 @@ existing_lock:
 		if (unlikely(!ldlm_is_cancel_on_block(lock) ||
                              !(dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK))){
                         CERROR("Granting sync lock to libclient. "
-                               "req fl %d, rep fl %d, lock fl "LPX64"\n",
+			       "req fl %d, rep fl %d, lock fl %#llx\n",
                                dlm_req->lock_flags, dlm_rep->lock_flags,
                                lock->l_flags);
                         LDLM_ERROR(lock, "sync lock");
@@ -1437,7 +1437,7 @@ existing_lock:
 				it = req_capsule_client_get(&req->rq_pill,
 							    &RMF_LDLM_INTENT);
 				if (it != NULL) {
-					CERROR("This is intent %s ("LPU64")\n",
+					CERROR("This is intent %s (%llu)\n",
 					       ldlm_it2str(it->opc), it->opc);
 				}
 			}
@@ -1657,7 +1657,7 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
                 lock = ldlm_handle2lock(&dlm_req->lock_handle[i]);
                 if (!lock) {
                         LDLM_DEBUG_NOLOCK("server-side cancel handler stale "
-                                          "lock (cookie "LPU64")",
+					  "lock (cookie %llu)",
                                           dlm_req->lock_handle[i].cookie);
                         continue;
                 }
@@ -2125,7 +2125,7 @@ static inline void ldlm_callback_errmsg(struct ptlrpc_request *req,
 					const struct lustre_handle *handle)
 {
         DEBUG_REQ((req->rq_no_reply || rc) ? D_WARNING : D_DLMTRACE, req,
-                  "%s: [nid %s] [rc %d] [lock "LPX64"]",
+		  "%s: [nid %s] [rc %d] [lock %#llx]",
                   msg, libcfs_id2str(req->rq_peer), rc,
                   handle ? handle->cookie : 0);
         if (req->rq_no_reply)
@@ -2244,7 +2244,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 
         lock = ldlm_handle2lock_long(&dlm_req->lock_handle[0], 0);
         if (!lock) {
-                CDEBUG(D_DLMTRACE, "callback on lock "LPX64" - lock "
+		CDEBUG(D_DLMTRACE, "callback on lock %#llx - lock "
                        "disappeared\n", dlm_req->lock_handle[0].cookie);
                 rc = ldlm_callback_reply(req, -EINVAL);
                 ldlm_callback_errmsg(req, "Operate with invalid parameter", rc,
@@ -2267,8 +2267,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 		 * should send cancel after dropping the cache. */
 		if ((ldlm_is_canceling(lock) && ldlm_is_bl_done(lock)) ||
 		     ldlm_is_failed(lock)) {
-			LDLM_DEBUG(lock, "callback on lock "
-				   LPX64" - lock disappeared",
+			LDLM_DEBUG(lock, "callback on lock %llx - lock disappeared",
 				   dlm_req->lock_handle[0].cookie);
 			unlock_res_and_lock(lock);
 			LDLM_LOCK_RELEASE(lock);
@@ -2346,7 +2345,7 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
                 struct ldlm_request *dlm_req;
 
                 CERROR("%s from %s arrived at %lu with bad export cookie "
-                       LPU64"\n",
+		       "%llu\n",
                        ll_opcode2str(lustre_msg_get_opc(req->rq_reqmsg)),
                        libcfs_nid2str(req->rq_peer.nid),
                        req->rq_arrival_time.tv_sec,
@@ -2406,7 +2405,7 @@ static int ldlm_cancel_hpreq_lock_match(struct ptlrpc_request *req,
                 if (lustre_handle_equal(&dlm_req->lock_handle[i],
                                         &lockh)) {
                         DEBUG_REQ(D_RPCTRACE, req,
-                                  "Prio raised by lock "LPX64".", lockh.cookie);
+				  "Prio raised by lock %#llx.", lockh.cookie);
 
                         rc = 1;
                         break;

@@ -588,7 +588,7 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 			   obd->obd_max_recoverable_clients);
 		seq_printf(m, "replayed_requests: %d\n",
 			   obd->obd_replayed_requests);
-		seq_printf(m, "last_transno: "LPD64"\n",
+		seq_printf(m, "last_transno: %lld\n",
 			   obd->obd_next_recovery_transno - 1);
 		seq_printf(m, "VBR: %s\n", obd->obd_version_recov ?
 			   "ENABLED" : "DISABLED");
@@ -621,7 +621,7 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 	seq_printf(m, "replayed_requests: %d\n", obd->obd_replayed_requests);
 	seq_printf(m, "queued_requests: %d\n",
 		   obd->obd_requests_queued_for_recovery);
-	seq_printf(m, "next_transno: "LPD64"\n",
+	seq_printf(m, "next_transno: %lld\n",
 		   obd->obd_next_recovery_transno);
 out:
 	return 0;

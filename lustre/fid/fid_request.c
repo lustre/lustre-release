@@ -231,7 +231,7 @@ static int seq_client_alloc_seq(const struct lu_env *env,
 	*seqnr = seq->lcs_space.lsr_start;
 	seq->lcs_space.lsr_start += 1;
 
-        CDEBUG(D_INFO, "%s: Allocated sequence ["LPX64"]\n", seq->lcs_name,
+	CDEBUG(D_INFO, "%s: Allocated sequence [%#llx]\n", seq->lcs_name,
                *seqnr);
 
         RETURN(rc);
@@ -266,7 +266,7 @@ static void seq_fid_alloc_fini(struct lu_client_seq *seq, __u64 seqnr,
 
 	mutex_lock(&seq->lcs_mutex);
 	if (seqnr != 0) {
-		CDEBUG(D_INFO, "%s: New sequence [0x%16.16"LPF64"x]\n",
+		CDEBUG(D_INFO, "%s: New sequence [0x%16.16llx]\n",
 		       seq->lcs_name, seqnr);
 
 		seq->lcs_fid.f_seq = seqnr;

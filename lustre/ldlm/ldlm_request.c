@@ -621,7 +621,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 					      LDLM_FL_INHERIT_MASK);
         unlock_res_and_lock(lock);
 
-	CDEBUG(D_INFO, "local: %p, remote cookie: "LPX64", flags: "LPX64"\n",
+	CDEBUG(D_INFO, "local: %p, remote cookie: %#llx, flags: %#llx\n",
 	       lock, reply->lock_handle.cookie, *flags);
 
 	/* If enqueue returned a blocked lock but the completion handler has
@@ -917,7 +917,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 
 			lock->l_req_extent = policy->l_extent;
 		}
-		LDLM_DEBUG(lock, "client-side enqueue START, flags "LPX64,
+		LDLM_DEBUG(lock, "client-side enqueue START, flags %#llx",
 			   *flags);
 	}
 
@@ -1314,7 +1314,7 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
         if (lustre_msg_get_slv(req->rq_repmsg) == 0 ||
             lustre_msg_get_limit(req->rq_repmsg) == 0) {
                 DEBUG_REQ(D_HA, req, "Zero SLV or Limit found "
-                          "(SLV: "LPU64", Limit: %u)",
+			  "(SLV: %llu, Limit: %u)",
                           lustre_msg_get_slv(req->rq_repmsg),
                           lustre_msg_get_limit(req->rq_repmsg));
                 RETURN(0);
@@ -1983,7 +1983,7 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
 	res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
 	if (IS_ERR(res)) {
 		/* This is not a problem. */
-		CDEBUG(D_INFO, "No resource "LPU64"\n", res_id->name[0]);
+		CDEBUG(D_INFO, "No resource %llu\n", res_id->name[0]);
 		RETURN(0);
 	}
 
@@ -2191,8 +2191,8 @@ static int replay_lock_interpret(const struct lu_env *env,
 
         lock = ldlm_handle2lock(&aa->lock_handle);
         if (!lock) {
-                CERROR("received replay ack for unknown local cookie "LPX64
-                       " remote cookie "LPX64 " from server %s id %s\n",
+		CERROR("received replay ack for unknown local cookie %#llx"
+		       " remote cookie %#llx from server %s id %s\n",
                        aa->lock_handle.cookie, reply->lock_handle.cookie,
                        req->rq_export->exp_client_uuid.uuid,
                        libcfs_id2str(req->rq_peer));

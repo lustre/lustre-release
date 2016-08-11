@@ -827,7 +827,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
         if (coinfo == NULL)
                 goto out;
 
-	snprintf(coinfo, coinfo_size, "%d:%s:%u:%u:%s:%c:%d:"LPX64":%s:"LPX64,
+	snprintf(coinfo, coinfo_size, "%d:%s:%u:%u:%s:%c:%d:%#llx:%s:%#llx",
 		 sec->ps_id, sec2gsec(sec)->gs_mech->gm_name,
 		 vcred->vc_uid, vcred->vc_gid,
 		 sec_part_flags, svc_flag, import_to_gss_svc(imp),
@@ -1090,7 +1090,7 @@ int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
 
 		seq_printf(seq, "%p: uid %u, ref %d, expire %lu(%+ld), fl %s, "
 			   "seq %d, win %u, key %08x(ref %d), "
-			   "hdl "LPX64":"LPX64", mech: %s\n",
+			   "hdl %#llx:%#llx, mech: %s\n",
 			   ctx, ctx->cc_vcred.vc_uid,
 			   atomic_read(&ctx->cc_refcount),
 			   ctx->cc_expire,

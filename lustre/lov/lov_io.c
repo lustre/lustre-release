@@ -413,7 +413,7 @@ static int lov_io_iter_init(const struct lu_env *env,
 		if (rc != 0)
 			break;
 
-		CDEBUG(D_VFSTRACE, "shrink: %d ["LPU64", "LPU64")\n",
+		CDEBUG(D_VFSTRACE, "shrink: %d [%llu, %llu)\n",
 		       stripe, start, end);
 
 		list_add_tail(&sub->sub_linkage, &lio->lis_active);
@@ -447,8 +447,8 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
                                               next) - io->u.ci_rw.crw_pos;
                 lio->lis_pos    = io->u.ci_rw.crw_pos;
                 lio->lis_endpos = io->u.ci_rw.crw_pos + io->u.ci_rw.crw_count;
-		CDEBUG(D_VFSTRACE, "stripe: "LPU64" chunk: ["LPU64", "LPU64") "
-		       LPU64"\n", (__u64)start, lio->lis_pos, lio->lis_endpos,
+		CDEBUG(D_VFSTRACE, "stripe: %llu chunk: [%llu, %llu) "
+		       "%llu\n", (__u64)start, lio->lis_pos, lio->lis_endpos,
 		       (__u64)lio->lis_io_endpos);
 	}
 	/*

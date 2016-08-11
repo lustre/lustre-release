@@ -967,14 +967,14 @@ struct ptlrpc_nrs_request *nrs_orr_req_get(struct ptlrpc_nrs_policy *policy,
 			CDEBUG(D_RPCTRACE,
 			       "NRS: starting to handle %s request for object "
 			       "with FID "DFID", from OST with index %u, with "
-			       "round "LPU64"\n", NRS_POL_NAME_ORR,
+			       "round %llu\n", NRS_POL_NAME_ORR,
 			       PFID(&orro->oo_key.ok_fid),
 			       nrq->nr_u.orr.or_key.ok_idx,
 			       nrq->nr_u.orr.or_round);
 		else
 			CDEBUG(D_RPCTRACE,
 			       "NRS: starting to handle %s request from OST "
-			       "with index %u, with round "LPU64"\n",
+			       "with index %u, with round %llu\n",
 			       NRS_POL_NAME_TRR, nrq->nr_u.orr.or_key.ok_idx,
 			       nrq->nr_u.orr.or_round);
 
@@ -1150,13 +1150,13 @@ static void nrs_orr_req_stop(struct ptlrpc_nrs_policy *policy,
 		    NRS_POL_NAME_MAX) == 0)
 		CDEBUG(D_RPCTRACE,
 		       "NRS: finished handling %s request for object with FID "
-		       DFID", from OST with index %u, with round "LPU64"\n",
+		       DFID", from OST with index %u, with round %llu\n",
 		       NRS_POL_NAME_ORR, PFID(&nrq->nr_u.orr.or_key.ok_fid),
 		       nrq->nr_u.orr.or_key.ok_idx, nrq->nr_u.orr.or_round);
 	else
 		CDEBUG(D_RPCTRACE,
 		       "NRS: finished handling %s request from OST with index %u,"
-		       " with round "LPU64"\n",
+		       " with round %llu\n",
 		       NRS_POL_NAME_TRR, nrq->nr_u.orr.or_key.ok_idx,
 		       nrq->nr_u.orr.or_round);
 }

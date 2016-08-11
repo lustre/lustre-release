@@ -1294,7 +1294,7 @@ static void ptlrpc_save_versions(struct ptlrpc_request *req)
 
         LASSERT(versions);
         lustre_msg_set_versions(reqmsg, versions);
-        CDEBUG(D_INFO, "Client save versions ["LPX64"/"LPX64"]\n",
+	CDEBUG(D_INFO, "Client save versions [%#llx/%#llx]\n",
                versions[0], versions[1]);
 
         EXIT;
@@ -1310,7 +1310,7 @@ __u64 ptlrpc_known_replied_xid(struct obd_import *imp)
 
 	req = list_entry(imp->imp_unreplied_list.next, struct ptlrpc_request,
 			 rq_unreplied_list);
-	LASSERTF(req->rq_xid >= 1, "XID:"LPU64"\n", req->rq_xid);
+	LASSERTF(req->rq_xid >= 1, "XID:%llu\n", req->rq_xid);
 
 	if (imp->imp_known_replied_xid < req->rq_xid - 1)
 		imp->imp_known_replied_xid = req->rq_xid - 1;
@@ -1613,7 +1613,7 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
         }
 
 	CDEBUG(D_RPCTRACE, "Sending RPC pname:cluuid:pid:xid:nid:opc"
-	       " %s:%s:%d:"LPU64":%s:%d\n", current_comm(),
+	       " %s:%s:%d:%llu:%s:%d\n", current_comm(),
 	       imp->imp_obd->obd_uuid.uuid,
 	       lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
 	       libcfs_nid2str(imp->imp_connection->c_peer.nid),
@@ -2036,7 +2036,7 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
 		CDEBUG(req->rq_reqmsg != NULL ? D_RPCTRACE : 0,
 			"Completed RPC pname:cluuid:pid:xid:nid:"
-			"opc %s:%s:%d:"LPU64":%s:%d\n",
+			"opc %s:%s:%d:%llu:%s:%d\n",
 			current_comm(), imp->imp_obd->obd_uuid.uuid,
 			lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
 			libcfs_nid2str(imp->imp_connection->c_peer.nid),
@@ -2678,11 +2678,11 @@ void ptlrpc_free_committed(struct obd_import *imp)
 
         if (imp->imp_peer_committed_transno == imp->imp_last_transno_checked &&
             imp->imp_generation == imp->imp_last_generation_checked) {
-                CDEBUG(D_INFO, "%s: skip recheck: last_committed "LPU64"\n",
+		CDEBUG(D_INFO, "%s: skip recheck: last_committed %llu\n",
                        imp->imp_obd->obd_name, imp->imp_peer_committed_transno);
 		RETURN_EXIT;
         }
-        CDEBUG(D_RPCTRACE, "%s: committing for last_committed "LPU64" gen %d\n",
+	CDEBUG(D_RPCTRACE, "%s: committing for last_committed %llu gen %d\n",
                imp->imp_obd->obd_name, imp->imp_peer_committed_transno,
                imp->imp_generation);
 
@@ -2721,7 +2721,7 @@ void ptlrpc_free_committed(struct obd_import *imp)
 			continue;
 		}
 
-                DEBUG_REQ(D_INFO, req, "commit (last_committed "LPU64")",
+		DEBUG_REQ(D_INFO, req, "commit (last_committed %llu)",
                           imp->imp_peer_committed_transno);
 free_req:
 		ptlrpc_free_request(req);
@@ -2941,7 +2941,7 @@ static int ptlrpc_replay_interpret(const struct lu_env *env,
                 LASSERTF(lustre_msg_get_transno(req->rq_reqmsg) ==
                          lustre_msg_get_transno(req->rq_repmsg) ||
                          lustre_msg_get_transno(req->rq_repmsg) == 0,
-                         LPX64"/"LPX64"\n",
+			 "%#llx/%#llx\n",
                          lustre_msg_get_transno(req->rq_reqmsg),
                          lustre_msg_get_transno(req->rq_repmsg));
         }
@@ -2957,8 +2957,8 @@ static int ptlrpc_replay_interpret(const struct lu_env *env,
         /* transaction number shouldn't be bigger than the latest replayed */
         if (req->rq_transno > lustre_msg_get_transno(req->rq_reqmsg)) {
                 DEBUG_REQ(D_ERROR, req,
-                          "Reported transno "LPU64" is bigger than the "
-                          "replayed one: "LPU64, req->rq_transno,
+			  "Reported transno %llu is bigger than the "
+			  "replayed one: %llu", req->rq_transno,
                           lustre_msg_get_transno(req->rq_reqmsg));
                 GOTO(out, rc = -EINVAL);
         }
@@ -3259,7 +3259,7 @@ void ptlrpc_set_bulk_mbits(struct ptlrpc_request *req)
 			req->rq_mbits = req->rq_xid;
 			spin_unlock(&req->rq_import->imp_lock);
 		}
-		CDEBUG(D_HA, "resend bulk old x"LPU64" new x"LPU64"\n",
+		CDEBUG(D_HA, "resend bulk old x%llu new x%llu\n",
 		       old_mbits, req->rq_mbits);
 	}
 

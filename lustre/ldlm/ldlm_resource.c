@@ -88,7 +88,7 @@ LPROC_SEQ_FOPS_RO_TYPE(ldlm, uint);
 
 static int seq_watermark_show(struct seq_file *m, void *data)
 {
-	seq_printf(m, LPU64"\n", *(__u64 *)m->private);
+	seq_printf(m, "%llu\n", *(__u64 *)m->private);
 	return 0;
 }
 
@@ -163,7 +163,7 @@ static const struct file_operations ldlm_watermark_fops = {
 
 static int seq_granted_show(struct seq_file *m, void *data)
 {
-	seq_printf(m, LPU64"\n", percpu_counter_sum_positive(
+	seq_printf(m, "%llu\n", percpu_counter_sum_positive(
 		   (struct percpu_counter *)m->private));
 	return 0;
 }

@@ -424,7 +424,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	if (sbi->ll_flags & LL_SBI_ALWAYS_PING)
 		data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;
 
-	CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d "
+	CDEBUG(D_RPCTRACE, "ocd_connect_flags: %#llx ocd_version: %d "
 	       "ocd_grant: %d\n", data->ocd_connect_flags,
 	       data->ocd_version, data->ocd_grant);
 
@@ -1567,7 +1567,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr, bool hsm_import)
                  * OST maximum object size and number of stripes.  This
                  * needs another check in addition to the VFS check above. */
                 if (attr->ia_size > ll_file_maxbytes(inode)) {
-                        CDEBUG(D_INODE,"file "DFID" too large %llu > "LPU64"\n",
+			CDEBUG(D_INODE,"file "DFID" too large %llu > %llu\n",
                                PFID(&lli->lli_fid), attr->ia_size,
                                ll_file_maxbytes(inode));
                         RETURN(-EFBIG);
@@ -1742,7 +1742,7 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
 
         osfs->os_type = sb->s_magic;
 
-        CDEBUG(D_SUPER, "MDC blocks "LPU64"/"LPU64" objects "LPU64"/"LPU64"\n",
+	CDEBUG(D_SUPER, "MDC blocks %llu/%llu objects %llu/%llu\n",
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
 
         if (sbi->ll_flags & LL_SBI_LAZYSTATFS)
@@ -1754,7 +1754,7 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
                 RETURN(rc);
         }
 
-        CDEBUG(D_SUPER, "OSC blocks "LPU64"/"LPU64" objects "LPU64"/"LPU64"\n",
+	CDEBUG(D_SUPER, "OSC blocks %llu/%llu objects %llu/%llu\n",
                obd_osfs.os_bavail, obd_osfs.os_blocks, obd_osfs.os_ffree,
                obd_osfs.os_files);
 
@@ -1782,7 +1782,7 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 	__u64 fsid = huge_encode_dev(sb->s_dev);
 	int rc;
 
-        CDEBUG(D_VFSTRACE, "VFS Op: at "LPU64" jiffies\n", get_jiffies_64());
+	CDEBUG(D_VFSTRACE, "VFS Op: at %llu jiffies\n", get_jiffies_64());
         ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STAFS, 1);
 
         /* Some amount of caching on the client is allowed */
@@ -1873,7 +1873,7 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 	if (body->mbo_valid & OBD_MD_FLMTIME) {
 		if (body->mbo_mtime > LTIME_S(inode->i_mtime)) {
 			CDEBUG(D_INODE, "setting ino %lu mtime from %lu "
-			       "to "LPU64"\n", inode->i_ino,
+			       "to %llu\n", inode->i_ino,
 			       LTIME_S(inode->i_mtime), body->mbo_mtime);
 			LTIME_S(inode->i_mtime) = body->mbo_mtime;
 		}
@@ -2139,7 +2139,7 @@ void ll_umount_begin(struct super_block *sb)
 
 	obd = class_exp2obd(sbi->ll_md_exp);
 	if (obd == NULL) {
-		CERROR("Invalid MDC connection handle "LPX64"\n",
+		CERROR("Invalid MDC connection handle %#llx\n",
 		       sbi->ll_md_exp->exp_handle.h_cookie);
 		EXIT;
 		return;
@@ -2148,7 +2148,7 @@ void ll_umount_begin(struct super_block *sb)
 
         obd = class_exp2obd(sbi->ll_dt_exp);
         if (obd == NULL) {
-                CERROR("Invalid LOV connection handle "LPX64"\n",
+		CERROR("Invalid LOV connection handle %#llx\n",
                        sbi->ll_dt_exp->exp_handle.h_cookie);
                 EXIT;
                 return;

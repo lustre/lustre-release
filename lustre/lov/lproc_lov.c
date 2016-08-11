@@ -51,7 +51,7 @@ static int lov_stripesize_seq_show(struct seq_file *m, void *v)
 	LASSERT(dev != NULL);
 	desc = &dev->u.lov.desc;
 
-	seq_printf(m, LPU64"\n", desc->ld_default_stripe_size);
+	seq_printf(m, "%llu\n", desc->ld_default_stripe_size);
 	return 0;
 }
 
@@ -86,7 +86,7 @@ static int lov_stripeoffset_seq_show(struct seq_file *m, void *v)
 
 	LASSERT(dev != NULL);
 	desc = &dev->u.lov.desc;
-	seq_printf(m, LPU64"\n", desc->ld_default_stripe_offset);
+	seq_printf(m, "%llu\n", desc->ld_default_stripe_offset);
 	return 0;
 }
 

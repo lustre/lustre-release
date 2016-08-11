@@ -202,7 +202,7 @@ static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
 			if (i_size_read(inode) < kms) {
 				i_size_write(inode, kms);
 				CDEBUG(D_VFSTRACE,
-				       DFID" updating i_size "LPU64"\n",
+				       DFID" updating i_size %llu\n",
 				       PFID(lu_object_fid(&obj->co_lu)),
 				       (__u64)i_size_read(inode));
 			}
@@ -1002,7 +1002,7 @@ static int vvp_io_write_start(const struct lu_env *env,
 	 * addition to the VFS checks earlier. */
 	if (pos + cnt > ll_file_maxbytes(inode)) {
 		CDEBUG(D_INODE,
-		       "%s: file "DFID" offset %llu > maxbytes "LPU64"\n",
+		       "%s: file "DFID" offset %llu > maxbytes %llu\n",
 		       ll_get_fsname(inode->i_sb, NULL, 0),
 		       PFID(ll_inode2fid(inode)), pos + cnt,
 		       ll_file_maxbytes(inode));

@@ -427,61 +427,59 @@ static int obd_init_checks(void)
         char buf[64];
         int len, ret = 0;
 
-        CDEBUG(D_INFO, "LPU64=%s, LPD64=%s, LPX64=%s\n", LPU64, LPD64, LPX64);
-
-        CDEBUG(D_INFO, "OBD_OBJECT_EOF = "LPX64"\n", (__u64)OBD_OBJECT_EOF);
+	CDEBUG(D_INFO, "OBD_OBJECT_EOF = %#llx\n", (__u64)OBD_OBJECT_EOF);
 
         u64val = OBD_OBJECT_EOF;
-        CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = "LPX64"\n", u64val);
+	CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = %#llx\n", u64val);
         if (u64val != OBD_OBJECT_EOF) {
-                CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
+		CERROR("__u64 %#llx(%d) != 0xffffffffffffffff\n",
                        u64val, (int)sizeof(u64val));
                 ret = -EINVAL;
         }
-        len = snprintf(buf, sizeof(buf), LPX64, u64val);
+	len = snprintf(buf, sizeof(buf), "%#llx", u64val);
         if (len != 18) {
-                CWARN("LPX64 wrong length! strlen(%s)=%d != 18\n", buf, len);
+		CWARN("u64 hex wrong length! strlen(%s)=%d != 18\n", buf, len);
                 ret = -EINVAL;
         }
 
         div64val = OBD_OBJECT_EOF;
-        CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = "LPX64"\n", u64val);
+	CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = %#llx\n", u64val);
         if (u64val != OBD_OBJECT_EOF) {
-                CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
+		CERROR("__u64 %#llx(%d) != 0xffffffffffffffff\n",
                        u64val, (int)sizeof(u64val));
                 ret = -EOVERFLOW;
         }
         if (u64val >> 8 != OBD_OBJECT_EOF >> 8) {
-                CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
+		CERROR("__u64 %#llx(%d) != 0xffffffffffffffff\n",
                        u64val, (int)sizeof(u64val));
                 return -EOVERFLOW;
         }
         if (do_div(div64val, 256) != (u64val & 255)) {
-                CERROR("do_div("LPX64",256) != "LPU64"\n", u64val, u64val &255);
+		CERROR("do_div(%#llx,256) != %llu\n", u64val, u64val & 255);
                 return -EOVERFLOW;
         }
         if (u64val >> 8 != div64val) {
-                CERROR("do_div("LPX64",256) "LPU64" != "LPU64"\n",
+		CERROR("do_div(%#llx,256) %llu != %llu\n",
                        u64val, div64val, u64val >> 8);
                 return -EOVERFLOW;
         }
-        len = snprintf(buf, sizeof(buf), LPX64, u64val);
+	len = snprintf(buf, sizeof(buf), "%#llx", u64val);
         if (len != 18) {
-                CWARN("LPX64 wrong length! strlen(%s)=%d != 18\n", buf, len);
+		CWARN("u64 hex wrong length! strlen(%s)=%d != 18\n", buf, len);
                 ret = -EINVAL;
         }
-        len = snprintf(buf, sizeof(buf), LPU64, u64val);
+	len = snprintf(buf, sizeof(buf), "%llu", u64val);
         if (len != 20) {
-                CWARN("LPU64 wrong length! strlen(%s)=%d != 20\n", buf, len);
+		CWARN("u64 wrong length! strlen(%s)=%d != 20\n", buf, len);
                 ret = -EINVAL;
         }
-        len = snprintf(buf, sizeof(buf), LPD64, u64val);
+	len = snprintf(buf, sizeof(buf), "%lld", u64val);
         if (len != 2) {
-                CWARN("LPD64 wrong length! strlen(%s)=%d != 2\n", buf, len);
+		CWARN("s64 wrong length! strlen(%s)=%d != 2\n", buf, len);
                 ret = -EINVAL;
         }
 	if ((u64val & ~PAGE_CACHE_MASK) >= PAGE_CACHE_SIZE) {
-                CWARN("mask failed: u64val "LPU64" >= "LPU64"\n", u64val,
+		CWARN("mask failed: u64val %llu >= %llu\n", u64val,
 		      (__u64)PAGE_CACHE_SIZE);
                 ret = -EINVAL;
         }
@@ -640,7 +638,7 @@ static void __exit obdclass_exit(void)
 
         lprocfs_free_stats(&obd_memory);
         CDEBUG((memory_leaked) ? D_ERROR : D_INFO,
-               "obd_memory max: "LPU64", leaked: "LPU64"\n",
+	       "obd_memory max: %llu, leaked: %llu\n",
                memory_max, memory_leaked);
 
         EXIT;

@@ -79,7 +79,7 @@ static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
                 RETURN (-ENOMEM);
         }
 
-        CDEBUG(D_NET, "Sending %d bytes to portal %d, xid "LPD64", offset %u\n",
+	CDEBUG(D_NET, "Sending %d bytes to portal %d, xid %lld, offset %u\n",
                len, portal, xid, offset);
 
         rc = LNetPut (conn->c_self, *mdh, ack,
@@ -89,7 +89,7 @@ static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
                 /* We're going to get an UNLINK event when I unlink below,
                  * which will complete just like any other failed send, so
                  * I fall through and return success here! */
-                CERROR("LNetPut(%s, %d, "LPD64") failed: %d\n",
+		CERROR("LNetPut(%s, %d, %lld) failed: %d\n",
                        libcfs_id2str(conn->c_peer), portal, xid, rc);
                 rc2 = LNetMDUnlink(*mdh);
                 LASSERTF(rc2 == 0, "rc2 = %d\n", rc2);
@@ -224,7 +224,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 
 		posted_md++;
 		if (rc != 0) {
-			CERROR("%s: failed bulk transfer with %s:%u x"LPU64": "
+			CERROR("%s: failed bulk transfer with %s:%u x%llu: "
 			       "rc = %d\n", exp->exp_obd->obd_name,
 			       libcfs_id2str(conn->c_peer), desc->bd_portal,
 			       mbits, rc);
@@ -246,7 +246,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 	}
 
 	CDEBUG(D_NET, "Transferring %u pages %u bytes via portal %d "
-	       "id %s mbits "LPX64"-"LPX64"\n", desc->bd_iov_count,
+	       "id %s mbits %#llx-%#llx\n", desc->bd_iov_count,
 	       desc->bd_nob, desc->bd_portal, libcfs_id2str(conn->c_peer),
 	       mbits - posted_md, mbits - 1);
 
@@ -340,12 +340,12 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 	mbits = req->rq_mbits - total_md + 1;
 
 	LASSERTF(mbits == (req->rq_mbits & PTLRPC_BULK_OPS_MASK),
-		 "first mbits = x"LPU64", last mbits = x"LPU64"\n",
+		 "first mbits = x%llu, last mbits = x%llu\n",
 		 mbits, req->rq_mbits);
 	LASSERTF(!(desc->bd_registered &&
 		   req->rq_send_state != LUSTRE_IMP_REPLAY) ||
 		 mbits != desc->bd_last_mbits,
-		 "registered: %d  rq_mbits: "LPU64" bd_last_mbits: "LPU64"\n",
+		 "registered: %d  rq_mbits: %llu bd_last_mbits: %llu\n",
 		 desc->bd_registered, mbits, desc->bd_last_mbits);
 
 	desc->bd_registered = 1;
@@ -364,7 +364,7 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 		rc = LNetMEAttach(desc->bd_portal, peer, mbits, 0,
 				  LNET_UNLINK, LNET_INS_AFTER, &me_h);
 		if (rc != 0) {
-			CERROR("%s: LNetMEAttach failed x"LPU64"/%d: rc = %d\n",
+			CERROR("%s: LNetMEAttach failed x%llu/%d: rc = %d\n",
 			       desc->bd_import->imp_obd->obd_name, mbits,
 			       posted_md, rc);
 			break;
@@ -374,7 +374,7 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 		rc = LNetMDAttach(me_h, md, LNET_UNLINK,
 				  &desc->bd_mds[posted_md]);
 		if (rc != 0) {
-			CERROR("%s: LNetMDAttach failed x"LPU64"/%d: rc = %d\n",
+			CERROR("%s: LNetMDAttach failed x%llu/%d: rc = %d\n",
 			       desc->bd_import->imp_obd->obd_name, mbits,
 			       posted_md, rc);
 			rc2 = LNetMEUnlink(me_h);
@@ -403,7 +403,7 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 	spin_unlock(&desc->bd_lock);
 
 	CDEBUG(D_NET, "Setup %u bulk %s buffers: %u pages %u bytes, "
-	       "mbits x"LPX64"-"LPX64", portal %u\n", desc->bd_md_count,
+	       "mbits x%#llx-%#llx, portal %u\n", desc->bd_md_count,
 	       ptlrpc_is_bulk_op_get(desc->bd_type) ? "get-source" : "put-sink",
 	       desc->bd_iov_count, desc->bd_nob,
 	       desc->bd_last_mbits, req->rq_mbits, desc->bd_portal);
@@ -740,7 +740,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
 	if (list_empty(&request->rq_unreplied_list) ||
 	    request->rq_xid <= imp->imp_known_replied_xid) {
-		DEBUG_REQ(D_ERROR, request, "xid: "LPU64", replied: "LPU64", "
+		DEBUG_REQ(D_ERROR, request, "xid: %llu, replied: %llu, "
 			  "list_empty:%d\n", request->rq_xid,
 			  imp->imp_known_replied_xid,
 			  list_empty(&request->rq_unreplied_list));
@@ -849,7 +849,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                         GOTO(cleanup_me, rc = -ENOMEM);
                 }
 
-                CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid "LPU64
+		CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid %llu"
                        ", portal %u\n",
                        request->rq_repbuf_len, request->rq_xid,
                        request->rq_reply_portal);

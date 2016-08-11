@@ -132,7 +132,7 @@ lprocfs_server_fid_space_seq_show(struct seq_file *m, void *unused)
 	LASSERT(seq != NULL);
 
 	mutex_lock(&seq->lss_mutex);
-	seq_printf(m, "["LPX64" - "LPX64"]:%x:%s\n", PRANGE(&seq->lss_space));
+	seq_printf(m, "[%#llx - %#llx]:%x:%s\n", PRANGE(&seq->lss_space));
 	mutex_unlock(&seq->lss_mutex);
 
 	RETURN(0);
@@ -189,7 +189,7 @@ lprocfs_server_fid_width_seq_write(struct file *file, const char __user *buffer,
 
 	seq->lss_width = val;
 
-	CDEBUG(D_INFO, "%s: Width: "LPU64"\n",
+	CDEBUG(D_INFO, "%s: Width: %llu\n",
 	       seq->lss_name, seq->lss_width);
 out_unlock:
 	mutex_unlock(&seq->lss_mutex);
@@ -206,7 +206,7 @@ lprocfs_server_fid_width_seq_show(struct seq_file *m, void *unused)
 	LASSERT(seq != NULL);
 
 	mutex_lock(&seq->lss_mutex);
-	seq_printf(m, LPU64"\n", seq->lss_width);
+	seq_printf(m, "%llu\n", seq->lss_width);
 	mutex_unlock(&seq->lss_mutex);
 
 	RETURN(0);
@@ -541,7 +541,7 @@ lprocfs_client_fid_space_seq_show(struct seq_file *m, void *unused)
 	LASSERT(seq != NULL);
 
 	mutex_lock(&seq->lcs_mutex);
-	seq_printf(m, "["LPX64" - "LPX64"]:%x:%s\n",
+	seq_printf(m, "[%#llx - %#llx]:%x:%s\n",
 		   PRANGE(&seq->lcs_space));
 	mutex_unlock(&seq->lcs_mutex);
 
@@ -575,7 +575,7 @@ lprocfs_client_fid_width_seq_write(struct file *file, const char __user *buffer,
 	if (val <= max && val > 0) {
 		seq->lcs_width = val;
 
-		CDEBUG(D_INFO, "%s: Sequence size: "LPU64"\n",
+		CDEBUG(D_INFO, "%s: Sequence size: %llu\n",
 		       seq->lcs_name, seq->lcs_width);
 	} else {
 		GOTO(out_unlock, count = -ERANGE);
@@ -595,7 +595,7 @@ lprocfs_client_fid_width_seq_show(struct seq_file *m, void *unused)
 	LASSERT(seq != NULL);
 
 	mutex_lock(&seq->lcs_mutex);
-	seq_printf(m, LPU64"\n", seq->lcs_width);
+	seq_printf(m, "%llu\n", seq->lcs_width);
 	mutex_unlock(&seq->lcs_mutex);
 
 	RETURN(0);

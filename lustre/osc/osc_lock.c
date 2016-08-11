@@ -221,13 +221,13 @@ static void osc_lock_lvb_update(const struct lu_env *env,
                 if (size > dlmlock->l_policy_data.l_extent.end)
                         size = dlmlock->l_policy_data.l_extent.end + 1;
                 if (size >= oinfo->loi_kms) {
-                        LDLM_DEBUG(dlmlock, "lock acquired, setting rss="LPU64
-                                   ", kms="LPU64, lvb->lvb_size, size);
+			LDLM_DEBUG(dlmlock, "lock acquired, setting rss=%llu"
+				   ", kms=%llu", lvb->lvb_size, size);
                         valid |= CAT_KMS;
                         attr->cat_kms = size;
                 } else {
                         LDLM_DEBUG(dlmlock, "lock acquired, setting rss="
-                                   LPU64"; leaving kms="LPU64", end="LPU64,
+				   "%llu; leaving kms=%llu, end=%llu",
                                    lvb->lvb_size, oinfo->loi_kms,
                                    dlmlock->l_policy_data.l_extent.end);
                 }
@@ -1087,7 +1087,7 @@ static int osc_lock_print(const struct lu_env *env, void *cookie,
 {
 	struct osc_lock *lock = cl2osc_lock(slice);
 
-	(*p)(env, cookie, "%p "LPX64" "LPX64" %d %p ",
+	(*p)(env, cookie, "%p %#llx %#llx %d %p ",
 	     lock->ols_dlmlock, lock->ols_flags, lock->ols_handle.cookie,
 	     lock->ols_state, lock->ols_owner);
 	osc_lvb_print(env, cookie, p, &lock->ols_lvb);
@@ -1198,7 +1198,7 @@ int osc_lock_init(const struct lu_env *env,
 	if (io->ci_type == CIT_WRITE || cl_io_is_mkwrite(io))
 		osc_lock_set_writer(env, io, obj, oscl);
 
-	LDLM_DEBUG_NOLOCK("lock %p, osc lock %p, flags "LPX64,
+	LDLM_DEBUG_NOLOCK("lock %p, osc lock %p, flags %#llx",
 			  lock, oscl, oscl->ols_flags);
 
 	return 0;

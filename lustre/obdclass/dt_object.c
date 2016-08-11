@@ -1013,7 +1013,7 @@ int lprocfs_dt_kbytestotal_seq_show(struct seq_file *m, void *v)
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		seq_printf(m, LPU64"\n", result);
+		seq_printf(m, "%llu\n", result);
 	}
 	return rc;
 }
@@ -1032,7 +1032,7 @@ int lprocfs_dt_kbytesfree_seq_show(struct seq_file *m, void *v)
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		seq_printf(m, LPU64"\n", result);
+		seq_printf(m, "%llu\n", result);
 	}
 	return rc;
 }
@@ -1051,7 +1051,7 @@ int lprocfs_dt_kbytesavail_seq_show(struct seq_file *m, void *v)
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		seq_printf(m, LPU64"\n", result);
+		seq_printf(m, "%llu\n", result);
 	}
 	return rc;
 }
@@ -1064,7 +1064,7 @@ int lprocfs_dt_filestotal_seq_show(struct seq_file *m, void *v)
 
 	int rc = dt_statfs(NULL, dt, &osfs);
 	if (rc == 0)
-		seq_printf(m, LPU64"\n", osfs.os_files);
+		seq_printf(m, "%llu\n", osfs.os_files);
 	return rc;
 }
 EXPORT_SYMBOL(lprocfs_dt_filestotal_seq_show);
@@ -1076,7 +1076,7 @@ int lprocfs_dt_filesfree_seq_show(struct seq_file *m, void *v)
 
 	int rc = dt_statfs(NULL, dt, &osfs);
 	if (rc == 0)
-		seq_printf(m, LPU64"\n", osfs.os_ffree);
+		seq_printf(m, "%llu\n", osfs.os_ffree);
 	return rc;
 }
 EXPORT_SYMBOL(lprocfs_dt_filesfree_seq_show);

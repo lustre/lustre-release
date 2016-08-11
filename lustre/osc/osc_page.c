@@ -141,7 +141,7 @@ static int osc_page_print(const struct lu_env *env,
 
 	return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p %lu: "
 			  "1< %#x %d %u %s %s > "
-			  "2< "LPD64" %u %u %#x %#x | %p %p %p > "
+			  "2< %lld %u %u %#x %#x | %p %p %p > "
 			  "3< %d %lu %d > "
 			  "4< %d %d %d %lu %s | %s %s %s %s > "
 			  "5< %s %s %s %s | %d %s | %d %s %s>\n",

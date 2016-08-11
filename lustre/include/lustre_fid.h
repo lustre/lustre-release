@@ -321,7 +321,7 @@ static inline void lu_last_id_fid(struct lu_fid *fid, __u64 seq, __u32 ost_idx)
 		fid->f_seq = fid_idif_seq(0, ost_idx);
 	} else {
 		LASSERTF(fid_seq_is_norm(seq) || fid_seq_is_echo(seq) ||
-			 fid_seq_is_idif(seq), LPX64"\n", seq);
+			 fid_seq_is_idif(seq), "%#llx\n", seq);
 		fid->f_seq = seq;
 	}
 	fid->f_oid = 0;

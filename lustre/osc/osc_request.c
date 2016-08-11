@@ -406,7 +406,7 @@ static int osc_create(const struct lu_env *env, struct obd_export *exp,
 	oa->o_blksize = cli_brw_size(exp->exp_obd);
 	oa->o_valid |= OBD_MD_FLBLKSZ;
 
-	CDEBUG(D_HA, "transno: "LPD64"\n",
+	CDEBUG(D_HA, "transno: %lld\n",
 	       lustre_msg_get_transno(req->rq_repmsg));
 out_req:
 	ptlrpc_req_finished(req);
@@ -717,7 +717,7 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
         oa->o_dropped = cli->cl_lost_grant;
         cli->cl_lost_grant = 0;
 	spin_unlock(&cli->cl_loi_list_lock);
-        CDEBUG(D_CACHE,"dirty: "LPU64" undirty: %u dropped %u grant: "LPU64"\n",
+	CDEBUG(D_CACHE, "dirty: %llu undirty: %u dropped %u grant: %llu\n",
                oa->o_dirty, oa->o_undirty, oa->o_dropped, oa->o_grant);
 }
 
@@ -739,7 +739,7 @@ static void __osc_update_grant(struct client_obd *cli, u64 grant)
 static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
 {
         if (body->oa.o_valid & OBD_MD_FLGRANT) {
-                CDEBUG(D_CACHE, "got "LPU64" extra grant\n", body->oa.o_grant);
+		CDEBUG(D_CACHE, "got %llu extra grant\n", body->oa.o_grant);
                 __osc_update_grant(cli, body->oa.o_grant);
         }
 }
@@ -1216,11 +1216,11 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 			  ergo(i > 0 && i < page_count - 1,
 			       poff == 0 && pg->count == PAGE_CACHE_SIZE)   &&
 			  ergo(i == page_count - 1, poff == 0)),
-			 "i: %d/%d pg: %p off: "LPU64", count: %u\n",
+			 "i: %d/%d pg: %p off: %llu, count: %u\n",
 			 i, page_count, pg, pg->off, pg->count);
                 LASSERTF(i == 0 || pg->off > pg_prev->off,
-                         "i %d p_c %u pg %p [pri %lu ind %lu] off "LPU64
-                         " prev_pg %p [pri %lu ind %lu] off "LPU64"\n",
+			 "i %d p_c %u pg %p [pri %lu ind %lu] off %llu"
+			 " prev_pg %p [pri %lu ind %lu] off %llu\n",
                          i, page_count,
                          pg->pg, page_private(pg->pg), pg->pg->index, pg->off,
                          pg_prev->pg, page_private(pg_prev->pg),
@@ -1357,7 +1357,7 @@ static int check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
                       "likely false positive due to mmap IO (bug 11742)";
 
 	LCONSOLE_ERROR_MSG(0x132, "BAD WRITE CHECKSUM: %s: from %s inode "DFID
-			   " object "DOSTID" extent ["LPU64"-"LPU64"]\n",
+			   " object "DOSTID" extent [%llu-%llu]\n",
 			   msg, libcfs_nid2str(peer->nid),
 			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : (__u64)0,
 			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
@@ -1399,7 +1399,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		unsigned int qid[LL_MAXQUOTAS] =
 					{body->oa.o_uid, body->oa.o_gid};
 
-                CDEBUG(D_QUOTA, "setdq for [%u %u] with valid "LPX64", flags %x\n",
+		CDEBUG(D_QUOTA, "setdq for [%u %u] with valid %#llx, flags %x\n",
                        body->oa.o_uid, body->oa.o_gid, body->oa.o_valid,
                        body->oa.o_flags);
                 osc_quota_setdq(cli, qid, body->oa.o_valid, body->oa.o_flags);
@@ -1478,7 +1478,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		if (server_cksum != client_cksum) {
 			LCONSOLE_ERROR_MSG(0x133, "%s: BAD READ CHECKSUM: from "
 					   "%s%s%s inode "DFID" object "DOSTID
-					   " extent ["LPU64"-"LPU64"]\n",
+					   " extent [%llu-%llu]\n",
 					   req->rq_import->imp_obd->obd_name,
 					   libcfs_nid2str(peer->nid),
 					   via, router,
@@ -1652,7 +1652,7 @@ static int brw_interpret(const struct lu_env *env,
 			rc = osc_brw_redo_request(req, aa, rc);
 		} else {
 			CERROR("%s: too many resent retries for object: "
-			       ""LPU64":"LPU64", rc = %d.\n",
+			       "%llu:%llu, rc = %d.\n",
 			       req->rq_import->imp_obd->obd_name,
 			       POSTID(&aa->aa_oa->o_oi), rc);
 		}
@@ -2011,7 +2011,7 @@ static int osc_enqueue_interpret(const struct lu_env *env,
 	 * be valid. */
 	lock = ldlm_handle2lock(lockh);
 	LASSERTF(lock != NULL,
-		 "lockh "LPX64", req %p, aa %p - client evicted?\n",
+		 "lockh %#llx, req %p, aa %p - client evicted?\n",
 		 lockh->cookie, req, aa);
 
 	/* Take an additional reference so that a blocking AST that
@@ -2569,7 +2569,7 @@ static int osc_reconnect(const struct lu_env *env,
 		cli->cl_lost_grant = 0;
 		spin_unlock(&cli->cl_loi_list_lock);
 
-                CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d"
+		CDEBUG(D_RPCTRACE, "ocd_connect_flags: %#llx ocd_version: %d"
 		       " ocd_grant: %d, lost: %ld.\n", data->ocd_connect_flags,
 		       data->ocd_version, data->ocd_grant, lost_grant);
 	}

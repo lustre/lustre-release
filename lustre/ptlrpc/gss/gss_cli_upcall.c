@@ -393,7 +393,7 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
 
 	might_sleep();
 
-	CWARN("%s ctx %p idx "LPX64" (%u->%s)\n",
+	CWARN("%s ctx %p idx %#llx (%u->%s)\n",
 	      sec_is_reverse(ctx->cc_sec) ?
 	      "server finishing reverse" : "client finishing forward",
 	      ctx, gss_handle_to_u64(&gctx->gc_handle),

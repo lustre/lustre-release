@@ -39,7 +39,7 @@
 #include <libcfs/libcfs.h>
 #include <interval_tree.h>
 
-#define RL_FMT "["LPU64", "LPU64"]"
+#define RL_FMT "[%llu, %llu]"
 #define RL_PARA(range)				\
 	(range)->rl_node.in_extent.start,	\
 	(range)->rl_node.in_extent.end

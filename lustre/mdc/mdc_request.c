@@ -143,7 +143,7 @@ static int mdc_get_root(struct obd_export *exp, const char *fileset,
 		GOTO(out, rc = -EPROTO);
 
 	*rootfid = body->mbo_fid1;
-	CDEBUG(D_NET, "root fid="DFID", last_committed="LPU64"\n",
+	CDEBUG(D_NET, "root fid="DFID", last_committed=%llu\n",
 	       PFID(rootfid), lustre_msg_get_last_committed(req->rq_repmsg));
 	EXIT;
 out:
@@ -575,7 +575,7 @@ void mdc_replay_open(struct ptlrpc_request *req)
                 LASSERT(och->och_magic == OBD_CLIENT_HANDLE_MAGIC);
 
                 file_fh = &och->och_fh;
-		CDEBUG(D_HA, "updating handle from "LPX64" to "LPX64"\n",
+		CDEBUG(D_HA, "updating handle from %#llx to %#llx\n",
 		       file_fh->cookie, body->mbo_handle.cookie);
 		old = *file_fh;
 		*file_fh = body->mbo_handle;
@@ -1005,11 +1005,11 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 			if (unlikely(*start == 1 && *hash == 0))
 				*hash = *start;
 			else
-				LASSERTF(*start <= *hash, "start = "LPX64
-					 ",end = "LPX64",hash = "LPX64"\n",
+				LASSERTF(*start <= *hash, "start = %#llx"
+					 ",end = %#llx,hash = %#llx\n",
 					 *start, *end, *hash);
-			CDEBUG(D_VFSTRACE, "offset %lx ["LPX64" "LPX64"],"
-			      " hash "LPX64"\n", offset, *start, *end, *hash);
+			CDEBUG(D_VFSTRACE, "offset %lx [%#llx %#llx],"
+			      " hash %#llx\n", offset, *start, *end, *hash);
 			if (*hash > *end) {
 				kunmap(page);
 				mdc_release_page(page, 0);
@@ -1322,7 +1322,7 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 	page = mdc_page_locate(mapping, &rp_param.rp_off, &start, &end,
 			       rp_param.rp_hash64);
 	if (IS_ERR(page)) {
-		CERROR("%s: dir page locate: "DFID" at "LPU64": rc %ld\n",
+		CERROR("%s: dir page locate: "DFID" at %llu: rc %ld\n",
 		       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),
 		       rp_param.rp_off, PTR_ERR(page));
 		GOTO(out_unlock, rc = PTR_ERR(page));
@@ -1351,7 +1351,7 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 					    rp_param.rp_hash64),
 			       mdc_read_page_remote, &rp_param);
 	if (IS_ERR(page)) {
-		CDEBUG(D_INFO, "%s: read cache page: "DFID" at "LPU64": %ld\n",
+		CDEBUG(D_INFO, "%s: read cache page: "DFID" at %llu: %ld\n",
 		       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),
 		       rp_param.rp_off, PTR_ERR(page));
 		GOTO(out_unlock, rc = PTR_ERR(page));
@@ -1360,7 +1360,7 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 	wait_on_page_locked(page);
 	(void)kmap(page);
 	if (!PageUptodate(page)) {
-		CERROR("%s: page not updated: "DFID" at "LPU64": rc %d\n",
+		CERROR("%s: page not updated: "DFID" at %llu: rc %d\n",
 		       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),
 		       rp_param.rp_off, -5);
 		goto fail;
@@ -1368,7 +1368,7 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 	if (!PageChecked(page))
 		SetPageChecked(page);
 	if (PageError(page)) {
-		CERROR("%s: page error: "DFID" at "LPU64": rc %d\n",
+		CERROR("%s: page error: "DFID" at %llu: rc %d\n",
 		       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),
 		       rp_param.rp_off, -5);
 		goto fail;
@@ -1389,8 +1389,8 @@ hash_collision:
 		LASSERT(start == rp_param.rp_off);
 		CWARN("Page-wide hash collision: %#lx\n", (unsigned long)end);
 #if BITS_PER_LONG == 32
-		CWARN("Real page-wide hash collision at ["LPU64" "LPU64"] with "
-		      "hash "LPU64"\n", le64_to_cpu(dp->ldp_hash_start),
+		CWARN("Real page-wide hash collision at [%llu %llu] with "
+		      "hash %llu\n", le64_to_cpu(dp->ldp_hash_start),
 		      le64_to_cpu(dp->ldp_hash_end), hash_offset);
 #endif
 
@@ -1490,7 +1490,7 @@ static int mdc_ioc_fid2path(struct obd_export *exp, struct getinfo_fid2path *gf)
 	memcpy(key + cfs_size_round(sizeof(KEY_FID2PATH)), gf, sizeof(*gf));
 	memcpy(key + cfs_size_round(sizeof(KEY_FID2PATH)) + sizeof(*gf),
 	       gf->gf_u.gf_root_fid, sizeof(struct lu_fid));
-	CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
+	CDEBUG(D_IOCTL, "path get "DFID" from %llu #%d\n",
 	       PFID(&gf->gf_fid), gf->gf_recno, gf->gf_linkno);
 
 	if (!fid_is_sane(&gf->gf_fid))
@@ -1508,7 +1508,7 @@ static int mdc_ioc_fid2path(struct obd_export *exp, struct getinfo_fid2path *gf)
 	if (vallen > sizeof(*gf) + gf->gf_pathlen)
 		GOTO(out, rc = -EOVERFLOW);
 
-	CDEBUG(D_IOCTL, "path got "DFID" from "LPU64" #%d: %s\n",
+	CDEBUG(D_IOCTL, "path got "DFID" from %llu #%d: %s\n",
 	       PFID(&gf->gf_fid), gf->gf_recno, gf->gf_linkno,
 	       gf->gf_pathlen < 512 ? gf->gf_u.gf_path :
 	       /* only log the last 512 characters of the path */
@@ -1842,12 +1842,12 @@ static int changelog_kkuc_cb(const struct lu_env *env, struct llog_handle *llh,
 
 	if (rec->cr.cr_index < cs->cs_startrec) {
 		/* Skip entries earlier than what we are interested in */
-		CDEBUG(D_HSM, "rec="LPU64" start="LPU64"\n",
+		CDEBUG(D_HSM, "rec=%llu start=%llu\n",
 		       rec->cr.cr_index, cs->cs_startrec);
 		RETURN(0);
 	}
 
-	CDEBUG(D_HSM, LPU64" %02d%-5s "LPU64" 0x%x t="DFID" p="DFID" %.*s\n",
+	CDEBUG(D_HSM, "%llu %02d%-5s %llu 0x%x t="DFID" p="DFID" %.*s\n",
 	       rec->cr.cr_index, rec->cr.cr_type,
 	       changelog_type2str(rec->cr.cr_type), rec->cr.cr_time,
 	       rec->cr.cr_flags & CLF_FLAGMASK,
@@ -1875,7 +1875,7 @@ static int mdc_changelog_send_thread(void *csdata)
 	enum llog_flag		 flags = LLOG_F_IS_CAT;
 	int			 rc;
 
-	CDEBUG(D_HSM, "changelog to fp=%p start "LPU64"\n",
+	CDEBUG(D_HSM, "changelog to fp=%p start %llu\n",
 	       cs->cs_fp, cs->cs_startrec);
 
 	OBD_ALLOC(cs->cs_buf, KUC_CHANGELOG_MSG_MAXSIZE);

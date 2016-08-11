@@ -1143,7 +1143,7 @@ static int ptlrpc_check_req(struct ptlrpc_request *req)
         } else if (lustre_msg_get_transno(req->rq_reqmsg) != 0 &&
 		   !obd->obd_recovering) {
                         DEBUG_REQ(D_ERROR, req, "Invalid req with transno "
-                                  LPU64" without recovery",
+				  "%llu without recovery",
                                   lustre_msg_get_transno(req->rq_reqmsg));
                         class_fail_export(req->rq_export);
                         rc = -ENODEV;
@@ -1884,7 +1884,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
                 rc = ptlrpc_unpack_req_msg(req, req->rq_reqlen);
                 if (rc != 0) {
                         CERROR("error unpacking request: ptl %d from %s "
-                               "x"LPU64"\n", svc->srv_req_portal,
+			       "x%llu\n", svc->srv_req_portal,
                                libcfs_id2str(req->rq_peer), req->rq_xid);
                         goto err_req;
                 }
@@ -1893,14 +1893,14 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
         rc = lustre_unpack_req_ptlrpc_body(req, MSG_PTLRPC_BODY_OFF);
         if (rc) {
                 CERROR ("error unpacking ptlrpc body: ptl %d from %s x"
-                        LPU64"\n", svc->srv_req_portal,
+			"%llu\n", svc->srv_req_portal,
                         libcfs_id2str(req->rq_peer), req->rq_xid);
                 goto err_req;
         }
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_REQ_OPC) &&
             lustre_msg_get_opc(req->rq_reqmsg) == cfs_fail_val) {
-                CERROR("drop incoming rpc opc %u, x"LPU64"\n",
+		CERROR("drop incoming rpc opc %u, x%llu\n",
                        cfs_fail_val, req->rq_xid);
                 goto err_req;
         }
@@ -1926,7 +1926,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
 		break;
 	}
 
-        CDEBUG(D_RPCTRACE, "got req x"LPU64"\n", req->rq_xid);
+	CDEBUG(D_RPCTRACE, "got req x%llu\n", req->rq_xid);
 
         req->rq_export = class_conn2export(
                 lustre_msg_get_handle(req->rq_reqmsg));
@@ -2067,7 +2067,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
         }
 
 	CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:nid:opc "
-	       "%s:%s+%d:%d:x"LPU64":%s:%d\n", current_comm(),
+	       "%s:%s+%d:%d:x%llu:%s:%d\n", current_comm(),
 	       (request->rq_export ?
 		(char *)request->rq_export->exp_client_uuid.uuid : "0"),
 	       (request->rq_export ?
@@ -2079,7 +2079,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
         if (lustre_msg_get_opc(request->rq_reqmsg) != OBD_PING)
                 CFS_FAIL_TIMEOUT_MS(OBD_FAIL_PTLRPC_PAUSE_REQ, cfs_fail_val);
 
-	CDEBUG(D_NET, "got req "LPU64"\n", request->rq_xid);
+	CDEBUG(D_NET, "got req %llu\n", request->rq_xid);
 
 	/* re-assign request and sesson thread to the current one */
 	request->rq_svc_thread = thread;
@@ -2106,8 +2106,8 @@ put_conn:
 	do_gettimeofday(&work_end);
 	timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
 	CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc "
-	       "%s:%s+%d:%d:x"LPU64":%s:%d Request procesed in "
-	       "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
+	       "%s:%s+%d:%d:x%llu:%s:%d Request procesed in "
+	       "%ldus (%ldus total) trans %llu rc %d/%d\n",
 		current_comm(),
 		(request->rq_export ?
 		 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
@@ -2212,7 +2212,7 @@ ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
         if (nlocks == 0 && !been_handled) {
                 /* If we see this, we should already have seen the warning
                  * in mds_steal_ack_locks()  */
-		CDEBUG(D_HA, "All locks stolen from rs %p x"LPD64".t"LPD64
+		CDEBUG(D_HA, "All locks stolen from rs %p x%lld.t%lld"
 		       " o%d NID %s\n",
 		       rs,
 		       rs->rs_xid, rs->rs_transno, rs->rs_opc,

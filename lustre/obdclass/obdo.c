@@ -66,7 +66,7 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, u64 valid)
 	u64 newvalid = 0;
 
 	if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-		CDEBUG(D_INODE, "valid "LPX64", new time %lu/%lu\n",
+		CDEBUG(D_INODE, "valid %#llx, new time %lu/%lu\n",
 			valid, LTIME_S(src->i_mtime),
 			LTIME_S(src->i_ctime));
 
@@ -122,7 +122,7 @@ EXPORT_SYMBOL(obdo_from_inode);
 
 void obdo_cpy_md(struct obdo *dst, const struct obdo *src, u64 valid)
 {
-        CDEBUG(D_INODE, "src obdo "DOSTID" valid "LPX64", dst obdo "DOSTID"\n",
+	CDEBUG(D_INODE, "src obdo "DOSTID" valid %#llx, dst obdo "DOSTID"\n",
                POSTID(&src->o_oi), src->o_valid, POSTID(&dst->o_oi));
         if (valid & OBD_MD_FLATIME)
                 dst->o_atime = src->o_atime;

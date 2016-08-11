@@ -54,6 +54,9 @@
 #include <lustre_net.h>
 #ifdef HAVE_SERVER_SUPPORT
 # include <md_object.h>
+
+#define ETI_NAME_LEN	20
+
 #endif /* HAVE_SERVER_SUPPORT */
 
 #include "echo_internal.h"
@@ -232,7 +235,7 @@ struct echo_thread_info {
 	/* per-thread values, can be re-used */
 	void			*eti_big_lmm; /* may be vmalloc'd */
 	int			eti_big_lmmsize;
-	char                    eti_name[20];
+	char                    eti_name[ETI_NAME_LEN];
 	struct lu_buf           eti_buf;
 	char                    eti_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
 #endif
@@ -1241,7 +1244,7 @@ static int cl_echo_cancel0(struct lu_env *env, struct echo_device *ed,
 	spin_lock(&ec->ec_lock);
 	list_for_each(el, &ec->ec_locks) {
 		ecl = list_entry(el, struct echo_lock, el_chain);
-                CDEBUG(D_INFO, "ecl: %p, cookie: "LPX64"\n", ecl, ecl->el_cookie);
+		CDEBUG(D_INFO, "ecl: %p, cookie: %#llx\n", ecl, ecl->el_cookie);
                 found = (ecl->el_cookie == cookie);
                 if (found) {
 			if (atomic_dec_and_test(&ecl->el_refcount))
@@ -1377,7 +1380,7 @@ static u64 last_object_id;
 static inline void echo_md_build_name(struct lu_name *lname, char *name,
 				      __u64 id)
 {
-	sprintf(name, LPU64, id);
+	snprintf(name, ETI_NAME_LEN, "%llu", id);
 	lname->ln_name = name;
 	lname->ln_namelen = strlen(name);
 }
@@ -1492,7 +1495,7 @@ static int echo_attr_get_complex(const struct lu_env *env,
 #endif
 out:
 	ma->ma_need = need;
-	CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64" ma_lmm=%p\n",
+	CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = %#llx ma_lmm=%p\n",
 	       rc, ma->ma_valid, ma->ma_lmm);
 	RETURN(rc);
 }
@@ -2293,7 +2296,7 @@ echo_client_page_debug_check(struct page *page, u64 id, u64 offset, u64 count)
                                         addr + delta, OBD_ECHO_BLOCK_SIZE,
                                         stripe_off, stripe_id);
                 if (rc2 != 0) {
-                        CERROR ("Error in echo object "LPX64"\n", id);
+			CERROR("Error in echo object %#llx\n", id);
                         rc = rc2;
                 }
         }

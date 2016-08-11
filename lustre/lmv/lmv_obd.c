@@ -103,7 +103,7 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv,
 		if (tgt == NULL || tgt->ltd_exp == NULL)
 			continue;
 
-		CDEBUG(D_INFO, "Target idx %d is %s conn "LPX64"\n", i,
+		CDEBUG(D_INFO, "Target idx %d is %s conn %#llx\n", i,
 		       tgt->ltd_uuid.uuid, tgt->ltd_exp->exp_handle.h_cookie);
 
 		if (obd_uuid_equals(uuid, &tgt->ltd_uuid))
@@ -704,7 +704,7 @@ repeat_fid2path:
 		*ptr = '/';
 	}
 
-	CDEBUG(D_INFO, "%s: get path %s "DFID" rec: "LPU64" ln: %u\n",
+	CDEBUG(D_INFO, "%s: get path %s "DFID" rec: %llu ln: %u\n",
 	       tgt->ltd_exp->exp_obd->obd_name,
 	       gf->gf_u.gf_path, PFID(&gf->gf_fid), gf->gf_recno,
 	       gf->gf_linkno);
@@ -2607,7 +2607,7 @@ static int lmv_get_info(const struct lu_env *env, struct obd_export *exp,
 
         obd = class_exp2obd(exp);
         if (obd == NULL) {
-                CDEBUG(D_IOCTL, "Invalid client cookie "LPX64"\n",
+		CDEBUG(D_IOCTL, "Invalid client cookie %#llx\n",
                        exp->exp_handle.h_cookie);
                 RETURN(-EINVAL);
         }
@@ -2679,7 +2679,7 @@ int lmv_set_info_async(const struct lu_env *env, struct obd_export *exp,
 
 	obd = class_exp2obd(exp);
 	if (obd == NULL) {
-		CDEBUG(D_IOCTL, "Invalid client cookie "LPX64"\n",
+		CDEBUG(D_IOCTL, "Invalid client cookie %#llx\n",
 		       exp->exp_handle.h_cookie);
 		RETURN(-EINVAL);
 	}

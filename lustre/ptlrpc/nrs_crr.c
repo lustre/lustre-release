@@ -437,7 +437,7 @@ struct ptlrpc_nrs_request *nrs_crrn_req_get(struct ptlrpc_nrs_policy *policy,
 
 		CDEBUG(D_RPCTRACE,
 		       "NRS: starting to handle %s request from %s, with round "
-		       LPU64"\n", NRS_POL_NAME_CRRN,
+		       "%llu\n", NRS_POL_NAME_CRRN,
 		       libcfs_id2str(req->rq_peer), nrq->nr_u.crr.cr_round);
 
 		/** Peek at the next request to be served */
@@ -606,7 +606,7 @@ static void nrs_crrn_req_stop(struct ptlrpc_nrs_policy *policy,
 						  rq_nrq);
 
 	CDEBUG(D_RPCTRACE,
-	       "NRS: finished handling %s request from %s, with round "LPU64
+	       "NRS: finished handling %s request from %s, with round %llu"
 	       "\n", NRS_POL_NAME_CRRN,
 	       libcfs_id2str(req->rq_peer), nrq->nr_u.crr.cr_round);
 }

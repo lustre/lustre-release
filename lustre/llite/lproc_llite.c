@@ -88,7 +88,7 @@ static int ll_kbytestotal_seq_show(struct seq_file *m, void *v)
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		seq_printf(m, LPU64"\n", result);
+		seq_printf(m, "%llu\n", result);
 	}
 	return rc;
 }
@@ -111,7 +111,7 @@ static int ll_kbytesfree_seq_show(struct seq_file *m, void *v)
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		seq_printf(m, LPU64"\n", result);
+		seq_printf(m, "%llu\n", result);
 	}
 	return rc;
 }
@@ -134,7 +134,7 @@ static int ll_kbytesavail_seq_show(struct seq_file *m, void *v)
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		seq_printf(m, LPU64"\n", result);
+		seq_printf(m, "%llu\n", result);
 	}
 	return rc;
 }
@@ -151,7 +151,7 @@ static int ll_filestotal_seq_show(struct seq_file *m, void *v)
 				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 				OBD_STATFS_NODELAY);
 	if (!rc)
-		seq_printf(m, LPU64"\n", osfs.os_files);
+		seq_printf(m, "%llu\n", osfs.os_files);
 	return rc;
 }
 LPROC_SEQ_FOPS_RO(ll_filestotal);
@@ -167,7 +167,7 @@ static int ll_filesfree_seq_show(struct seq_file *m, void *v)
 				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 				OBD_STATFS_NODELAY);
 	if (!rc)
-		seq_printf(m, LPU64"\n", osfs.os_ffree);
+		seq_printf(m, "%llu\n", osfs.os_ffree);
 	return rc;
 }
 LPROC_SEQ_FOPS_RO(ll_filesfree);
@@ -669,7 +669,7 @@ static ssize_t ll_statahead_max_seq_write(struct file *file,
 	if (val >= 0 && val <= LL_SA_RPC_MAX)
 		sbi->ll_sa_max = val;
 	else
-		CERROR("Bad statahead_max value "LPD64". Valid values are in "
+		CERROR("Bad statahead_max value %lld. Valid values are in "
 		       "the range [0, %d]\n", val, LL_SA_RPC_MAX);
 
 	return count;

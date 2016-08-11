@@ -88,7 +88,7 @@ static int mgc_name2resid(char *name, int len, struct ldlm_res_id *res_id,
                 LBUG();
         }
         res_id->name[1] = cpu_to_le64(resname);
-        CDEBUG(D_MGC, "log %s to resid "LPX64"/"LPX64" (%.8s)\n", name,
+	CDEBUG(D_MGC, "log %s to resid %#llx/%#llx (%.8s)\n", name,
                res_id->name[0], res_id->name[1], (char *)&res_id->name[0]);
         return 0;
 }
@@ -1099,7 +1099,7 @@ static int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 	int rc;
 	ENTRY;
 
-        CDEBUG(D_MGC, "Enqueue for %s (res "LPX64")\n", cld->cld_logname,
+	CDEBUG(D_MGC, "Enqueue for %s (res %#llx)\n", cld->cld_logname,
                cld->cld_resid.name[0]);
 
         /* We need a callback for every lockholder, so don't try to
@@ -1549,7 +1549,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 			break;
 		}
 
-                CDEBUG(D_INFO, "ir apply logs "LPD64"/"LPD64" for %s -> %s\n",
+		CDEBUG(D_INFO, "ir apply logs %lld/%lld for %s -> %s\n",
                        prev_version, max_version, obdname, params);
 
                 rc = class_process_config(lcfg);
@@ -1689,7 +1689,7 @@ again:
 		cfg->cfg_last_idx = res->mcr_offset;
 		eof = res->mcr_offset == res->mcr_size;
 
-		CDEBUG(D_INFO, "Latest version "LPD64", more %d.\n",
+		CDEBUG(D_INFO, "Latest version %lld, more %d.\n",
 		       res->mcr_offset, eof == false);
 	}
 

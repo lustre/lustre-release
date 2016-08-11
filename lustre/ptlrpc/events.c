@@ -345,7 +345,7 @@ void request_in_callback(lnet_event_t *ev)
 	req->rq_rqbd = rqbd;
 	req->rq_phase = RQ_PHASE_NEW;
 	if (ev->type == LNET_EVENT_PUT)
-		CDEBUG(D_INFO, "incoming req@%p x"LPU64" msgsize %u\n",
+		CDEBUG(D_INFO, "incoming req@%p x%llu msgsize %u\n",
 		       req, req->rq_xid, ev->mlength);
 
 	CDEBUG(D_RPCTRACE, "peer: %s\n", libcfs_id2str(req->rq_peer));

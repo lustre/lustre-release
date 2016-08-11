@@ -244,7 +244,7 @@ static void osc_page_touch_at(const struct lu_env *env,
          *
          * here
          */
-        CDEBUG(D_INODE, "stripe KMS %sincreasing "LPU64"->"LPU64" "LPU64"\n",
+	CDEBUG(D_INODE, "stripe KMS %sincreasing %llu->%llu %llu\n",
                kms > loi->loi_kms ? "" : "not ", loi->loi_kms, kms,
                loi->loi_lvb.lvb_size);
 
@@ -450,7 +450,7 @@ static int trunc_check_cb(const struct lu_env *env, struct cl_io *io,
 	oap = &ops->ops_oap;
 	if (oap->oap_cmd & OBD_BRW_WRITE &&
 	    !list_empty(&oap->oap_pending_item))
-		CL_PAGE_DEBUG(D_ERROR, env, page, "exists " LPU64 "/%s.\n",
+		CL_PAGE_DEBUG(D_ERROR, env, page, "exists %llu/%s.\n",
 				start, current->comm);
 
 	if (PageLocked(page->cp_vmpage))

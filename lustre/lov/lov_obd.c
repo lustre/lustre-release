@@ -395,7 +395,7 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
 		if (!tgt->ltd_exp)
 			continue;
 
-                CDEBUG(D_INFO, "lov idx %d is %s conn "LPX64"\n",
+		CDEBUG(D_INFO, "lov idx %d is %s conn %#llx\n",
                        index, obd_uuid2str(&tgt->ltd_uuid),
                        tgt->ltd_exp->exp_handle.h_cookie);
                 if (obd_uuid_equals(uuid, &tgt->ltd_uuid))
@@ -744,7 +744,7 @@ void lov_fix_desc_stripe_size(__u64 *val)
 		*val = LOV_DESC_STRIPE_SIZE_DEFAULT;
 	} else if (*val & (LOV_MIN_STRIPE_SIZE - 1)) {
 		*val &= ~(LOV_MIN_STRIPE_SIZE - 1);
-		LCONSOLE_WARN("Changing default stripe size to "LPU64" (a "
+		LCONSOLE_WARN("Changing default stripe size to %llu (a "
 			      "multiple of %u)\n",
 			      *val, LOV_MIN_STRIPE_SIZE);
 	}

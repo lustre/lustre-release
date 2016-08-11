@@ -87,7 +87,7 @@ static int ll_set_inode(struct inode *inode, void *opaque)
 	lli->lli_fid = body->mbo_fid1;
 	if (unlikely(!(body->mbo_valid & OBD_MD_FLTYPE))) {
 		CERROR("Can not initialize inode "DFID" without object type: "
-		       "valid = "LPX64"\n",
+		       "valid = %#llx\n",
 		       PFID(&lli->lli_fid), body->mbo_valid);
 		return -EINVAL;
 	}
@@ -957,7 +957,7 @@ void ll_update_times(struct ptlrpc_request *request, struct inode *inode)
 	LASSERT(body);
 	if (body->mbo_valid & OBD_MD_FLMTIME &&
 	    body->mbo_mtime > LTIME_S(inode->i_mtime)) {
-		CDEBUG(D_INODE, "setting fid "DFID" mtime from %lu to "LPU64
+		CDEBUG(D_INODE, "setting fid "DFID" mtime from %lu to %llu"
 		       "\n", PFID(ll_inode2fid(inode)),
 		       LTIME_S(inode->i_mtime), body->mbo_mtime);
 		LTIME_S(inode->i_mtime) = body->mbo_mtime;

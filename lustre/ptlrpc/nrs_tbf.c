@@ -1481,7 +1481,7 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 			}
 			CDEBUG(D_RPCTRACE,
 			       "NRS start %s request from %s, "
-			       "seq: "LPU64"\n",
+			       "seq: %llu\n",
 			       policy->pol_desc->pd_name,
 			       libcfs_id2str(req->rq_peer),
 			       nrq->nr_u.tbf.tr_sequence);
@@ -1602,7 +1602,7 @@ static void nrs_tbf_req_stop(struct ptlrpc_nrs_policy *policy,
 
 	assert_spin_locked(&policy->pol_nrs->nrs_svcpt->scp_req_lock);
 
-	CDEBUG(D_RPCTRACE, "NRS stop %s request from %s, seq: "LPU64"\n",
+	CDEBUG(D_RPCTRACE, "NRS stop %s request from %s, seq: %llu\n",
 	       policy->pol_desc->pd_name, libcfs_id2str(req->rq_peer),
 	       nrq->nr_u.tbf.tr_sequence);
 }

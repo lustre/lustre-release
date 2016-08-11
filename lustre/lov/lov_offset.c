@@ -239,7 +239,7 @@ int lov_stripe_intersects(struct lov_stripe_md *lsm, int stripeno,
         start_side = lov_stripe_offset(lsm, start, stripeno, obd_start);
         end_side = lov_stripe_offset(lsm, end, stripeno, obd_end);
 
-	CDEBUG(D_INODE, "["LPD64"->"LPD64"] -> [(%d) "LPD64"->"LPD64" (%d)]\n",
+	CDEBUG(D_INODE, "[%lld->%lld] -> [(%d) %lld->%lld (%d)]\n",
 		start, end, start_side, *obd_start, *obd_end, end_side);
 
         /* this stripe doesn't intersect the file extent when neither

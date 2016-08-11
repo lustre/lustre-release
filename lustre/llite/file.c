@@ -856,7 +856,7 @@ ll_lease_open(struct inode *inode, struct file *file, fmode_t fmode,
 	if (it.it_lock_mode == 0 ||
 	    it.it_lock_bits != MDS_INODELOCK_OPEN) {
 		/* open lock must return for lease */
-		CERROR(DFID "lease granted but no open lock, %d/"LPU64".\n",
+		CERROR(DFID "lease granted but no open lock, %d/%llu.\n",
 			PFID(ll_inode2fid(inode)), it.it_lock_mode,
 			it.it_lock_bits);
 		GOTO(out_close, rc = -EPROTO);
@@ -1032,7 +1032,7 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 	if (mtime < attr->cat_mtime)
 		mtime = attr->cat_mtime;
 
-	CDEBUG(D_VFSTRACE, DFID" updating i_size "LPU64"\n",
+	CDEBUG(D_VFSTRACE, DFID" updating i_size %llu\n",
 	       PFID(&lli->lli_fid), attr->cat_size);
 
 	i_size_write(inode, attr->cat_size);
@@ -1114,7 +1114,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "file: %s, type: %d ppos: "LPU64", count: %zu\n",
+	CDEBUG(D_VFSTRACE, "file: %s, type: %d ppos: %llu, count: %zu\n",
 		file_dentry(file)->d_name.name, iot, *ppos, count);
 
 restart:
@@ -3083,8 +3083,8 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
-	CDEBUG(D_DLMTRACE, "inode="DFID", pid=%u, flags="LPX64", mode=%u, "
-	       "start="LPU64", end="LPU64"\n", PFID(ll_inode2fid(inode)),
+	CDEBUG(D_DLMTRACE, "inode="DFID", pid=%u, flags=%#llx, mode=%u, "
+	       "start=%llu, end=%llu\n", PFID(ll_inode2fid(inode)),
 	       flock.l_flock.pid, flags, einfo.ei_mode,
 	       flock.l_flock.start, flock.l_flock.end);
 

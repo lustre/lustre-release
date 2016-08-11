@@ -1154,7 +1154,7 @@ int class_process_config(struct lustre_cfg *lcfg)
                 GOTO(out, err);
         }
         case LCFG_ADD_UUID: {
-                CDEBUG(D_IOCTL, "adding mapping from uuid %s to nid "LPX64
+		CDEBUG(D_IOCTL, "adding mapping from uuid %s to nid %#llx"
                        " (%s)\n", lustre_cfg_string(lcfg, 1),
                        lcfg->lcfg_nid, libcfs_nid2str(lcfg->lcfg_nid));
 
@@ -1807,7 +1807,7 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
 		char nidstr[LNET_NIDSTR_SIZE];
 
 		libcfs_nid2str_r(lcfg->lcfg_nid, nidstr, sizeof(nidstr));
-		ptr += snprintf(ptr, end - ptr, ", nid: %s("LPX64")",
+		ptr += snprintf(ptr, end - ptr, ", nid: %s(%#llx)",
 				nidstr, lcfg->lcfg_nid);
 	}
 
@@ -1859,7 +1859,7 @@ static int class_config_parse_rec(struct llog_rec_hdr *rec, char *buf, int size)
 		char nidstr[LNET_NIDSTR_SIZE];
 
 		libcfs_nid2str_r(lcfg->lcfg_nid, nidstr, sizeof(nidstr));
-		ptr += snprintf(ptr, end-ptr, "nid=%s("LPX64")\n     ",
+		ptr += snprintf(ptr, end-ptr, "nid=%s(%#llx)\n     ",
 				nidstr, lcfg->lcfg_nid);
 	}
 
