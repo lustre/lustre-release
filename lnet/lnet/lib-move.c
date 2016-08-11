@@ -41,6 +41,8 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <lnet/lib-lnet.h>
+#include <linux/nsproxy.h>
+#include <net/net_namespace.h>
 
 static int local_nid_dist_zero = 1;
 module_param(local_nid_dist_zero, int, 0444);
@@ -2497,11 +2499,18 @@ LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
                         return local_nid_dist_zero ? 0 : 1;
                 }
 
-                if (LNET_NIDNET(ni->ni_nid) == dstnet) {
-                        if (srcnidp != NULL)
-                                *srcnidp = ni->ni_nid;
-                        if (orderp != NULL)
-                                *orderp = order;
+		if (LNET_NIDNET(ni->ni_nid) == dstnet) {
+			/* Check if ni was originally created in
+			 * current net namespace.
+			 * If not, assign order above 0xffff0000,
+			 * to make this ni not a priority. */
+			if (!net_eq(ni->ni_net_ns, current->nsproxy->net_ns))
+				order += 0xffff0000;
+
+			if (srcnidp != NULL)
+				*srcnidp = ni->ni_nid;
+			if (orderp != NULL)
+				*orderp = order;
 			lnet_net_unlock(cpt);
 			return 1;
 		}
