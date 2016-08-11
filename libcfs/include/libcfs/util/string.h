@@ -78,6 +78,7 @@ struct cfs_expr_list {
 	struct list_head	el_exprs;
 };
 
+int cfs_expr_list_values(struct cfs_expr_list *expr_list, int max, __u32 **valpp);
 int cfs_gettok(struct cfs_lstr *next, char delim, struct cfs_lstr *res);
 int cfs_str2num_check(char *str, int nob, unsigned *num,
 		      unsigned min, unsigned max);

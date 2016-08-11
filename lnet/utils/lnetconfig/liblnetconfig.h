@@ -39,7 +39,7 @@
 #define LUSTRE_CFG_RC_MATCH			-7
 
 #include <lnet/lnet.h>
-#include <libcfs/libcfs_string.h>
+#include <libcfs/util/string.h>
 
 struct lnet_dlc_network_descr {
 	struct list_head network_on_rule;

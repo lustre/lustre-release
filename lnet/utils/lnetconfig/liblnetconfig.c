@@ -47,7 +47,6 @@
 #include <lnet/socklnd.h>
 #include "liblnd.h"
 #include <lnet/lnet.h>
-#include <libcfs/libcfs_string.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
 #include "liblnetconfig.h"
