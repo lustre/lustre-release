@@ -57,6 +57,11 @@
         </listitem>
         <listitem>
             <para>
+                <link linkend='lustrenodemap' endterm='lustrenodemap.title'/>
+            </para>
+        </listitem>
+        <listitem>
+            <para>
                 <link linkend='managingsecurity' endterm='managingsecurity.title'/>
 
             </para>
@@ -84,6 +89,7 @@
     <xi:include href="ManagingFailover.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="ConfiguringQuotas.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="LustreHSM.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="LustreNodemap.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="ManagingSecurity.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 
 
