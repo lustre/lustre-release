@@ -1384,16 +1384,13 @@ static dmu_buf_t *osd_mkreg(const struct lu_env *env, struct osd_object *obj,
 	if (rc)
 		return ERR_PTR(rc);
 
-	/*
-	 * XXX: This heuristic is non-optimal.  It would be better to
-	 * increase the blocksize up to osd->od_max_blksz during the write.
-	 * This is exactly how the ZPL behaves and it ensures that the right
-	 * blocksize is selected based on the file size rather than the
-	 * making broad assumptions based on the osd type.
-	 */
 	if ((fid_is_idif(fid) || fid_is_norm(fid)) && osd->od_is_ost) {
+		/* The minimum block size must be at least page size otherwise
+		 * it will break the assumption in tgt_thread_big_cache where
+		 * the array size is PTLRPC_MAX_BRW_PAGES. It will also affect
+		 * RDMA due to subpage transfer size */
 		rc = -dmu_object_set_blocksize(osd->od_os, db->db_object,
-					       osd->od_max_blksz, 0, oh->ot_tx);
+					       PAGE_SIZE, 0, oh->ot_tx);
 		if (unlikely(rc)) {
 			CERROR("%s: can't change blocksize: %d\n",
 			       osd->od_svname, rc);

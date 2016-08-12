@@ -329,7 +329,7 @@ struct osd_object {
 	struct rw_semaphore	 oo_sem;
 
 	/* to serialize some updates: destroy vs. others,
-	 * xattr_set, etc */
+	 * xattr_set, object block size change etc */
 	struct rw_semaphore	 oo_guard;
 
 	/* protected by oo_guard */

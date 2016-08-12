@@ -14997,6 +14997,104 @@ test_311() {
 }
 run_test 311 "disable OSP precreate, and unlink should destroy objs"
 
+zfs_oid_to_objid()
+{
+	local ost=$1
+	local objid=$2
+
+	local vdevdir=$(dirname $(facet_vdevice $ost))
+	local cmd="$ZDB -e -p $vdevdir -dddd $(facet_device $ost)"
+	local zfs_zapid=$(do_facet $ost $cmd |
+			  grep -w "/O/0/d$((objid%32))" -C 5 |
+			  awk '/Object/{getline; print $1}')
+	local zfs_objid=$(do_facet $ost $cmd $zfs_zapid |
+			  awk "/$objid = /"'{printf $3}')
+
+	echo $zfs_objid
+}
+
+zfs_object_blksz() {
+	local ost=$1
+	local objid=$2
+
+	local vdevdir=$(dirname $(facet_vdevice $ost))
+	local cmd="$ZDB -e -p $vdevdir -dddd $(facet_device $ost)"
+	local blksz=$(do_facet $ost $cmd $objid |
+		      awk '/dblk/{getline; printf $4}')
+
+	case "${blksz: -1}" in
+		k|K) blksz=$((${blksz:0:$((${#blksz} - 1))}*1024)) ;;
+		m|M) blksz=$((${blksz:0:$((${#blksz} - 1))}*1024*1024)) ;;
+		*) ;;
+	esac
+
+	echo $blksz
+}
+
+test_312() { # LU-4856
+	[ $(facet_fstype ost1) = "zfs" ] ||
+		{ skip "the test only applies to zfs" && return; }
+
+	local max_blksz=$(do_facet ost1 \
+			  $ZFS get -p recordsize $(facet_device ost1) |
+			  awk '!/VALUE/{print $3}')
+
+	# to make life a little bit easier
+	$LFS mkdir -c 1 -i 0 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+
+	local tf=$DIR/$tdir/$tfile
+	touch $tf
+	local oid=$($LFS getstripe $tf | awk '/obdidx/{getline; print $2}')
+
+	# Get ZFS object id
+	local zfs_objid=$(zfs_oid_to_objid ost1 $oid)
+
+	# block size change by sequential over write
+	local blksz
+	for ((bs=4096; bs <= max_blksz; bs <<= 2)); do
+		dd if=/dev/zero of=$tf bs=$bs count=1 oflag=sync conv=notrunc
+
+		blksz=$(zfs_object_blksz ost1 $zfs_objid)
+		[ $blksz -eq $bs ] || error "blksz error: $blksz, expected: $bs"
+	done
+	rm -f $tf
+
+	# block size change by sequential append write
+	dd if=/dev/zero of=$tf bs=4K count=1 oflag=sync conv=notrunc
+	oid=$($LFS getstripe $tf | awk '/obdidx/{getline; print $2}')
+	zfs_objid=$(zfs_oid_to_objid ost1 $oid)
+
+	for ((count = 1; count < $((max_blksz / 4096)); count *= 2)); do
+		dd if=/dev/zero of=$tf bs=4K count=$count seek=$count \
+			oflag=sync conv=notrunc
+
+		blksz=$(zfs_object_blksz ost1 $zfs_objid)
+		blksz=$((blksz / 8192)) # in 2*4K unit
+		[ $blksz -eq $count ] ||
+			error "blksz error(in 8k): $blksz, expected: $count"
+	done
+	rm -f $tf
+
+	# random write
+	touch $tf
+	oid=$($LFS getstripe $tf | awk '/obdidx/{getline; print $2}')
+	zfs_objid=$(zfs_oid_to_objid ost1 $oid)
+
+	dd if=/dev/zero of=$tf bs=8K count=1 oflag=sync conv=notrunc
+	blksz=$(zfs_object_blksz ost1 $zfs_objid)
+	[ $blksz -eq 8192 ] || error "blksz error: $blksz, expected: 8k"
+
+	dd if=/dev/zero of=$tf bs=64K count=1 oflag=sync conv=notrunc seek=128
+	blksz=$(zfs_object_blksz ost1 $zfs_objid)
+	[ $blksz -eq 65536 ] || error "blksz error: $blksz, expected: 64k"
+
+	dd if=/dev/zero of=$tf bs=1M count=1 oflag=sync conv=notrunc
+	blksz=$(zfs_object_blksz ost1 $zfs_objid)
+	[ $blksz -eq 65536 ] || error "rewrite error: $blksz, expected: 64k"
+}
+run_test 312 "make sure ZFS adjusts its block size by write pattern"
+
 test_400a() { # LU-1606, was conf-sanity test_74
 	local extra_flags=''
 	local out=$TMP/$tfile
