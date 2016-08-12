@@ -1590,6 +1590,9 @@ test_25() {
 
 	nodemap_test_setup
 
+	echo c* nodemaps:
+	do_facet mgs $LCTL get_param nodemap.c*.*
+
 	trap nodemap_test_cleanup EXIT
 
 	# create a new, empty nodemap, and add fileset info to it
