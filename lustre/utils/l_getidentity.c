@@ -60,8 +60,8 @@
  * '*' nid means any nid
  * '*' uid means any uid
  * the valid values for perms are:
- * setuid/setgid/setgrp/rmtacl           -- enable corresponding perm
- * nosetuid/nosetgid/nosetgrp/normtacl   -- disable corresponding perm
+ * setuid/setgid/setgrp		-- enable corresponding perm
+ * nosetuid/nosetgid/nosetgrp	-- disable corresponding perm
  * they can be listed together, separated by ',',
  * when perm and noperm are in the same line (item), noperm is preferential,
  * when they are in different lines (items), the latter is preferential,
@@ -73,9 +73,10 @@ static char *progname;
 static void usage(void)
 {
 	fprintf(stderr,
-		"\nusage: %s {mdtname} {uid}\n"
+		"\nusage: %s {-d|mdtname} {uid}\n"
 		"Normally invoked as an upcall from Lustre, set via:\n"
-		"lctl set_param mdt.${mdtname}.identity_upcall={path to upcall}\n",
+		"lctl set_param mdt.${mdtname}.identity_upcall={path to upcall}\n"
+		"\t-d: debug, print values to stdout instead of Lustre\n",
 		progname);
 }
 
@@ -196,17 +197,21 @@ typedef struct {
 } perm_type_t;
 
 static perm_type_t perm_types[] = {
-        { "setuid", CFS_SETUID_PERM },
-        { "setgid", CFS_SETGID_PERM },
-        { "setgrp", CFS_SETGRP_PERM },
-        { 0 }
+	{ "setuid", CFS_SETUID_PERM },
+	{ "setgid", CFS_SETGID_PERM },
+	{ "setgrp", CFS_SETGRP_PERM },
+	{ "rmtacl", 0 },
+	{ "rmtown", 0 },
+	{ 0 }
 };
 
 static perm_type_t noperm_types[] = {
-        { "nosetuid", CFS_SETUID_PERM },
-        { "nosetgid", CFS_SETGID_PERM },
-        { "nosetgrp", CFS_SETGRP_PERM },
-        { 0 }
+	{ "nosetuid", CFS_SETUID_PERM },
+	{ "nosetgid", CFS_SETGID_PERM },
+	{ "nosetgrp", CFS_SETGRP_PERM },
+	{ "normtacl", 0 },
+	{ "normtown", 0 },
+	{ 0 }
 };
 
 int parse_perm(__u32 *perm, __u32 *noperm, char *str)
@@ -461,11 +466,11 @@ int main(int argc, char **argv)
         rc = get_perms(data);
 
 downcall:
-        if (getenv("L_GETIDENTITY_TEST")) {
-                show_result(data);
-                rc = 0;
-                goto out;
-        }
+	if (strcmp(argv[1], "-d") == 0 || getenv("L_GETIDENTITY_TEST")) {
+		show_result(data);
+		rc = 0;
+		goto out;
+	}
 
 	rc = cfs_get_param_paths(&path, "mdt/%s/identity_info", argv[1]);
 	if (rc != 0) {
