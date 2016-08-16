@@ -997,6 +997,13 @@ int tgt_connect(struct tgt_session_info *tsi)
 	tsi->tsi_exp->exp_connect_data.ocd_brw_size = reply->ocd_brw_size;
 	spin_unlock(&tsi->tsi_exp->exp_lock);
 
+	if (strcmp(tsi->tsi_exp->exp_obd->obd_type->typ_name,
+		   LUSTRE_MDT_NAME) == 0) {
+		rc = req_check_sepol(tsi->tsi_pill);
+		if (rc)
+			GOTO(out, rc);
+	}
+
 	RETURN(0);
 out:
 	obd_disconnect(class_export_get(tsi->tsi_exp));

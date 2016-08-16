@@ -55,6 +55,7 @@
 /* struct ptlrpc_request, lustre_msg* */
 #include <lustre_req_layout.h>
 #include <lustre_acl.h>
+#include <lustre_nodemap.h>
 
 /*
  * RQFs (see below) refer to two struct req_msg_field arrays describing the
@@ -329,11 +330,12 @@ static const struct req_msg_field *mdt_swap_layouts[] = {
 };
 
 static const struct req_msg_field *obd_connect_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_TGTUUID,
-        &RMF_CLUUID,
-        &RMF_CONN,
-        &RMF_CONNECT_DATA
+	&RMF_PTLRPC_BODY,
+	&RMF_TGTUUID,
+	&RMF_CLUUID,
+	&RMF_CONN,
+	&RMF_CONNECT_DATA,
+	&RMF_SELINUX_POL
 };
 
 static const struct req_msg_field *obd_connect_server[] = {
@@ -1098,6 +1100,10 @@ struct req_msg_field RMF_LAYOUT_INTENT =
 		    sizeof(struct layout_intent), lustre_swab_layout_intent,
 		    NULL);
 EXPORT_SYMBOL(RMF_LAYOUT_INTENT);
+
+struct req_msg_field RMF_SELINUX_POL =
+	DEFINE_MSGF("selinux_pol", RMF_F_STRING, -1, NULL, NULL);
+EXPORT_SYMBOL(RMF_SELINUX_POL);
 
 /*
  * OST request field.
@@ -2525,3 +2531,46 @@ int req_capsule_server_grow(struct req_capsule *pill,
         return 0;
 }
 EXPORT_SYMBOL(req_capsule_server_grow);
+
+int req_check_sepol(struct req_capsule *pill)
+{
+	int rc = 0;
+#ifdef HAVE_SERVER_SUPPORT
+	struct obd_export *export;
+	struct lu_nodemap *nm = NULL;
+	const char *sepol = NULL;
+	const char *nm_sepol = NULL;
+
+	if (!pill->rc_req)
+		return -EPROTO;
+
+	export = pill->rc_req->rq_export;
+	if (!export || !exp_connect_sepol(export) ||
+	    !req_capsule_has_field(pill, &RMF_SELINUX_POL, RCL_CLIENT))
+		goto nm;
+
+	if (req_capsule_get_size(pill, &RMF_SELINUX_POL, RCL_CLIENT) == 0)
+		goto nm;
+
+	sepol = req_capsule_client_get(pill, &RMF_SELINUX_POL);
+	CDEBUG(D_SEC, "retrieved sepol %s\n", sepol);
+
+nm:
+	if (export) {
+		nm = nodemap_get_from_exp(export);
+		if (!IS_ERR_OR_NULL(nm)) {
+			nm_sepol = nodemap_get_sepol(nm);
+			if (nm_sepol && nm_sepol[0])
+				if (sepol == NULL ||
+				    strcmp(sepol, nm_sepol) != 0)
+					rc = -EACCES;
+		}
+	}
+
+	if (!IS_ERR_OR_NULL(nm))
+		nodemap_putref(nm);
+#endif
+
+	return rc;
+}
+EXPORT_SYMBOL(req_check_sepol);
