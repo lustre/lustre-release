@@ -56,6 +56,7 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 void mdc_file_secctx_pack(struct ptlrpc_request *req,
 			  const char *secctx_name,
 			  const void *secctx, size_t secctx_size);
+void mdc_file_sepol_pack(struct ptlrpc_request *req);
 
 void mdc_unlink_pack(struct ptlrpc_request *req, struct md_op_data *op_data);
 void mdc_getxattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data);

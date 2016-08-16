@@ -201,6 +201,16 @@ rebuild:
 	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX, RCL_CLIENT,
 			     op_data->op_file_secctx_size);
 
+	/* get SELinux policy info if any */
+	rc = sptlrpc_get_sepol(req);
+	if (rc < 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
+			     strlen(req->rq_sepol) ?
+			     strlen(req->rq_sepol) + 1 : 0);
+
 	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
 	if (rc) {
 		ptlrpc_request_free(req);
@@ -289,6 +299,16 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
         req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
                              op_data->op_namelen + 1);
 
+	/* get SELinux policy info if any */
+	rc = sptlrpc_get_sepol(req);
+	if (rc < 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
+			     strlen(req->rq_sepol) ?
+			     strlen(req->rq_sepol) + 1 : 0);
+
 	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
 	if (rc) {
 		ptlrpc_request_free(req);
@@ -336,6 +356,16 @@ int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
 
         req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
                              op_data->op_namelen + 1);
+
+	/* get SELinux policy info if any */
+	rc = sptlrpc_get_sepol(req);
+	if (rc < 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
+			     strlen(req->rq_sepol) ?
+			     strlen(req->rq_sepol) + 1 : 0);
 
 	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
 	if (rc) {
@@ -399,6 +429,16 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 	if (op_data->op_cli_flags & CLI_MIGRATE)
 		req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
 				     op_data->op_data_size);
+
+	/* get SELinux policy info if any */
+	rc = sptlrpc_get_sepol(req);
+	if (rc < 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
+			     strlen(req->rq_sepol) ?
+			     strlen(req->rq_sepol) + 1 : 0);
 
 	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
 	if (rc) {

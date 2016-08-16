@@ -1228,8 +1228,8 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 	struct mdt_rec_create *rec;
 	struct lu_attr *attr = &info->mti_attr.ma_attr;
 	struct mdt_reint_record *rr = &info->mti_rr;
-	struct req_capsule *pill = info->mti_pill;
-	struct md_op_spec *sp = &info->mti_spec;
+	struct req_capsule      *pill = info->mti_pill;
+	struct md_op_spec       *sp = &info->mti_spec;
 	int rc;
 
 	ENTRY;
@@ -1294,6 +1294,10 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 	if (rc < 0)
 		RETURN(rc);
 
+	rc = req_check_sepol(pill);
+	if (rc)
+		RETURN(rc);
+
 	rc = mdt_dlmreq_unpack(info);
 	RETURN(rc);
 }
@@ -1333,6 +1337,10 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 	if (rc < 0)
 		RETURN(rc);
 
+	rc = req_check_sepol(pill);
+	if (rc)
+		RETURN(rc);
+
 	rc = mdt_dlmreq_unpack(info);
 
 	RETURN(rc);
@@ -1344,7 +1352,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 	struct mdt_rec_unlink *rec;
 	struct lu_attr *attr = &info->mti_attr.ma_attr;
 	struct mdt_reint_record *rr = &info->mti_rr;
-	struct req_capsule *pill = info->mti_pill;
+	struct req_capsule      *pill = info->mti_pill;
 	int rc;
 
 	ENTRY;
@@ -1375,6 +1383,10 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 		RETURN(rc);
 
 	info->mti_spec.no_create = !!req_is_replay(mdt_info_req(info));
+
+	rc = req_check_sepol(pill);
+	if (rc)
+		RETURN(rc);
 
 	rc = mdt_dlmreq_unpack(info);
 	RETURN(rc);
@@ -1429,6 +1441,10 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 		RETURN(rc);
 
 	spec->no_create = !!req_is_replay(mdt_info_req(info));
+
+	rc = req_check_sepol(pill);
+	if (rc)
+		RETURN(rc);
 
 	rc = mdt_dlmreq_unpack(info);
 
@@ -1597,6 +1613,12 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 	rc = mdt_file_secctx_unpack(pill, &sp->sp_cr_file_secctx_name,
 				    &sp->sp_cr_file_secctx,
 				    &sp->sp_cr_file_secctx_size);
+	if (rc < 0)
+		RETURN(rc);
+
+	rc = req_check_sepol(pill);
+	if (rc)
+		RETURN(rc);
 
 	RETURN(rc);
 }
@@ -1652,6 +1674,10 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
                 CDEBUG(D_INFO, "no xattr data supplied\n");
                 RETURN(-EFAULT);
         }
+
+	rc = req_check_sepol(pill);
+	if (rc)
+		RETURN(rc);
 
 	if (mdt_dlmreq_unpack(info) < 0)
 		RETURN(-EPROTO);
