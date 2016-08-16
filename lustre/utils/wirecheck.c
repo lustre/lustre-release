@@ -321,6 +321,20 @@ check_lu_ladvise(void)
 	CHECK_MEMBER(lu_ladvise, lla_value4);
 	CHECK_VALUE(LU_LADVISE_WILLREAD);
 	CHECK_VALUE(LU_LADVISE_DONTNEED);
+}
+
+static void
+check_ladvise_hdr(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(ladvise_hdr);
+	CHECK_MEMBER(ladvise_hdr, lah_magic);
+	CHECK_MEMBER(ladvise_hdr, lah_count);
+	CHECK_MEMBER(ladvise_hdr, lah_flags);
+	CHECK_MEMBER(ladvise_hdr, lah_value1);
+	CHECK_MEMBER(ladvise_hdr, lah_value2);
+	CHECK_MEMBER(ladvise_hdr, lah_value3);
+	CHECK_MEMBER(ladvise_hdr, lah_advise);
 
 	CHECK_VALUE(LF_ASYNC);
 	CHECK_VALUE(LADVISE_MAGIC);
@@ -2616,6 +2630,7 @@ main(int argc, char **argv)
 	check_luda_type();
 	check_lu_dirpage();
 	check_lu_ladvise();
+	check_ladvise_hdr();
 	check_lustre_handle();
 	check_lustre_msg_v2();
 	check_ptlrpc_body();
