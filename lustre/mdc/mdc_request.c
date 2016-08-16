@@ -325,16 +325,25 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        if (xattr_name) {
-                xattr_namelen = strlen(xattr_name) + 1;
-                req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
-                                     xattr_namelen);
-        }
-        if (input_size) {
-                LASSERT(input);
-                req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
-                                     input_size);
-        }
+	if (xattr_name) {
+		xattr_namelen = strlen(xattr_name) + 1;
+		req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
+				     xattr_namelen);
+	}
+	if (input_size)
+		LASSERT(input);
+	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
+			     input_size);
+
+	/* get SELinux policy info if any */
+	rc = sptlrpc_get_sepol(req);
+	if (rc < 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
+			     strlen(req->rq_sepol) ?
+			     strlen(req->rq_sepol) + 1 : 0);
 
 	/* Flush local XATTR locks to get rid of a possible cancel RPC */
 	if (opcode == MDS_REINT && fid_is_sane(fid) &&
@@ -393,6 +402,8 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
                 tmp = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
                 memcpy(tmp, input, input_size);
         }
+
+	mdc_file_sepol_pack(req);
 
         if (req_capsule_has_field(&req->rq_pill, &RMF_EADATA, RCL_SERVER))
                 req_capsule_set_size(&req->rq_pill, &RMF_EADATA,
