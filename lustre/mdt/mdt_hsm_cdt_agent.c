@@ -574,6 +574,8 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 	 */
 	exp = cfs_hash_lookup(mdt2obd_dev(mdt)->obd_uuid_hash, &uuid);
 	if (exp == NULL || exp->exp_disconnected) {
+		if (exp != NULL)
+			class_export_put(exp);
 		/* This should clean up agents on evicted exports */
 		rc = -ENOENT;
 		CERROR("%s: agent uuid (%s) not found, unregistering:"
