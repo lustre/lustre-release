@@ -658,7 +658,8 @@ int ptlrpc_connect_import(struct obd_import *imp)
 			 obd2cli_tgt(imp->imp_obd),
 			 obd->obd_uuid.uuid,
 			 (char *)&imp->imp_dlm_handle,
-			 (char *)&imp->imp_connect_data };
+			 (char *)&imp->imp_connect_data,
+			 NULL };
 	struct ptlrpc_connect_async_args *aa;
 	int rc;
 	ENTRY;
@@ -719,6 +720,19 @@ int ptlrpc_connect_import(struct obd_import *imp)
 	request = ptlrpc_request_alloc(imp, &RQF_MDS_CONNECT);
 	if (request == NULL)
 		GOTO(out, rc = -ENOMEM);
+
+	/* get SELinux policy info if any */
+	rc = sptlrpc_get_sepol(request);
+	if (rc < 0) {
+		ptlrpc_request_free(request);
+		GOTO(out, rc);
+	}
+
+	bufs[5] = request->rq_sepol;
+
+	req_capsule_set_size(&request->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
+			     strlen(request->rq_sepol) ?
+			     strlen(request->rq_sepol) + 1 : 0);
 
 	rc = ptlrpc_request_bufs_pack(request, LUSTRE_OBD_VERSION,
 				      imp->imp_connect_op, bufs, NULL);
