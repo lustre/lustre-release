@@ -779,20 +779,30 @@ static int nodemap_load_entries(const struct lu_env *env,
 		GOTO(out, rc = PTR_ERR(it));
 
 	rc = iops->load(env, it, hash);
+	if (rc < 0)
+		GOTO(out_iops_fini, rc);
+
+	/* rc == 0 means we need to advance to record */
 	if (rc == 0) {
 		rc = iops->next(env, it);
-		if (rc != 0)
-			GOTO(out_iops, rc = 0);
+
+		if (rc < 0)
+			GOTO(out_iops_put, rc);
+		/* rc > 0 is eof, will be checked in while below */
+	} else {
+		/* rc == 1, we found initial record and can process below */
+		rc = 0;
 	}
 
 	new_config = nodemap_config_alloc();
 	if (IS_ERR(new_config)) {
 		rc = PTR_ERR(new_config);
 		new_config = NULL;
-		GOTO(out_lock, rc);
+		GOTO(out_iops_put, rc);
 	}
 
-	do {
+	/* rc > 0 is eof, check initial iops->next here as well */
+	while (rc == 0) {
 		struct nodemap_key *key;
 		union nodemap_rec rec;
 
@@ -800,11 +810,11 @@ static int nodemap_load_entries(const struct lu_env *env,
 		rc = iops->rec(env, it, (struct dt_rec *)&rec, 0);
 		if (rc != -ESTALE) {
 			if (rc != 0)
-				GOTO(out_lock, rc);
+				GOTO(out_nodemap_config, rc);
 			rc = nodemap_process_keyrec(new_config, key, &rec,
 						    &recent_nodemap);
 			if (rc < 0)
-				GOTO(out_lock, rc);
+				GOTO(out_nodemap_config, rc);
 			if (rc == NODEMAP_GLOBAL_IDX)
 				loaded_global_idx = true;
 		}
@@ -812,19 +822,20 @@ static int nodemap_load_entries(const struct lu_env *env,
 		do
 			rc = iops->next(env, it);
 		while (rc == -ESTALE);
-	} while (rc == 0);
+	}
 
 	if (rc > 0)
 		rc = 0;
 
-out_lock:
+out_nodemap_config:
 	if (rc != 0)
 		nodemap_config_dealloc(new_config);
 	else
 		/* creating new default needs to be done outside dt read lock */
 		activate_nodemap = true;
-out_iops:
+out_iops_put:
 	iops->put(env, it);
+out_iops_fini:
 	iops->fini(env, it);
 out:
 	dt_read_unlock(env, nodemap_idx);
