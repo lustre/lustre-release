@@ -58,6 +58,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <libcfs/util/list.h>
 #include <lustre_disk.h>
 #include <lustre_param.h>
 

@@ -64,6 +64,7 @@
 #include <limits.h>
 
 #include "obdctl.h"
+#include <libcfs/util/list.h>
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
 #include <libcfs/util/parser.h>

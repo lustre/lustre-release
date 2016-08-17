@@ -42,10 +42,10 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #include <linux/kthread.h>
+#include <linux/list.h>
 #include <libcfs/libcfs.h>
 #include <lustre_dlm.h>
 #include <obd_class.h>
-#include <libcfs/list.h>
 #include "ldlm_internal.h"
 
 static int ldlm_num_threads;

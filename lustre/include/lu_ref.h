@@ -26,7 +26,7 @@
 #ifndef __LUSTRE_LU_REF_H
 #define __LUSTRE_LU_REF_H
 
-#include <libcfs/list.h>
+#include <linux/list.h>
 
 /** \defgroup lu_ref lu_ref
  *

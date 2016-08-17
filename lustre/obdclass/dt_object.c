@@ -43,9 +43,9 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/list.h>
 #include <obd.h>
 #include <dt_object.h>
-#include <libcfs/list.h>
 /* fid_be_to_cpu() */
 #include <lustre_fid.h>
 #include <lustre_nodemap.h>

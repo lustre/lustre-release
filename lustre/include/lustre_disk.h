@@ -50,6 +50,11 @@
 
 #include <linux/types.h>
 #include <libcfs/libcfs.h>
+#ifdef __KERNEL__
+#include <linux/list.h>
+#else
+#include <libcfs/util/list.h>
+#endif
 #include <lnet/types.h>
 
 /****************** on-disk files *********************/

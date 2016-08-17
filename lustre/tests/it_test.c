@@ -44,6 +44,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/time.h>
+#include <libcfs/util/list.h>
 
 #include <linux/types.h>
 

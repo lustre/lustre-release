@@ -51,6 +51,7 @@
 #include <linux/mutex.h>
 #include <asm/atomic.h>
 
+#include <libcfs/linux/linux-list.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>

@@ -20,12 +20,8 @@
  * GPL HEADER END
  */
 
-#ifndef __LIBCFS_LIST_H__
-#define __LIBCFS_LIST_H__
-
-#ifdef __KERNEL__
-# include <linux/list.h>
-#else /* __KERNEL__ */
+#ifndef __LIBCFS_UTIL_LIST_H__
+#define __LIBCFS_UTIL_LIST_H__
 
 /*
  * Simple doubly linked list implementation.
@@ -487,30 +483,4 @@ static inline void hlist_add_after(struct hlist_node *n,
 	     &pos->member != (head);                                         \
 	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
 
-#endif /* __KERNEL__ */
-
-#ifdef HAVE_HLIST_FOR_EACH_3ARG
-#define cfs_hlist_for_each_entry(tpos, pos, head, member) \
-	hlist_for_each_entry(tpos, head, member)
-#define cfs_hlist_for_each_entry_safe(tpos, pos, n, head, member) \
-	hlist_for_each_entry_safe(tpos, n, head, member)
-#define cfs_hlist_for_each_entry_continue(tpos, pos, member) \
-	hlist_for_each_entry_continue(tpos, member)
-#define cfs_hlist_for_each_entry_from(tpos, pos, member) \
-	hlist_for_each_entry_from(tpos, member)
-#else
-#define cfs_hlist_for_each_entry(tpos, pos, head, member) \
-	hlist_for_each_entry(tpos, pos, head, member)
-#define cfs_hlist_for_each_entry_safe(tpos, pos, n, head, member) \
-	hlist_for_each_entry_safe(tpos, pos, n, head, member)
-#define cfs_hlist_for_each_entry_continue(tpos, pos, member) \
-	hlist_for_each_entry_continue(tpos, pos, member)
-#define cfs_hlist_for_each_entry_from(tpos, pos, member) \
-	hlist_for_each_entry_from(tpos, pos, member)
-#endif
-
-#ifdef HAVE_HLIST_ADD_AFTER
-#define hlist_add_behind(hnode, tail)	hlist_add_after(tail, hnode)
-#endif /* HAVE_HLIST_ADD_AFTER */
-
-#endif /* __LIBCFS_LUSTRE_LIST_H__ */
+#endif /* __LIBCFS_UTIL_LIST_H__ */

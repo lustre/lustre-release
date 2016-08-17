@@ -39,6 +39,7 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
+#include <linux/list.h>
 #include <libcfs/libcfs.h>
 #include <obd_support.h>
 #include <lustre_ha.h>
@@ -47,7 +48,6 @@
 #include <lustre_export.h>
 #include <obd.h>
 #include <obd_class.h>
-#include <libcfs/list.h>
 
 #include "ptlrpc_internal.h"
 

@@ -44,8 +44,9 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#include <libcfs/libcfs.h>
 #include <linux/module.h>
+#include <linux/list.h>
+#include <libcfs/libcfs.h>
 #include <libcfs/libcfs_hash.h> /* hash_long() */
 #include <obd_class.h>
 #include <obd_support.h>
@@ -53,7 +54,6 @@
 #include <lustre_fid.h>
 #include <lu_object.h>
 #include <lu_ref.h>
-#include <libcfs/list.h>
 
 enum {
 	LU_CACHE_PERCENT_MAX     = 50,

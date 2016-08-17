@@ -32,7 +32,7 @@
 
 #include <linux/kthread.h>
 #include <linux/sched.h>
-#include <libcfs/list.h>
+#include <linux/list.h>
 #include <lu_object.h>
 #include <dt_object.h>
 #include <md_object.h>

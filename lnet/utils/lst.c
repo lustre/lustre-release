@@ -49,7 +49,7 @@
 #include <sys/ioctl.h>
 #include <time.h>
 
-#include <libcfs/list.h>
+#include <libcfs/util/list.h>
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/parser.h>
 #include <lnet/lnetctl.h>

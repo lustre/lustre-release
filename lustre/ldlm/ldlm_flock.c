@@ -56,11 +56,11 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
+#include <linux/list.h>
 #include <lustre_dlm.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_lib.h>
-#include <libcfs/list.h>
 
 #include "ldlm_internal.h"
 

@@ -42,10 +42,10 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/sched.h>
+#include <linux/list.h>
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_fid.h>
-#include <libcfs/list.h>
 #include <cl_object.h>
 #include "cl_internal.h"
 

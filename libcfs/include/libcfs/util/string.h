@@ -46,7 +46,7 @@
 #include <stddef.h>
 
 #include <linux/types.h>
-#include <libcfs/list.h>
+#include <libcfs/util/list.h>
 
 #ifndef HAVE_STRLCPY /* not in glibc for RHEL 5.x, remove when obsolete */
 size_t strlcpy(char *tgt, const char *src, size_t tgt_len);

@@ -58,6 +58,7 @@
 struct rpc_clnt; /* for rpc_pipefs */
 #include <linux/sunrpc/rpc_pipe_fs.h>
 
+#include <libcfs/linux/linux-list.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>

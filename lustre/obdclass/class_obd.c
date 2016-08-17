@@ -41,6 +41,7 @@
 # include <linux/uidgid.h>
 #endif
 #include <linux/atomic.h>
+#include <linux/list.h>
 
 #include <obd_support.h>
 #include <obd_class.h>
@@ -48,7 +49,6 @@
 #include <lustre_debug.h>
 #include <lprocfs_status.h>
 #include <lustre_ver.h>
-#include <libcfs/list.h>
 #include <cl_object.h>
 #ifdef HAVE_SERVER_SUPPORT
 # include <dt_object.h>

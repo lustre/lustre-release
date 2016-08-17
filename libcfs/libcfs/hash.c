@@ -108,6 +108,7 @@
  */
 #include <linux/seq_file.h>
 
+#include <libcfs/linux/linux-list.h>
 #include <libcfs/libcfs.h>
 
 #if CFS_HASH_DEBUG_LEVEL >= CFS_HASH_DEBUG_1

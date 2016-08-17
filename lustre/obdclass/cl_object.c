@@ -50,12 +50,12 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/list.h>
 #include <libcfs/libcfs.h>
 /* class_put_type() */
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lustre_fid.h>
-#include <libcfs/list.h>
 #include <libcfs/libcfs_hash.h> /* for cfs_hash stuff */
 #include <cl_object.h>
 #include <lu_object.h>
