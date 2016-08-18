@@ -74,8 +74,8 @@ init_logging
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
 
-#                                  8  22  40  (min)
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="45 69 106"
+#                                  8  22  40  165  (min)
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="45 69 106 111"
 
 assert_DIR
 
@@ -273,6 +273,10 @@ check_mount2() {
 	do_facet client "touch $DIR2/a" || return 73
 	do_facet client "rm $DIR2/a" || return 74
 	echo "setup double mount lustre success"
+}
+
+generate_name() {
+	cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w $1 | head -n 1
 }
 
 build_test_filter
@@ -8078,6 +8082,206 @@ test_109b()
 	cleanup
 }
 run_test 109b "test lctl clear_conf one config"
+
+test_110()
+{
+	[[ $(facet_fstype $SINGLEMDS) != ldiskfs ]] &&
+		skip "Only applicable to ldiskfs-based MDTs"
+
+	do_facet $SINGLEMDS $DEBUGFS -w -R supported_features |grep large_dir ||
+		skip "large_dir option is not supported on MDS"
+	do_facet ost1 $DEBUGFS -w -R supported_features | grep large_dir ||
+		skip "large_dir option is not supported on OSS"
+
+	stopall # stop all targets before modifying the target counts
+	stack_trap "MDSCOUNT=$MDSCOUNT OSTCOUNT=$OSTCOUNT" EXIT
+	MDSCOUNT=1
+	OSTCOUNT=1
+
+	# ext4_dir_entry_2 struct size:264
+	# dx_root struct size:8
+	# dx_node struct size:8
+	# dx_entry struct size:8
+	# For 1024 bytes block size.
+	# First level directory entries: 126
+	# Second level directory entries: 127
+	# Entries in leaf: 3
+	# For 2 levels limit: 48006
+	# For 3 levels limit : 6096762
+	# Create 80000 files to safely exceed 2-level htree limit.
+	CONF_SANITY_110_LINKS=${CONF_SANITY_110_LINKS:-80000}
+
+	# can fit at most 3 filenames per 1KB leaf block, but each
+	# leaf/index block will only be 3/4 full before split at each level
+	(( MDSSIZE < CONF_SANITY_110_LINKS / 3 * 4/3 * 4/3 )) &&
+		CONF_SANITY_110_LINKS=$((MDSSIZE * 3 * 3/4 * 3/4))
+
+	local opts="$(mkfs_opts mds1 $(mdsdevname 1)) \
+		    --reformat $(mdsdevname 1) $(mdsvdevname 1)"
+	if [[ $opts != *mkfsoptions* ]]; then
+		opts+=" --mkfsoptions=\\\"-O large_dir -b 1024 -i 65536\\\""
+	else
+		opts="${opts//--mkfsoptions=\\\"/ \
+			--mkfsoptions=\\\"-O large_dir -b 1024 -i 65536 }"
+	fi
+	echo "MDT params: $opts"
+	add mds1 $opts || error "add mds1 failed with new params"
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
+
+	opts="$(mkfs_opts ost1 $(ostdevname 1)) \
+		--reformat $(ostdevname 1) $(ostvdevname 1)"
+
+	if [[ $opts != *mkfsoptions* ]]; then
+		opts+=" --mkfsoptions=\\\"-O large_dir\\\" "
+	else
+		opts="${opts//--mkfsoptions=\\\"/ \
+			--mkfsoptions=\\\"-O large_dir }"
+	fi
+	echo "OST params: $opts"
+	add ost1 $opts || error "add ost1 failed with new params"
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS
+
+	MOUNT_2=yes mountcli || error "mount clients failed"
+
+	mkdir -v $DIR/$tdir || error "cannot create $DIR/$tdir"
+	local pids count=0 group=0
+
+	echo "creating $CONF_SANITY_110_LINKS in total"
+	while (( count < CONF_SANITY_110_LINKS )); do
+		local len=$((253 - $(wc -c <<<"$tfile-$group-40000-")))
+		local dir=DIR$((group % 2 + 1))
+		local target=${!dir}/$tdir/$tfile-$group
+		local long=$target-$(generate_name $len)-
+		local create=$((CONF_SANITY_110_LINKS - count))
+
+		(( create > 40000 )) && create=40000
+		touch $target || error "creating $target failed"
+		echo "creating $create hard links to $target"
+		createmany -l $target $long $create &
+		pids+=" $!"
+
+		count=$((count + create))
+		group=$((group + 1))
+	done
+	echo "waiting for PIDs$pids to complete"
+	wait $pids || error "createmany failed after $group groups"
+
+	cleanup
+
+	run_e2fsck $(facet_active_host mds1) $(mdsdevname 1) -n
+}
+run_test 110 "Adding large_dir with 3-level htree"
+
+test_111() {
+	[[ $(facet_fstype $SINGLEMDS) != ldiskfs ]] &&
+		skip "Only applicable to ldiskfs-based MDTs"
+
+	is_dm_flakey_dev $SINGLEMDS $(mdsdevname 1) &&
+		skip "This test can not be executed on flakey dev"
+
+	do_facet $SINGLEMDS $DEBUGFS -w -R supported_features |grep large_dir ||
+		skip "large_dir option is not supported on MDS"
+
+	do_facet ost1 $DEBUGFS -w -R supported_features | grep large_dir ||
+		skip "large_dir option is not supported on OSS"
+
+	# cleanup before changing target counts
+	cleanup
+	stack_trap "MDSSIZE=$MDSSIZE MDSCOUNT=$MDSCOUNT OSTCOUNT=$OSTCOUNT" EXIT
+	MDSCOUNT=1
+	OSTCOUNT=1
+	(( MDSSIZE < 2400000 )) && MDSSIZE=2400000 # need at least 2.4GB
+
+	local mdsdev=$(mdsdevname 1)
+
+	local opts="$(mkfs_opts mds1 $(mdsdevname 1)) \
+		    --reformat $(mdsdevname 1) $(mdsvdevname 1)"
+	if [[ $opts != *mkfsoptions* ]]; then
+		opts+=" --mkfsoptions=\\\"-O large_dir -i 1048576 \\\" "
+	else
+		opts="${opts//--mkfsoptions=\\\"/ \
+			--mkfsoptions=\\\"-O large_dir -i 1048576 }"
+	fi
+	echo "MDT params: $opts"
+	__touch_device mds 1
+	add mds1 $opts || error "add mds1 failed with new params"
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
+
+	opts="$(mkfs_opts ost1 $(ostdevname 1)) \
+		--reformat $(ostdevname 1) $(ostvdevname 1)"
+	if [[ $opts != *mkfsoptions* ]]; then
+		opts+=" --mkfsoptions=\\\"-O large_dir \\\""
+	else
+		opts="${opts//--mkfsoptions=\\\"/ --mkfsoptions=\\\"-O large_dir }"
+	fi
+	echo "OST params: $opts"
+	__touch_device ost 1
+	add ost1 $opts || error "add ost1 failed with new params"
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS
+
+	MOUNT_2=yes mountcli
+	mkdir $DIR/$tdir || error "cannot create $DIR/$tdir"
+	lfs df $DIR/$tdir
+	lfs df -i $DIR/$tdir
+
+	local group=0
+
+	local start=$SECONDS
+	local dirsize=0
+	local dirmax=$((2 << 30))
+	local needskip=0
+	local taken=0
+	local rate=0
+	local left=0
+	local num=0
+	while (( !needskip & dirsize < dirmax )); do
+		local pids=""
+
+		for cli in ${CLIENTS//,/ }; do
+			local len=$((253 - $(wc -c <<<"$cli-$group-60000-")))
+			local target=$cli-$group
+			local long=$DIR/$tdir/$target-$(generate_name $len)-
+
+			RPWD=$DIR/$tdir do_node $cli touch $target ||
+				error "creating $target failed"
+			echo "creating 60000 hardlinks to $target"
+			RPWD=$DIR/$tdir do_node $cli createmany -l $target $long 60000 &
+			pids+=" $!"
+
+			group=$((group + 1))
+			target=$cli-$group
+			long=$DIR2/$tdir/$target-$(generate_name $len)-
+
+			RPWD=$DIR2/$tdir do_node $cli touch $target ||
+				error "creating $target failed"
+			echo "creating 60000 hardlinks to $target"
+			RPWD=$DIR2/$tdir do_node $cli createmany -l $target $long 60000 &
+			pids+=" $!"
+
+			group=$((group + 1))
+		done
+		echo "waiting for PIDs$pids to complete"
+		wait $pids || error "createmany failed after $group groups"
+		dirsize=$(stat -c %s $DIR/$tdir)
+		taken=$((SECONDS - start))
+		rate=$((dirsize / taken))
+		left=$(((dirmax - dirsize) / rate))
+		num=$((group * 60000))
+		echo "estimate ${left}s left after $num files / ${taken}s"
+		# if the estimated time remaining is too large (it may change
+		# over time as the create rate is not constant) then exit
+		# without declaring a failure.
+		(( left > 1200 )) && needskip=1
+	done
+
+	cleanup
+
+	(( $needskip )) && skip "ETA ${left}s after $num files / ${taken}s is too long"
+
+	run_e2fsck $(facet_active_host mds1) $(mdsdevname 1) -n
+}
+run_test 111 "Adding large_dir with over 2GB directory"
+
 
 cleanup_115()
 {
