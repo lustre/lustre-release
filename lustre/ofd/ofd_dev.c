@@ -2884,12 +2884,13 @@ struct lu_context_key ofd_thread_key = {
 static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 		     struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
-	const char		*dev = lustre_cfg_string(cfg, 0);
-	struct ofd_thread_info	*info = NULL;
-	struct obd_device	*obd;
-	struct obd_statfs	*osfs;
-	struct lu_fid		 fid;
-	int			 rc;
+	const char *dev = lustre_cfg_string(cfg, 0);
+	struct ofd_thread_info *info = NULL;
+	struct obd_device *obd;
+	struct obd_statfs *osfs;
+	struct lu_fid fid;
+	struct nm_config_file *nodemap_config;
+	int rc;
 
 	ENTRY;
 
@@ -3032,9 +3033,12 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (rc != 0)
 		GOTO(err_fini_fs, rc);
 
-	rc = nodemap_fs_init(env, m->ofd_osd, obd, m->ofd_los);
-	if (rc != 0)
-		GOTO(err_fini_los, rc);
+	nodemap_config = nm_config_file_register_tgt(env, m->ofd_osd,
+						     m->ofd_los);
+	if (IS_ERR(nodemap_config))
+		GOTO(err_fini_los, rc = PTR_ERR(nodemap_config));
+
+	obd->u.obt.obt_nodemap_config_file = nodemap_config;
 
 	rc = ofd_start_inconsistency_verification_thread(m);
 	if (rc != 0)
@@ -3045,7 +3049,8 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	RETURN(0);
 
 err_fini_nm:
-	nodemap_fs_fini(env, obd);
+	nm_config_file_deregister_tgt(env, obd->u.obt.obt_nodemap_config_file);
+	obd->u.obt.obt_nodemap_config_file = NULL;
 err_fini_los:
 	local_oid_storage_fini(env, m->ofd_los);
 	m->ofd_los = NULL;
@@ -3093,7 +3098,8 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	ofd_stop_inconsistency_verification_thread(m);
 	lfsck_degister(env, m->ofd_osd);
 	ofd_fs_cleanup(env, m);
-	nodemap_fs_fini(env, obd);
+	nm_config_file_deregister_tgt(env, obd->u.obt.obt_nodemap_config_file);
+	obd->u.obt.obt_nodemap_config_file = NULL;
 
 	if (m->ofd_los != NULL) {
 		local_oid_storage_fini(env, m->ofd_los);

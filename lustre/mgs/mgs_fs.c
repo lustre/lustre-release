@@ -163,7 +163,7 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 
 	mgs->mgs_configs_dir = o;
 
-	/* colocated MDT will cache config in target / dir */
+	/* colocated MDT will cache config in target root dir */
 	nm_config_file_obj = local_index_find_or_create(env, mgs->mgs_los,
 							mgs->mgs_configs_dir,
 							LUSTRE_NODEMAP_NAME,
@@ -182,10 +182,10 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 			GOTO(out_configs, rc);
 		}
 	}
-	nm_config_file = nm_config_file_register(env, nm_config_file_obj,
-						 mgs->mgs_los, NCFT_MGS);
+	nm_config_file = nm_config_file_register_mgs(env, nm_config_file_obj,
+						     mgs->mgs_los);
+	lu_object_put(env, &nm_config_file_obj->do_lu);
 	if (IS_ERR(nm_config_file)) {
-		lu_object_put(env, &nm_config_file_obj->do_lu);
 		CERROR("%s: error loading nodemap config file, file must be "
 		       "removed via ldiskfs: rc = %ld\n",
 		       mgs->mgs_obd->obd_name, PTR_ERR(nm_config_file));
@@ -203,7 +203,7 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 
 out_nm:
 	if (rc < 0) {
-		nm_config_file_deregister(env, nm_config_file, NCFT_MGS);
+		nm_config_file_deregister_mgs(env, nm_config_file);
 		mgs->mgs_obd->u.obt.obt_nodemap_config_file = NULL;
 	}
 out_configs:
@@ -235,9 +235,9 @@ int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *mgs)
 		mgs->mgs_nidtbl_dir = NULL;
 	}
 	if (mgs->mgs_obd->u.obt.obt_nodemap_config_file != NULL) {
-		nm_config_file_deregister(env,
-				mgs->mgs_obd->u.obt.obt_nodemap_config_file,
-				NCFT_MGS);
+		struct nm_config_file *ncf = mgs->mgs_obd->u.obt.obt_nodemap_config_file;
+
+		nm_config_file_deregister_mgs(env, ncf);
 		mgs->mgs_obd->u.obt.obt_nodemap_config_file = NULL;
 	}
 

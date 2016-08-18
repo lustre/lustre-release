@@ -143,17 +143,17 @@ void nodemap_test_nid(lnet_nid_t nid, char *name_buf, size_t name_len);
 int nodemap_test_id(lnet_nid_t nid, enum nodemap_id_type idtype,
 		    __u32 client_id, __u32 *fs_id);
 
-enum nm_config_file_type {
-	NCFT_MGS,
-	NCFT_TGT,
-};
-struct nm_config_file *nm_config_file_register(const struct lu_env *env,
-					       struct dt_object *obj,
-					       struct local_oid_storage *los,
-					       enum nm_config_file_type ncf_type);
-void nm_config_file_deregister(const struct lu_env *env,
-			       struct nm_config_file *ncf,
-			       enum nm_config_file_type ncf_type);
+struct nm_config_file *nm_config_file_register_mgs(const struct lu_env *env,
+						   struct dt_object *obj,
+						   struct local_oid_storage *los);
+struct dt_device;
+struct nm_config_file *nm_config_file_register_tgt(const struct lu_env *env,
+						   struct dt_device *dev,
+						   struct local_oid_storage *los);
+void nm_config_file_deregister_mgs(const struct lu_env *env,
+				   struct nm_config_file *ncf);
+void nm_config_file_deregister_tgt(const struct lu_env *env,
+				   struct nm_config_file *ncf);
 struct lu_nodemap *nodemap_get_from_exp(struct obd_export *exp);
 void nodemap_putref(struct lu_nodemap *nodemap);
 
@@ -193,10 +193,6 @@ void nodemap_config_set_active_mgc(struct nodemap_config *config);
 int nodemap_process_idx_pages(struct nodemap_config *config, union lu_page *lip,
 			      struct lu_nodemap **recent_nodemap);
 
-struct dt_device;
-int nodemap_fs_init(const struct lu_env *env, struct dt_device *dev,
-		    struct obd_device *obd, struct local_oid_storage *los);
-void nodemap_fs_fini(const struct lu_env *env, struct obd_device *obd);
 #else /* disable nodemap processing in MGC of non-servers */
 static inline int nodemap_process_idx_pages(void *config,
 					    union lu_page *lip,
