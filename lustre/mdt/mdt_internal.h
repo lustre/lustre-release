@@ -188,6 +188,14 @@ struct coordinator {
 #define MDT_FL_CFGLOG 0
 #define MDT_FL_SYNCED 1
 
+/* possible values for mo_dom_lock */
+enum {
+	NO_DOM_LOCK_ON_OPEN = 0,
+	TRYLOCK_DOM_ON_OPEN = 1,
+	ALWAYS_DOM_LOCK_ON_OPEN = 2,
+	NUM_DOM_LOCK_ON_OPEN_MODES
+};
+
 struct mdt_device {
 	/* super-class */
 	struct lu_device	   mdt_lu_dev;
@@ -212,7 +220,8 @@ struct mdt_device {
 				   mo_acl:1,
 				   mo_cos:1,
 				   mo_evict_tgt_nids:1,
-				   mo_dom_lock:1;
+				   mo_dom_read_open:1;
+		unsigned int       mo_dom_lock;
 	} mdt_opts;
         /* mdt state flags */
         unsigned long              mdt_state;
@@ -754,7 +763,7 @@ int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
 void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 			const struct lu_attr *attr, const struct lu_fid *fid);
 int mdt_pack_size2body(struct mdt_thread_info *info,
-			const struct lu_fid *fid, bool dom_lock);
+			const struct lu_fid *fid,  struct lustre_handle *lh);
 int mdt_getxattr(struct mdt_thread_info *info);
 int mdt_reint_setxattr(struct mdt_thread_info *info,
                        struct mdt_lock_handle *lh);
@@ -1244,6 +1253,8 @@ int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 			struct ldlm_lock **lockp, __u64 flags);
 int mdt_brw_enqueue(struct mdt_thread_info *info, struct ldlm_namespace *ns,
 		    struct ldlm_lock **lockp, __u64 flags);
+int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
+			 struct lustre_handle *lh);
 void mdt_dom_discard_data(struct mdt_thread_info *info,
 			  const struct lu_fid *fid);
 int mdt_dom_disk_lvbo_update(const struct lu_env *env, struct mdt_object *mo,

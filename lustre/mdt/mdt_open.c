@@ -829,7 +829,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 			dom_stripes = mdt_lmm_dom_entry(ma->ma_lmm);
 
 		if (dom_stripes == LMM_DOM_ONLY &&
-		    info->mti_mdt->mdt_opts.mo_dom_lock != 0 &&
+		    info->mti_mdt->mdt_opts.mo_dom_lock > 0 &&
 		    !mdt_dom_client_has_lock(info, mdt_object_fid(obj)))
 			dom_lock = true;
 	}
@@ -886,7 +886,17 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 			lhc = &info->mti_lh[MDT_LH_LOCAL];
 		} else if (dom_lock) {
 			lm = (open_flags & MDS_FMODE_WRITE) ? LCK_PW : LCK_PR;
-			*ibits = MDS_INODELOCK_DOM;
+			if (info->mti_mdt->mdt_opts.mo_dom_lock ==
+			    TRYLOCK_DOM_ON_OPEN) {
+				trybits |= MDS_INODELOCK_DOM |
+					   MDS_INODELOCK_LAYOUT;
+			} else {
+				/* mo_dom_lock == ALWAYS_DOM_LOCK_ON_OPEN */
+				*ibits = MDS_INODELOCK_DOM;
+				if (info->mti_mdt->mdt_opts.mo_dom_read_open) {
+					trybits |= MDS_INODELOCK_LAYOUT;
+				}
+			}
 		}
 
 		CDEBUG(D_INODE, "normal open:"DFID" lease count: %d, lm: %d\n",
@@ -1148,8 +1158,7 @@ out_unlock:
 out:
 	mdt_object_put(env, o);
 	if (rc == 0)
-		mdt_pack_size2body(info, rr->rr_fid2,
-				   ibits & MDS_INODELOCK_DOM);
+		mdt_pack_size2body(info, rr->rr_fid2, &lhc->mlh_reg_lh);
 out_parent_put:
 	if (parent != NULL)
 		mdt_object_put(env, parent);
@@ -1607,7 +1616,7 @@ out_child_unlock:
 out_child:
 	mdt_object_put(info->mti_env, child);
 	if (result == 0)
-		mdt_pack_size2body(info, child_fid, ibits & MDS_INODELOCK_DOM);
+		mdt_pack_size2body(info, child_fid, &lhc->mlh_reg_lh);
 out_parent:
 	mdt_object_unlock_put(info, parent, lh, result || !created);
 out:

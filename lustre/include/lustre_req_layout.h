@@ -311,6 +311,7 @@ extern struct req_msg_field RMF_OBD_IOOBJ;
 extern struct req_msg_field RMF_OBD_ID;
 extern struct req_msg_field RMF_FID;
 extern struct req_msg_field RMF_NIOBUF_REMOTE;
+extern struct req_msg_field RMF_NIOBUF_INLINE;
 extern struct req_msg_field RMF_RCS;
 extern struct req_msg_field RMF_FIEMAP_KEY;
 extern struct req_msg_field RMF_FIEMAP_VAL;

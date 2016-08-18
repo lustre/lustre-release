@@ -489,11 +489,12 @@ out:
  * Pack size attributes into the reply.
  */
 int mdt_pack_size2body(struct mdt_thread_info *info,
-			const struct lu_fid *fid, bool dom_lock)
+			const struct lu_fid *fid, struct lustre_handle *lh)
 {
 	struct mdt_body *b;
 	struct md_attr *ma = &info->mti_attr;
 	int dom_stripe;
+	bool dom_lock = false;
 
 	ENTRY;
 
@@ -507,6 +508,16 @@ int mdt_pack_size2body(struct mdt_thread_info *info,
 	/* no DoM stripe, no size in reply */
 	if (dom_stripe == LMM_NO_DOM)
 		RETURN(-ENOENT);
+
+	if (lustre_handle_is_used(lh)) {
+		struct ldlm_lock *lock;
+
+		lock = ldlm_handle2lock(lh);
+		if (lock != NULL) {
+			dom_lock = ldlm_has_dom(lock);
+			LDLM_LOCK_PUT(lock);
+		}
+	}
 
 	/* no DoM lock, no size in reply */
 	if (!dom_lock)
@@ -1832,7 +1843,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			 * mdt_object_put(), that is why this speacial
 			 * exit path is used. */
 			rc = mdt_pack_size2body(info, child_fid,
-						child_bits & MDS_INODELOCK_DOM);
+						&lhc->mlh_reg_lh);
 			if (rc != 0 && child_bits & MDS_INODELOCK_DOM) {
 				/* DOM lock was taken in advance but this is
 				 * not DoM file. Drop the lock. */
@@ -2122,11 +2133,24 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 out_ucred:
         mdt_exit_ucred(info);
 out_shrink:
-        mdt_client_compatibility(info);
-        rc2 = mdt_fix_reply(info);
-        if (rc == 0)
-                rc = rc2;
-        return rc;
+	mdt_client_compatibility(info);
+
+	rc2 = mdt_fix_reply(info);
+	if (rc == 0)
+		rc = rc2;
+
+	/*
+	 * Data-on-MDT optimization - read data along with OPEN and return it
+	 * in reply. Do that only if we have both DOM and LAYOUT locks.
+	 */
+	if (rc == 0 && op == REINT_OPEN &&
+	    info->mti_attr.ma_lmm != NULL &&
+	    mdt_lmm_dom_entry(info->mti_attr.ma_lmm) == LMM_DOM_ONLY) {
+		rc = mdt_dom_read_on_open(info, info->mti_mdt,
+					  &lhc->mlh_reg_lh);
+	}
+
+	return rc;
 }
 
 static long mdt_reint_opcode(struct ptlrpc_request *req,
@@ -4999,7 +5023,9 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	}
 
 	/* DoM files get IO lock at open by default */
-	m->mdt_opts.mo_dom_lock = 1;
+	m->mdt_opts.mo_dom_lock = ALWAYS_DOM_LOCK_ON_OPEN;
+	/* DoM files are read at open and data is packed in the reply */
+	m->mdt_opts.mo_dom_read_open = 1;
 
 	m->mdt_squash.rsi_uid = 0;
 	m->mdt_squash.rsi_gid = 0;

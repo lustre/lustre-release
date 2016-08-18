@@ -170,4 +170,8 @@ int mdc_ldlm_blocking_ast(struct ldlm_lock *dlmlock,
 			  struct ldlm_lock_desc *new, void *data, int flag);
 int mdc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data);
 int mdc_fill_lvb(struct ptlrpc_request *req, struct ost_lvb *lvb);
+
+#define MDC_DOM_DEF_INLINE_REPSIZE 8192
+#define MDC_DOM_MAX_INLINE_REPSIZE XATTR_SIZE_MAX
+
 #endif

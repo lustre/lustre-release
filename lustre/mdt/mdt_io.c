@@ -1332,3 +1332,186 @@ out:
 	repbody->mbo_flags = OBD_FL_FLUSH;
 	RETURN(rc);
 }
+
+/* read file data to the buffer */
+int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
+			 struct lustre_handle *lh)
+{
+	const struct lu_env *env = mti->mti_env;
+	struct tgt_session_info *tsi = tgt_ses_info(env);
+	struct req_capsule *pill = tsi->tsi_pill;
+	const struct lu_fid *fid;
+	struct ptlrpc_request *req = tgt_ses_req(tsi);
+	struct mdt_body *mbo;
+	struct dt_device *dt = mdt->mdt_bottom;
+	struct dt_object *mo;
+	void *buf;
+	struct niobuf_remote *rnb = NULL;
+	struct niobuf_local *lnb;
+	int rc;
+	int max_reply_len;
+	loff_t offset;
+	unsigned int len, copied = 0;
+	int lnbs, nr_local, i;
+	bool dom_lock = false;
+
+	ENTRY;
+
+	if (!req_capsule_field_present(pill, &RMF_NIOBUF_INLINE, RCL_SERVER)) {
+		/* There is no reply buffers for this field, this means that
+		 * client has no support for data in reply.
+		 */
+		RETURN(0);
+	}
+
+	mbo = req_capsule_server_get(pill, &RMF_MDT_BODY);
+
+	if (lustre_handle_is_used(lh)) {
+		struct ldlm_lock *lock;
+
+		lock = ldlm_handle2lock(lh);
+		if (lock) {
+			dom_lock = ldlm_has_dom(lock) && ldlm_has_layout(lock);
+			LDLM_LOCK_PUT(lock);
+		}
+	}
+
+	/* return data along with open only along with DoM lock */
+	if (!dom_lock || !mdt->mdt_opts.mo_dom_read_open)
+		RETURN(0);
+
+	if (!(mbo->mbo_valid & OBD_MD_DOM_SIZE))
+		RETURN(0);
+
+	if (mbo->mbo_dom_size == 0)
+		RETURN(0);
+
+	/* check the maximum size available in reply */
+	max_reply_len =
+		req->rq_rqbd->rqbd_svcpt->scp_service->srv_max_reply_size;
+
+	CDEBUG(D_INFO, "File size %llu, reply sizes %d/%d/%d\n",
+	       mbo->mbo_dom_size, max_reply_len, req->rq_reqmsg->lm_repsize,
+	       req->rq_replen);
+	len = req->rq_reqmsg->lm_repsize - req->rq_replen;
+	max_reply_len -= req->rq_replen;
+
+	/* NB: at this moment we have the following sizes:
+	 * - req->rq_replen: used data in reply
+	 * - req->rq_reqmsg->lm_repsize: total allocated reply buffer at client
+	 * - max_reply_len: maximum reply size allowed by protocol
+	 *
+	 * Ideal case when file size fits in allocated reply buffer,
+	 * that mean we can return whole data in reply. We can also fit more
+	 * data up to max_reply_size in total reply size, but this will cause
+	 * re-allocation on client and resend with larger buffer. This is still
+	 * faster than separate READ IO.
+	 * Third case if file is too big to fit even in maximum size, in that
+	 * case we return just tail to optimize possible append.
+	 *
+	 * At the moment the following strategy is used:
+	 * 1) try to fit into the buffer we have
+	 * 2) respond with bigger buffer so client will re-allocate it and
+	 *    resend (up to srv_max_reply_size value).
+	 * 3) return just file tail otherwise.
+	 */
+	if (mbo->mbo_dom_size <= len) {
+		/* can fit whole data */
+		len = mbo->mbo_dom_size;
+		offset = 0;
+	} else if (mbo->mbo_dom_size <= max_reply_len) {
+		/* It is worth to make this tunable ON/OFF because this will
+		 * cause buffer re-allocation and resend
+		 */
+		len = mbo->mbo_dom_size;
+		offset = 0;
+	} else {
+		int tail = mbo->mbo_dom_size % PAGE_SIZE;
+
+		/* no tail or tail can't fit in reply */
+		if (tail == 0 || len < tail)
+			RETURN(0);
+
+		len = tail;
+		offset = mbo->mbo_dom_size - len;
+	}
+	LASSERT((offset % PAGE_SIZE) == 0);
+	rc = req_capsule_server_grow(pill, &RMF_NIOBUF_INLINE,
+				     sizeof(*rnb) + len);
+	if (rc != 0) {
+		/* failed to grow data buffer, just exit */
+		GOTO(out, rc = -E2BIG);
+	}
+
+	/* re-take MDT_BODY buffer after the buffer growing above */
+	mbo = req_capsule_server_get(pill, &RMF_MDT_BODY);
+	fid = &mbo->mbo_fid1;
+	if (!fid_is_sane(fid))
+		RETURN(0);
+
+	rnb = req_capsule_server_get(tsi->tsi_pill, &RMF_NIOBUF_INLINE);
+	if (rnb == NULL)
+		GOTO(out, rc = -EPROTO);
+	buf = (char *)rnb + sizeof(*rnb);
+	rnb->rnb_len = len;
+	rnb->rnb_offset = offset;
+
+	mo = dt_locate(env, dt, fid);
+	if (IS_ERR(mo))
+		GOTO(out, rc = PTR_ERR(mo));
+	LASSERT(mo != NULL);
+
+	dt_read_lock(env, mo, 0);
+	if (!dt_object_exists(mo))
+		GOTO(unlock, rc = -ENOENT);
+
+	/* parse remote buffers to local buffers and prepare the latter */
+	lnbs = (len >> PAGE_SHIFT) + 1;
+	OBD_ALLOC(lnb, sizeof(*lnb) * lnbs);
+	if (lnb == NULL)
+		GOTO(unlock, rc = -ENOMEM);
+
+	rc = dt_bufs_get(env, mo, rnb, lnb, 0);
+	if (unlikely(rc < 0))
+		GOTO(free, rc);
+	LASSERT(rc <= lnbs);
+	nr_local = rc;
+	rc = dt_read_prep(env, mo, lnb, nr_local);
+	if (unlikely(rc))
+		GOTO(buf_put, rc);
+	/* copy data to the buffer finally */
+	for (i = 0; i < nr_local; i++) {
+		char *p = kmap(lnb[i].lnb_page);
+		long off;
+
+		LASSERT(lnb[i].lnb_page_offset == 0);
+		off = lnb[i].lnb_len & ~PAGE_MASK;
+		if (off > 0)
+			memset(p + off, 0, PAGE_SIZE - off);
+
+		memcpy(buf + (i << PAGE_SHIFT), p, lnb[i].lnb_len);
+		kunmap(lnb[i].lnb_page);
+		copied += lnb[i].lnb_len;
+		LASSERT(rc <= len);
+	}
+	CDEBUG(D_INFO, "Read %i (wanted %u) bytes from %llu\n", copied,
+	       len, offset);
+	if (copied < len)
+		CWARN("%s: read %i bytes for "DFID
+		      " but wanted %u, is size wrong?\n",
+		      tsi->tsi_exp->exp_obd->obd_name, copied,
+		      PFID(&tsi->tsi_fid), len);
+	EXIT;
+buf_put:
+	dt_bufs_put(env, mo, lnb, nr_local);
+free:
+	OBD_FREE(lnb, sizeof(*lnb) * lnbs);
+unlock:
+	dt_read_unlock(env, mo);
+	lu_object_put(env, &mo->do_lu);
+out:
+	if (rnb != NULL)
+		rnb->rnb_len = copied;
+	RETURN(0);
+}
+

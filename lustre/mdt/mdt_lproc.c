@@ -752,18 +752,132 @@ mdt_sync_count_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_sync_count);
 
+static char *dom_open_lock_modes[NUM_DOM_LOCK_ON_OPEN_MODES] = {
+	[NO_DOM_LOCK_ON_OPEN] = "never",
+	[TRYLOCK_DOM_ON_OPEN] = "trylock",
+	[ALWAYS_DOM_LOCK_ON_OPEN] = "always",
+};
+
+/* This must be longer than the longest string above */
+#define DOM_LOCK_MODES_MAXLEN 16
+
+/**
+ * Show MDT policy for data prefetch on open for DoM files..
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
 static int mdt_dom_lock_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n",  (mdt->mdt_opts.mo_dom_lock != 0));
+	seq_printf(m, "%s\n", dom_open_lock_modes[mdt->mdt_opts.mo_dom_lock]);
 	return 0;
 }
 
+/**
+ * Change MDT policy for data prefetch on open for DoM files.
+ *
+ * This variable defines how DOM lock is taken at open enqueue.
+ * There are three possible modes:
+ * 1) never - never take DoM lock on open. DoM lock will be taken as separate
+ *    IO lock with own enqueue.
+ * 2) trylock - DoM lock will be taken only if non-blocked.
+ * 3) always - DoM lock will be taken always even if it is blocking lock.
+ *
+ * If dom_read_open is enabled too then DoM lock is taken in PR mode and
+ * is paired with LAYOUT lock when possible.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents policy
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
 static ssize_t
 mdt_dom_lock_seq_write(struct file *file, const char __user *buffer,
 		       size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	char kernbuf[DOM_LOCK_MODES_MAXLEN];
+	int val = -1;
+	int i, rc;
+
+	if (count == 0 || count >= sizeof(kernbuf))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+
+	kernbuf[count] = 0;
+	if (kernbuf[count - 1] == '\n')
+		kernbuf[count - 1] = 0;
+
+	for (i = 0 ; i < NUM_DOM_LOCK_ON_OPEN_MODES; i++) {
+		if (strcmp(kernbuf, dom_open_lock_modes[i]) == 0) {
+			val = i;
+			break;
+		}
+	}
+
+	/* Legacy numeric codes */
+	if (val == -1) {
+		rc = kstrtoint_from_user(buffer, count, 0, &val);
+		if (rc)
+			return rc;
+	}
+
+	if (val < 0 || val >= NUM_DOM_LOCK_ON_OPEN_MODES)
+		return -EINVAL;
+
+	mdt->mdt_opts.mo_dom_lock = val;
+	return count;
+}
+LPROC_SEQ_FOPS(mdt_dom_lock);
+
+/**
+ * Show MDT policy for data prefetch on open for DoM files..
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
+static int mdt_dom_read_open_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	seq_printf(m, "%u\n", !!mdt->mdt_opts.mo_dom_read_open);
+	return 0;
+}
+
+/**
+ * Modify MDT policy for data prefetch on open for DoM files.
+ *
+ * If enabled then Data-on-MDT file data may be read during open and
+ * returned back in reply. It works only with mo_dom_lock enabled.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents policy
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
+static ssize_t
+mdt_dom_read_open_seq_write(struct file *file, const char __user *buffer,
+			    size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
@@ -775,10 +889,10 @@ mdt_dom_lock_seq_write(struct file *file, const char __user *buffer,
 	if (rc)
 		return rc;
 
-	mdt->mdt_opts.mo_dom_lock = val;
+	mdt->mdt_opts.mo_dom_read_open = !!val;
 	return count;
 }
-LPROC_SEQ_FOPS(mdt_dom_lock);
+LPROC_SEQ_FOPS(mdt_dom_read_open);
 
 LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, num_exports);
@@ -859,6 +973,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_sync_count_fops			},
 	{ .name =	"dom_lock",
 	  .fops =	&mdt_dom_lock_fops			},
+	{ .name =	"dom_read_open",
+	  .fops =	&mdt_dom_read_open_fops			},
 	{ NULL }
 };
 

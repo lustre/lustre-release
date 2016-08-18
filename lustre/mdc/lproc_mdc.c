@@ -453,6 +453,36 @@ static ssize_t mdc_stats_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(mdc_stats);
 
+static int mdc_dom_min_repsize_seq_show(struct seq_file *m, void *v)
+{
+	struct obd_device *dev = m->private;
+
+	seq_printf(m, "%u\n", dev->u.cli.cl_dom_min_inline_repsize);
+
+	return 0;
+}
+
+static ssize_t mdc_dom_min_repsize_seq_write(struct file *file,
+					     const char __user *buffer,
+					     size_t count, loff_t *off)
+{
+	struct obd_device *dev;
+	unsigned int val;
+	int rc;
+
+	dev =  ((struct seq_file *)file->private_data)->private;
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val > MDC_DOM_MAX_INLINE_REPSIZE)
+		return -ERANGE;
+
+	dev->u.cli.cl_dom_min_inline_repsize = val;
+	return count;
+}
+LPROC_SEQ_FOPS(mdc_dom_min_repsize);
+
 LPROC_SEQ_FOPS_RO_TYPE(mdc, connect_flags);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, timeouts);
@@ -486,6 +516,8 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	  .fops	=	&mdc_unstable_stats_fops	},
 	{ .name	=	"mdc_stats",
 	  .fops	=	&mdc_stats_fops			},
+	{ .name	=	"mdc_dom_min_repsize",
+	  .fops	=	&mdc_dom_min_repsize_fops	},
 	{ NULL }
 };
 

@@ -606,20 +606,24 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 	CDEBUG(D_DENTRY, "it %p it_disposition %x\n", it,
 	       it->it_disposition);
 	if (!it_disposition(it, DISP_LOOKUP_NEG)) {
-                rc = ll_prep_inode(&inode, request, (*de)->d_sb, it);
-                if (rc)
-                        RETURN(rc);
+		rc = ll_prep_inode(&inode, request, (*de)->d_sb, it);
+		if (rc)
+			RETURN(rc);
 
-                ll_set_lock_data(ll_i2sbi(parent)->ll_md_exp, inode, it, &bits);
+		if (it->it_op & IT_OPEN)
+			ll_dom_finish_open(inode, request, it);
 
-                /* We used to query real size from OSTs here, but actually
-                   this is not needed. For stat() calls size would be updated
-                   from subsequent do_revalidate()->ll_inode_revalidate_it() in
-                   2.4 and
-                   vfs_getattr_it->ll_getattr()->ll_inode_revalidate_it() in 2.6
-                   Everybody else who needs correct file size would call
-                   ll_glimpse_size or some equivalent themselves anyway.
-                   Also see bug 7198. */
+		ll_set_lock_data(ll_i2sbi(parent)->ll_md_exp, inode, it, &bits);
+
+		/* We used to query real size from OSTs here, but actually
+		 * this is not needed. For stat() calls size would be updated
+		 * from subsequent do_revalidate()->ll_inode_revalidate_it() in
+		 * 2.4 and
+		 * vfs_getattr_it->ll_getattr()->ll_inode_revalidate_it() in 2.6
+		 * Everybody else who needs correct file size would call
+		 * ll_glimpse_size or some equivalent themselves anyway.
+		 * Also see bug 7198.
+		 */
 	}
 
 	/* Only hash *de if it is unhashed (new dentry).

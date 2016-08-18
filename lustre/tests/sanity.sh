@@ -16966,6 +16966,197 @@ test_271c() {
 }
 run_test 271c "DoM: IO lock at open saves enqueue RPCs"
 
+cleanup_271def_tests() {
+	trap 0
+	rm -f $1
+}
+
+test_271d() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.57) ] &&
+		skip "Need MDS version at least 2.10.57" && return
+
+	local dom=$DIR/$tdir/dom
+	local tmp=$TMP/$tfile
+	trap "cleanup_271def_tests $tmp" EXIT
+
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
+
+	local mdtidx=$($GETSTRIPE -M $DIR/$tdir)
+	local facet=mds$((mdtidx + 1))
+
+	cancel_lru_locks mdc
+	dd if=/dev/urandom of=$tmp bs=1000 count=1
+	dd if=$tmp of=$dom bs=1000 count=1
+	cancel_lru_locks mdc
+
+	cat /etc/hosts >> $tmp
+	lctl set_param -n mdc.*.stats=clear
+
+	# append data to the same file it should update local page
+	echo "Append to the same page"
+	cat /etc/hosts >> $dom
+	local num=$(lctl get_param -n mdc.*.stats |
+		awk '/ost_read/ {print $2}')
+	local ra=$(lctl get_param -n mdc.*.stats |
+		awk '/req_active/ {print $2}')
+	local rw=$(lctl get_param -n mdc.*.stats |
+		awk '/req_waittime/ {print $2}')
+
+	[ -z $num ] || error "$num READ RPC occured"
+	[ $ra == $rw ] || error "$((ra - rw)) resend occured"
+	echo "... DONE"
+
+	# compare content
+	cmp $tmp $dom || error "file miscompare"
+
+	cancel_lru_locks mdc
+	lctl set_param -n mdc.*.stats=clear
+
+	echo "Open and read file"
+	cat $dom > /dev/null
+	local num=$(lctl get_param -n mdc.*.stats |
+		awk '/ost_read/ {print $2}')
+	local ra=$(lctl get_param -n mdc.*.stats |
+		awk '/req_active/ {print $2}')
+	local rw=$(lctl get_param -n mdc.*.stats |
+		awk '/req_waittime/ {print $2}')
+
+	[ -z $num ] || error "$num READ RPC occured"
+	[ $ra == $rw ] || error "$((ra - rw)) resend occured"
+	echo "... DONE"
+
+	# compare content
+	cmp $tmp $dom || error "file miscompare"
+
+	return 0
+}
+run_test 271d "DoM: read on open (1K file in reply buffer)"
+
+test_271e() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.57) ] &&
+		skip "Need MDS version at least 2.10.57" && return
+
+	local dom=$DIR/$tdir/dom
+	local tmp=$TMP/${tfile}.data
+	trap "cleanup_271def_tests $tmp" EXIT
+
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
+
+	local mdtidx=$($GETSTRIPE -M $DIR/$tdir)
+	local facet=mds$((mdtidx + 1))
+
+	cancel_lru_locks mdc
+	dd if=/dev/urandom of=$tmp bs=30K count=1
+	dd if=$tmp of=$dom bs=30K count=1
+	cancel_lru_locks mdc
+	cat /etc/hosts >> $tmp
+	lctl set_param -n mdc.*.stats=clear
+
+	echo "Append to the same page"
+	cat /etc/hosts >> $dom
+
+	local num=$(lctl get_param -n mdc.*.stats | \
+		awk '/ost_read/ {print $2}')
+	local ra=$(lctl get_param -n mdc.*.stats | \
+		awk '/req_active/ {print $2}')
+	local rw=$(lctl get_param -n mdc.*.stats | \
+		awk '/req_waittime/ {print $2}')
+
+	[ -z $num ] || error "$num READ RPC occured"
+	# Reply buffer can be adjusted for larger buffer by resend
+	echo "... DONE with $((ra - rw)) resends"
+
+	# compare content
+	cmp $tmp $dom || error "file miscompare"
+
+	cancel_lru_locks mdc
+	lctl set_param -n mdc.*.stats=clear
+
+	echo "Open and read file"
+	cat $dom > /dev/null
+	local num=$(lctl get_param -n mdc.*.stats | \
+		awk '/ost_read/ {print $2}')
+	local ra=$(lctl get_param -n mdc.*.stats | \
+		awk '/req_active/ {print $2}')
+	local rw=$(lctl get_param -n mdc.*.stats | \
+		awk '/req_waittime/ {print $2}')
+
+	[ -z $num ] || error "$num READ RPC occured"
+	# Reply buffer can be adjusted for larger buffer by resend
+	echo "... DONE with $((ra - rw)) resends"
+
+	# compare content
+	cmp $tmp $dom || error "file miscompare"
+
+	return 0
+}
+run_test 271e "DoM: read on open (30K file with reply buffer adjusting)"
+
+test_271f() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.57) ] &&
+		skip "Need MDS version at least 2.10.57" && return
+
+	local dom=$DIR/$tdir/dom
+	local tmp=$TMP/$tfile
+	trap "cleanup_271def_tests $tmp" EXIT
+
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
+
+	local mdtidx=$($GETSTRIPE -M $DIR/$tdir)
+	local facet=mds$((mdtidx + 1))
+
+	cancel_lru_locks mdc
+	dd if=/dev/urandom of=$tmp bs=200000 count=1
+	dd if=$tmp of=$dom bs=200000 count=1
+	cancel_lru_locks mdc
+	cat /etc/hosts >> $tmp
+	lctl set_param -n mdc.*.stats=clear
+
+	echo "Append to the same page"
+	cat /etc/hosts >> $dom
+	local num=$(lctl get_param -n mdc.*.stats | \
+		awk '/ost_read/ {print $2}')
+	local ra=$(lctl get_param -n mdc.*.stats | \
+		awk '/req_active/ {print $2}')
+	local rw=$(lctl get_param -n mdc.*.stats | \
+		awk '/req_waittime/ {print $2}')
+
+	[ -z $num ] || error "$num READ RPC occured"
+	[ $ra == $rw ] || error "$((ra - rw)) resend occured"
+	echo "... DONE"
+
+	# compare content
+	cmp $tmp $dom || error "file miscompare"
+
+	cancel_lru_locks mdc
+	lctl set_param -n mdc.*.stats=clear
+
+	echo "Open and read file"
+	cat $dom > /dev/null
+	local num=$(lctl get_param -n mdc.*.stats | \
+		awk '/ost_read/ {print $2}')
+	local ra=$(lctl get_param -n mdc.*.stats | \
+		awk '/req_active/ {print $2}')
+	local rw=$(lctl get_param -n mdc.*.stats | \
+		awk '/req_waittime/ {print $2}')
+
+	[ $num -eq 1 ] || error "expect 1 READ RPC, $num occured"
+	[ $ra == $rw ] || error "$((ra - rw)) resend occured"
+	echo "... DONE"
+
+	# compare content
+	cmp $tmp $dom || error "file miscompare"
+
+	return 0
+}
+run_test 271f "DoM: read on open (200K file and read tail)"
+
 test_275() {
 	remote_ost_nodsh && skip "remote OST with nodsh"
 	[ $(lustre_version_code ost1) -lt $(version_code 2.10.57) ] &&

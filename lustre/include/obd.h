@@ -187,6 +187,17 @@ struct client_obd {
 	 * run-time if a larger observed size is advertised by the MDT. */
 	__u32			 cl_max_mds_easize;
 
+	/* Data-on-MDT specific value to set larger reply buffer for possible
+	 * data read along with open/stat requests. By default it tries to use
+	 * unused space in reply buffer.
+	 * This value is used to ensure that reply buffer has at least as
+	 * much free space as value indicates. That free space is gained from
+	 * LOV EA buffer which is small for DoM files and on big systems can
+	 * provide up to 32KB of extra space in reply buffer.
+	 * Default value is 8K now.
+	 */
+	__u32			 cl_dom_min_inline_repsize;
+
 	enum lustre_sec_part	 cl_sp_me;
 	enum lustre_sec_part	 cl_sp_to;
 	struct sptlrpc_flavor	 cl_flvr_mgc; /* fixed flavor of mgc->mgs */
