@@ -19,10 +19,6 @@ require_dsh_mds || exit 0
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 
-[ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:	      LU-2547
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 24a 24b"
-
 build_test_filter
 
 # Allow us to override the setup if we already have a mounted system by
