@@ -1530,6 +1530,7 @@ t32_test_cleanup() {
 			destroy_zpool $facet $poolname
 		done
 	fi
+	combined_mgs_mds || start_mgs || rc=$?
 	return $rc
 }
 
@@ -1678,7 +1679,6 @@ t32_test() {
 	local mdt2_is_available=false
 	local node=$(facet_active_host $SINGLEMDS)
 	local r="do_node $node"
-	local node2=$(facet_active_host mds2)
 	local tmp=$TMP/t32
 	local img_commit
 	local img_kernel
@@ -1702,6 +1702,7 @@ t32_test() {
 	local stripe_count
 	local dir
 
+	combined_mgs_mds || stop_mgs || error "Unable to stop MGS"
 	trap 'trap - RETURN; t32_test_cleanup' RETURN
 
 	load_modules
@@ -1852,13 +1853,13 @@ t32_test() {
 			mkfsoptions="--mkfsoptions=\\\"-J size=8\\\""
 		fi
 
-		add fs2mds $(mkfs_opts mds2 $fs2mdsdev $fsname) --reformat \
+		add $SINGLEMDS $(mkfs_opts mds2 $fs2mdsdev $fsname) --reformat \
 			   $mkfsoptions $fs2mdsdev $fs2mdsvdev > /dev/null || {
 			error_noexit "Mkfs new MDT failed"
 			return 1
 		}
 
-		[[ $(facet_fstype mds1) != zfs ]] || import_zpool fs2mds
+		[[ $(facet_fstype mds1) != zfs ]] || import_zpool mds1
 
 		$r $TUNEFS --dryrun $fs2mdsdev || {
 			error_noexit "tunefs.lustre before mounting the MDT"
