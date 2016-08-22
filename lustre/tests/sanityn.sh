@@ -2522,7 +2522,7 @@ test_54_part1()
 	echo "==> rename vs getattr vs setxattr should not deadlock"
 	mkdir -p $DIR/d1/d2/d3 || error "(1) mkdir failed"
 
-	do_facet mds $LCTL set_param fail_loc=$1
+	do_facet mds1 $LCTL set_param fail_loc=$1
 
 	mv -T $DIR/d1/d2/d3 $DIR/d1/d3 &
 	PID1=$!
@@ -2544,7 +2544,7 @@ test_54_part2() {
 	echo "==> rename vs getattr vs open vs getattr should not deadlock"
 	mkdir -p $DIR/d1/d2/d3 || error "(1) mkdir failed"
 
-	do_facet mds $LCTL set_param fail_loc=$1
+	do_facet mds1 $LCTL set_param fail_loc=$1
 
 	mv -T $DIR/d1/d2/d3 $DIR/d1/d3 &
 	PID1=$!
@@ -2589,7 +2589,7 @@ test_55a() {
 	mkdir -p $DIR/d1/d2 $DIR/d3 || error "(1) mkdir failed"
 
 #define OBD_FAIL_MDS_RENAME4              0x156
-	do_facet mds $LCTL set_param fail_loc=0x80000156
+	do_facet mds1 $LCTL set_param fail_loc=0x80000156
 
 	mv -T $DIR/d1/d2 $DIR/d3/d2 &
 	PID1=$!
@@ -2607,7 +2607,7 @@ test_55b()
 	mkdir -p $DIR/d1/d2 $DIR/d3 || error "(1) mkdir failed"
 
 #define OBD_FAIL_MDS_RENAME4             0x156
-	do_facet mds $LCTL set_param fail_loc=0x80000156
+	do_facet mds1 $LCTL set_param fail_loc=0x80000156
 
 	mv -T $DIR/d1/d2 $DIR/d3/d2 &
 	PID1=$!
@@ -2625,7 +2625,7 @@ test_55c()
 	mkdir -p $DIR/d1/d2 $DIR/d3 || error "(1) mkdir failed"
 
 #define OBD_FAIL_MDS_RENAME4              0x156
-	do_facet mds $LCTL set_param fail_loc=0x156
+	do_facet mds1 $LCTL set_param fail_loc=0x156
 
 	mv -T $DIR/d1/d2 $DIR/d3/d2 &
 	PID1=$!
@@ -2653,7 +2653,7 @@ test_55d()
 	touch $DIR/f1
 
 #define OBD_FAIL_MDS_RENAME3              0x155
-	do_facet mds $LCTL set_param fail_loc=0x155
+	do_facet mds1 $LCTL set_param fail_loc=0x155
 	mv $DIR/f1 $DIR/$tdir &
 	PID1=$!
 	sleep 2

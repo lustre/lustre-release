@@ -3009,7 +3009,7 @@ test_43a() {
 
 	setup
 	chmod ugo+x $DIR || error "chmod 0 failed"
-	set_conf_param_and_check mds					\
+	set_conf_param_and_check mds1					\
 		"$LCTL get_param -n mdt.$FSNAME-MDT0000.root_squash"	\
 		"$FSNAME.mdt.root_squash"				\
 		"0:0"
@@ -3017,7 +3017,7 @@ test_43a() {
 		"$LCTL get_param -n llite.${FSNAME}*.root_squash"	\
 		"0:0" ||
 		error "check llite root_squash failed!"
-	set_conf_param_and_check mds					\
+	set_conf_param_and_check mds1					\
 		"$LCTL get_param -n mdt.$FSNAME-MDT0000.nosquash_nids"	\
 		"$FSNAME.mdt.nosquash_nids"				\
 		"NONE"
@@ -3049,7 +3049,7 @@ test_43a() {
 	#   set root squash UID:GID to RUNAS_ID
 	#   root should be able to access only files owned by RUNAS_ID
 	#
-	set_conf_param_and_check mds					\
+	set_conf_param_and_check mds1					\
 		"$LCTL get_param -n mdt.$FSNAME-MDT0000.root_squash"	\
 		"$FSNAME.mdt.root_squash"				\
 		"$RUNAS_ID:$RUNAS_ID"
@@ -3119,7 +3119,7 @@ test_43a() {
 	local NIDLIST=$($LCTL list_nids all | tr '\n' ' ')
 	NIDLIST="2@gni $NIDLIST 192.168.0.[2,10]@tcp"
 	NIDLIST=$(echo $NIDLIST | tr -s ' ' ' ')
-	set_conf_param_and_check mds					\
+	set_conf_param_and_check mds1					\
 		"$LCTL get_param -n mdt.$FSNAME-MDT0000.nosquash_nids"	\
 		"$FSNAME-MDTall.mdt.nosquash_nids"			\
 		"$NIDLIST"
@@ -4266,7 +4266,7 @@ test_58() { # bug 22658
 	unmount_fstype $SINGLEMDS
 	# restart MDS with missing llog files
 	start_mds || error "unable to start MDS"
-	do_facet mds "$LCTL set_param fail_loc=0"
+	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0"
 	reformat
 }
 run_test 58 "missing llog files must not prevent MDT from mounting"
@@ -4430,7 +4430,7 @@ test_62() {
 		{ skip "Need MDS version at least 2.2.51"; return 0; }
 
 	echo "disable journal for mds"
-	do_facet mds $TUNE2FS -O ^has_journal $mdsdev || error "tune2fs failed"
+	do_facet mds1 $TUNE2FS -O ^has_journal $mdsdev || error "tune2fs failed"
 	start_mds && error "MDT start should fail"
 	echo "disable journal for ost"
 	do_facet ost1 $TUNE2FS -O ^has_journal $ostdev || error "tune2fs failed"
