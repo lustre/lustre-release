@@ -2617,19 +2617,18 @@ restore_and_check_size() {
 	while [[ "$st" != "0x00000009" && $cpt -le 10 ]]
 	do
 		n=$(stat -c "%s" $f)
-		# we echo in both cases to show stat is not
-		# hang
+		# we echo in both cases to show stat is not hang
 		if [[ $n != $s ]]; then
 			echo "size seen is $n != $s"
 			err=1
 		else
 			echo "size seen is right: $n == $s"
 		fi
-		st=$(get_hsm_flags $f)
 		sleep 10
 		cpt=$((cpt + 1))
+		st=$(get_hsm_flags $f)
 	done
-	if [[ $cpt -lt 10 ]]; then
+	if [[ "$st" = "0x00000009" ]]; then
 		echo " "done
 	else
 		echo " restore is too long"
