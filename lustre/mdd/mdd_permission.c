@@ -99,9 +99,10 @@ int mdd_acl_set(const struct lu_env *env, struct mdd_object *obj,
 	struct thandle		*handle;
 	posix_acl_xattr_header	*head;
 	posix_acl_xattr_entry	*entry;
-	int			 rc, entry_count;
+	int			 entry_count;
 	bool			 not_equiv, mode_change;
 	mode_t			 mode;
+	int			 rc;
 	ENTRY;
 
 	head = (posix_acl_xattr_header *)(buf->lb_buf);
@@ -163,7 +164,7 @@ int mdd_acl_set(const struct lu_env *env, struct mdd_object *obj,
 unlock:
 	mdd_write_unlock(env, obj);
 stop:
-	mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
 
 	RETURN(rc);
 }

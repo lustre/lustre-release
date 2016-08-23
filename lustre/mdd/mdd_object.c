@@ -699,31 +699,31 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 static int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
 			 int flags, struct md_object *obj)
 {
-        struct thandle *handle;
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-        struct mdd_device *mdd = mdo2mdd(obj);
-        int rc;
-        ENTRY;
+	struct thandle *handle;
+	struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	struct mdd_device *mdd = mdo2mdd(obj);
+	int rc;
+	ENTRY;
 
-        handle = mdd_trans_create(env, mdd);
-        if (IS_ERR(handle))
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
 
 	rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
 	if (rc)
 		GOTO(stop, rc);
 
-        rc = mdd_trans_start(env, mdd, handle);
-        if (rc)
-                GOTO(stop, rc);
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(stop, rc);
 
-        rc = mdd_changelog_data_store(env, mdd, type, flags, mdd_obj,
-                                      handle);
+	rc = mdd_changelog_data_store(env, mdd, type, flags, mdd_obj,
+				      handle);
 
 stop:
-        mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /**
@@ -900,7 +900,8 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	GOTO(stop, rc);
 
 stop:
-	mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
+
 	return rc;
 }
 
@@ -1103,7 +1104,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 					      handle);
 
 stop:
-	mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
 
 	RETURN(rc);
 }
@@ -1143,7 +1144,7 @@ static int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
 	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
 	struct mdd_device *mdd = mdo2mdd(obj);
 	struct thandle *handle;
-	int  rc;
+	int rc;
 	ENTRY;
 
 	rc = mdd_la_get(env, mdd_obj, attr);
@@ -1183,9 +1184,9 @@ static int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
                                               handle);
 
 stop:
-        mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /*
@@ -1559,7 +1560,8 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	EXIT;
 
 stop:
-	mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
+
 	mdd_write_unlock(env, snd_o);
 	mdd_write_unlock(env, fst_o);
 
@@ -1707,24 +1709,25 @@ static int mdd_declare_close(const struct lu_env *env,
  * No permission check is needed.
  */
 static int mdd_close(const struct lu_env *env, struct md_object *obj,
-                     struct md_attr *ma, int mode)
+		     struct md_attr *ma, int mode)
 {
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-        struct mdd_device *mdd = mdo2mdd(obj);
-        struct thandle    *handle = NULL;
-	int rc, is_orphan = 0;
-        ENTRY;
+	struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	struct mdd_device *mdd = mdo2mdd(obj);
+	struct thandle *handle = NULL;
+	int is_orphan = 0;
+	int rc;
+	ENTRY;
 
-        if (ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_KEEP_ORPHAN) {
+	if (ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_KEEP_ORPHAN) {
 		mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
 		mdd_obj->mod_count--;
 		mdd_write_unlock(env, mdd_obj);
 
-                if (mdd_obj->mod_flags & ORPHAN_OBJ && !mdd_obj->mod_count)
-                        CDEBUG(D_HA, "Object "DFID" is retained in orphan "
-                               "list\n", PFID(mdd_object_fid(mdd_obj)));
-                RETURN(0);
-        }
+		if (mdd_obj->mod_flags & ORPHAN_OBJ && !mdd_obj->mod_count)
+			CDEBUG(D_HA, "Object "DFID" is retained in orphan "
+				"list\n", PFID(mdd_object_fid(mdd_obj)));
+		RETURN(0);
+	}
 
 	/* mdd_finish_unlink() will always set orphan object as DEAD_OBJ, but
 	 * it might fail to add the object to orphan list (w/o ORPHAN_OBJ). */
@@ -1833,7 +1836,7 @@ out:
 
 stop:
 	if (handle != NULL && !IS_ERR(handle))
-		mdd_trans_stop(env, mdd, rc, handle);
+		rc = mdd_trans_stop(env, mdd, rc, handle);
 
 	return rc;
 }

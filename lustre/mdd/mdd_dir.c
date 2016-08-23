@@ -1385,21 +1385,20 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 		 * failure, reset rc here */
 		rc = 0;
 	}
-        EXIT;
+	EXIT;
 out_unlock:
-        mdd_write_unlock(env, mdd_sobj);
-        if (rc == 0)
+	mdd_write_unlock(env, mdd_sobj);
+	if (rc == 0)
 		rc = mdd_changelog_ns_store(env, mdd, CL_HARDLINK, 0, mdd_sobj,
 					    mdo2fid(mdd_tobj), NULL, NULL,
 					    lname, NULL, handle);
 stop:
-	mdd_trans_stop(env, mdd, rc, handle);
-
+	rc = mdd_trans_stop(env, mdd, rc, handle);
 	if (is_vmalloc_addr(ldata->ld_buf))
 		/* if we vmalloced a large buffer drop it */
 		lu_buf_free(ldata->ld_buf);
 out_pending:
-        return rc;
+	return rc;
 }
 
 static int mdd_mark_orphan_object(const struct lu_env *env,
@@ -1757,7 +1756,7 @@ cleanup:
 	}
 
 stop:
-	mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
 
 	return rc;
 }
@@ -1777,9 +1776,11 @@ static int mdd_cd_sanity_check(const struct lu_env *env,
         RETURN(0);
 }
 
-static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
-                           struct md_object *cobj, const struct md_op_spec *spec,
-                           struct md_attr *ma)
+static int mdd_create_data(const struct lu_env *env,
+			   struct md_object *pobj,
+			   struct md_object *cobj,
+			   const struct md_op_spec *spec,
+			   struct md_attr *ma)
 {
 	struct mdd_device *mdd = mdo2mdd(cobj);
 	struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
@@ -1811,14 +1812,14 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 	/* calling ->ah_make_hint() is used to transfer information from parent */
 	mdd_object_make_hint(env, mdd_pobj, son, attr, spec, hint);
 
-        handle = mdd_trans_create(env, mdd);
-        if (IS_ERR(handle))
-                GOTO(out_free, rc = PTR_ERR(handle));
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		GOTO(out_free, rc = PTR_ERR(handle));
 
-        /*
-         * XXX: Setting the lov ea is not locked but setting the attr is locked?
-         * Should this be fixed?
-         */
+	/*
+	 * XXX: Setting the lov ea is not locked but setting the attr is locked?
+	 * Should this be fixed?
+	 */
 	CDEBUG(D_OTHER, "ea %p/%u, cr_flags "LPO64", no_create %u\n",
 	       spec->u.sp_ea.eadata, spec->u.sp_ea.eadatalen,
 	       spec->sp_cr_flags, spec->no_create);
@@ -1852,7 +1853,8 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, son, handle);
 
 stop:
-	mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
+
 out_free:
 	RETURN(rc);
 }
@@ -2343,7 +2345,8 @@ static int mdd_index_delete(const struct lu_env *env,
 	if (rc)
 		GOTO(stop, rc);
 stop:
-	mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
+
 	RETURN(rc);
 }
 
@@ -2485,8 +2488,6 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	EXIT;
 err_insert:
 	if (rc != 0) {
-		int rc2;
-
 		if (spec->sp_cr_flags & MDS_OPEN_VOLATILE)
 			rc2 = __mdd_orphan_del(env, son, handle);
 		else
@@ -3055,7 +3056,7 @@ cleanup:
 					    ltname, lsname, handle);
 
 stop:
-	mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
 
 out_pending:
 	mdd_object_put(env, mdd_sobj);
@@ -3317,7 +3318,6 @@ static int mdd_migrate_xattrs(const struct lu_env *env,
 	int			list_xsize;
 	struct lu_buf		list_xbuf;
 	int			rc;
-	int			rc1;
 
 	/* retrieve xattr list from the old object */
 	list_xsize = mdo_xattr_list(env, mdd_sobj, &LU_BUF_NULL);
@@ -3392,9 +3392,7 @@ static int mdd_migrate_xattrs(const struct lu_env *env,
 		if (rc != 0)
 			GOTO(stop_trans, rc);
 stop_trans:
-		rc1 = mdd_trans_stop(env, mdd, rc, handle);
-		if (rc == 0)
-			rc = rc1;
+		rc = mdd_trans_stop(env, mdd, rc, handle);
 		if (rc != 0)
 			GOTO(out, rc);
 next:
@@ -3596,13 +3594,8 @@ static int mdd_migrate_create(const struct lu_env *env,
 	la_flag->la_flags = la->la_flags | LUSTRE_IMMUTABLE_FL;
 	rc = mdo_attr_set(env, mdd_sobj, la_flag, handle);
 stop_trans:
-	if (handle != NULL) {
-		int rc1;
-
-		rc1 = mdd_trans_stop(env, mdd, rc, handle);
-		if (rc == 0)
-			rc = rc1;
-	}
+	if (handle != NULL)
+		rc = mdd_trans_stop(env, mdd, rc, handle);
 out_free:
 	if (lmm_buf.lb_buf != NULL)
 		OBD_FREE(lmm_buf.lb_buf, lmm_buf.lb_len);
@@ -3619,9 +3612,9 @@ static int mdd_migrate_entries(const struct lu_env *env,
 	struct thandle		*handle;
 	struct dt_it            *it;
 	const struct dt_it_ops  *iops;
-	int                      rc;
 	int                      result;
 	struct lu_dirent        *ent;
+	int                      rc;
 	ENTRY;
 
 	OBD_ALLOC(ent, NAME_MAX + sizeof(*ent) + 1);
@@ -3657,7 +3650,6 @@ static int mdd_migrate_entries(const struct lu_env *env,
 		int			recsize;
 		int			is_dir;
 		bool			target_exist = false;
-		int			rc1;
 
 		len = iops->key_size(env, it);
 		if (len == 0)
@@ -3791,10 +3783,7 @@ static int mdd_migrate_entries(const struct lu_env *env,
 out_put:
 		mdd_write_unlock(env, child);
 		mdd_object_put(env, child);
-		rc1 = mdd_trans_stop(env, mdd, rc, handle);
-		if (rc == 0)
-			rc = rc1;
-
+		rc = mdd_trans_stop(env, mdd, rc, handle);
 		if (rc != 0)
 			GOTO(out, rc);
 next:
@@ -4089,7 +4078,7 @@ out_unlock:
 	mdd_write_unlock(env, mdd_sobj);
 
 stop_trans:
-	mdd_trans_stop(env, mdd, rc, handle);
+	rc = mdd_trans_stop(env, mdd, rc, handle);
 
 	RETURN(rc);
 }

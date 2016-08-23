@@ -15402,6 +15402,29 @@ test_406() {
 }
 run_test 406 "DNE support fs default striping"
 
+test_407() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.55) ]] &&
+		skip "Need MDS version at least 2.8.55" && return
+
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir.0 ||
+		error "$LFS mkdir -i 0 -c 1 $tdir.0 failed"
+	$LFS mkdir -i 1 -c 1 $DIR/$tdir.1 ||
+		error "$LFS mkdir -i 1 -c 1 $tdir.1 failed"
+	touch $DIR/$tdir.0/$tfile.0 || error "touch $tdir.0/$tfile.0 failed"
+
+	#define OBD_FAIL_DT_TXN_STOP	0x2019
+	for idx in $(seq $MDSCOUNT); do
+		do_facet mds$idx "lctl set_param fail_loc=0x2019"
+	done
+	$LFS mkdir -c 2 $DIR/$tdir && error "$LFS mkdir -c 2 $tdir should fail"
+	mv $DIR/$tdir.0/$tfile.0 $DIR/$tdir.1/$tfile.1 &&
+		error "mv $tdir.0/$tfile.0 $tdir.1/$tfile.1 should fail"
+	true
+}
+run_test 407 "transaction fail should cause operation fail"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

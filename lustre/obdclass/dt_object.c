@@ -115,6 +115,9 @@ int dt_txn_hook_stop(const struct lu_env *env, struct thandle *th)
 	if (th->th_local)
 		return 0;
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_DT_TXN_STOP))
+		return -EIO;
+
 	list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
 		struct thandle *dtc_th = th;
 

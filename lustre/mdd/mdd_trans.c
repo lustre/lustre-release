@@ -63,6 +63,12 @@ int mdd_trans_start(const struct lu_env *env, struct mdd_device *mdd,
 int mdd_trans_stop(const struct lu_env *env, struct mdd_device *mdd,
 		   int result, struct thandle *handle)
 {
+	int rc;
+
 	handle->th_result = result;
-	return mdd_child_ops(mdd)->dt_trans_stop(env, mdd->mdd_child, handle);
+	rc = mdd_child_ops(mdd)->dt_trans_stop(env, mdd->mdd_child, handle);
+
+	/* if operation failed, return \a result, otherwise return status of
+	 * dt_trans_stop */
+	return result ?: rc;
 }

@@ -318,13 +318,13 @@ static int orph_index_delete(const struct lu_env *env,
 
 
 static int orphan_object_destroy(const struct lu_env *env,
-                                 struct mdd_object *obj,
-                                 struct dt_key *key)
+				 struct mdd_object *obj,
+				 struct dt_key *key)
 {
-        struct thandle *th = NULL;
-        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
-        int rc = 0;
-        ENTRY;
+	struct thandle *th = NULL;
+	struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+	int rc = 0;
+	ENTRY;
 
 	th = mdd_trans_create(env, mdd);
 	if (IS_ERR(th)) {
@@ -332,22 +332,22 @@ static int orphan_object_destroy(const struct lu_env *env,
 		RETURN(PTR_ERR(th));
 	}
 
-        rc = orph_declare_index_delete(env, obj, th);
-        if (rc)
-                GOTO(stop, rc);
+	rc = orph_declare_index_delete(env, obj, th);
+	if (rc)
+		GOTO(stop, rc);
 
 	rc = mdo_declare_destroy(env, obj, th);
-        if (rc)
-                GOTO(stop, rc);
+	if (rc)
+		GOTO(stop, rc);
 
-        rc = mdd_trans_start(env, mdd, th);
-        if (rc)
-                GOTO(stop, rc);
+	rc = mdd_trans_start(env, mdd, th);
+	if (rc)
+		GOTO(stop, rc);
 
-        mdd_write_lock(env, obj, MOR_TGT_CHILD);
-        if (likely(obj->mod_count == 0)) {
-                mdd_orphan_write_lock(env, mdd);
-                rc = mdd_orphan_delete_obj(env, mdd, key, th);
+	mdd_write_lock(env, obj, MOR_TGT_CHILD);
+	if (likely(obj->mod_count == 0)) {
+		mdd_orphan_write_lock(env, mdd);
+		rc = mdd_orphan_delete_obj(env, mdd, key, th);
 		if (rc == 0) {
 			mdo_ref_del(env, obj, th);
 			if (S_ISDIR(mdd_object_type(obj))) {
@@ -356,15 +356,15 @@ static int orphan_object_destroy(const struct lu_env *env,
 			}
 			rc = mdo_destroy(env, obj, th);
 		} else
-                        CERROR("could not delete object: rc = %d\n",rc);
-                mdd_orphan_write_unlock(env, mdd);
-        }
-        mdd_write_unlock(env, obj);
+			CERROR("could not delete object: rc = %d\n", rc);
+		mdd_orphan_write_unlock(env, mdd);
+	}
+	mdd_write_unlock(env, obj);
 
 stop:
-        mdd_trans_stop(env, mdd, 0, th);
+	rc = mdd_trans_stop(env, mdd, 0, th);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /**
