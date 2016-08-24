@@ -1,0 +1,157 @@
+mbcache provides absolutely no value for Lustre xattrs (because
+they are unique and cannot be shared between files) and as we can
+see it has a noticable overhead in some cases. In the past there
+was a CONFIG_MBCACHE option that would allow it to be disabled,
+but this was removed in newer kernels, so we will need to patch
+ldiskfs to fix this.
+
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -963,6 +963,7 @@ struct ext4_inode_info {
+ /*
+  * Mount flags set via mount options or defaults
+  */
++#define EXT4_MOUNT_NO_MBCACHE		0x00001 /* Disable mbcache */
+ #define EXT4_MOUNT_DIRDATA		0x00002	/* Data in directory entries*/
+ #define EXT4_MOUNT_GRPID		0x00004	/* Create files with directory's group */
+ #define EXT4_MOUNT_DEBUG		0x00008	/* Some debugging messages */
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -1161,6 +1161,7 @@ enum {
+ 	Opt_nomblk_io_submit, Opt_block_validity, Opt_noblock_validity,
+ 	Opt_inode_readahead_blks, Opt_journal_ioprio,
+ 	Opt_dioread_nolock, Opt_dioread_lock,
++	Opt_no_mbcache,
+ 	Opt_discard, Opt_nodiscard, Opt_init_itable, Opt_noinit_itable,
+ 	Opt_max_dir_size_kb, Opt_nojournal_checksum,
+ };
+@@ -1238,6 +1239,7 @@ static const match_table_t tokens = {
+ 	{Opt_discard, "discard"},
+ 	{Opt_nodiscard, "nodiscard"},
+ 	{Opt_init_itable, "init_itable=%u"},
++	{Opt_no_mbcache, "no_mbcache"},
+ 	{Opt_init_itable, "init_itable"},
+ 	{Opt_noinit_itable, "noinit_itable"},
+ 	{Opt_max_dir_size_kb, "max_dir_size_kb=%u"},
+@@ -1400,6 +1402,7 @@ static const struct mount_opts {
+ 	{Opt_noauto_da_alloc, EXT4_MOUNT_NO_AUTO_DA_ALLOC, MOPT_SET},
+ 	{Opt_auto_da_alloc, EXT4_MOUNT_NO_AUTO_DA_ALLOC, MOPT_CLEAR},
+ 	{Opt_noinit_itable, EXT4_MOUNT_INIT_INODE_TABLE, MOPT_CLEAR},
++	{Opt_no_mbcache, EXT4_MOUNT_NO_MBCACHE, MOPT_SET},
+ 	{Opt_commit, 0, MOPT_GTE0},
+ 	{Opt_max_batch_time, 0, MOPT_GTE0},
+ 	{Opt_min_batch_time, 0, MOPT_GTE0},
+Index: linux-stage/fs/ext4/xattr.c
+===================================================================
+--- linux-stage.orig/fs/ext4/xattr.c
++++ linux-stage/fs/ext4/xattr.c
+@@ -81,7 +81,8 @@
+ # define ea_bdebug(bh, fmt, ...)	no_printk(fmt, ##__VA_ARGS__)
+ #endif
+ 
+-static void ext4_xattr_cache_insert(struct buffer_head *);
++static void ext4_xattr_cache_insert(struct super_block *,
++				    struct buffer_head *);
+ static struct buffer_head *ext4_xattr_cache_find(struct inode *,
+ 						 struct ext4_xattr_header *,
+ 						 struct mb_cache_entry **);
+@@ -405,7 +406,7 @@ bad_block:
+ 		error = -EIO;
+ 		goto cleanup;
+ 	}
+-	ext4_xattr_cache_insert(bh);
++	ext4_xattr_cache_insert(inode->i_sb, bh);
+ 	entry = BFIRST(bh);
+ 	error = ext4_xattr_find_entry(&entry, name_index, name, bh->b_size, 1,
+ 				      inode);
+@@ -569,7 +570,7 @@ ext4_xattr_block_list(struct dentry *den
+ 		error = -EIO;
+ 		goto cleanup;
+ 	}
+-	ext4_xattr_cache_insert(bh);
++	ext4_xattr_cache_insert(inode->i_sb, bh);
+ 	error = ext4_xattr_list_entries(dentry, BFIRST(bh), buffer, buffer_size);
+ 
+ cleanup:
+@@ -667,7 +668,9 @@ ext4_xattr_release_block(handle_t *handl
+ 	struct mb_cache_entry *ce = NULL;
+ 	int error = 0;
+ 
+-	ce = mb_cache_entry_get(ext4_xattr_cache, bh->b_bdev, bh->b_blocknr);
++	if (!test_opt(inode->i_sb, NO_MBCACHE))
++		ce = mb_cache_entry_get(ext4_xattr_cache, bh->b_bdev,
++					bh->b_blocknr);
+ 	BUFFER_TRACE(bh, "get_write_access");
+ 	error = ext4_journal_get_write_access(handle, bh);
+ 	if (error)
+@@ -1082,8 +1085,10 @@ ext4_xattr_block_set(handle_t *handle, s
+ #define header(x) ((struct ext4_xattr_header *)(x))
+ 
+ 	if (s->base) {
+-		ce = mb_cache_entry_get(ext4_xattr_cache, bs->bh->b_bdev,
+-					bs->bh->b_blocknr);
++		if (!test_opt(inode->i_sb, NO_MBCACHE))
++			ce = mb_cache_entry_get(ext4_xattr_cache,
++						bs->bh->b_bdev,
++						bs->bh->b_blocknr);
+ 		BUFFER_TRACE(bs->bh, "get_write_access");
+ 		error = ext4_journal_get_write_access(handle, bs->bh);
+ 		if (error)
+@@ -1101,7 +1106,7 @@ ext4_xattr_block_set(handle_t *handle, s
+ 				if (!IS_LAST_ENTRY(s->first))
+ 					ext4_xattr_rehash(header(s->base),
+ 							  s->here);
+-				ext4_xattr_cache_insert(bs->bh);
++				ext4_xattr_cache_insert(sb, bs->bh);
+ 			}
+ 			unlock_buffer(bs->bh);
+ 			if (error == -EIO)
+@@ -1185,7 +1190,8 @@ inserted:
+ 				if (error)
+ 					goto cleanup_dquot;
+ 			}
+-			mb_cache_entry_release(ce);
++			if (ce)
++				mb_cache_entry_release(ce);
+ 			ce = NULL;
+ 		} else if (bs->bh && s->base == bs->bh->b_data) {
+ 			/* We were modifying this block in-place. */
+@@ -1238,7 +1244,7 @@ getblk_failed:
+ 			memcpy(new_bh->b_data, s->base, new_bh->b_size);
+ 			set_buffer_uptodate(new_bh);
+ 			unlock_buffer(new_bh);
+-			ext4_xattr_cache_insert(new_bh);
++			ext4_xattr_cache_insert(sb, new_bh);
+ 			error = ext4_handle_dirty_xattr_block(handle,
+ 							      inode, new_bh);
+ 			if (error)
+@@ -2022,12 +2028,15 @@ ext4_xattr_put_super(struct super_block
+  * Returns 0, or a negative error number on failure.
+  */
+ static void
+-ext4_xattr_cache_insert(struct buffer_head *bh)
++ext4_xattr_cache_insert(struct super_block *sb, struct buffer_head *bh)
+ {
+ 	__u32 hash = le32_to_cpu(BHDR(bh)->h_hash);
+ 	struct mb_cache_entry *ce;
+ 	int error;
+ 
++	if (test_opt(sb, NO_MBCACHE))
++		return;
++
+ 	ce = mb_cache_entry_alloc(ext4_xattr_cache, GFP_NOFS);
+ 	if (!ce) {
+ 		ea_bdebug(bh, "out of memory");
+@@ -2100,6 +2109,8 @@ ext4_xattr_cache_find(struct inode *inod
+ 	__u32 hash = le32_to_cpu(header->h_hash);
+ 	struct mb_cache_entry *ce;
+ 
++	if (test_opt(inode->i_sb, NO_MBCACHE))
++		return NULL;
+ 	if (!header->h_hash)
+ 		return NULL;  /* never share */
+ 	ea_idebug(inode, "looking for cached blocks [%x]", (int)hash);
