@@ -3718,6 +3718,43 @@ test_92() {
 }
 run_test 92 "create remote directory under orphan directory"
 
+test_93() {
+	local rc1=0
+	local rc2=0
+	local old_rr
+
+	mkdir -p $DIR1/$tfile-1/
+	mkdir -p $DIR2/$tfile-2/
+	local old_rr=$(do_facet $SINGLEMDS lctl get_param -n \
+		'lod.lustre-MDT*/qos_threshold_rr' | sed -e 's/%//')
+	do_facet $SINGLEMDS lctl set_param -n \
+		'lod.lustre-MDT*/qos_threshold_rr' 100
+	#define OBD_FAIL_MDS_LOV_CREATE_RACE     0x163
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x00000163"
+
+	$SETSTRIPE -c -1 $DIR1/$tfile-1/file1 &
+	local PID1=$!
+	sleep 1
+	$SETSTRIPE -c -1 $DIR2/$tfile-2/file2 &
+	local PID2=$!
+	wait $PID2
+	wait $PID1
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x0"
+	do_facet $SINGLEMDS "lctl set_param -n \
+		'lod.lustre-MDT*/qos_threshold_rr' $old_rr"
+
+	$GETSTRIPE $DIR1/$tfile-1/file1
+	rc1=$($GETSTRIPE -q $DIR1/$tfile-1/file1 |
+		awk '{if (/[0-9]/) print $1 }' | sort | uniq -d | wc -l)
+	$GETSTRIPE $DIR2/$tfile-2/file2
+	rc2=$($GETSTRIPE -q $DIR2/$tfile-2/file2 |
+		awk '{if (/[0-9]/) print $1 }' | sort | uniq -d | wc -l)
+	echo "rc1=$rc1 and rc2=$rc2 "
+	[ $rc1 -eq 0 ] && [ $rc2 -eq 0 ] ||
+		error "object allocate on same ost detected"
+}
+run_test 93 "alloc_rr should not allocate on same ost"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script
