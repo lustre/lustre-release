@@ -1025,7 +1025,15 @@ static int vvp_io_write_start(const struct lu_env *env,
 		 * consistency, proper locking to protect against writes,
 		 * trucates, etc. is handled in the higher layers of lustre.
 		 */
-		result = generic_file_write_iter(vio->vui_iocb, vio->vui_iter);
+		bool lock_node = !IS_NOSEC(inode);
+
+		if (lock_node)
+			inode_lock(inode);
+		result = __generic_file_write_iter(vio->vui_iocb,
+						   vio->vui_iter);
+		if (lock_node)
+			inode_unlock(inode);
+
 		if (result > 0 || result == -EIOCBQUEUED) {
 			ssize_t err;
 

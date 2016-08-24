@@ -1449,6 +1449,17 @@ static inline void iov_iter_truncate(struct iov_iter *i, u64 count)
 }
 #endif
 
+#ifndef HAVE_IS_SXID
+static inline bool is_sxid(umode_t mode)
+{
+	return (mode & S_ISUID) || ((mode & S_ISGID) && (mode & S_IXGRP));
+}
+#endif
+
+#ifndef IS_NOSEC
+#define IS_NOSEC(inode)	(!is_sxid(inode->i_mode))
+#endif
+
 #ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 static inline void iov_iter_reexpand(struct iov_iter *i, size_t count)
 {
@@ -1497,7 +1508,7 @@ generic_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 }
 
 static inline ssize_t
-generic_file_write_iter(struct kiocb *iocb, struct iov_iter *iter)
+__generic_file_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct iovec iov;
 	struct iov_iter i;

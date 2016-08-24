@@ -1377,6 +1377,22 @@ bio_end_sector, [
 ]) # LC_HAVE_BIO_END_SECTOR
 
 #
+# 3.9 created is_sxid
+#
+AC_DEFUN([LC_HAVE_IS_SXID], [
+LB_CHECK_COMPILE([if 'is_sxid' is defined],
+is_sxid, [
+	#include <linux/fs.h>
+],[
+	struct inode inode;
+
+	is_sxid(inode.i_mode);
+],[
+	AC_DEFINE(HAVE_IS_SXID, 1, [is_sxid is defined])
+])
+]) # LC_HAVE_IS_SXID
+
+#
 # LC_HAVE_REMOVE_PROC_SUBTREE
 #
 # 3.10 introduced remove_proc_subtree
@@ -2288,6 +2304,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 3.9
 	LC_HAVE_HLIST_FOR_EACH_3ARG
 	LC_HAVE_BIO_END_SECTOR
+	LC_HAVE_IS_SXID
 
 	# 3.10
 	LC_BLKDEV_RELEASE_RETURN_INT
