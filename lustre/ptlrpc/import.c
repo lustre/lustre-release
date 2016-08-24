@@ -1049,6 +1049,14 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 
 	spin_unlock(&imp->imp_lock);
 
+	if (!exp) {
+		/* This could happen if export is cleaned during the
+		   connect attempt */
+		CERROR("%s: missing export after connect\n",
+		       imp->imp_obd->obd_name);
+		GOTO(out, rc = -ENODEV);
+	}
+
 	/* check that server granted subset of flags we asked for. */
 	if ((ocd->ocd_connect_flags & imp->imp_connect_flags_orig) !=
 	    ocd->ocd_connect_flags) {
@@ -1094,13 +1102,6 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 		}
 	}
 
-	if (!exp) {
-		/* This could happen if export is cleaned during the
-		   connect attempt */
-		CERROR("%s: missing export after connect\n",
-		       imp->imp_obd->obd_name);
-		GOTO(out, rc = -ENODEV);
-	}
 	old_connect_flags = exp_connect_flags(exp);
 	exp->exp_connect_data = *ocd;
 	imp->imp_obd->obd_self_export->exp_connect_data = *ocd;

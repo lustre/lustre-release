@@ -167,14 +167,17 @@ int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
                         ptlrpc_connection_put(imp->imp_connection);
                         imp->imp_connection = NULL;
 
-                        dlmexp = class_conn2export(&imp->imp_dlm_handle);
-                        if (dlmexp && dlmexp->exp_connection) {
-                                LASSERT(dlmexp->exp_connection ==
-                                        imp_conn->oic_conn);
-                                ptlrpc_connection_put(dlmexp->exp_connection);
-                                dlmexp->exp_connection = NULL;
-                        }
-                }
+			dlmexp = class_conn2export(&imp->imp_dlm_handle);
+			if (dlmexp && dlmexp->exp_connection) {
+				LASSERT(dlmexp->exp_connection ==
+					imp_conn->oic_conn);
+				ptlrpc_connection_put(dlmexp->exp_connection);
+				dlmexp->exp_connection = NULL;
+			}
+
+			if (dlmexp != NULL)
+				class_export_put(dlmexp);
+		}
 
 		list_del(&imp_conn->oic_item);
                 ptlrpc_connection_put(imp_conn->oic_conn);
