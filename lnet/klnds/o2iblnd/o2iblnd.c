@@ -1877,8 +1877,13 @@ again:
 				}
 
 #ifdef HAVE_IB_MAP_MR_SG
+#ifdef HAVE_IB_MAP_MR_SG_5ARGS
+				n = ib_map_mr_sg(mr, tx->tx_frags,
+						 tx->tx_nfrags, NULL, PAGE_SIZE);
+#else
 				n = ib_map_mr_sg(mr, tx->tx_frags,
 						 tx->tx_nfrags, PAGE_SIZE);
+#endif
 				if (unlikely(n != tx->tx_nfrags)) {
 					CERROR("Failed to map mr %d/%d "
 					       "elements\n", n, tx->tx_nfrags);
