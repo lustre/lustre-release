@@ -3049,6 +3049,10 @@ tbf_rule_operate()
 }
 
 test_77e() {
+	local server_version=$(lustre_version_code ost1)
+	[[ $server_version -ge $(version_code 2.7.58) ]] ||
+		{ skip "Need server version newer than 2.7.57"; return 0; }
+
 	oss=$(comma_list $(osts_nodes))
 
 	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ nid"
@@ -3091,6 +3095,10 @@ test_77e() {
 run_test 77e "check TBF NID nrs policy"
 
 test_77f() {
+	local server_version=$(lustre_version_code ost1)
+	[[ $server_version -ge $(version_code 2.7.58) ]] ||
+		{ skip "Need server version newer than 2.7.57"; return 0; }
+
 	oss=$(comma_list $(osts_nodes))
 
 	# Configure jobid_var
@@ -3146,6 +3154,10 @@ test_77f() {
 run_test 77f "check TBF JobID nrs policy"
 
 test_77g() {
+	local server_version=$(lustre_version_code ost1)
+	[[ $server_version -ge $(version_code 2.7.58) ]] ||
+		{ skip "Need server version newer than 2.7.57"; return 0; }
+
 	oss=$(comma_list $(osts_nodes))
 
 	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ nid"
