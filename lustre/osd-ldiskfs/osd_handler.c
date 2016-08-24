@@ -2505,8 +2505,10 @@ static int osd_inode_setattr(const struct lu_env *env,
 	if (bits & LA_MTIME)
 		inode->i_mtime  = *osd_inode_time(env, inode, attr->la_mtime);
 	if (bits & LA_SIZE) {
+		spin_lock(&inode->i_lock);
 		LDISKFS_I(inode)->i_disksize = attr->la_size;
 		i_size_write(inode, attr->la_size);
+		spin_unlock(&inode->i_lock);
 	}
 
 	/* OSD should not change "i_blocks" which is used by quota.

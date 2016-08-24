@@ -1631,12 +1631,14 @@ static int osd_ldiskfs_writelink(struct inode *inode, char *buffer, int buflen)
 	/* LU-2634: clear the extent format for fast symlink */
 	ldiskfs_clear_inode_flag(inode, LDISKFS_INODE_EXTENTS);
 
-        memcpy((char *)&LDISKFS_I(inode)->i_data, (char *)buffer, buflen);
-        LDISKFS_I(inode)->i_disksize = buflen;
-        i_size_write(inode, buflen);
+	memcpy((char *)&LDISKFS_I(inode)->i_data, (char *)buffer, buflen);
+	spin_lock(&inode->i_lock);
+	LDISKFS_I(inode)->i_disksize = buflen;
+	i_size_write(inode, buflen);
+	spin_unlock(&inode->i_lock);
 	ll_dirty_inode(inode, I_DIRTY_DATASYNC);
 
-        return 0;
+	return 0;
 }
 
 int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
@@ -1707,8 +1709,8 @@ int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
 
 	if (write_NUL)
 		--new_size;
-        /* correct in-core and on-disk sizes */
-        if (new_size > i_size_read(inode)) {
+	/* correct in-core and on-disk sizes */
+	if (new_size > i_size_read(inode)) {
 		spin_lock(&inode->i_lock);
 		if (new_size > i_size_read(inode))
 			i_size_write(inode, new_size);
@@ -1823,7 +1825,9 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 
 	tid = oh->ot_handle->h_transaction->t_tid;
 
+	spin_lock(&inode->i_lock);
 	i_size_write(inode, start);
+	spin_unlock(&inode->i_lock);
 	ll_truncate_pagecache(inode, start);
 #ifdef HAVE_INODEOPS_TRUNCATE
 	if (inode->i_op->truncate) {
