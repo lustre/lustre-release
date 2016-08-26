@@ -14,19 +14,23 @@ CHUNKED_HTML=chunked-html
 
 RNG_UBN=/usr/share/xml/docbook/schema/rng/5.0/docbookxi.rng
 RNG_REL=/usr/share/xml/docbook5/schema/rng/5.0/docbookxi.rng
+RNG_BREW=/usr/local/opt/docbook/docbook/xml/5.0/rng/docbookxi.rng
 RNG_MAC=/opt/local/share/xml/docbook/5.0/rng/docbookxi.rng
 RNG=$(or $(shell ls $(RNG_UBN) 2> /dev/null), \
 	 $(shell ls $(RNG_REL) 2> /dev/null), \
+	 $(shell ls $(RNG_BREW) 2> /dev/null),\
 	 $(shell ls $(RNG_MAC) 2> /dev/null))
 XSL_UBN=/usr/share/xml/docbook/stylesheet/docbook-xsl-ns
 XSL_REL=/usr/share/sgml/docbook/xsl-ns-stylesheets-1.75.2
 XSL_F16=/usr/share/sgml/docbook/xsl-ns-stylesheets
 XSL_SLE=/usr/share/xml/docbook/stylesheet/nwalsh5/current
+XSL_BREW=/usr/local/opt/docbook-xsl/docbook-xsl
 XSL_MAC=/opt/local/share/xsl/docbook-xsl
 XSL=$(or $(shell ls -d $(XSL_UBN) 2> /dev/null), \
 	 $(shell ls -d $(XSL_REL) 2> /dev/null), \
 	 $(shell ls -d $(XSL_F16) 2> /dev/null), \
 	 $(shell ls -d $(XSL_SLE) 2> /dev/null), \
+	 $(shell ls -d $(XSL_BREW) 2> /dev/null),\
 	 $(shell ls -d $(XSL_MAC) 2> /dev/null))
 PRIMARYXSL=$(XSL)/$(subst $(TGT_BASE).,,$@)/docbook.xsl
 PRIMARYCHUNKXSL=$(XSL)/html/chunkfast.xsl
