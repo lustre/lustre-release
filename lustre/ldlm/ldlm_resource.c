@@ -1145,7 +1145,8 @@ static int ldlm_resource_complain(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	       ldlm_ns_name(ldlm_res_to_ns(res)), PLDLMRES(res), res,
 	       atomic_read(&res->lr_refcount) - 1);
 
-	ldlm_resource_dump(D_ERROR, res);
+	/* Use D_NETERROR since it is in the default mask */
+	ldlm_resource_dump(D_NETERROR, res);
 	unlock_res(res);
 	return 0;
 }
