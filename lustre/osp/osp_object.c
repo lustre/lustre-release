@@ -1092,6 +1092,16 @@ int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	if (rc != 0)
 		RETURN(rc);
 
+	/* Do not cache linkEA that may be self-adjusted by peers
+	 * under EA overflow case. */
+	if (strcmp(name, XATTR_NAME_LINK) == 0) {
+		oxe = osp_oac_xattr_find(o, name, true);
+		if (oxe != NULL)
+			osp_oac_xattr_put(oxe);
+
+		RETURN(0);
+	}
+
 	oxe = osp_oac_xattr_find_or_add(o, name, buf->lb_len);
 	if (oxe == NULL) {
 		CWARN("%s: cannot cache xattr '%s' of "DFID"\n",

@@ -3572,12 +3572,11 @@ struct lustre_capa_key {
 /** The link ea holds 1 \a link_ea_entry for each hardlink */
 #define LINK_EA_MAGIC 0x11EAF1DFUL
 struct link_ea_header {
-        __u32 leh_magic;
-        __u32 leh_reccount;
-        __u64 leh_len;      /* total size */
-        /* future use */
-        __u32 padding1;
-        __u32 padding2;
+	__u32 leh_magic;
+	__u32 leh_reccount;
+	__u64 leh_len;	/* total size */
+	__u32 leh_overflow_time;
+	__u32 leh_padding;
 };
 
 /** Hardlink data is name and parent fid.

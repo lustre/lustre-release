@@ -120,6 +120,77 @@ int mdd_lookup(const struct lu_env *env,
         RETURN(rc);
 }
 
+/** Read the link EA into a temp buffer.
+ * Uses the mdd_thread_info::mti_big_buf since it is generally large.
+ * A pointer to the buffer is stored in \a ldata::ld_buf.
+ *
+ * \retval 0 or error
+ */
+static int __mdd_links_read(const struct lu_env *env,
+			    struct mdd_object *mdd_obj,
+			    struct linkea_data *ldata)
+{
+	int rc;
+
+	if (!mdd_object_exists(mdd_obj))
+		return -ENODATA;
+
+	/* First try a small buf */
+	LASSERT(env != NULL);
+	ldata->ld_buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_link_buf,
+					       PAGE_SIZE);
+	if (ldata->ld_buf->lb_buf == NULL)
+		return -ENOMEM;
+
+	rc = mdo_xattr_get(env, mdd_obj, ldata->ld_buf, XATTR_NAME_LINK);
+	if (rc == -ERANGE) {
+		/* Buf was too small, figure out what we need. */
+		lu_buf_free(ldata->ld_buf);
+		rc = mdo_xattr_get(env, mdd_obj, ldata->ld_buf,
+				   XATTR_NAME_LINK);
+		if (rc < 0)
+			return rc;
+		ldata->ld_buf = lu_buf_check_and_alloc(ldata->ld_buf, rc);
+		if (ldata->ld_buf->lb_buf == NULL)
+			return -ENOMEM;
+		rc = mdo_xattr_get(env, mdd_obj, ldata->ld_buf,
+				  XATTR_NAME_LINK);
+	}
+	if (rc < 0) {
+		lu_buf_free(ldata->ld_buf);
+		ldata->ld_buf = NULL;
+		return rc;
+	}
+
+	return linkea_init(ldata);
+}
+
+static int mdd_links_read(const struct lu_env *env,
+			  struct mdd_object *mdd_obj,
+			  struct linkea_data *ldata)
+{
+	int rc;
+
+	rc = __mdd_links_read(env, mdd_obj, ldata);
+	if (!rc)
+		rc = linkea_init(ldata);
+
+	return rc;
+}
+
+static int mdd_links_read_with_rec(const struct lu_env *env,
+				   struct mdd_object *mdd_obj,
+				   struct linkea_data *ldata)
+{
+	int rc;
+
+	rc = __mdd_links_read(env, mdd_obj, ldata);
+	if (!rc)
+		rc = linkea_init_with_rec(ldata);
+
+	return rc;
+}
+
 /**
  * Get parent FID of the directory
  *
@@ -154,7 +225,7 @@ static inline int mdd_parent_fid(const struct lu_env *env,
 		GOTO(lookup, rc = 0);
 
 	ldata.ld_buf = buf;
-	rc = mdd_links_read(env, obj, &ldata);
+	rc = mdd_links_read_with_rec(env, obj, &ldata);
 	if (rc != 0)
 		GOTO(lookup, rc);
 
@@ -962,41 +1033,32 @@ static int mdd_linkea_prepare(const struct lu_env *env,
 			      struct linkea_data *ldata)
 {
 	int rc = 0;
-	int rc2 = 0;
 	ENTRY;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF))
-		return 0;
+		RETURN(0);
 
 	LASSERT(oldpfid != NULL || newpfid != NULL);
 
-	if (mdd_obj->mod_flags & DEAD_OBJ) {
-		/* Prevent linkea to be updated which is NOT necessary. */
-		ldata->ld_reclen = 0;
-		/* No more links, don't bother */
+	if (mdd_obj->mod_flags & DEAD_OBJ)
+		/* Unnecessary to update linkEA for dead object.  */
 		RETURN(0);
-	}
 
 	if (oldpfid != NULL) {
 		rc = __mdd_links_del(env, mdd_obj, ldata, oldlname, oldpfid);
 		if (rc) {
-			if ((check == 1) ||
-			    (rc != -ENODATA && rc != -ENOENT))
+			if ((check == 1) || (rc != -ENODATA && rc != -ENOENT))
 				RETURN(rc);
+
 			/* No changes done. */
 			rc = 0;
 		}
 	}
 
 	/* If renaming, add the new record */
-	if (newpfid != NULL) {
-		/* even if the add fails, we still delete the out-of-date
-		 * old link */
-		rc2 = __mdd_links_add(env, mdd_obj, ldata, newlname, newpfid,
-				      first, check);
-	}
-
-	rc = rc != 0 ? rc : rc2;
+	if (newpfid != NULL)
+		rc = __mdd_links_add(env, mdd_obj, ldata, newlname, newpfid,
+				     first, check);
 
 	RETURN(rc);
 }
@@ -1018,41 +1080,34 @@ int mdd_links_rename(const struct lu_env *env,
 		ldata = &mdd_env_info(env)->mti_link_data;
 		memset(ldata, 0, sizeof(*ldata));
 		rc = mdd_linkea_prepare(env, mdd_obj, oldpfid, oldlname,
-					newpfid, newlname, first, check,
-					ldata);
-		if (rc != 0)
+					newpfid, newlname, first, check, ldata);
+		if (rc)
 			GOTO(out, rc);
 	}
 
-	if (ldata->ld_reclen != 0)
+	if (!(mdd_obj->mod_flags & DEAD_OBJ))
 		rc = mdd_links_write(env, mdd_obj, ldata, handle);
-	EXIT;
+
+	GOTO(out, rc);
+
 out:
 	if (rc != 0) {
-		int error = 1;
-		if (rc == -EOVERFLOW || rc == -ENOSPC)
-			error = 0;
 		if (newlname == NULL)
-			CDEBUG(error ? D_ERROR : D_OTHER,
-			       "link_ea add failed %d "DFID"\n",
+			CERROR("link_ea add failed %d "DFID"\n",
 			       rc, PFID(mdd_object_fid(mdd_obj)));
 		else if (oldpfid == NULL)
-			CDEBUG(error ? D_ERROR : D_OTHER,
-			       "link_ea add '%.*s' failed %d "DFID"\n",
-			       newlname->ln_namelen, newlname->ln_name,
-			       rc, PFID(mdd_object_fid(mdd_obj)));
+			CERROR("link_ea add '%.*s' failed %d "DFID"\n",
+			       newlname->ln_namelen, newlname->ln_name, rc,
+			       PFID(mdd_object_fid(mdd_obj)));
 		else if (newpfid == NULL)
-			CDEBUG(error ? D_ERROR : D_OTHER,
-			       "link_ea del '%.*s' failed %d "DFID"\n",
-			       oldlname->ln_namelen, oldlname->ln_name,
-			       rc, PFID(mdd_object_fid(mdd_obj)));
+			CERROR("link_ea del '%.*s' failed %d "DFID"\n",
+			       oldlname->ln_namelen, oldlname->ln_name, rc,
+			       PFID(mdd_object_fid(mdd_obj)));
 		else
-			CDEBUG(error ? D_ERROR : D_OTHER,
-			       "link_ea rename '%.*s'->'%.*s' failed %d "
-			       DFID"\n",
-			       oldlname->ln_namelen, oldlname->ln_name,
-			       newlname->ln_namelen, newlname->ln_name,
-			       rc, PFID(mdd_object_fid(mdd_obj)));
+			CERROR("link_ea rename '%.*s'->'%.*s' failed %d "DFID
+			       "\n", oldlname->ln_namelen, oldlname->ln_name,
+			       newlname->ln_namelen, newlname->ln_name, rc,
+			       PFID(mdd_object_fid(mdd_obj)));
 	}
 
 	if (is_vmalloc_addr(ldata->ld_buf))
@@ -1084,50 +1139,6 @@ static inline int mdd_links_del(const struct lu_env *env,
 }
 
 /** Read the link EA into a temp buffer.
- * Uses the mdd_thread_info::mti_big_buf since it is generally large.
- * A pointer to the buffer is stored in \a ldata::ld_buf.
- *
- * \retval 0 or error
- */
-int mdd_links_read(const struct lu_env *env, struct mdd_object *mdd_obj,
-		   struct linkea_data *ldata)
-{
-	int rc;
-
-	if (!mdd_object_exists(mdd_obj))
-		return -ENODATA;
-
-	/* First try a small buf */
-	LASSERT(env != NULL);
-	ldata->ld_buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_link_buf,
-					       PAGE_SIZE);
-	if (ldata->ld_buf->lb_buf == NULL)
-		return -ENOMEM;
-
-	rc = mdo_xattr_get(env, mdd_obj, ldata->ld_buf, XATTR_NAME_LINK);
-	if (rc == -ERANGE) {
-		/* Buf was too small, figure out what we need. */
-		lu_buf_free(ldata->ld_buf);
-		rc = mdo_xattr_get(env, mdd_obj, ldata->ld_buf,
-				   XATTR_NAME_LINK);
-		if (rc < 0)
-			return rc;
-		ldata->ld_buf = lu_buf_check_and_alloc(ldata->ld_buf, rc);
-		if (ldata->ld_buf->lb_buf == NULL)
-			return -ENOMEM;
-		rc = mdo_xattr_get(env, mdd_obj, ldata->ld_buf,
-				  XATTR_NAME_LINK);
-	}
-	if (rc < 0) {
-		lu_buf_free(ldata->ld_buf);
-		ldata->ld_buf = NULL;
-		return rc;
-	}
-
-	return linkea_init(ldata);
-}
-
-/** Read the link EA into a temp buffer.
  * Uses the name_buf since it is generally large.
  * \retval IS_ERR err
  * \retval ptr to \a lu_buf (always \a mti_big_buf)
@@ -1152,38 +1163,26 @@ int mdd_links_write(const struct lu_env *env, struct mdd_object *mdd_obj,
 	    ldata->ld_leh == NULL)
 		return 0;
 
-	buf = mdd_buf_get_const(env, ldata->ld_buf->lb_buf,
-				ldata->ld_leh->leh_len);
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_LINKEA))
 		return 0;
 
+again:
+	buf = mdd_buf_get_const(env, ldata->ld_buf->lb_buf,
+				ldata->ld_leh->leh_len);
 	rc = mdo_xattr_set(env, mdd_obj, buf, XATTR_NAME_LINK, 0, handle);
-	if (unlikely(rc == -ENOSPC) && S_ISREG(mdd_object_type(mdd_obj)) &&
-	    mdd_object_remote(mdd_obj) == 0) {
-		struct lfsck_request *lr = &mdd_env_info(env)->mti_lr;
-		struct thandle	*sub_th;
-
-		/* XXX: If the linkEA is overflow, then we need to notify the
-		 *	namespace LFSCK to skip "nlink" attribute verification
-		 *	on this object to avoid the "nlink" to be shrinked by
-		 *	wrong. It may be not good an interaction with LFSCK
-		 *	like this. We will consider to replace it with other
-		 *	mechanism in future. LU-5802. */
-		lfsck_pack_rfa(lr, mdo2fid(mdd_obj), LE_SKIP_NLINK,
-			       LFSCK_TYPE_NAMESPACE);
-
-		sub_th = thandle_get_sub_by_dt(env, handle,
-				mdo2mdd(&mdd_obj->mod_obj)->mdd_bottom);
-		lfsck_in_notify(env, mdo2mdd(&mdd_obj->mod_obj)->mdd_bottom,
-				lr, sub_th);
+	if (unlikely(rc == -ENOSPC)) {
+		rc = linkea_overflow_shrink(ldata);
+		if (likely(rc > 0))
+			goto again;
 	}
 
 	return rc;
 }
 
-int mdd_declare_links_add(const struct lu_env *env, struct mdd_object *mdd_obj,
-			  struct thandle *handle, struct linkea_data *ldata,
-			  enum mdd_links_add_overflow overflow)
+static int mdd_declare_links_add(const struct lu_env *env,
+				 struct mdd_object *mdd_obj,
+				 struct thandle *handle,
+				 struct linkea_data *ldata)
 {
 	int	rc;
 	int	ea_len;
@@ -1193,36 +1192,13 @@ int mdd_declare_links_add(const struct lu_env *env, struct mdd_object *mdd_obj,
 		ea_len = ldata->ld_leh->leh_len;
 		linkea = ldata->ld_buf->lb_buf;
 	} else {
-		ea_len = DEFAULT_LINKEA_SIZE;
+		ea_len = MAX_LINKEA_SIZE;
 		linkea = NULL;
 	}
 
-	/* XXX: max size? */
 	rc = mdo_declare_xattr_set(env, mdd_obj,
 				   mdd_buf_get_const(env, linkea, ea_len),
 				   XATTR_NAME_LINK, 0, handle);
-	if (rc != 0)
-		return rc;
-
-	if (mdd_object_remote(mdd_obj) == 0 && overflow == MLAO_CHECK) {
-		struct lfsck_request *lr = &mdd_env_info(env)->mti_lr;
-		struct thandle	*sub_th;
-
-		/* XXX: If the linkEA is overflow, then we need to notify the
-		 *	namespace LFSCK to skip "nlink" attribute verification
-		 *	on this object to avoid the "nlink" to be shrinked by
-		 *	wrong. It may be not good an interaction with LFSCK
-		 *	like this. We will consider to replace it with other
-		 *	mechanism in future. LU-5802. */
-		lfsck_pack_rfa(lr, mdo2fid(mdd_obj), LE_SKIP_NLINK_DECLARE,
-			       LFSCK_TYPE_NAMESPACE);
-
-		sub_th = thandle_get_sub_by_dt(env, handle,
-				mdo2mdd(&mdd_obj->mod_obj)->mdd_bottom);
-		rc = lfsck_in_notify(env,
-				     mdo2mdd(&mdd_obj->mod_obj)->mdd_bottom,
-				     lr, sub_th);
-	}
 
 	return rc;
 }
@@ -1236,7 +1212,7 @@ static inline int mdd_declare_links_del(const struct lu_env *env,
 	/* For directory, the linkEA will be removed together
 	 * with the object. */
 	if (!S_ISDIR(mdd_object_type(c)))
-		rc = mdd_declare_links_add(env, c, handle, NULL, MLAO_IGNORE);
+		rc = mdd_declare_links_add(env, c, handle, NULL);
 
 	return rc;
 }
@@ -1281,8 +1257,7 @@ static int mdd_declare_link(const struct lu_env *env,
 	if (rc != 0)
 		return rc;
 
-	rc = mdd_declare_links_add(env, c, handle, data,
-			S_ISREG(mdd_object_type(c)) ? MLAO_CHECK : MLAO_IGNORE);
+	rc = mdd_declare_links_add(env, c, handle, data);
 	if (rc != 0)
 		return rc;
 
@@ -2122,7 +2097,7 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 		if (rc != 0)
 			return rc;
 
-		rc = mdd_declare_links_add(env, c, handle, ldata, MLAO_IGNORE);
+		rc = mdd_declare_links_add(env, c, handle, ldata);
 		if (rc)
 			return rc;
 
@@ -2708,8 +2683,7 @@ static int mdd_declare_rename(const struct lu_env *env,
 	if (rc)
 		return rc;
 
-	rc = mdd_declare_links_add(env, mdd_sobj, handle, ldata,
-		S_ISREG(mdd_object_type(mdd_sobj)) ? MLAO_CHECK : MLAO_IGNORE);
+	rc = mdd_declare_links_add(env, mdd_sobj, handle, ldata);
 	if (rc)
 		return rc;
 
@@ -2840,8 +2814,12 @@ static int mdd_rename(const struct lu_env *env,
                 GOTO(out_pending, rc = PTR_ERR(handle));
 
 	memset(ldata, 0, sizeof(*ldata));
-	mdd_linkea_prepare(env, mdd_sobj, mdd_object_fid(mdd_spobj), lsname,
-			   mdd_object_fid(mdd_tpobj), ltname, 1, 0, ldata);
+	rc = mdd_linkea_prepare(env, mdd_sobj, mdd_object_fid(mdd_spobj),
+				lsname, mdd_object_fid(mdd_tpobj), ltname,
+				1, 0, ldata);
+	if (rc)
+		GOTO(stop, rc);
+
 	rc = mdd_declare_rename(env, mdd, mdd_spobj, mdd_tpobj, mdd_sobj,
 				mdd_tobj, lsname, ltname, ma, ldata, handle);
 	if (rc)
@@ -3120,8 +3098,7 @@ static int mdd_linkea_update_child_internal(const struct lu_env *env,
 		linkea_entry_pack(ldata.ld_lee, &lname,
 				  mdd_object_fid(newparent));
 		if (declare)
-			rc = mdd_declare_links_add(env, child, handle, &ldata,
-						   MLAO_IGNORE);
+			rc = mdd_declare_links_add(env, child, handle, &ldata);
 		else
 			rc = mdd_links_write(env, child, &ldata, handle);
 		break;
@@ -3168,11 +3145,10 @@ static int mdd_update_linkea_internal(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(ldata->ld_buf != NULL);
+	LASSERT(ldata->ld_leh != NULL);
 
-again:
 	/* If it is mulitple links file, we need update the name entry for
 	 * all parent */
-	LASSERT(ldata->ld_leh != NULL);
 	ldata->ld_lee = (struct link_ea_entry *)(ldata->ld_leh + 1);
 	for (count = 0; count < ldata->ld_leh->leh_reccount; count++) {
 		struct mdd_device	*mdd = mdo2mdd(&mdd_sobj->mod_obj);
@@ -3187,16 +3163,13 @@ again:
 			CWARN("%s: cannot find obj "DFID": rc = %ld\n",
 			      mdd2obd_dev(mdd)->obd_name, PFID(&fid),
 			      PTR_ERR(pobj));
-			linkea_del_buf(ldata, &lname);
-			goto again;
+			continue;
 		}
 
 		if (!mdd_object_exists(pobj)) {
 			CDEBUG(D_INFO, "%s: obj "DFID" does not exist\n",
 			      mdd2obd_dev(mdd)->obd_name, PFID(&fid));
-			linkea_del_buf(ldata, &lname);
-			mdd_object_put(env, pobj);
-			goto again;
+			goto next_put;
 		}
 
 		if (pobj == mdd_pobj &&
@@ -3206,9 +3179,7 @@ again:
 			CDEBUG(D_INFO, "%s: skip its own %s: "DFID"\n",
 			      mdd2obd_dev(mdd)->obd_name, child_name->ln_name,
 			      PFID(&fid));
-			linkea_del_buf(ldata, &lname);
-			mdd_object_put(env, pobj);
-			goto again;
+			goto next_put;
 		}
 
 		CDEBUG(D_INFO, "%s: update "DFID" with "DNAME":"DFID"\n",
@@ -3244,9 +3215,11 @@ again:
 				/* lnamelen is too big(> NAME_MAX + 16),
 				 * something wrong about this linkea, let's
 				 * skip it */
-				linkea_del_buf(ldata, &lname);
-				mdd_object_put(env, pobj);
-				goto again;
+				CWARN("%s: the name %.*s is too long under "
+				      DFID"\n", mdd2obd_dev(mdd)->obd_name,
+				      lname.ln_namelen, lname.ln_name,
+				      PFID(&fid));
+				goto next_put;
 			}
 
 			/* Note: lname might be without \0 at the end, see
@@ -3260,14 +3233,9 @@ again:
 			 * it might be packed into the RPC buffer. */
 			rc = mdd_lookup(env, &pobj->mod_obj, &lname,
 					&info->mti_fid, NULL);
-			if (rc < 0 ||
-			    !lu_fid_eq(&info->mti_fid,
-					mdd_object_fid(mdd_sobj))) {
-				/* skip invalid linkea entry */
-				linkea_del_buf(ldata, &lname);
-				mdd_object_put(env, pobj);
-				goto again;
-			}
+			if (rc < 0 || !lu_fid_eq(&info->mti_fid,
+						 mdd_object_fid(mdd_sobj)))
+				GOTO(next_put, rc == -ENOENT ? 0 : rc);
 
 			rc = __mdd_index_delete(env, pobj, tmp_name, 0, handle);
 			if (rc != 0)
@@ -3340,8 +3308,7 @@ static int mdd_migrate_xattrs(const struct lu_env *env,
 	xname = list_xbuf.lb_buf;
 	while (rem > 0) {
 		xlen = strnlen(xname, rem - 1) + 1;
-		if (strcmp(XATTR_NAME_LINK, xname) == 0 ||
-		    strcmp(XATTR_NAME_LMA, xname) == 0 ||
+		if (strcmp(XATTR_NAME_LMA, xname) == 0 ||
 		    strcmp(XATTR_NAME_LMV, xname) == 0)
 			goto next;
 
@@ -3384,9 +3351,20 @@ static int mdd_migrate_xattrs(const struct lu_env *env,
 		if (rc != 0)
 			GOTO(stop_trans, rc);
 
+again:
 		rc = mdo_xattr_set(env, mdd_tobj, &xbuf, xname, 0, handle);
 		if (rc == -EEXIST)
 			GOTO(stop_trans, rc = 0);
+
+		if (unlikely(rc == -ENOSPC &&
+			     strcmp(xname, XATTR_NAME_LINK) == 0)) {
+			rc = linkea_overflow_shrink(
+					(struct linkea_data *)(xbuf.lb_buf));
+			if (likely(rc > 0)) {
+				xbuf.lb_len = rc;
+				goto again;
+			}
+		}
 
 		if (rc != 0)
 			GOTO(stop_trans, rc);
@@ -3438,8 +3416,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 		if (rc != 0)
 			return rc;
 	} else if (S_ISDIR(la->la_mode) && ldata != NULL) {
-		rc = mdd_declare_links_add(env, mdd_tobj, handle, ldata,
-					   MLAO_IGNORE);
+		rc = mdd_declare_links_add(env, mdd_tobj, handle, ldata);
 		if (rc != 0)
 			return rc;
 	}
@@ -3520,7 +3497,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 			spec->sp_cr_flags |= MDS_OPEN_HAS_EA;
 		}
 	} else if (S_ISDIR(la->la_mode)) {
-		rc = mdd_links_read(env, mdd_sobj, ldata);
+		rc = mdd_links_read_with_rec(env, mdd_sobj, ldata);
 		if (rc == -ENODATA) {
 			/* ignore the non-linkEA error */
 			ldata = NULL;
@@ -3883,7 +3860,7 @@ static int mdd_declare_migrate_update_name(const struct lu_env *env,
 	if (rc != 0)
 		return rc;
 
-	rc = mdd_declare_links_add(env, mdd_tobj, handle, NULL, MLAO_IGNORE);
+	rc = mdd_declare_links_add(env, mdd_tobj, handle, NULL);
 	if (rc != 0)
 		return rc;
 
@@ -4022,12 +3999,6 @@ static int mdd_migrate_update_name(const struct lu_env *env,
 	/* Insert new fid with target name into target dir */
 	rc = __mdd_index_insert(env, mdd_pobj, mdd_object_fid(mdd_tobj),
 				mdd_object_type(mdd_tobj), name, handle);
-	if (rc != 0)
-		GOTO(stop_trans, rc);
-
-	linkea_add_buf(ldata, lname, mdd_object_fid(mdd_pobj));
-	rc = mdd_links_add(env, mdd_tobj, mdo2fid(mdd_pobj), lname, handle,
-			   ldata, 1);
 	if (rc != 0)
 		GOTO(stop_trans, rc);
 
@@ -4172,6 +4143,12 @@ static int mdd_migrate_sanity_check(const struct lu_env *env,
 	/* If there are still links locally, then the file will not be
 	 * migrated. */
 	LASSERT(ldata->ld_leh != NULL);
+
+	/* If the linkEA is overflow, then means there are some unknown name
+	 * entries under unknown parents, that will prevent the migration. */
+	if (unlikely(ldata->ld_leh->leh_overflow_time))
+		RETURN(1);
+
 	ldata->ld_lee = (struct link_ea_entry *)(ldata->ld_leh + 1);
 	for (count = 0; count < ldata->ld_leh->leh_reccount; count++) {
 		struct lu_name		lname;

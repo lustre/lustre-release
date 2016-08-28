@@ -160,11 +160,6 @@ struct mdd_thread_info {
 	struct lu_seq_range	  mti_range;
 };
 
-enum mdd_links_add_overflow {
-	MLAO_IGNORE	= false,
-	MLAO_CHECK	= true,
-};
-
 extern const char orph_index_name[];
 
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
@@ -220,11 +215,6 @@ int mdd_is_root(struct mdd_device *mdd, const struct lu_fid *fid);
 int mdd_lookup(const struct lu_env *env,
                struct md_object *pobj, const struct lu_name *lname,
                struct lu_fid* fid, struct md_op_spec *spec);
-int mdd_links_read(const struct lu_env *env, struct mdd_object *mdd_obj,
-		   struct linkea_data *ldata);
-int mdd_declare_links_add(const struct lu_env *env, struct mdd_object *mdd_obj,
-			  struct thandle *handle, struct linkea_data *ldata,
-			  enum mdd_links_add_overflow overflow);
 int mdd_links_write(const struct lu_env *env, struct mdd_object *mdd_obj,
 		    struct linkea_data *ldata, struct thandle *handle);
 struct lu_buf *mdd_links_get(const struct lu_env *env,

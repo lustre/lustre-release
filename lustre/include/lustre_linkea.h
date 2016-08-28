@@ -27,7 +27,18 @@
  * Author: di wang <di.wang@intel.com>
  */
 
-#define DEFAULT_LINKEA_SIZE	4096
+/* There are several reasons to restrict the linkEA size:
+ *
+ * 1. Under DNE mode, if we do not restrict the linkEA size, and if there
+ *    are too many cross-MDTs hard links to the same object, then it will
+ *    casue the llog overflow.
+ *
+ * 2. Some backend has limited size for EA. For example, if without large
+ *    EA enabled, the ldiskfs will make all EAs to share one (4K) EA block.
+ *
+ * 3. Too many entries in linkEA will seriously affect linkEA performance
+ *    because we only support to locate linkEA entry consecutively. */
+#define MAX_LINKEA_SIZE	4096
 
 struct linkea_data {
 	/**
@@ -44,6 +55,7 @@ struct linkea_data {
 
 int linkea_data_new(struct linkea_data *ldata, struct lu_buf *buf);
 int linkea_init(struct linkea_data *ldata);
+int linkea_init_with_rec(struct linkea_data *ldata);
 void linkea_entry_unpack(const struct link_ea_entry *lee, int *reclen,
 			 struct lu_name *lname, struct lu_fid *pfid);
 int linkea_entry_pack(struct link_ea_entry *lee, const struct lu_name *lname,
@@ -51,6 +63,9 @@ int linkea_entry_pack(struct link_ea_entry *lee, const struct lu_name *lname,
 int linkea_add_buf(struct linkea_data *ldata, const struct lu_name *lname,
 		   const struct lu_fid *pfid);
 void linkea_del_buf(struct linkea_data *ldata, const struct lu_name *lname);
+int linkea_links_new(struct linkea_data *ldata, struct lu_buf *buf,
+		     const struct lu_name *cname, const struct lu_fid *pfid);
+int linkea_overflow_shrink(struct linkea_data *ldata);
 int linkea_links_find(struct linkea_data *ldata, const struct lu_name *lname,
 		      const struct lu_fid  *pfid);
 

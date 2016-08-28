@@ -1648,11 +1648,8 @@ static int lod_dir_declare_create_stripes(const struct lu_env *env,
 				PFID(lu_object_fid(&dto->do_lu)), i);
 
 		sname = lod_name_get(env, stripe_name, strlen(stripe_name));
-		rc = linkea_data_new(&ldata, &info->lti_linkea_buf);
-		if (rc != 0)
-			GOTO(out, rc);
-
-		rc = linkea_add_buf(&ldata, sname, lu_object_fid(&dt->do_lu));
+		rc = linkea_links_new(&ldata, &info->lti_linkea_buf,
+				      sname, lu_object_fid(&dt->do_lu));
 		if (rc != 0)
 			GOTO(out, rc);
 
@@ -2438,11 +2435,8 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 				 PFID(lu_object_fid(&dto->do_lu)), i);
 
 		sname = lod_name_get(env, stripe_name, strlen(stripe_name));
-		rc = linkea_data_new(&ldata, &info->lti_linkea_buf);
-		if (rc != 0)
-			GOTO(out, rc);
-
-		rc = linkea_add_buf(&ldata, sname, lu_object_fid(&dt->do_lu));
+		rc = linkea_links_new(&ldata, &info->lti_linkea_buf,
+				      sname, lu_object_fid(&dt->do_lu));
 		if (rc != 0)
 			GOTO(out, rc);
 

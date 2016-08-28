@@ -37,6 +37,7 @@
 #include <md_object.h>
 #include <obd.h>
 #include <obd_class.h>
+#include <lustre_linkea.h>
 
 #include "tgt_internal.h"
 
@@ -733,41 +734,45 @@ static int out_tx_xattr_set_exec(const struct lu_env *env,
 {
 	struct dt_object *dt_obj = arg->object;
 	int rc;
+	ENTRY;
 
 	CDEBUG(D_INFO, "%s: set xattr buf %p name %s flag %d\n",
 	       dt_obd_name(th->th_dev), arg->u.xattr_set.buf.lb_buf,
 	       arg->u.xattr_set.name, arg->u.xattr_set.flags);
 
-	if (!lu_object_exists(&dt_obj->do_lu))
-		GOTO(out, rc = -ENOENT);
+	if (!lu_object_exists(&dt_obj->do_lu)) {
+		rc = -ENOENT;
+	} else {
+		struct linkea_data ldata = { 0 };
+		bool linkea;
 
-	dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
-	rc = dt_xattr_set(env, dt_obj, &arg->u.xattr_set.buf,
-			  arg->u.xattr_set.name, arg->u.xattr_set.flags,
-			  th);
-	/**
-	 * Ignore errors if this is LINK EA
-	 **/
-	if (unlikely(rc != 0 &&
-		     strcmp(arg->u.xattr_set.name, XATTR_NAME_LINK) == 0)) {
-		/* XXX: If the linkEA is overflow, then we need to notify the
-		 *	namespace LFSCK to skip "nlink" attribute verification
-		 *	on this object to avoid the "nlink" to be shrinked by
-		 *	wrong. It may be not good an interaction with LFSCK
-		 *	like this. We will consider to replace it with other
-		 *	mechanism in future. LU-5802. */
-		if (rc == -ENOSPC && arg->reply != NULL) {
-			struct lfsck_request *lr = &tgt_th_info(env)->tti_lr;
-
-			lfsck_pack_rfa(lr, lu_object_fid(&dt_obj->do_lu),
-				       LE_SKIP_NLINK, LFSCK_TYPE_NAMESPACE);
-			tgt_lfsck_in_notify(env,
-				tgt_ses_info(env)->tsi_tgt->lut_bottom, lr, th);
+		ldata.ld_buf = &arg->u.xattr_set.buf;
+		if (strcmp(arg->u.xattr_set.name, XATTR_NAME_LINK) == 0) {
+			linkea = true;
+			rc = linkea_init(&ldata);
+			if (unlikely(rc))
+				GOTO(out, rc == -ENODATA ? -EINVAL : rc);
+		} else {
+			linkea = false;
 		}
 
-		rc = 0;
+		dt_write_lock(env, dt_obj, MOR_TGT_CHILD);
+
+again:
+		rc = dt_xattr_set(env, dt_obj, ldata.ld_buf,
+				  arg->u.xattr_set.name, arg->u.xattr_set.flags,
+				  th);
+		if (unlikely(rc == -ENOSPC && linkea)) {
+			rc = linkea_overflow_shrink(&ldata);
+			if (likely(rc > 0)) {
+				arg->u.xattr_set.buf.lb_len = rc;
+				goto again;
+			}
+		}
+		dt_write_unlock(env, dt_obj);
 	}
-	dt_write_unlock(env, dt_obj);
+
+	GOTO(out, rc);
 
 out:
 	CDEBUG(D_INFO, "%s: insert xattr set reply %p index %d: rc = %d\n",
@@ -793,24 +798,6 @@ int out_xattr_set_add_exec(const struct lu_env *env, struct dt_object *dt_obj,
 	rc = dt_declare_xattr_set(env, dt_obj, buf, name, flags, th);
 	if (rc != 0)
 		return rc;
-
-	if (strcmp(name, XATTR_NAME_LINK) == 0 && reply != NULL) {
-		struct lfsck_request *lr = &tgt_th_info(env)->tti_lr;
-
-		/* XXX: If the linkEA is overflow, then we need to notify the
-		 *	namespace LFSCK to skip "nlink" attribute verification
-		 *	on this object to avoid the "nlink" to be shrinked by
-		 *	wrong. It may be not good an interaction with LFSCK
-		 *	like this. We will consider to replace it with other
-		 *	mechanism in future. LU-5802. */
-		lfsck_pack_rfa(lr, lu_object_fid(&dt_obj->do_lu),
-			       LE_SKIP_NLINK_DECLARE, LFSCK_TYPE_NAMESPACE);
-		rc = tgt_lfsck_in_notify(env,
-					 tgt_ses_info(env)->tsi_tgt->lut_bottom,
-					 lr, ta->ta_handle);
-		if (rc != 0)
-			return rc;
-	}
 
 	arg = tx_add_exec(ta, out_tx_xattr_set_exec, NULL, file, line);
 	if (IS_ERR(arg))

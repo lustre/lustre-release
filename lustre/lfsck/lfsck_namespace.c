@@ -675,7 +675,7 @@ static int lfsck_declare_namespace_exec_dir(const struct lu_env *env,
 	if (rc == 0)
 		/* For insert new linkEA entry. */
 		rc = dt_declare_xattr_set(env, obj,
-			lfsck_buf_get_const(env, NULL, DEFAULT_LINKEA_SIZE),
+			lfsck_buf_get_const(env, NULL, MAX_LINKEA_SIZE),
 			XATTR_NAME_LINK, 0, handle);
 	return rc;
 }

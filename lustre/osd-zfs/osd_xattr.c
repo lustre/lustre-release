@@ -607,10 +607,6 @@ int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	     strcmp(name, XATTR_NAME_POSIX_ACL_DEFAULT) == 0))
 		RETURN(-EOPNOTSUPP);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LINKEA_OVERFLOW) &&
-	    strcmp(name, XATTR_NAME_LINK) == 0)
-		RETURN(-ENOSPC);
-
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 
 	down_write(&obj->oo_guard);

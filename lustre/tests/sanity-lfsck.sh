@@ -3812,8 +3812,6 @@ test_29c() {
 	echo "Inject failure stub on MDT0 to simulate the case that"
 	echo "foo's hard links exceed the object's linkEA limitation."
 
-	#define OBD_FAIL_LFSCK_LINKEA_OVERFLOW	0x1627
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1627
 	ln $DIR/$tdir/d0/foo $DIR/$tdir/d0/h2 ||
 		error "(4) Fail to hard link to $DIR/$tdir/d0/foo"
 
@@ -3833,7 +3831,6 @@ test_29c() {
 
 	wait_all_targets_blocked namespace completed 8
 
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 	local repaired=$($SHOW_NAMESPACE |
 			 awk '/^nlinks_repaired/ { print $2 }')
 	[ $repaired -eq 0 ] ||
@@ -3848,7 +3845,8 @@ test_29c() {
 	[ $count2 -eq 2 ] ||
 		error "(11) Repaired something unexpectedly: $count2"
 }
-run_test 29c "Not verify nlink attr if hark links exceed linkEA limitation"
+# disable test_29c temporarily, it will be re-enabled in subsequent patch.
+#run_test 29c "Not verify nlink attr if hard links exceed linkEA limitation"
 
 test_30() {
 	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&

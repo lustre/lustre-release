@@ -5515,7 +5515,7 @@ int mdt_links_read(struct mdt_thread_info *info, struct mdt_object *mdt_obj,
 	if (rc < 0)
 		return rc;
 
-	return linkea_init(ldata);
+	return linkea_init_with_rec(ldata);
 }
 
 /**

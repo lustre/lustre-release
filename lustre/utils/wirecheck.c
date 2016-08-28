@@ -1926,8 +1926,8 @@ check_link_ea_header(void)
 	CHECK_MEMBER(link_ea_header, leh_magic);
 	CHECK_MEMBER(link_ea_header, leh_reccount);
 	CHECK_MEMBER(link_ea_header, leh_len);
-	CHECK_MEMBER(link_ea_header, padding1);
-	CHECK_MEMBER(link_ea_header, padding2);
+	CHECK_MEMBER(link_ea_header, leh_overflow_time);
+	CHECK_MEMBER(link_ea_header, leh_padding);
 
 	CHECK_CDEFINE(LINK_EA_MAGIC);
 }
