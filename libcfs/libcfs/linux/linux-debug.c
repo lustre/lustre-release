@@ -208,13 +208,21 @@ static int print_trace_stack(void *data, char *name)
 	return 0;
 }
 
-static void print_trace_address(void *data, unsigned long addr, int reliable)
+#ifdef STACKTRACE_OPS_ADDRESS_RETURN_INT
+static int
+#else
+static void
+#endif
+print_trace_address(void *data, unsigned long addr, int reliable)
 {
 	char fmt[32];
 
 	touch_nmi_watchdog();
 	sprintf(fmt, " [<%016lx>] %s%%s\n", addr, reliable ? "": "? ");
 	__print_symbol(fmt, addr);
+#ifdef STACKTRACE_OPS_ADDRESS_RETURN_INT
+	return 0;
+#endif
 }
 
 static const struct stacktrace_ops print_trace_ops = {

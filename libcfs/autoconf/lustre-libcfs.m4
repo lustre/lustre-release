@@ -339,6 +339,25 @@ crypto_hash_helpers, [
 ]) # LIBCFS_CRYPTO_HASH_HELPERS
 
 #
+# LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
+#
+# linux 4.6 kernel changed stacktrace_ops address to return an int
+#
+AC_DEFUN([LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT], [
+LB_CHECK_COMPILE([if 'struct stacktrace_ops' address function returns an int],
+stacktrace_ops_address_return_int, [
+	#include <asm/stacktrace.h>
+],[
+	int rc;
+
+	rc = ((struct stacktrace_ops *)0)->address(NULL, 0, 0);
+],[
+	AC_DEFINE(STACKTRACE_OPS_ADDRESS_RETURN_INT, 1,
+		['struct stacktrace_ops' address function returns an int])
+])
+]) # LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -380,6 +399,8 @@ LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 LIBCFS_FPU_API
 # 4.5
 LIBCFS_CRYPTO_HASH_HELPERS
+# 4.6
+LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
 ]) # LIBCFS_PROG_LINUX
 
 #
