@@ -672,7 +672,7 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 	if (OCD_HAS_FLAG(&cli->cl_import->imp_connect_data, GRANT_PARAM))
 		oa->o_dirty = cli->cl_dirty_grant;
 	else
-		oa->o_dirty = cli->cl_dirty_pages << PAGE_CACHE_SHIFT;
+		oa->o_dirty = cli->cl_dirty_pages << PAGE_SHIFT;
 	if (unlikely(cli->cl_dirty_pages - cli->cl_dirty_transit >
 		     cli->cl_dirty_max_pages)) {
 		CERROR("dirty %lu - %lu > dirty_max %lu\n",
@@ -701,7 +701,7 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 		nrpages = cli->cl_max_pages_per_rpc;
 		nrpages *= cli->cl_max_rpcs_in_flight + 1;
 		nrpages = max(nrpages, cli->cl_dirty_max_pages);
-		oa->o_undirty = nrpages << PAGE_CACHE_SHIFT;
+		oa->o_undirty = nrpages << PAGE_SHIFT;
 		if (OCD_HAS_FLAG(&cli->cl_import->imp_connect_data,
 				 GRANT_PARAM)) {
 			int nrextents;
@@ -791,11 +791,11 @@ static void osc_shrink_grant_local(struct client_obd *cli, struct obdo *oa)
 static int osc_shrink_grant(struct client_obd *cli)
 {
 	__u64 target_bytes = (cli->cl_max_rpcs_in_flight + 1) *
-			     (cli->cl_max_pages_per_rpc << PAGE_CACHE_SHIFT);
+			     (cli->cl_max_pages_per_rpc << PAGE_SHIFT);
 
 	spin_lock(&cli->cl_loi_list_lock);
 	if (cli->cl_avail_grant <= target_bytes)
-		target_bytes = cli->cl_max_pages_per_rpc << PAGE_CACHE_SHIFT;
+		target_bytes = cli->cl_max_pages_per_rpc << PAGE_SHIFT;
 	spin_unlock(&cli->cl_loi_list_lock);
 
 	return osc_shrink_grant_to_target(cli, target_bytes);
@@ -811,8 +811,8 @@ int osc_shrink_grant_to_target(struct client_obd *cli, __u64 target_bytes)
 	/* Don't shrink if we are already above or below the desired limit
 	 * We don't want to shrink below a single RPC, as that will negatively
 	 * impact block allocation and long-term performance. */
-	if (target_bytes < cli->cl_max_pages_per_rpc << PAGE_CACHE_SHIFT)
-		target_bytes = cli->cl_max_pages_per_rpc << PAGE_CACHE_SHIFT;
+	if (target_bytes < cli->cl_max_pages_per_rpc << PAGE_SHIFT)
+		target_bytes = cli->cl_max_pages_per_rpc << PAGE_SHIFT;
 
 	if (target_bytes >= cli->cl_avail_grant) {
 		spin_unlock(&cli->cl_loi_list_lock);
@@ -859,7 +859,7 @@ static int osc_should_shrink_grant(struct client_obd *client)
 		/* Get the current RPC size directly, instead of going via:
 		 * cli_brw_size(obd->u.cli.cl_import->imp_obd->obd_self_export)
 		 * Keep comment here so that it can be found by searching. */
-		int brw_size = client->cl_max_pages_per_rpc << PAGE_CACHE_SHIFT;
+		int brw_size = client->cl_max_pages_per_rpc << PAGE_SHIFT;
 
 		if (client->cl_import->imp_state == LUSTRE_IMP_FULL &&
 		    client->cl_avail_grant > brw_size)
@@ -923,13 +923,13 @@ static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 			cli->cl_avail_grant -= cli->cl_dirty_grant;
 		else
 			cli->cl_avail_grant -=
-					cli->cl_dirty_pages << PAGE_CACHE_SHIFT;
+					cli->cl_dirty_pages << PAGE_SHIFT;
 	}
 
         if (cli->cl_avail_grant < 0) {
 		CWARN("%s: available grant < 0: avail/ocd/dirty %ld/%u/%ld\n",
 		      cli_name(cli), cli->cl_avail_grant,
-		      ocd->ocd_grant, cli->cl_dirty_pages << PAGE_CACHE_SHIFT);
+		      ocd->ocd_grant, cli->cl_dirty_pages << PAGE_SHIFT);
 		/* workaround for servers which do not have the patch from
 		 * LU-2679 */
 		cli->cl_avail_grant = ocd->ocd_grant;
@@ -1212,9 +1212,9 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
                 LASSERT(pg->count > 0);
                 /* make sure there is no gap in the middle of page array */
 		LASSERTF(page_count == 1 ||
-			 (ergo(i == 0, poff + pg->count == PAGE_CACHE_SIZE) &&
+			 (ergo(i == 0, poff + pg->count == PAGE_SIZE) &&
 			  ergo(i > 0 && i < page_count - 1,
-			       poff == 0 && pg->count == PAGE_CACHE_SIZE)   &&
+			       poff == 0 && pg->count == PAGE_SIZE)   &&
 			  ergo(i == page_count - 1, poff == 0)),
 			 "i: %d/%d pg: %p off: %llu, count: %u\n",
 			 i, page_count, pg, pg->off, pg->count);
@@ -1837,7 +1837,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 						oap->oap_count;
 			else
 				LASSERT(oap->oap_page_off + oap->oap_count ==
-					PAGE_CACHE_SIZE);
+					PAGE_SIZE);
 			if (oap->oap_interrupted)
 				interrupted = true;
 		}
@@ -1890,7 +1890,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	list_splice_init(ext_list, &aa->aa_exts);
 
 	spin_lock(&cli->cl_loi_list_lock);
-	starting_offset >>= PAGE_CACHE_SHIFT;
+	starting_offset >>= PAGE_SHIFT;
 	if (cmd == OBD_BRW_READ) {
 		cli->cl_r_in_flight++;
 		lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
@@ -2563,7 +2563,7 @@ static int osc_reconnect(const struct lu_env *env,
 		if (data->ocd_connect_flags & OBD_CONNECT_GRANT_PARAM)
 			grant += cli->cl_dirty_grant;
 		else
-			grant += cli->cl_dirty_pages << PAGE_CACHE_SHIFT;
+			grant += cli->cl_dirty_pages << PAGE_SHIFT;
 		data->ocd_grant = grant ? : 2 * cli_brw_size(obd);
 		lost_grant = cli->cl_lost_grant;
 		cli->cl_lost_grant = 0;

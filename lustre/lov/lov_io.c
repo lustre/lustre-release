@@ -616,7 +616,7 @@ static int lov_io_read_ahead(const struct lu_env *env,
 	if (ra_end != CL_PAGE_EOF)
 		ra_end = lov_stripe_pgoff(loo->lo_lsm, ra_end, stripe);
 
-	pps = loo->lo_lsm->lsm_stripe_size >> PAGE_CACHE_SHIFT;
+	pps = loo->lo_lsm->lsm_stripe_size >> PAGE_SHIFT;
 
 	CDEBUG(D_READA, DFID " max_index = %lu, pps = %u, "
 	       "stripe_size = %u, stripe no = %u, start index = %lu\n",

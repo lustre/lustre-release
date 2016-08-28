@@ -213,7 +213,7 @@ struct client_obd {
 	int			cl_grant_shrink_interval; /* seconds */
 
 	/* A chunk is an optimal size used by osc_extent to determine
-	 * the extent size. A chunk is max(PAGE_CACHE_SIZE, OST block size) */
+	 * the extent size. A chunk is max(PAGE_SIZE, OST block size) */
 	int			cl_chunkbits;
 	/* extent insertion metadata overhead to be accounted in grant,
 	 * in bytes */
@@ -1199,7 +1199,7 @@ bad_format:
 static inline int cli_brw_size(struct obd_device *obd)
 {
 	LASSERT(obd != NULL);
-	return obd->u.cli.cl_max_pages_per_rpc << PAGE_CACHE_SHIFT;
+	return obd->u.cli.cl_max_pages_per_rpc << PAGE_SHIFT;
 }
 
 /* when RPC size or the max RPCs in flight is increased, the max dirty pages
@@ -1212,7 +1212,7 @@ static inline void client_adjust_max_dirty(struct client_obd *cli)
 	 /* initializing */
 	if (cli->cl_dirty_max_pages <= 0)
 		cli->cl_dirty_max_pages = (OSC_MAX_DIRTY_DEFAULT * 1024 * 1024)
-							>> PAGE_CACHE_SHIFT;
+							>> PAGE_SHIFT;
 	else {
 		unsigned long dirty_max = cli->cl_max_rpcs_in_flight *
 					  cli->cl_max_pages_per_rpc;

@@ -1313,7 +1313,7 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, u64 offset,
 
 
         rc = cl_echo_enqueue0(env, eco, offset,
-			      offset + npages * PAGE_CACHE_SIZE - 1,
+			      offset + npages * PAGE_SIZE - 1,
                               rw == READ ? LCK_PR : LCK_PW, &lh.cookie,
                               CEF_NEVER);
         if (rc < 0)
@@ -2254,11 +2254,11 @@ static void echo_client_page_debug_setup(struct page *page, int rw, u64 id,
 	int	 delta;
 
         /* no partial pages on the client */
-	LASSERT(count == PAGE_CACHE_SIZE);
+	LASSERT(count == PAGE_SIZE);
 
 	addr = kmap(page);
 
-	for (delta = 0; delta < PAGE_CACHE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
+	for (delta = 0; delta < PAGE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
                 if (rw == OBD_BRW_WRITE) {
                         stripe_off = offset + delta;
                         stripe_id = id;
@@ -2284,11 +2284,11 @@ echo_client_page_debug_check(struct page *page, u64 id, u64 offset, u64 count)
         int     rc2;
 
         /* no partial pages on the client */
-	LASSERT(count == PAGE_CACHE_SIZE);
+	LASSERT(count == PAGE_SIZE);
 
 	addr = kmap(page);
 
-	for (rc = delta = 0; delta < PAGE_CACHE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
+	for (rc = delta = 0; delta < PAGE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
                 stripe_off = offset + delta;
                 stripe_id = id;
 
@@ -2333,7 +2333,7 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 		RETURN(-EINVAL);
 
         /* XXX think again with misaligned I/O */
-	npages = count >> PAGE_CACHE_SHIFT;
+	npages = count >> PAGE_SHIFT;
 
         if (rw == OBD_BRW_WRITE)
                 brw_flags = OBD_BRW_ASYNC;
@@ -2350,7 +2350,7 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 
 	for (i = 0, pgp = pga, off = offset;
 	     i < npages;
-	     i++, pgp++, off += PAGE_CACHE_SIZE) {
+	     i++, pgp++, off += PAGE_SIZE) {
 
 		LASSERT(pgp->pg == NULL);	/* for cleanup */
 
@@ -2360,7 +2360,7 @@ static int echo_client_kbrw(struct echo_device *ed, int rw, struct obdo *oa,
 			goto out;
 
 		pages[i] = pgp->pg;
-		pgp->count = PAGE_CACHE_SIZE;
+		pgp->count = PAGE_SIZE;
 		pgp->off = off;
 		pgp->flag = brw_flags;
 
@@ -2412,11 +2412,11 @@ static int echo_client_prep_commit(const struct lu_env *env,
 
 	ENTRY;
 
-	if (count <= 0 || (count & ~PAGE_CACHE_MASK) != 0)
+	if (count <= 0 || (count & ~PAGE_MASK) != 0)
 		RETURN(-EINVAL);
 
-	apc = npages = batch >> PAGE_CACHE_SHIFT;
-	tot_pages = count >> PAGE_CACHE_SHIFT;
+	apc = npages = batch >> PAGE_SHIFT;
+	tot_pages = count >> PAGE_SHIFT;
 
 	OBD_ALLOC(lnb, apc * sizeof(struct niobuf_local));
 	if (lnb == NULL)
@@ -2436,10 +2436,10 @@ static int echo_client_prep_commit(const struct lu_env *env,
 			npages = tot_pages;
 
 		rnb.rnb_offset = off;
-		rnb.rnb_len = npages * PAGE_CACHE_SIZE;
+		rnb.rnb_len = npages * PAGE_SIZE;
 		rnb.rnb_flags = brw_flags;
 		ioo.ioo_bufcnt = 1;
-		off += npages * PAGE_CACHE_SIZE;
+		off += npages * PAGE_SIZE;
 
 		lpages = npages;
 		ret = obd_preprw(env, rw, exp, oa, 1, &ioo, &rnb, &lpages, lnb);
@@ -2888,7 +2888,7 @@ static int __init obdecho_init(void)
         ENTRY;
         LCONSOLE_INFO("Echo OBD driver; http://www.lustre.org/\n");
 
-	LASSERT(PAGE_CACHE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
+	LASSERT(PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
 
 # ifdef HAVE_SERVER_SUPPORT
         rc = echo_persistent_pages_init();

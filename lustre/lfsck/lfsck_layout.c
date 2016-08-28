@@ -397,7 +397,7 @@ static int lfsck_layout_verify_header(struct lov_mds_md_v1 *lmm)
 	return 0;
 }
 
-#define LFSCK_RBTREE_BITMAP_SIZE	PAGE_CACHE_SIZE
+#define LFSCK_RBTREE_BITMAP_SIZE	PAGE_SIZE
 #define LFSCK_RBTREE_BITMAP_WIDTH	(LFSCK_RBTREE_BITMAP_SIZE << 3)
 #define LFSCK_RBTREE_BITMAP_MASK	(LFSCK_RBTREE_BITMAP_WIDTH - 1)
 

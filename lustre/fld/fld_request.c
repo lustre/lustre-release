@@ -398,7 +398,7 @@ again:
 			RETURN(-ENOMEM);
 
 		req_capsule_set_size(&req->rq_pill, &RMF_GENERIC_DATA,
-				     RCL_SERVER, PAGE_CACHE_SIZE);
+				     RCL_SERVER, PAGE_SIZE);
 		break;
 	default:
 		rc = -EINVAL;

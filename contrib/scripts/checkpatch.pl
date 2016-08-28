@@ -432,8 +432,11 @@ my %dep_functions = (
 	'cfs_list_splice_tail',		'list_splice_tail',
 	'cfs_list_t',			'struct list_head',
 
-	'CFS_PAGE_MASK',		'PAGE_CACHE_MASK or PAGE_MASK',
-	'CFS_PAGE_SIZE',		'PAGE_CACHE_SIZE or PAGE_SIZE',
+	'CFS_PAGE_MASK',		'PAGE_MASK',
+	'CFS_PAGE_SIZE',		'PAGE_SIZE',
+	'PAGE_CACHE_MASK',		'PAGE_MASK',
+	'PAGE_CACHE_SIZE',		'PAGE_SIZE',
+	'PAGE_CACHE_SHIFT',		'PAGE_SHIFT',
 
 	'cfs_proc_dir_entry_t',		'struct proc_dir_entry',
 

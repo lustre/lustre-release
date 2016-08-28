@@ -141,7 +141,7 @@
  * a header lu_dirpage which describes the start/end hash, and whether this
  * page is empty (contains no dir entry) or hash collide with next page.
  * After client receives reply, several pages will be integrated into dir page
- * in PAGE_CACHE_SIZE (if PAGE_CACHE_SIZE greater than LU_PAGE_SIZE), and the
+ * in PAGE_SIZE (if PAGE_SIZE greater than LU_PAGE_SIZE), and the
  * lu_dirpage for this integrated page will be adjusted. See
  * mdc_adjust_dirpages().
  *
@@ -1468,7 +1468,7 @@ out_rmdir:
 			st.st_gid	= body->mbo_gid;
 			st.st_rdev	= body->mbo_rdev;
 			st.st_size	= body->mbo_size;
-			st.st_blksize	= PAGE_CACHE_SIZE;
+			st.st_blksize	= PAGE_SIZE;
 			st.st_blocks	= body->mbo_blocks;
 			st.st_atime	= body->mbo_atime;
 			st.st_mtime	= body->mbo_mtime;

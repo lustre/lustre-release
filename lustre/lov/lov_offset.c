@@ -76,9 +76,9 @@ pgoff_t lov_stripe_pgoff(struct lov_stripe_md *lsm, pgoff_t stripe_index,
 {
 	loff_t offset;
 
-	offset = lov_stripe_size(lsm, (stripe_index << PAGE_CACHE_SHIFT) + 1,
+	offset = lov_stripe_size(lsm, (stripe_index << PAGE_SHIFT) + 1,
 				 stripe);
-	return offset >> PAGE_CACHE_SHIFT;
+	return offset >> PAGE_SHIFT;
 }
 
 /* we have an offset in file backed by an lov and want to find out where

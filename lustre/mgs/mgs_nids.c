@@ -96,7 +96,7 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 
         /* make sure unit_size is power 2 */
         LASSERT((unit_size & (unit_size - 1)) == 0);
-	LASSERT(nrpages << PAGE_CACHE_SHIFT >= units_total * unit_size);
+	LASSERT(nrpages << PAGE_SHIFT >= units_total * unit_size);
 
 	mutex_lock(&tbl->mn_lock);
         LASSERT(nidtbl_is_sane(tbl));
@@ -160,7 +160,7 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 				buf = kmap(pages[index]);
 				++index;
 
-				units_in_page = PAGE_CACHE_SIZE / unit_size;
+				units_in_page = PAGE_SIZE / unit_size;
 				LASSERT(units_in_page > 0);
 			}
 
@@ -632,7 +632,7 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 		RETURN(rc);
 
         bufsize = body->mcb_units << body->mcb_bits;
-	nrpages = (bufsize + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
+	nrpages = (bufsize + PAGE_SIZE - 1) >> PAGE_SHIFT;
         if (nrpages > PTLRPC_MAX_BRW_PAGES)
                 RETURN(-EINVAL);
 
@@ -648,14 +648,14 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
                 GOTO(out, rc = -EINVAL);
 
         res->mcr_offset = body->mcb_offset;
-	unit_size = min_t(int, 1 << body->mcb_bits, PAGE_CACHE_SIZE);
+	unit_size = min_t(int, 1 << body->mcb_bits, PAGE_SIZE);
 	bytes = mgs_nidtbl_read(req->rq_export, &fsdb->fsdb_nidtbl, res,
 				pages, nrpages, bufsize / unit_size, unit_size);
 	if (bytes < 0)
 		GOTO(out, rc = bytes);
 
 	/* start bulk transfer */
-	page_count = (bytes + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
+	page_count = (bytes + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	LASSERT(page_count <= nrpages);
 	desc = ptlrpc_prep_bulk_exp(req, page_count, 1,
 				    PTLRPC_BULK_PUT_SOURCE |
@@ -668,8 +668,8 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 	for (i = 0; i < page_count && bytes > 0; i++) {
 		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
 						 min_t(int, bytes,
-						      PAGE_CACHE_SIZE));
-		bytes -= PAGE_CACHE_SIZE;
+						      PAGE_SIZE));
+		bytes -= PAGE_SIZE;
         }
 
         rc = target_bulk_io(req->rq_export, desc, &lwi);
@@ -745,7 +745,7 @@ int lprocfs_wr_ir_state(struct file *file, const char __user *buffer,
         char *ptr;
         int rc = 0;
 
-	if (count == 0 || count >= PAGE_CACHE_SIZE)
+	if (count == 0 || count >= PAGE_SIZE)
 		return -EINVAL;
 
 	OBD_ALLOC(kbuf, count + 1);

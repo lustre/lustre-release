@@ -334,7 +334,7 @@ static int fld_handle_read(struct tgt_session_info *tsi)
 		RETURN(err_serious(-EPROTO));
 
 	req_capsule_set_size(tsi->tsi_pill, &RMF_GENERIC_DATA, RCL_SERVER,
-			     PAGE_CACHE_SIZE);
+			     PAGE_SIZE);
 
 	rc = req_capsule_server_pack(tsi->tsi_pill);
 	if (unlikely(rc != 0))
@@ -343,7 +343,7 @@ static int fld_handle_read(struct tgt_session_info *tsi)
 	data = req_capsule_server_get(tsi->tsi_pill, &RMF_GENERIC_DATA);
 
 	rc = fld_server_read(tsi->tsi_env, lu_site2seq(site)->ss_server_fld,
-			     in, data, PAGE_CACHE_SIZE);
+			     in, data, PAGE_SIZE);
 	RETURN(rc);
 }
 

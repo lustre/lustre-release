@@ -1105,7 +1105,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 			       PFID(mdt_object_fid(o)), rc);
 			rc = -EFAULT;
 		} else {
-			int print_limit = min_t(int, PAGE_CACHE_SIZE - 128, rc);
+			int print_limit = min_t(int, PAGE_SIZE - 128, rc);
 
 			if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READLINK_EPROTO))
 				rc -= 2;
@@ -1785,8 +1785,8 @@ static int mdt_readpage(struct tgt_session_info *tsi)
 		rdpg->rp_attrs |= LUDA_64BITHASH;
 	rdpg->rp_count  = min_t(unsigned int, reqbody->mbo_nlink,
 				exp_max_brw_size(tsi->tsi_exp));
-	rdpg->rp_npages = (rdpg->rp_count + PAGE_CACHE_SIZE - 1) >>
-			  PAGE_CACHE_SHIFT;
+	rdpg->rp_npages = (rdpg->rp_count + PAGE_SIZE - 1) >>
+			  PAGE_SHIFT;
         OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
         if (rdpg->rp_pages == NULL)
                 RETURN(-ENOMEM);

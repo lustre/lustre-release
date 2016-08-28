@@ -95,7 +95,7 @@ truncate_complete_page(struct address_space *mapping, struct page *page)
 
 	if (PagePrivate(page))
 #ifdef HAVE_INVALIDATE_RANGE
-		page->mapping->a_ops->invalidatepage(page, 0, PAGE_CACHE_SIZE);
+		page->mapping->a_ops->invalidatepage(page, 0, PAGE_SIZE);
 #else
 		page->mapping->a_ops->invalidatepage(page, 0);
 #endif

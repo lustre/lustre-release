@@ -241,15 +241,15 @@ static int osc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	if (!(fmkey->lfik_fiemap.fm_flags & FIEMAP_FLAG_SYNC))
 		goto skip_locking;
 
-	policy.l_extent.start = fmkey->lfik_fiemap.fm_start & PAGE_CACHE_MASK;
+	policy.l_extent.start = fmkey->lfik_fiemap.fm_start & PAGE_MASK;
 
 	if (OBD_OBJECT_EOF - fmkey->lfik_fiemap.fm_length <=
-	    fmkey->lfik_fiemap.fm_start + PAGE_CACHE_SIZE - 1)
+	    fmkey->lfik_fiemap.fm_start + PAGE_SIZE - 1)
 		policy.l_extent.end = OBD_OBJECT_EOF;
 	else
 		policy.l_extent.end = (fmkey->lfik_fiemap.fm_start +
 				       fmkey->lfik_fiemap.fm_length +
-				       PAGE_CACHE_SIZE - 1) & PAGE_CACHE_MASK;
+				       PAGE_SIZE - 1) & PAGE_MASK;
 
 	ostid_build_res_name(&fmkey->lfik_oa.o_oi, &resid);
 	mode = ldlm_lock_match(exp->exp_obd->obd_namespace,

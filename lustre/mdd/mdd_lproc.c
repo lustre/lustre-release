@@ -107,9 +107,9 @@ mdd_changelog_mask_seq_write(struct file *file, const char __user *buffer,
 	int rc;
 	ENTRY;
 
-	if (count >= PAGE_CACHE_SIZE)
+	if (count >= PAGE_SIZE)
 		RETURN(-EINVAL);
-	OBD_ALLOC(kernbuf, PAGE_CACHE_SIZE);
+	OBD_ALLOC(kernbuf, PAGE_SIZE);
 	if (kernbuf == NULL)
 		RETURN(-ENOMEM);
 	if (copy_from_user(kernbuf, buffer, count))
@@ -121,7 +121,7 @@ mdd_changelog_mask_seq_write(struct file *file, const char __user *buffer,
 	if (rc == 0)
 		rc = count;
 out:
-	OBD_FREE(kernbuf, PAGE_CACHE_SIZE);
+	OBD_FREE(kernbuf, PAGE_SIZE);
 	return rc;
 }
 LPROC_SEQ_FOPS(mdd_changelog_mask);

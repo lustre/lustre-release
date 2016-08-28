@@ -139,7 +139,7 @@ proc_max_dirty_pages_in_mb(struct ctl_table *table, int write,
 		if (val < 0)
 			return -ERANGE;
 
-		val >>= PAGE_CACHE_SHIFT;
+		val >>= PAGE_SHIFT;
 
 		/* Don't allow them to let dirty pages exceed 90% of system
 		 * memory and set a hard minimum of 4MB. */
@@ -149,8 +149,8 @@ proc_max_dirty_pages_in_mb(struct ctl_table *table, int write,
 			       "setting to %lu\n", val,
 			       ((totalram_pages / 10) * 9));
 			obd_max_dirty_pages = ((totalram_pages / 10) * 9);
-		} else if (val < 4 << (20 - PAGE_CACHE_SHIFT)) {
-			obd_max_dirty_pages = 4 << (20 - PAGE_CACHE_SHIFT);
+		} else if (val < 4 << (20 - PAGE_SHIFT)) {
+			obd_max_dirty_pages = 4 << (20 - PAGE_SHIFT);
 		} else {
 			obd_max_dirty_pages = val;
 		}
@@ -160,7 +160,7 @@ proc_max_dirty_pages_in_mb(struct ctl_table *table, int write,
 
 		len = lprocfs_read_frac_helper(buf, sizeof(buf),
 					       *(unsigned long *)table->data,
-					       1 << (20 - PAGE_CACHE_SHIFT));
+					       1 << (20 - PAGE_SHIFT));
 		if (len > *lenp)
 			len = *lenp;
 		buf[len] = '\0';

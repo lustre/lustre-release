@@ -2283,7 +2283,7 @@ static int lmv_read_striped_page(struct obd_export *exp,
 	dp->ldp_flags |= LDF_COLLIDE;
 
 	area = dp + 1;
-	left_bytes = PAGE_CACHE_SIZE - sizeof(*dp);
+	left_bytes = PAGE_SIZE - sizeof(*dp);
 	ent = area;
 	last_ent = ent;
 	do {

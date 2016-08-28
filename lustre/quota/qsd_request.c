@@ -386,7 +386,7 @@ int qsd_fetch_index(const struct lu_env *env, struct obd_export *exp,
 	/* req now owns desc and will free it when it gets freed */
 	for (i = 0; i < npages; i++)
 		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
-						 PAGE_CACHE_SIZE);
+						 PAGE_SIZE);
 
 	/* pack index information in request */
 	req_ii = req_capsule_client_get(&req->rq_pill, &RMF_IDX_INFO);

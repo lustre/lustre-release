@@ -909,9 +909,9 @@ restart_bulk:
 	/* NB req now owns desc and will free it when it gets freed */
 	for (i = 0; i < npages; i++)
 		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
-						 PAGE_CACHE_SIZE);
+						 PAGE_SIZE);
 
-	mdc_readdir_pack(req, offset, PAGE_CACHE_SIZE * npages, fid);
+	mdc_readdir_pack(req, offset, PAGE_SIZE * npages, fid);
 
 	ptlrpc_request_set_replen(req);
 	rc = ptlrpc_queue_wait(req);
@@ -943,7 +943,7 @@ restart_bulk:
 	if (req->rq_bulk->bd_nob_transferred & ~LU_PAGE_MASK) {
 		CERROR("%s: unexpected bytes transferred: %d (%ld expected)\n",
 		       exp->exp_obd->obd_name, req->rq_bulk->bd_nob_transferred,
-		       PAGE_CACHE_SIZE * npages);
+		       PAGE_SIZE * npages);
 		ptlrpc_req_finished(req);
 		RETURN(-EPROTO);
 	}
@@ -1056,7 +1056,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
  * |s|e|f|p|ent| 0 | ... | 0 |
  * '-----------------   -----'
  *
- * However, on hosts where the native VM page size (PAGE_CACHE_SIZE) is
+ * However, on hosts where the native VM page size (PAGE_SIZE) is
  * larger than LU_PAGE_SIZE, a single host page may contain multiple
  * lu_dirpages. After reading the lu_dirpages from the MDS, the
  * ldp_hash_end of the first lu_dirpage refers to the one immediately
@@ -1087,7 +1087,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
  * - Adjust the lde_reclen of the ending entry of each lu_dirpage to span
  *   to the first entry of the next lu_dirpage.
  */
-#if PAGE_CACHE_SIZE > LU_PAGE_SIZE
+#if PAGE_SIZE > LU_PAGE_SIZE
 static void mdc_adjust_dirpages(struct page **pages, int cfs_pgs, int lu_pgs)
 {
 	int i;
@@ -1138,7 +1138,7 @@ static void mdc_adjust_dirpages(struct page **pages, int cfs_pgs, int lu_pgs)
 }
 #else
 #define mdc_adjust_dirpages(pages, cfs_pgs, lu_pgs) do {} while (0)
-#endif	/* PAGE_CACHE_SIZE > LU_PAGE_SIZE */
+#endif	/* PAGE_SIZE > LU_PAGE_SIZE */
 
 /* parameters for readdir page */
 struct readpage_param {
@@ -1212,7 +1212,7 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 		int lu_pgs;
 
 		rd_pgs = (req->rq_bulk->bd_nob_transferred +
-			    PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
+			    PAGE_SIZE - 1) >> PAGE_SHIFT;
 		lu_pgs = req->rq_bulk->bd_nob_transferred >>
 							LU_PAGE_SHIFT;
 		LASSERT(!(req->rq_bulk->bd_nob_transferred & ~LU_PAGE_MASK));

@@ -226,7 +226,7 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
 #endif
 		bio_for_each_segment_all(bvec, bio, iter) {
 			BUG_ON(bvec->bv_offset != 0);
-			BUG_ON(bvec->bv_len != PAGE_CACHE_SIZE);
+			BUG_ON(bvec->bv_len != PAGE_SIZE);
 
 			pages[page_count] = bvec->bv_page;
 			offsets[page_count] = offset;
@@ -240,7 +240,7 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
                         (rw == WRITE) ? LPROC_LL_BRW_WRITE : LPROC_LL_BRW_READ,
                         page_count);
 
-        pvec->ldp_size = page_count << PAGE_CACHE_SHIFT;
+	pvec->ldp_size = page_count << PAGE_SHIFT;
         pvec->ldp_nr = page_count;
 
 	/* FIXME: in ll_direct_rw_pages, it has to allocate many cl_page{}s to
@@ -538,7 +538,7 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
 
         set_device_ro(bdev, (lo_flags & LO_FLAGS_READ_ONLY) != 0);
 
-	lo->lo_blocksize = PAGE_CACHE_SIZE;
+	lo->lo_blocksize = PAGE_SIZE;
         lo->lo_device = bdev;
         lo->lo_flags = lo_flags;
         lo->lo_backing_file = file;
@@ -560,7 +560,7 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
 
 	/* queue parameters */
 	blk_queue_max_hw_sectors(lo->lo_queue,
-				 LLOOP_MAX_SEGMENTS << (PAGE_CACHE_SHIFT - 9));
+				 LLOOP_MAX_SEGMENTS << (PAGE_SHIFT - 9));
 	blk_queue_max_segments(lo->lo_queue, LLOOP_MAX_SEGMENTS);
 
         set_capacity(disks[lo->lo_number], size);

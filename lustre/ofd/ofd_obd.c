@@ -1443,11 +1443,11 @@ static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 		GOTO(out, rc = -EROFS);
 
 #ifdef USE_HEALTH_CHECK_WRITE
-	OBD_ALLOC(info->fti_buf.lb_buf, PAGE_CACHE_SIZE);
+	OBD_ALLOC(info->fti_buf.lb_buf, PAGE_SIZE);
 	if (info->fti_buf.lb_buf == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	info->fti_buf.lb_len = PAGE_CACHE_SIZE;
+	info->fti_buf.lb_len = PAGE_SIZE;
 	info->fti_off = 0;
 
 	th = dt_trans_create(&env, ofd->ofd_osd);
@@ -1466,7 +1466,7 @@ static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 	}
 	dt_trans_stop(&env, ofd->ofd_osd, th);
 
-	OBD_FREE(info->fti_buf.lb_buf, PAGE_CACHE_SIZE);
+	OBD_FREE(info->fti_buf.lb_buf, PAGE_SIZE);
 
 	CDEBUG(D_INFO, "write 1 page synchronously for checking io rc %d\n",rc);
 #endif

@@ -188,7 +188,7 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 {
 	struct mm_struct *mm;
 	char *buffer;
-	int buf_len = PAGE_CACHE_SIZE;
+	int buf_len = PAGE_SIZE;
 	int key_len = strlen(key);
 	unsigned long addr;
 	int rc;

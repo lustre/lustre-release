@@ -1669,7 +1669,7 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 
 	/* 1MB bulk */
 	npages = min_t(unsigned int, OFD_MAX_BRW_SIZE, 1 << 20);
-	npages /= PAGE_CACHE_SIZE;
+	npages /= PAGE_SIZE;
 
 	OBD_ALLOC(pages, npages * sizeof(*pages));
 	if (pages == NULL)
@@ -1730,7 +1730,7 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 
 	for (i = 0; i < npages; i++)
 		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
-						 PAGE_CACHE_SIZE);
+						 PAGE_SIZE);
 
 	ptlrpc_request_set_replen(req);
 	rc = ptlrpc_queue_wait(req);
@@ -1748,7 +1748,7 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 		 GOTO(out, rc = -EPROTO);
 
 	npages = (ii->ii_count + LU_PAGE_COUNT - 1) >>
-		 (PAGE_CACHE_SHIFT - LU_PAGE_SHIFT);
+		 (PAGE_SHIFT - LU_PAGE_SHIFT);
 	if (npages > it->ooi_total_npages) {
 		CERROR("%s: returned more pages than expected, %u > %u\n",
 		       osp->opd_obd->obd_name, npages, it->ooi_total_npages);

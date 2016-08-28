@@ -60,7 +60,7 @@ void policy_from_vma(union ldlm_policy_data *policy, struct vm_area_struct *vma,
 		     unsigned long addr, size_t count)
 {
 	policy->l_extent.start = ((addr - vma->vm_start) & PAGE_MASK) +
-				 (vma->vm_pgoff << PAGE_CACHE_SHIFT);
+				 (vma->vm_pgoff << PAGE_SHIFT);
 	policy->l_extent.end = (policy->l_extent.start + count - 1) |
 			       ~PAGE_MASK;
 }
@@ -477,7 +477,7 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last)
 	LASSERTF(last > first, "last %llu first %llu\n", last, first);
         if (mapping_mapped(mapping)) {
                 rc = 0;
-		unmap_mapping_range(mapping, first + PAGE_CACHE_SIZE - 1,
+		unmap_mapping_range(mapping, first + PAGE_SIZE - 1,
                                     last - first + 1, 0);
         }
 

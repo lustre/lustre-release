@@ -143,7 +143,7 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 			buf->lb_buf, DMU_READ_PREFETCH);
 
 	record_end_io(osd, READ, cfs_time_current() - start, size,
-		      size >> PAGE_CACHE_SHIFT);
+		      size >> PAGE_SHIFT);
 	if (rc == 0) {
 		rc = size;
 		*pos += size;
@@ -239,7 +239,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 
 out:
 	record_end_io(osd, WRITE, 0, buf->lb_len,
-		      buf->lb_len >> PAGE_CACHE_SHIFT);
+		      buf->lb_len >> PAGE_SHIFT);
 
 	RETURN(rc);
 }
@@ -361,8 +361,8 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 			dbf = (void *) ((unsigned long)dbp[i] | 1);
 
 			while (tocpy > 0) {
-				thispage = PAGE_CACHE_SIZE;
-				thispage -= bufoff & (PAGE_CACHE_SIZE - 1);
+				thispage = PAGE_SIZE;
+				thispage -= bufoff & (PAGE_SIZE - 1);
 				thispage = min(tocpy, thispage);
 
 				lnb->lnb_rc = 0;
@@ -439,7 +439,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 			/* go over pages arcbuf contains, put them as
 			 * local niobufs for ptlrpc's bulks */
 			while (sz_in_block > 0) {
-				plen = min_t(int, sz_in_block, PAGE_CACHE_SIZE);
+				plen = min_t(int, sz_in_block, PAGE_SIZE);
 
 				lnb[i].lnb_file_offset = off;
 				lnb[i].lnb_page_offset = 0;
@@ -473,7 +473,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 
 			/* can't use zerocopy, allocate temp. buffers */
 			while (sz_in_block > 0) {
-				plen = min_t(int, sz_in_block, PAGE_CACHE_SIZE);
+				plen = min_t(int, sz_in_block, PAGE_SIZE);
 
 				lnb[i].lnb_file_offset = off;
 				lnb[i].lnb_page_offset = 0;

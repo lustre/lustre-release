@@ -44,7 +44,7 @@
 
 #include <linux/fs.h>
 #include <linux/module.h>
-#include <linux/pagemap.h> /* for PAGE_CACHE_SIZE */
+#include <linux/pagemap.h> /* for PAGE_SIZE */
 #include <lustre/lustre_idl.h>
 #include <obd_class.h>
 

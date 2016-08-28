@@ -196,7 +196,7 @@ static int qsd_reint_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 
 	/* let's do a 1MB bulk */
 	npages = min_t(unsigned int, OFD_MAX_BRW_SIZE, 1 << 20);
-	npages /= PAGE_CACHE_SIZE;
+	npages /= PAGE_SIZE;
 
 	/* allocate pages for bulk index read */
 	OBD_ALLOC(pages, npages * sizeof(*pages));
@@ -256,7 +256,7 @@ repeat:
 		ver = ii->ii_version;
 
 	pg_cnt = (ii->ii_count + (LU_PAGE_COUNT) - 1);
-	pg_cnt >>= PAGE_CACHE_SHIFT - LU_PAGE_SHIFT;
+	pg_cnt >>= PAGE_SHIFT - LU_PAGE_SHIFT;
 
 	if (pg_cnt > npages) {
 		CERROR("%s: master returned more pages than expected, %u > %u"

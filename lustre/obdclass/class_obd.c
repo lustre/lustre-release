@@ -478,9 +478,9 @@ static int obd_init_checks(void)
 		CWARN("s64 wrong length! strlen(%s)=%d != 2\n", buf, len);
                 ret = -EINVAL;
         }
-	if ((u64val & ~PAGE_CACHE_MASK) >= PAGE_CACHE_SIZE) {
+	if ((u64val & ~PAGE_MASK) >= PAGE_SIZE) {
 		CWARN("mask failed: u64val %llu >= %llu\n", u64val,
-		      (__u64)PAGE_CACHE_SIZE);
+		      (__u64)PAGE_SIZE);
                 ret = -EINVAL;
         }
 
@@ -539,7 +539,7 @@ static int __init obdclass_init(void)
 	/* Default the dirty page cache cap to 1/2 of system memory.
 	 * For clients with less memory, a larger fraction is needed
 	 * for other purposes (mostly for BGL). */
-	if (totalram_pages <= 512 << (20 - PAGE_CACHE_SHIFT))
+	if (totalram_pages <= 512 << (20 - PAGE_SHIFT))
 		obd_max_dirty_pages = totalram_pages / 4;
 	else
 		obd_max_dirty_pages = totalram_pages / 2;

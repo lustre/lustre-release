@@ -1353,7 +1353,7 @@ static int mgc_import_event(struct obd_device *obd,
 }
 
 enum {
-	CONFIG_READ_NRPAGES_INIT = 1 << (20 - PAGE_CACHE_SHIFT),
+	CONFIG_READ_NRPAGES_INIT = 1 << (20 - PAGE_SHIFT),
         CONFIG_READ_NRPAGES      = 4
 };
 
@@ -1379,22 +1379,22 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
         LASSERT(cfg->cfg_instance != NULL);
         LASSERT(cfg->cfg_sb == cfg->cfg_instance);
 
-	OBD_ALLOC(inst, PAGE_CACHE_SIZE);
+	OBD_ALLOC(inst, PAGE_SIZE);
 	if (inst == NULL)
 		RETURN(-ENOMEM);
 
 	if (!IS_SERVER(lsi)) {
-		pos = snprintf(inst, PAGE_CACHE_SIZE, "%p", cfg->cfg_instance);
-		if (pos >= PAGE_CACHE_SIZE) {
-			OBD_FREE(inst, PAGE_CACHE_SIZE);
+		pos = snprintf(inst, PAGE_SIZE, "%p", cfg->cfg_instance);
+		if (pos >= PAGE_SIZE) {
+			OBD_FREE(inst, PAGE_SIZE);
 			return -E2BIG;
 		}
         } else {
 		LASSERT(IS_MDT(lsi));
 		rc = server_name2svname(lsi->lsi_svname, inst, NULL,
-					PAGE_CACHE_SIZE);
+					PAGE_SIZE);
 		if (rc) {
-			OBD_FREE(inst, PAGE_CACHE_SIZE);
+			OBD_FREE(inst, PAGE_SIZE);
 			RETURN(-EINVAL);
 		}
 		pos = strlen(inst);
@@ -1402,7 +1402,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 
         ++pos;
         buf   = inst + pos;
-	bufsz = PAGE_CACHE_SIZE - pos;
+	bufsz = PAGE_SIZE - pos;
 
         while (datalen > 0) {
                 int   entry_len = sizeof(*entry);
@@ -1434,7 +1434,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		/* Keep this swab for normal mixed endian handling. LU-1644 */
 		if (mne_swab)
 			lustre_swab_mgs_nidtbl_entry(entry);
-		if (entry->mne_length > PAGE_CACHE_SIZE) {
+		if (entry->mne_length > PAGE_SIZE) {
 			CERROR("MNE too large (%u)\n", entry->mne_length);
 			break;
 		}
@@ -1557,7 +1557,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
                 /* continue, even one with error */
         }
 
-	OBD_FREE(inst, PAGE_CACHE_SIZE);
+	OBD_FREE(inst, PAGE_SIZE);
         RETURN(rc);
 }
 
@@ -1648,7 +1648,7 @@ again:
 	else
 		body->mcb_offset = cfg->cfg_last_idx + 1;
 	body->mcb_type   = cld->cld_type;
-	body->mcb_bits   = PAGE_CACHE_SHIFT;
+	body->mcb_bits   = PAGE_SHIFT;
 	body->mcb_units  = nrpages;
 
 	/* allocate bulk transfer descriptor */
@@ -1661,7 +1661,7 @@ again:
 
 	for (i = 0; i < nrpages; i++)
 		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
-						 PAGE_CACHE_SIZE);
+						 PAGE_SIZE);
 
 	ptlrpc_request_set_replen(req);
 	rc = ptlrpc_queue_wait(req);
@@ -1693,7 +1693,7 @@ again:
 	if (ealen < 0)
 		GOTO(out, rc = ealen);
 
-	if (ealen > nrpages << PAGE_CACHE_SHIFT)
+	if (ealen > nrpages << PAGE_SHIFT)
 		GOTO(out, rc = -EINVAL);
 
 	if (ealen == 0) { /* no logs transferred */
@@ -1745,7 +1745,7 @@ again:
 			rc2 = mgc_apply_recover_logs(obd, cld, res->mcr_offset,
 						     ptr,
 						     min_t(int, ealen,
-							   PAGE_CACHE_SIZE),
+							   PAGE_SIZE),
 						     mne_swab);
 		kunmap(pages[i]);
 		if (rc2 < 0) {
@@ -1757,7 +1757,7 @@ again:
 			break;
 		}
 
-		ealen -= PAGE_CACHE_SIZE;
+		ealen -= PAGE_SIZE;
 	}
 
 out:

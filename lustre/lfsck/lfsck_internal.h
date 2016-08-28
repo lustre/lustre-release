@@ -1426,7 +1426,7 @@ static inline int lfsck_links_read(const struct lu_env *env,
 {
 	ldata->ld_buf =
 		lu_buf_check_and_alloc(&lfsck_env_info(env)->lti_linkea_buf,
-				       PAGE_CACHE_SIZE);
+				       PAGE_SIZE);
 
 	return __lfsck_links_read(env, obj, ldata);
 }
@@ -1437,7 +1437,7 @@ static inline int lfsck_links_read2(const struct lu_env *env,
 {
 	ldata->ld_buf =
 		lu_buf_check_and_alloc(&lfsck_env_info(env)->lti_linkea_buf2,
-				       PAGE_CACHE_SIZE);
+				       PAGE_SIZE);
 
 	return __lfsck_links_read(env, obj, ldata);
 }

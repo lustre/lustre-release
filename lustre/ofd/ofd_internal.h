@@ -449,7 +449,7 @@ static inline int ofd_grant_prohibit(struct obd_export *exp,
 	/* When ofd_grant_compat_disable is set, we don't grant any space to
 	 * clients not supporting OBD_CONNECT_GRANT_PARAM.
 	 * Otherwise, space granted to such a client is inflated since it
-	 * consumes PAGE_CACHE_SIZE of grant space per block */
+	 * consumes PAGE_SIZE of grant space per block */
 	return !!(ofd_obd(ofd)->obd_self_export != exp &&
 		  !ofd_grant_param_supp(exp) && ofd->ofd_grant_compat_disable);
 }

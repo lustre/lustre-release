@@ -53,7 +53,7 @@
 
 #include "ptlrpc_internal.h"
 
-static int mult = 20 - PAGE_CACHE_SHIFT;
+static int mult = 20 - PAGE_SHIFT;
 static int enc_pool_max_memory_mb;
 module_param(enc_pool_max_memory_mb, int, 0644);
 MODULE_PARM_DESC(enc_pool_max_memory_mb,
@@ -64,7 +64,7 @@ MODULE_PARM_DESC(enc_pool_max_memory_mb,
  ****************************************/
 
 
-#define PTRS_PER_PAGE   (PAGE_CACHE_SIZE / sizeof(void *))
+#define PTRS_PER_PAGE   (PAGE_SIZE / sizeof(void *))
 #define PAGES_PER_POOL  (PTRS_PER_PAGE)
 
 #define IDLE_IDX_MAX            (100)
@@ -222,7 +222,7 @@ static void enc_pools_release_free_pages(long npages)
         /* free unused pools */
         while (p_idx_max1 < p_idx_max2) {
                 LASSERT(page_pools.epp_pools[p_idx_max2]);
-		OBD_FREE(page_pools.epp_pools[p_idx_max2], PAGE_CACHE_SIZE);
+		OBD_FREE(page_pools.epp_pools[p_idx_max2], PAGE_SIZE);
                 page_pools.epp_pools[p_idx_max2] = NULL;
                 p_idx_max2--;
         }
@@ -328,7 +328,7 @@ static unsigned long enc_pools_cleanup(struct page ***pools, int npools)
 					cleaned++;
 				}
 			}
-			OBD_FREE(pools[i], PAGE_CACHE_SIZE);
+			OBD_FREE(pools[i], PAGE_SIZE);
 			pools[i] = NULL;
 		}
 	}
@@ -448,7 +448,7 @@ static int enc_pools_add_pages(int npages)
                 goto out;
 
 	for (i = 0; i < npools; i++) {
-		OBD_ALLOC(pools[i], PAGE_CACHE_SIZE);
+		OBD_ALLOC(pools[i], PAGE_SIZE);
 		if (pools[i] == NULL)
 			goto out_pools;
 

@@ -99,7 +99,7 @@ static void ll_invalidatepage(struct page *vmpage,
 	 * happening with locked page too
 	 */
 #ifdef HAVE_INVALIDATE_RANGE
-	if (offset == 0 && length == PAGE_CACHE_SIZE) {
+	if (offset == 0 && length == PAGE_SIZE) {
 #else
 	if (offset == 0) {
 #endif
@@ -336,7 +336,7 @@ static void ll_free_user_pages(struct page **pages, int npages, int do_dirty)
  * representing PAGE_SIZE worth of user data, into a single buffer, and
  * then truncate this to be a full-sized RPC.  For 4kB PAGE_SIZE this is
  * up to 22MB for 128kB kmalloc and up to 682MB for 4MB kmalloc. */
-#define MAX_DIO_SIZE ((MAX_MALLOC / sizeof(struct brw_page) * PAGE_CACHE_SIZE) & \
+#define MAX_DIO_SIZE ((MAX_MALLOC / sizeof(struct brw_page) * PAGE_SIZE) & \
 		      ~(DT_MAX_BRW_SIZE - 1))
 
 #ifndef HAVE_IOV_ITER_RW
@@ -368,8 +368,8 @@ ll_direct_IO(
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), size=%zd (max %lu), "
 	       "offset=%lld=%llx, pages %zd (max %lu)\n",
 	       PFID(ll_inode2fid(inode)), inode, count, MAX_DIO_SIZE,
-	       file_offset, file_offset, count >> PAGE_CACHE_SHIFT,
-	       MAX_DIO_SIZE >> PAGE_CACHE_SHIFT);
+	       file_offset, file_offset, count >> PAGE_SHIFT,
+	       MAX_DIO_SIZE >> PAGE_SHIFT);
 
 	/* Check that all user buffers are aligned as well */
 	if (iov_iter_alignment(iter) & ~PAGE_MASK)
@@ -422,8 +422,8 @@ ll_direct_IO(
 			 * We should always be able to kmalloc for a
 			 * page worth of page pointers = 4MB on i386. */
 			if (result == -ENOMEM &&
-			    size > (PAGE_CACHE_SIZE / sizeof(*pages)) *
-				    PAGE_CACHE_SIZE) {
+			    size > (PAGE_SIZE / sizeof(*pages)) *
+				    PAGE_SIZE) {
 				size = ((((size / 2) - 1) |
 					~PAGE_MASK) + 1) & PAGE_MASK;
 				CDEBUG(D_VFSTRACE, "DIO size now %zu\n",
@@ -465,9 +465,9 @@ static inline int ll_get_user_pages(int rw, unsigned long user_addr,
 		return -EFBIG;
 	}
 
-	*max_pages = (user_addr + size + PAGE_CACHE_SIZE - 1) >>
-		      PAGE_CACHE_SHIFT;
-	*max_pages -= user_addr >> PAGE_CACHE_SHIFT;
+	*max_pages = (user_addr + size + PAGE_SIZE - 1) >>
+		      PAGE_SHIFT;
+	*max_pages -= user_addr >> PAGE_SHIFT;
 
 	OBD_ALLOC_LARGE(*pages, *max_pages * sizeof(**pages));
 	if (*pages) {
@@ -505,8 +505,8 @@ ll_direct_IO(int rw, struct kiocb *iocb, const struct iovec *iov,
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), size=%zd (max %lu), "
 	       "offset=%lld=%llx, pages %zd (max %lu)\n",
 	       PFID(ll_inode2fid(inode)), inode, count, MAX_DIO_SIZE,
-	       file_offset, file_offset, count >> PAGE_CACHE_SHIFT,
-	       MAX_DIO_SIZE >> PAGE_CACHE_SHIFT);
+	       file_offset, file_offset, count >> PAGE_SHIFT,
+	       MAX_DIO_SIZE >> PAGE_SHIFT);
 
         /* Check that all user buffers are aligned as well */
         for (seg = 0; seg < nr_segs; seg++) {
@@ -545,7 +545,7 @@ ll_direct_IO(int rw, struct kiocb *iocb, const struct iovec *iov,
                                                        &pages, &max_pages);
                         if (likely(page_count > 0)) {
                                 if (unlikely(page_count <  max_pages))
-					bytes = page_count << PAGE_CACHE_SHIFT;
+					bytes = page_count << PAGE_SHIFT;
 				result = ll_direct_IO_seg(env, io, rw, inode,
 							  bytes, file_offset,
 							  pages, page_count);
@@ -562,11 +562,11 @@ ll_direct_IO(int rw, struct kiocb *iocb, const struct iovec *iov,
                                  * We should always be able to kmalloc for a
                                  * page worth of page pointers = 4MB on i386. */
                                 if (result == -ENOMEM &&
-				    size > (PAGE_CACHE_SIZE / sizeof(*pages)) *
-					   PAGE_CACHE_SIZE) {
+				    size > (PAGE_SIZE / sizeof(*pages)) *
+					   PAGE_SIZE) {
                                         size = ((((size / 2) - 1) |
-						 ~PAGE_CACHE_MASK) + 1) &
-						PAGE_CACHE_MASK;
+						 ~PAGE_MASK) + 1) &
+						PAGE_MASK;
 					CDEBUG(D_VFSTRACE, "DIO size now %zu\n",
                                                size);
                                         continue;
@@ -637,9 +637,9 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 	struct cl_page *page;
 
 	struct cl_object *clob = ll_i2info(mapping->host)->lli_clob;
-	pgoff_t index = pos >> PAGE_CACHE_SHIFT;
+	pgoff_t index = pos >> PAGE_SHIFT;
 	struct page *vmpage = NULL;
-	unsigned from = pos & (PAGE_CACHE_SIZE - 1);
+	unsigned from = pos & (PAGE_SIZE - 1);
 	unsigned to = from + len;
 	int result = 0;
 	ENTRY;
@@ -739,7 +739,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 	struct cl_io *io;
 	struct vvp_io *vio;
 	struct cl_page *page;
-	unsigned from = pos & (PAGE_CACHE_SIZE - 1);
+	unsigned from = pos & (PAGE_SIZE - 1);
 	bool unplug = false;
 	int result = 0;
 	ENTRY;

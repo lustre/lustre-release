@@ -1043,13 +1043,13 @@ int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg, int nob)
 		RETURN(-ENOMEM);
 
 	if (!(exp_connect_flags(exp) & OBD_CONNECT_BRW_SIZE))
-		/* old client requires reply size in it's PAGE_CACHE_SIZE,
+		/* old client requires reply size in it's PAGE_SIZE,
 		 * which is rdpg->rp_count */
 		nob = rdpg->rp_count;
 
 	for (i = 0, tmpcount = nob; i < rdpg->rp_npages && tmpcount > 0;
 	     i++, tmpcount -= tmpsize) {
-		tmpsize = min_t(int, tmpcount, PAGE_CACHE_SIZE);
+		tmpsize = min_t(int, tmpcount, PAGE_SIZE);
 		desc->bd_frag_ops->add_kiov_frag(desc, rdpg->rp_pages[i], 0,
 						 tmpsize);
 	}
@@ -1110,7 +1110,7 @@ static int tgt_obd_idx_read(struct tgt_session_info *tsi)
 		GOTO(out, rc = -EFAULT);
 	rdpg->rp_count = min_t(unsigned int, req_ii->ii_count << LU_PAGE_SHIFT,
 			       exp_max_brw_size(tsi->tsi_exp));
-	rdpg->rp_npages = (rdpg->rp_count + PAGE_CACHE_SIZE -1) >> PAGE_CACHE_SHIFT;
+	rdpg->rp_npages = (rdpg->rp_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
 	/* allocate pages to store the containers */
 	OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof(rdpg->rp_pages[0]));

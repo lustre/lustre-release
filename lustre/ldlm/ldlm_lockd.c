@@ -206,7 +206,7 @@ static int expired_lock_main(void *arg)
 
 			lock = list_entry(expired->next, struct ldlm_lock,
 					  l_pending_chain);
-			if ((void *)lock < LP_POISON + PAGE_CACHE_SIZE &&
+			if ((void *)lock < LP_POISON + PAGE_SIZE &&
 			    (void *)lock >= LP_POISON) {
 				spin_unlock_bh(&waiting_locks_spinlock);
 				CERROR("free lock on elt list %p\n", lock);
@@ -214,7 +214,7 @@ static int expired_lock_main(void *arg)
 			}
 			list_del_init(&lock->l_pending_chain);
 			if ((void *)lock->l_export <
-			     LP_POISON + PAGE_CACHE_SIZE &&
+			     LP_POISON + PAGE_SIZE &&
 			    (void *)lock->l_export >= LP_POISON) {
 				CERROR("lock with free export on elt list %p\n",
 				       lock->l_export);

@@ -63,7 +63,7 @@ void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf)
         if (unlikely(nr_pages == 0))
                 return;
 
-	blocks_per_page = PAGE_CACHE_SIZE >> osd_sb(osd)->s_blocksize_bits;
+	blocks_per_page = PAGE_SIZE >> osd_sb(osd)->s_blocksize_bits;
 
         lprocfs_oh_tally_log2(&s->hist[BRW_R_PAGES+rw], nr_pages);
 

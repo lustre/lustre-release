@@ -33,7 +33,7 @@
 
 int linkea_data_new(struct linkea_data *ldata, struct lu_buf *buf)
 {
-	ldata->ld_buf = lu_buf_check_and_alloc(buf, PAGE_CACHE_SIZE);
+	ldata->ld_buf = lu_buf_check_and_alloc(buf, PAGE_SIZE);
 	if (ldata->ld_buf->lb_buf == NULL)
 		return -ENOMEM;
 	ldata->ld_leh = ldata->ld_buf->lb_buf;

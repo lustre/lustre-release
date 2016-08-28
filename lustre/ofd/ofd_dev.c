@@ -2138,14 +2138,14 @@ static int ofd_ladvise_prefetch(const struct lu_env *env,
 		GOTO(out_unlock, rc);
 
 	/* We need page aligned offset and length */
-	start_index = start >> PAGE_CACHE_SHIFT;
-	end_index = (end - 1) >> PAGE_CACHE_SHIFT;
+	start_index = start >> PAGE_SHIFT;
+	end_index = (end - 1) >> PAGE_SHIFT;
 	pages = end_index - start_index + 1;
 	while (pages > 0) {
 		nr_local = pages <= PTLRPC_MAX_BRW_PAGES ? pages :
 			PTLRPC_MAX_BRW_PAGES;
-		rnb.rnb_offset = start_index << PAGE_CACHE_SHIFT;
-		rnb.rnb_len = nr_local << PAGE_CACHE_SHIFT;
+		rnb.rnb_offset = start_index << PAGE_SHIFT;
+		rnb.rnb_len = nr_local << PAGE_SHIFT;
 		rc = dt_bufs_get(env, ofd_object_child(fo), &rnb, lnb, 0);
 		if (unlikely(rc < 0))
 			break;

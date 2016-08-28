@@ -143,7 +143,7 @@ static int osc_max_dirty_mb_seq_show(struct seq_file *m, void *v)
 	val = cli->cl_dirty_max_pages;
 	spin_unlock(&cli->cl_loi_list_lock);
 
-	mult = 1 << (20 - PAGE_CACHE_SHIFT);
+	mult = 1 << (20 - PAGE_SHIFT);
 	return lprocfs_seq_read_frac_helper(m, val, mult);
 }
 
@@ -160,10 +160,10 @@ static ssize_t osc_max_dirty_mb_seq_write(struct file *file,
 	if (rc)
 		return rc;
 
-	pages_number >>= PAGE_CACHE_SHIFT;
+	pages_number >>= PAGE_SHIFT;
 
 	if (pages_number <= 0 ||
-	    pages_number >= OSC_MAX_DIRTY_MB_MAX << (20 - PAGE_CACHE_SHIFT) ||
+	    pages_number >= OSC_MAX_DIRTY_MB_MAX << (20 - PAGE_SHIFT) ||
 	    pages_number > totalram_pages / 4) /* 1/4 of RAM */
 		return -ERANGE;
 
@@ -180,7 +180,7 @@ static int osc_cached_mb_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *dev = m->private;
 	struct client_obd *cli = &dev->u.cli;
-	int shift = 20 - PAGE_CACHE_SHIFT;
+	int shift = 20 - PAGE_SHIFT;
 
 	seq_printf(m, "used_mb: %ld\n"
 		   "busy_cnt: %ld\n"
@@ -217,7 +217,7 @@ osc_cached_mb_seq_write(struct file *file, const char __user *buffer,
 	if (rc)
 		return rc;
 
-	pages_number >>= PAGE_CACHE_SHIFT;
+	pages_number >>= PAGE_SHIFT;
 
 	if (pages_number < 0)
 		return -ERANGE;
@@ -244,7 +244,7 @@ static int osc_cur_dirty_bytes_seq_show(struct seq_file *m, void *v)
 	struct client_obd *cli = &dev->u.cli;
 
 	spin_lock(&cli->cl_loi_list_lock);
-	seq_printf(m, "%lu\n", cli->cl_dirty_pages << PAGE_CACHE_SHIFT);
+	seq_printf(m, "%lu\n", cli->cl_dirty_pages << PAGE_SHIFT);
 	spin_unlock(&cli->cl_loi_list_lock);
 	return 0;
 }
@@ -564,15 +564,15 @@ static ssize_t osc_obd_max_pages_per_rpc_seq_write(struct file *file,
 
 	/* if the max_pages is specified in bytes, convert to pages */
 	if (val >= ONE_MB_BRW_SIZE)
-		val >>= PAGE_CACHE_SHIFT;
+		val >>= PAGE_SHIFT;
 
 	LPROCFS_CLIMP_CHECK(dev);
 
-	chunk_mask = ~((1 << (cli->cl_chunkbits - PAGE_CACHE_SHIFT)) - 1);
+	chunk_mask = ~((1 << (cli->cl_chunkbits - PAGE_SHIFT)) - 1);
 	/* max_pages_per_rpc must be chunk aligned */
 	val = (val + ~chunk_mask) & chunk_mask;
 	if (val == 0 || (ocd->ocd_brw_size != 0 &&
-			 val > ocd->ocd_brw_size >> PAGE_CACHE_SHIFT)) {
+			 val > ocd->ocd_brw_size >> PAGE_SHIFT)) {
 		LPROCFS_CLIMP_EXIT(dev);
 		return -ERANGE;
 	}
@@ -594,7 +594,7 @@ static int osc_unstable_stats_seq_show(struct seq_file *m, void *v)
 	int mb;
 
 	pages = atomic_long_read(&cli->cl_unstable_count);
-	mb    = (pages * PAGE_CACHE_SIZE) >> 20;
+	mb    = (pages * PAGE_SIZE) >> 20;
 
 	seq_printf(m, "unstable_pages: %20ld\n"
 		   "unstable_mb:              %10d\n",

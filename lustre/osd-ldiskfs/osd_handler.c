@@ -6526,7 +6526,7 @@ static int osd_mount(const struct lu_env *env,
 	/* Glom up mount options */
 	if (*options != '\0')
 		strcat(options, ",");
-	strlcat(options, "no_mbcache", PAGE_CACHE_SIZE);
+	strlcat(options, "no_mbcache", PAGE_SIZE);
 
 	type = get_fs_type("ldiskfs");
 	if (!type) {

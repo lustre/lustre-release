@@ -676,7 +676,7 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 		GOTO(out, rc = -EINVAL);
 	}
 
-	if (data->ioc_plen1 > PAGE_CACHE_SIZE)
+	if (data->ioc_plen1 > PAGE_SIZE)
 		GOTO(out, rc = -E2BIG);
 
 	OBD_ALLOC(lcfg, data->ioc_plen1);
@@ -814,7 +814,7 @@ static int mgs_iocontrol_pool(const struct lu_env *env,
 		GOTO(out_pool, rc = -EINVAL);
         }
 
-	if (data->ioc_plen1 > PAGE_CACHE_SIZE)
+	if (data->ioc_plen1 > PAGE_SIZE)
 		GOTO(out_pool, rc = -E2BIG);
 
         OBD_ALLOC(lcfg, data->ioc_plen1);

@@ -523,7 +523,7 @@ static int osc_extent_merge(const struct lu_env *env, struct osc_extent *cur,
 		return -ERANGE;
 
 	LASSERT(cur->oe_dlmlock == victim->oe_dlmlock);
-	ppc_bits = osc_cli(obj)->cl_chunkbits - PAGE_CACHE_SHIFT;
+	ppc_bits = osc_cli(obj)->cl_chunkbits - PAGE_SHIFT;
 	chunk_start = cur->oe_start >> ppc_bits;
 	chunk_end   = cur->oe_end   >> ppc_bits;
 	if (chunk_start   != (victim->oe_end >> ppc_bits) + 1 &&
@@ -881,8 +881,8 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 
 	if (!sent) {
 		lost_grant = ext->oe_grants;
-	} else if (blocksize < PAGE_CACHE_SIZE &&
-		   last_count != PAGE_CACHE_SIZE) {
+	} else if (blocksize < PAGE_SIZE &&
+		   last_count != PAGE_SIZE) {
 		/* For short writes we shouldn't count parts of pages that
 		 * span a whole chunk on the OST side, or our accounting goes
 		 * wrong.  Should match the code in filter_grant_check. */
@@ -892,7 +892,7 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 		if (end)
 			count += blocksize - end;
 
-		lost_grant = PAGE_CACHE_SIZE - count;
+		lost_grant = PAGE_SIZE - count;
 	}
 	if (ext->oe_grants > 0)
 		osc_free_grant(cli, nr_pages, lost_grant, ext->oe_grants);
@@ -974,7 +974,7 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 	struct osc_async_page *tmp;
 	int                    pages_in_chunk = 0;
 	int                    ppc_bits    = cli->cl_chunkbits -
-					     PAGE_CACHE_SHIFT;
+					     PAGE_SHIFT;
 	__u64                  trunc_chunk = trunc_index >> ppc_bits;
 	int                    grants   = 0;
 	int                    nr_pages = 0;
@@ -1132,7 +1132,7 @@ static int osc_extent_make_ready(const struct lu_env *env,
 	if (!(last->oap_async_flags & ASYNC_COUNT_STABLE)) {
 		int last_oap_count = osc_refresh_count(env, last, OBD_BRW_WRITE);
 		LASSERT(last_oap_count > 0);
-		LASSERT(last->oap_page_off + last_oap_count <= PAGE_CACHE_SIZE);
+		LASSERT(last->oap_page_off + last_oap_count <= PAGE_SIZE);
 		last->oap_count = last_oap_count;
 		spin_lock(&last->oap_lock);
 		last->oap_async_flags |= ASYNC_COUNT_STABLE;
@@ -1143,7 +1143,7 @@ static int osc_extent_make_ready(const struct lu_env *env,
 	 * because it's known they are not the last page */
 	list_for_each_entry(oap, &ext->oe_pages, oap_pending_item) {
 		if (!(oap->oap_async_flags & ASYNC_COUNT_STABLE)) {
-			oap->oap_count = PAGE_CACHE_SIZE - oap->oap_page_off;
+			oap->oap_count = PAGE_SIZE - oap->oap_page_off;
 			spin_lock(&oap->oap_lock);
 			oap->oap_async_flags |= ASYNC_COUNT_STABLE;
 			spin_unlock(&oap->oap_lock);
@@ -1170,7 +1170,7 @@ static int osc_extent_expand(struct osc_extent *ext, pgoff_t index,
 	struct osc_object *obj = ext->oe_obj;
 	struct client_obd *cli = osc_cli(obj);
 	struct osc_extent *next;
-	int ppc_bits = cli->cl_chunkbits - PAGE_CACHE_SHIFT;
+	int ppc_bits = cli->cl_chunkbits - PAGE_SHIFT;
 	pgoff_t chunk = index >> ppc_bits;
 	pgoff_t end_chunk;
 	pgoff_t end_index;
@@ -1307,9 +1307,9 @@ static int osc_refresh_count(const struct lu_env *env,
 		return 0;
 	else if (cl_offset(obj, index + 1) > kms)
 		/* catch sub-page write at end of file */
-		return kms % PAGE_CACHE_SIZE;
+		return kms % PAGE_SIZE;
 	else
-		return PAGE_CACHE_SIZE;
+		return PAGE_SIZE;
 }
 
 static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
@@ -1388,7 +1388,7 @@ static void osc_consume_write_grant(struct client_obd *cli,
 	cli->cl_dirty_pages++;
 	pga->flag |= OBD_BRW_FROM_GRANT;
 	CDEBUG(D_CACHE, "using %lu grant credits for brw %p page %p\n",
-	       PAGE_CACHE_SIZE, pga, pga->pg);
+	       PAGE_SIZE, pga, pga->pg);
 	osc_update_next_shrink(cli);
 }
 
@@ -1469,7 +1469,7 @@ static void osc_unreserve_grant(struct client_obd *cli,
  * used, we should return these grants to OST. There're two cases where grants
  * can be lost:
  * 1. truncate;
- * 2. blocksize at OST is less than PAGE_CACHE_SIZE and a partial page was
+ * 2. blocksize at OST is less than PAGE_SIZE and a partial page was
  *    written. In this case OST may use less chunks to serve this partial
  *    write. OSTs don't actually know the page size on the client side. so
  *    clients have to calculate lost grant by the blocksize on the OST.
@@ -1497,7 +1497,7 @@ static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
 	spin_unlock(&cli->cl_loi_list_lock);
 	CDEBUG(D_CACHE, "lost %u grant: %lu avail: %lu dirty: %lu/%lu\n",
 	       lost_grant, cli->cl_lost_grant,
-	       cli->cl_avail_grant, cli->cl_dirty_pages << PAGE_CACHE_SHIFT,
+	       cli->cl_avail_grant, cli->cl_dirty_pages << PAGE_SHIFT,
 	       cli->cl_dirty_grant);
 }
 

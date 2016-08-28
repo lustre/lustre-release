@@ -404,17 +404,17 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	 * from OFD after connecting. */
 	cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
 
-	/* set cl_chunkbits default value to PAGE_CACHE_SHIFT,
+	/* set cl_chunkbits default value to PAGE_SHIFT,
 	 * it will be updated at OSC connection time. */
-	cli->cl_chunkbits = PAGE_CACHE_SHIFT;
+	cli->cl_chunkbits = PAGE_SHIFT;
 
 	if (!strcmp(name, LUSTRE_MDC_NAME)) {
 		cli->cl_max_rpcs_in_flight = OBD_MAX_RIF_DEFAULT;
-	} else if (totalram_pages >> (20 - PAGE_CACHE_SHIFT) <= 128 /* MB */) {
+	} else if (totalram_pages >> (20 - PAGE_SHIFT) <= 128 /* MB */) {
 		cli->cl_max_rpcs_in_flight = 2;
-	} else if (totalram_pages >> (20 - PAGE_CACHE_SHIFT) <= 256 /* MB */) {
+	} else if (totalram_pages >> (20 - PAGE_SHIFT) <= 256 /* MB */) {
 		cli->cl_max_rpcs_in_flight = 3;
-	} else if (totalram_pages >> (20 - PAGE_CACHE_SHIFT) <= 512 /* MB */) {
+	} else if (totalram_pages >> (20 - PAGE_SHIFT) <= 512 /* MB */) {
 		cli->cl_max_rpcs_in_flight = 4;
 	} else {
 		if (osc_on_mdt(obddev->obd_name))

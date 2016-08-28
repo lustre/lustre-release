@@ -82,7 +82,7 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 	iobuf->dr_rw = rw;
 	iobuf->dr_init_at = line;
 
-	blocks = pages * (PAGE_CACHE_SIZE >> osd_sb(d)->s_blocksize_bits);
+	blocks = pages * (PAGE_SIZE >> osd_sb(d)->s_blocksize_bits);
 	if (iobuf->dr_bl_buf.lb_len >= blocks * sizeof(iobuf->dr_blocks[0])) {
 		LASSERT(iobuf->dr_pg_buf.lb_len >=
 			pages * sizeof(iobuf->dr_pages[0]));
@@ -97,7 +97,7 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 	CDEBUG(D_OTHER, "realloc %u for %u (%u) pages\n",
 	       (unsigned)(pages * sizeof(iobuf->dr_pages[0])), i, pages);
 	pages = i;
-	blocks = pages * (PAGE_CACHE_SIZE >> osd_sb(d)->s_blocksize_bits);
+	blocks = pages * (PAGE_SIZE >> osd_sb(d)->s_blocksize_bits);
 	iobuf->dr_max_pages = 0;
 	CDEBUG(D_OTHER, "realloc %u for %u blocks\n",
 	       (unsigned)(blocks * sizeof(iobuf->dr_blocks[0])), blocks);
@@ -258,7 +258,7 @@ static int can_be_merged(struct bio *bio, sector_t sector)
 static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                       struct osd_iobuf *iobuf)
 {
-	int            blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
+	int            blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
 	struct page  **pages = iobuf->dr_pages;
 	int            npages = iobuf->dr_npages;
 	sector_t      *blocks = iobuf->dr_blocks;
@@ -390,8 +390,8 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
         *nrpages = 0;
 
         while (len > 0) {
-		int poff = offset & (PAGE_CACHE_SIZE - 1);
-		int plen = PAGE_CACHE_SIZE - poff;
+		int poff = offset & (PAGE_SIZE - 1);
+		int plen = PAGE_SIZE - poff;
 
                 if (plen > len)
                         plen = len;
@@ -422,7 +422,7 @@ static struct page *osd_get_page(struct dt_object *dt, loff_t offset, int rw)
 
         LASSERT(inode);
 
-	page = find_or_create_page(inode->i_mapping, offset >> PAGE_CACHE_SHIFT,
+	page = find_or_create_page(inode->i_mapping, offset >> PAGE_SHIFT,
                                    GFP_NOFS | __GFP_HIGHMEM);
         if (unlikely(page == NULL))
                 lprocfs_counter_add(d->od_stats, LPROC_OSD_NO_PAGE, 1);
@@ -762,7 +762,7 @@ map:
 static int osd_ldiskfs_map_nblocks(struct inode *inode, unsigned long index,
 				   int clen, sector_t *blocks, int create)
 {
-	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
+	int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
 	struct bpointers bp;
 	int err;
 
@@ -788,7 +788,7 @@ static int osd_ldiskfs_map_bm_inode_pages(struct inode *inode,
 					  struct page **page, int pages,
 					  sector_t *blocks, int create)
 {
-	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
+	int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
 	pgoff_t bitmap_max_page_index;
 	sector_t *b;
 	int rc = 0, i;
@@ -848,7 +848,7 @@ static int osd_ldiskfs_map_ext_inode_pages(struct inode *inode,
 
 		/* look for next extent */
 		fp = NULL;
-		blocks += clen * (PAGE_CACHE_SIZE >> inode->i_blkbits);
+		blocks += clen * (PAGE_SIZE >> inode->i_blkbits);
 	}
 
 	if (fp)
@@ -879,7 +879,7 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
 				       int pages, sector_t *blocks,
 				       int create)
 {
-	int blocks_per_page = PAGE_CACHE_SIZE >> inode->i_blkbits;
+	int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
 	int rc = 0, i = 0;
 	struct page *fp = NULL;
 	int clen = 0;
@@ -982,7 +982,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 		RETURN(rc);
 
 	isize = i_size_read(inode);
-	maxidx = ((isize + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT) - 1;
+	maxidx = ((isize + PAGE_SIZE - 1) >> PAGE_SHIFT) - 1;
 
         if (osd->od_writethrough_cache)
                 cache = 1;
@@ -1003,7 +1003,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 		 */
 		ClearPageUptodate(lnb[i].lnb_page);
 
-		if (lnb[i].lnb_len == PAGE_CACHE_SIZE)
+		if (lnb[i].lnb_len == PAGE_SIZE)
 			continue;
 
 		if (maxidx >= lnb[i].lnb_page->index) {
@@ -1018,7 +1018,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 			off = (lnb[i].lnb_page_offset + lnb[i].lnb_len) &
 			      ~PAGE_MASK;
 			if (off)
-				memset(p + off, 0, PAGE_CACHE_SIZE - off);
+				memset(p + off, 0, PAGE_SIZE - off);
 			kunmap(lnb[i].lnb_page);
 		}
 	}
@@ -1125,7 +1125,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 			extents++;
 
 		if (!osd_is_mapped(dt, lnb[i].lnb_file_offset, &extent))
-			quota_space += PAGE_CACHE_SIZE;
+			quota_space += PAGE_SIZE;
 
 		/* ignore quota for the whole request if any page is from
 		 * client cache or written by root.

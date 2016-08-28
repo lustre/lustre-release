@@ -269,7 +269,7 @@ int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 	int result;
 
 	opg->ops_from = 0;
-	opg->ops_to   = PAGE_CACHE_SIZE;
+	opg->ops_to   = PAGE_SIZE;
 
 	result = osc_prep_async_page(osc, opg, page->cp_vmpage,
 				     cl_offset(obj, index));

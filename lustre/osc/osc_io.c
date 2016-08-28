@@ -367,7 +367,7 @@ static int osc_io_write_iter_init(const struct lu_env *env,
 	if (cl_io_is_append(io))
 		RETURN(osc_io_iter_init(env, ios));
 
-	npages = io->u.ci_rw.crw_count >> PAGE_CACHE_SHIFT;
+	npages = io->u.ci_rw.crw_count >> PAGE_SHIFT;
 	if (io->u.ci_rw.crw_pos & ~PAGE_MASK)
 		++npages;
 

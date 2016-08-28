@@ -484,7 +484,7 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 		unsigned long end_index;
 
 		/* Truncate RA window to end of file */
-		end_index = (unsigned long)((kms - 1) >> PAGE_CACHE_SHIFT);
+		end_index = (unsigned long)((kms - 1) >> PAGE_SHIFT);
 		if (end_index <= end) {
 			end = end_index;
 			ria->ria_eof = true;
@@ -547,7 +547,7 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	if (ria->ria_reserved != 0)
 		ll_ra_count_put(ll_i2sbi(inode), ria->ria_reserved);
 
-	if (ra_end == end && ra_end == (kms >> PAGE_CACHE_SHIFT))
+	if (ra_end == end && ra_end == (kms >> PAGE_SHIFT))
 		ll_ra_stats_inc(inode, RA_STAT_EOF);
 
 	/* if we didn't get to the end of the region we reserved from
@@ -764,8 +764,8 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 	if (ras->ras_requests >= 2 && !ras->ras_request_index) {
 		__u64 kms_pages;
 
-		kms_pages = (i_size_read(inode) + PAGE_CACHE_SIZE - 1) >>
-			    PAGE_CACHE_SHIFT;
+		kms_pages = (i_size_read(inode) + PAGE_SIZE - 1) >>
+			    PAGE_SHIFT;
 
 		CDEBUG(D_READA, "kmsp %llu mwp %lu mp %lu\n", kms_pages,
                        ra->ra_max_read_ahead_whole_pages, ra->ra_max_pages_per_file);
@@ -953,7 +953,7 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 		 * breaking kernel which assumes ->writepage should mark
 		 * PageWriteback or clean the page. */
 		result = cl_sync_file_range(inode, offset,
-					    offset + PAGE_CACHE_SIZE - 1,
+					    offset + PAGE_SIZE - 1,
 					    CL_FSYNC_LOCAL, 1);
 		if (result > 0) {
 			/* actually we may have written more than one page.
@@ -991,7 +991,7 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 	ENTRY;
 
 	if (wbc->range_cyclic) {
-		start = mapping->writeback_index << PAGE_CACHE_SHIFT;
+		start = mapping->writeback_index << PAGE_SHIFT;
 		end = OBD_OBJECT_EOF;
 	} else {
 		start = wbc->range_start;
@@ -1025,7 +1025,7 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 		if (end == OBD_OBJECT_EOF)
 			mapping->writeback_index = 0;
 		else
-			mapping->writeback_index = (end >> PAGE_CACHE_SHIFT) +1;
+			mapping->writeback_index = (end >> PAGE_SHIFT) + 1;
 	}
 	RETURN(result);
 }

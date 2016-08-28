@@ -344,7 +344,7 @@ static inline __u64 ldlm_ratio2locknr(int ratio)
 {
 	__u64 locknr;
 
-	locknr = ((__u64)NUM_CACHEPAGES << PAGE_CACHE_SHIFT) * ratio;
+	locknr = ((__u64)NUM_CACHEPAGES << PAGE_SHIFT) * ratio;
 	do_div(locknr, 100 * sizeof(struct ldlm_lock));
 
 	return locknr;

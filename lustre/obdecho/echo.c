@@ -54,7 +54,7 @@
 #define ECHO_INIT_OID        0x10000000ULL
 #define ECHO_HANDLE_MAGIC    0xabcd0123fedc9876ULL
 
-#define ECHO_PERSISTENT_PAGES (ECHO_PERSISTENT_SIZE >> PAGE_CACHE_SHIFT)
+#define ECHO_PERSISTENT_PAGES (ECHO_PERSISTENT_SIZE >> PAGE_SHIFT)
 static struct page *echo_persistent_pages[ECHO_PERSISTENT_PAGES];
 
 enum {
@@ -288,7 +288,7 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
 	int len = nb->rnb_len;
 
 	while (len > 0) {
-		int plen = PAGE_CACHE_SIZE - (offset & (PAGE_CACHE_SIZE-1));
+		int plen = PAGE_SIZE - (offset & (PAGE_SIZE-1));
 		if (len < plen)
 			plen = len;
 
@@ -299,14 +299,14 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
 		res->lnb_file_offset = offset;
 		res->lnb_len = plen;
 		LASSERT((res->lnb_file_offset & ~PAGE_MASK) +
-			res->lnb_len <= PAGE_CACHE_SIZE);
+			res->lnb_len <= PAGE_SIZE);
 
 		if (ispersistent &&
-		    ((res->lnb_file_offset >> PAGE_CACHE_SHIFT) <
+		    ((res->lnb_file_offset >> PAGE_SHIFT) <
 		      ECHO_PERSISTENT_PAGES)) {
 			res->lnb_page =
 				echo_persistent_pages[res->lnb_file_offset >>
-						      PAGE_CACHE_SHIFT];
+						      PAGE_SHIFT];
 			/* Take extra ref so __free_pages() can be called OK */
 			get_page(res->lnb_page);
 		} else {
@@ -346,9 +346,9 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 			    struct niobuf_local *lb, int verify)
 {
 	struct niobuf_local *res = lb;
-	u64 start = rb->rnb_offset >> PAGE_CACHE_SHIFT;
-	u64 end   = (rb->rnb_offset + rb->rnb_len + PAGE_CACHE_SIZE - 1) >>
-		    PAGE_CACHE_SHIFT;
+	u64 start = rb->rnb_offset >> PAGE_SHIFT;
+	u64 end   = (rb->rnb_offset + rb->rnb_len + PAGE_SIZE - 1) >>
+		    PAGE_SHIFT;
 	int     count  = (int)(end - start);
 	int     rc     = 0;
 	int     i;
@@ -657,8 +657,8 @@ int echo_persistent_pages_init(void)
 			return -ENOMEM;
 		}
 
-		memset (kmap (pg), 0, PAGE_CACHE_SIZE);
-		kunmap (pg);
+		memset(kmap(pg), 0, PAGE_SIZE);
+		kunmap(pg);
 
 		echo_persistent_pages[i] = pg;
 	}

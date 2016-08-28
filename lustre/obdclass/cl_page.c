@@ -1049,7 +1049,7 @@ int cl_page_cancel(const struct lu_env *env, struct cl_page *page)
  */
 loff_t cl_offset(const struct cl_object *obj, pgoff_t idx)
 {
-	return (loff_t)idx << PAGE_CACHE_SHIFT;
+	return (loff_t)idx << PAGE_SHIFT;
 }
 EXPORT_SYMBOL(cl_offset);
 
@@ -1058,13 +1058,13 @@ EXPORT_SYMBOL(cl_offset);
  */
 pgoff_t cl_index(const struct cl_object *obj, loff_t offset)
 {
-	return offset >> PAGE_CACHE_SHIFT;
+	return offset >> PAGE_SHIFT;
 }
 EXPORT_SYMBOL(cl_index);
 
 size_t cl_page_size(const struct cl_object *obj)
 {
-	return 1UL << PAGE_CACHE_SHIFT;
+	return 1UL << PAGE_SHIFT;
 }
 EXPORT_SYMBOL(cl_page_size);
 

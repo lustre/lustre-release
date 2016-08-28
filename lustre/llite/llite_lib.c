@@ -304,15 +304,15 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	    valid != CLIENT_CONNECT_MDT_REQD) {
 		char *buf;
 
-		OBD_ALLOC_WAIT(buf, PAGE_CACHE_SIZE);
-		obd_connect_flags2str(buf, PAGE_CACHE_SIZE,
+		OBD_ALLOC_WAIT(buf, PAGE_SIZE);
+		obd_connect_flags2str(buf, PAGE_SIZE,
 				      valid ^ CLIENT_CONNECT_MDT_REQD, 0, ",");
 		LCONSOLE_ERROR_MSG(0x170, "Server %s does not support "
 				   "feature(s) needed for correct operation "
 				   "of this client (%s). Please upgrade "
 				   "server or downgrade client.\n",
 				   sbi->ll_md_exp->exp_obd->obd_name, buf);
-		OBD_FREE(buf, PAGE_CACHE_SIZE);
+		OBD_FREE(buf, PAGE_SIZE);
 		GOTO(out_md_fid, err = -EPROTO);
 	}
 
@@ -356,7 +356,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 sbi->ll_flags |= LL_SBI_64BIT_HASH;
 
 	if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE)
-		sbi->ll_md_brw_pages = data->ocd_brw_size >> PAGE_CACHE_SHIFT;
+		sbi->ll_md_brw_pages = data->ocd_brw_size >> PAGE_SHIFT;
 	else
 		sbi->ll_md_brw_pages = 1;
 

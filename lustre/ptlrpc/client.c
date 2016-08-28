@@ -212,7 +212,7 @@ void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 	LASSERT(page != NULL);
 	LASSERT(pageoffset >= 0);
 	LASSERT(len > 0);
-	LASSERT(pageoffset + len <= PAGE_CACHE_SIZE);
+	LASSERT(pageoffset + len <= PAGE_SIZE);
 	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
 
 	kiov = &BD_GET_KIOV(desc, desc->bd_iov_count);

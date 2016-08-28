@@ -259,7 +259,7 @@ static int ll_max_readahead_mb_seq_show(struct seq_file *m, void *v)
 	pages_number = sbi->ll_ra_info.ra_max_pages;
 	spin_unlock(&sbi->ll_lock);
 
-	mult = 1 << (20 - PAGE_CACHE_SHIFT);
+	mult = 1 << (20 - PAGE_SHIFT);
 	return lprocfs_seq_read_frac_helper(m, pages_number, mult);
 }
 
@@ -277,14 +277,14 @@ ll_max_readahead_mb_seq_write(struct file *file, const char __user *buffer,
 	if (rc)
 		return rc;
 
-	pages_number >>= PAGE_CACHE_SHIFT;
+	pages_number >>= PAGE_SHIFT;
 
 	if (pages_number < 0 || pages_number > totalram_pages / 2) {
 		/* 1/2 of RAM */
 		CERROR("%s: can't set max_readahead_mb=%lu > %luMB\n",
 		       ll_get_fsname(sb, NULL, 0),
-		       (unsigned long)pages_number >> (20 - PAGE_CACHE_SHIFT),
-		       totalram_pages >> (20 - PAGE_CACHE_SHIFT + 1));
+		       (unsigned long)pages_number >> (20 - PAGE_SHIFT),
+		       totalram_pages >> (20 - PAGE_SHIFT + 1));
 		return -ERANGE;
 	}
 
@@ -306,7 +306,7 @@ static int ll_max_readahead_per_file_mb_seq_show(struct seq_file *m, void *v)
 	pages_number = sbi->ll_ra_info.ra_max_pages_per_file;
 	spin_unlock(&sbi->ll_lock);
 
-	mult = 1 << (20 - PAGE_CACHE_SHIFT);
+	mult = 1 << (20 - PAGE_SHIFT);
 	return lprocfs_seq_read_frac_helper(m, pages_number, mult);
 }
 
@@ -325,13 +325,13 @@ ll_max_readahead_per_file_mb_seq_write(struct file *file,
 	if (rc)
 		return rc;
 
-	pages_number >>= PAGE_CACHE_SHIFT;
+	pages_number >>= PAGE_SHIFT;
 
 	if (pages_number < 0 || pages_number > sbi->ll_ra_info.ra_max_pages) {
 		CERROR("%s: can't set max_readahead_per_file_mb=%lu > "
 		       "max_read_ahead_mb=%lu\n", ll_get_fsname(sb, NULL, 0),
-		       (unsigned long)pages_number >> (20 - PAGE_CACHE_SHIFT),
-		       sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_CACHE_SHIFT));
+		       (unsigned long)pages_number >> (20 - PAGE_SHIFT),
+		       sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_SHIFT));
 		return -ERANGE;
 	}
 
@@ -353,7 +353,7 @@ static int ll_max_read_ahead_whole_mb_seq_show(struct seq_file *m, void *v)
 	pages_number = sbi->ll_ra_info.ra_max_read_ahead_whole_pages;
 	spin_unlock(&sbi->ll_lock);
 
-	mult = 1 << (20 - PAGE_CACHE_SHIFT);
+	mult = 1 << (20 - PAGE_SHIFT);
 	return lprocfs_seq_read_frac_helper(m, pages_number, mult);
 }
 
@@ -372,13 +372,13 @@ ll_max_read_ahead_whole_mb_seq_write(struct file *file,
 	if (rc)
 		return rc;
 
-	pages_number >>= PAGE_CACHE_SHIFT;
+	pages_number >>= PAGE_SHIFT;
 
 	/* Cap this at the current max readahead window size, the readahead
 	 * algorithm does this anyway so it's pointless to set it larger. */
 	if (pages_number < 0 ||
 	    pages_number > sbi->ll_ra_info.ra_max_pages_per_file) {
-		int pages_shift = 20 - PAGE_CACHE_SHIFT;
+		int pages_shift = 20 - PAGE_SHIFT;
 		CERROR("%s: can't set max_read_ahead_whole_mb=%lu > "
 		       "max_read_ahead_per_file_mb=%lu\n",
 		       ll_get_fsname(sb, NULL, 0),
@@ -399,7 +399,7 @@ static int ll_max_cached_mb_seq_show(struct seq_file *m, void *v)
 	struct super_block     *sb    = m->private;
 	struct ll_sb_info      *sbi   = ll_s2sbi(sb);
 	struct cl_client_cache *cache = sbi->ll_cache;
-	int shift = 20 - PAGE_CACHE_SHIFT;
+	int shift = 20 - PAGE_SHIFT;
 	long max_cached_mb;
 	long unused_mb;
 
@@ -448,12 +448,12 @@ ll_max_cached_mb_seq_write(struct file *file, const char __user *buffer,
 	if (rc)
 		RETURN(rc);
 
-	pages_number >>= PAGE_CACHE_SHIFT;
+	pages_number >>= PAGE_SHIFT;
 
 	if (pages_number < 0 || pages_number > totalram_pages) {
 		CERROR("%s: can't set max cache more than %lu MB\n",
 		       ll_get_fsname(sb, NULL, 0),
-		       totalram_pages >> (20 - PAGE_CACHE_SHIFT));
+		       totalram_pages >> (20 - PAGE_SHIFT));
 		RETURN(-ERANGE);
 	}
 	/* Allow enough cache so clients can make well-formed RPCs */
@@ -907,7 +907,7 @@ static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 	int mb;
 
 	pages = atomic_long_read(&cache->ccc_unstable_nr);
-	mb    = (pages * PAGE_CACHE_SIZE) >> 20;
+	mb    = (pages * PAGE_SIZE) >> 20;
 
 	seq_printf(m, "unstable_check:     %8d\n"
 		   "unstable_pages: %12ld\n"

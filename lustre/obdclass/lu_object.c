@@ -958,8 +958,8 @@ static unsigned long lu_htable_order(struct lu_device *top)
 
 #if BITS_PER_LONG == 32
         /* limit hashtable size for lowmem systems to low RAM */
-	if (cache_size > 1 << (30 - PAGE_CACHE_SHIFT))
-		cache_size = 1 << (30 - PAGE_CACHE_SHIFT) * 3 / 4;
+	if (cache_size > 1 << (30 - PAGE_SHIFT))
+		cache_size = 1 << (30 - PAGE_SHIFT) * 3 / 4;
 #endif
 
         /* clear off unreasonable cache setting. */
@@ -972,7 +972,7 @@ static unsigned long lu_htable_order(struct lu_device *top)
                 lu_cache_percent = LU_CACHE_PERCENT_DEFAULT;
         }
         cache_size = cache_size / 100 * lu_cache_percent *
-		(PAGE_CACHE_SIZE / 1024);
+		(PAGE_SIZE / 1024);
 
         for (bits = 1; (1 << bits) < cache_size; ++bits) {
                 ;

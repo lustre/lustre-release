@@ -1232,8 +1232,8 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 		RETURN(-EINVAL);
 
 	rdpg.rp_count = (body->mcb_units << body->mcb_bits);
-	rdpg.rp_npages = (rdpg.rp_count + PAGE_CACHE_SIZE - 1) >>
-		PAGE_CACHE_SHIFT;
+	rdpg.rp_npages = (rdpg.rp_count + PAGE_SIZE - 1) >>
+		PAGE_SHIFT;
 	if (rdpg.rp_npages > PTLRPC_MAX_BRW_PAGES)
 		RETURN(-EINVAL);
 
@@ -1269,7 +1269,7 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	res->mcr_offset = nodemap_ii.ii_hash_end;
 	res->mcr_size = bytes;
 
-	page_count = (bytes + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
+	page_count = (bytes + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	LASSERT(page_count <= rdpg.rp_count);
 	desc = ptlrpc_prep_bulk_exp(req, page_count, 1,
 				    PTLRPC_BULK_PUT_SOURCE |
@@ -1281,8 +1281,8 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 
 	for (i = 0; i < page_count && bytes > 0; i++) {
 		ptlrpc_prep_bulk_page_pin(desc, rdpg.rp_pages[i], 0,
-					  min_t(int, bytes, PAGE_CACHE_SIZE));
-		bytes -= PAGE_CACHE_SIZE;
+					  min_t(int, bytes, PAGE_SIZE));
+		bytes -= PAGE_SIZE;
 	}
 
 	rc = target_bulk_io(req->rq_export, desc, &lwi);

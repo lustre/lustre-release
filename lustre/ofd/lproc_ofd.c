@@ -639,7 +639,7 @@ LPROC_SEQ_FOPS(ofd_sync_lock_cancel);
  *
  * When ofd_grant_compat_disable is set, we don't grant any space to clients
  * not supporting OBD_CONNECT_GRANT_PARAM. Otherwise, space granted to such
- * a client is inflated since it consumes PAGE_CACHE_SIZE of grant space per
+ * a client is inflated since it consumes PAGE_SIZE of grant space per
  * block, (i.e. typically 4kB units), but underlaying file system might have
  * block size bigger than page size, e.g. ZFS. See LU-2049 for details.
  *
