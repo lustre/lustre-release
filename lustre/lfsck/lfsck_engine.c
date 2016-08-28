@@ -362,7 +362,9 @@ int lfsck_open_dir(const struct lu_env *env,
 		GOTO(out, rc = PTR_ERR(di));
 
 	rc = iops->load(env, di, cookie);
-	if (rc == 0 || (rc > 0 && cookie > 0))
+	if (rc == -ENODATA)
+		rc = 1;
+	else if (rc == 0 || (rc > 0 && cookie > 0))
 		rc = iops->next(env, di);
 	else if (rc > 0)
 		rc = 0;
@@ -441,7 +443,7 @@ static int lfsck_prep(const struct lu_env *env, struct lfsck_instance *lfsck,
 	/* Init otable-based iterator. */
 	if (pos == NULL) {
 		rc = iops->load(env, lfsck->li_di_oit, 0);
-		if (rc > 0) {
+		if (rc > 0 || unlikely(rc == -ENODATA)) {
 			lfsck->li_oit_over = 1;
 			rc = 0;
 		}
@@ -450,10 +452,10 @@ static int lfsck_prep(const struct lu_env *env, struct lfsck_instance *lfsck,
 	}
 
 	rc = iops->load(env, lfsck->li_di_oit, pos->lp_oit_cookie);
-	if (rc < 0)
-		GOTO(out, rc);
-	else if (rc > 0)
+	if (rc > 0 || unlikely(rc == -ENODATA))
 		lfsck->li_oit_over = 1;
+	else if (rc < 0)
+		GOTO(out, rc);
 
 	if (!lfsck->li_master || fid_is_zero(&pos->lp_dir_parent))
 		GOTO(out, rc = 0);
