@@ -11,6 +11,7 @@
 #ifndef __PTLRPC_GSS_GSS_INTERNAL_H_
 #define __PTLRPC_GSS_GSS_INTERNAL_H_
 
+#include <linux/crypto.h>
 #include <lustre_sec.h>
 
 /*

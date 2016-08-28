@@ -135,31 +135,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define FS_HAS_FIEMAP			(0)
 #endif
 
-/* add a lustre compatible layer for crypto API */
-#include <linux/crypto.h>
-static inline int ll_crypto_hmac(struct crypto_hash *tfm,
-                                 u8 *key, unsigned int *keylen,
-                                 struct scatterlist *sg,
-                                 unsigned int size, u8 *result)
-{
-        struct hash_desc desc;
-        int              rv;
-        desc.tfm   = tfm;
-        desc.flags = 0;
-        rv = crypto_hash_setkey(desc.tfm, key, *keylen);
-        if (rv) {
-                CERROR("failed to hash setkey: %d\n", rv);
-                return rv;
-        }
-        return crypto_hash_digest(&desc, sg, size, result);
-}
-
-static inline
-unsigned int ll_crypto_tfm_alg_min_keysize(struct crypto_blkcipher *tfm)
-{
-        return crypto_blkcipher_tfm(tfm)->__crt_alg->cra_blkcipher.min_keysize;
-}
-
 #ifndef HAVE_SIMPLE_SETATTR
 #define simple_setattr(dentry, ops) inode_setattr((dentry)->d_inode, ops)
 #endif
