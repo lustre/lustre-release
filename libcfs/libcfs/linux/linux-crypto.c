@@ -33,14 +33,12 @@
 #include <libcfs/libcfs_crypto.h>
 #include <libcfs/linux/linux-crypto.h>
 
-#ifndef crypto_ahash_alg_name
+#ifndef HAVE_CRYPTO_HASH_HELPERS
 static inline const char *crypto_ahash_alg_name(struct crypto_ahash *tfm)
 {
 	return crypto_tfm_alg_name(crypto_ahash_tfm(tfm));
 }
-#endif
 
-#ifndef crypto_ahash_driver_name
 static inline const char *crypto_ahash_driver_name(struct crypto_ahash *tfm)
 {
 	return crypto_tfm_alg_driver_name(crypto_ahash_tfm(tfm));

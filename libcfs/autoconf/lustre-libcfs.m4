@@ -322,6 +322,23 @@ LB_CHECK_LINUX_HEADER([asm/fpu/api.h], [
 ]) # LIBCFS_FPU_API
 
 #
+# Kernel version 4.5-rc1 commit d12481bc58fba89427565f8592e88446ec084a24
+# added crypto hash helpers
+#
+AC_DEFUN([LIBCFS_CRYPTO_HASH_HELPERS], [
+LB_CHECK_COMPILE([does crypto hash helper functions exist],
+crypto_hash_helpers, [
+	#include <crypto/hash.h>
+],[
+	crypto_ahash_alg_name(NULL);
+	crypto_ahash_driver_name(NULL);
+],[
+	AC_DEFINE(HAVE_CRYPTO_HASH_HELPERS, 1,
+		[crypto hash helper functions are available])
+])
+]) # LIBCFS_CRYPTO_HASH_HELPERS
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -361,6 +378,8 @@ LIBCFS_HLIST_ADD_AFTER
 # 4.2
 LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 LIBCFS_FPU_API
+# 4.5
+LIBCFS_CRYPTO_HASH_HELPERS
 ]) # LIBCFS_PROG_LINUX
 
 #
