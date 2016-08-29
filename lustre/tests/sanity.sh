@@ -15169,6 +15169,48 @@ test_312() { # LU-4856
 }
 run_test 312 "make sure ZFS adjusts its block size by write pattern"
 
+test_399() { # LU-7655 for OST fake write
+	# turn off debug for performance testing
+	local saved_debug=$($LCTL get_param -n debug)
+	$LCTL set_param debug=0
+
+	$SETSTRIPE -c 1 -i 0 $DIR/$tfile
+
+	# get ost1 size - lustre-OST0000
+	local ost1_avail_size=$($LFS df | awk /${ost1_svc}/'{ print $4 }')
+	local blocks=$((ost1_avail_size/2/1024)) # half avail space by megabytes
+	[ $blocks -gt 1000 ] && blocks=1000 # 1G in maximum
+
+	local start_time=$(date +%s.%N)
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=$blocks oflag=sync ||
+		error "real dd writing error"
+	local duration=$(bc <<< "$(date +%s.%N) - $start_time")
+	rm -f $DIR/$tfile
+
+	# define OBD_FAIL_OST_FAKE_WRITE	0x238
+	do_facet ost1 $LCTL set_param fail_loc=0x238
+
+	local start_time=$(date +%s.%N)
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=$blocks oflag=sync ||
+		error "fake dd writing error"
+	local duration_fake=$(bc <<< "$(date +%s.%N) - $start_time")
+
+	# verify file size
+	cancel_lru_locks osc
+	$CHECKSTAT -t file -s $((blocks * 1024 * 1024)) $DIR/$tfile ||
+		error "$tfile size not $blocks MB"
+
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	echo "fake write $duration_fake vs. normal write $duration in seconds"
+	[ $(bc <<< "$duration_fake < $duration") -eq 1 ] ||
+		error "fake write is slower"
+
+	$LCTL set_param -n debug="$saved_debug"
+	rm -f $DIR/$tfile
+}
+run_test 399 "fake write should not be slower than normal write"
+
 test_400a() { # LU-1606, was conf-sanity test_74
 	local extra_flags=''
 	local out=$TMP/$tfile
