@@ -135,4 +135,8 @@ truncate_complete_page(struct address_space *mapping, struct page *page)
 #define ATTR_CTIME_SET (1 << 28)
 #endif
 
+#ifndef HAVE_IN_COMPAT_SYSCALL
+#define in_compat_syscall	is_compat_task
+#endif
+
 #endif /* LUSTRE_PATCHLESS_COMPAT_H */
