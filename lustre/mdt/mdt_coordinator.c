@@ -1062,39 +1062,37 @@ out:
 /**
  * swap layouts between 2 fids
  * \param mti [IN] context
- * \param fid1 [IN]
- * \param fid2 [IN]
+ * \param obj [IN]
+ * \param dfid [IN]
  * \param mh_common [IN] MD HSM
  */
 static int hsm_swap_layouts(struct mdt_thread_info *mti,
-			    const lustre_fid *fid, const lustre_fid *dfid,
+			    struct mdt_object *obj, const struct lu_fid *dfid,
 			    struct md_hsm *mh_common)
 {
-	struct mdt_device	*mdt = mti->mti_mdt;
-	struct mdt_object	*child1, *child2;
-	struct mdt_lock_handle	*lh2;
+	struct mdt_object	*dobj;
+	struct mdt_lock_handle	*dlh;
 	int			 rc;
 	ENTRY;
 
-	child1 = mdt_object_find(mti->mti_env, mdt, fid);
-	if (IS_ERR(child1))
-		GOTO(out, rc = PTR_ERR(child1));
+	if (!mdt_object_exists(obj))
+		GOTO(out, rc = -ENOENT);
 
-	/* we already have layout lock on FID so take only
+	/* we already have layout lock on obj so take only
 	 * on dfid */
-	lh2 = &mti->mti_lh[MDT_LH_OLD];
-	mdt_lock_reg_init(lh2, LCK_EX);
-	child2 = mdt_object_find_lock(mti, dfid, lh2, MDS_INODELOCK_LAYOUT);
-	if (IS_ERR(child2))
-		GOTO(out_child1, rc = PTR_ERR(child2));
+	dlh = &mti->mti_lh[MDT_LH_OLD];
+	mdt_lock_reg_init(dlh, LCK_EX);
+	dobj = mdt_object_find_lock(mti, dfid, dlh, MDS_INODELOCK_LAYOUT);
+	if (IS_ERR(dobj))
+		GOTO(out, rc = PTR_ERR(dobj));
 
 	/* if copy tool closes the volatile before sending the final
 	 * progress through llapi_hsm_copy_end(), all the objects
 	 * are removed and mdd_swap_layout LBUG */
-	if (!mdt_object_exists(child2)) {
+	if (!mdt_object_exists(dobj)) {
 		CERROR("%s: Copytool has closed volatile file "DFID"\n",
 		       mdt_obd_name(mti->mti_mdt), PFID(dfid));
-		GOTO(out_child2, rc = -ENOENT);
+		GOTO(out_dobj, rc = -ENOENT);
 	}
 	/* Since we only handle restores here, unconditionally use
 	 * SWAP_LAYOUTS_MDS_HSM flag to ensure original layout will
@@ -1105,17 +1103,15 @@ static int hsm_swap_layouts(struct mdt_thread_info *mti,
 	 * only need to clear RELEASED and DIRTY.
 	 */
 	mh_common->mh_flags &= ~(HS_RELEASED | HS_DIRTY);
-	rc = mdt_hsm_attr_set(mti, child2, mh_common);
+	rc = mdt_hsm_attr_set(mti, dobj, mh_common);
 	if (rc == 0)
 		rc = mo_swap_layouts(mti->mti_env,
-				     mdt_object_child(child1),
-				     mdt_object_child(child2),
+				     mdt_object_child(obj),
+				     mdt_object_child(dobj),
 				     SWAP_LAYOUTS_MDS_HSM);
 
-out_child2:
-	mdt_object_unlock_put(mti, child2, lh2, 1);
-out_child1:
-	mdt_object_put(mti->mti_env, child1);
+out_dobj:
+	mdt_object_unlock_put(mti, dobj, dlh, 1);
 out:
 	RETURN(rc);
 }
@@ -1296,9 +1292,9 @@ unlock:
 
 		/* restore in data FID done, we swap the layouts
 		 * only if restore is successful */
-		if (pgs->hpk_errval == 0) {
-			rc = hsm_swap_layouts(mti, &car->car_hai->hai_fid,
-					      &car->car_hai->hai_dfid, &mh);
+		if (pgs->hpk_errval == 0 && !IS_ERR_OR_NULL(obj)) {
+			rc = hsm_swap_layouts(mti, obj, &car->car_hai->hai_dfid,
+					      &mh);
 			if (rc) {
 				if (cdt->cdt_policy & CDT_NORETRY_ACTION)
 					*status = ARS_FAILED;
@@ -1315,11 +1311,12 @@ unlock:
 		if (crh != NULL)
 			list_del(&crh->crh_list);
 		mutex_unlock(&cdt->cdt_restore_lock);
-		/* just give back layout lock, we keep
-		 * the reference which is given back
-		 * later with the lock for HSM flags */
-		if (!IS_ERR(obj) && crh != NULL)
-			mdt_object_unlock(mti, obj, &crh->crh_lh, 1);
+		/* Just give back layout lock, we keep the reference
+		 * which is given back later with the lock for HSM
+		 * flags.
+		 * XXX obj may be invalid so we do not pass it. */
+		if (crh != NULL)
+			mdt_object_unlock(mti, NULL, &crh->crh_lh, 1);
 
 		if (crh != NULL)
 			OBD_SLAB_FREE_PTR(crh, mdt_hsm_cdt_kmem);
