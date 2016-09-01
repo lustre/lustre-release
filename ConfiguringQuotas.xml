@@ -88,7 +88,7 @@ quite file system.</para>
     this, it is necessary to begin enabling quotas by enabling quotas on the
     back-end disk system. Because quota setup is dependent on the Lustre
     software version in use, you may first need to run
-    <literal>lfs get_param version</literal> to identify
+    <literal>lctl get_param version</literal> to identify
     <xref linkend="whichversion"/> you are currently using.
     </para>
     <section>
