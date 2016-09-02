@@ -168,11 +168,18 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 	 * LOHA_EXISTs is supposed to be the last step in the
 	 * initialization */
 
-	/* size change (in dnode) will be declared by dmu_tx_hold_write() */
-	if (dt_object_exists(dt))
+	/* declare possible size change. notice we can't check
+	 * current size here as another thread can change it */
+
+	if (dt_object_exists(dt)) {
+		LASSERT(obj->oo_db);
 		oid = obj->oo_db->db_object;
-	else
+
+		dmu_tx_hold_sa(oh->ot_tx, obj->oo_sa_hdl, 0);
+	} else {
 		oid = DMU_NEW_OBJECT;
+		dmu_tx_hold_sa_create(oh->ot_tx, ZFS_SA_BASE_ATTR_SIZE);
+	}
 
 	/* XXX: we still miss for append declaration support in ZFS
 	 *	-1 means append which is used by llog mostly, llog

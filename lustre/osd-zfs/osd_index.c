@@ -165,6 +165,7 @@ static struct dt_it *osd_index_it_init(const struct lu_env *env,
 
 	LASSERT(lu_object_exists(lo));
 	LASSERT(obj->oo_db);
+	LASSERT(osd_object_is_zap(obj->oo_db));
 	LASSERT(info);
 
 	OBD_SLAB_ALLOC_PTR_GFP(it, osd_zapit_cachep, GFP_NOFS);
@@ -424,6 +425,8 @@ static int osd_dir_lookup(const struct lu_env *env, struct dt_object *dt,
 	int                 rc;
 	ENTRY;
 
+	LASSERT(osd_object_is_zap(obj->oo_db));
+
 	if (name[0] == '.') {
 		if (name[1] == 0) {
 			const struct lu_fid *f = lu_object_fid(&dt->do_lu);
@@ -473,10 +476,8 @@ static int osd_declare_dir_insert(const struct lu_env *env,
 	else
 		object = obj->oo_db->db_object;
 
-	/* do not specify the key as then DMU is trying to look it up
-	 * which is very expensive. usually the layers above lookup
-	 * before insertion */
-	dmu_tx_hold_zap(oh->ot_tx, object, TRUE, NULL);
+	dmu_tx_hold_bonus(oh->ot_tx, object);
+	dmu_tx_hold_zap(oh->ot_tx, object, TRUE, (char *)key);
 
 	RETURN(0);
 }
@@ -623,6 +624,7 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(parent->oo_db);
+	LASSERT(osd_object_is_zap(parent->oo_db));
 
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(parent));
@@ -724,15 +726,12 @@ static int osd_declare_dir_delete(const struct lu_env *env,
 
 	if (dt_object_exists(dt)) {
 		LASSERT(obj->oo_db);
+		LASSERT(osd_object_is_zap(obj->oo_db));
 		dnode = obj->oo_db->db_object;
 	} else {
 		dnode = DMU_NEW_OBJECT;
 	}
-
-	/* do not specify the key as then DMU is trying to look it up
-	 * which is very expensive. usually the layers above lookup
-	 * before deletion */
-	dmu_tx_hold_zap(oh->ot_tx, dnode, FALSE, NULL);
+	dmu_tx_hold_zap(oh->ot_tx, dnode, TRUE, (char *)key);
 
 	RETURN(0);
 }
@@ -749,6 +748,7 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(zap_db);
+	LASSERT(osd_object_is_zap(zap_db));
 
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
@@ -1212,9 +1212,9 @@ static int osd_declare_index_insert(const struct lu_env *env,
 
 	dmu_tx_hold_bonus(oh->ot_tx, obj->oo_db->db_object);
 
-	/* do not specify the key as then DMU is trying to look it up
-	 * which is very expensive. usually the layers above lookup
-	 * before insertion */
+	/* It is not clear what API should be used for binary keys, so we pass
+	 * a null name which has the side effect of over-reserving space,
+	 * accounting for the worst case. See zap_count_write() */
 	dmu_tx_hold_zap(oh->ot_tx, obj->oo_db->db_object, TRUE, NULL);
 
 	RETURN(0);
@@ -1262,11 +1262,7 @@ static int osd_declare_index_delete(const struct lu_env *env,
 	LASSERT(obj->oo_db);
 
 	oh = container_of0(th, struct osd_thandle, ot_super);
-
-	/* do not specify the key as then DMU is trying to look it up
-	 * which is very expensive. usually the layers above lookup
-	 * before deletion */
-	dmu_tx_hold_zap(oh->ot_tx, obj->oo_db->db_object, FALSE, NULL);
+	dmu_tx_hold_zap(oh->ot_tx, obj->oo_db->db_object, TRUE, NULL);
 
 	RETURN(0);
 }

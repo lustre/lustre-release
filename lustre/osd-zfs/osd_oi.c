@@ -142,9 +142,8 @@ osd_oi_create(const struct lu_env *env, struct osd_device *o,
 {
 	struct zpl_direntry	*zde = &osd_oti_get(env)->oti_zde.lzd_reg;
 	struct lu_attr		*la = &osd_oti_get(env)->oti_la;
-	sa_handle_t		*sa_hdl = NULL;
+	dmu_buf_t		*db;
 	dmu_tx_t		*tx;
-	uint64_t		 oid;
 	int			 rc;
 
 	/* verify it doesn't already exist */
@@ -169,36 +168,21 @@ osd_oi_create(const struct lu_env *env, struct osd_device *o,
 		return rc;
 	}
 
-	oid = zap_create_flags(o->od_os, 0, ZAP_FLAG_HASH64,
-			       DMU_OT_DIRECTORY_CONTENTS,
-			       14, /* == ZFS fzap_default_block_shift */
-			       DN_MAX_INDBLKSHIFT, /* indirect block shift */
-			       DMU_OT_SA, DN_MAX_BONUSLEN, tx);
-
-	rc = -sa_handle_get(o->od_os, oid, NULL, SA_HDL_PRIVATE, &sa_hdl);
-	if (rc)
-		goto commit;
 	la->la_valid = LA_MODE | LA_UID | LA_GID;
 	la->la_mode = S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO;
 	la->la_uid = la->la_gid = 0;
-	rc = __osd_attr_init(env, o, sa_hdl, tx, la, parent);
-	sa_handle_destroy(sa_hdl);
-	if (rc)
-		goto commit;
+	__osd_zap_create(env, o, &db, tx, la, parent, 0);
 
-	zde->zde_dnode = oid;
+	zde->zde_dnode = db->db_object;
 	zde->zde_pad = 0;
 	zde->zde_type = IFTODT(S_IFDIR);
 
 	rc = -zap_add(o->od_os, parent, name, 8, 1, (void *)zde, tx);
 
-commit:
-	if (rc)
-		dmu_object_free(o->od_os, oid, tx);
 	dmu_tx_commit(tx);
 
-	if (rc == 0)
-		*child = oid;
+	*child = db->db_object;
+	sa_buf_rele(db, osd_obj_tag);
 
 	return rc;
 }
@@ -382,7 +366,7 @@ out:
  */
 static uint64_t
 osd_get_idx_for_ost_obj(const struct lu_env *env, struct osd_device *osd,
-			const struct lu_fid *fid, char *buf, int bufsize)
+			const struct lu_fid *fid, char *buf)
 {
 	struct osd_seq	*osd_seq;
 	unsigned long	b;
@@ -407,8 +391,7 @@ osd_get_idx_for_ost_obj(const struct lu_env *env, struct osd_device *osd,
 	b = id % OSD_OST_MAP_SIZE;
 	LASSERT(osd_seq->os_compat_dirs[b]);
 
-	if (buf)
-		snprintf(buf, bufsize, LPU64, id);
+	sprintf(buf, LPU64, id);
 
 	return osd_seq->os_compat_dirs[b];
 }
@@ -433,29 +416,28 @@ osd_get_idx_for_fid(struct osd_device *osd, const struct lu_fid *fid,
 
 	LASSERT(osd->od_oi_table != NULL);
 	oi = osd->od_oi_table[fid_seq(fid) & (osd->od_oi_count - 1)];
-	if (buf)
-		osd_fid2str(buf, fid);
+	osd_fid2str(buf, fid);
 
 	return oi->oi_zapid;
 }
 
 uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
-			    const struct lu_fid *fid, char *buf, int bufsize)
+			    const struct lu_fid *fid, char *buf)
 {
 	uint64_t zapid;
 
 	LASSERT(fid);
+	LASSERT(buf);
 
 	if (fid_is_on_ost(env, osd, fid) == 1 || fid_seq(fid) == FID_SEQ_ECHO) {
-		zapid = osd_get_idx_for_ost_obj(env, osd, fid, buf, bufsize);
+		zapid = osd_get_idx_for_ost_obj(env, osd, fid, buf);
 	} else if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
 		/* special objects with fixed known fids get their name */
 		char *name = oid2name(fid_oid(fid));
 
 		if (name) {
 			zapid = osd->od_root;
-			if (buf)
-				strncpy(buf, name, bufsize);
+			strcpy(buf, name);
 			if (fid_is_acct(fid))
 				zapid = MASTER_NODE_OBJ;
 		} else {
@@ -495,8 +477,8 @@ int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 	} else if (unlikely(fid_is_fs_root(fid))) {
 		*oid = dev->od_root;
 	} else {
-		zapid = osd_get_name_n_idx(env, dev, fid, buf,
-					   sizeof(info->oti_buf));
+		zapid = osd_get_name_n_idx(env, dev, fid, buf);
+
 		rc = -zap_lookup(dev->od_os, zapid, buf,
 				8, 1, &info->oti_zde);
 		if (rc)
