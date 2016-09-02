@@ -510,8 +510,8 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 		    struct lquota_id_info *qi, struct osd_object *obj,
 		    bool enforce, int *flags)
 {
-	struct osd_device       *dev = osd_dt_dev(oh->ot_super.th_dev);
-	struct qsd_instance     *qsd = dev->od_quota_slave;
+	struct osd_device       *dev;
+	struct qsd_instance     *qsd;
 	struct inode		*inode = NULL;
 	int                      i, rc = 0, crd;
 	bool                     found = false;
@@ -520,6 +520,11 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 	LASSERT(oh != NULL);
 	LASSERTF(oh->ot_id_cnt <= OSD_MAX_UGID_CNT, "count=%d\n",
 		 oh->ot_id_cnt);
+
+	dev = osd_dt_dev(oh->ot_super.th_dev);
+	LASSERT(dev != NULL);
+
+	qsd = dev->od_quota_slave;
 
 	for (i = 0; i < oh->ot_id_cnt; i++) {
 		if (oh->ot_id_array[i] == qi->lqi_id.qid_uid &&
