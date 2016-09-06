@@ -234,7 +234,7 @@ int range_lock(struct range_lock_tree *tree, struct range_lock *lock)
 
 		if (signal_pending(current)) {
 			range_unlock(tree, lock);
-			GOTO(out, rc = -EINTR);
+			GOTO(out, rc = -ERESTARTSYS);
 		}
 		spin_lock(&tree->rlt_lock);
 	}
