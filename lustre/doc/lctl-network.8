@@ -1,0 +1,81 @@
+.TH lctl-network 8 "2014 May 28" Lustre "configuration utilities"
+.SH NAME
+lctl network \- start or stop an LNet network or set network type
+.SH SYNOPSIS
+.B lctl network
+.I up
+|
+.I down
+|
+.I configure
+|
+.I unconfigure
+|
+.RI < tcp / o2ib >
+
+.B net
+can be substituted for
+.B network
+.SH DESCRIPTION
+.B lfs network
+is used to start or stop LNet and LNet configuration on a client, server, or router.
+.P
+The Lustre software automatically starts and stops LNet, but it can also be manually stopped or started in a standalone manner. This is particularly useful to verify that your networking setup is working correctly before you attempt to start the Lustre file system, or necessary for Lustre routers which only need the LND and LNet modules.
+.SH OPTIONS
+.TP
+.B up
+Starts LNet. The LNet modules must be loaded first.
+.TP
+.B down
+Stops LNet
+.TP
+.B configure
+Loads LNet configuration
+.TP
+.B unconfigure
+Clears LNet configuration. This step is necessary for standalone routers to remove LNet references before the LNet modules can be removed.
+.SH EXAMPLES
+.TP
+To load the module and start LNet
+# modprobe lnet
+.br
+# lctl network up
+.br
+LNet configured
+.TP
+To stop LNet and remove the module
+# lctl network down
+.br
+LNet ready to unload
+.br
+# rmmod lnet
+.TP
+To load LNet configuration in standalone mode
+# lctl network configure
+.br
+LNet configured
+.TP
+To clear the LNet configuration
+# lctl network unconfigure
+LNet ready to unload
+.SH NOTES
+.P
+The lustre_rmmod utility does not work if you have manually run the
+.B lctl network
+.I up
+command.
+.P
+Attempting to remove
+.BR lustre (7)
+modules prior to stopping the network may result in a crash or an LNet hang.
+If this occurs, the node must be rebooted (in most cases). Make sure that the
+Lustre network and file system are stopped prior to unloading the modules.
+.SH AVAILABILITY
+.B lctl network
+is a subcommand of
+.BR lctl (8)
+and is distributed as part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8)

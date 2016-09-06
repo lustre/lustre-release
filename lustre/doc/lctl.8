@@ -1,4 +1,4 @@
-.TH lctl 1 "2003 Oct 8" Lustre "configuration utilities"
+.TH lctl 1 "2016 Sep 8" Lustre "configuration utilities"
 .SH NAME
 lctl \- Low level Lustre filesystem configuration utility
 .SH SYNOPSIS
@@ -11,40 +11,33 @@ lctl \- Low level Lustre filesystem configuration utility
 .B lctl
 is used to directly control Lustre via an ioctl interface, allowing
 various configuration, maintenance, and debugging features to be accessed.
- 
+
 .B lctl
 can be invoked in interactive mode by issuing lctl command. After that, commands are issued as below. The most common commands in lctl are
-.B dl
-,
-.B dk
-,
-.B device 
-,
-.B network 
-.I <up/down>
-,
-.B list_nids
-,
+.BR dl ,
+.BR dk ,
+.BR device ,
+.B network
+.IR <up/down> ,
+.BR list_nids ,
 .B ping
-.I nid
-,
-.B help
-,
-.B quit.
+.IR nid ,
+.BR help ,
+.BR quit .
 
 To get a complete listing of available commands, type
 .B help
 at the lctl prompt.  To get basic help on the meaning and syntax of a
-command, type 
-.B help 
+command, type
+.B help
 .I command
-.  Command completion is activated with the TAB key, and command history is available via the up- and down-arrow keys. 
+.  Command completion is activated with the TAB key, and command history is available via the up- and down-arrow keys.
 
-For non-interactive use, one uses the second invocation, which runs command after connecting to the device. 
+For non-interactive use, one uses the second invocation, which runs command after connecting to the device.
 
 .SS Network Configuration
 .TP
-.BI network " <up/down>|<tcp/elan/myrinet>"
+.BR network " <" up / down >|< tcp / o2ib >
 Start or stop LNET, or select a network type for other
 .I lctl
 LNET commands
@@ -70,35 +63,35 @@ The previous log is backed up with the suffix '.bak'.
 Check LNET connectivity via an LNET ping. This will use the fabric
 appropriate to the specified NID.
 .TP
-.BI interface_list 
-Print the network interface information for a given 
+.BI interface_list
+Print the network interface information for a given
 .B network
 type.
 .TP
-.BI peer_list 
-Print the known peers for a given 
+.BI peer_list
+Print the known peers for a given
 .B network
 type.
 .TP
-.BI conn_list 
+.BI conn_list
 Print all the connected remote NIDs for a given
 .B network
 type.
-.TP 
-.BI route_list 
+.TP
+.BI route_list
 Print the complete routing table.
 .PP
 .SS Device Selection
-.TP 
-.BI device " <devname> " 
-This will select the specified OBD device.  All other commands depend on the device being set. 
-.TP 
-.BI device_list 
-Show all the local Lustre OBDs. AKA 
+.TP
+.BI device " <devname> "
+This will select the specified OBD device.  All other commands depend on the device being set.
+.TP
+.BI device_list
+Show all the local Lustre OBDs. AKA
 .B dl
 .PP
 .SS Device Operations
-.TP 
+.TP
 .BI list_param " [-F|-R] <param_search ...>"
 List the Lustre or LNet parameter name
 .B -F
@@ -233,9 +226,9 @@ Delete a parameter setting (use the default value at the next restart).  A null 
 .br
 .B Parameters:
 .br
-All of the writable parameters under 
+All of the writable parameters under
 .B lctl list_param
-(e.g. 
+(e.g.
 .I lctl list_param -F osc.*.* | grep =
 ) can be permanently set using
 .B lctl conf_param
@@ -244,33 +237,33 @@ All of the writable parameters under
 Additionally, failover nodes may be added (or removed), and some system-wide parameters may be set as well (sys.at_max, sys.at_min, sys.at_extra, sys.at_early_margin, sys.at_history, sys.timeout, sys.ldlm_timeout.)  <device> is ignored for system wide parameters.
 .br
 .B Examples:
-.br 
+.br
 # lctl conf_param testfs.sys.at_max=1200
 .br
-# lctl conf_param testfs.llite.max_read_ahead_mb=16 
+# lctl conf_param testfs.llite.max_read_ahead_mb=16
 .br
 # lctl conf_param testfs-MDT0000.lov.stripesize=2M
 .br
-# lctl conf_param lustre-OST0001.osc.active=0 
+# lctl conf_param lustre-OST0001.osc.active=0
 .br
-# lctl conf_param testfs-OST0000.osc.max_dirty_mb=29.15 
+# lctl conf_param testfs-OST0000.osc.max_dirty_mb=29.15
 .br
-# lctl conf_param testfs-OST0000.ost.client_cache_seconds=15 
+# lctl conf_param testfs-OST0000.ost.client_cache_seconds=15
 .br
 # lctl conf_param testfs-OST0000.failover.node=1.2.3.4@tcp1
-.TP 
-.BI activate 
-Reactivate an import after deactivating, below.  This setting is only effective until the next restart (see 
+.TP
+.BI activate
+Reactivate an import after deactivating, below.  This setting is only effective until the next restart (see
 .B conf_param
 ).
-.TP 
-.BI deactivate 
+.TP
+.BI deactivate
 Deactivate an import, in particular meaning do not assign new file stripes
 to an OSC.  This command should be used on the OSC in the MDT LOV
 corresponding to a failed OST device, to prevent further attempts at
 communication with the failed OST.
-.TP 
-.BI abort_recovery 
+.TP
+.BI abort_recovery
 Abort the recovery process on a restarting MDT or OST device
 .PP
 .SS Virtual Block Device Operation
@@ -391,43 +384,43 @@ Stop LFSCK on the specified MDT or OST device.
 Get the LFSCK global status via the specified MDT device.
 .RE
 .SS Debug
-.TP 
-.BI debug_daemon 
+.TP
+.BI debug_daemon
 Start and stop the debug daemon, and control the output filename and size.
-.TP 
-.BI debug_kernel " [file] [raw]" 
+.TP
+.BI debug_kernel " [file] [raw]"
 Dump the kernel debug buffer to stdout or file.
-.TP 
+.TP
 .BI debug_file " <input> [output]"
 Convert kernel-dumped debug log from binary to plain text format.
-.TP 
-.BI clear 
+.TP
+.BI clear
 Clear the kernel debug buffer.
-.TP 
-.BI mark " <text>" 
+.TP
+.BI mark " <text>"
 Insert marker text in the kernel debug buffer.
-.TP 
-.BI filter " <subsystem id/debug mask>" 
+.TP
+.BI filter " <subsystem id/debug mask>"
 Filter kernel debug messages by subsystem or mask.
-.TP 
-.BI show " <subsystem id/debug mask>" 
+.TP
+.BI show " <subsystem id/debug mask>"
 Show specific type of messages.
-.TP 
-.BI debug_list " <subs/types>" 
+.TP
+.BI debug_list " <subs/types>"
 List all the subsystem and debug types.
 .TP
-.BI modules " <path>" 
+.BI modules " <path>"
 Provide gdb-friendly module information.
 
 .SH OPTIONS
-The following options can be used to invoke lctl. 
+The following options can be used to invoke lctl.
 .TP
-.B --device 
+.B --device
 The device to be used for the operation. This can be specified by name or
-number. See 
+number. See
 .B device_list
 .TP
-.B --ignore_errors | ignore_errors 
+.B --ignore_errors | ignore_errors
 Ignore errors during script processing
 .TP
 .B lustre_build_version
@@ -457,12 +450,24 @@ lctl > quit
 
 .SH AVAILABILITY
 .B lctl
-is part of the 
-.BR Lustre (7) 
+is part of the
+.BR Lustre (7)
 filesystem package.
 .SH SEE ALSO
 .BR lustre (7),
 .BR mkfs.lustre (8),
 .BR mount.lustre (8),
 .BR lctl (8),
+.BR lctl-lfsck-start (8),
+.BR lctl-lfsck-stop (8),
+.BR lctl-lfsck-query (8),
+.BR lctl-network (8),
+.BR lctl-nodemap-activate (8),
+.BR lctl-nodemap-add-idmap (8),
+.BR lctl-nodemap-add-range (8),
+.BR lctl-nodemap-add (8),
+.BR lctl-nodemap-del-idmap (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-del (8),
+.BR lctl-nodemap-modify (8),
 .BR lfs (1)
