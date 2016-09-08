@@ -14098,6 +14098,15 @@ ladvise_willread_performance()
 	local repeat=10
 	local average_cache=0
 	local average_ladvise=0
+	local my_error=error
+
+	# This test case is time sensitive and Maloo uses KVM to run autotest.
+	# Therefore the complete time of I/O task is unreliable and depends on
+	# the workload on the host machine when the task is running.
+	local virt=$(running_in_vm)
+	[ -n "$virt" ] && echo "running in VM '$virt', ignore error" &&
+		my_error="error_ignore env=$virt"
+
 	for ((i = 1; i <= $repeat; i++)); do
 		echo "Iter $i/$repeat: reading without willread hint"
 		cancel_lru_locks osc
@@ -14147,8 +14156,8 @@ ladvise_willread_performance()
 
 	local lowest_speedup=$((average_cache / 2))
 	[ $average_ladvise -gt $lowest_speedup ] ||
-		error "Speedup with willread is less than $lowest_speedup%,"\
-			"got $average_ladvise%"
+		$my_error "Speedup with willread is less than "\
+			"$lowest_speedup%, got $average_ladvise%"
 	echo "Speedup with willread ladvise: $average_ladvise%"
 	echo "Speedup with cache: $average_cache%"
 }
