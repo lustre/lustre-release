@@ -1002,8 +1002,7 @@ static int jt_import(int argc, char **argv)
 		break;
 	}
 
-	if (rc != LUSTRE_CFG_RC_NO_ERR)
-		cYAML_print_tree2file(stderr, err_rc);
+	cYAML_print_tree2file(stderr, err_rc);
 
 	cYAML_free_tree(err_rc);
 

@@ -79,6 +79,20 @@ struct lustre_lnet_ip2nets {
 };
 
 /*
+ * free_intf_descr
+ *	frees the memory allocated for an intf descriptor.
+ */
+void free_intf_descr(struct lnet_dlc_intf_descr *intf_descr)
+{
+	if (!intf_descr)
+		return;
+
+	if (intf_descr->cpt_expr != NULL)
+		cfs_expr_list_free(intf_descr->cpt_expr);
+	free(intf_descr);
+}
+
+/*
  * lustre_lnet_add_ip_range
  * Formatting:
  *	given a string of the format:
@@ -310,9 +324,8 @@ int lustre_lnet_parse_interfaces(char *intf_str,
 failed:
 	list_for_each_entry_safe(intf_descr, tmp, &nw_descr->nw_intflist,
 				 intf_on_network) {
-		if (intf_descr->cpt_expr != NULL)
-			cfs_expr_list_free(intf_descr->cpt_expr);
-		free(intf_descr);
+		list_del(&intf_descr->intf_on_network);
+		free_intf_descr(intf_descr);
 	}
 
 	return rc;
@@ -995,7 +1008,7 @@ int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 {
 	int rc;
 	__u32 ip;
-	struct lnet_dlc_intf_descr *intf_descr;
+	struct lnet_dlc_intf_descr *intf_descr, *tmp;
 	struct ifaddrs *ifaddr = ifa;
 	struct lustre_lnet_ip_range_descr *ip_range;
 	int family;
@@ -1013,7 +1026,8 @@ int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 				continue;
 
 			family = ifaddr->ifa_addr->sa_family;
-			if (family == AF_INET) {
+			if (family == AF_INET &&
+			    strcmp(ifaddr->ifa_name, "lo") != 0) {
 				rc = lustre_lnet_add_intf_descr
 					(intf_list, ifaddr->ifa_name,
 					strlen(ifaddr->ifa_name));
@@ -1061,11 +1075,14 @@ int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 
 					if (rc != LUSTRE_CFG_RC_NO_ERR)
 						return rc;
-
-					return LUSTRE_CFG_RC_MATCH;
 				}
 			}
 		}
+
+		if (!list_empty(intf_list))
+			return LUSTRE_CFG_RC_MATCH;
+
+		return LUSTRE_CFG_RC_NO_MATCH;
 	}
 
 	/*
@@ -1076,7 +1093,7 @@ int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 	 * If > 1 interfaces all the interfaces must match for the NI to
 	 * be configured.
 	 */
-	list_for_each_entry(intf_descr, intf_list, intf_on_network) {
+	list_for_each_entry_safe(intf_descr, tmp, intf_list, intf_on_network) {
 		for (ifaddr = ifa; ifaddr != NULL; ifaddr = ifaddr->ifa_next) {
 			if (ifaddr->ifa_addr == NULL)
 				continue;
@@ -1088,20 +1105,31 @@ int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 				break;
 		}
 
-		if (ifaddr == NULL)
-			return LUSTRE_CFG_RC_NO_MATCH;
+		if (ifaddr == NULL) {
+			list_del(&intf_descr->intf_on_network);
+			free_intf_descr(intf_descr);
+			continue;
+		}
 
-		if ((ifaddr->ifa_flags & IFF_UP) == 0)
-			return LUSTRE_CFG_RC_NO_MATCH;
+		if ((ifaddr->ifa_flags & IFF_UP) == 0) {
+			list_del(&intf_descr->intf_on_network);
+			free_intf_descr(intf_descr);
+			continue;
+		}
 
 		ip = ((struct sockaddr_in *)ifaddr->ifa_addr)->sin_addr.s_addr;
 
+		rc = 1;
 		list_for_each_entry(ip_range, ip_ranges, ipr_entry) {
 			rc = cfs_ip_addr_match(bswap_32(ip), &ip_range->ipr_expr);
 			if (rc)
 				break;
-			else
-				return LUSTRE_CFG_RC_NO_MATCH;
+		}
+
+		if (!rc) {
+			/* no match for this interface */
+			list_del(&intf_descr->intf_on_network);
+			free_intf_descr(intf_descr);
 		}
 	}
 
@@ -1228,8 +1256,7 @@ lustre_lnet_config_ip2nets(struct lustre_lnet_ip2nets *ip2nets,
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 
-	if (ip2nets == NULL ||
-	    list_empty(&ip2nets->ip2nets_net.nw_intflist)) {
+	if (!ip2nets) {
 		snprintf(err_str,
 			 sizeof(err_str),
 			 "\"incomplete ip2nets information\"");
@@ -1242,6 +1269,12 @@ lustre_lnet_config_ip2nets(struct lustre_lnet_ip2nets *ip2nets,
 		snprintf(err_str,
 			 sizeof(err_str),
 			 "\"cannot resolve ip2nets rule\"");
+		goto out;
+	}
+
+	if (list_empty(&ip2nets->ip2nets_net.nw_intflist)) {
+		snprintf(err_str, sizeof(err_str),
+			 "\"no interfaces match ip2nets rules\"");
 		goto out;
 	}
 
@@ -1380,9 +1413,8 @@ out:
 		list_for_each_entry_safe(intf_descr, tmp,
 					 &nw_descr->nw_intflist,
 					 intf_on_network) {
-			if (intf_descr->cpt_expr != NULL)
-				cfs_expr_list_free(intf_descr->cpt_expr);
-			free(intf_descr);
+			list_del(&intf_descr->intf_on_network);
+			free_intf_descr(intf_descr);
 		}
 	}
 
@@ -1467,9 +1499,8 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 
 	list_for_each_entry_safe(intf_descr, tmp, &nw_descr->nw_intflist,
 				 intf_on_network) {
-		if (intf_descr->cpt_expr != NULL)
-			cfs_expr_list_free(intf_descr->cpt_expr);
-		free(intf_descr);
+		list_del(&intf_descr->intf_on_network);
+		free_intf_descr(intf_descr);
 	}
 
 out:
@@ -2428,9 +2459,8 @@ static int yaml_copy_intf_info(struct cYAML *intf_tree,
 failed:
 	list_for_each_entry_safe(intf_descr, tmp, &nw_descr->nw_intflist,
 				 intf_on_network) {
-		if (intf_descr->cpt_expr != NULL)
-			cfs_expr_list_free(intf_descr->cpt_expr);
-		free(intf_descr);
+		list_del(&intf_descr->intf_on_network);
+		free_intf_descr(intf_descr);
 	}
 
 	return rc;
@@ -2675,17 +2705,19 @@ out:
 	list_for_each_entry_safe(intf_descr, intf_tmp,
 				 &ip2nets.ip2nets_net.nw_intflist,
 				 intf_on_network) {
-		if (intf_descr->cpt_expr != NULL)
-			cfs_expr_list_free(intf_descr->cpt_expr);
-		free(intf_descr);
+		list_del(&intf_descr->intf_on_network);
+		free_intf_descr(intf_descr);
 	}
 
 	list_for_each_entry_safe(ip_range_descr, tmp,
 				 &ip2nets.ip2nets_ip_ranges,
 				 ipr_entry) {
+		list_del(&ip_range_descr->ipr_entry);
 		list_for_each_entry_safe(el, el_tmp, &ip_range_descr->ipr_expr,
-					 el_link)
+					 el_link) {
+			list_del(&el->el_link);
 			cfs_expr_list_free(el);
+		}
 		free(ip_range_descr);
 	}
 
