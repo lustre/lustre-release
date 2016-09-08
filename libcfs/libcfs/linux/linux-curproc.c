@@ -153,8 +153,11 @@ static int cfs_access_process_vm(struct task_struct *tsk,
 		int bytes, rc, offset;
 		void *maddr;
 
-		rc = get_user_pages(tsk, mm, addr, 1,
-				     write, 1, &page, &vma);
+#ifdef HAVE_GET_USER_PAGES_6ARG
+		rc = get_user_pages(addr, 1, write, 1, &page, &vma);
+#else
+		rc = get_user_pages(tsk, mm, addr, 1, write, 1, &page, &vma);
+#endif
 		if (rc <= 0)
 			break;
 
@@ -173,7 +176,7 @@ static int cfs_access_process_vm(struct task_struct *tsk,
 					    buf, maddr + offset, bytes);
 		}
 		kunmap(page);
-		page_cache_release(page);
+		put_page(page);
 		len -= bytes;
 		buf += bytes;
 		addr += bytes;

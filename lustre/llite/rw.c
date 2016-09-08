@@ -231,7 +231,7 @@ out:
 	if (vmpage != NULL) {
 		if (rc != 0)
 			unlock_page(vmpage);
-		page_cache_release(vmpage);
+		put_page(vmpage);
 	}
 	if (msg != NULL) {
 		ll_ra_stats_inc(inode, which);

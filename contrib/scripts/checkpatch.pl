@@ -438,6 +438,9 @@ my %dep_functions = (
 	'PAGE_CACHE_SIZE',		'PAGE_SIZE',
 	'PAGE_CACHE_SHIFT',		'PAGE_SHIFT',
 
+	'page_cache_release',		'put_page',
+	'page_cache_get',		'get_page',
+
 	'cfs_proc_dir_entry_t',		'struct proc_dir_entry',
 
 	'cfs_rcu_head_t',		'struct rcu_head',

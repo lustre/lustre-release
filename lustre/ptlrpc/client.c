@@ -220,7 +220,7 @@ void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 	desc->bd_nob += len;
 
 	if (pin)
-		page_cache_get(page);
+		get_page(page);
 
 	kiov->kiov_page = page;
 	kiov->kiov_offset = pageoffset;

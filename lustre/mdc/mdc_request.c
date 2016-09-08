@@ -960,7 +960,7 @@ static void mdc_release_page(struct page *page, int remove)
 			truncate_complete_page(page->mapping, page);
 		unlock_page(page);
 	}
-	page_cache_release(page);
+	put_page(page);
 }
 
 static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
@@ -981,7 +981,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 	if (found > 0 && !radix_tree_exceptional_entry(page)) {
 		struct lu_dirpage *dp;
 
-		page_cache_get(page);
+		get_page(page);
 		spin_unlock_irq(&mapping->tree_lock);
 		/*
 		 * In contrast to find_lock_page() we are sure that directory
@@ -1027,7 +1027,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 				page = NULL;
 			}
 		} else {
-			page_cache_release(page);
+			put_page(page);
 			page = ERR_PTR(-EIO);
 		}
 	} else {
@@ -1153,7 +1153,7 @@ struct readpage_param {
 static inline void delete_from_page_cache(struct page *page)
 {
 	remove_from_page_cache(page);
-	page_cache_release(page);
+	put_page(page);
 }
 #endif
 
@@ -1235,7 +1235,7 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 		page = page_pool[i];
 
 		if (rc < 0 || i >= rd_pgs) {
-			page_cache_release(page);
+			put_page(page);
 			continue;
 		}
 
@@ -1255,7 +1255,7 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 		else
 			CDEBUG(D_VFSTRACE, "page %lu add to page cache failed:"
 			       " rc = %d\n", offset, ret);
-		page_cache_release(page);
+		put_page(page);
 	}
 
 	if (page_pool != &page0)

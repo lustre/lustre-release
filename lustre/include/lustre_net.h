@@ -2166,7 +2166,7 @@ static inline void ptlrpc_release_bulk_page_pin(struct ptlrpc_bulk_desc *desc)
 	int i;
 
 	for (i = 0; i < desc->bd_iov_count ; i++)
-		page_cache_release(BD_GET_KIOV(desc, i).kiov_page);
+		put_page(BD_GET_KIOV(desc, i).kiov_page);
 }
 
 static inline void ptlrpc_release_bulk_noop(struct ptlrpc_bulk_desc *desc)

@@ -315,7 +315,7 @@ static void ll_free_user_pages(struct page **pages, int npages, int do_dirty)
 			break;
 		if (do_dirty)
 			set_page_dirty_lock(pages[i]);
-		page_cache_release(pages[i]);
+		put_page(pages[i]);
 	}
 
 #if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_IOV_ITER_RW)
@@ -670,7 +670,7 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 		 * one in commit page list, though. */
 		if (vmpage != NULL && plist->pl_nr > 0) {
 			unlock_page(vmpage);
-			page_cache_release(vmpage);
+			put_page(vmpage);
 			vmpage = NULL;
 		}
 
@@ -719,7 +719,7 @@ out:
 	if (result < 0) {
 		if (vmpage != NULL) {
 			unlock_page(vmpage);
-			page_cache_release(vmpage);
+			put_page(vmpage);
 		}
 		if (io)
 			io->ci_result = result;
@@ -744,7 +744,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 	int result = 0;
 	ENTRY;
 
-	page_cache_release(vmpage);
+	put_page(vmpage);
 
 	LASSERT(lcc != NULL);
 	env  = lcc->lcc_env;

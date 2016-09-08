@@ -481,7 +481,7 @@ static loff_t vvp_pgcache_find(const struct lu_env *env,
 				id.vpi_index = vmpage->index;
 				/* Cant support over 16T file */
 				nr = !(vmpage->index > 0xffffffff);
-				page_cache_release(vmpage);
+				put_page(vmpage);
 			}
 
 			lu_object_ref_del(&clob->co_lu, "dump", current);
@@ -562,7 +562,7 @@ static int vvp_pgcache_show(struct seq_file *f, void *v)
 				page = cl_vmpage_page(vmpage, clob);
 				unlock_page(vmpage);
 
-				page_cache_release(vmpage);
+				put_page(vmpage);
 			}
 
 			seq_printf(f, "%8x@"DFID": ", id.vpi_index,

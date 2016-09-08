@@ -2183,7 +2183,7 @@ next:
 			stripe_hash = le64_to_cpu(dp->ldp_hash_end);
 
 			kunmap(page);
-			page_cache_release(page);
+			put_page(page);
 			page = NULL;
 
 			/* reach the end of current stripe, go to next stripe */
@@ -2198,12 +2198,12 @@ next:
 			    le64_to_cpu(ent->lde_hash)) {
 				min_ent = ent;
 				kunmap(min_page);
-				page_cache_release(min_page);
+				put_page(min_page);
 				min_idx = i;
 				min_page = page;
 			} else {
 				kunmap(page);
-				page_cache_release(page);
+				put_page(page);
 				page = NULL;
 			}
 		} else {
@@ -2216,7 +2216,7 @@ next:
 out:
 	if (*ppage != NULL) {
 		kunmap(*ppage);
-		page_cache_release(*ppage);
+		put_page(*ppage);
 	}
 	*stripe_offset = min_idx;
 	*entp = min_ent;
@@ -2342,7 +2342,7 @@ static int lmv_read_striped_page(struct obd_export *exp,
 out:
 	if (min_ent_page != NULL) {
 		kunmap(min_ent_page);
-		page_cache_release(min_ent_page);
+		put_page(min_ent_page);
 	}
 
 	if (unlikely(rc != 0)) {

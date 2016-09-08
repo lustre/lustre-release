@@ -68,7 +68,7 @@ static inline void ll_remove_from_page_cache(struct page *page)
 static inline void ll_delete_from_page_cache(struct page *page)
 {
         ll_remove_from_page_cache(page);
-        page_cache_release(page);
+	put_page(page);
 }
 #else /* HAVE_DELETE_FROM_PAGE_CACHE */
 #define ll_delete_from_page_cache(page) delete_from_page_cache(page)
