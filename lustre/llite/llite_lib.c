@@ -326,11 +326,12 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	}
 
 	LASSERT(osfs->os_bsize);
-        sb->s_blocksize = osfs->os_bsize;
-        sb->s_blocksize_bits = log2(osfs->os_bsize);
-        sb->s_magic = LL_SUPER_MAGIC;
-        sb->s_maxbytes = MAX_LFS_FILESIZE;
-        sbi->ll_namelen = osfs->os_namelen;
+	sb->s_blocksize = osfs->os_bsize;
+	sb->s_blocksize_bits = log2(osfs->os_bsize);
+	sb->s_magic = LL_SUPER_MAGIC;
+	sb->s_maxbytes = MAX_LFS_FILESIZE;
+	sbi->ll_namelen = osfs->os_namelen;
+	sbi->ll_mnt.mnt = current->fs->root.mnt;
 
         if ((sbi->ll_flags & LL_SBI_USER_XATTR) &&
             !(data->ocd_connect_flags & OBD_CONNECT_XATTR)) {
@@ -2132,6 +2133,8 @@ void ll_umount_begin(struct super_block *sb)
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
 	struct obd_device *obd;
 	struct obd_ioctl_data *ioc_data;
+	struct l_wait_info lwi;
+	wait_queue_head_t waitq;
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "VFS Op: superblock %p count %d active %d\n", sb,
@@ -2167,10 +2170,14 @@ void ll_umount_begin(struct super_block *sb)
 	}
 
 	/* Really, we'd like to wait until there are no requests outstanding,
-	 * and then continue.  For now, we just invalidate the requests,
-	 * schedule() and sleep one second if needed, and hope.
+	 * and then continue.  For now, we just periodically checking for vfs
+	 * to decrement mnt_cnt and hope to finish it within 10sec.
 	 */
-	schedule();
+	init_waitqueue_head(&waitq);
+	lwi = LWI_TIMEOUT_INTERVAL(cfs_time_seconds(10),
+				   cfs_time_seconds(1), NULL, NULL);
+	l_wait_event(waitq, may_umount(sbi->ll_mnt.mnt), &lwi);
+
 	EXIT;
 }
 

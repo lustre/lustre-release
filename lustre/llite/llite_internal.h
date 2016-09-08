@@ -530,6 +530,7 @@ struct ll_sb_info {
 						 * clustred nfs */
 	/* root squash */
 	struct root_squash_info	  ll_squash;
+	struct path		  ll_mnt;
 };
 
 /*
