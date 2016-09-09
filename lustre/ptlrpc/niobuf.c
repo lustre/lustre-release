@@ -208,7 +208,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 		/* LU-6441: last md is not sent and desc->bd_md_count == 1 */
 		if (OBD_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_CLIENT_BULK_CB3,
 					 CFS_FAIL_ONCE) &&
-		    posted_md == desc->bd_md_max_brw - 1) {
+		    total_md > 1 && posted_md == total_md - 1) {
 			posted_md++;
 			continue;
 		}

@@ -12662,10 +12662,11 @@ test_224c() { # LU-6441
 		error "conf_param timeout=5 failed"
 
 	#define OBD_FAIL_PTLRPC_CLIENT_BULK_CB3   0x520
-	$LCTL set_param fail_loc=0x520
+	do_facet ost1 $LCTL set_param fail_loc=0x520
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile
 	dd if=/dev/zero of=$DIR/$tfile bs=8MB count=1
 	sync
-	$LCTL set_param fail_loc=0
+	do_facet ost1 $LCTL set_param fail_loc=0
 
 	set_conf_param_and_check client "$test_at" "$param_at" $at_max ||
 		error "conf_param at_max=$at_max failed"
