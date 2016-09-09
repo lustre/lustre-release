@@ -223,11 +223,13 @@
         <para>The command to create a new file with a specified stripe size is similar to:</para>
         <screen>[client]# lfs setstripe -s 4M /mnt/lustre/new_file</screen>
         <para>This example command creates the new file <literal>/mnt/lustre/new_file</literal> with a stripe size of 4 MB.</para>
-        <para>Now, when a file is created, the new stripe setting evenly distributes the data over all the available OSTs:</para>
+        <para>Now, when the file is created, the new stripe setting creates the file on a single OST with a stripe size of 4M:</para>
         <screen> [client]# lfs getstripe /mnt/lustre/new_file
 /mnt/lustre/4mb_file
 lmm_stripe_count:   1
 lmm_stripe_size:    4194304
+lmm_pattern:        1
+lmm_layout_gen:     0
 lmm_stripe_offset:  1
 obdidx     objid        objid           group
 1          690550       0xa8976         0 </screen>
@@ -299,9 +301,10 @@ $ dd if=/dev/zero of=file1 count=1 bs=100M
 
 $ lfs getstripe file1
 /mnt/testfs/file1
-/mnt/testfs/file1
 lmm_stripe_count:   1
 lmm_stripe_size:    1048576
+lmm_pattern:        1
+lmm_layout_gen:     0
 lmm_stripe_offset:  0               
      obdidx    objid   objid    group                    
      0         37364   0x91f4   0</screen>
@@ -328,6 +331,11 @@ lmm_stripe_offset:  0
       <para>To view information for a file, enter a command similar to:</para>
       <screen>$ lfs getstripe /mnt/lustre/foo
 /mnt/lustre/foo
+lmm_stripe_count:   1
+lmm_stripe_size:    1048576
+lmm_pattern:        1
+lmm_layout_gen:     0
+lmm_stripe_offset:  0
   obdidx   objid    objid      group
   2        835487   m0xcbf9f   0 </screen>
       <para>In this example, the file is located on <literal>obdidx 2</literal>, which corresponds
@@ -345,11 +353,12 @@ osc.lustre-OST0002-osc.ost_conn_uuid=192.168.20.1@tcp</screen></para>
           <primary>striping</primary>
           <secondary>remote directories</secondary>
         </indexterm>Locating the MDT for a remote directory</title>
-      <para condition="l24">Lustre software release 2.4 can be configured with multiple MDTs in the
-        same file system. Each sub-directory can have a different MDT. To identify on which MDT a
-        given subdirectory is located, pass the <literal>getstripe -M</literal> parameters to
-          <literal>lfs</literal>. An example of this command is provided in the section <xref
-          linkend="dbdoclet.rmremotedir"/>.</para>
+      <para condition="l24">Lustre software release 2.4 can be configured with
+          multiple MDTs in the same file system. Each sub-directory can have a
+          different MDT. To identify on which MDT a given subdirectory is
+          located, pass the <literal>getstripe [--mdt-index|-M]</literal>
+          parameters to <literal>lfs</literal>. An example of this command is
+          provided in the section <xref linkend="dbdoclet.rmremotedir"/>.</para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438209_10424">

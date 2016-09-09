@@ -32,9 +32,10 @@ lfs find [[!] --atime|-A [-+]N] [[!] --mtime|-M [-+]N]
          <replaceable>dirname|filename</replaceable>
 lfs getname [-h]|[path...]
 lfs getstripe [--obd|-O <replaceable>ost_name</replaceable>] [--quiet|-q] [--verbose|-v]
-              [--count|-c] [--index|-i | --offset|-o]
-              [--size|-s] [--pool|-p] [--directory|-d]
-              [--recursive|-r] [--raw|-R] [-M] 
+              [--stripe-count|-c] [--stripe-index|-i]
+              [--stripe-size|-s] [--pool|-p] [--directory|-d]
+              [--mdt-index|-M] [--recursive|-r] [--raw|-R]
+              [--layout|-L]
               <replaceable>dirname|filename</replaceable> ...
 lfs setstripe [--size|-s stripe_size] [--count|-c <replaceable>stripe_count</replaceable>]
               [--stripe-index|-i <replaceable>start_ost_index</replaceable>]
@@ -435,10 +436,11 @@ lfs help
                 are returned.</para>
                 <para>If you only want specific striping information, then the
                 options of 
-                <literal>--count</literal>,
-                <literal>--size</literal>,
-                <literal>--index</literal> or 
-                <literal>--offset</literal> plus various combinations of these
+                <literal>--stripe-count</literal>,
+                <literal>--stripe-size</literal>,
+                <literal>--stripe-index</literal>,
+                <literal>--layout</literal>, or
+                <literal>--pool</literal> plus various combinations of these
                 options can be used to retrieve specific information.</para>
                 <para>If the 
                 <literal>--raw</literal> option is specified, the stripe
@@ -447,7 +449,7 @@ lfs help
                 not set, 0, 0, and -1 will be printed for the stripe count,
                 size, and offset respectively.</para>
                 <para condition="l24">The 
-                <literal>-M</literal> prints the index of the MDT for a given
+                <literal>--mdt-index</literal> prints the index of the MDT for a given
                 directory. See 
                 <xref linkend="dbdoclet.rmremotedir" />.</para>
               </entry>

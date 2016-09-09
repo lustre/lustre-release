@@ -185,7 +185,7 @@ $ for i in $(seq 3); do lfs getstripe -M ./testremote/${i}.txt; done <lineannota
       <orderedlist>
         <listitem>
           <para>Identify the file(s) to be moved.</para>
-          <para>In the example below, output from the
+          <para>In the example below, the object information portion of the output from the
           <literal>lfs getstripe</literal> command below shows that the
           <literal>test_2</literal>file is located entirely on OST0002:</para>
           <screen>

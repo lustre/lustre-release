@@ -646,24 +646,29 @@ Debug log: 324 lines, 258 kept, 66 dropped.
         attributes for a new file or directory.</para>
       <para>The <literal>lfs getstripe</literal> command takes a Lustre filename as input and lists
         all the objects that form a part of this file. To obtain this information for the file
-          <literal>/mnt/lustre/frog</literal> in a Lustre file system, run:</para>
-      <screen>$ lfs getstripe /mnt/lustre/frog
+          <literal>/mnt/testfs/frog</literal> in a Lustre file system, run:</para>
+      <screen>$ lfs getstripe /mnt/testfs/frog
 lmm_stripe_count:   2
 lmm_stripe_size:    1048576
+lmm_pattern:        1
+lmm_layout_gen:     0
 lmm_stripe_offset:  2
         obdidx           objid          objid           group
              2          818855        0xc7ea7               0
              0          873123        0xd52a3               0
         </screen>
-      <para>The <literal>debugfs</literal> tool is provided in the <literal>e2fsprogs</literal>
-        package. It can be used for interactive debugging of an <literal>ldiskfs</literal> file
-        system. The <literal>debugfs</literal> tool can either be used to check status or modify
-        information in the file system. In a Lustre file system, all objects that belong to a file
-        are stored in an underlying <literal>ldiskfs</literal> file system on the OSTs. The file
-        system uses the object IDs as the file names. Once the object IDs are known, use the
-          <literal>debugfs</literal> tool to obtain the attributes of all objects from different
-        OSTs.</para>
-      <para>A sample run for the <literal>/mnt/lustre/frog</literal> file used in the above example is shown here:</para>
+      <para>The <literal>debugfs</literal> tool is provided in the
+          <literal>e2fsprogs</literal> package. It can be used for interactive
+          debugging of an <literal>ldiskfs</literal> file system. The
+          <literal>debugfs</literal> tool can either be used to check status or
+          modify information in the file system. In a Lustre file system, all
+          objects that belong to a file are stored in an underlying
+          <literal>ldiskfs</literal> file system on the OSTs. The file system
+          uses the object IDs as the file names. Once the object IDs are known,
+          use the <literal>debugfs</literal> tool to obtain the attributes of
+          all objects from different OSTs.</para>
+      <para>A sample run for the <literal>/mnt/testfs/frog</literal> file used
+          in the above example is shown here:</para>
       <screen>$ debugfs -c -R "stat O/0/d$((818855 % 32))/818855" /dev/vgmyth/lvmythost2
 
 debugfs 1.41.90.wc3 (28-May-2011)

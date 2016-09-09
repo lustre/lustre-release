@@ -391,7 +391,8 @@ client$ mkdir /mnt/lustre/local_dir0
 client$ lfs getstripe -M /mnt/lustre/local_dir0
 0
 </screen>
-	<para>The <literal>getstripe -M</literal> parameters return the index of the MDT that is serving the given directory.</para>
+	<para>The <literal>getstripe [--mdt-index|-M]</literal> parameters return
+        the index of the MDT that is serving the given directory.</para>
 	  </section>
 	  <section xml:id="dbdoclet.inactivemdt" condition='l24'>
       <title>
