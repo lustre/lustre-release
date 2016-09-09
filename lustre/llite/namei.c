@@ -51,7 +51,8 @@
 #include "llite_internal.h"
 
 static int ll_create_it(struct inode *dir, struct dentry *dentry,
-			struct lookup_intent *it);
+			struct lookup_intent *it,
+			void *secctx, __u32 secctxlen);
 
 /* called from iget5_locked->find_inode() under inode_lock spinlock */
 static int ll_test_inode(struct inode *inode, void *opaque)
@@ -541,7 +542,8 @@ out:
 }
 
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
-				   struct lookup_intent *it)
+				   struct lookup_intent *it,
+				   void **secctx, __u32 *secctxlen)
 {
 	struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
 	struct dentry *save = dentry, *retval;
@@ -597,6 +599,10 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 					     &op_data->op_file_secctx_size);
 		if (rc < 0)
 			GOTO(out, retval = ERR_PTR(rc));
+		if (secctx != NULL)
+			*secctx = op_data->op_file_secctx;
+		if (secctxlen != NULL)
+			*secctxlen = op_data->op_file_secctx_size;
 	}
 
 	rc = md_intent_lock(ll_i2mdexp(parent), op_data, it, &req,
@@ -646,8 +652,15 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	GOTO(out, retval = (dentry == save) ? NULL : dentry);
 
 out:
-	if (op_data != NULL && !IS_ERR(op_data))
+	if (op_data != NULL && !IS_ERR(op_data)) {
+		if (secctx != NULL && secctxlen != NULL) {
+			/* caller needs sec ctx info, so reset it in op_data to
+			 * prevent it from being freed */
+			op_data->op_file_secctx = NULL;
+			op_data->op_file_secctx_size = 0;
+		}
 		ll_finish_md_op_data(op_data);
+	}
 
 	ptlrpc_req_finished(req);
 	return retval;
@@ -677,7 +690,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 		itp = NULL;
 	else
 		itp = &it;
-	de = ll_lookup_it(parent, dentry, itp);
+	de = ll_lookup_it(parent, dentry, itp, NULL, NULL);
 
 	if (itp != NULL)
 		ll_intent_release(itp);
@@ -696,6 +709,8 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	struct lookup_intent *it;
 	struct dentry *de;
 	long long lookup_flags = LOOKUP_OPEN;
+	void *secctx = NULL;
+	__u32 secctxlen = 0;
 	int rc = 0;
 	ENTRY;
 
@@ -736,7 +751,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	it->it_flags &= ~MDS_OPEN_FL_INTERNAL;
 
 	/* Dentry added to dcache tree in ll_lookup_it */
-	de = ll_lookup_it(dir, dentry, it);
+	de = ll_lookup_it(dir, dentry, it, &secctx, &secctxlen);
 	if (IS_ERR(de))
 		rc = PTR_ERR(de);
 	else if (de != NULL)
@@ -747,7 +762,8 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	if (!rc) {
 		if (it_disposition(it, DISP_OPEN_CREATE)) {
 			/* Dentry instantiated in ll_create_it. */
-			rc = ll_create_it(dir, dentry, it);
+			rc = ll_create_it(dir, dentry, it, secctx, secctxlen);
+			security_release_secctx(secctx, secctxlen);
 			if (rc) {
 				/* We dget in ll_splice_alias. */
 				if (de != NULL)
@@ -812,16 +828,16 @@ ll_convert_intent(struct open_intent *oit, int lookup_flags)
 static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                                    struct nameidata *nd)
 {
-        struct dentry *de;
-        ENTRY;
+	struct dentry *de;
+	ENTRY;
 
-        if (nd && !(nd->flags & (LOOKUP_CONTINUE|LOOKUP_PARENT))) {
-                struct lookup_intent *it;
+	if (nd && !(nd->flags & (LOOKUP_CONTINUE|LOOKUP_PARENT))) {
+		struct lookup_intent *it;
 
-                if (ll_d2d(dentry) && ll_d2d(dentry)->lld_it) {
-                        it = ll_d2d(dentry)->lld_it;
-                        ll_d2d(dentry)->lld_it = NULL;
-                } else {
+		if (ll_d2d(dentry) && ll_d2d(dentry)->lld_it) {
+			it = ll_d2d(dentry)->lld_it;
+			ll_d2d(dentry)->lld_it = NULL;
+		} else {
 			/*
 			 * Optimize away (CREATE && !OPEN). Let .create handle
 			 * the race. But only if we have write permissions
@@ -834,23 +850,23 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 					      MAY_WRITE | MAY_EXEC) == 0))
 				RETURN(NULL);
 
-                        it = ll_convert_intent(&nd->intent.open, nd->flags);
-                        if (IS_ERR(it))
-                                RETURN((struct dentry *)it);
-                }
+			it = ll_convert_intent(&nd->intent.open, nd->flags);
+			if (IS_ERR(it))
+				RETURN((struct dentry *)it);
+		}
 
-		de = ll_lookup_it(parent, dentry, it);
-                if (de)
-                        dentry = de;
-                if ((nd->flags & LOOKUP_OPEN) && !IS_ERR(dentry)) { /* Open */
-                        if (dentry->d_inode &&
-                            it_disposition(it, DISP_OPEN_OPEN)) { /* nocreate */
-                                if (S_ISFIFO(dentry->d_inode->i_mode)) {
+		de = ll_lookup_it(parent, dentry, it, NULL, NULL);
+		if (de)
+			dentry = de;
+		if ((nd->flags & LOOKUP_OPEN) && !IS_ERR(dentry)) { /* Open */
+			if (dentry->d_inode &&
+			    it_disposition(it, DISP_OPEN_OPEN)) { /* nocreate */
+				if (S_ISFIFO(dentry->d_inode->i_mode)) {
 					/* We cannot call open here as it might
 					 * deadlock. This case is unreachable in
 					 * practice because of
 					 * OBD_CONNECT_NODEVOH. */
-                                } else {
+				} else {
 					struct file *filp;
 
 					nd->intent.open.file->private_data = it;
@@ -862,24 +878,24 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 							dput(de);
 						de = (struct dentry *)filp;
 					}
-                                }
-                        } else if (it_disposition(it, DISP_OPEN_CREATE)) {
-                                // XXX This can only reliably work on assumption
-                                // that there are NO hashed negative dentries.
-                                ll_d2d(dentry)->lld_it = it;
-                                it = NULL; /* Will be freed in ll_create_nd */
-                                /* We absolutely depend on ll_create_nd to be
-                                 * called to not leak this intent and possible
-                                 * data attached to it */
-                        }
-                }
+				}
+			} else if (it_disposition(it, DISP_OPEN_CREATE)) {
+				/* XXX This can only reliably work on assumption
+				 * that there are NO hashed negative dentries.*/
+				ll_d2d(dentry)->lld_it = it;
+				it = NULL; /* Will be freed in ll_create_nd */
+				/* We absolutely depend on ll_create_nd to be
+				 * called to not leak this intent and possible
+				 * data attached to it */
+			}
+		}
 
-                if (it) {
-                        ll_intent_release(it);
-                        OBD_FREE(it, sizeof(*it));
-                }
-        } else {
-		de = ll_lookup_it(parent, dentry, NULL);
+		if (it) {
+			ll_intent_release(it);
+			OBD_FREE(it, sizeof(*it));
+		}
+	} else {
+		de = ll_lookup_it(parent, dentry, NULL, NULL, NULL);
 	}
 
 	RETURN(de);
@@ -934,7 +950,8 @@ static struct inode *ll_create_node(struct inode *dir, struct lookup_intent *it)
  * with d_instantiate().
  */
 static int ll_create_it(struct inode *dir, struct dentry *dentry,
-			struct lookup_intent *it)
+			struct lookup_intent *it,
+			void *secctx, __u32 secctxlen)
 {
 	struct inode *inode;
 	int rc = 0;
@@ -951,6 +968,18 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry,
 	inode = ll_create_node(dir, it);
 	if (IS_ERR(inode))
 		RETURN(PTR_ERR(inode));
+
+	if ((ll_i2sbi(inode)->ll_flags & LL_SBI_FILE_SECCTX) &&
+	    secctx != NULL) {
+		inode_lock(inode);
+		/* must be done before d_instantiate, because it calls
+		 * security_d_instantiate, which means a getxattr if security
+		 * context is not set yet */
+		rc = security_inode_notifysecctx(inode, secctx, secctxlen);
+		inode_unlock(inode);
+		if (rc)
+			RETURN(rc);
+	}
 
 	d_instantiate(dentry, inode);
 
@@ -1016,8 +1045,6 @@ again:
 			from_kuid(&init_user_ns, current_fsuid()),
 			from_kgid(&init_user_ns, current_fsgid()),
 			cfs_curproc_cap_pack(), rdev, &request);
-	ll_finish_md_op_data(op_data);
-	op_data = NULL;
 	if (err < 0 && err != -EREMOTE)
 		GOTO(err_exit, err);
 
@@ -1051,6 +1078,7 @@ again:
 
 		ptlrpc_req_finished(request);
 		request = NULL;
+		ll_finish_md_op_data(op_data);
 		goto again;
 	}
 
@@ -1061,6 +1089,19 @@ again:
 	err = ll_prep_inode(&inode, request, dchild->d_sb, NULL);
 	if (err)
 		GOTO(err_exit, err);
+
+	if (sbi->ll_flags & LL_SBI_FILE_SECCTX) {
+		inode_lock(inode);
+		/* must be done before d_instantiate, because it calls
+		 * security_d_instantiate, which means a getxattr if security
+		 * context is not set yet */
+		err = security_inode_notifysecctx(inode,
+						  op_data->op_file_secctx,
+						  op_data->op_file_secctx_size);
+		inode_unlock(inode);
+		if (err)
+			GOTO(err_exit, err);
+	}
 
 	d_instantiate(dchild, inode);
 
@@ -1177,7 +1218,7 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry,
 		goto out;
 	}
 
-	rc = ll_create_it(dir, dentry, it);
+	rc = ll_create_it(dir, dentry, it, NULL, 0);
 	if (nd && (nd->flags & LOOKUP_OPEN) && dentry->d_inode) { /* Open */
 		struct file *filp;
 
