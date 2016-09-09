@@ -581,7 +581,7 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 	if (fid != NULL) {
 		b->mbo_fid1 = *fid;
 		b->mbo_valid |= OBD_MD_FLID;
-		CDEBUG(D_INODE, DFID": nlink=%d, mode=%o, valid="LPX64"\n",
+		CDEBUG(D_INODE, DFID": nlink=%d, mode=%o, valid=%#llx\n",
 		       PFID(fid), b->mbo_nlink, b->mbo_mode, b->mbo_valid);
 	}
 
@@ -931,7 +931,7 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 #endif
 out:
 	ma->ma_need = need;
-	CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64" ma_lmm=%p\n",
+	CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = %#llx ma_lmm=%p\n",
 	       rc, ma->ma_valid, ma->ma_lmm);
 	RETURN(rc);
 }
@@ -1775,7 +1775,7 @@ static int mdt_readpage(struct tgt_session_info *tsi)
          */
 	rdpg->rp_hash = reqbody->mbo_size;
 	if (rdpg->rp_hash != reqbody->mbo_size) {
-		CERROR("Invalid hash: "LPX64" != "LPX64"\n",
+		CERROR("Invalid hash: %#llx != %#llx\n",
 		       rdpg->rp_hash, reqbody->mbo_size);
 		RETURN(-EFAULT);
 	}
@@ -2447,7 +2447,7 @@ int mdt_check_resent_lock(struct mdt_thread_info *info,
 			/* Lock is pinned by ldlm_handle_enqueue0() as it is
 			 * a resend case, however, it could be already destroyed
 			 * due to client eviction or a raced cancel RPC. */
-			LDLM_DEBUG_NOLOCK("Invalid lock handle "LPX64,
+			LDLM_DEBUG_NOLOCK("Invalid lock handle %#llx",
 					  lhc->mlh_reg_lh.cookie);
 			RETURN(-ESTALE);
 		}
@@ -2743,14 +2743,14 @@ static void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 			cos = (mdt_cos_is_enabled(mdt) ||
 			       mdt_slc_is_enabled(mdt));
 
-			LASSERTF(lock != NULL, "no lock for cookie "LPX64"\n",
+			LASSERTF(lock != NULL, "no lock for cookie %#llx\n",
 				 h->cookie);
 
 			/* there is no request if mdt_object_unlock() is called
 			 * from mdt_export_cleanup()->mdt_add_dirty_flag() */
 			if (likely(req != NULL)) {
 				CDEBUG(D_HA, "request = %p reply state = %p"
-				       " transno = "LPD64"\n", req,
+				       " transno = %lld\n", req,
 				       req->rq_reply_state, req->rq_transno);
 				if (cos) {
 					ldlm_lock_downgrade(lock, LCK_COS);
@@ -3185,14 +3185,14 @@ mdt_intent_lock_replace(struct mdt_thread_info *info,
 		/* Lock is pinned by ldlm_handle_enqueue0() as it is
 		 * a resend case, however, it could be already destroyed
 		 * due to client eviction or a raced cancel RPC. */
-		LDLM_DEBUG_NOLOCK("Invalid lock handle "LPX64"\n",
+		LDLM_DEBUG_NOLOCK("Invalid lock handle %#llx\n",
 				  lh->mlh_reg_lh.cookie);
 		lh->mlh_reg_lh.cookie = 0;
 		RETURN(-ESTALE);
 	}
 
 	LASSERTF(new_lock != NULL,
-		 "lockh "LPX64" flags "LPX64" rc %d\n",
+		 "lockh %#llx flags %#llx : rc = %d\n",
 		 lh->mlh_reg_lh.cookie, flags, result);
 
         /*
@@ -3279,7 +3279,7 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
 		lh->mlh_reg_mode = new_lock->l_granted_mode;
 
 		LDLM_DEBUG(new_lock, "Restoring lock cookie");
-		DEBUG_REQ(D_DLMTRACE, req, "restoring lock cookie "LPX64,
+		DEBUG_REQ(D_DLMTRACE, req, "restoring lock cookie %#llx",
 			  lh->mlh_reg_lh.cookie);
 		return;
 	}
@@ -3298,7 +3298,7 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
          */
         lustre_msg_clear_flags(req->rq_reqmsg, MSG_RESENT);
 
-	DEBUG_REQ(D_DLMTRACE, req, "no existing lock with rhandle "LPX64,
+	DEBUG_REQ(D_DLMTRACE, req, "no existing lock with rhandle %#llx",
 		  dlmreq->lock_handle[0].cookie);
 }
 
@@ -5093,7 +5093,7 @@ static int mdt_connect_internal(struct obd_export *exp,
 	if (!(data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) &&
 	    !(data->ocd_connect_flags & OBD_CONNECT_IBITS)) {
 		CWARN("%s: client %s does not support ibits lock, either "
-		      "very old or an invalid client: flags "LPX64"\n",
+		      "very old or an invalid client: flags %#llx\n",
 		      mdt_obd_name(mdt), exp->exp_client_uuid.uuid,
 		      data->ocd_connect_flags);
 		return -EBADE;
@@ -5109,7 +5109,7 @@ static int mdt_connect_internal(struct obd_export *exp,
 		data->ocd_brw_size = min(data->ocd_brw_size,
 					 (__u32)MD_MAX_BRW_SIZE);
 		if (data->ocd_brw_size == 0) {
-			CERROR("%s: cli %s/%p ocd_connect_flags: "LPX64
+			CERROR("%s: cli %s/%p ocd_connect_flags: %#llx"
 			       " ocd_version: %x ocd_grant: %d "
 			       "ocd_index: %u ocd_brw_size is "
 			       "unexpectedly zero, network data "
@@ -5710,7 +5710,7 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 	int    rc;
 	ENTRY;
 
-	CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
+	CDEBUG(D_IOCTL, "path get "DFID" from %llu #%d\n",
 		PFID(&fp->gf_fid), fp->gf_recno, fp->gf_linkno);
 
 	if (!fid_is_sane(&fp->gf_fid))
@@ -5718,7 +5718,7 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 
 	if (!fid_is_namespace_visible(&fp->gf_fid)) {
 		CWARN("%s: "DFID" is invalid, sequence should be "
-		      ">= "LPX64"\n", mdt_obd_name(mdt),
+		      ">= %#llx\n", mdt_obd_name(mdt),
 		      PFID(&fp->gf_fid), (__u64)FID_SEQ_NORMAL);
 		RETURN(-EINVAL);
 	}
@@ -5747,7 +5747,7 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 
 	rc = mdt_path(info, obj, fp, root_fid);
 
-	CDEBUG(D_INFO, "fid "DFID", path %s recno "LPX64" linkno %u\n",
+	CDEBUG(D_INFO, "fid "DFID", path %s recno %#llx linkno %u\n",
 	       PFID(&fp->gf_fid), fp->gf_u.gf_path,
 	       fp->gf_recno, fp->gf_linkno);
 

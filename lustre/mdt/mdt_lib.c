@@ -824,7 +824,7 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
 		MDS_ATTR_FORCE | MDS_ATTR_KILL_SUID | MDS_ATTR_KILL_SGID |
 		MDS_ATTR_FROM_OPEN | MDS_OPEN_OWNEROVERRIDE);
 	if (in != 0)
-		CERROR("Unknown attr bits: "LPX64"\n", in);
+		CERROR("Unknown attr bits: %#llx\n", in);
 	return out;
 }
 

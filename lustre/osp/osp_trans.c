@@ -264,7 +264,7 @@ object_update_request_dump(const struct object_update_request *ourq,
 		update = object_update_request_get(ourq, i, &size);
 		LASSERT(update != NULL);
 		CDEBUG(mask, "i = %u fid = "DFID" op = %s "
-		       "params = %d batchid = "LPU64" size = %zu repsize %u\n",
+		       "params = %d batchid = %llu size = %zu repsize %u\n",
 		       i, PFID(&update->ou_fid),
 		       update_op_str(update->ou_type),
 		       update->ou_params_count,
@@ -1045,7 +1045,7 @@ static void osp_request_commit_cb(struct ptlrpc_request *req)
 		last_committed_transno =
 			req->rq_import->imp_peer_committed_transno;
 
-	CDEBUG(D_HA, "trans no "LPU64" committed transno "LPU64"\n",
+	CDEBUG(D_HA, "trans no %llu committed transno %llu\n",
 	       req->rq_transno, last_committed_transno);
 
 	/* If the transaction is not really committed, mark result = 1 */
@@ -1295,7 +1295,7 @@ int osp_check_and_set_rpc_version(struct osp_thandle *oth,
 	spin_unlock(&ou->ou_lock);
 
 	LASSERT(oth->ot_super.th_wait_submit == 1);
-	CDEBUG(D_INFO, "%s: version "LPU64" oth:version %p:"LPU64"\n",
+	CDEBUG(D_INFO, "%s: version %llu oth:version %p:%llu\n",
 	       osp->opd_obd->obd_name, ou->ou_version, oth,
 	       oth->ot_our->our_version);
 
@@ -1325,7 +1325,7 @@ osp_get_next_request(struct osp_updates *ou, struct osp_update_request **ourp)
 	spin_lock(&ou->ou_lock);
 	list_for_each_entry_safe(our, tmp, &ou->ou_list, our_list) {
 		LASSERT(our->our_th != NULL);
-		CDEBUG(D_HA, "ou %p version "LPU64" rpc_version "LPU64"\n",
+		CDEBUG(D_HA, "ou %p version %llu rpc_version %llu\n",
 		       ou, our->our_version, ou->ou_rpc_version);
 		spin_lock(&our->our_list_lock);
 		/* Find next osp_update_request in the list */
@@ -1577,7 +1577,7 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		GOTO(out, rc = -EIO);
 	}
 
-	CDEBUG(D_HA, "%s: add oth %p with version "LPU64"\n",
+	CDEBUG(D_HA, "%s: add oth %p with version %llu\n",
 	       osp->opd_obd->obd_name, oth, our->our_version);
 
 	LASSERT(our->our_req_ready == 0);

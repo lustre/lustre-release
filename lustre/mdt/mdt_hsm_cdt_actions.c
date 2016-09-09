@@ -53,10 +53,10 @@ void dump_llog_agent_req_rec(const char *prefix,
 	sz = larr->arr_hai.hai_len - sizeof(larr->arr_hai);
 	CDEBUG(D_HSM, "%slrh=[type=%X len=%d idx=%d] fid="DFID
 	       " dfid="DFID
-	       " compound/cookie="LPX64"/"LPX64
-	       " status=%s action=%s archive#=%d flags="LPX64
-	       " create="LPU64" change="LPU64
-	       " extent="LPX64"-"LPX64" gid="LPX64" datalen=%d"
+	       " compound/cookie=%#llx/%#llx"
+	       " status=%s action=%s archive#=%d flags=%#llx"
+	       " create=%llu change=%llu"
+	       " extent=%#llx-%#llx gid=%#llx datalen=%d"
 	       " data=[%s]\n",
 	       prefix,
 	       larr->arr_hdr.lrh_type,
@@ -230,7 +230,7 @@ static int mdt_agent_record_update_cb(const struct lu_env *env,
 
 	rc = 0;
 	for (i = 0 ; i < ducb->cookies_count ; i++) {
-		CDEBUG(D_HSM, "%s: search "LPX64", found "LPX64"\n",
+		CDEBUG(D_HSM, "%s: search %#llx, found %#llx\n",
 		       mdt_obd_name(ducb->mdt), ducb->cookies[i],
 		       larr->arr_hai.hai_cookie);
 		if (larr->arr_hai.hai_cookie == ducb->cookies[i]) {
@@ -331,7 +331,7 @@ static void *mdt_hsm_actions_proc_start(struct seq_file *s, loff_t *pos)
 		RETURN(ERR_PTR(-ENOENT));
 	}
 
-	CDEBUG(D_HSM, "llog successfully initialized, start from "LPD64"\n",
+	CDEBUG(D_HSM, "llog successfully initialized, start from %lld\n",
 	       *pos);
 	/* first call = rewind */
 	if (*pos == 0) {
@@ -384,10 +384,10 @@ static int hsm_actions_show_cb(const struct lu_env *env,
 	count = s->count;
 	sz = larr->arr_hai.hai_len - sizeof(larr->arr_hai);
 	seq_printf(s, "lrh=[type=%X len=%d idx=%d/%d] fid="DFID
-		   " dfid="DFID" compound/cookie="LPX64"/"LPX64
-		   " action=%s archive#=%d flags="LPX64
-		   " extent="LPX64"-"LPX64
-		   " gid="LPX64" datalen=%d status=%s data=[%s]\n",
+		   " dfid="DFID" compound/cookie=%#llx/%#llx"
+		   " action=%s archive#=%d flags=%#llx"
+		   " extent=%#llx-%#llx"
+		   " gid=%#llx datalen=%d status=%s data=[%s]\n",
 		   hdr->lrh_type, hdr->lrh_len,
 		   llh->lgh_hdr->llh_cat_idx, hdr->lrh_index,
 		   PFID(&larr->arr_hai.hai_fid),

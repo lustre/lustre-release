@@ -1077,7 +1077,7 @@ static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 	update = thandle_to_osp_update_request(th);
 	LASSERT(update != NULL);
 
-	CDEBUG(D_INFO, "write "DFID" offset = "LPU64" length = %zu\n",
+	CDEBUG(D_INFO, "write "DFID" offset = %llu length = %zu\n",
 	       PFID(lu_object_fid(&dt->do_lu)), *pos, buf->lb_len);
 
 	rc = osp_update_rpc_pack(env, write, update, OUT_WRITE,

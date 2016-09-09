@@ -200,8 +200,8 @@ static bool hsm_action_is_needed(struct hsm_action_item *hai, int hal_an,
 		is_needed = true;
 		break;
 	}
-	CDEBUG(D_HSM, "fid="DFID" action=%s rq_flags="LPX64
-		      " extent="LPX64"-"LPX64" hsm_flags=%X %s\n",
+	CDEBUG(D_HSM, "fid="DFID" action=%s rq_flags=%#llx"
+		      " extent=%#llx-%#llx hsm_flags=%X %s\n",
 		      PFID(&hai->hai_fid),
 		      hsm_copytool_action2name(hai->hai_action), rq_flags,
 		      hai->hai_extent.offset, hai->hai_extent.length,

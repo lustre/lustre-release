@@ -137,7 +137,7 @@ static int lprocfs_changelog_users_cb(const struct lu_env *env,
 
 	rec = (struct llog_changelog_user_rec *)hdr;
 
-	seq_printf(m, CHANGELOG_USER_PREFIX"%-3d "LPU64"\n",
+	seq_printf(m, CHANGELOG_USER_PREFIX"%-3d %llu\n",
 		   rec->cur_id, rec->cur_endrec);
 	return 0;
 }
@@ -166,7 +166,7 @@ static int mdd_changelog_users_seq_show(struct seq_file *m, void *data)
 	cur = mdd->mdd_cl.mc_index;
 	spin_unlock(&mdd->mdd_cl.mc_lock);
 
-	seq_printf(m, "current index: "LPU64"\n", cur);
+	seq_printf(m, "current index: %llu\n", cur);
 	seq_printf(m, "%-5s %s\n", "ID", "index");
 
 	llog_cat_process(&env, ctxt->loc_handle, lprocfs_changelog_users_cb,
@@ -223,7 +223,7 @@ static int mdd_changelog_size_seq_show(struct seq_file *m, void *data)
 	rc = mdd_changelog_size_ctxt(&env, mdd, LLOG_CHANGELOG_USER_ORIG_CTXT,
 				     &tmp);
 
-	seq_printf(m, LPU64"\n", tmp);
+	seq_printf(m, "%llu\n", tmp);
 	lu_env_fini(&env);
 	return rc;
 }

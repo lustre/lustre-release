@@ -65,7 +65,7 @@ static int lod_stripesize_seq_show(struct seq_file *m, void *v)
 
 	LASSERT(dev != NULL);
 	lod  = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, LPU64"\n",
+	seq_printf(m, "%llu\n",
 		   lod->lod_desc.ld_default_stripe_size);
 	return 0;
 }
@@ -124,7 +124,7 @@ static int lod_stripeoffset_seq_show(struct seq_file *m, void *v)
 
 	LASSERT(dev != NULL);
 	lod  = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, LPU64"\n",
+	seq_printf(m, "%llu\n",
 		   lod->lod_desc.ld_default_stripe_offset);
 	return 0;
 }

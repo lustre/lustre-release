@@ -224,7 +224,7 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 		if (info->mti_transno != 0) {
 			struct obd_export *exp = req->rq_export;
 
-			CERROR("%s: replay trans "LPU64" NID %s: rc = %d\n",
+			CERROR("%s: replay trans %llu NID %s: rc = %d\n",
 			       mdt_obd_name(mdt), info->mti_transno,
 			       libcfs_nid2str(exp->exp_connection->c_peer.nid),
 			       rc);
@@ -240,7 +240,7 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 	}
 	spin_unlock(&mdt->mdt_lut.lut_translock);
 
-	CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",
+	CDEBUG(D_INODE, "transno = %llu, last_committed = %llu\n",
 	       info->mti_transno,
 	       req->rq_export->exp_obd->obd_last_committed);
 
@@ -259,7 +259,7 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 		 * otherwise the following resend(after replay) can not
 		 * be checked correctly by xid */
 		mutex_unlock(&ted->ted_lcd_lock);
-		CDEBUG(D_HA, "%s: transno = "LPU64" < last_transno = "LPU64"\n",
+		CDEBUG(D_HA, "%s: transno = %llu < last_transno = %llu\n",
 		       mdt_obd_name(mdt), info->mti_transno,
 		       lcd->lcd_last_transno);
 		RETURN_EXIT;
@@ -295,7 +295,7 @@ void mdt_mfd_set_mode(struct mdt_file_data *mfd, __u64 mode)
 {
 	LASSERT(mfd != NULL);
 
-	CDEBUG(D_HA, DFID " Change mfd mode "LPO64" -> "LPO64".\n",
+	CDEBUG(D_HA, DFID " Change mfd mode %#llo -> %#llo.\n",
 	       PFID(mdt_object_fid(mfd->mfd_object)), mfd->mfd_mode, mode);
 
 	mfd->mfd_mode = mode;
@@ -363,8 +363,8 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 			mdt_set_disposition(info, rep, DISP_OPEN_STRIPE);
         }
 
-        CDEBUG(D_INODE, "after open, ma_valid bit = "LPX64" lmm_size = %d\n",
-               ma->ma_valid, ma->ma_lmm_size);
+	CDEBUG(D_INODE, "after open, ma_valid bit = %#llx lmm_size = %d\n",
+	       ma->ma_valid, ma->ma_lmm_size);
 
         if (ma->ma_valid & MA_LOV) {
                 LASSERT(ma->ma_lmm_size != 0);
@@ -443,7 +443,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 		old_mfd = mdt_handle2mfd(med, info->mti_rr.rr_handle, true);
 		if (old_mfd != NULL) {
 			CDEBUG(D_HA, "delete orphan mfd = %p, fid = "DFID", "
-			       "cookie = "LPX64"\n", mfd,
+			       "cookie = %#llx\n", mfd,
 			       PFID(mdt_object_fid(mfd->mfd_object)),
 			       info->mti_rr.rr_handle->cookie);
 			class_handle_unhash(&old_mfd->mfd_handle);
@@ -459,12 +459,12 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 		} else {
 			spin_unlock(&med->med_open_lock);
 			CDEBUG(D_HA, "orphan mfd not found, fid = "DFID", "
-			       "cookie = "LPX64"\n",
+			       "cookie = %#llx\n",
 			       PFID(mdt_object_fid(mfd->mfd_object)),
 			       info->mti_rr.rr_handle->cookie);
 		}
 
-		CDEBUG(D_HA, "Store old cookie "LPX64" in new mfd\n",
+		CDEBUG(D_HA, "Store old cookie %#llx in new mfd\n",
 		       info->mti_rr.rr_handle->cookie);
 
 		mfd->mfd_old_handle.cookie = info->mti_rr.rr_handle->cookie;
@@ -643,7 +643,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
 	opdata = mdt_req_from_lrd(req, info->mti_reply_data);
 	mdt_set_disposition(info, ldlm_rep, opdata);
 
-        CDEBUG(D_INODE, "This is reconstruct open: disp="LPX64", result=%d\n",
+	CDEBUG(D_INODE, "This is reconstruct open: disp=%#llx, result=%d\n",
                ldlm_rep->lock_policy_res1, req->rq_status);
 
         if (mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE) &&
@@ -811,9 +811,10 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 
 		/* Lease must be with open lock */
 		if (!(open_flags & MDS_OPEN_LOCK)) {
-			CERROR("Request lease for file:"DFID ", but open lock "
-				"is missed, open_flags = "LPO64".\n",
-				PFID(mdt_object_fid(obj)), open_flags);
+			CERROR("%s: Request lease for file:"DFID ", but open lock "
+			       "is missed, open_flags = %#llo : rc = %d\n",
+			       mdt_obd_name(info->mti_mdt),
+			       PFID(mdt_object_fid(obj)), open_flags, -EPROTO);
 			GOTO(out, rc = -EPROTO);
 		}
 
@@ -873,16 +874,17 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		rc = mdt_object_lock(info, obj, lhc, *ibits);
 	}
 
-	CDEBUG(D_INODE, "Requested bits lock:"DFID ", ibits = "LPX64
-		", open_flags = "LPO64", try_layout = %d, rc = %d\n",
-		PFID(mdt_object_fid(obj)), *ibits, open_flags, try_layout, rc);
+	CDEBUG(D_INODE, "%s: Requested bits lock:"DFID ", ibits = %#llx"
+	       ", open_flags = %#llo, try_layout = %d : rc = %d\n",
+	       mdt_obd_name(info->mti_mdt), PFID(mdt_object_fid(obj)),
+	       *ibits, open_flags, try_layout, rc);
 
 	/* will change layout, revoke layout locks by enqueuing EX lock. */
 	if (rc == 0 && create_layout) {
 		struct mdt_lock_handle *ll = &info->mti_lh[MDT_LH_LAYOUT];
 
 		CDEBUG(D_INODE, "Will create layout, get EX layout lock:"DFID
-			", open_flags = "LPO64"\n",
+			", open_flags = %#llo\n",
 			PFID(mdt_object_fid(obj)), open_flags);
 
 		/* We cannot enqueue another lock for the same resource we
@@ -1261,7 +1263,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		GOTO(out, result = -EROFS);
 
 	CDEBUG(D_INODE, "I am going to open "DFID"/("DNAME"->"DFID") "
-	       "cr_flag="LPO64" mode=0%06o msg_flag=0x%x\n",
+	       "cr_flag=%#llo mode=0%06o msg_flag=0x%x\n",
 	       PFID(rr->rr_fid1), PNAME(&rr->rr_name),
 	       PFID(rr->rr_fid2), create_flags,
 	       ma->ma_attr.la_mode, msg_flags);
@@ -1718,8 +1720,8 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 
 	/* Compare on-disk and packed data_version */
 	if (data->cd_data_version != ma->ma_hsm.mh_arch_ver) {
-		CDEBUG(D_HSM, DFID" data_version mismatches: packed="LPU64
-		       " and on-disk="LPU64"\n", PFID(mdt_object_fid(o)),
+		CDEBUG(D_HSM, DFID" data_version mismatches: packed=%llu"
+		       " and on-disk=%llu\n", PFID(mdt_object_fid(o)),
 		       data->cd_data_version, ma->ma_hsm.mh_arch_ver);
 		GOTO(out_unlock, rc = -EPERM);
 	}
@@ -2065,7 +2067,7 @@ int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 	if (mdt_mfd_closed(mfd)) {
 		spin_unlock(&med->med_open_lock);
 		CDEBUG(D_INODE, "no handle for file close: fid = "DFID
-		       ": cookie = "LPX64"\n", PFID(info->mti_rr.rr_fid1),
+		       ": cookie = %#llx\n", PFID(info->mti_rr.rr_fid1),
 		       info->mti_close_handle.cookie);
 		/** not serious error since bug 3633 */
 		rc = -ESTALE;

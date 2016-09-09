@@ -89,7 +89,7 @@ osp_active_seq_write(struct file *file, const char __user *buffer,
 	if (dev->u.cli.cl_import->imp_deactive == val)
 		rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
 	else
-		CDEBUG(D_CONFIG, "activate "LPD64": ignoring repeat request\n",
+		CDEBUG(D_CONFIG, "activate %lld: ignoring repeat request\n",
 		       val);
 
 	LPROCFS_CLIMP_EXIT(dev);
@@ -490,7 +490,7 @@ static int osp_prealloc_next_seq_seq_show(struct seq_file *m, void *data)
 	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
-	seq_printf(m, LPX64"\n", fid_seq(&osp->opd_pre_used_fid));
+	seq_printf(m, "%#llx\n", fid_seq(&osp->opd_pre_used_fid));
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(osp_prealloc_next_seq);
@@ -511,7 +511,7 @@ static int osp_prealloc_last_seq_seq_show(struct seq_file *m, void *data)
 	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
-	seq_printf(m, LPX64"\n",
+	seq_printf(m, "%#llx\n",
 		   fid_seq(&osp->opd_pre_last_created_fid));
 	return 0;
 }
@@ -533,7 +533,7 @@ static int osp_prealloc_reserved_seq_show(struct seq_file *m, void *data)
 	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
-	seq_printf(m, LPU64"\n", osp->opd_pre_reserved);
+	seq_printf(m, "%llu\n", osp->opd_pre_reserved);
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(osp_prealloc_reserved);

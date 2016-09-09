@@ -102,8 +102,8 @@ void mdt_hsm_dump_hal(int level, const char *prefix,
 	struct hsm_action_item	*hai;
 	char			 buf[12];
 
-	CDEBUG(level, "%s: HAL header: version %X count %d compound "LPX64
-		      " archive_id %d flags "LPX64"\n",
+	CDEBUG(level, "%s: HAL header: version %X count %d compound %#llx"
+		      " archive_id %d flags %#llx\n",
 	       prefix, hal->hal_version, hal->hal_count,
 	       hal->hal_compound_id, hal->hal_archive_id, hal->hal_flags);
 
@@ -111,8 +111,8 @@ void mdt_hsm_dump_hal(int level, const char *prefix,
 	for (i = 0; i < hal->hal_count; i++) {
 		sz = hai->hai_len - sizeof(*hai);
 		CDEBUG(level, "%s %d: fid="DFID" dfid="DFID
-		       " compound/cookie="LPX64"/"LPX64
-		       " action=%s extent="LPX64"-"LPX64" gid="LPX64
+		       " compound/cookie=%#llx/%#llx"
+		       " action=%s extent=%#llx-%#llx gid=%#llx"
 		       " datalen=%d data=[%s]\n",
 		       prefix, i,
 		       PFID(&hai->hai_fid), PFID(&hai->hai_dfid),
@@ -216,14 +216,8 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 				cfs_size_round(MTI_NAME_MAXLEN+1) +
 				2 * cfs_size_round(larr->arr_hai.hai_len);
 			OBD_ALLOC(hal, request->hal_sz);
-			if (!hal) {
-				CERROR("%s: Cannot allocate memory (%d o)"
-				       "for compound "LPX64"\n",
-				       mdt_obd_name(mdt),
-				       request->hal_sz,
-				       larr->arr_compound_id);
+			if (!hal)
 				RETURN(-ENOMEM);
-			}
 			hal->hal_version = HAL_VERSION;
 			strlcpy(hal->hal_fsname, hsd->fs_name,
 				MTI_NAME_MAXLEN + 1);
@@ -257,13 +251,8 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 
 				sz = 2 * request->hal_sz;
 				OBD_ALLOC(hal_buffer, sz);
-				if (!hal_buffer) {
-					CERROR("%s: Cannot allocate memory "
-					       "(%d o) for compound "LPX64"\n",
-					       mdt_obd_name(mdt), sz,
-					       larr->arr_compound_id);
+				if (!hal_buffer)
 					RETURN(-ENOMEM);
-				}
 				memcpy(hal_buffer, request->hal,
 				       request->hal_used_sz);
 				OBD_FREE(request->hal,
@@ -324,7 +313,7 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 		rc = mdt_hsm_update_request_state(hsd->mti, &pgs, 0);
 		if (rc)
 			CERROR("%s: cannot cleanup timed out request: "
-			       DFID" for cookie "LPX64" action=%s\n",
+			       DFID" for cookie %#llx action=%s\n",
 			       mdt_obd_name(mdt),
 			       PFID(&pgs.hpk_fid), pgs.hpk_cookie,
 			       hsm_copytool_action2name(
@@ -534,13 +523,9 @@ static int mdt_coordinator(void *data)
 			 */
 			sz = hal->hal_count * sizeof(__u64);
 			OBD_ALLOC(cookies, sz);
-			if (cookies == NULL) {
-				CERROR("%s: Cannot allocate memory (%d o) "
-				       "for cookies vector "LPX64"\n",
-				       mdt_obd_name(mdt), sz,
-				       hal->hal_compound_id);
+			if (cookies == NULL)
 				continue;
-			}
+
 			hai = hai_first(hal);
 			for (j = 0; j < hal->hal_count; j++) {
 				cookies[j] = hai->hai_cookie;
@@ -1019,7 +1004,7 @@ int mdt_hsm_add_hal(struct mdt_thread_info *mti,
 			if (rc) {
 				CERROR("%s: mdt_agent_record_update() failed, "
 				       "rc=%d, cannot update status to %s "
-				       "for cookie "LPX64"\n",
+				       "for cookie %#llx\n",
 				       mdt_obd_name(mdt), rc,
 				       agent_req_status2name(ARS_CANCELED),
 				       hai->hai_cookie);
@@ -1203,7 +1188,7 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 		}
 
 		if (pgs->hpk_errval > CLF_HSM_MAXERROR) {
-			CERROR("%s: Request "LPX64" on "DFID
+			CERROR("%s: Request %#llx on "DFID
 			       " failed, error code %d too large\n",
 			       mdt_obd_name(mdt),
 			       pgs->hpk_cookie, PFID(&pgs->hpk_fid),
@@ -1227,14 +1212,14 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 			break;
 		case HSMA_CANCEL:
 			hsm_set_cl_event(&cl_flags, HE_CANCEL);
-			CERROR("%s: Failed request "LPX64" on "DFID
+			CERROR("%s: Failed request %#llx on "DFID
 			       " cannot be a CANCEL\n",
 			       mdt_obd_name(mdt),
 			       pgs->hpk_cookie,
 			       PFID(&pgs->hpk_fid));
 			break;
 		default:
-			CERROR("%s: Failed request "LPX64" on "DFID
+			CERROR("%s: Failed request %#llx on "DFID
 			       " %d is an unknown action\n",
 			       mdt_obd_name(mdt),
 			       pgs->hpk_cookie, PFID(&pgs->hpk_fid),
@@ -1274,17 +1259,13 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 			break;
 		case HSMA_CANCEL:
 			hsm_set_cl_event(&cl_flags, HE_CANCEL);
-			CERROR("%s: Successful request "LPX64
-			       " on "DFID
-			       " cannot be a CANCEL\n",
+			CERROR("%s: Successful request %#llx on "DFID" cannot be a CANCEL\n",
 			       mdt_obd_name(mdt),
 			       pgs->hpk_cookie,
 			       PFID(&pgs->hpk_fid));
 			break;
 		default:
-			CERROR("%s: Successful request "LPX64
-			       " on "DFID
-			       " %d is an unknown action\n",
+			CERROR("%s: Successful request %#llx on "DFID" %d is an unknown action\n",
 			       mdt_obd_name(mdt),
 			       pgs->hpk_cookie, PFID(&pgs->hpk_fid),
 			       car->car_hai->hai_action);
@@ -1381,7 +1362,7 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 	/* first do sanity checks */
 	car = mdt_cdt_update_request(cdt, pgs);
 	if (IS_ERR(car)) {
-		CERROR("%s: Cannot find running request for cookie "LPX64
+		CERROR("%s: Cannot find running request for cookie %#llx"
 		       " on fid="DFID"\n",
 		       mdt_obd_name(mdt),
 		       pgs->hpk_cookie, PFID(&pgs->hpk_fid));
@@ -1389,7 +1370,7 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 		RETURN(PTR_ERR(car));
 	}
 
-	CDEBUG(D_HSM, "Progress received for fid="DFID" cookie="LPX64
+	CDEBUG(D_HSM, "Progress received for fid="DFID" cookie=%#llx"
 		      " action=%s flags=%d err=%d fid="DFID" dfid="DFID"\n",
 		      PFID(&pgs->hpk_fid), pgs->hpk_cookie,
 		      hsm_copytool_action2name(car->car_hai->hai_action),
@@ -1408,7 +1389,7 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 	     car->car_hai->hai_action == HSMA_ARCHIVE) &&
 	    (!lu_fid_eq(&pgs->hpk_fid, &car->car_hai->hai_dfid) &&
 	     !lu_fid_eq(&pgs->hpk_fid, &car->car_hai->hai_fid))) {
-		CERROR("%s: Progress on "DFID" for cookie "LPX64
+		CERROR("%s: Progress on "DFID" for cookie %#llx"
 		       " does not match request FID "DFID" nor data FID "
 		       DFID"\n",
 		       mdt_obd_name(mdt),
@@ -1419,7 +1400,7 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 	}
 
 	if (pgs->hpk_errval != 0 && !(pgs->hpk_flags & HP_FLAG_COMPLETED)) {
-		CERROR("%s: Progress on "DFID" for cookie "LPX64" action=%s"
+		CERROR("%s: Progress on "DFID" for cookie %#llx action=%s"
 		       " is not coherent (err=%d and not completed"
 		       " (flags=%d))\n",
 		       mdt_obd_name(mdt),
@@ -1442,7 +1423,7 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 		/* remove request from memory list */
 		mdt_cdt_remove_request(cdt, pgs->hpk_cookie);
 
-		CDEBUG(D_HSM, "Updating record: fid="DFID" cookie="LPX64
+		CDEBUG(D_HSM, "Updating record: fid="DFID" cookie=%#llx"
 			      " action=%s status=%s\n", PFID(&pgs->hpk_fid),
 		       pgs->hpk_cookie,
 		       hsm_copytool_action2name(car->car_hai->hai_action),
@@ -1457,7 +1438,7 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 			if (rc1)
 				CERROR("%s: mdt_agent_record_update() failed,"
 				       " rc=%d, cannot update status to %s"
-				       " for cookie "LPX64"\n",
+				       " for cookie %#llx\n",
 				       mdt_obd_name(mdt), rc1,
 				       agent_req_status2name(status),
 				       pgs->hpk_cookie);
@@ -1659,8 +1640,8 @@ bool mdt_hsm_is_action_compat(const struct hsm_action_item *hai,
 		is_compat = true;
 		break;
 	}
-	CDEBUG(D_HSM, "fid="DFID" action=%s flags="LPX64
-		      " extent="LPX64"-"LPX64" hsm_flags=%.8X %s\n",
+	CDEBUG(D_HSM, "fid="DFID" action=%s flags=%#llx"
+		      " extent=%#llx-%#llx hsm_flags=%.8X %s\n",
 		      PFID(&hai->hai_fid),
 		      hsm_copytool_action2name(hai->hai_action), rq_flags,
 		      hai->hai_extent.offset, hai->hai_extent.length,
@@ -1715,7 +1696,7 @@ static void hsm_policy_bit2str(struct seq_file *m, const __u64 mask,
 	ENTRY;
 
 	if (hexa)
-		seq_printf(m, "("LPX64") ", mask);
+		seq_printf(m, "(%#llx) ", mask);
 
 	for (i = 0; i < CDT_POLICY_SHIFT_COUNT; i++) {
 		bit = (1ULL << i);
@@ -1808,7 +1789,7 @@ mdt_hsm_policy_seq_write(struct file *file, const char __user *buffer,
 
 	} while (start != NULL);
 
-	CDEBUG(D_HSM, "%s: new policy: rm="LPX64" add="LPX64" set="LPX64"\n",
+	CDEBUG(D_HSM, "%s: new policy: rm=%#llx add=%#llx set=%#llx\n",
 	       mdt_obd_name(mdt), remove_mask, add_mask, set_mask);
 
 	/* if no sign in all string, it is a clear and set
@@ -1839,7 +1820,7 @@ static int mdt_hsm_##VAR##_seq_show(struct seq_file *m, void *data)	\
 	struct coordinator	*cdt = &mdt->mdt_coordinator;		\
 	ENTRY;								\
 									\
-	seq_printf(m, LPU64"\n", (__u64)cdt->VAR);			\
+	seq_printf(m, "%llu\n", (__u64)cdt->VAR);			\
 	RETURN(0);							\
 }									\
 static ssize_t								\

@@ -1224,7 +1224,7 @@ void lod_fix_desc_stripe_size(__u64 *val)
 		*val = LOV_DESC_STRIPE_SIZE_DEFAULT;
 	} else if (*val & (LOV_MIN_STRIPE_SIZE - 1)) {
 		*val &= ~(LOV_MIN_STRIPE_SIZE - 1);
-		LCONSOLE_WARN("Changing default stripe size to "LPU64" (a "
+		LCONSOLE_WARN("Changing default stripe size to %llu (a "
 			      "multiple of %u)\n",
 			      *val, LOV_MIN_STRIPE_SIZE);
 	}

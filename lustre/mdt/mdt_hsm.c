@@ -121,16 +121,16 @@ int mdt_hsm_progress(struct tgt_session_info *tsi)
 
 	hpk->hpk_errval = lustre_errno_ntoh(hpk->hpk_errval);
 
-	CDEBUG(D_HSM, "Progress on "DFID": len="LPU64" err=%d\n",
+	CDEBUG(D_HSM, "Progress on "DFID": len=%llu : rc = %d\n",
 	       PFID(&hpk->hpk_fid), hpk->hpk_extent.length, hpk->hpk_errval);
 
 	if (hpk->hpk_errval)
-		CDEBUG(D_HSM, "Copytool progress on "DFID" failed (%d); %s.\n",
+		CDEBUG(D_HSM, "Copytool progress on "DFID" failed : rc = %d; %s.\n",
 		       PFID(&hpk->hpk_fid), hpk->hpk_errval,
 		       hpk->hpk_flags & HP_FLAG_RETRY ? "will retry" : "fatal");
 
 	if (hpk->hpk_flags & HP_FLAG_COMPLETED)
-		CDEBUG(D_HSM, "Finished "DFID" (%d) cancel cookie="LPX64"\n",
+		CDEBUG(D_HSM, "Finished "DFID" : rc = %d; cancel cookie=%#llx\n",
 		       PFID(&hpk->hpk_fid), hpk->hpk_errval, hpk->hpk_cookie);
 
 	info = tsi2mdt_info(tsi);
@@ -281,8 +281,8 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 
 	/* Detect out-of range masks */
 	if ((hss->hss_setmask | hss->hss_clearmask) & ~HSM_FLAGS_MASK) {
-		CDEBUG(D_HSM, "Incompatible masks provided (set "LPX64
-		       ", clear "LPX64") vs supported set (%#x).\n",
+		CDEBUG(D_HSM, "Incompatible masks provided (set %#llx"
+		       ", clear %#llx) vs supported set (%#x).\n",
 		       hss->hss_setmask, hss->hss_clearmask, HSM_FLAGS_MASK);
 		GOTO(out_unlock, rc = -EINVAL);
 	}
@@ -291,8 +291,8 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 	 * NOT defined in HSM_USER_MASK. */
 	if (((hss->hss_setmask | hss->hss_clearmask) & ~HSM_USER_MASK) &&
 	    !md_capable(mdt_ucred(info), CFS_CAP_SYS_ADMIN)) {
-		CDEBUG(D_HSM, "Incompatible masks provided (set "LPX64
-		       ", clear "LPX64") vs unprivileged set (%#x).\n",
+		CDEBUG(D_HSM, "Incompatible masks provided (set %#llx"
+		       ", clear %#llx) vs unprivileged set (%#x).\n",
 		       hss->hss_setmask, hss->hss_clearmask, HSM_USER_MASK);
 		GOTO(out_unlock, rc = -EPERM);
 	}
@@ -341,7 +341,7 @@ int mdt_hsm_state_set(struct tgt_session_info *tsi)
 	    (flags & HS_RELEASED && !(flags & HS_ARCHIVED)) ||
 	    (flags & HS_LOST     && !(flags & HS_ARCHIVED))) {
 		CDEBUG(D_HSM, "Incompatible flag change on "DFID
-			      "flags="LPX64"\n",
+			      "flags=%#llx\n",
 		       PFID(&info->mti_body->mbo_fid1), flags);
 		GOTO(out_unlock, rc = -EINVAL);
 	}

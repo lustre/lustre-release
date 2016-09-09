@@ -1820,7 +1820,7 @@ static int mdd_create_data(const struct lu_env *env,
 	 * XXX: Setting the lov ea is not locked but setting the attr is locked?
 	 * Should this be fixed?
 	 */
-	CDEBUG(D_OTHER, "ea %p/%u, cr_flags "LPO64", no_create %u\n",
+	CDEBUG(D_OTHER, "ea %p/%u, cr_flags %#llo, no_create %u\n",
 	       spec->u.sp_ea.eadata, spec->u.sp_ea.eadatalen,
 	       spec->sp_cr_flags, spec->no_create);
 

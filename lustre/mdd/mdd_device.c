@@ -181,7 +181,7 @@ static int changelog_init_cb(const struct lu_env *env, struct llog_handle *llh,
 	LASSERT(rec->cr_hdr.lrh_type == CHANGELOG_REC);
 
 	CDEBUG(D_INFO,
-	       "seeing record at index %d/%d/"LPU64" t=%x %.*s in log"
+	       "seeing record at index %d/%d/%llu t=%x %.*s in log"
 	       DOSTID"\n", hdr->lrh_index, rec->cr_hdr.lrh_index,
 	       rec->cr.cr_index, rec->cr.cr_type, rec->cr.cr_namelen,
 	       changelog_rec_name(&rec->cr), POSTID(&llh->lgh_id.lgl_oi));
@@ -201,7 +201,7 @@ static int changelog_user_init_cb(const struct lu_env *env,
         LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
         LASSERT(rec->cur_hdr.lrh_type == CHANGELOG_USER_REC);
 
-        CDEBUG(D_INFO, "seeing user at index %d/%d id=%d endrec="LPU64
+	CDEBUG(D_INFO, "seeing user at index %d/%d id=%d endrec=%llu"
                " in log "DOSTID"\n", hdr->lrh_index, rec->cur_hdr.lrh_index,
                rec->cur_id, rec->cur_endrec, POSTID(&llh->lgh_id.lgl_oi));
 
@@ -358,7 +358,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 		GOTO(out_close, rc);
 	}
 
-	CDEBUG(D_IOCTL, "changelog starting index="LPU64"\n",
+	CDEBUG(D_IOCTL, "changelog starting index=%llu\n",
 	       mdd->mdd_cl.mc_index);
 
 	/* setup user changelog */
@@ -589,8 +589,8 @@ static int obf_lookup(const struct lu_env *env, struct md_object *p,
 	if (!fid_is_norm(f) && !fid_is_igif(f) && !fid_is_root(f) &&
 	    !fid_seq_is_dot(f->f_seq)) {
 		CWARN("%s: Trying to lookup invalid FID "DFID" in %s/%s, "
-		      "sequence should be >= "LPX64" or within ["LPX64","
-		      ""LPX64"].\n", mdd2obd_dev(mdd)->obd_name, PFID(f),
+		      "sequence should be >= %#llx or within [%#llx,"
+		      "%#llx].\n", mdd2obd_dev(mdd)->obd_name, PFID(f),
 		      dot_lustre_name, mdd_obf_dir_name, (__u64)FID_SEQ_NORMAL,
 		      (__u64)FID_SEQ_IGIF, (__u64)FID_SEQ_IGIF_MAX);
 		GOTO(out, rc = -EINVAL);
@@ -1395,7 +1395,7 @@ static int mdd_changelog_user_purge_cb(const struct lu_env *env,
         }
 
         /* Update the endrec */
-        CDEBUG(D_IOCTL, "Rewriting changelog user %d endrec to "LPU64"\n",
+	CDEBUG(D_IOCTL, "Rewriting changelog user %d endrec to %llu\n",
                mcud->mcud_id, rec->cur_endrec);
 
 	rc = llog_write(env, llh, hdr, hdr->lrh_index);
@@ -1438,7 +1438,7 @@ static int mdd_changelog_user_purge(const struct lu_env *env,
 			      mdd_changelog_user_purge_cb, (void *)&data,
 			      0, 0);
         if ((rc >= 0) && (data.mcud_minrec > 0)) {
-                CDEBUG(D_IOCTL, "Purging changelog entries up to "LPD64
+		CDEBUG(D_IOCTL, "Purging changelog entries up to %lld"
                        ", referenced by "CHANGELOG_USER_PREFIX"%d\n",
                        data.mcud_minrec, data.mcud_minid);
 		rc = mdd_changelog_llog_cancel(env, mdd, data.mcud_minrec);
@@ -1451,7 +1451,7 @@ static int mdd_changelog_user_purge(const struct lu_env *env,
 
         if (!data.mcud_found) {
                 CWARN("No entry for user %d.  Last changelog reference is "
-                      LPD64" by changelog user %d\n", data.mcud_id,
+		      "%lld by changelog user %d\n", data.mcud_id,
                       data.mcud_minrec, data.mcud_minid);
                rc = -ENOENT;
         }

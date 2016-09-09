@@ -52,10 +52,10 @@ void dump_requests(char *prefix, struct coordinator *cdt)
 	down_read(&cdt->cdt_request_lock);
 	list_for_each_entry(car, &cdt->cdt_requests, car_request_list) {
 		CDEBUG(D_HSM, "%s fid="DFID" dfid="DFID
-		       " compound/cookie="LPX64"/"LPX64
-		       " action=%s archive#=%d flags="LPX64
-		       " extent="LPX64"-"LPX64
-		       " gid="LPX64" refcount=%d canceled=%d\n",
+		       " compound/cookie=%#llx/%#llx"
+		       " action=%s archive#=%d flags=%#llx"
+		       " extent=%#llx-%#llx"
+		       " gid=%#llx refcount=%d canceled=%d\n",
 		       prefix, PFID(&car->car_hai->hai_fid),
 		       PFID(&car->car_hai->hai_dfid),
 		       car->car_compound_id, car->car_hai->hai_cookie,
@@ -524,10 +524,10 @@ static int mdt_hsm_active_requests_proc_show(struct seq_file *s, void *v)
 	mdt_cdt_get_work_done(car, &data_moved);
 
 	seq_printf(s, "fid="DFID" dfid="DFID
-		   " compound/cookie="LPX64"/"LPX64
-		   " action=%s archive#=%d flags="LPX64
-		   " extent="LPX64"-"LPX64" gid="LPX64
-		   " data=[%s] canceled=%d uuid=%s done="LPU64"\n",
+		   " compound/cookie=%#llx/%#llx"
+		   " action=%s archive#=%d flags=%#llx"
+		   " extent=%#llx-%#llx gid=%#llx"
+		   " data=[%s] canceled=%d uuid=%s done=%llu\n",
 		   PFID(&car->car_hai->hai_fid),
 		   PFID(&car->car_hai->hai_dfid),
 		   car->car_compound_id, car->car_hai->hai_cookie,

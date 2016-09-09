@@ -65,14 +65,15 @@ static inline void mdt_reint_init_ma(struct mdt_thread_info *info,
 static void mdt_obj_version_get(struct mdt_thread_info *info,
                                 struct mdt_object *o, __u64 *version)
 {
-        LASSERT(o);
+	LASSERT(o);
+
 	if (mdt_object_exists(o) && !mdt_object_remote(o) &&
 	    !fid_is_obf(mdt_object_fid(o)))
-                *version = dt_version_get(info->mti_env, mdt_obj2dt(o));
-        else
-                *version = ENOENT_VERSION;
-        CDEBUG(D_INODE, "FID "DFID" version is "LPX64"\n",
-               PFID(mdt_object_fid(o)), *version);
+		*version = dt_version_get(info->mti_env, mdt_obj2dt(o));
+	else
+		*version = ENOENT_VERSION;
+	CDEBUG(D_INODE, "FID "DFID" version is %#llx\n",
+	       PFID(mdt_object_fid(o)), *version);
 }
 
 /**
@@ -100,7 +101,7 @@ static int mdt_version_check(struct ptlrpc_request *req,
 		spin_unlock(&req->rq_export->exp_lock);
 		RETURN(-EOVERFLOW);
 	} else if (pre_ver[idx] != version) {
-		CDEBUG(D_INODE, "Version mismatch "LPX64" != "LPX64"\n",
+		CDEBUG(D_INODE, "Version mismatch %#llx != %#llx\n",
 		       pre_ver[idx], version);
 		spin_lock(&req->rq_export->exp_lock);
 		req->rq_export->exp_vbr_failed = 1;

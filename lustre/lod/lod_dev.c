@@ -164,7 +164,7 @@ int lod_fld_lookup(const struct lu_env *env, struct lod_device *lod,
 	*tgt = range.lsr_index;
 	*type = range.lsr_flags;
 
-	CDEBUG(D_INFO, "%s: got tgt %x for sequence: "LPX64"\n",
+	CDEBUG(D_INFO, "%s: got tgt %x for sequence: %#llx\n",
 	       lod2obd(lod)->obd_name, *tgt, fid_seq(fid));
 
 	RETURN(0);

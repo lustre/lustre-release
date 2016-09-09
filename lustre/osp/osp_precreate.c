@@ -453,7 +453,7 @@ static int osp_precreate_rollover_new_seq(struct lu_env *env,
 		RETURN(rc);
 	}
 
-	LCONSOLE_INFO("%s: update sequence from "LPX64" to "LPX64"\n",
+	LCONSOLE_INFO("%s: update sequence from %#llx to %#llx\n",
 		      osp->opd_obd->obd_name, fid_seq(last_fid),
 		      fid_seq(fid));
 	/* Update last_xxx to the new seq */
@@ -966,8 +966,8 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 		if ((msfs->os_ffree < 32) || (msfs->os_bavail < used)) {
 			d->opd_pre_status = -ENOSPC;
 			if (old != -ENOSPC)
-				CDEBUG(D_INFO, "%s: status: "LPU64" blocks, "
-				       LPU64" free, "LPU64" used, "LPU64" "
+				CDEBUG(D_INFO, "%s: status: %llu blocks, "
+				       "%llu free, %llu used, %llu "
 				       "avail -> %d: rc = %d\n",
 				       d->opd_obd->obd_name, msfs->os_blocks,
 				       msfs->os_bfree, used, msfs->os_bavail,
@@ -983,8 +983,8 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 			d->opd_pre_create_count = OST_MIN_PRECREATE;
 			spin_unlock(&d->opd_pre_lock);
 			wake_up(&d->opd_pre_waitq);
-			CDEBUG(D_INFO, "%s: no space: "LPU64" blocks, "LPU64
-			       " free, "LPU64" used, "LPU64" avail -> %d: "
+			CDEBUG(D_INFO, "%s: no space: %llu blocks, %llu"
+			       " free, %llu used, %llu avail -> %d: "
 			       "rc = %d\n", d->opd_obd->obd_name,
 			       msfs->os_blocks, msfs->os_bfree, used,
 			       msfs->os_bavail, d->opd_pre_status, rc);
@@ -1188,7 +1188,7 @@ static int osp_precreate_thread(void *_arg)
 
 			if (unlikely(osp_precreate_end_seq(&env, d) &&
 				     osp_create_end_seq(&env, d))) {
-				LCONSOLE_INFO("%s:"LPX64" is used up."
+				LCONSOLE_INFO("%s:%#llx is used up."
 					      " Update to new seq\n",
 					      d->opd_obd->obd_name,
 					 fid_seq(&d->opd_pre_last_created_fid));
@@ -1270,7 +1270,7 @@ static int osp_precreate_timeout_condition(void *data)
 	struct osp_device *d = data;
 
 	CDEBUG(D_HA, "%s: slow creates, last="DFID", next="DFID", "
-	      "reserved="LPU64", syn_changes=%u, "
+	      "reserved=%llu, syn_changes=%u, "
 	      "syn_rpc_in_progress=%d, status=%d\n",
 	      d->opd_obd->obd_name, PFID(&d->opd_pre_last_created_fid),
 	      PFID(&d->opd_pre_used_fid), d->opd_pre_reserved,

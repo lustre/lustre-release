@@ -182,9 +182,10 @@ static void mdd_object_free(const struct lu_env *env, struct lu_object *o)
 static int mdd_object_print(const struct lu_env *env, void *cookie,
                             lu_printer_t p, const struct lu_object *o)
 {
-        struct mdd_object *mdd = lu2mdd_obj((struct lu_object *)o);
-        return (*p)(env, cookie, LUSTRE_MDD_NAME"-object@%p(open_count=%d, "
-                    "valid=%x, cltime="LPU64", flags=%lx)",
+	struct mdd_object *mdd = lu2mdd_obj((struct lu_object *)o);
+
+	return (*p)(env, cookie,
+		    LUSTRE_MDD_NAME"-object@%p(open_count=%d, valid=%x, cltime=%llu, flags=%lx)",
                     mdd, mdd->mod_count, mdd->mod_valid,
                     mdd->mod_cltime, mdd->mod_flags);
 }
@@ -861,7 +862,7 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	/* no need to setattr anymore */
 	if (la_copy->la_valid == 0) {
 		CDEBUG(D_INODE, "%s: no valid attribute on "DFID", previous"
-		       "valid is "LPX64"\n", mdd2obd_dev(mdd)->obd_name,
+		       "valid is %#llx\n", mdd2obd_dev(mdd)->obd_name,
 		       PFID(mdo2fid(mdd_obj)), la->la_valid);
 
 		RETURN(0);
@@ -883,7 +884,7 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		handle->th_sync = 1;
 
 	if (la->la_valid & (LA_MTIME | LA_CTIME))
-                CDEBUG(D_INODE, "setting mtime "LPU64", ctime "LPU64"\n",
+		CDEBUG(D_INODE, "setting mtime %llu, ctime %llu\n",
 		       la->la_mtime, la->la_ctime);
 
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);

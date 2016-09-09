@@ -491,7 +491,7 @@ static void osp_sync_request_commit_cb(struct ptlrpc_request *req)
 	struct osp_device *d = req->rq_cb_data;
 	struct osp_job_req_args *jra;
 
-	CDEBUG(D_HA, "commit req %p, transno "LPU64"\n", req, req->rq_transno);
+	CDEBUG(D_HA, "commit req %p, transno %llu\n", req, req->rq_transno);
 
 	if (unlikely(req->rq_transno == 0))
 		return;
@@ -570,7 +570,7 @@ static int osp_sync_interpret(const struct lu_env *env,
 		 */
 		LASSERTF(req->rq_transno == 0 ||
 			 req->rq_import_generation < imp->imp_generation,
-			 "transno "LPU64", rc %d, gen: req %d, imp %d\n",
+			 "transno %llu, rc %d, gen: req %d, imp %d\n",
 			 req->rq_transno, rc, req->rq_import_generation,
 			 imp->imp_generation);
 		if (req->rq_transno == 0) {
@@ -731,7 +731,7 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 	/* lsr_valid can only be 0 or have OBD_MD_{FLUID,FLGID} set,
 	 * so no bits other than these should be set. */
 	if ((rec->lsr_valid & ~(OBD_MD_FLUID | OBD_MD_FLGID)) != 0) {
-		CERROR("%s: invalid setattr record, lsr_valid:"LPU64"\n",
+		CERROR("%s: invalid setattr record, lsr_valid:%llu\n",
 		       d->opd_obd->obd_name, rec->lsr_valid);
 		/* return 1 on invalid record */
 		RETURN(1);
@@ -1049,7 +1049,7 @@ static void osp_sync_process_committed(const struct lu_env *env,
 				CERROR("%s: can't cancel record: %d\n",
 				       obd->obd_name, rc);
 		} else {
-			DEBUG_REQ(D_OTHER, req, "imp_committed = "LPU64,
+			DEBUG_REQ(D_OTHER, req, "imp_committed = %llu",
 				  imp->imp_peer_committed_transno);
 		}
 		ptlrpc_req_finished(req);
@@ -1513,7 +1513,7 @@ static void osp_sync_tracker_commit_cb(struct thandle *th, void *cookie)
 
 	spin_lock(&tr->otr_lock);
 	if (likely(txn->oti_current_id > tr->otr_committed_id)) {
-		CDEBUG(D_OTHER, "committed: "LPU64" -> "LPU64"\n",
+		CDEBUG(D_OTHER, "committed: %llu -> %llu\n",
 		       tr->otr_committed_id, txn->oti_current_id);
 		tr->otr_committed_id = txn->oti_current_id;
 
@@ -1654,7 +1654,7 @@ static __u64 osp_sync_id_get(struct osp_device *d, __u64 id)
 
 	if (unlikely(tr->otr_next_id <= d->opd_syn_last_used_id)) {
 		spin_unlock(&tr->otr_lock);
-		CERROR("%s: next "LPU64", last synced "LPU64"\n",
+		CERROR("%s: next %llu, last synced %llu\n",
 		       d->opd_obd->obd_name, tr->otr_next_id,
 		       d->opd_syn_last_used_id);
 		LBUG();
@@ -1667,7 +1667,7 @@ static __u64 osp_sync_id_get(struct osp_device *d, __u64 id)
 	if (list_empty(&d->opd_syn_ontrack))
 		list_add(&d->opd_syn_ontrack, &tr->otr_wakeup_list);
 	spin_unlock(&tr->otr_lock);
-	CDEBUG(D_OTHER, "new id "LPU64"\n", id);
+	CDEBUG(D_OTHER, "new id %llu\n", id);
 
 	return id;
 }

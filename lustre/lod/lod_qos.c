@@ -517,9 +517,9 @@ static int lod_qos_used(struct lod_device *lod, struct ost_pool *osts,
 		if (ost->ltd_qos.ltq_usable)
 			*total_wt += ost->ltd_qos.ltq_weight;
 
-		QOS_DEBUG("recalc tgt %d usable=%d avail="LPU64
-			  " ostppo="LPU64" ostp="LPU64" ossppo="LPU64
-			  " ossp="LPU64" wt="LPU64"\n",
+		QOS_DEBUG("recalc tgt %d usable=%d avail=%llu"
+			  " ostppo=%llu ostp=%llu ossppo=%llu"
+			  " ossp=%llu wt=%llu\n",
 			  i, ost->ltd_qos.ltq_usable, TGT_BAVAIL(i) >> 10,
 			  ost->ltd_qos.ltq_penalty_per_obj >> 10,
 			  ost->ltd_qos.ltq_penalty >> 10,
@@ -1516,8 +1516,8 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 				continue;
 
 			cur_weight += ost->ltd_qos.ltq_weight;
-			QOS_DEBUG("stripe_cnt=%d nfound=%d cur_weight="LPU64
-				  " rand="LPU64" total_weight="LPU64"\n",
+			QOS_DEBUG("stripe_cnt=%d nfound=%d cur_weight=%llu"
+				  " rand=%llu total_weight=%llu\n",
 				  stripe_cnt, nfound, cur_weight, rand,
 				  total_weight);
 

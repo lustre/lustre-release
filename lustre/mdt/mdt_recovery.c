@@ -141,21 +141,21 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
 		oldrep = list_entry(tmp, struct ptlrpc_reply_state,
 				    rs_exp_list);
 
-                if (oldrep->rs_xid != req->rq_xid)
-                        continue;
+		if (oldrep->rs_xid != req->rq_xid)
+			continue;
 
-                if (oldrep->rs_opc != lustre_msg_get_opc(req->rq_reqmsg))
-                        CERROR ("Resent req xid "LPU64" has mismatched opc: "
-                                "new %d old %d\n", req->rq_xid,
-                                lustre_msg_get_opc(req->rq_reqmsg),
-                                oldrep->rs_opc);
+		if (oldrep->rs_opc != lustre_msg_get_opc(req->rq_reqmsg))
+			CERROR("%s: Resent req xid %llu has mismatched opc: "
+			       "new %d old %d\n", exp->exp_obd->obd_name,
+			       req->rq_xid, lustre_msg_get_opc(req->rq_reqmsg),
+			       oldrep->rs_opc);
 
 		svcpt = oldrep->rs_svcpt;
 		spin_lock(&svcpt->scp_rep_lock);
 
 		list_del_init(&oldrep->rs_exp_list);
 
-		CDEBUG(D_HA, "Stealing %d locks from rs %p x"LPD64".t"LPD64
+		CDEBUG(D_HA, "Stealing %d locks from rs %p x%lld.t%lld"
 		       " o%d NID %s\n",
 		       oldrep->rs_nlocks, oldrep,
 		       oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_opc,
@@ -185,7 +185,7 @@ __u64 mdt_req_from_lrd(struct ptlrpc_request *req,
 	LASSERT(trd != NULL);
 	lrd = &trd->trd_reply;
 
-	DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
+	DEBUG_REQ(D_HA, req, "restoring transno %lld/status %d",
 		  lrd->lrd_transno, lrd->lrd_result);
 
 	req->rq_transno = lrd->lrd_transno;
@@ -198,7 +198,7 @@ __u64 mdt_req_from_lrd(struct ptlrpc_request *req,
 	lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
 	lustre_msg_set_status(req->rq_repmsg, req->rq_status);
 
-	DEBUG_REQ(D_RPCTRACE, req, "restoring transno "LPD64"/status %d",
+	DEBUG_REQ(D_RPCTRACE, req, "restoring transno %lld/status %d",
 		  req->rq_transno, req->rq_status);
 
 	mdt_steal_ack_locks(req);

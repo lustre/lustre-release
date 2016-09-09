@@ -429,7 +429,7 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 				CERROR("%s: mdt_agent_record_update() "
 				      "failed, cannot update "
 				      "status to %s for cookie "
-				      LPX64": rc = %d\n",
+				      "%#llx: rc = %d\n",
 				      mdt_obd_name(mdt),
 				      agent_req_status2name(ARS_SUCCEED),
 				      hai->hai_cookie, rc2);
@@ -483,7 +483,7 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 					      "%s: mdt_agent_record_update() "
 					      "failed, cannot update "
 					      "status to %s for cookie "
-					      LPX64": rc = %d\n",
+					      "%#llx: rc = %d\n",
 					      mdt_obd_name(mdt),
 					      agent_req_status2name(ARS_FAILED),
 					      hai->hai_cookie, rc);
@@ -508,7 +508,7 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 					CERROR("%s: mdt_agent_record_update() "
 					      "failed, cannot update "
 					      "status to %s for cookie "
-					      LPX64": rc = %d\n",
+					      "%#llx: rc = %d\n",
 					      mdt_obd_name(mdt),
 					      agent_req_status2name(ARS_FAILED),
 					      hai->hai_cookie, rc);
