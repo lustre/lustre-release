@@ -4841,6 +4841,18 @@ error_and_remount() {
 	exit 1
 }
 
+# Throw an error if it's not running in vm - usually for performance
+# verification
+error_not_in_vm() {
+	local virt=$(running_in_vm)
+	if [[ -n "$virt" ]]; then
+		echo "running in VM '$virt', ignore error"
+		error_ignore env=$virt "$@"
+	else
+		error "$@"
+	fi
+}
+
 skip_env () {
 	$FAIL_ON_SKIP_ENV && error false $@ || skip $@
 }

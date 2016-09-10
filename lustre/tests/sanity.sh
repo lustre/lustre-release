@@ -13868,17 +13868,8 @@ test_247e() {
 run_test 247e "mount .. as fileset"
 
 test_248() {
-	local my_error=error
-
 	local fast_read_sav=$($LCTL get_param -n llite.*.fast_read 2>/dev/null)
 	[ -z "$fast_read_sav" ] && skip "no fast read support" && return
-
-	# This test case is time sensitive and Maloo uses KVM to run autotest.
-	# Therefore the complete time of I/O task is unreliable and depends on
-	# the workload on the host machine when the task is running.
-	local virt=$(running_in_vm)
-	[ -n "$virt" ] && echo "running in VM '$virt', ignore error" &&
-		  my_error="error_ignore env=$virt"
 
 	# create a large file for fast read verification
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=128 > /dev/null 2>&1
@@ -13901,7 +13892,8 @@ test_248() {
 
 	# verify that fast read is 4 times faster for cache read
 	[ $(bc <<< "4 * $t_fast < $t_slow") -eq 1 ] ||
-		$my_error "fast read was not 4 times faster: $t_fast vs $t_slow"
+		error_not_in_vm "fast read was not 4 times faster: " \
+			   "$t_fast vs $t_slow"
 
 	echo "Test 2: verify the performance between big and small read"
 	$LCTL set_param -n llite.*.fast_read=1
@@ -13918,7 +13910,7 @@ test_248() {
 
 	# verify that big IO is not 4 times faster than small IO
 	[ $(bc <<< "4 * $t_1k >= $t_1m") -eq 1 ] ||
-		$my_error "bigger IO is way too fast: $t_1k vs $t_1m"
+		error_not_in_vm "bigger IO is way too fast: $t_1k vs $t_1m"
 
 	$LCTL set_param -n llite.*.fast_read=$fast_read_sav
 	rm -f $DIR/$tfile
@@ -14098,14 +14090,6 @@ ladvise_willread_performance()
 	local repeat=10
 	local average_cache=0
 	local average_ladvise=0
-	local my_error=error
-
-	# This test case is time sensitive and Maloo uses KVM to run autotest.
-	# Therefore the complete time of I/O task is unreliable and depends on
-	# the workload on the host machine when the task is running.
-	local virt=$(running_in_vm)
-	[ -n "$virt" ] && echo "running in VM '$virt', ignore error" &&
-		my_error="error_ignore env=$virt"
 
 	for ((i = 1; i <= $repeat; i++)); do
 		echo "Iter $i/$repeat: reading without willread hint"
@@ -14156,8 +14140,8 @@ ladvise_willread_performance()
 
 	local lowest_speedup=$((average_cache / 2))
 	[ $average_ladvise -gt $lowest_speedup ] ||
-		$my_error "Speedup with willread is less than "\
-			"$lowest_speedup%, got $average_ladvise%"
+		error_not_in_vm "Speedup with willread is less than " \
+			   "$lowest_speedup%, got $average_ladvise%"
 	echo "Speedup with willread ladvise: $average_ladvise%"
 	echo "Speedup with cache: $average_cache%"
 }
@@ -15236,7 +15220,7 @@ test_399() { # LU-7655 for OST fake write
 
 	echo "fake write $duration_fake vs. normal write $duration in seconds"
 	[ $(bc <<< "$duration_fake < $duration") -eq 1 ] ||
-		error "fake write is slower"
+		error_not_in_vm "fake write is slower"
 
 	$LCTL set_param -n debug="$saved_debug"
 	rm -f $DIR/$tfile
