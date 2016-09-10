@@ -158,6 +158,9 @@ enum lfsck_param_flags {
 
 	/* Do not return until the LFSCK not running. */
 	LPF_WAIT		= 0x0100,
+
+	/* Delay to create OST-object for dangling LOV EA. */
+	LPF_DELAY_CREATE_OSTOBJ	= 0x0200,
 };
 
 enum lfsck_type {
@@ -191,6 +194,7 @@ enum lfsck_start_valid {
 	LSV_ASYNC_WINDOWS	= 0x00000008,
 	LSV_CREATE_OSTOBJ	= 0x00000010,
 	LSV_CREATE_MDTOBJ	= 0x00000020,
+	LSV_DELAY_CREATE_OSTOBJ	= 0x00000040,
 };
 
 /* Arguments for starting lfsck. */

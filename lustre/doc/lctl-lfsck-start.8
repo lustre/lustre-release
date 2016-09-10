@@ -3,7 +3,8 @@
 .br
 .B lctl lfsck_start \fR[-M | --device [MDT,OST]_device]
      \fR[-A | --all] [-c | --create-ostobj [on | off]]
-     \fR[-C | --create-mttobj [on | off]]
+     \fR[-C | --create-mdtobj [on | off]]
+     \fR[-d | --delay-create-ostobj [on | off]]
      \fR[-e | --error <continue | abort>] [-h | --help]
      \fR[-n | --dryrun [on | off]] [-o | --orphan]
      \fR[-r | --reset] [-s | --speed speed_limit]
@@ -37,6 +38,16 @@ Create the lost MDT-object for dangling name entry: 'off' (default) or 'on'.
 Under default mode, when the LFSCK find dangling name entry, it will report
 the inconsistency but will not repair it.  If 'on' is given, then LFSCK will
 re-create the missed MDT-object.
+.TP
+.B  -d, --delay-create-ostobj [on | off]
+Delay to create the lost OST-object for dangling LOV EA until orphan OST-objects
+handled: 'off' (default) or 'on'. If both "--create-ostobj" and the delay option
+are 'on', then the LFSCK will NOT create the OST-object to repair dangling LOV
+EA unless all the OST-objects have been handled. It can avoid reparing dangling
+LOV EA incorrectly because of LOV EA corruption. The side-effect is that as long
+as one OST does not join the layout LFSCK or fail to complete the scanning, then
+reparing dangling LOV EA will be skipped. For a large system with a lot of OSTs,
+such condition may be a bit strict. The default value is 'off'.
 .TP
 .B  -e, --error <error_handle>
 With error_handle as 'abort' then if the repair of a file is not possible, then

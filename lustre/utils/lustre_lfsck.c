@@ -55,6 +55,8 @@ static struct option long_opt_start[] = {
 	{"create-ostobj",	optional_argument, 0, 'c'},
 	{"create_mdtobj",	optional_argument, 0, 'C'},
 	{"create-mdtobj",	optional_argument, 0, 'C'},
+	{"delay_create_ostobj",	optional_argument, 0, 'd'},
+	{"delay-create-ostobj",	optional_argument, 0, 'd'},
 	{"error",		required_argument, 0, 'e'},
 	{"help",		no_argument,	   0, 'h'},
 	{"dryrun",		optional_argument, 0, 'n'},
@@ -126,6 +128,7 @@ static void usage_start(void)
 		"lfsck_start [-M | --device {MDT,OST}_device]\n"
 		"	     [-A | --all] [-c | --create_ostobj [on | off]]\n"
 		"	     [-C | --create_mdtobj [on | off]]\n"
+		"	     [-d | --delay_create_ostobj [on | off]]\n"
 		"	     [-e | --error {continue | abort}] [-h | --help]\n"
 		"	     [-n | --dryrun [on | off]] [-o | --orphan]\n"
 		"            [-r | --reset] [-s | --speed ops_per_sec_limit]\n"
@@ -139,6 +142,8 @@ static void usage_start(void)
 		    "(default 'off', or 'on')\n"
 		"-C: create the lost MDT-object for dangling name entry "
 		    "(default 'off', or 'on')\n"
+		"-d: delay create the lost OST-object for dangling LOV EA "
+		    "until orphan OST-objects handled (default 'off', or 'on')\n"
 		"-e: error handle mode (default 'continue', or 'abort')\n"
 		"-h: this help message\n"
 		"-n: check with no modification (default 'off', or 'on')\n"
@@ -269,7 +274,7 @@ int jt_lfsck_start(int argc, char **argv)
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char device[MAX_OBD_NAME];
 	struct lfsck_start start;
-	char *optstring = "Ac::C::e:hM:n::ors:t:w:";
+	char *optstring = "Ac::C::d::e:hM:n::ors:t:w:";
 	int opt, index, rc, val, i;
 
 	memset(&data, 0, sizeof(data));
@@ -312,6 +317,19 @@ int jt_lfsck_start(int argc, char **argv)
 				return -EINVAL;
 			}
 			start.ls_valid |= LSV_CREATE_MDTOBJ;
+			break;
+		case 'd':
+			if (optarg == NULL || strcmp(optarg, "on") == 0) {
+				start.ls_flags |= LPF_DELAY_CREATE_OSTOBJ;
+			} else if (strcmp(optarg, "off") != 0) {
+				fprintf(stderr, "invalid switch: -c '%s'. "
+					"valid switches are:\n"
+					"empty ('on'), or 'off' without space. "
+					"For example:\n"
+					"'-c', '-con', '-coff'\n", optarg);
+				return -EINVAL;
+			}
+			start.ls_valid |= LSV_DELAY_CREATE_OSTOBJ;
 			break;
 		case 'e':
 			if (strcmp(optarg, "abort") == 0) {

@@ -399,6 +399,7 @@ command_t cmdlist[] = {
 	 "usage: lfsck_start [-M | --device [MDT,OST]_device]\n"
 	 "		     [-A | --all] [-c | --create-ostobj [on | off]]\n"
 	 "		     [-C | --create-mdtobj [on | off]]\n"
+	 "		     [-d | --delay-create-ostobj [on | off]]\n"
 	 "		     [-e | --error {continue | abort}] [-h | --help]\n"
 	 "		     [-n | --dryrun [on | off]] [-o | --orphan]\n"
 	 "		     [-r | --reset] [-s | --speed speed_limit]\n"

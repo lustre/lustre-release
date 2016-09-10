@@ -1512,10 +1512,11 @@ test_13() {
 }
 run_test 13 "LFSCK can repair crashed lmm_oi"
 
-test_14() {
+test_14a() {
 	echo "#####"
 	echo "The OST-object referenced by the MDT-object should be there;"
 	echo "otherwise, the LFSCK should re-create the missing OST-object."
+	echo "without '--delay-create-ostobj' option."
 	echo "#####"
 
 	check_mount_and_prep
@@ -1586,7 +1587,74 @@ test_14() {
 
 	stop_full_debug_logging
 }
-run_test 14 "LFSCK can repair MDT-object with dangling reference"
+run_test 14a "LFSCK can repair MDT-object with dangling LOV EA reference (1)"
+
+test_14b() {
+	echo "#####"
+	echo "The OST-object referenced by the MDT-object should be there;"
+	echo "otherwise, the LFSCK should re-create the missing OST-object."
+	echo "with '--delay-create-ostobj' option."
+	echo "#####"
+
+	check_mount_and_prep
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
+
+	echo "Inject failure stub to simulate dangling referenced MDT-object"
+	#define OBD_FAIL_LFSCK_DANGLING	0x1610
+	do_facet ost1 $LCTL set_param fail_loc=0x1610
+	local count=$(precreated_ost_obj_count 0 0)
+
+	createmany -o $DIR/$tdir/f $((count + 31))
+	touch $DIR/$tdir/guard
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	start_full_debug_logging
+
+	# exhaust other pre-created dangling cases
+	count=$(precreated_ost_obj_count 0 0)
+	createmany -o $DIR/$tdir/a $count ||
+		error "(0) Fail to create $count files."
+
+	echo "'ls' should fail because of dangling referenced MDT-object"
+	ls -ail $DIR/$tdir > /dev/null 2>&1 && error "(1) ls should fail."
+
+	echo "Trigger layout LFSCK to find out dangling reference"
+	$START_LAYOUT -r -o -d || error "(2) Fail to start LFSCK for layout!"
+
+	wait_all_targets_blocked layout completed 3
+
+	local repaired=$($SHOW_LAYOUT |
+			 awk '/^repaired_dangling/ { print $2 }')
+	[ $repaired -ge 32 ] ||
+		error "(4) Fail to repair dangling reference: $repaired"
+
+	echo "'stat' should fail because of not repair dangling by default"
+	stat $DIR/$tdir/guard > /dev/null 2>&1 && error "(5) stat should fail"
+
+	echo "Trigger layout LFSCK to repair dangling reference"
+	$START_LAYOUT -r -o -c -d || error "(6) Fail to start LFSCK for layout!"
+
+	wait_all_targets_blocked layout completed 7
+
+	# There may be some async LFSCK updates in processing, wait for
+	# a while until the target reparation has been done. LU-4970.
+
+	echo "'stat' should success after layout LFSCK repairing"
+	wait_update_facet client "stat $DIR/$tdir/guard |
+		awk '/Size/ { print \\\$2 }'" "0" 32 || {
+		stat $DIR/$tdir/guard
+		$SHOW_LAYOUT
+		error "(8) unexpected size"
+	}
+
+	repaired=$($SHOW_LAYOUT |
+			 awk '/^repaired_dangling/ { print $2 }')
+	[ $repaired -ge 32 ] ||
+		error "(9) Fail to repair dangling reference: $repaired"
+
+	stop_full_debug_logging
+}
+run_test 14b "LFSCK can repair MDT-object with dangling LOV EA reference (2)"
 
 test_15a() {
 	echo "#####"
@@ -2148,11 +2216,9 @@ run_test 18c "Find out orphan OST-object and repair it (3)"
 
 test_18d() {
 	echo "#####"
-	echo "The target MDT-object layout EA slot is occpuied by some new"
-	echo "created OST-object when repair dangling reference case. Such"
-	echo "conflict OST-object has never been modified. Then when found"
-	echo "the orphan OST-object, LFSCK will replace it with the orphan"
-	echo "OST-object."
+	echo "The target MDT-object layout EA is corrupted, but the right"
+	echo "OST-object is still alive as orphan. The layout LFSCK will"
+	echo "not create new OST-object to occupy such slot."
 	echo "#####"
 
 	check_mount_and_prep
@@ -2192,7 +2258,7 @@ test_18d() {
 		error "(1) Expect incorrect file2 size"
 
 	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
-	$START_LAYOUT -r -o -c || error "(2) Fail to start LFSCK for layout!"
+	$START_LAYOUT -r -o -c -d || error "(2) Fail to start LFSCK for layout!"
 
 	for k in $(seq $MDSCOUNT); do
 		# The LFSCK status query internal is 30 seconds. For the case
@@ -2218,10 +2284,16 @@ test_18d() {
 	[ $repaired -eq 1 ] ||
 		error "(5) Expect 1 orphan has been fixed, but got: $repaired"
 
+	repaired=$(do_facet $SINGLEMDS $LCTL get_param -n \
+		   mdd.$(facet_svc $SINGLEMDS).lfsck_layout |
+		   awk '/^repaired_dangling/ { print $2 }')
+	[ $repaired -eq 0 ] ||
+		error "(6) Expect 0 dangling has been fixed, but got: $repaired"
+
 	echo "The file size should be correct after layout LFSCK scanning"
 	cur_size=$(ls -il $DIR/$tdir/a1/f2 | awk '{ print $6 }')
 	[ "$cur_size" == "$saved_size" ] ||
-		error "(6) Expect file2 size $saved_size, but got $cur_size"
+		error "(7) Expect file2 size $saved_size, but got $cur_size"
 
 	echo "The LFSCK should find back the original data."
 	cat $DIR/$tdir/a1/f2

@@ -342,8 +342,9 @@ enum dt_index_flags {
  */
 extern const struct dt_index_features dt_directory_features;
 extern const struct dt_index_features dt_otable_features;
-extern const struct dt_index_features dt_lfsck_orphan_features;
-extern const struct dt_index_features dt_lfsck_features;
+extern const struct dt_index_features dt_lfsck_layout_orphan_features;
+extern const struct dt_index_features dt_lfsck_layout_dangling_features;
+extern const struct dt_index_features dt_lfsck_namespace_features;
 
 /* index features supported by the accounting objects */
 extern const struct dt_index_features dt_acct_features;

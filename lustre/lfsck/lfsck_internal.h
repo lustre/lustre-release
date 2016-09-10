@@ -357,7 +357,11 @@ struct lfsck_layout {
 
 	/* For further using. 256-bytes aligned now. */
 	__u32	ll_reserved_1;
-	__u64	ll_reserved_2[11];
+
+	/* The latest object has been processed (failed) during double scan. */
+	struct lu_fid	ll_fid_latest_scanned_phase2;
+
+	__u64	ll_reserved_2[9];
 
 	/* The OST targets bitmap to record the OSTs that contain
 	 * non-verified OST-objects. */
@@ -866,6 +870,7 @@ struct lfsck_thread_info {
 	struct lu_fid		lti_fid;
 	struct lu_fid		lti_fid2;
 	struct lu_fid		lti_fid3;
+	struct lu_fid		lti_fid4;
 	struct lu_attr		lti_la;
 	struct lu_attr		lti_la2;
 	struct ost_id		lti_oi;
@@ -968,6 +973,16 @@ int lfsck_double_scan_generic(const struct lu_env *env,
 			      struct lfsck_component *com, int status);
 void lfsck_quit_generic(const struct lu_env *env,
 			struct lfsck_component *com);
+int lfsck_load_one_trace_file(const struct lu_env *env,
+			      struct lfsck_component *com,
+			      struct dt_object *parent,
+			      struct dt_object **child,
+			      const struct dt_index_features *ft,
+			      const char *name, bool reset);
+int lfsck_load_sub_trace_files(const struct lu_env *env,
+			       struct lfsck_component *com,
+			       const struct dt_index_features *ft,
+			       const char *prefix, bool reset);
 
 /* lfsck_engine.c */
 int lfsck_unpack_ent(struct lu_dirent *ent, __u64 *cookie, __u16 *type);

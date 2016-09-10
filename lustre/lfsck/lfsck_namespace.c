@@ -440,71 +440,6 @@ log:
 	return rc;
 }
 
-static struct dt_object *
-lfsck_namespace_load_one_trace_file(const struct lu_env *env,
-				    struct lfsck_component *com,
-				    struct dt_object *parent,
-				    const char *name, bool reset)
-{
-	struct lfsck_instance	*lfsck = com->lc_lfsck;
-	struct dt_object	*obj;
-	int			 rc;
-
-	if (reset) {
-		rc = local_object_unlink(env, lfsck->li_bottom, parent, name);
-		if (rc != 0 && rc != -ENOENT)
-			return ERR_PTR(rc);
-	}
-
-	obj = local_index_find_or_create(env, lfsck->li_los, parent, name,
-					 S_IFREG | S_IRUGO | S_IWUSR,
-					 &dt_lfsck_features);
-
-	return obj;
-}
-
-static int lfsck_namespace_load_sub_trace_files(const struct lu_env *env,
-						struct lfsck_component *com,
-						bool reset)
-{
-	char				*name = lfsck_env_info(env)->lti_key;
-	struct lfsck_sub_trace_obj	*lsto;
-	struct dt_object		*obj;
-	int				 rc;
-	int				 i;
-
-	for (i = 0, lsto = &com->lc_sub_trace_objs[0];
-	     i < LFSCK_STF_COUNT; i++, lsto++) {
-		snprintf(name, NAME_MAX, "%s_%02d", LFSCK_NAMESPACE, i);
-		mutex_lock(&lsto->lsto_mutex);
-		if (lsto->lsto_obj != NULL) {
-			if (!reset) {
-				mutex_unlock(&lsto->lsto_mutex);
-				continue;
-			}
-
-			lfsck_object_put(env, lsto->lsto_obj);
-			lsto->lsto_obj = NULL;
-		}
-
-		obj = lfsck_namespace_load_one_trace_file(env, com,
-				com->lc_lfsck->li_lfsck_dir, name, reset);
-		LASSERT(obj != NULL);
-		if (IS_ERR(obj)) {
-			rc = PTR_ERR(obj);
-		} else {
-			lsto->lsto_obj = obj;
-			rc = obj->do_ops->do_index_try(env, obj,
-						       &dt_lfsck_features);
-		}
-		mutex_unlock(&lsto->lsto_mutex);
-		if (rc != 0)
-			return rc;
-	}
-
-	return 0;
-}
-
 static int lfsck_namespace_init(const struct lu_env *env,
 				struct lfsck_component *com)
 {
@@ -517,9 +452,10 @@ static int lfsck_namespace_init(const struct lu_env *env,
 	ns->ln_time_latest_reset = cfs_time_current_sec();
 	down_write(&com->lc_sem);
 	rc = lfsck_namespace_store(env, com);
-	up_write(&com->lc_sem);
 	if (rc == 0)
-		rc = lfsck_namespace_load_sub_trace_files(env, com, true);
+		rc = lfsck_load_sub_trace_files(env, com,
+			&dt_lfsck_namespace_features, LFSCK_NAMESPACE, true);
+	up_write(&com->lc_sem);
 
 	return rc;
 }
@@ -3946,7 +3882,6 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 	struct lfsck_namespace		*ns	= com->lc_file_ram;
 	struct lfsck_assistant_data	*lad	= com->lc_data;
 	struct dt_object		*root;
-	struct dt_object		*dto;
 	int				 rc;
 	ENTRY;
 
@@ -3972,15 +3907,14 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 	ns->ln_status = LS_INIT;
 	ns->ln_time_latest_reset = cfs_time_current_sec();
 
-	lfsck_object_put(env, com->lc_obj);
-	com->lc_obj = NULL;
-	dto = lfsck_namespace_load_one_trace_file(env, com, root,
-						  LFSCK_NAMESPACE, true);
-	if (IS_ERR(dto))
-		GOTO(out, rc = PTR_ERR(dto));
+	rc = lfsck_load_one_trace_file(env, com, root, &com->lc_obj,
+				       &dt_lfsck_namespace_features,
+				       LFSCK_NAMESPACE, true);
+	if (rc)
+		GOTO(out, rc);
 
-	com->lc_obj = dto;
-	rc = lfsck_namespace_load_sub_trace_files(env, com, true);
+	rc = lfsck_load_sub_trace_files(env, com, &dt_lfsck_namespace_features,
+					LFSCK_NAMESPACE, true);
 	if (rc != 0)
 		GOTO(out, rc);
 
@@ -6198,8 +6132,9 @@ checkpoint:
 		down_write(&com->lc_sem);
 		com->lc_new_checked++;
 		com->lc_new_scanned++;
-		if (rc >= 0 && fid_is_sane(&fid))
+		if (rc >= 0)
 			ns->ln_fid_latest_scanned_phase2 = fid;
+
 		if (rc > 0)
 			ns->ln_objs_repaired_phase2++;
 		else if (rc < 0)
@@ -6219,10 +6154,8 @@ checkpoint:
 			ns->ln_time_last_checkpoint = cfs_time_current_sec();
 			ns->ln_objs_checked_phase2 += com->lc_new_checked;
 			com->lc_new_checked = 0;
-			rc = lfsck_namespace_store(env, com);
+			lfsck_namespace_store(env, com);
 			up_write(&com->lc_sem);
-			if (rc != 0)
-				GOTO(put, rc);
 
 			com->lc_time_last_checkpoint = cfs_time_current();
 			com->lc_time_next_checkpoint =
@@ -6706,7 +6639,7 @@ int lfsck_namespace_setup(const struct lu_env *env,
 	obj = local_index_find_or_create(env, lfsck->li_los, root,
 					 LFSCK_NAMESPACE,
 					 S_IFREG | S_IRUGO | S_IWUSR,
-					 &dt_lfsck_features);
+					 &dt_lfsck_namespace_features);
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 
@@ -6717,7 +6650,8 @@ int lfsck_namespace_setup(const struct lu_env *env,
 	else if (rc < 0)
 		rc = lfsck_namespace_reset(env, com, true);
 	else
-		rc = lfsck_namespace_load_sub_trace_files(env, com, false);
+		rc = lfsck_load_sub_trace_files(env, com,
+			&dt_lfsck_namespace_features, LFSCK_NAMESPACE, false);
 	if (rc != 0)
 		GOTO(out, rc);
 

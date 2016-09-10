@@ -225,6 +225,11 @@ int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 			dirty = true;
 		}
 
+		if (bk->lb_param & LPF_DELAY_CREATE_OSTOBJ) {
+			bk->lb_param &= ~LPF_DELAY_CREATE_OSTOBJ;
+			dirty = true;
+		}
+
 		if (bk->lb_param & LPF_FAILOUT) {
 			bk->lb_param &= ~LPF_FAILOUT;
 			dirty = true;
@@ -278,6 +283,18 @@ int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 			} else if (!(bk->lb_param & LPF_CREATE_MDTOBJ) &&
 				   (start->ls_flags & LPF_CREATE_MDTOBJ)) {
 				bk->lb_param |= LPF_CREATE_MDTOBJ;
+				dirty = true;
+			}
+		}
+
+		if ((start->ls_valid & LSV_DELAY_CREATE_OSTOBJ) || reset) {
+			if ((bk->lb_param & LPF_DELAY_CREATE_OSTOBJ) &&
+			    !(start->ls_valid & LSV_DELAY_CREATE_OSTOBJ)) {
+				bk->lb_param &= ~LPF_DELAY_CREATE_OSTOBJ;
+				dirty = true;
+			} else if (!(bk->lb_param & LPF_DELAY_CREATE_OSTOBJ) &&
+				   start->ls_flags & LPF_DELAY_CREATE_OSTOBJ) {
+				bk->lb_param |= LPF_DELAY_CREATE_OSTOBJ;
 				dirty = true;
 			}
 		}

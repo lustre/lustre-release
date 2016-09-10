@@ -578,8 +578,8 @@ EXPORT_SYMBOL(dt_directory_features);
 const struct dt_index_features dt_otable_features;
 EXPORT_SYMBOL(dt_otable_features);
 
-/* lfsck orphan */
-const struct dt_index_features dt_lfsck_orphan_features = {
+/* lfsck layout orphan */
+const struct dt_index_features dt_lfsck_layout_orphan_features = {
 	.dif_flags		= 0,
 	.dif_keysize_min	= sizeof(struct lu_fid),
 	.dif_keysize_max	= sizeof(struct lu_fid),
@@ -587,10 +587,21 @@ const struct dt_index_features dt_lfsck_orphan_features = {
 	.dif_recsize_max	= sizeof(struct lu_orphan_rec),
 	.dif_ptrsize		= 4
 };
-EXPORT_SYMBOL(dt_lfsck_orphan_features);
+EXPORT_SYMBOL(dt_lfsck_layout_orphan_features);
 
-/* lfsck */
-const struct dt_index_features dt_lfsck_features = {
+/* lfsck layout dangling */
+const struct dt_index_features dt_lfsck_layout_dangling_features = {
+	.dif_flags		= DT_IND_UPDATE,
+	.dif_keysize_min	= sizeof(struct lu_fid),
+	.dif_keysize_max	= sizeof(struct lu_fid),
+	.dif_recsize_min	= sizeof(struct lu_fid),
+	.dif_recsize_max	= sizeof(struct lu_fid),
+	.dif_ptrsize		= 4
+};
+EXPORT_SYMBOL(dt_lfsck_layout_dangling_features);
+
+/* lfsck namespace */
+const struct dt_index_features dt_lfsck_namespace_features = {
 	.dif_flags		= DT_IND_UPDATE,
 	.dif_keysize_min	= sizeof(struct lu_fid),
 	.dif_keysize_max	= sizeof(struct lu_fid),
@@ -598,7 +609,7 @@ const struct dt_index_features dt_lfsck_features = {
 	.dif_recsize_max	= sizeof(__u8),
 	.dif_ptrsize		= 4
 };
-EXPORT_SYMBOL(dt_lfsck_features);
+EXPORT_SYMBOL(dt_lfsck_namespace_features);
 
 /* accounting indexes */
 const struct dt_index_features dt_acct_features = {
@@ -664,7 +675,7 @@ static inline const struct dt_index_features *dt_index_feat_select(__u64 seq,
 			return ERR_PTR(-ENOENT);
 		return &dt_quota_slv_features;
 	} else if (seq == FID_SEQ_LAYOUT_RBTREE){
-		return &dt_lfsck_orphan_features;
+		return &dt_lfsck_layout_orphan_features;
 	} else if (seq >= FID_SEQ_NORMAL) {
 		/* object is part of the namespace, verify that it is a
 		 * directory */

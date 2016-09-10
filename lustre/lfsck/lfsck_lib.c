@@ -86,6 +86,8 @@ const char *lfsck_param_names[] = {
 	"orphan",
 	"create_ostobj",
 	"create_mdtobj",
+	NULL,
+	"delay_create_ostobj",
 	NULL
 };
 
@@ -2624,6 +2626,96 @@ void lfsck_quit_generic(const struct lu_env *env,
 		     thread_is_init(athread) ||
 		     thread_is_stopped(athread),
 		     &lwi);
+}
+
+int lfsck_load_one_trace_file(const struct lu_env *env,
+			      struct lfsck_component *com,
+			      struct dt_object *parent,
+			      struct dt_object **child,
+			      const struct dt_index_features *ft,
+			      const char *name, bool reset)
+{
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct dt_object *obj;
+	int rc;
+	ENTRY;
+
+	if (*child != NULL) {
+		struct dt_it *it;
+		const struct dt_it_ops *iops;
+		struct lu_fid *fid = &lfsck_env_info(env)->lti_fid3;
+
+		if (!reset)
+			RETURN(0);
+
+		obj = *child;
+		rc = obj->do_ops->do_index_try(env, obj, ft);
+		if (rc)
+			/* unlink by force */
+			goto unlink;
+
+		iops = &obj->do_index_ops->dio_it;
+		it = iops->init(env, obj, 0);
+		if (IS_ERR(it))
+			/* unlink by force */
+			goto unlink;
+
+		fid_zero(fid);
+		rc = iops->get(env, it, (const struct dt_key *)fid);
+		if (rc >= 0) {
+			rc = iops->next(env, it);
+			iops->put(env, it);
+		}
+		iops->fini(env, it);
+		if (rc > 0)
+			/* "rc > 0" means the index file is empty. */
+			RETURN(0);
+
+unlink:
+		/* The old index is not empty, remove it firstly. */
+		rc = local_object_unlink(env, lfsck->li_bottom, parent, name);
+
+		CDEBUG(D_LFSCK, "%s: unlink lfsck sub trace file %s: rc = %d\n",
+		       lfsck_lfsck2name(com->lc_lfsck), name, rc);
+
+		if (rc)
+			RETURN(rc);
+
+		lfsck_object_put(env, *child);
+		*child = NULL;
+	}
+
+	obj = local_index_find_or_create(env, lfsck->li_los, parent, name,
+					 S_IFREG | S_IRUGO | S_IWUSR, ft);
+	if (IS_ERR(obj))
+		RETURN(PTR_ERR(obj));
+
+	rc = obj->do_ops->do_index_try(env, obj, ft);
+	if (rc == 0)
+		*child = obj;
+
+	RETURN(rc);
+}
+
+int lfsck_load_sub_trace_files(const struct lu_env *env,
+			       struct lfsck_component *com,
+			       const struct dt_index_features *ft,
+			       const char *prefix, bool reset)
+{
+	char *name = lfsck_env_info(env)->lti_key;
+	struct lfsck_sub_trace_obj *lsto;
+	int rc;
+	int i;
+
+	for (i = 0, rc = 0, lsto = &com->lc_sub_trace_objs[0];
+	     i < LFSCK_STF_COUNT && rc == 0; i++, lsto++) {
+		snprintf(name, NAME_MAX, "%s_%02d", prefix, i);
+		rc = lfsck_load_one_trace_file(env, com,
+				com->lc_lfsck->li_lfsck_dir,
+				&lsto->lsto_obj, ft, name, reset);
+	}
+
+	return rc;
 }
 
 /* external interfaces */
