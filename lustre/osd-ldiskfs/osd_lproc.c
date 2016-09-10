@@ -422,7 +422,7 @@ static int ldiskfs_osd_full_scrub_ratio_seq_show(struct seq_file *m, void *data)
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	seq_printf(m, LPU64"\n", dev->od_full_scrub_ratio);
+	seq_printf(m, "%llu\n", dev->od_full_scrub_ratio);
 	return 0;
 }
 
@@ -462,7 +462,7 @@ static int ldiskfs_osd_full_scrub_threshold_rate_seq_show(struct seq_file *m,
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	seq_printf(m, LPU64" (bad OI mappings/minute)\n",
+	seq_printf(m, "%llu (bad OI mappings/minute)\n",
 		   dev->od_full_scrub_threshold_rate);
 	return 0;
 }
@@ -539,7 +539,7 @@ static int ldiskfs_osd_readcache_seq_show(struct seq_file *m, void *data)
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	seq_printf(m, LPU64"\n", osd->od_readcache_max_filesize);
+	seq_printf(m, "%llu\n", osd->od_readcache_max_filesize);
 	return 0;
 }
 

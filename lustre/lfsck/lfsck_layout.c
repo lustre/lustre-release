@@ -1095,7 +1095,7 @@ stop:
 
 log:
 	CDEBUG(D_LFSCK, "%s: layout LFSCK will create LAST_ID for <seq> "
-	       LPX64": rc = %d\n",
+	       "%#llx: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), fid_seq(lfsck_dto2fid(obj)), rc);
 
 	return rc;
@@ -1132,8 +1132,8 @@ lfsck_layout_lastid_reload(const struct lu_env *env,
 			lo->ll_flags |= LF_CRASHED_LASTID;
 
 			CDEBUG(D_LFSCK, "%s: layout LFSCK finds crashed "
-			       "LAST_ID file (1) for the sequence "LPX64
-			       ", old value "LPU64", known value "LPU64"\n",
+			       "LAST_ID file (1) for the sequence %#llx"
+			       ", old value %llu, known value %llu\n",
 			       lfsck_lfsck2name(lfsck), lls->lls_seq,
 			       lastid, lls->lls_lastid);
 		}
@@ -1166,7 +1166,7 @@ lfsck_layout_lastid_store(const struct lu_env *env,
 			continue;
 
 		CDEBUG(D_LFSCK, "%s: layout LFSCK will sync the LAST_ID for "
-		       "<seq> "LPX64" as <oid> "LPU64"\n",
+		       "<seq> %#llx as <oid> %llu\n",
 		       lfsck_lfsck2name(lfsck), lls->lls_seq, lls->lls_lastid);
 
 		if (bk->lb_param & LPF_DRYRUN) {
@@ -1178,7 +1178,7 @@ lfsck_layout_lastid_store(const struct lu_env *env,
 		if (IS_ERR(th)) {
 			rc1 = PTR_ERR(th);
 			CDEBUG(D_LFSCK, "%s: layout LFSCK failed to store "
-			       "the LAST_ID for <seq> "LPX64"(1): rc = %d\n",
+			       "the LAST_ID for <seq> %#llx(1): rc = %d\n",
 			       lfsck_lfsck2name(com->lc_lfsck),
 			       lls->lls_seq, rc1);
 			continue;
@@ -1209,7 +1209,7 @@ stop:
 		if (rc != 0) {
 			rc1 = rc;
 			CDEBUG(D_LFSCK, "%s: layout LFSCK failed to store "
-			       "the LAST_ID for <seq> "LPX64"(2): rc = %d\n",
+			       "the LAST_ID for <seq> %#llx(2): rc = %d\n",
 			       lfsck_lfsck2name(com->lc_lfsck),
 			       lls->lls_seq, rc1);
 		}
@@ -1246,7 +1246,7 @@ lfsck_layout_lastid_load(const struct lu_env *env,
 			lo->ll_flags |= LF_CRASHED_LASTID;
 
 			CDEBUG(D_LFSCK, "%s: layout LFSCK cannot find the "
-			       "LAST_ID file for sequence "LPX64"\n",
+			       "LAST_ID file for sequence %#llx\n",
 			       lfsck_lfsck2name(lfsck), lls->lls_seq);
 
 			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY4) &&
@@ -1289,7 +1289,7 @@ lfsck_layout_lastid_load(const struct lu_env *env,
 			lo->ll_flags |= LF_CRASHED_LASTID;
 
 			CDEBUG(D_LFSCK, "%s: layout LFSCK finds invalid "
-			       "LAST_ID file for the sequence "LPX64
+			       "LAST_ID file for the sequence %#llx"
 			       ": rc = %d\n",
 			       lfsck_lfsck2name(lfsck), lls->lls_seq, rc);
 		}
@@ -1323,7 +1323,7 @@ static void lfsck_layout_record_failure(const struct lu_env *env,
 		lo->ll_pos_first_inconsistent = cookie;
 
 		CDEBUG(D_LFSCK, "%s: layout LFSCK hit first non-repaired "
-		       "inconsistency at the pos ["LPU64"]\n",
+		       "inconsistency at the pos [%llu]\n",
 		       lfsck_lfsck2name(lfsck),
 		       lo->ll_pos_first_inconsistent);
 	}
@@ -3972,7 +3972,7 @@ static int lfsck_layout_master_checkpoint(const struct lu_env *env,
 	up_write(&com->lc_sem);
 
 	CDEBUG(D_LFSCK, "%s: layout LFSCK master checkpoint at the pos ["
-	       LPU64"], status = %d: rc = %d\n", lfsck_lfsck2name(lfsck),
+	       "%llu], status = %d: rc = %d\n", lfsck_lfsck2name(lfsck),
 	       lfsck->li_pos_current.lp_oit_cookie, lo->ll_status, rc);
 
 	return rc;
@@ -4006,7 +4006,7 @@ static int lfsck_layout_slave_checkpoint(const struct lu_env *env,
 	up_write(&com->lc_sem);
 
 	CDEBUG(D_LFSCK, "%s: layout LFSCK slave checkpoint at the pos ["
-	       LPU64"], status = %d: rc = %d\n", lfsck_lfsck2name(lfsck),
+	       "%llu], status = %d: rc = %d\n", lfsck_lfsck2name(lfsck),
 	       lfsck->li_pos_current.lp_oit_cookie, lo->ll_status, rc);
 
 	return rc;
@@ -4115,7 +4115,7 @@ static int lfsck_layout_slave_prep(const struct lu_env *env,
 	}
 
 	CDEBUG(D_LFSCK, "%s: layout LFSCK slave prep done, start pos ["
-	       LPU64"]\n", lfsck_lfsck2name(lfsck),
+	       "%llu]\n", lfsck_lfsck2name(lfsck),
 	       com->lc_pos_start.lp_oit_cookie);
 
 	return rc;
@@ -4149,7 +4149,7 @@ static int lfsck_layout_master_prep(const struct lu_env *env,
 
 log:
 	CDEBUG(D_LFSCK, "%s: layout LFSCK master prep done, start pos ["
-	       LPU64"]\n", lfsck_lfsck2name(com->lc_lfsck),
+	       "%llu]\n", lfsck_lfsck2name(com->lc_lfsck),
 	       com->lc_pos_start.lp_oit_cookie);
 
 	return 0;
@@ -4551,7 +4551,7 @@ static int lfsck_layout_slave_exec_oit(const struct lu_env *env,
 		rc = lfsck_layout_lastid_load(env, com, lls);
 		if (rc != 0) {
 			CDEBUG(D_LFSCK, "%s: layout LFSCK failed to "
-			      "load LAST_ID for "LPX64": rc = %d\n",
+			      "load LAST_ID for %#llx: rc = %d\n",
 			      lfsck_lfsck2name(com->lc_lfsck), seq, rc);
 			lo->ll_objs_failed_phase1++;
 			OBD_FREE_PTR(lls);
@@ -4578,7 +4578,7 @@ static int lfsck_layout_slave_exec_oit(const struct lu_env *env,
 			rc = lfsck_layout_lastid_reload(env, com, lls);
 			if (unlikely(rc != 0)) {
 				CDEBUG(D_LFSCK, "%s: layout LFSCK failed to "
-				      "reload LAST_ID for "LPX64": rc = %d\n",
+				      "reload LAST_ID for %#llx: rc = %d\n",
 				      lfsck_lfsck2name(com->lc_lfsck),
 				      lls->lls_seq, rc);
 
@@ -4596,8 +4596,8 @@ static int lfsck_layout_slave_exec_oit(const struct lu_env *env,
 			lo->ll_flags |= LF_CRASHED_LASTID;
 
 			CDEBUG(D_LFSCK, "%s: layout LFSCK finds crashed "
-			       "LAST_ID file (2) for the sequence "LPX64
-			       ", old value "LPU64", known value "LPU64"\n",
+			       "LAST_ID file (2) for the sequence %#llx"
+			       ", old value %llu, known value %llu\n",
 			       lfsck_lfsck2name(lfsck), lls->lls_seq,
 			       lls->lls_lastid, oid);
 		}
@@ -4773,23 +4773,23 @@ static void lfsck_layout_dump(const struct lu_env *env,
 
 	lfsck_time_dump(m, lo->ll_time_last_checkpoint, "last_checkpoint");
 
-	seq_printf(m, "latest_start_position: "LPU64"\n"
-		   "last_checkpoint_position: "LPU64"\n"
-		   "first_failure_position: "LPU64"\n",
+	seq_printf(m, "latest_start_position: %llu\n"
+		   "last_checkpoint_position: %llu\n"
+		   "first_failure_position: %llu\n",
 		   lo->ll_pos_latest_start,
 		   lo->ll_pos_last_checkpoint,
 		   lo->ll_pos_first_inconsistent);
 
 	seq_printf(m, "success_count: %u\n"
-		   "repaired_dangling: "LPU64"\n"
-		   "repaired_unmatched_pair: "LPU64"\n"
-		   "repaired_multiple_referenced: "LPU64"\n"
-		   "repaired_orphan: "LPU64"\n"
-		   "repaired_inconsistent_owner: "LPU64"\n"
-		   "repaired_others: "LPU64"\n"
-		   "skipped: "LPU64"\n"
-		   "failed_phase1: "LPU64"\n"
-		   "failed_phase2: "LPU64"\n",
+		   "repaired_dangling: %llu\n"
+		   "repaired_unmatched_pair: %llu\n"
+		   "repaired_multiple_referenced: %llu\n"
+		   "repaired_orphan: %llu\n"
+		   "repaired_inconsistent_owner: %llu\n"
+		   "repaired_others: %llu\n"
+		   "skipped: %llu\n"
+		   "failed_phase1: %llu\n"
+		   "failed_phase2: %llu\n",
 		   lo->ll_success_count,
 		   lo->ll_objs_repaired[LLIT_DANGLING - 1],
 		   lo->ll_objs_repaired[LLIT_UNMATCHED_PAIR - 1],
@@ -4818,13 +4818,13 @@ static void lfsck_layout_dump(const struct lu_env *env,
 			do_div(new_checked, duration);
 		if (rtime != 0)
 			do_div(speed, rtime);
-		seq_printf(m, "checked_phase1: "LPU64"\n"
-			   "checked_phase2: "LPU64"\n"
+		seq_printf(m, "checked_phase1: %llu\n"
+			   "checked_phase2: %llu\n"
 			   "run_time_phase1: %u seconds\n"
 			   "run_time_phase2: %u seconds\n"
-			   "average_speed_phase1: "LPU64" items/sec\n"
+			   "average_speed_phase1: %llu items/sec\n"
 			   "average_speed_phase2: N/A\n"
-			   "real-time_speed_phase1: "LPU64" items/sec\n"
+			   "real-time_speed_phase1: %llu items/sec\n"
 			   "real-time_speed_phase2: N/A\n",
 			   checked,
 			   lo->ll_objs_checked_phase2,
@@ -4844,7 +4844,7 @@ static void lfsck_layout_dump(const struct lu_env *env,
 		pos = iops->store(env, lfsck->li_di_oit);
 		if (!lfsck->li_current_oit_processed)
 			pos--;
-		seq_printf(m, "current_position: "LPU64"\n", pos);
+		seq_printf(m, "current_position: %llu\n", pos);
 
 	} else if (lo->ll_status == LS_SCANNING_PHASE2) {
 		cfs_duration_t duration = cfs_time_current() -
@@ -4864,14 +4864,14 @@ static void lfsck_layout_dump(const struct lu_env *env,
 			do_div(speed1, lo->ll_run_time_phase1);
 		if (rtime != 0)
 			do_div(speed2, rtime);
-		seq_printf(m, "checked_phase1: "LPU64"\n"
-			   "checked_phase2: "LPU64"\n"
+		seq_printf(m, "checked_phase1: %llu\n"
+			   "checked_phase2: %llu\n"
 			   "run_time_phase1: %u seconds\n"
 			   "run_time_phase2: %u seconds\n"
-			   "average_speed_phase1: "LPU64" items/sec\n"
-			   "average_speed_phase2: "LPU64" items/sec\n"
+			   "average_speed_phase1: %llu items/sec\n"
+			   "average_speed_phase2: %llu items/sec\n"
 			   "real-time_speed_phase1: N/A\n"
-			   "real-time_speed_phase2: "LPU64" items/sec\n"
+			   "real-time_speed_phase2: %llu items/sec\n"
 			   "current_position: "DFID"\n",
 			   lo->ll_objs_checked_phase1,
 			   checked,
@@ -4889,12 +4889,12 @@ static void lfsck_layout_dump(const struct lu_env *env,
 			do_div(speed1, lo->ll_run_time_phase1);
 		if (lo->ll_run_time_phase2 != 0)
 			do_div(speed2, lo->ll_run_time_phase2);
-		seq_printf(m, "checked_phase1: "LPU64"\n"
-			   "checked_phase2: "LPU64"\n"
+		seq_printf(m, "checked_phase1: %llu\n"
+			   "checked_phase2: %llu\n"
 			   "run_time_phase1: %u seconds\n"
 			   "run_time_phase2: %u seconds\n"
-			   "average_speed_phase1: "LPU64" items/sec\n"
-			   "average_speed_phase2: "LPU64" objs/sec\n"
+			   "average_speed_phase1: %llu items/sec\n"
+			   "average_speed_phase2: %llu objs/sec\n"
 			   "real-time_speed_phase1: N/A\n"
 			   "real-time_speed_phase2: N/A\n"
 			   "current_position: N/A\n",
@@ -6216,9 +6216,9 @@ static int lfsck_orphan_it_load(const struct lu_env *env,
 	LASSERT(llst != NULL);
 
 	if (hash != llst->llst_hash) {
-		CDEBUG(D_LFSCK, "%s: the given hash "LPU64" for orphan "
+		CDEBUG(D_LFSCK, "%s: the given hash %llu for orphan "
 		       "iteration does not match the one when fini "
-		       LPU64", to be reset.\n",
+		       "%llu, to be reset.\n",
 		       lfsck_lfsck2name(it->loi_com->lc_lfsck), hash,
 		       llst->llst_hash);
 		fid_zero(&llst->llst_fid);

@@ -646,7 +646,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	 * copies */
 	space  *= osd->od_os->os_copies;
 	space   = toqb(space);
-	CDEBUG(D_QUOTA, "writing %d pages, reserving "LPD64"K of quota space\n",
+	CDEBUG(D_QUOTA, "writing %d pages, reserving %lldK of quota space\n",
 	       npages, space);
 
 	record_start_io(osd, WRITE, discont_pages);

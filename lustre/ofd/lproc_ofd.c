@@ -85,7 +85,7 @@ static int ofd_tot_dirty_seq_show(struct seq_file *m, void *data)
 
 	LASSERT(obd != NULL);
 	ofd = ofd_dev(obd->obd_lu_dev);
-	seq_printf(m, LPU64"\n", ofd->ofd_tot_dirty);
+	seq_printf(m, "%llu\n", ofd->ofd_tot_dirty);
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_tot_dirty);
@@ -106,7 +106,7 @@ static int ofd_tot_granted_seq_show(struct seq_file *m, void *data)
 
 	LASSERT(obd != NULL);
 	ofd = ofd_dev(obd->obd_lu_dev);
-	seq_printf(m, LPU64"\n", ofd->ofd_tot_granted);
+	seq_printf(m, "%llu\n", ofd->ofd_tot_granted);
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_tot_granted);
@@ -127,7 +127,7 @@ static int ofd_tot_pending_seq_show(struct seq_file *m, void *data)
 
 	LASSERT(obd != NULL);
 	ofd = ofd_dev(obd->obd_lu_dev);
-	seq_printf(m, LPU64"\n", ofd->ofd_tot_pending);
+	seq_printf(m, "%llu\n", ofd->ofd_tot_pending);
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_tot_pending);
@@ -836,7 +836,7 @@ static int ofd_lfsck_verify_pfid_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "switch: %s\ndetected: "LPU64"\nrepaired: "LPU64"\n",
+	seq_printf(m, "switch: %s\ndetected: %llu\nrepaired: %llu\n",
 		   ofd->ofd_lfsck_verify_pfid ? "on" : "off",
 		   ofd->ofd_inconsistency_self_detected,
 		   ofd->ofd_inconsistency_self_repaired);

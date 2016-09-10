@@ -1735,8 +1735,8 @@ static int osd_seq_exists(const struct lu_env *env,
 	rc = osd_fld_lookup(env, osd, seq, range);
 	if (rc != 0) {
 		if (rc != -ENOENT)
-			CERROR("%s: can't lookup FLD sequence "LPX64
-			       ": rc = %d\n", osd_name(osd), seq, rc);
+			CERROR("%s: can't lookup FLD sequence %#llx: rc = %d\n",
+			       osd_name(osd), seq, rc);
 		RETURN(0);
 	}
 
@@ -3691,7 +3691,7 @@ static int osd_object_version_get(const struct lu_env *env,
 {
         struct inode *inode = osd_dt_obj(dt)->oo_inode;
 
-        CDEBUG(D_INODE, "Get version "LPX64" for inode %lu\n",
+	CDEBUG(D_INODE, "Get version %#llx for inode %lu\n",
                LDISKFS_I(inode)->i_fs_version, inode->i_ino);
         *ver = LDISKFS_I(inode)->i_fs_version;
         return 0;
@@ -3827,7 +3827,7 @@ static void osd_object_version_set(const struct lu_env *env,
 {
         struct inode *inode = osd_dt_obj(dt)->oo_inode;
 
-        CDEBUG(D_INODE, "Set version "LPX64" (old "LPX64") for inode %lu\n",
+	CDEBUG(D_INODE, "Set version %#llx (old %#llx) for inode %lu\n",
                *new_version, LDISKFS_I(inode)->i_fs_version, inode->i_ino);
 
         LDISKFS_I(inode)->i_fs_version = *new_version;

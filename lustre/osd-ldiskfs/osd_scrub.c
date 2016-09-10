@@ -275,7 +275,7 @@ void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags)
 	struct scrub_file *sf = &scrub->os_file;
 
 	CDEBUG(D_LFSCK, "%.16s: reset OI scrub file, old flags = "
-	       LPX64", add flags = "LPX64"\n",
+	       "%#llx, add flags = %#llx\n",
 	       osd_scrub2name(scrub), sf->sf_flags, flags);
 
 	memcpy(sf->sf_uuid, uuid, 16);
@@ -3068,7 +3068,7 @@ static void scrub_bits_dump(struct seq_file *m, int bits, const char *names[],
 static void scrub_time_dump(struct seq_file *m, __u64 time, const char *prefix)
 {
 	if (time != 0)
-		seq_printf(m, "%s: "LPU64" seconds\n", prefix,
+		seq_printf(m, "%s: %llu seconds\n", prefix,
 			   cfs_time_current_sec() - time);
 	else
 		seq_printf(m, "%s: N/A\n", prefix);
@@ -3077,7 +3077,7 @@ static void scrub_time_dump(struct seq_file *m, __u64 time, const char *prefix)
 static void scrub_pos_dump(struct seq_file *m, __u64 pos, const char *prefix)
 {
 	if (pos != 0)
-		seq_printf(m, "%s: "LPU64"\n", prefix, pos);
+		seq_printf(m, "%s: %llu\n", prefix, pos);
 	else
 		seq_printf(m, "%s: N/A\n", prefix);
 }
@@ -3120,12 +3120,12 @@ int osd_scrub_dump(struct seq_file *m, struct osd_device *dev)
 			"first_failure_position");
 
 	checked = sf->sf_items_checked + scrub->os_new_checked;
-	seq_printf(m, "checked: "LPU64"\n"
-		   "updated: "LPU64"\n"
-		   "failed: "LPU64"\n"
-		   "prior_updated: "LPU64"\n"
-		   "noscrub: "LPU64"\n"
-		   "igif: "LPU64"\n"
+	seq_printf(m, "checked: %llu\n"
+		   "updated: %llu\n"
+		   "failed: %llu\n"
+		   "prior_updated: %llu\n"
+		   "noscrub: %llu\n"
+		   "igif: %llu\n"
 		   "success_count: %u\n",
 		   checked, sf->sf_items_updated, sf->sf_items_failed,
 		   sf->sf_items_updated_prior, sf->sf_items_noscrub,
@@ -3145,12 +3145,12 @@ int osd_scrub_dump(struct seq_file *m, struct osd_device *dev)
 		if (rtime != 0)
 			do_div(speed, rtime);
 		seq_printf(m, "run_time: %u seconds\n"
-			   "average_speed: "LPU64" objects/sec\n"
-			   "real-time_speed: "LPU64" objects/sec\n"
+			   "average_speed: %llu objects/sec\n"
+			   "real-time_speed: %llu objects/sec\n"
 			   "current_position: %u\n"
-			   "lf_scanned: "LPU64"\n"
-			   "lf_repaired: "LPU64"\n"
-			   "lf_failed: "LPU64"\n",
+			   "lf_scanned: %llu\n"
+			   "lf_repaired: %llu\n"
+			   "lf_failed: %llu\n",
 			   rtime, speed, new_checked, scrub->os_pos_current,
 			   scrub->os_lf_scanned, scrub->os_lf_repaired,
 			   scrub->os_lf_failed);
@@ -3158,12 +3158,12 @@ int osd_scrub_dump(struct seq_file *m, struct osd_device *dev)
 		if (sf->sf_run_time != 0)
 			do_div(speed, sf->sf_run_time);
 		seq_printf(m, "run_time: %u seconds\n"
-			   "average_speed: "LPU64" objects/sec\n"
+			   "average_speed: %llu objects/sec\n"
 			   "real-time_speed: N/A\n"
 			   "current_position: N/A\n"
-			   "lf_scanned: "LPU64"\n"
-			   "lf_repaired: "LPU64"\n"
-			   "lf_failed: "LPU64"\n",
+			   "lf_scanned: %llu\n"
+			   "lf_repaired: %llu\n"
+			   "lf_failed: %llu\n",
 			   sf->sf_run_time, speed, scrub->os_lf_scanned,
 			   scrub->os_lf_repaired, scrub->os_lf_failed);
 	}

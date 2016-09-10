@@ -755,7 +755,7 @@ static int osd_obj_add_entry(struct osd_thread_info *info,
 }
 
 /**
- * Use LPU64 for legacy OST sequences, but use LPX64i for new
+ * Use %llu for legacy OST sequences, but use %llx for new
  * sequences names, so that the O/{seq}/dN/{oid} more closely
  * follows the DFID/PFID format. This makes it easier to map from
  * debug messages to objects in the future, and the legacy space
@@ -765,7 +765,7 @@ static inline void osd_seq_name(char *seq_name, size_t name_size, u64 seq)
 {
 	snprintf(seq_name, name_size,
 		 (fid_seq_is_rsvd(seq) ||
-		  fid_seq_is_mdt0(seq)) ? LPU64 : LPX64i,
+		  fid_seq_is_mdt0(seq)) ? "%llu" : "%llx",
 		 fid_seq_is_idif(seq) ? 0 : seq);
 }
 
@@ -775,7 +775,7 @@ static inline void osd_oid_name(char *name, size_t name_size,
 	snprintf(name, name_size,
 		 (fid_seq_is_rsvd(fid_seq(fid)) ||
 		  fid_seq_is_mdt0(fid_seq(fid)) ||
-		  fid_seq_is_idif(fid_seq(fid))) ? LPU64 : LPX64i, id);
+		  fid_seq_is_idif(fid_seq(fid))) ? "%llu" : "%llx", id);
 }
 
 /* external locking is required */

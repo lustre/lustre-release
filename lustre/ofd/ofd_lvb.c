@@ -133,8 +133,8 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 	lvb->lvb_atime = info->fti_attr.la_atime;
 	lvb->lvb_ctime = info->fti_attr.la_ctime;
 
-	CDEBUG(D_DLMTRACE, "res: "DFID" initial lvb size: "LPU64", "
-	       "mtime: "LPX64", blocks: "LPX64"\n",
+	CDEBUG(D_DLMTRACE, "res: "DFID" initial lvb size: %llu, "
+	       "mtime: %#llx, blocks: %#llx\n",
 	       PFID(&info->fti_fid), lvb->lvb_size,
 	       lvb->lvb_mtime, lvb->lvb_blocks);
 
@@ -244,31 +244,31 @@ static int ofd_lvbo_update(struct ldlm_resource *res,
 		lock_res(res);
 		if (rpc_lvb->lvb_size > lvb->lvb_size || !increase_only) {
 			CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb size: "
-			       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
+			       "%llu -> %llu\n", PFID(&info->fti_fid),
 			       lvb->lvb_size, rpc_lvb->lvb_size);
 			lvb->lvb_size = rpc_lvb->lvb_size;
 		}
 		if (rpc_lvb->lvb_mtime > lvb->lvb_mtime || !increase_only) {
 			CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb mtime: "
-			       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
+			       "%llu -> %llu\n", PFID(&info->fti_fid),
 			       lvb->lvb_mtime, rpc_lvb->lvb_mtime);
 			lvb->lvb_mtime = rpc_lvb->lvb_mtime;
 		}
 		if (rpc_lvb->lvb_atime > lvb->lvb_atime || !increase_only) {
 			CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb atime: "
-			       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
+			       "%llu -> %llu\n", PFID(&info->fti_fid),
 			       lvb->lvb_atime, rpc_lvb->lvb_atime);
 			lvb->lvb_atime = rpc_lvb->lvb_atime;
 		}
 		if (rpc_lvb->lvb_ctime > lvb->lvb_ctime || !increase_only) {
 			CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb ctime: "
-			       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
+			       "%llu -> %llu\n", PFID(&info->fti_fid),
 			       lvb->lvb_ctime, rpc_lvb->lvb_ctime);
 			lvb->lvb_ctime = rpc_lvb->lvb_ctime;
 		}
 		if (rpc_lvb->lvb_blocks > lvb->lvb_blocks || !increase_only) {
 			CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb blocks: "
-			       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
+			       "%llu -> %llu\n", PFID(&info->fti_fid),
 			       lvb->lvb_blocks, rpc_lvb->lvb_blocks);
 			lvb->lvb_blocks = rpc_lvb->lvb_blocks;
 		}
@@ -290,32 +290,32 @@ disk_update:
 	lock_res(res);
 	if (info->fti_attr.la_size > lvb->lvb_size || !increase_only) {
 		CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb size from disk: "
-		       LPU64" -> %llu\n", PFID(&info->fti_fid),
+		       "%llu -> %llu\n", PFID(&info->fti_fid),
 		       lvb->lvb_size, info->fti_attr.la_size);
 		lvb->lvb_size = info->fti_attr.la_size;
 	}
 
 	if (info->fti_attr.la_mtime >lvb->lvb_mtime || !increase_only) {
 		CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb mtime from disk: "
-		       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
+		       "%llu -> %llu\n", PFID(&info->fti_fid),
 		       lvb->lvb_mtime, info->fti_attr.la_mtime);
 		lvb->lvb_mtime = info->fti_attr.la_mtime;
 	}
 	if (info->fti_attr.la_atime >lvb->lvb_atime || !increase_only) {
 		CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb atime from disk: "
-		       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
+		       "%llu -> %llu\n", PFID(&info->fti_fid),
 		       lvb->lvb_atime, info->fti_attr.la_atime);
 		lvb->lvb_atime = info->fti_attr.la_atime;
 	}
 	if (info->fti_attr.la_ctime >lvb->lvb_ctime || !increase_only) {
 		CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb ctime from disk: "
-		       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
+		       "%llu -> %llu\n", PFID(&info->fti_fid),
 		       lvb->lvb_ctime, info->fti_attr.la_ctime);
 		lvb->lvb_ctime = info->fti_attr.la_ctime;
 	}
 	if (info->fti_attr.la_blocks > lvb->lvb_blocks || !increase_only) {
 		CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb blocks from disk: "
-		       LPU64" -> %llu\n", PFID(&info->fti_fid), lvb->lvb_blocks,
+		       "%llu -> %llu\n", PFID(&info->fti_fid), lvb->lvb_blocks,
 		       (unsigned long long)info->fti_attr.la_blocks);
 		lvb->lvb_blocks = info->fti_attr.la_blocks;
 	}

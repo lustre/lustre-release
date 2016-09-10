@@ -886,7 +886,7 @@ osd_unlinked_object_free(struct osd_device *osd, uint64_t oid)
 
 	rc = -dmu_free_long_range(osd->od_os, oid, 0, DMU_OBJECT_END);
 	if (rc != 0) {
-		CWARN("%s: Cannot truncate "LPU64": rc = %d\n",
+		CWARN("%s: Cannot truncate %llu: rc = %d\n",
 		      osd->od_svname, oid, rc);
 		return rc;
 	}
@@ -896,21 +896,21 @@ osd_unlinked_object_free(struct osd_device *osd, uint64_t oid)
 	dmu_tx_hold_zap(tx, osd->od_unlinkedid, FALSE, NULL);
 	rc = -dmu_tx_assign(tx, TXG_WAIT);
 	if (rc != 0) {
-		CWARN("%s: Cannot assign tx for "LPU64": rc = %d\n",
+		CWARN("%s: Cannot assign tx for %llu: rc = %d\n",
 		      osd->od_svname, oid, rc);
 		goto failed;
 	}
 
 	rc = -zap_remove_int(osd->od_os, osd->od_unlinkedid, oid, tx);
 	if (rc != 0) {
-		CWARN("%s: Cannot remove "LPU64" from unlinked set: rc = %d\n",
+		CWARN("%s: Cannot remove %llu from unlinked set: rc = %d\n",
 		      osd->od_svname, oid, rc);
 		goto failed;
 	}
 
 	rc = -dmu_object_free(osd->od_os, oid, tx);
 	if (rc != 0) {
-		CWARN("%s: Cannot free "LPU64": rc = %d\n",
+		CWARN("%s: Cannot free %llu: rc = %d\n",
 		      osd->od_svname, oid, rc);
 		goto failed;
 	}

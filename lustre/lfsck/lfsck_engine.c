@@ -695,7 +695,7 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 		if (CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_DELAY2, cfs_fail_val) &&
 		    unlikely(!thread_is_running(thread))) {
 			CDEBUG(D_LFSCK, "%s: scan dir exit for engine stop, "
-			       "parent "DFID", cookie "LPX64"\n",
+			       "parent "DFID", cookie %#llx\n",
 			       lfsck_lfsck2name(lfsck),
 			       PFID(lfsck_dto2fid(dir)), lfsck->li_cookie_dir);
 
@@ -711,7 +711,7 @@ static int lfsck_master_dir_engine(const struct lu_env *env,
 
 		if (rc != 0) {
 			CDEBUG(D_LFSCK, "%s: scan dir failed at rec(), "
-			       "parent "DFID", cookie "LPX64": rc = %d\n",
+			       "parent "DFID", cookie %#llx: rc = %d\n",
 			       lfsck_lfsck2name(lfsck),
 			       PFID(lfsck_dto2fid(dir)),
 			       lfsck->li_cookie_dir, rc);
@@ -757,7 +757,7 @@ checkpoint:
 		lfsck_control_speed(lfsck);
 		if (unlikely(!thread_is_running(thread))) {
 			CDEBUG(D_LFSCK, "%s: scan dir exit for engine stop, "
-			       "parent "DFID", cookie "LPX64"\n",
+			       "parent "DFID", cookie %#llx\n",
 			       lfsck_lfsck2name(lfsck),
 			       PFID(lfsck_dto2fid(dir)),
 			       lfsck->li_cookie_dir);
@@ -846,7 +846,7 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 		if (CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_DELAY1, cfs_fail_val) &&
 		    unlikely(!thread_is_running(thread))) {
 			CDEBUG(D_LFSCK, "%s: OIT scan exit for engine stop, "
-			       "cookie "LPU64"\n",
+			       "cookie %llu\n",
 			       lfsck_lfsck2name(lfsck), iops->store(env, di));
 
 			RETURN(0);
@@ -949,7 +949,7 @@ static int lfsck_master_oit_engine(const struct lu_env *env,
 		target = lfsck_object_find_bottom(env, lfsck, fid);
 		if (IS_ERR(target)) {
 			CDEBUG(D_LFSCK, "%s: OIT scan failed at find target "
-			       DFID", cookie "LPU64": rc = %d\n",
+			       DFID", cookie %llu: rc = %d\n",
 			       lfsck_lfsck2name(lfsck), PFID(fid),
 			       iops->store(env, di), rc);
 			lfsck_fail(env, lfsck, true);
@@ -988,12 +988,12 @@ checkpoint:
 			lfsck->li_current_oit_processed = 0;
 		else
 			CDEBUG(D_LFSCK, "%s oit engine fail to locate next at "
-			       LPU64 ": rc = %d\n", lfsck_lfsck2name(lfsck),
+			       "%llu: rc = %d\n", lfsck_lfsck2name(lfsck),
 			       iops->store(env, di), rc);
 
 		if (unlikely(!thread_is_running(thread))) {
 			CDEBUG(D_LFSCK, "%s: OIT scan exit for engine stop, "
-			       "cookie "LPU64"\n", lfsck_lfsck2name(lfsck),
+			       "cookie %llu\n", lfsck_lfsck2name(lfsck),
 			       iops->store(env, di));
 			RETURN(0);
 		}
@@ -1050,7 +1050,7 @@ int lfsck_master_engine(void *args)
 		GOTO(fini_oit, rc);
 
 	CDEBUG(D_LFSCK, "LFSCK entry: oit_flags = %#x, dir_flags = %#x, "
-	       "oit_cookie = "LPU64", dir_cookie = "LPX64", parent = "DFID
+	       "oit_cookie = %llu, dir_cookie = %#llx, parent = "DFID
 	       ", pid = %d\n", lfsck->li_args_oit, lfsck->li_args_dir,
 	       lfsck->li_pos_checkpoint.lp_oit_cookie,
 	       lfsck->li_pos_checkpoint.lp_dir_cookie,
@@ -1077,7 +1077,7 @@ int lfsck_master_engine(void *args)
 
 	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_checkpoint, false);
 	CDEBUG(D_LFSCK, "LFSCK exit: oit_flags = %#x, dir_flags = %#x, "
-	       "oit_cookie = "LPU64", dir_cookie = "LPX64", parent = "DFID
+	       "oit_cookie = %llu, dir_cookie = %#llx, parent = "DFID
 	       ", pid = %d, rc = %d\n", lfsck->li_args_oit, lfsck->li_args_dir,
 	       lfsck->li_pos_checkpoint.lp_oit_cookie,
 	       lfsck->li_pos_checkpoint.lp_dir_cookie,

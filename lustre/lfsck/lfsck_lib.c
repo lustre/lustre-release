@@ -1770,8 +1770,8 @@ void lfsck_time_dump(struct seq_file *m, __u64 time, const char *name)
 		seq_printf(m, "%s_time: N/A\n", name);
 		seq_printf(m, "time_since_%s: N/A\n", name);
 	} else {
-		seq_printf(m, "%s_time: "LPU64"\n", name, time);
-		seq_printf(m, "time_since_%s: "LPU64" seconds\n",
+		seq_printf(m, "%s_time: %llu\n", name, time);
+		seq_printf(m, "time_since_%s: %llu seconds\n",
 			   name, cfs_time_current_sec() - time);
 	}
 }
@@ -1784,10 +1784,10 @@ void lfsck_pos_dump(struct seq_file *m, struct lfsck_position *pos,
 			seq_printf(m, "%s: N/A, N/A, N/A\n", prefix);
 			return;
 		}
-		seq_printf(m, "%s: "LPU64", N/A, N/A\n",
+		seq_printf(m, "%s: %llu, N/A, N/A\n",
 			   prefix, pos->lp_oit_cookie);
 	} else {
-		seq_printf(m, "%s: "LPU64", "DFID", "LPX64"\n",
+		seq_printf(m, "%s: %llu, "DFID", %#llx\n",
 			   prefix, pos->lp_oit_cookie,
 			   PFID(&pos->lp_dir_parent), pos->lp_dir_cookie);
 	}

@@ -248,7 +248,7 @@ static void lfsck_namespace_record_failure(const struct lu_env *env,
 		ns->ln_pos_first_inconsistent = pos;
 
 		CDEBUG(D_LFSCK, "%s: namespace LFSCK hit first non-repaired "
-		       "inconsistency at the pos ["LPU64", "DFID", "LPX64"]\n",
+		       "inconsistency at the pos [%llu, "DFID", %#llx]\n",
 		       lfsck_lfsck2name(lfsck),
 		       ns->ln_pos_first_inconsistent.lp_oit_cookie,
 		       PFID(&ns->ln_pos_first_inconsistent.lp_dir_parent),
@@ -3672,38 +3672,38 @@ static void lfsck_namespace_dump_statistics(struct seq_file *m,
 					    __u32 time_phase1,
 					    __u32 time_phase2)
 {
-	seq_printf(m, "checked_phase1: "LPU64"\n"
-		   "checked_phase2: "LPU64"\n"
-		   "updated_phase1: "LPU64"\n"
-		   "updated_phase2: "LPU64"\n"
-		   "failed_phase1: "LPU64"\n"
-		   "failed_phase2: "LPU64"\n"
-		   "directories: "LPU64"\n"
-		   "dirent_repaired: "LPU64"\n"
-		   "linkea_repaired: "LPU64"\n"
-		   "nlinks_repaired: "LPU64"\n"
-		   "multiple_linked_checked: "LPU64"\n"
-		   "multiple_linked_repaired: "LPU64"\n"
-		   "unknown_inconsistency: "LPU64"\n"
-		   "unmatched_pairs_repaired: "LPU64"\n"
-		   "dangling_repaired: "LPU64"\n"
-		   "multiple_referenced_repaired: "LPU64"\n"
-		   "bad_file_type_repaired: "LPU64"\n"
-		   "lost_dirent_repaired: "LPU64"\n"
-		   "local_lost_found_scanned: "LPU64"\n"
-		   "local_lost_found_moved: "LPU64"\n"
-		   "local_lost_found_skipped: "LPU64"\n"
-		   "local_lost_found_failed: "LPU64"\n"
-		   "striped_dirs_scanned: "LPU64"\n"
-		   "striped_dirs_repaired: "LPU64"\n"
-		   "striped_dirs_failed: "LPU64"\n"
-		   "striped_dirs_disabled: "LPU64"\n"
-		   "striped_dirs_skipped: "LPU64"\n"
-		   "striped_shards_scanned: "LPU64"\n"
-		   "striped_shards_repaired: "LPU64"\n"
-		   "striped_shards_failed: "LPU64"\n"
-		   "striped_shards_skipped: "LPU64"\n"
-		   "name_hash_repaired: "LPU64"\n"
+	seq_printf(m, "checked_phase1: %llu\n"
+		   "checked_phase2: %llu\n"
+		   "updated_phase1: %llu\n"
+		   "updated_phase2: %llu\n"
+		   "failed_phase1: %llu\n"
+		   "failed_phase2: %llu\n"
+		   "directories: %llu\n"
+		   "dirent_repaired: %llu\n"
+		   "linkea_repaired: %llu\n"
+		   "nlinks_repaired: %llu\n"
+		   "multiple_linked_checked: %llu\n"
+		   "multiple_linked_repaired: %llu\n"
+		   "unknown_inconsistency: %llu\n"
+		   "unmatched_pairs_repaired: %llu\n"
+		   "dangling_repaired: %llu\n"
+		   "multiple_referenced_repaired: %llu\n"
+		   "bad_file_type_repaired: %llu\n"
+		   "lost_dirent_repaired: %llu\n"
+		   "local_lost_found_scanned: %llu\n"
+		   "local_lost_found_moved: %llu\n"
+		   "local_lost_found_skipped: %llu\n"
+		   "local_lost_found_failed: %llu\n"
+		   "striped_dirs_scanned: %llu\n"
+		   "striped_dirs_repaired: %llu\n"
+		   "striped_dirs_failed: %llu\n"
+		   "striped_dirs_disabled: %llu\n"
+		   "striped_dirs_skipped: %llu\n"
+		   "striped_shards_scanned: %llu\n"
+		   "striped_shards_repaired: %llu\n"
+		   "striped_shards_failed: %llu\n"
+		   "striped_shards_skipped: %llu\n"
+		   "name_hash_repaired: %llu\n"
 		   "success_count: %u\n"
 		   "run_time_phase1: %u seconds\n"
 		   "run_time_phase2: %u seconds\n",
@@ -3992,8 +3992,8 @@ static int lfsck_namespace_checkpoint(const struct lu_env *env,
 	up_write(&com->lc_sem);
 
 log:
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK checkpoint at the pos ["LPU64
-	       ", "DFID", "LPX64"], status = %d: rc = %d\n",
+	CDEBUG(D_LFSCK, "%s: namespace LFSCK checkpoint at the pos [%llu"
+	       ", "DFID", %#llx], status = %d: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), lfsck->li_pos_current.lp_oit_cookie,
 	       PFID(&lfsck->li_pos_current.lp_dir_parent),
 	       lfsck->li_pos_current.lp_dir_cookie, ns->ln_status, rc);
@@ -4094,8 +4094,8 @@ static int lfsck_namespace_prep(const struct lu_env *env,
 
 	rc = lfsck_start_assistant(env, com, lsp);
 
-	CDEBUG(D_LFSCK, "%s: namespace LFSCK prep done, start pos ["LPU64", "
-	       DFID", "LPX64"]: rc = %d\n",
+	CDEBUG(D_LFSCK, "%s: namespace LFSCK prep done, start pos [%llu, "
+	       DFID", %#llx]: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), pos->lp_oit_cookie,
 	       PFID(&pos->lp_dir_parent), pos->lp_dir_cookie, rc);
 
@@ -4359,10 +4359,10 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 			do_div(speed, rtime);
 
 		lfsck_namespace_dump_statistics(m, ns, checked, 0, rtime, 0);
-		seq_printf(m, "average_speed_phase1: "LPU64" items/sec\n"
+		seq_printf(m, "average_speed_phase1: %llu items/sec\n"
 			   "average_speed_phase2: N/A\n"
-			   "average_speed_total: "LPU64" items/sec\n"
-			   "real_time_speed_phase1: "LPU64" items/sec\n"
+			   "average_speed_total: %llu items/sec\n"
+			   "real_time_speed_phase1: %llu items/sec\n"
 			   "real_time_speed_phase2: N/A\n",
 			   speed,
 			   speed,
@@ -4429,11 +4429,11 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 		lfsck_namespace_dump_statistics(m, ns, ns->ln_items_checked,
 						checked,
 						ns->ln_run_time_phase1, rtime);
-		seq_printf(m, "average_speed_phase1: "LPU64" items/sec\n"
-			   "average_speed_phase2: "LPU64" objs/sec\n"
-			   "average_speed_total: "LPU64" items/sec\n"
+		seq_printf(m, "average_speed_phase1: %llu items/sec\n"
+			   "average_speed_phase2: %llu objs/sec\n"
+			   "average_speed_total: %llu items/sec\n"
 			   "real_time_speed_phase1: N/A\n"
-			   "real_time_speed_phase2: "LPU64" objs/sec\n"
+			   "real_time_speed_phase2: %llu objs/sec\n"
 			   "current_position: "DFID"\n",
 			   speed1,
 			   speed2,
@@ -4463,9 +4463,9 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 						ns->ln_objs_checked_phase2,
 						ns->ln_run_time_phase1,
 						ns->ln_run_time_phase2);
-		seq_printf(m, "average_speed_phase1: "LPU64" items/sec\n"
-			   "average_speed_phase2: "LPU64" objs/sec\n"
-			   "average_speed_total: "LPU64" items/sec\n"
+		seq_printf(m, "average_speed_phase1: %llu items/sec\n"
+			   "average_speed_phase2: %llu objs/sec\n"
+			   "average_speed_total: %llu items/sec\n"
 			   "real_time_speed_phase1: N/A\n"
 			   "real_time_speed_phase2: N/A\n"
 			   "current_position: N/A\n",

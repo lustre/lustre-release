@@ -76,7 +76,7 @@ static int ofd_version_get_check(struct ofd_thread_info *info,
 	/* VBR: version is checked always because costs nothing */
 	if (info->fti_pre_version != 0 &&
 	    info->fti_pre_version != curr_version) {
-		CDEBUG(D_INODE, "Version mismatch "LPX64" != "LPX64"\n",
+		CDEBUG(D_INODE, "Version mismatch %#llx != %#llx\n",
 		       info->fti_pre_version, curr_version);
 		spin_lock(&info->fti_exp->exp_lock);
 		info->fti_exp->exp_vbr_failed = 1;
@@ -293,7 +293,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 
 		if (unlikely(ofd_object_exists(fo))) {
 			/* object may exist being re-created by write replay */
-			CDEBUG(D_INODE, "object "LPX64"/"LPX64" exists: "
+			CDEBUG(D_INODE, "object %#llx/%#llx exists: "
 			       DFID"\n", ostid_seq(&oseq->os_oi), id,
 			       PFID(lu_object_fid(&fo->ofo_obj.do_lu)));
 			continue;
@@ -389,8 +389,8 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 				      &info->fti_buf, &info->fti_off, th);
 		dt_write_unlock(env, oseq->os_lastid_obj);
 		if (rc1 != 0)
-			CERROR("%s: fail to reset the LAST_ID for seq ("LPX64
-			       ") from "LPU64" to "LPU64"\n", ofd_name(ofd),
+			CERROR("%s: fail to reset the LAST_ID for seq (%#llx"
+			       ") from %llu to %llu\n", ofd_name(ofd),
 			       ostid_seq(&oseq->os_oi), id + nr - 1,
 			       ofd_seq_last_oid(oseq));
 	}

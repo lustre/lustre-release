@@ -849,7 +849,7 @@ int osd_xattrs_destroy(const struct lu_env *env,
 
 	rc = -dmu_object_free(osd->od_os, obj->oo_xattr, tx);
 	if (rc)
-		CERROR("%s: free xattr "LPU64" failed: rc = %d\n",
+		CERROR("%s: free xattr %llu failed: rc = %d\n",
 		       osd->od_svname, obj->oo_xattr, rc);
 
 	return rc;

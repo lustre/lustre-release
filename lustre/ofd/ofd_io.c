@@ -542,7 +542,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 
 		oseq = ofd_seq_load(env, ofd, seq);
 		if (IS_ERR(oseq)) {
-			CERROR("%s: Can't find FID Sequence "LPX64": rc = %d\n",
+			CERROR("%s: Can't find FID Sequence %#llx: rc = %d\n",
 			       ofd_name(ofd), seq, (int)PTR_ERR(oseq));
 			GOTO(out, rc = -EINVAL);
 		}

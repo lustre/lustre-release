@@ -1589,7 +1589,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 
 	oseq = ofd_seq_load(tsi->tsi_env, ofd, seq);
 	if (IS_ERR(oseq)) {
-		CERROR("%s: Can't find FID Sequence "LPX64": rc = %ld\n",
+		CERROR("%s: Can't find FID Sequence %#llx: rc = %ld\n",
 		       ofd_name(ofd), seq, PTR_ERR(oseq));
 		GOTO(out_sem, rc = -EINVAL);
 	}
@@ -1598,7 +1598,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	    (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
 		if (!ofd_obd(ofd)->obd_recovering ||
 		    oid > ofd_seq_last_oid(oseq)) {
-			CERROR("%s: recreate objid "DOSTID" > last id "LPU64
+			CERROR("%s: recreate objid "DOSTID" > last id %llu"
 			       "\n", ofd_name(ofd), POSTID(&oa->o_oi),
 			       ofd_seq_last_oid(oseq));
 			GOTO(out_nolock, rc = -EINVAL);
@@ -1623,13 +1623,13 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		oseq->os_destroys_in_progress = 1;
 		mutex_lock(&oseq->os_create_lock);
 		if (!oseq->os_destroys_in_progress) {
-			CERROR("%s:["LPU64"] destroys_in_progress already"
+			CERROR("%s:[%llu] destroys_in_progress already"
 			       " cleared\n", ofd_name(ofd), seq);
 			ostid_set_id(&rep_oa->o_oi, ofd_seq_last_oid(oseq));
 			GOTO(out, rc = 0);
 		}
 		diff = oid - ofd_seq_last_oid(oseq);
-		CDEBUG(D_HA, "ofd_last_id() = "LPU64" -> diff = %d\n",
+		CDEBUG(D_HA, "ofd_last_id() = %llu -> diff = %d\n",
 			ofd_seq_last_oid(oseq), diff);
 		if (-diff > OST_MAX_PRECREATE) {
 			/* Let MDS know that we are so far ahead. */
@@ -1682,7 +1682,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			if (diff < 0) {
 				/* LU-5648 */
 				CERROR("%s: invalid precreate request for "
-				       DOSTID", last_id " LPU64 ". "
+				       DOSTID", last_id %llu. "
 				       "Likely MDS last_id corruption\n",
 				       ofd_name(ofd), POSTID(&oa->o_oi),
 				       ofd_seq_last_oid(oseq));
@@ -1737,8 +1737,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			next_id = ofd_seq_last_oid(oseq) + 1;
 			count = ofd_precreate_batch(ofd, diff);
 
-			CDEBUG(D_HA, "%s: reserve %d objects in group "LPX64
-			       " at "LPU64"\n", ofd_name(ofd),
+			CDEBUG(D_HA, "%s: reserve %d objects in group %#llx"
+			       " at %llu\n", ofd_name(ofd),
 			       count, seq, next_id);
 
 			if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
@@ -2057,8 +2057,8 @@ static int ofd_punch_hdl(struct tgt_session_info *tsi)
 			RETURN(rc);
 	}
 
-	CDEBUG(D_INODE, "calling punch for object "DFID", valid = "LPX64
-	       ", start = "LPD64", end = "LPD64"\n", PFID(&tsi->tsi_fid),
+	CDEBUG(D_INODE, "calling punch for object "DFID", valid = %#llx"
+	       ", start = %lld, end = %lld\n", PFID(&tsi->tsi_fid),
 	       oa->o_valid, start, end);
 
 	fo = ofd_object_find_exists(tsi->tsi_env, ofd_exp(tsi->tsi_exp),
@@ -2397,8 +2397,8 @@ static void ofd_prolong_extent_locks(struct tgt_session_info *tsi,
 	data->lpa_export = tsi->tsi_exp;
 	data->lpa_resid = tsi->tsi_resid;
 
-	CDEBUG(D_RPCTRACE, "Prolong locks for req %p with x"LPU64
-	       " ext("LPU64"->"LPU64")\n", tgt_ses_req(tsi),
+	CDEBUG(D_RPCTRACE, "Prolong locks for req %p with x%llu"
+	       " ext(%llu->%llu)\n", tgt_ses_req(tsi),
 	       tgt_ses_req(tsi)->rq_xid, data->lpa_extent.start,
 	       data->lpa_extent.end);
 
@@ -2535,7 +2535,7 @@ static int ofd_rw_hpreq_check(struct ptlrpc_request *req)
 	pa.lpa_extent.end = rnb->rnb_offset + rnb->rnb_len - 1;
 
 	DEBUG_REQ(D_RPCTRACE, req, "%s %s: refresh rw locks: "DFID
-		  " ("LPU64"->"LPU64")\n", tgt_name(tsi->tsi_tgt),
+		  " (%llu->%llu)\n", tgt_name(tsi->tsi_tgt),
 		  current->comm, PFID(&tsi->tsi_fid), pa.lpa_extent.start,
 		  pa.lpa_extent.end);
 
@@ -2650,7 +2650,7 @@ static int ofd_punch_hpreq_check(struct ptlrpc_request *req)
 	pa.lpa_extent.end   = oa->o_blocks;
 
 	CDEBUG(D_DLMTRACE,
-	       "%s: refresh locks: "LPU64"/"LPU64" ("LPU64"->"LPU64")\n",
+	       "%s: refresh locks: %llu/%llu (%llu->%llu)\n",
 	       tgt_name(tsi->tsi_tgt), tsi->tsi_resid.name[0],
 	       tsi->tsi_resid.name[1], pa.lpa_extent.start, pa.lpa_extent.end);
 

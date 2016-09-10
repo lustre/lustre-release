@@ -145,7 +145,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	if (!data)
 		RETURN(0);
 
-	CDEBUG(D_RPCTRACE, "%s: cli %s/%p ocd_connect_flags: "LPX64
+	CDEBUG(D_RPCTRACE, "%s: cli %s/%p ocd_connect_flags: %#llx"
 	       " ocd_version: %x ocd_grant: %d ocd_index: %u"
 	       " ocd_group %u\n",
 	       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
@@ -181,7 +181,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		if (data->ocd_brw_size > ofd->ofd_brw_size)
 			data->ocd_brw_size = ofd->ofd_brw_size;
 		if (data->ocd_brw_size == 0) {
-			CERROR("%s: cli %s/%p ocd_connect_flags: "LPX64
+			CERROR("%s: cli %s/%p ocd_connect_flags: %#llx"
 			       " ocd_version: %x ocd_grant: %d ocd_index: %u "
 			       "ocd_brw_size is unexpectedly zero, "
 			       "network data corruption?"
@@ -822,8 +822,8 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	 * might be under-reporting if clients haven't announced their
 	 * caches with brw recently */
 
-	CDEBUG(D_SUPER | D_CACHE, "blocks cached "LPU64" granted "LPU64
-	       " pending "LPU64" free "LPU64" avail "LPU64"\n",
+	CDEBUG(D_SUPER | D_CACHE, "blocks cached %llu granted %llu"
+	       " pending %llu free %llu avail %llu\n",
 	       ofd->ofd_tot_dirty, ofd->ofd_tot_granted, ofd->ofd_tot_pending,
 	       osfs->os_bfree << ofd->ofd_blockbits,
 	       osfs->os_bavail << ofd->ofd_blockbits);
@@ -843,8 +843,8 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	}
 
 	ofd_grant_sanity_check(obd, __FUNCTION__);
-	CDEBUG(D_CACHE, LPU64" blocks: "LPU64" free, "LPU64" avail; "
-	       LPU64" objects: "LPU64" free; state %x\n",
+	CDEBUG(D_CACHE, "%llu blocks: %llu free, %llu avail; "
+	       "%llu objects: %llu free; state %x\n",
 	       osfs->os_blocks, osfs->os_bfree, osfs->os_bavail,
 	       osfs->os_files, osfs->os_ffree, osfs->os_state);
 
@@ -1113,7 +1113,7 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 
 	oseq = ofd_seq_load(env, ofd, seq);
 	if (IS_ERR(oseq)) {
-		CERROR("%s: Can't find FID Sequence "LPX64": rc = %ld\n",
+		CERROR("%s: Can't find FID Sequence %#llx: rc = %ld\n",
 		       ofd_name(ofd), seq, PTR_ERR(oseq));
 		GOTO(out_sem, rc = -EINVAL);
 	}

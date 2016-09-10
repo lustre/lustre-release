@@ -184,7 +184,7 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 			error = 1;
 		if (fed->fed_grant + fed->fed_pending > maxsize) {
 			CERROR("%s: cli %s/%p fed_grant(%ld) + fed_pending(%ld)"
-			       " > maxsize("LPU64")\n", obd->obd_name,
+			       " > maxsize(%llu)\n", obd->obd_name,
 			       exp->exp_client_uuid.uuid, exp, fed->fed_grant,
 			       fed->fed_pending, maxsize);
 			spin_unlock(&obd->obd_dev_lock);
@@ -192,7 +192,7 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 			LBUG();
 		}
 		if (fed->fed_dirty > maxsize) {
-			CERROR("%s: cli %s/%p fed_dirty(%ld) > maxsize("LPU64
+			CERROR("%s: cli %s/%p fed_dirty(%ld) > maxsize(%llu"
 			       ")\n", obd->obd_name, exp->exp_client_uuid.uuid,
 			       exp, fed->fed_dirty, maxsize);
 			spin_unlock(&obd->obd_dev_lock);
@@ -222,7 +222,7 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 			error = 1;
 		if (fed->fed_grant + fed->fed_pending > maxsize) {
 			CERROR("%s: cli %s/%p fed_grant(%ld) + fed_pending(%ld)"
-			       " > maxsize("LPU64")\n", obd->obd_name,
+			       " > maxsize(%llu)\n", obd->obd_name,
 			       exp->exp_client_uuid.uuid, exp, fed->fed_grant,
 			       fed->fed_pending, maxsize);
 			spin_unlock(&obd->obd_dev_lock);
@@ -230,7 +230,7 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 			LBUG();
 		}
 		if (fed->fed_dirty > maxsize) {
-			CERROR("%s: cli %s/%p fed_dirty(%ld) > maxsize("LPU64
+			CERROR("%s: cli %s/%p fed_dirty(%ld) > maxsize(%llu"
 			       ")\n", obd->obd_name, exp->exp_client_uuid.uuid,
 			       exp, fed->fed_dirty, maxsize);
 			spin_unlock(&obd->obd_dev_lock);
@@ -253,22 +253,22 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 	spin_unlock(&ofd->ofd_grant_lock);
 
 	if (tot_granted != fo_tot_granted)
-		CERROR("%s: tot_granted "LPU64" != fo_tot_granted "LPU64"\n",
+		CERROR("%s: tot_granted %llu != fo_tot_granted %llu\n",
 		       func, tot_granted, fo_tot_granted);
 	if (tot_pending != fo_tot_pending)
-		CERROR("%s: tot_pending "LPU64" != fo_tot_pending "LPU64"\n",
+		CERROR("%s: tot_pending %llu != fo_tot_pending %llu\n",
 		       func, tot_pending, fo_tot_pending);
 	if (tot_dirty != fo_tot_dirty)
-		CERROR("%s: tot_dirty "LPU64" != fo_tot_dirty "LPU64"\n",
+		CERROR("%s: tot_dirty %llu != fo_tot_dirty %llu\n",
 		       func, tot_dirty, fo_tot_dirty);
 	if (tot_pending > tot_granted)
-		CERROR("%s: tot_pending "LPU64" > tot_granted "LPU64"\n",
+		CERROR("%s: tot_pending %llu > tot_granted %llu\n",
 		       func, tot_pending, tot_granted);
 	if (tot_granted > maxsize)
-		CERROR("%s: tot_granted "LPU64" > maxsize "LPU64"\n",
+		CERROR("%s: tot_granted %llu > maxsize %llu\n",
 		       func, tot_granted, maxsize);
 	if (tot_dirty > maxsize)
-		CERROR("%s: tot_dirty "LPU64" > maxsize "LPU64"\n",
+		CERROR("%s: tot_dirty %llu > maxsize %llu\n",
 		       func, tot_dirty, maxsize);
 }
 
@@ -308,7 +308,7 @@ static void ofd_grant_statfs(const struct lu_env *env, struct obd_export *exp,
 		return;
 	}
 
-	CDEBUG(D_CACHE, "%s: cli %s/%p free: "LPU64" avail: "LPU64"\n",
+	CDEBUG(D_CACHE, "%s: cli %s/%p free: %llu avail: %llu\n",
 	       obd->obd_name, exp->exp_client_uuid.uuid, exp,
 	       osfs->os_bfree << ofd->ofd_blockbits,
 	       osfs->os_bavail << ofd->ofd_blockbits);
@@ -352,9 +352,9 @@ static u64 ofd_grant_space_left(struct obd_export *exp)
 			    tot_granted - ofd->ofd_tot_pending) ?
 			    D_ERROR : D_CACHE;
 
-		CDEBUG_LIMIT(mask, "%s: cli %s/%p left "LPU64" < tot_grant "
-			     LPU64" unstable "LPU64" pending "LPU64" "
-			     "dirty "LPU64"\n",
+		CDEBUG_LIMIT(mask, "%s: cli %s/%p left %llu < tot_grant "
+			     "%llu unstable %llu pending %llu "
+			     "dirty %llu\n",
 			     obd->obd_name, exp->exp_client_uuid.uuid, exp,
 			     left, tot_granted, unstable,
 			     ofd->ofd_tot_pending, ofd->ofd_tot_dirty);
@@ -368,8 +368,8 @@ static u64 ofd_grant_space_left(struct obd_export *exp)
 	/* Align left on block size */
 	left &= ~((1ULL << ofd->ofd_blockbits) - 1);
 
-	CDEBUG(D_CACHE, "%s: cli %s/%p avail "LPU64" left "LPU64" unstable "
-	       LPU64" tot_grant "LPU64" pending "LPU64"\n", obd->obd_name,
+	CDEBUG(D_CACHE, "%s: cli %s/%p avail %llu left %llu unstable "
+	       "%llu tot_grant %llu pending %llu\n", obd->obd_name,
 	       exp->exp_client_uuid.uuid, exp, avail, left, unstable,
 	       tot_granted, ofd->ofd_tot_pending);
 
@@ -414,7 +414,7 @@ static void ofd_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 	 * out-or-order and have already consumed some grant.  We want to
 	 * leave this here in case there is a large error in accounting. */
 	CDEBUG(D_CACHE,
-	       "%s: cli %s/%p reports grant "LPU64" dropped %u, local %lu\n",
+	       "%s: cli %s/%p reports grant %llu dropped %u, local %lu\n",
 	       obd->obd_name, exp->exp_client_uuid.uuid, exp, oa->o_grant,
 	       oa->o_dropped, fed->fed_grant);
 
@@ -447,8 +447,8 @@ static void ofd_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 		dropped = 0;
 	}
 	if (ofd->ofd_tot_granted < dropped) {
-		CERROR("%s: cli %s/%p reports %lu dropped > tot_grant "LPU64
-		       "\n", obd->obd_name, exp->exp_client_uuid.uuid, exp,
+		CERROR("%s: cli %s/%p reports %lu dropped > tot_grant %llu\n",
+		       obd->obd_name, exp->exp_client_uuid.uuid, exp,
 		       dropped, ofd->ofd_tot_granted);
 		dropped = 0;
 	}
@@ -500,9 +500,9 @@ static void ofd_grant_shrink(struct obd_export *exp, struct obdo *oa,
 	fed->fed_grant       -= grant_shrink;
 	ofd->ofd_tot_granted -= grant_shrink;
 
-	CDEBUG(D_CACHE, "%s: cli %s/%p shrink %ld fed_grant %ld total "
-	       LPU64"\n", obd->obd_name, exp->exp_client_uuid.uuid,
-	       exp, grant_shrink, fed->fed_grant, ofd->ofd_tot_granted);
+	CDEBUG(D_CACHE, "%s: cli %s/%p shrink %ld fed_grant %ld total %llu\n",
+	       obd->obd_name, exp->exp_client_uuid.uuid, exp, grant_shrink,
+	       fed->fed_grant, ofd->ofd_tot_granted);
 
 	/* client has just released some grant, don't grant any space back */
 	oa->o_grant = 0;
@@ -790,7 +790,7 @@ static long ofd_grant_alloc(struct obd_export *exp, u64 curgrant,
 		RETURN(0);
 
 	if (want > 0x7fffffff) {
-		CERROR("%s: client %s/%p requesting > 2GB grant "LPU64"\n",
+		CERROR("%s: client %s/%p requesting > 2GB grant %llu\n",
 		       obd->obd_name, exp->exp_client_uuid.uuid, exp, want);
 		RETURN(0);
 	}
@@ -830,7 +830,7 @@ static long ofd_grant_alloc(struct obd_export *exp, u64 curgrant,
 	fed->fed_grant += grant;
 
 	if (fed->fed_grant < 0) {
-		CERROR("%s: cli %s/%p grant %ld want "LPU64" current "LPU64"\n",
+		CERROR("%s: cli %s/%p grant %ld want %llu current %llu\n",
 		       obd->obd_name, exp->exp_client_uuid.uuid, exp,
 		       fed->fed_grant, want, curgrant);
 		spin_unlock(&ofd->ofd_grant_lock);
@@ -838,11 +838,11 @@ static long ofd_grant_alloc(struct obd_export *exp, u64 curgrant,
 	}
 
 	CDEBUG(D_CACHE,
-	       "%s: cli %s/%p wants: "LPU64" current grant "LPU64
-	       " granting: "LPU64"\n", obd->obd_name, exp->exp_client_uuid.uuid,
+	       "%s: cli %s/%p wants: %llu current grant %llu"
+	       " granting: %llu\n", obd->obd_name, exp->exp_client_uuid.uuid,
 	       exp, want, curgrant, grant);
 	CDEBUG(D_CACHE,
-	       "%s: cli %s/%p tot cached:"LPU64" granted:"LPU64
+	       "%s: cli %s/%p tot cached:%llu granted:%llu"
 	       " num_exports: %d\n", obd->obd_name, exp->exp_client_uuid.uuid,
 	       exp, ofd->ofd_tot_dirty, ofd->ofd_tot_granted,
 	       obd->obd_num_exports);
@@ -927,8 +927,8 @@ refresh:
 
 	spin_unlock(&ofd->ofd_grant_lock);
 
-	CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %d want: "LPU64" left: "
-	       LPU64"\n", exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
+	CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %d want: %llu left: %llu\n",
+	       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
 	       exp, data->ocd_grant, want, left);
 
 	EXIT;
@@ -952,19 +952,19 @@ void ofd_grant_discard(struct obd_export *exp)
 
 	spin_lock(&ofd->ofd_grant_lock);
 	LASSERTF(ofd->ofd_tot_granted >= fed->fed_grant,
-		 "%s: tot_granted "LPU64" cli %s/%p fed_grant %ld\n",
+		 "%s: tot_granted %llu cli %s/%p fed_grant %ld\n",
 		 obd->obd_name, ofd->ofd_tot_granted,
 		 exp->exp_client_uuid.uuid, exp, fed->fed_grant);
 	ofd->ofd_tot_granted -= fed->fed_grant;
 	fed->fed_grant = 0;
 	LASSERTF(ofd->ofd_tot_pending >= fed->fed_pending,
-		 "%s: tot_pending "LPU64" cli %s/%p fed_pending %ld\n",
+		 "%s: tot_pending %llu cli %s/%p fed_pending %ld\n",
 		 obd->obd_name, ofd->ofd_tot_pending,
 		 exp->exp_client_uuid.uuid, exp, fed->fed_pending);
 	/* ofd_tot_pending is handled in ofd_grant_commit as bulk
 	 * commmits */
 	LASSERTF(ofd->ofd_tot_dirty >= fed->fed_dirty,
-		 "%s: tot_dirty "LPU64" cli %s/%p fed_dirty %ld\n",
+		 "%s: tot_dirty %llu cli %s/%p fed_dirty %ld\n",
 		 obd->obd_name, ofd->ofd_tot_dirty,
 		 exp->exp_client_uuid.uuid, exp, fed->fed_dirty);
 	ofd->ofd_tot_dirty -= fed->fed_dirty;
@@ -1194,7 +1194,7 @@ long ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 	if (ofd->ofd_osfs.os_bavail - (fed->fed_grant >> ofd->ofd_blockbits) <
 	    (ofd->ofd_osfs.os_blocks >> 10)) {
 		spin_unlock(&ofd->ofd_grant_lock);
-		CDEBUG(D_RPCTRACE, "%s: not enough space for create "LPU64"\n",
+		CDEBUG(D_RPCTRACE, "%s: not enough space for create %llu\n",
 		       ofd_name(ofd),
 		       ofd->ofd_osfs.os_bavail * ofd->ofd_osfs.os_blocks);
 		RETURN(-ENOSPC);
@@ -1302,19 +1302,18 @@ void ofd_grant_commit(struct obd_export *exp, unsigned long pending,
 	exp->exp_filter_data.fed_pending -= pending;
 
 	if (ofd->ofd_tot_granted < pending) {
-		 CERROR("%s: cli %s/%p tot_granted("LPU64") < grant_used(%lu)"
-			"\n", exp->exp_obd->obd_name,
-			exp->exp_client_uuid.uuid, exp, ofd->ofd_tot_granted,
-			pending);
+		CERROR("%s: cli %s/%p tot_granted(%llu) < grant_used(%lu)\n",
+		       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
+		       ofd->ofd_tot_granted, pending);
 		spin_unlock(&ofd->ofd_grant_lock);
 		LBUG();
 	}
 	ofd->ofd_tot_granted -= pending;
 
 	if (ofd->ofd_tot_pending < pending) {
-		 CERROR("%s: cli %s/%p tot_pending("LPU64") < grant_used(%lu)"
-			"\n", exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
-			exp, ofd->ofd_tot_pending, pending);
+		CERROR("%s: cli %s/%p tot_pending(%llu) < grant_used(%lu)\n",
+		       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
+		       ofd->ofd_tot_pending, pending);
 		spin_unlock(&ofd->ofd_grant_lock);
 		LBUG();
 	}

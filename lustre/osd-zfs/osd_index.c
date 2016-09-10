@@ -301,7 +301,7 @@ found:
 	if (unlikely((lma->lma_incompat & ~LMA_INCOMPAT_SUPP) ||
 		     CFS_FAIL_CHECK(OBD_FAIL_OSD_LMA_INCOMPAT))) {
 		CWARN("%s: unsupported incompat LMA feature(s) %#x for "
-		      "oid = "LPX64"\n", osd->od_svname,
+		      "oid = %#llx\n", osd->od_svname,
 		      lma->lma_incompat & ~LMA_INCOMPAT_SUPP, oid);
 		GOTO(out, rc = -EOPNOTSUPP);
 	} else {
@@ -563,7 +563,7 @@ static int osd_seq_exists(const struct lu_env *env, struct osd_device *osd,
 	rc = osd_fld_lookup(env, osd, seq, range);
 	if (rc != 0) {
 		if (rc != -ENOENT)
-			CERROR("%s: Can not lookup fld for "LPX64"\n",
+			CERROR("%s: Can not lookup fld for %#llx\n",
 			       osd_name(osd), seq);
 		RETURN(0);
 	}
@@ -1308,7 +1308,7 @@ static int osd_index_it_get(const struct lu_env *env, struct dt_it *di,
 	 * XXX: we need a binary version of zap_cursor_move_to_key()
 	 *	to implement this API */
 	if (*((const __u64 *)key) != 0)
-		CERROR("NOT IMPLEMETED YET (move to "LPX64")\n",
+		CERROR("NOT IMPLEMETED YET (move to %#llx)\n",
 		       *((__u64 *)key));
 
 	zap_cursor_fini(it->ozi_zc);
