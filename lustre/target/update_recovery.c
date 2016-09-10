@@ -381,14 +381,14 @@ insert_update_records_to_replay_list(struct target_distribute_txn_data *tdtd,
 	int rc = 0;
 	ENTRY;
 
-	CDEBUG(D_HA, "%s: insert record batchid = "LPU64" transno = "LPU64
+	CDEBUG(D_HA, "%s: insert record batchid = %llu transno = %llu"
 	       " mdt_index %u\n", tdtd->tdtd_lut->lut_obd->obd_name,
 	       record->ur_batchid, record->ur_master_transno, mdt_index);
 
 	/* Update batchid if necessary */
 	spin_lock(&tdtd->tdtd_batchid_lock);
 	if (record->ur_batchid >= tdtd->tdtd_batchid) {
-		CDEBUG(D_HA, "%s update batchid from "LPU64 " to "LPU64"\n",
+		CDEBUG(D_HA, "%s update batchid from %llu" " to %llu\n",
 		       tdtd->tdtd_lut->lut_obd->obd_name,
 		       tdtd->tdtd_batchid, record->ur_batchid);
 		tdtd->tdtd_batchid = record->ur_batchid + 1;
@@ -599,7 +599,7 @@ __u64 distribute_txn_get_next_transno(struct target_distribute_txn_data *tdtd)
 	}
 	spin_unlock(&tdtd->tdtd_replay_list_lock);
 
-	CDEBUG(D_HA, "%s: Next update transno "LPU64"\n",
+	CDEBUG(D_HA, "%s: Next update transno %llu\n",
 	       tdtd->tdtd_lut->lut_obd->obd_name, transno);
 	return transno;
 }

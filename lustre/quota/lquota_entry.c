@@ -326,7 +326,7 @@ struct lquota_entry *lqe_locate(const struct lu_env *env,
 
 	OBD_SLAB_ALLOC_PTR_GFP(new, lqe_kmem, GFP_NOFS);
 	if (new == NULL) {
-		CERROR("Fail to allocate lqe for id:"LPU64", "
+		CERROR("Fail to allocate lqe for id:%llu, "
 			"hash:%s\n", qid->qid_uid, site->lqs_hash->hs_name);
 		RETURN(ERR_PTR(-ENOMEM));
 	}

@@ -138,9 +138,9 @@ static void qsd_lqe_debug(struct lquota_entry *lqe, void *arg,
 	struct qsd_qtype_info	*qqi = (struct qsd_qtype_info *)arg;
 
 	libcfs_debug_vmsg2(msgdata, fmt, args,
-			   "qsd:%s qtype:%s id:"LPU64" enforced:%d granted:"
-			   LPU64" pending:"LPU64" waiting:"LPU64" req:%d usage:"
-			   LPU64" qunit:"LPU64" qtune:"LPU64" edquot:%d\n",
+			   "qsd:%s qtype:%s id:%llu enforced:%d granted:"
+			   "%llu pending:%llu waiting:%llu req:%d usage:"
+			   "%llu qunit:%llu qtune:%llu edquot:%d\n",
 			   qqi->qqi_qsd->qsd_svname, QTYPE_NAME(qqi->qqi_qtype),
 			   lqe->lqe_id.qid_uid, lqe->lqe_enforced,
 			   lqe->lqe_granted, lqe->lqe_pending_write,
@@ -212,7 +212,7 @@ int qsd_refresh_usage(const struct lu_env *env, struct lquota_entry *lqe)
 		RETURN(rc);
 	}
 
-	LQUOTA_DEBUG(lqe, "disk usage: "LPU64, lqe->lqe_usage);
+	LQUOTA_DEBUG(lqe, "disk usage: %llu", lqe->lqe_usage);
 	RETURN(0);
 }
 
@@ -261,15 +261,15 @@ int qsd_update_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 		/* Update record in global index copy */
 		struct lquota_glb_rec *glb_rec = (struct lquota_glb_rec *)rec;
 
-		CDEBUG(D_QUOTA, "%s: updating global index hardlimit: "LPU64", "
-		       "softlimit: "LPU64" for id "LPU64"\n",
+		CDEBUG(D_QUOTA, "%s: updating global index hardlimit: %llu, "
+		       "softlimit: %llu for id %llu\n",
 		       qqi->qqi_qsd->qsd_svname, glb_rec->qbr_hardlimit,
 		       glb_rec->qbr_softlimit, qid->qid_uid);
 	} else {
 		/* Update record in slave index copy */
 		struct lquota_slv_rec *slv_rec = (struct lquota_slv_rec *)rec;
 
-		CDEBUG(D_QUOTA, "%s: update granted to "LPU64" for id "LPU64
+		CDEBUG(D_QUOTA, "%s: update granted to %llu for id %llu"
 		       "\n", qqi->qqi_qsd->qsd_svname, slv_rec->qsr_granted,
 		       qid->qid_uid);
 	}
@@ -286,8 +286,8 @@ int qsd_update_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 out:
 	dt_trans_stop(env, qqi->qqi_qsd->qsd_dev, th);
 	if (rc)
-		CERROR("%s: failed to update %s index copy for id "LPU64", rc:"
-		       "%d\n", qqi->qqi_qsd->qsd_svname,
+		CERROR("%s: failed to update %s index copy for id %llu, : rc = %d\n",
+		       qqi->qqi_qsd->qsd_svname,
 		       global ? "global" : "slave", qid->qid_uid, rc);
 	else if (flags == LQUOTA_SET_VER)
 		qsd_bump_version(qqi, ver, global);
@@ -322,15 +322,15 @@ int qsd_update_lqe(const struct lu_env *env, struct lquota_entry *lqe,
 		lqe->lqe_enforced = (glb_rec->qbr_hardlimit ||
 				     glb_rec->qbr_softlimit) ? true : false;
 
-		LQUOTA_DEBUG(lqe, "updating global index hardlimit: "LPU64", "
-			     "softlimit: "LPU64, glb_rec->qbr_hardlimit,
+		LQUOTA_DEBUG(lqe, "updating global index hardlimit: %llu, "
+			     "softlimit: %llu", glb_rec->qbr_hardlimit,
 			     glb_rec->qbr_softlimit);
 	} else {
 		struct lquota_slv_rec *slv_rec = (struct lquota_slv_rec *)rec;
 
 		lqe->lqe_granted = slv_rec->qsr_granted;
 
-		LQUOTA_DEBUG(lqe, "updating slave index, granted:"LPU64"",
+		LQUOTA_DEBUG(lqe, "updating slave index, granted:%llu",
 			     slv_rec->qsr_granted);
 	}
 

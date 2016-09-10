@@ -112,9 +112,9 @@ static void qmt_lqe_debug(struct lquota_entry *lqe, void *arg,
 	struct qmt_pool_info	*pool = (struct qmt_pool_info *)arg;
 
 	libcfs_debug_vmsg2(msgdata, fmt, args,
-			   "qmt:%s pool:%d-%s id:"LPU64" enforced:%d hard:"LPU64
-			   " soft:"LPU64" granted:"LPU64" time:"LPU64" qunit:"
-			   LPU64" edquot:%d may_rel:"LPU64" revoke:"LPU64"\n",
+			   "qmt:%s pool:%d-%s id:%llu enforced:%d hard:%llu"
+			   " soft:%llu granted:%llu time:%llu qunit:"
+			   "%llu edquot:%d may_rel:%llu revoke:%llu\n",
 			   pool->qpi_qmt->qmt_svname,
 			   pool->qpi_key & 0x0000ffff,
 			   RES_NAME(pool->qpi_key >> 16),
@@ -327,7 +327,7 @@ int qmt_slv_read(const struct lu_env *env, struct lquota_entry *lqe,
 		RETURN(rc);
 	}
 
-	LQUOTA_DEBUG(lqe, "successful slv read "LPU64, *granted);
+	LQUOTA_DEBUG(lqe, "successful slv read %llu", *granted);
 
 	RETURN(0);
 }
@@ -360,7 +360,7 @@ int qmt_slv_write(const struct lu_env *env, struct thandle *th,
 	LASSERT(lqe_is_master(lqe));
 	LASSERT(lqe_is_locked(lqe));
 
-	LQUOTA_DEBUG(lqe, "write slv "DFID" granted:"LPU64,
+	LQUOTA_DEBUG(lqe, "write slv "DFID" granted:%llu",
 		     PFID(lu_object_fid(&slv_obj->do_lu)), granted);
 
 	/* never delete the entry, otherwise, it'll not be transferred
@@ -375,7 +375,7 @@ int qmt_slv_write(const struct lu_env *env, struct thandle *th,
 			       (struct dt_rec *)rec, flags, ver);
 	if (rc) {
 		LQUOTA_ERROR(lqe, "failed to update slave index "DFID" granted:"
-			     LPU64, PFID(lu_object_fid(&slv_obj->do_lu)),
+			     "%llu", PFID(lu_object_fid(&slv_obj->do_lu)),
 			     granted);
 		RETURN(rc);
 	}
@@ -660,7 +660,7 @@ done:
 		/* keep current qunit */
 		RETURN_EXIT;
 
-	LQUOTA_DEBUG(lqe, "%s qunit to "LPU64,
+	LQUOTA_DEBUG(lqe, "%s qunit to %llu",
 		     lqe->lqe_qunit < qunit ? "increasing" : "decreasing",
 		     qunit);
 

@@ -127,7 +127,7 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 		break;
 
 	default:
-		CERROR("%s: invalid intent opcode: "LPU64"\n", qmt->qmt_svname,
+		CERROR("%s: invalid intent opcode: %llu\n", qmt->qmt_svname,
 		       it->opc);
 		GOTO(out, rc = err_serious(-EINVAL));
 	}
@@ -267,7 +267,7 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 	LASSERT(lqe != NULL);
 	lqe_getref(lqe);
 
-	LQUOTA_DEBUG(lqe, "releasing:"LPU64" may release:"LPU64,
+	LQUOTA_DEBUG(lqe, "releasing:%llu may release:%llu",
 		     lvb->lvb_id_rel, lvb->lvb_id_may_rel);
 
 	if (lvb->lvb_id_rel == 0) {
@@ -315,7 +315,7 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 			QUOTA_DQACQ_FL_REL, lvb->lvb_id_rel, 0, &qti->qti_body);
 	if (rc || qti->qti_body.qb_count != lvb->lvb_id_rel)
 		LQUOTA_ERROR(lqe, "failed to release quota space on glimpse "
-			     LPU64"!="LPU64" rc:%d\n", qti->qti_body.qb_count,
+			     "%llu!=%llu : rc = %d\n", qti->qti_body.qb_count,
 			     lvb->lvb_id_rel, rc);
 	class_export_put(exp);
 	if (rc)

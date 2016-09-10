@@ -72,8 +72,7 @@ static void top_multiple_thandle_dump(struct top_multiple_thandle *tmt,
 	struct sub_thandle	*st;
 
 	LASSERT(tmt->tmt_magic == TOP_THANDLE_MAGIC);
-	CDEBUG(mask, "%s tmt %p refcount %d committed %d result %d "
-	       "batchid "LPU64"\n",
+	CDEBUG(mask, "%s tmt %p refcount %d committed %d result %d batchid %llu\n",
 	       tmt->tmt_master_sub_dt ?
 	       tmt->tmt_master_sub_dt->dd_lu_dev.ld_obd->obd_name :
 	       "NULL",
@@ -1446,7 +1445,7 @@ distribute_txn_commit_batchid_update(const struct lu_env *env,
 	rc = dt_record_write(env, tdtd->tdtd_batchid_obj, &buf,
 			     &off, th);
 
-	CDEBUG(D_INFO, "%s: update batchid "LPU64": rc = %d\n",
+	CDEBUG(D_INFO, "%s: update batchid %llu: rc = %d\n",
 	       tdtd->tdtd_lut->lut_obd->obd_name, batchid, rc);
 
 stop:
@@ -1563,7 +1562,7 @@ static int distribute_txn_commit_thread(void *_arg)
 	wake_up(&thread->t_ctl_waitq);
 	INIT_LIST_HEAD(&list);
 
-	CDEBUG(D_HA, "%s: start commit thread committed batchid "LPU64"\n",
+	CDEBUG(D_HA, "%s: start commit thread committed batchid %llu\n",
 	       tdtd->tdtd_lut->lut_obd->obd_name,
 	       tdtd->tdtd_committed_batchid);
 
@@ -1583,8 +1582,8 @@ static int distribute_txn_commit_thread(void *_arg)
 				list_move_tail(&tmt->tmt_commit_list, &list);
 			} else if (!tdtd->tdtd_lut->lut_obd->obd_recovering) {
 				LASSERTF(tmt->tmt_batchid >= batchid,
-					 "tmt %p tmt_batchid: "LPU64", batchid "
-					  LPU64"\n", tmt, tmt->tmt_batchid,
+					 "tmt %p tmt_batchid: %llu, batchid "
+					  "%llu\n", tmt, tmt->tmt_batchid,
 					 batchid);
 				/* There are three types of distribution
 				 * transaction result
@@ -1612,8 +1611,8 @@ static int distribute_txn_commit_thread(void *_arg)
 		}
 		spin_unlock(&tdtd->tdtd_batchid_lock);
 
-		CDEBUG(D_HA, "%s: batchid: "LPU64" committed batchid "
-		       LPU64"\n", tdtd->tdtd_lut->lut_obd->obd_name, batchid,
+		CDEBUG(D_HA, "%s: batchid: %llu committed batchid "
+		       "%llu\n", tdtd->tdtd_lut->lut_obd->obd_name, batchid,
 		       tdtd->tdtd_committed_batchid);
 		/* update globally committed on a storage */
 		if (batchid > tdtd->tdtd_committed_batchid) {

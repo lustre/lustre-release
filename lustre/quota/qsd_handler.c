@@ -45,7 +45,7 @@ static inline int qsd_request_enter(struct lquota_entry *lqe)
 	}
 
 	if (lqe->lqe_pending_rel != 0) {
-		LQUOTA_ERROR(lqe, "no request in flight with pending_rel="LPU64,
+		LQUOTA_ERROR(lqe, "no request in flight with pending_rel=%llu",
 			     lqe->lqe_pending_rel);
 		LBUG();
 	}
@@ -350,12 +350,12 @@ static void qsd_req_completion(const struct lu_env *env,
 	 * the DQACQ since the limit for this ID has been removed, so we
 	 * should not update quota entry & slave index copy neither. */
 	if (repbody != NULL && repbody->qb_count != 0) {
-		LQUOTA_DEBUG(lqe, "DQACQ qb_count:"LPU64, repbody->qb_count);
+		LQUOTA_DEBUG(lqe, "DQACQ qb_count:%llu", repbody->qb_count);
 
 		if (req_is_rel(reqbody->qb_flags)) {
 			if (lqe->lqe_granted < repbody->qb_count) {
 				LQUOTA_ERROR(lqe, "can't release more space "
-					     "than owned "LPU64"<"LPU64,
+					     "than owned %llu<%llu",
 					     lqe->lqe_granted,
 					     repbody->qb_count);
 				lqe->lqe_granted = 0;
@@ -634,7 +634,7 @@ static bool qsd_acquire(const struct lu_env *env, struct lquota_entry *lqe,
 	ENTRY;
 
 	for (count = 0; rc == 0; count++) {
-		LQUOTA_DEBUG(lqe, "acquiring:"LPD64 " count=%d", space, count);
+		LQUOTA_DEBUG(lqe, "acquiring:%lld count=%d", space, count);
 
 		if (lqe2qqi(lqe)->qqi_qsd->qsd_stopping) {
 			rc = -EINPROGRESS;
@@ -722,7 +722,7 @@ static int qsd_op_begin0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 		RETURN(0);
 	}
 
-	LQUOTA_DEBUG(lqe, "op_begin space:"LPD64, space);
+	LQUOTA_DEBUG(lqe, "op_begin space:%lld", space);
 
 	lqe_write_lock(lqe);
 	lqe->lqe_waiting_write += space;
@@ -1151,7 +1151,7 @@ void qsd_op_adjust(const struct lu_env *env, struct qsd_instance *qsd,
 
 	lqe = lqe_locate(env, qqi->qqi_site, qid);
 	if (IS_ERR(lqe)) {
-		CERROR("%s: fail to locate lqe for id:"LPU64", type:%d\n",
+		CERROR("%s: fail to locate lqe for id:%llu, type:%d\n",
 		       qsd->qsd_svname, qid->qid_uid, qtype);
 		RETURN_EXIT;
 	}

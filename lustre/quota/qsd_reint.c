@@ -58,7 +58,7 @@ static void qsd_reint_completion(const struct lu_env *env,
 	}
 
 	CDEBUG(D_QUOTA, "%s: global quota lock successfully acquired, glb "
-	       "fid:"DFID", glb ver:"LPU64", slv fid:"DFID", slv ver:"LPU64"\n",
+	       "fid:"DFID", glb ver:%llu, slv fid:"DFID", slv ver:%llu\n",
 	       qsd->qsd_svname, PFID(&req_qbody->qb_fid),
 	       lvb->lvb_glb_ver, PFID(&rep_qbody->qb_slv_fid),
 	       rep_qbody->qb_slv_ver);
@@ -284,8 +284,8 @@ out:
 	if (rc == 0) {
 		rc = qsd_write_version(env, qqi, ver, global);
 		if (rc)
-			CERROR("%s: write version "LPU64" to "DFID" failed. "
-			       "%d\n", qsd->qsd_svname, ver, PFID(fid), rc);
+			CERROR("%s: write version %llu to "DFID" failed : rc = %d\n",
+			       qsd->qsd_svname, ver, PFID(fid), rc);
 	}
 
 	RETURN(rc);
@@ -469,8 +469,8 @@ static int qsd_reint_main(void *args)
 		if (rc)
 			GOTO(out_env_init, rc);
 
-		CDEBUG(D_QUOTA, "%s: glb_ver:"LPU64"/"LPU64",slv_ver:"LPU64"/"
-		       LPU64"\n", qsd->qsd_svname,
+		CDEBUG(D_QUOTA, "%s: glb_ver:%llu/%llu,slv_ver:%llu/"
+		       "%llu\n", qsd->qsd_svname,
 		       qti->qti_lvb.lvb_glb_ver, qqi->qqi_glb_ver,
 		       qti->qti_slv_ver, qqi->qqi_slv_ver);
 	}

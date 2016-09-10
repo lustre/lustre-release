@@ -1249,8 +1249,7 @@ int nodemap_index_read(struct lu_env *env,
 	dt_read_lock(env, nodemap_idx, 0);
 	version = dt_version_get(env, nodemap_idx);
 	if (rdpg->rp_hash != 0 && ii->ii_version != version) {
-		CDEBUG(D_INFO, "nodemap config changed while sending, "
-			       "old "LPU64", new "LPU64"\n",
+		CDEBUG(D_INFO, "nodemap config changed inflight, old %llu, new %llu\n",
 		       ii->ii_version,
 		       version);
 		ii->ii_hash_end = 0;

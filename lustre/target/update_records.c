@@ -68,7 +68,7 @@ void update_records_dump(const struct update_records *records,
 	struct update_params	*params = NULL;
 	unsigned int		i;
 
-	CDEBUG(mask, "master transno = "LPU64" batchid = "LPU64" flags = %x"
+	CDEBUG(mask, "master transno = %llu batchid = %llu flags = %x"
 	       " ops = %d params = %d\n", records->ur_master_transno,
 	       records->ur_batchid, records->ur_flags, records->ur_update_count,
 	       records->ur_param_count);

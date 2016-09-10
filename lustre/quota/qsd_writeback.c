@@ -123,7 +123,7 @@ static void qsd_add_deferred(struct qsd_instance *qsd, struct list_head *list,
 		if (upd->qur_ver == tmp->qur_ver) {
 			LASSERT(tmp->qur_lqe);
 			LQUOTA_ERROR(tmp->qur_lqe, "Found a conflict record "
-				     "with ver:"LPU64"", tmp->qur_ver);
+				     "with ver:%llu", tmp->qur_ver);
 			list_del_init(&tmp->qur_link);
 			qsd_upd_free(tmp);
 		} else if (upd->qur_ver < tmp->qur_ver) {
@@ -151,7 +151,7 @@ static void qsd_kickoff_deferred(struct qsd_qtype_info *qqi,
 			/* drop this update */
 			list_del_init(&upd->qur_link);
 			CDEBUG(D_QUOTA, "%s: skipping deferred update ver:"
-			       LPU64"/"LPU64", global:%d, qid:"LPU64"\n",
+			       "%llu/%llu, global:%d, qid:%llu\n",
 			       qqi->qqi_qsd->qsd_svname, upd->qur_ver, ver,
 			       upd->qur_global, upd->qur_qid.qid_uid);
 			qsd_upd_free(upd);
@@ -165,11 +165,11 @@ static void qsd_kickoff_deferred(struct qsd_qtype_info *qqi,
 		RETURN_EXIT;
 
 	CDEBUG(D_QUOTA, "%s: found deferred update record. "
-	       "version:"LPU64"/"LPU64", global:%d, qid:"LPU64"\n",
+	       "version:%llu/%llu, global:%d, qid:%llu\n",
 	       qqi->qqi_qsd->qsd_svname, upd->qur_ver, ver,
 	       upd->qur_global, upd->qur_qid.qid_uid);
 
-	LASSERTF(upd->qur_ver > ver, "lur_ver:"LPU64", cur_ver:"LPU64"\n",
+	LASSERTF(upd->qur_ver > ver, "lur_ver:%llu, cur_ver:%llu\n",
 		 upd->qur_ver, ver);
 
 	/* Kick off the deferred udpate */
@@ -223,7 +223,7 @@ void qsd_upd_schedule(struct qsd_qtype_info *qqi, struct lquota_entry *lqe,
 	__u64			 cur_ver;
 	ENTRY;
 
-	CDEBUG(D_QUOTA, "%s: schedule update. global:%s, version:"LPU64"\n",
+	CDEBUG(D_QUOTA, "%s: schedule update. global:%s, version:%llu\n",
 	       qsd->qsd_svname, global ? "true" : "false", ver);
 
 	upd = qsd_upd_alloc(qqi, lqe, qid, rec, ver, global);
@@ -248,11 +248,11 @@ void qsd_upd_schedule(struct qsd_qtype_info *qqi, struct lquota_entry *lqe,
 			/* legitimate race between glimpse AST and
 			 * reintegration */
 			CDEBUG(D_QUOTA, "%s: discarding glb update from glimpse"
-			       " ver:"LPU64" local ver:"LPU64"\n",
+			       " ver:%llu local ver:%llu\n",
 			       qsd->qsd_svname, ver, cur_ver);
 		else
-			CERROR("%s: discard slv update, ver:"LPU64" local ver:"
-			       LPU64"\n", qsd->qsd_svname, ver, cur_ver);
+			CERROR("%s: discard slv update, ver:%llu local ver:"
+			       "%llu\n", qsd->qsd_svname, ver, cur_ver);
 		qsd_upd_free(upd);
 	} else if ((ver == cur_ver + 1) && qqi->qqi_glb_uptodate &&
 		   qqi->qqi_slv_uptodate) {
@@ -526,8 +526,8 @@ static void qsd_cleanup_deferred(struct qsd_instance *qsd)
 		write_lock(&qsd->qsd_lock);
 		list_for_each_entry_safe(upd, tmp, &qqi->qqi_deferred_glb,
 					 qur_link) {
-			CWARN("%s: Free global deferred upd: ID:"LPU64", "
-			      "ver:"LPU64"/"LPU64"\n", qsd->qsd_svname,
+			CWARN("%s: Free global deferred upd: ID:%llu, "
+			      "ver:%llu/%llu\n", qsd->qsd_svname,
 			      upd->qur_qid.qid_uid, upd->qur_ver,
 			      qqi->qqi_glb_ver);
 			list_del_init(&upd->qur_link);
@@ -535,8 +535,8 @@ static void qsd_cleanup_deferred(struct qsd_instance *qsd)
 		}
 		list_for_each_entry_safe(upd, tmp, &qqi->qqi_deferred_slv,
 					 qur_link) {
-			CWARN("%s: Free slave deferred upd: ID:"LPU64", "
-			      "ver:"LPU64"/"LPU64"\n", qsd->qsd_svname,
+			CWARN("%s: Free slave deferred upd: ID:%llu, "
+			      "ver:%llu/%llu\n", qsd->qsd_svname,
 			      upd->qur_qid.qid_uid, upd->qur_ver,
 			      qqi->qqi_slv_ver);
 			list_del_init(&upd->qur_link);

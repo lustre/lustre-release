@@ -464,9 +464,9 @@ int tgt_client_data_read(const struct lu_env *env, struct lu_target *tgt,
 			ptlrpc_status_ntoh(lcd->lcd_last_close_result);
 	}
 
-	CDEBUG(D_INFO, "%s: read lcd @%lld uuid = %s, last_transno = "LPU64
-	       ", last_xid = "LPU64", last_result = %u, last_data = %u, "
-	       "last_close_transno = "LPU64", last_close_xid = "LPU64", "
+	CDEBUG(D_INFO, "%s: read lcd @%lld uuid = %s, last_transno = %llu"
+	       ", last_xid = %llu, last_result = %u, last_data = %u, "
+	       "last_close_transno = %llu, last_close_xid = %llu, "
 	       "last_close_result = %u, rc = %d\n", tgt->lut_obd->obd_name,
 	       *off, lcd->lcd_uuid, lcd->lcd_last_transno, lcd->lcd_last_xid,
 	       lcd->lcd_last_result, lcd->lcd_last_data,
@@ -550,7 +550,7 @@ out:
 	mutex_unlock(&ted->ted_lcd_lock);
 	dt_trans_stop(env, tgt->lut_bottom, th);
 	CDEBUG(D_INFO, "%s: update last_rcvd client data for UUID = %s, "
-	       "last_transno = "LPU64": rc = %d\n", tgt->lut_obd->obd_name,
+	       "last_transno = %llu: rc = %d\n", tgt->lut_obd->obd_name,
 	       tgt->lut_lsd.lsd_uuid, tgt->lut_lsd.lsd_last_transno, rc);
 
 	return rc;
@@ -569,7 +569,7 @@ int tgt_server_data_read(const struct lu_env *env, struct lu_target *tgt)
 		lsd_le_to_cpu(&tti->tti_lsd, &tgt->lut_lsd);
 
 	CDEBUG(D_INFO, "%s: read last_rcvd server data for UUID = %s, "
-	       "last_transno = "LPU64": rc = %d\n", tgt->lut_obd->obd_name,
+	       "last_transno = %llu: rc = %d\n", tgt->lut_obd->obd_name,
 	       tgt->lut_lsd.lsd_uuid, tgt->lut_lsd.lsd_last_transno, rc);
         return rc;
 }
@@ -591,7 +591,7 @@ int tgt_server_data_write(const struct lu_env *env, struct lu_target *tgt,
 	rc = dt_record_write(env, dto, &tti->tti_buf, &tti->tti_off, th);
 
 	CDEBUG(D_INFO, "%s: write last_rcvd server data for UUID = %s, "
-	       "last_transno = "LPU64": rc = %d\n", tgt->lut_obd->obd_name,
+	       "last_transno = %llu: rc = %d\n", tgt->lut_obd->obd_name,
 	       tgt->lut_lsd.lsd_uuid, tgt->lut_lsd.lsd_last_transno, rc);
 
 	RETURN(rc);
@@ -610,7 +610,7 @@ int tgt_server_data_update(const struct lu_env *env, struct lu_target *tgt,
 	ENTRY;
 
 	CDEBUG(D_SUPER,
-	       "%s: mount_count is "LPU64", last_transno is "LPU64"\n",
+	       "%s: mount_count is %llu, last_transno is %llu\n",
 	       tgt->lut_lsd.lsd_uuid, tgt->lut_obd->u.obt.obt_mount_count,
 	       tgt->lut_last_transno);
 
@@ -640,7 +640,7 @@ out:
 	dt_trans_stop(env, tgt->lut_bottom, th);
 
 	CDEBUG(D_INFO, "%s: update last_rcvd server data for UUID = %s, "
-	       "last_transno = "LPU64": rc = %d\n", tgt->lut_obd->obd_name,
+	       "last_transno = %llu: rc = %d\n", tgt->lut_obd->obd_name,
 	       tgt->lut_lsd.lsd_uuid, tgt->lut_lsd.lsd_last_transno, rc);
 	RETURN(rc);
 }
@@ -807,7 +807,7 @@ static void tgt_cb_last_committed(struct lu_env *env, struct thandle *th,
 out:
 	class_export_cb_put(ccb->llcc_exp);
 	if (ccb->llcc_transno)
-		CDEBUG(D_HA, "%s: transno "LPD64" is committed\n",
+		CDEBUG(D_HA, "%s: transno %lld is committed\n",
 		       ccb->llcc_tgt->lut_obd->obd_name, ccb->llcc_transno);
 	OBD_FREE_PTR(ccb);
 }
@@ -1183,7 +1183,7 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 	spin_lock(&tgt->lut_translock);
 	if (th->th_result != 0) {
 		if (tti->tti_transno != 0) {
-			CERROR("%s: replay transno "LPU64" failed: rc = %d\n",
+			CERROR("%s: replay transno %llu failed: rc = %d\n",
 			       tgt_name(tgt), tti->tti_transno, th->th_result);
 		}
 	} else if (tti->tti_transno == 0) {
@@ -1202,7 +1202,7 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 	}
 
 	/* filling reply data */
-	CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",
+	CDEBUG(D_INODE, "transno = %llu, last_committed = %llu\n",
 	       tti->tti_transno, tgt->lut_obd->obd_last_committed);
 
 	if (req != NULL) {
@@ -1315,7 +1315,7 @@ static int tgt_last_rcvd_update(const struct lu_env *env, struct lu_target *tgt,
 		if (*transno_p > tti->tti_transno) {
 			if (!tgt->lut_no_reconstruct) {
 				CERROR("%s: trying to overwrite bigger transno:"
-				       "on-disk: "LPU64", new: "LPU64" replay: "
+				       "on-disk: %llu, new: %llu replay: "
 				       "%d. See LU-617.\n", tgt_name(tgt),
 				       *transno_p, tti->tti_transno,
 				       req_is_replay(req));
@@ -1444,8 +1444,8 @@ static int tgt_clients_data_init(const struct lu_env *env,
 		/* These exports are cleaned up by disconnect, so they
 		 * need to be set up like real exports as connect does.
 		 */
-		CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
-		       " srv lr: "LPU64" lx: "LPU64" gen %u\n", lcd->lcd_uuid,
+		CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: %llu"
+		       " srv lr: %llu lx: %llu gen %u\n", lcd->lcd_uuid,
 		       cl_idx, last_transno, lsd->lsd_last_transno,
 		       lcd_last_xid(lcd), lcd->lcd_generation);
 
@@ -1499,7 +1499,7 @@ static int tgt_clients_data_init(const struct lu_env *env,
 		}
 
 		/* Need to check last_rcvd even for duplicated exports. */
-		CDEBUG(D_OTHER, "client at idx %d has last_transno = "LPU64"\n",
+		CDEBUG(D_OTHER, "client at idx %d has last_transno = %llu\n",
 		       cl_idx, last_transno);
 
 		spin_lock(&tgt->lut_translock);
@@ -1662,9 +1662,9 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 	lsd->lsd_mount_count++;
 
 	CDEBUG(D_INODE, "=======,=BEGIN DUMPING LAST_RCVD========\n");
-	CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
+	CDEBUG(D_INODE, "%s: server last_transno: %llu\n",
 	       tgt_name(tgt), tgt->lut_last_transno);
-	CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
+	CDEBUG(D_INODE, "%s: server mount_count: %llu\n",
 	       tgt_name(tgt), lsd->lsd_mount_count);
 	CDEBUG(D_INODE, "%s: server data size: %u\n",
 	       tgt_name(tgt), lsd->lsd_server_size);
@@ -1796,7 +1796,7 @@ int tgt_txn_stop_cb(const struct lu_env *env, struct thandle *th,
 
 	if (tti->tti_has_trans && !echo_client) {
 		if (tti->tti_mult_trans == 0) {
-			CDEBUG(D_HA, "More than one transaction "LPU64"\n",
+			CDEBUG(D_HA, "More than one transaction %llu\n",
 			       tti->tti_transno);
 			RETURN(0);
 		}

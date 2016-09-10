@@ -678,7 +678,7 @@ static int out_tx_write_exec(const struct lu_env *env, struct thandle *th,
 	struct dt_object *dt_obj = arg->object;
 	int rc;
 
-	CDEBUG(D_INFO, "write "DFID" pos "LPU64" buf %p, len %lu\n",
+	CDEBUG(D_INFO, "write "DFID" pos %llu buf %p, len %lu\n",
 	       PFID(lu_object_fid(&dt_obj->do_lu)), arg->u.write.pos,
 	       arg->u.write.buf.lb_buf, (unsigned long)arg->u.write.buf.lb_len);
 

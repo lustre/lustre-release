@@ -228,14 +228,12 @@ static int lprocfs_quota_seq_show(struct seq_file *p, void *v)
 
 	seq_printf(p, "- %-8s %llu\n", "id:", *((__u64 *)key));
 	if (fid_is_acct(fid))
-		seq_printf(p, "  %-8s { inodes: %20"LPF64"u, kbytes: %20"LPF64
-			   "u }\n", "usage:",
+		seq_printf(p, "  %-8s { inodes: %20llu, kbytes: %20llu }\n", "usage:",
 			   ((struct lquota_acct_rec *)rec)->ispace,
 			   toqb(((struct lquota_acct_rec *)rec)->bspace));
 	else if (fid_seq(fid) == FID_SEQ_QUOTA_GLB ||
 		 fid_seq(fid) == FID_SEQ_LOCAL_NAME)
-		seq_printf(p, "  %-8s { hard: %20"LPF64"u, soft: %20"LPF64
-			   "u, granted: %20"LPF64"u, time: %20"LPF64"u }\n",
+		seq_printf(p, "  %-8s { hard: %20llu, soft: %20llu, granted: %20llu, time: %20llu }\n",
 			   "limits:",
 			   ((struct lquota_glb_rec *)rec)->qbr_hardlimit,
 			   ((struct lquota_glb_rec *)rec)->qbr_softlimit,

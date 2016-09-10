@@ -536,7 +536,7 @@ static int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
 	if (req_can_reconstruct(req, NULL)) {
 		if (!(lustre_msg_get_flags(req->rq_reqmsg) &
 		      (MSG_RESENT | MSG_REPLAY))) {
-			DEBUG_REQ(D_WARNING, req, "rq_xid "LPU64" matches "
+			DEBUG_REQ(D_WARNING, req, "rq_xid %llu matches "
 				  "saved xid, expected REPLAY or RESENT flag "
 				  "(%x)", req->rq_xid,
 				  lustre_msg_get_flags(req->rq_reqmsg));
@@ -1241,7 +1241,7 @@ static int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 		rc = tgt_sync(&env, tgt, obj, start, end);
 		if (rc < 0) {
-			CERROR("%s: syncing "DFID" ("LPU64"-"LPU64") on lock "
+			CERROR("%s: syncing "DFID" (%llu-%llu) on lock "
 			       "cancel: rc = %d\n",
 			       tgt_name(tgt), PFID(&fid),
 			       lock->l_policy_data.l_extent.start,
@@ -1934,7 +1934,7 @@ static void tgt_warn_on_cksum(struct ptlrpc_request *req,
 	}
 
 	LCONSOLE_ERROR_MSG(0x168, "BAD WRITE CHECKSUM: %s from %s%s%s inode "
-			   DFID" object "DOSTID" extent ["LPU64"-"LPU64
+			   DFID" object "DOSTID" extent [%llu-%llu"
 			   "]: client csum %x, server csum %x\n",
 			   exp->exp_obd->obd_name, libcfs_id2str(req->rq_peer),
 			   via, router,

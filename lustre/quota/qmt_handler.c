@@ -118,8 +118,8 @@ static int qmt_set(const struct lu_env *env, struct qmt_device *qmt,
 	now = cfs_time_current_sec();
 
 	lqe_write_lock(lqe);
-	LQUOTA_DEBUG(lqe, "changing quota settings valid:%x hard:"LPU64" soft:"
-		     LPU64" time:"LPU64, valid, hard, soft, time);
+	LQUOTA_DEBUG(lqe, "changing quota settings valid:%x hard:%llu soft:"
+		     "%llu time:%llu", valid, hard, soft, time);
 
 	if ((valid & QIF_TIMES) != 0 && lqe->lqe_gracetime != time) {
 		/* change time settings */
@@ -378,8 +378,8 @@ int qmt_dqacq0(const struct lu_env *env, struct lquota_entry *lqe,
 		GOTO(out, rc = PTR_ERR(th));
 
 	lqe_write_lock(lqe);
-	LQUOTA_DEBUG(lqe, "dqacq starts uuid:%s flags:0x%x wanted:"LPU64
-		     " usage:"LPU64, obd_uuid2str(uuid), qb_flags, qb_count,
+	LQUOTA_DEBUG(lqe, "dqacq starts uuid:%s flags:0x%x wanted:%llu"
+		     " usage:%llu", obd_uuid2str(uuid), qb_flags, qb_count,
 		     qb_usage);
 
 	/* Legal race, limits have been removed on master, but slave didn't
@@ -415,7 +415,7 @@ int qmt_dqacq0(const struct lu_env *env, struct lquota_entry *lqe,
 		    lqe->lqe_granted < qb_count) {
 			/* can't release more than granted */
 			LQUOTA_ERROR(lqe, "Release too much! uuid:%s release:"
-				     LPU64" granted:"LPU64", total:"LPU64,
+				     "%llu granted:%llu, total:%llu",
 				     obd_uuid2str(uuid), qb_count,
 				     slv_granted, lqe->lqe_granted);
 			GOTO(out_locked, rc = -EINVAL);
@@ -549,7 +549,7 @@ out_write:
 	/* clear/set edquot flag and notify slaves via glimpse if needed */
 	qmt_adjust_edquot(lqe, now);
 out_locked:
-	LQUOTA_DEBUG(lqe, "dqacq ends count:"LPU64" ver:"LPU64" rc:%d",
+	LQUOTA_DEBUG(lqe, "dqacq ends count:%llu ver:%llu rc:%d",
 		     repbody->qb_count, repbody->qb_slv_ver, rc);
 	lqe_write_unlock(lqe);
 out:
