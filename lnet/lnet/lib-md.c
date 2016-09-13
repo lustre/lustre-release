@@ -46,33 +46,33 @@
 void
 lnet_md_unlink(lnet_libmd_t *md)
 {
-        if ((md->md_flags & LNET_MD_FLAG_ZOMBIE) == 0) {
-                /* first unlink attempt... */
-                lnet_me_t *me = md->md_me;
+	if ((md->md_flags & LNET_MD_FLAG_ZOMBIE) == 0) {
+		/* first unlink attempt... */
+		lnet_me_t *me = md->md_me;
 
-                md->md_flags |= LNET_MD_FLAG_ZOMBIE;
+		md->md_flags |= LNET_MD_FLAG_ZOMBIE;
 
-                /* Disassociate from ME (if any), and unlink it if it was created
-                 * with LNET_UNLINK */
-                if (me != NULL) {
+		/* Disassociate from ME (if any), and unlink it if it was created
+		 * with LNET_UNLINK */
+		if (me != NULL) {
 			/* detach MD from portal */
 			lnet_ptl_detach_md(me, md);
-                        if (me->me_unlink == LNET_UNLINK)
-                                lnet_me_unlink(me);
-                }
+			if (me->me_unlink == LNET_UNLINK)
+				lnet_me_unlink(me);
+		}
 
-                /* ensure all future handle lookups fail */
+		/* ensure all future handle lookups fail */
 		lnet_res_lh_invalidate(&md->md_lh);
-        }
+	}
 
-        if (md->md_refcount != 0) {
-                CDEBUG(D_NET, "Queueing unlink of md %p\n", md);
-                return;
-        }
+	if (md->md_refcount != 0) {
+		CDEBUG(D_NET, "Queueing unlink of md %p\n", md);
+		return;
+	}
 
-        CDEBUG(D_NET, "Unlinking md %p\n", md);
+	CDEBUG(D_NET, "Unlinking md %p\n", md);
 
-        if (md->md_eq != NULL) {
+	if (md->md_eq != NULL) {
 		int	cpt = lnet_cpt_of_cookie(md->md_lh.lh_cookie);
 
 		LASSERT(*md->md_eq->eq_refs[cpt] > 0);
@@ -87,76 +87,76 @@ lnet_md_unlink(lnet_libmd_t *md)
 static int
 lnet_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
 {
-        int          i;
-        unsigned int niov;
-        int          total_length = 0;
+	int	     i;
+	unsigned int niov;
+	int	     total_length = 0;
 
-        lmd->md_me = NULL;
-        lmd->md_start = umd->start;
-        lmd->md_offset = 0;
-        lmd->md_max_size = umd->max_size;
-        lmd->md_options = umd->options;
-        lmd->md_user_ptr = umd->user_ptr;
+	lmd->md_me = NULL;
+	lmd->md_start = umd->start;
+	lmd->md_offset = 0;
+	lmd->md_max_size = umd->max_size;
+	lmd->md_options = umd->options;
+	lmd->md_user_ptr = umd->user_ptr;
 	lmd->md_eq = NULL;
-        lmd->md_threshold = umd->threshold;
-        lmd->md_refcount = 0;
-        lmd->md_flags = (unlink == LNET_UNLINK) ? LNET_MD_FLAG_AUTO_UNLINK : 0;
+	lmd->md_threshold = umd->threshold;
+	lmd->md_refcount = 0;
+	lmd->md_flags = (unlink == LNET_UNLINK) ? LNET_MD_FLAG_AUTO_UNLINK : 0;
 
-        if ((umd->options & LNET_MD_IOVEC) != 0) {
+	if ((umd->options & LNET_MD_IOVEC) != 0) {
 
-                if ((umd->options & LNET_MD_KIOV) != 0) /* Can't specify both */
-                        return -EINVAL;
+		if ((umd->options & LNET_MD_KIOV) != 0) /* Can't specify both */
+			return -EINVAL;
 
-                lmd->md_niov = niov = umd->length;
-                memcpy(lmd->md_iov.iov, umd->start,
-                       niov * sizeof (lmd->md_iov.iov[0]));
+		lmd->md_niov = niov = umd->length;
+		memcpy(lmd->md_iov.iov, umd->start,
+		       niov * sizeof(lmd->md_iov.iov[0]));
 
-                for (i = 0; i < (int)niov; i++) {
-                        /* We take the base address on trust */
-                        if (lmd->md_iov.iov[i].iov_len <= 0) /* invalid length */
-                                return -EINVAL;
+		for (i = 0; i < (int)niov; i++) {
+			/* We take the base address on trust */
+			if (lmd->md_iov.iov[i].iov_len <= 0) /* invalid length */
+				return -EINVAL;
 
-                        total_length += lmd->md_iov.iov[i].iov_len;
-                }
+			total_length += lmd->md_iov.iov[i].iov_len;
+		}
 
-                lmd->md_length = total_length;
+		lmd->md_length = total_length;
 
-                if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
-                    (umd->max_size < 0 ||
-                     umd->max_size > total_length)) // illegal max_size
-                        return -EINVAL;
+		if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
+		    (umd->max_size < 0 ||
+		     umd->max_size > total_length)) // illegal max_size
+			return -EINVAL;
 
-        } else if ((umd->options & LNET_MD_KIOV) != 0) {
-                lmd->md_niov = niov = umd->length;
-                memcpy(lmd->md_iov.kiov, umd->start,
-                       niov * sizeof (lmd->md_iov.kiov[0]));
+	} else if ((umd->options & LNET_MD_KIOV) != 0) {
+		lmd->md_niov = niov = umd->length;
+		memcpy(lmd->md_iov.kiov, umd->start,
+		       niov * sizeof(lmd->md_iov.kiov[0]));
 
-                for (i = 0; i < (int)niov; i++) {
-                        /* We take the page pointer on trust */
-                        if (lmd->md_iov.kiov[i].kiov_offset +
+		for (i = 0; i < (int)niov; i++) {
+			/* We take the page pointer on trust */
+			if (lmd->md_iov.kiov[i].kiov_offset +
 			    lmd->md_iov.kiov[i].kiov_len > PAGE_SIZE)
-                                return -EINVAL; /* invalid length */
+				return -EINVAL; /* invalid length */
 
-                        total_length += lmd->md_iov.kiov[i].kiov_len;
-                }
+			total_length += lmd->md_iov.kiov[i].kiov_len;
+		}
 
-                lmd->md_length = total_length;
+		lmd->md_length = total_length;
 
-                if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
-                    (umd->max_size < 0 ||
-                     umd->max_size > total_length)) // illegal max_size
-                        return -EINVAL;
-        } else {   /* contiguous */
-                lmd->md_length = umd->length;
-                lmd->md_niov = niov = 1;
-                lmd->md_iov.iov[0].iov_base = umd->start;
-                lmd->md_iov.iov[0].iov_len = umd->length;
+		if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
+		    (umd->max_size < 0 ||
+		     umd->max_size > total_length)) // illegal max_size
+			return -EINVAL;
+	} else {   /* contiguous */
+		lmd->md_length = umd->length;
+		lmd->md_niov = niov = 1;
+		lmd->md_iov.iov[0].iov_base = umd->start;
+		lmd->md_iov.iov[0].iov_len = umd->length;
 
-                if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
-                    (umd->max_size < 0 ||
-                     umd->max_size > (int)umd->length)) // illegal max_size
-                        return -EINVAL;
-        }
+		if ((umd->options & LNET_MD_MAX_SIZE) != 0 && /* max size used */
+		    (umd->max_size < 0 ||
+		     umd->max_size > (int)umd->length)) // illegal max_size
+			return -EINVAL;
+	}
 
 	return 0;
 }
@@ -172,7 +172,7 @@ lnet_md_link(lnet_libmd_t *md, lnet_handle_eq_t eq_handle, int cpt)
 	 * otherwise caller may only lnet_md_free() it.
 	 */
 	/* This implementation doesn't know how to create START events or
-	 * disable END events.  Best to LASSERT our caller is compliant so
+	 * disable END events.	Best to LASSERT our caller is compliant so
 	 * we find out quickly...  */
 	/*  TODO - reevaluate what should be here in light of
 	 * the removal of the start and end events
@@ -200,38 +200,38 @@ lnet_md_link(lnet_libmd_t *md, lnet_handle_eq_t eq_handle, int cpt)
 void
 lnet_md_deconstruct(lnet_libmd_t *lmd, lnet_md_t *umd)
 {
-        /* NB this doesn't copy out all the iov entries so when a
-         * discontiguous MD is copied out, the target gets to know the
-         * original iov pointer (in start) and the number of entries it had
-         * and that's all.
-         */
-        umd->start = lmd->md_start;
-        umd->length = ((lmd->md_options & (LNET_MD_IOVEC | LNET_MD_KIOV)) == 0) ?
-                      lmd->md_length : lmd->md_niov;
-        umd->threshold = lmd->md_threshold;
-        umd->max_size = lmd->md_max_size;
-        umd->options = lmd->md_options;
-        umd->user_ptr = lmd->md_user_ptr;
-        lnet_eq2handle(&umd->eq_handle, lmd->md_eq);
+	/* NB this doesn't copy out all the iov entries so when a
+	 * discontiguous MD is copied out, the target gets to know the
+	 * original iov pointer (in start) and the number of entries it had
+	 * and that's all.
+	 */
+	umd->start = lmd->md_start;
+	umd->length = ((lmd->md_options & (LNET_MD_IOVEC | LNET_MD_KIOV)) == 0) ?
+		      lmd->md_length : lmd->md_niov;
+	umd->threshold = lmd->md_threshold;
+	umd->max_size = lmd->md_max_size;
+	umd->options = lmd->md_options;
+	umd->user_ptr = lmd->md_user_ptr;
+	lnet_eq2handle(&umd->eq_handle, lmd->md_eq);
 }
 
 static int
 lnet_md_validate(lnet_md_t *umd)
 {
-        if (umd->start == NULL && umd->length != 0) {
-                CERROR("MD start pointer can not be NULL with length %u\n",
-                       umd->length);
-                return -EINVAL;
-        }
+	if (umd->start == NULL && umd->length != 0) {
+		CERROR("MD start pointer can not be NULL with length %u\n",
+		       umd->length);
+		return -EINVAL;
+	}
 
-        if ((umd->options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
-            umd->length > LNET_MAX_IOV) {
-                CERROR("Invalid option: too many fragments %u, %d max\n",
-                       umd->length, LNET_MAX_IOV);
-                return -EINVAL;
-        }
+	if ((umd->options & (LNET_MD_KIOV | LNET_MD_IOVEC)) != 0 &&
+	    umd->length > LNET_MAX_IOV) {
+		CERROR("Invalid option: too many fragments %u, %d max\n",
+		       umd->length, LNET_MAX_IOV);
+		return -EINVAL;
+	}
 
-        return 0;
+	return 0;
 }
 
 /**
@@ -250,7 +250,7 @@ lnet_md_validate(lnet_md_t *umd)
  * \param handle On successful returns, a handle to the newly created MD is
  * saved here. This handle can be used later in LNetMDUnlink().
  *
- * \retval 0       On success.
+ * \retval 0	   On success.
  * \retval -EINVAL If \a umd is not valid.
  * \retval -ENOMEM If new MD cannot be allocated.
  * \retval -ENOENT Either \a meh or \a umd.eq_handle does not point to a
@@ -263,26 +263,26 @@ int
 LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 	     lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
-	struct list_head        matches = LIST_HEAD_INIT(matches);
-	struct list_head        drops = LIST_HEAD_INIT(drops);
+	struct list_head	matches = LIST_HEAD_INIT(matches);
+	struct list_head	drops = LIST_HEAD_INIT(drops);
 	struct lnet_me		*me;
 	struct lnet_libmd	*md;
 	int			cpt;
 	int			rc;
 
-        LASSERT (the_lnet.ln_refcount > 0);
+	LASSERT(the_lnet.ln_refcount > 0);
 
-        if (lnet_md_validate(&umd) != 0)
-                return -EINVAL;
+	if (lnet_md_validate(&umd) != 0)
+		return -EINVAL;
 
-        if ((umd.options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) == 0) {
-                CERROR("Invalid option: no MD_OP set\n");
-                return -EINVAL;
-        }
+	if ((umd.options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) == 0) {
+		CERROR("Invalid option: no MD_OP set\n");
+		return -EINVAL;
+	}
 
-        md = lnet_md_alloc(&umd);
-        if (md == NULL)
-                return -ENOMEM;
+	md = lnet_md_alloc(&umd);
+	if (md == NULL)
+		return -ENOMEM;
 
 	rc = lnet_md_build(md, &umd, unlink);
 	if (rc != 0)
@@ -333,7 +333,7 @@ EXPORT_SYMBOL(LNetMDAttach);
  * saved here. This handle can be used later in LNetMDUnlink(), LNetPut(),
  * and LNetGet() operations.
  *
- * \retval 0       On success.
+ * \retval 0	   On success.
  * \retval -EINVAL If \a umd is not valid.
  * \retval -ENOMEM If new MD cannot be allocated.
  * \retval -ENOENT \a umd.eq_handle does not point to a valid EQ. Note that
@@ -347,19 +347,19 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
 	int		cpt;
 	int		rc;
 
-        LASSERT (the_lnet.ln_refcount > 0);
+	LASSERT(the_lnet.ln_refcount > 0);
 
-        if (lnet_md_validate(&umd) != 0)
-                return -EINVAL;
+	if (lnet_md_validate(&umd) != 0)
+		return -EINVAL;
 
-        if ((umd.options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) != 0) {
-                CERROR("Invalid option: GET|PUT illegal on active MDs\n");
-                return -EINVAL;
-        }
+	if ((umd.options & (LNET_MD_OP_GET | LNET_MD_OP_PUT)) != 0) {
+		CERROR("Invalid option: GET|PUT illegal on active MDs\n");
+		return -EINVAL;
+	}
 
-        md = lnet_md_alloc(&umd);
-        if (md == NULL)
-                return -ENOMEM;
+	md = lnet_md_alloc(&umd);
+	if (md == NULL)
+		return -ENOMEM;
 
 	rc = lnet_md_build(md, &umd, unlink);
 	if (rc != 0)
@@ -412,7 +412,7 @@ EXPORT_SYMBOL(LNetMDBind);
  *
  * \param mdh A handle for the MD to be unlinked.
  *
- * \retval 0       On success.
+ * \retval 0	   On success.
  * \retval -ENOENT If \a mdh does not point to a valid MD object.
  */
 int
@@ -430,8 +430,8 @@ LNetMDUnlink (lnet_handle_md_t mdh)
 	md = lnet_handle2md(&mdh);
 	if (md == NULL) {
 		lnet_res_unlock(cpt);
-                return -ENOENT;
-        }
+		return -ENOENT;
+	}
 
 	md->md_flags |= LNET_MD_FLAG_ABORTED;
 	/* If the MD is busy, lnet_md_unlink just marks it for deletion, and
@@ -442,7 +442,7 @@ LNetMDUnlink (lnet_handle_md_t mdh)
 		lnet_eq_enqueue_event(md->md_eq, &ev);
 	}
 
-        lnet_md_unlink(md);
+	lnet_md_unlink(md);
 
 	lnet_res_unlock(cpt);
 	return 0;

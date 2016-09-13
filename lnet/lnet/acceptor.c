@@ -55,14 +55,14 @@ static struct {
 int
 lnet_acceptor_port(void)
 {
-        return accept_port;
+	return accept_port;
 }
 
 static inline int
 lnet_accept_magic(__u32 magic, __u32 constant)
 {
-        return (magic == constant ||
-                magic == __swab32(constant));
+	return (magic == constant ||
+		magic == __swab32(constant));
 }
 
 EXPORT_SYMBOL(lnet_acceptor_port);
@@ -83,132 +83,132 @@ static char *accept_type = NULL;
 static int
 lnet_acceptor_get_tunables(void)
 {
-        /* Userland acceptor uses 'accept_type' instead of 'accept', due to
-         * conflict with 'accept(2)', but kernel acceptor still uses 'accept'
-         * for compatibility. Hence the trick. */
-        accept_type = accept;
-        return 0;
+	/* Userland acceptor uses 'accept_type' instead of 'accept', due to
+	 * conflict with 'accept(2)', but kernel acceptor still uses 'accept'
+	 * for compatibility. Hence the trick. */
+	accept_type = accept;
+	return 0;
 }
 
 int
 lnet_acceptor_timeout(void)
 {
-        return accept_timeout;
+	return accept_timeout;
 }
 EXPORT_SYMBOL(lnet_acceptor_timeout);
 
 void
 lnet_connect_console_error (int rc, lnet_nid_t peer_nid,
-                           __u32 peer_ip, int peer_port)
+			   __u32 peer_ip, int peer_port)
 {
-        switch (rc) {
-        /* "normal" errors */
-        case -ECONNREFUSED:
+	switch (rc) {
+	/* "normal" errors */
+	case -ECONNREFUSED:
 		CNETERR("Connection to %s at host %pI4h on port %d was "
-                        "refused: check that Lustre is running on that node.\n",
+			"refused: check that Lustre is running on that node.\n",
 			libcfs_nid2str(peer_nid), &peer_ip, peer_port);
-                break;
-        case -EHOSTUNREACH:
-        case -ENETUNREACH:
+		break;
+	case -EHOSTUNREACH:
+	case -ENETUNREACH:
 		CNETERR("Connection to %s at host %pI4h "
-                        "was unreachable: the network or that node may "
-                        "be down, or Lustre may be misconfigured.\n",
+			"was unreachable: the network or that node may "
+			"be down, or Lustre may be misconfigured.\n",
 			libcfs_nid2str(peer_nid), &peer_ip);
-                break;
-        case -ETIMEDOUT:
+		break;
+	case -ETIMEDOUT:
 		CNETERR("Connection to %s at host %pI4h on "
-                        "port %d took too long: that node may be hung "
-                        "or experiencing high load.\n",
+			"port %d took too long: that node may be hung "
+			"or experiencing high load.\n",
 			libcfs_nid2str(peer_nid), &peer_ip, peer_port);
-                break;
-        case -ECONNRESET:
+		break;
+	case -ECONNRESET:
 		LCONSOLE_ERROR_MSG(0x11b, "Connection to %s at host %pI4h"
-                                   " on port %d was reset: "
-                                   "is it running a compatible version of "
-                                   "Lustre and is %s one of its NIDs?\n",
+				   " on port %d was reset: "
+				   "is it running a compatible version of "
+				   "Lustre and is %s one of its NIDs?\n",
 				   libcfs_nid2str(peer_nid), &peer_ip,
 				   peer_port, libcfs_nid2str(peer_nid));
-                break;
-        case -EPROTO:
-                LCONSOLE_ERROR_MSG(0x11c, "Protocol error connecting to %s at "
+		break;
+	case -EPROTO:
+		LCONSOLE_ERROR_MSG(0x11c, "Protocol error connecting to %s at "
 				   "host %pI4h on port %d: is it running "
-                                   "a compatible version of Lustre?\n",
+				   "a compatible version of Lustre?\n",
 				   libcfs_nid2str(peer_nid), &peer_ip,
 				   peer_port);
-                break;
-        case -EADDRINUSE:
-                LCONSOLE_ERROR_MSG(0x11d, "No privileged ports available to "
+		break;
+	case -EADDRINUSE:
+		LCONSOLE_ERROR_MSG(0x11d, "No privileged ports available to "
 				   "connect to %s at host %pI4h on port "
-                                   "%d\n", libcfs_nid2str(peer_nid),
+				   "%d\n", libcfs_nid2str(peer_nid),
 				   &peer_ip, peer_port);
-                break;
-        default:
-                LCONSOLE_ERROR_MSG(0x11e, "Unexpected error %d connecting to %s"
+		break;
+	default:
+		LCONSOLE_ERROR_MSG(0x11e, "Unexpected error %d connecting to %s"
 				   " at host %pI4h on port %d\n", rc,
-                                   libcfs_nid2str(peer_nid),
+				   libcfs_nid2str(peer_nid),
 				   &peer_ip, peer_port);
-                break;
-        }
+		break;
+	}
 }
 EXPORT_SYMBOL(lnet_connect_console_error);
 
 int
 lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
-            __u32 local_ip, __u32 peer_ip, int peer_port)
+	    __u32 local_ip, __u32 peer_ip, int peer_port)
 {
-        lnet_acceptor_connreq_t cr;
-	struct socket           *sock;
-        int                     rc;
-        int                     port;
-        int                     fatal;
+	lnet_acceptor_connreq_t cr;
+	struct socket		*sock;
+	int			rc;
+	int			port;
+	int			fatal;
 
-        CLASSERT (sizeof(cr) <= 16);            /* not too big to be on the stack */
+	CLASSERT(sizeof(cr) <= 16);		/* not too big to be on the stack */
 
-        for (port = LNET_ACCEPTOR_MAX_RESERVED_PORT;
-             port >= LNET_ACCEPTOR_MIN_RESERVED_PORT;
-             --port) {
-                /* Iterate through reserved ports. */
+	for (port = LNET_ACCEPTOR_MAX_RESERVED_PORT;
+	     port >= LNET_ACCEPTOR_MIN_RESERVED_PORT;
+	     --port) {
+		/* Iterate through reserved ports. */
 
 		rc = lnet_sock_connect(&sock, &fatal,
-                                         local_ip, port,
-                                         peer_ip, peer_port);
-                if (rc != 0) {
-                        if (fatal)
-                                goto failed;
-                        continue;
-                }
+					 local_ip, port,
+					 peer_ip, peer_port);
+		if (rc != 0) {
+			if (fatal)
+				goto failed;
+			continue;
+		}
 
-                CLASSERT (LNET_PROTO_ACCEPTOR_VERSION == 1);
+		CLASSERT(LNET_PROTO_ACCEPTOR_VERSION == 1);
 
-                cr.acr_magic   = LNET_PROTO_ACCEPTOR_MAGIC;
-                cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
-                cr.acr_nid     = peer_nid;
+		cr.acr_magic   = LNET_PROTO_ACCEPTOR_MAGIC;
+		cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
+		cr.acr_nid     = peer_nid;
 
-                if (the_lnet.ln_testprotocompat != 0) {
-                        /* single-shot proto check */
+		if (the_lnet.ln_testprotocompat != 0) {
+			/* single-shot proto check */
 			lnet_net_lock(LNET_LOCK_EX);
-                        if ((the_lnet.ln_testprotocompat & 4) != 0) {
-                                cr.acr_version++;
-                                the_lnet.ln_testprotocompat &= ~4;
-                        }
-                        if ((the_lnet.ln_testprotocompat & 8) != 0) {
-                                cr.acr_magic = LNET_PROTO_MAGIC;
-                                the_lnet.ln_testprotocompat &= ~8;
-                        }
+			if ((the_lnet.ln_testprotocompat & 4) != 0) {
+				cr.acr_version++;
+				the_lnet.ln_testprotocompat &= ~4;
+			}
+			if ((the_lnet.ln_testprotocompat & 8) != 0) {
+				cr.acr_magic = LNET_PROTO_MAGIC;
+				the_lnet.ln_testprotocompat &= ~8;
+			}
 			lnet_net_unlock(LNET_LOCK_EX);
-                }
+		}
 
 		rc = lnet_sock_write(sock, &cr, sizeof(cr),
-                                       accept_timeout);
-                if (rc != 0)
-                        goto failed_sock;
+				       accept_timeout);
+		if (rc != 0)
+			goto failed_sock;
 
-                *sockp = sock;
-                return 0;
-        }
+		*sockp = sock;
+		return 0;
+	}
 
-        rc = -EADDRINUSE;
-        goto failed;
+	rc = -EADDRINUSE;
+	goto failed;
 
 failed_sock:
 	sock_release(sock);
@@ -221,167 +221,167 @@ EXPORT_SYMBOL(lnet_connect);
 static int
 lnet_accept(struct socket *sock, __u32 magic)
 {
-        lnet_acceptor_connreq_t cr;
-        __u32                   peer_ip;
-        int                     peer_port;
-        int                     rc;
-        int                     flip;
-        lnet_ni_t              *ni;
-        char                   *str;
+	lnet_acceptor_connreq_t cr;
+	__u32			peer_ip;
+	int			peer_port;
+	int			rc;
+	int			flip;
+	lnet_ni_t	       *ni;
+	char		       *str;
 
-        LASSERT (sizeof(cr) <= 16);             /* not too big for the stack */
+	LASSERT(sizeof(cr) <= 16);		/* not too big for the stack */
 
 	rc = lnet_sock_getaddr(sock, true, &peer_ip, &peer_port);
-        LASSERT (rc == 0);                      /* we succeeded before */
+	LASSERT(rc == 0);			/* we succeeded before */
 
-        if (!lnet_accept_magic(magic, LNET_PROTO_ACCEPTOR_MAGIC)) {
+	if (!lnet_accept_magic(magic, LNET_PROTO_ACCEPTOR_MAGIC)) {
 
-                if (lnet_accept_magic(magic, LNET_PROTO_MAGIC)) {
-                        /* future version compatibility!
-                         * When LNET unifies protocols over all LNDs, the first
-                         * thing sent will be a version query.  I send back
-                         * LNET_PROTO_ACCEPTOR_MAGIC to tell her I'm "old" */
+		if (lnet_accept_magic(magic, LNET_PROTO_MAGIC)) {
+			/* future version compatibility!
+			 * When LNET unifies protocols over all LNDs, the first
+			 * thing sent will be a version query.	I send back
+			 * LNET_PROTO_ACCEPTOR_MAGIC to tell her I'm "old" */
 
-                        memset (&cr, 0, sizeof(cr));
-                        cr.acr_magic = LNET_PROTO_ACCEPTOR_MAGIC;
-                        cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
+			memset(&cr, 0, sizeof(cr));
+			cr.acr_magic = LNET_PROTO_ACCEPTOR_MAGIC;
+			cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
 			rc = lnet_sock_write(sock, &cr, sizeof(cr),
-                                               accept_timeout);
+					       accept_timeout);
 
-                        if (rc != 0)
-                                CERROR("Error sending magic+version in response"
+			if (rc != 0)
+				CERROR("Error sending magic+version in response"
 				       "to LNET magic from %pI4h: %d\n",
 				       &peer_ip, rc);
-                        return -EPROTO;
-                }
+			return -EPROTO;
+		}
 
-                if (magic == le32_to_cpu(LNET_PROTO_TCP_MAGIC))
-                        str = "'old' socknal/tcpnal";
-                else
-                        str = "unrecognised";
+		if (magic == le32_to_cpu(LNET_PROTO_TCP_MAGIC))
+			str = "'old' socknal/tcpnal";
+		else
+			str = "unrecognised";
 
 		LCONSOLE_ERROR_MSG(0x11f, "Refusing connection from %pI4h"
-                                   " magic %08x: %s acceptor protocol\n",
+				   " magic %08x: %s acceptor protocol\n",
 				   &peer_ip, magic, str);
-                return -EPROTO;
-        }
+		return -EPROTO;
+	}
 
-        flip = (magic != LNET_PROTO_ACCEPTOR_MAGIC);
+	flip = (magic != LNET_PROTO_ACCEPTOR_MAGIC);
 
 	rc = lnet_sock_read(sock, &cr.acr_version,
-                              sizeof(cr.acr_version),
-                              accept_timeout);
-        if (rc != 0) {
-                CERROR("Error %d reading connection request version from "
+			      sizeof(cr.acr_version),
+			      accept_timeout);
+	if (rc != 0) {
+		CERROR("Error %d reading connection request version from "
 		       "%pI4h\n", rc, &peer_ip);
-                return -EIO;
-        }
+		return -EIO;
+	}
 
-        if (flip)
-                __swab32s(&cr.acr_version);
+	if (flip)
+		__swab32s(&cr.acr_version);
 
-        if (cr.acr_version != LNET_PROTO_ACCEPTOR_VERSION) {
-                /* future version compatibility!
-                 * An acceptor-specific protocol rev will first send a version
-                 * query.  I send back my current version to tell her I'm
-                 * "old". */
-                int peer_version = cr.acr_version;
+	if (cr.acr_version != LNET_PROTO_ACCEPTOR_VERSION) {
+		/* future version compatibility!
+		 * An acceptor-specific protocol rev will first send a version
+		 * query.  I send back my current version to tell her I'm
+		 * "old". */
+		int peer_version = cr.acr_version;
 
-                memset (&cr, 0, sizeof(cr));
-                cr.acr_magic = LNET_PROTO_ACCEPTOR_MAGIC;
-                cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
+		memset(&cr, 0, sizeof(cr));
+		cr.acr_magic = LNET_PROTO_ACCEPTOR_MAGIC;
+		cr.acr_version = LNET_PROTO_ACCEPTOR_VERSION;
 
 		rc = lnet_sock_write(sock, &cr, sizeof(cr),
-                                       accept_timeout);
+				       accept_timeout);
 
-                if (rc != 0)
-                        CERROR("Error sending magic+version in response"
+		if (rc != 0)
+			CERROR("Error sending magic+version in response"
 			       "to version %d from %pI4h: %d\n",
 			       peer_version, &peer_ip, rc);
-                return -EPROTO;
-        }
+		return -EPROTO;
+	}
 
 	rc = lnet_sock_read(sock, &cr.acr_nid,
-                              sizeof(cr) -
-                              offsetof(lnet_acceptor_connreq_t, acr_nid),
-                              accept_timeout);
-        if (rc != 0) {
-                CERROR("Error %d reading connection request from "
+			      sizeof(cr) -
+			      offsetof(lnet_acceptor_connreq_t, acr_nid),
+			      accept_timeout);
+	if (rc != 0) {
+		CERROR("Error %d reading connection request from "
 		       "%pI4h\n", rc, &peer_ip);
-                return -EIO;
-        }
+		return -EIO;
+	}
 
-        if (flip)
-                __swab64s(&cr.acr_nid);
+	if (flip)
+		__swab64s(&cr.acr_nid);
 
-        ni = lnet_net2ni(LNET_NIDNET(cr.acr_nid));
-        if (ni == NULL ||               /* no matching net */
-            ni->ni_nid != cr.acr_nid) { /* right NET, wrong NID! */
-                if (ni != NULL)
-                        lnet_ni_decref(ni);
+	ni = lnet_net2ni(LNET_NIDNET(cr.acr_nid));
+	if (ni == NULL ||		/* no matching net */
+	    ni->ni_nid != cr.acr_nid) { /* right NET, wrong NID! */
+		if (ni != NULL)
+			lnet_ni_decref(ni);
 		LCONSOLE_ERROR_MSG(0x120, "Refusing connection from %pI4h "
 				   "for %s: No matching NI\n",
 				   &peer_ip, libcfs_nid2str(cr.acr_nid));
-                return -EPERM;
-        }
+		return -EPERM;
+	}
 
-        if (ni->ni_lnd->lnd_accept == NULL) {
-                /* This catches a request for the loopback LND */
-                lnet_ni_decref(ni);
+	if (ni->ni_lnd->lnd_accept == NULL) {
+		/* This catches a request for the loopback LND */
+		lnet_ni_decref(ni);
 		LCONSOLE_ERROR_MSG(0x121, "Refusing connection from %pI4h "
 				  "for %s: NI doesn not accept IP connections\n",
 				  &peer_ip, libcfs_nid2str(cr.acr_nid));
-                return -EPERM;
-        }
+		return -EPERM;
+	}
 
 	CDEBUG(D_NET, "Accept %s from %pI4h\n",
 	       libcfs_nid2str(cr.acr_nid), &peer_ip);
 
-        rc = ni->ni_lnd->lnd_accept(ni, sock);
+	rc = ni->ni_lnd->lnd_accept(ni, sock);
 
-        lnet_ni_decref(ni);
-        return rc;
+	lnet_ni_decref(ni);
+	return rc;
 }
 
 static int
 lnet_acceptor(void *arg)
 {
 	struct socket  *newsock;
-        int            rc;
-        __u32          magic;
-        __u32          peer_ip;
-        int            peer_port;
-	int            secure = (int)((uintptr_t)arg);
+	int	       rc;
+	__u32	       magic;
+	__u32	       peer_ip;
+	int	       peer_port;
+	int	       secure = (int)((uintptr_t)arg);
 
-        LASSERT (lnet_acceptor_state.pta_sock == NULL);
+	LASSERT(lnet_acceptor_state.pta_sock == NULL);
 
-        cfs_block_allsigs();
+	cfs_block_allsigs();
 
 	rc = lnet_sock_listen(&lnet_acceptor_state.pta_sock,
-                                0, accept_port, accept_backlog);
-        if (rc != 0) {
-                if (rc == -EADDRINUSE)
-                        LCONSOLE_ERROR_MSG(0x122, "Can't start acceptor on port"
-                                           " %d: port already in use\n",
-                                           accept_port);
-                else
-                        LCONSOLE_ERROR_MSG(0x123, "Can't start acceptor on port "
-                                           "%d: unexpected error %d\n",
-                                           accept_port, rc);
+				0, accept_port, accept_backlog);
+	if (rc != 0) {
+		if (rc == -EADDRINUSE)
+			LCONSOLE_ERROR_MSG(0x122, "Can't start acceptor on port"
+					   " %d: port already in use\n",
+					   accept_port);
+		else
+			LCONSOLE_ERROR_MSG(0x123, "Can't start acceptor on port "
+					   "%d: unexpected error %d\n",
+					   accept_port, rc);
 
-                lnet_acceptor_state.pta_sock = NULL;
-        } else {
-                LCONSOLE(0, "Accept %s, port %d\n", accept_type, accept_port);
-        }
+		lnet_acceptor_state.pta_sock = NULL;
+	} else {
+		LCONSOLE(0, "Accept %s, port %d\n", accept_type, accept_port);
+	}
 
 	/* set init status and unblock parent */
 	lnet_acceptor_state.pta_shutdown = rc;
 	complete(&lnet_acceptor_state.pta_signal);
 
-        if (rc != 0)
-                return rc;
+	if (rc != 0)
+		return rc;
 
-        while (!lnet_acceptor_state.pta_shutdown) {
+	while (!lnet_acceptor_state.pta_shutdown) {
 
 		rc = lnet_sock_accept(&newsock, lnet_acceptor_state.pta_sock);
 		if (rc != 0) {
@@ -400,30 +400,30 @@ lnet_acceptor(void *arg)
 		}
 
 		rc = lnet_sock_getaddr(newsock, true, &peer_ip, &peer_port);
-                if (rc != 0) {
-                        CERROR("Can't determine new connection's address\n");
-                        goto failed;
-                }
+		if (rc != 0) {
+			CERROR("Can't determine new connection's address\n");
+			goto failed;
+		}
 
-                if (secure && peer_port > LNET_ACCEPTOR_MAX_RESERVED_PORT) {
+		if (secure && peer_port > LNET_ACCEPTOR_MAX_RESERVED_PORT) {
 			CERROR("Refusing connection from %pI4h: "
 			       "insecure port %d\n", &peer_ip, peer_port);
-                        goto failed;
-                }
+			goto failed;
+		}
 
 		rc = lnet_sock_read(newsock, &magic, sizeof(magic),
-                                      accept_timeout);
-                if (rc != 0) {
-                        CERROR("Error %d reading connection request from "
+				      accept_timeout);
+		if (rc != 0) {
+			CERROR("Error %d reading connection request from "
 			       "%pI4h\n", rc, &peer_ip);
-                        goto failed;
-                }
+			goto failed;
+		}
 
-                rc = lnet_accept(newsock, magic);
-                if (rc != 0)
-                        goto failed;
+		rc = lnet_accept(newsock, magic);
+		if (rc != 0)
+			goto failed;
 
-                continue;
+		continue;
 
 failed:
 		sock_release(newsock);
@@ -442,38 +442,38 @@ failed:
 static inline int
 accept2secure(const char *acc, long *sec)
 {
-        if (!strcmp(acc, "secure")) {
-                *sec = 1;
-                return 1;
-        } else if (!strcmp(acc, "all")) {
-                *sec = 0;
-                return 1;
-        } else if (!strcmp(acc, "none")) {
-                return 0;
-        } else {
-                LCONSOLE_ERROR_MSG(0x124, "Can't parse 'accept=\"%s\"'\n",
-                                   acc);
-                return -EINVAL;
-        }
+	if (!strcmp(acc, "secure")) {
+		*sec = 1;
+		return 1;
+	} else if (!strcmp(acc, "all")) {
+		*sec = 0;
+		return 1;
+	} else if (!strcmp(acc, "none")) {
+		return 0;
+	} else {
+		LCONSOLE_ERROR_MSG(0x124, "Can't parse 'accept=\"%s\"'\n",
+				   acc);
+		return -EINVAL;
+	}
 }
 
 int
 lnet_acceptor_start(void)
 {
 	struct task_struct *task;
-        int  rc;
-        long rc2;
-        long secure;
+	int  rc;
+	long rc2;
+	long secure;
 
 	/* if acceptor is already running return immediately */
 	if (!lnet_acceptor_state.pta_shutdown)
 		return 0;
 
-        LASSERT (lnet_acceptor_state.pta_sock == NULL);
+	LASSERT(lnet_acceptor_state.pta_sock == NULL);
 
-        rc = lnet_acceptor_get_tunables();
-        if (rc != 0)
-                return rc;
+	rc = lnet_acceptor_get_tunables();
+	if (rc != 0)
+		return rc;
 
 	init_completion(&lnet_acceptor_state.pta_signal);
 	rc = accept2secure(accept_type, &secure);

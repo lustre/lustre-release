@@ -615,7 +615,7 @@ lnet_ptl_match_md(struct lnet_match_info *info, struct lnet_msg *msg)
 		lnet_ptl_unlock(ptl);
 		lnet_res_unlock(mtable->mt_cpt);
 		rc = LNET_MATCHMD_NONE;
-	} else  {
+	} else	{
 		lnet_res_unlock(mtable->mt_cpt);
 		rc = lnet_ptl_match_delay(ptl, info, msg);
 	}
@@ -889,7 +889,7 @@ lnet_portals_create(void)
  *
  * \param portal Index of the portal to enable the lazy attribute on.
  *
- * \retval 0       On success.
+ * \retval 0	   On success.
  * \retval -EINVAL If \a portal is not a valid index.
  */
 int
@@ -970,7 +970,7 @@ lnet_clear_lazy_portal(struct lnet_ni *ni, int portal, char *reason)
  *
  * \param portal Index of the portal to disable the lazy attribute on.
  *
- * \retval 0       On success.
+ * \retval 0	   On success.
  * \retval -EINVAL If \a portal is not a valid index.
  */
 int

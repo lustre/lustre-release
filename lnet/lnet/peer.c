@@ -306,15 +306,15 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid, int cpt)
 	INIT_LIST_HEAD(&lp->lp_rtrq);
 	INIT_LIST_HEAD(&lp->lp_routes);
 
-        lp->lp_notify = 0;
-        lp->lp_notifylnd = 0;
-        lp->lp_notifying = 0;
-        lp->lp_alive_count = 0;
-        lp->lp_timestamp = 0;
-        lp->lp_alive = !lnet_peers_start_down(); /* 1 bit!! */
-        lp->lp_last_alive = cfs_time_current(); /* assumes alive */
-        lp->lp_last_query = 0; /* haven't asked NI yet */
-        lp->lp_ping_timestamp = 0;
+	lp->lp_notify = 0;
+	lp->lp_notifylnd = 0;
+	lp->lp_notifying = 0;
+	lp->lp_alive_count = 0;
+	lp->lp_timestamp = 0;
+	lp->lp_alive = !lnet_peers_start_down(); /* 1 bit!! */
+	lp->lp_last_alive = cfs_time_current(); /* assumes alive */
+	lp->lp_last_query = 0; /* haven't asked NI yet */
+	lp->lp_ping_timestamp = 0;
 	lp->lp_ping_feats = LNET_PING_FEAT_INVAL;
 	lp->lp_nid = nid;
 	lp->lp_cpt = cpt2;
@@ -372,20 +372,20 @@ lnet_debug_peer(lnet_nid_t nid)
 	rc = lnet_nid2peer_locked(&lp, nid, cpt);
 	if (rc != 0) {
 		lnet_net_unlock(cpt);
-                CDEBUG(D_WARNING, "No peer %s\n", libcfs_nid2str(nid));
-                return;
-        }
+		CDEBUG(D_WARNING, "No peer %s\n", libcfs_nid2str(nid));
+		return;
+	}
 
-        if (lnet_isrouter(lp) || lnet_peer_aliveness_enabled(lp))
-                aliveness = lp->lp_alive ? "up" : "down";
+	if (lnet_isrouter(lp) || lnet_peer_aliveness_enabled(lp))
+		aliveness = lp->lp_alive ? "up" : "down";
 
-        CDEBUG(D_WARNING, "%-24s %4d %5s %5d %5d %5d %5d %5d %ld\n",
-               libcfs_nid2str(lp->lp_nid), lp->lp_refcount,
-               aliveness, lp->lp_ni->ni_peertxcredits,
-               lp->lp_rtrcredits, lp->lp_minrtrcredits,
-               lp->lp_txcredits, lp->lp_mintxcredits, lp->lp_txqnob);
+	CDEBUG(D_WARNING, "%-24s %4d %5s %5d %5d %5d %5d %5d %ld\n",
+	       libcfs_nid2str(lp->lp_nid), lp->lp_refcount,
+	       aliveness, lp->lp_ni->ni_peertxcredits,
+	       lp->lp_rtrcredits, lp->lp_minrtrcredits,
+	       lp->lp_txcredits, lp->lp_mintxcredits, lp->lp_txqnob);
 
-        lnet_peer_decref_locked(lp);
+	lnet_peer_decref_locked(lp);
 
 	lnet_net_unlock(cpt);
 }

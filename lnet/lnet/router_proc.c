@@ -42,9 +42,9 @@ static struct ctl_table_header *lnet_table_header = NULL;
  * bits for peer hash offset
  * NB: we don't use the highest bit of *ppos because it's signed
  */
-#define LNET_PROC_HOFF_BITS	(LNET_LOFFT_BITS -       \
-				 LNET_PROC_CPT_BITS -    \
-				 LNET_PROC_VER_BITS -    \
+#define LNET_PROC_HOFF_BITS	(LNET_LOFFT_BITS -	 \
+				 LNET_PROC_CPT_BITS -	 \
+				 LNET_PROC_VER_BITS -	 \
 				 LNET_PROC_HASH_BITS - 1)
 /* bits for hash index + position */
 #define LNET_PROC_HPOS_BITS	(LNET_PROC_HASH_BITS + LNET_PROC_HOFF_BITS)
@@ -79,50 +79,50 @@ static struct ctl_table_header *lnet_table_header = NULL;
 static int __proc_lnet_stats(void *data, int write,
 			     loff_t pos, void __user *buffer, int nob)
 {
-        int              rc;
-        lnet_counters_t *ctrs;
-        int              len;
-        char            *tmpstr;
-	const int        tmpsiz = 256; /* 7 %u and 4 __u64 */
+	int		 rc;
+	lnet_counters_t *ctrs;
+	int		 len;
+	char		*tmpstr;
+	const int	 tmpsiz = 256; /* 7 %u and 4 __u64 */
 
-        if (write) {
+	if (write) {
 		lnet_counters_reset();
 		return 0;
-        }
+	}
 
-        /* read */
+	/* read */
 
-        LIBCFS_ALLOC(ctrs, sizeof(*ctrs));
-        if (ctrs == NULL)
-                return -ENOMEM;
+	LIBCFS_ALLOC(ctrs, sizeof(*ctrs));
+	if (ctrs == NULL)
+		return -ENOMEM;
 
-        LIBCFS_ALLOC(tmpstr, tmpsiz);
-        if (tmpstr == NULL) {
-                LIBCFS_FREE(ctrs, sizeof(*ctrs));
-                return -ENOMEM;
-        }
+	LIBCFS_ALLOC(tmpstr, tmpsiz);
+	if (tmpstr == NULL) {
+		LIBCFS_FREE(ctrs, sizeof(*ctrs));
+		return -ENOMEM;
+	}
 
 	lnet_counters_get(ctrs);
 
-        len = snprintf(tmpstr, tmpsiz,
+	len = snprintf(tmpstr, tmpsiz,
 		       "%u %u %u %u %u %u %u %llu %llu "
 		       "%llu %llu",
-                       ctrs->msgs_alloc, ctrs->msgs_max,
-                       ctrs->errors,
-                       ctrs->send_count, ctrs->recv_count,
-                       ctrs->route_count, ctrs->drop_count,
-                       ctrs->send_length, ctrs->recv_length,
-                       ctrs->route_length, ctrs->drop_length);
+		       ctrs->msgs_alloc, ctrs->msgs_max,
+		       ctrs->errors,
+		       ctrs->send_count, ctrs->recv_count,
+		       ctrs->route_count, ctrs->drop_count,
+		       ctrs->send_length, ctrs->recv_length,
+		       ctrs->route_length, ctrs->drop_length);
 
-        if (pos >= min_t(int, len, strlen(tmpstr)))
-                rc = 0;
-        else
-                rc = cfs_trace_copyout_string(buffer, nob,
-                                              tmpstr + pos, "\n");
+	if (pos >= min_t(int, len, strlen(tmpstr)))
+		rc = 0;
+	else
+		rc = cfs_trace_copyout_string(buffer, nob,
+					      tmpstr + pos, "\n");
 
-        LIBCFS_FREE(tmpstr, tmpsiz);
-        LIBCFS_FREE(ctrs, sizeof(*ctrs));
-        return rc;
+	LIBCFS_FREE(tmpstr, tmpsiz);
+	LIBCFS_FREE(ctrs, sizeof(*ctrs));
+	return rc;
 }
 
 static int
@@ -150,25 +150,25 @@ proc_lnet_routes(struct ctl_table *table, int write, void __user *buffer,
 	off = LNET_PROC_HOFF_GET(*ppos);
 	ver = LNET_PROC_VER_GET(*ppos);
 
-        LASSERT (!write);
+	LASSERT(!write);
 
-        if (*lenp == 0)
-                return 0;
+	if (*lenp == 0)
+		return 0;
 
-        LIBCFS_ALLOC(tmpstr, tmpsiz);
-        if (tmpstr == NULL)
-                return -ENOMEM;
+	LIBCFS_ALLOC(tmpstr, tmpsiz);
+	if (tmpstr == NULL)
+		return -ENOMEM;
 
-        s = tmpstr; /* points to current position in tmpstr[] */
+	s = tmpstr; /* points to current position in tmpstr[] */
 
-        if (*ppos == 0) {
-                s += snprintf(s, tmpstr + tmpsiz - s, "Routing %s\n",
-                              the_lnet.ln_routing ? "enabled" : "disabled");
-                LASSERT (tmpstr + tmpsiz - s > 0);
+	if (*ppos == 0) {
+		s += snprintf(s, tmpstr + tmpsiz - s, "Routing %s\n",
+			      the_lnet.ln_routing ? "enabled" : "disabled");
+		LASSERT(tmpstr + tmpsiz - s > 0);
 
 		s += snprintf(s, tmpstr + tmpsiz - s, "%-8s %4s %8s %7s %s\n",
 			      "net", "hops", "priority", "state", "router");
-                LASSERT (tmpstr + tmpsiz - s > 0);
+		LASSERT(tmpstr + tmpsiz - s > 0);
 
 		lnet_net_lock(0);
 		ver = (unsigned int)the_lnet.ln_remote_nets_version;
@@ -220,12 +220,12 @@ proc_lnet_routes(struct ctl_table *table, int write, void __user *buffer,
 			}
 		}
 
-                if (route != NULL) {
-			__u32        net	= rnet->lrn_net;
+		if (route != NULL) {
+			__u32	     net	= rnet->lrn_net;
 			__u32 hops		= route->lr_hops;
 			unsigned int priority	= route->lr_priority;
 			lnet_nid_t   nid	= route->lr_gateway->lp_nid;
-			int          alive	= lnet_is_route_alive(route);
+			int	     alive	= lnet_is_route_alive(route);
 
 			s += snprintf(s, tmpstr + tmpsiz - s,
 				      "%-8s %4u %8u %7s %s\n",
@@ -237,56 +237,56 @@ proc_lnet_routes(struct ctl_table *table, int write, void __user *buffer,
 		}
 
 		lnet_net_unlock(0);
-        }
+	}
 
-        len = s - tmpstr;     /* how many bytes was written */
+	len = s - tmpstr;     /* how many bytes was written */
 
-        if (len > *lenp) {    /* linux-supplied buffer is too small */
-                rc = -EINVAL;
-        } else if (len > 0) { /* wrote something */
+	if (len > *lenp) {    /* linux-supplied buffer is too small */
+		rc = -EINVAL;
+	} else if (len > 0) { /* wrote something */
 		if (copy_to_user(buffer, tmpstr, len))
-                        rc = -EFAULT;
-                else {
+			rc = -EFAULT;
+		else {
 			off += 1;
 			*ppos = LNET_PROC_POS_MAKE(0, ver, 0, off);
-                }
-        }
+		}
+	}
 
-        LIBCFS_FREE(tmpstr, tmpsiz);
+	LIBCFS_FREE(tmpstr, tmpsiz);
 
-        if (rc == 0)
-                *lenp = len;
+	if (rc == 0)
+		*lenp = len;
 
-        return rc;
+	return rc;
 }
 
 static int
 proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 		  size_t *lenp, loff_t *ppos)
 {
-        int        rc = 0;
-        char      *tmpstr;
-        char      *s;
-        const int  tmpsiz = 256;
-        int        len;
-        int        ver;
-	int        off;
+	int	   rc = 0;
+	char	  *tmpstr;
+	char	  *s;
+	const int  tmpsiz = 256;
+	int	   len;
+	int	   ver;
+	int	   off;
 
 	off = LNET_PROC_HOFF_GET(*ppos);
 	ver = LNET_PROC_VER_GET(*ppos);
 
-        LASSERT (!write);
+	LASSERT(!write);
 
-        if (*lenp == 0)
-                return 0;
+	if (*lenp == 0)
+		return 0;
 
-        LIBCFS_ALLOC(tmpstr, tmpsiz);
-        if (tmpstr == NULL)
-                return -ENOMEM;
+	LIBCFS_ALLOC(tmpstr, tmpsiz);
+	if (tmpstr == NULL)
+		return -ENOMEM;
 
-        s = tmpstr; /* points to current position in tmpstr[] */
+	s = tmpstr; /* points to current position in tmpstr[] */
 
-        if (*ppos == 0) {
+	if (*ppos == 0) {
 		s += snprintf(s, tmpstr + tmpsiz - s,
 			      "%-4s %7s %9s %6s %12s %9s %8s %7s %s\n",
 			      "ref", "rtr_ref", "alive_cnt", "state",
@@ -308,36 +308,36 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 		if (ver != LNET_PROC_VERSION(the_lnet.ln_routers_version)) {
 			lnet_net_unlock(0);
 
-                        LIBCFS_FREE(tmpstr, tmpsiz);
-                        return -ESTALE;
-                }
+			LIBCFS_FREE(tmpstr, tmpsiz);
+			return -ESTALE;
+		}
 
-                r = the_lnet.ln_routers.next;
+		r = the_lnet.ln_routers.next;
 
 		while (r != &the_lnet.ln_routers) {
 			lnet_peer_t *lp = list_entry(r, lnet_peer_t,
 						     lp_rtr_list);
 
-                        if (skip == 0) {
-                                peer = lp;
-                                break;
-                        }
+			if (skip == 0) {
+				peer = lp;
+				break;
+			}
 
-                        skip--;
-                        r = r->next;
-                }
+			skip--;
+			r = r->next;
+		}
 
-                if (peer != NULL) {
-                        lnet_nid_t nid = peer->lp_nid;
-                        cfs_time_t now = cfs_time_current();
-                        cfs_time_t deadline = peer->lp_ping_deadline;
-                        int nrefs     = peer->lp_refcount;
-                        int nrtrrefs  = peer->lp_rtr_refcount;
-                        int alive_cnt = peer->lp_alive_count;
-                        int alive     = peer->lp_alive;
-                        int pingsent  = !peer->lp_ping_notsent;
-                        int last_ping = cfs_duration_sec(cfs_time_sub(now,
-                                                     peer->lp_ping_timestamp));
+		if (peer != NULL) {
+			lnet_nid_t nid = peer->lp_nid;
+			cfs_time_t now = cfs_time_current();
+			cfs_time_t deadline = peer->lp_ping_deadline;
+			int nrefs     = peer->lp_refcount;
+			int nrtrrefs  = peer->lp_rtr_refcount;
+			int alive_cnt = peer->lp_alive_count;
+			int alive     = peer->lp_alive;
+			int pingsent  = !peer->lp_ping_notsent;
+			int last_ping = cfs_duration_sec(cfs_time_sub(now,
+						     peer->lp_ping_timestamp));
 			int down_ni   = 0;
 			lnet_route_t *rtr;
 
@@ -354,53 +354,53 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 				}
 			}
 
-                        if (deadline == 0)
-                                s += snprintf(s, tmpstr + tmpsiz - s,
-                                              "%-4d %7d %9d %6s %12d %9d %8s %7d %s\n",
-                                              nrefs, nrtrrefs, alive_cnt,
-                                              alive ? "up" : "down", last_ping,
-                                              pingsent, "NA", down_ni,
-                                              libcfs_nid2str(nid));
-                        else
-                                s += snprintf(s, tmpstr + tmpsiz - s,
-                                              "%-4d %7d %9d %6s %12d %9d %8lu %7d %s\n",
-                                              nrefs, nrtrrefs, alive_cnt,
-                                              alive ? "up" : "down", last_ping,
-                                              pingsent,
-                                              cfs_duration_sec(cfs_time_sub(deadline, now)),
-                                              down_ni, libcfs_nid2str(nid));
-                        LASSERT (tmpstr + tmpsiz - s > 0);
-                }
+			if (deadline == 0)
+				s += snprintf(s, tmpstr + tmpsiz - s,
+					      "%-4d %7d %9d %6s %12d %9d %8s %7d %s\n",
+					      nrefs, nrtrrefs, alive_cnt,
+					      alive ? "up" : "down", last_ping,
+					      pingsent, "NA", down_ni,
+					      libcfs_nid2str(nid));
+			else
+				s += snprintf(s, tmpstr + tmpsiz - s,
+					      "%-4d %7d %9d %6s %12d %9d %8lu %7d %s\n",
+					      nrefs, nrtrrefs, alive_cnt,
+					      alive ? "up" : "down", last_ping,
+					      pingsent,
+					      cfs_duration_sec(cfs_time_sub(deadline, now)),
+					      down_ni, libcfs_nid2str(nid));
+			LASSERT(tmpstr + tmpsiz - s > 0);
+		}
 
 		lnet_net_unlock(0);
-        }
+	}
 
-        len = s - tmpstr;     /* how many bytes was written */
+	len = s - tmpstr;     /* how many bytes was written */
 
-        if (len > *lenp) {    /* linux-supplied buffer is too small */
-                rc = -EINVAL;
-        } else if (len > 0) { /* wrote something */
+	if (len > *lenp) {    /* linux-supplied buffer is too small */
+		rc = -EINVAL;
+	} else if (len > 0) { /* wrote something */
 		if (copy_to_user(buffer, tmpstr, len))
-                        rc = -EFAULT;
-                else {
+			rc = -EFAULT;
+		else {
 			off += 1;
 			*ppos = LNET_PROC_POS_MAKE(0, ver, 0, off);
-                }
-        }
+		}
+	}
 
-        LIBCFS_FREE(tmpstr, tmpsiz);
+	LIBCFS_FREE(tmpstr, tmpsiz);
 
-        if (rc == 0)
-                *lenp = len;
+	if (rc == 0)
+		*lenp = len;
 
-        return rc;
+	return rc;
 }
 
 static int
 proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 		size_t *lenp, loff_t *ppos)
 {
-	const int		tmpsiz  = 256;
+	const int		tmpsiz	= 256;
 	struct lnet_peer_table	*ptable;
 	char			*tmpstr;
 	char			*s;
@@ -422,18 +422,18 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 		return 0;
 	}
 
-        LIBCFS_ALLOC(tmpstr, tmpsiz);
-        if (tmpstr == NULL)
-                return -ENOMEM;
+	LIBCFS_ALLOC(tmpstr, tmpsiz);
+	if (tmpstr == NULL)
+		return -ENOMEM;
 
-        s = tmpstr; /* points to current position in tmpstr[] */
+	s = tmpstr; /* points to current position in tmpstr[] */
 
-        if (*ppos == 0) {
-                s += snprintf(s, tmpstr + tmpsiz - s,
-                              "%-24s %4s %5s %5s %5s %5s %5s %5s %5s %s\n",
-                              "nid", "refs", "state", "last", "max",
-                              "rtr", "min", "tx", "min", "queue");
-                LASSERT (tmpstr + tmpsiz - s > 0);
+	if (*ppos == 0) {
+		s += snprintf(s, tmpstr + tmpsiz - s,
+			      "%-24s %4s %5s %5s %5s %5s %5s %5s %5s %s\n",
+			      "nid", "refs", "state", "last", "max",
+			      "rtr", "min", "tx", "min", "queue");
+		LASSERT(tmpstr + tmpsiz - s > 0);
 
 		hoff++;
 	} else {
@@ -463,74 +463,74 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 			while (p != &ptable->pt_hash[hash]) {
 				lnet_peer_t *lp = list_entry(p, lnet_peer_t,
 							     lp_hashlist);
-                                if (skip == 0) {
-                                        peer = lp;
+				if (skip == 0) {
+					peer = lp;
 
-                                        /* minor optimization: start from idx+1
-                                         * on next iteration if we've just
-                                         * drained lp_hashlist */
+					/* minor optimization: start from idx+1
+					 * on next iteration if we've just
+					 * drained lp_hashlist */
 					if (lp->lp_hashlist.next ==
 					    &ptable->pt_hash[hash]) {
 						hoff = 1;
 						hash++;
 					} else {
 						hoff++;
-                                        }
+					}
 
-                                        break;
-                                }
+					break;
+				}
 
-                                skip--;
-                                p = lp->lp_hashlist.next;
-                        }
+				skip--;
+				p = lp->lp_hashlist.next;
+			}
 
-                        if (peer != NULL)
-                                break;
+			if (peer != NULL)
+				break;
 
-                        p = NULL;
+			p = NULL;
 			hoff = 1;
 			hash++;
-                }
+		}
 
-                if (peer != NULL) {
-                        lnet_nid_t nid       = peer->lp_nid;
-                        int        nrefs     = peer->lp_refcount;
-                        int        lastalive = -1;
-                        char      *aliveness = "NA";
-                        int        maxcr     = peer->lp_ni->ni_peertxcredits;
-                        int        txcr      = peer->lp_txcredits;
-                        int        mintxcr   = peer->lp_mintxcredits;
-                        int        rtrcr     = peer->lp_rtrcredits;
-                        int        minrtrcr  = peer->lp_minrtrcredits;
-                        int        txqnob    = peer->lp_txqnob;
+		if (peer != NULL) {
+			lnet_nid_t nid	     = peer->lp_nid;
+			int	   nrefs     = peer->lp_refcount;
+			int	   lastalive = -1;
+			char	  *aliveness = "NA";
+			int	   maxcr     = peer->lp_ni->ni_peertxcredits;
+			int	   txcr      = peer->lp_txcredits;
+			int	   mintxcr   = peer->lp_mintxcredits;
+			int	   rtrcr     = peer->lp_rtrcredits;
+			int	   minrtrcr  = peer->lp_minrtrcredits;
+			int	   txqnob    = peer->lp_txqnob;
 
-                        if (lnet_isrouter(peer) ||
-                            lnet_peer_aliveness_enabled(peer))
-                                aliveness = peer->lp_alive ? "up" : "down";
+			if (lnet_isrouter(peer) ||
+			    lnet_peer_aliveness_enabled(peer))
+				aliveness = peer->lp_alive ? "up" : "down";
 
-                        if (lnet_peer_aliveness_enabled(peer)) {
-                                cfs_time_t     now = cfs_time_current();
-                                cfs_duration_t delta;
+			if (lnet_peer_aliveness_enabled(peer)) {
+				cfs_time_t     now = cfs_time_current();
+				cfs_duration_t delta;
 
-                                delta = cfs_time_sub(now, peer->lp_last_alive);
-                                lastalive = cfs_duration_sec(delta);
+				delta = cfs_time_sub(now, peer->lp_last_alive);
+				lastalive = cfs_duration_sec(delta);
 
-                                /* No need to mess up peers contents with
-                                 * arbitrarily long integers - it suffices to
-                                 * know that lastalive is more than 10000s old
-                                 */
-                                if (lastalive >= 10000)
-                                        lastalive = 9999;
-                        }
+				/* No need to mess up peers contents with
+				 * arbitrarily long integers - it suffices to
+				 * know that lastalive is more than 10000s old
+				 */
+				if (lastalive >= 10000)
+					lastalive = 9999;
+			}
 
 			lnet_net_unlock(cpt);
 
-                        s += snprintf(s, tmpstr + tmpsiz - s,
-                                      "%-24s %4d %5s %5d %5d %5d %5d %5d %5d %d\n",
-                                      libcfs_nid2str(nid), nrefs, aliveness,
-                                      lastalive, maxcr, rtrcr, minrtrcr, txcr,
-                                      mintxcr, txqnob);
-                        LASSERT (tmpstr + tmpsiz - s > 0);
+			s += snprintf(s, tmpstr + tmpsiz - s,
+				      "%-24s %4d %5s %5d %5d %5d %5d %5d %5d %d\n",
+				      libcfs_nid2str(nid), nrefs, aliveness,
+				      lastalive, maxcr, rtrcr, minrtrcr, txcr,
+				      mintxcr, txqnob);
+			LASSERT(tmpstr + tmpsiz - s > 0);
 
 		} else { /* peer is NULL */
 			lnet_net_unlock(cpt);
@@ -543,32 +543,32 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 			if (peer == NULL && cpt < LNET_CPT_NUMBER)
 				goto again;
 		}
-        }
+	}
 
-        len = s - tmpstr;     /* how many bytes was written */
+	len = s - tmpstr;     /* how many bytes was written */
 
-        if (len > *lenp) {    /* linux-supplied buffer is too small */
-                rc = -EINVAL;
-        } else if (len > 0) { /* wrote something */
+	if (len > *lenp) {    /* linux-supplied buffer is too small */
+		rc = -EINVAL;
+	} else if (len > 0) { /* wrote something */
 		if (copy_to_user(buffer, tmpstr, len))
-                        rc = -EFAULT;
-                else
+			rc = -EFAULT;
+		else
 			*ppos = LNET_PROC_POS_MAKE(cpt, ver, hash, hoff);
-        }
+	}
 
-        LIBCFS_FREE(tmpstr, tmpsiz);
+	LIBCFS_FREE(tmpstr, tmpsiz);
 
-        if (rc == 0)
-                *lenp = len;
+	if (rc == 0)
+		*lenp = len;
 
-        return rc;
+	return rc;
 }
 
 static int __proc_lnet_buffers(void *data, int write,
 			       loff_t pos, void __user *buffer, int nob)
 {
-	char            *s;
-	char            *tmpstr;
+	char		*s;
+	char		*tmpstr;
 	int		tmpsiz;
 	int		idx;
 	int		len;
@@ -579,16 +579,16 @@ static int __proc_lnet_buffers(void *data, int write,
 
 	/* (4 %d) * 4 * LNET_CPT_NUMBER */
 	tmpsiz = 64 * (LNET_NRBPOOLS + 1) * LNET_CPT_NUMBER;
-        LIBCFS_ALLOC(tmpstr, tmpsiz);
-        if (tmpstr == NULL)
-                return -ENOMEM;
+	LIBCFS_ALLOC(tmpstr, tmpsiz);
+	if (tmpstr == NULL)
+		return -ENOMEM;
 
-        s = tmpstr; /* points to current position in tmpstr[] */
+	s = tmpstr; /* points to current position in tmpstr[] */
 
-        s += snprintf(s, tmpstr + tmpsiz - s,
-                      "%5s %5s %7s %7s\n",
-                      "pages", "count", "credits", "min");
-        LASSERT (tmpstr + tmpsiz - s > 0);
+	s += snprintf(s, tmpstr + tmpsiz - s,
+		      "%5s %5s %7s %7s\n",
+		      "pages", "count", "credits", "min");
+	LASSERT(tmpstr + tmpsiz - s > 0);
 
 	if (the_lnet.ln_rtrpools == NULL)
 		goto out; /* I'm not a router */
@@ -610,16 +610,16 @@ static int __proc_lnet_buffers(void *data, int write,
 	}
 
  out:
-        len = s - tmpstr;
+	len = s - tmpstr;
 
-        if (pos >= min_t(int, len, strlen(tmpstr)))
-                rc = 0;
-        else
-                rc = cfs_trace_copyout_string(buffer, nob,
-                                              tmpstr + pos, NULL);
+	if (pos >= min_t(int, len, strlen(tmpstr)))
+		rc = 0;
+	else
+		rc = cfs_trace_copyout_string(buffer, nob,
+					      tmpstr + pos, NULL);
 
-        LIBCFS_FREE(tmpstr, tmpsiz);
-        return rc;
+	LIBCFS_FREE(tmpstr, tmpsiz);
+	return rc;
 }
 
 static int
@@ -635,50 +635,50 @@ proc_lnet_nis(struct ctl_table *table, int write, void __user *buffer,
 	      size_t *lenp, loff_t *ppos)
 {
 	int	tmpsiz = 128 * LNET_CPT_NUMBER;
-        int        rc = 0;
-        char      *tmpstr;
-        char      *s;
-        int        len;
+	int	   rc = 0;
+	char	  *tmpstr;
+	char	  *s;
+	int	   len;
 
-        LASSERT (!write);
+	LASSERT(!write);
 
-        if (*lenp == 0)
-                return 0;
+	if (*lenp == 0)
+		return 0;
 
-        LIBCFS_ALLOC(tmpstr, tmpsiz);
-        if (tmpstr == NULL)
-                return -ENOMEM;
+	LIBCFS_ALLOC(tmpstr, tmpsiz);
+	if (tmpstr == NULL)
+		return -ENOMEM;
 
-        s = tmpstr; /* points to current position in tmpstr[] */
+	s = tmpstr; /* points to current position in tmpstr[] */
 
-        if (*ppos == 0) {
-                s += snprintf(s, tmpstr + tmpsiz - s,
-                              "%-24s %6s %5s %4s %4s %4s %5s %5s %5s\n",
-                              "nid", "status", "alive", "refs", "peer",
-                              "rtr", "max", "tx", "min");
-                LASSERT (tmpstr + tmpsiz - s > 0);
-        } else {
+	if (*ppos == 0) {
+		s += snprintf(s, tmpstr + tmpsiz - s,
+			      "%-24s %6s %5s %4s %4s %4s %5s %5s %5s\n",
+			      "nid", "status", "alive", "refs", "peer",
+			      "rtr", "max", "tx", "min");
+		LASSERT(tmpstr + tmpsiz - s > 0);
+	} else {
 		struct list_head  *n;
-                lnet_ni_t         *ni   = NULL;
-                int                skip = *ppos - 1;
+		lnet_ni_t	  *ni	= NULL;
+		int		   skip = *ppos - 1;
 
 		lnet_net_lock(0);
 
-                n = the_lnet.ln_nis.next;
+		n = the_lnet.ln_nis.next;
 
 		while (n != &the_lnet.ln_nis) {
 			lnet_ni_t *a_ni = list_entry(n, lnet_ni_t, ni_list);
 
-                        if (skip == 0) {
-                                ni = a_ni;
-                                break;
-                        }
+			if (skip == 0) {
+				ni = a_ni;
+				break;
+			}
 
-                        skip--;
-                        n = n->next;
-                }
+			skip--;
+			n = n->next;
+		}
 
-                if (ni != NULL) {
+		if (ni != NULL) {
 			struct lnet_tx_queue	*tq;
 			char	*stat;
 			long	now = cfs_time_current_sec();
@@ -729,30 +729,30 @@ proc_lnet_nis(struct ctl_table *table, int write, void __user *buffer,
 		}
 
 		lnet_net_unlock(0);
-        }
+	}
 
-        len = s - tmpstr;     /* how many bytes was written */
+	len = s - tmpstr;     /* how many bytes was written */
 
-        if (len > *lenp) {    /* linux-supplied buffer is too small */
-                rc = -EINVAL;
-        } else if (len > 0) { /* wrote something */
+	if (len > *lenp) {    /* linux-supplied buffer is too small */
+		rc = -EINVAL;
+	} else if (len > 0) { /* wrote something */
 		if (copy_to_user(buffer, tmpstr, len))
-                        rc = -EFAULT;
-                else
-                        *ppos += 1;
-        }
+			rc = -EFAULT;
+		else
+			*ppos += 1;
+	}
 
-        LIBCFS_FREE(tmpstr, tmpsiz);
+	LIBCFS_FREE(tmpstr, tmpsiz);
 
-        if (rc == 0)
-                *lenp = len;
+	if (rc == 0)
+		*lenp = len;
 
-        return rc;
+	return rc;
 }
 
 struct lnet_portal_rotors {
-	int             pr_value;
-	const char      *pr_name;
+	int		pr_value;
+	const char	*pr_name;
 	const char	*pr_desc;
 };
 

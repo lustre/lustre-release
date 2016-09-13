@@ -68,16 +68,16 @@
  * object is saved here. This handle can be used later in LNetMEInsert(),
  * LNetMEUnlink(), or LNetMDAttach() functions.
  *
- * \retval 0       On success.
+ * \retval 0	   On success.
  * \retval -EINVAL If \a portal is invalid.
  * \retval -ENOMEM If new ME object cannot be allocated.
  */
 int
 LNetMEAttach(unsigned int portal,
-             lnet_process_id_t match_id,
-             __u64 match_bits, __u64 ignore_bits,
-             lnet_unlink_t unlink, lnet_ins_pos_t pos,
-             lnet_handle_me_t *handle)
+	     lnet_process_id_t match_id,
+	     __u64 match_bits, __u64 ignore_bits,
+	     lnet_unlink_t unlink, lnet_ins_pos_t pos,
+	     lnet_handle_me_t *handle)
 {
 	struct lnet_match_table *mtable;
 	struct lnet_me		*me;
@@ -99,12 +99,12 @@ LNetMEAttach(unsigned int portal,
 
 	lnet_res_lock(mtable->mt_cpt);
 
-        me->me_portal = portal;
-        me->me_match_id = match_id;
-        me->me_match_bits = match_bits;
-        me->me_ignore_bits = ignore_bits;
-        me->me_unlink = unlink;
-        me->me_md = NULL;
+	me->me_portal = portal;
+	me->me_match_id = match_id;
+	me->me_match_bits = match_bits;
+	me->me_ignore_bits = ignore_bits;
+	me->me_unlink = unlink;
+	me->me_md = NULL;
 
 	lnet_res_lh_initialize(the_lnet.ln_me_containers[mtable->mt_cpt],
 			       &me->me_lh);
@@ -139,16 +139,16 @@ EXPORT_SYMBOL(LNetMEAttach);
  * \param match_id,match_bits,ignore_bits,unlink,pos,handle See the discussion
  * for LNetMEAttach().
  *
- * \retval 0       On success.
+ * \retval 0	   On success.
  * \retval -ENOMEM If new ME object cannot be allocated.
  * \retval -ENOENT If \a current_meh does not point to a valid match entry.
  */
 int
 LNetMEInsert(lnet_handle_me_t current_meh,
-             lnet_process_id_t match_id,
-             __u64 match_bits, __u64 ignore_bits,
-             lnet_unlink_t unlink, lnet_ins_pos_t pos,
-             lnet_handle_me_t *handle)
+	     lnet_process_id_t match_id,
+	     __u64 match_bits, __u64 ignore_bits,
+	     lnet_unlink_t unlink, lnet_ins_pos_t pos,
+	     lnet_handle_me_t *handle)
 {
 	struct lnet_me		*current_me;
 	struct lnet_me		*new_me;
@@ -184,15 +184,15 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 		lnet_me_free(new_me);
 		lnet_res_unlock(cpt);
 		return -EPERM;
-        }
+	}
 
 	new_me->me_pos = current_me->me_pos;
-        new_me->me_portal = current_me->me_portal;
-        new_me->me_match_id = match_id;
-        new_me->me_match_bits = match_bits;
-        new_me->me_ignore_bits = ignore_bits;
-        new_me->me_unlink = unlink;
-        new_me->me_md = NULL;
+	new_me->me_portal = current_me->me_portal;
+	new_me->me_match_id = match_id;
+	new_me->me_match_bits = match_bits;
+	new_me->me_ignore_bits = ignore_bits;
+	new_me->me_unlink = unlink;
+	new_me->me_md = NULL;
 
 	lnet_res_lh_initialize(the_lnet.ln_me_containers[cpt], &new_me->me_lh);
 
@@ -219,7 +219,7 @@ EXPORT_SYMBOL(LNetMEInsert);
  *
  * \param meh A handle for the ME to be unlinked.
  *
- * \retval 0       On success.
+ * \retval 0	   On success.
  * \retval -ENOENT If \a meh does not point to a valid ME.
  * \see LNetMDUnlink() for the discussion on delivering unlink event.
  */
@@ -239,8 +239,8 @@ LNetMEUnlink(lnet_handle_me_t meh)
 	me = lnet_handle2me(&meh);
 	if (me == NULL) {
 		lnet_res_unlock(cpt);
-                return -ENOENT;
-        }
+		return -ENOENT;
+	}
 
 	md = me->me_md;
 	if (md != NULL) {
@@ -281,15 +281,15 @@ static void
 lib_me_dump(lnet_me_t *me)
 {
 	CWARN("Match Entry %p (%#llx)\n", me,
-              me->me_lh.lh_cookie);
+	      me->me_lh.lh_cookie);
 
-        CWARN("\tMatch/Ignore\t= %016lx / %016lx\n",
-              me->me_match_bits, me->me_ignore_bits);
+	CWARN("\tMatch/Ignore\t= %016lx / %016lx\n",
+	      me->me_match_bits, me->me_ignore_bits);
 
-        CWARN("\tMD\t= %p\n", me->md);
-        CWARN("\tprev\t= %p\n",
+	CWARN("\tMD\t= %p\n", me->md);
+	CWARN("\tprev\t= %p\n",
 	      list_entry(me->me_list.prev, lnet_me_t, me_list));
-        CWARN("\tnext\t= %p\n",
+	CWARN("\tnext\t= %p\n",
 	      list_entry(me->me_list.next, lnet_me_t, me_list));
 }
 #endif

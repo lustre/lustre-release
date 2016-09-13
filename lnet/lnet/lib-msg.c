@@ -45,16 +45,16 @@
 void
 lnet_build_unlink_event(lnet_libmd_t *md, lnet_event_t *ev)
 {
-        ENTRY;
+	ENTRY;
 
-        memset(ev, 0, sizeof(*ev));
+	memset(ev, 0, sizeof(*ev));
 
-        ev->status   = 0;
-        ev->unlinked = 1;
-        ev->type     = LNET_EVENT_UNLINK;
-        lnet_md_deconstruct(md, &ev->md);
-        lnet_md2handle(&ev->md_handle, md);
-        EXIT;
+	ev->status   = 0;
+	ev->unlinked = 1;
+	ev->type     = LNET_EVENT_UNLINK;
+	lnet_md_deconstruct(md, &ev->md);
+	lnet_md2handle(&ev->md_handle, md);
+	EXIT;
 }
 
 /*
@@ -72,19 +72,19 @@ lnet_build_msg_event(lnet_msg_t *msg, lnet_event_kind_t ev_type)
 
 	if (ev_type == LNET_EVENT_SEND) {
 		/* event for active message */
-		ev->target.nid    = le64_to_cpu(hdr->dest_nid);
-		ev->target.pid    = le32_to_cpu(hdr->dest_pid);
+		ev->target.nid	  = le64_to_cpu(hdr->dest_nid);
+		ev->target.pid	  = le32_to_cpu(hdr->dest_pid);
 		ev->initiator.nid = LNET_NID_ANY;
 		ev->initiator.pid = the_lnet.ln_pid;
 		ev->sender	  = LNET_NID_ANY;
 
 	} else {
 		/* event for passive message */
-		ev->target.pid    = hdr->dest_pid;
-		ev->target.nid    = hdr->dest_nid;
+		ev->target.pid	  = hdr->dest_pid;
+		ev->target.nid	  = hdr->dest_nid;
 		ev->initiator.pid = hdr->src_pid;
 		ev->initiator.nid = hdr->src_nid;
-		ev->rlength       = hdr->payload_length;
+		ev->rlength	  = hdr->payload_length;
 		ev->sender	  = msg->msg_from;
 		ev->mlength	  = msg->msg_wanted;
 		ev->offset	  = msg->msg_offset;
@@ -361,30 +361,30 @@ lnet_msg_detach_md(lnet_msg_t *msg, int status)
 static int
 lnet_complete_msg_locked(lnet_msg_t *msg, int cpt)
 {
-        lnet_handle_wire_t ack_wmd;
-        int                rc;
-        int                status = msg->msg_ev.status;
+	lnet_handle_wire_t ack_wmd;
+	int		   rc;
+	int		   status = msg->msg_ev.status;
 
 	LASSERT(msg->msg_onactivelist);
 
-        if (status == 0 && msg->msg_ack) {
-                /* Only send an ACK if the PUT completed successfully */
+	if (status == 0 && msg->msg_ack) {
+		/* Only send an ACK if the PUT completed successfully */
 
 		lnet_msg_decommit(msg, cpt, 0);
 
 		msg->msg_ack = 0;
 		lnet_net_unlock(cpt);
 
-                LASSERT(msg->msg_ev.type == LNET_EVENT_PUT);
-                LASSERT(!msg->msg_routing);
+		LASSERT(msg->msg_ev.type == LNET_EVENT_PUT);
+		LASSERT(!msg->msg_routing);
 
-                ack_wmd = msg->msg_hdr.msg.put.ack_wmd;
+		ack_wmd = msg->msg_hdr.msg.put.ack_wmd;
 
-                lnet_prep_send(msg, LNET_MSG_ACK, msg->msg_ev.initiator, 0, 0);
+		lnet_prep_send(msg, LNET_MSG_ACK, msg->msg_ev.initiator, 0, 0);
 
-                msg->msg_hdr.msg.ack.dst_wmd = ack_wmd;
-                msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;
-                msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
+		msg->msg_hdr.msg.ack.dst_wmd = ack_wmd;
+		msg->msg_hdr.msg.ack.match_bits = msg->msg_ev.match_bits;
+		msg->msg_hdr.msg.ack.mlength = cpu_to_le32(msg->msg_ev.mlength);
 
 		/* NB: we probably want to use NID of msg::msg_from as 3rd
 		 * parameter (router NID) if it's routed message */
@@ -448,7 +448,7 @@ lnet_finalize(lnet_ni_t *ni, lnet_msg_t *msg, int status)
 	if (msg == NULL)
 		return;
 
-        msg->msg_ev.status = status;
+	msg->msg_ev.status = status;
 
 	if (msg->msg_md != NULL) {
 		cpt = lnet_cpt_of_cookie(msg->msg_md->md_lh.lh_cookie);
@@ -527,7 +527,7 @@ EXPORT_SYMBOL(lnet_finalize);
 void
 lnet_msg_container_cleanup(struct lnet_msg_container *container)
 {
-	int     count = 0;
+	int	count = 0;
 
 	if (container->msc_init == 0)
 		return;
@@ -586,7 +586,7 @@ void
 lnet_msg_containers_destroy(void)
 {
 	struct lnet_msg_container *container;
-	int     i;
+	int	i;
 
 	if (the_lnet.ln_msg_containers == NULL)
 		return;

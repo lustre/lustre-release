@@ -730,7 +730,7 @@ int
 lnet_delay_rule_add(struct lnet_fault_attr *attr)
 {
 	struct lnet_delay_rule *rule;
-	int		        rc = 0;
+	int			rc = 0;
 	ENTRY;
 
 	if (!((attr->u.delay.la_rate == 0) ^
@@ -823,10 +823,10 @@ int
 lnet_delay_rule_del(lnet_nid_t src, lnet_nid_t dst, bool shutdown)
 {
 	struct lnet_delay_rule *rule;
-	struct lnet_delay_rule  *tmp;
-	struct list_head        rule_list;
+	struct lnet_delay_rule	*tmp;
+	struct list_head	rule_list;
 	struct list_head	msg_list;
-	int		        n = 0;
+	int			n = 0;
 	bool			cleanup;
 	ENTRY;
 
@@ -893,9 +893,9 @@ lnet_delay_rule_list(int pos, struct lnet_fault_attr *attr,
 		    struct lnet_fault_stat *stat)
 {
 	struct lnet_delay_rule *rule;
-	int		        cpt;
-	int		        i = 0;
-	int		        rc = -ENOENT;
+	int			cpt;
+	int			i = 0;
+	int			rc = -ENOENT;
 	ENTRY;
 
 	cpt = lnet_net_lock_current();
@@ -922,7 +922,7 @@ void
 lnet_delay_rule_reset(void)
 {
 	struct lnet_delay_rule *rule;
-	int		        cpt;
+	int			cpt;
 	ENTRY;
 
 	cpt = lnet_net_lock_current();
