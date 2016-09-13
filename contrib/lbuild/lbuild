@@ -843,6 +843,9 @@ build_lustre() {
     mv -f lustre-*.src.rpm $TOPDIR/SRPMS/
 
     popd >/dev/null
+	if type -p cleanup_rpmmacros; then
+		cleanup_rpmmacros
+	fi
 
     return 0
 }

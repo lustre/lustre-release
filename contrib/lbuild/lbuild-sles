@@ -6,6 +6,8 @@ BUILD_GEN+=".1" #LU-3337 add missing build files for sles11sp2 server
 
 DEVEL_KERNEL_TYPE="default-devel"
 RPM_HELPERS_DIR="/usr/lib/rpm"
+RMAC=$HOME/.rpmmacros
+SUSE_MACROS=/etc/rpm/macros.kernel-source
 
 prepare_and_build_srpm() {
 
@@ -115,12 +117,21 @@ resolve_arch() {
 }
 
 find_linux_devel_paths() {
-    local path="$1"
+	local path="$1"
+	local linuxobjpath=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$(resolve_arch $TARGET_ARCH $PATCHLESS)/$RPMSMPTYPE
 
-    LINUX=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}
-    LINUXOBJ=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}-obj/$(resolve_arch $TARGET_ARCH $PATCHLESS)/$RPMSMPTYPE
+	LINUX=$path/usr/src/linux-${lnxmaj}${lnxmin}-${lnxrel}
+	LINUXOBJ=$path/usr/src/linux-obj/$(resolve_arch $TARGET_ARCH $PATCHLESS)/$RPMSMPTYPE
 
-    return 0
+	# symlink the linux-obj to linux-version-obj
+	ln -s $linuxobjpath $LINUXOBJ
+
+	# We modify %kernel_module_package macro to use the linux obj
+	# that lbuild install, not the OS installed /usr/src
+	sed -i "/^%kernel_module_package/,/^)}$/d" $RMAC
+	sed -e "s/\/usr\/src/${path//\//\\/}\/usr\/src/" ${SUSE_MACROS} >> $RMAC
+
+	return 0
 }
 
 mcpu_rpmbuild_opt() {
@@ -132,4 +143,9 @@ mcpu_rpmbuild_opt() {
 # This function digs out the linux release from a linux-obj tree
 find_linux_release() {
     _find_linux_release $LINUXOBJ
+}
+
+# cleanup the modified/added rpmmacros
+cleanup_rpmmacros() {
+	sed -i "/^%kernel_module_package/,/^)}$/d" $RMAC
 }

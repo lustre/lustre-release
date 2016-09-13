@@ -104,3 +104,7 @@ kernel_srpm_location() {
     echo "http://vault.centos.org/centos/7/updates/Source/SPackages/"
 
 }
+
+cleanup_rpmmacros() {
+	sed -i "/^%kernel_module_package/,/^)}$/d" $RMAC
+}
