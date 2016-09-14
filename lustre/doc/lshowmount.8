@@ -1,0 +1,43 @@
+.TH LSHOWMOUNT 8 Lustre LLNL LSHOWMOUNT
+.SH NAME
+lshowmount \- show lustre exports
+.SH SYNOPSIS
+.B "lshowmount [-ehlv]"
+.br
+.SH DESCRIPTION
+.B lshowmount
+Utility to show the hosts that have lustre currently mounted to a server.
+Ths utility looks for any exports from the mgs, mds, and obdfilter.
+.SH OPTIONS
+.B lshowmount
+accepts the following options:
+.TP
+.I "-e | --enumerate"
+causes
+.B lshowmount
+to list each client mounted on a separate line instead of trying
+to compress the list of clients into a hostrange string.
+.TP
+.I "-h | --help"
+causes
+.B lshowmount
+to print out a usage message.
+.TP
+.I "-l | --lookup"
+causes
+.B lshowmount
+to try to lookup the hostname for nids that look like IP addresses.
+.TP
+.I "-v | --verbose"
+causes
+.B lshowmount
+to output export information for each service instead of only displaying
+the aggregate information for all Lustre services on the server.
+.SH FILES
+/proc/fs/lustre/mgs/<server>/exports/<uuid>/nid
+.br
+/proc/fs/lustre/mds/<server>/exports/<uuid>/nid
+.br
+/proc/fs/lustre/obdfilter/<server>/exports/<uuid>/nid
+.SH AUTHOR
+Herb Wartens

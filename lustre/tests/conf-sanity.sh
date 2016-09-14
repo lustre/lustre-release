@@ -6924,6 +6924,33 @@ test_99()
 }
 run_test 99 "Adding meta_bg option"
 
+test_100() {
+	reformat
+	start_mds || error "MDS start failed"
+	start_ost || error "unable to start OST"
+	mount_client $MOUNT || error "client start failed"
+	check_mount || error "check_mount failed"
+
+	# Desired output
+	# MGS:
+	#     0@lo
+	# lustre-MDT0000:
+	#     0@lo
+	# lustre-OST0000:
+	#     0@lo
+	do_facet mgs 'lshowmount -v' | awk 'BEGIN {NR == 0; rc=1} /MGS:/ {rc=0}
+		END {exit rc}' || error "lshowmount have no output MGS"
+
+	do_facet mds1 'lshowmount -v' | awk 'BEGIN {NR == 2; rc=1} /-MDT0000:/
+		{rc=0} END {exit rc}' || error "lshowmount have no output MDT0"
+
+	do_facet ost1 'lshowmount -v' | awk 'BEGIN {NR == 4; rc=1} /-OST0000:/
+		{rc=0} END {exit rc}' || error "lshowmount have no output OST0"
+
+	cleanup || error "cleanup failed with $?"
+}
+run_test 100 "check lshowmount lists MGS, MDT, OST and 0@lo"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

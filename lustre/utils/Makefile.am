@@ -39,7 +39,7 @@ sbin_PROGRAMS += wiretest
 endif # TESTS
 
 if SERVER
-sbin_PROGRAMS += mkfs.lustre tunefs.lustre llverdev lr_reader \
+sbin_PROGRAMS += mkfs.lustre tunefs.lustre llverdev lr_reader lshowmount \
 		 ll_decode_filter_fid llog_reader
 endif
 if LIBPTHREAD
@@ -65,6 +65,9 @@ lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 lustre_rsync_SOURCES = lustre_rsync.c obd.c lustre_cfg.c lustre_rsync.h
 lustre_rsync_LDADD :=  liblustreapi.a $(LIBPTLCTL) $(LIBREADLINE) $(PTHREAD_LIBS)
 lustre_rsync_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
+
+lshowmount_SOURCES = lshowmount.c nidlist.c nidlist.h
+lshowmount_LDADD :=  liblustreapi.a
 
 if EXT2FS_DEVEL
 EXT2FSLIB = -lext2fs

@@ -20,6 +20,7 @@
 /tunefs_lustre
 /lreplicate
 /ltrack_stats
+/lshowmount
 /lustre_rsync
 /ll_decode_filter_fid
 /lhsmd_posix
