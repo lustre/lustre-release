@@ -238,10 +238,6 @@ const char *update_op_str(__u16 opcode);
 
 extern struct page *tgt_page_to_corrupt;
 
-struct tgt_thread_big_cache {
-	struct niobuf_local	local[PTLRPC_MAX_BRW_PAGES];
-};
-
 int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt);
 int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 		     void *cookie);

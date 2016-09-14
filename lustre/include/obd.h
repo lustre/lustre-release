@@ -435,6 +435,10 @@ struct niobuf_local {
 	void		*lnb_data;
 };
 
+struct tgt_thread_big_cache {
+	struct niobuf_local	local[PTLRPC_MAX_BRW_PAGES];
+};
+
 #define LUSTRE_FLD_NAME         "fld"
 #define LUSTRE_SEQ_NAME         "seq"
 
