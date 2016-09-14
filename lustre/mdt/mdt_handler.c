@@ -2392,11 +2392,15 @@ int mdt_remote_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		break;
 	}
 	case LDLM_CB_CANCELING: {
+		struct obd_device *obd = ldlm_lock_to_ns(lock)->ns_obd;
+		struct mdt_device *mdt =
+				mdt_dev(obd->obd_lu_dev->ld_site->ls_top_dev);
+
 		LDLM_DEBUG(lock, "Revoke remote lock\n");
 
 		/* discard slc lock here so that it can be cleaned anytime,
 		 * especially for cleanup_resource() */
-		tgt_discard_slc_lock(lock);
+		tgt_discard_slc_lock(&mdt->mdt_lut, lock);
 
 		/* once we cache lock, l_ast_data is set to mdt_object */
 		if (lock->l_ast_data != NULL) {
@@ -2405,9 +2409,6 @@ int mdt_remote_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 			rc = lu_env_init(&env, LCT_MD_THREAD);
 			if (unlikely(rc != 0)) {
-				struct obd_device *obd;
-
-				obd = ldlm_lock_to_ns(lock)->ns_obd;
 				CWARN("%s: lu_env initialization failed, object"
 				      "%p "DFID" is leaked!\n",
 				      obd->obd_name, mo,
@@ -2807,7 +2808,8 @@ static void mdt_save_remote_lock(struct mdt_thread_info *info,
 			struct ptlrpc_request *req = mdt_info_req(info);
 
 			LASSERT(req != NULL);
-			tgt_save_slc_lock(lock, req->rq_transno);
+			tgt_save_slc_lock(&info->mti_mdt->mdt_lut, lock,
+					  req->rq_transno);
 			ldlm_lock_decref(h, mode);
 		}
 		h->cookie = 0ull;

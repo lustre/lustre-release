@@ -37,23 +37,22 @@
 #include "tgt_internal.h"
 #include "../ptlrpc/ptlrpc_internal.h"
 
-static spinlock_t uncommitted_slc_locks_guard;
-static struct list_head uncommitted_slc_locks;
-
 /*
- * Save cross-MDT lock in uncommitted_slc_locks.
+ * Save cross-MDT lock in lut_slc_locks.
  *
  * Lock R/W count is not saved, but released in unlock (not canceled remotely),
  * instead only a refcount is taken, so that the remote MDT where the object
  * resides can detect conflict with this lock there.
  *
+ * \param lut target
  * \param lock cross-MDT lock to save
  * \param transno when the transaction with this transno is committed, this lock
  *		  can be canceled.
  */
-void tgt_save_slc_lock(struct ldlm_lock *lock, __u64 transno)
+void tgt_save_slc_lock(struct lu_target *lut, struct ldlm_lock *lock,
+		       __u64 transno)
 {
-	spin_lock(&uncommitted_slc_locks_guard);
+	spin_lock(&lut->lut_slc_locks_guard);
 	lock_res_and_lock(lock);
 	if (ldlm_is_cbpending(lock)) {
 		/* if it was canceld by server, don't save, because remote MDT
@@ -65,27 +64,27 @@ void tgt_save_slc_lock(struct ldlm_lock *lock, __u64 transno)
 		 * both use this lock, and save it after use, so for the second
 		 * one, just put the refcount. */
 		if (list_empty(&lock->l_slc_link))
-			list_add_tail(&lock->l_slc_link,
-				      &uncommitted_slc_locks);
+			list_add_tail(&lock->l_slc_link, &lut->lut_slc_locks);
 		else
 			LDLM_LOCK_PUT(lock);
 	}
 	unlock_res_and_lock(lock);
-	spin_unlock(&uncommitted_slc_locks_guard);
+	spin_unlock(&lut->lut_slc_locks_guard);
 }
 EXPORT_SYMBOL(tgt_save_slc_lock);
 
 /*
- * Discard cross-MDT lock from uncommitted_slc_locks.
+ * Discard cross-MDT lock from lut_slc_locks.
  *
- * This is called upon BAST, just remove lock from uncommitted_slc_locks and put
- * lock refcount. The BAST will cancel this lock.
+ * This is called upon BAST, just remove lock from lut_slc_locks and put lock
+ * refcount. The BAST will cancel this lock.
  *
+ * \param lut target
  * \param lock cross-MDT lock to discard
  */
-void tgt_discard_slc_lock(struct ldlm_lock *lock)
+void tgt_discard_slc_lock(struct lu_target *lut, struct ldlm_lock *lock)
 {
-	spin_lock(&uncommitted_slc_locks_guard);
+	spin_lock(&lut->lut_slc_locks_guard);
 	lock_res_and_lock(lock);
 	/* may race with tgt_cancel_slc_locks() */
 	if (lock->l_transno != 0) {
@@ -96,26 +95,26 @@ void tgt_discard_slc_lock(struct ldlm_lock *lock)
 		LDLM_LOCK_PUT(lock);
 	}
 	unlock_res_and_lock(lock);
-	spin_unlock(&uncommitted_slc_locks_guard);
+	spin_unlock(&lut->lut_slc_locks_guard);
 }
 EXPORT_SYMBOL(tgt_discard_slc_lock);
 
 /*
  * Cancel cross-MDT locks upon transaction commit.
  *
- * Remove cross-MDT locks from uncommitted_slc_locks, cancel them and put lock
- * refcount.
+ * Remove cross-MDT locks from lut_slc_locks, cancel them and put lock refcount.
  *
+ * \param lut target
  * \param transno transaction with this number was committed.
  */
-void tgt_cancel_slc_locks(__u64 transno)
+void tgt_cancel_slc_locks(struct lu_target *lut, __u64 transno)
 {
 	struct ldlm_lock *lock, *next;
 	LIST_HEAD(list);
 	struct lustre_handle lockh;
 
-	spin_lock(&uncommitted_slc_locks_guard);
-	list_for_each_entry_safe(lock, next, &uncommitted_slc_locks,
+	spin_lock(&lut->lut_slc_locks_guard);
+	list_for_each_entry_safe(lock, next, &lut->lut_slc_locks,
 				 l_slc_link) {
 		lock_res_and_lock(lock);
 		LASSERT(lock->l_transno != 0);
@@ -134,7 +133,7 @@ void tgt_cancel_slc_locks(__u64 transno)
 		list_move(&lock->l_slc_link, &list);
 		unlock_res_and_lock(lock);
 	}
-	spin_unlock(&uncommitted_slc_locks_guard);
+	spin_unlock(&lut->lut_slc_locks_guard);
 
 	list_for_each_entry_safe(lock, next, &list, l_slc_link) {
 		list_del_init(&lock->l_slc_link);
@@ -181,6 +180,9 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 
 	spin_lock_init(&lut->lut_flags_lock);
 	lut->lut_sync_lock_cancel = NEVER_SYNC_ON_CANCEL;
+
+	spin_lock_init(&lut->lut_slc_locks_guard);
+	INIT_LIST_HEAD(&lut->lut_slc_locks);
 
 	/* last_rcvd initialization is needed by replayable targets only */
 	if (!obd->obd_replayable)
@@ -411,9 +413,6 @@ int tgt_mod_init(void)
 	lu_context_key_register_many(&tgt_session_key, NULL);
 
 	update_info_init();
-
-	spin_lock_init(&uncommitted_slc_locks_guard);
-	INIT_LIST_HEAD(&uncommitted_slc_locks);
 
 	RETURN(0);
 }

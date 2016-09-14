@@ -800,7 +800,7 @@ static void tgt_cb_last_committed(struct lu_env *env, struct thandle *th,
 		spin_unlock(&ccb->llcc_tgt->lut_translock);
 
 		ptlrpc_commit_replies(ccb->llcc_exp);
-		tgt_cancel_slc_locks(ccb->llcc_transno);
+		tgt_cancel_slc_locks(ccb->llcc_tgt, ccb->llcc_transno);
 	} else {
 		spin_unlock(&ccb->llcc_tgt->lut_translock);
 	}

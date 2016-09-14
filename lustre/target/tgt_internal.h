@@ -288,5 +288,5 @@ void distribute_txn_insert_by_batchid(struct top_multiple_thandle *new);
 int top_trans_create_tmt(const struct lu_env *env,
 			 struct top_thandle *top_th);
 
-void tgt_cancel_slc_locks(__u64 transno);
+void tgt_cancel_slc_locks(struct lu_target *tgt, __u64 transno);
 #endif /* _TG_INTERNAL_H */
