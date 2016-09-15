@@ -26,7 +26,7 @@ init_logging
 
 check_and_setup_lustre
 
-#                                  9  12.5  (min)"
+#                                  9  12.5 (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="18 23b"
 
 DIR=${DIR:-$MOUNT}
@@ -1414,9 +1414,13 @@ test_23b() {
 run_test 23b "OST pools and OOS"
 
 test_24() {
-    set_cleanup_trap
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    [[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
+	set_cleanup_trap
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
+
+	local server_version=$(lustre_version_code $SINGLEMDS)
+		[[ $server_version -ge $(version_code 2.8.56) ]] ||
+		{ skip "Need server version newer than 2.8.55"; return 0; }
 
     local numfiles=10
     local i=0
