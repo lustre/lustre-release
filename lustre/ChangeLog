@@ -57,9 +57,9 @@ TBD Intel Corporation
          3.0.101-80          (SLES11 SP4)
          3.12.62-60.64.8     (SLES12 SP1)
          vanilla linux 4.5.7
-       * Recommended e2fsprogs version: 1.42.13.wc4 or newer
-       * Recommended ZFS / SPL version: 0.6.5.7
-       * Tested with ZFS / SPL version: 0.6.5.7
+       * Recommended e2fsprogs version: 1.42.13.wc5 or newer
+       * Recommended ZFS / SPL version: 0.6.5.8
+       * Tested with ZFS / SPL version: 0.6.5.8
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
          since the NFSv4 export of Lustre filesystem with 4K stack may cause a
          stack overflow. For more information, please refer to bugzilla 17630.

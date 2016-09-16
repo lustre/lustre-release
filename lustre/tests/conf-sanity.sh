@@ -1749,7 +1749,8 @@ t32_test() {
 		! $mdt2_is_available || poolname_list+=" t32fs-mdt2"
 
 		for poolname in $poolname_list; do
-			$r "$ZPOOL list -H $poolname >/dev/null 2>&1 ||
+			$r "modprobe zfs;
+				$ZPOOL list -H $poolname >/dev/null 2>&1 ||
 				$ZPOOL import -f -d $tmp $poolname"
 		done
 
@@ -2274,7 +2275,8 @@ t32_test() {
 
 		if [[ $fstype == zfs ]]; then
 			local poolname=t32fs-mdt1
-			$r "$ZPOOL list -H $poolname >/dev/null 2>&1 ||
+			$r "modprobe zfs;
+				$ZPOOL list -H $poolname >/dev/null 2>&1 ||
 				$ZPOOL import -f -d $tmp $poolname"
 		fi
 

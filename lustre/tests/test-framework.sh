@@ -1052,7 +1052,8 @@ create_zpool() {
 	shift 3
 	local opts=${@:-"-o cachefile=none"}
 
-	do_facet $facet "$ZPOOL list -H $poolname >/dev/null 2>&1 ||
+	do_facet $facet "modprobe zfs;
+		$ZPOOL list -H $poolname >/dev/null 2>&1 ||
 		$ZPOOL create -f $opts $poolname $vdev"
 }
 
@@ -1118,7 +1119,8 @@ import_zpool() {
 
 	if [[ -n "$poolname" ]]; then
 		opts+=" -d $(dirname $(facet_vdevice $facet))"
-		do_facet $facet "$ZPOOL list -H $poolname >/dev/null 2>&1 ||
+		do_facet $facet "modprobe zfs;
+			$ZPOOL list -H $poolname >/dev/null 2>&1 ||
 			$ZPOOL import -f $opts $poolname"
 	fi
 }
