@@ -47,12 +47,12 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
+#include <endian.h>
 #include <errno.h>
 #include <assert.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 
-#include <libcfs/byteorder.h>
 #include <libcfs/util/string.h>
 #include <lustre/libiam.h>
 
@@ -149,10 +149,10 @@ static void lfix_root(void *buf,
 
         root = buf;
         *root = (typeof(*root)) {
-                .ilr_magic           = cpu_to_le64(IAM_LFIX_ROOT_MAGIC),
-                .ilr_keysize         = cpu_to_le16(keysize),
-                .ilr_recsize         = cpu_to_le16(recsize),
-                .ilr_ptrsize         = cpu_to_le16(ptrsize),
+		.ilr_magic           = htole64(IAM_LFIX_ROOT_MAGIC),
+		.ilr_keysize         = htole16(keysize),
+		.ilr_recsize         = htole16(recsize),
+		.ilr_ptrsize         = htole16(ptrsize),
                 .ilr_indirect_levels = 0
         };
 
@@ -161,7 +161,7 @@ static void lfix_root(void *buf,
                 /*
                  * limit itself + one pointer to the leaf.
                  */
-                .count = cpu_to_le16(2),
+		.count = htole16(2),
                 .limit = lfix_root_limit(blocksize, keysize + ptrsize)
         };
 
@@ -181,9 +181,9 @@ static void lfix_root(void *buf,
         entry += keysize;
         /* now @entry points to <ptr> */
         if (ptrsize == 4)
-                STORE_UNALIGNED(cpu_to_le32(1), (u_int32_t *)entry);
+		STORE_UNALIGNED(htole32(1), (u_int32_t *)entry);
         else
-                STORE_UNALIGNED(cpu_to_le64(1), (u_int64_t *)entry);
+		STORE_UNALIGNED(htole64(1), (u_int64_t *)entry);
 }
 
 static void lfix_leaf(void *buf,
@@ -194,12 +194,12 @@ static void lfix_leaf(void *buf,
         /* form leaf */
         head = buf;
         *head = (typeof(*head)) {
-                .ill_magic = cpu_to_le16(IAM_LEAF_HEADER_MAGIC),
+		.ill_magic = htole16(IAM_LEAF_HEADER_MAGIC),
                 /*
                  * Leaf contains an entry with the smallest possible key
                  * (created by zeroing).
                  */
-                .ill_count = cpu_to_le16(1),
+		.ill_count = htole16(1),
         };
 }
 
@@ -219,9 +219,9 @@ static void lvar_root(void *buf,
         isize = sizeof(lvar_hash_t) + ptrsize;
         root = buf;
         *root = (typeof(*root)) {
-                .vr_magic            = cpu_to_le32(IAM_LVAR_ROOT_MAGIC),
-                .vr_recsize          = cpu_to_le16(recsize),
-                .vr_ptrsize          = cpu_to_le16(ptrsize),
+		.vr_magic            = htole32(IAM_LVAR_ROOT_MAGIC),
+		.vr_recsize          = htole16(recsize),
+		.vr_ptrsize          = htole16(ptrsize),
                 .vr_indirect_levels  = 0
         };
 
@@ -230,7 +230,7 @@ static void lvar_root(void *buf,
                 /*
                  * limit itself + one pointer to the leaf.
                  */
-                .count = cpu_to_le16(2),
+		.count = htole16(2),
                 .limit = lvar_root_limit(blocksize, keysize + ptrsize)
         };
 
@@ -250,9 +250,9 @@ static void lvar_root(void *buf,
         entry += sizeof(lvar_hash_t);
         /* now @entry points to <ptr> */
         if (ptrsize == 4)
-                STORE_UNALIGNED(cpu_to_le32(1), (u_int32_t *)entry);
+		STORE_UNALIGNED(htole32(1), (u_int32_t *)entry);
         else
-                STORE_UNALIGNED(cpu_to_le64(1), (u_int64_t *)entry);
+		STORE_UNALIGNED(htole64(1), (u_int64_t *)entry);
 }
 
 static int lvar_esize(int namelen, int recsize)
@@ -270,8 +270,8 @@ static void lvar_leaf(void *buf,
         /* form leaf */
         head = buf;
         *head = (typeof(*head)) {
-                .vlh_magic = cpu_to_le16(IAM_LVAR_LEAF_MAGIC),
-                .vlh_used  = cpu_to_le16(sizeof *head + lvar_esize(0, recsize))
+		.vlh_magic = htole16(IAM_LVAR_LEAF_MAGIC),
+		.vlh_used  = htole16(sizeof *head + lvar_esize(0, recsize))
         };
         rec = (void *)(head + 1);
         rec[offsetof(struct lvar_leaf_entry, vle_key)] = recsize;

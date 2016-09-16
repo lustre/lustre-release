@@ -47,7 +47,7 @@
  *
  * @{
  */
-
+#include <asm/byteorder.h>
 #include <linux/types.h>
 #include <libcfs/libcfs.h>
 #ifdef __KERNEL__
@@ -421,26 +421,26 @@ static inline void lsd_le_to_cpu(struct lr_server_data *buf,
 {
 	int i;
 	memcpy(lsd->lsd_uuid, buf->lsd_uuid, sizeof(lsd->lsd_uuid));
-	lsd->lsd_last_transno     = le64_to_cpu(buf->lsd_last_transno);
-	lsd->lsd_compat14         = le64_to_cpu(buf->lsd_compat14);
-	lsd->lsd_mount_count      = le64_to_cpu(buf->lsd_mount_count);
-	lsd->lsd_feature_compat   = le32_to_cpu(buf->lsd_feature_compat);
-	lsd->lsd_feature_rocompat = le32_to_cpu(buf->lsd_feature_rocompat);
-	lsd->lsd_feature_incompat = le32_to_cpu(buf->lsd_feature_incompat);
-	lsd->lsd_server_size      = le32_to_cpu(buf->lsd_server_size);
-	lsd->lsd_client_start     = le32_to_cpu(buf->lsd_client_start);
-	lsd->lsd_client_size      = le16_to_cpu(buf->lsd_client_size);
-	lsd->lsd_subdir_count     = le16_to_cpu(buf->lsd_subdir_count);
-	lsd->lsd_catalog_oid      = le64_to_cpu(buf->lsd_catalog_oid);
-	lsd->lsd_catalog_ogen     = le32_to_cpu(buf->lsd_catalog_ogen);
+	lsd->lsd_last_transno     = __le64_to_cpu(buf->lsd_last_transno);
+	lsd->lsd_compat14         = __le64_to_cpu(buf->lsd_compat14);
+	lsd->lsd_mount_count      = __le64_to_cpu(buf->lsd_mount_count);
+	lsd->lsd_feature_compat   = __le32_to_cpu(buf->lsd_feature_compat);
+	lsd->lsd_feature_rocompat = __le32_to_cpu(buf->lsd_feature_rocompat);
+	lsd->lsd_feature_incompat = __le32_to_cpu(buf->lsd_feature_incompat);
+	lsd->lsd_server_size      = __le32_to_cpu(buf->lsd_server_size);
+	lsd->lsd_client_start     = __le32_to_cpu(buf->lsd_client_start);
+	lsd->lsd_client_size      = __le16_to_cpu(buf->lsd_client_size);
+	lsd->lsd_subdir_count     = __le16_to_cpu(buf->lsd_subdir_count);
+	lsd->lsd_catalog_oid      = __le64_to_cpu(buf->lsd_catalog_oid);
+	lsd->lsd_catalog_ogen     = __le32_to_cpu(buf->lsd_catalog_ogen);
 	memcpy(lsd->lsd_peeruuid, buf->lsd_peeruuid, sizeof(lsd->lsd_peeruuid));
-	lsd->lsd_osd_index        = le32_to_cpu(buf->lsd_osd_index);
-	lsd->lsd_padding1        = le32_to_cpu(buf->lsd_padding1);
-	lsd->lsd_start_epoch      = le32_to_cpu(buf->lsd_start_epoch);
+	lsd->lsd_osd_index        = __le32_to_cpu(buf->lsd_osd_index);
+	lsd->lsd_padding1         = __le32_to_cpu(buf->lsd_padding1);
+	lsd->lsd_start_epoch      = __le32_to_cpu(buf->lsd_start_epoch);
 	for (i = 0; i < LR_EXPIRE_INTERVALS; i++)
-		lsd->lsd_trans_table[i] = le64_to_cpu(buf->lsd_trans_table[i]);
-	lsd->lsd_trans_table_time = le32_to_cpu(buf->lsd_trans_table_time);
-	lsd->lsd_expire_intervals = le32_to_cpu(buf->lsd_expire_intervals);
+		lsd->lsd_trans_table[i] = __le64_to_cpu(buf->lsd_trans_table[i]);
+	lsd->lsd_trans_table_time = __le32_to_cpu(buf->lsd_trans_table_time);
+	lsd->lsd_expire_intervals = __le32_to_cpu(buf->lsd_expire_intervals);
 }
 
 static inline void lsd_cpu_to_le(struct lr_server_data *lsd,
@@ -448,66 +448,66 @@ static inline void lsd_cpu_to_le(struct lr_server_data *lsd,
 {
 	int i;
 	memcpy(buf->lsd_uuid, lsd->lsd_uuid, sizeof(buf->lsd_uuid));
-	buf->lsd_last_transno     = cpu_to_le64(lsd->lsd_last_transno);
-	buf->lsd_compat14         = cpu_to_le64(lsd->lsd_compat14);
-	buf->lsd_mount_count      = cpu_to_le64(lsd->lsd_mount_count);
-	buf->lsd_feature_compat   = cpu_to_le32(lsd->lsd_feature_compat);
-	buf->lsd_feature_rocompat = cpu_to_le32(lsd->lsd_feature_rocompat);
-	buf->lsd_feature_incompat = cpu_to_le32(lsd->lsd_feature_incompat);
-	buf->lsd_server_size      = cpu_to_le32(lsd->lsd_server_size);
-	buf->lsd_client_start     = cpu_to_le32(lsd->lsd_client_start);
-	buf->lsd_client_size      = cpu_to_le16(lsd->lsd_client_size);
-	buf->lsd_subdir_count     = cpu_to_le16(lsd->lsd_subdir_count);
-	buf->lsd_catalog_oid      = cpu_to_le64(lsd->lsd_catalog_oid);
-	buf->lsd_catalog_ogen     = cpu_to_le32(lsd->lsd_catalog_ogen);
+	buf->lsd_last_transno     = __cpu_to_le64(lsd->lsd_last_transno);
+	buf->lsd_compat14         = __cpu_to_le64(lsd->lsd_compat14);
+	buf->lsd_mount_count      = __cpu_to_le64(lsd->lsd_mount_count);
+	buf->lsd_feature_compat   = __cpu_to_le32(lsd->lsd_feature_compat);
+	buf->lsd_feature_rocompat = __cpu_to_le32(lsd->lsd_feature_rocompat);
+	buf->lsd_feature_incompat = __cpu_to_le32(lsd->lsd_feature_incompat);
+	buf->lsd_server_size      = __cpu_to_le32(lsd->lsd_server_size);
+	buf->lsd_client_start     = __cpu_to_le32(lsd->lsd_client_start);
+	buf->lsd_client_size      = __cpu_to_le16(lsd->lsd_client_size);
+	buf->lsd_subdir_count     = __cpu_to_le16(lsd->lsd_subdir_count);
+	buf->lsd_catalog_oid      = __cpu_to_le64(lsd->lsd_catalog_oid);
+	buf->lsd_catalog_ogen     = __cpu_to_le32(lsd->lsd_catalog_ogen);
 	memcpy(buf->lsd_peeruuid, lsd->lsd_peeruuid, sizeof(buf->lsd_peeruuid));
-	buf->lsd_osd_index	  = cpu_to_le32(lsd->lsd_osd_index);
-	buf->lsd_padding1	  = cpu_to_le32(lsd->lsd_padding1);
-	buf->lsd_start_epoch      = cpu_to_le32(lsd->lsd_start_epoch);
+	buf->lsd_osd_index	  = __cpu_to_le32(lsd->lsd_osd_index);
+	buf->lsd_padding1	  = __cpu_to_le32(lsd->lsd_padding1);
+	buf->lsd_start_epoch      = __cpu_to_le32(lsd->lsd_start_epoch);
 	for (i = 0; i < LR_EXPIRE_INTERVALS; i++)
-		buf->lsd_trans_table[i] = cpu_to_le64(lsd->lsd_trans_table[i]);
-	buf->lsd_trans_table_time = cpu_to_le32(lsd->lsd_trans_table_time);
-	buf->lsd_expire_intervals = cpu_to_le32(lsd->lsd_expire_intervals);
+		buf->lsd_trans_table[i] = __cpu_to_le64(lsd->lsd_trans_table[i]);
+	buf->lsd_trans_table_time = __cpu_to_le32(lsd->lsd_trans_table_time);
+	buf->lsd_expire_intervals = __cpu_to_le32(lsd->lsd_expire_intervals);
 }
 
 static inline void lcd_le_to_cpu(struct lsd_client_data *buf,
                                  struct lsd_client_data *lcd)
 {
         memcpy(lcd->lcd_uuid, buf->lcd_uuid, sizeof (lcd->lcd_uuid));
-        lcd->lcd_last_transno       = le64_to_cpu(buf->lcd_last_transno);
-        lcd->lcd_last_xid           = le64_to_cpu(buf->lcd_last_xid);
-        lcd->lcd_last_result        = le32_to_cpu(buf->lcd_last_result);
-        lcd->lcd_last_data          = le32_to_cpu(buf->lcd_last_data);
-        lcd->lcd_last_close_transno = le64_to_cpu(buf->lcd_last_close_transno);
-        lcd->lcd_last_close_xid     = le64_to_cpu(buf->lcd_last_close_xid);
-        lcd->lcd_last_close_result  = le32_to_cpu(buf->lcd_last_close_result);
-        lcd->lcd_last_close_data    = le32_to_cpu(buf->lcd_last_close_data);
-        lcd->lcd_pre_versions[0]    = le64_to_cpu(buf->lcd_pre_versions[0]);
-        lcd->lcd_pre_versions[1]    = le64_to_cpu(buf->lcd_pre_versions[1]);
-        lcd->lcd_pre_versions[2]    = le64_to_cpu(buf->lcd_pre_versions[2]);
-        lcd->lcd_pre_versions[3]    = le64_to_cpu(buf->lcd_pre_versions[3]);
-        lcd->lcd_last_epoch         = le32_to_cpu(buf->lcd_last_epoch);
-	lcd->lcd_generation	    = le32_to_cpu(buf->lcd_generation);
+	lcd->lcd_last_transno       = __le64_to_cpu(buf->lcd_last_transno);
+	lcd->lcd_last_xid           = __le64_to_cpu(buf->lcd_last_xid);
+	lcd->lcd_last_result        = __le32_to_cpu(buf->lcd_last_result);
+	lcd->lcd_last_data          = __le32_to_cpu(buf->lcd_last_data);
+	lcd->lcd_last_close_transno = __le64_to_cpu(buf->lcd_last_close_transno);
+	lcd->lcd_last_close_xid     = __le64_to_cpu(buf->lcd_last_close_xid);
+	lcd->lcd_last_close_result  = __le32_to_cpu(buf->lcd_last_close_result);
+	lcd->lcd_last_close_data    = __le32_to_cpu(buf->lcd_last_close_data);
+	lcd->lcd_pre_versions[0]    = __le64_to_cpu(buf->lcd_pre_versions[0]);
+	lcd->lcd_pre_versions[1]    = __le64_to_cpu(buf->lcd_pre_versions[1]);
+	lcd->lcd_pre_versions[2]    = __le64_to_cpu(buf->lcd_pre_versions[2]);
+	lcd->lcd_pre_versions[3]    = __le64_to_cpu(buf->lcd_pre_versions[3]);
+	lcd->lcd_last_epoch         = __le32_to_cpu(buf->lcd_last_epoch);
+	lcd->lcd_generation	    = __le32_to_cpu(buf->lcd_generation);
 }
 
 static inline void lcd_cpu_to_le(struct lsd_client_data *lcd,
                                  struct lsd_client_data *buf)
 {
         memcpy(buf->lcd_uuid, lcd->lcd_uuid, sizeof (lcd->lcd_uuid));
-        buf->lcd_last_transno       = cpu_to_le64(lcd->lcd_last_transno);
-        buf->lcd_last_xid           = cpu_to_le64(lcd->lcd_last_xid);
-        buf->lcd_last_result        = cpu_to_le32(lcd->lcd_last_result);
-        buf->lcd_last_data          = cpu_to_le32(lcd->lcd_last_data);
-        buf->lcd_last_close_transno = cpu_to_le64(lcd->lcd_last_close_transno);
-        buf->lcd_last_close_xid     = cpu_to_le64(lcd->lcd_last_close_xid);
-        buf->lcd_last_close_result  = cpu_to_le32(lcd->lcd_last_close_result);
-        buf->lcd_last_close_data    = cpu_to_le32(lcd->lcd_last_close_data);
-        buf->lcd_pre_versions[0]    = cpu_to_le64(lcd->lcd_pre_versions[0]);
-        buf->lcd_pre_versions[1]    = cpu_to_le64(lcd->lcd_pre_versions[1]);
-        buf->lcd_pre_versions[2]    = cpu_to_le64(lcd->lcd_pre_versions[2]);
-        buf->lcd_pre_versions[3]    = cpu_to_le64(lcd->lcd_pre_versions[3]);
-        buf->lcd_last_epoch         = cpu_to_le32(lcd->lcd_last_epoch);
-	buf->lcd_generation	    = cpu_to_le32(lcd->lcd_generation);
+	buf->lcd_last_transno       = __cpu_to_le64(lcd->lcd_last_transno);
+	buf->lcd_last_xid           = __cpu_to_le64(lcd->lcd_last_xid);
+	buf->lcd_last_result        = __cpu_to_le32(lcd->lcd_last_result);
+	buf->lcd_last_data          = __cpu_to_le32(lcd->lcd_last_data);
+	buf->lcd_last_close_transno = __cpu_to_le64(lcd->lcd_last_close_transno);
+	buf->lcd_last_close_xid     = __cpu_to_le64(lcd->lcd_last_close_xid);
+	buf->lcd_last_close_result  = __cpu_to_le32(lcd->lcd_last_close_result);
+	buf->lcd_last_close_data    = __cpu_to_le32(lcd->lcd_last_close_data);
+	buf->lcd_pre_versions[0]    = __cpu_to_le64(lcd->lcd_pre_versions[0]);
+	buf->lcd_pre_versions[1]    = __cpu_to_le64(lcd->lcd_pre_versions[1]);
+	buf->lcd_pre_versions[2]    = __cpu_to_le64(lcd->lcd_pre_versions[2]);
+	buf->lcd_pre_versions[3]    = __cpu_to_le64(lcd->lcd_pre_versions[3]);
+	buf->lcd_last_epoch         = __cpu_to_le32(lcd->lcd_last_epoch);
+	buf->lcd_generation	    = __cpu_to_le32(lcd->lcd_generation);
 }
 
 static inline __u64 lcd_last_transno(struct lsd_client_data *lcd)

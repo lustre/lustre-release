@@ -105,7 +105,7 @@ static int lgss_sk_using_cred(struct lgss_cred *cred)
 	bufs[4] = skc->sc_nodemap_hash;
 
 	/* big endian flags for the wire */
-	flags = cpu_to_be32(skc->sc_flags);
+	flags = htobe64(skc->sc_flags);
 	bufs[5].value = &flags;
 	bufs[5].length = sizeof(flags);
 

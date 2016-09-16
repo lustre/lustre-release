@@ -73,7 +73,9 @@
 #ifndef _LUSTRE_IDL_H_
 #define _LUSTRE_IDL_H_
 
+#include <asm/byteorder.h>
 #include <linux/types.h>
+
 #include <libcfs/libcfs.h>
 #include <lnet/types.h>
 #include <lustre/lustre_user.h> /* Defn's shared with user-space. */
@@ -764,30 +766,30 @@ static inline void lu_igif_build(struct lu_fid *fid, __u32 ino, __u32 gen)
  */
 static inline void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src)
 {
-	dst->f_seq = cpu_to_le64(fid_seq(src));
-	dst->f_oid = cpu_to_le32(fid_oid(src));
-	dst->f_ver = cpu_to_le32(fid_ver(src));
+	dst->f_seq = __cpu_to_le64(fid_seq(src));
+	dst->f_oid = __cpu_to_le32(fid_oid(src));
+	dst->f_ver = __cpu_to_le32(fid_ver(src));
 }
 
 static inline void fid_le_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
 {
-	dst->f_seq = le64_to_cpu(fid_seq(src));
-	dst->f_oid = le32_to_cpu(fid_oid(src));
-	dst->f_ver = le32_to_cpu(fid_ver(src));
+	dst->f_seq = __le64_to_cpu(fid_seq(src));
+	dst->f_oid = __le32_to_cpu(fid_oid(src));
+	dst->f_ver = __le32_to_cpu(fid_ver(src));
 }
 
 static inline void fid_cpu_to_be(struct lu_fid *dst, const struct lu_fid *src)
 {
-	dst->f_seq = cpu_to_be64(fid_seq(src));
-	dst->f_oid = cpu_to_be32(fid_oid(src));
-	dst->f_ver = cpu_to_be32(fid_ver(src));
+	dst->f_seq = __cpu_to_be64(fid_seq(src));
+	dst->f_oid = __cpu_to_be32(fid_oid(src));
+	dst->f_ver = __cpu_to_be32(fid_ver(src));
 }
 
 static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
 {
-	dst->f_seq = be64_to_cpu(fid_seq(src));
-	dst->f_oid = be32_to_cpu(fid_oid(src));
-	dst->f_ver = be32_to_cpu(fid_ver(src));
+	dst->f_seq = __be64_to_cpu(fid_seq(src));
+	dst->f_oid = __be32_to_cpu(fid_oid(src));
+	dst->f_ver = __be32_to_cpu(fid_ver(src));
 }
 
 static inline bool fid_is_sane(const struct lu_fid *fid)
@@ -824,8 +826,8 @@ static inline void ostid_cpu_to_le(const struct ost_id *src_oi,
 				   struct ost_id *dst_oi)
 {
 	if (fid_seq_is_mdt0(src_oi->oi.oi_seq)) {
-		dst_oi->oi.oi_id = cpu_to_le64(src_oi->oi.oi_id);
-		dst_oi->oi.oi_seq = cpu_to_le64(src_oi->oi.oi_seq);
+		dst_oi->oi.oi_id = __cpu_to_le64(src_oi->oi.oi_id);
+		dst_oi->oi.oi_seq = __cpu_to_le64(src_oi->oi.oi_seq);
 	} else {
 		fid_cpu_to_le(&dst_oi->oi_fid, &src_oi->oi_fid);
 	}
@@ -835,8 +837,8 @@ static inline void ostid_le_to_cpu(const struct ost_id *src_oi,
 				   struct ost_id *dst_oi)
 {
 	if (fid_seq_is_mdt0(src_oi->oi.oi_seq)) {
-		dst_oi->oi.oi_id = le64_to_cpu(src_oi->oi.oi_id);
-		dst_oi->oi.oi_seq = le64_to_cpu(src_oi->oi.oi_seq);
+		dst_oi->oi.oi_id = __le64_to_cpu(src_oi->oi.oi_id);
+		dst_oi->oi.oi_seq = __le64_to_cpu(src_oi->oi.oi_seq);
 	} else {
 		fid_le_to_cpu(&dst_oi->oi_fid, &src_oi->oi_fid);
 	}
@@ -962,22 +964,22 @@ enum lu_dirpage_flags {
 
 static inline struct lu_dirent *lu_dirent_start(struct lu_dirpage *dp)
 {
-        if (le32_to_cpu(dp->ldp_flags) & LDF_EMPTY)
-                return NULL;
-        else
-                return dp->ldp_entries;
+	if (__le32_to_cpu(dp->ldp_flags) & LDF_EMPTY)
+		return NULL;
+	else
+		return dp->ldp_entries;
 }
 
 static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
 {
-        struct lu_dirent *next;
+	struct lu_dirent *next;
 
-        if (le16_to_cpu(ent->lde_reclen) != 0)
-                next = ((void *)ent) + le16_to_cpu(ent->lde_reclen);
-        else
-                next = NULL;
+	if (__le16_to_cpu(ent->lde_reclen) != 0)
+		next = ((void *)ent) + __le16_to_cpu(ent->lde_reclen);
+	else
+		next = NULL;
 
-        return next;
+	return next;
 }
 
 static inline size_t lu_dirent_calc_size(size_t namelen, __u16 attr)
@@ -1580,15 +1582,15 @@ static inline __u64 lmm_oi_seq(const struct ost_id *oi)
 static inline void lmm_oi_le_to_cpu(struct ost_id *dst_oi,
 				    const struct ost_id *src_oi)
 {
-	dst_oi->oi.oi_id = le64_to_cpu(src_oi->oi.oi_id);
-	dst_oi->oi.oi_seq = le64_to_cpu(src_oi->oi.oi_seq);
+	dst_oi->oi.oi_id = __le64_to_cpu(src_oi->oi.oi_id);
+	dst_oi->oi.oi_seq = __le64_to_cpu(src_oi->oi.oi_seq);
 }
 
 static inline void lmm_oi_cpu_to_le(struct ost_id *dst_oi,
 				    const struct ost_id *src_oi)
 {
-	dst_oi->oi.oi_id = cpu_to_le64(src_oi->oi.oi_id);
-	dst_oi->oi.oi_seq = cpu_to_le64(src_oi->oi.oi_seq);
+	dst_oi->oi.oi_id = __cpu_to_le64(src_oi->oi.oi_id);
+	dst_oi->oi.oi_seq = __cpu_to_le64(src_oi->oi.oi_seq);
 }
 
 #define MAX_MD_SIZE (sizeof(struct lov_mds_md) + 4 * sizeof(struct lov_ost_data))
@@ -2647,11 +2649,11 @@ static inline int lmv_mds_md_size(int stripe_count, unsigned int lmm_magic)
 
 static inline int lmv_mds_md_stripe_count_get(const union lmv_mds_md *lmm)
 {
-	switch (le32_to_cpu(lmm->lmv_magic)) {
+	switch (__le32_to_cpu(lmm->lmv_magic)) {
 	case LMV_MAGIC_V1:
-		return le32_to_cpu(lmm->lmv_md_v1.lmv_stripe_count);
+		return __le32_to_cpu(lmm->lmv_md_v1.lmv_stripe_count);
 	case LMV_USER_MAGIC:
-		return le32_to_cpu(lmm->lmv_user_md.lum_stripe_count);
+		return __le32_to_cpu(lmm->lmv_user_md.lum_stripe_count);
 	default:
 		return -EINVAL;
 	}

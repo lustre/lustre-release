@@ -398,7 +398,7 @@ int handle_sk(struct svc_nego_data *snd)
 	}
 
 	memcpy(&flags, bufs[5].value, sizeof(flags));
-	skc = sk_create_cred(target, snd->nm_name, be32_to_cpu(flags));
+	skc = sk_create_cred(target, snd->nm_name, be32toh(flags));
 	if (!skc) {
 		printerr(0, "Failed to create sk credentials\n");
 		for (i = 0; i < numbufs; i++)
@@ -551,7 +551,7 @@ int handle_null(struct svc_nego_data *snd)
 	snd->maj_stat = GSS_S_COMPLETE;
 
 	memcpy(&tmp, snd->in_tok.value, sizeof(tmp));
-	tmp = be64_to_cpu(tmp);
+	tmp = be64toh(tmp);
 	flags = (uint32_t)(tmp & 0x00000000ffffffff);
 	memset(&cred, 0, sizeof(cred));
 	cred.cr_mapped_uid = -1;

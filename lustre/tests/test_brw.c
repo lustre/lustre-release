@@ -51,16 +51,14 @@
 #include <sys/stat.h>
 #include <linux/types.h>
 
-#include <libcfs/byteorder.h>
-
 #define READ  1
 #define WRITE 2
 
-#define LPDS sizeof(__u64)
-int block_debug_setup(void *addr, int len, __u64 off, __u64 id)
+#define LPDS sizeof(uint64_t)
+int block_debug_setup(void *addr, int len, uint64_t off, uint64_t id)
 {
-        off = cpu_to_le64(off);
-        id = cpu_to_le64(id);
+	off = htole64(off);
+	id = htole64(id);
         memcpy(addr, (char *)&off, LPDS);
         memcpy(addr + LPDS, (char *)&id, LPDS);
 
@@ -76,8 +74,8 @@ int block_debug_check(char *who, void *addr, int size, uint64_t off, uint64_t id
 	uint64_t ne_off;
         int err = 0;
 
-        ne_off = le64_to_cpu(off);
-        id = le64_to_cpu(id);
+	ne_off = le64toh(off);
+	id = le64toh(id);
         if (memcmp(addr, (char *)&ne_off, LPDS)) {
 		fprintf(stderr, "%s: for offset %"PRIu64" off: %"PRIx64" != %"PRIx64"\n",
 			who, off, *(uint64_t *)addr, ne_off);
@@ -117,9 +115,9 @@ int main(int argc, char **argv)
 {
         int fd;
         char *buf;
-        long long count, last, offset;
+	long long count, last;
         long pg_vec, len;
-	uint64_t objid;
+	uint64_t objid, offset;
         struct stat st;
         int flags = 0;
         int cmd = 0;
@@ -222,10 +220,10 @@ int main(int argc, char **argv)
         }
 
         for (offset = 0; offset < last && cmd & WRITE; offset += len) {
-                int i;
+		unsigned int i;
 
                 for (i = 0; i < len; i += st.st_blksize)
-                        block_debug_setup(buf + i, st.st_blksize, 
+			block_debug_setup(buf + i, st.st_blksize,
                                           offset + i, objid);
 
                 rc = write(fd, buf, len);

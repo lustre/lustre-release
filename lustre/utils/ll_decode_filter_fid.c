@@ -46,7 +46,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
-#include <libcfs/byteorder.h>
+#include <asm/byteorder.h>
 #include <lustre/lustre_user.h>
 
 int main(int argc, char *argv[])
@@ -77,18 +77,18 @@ int main(int argc, char *argv[])
 			/* old filter_fid */
 			printf("%s: objid=%llu seq=%llu parent="DFID
 			       " stripe=%u\n", argv[i],
-			       (unsigned long long)le64_to_cpu(ffo->ff_objid),
-			       (unsigned long long)le64_to_cpu(ffo->ff_seq),
-			       (unsigned long long)le64_to_cpu(ffo->ff_parent.f_seq),
-			       le32_to_cpu(ffo->ff_parent.f_oid), 0 /* ver */,
+			       (unsigned long long)__le64_to_cpu(ffo->ff_objid),
+			       (unsigned long long)__le64_to_cpu(ffo->ff_seq),
+			       (unsigned long long)__le64_to_cpu(ffo->ff_parent.f_seq),
+			       le32toh(ffo->ff_parent.f_oid), 0 /* ver */,
 			       /* this is stripe_nr actually */
-			       le32_to_cpu(ffo->ff_parent.f_stripe_idx));
+			       le32toh(ffo->ff_parent.f_stripe_idx));
 		} else {
 			printf("%s: parent="DFID" stripe=%u\n", argv[i],
-			       (unsigned long long)le64_to_cpu(ff->ff_parent.f_seq),
-			       le32_to_cpu(ff->ff_parent.f_oid), 0, /* ver */
+			       (unsigned long long)__le64_to_cpu(ff->ff_parent.f_seq),
+			       __le32_to_cpu(ff->ff_parent.f_oid), 0, /* ver */
 			       /* this is stripe_nr actually */
-			       le32_to_cpu(ff->ff_parent.f_stripe_idx));
+			       __le32_to_cpu(ff->ff_parent.f_stripe_idx));
 		}
 	}
 

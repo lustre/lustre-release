@@ -27,7 +27,6 @@
 
 #include <string.h>
 #include <time.h>
-#include <libcfs/byteorder.h>
 #include "lgss_utils.h"
 
 static int lgss_null_prepare_cred(struct lgss_cred *cred)
@@ -47,7 +46,7 @@ static int lgss_null_prepare_cred(struct lgss_cred *cred)
 	tmp |= cred->lc_root_flags;
 
 	/* big-endian for the wire */
-	tmp = cpu_to_be64(tmp);
+	tmp = htobe64(tmp);
 	memcpy(cred->lc_mech_token.value, &tmp, cred->lc_mech_token.length);
 
 	return 0;

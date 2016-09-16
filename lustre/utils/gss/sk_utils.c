@@ -298,15 +298,15 @@ void sk_config_cpu_to_disk(struct sk_keyfile_config *config)
 	if (!config)
 		return;
 
-	config->skc_version = be32_to_cpu(config->skc_version);
-	config->skc_hmac_alg = be16_to_cpu(config->skc_hmac_alg);
-	config->skc_crypt_alg = be16_to_cpu(config->skc_crypt_alg);
-	config->skc_expire = be32_to_cpu(config->skc_expire);
-	config->skc_shared_keylen = be32_to_cpu(config->skc_shared_keylen);
-	config->skc_session_keylen = be32_to_cpu(config->skc_session_keylen);
+	config->skc_version = htobe32(config->skc_version);
+	config->skc_hmac_alg = htobe16(config->skc_hmac_alg);
+	config->skc_crypt_alg = htobe16(config->skc_crypt_alg);
+	config->skc_expire = htobe32(config->skc_expire);
+	config->skc_shared_keylen = htobe32(config->skc_shared_keylen);
+	config->skc_session_keylen = htobe32(config->skc_session_keylen);
 
 	for (i = 0; i < MAX_MGSNIDS; i++)
-		config->skc_mgsnids[i] = be64_to_cpu(config->skc_mgsnids[i]);
+		config->skc_mgsnids[i] = htobe64(config->skc_mgsnids[i]);
 
 	return;
 }
@@ -323,15 +323,15 @@ void sk_config_disk_to_cpu(struct sk_keyfile_config *config)
 	if (!config)
 		return;
 
-	config->skc_version = cpu_to_be32(config->skc_version);
-	config->skc_hmac_alg = cpu_to_be16(config->skc_hmac_alg);
-	config->skc_crypt_alg = cpu_to_be16(config->skc_crypt_alg);
-	config->skc_expire = cpu_to_be32(config->skc_expire);
-	config->skc_shared_keylen = cpu_to_be32(config->skc_shared_keylen);
-	config->skc_session_keylen = cpu_to_be32(config->skc_session_keylen);
+	config->skc_version = be32toh(config->skc_version);
+	config->skc_hmac_alg = be16toh(config->skc_hmac_alg);
+	config->skc_crypt_alg = be16toh(config->skc_crypt_alg);
+	config->skc_expire = be32toh(config->skc_expire);
+	config->skc_shared_keylen = be32toh(config->skc_shared_keylen);
+	config->skc_session_keylen = be32toh(config->skc_session_keylen);
 
 	for (i = 0; i < MAX_MGSNIDS; i++)
-		config->skc_mgsnids[i] = cpu_to_be64(config->skc_mgsnids[i]);
+		config->skc_mgsnids[i] = be64toh(config->skc_mgsnids[i]);
 
 	return;
 }
@@ -1087,7 +1087,7 @@ int sk_kdf(struct sk_cred *skc, lnet_nid_t client_nid,
 	skp = session_key->value;
 	i = 0;
 	while (remain > 0) {
-		counter = cpu_to_be32(i++);
+		counter = be32toh(i++);
 		rc = sk_sign_bufs(&kctx->skc_shared_key, bufs, 4,
 			     sk_hash_to_evp_md(kctx->skc_hmac_alg), &tmp_hash);
 		if (rc) {
