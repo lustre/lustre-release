@@ -513,7 +513,8 @@ static int __init obdclass_init(void)
 					 LPROCFS_STATS_FLAG_IRQ_SAFE);
 	if (obd_memory == NULL) {
 		CERROR("kmalloc of 'obd_memory' failed\n");
-		RETURN(-ENOMEM);
+		err = -ENOMEM;
+		goto cleanup_zombie_impexp;
 	}
 
 	lprocfs_counter_init(obd_memory, OBD_MEMORY_STAT,
@@ -522,19 +523,19 @@ static int __init obdclass_init(void)
 #endif
 	err = obd_init_checks();
 	if (err == -EOVERFLOW)
-		return err;
+		goto cleanup_zombie_impexp;
 
 	class_init_uuidlist();
 	err = class_handle_init();
 	if (err)
-		return err;
+		goto cleanup_uuidlist;
 
 	INIT_LIST_HEAD(&obd_types);
 
 	err = misc_register(&obd_psdev);
 	if (err) {
 		CERROR("cannot register %d err %d\n", OBD_DEV_MINOR, err);
-		return err;
+		goto cleanup_class_handle;
 	}
 
 	/* This struct is already zeroed for us (static global) */
@@ -551,35 +552,91 @@ static int __init obdclass_init(void)
 
 	err = obd_init_caches();
 	if (err)
-		return err;
+		goto cleanup_deregister;
+
 	err = class_procfs_init();
 	if (err)
-		return err;
+		goto cleanup_caches;
 
 	err = lu_global_init();
 	if (err)
-		return err;
+		goto cleanup_class_procfs;
 
 	err = cl_global_init();
 	if (err != 0)
-		return err;
+		goto cleanup_lu_global;
 
 #ifdef HAVE_SERVER_SUPPORT
 	err = dt_global_init();
 	if (err != 0)
-		return err;
+		goto cleanup_cl_global;
 
 	err = lu_ucred_global_init();
 	if (err != 0)
-		return err;
+		goto cleanup_dt_global;
 #endif /* HAVE_SERVER_SUPPORT */
 
 	err = llog_info_init();
 	if (err)
-		return err;
+#ifdef HAVE_SERVER_SUPPORT
+		goto cleanup_lu_ucred_global;
+#else /* !HAVE_SERVER_SUPPORT */
+		goto cleanup_cl_global;
+#endif /* HAVE_SERVER_SUPPORT */
 
 	err = lustre_register_fs();
 
+	/* simulate a late OOM situation now to require all
+	 * alloc'ed/initialized resources to be freed */
+	if (OBD_FAIL_CHECK(OBD_FAIL_OBDCLASS_MODULE_LOAD)) {
+		/* fake error but filesystem has been registered */
+		lustre_unregister_fs();
+		/* force error to ensure module will be unloaded/cleaned */
+		err = -ENOMEM;
+	}
+
+	if (err)
+		goto cleanup_llog_info;
+
+	goto out_success;
+
+cleanup_llog_info:
+	llog_info_fini();
+
+#ifdef HAVE_SERVER_SUPPORT
+cleanup_lu_ucred_global:
+	lu_ucred_global_fini();
+
+cleanup_dt_global:
+	dt_global_fini();
+#endif /* HAVE_SERVER_SUPPORT */
+
+cleanup_cl_global:
+	cl_global_fini();
+
+cleanup_lu_global:
+	lu_global_fini();
+
+cleanup_class_procfs:
+	obd_sysctl_clean();
+	class_procfs_clean();
+
+cleanup_caches:
+	obd_cleanup_caches();
+
+cleanup_deregister:
+	misc_deregister(&obd_psdev);
+
+cleanup_class_handle:
+	class_handle_cleanup();
+
+cleanup_uuidlist:
+	class_exit_uuidlist();
+
+cleanup_zombie_impexp:
+	obd_zombie_impexp_stop();
+
+out_success:
 	return err;
 }
 

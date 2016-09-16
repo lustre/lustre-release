@@ -7028,6 +7028,43 @@ test_101() {
 }
 run_test 101 "Race MDT->OST reconnection with create"
 
+test_102() {
+	cleanup || error "cleanup failed with $?"
+
+	local mds1dev=$(mdsdevname 1)
+	local mds1mnt=$(facet_mntpt mds1)
+	local mds1fstype=$(facet_fstype mds1)
+	local mds1opts=$MDS_MOUNT_OPTS
+
+	if [ $mds1fstype == ldiskfs ] &&
+	   ! do_facet mds1 test -b $mds1dev; then
+		mds1opts=$(csa_add "$mds1opts" -o loop)
+	fi
+	if [[ $mds1fstype == zfs ]]; then
+		import_zpool mds1 || return ${PIPESTATUS[0]}
+	fi
+
+	# unload all and only load libcfs to allow fail_loc setting
+	do_facet mds1 lustre_rmmod || error "unable to unload modules"
+	do_facet mds1 modprobe libcfs || error "libcfs not loaded"
+	do_facet mds1 lsmod \| grep libcfs || error "libcfs not loaded"
+
+	#define OBD_FAIL_OBDCLASS_MODULE_LOAD    0x60a
+	do_facet mds1 "$LCTL set_param fail_loc=0x8000060a"
+
+	do_facet mds1 $MOUNT_CMD $mds1dev $mds1mnt $mds1opts &&
+		error "mdt start must fail"
+	do_facet mds1 lsmod \| grep  obdclass && error "obdclass must not load"
+
+	do_facet mds1 "$LCTL set_param fail_loc=0x0"
+
+	do_facet mds1 $MOUNT_CMD $mds1dev $mds1mnt $mds1opts ||
+		error "mdt start must not fail"
+
+	cleanup || error "cleanup failed with $?"
+}
+run_test 102 "obdclass module cleanup upon error"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
