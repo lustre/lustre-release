@@ -124,7 +124,7 @@ static int lfs_ladvise(int argc, char **argv);
 	"                 [--stripe-index|-i <start_ost_idx>]\n"	\
 	"                 [--stripe-size|-S <stripe_size>]\n"		\
 	"                 [--pool|-p <pool_name>]\n"			\
-	"                 [--ost-list|-o <ost_indices>]\n"
+	"                 [--ost|-o <ost_indices>]\n"
 
 #define SSM_HELP_COMMON \
 	"\tstripe_size:  Number of bytes on each OST (0 filesystem default)\n" \
@@ -138,7 +138,7 @@ static int lfs_ladvise(int argc, char **argv);
 	"\t                -o <ost_1>,<ost_i>-<ost_j>,<ost_n>\n"	\
 	"\t              Or:\n"						\
 	"\t                -o <ost_1> -o <ost_i>-<ost_j> -o <ost_n>\n"	\
-	"\t              If --pool is set with --ost-list, then the OSTs\n" \
+	"\t              If --pool is set with --ost, then the OSTs\n" \
 	"\t              must be the members of the pool."
 
 #define SETSTRIPE_USAGE						\
@@ -155,6 +155,19 @@ static int lfs_ladvise(int argc, char **argv);
 	"\n"								\
 	"\tblock:        Block file access during data migration (default)\n" \
 	"\tnon-block:    Abort migrations if concurrent access is detected\n" \
+
+#define SETDIRSTRIPE_USAGE					\
+	"		[--mdt-count|-c stripe_count>\n"	\
+	"		[--mdt-index|-i mdt_index]\n"		\
+	"		[--mdt-hash|-t mdt_hash]\n"		\
+	"		[--default_stripe|-D] [--mode|-m mode] <dir>\n"	\
+	"\tstripe_count: stripe count of the striped directory\n"	\
+	"\tmdt_index: MDT index of first stripe\n"			\
+	"\tmdt_hash:  hash type of the striped directory. mdt types:\n"	\
+	"	fnv_1a_64 FNV-1a hash algorithm (default)\n"		\
+	"	all_char  sum of characters % MDT_COUNT (not recommended)\n" \
+	"\tdefault_stripe: set default dirstripe of the directory\n"	\
+	"\tmode: the mode of the directory\n"
 
 static const char	*progname;
 static bool		 file_lease_supported = true;
@@ -174,22 +187,14 @@ command_t cmdlist[] = {
 	 "usage: getstripe [--ost|-O <uuid>] [--quiet|-q] [--verbose|-v]\n"
 	 "		   [--stripe-count|-c] [--stripe-index|-i]\n"
 	 "		   [--pool|-p] [--stripe-size|-S] [--directory|-d]\n"
-	 "		   [--mdt-index|-M] [--recursive|-r] [--raw|-R]\n"
+	 "		   [--mdt|-m] [--recursive|-r] [--raw|-R]\n"
 	 "		   [--layout|-L] [--fid|-F] [--generation|-g]\n"
 	 "		   <directory|filename> ..."},
 	{"setdirstripe", lfs_setdirstripe, 0,
 	 "To create a striped directory on a specified MDT. This can only\n"
 	 "be done on MDT0 with the right of administrator.\n"
-	 "usage: setdirstripe <--count|-c stripe_count>\n"
-	 "		[--index|-i mdt_index] [--hash-type|-t hash_type]\n"
-	 "		[--default_stripe|-D ] [--mode|-m mode] <dir>\n"
-	 "\tstripe_count: stripe count of the striped directory\n"
-	 "\tmdt_index:	MDT index of first stripe\n"
-	 "\thash_type:	hash type of the striped directory. Hash types:\n"
-	 "	fnv_1a_64 FNV-1a hash algorithm (default)\n"
-	 "	all_char  sum of characters % MDT_COUNT (not recommended)\n"
-	 "\tdefault_stripe: set default dirstripe of the directory\n"
-	 "\tmode: the mode of the directory\n"},
+	 "usage: setdirstripe [OPTION] <directory>\n"
+	 SETDIRSTRIPE_USAGE},
 	{"getdirstripe", lfs_getdirstripe, 0,
 	 "To list the striping info for a given directory\n"
 	 "or recursively for all directories in a directory tree.\n"
@@ -199,16 +204,8 @@ command_t cmdlist[] = {
 	{"mkdir", lfs_setdirstripe, 0,
 	 "To create a striped directory on a specified MDT. This can only\n"
 	 "be done on MDT0 with the right of administrator.\n"
-	 "usage: mkdir <--count|-c stripe_count>\n"
-	 "		[--index|-i mdt_index] [--hash-type|-t hash_type]\n"
-	 "		[--default_stripe|-D ] [--mode|-m mode] <dir>\n"
-	 "\tstripe_count: stripe count of the striped directory\n"
-	 "\tmdt_index:	MDT index of first stripe\n"
-	 "\thash_type:	hash type of the striped directory. Hash types:\n"
-	 "	fnv_1a_64 FNV-1a hash algorithm (default)\n"
-	 "	all_char  sum of characters % MDT_COUNT (not recommended)\n"
-	 "\tdefault_stripe: set default dirstripe of the directory\n"
-	 "\tmode: the mode of the directory\n"},
+	 "usage: mkdir [OPTION] <directory>\n"
+	 SETDIRSTRIPE_USAGE},
 	{"rm_entry", lfs_rmentry, 0,
 	 "To remove the name entry of the remote directory. Note: This\n"
 	 "command will only delete the name entry, i.e. the remote directory\n"
@@ -950,12 +947,16 @@ static int lfs_setstripe(int argc, char **argv)
 #endif
 		{"stripe-index", required_argument, 0, 'i'},
 		{"stripe_index", required_argument, 0, 'i'},
+		{"mdt",	 	 required_argument, 0, 'm'},
 		{"mdt-index",	 required_argument, 0, 'm'},
 		{"mdt_index",	 required_argument, 0, 'm'},
 		/* --non-block is only valid in migrate mode */
 		{"non-block",	 no_argument,	    0, 'n'},
+		{"ost",		 required_argument, 0, 'o'},
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		{"ost-list",     required_argument, 0, 'o'},
 		{"ost_list",     required_argument, 0, 'o'},
+#endif
 		{"pool",	 required_argument, 0, 'p'},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "--stripe-size", but was confusing
@@ -1364,6 +1365,8 @@ static int lfs_find(int argc, char **argv)
                 {"stripe_index", required_argument, 0, 'i'},
 		{"layout",	 required_argument, 0, 'L'},
                 {"mdt",          required_argument, 0, 'm'},
+                {"mdt-index",    required_argument, 0, 'm'},
+                {"mdt_index",    required_argument, 0, 'm'},
                 {"mtime",        required_argument, 0, 'M'},
                 {"name",         required_argument, 0, 'n'},
      /* reserve {"or",           no_argument,     , 0, 'o'}, to match find(1) */
@@ -1745,8 +1748,13 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"stripe-index",	no_argument,		0, 'i'},
 		{"stripe_index",	no_argument,		0, 'i'},
 		{"layout",		no_argument,		0, 'L'},
+		{"mdt",			no_argument,		0, 'm'},
+		{"mdt-index",		no_argument,		0, 'm'},
+		{"mdt_index",		no_argument,		0, 'm'},
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		{"mdt-index",		no_argument,		0, 'M'},
 		{"mdt_index",		no_argument,		0, 'M'},
+#endif
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "stripe-index", but was confusing
 		 * with "file offset" (which will eventually be needed for
@@ -1772,7 +1780,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	};
 	int c, rc;
 
-	while ((c = getopt_long(argc, argv, "cdDFghiLMoO:pqrRsSv",
+	while ((c = getopt_long(argc, argv, "cdDFghiLmMoO:pqrRsSv",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'O':
@@ -1863,7 +1871,14 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				param->fp_max_depth = 0;
 			}
 			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 'M':
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 11, 53, 0)
+			fprintf(stderr, "warning: '-M' deprecated"
+				", use '-m' instead\n");
+#endif
+#endif
+		case 'm':
 			if (!(param->fp_verbose & VERBOSE_DETAIL))
 				param->fp_max_depth = 0;
 			param->fp_verbose |= VERBOSE_MDTINDEX;
@@ -1972,11 +1987,20 @@ static int lfs_setdirstripe(int argc, char **argv)
 	bool			delete = false;
 
 	struct option long_opts[] = {
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		{"count",	required_argument, 0, 'c'},
+#endif
+		{"mdt-count",	required_argument, 0, 'c'},
 		{"delete",	no_argument, 0, 'd'},
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		{"index",	required_argument, 0, 'i'},
+#endif
+		{"mdt-index",	required_argument, 0, 'i'},
 		{"mode",	required_argument, 0, 'm'},
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		{"hash-type",	required_argument, 0, 't'},
+#endif
+		{"mdt-hash",	required_argument, 0, 't'},
 		{"default_stripe", no_argument, 0, 'D'},
 		{0, 0, 0, 0}
 	};
@@ -1988,6 +2012,11 @@ static int lfs_setdirstripe(int argc, char **argv)
 			/* Long options. */
 			break;
 		case 'c':
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 11, 53, 0)
+			if (strcmp(argv[optind - 1], "--count") == 0)
+				fprintf(stderr, "warning: '--count' deprecated"
+					", use '--mdt-count' instead\n");
+#endif
 			stripe_count_opt = optarg;
 			break;
 		case 'd':
@@ -1998,12 +2027,23 @@ static int lfs_setdirstripe(int argc, char **argv)
 			default_stripe = true;
 			break;
 		case 'i':
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 11, 53, 0)
+			if (strcmp(argv[optind - 1], "--index") == 0)
+				fprintf(stderr, "warning: '--index' deprecated"
+					", use '--mdt-index' instead\n");
+#endif
 			stripe_offset_opt = optarg;
 			break;
 		case 'm':
 			mode_opt = optarg;
 			break;
 		case 't':
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 11, 53, 0)
+			if (strcmp(argv[optind - 1], "--hash-type") == 0)
+				fprintf(stderr, "warning: '--hash-type' "
+					"deprecated, use '--mdt-hash' "
+					"instead\n");
+#endif
 			stripe_hash_opt = optarg;
 			break;
 		default:
