@@ -99,6 +99,7 @@ static inline bool str_starts_with(const char *str, const char *prefix)
 	return strncmp(str, prefix, strlen(prefix)) == 0;
 }
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
 static int mgs_set_info(struct tgt_session_info *tsi)
 {
 	struct mgs_thread_info	*mgi;
@@ -156,6 +157,7 @@ out_cfg:
 	lustre_cfg_free(lcfg);
 	return rc;
 }
+#endif
 
 enum ast_type {
 		AST_CONFIG = 1,
@@ -1040,7 +1042,9 @@ TGT_RPC_HANDLER(MGS_FIRST_OPC,
 		0,			MGS_DISCONNECT,	 mgs_disconnect,
 		&RQF_MDS_DISCONNECT, LUSTRE_OBD_VERSION),
 TGT_MGS_HDL_VAR(0,			MGS_EXCEPTION,	 mgs_exception),
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
 TGT_MGS_HDL    (HABEO_REFERO | MUTABOR,	MGS_SET_INFO,	 mgs_set_info),
+#endif
 TGT_MGS_HDL    (HABEO_REFERO | MUTABOR,	MGS_TARGET_REG,	 mgs_target_reg),
 TGT_MGS_HDL_VAR(0,			MGS_TARGET_DEL,	 mgs_target_del),
 TGT_MGS_HDL    (HABEO_REFERO,		MGS_CONFIG_READ, mgs_config_read),

@@ -416,6 +416,7 @@ out:
 	RETURN(rc);
 }
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
 static int ll_send_mgc_param(struct obd_export *mgc, char *string)
 {
         struct mgs_send_param *msp;
@@ -434,6 +435,7 @@ static int ll_send_mgc_param(struct obd_export *mgc, char *string)
 
         return rc;
 }
+#endif
 
 /**
  * Create striped directory with specified stripe(@lump)
@@ -545,8 +547,10 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
         struct md_op_data *op_data;
         struct ptlrpc_request *req = NULL;
         int rc = 0;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
         struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
         struct obd_device *mgc = lsi->lsi_mgc;
+#endif
         int lum_size;
 	ENTRY;
 
@@ -601,7 +605,7 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
 	if (rc)
 		RETURN(rc);
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 50, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
 	/*
 	 * 2.9 server has stored filesystem default stripe in ROOT xattr,
 	 * and it's stored into system config for backward compatibility.
