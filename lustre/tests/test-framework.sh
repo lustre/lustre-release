@@ -4731,7 +4731,7 @@ debugrestore() {
 		true
 	DEBUGSAVE=""
 
-	[ -n "DEBUGSAVE_SERVER" ] &&
+	[ -n "$DEBUGSAVE_SERVER" ] &&
 		do_nodes $(comma_list $(all_server_nodes)) \
 			 "$LCTL set_param debug=\\\"${DEBUGSAVE_SERVER}\\\"" ||
 			 true
