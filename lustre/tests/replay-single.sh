@@ -3021,7 +3021,7 @@ test_86() {
 }
 run_test 86 "umount server after clear nid_stats should not hit LBUG"
 
-test_87() {
+test_87a() {
 	do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
 
 	replay_barrier ost1
@@ -3037,7 +3037,7 @@ test_87() {
 		error "New checksum $cksum2 does not match original $cksum"
 	fi
 }
-run_test 87 "write replay"
+run_test 87a "write replay"
 
 test_87b() {
 	do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
