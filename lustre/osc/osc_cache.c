@@ -2168,7 +2168,6 @@ __must_hold(osc)
 	if (!list_empty(&rpclist)) {
 		osc_object_unlock(osc);
 
-		LASSERT(page_count > 0);
 		rc = osc_build_rpc(env, cli, &rpclist, OBD_BRW_READ);
 		LASSERT(list_empty(&rpclist));
 
