@@ -871,7 +871,6 @@ typedef struct kgn_data {
 	atomic_t                kgn_rev_offset;       /* # of REV rdma w/misaligned offsets */
 	atomic_t                kgn_rev_length;       /* # of REV rdma have misaligned len */
 	atomic_t                kgn_rev_copy_buff;    /* # of REV rdma buffer copies */
-	struct socket          *kgn_sock;             /* for Apollo */
 	unsigned long           free_pages_limit;     /* # of free pages reserve from fma block allocations */
 	int                     kgn_enable_gl_mutex;  /* kgni api mtx enable */
 } kgn_data_t;
@@ -994,6 +993,11 @@ static inline void kgnilnd_vfree(void *ptr, int size)
 	libcfs_kmem_dec(ptr, size);
 	vfree(ptr);
 }
+
+/* as of kernel version 4.2, set_mb is replaced with smp_store_mb */
+#ifndef set_mb
+#define set_mb smp_store_mb
+#endif
 
 /* Copied from DEBUG_REQ in Lustre - the dance is needed to save stack space */
 

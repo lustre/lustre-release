@@ -26,11 +26,7 @@
 
 /* Primary entry points from LNET.  There are no guarantees against reentrance. */
 lnd_t the_kgnilnd = {
-#ifdef CONFIG_CRAY_XT
 	.lnd_type       = GNILND,
-#else
-	.lnd_type       = GNIIPLND,
-#endif
 	.lnd_startup    = kgnilnd_startup,
 	.lnd_shutdown   = kgnilnd_shutdown,
 	.lnd_ctl        = kgnilnd_ctl,
@@ -2054,12 +2050,6 @@ kgnilnd_dev_init(kgn_device_t *dev)
 		}
 	}
 
-	rrc = sock_create_kern(PF_INET, SOCK_DGRAM, IPPROTO_IP, &kgnilnd_data.kgn_sock);
-	if (rrc < 0) {
-		CERROR("sock_create returned %d\n", rrc);
-		GOTO(failed, rrc);
-	}
-
 	rc = kgnilnd_nicaddr_to_nid(dev->gnd_host_id, &dev->gnd_nid);
 	if (rc < 0) {
 		/* log messages during startup */
@@ -2200,9 +2190,6 @@ kgnilnd_dev_fini(kgn_device_t *dev)
 			"bad rc from gni_cdm_destroy: %d\n", rrc);
 		dev->gnd_domain = NULL;
 	}
-
-	if (kgnilnd_data.kgn_sock)
-		sock_release(kgnilnd_data.kgn_sock);
 
 	EXIT;
 }
