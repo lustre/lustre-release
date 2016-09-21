@@ -202,7 +202,9 @@ static int hsm_update_work(struct cdt_req_progress *crp,
 
 	v = crp->crp_node[crp->crp_cnt / NODE_VECTOR_SZ];
 	node = &v[crp->crp_cnt % NODE_VECTOR_SZ];
-	interval_set(node, extent->offset, end);
+	rc = interval_set(node, extent->offset, end);
+	if (rc)
+		GOTO(out, rc);
 	/* try to insert, if entry already exist ignore the new one
 	 * it can happen if ct sends 2 times the same progress */
 	if (interval_insert(node, &crp->crp_root) == NULL)

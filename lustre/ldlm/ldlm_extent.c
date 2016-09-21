@@ -1006,7 +1006,7 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
         struct interval_node *found, **root;
         struct ldlm_interval *node;
         struct ldlm_extent *extent;
-        int idx;
+	int idx, rc;
 
         LASSERT(lock->l_granted_mode == lock->l_req_mode);
 
@@ -1020,7 +1020,9 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
 
         /* node extent initialize */
         extent = &lock->l_policy_data.l_extent;
-        interval_set(&node->li_node, extent->start, extent->end);
+
+	rc = interval_set(&node->li_node, extent->start, extent->end);
+	LASSERT(!rc);
 
         root = &res->lr_itree[idx].lit_root;
         found = interval_insert(&node->li_node, root);

@@ -74,6 +74,7 @@ struct lu_nid_range *range_create(struct nodemap_range_tree *nm_range_tree,
 				  struct lu_nodemap *nodemap, unsigned range_id)
 {
 	struct lu_nid_range *range;
+	int rc;
 
 	if (LNET_NIDNET(start_nid) != LNET_NIDNET(end_nid) ||
 	    LNET_NIDADDR(start_nid) > LNET_NIDADDR(end_nid))
@@ -96,7 +97,13 @@ struct lu_nid_range *range_create(struct nodemap_range_tree *nm_range_tree,
 		range->rn_id = nm_range_tree->nmrt_range_highest_id;
 	}
 	range->rn_nodemap = nodemap;
-	interval_set(&range->rn_node, start_nid, end_nid);
+
+	rc = interval_set(&range->rn_node, start_nid, end_nid);
+	if (rc < 0) {
+		OBD_FREE_PTR(range);
+		return NULL;
+	}
+
 	INIT_LIST_HEAD(&range->rn_list);
 
 	return range;

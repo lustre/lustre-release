@@ -37,6 +37,7 @@
  *
  * Author: jay <jxiong@clusterfs.com>
  */
+#include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
