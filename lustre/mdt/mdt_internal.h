@@ -92,11 +92,33 @@ struct mdt_file_data {
  */
 #define CDT_DEFAULT_POLICY		CDT_NORETRY_ACTION
 
+/* Coordinator states. Keep the cdt_transition table in sync. */
 enum cdt_states { CDT_STOPPED = 0,
 		  CDT_INIT,
 		  CDT_RUNNING,
 		  CDT_DISABLE,
-		  CDT_STOPPING };
+		  CDT_STOPPING,
+
+		  CDT_STATES_COUNT
+};
+
+static inline char *cdt_mdt_state2str(int state)
+{
+	switch (state) {
+	case CDT_INIT:
+		return "init";
+	case CDT_RUNNING:
+		return "enabled";
+	case CDT_STOPPING:
+		return "stopping";
+	case CDT_STOPPED:
+		return "stopped";
+	case CDT_DISABLE:
+		return "disabled";
+	default:
+		return "unknown";
+	}
+}
 
 /* when multiple lock are needed, the lock order is
  * cdt_llog_lock
@@ -114,6 +136,7 @@ struct coordinator {
 	struct proc_dir_entry	*cdt_proc_dir;	     /**< cdt /proc directory */
 	__u64			 cdt_policy;	     /**< policy flags */
 	enum cdt_states		 cdt_state;	      /**< state */
+	spinlock_t		 cdt_state_lock;      /**< cdt_state lock */
 	atomic_t		 cdt_compound_id;     /**< compound id
 						       * counter */
 	__u64			 cdt_last_cookie;     /**< last cookie
@@ -177,8 +200,7 @@ struct mdt_device {
 		unsigned int       mo_user_xattr:1,
 				   mo_acl:1,
 				   mo_cos:1,
-				   mo_evict_tgt_nids:1,
-				   mo_coordinator:1;
+				   mo_evict_tgt_nids:1;
 	} mdt_opts;
         /* mdt state flags */
         unsigned long              mdt_state;
