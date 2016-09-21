@@ -48,6 +48,10 @@ static int brw_inject_errors;
 module_param(brw_inject_errors, int, 0644);
 MODULE_PARM_DESC(brw_inject_errors, "# data errors to inject randomly, zero by default");
 
+#define BRW_POISON	0xbeefbeefbeefbeefULL
+#define BRW_MAGIC	0xeeb0eeb1eeb2eeb3ULL
+#define BRW_MSIZE	sizeof(__u64)
+
 static void
 brw_client_fini (sfw_test_instance_t *tsi)
 {
@@ -71,6 +75,7 @@ brw_client_init (sfw_test_instance_t *tsi)
 {
 	sfw_session_t	 *sn = tsi->tsi_batch->bat_session;
 	int		  flags;
+	int		  off;
 	int		  npg;
 	int		  len;
 	int		  opc;
@@ -89,6 +94,7 @@ brw_client_init (sfw_test_instance_t *tsi)
 		/* NB: this is not going to work for variable page size,
 		 * but we have to keep it for compatibility */
 		len   = npg * PAGE_SIZE;
+		off   = 0;
 
 	} else {
 		test_bulk_req_v1_t  *breq = &tsi->tsi_u.bulk_v1;
@@ -100,8 +106,12 @@ brw_client_init (sfw_test_instance_t *tsi)
 		opc   = breq->blk_opc;
 		flags = breq->blk_flags;
 		len   = breq->blk_len;
-		npg   = (len + PAGE_SIZE - 1) >> PAGE_SHIFT;
+		off   = breq->blk_offset & ~PAGE_MASK;
+		npg   = (off + len + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	}
+
+	if (off % BRW_MSIZE != 0)
+		return -EINVAL;
 
 	if (npg > LNET_MAX_IOV || npg <= 0)
 		return -EINVAL;
@@ -115,7 +125,7 @@ brw_client_init (sfw_test_instance_t *tsi)
 
 	list_for_each_entry(tsu, &tsi->tsi_units, tsu_list) {
 		bulk = srpc_alloc_bulk(lnet_cpt_of_nid(tsu->tsu_dest.nid),
-				       npg, len, opc == LST_BRW_READ);
+				       off, npg, len, opc == LST_BRW_READ);
 		if (bulk == NULL) {
 			brw_client_fini(tsi);
 			return -ENOMEM;
@@ -131,7 +141,7 @@ brw_client_init (sfw_test_instance_t *tsi)
 #define BRW_MAGIC       0xeeb0eeb1eeb2eeb3ULL
 #define BRW_MSIZE       sizeof(__u64)
 
-static int brw_inject_one_error(void)
+int brw_inject_one_error(void)
 {
 	struct timeval tv;
 
@@ -145,111 +155,127 @@ static int brw_inject_one_error(void)
 }
 
 static void
-brw_fill_page(struct page *pg, int pattern, __u64 magic)
+brw_fill_page(struct page *pg, int off, int len, int pattern, __u64 magic)
 {
-	char *addr = page_address(pg);
-        int   i;
+	char *addr = page_address(pg) + off;
+	int   i;
 
-        LASSERT (addr != NULL);
+	LASSERT(addr != NULL);
+	LASSERT(off % BRW_MSIZE == 0 && len % BRW_MSIZE == 0);
 
-        if (pattern == LST_BRW_CHECK_NONE) return;
+	if (pattern == LST_BRW_CHECK_NONE)
+		return;
 
-        if (magic == BRW_MAGIC)
-                magic += brw_inject_one_error();
+	if (magic == BRW_MAGIC)
+		magic += brw_inject_one_error();
 
-        if (pattern == LST_BRW_CHECK_SIMPLE) {
-                memcpy(addr, &magic, BRW_MSIZE);
-		addr += PAGE_SIZE - BRW_MSIZE;
-                memcpy(addr, &magic, BRW_MSIZE);
-                return;
-        }
+	if (pattern == LST_BRW_CHECK_SIMPLE) {
+		memcpy(addr, &magic, BRW_MSIZE);
+		if (len > BRW_MSIZE) {
+			addr += len - BRW_MSIZE;
+			memcpy(addr, &magic, BRW_MSIZE);
+		}
+		return;
+	}
 
-        if (pattern == LST_BRW_CHECK_FULL) {
-		for (i = 0; i < PAGE_SIZE / BRW_MSIZE; i++)
-                        memcpy(addr + i * BRW_MSIZE, &magic, BRW_MSIZE);
-                return;
-        }
-
-        LBUG ();
-        return;
+	if (pattern == LST_BRW_CHECK_FULL) {
+		for (i = 0; i < len; i += BRW_MSIZE)
+			memcpy(addr + i, &magic, BRW_MSIZE);
+		return;
+	}
+	LBUG();
 }
 
 static int
-brw_check_page(struct page *pg, int pattern, __u64 magic)
+brw_check_page(struct page *pg, int off, int len, int pattern, __u64 magic)
 {
-	char  *addr = page_address(pg);
-        __u64  data = 0; /* make compiler happy */
-        int    i;
+	char  *addr = page_address(pg) + off;
+	__u64  data = 0; /* make compiler happy */
+	int    i;
 
-        LASSERT (addr != NULL);
+	LASSERT(addr != NULL);
+	LASSERT(off % BRW_MSIZE == 0 && len % BRW_MSIZE == 0);
 
-        if (pattern == LST_BRW_CHECK_NONE)
-                return 0;
+	if (pattern == LST_BRW_CHECK_NONE)
+		return 0;
 
-        if (pattern == LST_BRW_CHECK_SIMPLE) {
-                data = *((__u64 *) addr);
-                if (data != magic) goto bad_data;
+	if (pattern == LST_BRW_CHECK_SIMPLE) {
+		data = *((__u64 *) addr);
+		if (data != magic)
+			goto bad_data;
 
-		addr += PAGE_SIZE - BRW_MSIZE;
-                data = *((__u64 *) addr);
-                if (data != magic) goto bad_data;
+		if (len > BRW_MSIZE) {
+			addr += len - BRW_MSIZE;
+			data = *((__u64 *) addr);
+			if (data != magic)
+				goto bad_data;
+		}
+		return 0;
+	}
 
-                return 0;
-        }
+	if (pattern == LST_BRW_CHECK_FULL) {
+		for (i = 0; i < len; i += BRW_MSIZE) {
+			data = *(__u64 *)(addr + i);
+			if (data != magic)
+				goto bad_data;
+		}
+		return 0;
+	}
 
-        if (pattern == LST_BRW_CHECK_FULL) {
-		for (i = 0; i < PAGE_SIZE / BRW_MSIZE; i++) {
-                        data = *(((__u64 *) addr) + i);
-                        if (data != magic) goto bad_data;
-                }
-
-                return 0;
-        }
-
-        LBUG ();
+	LBUG();
 
 bad_data:
 	CERROR ("Bad data in page %p: %#llx, %#llx expected\n",
-                pg, data, magic);
-        return 1;
+		pg, data, magic);
+	return 1;
 }
 
 static void
 brw_fill_bulk(srpc_bulk_t *bk, int pattern, __u64 magic)
 {
-        int         i;
+	int	     i;
 	struct page *pg;
 
-        for (i = 0; i < bk->bk_niov; i++) {
-                pg = bk->bk_iovs[i].kiov_page;
-                brw_fill_page(pg, pattern, magic);
-        }
+	for (i = 0; i < bk->bk_niov; i++) {
+		int	off;
+		int	len;
+
+		pg = bk->bk_iovs[i].kiov_page;
+		off = bk->bk_iovs[i].kiov_offset;
+		len = bk->bk_iovs[i].kiov_len;
+		brw_fill_page(pg, off, len, pattern, magic);
+	}
 }
 
 static int
 brw_check_bulk(srpc_bulk_t *bk, int pattern, __u64 magic)
 {
-        int         i;
+	int	     i;
 	struct page *pg;
 
-        for (i = 0; i < bk->bk_niov; i++) {
-                pg = bk->bk_iovs[i].kiov_page;
-                if (brw_check_page(pg, pattern, magic) != 0) {
-                        CERROR ("Bulk page %p (%d/%d) is corrupted!\n",
-                                pg, i, bk->bk_niov);
-                        return 1;
-                }
-        }
+	for (i = 0; i < bk->bk_niov; i++) {
+		int	off;
+		int	len;
 
-        return 0;
+		pg = bk->bk_iovs[i].kiov_page;
+		off = bk->bk_iovs[i].kiov_offset;
+		len = bk->bk_iovs[i].kiov_len;
+		if (brw_check_page(pg, off, len, pattern, magic) != 0) {
+			CERROR("Bulk page %p (%d/%d) is corrupted!\n",
+			       pg, i, bk->bk_niov);
+			return 1;
+		}
+	}
+
+	return 0;
 }
 
 static int
-brw_client_prep_rpc (sfw_test_unit_t *tsu,
-                     lnet_process_id_t dest, srpc_client_rpc_t **rpcpp)
+brw_client_prep_rpc(sfw_test_unit_t *tsu,
+		    lnet_process_id_t dest, srpc_client_rpc_t **rpcpp)
 {
-        srpc_bulk_t         *bulk = tsu->tsu_private;
-        sfw_test_instance_t *tsi = tsu->tsu_instance;
+	srpc_bulk_t	    *bulk = tsu->tsu_private;
+	sfw_test_instance_t *tsi = tsu->tsu_instance;
 	sfw_session_t	    *sn = tsi->tsi_batch->bat_session;
 	srpc_client_rpc_t   *rpc;
 	srpc_brw_reqst_t    *req;
@@ -272,6 +298,7 @@ brw_client_prep_rpc (sfw_test_unit_t *tsu,
 
 	} else {
 		test_bulk_req_v1_t  *breq = &tsi->tsi_u.bulk_v1;
+		int		     off;
 
 		/* I should never get this step if it's unknown feature
 		 * because make_session will reject unknown feature */
@@ -280,7 +307,8 @@ brw_client_prep_rpc (sfw_test_unit_t *tsu,
 		opc   = breq->blk_opc;
 		flags = breq->blk_flags;
 		len   = breq->blk_len;
-		npg   = (len + PAGE_SIZE - 1) >> PAGE_SHIFT;
+		off   = breq->blk_offset;
+		npg   = (off + len + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	}
 
 	rc = sfw_create_test_rpc(tsu, dest, sn->sn_features, npg, len, &rpc);

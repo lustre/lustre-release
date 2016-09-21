@@ -436,8 +436,8 @@ srpc_create_client_rpc(lnet_process_id_t peer, int service,
 void srpc_post_rpc(srpc_client_rpc_t *rpc);
 void srpc_abort_rpc(srpc_client_rpc_t *rpc, int why);
 void srpc_free_bulk(srpc_bulk_t *bk);
-srpc_bulk_t *srpc_alloc_bulk(int cpt, unsigned bulk_npg, unsigned bulk_len,
-			     int sink);
+srpc_bulk_t *srpc_alloc_bulk(int cpt, unsigned off, unsigned bulk_npg,
+			     unsigned bulk_len, int sink);
 int srpc_send_rpc(swi_workitem_t *wi);
 int srpc_send_reply(srpc_server_rpc_t *rpc);
 int srpc_add_service(srpc_service_t *sv);

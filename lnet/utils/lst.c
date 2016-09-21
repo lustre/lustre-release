@@ -2955,6 +2955,7 @@ lst_get_bulk_param(int argc, char **argv, lst_test_bulk_param_t *bulk)
         bulk->blk_size  = 4096;
         bulk->blk_opc   = LST_BRW_READ;
         bulk->blk_flags = LST_BRW_CHECK_NONE;
+	bulk->blk_srv_off = bulk->blk_cli_off = 0;
 
         while (i < argc) {
                 if (strcasestr(argv[i], "check=") == argv[i] ||
@@ -2995,6 +2996,27 @@ lst_get_bulk_param(int argc, char **argv, lst_test_bulk_param_t *bulk)
                                         bulk->blk_size);
                                 return -1;
                         }
+
+		} else if (strcasestr(argv[i], "off=") == argv[i]) {
+			int	off;
+
+			tok = strchr(argv[i], '=') + 1;
+
+			off = strtol(tok, &end, 0);
+			/* NB: align with sizeof(__u64) to simplify page
+			 * checking implementation */
+			if (off < 0 || off % sizeof(__u64) != 0) {
+				fprintf(stderr,
+					"Invalid offset %s/%d, it should be "
+					"postive value and multiple of %d\n",
+					tok, off, (int)sizeof(__u64));
+				return -1;
+			}
+
+			/* NB: blk_srv_off is reserved so far */
+			bulk->blk_cli_off = bulk->blk_srv_off = off;
+			if (end == NULL)
+				return 0;
 
                 } else if (strcasecmp(argv[i], "read") == 0 ||
                            strcasecmp(argv[i], "r") == 0) {

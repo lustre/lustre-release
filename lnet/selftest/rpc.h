@@ -181,7 +181,7 @@ typedef struct {
 	__u16			blk_flags;
 	/** data length */
 	__u32			blk_len;
-	/** reserved: offset */
+	/** bulk offset */
 	__u32                   blk_offset;
 } WIRE_ATTR test_bulk_req_v1_t;
 

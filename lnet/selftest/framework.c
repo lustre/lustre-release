@@ -1125,7 +1125,7 @@ sfw_alloc_pages(struct srpc_server_rpc *rpc, int cpt, int npages, int len,
 	LASSERT(rpc->srpc_bulk == NULL);
 	LASSERT(npages > 0 && npages <= LNET_MAX_IOV);
 
-	rpc->srpc_bulk = srpc_alloc_bulk(cpt, npages, len, sink);
+	rpc->srpc_bulk = srpc_alloc_bulk(cpt, 0, npages, len, sink);
 	if (rpc->srpc_bulk == NULL)
 		return -ENOMEM;
 

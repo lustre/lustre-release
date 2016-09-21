@@ -797,14 +797,15 @@ lstcon_bulkrpc_v0_prep(lst_test_bulk_param_t *param, srpc_test_reqst_t *req)
 }
 
 static int
-lstcon_bulkrpc_v1_prep(lst_test_bulk_param_t *param, srpc_test_reqst_t *req)
+lstcon_bulkrpc_v1_prep(lst_test_bulk_param_t *param, bool is_client,
+		       srpc_test_reqst_t *req)
 {
 	test_bulk_req_v1_t *brq = &req->tsr_u.bulk_v1;
 
 	brq->blk_opc	= param->blk_opc;
 	brq->blk_flags	= param->blk_flags;
 	brq->blk_len	= param->blk_size;
-	brq->blk_offset	= 0; /* reserved */
+	brq->blk_offset	= is_client ? param->blk_cli_off : param->blk_srv_off;
 
 	return 0;
 }
@@ -904,7 +905,8 @@ lstcon_testrpc_prep(lstcon_node_t *nd, int transop, unsigned feats,
 						    &test->tes_param[0], trq);
 		} else {
 			rc = lstcon_bulkrpc_v1_prep((lst_test_bulk_param_t *)
-						    &test->tes_param[0], trq);
+						    &test->tes_param[0],
+						    trq->tsr_is_client, trq);
 		}
 
                 break;
