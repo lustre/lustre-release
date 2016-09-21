@@ -2707,12 +2707,18 @@ lr_reader</title>
           </tbody>
         </tgroup>
       </informaltable>
-      <para>A call to use flock may be blocked if another process is holding an incompatible lock. Locks created using flock are applicable for an open file table entry. Therefore, a single process may hold only one type of lock (shared or exclusive) on a single file. Subsequent flock calls on a file that is already locked converts the existing lock to the new lock mode.</para>
+      <para>A call to use flock may be blocked if another process is holding an
+          incompatible lock. Locks created using flock are applicable for an
+          open file table entry. Therefore, a single process may hold only one
+          type of lock (shared or exclusive) on a single file. Subsequent flock
+          calls on a file that is already locked converts the existing lock to
+          the new lock mode.</para>
       <section remap="h4">
         <title>Example</title>
-        <screen>$ mount -t lustre -o flock mds@tcp0:/lustre /mnt/client</screen>
+        <screen>$ mount -t lustre -o flock mgs@tcp0:/lustre /mnt/client</screen>
         <para>You can check it in /etc/mtab. It should look like,</para>
-        <screen>mds@tcp0:/lustre /mnt/client lustre rw,flock         0       0</screen>
+        <screen>mgs@tcp0:/lustre /mnt/client lustre rw,flock         0       0
+        </screen>
       </section>
     </section>
     <section remap="h3" condition='l29'>
