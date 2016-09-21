@@ -111,6 +111,8 @@ AC_SUBST(modulefsdir)
 
 modulenetdir="${moduledir}/net/${IN_KERNEL}"
 AC_SUBST(modulenetdir)
+
+AC_SUBST(KMP_MODDIR)
 ])
 
 #
