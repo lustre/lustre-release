@@ -838,7 +838,7 @@ int  mdt_hsm_cdt_fini(struct mdt_device *mdt)
  * \retval 0 success
  * \retval -ve failure
  */
-int mdt_hsm_cdt_start(struct mdt_device *mdt)
+static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 {
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
 	int			 rc;

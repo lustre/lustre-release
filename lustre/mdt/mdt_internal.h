@@ -856,7 +856,6 @@ struct cdt_restore_handle *mdt_hsm_restore_hdl_find(struct coordinator *cdt,
 						const struct lu_fid *fid);
 /* coordinator management */
 int mdt_hsm_cdt_init(struct mdt_device *mdt);
-int mdt_hsm_cdt_start(struct mdt_device *mdt);
 int mdt_hsm_cdt_stop(struct mdt_device *mdt);
 int mdt_hsm_cdt_fini(struct mdt_device *mdt);
 int mdt_hsm_cdt_wakeup(struct mdt_device *mdt);
