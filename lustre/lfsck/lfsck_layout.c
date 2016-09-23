@@ -1804,13 +1804,9 @@ again:
 	if (rc != -ENOENT)
 		GOTO(unlock, rc);
 
-	rc = linkea_data_new(&ldata,
-			     &lfsck_env_info(env)->lti_linkea_buf);
-	if (rc != 0)
-		GOTO(unlock, rc);
-
 	pname = lfsck_name_get_const(env, name, strlen(name));
-	rc = linkea_add_buf(&ldata, pname, lfsck_dto2fid(lfsck->li_lpf_obj));
+	rc = linkea_links_new(&ldata, &lfsck_env_info(env)->lti_linkea_buf,
+			      pname, lfsck_dto2fid(lfsck->li_lpf_obj));
 	if (rc != 0)
 		GOTO(unlock, rc);
 

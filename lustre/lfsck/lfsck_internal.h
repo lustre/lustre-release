@@ -111,7 +111,6 @@ struct lfsck_bookmark {
 enum lfsck_namespace_trace_flags {
 	LNTF_CHECK_LINKEA	= 0x01,
 	LNTF_CHECK_PARENT	= 0x02,
-	LNTF_SKIP_NLINK		= 0x04,
 	LNTF_CHECK_ORPHAN	= 0x08,
 	LNTF_UNCERTAIN_LMV	= 0x10,
 	LNTF_RECHECK_NAME_HASH	= 0x20,
@@ -274,9 +273,14 @@ struct lfsck_namespace {
 	 * the MDTs that contain non-verified MDT-objects. */
 	__u32	ln_bitmap_size;
 
-	__u32	ln_reserved_1;
+	/* Time for the latest LFSCK scan in seconds from the beginning. */
+	__u32	ln_time_latest_reset;
+
+	/* How many linkEA overflow timestamp have been cleared. */
+	__u64	ln_linkea_overflow_cleared;
+
 	/* For further using. 256-bytes aligned now. */
-	__u64   ln_reserved[15];
+	__u64   ln_reserved[14];
 };
 
 enum lfsck_layout_inconsistency_type {
@@ -993,7 +997,7 @@ int lfsck_namespace_check_exist(const struct lu_env *env,
 				struct dt_object *dir,
 				struct dt_object *obj, const char *name);
 int __lfsck_links_read(const struct lu_env *env, struct dt_object *obj,
-		       struct linkea_data *ldata);
+		       struct linkea_data *ldata, bool with_rec);
 int lfsck_namespace_rebuild_linkea(const struct lu_env *env,
 				   struct lfsck_component *com,
 				   struct dt_object *obj,
@@ -1450,20 +1454,33 @@ static inline int lfsck_links_read(const struct lu_env *env,
 {
 	ldata->ld_buf =
 		lu_buf_check_and_alloc(&lfsck_env_info(env)->lti_linkea_buf,
-				       PAGE_SIZE);
+				       MAX_LINKEA_SIZE);
 
-	return __lfsck_links_read(env, obj, ldata);
+	return __lfsck_links_read(env, obj, ldata, false);
 }
 
-static inline int lfsck_links_read2(const struct lu_env *env,
-				    struct dt_object *obj,
-				    struct linkea_data *ldata)
+/* Read linkEA for the given object, the linkEA should contain
+ * at least one entry, otherwise, -ENODATA will be returned. */
+static inline int lfsck_links_read_with_rec(const struct lu_env *env,
+					    struct dt_object *obj,
+					    struct linkea_data *ldata)
+{
+	ldata->ld_buf =
+		lu_buf_check_and_alloc(&lfsck_env_info(env)->lti_linkea_buf,
+				       MAX_LINKEA_SIZE);
+
+	return __lfsck_links_read(env, obj, ldata, true);
+}
+
+static inline int lfsck_links_read2_with_rec(const struct lu_env *env,
+					     struct dt_object *obj,
+					     struct linkea_data *ldata)
 {
 	ldata->ld_buf =
 		lu_buf_check_and_alloc(&lfsck_env_info(env)->lti_linkea_buf2,
-				       PAGE_SIZE);
+				       MAX_LINKEA_SIZE);
 
-	return __lfsck_links_read(env, obj, ldata);
+	return __lfsck_links_read(env, obj, ldata, true);
 }
 
 static inline struct lfsck_lmv *lfsck_lmv_get(struct lfsck_lmv *llmv)

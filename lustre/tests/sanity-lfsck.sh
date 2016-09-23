@@ -3750,7 +3750,10 @@ test_29a() {
 	count=$(stat --format=%h $DIR/$tdir/d0/foo)
 	[ $count -eq 2 ] || error "(8) Fail to repair nlink count: $count"
 }
-run_test 29a "LFSCK can repair bad nlink count (1)"
+# Disable 29a, we only allow nlink to be updated if the known linkEA
+# entries is larger than nlink count.
+#
+#run_test 29a "LFSCK can repair bad nlink count (1)"
 
 test_29b() {
 	echo "#####"
@@ -3794,59 +3797,100 @@ test_29b() {
 }
 run_test 29b "LFSCK can repair bad nlink count (2)"
 
-test_29c() {
+test_29c()
+{
 	echo "#####"
-	echo "There are too many hard links to the object, and exceeds the"
-	echo "object's linkEA limitation, as to NOT all the known name entries"
-	echo "will be recorded in the linkEA. Under such case, LFSCK should"
-	echo "skip the nlink verification for this object."
+	echo "The namespace LFSCK will create many hard links to the target"
+	echo "file as to exceed the linkEA size limitation. Under such case"
+	echo "the linkEA will be marked as overflow that will prevent the"
+	echo "target file to be migrated. Then remove some hard links to"
+	echo "make the left hard links to be held within the linkEA size"
+	echo "limitation. But before the namespace LFSCK adding all the"
+	echo "missed linkEA entries back, the overflow mark (timestamp)"
+	echo "will not be cleared."
 	echo "#####"
 
 	check_mount_and_prep
 
-	$LFS mkdir -i 0 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0"
-	touch $DIR/$tdir/d0/foo || error "(2) Fail to create foo"
-	ln $DIR/$tdir/d0/foo $DIR/$tdir/d0/h1 ||
-		error "(3) Fail to hard link to $DIR/$tdir/d0/foo"
+	mkdir -p $DIR/$tdir/guard || error "(0.1) Fail to mkdir"
+	$LFS mkdir -i $((MDSCOUNT - 1)) $DIR/$tdir/foo ||
+		error "(0.2) Fail to mkdir"
+	touch $DIR/$tdir/guard/f0 || error "(1) Fail to create"
+	local oldfid=$($LFS path2fid $DIR/$tdir/guard/f0)
 
-	echo "Inject failure stub on MDT0 to simulate the case that"
-	echo "foo's hard links exceed the object's linkEA limitation."
-
-	ln $DIR/$tdir/d0/foo $DIR/$tdir/d0/h2 ||
-		error "(4) Fail to hard link to $DIR/$tdir/d0/foo"
+	# define MAX_LINKEA_SIZE        4096
+	# sizeof(link_ea_header) = 24
+	# sizeof(link_ea_entry) = 18
+	# nlink_min=$(((MAX_LINKEA_SIZE - sizeof(link_ea_header)) /
+	#	      (sizeof(link_ea_entry) + name_length))
+	# If the average name length is 12 bytes, then 150 hard links
+	# is totally enough to overflow the linkEA
+	echo "Create 150 hard links should succeed although the linkEA overflow"
+	createmany -l $DIR/$tdir/guard/f0 $DIR/$tdir/foo/ttttttttttt 150 ||
+		error "(2) Fail to hard link"
 
 	cancel_lru_locks mdc
+	if [ $MDSCOUNT -ge 2 ]; then
+		$LFS migrate -m 1 $DIR/$tdir/guard 2>/dev/null ||
+			error "(3.1) Migrate failure"
 
-	local count1=$(stat --format=%h $DIR/$tdir/d0/foo)
-	[ $count1 -eq 3 ] || error "(5) Stat failure: $count1"
+		echo "The object with linkEA overflow should NOT be migrated"
+		local newfid=$($LFS path2fid $DIR/$tdir/guard/f0)
+		[ "$newfid" == "$oldfid" ] ||
+			error "(3.2) Migrate should fail: $newfid != $oldfid"
+	fi
 
-	local foofid=$($LFS path2fid $DIR/$tdir/d0/foo)
-	$LFS fid2path $DIR $foofid
-	local count2=$($LFS fid2path $DIR $foofid | wc -l)
-	[ $count2 -eq 2 ] || error "(6) Fail to inject error: $count2"
+	# Remove 100 hard links, then the linkEA should have space
+	# to hold the missed linkEA entries.
+	echo "Remove 100 hard links to save space for the missed linkEA entries"
+	unlinkmany $DIR/$tdir/foo/ttttttttttt 100 || error "(4) Fail to unlink"
 
-	echo "Trigger namespace LFSCK to repair the nlink count"
+	if [ $MDSCOUNT -ge 2 ]; then
+		$LFS migrate -m 1 $DIR/$tdir/guard 2>/dev/null ||
+			error "(5.1) Migrate failure"
+
+		# The overflow timestamp is still there, so migration will fail.
+		local newfid=$($LFS path2fid $DIR/$tdir/guard/f0)
+		[ "$newfid" == "$oldfid" ] ||
+			error "(5.2) Migrate should fail: $newfid != $oldfid"
+	fi
+
+	# sleep 3 seconds to guarantee that the overflow is recognized
+	sleep 3
+
+	echo "Trigger namespace LFSCK to clear the overflow timestamp"
 	$START_NAMESPACE -r -A ||
-		error "(7) Fail to start LFSCK for namespace"
+		error "(6) Fail to start LFSCK for namespace"
 
-	wait_all_targets_blocked namespace completed 8
+	wait_all_targets_blocked namespace completed 7
 
 	local repaired=$($SHOW_NAMESPACE |
-			 awk '/^nlinks_repaired/ { print $2 }')
+			 awk '/^linkea_overflow_cleared/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(8) Fail to clear linkea overflow: $repaired"
+
+	repaired=$($SHOW_NAMESPACE |
+		   awk '/^nlinks_repaired/ { print $2 }')
 	[ $repaired -eq 0 ] ||
-		error "(9) Repair nlink count unexpcetedly: $repaired"
+		error "(9) Unexpected nlink repaired: $repaired"
 
-	cancel_lru_locks mdc
+	if [ $MDSCOUNT -ge 2 ]; then
+		$LFS migrate -m 1 $DIR/$tdir/guard 2>/dev/null ||
+			error "(10.1) Migrate failure"
 
-	count1=$(stat --format=%h $DIR/$tdir/d0/foo)
-	[ $count1 -eq 3 ] || error "(10) Stat failure: $count1"
+		# Migration should succeed after clear the overflow timestamp.
+		local newfid=$($LFS path2fid $DIR/$tdir/guard/f0)
+		[ "$newfid" != "$oldfid" ] ||
+			error "(10.2) Migrate should succeed"
 
-	count2=$($LFS fid2path $DIR $foofid | wc -l)
-	[ $count2 -eq 2 ] ||
-		error "(11) Repaired something unexpectedly: $count2"
+		ls -l $DIR/$tdir/foo > /dev/null ||
+			error "(11) 'ls' failed after migration"
+	fi
+
+	rm -f $DIR/$tdir/guard/f0 || error "(12) Fail to unlink f0"
+	rm -rf $DIR/$tdir/foo || error "(13) Fail to rmdir foo"
 }
-# disable test_29c temporarily, it will be re-enabled in subsequent patch.
-#run_test 29c "Not verify nlink attr if hard links exceed linkEA limitation"
+run_test 29c "verify linkEA size limitation"
 
 test_30() {
 	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&

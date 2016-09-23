@@ -1241,12 +1241,6 @@ static int mdd_declare_link(const struct lu_env *env,
 	if (rc != 0)
 		return rc;
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MORE_NLINK)) {
-		rc = mdo_declare_ref_add(env, c, handle);
-		if (rc != 0)
-			return rc;
-	}
-
 	la->la_valid = LA_CTIME | LA_MTIME;
 	rc = mdo_declare_attr_set(env, p, la, handle);
 	if (rc != 0)
@@ -1324,12 +1318,6 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 		GOTO(out_unlock, rc);
 
 	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LESS_NLINK)) {
-		rc = mdo_ref_add(env, mdd_sobj, handle);
-		if (rc != 0)
-			GOTO(out_unlock, rc);
-	}
-
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MORE_NLINK)) {
 		rc = mdo_ref_add(env, mdd_sobj, handle);
 		if (rc != 0)
 			GOTO(out_unlock, rc);

@@ -1984,7 +1984,7 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 			break;
 		}
 
-		rc1 = lfsck_links_read(env, obj, &ldata);
+		rc1 = lfsck_links_read_with_rec(env, obj, &ldata);
 		if (rc1 == -ENOENT) {
 			create = true;
 			goto repair;
@@ -2122,7 +2122,8 @@ repair:
 		if (repair_linkea) {
 			struct lustre_handle lh = { 0 };
 
-			rc1 = linkea_data_new(&ldata, &info->lti_big_buf);
+			rc1 = linkea_links_new(&ldata, &info->lti_big_buf,
+					       cname, lfsck_dto2fid(dir));
 			if (rc1 != 0)
 				goto next;
 
@@ -2139,10 +2140,6 @@ repair:
 					goto next;
 				}
 			}
-
-			rc1 = linkea_add_buf(&ldata, cname, lfsck_dto2fid(dir));
-			if (rc1 != 0)
-				goto next;
 
 			rc1 = lfsck_ibits_lock(env, lfsck, obj, &lh,
 					       MDS_INODELOCK_UPDATE |

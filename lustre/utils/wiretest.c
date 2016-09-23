@@ -4878,10 +4878,6 @@ void lustre_assert_wire_constants(void)
 		 (long long)LE_CONDITIONAL_DESTROY);
 	LASSERTF(LE_PAIRS_VERIFY == 11, "found %lld\n",
 		 (long long)LE_PAIRS_VERIFY);
-	LASSERTF(LE_SKIP_NLINK_DECLARE == 13, "found %lld\n",
-		 (long long)LE_SKIP_NLINK_DECLARE);
-	LASSERTF(LE_SKIP_NLINK == 14, "found %lld\n",
-		 (long long)LE_SKIP_NLINK);
 	LASSERTF(LE_SET_LMV_MASTER == 15, "found %lld\n",
 		 (long long)LE_SET_LMV_MASTER);
 	LASSERTF(LE_SET_LMV_SLAVE == 16, "found %lld\n",

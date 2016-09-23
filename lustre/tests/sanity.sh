@@ -15792,6 +15792,38 @@ test_408() {
 }
 run_test 408 "drop_caches should not hang due to page leaks"
 
+test_409()
+{
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDTs for this test" && return
+
+	check_mount_and_prep
+
+	mkdir -p $DIR/$tdir || error "(0) Fail to mkdir"
+	$LFS mkdir -i 1 -c 2 $DIR/$tdir/foo || error "(1) Fail to mkdir"
+	touch $DIR/$tdir/guard || error "(2) Fail to create"
+
+	local PREFIX=$(str_repeat 'A' 128)
+	echo "Create 1K hard links start at $(date)"
+	createmany -l $DIR/$tdir/guard $DIR/$tdir/foo/${PREFIX}_ 1000 ||
+		error "(3) Fail to hard link"
+
+	echo "Links count should be right although linkEA overflow"
+	stat $DIR/$tdir/guard || error "(4) Fail to stat"
+	local linkcount=$(stat --format=%h $DIR/$tdir/guard)
+	[ $linkcount -eq 1001 ] ||
+		error "(5) Unexpected hard links count: $linkcount"
+
+	echo "List all links start at $(date)"
+	ls -l $DIR/$tdir/foo > /dev/null ||
+		error "(6) Fail to list $DIR/$tdir/foo"
+
+	echo "Unlink hard links start at $(date)"
+	unlinkmany $DIR/$tdir/foo/${PREFIX}_ 1000 ||
+		error "(7) Fail to unlink"
+}
+run_test 409 "Large amount of cross-MDTs hard links on the same file"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

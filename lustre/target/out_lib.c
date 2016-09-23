@@ -748,10 +748,64 @@ static int out_tx_xattr_set_exec(const struct lu_env *env,
 
 		ldata.ld_buf = &arg->u.xattr_set.buf;
 		if (strcmp(arg->u.xattr_set.name, XATTR_NAME_LINK) == 0) {
+			struct link_ea_header *leh;
+
 			linkea = true;
 			rc = linkea_init(&ldata);
 			if (unlikely(rc))
 				GOTO(out, rc == -ENODATA ? -EINVAL : rc);
+
+			leh = ldata.ld_leh;
+			LASSERT(leh != NULL);
+
+			/* If the new linkEA contains overflow timestamp,
+			 * then two cases:
+			 *
+			 * 1. The old linkEA for the object has already
+			 *    overflowed before current setting, the new
+			 *    linkEA does not contains new link entry. So
+			 *    the linkEA overflow timestamp is unchanged.
+			 *
+			 * 2. There are new link entry in the new linkEA,
+			 *    so its overflow timestamp is differnt from
+			 *    the old one. Usually, the overstamp in the
+			 *    given linkEA is newer. But because of clock
+			 *    drift among MDTs, the timestamp may become
+			 *    older. So here, we convert the timestamp to
+			 *    the server local time. Then namespace LFSCK
+			 *    that uses local time can handle it easily. */
+			if (unlikely(leh->leh_overflow_time)) {
+				struct lu_buf tbuf = { 0 };
+				bool update = false;
+
+				lu_buf_alloc(&tbuf, MAX_LINKEA_SIZE);
+				if (tbuf.lb_buf == NULL)
+					GOTO(unlock, rc = -ENOMEM);
+
+				rc = dt_xattr_get(env, dt_obj, &tbuf,
+						  XATTR_NAME_LINK);
+				if (rc > 0) {
+					struct linkea_data tdata = { 0 };
+
+					tdata.ld_buf = &tbuf;
+					rc = linkea_init(&tdata);
+					if (rc || leh->leh_overflow_time !=
+					    tdata.ld_leh->leh_overflow_time)
+						update = true;
+				} else {
+					/* Update the timestamp by force if
+					 * fail to load the old linkEA. */
+					update = true;
+				}
+
+				lu_buf_free(&tbuf);
+				if (update) {
+					leh->leh_overflow_time =
+							cfs_time_current_sec();
+					if (unlikely(!leh->leh_overflow_time))
+						leh->leh_overflow_time++;
+				}
+			}
 		} else {
 			linkea = false;
 		}
@@ -769,6 +823,8 @@ again:
 				goto again;
 			}
 		}
+
+unlock:
 		dt_write_unlock(env, dt_obj);
 	}
 
