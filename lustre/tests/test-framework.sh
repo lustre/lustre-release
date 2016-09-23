@@ -1776,14 +1776,24 @@ zconf_mount_clients() {
 	fi
 
 	do_nodes $clients "
-running=\\\$(mount | grep -c $mnt' ');
-rc=0;
-if [ \\\$running -eq 0 ] ; then
-    mkdir -p $mnt;
-    $MOUNT_CMD $flags $opts $device $mnt;
-    rc=\\\$?;
-fi;
-exit \\\$rc" || return ${PIPESTATUS[0]}
+		running=\\\$(mount | grep -c $mnt' ');
+		rc=0;
+		if [ \\\$running -eq 0 ] ; then
+			mkdir -p $mnt;
+			$MOUNT_CMD $flags $opts $device $mnt;
+			rc=\\\$?;
+		else
+			lustre_mnt_count=\\\$(mount | grep $mnt' ' | \
+				grep 'type lustre' | wc -l);
+			if [ \\\$running -ne \\\$lustre_mnt_count ] ; then
+				echo zconf_mount_clients FAILED: \
+					mount count \\\$running, not matching \
+					with mount count of 'type lustre' \
+					\\\$lustre_mnt_count;
+				rc=1;
+			fi;
+		fi;
+	exit \\\$rc" || return ${PIPESTATUS[0]}
 
 	echo "Started clients $clients: "
 	do_nodes $clients "mount | grep $mnt' '"
