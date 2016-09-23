@@ -12111,8 +12111,10 @@ test_205() { # Job stats
 	cmd="mv -f $DIR/$tfile $DIR/$tdir.rename"
 	verify_jobstats "$cmd" "$SINGLEMDS"
 	# jobstats expiry - sleep until old stats should be expired
-	local left=$((interval_new + 2 - (SECONDS - start)))
-	[ $left -ge 0 ] && echo "sleep $left for expiry" && sleep $((left + 1))
+	local left=$((interval_new + 5 - (SECONDS - start)))
+	[ $left -ge 0 ] && wait_update_facet $SINGLEMDS \
+		"lctl get_param *.*.job_stats | grep -c 'job_id.*mkdir'" \
+			"0" $left
 	cmd="mkdir $DIR/$tdir.expire"
 	verify_jobstats "$cmd" "$SINGLEMDS"
 	[ $(do_facet $SINGLEMDS lctl get_param *.*.job_stats |
