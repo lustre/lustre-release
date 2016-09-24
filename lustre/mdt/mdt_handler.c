@@ -5717,9 +5717,9 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 		RETURN(-EINVAL);
 
 	if (!fid_is_namespace_visible(&fp->gf_fid)) {
-		CWARN("%s: "DFID" is invalid, sequence should be "
-		      ">= %#llx\n", mdt_obd_name(mdt),
-		      PFID(&fp->gf_fid), (__u64)FID_SEQ_NORMAL);
+		CDEBUG(D_INFO, "%s: "DFID" is invalid, f_seq should be >= "LPX64
+		       ", or f_oid != 0, or f_ver == 0\n", mdt_obd_name(mdt),
+		       PFID(&fp->gf_fid), (__u64)FID_SEQ_NORMAL);
 		RETURN(-EINVAL);
 	}
 

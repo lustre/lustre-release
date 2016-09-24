@@ -175,11 +175,11 @@ command_t cmdlist[] = {
 	{"getstripe", lfs_getstripe, 0,
 	 "To list the striping info for a given file or files in a\n"
 	 "directory or recursively for all files in a directory tree.\n"
-	 "usage: getstripe [--ost|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
+	 "usage: getstripe [--ost|-O <uuid>] [--quiet|-q] [--verbose|-v]\n"
 	 "		   [--stripe-count|-c] [--stripe-index|-i]\n"
 	 "		   [--pool|-p] [--stripe-size|-S] [--directory|-d]\n"
 	 "		   [--mdt-index|-M] [--recursive|-r] [--raw|-R]\n"
-	 "		   [--layout|-L]\n"
+	 "		   [--layout|-L] [--fid|-F] [--generation|-g]\n"
 	 "		   <directory|filename> ..."},
 	{"setdirstripe", lfs_setdirstripe, 0,
 	 "To create a striped directory on a specified MDT. This can only\n"
@@ -1738,6 +1738,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"stripe_count",	no_argument,		0, 'c'},
 		{"directory",		no_argument,		0, 'd'},
 		{"default",		no_argument,		0, 'D'},
+		{"fid",			no_argument,		0, 'F'},
 		{"generation",		no_argument,		0, 'g'},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
 		/* This formerly implied "stripe-index", but was explicitly
@@ -1775,7 +1776,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	};
 	int c, rc;
 
-	while ((c = getopt_long(argc, argv, "cdDghiLMoO:pqrRsSv",
+	while ((c = getopt_long(argc, argv, "cdDFghiLMoO:pqrRsSv",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'O':
@@ -1796,11 +1797,17 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		case 'D':
 			param->fp_get_default_lmv = 1;
 			break;
+		case 'F':
+			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
+				param->fp_verbose |= VERBOSE_DFID;
+				param->fp_max_depth = 0;
+			}
+			break;
 		case 'r':
 			param->fp_recursive = 1;
 			break;
 		case 'v':
-			param->fp_verbose = VERBOSE_ALL | VERBOSE_DETAIL;
+			param->fp_verbose = VERBOSE_DEFAULT | VERBOSE_DETAIL;
 			break;
 		case 'c':
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
@@ -1880,7 +1887,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		param->fp_max_depth = -1;
 
 	if (!param->fp_verbose)
-		param->fp_verbose = VERBOSE_ALL;
+		param->fp_verbose = VERBOSE_DEFAULT;
 	if (param->fp_quiet)
 		param->fp_verbose = VERBOSE_OBJID;
 

@@ -4436,30 +4436,47 @@ test_56a() {	# was test_56
 		error "$GETSTRIPE $DIR/$tdir: found $FILENUM, not $NUMFILES"
 	echo "$GETSTRIPE --recursive passed."
 
-        # test lfs getstripe with file instead of dir
+	# test lfs getstripe with file instead of dir
 	FILENUM=$($GETSTRIPE $DIR/$tdir/file1 | grep -c obdidx)
 	[[ $FILENUM -eq 1 ]] ||
 		error "$GETSTRIPE $DIR/$tdir/file1: found $FILENUM, not 1"
 	echo "$GETSTRIPE file1 passed."
 
-        #test lfs getstripe with --verbose
+	#test lfs getstripe with --verbose
 	[[ $($GETSTRIPE --verbose $DIR/$tdir |
 		grep -c lmm_magic) -eq $NUMFILES ]] ||
 		error "$GETSTRIPE --verbose $DIR/$tdir: want $NUMFILES"
 	[[ $($GETSTRIPE $DIR/$tdir | grep -c lmm_magic) -eq 0 ]] ||
-		rror "$GETSTRIPE $DIR/$tdir: showed lmm_magic"
+		error "$GETSTRIPE $DIR/$tdir: showed lmm_magic"
+
+	#test lfs getstripe with -v prints lmm_fid
+	[[ $($GETSTRIPE -v $DIR/$tdir | grep -c lmm_fid) -eq $NUMFILES ]] ||
+		error "$GETSTRIPE -v $DIR/$tdir: want $NUMFILES lmm_fid: lines"
+	[[ $($GETSTRIPE $DIR/$tdir | grep -c lmm_fid) -eq 0 ]] ||
+		error "$GETSTRIPE $DIR/$tdir: showed lmm_fid"
 	echo "$GETSTRIPE --verbose passed."
 
-        #test lfs getstripe with --obd
-        $GETSTRIPE --obd wrong_uuid $DIR/$tdir 2>&1 |
+	#check for FID information
+	local fid1=$($GETSTRIPE --fid $DIR/$tdir/file1)
+	local fid2=$($GETSTRIPE --verbose $DIR/$tdir/file1 |
+		       awk '/lmm_fid: / { print $2 }')
+	local fid3=$($LFS path2fid $DIR/$tdir/file1)
+	[ "$fid1" != "$fid2" ] &&
+		error "getstripe --fid $fid1 != getstripe --verbose $fid2"
+	[ "$fid1" != "$fid3" ] &&
+		error "getstripe --fid $fid1 != lfs path2fid $fid3"
+	echo "$GETSTRIPE --fid passed."
+
+	#test lfs getstripe with --obd
+	$GETSTRIPE --obd wrong_uuid $DIR/$tdir 2>&1 |
 		grep -q "unknown obduuid" ||
 		error "$GETSTRIPE --obd wrong_uuid should return error message"
 
 	[[ $OSTCOUNT -lt 2 ]] &&
-                skip_env "skipping other $GETSTRIPE --obd test" && return
+		skip_env "skipping other $GETSTRIPE --obd test" && return
 
-        OSTIDX=1
-        OBDUUID=$(ostuuid_from_index $OSTIDX)
+	OSTIDX=1
+	OBDUUID=$(ostuuid_from_index $OSTIDX)
 	FILENUM=$($GETSTRIPE -ir $DIR/$tdir | grep "^$OSTIDX\$" | wc -l)
 	FOUND=$($GETSTRIPE -r --obd $OBDUUID $DIR/$tdir | grep obdidx | wc -l)
 	[[ $FOUND -eq $FILENUM ]] ||
@@ -4805,7 +4822,7 @@ run_test 56s "check lfs find -stripe-count works"
 
 test_56t() { # LU-611
 	TDIR=$DIR/${tdir}t
-	setup_56 $NUMFILES $NUMDIRS "-s 512k"
+	setup_56 $NUMFILES $NUMDIRS "--stripe-size 512k"
 
 	$SETSTRIPE -S 256k $TDIR/$tfile.{0,1,2,3}
 
@@ -10157,17 +10174,17 @@ test_154A() {
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.1) ]] &&
 		skip "Need MDS version at least 2.4.1" && return
 
-	touch $DIR/$tfile
-	local FID=$($LFS path2fid $DIR/$tfile)
-	[ -z "$FID" ] && error "path2fid unable to get $DIR/$tfile FID"
+	local tf=$DIR/$tfile
+	touch $tf
+
+	local fid=$($LFS path2fid $tf)
+	[ -z "$fid" ] && error "path2fid unable to get $tf FID"
 
 	# check that we get the same pathname back
-	local FOUND=$($LFS fid2path $MOUNT "$FID")
-	[ -z "$FOUND" ] && error "fid2path unable to get $FID path"
-	[ "$FOUND" != "$DIR/$tfile" ] &&
-		error "fid2path(path2fid($DIR/$tfile)) = $FOUND != $DIR/$tfile"
-
-	rm -rf $DIR/$tfile
+	local found=$($LFS fid2path $MOUNT "$fid")
+	[ -z "$found" ] && error "fid2path unable to get '$fid' path"
+	[ "$found" == "$tf" ] ||
+		error "fid2path($fid=path2fid($tf)) = $found != $tf"
 }
 run_test 154A "lfs path2fid and fid2path basic checks"
 

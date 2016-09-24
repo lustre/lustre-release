@@ -382,7 +382,7 @@ struct lov_user_ost_data_v1 {     /* per-stripe data structure */
 struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
 	__u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V1 */
 	__u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
-	struct ost_id lmm_oi;	  /* LOV object ID */
+	struct ost_id lmm_oi;	  /* MDT parent inode id/seq (id/0 for 1.x) */
 	__u32 lmm_stripe_size;    /* size of stripe in bytes */
 	__u16 lmm_stripe_count;   /* num stripes in use for this object */
 	union {
@@ -397,7 +397,7 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
 struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
 	__u32 lmm_magic;          /* magic number = LOV_USER_MAGIC_V3 */
 	__u32 lmm_pattern;        /* LOV_PATTERN_RAID0, LOV_PATTERN_RAID1 */
-	struct ost_id lmm_oi;	  /* LOV object ID */
+	struct ost_id lmm_oi;	  /* MDT parent inode id/seq (id/0 for 1.x) */
 	__u32 lmm_stripe_size;    /* size of stripe in bytes */
 	__u16 lmm_stripe_count;   /* num stripes in use for this object */
 	union {

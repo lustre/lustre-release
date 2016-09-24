@@ -2103,13 +2103,13 @@ static int sattr_cache_get_defaults(const char *const fsname,
 }
 
 static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
-                                     struct lov_user_ost_data_v1 *objects,
-                                     int is_dir, int verbose, int depth,
-                                     int raw, char *pool_name)
+				     struct lov_user_ost_data_v1 *objects,
+				     int is_dir, int verbose, int depth,
+				     int raw, char *pool_name)
 {
-        char *prefix = is_dir ? "" : "lmm_";
+	char *prefix = is_dir ? "" : "lmm_";
 	char *separator = "";
-        int rc;
+	int rc;
 
 	if (is_dir && lmm_oi_seq(&lum->lmm_oi) == FID_SEQ_LOV_DEFAULT) {
 		lmm_oi_set_seq(&lum->lmm_oi, 0);
@@ -2117,8 +2117,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			llapi_printf(LLAPI_MSG_NORMAL, "(Default) ");
 	}
 
-        if (depth && path && ((verbose != VERBOSE_OBJID) || !is_dir))
-                llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
+	if (depth && path && ((verbose != VERBOSE_OBJID) || !is_dir))
+		llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
 
 	if ((verbose & VERBOSE_DETAIL) && !is_dir) {
 		llapi_printf(LLAPI_MSG_NORMAL, "lmm_magic:          0x%08X\n",
@@ -2128,58 +2128,86 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_id:      %#jx\n",
 			     (uintmax_t)lmm_oi_id(&lum->lmm_oi));
 	}
+	if ((verbose & (VERBOSE_DETAIL | VERBOSE_DFID)) && !is_dir) {
+		if (verbose & ~VERBOSE_DFID)
+			llapi_printf(LLAPI_MSG_NORMAL, "lmm_fid:            ");
+		/* This needs a bit of hand-holding since old 1.x lmm_oi
+		 * have { oi.oi_id = mds_inum, oi.oi_seq = 0 } and 2.x lmm_oi
+		 * have { oi.oi_id = mds_oid, oi.oi_seq = mds_seq } instead of
+		 * a real FID.  Ideally the 2.x code would have stored this
+		 * like a FID with { oi_id = mds_seq, oi_seq = mds_oid } so the
+		 * ostid union lu_fid { f_seq = mds_seq, f_oid = mds_oid }
+		 * worked properly (especially since IGIF FIDs use mds_inum as
+		 * the FID SEQ), but unfortunately that didn't happen.
+		 *
+		 * Print it to look like an IGIF FID, even though the fields
+		 * are reversed on disk, so that it makes sense to userspace.
+		 *
+		 * Don't use ostid_id() and ostid_seq(), since they assume the
+		 * oi_fid fields are in the right order.  This is why there are
+		 * separate lmm_oi_seq() and lmm_oi_id() routines for this.
+		 *
+		 * For newer layout types hopefully this will be a real FID. */
+		llapi_printf(LLAPI_MSG_NORMAL, DFID"\n",
+			     lmm_oi_seq(&lum->lmm_oi) == 0 ?
+				lmm_oi_id(&lum->lmm_oi) :
+				lmm_oi_seq(&lum->lmm_oi),
+			     lmm_oi_seq(&lum->lmm_oi) == 0 ?
+				0 : (__u32)lmm_oi_id(&lum->lmm_oi),
+			     (__u32)(lmm_oi_id(&lum->lmm_oi) >> 32));
+	}
 
-        if (verbose & VERBOSE_COUNT) {
-                if (verbose & ~VERBOSE_COUNT)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_count:   ",
-                                     prefix);
-                if (is_dir) {
-                        if (!raw && lum->lmm_stripe_count == 0) {
-                                unsigned int scount;
-                                rc = sattr_cache_get_defaults(NULL, path,
-                                                              &scount, NULL,
-                                                              NULL);
-                                if (rc == 0)
+	if (verbose & VERBOSE_COUNT) {
+		if (verbose & ~VERBOSE_COUNT)
+			llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_count:   ",
+				     prefix);
+		if (is_dir) {
+			if (!raw && lum->lmm_stripe_count == 0) {
+				unsigned int scount;
+				rc = sattr_cache_get_defaults(NULL, path,
+							      &scount, NULL,
+							      NULL);
+				if (rc == 0)
 					llapi_printf(LLAPI_MSG_NORMAL, "%d",
 						     scount);
-                                else
-                                        llapi_error(LLAPI_MSG_ERROR, rc,
-                                                    "Cannot determine default"
-                                                    " stripe count.");
-                        } else {
+				else
+					llapi_error(LLAPI_MSG_ERROR, rc,
+						    "Cannot determine default"
+						    " stripe count.");
+			} else {
 				llapi_printf(LLAPI_MSG_NORMAL, "%d",
-                                             lum->lmm_stripe_count ==
-                                             (typeof(lum->lmm_stripe_count))(-1)
+					     lum->lmm_stripe_count ==
+					     (typeof(lum->lmm_stripe_count))(-1)
 					     ? -1 : lum->lmm_stripe_count);
-                        }
-                } else {
+			}
+		} else {
 			llapi_printf(LLAPI_MSG_NORMAL, "%hd",
 				     (__s16)lum->lmm_stripe_count);
-                }
+		}
 		separator = is_dir ? " " : "\n";
-        }
+	}
 
-        if (verbose & VERBOSE_SIZE) {
+	if (verbose & VERBOSE_SIZE) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-                if (verbose & ~VERBOSE_SIZE)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_size:    ",
-                                     prefix);
-                if (is_dir && !raw && lum->lmm_stripe_size == 0) {
-                        unsigned int ssize;
-                        rc = sattr_cache_get_defaults(NULL, path, NULL, &ssize,
-                                                      NULL);
-                        if (rc == 0)
+		if (verbose & ~VERBOSE_SIZE)
+			llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_size:    ",
+				     prefix);
+		if (is_dir && !raw && lum->lmm_stripe_size == 0) {
+			unsigned int ssize;
+			rc = sattr_cache_get_defaults(NULL, path, NULL, &ssize,
+						      NULL);
+			if (rc == 0)
 				llapi_printf(LLAPI_MSG_NORMAL, "%u", ssize);
-                        else
-                                llapi_error(LLAPI_MSG_ERROR, rc,
-                                            "Cannot determine default"
-                                            " stripe size.");
-                } else {
+			else
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "Cannot determine default"
+					    " stripe size.");
+		} else {
 			llapi_printf(LLAPI_MSG_NORMAL, "%u",
 				     lum->lmm_stripe_size);
-                }
+		}
 		separator = is_dir ? " " : "\n";
-        }
+	}
 
 	if ((verbose & VERBOSE_LAYOUT) && !is_dir) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
@@ -2190,42 +2218,42 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		separator = "\n";
 	}
 
-        if ((verbose & VERBOSE_GENERATION) && !is_dir) {
+	if ((verbose & VERBOSE_GENERATION) && !is_dir) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-                if (verbose & ~VERBOSE_GENERATION)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%slayout_gen:     ",
-                                     prefix);
+		if (verbose & ~VERBOSE_GENERATION)
+			llapi_printf(LLAPI_MSG_NORMAL, "%slayout_gen:     ",
+				     prefix);
 		llapi_printf(LLAPI_MSG_NORMAL, "%u",
 			     (int)lum->lmm_layout_gen);
 		separator = "\n";
-        }
+	}
 
-        if (verbose & VERBOSE_OFFSET) {
+	if (verbose & VERBOSE_OFFSET) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-                if (verbose & ~VERBOSE_OFFSET)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_offset:  ",
-                                     prefix);
-                if (is_dir)
+		if (verbose & ~VERBOSE_OFFSET)
+			llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_offset:  ",
+				     prefix);
+		if (is_dir)
 			llapi_printf(LLAPI_MSG_NORMAL, "%d",
-                                     lum->lmm_stripe_offset ==
-                                     (typeof(lum->lmm_stripe_offset))(-1) ? -1 :
+				     lum->lmm_stripe_offset ==
+				     (typeof(lum->lmm_stripe_offset))(-1) ? -1 :
 				     lum->lmm_stripe_offset);
-                else
+		else
 			llapi_printf(LLAPI_MSG_NORMAL, "%u",
 				     objects[0].l_ost_idx);
 		separator = is_dir ? " " : "\n";
-        }
+	}
 
-        if ((verbose & VERBOSE_POOL) && (pool_name != NULL)) {
+	if ((verbose & VERBOSE_POOL) && (pool_name != NULL)) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-                if (verbose & ~VERBOSE_POOL)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%spool:           ",
-                                     prefix);
+		if (verbose & ~VERBOSE_POOL)
+			llapi_printf(LLAPI_MSG_NORMAL, "%spool:           ",
+				     prefix);
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", pool_name);
-        }
+	}
 
-        if (!is_dir || (is_dir && (verbose != VERBOSE_OBJID)))
-                llapi_printf(LLAPI_MSG_NORMAL, "\n");
+	if (!is_dir || (is_dir && (verbose != VERBOSE_OBJID)))
+		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
 void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
@@ -3804,6 +3832,7 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
 int llapi_fid2path(const char *device, const char *fidstr, char *buf,
 		   int buflen, long long *recno, int *linkno)
 {
+	const char *fidstr_orig = fidstr;
 	struct lu_fid fid;
 	struct getinfo_fid2path *gf;
 	int rc;
@@ -3814,8 +3843,8 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
 	sscanf(fidstr, SFID, RFID(&fid));
 	if (!fid_is_sane(&fid)) {
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "bad FID format [%s], should be [seq:oid:ver]"
-				  " (e.g. "DFID")\n", fidstr,
+				  "bad FID format '%s', should be [seq:oid:ver]"
+				  " (e.g. "DFID")\n", fidstr_orig,
 				  (unsigned long long)FID_SEQ_NORMAL, 2, 0);
 		return -EINVAL;
 	}
@@ -3823,6 +3852,7 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
 	gf = malloc(sizeof(*gf) + buflen);
 	if (gf == NULL)
 		return -ENOMEM;
+
 	gf->gf_fid = fid;
 	gf->gf_recno = *recno;
 	gf->gf_linkno = *linkno;
@@ -3830,21 +3860,20 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
 
 	/* Take path or fsname */
 	rc = root_ioctl(device, OBD_IOC_FID2PATH, gf, NULL, 0);
-	if (rc) {
-		if (rc != -ENOENT)
-			llapi_error(LLAPI_MSG_ERROR, rc, "ioctl err %d", rc);
-	} else {
-		memcpy(buf, gf->gf_u.gf_path, gf->gf_pathlen);
-		if (buf[0] == '\0') { /* ROOT path */
-			buf[0] = '/';
-			buf[1] = '\0';
-		}
-		*recno = gf->gf_recno;
-		*linkno = gf->gf_linkno;
-        }
+	if (rc)
+		goto out_free;
 
-        free(gf);
-        return rc;
+	memcpy(buf, gf->gf_u.gf_path, gf->gf_pathlen);
+	if (buf[0] == '\0') { /* ROOT path */
+		buf[0] = '/';
+		buf[1] = '\0';
+	}
+	*recno = gf->gf_recno;
+	*linkno = gf->gf_linkno;
+
+out_free:
+	free(gf);
+	return rc;
 }
 
 static int fid_from_lma(const char *path, const int fd, lustre_fid *fid)
