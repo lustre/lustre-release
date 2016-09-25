@@ -3197,19 +3197,10 @@ test_23b() {
 
 	check_mount_and_prep
 
-	[[ -d $MOUNT/.lustre/lost+found/MDT0000 ]] || {
-		# Trigger LFSCK firstly, that will generate the
-		# .lustre/lost+found/MDTxxxx in advance to avoid
-		# reusing the local object for the dangling name
-		# entry. LU-7429
-		$START_NAMESPACE -r ||
-			error "(0) Fail to start LFSCK for namespace"
-
-		wait_all_targets_blocked namespace completed 0.1
-	}
-
 	$LFS mkdir -i 0 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0 on MDT0"
 	$LFS path2fid $DIR/$tdir/d0
+
+	createmany -o $DIR/$tdir/d0/t 10 || error "(1.5) Fail to creatmany"
 
 	echo "dummy" > $DIR/$tdir/d0/f0 || error "(2) Fail to touch on MDT0"
 	$LFS path2fid $DIR/$tdir/d0/f0
@@ -3217,10 +3208,10 @@ test_23b() {
 	echo "dead" > $DIR/$tdir/d0/f1 || error "(3) Fail to touch on MDT0"
 	$LFS path2fid $DIR/$tdir/d0/f1
 
-	local OID=$($LFS path2fid $DIR/$tdir/d0/f1 | awk -F':' '{print $2}')
-	OID=$(printf %d $OID)
+	local SEQ0=$($LFS path2fid $DIR/$tdir/d0/f0 | awk -F':' '{print $1}')
+	local SEQ1=$($LFS path2fid $DIR/$tdir/d0/f1 | awk -F':' '{print $1}')
 
-	if [ $OID -eq 1 ]; then
+	if [ "$SEQ0" != "$SEQ1" ]; then
 		# To guarantee that the f0 and f1 are in the same FID seq
 		rm -f $DIR/$tdir/d0/f0 ||
 			error "(3.1) Fail to unlink $DIR/$tdir/d0/f0"
@@ -3229,11 +3220,22 @@ test_23b() {
 		$LFS path2fid $DIR/$tdir/d0/f0
 	fi
 
+	local OID=$($LFS path2fid $DIR/$tdir/d0/f1 | awk -F':' '{print $2}')
+	OID=$(printf %d $OID)
+
 	echo "Inject failure stub on MDT0 to simulate dangling name entry"
 	#define OBD_FAIL_LFSCK_DANGLING3	0x1621
 	do_facet $SINGLEMDS $LCTL set_param fail_val=$OID fail_loc=0x1621
 	ln $DIR/$tdir/d0/f0 $DIR/$tdir/d0/foo || error "(4) Fail to hard link"
 	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
+
+	# If there is creation after the dangling injection, it may re-use
+	# the just released local object (inode) that is referenced by the
+	# dangling name entry. It will fail the dangling injection.
+	# So before deleting the target object for the dangling name entry,
+	# remove some other objects to avoid the target object being reused
+	# by some potential creations. LU-7429
+	unlinkmany $DIR/$tdir/d0/t 10 || error "(5.0) Fail to unlinkmany"
 
 	rm -f $DIR/$tdir/d0/f1 || error "(5) Fail to unlink $DIR/$tdir/d0/f1"
 
@@ -3286,19 +3288,10 @@ test_23c() {
 
 	check_mount_and_prep
 
-	[[ -d $MOUNT/.lustre/lost+found/MDT0000 ]] || {
-		# Trigger LFSCK firstly, that will generate the
-		# .lustre/lost+found/MDTxxxx in advance to avoid
-		# reusing the local object for the dangling name
-		# entry. LU-7429
-		$START_NAMESPACE -r ||
-			error "(0) Fail to start LFSCK for namespace"
-
-		wait_all_targets_blocked namespace completed 0.1
-	}
-
 	$LFS mkdir -i 0 $DIR/$tdir/d0 || error "(1) Fail to mkdir d0 on MDT0"
 	$LFS path2fid $DIR/$tdir/d0
+
+	createmany -o $DIR/$tdir/d0/t 10 || error "(1.5) Fail to creatmany"
 
 	echo "dummy" > $DIR/$tdir/d0/f0 || error "(2) Fail to touch on MDT0"
 	$LFS path2fid $DIR/$tdir/d0/f0
@@ -3306,10 +3299,10 @@ test_23c() {
 	echo "dead" > $DIR/$tdir/d0/f1 || error "(3) Fail to touch on MDT0"
 	$LFS path2fid $DIR/$tdir/d0/f1
 
-	local OID=$($LFS path2fid $DIR/$tdir/d0/f1 | awk -F':' '{print $2}')
-	OID=$(printf %d $OID)
+	local SEQ0=$($LFS path2fid $DIR/$tdir/d0/f0 | awk -F':' '{print $1}')
+	local SEQ1=$($LFS path2fid $DIR/$tdir/d0/f1 | awk -F':' '{print $1}')
 
-	if [ $OID -eq 1 ]; then
+	if [ "$SEQ0" != "$SEQ1" ]; then
 		# To guarantee that the f0 and f1 are in the same FID seq
 		rm -f $DIR/$tdir/d0/f0 ||
 			error "(3.1) Fail to unlink $DIR/$tdir/d0/f0"
@@ -3318,11 +3311,22 @@ test_23c() {
 		$LFS path2fid $DIR/$tdir/d0/f0
 	fi
 
+	local OID=$($LFS path2fid $DIR/$tdir/d0/f1 | awk -F':' '{print $2}')
+	OID=$(printf %d $OID)
+
 	echo "Inject failure stub on MDT0 to simulate dangling name entry"
 	#define OBD_FAIL_LFSCK_DANGLING3	0x1621
 	do_facet $SINGLEMDS $LCTL set_param fail_val=$OID fail_loc=0x1621
 	ln $DIR/$tdir/d0/f0 $DIR/$tdir/d0/foo || error "(4) Fail to hard link"
 	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
+
+	# If there is creation after the dangling injection, it may re-use
+	# the just released local object (inode) that is referenced by the
+	# dangling name entry. It will fail the dangling injection.
+	# So before deleting the target object for the dangling name entry,
+	# remove some other objects to avoid the target object being reused
+	# by some potential creations. LU-7429
+	unlinkmany $DIR/$tdir/d0/t 10 || error "(5.0) Fail to unlinkmany"
 
 	rm -f $DIR/$tdir/d0/f1 || error "(5) Fail to unlink $DIR/$tdir/d0/f1"
 
@@ -3339,7 +3343,7 @@ test_23c() {
 
 	wait_update_facet client "stat $DIR/$tdir/d0/foo |
 		awk '/Size/ { print \\\$2 }'" "0" $LTIME || {
-		stat $DIR/$tdir/guard
+		stat $DIR/$tdir/d0/foo
 		$SHOW_NAMESPACE
 		error "(8) unexpected size"
 	}
