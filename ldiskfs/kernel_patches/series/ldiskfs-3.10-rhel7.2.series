@@ -21,3 +21,4 @@ rhel7/ext4-give-warning-with-dir-htree-growing.patch
 rhel7/ext4-mmp-brelse.patch
 rhel7/ext4-jcb-optimization.patch
 rhel7/ext4_s_max_ext_tree_depth.patch
+rhel7.2/ext4-release-bh-in-makeinxdir.patch

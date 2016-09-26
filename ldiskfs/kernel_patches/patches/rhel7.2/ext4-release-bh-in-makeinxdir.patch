@@ -1,0 +1,10 @@
+--- linux-1/fs/ext4/namei.c	2016-09-27 02:16:31.020890438 +0800
++++ linux-2/fs/ext4/namei.c	2016-09-27 02:17:14.246620470 +0800
+@@ -1874,6 +1874,7 @@ out_frames:
+ 	 */
+ 	ext4_mark_inode_dirty(handle, dir);
+ 	dx_release(frames);
++	brelse(bh);
+ 	return retval;
+ }
+ 
