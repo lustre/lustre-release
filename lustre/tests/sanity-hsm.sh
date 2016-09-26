@@ -1731,7 +1731,7 @@ test_16() {
 	# Add 1 to account for rounding errors between start and end (LU-8155)
 	local duration=$((end - start + 1))
 
-	[[ $duration -ge $goal ]] ||
+	[[ $duration -ge $((goal - 1)) ]] ||
 		error "Transfer is too fast $duration < $goal"
 
 	copytool_cleanup
