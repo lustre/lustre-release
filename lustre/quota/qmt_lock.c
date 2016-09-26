@@ -51,6 +51,7 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 	struct obd_uuid		*uuid;
 	struct lquota_lvb	*lvb;
 	struct ldlm_resource	*res = (*lockp)->l_resource;
+	struct ldlm_reply	*ldlm_rep;
 	int			 rc, lvb_len;
 	ENTRY;
 
@@ -76,6 +77,10 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 
 	repbody = req_capsule_server_get(&req->rq_pill, &RMF_QUOTA_BODY);
 	if (repbody == NULL)
+		RETURN(err_serious(-EFAULT));
+
+	ldlm_rep = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
+	if (ldlm_rep == NULL)
 		RETURN(err_serious(-EFAULT));
 
 	uuid = &(*lockp)->l_export->exp_client_uuid;
@@ -129,7 +134,7 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 	default:
 		CERROR("%s: invalid intent opcode: %llu\n", qmt->qmt_svname,
 		       it->opc);
-		GOTO(out, rc = err_serious(-EINVAL));
+		GOTO(out, rc = -EINVAL);
 	}
 
 	/* on success, pack lvb in reply */
@@ -140,9 +145,10 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 		GOTO(out, rc = lvb_len);
 
 	req_capsule_shrink(&req->rq_pill, &RMF_DLM_LVB, lvb_len, RCL_SERVER);
-	EXIT;
 out:
-	return rc;
+	ldlm_rep->lock_policy_res2 = clear_serious(rc);
+	EXIT;
+	return ELDLM_OK;
 }
 
 /*

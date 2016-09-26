@@ -159,6 +159,7 @@ static int qsd_intent_interpret(const struct lu_env *env,
 	struct lustre_handle	 *lockh;
 	struct quota_body	 *rep_qbody = NULL, *req_qbody;
 	struct qsd_async_args	 *aa = (struct qsd_async_args *)arg;
+	struct ldlm_reply	 *lockrep;
 	__u64			  flags = LDLM_FL_HAS_INTENT;
 	ENTRY;
 
@@ -170,14 +171,28 @@ static int qsd_intent_interpret(const struct lu_env *env,
 	rc = ldlm_cli_enqueue_fini(aa->aa_exp, req, LDLM_PLAIN, 0, LCK_CR,
 				   &flags, (void *)aa->aa_lvb,
 				   sizeof(struct lquota_lvb), lockh, rc);
-	if (rc < 0)
+	if (rc < 0) {
 		/* the lock has been destroyed, forget about the lock handle */
 		memset(lockh, 0, sizeof(*lockh));
+		/*
+		 * To avoid the server being fullfilled by LDLM locks, server
+		 * may reject the locking request by returning -EINPROGRESS,
+		 * this is different from the -EINPROGRESS returned by quota
+		 * code.
+		 */
+		if (rc == -EINPROGRESS)
+			rc = -EAGAIN;
+		GOTO(out, rc);
+	}
+
+	lockrep = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
+	LASSERT(lockrep != NULL);
+	rc = ptlrpc_status_ntoh(lockrep->lock_policy_res2);
 
 	if (rc == 0 || rc == -EDQUOT || rc == -EINPROGRESS)
 		rep_qbody = req_capsule_server_get(&req->rq_pill,
 						   &RMF_QUOTA_BODY);
-
+out:
 	aa->aa_completion(env, aa->aa_qqi, req_qbody, rep_qbody, lockh,
 			  aa->aa_lvb, aa->aa_arg, rc);
 	RETURN(rc);
