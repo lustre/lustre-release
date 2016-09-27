@@ -53,7 +53,6 @@
 #include <uapi/linux/lustre_ioctl.h>
 #include <lustre_lfsck.h>
 #include <lustre_log.h>
-#include <lustre_net.h>
 #include <lustre_nodemap.h>
 #include <lustre_mds.h>
 #include <uapi/linux/lustre_param.h>
