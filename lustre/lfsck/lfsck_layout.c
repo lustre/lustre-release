@@ -5218,7 +5218,6 @@ static void lfsck_layout_dump(const struct lu_env *env,
 
 	if (lo->ll_status == LS_SCANNING_PHASE1) {
 		__u64 pos;
-		const struct dt_it_ops *iops;
 		cfs_duration_t duration = cfs_time_current() -
 					  lfsck->li_time_last_checkpoint;
 		__u64 checked = lo->ll_objs_checked_phase1 +
@@ -5248,19 +5247,22 @@ static void lfsck_layout_dump(const struct lu_env *env,
 			   speed,
 			   new_checked);
 
-		LASSERT(lfsck->li_di_oit != NULL);
+		if (likely(lfsck->li_di_oit)) {
+			const struct dt_it_ops *iops =
+				&lfsck->li_obj_oit->do_index_ops->dio_it;
 
-		iops = &lfsck->li_obj_oit->do_index_ops->dio_it;
+			/* The low layer otable-based iteration position may NOT
+			 * exactly match the layout-based directory traversal
+			 * cookie. Generally, it is not a serious issue. But the
+			 * caller should NOT make assumption on that. */
+			pos = iops->store(env, lfsck->li_di_oit);
+			if (!lfsck->li_current_oit_processed)
+				pos--;
+		} else {
+			pos = lo->ll_pos_last_checkpoint;
+		}
 
-		/* The low layer otable-based iteration position may NOT
-		 * exactly match the layout-based directory traversal
-		 * cookie. Generally, it is not a serious issue. But the
-		 * caller should NOT make assumption on that. */
-		pos = iops->store(env, lfsck->li_di_oit);
-		if (!lfsck->li_current_oit_processed)
-			pos--;
 		seq_printf(m, "current_position: %llu\n", pos);
-
 	} else if (lo->ll_status == LS_SCANNING_PHASE2) {
 		cfs_duration_t duration = cfs_time_current() -
 					  com->lc_time_last_checkpoint;

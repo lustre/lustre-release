@@ -4421,7 +4421,6 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 
 	if (ns->ln_status == LS_SCANNING_PHASE1) {
 		struct lfsck_position pos;
-		const struct dt_it_ops *iops;
 		cfs_duration_t duration = cfs_time_current() -
 					  lfsck->li_time_last_checkpoint;
 		__u64 checked = ns->ln_items_checked + com->lc_new_checked;
@@ -4447,33 +4446,37 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 			   speed,
 			   new_checked);
 
-		LASSERT(lfsck->li_di_oit != NULL);
+		if (likely(lfsck->li_di_oit)) {
+			const struct dt_it_ops *iops =
+				&lfsck->li_obj_oit->do_index_ops->dio_it;
 
-		iops = &lfsck->li_obj_oit->do_index_ops->dio_it;
+			/* The low layer otable-based iteration position may NOT
+			 * exactly match the namespace-based directory traversal
+			 * cookie. Generally, it is not a serious issue. But the
+			 * caller should NOT make assumption on that. */
+			pos.lp_oit_cookie = iops->store(env, lfsck->li_di_oit);
+			if (!lfsck->li_current_oit_processed)
+				pos.lp_oit_cookie--;
 
-		/* The low layer otable-based iteration position may NOT
-		 * exactly match the namespace-based directory traversal
-		 * cookie. Generally, it is not a serious issue. But the
-		 * caller should NOT make assumption on that. */
-		pos.lp_oit_cookie = iops->store(env, lfsck->li_di_oit);
-		if (!lfsck->li_current_oit_processed)
-			pos.lp_oit_cookie--;
-
-		spin_lock(&lfsck->li_lock);
-		if (lfsck->li_di_dir != NULL) {
-			pos.lp_dir_cookie = lfsck->li_cookie_dir;
-			if (pos.lp_dir_cookie >= MDS_DIR_END_OFF) {
+			spin_lock(&lfsck->li_lock);
+			if (lfsck->li_di_dir) {
+				pos.lp_dir_cookie = lfsck->li_cookie_dir;
+				if (pos.lp_dir_cookie >= MDS_DIR_END_OFF) {
+					fid_zero(&pos.lp_dir_parent);
+					pos.lp_dir_cookie = 0;
+				} else {
+					pos.lp_dir_parent =
+					*lfsck_dto2fid(lfsck->li_obj_dir);
+				}
+			} else {
 				fid_zero(&pos.lp_dir_parent);
 				pos.lp_dir_cookie = 0;
-			} else {
-				pos.lp_dir_parent =
-					*lfsck_dto2fid(lfsck->li_obj_dir);
 			}
+			spin_unlock(&lfsck->li_lock);
 		} else {
-			fid_zero(&pos.lp_dir_parent);
-			pos.lp_dir_cookie = 0;
+			pos = ns->ln_pos_last_checkpoint;
 		}
-		spin_unlock(&lfsck->li_lock);
+
 		lfsck_pos_dump(m, &pos, "current_position");
 	} else if (ns->ln_status == LS_SCANNING_PHASE2) {
 		cfs_duration_t duration = cfs_time_current() -
