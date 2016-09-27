@@ -144,6 +144,10 @@ struct hsm_scan_data {
 	struct hsm_scan_request		*request;
 };
 
+struct hsm_thread_data {
+	struct mdt_thread_info	*cdt_mti;
+	struct hsm_scan_request	*request;
+};
 /**
  *  llog_cat_process() callback, used to:
  *  - find waiting request and start action
@@ -457,10 +461,10 @@ static void mdt_hsm_cdt_cleanup(struct mdt_device *mdt)
 static bool cdt_transition[CDT_STATES_COUNT][CDT_STATES_COUNT] = {
 	/* from -> to:    stopped init   running disable stopping */
 	/* stopped */	{ true,   true,  false,  false,  false },
-	/* init */	{ true,   false, true,   false,  true },
+	/* init */	{ true,   false, true,   false,  false },
 	/* running */	{ false,  false, true,   true,   true },
 	/* disable */	{ false,  false, true,   true,   true },
-	/* stopping */	{ true,   false, false,  false,  true }
+	/* stopping */	{ true,   false, false,  false,  false }
 };
 
 /**
@@ -505,7 +509,8 @@ static int set_cdt_state(struct coordinator *cdt, enum cdt_states new_state,
  */
 static int mdt_coordinator(void *data)
 {
-	struct mdt_thread_info	*mti = data;
+	struct hsm_thread_data	*thread_data = data;
+	struct mdt_thread_info	*mti = thread_data->cdt_mti;
 	struct mdt_device	*mdt = mti->mti_mdt;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
 	struct hsm_scan_data	 hsd = { NULL };
@@ -513,18 +518,13 @@ static int mdt_coordinator(void *data)
 	int			 request_sz;
 	ENTRY;
 
-	CDEBUG(D_HSM, "%s: coordinator thread starting, pid=%d\n",
-	       mdt_obd_name(mdt), current_pid());
-
-	/* we use a copy of cdt_max_requests in the cb, so if cdt_max_requests
-	 * increases due to a change from /proc we do not overflow the
-	 * hsd.request[] vector
-	 */
+	/* set up hsd->request and max_requests */
 	hsd.max_requests = cdt->cdt_max_requests;
 	request_sz = hsd.max_requests * sizeof(*hsd.request);
-	OBD_ALLOC_LARGE(hsd.request, request_sz);
-	if (!hsd.request)
-		GOTO(out, rc = -ENOMEM);
+	hsd.request = thread_data->request;
+
+	CDEBUG(D_HSM, "%s: coordinator thread starting, pid=%d\n",
+	       mdt_obd_name(mdt), current_pid());
 
 	hsd.mti = mti;
 	obd_uuid2fsname(hsd.fs_name, mdt_obd_name(mdt), MTI_NAME_MAXLEN);
@@ -541,12 +541,12 @@ static int mdt_coordinator(void *data)
 		lwi = LWI_TIMEOUT(cfs_time_seconds(cdt->cdt_loop_period),
 				  NULL, NULL);
 		l_wait_event(cdt->cdt_waitq,
-			     cdt->cdt_event || (cdt->cdt_state == CDT_STOPPING),
+			     cdt->cdt_event || kthread_should_stop(),
 			     &lwi);
 
 		CDEBUG(D_HSM, "coordinator resumes\n");
 
-		if (cdt->cdt_state == CDT_STOPPING) {
+		if (kthread_should_stop()) {
 			rc = 0;
 			break;
 		}
@@ -565,13 +565,21 @@ static int mdt_coordinator(void *data)
 			/* cdt_max_requests has changed,
 			 * we need to allocate a new buffer
 			 */
-			OBD_FREE_LARGE(hsd.request, request_sz);
-			hsd.max_requests = cdt->cdt_max_requests;
-			request_sz = hsd.max_requests * sizeof(*hsd.request);
-			OBD_ALLOC_LARGE(hsd.request, request_sz);
-			if (!hsd.request) {
-				rc = -ENOMEM;
-				break;
+			struct hsm_scan_request *tmp = NULL;
+			int max_requests = cdt->cdt_max_requests;
+			OBD_ALLOC_LARGE(tmp, max_requests *
+					sizeof(struct hsm_scan_request));
+			if (!tmp) {
+				CERROR("Failed to resize request buffer, "
+				       "keeping it at %d\n",
+				       hsd.max_requests);
+				cdt->cdt_max_requests = hsd.max_requests;
+			} else {
+				OBD_FREE_LARGE(hsd.request, request_sz);
+				hsd.max_requests = max_requests;
+				request_sz = hsd.max_requests *
+					sizeof(struct hsm_scan_request);
+				hsd.request = tmp;
 			}
 		}
 
@@ -645,17 +653,11 @@ clean_cb_alloc:
 			OBD_FREE(request->hal, request->hal_sz);
 		}
 	}
-	EXIT;
-out:
-	set_cdt_state(cdt, CDT_STOPPING, NULL);
 
 	if (hsd.request)
 		OBD_FREE_LARGE(hsd.request, request_sz);
 
 	mdt_hsm_cdt_cleanup(mdt);
-
-	set_cdt_state(cdt, CDT_STOPPED, NULL);
-	wake_up_all(&cdt->cdt_waitq);
 
 	if (rc != 0)
 		CERROR("%s: coordinator thread exiting, process=%d, rc=%d\n",
@@ -665,7 +667,7 @@ out:
 			      " no error\n",
 		       mdt_obd_name(mdt), current_pid());
 
-	return rc;
+	RETURN(rc);
 }
 
 /**
@@ -861,7 +863,7 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 	init_rwsem(&cdt->cdt_request_lock);
 	mutex_init(&cdt->cdt_restore_lock);
 	spin_lock_init(&cdt->cdt_state_lock);
-	cdt->cdt_state = CDT_STOPPED;
+	set_cdt_state(cdt, CDT_STOPPED, NULL);
 
 	INIT_LIST_HEAD(&cdt->cdt_request_list);
 	INIT_LIST_HEAD(&cdt->cdt_agents);
@@ -975,8 +977,9 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
 	int			 rc;
 	void			*ptr;
-	struct mdt_thread_info	*cdt_mti;
 	struct task_struct	*task;
+	int			 request_sz;
+	struct hsm_thread_data	 thread_data;
 	ENTRY;
 
 	/* functions defined but not yet used
@@ -1006,8 +1009,9 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	 * /proc entries are created by the coordinator thread */
 
 	/* set up list of started restore requests */
-	cdt_mti = lu_context_key_get(&cdt->cdt_env.le_ctx, &mdt_thread_key);
-	rc = mdt_hsm_pending_restore(cdt_mti);
+	thread_data.cdt_mti =
+		lu_context_key_get(&cdt->cdt_env.le_ctx, &mdt_thread_key);
+	rc = mdt_hsm_pending_restore(thread_data.cdt_mti);
 	if (rc)
 		CERROR("%s: cannot take the layout locks needed"
 		       " for registered restore: %d\n",
@@ -1016,25 +1020,28 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	if (mdt->mdt_bottom->dd_rdonly)
 		RETURN(0);
 
-	task = kthread_run(mdt_coordinator, cdt_mti, "hsm_cdtr");
+	/* Allocate the initial hsd.request[] vector*/
+	request_sz = cdt->cdt_max_requests * sizeof(struct hsm_scan_request);
+	OBD_ALLOC_LARGE(thread_data.request, request_sz);
+	if (!thread_data.request) {
+		set_cdt_state(cdt, CDT_STOPPED, NULL);
+		RETURN(-ENOMEM);
+	}
+
+	task = kthread_run(mdt_coordinator, &thread_data, "hsm_cdtr");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
 		set_cdt_state(cdt, CDT_STOPPED, NULL);
+		OBD_FREE(thread_data.request, request_sz);
 		CERROR("%s: error starting coordinator thread: %d\n",
 		       mdt_obd_name(mdt), rc);
 	} else {
+		cdt->cdt_task = task;
 		wait_event(cdt->cdt_waitq,
 			   cdt->cdt_state != CDT_INIT);
-		if (cdt->cdt_state == CDT_RUNNING) {
-			CDEBUG(D_HSM, "%s: coordinator thread started\n",
-			       mdt_obd_name(mdt));
-			rc = 0;
-		} else {
-			CDEBUG(D_HSM,
-			       "%s: coordinator thread failed to start\n",
-			       mdt_obd_name(mdt));
-			rc = -EINVAL;
-		}
+		CDEBUG(D_HSM, "%s: coordinator thread started\n",
+		       mdt_obd_name(mdt));
+		rc = 0;
 	}
 
 	RETURN(rc);
@@ -1052,11 +1059,11 @@ int mdt_hsm_cdt_stop(struct mdt_device *mdt)
 	ENTRY;
 	/* stop coordinator thread */
 	rc = set_cdt_state(cdt, CDT_STOPPING, NULL);
-	if (rc != 0)
-		RETURN(rc);
-
-	wake_up_all(&cdt->cdt_waitq);
-	wait_event(cdt->cdt_waitq, cdt->cdt_state != CDT_STOPPING);
+	if (rc == 0) {
+		kthread_stop(cdt->cdt_task);
+		cdt->cdt_task = NULL;
+		set_cdt_state(cdt, CDT_STOPPED, NULL);
+	}
 
 	RETURN(rc);
 }
@@ -2044,7 +2051,6 @@ mdt_hsm_cdt_control_seq_write(struct file *file, const char __user *buffer,
 			rc = -EALREADY;
 		} else {
 			rc = mdt_hsm_cdt_stop(mdt);
-			mdt_hsm_cdt_wakeup(mdt);
 		}
 	} else if (strcmp(kernbuf, CDT_DISABLE_CMD) == 0) {
 		if ((cdt->cdt_state == CDT_STOPPING) ||
