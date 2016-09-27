@@ -76,12 +76,12 @@ xml:id="understandinglustre">
       beyond the size and performance observed in production systems to
       date.</para>
       <para>
-      <xref linkend="understandinglustre.tab1" />shows the practical range of
-      scalability and performance characteristics of a Lustre file system and
-      some test results in production systems.</para>
-      <table frame="all">
-        <title xml:id="understandinglustre.tab1">Lustre File System Scalability
-        and Performance</title>
+      <xref linkend="understandinglustre.tab1" /> shows some of the
+      scalability and performance characteristics of a Lustre file system.
+      For a full list of Lustre file and filesystem limits see
+      <xref linkend="settinguplustresystem.tab2"/>.</para>
+      <table frame="all" xml:id="understandinglustre.tab1">
+        <title>Lustre File System Scalability and Performance</title>
         <tgroup cols="3">
           <colspec colname="c1" colwidth="1*" />
           <colspec colname="c2" colwidth="2*" />
@@ -139,7 +139,8 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single client:</emphasis>
                 </para>
-                <para>2 GB/sec I/O, 1000 metadata ops/sec</para>
+                <para>4.5 GB/sec I/O (FDR IB, OPA1),
+		1000 metadata ops/sec</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
@@ -156,8 +157,12 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>1-32 OSTs per OSS,</para>
-                <para>128TB per OST</para>
+                <para>1-32 OSTs per OSS</para>
+                <para>
+                  <emphasis>Single OST:</emphasis>
+                </para>
+                <para>300M objects, 128TB per OST (ldiskfs)</para>
+                <para>500M objects, 256TB per OST (ZFS)</para>
                 <para>
                   <emphasis>OSS count:</emphasis>
                 </para>
@@ -167,8 +172,9 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>32x 8TB OSTs per OSS,</para>
-                <para>8x 32TB OSTs per OSS</para>
+                <para>32x 8TB OSTs per OSS (ldiskfs),</para>
+                <para>8x 32TB OSTs per OSS (ldiskfs)</para>
+                <para>1x 72TB OST per OSS (ZFS)</para>
                 <para>
                   <emphasis>OSS count:</emphasis>
                 </para>
@@ -187,7 +193,7 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>10 GB/sec</para>
+                <para>15 GB/sec</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
@@ -197,7 +203,7 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single OSS:</emphasis>
                 </para>
-                <para>6.0+ GB/sec</para>
+                <para>10 GB/sec</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
@@ -212,25 +218,30 @@ xml:id="understandinglustre">
               </entry>
               <entry>
                 <para>
+                  <emphasis>Single MDS:</emphasis>
+                </para>
+		<para>1-4 MDTs per MDS</para>
+                <para>
                   <emphasis>Single MDT:</emphasis>
                 </para>
-                <para>4 billion files (ldiskfs), 256 trillion files
-                (ZFS)</para>
+                <para>4 billion files, 8TB per MDT (ldiskfs)</para>
+		<para>64 billion files, 64TB per MDT (ZFS)</para>
                 <para>
                   <emphasis>MDS count:</emphasis>
                 </para>
-                <para>1 primary + 1 backup</para>
-                <para condition="l24">Up to 256 MDTs and up to 256 MDSs</para>
+                <para>1 primary + 1 standby</para>
+                <para condition="l24">256 MDSs, with up to 256 MDTs</para>
               </entry>
               <entry>
                 <para>
-                  <emphasis>Single MDT:</emphasis>
+                  <emphasis>Single MDS:</emphasis>
                 </para>
-                <para>2 billion files</para>
+                <para>3 billion files</para>
                 <para>
                   <emphasis>MDS count:</emphasis>
                 </para>
-                <para>1 primary + 1 backup</para>
+                <para>7 MDS with 7 2TB MDTs in production</para>
+                <para>256 MDS with 256 64GB MDTs in testing</para>
               </entry>
             </row>
             <row>
@@ -258,11 +269,12 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Single File:</emphasis>
                 </para>
-                <para>32 PB max file size (ldiskfs), 2^63 bytes (ZFS)</para>
+                <para>32 PB max file size (ldiskfs)</para>
+		<para>2^63 bytes (ZFS)</para>
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>512 PB space, 32 billion files</para>
+                <para>512 PB space, 1 trillion files</para>
               </entry>
               <entry>
                 <para>
@@ -272,7 +284,7 @@ xml:id="understandinglustre">
                 <para>
                   <emphasis>Aggregate:</emphasis>
                 </para>
-                <para>55 PB space, 2 billion files</para>
+                <para>55 PB space, 8 billion files</para>
               </entry>
             </row>
           </tbody>
@@ -313,8 +325,8 @@ xml:id="understandinglustre">
           performance, low latency networks and permits Remote Direct Memory
           Access (RDMA) for InfiniBand
           <superscript>*</superscript>(utilizing OpenFabrics Enterprise
-          Distribution (OFED
-          <superscript>*</superscript>) and other advanced networks for fast
+          Distribution (OFED<superscript>*</superscript>), Intel OmniPath®,
+	  and other advanced networks for fast
           and efficient network transport. Multiple RDMA networks can be
           bridged using Lustre routing for maximum performance. The Lustre
           software also includes integrated network diagnostics.</para>
@@ -385,11 +397,11 @@ xml:id="understandinglustre">
           <para>
           <emphasis role="bold">Capacity growth:</emphasis>The size of a Lustre
           file system and aggregate cluster bandwidth can be increased without
-          interruption by adding a new OSS with OSTs to the cluster.</para>
+          interruption by adding new OSTs and MDTs to the cluster.</para>
         </listitem>
         <listitem>
           <para>
-          <emphasis role="bold">Controlled striping:</emphasis>The layout of
+          <emphasis role="bold">Controlled file layout:</emphasis>The layout of
           files across OSTs can be configured on a per file, per directory, or
           per file system basis. This allows file I/O to be tuned to specific
           application requirements within a single file system. The Lustre file
@@ -454,9 +466,8 @@ xml:id="understandinglustre">
     networking (LNET).</para>
     <para>A basic configuration of Lustre file system components is shown in
     <xref linkend="understandinglustre.fig.cluster" />.</para>
-    <figure>
-      <title xml:id="understandinglustre.fig.cluster">Lustre file system
-      components in a basic cluster</title>
+    <figure xml:id="understandinglustre.fig.cluster">
+      <title>Lustre file system components in a basic cluster</title>
       <mediaobject>
         <imageobject>
           <imagedata scalefit="1" width="100%"
@@ -562,8 +573,8 @@ xml:id="understandinglustre">
       <xref linkend="understandinglustre.tab.storagerequire" />provides the
       requirements for attached storage for each Lustre file system component
       and describes desirable characteristics of the hardware used.</para>
-      <table frame="all">
-        <title xml:id="understandinglustre.tab.storagerequire">
+      <table frame="all" xml:id="understandinglustre.tab.storagerequire">
+        <title>
         <indexterm>
           <primary>Lustre</primary>
           <secondary>requirements</secondary>
@@ -666,8 +677,8 @@ xml:id="understandinglustre">
       OSSs enables failover capability. For more details about OSS failover,
       see
       <xref linkend="understandingfailover" />.</para>
-      <figure>
-        <title xml:id="understandinglustre.fig.lustrescale">
+      <figure xml:id="understandinglustre.fig.lustrescale">
+        <title>
         <indexterm>
           <primary>Lustre</primary>
           <secondary>at scale</secondary>
@@ -865,8 +876,8 @@ xml:id="understandinglustre">
       <literal>stripe_count</literal> for File B and File C is 1.</para>
       <para>No space is reserved on the OST for unwritten data. File A in
       <xref linkend="understandinglustre.fig.filestripe" />.</para>
-      <figure>
-        <title xml:id="understandinglustre.fig.filestripe">File striping on a
+      <figure xml:id="understandinglustre.fig.filestripe">
+        <title>File striping on a
         Lustre file system</title>
         <mediaobject>
           <imageobject>
