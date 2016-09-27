@@ -1581,6 +1581,7 @@ test_25() {
 	local tmpfile=$(mktemp)
 	local tmpfile2=$(mktemp)
 	local subdir=c0dir
+	local client
 
 	nodemap_version_check || return 0
 
@@ -1590,8 +1591,16 @@ test_25() {
 
 	nodemap_test_setup
 
-	echo c* nodemaps:
-	do_facet mgs $LCTL get_param nodemap.c*.*
+	# enable trusted/admin for setquota call in cleanup_and_setup_lustre()
+	i=0
+	for client in $clients; do
+		do_facet mgs $LCTL nodemap_modify --name c${i} \
+			--property admin --value 1
+		do_facet mgs $LCTL nodemap_modify --name c${i} \
+			--property trusted --value 1
+		((i++))
+	done
+	wait_nm_sync c$((i - 1)) trusted_nodemap
 
 	trap nodemap_test_cleanup EXIT
 
