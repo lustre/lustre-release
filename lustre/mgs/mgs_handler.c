@@ -338,12 +338,12 @@ static int mgs_check_failover_reg(struct mgs_target_info *mti)
 /* Called whenever a target starts up.  Flags indicate first connect, etc. */
 static int mgs_target_reg(struct tgt_session_info *tsi)
 {
-	struct obd_device	*obd = tsi->tsi_exp->exp_obd;
-	struct mgs_device	*mgs = exp2mgs_dev(tsi->tsi_exp);
-	struct mgs_target_info	*mti, *rep_mti;
-	struct fs_db		*fsdb;
-	int			 opc;
-	int			 rc = 0;
+	struct obd_device *obd = tsi->tsi_exp->exp_obd;
+	struct mgs_device *mgs = exp2mgs_dev(tsi->tsi_exp);
+	struct mgs_target_info *mti, *rep_mti;
+	struct fs_db *fsdb = NULL;
+	int opc;
+	int rc = 0;
 
 	ENTRY;
 
@@ -482,6 +482,8 @@ out_nolock:
 
 	/* Flush logs to disk */
 	dt_sync(tsi->tsi_env, mgs->mgs_bottom);
+	if (fsdb)
+		mgs_put_fsdb(mgs, fsdb);
 	RETURN(rc);
 }
 
@@ -783,11 +785,13 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 
 	/* revoke nodemap lock */
 	rc = mgs_find_or_make_fsdb(env, mgs, LUSTRE_NODEMAP_NAME, &fsdb);
-	if (rc < 0)
+	if (rc < 0) {
 		CWARN("%s: cannot make nodemap fsdb: rc = %d\n",
 		      mgs->mgs_obd->obd_name, rc);
-	else
+	} else {
 		mgs_revoke_lock(mgs, fsdb, CONFIG_T_NODEMAP);
+		mgs_put_fsdb(mgs, fsdb);
+	}
 
 out_lcfg:
 	OBD_FREE(lcfg, data->ioc_plen1);
@@ -1115,8 +1119,6 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	struct obd_device		*obd;
 	struct lustre_mount_info	*lmi;
 	struct llog_ctxt		*ctxt;
-	struct fs_db			*fsdb = NULL;
-	struct fs_db			*fsdb_srpc = NULL;
 	int				 rc;
 
 	ENTRY;
@@ -1191,14 +1193,14 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 
 	/* Setup params fsdb and log, so that other servers can make a local
 	 * copy successfully when they are mounted. See LU-4783 */
-	rc = mgs_params_fsdb_setup(env, mgs, fsdb);
+	rc = mgs_params_fsdb_setup(env, mgs);
 	if (rc)
 		/* params fsdb and log can be setup later */
 		CERROR("%s: %s fsdb and log setup failed: rc = %d\n",
 		       obd->obd_name, PARAMS_FILENAME, rc);
 
 	/* Setup _mgs fsdb, useful for srpc */
-	mgs__mgs_fsdb_setup(env, mgs, fsdb_srpc);
+	mgs__mgs_fsdb_setup(env, mgs);
 
 	ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
 			   "mgs_ldlm_client", &obd->obd_ldlm_client);

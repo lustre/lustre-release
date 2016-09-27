@@ -461,14 +461,8 @@ int mgs_ir_init_fs(const struct lu_env *env, struct mgs_device *mgs,
 			    mgs->mgs_start_time + ir_timeout))
 		fsdb->fsdb_ir_state = IR_STARTUP;
 	fsdb->fsdb_nonir_clients = 0;
-	INIT_LIST_HEAD(&fsdb->fsdb_clients);
-
 	/* start notify thread */
 	fsdb->fsdb_mgs = mgs;
-	atomic_set(&fsdb->fsdb_notify_phase, 0);
-	init_waitqueue_head(&fsdb->fsdb_notify_waitq);
-	init_completion(&fsdb->fsdb_notify_comp);
-
 	task = kthread_run(mgs_ir_notify, fsdb,
 			       "mgs_%s_notify", fsdb->fsdb_name);
 	if (!IS_ERR(task))
@@ -525,7 +519,7 @@ int mgs_ir_update(const struct lu_env *env, struct mgs_device *mgs,
 
 	rc = mgs_nidtbl_write(env, fsdb, mti);
         if (rc)
-                return rc;
+		GOTO(out, rc);
 
         /* check ir state */
 	mutex_lock(&fsdb->fsdb_mutex);
@@ -551,7 +545,10 @@ int mgs_ir_update(const struct lu_env *env, struct mgs_device *mgs,
 		atomic_inc(&fsdb->fsdb_notify_phase);
 		wake_up(&fsdb->fsdb_notify_waitq);
 	}
-	return 0;
+
+out:
+	mgs_put_fsdb(mgs, fsdb);
+	return rc;
 }
 
 /* NID table can be cached by two entities: Clients and MDTs */
@@ -595,7 +592,7 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 {
 	struct lu_env     *env = req->rq_svc_thread->t_env;
 	struct mgs_device *mgs = exp2mgs_dev(req->rq_export);
-        struct fs_db      *fsdb;
+	struct fs_db *fsdb = NULL;
         struct mgs_config_body  *body;
         struct mgs_config_res   *res;
         struct ptlrpc_bulk_desc *desc;
@@ -623,27 +620,27 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
+	bufsize = body->mcb_units << body->mcb_bits;
+	nrpages = (bufsize + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	if (nrpages > PTLRPC_MAX_BRW_PAGES)
+		RETURN(-EINVAL);
+
 	rc = mgs_find_or_make_fsdb(env, mgs, fsname, &fsdb);
-        if (rc)
+	if (rc)
 		RETURN(rc);
 
-        bufsize = body->mcb_units << body->mcb_bits;
-	nrpages = (bufsize + PAGE_SIZE - 1) >> PAGE_SHIFT;
-        if (nrpages > PTLRPC_MAX_BRW_PAGES)
-                RETURN(-EINVAL);
+	CDEBUG(D_MGS, "Reading IR log %s bufsize %ld.\n",
+	       body->mcb_name, bufsize);
 
-        CDEBUG(D_MGS, "Reading IR log %s bufsize %ld.\n",
-               body->mcb_name, bufsize);
+	OBD_ALLOC(pages, sizeof(*pages) * nrpages);
+	if (!pages)
+		GOTO(out, rc = -ENOMEM);
 
-        OBD_ALLOC(pages, sizeof(*pages) * nrpages);
-        if (pages == NULL)
-                RETURN(-ENOMEM);
+	res = req_capsule_server_get(&req->rq_pill, &RMF_MGS_CONFIG_RES);
+	if (!res)
+		GOTO(out, rc = -EINVAL);
 
-        res = req_capsule_server_get(&req->rq_pill, &RMF_MGS_CONFIG_RES);
-        if (res == NULL)
-                GOTO(out, rc = -EINVAL);
-
-        res->mcr_offset = body->mcb_offset;
+	res->mcr_offset = body->mcb_offset;
 	unit_size = min_t(int, 1 << body->mcb_bits, PAGE_SIZE);
 	bytes = mgs_nidtbl_read(req->rq_export, &fsdb->fsdb_nidtbl, res,
 				pages, nrpages, bufsize / unit_size, unit_size);
@@ -658,7 +655,7 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 					PTLRPC_BULK_BUF_KIOV,
 				    MGS_BULK_PORTAL,
 				    &ptlrpc_bulk_kiov_pin_ops);
-	if (desc == NULL)
+	if (!desc)
 		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < page_count && bytes > 0; i++) {
@@ -666,18 +663,28 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 						 min_t(int, bytes,
 						      PAGE_SIZE));
 		bytes -= PAGE_SIZE;
-        }
+	}
 
-        rc = target_bulk_io(req->rq_export, desc, &lwi);
+	rc = target_bulk_io(req->rq_export, desc, &lwi);
 	ptlrpc_free_bulk(desc);
 
+	GOTO(out, rc);
+
 out:
-	for (i = 0; i < nrpages; i++) {
-		if (pages[i] == NULL)
-			break;
-		__free_page(pages[i]);
+	if (pages) {
+		for (i = 0; i < nrpages; i++) {
+			if (!pages[i])
+				break;
+
+			__free_page(pages[i]);
+		}
+
+		OBD_FREE(pages, sizeof(*pages) * nrpages);
 	}
-	OBD_FREE(pages, sizeof(*pages) * nrpages);
+
+	if (fsdb)
+		mgs_put_fsdb(mgs, fsdb);
+
 	return rc;
 }
 
@@ -840,9 +847,9 @@ ssize_t lprocfs_ir_timeout_seq_write(struct file *file,
 int mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
 		   char *fsname)
 {
-        struct mgs_export_data *data = &exp->u.eu_mgs_data;
+	struct mgs_export_data *data = &exp->u.eu_mgs_data;
 	struct mgs_device *mgs = exp2mgs_dev(exp);
-        struct fs_db      *fsdb;
+	struct fs_db *fsdb = NULL;
         struct mgs_fsc    *fsc     = NULL;
         struct mgs_fsc    *new_fsc = NULL;
         bool               found   = false;
@@ -855,8 +862,8 @@ int mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
 
         /* allocate a new fsc in case we need it in spinlock. */
         OBD_ALLOC_PTR(new_fsc);
-        if (new_fsc == NULL)
-                RETURN(-ENOMEM);
+	if (!new_fsc)
+		GOTO(out, rc = -ENOMEM);
 
 	INIT_LIST_HEAD(&new_fsc->mfc_export_list);
 	INIT_LIST_HEAD(&new_fsc->mfc_fsdb_list);
@@ -899,7 +906,10 @@ int mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
                 class_export_put(new_fsc->mfc_export);
                 OBD_FREE_PTR(new_fsc);
         }
-        RETURN(rc);
+
+out:
+	mgs_put_fsdb(mgs, fsdb);
+	RETURN(rc);
 }
 
 void mgs_fsc_cleanup(struct obd_export *exp)
