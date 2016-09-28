@@ -264,7 +264,7 @@ static void lfsck_layout_assistant_sync_failures(const struct lu_env *env,
 	int				   rc    = 0;
 	ENTRY;
 
-	if (!lad->lad_incomplete || lo->ll_flags & LF_INCOMPLETE)
+	if (!lad->lad_incomplete)
 		RETURN_EXIT;
 
 	/* If the MDT has ever failed to verfiy some OST-objects,
