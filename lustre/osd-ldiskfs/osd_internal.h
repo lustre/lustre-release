@@ -333,7 +333,7 @@ enum osd_full_scrub_ratio {
  */
 #define OSD_MAX_UGID_CNT        10
 
-enum {
+enum osd_op_type {
 	OSD_OT_ATTR_SET		= 0,
 	OSD_OT_PUNCH		= 1,
 	OSD_OT_XATTR_SET	= 2,
@@ -356,11 +356,11 @@ struct osd_thandle {
 	struct list_head       ot_stop_dcb_list;
 	/* Link to the device, for debugging. */
 	struct lu_ref_link      ot_dev_link;
-        unsigned short          ot_credits;
-        unsigned short          ot_id_cnt;
-        unsigned short          ot_id_type;
+	unsigned int		ot_credits;
+	unsigned short		ot_id_cnt;
+	unsigned short		ot_id_type;
 	unsigned int		ot_remove_agents:1;
-        uid_t                   ot_id_array[OSD_MAX_UGID_CNT];
+	uid_t			ot_id_array[OSD_MAX_UGID_CNT];
 	struct lquota_trans    *ot_quota_trans;
 #if OSD_THANDLE_STATS
         /** time when this handle was allocated */
@@ -622,9 +622,9 @@ struct osd_thread_info {
 	 * cases where a large number of credits are being allocated for
 	 * single transaction. */
 	unsigned int		oti_credits_before;
-	unsigned short		oti_declare_ops[OSD_OT_MAX];
-	unsigned short		oti_declare_ops_cred[OSD_OT_MAX];
-	unsigned short		oti_declare_ops_used[OSD_OT_MAX];
+	unsigned int		oti_declare_ops[OSD_OT_MAX];
+	unsigned int		oti_declare_ops_cred[OSD_OT_MAX];
+	unsigned int		oti_declare_ops_used[OSD_OT_MAX];
 };
 
 extern int ldiskfs_pdo;
@@ -1004,7 +1004,7 @@ void osd_trans_dump_creds(const struct lu_env *env, struct thandle *th);
 
 static inline void osd_trans_declare_op(const struct lu_env *env,
 					struct osd_thandle *oh,
-					unsigned int op, int credits)
+					enum osd_op_type op, int credits)
 {
 	struct osd_thread_info *oti = osd_oti_get(env);
 
@@ -1025,7 +1025,8 @@ static inline void osd_trans_declare_op(const struct lu_env *env,
 }
 
 static inline void osd_trans_exec_op(const struct lu_env *env,
-				     struct thandle *th, unsigned int op)
+				     struct thandle *th,
+				     enum osd_op_type op)
 {
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_thandle     *oh  = container_of(th, struct osd_thandle,
@@ -1090,7 +1091,7 @@ proceed:
 
 static inline void osd_trans_exec_check(const struct lu_env *env,
 					struct thandle *th,
-					unsigned int op)
+					enum osd_op_type op)
 {
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_thandle     *oh  = container_of(th, struct osd_thandle,
