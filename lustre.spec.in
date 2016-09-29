@@ -389,7 +389,6 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %{_mandir}/man?/*
 %endif
 %{_includedir}/lustre
-%{_includedir}/libcfs
 %endif
 %{_datadir}/lustre
 %{_sysconfdir}/udev/rules.d/99-lustre.rules

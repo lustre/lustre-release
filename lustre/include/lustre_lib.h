@@ -60,6 +60,14 @@ struct l_wait_info;
 #include <lustre_ha.h>
 #include <lustre_net.h>
 
+#define LI_POISON 0x5a5a5a5a
+#if BITS_PER_LONG > 32
+# define LL_POISON 0x5a5a5a5a5a5a5a5aL
+#else
+# define LL_POISON 0x5a5a5a5aL
+#endif
+#define LP_POISON ((void *)LL_POISON)
+
 #ifdef HAVE_SERVER_SUPPORT
 void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
 			  int error);

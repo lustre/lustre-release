@@ -3,10 +3,6 @@ DIST_SUBDIRS = linux util
 
 libcfsdir = $(includedir)/libcfs
 
-if UTILS
-libcfs_HEADERS = types.h
-endif
-
 EXTRA_DIST = \
 	bitmap.h \
 	curproc.h \
@@ -22,5 +18,4 @@ EXTRA_DIST = \
 	libcfs_private.h \
 	libcfs_string.h \
 	libcfs_time.h \
-	libcfs_workitem.h \
-	types.h
+	libcfs_workitem.h

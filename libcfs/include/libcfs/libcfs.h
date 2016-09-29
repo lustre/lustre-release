@@ -39,7 +39,6 @@
 
 #ifdef __KERNEL__
 # include <libcfs/linux/libcfs.h>
-# include <libcfs/types.h>
 # include "curproc.h"
 
 #define LIBCFS_VERSION	"0.5.0"
