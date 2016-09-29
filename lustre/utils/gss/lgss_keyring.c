@@ -422,10 +422,12 @@ static int lgssc_init_nego_data(struct lgss_nego_data *lnd,
 	case LGSS_MECH_NULL:
 		lnd->lnd_mech = (gss_OID)&nulloid;
 		break;
+#ifdef HAVE_OPENSSL_SSK
 	case LGSS_MECH_SK:
 		lnd->lnd_mech = (gss_OID)&skoid;
 		lnd->lnd_req_flags = GSS_C_MUTUAL_FLAG;
 		break;
+#endif
 	default:
 		logmsg(LL_ERR, "invalid mech: %d\n", mech);
 		lnd->lnd_rpc_err = -EACCES;

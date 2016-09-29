@@ -359,6 +359,7 @@ typedef struct gss_union_ctx_id_t {
 
 int handle_sk(struct svc_nego_data *snd)
 {
+#ifdef HAVE_OPENSSL_SSK
 	struct sk_cred *skc = NULL;
 	struct svc_cred cred;
 	gss_buffer_desc bufs[7];
@@ -512,6 +513,9 @@ out_err:
 	if (skc)
 		sk_free_cred(skc);
 	printerr(3, "sk returning failure\n");
+#else /* !HAVE_OPENSSL_SSK */
+	printerr(0, "ERROR: shared key subflavour is not enabled\n");
+#endif /* HAVE_OPENSSL_SSK */
 	return -1;
 }
 
@@ -705,12 +709,17 @@ int handle_channel_request(FILE *f)
 		snd.mech = &nulloid;
 		break;
 	case LGSS_MECH_SK:
+#ifdef HAVE_OPENSSL_SSK
 		if (!sk_enabled) {
 			printerr(1, "WARNING: Request for sk but service "
 				 "support not enabled\n");
 			goto ignore;
 		}
 		snd.mech = &skoid;
+#else
+		printerr(1, "ERROR: Request for sk but service "
+			 "support not enabled\n");
+#endif
 		break;
 	default:
 		printerr(0, "WARNING: invalid mechanism recevied: %d\n",

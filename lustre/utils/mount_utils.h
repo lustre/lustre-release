@@ -184,5 +184,12 @@ struct module_backfs_ops {
 
 struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type);
 void unload_backfs_ops(struct module_backfs_ops *ops);
+#ifdef HAVE_OPENSSL_SSK
 int load_shared_keys(struct mount_opts *mop);
+#else
+static inline int load_shared_keys(struct mount_opts *mop)
+{
+	return EOPNOTSUPP;
+}
+#endif
 #endif

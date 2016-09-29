@@ -237,10 +237,12 @@ gss_OID_desc nulloid = {
 	.length = 12,
 	.elements = "\053\006\001\004\001\311\146\215\126\001\000\000"
 };
+#ifdef HAVE_OPENSSL_SSK
 gss_OID_desc skoid = {
 	.length = 12,
 	.elements = "\053\006\001\004\001\311\146\215\126\001\000\001"
 };
+#endif
 
 /****************************************
  * log facilities                       *
@@ -342,8 +344,10 @@ struct lgss_mech_type *lgss_name2mech(const char *mech_name)
 		return &lgss_mech_krb5;
 	if (strcmp(mech_name, "gssnull") == 0)
 		return &lgss_mech_null;
+#ifdef HAVE_OPENSSL_SSK
 	if (strcmp(mech_name, "sk") == 0)
 		return &lgss_mech_sk;
+#endif
 	return NULL;
 }
 

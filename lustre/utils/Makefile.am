@@ -19,7 +19,10 @@ if UTILS
 
 if GSS
 SUBDIRS = gss
-GSSSRC = gss/sk_utils.c gss/sk_utils.h gss/err_util.c gss/err_util.h
+GSSSRC = gss/err_util.c gss/err_util.h
+if GSS_SSK
+GSSSRC += gss/sk_utils.c gss/sk_utils.h
+endif
 GSSLIB = -lcrypto -lssl -lkeyutils -lm
 else
 GSSSRC =

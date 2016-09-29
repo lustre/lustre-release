@@ -191,7 +191,9 @@ usage(FILE *fp, char *progname)
 	fprintf(stderr, "-o      - Service OSS\n");
 	fprintf(stderr, "-g      - Service MGS\n");
 	fprintf(stderr, "-k      - Enable kerberos support\n");
+#ifdef HAVE_OPENSSL_SSK
 	fprintf(stderr, "-s      - Enable shared key support\n");
+#endif
 	fprintf(stderr, "-z      - Enable gssnull support\n");
 
 	exit(1);
@@ -237,7 +239,12 @@ main(int argc, char *argv[])
 			usage(stdout, argv[0]);
 			break;
 		case 's':
+#ifdef HAVE_OPENSSL_SSK
 			sk_enabled = 1;
+#else
+			printerr(0, "ERROR: Request for sk but service "
+				 "support not enabled\n");
+#endif
 			break;
 		case 'z':
 			null_enabled = 1;

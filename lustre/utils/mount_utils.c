@@ -880,6 +880,7 @@ int file_create(char *path, __u64 size)
 }
 
 #ifdef HAVE_GSS
+#ifdef HAVE_OPENSSL_SSK
 int load_shared_keys(struct mount_opts *mop)
 {
 	DIR *dir;
@@ -963,4 +964,5 @@ int load_shared_keys(struct mount_opts *mop)
 
 	return rc;
 }
-#endif
+#endif /* HAVE_OPENSSL_SSK */
+#endif /* HAVE_GSS */

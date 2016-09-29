@@ -341,13 +341,17 @@ AS_IF([test "x$enable_gss" != xno], [
 	], [
 		enable_gss="no"
 	])
+
+	enable_ssk=$enable_gss
 ])
 ]) # LC_CONFIG_GSS
 
-# LC_HAVE_VOID_OPENSSL_HMAC_FUNCS
+# LC_OPENSSL_SSK
 #
-# OpenSSL 1.0+ return int for HMAC functions but previous versions do not
-AC_DEFUN([LC_HAVE_VOID_OPENSSL_HMAC_FUNCS], [
+# OpenSSL 1.0+ return int for HMAC functions but older SLES11 versions do not
+AC_DEFUN([LC_OPENSSL_SSK], [
+AC_MSG_CHECKING([whether OpenSSL has functions needed for SSK])
+AS_IF([test "x$enable_ssk" != xno], [
 AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 	#include <openssl/hmac.h>
 	#include <openssl/evp.h>
@@ -358,10 +362,12 @@ AC_COMPILE_IFELSE([AC_LANG_SOURCE([
 		HMAC_CTX_init(&ctx);
 		rc = HMAC_Init_ex(&ctx, "test", 4, EVP_md_null(), NULL);
 	}
-])],[],[AC_DEFINE(HAVE_VOID_OPENSSL_HMAC_FUNCS, 1,
-		[OpenSSL HMAC functions return void instead of int])
+])],[AC_DEFINE(HAVE_OPENSSL_SSK, 1,
+	       [OpenSSL HMAC functions needed for SSK])],
+	[enable_ssk="no"])
 ])
-]) # LC_HAVE_VOID_OPENSSL_HMAC_FUNCS
+AC_MSG_RESULT([$enable_ssk])
+]) # LC_OPENSSL_SSK
 
 # LC_INODE_PERMISION_2ARGS
 #
@@ -2234,7 +2240,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	LC_GLIBC_SUPPORT_FHANDLES
 	LC_CONFIG_GSS
-	LC_HAVE_VOID_OPENSSL_HMAC_FUNCS
+	LC_OPENSSL_SSK
 
 	# 2.6.32
 	LC_BLK_QUEUE_MAX_SEGMENTS
@@ -2694,6 +2700,7 @@ AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
 AM_CONDITIONAL(GSS_KEYRING, test x$enable_gss_keyring = xyes)
 AM_CONDITIONAL(GSS_PIPEFS, test x$enable_gss_pipefs = xyes)
+AM_CONDITIONAL(GSS_SSK, test x$enable_ssk = xyes)
 AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)
 AM_CONDITIONAL(LLITE_LLOOP, test x$enable_llite_lloop_module = xyes)
 ]) # LC_CONDITIONALS

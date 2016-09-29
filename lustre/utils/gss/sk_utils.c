@@ -909,12 +909,6 @@ int sk_sign_bufs(gss_buffer_desc *key, gss_buffer_desc *bufs, const int numbufs,
 		goto out;
 	}
 
-#ifdef HAVE_VOID_OPENSSL_HMAC_FUNCS
-	HMAC_Init_ex(&hctx, key->value, key->length, hash_alg, NULL);
-	for (i = 0; i < numbufs; i++)
-		HMAC_Update(&hctx, bufs[i].value, bufs[i].length);
-	HMAC_Final(&hctx, hmac->value, &hashlen);
-#else
 	if (HMAC_Init_ex(&hctx, key->value, key->length, hash_alg, NULL) != 1) {
 		printerr(0, "Failed to init HMAC\n");
 		goto out;
@@ -932,7 +926,6 @@ int sk_sign_bufs(gss_buffer_desc *key, gss_buffer_desc *bufs, const int numbufs,
 		printerr(0, "Failed to finalize HMAC\n");
 		goto out;
 	}
-#endif
 
 	if (hmac->length != hashlen) {
 		printerr(0, "HMAC size does not match expected\n");

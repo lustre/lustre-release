@@ -520,8 +520,13 @@ int __init init_kerberos_module(void);
 void cleanup_kerberos_module(void);
 
 /* gss_sk_mech.c */
+#ifdef HAVE_OPENSSL_SSK
 int __init init_sk_module(void);
 void cleanup_sk_module(void);
+#else
+static inline int init_sk_module(void) { return 0; }
+static inline void cleanup_sk_module(void) { return; }
+#endif /* HAVE_OPENSSL_SSK */
 
 /* debug */
 static inline

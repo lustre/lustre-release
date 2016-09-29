@@ -741,7 +741,7 @@ int main(int argc, char *const argv[])
 			return rc;
 		}
 	}
-#endif
+#endif /* HAVE_GSS */
 
 	if (!mop.mo_fake) {
 		/* flags and target get to lustre_get_sb(), but not
