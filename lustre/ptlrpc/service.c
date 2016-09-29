@@ -176,24 +176,25 @@ ptlrpc_grow_req_bufs(struct ptlrpc_service_part *svcpt, int post)
  * Puts a lock and its mode into reply state assotiated to request reply.
  */
 void
-ptlrpc_save_lock(struct ptlrpc_request *req,
-                 struct lustre_handle *lock, int mode, int no_ack)
+ptlrpc_save_lock(struct ptlrpc_request *req, struct lustre_handle *lock,
+		 int mode, bool no_ack, bool convert_lock)
 {
-        struct ptlrpc_reply_state *rs = req->rq_reply_state;
-        int                        idx;
+	struct ptlrpc_reply_state *rs = req->rq_reply_state;
+	int idx;
 
-        LASSERT(rs != NULL);
-        LASSERT(rs->rs_nlocks < RS_MAX_LOCKS);
+	LASSERT(rs != NULL);
+	LASSERT(rs->rs_nlocks < RS_MAX_LOCKS);
 
-        if (req->rq_export->exp_disconnected) {
-                ldlm_lock_decref(lock, mode);
-        } else {
-                idx = rs->rs_nlocks++;
-                rs->rs_locks[idx] = *lock;
-                rs->rs_modes[idx] = mode;
-                rs->rs_difficult = 1;
-                rs->rs_no_ack = !!no_ack;
-        }
+	if (req->rq_export->exp_disconnected) {
+		ldlm_lock_decref(lock, mode);
+	} else {
+		idx = rs->rs_nlocks++;
+		rs->rs_locks[idx] = *lock;
+		rs->rs_modes[idx] = mode;
+		rs->rs_difficult = 1;
+		rs->rs_no_ack = no_ack;
+		rs->rs_convert_lock = convert_lock;
+	}
 }
 EXPORT_SYMBOL(ptlrpc_save_lock);
 
@@ -204,7 +205,7 @@ struct ptlrpc_hr_thread {
 	int				hrt_id;		/* thread ID */
 	spinlock_t			hrt_lock;
 	wait_queue_head_t		hrt_waitq;
-	struct list_head			hrt_queue;	/* RS queue */
+	struct list_head		hrt_queue;
 	struct ptlrpc_hr_partition	*hrt_partition;
 };
 
@@ -2161,10 +2162,10 @@ ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 {
 	struct ptlrpc_service_part *svcpt = rs->rs_svcpt;
 	struct ptlrpc_service     *svc = svcpt->scp_service;
-        struct obd_export         *exp;
-        int                        nlocks;
-        int                        been_handled;
-        ENTRY;
+	struct obd_export         *exp;
+	int                        nlocks;
+	int                        been_handled;
+	ENTRY;
 
 	exp = rs->rs_export;
 
@@ -2172,58 +2173,91 @@ ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 	LASSERT(rs->rs_scheduled);
 	LASSERT(list_empty(&rs->rs_list));
 
-	spin_lock(&exp->exp_lock);
-	/* Noop if removed already */
-	list_del_init(&rs->rs_exp_list);
-	spin_unlock(&exp->exp_lock);
-
-        /* The disk commit callback holds exp_uncommitted_replies_lock while it
-         * iterates over newly committed replies, removing them from
-         * exp_uncommitted_replies.  It then drops this lock and schedules the
-         * replies it found for handling here.
-         *
-         * We can avoid contention for exp_uncommitted_replies_lock between the
-         * HRT threads and further commit callbacks by checking rs_committed
-         * which is set in the commit callback while it holds both
-         * rs_lock and exp_uncommitted_reples.
-         *
-         * If we see rs_committed clear, the commit callback _may_ not have
-         * handled this reply yet and we race with it to grab
-         * exp_uncommitted_replies_lock before removing the reply from
-         * exp_uncommitted_replies.  Note that if we lose the race and the
-         * reply has already been removed, list_del_init() is a noop.
-         *
-         * If we see rs_committed set, we know the commit callback is handling,
-         * or has handled this reply since store reordering might allow us to
-         * see rs_committed set out of sequence.  But since this is done
-         * holding rs_lock, we can be sure it has all completed once we hold
-         * rs_lock, which we do right next.
-         */
+	/* The disk commit callback holds exp_uncommitted_replies_lock while it
+	 * iterates over newly committed replies, removing them from
+	 * exp_uncommitted_replies.  It then drops this lock and schedules the
+	 * replies it found for handling here.
+	 *
+	 * We can avoid contention for exp_uncommitted_replies_lock between the
+	 * HRT threads and further commit callbacks by checking rs_committed
+	 * which is set in the commit callback while it holds both
+	 * rs_lock and exp_uncommitted_reples.
+	 *
+	 * If we see rs_committed clear, the commit callback _may_ not have
+	 * handled this reply yet and we race with it to grab
+	 * exp_uncommitted_replies_lock before removing the reply from
+	 * exp_uncommitted_replies.  Note that if we lose the race and the
+	 * reply has already been removed, list_del_init() is a noop.
+	 *
+	 * If we see rs_committed set, we know the commit callback is handling,
+	 * or has handled this reply since store reordering might allow us to
+	 * see rs_committed set out of sequence.  But since this is done
+	 * holding rs_lock, we can be sure it has all completed once we hold
+	 * rs_lock, which we do right next.
+	 */
 	if (!rs->rs_committed) {
+		/* if rs was commited, no need to convert locks, don't check
+		 * rs_committed here because rs may never be added into
+		 * exp_uncommitted_replies and this flag never be set, see
+		 * target_send_reply() */
+		if (rs->rs_convert_lock &&
+		    rs->rs_transno > exp->exp_last_committed) {
+			struct ldlm_lock *lock;
+
+			spin_lock(&rs->rs_lock);
+			if (rs->rs_convert_lock &&
+			    rs->rs_transno > exp->exp_last_committed) {
+				nlocks = rs->rs_nlocks;
+				while (nlocks-- > 0)
+					rs->rs_modes[nlocks] = LCK_COS;
+				nlocks = rs->rs_nlocks;
+				rs->rs_convert_lock = 0;
+				/* clear rs_scheduled so that commit callback
+				 * can schedule again */
+				rs->rs_scheduled = 0;
+				spin_unlock(&rs->rs_lock);
+
+				while (nlocks-- > 0) {
+					lock = ldlm_handle2lock(
+							&rs->rs_locks[nlocks]);
+					LASSERT(lock != NULL);
+					ldlm_lock_downgrade(lock, LCK_COS);
+					LDLM_LOCK_PUT(lock);
+				}
+				RETURN(0);
+			}
+			spin_unlock(&rs->rs_lock);
+		}
+
 		spin_lock(&exp->exp_uncommitted_replies_lock);
 		list_del_init(&rs->rs_obd_list);
 		spin_unlock(&exp->exp_uncommitted_replies_lock);
 	}
 
+	spin_lock(&exp->exp_lock);
+	/* Noop if removed already */
+	list_del_init(&rs->rs_exp_list);
+	spin_unlock(&exp->exp_lock);
+
 	spin_lock(&rs->rs_lock);
 
-        been_handled = rs->rs_handled;
-        rs->rs_handled = 1;
+	been_handled = rs->rs_handled;
+	rs->rs_handled = 1;
 
-        nlocks = rs->rs_nlocks;                 /* atomic "steal", but */
-        rs->rs_nlocks = 0;                      /* locks still on rs_locks! */
+	nlocks = rs->rs_nlocks;                 /* atomic "steal", but */
+	rs->rs_nlocks = 0;                      /* locks still on rs_locks! */
 
-        if (nlocks == 0 && !been_handled) {
-                /* If we see this, we should already have seen the warning
-                 * in mds_steal_ack_locks()  */
+	if (nlocks == 0 && !been_handled) {
+		/* If we see this, we should already have seen the warning
+		 * in mds_steal_ack_locks()  */
 		CDEBUG(D_HA, "All locks stolen from rs %p x%lld.t%lld"
 		       " o%d NID %s\n",
 		       rs,
 		       rs->rs_xid, rs->rs_transno, rs->rs_opc,
 		       libcfs_nid2str(exp->exp_connection->c_peer.nid));
-        }
+	}
 
-        if ((!been_handled && rs->rs_on_net) || nlocks > 0) {
+	if ((!been_handled && rs->rs_on_net) || nlocks > 0) {
 		spin_unlock(&rs->rs_lock);
 
 		if (!been_handled && rs->rs_on_net) {
@@ -2239,6 +2273,7 @@ ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 	}
 
 	rs->rs_scheduled = 0;
+	rs->rs_convert_lock = 0;
 
 	if (!rs->rs_on_net) {
 		/* Off the net */

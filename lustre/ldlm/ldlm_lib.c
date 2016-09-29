@@ -716,7 +716,10 @@ int server_disconnect_export(struct obd_export *exp)
 		spin_lock(&svcpt->scp_rep_lock);
 
 		list_del_init(&rs->rs_exp_list);
+
 		spin_lock(&rs->rs_lock);
+		/* clear rs_convert_lock to make sure rs is handled and put */
+		rs->rs_convert_lock = 0;
 		ptlrpc_schedule_difficult_reply(rs);
 		spin_unlock(&rs->rs_lock);
 

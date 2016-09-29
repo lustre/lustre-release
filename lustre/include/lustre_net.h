@@ -668,6 +668,8 @@ struct ptlrpc_reply_state {
         unsigned long          rs_committed:1;/* the transaction was committed
                                                  and the rs was dispatched
                                                  by ptlrpc_commit_replies */
+	unsigned long		rs_convert_lock:1; /* need to convert saved
+						    * locks to COS mode */
 	atomic_t		rs_refcount;	/* number of users */
 	/** Number of locks awaiting client ACK */
 	int			rs_nlocks;
@@ -2250,8 +2252,8 @@ struct ptlrpc_service_conf {
  *
  * @{
  */
-void ptlrpc_save_lock(struct ptlrpc_request *req,
-                      struct lustre_handle *lock, int mode, int no_ack);
+void ptlrpc_save_lock(struct ptlrpc_request *req, struct lustre_handle *lock,
+		      int mode, bool no_ack, bool convert_lock);
 void ptlrpc_commit_replies(struct obd_export *exp);
 void ptlrpc_dispatch_difficult_reply(struct ptlrpc_reply_state *rs);
 void ptlrpc_schedule_difficult_reply(struct ptlrpc_reply_state *rs);

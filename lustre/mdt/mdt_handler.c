@@ -2387,49 +2387,66 @@ static inline int mdt_is_lock_sync(struct ldlm_lock *lock)
  * \see ldlm_blocking_ast_nocheck
  */
 int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
-                     void *data, int flag)
+		     void *data, int flag)
 {
-        struct obd_device *obd = ldlm_lock_to_ns(lock)->ns_obd;
-        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        int rc;
-        ENTRY;
+	struct obd_device *obd = ldlm_lock_to_ns(lock)->ns_obd;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool commit_async = false;
+	int rc;
+	ENTRY;
 
-        if (flag == LDLM_CB_CANCELING)
-                RETURN(0);
+	if (flag == LDLM_CB_CANCELING)
+		RETURN(0);
 
-        lock_res_and_lock(lock);
-        if (lock->l_blocking_ast != mdt_blocking_ast) {
-                unlock_res_and_lock(lock);
-                RETURN(0);
-        }
+	lock_res_and_lock(lock);
+	if (lock->l_blocking_ast != mdt_blocking_ast) {
+		unlock_res_and_lock(lock);
+		RETURN(0);
+	}
+	/* There is no lock conflict if l_blocking_lock == NULL,
+	 * it indicates a blocking ast sent from ldlm_lock_decref_internal
+	 * when the last reference to a local lock was released */
 	if (lock->l_req_mode & (LCK_PW | LCK_EX) &&
 	    lock->l_blocking_lock != NULL) {
-		if (mdt_cos_is_enabled(mdt) &&
-		    lock->l_client_cookie !=
-		    lock->l_blocking_lock->l_client_cookie)
+		if (mdt_cos_is_enabled(mdt)) {
+			if (lock->l_client_cookie !=
+			    lock->l_blocking_lock->l_client_cookie)
+				mdt_set_lock_sync(lock);
+		} else if (mdt_slc_is_enabled(mdt) &&
+			   ldlm_is_cos_incompat(lock->l_blocking_lock)) {
 			mdt_set_lock_sync(lock);
-		else if (mdt_slc_is_enabled(mdt) &&
-			 ldlm_is_cos_incompat(lock->l_blocking_lock))
-			mdt_set_lock_sync(lock);
+			/*
+			 * we may do extra commit here, but there is a small
+			 * window to miss a commit: lock was unlocked (saved),
+			 * then a conflict lock queued and we come here, but
+			 * REP-ACK not received, so lock was not converted to
+			 * COS mode yet.
+			 * Fortunately this window is quite small, so the
+			 * extra commit should be rare (not to say distributed
+			 * operation is rare too).
+			 */
+			commit_async = true;
+		}
+	} else if (lock->l_req_mode == LCK_COS &&
+		   lock->l_blocking_lock != NULL) {
+		commit_async = true;
 	}
-        rc = ldlm_blocking_ast_nocheck(lock);
 
-        /* There is no lock conflict if l_blocking_lock == NULL,
-         * it indicates a blocking ast sent from ldlm_lock_decref_internal
-         * when the last reference to a local lock was released */
-        if (lock->l_req_mode == LCK_COS && lock->l_blocking_lock != NULL) {
-                struct lu_env env;
+	rc = ldlm_blocking_ast_nocheck(lock);
+
+	if (commit_async) {
+		struct lu_env env;
 
 		rc = lu_env_init(&env, LCT_LOCAL);
 		if (unlikely(rc != 0))
 			CWARN("%s: lu_env initialization failed, cannot "
 			      "start asynchronous commit: rc = %d\n",
 			      obd->obd_name, rc);
-                else
-                        mdt_device_commit_async(&env, mdt);
-                lu_env_fini(&env);
-        }
-        RETURN(rc);
+		else
+			mdt_device_commit_async(&env, mdt);
+		lu_env_fini(&env);
+	}
+	RETURN(rc);
 }
 
 /*
@@ -2811,10 +2828,8 @@ static void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 			struct mdt_device *mdt = info->mti_mdt;
 			struct ldlm_lock *lock = ldlm_handle2lock(h);
 			struct ptlrpc_request *req = mdt_info_req(info);
-			int cos;
-
-			cos = (mdt_cos_is_enabled(mdt) ||
-			       mdt_slc_is_enabled(mdt));
+			bool cos = mdt_cos_is_enabled(mdt);
+			bool convert_lock = !cos && mdt_slc_is_enabled(mdt);
 
 			LASSERTF(lock != NULL, "no lock for cookie %#llx\n",
 				 h->cookie);
@@ -2822,14 +2837,15 @@ static void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 			/* there is no request if mdt_object_unlock() is called
 			 * from mdt_export_cleanup()->mdt_add_dirty_flag() */
 			if (likely(req != NULL)) {
-				CDEBUG(D_HA, "request = %p reply state = %p"
-				       " transno = %lld\n", req,
-				       req->rq_reply_state, req->rq_transno);
+				LDLM_DEBUG(lock, "save lock request %p reply "
+					"state %p transno %lld\n", req,
+					req->rq_reply_state, req->rq_transno);
 				if (cos) {
 					ldlm_lock_downgrade(lock, LCK_COS);
 					mode = LCK_COS;
 				}
-				ptlrpc_save_lock(req, h, mode, cos);
+				ptlrpc_save_lock(req, h, mode, cos,
+						 convert_lock);
 			} else {
 				mdt_fid_unlock(h, mode);
 			}
