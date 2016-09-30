@@ -438,6 +438,7 @@ run_mdtest() {
     # We devide the files by number of core
     mdtest_nFiles=$((mdtest_nFiles/mdtest_THREADS/num_clients))
     mdtest_iteration=${mdtest_iteration:-1}
+	local mdtest_custom_params=${mdtest_custom_params:-""}
 
     local type=${1:-"ssf"}
 
@@ -464,8 +465,10 @@ run_mdtest() {
     # -n # : number of file/dir to create/stat/remove
     # -u   : each process create/stat/remove individually
 
-    local cmd="$MDTEST -d $testdir -i $mdtest_iteration -n $mdtest_nFiles"
-    [ $type = "fpp" ] && cmd="$cmd -u"
+	local cmd="$MDTEST -d $testdir -i $mdtest_iteration \
+		-n $mdtest_nFiles $mdtest_custom_params"
+
+	[ $type = "fpp" ] && cmd="$cmd -u"
 
 	echo "+ $cmd"
 	# find out if we need to use srun by checking $SRUN_PARTITION
