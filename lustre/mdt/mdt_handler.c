@@ -5074,6 +5074,10 @@ static int mdt_obd_set_info_async(const struct lu_env *env,
  * connect flags from the obd_connect_data::ocd_connect_flags field of the
  * reply. \see mdt_connect().
  *
+ * Before 2.7.50 clients will send a struct obd_connect_data_v1 rather than a
+ * full struct obd_connect_data. So care must be taken when accessing fields
+ * that are not present in struct obd_connect_data_v1. See LU-16.
+ *
  * \param exp   the obd_export associated with this client/target pair
  * \param mdt   the target device for the connection
  * \param data  stores data for this connect request
@@ -5089,7 +5093,10 @@ static int mdt_connect_internal(struct obd_export *exp,
 	LASSERT(data != NULL);
 
 	data->ocd_connect_flags &= MDT_CONNECT_SUPPORTED;
-	data->ocd_connect_flags2 &= MDT_CONNECT_SUPPORTED2;
+
+	if (data->ocd_connect_flags & OBD_CONNECT_FLAGS2)
+		data->ocd_connect_flags2 &= MDT_CONNECT_SUPPORTED2;
+
 	data->ocd_ibits_known &= MDS_INODELOCK_FULL;
 
 	if (!(data->ocd_connect_flags & OBD_CONNECT_MDS_MDS) &&

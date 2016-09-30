@@ -72,7 +72,10 @@ static int echo_connect(const struct lu_env *env,
 	int rc;
 
 	data->ocd_connect_flags &= ECHO_CONNECT_SUPPORTED;
-	data->ocd_connect_flags2 &= ECHO_CONNECT_SUPPORTED2;
+
+	if (data->ocd_connect_flags & OBD_CONNECT_FLAGS2)
+		data->ocd_connect_flags2 &= ECHO_CONNECT_SUPPORTED2;
+
 	rc = class_connect(&conn, obd, cluuid);
 	if (rc) {
 		CERROR("can't connect %d\n", rc);
