@@ -343,6 +343,7 @@ run_metabench() {
     # threads per client
     mbench_THREADS=${mbench_THREADS:-4}
 	mbench_OPTIONS=${mbench_OPTIONS:-}
+	mbench_CLEANUP=${mbench_CLEANUP:-true}
 
     [ x$METABENCH = x ] &&
         { skip_env "metabench not found" && return; }
@@ -357,12 +358,12 @@ run_metabench() {
     # mpi_run uses mpiuser
     chmod 0777 $testdir
 
-    # -C             Run the file creation tests.
-    # -S             Run the file stat tests.
-    # -c nfile       Number of files to be used in each test.
-    # -k             Cleanup.  Remove the test directories.
+	# -C             Run the file creation tests.
+	# -S             Run the file stat tests.
+	# -c nfile       Number of files to be used in each test.
+	# -k             => dont cleanup files when finished.
 	local cmd="$METABENCH -w $testdir -c $mbench_NFILES -C -S -k $mbench_OPTIONS"
-    echo "+ $cmd"
+	echo "+ $cmd"
 
 	# find out if we need to use srun by checking $SRUN_PARTITION
 	if [ "$SRUN_PARTITION" ]; then
@@ -378,7 +379,12 @@ run_metabench() {
     if [ $rc != 0 ] ; then
         error "metabench failed! $rc"
     fi
-    rm -rf $testdir
+
+	if $mbench_CLEANUP; then
+		rm -rf $testdir
+	else
+		mv $dir/d0.metabench $dir/_xxx.$(date +%s).d0.metabench
+	fi
 }
 
 run_simul() {
