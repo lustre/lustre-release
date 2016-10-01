@@ -1038,9 +1038,27 @@ int osp_init_pre_fid(struct osp_device *osp)
 
 	LASSERT(osp->opd_pre != NULL);
 
-	/* Return if last_used fid has been initialized */
+	/* Let's check if the current last_seq/fid is valid,
+	 * otherwise request new sequence from the controller */
+	if (osp_is_fid_client(osp) && osp->opd_group != 0) {
+		/* Non-MDT0 can only use normal sequence for
+		 * OST objects */
+		if (fid_is_norm(&osp->opd_last_used_fid))
+			RETURN(0);
+	} else {
+		/* Initially MDT0 will start with IDIF, after
+		 * that it will request new sequence from the
+		 * controller */
+		if (fid_is_idif(&osp->opd_last_used_fid) ||
+		    fid_is_norm(&osp->opd_last_used_fid))
+			RETURN(0);
+	}
+
 	if (!fid_is_zero(&osp->opd_last_used_fid))
-		RETURN(0);
+		CWARN("%s: invalid last used fid "DFID
+		      ", try to get new sequence.\n",
+		      osp->opd_obd->obd_name,
+		      PFID(&osp->opd_last_used_fid));
 
 	rc = lu_env_init(&env, osp->opd_dt_dev.dd_lu_dev.ld_type->ldt_ctx_tags);
 	if (rc) {

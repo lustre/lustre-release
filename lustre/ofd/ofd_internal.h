@@ -569,4 +569,17 @@ static inline void ofd_prepare_fidea(struct filter_fid *ff,
 	ff->ff_parent.f_ver = cpu_to_le32(oa->o_stripe_idx);
 }
 
+static inline int ofd_validate_seq(struct obd_export *exp, __u64 seq)
+{
+	struct filter_export_data *fed = &exp->exp_filter_data;
+
+	if (unlikely(seq == FID_SEQ_OST_MDT0 && fed->fed_group != 0)) {
+		/* IDIF request only operates on MDT0 group */
+		CERROR("%s: Invalid sequence %#llx for group %u\n",
+		       exp->exp_obd->obd_name, seq, fed->fed_group);
+		RETURN(-EINVAL);
+	}
+
+	return 0;
+}
 #endif /* _OFD_INTERNAL_H */

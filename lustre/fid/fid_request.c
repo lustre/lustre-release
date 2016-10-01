@@ -194,6 +194,17 @@ static int seq_client_alloc_meta(const struct lu_env *env,
 			 * (MDT0)yet */
 			rc = seq_client_rpc(seq, &seq->lcs_space,
 					    SEQ_ALLOC_META, "meta");
+			if (rc == -EINPROGRESS || rc == -EAGAIN) {
+				wait_queue_head_t waitq;
+				struct l_wait_info  lwi;
+
+				/* MDT0 is not ready, let's wait for 2
+				 * seconds and retry. */
+				init_waitqueue_head(&waitq);
+				lwi = LWI_TIMEOUT(cfs_time_seconds(2), NULL,
+						  NULL);
+				l_wait_event(waitq, 0, &lwi);
+			}
 		} while (rc == -EINPROGRESS || rc == -EAGAIN);
         }
 
