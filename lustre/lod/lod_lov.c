@@ -744,7 +744,7 @@ static int lod_gen_component_ea(const struct lu_env *env,
 	struct lov_ost_data_v1	*objs;
 	struct lod_layout_component *lod_comp;
 	__u32	magic;
-	__u16 stripecnt;
+	__u16 stripe_count;
 	int	i, rc = 0;
 	ENTRY;
 
@@ -767,7 +767,7 @@ static int lod_gen_component_ea(const struct lu_env *env,
 	lmm_oi_cpu_to_le(&lmm->lmm_oi, &lmm->lmm_oi);
 
 	lmm->lmm_stripe_size = cpu_to_le32(lod_comp->llc_stripe_size);
-	lmm->lmm_stripe_count = cpu_to_le16(lod_comp->llc_stripenr);
+	lmm->lmm_stripe_count = cpu_to_le16(lod_comp->llc_stripe_count);
 	/**
 	 * for dir and uninstantiated component, lmm_layout_gen stores
 	 * default stripe offset.
@@ -788,16 +788,16 @@ static int lod_gen_component_ea(const struct lu_env *env,
 			RETURN(-E2BIG);
 		objs = &v3->lmm_objects[0];
 	}
-	stripecnt = lod_comp_entry_stripecnt(lo, lod_comp, is_dir);
+	stripe_count = lod_comp_entry_stripe_count(lo, lod_comp, is_dir);
 	if (!is_dir && lo->ldo_is_composite)
-		lod_comp_shrink_stripecount(lod_comp, &stripecnt);
+		lod_comp_shrink_stripe_count(lod_comp, &stripe_count);
 
 	if (is_dir || lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)
 		GOTO(done, rc = 0);
 
 	/* generate ost_idx of this component stripe */
 	lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-	for (i = 0; i < stripecnt; i++) {
+	for (i = 0; i < stripe_count; i++) {
 		struct dt_object *object;
 		__u32 ost_idx = (__u32)-1UL;
 		int type = LU_SEQ_RANGE_OST;
@@ -843,7 +843,7 @@ static int lod_gen_component_ea(const struct lu_env *env,
 	}
 done:
 	if (lmm_size != NULL)
-		*lmm_size = lov_mds_md_size(stripecnt, magic);
+		*lmm_size = lov_mds_md_size(stripe_count, magic);
 	RETURN(rc);
 }
 
@@ -1084,7 +1084,7 @@ static int validate_lod_and_idx(struct lod_device *md, __u32 idx)
  * Instantiate objects for stripes.
  *
  * Allocate and initialize LU-objects representing the stripes. The number
- * of the stripes (ldo_stripenr) must be initialized already. The caller
+ * of the stripes (ldo_stripe_count) must be initialized already. The caller
  * must ensure nobody else is calling the function on the object at the same
  * time. FLDB service must be running to be able to map a FID to the targets
  * and find appropriate device representing that target.
@@ -1118,15 +1118,15 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
 
 	LASSERT(lod_comp->llc_stripe == NULL);
-	LASSERT(lod_comp->llc_stripenr > 0);
+	LASSERT(lod_comp->llc_stripe_count > 0);
 	LASSERT(lod_comp->llc_stripe_size > 0);
 
-	stripe_len = lod_comp->llc_stripenr;
+	stripe_len = lod_comp->llc_stripe_count;
 	OBD_ALLOC(stripe, sizeof(stripe[0]) * stripe_len);
 	if (stripe == NULL)
 		RETURN(-ENOMEM);
 
-	for (i = 0; i < lod_comp->llc_stripenr; i++) {
+	for (i = 0; i < lod_comp->llc_stripe_count; i++) {
 		if (unlikely(lovea_slot_is_dummy(&objs[i])))
 			continue;
 
@@ -1168,7 +1168,7 @@ out:
 				dt_object_put(env, stripe[i]);
 
 		OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
-		lod_comp->llc_stripenr = 0;
+		lod_comp->llc_stripe_count = 0;
 	} else {
 		lod_comp->llc_stripe = stripe;
 		lod_comp->llc_stripes_allocated = stripe_len;
@@ -1262,7 +1262,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 
 		lod_comp->llc_pattern = pattern;
 		lod_comp->llc_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
-		lod_comp->llc_stripenr = le16_to_cpu(lmm->lmm_stripe_count);
+		lod_comp->llc_stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
 		lod_comp->llc_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);
 
 		if (magic == LOV_MAGIC_V3) {
@@ -1285,15 +1285,16 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 				 * used in lod_alloc_ost_list().
 				 */
 				lod_comp->llc_ostlist.op_count =
-					lod_comp->llc_stripenr;
+					lod_comp->llc_stripe_count;
 				lod_comp->llc_ostlist.op_size =
-					lod_comp->llc_stripenr * sizeof(__u32);
+					lod_comp->llc_stripe_count *
+					sizeof(__u32);
 				OBD_ALLOC(lod_comp->llc_ostlist.op_array,
 					  lod_comp->llc_ostlist.op_size);
 				if (!lod_comp->llc_ostlist.op_array)
 					GOTO(out, rc = -ENOMEM);
 
-				for (j = 0; j < lod_comp->llc_stripenr; j++)
+				for (j = 0; j < lod_comp->llc_stripe_count; j++)
 					lod_comp->llc_ostlist.op_array[j] =
 						le32_to_cpu(objs[j].l_ost_idx);
 
@@ -1520,7 +1521,7 @@ static int lod_verify_v1v3(struct lod_device *d, const struct lu_buf *buf,
 	}
 
 	/* the user uses "0" for default stripe pattern normally. */
-	if (!is_from_disk && lum->lmm_pattern == 0)
+	if (!is_from_disk && lum->lmm_pattern == LOV_PATTERN_NONE)
 		lum->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
 
 	if (!lov_pattern_supported(le32_to_cpu(lum->lmm_pattern))) {

@@ -271,7 +271,8 @@ void lov_fix_desc_stripe_size(__u64 *val);
 void lov_fix_desc_stripe_count(__u32 *val);
 void lov_fix_desc_pattern(__u32 *val);
 void lov_fix_desc_qos_maxage(__u32 *val);
-__u16 lov_get_stripecnt(struct lov_obd *lov, __u32 magic, __u16 stripe_count);
+__u16 lov_get_stripe_count(struct lov_obd *lov, __u32 magic,
+			   __u16 stripe_count);
 int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                     struct obd_connect_data *data);
 int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg);

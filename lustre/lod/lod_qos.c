@@ -732,15 +732,15 @@ out:
  * Return an acceptable stripe count depending on flag LOV_USES_DEFAULT_STRIPE:
  * all stripes or 3/4 of stripes.
  *
- * \param[in] stripe_cnt	number of stripes requested
+ * \param[in] stripe_count	number of stripes requested
  * \param[in] flags		0 or LOV_USES_DEFAULT_STRIPE
  *
  * \retval			acceptable stripecount
  */
-static int min_stripe_count(__u32 stripe_cnt, int flags)
+static int min_stripe_count(__u32 stripe_count, int flags)
 {
 	return (flags & LOV_USES_DEFAULT_STRIPE ?
-			stripe_cnt - (stripe_cnt / 4) : stripe_cnt);
+		stripe_count - (stripe_count / 4) : stripe_count);
 }
 
 #define LOV_CREATE_RESEED_MULT 30
@@ -971,16 +971,16 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	struct ost_pool   *osts;
 	struct lod_qos_rr *lqr;
 	unsigned int	i, array_idx;
-	__u32	ost_start_idx_temp;
-	__u32	stripe_idx = 0;
-	__u32	stripe_cnt, stripe_cnt_min, ost_idx;
-	int	rc, speed = 0, ost_connecting = 0;
+	__u32 ost_start_idx_temp;
+	__u32 stripe_idx = 0;
+	__u32 stripe_count, stripe_count_min, ost_idx;
+	int rc, speed = 0, ost_connecting = 0;
 	ENTRY;
 
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
-	stripe_cnt = lod_comp->llc_stripenr;
-	stripe_cnt_min = min_stripe_count(stripe_cnt, flags);
+	stripe_count = lod_comp->llc_stripe_count;
+	stripe_count_min = min_stripe_count(stripe_count, flags);
 
 	if (lod_comp->llc_pool != NULL)
 		pool = lod_find_pool(m, lod_comp->llc_pool);
@@ -998,7 +998,7 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	if (rc)
 		GOTO(out, rc);
 
-	rc = lod_qos_ost_in_use_clear(env, stripe_cnt);
+	rc = lod_qos_ost_in_use_clear(env, stripe_count);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1009,26 +1009,26 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 		lqr->lqr_start_count =
 			(LOV_CREATE_RESEED_MIN / max(osts->op_count, 1U) +
 			 LOV_CREATE_RESEED_MULT) * max(osts->op_count, 1U);
-	} else if (stripe_cnt_min >= osts->op_count ||
+	} else if (stripe_count_min >= osts->op_count ||
 			lqr->lqr_start_idx > osts->op_count) {
 		/* If we have allocated from all of the OSTs, slowly
 		 * precess the next start if the OST/stripe count isn't
 		 * already doing this for us. */
 		lqr->lqr_start_idx %= osts->op_count;
-		if (stripe_cnt > 1 && (osts->op_count % stripe_cnt) != 1)
+		if (stripe_count > 1 && (osts->op_count % stripe_count) != 1)
 			++lqr->lqr_offset_idx;
 	}
 	ost_start_idx_temp = lqr->lqr_start_idx;
 
 repeat_find:
 
-	QOS_DEBUG("pool '%s' want %d startidx %d startcnt %d offset %d "
+	QOS_DEBUG("pool '%s' want %d start_idx %d start_count %d offset %d "
 		  "active %d count %d\n",
 		  lod_comp->llc_pool ? lod_comp->llc_pool : "",
-		  stripe_cnt, lqr->lqr_start_idx, lqr->lqr_start_count,
+		  stripe_count, lqr->lqr_start_idx, lqr->lqr_start_count,
 		  lqr->lqr_offset_idx, osts->op_count, osts->op_count);
 
-	for (i = 0; i < osts->op_count && stripe_idx < stripe_cnt; i++) {
+	for (i = 0; i < osts->op_count && stripe_idx < stripe_count; i++) {
 		array_idx = (lqr->lqr_start_idx + lqr->lqr_offset_idx) %
 				osts->op_count;
 		++lqr->lqr_start_idx;
@@ -1055,7 +1055,7 @@ repeat_find:
 		if (rc != 0 && OST_TGT(m, ost_idx)->ltd_connecting)
 			ost_connecting = 1;
 	}
-	if ((speed < 2) && (stripe_idx < stripe_cnt_min)) {
+	if ((speed < 2) && (stripe_idx < stripe_count_min)) {
 		/* Try again, allowing slower OSCs */
 		speed++;
 		lqr->lqr_start_idx = ost_start_idx_temp;
@@ -1068,7 +1068,7 @@ repeat_find:
 	up_read(&m->lod_qos.lq_rw_sem);
 
 	if (stripe_idx) {
-		lod_comp->llc_stripenr = stripe_idx;
+		lod_comp->llc_stripe_count = stripe_idx;
 		/* at least one stripe is allocated */
 		rc = 0;
 	} else {
@@ -1133,26 +1133,26 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
 	LASSERT(lod_comp->llc_ostlist.op_array);
 
-	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripenr);
+	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripe_count);
 	if (rc < 0)
 		RETURN(rc);
 
-	for (i = 0; i < lod_comp->llc_stripenr; i++) {
+	for (i = 0; i < lod_comp->llc_stripe_count; i++) {
 		if (lod_comp->llc_ostlist.op_array[i] ==
 		    lod_comp->llc_stripe_offset) {
 			array_idx = i;
 			break;
 		}
 	}
-	if (i == lod_comp->llc_stripenr) {
+	if (i == lod_comp->llc_stripe_count) {
 		CDEBUG(D_OTHER,
 		       "%s: start index %d not in the specified list of OSTs\n",
 		       lod2obd(m)->obd_name, lod_comp->llc_stripe_offset);
 		RETURN(-EINVAL);
 	}
 
-	for (i = 0; i < lod_comp->llc_stripenr;
-	     i++, array_idx = (array_idx + 1) % lod_comp->llc_stripenr) {
+	for (i = 0; i < lod_comp->llc_stripe_count;
+	     i++, array_idx = (array_idx + 1) % lod_comp->llc_stripe_count) {
 		__u32 ost_idx = lod_comp->llc_ostlist.op_array[array_idx];
 
 		if (!cfs_bitmap_check(m->lod_ost_bitmap, ost_idx)) {
@@ -1239,7 +1239,7 @@ static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
 
-	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripenr);
+	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripe_count);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1332,7 +1332,7 @@ repeat_find:
 		stripe_num++;
 
 		/* We have enough stripes */
-		if (stripe_num == lod_comp->llc_stripenr)
+		if (stripe_num == lod_comp->llc_stripe_count)
 			GOTO(out, rc = 0);
 	}
 	if (speed < 2) {
@@ -1347,7 +1347,7 @@ repeat_find:
 	 */
 	CERROR("can't lstripe objid "DFID": have %d want %u\n",
 	       PFID(lu_object_fid(lod2lu_obj(lo))), stripe_num,
-	       lod_comp->llc_stripenr);
+	       lod_comp->llc_stripe_count);
 	rc = stripe_num == 0 ? -ENOSPC : -EFBIG;
 out:
 	if (pool != NULL) {
@@ -1438,15 +1438,15 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	struct pool_desc *pool = NULL;
 	struct ost_pool *osts;
 	unsigned int i;
-	__u32	nfound, good_osts, stripe_cnt, stripe_cnt_min;
+	__u32	nfound, good_osts, stripe_count, stripe_count_min;
 	int rc = 0;
 	ENTRY;
 
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
-	stripe_cnt = lod_comp->llc_stripenr;
-	stripe_cnt_min = min_stripe_count(stripe_cnt, flags);
-	if (stripe_cnt_min < 1)
+	stripe_count = lod_comp->llc_stripe_count;
+	stripe_count_min = min_stripe_count(stripe_count, flags);
+	if (stripe_count_min < 1)
 		RETURN(-EINVAL);
 
 	if (lod_comp->llc_pool != NULL)
@@ -1477,7 +1477,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	if (rc)
 		GOTO(out, rc);
 
-	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripenr);
+	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripe_count);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1514,16 +1514,16 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 
 	QOS_DEBUG("found %d good osts\n", good_osts);
 
-	if (good_osts < stripe_cnt_min)
+	if (good_osts < stripe_count_min)
 		GOTO(out, rc = -EAGAIN);
 
 	/* We have enough osts */
-	if (good_osts < stripe_cnt)
-		stripe_cnt = good_osts;
+	if (good_osts < stripe_count)
+		stripe_count = good_osts;
 
 	/* Find enough OSTs with weighted random allocation. */
 	nfound = 0;
-	while (nfound < stripe_cnt) {
+	while (nfound < stripe_count) {
 		__u64 rand, cur_weight;
 
 		cur_weight = 0;
@@ -1568,9 +1568,9 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 				continue;
 
 			cur_weight += ost->ltd_qos.ltq_weight;
-			QOS_DEBUG("stripe_cnt=%d nfound=%d cur_weight=%llu"
-				  " rand=%llu total_weight=%llu\n",
-				  stripe_cnt, nfound, cur_weight, rand,
+			QOS_DEBUG("stripe_count=%d nfound=%d cur_weight=%llu "
+				  "rand=%llu total_weight=%llu\n",
+				  stripe_count, nfound, cur_weight, rand,
 				  total_weight);
 
 			if (cur_weight < rand)
@@ -1605,7 +1605,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		}
 	}
 
-	if (unlikely(nfound != stripe_cnt)) {
+	if (unlikely(nfound != stripe_count)) {
 		/*
 		 * when the decision to use weighted algorithm was made
 		 * we had enough appropriate OSPs, but this state can
@@ -1614,7 +1614,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		 * an object due to just changed state
 		 */
 		QOS_DEBUG("%s: wanted %d objects, found only %d\n",
-			  lod2obd(lod)->obd_name, stripe_cnt, nfound);
+			  lod2obd(lod)->obd_name, stripe_count, nfound);
 		for (i = 0; i < nfound; i++) {
 			LASSERT(stripe[i] != NULL);
 			dt_object_put(env, stripe[i]);
@@ -1658,8 +1658,8 @@ out_nolock:
  *
  * \retval		the maximum usable stripe count
  */
-__u16 lod_get_stripecnt(struct lod_device *lod, struct lod_object *lo,
-			__u16 stripe_count)
+__u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
+			   __u16 stripe_count)
 {
 	__u32 max_stripes = LOV_MAX_STRIPE_COUNT_OLD;
 
@@ -1685,7 +1685,8 @@ __u16 lod_get_stripecnt(struct lod_device *lod, struct lod_object *lo,
 				lod_comp = &lo->ldo_comp_entries[i];
 				if (lod_comp->llc_flags & LCME_FL_INIT)
 					header_sz += lov_mds_md_size(
-					lod_comp->llc_stripenr, LOV_MAGIC_V3);
+						lod_comp->llc_stripe_count,
+						LOV_MAGIC_V3);
 			}
 			if (easize > header_sz)
 				easize -= header_sz;
@@ -1787,7 +1788,7 @@ int lod_use_defined_striping(const struct lu_env *env,
 
 		lod_comp->llc_pattern = le32_to_cpu(v1->lmm_pattern);
 		lod_comp->llc_stripe_size = le32_to_cpu(v1->lmm_stripe_size);
-		lod_comp->llc_stripenr = le16_to_cpu(v1->lmm_stripe_count);
+		lod_comp->llc_stripe_count = le16_to_cpu(v1->lmm_stripe_count);
 		lod_comp->llc_layout_gen = le16_to_cpu(v1->lmm_layout_gen);
 		/**
 		 * The stripe_offset of an uninit-ed component is stored in
@@ -1969,9 +1970,9 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		if (v1->lmm_stripe_size)
 			lod_comp->llc_stripe_size = v1->lmm_stripe_size;
 
-		lod_comp->llc_stripenr = desc->ld_default_stripe_count;
+		lod_comp->llc_stripe_count = desc->ld_default_stripe_count;
 		if (v1->lmm_stripe_count)
-			lod_comp->llc_stripenr = v1->lmm_stripe_count;
+			lod_comp->llc_stripe_count = v1->lmm_stripe_count;
 
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
 		lod_obj_set_pool(lo, i, pool_name);
@@ -1998,8 +1999,8 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 			}
 		}
 
-		if (lod_comp->llc_stripenr > pool_tgt_count(pool))
-			lod_comp->llc_stripenr = pool_tgt_count(pool);
+		if (lod_comp->llc_stripe_count > pool_tgt_count(pool))
+			lod_comp->llc_stripe_count = pool_tgt_count(pool);
 
 		lod_pool_putref(pool);
 	}
@@ -2054,23 +2055,24 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		/*
 		 * no striping has been created so far
 		 */
-		LASSERT(lod_comp->llc_stripenr);
+		LASSERT(lod_comp->llc_stripe_count);
 		/*
 		 * statfs and check OST targets now, since ld_active_tgt_count
 		 * could be changed if some OSTs are [de]activated manually.
 		 */
 		lod_qos_statfs_update(env, d);
-		stripe_len = lod_get_stripecnt(d, lo, lod_comp->llc_stripenr);
+		stripe_len = lod_get_stripe_count(d, lo,
+						  lod_comp->llc_stripe_count);
 		if (stripe_len == 0)
 			GOTO(out, rc = -ERANGE);
-		lod_comp->llc_stripenr = stripe_len;
+		lod_comp->llc_stripe_count = stripe_len;
 		OBD_ALLOC(stripe, sizeof(stripe[0]) * stripe_len);
 		if (stripe == NULL)
 			GOTO(out, rc = -ENOMEM);
 
 		lod_getref(&d->lod_ost_descs);
 		/* XXX: support for non-0 files w/o objects */
-		CDEBUG(D_OTHER, "tgt_count %d stripenr %d\n",
+		CDEBUG(D_OTHER, "tgt_count %d stripe_count %d\n",
 				d->lod_desc.ld_tgt_count, stripe_len);
 
 		if (lod_comp->llc_ostlist.op_array) {
@@ -2094,7 +2096,7 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 					dt_object_put(env, stripe[i]);
 
 			OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
-			lod_comp->llc_stripenr = 0;
+			lod_comp->llc_stripe_count = 0;
 		} else {
 			lod_comp->llc_stripe = stripe;
 			lod_comp->llc_stripes_allocated = stripe_len;
@@ -2105,7 +2107,7 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		 * striping (not a hint), so it allocated all the object
 		 * now we need to create them
 		 */
-		for (i = 0; i < lod_comp->llc_stripenr; i++) {
+		for (i = 0; i < lod_comp->llc_stripe_count; i++) {
 			struct dt_object  *o;
 
 			o = lod_comp->llc_stripe[i];
@@ -2195,14 +2197,14 @@ int lod_prepare_inuse(const struct lu_env *env, struct lod_object *lo)
 	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
 	struct ost_pool *inuse = &info->lti_inuse_osts;
 	struct lod_obj_stripe_cb_data data;
-	__u32 stripe_cnt = 0;
+	__u32 stripe_count = 0;
 	int i;
 	int rc;
 
 	for (i = 0; i < lo->ldo_comp_cnt; i++)
-		stripe_cnt += lod_comp_entry_stripecnt(lo,
+		stripe_count += lod_comp_entry_stripe_count(lo,
 					&lo->ldo_comp_entries[i], false);
-	rc = lod_inuse_resize(inuse, stripe_cnt, d->lod_osd_max_easize);
+	rc = lod_inuse_resize(inuse, stripe_count, d->lod_osd_max_easize);
 	if (rc)
 		return rc;
 
@@ -2234,7 +2236,7 @@ int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 		RETURN(-EIO);
 
 	/*
-	 * by this time, the object's ldo_stripenr and ldo_stripe_size
+	 * by this time, the object's ldo_stripe_count and ldo_stripe_size
 	 * contain default value for striping: taken from the parent
 	 * or from filesystem defaults
 	 *

@@ -366,25 +366,26 @@ static void mdc_ioepoch_pack(struct mdt_ioepoch *epoch,
 void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 		      void *ea, size_t ealen)
 {
-        struct mdt_rec_setattr *rec;
-        struct lov_user_md *lum = NULL;
+	struct mdt_rec_setattr *rec;
+	struct lov_user_md *lum = NULL;
 
-        CLASSERT(sizeof(struct mdt_rec_reint) ==sizeof(struct mdt_rec_setattr));
-        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
-        mdc_setattr_pack_rec(rec, op_data);
+	CLASSERT(sizeof(struct mdt_rec_reint) ==
+		 sizeof(struct mdt_rec_setattr));
+	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
+	mdc_setattr_pack_rec(rec, op_data);
 
-        if (ealen == 0)
-                return;
+	if (ealen == 0)
+		return;
 
-        lum = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
-        if (ea == NULL) { /* Remove LOV EA */
+	lum = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
+	if (ea == NULL) { /* Remove LOV EA */
 		lum->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V1);
-                lum->lmm_stripe_size = 0;
-                lum->lmm_stripe_count = 0;
-                lum->lmm_stripe_offset = (typeof(lum->lmm_stripe_offset))(-1);
-        } else {
-                memcpy(lum, ea, ealen);
-        }
+		lum->lmm_stripe_size = 0;
+		lum->lmm_stripe_count = 0;
+		lum->lmm_stripe_offset = (typeof(lum->lmm_stripe_offset))(-1);
+	} else {
+		memcpy(lum, ea, ealen);
+	}
 }
 
 void mdc_unlink_pack(struct ptlrpc_request *req, struct md_op_data *op_data)

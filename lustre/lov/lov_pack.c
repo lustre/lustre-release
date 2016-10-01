@@ -66,7 +66,7 @@ void lov_dump_lmm_common(int level, void *lmmp)
 }
 
 static void lov_dump_lmm_objects(int level, struct lov_ost_data *lod,
-                                 int stripe_count)
+				 int stripe_count)
 {
 	int i;
 
@@ -77,7 +77,7 @@ static void lov_dump_lmm_objects(int level, struct lov_ost_data *lod,
 	}
 
 	for (i = 0; i < stripe_count; ++i, ++lod) {
-		struct ost_id	oi;
+		struct ost_id oi;
 
 		ostid_le_to_cpu(&lod->l_ost_oi, &oi);
 		CDEBUG(level, "stripe %u idx %u subobj "DOSTID"\n", i,
@@ -94,10 +94,10 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 
 void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm)
 {
-        lov_dump_lmm_common(level, lmm);
-        CDEBUG(level,"pool_name "LOV_POOLNAMEF"\n", lmm->lmm_pool_name);
-        lov_dump_lmm_objects(level, lmm->lmm_objects,
-                             le16_to_cpu(lmm->lmm_stripe_count));
+	lov_dump_lmm_common(level, lmm);
+	CDEBUG(level, "pool_name "LOV_POOLNAMEF"\n", lmm->lmm_pool_name);
+	lov_dump_lmm_objects(level, lmm->lmm_objects,
+			     le16_to_cpu(lmm->lmm_stripe_count));
 }
 
 void lov_dump_lmm(int level, void *lmm)
@@ -216,7 +216,7 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 	for (entry = 0; entry < lsm->lsm_entry_count; entry++) {
 		struct lov_stripe_md_entry *lsme;
 		struct lov_mds_md *lmm;
-		__u16 stripecnt;
+		__u16 stripe_count;
 
 		lsme = lsm->lsm_entries[entry];
 		lcme = &lcmv1->lcm_entries[entry];
@@ -251,11 +251,11 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 
 		if (lsme_inited(lsme) &&
 		    !(lsme->lsme_pattern & LOV_PATTERN_F_RELEASED))
-			stripecnt = lsme->lsme_stripe_count;
+			stripe_count = lsme->lsme_stripe_count;
 		else
-			stripecnt = 0;
+			stripe_count = 0;
 
-		for (i = 0; i < stripecnt; i++) {
+		for (i = 0; i < stripe_count; i++) {
 			struct lov_oinfo *loi = lsme->lsme_oinfo[i];
 
 			ostid_cpu_to_le(&loi->loi_oi, &lmm_objects[i].l_ost_oi);
@@ -265,7 +265,7 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 					cpu_to_le32(loi->loi_ost_idx);
 		}
 
-		size = lov_mds_md_size(stripecnt, lsme->lsme_magic);
+		size = lov_mds_md_size(stripe_count, lsme->lsme_magic);
 		lcme->lcme_size = cpu_to_le32(size);
 		offset += size;
 	} /* for each layout component */
@@ -274,28 +274,28 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 }
 
 /* Find the max stripecount we should use */
-__u16 lov_get_stripecnt(struct lov_obd *lov, __u32 magic, __u16 stripe_count)
+__u16 lov_get_stripe_count(struct lov_obd *lov, __u32 magic, __u16 stripe_count)
 {
-        __u32 max_stripes = LOV_MAX_STRIPE_COUNT_OLD;
+	__u32 max_stripes = LOV_MAX_STRIPE_COUNT_OLD;
 
-        if (!stripe_count)
-                stripe_count = lov->desc.ld_default_stripe_count;
-        if (stripe_count > lov->desc.ld_active_tgt_count)
-                stripe_count = lov->desc.ld_active_tgt_count;
-        if (!stripe_count)
-                stripe_count = 1;
+	if (!stripe_count)
+		stripe_count = lov->desc.ld_default_stripe_count;
+	if (stripe_count > lov->desc.ld_active_tgt_count)
+		stripe_count = lov->desc.ld_active_tgt_count;
+	if (!stripe_count)
+		stripe_count = 1;
 
-        /* stripe count is based on whether ldiskfs can handle
-         * larger EA sizes */
-        if (lov->lov_ocd.ocd_connect_flags & OBD_CONNECT_MAX_EASIZE &&
-            lov->lov_ocd.ocd_max_easize)
+	/* stripe count is based on whether ldiskfs can handle
+	 * larger EA sizes */
+	if (lov->lov_ocd.ocd_connect_flags & OBD_CONNECT_MAX_EASIZE &&
+	    lov->lov_ocd.ocd_max_easize)
 		max_stripes = lov_mds_md_max_stripe_count(
 			lov->lov_ocd.ocd_max_easize, magic);
 
-        if (stripe_count > max_stripes)
-                stripe_count = max_stripes;
+	if (stripe_count > max_stripes)
+		stripe_count = max_stripes;
 
-        return stripe_count;
+	return stripe_count;
 }
 
 int lov_free_memmd(struct lov_stripe_md **lsmp)

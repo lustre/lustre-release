@@ -1825,16 +1825,16 @@ test_27y() {
 	done
 
 	# all osp devices get activated, hence -1 stripe count restored
-	local stripecnt=0
+	local stripe_count=0
 
 	# sleep 2*lod_qos_maxage seconds waiting for lod qos to notice osp
 	# devices get activated.
 	sleep_maxage
 	$LFS setstripe -c -1 $DIR/$tfile
-	stripecnt=$($LFS getstripe -c $DIR/$tfile)
+	stripe_count=$($LFS getstripe -c $DIR/$tfile)
 	rm -f $DIR/$tfile
-	[ $stripecnt -ne $OSTCOUNT ] &&
-		error "Of $OSTCOUNT OSTs, only $stripecnt is available"
+	[ $stripe_count -ne $OSTCOUNT ] &&
+		error "Of $OSTCOUNT OSTs, only $stripe_count is available"
 	return 0
 }
 run_test 27y "create files while OST0 is degraded and the rest inactive"
@@ -9446,8 +9446,8 @@ test_130d() {
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $fm_file) + 1)))" = "zfs" ] &&
 		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return
 
-	local actual_stripecnt=$($GETSTRIPE -c $fm_file)
-	dd if=/dev/zero of=$fm_file bs=1M count=$actual_stripecnt ||
+	local actual_stripe_count=$($GETSTRIPE -c $fm_file)
+	dd if=/dev/zero of=$fm_file bs=1M count=$actual_stripe_count ||
 		error "dd failed on $fm_file"
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
@@ -9479,7 +9479,7 @@ test_130d() {
 		(( tot_len += ext_len ))
 		last_lun=$frag_lun
 	done
-	if (( num_luns != actual_stripecnt || tot_len != 1024 )); then
+	if (( num_luns != actual_stripe_count || tot_len != 1024 )); then
 		cleanup_130
 		error "FIEMAP on $fm_file failed; returned wrong number of " \
 			"luns or wrong len for OST $last_lun"
@@ -16435,7 +16435,7 @@ test_406() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.50) ] &&
 		skip "Need MDS version at least 2.8.50" && return
 
-	local def_stripenr=$($GETSTRIPE -c $MOUNT)
+	local def_stripe_count=$($GETSTRIPE -c $MOUNT)
 	local def_stripe_size=$($GETSTRIPE -S $MOUNT)
 	local def_stripe_offset=$($GETSTRIPE -i $MOUNT)
 	local def_pool=$($GETSTRIPE -p $MOUNT)
@@ -16490,12 +16490,12 @@ test_406() {
 
 	# restore FS default striping
 	if [ -z $def_pool ]; then
-		$SETSTRIPE -c $def_stripenr -S $def_stripe_size \
+		$SETSTRIPE -c $def_stripe_count -S $def_stripe_size \
 			-i $def_stripe_offset $MOUNT ||
 			error "restore default striping failed"
 	else
-		$SETSTRIPE -c $def_stripenr -S $def_stripe_size -p $def_pool \
-			-i $def_stripe_offset $MOUNT ||
+		$SETSTRIPE -c $def_stripe_count -S $def_stripe_size \
+			-i $def_stripe_offset -p $def_pool $MOUNT ||
 			error "restore default striping with $def_pool failed"
 	fi
 

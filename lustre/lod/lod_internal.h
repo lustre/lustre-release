@@ -236,7 +236,7 @@ struct lod_layout_component {
 	__u32			  llc_pattern;
 	__u16			  llc_layout_gen;
 	__u16			  llc_stripe_offset;
-	__u16			  llc_stripenr;
+	__u16			  llc_stripe_count;
 	__u16			  llc_stripes_allocated;
 	char			 *llc_pool;
 	/* ost list specified with LOV_USER_MAGIC_SPECIFIC lum */
@@ -252,7 +252,7 @@ struct lod_default_striping {
 	__u32				lds_def_comp_size_cnt;
 	struct lod_layout_component	*lds_def_comp_entries;
 	/* default LMV */
-	__u32				lds_dir_def_stripenr;
+	__u32				lds_dir_def_stripe_count;
 	__u32				lds_dir_def_stripe_offset;
 	__u32				lds_dir_def_hash_type;
 					/* default file striping flags (LOV) */
@@ -263,6 +263,7 @@ struct lod_default_striping {
 };
 
 struct lod_object {
+	/* common fields for both files and directories */
 	struct dt_object		ldo_obj;
 	union {
 		/* file stripe (LOV) */
@@ -277,7 +278,7 @@ struct lod_object {
 		/* directory stripe (LMV) */
 		struct {
 			/* Slave stripe count for striped directory. */
-			__u16		ldo_dir_stripenr;
+			__u16		ldo_dir_stripe_count;
 			/* How many stripes allocated for a striped directory */
 			__u16		ldo_dir_stripes_allocated;
 			__u32		ldo_dir_stripe_offset;
@@ -297,7 +298,7 @@ struct lod_object {
 	};
 	/* file stripe (LOV) */
 	struct lod_layout_component	*ldo_comp_entries;
-	/* slave stripes of striped directory (LMV)*/
+	/* slave stripes of striped directory (LMV) */
 	struct dt_object		**ldo_stripe;
 };
 
@@ -460,12 +461,12 @@ static inline bool lod_obj_is_striped(struct dt_object *dt)
 		return false;
 
 	if (S_ISDIR(dt->do_lu.lo_header->loh_attr))
-		return lo->ldo_dir_stripenr != 0;
+		return lo->ldo_dir_stripe_count != 0;
 
 	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		if (lo->ldo_comp_entries[i].llc_stripe == NULL)
 			continue;
-		LASSERT(lo->ldo_comp_entries[i].llc_stripenr > 0);
+		LASSERT(lo->ldo_comp_entries[i].llc_stripe_count > 0);
 		return true;
 	}
 	return false;
@@ -571,8 +572,8 @@ lod_comp_inited(const struct lod_layout_component *entry)
  * save the specified OST index list.
  */
 static inline void
-lod_comp_shrink_stripecount(struct lod_layout_component *lod_comp,
-			    __u16 *stripe_count)
+lod_comp_shrink_stripe_count(struct lod_layout_component *lod_comp,
+			     __u16 *stripe_count)
 {
 	/**
 	 * Need one lov_ost_data_v1 to store invalid ost_idx, please refer to
@@ -651,11 +652,11 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			struct lu_attr *attr, struct thandle *th,
 			int comp_idx, struct ost_pool *inuse);
-__u16 lod_comp_entry_stripecnt(struct lod_object *lo,
-			       struct lod_layout_component *entry,
-			       bool is_dir);
-__u16 lod_get_stripecnt(struct lod_device *lod, struct lod_object *lo,
-			__u16 stripe_count);
+__u16 lod_comp_entry_stripe_count(struct lod_object *lo,
+				  struct lod_layout_component *entry,
+				  bool is_dir);
+__u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
+			   __u16 stripe_count);
 
 /* lproc_lod.c */
 int lod_procfs_init(struct lod_device *lod);

@@ -1594,25 +1594,25 @@ static int echo_create_md_object(const struct lu_env *env,
 	if (parent == NULL)
 		RETURN(-ENXIO);
 
-        memset(ma, 0, sizeof(*ma));
-        memset(spec, 0, sizeof(*spec));
-        if (stripe_count != 0) {
-                spec->sp_cr_flags |= FMODE_WRITE;
+	memset(ma, 0, sizeof(*ma));
+	memset(spec, 0, sizeof(*spec));
+	if (stripe_count != 0) {
+		spec->sp_cr_flags |= FMODE_WRITE;
 		echo_set_lmm_size(env, ld, ma);
-                if (stripe_count != -1) {
-                        struct lov_user_md_v3 *lum = &info->eti_lum;
+		if (stripe_count != -1) {
+			struct lov_user_md_v3 *lum = &info->eti_lum;
 
-                        lum->lmm_magic = LOV_USER_MAGIC_V3;
-                        lum->lmm_stripe_count = stripe_count;
-                        lum->lmm_stripe_offset = stripe_offset;
-                        lum->lmm_pattern = 0;
-                        spec->u.sp_ea.eadata = lum;
+			lum->lmm_magic = LOV_USER_MAGIC_V3;
+			lum->lmm_stripe_count = stripe_count;
+			lum->lmm_stripe_offset = stripe_offset;
+			lum->lmm_pattern = LOV_PATTERN_NONE;
+			spec->u.sp_ea.eadata = lum;
 			spec->u.sp_ea.eadatalen = sizeof(*lum);
-                        spec->sp_cr_flags |= MDS_OPEN_HAS_EA;
-                }
-        }
+			spec->sp_cr_flags |= MDS_OPEN_HAS_EA;
+		}
+	}
 
-        ma->ma_attr.la_mode = mode;
+	ma->ma_attr.la_mode = mode;
 	ma->ma_attr.la_valid = LA_CTIME | LA_MODE;
         ma->ma_attr.la_ctime = cfs_time_current_64();
 

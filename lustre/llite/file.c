@@ -1742,20 +1742,20 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
 					(struct lov_user_md_v3 *)lmm);
 			if (S_ISREG(body->mbo_mode))
 				lustre_swab_lov_user_md_objects(
-				 ((struct lov_user_md_v3 *)lmm)->lmm_objects,
-				 stripe_count);
+				    ((struct lov_user_md_v3 *)lmm)->lmm_objects,
+				    stripe_count);
 		} else if (lmm->lmm_magic ==
 			   cpu_to_le32(LOV_MAGIC_COMP_V1)) {
 			lustre_swab_lov_comp_md_v1(
 					(struct lov_comp_md_v1 *)lmm);
 		}
-        }
+	}
 
 out:
-        *lmmp = lmm;
-        *lmm_size = lmmsize;
-        *request = req;
-        return rc;
+	*lmmp = lmm;
+	*lmm_size = lmmsize;
+	*request = req;
+	return rc;
 }
 
 static int ll_lov_setea(struct inode *inode, struct file *file,

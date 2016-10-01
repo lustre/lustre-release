@@ -2487,14 +2487,14 @@ test_51c() {
 
 	# write something to the file, it should be blocked on fetching layout
 	dd if=/dev/zero of=$DIR2/$tdir/$tfile bs=1k count=1 conv=notrunc
-	local stripecnt=$($LFS getstripe -c $DIR2/$tdir/$tfile)
+	local stripe_count=$($LFS getstripe -c $DIR2/$tdir/$tfile)
 	wait $pid
 
 	# lod_qos.c::min_stripe_count() allows setstripe with a default stripe
 	# count to succeed with only 3/4 of the number of stripes (rounded up),
 	# so creating striped files does not fail if an OST is offline or full
-	[ $stripecnt -ge $((OSTCOUNT - $OSTCOUNT / 4)) ] ||
-		error "layout wrong: getstripe -c $stripecnt < $OSTCOUNT * 3/4"
+	[ $stripe_count -ge $((OSTCOUNT - $OSTCOUNT / 4)) ] ||
+		error "bad layout: getstripe -c $stripe_count < $OSTCOUNT * 3/4"
 
 	rm -fr $DIR1/$tdir
 }
