@@ -362,7 +362,10 @@ struct mdt_thread_info {
         const struct ldlm_request *mti_dlm_req;
 
         __u32                      mti_has_trans:1, /* has txn already? */
-                                   mti_cross_ref:1;
+				   mti_cross_ref:1,
+	/* big_lmm buffer was used and must be used in reply */
+				   mti_big_lmm_used:1,
+				   mti_big_acl_used:1;
 
         /* opdata for mdt_reint_open(), has the same as
          * ldlm_reply:lock_policy_res1.  mdt_update_last_rcvd() stores this
@@ -425,9 +428,9 @@ struct mdt_thread_info {
         struct lu_name             mti_name;
 	/* per-thread values, can be re-used, may be vmalloc'd */
 	void			  *mti_big_lmm;
+	void			  *mti_big_acl;
 	int			   mti_big_lmmsize;
-	/* big_lmm buffer was used and must be used in reply */
-	int			   mti_big_lmm_used;
+	int			   mti_big_aclsize;
 	/* should be enough to fit lustre_mdt_attrs */
 	char			   mti_xattr_buf[128];
 	struct ldlm_enqueue_info   mti_einfo;

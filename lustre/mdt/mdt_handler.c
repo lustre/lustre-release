@@ -483,14 +483,18 @@ int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
 	const struct lu_env	*env = info->mti_env;
 	struct md_object	*next = mdt_object_child(o);
 	struct lu_buf		*buf = &info->mti_buf;
+	struct mdt_device	*mdt = info->mti_mdt;
 	int rc;
+
+	ENTRY;
 
 	buf->lb_buf = req_capsule_server_get(info->mti_pill, &RMF_ACL);
 	buf->lb_len = req_capsule_get_size(info->mti_pill, &RMF_ACL,
 					   RCL_SERVER);
 	if (buf->lb_len == 0)
-		return 0;
+		RETURN(0);
 
+again:
 	rc = mo_xattr_get(env, next, buf, XATTR_NAME_ACL_ACCESS);
 	if (rc < 0) {
 		if (rc == -ENODATA) {
@@ -500,17 +504,49 @@ int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
 		} else if (rc == -EOPNOTSUPP) {
 			rc = 0;
 		} else {
+			if (rc == -ERANGE &&
+			    exp_connect_large_acl(info->mti_exp) &&
+			    buf->lb_buf != info->mti_big_acl) {
+				if (info->mti_big_acl == NULL) {
+					OBD_ALLOC_LARGE(info->mti_big_acl,
+							mdt->mdt_max_ea_size);
+					if (info->mti_big_acl == NULL) {
+						CERROR("%s: unable to grow "
+						       DFID" ACL buffer\n",
+						       mdt_obd_name(mdt),
+						       PFID(mdt_object_fid(o)));
+						RETURN(-ENOMEM);
+					}
+
+					info->mti_big_aclsize =
+							mdt->mdt_max_ea_size;
+				}
+
+				CDEBUG(D_INODE, "%s: grow the "DFID
+				       " ACL buffer to size %d\n",
+				       mdt_obd_name(mdt),
+				       PFID(mdt_object_fid(o)),
+				       mdt->mdt_max_ea_size);
+
+				buf->lb_buf = info->mti_big_acl;
+				buf->lb_len = info->mti_big_aclsize;
+
+				goto again;
+			}
+
 			CERROR("%s: unable to read "DFID" ACL: rc = %d\n",
-			       mdt_obd_name(info->mti_mdt),
-			       PFID(mdt_object_fid(o)), rc);
+			       mdt_obd_name(mdt), PFID(mdt_object_fid(o)), rc);
 		}
 	} else {
+		if (buf->lb_buf == info->mti_big_acl)
+			info->mti_big_acl_used = 1;
+
 		rc = nodemap_map_acl(nodemap, buf->lb_buf,
 				     rc, NODEMAP_FS_TO_CLIENT);
 		/* if all ACLs mapped out, rc is still >= 0 */
 		if (rc < 0) {
 			CERROR("%s: nodemap_map_acl unable to parse "DFID
-			       " ACL: rc = %d\n", mdt_obd_name(info->mti_mdt),
+			       " ACL: rc = %d\n", mdt_obd_name(mdt),
 			       PFID(mdt_object_fid(o)), rc);
 		} else {
 			repbody->mbo_aclsize = rc;
@@ -518,7 +554,8 @@ int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
 			rc = 0;
 		}
 	}
-	return rc;
+
+	RETURN(rc);
 }
 #endif
 
@@ -1204,6 +1241,12 @@ static int mdt_getattr(struct tgt_session_info *tsi)
 		GOTO(out, rc = err_serious(rc));
 
 	req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, rc);
+
+	/* Set ACL reply buffer size as LUSTRE_POSIX_ACL_MAX_SIZE_OLD
+	 * by default. If the target object has more ACL entries, then
+	 * enlarge the buffer when necessary. */
+	req_capsule_set_size(pill, &RMF_ACL, RCL_SERVER,
+			     LUSTRE_POSIX_ACL_MAX_SIZE_OLD);
 
 	rc = req_capsule_server_pack(pill);
 	if (unlikely(rc != 0))
@@ -1918,6 +1961,13 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 	/* llog cookies are always 0, the field is kept for compatibility */
         if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
 		req_capsule_set_size(pill, &RMF_LOGCOOKIES, RCL_SERVER, 0);
+
+	/* Set ACL reply buffer size as LUSTRE_POSIX_ACL_MAX_SIZE_OLD
+	 * by default. If the target object has more ACL entries, then
+	 * enlarge the buffer when necessary. */
+	if (req_capsule_has_field(pill, &RMF_ACL, RCL_SERVER))
+		req_capsule_set_size(pill, &RMF_ACL, RCL_SERVER,
+				     LUSTRE_POSIX_ACL_MAX_SIZE_OLD);
 
         rc = req_capsule_server_pack(pill);
         if (rc != 0) {
@@ -3033,6 +3083,13 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
 			req_capsule_set_size(pill, &RMF_LOGCOOKIES,
 					     RCL_SERVER, 0);
 
+		/* Set ACL reply buffer size as LUSTRE_POSIX_ACL_MAX_SIZE_OLD
+		 * by default. If the target object has more ACL entries, then
+		 * enlarge the buffer when necessary. */
+		if (req_capsule_has_field(pill, &RMF_ACL, RCL_SERVER))
+			req_capsule_set_size(pill, &RMF_ACL, RCL_SERVER,
+					     LUSTRE_POSIX_ACL_MAX_SIZE_OLD);
+
                 rc = req_capsule_server_pack(pill);
         }
         RETURN(rc);
@@ -3089,6 +3146,7 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
         info->mti_cross_ref = 0;
         info->mti_opdata = 0;
 	info->mti_big_lmm_used = 0;
+	info->mti_big_acl_used = 0;
 
         info->mti_spec.no_create = 0;
 	info->mti_spec.sp_rm_entry = 0;
@@ -6287,6 +6345,13 @@ static void mdt_key_fini(const struct lu_context *ctx,
 		info->mti_big_lmm = NULL;
 		info->mti_big_lmmsize = 0;
 	}
+
+	if (info->mti_big_acl) {
+		OBD_FREE_LARGE(info->mti_big_acl, info->mti_big_aclsize);
+		info->mti_big_acl = NULL;
+		info->mti_big_aclsize = 0;
+	}
+
 	OBD_FREE_PTR(info);
 }
 

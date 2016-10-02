@@ -1719,14 +1719,15 @@ static struct lu_device_type mdd_device_type = {
 LU_KEY_INIT(mdd, struct mdd_thread_info);
 
 static void mdd_key_fini(const struct lu_context *ctx,
-                         struct lu_context_key *key, void *data)
+			 struct lu_context_key *key, void *data)
 {
-        struct mdd_thread_info *info = data;
+	struct mdd_thread_info *info = data;
 
 	lu_buf_free(&info->mti_big_buf);
 	lu_buf_free(&info->mti_link_buf);
+	lu_buf_free(&info->mti_xattr_buf);
 
-        OBD_FREE_PTR(info);
+	OBD_FREE_PTR(info);
 }
 
 /* context key: mdd_thread_key */

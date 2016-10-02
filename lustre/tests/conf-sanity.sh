@@ -3382,8 +3382,9 @@ cleanup_48() {
 	reformat_and_config
 }
 
-test_48() { # bug 17636
-	reformat
+test_48() { # bz-17636 LU-7473
+	local count
+
 	setup_noconfig
 	check_mount || error "check_mount failed"
 
@@ -3394,14 +3395,36 @@ test_48() { # bug 17636
 	$GETSTRIPE $MOUNT/widestripe ||
 		error "$GETSTRIPE $MOUNT/widestripe failed"
 
-	trap cleanup_48 EXIT ERR
+	# In the future, we may introduce more EAs, such as selinux, enlarged
+	# LOV EA, and so on. These EA will use some EA space that is shared by
+	# ACL entries. So here we only check some reasonable ACL entries count,
+	# instead of the max number that is calculated from the max_ea_size.
+	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.57) ];
+	then
+		count=28	# hard coded of RPC protocol
+	elif [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		count=4000	# max_num 4091 max_ea_size = 32768
+	elif ! large_xattr_enabled; then
+		count=450	# max_num 497 max_ea_size = 4012
+	else
+		count=4500	# max_num 8187 max_ea_size = 1048492
+				# not create too much (>5000) to save test time
+	fi
 
-	# fill acl buffer for avoid expand lsm to them
-	getent passwd | awk -F : '{ print "u:"$1":rwx" }' |  while read acl; do
-	    setfacl -m $acl $MOUNT/widestripe
+	echo "It is expected to hold at least $count ACL entries"
+	trap cleanup_48 EXIT ERR
+	for ((i = 0; i < $count; i++)) do
+		setfacl -m u:$((i + 100)):rw $MOUNT/widestripe ||
+			error "Fail to setfacl for $MOUNT/widestripe at $i"
 	done
 
+	cancel_lru_locks mdc
 	stat $MOUNT/widestripe || error "stat $MOUNT/widestripe failed"
+	local r_count=$(getfacl $MOUNT/widestripe | grep "user:" | wc -l)
+	count=$((count + 1)) # for the entry "user::rw-"
+
+	[ $count -eq $r_count ] ||
+		error "Expected ACL entries $count, but got $r_count"
 
 	cleanup_48
 }

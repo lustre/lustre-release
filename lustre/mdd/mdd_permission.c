@@ -54,7 +54,7 @@
 int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
 		  struct thandle *handle)
 {
-	struct lu_buf           *buf;
+	struct lu_buf            buf;
 	posix_acl_xattr_header  *head;
 	posix_acl_xattr_entry   *entry;
 	int                      entry_count;
@@ -62,19 +62,19 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
 
 	ENTRY;
 
-	buf = mdd_buf_get(env, mdd_env_info(env)->mti_xattr_buf,
-			  sizeof(mdd_env_info(env)->mti_xattr_buf));
-
-	rc = mdo_xattr_get(env, o, buf, XATTR_NAME_ACL_ACCESS);
+	lu_buf_check_and_alloc(&mdd_env_info(env)->mti_xattr_buf,
+			mdd_obj2mdd_dev(o)->mdd_dt_conf.ddp_max_ea_size);
+	buf = mdd_env_info(env)->mti_xattr_buf;
+	rc = mdo_xattr_get(env, o, &buf, XATTR_NAME_ACL_ACCESS);
 	if ((rc == -EOPNOTSUPP) || (rc == -ENODATA))
 		RETURN(0);
 	else if (rc <= 0)
 		RETURN(rc);
 
-	buf->lb_len = rc;
-	head = (posix_acl_xattr_header *)(buf->lb_buf);
+	buf.lb_len = rc;
+	head = (posix_acl_xattr_header *)(buf.lb_buf);
 	entry = head->a_entries;
-	entry_count = (buf->lb_len - sizeof(head->a_version)) /
+	entry_count = (buf.lb_len - sizeof(head->a_version)) /
 		sizeof(posix_acl_xattr_entry);
 	if (entry_count <= 0)
 		RETURN(0);
@@ -83,7 +83,7 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
 	if (rc)
 		RETURN(rc);
 
-	rc = mdo_xattr_set(env, o, buf, XATTR_NAME_ACL_ACCESS,
+	rc = mdo_xattr_set(env, o, &buf, XATTR_NAME_ACL_ACCESS,
 			   0, handle);
 	RETURN(rc);
 }
@@ -205,21 +205,22 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
 	struct lu_ucred  *uc  = lu_ucred_assert(env);
 	posix_acl_xattr_header *head;
 	posix_acl_xattr_entry *entry;
-	struct lu_buf   *buf;
+	struct lu_buf buf;
 	int entry_count;
 	int rc;
 	ENTRY;
 
-	buf = mdd_buf_get(env, mdd_env_info(env)->mti_xattr_buf,
-			  sizeof(mdd_env_info(env)->mti_xattr_buf));
-	rc = mdo_xattr_get(env, obj, buf, XATTR_NAME_ACL_ACCESS);
+	lu_buf_check_and_alloc(&mdd_env_info(env)->mti_xattr_buf,
+			mdd_obj2mdd_dev(obj)->mdd_dt_conf.ddp_max_ea_size);
+	buf = mdd_env_info(env)->mti_xattr_buf;
+	rc = mdo_xattr_get(env, obj, &buf, XATTR_NAME_ACL_ACCESS);
 	if (rc <= 0)
 		RETURN(rc ? : -EACCES);
 
-	buf->lb_len = rc;
-	head = (posix_acl_xattr_header *)(buf->lb_buf);
+	buf.lb_len = rc;
+	head = (posix_acl_xattr_header *)(buf.lb_buf);
 	entry = head->a_entries;
-	entry_count = posix_acl_xattr_count(buf->lb_len);
+	entry_count = posix_acl_xattr_count(buf.lb_len);
 
 	/* Disregard empty ACLs and fall back to
 	 * standard UNIX permissions. See LU-5434 */

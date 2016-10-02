@@ -99,6 +99,10 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 		RETURN(size);
 	}
 
+	if (req_capsule_has_field(pill, &RMF_ACL, RCL_SERVER))
+		req_capsule_set_size(pill, &RMF_ACL, RCL_SERVER,
+				     LUSTRE_POSIX_ACL_MAX_SIZE_OLD);
+
         req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER,
 			     info->mti_body->mbo_eadatasize == 0 ? 0 : size);
         rc = req_capsule_server_pack(pill);
@@ -303,8 +307,9 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		    strcmp(xattr_name, XATTR_NAME_ACL_DEFAULT) == 0)) {
 		struct lu_nodemap *nodemap;
 
-		/* currently lustre limit acl access size */
-		if (xattr_len > LUSTRE_POSIX_ACL_MAX_SIZE)
+		if ((xattr_len > info->mti_mdt->mdt_max_ea_size) ||
+		     (!exp_connect_large_acl(exp) &&
+		      xattr_len > LUSTRE_POSIX_ACL_MAX_SIZE_OLD))
 			GOTO(out, rc = -ERANGE);
 
 		nodemap = nodemap_get_from_exp(exp);

@@ -44,6 +44,7 @@
 #include <obd_cksum.h>
 #include <lustre_lfsck.h>
 #include <lustre_nodemap.h>
+#include <lustre_acl.h>
 
 #include "tgt_internal.h"
 
@@ -425,6 +426,10 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 					  RCL_SERVER))
 			req_capsule_set_size(tsi->tsi_pill, &RMF_LOGCOOKIES,
 					     RCL_SERVER, 0);
+		if (req_capsule_has_field(tsi->tsi_pill, &RMF_ACL, RCL_SERVER))
+			req_capsule_set_size(tsi->tsi_pill,
+					     &RMF_ACL, RCL_SERVER,
+					     LUSTRE_POSIX_ACL_MAX_SIZE_OLD);
 
 		rc = req_capsule_server_pack(tsi->tsi_pill);
 	}

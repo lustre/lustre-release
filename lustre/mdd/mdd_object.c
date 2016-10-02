@@ -1040,9 +1040,8 @@ static int mdd_hsm_update_locked(const struct lu_env *env,
 		RETURN(-ENOMEM);
 
 	/* Read HSM attrs from disk */
-	CLASSERT(sizeof(struct hsm_attrs) <= sizeof(info->mti_xattr_buf));
-	current_buf = mdd_buf_get(env, info->mti_xattr_buf,
-				  sizeof(info->mti_xattr_buf));
+	current_buf = lu_buf_check_and_alloc(&info->mti_xattr_buf,
+				mdo2mdd(obj)->mdd_dt_conf.ddp_max_ea_size);
 	rc = mdo_xattr_get(env, mdd_obj, current_buf, XATTR_NAME_HSM);
 	rc = lustre_buf2hsm(current_buf->lb_buf, rc, current_mh);
 	if (rc < 0 && rc != -ENODATA)

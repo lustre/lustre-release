@@ -2407,8 +2407,9 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	if (IS_ERR(handle))
 		GOTO(out_free, rc = PTR_ERR(handle));
 
-	acl_buf.lb_buf = info->mti_xattr_buf;
-	acl_buf.lb_len = sizeof(info->mti_xattr_buf);
+	lu_buf_check_and_alloc(&info->mti_xattr_buf,
+			       mdd->mdd_dt_conf.ddp_max_ea_size);
+	acl_buf = info->mti_xattr_buf;
 	def_acl_buf.lb_buf = info->mti_key;
 	def_acl_buf.lb_len = sizeof(info->mti_key);
 	rc = mdd_acl_init(env, mdd_pobj, attr, &def_acl_buf, &acl_buf);
@@ -3475,7 +3476,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	struct md_op_spec	*spec = &info->mti_spec;
 	struct lu_buf		lmm_buf = { NULL };
 	struct lu_buf		link_buf = { NULL };
-	const struct lu_buf	*buf;
+	struct lu_buf		 mgr_buf;
 	struct thandle		*handle;
 	struct lmv_mds_md_v1	*mgr_ea;
 	struct lu_attr		*la_flag = MDD_ENV_VAR(env, la_for_fix);
@@ -3490,6 +3491,8 @@ static int mdd_migrate_create(const struct lu_env *env,
 	spec->sp_cr_lookup = 0;
 	spec->sp_feat = &dt_directory_features;
 	if (S_ISLNK(la->la_mode)) {
+		const struct lu_buf *buf;
+
 		buf = lu_buf_check_and_alloc(
 				&mdd_env_info(env)->mti_big_buf,
 				la->la_size + 1);
@@ -3526,7 +3529,11 @@ static int mdd_migrate_create(const struct lu_env *env,
 			RETURN(rc);
 	}
 
-	mgr_ea = (struct lmv_mds_md_v1 *)info->mti_xattr_buf;
+	mgr_easize = lmv_mds_md_size(2, LMV_MAGIC_V1);
+	lu_buf_check_and_alloc(&info->mti_xattr_buf, mgr_easize);
+	mgr_buf.lb_buf = info->mti_xattr_buf.lb_buf;
+	mgr_buf.lb_len = mgr_easize;
+	mgr_ea = mgr_buf.lb_buf;
 	memset(mgr_ea, 0, sizeof(*mgr_ea));
 	mgr_ea->lmv_magic = cpu_to_le32(LMV_MAGIC_V1);
 	mgr_ea->lmv_stripe_count = cpu_to_le32(2);
@@ -3545,10 +3552,8 @@ static int mdd_migrate_create(const struct lu_env *env,
 	 * the last step of migration, so we set th_local = 1 to avoid
 	 * update last rcvd for this transaction */
 	handle->th_local = 1;
-	rc = mdd_declare_migrate_create(env, mdd_pobj, mdd_sobj, mdd_tobj,
-					spec, la,
-					(union lmv_mds_md *)info->mti_xattr_buf,
-					ldata, handle);
+	rc = mdd_declare_migrate_create(env, mdd_pobj, mdd_sobj, mdd_tobj, spec,
+					la, mgr_buf.lb_buf, ldata, handle);
 	if (rc != 0)
 		GOTO(stop_trans, rc);
 
@@ -3574,9 +3579,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	/* Set MIGRATE EA on the source inode, so once the migration needs
 	 * to be re-done during failover, the re-do process can locate the
 	 * target object which is already being created. */
-	mgr_easize = lmv_mds_md_size(2, LMV_MAGIC_V1);
-	buf = mdd_buf_get_const(env, mgr_ea, mgr_easize);
-	rc = mdo_xattr_set(env, mdd_sobj, buf, XATTR_NAME_LMV, 0, handle);
+	rc = mdo_xattr_set(env, mdd_sobj, &mgr_buf, XATTR_NAME_LMV, 0, handle);
 	if (rc != 0)
 		GOTO(stop_trans, rc);
 

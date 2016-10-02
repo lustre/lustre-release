@@ -655,7 +655,7 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 
 	acl_size = body->mbo_aclsize;
 
-        /* this replay - not send info to client */
+	/* this replay - not send info to client */
 	if (info->mti_spec.no_create) {
 		md_size = 0;
 		acl_size = 0;
@@ -690,17 +690,22 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 				req_capsule_server_get(pill, &RMF_MDT_MD));
 			req_capsule_shrink(pill, &RMF_MDT_MD, 0, RCL_SERVER);
 		}
-        } else if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER)) {
-                req_capsule_shrink(pill, &RMF_MDT_MD, md_size, RCL_SERVER);
-        }
+	} else if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER)) {
+		req_capsule_shrink(pill, &RMF_MDT_MD, md_size, RCL_SERVER);
+	}
 
-        if (req_capsule_has_field(pill, &RMF_ACL, RCL_SERVER))
-                req_capsule_shrink(pill, &RMF_ACL, acl_size, RCL_SERVER);
-        else if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
-                req_capsule_shrink(pill, &RMF_LOGCOOKIES,
-                                   acl_size, RCL_SERVER);
+	if (info->mti_big_acl_used) {
+		if (acl_size == 0)
+			info->mti_big_acl_used = 0;
+		else
+			req_capsule_shrink(pill, &RMF_ACL, 0, RCL_SERVER);
+	} else if (req_capsule_has_field(pill, &RMF_ACL, RCL_SERVER)) {
+		req_capsule_shrink(pill, &RMF_ACL, acl_size, RCL_SERVER);
+	} else if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER)) {
+		req_capsule_shrink(pill, &RMF_LOGCOOKIES, acl_size, RCL_SERVER);
+	}
 
-        if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_SERVER) &&
+	if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_SERVER) &&
 	    !(body->mbo_valid & OBD_MD_FLMDSCAPA))
 		req_capsule_shrink(pill, &RMF_CAPA1, 0, RCL_SERVER);
 
@@ -744,14 +749,32 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 				memcpy(lmm, info->mti_attr.ma_lmv,
 				       info->mti_attr.ma_lmv_size);
 			}
-                }
-                /* update mdt_max_mdsize so clients will be aware about that */
-                if (info->mti_mdt->mdt_max_mdsize < info->mti_attr.ma_lmm_size)
-                        info->mti_mdt->mdt_max_mdsize =
-                                                    info->mti_attr.ma_lmm_size;
+		}
+
+		/* update mdt_max_mdsize so clients will be aware about that */
+		if (info->mti_mdt->mdt_max_mdsize < info->mti_attr.ma_lmm_size)
+			info->mti_mdt->mdt_max_mdsize =
+						info->mti_attr.ma_lmm_size;
 		info->mti_big_lmm_used = 0;
-        }
-        RETURN(rc);
+	}
+
+	if (info->mti_big_acl_used) {
+		CDEBUG(D_INFO, "Enlarge reply ACL buffer to %d bytes\n",
+		       acl_size);
+
+		rc = req_capsule_server_grow(pill, &RMF_ACL, acl_size);
+		if (rc) {
+			body->mbo_valid &= ~OBD_MD_FLACL;
+		} else {
+			void *acl = req_capsule_server_get(pill, &RMF_ACL);
+
+			memcpy(acl, info->mti_big_acl, acl_size);
+		}
+
+		info->mti_big_acl_used = 0;
+	}
+
+	RETURN(rc);
 }
 
 

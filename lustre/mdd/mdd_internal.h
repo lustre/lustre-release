@@ -150,8 +150,8 @@ struct mdd_thread_info {
 	struct lu_buf             mti_buf[4];
 	struct lu_buf             mti_big_buf; /* biggish persistent buf */
 	struct lu_buf		  mti_link_buf; /* buf for link ea */
+	struct lu_buf		  mti_xattr_buf;
 	struct obdo               mti_oa;
-	char                      mti_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
 	struct dt_allocation_hint mti_hint;
 	struct dt_object_format   mti_dof;
 	struct linkea_data	  mti_link_data;

@@ -40,13 +40,13 @@
 #ifdef CONFIG_FS_POSIX_ACL
 # include <linux/posix_acl_xattr.h>
 # define LUSTRE_POSIX_ACL_MAX_ENTRIES 32
-# define LUSTRE_POSIX_ACL_MAX_SIZE					\
+# define LUSTRE_POSIX_ACL_MAX_SIZE_OLD					\
 	(sizeof(posix_acl_xattr_header) +				\
 	 LUSTRE_POSIX_ACL_MAX_ENTRIES * sizeof(posix_acl_xattr_entry))
 #endif /* CONFIG_FS_POSIX_ACL */
 
-#ifndef LUSTRE_POSIX_ACL_MAX_SIZE
-# define LUSTRE_POSIX_ACL_MAX_SIZE 0
+#ifndef LUSTRE_POSIX_ACL_MAX_SIZE_OLD
+# define LUSTRE_POSIX_ACL_MAX_SIZE_OLD 0
 #endif /* LUSTRE_POSIX_ACL_MAX_SIZE */
 
 #endif
