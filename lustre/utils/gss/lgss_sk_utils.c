@@ -93,7 +93,7 @@ static int lgss_sk_using_cred(struct lgss_cred *cred)
 	uint32_t flags;
 	int rc;
 
-	rc = sk_gen_params(skc, true);
+	rc = sk_gen_params(skc);
 	if (rc)
 		return rc;
 
@@ -107,7 +107,7 @@ static int lgss_sk_using_cred(struct lgss_cred *cred)
 	bufs[SK_INIT_P] = skc->sc_p;
 	bufs[SK_INIT_TARGET] = skc->sc_tgt;
 	bufs[SK_INIT_NODEMAP] = skc->sc_nodemap_hash;
-	flags = htobe64(skc->sc_flags);
+	flags = htobe32(skc->sc_flags);
 	bufs[SK_INIT_FLAGS].value = &flags;
 	bufs[SK_INIT_FLAGS].length = sizeof(flags);
 

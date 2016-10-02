@@ -415,6 +415,22 @@ int handle_sk(struct svc_nego_data *snd)
 		goto cleanup_buffers;
 	}
 
+	/* Verify that the peer has used a prime size greater or equal to
+	 * the size specified in the key file which may contain only zero
+	 * fill but the size specifies the mimimum supported size on
+	 * servers */
+	if (skc->sc_flags & LGSS_SVC_PRIV &&
+	    bufs[SK_INIT_P].length < skc->sc_p.length) {
+		printerr(0, "Peer DHKE prime does not meet the size required "
+			 "by keyfile: %zd bits\n", skc->sc_p.length * 8);
+		goto cleanup_buffers;
+	}
+
+	/* Throw out the p from the server and use the wire data */
+	free(skc->sc_p.value);
+	skc->sc_p.value = NULL;
+	skc->sc_p.length = 0;
+
 	/* Take control of all the allocated buffers from decoding */
 	if (bufs[SK_INIT_RANDOM].length !=
 	    sizeof(skc->sc_kctx.skc_peer_random)) {
@@ -428,15 +444,6 @@ int handle_sk(struct svc_nego_data *snd)
 	remote_pub_key = bufs[SK_INIT_PUB_KEY];
 	skc->sc_nodemap_hash = bufs[SK_INIT_NODEMAP];
 	skc->sc_hmac = bufs[SK_INIT_HMAC];
-
-	/* Verify that the peer has used a key size greater to or equal
-	 * the size specified by the key file */
-	if (skc->sc_flags & LGSS_SVC_PRIV &&
-	    skc->sc_p.length < skc->sc_session_keylen) {
-		printerr(0, "Peer DH parameters do not meet the size required "
-			 "by keyfile\n");
-		goto cleanup_partial;
-	}
 
 	/* Verify HMAC from peer.  Ideally this would happen before anything
 	 * else but we don't have enough information to lookup key without the
@@ -456,7 +463,7 @@ int handle_sk(struct svc_nego_data *snd)
 		goto cleanup_partial;
 	}
 
-	rc = sk_gen_params(skc, false);
+	rc = sk_gen_params(skc);
 	if (rc != GSS_S_COMPLETE) {
 		printerr(0, "Failed to generate DH params for responder\n");
 		goto cleanup_partial;

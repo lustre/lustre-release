@@ -55,7 +55,7 @@ MANFILES = lustre.7 lfs.1 mount.lustre.8 lctl.8 lnetctl.8 \
 	llapi_hsm_action_progress.3 llapi_hsm_action_get_dfid.3 \
 	llapi_hsm_action_get_fd.3 lustreapi.7 llapi_hsm_action_begin.3 \
 	llapi_hsm_copytool_register.3 lfs-ladvise.1 llapi_ladvise.3 \
-	ll_decode_linkea.8
+	ll_decode_linkea.8 lgss_sk.8
 
 SERVER_MANFILES = mkfs.lustre.8 tunefs.lustre.8 lshowmount.8
 

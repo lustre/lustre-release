@@ -23,11 +23,6 @@ Show file's key attributes.
 .I "-w, --write <keyfile>"
 Generate key file.
 .HP
-Load Options:
-.TP
-.I "-t, --type <type>"
-Key type (mgs, server, client).
-.HP
 Modify/Write Options:
 .TP
 .I "-c, --crypt <num>"
@@ -36,8 +31,8 @@ Cipher for encryption (Default: AES-256-CTR)
 AES-256-CTR
 .RE
 .TP
-.I "-h, --hmac <num>"
-Hash alg for HMAC (Default: SHA256)
+.I "-i, --hmac <num>"
+Hash algorithm for integrity (Default: SHA256)
 .RS
 SHA256
 .br
@@ -56,8 +51,23 @@ Comma seperated list of MGS NIDs.  Only required when mgssec is used (Default: "
 .I "-n, --nodemap <name>"
 Nodemap name for key (Default: "default").
 .TP
-.I "-s, --session <len>"
-Session key length in bits (Default: 1024).
+.I "-p, --prime-bits <len>"
+Length of prime (p) in bits used for the DHKE (Default: 2048).  This is
+generated only for client keys and can take a while to generate.  For server
+and MGS keys this value also sets the minimum acceptable prime length from a
+client.  If a client attempts to connect with a smaller prime it will reject
+the connection.  In this way servers can "guarantee" the minimum encryption
+level acceptable.
+.TP
+.I "-t, --type <type>"
+The type is a mandatory parameter for writing a key and optional for modifying.
+Valid key types:
+.nf
+mgs    - is used for the MGS where --mgssec is used
+server - for MDS or OSS servers
+client - For clients as well as servers who communicate with other servers in a
+         client context (e.g. MDS communication with OSTs)
+.fi
 .TP
 .I "-k, --shared <len>"
 Shared key length in bits (Default: 256).
@@ -74,36 +84,100 @@ Other Options:
 .TP
 .I "-v, --verbose"
 Increase verbosity for errors.
-.SH EXAMPLES
-Write a key for file system 'tank' for a client in the biology nodemap:
+.SH NOTES
+The key file is generally the same for client and servers with a few exceptions:
 .IP
 .nf
-[root@server ~]# lgss_sk -f tank -n biology -w tank.biology.key
+1. Types can differ
+2. Both have the prime length but only client keys will have the actual prime
+   value populated.
+.fi
+.LP
+Therefore a
+.B server
+or
+.B mgs
+key can be distributed to a client but the clients
+must change the type to generate a prime.
+.HP
+.SH EXAMPLES
+Create a key for file system
+.B tank
+for nodemap
+.B biology
+with type server.
+Once on the client the file should be modified to reflect that it is of type
+.B client
+and will also generate a prime for the key.
+.IP
+.nf
+[root@server ~]# lgss_sk -f tank -n biology -t server -w tank.server.biology.key
+[root@server ~]# scp tank.server.biology.key user@client:tank.client.biology.key
+
+[root@client ~]# lgss_sk -t client -m tank.client.biology.key
 .fi
 .LP
 Add MGS NIDs to existing key:
 .IP
 .nf
 [root@server ~]# lgss_sk -g 192.168.1.101@tcp,10.10.0.101@o2ib \\
--m tank.biology.key
+-m tank.server.biology.key
+
+[root@client ~]# lgss_sk -g 192.168.1.101@tcp,10.10.0.101@o2ib \\
+-m tank.client.biology.key
 .fi
 .LP
 Show key attributes:
 .IP
 .nf
-[root@server ~]# lgss_sk -r tank.biology.key
+[root@server ~]# lgss_sk -r tank.server.biology.key
 Version:        1
+Type:           server
 HMAC alg:       SHA256
 Crypt alg:      AES-256-CTR
-Ctx Expiration: 2147483647 seconds
+Ctx Expiration: 604800 seconds
 Shared keylen:  256 bits
-Session keylen: 1024 bits
+Prime length:   2048 bits
 File system:    tank
 MGS NIDs:       192.168.1.101@tcp 10.10.0.101@o2ib
 Nodemap name:   biology
 Shared key:
-  0000: e486 65a8 b0d6 a8bc 17c4 8316 7f5a 701d  ..e..........Zp.
-  0010: 5d6a 7b42 ed35 49cf 5ae9 0638 b12d e3d6  ]j{B.5I.Z..8.-..
+  0000: c160 00c6 e5ba 11df 50cb c420 ae61 c1b3  .`......P.. .a..
+  0010: c76e 5a82 ce48 fde9 d319 ce26 cfc4 b91e  .nZ..H.....&....
+Prime (p) :
+
+[root@client ~]# lgss_sk -r tank.client.biology.key
+Version:        1
+Type:           client
+HMAC alg:       SHA256
+Crypt alg:      AES-256-CTR
+Ctx Expiration: 604800 seconds
+Shared keylen:  256 bits
+Prime length:   2048 bits
+File system:    tank
+MGS NIDs:       192.168.1.101@tcp 10.10.0.101@o2ib
+Nodemap name:   biology
+Shared key:
+  0000: c160 00c6 e5ba 11df 50cb c420 ae61 c1b3  .`......P.. .a..
+  0010: c76e 5a82 ce48 fde9 d319 ce26 cfc4 b91e  .nZ..H.....&....
+Prime (p) :
+  0000: be19 9412 a4c5 3355 9963 ebdf 3fce a5d8  ......3U.c..?...
+  0010: 9776 50db 70b1 1ad4 a22b 3b68 2ae6 fb7a  .vP.p....+;h*..z
+  0020: 803b 2f67 e6ee cd55 3df1 afbd 4e3a b620  .;/g...U=...N:. 
+  0030: 1d86 4182 bb03 d9b5 9605 658e 4dfb 6d39  ..A.......e.M.m9
+  0040: 0394 b789 437f d30b 3fc0 2c7f 42bb 1987  ....C...?.,.B...
+  0050: 0837 bae1 5332 4992 3a0c 9d01 d350 c2bb  .7..S2I.:....P..
+  0060: ed25 27e9 5439 f295 4c04 08cd bcfe 7e0b  .%'.T9..L.....~.
+  0070: 542b e80b 2fb5 eed0 9ca8 f9bc a792 baf1  T+../...........
+  0080: db1a af08 cee7 7b7f f3e4 7f14 71ca b7c9  ......{.....q...
+  0090: 9d07 c24b 8f04 65e3 4c8c fdd5 6e70 641d  ...K..e.L...npd.
+  00a0: af24 a48a b1c7 d2ff 9fee 158e 7025 6d81  .$..........p%m.
+  00b0: a54f 48f9 712f cac3 28fb 426c 330b 07ff  .OH.q/..(.Bl3...
+  00c0: c4a4 cb67 a46b cc57 1846 dc9d 4ce4 fa65  ...g.k.W.F..L..e
+  00d0: 7fc6 e77d 1220 b807 6c7c 5660 b703 39d2  ...}. ..l|V`..9.
+  00e0: 1d99 bd89 e2f1 3e40 74a1 709c 6e6c 6624  ......>@t.p.nlf$
+  00f0: fad6 97bf c3e0 b0d4 cefc 3596 dd69 5223  ..........5..iR#
+
 .fi
 .br
 .SH "SEE ALSO"

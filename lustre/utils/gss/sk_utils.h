@@ -43,6 +43,7 @@
 #define SK_GENERATOR 2
 #define SK_SESSION_MAX_KEYLEN_BYTES 1024
 #define SK_MAX_KEYLEN_BYTES 128
+#define SK_MAX_P_BYTES 2048
 #define SK_NONCE_SIZE 4
 #define MAX_MGSNIDS 16
 
@@ -90,8 +91,10 @@ struct sk_keyfile_config {
 	uint32_t	skc_expire;
 	/* Length of shared key in skc_shared_key */
 	uint32_t	skc_shared_keylen;
-	/* Minimum length of the session keys using this keyfile */
-	uint32_t	skc_session_keylen;
+	/* Length of the prime used in the DHKE */
+	uint32_t	skc_prime_bits;
+	/* Key type */
+	uint8_t		skc_type;
 	/* Array of MGS NIDs to load key's for.  This is for the client since
 	 * the upcall only knows the target name which is MGC<IP>@<NET>
 	 * Only needed when mounting with mgssec */
@@ -103,6 +106,8 @@ struct sk_keyfile_config {
 	char		skc_nodemap[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	/* Shared key */
 	unsigned char	skc_shared_key[SK_MAX_KEYLEN_BYTES];
+	/* Prime (p) for DHKE */
+	unsigned char	skc_p[SK_MAX_P_BYTES];
 } __attribute__((packed));
 
 /* Format passed to the kernel from userspace */
@@ -121,7 +126,6 @@ struct sk_kernel_ctx {
 
 /* Structure used in context initiation to hold all necessary data */
 struct sk_cred {
-	uint32_t		 sc_session_keylen;
 	uint32_t		 sc_flags;
 	gss_buffer_desc		 sc_p;
 	gss_buffer_desc		 sc_pub_key;
@@ -135,7 +139,7 @@ struct sk_cred {
 
 void sk_init_logging(char *program, int verbose, int fg);
 struct sk_keyfile_config *sk_read_file(char *filename);
-int sk_load_keyfile(char *path, int type);
+int sk_load_keyfile(char *path);
 void sk_config_disk_to_cpu(struct sk_keyfile_config *config);
 void sk_config_cpu_to_disk(struct sk_keyfile_config *config);
 int sk_validate_config(const struct sk_keyfile_config *config);
@@ -143,7 +147,7 @@ uint32_t sk_verify_hash(const char *string, const EVP_MD *hash_alg,
 			const gss_buffer_desc *current_hash);
 struct sk_cred *sk_create_cred(const char *fsname, const char *cluster,
 			       const uint32_t flags);
-uint32_t sk_gen_params(struct sk_cred *skc, bool initiator);
+uint32_t sk_gen_params(struct sk_cred *skc);
 int sk_sign_bufs(gss_buffer_desc *key, gss_buffer_desc *bufs, const int numbufs,
 		 const EVP_MD *hash_alg, gss_buffer_desc *hmac);
 uint32_t sk_verify_hmac(struct sk_cred *skc, gss_buffer_desc *bufs,

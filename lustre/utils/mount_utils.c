@@ -884,7 +884,6 @@ int load_shared_keys(struct mount_opts *mop)
 	struct stat sbuf;
 	char fullpath[PATH_MAX];
 	char *path = mop->mo_skpath;
-	int type = 0;
 	int rc;
 
 	/* init logging */
@@ -897,23 +896,9 @@ int load_shared_keys(struct mount_opts *mop)
 		return -errno;
 	}
 
-	if (IS_SERVER(&mop->mo_ldd)) {
-		if (IS_MGS(&mop->mo_ldd))
-			type |= SK_TYPE_MGS;
-		if (IS_MDT(&mop->mo_ldd) || IS_OST(&mop->mo_ldd))
-			type |= SK_TYPE_SERVER;
-	} else {
-		type |= SK_TYPE_CLIENT;
-		if (!S_ISREG(sbuf.st_mode)) {
-			fprintf(stderr, "Invalid shared key path, must be a "
-				"file for client mounts: %s\n", path);
-			return -EINVAL;
-		}
-	}
-
 	/* Load individual keys or a directory of them */
 	if (S_ISREG(sbuf.st_mode)) {
-		return sk_load_keyfile(path, type);
+		return sk_load_keyfile(path);
 	} else if (!S_ISDIR(sbuf.st_mode)) {
 		fprintf(stderr, "Invalid shared key path: %s\n", path);
 		return -ENOKEY;
@@ -956,7 +941,7 @@ int load_shared_keys(struct mount_opts *mop)
 		if (!S_ISREG(sbuf.st_mode))
 			continue;
 
-		rc = sk_load_keyfile(fullpath, type);
+		rc = sk_load_keyfile(fullpath);
 		if (rc) {
 			fprintf(stderr, "Failed to load key %s\n", fullpath);
 		}

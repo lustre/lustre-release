@@ -200,7 +200,7 @@ static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
  * \return	0	sucess
  * \return	-1	failure
  */
-int sk_load_keyfile(char *path, int type)
+int sk_load_keyfile(char *path)
 {
 	struct sk_keyfile_config *config;
 	char description[SK_DESCRIPTION_SIZE + 1];
@@ -233,7 +233,7 @@ int sk_load_keyfile(char *path, int type)
 	/* The server side can have multiple key files per file system so
 	 * the nodemap name is appended to the key description to uniquely
 	 * identify it */
-	if (type & SK_TYPE_MGS) {
+	if (config->skc_type & SK_TYPE_MGS) {
 		/* Any key can be an MGS key as long as we are told to use it */
 		rc = snprintf(description, SK_DESCRIPTION_SIZE, "lustre:MGS:%s",
 			      config->skc_nodemap);
@@ -242,7 +242,7 @@ int sk_load_keyfile(char *path, int type)
 		if (sk_load_key(config, description) == -1)
 			goto out;
 	}
-	if (type & SK_TYPE_SERVER) {
+	if (config->skc_type & SK_TYPE_SERVER) {
 		/* Server keys need to have the file system name in the key */
 		if (!config->skc_fsname) {
 			printerr(0, "Key configuration has no file system "
@@ -256,7 +256,7 @@ int sk_load_keyfile(char *path, int type)
 		if (sk_load_key(config, description) == -1)
 			goto out;
 	}
-	if (type & SK_TYPE_CLIENT) {
+	if (config->skc_type & SK_TYPE_CLIENT) {
 		/* Load client file system key */
 		if (config->skc_fsname) {
 			rc = snprintf(description, SK_DESCRIPTION_SIZE,
@@ -305,7 +305,7 @@ void sk_config_cpu_to_disk(struct sk_keyfile_config *config)
 	config->skc_crypt_alg = htobe16(config->skc_crypt_alg);
 	config->skc_expire = htobe32(config->skc_expire);
 	config->skc_shared_keylen = htobe32(config->skc_shared_keylen);
-	config->skc_session_keylen = htobe32(config->skc_session_keylen);
+	config->skc_prime_bits = htobe32(config->skc_prime_bits);
 
 	for (i = 0; i < MAX_MGSNIDS; i++)
 		config->skc_mgsnids[i] = htobe64(config->skc_mgsnids[i]);
@@ -330,7 +330,7 @@ void sk_config_disk_to_cpu(struct sk_keyfile_config *config)
 	config->skc_crypt_alg = be16toh(config->skc_crypt_alg);
 	config->skc_expire = be32toh(config->skc_expire);
 	config->skc_shared_keylen = be32toh(config->skc_shared_keylen);
-	config->skc_session_keylen = be32toh(config->skc_session_keylen);
+	config->skc_prime_bits = be32toh(config->skc_prime_bits);
 
 	for (i = 0; i < MAX_MGSNIDS; i++)
 		config->skc_mgsnids[i] = be64toh(config->skc_mgsnids[i]);
@@ -374,11 +374,11 @@ int sk_validate_config(const struct sk_keyfile_config *config)
 			 "and %d\n", 60, INT_MAX);
 		return -1;
 	}
-	if (config->skc_session_keylen % 8 != 0 ||
-	    config->skc_session_keylen > SK_SESSION_MAX_KEYLEN_BYTES * 8) {
+	if (config->skc_prime_bits % 8 != 0 ||
+	    config->skc_prime_bits > SK_MAX_P_BYTES * 8) {
 		printerr(0, "Invalid session key length must be a multiple of 8"
 			 " and less then %d bits\n",
-			 SK_SESSION_MAX_KEYLEN_BYTES * 8);
+			 SK_MAX_P_BYTES * 8);
 		return -1;
 	}
 	if (config->skc_shared_keylen % 8 != 0 ||
@@ -403,6 +403,11 @@ int sk_validate_config(const struct sk_keyfile_config *config)
 		; /* empty loop */
 	if (i == sizeof(config->skc_nodemap)) {
 		printerr(0, "Nodemap name not null terminated\n");
+		return -1;
+	}
+
+	if (config->skc_type == SK_TYPE_INVALID) {
+		printerr(0, "Invalid key type\n");
 		return -1;
 	}
 
@@ -650,7 +655,6 @@ struct sk_cred *sk_create_cred(const char *tgt, const char *nodemap,
 	kctx->skc_expire = config->skc_expire;
 
 	/* key payload format is in bits, convert to bytes */
-	skc->sc_session_keylen = config->skc_session_keylen / 8;
 	kctx->skc_shared_key.length = config->skc_shared_keylen / 8;
 	kctx->skc_shared_key.value = malloc(kctx->skc_shared_key.length);
 	if (!kctx->skc_shared_key.value) {
@@ -659,6 +663,14 @@ struct sk_cred *sk_create_cred(const char *tgt, const char *nodemap,
 	}
 	memcpy(kctx->skc_shared_key.value, config->skc_shared_key,
 	       kctx->skc_shared_key.length);
+
+	skc->sc_p.length = config->skc_prime_bits / 8;
+	skc->sc_p.value = malloc(skc->sc_p.length);
+	if (!skc->sc_p.value) {
+		printerr(0, "Failed to allocate p\n");
+		goto out_err;
+	}
+	memcpy(skc->sc_p.value, config->skc_p, skc->sc_p.length);
 
 	free(config);
 
@@ -671,54 +683,50 @@ out_err:
 	return NULL;
 }
 
-static void sk_free_parameters(struct sk_cred *skc)
-{
-	if (skc->sc_params)
-		DH_free(skc->sc_params);
-	if (skc->sc_p.value)
-		free(skc->sc_p.value);
-	if (skc->sc_pub_key.value)
-		free(skc->sc_pub_key.value);
-
-	skc->sc_params = NULL;
-	skc->sc_p.value = NULL;
-	skc->sc_p.length = 0;
-	skc->sc_pub_key.value = NULL;
-	skc->sc_pub_key.length = 0;
-}
-
 /**
- * Generates a public key and computes the private key for the DH key exchange.
- * The parameters must be populated with the p and g from the peer.
+ * Populates the DH parameters for the DHKE
  *
- * \param[in,out]	skc	Shared key credentials structure to populate
- *				with DH parameters
+ * \param[in,out]	skc		Shared key credentials structure to
+ *					populate with DH parameters
  *
  * \retval	GSS_S_COMPLETE	success
  * \retval	GSS_S_FAILURE	failure
  */
-static uint32_t sk_gen_responder_params(struct sk_cred *skc)
+uint32_t sk_gen_params(struct sk_cred *skc)
 {
+	uint32_t random;
 	int rc;
 
-	/* No keys to generate without privacy mode */
-	if ((skc->sc_flags & LGSS_SVC_PRIV) == 0)
-		return GSS_S_COMPLETE;
+	/* Random value used by both the request and response as part of the
+	 * key binding material.  This also should ensure we have unqiue
+	 * tokens that are sent to the remote server which is important because
+	 * the token is hashed for the sunrpc cache lookups and a failure there
+	 * would cause connection attempts to fail indefinitely due to the large
+	 * timeout value on the server side */
+	if (RAND_bytes((unsigned char *)&random, sizeof(random)) != 1) {
+		printerr(0, "Failed to get data for random parameter: %s\n",
+			 ERR_error_string(ERR_get_error(), NULL));
+		return GSS_S_FAILURE;
+	}
 
+	/* The random value will always be used in byte range operations
+	 * so we keep it as big endian from this point on */
+	skc->sc_kctx.skc_host_random = random;
+
+	/* Populate DH parameters */
 	skc->sc_params = DH_new();
 	if (!skc->sc_params) {
 		printerr(0, "Failed to allocate DH\n");
 		return GSS_S_FAILURE;
 	}
 
-	/* responder should already have sc_p populated */
 	skc->sc_params->p = BN_bin2bn(skc->sc_p.value, skc->sc_p.length, NULL);
 	if (!skc->sc_params->p) {
 		printerr(0, "Failed to convert binary to BIGNUM\n");
 		return GSS_S_FAILURE;
 	}
 
-	/* and we use a static generator for shared key */
+	/* We use a static generator for shared key */
 	skc->sc_params->g = BN_new();
 	if (!skc->sc_params->g) {
 		printerr(0, "Failed to allocate new BIGNUM\n");
@@ -729,7 +737,7 @@ static uint32_t sk_gen_responder_params(struct sk_cred *skc)
 		return GSS_S_FAILURE;
 	}
 
-	/* verify that we have a safe prime and valid generator */
+	/* Verify that we have a safe prime and valid generator */
 	if (DH_check(skc->sc_params, &rc) != 1) {
 		printerr(0, "DH_check() failed: %d\n", rc);
 		return GSS_S_FAILURE;
@@ -754,102 +762,6 @@ static uint32_t sk_gen_responder_params(struct sk_cred *skc)
 	BN_bn2bin(skc->sc_params->pub_key, skc->sc_pub_key.value);
 
 	return GSS_S_COMPLETE;
-}
-
-/**
- * Generates shared key Diffie Hellman parameters used for the DH key exchange
- * between host and peer if privacy mode is enabled
- *
- * \param[in,out]	skc	Shared key credentials structure to populate
- *				with DH parameters
- *
- * \retval	GSS_S_COMPLETE	success
- * \retval	GSS_S_FAILURE	failure
- */
-static uint32_t sk_gen_initiator_params(struct sk_cred *skc)
-{
-	int rc;
-
-	/* The credential could be used so free existing parameters */
-	sk_free_parameters(skc);
-
-	/* Only privacy mode needs the rest of the parameter generation
-	 * but we use IV in other modes as well so tokens should be
-	 * unique */
-	if ((skc->sc_flags & LGSS_SVC_PRIV) == 0)
-		return GSS_S_COMPLETE;
-
-	skc->sc_params = DH_generate_parameters(skc->sc_session_keylen * 8,
-						SK_GENERATOR, NULL, NULL);
-	if (skc->sc_params == NULL) {
-		printerr(0, "Failed to generate diffie-hellman parameters: %s",
-			 ERR_error_string(ERR_get_error(), NULL));
-		return GSS_S_FAILURE;
-	}
-
-	if (DH_check(skc->sc_params, &rc) != 1) {
-		printerr(0, "DH_check() failed: %d\n", rc);
-		return GSS_S_FAILURE;
-	} else if (rc) {
-		printerr(0, "DH_check() returned error codes: 0x%x\n", rc);
-		return GSS_S_FAILURE;
-	}
-
-	if (DH_generate_key(skc->sc_params) != 1) {
-		printerr(0, "Failed to generate public DH key: %s\n",
-			 ERR_error_string(ERR_get_error(), NULL));
-		return GSS_S_FAILURE;
-	}
-
-	skc->sc_p.length = BN_num_bytes(skc->sc_params->p);
-	skc->sc_pub_key.length = BN_num_bytes(skc->sc_params->pub_key);
-	skc->sc_p.value = malloc(skc->sc_p.length);
-	skc->sc_pub_key.value = malloc(skc->sc_pub_key.length);
-	if (!skc->sc_p.value || !skc->sc_pub_key.value) {
-		printerr(0, "Failed to allocate memory for params\n");
-		return GSS_S_FAILURE;
-	}
-
-	BN_bn2bin(skc->sc_params->pub_key, skc->sc_pub_key.value);
-	BN_bn2bin(skc->sc_params->p, skc->sc_p.value);
-
-	return GSS_S_COMPLETE;
-}
-
-/**
- * Generates or populates the DH parameters depending on whether the system is
- * the initiator or responder for the connection
- *
- * \param[in,out]	skc		Shared key credentials structure to
- *					populate with DH parameters
- * \param[in]		initiator	Boolean whether to initiate parameters
- *
- * \retval	GSS_S_COMPLETE	success
- * \retval	GSS_S_FAILURE	failure
- */
-uint32_t sk_gen_params(struct sk_cred *skc, const bool initiator)
-{
-	uint32_t random;
-
-	/* Random value used by both the request and response as part of the
-	 * key binding material.  This also should ensure we have unqiue
-	 * tokens that are sent to the remote server which is important because
-	 * the token is hashed for the sunrpc cache lookups and a failure there
-	 * would cause connection attempts to fail indefinitely due to the large
-	 * timeout value on the server side */
-	if (RAND_bytes((unsigned char *)&random, sizeof(random)) != 1) {
-		printerr(0, "Failed to get data for random parameter\n");
-		return GSS_S_FAILURE;
-	}
-
-	/* The random value will always be used in byte range operations
-	 * so we keep it as big endian from this point on */
-	skc->sc_kctx.skc_host_random = htobe32(random);
-
-	if (initiator)
-		return sk_gen_initiator_params(skc);
-
-	return sk_gen_responder_params(skc);
 }
 
 /**
@@ -1217,10 +1129,6 @@ uint32_t sk_compute_dh_key(struct sk_cred *skc, const gss_buffer_desc *pub_key)
 	BIGNUM *remote_pub_key;
 	int status;
 	uint32_t rc = GSS_S_FAILURE;
-
-	/* No keys computed unless privacy mode is in use */
-	if ((skc->sc_flags & LGSS_SVC_PRIV) == 0)
-		return GSS_S_COMPLETE;
 
 	remote_pub_key = BN_bin2bn(pub_key->value, pub_key->length, NULL);
 	if (!remote_pub_key) {
