@@ -874,7 +874,6 @@ static int mdd_hsm_actions_llog_fini(const struct lu_env *env,
 static void mdd_device_shutdown(const struct lu_env *env, struct mdd_device *m,
 				struct lustre_cfg *cfg)
 {
-	mdd_generic_thread_stop(&m->mdd_orph_cleanup_thread);
 	lfsck_degister(env, m->mdd_bottom);
 	mdd_hsm_actions_llog_fini(env, m);
 	mdd_changelog_fini(env, m);
@@ -916,7 +915,11 @@ static int mdd_process_config(const struct lu_env *env,
                         GOTO(out, rc);
 		dt_conf_get(env, dt, &m->mdd_dt_conf);
                 break;
-        case LCFG_CLEANUP:
+	case LCFG_PRE_CLEANUP:
+		rc = next->ld_ops->ldo_process_config(env, next, cfg);
+		mdd_generic_thread_stop(&m->mdd_orph_cleanup_thread);
+		break;
+	case LCFG_CLEANUP:
 		rc = next->ld_ops->ldo_process_config(env, next, cfg);
 		lu_dev_del_linkage(d->ld_site, d);
 		mdd_device_shutdown(env, m, cfg);
