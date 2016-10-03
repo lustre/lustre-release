@@ -48,7 +48,7 @@ A typical usage of ladvise is to enable applications and users with external
 knowledge to intervene in server-side cache management. For example, if a
 bunch of different clients are doing small random reads of a file, prefetching
 pages into OSS cache with big linear reads before the random IO is a net
-benefit. Fetching all that data into each client cache with fadvise() may not
+benefit. Fetching that data into each client cache with fadvise() may not
 be, due to much more data being sent to the client.
 
 The main difference between Linux fadvise() system call and ladvise is that

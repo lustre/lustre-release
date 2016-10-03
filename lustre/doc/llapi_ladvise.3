@@ -1,48 +1,102 @@
 .TH llapi_ladvise 3 "2015 Dec 15" "Lustre User API"
 .SH NAME
-llapi_ladvise \- give IO advices/hints on a Lustre file to the server
+llapi_ladvise \- give IO advice/hints on a Lustre file to the server
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
 .sp
-.BI "int llapi_ladvise(int " fd ", unsigned long long " flags ", int " num_advise ", struct lu_ladvise *" ladvise ");"
+.BI "int llapi_ladvise(int " fd ", unsigned long long " flags ,
+.BI "                  int " num_advise ", struct llapi_ladvise *" ladvise ");"
 .sp
 .fi
 .SH DESCRIPTION
 .LP
 .B llapi_ladvise()
-gives advices to a file specified by the file descriptor
-.IR fd .
-.IR ladvise
-points to an array that contains the information of the advices. The number
-of advices is
-.IR num_advise ,
-which should be smaller than
-.B MAX_NUM_LADVISE.
-Each of these advises is given in
-.I lu_ladvise
-structure, which contains the following fields:
-.PP
-.in +4n
-.nf
-struct lu_ladvise {
-    __u64 lla_advice;  /* Advice type */
-    __u64 lla_start;   /* Start offset of file */
-    __u64 lla_end;     /* End offset of file(not included) */
-    __u64 lla_padding; /* Not used yet */
-};
-.fi
-.in
-.LP
-In addition, zero or more flags can be
-.RI bitwise-or 'd
-in
-.IR flags .
-The full list of file creation flags and file status flags is as follows:
+passes an array of
+.I num_advise
+I/O hints (up to a maximum of
+.BR LAH_COUNT_MAX
+items) in
+.I ladvise
+for the file descriptor
+.I fd
+from to an application to one or more Lustre servers.  Optionally,
+.I flags
+can modify how the advice will be processed via bitwise-or'd values:
 .TP
 .B LF_ASYNC
 Client return to userspace immediately after submitting ladvise RPCs, leaving
 server threads to handle the advices asynchronously.
+.PP
+Each of the
+.I ladvise
+elements is an
+.B llapi_lu_ladvise
+structure, which contains the following fields:
+.PP
+.in +4n
+.nf
+struct llapi_lu_ladvise {
+	__u16 lla_advice;	/* advice type */
+	__u16 lla_value1;	/* values for different advice types */
+	__u32 lla_value2;
+	__u64 lla_start;	/* first byte of extent for advice */
+	__u64 lla_end;		/* last byte of extent for advice */
+	__u32 lla_value3;
+	__u32 lla_value4;
+};
+.fi
+.in
+.TP
+.I lla_ladvice
+specifies the advice for the given file range, currently one of:
+.TP
+.B LU_LADVISE_WILLREAD
+Prefetch data into server cache using optimum I/O size for the server.
+.TP
+.B LU_LADVISE_DONTNEED
+Clean cached data for the specified file range(s) on the server.
+.TP
+.I lla_start
+is the offset in bytes for the start of this advice.
+.TP
+.I lla_end
+is the offset in bytes (non-inclusive) for the end of this advice.
+.TP
+.IR lla_value1 , " lla_value2" , " lla_value3" , " lla_value4"
+additional arguments for future advice types and should be
+set to zero if not explicitly required for a given advice type.
+.PP
+.B llapi_ladvise()
+forwards the advice to Lustre servers without guaranteeing how and when
+servers will react to the advice. Actions may or may not triggered when the
+advices are recieved, depending on the type of the advice as well as the
+real-time decision of the affected server-side components.
+
+A typical usage of
+.B llapi_ladvise()
+is to enable applications and users (via
+.BR "lfs ladvise" (1))
+with external knowledge about application I/O patterns to intervene in
+server-side I/O handling. For example, if a group of different clients
+are doing small random reads of a file, prefetching pages into OSS cache
+with big linear reads before the random IO is a net benefit. Fetching
+that data into each client cache with
+.B fadvise()
+may not be, due to much more data being sent to the clients.
+
+While conceptually similar to the
+.BR posix_fadvise (2)
+and Linux
+.BR fadvise (2)
+system calls, the main difference of
+.B llapi_ladvise()
+is that
+.BR fadvise() / posix_fadvise()
+are client side mechanisms that do not pass advice to the filesystem, while
+.B llapi_ladvise()
+sends advice or hints to one or more Lustre servers on which the file
+is stored.  In some cases it may be desirable to use both interfaces.
 .PP
 .SH RETURN VALUES
 .PP
