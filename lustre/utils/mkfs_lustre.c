@@ -776,8 +776,11 @@ int main(int argc, char *const argv[])
 		goto out;
 	}
 
-	server_make_name(ldd->ldd_flags, ldd->ldd_svindex,
-			 ldd->ldd_fsname, ldd->ldd_svname);
+	if (server_make_name(ldd->ldd_flags, ldd->ldd_svindex,
+			     ldd->ldd_fsname, ldd->ldd_svname)) {
+		printf("unknown server type %#x\n", ldd->ldd_flags);
+		goto out;
+	}
 
 	if (verbose >= 0)
 		print_ldd("Permanent disk data", ldd);

@@ -49,6 +49,7 @@
 #ifdef __KERNEL__
 #include <linux/list.h>
 #else
+#include <stdbool.h>
 #include <libcfs/util/list.h>
 #endif
 #include <lnet/types.h>
@@ -191,9 +192,11 @@ struct lustre_disk_data {
 #define MT_STR(data)    mt_str((data)->ldd_mount_type)
 
 /* Make the mdt/ost server obd name based on the filesystem name */
-static inline int server_make_name(__u32 flags, __u16 index, char *fs,
-                                   char *name)
+static inline bool server_make_name(__u32 flags, __u16 index, char *fs,
+				    char *name)
 {
+	bool invalid_flag = false;
+
         if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
                 if (!(flags & LDD_F_SV_ALL))
 			sprintf(name, "%.8s%c%s%04x", fs,
@@ -205,9 +208,9 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
                 sprintf(name, "MGS");
         } else {
                 CERROR("unknown server type %#x\n", flags);
-                return 1;
-        }
-        return 0;
+		invalid_flag = true;
+	}
+	return invalid_flag;
 }
 
 /****************** mount command *********************/

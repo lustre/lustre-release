@@ -594,8 +594,12 @@ static int mgs_set_index(const struct lu_env *env,
 	set_bit(mti->mti_stripe_index, imap);
 	clear_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags);
 	mutex_unlock(&fsdb->fsdb_mutex);
-	server_make_name(mti->mti_flags & ~(LDD_F_VIRGIN | LDD_F_WRITECONF),
-			 mti->mti_stripe_index, mti->mti_fsname, mti->mti_svname);
+	if (server_make_name(mti->mti_flags & ~(LDD_F_VIRGIN | LDD_F_WRITECONF),
+			     mti->mti_stripe_index, mti->mti_fsname,
+			     mti->mti_svname)) {
+		CERROR("unknown server type %#x\n", mti->mti_flags);
+		return -EINVAL;
+	}
 
         CDEBUG(D_MGS, "Set index for %s to %d\n", mti->mti_svname,
                mti->mti_stripe_index);
