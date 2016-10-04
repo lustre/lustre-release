@@ -75,10 +75,11 @@ struct mdd_changelog {
 	int			mc_lastuser;
 };
 
-static inline __u64 cl_time(void) {
-	cfs_fs_time_t time;
+static inline __u64 cl_time(void)
+{
+	struct timespec64 time;
 
-	cfs_fs_time_current(&time);
+	ktime_get_real_ts64(&time);
 	return (((__u64)time.tv_sec) << 30) + time.tv_nsec;
 }
 

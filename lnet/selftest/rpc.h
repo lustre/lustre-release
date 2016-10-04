@@ -221,7 +221,7 @@ typedef struct {
         __u32                   pnr_magic;
         __u32                   pnr_seq;
         __u64                   pnr_time_sec;
-        __u64                   pnr_time_usec;
+	__u64                   pnr_time_nsec;
 } WIRE_ATTR srpc_ping_reqst_t;
 
 typedef struct {

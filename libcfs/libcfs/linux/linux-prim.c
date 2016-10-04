@@ -84,6 +84,14 @@ cfs_time_t cfs_timer_deadline(struct timer_list *t)
 }
 EXPORT_SYMBOL(cfs_timer_deadline);
 
+#ifndef HAVE_KTIME_GET_REAL_TS64
+void ktime_get_real_ts64(struct timespec64 *ts)
+{
+	*ts = timespec_to_timespec64(CURRENT_TIME);
+}
+EXPORT_SYMBOL(ktime_get_real_ts64);
+#endif /* HAVE_KTIME_GET_REAL_TS64 */
+
 sigset_t
 cfs_block_allsigs(void)
 {

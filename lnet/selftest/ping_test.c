@@ -92,7 +92,7 @@ ping_client_prep_rpc(sfw_test_unit_t *tsu,
 	srpc_ping_reqst_t   *req;
 	sfw_test_instance_t *tsi = tsu->tsu_instance;
 	sfw_session_t       *sn  = tsi->tsi_batch->bat_session;
-	struct timeval       tv;
+	struct timespec64 ts;
 	int		     rc;
 
 	LASSERT(sn != NULL);
@@ -110,9 +110,9 @@ ping_client_prep_rpc(sfw_test_unit_t *tsu,
 	req->pnr_seq = lst_ping_data.pnd_counter++;
 	spin_unlock(&lst_ping_data.pnd_lock);
 
-	cfs_fs_timeval(&tv);
-	req->pnr_time_sec  = tv.tv_sec;
-	req->pnr_time_usec = tv.tv_usec;
+	ktime_get_real_ts64(&ts);
+	req->pnr_time_sec  = ts.tv_sec;
+	req->pnr_time_nsec = ts.tv_nsec;
 
 	return rc;
 }
@@ -121,12 +121,12 @@ static void
 ping_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
 {
         sfw_test_instance_t *tsi = tsu->tsu_instance;
-        sfw_session_t       *sn = tsi->tsi_batch->bat_session;
-        srpc_ping_reqst_t   *reqst = &rpc->crpc_reqstmsg.msg_body.ping_reqst;
-        srpc_ping_reply_t   *reply = &rpc->crpc_replymsg.msg_body.ping_reply;
-        struct timeval       tv;
+	sfw_session_t *sn = tsi->tsi_batch->bat_session;
+	srpc_ping_reqst_t *reqst = &rpc->crpc_reqstmsg.msg_body.ping_reqst;
+	srpc_ping_reply_t *reply = &rpc->crpc_replymsg.msg_body.ping_reply;
+	struct timespec64 ts;
 
-        LASSERT (sn != NULL);
+	LASSERT(sn != NULL);
 
         if (rpc->crpc_status != 0) {
                 if (!tsi->tsi_stopping) /* rpc could have been aborted */
@@ -161,10 +161,10 @@ ping_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
                 return;
         }
 
-        cfs_fs_timeval(&tv);
-        CDEBUG (D_NET, "%d reply in %u usec\n", reply->pnr_seq,
-                (unsigned)((tv.tv_sec - (unsigned)reqst->pnr_time_sec) * 1000000
-                           + (tv.tv_usec - reqst->pnr_time_usec)));
+	ktime_get_real_ts64(&ts);
+	CDEBUG(D_NET, "%d reply in %llu nsec\n", reply->pnr_seq,
+	       (u64)((ts.tv_sec - reqst->pnr_time_sec) * NSEC_PER_SEC +
+		    (ts.tv_nsec - reqst->pnr_time_nsec)));
         return;
 }
 
@@ -185,7 +185,7 @@ ping_server_handle(struct srpc_server_rpc *rpc)
                 __swab32s(&req->pnr_seq);
                 __swab32s(&req->pnr_magic);
                 __swab64s(&req->pnr_time_sec);
-                __swab64s(&req->pnr_time_usec);
+		__swab64s(&req->pnr_time_nsec);
         }
         LASSERT (reqstmsg->msg_type == srpc_service2request(sv->sv_id));
 

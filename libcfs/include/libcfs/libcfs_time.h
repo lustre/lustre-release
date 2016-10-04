@@ -39,6 +39,7 @@
 
 #ifndef __LIBCFS_TIME_H__
 #define __LIBCFS_TIME_H__
+
 /*
  * generic time manipulation functions.
  */
@@ -98,17 +99,6 @@ static inline long cfs_timeval_sub(struct timeval *large, struct timeval *small,
         }                                                       \
         result;                                                 \
 })
-
-/*
- * helper function similar to do_gettimeofday() of Linux kernel
- */
-static inline void cfs_fs_timeval(struct timeval *tv)
-{
-        cfs_fs_time_t time;
-
-        cfs_fs_time_current(&time);
-        cfs_fs_time_usec(&time, tv);
-}
 
 #define CFS_TICK	1
 

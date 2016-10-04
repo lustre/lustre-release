@@ -294,6 +294,41 @@ hlist_add_after, [
 ]) # LIBCFS_HLIST_ADD_AFTER
 
 #
+# Kernel version 3.17 introduced struct timespec64
+#
+AC_DEFUN([LIBCFS_TIMESPEC64],[
+LB_CHECK_COMPILE([does 'struct timespec64' exist],
+timespec64, [
+	#include <linux/time.h>
+],[
+	struct timespec64 ts;
+
+	ts.tv_sec = 0;
+	ts.tv_nsec = 0;
+],[
+	AC_DEFINE(HAVE_TIMESPEC64, 1,
+		['struct timespec64' is available])
+])
+]) # LIBCFS_TIMESPEC64
+
+#
+# Kernel version 3.17 introduced ktime_get_real_ts64
+#
+AC_DEFUN([LIBCFS_KTIME_GET_REAL_TS64],[
+LB_CHECK_COMPILE([does function 'ktime_get_real_ts64' exist],
+ktime_get_real_ts64, [
+	#include <linux/ktime.h>
+],[
+	struct timespec64 *ts = NULL;
+
+	ktime_get_real_ts64(ts);
+],[
+	AC_DEFINE(HAVE_KTIME_GET_REAL_TS64, 1,
+		['ktime_get_real_ts64' is available])
+])
+]) # LIBCFS_KTIME_GET_REAL_TS64
+
+#
 # Kernel version 4.2 changed topology_thread_cpumask
 # to topology_sibling_cpumask
 #
@@ -412,6 +447,8 @@ LIBCFS_ENABLE_CRC32C_ACCEL
 LIBCFS_SHRINKER_COUNT
 # 3.17
 LIBCFS_HLIST_ADD_AFTER
+LIBCFS_TIMESPEC64
+LIBCFS_KTIME_GET_REAL_TS64
 # 4.2
 LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 LIBCFS_FPU_API
