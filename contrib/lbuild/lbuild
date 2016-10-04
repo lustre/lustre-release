@@ -445,36 +445,27 @@ fetch_url() {
 }
 
 download_srpm() {
-    local target=$1
-    local srpm=$2
-    local force="${3:-false}"
+	local target=$1
+	local srpm=$2
+	local force="${3:-false}"
 
-    if $force || [ ! -r "$KERNELDIR/$srpm" ] ||
-       [ ! -s "$KERNELDIR/$srpm" ]; then
-        if $DOWNLOAD; then
-            local location="https://downloads.hpdd.intel.com/public/kernels/$target/old"
-            # get the location from a distro specific method if it exists
-            if type -p kernel_srpm_location; then
-                location=$(kernel_srpm_location)
-            fi
-            echo "Downloading $location/$srpm..."
-            if ! fetch_url "$location/$srpm" "$KERNELDIR/$srpm" 2>&1 ||
-               [ ! -s "$KERNELDIR/$srpm" ]; then
-                rm -f $KERNELDIR/$srpm
-                # punt to a distro specific method if it exists
-                if ! type -p download_srpm-$DISTROMAJ; then
-                    fatal 1 "Could not download target $target's kernel SRPM $srpm from $location."
-                else
-                    if ! download_srpm-$DISTROMAJ "$target" "$srpm" "$force"; then
-                        fatal 1 "Could not download target $target's kernel SRPM $srpm using download_srpm-$DISTROMAJ."
-                    fi
-                fi
-            fi
-        else
-            fatal 1 "$srpm not found in directory $KERNELDIR."
-        fi
-    fi
-
+	# let the download_file handle the concurrency
+	if $DOWNLOAD; then
+		local location= \
+		"https://downloads.hpdd.intel.com/public/kernels/$target/old"
+		# get the location from a distro specific method if it exists
+		if type -p kernel_srpm_location; then
+			location=$(kernel_srpm_location)
+		fi
+		echo "Downloading $location/$srpm..."
+		if ! download_file \
+			"$location/$srpm" "$KERNELDIR/$srpm" "$force" 2>&1 ||
+			[ ! -s "$KERNELDIR/$srpm" ]; then
+			rm -f $KERNELDIR/$srpm
+			fatal 1 "Could not download target $target's kernel \
+SRPM $srpm from $location."
+		fi
+	fi
 }
 
 download_file() {
@@ -1379,10 +1370,8 @@ build_kernel_with_srpm() {
     if ! $USE_BUILD_CACHE || ! reuse kernel "$TOPDIR" "$CAN_LINK_FOR_REUSE" \
                                    "$REUSE_SIGNATURE"; then
         # nothing cached, build from scratch
-        if [ ! -r "$KERNELDIR/$KERNEL_SRPM" ]; then
-            echo "Downloading kernel SRPM" >&${outfd}
-            download_srpm "$CANONICAL_TARGET" "$KERNEL_SRPM" >&${outfd}
-        fi
+	echo "Downloading kernel SRPM" >&${outfd}
+	download_srpm "$CANONICAL_TARGET" "$KERNEL_SRPM" >&${outfd}
 
         if ! rpm -ivh $KERNELDIR/$KERNEL_SRPM \
                   --define "_topdir $TOPDIR" >&${outfd} 2>&1; then
