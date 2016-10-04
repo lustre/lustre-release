@@ -16,7 +16,7 @@ PATCH SERIES FOR SERVER KERNELS:
 2.6-rhel6.series        2.6.32-431.29.2.el6 (RHEL 6.5)
 2.6-rhel6.series        2.6.32-504.30.3.el6 (RHEL 6.6)
 2.6-rhel6.series        2.6.32-573.26.1.el6 (RHEL 6.7)
-2.6-rhel6.8.series      2.6.32-642.4.2.el6  (RHEL 6.8)
+2.6-rhel6.8.series      2.6.32-642.6.1.el6  (RHEL 6.8)
 3.10-rhel7.series       3.10.0-327.36.1.el7 (RHEL 7.2)
 3.0-sles11sp3.series    3.0.101-0.47.71     (SLES11 SP3)
 3.0-sles11sp3.series    3.0.101-80          (SLES11 SP4)
