@@ -63,8 +63,8 @@ extern char hostname[];
 extern char *timestamp();
 extern char *testdir;
 
-extern inline void begin(char *str);
-extern inline void end(char *str);
+extern void begin(char *str);
+extern void end(char *str);
 
 extern void dump_diff(char *orig_buf, char *buf, int len, long off);
 extern void lp_gethostname(void);
