@@ -1,0 +1,53 @@
+.TH ll_decode_linkea 1 "May 25, 2016" Lustre "utilities"
+.SH NAME
+ll_decode_linkea \- display parent FIDs and name of a Lustre file
+.SH SYNOPSIS
+.B ll_decode_linkea
+.I file
+.RI [ "file ..." ]
+.br
+.SH DESCRIPTION
+.B ll_decode_linkea
+decodes and prints the Lustre parent FIDs and name of a Lustre file, which
+are stored in the "trusted.link" attribute on MDT. This is accessible to
+.B ll_decode_linkea
+not only through Lustre client, but also when the MDT filesystem is mounted
+locally as type ldiskfs for maintenance.
+.PP
+The "trusted.link" extended attribute is saved when file/directory is created,
+and modified when renaming or hard link happens.
+.PP
+The parent FID is useful in case of MDT corruption. The fsck of ldiskfs can
+recover most of the ldiskfs hierarchy, but it might leave some files or
+directories under lost+found. The parent FIDs can be used to determine the
+right Lustre paths to move them to.
+.SH EXAMPLE
+.fi
+root@mdt1# cd /mnt/mdt/lost+found
+.fi
+root@mdt1# ll_decode_linkea \#123451 \#123452
+.fi
+#123451: count 2
+.fi
+    0: [0x200034021:0x2:0x0], name "file1"
+.fi
+    1: [0x200034021:0x1:0x0], name "file1_link"
+.fi
+#123452: count 1
+.fi
+    0: [0x200000007:0x1:0x0], name "file2"
+.PP
+This shows that the 2 files in lost+found. ll_decode_linkea prints all of the
+parent FIDs of these files. file1 has two hard links, that is why it has two
+parent directories. Command
+.B lfs fid2path
+could be used to extract the paths of the parents.
+.PP
+Since "trusted.link" xattr is accessible on Lustre client too,
+.B ll_decode_linkea
+could also be used on Lustre client.
+.PP
+.SH SEE ALSO
+.BR lfs (1),
+.BR lustre (7),
+.BR ll_recover_lost_found_objs (8)

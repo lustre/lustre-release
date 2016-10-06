@@ -10202,6 +10202,29 @@ test_154A() {
 }
 run_test 154A "lfs path2fid and fid2path basic checks"
 
+test_154B() {
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.1) ]] &&
+		skip "Need MDS version at least 2.4.1" && return
+
+	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
+	touch $DIR/$tdir/$tfile || error "touch $DIR/$tdir/$tfile failed"
+	local linkea=$($LL_DECODE_LINKEA $DIR/$tdir/$tfile | grep 'pfid')
+	[ -z "$linkea" ] && error "decode linkea $DIR/$tdir/$tfile failed"
+
+	local name=$(echo $linkea | awk '/pfid/ {print $5}' | sed -e "s/'//g")
+	local PFID=$(echo $linkea | awk '/pfid/ {print $3}' | sed -e "s/,//g")
+
+	# check that we get the same pathname
+	echo "PFID: $PFID, name: $name"
+	local FOUND=$($LFS fid2path $MOUNT "$PFID")
+	[ -z "$FOUND" ] && error "fid2path unable to get $PFID path"
+	[ "$FOUND/$name" != "$DIR/$tdir/$tfile" ] &&
+		error "ll_decode_linkea has $FOUND/$name != $DIR/$tdir/$tfile"
+
+	rm -rf $DIR/$tdir || error "Can not delete directory $DIR/$tdir"
+}
+run_test 154B "verify the ll_decode_linkea tool"
+
 test_154a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ]] ||

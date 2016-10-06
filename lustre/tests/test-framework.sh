@@ -270,6 +270,8 @@ init_test_env() {
     fi
     export LL_DECODE_FILTER_FID=${LL_DECODE_FILTER_FID:-"$LUSTRE/utils/ll_decode_filter_fid"}
     [ ! -f "$LL_DECODE_FILTER_FID" ] && export LL_DECODE_FILTER_FID="ll_decode_filter_fid"
+    export LL_DECODE_LINKEA=${LL_DECODE_LINKEA:-"$LUSTRE/utils/ll_decode_linkea"}
+    [ ! -f "$LL_DECODE_LINKEA" ] && export LL_DECODE_LINKEA="ll_decode_linkea"
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
     [ ! -f "$MKFS" ] && export MKFS="mkfs.lustre"
     export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
