@@ -2966,22 +2966,23 @@ nrs_write_read() {
 	$LFS setstripe -c $OSTCOUNT $dir || error "setstripe to $dir failed"
 	chmod 777 $dir
 
-	do_nodes $CLIENTS $myRUNAS dd if=/dev/zero of="$dir/nrs_r_$HOSTNAME"\
-		bs=1M count=$n > /dev/null 2>&1 || error "dd on client failed"
+	do_nodes $CLIENTS $myRUNAS \
+		dd if=/dev/zero of="$dir/nrs_r_$HOSTNAME" bs=1M count=$n ||
+		error "dd at 0 on client failed (1)"
 
 	for ((i = 0; i < $n; i++)); do
-		do_nodes $CLIENTS $myRUNAS dd if=/dev/zero\
-			of="$dir/nrs_w_$HOSTNAME" bs=1M seek=$i count=1\
-			 > /dev/null 2>&1 || error "dd on client failed" &
+		do_nodes $CLIENTS $myRUNAS dd if=/dev/zero \
+			of="$dir/nrs_w_$HOSTNAME" bs=1M seek=$i count=1 ||
+			 error "dd at ${i}MB on client failed (2)" &
 		local pids_w[$i]=$!
 	done
 	do_nodes $CLIENTS sync;
 	cancel_lru_locks osc
 
 	for ((i = 0; i < $n; i++)); do
-		do_nodes $CLIENTS $myRUNAS dd if="$dir/nrs_w_$HOSTNAME"\
-			of=/dev/zero bs=1M seek=$i count=1 > /dev/null 2>&1 ||
-			error "dd on client failed"
+		do_nodes $CLIENTS $myRUNAS dd if="$dir/nrs_w_$HOSTNAME" \
+			of=/dev/zero bs=1M seek=$i count=1 > /dev/null ||
+			error "dd at ${i}MB on client failed (3)"
 		local pids_r[$i]=$!
 	done
 	cancel_lru_locks osc
