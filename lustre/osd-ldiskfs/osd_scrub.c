@@ -1384,30 +1384,30 @@ full:
 		pos = &ooc->ooc_pos_preload;
 		count = &ooc->ooc_cached_items;
 	}
+
+	param.bg = (*pos - 1) / LDISKFS_INODES_PER_GROUP(param.sb);
+	param.offset = (*pos - 1) % LDISKFS_INODES_PER_GROUP(param.sb);
+	param.gbase = 1 + param.bg * LDISKFS_INODES_PER_GROUP(param.sb);
 	limit = le32_to_cpu(LDISKFS_SB(param.sb)->s_es->s_inodes_count);
 
 	while (*pos <= limit && *count < max) {
-		struct osd_idmap_cache *oic = NULL;
 		struct ldiskfs_group_desc *desc;
+		bool next_group = false;
 
-		param.bg = (*pos - 1) / LDISKFS_INODES_PER_GROUP(param.sb);
 		desc = ldiskfs_get_group_desc(param.sb, param.bg, NULL);
-		if (desc == NULL)
+		if (!desc)
 			RETURN(-EIO);
 
 		ldiskfs_lock_group(param.sb, param.bg);
 		if (desc->bg_flags & cpu_to_le16(LDISKFS_BG_INODE_UNINIT)) {
 			ldiskfs_unlock_group(param.sb, param.bg);
-			*pos = 1 + (param.bg + 1) *
-				LDISKFS_INODES_PER_GROUP(param.sb);
-			continue;
+			next_group = true;
+			goto next_group;
 		}
 		ldiskfs_unlock_group(param.sb, param.bg);
 
-		param.offset = (*pos - 1) % LDISKFS_INODES_PER_GROUP(param.sb);
-		param.gbase = 1 + param.bg * LDISKFS_INODES_PER_GROUP(param.sb);
 		param.bitmap = ldiskfs_read_inode_bitmap(param.sb, param.bg);
-		if (param.bitmap == NULL) {
+		if (!param.bitmap) {
 			CDEBUG(D_LFSCK, "%.16s: fail to read bitmap for %u, "
 			       "scrub will stop, urgent mode\n",
 			       osd_scrub2name(scrub), (__u32)param.bg);
@@ -1416,17 +1416,19 @@ full:
 
 		while (param.offset < LDISKFS_INODES_PER_GROUP(param.sb) &&
 		       *count < max) {
+			struct osd_idmap_cache *oic = NULL;
+
 			if (param.offset +
 				ldiskfs_itable_unused_count(param.sb, desc) >
 			    LDISKFS_INODES_PER_GROUP(param.sb)) {
-				*pos = 1 + (param.bg + 1) *
-					LDISKFS_INODES_PER_GROUP(param.sb);
+				next_group = true;
 				goto next_group;
 			}
 
 			rc = next(info, dev, &param, &oic, noslot);
 			switch (rc) {
 			case SCRUB_NEXT_BREAK:
+				next_group = true;
 				goto next_group;
 			case SCRUB_NEXT_EXIT:
 				brelse(param.bitmap);
@@ -1447,7 +1449,18 @@ full:
 		}
 
 next_group:
-		brelse(param.bitmap);
+		if (param.bitmap) {
+			brelse(param.bitmap);
+			param.bitmap = NULL;
+		}
+
+		if (next_group) {
+			param.bg++;
+			param.offset = 0;
+			param.gbase = 1 +
+				param.bg * LDISKFS_INODES_PER_GROUP(param.sb);
+			*pos = param.gbase;
+		}
 	}
 
 	if (*pos > limit)
