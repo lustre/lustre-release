@@ -378,13 +378,19 @@ test_16() {
 	local file2=$DIR2/$tfile
 
 	# to allocate grant because it may run out due to test_15.
-	lfs setstripe -c -1 $file1
+	$LFS setstripe -c -1 $file1
 	dd if=/dev/zero of=$file1 bs=$STRIPE_BYTES count=$OSTCOUNT oflag=sync
 	dd if=/dev/zero of=$file2 bs=$STRIPE_BYTES count=$OSTCOUNT oflag=sync
 	rm -f $file1
 
-	lfs setstripe -c -1 $file1 # b=10919
-	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2
+	$LFS setstripe -c -1 $file1 # b=10919
+	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2 \
+		|| error "fsx failed"
+	rm -f $file1
+
+	# O_DIRECT reads and writes must be aligned to the device block size.
+	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 -Z -r 4096 \
+		-w 4096 $file1 $file2 || error "fsx with O_DIRECT failed."
 }
 run_test 16 "$FSXNUM iterations of dual-mount fsx"
 

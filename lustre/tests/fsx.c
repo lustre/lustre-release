@@ -35,7 +35,6 @@
  *	Sundry porting patches from Guy Harris 12/2001
  * $FreeBSD: src/tools/regression/fsx/fsx.c,v 1.1 2001/12/20 04:15:57 jkh Exp $
  */
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #if defined(_UWIN) || defined(__linux__)
@@ -144,11 +143,11 @@ long	numops = -1;			/* -N flag */
 int	randomoplen = 1;		/* -O flag disables it */
 int	seed = 1;			/* -S flag */
 int     mapped_writes = 1;              /* -W flag disables */
-int 	mapped_reads = 1;		/* -R flag disables it */
+int	mapped_reads = 1;		/* -R flag disables it */
 int	fsxgoodfd = 0;
+int	o_direct;			/* -Z */
 FILE *	fsxlogf = NULL;
 int badoff = -1;
-
 
 void
 vwarnc(code, fmt, ap)
@@ -499,8 +498,8 @@ open_test_files(char **argv, int argc)
 	for (i = 0, tf = test_files; i < num_test_files; i++, tf++) {
 
 		tf->path = argv[i];
-		tf->fd = open(tf->path, O_RDWR|(lite ? 0 : O_CREAT|O_TRUNC),
-				0666);
+		tf->fd = open(tf->path, O_RDWR|(lite ? 0 : O_CREAT|O_TRUNC)|
+				o_direct, 0666);
 		if (tf->fd < 0) {
 			prterr(tf->path);
 			exit(91);
@@ -618,9 +617,11 @@ doread(unsigned offset, unsigned size)
 	int fd = tf->fd;
 
 	offset -= offset % readbdy;
+	if (o_direct)
+		size -= size % readbdy;
 	gettimeofday(&t, NULL);
 	if (size == 0) {
-		if (!quiet && testcalls > simulatedopcount)
+		if (!quiet && testcalls > simulatedopcount && !o_direct)
 			prt("skipping zero size read\n");
 		log4(OP_SKIPPED, OP_READ, offset, size, &t, tf);
 		return;
@@ -757,9 +758,11 @@ dowrite(unsigned offset, unsigned size)
 	int fd = tf->fd;
 
 	offset -= offset % writebdy;
+	if (o_direct)
+		size -= size % writebdy;
 	gettimeofday(&t, NULL);
 	if (size == 0) {
-		if (!quiet && testcalls > simulatedopcount)
+		if (!quiet && testcalls > simulatedopcount && !o_direct)
 			prt("skipping zero size write\n");
 		log4(OP_SKIPPED, OP_WRITE, offset, size, &t, tf);
 		return;
@@ -997,7 +1000,7 @@ docloseopen(void)
 		gettimeofday(&t, NULL);
 		prt("       %lu.%06lu close done\n", t.tv_sec, t.tv_usec);
 	}
-	tf->fd = open(tf->path, O_RDWR, 0);
+	tf->fd = open(tf->path, O_RDWR|o_direct, 0);
 	if (tf->fd < 0) {
 		prterr("docloseopen: open");
 		report_failure(181);
@@ -1118,10 +1121,11 @@ usage(void)
 "	-P: save .fsxlog and .fsxgood files in dirpath (default ./)\n"
 "	-S seed: for random # generator (default 1) 0 gets timestamp\n"
 "	-W: mapped write operations DISabled\n"
-"        -R: read() system calls only (mapped reads disabled)\n"
-"	-I: When multiple paths to the file are given each operation uses"
-"           a different path.  Iterate through them in order with 'rotate'"
-"           or chose then at 'random'.  (defaults to random)\n"
+"	-R: read() system calls only (mapped reads disabled)\n"
+"	-Z: O_DIRECT (use -R, -W, -r and -w too)\n"
+"	-I: When multiple paths to the file are given each operation uses\n"
+"	    a different path.  Iterate through them in order with 'rotate'\n"
+"	    or chose then at 'random'.  (defaults to random)\n"
 "	fname: this filename is REQUIRED (no default)\n");
 	exit(90);
 }
@@ -1176,7 +1180,7 @@ main(int argc, char **argv)
 	setvbuf(stdout, (char *)0, _IOLBF, 0); /* line buffered stdout */
 
 	while ((ch = getopt(argc, argv,
-				"b:c:dl:m:no:p:qr:s:t:w:D:I:LN:OP:RS:W"))
+				"b:c:dl:m:no:p:qr:s:t:w:D:I:LN:OP:RS:WZ"))
 	       != EOF)
 		switch (ch) {
 		case 'b':
@@ -1297,6 +1301,9 @@ main(int argc, char **argv)
 			if (!quiet)
 				fprintf(stdout, "mapped writes DISABLED\n");
 			break;
+		case 'Z':
+			o_direct = O_DIRECT;
+			break;
 
 		default:
 			usage();
@@ -1357,10 +1364,36 @@ main(int argc, char **argv)
 	original_buf = (char *) malloc(maxfilelen);
 	for (i = 0; i < maxfilelen; i++)
 		original_buf[i] = random() % 256;
-	good_buf = (char *) malloc(maxfilelen);
-	memset(good_buf, '\0', maxfilelen);
-	temp_buf = (char *) malloc(maxoplen);
-	memset(temp_buf, '\0', maxoplen);
+	if (o_direct) {
+		int ret;
+
+		ret = posix_memalign((void **)&good_buf, writebdy, maxfilelen);
+		if (ret) {
+			prt("main: posix_memalign failed: %s\n", strerror(ret));
+			exit(96);
+		}
+
+		ret = posix_memalign((void **)&temp_buf, readbdy, maxoplen);
+		if (ret) {
+			prt("main: posix_memalign failed: %s\n", strerror(ret));
+			exit(97);
+		}
+	} else {
+		good_buf = malloc(maxfilelen);
+		if (!good_buf) {
+			prt("malloc failed.\n");
+			exit(98);
+		}
+
+		temp_buf = malloc(maxoplen);
+		if (!temp_buf) {
+			prt("malloc failed.\n");
+			exit(99);
+		}
+	}
+	memset(good_buf, 0, maxfilelen);
+	memset(temp_buf, 0, maxoplen);
+
 	if (lite) {	/* zero entire existing file */
 		ssize_t written;
 		int fd = get_fd();
