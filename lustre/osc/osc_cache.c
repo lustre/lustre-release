@@ -594,6 +594,10 @@ int osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
 			if (ext->oe_urgent)
 				list_move_tail(&ext->oe_link,
 					       &obj->oo_urgent_exts);
+			else if (ext->oe_nr_pages == ext->oe_mppr) {
+				list_move_tail(&ext->oe_link,
+					       &obj->oo_full_exts);
+			}
 		}
 		osc_object_unlock(obj);
 
@@ -1738,9 +1742,10 @@ static int osc_makes_rpc(struct client_obd *cli, struct osc_object *osc,
 			CDEBUG(D_CACHE, "cache waiters forcing RPC\n");
 			RETURN(1);
 		}
-		if (atomic_read(&osc->oo_nr_writes) >=
-		    cli->cl_max_pages_per_rpc)
+		if (!list_empty(&osc->oo_full_exts)) {
+			CDEBUG(D_CACHE, "full extent ready, make an RPC\n");
 			RETURN(1);
+		}
 	} else {
 		if (atomic_read(&osc->oo_nr_reads) == 0)
 			RETURN(0);
@@ -1913,6 +1918,7 @@ static int try_to_add_extent_for_io(struct client_obd *cli,
 
 	EASSERT((ext->oe_state == OES_CACHE || ext->oe_state == OES_LOCK_DONE),
 		ext);
+	OSC_EXTENT_DUMP(D_CACHE, ext, "trying to add this extent\n");
 
 	if (data->erd_max_extents == 0)
 		RETURN(0);
@@ -2042,19 +2048,20 @@ static unsigned int get_write_extents(struct osc_object *obj,
 				 struct osc_extent, oe_link);
 		if (!try_to_add_extent_for_io(cli, ext, &data))
 			return data.erd_page_count;
+	}
+	if (data.erd_page_count == data.erd_max_pages)
+		return data.erd_page_count;
 
-		if (!ext->oe_intree)
-			continue;
-
-		while ((ext = next_extent(ext)) != NULL) {
-			if ((ext->oe_state != OES_CACHE) ||
-			    (!list_empty(&ext->oe_link) &&
-			     ext->oe_owner != NULL))
-				continue;
-
-			if (!try_to_add_extent_for_io(cli, ext, &data))
-				return data.erd_page_count;
-		}
+	/* One key difference between full extents and other extents: full
+	 * extents can usually only be added if the rpclist was empty, so if we
+	 * can't add one, we continue on to trying to add normal extents.  This
+	 * is so we don't miss adding extra extents to an RPC containing high
+	 * priority or urgent extents. */
+	while (!list_empty(&obj->oo_full_exts)) {
+		ext = list_entry(obj->oo_full_exts.next,
+				 struct osc_extent, oe_link);
+		if (!try_to_add_extent_for_io(cli, ext, &data))
+			break;
 	}
 	if (data.erd_page_count == data.erd_max_pages)
 		return data.erd_page_count;
@@ -2833,8 +2840,12 @@ again:
 			osc_update_pending(obj, OBD_BRW_WRITE,
 					   -ext->oe_nr_pages);
 		}
-		EASSERT(list_empty(&ext->oe_link), ext);
-		list_add_tail(&ext->oe_link, &list);
+		/* This extent could be on the full extents list, that's OK */
+		EASSERT(!ext->oe_hp && !ext->oe_urgent, ext);
+		if (!list_empty(&ext->oe_link))
+			list_move_tail(&ext->oe_link, &list);
+		else
+			list_add_tail(&ext->oe_link, &list);
 
 		ext = next_extent(ext);
 	}
