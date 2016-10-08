@@ -684,6 +684,34 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 	return 0;
 }
 
+/* change label from <fsname>:<index> to
+ * <fsname>-<index> to indicate the device has
+ * been registered. only if the label is
+ * supposed to be changed and target service
+ * is supposed to start */
+static void label_lustre(struct mount_opts *mop)
+{
+	if (mop->mo_nosvc)
+		return;
+
+	if (mop->mo_ldd.ldd_flags & (LDD_F_VIRGIN | LDD_F_WRITECONF)) {
+		(void)osd_label_lustre(mop);
+	} else {
+		struct lustre_disk_data ldd;
+		int rc;
+
+		/* device label could be changed after journal recovery,
+		 * it should also be relabeled for mount has succeeded. */
+		memset(&ldd, 0, sizeof(ldd));
+		rc = osd_read_ldd(mop->mo_source, &ldd);
+		if (rc == 0) {
+			rc = strlen(ldd.ldd_svname);
+			if (rc >= 8 && ldd.ldd_svname[rc - 8] != '-')
+				(void)osd_label_lustre(mop);
+		}
+	}
+}
+
 int main(int argc, char *const argv[])
 {
 	struct mount_opts mop;
@@ -819,16 +847,7 @@ int main(int argc, char *const argv[])
 			rc = mount(mop.mo_source, mop.mo_target, "lustre",
 				   flags, (void *)options);
 			if (rc == 0) {
-				/* change label from <fsname>:<index> to
-				 * <fsname>-<index> to indicate the device has
-				 *  been registered. only if the label is
-				 *  supposed to be changed and target service
-				 *  is supposed to start */
-				if (mop.mo_ldd.ldd_flags &
-				   (LDD_F_VIRGIN | LDD_F_WRITECONF)) {
-					if (mop.mo_nosvc == 0)
-						(void)osd_label_lustre(&mop);
-				}
+				label_lustre(&mop);
 			} else {
                                 if (verbose) {
                                         fprintf(stderr, "%s: mount %s at %s "
