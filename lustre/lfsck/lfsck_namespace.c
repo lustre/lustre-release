@@ -2688,7 +2688,8 @@ again:
 		 * When the LFSCK runs again, if the dangling name is still
 		 * there, the LFSCK should move the orphan directory object
 		 * back to the normal namespace. */
-		if (!lpf && !lu_fid_eq(pfid, &tfid) && once) {
+		if (!lpf && !fid_is_zero(pfid) &&
+		    !lu_fid_eq(pfid, &tfid) && once) {
 			linkea_next_entry(ldata);
 			continue;
 		}
@@ -2739,7 +2740,7 @@ again:
 			 * directory contains the specified child, but such
 			 * parent does not match the dotdot name entry, then
 			 * trust the linkEA. */
-			if (!lu_fid_eq(pfid, pfid2)) {
+			if (!fid_is_zero(pfid) && !lu_fid_eq(pfid, pfid2)) {
 				*type = LNIT_UNMATCHED_PAIRS;
 				rc = lfsck_namespace_repair_unmatched_pairs(env,
 						com, child, pfid2, cname);

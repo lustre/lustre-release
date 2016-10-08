@@ -126,9 +126,26 @@ static inline __u32 osp_dev2node(struct osp_device *osp)
 	return osp->opd_storage->dd_lu_dev.ld_site->ld_seq_site->ss_node_id;
 }
 
+static inline const char *osp_dto2name(struct osp_object *obj)
+{
+	return obj->opo_obj.do_lu.lo_dev->ld_obd->obd_name;
+}
+
 static inline bool is_ost_obj(struct lu_object *lo)
 {
 	return !lu2osp_dev(lo->lo_dev)->opd_connect_mdt;
+}
+
+static inline void __osp_oac_xattr_assignment(struct osp_object *obj,
+					      struct osp_xattr_entry *oxe,
+					      const struct lu_buf *buf)
+{
+	if (buf->lb_len > 0)
+		memcpy(oxe->oxe_value, buf->lb_buf, buf->lb_len);
+
+	oxe->oxe_vallen = buf->lb_len;
+	oxe->oxe_exist = 1;
+	oxe->oxe_ready = 1;
 }
 
 /**
@@ -153,6 +170,24 @@ static void osp_object_assign_fid(const struct lu_env *env,
 	osp_precreate_get_fid(env, d, &osi->osi_fid);
 
 	lu_object_assign_fid(env, &o->opo_obj.do_lu, &osi->osi_fid);
+}
+
+#define OXE_DEFAULT_LEN	16
+
+/**
+ * Release reference from the OSP object extended attribute entry.
+ *
+ * If it is the last reference, then free the entry.
+ *
+ * \param[in] oxe	pointer to the OSP object extended attribute entry.
+ */
+static inline void osp_oac_xattr_put(struct osp_xattr_entry *oxe)
+{
+	if (atomic_dec_and_test(&oxe->oxe_ref)) {
+		LASSERT(list_empty(&oxe->oxe_list));
+
+		OBD_FREE(oxe, oxe->oxe_buflen);
+	}
 }
 
 /**
@@ -205,7 +240,7 @@ static struct osp_xattr_entry *osp_oac_xattr_find(struct osp_object *obj,
 
 	spin_lock(&obj->opo_lock);
 	oxe = osp_oac_xattr_find_locked(obj, name, strlen(name));
-	if (oxe != NULL) {
+	if (oxe) {
 		if (unlink)
 			list_del_init(&oxe->oxe_list);
 		else
@@ -235,16 +270,17 @@ static struct osp_xattr_entry *
 osp_oac_xattr_find_or_add(struct osp_object *obj, const char *name, size_t len)
 {
 	struct osp_xattr_entry *oxe;
-	struct osp_xattr_entry *tmp	= NULL;
-	size_t			namelen = strlen(name);
-	size_t			size	= sizeof(*oxe) + namelen + 1 + len;
+	struct osp_xattr_entry *tmp = NULL;
+	size_t namelen = strlen(name);
+	size_t size = sizeof(*oxe) + namelen + 1 +
+		      (len ? len : OXE_DEFAULT_LEN);
 
 	oxe = osp_oac_xattr_find(obj, name, false);
-	if (oxe != NULL)
+	if (oxe)
 		return oxe;
 
 	OBD_ALLOC(oxe, size);
-	if (unlikely(oxe == NULL))
+	if (unlikely(!oxe))
 		return NULL;
 
 	INIT_LIST_HEAD(&oxe->oxe_list);
@@ -257,13 +293,13 @@ osp_oac_xattr_find_or_add(struct osp_object *obj, const char *name, size_t len)
 
 	spin_lock(&obj->opo_lock);
 	tmp = osp_oac_xattr_find_locked(obj, name, namelen);
-	if (tmp == NULL)
+	if (!tmp)
 		list_add_tail(&oxe->oxe_list, &obj->opo_xattr_list);
 	else
 		atomic_inc(&tmp->oxe_ref);
 	spin_unlock(&obj->opo_lock);
 
-	if (tmp != NULL) {
+	if (tmp) {
 		OBD_FREE(oxe, size);
 		oxe = tmp;
 	}
@@ -272,67 +308,86 @@ osp_oac_xattr_find_or_add(struct osp_object *obj, const char *name, size_t len)
 }
 
 /**
- * Add the given extended attribute to the OSP object attributes cache.
+ * Assign the cached OST-object's EA with the given value.
  *
- * If there is an old extended attributed entry with the same name,
- * remove it from the cache and return it via the parameter \a poxe.
+ * If the current EA entry in cache has not enough space to hold the new
+ * value, remove it, create a new one, then assign with the given value.
  *
  * \param[in] obj	pointer to the OSP object
- * \param[in,out] poxe	double pointer to the OSP object extended attribute
- *			entry: the new extended attribute entry is transferred
- *			via such pointer target, and if old the extended
- *			attribute entry exists, then it will be returned back
- *			via such pointer target.
- * \param[in] len	the length of the (new) extended attribute value
+ * \param[in] oxe	pointer to the cached EA entry to be assigned
+ * \param[in] buf	pointer to the buffer with new EA value
  *
- * \retval		pointer to the new extended attribute entry
- * \retval		NULL for failure cases.
+ * \retval		pointer to the new created EA entry in cache if
+ *			current entry is not big enough; otherwise, the
+ *			input 'oxe' will be returned.
  */
 static struct osp_xattr_entry *
-osp_oac_xattr_replace(struct osp_object *obj,
-		      struct osp_xattr_entry **poxe, size_t len)
+osp_oac_xattr_assignment(struct osp_object *obj, struct osp_xattr_entry *oxe,
+			 const struct lu_buf *buf)
 {
-	struct osp_xattr_entry *oxe;
-	size_t			namelen = (*poxe)->oxe_namelen;
-	size_t			size	= sizeof(*oxe) + namelen + 1 + len;
+	struct osp_xattr_entry *new = NULL;
+	struct osp_xattr_entry *old = NULL;
+	int namelen = oxe->oxe_namelen;
+	size_t size = sizeof(*oxe) + namelen + 1 + buf->lb_len;
+	bool unlink_only = false;
 
-	OBD_ALLOC(oxe, size);
-	if (unlikely(oxe == NULL))
-		return NULL;
-
-	INIT_LIST_HEAD(&oxe->oxe_list);
-	oxe->oxe_buflen = size;
-	oxe->oxe_namelen = namelen;
-	memcpy(oxe->oxe_buf, (*poxe)->oxe_buf, namelen);
-	oxe->oxe_value = oxe->oxe_buf + namelen + 1;
-	/* One ref is for the caller, the other is for the entry on the list. */
-	atomic_set(&oxe->oxe_ref, 2);
+	if (oxe->oxe_buflen < size) {
+		OBD_ALLOC(new, size);
+		if (likely(new)) {
+			INIT_LIST_HEAD(&new->oxe_list);
+			new->oxe_buflen = size;
+			new->oxe_namelen = namelen;
+			memcpy(new->oxe_buf, oxe->oxe_buf, namelen);
+			new->oxe_value = new->oxe_buf + namelen + 1;
+			/* One ref is for the caller,
+			 * the other is for the entry on the list. */
+			atomic_set(&new->oxe_ref, 2);
+			__osp_oac_xattr_assignment(obj, new, buf);
+		} else {
+			unlink_only = true;
+			CWARN("%s: cannot update cached xattr %.*s of "DFID"\n",
+			      osp_dto2name(obj), namelen, oxe->oxe_buf,
+			      PFID(lu_object_fid(&obj->opo_obj.do_lu)));
+		}
+	}
 
 	spin_lock(&obj->opo_lock);
-	*poxe = osp_oac_xattr_find_locked(obj, oxe->oxe_buf, namelen);
-	LASSERT(*poxe != NULL);
+	old = osp_oac_xattr_find_locked(obj, oxe->oxe_buf, namelen);
+	if (likely(old)) {
+		if (new) {
+			/* Unlink the 'old'. */
+			list_del_init(&old->oxe_list);
 
-	list_del_init(&(*poxe)->oxe_list);
-	list_add_tail(&oxe->oxe_list, &obj->opo_xattr_list);
+			/* Drop the ref for 'old' on list. */
+			osp_oac_xattr_put(old);
+
+			/* Drop the ref for current using. */
+			osp_oac_xattr_put(oxe);
+			oxe = new;
+
+			/* Insert 'new' into list. */
+			list_add_tail(&new->oxe_list, &obj->opo_xattr_list);
+		} else if (unlink_only) {
+			/* Unlink the 'old'. */
+			list_del_init(&old->oxe_list);
+
+			/* Drop the ref for 'old' on list. */
+			osp_oac_xattr_put(old);
+		} else {
+			__osp_oac_xattr_assignment(obj, oxe, buf);
+		}
+	} else if (new) {
+		/* Drop the ref for current using. */
+		osp_oac_xattr_put(oxe);
+		oxe = new;
+
+		/* Someone unlinked the 'old' by race,
+		 * insert the 'new' one into list. */
+		list_add_tail(&new->oxe_list, &obj->opo_xattr_list);
+	}
 	spin_unlock(&obj->opo_lock);
 
 	return oxe;
-}
-
-/**
- * Release reference from the OSP object extended attribute entry.
- *
- * If it is the last reference, then free the entry.
- *
- * \param[in] oxe	pointer to the OSP object extended attribute entry.
- */
-static inline void osp_oac_xattr_put(struct osp_xattr_entry *oxe)
-{
-	if (atomic_dec_and_test(&oxe->oxe_ref)) {
-		LASSERT(list_empty(&oxe->oxe_list));
-
-		OBD_FREE(oxe, oxe->oxe_buflen);
-	}
 }
 
 /**
@@ -713,27 +768,31 @@ static int osp_xattr_get_interpterer(const struct lu_env *env,
 				     struct osp_object *obj,
 				     void *data, int index, int rc)
 {
-	struct osp_xattr_entry	*oxe  = data;
-	struct lu_buf		*rbuf = &osp_env_info(env)->osi_lb2;
+	struct osp_xattr_entry *oxe = data;
+	struct lu_buf *rbuf = &osp_env_info(env)->osi_lb2;
 
-	if (rc == 0) {
+	if (!rc) {
 		size_t len = sizeof(*oxe) + oxe->oxe_namelen + 1;
 
 		rc = object_update_result_data_get(reply, rbuf, index);
-		if (rc < 0 || rbuf->lb_len > (oxe->oxe_buflen - len)) {
-			spin_lock(&obj->opo_lock);
-			oxe->oxe_ready = 0;
+		spin_lock(&obj->opo_lock);
+		if (rc < 0 || rbuf->lb_len == 0 ||
+		    rbuf->lb_len > (oxe->oxe_buflen - len)) {
+			if (unlikely(rc == -ENODATA)) {
+				oxe->oxe_exist = 0;
+				oxe->oxe_ready = 1;
+			} else {
+				oxe->oxe_ready = 0;
+			}
 			spin_unlock(&obj->opo_lock);
+			/* Put the reference obtained in the
+			 * osp_declare_xattr_get(). */
 			osp_oac_xattr_put(oxe);
 
 			return rc < 0 ? rc : -ERANGE;
 		}
 
-		spin_lock(&obj->opo_lock);
-		oxe->oxe_vallen = rbuf->lb_len;
-		memcpy(oxe->oxe_value, rbuf->lb_buf, rbuf->lb_len);
-		oxe->oxe_exist = 1;
-		oxe->oxe_ready = 1;
+		__osp_oac_xattr_assignment(obj, oxe, rbuf);
 		spin_unlock(&obj->opo_lock);
 	} else if (rc == -ENOENT || rc == -ENODATA) {
 		spin_lock(&obj->opo_lock);
@@ -746,6 +805,7 @@ static int osp_xattr_get_interpterer(const struct lu_env *env,
 		spin_unlock(&obj->opo_lock);
 	}
 
+	/* Put the reference obtained in the osp_declare_xattr_get(). */
 	osp_oac_xattr_put(oxe);
 
 	return 0;
@@ -781,16 +841,14 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(buf != NULL);
 	LASSERT(name != NULL);
 
-	namelen = strlen(name);
-
-	/* If only for xattr size, return directly. */
 	if (unlikely(buf->lb_len == 0))
-		return 0;
+		return -EINVAL;
 
 	oxe = osp_oac_xattr_find_or_add(obj, name, buf->lb_len);
 	if (oxe == NULL)
 		return -ENOMEM;
 
+	namelen = strlen(name);
 	mutex_lock(&osp->opd_async_requests_mutex);
 	rc = osp_insert_async_request(env, OUT_XATTR_GET, obj, 1,
 				      &namelen, (const void **)&name,
@@ -857,8 +915,8 @@ int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	struct ptlrpc_request	*req	= NULL;
 	struct object_update_reply *reply;
 	struct osp_xattr_entry	*oxe	= NULL;
-	const char		*dname  = dt->do_lu.lo_dev->ld_obd->obd_name;
-	int			 rc	= 0;
+	const char *dname = osp_dto2name(obj);
+	int rc = 0;
 	ENTRY;
 
 	LASSERT(buf != NULL);
@@ -958,20 +1016,28 @@ unlock:
 	}
 
 	rc = object_update_result_data_get(reply, rbuf, 0);
-	if (rc < 0)
+	if (rc < 0 || rbuf->lb_len == 0) {
+		if (oxe) {
+			spin_lock(&obj->opo_lock);
+			if (unlikely(rc == -ENODATA)) {
+				oxe->oxe_exist = 0;
+				oxe->oxe_ready = 1;
+			} else {
+				oxe->oxe_ready = 0;
+			}
+			spin_unlock(&obj->opo_lock);
+		}
+
+		GOTO(out, rc);
+	}
+
+	/* For detecting EA size. */
+	if (!buf->lb_buf)
 		GOTO(out, rc);
 
-	if (buf->lb_buf == NULL)
-		GOTO(out, rc);
-
-	if (unlikely(buf->lb_len < rbuf->lb_len))
-		GOTO(out, rc = -ERANGE);
-
-	memcpy(buf->lb_buf, rbuf->lb_buf, rbuf->lb_len);
-
-	if (oxe == NULL) {
+	if (!oxe) {
 		oxe = osp_oac_xattr_find_or_add(obj, name, rbuf->lb_len);
-		if (oxe == NULL) {
+		if (!oxe) {
 			CWARN("%s: Fail to add xattr (%s) to "
 			      "cache for "DFID" (2): rc = %d\n",
 			      dname, name, PFID(lu_object_fid(&dt->do_lu)), rc);
@@ -980,45 +1046,25 @@ unlock:
 		}
 	}
 
-	if (oxe->oxe_buflen - oxe->oxe_namelen - 1 < rbuf->lb_len) {
-		struct osp_xattr_entry *old = oxe;
-		struct osp_xattr_entry *tmp;
-
-		tmp = osp_oac_xattr_replace(obj, &old, rbuf->lb_len);
-		osp_oac_xattr_put(oxe);
-		oxe = tmp;
-		if (tmp == NULL) {
-			CWARN("%s: Fail to update xattr (%s) to "
-			      "cache for "DFID": rc = %d\n",
-			      dname, name, PFID(lu_object_fid(&dt->do_lu)), rc);
-			spin_lock(&obj->opo_lock);
-			old->oxe_ready = 0;
-			spin_unlock(&obj->opo_lock);
-
-			GOTO(out, rc);
-		}
-
-		/* Drop the ref for entry on list. */
-		osp_oac_xattr_put(old);
-	}
-
-	spin_lock(&obj->opo_lock);
-	oxe->oxe_vallen = rbuf->lb_len;
-	memcpy(oxe->oxe_value, rbuf->lb_buf, rbuf->lb_len);
-	oxe->oxe_exist = 1;
-	oxe->oxe_ready = 1;
-	spin_unlock(&obj->opo_lock);
+	oxe = osp_oac_xattr_assignment(obj, oxe, rbuf);
 
 	GOTO(out, rc);
 
 out:
-	if (req != NULL)
+	if (rc > 0 && buf->lb_buf) {
+		if (unlikely(buf->lb_len < rbuf->lb_len))
+			rc = -ERANGE;
+		else
+			memcpy(buf->lb_buf, rbuf->lb_buf, rbuf->lb_len);
+	}
+
+	if (req)
 		ptlrpc_req_finished(req);
 
-	if (update != NULL && !IS_ERR(update))
+	if (update && !IS_ERR(update))
 		osp_update_request_destroy(env, update);
 
-	if (oxe != NULL)
+	if (oxe)
 		osp_oac_xattr_put(oxe);
 
 	return rc;
@@ -1109,41 +1155,14 @@ int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	oxe = osp_oac_xattr_find_or_add(o, name, buf->lb_len);
 	if (oxe == NULL) {
 		CWARN("%s: cannot cache xattr '%s' of "DFID"\n",
-		      dt->do_lu.lo_dev->ld_obd->obd_name,
-		      name, PFID(lu_object_fid(&dt->do_lu)));
+		      osp_dto2name(o), name, PFID(lu_object_fid(&dt->do_lu)));
 
 		RETURN(0);
 	}
 
-	if (oxe->oxe_buflen - oxe->oxe_namelen - 1 < buf->lb_len) {
-		struct osp_xattr_entry *old = oxe;
-		struct osp_xattr_entry *tmp;
-
-		tmp = osp_oac_xattr_replace(o, &old, buf->lb_len);
+	oxe = osp_oac_xattr_assignment(o, oxe, buf);
+	if (oxe)
 		osp_oac_xattr_put(oxe);
-		oxe = tmp;
-		if (tmp == NULL) {
-			CWARN("%s: cannot update cached xattr '%s' of "DFID"\n",
-			      dt->do_lu.lo_dev->ld_obd->obd_name,
-			      name, PFID(lu_object_fid(&dt->do_lu)));
-			spin_lock(&o->opo_lock);
-			old->oxe_ready = 0;
-			spin_unlock(&o->opo_lock);
-
-			RETURN(0);
-		}
-
-		/* Drop the ref for entry on list. */
-		osp_oac_xattr_put(old);
-	}
-
-	spin_lock(&o->opo_lock);
-	oxe->oxe_vallen = buf->lb_len;
-	memcpy(oxe->oxe_value, buf->lb_buf, buf->lb_len);
-	oxe->oxe_exist = 1;
-	oxe->oxe_ready = 1;
-	spin_unlock(&o->opo_lock);
-	osp_oac_xattr_put(oxe);
 
 	RETURN(0);
 }

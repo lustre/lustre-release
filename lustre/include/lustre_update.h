@@ -245,15 +245,18 @@ object_update_result_insert(struct object_update_reply *reply,
 	char *ptr;
 
 	update_result = object_update_result_get(reply, index, NULL);
-	LASSERT(update_result != NULL);
+	LASSERT(update_result);
 
 	update_result->our_rc = ptlrpc_status_hton(rc);
-	if (data != NULL && data_len > 0) {
-		LASSERT(data != NULL);
-		ptr = (char *)update_result +
+	if (rc >= 0) {
+		if (data_len > 0) {
+			LASSERT(data);
+
+			ptr = (char *)update_result +
 			cfs_size_round(sizeof(struct object_update_reply));
+			memcpy(ptr, data, data_len);
+		}
 		update_result->our_datalen = data_len;
-		memcpy(ptr, data, data_len);
 	}
 
 	reply->ourp_lens[index] = cfs_size_round(data_len +
