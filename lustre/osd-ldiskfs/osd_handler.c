@@ -3181,10 +3181,10 @@ static int osd_object_destroy(const struct lu_env *env,
 		/* it will check/delete the inode from remote parent,
 		 * how to optimize it? unlink performance impaction XXX */
 		result = osd_delete_from_remote_parent(env, osd, obj, oh);
-		if (result != 0 && result != -ENOENT) {
+		if (result != 0)
 			CERROR("%s: delete inode "DFID": rc = %d\n",
 			       osd_name(osd), PFID(fid), result);
-		}
+
 		spin_lock(&obj->oo_guard);
 		clear_nlink(inode);
 		spin_unlock(&obj->oo_guard);
@@ -4481,20 +4481,19 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 	 * /Agent directory, Check whether it needs to delete
 	 * from agent directory */
 	if (unlikely(strcmp((char *)key, dotdot) == 0)) {
-		rc = osd_delete_from_remote_parent(env, osd_obj2dev(obj), obj,
-						   oh);
-		if (rc != 0 && rc != -ENOENT) {
-			CERROR("%s: delete agent inode "DFID": rc = %d\n",
-			       osd_name(osd), PFID(fid), rc);
-		}
+		int ret;
 
-		if (rc == -ENOENT)
-			rc = 0;
-
-		GOTO(out, rc);
+		ret = osd_delete_from_remote_parent(env, osd_obj2dev(obj),
+						    obj, oh);
+		if (ret != 0)
+			/* Sigh, the entry has been deleted, and
+			 * it is not easy to revert it back, so
+			 * let's keep this error private, and let
+			 * LFSCK fix it. XXX */
+			CERROR("%s: delete remote parent "DFID": rc = %d\n",
+			       osd_name(osd), PFID(fid), ret);
 	}
 out:
-
         LASSERT(osd_invariant(obj));
 	osd_trans_exec_check(env, handle, OSD_OT_DELETE);
         RETURN(rc);

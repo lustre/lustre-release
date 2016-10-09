@@ -271,8 +271,12 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 
 	/* Check lma to see whether it is remote object */
 	rc = osd_get_lma(oti, obj->oo_inode, &oti->oti_obj_dentry, lma);
-	if (rc != 0)
+	if (rc != 0) {
+		/* No LMA if the directory is created before 2.0 */
+		if (rc == -ENODATA)
+			rc = 0;
 		RETURN(rc);
+	}
 
 	if (likely(!(lma->lma_incompat & LMAI_REMOTE_PARENT)))
 		RETURN(0);
