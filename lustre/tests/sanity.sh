@@ -6725,6 +6725,7 @@ test_101f() {
 	which iozone || { skip "no iozone installed" && return; }
 
 	local old_debug=$($LCTL get_param debug)
+	old_debug=${old_debug#*=}
 	$LCTL set_param debug="reada mmap"
 
 	# create a test file
@@ -6737,14 +6738,15 @@ test_101f() {
 	$LCTL set_param -n llite.*.read_ahead_stats 0
 
 	echo mmap read the file with small block size
-	iozone -i 1 -+n -r 32k -s 128m -B -f $DIR/$tfile > /dev/null 2>&1
+	iozone -i 1 -u 1 -l 1 -+n -r 32k -s 128m -B -f $DIR/$tfile \
+		> /dev/null 2>&1
 
 	echo checking missing pages
 	$LCTL get_param llite.*.read_ahead_stats
 	local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
 			get_named_value 'misses' | cut -d" " -f1 | calc_total)
 
-	$LCTL set_param debug=$old_debug
+	$LCTL set_param debug="$old_debug"
 	[ $miss -lt 3 ] || error "misses too much pages ('$miss')!"
 	rm -f $DIR/$tfile
 }
