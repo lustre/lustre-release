@@ -3240,24 +3240,36 @@ void ptlrpc_set_bulk_mbits(struct ptlrpc_request *req)
 
 	LASSERT(bd != NULL);
 
-	if (!req->rq_resend) {
-		/* this request has a new xid, just use it as bulk matchbits */
-		req->rq_mbits = req->rq_xid;
+	/* Generate new matchbits for all resend requests, including
+	 * resend replay. */
+	if (req->rq_resend) {
+		__u64 old_mbits = req->rq_mbits;
 
-	} else { /* needs to generate a new matchbits for resend */
-		__u64	old_mbits = req->rq_mbits;
-
+		/* First time resend on -EINPROGRESS will generate new xid,
+		 * so we can actually use the rq_xid as rq_mbits in such case,
+		 * however, it's bit hard to distinguish such resend with a
+		 * 'resend for the -EINPROGRESS resend'. To make it simple,
+		 * we opt to generate mbits for all resend cases. */
 		if (OCD_HAS_FLAG(&bd->bd_import->imp_connect_data, BULK_MBITS)){
 			req->rq_mbits = ptlrpc_next_xid();
-		} else {/* old version transfers rq_xid to peer as matchbits */
+		} else {
+			/* Old version transfers rq_xid to peer as
+			 * matchbits. */
 			spin_lock(&req->rq_import->imp_lock);
 			list_del_init(&req->rq_unreplied_list);
 			ptlrpc_assign_next_xid_nolock(req);
-			req->rq_mbits = req->rq_xid;
 			spin_unlock(&req->rq_import->imp_lock);
+			req->rq_mbits = req->rq_xid;
 		}
 		CDEBUG(D_HA, "resend bulk old x%llu new x%llu\n",
 		       old_mbits, req->rq_mbits);
+	} else if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)) {
+		/* Request being sent first time, use xid as matchbits. */
+		req->rq_mbits = req->rq_xid;
+	} else {
+		/* Replay request, xid and matchbits have already been
+		 * correctly assigned. */
+		return;
 	}
 
 	/* For multi-bulk RPCs, rq_mbits is the last mbits needed for bulks so
@@ -3267,7 +3279,10 @@ void ptlrpc_set_bulk_mbits(struct ptlrpc_request *req)
 			  LNET_MAX_IOV) - 1;
 
 	/* Set rq_xid as rq_mbits to indicate the final bulk for the old
-	 * server which does not support OBD_CONNECT_BULK_MBITS. LU-6808 */
+	 * server which does not support OBD_CONNECT_BULK_MBITS. LU-6808.
+	 *
+	 * It's ok to directly set the rq_xid here, since this xid bump
+	 * won't affect the request position in unreplied list. */
 	if (!OCD_HAS_FLAG(&bd->bd_import->imp_connect_data, BULK_MBITS))
 		req->rq_xid = req->rq_mbits;
 }
