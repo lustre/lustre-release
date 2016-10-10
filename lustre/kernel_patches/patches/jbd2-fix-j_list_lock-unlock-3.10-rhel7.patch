@@ -1,0 +1,37 @@
+jbd2: fix incorrect unlock on j_list_lock
+
+When 'jh->b_transaction == transaction' (asserted by below)
+
+  J_ASSERT_JH(jh, (jh->b_transaction == transaction || ...
+
+'journal->j_list_lock' will be incorrectly unlocked, since
+the the lock is aquired only at the end of if / else-if
+statements (missing the else case).
+
+This bug has been introduced by an earlier change named
+"jbd2: minimize region locked by j_list_lock in journal_get_create_access()".
+
+Signed-off-by: Taesoo Kim <tsgatesv@gmail.com>
+
+Index: linux-3.10.0-327.36.1.el7/fs/jbd2/transaction.c
+===================================================================
+--- linux-3.10.0-327.36.1.el7.orig/fs/jbd2/transaction.c
++++ linux-3.10.0-327.36.1.el7/fs/jbd2/transaction.c
+@@ -1091,6 +1091,7 @@
+ 		JBUFFER_TRACE(jh, "file as BJ_Reserved");
+ 		spin_lock(&journal->j_list_lock);
+ 		__jbd2_journal_file_buffer(jh, transaction, BJ_Reserved);
++		spin_unlock(&journal->j_list_lock);
+ 	} else if (jh->b_transaction == journal->j_committing_transaction) {
+ 		/* first access by this transaction */
+ 		jh->b_modified = 0;
+@@ -1098,8 +1099,8 @@
+ 		JBUFFER_TRACE(jh, "set next transaction");
+ 		spin_lock(&journal->j_list_lock);
+ 		jh->b_next_transaction = transaction;
++		spin_unlock(&journal->j_list_lock);
+ 	}
+-	spin_unlock(&journal->j_list_lock);
+ 	jbd_unlock_bh_state(bh);
+ 
+ 	/*
