@@ -1709,6 +1709,14 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		 *     This should be removed when we can calculate the
 		 *     credits precisely. */
 		oh->ot_credits = osd_transaction_size(dev);
+	} else if (ldiskfs_track_declares_assert != 0) {
+		/* reserve few credits to prevent an assertion in JBD
+		 * our debugging mechanism will be able to detected
+		 * overuse. this can help to debug single-update
+		 * transactions */
+		oh->ot_credits += 10;
+		if (unlikely(osd_param_is_not_sane(dev, th)))
+			oh->ot_credits = osd_transaction_size(dev);
 	}
 
         /*
