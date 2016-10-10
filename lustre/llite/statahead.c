@@ -1233,8 +1233,12 @@ void ll_deauthorize_statahead(struct inode *dir, void *key)
 		/*
 		 * statahead thread may not quit yet because it needs to cache
 		 * entries, now it's time to tell it to quit.
+		 *
+		 * In case sai is released, wake_up() is called inside spinlock,
+		 * so we have to call smp_mb() explicitely to serialize ops.
 		 */
 		thread_set_flags(&sai->sai_thread, SVC_STOPPING);
+		smp_mb();
 		wake_up(&sai->sai_thread.t_ctl_waitq);
 	}
 	spin_unlock(&lli->lli_sa_lock);
