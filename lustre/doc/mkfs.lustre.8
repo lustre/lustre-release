@@ -149,7 +149,9 @@ Used for optizing MDT inode size
 .TP
 .BI \--force-nohostid
 Ignore unset hostid for ZFS import protection. To set hostid either set
-spl_hostid parameter for spl.ko or set /etc/hostid, see genhostid(1).
+spl_hostid parameter for spl.ko or set /etc/hostid, see genhostid(1).  To
+populate the spl_hostid parameter, spl.ko must be (re)loaded after /etc/hostid is
+created.
 
 .TP
 .BI \--verbose
