@@ -59,7 +59,7 @@
  * use the the negative range of a 64-bit number and regular contexts use the
  * postive range.  If the same IV/nonce combination were reused it would leak
  * information about the plaintext. */
-#define SK_IV_REV_START (1UL << 63)
+#define SK_IV_REV_START (1ULL << 63)
 
 struct sk_ctx {
 	__u16			sc_hmac;
