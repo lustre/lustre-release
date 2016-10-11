@@ -815,7 +815,7 @@ static int out_trans_stop(const struct lu_env *env,
 			if (ta->ta_args[i]->exec_fn == out_tx_create_exec)
 				set_bit(LU_OBJECT_HEARD_BANSHEE,
 					&obj->do_lu.lo_header->loh_flags);
-			lu_object_put(env, &ta->ta_args[i]->object->do_lu);
+			dt_object_put(env, ta->ta_args[i]->object);
 			ta->ta_args[i]->object = NULL;
 		}
 	}
@@ -1150,7 +1150,7 @@ int out_handle(struct tgt_session_info *tsi)
 			rc = h->th_act(tsi);
 next:
 			reply_index++;
-			lu_object_put(env, &dt_obj->do_lu);
+			dt_object_put(env, dt_obj);
 			if (rc < 0)
 				GOTO(out, rc);
 		}

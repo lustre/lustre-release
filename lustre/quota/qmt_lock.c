@@ -216,7 +216,7 @@ int qmt_lvbo_init(struct lu_device *ld, struct ldlm_resource *res)
 		if (IS_ERR(obj))
 			GOTO(out, rc = PTR_ERR(obj));
 		if (!dt_object_exists(obj)) {
-			lu_object_put(env, &obj->do_lu);
+			dt_object_put(env, obj);
 			GOTO(out, rc = -ENOENT);
 		}
 
@@ -435,7 +435,7 @@ int qmt_lvbo_free(struct lu_device *ld, struct ldlm_resource *res)
 		}
 
 		/* release object reference */
-		lu_object_put(env, &obj->do_lu);
+		dt_object_put(env, obj);
 		lu_env_fini(env);
 		OBD_FREE_PTR(env);
 	}

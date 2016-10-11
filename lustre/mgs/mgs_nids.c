@@ -250,7 +250,7 @@ static int nidtbl_update_version(const struct lu_env *env,
 out:
 	dt_trans_stop(env, mgs->mgs_bottom, th);
 out_put:
-	lu_object_put(env, &fsdb->do_lu);
+	dt_object_put(env, fsdb);
 	RETURN(rc);
 }
 
@@ -298,7 +298,7 @@ static int nidtbl_read_version(const struct lu_env *env,
 		CERROR("%s: read version file %s error %d\n",
 		       mgs->mgs_obd->obd_name, tbl->mn_fsdb->fsdb_name, rc);
 	}
-	lu_object_put(env, &fsdb->do_lu);
+	dt_object_put(env, fsdb);
 	RETURN(rc);
 }
 

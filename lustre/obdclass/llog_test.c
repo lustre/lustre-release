@@ -1341,7 +1341,7 @@ out_put:
 	llog_ctxt_put(ctxt);
 
 	if (obj != NULL)
-		lu_object_put(env, &obj->do_lu);
+		dt_object_put(env, obj);
 
 	RETURN(rc);
 }

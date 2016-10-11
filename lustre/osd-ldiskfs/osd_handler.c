@@ -5216,17 +5216,6 @@ out:
 	return rc;
 }
 
-/**
- * Put the osd object once done with it.
- *
- * \param obj osd object that needs to be put
- */
-static inline void osd_object_put(const struct lu_env *env,
-                                  struct osd_object *obj)
-{
-        lu_object_put(env, &obj->oo_dt.do_lu);
-}
-
 static int osd_index_declare_ea_insert(const struct lu_env *env,
 				       struct dt_object *dt,
 				       const struct dt_rec *rec,
@@ -5430,7 +5419,6 @@ static struct dt_it *osd_it_iam_init(const struct lu_env *env,
 /**
  * free given Iterator.
  */
-
 static void osd_it_iam_fini(const struct lu_env *env, struct dt_it *di)
 {
 	struct osd_it_iam	*it  = (struct osd_it_iam *)di;
@@ -5438,7 +5426,7 @@ static void osd_it_iam_fini(const struct lu_env *env, struct dt_it *di)
 
 	iam_it_fini(&it->oi_it);
 	osd_ipd_put(env, &obj->oo_dir->od_container, it->oi_ipd);
-	lu_object_put(env, &obj->oo_dt.do_lu);
+	osd_object_put(env, obj);
 	OBD_FREE_PTR(it);
 }
 
@@ -5743,7 +5731,7 @@ static void osd_it_ea_fini(const struct lu_env *env, struct dt_it *di)
 
 	ENTRY;
 	oie->oie_file.f_op->release(inode, &oie->oie_file);
-	lu_object_put(env, &obj->oo_dt.do_lu);
+	osd_object_put(env, obj);
 	if (unlikely(oie->oie_buf != info->oti_it_ea_buf))
 		OBD_FREE(oie->oie_buf, OSD_IT_EA_BUFSIZE);
 	else

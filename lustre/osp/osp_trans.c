@@ -240,7 +240,7 @@ void osp_update_request_destroy(const struct lu_env *env,
 			list_del_init(&obj->opo_invalidate_cb_list);
 			spin_unlock(&obj->opo_lock);
 
-			lu_object_put(env, &obj->opo_obj.do_lu);
+			dt_object_put(env, &obj->opo_obj);
 		}
 
 		if (env == &lenv)
@@ -527,7 +527,7 @@ static void osp_thandle_invalidate_object(const struct lu_env *env,
 		list_del_init(&obj->opo_invalidate_cb_list);
 		spin_unlock(&obj->opo_lock);
 
-		lu_object_put(env, &obj->opo_obj.do_lu);
+		dt_object_put(env, &obj->opo_obj);
 	}
 }
 

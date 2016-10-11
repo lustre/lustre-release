@@ -183,7 +183,7 @@ static struct dt_object
 	if (rc) {
 		CERROR("%s: can't be initialized: rc = %d\n",
 		       osp->opd_obd->obd_name, rc);
-		lu_object_put(env, &dto->do_lu);
+		dt_object_put(env, dto);
 		RETURN(ERR_PTR(rc));
 	}
 	RETURN(dto);
@@ -283,7 +283,7 @@ out:
 	/* object will be released in device cleanup path */
 	CERROR("%s: can't initialize lov_objid: rc = %d\n",
 	       osp->opd_obd->obd_name, rc);
-	lu_object_put(env, &dto->do_lu);
+	dt_object_put(env, dto);
 	osp->opd_last_used_oid_file = NULL;
 	RETURN(rc);
 }
@@ -340,7 +340,7 @@ out:
 	/* object will be released in device cleanup path */
 	CERROR("%s: can't initialize lov_seq: rc = %d\n",
 	       osp->opd_obd->obd_name, rc);
-	lu_object_put(env, &dto->do_lu);
+	dt_object_put(env, dto);
 	osp->opd_last_used_seq_file = NULL;
 	RETURN(rc);
 }
@@ -410,11 +410,11 @@ static int osp_last_used_init(const struct lu_env *env, struct osp_device *osp)
 out:
 	if (rc != 0) {
 		if (osp->opd_last_used_oid_file != NULL) {
-			lu_object_put(env, &osp->opd_last_used_oid_file->do_lu);
+			dt_object_put(env, osp->opd_last_used_oid_file);
 			osp->opd_last_used_oid_file = NULL;
 		}
 		if (osp->opd_last_used_seq_file != NULL) {
-			lu_object_put(env, &osp->opd_last_used_seq_file->do_lu);
+			dt_object_put(env, osp->opd_last_used_seq_file);
 			osp->opd_last_used_seq_file = NULL;
 		}
 	}
@@ -432,12 +432,12 @@ static void osp_last_used_fini(const struct lu_env *env, struct osp_device *osp)
 {
 	/* release last_used file */
 	if (osp->opd_last_used_oid_file != NULL) {
-		lu_object_put(env, &osp->opd_last_used_oid_file->do_lu);
+		dt_object_put(env, osp->opd_last_used_oid_file);
 		osp->opd_last_used_oid_file = NULL;
 	}
 
 	if (osp->opd_last_used_seq_file != NULL) {
-		lu_object_put(env, &osp->opd_last_used_seq_file->do_lu);
+		dt_object_put(env, osp->opd_last_used_seq_file);
 		osp->opd_last_used_seq_file = NULL;
 	}
 }

@@ -1956,6 +1956,18 @@ dt_object_locate(struct dt_object *dto, struct dt_device *dt_dev)
 	return NULL;
 }
 
+static inline void dt_object_put(const struct lu_env *env,
+				 struct dt_object *dto)
+{
+	lu_object_put(env, &dto->do_lu);
+}
+
+static inline void dt_object_put_nocache(const struct lu_env *env,
+					 struct dt_object *dto)
+{
+	lu_object_put_nocache(env, &dto->do_lu);
+}
+
 int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 			   const struct lu_fid *first_fid,
 			   struct local_oid_storage **los);

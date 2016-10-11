@@ -234,16 +234,15 @@ int seq_store_init(struct lu_server_seq *seq,
         RETURN(rc);
 }
 
-void seq_store_fini(struct lu_server_seq *seq,
-                    const struct lu_env *env)
+void seq_store_fini(struct lu_server_seq *seq, const struct lu_env *env)
 {
-        ENTRY;
+	ENTRY;
 
-        if (seq->lss_obj != NULL) {
-                if (!IS_ERR(seq->lss_obj))
-                        lu_object_put(env, &seq->lss_obj->do_lu);
-                seq->lss_obj = NULL;
-        }
+	if (seq->lss_obj != NULL) {
+		if (!IS_ERR(seq->lss_obj))
+			dt_object_put(env, seq->lss_obj);
+		seq->lss_obj = NULL;
+	}
 
-        EXIT;
+	EXIT;
 }

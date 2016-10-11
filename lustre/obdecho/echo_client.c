@@ -755,11 +755,11 @@ echo_md_local_file_create(const struct lu_env *env, struct echo_md_device *emd,
 	*fid = *lu_object_fid(&dto->do_lu);
 	/* since stack is not fully set up the local_storage uses own stack
 	 * and we should drop its object from cache */
-	lu_object_put_nocache(env, &dto->do_lu);
+	dt_object_put_nocache(env, dto);
 
 	EXIT;
 out_put:
-	lu_object_put(env, &parent->do_lu);
+	dt_object_put(env, parent);
 	RETURN(rc);
 }
 

@@ -1249,7 +1249,7 @@ static int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		}
 err_put:
 		if (obj != NULL)
-			lu_object_put(&env, &obj->do_lu);
+			dt_object_put(&env, obj);
 err_env:
 		lu_env_fini(&env);
 	}

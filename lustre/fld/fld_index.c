@@ -360,7 +360,7 @@ int fld_index_init(const struct lu_env *env, struct lu_server_fld *fld,
 
 	LASSERT(dt_obj != NULL);
 	if (!dt_object_exists(dt_obj)) {
-		lu_object_put(env, &dt_obj->do_lu);
+		dt_object_put(env, dt_obj);
 		dt_obj = dt_find_or_create(env, dt, &fid, &dof, attr);
 		fld->lsf_new = 1;
 		if (IS_ERR(dt_obj)) {
@@ -436,7 +436,7 @@ out:
 
 	if (rc < 0) {
 		if (dt_obj != NULL)
-			lu_object_put(env, &dt_obj->do_lu);
+			dt_object_put(env, dt_obj);
 		fld->lsf_obj = NULL;
 	}
 	RETURN(rc);
@@ -447,7 +447,7 @@ void fld_index_fini(const struct lu_env *env, struct lu_server_fld *fld)
 	ENTRY;
 	if (fld->lsf_obj != NULL) {
 		if (!IS_ERR(fld->lsf_obj))
-			lu_object_put(env, &fld->lsf_obj->do_lu);
+			dt_object_put(env, fld->lsf_obj);
 		fld->lsf_obj = NULL;
 	}
 	EXIT;

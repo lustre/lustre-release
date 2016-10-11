@@ -475,7 +475,7 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 		LASSERT(PageLocked(lnb[i].lnb_page));
 		unlock_page(lnb[i].lnb_page);
 		put_page(lnb[i].lnb_page);
-		lu_object_put(env, &dt->do_lu);
+		dt_object_put(env, dt);
 		lnb[i].lnb_page = NULL;
 	}
 

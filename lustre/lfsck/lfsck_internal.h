@@ -1238,7 +1238,7 @@ static inline struct dt_object *lfsck_object_get(struct dt_object *obj)
 static inline void lfsck_object_put(const struct lu_env *env,
 				    struct dt_object *obj)
 {
-	lu_object_put(env, &obj->do_lu);
+	dt_object_put(env, obj);
 }
 
 static inline struct seq_server_site

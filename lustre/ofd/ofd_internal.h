@@ -403,7 +403,11 @@ int ofd_object_ff_load(const struct lu_env *env, struct ofd_object *fo);
 int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 			  u64 id, struct ofd_seq *oseq, int nr, int sync);
 
-void ofd_object_put(const struct lu_env *env, struct ofd_object *fo);
+static inline void ofd_object_put(const struct lu_env *env,
+				  struct ofd_object *fo)
+{
+	dt_object_put(env, &fo->ofo_obj);
+}
 int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 		 struct lu_attr *la, struct filter_fid *ff);
 int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,

@@ -1265,7 +1265,7 @@ static int update_recovery_exec(const struct lu_env *env,
 			break;
 		}
 next:
-		lu_object_put(env, &dt_obj->do_lu);
+		dt_object_put(env, dt_obj);
 		if (rc < 0)
 			break;
 	}
@@ -1427,7 +1427,7 @@ stop_trans:
 	rc = top_trans_stop(env, tdtd->tdtd_dt, th);
 	for (i = 0; i < ta->ta_argno; i++) {
 		if (ta->ta_args[i]->object != NULL) {
-			lu_object_put(env, &ta->ta_args[i]->object->do_lu);
+			dt_object_put(env, ta->ta_args[i]->object);
 			ta->ta_args[i]->object = NULL;
 		}
 	}

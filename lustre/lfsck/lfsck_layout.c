@@ -2613,7 +2613,7 @@ put:
 		lfsck_object_put(env, parent);
 	else
 		/* The layout EA is changed, need to be reloaded next time. */
-		lu_object_put_nocache(env, &parent->do_lu);
+		dt_object_put_nocache(env, parent);
 
 out:
 	down_write(&com->lc_sem);

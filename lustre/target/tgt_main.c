@@ -265,14 +265,14 @@ out_put:
 	obd->u.obt.obt_magic = 0;
 	obd->u.obt.obt_lut = NULL;
 	if (lut->lut_last_rcvd != NULL) {
-		lu_object_put(env, &lut->lut_last_rcvd->do_lu);
+		dt_object_put(env, lut->lut_last_rcvd);
 		lut->lut_last_rcvd = NULL;
 	}
 	if (lut->lut_client_bitmap != NULL)
 		OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
 	lut->lut_client_bitmap = NULL;
 	if (lut->lut_reply_data != NULL)
-		lu_object_put(env, &lut->lut_reply_data->do_lu);
+		dt_object_put(env, lut->lut_reply_data);
 	lut->lut_reply_data = NULL;
 	if (lut->lut_reply_bitmap != NULL) {
 		for (i = 0; i < LUT_REPLY_SLOTS_MAX_CHUNKS; i++) {
@@ -311,7 +311,7 @@ void tgt_fini(const struct lu_env *env, struct lu_target *lut)
 	sptlrpc_rule_set_free(&lut->lut_sptlrpc_rset);
 
 	if (lut->lut_reply_data != NULL)
-		lu_object_put(env, &lut->lut_reply_data->do_lu);
+		dt_object_put(env, lut->lut_reply_data);
 	lut->lut_reply_data = NULL;
 	if (lut->lut_reply_bitmap != NULL) {
 		for (i = 0; i < LUT_REPLY_SLOTS_MAX_CHUNKS; i++) {
@@ -331,7 +331,7 @@ void tgt_fini(const struct lu_env *env, struct lu_target *lut)
 	}
 	if (lut->lut_last_rcvd) {
 		dt_txn_callback_del(lut->lut_bottom, &lut->lut_txn_cb);
-		lu_object_put(env, &lut->lut_last_rcvd->do_lu);
+		dt_object_put(env, lut->lut_last_rcvd);
 		lut->lut_last_rcvd = NULL;
 	}
 	EXIT;

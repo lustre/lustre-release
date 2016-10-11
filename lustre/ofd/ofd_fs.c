@@ -111,7 +111,7 @@ void ofd_seq_put(const struct lu_env *env, struct ofd_seq *oseq)
 	if (atomic_dec_and_test(&oseq->os_refc)) {
 		LASSERT(list_empty(&oseq->os_list));
 		LASSERT(oseq->os_lastid_obj != NULL);
-		lu_object_put(env, &oseq->os_lastid_obj->do_lu);
+		dt_object_put(env, oseq->os_lastid_obj);
 		OBD_FREE_PTR(oseq);
 	}
 }
@@ -680,7 +680,7 @@ void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd)
 		      ofd_name(ofd), rc);
 
 	if (ofd->ofd_health_check_file) {
-		lu_object_put(env, &ofd->ofd_health_check_file->do_lu);
+		dt_object_put(env, ofd->ofd_health_check_file);
 		ofd->ofd_health_check_file = NULL;
 	}
 

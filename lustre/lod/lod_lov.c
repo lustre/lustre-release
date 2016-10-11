@@ -899,7 +899,7 @@ out:
 	if (rc != 0) {
 		for (i = 0; i < stripe_len; i++)
 			if (stripe[i] != NULL)
-				lu_object_put(env, &stripe[i]->do_lu);
+				dt_object_put(env, stripe[i]);
 
 		OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
 		lo->ldo_stripenr = 0;

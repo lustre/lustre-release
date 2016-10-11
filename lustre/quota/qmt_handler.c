@@ -557,7 +557,7 @@ out:
 		dt_trans_stop(env, qmt->qmt_child, th);
 
 	if (slv_obj != NULL && !IS_ERR(slv_obj))
-		lu_object_put(env, &slv_obj->do_lu);
+		dt_object_put(env, slv_obj);
 
 	if ((req_is_acq(qb_flags) || req_is_preacq(qb_flags)) &&
 	    OBD_FAIL_CHECK(OBD_FAIL_QUOTA_EDQUOT)) {

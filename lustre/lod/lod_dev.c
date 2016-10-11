@@ -1032,7 +1032,7 @@ static int lod_process_config(const struct lu_env *env,
 	}
 	case LCFG_PRE_CLEANUP: {
 		if (lod->lod_md_root != NULL) {
-			lu_object_put(env, &lod->lod_md_root->ldo_obj.do_lu);
+			dt_object_put(env, &lod->lod_md_root->ldo_obj);
 			lod->lod_md_root = NULL;
 		}
 
@@ -1203,7 +1203,7 @@ static int lod_prepare(const struct lu_env *env, struct lu_device *pdev,
 	if (IS_ERR(dto))
 		GOTO(out_put, rc = PTR_ERR(dto));
 
-	lu_object_put(env, &dto->do_lu);
+	dt_object_put(env, dto);
 
 	/* Create update log dir */
 	lu_update_log_dir_fid(fid, index);
@@ -1214,7 +1214,7 @@ static int lod_prepare(const struct lu_env *env, struct lu_device *pdev,
 	if (IS_ERR(dto))
 		GOTO(out_put, rc = PTR_ERR(dto));
 
-	lu_object_put(env, &dto->do_lu);
+	dt_object_put(env, dto);
 
 	rc = lod_prepare_distribute_txn(env, lod);
 	if (rc != 0)
@@ -1225,7 +1225,7 @@ static int lod_prepare(const struct lu_env *env, struct lu_device *pdev,
 		GOTO(out_put, rc);
 
 out_put:
-	lu_object_put(env, &root->do_lu);
+	dt_object_put(env, root);
 
 	RETURN(rc);
 }

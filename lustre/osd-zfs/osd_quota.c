@@ -197,7 +197,7 @@ static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 	ENTRY;
 
 	osd_zap_cursor_fini(it->oiq_zc);
-	lu_object_put(env, &it->oiq_obj->oo_dt.do_lu);
+	osd_object_put(env, it->oiq_obj);
 	OBD_FREE_PTR(it);
 
 	EXIT;

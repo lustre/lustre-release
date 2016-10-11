@@ -1533,7 +1533,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			  lod2obd(lod)->obd_name, stripe_cnt, nfound);
 		for (i = 0; i < nfound; i++) {
 			LASSERT(stripe[i] != NULL);
-			lu_object_put(env, &stripe[i]->do_lu);
+			dt_object_put(env, stripe[i]);
 			stripe[i] = NULL;
 		}
 
@@ -1895,7 +1895,7 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		if (rc < 0) {
 			for (i = 0; i < stripe_len; i++)
 				if (stripe[i] != NULL)
-					lu_object_put(env, &stripe[i]->do_lu);
+					dt_object_put(env, stripe[i]);
 
 			OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
 			lo->ldo_stripenr = 0;

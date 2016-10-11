@@ -78,7 +78,7 @@ struct dt_object *acct_obj_lookup(const struct lu_env *env,
 		RETURN(obj);
 
 	if (!dt_object_exists(obj)) {
-		lu_object_put(env, &obj->do_lu);
+		dt_object_put(env, obj);
 		RETURN(ERR_PTR(-ENOENT));
 	}
 
@@ -92,7 +92,7 @@ struct dt_object *acct_obj_lookup(const struct lu_env *env,
 			       " acct object rc:%d\n",
 			       dev->dd_lu_dev.ld_obd->obd_name,
 			       QTYPE_NAME(type), rc);
-			lu_object_put(env, &obj->do_lu);
+			dt_object_put(env, obj);
 			RETURN(ERR_PTR(rc));
 		}
 	}
@@ -123,7 +123,7 @@ static struct dt_object *quota_obj_lookup(const struct lu_env *env,
 		RETURN(obj);
 
 	if (!dt_object_exists(obj)) {
-		lu_object_put(env, &obj->do_lu);
+		dt_object_put(env, obj);
 		RETURN(ERR_PTR(-ENOENT));
 	}
 
@@ -138,7 +138,7 @@ static struct dt_object *quota_obj_lookup(const struct lu_env *env,
 			       " slave index object rc:%d\n",
 			       dev->dd_lu_dev.ld_obd->obd_name,
 			       QTYPE_NAME(type), rc);
-			lu_object_put(env, &obj->do_lu);
+			dt_object_put(env, obj);
 			RETURN(ERR_PTR(rc));
 		}
 	}
@@ -199,7 +199,7 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 	dqblk->dqb_curinodes	= qti->qti_acct_rec.ispace;
 	dqblk->dqb_valid	= QIF_USAGE;
 
-	lu_object_put(env, &obj->do_lu);
+	dt_object_put(env, obj);
 
 	/* Step 2: collect enforcement information */
 
@@ -227,8 +227,8 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 
 	GOTO(out, rc = 0);
 out:
-	lu_object_put(env, &obj->do_lu);
-        return rc;
+	dt_object_put(env, obj);
+	return rc;
 }
 EXPORT_SYMBOL(lquotactl_slv);
 

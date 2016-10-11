@@ -136,7 +136,7 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 	fo->ofo_pfid_checking = 0;
 	ofd_write_unlock(env, fo);
 
-	lu_object_put(env, &fo->ofo_obj.do_lu);
+	ofd_object_put(env, fo);
 	OBD_FREE_PTR(oii);
 }
 
@@ -214,7 +214,7 @@ static int ofd_inconsistency_verification_main(void *args)
 		fo->ofo_pfid_checking = 0;
 		ofd_write_unlock(&env, fo);
 
-		lu_object_put(&env, &fo->ofo_obj.do_lu);
+		ofd_object_put(&env, fo);
 		OBD_FREE_PTR(oii);
 		spin_lock(&ofd->ofd_inconsistency_lock);
 	}

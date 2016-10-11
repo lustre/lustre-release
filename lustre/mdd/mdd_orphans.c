@@ -539,7 +539,7 @@ int orph_index_init(const struct lu_env *env, struct mdd_device *mdd)
 	if (!dt_try_as_dir(env, d)) {
 		CERROR("%s: \"%s\" is not an index: rc = %d\n",
 		       mdd2obd_dev(mdd)->obd_name, orph_index_name, rc);
-		lu_object_put(env, &d->do_lu);
+		dt_object_put(env, d);
 		RETURN(-ENOTDIR);
 	}
 	mdd->mdd_orphans = d;
@@ -548,12 +548,12 @@ int orph_index_init(const struct lu_env *env, struct mdd_device *mdd)
 
 void orph_index_fini(const struct lu_env *env, struct mdd_device *mdd)
 {
-        ENTRY;
-        if (mdd->mdd_orphans != NULL) {
-                lu_object_put(env, &mdd->mdd_orphans->do_lu);
-                mdd->mdd_orphans = NULL;
-        }
-        EXIT;
+	ENTRY;
+	if (mdd->mdd_orphans != NULL) {
+		dt_object_put(env, mdd->mdd_orphans);
+		mdd->mdd_orphans = NULL;
+	}
+	EXIT;
 }
 
 static int __mdd_orphan_cleanup(void *args)

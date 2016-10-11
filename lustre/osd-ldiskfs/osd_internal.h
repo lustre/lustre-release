@@ -904,6 +904,17 @@ static inline struct super_block *osd_sb(const struct osd_device *dev)
 	return dev->od_mnt->mnt_sb;
 }
 
+/**
+ * Put the osd object once done with it.
+ *
+ * \param obj osd object that needs to be put
+ */
+static inline void osd_object_put(const struct lu_env *env,
+				  struct osd_object *obj)
+{
+	dt_object_put(env, &obj->oo_dt);
+}
+
 static inline int osd_object_is_root(const struct osd_object *obj)
 {
         return osd_sb(osd_obj2dev(obj))->s_root->d_inode == obj->oo_inode;

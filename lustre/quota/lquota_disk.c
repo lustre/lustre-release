@@ -84,7 +84,7 @@ lquota_disk_find_create(const struct lu_env *env, struct dt_device *dev,
 	/* local_oid_storage_fini() will finalize the local storage device,
 	 * we have to open the object in another device stack */
 	qti->qti_fid = obj->do_lu.lo_header->loh_fid;
-	lu_object_put_nocache(env, &obj->do_lu);
+	dt_object_put_nocache(env, obj);
 	obj = dt_locate(env, dev, &qti->qti_fid);
 	if (IS_ERR(obj))
 		GOTO(out, obj);
@@ -196,7 +196,7 @@ struct dt_object *lquota_disk_dir_find_create(const struct lu_env *env,
 	/* local_oid_storage_fini() will finalize the local storage device,
 	 * we have to open the object in another device stack */
 	qti->qti_fid = qt_dir->do_lu.lo_header->loh_fid;
-	lu_object_put_nocache(env, &qt_dir->do_lu);
+	dt_object_put_nocache(env, qt_dir);
 	qt_dir = dt_locate(env, dev, &qti->qti_fid);
 	if (IS_ERR(qt_dir))
 		GOTO(out, rc = PTR_ERR(qt_dir));
@@ -206,12 +206,12 @@ struct dt_object *lquota_disk_dir_find_create(const struct lu_env *env,
 	EXIT;
 out:
 	if (parent != NULL && !IS_ERR(parent))
-		lu_object_put(env, &parent->do_lu);
+		dt_object_put(env, parent);
 	if (los != NULL)
 		local_oid_storage_fini(env, los);
 	if (rc) {
 		if (qt_dir != NULL && !IS_ERR(qt_dir))
-			lu_object_put(env, &qt_dir->do_lu);
+			dt_object_put(env, qt_dir);
 		qt_dir = ERR_PTR(rc);
 	}
 	return qt_dir;
@@ -282,7 +282,7 @@ struct dt_object *lquota_disk_glb_find_create(const struct lu_env *env,
 			CERROR("%s: failed to setup index operations for "DFID
 			       " rc:%d\n", dev->dd_lu_dev.ld_obd->obd_name,
 			       PFID(lu_object_fid(&glb_idx->do_lu)), rc);
-			lu_object_put(env, &glb_idx->do_lu);
+			dt_object_put(env, glb_idx);
 			glb_idx = ERR_PTR(rc);
 		}
 	}
@@ -342,7 +342,7 @@ struct dt_object *lquota_disk_slv_find(const struct lu_env *env,
 			CERROR("%s: failed to setup slave index operations for "
 			       "%s, rc:%d\n", dev->dd_lu_dev.ld_obd->obd_name,
 			       obd_uuid2str(uuid), rc);
-			lu_object_put(env, &slv_idx->do_lu);
+			dt_object_put(env, slv_idx);
 			slv_idx = ERR_PTR(rc);
 		}
 	}
@@ -437,7 +437,7 @@ struct dt_object *lquota_disk_slv_find_create(const struct lu_env *env,
 			CERROR("%s: failed to setup index operations for "DFID
 			       " rc:%d\n", dev->dd_lu_dev.ld_obd->obd_name,
 			       PFID(lu_object_fid(&slv_idx->do_lu)), rc);
-			lu_object_put(env, &slv_idx->do_lu);
+			dt_object_put(env, slv_idx);
 			slv_idx = ERR_PTR(rc);
 		}
 	}

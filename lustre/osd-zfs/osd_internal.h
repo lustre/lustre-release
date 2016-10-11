@@ -436,6 +436,17 @@ static inline int osd_invariant(const struct osd_object *obj)
 	return 1;
 }
 
+/**
+ * Put the osd object once done with it.
+ *
+ * \param obj osd object that needs to be put
+ */
+static inline void osd_object_put(const struct lu_env *env,
+				  struct osd_object *obj)
+{
+	dt_object_put(env, &obj->oo_dt);
+}
+
 static inline int osd_object_invariant(const struct lu_object *l)
 {
 	return osd_invariant(osd_obj(l));

@@ -419,7 +419,7 @@ trans_stop:
 	dt_trans_stop(env, ls->ls_osd, th);
 out:
 	if (rc) {
-		lu_object_put_nocache(env, &dto->do_lu);
+		dt_object_put_nocache(env, dto);
 		dto = ERR_PTR(rc);
 	}
 	RETURN(dto);
@@ -515,7 +515,7 @@ struct dt_object *local_file_find_or_create_with_fid(const struct lu_env *env,
 			 * have to open the object in other device stack */
 			if (!IS_ERR(dto)) {
 				dti->dti_fid = dto->do_lu.lo_header->loh_fid;
-				lu_object_put_nocache(env, &dto->do_lu);
+				dt_object_put_nocache(env, dto);
 				dto = dt_locate(env, dt, &dti->dti_fid);
 			}
 			ls_device_put(env, ls);
@@ -611,7 +611,7 @@ local_index_find_or_create_with_fid(const struct lu_env *env,
 			 * have to open the object in other device stack */
 			if (!IS_ERR(dto)) {
 				dti->dti_fid = dto->do_lu.lo_header->loh_fid;
-				lu_object_put_nocache(env, &dto->do_lu);
+				dt_object_put_nocache(env, dto);
 				dto = dt_locate(env, dt, &dti->dti_fid);
 			}
 			ls_device_put(env, ls);
@@ -694,7 +694,7 @@ unlock:
 stop:
 	dt_trans_stop(env, dt, th);
 out:
-	lu_object_put_nocache(env, &dto->do_lu);
+	dt_object_put_nocache(env, dto);
 	return rc;
 }
 EXPORT_SYMBOL(local_object_unlink);
@@ -747,7 +747,7 @@ static int lastid_compat_check(const struct lu_env *env, struct dt_device *dev,
 	snprintf(dti->dti_buf, sizeof(dti->dti_buf), "seq-%#llx-lastid",
 		 lastid_seq);
 	rc = dt_lookup_dir(env, root, dti->dti_buf, &dti->dti_fid);
-	lu_object_put_nocache(env, &root->do_lu);
+	dt_object_put_nocache(env, root);
 	if (rc == -ENOENT) {
 		/* old llog lastid accessed by FID only */
 		if (lastid_seq != FID_SEQ_LLOG)
@@ -760,7 +760,7 @@ static int lastid_compat_check(const struct lu_env *env, struct dt_device *dev,
 			return PTR_ERR(o);
 
 		if (!dt_object_exists(o)) {
-			lu_object_put_nocache(env, &o->do_lu);
+			dt_object_put_nocache(env, o);
 			return 0;
 		}
 		CDEBUG(D_INFO, "Found old llog lastid file\n");
@@ -790,7 +790,7 @@ static int lastid_compat_check(const struct lu_env *env, struct dt_device *dev,
 		CERROR("%s: failed to read seq-%#llx-lastid: rc = %d\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name, lastid_seq, rc);
 	}
-	lu_object_put_nocache(env, &o->do_lu);
+	dt_object_put_nocache(env, o);
 	if (rc == 0)
 		*first_oid = le32_to_cpu(losd.lso_next_oid);
 	return rc;
@@ -927,7 +927,7 @@ out_los:
 		OBD_FREE_PTR(*los);
 		*los = NULL;
 		if (o != NULL && !IS_ERR(o))
-			lu_object_put_nocache(env, &o->do_lu);
+			dt_object_put_nocache(env, o);
 	} else {
 		(*los)->los_seq = fid_seq(first_fid);
 		(*los)->los_last_oid = le64_to_cpu(lastid);
@@ -964,7 +964,7 @@ void local_oid_storage_fini(const struct lu_env *env,
 	}
 
 	if (los->los_obj)
-		lu_object_put_nocache(env, &los->los_obj->do_lu);
+		dt_object_put_nocache(env, los->los_obj);
 	list_del(&los->los_list);
 	OBD_FREE_PTR(los);
 	mutex_unlock(&ls->ls_los_mutex);

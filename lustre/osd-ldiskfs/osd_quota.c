@@ -192,7 +192,7 @@ static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 	struct osd_quota_leaf *leaf, *tmp;
 	ENTRY;
 
-	lu_object_put(env, &it->oiq_obj->oo_dt.do_lu);
+	osd_object_put(env, it->oiq_obj);
 
 	list_for_each_entry_safe(leaf, tmp, &it->oiq_list, oql_link) {
 		list_del_init(&leaf->oql_link);
@@ -712,7 +712,7 @@ int osd_quota_migration(const struct lu_env *env, struct dt_object *dt)
 			CERROR("%s: Old admin file %s doesn't exist, but is "
 			       "still referenced in parent directory.\n",
 			       osd->od_svname, fname);
-			lu_object_put(env, &admin->do_lu);
+			dt_object_put(env, admin);
 			GOTO(out, rc = -ENOENT);
 		}
 
@@ -722,12 +722,12 @@ int osd_quota_migration(const struct lu_env *env, struct dt_object *dt)
 			      "convert them into new format.\n",
 			      osd->od_svname, fname);
 
-		lu_object_put(env, &admin->do_lu);
+		dt_object_put(env, admin);
 		GOTO(out, rc = -EINVAL);
 	}
 out:
 	if (parent && !IS_ERR(parent))
-		lu_object_put(env, &parent->do_lu);
-	lu_object_put(env, &root->do_lu);
+		dt_object_put(env, parent);
+	dt_object_put(env, root);
 	RETURN(rc);
 }

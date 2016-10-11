@@ -327,12 +327,12 @@ static void qmt_pool_free(const struct lu_env *env, struct qmt_pool_info *pool)
 		/* release reference to global index */
 		if (pool->qpi_glb_obj[qtype] != NULL &&
 		    !IS_ERR(pool->qpi_glb_obj[qtype]))
-			lu_object_put(env, &pool->qpi_glb_obj[qtype]->do_lu);
+			dt_object_put(env, pool->qpi_glb_obj[qtype]);
 	}
 
 	/* release reference on pool directory */
 	if (pool->qpi_root != NULL && !IS_ERR(pool->qpi_root))
-		lu_object_put(env, &pool->qpi_root->do_lu);
+		dt_object_put(env, pool->qpi_root);
 
 	/* release reference on the master target */
 	if (pool->qpi_qmt != NULL) {
@@ -686,7 +686,7 @@ int qmt_pool_new_conn(const struct lu_env *env, struct qmt_device *qmt,
 	/* retrieve slave fid & current object version */
 	memcpy(slv_fid, lu_object_fid(&slv_obj->do_lu), sizeof(*slv_fid));
 	*slv_ver = dt_version_get(env, slv_obj);
-	lu_object_put(env, &slv_obj->do_lu);
+	dt_object_put(env, slv_obj);
 	if (created)
 		pool->qpi_slv_nr[qtype]++;
 out:

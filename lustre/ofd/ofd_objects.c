@@ -166,17 +166,6 @@ int ofd_object_ff_load(const struct lu_env *env, struct ofd_object *fo)
 }
 
 /**
- * Put OFD object reference.
- *
- * \param[in] env	execution environment
- * \param[in] fo	OFD object
- */
-void ofd_object_put(const struct lu_env *env, struct ofd_object *fo)
-{
-	lu_object_put(env, &fo->ofo_obj.do_lu);
-}
-
-/**
  * Precreate the given number \a nr of objects in the given sequence \a oseq.
  *
  * This function precreates new OST objects in the given sequence.

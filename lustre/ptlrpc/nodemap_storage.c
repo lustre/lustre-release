@@ -213,7 +213,7 @@ again:
 		 * rewrite the config
 		 */
 		if (rc < 0) {
-			lu_object_put(env, &nm_obj->do_lu);
+			dt_object_put(env, nm_obj);
 
 			if (create_new == NCFC_CREATE_NEW)
 				GOTO(out_root, nm_obj = ERR_PTR(rc));
@@ -226,7 +226,7 @@ again:
 	}
 
 out_root:
-	lu_object_put(env, &root_obj->do_lu);
+	dt_object_put(env, root_obj);
 out:
 	return nm_obj;
 }
@@ -1032,7 +1032,7 @@ struct dt_object *nodemap_save_config_cache(const struct lu_env *env,
 	mutex_unlock(&active_config_lock);
 
 	if (rc < 0) {
-		lu_object_put(env, &o->do_lu);
+		dt_object_put(env, o);
 		o = ERR_PTR(rc);
 	}
 
@@ -1059,7 +1059,7 @@ static void nodemap_save_all_caches(void)
 		struct dt_object *o;
 
 		/* put current config file so save conf can rewrite it */
-		lu_object_put_nocache(&env, &ncf->ncf_obj->do_lu);
+		dt_object_put_nocache(&env, ncf->ncf_obj);
 		ncf->ncf_obj = NULL;
 
 		o = nodemap_save_config_cache(&env, dev, ncf->ncf_los);
@@ -1214,7 +1214,7 @@ void nm_config_file_deregister_mgs(const struct lu_env *env,
 
 	nodemap_mgs_ncf = NULL;
 	if (ncf->ncf_obj)
-		lu_object_put(env, &ncf->ncf_obj->do_lu);
+		dt_object_put(env, ncf->ncf_obj);
 
 	OBD_FREE_PTR(ncf);
 
@@ -1235,7 +1235,7 @@ void nm_config_file_deregister_tgt(const struct lu_env *env,
 	mutex_unlock(&ncf_list_lock);
 
 	if (ncf->ncf_obj)
-		lu_object_put(env, &ncf->ncf_obj->do_lu);
+		dt_object_put(env, ncf->ncf_obj);
 
 	OBD_FREE_PTR(ncf);
 

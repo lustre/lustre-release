@@ -454,7 +454,7 @@ static int qmt_device_prepare(const struct lu_env *env,
 	/* initialize on-disk indexes associated with each pool */
 	rc = qmt_pool_prepare(env, qmt, qmt_root);
 
-	lu_object_put(env, &qmt_root->do_lu);
+	dt_object_put(env, qmt_root);
 	RETURN(rc);
 }
 

@@ -182,7 +182,7 @@ static void osd_index_it_fini(const struct lu_env *env, struct dt_it *di)
 	obj = it->ozi_obj;
 
 	osd_zap_cursor_fini(it->ozi_zc);
-	lu_object_put(env, &obj->oo_dt.do_lu);
+	osd_object_put(env, obj);
 	OBD_SLAB_FREE_PTR(it, osd_zapit_cachep);
 
 	EXIT;
@@ -475,17 +475,6 @@ static int osd_declare_dir_insert(const struct lu_env *env,
 	osd_idc_find_or_init(env, osd, fid);
 
 	RETURN(0);
-}
-
-/**
- * Put the osd object once done with it.
- *
- * \param obj osd object that needs to be put
- */
-static inline void osd_object_put(const struct lu_env *env,
-				  struct osd_object *obj)
-{
-	lu_object_put(env, &obj->oo_dt.do_lu);
 }
 
 static int osd_seq_exists(const struct lu_env *env, struct osd_device *osd,

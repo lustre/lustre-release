@@ -321,20 +321,20 @@ static void qsd_qtype_fini(const struct lu_env *env, struct qsd_instance *qsd,
 
 	/* release accounting object */
 	if (qqi->qqi_acct_obj != NULL && !IS_ERR(qqi->qqi_acct_obj)) {
-		lu_object_put(env, &qqi->qqi_acct_obj->do_lu);
+		dt_object_put(env, qqi->qqi_acct_obj);
 		qqi->qqi_acct_obj = NULL;
 	}
 
 	/* release slv index */
 	if (qqi->qqi_slv_obj != NULL && !IS_ERR(qqi->qqi_slv_obj)) {
-		lu_object_put(env, &qqi->qqi_slv_obj->do_lu);
+		dt_object_put(env, qqi->qqi_slv_obj);
 		qqi->qqi_slv_obj = NULL;
 		qqi->qqi_slv_ver = 0;
 	}
 
 	/* release global index */
 	if (qqi->qqi_glb_obj != NULL && !IS_ERR(qqi->qqi_glb_obj)) {
-		lu_object_put(env, &qqi->qqi_glb_obj->do_lu);
+		dt_object_put(env, qqi->qqi_glb_obj);
 		qqi->qqi_glb_obj = NULL;
 		qqi->qqi_glb_ver = 0;
 	}
@@ -526,7 +526,7 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 
 	/* release quota root directory */
 	if (qsd->qsd_root != NULL) {
-		lu_object_put(env, &qsd->qsd_root->do_lu);
+		dt_object_put(env, qsd->qsd_root);
 		qsd->qsd_root = NULL;
 	}
 

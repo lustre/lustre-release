@@ -1519,7 +1519,7 @@ distribute_txn_commit_batchid_init(const struct lu_env *env,
 
 out_put:
 	if (rc < 0 && dt_obj != NULL) {
-		lu_object_put(env, &dt_obj->do_lu);
+		dt_object_put(env, dt_obj);
 		tdtd->tdtd_batchid_obj = NULL;
 	}
 	return rc;
@@ -1746,7 +1746,7 @@ void distribute_txn_fini(const struct lu_env *env,
 
 	dtrq_list_destroy(tdtd);
 	if (tdtd->tdtd_batchid_obj != NULL) {
-		lu_object_put(env, &tdtd->tdtd_batchid_obj->do_lu);
+		dt_object_put(env, tdtd->tdtd_batchid_obj);
 		tdtd->tdtd_batchid_obj = NULL;
 	}
 }
