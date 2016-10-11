@@ -1325,6 +1325,14 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 	LASSERT(ma->ma_attr.la_valid & LA_CTIME);
 	la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
 
+	/* Note: even this function will change ldata, but it comes from
+	 * thread_info, which is completely temporary and only seen in
+	 * this function, so we do not need reset ldata once it fails.*/
+	rc = mdd_linkea_prepare(env, mdd_sobj, NULL, NULL, mdo2fid(mdd_tobj),
+				lname, 0, 0, ldata);
+	if (rc != 0)
+		GOTO(stop, rc);
+
 	rc = mdd_declare_link(env, mdd, mdd_tobj, mdd_sobj, lname, handle,
 			      la, ldata);
         if (rc)
@@ -1370,17 +1378,12 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 
 	la->la_valid = LA_CTIME;
 	rc = mdd_update_time(env, mdd_sobj, cattr, la, handle);
-	if (rc == 0) {
-		rc = mdd_linkea_prepare(env, mdd_sobj, NULL, NULL,
-					mdo2fid(mdd_tobj), lname, 0, 0,
-					ldata);
-		if (rc == 0)
-			mdd_links_add(env, mdd_sobj, mdo2fid(mdd_tobj),
-				      lname, handle, ldata, 0);
-		/* The failure of links_add should not cause the link
-		 * failure, reset rc here */
-		rc = 0;
-	}
+	if (rc == 0)
+		/* Note: The failure of links_add should not cause the
+		 * link failure, so do not check return value. */
+		mdd_links_add(env, mdd_sobj, mdo2fid(mdd_tobj),
+			      lname, handle, ldata, 0);
+
 	EXIT;
 out_unlock:
 	mdd_write_unlock(env, mdd_sobj);
