@@ -286,18 +286,19 @@ static struct config_llog_data *config_recover_log_add(struct obd_device *obd,
         return cld;
 }
 
-static struct config_llog_data *config_params_log_add(struct obd_device *obd,
-	struct config_llog_instance *cfg, struct super_block *sb)
+static struct config_llog_data *config_log_find_or_add(struct obd_device *obd,
+				char *logname, struct super_block *sb, int type,
+				struct config_llog_instance *cfg)
 {
 	struct config_llog_instance	lcfg = *cfg;
 	struct config_llog_data		*cld;
 
-	lcfg.cfg_instance = sb;
+	lcfg.cfg_instance = sb != NULL ? (void *)sb : (void *)obd;
+	cld = config_log_find(logname, &lcfg);
+	if (unlikely(cld != NULL))
+		return cld;
 
-	cld = do_config_log_add(obd, PARAMS_FILENAME, CONFIG_T_PARAMS,
-				&lcfg, sb);
-
-	return cld;
+	return do_config_log_add(obd, logname, type, &lcfg, sb);
 }
 
 /** Add this log to the list of active logs watched by an MGC.
@@ -335,20 +336,18 @@ config_log_add(struct obd_device *obd, char *logname,
 	memcpy(seclogname, logname, ptr - logname);
 	strcpy(seclogname + (ptr - logname), "-sptlrpc");
 
-	sptlrpc_cld = config_log_find(seclogname, NULL);
-	if (sptlrpc_cld == NULL) {
-		sptlrpc_cld = do_config_log_add(obd, seclogname,
-						CONFIG_T_SPTLRPC, NULL, NULL);
-		if (IS_ERR(sptlrpc_cld)) {
-			CERROR("can't create sptlrpc log: %s\n", seclogname);
-			GOTO(out, rc = PTR_ERR(sptlrpc_cld));
-		}
+	sptlrpc_cld = config_log_find_or_add(obd, seclogname, NULL,
+					     CONFIG_T_SPTLRPC, cfg);
+	if (IS_ERR(sptlrpc_cld)) {
+		CERROR("can't create sptlrpc log: %s\n", seclogname);
+		GOTO(out, rc = PTR_ERR(sptlrpc_cld));
 	}
 
-	nodemap_cld = config_log_find(LUSTRE_NODEMAP_NAME, NULL);
-	if (!nodemap_cld && IS_SERVER(lsi) && !IS_MGS(lsi)) {
-		nodemap_cld = do_config_log_add(obd, LUSTRE_NODEMAP_NAME,
-						CONFIG_T_NODEMAP, NULL, NULL);
+	nodemap_cld = NULL;
+	if (IS_SERVER(lsi) && !IS_MGS(lsi)) {
+		nodemap_cld = config_log_find_or_add(obd, LUSTRE_NODEMAP_NAME,
+						     NULL, CONFIG_T_NODEMAP,
+						     cfg);
 		if (IS_ERR(nodemap_cld)) {
 			rc = PTR_ERR(nodemap_cld);
 			CERROR("%s: cannot create nodemap log: rc = %d\n",
@@ -357,7 +356,8 @@ config_log_add(struct obd_device *obd, char *logname,
 		}
 	}
 
-	params_cld = config_params_log_add(obd, cfg, sb);
+	params_cld = config_log_find_or_add(obd, PARAMS_FILENAME, sb,
+					    CONFIG_T_PARAMS, cfg);
 	if (IS_ERR(params_cld)) {
 		rc = PTR_ERR(params_cld);
 		CERROR("%s: can't create params log: rc = %d\n",
