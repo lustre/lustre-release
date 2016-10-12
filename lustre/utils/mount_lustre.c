@@ -848,7 +848,8 @@ int main(int argc, char *const argv[])
 			rc = mount(mop.mo_source, mop.mo_target, "lustre",
 				   flags, (void *)options);
 			if (rc == 0) {
-				label_lustre(&mop);
+				if (!client)
+					label_lustre(&mop);
 			} else {
                                 if (verbose) {
                                         fprintf(stderr, "%s: mount %s at %s "
