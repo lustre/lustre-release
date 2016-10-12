@@ -48,6 +48,7 @@
 #include <lustre_nodemap.h>
 #include <lustre_swab.h>
 #include <obd_class.h>
+#include <lustre_barrier.h>
 
 #include "mgc_internal.h"
 
@@ -1836,8 +1837,17 @@ out:
 
 static int mgc_barrier_glimpse_ast(struct ldlm_lock *lock, void *data)
 {
-	/* XXX: It will be implemented in subsequent patch. */
-	return 0;
+	struct config_llog_data *cld = lock->l_ast_data;
+	int rc;
+	ENTRY;
+
+	if (cld->cld_stopping)
+		RETURN(-ENODEV);
+
+	rc = barrier_handler(s2lsi(cld->cld_cfg.cfg_sb)->lsi_dt_dev,
+			     (struct ptlrpc_request *)data);
+
+	RETURN(rc);
 }
 
 /* Copy a remote log locally */

@@ -28,7 +28,7 @@ nodemap_objs := nodemap_handler.o nodemap_lproc.o nodemap_range.o
 nodemap_objs += nodemap_idmap.o nodemap_rbtree.o nodemap_member.o
 nodemap_objs += nodemap_storage.o
 
-ptlrpc-objs := $(ldlm_objs) $(ptlrpc_objs)
+ptlrpc-objs := $(ldlm_objs) $(ptlrpc_objs) $(TARGET)barrier.o
 @SERVER_TRUE@ptlrpc-objs += $(target_objs) $(nodemap_objs)
 
 @GSS_TRUE@subdir-m += gss
@@ -48,6 +48,9 @@ tgt_%.c: @LUSTRE@/target/tgt_%.c
 	ln -sf $< $@
 
 out_%.c: @LUSTRE@/target/out_%.c
+	ln -sf $< $@
+
+barrier.c: @LUSTRE@/target/barrier.c
 	ln -sf $< $@
 
 EXTRA_DIST := $(ptlrpc_objs:.o=.c) ptlrpc_internal.h

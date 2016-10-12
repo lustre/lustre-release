@@ -104,7 +104,7 @@ struct ptldebug_header {
 #define S_LQUOTA	0x00040000
 #define S_OSD		0x00080000
 #define S_LFSCK		0x00100000
-/* unused */
+#define S_SNAPSHOT	0x00200000
 /* unused */
 #define S_LMV		0x00800000 /* b_new_cmd */
 /* unused */
@@ -119,8 +119,8 @@ struct ptldebug_header {
 #define LIBCFS_DEBUG_SUBSYS_NAMES {					\
 	"undefined", "mdc", "mds", "osc", "ost", "class", "log",	\
 	"llite", "rpc", "mgmt", "lnet", "lnd", "pinger", "filter", "",	\
-	"echo", "ldlm", "lov", "lquota", "osd", "lfsck", "", "", "lmv",	\
-	 "", "sec", "gss", "", "mgc", "mgs", "fid", "fld", NULL }
+	"echo", "ldlm", "lov", "lquota", "osd", "lfsck", "snapshot", "",\
+	"lmv",	"", "sec", "gss", "", "mgc", "mgs", "fid", "fld", NULL }
 
 /* Debugging masks (32 bits, non-overlapping) */
 #define D_TRACE		0x00000001 /* ENTRY/EXIT markers */
@@ -153,13 +153,14 @@ struct ptldebug_header {
 #define D_SEC		0x08000000
 #define D_LFSCK		0x10000000 /* For both OI scrub and LFSCK */
 #define D_HSM		0x20000000
+#define D_SNAPSHOT	0x40000000 /* snapshot */
 
 #define LIBCFS_DEBUG_MASKS_NAMES {					\
 	"trace", "inode", "super", "ext2", "malloc", "cache", "info",	\
 	"ioctl", "neterror", "net", "warning", "buffs", "other",	\
 	"dentry", "nettrace", "page", "dlmtrace", "error", "emerg",	\
 	"ha", "rpctrace", "vfstrace", "reada", "mmap", "config",	\
-	"console", "quota", "sec", "lfsck", "hsm", NULL }
+	"console", "quota", "sec", "lfsck", "hsm", "snapshot", NULL }
 
 #define D_CANTMASK   (D_ERROR | D_EMERG | D_WARNING | D_CONSOLE)
 

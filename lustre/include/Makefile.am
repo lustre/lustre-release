@@ -45,6 +45,7 @@ EXTRA_DIST = \
 	lu_object.h \
 	lu_ref.h \
 	lustre_acl.h \
+	lustre_barrier.h \
 	lustre_cfg.h \
 	lustre_compat.h \
 	lustre_debug.h \

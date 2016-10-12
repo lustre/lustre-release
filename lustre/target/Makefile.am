@@ -32,7 +32,7 @@
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
 EXTRA_DIST = tgt_main.c tgt_lastrcvd.c tgt_handler.c tgt_internal.h \
-	     out_handler.c out_lib.c
+	     out_handler.c out_lib.c barrier.c
 EXTRA_DIST += update_trans.c
 EXTRA_DIST += update_records.c
 EXTRA_DIST += update_recovery.c

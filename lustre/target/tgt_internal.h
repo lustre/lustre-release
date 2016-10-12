@@ -285,4 +285,6 @@ int top_trans_create_tmt(const struct lu_env *env,
 			 struct top_thandle *top_th);
 
 void tgt_cancel_slc_locks(struct lu_target *tgt, __u64 transno);
+void barrier_init(void);
+void barrier_fini(void);
 #endif /* _TG_INTERNAL_H */

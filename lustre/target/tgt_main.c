@@ -411,6 +411,7 @@ int tgt_mod_init(void)
 
 	tgt_ses_key_init_generic(&tgt_session_key, NULL);
 	lu_context_key_register_many(&tgt_session_key, NULL);
+	barrier_init();
 
 	update_info_init();
 
@@ -419,6 +420,7 @@ int tgt_mod_init(void)
 
 void tgt_mod_exit(void)
 {
+	barrier_fini();
 	if (tgt_page_to_corrupt != NULL)
 		put_page(tgt_page_to_corrupt);
 

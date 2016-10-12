@@ -1385,6 +1385,7 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 {
 	struct lod_device   *lod = dt2lod_dev(dev);
 	struct lod_ost_desc *ost;
+	struct lod_mdt_desc *mdt;
 	unsigned int         i;
 	int                  rc = 0;
 	ENTRY;
@@ -1395,12 +1396,29 @@ static int lod_sync(const struct lu_env *env, struct dt_device *dev)
 		LASSERT(ost && ost->ltd_ost);
 		rc = dt_sync(env, ost->ltd_ost);
 		if (rc) {
-			CERROR("%s: can't sync %u: %d\n",
+			CERROR("%s: can't sync ost %u: %d\n",
 			       lod2obd(lod)->obd_name, i, rc);
 			break;
 		}
 	}
 	lod_putref(lod, &lod->lod_ost_descs);
+
+	if (rc)
+		RETURN(rc);
+
+	lod_getref(&lod->lod_mdt_descs);
+	lod_foreach_mdt(lod, i) {
+		mdt = MDT_TGT(lod, i);
+		LASSERT(mdt && mdt->ltd_mdt);
+		rc = dt_sync(env, mdt->ltd_mdt);
+		if (rc) {
+			CERROR("%s: can't sync mdt %u: %d\n",
+			       lod2obd(lod)->obd_name, i, rc);
+			break;
+		}
+	}
+	lod_putref(lod, &lod->lod_mdt_descs);
+
 	if (rc == 0)
 		rc = dt_sync(env, lod->lod_child);
 
