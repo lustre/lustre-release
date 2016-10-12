@@ -601,7 +601,14 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
                 <para> <literal>changelog_register</literal></para>
               </entry>
               <entry>
-                <para> Registers a new changelog user for a particular device. Changelog entries are not purged beyond a registered user&apos;s set point (see <literal>lfs changelog_clear</literal>).</para>
+                <para> Registers a new changelog user for a particular device.
+		Changelog entries are saved persistently on the MDT with each
+		filesystem operation, and are only purged beyond all registered
+		user&apos;s minimum set point (see
+		<literal>lfs changelog_clear</literal>). This may cause the
+		Changelog to consume a large amount of space, eventually
+		filling the MDT, if a changelog user is registered but never
+		consumes those records.</para>
               </entry>
             </row>
             <row>
@@ -609,7 +616,10 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
                 <para>changelog_deregister <replaceable>id</replaceable></para>
               </entry>
               <entry>
-                <para> Unregisters an existing changelog user. If the user&apos;s &quot;clear&quot; record number is the minimum for the device, changelog records are purged until the next minimum.</para>
+                <para> Unregisters an existing changelog user. If the
+		user&apos;s &quot;clear&quot; record number is the minimum for
+		the device, changelog records are purged until the next minimum.
+		</para>
               </entry>
             </row>
           </tbody>
