@@ -2518,15 +2518,15 @@ static int ldlm_revoke_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 void ldlm_revoke_export_locks(struct obd_export *exp)
 {
 	struct list_head  rpc_list;
-        ENTRY;
+	ENTRY;
 
 	INIT_LIST_HEAD(&rpc_list);
-        cfs_hash_for_each_empty(exp->exp_lock_hash,
-                                ldlm_revoke_lock_cb, &rpc_list);
-        ldlm_run_ast_work(exp->exp_obd->obd_namespace, &rpc_list,
-                          LDLM_WORK_REVOKE_AST);
+	cfs_hash_for_each_nolock(exp->exp_lock_hash,
+				 ldlm_revoke_lock_cb, &rpc_list, 0);
+	ldlm_run_ast_work(exp->exp_obd->obd_namespace, &rpc_list,
+			  LDLM_WORK_REVOKE_AST);
 
-        EXIT;
+	EXIT;
 }
 EXPORT_SYMBOL(ldlm_revoke_export_locks);
 #endif /* HAVE_SERVER_SUPPORT */
