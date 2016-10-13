@@ -922,15 +922,6 @@ static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 					cli->cl_dirty_pages << PAGE_SHIFT;
 	}
 
-        if (cli->cl_avail_grant < 0) {
-		CWARN("%s: available grant < 0: avail/ocd/dirty %ld/%u/%ld\n",
-		      cli_name(cli), cli->cl_avail_grant,
-		      ocd->ocd_grant, cli->cl_dirty_pages << PAGE_SHIFT);
-		/* workaround for servers which do not have the patch from
-		 * LU-2679 */
-		cli->cl_avail_grant = ocd->ocd_grant;
-        }
-
 	if (OCD_HAS_FLAG(ocd, GRANT_PARAM)) {
 		u64 size;
 		int chunk_mask;
