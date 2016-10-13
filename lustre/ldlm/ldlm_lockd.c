@@ -326,9 +326,9 @@ static void waiting_locks_callback(unsigned long unused)
                         continue;
                 }
                 ldlm_lock_to_ns(lock)->ns_timeouts++;
-                LDLM_ERROR(lock, "lock callback timer expired after %lds: "
+		LDLM_ERROR(lock, "lock callback timer expired after %llds: "
                            "evicting client at %s ",
-                           cfs_time_current_sec() - lock->l_last_activity,
+			   ktime_get_real_seconds() - lock->l_last_activity,
                            libcfs_nid2str(
                                    lock->l_export->exp_connection->c_peer.nid));
 
@@ -460,7 +460,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 	}
 
 	ldlm_set_waited(lock);
-	lock->l_last_activity = cfs_time_current_sec();
+	lock->l_last_activity = ktime_get_real_seconds();
 	ret = __ldlm_add_waiting_lock(lock, timeout);
 	if (ret) {
 		/* grab ref on the lock if it has been added to the
@@ -922,7 +922,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         if (AT_OFF)
                 req->rq_timeout = ldlm_get_rq_timeout();
 
-	lock->l_last_activity = cfs_time_current_sec();
+	lock->l_last_activity = ktime_get_real_seconds();
 
         if (lock->l_export && lock->l_export->exp_nid_stats &&
             lock->l_export->exp_nid_stats->nid_ldlm_stats)
@@ -1012,7 +1012,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 		}
         }
 
-	lock->l_last_activity = cfs_time_current_sec();
+	lock->l_last_activity = ktime_get_real_seconds();
 
 	LDLM_DEBUG(lock, "server preparing completion AST");
 
@@ -1122,7 +1122,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         if (AT_OFF)
                 req->rq_timeout = ldlm_get_rq_timeout();
 
-	lock->l_last_activity = cfs_time_current_sec();
+	lock->l_last_activity = ktime_get_real_seconds();
 
 	req->rq_interpret_reply = ldlm_cb_interpret;
 
@@ -1679,10 +1679,10 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
                 }
 
 		if ((flags & LATF_STATS) && ldlm_is_ast_sent(lock)) {
-			long delay = cfs_time_sub(cfs_time_current_sec(),
-						  lock->l_last_activity);
-			LDLM_DEBUG(lock, "server cancels blocked lock after "
-				   CFS_DURATION_T"s", delay);
+			time64_t delay = ktime_get_real_seconds() -
+					 lock->l_last_activity;
+			LDLM_DEBUG(lock, "server cancels blocked lock after %llds",
+				   (s64)delay);
 			at_measured(&lock->l_export->exp_bl_lock_at, delay);
 		}
                 ldlm_lock_cancel(lock);
