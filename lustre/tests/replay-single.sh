@@ -3294,8 +3294,8 @@ test_90() { # bug 19494
             return 0
         fi
     fi
-	# maybe effected by previous test
-        wait_osc_import_state mds ost FULL
+	# ensure all OSTs are active to allow allocations
+	wait_osts_up
 
 	mkdir $dir || error "mkdir $dir failed"
 

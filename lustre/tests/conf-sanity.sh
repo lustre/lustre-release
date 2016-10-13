@@ -5641,19 +5641,6 @@ test_81() { # LU-4665
 }
 run_test 81 "sparse OST indexing"
 
-# Wait OSTs to be active on both client and MDT side.
-wait_osts_up() {
-	local cmd="$LCTL get_param -n lov.$FSNAME-clilov-*.target_obd |
-		awk 'BEGIN {c = 0} /ACTIVE/{c += 1} END {printf \\\"%d\\\", c}'"
-	wait_update $HOSTNAME "eval $cmd" $OSTCOUNT ||
-		error "wait_update OSTs up on client failed"
-
-	cmd="$LCTL get_param -n lod.$FSNAME-MDT*-*.target_obd | sort -u |
-	     awk 'BEGIN {c = 0} /ACTIVE/{c += 1} END {printf \\\"%d\\\", c}'"
-	wait_update_facet $SINGLEMDS "eval $cmd" $OSTCOUNT ||
-		error "wait_update OSTs up on MDT failed"
-}
-
 # Here we exercise the stripe placement functionality on a file system that
 # has formatted the OST with a random index. With the file system the following
 # functionality is tested:

@@ -2336,6 +2336,19 @@ wait_mds_ost_sync () {
 	return 1
 }
 
+# Wait OSTs to be active on both client and MDT side.
+wait_osts_up() {
+	local cmd="$LCTL get_param -n lov.$FSNAME-clilov-*.target_obd |
+		awk 'BEGIN {c = 0} /ACTIVE/{c += 1} END {printf \\\"%d\\\", c}'"
+	wait_update $HOSTNAME "eval $cmd" $OSTCOUNT ||
+		error "wait_update OSTs up on client failed"
+
+	cmd="$LCTL get_param -n lod.$FSNAME-MDT*-*.target_obd | sort -u |
+	     awk 'BEGIN {c = 0} /ACTIVE/{c += 1} END {printf \\\"%d\\\", c}'"
+	wait_update_facet $SINGLEMDS "eval $cmd" $OSTCOUNT ||
+		error "wait_update OSTs up on MDT failed"
+}
+
 wait_destroy_complete () {
 	echo "Waiting for local destroys to complete"
 	# MAX value shouldn't be big as this mean server responsiveness
