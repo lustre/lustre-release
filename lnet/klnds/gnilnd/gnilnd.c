@@ -266,6 +266,7 @@ kgnilnd_create_conn(kgn_conn_t **connp, kgn_device_t *dev)
 	INIT_LIST_HEAD(&conn->gnc_schedlist);
 	INIT_LIST_HEAD(&conn->gnc_fmaq);
 	INIT_LIST_HEAD(&conn->gnc_mdd_list);
+	INIT_LIST_HEAD(&conn->gnc_delaylist);
 	spin_lock_init(&conn->gnc_list_lock);
 	spin_lock_init(&conn->gnc_tx_lock);
 	conn->gnc_magic = GNILND_CONN_MAGIC;
@@ -451,8 +452,9 @@ kgnilnd_destroy_conn(kgn_conn_t *conn)
 		list_empty(&conn->gnc_hashlist) &&
 		list_empty(&conn->gnc_schedlist) &&
 		list_empty(&conn->gnc_mdd_list) &&
+		list_empty(&conn->gnc_delaylist) &&
 		conn->gnc_magic == GNILND_CONN_MAGIC,
-		"conn 0x%p->%s IRQ %d sched %d purg %d ep 0x%p Mg %d lists %d/%d/%d/%d\n",
+		"conn 0x%p->%s IRQ %d sched %d purg %d ep 0x%p Mg %d lists %d/%d/%d/%d/%d\n",
 		conn, conn->gnc_peer ? libcfs_nid2str(conn->gnc_peer->gnp_nid)
 				     : "<?>",
 		!!in_interrupt(), conn->gnc_scheduled,
@@ -462,7 +464,8 @@ kgnilnd_destroy_conn(kgn_conn_t *conn)
 		list_empty(&conn->gnc_list),
 		list_empty(&conn->gnc_hashlist),
 		list_empty(&conn->gnc_schedlist),
-		list_empty(&conn->gnc_mdd_list));
+		list_empty(&conn->gnc_mdd_list),
+		list_empty(&conn->gnc_delaylist));
 
 	/* Tripping these is especially bad, as it means we have items on the
 	 *  lists that didn't keep their refcount on the connection - or
@@ -738,6 +741,11 @@ kgnilnd_complete_closed_conn(kgn_conn_t *conn)
 		 kgnilnd_conn_state2str(conn));
 
 	LASSERT(list_empty(&conn->gnc_hashlist));
+	/* We shouldnt be on the delay list, the conn can 
+	 * get added to this list during a retransmit, and retransmits
+	 * only occur within scheduler threads.
+	 */
+	LASSERT(list_empty(&conn->gnc_delaylist));
 
 	/* we've sent the close, start nuking */
 	if (CFS_FAIL_CHECK(CFS_FAIL_GNI_SCHEDULE_COMPLETE))
@@ -2114,9 +2122,12 @@ kgnilnd_dev_fini(kgn_device_t *dev)
 	/* At quiesce or rest time, need to loop through and clear gnd_ready_conns ?*/
 	LASSERTF(list_empty(&dev->gnd_ready_conns) &&
 		 list_empty(&dev->gnd_map_tx) &&
-		 list_empty(&dev->gnd_rdmaq),
-		 "dev 0x%p ready_conns %d@0x%p map_tx %d@0x%p rdmaq %d@0x%p\n",
+		 list_empty(&dev->gnd_rdmaq) &&
+		 list_empty(&dev->gnd_delay_conns),
+		 "dev 0x%p ready_conns %d@0x%p delay_conns %d@0x%p" 
+		 "map_tx %d@0x%p rdmaq %d@0x%p\n",
 		 dev, kgnilnd_count_list(&dev->gnd_ready_conns), &dev->gnd_ready_conns,
+		 kgnilnd_count_list(&dev->gnd_delay_conns), &dev->gnd_delay_conns,
 		 kgnilnd_count_list(&dev->gnd_map_tx), &dev->gnd_map_tx,
 		 kgnilnd_count_list(&dev->gnd_rdmaq), &dev->gnd_rdmaq);
 
@@ -2240,6 +2251,7 @@ int kgnilnd_base_startup(void)
 
 		dev->gnd_id = i;
 		INIT_LIST_HEAD(&dev->gnd_ready_conns);
+		INIT_LIST_HEAD(&dev->gnd_delay_conns);
 		INIT_LIST_HEAD(&dev->gnd_map_tx);
 		INIT_LIST_HEAD(&dev->gnd_fma_buffs);
 		mutex_init(&dev->gnd_cq_mutex);

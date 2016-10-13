@@ -151,7 +151,7 @@ kgnilnd_schedule_process_conn(kgn_conn_t *conn, int sched_intent)
  * as scheduled */
 
 int
-_kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line, int refheld)
+_kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line, int refheld, int lock_held)
 {
 	kgn_device_t        *dev = conn->gnc_device;
 	int                  sched;
@@ -184,10 +184,11 @@ _kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line, int refhe
 			 conn, sched);
 
 		CDEBUG(D_INFO, "scheduling conn 0x%p caller %s:%d\n", conn, caller, line);
-
-		spin_lock(&dev->gnd_lock);
+		if (!lock_held)
+			spin_lock(&dev->gnd_lock);
 		list_add_tail(&conn->gnc_schedlist, &dev->gnd_ready_conns);
-		spin_unlock(&dev->gnd_lock);
+		if (!lock_held)
+			spin_unlock(&dev->gnd_lock);
 		set_mb(conn->gnc_last_sched_ask, jiffies);
 		rc = 1;
 	} else {
@@ -197,6 +198,23 @@ _kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line, int refhe
 
 	/* make sure thread(s) going to process conns - but let it make
 	 * separate decision from conn schedule */
+	if (!lock_held)
+		kgnilnd_schedule_device(dev);
+	return rc;
+}
+
+int
+_kgnilnd_schedule_delay_conn(kgn_conn_t *conn)
+{
+	kgn_device_t	*dev = conn->gnc_device;
+	int rc = 0;
+	spin_lock(&dev->gnd_lock);
+	if (list_empty(&conn->gnc_delaylist)) {
+		list_add_tail(&conn->gnc_delaylist, &dev->gnd_delay_conns);
+		rc = 1;
+	}
+	spin_unlock(&dev->gnd_lock);
+
 	kgnilnd_schedule_device(dev);
 	return rc;
 }
@@ -1343,70 +1361,35 @@ search_again:
 	return 0;
 }
 
-static inline int
-kgnilnd_tx_should_retry(kgn_conn_t *conn, kgn_tx_t *tx)
+static inline void
+kgnilnd_tx_log_retrans(kgn_conn_t *conn, kgn_tx_t *tx)
 {
-	int             max_retrans = *kgnilnd_tunables.kgn_max_retransmits;
 	int             log_retrans;
-	int             log_retrans_level;
 
-	/* I need kgni credits to send this.  Replace tx at the head of the
-	 * fmaq and I'll get rescheduled when credits appear */
-	tx->tx_state = 0;
-	tx->tx_retrans++;
-	conn->gnc_tx_retrans++;
-	log_retrans = ((tx->tx_retrans < 25) || ((tx->tx_retrans % 25) == 0) ||
-			(tx->tx_retrans > (max_retrans / 2)));
-	log_retrans_level = tx->tx_retrans < (max_retrans / 2) ? D_NET : D_NETERROR;
-
-	/* Decision time - either error, warn or just retransmit */
+	log_retrans = ((tx->tx_retrans < 25) || ((tx->tx_retrans % 25) == 0));
 
 	/* we don't care about TX timeout - it could be that the network is slower
 	 * or throttled. We'll keep retranmitting - so if the network is so slow
 	 * that we fill up our mailbox, we'll keep trying to resend that msg
 	 * until we exceed the max_retrans _or_ gnc_last_rx expires, indicating
 	 * that he hasn't send us any traffic in return */
-
-	if (tx->tx_retrans > max_retrans) {
-		/* this means we are not backing off the retransmits
-		 * in a healthy manner and are likely chewing up the
-		 * CPU cycles quite badly */
-		GNIDBG_TOMSG(D_ERROR, &tx->tx_msg,
-			"SOFTWARE BUG: too many retransmits (%d) for tx id %x "
-			"conn 0x%p->%s\n",
-			tx->tx_retrans, tx->tx_id, conn,
-			libcfs_nid2str(conn->gnc_peer->gnp_nid));
-
-		/* yes - double errors to help debug this condition */
-		GNIDBG_TOMSG(D_NETERROR, &tx->tx_msg, "connection dead. "
-			"unable to send to %s for %lu secs (%d tries)",
-			libcfs_nid2str(tx->tx_conn->gnc_peer->gnp_nid),
-			cfs_duration_sec(jiffies - tx->tx_cred_wait),
-			tx->tx_retrans);
-
-		kgnilnd_close_conn(conn, -ETIMEDOUT);
-
-		/* caller should terminate */
-		RETURN(0);
-	} else {
-		/* some reasonable throttling of the debug message */
-		if (log_retrans) {
-			unsigned long now = jiffies;
-			/* XXX Nic: Mystical TX debug here... */
-			GNIDBG_SMSG_CREDS(log_retrans_level, conn);
-			GNIDBG_TOMSG(log_retrans_level, &tx->tx_msg,
-				"NOT_DONE on conn 0x%p->%s id %x retrans %d wait %dus"
-				" last_msg %uus/%uus last_cq %uus/%uus",
-				conn, libcfs_nid2str(conn->gnc_peer->gnp_nid),
-				tx->tx_id, tx->tx_retrans,
-				jiffies_to_usecs(now - tx->tx_cred_wait),
-				jiffies_to_usecs(now - conn->gnc_last_tx),
-				jiffies_to_usecs(now - conn->gnc_last_rx),
-				jiffies_to_usecs(now - conn->gnc_last_tx_cq),
-				jiffies_to_usecs(now - conn->gnc_last_rx_cq));
-		}
-		/* caller should retry */
-		RETURN(1);
+	
+	/* some reasonable throttling of the debug message */
+	if (log_retrans) {
+		unsigned long now = jiffies;
+		/* XXX Nic: Mystical TX debug here... */
+		/* We expect retransmissions so only log when D_NET is enabled */
+		GNIDBG_SMSG_CREDS(D_NET, conn);
+		GNIDBG_TOMSG(D_NET, &tx->tx_msg,
+			"NOT_DONE on conn 0x%p->%s id %x retrans %d wait %dus"
+			" last_msg %uus/%uus last_cq %uus/%uus",
+			conn, libcfs_nid2str(conn->gnc_peer->gnp_nid),
+			tx->tx_id, tx->tx_retrans,
+			jiffies_to_usecs(now - tx->tx_cred_wait),
+			jiffies_to_usecs(now - conn->gnc_last_tx),
+			jiffies_to_usecs(now - conn->gnc_last_rx),
+			jiffies_to_usecs(now - conn->gnc_last_tx_cq),
+			jiffies_to_usecs(now - conn->gnc_last_rx_cq));
 	}
 }
 
@@ -1419,7 +1402,6 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 {
 	kgn_conn_t      *conn = tx->tx_conn;
 	kgn_msg_t       *msg = &tx->tx_msg;
-	int              retry_send;
 	gni_return_t     rrc;
 	unsigned long    newest_last_rx, timeout;
 	unsigned long    now;
@@ -1529,9 +1511,11 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 		return 0;
 
 	case GNI_RC_NOT_DONE:
-		/* XXX Nic: We need to figure out how to track this
-		 * - there are bound to be good reasons for it,
-		 * but we want to know when it happens */
+		/* Jshimek: We can get GNI_RC_NOT_DONE for 3 reasons currently
+		 * 1: out of mbox credits
+		 * 2: out of mbox payload credits
+		 * 3: On Aries out of dla credits
+		 */
 		kgnilnd_conn_mutex_unlock(&conn->gnc_smsg_mutex);
 		kgnilnd_gl_mutex_unlock(&conn->gnc_device->gnd_cq_mutex);
 		/* We'll handle this error inline - makes the calling logic much more
@@ -1542,31 +1526,36 @@ kgnilnd_sendmsg_nolock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob,
 			return -EAGAIN;
 		}
 
-		retry_send = kgnilnd_tx_should_retry(conn, tx);
-		if (retry_send) {
-			/* add to head of list for the state and retries */
-			spin_lock(state_lock);
-			kgnilnd_tx_add_state_locked(tx, conn->gnc_peer, conn, state, 0);
-			spin_unlock(state_lock);
+		/* I need kgni credits to send this.  Replace tx at the head of the
+		 * fmaq and I'll get rescheduled when credits appear. Reset the tx_state
+		 * and bump retrans counts since we are requeueing the tx.
+		 */
+		tx->tx_state = 0;
+		tx->tx_retrans++;
+		conn->gnc_tx_retrans++;
 
-			/* We only reschedule for a certain number of retries, then
-			 * we will wait for the CQ events indicating a release of SMSG
-			 * credits */
-			if (tx->tx_retrans < (*kgnilnd_tunables.kgn_max_retransmits/4)) {
-				kgnilnd_schedule_conn(conn);
-				return 0;
-			} else {
-				/* CQ event coming in signifies either TX completed or
-				 * RX receive. Either of these *could* free up credits
-				 * in the SMSG mbox and we should try sending again */
-				GNIDBG_TX(D_NET, tx, "waiting for CQID %u event to resend",
-					 tx->tx_conn->gnc_cqid);
-				/* use +ve return code to let upper layers know they
-				 * should stop looping on sends */
-				return EAGAIN;
-			}
+		kgnilnd_tx_log_retrans(conn, tx);
+		/* add to head of list for the state and retries */
+		spin_lock(state_lock);
+		kgnilnd_tx_add_state_locked(tx, conn->gnc_peer, conn, state, 0);
+		spin_unlock(state_lock);
+
+		/* We only reschedule for a certain number of retries, then
+		 * we will wait for the CQ events indicating a release of SMSG
+		 * credits */
+		if (tx->tx_retrans < *kgnilnd_tunables.kgn_max_retransmits) {
+			kgnilnd_schedule_conn(conn);
+			return 0;
 		} else {
-			return -EAGAIN;
+			/* CQ event coming in signifies either TX completed or
+			 * RX receive. Either of these *could* free up credits
+			 * in the SMSG mbox and we should try sending again */
+			GNIDBG_TX(D_NET, tx, "waiting for CQID %u event to resend",
+				 tx->tx_conn->gnc_cqid);
+			kgnilnd_schedule_delay_conn(conn);
+			/* use +ve return code to let upper layers know they
+			 * should stop looping on sends */
+			return EAGAIN;
 		}
 	default:
 		/* handle bad retcode gracefully */
@@ -2079,6 +2068,8 @@ kgnilnd_release_msg(kgn_conn_t *conn)
 
 	LASSERTF(rrc == GNI_RC_SUCCESS, "bad rrc %d\n", rrc);
 	GNIDBG_SMSG_CREDS(D_NET, conn);
+
+	kgnilnd_schedule_conn(conn);
 
 	return;
 }
@@ -3338,6 +3329,7 @@ kgnilnd_check_fma_send_cq(kgn_device_t *dev)
 	kgn_conn_t            *conn = NULL;
 	int                    queued_fma, saw_reply, rc;
 	long                   num_processed = 0;
+	struct list_head      *ctmp, *ctmpN;
 
 	for (;;) {
 		/* make sure we don't keep looping if we need to reset */
@@ -3360,6 +3352,22 @@ kgnilnd_check_fma_send_cq(kgn_device_t *dev)
 			       "SMSG send CQ %d not ready (data %#llx) "
 			       "processed %ld\n", dev->gnd_id, event_data,
 			       num_processed);
+
+			if (num_processed > 0) {
+				spin_lock(&dev->gnd_lock);
+				if (!list_empty(&dev->gnd_delay_conns)) {
+					list_for_each_safe(ctmp, ctmpN, &dev->gnd_delay_conns) {
+						conn = list_entry(ctmp, kgn_conn_t, gnc_delaylist);
+						list_del_init(&conn->gnc_delaylist);
+						CDEBUG(D_NET, "Moving Conn %p from delay queue to ready_queue\n", conn);
+						kgnilnd_schedule_conn_nolock(conn);
+					}
+					spin_unlock(&dev->gnd_lock);
+					kgnilnd_schedule_device(dev);
+				} else {
+					spin_unlock(&dev->gnd_lock);
+				}
+			}
 			return num_processed;
 		}
 
@@ -4900,6 +4908,12 @@ kgnilnd_process_conns(kgn_device_t *dev, unsigned long deadline)
 
 		conn = list_first_entry(&dev->gnd_ready_conns, kgn_conn_t, gnc_schedlist);
 		list_del_init(&conn->gnc_schedlist);
+		/* 
+		 * Since we are processing conn now, we don't need to be on the delaylist any longer.
+		 */
+
+		if (!list_empty(&conn->gnc_delaylist))
+			list_del_init(&conn->gnc_delaylist);
 		spin_unlock(&dev->gnd_lock);
 
 		conn_sched = xchg(&conn->gnc_scheduled, GNILND_CONN_PROCESS);
@@ -4926,7 +4940,7 @@ kgnilnd_process_conns(kgn_device_t *dev, unsigned long deadline)
 				kgnilnd_conn_decref(conn);
 				up_write(&dev->gnd_conn_sem);
 			} else if (rc != 1) {
-			kgnilnd_conn_decref(conn);
+				kgnilnd_conn_decref(conn);
 			}
 			/* clear this so that scheduler thread doesn't spin */
 			found_work = 0;
@@ -4977,7 +4991,7 @@ kgnilnd_process_conns(kgn_device_t *dev, unsigned long deadline)
 			kgnilnd_conn_decref(conn);
 			up_write(&dev->gnd_conn_sem);
 		} else if (rc != 1) {
-		kgnilnd_conn_decref(conn);
+			kgnilnd_conn_decref(conn);
 		}
 
 		/* check list again with lock held */

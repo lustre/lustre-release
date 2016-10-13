@@ -102,9 +102,10 @@ static int pkey = GNI_JOB_CREATE_COOKIE(GNI_PKEY_LND, 0);
 module_param(pkey, int, 0444);
 MODULE_PARM_DESC(pkey, "pkey for CDM");
 
-static int max_retransmits = 1024;
+static int max_retransmits = 128;
 module_param(max_retransmits, int, 0444);
-MODULE_PARM_DESC(max_retransmits, "max retransmits for FMA");
+MODULE_PARM_DESC(max_retransmits,
+		 "max retransmits for FMA before entering delay queue");
 
 static int nwildcard = 4;
 module_param(nwildcard, int, 0444);

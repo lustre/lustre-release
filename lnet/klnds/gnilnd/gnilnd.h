@@ -462,7 +462,7 @@ typedef struct kgn_tunables {
 	int              *kgn_bte_relaxed_ordering; /* relaxed ordering (PASSPW) on BTE transfers */
 	int              *kgn_ptag;             /* PTAG for cdm_create */
 	int              *kgn_pkey;             /* PKEY for cdm_create */
-	int              *kgn_max_retransmits;  /* max number of FMA retransmits */
+	int              *kgn_max_retransmits;  /* max number of FMA retransmits before entering delay list */
 	int              *kgn_nwildcard;        /* # wildcard per net to post */
 	int              *kgn_nice;             /* nice value for kgnilnd threads */
 	int              *kgn_rdmaq_intervals;  /* # intervals per second for rdmaq throttle */
@@ -541,6 +541,7 @@ typedef struct kgn_device {
 	atomic_t                gnd_neps;         /* # EP allocated to conns */
 	short                   gnd_ready;        /* stuff to do in scheduler thread */
 	struct list_head        gnd_ready_conns;  /* connections ready to tx/rx */
+	struct list_head        gnd_delay_conns;  /* connections in need of dla/or smsg credits */
 	struct list_head        gnd_map_tx;       /* TX: needing buffer mapping */
 	wait_queue_head_t       gnd_waitq;        /* scheduler wakeup */
 	spinlock_t              gnd_lock;         /* serialise gnd_ready_conns */
@@ -706,6 +707,7 @@ typedef struct kgn_conn {
 	struct list_head    gnc_schedlist;      /* schedule (on gnd_?_conns) for attention */
 	struct list_head    gnc_fmaq;           /* txs queued for FMA */
 	struct list_head    gnc_mdd_list;       /* hold list for MDD on hard conn reset */
+	struct list_head    gnc_delaylist;      /* If on this list schedule anytime we get interrupted */
 	__u64               gnc_peerstamp;      /* peer's unique stamp */
 	__u64               gnc_peer_connstamp; /* peer's unique connection stamp */
 	__u64               gnc_my_connstamp;   /* my unique connection stamp */
@@ -879,7 +881,8 @@ extern kgn_tunables_t     kgnilnd_tunables;
 
 extern void kgnilnd_destroy_peer(kgn_peer_t *peer);
 extern void kgnilnd_destroy_conn(kgn_conn_t *conn);
-extern int _kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line, int refheld);
+extern int _kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line, int refheld, int lock_held);
+extern int _kgnilnd_schedule_delay_conn(kgn_conn_t *conn);
 
 /* Macro wrapper for _kgnilnd_schedule_conn. This will store the function
  * and the line of the calling function to allow us to debug problematic
@@ -887,10 +890,20 @@ extern int _kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line
  * the location manually.
  */
 #define kgnilnd_schedule_conn(conn)					\
-	_kgnilnd_schedule_conn(conn, __func__, __LINE__, 0);
+	_kgnilnd_schedule_conn(conn, __func__, __LINE__, 0, 0);
 
 #define kgnilnd_schedule_conn_refheld(conn, refheld)			\
-	_kgnilnd_schedule_conn(conn, __func__, __LINE__, refheld);
+	_kgnilnd_schedule_conn(conn, __func__, __LINE__, refheld, 0);
+
+#define kgnilnd_schedule_conn_nolock(conn)				\
+	_kgnilnd_schedule_conn(conn, __func__, __LINE__, 0, 1);
+
+
+/* Macro wrapper for _kgnilnd_schedule_delay_conn. This will allow us to store
+ * extra data if we need to.
+ */
+#define kgnilnd_schedule_delay_conn(conn) \
+	_kgnilnd_schedule_delay_conn(conn);
 
 static inline void
 kgnilnd_thread_fini(void)
@@ -1764,7 +1777,7 @@ kgn_tx_t *kgnilnd_new_tx_msg(int type, lnet_nid_t source);
 void kgnilnd_tx_done(kgn_tx_t *tx, int completion);
 void kgnilnd_txlist_done(struct list_head *txlist, int error);
 void kgnilnd_unlink_peer_locked(kgn_peer_t *peer);
-int _kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line, int refheld);
+int _kgnilnd_schedule_conn(kgn_conn_t *conn, const char *caller, int line, int refheld, int lock_held);
 int kgnilnd_schedule_process_conn(kgn_conn_t *conn, int sched_intent);
 
 void kgnilnd_schedule_dgram(kgn_device_t *dev);
