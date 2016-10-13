@@ -287,7 +287,7 @@ static int vvp_io_fault_iter_init(const struct lu_env *env,
 	struct inode  *inode = vvp_object_inode(ios->cis_obj);
 
 	LASSERT(inode == file_inode(vio->vui_fd->fd_file));
-	vio->u.fault.ft_mtime = LTIME_S(inode->i_mtime);
+	vio->u.fault.ft_mtime = inode->i_mtime.tv_sec;
 
 	return 0;
 }
