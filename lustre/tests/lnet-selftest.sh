@@ -11,11 +11,6 @@ init_logging
 #
 ALWAYS_EXCEPT="$ALWAYS_EXCEPT $LNET_SELFTEST_EXCEPT"
 
-if [[ $MDSCOUNT -ge 2 ]]; then
-	#LU-4181
-	skip "Only run with single MDT for now" && exit
-fi
-
 [ x$LST = x ] && { skip_env "lst not found LST=$LST" && exit 0; }
 
 # FIXME: what is the reasonable value here?
