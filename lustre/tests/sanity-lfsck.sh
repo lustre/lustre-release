@@ -1335,6 +1335,14 @@ test_11b() {
 	umount_client $MOUNT
 	stop ost1 || error "(1) Fail to stop ost1"
 
+	# stop MDS to forget last precreated object
+	echo "stop $SINGLEMDS"
+	stop $SINGLEMDS > /dev/null || error "(11) Fail to stop MDS!"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(12) Fail to start MDS!"
+
 	#define OBD_FAIL_OST_ENOSPC              0x215
 	do_facet ost1 $LCTL set_param fail_loc=0x215
 
