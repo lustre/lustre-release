@@ -615,6 +615,116 @@ struct mgs_modify_lookup {
         int               mml_modified;
 };
 
+static int mgs_check_record_match(const struct lu_env *env,
+				struct llog_handle *llh,
+				struct llog_rec_hdr *rec, void *data)
+{
+	struct cfg_marker *mc_marker = data;
+	struct cfg_marker *marker;
+	struct lustre_cfg *lcfg = REC_DATA(rec);
+	int cfg_len = REC_DATA_LEN(rec);
+	int rc;
+	ENTRY;
+
+
+	if (rec->lrh_type != OBD_CFG_REC) {
+		CDEBUG(D_ERROR, "Unhandled lrh_type: %#x\n", rec->lrh_type);
+		RETURN(-EINVAL);
+	}
+
+	rc = lustre_cfg_sanity_check(lcfg, cfg_len);
+	if (rc) {
+		CDEBUG(D_ERROR, "Insane cfg\n");
+		RETURN(rc);
+	}
+
+	/* We only care about markers */
+	if (lcfg->lcfg_command != LCFG_MARKER)
+		RETURN(0);
+
+	marker = lustre_cfg_buf(lcfg, 1);
+
+	if (marker->cm_flags & CM_SKIP)
+		RETURN(0);
+
+	if ((strcmp(mc_marker->cm_comment, marker->cm_comment) == 0) &&
+		(strcmp(mc_marker->cm_tgtname, marker->cm_tgtname) == 0)) {
+		/* Found a non-skipped marker match */
+		CDEBUG(D_MGS, "Matched rec %u marker %d flag %x %s %s\n",
+			rec->lrh_index, marker->cm_step,
+			marker->cm_flags, marker->cm_tgtname,
+			marker->cm_comment);
+		rc = LLOG_PROC_BREAK;
+	}
+
+	RETURN(rc);
+}
+
+/**
+ * Check an existing config log record with matching comment and device
+ * Return code:
+ * 0 - checked successfully,
+ * LLOG_PROC_BREAK - record matches
+ * negative - error
+ */
+static int mgs_check_marker(const struct lu_env *env, struct mgs_device *mgs,
+		struct fs_db *fsdb, struct mgs_target_info *mti,
+		char *logname, char *devname, char *comment)
+{
+	struct llog_handle *loghandle;
+	struct llog_ctxt *ctxt;
+	struct cfg_marker *mc_marker;
+	int rc;
+
+	ENTRY;
+
+	LASSERT(mutex_is_locked(&fsdb->fsdb_mutex));
+	CDEBUG(D_MGS, "mgs check %s/%s/%s\n", logname, devname, comment);
+
+	ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
+	LASSERT(ctxt != NULL);
+	rc = llog_open(env, ctxt, &loghandle, NULL, logname, LLOG_OPEN_EXISTS);
+	if (rc < 0) {
+		if (rc == -ENOENT)
+			rc = 0;
+		GOTO(out_pop, rc);
+	}
+
+	rc = llog_init_handle(env, loghandle, LLOG_F_IS_PLAIN, NULL);
+	if (rc)
+		GOTO(out_close, rc);
+
+	if (llog_get_size(loghandle) <= 1)
+		GOTO(out_close, rc = 0);
+
+	OBD_ALLOC_PTR(mc_marker);
+	if (!mc_marker)
+		GOTO(out_close, rc = -ENOMEM);
+	if (strlcpy(mc_marker->cm_comment, comment,
+		sizeof(mc_marker->cm_comment)) >=
+		sizeof(mc_marker->cm_comment))
+		GOTO(out_free, rc = -E2BIG);
+	if (strlcpy(mc_marker->cm_tgtname, devname,
+		sizeof(mc_marker->cm_tgtname)) >=
+		sizeof(mc_marker->cm_tgtname))
+		GOTO(out_free, rc = -E2BIG);
+
+	rc = llog_process(env, loghandle, mgs_check_record_match,
+			(void *)mc_marker, NULL);
+
+out_free:
+	OBD_FREE_PTR(mc_marker);
+
+out_close:
+	llog_close(env, loghandle);
+out_pop:
+	if (rc && rc != LLOG_PROC_BREAK)
+		CDEBUG(D_ERROR, "%s: mgs check %s/%s failed: rc = %d\n",
+			mgs->mgs_obd->obd_name, mti->mti_svname, comment, rc);
+	llog_ctxt_put(ctxt);
+	RETURN(rc);
+}
+
 static int mgs_modify_handler(const struct lu_env *env,
 			      struct llog_handle *llh,
 			      struct llog_rec_hdr *rec, void *data)
@@ -4197,6 +4307,7 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
         char *label = NULL, *canceled_label = NULL;
         int label_sz;
         struct mgs_target_info *mti = NULL;
+	bool checked = false;
         int rc, i;
         ENTRY;
 
@@ -4259,11 +4370,10 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
                 break;
         }
 
-        if (canceled_label != NULL) {
-                OBD_ALLOC_PTR(mti);
-                if (mti == NULL)
-			GOTO(out_cancel, rc = -ENOMEM);
-        }
+	OBD_ALLOC_PTR(mti);
+	if (mti == NULL)
+		GOTO(out_cancel, rc = -ENOMEM);
+	strncpy(mti->mti_svname, "lov pool", sizeof(mti->mti_svname));
 
 	mutex_lock(&fsdb->fsdb_mutex);
         /* write pool def to all MDT logs */
@@ -4275,12 +4385,24 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 				mutex_unlock(&fsdb->fsdb_mutex);
 				GOTO(out_mti, rc);
 			}
-                        if (canceled_label != NULL) {
-                                strcpy(mti->mti_svname, "lov pool");
+
+			if (!checked && (canceled_label == NULL)) {
+				rc = mgs_check_marker(env, mgs, fsdb, mti,
+						logname, lovname, label);
+				if (rc) {
+					name_destroy(&logname);
+					name_destroy(&lovname);
+					mutex_unlock(&fsdb->fsdb_mutex);
+					GOTO(out_mti,
+						rc = (rc == LLOG_PROC_BREAK ?
+							-EEXIST : rc));
+				}
+				checked = true;
+			}
+			if (canceled_label != NULL)
 				rc = mgs_modify(env, mgs, fsdb, mti, logname,
 						lovname, canceled_label,
 						CM_SKIP);
-                        }
 
 			if (rc >= 0)
 				rc = mgs_write_log_pool(env, mgs, logname,
@@ -4300,6 +4422,17 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 	if (rc) {
 		mutex_unlock(&fsdb->fsdb_mutex);
 		GOTO(out_mti, rc);
+	}
+
+	if (!checked && (canceled_label == NULL)) {
+		rc = mgs_check_marker(env, mgs, fsdb, mti, logname,
+				fsdb->fsdb_clilov, label);
+		if (rc) {
+			name_destroy(&logname);
+			mutex_unlock(&fsdb->fsdb_mutex);
+			GOTO(out_mti, rc = (rc == LLOG_PROC_BREAK ?
+				-EEXIST : rc));
+		}
 	}
 	if (canceled_label != NULL) {
 		rc = mgs_modify(env, mgs, fsdb, mti, logname,
