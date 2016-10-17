@@ -391,6 +391,7 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 	spin_lock_init(&cli->cl_lru_list_lock);
 	atomic_long_set(&cli->cl_unstable_count, 0);
 	INIT_LIST_HEAD(&cli->cl_shrink_list);
+	INIT_LIST_HEAD(&cli->cl_grant_chain);
 
 	INIT_LIST_HEAD(&cli->cl_flight_waiters);
 	cli->cl_rpcs_in_flight = 0;
