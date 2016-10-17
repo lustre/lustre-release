@@ -217,9 +217,11 @@ static int mgs_fsdb_handler(const struct lu_env *env, struct llog_handle *llh,
                 }
                 rc = 0;
                 CDEBUG(D_MGS, "MDT index is %u\n", index);
-		set_bit(index, fsdb->fsdb_mdt_index_map);
-                fsdb->fsdb_mdt_count ++;
-        }
+		if (!test_bit(index, fsdb->fsdb_mdt_index_map)) {
+			set_bit(index, fsdb->fsdb_mdt_index_map);
+			fsdb->fsdb_mdt_count++;
+		}
+	}
 
 	/**
 	 * figure out the old config. fsdb_gen = 0 means old log
@@ -407,6 +409,8 @@ static struct fs_db *mgs_new_fsdb(const struct lu_env *env,
 	if (strcmp(fsname, MGSSELF_NAME) == 0) {
 		set_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags);
 		fsdb->fsdb_mgs = mgs;
+		if (logname_is_barrier(fsname))
+			goto add;
 	} else {
 		OBD_ALLOC(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
 		if (!fsdb->fsdb_mdt_index_map) {
@@ -421,6 +425,9 @@ static struct fs_db *mgs_new_fsdb(const struct lu_env *env,
 
 			GOTO(err, rc = -ENOMEM);
 		}
+
+		if (logname_is_barrier(fsname))
+			goto add;
 
 		rc = name_create(&fsdb->fsdb_clilov, fsname, "-clilov");
 		if (rc)
@@ -453,6 +460,7 @@ static struct fs_db *mgs_new_fsdb(const struct lu_env *env,
 		GOTO(err, rc);
 	}
 
+add:
 	/* One ref is for the fsdb on the list.
 	 * The other ref is for the caller. */
 	atomic_set(&fsdb->fsdb_ref, 2);
@@ -474,7 +482,8 @@ static void mgs_free_fsdb(struct mgs_device *mgs, struct fs_db *fsdb)
 	lproc_mgs_del_live(mgs, fsdb);
 
 	/* deinitialize fsr */
-	mgs_ir_fini_fs(mgs, fsdb);
+	if (fsdb->fsdb_mgs)
+		mgs_ir_fini_fs(mgs, fsdb);
 
 	if (fsdb->fsdb_ost_index_map)
 		OBD_FREE(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
@@ -621,8 +630,6 @@ static int mgs_set_index(const struct lu_env *env,
                 if (rc == -1)
 			GOTO(out_up, rc = -ERANGE);
                 mti->mti_stripe_index = rc;
-                if (mti->mti_flags & LDD_F_SV_TYPE_MDT)
-                        fsdb->fsdb_mdt_count ++;
         }
 
 	/* the last index(0xffff) is reserved for default value. */
@@ -647,8 +654,12 @@ static int mgs_set_index(const struct lu_env *env,
                         CDEBUG(D_MGS, "Server %s updating index %d\n",
                                mti->mti_svname, mti->mti_stripe_index);
 			GOTO(out_up, rc = EALREADY);
-                }
-        }
+		}
+	} else {
+		set_bit(mti->mti_stripe_index, imap);
+		if (mti->mti_flags & LDD_F_SV_TYPE_MDT)
+			fsdb->fsdb_mdt_count++;
+	}
 
 	set_bit(mti->mti_stripe_index, imap);
 	clear_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags);
@@ -4006,8 +4017,9 @@ int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs,
 {
 	struct list_head log_list;
 	struct mgs_direntry *dirent, *n;
-	int rc, len = strlen(fsname);
+	char barrier_name[20] = {};
 	char *suffix;
+	int rc, len = strlen(fsname);
 	ENTRY;
 
 	/* Find all the logs in the CONFIGS directory */
@@ -4016,6 +4028,10 @@ int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs,
 		RETURN(rc);
 
 	mutex_lock(&mgs->mgs_mutex);
+	snprintf(barrier_name, sizeof(barrier_name) - 1, "%s-%s",
+		 fsname, BARRIER_FILENAME);
+	/* Delete the barrier fsdb */
+	mgs_remove_fsdb_by_name(mgs, barrier_name);
 	/* Delete the fs db */
 	mgs_remove_fsdb_by_name(mgs, fsname);
 	mutex_unlock(&mgs->mgs_mutex);

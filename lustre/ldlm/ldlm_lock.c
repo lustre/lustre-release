@@ -2024,6 +2024,8 @@ int ldlm_work_gl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 
 	/* transfer the glimpse descriptor to ldlm_cb_set_arg */
 	arg->gl_desc = gl_work->gl_desc;
+	arg->gl_interpret_reply = gl_work->gl_interpret_reply;
+	arg->gl_interpret_data = gl_work->gl_interpret_data;
 
 	/* invoke the actual glimpse callback */
 	if (lock->l_glimpse_ast(lock, (void*)arg) == 0)

@@ -176,6 +176,7 @@ int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 #define CONFIG_T_RECOVER	0x04
 #define CONFIG_T_PARAMS		0x08
 #define CONFIG_T_NODEMAP	0x10
+#define CONFIG_T_BARRIER	0x20
 
 /* Sub clds should be attached to the config_llog_data when processing
  * config log for client or server target. */
@@ -184,25 +185,40 @@ int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 #define CONFIG_SUB_SERVER	(CONFIG_SUB_CLIENT | CONFIG_T_NODEMAP)
 
 #define PARAMS_FILENAME		"params"
+#define BARRIER_FILENAME	"barrier"
 #define LCTL_UPCALL		"lctl"
+
+static inline bool logname_is_barrier(const char *logname)
+{
+	char *ptr;
+
+	/* logname for barrier is "fsname-barrier" */
+	ptr = strstr(logname, BARRIER_FILENAME);
+	if (ptr && (ptr - logname) >= 2 &&
+	    *(ptr - 1) == '-' && *(ptr + 7) == '\0')
+		return true;
+
+	return false;
+}
 
 /* list of active configuration logs  */
 struct config_llog_data {
-        struct ldlm_res_id          cld_resid;
-        struct config_llog_instance cld_cfg;
+	struct ldlm_res_id	    cld_resid;
+	struct config_llog_instance cld_cfg;
 	struct list_head	    cld_list_chain;
 	atomic_t		    cld_refcount;
 	struct config_llog_data    *cld_sptlrpc;/* depended sptlrpc log */
-	struct config_llog_data	   *cld_params;	/* common parameters log */
+	struct config_llog_data    *cld_params;	/* common parameters log */
 	struct config_llog_data    *cld_recover;/* imperative recover log */
 	struct config_llog_data    *cld_nodemap;/* nodemap log */
-        struct obd_export          *cld_mgcexp;
+	struct config_llog_data    *cld_barrier;/* barrier log (for MDT only) */
+	struct obd_export	   *cld_mgcexp;
 	struct mutex		    cld_lock;
-        int                         cld_type;
-        unsigned int                cld_stopping:1, /* we were told to stop
-                                                     * watching */
-                                    cld_lostlock:1; /* lock not requeued */
-        char                        cld_logname[0];
+	int			    cld_type;
+	unsigned int		    cld_stopping:1, /* we were told to stop
+						     * watching */
+				    cld_lostlock:1; /* lock not requeued */
+	char			    cld_logname[0];
 };
 
 struct lustre_profile {

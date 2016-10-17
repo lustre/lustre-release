@@ -1104,8 +1104,8 @@ void lustre_assert_wire_constants(void)
 		 OBD_CONNECT_TRANSNO);
 	LASSERTF(OBD_CONNECT_IBITS == 0x1000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT_IBITS);
-	LASSERTF(OBD_CONNECT_JOIN == 0x2000ULL, "found 0x%.16llxULL\n",
-		 OBD_CONNECT_JOIN);
+	LASSERTF(OBD_CONNECT_BARRIER == 0x2000ULL, "found 0x%.16llxULL\n",
+		 OBD_CONNECT_BARRIER);
 	LASSERTF(OBD_CONNECT_ATTRFID == 0x4000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT_ATTRFID);
 	LASSERTF(OBD_CONNECT_NODEVOH == 0x8000ULL, "found 0x%.16llxULL\n",
@@ -3294,6 +3294,38 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ldlm_gl_lquota_desc, gl_pad2));
 	LASSERTF((int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_pad2) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_pad2));
+
+	/* Checks for struct ldlm_gl_barrier_desc */
+	LASSERTF((int)sizeof(struct ldlm_gl_barrier_desc) == 16, "found %lld\n",
+		 (long long)(int)sizeof(struct ldlm_gl_barrier_desc));
+	LASSERTF((int)offsetof(struct ldlm_gl_barrier_desc, lgbd_status) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct ldlm_gl_barrier_desc, lgbd_status));
+	LASSERTF((int)sizeof(((struct ldlm_gl_barrier_desc *)0)->lgbd_status) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ldlm_gl_barrier_desc *)0)->lgbd_status));
+	LASSERTF((int)offsetof(struct ldlm_gl_barrier_desc, lgbd_timeout) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct ldlm_gl_barrier_desc, lgbd_timeout));
+	LASSERTF((int)sizeof(((struct ldlm_gl_barrier_desc *)0)->lgbd_timeout) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct ldlm_gl_barrier_desc *)0)->lgbd_timeout));
+	LASSERTF((int)offsetof(struct ldlm_gl_barrier_desc, lgbd_padding) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct ldlm_gl_barrier_desc, lgbd_padding));
+	LASSERTF((int)sizeof(((struct ldlm_gl_barrier_desc *)0)->lgbd_padding) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct ldlm_gl_barrier_desc *)0)->lgbd_padding));
+
+	/* Checks for struct barrier_lvb */
+	LASSERTF((int)sizeof(struct barrier_lvb) == 16, "found %lld\n",
+		 (long long)(int)sizeof(struct barrier_lvb));
+	LASSERTF((int)offsetof(struct barrier_lvb, lvb_status) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct barrier_lvb, lvb_status));
+	LASSERTF((int)sizeof(((struct barrier_lvb *)0)->lvb_status) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct barrier_lvb *)0)->lvb_status));
+	LASSERTF((int)offsetof(struct barrier_lvb, lvb_index) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct barrier_lvb, lvb_index));
+	LASSERTF((int)sizeof(((struct barrier_lvb *)0)->lvb_index) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct barrier_lvb *)0)->lvb_index));
+	LASSERTF((int)offsetof(struct barrier_lvb, lvb_padding) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct barrier_lvb, lvb_padding));
+	LASSERTF((int)sizeof(((struct barrier_lvb *)0)->lvb_padding) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct barrier_lvb *)0)->lvb_padding));
 
 	/* Checks for struct mgs_send_param */
 	LASSERTF((int)sizeof(struct mgs_send_param) == 1024, "found %lld\n",

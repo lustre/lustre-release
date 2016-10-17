@@ -49,17 +49,22 @@ int mgc_process_log(struct obd_device *mgc, struct config_llog_data *cld);
 
 static inline int cld_is_sptlrpc(struct config_llog_data *cld)
 {
-        return cld->cld_type == CONFIG_T_SPTLRPC;
+	return cld->cld_type == CONFIG_T_SPTLRPC;
 }
 
 static inline int cld_is_recover(struct config_llog_data *cld)
 {
-        return cld->cld_type == CONFIG_T_RECOVER;
+	return cld->cld_type == CONFIG_T_RECOVER;
 }
 
 static inline int cld_is_nodemap(struct config_llog_data *cld)
 {
 	return cld->cld_type == CONFIG_T_NODEMAP;
+}
+
+static inline int cld_is_barrier(struct config_llog_data *cld)
+{
+	return cld->cld_type == CONFIG_T_BARRIER;
 }
 
 #endif  /* _MGC_INTERNAL_H */

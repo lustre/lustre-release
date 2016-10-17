@@ -145,7 +145,7 @@ int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 		[DLM_LOCKREPLY_OFF]   = sizeof(*rep),
 		[DLM_REPLY_REC_OFF]   = sizeof(*reply_lvb)
 	};
-	struct ldlm_glimpse_work gl_work;
+	struct ldlm_glimpse_work gl_work = {};
 	struct list_head gl_list;
 	ENTRY;
 

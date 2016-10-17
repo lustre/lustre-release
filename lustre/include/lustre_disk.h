@@ -598,6 +598,7 @@ void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd);
 # endif
 
 int mgc_fsname2resid(char *fsname, struct ldlm_res_id *res_id, int type);
+int mgc_logname2resid(char *fsname, struct ldlm_res_id *res_id, int type);
 #endif /* __KERNEL__ */
 
 /** @} disk */

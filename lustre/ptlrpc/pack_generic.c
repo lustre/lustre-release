@@ -1785,16 +1785,25 @@ void lustre_swab_generic_32s(__u32 *val)
         __swab32s(val);
 }
 
-void lustre_swab_gl_desc(union ldlm_gl_desc *desc)
+void lustre_swab_gl_lquota_desc(struct ldlm_gl_lquota_desc *desc)
 {
-	lustre_swab_lu_fid(&desc->lquota_desc.gl_id.qid_fid);
-	__swab64s(&desc->lquota_desc.gl_flags);
-	__swab64s(&desc->lquota_desc.gl_ver);
-	__swab64s(&desc->lquota_desc.gl_hardlimit);
-	__swab64s(&desc->lquota_desc.gl_softlimit);
-	__swab64s(&desc->lquota_desc.gl_time);
-	CLASSERT(offsetof(typeof(desc->lquota_desc), gl_pad2) != 0);
+	lustre_swab_lu_fid(&desc->gl_id.qid_fid);
+	__swab64s(&desc->gl_flags);
+	__swab64s(&desc->gl_ver);
+	__swab64s(&desc->gl_hardlimit);
+	__swab64s(&desc->gl_softlimit);
+	__swab64s(&desc->gl_time);
+	CLASSERT(offsetof(typeof(*desc), gl_pad2) != 0);
 }
+EXPORT_SYMBOL(lustre_swab_gl_lquota_desc);
+
+void lustre_swab_gl_barrier_desc(struct ldlm_gl_barrier_desc *desc)
+{
+	__swab32s(&desc->lgbd_status);
+	__swab32s(&desc->lgbd_timeout);
+	CLASSERT(offsetof(typeof(*desc), lgbd_padding) != 0);
+}
+EXPORT_SYMBOL(lustre_swab_gl_barrier_desc);
 
 void lustre_swab_ost_lvb_v1(struct ost_lvb_v1 *lvb)
 {
@@ -1829,6 +1838,14 @@ void lustre_swab_lquota_lvb(struct lquota_lvb *lvb)
 	__swab64s(&lvb->lvb_pad1);
 }
 EXPORT_SYMBOL(lustre_swab_lquota_lvb);
+
+void lustre_swab_barrier_lvb(struct barrier_lvb *lvb)
+{
+	__swab32s(&lvb->lvb_status);
+	__swab32s(&lvb->lvb_index);
+	CLASSERT(offsetof(typeof(*lvb), lvb_padding) != 0);
+}
+EXPORT_SYMBOL(lustre_swab_barrier_lvb);
 
 void lustre_swab_mdt_body (struct mdt_body *b)
 {

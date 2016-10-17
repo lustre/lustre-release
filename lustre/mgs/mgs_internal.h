@@ -117,17 +117,22 @@ struct mgs_tgt_srpc_conf {
 #define FSDB_REVOKING_PARAMS	(6)  /* DLM lock is being revoked */
 
 struct fs_db {
-	char		  fsdb_name[9];
+	char		  fsdb_name[20];
 	struct list_head  fsdb_list;		/* list of databases */
 	struct mutex	  fsdb_mutex;
-	void		 *fsdb_ost_index_map;	/* bitmap of used indicies */
+	union {
+		void	 *fsdb_ost_index_map;	/* bitmap of used indicies */
+		void	 *fsdb_barrier_map;	/* bitmap of barrier */
+	};
 	void		 *fsdb_mdt_index_map;	/* bitmap of used indicies */
 	atomic_t	  fsdb_ref;
 	int		  fsdb_mdt_count;
 	char		 *fsdb_clilov;	/* COMPAT_146 client lov name */
 	char		 *fsdb_clilmv;
 	unsigned long	  fsdb_flags;
-	__u32		  fsdb_gen;
+	__u32		  fsdb_barrier_status;
+	__u32		  fsdb_barrier_timeout;
+	time_t		  fsdb_barrier_latest_create_time;
 
         /* in-memory copy of the srpc rules, guarded by fsdb_lock */
         struct sptlrpc_rule_set   fsdb_srpc_gen;
@@ -148,11 +153,14 @@ struct fs_db {
 	cfs_time_t            fsdb_notify_start;
 	atomic_t	      fsdb_notify_phase;
 	volatile unsigned int fsdb_notify_async:1,
-                             fsdb_notify_stop:1;
-        /* statistic data */
-        unsigned int         fsdb_notify_total;
-        unsigned int         fsdb_notify_max;
-        unsigned int         fsdb_notify_count;
+			      fsdb_notify_stop:1,
+			      fsdb_has_lproc_entry:1,
+			      fsdb_barrier_disabled:1;
+	/* statistic data */
+	unsigned int	fsdb_notify_total;
+	unsigned int	fsdb_notify_max;
+	unsigned int	fsdb_notify_count;
+	__u32		fsdb_gen;
 };
 
 struct mgs_device {
@@ -173,6 +181,7 @@ struct mgs_device {
 	struct local_oid_storage	*mgs_los;
 	struct mutex			 mgs_mutex;
 	struct mutex			 mgs_health_mutex;
+	struct rw_semaphore		 mgs_barrier_rwsem;
 	struct lu_target		 mgs_lut;
 };
 

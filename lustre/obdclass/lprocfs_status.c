@@ -767,7 +767,7 @@ static const char *obd_connect_names[] = {
 	"truncate_lock",
 	"initial_transno",
 	"inode_bit_locks",
-	"join_file(obsolete)",
+	"barrier",
 	"getattr_by_fid",
 	"no_oh_for_devices",
 	"remote_client",

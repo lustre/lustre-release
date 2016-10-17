@@ -124,14 +124,6 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 
 /* ldlm_lock.c */
 
-struct ldlm_cb_set_arg {
-	struct ptlrpc_request_set	*set;
-	int				 type; /* LDLM_{CP,BL,GL}_CALLBACK */
-	atomic_t			 restart;
-	struct list_head			*list;
-	union ldlm_gl_desc		*gl_desc; /* glimpse AST descriptor */
-};
-
 typedef enum {
 	LDLM_WORK_BL_AST,
 	LDLM_WORK_CP_AST,

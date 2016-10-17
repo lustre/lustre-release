@@ -32,6 +32,7 @@
 
 #include <lustre_dlm.h>
 #include <obd_class.h>
+#include <lustre_swab.h>
 
 #include "qsd_internal.h"
 
@@ -147,6 +148,9 @@ static int qsd_common_glimpse_ast(struct ptlrpc_request *req,
 	*desc = req_capsule_client_get(&req->rq_pill, &RMF_DLM_GL_DESC);
 	if (*desc == NULL)
 		RETURN(-EFAULT);
+
+	if (ptlrpc_req_need_swab(req))
+		lustre_swab_gl_lquota_desc(*desc);
 
 	/* prepare reply */
 	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,

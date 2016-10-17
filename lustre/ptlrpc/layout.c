@@ -1068,8 +1068,7 @@ struct req_msg_field RMF_DLM_LVB =
 EXPORT_SYMBOL(RMF_DLM_LVB);
 
 struct req_msg_field RMF_DLM_GL_DESC =
-	DEFINE_MSGF("dlm_gl_desc", 0, sizeof(union ldlm_gl_desc),
-		    lustre_swab_gl_desc, NULL);
+	DEFINE_MSGF("dlm_gl_desc", 0, sizeof(union ldlm_gl_desc), NULL, NULL);
 EXPORT_SYMBOL(RMF_DLM_GL_DESC);
 
 struct req_msg_field RMF_MDT_MD =

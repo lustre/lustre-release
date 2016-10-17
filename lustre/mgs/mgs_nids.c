@@ -414,18 +414,15 @@ void mgs_ir_notify_complete(struct fs_db *fsdb)
 
 static int mgs_ir_notify(void *arg)
 {
-        struct fs_db      *fsdb   = arg;
-        struct ldlm_res_id resid;
+	struct fs_db *fsdb = arg;
+	struct ldlm_res_id resid;
+	char name[sizeof(fsdb->fsdb_name) + 16];
 
-        char name[sizeof(fsdb->fsdb_name) + 20];
+	LASSERTF(sizeof(name) < 40, "name is too large to be in stack.\n");
 
-        LASSERTF(sizeof(name) < 32, "name is too large to be in stack.\n");
-        sprintf(name, "mgs_%s_notify", fsdb->fsdb_name);
-
+	snprintf(name, sizeof(name) - 1, "mgs_%s_notify", fsdb->fsdb_name);
 	complete(&fsdb->fsdb_notify_comp);
-
-        set_user_nice(current, -2);
-
+	set_user_nice(current, -2);
 	mgc_fsname2resid(fsdb->fsdb_name, &resid, CONFIG_T_RECOVER);
 	while (1) {
 		struct l_wait_info   lwi = { 0 };

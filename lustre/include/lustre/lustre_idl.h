@@ -654,11 +654,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT_TRUNCLOCK           0x400ULL /*locks on server for punch */
 #define OBD_CONNECT_TRANSNO             0x800ULL /*replay sends init transno */
 #define OBD_CONNECT_IBITS              0x1000ULL /*support for inodebits locks*/
-#define OBD_CONNECT_JOIN               0x2000ULL /*files can be concatenated.
-                                                  *We do not support JOIN FILE
-                                                  *anymore, reserve this flags
-                                                  *just for preventing such bit
-                                                  *to be reused.*/
+#define OBD_CONNECT_BARRIER	       0x2000ULL /* write barrier */
 #define OBD_CONNECT_ATTRFID            0x4000ULL /*Server can GetAttr By Fid*/
 #define OBD_CONNECT_NODEVOH            0x8000ULL /*No open hndl on specl nodes*/
 #define OBD_CONNECT_RMT_CLIENT        0x10000ULL /* Remote client, never used
@@ -800,7 +796,7 @@ struct ptlrpc_body_v2 {
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT | \
 				OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV | \
 				OBD_CONNECT_MNE_SWAB | OBD_CONNECT_PINGLESS |\
-				OBD_CONNECT_BULK_MBITS)
+				OBD_CONNECT_BULK_MBITS | OBD_CONNECT_BARRIER)
 
 #define MGS_CONNECT_SUPPORTED2 0
 
@@ -2209,8 +2205,21 @@ typedef union ldlm_wire_policy_data {
 	struct ldlm_inodebits	l_inodebits;
 } ldlm_wire_policy_data_t;
 
+struct barrier_lvb {
+	__u32	lvb_status;
+	__u32	lvb_index;
+	__u64	lvb_padding;
+};
+
+struct ldlm_gl_barrier_desc {
+	__u32	lgbd_status;
+	__u32	lgbd_timeout;
+	__u64	lgbd_padding;
+};
+
 union ldlm_gl_desc {
 	struct ldlm_gl_lquota_desc	lquota_desc;
+	struct ldlm_gl_barrier_desc	barrier_desc;
 };
 
 enum ldlm_intent_flags {

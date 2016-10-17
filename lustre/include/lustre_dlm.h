@@ -588,6 +588,23 @@ struct ldlm_glimpse_work {
 	__u32			 gl_flags;/* see LDLM_GL_WORK_* below */
 	union ldlm_gl_desc	*gl_desc; /* glimpse descriptor to be packed in
 					   * glimpse callback request */
+	ptlrpc_interpterer_t	 gl_interpret_reply;
+	void			*gl_interpret_data;
+};
+
+struct ldlm_cb_set_arg {
+	struct ptlrpc_request_set	*set;
+	int				 type; /* LDLM_{CP,BL,GL}_CALLBACK */
+	atomic_t			 restart;
+	struct list_head		*list;
+	union ldlm_gl_desc		*gl_desc; /* glimpse AST descriptor */
+	ptlrpc_interpterer_t		 gl_interpret_reply;
+	void				*gl_interpret_data;
+};
+
+struct ldlm_cb_async_args {
+	struct ldlm_cb_set_arg	*ca_set_arg;
+	struct ldlm_lock	*ca_lock;
 };
 
 /** The ldlm_glimpse_work is allocated on the stack and should not be freed. */

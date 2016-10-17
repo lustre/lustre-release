@@ -528,7 +528,7 @@ check_obd_connect_data(void)
 	CHECK_DEFINE_64X(OBD_CONNECT_TRUNCLOCK);
 	CHECK_DEFINE_64X(OBD_CONNECT_TRANSNO);
 	CHECK_DEFINE_64X(OBD_CONNECT_IBITS);
-	CHECK_DEFINE_64X(OBD_CONNECT_JOIN);
+	CHECK_DEFINE_64X(OBD_CONNECT_BARRIER);
 	CHECK_DEFINE_64X(OBD_CONNECT_ATTRFID);
 	CHECK_DEFINE_64X(OBD_CONNECT_NODEVOH);
 	CHECK_DEFINE_64X(OBD_CONNECT_RMT_CLIENT);
@@ -1445,6 +1445,23 @@ check_ldlm_gl_lquota_desc(void)
 	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_pad2);
 }
 
+static void check_ldlm_gl_barrier_desc(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(ldlm_gl_barrier_desc);
+	CHECK_MEMBER(ldlm_gl_barrier_desc, lgbd_status);
+	CHECK_MEMBER(ldlm_gl_barrier_desc, lgbd_timeout);
+	CHECK_MEMBER(ldlm_gl_barrier_desc, lgbd_padding);
+}
+
+static void check_ldlm_barrier_lvb(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(barrier_lvb);
+	CHECK_MEMBER(barrier_lvb, lvb_status);
+	CHECK_MEMBER(barrier_lvb, lvb_index);
+	CHECK_MEMBER(barrier_lvb, lvb_padding);
+}
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
 static void
@@ -2669,6 +2686,8 @@ main(int argc, char **argv)
 	check_ldlm_ost_lvb();
 	check_ldlm_lquota_lvb();
 	check_ldlm_gl_lquota_desc();
+	check_ldlm_gl_barrier_desc();
+	check_ldlm_barrier_lvb();
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
 	check_mgs_send_param();
 #endif
