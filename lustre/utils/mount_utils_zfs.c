@@ -664,11 +664,22 @@ int zfs_init(void)
 
 	g_zfs = libzfs_init();
 	if (g_zfs == NULL) {
-		fprintf(stderr, "Failed to initialize ZFS library\n");
-		ret = EINVAL;
-	} else {
-		osd_zfs_setup = 1;
+		/* Try to load zfs.ko and retry libzfs_init() */
+
+		ret = system("/sbin/modprobe -q zfs");
+
+		if (ret == 0) {
+			g_zfs = libzfs_init();
+			if (g_zfs == NULL)
+				ret = EINVAL;
+		}
 	}
+
+	if (ret == 0)
+		osd_zfs_setup = 1;
+
+	else
+		fprintf(stderr, "Failed to initialize ZFS library: %d\n", ret);
 
 	return ret;
 }
