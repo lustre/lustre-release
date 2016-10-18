@@ -64,7 +64,6 @@ lprocfs_fid_write_common(const char __user *buffer, size_t count,
 				struct lu_seq_range *range)
 {
 	struct lu_seq_range tmp = { 0, };
-	int rc;
 	char kernbuf[MAX_FID_RANGE_STRLEN];
 	ENTRY;
 
@@ -84,9 +83,9 @@ lprocfs_fid_write_common(const char __user *buffer, size_t count,
 	}
 
 	/* of the form "[0x0000000240000400 - 0x000000028000400]" */
-	rc = sscanf(kernbuf, "[%llx - %llx]\n",
-		    (long long unsigned *)&tmp.lsr_start,
-		    (long long unsigned *)&tmp.lsr_end);
+	sscanf(kernbuf, "[%llx - %llx]\n",
+	       (long long unsigned *)&tmp.lsr_start,
+	       (long long unsigned *)&tmp.lsr_end);
 	if (!lu_seq_range_is_sane(&tmp) || lu_seq_range_is_zero(&tmp) ||
 	    tmp.lsr_start < range->lsr_start || tmp.lsr_end > range->lsr_end)
 		RETURN(-EINVAL);

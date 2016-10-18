@@ -379,7 +379,6 @@ static int qsd_id_glimpse_ast(struct ldlm_lock *lock, void *data)
 {
 	struct ptlrpc_request		*req = data;
 	struct lquota_entry		*lqe;
-	struct qsd_instance             *qsd;
 	struct ldlm_gl_lquota_desc	*desc;
 	struct lquota_lvb		*lvb;
 	int				 rc;
@@ -397,8 +396,6 @@ static int qsd_id_glimpse_ast(struct ldlm_lock *lock, void *data)
 
 	LQUOTA_DEBUG(lqe, "glimpse on quota locks, new qunit:%llu",
 		     desc->gl_qunit);
-
-	qsd = lqe2qqi(lqe)->qqi_qsd;
 
 	lqe_write_lock(lqe);
 	lvb->lvb_id_rel = 0;

@@ -1098,7 +1098,6 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 			   struct obdo *oa)
 {
 	struct ofd_device	*ofd = ofd_exp(exp);
-	struct ofd_thread_info	*info;
 	u64			 seq = ostid_seq(&oa->o_oi);
 	struct ofd_seq		*oseq;
 	int			 rc = 0, diff = 1;
@@ -1108,7 +1107,7 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 
 	ENTRY;
 
-	info = ofd_info_init(env, exp);
+	ofd_info_init(env, exp);
 
 	LASSERT(seq == FID_SEQ_ECHO);
 	LASSERT(oa->o_valid & OBD_MD_FLGROUP);

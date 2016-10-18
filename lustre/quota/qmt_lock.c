@@ -542,7 +542,6 @@ void qmt_glb_lock_notify(const struct lu_env *env, struct lquota_entry *lqe,
 	struct qmt_thread_info	*qti = qmt_info(env);
 	struct qmt_pool_info	*pool = lqe2qpi(lqe);
 	struct ldlm_resource	*res = NULL;
-	int			 rc;
 	ENTRY;
 
 	lquota_generate_fid(&qti->qti_fid, pool->qpi_key & 0x0000ffff,
@@ -568,8 +567,8 @@ void qmt_glb_lock_notify(const struct lu_env *env, struct lquota_entry *lqe,
 		RETURN_EXIT;
 	}
 
-	rc = qmt_glimpse_lock(env, pool->qpi_qmt, res, &qti->qti_gl_desc,
-			      NULL, NULL);
+	qmt_glimpse_lock(env, pool->qpi_qmt, res, &qti->qti_gl_desc,
+			 NULL, NULL);
 	ldlm_resource_putref(res);
 	EXIT;
 }
@@ -602,7 +601,6 @@ static void qmt_id_lock_glimpse(const struct lu_env *env,
 	struct qmt_thread_info	*qti = qmt_info(env);
 	struct qmt_pool_info	*pool = lqe2qpi(lqe);
 	struct ldlm_resource	*res = NULL;
-	int			 rc;
 	ENTRY;
 
 	if (!lqe->lqe_enforced)
@@ -652,8 +650,8 @@ static void qmt_id_lock_glimpse(const struct lu_env *env,
 	lqe_write_unlock(lqe);
 
 	/* issue glimpse callback to slaves */
-	rc = qmt_glimpse_lock(env, qmt, res, &qti->qti_gl_desc,
-			      uuid ? qmt_id_lock_cb : NULL, (void *)uuid);
+	qmt_glimpse_lock(env, qmt, res, &qti->qti_gl_desc,
+			 uuid ? qmt_id_lock_cb : NULL, (void *)uuid);
 
 	lqe_write_lock(lqe);
 	if (lqe->lqe_revoke_time == 0 &&

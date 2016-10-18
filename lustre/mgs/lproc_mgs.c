@@ -174,14 +174,10 @@ LPROC_SEQ_FOPS(mgs_live);
 
 int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb)
 {
-	int rc;
-
 	if (!mgs->mgs_proc_live)
 		return 0;
-	rc = lprocfs_seq_create(mgs->mgs_proc_live, fsdb->fsdb_name, 0644,
-				&mgs_live_fops, fsdb);
-
-	return 0;
+	return lprocfs_seq_create(mgs->mgs_proc_live, fsdb->fsdb_name, 0644,
+				  &mgs_live_fops, fsdb);
 }
 
 int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)

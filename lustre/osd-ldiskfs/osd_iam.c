@@ -1023,11 +1023,9 @@ static int iam_lookup_lock(struct iam_path *path,
  */
 static int iam_path_lookup(struct iam_path *path, int index)
 {
-        struct iam_container *c;
         struct iam_leaf  *leaf;
         int result;
 
-        c = path->ip_container;
         leaf = &path->ip_leaf;
         result = iam_lookup_lock(path, &leaf->il_lock, DLT_WRITE);
         assert_inv(iam_path_check(path));
@@ -1363,13 +1361,11 @@ int iam_index_next(struct iam_container *c, struct iam_path *path)
         iam_ptr_t cursor;
 	struct dynlock_handle *lh[DX_MAX_TREE_HEIGHT] = { NULL, };
         int result;
-        struct inode *object;
 
         /*
          * Locking for iam_index_next()... is to be described.
          */
 
-        object = c->ic_object;
         cursor = path->ip_frame->leaf;
 
         while (1) {

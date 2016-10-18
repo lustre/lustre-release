@@ -1075,7 +1075,6 @@ void ofd_grant_prepare_write(const struct lu_env *env,
 	int			 from_cache;
 	int			 force = 0; /* can use cached data intially */
 	long			 chunk = ofd_grant_chunk(exp, ofd, NULL);
-	int			 rc;
 
 	ENTRY;
 
@@ -1117,7 +1116,7 @@ refresh:
 			 * space on the server */
 			spin_unlock(&ofd->ofd_grant_lock);
 			/* discard errors, at least we tried ... */
-			rc = dt_sync(env, ofd->ofd_osd);
+			dt_sync(env, ofd->ofd_osd);
 			force = 2;
 			goto refresh;
 		}

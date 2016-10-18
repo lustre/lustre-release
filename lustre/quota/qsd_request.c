@@ -158,7 +158,6 @@ static int qsd_intent_interpret(const struct lu_env *env,
 {
 	struct lustre_handle	 *lockh;
 	struct quota_body	 *rep_qbody = NULL, *req_qbody;
-	struct ldlm_intent	 *lit;
 	struct qsd_async_args	 *aa = (struct qsd_async_args *)arg;
 	__u64			  flags = LDLM_FL_HAS_INTENT;
 	ENTRY;
@@ -166,7 +165,7 @@ static int qsd_intent_interpret(const struct lu_env *env,
 	LASSERT(aa->aa_exp);
 	lockh = &aa->aa_lockh;
 	req_qbody = req_capsule_client_get(&req->rq_pill, &RMF_QUOTA_BODY);
-	lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
+	req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
 
 	rc = ldlm_cli_enqueue_fini(aa->aa_exp, req, LDLM_PLAIN, 0, LCK_CR,
 				   &flags, (void *)aa->aa_lvb,

@@ -365,7 +365,6 @@ static int hsm_actions_show_cb(const struct lu_env *env,
 	struct seq_file		     *s = data;
 	struct agent_action_iterator *aai;
 	int			      sz;
-	size_t			      count;
 	char			      buf[12];
 	ENTRY;
 
@@ -381,7 +380,6 @@ static int hsm_actions_show_cb(const struct lu_env *env,
 		     hdr->lrh_index <= aai->aai_index))
 		RETURN(0);
 
-	count = s->count;
 	sz = larr->arr_hai.hai_len - sizeof(larr->arr_hai);
 	seq_printf(s, "lrh=[type=%X len=%d idx=%d/%d] fid="DFID
 		   " dfid="DFID" compound/cookie=%#llx/%#llx"

@@ -3643,7 +3643,6 @@ static int mdd_migrate_entries(const struct lu_env *env,
 		struct mdd_object	*child;
 		char			*name = mdd_env_info(env)->mti_key;
 		int			len;
-		int			recsize;
 		int			is_dir;
 		bool			target_exist = false;
 
@@ -3661,7 +3660,6 @@ static int mdd_migrate_entries(const struct lu_env *env,
 		}
 
 		fid_le_to_cpu(&ent->lde_fid, &ent->lde_fid);
-		recsize = le16_to_cpu(ent->lde_reclen);
 
 		/* Insert new fid with target name into target dir */
 		if ((ent->lde_namelen == 1 && ent->lde_name[0] == '.') ||

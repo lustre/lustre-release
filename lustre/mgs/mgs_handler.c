@@ -1311,7 +1311,7 @@ static int mgs_object_init(const struct lu_env *env, struct lu_object *o,
 	else
 		rc = -ENOMEM;
 
-	return 0;
+	return rc;
 }
 
 static void mgs_object_free(const struct lu_env *env, struct lu_object *o)
