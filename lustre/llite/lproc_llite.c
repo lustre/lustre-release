@@ -1380,9 +1380,9 @@ static int ll_rw_extents_stats_pp_seq_show(struct seq_file *seq, void *v)
 	do_gettimeofday(&now);
 
 	if (!sbi->ll_rw_stats_on) {
-		seq_puts(seq, "disabled\n write anything in this file to activate, then 0 or \[D/d]isabled\" to deactivate\n");
-                return 0;
-        }
+		seq_puts(seq, "disabled\n write anything in this file to activate, then 0 or \"[D/d]isabled\" to deactivate\n");
+		return 0;
+	}
         seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
                    now.tv_sec, now.tv_usec);
         seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
