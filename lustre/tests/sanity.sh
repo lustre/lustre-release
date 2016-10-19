@@ -15460,7 +15460,16 @@ test_313() {
 }
 run_test 313 "io should fail after last_rcvd update fail"
 
-test_399() { # LU-7655 for OST fake write
+test_fake_rw() {
+	local read_write=$1
+	if [ "$read_write" = "write" ]; then
+		local dd_cmd="dd if=/dev/zero of=$DIR/$tfile"
+	elif [ "$read_write" = "read" ]; then
+		local dd_cmd="dd of=/dev/null if=$DIR/$tfile"
+	else
+		error "argument error"
+	fi
+
 	# turn off debug for performance testing
 	local saved_debug=$($LCTL get_param -n debug)
 	$LCTL set_param debug=0
@@ -15472,35 +15481,56 @@ test_399() { # LU-7655 for OST fake write
 	local blocks=$((ost1_avail_size/2/1024)) # half avail space by megabytes
 	[ $blocks -gt 1000 ] && blocks=1000 # 1G in maximum
 
-	local start_time=$(date +%s.%N)
-	dd if=/dev/zero of=$DIR/$tfile bs=1M count=$blocks oflag=sync ||
-		error "real dd writing error"
-	local duration=$(bc <<< "$(date +%s.%N) - $start_time")
-	rm -f $DIR/$tfile
+	if [ "$read_write" = "read" ]; then
+		truncate -s $(expr 1048576 \* $blocks) $DIR/$tfile
+	fi
 
-	# define OBD_FAIL_OST_FAKE_WRITE	0x238
+	local start_time=$(date +%s.%N)
+	$dd_cmd bs=1M count=$blocks oflag=sync ||
+		error "real dd $read_write error"
+	local duration=$(bc <<< "$(date +%s.%N) - $start_time")
+
+	if [ "$read_write" = "write" ]; then
+		rm -f $DIR/$tfile
+	fi
+
+	# define OBD_FAIL_OST_FAKE_RW		0x238
 	do_facet ost1 $LCTL set_param fail_loc=0x238
 
 	local start_time=$(date +%s.%N)
-	dd if=/dev/zero of=$DIR/$tfile bs=1M count=$blocks oflag=sync ||
-		error "fake dd writing error"
+	$dd_cmd bs=1M count=$blocks oflag=sync ||
+		error "fake dd $read_write error"
 	local duration_fake=$(bc <<< "$(date +%s.%N) - $start_time")
 
-	# verify file size
-	cancel_lru_locks osc
-	$CHECKSTAT -t file -s $((blocks * 1024 * 1024)) $DIR/$tfile ||
-		error "$tfile size not $blocks MB"
-
+	if [ "$read_write" = "write" ]; then
+		# verify file size
+		cancel_lru_locks osc
+		$CHECKSTAT -t file -s $((blocks * 1024 * 1024)) $DIR/$tfile ||
+			error "$tfile size not $blocks MB"
+	fi
 	do_facet ost1 $LCTL set_param fail_loc=0
 
-	echo "fake write $duration_fake vs. normal write $duration in seconds"
+	echo "fake $read_write $duration_fake vs. normal $read_write" \
+		"$duration in seconds"
 	[ $(bc <<< "$duration_fake < $duration") -eq 1 ] ||
 		error_not_in_vm "fake write is slower"
 
 	$LCTL set_param -n debug="$saved_debug"
 	rm -f $DIR/$tfile
 }
-run_test 399 "fake write should not be slower than normal write"
+test_399a() { # LU-7655 for OST fake write
+	test_fake_rw write
+}
+run_test 399a "fake write should not be slower than normal write"
+
+
+test_399b() { # LU-8726 for OST fake read
+	if [ "$(facet_fstype ost1)" != "ldiskfs" ]; then
+		skip "only for ldiskfs" && return 0
+	fi
+	test_fake_rw read
+}
+run_test 399b "fake read should not be slower than normal read"
 
 test_400a() { # LU-1606, was conf-sanity test_74
 	local extra_flags=''

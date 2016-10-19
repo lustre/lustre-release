@@ -1047,7 +1047,7 @@ ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
 	la->la_valid &= LA_ATIME | LA_MTIME | LA_CTIME;
 
 	/* do fake write, to simulate the write case for performance testing */
-	if (OBD_FAIL_CHECK(OBD_FAIL_OST_FAKE_WRITE)) {
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_FAKE_RW)) {
 		struct niobuf_local *last = &lnb[niocount - 1];
 		__u64 file_size = last->lnb_file_offset + last->lnb_len;
 		__u64 valid = la->la_valid;
