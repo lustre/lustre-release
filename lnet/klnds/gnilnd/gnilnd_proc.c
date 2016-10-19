@@ -1,9 +1,10 @@
 /*
- * Copyright (C) 2009-2012 Cray, Inc.
+ * Copyright (C) 2009-2012, 2016 Cray, Inc.
  *
  * Copyright (c) 2013, 2015, Intel Corporation.
  *
  *   Author: Nic Henke <nic@cray.com>
+ *   Author: James Shimek <jshimek@cray.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -198,7 +199,6 @@ kgnilnd_cksum_test_seq_open(struct inode *inode, struct file *file)
 static const struct file_operations kgn_cksum_test_fops = {
 	.owner   = THIS_MODULE,
 	.open    = kgnilnd_cksum_test_seq_open,
-	.read    = seq_read,
 	.write   = kgnilnd_proc_cksum_test_write,
 	.llseek  = seq_lseek,
 	.release = seq_release,
