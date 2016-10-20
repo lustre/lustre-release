@@ -4467,7 +4467,7 @@ test_64() {
 	mount_client $MOUNT || error "Unable to mount client"
 	stop_ost2 || error "Unable to stop second ost"
 	echo "$LFS df"
-	$LFS df --lazy || error "lfs df failed"
+	$LFS df --lazy
 	umount_client $MOUNT -f || error “unmount $MOUNT failed”
 	cleanup_nocli || error "cleanup_nocli failed with $?"
 	#writeconf to remove all ost2 traces for subsequent tests

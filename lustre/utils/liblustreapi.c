@@ -3356,11 +3356,9 @@ int llapi_getstripe(char *path, struct find_param *param)
                               cb_common_fini, param);
 }
 
-int llapi_obd_statfs(char *path, __u32 type, __u32 index,
-                     struct obd_statfs *stat_buf,
-                     struct obd_uuid *uuid_buf)
+int llapi_obd_fstatfs(int fd, __u32 type, __u32 index,
+		      struct obd_statfs *stat_buf, struct obd_uuid *uuid_buf)
 {
-        int fd;
         char raw[OBD_MAX_IOCTL_BUFFER] = {'\0'};
         char *rawbuf = raw;
         struct obd_ioctl_data data = { 0 };
@@ -3382,6 +3380,17 @@ int llapi_obd_statfs(char *path, __u32 type, __u32 index,
                 return rc;
         }
 
+	rc = ioctl(fd, IOC_OBD_STATFS, (void *)rawbuf);
+
+	return rc < 0 ? -errno : 0;
+}
+
+int llapi_obd_statfs(char *path, __u32 type, __u32 index,
+		     struct obd_statfs *stat_buf, struct obd_uuid *uuid_buf)
+{
+	int fd;
+	int rc;
+
 	fd = open(path, O_RDONLY);
 	if (fd < 0) {
 		rc = -errno;
@@ -3391,11 +3400,11 @@ int llapi_obd_statfs(char *path, __u32 type, __u32 index,
 		 * -ESHUTDOWN), force caller to exit or it will loop forever. */
 		return -ENODEV;
 	}
-	rc = ioctl(fd, IOC_OBD_STATFS, (void *)rawbuf);
-	if (rc)
-		rc = errno ? -errno : -EINVAL;
+
+	rc = llapi_obd_fstatfs(fd, type, index, stat_buf, uuid_buf);
 
 	close(fd);
+
 	return rc;
 }
 

@@ -2356,7 +2356,9 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow,
 	__u64 ost_ffree = 0;
 	__u32 index;
 	__u32 type;
-	int rc;
+	int fd;
+	int rc = 0;
+	int rc2;
 
         if (pool) {
                 poolname = strchr(pool, '.');
@@ -2369,6 +2371,14 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow,
                 } else
                         poolname = pool;
         }
+
+	fd = open(mntdir, O_RDONLY);
+	if (fd < 0) {
+		rc = -errno;
+		fprintf(stderr, "%s: cannot open '%s': %s\n", progname, mntdir,
+			strerror(errno));
+		return rc;
+	}
 
         if (ishow)
                 printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
@@ -2384,13 +2394,16 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow,
                         memset(&stat_buf, 0, sizeof(struct obd_statfs));
                         memset(&uuid_buf, 0, sizeof(struct obd_uuid));
 			type = lazy ? tp->st_op | LL_STATFS_NODELAY : tp->st_op;
-			rc = llapi_obd_statfs(mntdir, type, index,
-                                              &stat_buf, &uuid_buf);
-                        if (rc == -ENODEV)
-                                break;
-
-			if (rc == -EAGAIN)
+			rc2 = llapi_obd_fstatfs(fd, type, index,
+					       &stat_buf, &uuid_buf);
+			if (rc2 == -ENODEV)
+				break;
+			else if (rc2 == -EAGAIN)
 				continue;
+			else if (rc2 == -ENODATA)
+				; /* Inactive device, OK. */
+			else if (rc2 < 0 && rc == 0)
+				rc = rc2;
 
                         if (poolname && tp->st_op == LL_STATFS_LOV &&
                             llapi_search_ost(fsname, poolname,
@@ -2405,10 +2418,10 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow,
                         if (uuid_buf.uuid[0] == '\0')
                                 sprintf(uuid_buf.uuid, "%s%04x",
                                         tp->st_name, index);
-                        showdf(mntdir, &stat_buf, obd_uuid2str(&uuid_buf),
-                               ishow, cooked, tp->st_name, index, rc);
+			showdf(mntdir, &stat_buf, obd_uuid2str(&uuid_buf),
+			       ishow, cooked, tp->st_name, index, rc2);
 
-                        if (rc == 0) {
+			if (rc2 == 0) {
                                 if (tp->st_op == LL_STATFS_LMV) {
                                         sum.os_ffree += stat_buf.os_ffree;
                                         sum.os_files += stat_buf.os_files;
@@ -2421,11 +2434,11 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow,
 						stat_buf.os_bsize;
 					ost_ffree += stat_buf.os_ffree;
 				}
-			} else if (rc == -EINVAL || rc == -EFAULT) {
-				break;
 			}
 		}
 	}
+
+	close(fd);
 
 	/* If we don't have as many objects free on the OST as inodes
 	 * on the MDS, we reduce the total number of inodes to
@@ -2438,7 +2451,8 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow,
 	printf("\n");
 	showdf(mntdir, &sum, "filesystem summary:", ishow, cooked, NULL, 0, 0);
 	printf("\n");
-	return 0;
+
+	return rc;
 }
 
 static int lfs_df(int argc, char **argv)

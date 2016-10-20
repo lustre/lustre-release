@@ -247,6 +247,9 @@ extern int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
 				 int stripe_count, int stripe_pattern,
 				 const char *poolname);
 int llapi_direntry_remove(char *dname);
+
+int llapi_obd_fstatfs(int fd, __u32 type, __u32 index,
+		      struct obd_statfs *stat_buf, struct obd_uuid *uuid_buf);
 extern int llapi_obd_statfs(char *path, __u32 type, __u32 index,
                      struct obd_statfs *stat_buf,
                      struct obd_uuid *uuid_buf);
