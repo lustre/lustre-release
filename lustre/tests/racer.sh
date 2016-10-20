@@ -26,6 +26,19 @@ CLIENTS=${CLIENTS:-$HOSTNAME}
 RACERDIRS=${RACERDIRS:-"$DIR $DIR2"}
 echo RACERDIRS=$RACERDIRS
 
+if ((MDSCOUNT > 1 &&
+     $(lustre_version_code $SINGLEMDS) >= $(version_code 2.8.0))); then
+	RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-true}
+	RACER_ENABLE_STRIPED_DIRS=${RACER_ENABLE_STRIPED_DIRS:-true}
+	RACER_ENABLE_MIGRATION=${RACER_ENABLE_MIGRATION:-true}
+elif ((MDSCOUNT > 1 &&
+       $(lustre_version_code $SINGLEMDS) >= $(version_code 2.5.0))); then
+	RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-true}
+fi
+
+RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-false}
+RACER_ENABLE_STRIPED_DIRS=${RACER_ENABLE_STRIPED_DIRS:-false}
+RACER_ENABLE_MIGRATION=${RACER_ENABLE_MIGRATION:-false}
 
 check_progs_installed $CLIENTS $racer ||
 	{ skip_env "$racer not found" && exit 0; }
@@ -57,8 +70,13 @@ test_1() {
 
 	local rpids=""
 	for rdir in $RDIRS; do
-		do_nodes $clients "DURATION=$DURATION MDSCOUNT=$MDSCOUNT \
-				   LFS=$LFS $racer $rdir $NUM_RACER_THREADS" &
+		do_nodes $clients "DURATION=$DURATION \
+			MDSCOUNT=$MDSCOUNT \
+			RACER_ENABLE_REMOTE_DIRS=$RACER_ENABLE_REMOTE_DIRS \
+			RACER_ENABLE_STRIPED_DIRS=$RACER_ENABLE_STRIPED_DIRS \
+			RACER_ENABLE_MIGRATION=$RACER_ENABLE_MIGRATION \
+			LFS=$LFS \
+			$racer $rdir $NUM_RACER_THREADS" &
 		pid=$!
 		rpids="$rpids $pid"
 	done
