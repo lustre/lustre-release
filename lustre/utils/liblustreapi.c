@@ -3382,12 +3382,9 @@ int llapi_obd_statfs(char *path, __u32 type, __u32 index,
                 return rc;
         }
 
-        fd = open(path, O_RDONLY);
-        if (errno == EISDIR)
-                fd = open(path, O_DIRECTORY | O_RDONLY);
-
+	fd = open(path, O_RDONLY);
 	if (fd < 0) {
-		rc = errno ? -errno : -EBADF;
+		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "error: %s: opening '%s'",
 			    __func__, path);
 		/* If we can't even open a file on the filesystem (e.g. with
