@@ -178,27 +178,27 @@ EXPORT_SYMBOL(cfs_cpt_table_alloc);
 
 int cfs_cpt_table_print(struct cfs_cpt_table *cptab, char *buf, int len)
 {
-	char	*tmp = buf;
-	int	rc = -EFBIG;
-	int	i;
-	int	j;
+	char *tmp = buf;
+	int rc;
+	int i;
+	int j;
 
 	for (i = 0; i < cptab->ctb_nparts; i++) {
 		if (len <= 0)
-			goto out;
+			goto err;
 
 		rc = snprintf(tmp, len, "%d\t:", i);
 		len -= rc;
 
 		if (len <= 0)
-			goto out;
+			goto err;
 
 		tmp += rc;
 		for_each_cpu(j, cptab->ctb_parts[i].cpt_cpumask) {
 			rc = snprintf(tmp, len, " %d", j);
 			len -= rc;
 			if (len <= 0)
-				goto out;
+				goto err;
 			tmp += rc;
 		}
 
@@ -206,31 +206,30 @@ int cfs_cpt_table_print(struct cfs_cpt_table *cptab, char *buf, int len)
 		tmp++;
 		len--;
 	}
-	rc = 0;
- out:
-	if (rc < 0)
-		return rc;
 
 	return tmp - buf;
+
+err:
+	return -E2BIG;
 }
 EXPORT_SYMBOL(cfs_cpt_table_print);
 
 int cfs_cpt_distance_print(struct cfs_cpt_table *cptab, char *buf, int len)
 {
-	char	*tmp = buf;
-	int	rc = -EFBIG;
-	int	i;
-	int	j;
+	char *tmp = buf;
+	int rc;
+	int i;
+	int j;
 
 	for (i = 0; i < cptab->ctb_nparts; i++) {
 		if (len <= 0)
-			goto out;
+			goto err;
 
 		rc = snprintf(tmp, len, "%d\t:", i);
 		len -= rc;
 
 		if (len <= 0)
-			goto out;
+			goto err;
 
 		tmp += rc;
 		for (j = 0; j < cptab->ctb_nparts; j++) {
@@ -238,7 +237,7 @@ int cfs_cpt_distance_print(struct cfs_cpt_table *cptab, char *buf, int len)
 				j, cptab->ctb_parts[i].cpt_distance[j]);
 			len -= rc;
 			if (len <= 0)
-				goto out;
+				goto err;
 			tmp += rc;
 		}
 
@@ -246,12 +245,11 @@ int cfs_cpt_distance_print(struct cfs_cpt_table *cptab, char *buf, int len)
 		tmp++;
 		len--;
 	}
-	rc = 0;
- out:
-	if (rc < 0)
-		return rc;
 
 	return tmp - buf;
+
+err:
+	return -E2BIG;
 }
 EXPORT_SYMBOL(cfs_cpt_distance_print);
 
@@ -445,8 +443,15 @@ int cfs_cpt_set_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
 		return 0;
 	}
 
-	LASSERT(!cpumask_test_cpu(cpu, cptab->ctb_cpumask));
-	LASSERT(!cpumask_test_cpu(cpu, cptab->ctb_parts[cpt].cpt_cpumask));
+	if (cpumask_test_cpu(cpu, cptab->ctb_cpumask)) {
+		CDEBUG(D_INFO, "CPU %d is already in cpumask\n", cpu);
+		return 0;
+	}
+	if (cpumask_test_cpu(cpu, cptab->ctb_parts[cpt].cpt_cpumask)) {
+		CDEBUG(D_INFO, "CPU %d is already in partition %d cpumask\n",
+				cpu, cptab->ctb_cpu2cpt[cpu]);
+		return 0;
+	}
 
 	cfs_cpt_add_cpu(cptab, cpt, cpu);
 	cfs_cpt_add_node(cptab, cpt, cpu_to_node(cpu));
@@ -513,15 +518,17 @@ void cfs_cpt_unset_cpumask(struct cfs_cpt_table *cptab, int cpt,
 {
 	int cpu;
 
-	for_each_cpu(cpu, mask)
-		cfs_cpt_unset_cpu(cptab, cpt, cpu);
+	for_each_cpu(cpu, mask) {
+		cfs_cpt_del_cpu(cptab, cpt, cpu);
+		cfs_cpt_del_node(cptab, cpt, cpu_to_node(cpu));
+	}
 }
 EXPORT_SYMBOL(cfs_cpt_unset_cpumask);
 
 int cfs_cpt_set_node(struct cfs_cpt_table *cptab, int cpt, int node)
 {
 	const cpumask_t *mask;
-	int		cpu;
+	int cpu;
 
 	if (node < 0 || node >= nr_node_ids) {
 		CDEBUG(D_INFO,
@@ -563,12 +570,10 @@ EXPORT_SYMBOL(cfs_cpt_unset_node);
 int cfs_cpt_set_nodemask(struct cfs_cpt_table *cptab, int cpt,
 			 const nodemask_t *mask)
 {
-	int	i;
+	int node;
 
-	for_each_node_mask(i, *mask) {
-		if (!cfs_cpt_set_node(cptab, cpt, i))
-			return 0;
-	}
+	for_each_node_mask(node, *mask)
+		cfs_cpt_set_node(cptab, cpt, node);
 
 	return 1;
 }
@@ -577,42 +582,42 @@ EXPORT_SYMBOL(cfs_cpt_set_nodemask);
 void cfs_cpt_unset_nodemask(struct cfs_cpt_table *cptab, int cpt,
 			    const nodemask_t *mask)
 {
-	int	i;
+	int node;
 
-	for_each_node_mask(i, *mask)
-		cfs_cpt_unset_node(cptab, cpt, i);
+	for_each_node_mask(node, *mask)
+		cfs_cpt_unset_node(cptab, cpt, node);
 }
 EXPORT_SYMBOL(cfs_cpt_unset_nodemask);
 
 int cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt)
 {
-	nodemask_t	*mask;
-	int		weight;
-	int		rotor;
-	int		node;
+	nodemask_t *mask;
+	int weight;
+	int rotor;
+	int node = 0;
 
 	/* convert CPU partition ID to HW node id */
 
 	if (cpt < 0 || cpt >= cptab->ctb_nparts) {
-		mask = cptab->ctb_nodemask;
+		mask  = cptab->ctb_nodemask;
 		rotor = cptab->ctb_spread_rotor++;
 	} else {
-		mask = cptab->ctb_parts[cpt].cpt_nodemask;
+		mask  = cptab->ctb_parts[cpt].cpt_nodemask;
 		rotor = cptab->ctb_parts[cpt].cpt_spread_rotor++;
+		node  = cptab->ctb_parts[cpt].cpt_node;
 	}
 
 	weight = nodes_weight(*mask);
-	LASSERT(weight > 0);
+	if (weight > 0) {
+		rotor %= weight;
 
-	rotor %= weight;
-
-	for_each_node_mask(node, *mask) {
-		if (rotor-- == 0)
-			return node;
+		for_each_node_mask(node, *mask) {
+			if (rotor-- == 0)
+				return node;
+		}
 	}
 
-	LBUG();
-	return 0;
+	return node;
 }
 EXPORT_SYMBOL(cfs_cpt_spread_node);
 
@@ -653,10 +658,10 @@ EXPORT_SYMBOL(cfs_cpt_of_node);
 
 int cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt)
 {
-	cpumask_t	*cpumask;
-	nodemask_t	*nodemask;
-	int		rc;
-	int		i;
+	nodemask_t *nodemask;
+	cpumask_t *cpumask;
+	int cpu;
+	int rc;
 
 	LASSERT(cpt == CFS_CPT_ANY || (cpt >= 0 && cpt < cptab->ctb_nparts));
 
@@ -675,8 +680,8 @@ int cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt)
 		return -EINVAL;
 	}
 
-	for_each_online_cpu(i) {
-		if (cpumask_test_cpu(i, cpumask))
+	for_each_online_cpu(cpu) {
+		if (cpumask_test_cpu(cpu, cpumask))
 			continue;
 
 		rc = set_cpus_allowed_ptr(current, cpumask);
@@ -697,55 +702,55 @@ EXPORT_SYMBOL(cfs_cpt_bind);
  * We always prefer to choose CPU in the same core/socket.
  */
 static int cfs_cpt_choose_ncpus(struct cfs_cpt_table *cptab, int cpt,
-				cpumask_t *node, int number)
+				cpumask_t *node_mask, int number)
 {
-	cpumask_t *socket = NULL;
-	cpumask_t *core = NULL;
+	cpumask_t *socket_mask = NULL;
+	cpumask_t *core_mask = NULL;
 	int rc = 0;
 	int cpu;
 	int i;
 
 	LASSERT(number > 0);
 
-	if (number >= cpumask_weight(node)) {
-		while (!cpumask_empty(node)) {
-			cpu = cpumask_first(node);
+	if (number >= cpumask_weight(node_mask)) {
+		while (!cpumask_empty(node_mask)) {
+			cpu = cpumask_first(node_mask);
+			cpumask_clear_cpu(cpu, node_mask);
+
+			if (!cpu_online(cpu))
+				continue;
 
 			rc = cfs_cpt_set_cpu(cptab, cpt, cpu);
 			if (!rc)
 				return -EINVAL;
-			cpumask_clear_cpu(cpu, node);
 		}
 		return 0;
 	}
 
 	/* allocate scratch buffer */
-	LIBCFS_ALLOC(socket, cpumask_size());
-	LIBCFS_ALLOC(core, cpumask_size());
-	if (socket == NULL || core == NULL) {
+	LIBCFS_ALLOC(socket_mask, cpumask_size());
+	LIBCFS_ALLOC(core_mask, cpumask_size());
+	if (socket_mask == NULL || core_mask == NULL) {
 		rc = -ENOMEM;
 		goto out;
 	}
 
-	while (!cpumask_empty(node)) {
-		cpu = cpumask_first(node);
+	while (!cpumask_empty(node_mask)) {
+		cpu = cpumask_first(node_mask);
 
 		/* get cpumask for cores in the same socket */
-		cpumask_copy(socket, topology_core_cpumask(cpu));
-		cpumask_and(socket, socket, node);
-
-		LASSERT(!cpumask_empty(socket));
-
-		while (!cpumask_empty(socket)) {
+		cpumask_and(socket_mask, topology_core_cpumask(cpu), node_mask);
+		while (!cpumask_empty(socket_mask)) {
 			/* get cpumask for hts in the same core */
-			cpumask_copy(core, topology_sibling_cpumask(cpu));
-			cpumask_and(core, core, node);
+			cpumask_and(core_mask,
+				    topology_sibling_cpumask(cpu), node_mask);
 
-			LASSERT(!cpumask_empty(core));
+			for_each_cpu(i, core_mask) {
+				cpumask_clear_cpu(i, socket_mask);
+				cpumask_clear_cpu(i, node_mask);
 
-			for_each_cpu(i, core) {
-				cpumask_clear_cpu(i, socket);
-				cpumask_clear_cpu(i, node);
+				if (!cpu_online(i))
+					continue;
 
 				rc = cfs_cpt_set_cpu(cptab, cpt, i);
 				if (!rc) {
@@ -756,15 +761,15 @@ static int cfs_cpt_choose_ncpus(struct cfs_cpt_table *cptab, int cpt,
 				if (--number == 0)
 					goto out;
 			}
-			cpu = cpumask_first(socket);
+			cpu = cpumask_first(socket_mask);
 		}
 	}
 
 out:
-	if (socket != NULL)
-		LIBCFS_FREE(socket, cpumask_size());
-	if (core != NULL)
-		LIBCFS_FREE(core, cpumask_size());
+	if (core_mask != NULL)
+		LIBCFS_FREE(core_mask, cpumask_size());
+	if (socket_mask != NULL)
+		LIBCFS_FREE(socket_mask, cpumask_size());
 	return rc;
 }
 
@@ -784,7 +789,8 @@ static int cfs_cpt_num_estimate(void)
 	/* generate reasonable number of CPU partitions based on total number
 	 * of CPUs, Preferred N should be power2 and match this condition:
 	 * 2 * (N - 1)^2 < NCPUS <= 2 * N^2 */
-	for (ncpt = 2; ncpu > 2 * ncpt * ncpt; ncpt <<= 1) {}
+	for (ncpt = 2; ncpu > 2 * ncpt * ncpt; ncpt <<= 1)
+		;
 
 	if (ncpt <= nnode) { /* fat numa system */
 		while (nnode > ncpt)
@@ -812,29 +818,22 @@ out:
 static struct cfs_cpt_table *cfs_cpt_table_create(int ncpt)
 {
 	struct cfs_cpt_table *cptab = NULL;
-	cpumask_t *mask = NULL;
+	cpumask_t *node_mask = NULL;
 	int cpt = 0;
+	int node;
 	int num;
-	int rc;
-	int i;
+	int rem;
+	int rc = 0;
 
-	rc = cfs_cpt_num_estimate();
+	num = cfs_cpt_num_estimate();
 	if (ncpt <= 0)
-		ncpt = rc;
+		ncpt = num;
 
-	if (ncpt > num_online_cpus() || ncpt > 4 * rc) {
+	if (ncpt > num_online_cpus() || ncpt > 4 * num) {
 		CWARN("CPU partition number %d is larger than suggested "
-		      "value (%d), your system may have performance"
+		      "value (%d), your system may have performance "
 		      "issue or run out of memory while under pressure\n",
-		      ncpt, rc);
-	}
-
-	if (num_online_cpus() % ncpt != 0) {
-		CERROR("CPU number %d is not multiple of cpu_npartition %d, "
-		       "please try different cpu_npartitions value or"
-		       "set pattern string by cpu_pattern=STRING\n",
-		       (int)num_online_cpus(), ncpt);
-		goto failed;
+		      ncpt, num);
 	}
 
 	cptab = cfs_cpt_table_alloc(ncpt);
@@ -843,67 +842,44 @@ static struct cfs_cpt_table *cfs_cpt_table_create(int ncpt)
 		goto failed;
 	}
 
-	num = num_online_cpus() / ncpt;
-	if (num == 0) {
-		CERROR("CPU changed while setting CPU partition\n");
-		goto failed;
-	}
-
-	LIBCFS_ALLOC(mask, cpumask_size());
-	if (mask == NULL) {
+	LIBCFS_ALLOC(node_mask, cpumask_size());
+	if (node_mask == NULL) {
 		CERROR("Failed to allocate scratch cpumask\n");
 		goto failed;
 	}
 
-	for_each_online_node(i) {
-		cpumask_copy(mask, cpumask_of_node(i));
+	num = num_online_cpus() / ncpt;
+	rem = num_online_cpus() % ncpt;
+	for_each_online_node(node) {
+		cpumask_copy(node_mask, cpumask_of_node(node));
 
-		while (!cpumask_empty(mask)) {
-			struct cfs_cpu_partition *part;
-			int n;
+		while (cpt < ncpt && !cpumask_empty(node_mask)) {
+			struct cfs_cpu_partition *part = &cptab->ctb_parts[cpt];
+			int ncpu = cpumask_weight(part->cpt_cpumask);
 
-			/* Each emulated NUMA node has all allowed CPUs in
-			 * the mask.
-			 * End loop when all partitions have assigned CPUs.
-			 */
-			if (cpt == ncpt)
-				break;
-
-			part = &cptab->ctb_parts[cpt];
-
-			n = num - cpumask_weight(part->cpt_cpumask);
-			LASSERT(n > 0);
-
-			rc = cfs_cpt_choose_ncpus(cptab, cpt, mask, n);
+			rc = cfs_cpt_choose_ncpus(cptab, cpt, node_mask,
+						  num - ncpu);
 			if (rc < 0)
 				goto failed;
 
-			LASSERT(num >= cpumask_weight(part->cpt_cpumask));
-			if (num == cpumask_weight(part->cpt_cpumask))
+			ncpu = cpumask_weight(part->cpt_cpumask);
+			if (ncpu == num + !!(rem > 0)) {
 				cpt++;
+				rem--;
+			}
 		}
 	}
 
-	if (cpt != ncpt ||
-	    num != cpumask_weight(cptab->ctb_parts[ncpt - 1].cpt_cpumask)) {
-		CERROR("Expect %d(%d) CPU partitions but got %d(%d), "
-		       "CPU hotplug/unplug while setting?\n",
-		       cptab->ctb_nparts, num, cpt,
-		       cpumask_weight(cptab->ctb_parts[ncpt - 1].cpt_cpumask));
-		goto failed;
-	}
-
-	LIBCFS_FREE(mask, cpumask_size());
-
+	LIBCFS_FREE(node_mask, cpumask_size());
 	return cptab;
 
- failed:
-	CERROR("Failed to setup CPU-partition-table with %d "
-	       "CPU-partitions, online HW nodes: %d, HW cpus: %d.\n",
-	       ncpt, num_online_nodes(), num_online_cpus());
+failed:
+	CERROR("Failed (rc=%d) to setup CPU partition table with %d "
+		"partitions, online HW NUMA nodes: %d, HW CPU cores: %d.\n",
+		rc, ncpt, num_online_nodes(), num_online_cpus());
 
-	if (mask != NULL)
-		LIBCFS_FREE(mask, cpumask_size());
+	if (node_mask != NULL)
+		LIBCFS_FREE(node_mask, cpumask_size());
 
 	if (cptab != NULL)
 		cfs_cpt_table_free(cptab);

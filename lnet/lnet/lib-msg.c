@@ -573,16 +573,17 @@ lnet_msg_container_cleanup(struct lnet_msg_container *container)
 int
 lnet_msg_container_setup(struct lnet_msg_container *container, int cpt)
 {
-	int	rc;
+	int rc = 0;
 
 	container->msc_init = 1;
 
 	INIT_LIST_HEAD(&container->msc_active);
 	INIT_LIST_HEAD(&container->msc_finalizing);
 
-	rc = 0;
 	/* number of CPUs */
 	container->msc_nfinalizers = cfs_cpt_weight(lnet_cpt_table(), cpt);
+	if (container->msc_nfinalizers == 0)
+		container->msc_nfinalizers = 1;
 
 	LIBCFS_CPT_ALLOC(container->msc_finalizers, lnet_cpt_table(), cpt,
 			 container->msc_nfinalizers *

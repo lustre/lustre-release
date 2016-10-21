@@ -66,6 +66,8 @@ struct cfs_cpu_partition {
 	unsigned			*cpt_distance;
 	/* spread rotor for NUMA allocator */
 	int				 cpt_spread_rotor;
+	/* NUMA node if cpt_nodemask is empty */
+	int				 cpt_node;
 };
 
 /** descriptor for CPU partitions */
