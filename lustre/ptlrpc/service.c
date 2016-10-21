@@ -559,7 +559,8 @@ ptlrpc_server_nthreads_check(struct ptlrpc_service *svc,
 		 * have too many threads no matter how many cores/HTs
 		 * there are.
 		 */
-		if (cfs_cpu_ht_nsiblings(0) > 1) { /* weight is # of HTs */
+		if (cfs_cpu_ht_nsiblings(smp_processor_id()) > 1) {
+			/* weight is # of HTs */
 			/* depress thread factor for hyper-thread */
 			factor = factor - (factor >> 1) + (factor >> 3);
 		}
@@ -2585,16 +2586,17 @@ static int ptlrpc_hr_main(void *arg)
 	struct ptlrpc_hr_thread		*hrt = (struct ptlrpc_hr_thread *)arg;
 	struct ptlrpc_hr_partition	*hrp = hrt->hrt_partition;
 	struct list_head		replies;
-	char				threadname[20];
 	int				rc;
 
 	INIT_LIST_HEAD(&replies);
-	snprintf(threadname, sizeof(threadname), "ptlrpc_hr%02d_%03d",
-		 hrp->hrp_cpt, hrt->hrt_id);
 	unshare_fs_struct();
 
 	rc = cfs_cpt_bind(ptlrpc_hr.hr_cpt_table, hrp->hrp_cpt);
 	if (rc != 0) {
+		char threadname[20];
+
+		snprintf(threadname, sizeof(threadname), "ptlrpc_hr%02d_%03d",
+			 hrp->hrp_cpt, hrt->hrt_id);
 		CWARN("Failed to bind %s on CPT %d of CPT table %p: rc = %d\n",
 		      threadname, hrp->hrp_cpt, ptlrpc_hr.hr_cpt_table, rc);
 	}
@@ -2910,7 +2912,7 @@ int ptlrpc_hr_init(void)
 
 	init_waitqueue_head(&ptlrpc_hr.hr_waitq);
 
-	weight = cfs_cpu_ht_nsiblings(0);
+	weight = cfs_cpu_ht_nsiblings(smp_processor_id());
 
 	cfs_percpt_for_each(hrp, i, ptlrpc_hr.hr_partitions) {
 		hrp->hrp_cpt = i;
