@@ -103,7 +103,7 @@ void cfs_cpt_table_free(struct cfs_cpt_table *cptab);
 /**
  * create a cfs_cpt_table with \a ncpt number of partitions
  */
-struct cfs_cpt_table *cfs_cpt_table_alloc(unsigned int ncpt);
+struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt);
 /**
  * print string information of cpt-table
  */
@@ -115,8 +115,7 @@ int cfs_cpt_distance_print(struct cfs_cpt_table *cptab, char *buf, int len);
 /**
  * return total number of CPU partitions in \a cptab
  */
-int
-cfs_cpt_number(struct cfs_cpt_table *cptab);
+int cfs_cpt_number(struct cfs_cpt_table *cptab);
 /**
  * return number of HW cores or hypter-threadings in a CPU partition \a cpt
  */
@@ -166,13 +165,14 @@ void cfs_cpt_unset_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu);
  * add all cpus in \a mask to CPU partition \a cpt
  * return 1 if successfully set all CPUs, otherwise return 0
  */
-int cfs_cpt_set_cpumask(struct cfs_cpt_table *cptab,
-			int cpt, const cpumask_t *mask);
+
+int cfs_cpt_set_cpumask(struct cfs_cpt_table *cptab, int cpt,
+			const cpumask_t *mask);
 /**
  * remove all cpus in \a mask from CPU partition \a cpt
  */
-void cfs_cpt_unset_cpumask(struct cfs_cpt_table *cptab,
-			   int cpt, const cpumask_t *mask);
+void cfs_cpt_unset_cpumask(struct cfs_cpt_table *cptab, int cpt,
+			   const cpumask_t *mask);
 /**
  * add all cpus in NUMA node \a node to CPU partition \a cpt
  * return 1 if successfully set all CPUs, otherwise return 0
@@ -187,13 +187,13 @@ void cfs_cpt_unset_node(struct cfs_cpt_table *cptab, int cpt, int node);
  * add all cpus in node mask \a mask to CPU partition \a cpt
  * return 1 if successfully set all CPUs, otherwise return 0
  */
-int cfs_cpt_set_nodemask(struct cfs_cpt_table *cptab,
-			 int cpt, nodemask_t *mask);
+int cfs_cpt_set_nodemask(struct cfs_cpt_table *cptab, int cpt,
+			 const nodemask_t *mask);
 /**
  * remove all cpus in node mask \a mask from CPU partition \a cpt
  */
-void cfs_cpt_unset_nodemask(struct cfs_cpt_table *cptab,
-			    int cpt, nodemask_t *mask);
+void cfs_cpt_unset_nodemask(struct cfs_cpt_table *cptab, int cpt,
+			    const nodemask_t *mask);
 /**
  * convert partition id \a cpt to numa node id, if there are more than one
  * nodes in this partition, it might return a different node id each time.

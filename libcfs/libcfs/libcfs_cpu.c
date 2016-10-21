@@ -38,7 +38,7 @@
 #include <libcfs/libcfs.h>
 
 /** Global CPU partition table */
-struct cfs_cpt_table   *cfs_cpt_table __read_mostly = NULL;
+struct cfs_cpt_table *cfs_cpt_table __read_mostly = NULL;
 EXPORT_SYMBOL(cfs_cpt_table);
 
 #ifndef HAVE_LIBCFS_CPT
@@ -47,8 +47,7 @@ EXPORT_SYMBOL(cfs_cpt_table);
 
 #define CFS_CPT_DISTANCE		1	/* Arbitrary positive value */
 
-struct cfs_cpt_table *
-cfs_cpt_table_alloc(unsigned int ncpt)
+struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 {
 	struct cfs_cpt_table *cptab;
 
@@ -69,8 +68,7 @@ cfs_cpt_table_alloc(unsigned int ncpt)
 }
 EXPORT_SYMBOL(cfs_cpt_table_alloc);
 
-void
-cfs_cpt_table_free(struct cfs_cpt_table *cptab)
+void cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 {
 	LASSERT(cptab->ctb_version == CFS_CPU_VERSION_MAGIC);
 
@@ -78,10 +76,9 @@ cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 }
 EXPORT_SYMBOL(cfs_cpt_table_free);
 
-int
-cfs_cpt_table_print(struct cfs_cpt_table *cptab, char *buf, int len)
+int cfs_cpt_table_print(struct cfs_cpt_table *cptab, char *buf, int len)
 {
-	int	rc = 0;
+	int rc = 0;
 
 	rc = snprintf(buf, len, "%d\t: %d\n", 0, 0);
 	len -= rc;
@@ -92,8 +89,7 @@ cfs_cpt_table_print(struct cfs_cpt_table *cptab, char *buf, int len)
 }
 EXPORT_SYMBOL(cfs_cpt_table_print);
 
-int
-cfs_cpt_distance_print(struct cfs_cpt_table *cptab, char *buf, int len)
+int cfs_cpt_distance_print(struct cfs_cpt_table *cptab, char *buf, int len)
 {
 	int	rc = 0;
 
@@ -106,138 +102,121 @@ cfs_cpt_distance_print(struct cfs_cpt_table *cptab, char *buf, int len)
 }
 EXPORT_SYMBOL(cfs_cpt_distance_print);
 
-int
-cfs_cpt_number(struct cfs_cpt_table *cptab)
+int cfs_cpt_number(struct cfs_cpt_table *cptab)
 {
 	return 1;
 }
 EXPORT_SYMBOL(cfs_cpt_number);
 
-int
-cfs_cpt_weight(struct cfs_cpt_table *cptab, int cpt)
+int cfs_cpt_weight(struct cfs_cpt_table *cptab, int cpt)
 {
 	return 1;
 }
 EXPORT_SYMBOL(cfs_cpt_weight);
 
-int
-cfs_cpt_online(struct cfs_cpt_table *cptab, int cpt)
+int cfs_cpt_online(struct cfs_cpt_table *cptab, int cpt)
 {
 	return 1;
 }
 EXPORT_SYMBOL(cfs_cpt_online);
 
-cpumask_t *
-cfs_cpt_cpumask(struct cfs_cpt_table *cptab, int cpt)
+cpumask_t *cfs_cpt_cpumask(struct cfs_cpt_table *cptab, int cpt)
 {
 	return &cptab->ctb_mask;
 }
 EXPORT_SYMBOL(cfs_cpt_cpumask);
 
-nodemask_t *
-cfs_cpt_nodemask(struct cfs_cpt_table *cptab, int cpt)
+nodemask_t *cfs_cpt_nodemask(struct cfs_cpt_table *cptab, int cpt)
 {
 	return &cptab->ctb_nodemask;
 }
 EXPORT_SYMBOL(cfs_cpt_nodemask);
 
-unsigned
-cfs_cpt_distance(struct cfs_cpt_table *cptab, int cpt1, int cpt2)
+unsigned cfs_cpt_distance(struct cfs_cpt_table *cptab, int cpt1, int cpt2)
 {
 	return CFS_CPT_DISTANCE;
 }
 EXPORT_SYMBOL(cfs_cpt_distance);
 
-int
-cfs_cpt_set_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
+int cfs_cpt_set_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
 {
 	return 1;
 }
 EXPORT_SYMBOL(cfs_cpt_set_cpu);
 
-void
-cfs_cpt_unset_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
+void cfs_cpt_unset_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
 {
 }
 EXPORT_SYMBOL(cfs_cpt_unset_cpu);
 
-int
-cfs_cpt_set_cpumask(struct cfs_cpt_table *cptab, int cpt, const cpumask_t *mask)
+int cfs_cpt_set_cpumask(struct cfs_cpt_table *cptab, int cpt,
+			const cpumask_t *mask)
 {
 	return 1;
 }
 EXPORT_SYMBOL(cfs_cpt_set_cpumask);
 
-void
-cfs_cpt_unset_cpumask(struct cfs_cpt_table *cptab, int cpt,
-		      const cpumask_t *mask)
+void cfs_cpt_unset_cpumask(struct cfs_cpt_table *cptab, int cpt,
+			   const cpumask_t *mask)
 {
 }
 EXPORT_SYMBOL(cfs_cpt_unset_cpumask);
 
-int
-cfs_cpt_set_node(struct cfs_cpt_table *cptab, int cpt, int node)
+int cfs_cpt_set_node(struct cfs_cpt_table *cptab, int cpt, int node)
 {
 	return 1;
 }
 EXPORT_SYMBOL(cfs_cpt_set_node);
 
-void
-cfs_cpt_unset_node(struct cfs_cpt_table *cptab, int cpt, int node)
+void cfs_cpt_unset_node(struct cfs_cpt_table *cptab, int cpt, int node)
 {
 }
 EXPORT_SYMBOL(cfs_cpt_unset_node);
 
-int
-cfs_cpt_set_nodemask(struct cfs_cpt_table *cptab, int cpt, nodemask_t *mask)
+int cfs_cpt_set_nodemask(struct cfs_cpt_table *cptab, int cpt,
+			 const nodemask_t *mask)
 {
 	return 1;
 }
 EXPORT_SYMBOL(cfs_cpt_set_nodemask);
 
-void
-cfs_cpt_unset_nodemask(struct cfs_cpt_table *cptab, int cpt, nodemask_t *mask)
+void cfs_cpt_unset_nodemask(struct cfs_cpt_table *cptab, int cpt,
+			    const nodemask_t *mask)
 {
 }
 EXPORT_SYMBOL(cfs_cpt_unset_nodemask);
 
-int
-cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt)
+int cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt)
 {
 	return 0;
 }
 EXPORT_SYMBOL(cfs_cpt_spread_node);
 
-int
-cfs_cpt_current(struct cfs_cpt_table *cptab, int remap)
+int cfs_cpt_current(struct cfs_cpt_table *cptab, int remap)
 {
 	return 0;
 }
 EXPORT_SYMBOL(cfs_cpt_current);
 
-int
-cfs_cpt_of_cpu(struct cfs_cpt_table *cptab, int cpu)
+int cfs_cpt_of_cpu(struct cfs_cpt_table *cptab, int cpu)
 {
 	return 0;
 }
 EXPORT_SYMBOL(cfs_cpt_of_cpu);
 
-int
-cfs_cpt_of_node(struct cfs_cpt_table *cptab, int node)
+int cfs_cpt_of_node(struct cfs_cpt_table *cptab, int node)
 {
 	return 0;
 }
 EXPORT_SYMBOL(cfs_cpt_of_node);
 
-int
-cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt)
+int cfs_cpt_bind(struct cfs_cpt_table *cptab, int cpt)
 {
 	return 0;
 }
 EXPORT_SYMBOL(cfs_cpt_bind);
 
-void
-cfs_cpu_fini(void)
+void cfs_cpu_fini(void)
 {
 	if (cfs_cpt_table != NULL) {
 		cfs_cpt_table_free(cfs_cpt_table);
@@ -245,8 +224,7 @@ cfs_cpu_fini(void)
 	}
 }
 
-int
-cfs_cpu_init(void)
+int cfs_cpu_init(void)
 {
 	cfs_cpt_table = cfs_cpt_table_alloc(1);
 

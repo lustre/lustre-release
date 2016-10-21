@@ -65,17 +65,17 @@ struct cfs_cpu_partition {
 	/* NUMA distance between CPTs */
 	unsigned			*cpt_distance;
 	/* spread rotor for NUMA allocator */
-	unsigned			cpt_spread_rotor;
+	int				 cpt_spread_rotor;
 };
 
 /** descriptor for CPU partitions */
 struct cfs_cpt_table {
 	/* spread rotor for NUMA allocator */
-	unsigned			ctb_spread_rotor;
+	int				ctb_spread_rotor;
 	/* maximum NUMA distance between all nodes in table */
 	unsigned			ctb_distance;
 	/* # of CPU partitions */
-	unsigned			ctb_nparts;
+	int				 ctb_nparts;
 	/* partitions tables */
 	struct cfs_cpu_partition	*ctb_parts;
 	/* shadow HW CPU to CPU partition ID */
