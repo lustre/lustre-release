@@ -131,14 +131,15 @@ cfs_cpt_unset_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
 EXPORT_SYMBOL(cfs_cpt_unset_cpu);
 
 int
-cfs_cpt_set_cpumask(struct cfs_cpt_table *cptab, int cpt, cpumask_t *mask)
+cfs_cpt_set_cpumask(struct cfs_cpt_table *cptab, int cpt, const cpumask_t *mask)
 {
 	return 1;
 }
 EXPORT_SYMBOL(cfs_cpt_set_cpumask);
 
 void
-cfs_cpt_unset_cpumask(struct cfs_cpt_table *cptab, int cpt, cpumask_t *mask)
+cfs_cpt_unset_cpumask(struct cfs_cpt_table *cptab, int cpt,
+		      const cpumask_t *mask)
 {
 }
 EXPORT_SYMBOL(cfs_cpt_unset_cpumask);
@@ -168,12 +169,6 @@ cfs_cpt_unset_nodemask(struct cfs_cpt_table *cptab, int cpt, nodemask_t *mask)
 {
 }
 EXPORT_SYMBOL(cfs_cpt_unset_nodemask);
-
-void
-cfs_cpt_clear(struct cfs_cpt_table *cptab, int cpt)
-{
-}
-EXPORT_SYMBOL(cfs_cpt_clear);
 
 int
 cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt)

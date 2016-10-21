@@ -68,69 +68,18 @@ static char	*cpu_pattern = "N";
 module_param(cpu_pattern, charp, 0444);
 MODULE_PARM_DESC(cpu_pattern, "CPU partitions pattern");
 
-struct cfs_cpt_data {
-	/* serialize hotplug etc */
-	spinlock_t		cpt_lock;
-	/* reserved for hotplug */
-	unsigned long		cpt_version;
-	/* mutex to protect cpt_cpumask */
-	struct mutex		cpt_mutex;
-	/* scratch buffer for set/unset_node */
-	cpumask_t		*cpt_cpumask;
-};
-
-static struct cfs_cpt_data	cpt_data;
-
-/* return number of cores in the same socket of \a cpu */
-int
-cfs_cpu_core_nsiblings(int cpu)
-{
-	int	num;
-
-	mutex_lock(&cpt_data.cpt_mutex);
-
-	cpumask_copy(cpt_data.cpt_cpumask, topology_core_cpumask(cpu));
-	num = cpumask_weight(cpt_data.cpt_cpumask);
-
-	mutex_unlock(&cpt_data.cpt_mutex);
-
-	return num;
-}
-
-/* return cpumask of HTs in the same core */
-void
-cfs_cpu_ht_siblings(int cpu, cpumask_t *mask)
-{
-	cpumask_copy(mask, topology_sibling_cpumask(cpu));
-}
-
 /* return number of HTs in the same core of \a cpu */
 int
 cfs_cpu_ht_nsiblings(int cpu)
 {
-	int	num;
-
-	num = cpumask_weight(topology_sibling_cpumask(cpu));
-
-	return num;
+	return cpumask_weight(topology_sibling_cpumask(cpu));
 }
 EXPORT_SYMBOL(cfs_cpu_ht_nsiblings);
 
 void
-cfs_node_to_cpumask(int node, cpumask_t *mask)
-{
-	const cpumask_t *tmp = cpumask_of_node(node);
-
-	if (tmp != NULL)
-		cpumask_copy(mask, tmp);
-	else
-		cpumask_clear(mask);
-}
-
-void
 cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 {
-	int	i;
+	int i;
 
 	if (cptab->ctb_cpu2cpt != NULL) {
 		LIBCFS_FREE(cptab->ctb_cpu2cpt,
@@ -203,14 +152,9 @@ cfs_cpt_table_alloc(unsigned int ncpt)
 			goto failed;
 	}
 
-	spin_lock(&cpt_data.cpt_lock);
-	/* Reserved for hotplug */
-	cptab->ctb_version = cpt_data.cpt_version;
-	spin_unlock(&cpt_data.cpt_lock);
-
 	return cptab;
 
- failed:
+failed:
 	cfs_cpt_table_free(cptab);
 	return NULL;
 }
@@ -251,7 +195,7 @@ cfs_cpt_table_print(struct cfs_cpt_table *cptab, char *buf, int len)
 		len--;
 	}
 
- out:
+out:
 	if (rc < 0)
 		return rc;
 
@@ -407,15 +351,13 @@ cfs_cpt_unset_cpu(struct cfs_cpt_table *cptab, int cpt, int cpu)
 
 	if (i >= nr_cpu_ids)
 		node_clear(node, *cptab->ctb_nodemask);
-
-	return;
 }
 EXPORT_SYMBOL(cfs_cpt_unset_cpu);
 
 int
-cfs_cpt_set_cpumask(struct cfs_cpt_table *cptab, int cpt, cpumask_t *mask)
+cfs_cpt_set_cpumask(struct cfs_cpt_table *cptab, int cpt, const cpumask_t *mask)
 {
-	int	i;
+	int cpu;
 
 	if (cpumask_weight(mask) == 0 ||
 	    cpumask_any_and(mask, cpu_online_mask) >= nr_cpu_ids) {
@@ -424,8 +366,8 @@ cfs_cpt_set_cpumask(struct cfs_cpt_table *cptab, int cpt, cpumask_t *mask)
 		return 0;
 	}
 
-	for_each_cpu(i, mask) {
-		if (!cfs_cpt_set_cpu(cptab, cpt, i))
+	for_each_cpu(cpu, mask) {
+		if (!cfs_cpt_set_cpu(cptab, cpt, cpu))
 			return 0;
 	}
 
@@ -434,19 +376,20 @@ cfs_cpt_set_cpumask(struct cfs_cpt_table *cptab, int cpt, cpumask_t *mask)
 EXPORT_SYMBOL(cfs_cpt_set_cpumask);
 
 void
-cfs_cpt_unset_cpumask(struct cfs_cpt_table *cptab, int cpt, cpumask_t *mask)
+cfs_cpt_unset_cpumask(struct cfs_cpt_table *cptab, int cpt,
+		      const cpumask_t *mask)
 {
-	int	i;
+	int cpu;
 
-	for_each_cpu(i, mask)
-		cfs_cpt_unset_cpu(cptab, cpt, i);
+	for_each_cpu(cpu, mask)
+		cfs_cpt_unset_cpu(cptab, cpt, cpu);
 }
 EXPORT_SYMBOL(cfs_cpt_unset_cpumask);
 
 int
 cfs_cpt_set_node(struct cfs_cpt_table *cptab, int cpt, int node)
 {
-	cpumask_t	*mask;
+	const cpumask_t *mask;
 	int		rc;
 
 	if (node < 0 || node >= MAX_NUMNODES) {
@@ -455,14 +398,8 @@ cfs_cpt_set_node(struct cfs_cpt_table *cptab, int cpt, int node)
 		return 0;
 	}
 
-	mutex_lock(&cpt_data.cpt_mutex);
-
-	mask = cpt_data.cpt_cpumask;
-	cfs_node_to_cpumask(node, mask);
-
+	mask = cpumask_of_node(node);
 	rc = cfs_cpt_set_cpumask(cptab, cpt, mask);
-
-	mutex_unlock(&cpt_data.cpt_mutex);
 
 	return rc;
 }
@@ -471,7 +408,7 @@ EXPORT_SYMBOL(cfs_cpt_set_node);
 void
 cfs_cpt_unset_node(struct cfs_cpt_table *cptab, int cpt, int node)
 {
-	cpumask_t *mask;
+	const cpumask_t *mask;
 
 	if (node < 0 || node >= MAX_NUMNODES) {
 		CDEBUG(D_INFO,
@@ -479,14 +416,9 @@ cfs_cpt_unset_node(struct cfs_cpt_table *cptab, int cpt, int node)
 		return;
 	}
 
-	mutex_lock(&cpt_data.cpt_mutex);
-
-	mask = cpt_data.cpt_cpumask;
-	cfs_node_to_cpumask(node, mask);
-
+	mask = cpumask_of_node(node);
 	cfs_cpt_unset_cpumask(cptab, cpt, mask);
 
-	mutex_unlock(&cpt_data.cpt_mutex);
 }
 EXPORT_SYMBOL(cfs_cpt_unset_node);
 
@@ -514,28 +446,7 @@ cfs_cpt_unset_nodemask(struct cfs_cpt_table *cptab, int cpt, nodemask_t *mask)
 }
 EXPORT_SYMBOL(cfs_cpt_unset_nodemask);
 
-void
-cfs_cpt_clear(struct cfs_cpt_table *cptab, int cpt)
-{
-	int	last;
-	int	i;
-
-	if (cpt == CFS_CPT_ANY) {
-		last = cptab->ctb_nparts - 1;
-		cpt = 0;
-	} else {
-		last = cpt;
-	}
-
-	for (; cpt <= last; cpt++) {
-		for_each_cpu(i, cptab->ctb_parts[cpt].cpt_cpumask)
-			cfs_cpt_unset_cpu(cptab, cpt, i);
-	}
-}
-EXPORT_SYMBOL(cfs_cpt_clear);
-
-int
-cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt)
+int cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt)
 {
 	nodemask_t	*mask;
 	int		weight;
@@ -707,7 +618,7 @@ cfs_cpt_choose_ncpus(struct cfs_cpt_table *cptab, int cpt,
 		}
 	}
 
- out:
+out:
 	if (socket != NULL)
 		LIBCFS_FREE(socket, cpumask_size());
 	if (core != NULL)
@@ -745,7 +656,7 @@ cfs_cpt_num_estimate(void)
 
 	ncpt = nnode;
 
- out:
+out:
 #if (BITS_PER_LONG == 32)
 	/* config many CPU partitions on 32-bit system could consume
 	 * too much memory */
@@ -805,7 +716,7 @@ cfs_cpt_table_create(int ncpt)
 	}
 
 	for_each_online_node(i) {
-		cfs_node_to_cpumask(i, mask);
+		cpumask_copy(mask, cpumask_of_node(i));
 
 		while (!cpumask_empty(mask)) {
 			struct cfs_cpu_partition *part;
@@ -1021,9 +932,6 @@ cfs_cpu_notify(struct notifier_block *self, unsigned long action, void *hcpu)
 	case CPU_DEAD_FROZEN:
 	case CPU_ONLINE:
 	case CPU_ONLINE_FROZEN:
-		spin_lock(&cpt_data.cpt_lock);
-		cpt_data.cpt_version++;
-		spin_unlock(&cpt_data.cpt_lock);
 	default:
 		if (action != CPU_DEAD && action != CPU_DEAD_FROZEN) {
 			CDEBUG(D_INFO, "CPU changed [cpu %u action %lx]\n",
@@ -1031,13 +939,9 @@ cfs_cpu_notify(struct notifier_block *self, unsigned long action, void *hcpu)
 			break;
 		}
 
-		mutex_lock(&cpt_data.cpt_mutex);
 		/* if all HTs in a core are offline, it may break affinity */
-		cpumask_copy(cpt_data.cpt_cpumask,
-			     topology_sibling_cpumask(cpu));
-		warn = cpumask_any_and(cpt_data.cpt_cpumask,
+		warn = cpumask_any_and(topology_sibling_cpumask(cpu),
 				       cpu_online_mask) >= nr_cpu_ids;
-		mutex_unlock(&cpt_data.cpt_mutex);
 		CDEBUG(warn ? D_WARNING : D_INFO,
 		       "Lustre: can't support CPU plug-out well now, "
 		       "performance and stability could be impacted"
@@ -1063,8 +967,6 @@ cfs_cpu_fini(void)
 #ifdef CONFIG_HOTPLUG_CPU
 	unregister_hotcpu_notifier(&cfs_cpu_notifier);
 #endif
-	if (cpt_data.cpt_cpumask != NULL)
-		LIBCFS_FREE(cpt_data.cpt_cpumask, cpumask_size());
 }
 
 int
@@ -1072,21 +974,10 @@ cfs_cpu_init(void)
 {
 	LASSERT(cfs_cpt_table == NULL);
 
-	memset(&cpt_data, 0, sizeof(cpt_data));
-
-	LIBCFS_ALLOC(cpt_data.cpt_cpumask, cpumask_size());
-	if (cpt_data.cpt_cpumask == NULL) {
-		CERROR("Failed to allocate scratch buffer\n");
-		return -1;
-	}
-
-	spin_lock_init(&cpt_data.cpt_lock);
-	mutex_init(&cpt_data.cpt_mutex);
-
 #ifdef CONFIG_HOTPLUG_CPU
 	register_hotcpu_notifier(&cfs_cpu_notifier);
 #endif
-
+	get_online_cpus();
 	if (*cpu_pattern != 0) {
 		char *cpu_pattern_dup = kstrdup(cpu_pattern, GFP_KERNEL);
 
@@ -1111,21 +1002,15 @@ cfs_cpu_init(void)
 			goto failed;
 		}
 	}
-
-	spin_lock(&cpt_data.cpt_lock);
-	if (cfs_cpt_table->ctb_version != cpt_data.cpt_version) {
-		spin_unlock(&cpt_data.cpt_lock);
-		CERROR("CPU hotplug/unplug during setup\n");
-		goto failed;
-	}
-	spin_unlock(&cpt_data.cpt_lock);
+	put_online_cpus();
 
 	LCONSOLE(0, "HW nodes: %d, HW CPU cores: %d, npartitions: %d\n",
 		     num_online_nodes(), num_online_cpus(),
 		     cfs_cpt_number(cfs_cpt_table));
 	return 0;
 
- failed:
+failed:
+	put_online_cpus();
 	cfs_cpu_fini();
 	return -1;
 }

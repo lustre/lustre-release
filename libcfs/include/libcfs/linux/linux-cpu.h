@@ -68,8 +68,6 @@ struct cfs_cpu_partition {
 
 /** descriptor for CPU partitions */
 struct cfs_cpt_table {
-	/* version, reserved for hotplug */
-	unsigned			ctb_version;
 	/* spread rotor for NUMA allocator */
 	unsigned			ctb_spread_rotor;
 	/* # of CPU partitions */
@@ -85,9 +83,6 @@ struct cfs_cpt_table {
 };
 
 void cfs_cpu_core_siblings(int cpu, cpumask_t *mask);
-void cfs_cpu_ht_siblings(int cpu, cpumask_t *mask);
-void cfs_node_to_cpumask(int node, cpumask_t *mask);
-int cfs_cpu_core_nsiblings(int cpu);
 int cfs_cpu_ht_nsiblings(int cpu);
 
 #endif /* CONFIG_SMP */
