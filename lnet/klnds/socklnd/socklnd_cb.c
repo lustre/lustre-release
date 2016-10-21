@@ -1402,8 +1402,8 @@ int ksocknal_scheduler(void *arg)
 
 	rc = cfs_cpt_bind(lnet_cpt_table(), info->ksi_cpt);
 	if (rc != 0) {
-		CERROR("Can't set CPT affinity to %d: %d\n",
-		       info->ksi_cpt, rc);
+		CWARN("Can't set CPU partition affinity to %d: %d\n",
+			info->ksi_cpt, rc);
 	}
 
 	spin_lock_bh(&sched->kss_lock);

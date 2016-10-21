@@ -3517,10 +3517,10 @@ kiblnd_scheduler(void *arg)
 
 	rc = cfs_cpt_bind(lnet_cpt_table(), sched->ibs_cpt);
 	if (rc != 0) {
-		CWARN("Failed to bind on CPT %d, please verify whether "
-		      "all CPUs are healthy and reload modules if necessary, "
-		      "otherwise your system might under risk of low "
-		      "performance\n", sched->ibs_cpt);
+		CWARN("Unable to bind on CPU partition %d, please verify "
+		      "whether all CPUs are healthy and reload modules if "
+		      "necessary, otherwise your system might under risk of "
+		      "low performance\n", sched->ibs_cpt);
 	}
 
 	spin_lock_irqsave(&sched->ibs_lock, flags);
