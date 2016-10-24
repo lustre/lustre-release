@@ -57,7 +57,7 @@
 #include <sys/types.h>
 
 #include <libcfs/util/string.h>
-#include <lustre/lustre_idl.h>
+#include <lustre/lustre_fid.h>
 #include <lustre/lustreapi.h>
 
 /* Progress reporting period */

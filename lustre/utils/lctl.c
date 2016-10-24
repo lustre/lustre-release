@@ -44,7 +44,7 @@
 #include <libcfs/util/parser.h>
 #include <lnet/lnetctl.h>
 #include "obdctl.h"
-#include <lustre/lustre_idl.h>
+#include <lustre_ver.h>
 
 static int jt_noop(int argc, char **argv) {
         return 0;

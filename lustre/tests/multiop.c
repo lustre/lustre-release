@@ -52,7 +52,6 @@
 #include <time.h>
 #include <err.h>
 
-#include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
 
 #define T1 "write data before unlink\n"

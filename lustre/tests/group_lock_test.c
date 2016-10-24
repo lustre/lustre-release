@@ -43,7 +43,6 @@
 #include <poll.h>
 
 #include <lustre/lustreapi.h>
-#include <lustre/lustre_idl.h>
 
 #define ERROR(fmt, ...)							\
 	fprintf(stderr, "%s: %s:%d: %s: " fmt "\n",			\

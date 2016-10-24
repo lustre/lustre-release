@@ -149,7 +149,9 @@
  */
 
 #include <libcfs/libcfs.h>
+#include <lustre/lustre_fid.h>
 #include <lustre/lustre_idl.h>
+#include <lustre/lustre_ostid.h>
 
 struct lu_env;
 struct lu_site;
@@ -659,6 +661,62 @@ static inline void ost_fid_build_resid(const struct lu_fid *fid,
 	}
 }
 
+/**
+ * Unpack an OST object id/seq (group) into a FID.  This is needed for
+ * converting all obdo, lmm, lsm, etc. 64-bit id/seq pairs into proper
+ * FIDs.  Note that if an id/seq is already in FID/IDIF format it will
+ * be passed through unchanged.  Only legacy OST objects in "group 0"
+ * will be mapped into the IDIF namespace so that they can fit into the
+ * struct lu_fid fields without loss.  For reference see:
+ * http://arch.lustre.org/index.php?title=Interoperability_fids_zfs
+ */
+static inline int ostid_to_fid(struct lu_fid *fid, const struct ost_id *ostid,
+			       u32 ost_idx)
+{
+	u64 seq = ostid_seq(ostid);
+
+	if (ost_idx > 0xffff) {
+		CERROR("bad ost_idx, "DOSTID" ost_idx:%u\n", POSTID(ostid),
+		       ost_idx);
+		return -EBADF;
+	}
+
+	if (fid_seq_is_mdt0(seq)) {
+		u64 oid = ostid_id(ostid);
+
+		/* This is a "legacy" (old 1.x/2.early) OST object in "group 0"
+		 * that we map into the IDIF namespace.  It allows up to 2^48
+		 * objects per OST, as this is the object namespace that has
+		 * been in production for years.  This can handle create rates
+		 * of 1M objects/s/OST for 9 years, or combinations thereof.
+		 */
+		if (oid >= IDIF_MAX_OID) {
+			CERROR("bad MDT0 id(1), "DOSTID" ost_idx:%u\n",
+			       POSTID(ostid), ost_idx);
+			return -EBADF;
+		}
+		fid->f_seq = fid_idif_seq(oid, ost_idx);
+		/* truncate to 32 bits by assignment */
+		fid->f_oid = oid;
+		/* in theory, not currently used */
+		fid->f_ver = oid >> 48;
+	} else if (likely(!fid_seq_is_default(seq))) {
+		/* This is either an IDIF object, which identifies objects
+		 * across all OSTs, or a regular FID.  The IDIF namespace
+		 * maps legacy OST objects into the FID namespace.  In both
+		 * cases, we just pass the FID through, no conversion needed.
+		 */
+		if (ostid->oi_fid.f_ver) {
+			CERROR("bad MDT0 id(2), "DOSTID" ost_idx:%u\n",
+			       POSTID(ostid), ost_idx);
+			return -EBADF;
+		}
+		*fid = ostid->oi_fid;
+	}
+
+	return 0;
+}
+
 static inline void ost_fid_from_resid(struct lu_fid *fid,
 				      const struct ldlm_res_id *name,
 				      int ost_idx)
@@ -747,6 +805,33 @@ lu_fid_diff(const struct lu_fid *fid1, const struct lu_fid *fid2)
 		       fid_idif_id(fid2->f_seq, fid2->f_oid, fid2->f_ver);
 
 	return fid_oid(fid1) - fid_oid(fid2);
+}
+
+static inline int fid_set_id(struct lu_fid *fid, u64 oid)
+{
+	if (unlikely(fid_seq_is_igif(fid->f_seq))) {
+		CERROR("bad IGIF, "DFID"\n", PFID(fid));
+		return -EBADF;
+	}
+
+	if (fid_is_idif(fid)) {
+		if (oid >= IDIF_MAX_OID) {
+			CERROR("Too large OID %#llx to set IDIF "DFID"\n",
+			       (unsigned long long)oid, PFID(fid));
+			return -EBADF;
+		}
+		fid->f_seq = fid_idif_seq(oid, fid_idif_ost_idx(fid));
+		fid->f_oid = oid;
+		fid->f_ver = oid >> 48;
+	} else {
+		if (oid > OBIF_MAX_OID) {
+			CERROR("Too large OID %#llx to set REG "DFID"\n",
+			       (unsigned long long)oid, PFID(fid));
+			return -EBADF;
+		}
+		fid->f_oid = oid;
+	}
+	return 0;
 }
 
 #define LUSTRE_SEQ_SRV_NAME "seq_srv"

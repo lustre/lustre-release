@@ -67,7 +67,7 @@
 #include <libcfs/util/string.h>
 
 #include <lnet/nidstr.h>
-#include <lustre/lustre_idl.h>
+#include <lustre/lustre_ostid.h>
 #include <lustre_cfg.h>
 #include <lustre_ioctl.h>
 #include <lustre_ver.h>

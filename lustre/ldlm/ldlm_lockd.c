@@ -40,6 +40,7 @@
 #include <linux/kthread.h>
 #include <linux/list.h>
 #include <libcfs/libcfs.h>
+#include <lustre/lustre_errno.h>
 #include <lustre_dlm.h>
 #include <obd_class.h>
 #include "ldlm_internal.h"

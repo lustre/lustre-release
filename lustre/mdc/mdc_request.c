@@ -43,6 +43,8 @@
 # include <linux/uidgid.h>
 #endif
 
+#include <lustre/lustre_errno.h>
+
 #include <cl_object.h>
 #include <llog_swab.h>
 #include <lprocfs_status.h>

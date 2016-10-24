@@ -53,7 +53,8 @@
 #include <errno.h>
 #include <time.h>
 #include <lnet/nidstr.h>
-#include <lustre/lustre_idl.h>
+#include <lustre/lustre_fid.h>
+#include <lustre/lustre_ostid.h>
 #include <lustre/lustreapi.h>
 #include <lustre_log_user.h>
 #include <lustre_cfg.h>

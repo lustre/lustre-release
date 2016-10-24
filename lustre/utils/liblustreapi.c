@@ -72,6 +72,7 @@
 #include <libcfs/util/string.h>
 #include <lnet/lnetctl.h>
 #include <lustre/lustreapi.h>
+#include <lustre/lustre_ostid.h>
 #include <lustre_ioctl.h>
 #include "lustreapi_internal.h"
 
