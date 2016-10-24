@@ -2735,22 +2735,22 @@ enum {
 };
 
 static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
-                     struct lu_attr *attr,
-                     struct dt_allocation_hint *hint,
-                     struct dt_object_format *dof,
-                     struct thandle *th)
+		     struct lu_attr *attr,
+		     struct dt_allocation_hint *hint,
+		     struct dt_object_format *dof,
+		     struct thandle *th)
 {
-        int result;
-        struct osd_thandle *oth;
-        __u32 mode = (attr->la_mode & (S_IFMT | S_IRWXUGO | S_ISVTX));
+	int result;
+	struct osd_thandle *oth;
+	__u32 mode = (attr->la_mode & (S_IFMT | S_IRWXUGO | S_ISVTX | S_ISGID));
 
-        LASSERT(S_ISDIR(attr->la_mode));
+	LASSERT(S_ISDIR(attr->la_mode));
 
-        oth = container_of(th, struct osd_thandle, ot_super);
-        LASSERT(oth->ot_handle->h_transaction != NULL);
-        result = osd_mkfile(info, obj, mode, hint, th);
+	oth = container_of(th, struct osd_thandle, ot_super);
+	LASSERT(oth->ot_handle->h_transaction != NULL);
+	result = osd_mkfile(info, obj, mode, hint, th);
 
-        return result;
+	return result;
 }
 
 static int osd_mk_index(struct osd_thread_info *info, struct osd_object *obj,
@@ -3375,6 +3375,9 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 		RETURN(local);
 	}
 
+	/* restore i_gid in case S_ISGID is set, we will inherit S_ISGID and set
+	 * correct gid on remote file, not agent here */
+	local->i_gid = current_fsgid();
 	ldiskfs_set_inode_state(local, LDISKFS_STATE_LUSTRE_NOSCRUB);
 	unlock_new_inode(local);
 
