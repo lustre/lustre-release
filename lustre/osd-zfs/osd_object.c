@@ -1371,7 +1371,8 @@ static dmu_buf_t *osd_mkreg(const struct lu_env *env, struct osd_object *obj,
 	if (rc)
 		return ERR_PTR(rc);
 
-	if ((fid_is_idif(fid) || fid_is_norm(fid)) && osd->od_is_ost) {
+	if ((fid_is_idif(fid) || fid_is_norm(fid) || fid_is_echo(fid)) &&
+	    osd->od_is_ost) {
 		/* The minimum block size must be at least page size otherwise
 		 * it will break the assumption in tgt_thread_big_cache where
 		 * the array size is PTLRPC_MAX_BRW_PAGES. It will also affect
