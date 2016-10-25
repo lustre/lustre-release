@@ -1,0 +1,134 @@
+Index: linux-3.10.0-495.el7.x86_64/block/blk-settings.c
+===================================================================
+--- linux-3.10.0-495.el7.x86_64.orig/block/blk-settings.c
++++ linux-3.10.0-495.el7.x86_64/block/blk-settings.c
+@@ -19,6 +19,12 @@ EXPORT_SYMBOL(blk_max_low_pfn);
+ 
+ unsigned long blk_max_pfn;
+ 
++int default_max_sectors = BLK_DEF_MAX_SECTORS;
++module_param(default_max_sectors, int, 0);
++
++int default_max_segments = BLK_MAX_SEGMENTS;
++module_param(default_max_segments, int, 0);
++
+ /**
+  * blk_queue_prep_rq - set a prepare_request function for queue
+  * @q:		queue
+@@ -108,7 +114,7 @@ EXPORT_SYMBOL_GPL(blk_queue_lld_busy);
+  */
+ void blk_set_default_limits(struct queue_limits *lim)
+ {
+-	lim->max_segments = BLK_MAX_SEGMENTS;
++	lim->max_segments = default_max_segments;
+ 	lim->max_integrity_segments = 0;
+ 	lim->seg_boundary_mask = BLK_SEG_BOUNDARY_MASK;
+ 	if (lim->limits_aux)
+@@ -268,7 +274,7 @@ void blk_limits_max_hw_sectors(struct qu
+ 
+ 	limits->max_hw_sectors = max_hw_sectors;
+ 	max_sectors = min_not_zero(max_hw_sectors, limits->max_dev_sectors);
+-	max_sectors = min_t(unsigned int, max_sectors, BLK_DEF_MAX_SECTORS);
++	max_sectors = min_t(unsigned int, max_sectors, default_max_sectors);
+ 	limits->max_sectors = max_sectors;
+ }
+ EXPORT_SYMBOL(blk_limits_max_hw_sectors);
+Index: linux-3.10.0-495.el7.x86_64/drivers/scsi/Kconfig
+===================================================================
+--- linux-3.10.0-495.el7.x86_64.orig/drivers/scsi/Kconfig
++++ linux-3.10.0-495.el7.x86_64/drivers/scsi/Kconfig
+@@ -246,6 +246,15 @@ config SCSI_LOGGING
+ 	  there should be no noticeable performance impact as long as you have
+ 	  logging turned off.
+ 
++config SCSI_MAX_SG_SEGMENTS
++	int "Maximum SCSI scatter gather segment size"
++	range 32 256 
++	default "128"
++	depends on SCSI
++	help
++	  Control the maximum limit for scatter gather buffers for the
++	  SCSI device.
++
+ config SCSI_SCAN_ASYNC
+ 	bool "Asynchronous SCSI scanning"
+ 	depends on SCSI
+Index: linux-3.10.0-495.el7.x86_64/include/scsi/scsi.h
+===================================================================
+--- linux-3.10.0-495.el7.x86_64.orig/include/scsi/scsi.h
++++ linux-3.10.0-495.el7.x86_64/include/scsi/scsi.h
+@@ -25,7 +25,7 @@ enum scsi_timeouts {
+  * to SG_MAX_SINGLE_ALLOC to pack correctly at the highest order.  The
+  * minimum value is 32
+  */
+-#define SCSI_MAX_SG_SEGMENTS	128
++#define SCSI_MAX_SG_SEGMENTS	CONFIG_SCSI_MAX_SG_SEGMENTS
+ 
+ /*
+  * Like SCSI_MAX_SG_SEGMENTS, but for archs that have sg chaining. This limit
+Index: linux-3.10.0-495.el7.x86_64/drivers/scsi/isci/init.c
+===================================================================
+--- linux-3.10.0-495.el7.x86_64.orig/drivers/scsi/isci/init.c
++++ linux-3.10.0-495.el7.x86_64/drivers/scsi/isci/init.c
+@@ -119,6 +119,10 @@ unsigned char phy_gen = SCIC_SDS_PARM_GE
+ module_param(phy_gen, byte, 0);
+ MODULE_PARM_DESC(phy_gen, "PHY generation (1: 1.5Gbps 2: 3.0Gbps 3: 6.0Gbps)");
+ 
++u16 sg_table_size = SG_ALL;
++module_param(sg_table_size, ushort, 0);
++MODULE_PARM_DESC(sg_table_size, "Size in KB of scatter gather table");
++
+ unsigned char max_concurr_spinup;
+ module_param(max_concurr_spinup, byte, 0);
+ MODULE_PARM_DESC(max_concurr_spinup, "Max concurrent device spinup");
+@@ -163,7 +167,6 @@ static struct scsi_host_template isci_sh
+ 	.can_queue			= ISCI_CAN_QUEUE_VAL,
+ 	.cmd_per_lun			= 1,
+ 	.this_id			= -1,
+-	.sg_tablesize			= SG_ALL,
+ 	.max_sectors			= SCSI_DEFAULT_MAX_SECTORS,
+ 	.use_clustering			= ENABLE_CLUSTERING,
+ 	.eh_abort_handler		= sas_eh_abort_handler,
+@@ -571,6 +574,7 @@ static struct isci_host *isci_host_alloc
+ 
+ 		INIT_LIST_HEAD(&idev->node);
+ 	}
++	isci_sht.sg_tablesize = sg_table_size;
+ 
+ 	shost = scsi_host_alloc(&isci_sht, sizeof(void *));
+ 	if (!shost)
+Index: linux-3.10.0-495.el7.x86_64/drivers/message/fusion/Kconfig
+===================================================================
+--- linux-3.10.0-495.el7.x86_64.orig/drivers/message/fusion/Kconfig
++++ linux-3.10.0-495.el7.x86_64/drivers/message/fusion/Kconfig
+@@ -61,9 +61,9 @@ config FUSION_SAS
+ 	  LSISAS1078
+ 
+ config FUSION_MAX_SGE
+-	int "Maximum number of scatter gather entries (16 - 128)"
+-	default "128"
+-	range 16 128
++	int "Maximum number of scatter gather entries (16 - 256)"
++	default "256"
++	range 16 256
+ 	help
+ 	  This option allows you to specify the maximum number of scatter-
+ 	  gather entries per I/O. The driver default is 128, which matches
+Index: linux-3.10.0-495.el7.x86_64/drivers/message/fusion/mptbase.h
+===================================================================
+--- linux-3.10.0-495.el7.x86_64.orig/drivers/message/fusion/mptbase.h
++++ linux-3.10.0-495.el7.x86_64/drivers/message/fusion/mptbase.h
+@@ -166,10 +166,10 @@
+  * Set the MAX_SGE value based on user input.
+  */
+ #ifdef CONFIG_FUSION_MAX_SGE
+-#if CONFIG_FUSION_MAX_SGE  < 16
++#if CONFIG_FUSION_MAX_SGE < 16
+ #define MPT_SCSI_SG_DEPTH	16
+-#elif CONFIG_FUSION_MAX_SGE  > 128
+-#define MPT_SCSI_SG_DEPTH	128
++#elif CONFIG_FUSION_MAX_SGE > 256
++#define MPT_SCSI_SG_DEPTH	256
+ #else
+ #define MPT_SCSI_SG_DEPTH	CONFIG_FUSION_MAX_SGE
+ #endif

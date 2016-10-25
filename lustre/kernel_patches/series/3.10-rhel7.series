@@ -1,5 +1,5 @@
 raid5-mmp-unplug-dev-3.7.patch
 dev_read_only-3.7.patch
-blkdev_tunables-3.7.patch
+blkdev_tunables-3.8.patch
 jbd2-fix-j_list_lock-unlock-3.10-rhel7.patch
 
