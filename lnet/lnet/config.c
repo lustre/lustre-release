@@ -187,7 +187,7 @@ lnet_ni_alloc(__u32 net, struct cfs_expr_list *el, struct list_head *nilist)
 	else
 		ni->ni_net_ns = NULL;
 
-	ni->ni_last_alive = cfs_time_current_sec();
+	ni->ni_last_alive = ktime_get_real_seconds();
 	list_add_tail(&ni->ni_list, nilist);
 	return ni;
  failed:

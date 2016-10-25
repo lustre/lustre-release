@@ -262,6 +262,25 @@ AS_IF([test "x$enable_crc32c_crypto" = xyes], [
 ]) # LIBCFS_ENABLE_CRC32C_ACCEL
 
 #
+# Kernel version 3.11 introduced ktime_get_ts64
+#
+AC_DEFUN([LIBCFS_KTIME_GET_TS64],[
+LB_CHECK_COMPILE([does function 'ktime_get_ts64' exist],
+ktime_get_ts64, [
+	#include <linux/ktime.h>
+],[
+	struct timespec64 *ts = NULL;
+
+	ktime_get_ts64(ts);
+],[
+	AC_DEFINE(HAVE_KTIME_GET_TS64, 1,
+		['ktime_get_ts64' is available])
+])
+]) # LIBCFS_KTIME_GET_TS64
+
+#
+
+#
 # FC19 3.12 kernel struct shrinker change
 #
 AC_DEFUN([LIBCFS_SHRINKER_COUNT],[
@@ -327,6 +346,40 @@ ktime_get_real_ts64, [
 		['ktime_get_real_ts64' is available])
 ])
 ]) # LIBCFS_KTIME_GET_REAL_TS64
+
+#
+# Kernel version 3.17 introduced ktime_get_real_seconds
+#
+AC_DEFUN([LIBCFS_KTIME_GET_REAL_SECONDS],[
+LB_CHECK_COMPILE([does function 'ktime_get_real_seconds' exist],
+ktime_get_real_seconds, [
+	#include <linux/ktime.h>
+],[
+	time64_t now;
+
+	now = ktime_get_real_seconds();
+],[
+	AC_DEFINE(HAVE_KTIME_GET_REAL_SECONDS, 1,
+		['ktime_get_real_seconds' is available])
+])
+]) # LIBCFS_KTIME_GET_REAL_SECONDS
+
+#
+# Kernel version 3.19 introduced ktime_get_seconds
+#
+AC_DEFUN([LIBCFS_KTIME_GET_SECONDS],[
+LB_CHECK_COMPILE([does function 'ktime_get_seconds' exist],
+ktime_get_seconds, [
+	#include <linux/ktime.h>
+],[
+	time64_t now;
+
+	now = ktime_get_seconds();
+],[
+	AC_DEFINE(HAVE_KTIME_GET_SECONDS, 1,
+		['ktime_get_seconds' is available])
+])
+]) # LIBCFS_KTIME_GET_SECONDS
 
 #
 # Kernel version 4.2 changed topology_thread_cpumask
@@ -443,12 +496,17 @@ LIBCFS_HAVE_CRC32
 LIBCFS_ENABLE_CRC32_ACCEL
 # 3.10
 LIBCFS_ENABLE_CRC32C_ACCEL
+# 3.11
+LIBCFS_KTIME_GET_TS64
 # 3.12
 LIBCFS_SHRINKER_COUNT
 # 3.17
 LIBCFS_HLIST_ADD_AFTER
 LIBCFS_TIMESPEC64
 LIBCFS_KTIME_GET_REAL_TS64
+LIBCFS_KTIME_GET_REAL_SECONDS
+# 3.19
+LIBCFS_KTIME_GET_SECONDS
 # 4.2
 LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 LIBCFS_FPU_API

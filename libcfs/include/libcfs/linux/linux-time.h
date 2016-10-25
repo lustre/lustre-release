@@ -130,9 +130,21 @@ static inline struct timespec64 timespec_to_timespec64(const struct timespec ts)
 
 #endif /* HAVE_TIMESPEC64 */
 
+#ifndef HAVE_KTIME_GET_TS64
+void ktime_get_ts64(struct timespec64 *ts);
+#endif /* HAVE_KTIME_GET_TS */
+
 #ifndef HAVE_KTIME_GET_REAL_TS64
 void ktime_get_real_ts64(struct timespec64 *ts);
 #endif /* HAVE_KTIME_GET_REAL_TS */
+
+#ifndef HAVE_KTIME_GET_REAL_SECONDS
+time64_t ktime_get_real_seconds(void);
+#endif /* HAVE_KTIME_GET_REAL_SECONDS */
+
+#ifndef HAVE_KTIME_GET_SECONDS
+time64_t ktime_get_seconds(void);
+#endif /* HAVE_KTIME_GET_SECONDS */
 
 static inline int cfs_time_before(cfs_time_t t1, cfs_time_t t2)
 {

@@ -834,7 +834,7 @@ lstcon_ioctl_entry(unsigned int cmd, struct libcfs_ioctl_hdr *hdr)
 
 	mutex_lock(&console_session.ses_mutex);
 
-	console_session.ses_laststamp = cfs_time_current_sec();
+	console_session.ses_laststamp = ktime_get_real_seconds();
 
 	if (console_session.ses_shutdown) {
 		rc = -ESHUTDOWN;

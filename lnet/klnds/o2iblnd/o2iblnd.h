@@ -418,7 +418,7 @@ typedef struct
 	 * The second that peers are pulled out from \a kib_reconn_wait
 	 * for reconnection.
 	 */
-	unsigned int		kib_reconn_sec;
+	time64_t		kib_reconn_sec;
 	/* connection daemon sleeps here */
 	wait_queue_head_t	kib_connd_waitq;
 	spinlock_t		kib_connd_lock;	/* serialise */

@@ -553,7 +553,7 @@ srpc_add_buffer(struct swi_workitem *wi)
 	}
 
 	if (rc != 0) {
-		scd->scd_buf_err_stamp = cfs_time_current_sec();
+		scd->scd_buf_err_stamp = ktime_get_real_seconds();
 		scd->scd_buf_err = rc;
 
 		LASSERT(scd->scd_buf_posting > 0);
@@ -1092,7 +1092,7 @@ srpc_add_client_rpc_timer(srpc_client_rpc_t *rpc)
 	timer->stt_data	   = rpc;
 	timer->stt_func    = srpc_client_rpc_expired;
 	timer->stt_expires = cfs_time_add(rpc->crpc_timeout,
-					  cfs_time_current_sec());
+					  ktime_get_real_seconds());
 	stt_add_timer(timer);
 	return;
 }
@@ -1482,7 +1482,7 @@ srpc_lnet_ev_handler(lnet_event_t *ev)
 		}
 
 		if (scd->scd_buf_err_stamp != 0 &&
-		    scd->scd_buf_err_stamp < cfs_time_current_sec()) {
+		    scd->scd_buf_err_stamp < ktime_get_real_seconds()) {
 			/* re-enable adding buffer */
 			scd->scd_buf_err_stamp = 0;
 			scd->scd_buf_err = 0;
@@ -1588,9 +1588,9 @@ srpc_startup (void)
 	/* 1 second pause to avoid timestamp reuse */
 	set_current_state(TASK_UNINTERRUPTIBLE);
 	schedule_timeout(cfs_time_seconds(1));
-	srpc_data.rpc_matchbits = ((__u64) cfs_time_current_sec()) << 48;
+	srpc_data.rpc_matchbits = ((__u64) ktime_get_real_seconds()) << 48;
 
-        srpc_data.rpc_state = SRPC_STATE_NONE;
+	srpc_data.rpc_state = SRPC_STATE_NONE;
 
 	rc = LNetNIInit(LNET_PID_LUSTRE);
         if (rc < 0) {

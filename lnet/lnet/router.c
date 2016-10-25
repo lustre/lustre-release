@@ -838,7 +838,7 @@ static void
 lnet_update_ni_status_locked(void)
 {
 	lnet_ni_t	*ni;
-	long		now;
+	time64_t now;
 	int		timeout;
 
 	LASSERT(the_lnet.ln_routing);
@@ -846,7 +846,7 @@ lnet_update_ni_status_locked(void)
 	timeout = router_ping_timeout +
 		  MAX(live_router_check_interval, dead_router_check_interval);
 
-	now = cfs_time_current_sec();
+	now = ktime_get_real_seconds();
 	list_for_each_entry(ni, &the_lnet.ln_nis, ni_list) {
 		if (ni->ni_lnd->lnd_type == LOLND)
 			continue;

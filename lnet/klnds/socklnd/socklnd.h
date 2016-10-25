@@ -235,11 +235,11 @@ typedef struct
 	/* # connds connecting */
 	int			ksnd_connd_connecting;
 	/** time stamp of the last failed connecting attempt */
-	long			ksnd_connd_failed_stamp;
+	time64_t		ksnd_connd_failed_stamp;
 	/** # starting connd */
 	unsigned		ksnd_connd_starting;
 	/** time stamp of the last starting connd */
-	long			ksnd_connd_starting_stamp;
+	time64_t		ksnd_connd_starting_stamp;
 	/** # running connd */
 	unsigned		ksnd_connd_running;
 	/* serialise */

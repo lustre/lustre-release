@@ -1250,7 +1250,7 @@ ksocknal_create_conn(lnet_ni_t *ni, ksock_route_t *route,
 	}
 
         conn->ksnc_peer = peer;                 /* conn takes my ref on peer */
-        peer->ksnp_last_alive = cfs_time_current();
+	peer->ksnp_last_alive = ktime_get_real_seconds();
         peer->ksnp_send_keepalive = 0;
         peer->ksnp_error = 0;
 
@@ -1258,7 +1258,7 @@ ksocknal_create_conn(lnet_ni_t *ni, ksock_route_t *route,
         sched->kss_nconns++;
         conn->ksnc_scheduler = sched;
 
-	conn->ksnc_tx_last_post = cfs_time_current();
+	conn->ksnc_tx_last_post = ktime_get_real_seconds();
 	/* Set the deadline for the outgoing HELLO to drain */
 	conn->ksnc_tx_bufnob = sock->sk->sk_wmem_queued;
 	conn->ksnc_tx_deadline = cfs_time_shift(*ksocknal_tunables.ksnd_timeout);
@@ -1644,7 +1644,7 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
                        libcfs_id2str(conn->ksnc_peer->ksnp_id), conn->ksnc_type,
 		       &conn->ksnc_ipaddr, conn->ksnc_port,
                        conn->ksnc_rx_nob_wanted, conn->ksnc_rx_nob_left,
-                       cfs_duration_sec(cfs_time_sub(cfs_time_current(),
+		       cfs_duration_sec(cfs_time_sub(ktime_get_real_seconds(),
                                         last_rcv)));
                 lnet_finalize (conn->ksnc_peer->ksnp_ni,
                                conn->ksnc_cookie, -EIO);
@@ -1785,14 +1785,14 @@ ksocknal_notify (lnet_ni_t *ni, lnet_nid_t gw_nid, int alive)
 }
 
 void
-ksocknal_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
+ksocknal_query(lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
 {
-        int                connect = 1;
-        cfs_time_t         last_alive = 0;
-        cfs_time_t         now = cfs_time_current();
-        ksock_peer_t      *peer = NULL;
-	rwlock_t		*glock = &ksocknal_data.ksnd_global_lock;
-	lnet_process_id_t  id = {
+	int connect = 1;
+	time64_t last_alive = 0;
+	time64_t now = ktime_get_real_seconds();
+	ksock_peer_t *peer = NULL;
+	rwlock_t *glock = &ksocknal_data.ksnd_global_lock;
+	lnet_process_id_t id = {
 		.nid = nid,
 		.pid = LNET_PID_LUSTRE,
 	};
@@ -2444,7 +2444,7 @@ ksocknal_base_startup(void)
 
         ksocknal_data.ksnd_connd_starting         = 0;
         ksocknal_data.ksnd_connd_failed_stamp     = 0;
-        ksocknal_data.ksnd_connd_starting_stamp   = cfs_time_current_sec();
+	ksocknal_data.ksnd_connd_starting_stamp   = ktime_get_real_seconds();
         /* must have at least 2 connds to remain responsive to accepts while
          * connecting */
         if (*ksocknal_tunables.ksnd_nconnds < SOCKNAL_CONND_RESV + 1)
