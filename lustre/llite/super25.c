@@ -102,7 +102,7 @@ static int __init lustre_init(void)
 {
 	struct proc_dir_entry *entry;
 	lnet_process_id_t lnet_id;
-	struct timeval tv;
+	struct timespec64 ts;
 	int i, rc, seed[2];
 
 	CLASSERT(sizeof(LUSTRE_VOLATILE_HDR) == LUSTRE_VOLATILE_HDR_LEN + 1);
@@ -147,8 +147,8 @@ static int __init lustre_init(void)
 			seed[0] ^= LNET_NIDADDR(lnet_id.nid);
 	}
 
-	do_gettimeofday(&tv);
-	cfs_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
+	ktime_get_ts64(&ts);
+	cfs_srand(ts.tv_sec ^ seed[0], ts.tv_nsec ^ seed[1]);
 
 	rc = vvp_global_init();
 	if (rc != 0)
