@@ -204,8 +204,6 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
-	record_start_io(osd, WRITE, 0);
-
 	dmu_write(osd->od_os, obj->oo_db->db_object, offset,
 		(uint64_t)buf->lb_len, buf->lb_buf, oh->ot_tx);
 	write_lock(&obj->oo_attr_lock);
@@ -227,9 +225,6 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	rc = buf->lb_len;
 
 out:
-	record_end_io(osd, WRITE, 0, buf->lb_len,
-		      buf->lb_len >> PAGE_SHIFT);
-
 	RETURN(rc);
 }
 
