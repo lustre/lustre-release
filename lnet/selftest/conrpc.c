@@ -1176,7 +1176,7 @@ lstcon_rpc_pinger(void *arg)
         srpc_debug_reqst_t *drq;
         lstcon_ndlink_t    *ndl;
         lstcon_node_t      *nd;
-        time_t              intv;
+	int intv;
         int                 count = 0;
         int                 rc;
 
@@ -1248,9 +1248,8 @@ lstcon_rpc_pinger(void *arg)
                 if (nd->nd_state != LST_NODE_ACTIVE)
                         continue;
 
-                intv = cfs_duration_sec(cfs_time_sub(cfs_time_current(),
-                                                     nd->nd_stamp));
-                if (intv < (time_t)nd->nd_timeout / 2)
+		intv = cfs_duration_sec(jiffies - nd->nd_stamp);
+		if (intv < nd->nd_timeout / 2)
                         continue;
 
 		rc = lstcon_rpc_init(nd, SRPC_SERVICE_DEBUG,

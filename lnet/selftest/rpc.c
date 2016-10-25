@@ -1091,8 +1091,7 @@ srpc_add_client_rpc_timer(srpc_client_rpc_t *rpc)
 	INIT_LIST_HEAD(&timer->stt_list);
 	timer->stt_data	   = rpc;
 	timer->stt_func    = srpc_client_rpc_expired;
-	timer->stt_expires = cfs_time_add(rpc->crpc_timeout,
-					  ktime_get_real_seconds());
+	timer->stt_expires = ktime_get_real_seconds() + rpc->crpc_timeout;
 	stt_add_timer(timer);
 	return;
 }

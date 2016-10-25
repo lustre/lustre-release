@@ -174,8 +174,7 @@ sfw_add_session_timer (void)
         LASSERT (!sn->sn_timer_active);
 
         sn->sn_timer_active = 1;
-        timer->stt_expires = cfs_time_add(sn->sn_timeout,
-					  ktime_get_real_seconds());
+	timer->stt_expires = ktime_get_real_seconds()+ sn->sn_timeout;
         stt_add_timer(timer);
         return;
 }
