@@ -157,10 +157,18 @@ maximum of 'timeout' seconds.  The default hard recovery timeout is set to
 .B mount -t lustre cfs21@tcp0:/testfs /mnt/myfilesystem
 Start a client for the Lustre filesystem 'testfs' at the mount point
 /mnt/myfilesystem. The Management Service is running on a node reachable
-from this client via the nid cfs21@tcp0.
+from this client via the NID cfs21@tcp0.
 .TP
 .B mount -t lustre cfs21@tcp0:/testfs/dir /mnt/myfilesystem
 Like above example, but mount subdirectory 'dir' as fileset.
+.TP
+.B mount -t lustre cfs21@tcp0,cfs21ib@o2ib0:cfs22@tcp0,cfs22ib@o2ib0:/testfs/dir /mnt/myfilesystem
+Like above example, but the Management Service is running on one of the service
+nodes cfs21 and cfs22, which are two different hosts separated by a colon and
+served as a failover pair. Lustre tries the first one, and if that fails, it
+tries the second one. On each service node, the comma-separated NIDs refer to
+different interfaces on the same host, and the Lustre client chooses the best
+one for communication based on which network interfaces it has locally.
 .TP
 .B mount -t lustre /dev/sda1 /mnt/test/mdt
 Start the Lustre metadata target service from /dev/sda1 on mountpoint /mnt/test/mdt.

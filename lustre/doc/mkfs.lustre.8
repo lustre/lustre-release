@@ -160,6 +160,17 @@ Print more information.
 .BI \--version
 Output build version of the mkfs.lustre utiltiy.
 
+.SH NID
+A Lustre network identifier (NID) is used to uniquely identify a Lustre network
+endpoint by node ID and network type. The format of the NID is:
+\fInetwork_id@network_type\fR.
+If a node has multiple network interfaces, it may have multiple NIDs, which must
+all be identified so other nodes can choose the NID that is appropriate for
+their network interfaces. Typically, NIDs are specified in a list delimited by
+commas (,). However, when failover nodes are specified, the NIDs are delimited
+by a colon (:) or by repeating a keyword such as \fI--mgsnode=\fR or
+\fI--servicenode=\fR.
+
 .SH EXAMPLES
 .TP
 .B mkfs.lustre --fsname=testfs --index=0 --mdt --mgs /dev/sda1
@@ -167,6 +178,13 @@ Combined MGS and MDT for filesystem 'testfs' on node e.g. cfs21
 .TP
 .B mkfs.lustre --fsname=testfs --index=0 --ost --mgsnode=cfs21@tcp0 /dev/sdb
 OST for filesystem 'testfs' on any node using the above MGS.
+.TP
+.B mkfs.lustre --fsname=testfs --index=0 --mdt --mgs --servicenode=cfs21@tcp0,cfs21ib@o2ib0 --servicenode=cfs22@tcp0,cfs22ib@o2ib0 /dev/sda1
+Combined MGS and MDT for filesystem 'testfs' on failover pair cfs21 and cfs22.
+.TP
+.B mkfs.lustre --fsname=testfs --index=0 --ost --mgsnode=cfs21@tcp0,cfs21ib@o2ib0:cfs22@tcp0,cfs22ib@o2ib0 --failnode=cfs24@tcp0,cfs24ib@o2ib0 /dev/sdb
+OST for filesystem 'testfs' using the above MGS and having a failover partner
+cfs24.
 .TP
 .B mkfs.lustre --mgs /dev/sda1
 Standalone MGS on e.g. node cfs22
