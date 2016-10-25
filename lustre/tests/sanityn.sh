@@ -3324,6 +3324,10 @@ test_77i() {
 run_test 77i "Change rank of TBF rule"
 
 test_78() { #LU-6673
+	local server_version=$(lustre_version_code ost1)
+	[[ $server_version -ge $(version_code 2.7.58) ]] ||
+		{ skip "Need server version newer than 2.7.57"; return 0; }
+
 	local rc
 
 	oss=$(comma_list $(osts_nodes))
