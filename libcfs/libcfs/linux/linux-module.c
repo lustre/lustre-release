@@ -168,7 +168,7 @@ static struct file_operations libcfs_fops = {
 };
 
 struct miscdevice libcfs_dev = {
-	LNET_MINOR,
-	"lnet",
-	&libcfs_fops
+	.minor	= LNET_MINOR,
+	.name	= "lnet",
+	.fops	= &libcfs_fops
 };
