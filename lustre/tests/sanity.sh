@@ -15632,6 +15632,14 @@ test_401d() {
 run_test 401d "Verify 'lctl set_param' accepts values containing '='"
 
 test_402() {
+	local server_version=$(lustre_version_code $SINGLEMDS)
+	[[ $server_version -ge $(version_code 2.7.66) ]] ||
+	[[ $server_version -ge $(version_code 2.7.18.4) &&
+		$server_version -lt $(version_code 2.7.50) ]] ||
+	[[ $server_version -ge $(version_code 2.7.2) &&
+		$server_version -lt $(version_code 2.7.11) ]] ||
+		{ skip "Need MDS version 2.7.2+ or 2.7.18.4+ or 2.7.66+";
+			return; }
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	$LFS setdirstripe -i 0 $DIR/$tdir || error "setdirstripe -i 0 failed"
 #define OBD_FAIL_MDS_FLD_LOOKUP 0x15c
