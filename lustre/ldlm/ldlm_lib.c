@@ -2053,7 +2053,6 @@ repeat:
 			 atomic_read(&tdtd->tdtd_recovery_threads_count) == 0,
 			     &lwi);
 			/* Then abort the update recovery list */
-			dtrq_list_dump(lut->lut_tdtd, D_ERROR);
 			dtrq_list_destroy(lut->lut_tdtd);
 		}
 
@@ -2212,8 +2211,6 @@ static int check_for_recovery_ready(struct lu_target *lut)
 			       " extend recovery %d\n", obd->obd_name,
 			       obd->obd_recovery_timeout);
 			return 0;
-		} else {
-			dtrq_list_dump(lut->lut_tdtd, D_HA);
 		}
 	}
 
