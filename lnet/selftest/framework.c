@@ -39,7 +39,7 @@
 
 #include "selftest.h"
 
-struct lst_sid LST_INVALID_SID = {LNET_NID_ANY, -1};
+struct lst_sid LST_INVALID_SID = { .ses_nid = LNET_NID_ANY, .ses_stamp = -1};
 
 static int session_timeout = 100;
 module_param(session_timeout, int, 0444);

@@ -53,7 +53,7 @@
 #include <lnet/lnet.h>
 #include <utils/obdctl.h>
 
-struct lst_sid LST_INVALID_SID = {LNET_NID_ANY, -1};
+struct lst_sid LST_INVALID_SID = { .ses_nid = LNET_NID_ANY, .ses_stamp = -1 };
 static struct lst_sid session_id;
 static int                 session_key;
 
@@ -532,22 +532,20 @@ lst_new_session_ioctl(char *name, int timeout, int force, struct lst_sid *sid)
 }
 
 int
-jt_lst_new_session(int argc,  char **argv)
+jt_lst_new_session(int argc, char **argv)
 {
-        char  buf[LST_NAME_SIZE];
-        char *name;
-        int   optidx  = 0;
-        int   timeout = 300;
-        int   force   = 0;
-        int   c;
-        int   rc;
+	char  buf[LST_NAME_SIZE];
+	char *name;
+	int   optidx = 0;
+	int   timeout = 300;
+	int   force = 0;
+	int   c;
+	int   rc;
 
-        static struct option session_opts[] =
-        {
-                {"timeout", required_argument,  0, 't' },
-                {"force",   no_argument,        0, 'f' },
-                {0,         0,                  0,  0  }
-        };
+	static const struct option session_opts[] = {
+		{ .name = "timeout", .has_arg = required_argument, .val = 't' },
+		{ .name = "force",   .has_arg = no_argument,	   .val = 'f' },
+		{ .name = NULL } };
 
         if (session_key == 0) {
                 fprintf(stderr,
@@ -782,25 +780,23 @@ jt_lst_ping(int argc,  char **argv)
 	struct list_head   head;
 	lnet_process_id_t *ids = NULL;
 	struct lstcon_rpc_ent  *ent = NULL;
-        char              *str = NULL;
-        int                optidx  = 0;
-        int                server  = 0;
-        int                timeout = 5;
-        int                count   = 0;
-        int                type    = 0;
-        int                rc      = 0;
-        int                c;
+	char              *str = NULL;
+	int                optidx  = 0;
+	int                server  = 0;
+	int                timeout = 5;
+	int                count   = 0;
+	int                type    = 0;
+	int                rc      = 0;
+	int                c;
 
-        static struct option ping_opts[] =
-        {
-                {"session", no_argument,       0, 's' },
-                {"server",  no_argument,       0, 'v' },
-                {"batch",   required_argument, 0, 'b' },
-                {"group",   required_argument, 0, 'g' },
-                {"nodes",   required_argument, 0, 'n' },
-                {"timeout", required_argument, 0, 't' },
-                {0,         0,                 0,  0  }
-        };
+	static const struct option ping_opts[] = {
+		{ .name = "session", .has_arg = no_argument,	   .val = 's' },
+		{ .name = "server",  .has_arg = no_argument,	   .val = 'v' },
+		{ .name = "batch",   .has_arg = required_argument, .val = 'b' },
+		{ .name = "group",   .has_arg = required_argument, .val = 'g' },
+		{ .name = "nodes",   .has_arg = required_argument, .val = 'n' },
+		{ .name = "timeout", .has_arg = required_argument, .val = 't' },
+		{ .name = NULL, } };
 
         if (session_key == 0) {
                 fprintf(stderr,
@@ -1161,24 +1157,22 @@ lst_update_group_ioctl(int opc, char *name, int clean, int count,
 int
 jt_lst_update_group(int argc, char **argv)
 {
-	struct list_head         head;
-        lnet_process_id_t *ids = NULL;
-        char              *str = NULL;
-        char              *grp = NULL;
-        int                optidx = 0;
-        int                count = 0;
-        int                clean = 0;
-        int                opc = 0;
-        int                rc;
-        int                c;
+	struct list_head   head;
+	lnet_process_id_t *ids = NULL;
+	char              *str = NULL;
+	char              *grp = NULL;
+	int                optidx = 0;
+	int                count = 0;
+	int                clean = 0;
+	int                opc = 0;
+	int                rc;
+	int                c;
 
-        static struct option update_group_opts[] =
-        {
-                {"refresh", no_argument,       0, 'f' },
-                {"clean",   required_argument, 0, 'c' },
-                {"remove",  required_argument, 0, 'r' },
-                {0,         0,                 0,  0  }
-        };
+	static const struct option update_group_opts[] = {
+		{ .name = "refresh", .has_arg = no_argument,	   .val = 'f' },
+		{ .name = "clean",   .has_arg = required_argument, .val = 'c' },
+		{ .name = "remove",  .has_arg = required_argument, .val = 'r' },
+		{ .name = NULL } };
 
         if (session_key == 0) {
                 fprintf(stderr,
@@ -1348,29 +1342,27 @@ jt_lst_list_group(int argc, char **argv)
 {
 	struct lstcon_ndlist_ent gent;
 	struct lstcon_node_ent   *dents;
-        int               optidx  = 0;
-        int               verbose = 0;
-        int               active  = 0;
-        int               busy    = 0;
-        int               down    = 0;
-        int               unknown = 0;
-        int               all     = 0;
-        int               count;
-        int               index;
-        int               i;
-        int               j;
-        int               c;
-        int               rc = 0;
+	int optidx  = 0;
+	int verbose = 0;
+	int active  = 0;
+	int busy    = 0;
+	int down    = 0;
+	int unknown = 0;
+	int all     = 0;
+	int count;
+	int index;
+	int i;
+	int j;
+	int c;
+	int rc      = 0;
 
-        static struct option list_group_opts[] =
-        {
-                {"active",  no_argument, 0, 'a' },
-                {"busy",    no_argument, 0, 'b' },
-                {"down",    no_argument, 0, 'd' },
-                {"unknown", no_argument, 0, 'u' },
-                {"all",     no_argument, 0, 'l' },
-                {0,         0,           0,  0  }
-        };
+	static const struct option list_group_opts[] = {
+		{ .name = "active",  .has_arg = no_argument, .val = 'a' },
+		{ .name = "busy",    .has_arg = no_argument, .val = 'b' },
+		{ .name = "down",    .has_arg = no_argument, .val = 'd' },
+		{ .name = "unknown", .has_arg = no_argument, .val = 'u' },
+		{ .name = "all",     .has_arg = no_argument, .val = 'l' },
+		{ .name = NULL, } };
 
         if (session_key == 0) {
                 fprintf(stderr,
@@ -1895,22 +1887,21 @@ jt_lst_stat(int argc, char **argv)
 	int		      c;
 	int		      mbs     = 0; /* report as MB/s */
 
-	static struct option stat_opts[] = {
-		{"timeout"   , required_argument, 0, 't' },
-		{"delay"     , required_argument, 0, 'd' },
-		{"count"     , required_argument, 0, 'o' },
-		{"lnet"	     , no_argument,	 0, 'l' },
-		{"rpc"	     , no_argument,	 0, 'c' },
-		{"bw"	     , no_argument,	 0, 'b' },
-		{"rate"	     , no_argument,	 0, 'a' },
-		{"read"	     , no_argument,	 0, 'r' },
-		{"write"     , no_argument,	 0, 'w' },
-		{"avg"	     , no_argument,	 0, 'g' },
-		{"min"	     , no_argument,	 0, 'n' },
-		{"max"	     , no_argument,	 0, 'x' },
-		{"mbs"	     , no_argument,	 0, 'm' },
-		{0,	       0,		 0,  0  }
-        };
+	static const struct option stat_opts[] = {
+		{ .name = "timeout", .has_arg = required_argument, .val = 't' },
+		{ .name = "delay",   .has_arg = required_argument, .val = 'd' },
+		{ .name = "count",   .has_arg = required_argument, .val = 'o' },
+		{ .name = "lnet",    .has_arg = no_argument,	   .val = 'l' },
+		{ .name = "rpc",     .has_arg = no_argument,       .val = 'c' },
+		{ .name = "bw",      .has_arg = no_argument,       .val = 'b' },
+		{ .name = "rate",    .has_arg = no_argument,       .val = 'a' },
+		{ .name = "read",    .has_arg = no_argument,       .val = 'r' },
+		{ .name = "write",   .has_arg = no_argument,       .val = 'w' },
+		{ .name = "avg",     .has_arg = no_argument,       .val = 'g' },
+		{ .name = "min",     .has_arg = no_argument,       .val = 'n' },
+		{ .name = "max",     .has_arg = no_argument,       .val = 'x' },
+		{ .name = "mbs",     .has_arg = no_argument,       .val = 'm' },
+		{ .name = NULL } };
 
         if (session_key == 0) {
                 fprintf(stderr,
@@ -2058,22 +2049,20 @@ out:
 int
 jt_lst_show_error(int argc, char **argv)
 {
-	struct list_head            head;
-        lst_stat_req_param_t *srp;
-	struct lstcon_rpc_ent     *ent;
-	struct sfw_counters       *sfwk;
-	struct srpc_counters      *srpc;
-        int                   show_rpc = 1;
-        int                   optidx   = 0;
-        int                   rc       = 0;
-        int                   ecount;
-        int                   c;
+	struct list_head       head;
+	lst_stat_req_param_t  *srp;
+	struct lstcon_rpc_ent *ent;
+	struct sfw_counters   *sfwk;
+	struct srpc_counters  *srpc;
+	int		       show_rpc = 1;
+	int		       optidx = 0;
+	int		       rc = 0;
+	int		       ecount;
+	int		       c;
 
-        static struct option  show_error_opts[] =
-        {
-                {"session", no_argument,       0, 's' },
-                {0,         0,                 0,  0  }
-        };
+	static const struct option show_error_opts[] = {
+		{ .name = "session", .has_arg = no_argument, .val = 's' },
+		{ .name = NULL, } };
 
         if (session_key == 0) {
                 fprintf(stderr,
@@ -2243,19 +2232,17 @@ lst_start_batch_ioctl(char *name, int timeout, struct list_head *resultp)
 int
 jt_lst_start_batch(int argc, char **argv)
 {
-	struct list_head        head;
-        char             *batch;
-        int               optidx  = 0;
-        int               timeout = 0;
-        int               count = 0;
-        int               rc;
-        int               c;
+	struct list_head  head;
+	char             *batch;
+	int               optidx = 0;
+	int               timeout = 0;
+	int               count = 0;
+	int               rc;
+	int               c;
 
-        static struct option start_batch_opts[] =
-        {
-                {"timeout", required_argument, 0, 't' },
-                {0,         0,                 0,  0  }
-        };
+	static const struct option start_batch_opts[] = {
+		{ .name = "timeout", .has_arg = required_argument, .val = 't' },
+		{ .name = NULL } };
 
         if (session_key == 0) {
                 fprintf(stderr,
@@ -2346,19 +2333,17 @@ lst_stop_batch_ioctl(char *name, int force, struct list_head *resultp)
 int
 jt_lst_stop_batch(int argc, char **argv)
 {
-	struct list_head        head;
-        char             *batch;
-        int               force = 0;
-        int               optidx;
-        int               count;
-        int               rc;
-        int               c;
+	struct list_head  head;
+	char             *batch;
+	int               force = 0;
+	int               optidx;
+	int               count;
+	int               rc;
+	int               c;
 
-        static struct option stop_batch_opts[] =
-        {
-                {"force",   no_argument,   0, 'f' },
-                {0,         0,             0,  0  }
-        };
+	static const struct option stop_batch_opts[] = {
+		{ .name = "force", .has_arg = no_argument, .val = 'f' },
+		{ .name = NULL } };
 
         if (session_key == 0) {
                 fprintf(stderr,
@@ -2563,26 +2548,24 @@ int
 jt_lst_list_batch(int argc, char **argv)
 {
 	struct lstcon_test_batch_ent ent;
-        char                *batch   = NULL;
-        int                  optidx  = 0;
-        int                  verbose = 0; /* list nodes in batch or test */
-        int                  invalid = 0;
-        int                  active  = 0;
-        int                  server  = 0;
-        int                  ntest   = 0;
-        int                  test    = 0;
-        int                  c       = 0;
-        int                  rc;
+	char *batch   = NULL;
+	int   optidx  = 0;
+	int   verbose = 0; /* list nodes in batch or test */
+	int   invalid = 0;
+	int   active  = 0;
+	int   server  = 0;
+	int   ntest   = 0;
+	int   test    = 0;
+	int   c       = 0;
+	int   rc;
 
-        static struct option list_batch_opts[] =
-        {
-                {"test",    required_argument, 0, 't' },
-                {"invalid", no_argument,       0, 'i' },
-                {"active",  no_argument,       0, 'a' },
-                {"all",     no_argument,       0, 'l' },
-                {"server",  no_argument,       0, 's' },
-                {0,         0,                 0,  0  }
-        };
+	static const struct option list_batch_opts[] = {
+		{ .name = "test",    .has_arg = required_argument, .val = 't' },
+		{ .name = "invalid", .has_arg = no_argument,	   .val = 'i' },
+		{ .name = "active",  .has_arg = no_argument,	   .val = 'a' },
+		{ .name = "all",     .has_arg = no_argument,	   .val = 'l' },
+		{ .name = "server",  .has_arg = no_argument,	   .val = 's' },
+		{ .name = NULL, } };
 
         if (session_key == 0) {
                 fprintf(stderr,
@@ -2743,37 +2726,35 @@ int
 jt_lst_query_batch(int argc, char **argv)
 {
 	struct lstcon_test_batch_ent ent;
-	struct list_head              head;
-        char                   *batch   = NULL;
-        time_t                  last    = 0;
-        int                     optidx  = 0;
-        int                     verbose = 0;
-        int                     server  = 0;
-        int                     timeout = 5; /* default 5 seconds */
-        int                     delay   = 5; /* default 5 seconds */
-        int                     loop    = 1; /* default 1 loop */
-        int                     active  = 0;
-        int                     error   = 0;
-        int                     idle    = 0;
-        int                     count   = 0;
-        int                     test    = 0;
-        int                     rc      = 0;
-        int                     c       = 0;
-        int                     i;
+	struct list_head head;
+	char   *batch   = NULL;
+	time_t  last    = 0;
+	int     optidx  = 0;
+	int     verbose = 0;
+	int     server  = 0;
+	int     timeout = 5; /* default 5 seconds */
+	int     delay   = 5; /* default 5 seconds */
+	int     loop    = 1; /* default 1 loop */
+	int     active  = 0;
+	int     error   = 0;
+	int     idle    = 0;
+	int     count   = 0;
+	int     test    = 0;
+	int     rc      = 0;
+	int     c       = 0;
+	int     i;
 
-        static struct option query_batch_opts[] =
-        {
-                {"timeout", required_argument, 0, 'o' },
-                {"delay",   required_argument, 0, 'd' },
-                {"loop",    required_argument, 0, 'c' },
-                {"test",    required_argument, 0, 't' },
-                {"server",  no_argument,       0, 's' },
-                {"active",  no_argument,       0, 'a' },
-                {"idle",    no_argument,       0, 'i' },
-                {"error",   no_argument,       0, 'e' },
-                {"all",     no_argument,       0, 'l' },
-                {0,         0,                 0,  0  }
-        };
+	static const struct option query_batch_opts[] = {
+		{ .name = "timeout", .has_arg = required_argument, .val = 'o' },
+		{ .name = "delay",   .has_arg = required_argument, .val = 'd' },
+		{ .name = "loop",    .has_arg = required_argument, .val = 'c' },
+		{ .name = "test",    .has_arg = required_argument, .val = 't' },
+		{ .name = "server",  .has_arg = no_argument,	   .val = 's' },
+		{ .name = "active",  .has_arg = no_argument,	   .val = 'a' },
+		{ .name = "idle",    .has_arg = no_argument,	   .val = 'i' },
+		{ .name = "error",   .has_arg = no_argument,	   .val = 'e' },
+		{ .name = "all",     .has_arg = no_argument,	   .val = 'l' },
+		{ .name = NULL, } };
 
         if (session_key == 0) {
                 fprintf(stderr,
@@ -3107,36 +3088,34 @@ lst_add_test_ioctl(char *batch, int type, int loop, int concur,
 int
 jt_lst_add_test(int argc, char **argv)
 {
-	struct list_head    head;
-        char         *batch  = NULL;
-        char         *test   = NULL;
-        char         *dstr   = NULL;
-        char         *from   = NULL;
-        char         *to     = NULL;
-        void         *param  = NULL;
-        int           optidx = 0;
-        int           concur = 1;
-        int           loop   = -1;
-        int           dist   = 1;
-        int           span   = 1;
-        int           plen   = 0;
-        int           fcount = 0;
-        int           tcount = 0;
-        int           ret    = 0;
-        int           type;
-        int           rc;
-        int           c;
+	struct list_head head;
+	char *batch  = NULL;
+	char *test   = NULL;
+	char *dstr   = NULL;
+	char *from   = NULL;
+	char *to     = NULL;
+	void *param  = NULL;
+	int   optidx = 0;
+	int   concur = 1;
+	int   loop   = -1;
+	int   dist   = 1;
+	int   span   = 1;
+	int   plen   = 0;
+	int   fcount = 0;
+	int   tcount = 0;
+	int   ret    = 0;
+	int   type;
+	int   rc;
+	int   c;
 
-        static struct option add_test_opts[] =
-        {
-                {"batch",       required_argument, 0, 'b' },
-                {"concurrency", required_argument, 0, 'c' },
-                {"distribute",  required_argument, 0, 'd' },
-                {"from",        required_argument, 0, 'f' },
-                {"to",          required_argument, 0, 't' },
-                {"loop",        required_argument, 0, 'l' },
-                {0,             0,                 0,  0  }
-        };
+	static const struct option add_test_opts[] = {
+	{ .name = "batch",	 .has_arg = required_argument, .val = 'b' },
+	{ .name = "concurrency", .has_arg = required_argument, .val = 'c' },
+	{ .name = "distribute",	 .has_arg = required_argument, .val = 'd' },
+	{ .name = "from",	 .has_arg = required_argument, .val = 'f' },
+	{ .name = "to",		 .has_arg = required_argument, .val = 't' },
+	{ .name = "loop",	 .has_arg = required_argument, .val = 'l' },
+	{ .name = NULL } };
 
         if (session_key == 0) {
                 fprintf(stderr,

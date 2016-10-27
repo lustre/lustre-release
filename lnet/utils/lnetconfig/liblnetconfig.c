@@ -3058,35 +3058,32 @@ struct lookup_cmd_hdlr_tbl {
 };
 
 static struct lookup_cmd_hdlr_tbl lookup_config_tbl[] = {
-	{"route", handle_yaml_config_route},
-	{"net", handle_yaml_config_ni},
-	{"ip2nets", handle_yaml_config_ip2nets},
-	{"peer", handle_yaml_config_peer},
-	{"routing", handle_yaml_config_routing},
-	{"buffers", handle_yaml_config_buffers},
-	{"numa", handle_yaml_config_numa},
-	{NULL, NULL}
-};
+	{ .name = "route",	.cb = handle_yaml_config_route },
+	{ .name = "net",	.cb = handle_yaml_config_ni },
+	{ .name = "ip2nets",	.cb = handle_yaml_config_ip2nets },
+	{ .name = "peer",	.cb = handle_yaml_config_peer },
+	{ .name = "routing",	.cb = handle_yaml_config_routing },
+	{ .name = "buffers",	.cb = handle_yaml_config_buffers },
+	{ .name = "numa",	.cb = handle_yaml_config_numa },
+	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
-	{"route", handle_yaml_del_route},
-	{"net", handle_yaml_del_ni},
-	{"peer", handle_yaml_del_peer},
-	{"routing", handle_yaml_del_routing},
-	{"numa", handle_yaml_del_numa},
-	{NULL, NULL}
-};
+	{ .name = "route",	.cb = handle_yaml_del_route },
+	{ .name = "net",	.cb = handle_yaml_del_ni },
+	{ .name = "peer",	.cb = handle_yaml_del_peer },
+	{ .name = "routing",	.cb = handle_yaml_del_routing },
+	{ .name = "numa",	.cb = handle_yaml_del_numa },
+	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {
-	{"route", handle_yaml_show_route},
-	{"net", handle_yaml_show_net},
-	{"buffers", handle_yaml_show_routing},
-	{"routing", handle_yaml_show_routing},
-	{"peer", handle_yaml_show_peers},
-	{"statistics", handle_yaml_show_stats},
-	{"numa", handle_yaml_show_numa},
-	{NULL, NULL}
-};
+	{ .name = "route",	.cb = handle_yaml_show_route },
+	{ .name = "net",	.cb = handle_yaml_show_net },
+	{ .name = "buffers",	.cb = handle_yaml_show_routing },
+	{ .name = "routing",	.cb = handle_yaml_show_routing },
+	{ .name = "peer",	.cb = handle_yaml_show_peers },
+	{ .name = "statistics",	.cb = handle_yaml_show_stats },
+	{ .name = "numa",	.cb = handle_yaml_show_numa },
+	{ .name = NULL } };
 
 static cmd_handler_t lookup_fn(char *key,
 			       struct lookup_cmd_hdlr_tbl *tbl)

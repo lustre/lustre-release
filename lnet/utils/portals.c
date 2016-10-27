@@ -1320,21 +1320,20 @@ fault_attr_ptl_parse(char *ptl_str, __u64 *mask_p)
 static int
 fault_simul_rule_add(__u32 opc, char *name, int argc, char **argv)
 {
-	struct libcfs_ioctl_data  data = {{0}};
+	struct libcfs_ioctl_data  data = { { 0 } };
 	struct lnet_fault_attr    attr;
 	char			 *optstr;
 	int			  rc;
 
-	static struct option opts[] = {
-		{"source",	required_argument,	0,	's'},
-		{"dest",	required_argument,	0,	'd'},
-		{"rate",	required_argument,	0,	'r'},
-		{"interval",	required_argument,	0,	'i'},
-		{"latency",	required_argument,	0,	'l'},
-		{"portal",	required_argument,	0,	'p'},
-		{"message",	required_argument,	0,	'm'},
-		{0, 0, 0, 0}
-	};
+	static const struct option opts[] = {
+	{ .name = "source",   .has_arg = required_argument, .val = 's' },
+	{ .name = "dest",     .has_arg = required_argument, .val = 'd' },
+	{ .name = "rate",     .has_arg = required_argument, .val = 'r' },
+	{ .name = "interval", .has_arg = required_argument, .val = 'i' },
+	{ .name = "latency",  .has_arg = required_argument, .val = 'l' },
+	{ .name = "portal",   .has_arg = required_argument, .val = 'p' },
+	{ .name = "message",  .has_arg = required_argument, .val = 'm' },
+	{ .name = NULL } };
 
 	if (argc == 1) {
 		fprintf(stderr, "Failed, please provide source, destination "
@@ -1475,17 +1474,16 @@ jt_ptl_delay_add(int argc, char **argv)
 static int
 fault_simul_rule_del(__u32 opc, char *name, int argc, char **argv)
 {
-	struct libcfs_ioctl_data data = {{0}};
+	struct libcfs_ioctl_data data = { { 0 } };
 	struct lnet_fault_attr   attr;
 	bool			 all = false;
 	int			 rc;
 
-	static struct option opts[] = {
-		{"source",	required_argument,	0,	's'},
-		{"dest",	required_argument,	0,	'd'},
-		{"all",		no_argument,		0,	'a'},
-		{0, 0, 0, 0}
-	};
+	static const struct option opts[] = {
+		{ .name = "source", .has_arg = required_argument, .val = 's' },
+		{ .name = "dest",   .has_arg = required_argument, .val = 'd' },
+		{ .name = "all",    .has_arg = no_argument,	  .val = 'a' },
+		{ .name = NULL } };
 
 	if (argc == 1) {
 		fprintf(stderr, "Failed, please provide source and "
@@ -1564,7 +1562,7 @@ jt_ptl_delay_del(int argc, char **argv)
 static int
 fault_simul_rule_reset(__u32 opc, char *name, int argc, char **argv)
 {
-	struct libcfs_ioctl_data   data = {{0}};
+	struct libcfs_ioctl_data   data = { { 0 } };
 	int			   rc;
 
 	LIBCFS_IOC_INIT(data);
@@ -1595,7 +1593,7 @@ jt_ptl_delay_reset(int argc, char **argv)
 static int
 fault_simul_rule_list(__u32 opc, char *name, int argc, char **argv)
 {
-	struct libcfs_ioctl_data data = {{0}};
+	struct libcfs_ioctl_data data = { { 0 } };
 	struct lnet_fault_attr   attr;
 	struct lnet_fault_stat   stat;
 	int			 pos;
