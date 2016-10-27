@@ -131,7 +131,6 @@ static int
 kiblnd_unpack_rd(kib_msg_t *msg, int flip)
 {
         kib_rdma_desc_t   *rd;
-	int msg_size;
         int                nob;
         int                n;
         int                i;
@@ -148,7 +147,14 @@ kiblnd_unpack_rd(kib_msg_t *msg, int flip)
                 __swab32s(&rd->rd_nfrags);
         }
 
-	n = rd->rd_nfrags;
+        n = rd->rd_nfrags;
+
+        if (n <= 0 || n > IBLND_MAX_RDMA_FRAGS) {
+                CERROR("Bad nfrags: %d, should be 0 < n <= %d\n",
+                       n, IBLND_MAX_RDMA_FRAGS);
+                return 1;
+        }
+
         nob = offsetof (kib_msg_t, ibm_u) +
               kiblnd_rd_msg_size(rd, msg->ibm_type, n);
 
@@ -157,13 +163,6 @@ kiblnd_unpack_rd(kib_msg_t *msg, int flip)
                        kiblnd_msgtype2str(msg->ibm_type), msg->ibm_nob, nob);
                 return 1;
         }
-
-	msg_size = kiblnd_rd_size(rd);
-	if (msg_size <= 0 || msg_size > LNET_MAX_PAYLOAD) {
-		CERROR("Bad msg_size: %d, should be 0 < n <= %d\n",
-		       msg_size, LNET_MAX_PAYLOAD);
-		return 1;
-	}
 
         if (!flip)
                 return 0;
