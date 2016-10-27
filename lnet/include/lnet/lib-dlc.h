@@ -215,7 +215,7 @@ struct lnet_ioctl_dbg {
 
 struct lnet_ioctl_peer_cfg {
 	struct libcfs_ioctl_hdr prcfg_hdr;
-	lnet_nid_t prcfg_key_nid;
+	lnet_nid_t prcfg_prim_nid;
 	lnet_nid_t prcfg_cfg_nid;
 	__u32 prcfg_idx;
 	bool prcfg_mr;

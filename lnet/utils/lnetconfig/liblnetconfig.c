@@ -406,13 +406,13 @@ static lnet_nid_t *allocate_create_nid_array(char **nids, __u32 num_nids,
 	return array;
 }
 
-static int dispatch_peer_ni_cmd(lnet_nid_t knid, lnet_nid_t nid, __u32 cmd,
+static int dispatch_peer_ni_cmd(lnet_nid_t pnid, lnet_nid_t nid, __u32 cmd,
 				struct lnet_ioctl_peer_cfg *data,
 				char *err_str, char *cmd_str)
 {
 	int rc;
 
-	data->prcfg_key_nid = knid;
+	data->prcfg_prim_nid = pnid;
 	data->prcfg_cfg_nid = nid;
 
 	rc = l_ioctl(LNET_DEV_ID, cmd, data);
@@ -427,23 +427,23 @@ static int dispatch_peer_ni_cmd(lnet_nid_t knid, lnet_nid_t nid, __u32 cmd,
 	return rc;
 }
 
-int lustre_lnet_config_peer_nid(char *knid, char **nid, int num_nids,
+int lustre_lnet_config_peer_nid(char *pnid, char **nid, int num_nids,
 				bool mr, int seq_no, struct cYAML **err_rc)
 {
 	struct lnet_ioctl_peer_cfg data;
-	lnet_nid_t key_nid = LNET_NID_ANY;
+	lnet_nid_t prim_nid = LNET_NID_ANY;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
 	int idx = 0;
 	bool nid0_used = false;
 	char err_str[LNET_MAX_STR_LEN] = {0};
 	lnet_nid_t *nids = allocate_create_nid_array(nid, num_nids, err_str);
 
-	if (knid) {
-		key_nid = libcfs_str2nid(knid);
-		if (key_nid == LNET_NID_ANY) {
+	if (pnid) {
+		prim_nid = libcfs_str2nid(pnid);
+		if (prim_nid == LNET_NID_ANY) {
 			snprintf(err_str, sizeof(err_str),
 				 "bad key NID: '%s'",
-				 knid);
+				 pnid);
 			rc = LUSTRE_CFG_RC_MISSING_PARAM;
 			goto out;
 		}
@@ -453,7 +453,7 @@ int lustre_lnet_config_peer_nid(char *knid, char **nid, int num_nids,
 		rc = LUSTRE_CFG_RC_MISSING_PARAM;
 		goto out;
 	} else {
-		key_nid = LNET_NID_ANY;
+		prim_nid = LNET_NID_ANY;
 	}
 
 	snprintf(err_str, sizeof(err_str), "\"Success\"");
@@ -462,17 +462,17 @@ int lustre_lnet_config_peer_nid(char *knid, char **nid, int num_nids,
 	data.prcfg_mr = mr;
 
 	/*
-	 * if key_nid is not specified use the first nid in the list of
-	 * nids provided as the key_nid. NOTE: on entering 'if' we must
+	 * if prim_nid is not specified use the first nid in the list of
+	 * nids provided as the prim_nid. NOTE: on entering 'if' we must
 	 * have at least 1 NID
 	 */
-	if (key_nid == LNET_NID_ANY) {
+	if (prim_nid == LNET_NID_ANY) {
 		nid0_used = true;
-		key_nid = nids[0];
+		prim_nid = nids[0];
 	}
 
-	/* Create the key_nid first */
-	rc = dispatch_peer_ni_cmd(key_nid, LNET_NID_ANY,
+	/* Create the prim_nid first */
+	rc = dispatch_peer_ni_cmd(prim_nid, LNET_NID_ANY,
 				  IOC_LIBCFS_ADD_PEER_NI,
 				  &data, err_str, "add");
 
@@ -482,12 +482,12 @@ int lustre_lnet_config_peer_nid(char *knid, char **nid, int num_nids,
 	/* add the rest of the nids to the key nid if any are available */
 	for (idx = nid0_used ? 1 : 0 ; nids && idx < num_nids; idx++) {
 		/*
-		 * If key_nid is not provided then the first nid in the
-		 * list becomes the key_nid. First time round the loop use
+		 * If prim_nid is not provided then the first nid in the
+		 * list becomes the prim_nid. First time round the loop use
 		 * LNET_NID_ANY for the first parameter, then use nid[0]
 		 * as the key nid after wards
 		 */
-		rc = dispatch_peer_ni_cmd(key_nid, nids[idx],
+		rc = dispatch_peer_ni_cmd(prim_nid, nids[idx],
 					  IOC_LIBCFS_ADD_PEER_NI, &data,
 					  err_str, "add");
 
@@ -502,28 +502,28 @@ out:
 	return rc;
 }
 
-int lustre_lnet_del_peer_nid(char *knid, char **nid, int num_nids,
+int lustre_lnet_del_peer_nid(char *pnid, char **nid, int num_nids,
 			     int seq_no, struct cYAML **err_rc)
 {
 	struct lnet_ioctl_peer_cfg data;
-	lnet_nid_t key_nid;
+	lnet_nid_t prim_nid;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
 	int idx = 0;
 	char err_str[LNET_MAX_STR_LEN] = {0};
 	lnet_nid_t *nids = allocate_create_nid_array(nid, num_nids, err_str);
 
-	if (knid == NULL) {
+	if (pnid == NULL) {
 		snprintf(err_str, sizeof(err_str),
 			 "\"Primary nid is not provided\"");
 		rc = LUSTRE_CFG_RC_MISSING_PARAM;
 		goto out;
 	} else {
-		key_nid = libcfs_str2nid(knid);
-		if (key_nid == LNET_NID_ANY) {
+		prim_nid = libcfs_str2nid(pnid);
+		if (prim_nid == LNET_NID_ANY) {
 			rc = LUSTRE_CFG_RC_BAD_PARAM;
 			snprintf(err_str, sizeof(err_str),
 				 "bad key NID: '%s'",
-				 knid);
+				 pnid);
 			goto out;
 		}
 	}
@@ -532,14 +532,14 @@ int lustre_lnet_del_peer_nid(char *knid, char **nid, int num_nids,
 
 	LIBCFS_IOC_INIT_V2(data, prcfg_hdr);
 	if (!nids || nids[0] == LNET_NID_ANY) {
-		rc = dispatch_peer_ni_cmd(key_nid, LNET_NID_ANY,
+		rc = dispatch_peer_ni_cmd(prim_nid, LNET_NID_ANY,
 					  IOC_LIBCFS_DEL_PEER_NI,
 					  &data, err_str, "del");
 		goto out;
 	}
 
 	for (idx = 0; nids && idx < num_nids; idx++) {
-		rc = dispatch_peer_ni_cmd(key_nid, nids[idx],
+		rc = dispatch_peer_ni_cmd(prim_nid, nids[idx],
 					  IOC_LIBCFS_DEL_PEER_NI, &data,
 					  err_str, "del");
 
@@ -2022,6 +2022,10 @@ out:
 int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 			  struct cYAML **show_rc, struct cYAML **err_rc)
 {
+	/*
+	 * TODO: This function is changing in a future patch to accommodate
+	 * PEER_LIST and proper filtering on any nid of the peer
+	 */
 	struct lnet_ioctl_peer_cfg *peer_info;
 	struct lnet_peer_ni_credit_info *lpni_cri;
 	struct lnet_ioctl_element_stats *lpni_stats;
@@ -2071,7 +2075,7 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 			}
 
 			if (primary_nid != LNET_NID_ANY &&
-			    primary_nid != peer_info->prcfg_key_nid)
+			    primary_nid != peer_info->prcfg_prim_nid)
 					continue;
 
 			lpni_cri = (struct lnet_peer_ni_credit_info*)peer_info->prcfg_bulk;
@@ -2083,13 +2087,13 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 			if (peer == NULL)
 				goto out;
 
-			if (peer_info->prcfg_key_nid != prev_primary_nid) {
-				prev_primary_nid = peer_info->prcfg_key_nid;
+			if (peer_info->prcfg_prim_nid != prev_primary_nid) {
+				prev_primary_nid = peer_info->prcfg_prim_nid;
 				new_peer = true;
 			}
 
 			if (new_peer) {
-				lnet_nid_t pnid = peer_info->prcfg_key_nid;
+				lnet_nid_t pnid = peer_info->prcfg_prim_nid;
 				if (cYAML_create_string(peer, "primary nid",
 							libcfs_nid2str(pnid))
 				    == NULL)
@@ -2820,17 +2824,17 @@ static int handle_yaml_config_peer(struct cYAML *tree, struct cYAML **show_rc,
 {
 	char **nids = NULL;
 	int num, rc;
-	struct cYAML *seq_no, *key_nid, *non_mr;
+	struct cYAML *seq_no, *prim_nid, *non_mr;
 
 	num = yaml_copy_peer_nids(tree, &nids);
 	if (num < 0)
 		return num;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
-	key_nid = cYAML_get_object_item(tree, "primary nid");
+	prim_nid = cYAML_get_object_item(tree, "primary nid");
 	non_mr = cYAML_get_object_item(tree, "non_mr");
 
-	rc = lustre_lnet_config_peer_nid((key_nid) ? key_nid->cy_valuestring : NULL,
+	rc = lustre_lnet_config_peer_nid((prim_nid) ? prim_nid->cy_valuestring : NULL,
 					 nids, num,
 					 (non_mr) ? false : true,
 					 (seq_no) ? seq_no->cy_valueint : -1,
@@ -2845,16 +2849,16 @@ static int handle_yaml_del_peer(struct cYAML *tree, struct cYAML **show_rc,
 {
 	char **nids = NULL;
 	int num, rc;
-	struct cYAML *seq_no, *key_nid;
+	struct cYAML *seq_no, *prim_nid;
 
 	num = yaml_copy_peer_nids(tree, &nids);
 	if (num < 0)
 		return num;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
-	key_nid = cYAML_get_object_item(tree, "primary nid");
+	prim_nid = cYAML_get_object_item(tree, "primary nid");
 
-	rc = lustre_lnet_del_peer_nid((key_nid) ? key_nid->cy_valuestring : NULL,
+	rc = lustre_lnet_del_peer_nid((prim_nid) ? prim_nid->cy_valuestring : NULL,
 				      nids, num,
 				      (seq_no) ? seq_no->cy_valueint : -1,
 				      err_rc);
@@ -2987,16 +2991,16 @@ static int handle_yaml_show_routing(struct cYAML *tree, struct cYAML **show_rc,
 					show_rc, err_rc);
 }
 
-static int handle_yaml_show_credits(struct cYAML *tree, struct cYAML **show_rc,
-				    struct cYAML **err_rc)
+static int handle_yaml_show_peers(struct cYAML *tree, struct cYAML **show_rc,
+				  struct cYAML **err_rc)
 {
-	struct cYAML *seq_no, *key_nid, *detail;
+	struct cYAML *seq_no, *nid, *detail;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 	detail = cYAML_get_object_item(tree, "detail");
-	key_nid = cYAML_get_object_item(tree, "key_nid");
+	nid = cYAML_get_object_item(tree, "nid");
 
-	return lustre_lnet_show_peer((key_nid) ? key_nid->cy_valuestring : NULL,
+	return lustre_lnet_show_peer((nid) ? nid->cy_valuestring : NULL,
 				     (detail) ? detail->cy_valueint : 0,
 				     (seq_no) ? seq_no->cy_valueint : -1,
 				     show_rc, err_rc);
@@ -3078,7 +3082,7 @@ static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {
 	{"net", handle_yaml_show_net},
 	{"buffers", handle_yaml_show_routing},
 	{"routing", handle_yaml_show_routing},
-	{"credits", handle_yaml_show_credits},
+	{"peer", handle_yaml_show_peers},
 	{"statistics", handle_yaml_show_stats},
 	{"numa", handle_yaml_show_numa},
 	{NULL, NULL}

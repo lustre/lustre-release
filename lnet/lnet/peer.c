@@ -774,18 +774,18 @@ lnet_add_prim_lpni(lnet_nid_t nid)
 }
 
 static int
-lnet_add_peer_ni_to_prim_lpni(lnet_nid_t key_nid, lnet_nid_t nid)
+lnet_add_peer_ni_to_prim_lpni(lnet_nid_t prim_nid, lnet_nid_t nid)
 {
 	struct lnet_peer *peer, *primary_peer;
 	struct lnet_peer_ni *lpni = NULL, *klpni = NULL;
 
-	LASSERT(key_nid != LNET_NID_ANY && nid != LNET_NID_ANY);
+	LASSERT(prim_nid != LNET_NID_ANY && nid != LNET_NID_ANY);
 
 	/*
 	 * key nid must be created by this point. If not then this
 	 * operation is not permitted
 	 */
-	klpni = lnet_find_peer_ni_locked(key_nid);
+	klpni = lnet_find_peer_ni_locked(prim_nid);
 	if (!klpni)
 		return -ENOENT;
 
@@ -802,13 +802,13 @@ lnet_add_peer_ni_to_prim_lpni(lnet_nid_t key_nid, lnet_nid_t nid)
 		 * lpni already exists in the system but it belongs to
 		 * a different peer. We can't re-added it
 		 */
-		if (peer->lp_primary_nid != key_nid && peer->lp_multi_rail) {
+		if (peer->lp_primary_nid != prim_nid && peer->lp_multi_rail) {
 			CERROR("Cannot add NID %s owned by peer %s to peer %s\n",
 			       libcfs_nid2str(lpni->lpni_nid),
 			       libcfs_nid2str(peer->lp_primary_nid),
-			       libcfs_nid2str(key_nid));
+			       libcfs_nid2str(prim_nid));
 			return -EEXIST;
-		} else if (peer->lp_primary_nid == key_nid) {
+		} else if (peer->lp_primary_nid == prim_nid) {
 			/*
 			 * found a peer_ni that is already part of the
 			 * peer. This is a no-op operation.
@@ -817,7 +817,7 @@ lnet_add_peer_ni_to_prim_lpni(lnet_nid_t key_nid, lnet_nid_t nid)
 		}
 
 		/*
-		 * TODO: else if (peer->lp_primary_nid != key_nid &&
+		 * TODO: else if (peer->lp_primary_nid != prim_nid &&
 		 *		  !peer->lp_multi_rail)
 		 * peer is not an MR peer and it will be moved in the next
 		 * step to klpni, so update its flags accordingly.
@@ -889,55 +889,55 @@ lnet_peer_ni_add_non_mr(lnet_nid_t nid)
 
 /*
  * This API handles the following combinations:
- *	Create a primary NI if only the key_nid is provided
+ *	Create a primary NI if only the prim_nid is provided
  *	Create or add an lpni to a primary NI. Primary NI must've already
  *	been created
  *	Create a non-MR peer.
  */
 int
-lnet_add_peer_ni_to_peer(lnet_nid_t key_nid, lnet_nid_t nid, bool mr)
+lnet_add_peer_ni_to_peer(lnet_nid_t prim_nid, lnet_nid_t nid, bool mr)
 {
 	/*
 	 * Caller trying to setup an MR like peer hierarchy but
 	 * specifying it to be non-MR. This is not allowed.
 	 */
-	if (key_nid != LNET_NID_ANY &&
+	if (prim_nid != LNET_NID_ANY &&
 	    nid != LNET_NID_ANY && !mr)
 		return -EPERM;
 
 	/* Add the primary NID of a peer */
-	if (key_nid != LNET_NID_ANY &&
+	if (prim_nid != LNET_NID_ANY &&
 	    nid == LNET_NID_ANY && mr)
-		return lnet_add_prim_lpni(key_nid);
+		return lnet_add_prim_lpni(prim_nid);
 
 	/* Add a NID to an existing peer */
-	if (key_nid != LNET_NID_ANY &&
+	if (prim_nid != LNET_NID_ANY &&
 	    nid != LNET_NID_ANY && mr)
-		return lnet_add_peer_ni_to_prim_lpni(key_nid, nid);
+		return lnet_add_peer_ni_to_prim_lpni(prim_nid, nid);
 
 	/* Add a non-MR peer NI */
-	if (((key_nid != LNET_NID_ANY &&
+	if (((prim_nid != LNET_NID_ANY &&
 	      nid == LNET_NID_ANY) ||
-	     (key_nid == LNET_NID_ANY &&
+	     (prim_nid == LNET_NID_ANY &&
 	      nid != LNET_NID_ANY)) && !mr)
-		return lnet_peer_ni_add_non_mr(key_nid != LNET_NID_ANY ?
-							 key_nid : nid);
+		return lnet_peer_ni_add_non_mr(prim_nid != LNET_NID_ANY ?
+							 prim_nid : nid);
 
 	return 0;
 }
 
 int
-lnet_del_peer_ni_from_peer(lnet_nid_t key_nid, lnet_nid_t nid)
+lnet_del_peer_ni_from_peer(lnet_nid_t prim_nid, lnet_nid_t nid)
 {
 	lnet_nid_t local_nid;
 	struct lnet_peer *peer;
 	struct lnet_peer_ni *lpni;
 	int rc;
 
-	if (key_nid == LNET_NID_ANY)
+	if (prim_nid == LNET_NID_ANY)
 		return -EINVAL;
 
-	local_nid = (nid != LNET_NID_ANY) ? nid : key_nid;
+	local_nid = (nid != LNET_NID_ANY) ? nid : prim_nid;
 
 	lpni = lnet_find_peer_ni_locked(local_nid);
 	if (!lpni)

@@ -2802,7 +2802,7 @@ LNetCtl(unsigned int cmd, void *arg)
 			return -EINVAL;
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		rc = lnet_add_peer_ni_to_peer(cfg->prcfg_key_nid,
+		rc = lnet_add_peer_ni_to_peer(cfg->prcfg_prim_nid,
 					      cfg->prcfg_cfg_nid,
 					      cfg->prcfg_mr);
 		mutex_unlock(&the_lnet.ln_api_mutex);
@@ -2816,7 +2816,7 @@ LNetCtl(unsigned int cmd, void *arg)
 			return -EINVAL;
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		rc = lnet_del_peer_ni_from_peer(cfg->prcfg_key_nid,
+		rc = lnet_del_peer_ni_from_peer(cfg->prcfg_prim_nid,
 						cfg->prcfg_cfg_nid);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
@@ -2859,7 +2859,7 @@ LNetCtl(unsigned int cmd, void *arg)
 			     (cfg->prcfg_bulk + sizeof(*lpni_cri));
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		rc = lnet_get_peer_info(cfg->prcfg_idx, &cfg->prcfg_key_nid,
+		rc = lnet_get_peer_info(cfg->prcfg_idx, &cfg->prcfg_prim_nid,
 					&cfg->prcfg_cfg_nid, &cfg->prcfg_mr,
 					lpni_cri, lpni_stats);
 		mutex_unlock(&the_lnet.ln_api_mutex);

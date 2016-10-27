@@ -135,17 +135,17 @@ command_t set_cmds[] = {
 
 command_t peer_cmds[] = {
 	{"add", jt_add_peer_nid, 0, "add a peer NID\n"
-	 "\t--key_nid: NID to identify peer. If not provided then the first\n"
-	 "\t           NID in the list becomes the key NID of a newly created\n"
-	 "\t           peer. \n"
+	 "\t--prim_nid: Primary NID of the peer. If not provided then the first\n"
+	 "\t            NID in the list becomes the Primary NID of a newly created\n"
+	 "\t            peer. \n"
 	 "\t--nid: one or more peer NIDs\n"
 	 "\t--non_mr: create this peer as not Multi-Rail capable\n"},
 	{"del", jt_del_peer_nid, 0, "delete a peer NID\n"
-	 "\t--key_nid: NID to identify peer.\n"
+	 "\t--prim_nid: Primary NID of the peer.\n"
 	 "\t--nid: list of NIDs to remove. If none provided,\n"
 	 "\t       peer is deleted\n"},
 	{"show", jt_show_peer, 0, "show peer credits\n"
-	 "\t--primary_nid: NID of peer to filter on.\n"},
+	 "\t--nid: NID of peer to filter on.\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -1086,7 +1086,7 @@ static int jt_export(int argc, char **argv)
 
 static int jt_add_peer_nid(int argc, char **argv)
 {
-	char *key_nid = NULL;
+	char *prim_nid = NULL;
 	char **nids = NULL, **nids2 = NULL;
 	int size = 0;
 	struct cYAML *err_rc = NULL;
@@ -1095,7 +1095,7 @@ static int jt_add_peer_nid(int argc, char **argv)
 
 	const char *const short_options = "k:n:mh";
 	const struct option long_options[] = {
-		{ "key_nid", 1, NULL, 'k' },
+		{ "prim_nid", 1, NULL, 'k' },
 		{ "nid", 1, NULL, 'n' },
 		{ "non_mr", 0, NULL, 'm'},
 		{ "help", 0, NULL, 'h' },
@@ -1106,7 +1106,7 @@ static int jt_add_peer_nid(int argc, char **argv)
 				  long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'k':
-			key_nid = optarg;
+			prim_nid = optarg;
 			break;
 		case 'n':
 			size = lustre_lnet_parse_nids(optarg, nids, size,
@@ -1127,7 +1127,7 @@ static int jt_add_peer_nid(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_config_peer_nid(key_nid, nids, size,
+	rc = lustre_lnet_config_peer_nid(prim_nid, nids, size,
 					 !non_mr, -1, &err_rc);
 
 failed:
@@ -1145,14 +1145,14 @@ failed:
 
 static int jt_del_peer_nid(int argc, char **argv)
 {
-	char *key_nid = NULL;
+	char *prim_nid = NULL;
 	char **nids = NULL, **nids2 = NULL;
 	struct cYAML *err_rc = NULL;
 	int rc = LUSTRE_CFG_RC_NO_ERR, opt, i, size = 0;
 
 	const char *const short_options = "k:n:h";
 	const struct option long_options[] = {
-		{ "key_nid", 1, NULL, 'k' },
+		{ "prim_nid", 1, NULL, 'k' },
 		{ "nid", 1, NULL, 'n' },
 		{ "help", 0, NULL, 'h' },
 		{ NULL, 0, NULL, 0 },
@@ -1162,7 +1162,7 @@ static int jt_del_peer_nid(int argc, char **argv)
 				  long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'k':
-			key_nid = optarg;
+			prim_nid = optarg;
 			break;
 		case 'n':
 			size = lustre_lnet_parse_nids(optarg, nids, size,
@@ -1180,7 +1180,7 @@ static int jt_del_peer_nid(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_del_peer_nid(key_nid, nids, size, -1, &err_rc);
+	rc = lustre_lnet_del_peer_nid(prim_nid, nids, size, -1, &err_rc);
 
 failed:
 	for (i = 0; i < size; i++)
@@ -1197,14 +1197,14 @@ failed:
 
 static int jt_show_peer(int argc, char **argv)
 {
-	char *key_nid = NULL;
+	char *nid = NULL;
 	int rc, opt;
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
 	int detail = 0;
 
 	const char *const short_options = "k:vh";
 	const struct option long_options[] = {
-		{ "key_nid", 1, NULL, 'k' },
+		{ "nid", 1, NULL, 'n' },
 		{ "verbose", 0, NULL, 'v' },
 		{ "help", 0, NULL, 'h' },
 		{ NULL, 0, NULL, 0 },
@@ -1214,20 +1214,20 @@ static int jt_show_peer(int argc, char **argv)
 				  long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'k':
-			key_nid = optarg;
+			nid = optarg;
 			break;
 		case 'v':
 			detail = 1;
 			break;
 		case 'h':
-			print_help(peer_cmds, "peer", "add");
+			print_help(peer_cmds, "peer", "show");
 			return 0;
 		default:
 			return 0;
 		}
 	}
 
-	rc = lustre_lnet_show_peer(key_nid, detail, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_peer(nid, detail, -1, &show_rc, &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
