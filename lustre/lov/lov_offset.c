@@ -227,8 +227,7 @@ loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, u64 file_size,
  * that is contained within the lov extent.  this returns true if the given
  * stripe does intersect with the lov extent. */
 int lov_stripe_intersects(struct lov_stripe_md *lsm, int stripeno,
-			  loff_t start, loff_t end,
-			  loff_t *obd_start, loff_t *obd_end)
+			  u64 start, u64 end, u64 *obd_start, u64 *obd_end)
 {
         int start_side, end_side;
 

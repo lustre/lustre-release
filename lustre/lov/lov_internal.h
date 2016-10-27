@@ -182,8 +182,7 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, loff_t lov_off, int stripeno,
 loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, u64 file_size,
 			  int stripeno);
 int lov_stripe_intersects(struct lov_stripe_md *lsm, int stripeno,
-			  loff_t start, loff_t end,
-			  loff_t *obd_start, loff_t *obd_end);
+			  u64 start, u64 end, u64 *obd_start, u64 *obd_end);
 int lov_stripe_number(struct lov_stripe_md *lsm, loff_t lov_off);
 pgoff_t lov_stripe_pgoff(struct lov_stripe_md *lsm, pgoff_t stripe_index,
 			 int stripe);
