@@ -4326,7 +4326,7 @@ static int osd_index_declare_ea_delete(const struct lu_env *env,
 {
 	struct osd_thandle *oh;
 	struct inode	   *inode;
-	int		    rc;
+	int		    rc, credits;
 	ENTRY;
 
 	LASSERT(!dt_object_remote(dt));
@@ -4335,10 +4335,14 @@ static int osd_index_declare_ea_delete(const struct lu_env *env,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
-	/* due to DNE we may need to remove an agent inode */
-	osd_trans_declare_op(env, oh, OSD_OT_DELETE,
-			     osd_dto_credits_noquota[DTO_INDEX_DELETE] +
-			     osd_dto_credits_noquota[DTO_OBJECT_DELETE]);
+	credits = osd_dto_credits_noquota[DTO_INDEX_DELETE];
+	if (key != NULL && unlikely(strcmp((char *)key, dotdot) == 0)) {
+		/* '..' to a remote object has a local representative */
+		credits += osd_dto_credits_noquota[DTO_INDEX_DELETE];
+		/* to reset LMAI_REMOTE_PARENT */
+		credits += 1;
+	}
+	osd_trans_declare_op(env, oh, OSD_OT_DELETE, credits);
 
 	inode = osd_dt_obj(dt)->oo_inode;
 	if (inode == NULL)
