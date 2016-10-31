@@ -1165,11 +1165,11 @@ void gss_cli_ctx_die_kr(struct ptlrpc_cli_ctx *ctx, int grace)
 
 static
 int sec_install_rctx_kr(struct ptlrpc_sec *sec,
-                        struct ptlrpc_svc_ctx *svc_ctx)
+			struct ptlrpc_svc_ctx *svc_ctx)
 {
-        struct ptlrpc_cli_ctx   *cli_ctx;
-        struct vfs_cred          vcred = { 0, 0 };
-        int                      rc;
+	struct ptlrpc_cli_ctx *cli_ctx;
+	struct vfs_cred vcred = { .vc_uid = 0 };
+	int rc;
 
         LASSERT(sec);
         LASSERT(svc_ctx);
@@ -1197,13 +1197,13 @@ int sec_install_rctx_kr(struct ptlrpc_sec *sec,
 
 static
 int sec_install_rctx_kr(struct ptlrpc_sec *sec,
-                        struct ptlrpc_svc_ctx *svc_ctx)
+			struct ptlrpc_svc_ctx *svc_ctx)
 {
-        struct ptlrpc_cli_ctx   *cli_ctx = NULL;
-        struct key              *key;
-        struct vfs_cred          vcred = { 0, 0 };
-        char                     desc[64];
-        int                      rc;
+	struct ptlrpc_cli_ctx *cli_ctx = NULL;
+	struct key *key;
+	struct vfs_cred vcred = { .vc_uid = 0 };
+	char desc[64];
+	int rc;
 
         LASSERT(sec);
         LASSERT(svc_ctx);

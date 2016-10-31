@@ -940,15 +940,12 @@ static struct subflavor_desc gss_sk_sfs[] = {
 	},
 };
 
-/*
- * currently we leave module owner NULL
- */
 static struct gss_api_mech gss_sk_mech = {
-	.gm_owner       = NULL, /*THIS_MODULE, */
+	/* .gm_owner uses default NULL value for THIS_MODULE */
 	.gm_name        = "sk",
 	.gm_oid         = (rawobj_t) {
-		12,
-		"\053\006\001\004\001\311\146\215\126\001\000\001",
+		.len = 12,
+		.data = "\053\006\001\004\001\311\146\215\126\001\000\001",
 	},
 	.gm_ops         = &gss_sk_ops,
 	.gm_sf_num      = 4,

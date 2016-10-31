@@ -190,11 +190,8 @@ static struct subflavor_desc gss_null_sfs[] = {
 	},
 };
 
-/*
- * currently we leave module owner NULL
- */
 static struct gss_api_mech gss_null_mech = {
-	.gm_owner       = NULL, /*THIS_MODULE, */
+	/* .gm_owner uses default NULL value for THIS_MODULE */
 	.gm_name        = "gssnull",
 	.gm_oid         = (rawobj_t) {
 		12,
