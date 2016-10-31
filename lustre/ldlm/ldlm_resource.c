@@ -305,13 +305,21 @@ static ssize_t lprocfs_lru_size_seq_write(struct file *file,
 					  size_t count, loff_t *off)
 {
 	struct ldlm_namespace *ns = ((struct seq_file *)file->private_data)->private;
-        char dummy[MAX_STRING_SIZE + 1], *end;
-        unsigned long tmp;
-        int lru_resize;
+	char		       dummy[MAX_STRING_SIZE + 1];
+	char		      *end;
+	unsigned long	       tmp;
+	int		       lru_resize;
 
-        dummy[MAX_STRING_SIZE] = '\0';
-	if (copy_from_user(dummy, buffer, MAX_STRING_SIZE))
-                return -EFAULT;
+	if (count >= sizeof(dummy))
+		return -EINVAL;
+
+	if (count == 0)
+		return 0;
+
+	if (copy_from_user(dummy, buffer, count))
+		return -EFAULT;
+
+	dummy[count] = 0;
 
         if (strncmp(dummy, "clear", 5) == 0) {
                 CDEBUG(D_DLMTRACE,
