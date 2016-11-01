@@ -1459,8 +1459,9 @@ static int lfsck_layout_double_scan_result(const struct lu_env *env,
 				lo->ll_status = LS_COMPLETED;
 			}
 		}
+		lo->ll_flags &= ~LF_SCANNED_ONCE;
 		if (!(lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN))
-			lo->ll_flags &= ~(LF_SCANNED_ONCE | LF_INCONSISTENT);
+			lo->ll_flags &= ~LF_INCONSISTENT;
 		lo->ll_time_last_complete = lo->ll_time_last_checkpoint;
 		lo->ll_success_count++;
 	} else if (rc == 0) {

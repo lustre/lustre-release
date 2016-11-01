@@ -6271,8 +6271,9 @@ static int lfsck_namespace_double_scan_result(const struct lu_env *env,
 			ns->ln_status = LS_PARTIAL;
 		else
 			ns->ln_status = LS_COMPLETED;
+		ns->ln_flags &= ~LF_SCANNED_ONCE;
 		if (!(lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN))
-			ns->ln_flags &= ~(LF_SCANNED_ONCE | LF_INCONSISTENT);
+			ns->ln_flags &= ~LF_INCONSISTENT;
 		ns->ln_time_last_complete = ns->ln_time_last_checkpoint;
 		ns->ln_success_count++;
 	} else if (rc == 0) {

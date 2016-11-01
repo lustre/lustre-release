@@ -5029,6 +5029,28 @@ test_32()
 }
 run_test 32 "stop LFSCK when some OST failed"
 
+test_33()
+{
+	lfsck_prep 5 5
+
+	$START_LAYOUT --dryrun -o -r ||
+		error "(1) Fail to start layout LFSCK"
+	wait_all_targets_blocked layout completed 2
+
+	local PARAMS=$($SHOW_LAYOUT | awk '/^param/ { print $2 }')
+	[ "$PARAMS" == "dryrun,all_targets,orphan" ] ||
+		error "(3) Expect 'dryrun,all_targets,orphan', got '$PARAMS'"
+
+	$START_NAMESPACE -e abort -A -r ||
+		error "(4) Fail to start namespace LFSCK"
+	wait_all_targets_blocked namespace completed 5
+
+	PARAMS=$($SHOW_NAMESPACE | awk '/^param/ { print $2 }')
+	[ "$PARAMS" == "failout,all_targets" ] ||
+		error "(6) Expect 'failout,all_targets', got '$PARAMS'"
+}
+run_test 33 "check LFSCK paramters"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

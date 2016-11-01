@@ -263,9 +263,19 @@ int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 			dirty = true;
 		}
 
+		if ((bk->lb_param & LPF_OST_ORPHAN) &&
+		    !(start->ls_flags & LPF_OST_ORPHAN)) {
+			bk->lb_param &= ~LPF_OST_ORPHAN;
+			dirty = true;
+		} else if (!(bk->lb_param & LPF_OST_ORPHAN) &&
+			   (start->ls_flags & LPF_OST_ORPHAN)) {
+			bk->lb_param |= LPF_OST_ORPHAN;
+			dirty = true;
+		}
+
 		if ((start->ls_valid & LSV_CREATE_OSTOBJ) || reset) {
 			if ((bk->lb_param & LPF_CREATE_OSTOBJ) &&
-			    !(start->ls_valid & LSV_CREATE_OSTOBJ)) {
+			    !(start->ls_flags & LPF_CREATE_OSTOBJ)) {
 				bk->lb_param &= ~LPF_CREATE_OSTOBJ;
 				dirty = true;
 			} else if (!(bk->lb_param & LPF_CREATE_OSTOBJ) &&
@@ -277,7 +287,7 @@ int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 
 		if ((start->ls_valid & LSV_CREATE_MDTOBJ) || reset) {
 			if ((bk->lb_param & LPF_CREATE_MDTOBJ) &&
-			    !(start->ls_valid & LSV_CREATE_MDTOBJ)) {
+			    !(start->ls_flags & LPF_CREATE_MDTOBJ)) {
 				bk->lb_param &= ~LPF_CREATE_MDTOBJ;
 				dirty = true;
 			} else if (!(bk->lb_param & LPF_CREATE_MDTOBJ) &&
@@ -289,7 +299,7 @@ int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 
 		if ((start->ls_valid & LSV_DELAY_CREATE_OSTOBJ) || reset) {
 			if ((bk->lb_param & LPF_DELAY_CREATE_OSTOBJ) &&
-			    !(start->ls_valid & LSV_DELAY_CREATE_OSTOBJ)) {
+			    !(start->ls_flags & LPF_DELAY_CREATE_OSTOBJ)) {
 				bk->lb_param &= ~LPF_DELAY_CREATE_OSTOBJ;
 				dirty = true;
 			} else if (!(bk->lb_param & LPF_DELAY_CREATE_OSTOBJ) &&
@@ -301,37 +311,27 @@ int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 
 		if ((start->ls_valid & LSV_ERROR_HANDLE) || reset) {
 			if ((bk->lb_param & LPF_FAILOUT) &&
-			    !(start->ls_valid & LSV_ERROR_HANDLE)) {
+			    !(start->ls_flags & LPF_FAILOUT)) {
 				bk->lb_param &= ~LPF_FAILOUT;
 				dirty = true;
-			} else if (!(start->ls_flags & LPF_FAILOUT) &&
-				   (bk->lb_param & LPF_FAILOUT)) {
-				bk->lb_param &= ~LPF_FAILOUT;
+			} else if (!(bk->lb_param & LPF_FAILOUT) &&
+				   (start->ls_flags & LPF_FAILOUT)) {
+				bk->lb_param |= LPF_FAILOUT;
 				dirty = true;
 			}
 		}
 
 		if ((start->ls_valid & LSV_DRYRUN) || reset) {
 			if ((bk->lb_param & LPF_DRYRUN) &&
-			   !(start->ls_valid & LSV_DRYRUN)) {
-				bk->lb_param &= ~LPF_DRYRUN;
-				dirty = true;
-			} else if (!(start->ls_flags & LPF_DRYRUN) &&
-				   (bk->lb_param & LPF_DRYRUN)) {
+			    !(start->ls_flags & LPF_DRYRUN)) {
 				bk->lb_param &= ~LPF_DRYRUN;
 				lfsck->li_drop_dryrun = 1;
 				dirty = true;
+			} else if (!(bk->lb_param & LPF_DRYRUN) &&
+				   (start->ls_flags & LPF_DRYRUN)) {
+				bk->lb_param |= LPF_DRYRUN;
+				dirty = true;
 			}
-		}
-
-		if ((bk->lb_param & LPF_OST_ORPHAN) &&
-		    !(start->ls_flags & LPF_OST_ORPHAN)) {
-			bk->lb_param &= ~LPF_OST_ORPHAN;
-			dirty = true;
-		} else if (!(bk->lb_param & LPF_OST_ORPHAN) &&
-			   (start->ls_flags & LPF_OST_ORPHAN)) {
-			bk->lb_param |= LPF_OST_ORPHAN;
-			dirty = true;
 		}
 
 		if (start->ls_valid & LSV_SPEED_LIMIT) {
