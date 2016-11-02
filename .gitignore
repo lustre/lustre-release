@@ -77,6 +77,10 @@ TAGS
 /lustre.spec
 /lustre-dkms.spec
 /lustre*.tar.gz
+/lustre*.rpm
+/kmod-lustre*.rpm
+/kmp-*.files
+/kmp-*.preamble
 /mkinstalldirs
 /Module.markers
 /Module.symvers

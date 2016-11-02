@@ -72,6 +72,7 @@
 /stat
 /statmany
 /statone
+/swap_lock_test
 /tchmod
 /test_brw
 /testreq
@@ -85,4 +86,3 @@
 /write_time_limit
 /writemany
 /writeme
-
