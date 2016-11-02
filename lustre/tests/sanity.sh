@@ -8746,11 +8746,18 @@ test_124b() {
 
 	NR=$(($(default_lru_size)*20))
 	if [[ $NR -gt $LIMIT ]]; then
-                log "Limit lock number by $LIMIT locks"
-                NR=$LIMIT
-        fi
-        lru_resize_disable mdc
-        test_mkdir -p $DIR/$tdir/disable_lru_resize ||
+		log "Limit lock number by $LIMIT locks"
+		NR=$LIMIT
+	fi
+
+	IFree=$(mdsrate_inodes_available)
+	if [ $IFree -lt $NR ]; then
+		log "Limit lock number by $IFree inodes"
+		NR=$IFree
+	fi
+
+	lru_resize_disable mdc
+	test_mkdir -p $DIR/$tdir/disable_lru_resize ||
 		error "failed to create $DIR/$tdir/disable_lru_resize"
 
         createmany -o $DIR/$tdir/disable_lru_resize/f $NR
