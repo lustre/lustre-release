@@ -669,6 +669,23 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 				   libcfs_nid2str(peer.nid));
 			ldlm_lock_cancel(lock);
 			rc = -ERESTART;
+		} else if (rc == -ENODEV || rc == -ESHUTDOWN ||
+			   (rc == -EIO &&
+			    req->rq_import->imp_state == LUSTRE_IMP_CLOSED)) {
+			/* Upon umount process the AST fails because cannot be
+			 * sent. This shouldn't lead to the client eviction.
+			 * -ENODEV error is returned by ptl_send_rpc() for
+			 *  new request in such import.
+			 * -SHUTDOWN is returned by ptlrpc_import_delay_req()
+			 *  if imp_invalid is set or obd_no_recov.
+			 * Meanwhile there is also check for LUSTRE_IMP_CLOSED
+			 * in ptlrpc_import_delay_req() as well with -EIO code.
+			 * In all such cases errors are ignored.
+			 */
+			LDLM_DEBUG(lock, "%s AST can't be sent due to a server"
+					 " %s failure or umount process: rc = %d\n",
+					 ast_type,
+					 req->rq_import->imp_obd->obd_name, rc);
 		} else {
 			LDLM_ERROR(lock,
 				   "client (nid %s) %s %s AST (req@%p x%llu status %d rc %d), evict it",
