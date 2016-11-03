@@ -775,18 +775,62 @@ struct test_case {
 };
 
 struct test_case tests[] = {
-        { 1, "mmap test1: basic mmap operation", mmap_tst1, 1 },
-        { 2, "mmap test2: MAP_PRIVATE not write back", mmap_tst2, 1 },
-        { 3, "mmap test3: concurrent mmap ops on two nodes", mmap_tst3, 2 },
-        { 4, "mmap test4: c1 write to f1 from mmapped f2, "
-             "c2 write to f1 from mmapped f1", mmap_tst4, 2 },
-        { 5, "mmap test5: read/write file to/from the buffer "
-             "which mmapped to just this file", mmap_tst5, 1 },
-        { 6, "mmap test6: check mmap write/read content on two nodes",
-                mmap_tst6, 2 },
-        { 7, "mmap test7: file i/o with an unmapped buffer", mmap_tst7, 1},
-        { 8, "mmap test8: SIGBUS for beyond file size", mmap_tst8, 1 },
-        { 0, NULL, 0, 0 }
+	{
+		.tc		= 1,
+		.desc		= "mmap test1: basic mmap operation",
+		.test_fn	= mmap_tst1,
+		.node_cnt	= 1
+	},
+	{
+		.tc		= 2,
+		.desc		= "mmap test2: MAP_PRIVATE not write back",
+		.test_fn	= mmap_tst2,
+		.node_cnt	= 1
+	},
+	{
+		.tc		= 3,
+		.desc		= "mmap test3: concurrent mmap ops on "
+				  "two nodes",
+		.test_fn	= mmap_tst3,
+		.node_cnt	= 2
+	},
+	{
+		.tc		= 4,
+		.desc		= "mmap test4: c1 write to f1 from mmapped f2, "
+				  "c2 write to f1 from mmapped f1",
+		.test_fn	= mmap_tst4,
+		.node_cnt	= 2
+	},
+	{
+		.tc		= 5,
+		.desc		= "mmap test5: read/write file to/from the "
+				  "buffer which mmapped to just this file",
+		.test_fn	= mmap_tst5,
+		.node_cnt	= 1
+	},
+	{
+		.tc		= 6,
+		.desc		= "mmap test6: check mmap write/read content "
+				  "on two nodes",
+		.test_fn	= mmap_tst6,
+		.node_cnt	= 2
+	},
+	{
+		.tc		= 7,
+		.desc		= "mmap test7: file i/o with an unmapped "
+				  "buffer",
+		.test_fn	= mmap_tst7,
+		.node_cnt	= 1
+	},
+	{
+		.tc		= 8,
+		.desc		= "mmap test8: SIGBUS for beyond file size",
+		.test_fn	= mmap_tst8,
+		.node_cnt	= 1
+	},
+	{
+		.tc		= 0
+	}
 };
 
 int main(int argc, char **argv)

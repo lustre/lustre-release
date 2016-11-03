@@ -103,8 +103,8 @@ int main(int argc, char **argv)
 {
 	int c;
 	struct option long_opts[] = {
-		{"test", no_argument, 0, 't'},
-		{NULL, 0, NULL, 0}
+		{ .name = "test", .has_arg = no_argument, .val = 't' },
+		{ .name = NULL }
 	};
 	int fd;
 	int rc;

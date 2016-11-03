@@ -46,10 +46,10 @@
 #include <lustre_ioctl.h>
 
 struct option longopts[] = {
-	{"lookup", 0, 0, 'l'},
-	{"random", 0, 0, 'r'},
-	{"stat", 0, 0, 's'},
-	{NULL, 0, 0, 0},
+	{ .name = "lookup", .has_arg = no_argument, .val = 'l' },
+	{ .name = "random", .has_arg = no_argument, .val = 'r' },
+	{ .name = "stat", .has_arg = no_argument, .val = 's' },
+	{ .name = NULL }
 };
 char *shortopts = "hlr:s0123456789";
 

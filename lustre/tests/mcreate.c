@@ -54,14 +54,14 @@ void usage(const char *prog, int status)
 
 int main(int argc, char ** argv)
 {
-        struct option opts[] = {
-                { "device", 1, NULL, 'd' },
-                { "help",   0, NULL, 'h' },
-                { "mode",   1, NULL, 'm' },
-                { "major",  1, NULL, 'M' },
-                { "minor",  1, NULL, 'N' },
-                { NULL },
-        };
+	struct option opts[] = {
+		{ .name = "device", .has_arg = required_argument, .val = 'd' },
+		{ .name = "help", .has_arg = no_argument, .val = 'h' },
+		{ .name = "mode", .has_arg = required_argument, .val = 'm' },
+		{ .name = "major", .has_arg = required_argument, .val = 'M' },
+		{ .name = "minor", .has_arg = required_argument, .val = 'N' },
+		{ .name = NULL }
+	};
         const char *path;
         mode_t mode = S_IFREG | 0644;
         dev_t dev = 0;
