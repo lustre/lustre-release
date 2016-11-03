@@ -750,6 +750,32 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 	(void)osd_grow_blocksize(obj, oh, lnb[0].lnb_file_offset,
 				 lnb[npages - 1].lnb_file_offset +
 				 lnb[npages - 1].lnb_len);
+
+	/* LU-8791: take oo_guard to avoid the deadlock that changing block
+	 * size and assigning arcbuf take place at the same time.
+	 *
+	 * Thread 1:
+	 * osd_write_commit()
+	 *  -> osd_grow_blocksize() with osd_object::oo_guard held
+	 *   -> dmu_object_set_blocksize()
+	 *    -> dnode_set_blksz(), with dnode_t::dn_struct_rwlock
+	 *       write lock held
+	 *     -> dbuf_new_size()
+	 *      -> dmu_buf_will_dirty()
+	 *       -> dbuf_read()
+	 *        -> wait for the dbuf state to change
+	 * Thread 2:
+	 * osd_write_commit()
+	 *  -> dmu_assign_arcbuf()
+	 *   -> dbuf_assign_arcbuf(), set dbuf state to DB_FILL
+	 *    -> dbuf_dirty()
+	 *     -> try to hold the read lock of dnode_t::dn_struct_rwlock
+	 *
+	 * By taking the read lock, it can avoid thread 2 to enter into the
+	 * critical section of assigning the arcbuf, while thread 1 is
+	 * changing the block size.
+	 */
+	down_read(&obj->oo_guard);
 	for (i = 0; i < npages; i++) {
 		CDEBUG(D_INODE, "write %u bytes at %u\n",
 			(unsigned) lnb[i].lnb_len,
@@ -788,6 +814,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			new_size = lnb[i].lnb_file_offset + lnb[i].lnb_len;
 		iosize += lnb[i].lnb_len;
 	}
+	up_read(&obj->oo_guard);
 
 	if (unlikely(new_size == 0)) {
 		/* no pages to write, no transno is needed */
