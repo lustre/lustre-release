@@ -1009,14 +1009,16 @@ build_spl_zfs() {
 
         # need to fetch the repo in order to build it.
         # default to github but allow override
-        git clone ${SPLZFSGITREPO:-"https://github.com/zfsonlinux"}/$pkg.git $pkg 2>&1
+	git clone -n ${SPLZFSGITREPO:-"https://github.com/zfsonlinux"}/$pkg.git $pkg 2>&1
 
-        pushd $pkg || return 255
-        if [ -n "$SPLZFSTAG" ]; then
-            git checkout $SPLZFSTAG
-        else
-            git checkout -b lbuild $pkg-$SPLZFSVER
-        fi
+	pushd $pkg || return 255
+	local tag
+	if [ -n "$SPLZFSTAG" ]; then
+	    tag=$SPLZFSTAG
+	else
+	    tag=$pkg-$SPLZFSVER
+	fi
+	git checkout -b lbuild $tag || fatal 1 "Failed to checkout \"$tag\" for $pkg.git"
 
         # This differentiates between older zfs versions
         if [ -f $pkg-modules.spec.in ]; then
