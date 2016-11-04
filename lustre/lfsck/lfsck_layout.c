@@ -288,7 +288,8 @@ static void lfsck_layout_assistant_sync_failures(const struct lu_env *env,
 	down_read(&ltds->ltd_rw_sem);
 	cfs_foreach_bit(lad->lad_bitmap, idx) {
 		ltd = lfsck_ltd2tgt(ltds, idx);
-		LASSERT(ltd != NULL);
+		if (unlikely(!ltd))
+			continue;
 
 		laia->laia_ltd = ltd;
 		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
