@@ -460,7 +460,8 @@ static struct fs_db *mgs_new_fsdb(const struct lu_env *env,
 		lproc_mgs_add_live(mgs, fsdb);
 	}
 
-	if (!test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags)) {
+	if (!test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags) &&
+	    strcmp(PARAMS_FILENAME, fsname) != 0) {
 		/* populate the db from the client llog */
 		rc = mgs_get_fsdb_from_llog(env, mgs, fsdb);
 		if (rc) {

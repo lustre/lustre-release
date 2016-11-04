@@ -244,11 +244,13 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 	init_waitqueue_head(&qmt->qmt_reba_thread.t_ctl_waitq);
 	INIT_LIST_HEAD(&qmt->qmt_reba_list);
 	spin_lock_init(&qmt->qmt_reba_lock);
-	rc = qmt_start_reba_thread(qmt);
-	if (rc) {
-		CERROR("%s: failed to start rebalance thread (%d)\n",
-		       qmt->qmt_svname, rc);
-		GOTO(out, rc);
+	if (!qmt->qmt_child->dd_rdonly) {
+		rc = qmt_start_reba_thread(qmt);
+		if (rc) {
+			CERROR("%s: failed to start rebalance thread (%d)\n",
+			       qmt->qmt_svname, rc);
+			GOTO(out, rc);
+		}
 	}
 
 	/* at the moment there is no linkage between lu_type and obd_type, so

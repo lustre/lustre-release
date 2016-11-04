@@ -212,6 +212,9 @@ int ofd_seq_last_oid_write(const struct lu_env *env, struct ofd_device *ofd,
 
 	ENTRY;
 
+	if (ofd->ofd_osd->dd_rdonly)
+		RETURN(0);
+
 	tmp = cpu_to_le64(ofd_seq_last_oid(oseq));
 
 	info->fti_buf.lb_buf = &tmp;

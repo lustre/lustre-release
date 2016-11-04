@@ -508,9 +508,11 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++)
 		qsd_qtype_fini(env, qsd, qtype);
 
-	/* deregister connection to the quota master */
-	qsd->qsd_exp_valid = false;
-	lustre_deregister_lwp_item(&qsd->qsd_exp);
+	if (qsd->qsd_exp) {
+		/* deregister connection to the quota master */
+		qsd->qsd_exp_valid = false;
+		lustre_deregister_lwp_item(&qsd->qsd_exp);
+	}
 
 	/* release per-filesystem information */
 	if (qsd->qsd_fsinfo != NULL) {
@@ -702,6 +704,9 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 	write_lock(&qsd->qsd_lock);
 	qsd->qsd_prepared = true;
 	write_unlock(&qsd->qsd_lock);
+
+	if (qsd->qsd_dev->dd_rdonly)
+		RETURN(0);
 
 	/* start reintegration thread for each type, if required */
 	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++) {

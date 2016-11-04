@@ -214,6 +214,9 @@ static int tgt_reply_header_write(const struct lu_env *env,
 		tgt->lut_obd->obd_name, REPLY_DATA,
 		lrh->lrh_magic, lrh->lrh_header_size, lrh->lrh_reply_size);
 
+	if (tgt->lut_bottom->dd_rdonly)
+		RETURN(0);
+
 	buf.lrh_magic = cpu_to_le32(lrh->lrh_magic);
 	buf.lrh_header_size = cpu_to_le32(lrh->lrh_header_size);
 	buf.lrh_reply_size = cpu_to_le32(lrh->lrh_reply_size);
@@ -444,8 +447,9 @@ void tgt_client_free(struct obd_export *exp)
 }
 EXPORT_SYMBOL(tgt_client_free);
 
-int tgt_client_data_read(const struct lu_env *env, struct lu_target *tgt,
-			 struct lsd_client_data *lcd, loff_t *off, int index)
+static int tgt_client_data_read(const struct lu_env *env, struct lu_target *tgt,
+				struct lsd_client_data *lcd,
+				loff_t *off, int index)
 {
 	struct tgt_thread_info	*tti = tgt_th_info(env);
 	int			 rc;
@@ -471,9 +475,10 @@ int tgt_client_data_read(const struct lu_env *env, struct lu_target *tgt,
 	return rc;
 }
 
-int tgt_client_data_write(const struct lu_env *env, struct lu_target *tgt,
-			  struct lsd_client_data *lcd, loff_t *off,
-			  struct thandle *th)
+static int tgt_client_data_write(const struct lu_env *env,
+				 struct lu_target *tgt,
+				 struct lsd_client_data *lcd,
+				 loff_t *off, struct thandle *th)
 {
 	struct tgt_thread_info *tti = tgt_th_info(env);
 	struct dt_object	*dto;
@@ -486,6 +491,59 @@ int tgt_client_data_write(const struct lu_env *env, struct lu_target *tgt,
 
 	dto = dt_object_locate(tgt->lut_last_rcvd, th->th_dev);
 	return dt_record_write(env, dto, &tti->tti_buf, off, th);
+}
+
+struct tgt_new_client_callback {
+	struct dt_txn_commit_cb	 lncc_cb;
+	struct obd_export	*lncc_exp;
+};
+
+static void tgt_cb_new_client(struct lu_env *env, struct thandle *th,
+			      struct dt_txn_commit_cb *cb, int err)
+{
+	struct tgt_new_client_callback *ccb;
+
+	ccb = container_of0(cb, struct tgt_new_client_callback, lncc_cb);
+
+	LASSERT(ccb->lncc_exp->exp_obd);
+
+	CDEBUG(D_RPCTRACE, "%s: committing for initial connect of %s\n",
+	       ccb->lncc_exp->exp_obd->obd_name,
+	       ccb->lncc_exp->exp_client_uuid.uuid);
+
+	spin_lock(&ccb->lncc_exp->exp_lock);
+
+	ccb->lncc_exp->exp_need_sync = 0;
+
+	spin_unlock(&ccb->lncc_exp->exp_lock);
+	class_export_cb_put(ccb->lncc_exp);
+
+	OBD_FREE_PTR(ccb);
+}
+
+int tgt_new_client_cb_add(struct thandle *th, struct obd_export *exp)
+{
+	struct tgt_new_client_callback	*ccb;
+	struct dt_txn_commit_cb		*dcb;
+	int				 rc;
+
+	OBD_ALLOC_PTR(ccb);
+	if (ccb == NULL)
+		return -ENOMEM;
+
+	ccb->lncc_exp = class_export_cb_get(exp);
+
+	dcb = &ccb->lncc_cb;
+	dcb->dcb_func = tgt_cb_new_client;
+	INIT_LIST_HEAD(&dcb->dcb_linkage);
+	strlcpy(dcb->dcb_name, "tgt_cb_new_client", sizeof(dcb->dcb_name));
+
+	rc = dt_trans_cb_add(th, dcb);
+	if (rc) {
+		class_export_cb_put(exp);
+		OBD_FREE_PTR(ccb);
+	}
+	return rc;
 }
 
 /**
@@ -507,6 +565,9 @@ static int tgt_client_data_update(const struct lu_env *env,
 			  class_exp2obd(exp)->obd_name);
 		RETURN(-EINVAL);
 	}
+
+	if (tgt->lut_bottom->dd_rdonly)
+		RETURN(0);
 
 	th = dt_trans_create(env, tgt->lut_bottom);
 	if (IS_ERR(th))
@@ -556,7 +617,7 @@ out:
 	return rc;
 }
 
-int tgt_server_data_read(const struct lu_env *env, struct lu_target *tgt)
+static int tgt_server_data_read(const struct lu_env *env, struct lu_target *tgt)
 {
 	struct tgt_thread_info	*tti = tgt_th_info(env);
 	int			 rc;
@@ -574,8 +635,8 @@ int tgt_server_data_read(const struct lu_env *env, struct lu_target *tgt)
         return rc;
 }
 
-int tgt_server_data_write(const struct lu_env *env, struct lu_target *tgt,
-			  struct thandle *th)
+static int tgt_server_data_write(const struct lu_env *env,
+				 struct lu_target *tgt, struct thandle *th)
 {
 	struct tgt_thread_info	*tti = tgt_th_info(env);
 	struct dt_object	*dto;
@@ -619,6 +680,9 @@ int tgt_server_data_update(const struct lu_env *env, struct lu_target *tgt,
 	tgt->lut_lsd.lsd_last_transno = tgt->lut_last_transno;
 	spin_unlock(&tgt->lut_translock);
 
+	if (tgt->lut_bottom->dd_rdonly)
+		RETURN(0);
+
 	th = dt_trans_create(env, tgt->lut_bottom);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
@@ -646,8 +710,8 @@ out:
 }
 EXPORT_SYMBOL(tgt_server_data_update);
 
-int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tgt,
-			   loff_t size)
+static int tgt_truncate_last_rcvd(const struct lu_env *env,
+				  struct lu_target *tgt, loff_t size)
 {
 	struct dt_object *dt = tgt->lut_last_rcvd;
 	struct thandle	 *th;
@@ -655,6 +719,9 @@ int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tgt,
 	int		  rc;
 
 	ENTRY;
+
+	if (tgt->lut_bottom->dd_rdonly)
+		RETURN(0);
 
 	attr.la_size = size;
 	attr.la_valid = LA_SIZE;
@@ -817,8 +884,8 @@ out:
  * Add commit callback function, it returns a non-zero value to inform
  * caller to use sync transaction if necessary.
  */
-int tgt_last_commit_cb_add(struct thandle *th, struct lu_target *tgt,
-			   struct obd_export *exp, __u64 transno)
+static int tgt_last_commit_cb_add(struct thandle *th, struct lu_target *tgt,
+				  struct obd_export *exp, __u64 transno)
 {
 	struct tgt_last_committed_callback	*ccb;
 	struct dt_txn_commit_cb			*dcb;
@@ -850,59 +917,6 @@ int tgt_last_commit_cb_add(struct thandle *th, struct lu_target *tgt,
 	/* if exp_need_sync is set, return non-zero value to force
 	 * a sync transaction. */
 	return rc ? rc : exp->exp_need_sync;
-}
-
-struct tgt_new_client_callback {
-	struct dt_txn_commit_cb	 lncc_cb;
-	struct obd_export	*lncc_exp;
-};
-
-static void tgt_cb_new_client(struct lu_env *env, struct thandle *th,
-			      struct dt_txn_commit_cb *cb, int err)
-{
-	struct tgt_new_client_callback *ccb;
-
-	ccb = container_of0(cb, struct tgt_new_client_callback, lncc_cb);
-
-	LASSERT(ccb->lncc_exp->exp_obd);
-
-	CDEBUG(D_RPCTRACE, "%s: committing for initial connect of %s\n",
-	       ccb->lncc_exp->exp_obd->obd_name,
-	       ccb->lncc_exp->exp_client_uuid.uuid);
-
-	spin_lock(&ccb->lncc_exp->exp_lock);
-
-	ccb->lncc_exp->exp_need_sync = 0;
-
-	spin_unlock(&ccb->lncc_exp->exp_lock);
-	class_export_cb_put(ccb->lncc_exp);
-
-	OBD_FREE_PTR(ccb);
-}
-
-int tgt_new_client_cb_add(struct thandle *th, struct obd_export *exp)
-{
-	struct tgt_new_client_callback	*ccb;
-	struct dt_txn_commit_cb		*dcb;
-	int				 rc;
-
-	OBD_ALLOC_PTR(ccb);
-	if (ccb == NULL)
-		return -ENOMEM;
-
-	ccb->lncc_exp = class_export_cb_get(exp);
-
-	dcb = &ccb->lncc_cb;
-	dcb->dcb_func = tgt_cb_new_client;
-	INIT_LIST_HEAD(&dcb->dcb_linkage);
-	strlcpy(dcb->dcb_name, "tgt_cb_new_client", sizeof(dcb->dcb_name));
-
-	rc = dt_trans_cb_add(th, dcb);
-	if (rc) {
-		class_export_cb_put(exp);
-		OBD_FREE_PTR(ccb);
-	}
-	return rc;
 }
 
 /**
@@ -1419,6 +1433,9 @@ static int tgt_clients_data_init(const struct lu_env *env,
 
 	ENTRY;
 
+	if (tgt->lut_bottom->dd_rdonly)
+		RETURN(0);
+
 	CLASSERT(offsetof(struct lsd_client_data, lcd_padding) +
 		 sizeof(lcd->lcd_padding) == LR_CLIENT_SIZE);
 
@@ -1618,12 +1635,23 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 			RETURN(rc);
 		}
 		if (strcmp(lsd->lsd_uuid, tgt->lut_obd->obd_uuid.uuid)) {
-			LCONSOLE_ERROR_MSG(0x157, "Trying to start OBD %s "
-					   "using the wrong disk %s. Were the"
-					   " /dev/ assignments rearranged?\n",
-					   tgt->lut_obd->obd_uuid.uuid,
-					   lsd->lsd_uuid);
-			RETURN(-EINVAL);
+			if (tgt->lut_bottom->dd_rdonly) {
+				/* Such difference may be caused by mounting
+				 * up snapshot with new fsname under rd_only
+				 * mode. But even if it was NOT, it will not
+				 * damage the system because of "rd_only". */
+				memcpy(lsd->lsd_uuid,
+				       tgt->lut_obd->obd_uuid.uuid,
+				       sizeof(lsd->lsd_uuid));
+			} else {
+				LCONSOLE_ERROR_MSG(0x157, "Trying to start "
+						   "OBD %s using the wrong "
+						   "disk %s. Were the /dev/ "
+						   "assignments rearranged?\n",
+						   tgt->lut_obd->obd_uuid.uuid,
+						   lsd->lsd_uuid);
+				RETURN(-EINVAL);
+			}
 		}
 
 		if (lsd->lsd_osd_index != index) {
@@ -1739,6 +1767,14 @@ int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
 	struct tgt_thread_info	*tti = tgt_th_info(env);
 	struct dt_object	*dto;
 	int			 rc;
+
+	/* For readonly case, the caller should have got failure
+	 * when start the transaction. If the logic comes here,
+	 * there must be something wrong. */
+	if (unlikely(tgt->lut_bottom->dd_rdonly)) {
+		dump_stack();
+		LBUG();
+	}
 
 	/* if there is no session, then this transaction is not result of
 	 * request processing but some local operation */

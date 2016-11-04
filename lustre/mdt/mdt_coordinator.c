@@ -882,6 +882,9 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 		       " for registered restore: %d\n",
 		       mdt_obd_name(mdt), rc);
 
+	if (mdt->mdt_bottom->dd_rdonly)
+		RETURN(0);
+
 	task = kthread_run(mdt_coordinator, cdt_mti, "hsm_cdtr");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
@@ -915,6 +918,9 @@ int mdt_hsm_cdt_stop(struct mdt_device *mdt)
 	struct cdt_restore_handle	*crh, *tmp3;
 	struct mdt_thread_info		*cdt_mti;
 	ENTRY;
+
+	if (mdt->mdt_opts.mo_coordinator == 0)
+		RETURN(0);
 
 	if (cdt->cdt_state == CDT_STOPPED) {
 		CERROR("%s: Coordinator already stopped\n",

@@ -354,6 +354,9 @@ int osp_write_last_oid_seq_files(struct lu_env *env, struct osp_device *osp,
 	int		      rc;
 	ENTRY;
 
+	if (osp->opd_storage->dd_rdonly)
+		RETURN(0);
+
 	/* Note: through f_oid is only 32 bits, it will also write 64 bits
 	 * for oid to keep compatibility with the previous version. */
 	lb_oid->lb_buf = &fid->f_oid;
@@ -1150,6 +1153,12 @@ static int osp_precreate_thread(void *_arg)
 	if (rc) {
 		CERROR("%s: init env error: rc = %d\n", d->opd_obd->obd_name,
 		       rc);
+
+		spin_lock(&d->opd_pre_lock);
+		thread->t_flags = SVC_STOPPED;
+		spin_unlock(&d->opd_pre_lock);
+		wake_up(&thread->t_ctl_waitq);
+
 		RETURN(rc);
 	}
 
@@ -1660,6 +1669,7 @@ int osp_init_precreate(struct osp_device *d)
 	spin_lock_init(&d->opd_pre_lock);
 	init_waitqueue_head(&d->opd_pre_waitq);
 	init_waitqueue_head(&d->opd_pre_user_waitq);
+	thread_set_flags(&d->opd_pre_thread, SVC_INIT);
 	init_waitqueue_head(&d->opd_pre_thread.t_ctl_waitq);
 
 	/*
@@ -1672,6 +1682,9 @@ int osp_init_precreate(struct osp_device *d)
 	       (unsigned long long)d->opd_statfs_fresh_till);
 	setup_timer(&d->opd_statfs_timer, osp_statfs_timer_cb,
 		    (unsigned long)d);
+
+	if (d->opd_storage->dd_rdonly)
+		RETURN(0);
 
 	/*
 	 * start thread handling precreation and statfs updates
@@ -1701,8 +1714,7 @@ int osp_init_precreate(struct osp_device *d)
  */
 void osp_precreate_fini(struct osp_device *d)
 {
-	struct ptlrpc_thread *thread;
-
+	struct ptlrpc_thread *thread = &d->opd_pre_thread;
 	ENTRY;
 
 	del_timer(&d->opd_statfs_timer);
@@ -1710,12 +1722,11 @@ void osp_precreate_fini(struct osp_device *d)
 	if (d->opd_pre == NULL)
 		RETURN_EXIT;
 
-	thread = &d->opd_pre_thread;
-
-	thread->t_flags = SVC_STOPPING;
-	wake_up(&d->opd_pre_waitq);
-
-	wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
+	if (!thread_is_init(thread) && !thread_is_stopped(thread)) {
+		thread->t_flags = SVC_STOPPING;
+		wake_up(&d->opd_pre_waitq);
+		wait_event(thread->t_ctl_waitq, thread_is_stopped(thread));
+	}
 
 	OBD_FREE_PTR(d->opd_pre);
 	d->opd_pre = NULL;

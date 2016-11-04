@@ -833,6 +833,9 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 	if (unlikely(qsd == NULL))
 		RETURN(0);
 
+	if (qsd->qsd_dev->dd_rdonly)
+		RETURN(0);
+
 	/* We don't enforce quota until the qsd_instance is started */
 	read_lock(&qsd->qsd_lock);
 	if (!qsd->qsd_started) {
@@ -921,6 +924,9 @@ int qsd_adjust(const struct lu_env *env, struct lquota_entry *lqe)
 
 	qqi = lqe2qqi(lqe);
 	qsd = qqi->qqi_qsd;
+
+	if (qsd->qsd_dev->dd_rdonly)
+		RETURN(0);
 
 	lqe_write_lock(lqe);
 
@@ -1073,6 +1079,9 @@ void qsd_op_end(const struct lu_env *env, struct qsd_instance *qsd,
 	ENTRY;
 
 	if (unlikely(qsd == NULL))
+		RETURN_EXIT;
+
+	if (qsd->qsd_dev->dd_rdonly)
 		RETURN_EXIT;
 
 	/* We don't enforce quota until the qsd_instance is started */

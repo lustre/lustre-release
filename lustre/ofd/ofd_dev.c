@@ -2894,6 +2894,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	struct obd_statfs *osfs;
 	struct lu_fid fid;
 	struct nm_config_file *nodemap_config;
+	struct obd_device_target *obt;
 	int rc;
 
 	ENTRY;
@@ -2908,7 +2909,8 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (rc != 0)
 		RETURN(rc);
 
-	obd->u.obt.obt_magic = OBT_MAGIC;
+	obt = &obd->u.obt;
+	obt->obt_magic = OBT_MAGIC;
 
 	m->ofd_fmd_max_num = OFD_FMD_MAX_NUM_DEFAULT;
 	m->ofd_fmd_max_age = OFD_FMD_MAX_AGE_DEFAULT;
@@ -3040,10 +3042,13 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	nodemap_config = nm_config_file_register_tgt(env, m->ofd_osd,
 						     m->ofd_los);
-	if (IS_ERR(nodemap_config))
-		GOTO(err_fini_los, rc = PTR_ERR(nodemap_config));
-
-	obd->u.obt.obt_nodemap_config_file = nodemap_config;
+	if (IS_ERR(nodemap_config)) {
+		rc = PTR_ERR(nodemap_config);
+		if (rc != -EROFS)
+			GOTO(err_fini_los, rc);
+	} else {
+		obt->obt_nodemap_config_file = nodemap_config;
+	}
 
 	rc = ofd_start_inconsistency_verification_thread(m);
 	if (rc != 0)
@@ -3054,8 +3059,8 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	RETURN(0);
 
 err_fini_nm:
-	nm_config_file_deregister_tgt(env, obd->u.obt.obt_nodemap_config_file);
-	obd->u.obt.obt_nodemap_config_file = NULL;
+	nm_config_file_deregister_tgt(env, obt->obt_nodemap_config_file);
+	obt->obt_nodemap_config_file = NULL;
 err_fini_los:
 	local_oid_storage_fini(env, m->ofd_los);
 	m->ofd_los = NULL;

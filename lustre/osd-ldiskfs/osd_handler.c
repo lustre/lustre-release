@@ -1604,6 +1604,14 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	struct thandle		*th;
 	ENTRY;
 
+	if (d->dd_rdonly) {
+		CERROR("%s: someone try to start transaction under "
+		       "readonly mode, should be disabled.\n",
+		       osd_name(osd_dt_dev(d)));
+		dump_stack();
+		RETURN(ERR_PTR(-EROFS));
+	}
+
 	/* on pending IO in this thread should left from prev. request */
 	LASSERT(atomic_read(&iobuf->dr_numreqs) == 0);
 
@@ -6868,16 +6876,30 @@ static int osd_mount(const struct lu_env *env,
 		       "greater than 512TB and can cause data corruption. "
 		       "Use \"force_over_512tb\" mount option to override.\n",
 		       name, dev);
-		GOTO(out, rc = -EINVAL);
+		GOTO(out_mnt, rc = -EINVAL);
 	}
 
+	if (lmd_flags & LMD_FLG_DEV_RDONLY) {
 #ifdef HAVE_DEV_SET_RDONLY
-	if (dev_check_rdonly(o->od_mnt->mnt_sb->s_bdev)) {
-		CERROR("%s: underlying device %s is marked as read-only. "
-		       "Setup failed\n", name, dev);
-		GOTO(out_mnt, rc = -EROFS);
-	}
+		dev_set_rdonly(osd_sb(o)->s_bdev);
+		o->od_dt_dev.dd_rdonly = 1;
+		LCONSOLE_WARN("%s: set dev_rdonly on this device\n", name);
+#else
+		LCONSOLE_WARN("%s: not support dev_rdonly on this device",
+			      name);
+
+		GOTO(out_mnt, rc = -EOPNOTSUPP);
 #endif
+	} else {
+#ifdef HAVE_DEV_SET_RDONLY
+		if (dev_check_rdonly(osd_sb(o)->s_bdev)) {
+			CERROR("%s: underlying device %s is marked as "
+			       "read-only. Setup failed\n", name, dev);
+
+			GOTO(out_mnt, rc = -EROFS);
+		}
+#endif
+	}
 
 	if (!LDISKFS_HAS_COMPAT_FEATURE(o->od_mnt->mnt_sb,
 					LDISKFS_FEATURE_COMPAT_HAS_JOURNAL)) {

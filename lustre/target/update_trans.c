@@ -1701,6 +1701,9 @@ int distribute_txn_init(const struct lu_env *env,
 	atomic_set(&tdtd->tdtd_recovery_threads_count, 0);
 
 	tdtd->tdtd_lut = lut;
+	if (lut->lut_bottom->dd_rdonly)
+		RETURN(0);
+
 	rc = distribute_txn_commit_batchid_init(env, tdtd);
 	if (rc != 0)
 		RETURN(rc);

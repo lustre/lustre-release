@@ -3046,6 +3046,9 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 	__u16				 type   = 1;
 	ENTRY;
 
+	if (key->dd_rdonly)
+		RETURN(-EROFS);
+
 	lfsck = lfsck_instance_find(key, true, false);
 	if (unlikely(lfsck == NULL))
 		RETURN(-ENXIO);

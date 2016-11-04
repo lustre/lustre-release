@@ -3684,6 +3684,8 @@ writeconf_all () {
 }
 
 setupall() {
+	local arg1=$1
+
 	nfs_client_mode && return
 	cifs_client_mode && return
 
@@ -3736,6 +3738,11 @@ setupall() {
     fi
 
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+
+	if [ ! -z $arg1 ]; then
+		[ "$arg1" = "server_only" ] && return
+	fi
+
     mount_client $MOUNT
     [ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT
     clients_up

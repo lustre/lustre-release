@@ -211,6 +211,9 @@ static int osp_write_local_file(const struct lu_env *env,
 	struct thandle *th;
 	int rc;
 
+	if (osp->opd_storage->dd_rdonly)
+		RETURN(0);
+
 	th = dt_trans_create(env, osp->opd_storage);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
@@ -499,6 +502,9 @@ static int osp_update_init(struct osp_device *osp)
 	ENTRY;
 
 	LASSERT(osp->opd_connect_mdt);
+
+	if (osp->opd_storage->dd_rdonly)
+		RETURN(0);
 
 	OBD_ALLOC_PTR(osp->opd_update);
 	if (osp->opd_update == NULL)
@@ -1163,10 +1169,11 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 	if (!osp->opd_connect_mdt) {
 		/* Initialize last id from the storage - will be
 		 * used in orphan cleanup. */
-		rc = osp_last_used_init(env, osp);
-		if (rc)
-			GOTO(out_fid, rc);
-
+		if (!osp->opd_storage->dd_rdonly) {
+			rc = osp_last_used_init(env, osp);
+			if (rc)
+				GOTO(out_fid, rc);
+		}
 
 		/* Initialize precreation thread, it handles new
 		 * connections as well. */

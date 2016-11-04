@@ -1729,7 +1729,8 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 	 * support ZIL.  If the object tracked the txg that it was last
 	 * modified in, it could pass that txg here instead of "0".  Maybe
 	 * the changes are already committed, so no wait is needed at all? */
-	txg_wait_synced(dmu_objset_pool(osd->od_os), 0ULL);
+	if (!osd->od_dt_dev.dd_rdonly)
+		txg_wait_synced(dmu_objset_pool(osd->od_os), 0ULL);
 
 	RETURN(0);
 }

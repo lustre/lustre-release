@@ -1930,7 +1930,7 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 	    cli->cl_mgc_configs_dir != NULL &&
 	    lu2dt_dev(cli->cl_mgc_configs_dir->do_lu.lo_dev) ==
 	    lsi->lsi_dt_dev) {
-		if (!local_only)
+		if (!local_only && !lsi->lsi_dt_dev->dd_rdonly)
 			/* Only try to copy log if we have the lock. */
 			rc = mgc_llog_local_copy(env, mgc, ctxt, lctxt,
 						 cld->cld_logname);
@@ -1958,11 +1958,24 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 			GOTO(out_pop, rc = -EIO);
 	}
 
-	/* logname and instance info should be the same, so use our
-	 * copy of the instance for the update.  The cfg_last_idx will
-	 * be updated here. */
-	rc = class_config_parse_llog(env, ctxt, cld->cld_logname,
-				     &cld->cld_cfg);
+	rc = -EAGAIN;
+	if (lsi && IS_SERVER(lsi) && !IS_MGS(lsi) &&
+	    lsi->lsi_dt_dev->dd_rdonly) {
+		struct llog_ctxt *rctxt;
+
+		/* Under readonly mode, we may have no local copy or local
+		 * copy is incomplete, so try to use remote llog firstly. */
+		rctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
+		LASSERT(rctxt);
+
+		rc = class_config_parse_llog(env, rctxt, cld->cld_logname,
+					     &cld->cld_cfg);
+		llog_ctxt_put(rctxt);
+	}
+
+	if (rc && rc != -ENOENT)
+		rc = class_config_parse_llog(env, ctxt, cld->cld_logname,
+					     &cld->cld_cfg);
 
 	/*
 	 * update settings on existing OBDs. doing it inside

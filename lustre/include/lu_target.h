@@ -436,9 +436,6 @@ void tgt_boot_epoch_update(struct lu_target *lut);
 void tgt_save_slc_lock(struct lu_target *lut, struct ldlm_lock *lock,
 		       __u64 transno);
 void tgt_discard_slc_lock(struct lu_target *lut, struct ldlm_lock *lock);
-int tgt_last_commit_cb_add(struct thandle *th, struct lu_target *lut,
-			   struct obd_export *exp, __u64 transno);
-int tgt_new_client_cb_add(struct thandle *th, struct obd_export *exp);
 int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	     struct obd_device *obd, struct dt_device *dt,
 	     struct tgt_opc_slice *slice,
@@ -449,17 +446,8 @@ void tgt_client_free(struct obd_export *exp);
 int tgt_client_del(const struct lu_env *env, struct obd_export *exp);
 int tgt_client_add(const struct lu_env *env, struct obd_export *exp, int);
 int tgt_client_new(const struct lu_env *env, struct obd_export *exp);
-int tgt_client_data_read(const struct lu_env *env, struct lu_target *tg,
-			 struct lsd_client_data *lcd, loff_t *off, int index);
-int tgt_client_data_write(const struct lu_env *env, struct lu_target *tg,
-			  struct lsd_client_data *lcd, loff_t *off, struct thandle *th);
-int tgt_server_data_read(const struct lu_env *env, struct lu_target *tg);
-int tgt_server_data_write(const struct lu_env *env, struct lu_target *tg,
-			  struct thandle *th);
 int tgt_server_data_update(const struct lu_env *env, struct lu_target *tg,
 			   int sync);
-int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg,
-			   loff_t off);
 int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt);
 bool tgt_lookup_reply(struct ptlrpc_request *req, struct tg_reply_data *trd);
 int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,

@@ -554,7 +554,7 @@ int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd)
 
 	CDEBUG(D_HA, "%s: recovery is over\n", ofd_name(ofd));
 
-	if (!ofd->ofd_skip_lfsck) {
+	if (!ofd->ofd_skip_lfsck && !ofd->ofd_osd->dd_rdonly) {
 		struct lfsck_start_param lsp;
 
 		lsp.lsp_start = NULL;

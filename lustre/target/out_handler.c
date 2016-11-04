@@ -1109,6 +1109,9 @@ int out_handle(struct tgt_session_info *tsi)
 						     out_reconstruct, reply,
 						     reply_index))
 					GOTO(next, rc = 0);
+
+				if (dt->dd_rdonly)
+					GOTO(next, rc = -EROFS);
 			}
 
 			/* start transaction for modification RPC only */

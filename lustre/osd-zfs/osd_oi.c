@@ -148,6 +148,9 @@ osd_oi_create(const struct lu_env *env, struct osd_device *o,
 	if (rc == 0)
 		return -EEXIST;
 
+	if (o->od_dt_dev.dd_rdonly)
+		return -EROFS;
+
 	/* create fid-to-dnode index */
 	tx = dmu_tx_create(o->od_os);
 	if (tx == NULL)

@@ -196,8 +196,11 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
         struct ptlrpc_request  *req = mdt_info_req(info);
         struct tg_export_data  *ted;
         struct lsd_client_data *lcd;
-
         ENTRY;
+
+	if (mdt_rdonly(req->rq_export))
+		RETURN_EXIT;
+
         /* transaction has occurred already */
         if (lustre_msg_get_transno(req->rq_repmsg) != 0)
                 RETURN_EXIT;
@@ -1403,7 +1406,7 @@ again:
 
                 if (!(create_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
-		if (exp_connect_flags(req->rq_export) & OBD_CONNECT_RDONLY)
+		if (mdt_rdonly(req->rq_export))
 			GOTO(out_parent, result = -EROFS);
                 *child_fid = *info->mti_rr.rr_fid2;
                 LASSERTF(fid_is_sane(child_fid), "fid="DFID"\n",
@@ -1678,7 +1681,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	int                     rc2;
 	ENTRY;
 
-	if (exp_connect_flags(info->mti_exp) & OBD_CONNECT_RDONLY)
+	if (mdt_rdonly(info->mti_exp))
 		RETURN(-EROFS);
 
 	data = req_capsule_client_get(info->mti_pill, &RMF_CLOSE_DATA);

@@ -257,8 +257,7 @@ hsm_action_permission(struct mdt_thread_info *mti,
 	int rc;
 	ENTRY;
 
-	if (hsma != HSMA_RESTORE &&
-	    exp_connect_flags(mti->mti_exp) & OBD_CONNECT_RDONLY)
+	if (hsma != HSMA_RESTORE && mdt_rdonly(mti->mti_exp))
 		RETURN(-EROFS);
 
 	if (md_capable(uc, CFS_CAP_SYS_ADMIN))

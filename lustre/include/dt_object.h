@@ -1740,7 +1740,8 @@ struct dt_device {
          * single-threaded start-up shut-down procedures.
          */
 	struct list_head		   dd_txn_callbacks;
-	unsigned int			   dd_record_fid_accessed:1;
+	unsigned int			   dd_record_fid_accessed:1,
+					   dd_rdonly:1;
 };
 
 int  dt_device_init(struct dt_device *dev, struct lu_device_type *t);

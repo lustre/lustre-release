@@ -271,12 +271,16 @@ int fld_insert_entry(const struct lu_env *env,
 		     const struct lu_seq_range *range)
 {
 	struct thandle *th;
+	struct dt_device *dt = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
 	int rc;
 	ENTRY;
 
 	LASSERT(mutex_is_locked(&fld->lsf_lock));
 
-	th = dt_trans_create(env, lu2dt_dev(fld->lsf_obj->do_lu.lo_dev));
+	if (dt->dd_rdonly)
+		RETURN(0);
+
+	th = dt_trans_create(env, dt);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
 
@@ -287,8 +291,7 @@ int fld_insert_entry(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	rc = dt_trans_start_local(env, lu2dt_dev(fld->lsf_obj->do_lu.lo_dev),
-				  th);
+	rc = dt_trans_start_local(env, dt, th);
 	if (rc)
 		GOTO(out, rc);
 
@@ -296,7 +299,7 @@ int fld_insert_entry(const struct lu_env *env,
 	if (rc == -EEXIST)
 		rc = 0;
 out:
-	dt_trans_stop(env, lu2dt_dev(fld->lsf_obj->do_lu.lo_dev), th);
+	dt_trans_stop(env, dt, th);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(fld_insert_entry);

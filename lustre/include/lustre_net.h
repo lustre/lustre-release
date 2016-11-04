@@ -1494,12 +1494,13 @@ struct ptlrpc_bulk_desc {
 #define BD_GET_ENC_KVEC(desc, i)	((desc)->bd_u.bd_kvec.bd_enc_kvec[i])
 
 enum {
-        SVC_STOPPED     = 1 << 0,
-        SVC_STOPPING    = 1 << 1,
-        SVC_STARTING    = 1 << 2,
-        SVC_RUNNING     = 1 << 3,
-        SVC_EVENT       = 1 << 4,
-        SVC_SIGNAL      = 1 << 5,
+	SVC_INIT	= 0,
+	SVC_STOPPED	= 1 << 0,
+	SVC_STOPPING	= 1 << 1,
+	SVC_STARTING	= 1 << 2,
+	SVC_RUNNING	= 1 << 3,
+	SVC_EVENT	= 1 << 4,
+	SVC_SIGNAL	= 1 << 5,
 };
 
 #define PTLRPC_THR_NAME_LEN		32

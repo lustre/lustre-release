@@ -908,6 +908,14 @@ static inline struct mdt_device *mdt_exp2dev(struct obd_export *exp)
 	return mdt_dev(exp->exp_obd->obd_lu_dev);
 }
 
+static inline bool mdt_rdonly(struct obd_export *exp)
+{
+	if (exp_connect_flags(exp) & OBD_CONNECT_RDONLY ||
+	    mdt_exp2dev(exp)->mdt_bottom->dd_rdonly)
+		return true;
+	return false;
+}
+
 typedef void (*mdt_reconstruct_t)(struct mdt_thread_info *mti,
                                   struct mdt_lock_handle *lhc);
 static inline int mdt_check_resent(struct mdt_thread_info *info,

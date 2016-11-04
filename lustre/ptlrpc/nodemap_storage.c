@@ -162,22 +162,32 @@ static struct dt_object *nodemap_cache_find_create(const struct lu_env *env,
 						   struct local_oid_storage *los,
 						   enum ncfc_find_create create_new)
 {
-	struct lu_fid root_fid;
+	struct lu_fid tfid;
 	struct dt_object *root_obj;
 	struct dt_object *nm_obj;
 	int rc = 0;
 
-	rc = dt_root_get(env, dev, &root_fid);
+	rc = dt_root_get(env, dev, &tfid);
 	if (rc < 0)
 		GOTO(out, nm_obj = ERR_PTR(rc));
 
-	root_obj = dt_locate(env, dev, &root_fid);
+	root_obj = dt_locate(env, dev, &tfid);
 	if (unlikely(IS_ERR(root_obj)))
 		GOTO(out, nm_obj = root_obj);
 
+	rc = dt_lookup_dir(env, root_obj, LUSTRE_NODEMAP_NAME, &tfid);
+	if (rc == -ENOENT) {
+		if (dev->dd_rdonly)
+			GOTO(out_root, nm_obj = ERR_PTR(-EROFS));
+	} else if (rc) {
+		GOTO(out_root, nm_obj = ERR_PTR(rc));
+	} else if (dev->dd_rdonly && create_new == NCFC_CREATE_NEW) {
+		GOTO(out_root, nm_obj = ERR_PTR(-EROFS));
+	}
+
 again:
 	/* if loading index fails the first time, create new index */
-	if (create_new == NCFC_CREATE_NEW) {
+	if (create_new == NCFC_CREATE_NEW && rc != -ENOENT) {
 		CDEBUG(D_INFO, "removing old index, creating new one\n");
 		rc = local_object_unlink(env, dev, root_obj,
 					 LUSTRE_NODEMAP_NAME);
@@ -954,7 +964,7 @@ struct dt_object *nodemap_save_config_cache(const struct lu_env *env,
 	/* create a new index file to fill with active config */
 	o = nodemap_cache_find_create(env, dev, los, NCFC_CREATE_NEW);
 	if (IS_ERR(o))
-		GOTO(out, o);
+		RETURN(o);
 
 	mutex_lock(&active_config_lock);
 
@@ -1019,7 +1029,6 @@ struct dt_object *nodemap_save_config_cache(const struct lu_env *env,
 	if (rc2 < 0)
 		rc = rc2;
 
-out:
 	mutex_unlock(&active_config_lock);
 
 	if (rc < 0) {

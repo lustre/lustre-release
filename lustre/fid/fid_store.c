@@ -107,6 +107,9 @@ int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
 	loff_t pos = 0;
 	int rc;
 
+	if (dt_dev->dd_rdonly)
+		RETURN(0);
+
 	info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
 	LASSERT(info != NULL);
 

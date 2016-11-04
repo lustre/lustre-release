@@ -1401,7 +1401,8 @@ static struct dt_it *osd_zfs_otable_it_init(const struct lu_env *env,
 	/* XXX: dmu_object_next() does NOT find dnodes allocated
 	 *	in the current non-committed txg, so we force txg
 	 *	commit to find all existing dnodes ... */
-	txg_wait_synced(dmu_objset_pool(dev->od_os), 0ULL);
+	if (!dev->od_dt_dev.dd_rdonly)
+		txg_wait_synced(dmu_objset_pool(dev->od_os), 0ULL);
 
 	RETURN((struct dt_it *)it);
 }

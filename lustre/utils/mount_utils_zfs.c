@@ -389,8 +389,11 @@ int zfs_read_ldd(char *ds,  struct lustre_disk_data *ldd)
 		return EINVAL;
 
 	zhp = zfs_open(g_zfs, ds, ZFS_TYPE_FILESYSTEM);
-	if (zhp == NULL)
-		goto out;
+	if (!zhp) {
+		zhp = zfs_open(g_zfs, ds, ZFS_TYPE_SNAPSHOT);
+		if (!zhp)
+			goto out;
+	}
 
 	for (i = 0; special_ldd_prop_params[i].zlpb_prop_name != NULL; i++) {
 		bridge = &special_ldd_prop_params[i];

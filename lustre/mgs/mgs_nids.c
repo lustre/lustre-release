@@ -220,6 +220,9 @@ static int nidtbl_update_version(const struct lu_env *env,
 	int		  rc;
         ENTRY;
 
+	if (mgs->mgs_bottom->dd_rdonly)
+		RETURN(0);
+
 	LASSERT(mutex_is_locked(&tbl->mn_lock));
 
 	fsdb = local_file_find_or_create(env, mgs->mgs_los, mgs->mgs_nidtbl_dir,

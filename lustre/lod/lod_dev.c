@@ -385,7 +385,7 @@ static int lod_sub_recovery_thread(void *arg)
 
 again:
 	rc = lod_sub_prep_llog(&env, lod, dt, lrd->lrd_idx);
-	if (rc == 0) {
+	if (!rc && !lod->lod_child->dd_rdonly) {
 		/* Process the recovery record */
 		ctxt = llog_get_context(dt->dd_lu_dev.ld_obd,
 					LLOG_UPDATELOG_ORIG_CTXT);
