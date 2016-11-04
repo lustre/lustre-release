@@ -274,6 +274,30 @@ do {                                                                           \
 	for (;;) {                                                             \
 		set_current_state(TASK_INTERRUPTIBLE);			       \
 									       \
+		/* To guarantee that the condition check will be done */       \
+		/* after setting the thread state as TASK_INTERRUPTIBLE. */    \
+		/* Otherwise, out-of-order execution may cause some race. */   \
+		/* Consider the following real execution order: */	       \
+									       \
+		/* 1. Thread1 checks condition on CPU1, gets false. */	       \
+		/* 2. Thread2 sets condition on CPU2. */		       \
+		/* 3. Thread2 calls wake_up() on CPU2 to wake the threads */   \
+		/*    with state TASK_INTERRUPTIBLE | TASK_UNINTERRUPTIBLE. */ \
+		/*    But the Thread1's state is TASK_RUNNING at that time. */ \
+		/* 4. Thread1 sets its state as TASK_INTERRUPTIBLE on CPU1, */ \
+		/*    then schedule. */					       \
+									       \
+		/* If the '__timeout' variable is zero, the Thread1 will */    \
+		/* have no chance to check the condition again. */	       \
+									       \
+		/* Generally, the interval between out-of-ordered step1 and */ \
+		/* step4 is very tiny, as to above step2 and step3 cannot */   \
+		/* happen. On some degree, it can explain why we seldom hit */ \
+		/* related trouble. But such race really exists, especially */ \
+		/* consider that the step1 and step4 can be interruptible. */  \
+		/* So add barrier to avoid Thread1 out-of-order execution. */  \
+		smp_mb();						       \
+									       \
 		if (condition)                                                 \
 			break;                                                 \
 									       \
