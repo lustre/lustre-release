@@ -119,9 +119,10 @@ void usage(FILE *out)
 			"cache, log)\n"
 #endif
 		"\n"
-#ifndef TUNEFS
 		"\ttarget types:\n"
 		"\t\t--mgs: configuration management service\n"
+		"\t\t--nomgs: turn off MGS service on this MDT\n"
+#ifndef TUNEFS
 		"\t\t--mdt: metadata storage, mutually exclusive with ost\n"
 		"\t\t--ost: object storage, mutually exclusive with mdt, mgs\n"
 #endif
@@ -154,9 +155,9 @@ void usage(FILE *out)
 		"\t\t--stripe-count-hint=#N: for optimizing MDT inode size\n"
 #else
 		"\t\t--erase-params: erase all old parameter settings\n"
-		"\t\t--nomgs: turn off MGS service on this MDT\n"
 		"\t\t--writeconf: erase all config logs for this fs.\n"
 		"\t\t--quota: enable space accounting on old 2.x device.\n"
+		"\t\t--rename: rename the filesystem name\n"
 #endif
 		"\t\t--comment=<user comment>: arbitrary string (%d bytes)\n"
 		"\t\t--dryrun: report what we would do; don't write to disk\n"
@@ -274,18 +275,20 @@ static char *convert_hostnames(char *s1)
 }
 
 int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
-	       char **mountopts)
+	       char **mountopts, char *old_fsname)
 {
 	static struct option long_opt[] = {
 		{ "backfs-mount-opts",  required_argument,	NULL, 'B' },
 		{ "failnode",		required_argument,	NULL, 'f' },
 		{ "failover",		required_argument,	NULL, 'f' },
+		{ "mgs",		no_argument,		NULL, 'G' },
 		{ "help",		no_argument,		NULL, 'h' },
 		{ "index",		required_argument,	NULL, 'i' },
 		{ "fsname",		required_argument,	NULL, 'L' },
 		{ "mgsnode",		required_argument,	NULL, 'm' },
 		{ "mgsnid",		required_argument,	NULL, 'm' },
 		{ "dryrun",		no_argument,		NULL, 'n' },
+		{ "nomgs",		no_argument,		NULL, 'N' },
 		{ "mountfsoptions",	required_argument,	NULL, 'o' },
 		{ "param",		required_argument,	NULL, 'p' },
 		{ "quiet",		no_argument,		NULL, 'q' },
@@ -299,25 +302,24 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		{ "backfstype",		required_argument,	NULL, 'b' },
 		{ "stripe-count-hint",	required_argument,	NULL, 'c' },
 		{ "device-size",	required_argument,	NULL, 'd' },
-		{ "mgs",		no_argument,		NULL, 'G' },
 		{ "mkfsoptions",	required_argument,	NULL, 'k' },
 		{ "mdt",		no_argument,		NULL, 'M' },
-		{ "nomgs",		no_argument,		NULL, 'N' },
 		{ "ost",		no_argument,		NULL, 'O' },
 		{ "reformat",		no_argument,		NULL, 'r' },
 		{ "replace",		no_argument,		NULL, 'R' },
 #else
 		{ "erase-params",	no_argument,		NULL, 'e' },
 		{ "quota",		no_argument,		NULL, 'Q' },
+		{ "rename",		optional_argument,	NULL, 'R' },
 		{ "writeconf",		no_argument,		NULL, 'w' },
 #endif
 		{ 0,			0,			NULL,  0  }
 	};
-	char *optstring = "B:f:hi:L:m:no:p:qs:t:u:vV"
+	char *optstring = "B:f:Ghi:L:m:nNo:p:qs:t:u:vV"
 #ifndef TUNEFS
-			  "b:c:d:Gk:MNOrR";
+			  "b:c:d:k:MOrR";
 #else
-			  "eQw";
+			  "eQR::w";
 #endif
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	char new_fsname[16] = { 0 };
@@ -368,6 +370,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			mop->mo_flags |= MO_FAILOVER;
 			break;
 		}
+		case 'G':
+			ldd->ldd_flags |= LDD_F_SV_TYPE_MGS;
+			break;
 		case 'h':
 			usage(stdout);
 			return 1;
@@ -433,6 +438,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		}
 		case 'n':
 			print_only++;
+			break;
+		case 'N':
+			ldd->ldd_flags &= ~LDD_F_SV_TYPE_MGS;
 			break;
 		case 'o':
 			*mountopts = optarg;
@@ -515,18 +523,12 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		case 'd':
 			mop->mo_device_kb = atol(optarg);
 			break;
-		case 'G':
-			ldd->ldd_flags |= LDD_F_SV_TYPE_MGS;
-			break;
 		case 'k':
 			strscpy(mop->mo_mkfsopts, optarg,
 				sizeof(mop->mo_mkfsopts));
 			break;
 		case 'M':
 			ldd->ldd_flags |= LDD_F_SV_TYPE_MDT;
-			break;
-		case 'N':
-			ldd->ldd_flags &= ~LDD_F_SV_TYPE_MGS;
 			break;
 		case 'O':
 			ldd->ldd_flags |= LDD_F_SV_TYPE_OST;
@@ -546,6 +548,45 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		case 'Q':
 			mop->mo_flags |= MO_QUOTA;
 			break;
+		case 'R': {
+			char *tmp;
+
+			mop->mo_flags |= MO_RENAME;
+			if (!optarg) {
+				if (IS_SEPARATED_MGS(ldd)) {
+					fprintf(stderr, "%s: must specify the "
+						"old fsname to be renamed for "
+						"separated MGS\n", progname);
+					return 1;
+				}
+				break;
+			}
+
+			if ((strlen(optarg) < 1) || (strlen(optarg) > 8)) {
+				fprintf(stderr, "%s: filesystem name must be "
+					"1-8 chars\n", progname);
+				return 1;
+			}
+
+			tmp = strpbrk(optarg, "/:");
+			if (tmp) {
+				fprintf(stderr, "%s: char '%c' not allowed in "
+					"filesystem name\n", progname, *tmp);
+				return 1;
+			}
+
+			if (IS_SEPARATED_MGS(ldd)) {
+				strscpy(old_fsname, optarg,
+					sizeof(ldd->ldd_fsname));
+			} else if (strlen(old_fsname) != strlen(optarg) ||
+				   strcmp(old_fsname, optarg) != 0) {
+				fprintf(stderr, "%s: the given fsname '%s' "
+					"to be renamed does not exist\n",
+					progname, optarg);
+				return 1;
+			}
+			break;
+		}
 		case 'w':
 			ldd->ldd_flags |= LDD_F_WRITECONF;
 			break;
@@ -560,7 +601,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	}
 
 	if (strlen(new_fsname) > 0) {
-		if (!(mop->mo_flags & MO_FORCEFORMAT) &&
+		if (!(mop->mo_flags & (MO_FORCEFORMAT | MO_RENAME)) &&
 		     (!(ldd->ldd_flags &
 			(LDD_F_UPGRADE14 | LDD_F_VIRGIN | LDD_F_WRITECONF)))) {
 			fprintf(stderr, "%s: cannot change the name "
@@ -578,6 +619,22 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			" a registered target\n", progname);
 		return 1;
 	}
+
+#ifdef TUNEFS
+	if (mop->mo_flags & MO_RENAME) {
+		if (new_fsname[0] == '\0') {
+			fprintf(stderr, "%s: need to specify new fsname for "
+				"renaming case\n", progname);
+			return 1;
+		}
+
+		if (strcmp(old_fsname, new_fsname) == 0) {
+			fprintf(stderr, "%s: cannot rename fsname '%s' to "
+				"the same name\n", progname, old_fsname);
+			return 1;
+		}
+	}
+#endif
 
 	/* Need to clear this flag after parsing 'L' and 'i' options. */
 	if (replace)
@@ -607,6 +664,7 @@ int main(int argc, char *const argv[])
 	struct lustre_disk_data *ldd = &mop.mo_ldd;
 	char *mountopts = NULL;
 	char wanted_mountopts[512] = "";
+	char old_fsname[16] = "";
 	unsigned mount_type;
 	int ret = 0;
 	int ret2 = 0;
@@ -655,6 +713,7 @@ int main(int argc, char *const argv[])
 		goto out;
 	}
 
+	strscpy(old_fsname, ldd->ldd_fsname, sizeof(ldd->ldd_fsname));
 	ldd->ldd_flags &= ~(LDD_F_WRITECONF | LDD_F_VIRGIN);
 
 	/* svname of the form lustre:OST1234 means never registered */
@@ -674,7 +733,7 @@ int main(int argc, char *const argv[])
 		print_ldd("Read previous values", ldd);
 #endif /* TUNEFS */
 
-	ret = parse_opts(argc, argv, &mop, &mountopts);
+	ret = parse_opts(argc, argv, &mop, &mountopts, old_fsname);
 	if (ret != 0 || version)
 		goto out;
 
@@ -839,13 +898,20 @@ int main(int argc, char *const argv[])
 		fprintf(stderr, "mkfs failed %d\n", ret);
 		goto out;
 	}
-#else /* !TUNEFS */
+#else /* TUNEFS */
 	/* update svname with '=' to refresh config */
 	if (ldd->ldd_flags & LDD_F_WRITECONF) {
 		struct mount_opts opts;
 		opts.mo_ldd = *ldd;
 		opts.mo_source = mop.mo_device;
 		(void) osd_label_lustre(&opts);
+	}
+
+	/* Rename filesystem fsname */
+	if (mop.mo_flags & MO_RENAME) {
+		ret = osd_rename_fsname(&mop, old_fsname);
+		if (ret)
+			goto out;
 	}
 
 	/* Enable quota accounting */

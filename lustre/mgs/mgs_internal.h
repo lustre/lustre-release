@@ -426,5 +426,6 @@ int mgs_lcfg_fork(const struct lu_env *env, struct mgs_device *mgs,
 		  const char *oldname, const char *newname);
 int mgs_lcfg_erase(const struct lu_env *env, struct mgs_device *mgs,
 		   const char *fsname);
+int mgs_lcfg_rename(const struct lu_env *env, struct mgs_device *mgs);
 
 #endif /* _MGS_INTERNAL_H */

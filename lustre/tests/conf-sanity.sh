@@ -7076,6 +7076,131 @@ test_102() {
 }
 run_test 102 "obdclass module cleanup upon error"
 
+test_renamefs() {
+	local newname=$1
+
+	echo "rename $FSNAME to $newname"
+
+	if [ ! combined_mgs_mds ]; then
+		local facet=$(mgsdevname)
+
+		do_facet mgs \
+			"$TUNEFS --fsname=$newname --rename=$FSNAME -v $facet"||
+			error "(7) Fail to rename MGS"
+		if [ "$(facet_fstype $facet)" = "zfs" ]; then
+			reimport_zpool mgs $newname-mgs
+		fi
+	fi
+
+	for num in $(seq $MDSCOUNT); do
+		local facet=$(mdsdevname $num)
+
+		do_facet mds${num} \
+			"$TUNEFS --fsname=$newname --rename=$FSNAME -v $facet"||
+			error "(8) Fail to rename MDT $num"
+		if [ "$(facet_fstype $facet)" = "zfs" ]; then
+			reimport_zpool mds${num} $newname-mdt${num}
+		fi
+	done
+
+	for num in $(seq $OSTCOUNT); do
+		local facet=$(ostdevname $num)
+
+		do_facet ost${num} \
+			"$TUNEFS --fsname=$newname --rename=$FSNAME -v $facet"||
+			error "(9) Fail to rename OST $num"
+		if [ "$(facet_fstype $facet)" = "zfs" ]; then
+			reimport_zpool ost${num} $newname-ost${num}
+		fi
+	done
+}
+
+test_103_set_pool() {
+	local pname=$1
+	local ost_x=$2
+
+	do_facet mgs $LCTL pool_add $FSNAME.$pname ${FSNAME}-$ost_x ||
+		error "Fail to add $ost_x to $FSNAME.$pname"
+	wait_update $HOSTNAME \
+		"lctl get_param -n lov.$FSNAME-clilov-*.pools.$pname |
+		 grep $ost_x" "$FSNAME-${ost_x}_UUID" ||
+		error "$ost_x is NOT in pool $FSNAME.$pname"
+}
+
+test_103_check_pool() {
+	local save_fsname=$1
+	local errno=$2
+
+	stat $DIR/$tdir/test-framework.sh ||
+		error "($errno) Fail to stat"
+	do_facet mgs $LCTL pool_list $FSNAME.pool1 ||
+		error "($errno) Fail to list $FSNAME.pool1"
+	do_facet mgs $LCTL pool_list $FSNAME.$save_fsname ||
+		error "($errno) Fail to list $FSNAME.$save_fsname"
+	do_facet mgs $LCTL pool_list $FSNAME.$save_fsname |
+		grep ${FSNAME}-OST0000 ||
+		error "($errno) List $FSNAME.$save_fsname is invalid"
+
+	local pname=$($LFS getstripe --pool $DIR/$tdir/d0)
+	[ "$pname" = "$save_fsname" ] ||
+		error "($errno) Unexpected pool name $pname"
+}
+
+test_103() {
+	check_mount_and_prep
+	rm -rf $DIR/$tdir
+	mkdir $DIR/$tdir || error "(1) Fail to mkdir $DIR/$tdir"
+	cp $LUSTRE/tests/test-framework.sh $DIR/$tdir ||
+		error "(2) Fail to copy test-framework.sh"
+
+	do_facet mgs $LCTL pool_new $FSNAME.pool1 ||
+		error "(3) Fail to create $FSNAME.pool1"
+	# name the pool name as the fsname
+	do_facet mgs $LCTL pool_new $FSNAME.$FSNAME ||
+		error "(4) Fail to create $FSNAME.$FSNAME"
+
+	test_103_set_pool $FSNAME OST0000
+
+	$SETSTRIPE -p $FSNAME $DIR/$tdir/d0 ||
+		error "(6) Fail to setstripe on $DIR/$tdir/d0"
+
+	KEEP_ZPOOL=true
+	stopall
+
+	test_renamefs mylustre
+
+	local save_fsname=$FSNAME
+	FSNAME="mylustre"
+	setupall
+
+	test_103_check_pool $save_fsname 7
+
+	if [ $OSTCOUNT -ge 2 ]; then
+		test_103_set_pool $save_fsname OST0001
+	fi
+
+	$SETSTRIPE -p $save_fsname $DIR/$tdir/f0 ||
+		error "(16) Fail to setstripe on $DIR/$tdir/f0"
+
+	stopall
+
+	test_renamefs tfs
+
+	FSNAME="tfs"
+	setupall
+
+	test_103_check_pool $save_fsname 17
+
+	stopall
+
+	test_renamefs $save_fsname
+
+	FSNAME=$save_fsname
+	setupall
+	KEEP_ZPOOL=false
+}
+run_test 103 "rename filesystem name"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

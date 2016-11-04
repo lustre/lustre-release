@@ -680,6 +680,70 @@ int zfs_label_lustre(struct mount_opts *mop)
 	return ret;
 }
 
+int zfs_rename_fsname(struct mkfs_opts *mop, const char *oldname)
+{
+	struct mount_opts opts;
+	char mntpt[] = "/tmp/mntXXXXXX";
+	char *cmd_buf;
+	int ret;
+
+	/* Change the filesystem label. */
+	opts.mo_ldd = mop->mo_ldd;
+	opts.mo_source = mop->mo_device;
+	ret = zfs_label_lustre(&opts);
+	if (ret) {
+		if (errno != 0)
+			ret = errno;
+		fprintf(stderr, "Can't change filesystem label: %s\n",
+			strerror(ret));
+		return ret;
+	}
+
+	/* Mount this device temporarily in order to write these files */
+	if (mkdtemp(mntpt) == NULL) {
+		if (errno != 0)
+			ret = errno;
+		fprintf(stderr, "Can't create temp mount point %s: %s\n",
+			mntpt, strerror(ret));
+		return ret;
+	}
+
+	cmd_buf = malloc(PATH_MAX);
+	if (!cmd_buf) {
+		ret = ENOMEM;
+		goto out_rmdir;
+	}
+
+	memset(cmd_buf, 0, PATH_MAX);
+	snprintf(cmd_buf, PATH_MAX - 1, "zfs set mountpoint=%s %s && "
+		 "zfs set canmount=on %s && zfs mount %s",
+		 mntpt, mop->mo_device, mop->mo_device, mop->mo_device);
+	ret = run_command(cmd_buf, PATH_MAX);
+	if (ret) {
+		if (errno != 0)
+			ret = errno;
+		fprintf(stderr, "Unable to mount %s (%s)\n",
+			mop->mo_device, strerror(ret));
+		if (ret == ENODEV)
+			fprintf(stderr, "Is the %s module available?\n",
+				MT_STR(&mop->mo_ldd));
+		goto out_free;
+	}
+
+	ret = lustre_rename_fsname(mop, mntpt, oldname);
+	memset(cmd_buf, 0, PATH_MAX);
+	snprintf(cmd_buf, PATH_MAX - 1, "zfs umount %s && "
+		 "zfs set canmount=off %s && zfs set mountpoint=none %s",
+		 mop->mo_device, mop->mo_device, mop->mo_device);
+	run_command(cmd_buf, PATH_MAX);
+
+out_free:
+	free(cmd_buf);
+out_rmdir:
+	rmdir(mntpt);
+	return ret;
+}
+
 int zfs_init(void)
 {
 	int ret = 0;

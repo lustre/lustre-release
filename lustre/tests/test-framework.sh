@@ -139,6 +139,7 @@ init_test_env() {
 	export FAIL_ON_SKIP_ENV=${FAIL_ON_SKIP_ENV:-false}
 	export RPC_MODE=${RPC_MODE:-false}
 	export DO_CLEANUP=${DO_CLEANUP:-true}
+	export KEEP_ZPOOL=${KEEP_ZPOOL:-false}
 
     export MKE2FS=$MKE2FS
     if [ -z "$MKE2FS" ]; then
@@ -1110,6 +1111,20 @@ import_zpool() {
 }
 
 #
+# Reimport ZFS storage pool with new name
+#
+reimport_zpool() {
+	local facet=$1
+	local newpool=$2
+	local opts="-o cachefile=none"
+	local poolname=$(zpool_name $facet)
+
+	opts+=" -d $(dirname $(facet_vdevice $facet))"
+	do_facet $facet "$ZPOOL export $poolname;
+			 $ZPOOL import $opts $poolname $newpool"
+}
+
+#
 # Set the "cachefile=none" property on ZFS storage pool so that the pool
 # is not automatically imported on system startup.
 #
@@ -1398,7 +1413,7 @@ stop() {
 
 	if [[ $(facet_fstype $facet) == zfs ]]; then
 		# export ZFS storage pool
-		export_zpool $facet
+		[ "$KEEP_ZPOOL" = "true" ] || export_zpool $facet
 	fi
 }
 

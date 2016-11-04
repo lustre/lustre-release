@@ -425,6 +425,28 @@ out:
 	RETURN(dto);
 }
 
+struct dt_object *local_file_find(const struct lu_env *env,
+				  struct local_oid_storage *los,
+				  struct dt_object *parent,
+				  const char *name)
+{
+	struct dt_thread_info	*dti = dt_info(env);
+	struct dt_object	*dto;
+	int			 rc;
+
+	LASSERT(parent);
+
+	rc = dt_lookup_dir(env, parent, name, &dti->dti_fid);
+	if (!rc)
+		dto = ls_locate(env, dt2ls_dev(los->los_dev),
+				&dti->dti_fid, NULL);
+	else
+		dto = ERR_PTR(rc);
+
+	return dto;
+}
+EXPORT_SYMBOL(local_file_find);
+
 /*
  * Look up and create (if it does not exist) a local named file or directory in
  * parent directory.
@@ -438,30 +460,21 @@ struct dt_object *local_file_find_or_create(const struct lu_env *env,
 	struct dt_object	*dto;
 	int			 rc;
 
-	LASSERT(parent);
+	dto = local_file_find(env, los, parent, name);
+	if (!IS_ERR(dto) || PTR_ERR(dto) != -ENOENT)
+		return dto;
 
-	rc = dt_lookup_dir(env, parent, name, &dti->dti_fid);
-	if (rc == 0)
-		/* name is found, get the object */
-		dto = ls_locate(env, dt2ls_dev(los->los_dev),
-				&dti->dti_fid, NULL);
-	else if (rc != -ENOENT)
-		dto = ERR_PTR(rc);
-	else {
-		rc = local_object_fid_generate(env, los, &dti->dti_fid);
-		if (rc < 0) {
-			dto = ERR_PTR(rc);
-		} else {
-			/* create the object */
-			dti->dti_attr.la_valid	= LA_MODE;
-			dti->dti_attr.la_mode	= mode;
-			dti->dti_dof.dof_type	= dt_mode_to_dft(mode & S_IFMT);
-			dto = __local_file_create(env, &dti->dti_fid, los,
-						  dt2ls_dev(los->los_dev),
-						  parent, name, &dti->dti_attr,
-						  &dti->dti_dof);
-		}
-	}
+	rc = local_object_fid_generate(env, los, &dti->dti_fid);
+	if (rc)
+		return ERR_PTR(rc);
+
+	/* create the object */
+	dti->dti_attr.la_valid = LA_MODE;
+	dti->dti_attr.la_mode = mode;
+	dti->dti_dof.dof_type = dt_mode_to_dft(mode & S_IFMT);
+	dto = __local_file_create(env, &dti->dti_fid, los,
+				  dt2ls_dev(los->los_dev), parent, name,
+				  &dti->dti_attr, &dti->dti_dof);
 	return dto;
 }
 EXPORT_SYMBOL(local_file_find_or_create);

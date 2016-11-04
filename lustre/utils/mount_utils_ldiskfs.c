@@ -1314,6 +1314,69 @@ int ldiskfs_label_lustre(struct mount_opts *mop)
 	return rc;
 }
 
+int ldiskfs_rename_fsname(struct mkfs_opts *mop, const char *oldname)
+{
+	struct mount_opts opts;
+	struct lustre_disk_data *ldd = &mop->mo_ldd;
+	char mntpt[] = "/tmp/mntXXXXXX";
+	char *dev;
+	int ret;
+
+	/* Change the filesystem label. */
+	opts.mo_ldd = *ldd;
+	opts.mo_source = mop->mo_device;
+	ret = ldiskfs_label_lustre(&opts);
+	if (ret) {
+		if (errno != 0)
+			ret = errno;
+		fprintf(stderr, "Can't change filesystem label: %s\n",
+			strerror(ret));
+		return ret;
+	}
+
+	/* Mount this device temporarily in order to write these files */
+	if (mkdtemp(mntpt) == NULL) {
+		if (errno != 0)
+			ret = errno;
+		else
+			ret = EINVAL;
+		fprintf(stderr, "Can't create temp mount point %s: %s\n",
+			mntpt, strerror(ret));
+		return ret;
+	}
+
+#ifdef HAVE_SELINUX
+	/*
+	 * Append file context to mount options if SE Linux is enabled
+	 */
+	if (is_selinux_enabled() > 0)
+		append_context_for_mount(mntpt, mop);
+#endif
+
+	if (mop->mo_flags & MO_IS_LOOP)
+		dev = mop->mo_loopdev;
+	else
+		dev = mop->mo_device;
+	ret = mount(dev, mntpt, MT_STR(ldd), 0, ldd->ldd_mount_opts);
+	if (ret) {
+		if (errno != 0)
+			ret = errno;
+		fprintf(stderr, "Unable to mount %s: %s\n",
+			dev, strerror(ret));
+		if (ret == ENODEV)
+			fprintf(stderr, "Is the %s module available?\n",
+				MT_STR(ldd));
+		goto out_rmdir;
+	}
+
+	ret = lustre_rename_fsname(mop, mntpt, oldname);
+	umount(mntpt);
+
+out_rmdir:
+	rmdir(mntpt);
+	return ret;
+}
+
 /* Enable quota accounting */
 int ldiskfs_enable_quota(struct mkfs_opts *mop)
 {

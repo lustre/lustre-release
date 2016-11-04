@@ -72,6 +72,7 @@ extern int failover;
 #define MO_DRYRUN		0x08
 #define MO_QUOTA		0x10
 #define MO_NOHOSTID_CHECK	0x20
+#define MO_RENAME		0x40
 
 #define MAX_LOOP_DEVICES	16
 #define INDEX_UNASSIGNED	0xFFFF
@@ -141,6 +142,8 @@ int update_utab_entry(struct mount_opts *mop);
 int check_mountfsoptions(char *mountopts, char *wanted_mountopts);
 void trim_mountfsoptions(char *s);
 __u64 get_device_size(char* device);
+int lustre_rename_fsname(struct mkfs_opts *mop, const char *mntpt,
+			 const char *oldname);
 
 /* loopback helper functions */
 int file_create(char *path, __u64 size);
@@ -158,6 +161,7 @@ int osd_prepare_lustre(struct mkfs_opts *mop,
 int osd_fix_mountopts(struct mkfs_opts *mop, char *mountopts, size_t len);
 int osd_tune_lustre(char *dev, struct mount_opts *mop);
 int osd_label_lustre(struct mount_opts *mop);
+int osd_rename_fsname(struct mkfs_opts *mop, const char *oldname);
 int osd_enable_quota(struct mkfs_opts *mop);
 int osd_init(void);
 void osd_fini(void);
@@ -176,6 +180,7 @@ struct module_backfs_ops {
 	int	(*tune_lustre)(char *dev, struct mount_opts *mop);
 	int	(*label_lustre)(struct mount_opts *mop);
 	int	(*enable_quota)(struct mkfs_opts *mop);
+	int	(*rename_fsname)(struct mkfs_opts *mop, const char *oldname);
 	void   *dl_handle;
 };
 

@@ -119,6 +119,8 @@
 
 #define LDD_F_MASK          0xFFFF
 
+#define XATTR_TARGET_RENAME "trusted.rename_tgt"
+
 enum ldd_mount_type {
 	LDD_MT_EXT3 = 0,
 	LDD_MT_LDISKFS,
@@ -184,12 +186,13 @@ struct lustre_disk_data {
 };
 
 
-#define IS_MDT(data)    ((data)->lsi_flags & LDD_F_SV_TYPE_MDT)
-#define IS_OST(data)    ((data)->lsi_flags & LDD_F_SV_TYPE_OST)
-#define IS_MGS(data)    ((data)->lsi_flags & LDD_F_SV_TYPE_MGS)
-#define IS_SERVER(data) ((data)->lsi_flags & (LDD_F_SV_TYPE_MGS | \
-			 LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST))
-#define MT_STR(data)    mt_str((data)->ldd_mount_type)
+#define IS_MDT(data)		((data)->lsi_flags & LDD_F_SV_TYPE_MDT)
+#define IS_OST(data)		((data)->lsi_flags & LDD_F_SV_TYPE_OST)
+#define IS_MGS(data)		((data)->lsi_flags & LDD_F_SV_TYPE_MGS)
+#define IS_SEPARATED_MGS(data)	((data)->ldd_flags == LDD_F_SV_TYPE_MGS)
+#define IS_SERVER(data)		((data)->lsi_flags & (LDD_F_SV_TYPE_MGS | \
+				 LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST))
+#define MT_STR(data)		mt_str((data)->ldd_mount_type)
 
 /* Make the mdt/ost server obd name based on the filesystem name */
 static inline bool server_make_name(__u32 flags, __u16 index, char *fs,
