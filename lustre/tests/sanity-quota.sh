@@ -2332,6 +2332,49 @@ test_37() {
 }
 run_test 37 "Quota accounted properly for file created by 'lfs setstripe'"
 
+# LU-8801
+test_38() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.60) ] &&
+		skip "Old server doesn't have LU-8801 fix." && return
+
+	[ "$UID" != 0 ] && skip_env "must run as root" && return
+
+	setup_quota_test || error "setup quota failed with $?"
+	trap cleanup_quota_test EXIT
+
+	# make sure the system is clean
+	local USED=$(getquota -u $TSTID global curspace)
+	[ $USED -ne 0 ] &&
+		error "Used space ($USED) for user $TSTID isn't 0."
+	USED=$(getquota -u $TSTID2 global curspace)
+	[ $USED -ne 0 ] &&
+		error "Used space ($USED) for user $TSTID2 isn't 0."
+
+	local TESTFILE="$DIR/$tdir/$tfile"
+	local file_cnt=10000
+
+	# Generate id entries in accounting file
+	echo "Create $file_cnt files..."
+	for i in `seq $file_cnt`; do
+		touch $TESTFILE-$i
+		chown $((file_cnt - i)):$((file_cnt - i)) $TESTFILE-$i
+	done
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+
+	local procf="osd-$(facet_fstype $SINGLEMDS).$FSNAME-MDT0000"
+	procf=${procf}.quota_slave.acct_user
+	local accnt_cnt
+
+	acct_cnt=$(do_facet mds1 $LCTL get_param $procf | grep "id:" | wc -l)
+	echo "Found $acct_cnt id entries"
+
+	[ $file_cnt -eq $acct_cnt ] || error "skipped id entries"
+
+	cleanup_quota_test
+}
+run_test 38 "Quota accounting iterator doesn't skip id entries"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"

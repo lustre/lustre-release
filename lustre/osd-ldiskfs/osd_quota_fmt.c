@@ -286,12 +286,10 @@ int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,
 						depth + 1, 0, it);
 		else
 			ret = walk_block_dqentry(env, obj, type, blk, 0, it);
-	}
 
-	if (ret == 0) { /* Entry found */
-		it->oiq_blk[depth + 1] = blk;
-		it->oiq_index[depth] = index;
 	}
+	it->oiq_blk[depth + 1] = blk;
+	it->oiq_index[depth] = index;
 
 out_buf:
 	freedqbuf(buf);
