@@ -1368,6 +1368,131 @@ $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp stop loginnode"
       </listitem>
     </itemizedlist>
   </section>
+  <section condition="l29">
+      <title>
+        <indexterm>
+          <primary>tuning</primary>
+          <secondary>with lfs ladvise</secondary>
+        </indexterm>
+        Server-Side Advice and Hinting
+      </title>
+      <section><title>Overview</title>
+      <para>Use the <literal>lfs ladvise</literal> command give file access
+      advices or hints to servers.</para>
+      <screen>lfs ladvise [--advice|-a ADVICE ] [--background|-b]
+[--start|-s START[kMGT]]
+{[--end|-e END[kMGT]] | [--length|-l LENGTH[kMGT]]}
+<emphasis>file</emphasis> ...
+      </screen>
+      <para>
+        <informaltable frame="all">
+          <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Option</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para><literal>-a</literal>, <literal>--advice=</literal>
+                <literal>ADVICE</literal></para>
+              </entry>
+              <entry>
+                <para>Give advice or hint of type <literal>ADVICE</literal>.
+                Advice types are:</para>
+                <para><literal>willread</literal> to prefetch data into server
+                cache</para>
+                <para><literal>dontneed</literal> to cleanup data cache on
+                server</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>-b</literal>, <literal>--background</literal>
+                </para>
+              </entry>
+              <entry>
+                <para>Enable the advices to be sent and handled asynchronously.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para><literal>-s</literal>, <literal>--start=</literal>
+                        <literal>START_OFFSET</literal></para>
+              </entry>
+              <entry>
+                <para>File range starts from <literal>START_OFFSET</literal>
+                </para>
+                </entry>
+            </row>
+            <row>
+                <entry>
+                    <para><literal>-e</literal>, <literal>--end=</literal>
+                        <literal>END_OFFSET</literal></para>
+                </entry>
+                <entry>
+                    <para>File range ends at (not including)
+                    <literal>END_OFFSET</literal>.  This option may not be
+                    specified at the same time as the <literal>-l</literal>
+                    option.</para>
+                </entry>
+            </row>
+            <row>
+                <entry>
+                    <para><literal>-l</literal>, <literal>--length=</literal>
+                        <literal>LENGTH</literal></para>
+                </entry>
+                <entry>
+                  <para>File range has length of <literal>LENGTH</literal>.
+                  This option may not be specified at the same time as the
+                  <literal>-e</literal> option.</para>
+                </entry>
+            </row>
+          </tbody>
+          </tgroup>
+        </informaltable>
+      </para>
+      <para>Typically, <literal>lfs ladvise</literal> forwards the advice to
+      Lustre servers without guaranteeing when and what servers will react to
+      the advice. Actions may or may not triggered when the advices are
+      recieved, depending on the type of the advice, as well as the real-time
+      decision of the affected server-side components.</para>
+      <para>A typical usage of ladvise is to enable applications and users with
+      external knowledge to intervene in server-side cache management. For
+      example, if a bunch of different clients are doing small random reads of a
+      file, prefetching pages into OSS cache with big linear reads before the
+      random IO is a net benefit. Fetching that data into each client cache with
+      fadvise() may not be, due to much more data being sent to the client.
+      </para>
+      <para>The main difference between the Linux <literal>fadvise()</literal>
+      system call and <literal>lfs ladvise</literal> is that
+      <literal>fadvise()</literal> is only a client side mechanism that does
+      not pass the advice to the filesystem, while <literal>ladvise</literal>
+      can send advices or hints to the Lustre server side.</para>
+      </section>
+      <section><title>Examples</title>
+        <para>The following example gives the OST(s) holding the first 1GB of
+        <literal>/mnt/lustre/file1</literal>a hint that the first 1GB of the
+        file will be read soon.</para>
+        <screen>client1$ lfs ladvise -a willread -s 0 -e 1048576000 /mnt/lustre/file1
+        </screen>
+        <para>The following example gives the OST(s) holding the first 1GB of
+        <literal>/mnt/lustre/file1</literal> a hint that the first 1GB of file
+        will not be read in the near future, thus the OST(s) could clear the
+        cache of the file in the memory.</para>
+        <screen>client1$ lfs ladvise -a dontneed -s 0 -e 1048576000 /mnt/lustre/file1
+        </screen>
+      </section>
+  </section>
   <section xml:id="dbdoclet.50438272_80545">
     <title>
     <indexterm>

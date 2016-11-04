@@ -829,6 +829,200 @@ int llapi_path2fid(const char *path, unsigned long long *seq, unsigned long *oid
       <para>non-zero value On failure</para>
     </section>
   </section>
+  <section condition="l29">
+      <title>
+          <literal>llapi_ladvise</literal>
+      </title>
+      <para>Use <literal>llapi_ladvise</literal> to give IO advice/hints on a
+      Lustre file to the server.</para>
+      <section remap="h5">
+          <title>Synopsis</title>
+          <screen>
+#include &lt;lustre/lustreapi.h&gt;
+int llapi_ladvise(int fd, unsigned long long flags,
+                  int num_advise, struct llapi_lu_ladvise *ladvise);
+                                
+struct llapi_lu_ladvise {
+  __u16 lla_advice;       /* advice type */
+  __u16 lla_value1;       /* values for different advice types */
+  __u32 lla_value2;
+  __u64 lla_start;        /* first byte of extent for advice */
+  __u64 lla_end;          /* last byte of extent for advice */
+  __u32 lla_value3;
+  __u32 lla_value4;
+};
+          </screen>
+      </section>
+      <section remap="h5">
+          <title>Description</title>
+          <para>The <literal>llapi_ladvise</literal> function passes an array of
+          <emphasis>num_advise</emphasis> I/O hints (up to a maximum of
+          <emphasis>LAH_COUNT_MAX</emphasis> items) in ladvise for the file
+          descriptor <emphasis>fd</emphasis> from an application to one or more
+          Lustre servers.  Optionally, <emphasis>flags</emphasis> can modify how
+          the advice will be processed via bitwise-or'd values:</para>
+          <itemizedlist><listitem>
+          <para><literal>LF_ASYNC</literal>:  Clients return to userspace
+          immediately after submitting ladvise RPCs, leaving server threads to
+          handle the advices asynchronously.</para>
+          </listitem></itemizedlist>
+          <para>Each of the <emphasis>ladvise</emphasis> elements is an
+          <emphasis>llapi_lu_ladvise</emphasis> structure, which contains the
+          following fields:
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="50*"/>
+              <colspec colname="c2" colwidth="50*"/>
+              <thead>
+                <row>
+                  <entry>
+                    <para><emphasis role="bold">Field</emphasis></para>
+                  </entry>
+                  <entry>
+                    <para><emphasis role="bold">Description</emphasis></para>
+                  </entry>
+                </row>
+              </thead>
+              <tbody>
+              <row>
+              <entry>
+                <para> <literal>lla_ladvice</literal></para>
+              </entry>
+              <entry>
+                <para>Specifies the advice for the given file range, currently
+                one of:</para>
+                <para><literal>LU_LADVISE_WILLREAD</literal>:  Prefetch data
+                into server cache using optimum I/O size for the server.</para>
+                <para><literal>LU_LADVISE_DONTNEED</literal>:  Clean cached data
+                for the specified file range(s) on the server.</para>
+              </entry>
+              </row>
+              <row>
+                <entry>
+                  <para> <literal>lla_start</literal></para>
+                </entry>
+                <entry>
+                  <para>The offset in bytes for the start of this advice.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para> <literal>lla_end</literal></para>
+                </entry>
+                <entry>
+                  <para>The offset in bytes (non-inclusive) for the end of this
+                  advice.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para> <literal>lla_value1</literal></para>
+                  <para> <literal>lla_value2</literal></para>
+                  <para> <literal>lla_value3</literal></para>
+                  <para> <literal>lla_value4</literal></para>
+                </entry>
+                <entry>
+                    <para>Additional arguments for future advice types and
+                    should be set to zero if not explicitly required for a given
+                    advice type.</para>
+                </entry>
+              </row>
+              </tbody>
+              </tgroup>
+          </informaltable>
+          </para>
+          <para><literal>llapi_ladvise()</literal> forwards the advice to Lustre
+          servers without guaranteeing how and when servers will react to the
+          advice. Actions may or may not be triggered when the advices are
+          received, depending on the type of the advice as well as the real-time
+          decision of the affected server-side components.
+          </para>
+          <para> A typical usage of <literal>llapi_ladvise()</literal> is to
+          enable applications and users (via <literal>lfs ladvise</literal>)
+          with external knowledge about application I/O patterns to intervene in
+          server-side I/O handling. For example, if a group of different clients
+          are doing small random reads of a file, prefetching pages into OSS
+          cache with big linear reads before the random IO is an overall net
+          benefit.  Fetching that data into each client cache with
+          <emphasis>fadvise()</emphasis> may not be beneficial, due to much more
+          data being sent to the clients.
+          </para>
+          <para>While conceptually similar to the
+          <emphasis>posix_fadvise</emphasis> and Linux
+          <emphasis>fadvise</emphasis> system calls, the main difference of
+          <literal>llapi_ladvise()</literal> is that
+          <emphasis>fadvise() / posix_fadvise()</emphasis> are client side
+          mechanisms that do not pass advice to the filesystem, while
+          <literal>llapi_ladvise()</literal> sends advice or hints to one or
+          more Lustre servers on which the file is stored.  In some cases it may
+          be desirable to use both interfaces.
+          </para>
+      </section>
+      <section remap="h5">
+          <title>Return Values</title>
+          <para><literal>llapi_ladvise</literal> returns:</para>
+          <para><literal>0</literal> On success</para>
+          <para><literal>-1</literal> if an error occurred (in which case, errno
+          is set appropriately).</para>
+      </section>
+      <section remap="h5">
+          <title>Errors</title>
+        <para>
+          <informaltable frame="all">
+            <tgroup cols="2">
+              <colspec colname="c1" colwidth="50*"/>
+              <colspec colname="c2" colwidth="50*"/>
+              <thead>
+                <row>
+                  <entry>
+                    <para><emphasis role="bold">Error</emphasis></para>
+                  </entry>
+                  <entry>
+                    <para><emphasis role="bold">Description</emphasis></para>
+                  </entry>
+                </row>
+              </thead>
+              <tbody>
+                <row>
+                  <entry>
+                    <para> <literal>ENOMEM</literal></para>
+                  </entry>
+                  <entry>
+                    <para>Insufficient memory to complete operation.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para> <literal>EINVAL</literal></para>
+                  </entry>
+                  <entry>
+                    <para>One or more invalid arguments are given.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para> <literal>EFAULT</literal></para>
+                  </entry>
+                  <entry>
+                    <para>Memory region pointed by
+                    <literal>ladvise</literal> is not properly mapped.
+                    </para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para> <literal>ENOTSUPP</literal></para>
+                  </entry>
+                  <entry>
+                    <para>Advice type is not supported.</para>
+                  </entry>
+                </row>
+              </tbody>
+            </tgroup>
+          </informaltable>
+          </para>
+      </section>
+  </section>
   <section xml:id="dbdoclet.50438215_marker-1297700">
     <title>Example Using the <literal>llapi</literal> Library</title>
     <para>Use <literal>llapi_file_create</literal> to set Lustre software properties for a new file.
