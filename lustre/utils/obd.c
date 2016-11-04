@@ -75,6 +75,7 @@
 #include <lnet/lnetctl.h>
 #include <lustre/lustreapi.h>
 #include <lustre_param.h>
+#include <lustre/lustre_barrier_user.h>
 
 #define MAX_STRING_SIZE 128
 
@@ -4062,6 +4063,227 @@ out:
         }
 
         return rc;
+}
+
+static const char *barrier_status2name(enum barrier_status status)
+{
+	switch (status) {
+	case BS_INIT:
+		return "init";
+	case BS_FREEZING_P1:
+		return "freezing_p1";
+	case BS_FREEZING_P2:
+		return "freezing_p2";
+	case BS_FROZEN:
+		return "frozen";
+	case BS_THAWING:
+		return "thawing";
+	case BS_THAWED:
+		return "thawed";
+	case BS_FAILED:
+		return "failed";
+	case BS_EXPIRED:
+		return "expired";
+	case BS_RESCAN:
+		return "rescan";
+	default:
+		return "unknown";
+	}
+}
+
+int jt_barrier_freeze(int argc, char **argv)
+{
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	struct barrier_ctl bc;
+	int rc;
+
+	if (argc < 2 || argc > 3)
+		return CMD_HELP;
+
+	memset(&data, 0, sizeof(data));
+	rc = data.ioc_dev = get_mgs_device();
+	if (rc < 0)
+		return rc;
+
+	memset(&bc, 0, sizeof(bc));
+	bc.bc_version = BARRIER_VERSION_V1;
+	bc.bc_cmd = BC_FREEZE;
+	if (argc == 3)
+		bc.bc_timeout = atoi(argv[2]);
+	if (bc.bc_timeout == 0)
+		bc.bc_timeout = BARRIER_TIMEOUT_DEFAULT;
+
+	if (strlen(argv[1]) > 8) {
+		fprintf(stderr, "%s: fsname name %s is too long. "
+			"It should not exceed 8.\n", argv[0], argv[1]);
+		return -EINVAL;
+	}
+
+	strncpy(bc.bc_name, argv[1], sizeof(bc.bc_name));
+	data.ioc_inlbuf1 = (char *)&bc;
+	data.ioc_inllen1 = sizeof(bc);
+	memset(buf, 0, sizeof(rawbuf));
+	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "Fail to pack ioctl data: rc = %d.\n", rc);
+		return rc;
+	}
+
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_BARRIER, buf);
+	if (rc < 0)
+		fprintf(stderr, "Fail to freeze barrier for %s: %s\n",
+			argv[1], strerror(errno));
+
+	return rc;
+}
+
+int jt_barrier_thaw(int argc, char **argv)
+{
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	struct barrier_ctl bc;
+	int rc;
+
+	if (argc != 2)
+		return CMD_HELP;
+
+	memset(&data, 0, sizeof(data));
+	rc = data.ioc_dev = get_mgs_device();
+	if (rc < 0)
+		return rc;
+
+	memset(&bc, 0, sizeof(bc));
+	bc.bc_version = BARRIER_VERSION_V1;
+	bc.bc_cmd = BC_THAW;
+
+	if (strlen(argv[1]) > 8) {
+		fprintf(stderr, "fsname name %s is too long. "
+			"It should not exceed 8.\n", argv[1]);
+		return -EINVAL;
+	}
+
+	strncpy(bc.bc_name, argv[1], sizeof(bc.bc_name));
+	data.ioc_inlbuf1 = (char *)&bc;
+	data.ioc_inllen1 = sizeof(bc);
+	memset(buf, 0, sizeof(rawbuf));
+	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "Fail to pack ioctl data: rc = %d.\n", rc);
+		return rc;
+	}
+
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_BARRIER, buf);
+	if (rc < 0)
+		fprintf(stderr, "Fail to thaw barrier for %s: %s\n",
+			argv[1], strerror(errno));
+
+	return rc;
+}
+
+int jt_barrier_stat(int argc, char **argv)
+{
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	struct barrier_ctl bc;
+	int rc;
+
+	if (argc != 2)
+		return CMD_HELP;
+
+	memset(&data, 0, sizeof(data));
+	rc = data.ioc_dev = get_mgs_device();
+	if (rc < 0)
+		return rc;
+
+	memset(&bc, 0, sizeof(bc));
+	bc.bc_version = BARRIER_VERSION_V1;
+	bc.bc_cmd = BC_STAT;
+
+	if (strlen(argv[1]) > 8) {
+		fprintf(stderr, "fsname name %s is too long. "
+			"It should not exceed 8.\n", argv[1]);
+		return -EINVAL;
+	}
+
+	strncpy(bc.bc_name, argv[1], sizeof(bc.bc_name));
+	data.ioc_inlbuf1 = (char *)&bc;
+	data.ioc_inllen1 = sizeof(bc);
+	memset(buf, 0, sizeof(rawbuf));
+	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "Fail to pack ioctl data: rc = %d.\n", rc);
+		return rc;
+	}
+
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_BARRIER, buf);
+	if (rc < 0) {
+		fprintf(stderr, "Fail to query barrier for %s: %s\n",
+			argv[1], strerror(errno));
+	} else {
+		obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+		printf("The barrier for %s is in '%s'\n",
+		       argv[1], barrier_status2name(bc.bc_status));
+		if (bc.bc_status == BS_FREEZING_P1 ||
+		    bc.bc_status == BS_FREEZING_P2 ||
+		    bc.bc_status == BS_FROZEN)
+			printf("The barrier will be expired after %d "
+			       "seconds\n", bc.bc_timeout);
+	}
+
+	return rc;
+}
+
+int jt_barrier_rescan(int argc, char **argv)
+{
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	struct barrier_ctl bc;
+	int rc;
+
+	if (argc < 2 || argc > 3)
+		return CMD_HELP;
+
+	memset(&data, 0, sizeof(data));
+	rc = data.ioc_dev = get_mgs_device();
+	if (rc < 0)
+		return rc;
+
+	memset(&bc, 0, sizeof(bc));
+	bc.bc_version = BARRIER_VERSION_V1;
+	bc.bc_cmd = BC_RESCAN;
+	if (argc == 3)
+		bc.bc_timeout = atoi(argv[2]);
+	if (bc.bc_timeout == 0)
+		bc.bc_timeout = BARRIER_TIMEOUT_DEFAULT;
+
+	if (strlen(argv[1]) > 8) {
+		fprintf(stderr, "fsname name %s is too long. "
+			"It should not exceed 8.\n", argv[1]);
+		return -EINVAL;
+	}
+
+	strncpy(bc.bc_name, argv[1], sizeof(bc.bc_name));
+	data.ioc_inlbuf1 = (char *)&bc;
+	data.ioc_inllen1 = sizeof(bc);
+	memset(buf, 0, sizeof(rawbuf));
+	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "Fail to pack ioctl data: rc = %d.\n", rc);
+		return rc;
+	}
+
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_BARRIER, buf);
+	if (rc < 0) {
+		fprintf(stderr, "Fail to rescan barrier bitmap for %s: %s\n",
+			argv[1], strerror(errno));
+	} else {
+		obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+		printf("%u of %u MDT(s) in the filesystem %s are inactive\n",
+		       bc.bc_absence, bc.bc_total, argv[1]);
+	}
+
+	return rc;
 }
 
 int jt_get_obj_version(int argc, char **argv)

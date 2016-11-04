@@ -245,6 +245,21 @@ command_t cmdlist[] = {
 	 "list pools and pools members\n"
 	 "usage: pool_list  <fsname>[.<poolname>] | <pathname>"},
 
+	/* Barrier commands */
+	{"===  Barrier ==", NULL, 0, "barrier management"},
+	{"barrier_freeze", jt_barrier_freeze, 0,
+	 "freeze write barrier on MDTs\n"
+	 "usage: barrier_freeze <fsname> [timeout (in seconds)]"},
+	{"barrier_thaw", jt_barrier_thaw, 0,
+	 "thaw write barrier on MDTs\n"
+	 "usage: barrier_thaw <fsname>"},
+	{"barrier_stat", jt_barrier_stat, 0,
+	 "query write barrier status on MDTs\n"
+	 "usage: barrier_stat <fsname>"},
+	{"barrier_rescan", jt_barrier_rescan, 0,
+	 "rescan the system to filter out inactive MDT(s) for barrier\n"
+	 "usage: barrier_rescan <fsname> [timeout (in seconds)]"},
+
 	/* Nodemap commands */
 	{"=== Nodemap ===", NULL, 0, "nodemap management"},
 	{"nodemap_activate", jt_nodemap_activate, 0,

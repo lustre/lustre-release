@@ -483,4 +483,17 @@ static inline void hlist_add_after(struct hlist_node *n,
 	     &pos->member != (head);                                         \
 	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
 
+/**
+ * Iterate backwards over a list of given type safely against removal of entry
+ * \param pos        the type * to use as a loop counter.
+ * \param n          another type * to use as temporary storage
+ * \param head       the head for your list.
+ * \param member     the name of the list_struct within the struct.
+ */
+#define list_for_each_entry_safe_reverse(pos, n, head, member)		\
+	for (pos = list_entry((head)->prev, typeof(*pos), member),	\
+		n = list_entry(pos->member.prev, typeof(*pos), member);	\
+	     &pos->member != (head);					\
+	     pos = n, n = list_entry(n->member.prev, typeof(*n), member))
+
 #endif /* __LIBCFS_UTIL_LIST_H__ */

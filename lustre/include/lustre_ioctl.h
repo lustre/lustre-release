@@ -425,6 +425,8 @@ obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 /*	lustre/lustre_user.h	240-249 */
 /*	LIBCFS_IOC_DEBUG_MASK	250 */
 
+#define OBD_IOC_BARRIER		_IOWR('f', 261, OBD_IOC_DATA_TYPE)
+
 #define IOC_OSC_SET_ACTIVE	_IOWR('h', 21, void *)
 
 #endif /* LUSTRE_IOCTL_H_ */

@@ -132,6 +132,8 @@ struct fs_db {
 	unsigned long	  fsdb_flags;
 	__u32		  fsdb_barrier_status;
 	__u32		  fsdb_barrier_timeout;
+	__u32		  fsdb_barrier_expected;
+	int		  fsdb_barrier_result;
 	time_t		  fsdb_barrier_latest_create_time;
 
         /* in-memory copy of the srpc rules, guarded by fsdb_lock */
@@ -258,6 +260,11 @@ int mgs_client_free(struct obd_export *exp);
 int mgs_fs_setup(const struct lu_env *env, struct mgs_device *m);
 int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *m);
 
+/* mgs_barrier.c */
+int mgs_iocontrol_barrier(const struct lu_env *env,
+			  struct mgs_device *mgs,
+			  struct obd_ioctl_data *data);
+
 #ifdef CONFIG_PROC_FS
 int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name);
 void lproc_mgs_cleanup(struct mgs_device *mgs);
@@ -298,6 +305,7 @@ struct mgs_thread_info {
 	char			mgi_fsname[MTI_NAME_MAXLEN];
 	struct cfg_marker	mgi_marker;
 	struct temp_comp	mgi_comp;
+	union ldlm_gl_desc	mgi_gl_desc;
 };
 
 extern struct lu_context_key mgs_thread_key;

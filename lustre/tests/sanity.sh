@@ -15931,6 +15931,203 @@ test_409()
 }
 run_test 409 "Large amount of cross-MDTs hard links on the same file"
 
+prep_801() {
+	start_full_debug_logging
+	# cleanup unused barrier locks before test
+	do_facet mgs $LCTL barrier_rescan $FSNAME ||
+		error "Fail to prep barrier test env"
+}
+
+post_801() {
+	stop_full_debug_logging
+}
+
+test_801a() {
+	prep_801
+
+	#define OBD_FAIL_BARRIER_DELAY		0x2202
+	do_facet mgs $LCTL set_param fail_val=3 fail_loc=0x2202
+	do_facet mgs $LCTL barrier_freeze $FSNAME 10 &
+
+	sleep 1
+	local b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			       awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'freezing_p1'" ] ||
+		error "(1) unexpected barrier status $b_status"
+
+	do_facet mgs $LCTL set_param fail_val=0 fail_loc=0
+	wait
+	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			 awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'frozen'" ] ||
+		error "(2) unexpected barrier status $b_status"
+
+	local expired=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			awk '/will be expired/ { print $7 }')
+	echo "sleep $((expired + 3)) seconds, then the barrier will be expired"
+	sleep $((expired + 3))
+
+	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			 awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'expired'" ] ||
+		error "(3) unexpected barrier status $b_status"
+
+	do_facet mgs $LCTL barrier_freeze $FSNAME 10 ||
+		error "(4) fail to freeze barrier"
+
+	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			 awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'frozen'" ] ||
+		error "(5) unexpected barrier status $b_status"
+
+	#define OBD_FAIL_BARRIER_DELAY		0x2202
+	do_facet mgs $LCTL set_param fail_val=3 fail_loc=0x2202
+	do_facet mgs $LCTL barrier_thaw $FSNAME &
+
+	sleep 1
+	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			 awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'thawing'" ] ||
+		error "(6) unexpected barrier status $b_status"
+
+	do_facet mgs $LCTL set_param fail_val=0 fail_loc=0
+	wait
+	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			 awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'thawed'" ] ||
+		error "(7) unexpected barrier status $b_status"
+
+	#define OBD_FAIL_BARRIER_FAILURE	0x2203
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x2203
+	do_facet mgs $LCTL barrier_freeze $FSNAME
+
+	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			       awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'failed'" ] ||
+		error "(8) unexpected barrier status $b_status"
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	do_facet mgs $LCTL barrier_thaw $FSNAME
+
+	post_801
+}
+run_test 801a "write barrier user interfaces and stat machine"
+
+test_801b() {
+	prep_801
+
+	mkdir $DIR/$tdir || error "(1) fail to mkdir"
+	createmany -d $DIR/$tdir/d 6 || "(2) fail to mkdir"
+	touch $DIR/$tdir/d2/f10 || error "(3) fail to touch"
+	touch $DIR/$tdir/d3/f11 || error "(4) fail to touch"
+	touch $DIR/$tdir/d4/f12 || error "(5) fail to touch"
+
+	cancel_lru_locks mdc
+
+	# 180 seconds should be long enough
+	do_facet mgs $LCTL barrier_freeze $FSNAME 180
+
+	local b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			       awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'frozen'" ] ||
+		error "(6) unexpected barrier status $b_status"
+
+	mkdir $DIR/$tdir/d0/d10 &
+	mkdir_pid=$!
+
+	touch $DIR/$tdir/d1/f13 &
+	touch_pid=$!
+
+	ln $DIR/$tdir/d2/f10 $DIR/$tdir/d2/f14 &
+	ln_pid=$!
+
+	mv $DIR/$tdir/d3/f11 $DIR/$tdir/d3/f15 &
+	mv_pid=$!
+
+	rm -f $DIR/$tdir/d4/f12 &
+	rm_pid=$!
+
+	stat $DIR/$tdir/d5 || error "(7) stat should succeed"
+
+	# To guarantee taht the 'stat' is not blocked
+	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			 awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'frozen'" ] ||
+		error "(8) unexpected barrier status $b_status"
+
+	# let above commands to run at background
+	sleep 5
+
+	ps -p $mkdir_pid || error "(9) mkdir should be blocked"
+	ps -p $touch_pid || error "(10) touch should be blocked"
+	ps -p $ln_pid || error "(11) link should be blocked"
+	ps -p $mv_pid || error "(12) rename should be blocked"
+	ps -p $rm_pid || error "(13) unlink should be blocked"
+
+	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			 awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'frozen'" ] ||
+		error "(14) unexpected barrier status $b_status"
+
+	do_facet mgs $LCTL barrier_thaw $FSNAME
+	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			 awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'thawed'" ] ||
+		error "(15) unexpected barrier status $b_status"
+
+	wait $mkdir_pid || error "(16) mkdir should succeed"
+	wait $touch_pid || error "(17) touch should succeed"
+	wait $ln_pid || error "(18) link should succeed"
+	wait $mv_pid || error "(19) rename should succeed"
+	wait $rm_pid || error "(20) unlink should succeed"
+
+	post_801
+}
+run_test 801b "modification will be blocked by write barrier"
+
+test_801c() {
+	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
+
+	prep_801
+
+	stop mds2 || error "(1) Fail to stop mds2"
+
+	do_facet mgs $LCTL barrier_freeze $FSNAME 30
+
+	local b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			       awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'expired'" -o "$b_status" = "'failed'" ] || {
+		do_facet mgs $LCTL barrier_thaw $FSNAME
+		error "(2) unexpected barrier status $b_status"
+	}
+
+	do_facet mgs $LCTL barrier_rescan $FSNAME ||
+		error "(3) Fail to rescan barrier bitmap"
+
+	do_facet mgs $LCTL barrier_freeze $FSNAME 10
+
+	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			 awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'frozen'" ] ||
+		error "(4) unexpected barrier status $b_status"
+
+	do_facet mgs $LCTL barrier_thaw $FSNAME
+	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			 awk '/The barrier for/ { print $7 }')
+	[ "$b_status" = "'thawed'" ] ||
+		error "(5) unexpected barrier status $b_status"
+
+	local devname=$(mdsdevname 2)
+
+	start mds2 $devname $MDS_MOUNT_OPTS || error "(6) Fail to start mds2"
+
+	do_facet mgs $LCTL barrier_rescan $FSNAME ||
+		error "(7) Fail to rescan barrier bitmap"
+
+	post_801
+}
+run_test 801c "rescan barrier bitmap"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

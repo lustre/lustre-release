@@ -323,6 +323,9 @@ int barrier_handler(struct dt_device *key, struct ptlrpc_request *req)
 		break;
 	case BS_FREEZING_P1:
 	case BS_FREEZING_P2:
+		if (OBD_FAIL_CHECK(OBD_FAIL_BARRIER_FAILURE))
+			GOTO(fini, rc = -EINVAL);
+
 		barrier->bi_deadline = cfs_time_current_sec() +
 					desc->lgbd_timeout;
 		rc = barrier_freeze(&env, barrier,

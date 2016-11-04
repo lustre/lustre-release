@@ -161,6 +161,10 @@ int jt_lcfg_setparam(int argc, char **argv);
 int jt_lcfg_listparam(int argc, char **argv);
 
 int jt_pool_cmd(int argc, char **argv);
+int jt_barrier_freeze(int argc, char **argv);
+int jt_barrier_thaw(int argc, char **argv);
+int jt_barrier_stat(int argc, char **argv);
+int jt_barrier_rescan(int argc, char **argv);
 int jt_nodemap_activate(int argc, char **argv);
 int jt_nodemap_add(int argc, char **argv);
 int jt_nodemap_del(int argc, char **argv);
