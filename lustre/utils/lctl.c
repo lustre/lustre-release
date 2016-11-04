@@ -317,6 +317,12 @@ command_t cmdlist[] = {
 	 "usage: setup <args...>"},
 	{"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
 	 "usage: cleanup [force | failover]"},
+	{"fork_lcfg", jt_lcfg_fork, 0,
+	 "copy configuration files for named filesystem with given name\n"
+	 "usage: fork_lcfg <fsname> <newname>"},
+	{"erase_lcfg", jt_lcfg_erase, 0,
+	 "permanently erase configuration for the named filesystem\n"
+	 "usage: erase_lcfg <fsname>"},
 
 	/* Test only commands */
 	{"==== testing (DANGEROUS) ====", NULL, 0, "testing (DANGEROUS)"},

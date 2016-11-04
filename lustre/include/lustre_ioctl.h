@@ -413,6 +413,8 @@ obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 /*	ECHO_IOC_ENQUEUE	_IOWR('f', 202, OBD_IOC_DATA_TYPE) */
 /*	ECHO_IOC_CANCEL		_IOWR('f', 203, OBD_IOC_DATA_TYPE) */
 
+#define OBD_IOC_LCFG_FORK	_IOWR('f', 208, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_LCFG_ERASE	_IOWR('f', 209, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_GET_OBJ_VERSION	_IOR ('f', 210, OBD_IOC_DATA_TYPE)
 
 /*	lustre/lustre_user.h	212-217 */

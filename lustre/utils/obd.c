@@ -2421,6 +2421,68 @@ int jt_obd_mdc_lookup(int argc, char **argv)
         return rc;
 }
 
+int jt_lcfg_fork(int argc, char **argv)
+{
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	int rc;
+
+	if (argc != 3)
+		return CMD_HELP;
+
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = get_mgs_device();
+	data.ioc_inllen1 = strlen(argv[1]) + 1;
+	data.ioc_inlbuf1 = argv[1];
+	data.ioc_inllen2 = strlen(argv[2]) + 1;
+	data.ioc_inlbuf2 = argv[2];
+
+	memset(buf, 0, sizeof(rawbuf));
+	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LCFG_FORK, buf);
+	if (rc < 0)
+		fprintf(stderr, "error: %s: OBD_IOC_LCFG_FORK failed: %s\n",
+			jt_cmdname(argv[0]), strerror(errno));
+
+	return rc;
+}
+
+int jt_lcfg_erase(int argc, char **argv)
+{
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	int rc;
+
+	if (argc != 2)
+		return CMD_HELP;
+
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = get_mgs_device();
+	data.ioc_inllen1 = strlen(argv[1]) + 1;
+	data.ioc_inlbuf1 = argv[1];
+
+	memset(buf, 0, sizeof(rawbuf));
+	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+
+	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_LCFG_ERASE, buf);
+	if (rc < 0)
+		fprintf(stderr, "error: %s: OBD_IOC_LCFG_ERASE failed: %s\n",
+			jt_cmdname(argv[0]), strerror(errno));
+
+	return rc;
+}
+
 int jt_llog_catlist(int argc, char **argv)
 {
         struct obd_ioctl_data data;

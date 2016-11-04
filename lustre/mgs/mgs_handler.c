@@ -467,7 +467,7 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 				      "request.  All servers must be restarted "
 				      "in order to regenerate the logs: rc = %d"
 				      "\n", obd->obd_name, mti->mti_fsname, rc);
-			if (rc)
+			if (rc && rc != -ENOENT)
 				GOTO(out_norevoke, rc);
 
 			rc = mgs_find_or_make_fsdb(tsi->tsi_env, mgs,
@@ -1073,6 +1073,15 @@ out_free:
 
 	case OBD_IOC_NODEMAP:
 		rc = mgs_iocontrol_nodemap(&env, mgs, data);
+		break;
+
+	case OBD_IOC_LCFG_FORK:
+		rc = mgs_lcfg_fork(&env, mgs, data->ioc_inlbuf1,
+				   data->ioc_inlbuf2);
+		break;
+
+	case OBD_IOC_LCFG_ERASE:
+		rc = mgs_lcfg_erase(&env, mgs, data->ioc_inlbuf1);
 		break;
 
 	case OBD_IOC_CATLOGLIST:
