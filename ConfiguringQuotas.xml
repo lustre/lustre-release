@@ -365,7 +365,7 @@ group uptodate: glb[1],slv[1],reint[0]
     one can exceed the soft limit within the grace period if under the hard
     limit.</para>
     <para>Due to the distributed nature of a Lustre file system and the need to
-    mainain performance under load, those quota parameters may not be 100%
+    maintain performance under load, those quota parameters may not be 100%
     accurate. The quota settings can be manipulated via the
     <literal>lfs</literal> command, executed on a client, and includes several
     options to work with quotas:</para>
@@ -453,7 +453,7 @@ uses an IAM files while the ZFS OSD creates dedicated ZAPs.</para>
     modified. This glimpse callback includes information about the identifier
     subject to the change. If the global index on the QMT is modified while a
     slave is disconnected, the index version is used to determine whether the
-    slave copy of the global index isn't uptodate any more. If so, the slave
+    slave copy of the global index isn't up to date any more. If so, the slave
     fetches the whole index again and updates the local copy. The slave copy of
     the global index is also exported via /proc and can be accessed via the
     following command:
@@ -478,7 +478,7 @@ lctl get_param osd-*.*.quota_slave.limit*
     may experience unnecessary failures. The file system block quota is divided
     up among the OSTs within the file system. Each OST requests an allocation
     which is increased up to the quota limit. The quota allocation is then
-    <emphasis role="italic">quantized</emphasis>to reduce the number of
+    <emphasis role="italic">quantized</emphasis> to reduce the number of
     quota-related request traffic.</para>
     <para>The Lustre quota system distributes quotas from the Quota Master
     Target (aka QMT). Only one QMT instance is supported for now and only runs
@@ -493,7 +493,7 @@ lctl get_param osd-*.*.quota_slave.limit*
     responsible for releasing quota space above the new qunit value. The qunit
     size isn't shrunk indefinitely and there is a minimal value of 1MB for
     blocks and 1,024 for inodes. This means that the quota space rebalancing
-    process will stop when this mininum value is reached. As a result, quota
+    process will stop when this minimum value is reached. As a result, quota
     exceeded can be returned while many slaves still have 1MB or 1,024 inodes
     of spare quota space.</para>
     <para>If we look at the
@@ -556,7 +556,7 @@ $ cp: writing `/mnt/testfs/foo`: Disk quota exceeded.
       <secondary>Interoperability</secondary>
     </indexterm>Quotas and Version Interoperability</title>
     <para>The new quota protocol introduced in Lustre software release 2.4.0
-    <emphasis role="bold">is not compatible</emphasis>with previous
+    <emphasis role="bold">is not compatible</emphasis> with previous
     versions. As a consequence,
     <emphasis role="bold">all Lustre servers must be upgraded to release 2.4.0
     for quota to be functional</emphasis>. Quota limits set on the Lustre file
@@ -566,7 +566,7 @@ $ cp: writing `/mnt/testfs/foo`: Disk quota exceeded.
     <literal>tunefs.lustre --quota</literal> against all targets. It is worth
     noting that running
     <literal>tunefs.lustre --quota</literal> is
-    <emphasis role="bold">mandatory</emphasis>for all targets formatted with a
+    <emphasis role="bold">mandatory</emphasis> for all targets formatted with a
     Lustre software release older than release 2.4.0, otherwise quota
     enforcement as well as accounting won't be functional.</para>
     <para>Besides, the quota protocol in release 2.4 takes for granted that the

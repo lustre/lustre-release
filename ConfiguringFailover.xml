@@ -123,7 +123,7 @@
             information</para>
         </listitem>
       </itemizedlist></para>
-    <para>When the target is formatted using the <literal>mkfs.lustre</literal>command, the failover
+    <para>When the target is formatted using the <literal>mkfs.lustre</literal> command, the failover
       service node(s) for the target are designated using the <literal>--servicenode</literal>
       option. In the example below, an OST with index <literal>0</literal> in the  file system
         <literal>testfs</literal> is formatted with two service nodes designated to serve as a

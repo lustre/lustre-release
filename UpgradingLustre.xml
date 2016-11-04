@@ -5,7 +5,7 @@ xml:id="upgradinglustre">
   <title xml:id="upgradinglustre.title">Upgrading a Lustre File System</title>
   <para>This chapter describes interoperability between Lustre software
   releases. It also provides procedures for upgrading from Lustre software
-  release 1.8 to Lustre softeware release 2.x , from a Lustre software release
+  release 1.8 to Lustre software release 2.x , from a Lustre software release
   2.x to a more recent Lustre software release 2.x (major release upgrade), and
   from a a Lustre software release 2.x.y to a more recent Lustre software
   release 2.x.y (minor release upgrade). It includes the following
@@ -186,7 +186,7 @@ xml:id="upgradinglustre">
           not installed, configured, or administered properly. If a full backup
           of the file system is not practical, a device-level backup of the MDT
           file system is recommended. See 
-          <xref linkend="backupandrestore" />for a procedure.</para>
+          <xref linkend="backupandrestore" /> for a procedure.</para>
         </caution>
       </listitem>
       <listitem>
@@ -391,7 +391,7 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
     </orderedlist>
     <note>
       <para>The mounting order described in the steps above must be followed
-      for the intial mount and registration of a Lustre file system after an
+      for the initial mount and registration of a Lustre file system after an
       upgrade. For a normal start of a Lustre file system, the mounting order
       is MGT, OSTs, MDT(s), clients.</para>
     </note>
@@ -424,7 +424,7 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
           not installed, configured, or administered properly. If a full backup
           of the file system is not practical, a device-level backup of the MDT
           file system is recommended. See 
-          <xref linkend="backupandrestore" />for a procedure.</para>
+          <xref linkend="backupandrestore" /> for a procedure.</para>
         </caution>
       </listitem>
       <listitem>

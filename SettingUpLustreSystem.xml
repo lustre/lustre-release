@@ -215,7 +215,7 @@
       file size.</para>
       <note condition='l24'><para>Starting in release 2.4, using the DNE
       remote directory feature it is possible to increase the metadata
-      capacity of a single filesystem by configuting additional MDTs into
+      capacity of a single filesystem by configuring additional MDTs into
       the filesystem, see <xref linkend="dbdoclet.addingamdt"/> for details.
       </para></note>
       <para>For example, if the average file size is 5 MB and you have
@@ -344,7 +344,7 @@
       <literal>mkfs.lustre</literal>.  Decreasing the inode ratio tunable
       <literal>bytes-per-inode</literal> will create more inodes for a given
       MDT size, but will leave less space for extra per-file metadata.  The
-      inode ratio must always be strictly larget than the MDT inode size,
+      inode ratio must always be strictly larger than the MDT inode size,
       which is 512 bytes by default.  It is recommended to use an inode ratio
       at least 512 bytes larger than the inode size to ensure the MDT does
       not run out of space.</para>
@@ -373,7 +373,7 @@
       for potential variations in future usage. This helps reduce the format
       and file system check time and makes more space available for data.</para>
       <para>The table below shows the default
-      <emphasis role="italic">bytes-per-inode</emphasis>ratio ("inode ratio")
+      <emphasis role="italic">bytes-per-inode</emphasis> ratio ("inode ratio")
       used for OSTs of various sizes when they are formatted.</para>
       <para>
         <table frame="all">

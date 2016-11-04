@@ -2172,7 +2172,7 @@ nid                    refs   peer    max   tx    min
             <literal>qos_prio_free</literal> puts more weighting on the amount of free space
           available on each OST and less on how stripes are distributed across OSTs. The default
           value is 91 percent. When the free space priority is set to 100, weighting is based
-          entirely on free space and location is no longer used by the striping algorthm.</para>
+          entirely on free space and location is no longer used by the striping algorithm.</para>
       </listitem>
       <listitem>
         <para condition="l29"><literal>reserved_mb_low</literal> - The low watermark used to stop

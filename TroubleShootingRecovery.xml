@@ -1241,7 +1241,7 @@ lctl get_param -n obdfilter.
                       <listitem>
                         <para>
                         <literal>Repaired Unmatched Pairs</literal> total number
-                        of unmatched MDT and OST-object paris have been
+                        of unmatched MDT and OST-object pairs have been
                         repaired in the scanning-phase1</para>
                       </listitem>
                       <listitem>

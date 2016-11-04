@@ -373,7 +373,7 @@ lnetctl export > FILE.yaml</screen>
       at the first error.</para>
       <para>Below is the YAML syntax describing the various
       configuration elements which can be operated on via DLC. Not all
-      YAML elements are requied for all operations (add/delete/show).
+      YAML elements are required for all operations (add/delete/show).
       The system ignores elements which are not pertinent to the requested
       operation.</para>
       <section>
@@ -675,7 +675,7 @@ tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
     <para>The LNET module routes parameter is used to identify routers in
     a Lustre configuration. These parameters are set in
     <literal>modprobe.conf</literal> on each Lustre node. </para>
-    <para>Routes are typicall set to connect to segregated subnetworks
+    <para>Routes are typically set to connect to segregated subnetworks
     or to cross connect two different types of networks such as tcp and
     o2ib</para>
     <para>The LNET routes parameter specifies a colon-separated list of

@@ -105,14 +105,14 @@ xml:id="understandingfailover">
       <itemizedlist>
         <listitem>
           <para>
-          <emphasis role="bold">Active/passive</emphasis>pair - In this
+          <emphasis role="bold">Active/passive</emphasis> pair - In this
           configuration, the active node provides resources and serves data,
           while the passive node is usually standing by idle. If the active
           node fails, the passive node takes over and becomes active.</para>
         </listitem>
         <listitem>
           <para>
-          <emphasis role="bold">Active/active</emphasis>pair - In this
+          <emphasis role="bold">Active/active</emphasis> pair - In this
           configuration, both nodes are active, each providing a subset of
           resources. In case of a failure, the second node takes over resources
           from the failed node.</para>

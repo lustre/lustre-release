@@ -77,7 +77,7 @@
       is described using a dash to separate the range, for example,
       <literal>192.168.20.[0-255]@tcp</literal>.</para>
 
-      <para>The range must be contiguous. The full LNET definiton for a
+      <para>The range must be contiguous. The full LNET definition for a
       nidlist is as follows:</para>
 
       <screen>

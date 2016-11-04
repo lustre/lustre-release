@@ -463,7 +463,7 @@ information (lowest bits first):</para>
 		</title>
 
 	<para>Robinhood is a Policy engine and reporting tool for large file
-systems. It maintains a replicate of file system medatada in a database that
+systems. It maintains a replicate of file system metadata in a database that
 can be queried at will. Robinhood makes it possible to schedule mass action on
 file system entries by defining attribute-based policies, provides fast <literal>find</literal>
 and <literal>du</literal> enhanced clones, and provides administrators with an overall

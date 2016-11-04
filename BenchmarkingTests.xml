@@ -52,7 +52,7 @@
         </listitem>
         <listitem>
           <para><literal>ost-survey</literal> - Performs I/O against OSTs individually to allow
-            performance comparisons to detect if an OST is performing suboptimally due to hardware
+            performance comparisons to detect if an OST is performing sub-optimally due to hardware
             issues.</para>
         </listitem>
       </itemizedlist>

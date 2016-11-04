@@ -107,7 +107,7 @@ other::---</screen>
       users.</para>
     <para>The root squash feature works by re-mapping the user ID (UID) and group ID (GID) of the
       root user to a UID and GID specified by the system administrator, via the Lustre configuration
-      management server (MGS). The root squash feature also enables the Lustre fle system
+      management server (MGS). The root squash feature also enables the Lustre file system
       administrator to specify a set of client for which UID/GID re-mapping does not apply.</para>
     <section remap="h3">
         <title><indexterm><primary>root squash</primary><secondary>configuring</secondary></indexterm>Configuring Root Squash</title>

@@ -172,7 +172,7 @@ xml:id="backupandrestore">
           <listitem>
             <para>Verify that the Lustre file system (source) and the replica
             file system (target) are identical 
-            <emphasis>before</emphasis>registering the changelog user. If the
+            <emphasis>before</emphasis> registering the changelog user. If the
             file systems are discrepant, use a utility, e.g. regular 
             <literal>rsync</literal>(not 
             <literal>lustre_rsync</literal>), to make them identical.</para>

@@ -84,7 +84,7 @@
       verify that data has been transmitted while the LND layer is connection oriented and typically
       does verify data transmission.</para>
     <para>LNETs are uniquely identified by a label comprised of a string corresponding to an LND and
-      a number, such as tcp0, o2ib0, or o2ib1, that uniquely indentifies each LNET. Each node on an
+      a number, such as tcp0, o2ib0, or o2ib1, that uniquely identifies each LNET. Each node on an
       LNET has at least one network identifier (NID). A NID is a combination of the address of the
       network interface and the LNET label in the
           form:<literal><replaceable>address</replaceable>@<replaceable>LNET_label</replaceable></literal>.</para>

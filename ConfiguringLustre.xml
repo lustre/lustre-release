@@ -67,7 +67,7 @@ xml:id="configuringlustre">
       </listitem>
       <listitem>
         <para>
-        <emphasis>Set</emphasis>lnet 
+        <emphasis>Set</emphasis> lnet 
         <emphasis>module parameters to specify how Lustre Networking (LNET) is
         to be configured to work with a Lustre file system and test the LNET
         configuration.</emphasis>LNET will, by default, use the first TCP/IP

@@ -746,7 +746,7 @@ mds1# lctl get_param mdt.testfs-MDT0000.recovery_status
     <para>Where multiple NIDs are specified separated by commas (for example, 
     <literal>10.67.73.200@tcp,192.168.10.1@tcp</literal>), the two NIDs refer
     to the same host, and the Lustre software chooses the 
-    <emphasis>best</emphasis>one for communication. When a pair of NIDs is
+    <emphasis>best</emphasis> one for communication. When a pair of NIDs is
     separated by a colon (for example, 
     <literal>10.67.73.200@tcp:10.67.73.201@tcp</literal>), the two NIDs refer
     to two different hosts and are treated as a failover pair (the Lustre

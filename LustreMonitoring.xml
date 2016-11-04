@@ -390,7 +390,7 @@ jobid_var=disable
       <screen># lctl conf_param testfs.sys.jobid_var=SLURM_JOB_ID</screen>
       <para>The <literal>lctl conf_param</literal> command to enable or disable
       jobstats should be run on the MGS as root. The change is persistent, and
-      will be propogated to the MDS, OSS, and client nodes automatically when
+      will be propagated to the MDS, OSS, and client nodes automatically when
       it is set on the MGS and for each new client mount.</para>
       <para>To temporarily enable jobstats on a client, or to use a different
       jobid_var on a subset of nodes, such as nodes in a remote cluster that
@@ -636,7 +636,7 @@ Other Monitoring Options</title>
         </listitem>
         <listitem>
           <para><literal>xltop</literal> - A continuous Lustre monitor with batch scheduler
-            integation. <link xmlns:xlink="http://www.w3.org/1999/xlink"
+            integration. <link xmlns:xlink="http://www.w3.org/1999/xlink"
               xlink:href="https://github.com/jhammond/xltop"/></para>
         </listitem>
       </itemizedlist></para>

@@ -738,7 +738,7 @@ xml:id="understandinglustre">
       <listitem>
         <para>Verifies the linkEA entry for each and regenerates the linkEA
         if it is invalid or missing. The
-        <emphasis role="italic">linkEA</emphasis>consists of the file name and
+        <emphasis role="italic">linkEA</emphasis> consists of the file name and
         parent FID. It is stored as an extended attribute in the file
         itself. Thus, the linkEA can be used to reconstruct the full path name
 	of a file.</para>
@@ -753,7 +753,7 @@ xml:id="understandinglustre">
     the OST(s) that contain the file data. If the MDT file points to one
     object, all the file data is stored in that object. If the MDT file points
     to more than one object, the file data is
-    <emphasis role="italic">striped</emphasis>across the objects using RAID 0,
+    <emphasis role="italic">striped</emphasis> across the objects using RAID 0,
     and each object is stored on a different OST. (For more information about
     how striping is implemented in a Lustre file system, see
     <xref linkend="dbdoclet.50438250_89922" />.</para>
@@ -795,23 +795,23 @@ xml:id="understandinglustre">
     <itemizedlist>
       <listitem>
         <para>The
-        <emphasis>network bandwidth</emphasis>equals the aggregated bandwidth
+        <emphasis>network bandwidth</emphasis> equals the aggregated bandwidth
         of the OSSs to the targets.</para>
       </listitem>
       <listitem>
         <para>The
-        <emphasis>disk bandwidth</emphasis>equals the sum of the disk
+        <emphasis>disk bandwidth</emphasis> equals the sum of the disk
         bandwidths of the storage targets (OSTs) up to the limit of the network
         bandwidth.</para>
       </listitem>
       <listitem>
         <para>The
-        <emphasis>aggregate bandwidth</emphasis>equals the minimum of the disk
+        <emphasis>aggregate bandwidth</emphasis> equals the minimum of the disk
         bandwidth and the network bandwidth.</para>
       </listitem>
       <listitem>
         <para>The
-        <emphasis>available file system space</emphasis>equals the sum of the
+        <emphasis>available file system space</emphasis> equals the sum of the
         available space of all the OSTs.</para>
       </listitem>
     </itemizedlist>

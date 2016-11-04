@@ -25,7 +25,7 @@
       RPC.</para>
     <note>
       <para>For information about universal UID/GID requirements in a Lustre file system
-        ennvironment, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+        environment, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
           linkend="section_rh2_d4w_gk"/>.</para>
     </note>
     <section remap="h3">

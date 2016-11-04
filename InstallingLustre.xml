@@ -122,9 +122,9 @@ xml:id="installinglustre">
             <emphasis role="italic">Lustre server packages</emphasis>
           </emphasis>. The required packages for Lustre servers are listed in
           the table below, where 
-          <replaceable>ver</replaceable>refers to the Linux kernel distribution
+          <replaceable>ver</replaceable> refers to the Linux kernel distribution
           (e.g., 2.6.32-358.6.2.el6) and 
-          <replaceable>arch</replaceable>refers to the processor architecture
+          <replaceable>arch</replaceable> refers to the processor architecture
           (e.g., x86_64). These packages are available in the 
           <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
           Lustre Releases</link>repository.</para>
@@ -218,7 +218,7 @@ xml:id="installinglustre">
             <emphasis role="italic">Lustre client packages</emphasis>
           </emphasis>. The required packages for Lustre clients are listed in
           the table below, where 
-          <replaceable>ver</replaceable>refers to the Linux distribution (e.g.,
+          <replaceable>ver</replaceable> refers to the Linux distribution (e.g.,
           2.6.18-348.1.1.el5). These packages are available in the 
           <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
           Lustre Releases</link>repository.</para>
@@ -267,7 +267,7 @@ xml:id="installinglustre">
             <para>The version of the kernel running on a Lustre client must be
             the same as the version of the 
             <code>lustre-client-modules-</code>
-            <replaceable>ver</replaceable>package being installed. If the
+            <replaceable>ver</replaceable> package being installed. If the
             kernel running on the client is not compatible, a kernel that is
             compatible must be installed on the client before the Lustre file
             system software is installed.</para>
@@ -545,7 +545,7 @@ rpm -qa|egrep "lustre|wc"|sort
           <para>The version of the kernel running on a Lustre client must be
           the same as the version of the 
           <literal>lustre-client-modules-</literal>
-          <replaceable>ver</replaceable>package being installed. If not, a
+          <replaceable>ver</replaceable> package being installed. If not, a
           compatible kernel must be installed on the client before the Lustre
           client packages are installed.</para>
         </note></para>
