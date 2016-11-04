@@ -1602,20 +1602,22 @@ out:
 static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
                          unsigned int cmd, int len, void *karg)
 {
-	struct mdd_device *mdd;
+	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
 	struct obd_ioctl_data *data = karg;
 	int rc;
-
 	ENTRY;
-
-	mdd = lu2mdd_dev(&m->md_lu_dev);
 
 	/* Doesn't use obd_ioctl_data */
 	switch (cmd) {
 	case OBD_IOC_CHANGELOG_CLEAR: {
 		struct changelog_setinfo *cs = karg;
+
+		if (unlikely(!barrier_entry(mdd->mdd_bottom)))
+			RETURN(-EINPROGRESS);
+
 		rc = mdd_changelog_clear(env, mdd, cs->cs_id,
 					 cs->cs_recno);
+		barrier_exit(mdd->mdd_bottom);
 		RETURN(rc);
 	}
 	case OBD_IOC_GET_MNTOPT: {
@@ -1653,10 +1655,18 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 
 	switch (cmd) {
 	case OBD_IOC_CHANGELOG_REG:
+		if (unlikely(!barrier_entry(mdd->mdd_bottom)))
+			RETURN(-EINPROGRESS);
+
 		rc = mdd_changelog_user_register(env, mdd, &data->ioc_u32_1);
+		barrier_exit(mdd->mdd_bottom);
 		break;
 	case OBD_IOC_CHANGELOG_DEREG:
+		if (unlikely(!barrier_entry(mdd->mdd_bottom)))
+			RETURN(-EINPROGRESS);
+
 		rc = mdd_changelog_user_purge(env, mdd, data->ioc_u32_1);
+		barrier_exit(mdd->mdd_bottom);
 		break;
 	default:
 		rc = -ENOTTY;

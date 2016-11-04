@@ -1756,6 +1756,7 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
 	struct thandle *handle = NULL;
 	int is_orphan = 0;
 	int rc;
+	bool blocked = false;
 	ENTRY;
 
 	if (ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_KEEP_ORPHAN) {
@@ -1777,24 +1778,43 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
 
 again:
 	if (is_orphan) {
-                handle = mdd_trans_create(env, mdo2mdd(obj));
-                if (IS_ERR(handle))
-                        RETURN(PTR_ERR(handle));
+		/* mdd_trans_create() maybe failed because of barrier_entry(),
+		 * under such case, the orphan MDT-object will be left in the
+		 * orphan list, and when the MDT remount next time, the unused
+		 * orphans will be destroyed automatically.
+		 *
+		 * One exception: the former mdd_finish_unlink may failed to
+		 * add the orphan MDT-object to the orphan list, then if the
+		 * mdd_trans_create() failed because of barrier_entry(), the
+		 * MDT-object will become real orphan that is neither in the
+		 * namespace nor in the orphan list. Such bad case should be
+		 * very rare and will be handled by e2fsck/lfsck. */
+		handle = mdd_trans_create(env, mdo2mdd(obj));
+		if (IS_ERR(handle)) {
+			rc = PTR_ERR(handle);
+			if (rc != -EINPROGRESS)
+				GOTO(stop, rc);
 
-                rc = mdd_declare_close(env, mdd_obj, ma, handle);
-                if (rc)
-                        GOTO(stop, rc);
+			handle = NULL;
+			blocked = true;
+			goto cont;
+		}
+
+		rc = mdd_declare_close(env, mdd_obj, ma, handle);
+		if (rc)
+			GOTO(stop, rc);
 
 		rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
 		if (rc)
 			GOTO(stop, rc);
 
-                rc = mdd_trans_start(env, mdo2mdd(obj), handle);
-                if (rc)
-                        GOTO(stop, rc);
-        }
+		rc = mdd_trans_start(env, mdo2mdd(obj), handle);
+		if (rc)
+			GOTO(stop, rc);
+	}
 
-        mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+cont:
+	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
 	rc = mdd_la_get(env, mdd_obj, &ma->ma_attr);
 	if (rc != 0) {
 		CERROR("Failed to get lu_attr of "DFID": %d\n",
@@ -1807,14 +1827,14 @@ again:
 		    ((mdd_obj->mod_flags & (ORPHAN_OBJ | DEAD_OBJ)) != 0 ||
 		     ma->ma_attr.la_nlink == 0);
 
-	if (is_orphan && handle == NULL) {
+	if (is_orphan && !handle && !blocked) {
 		mdd_write_unlock(env, mdd_obj);
 		goto again;
 	}
 
 	mdd_obj->mod_count--; /*release open count */
 
-	if (!is_orphan)
+	if (!is_orphan || blocked)
 		GOTO(out, rc = 0);
 
 	/* Orphan object */
@@ -1850,14 +1870,14 @@ again:
 	EXIT;
 
 out:
-        mdd_write_unlock(env, mdd_obj);
+	mdd_write_unlock(env, mdd_obj);
 
-        if (rc == 0 &&
-            (mode & (FMODE_WRITE | MDS_OPEN_APPEND | MDS_OPEN_TRUNC)) &&
-            !(ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_RECOV_OPEN)) {
-                if (handle == NULL) {
-                        handle = mdd_trans_create(env, mdo2mdd(obj));
-                        if (IS_ERR(handle))
+	if (!rc && !blocked &&
+	    (mode & (FMODE_WRITE | MDS_OPEN_APPEND | MDS_OPEN_TRUNC)) &&
+	    !(ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_RECOV_OPEN)) {
+		if (handle == NULL) {
+			handle = mdd_trans_create(env, mdo2mdd(obj));
+			if (IS_ERR(handle))
 				GOTO(stop, rc = PTR_ERR(handle));
 
 			rc = mdd_declare_changelog_store(env, mdd, NULL, NULL,

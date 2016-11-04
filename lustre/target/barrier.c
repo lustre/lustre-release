@@ -237,6 +237,51 @@ void barrier_fini(void)
 	LASSERT(list_empty(&barrier_instance_list));
 }
 
+bool barrier_entry(struct dt_device *key)
+{
+	struct barrier_instance *barrier;
+	bool entered = false;
+	ENTRY;
+
+	barrier = barrier_instance_find(key);
+	if (unlikely(!barrier))
+		/* Fail open */
+		RETURN(true);
+
+	read_lock(&barrier->bi_rwlock);
+	if (likely(barrier->bi_status != BS_FREEZING_P1 &&
+		   barrier->bi_status != BS_FREEZING_P2 &&
+		   barrier->bi_status != BS_FROZEN) ||
+	    cfs_time_beforeq(barrier->bi_deadline, cfs_time_current_sec())) {
+		percpu_counter_inc(&barrier->bi_writers);
+		entered = true;
+	}
+	read_unlock(&barrier->bi_rwlock);
+
+	barrier_instance_put(barrier);
+	return entered;
+}
+EXPORT_SYMBOL(barrier_entry);
+
+void barrier_exit(struct dt_device *key)
+{
+	struct barrier_instance *barrier;
+
+	barrier = barrier_instance_find(key);
+	if (likely(barrier)) {
+		percpu_counter_dec(&barrier->bi_writers);
+
+		/* Avoid out-of-order execution the decreasing inflight
+		 * modifications count and the check of barrier status. */
+		smp_mb();
+
+		if (unlikely(barrier->bi_status == BS_FREEZING_P1))
+			wake_up_all(&barrier->bi_waitq);
+		barrier_instance_put(barrier);
+	}
+}
+EXPORT_SYMBOL(barrier_exit);
+
 int barrier_handler(struct dt_device *key, struct ptlrpc_request *req)
 {
 	struct ldlm_gl_barrier_desc *desc;

@@ -35,6 +35,8 @@
 #include <dt_object.h>
 #include <lustre_export.h>
 
+bool barrier_entry(struct dt_device *key);
+void barrier_exit(struct dt_device *key);
 int barrier_handler(struct dt_device *key, struct ptlrpc_request *req);
 int barrier_register(struct dt_device *key, struct dt_device *next);
 void barrier_deregister(struct dt_device *key);

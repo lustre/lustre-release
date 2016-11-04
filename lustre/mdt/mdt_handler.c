@@ -61,6 +61,7 @@
 #include <lustre_swab.h>
 #include <obd.h>
 #include <obd_support.h>
+#include <lustre_barrier.h>
 
 #include <llog_swab.h>
 
@@ -2100,8 +2101,16 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	if (repoqc == NULL)
 		GOTO(out_nodemap, rc = err_serious(-EFAULT));
 
+	if (oqctl->qc_cmd == Q_SETINFO || oqctl->qc_cmd == Q_SETQUOTA)
+		barrier_exit(tsi->tsi_tgt->lut_bottom);
+
 	if (oqctl->qc_id != id)
 		swap(oqctl->qc_id, id);
+
+	if (oqctl->qc_cmd == Q_SETINFO || oqctl->qc_cmd == Q_SETQUOTA) {
+		if (unlikely(!barrier_entry(tsi->tsi_tgt->lut_bottom)))
+			RETURN(-EINPROGRESS);
+	}
 
 	switch (oqctl->qc_cmd) {
 
@@ -4926,6 +4935,7 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
 		spin_lock_init(&mo->mot_write_lock);
 		mutex_init(&mo->mot_lov_mutex);
 		init_rwsem(&mo->mot_open_sem);
+		atomic_set(&mo->mot_open_count, 0);
 		RETURN(o);
 	}
 	RETURN(NULL);
