@@ -660,6 +660,26 @@ trusted.fid= \
 0x0d822200000000004a8a73e500000000808a0100000000000000000000000000</screen>
       </listitem>
       <listitem>
+        <para>Remove old OI files.</para>
+        <screen>[oss]# rm -f oi.16*</screen>
+      </listitem>
+      <listitem>
+        <para>Remove old CATALOGS.</para>
+        <screen>[oss]# rm -f CATALOGS</screen>
+        <note>
+        <para>This is optional for the MDT side only. The CATALOGS record the
+    llog file handlers that are used for recovering cross-server updates. Before
+	OI scrub rebuilds the OI mappings for the llog files, the related recovery
+	will get a failure if it runs faster than the background OI scrub.  This will
+    result in a failure of the whole mount process. OI scrub is an online tool,
+    therefore, a mount failure means that the OI scrub will be stopped.
+    Removing the old CATALOGS will avoid this potential trouble.  The
+	side-effect of removing old CATALOGS is that the recovery for related
+	cross-server updates will be aborted. However, this can be handled by LFSCK
+	after the system mount is up.</para>
+        </note>
+      </listitem>
+      <listitem>
         <para>Change directory out of the file system.</para>
         <screen>[oss]# cd -</screen>
       </listitem>
