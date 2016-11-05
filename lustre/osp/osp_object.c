@@ -1243,6 +1243,8 @@ int osp_invalidate(const struct lu_env *env, struct dt_object *dt)
 	struct osp_object *obj = dt2osp_obj(dt);
 	ENTRY;
 
+	CDEBUG(D_HA, "Invalidate osp_object "DFID"\n",
+	       PFID(lu_object_fid(&dt->do_lu)));
 	osp_obj_invalidate_cache(obj);
 
 	spin_lock(&obj->opo_lock);

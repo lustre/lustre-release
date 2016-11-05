@@ -286,7 +286,6 @@ static int llog_osd_read_header(const struct lu_env *env,
 
 	handle->lgh_hdr->llh_flags |= (flags & LLOG_F_EXT_MASK);
 	handle->lgh_last_idx = LLOG_HDR_TAIL(handle->lgh_hdr)->lrt_index;
-	handle->lgh_write_offset = lgi->lgi_attr.la_size;
 
 	RETURN(0);
 }
@@ -390,7 +389,6 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	__u32			chunk_size;
 	size_t			 left;
 	__u32			orig_last_idx;
-	__u64			orig_write_offset;
 	ENTRY;
 
 	llh = loghandle->lgh_hdr;
@@ -556,7 +554,6 @@ static int llog_osd_write_rec(const struct lu_env *env,
 
 	LASSERT(lgi->lgi_attr.la_valid & LA_SIZE);
 	orig_last_idx = loghandle->lgh_last_idx;
-	orig_write_offset = loghandle->lgh_write_offset;
 	lgi->lgi_off = lgi->lgi_attr.la_size;
 
 	if (loghandle->lgh_max_size > 0 &&
@@ -579,9 +576,6 @@ static int llog_osd_write_rec(const struct lu_env *env,
 		rc = llog_osd_pad(env, o, &lgi->lgi_off, left, index, th);
 		if (rc)
 			RETURN(rc);
-
-		if (dt_object_remote(o))
-			loghandle->lgh_write_offset = lgi->lgi_off;
 
 		loghandle->lgh_last_idx++; /* for pad rec */
 	}
@@ -684,9 +678,6 @@ out_unlock:
 	 * records. This also allows to handle Catalog wrap around case */
 	if (llh->llh_flags & LLOG_F_IS_FIXSIZE) {
 		lgi->lgi_off = llh->llh_hdr.lrh_len + (index - 1) * reclen;
-	} else if (dt_object_remote(o)) {
-		lgi->lgi_off = max_t(__u64, loghandle->lgh_write_offset,
-				     lgi->lgi_off);
 	} else {
 		rc = dt_attr_get(env, o, &lgi->lgi_attr);
 		if (rc)
@@ -702,9 +693,6 @@ out_unlock:
 	rc = dt_record_write(env, o, &lgi->lgi_buf, &lgi->lgi_off, th);
 	if (rc < 0)
 		GOTO(out, rc);
-
-	if (dt_object_remote(o))
-		loghandle->lgh_write_offset = lgi->lgi_off;
 
 	CDEBUG(D_HA, "added record "DFID": idx: %u, %u off%llu\n",
 	       PFID(lu_object_fid(&o->do_lu)), index, rec->lrh_len,
@@ -732,7 +720,6 @@ out:
 	/* restore llog last_idx */
 	if (dt_object_remote(o)) {
 		loghandle->lgh_last_idx = orig_last_idx;
-		loghandle->lgh_write_offset = orig_write_offset;
 	} else if (--loghandle->lgh_last_idx == 0 &&
 	    (llh->llh_flags & LLOG_F_IS_CAT) && llh->llh_cat_idx != 0) {
 		/* catalog had just wrap-around case */
@@ -936,11 +923,13 @@ static int llog_osd_next_block(const struct lu_env *env,
 
 		if (last_rec->lrh_index != tail->lrt_index) {
 			CERROR("%s: invalid llog tail at log id "DOSTID"/%u "
-			       "offset %llu last_rec idx %u tail idx %u\n",
+			       "offset %llu last_rec idx %u tail idx %u"
+			       "lrt len %u read_size %d\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
 			       POSTID(&loghandle->lgh_id.lgl_oi),
 			       loghandle->lgh_id.lgl_ogen, *cur_offset,
-			       last_rec->lrh_index, tail->lrt_index);
+			       last_rec->lrh_index, tail->lrt_index,
+			       tail->lrt_len, rc);
 			GOTO(out, rc = -EINVAL);
 		}
 

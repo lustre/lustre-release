@@ -273,9 +273,6 @@ struct llog_handle {
 	int			 lgh_last_idx;
 	int			 lgh_cur_idx; /* used during llog_process */
 	__u64			 lgh_cur_offset; /* used during llog_process */
-	/* used during llog_osd_write_rec */
-	__u64			 lgh_write_offset;
-	int			 lgh_max_size;
 	struct llog_ctxt	*lgh_ctxt;
 	union {
 		struct plain_handle_data	 phd;
@@ -286,6 +283,7 @@ struct llog_handle {
 	struct llog_operations	*lgh_logops;
 	atomic_t		 lgh_refcount;
 
+	int			lgh_max_size;
 	__u32			lgh_stale:1;
 };
 

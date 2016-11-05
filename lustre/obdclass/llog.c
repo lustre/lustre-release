@@ -316,7 +316,6 @@ int llog_read_header(const struct lu_env *env, struct llog_handle *handle,
 
 		/* lrh_len should be initialized in llog_init_handle */
 		handle->lgh_last_idx = 0; /* header is record with index 0 */
-		handle->lgh_write_offset = 0;
 		llh->llh_count = 1;         /* for the header record */
 		llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
 		LASSERT(handle->lgh_ctxt->loc_chunk_size >=
