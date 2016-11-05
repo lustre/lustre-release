@@ -340,12 +340,16 @@ conf_param $FSNAME.quota.ost=$QUOTA_TYPE</screen></para>
           <para>This step is not reversible. Do not complete this step until
           you are sure you will not be downgrading the Lustre software.</para>
         </warning>
-        <para condition='l24'>This step only enables FID-in-dirent for newly 
-        created files. If you are upgrading to Lustre software release 2.4, 
-        you can use LFSCK to enable FID-in-dirent for existing files. For 
-        more information about FID-in-dirent and related functionalities in 
-        LFSCK, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="understandinglustre.storageio" />.</para>
+	<para condition='l24'>This step only enables FID-in-dirent for newly
+	created files. If you are upgrading to Lustre software release 2.4,
+	you can use namespace LFSCK to enable FID-in-dirent for the existing
+	files. For the case of upgrading from Lustre software release 1.8, it is
+    important to note that if you do NOT enable <literal>dirdata</literal> via
+    the <literal>tune2fs</literal> command above, the namespace LFSCK will NOT
+	generate FID-in-dirent for the existing files. For more information about
+	FID-in-dirent and related functionalities in LFSCK, see
+    <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+    linkend="understandinglustre.storageio" />.</para>
       </listitem>
       <listitem>
         <para>Start the Lustre file system by starting the components in the
