@@ -724,7 +724,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
         char                    *coinfo;
         int                      coinfo_size;
 	const char		*sec_part_flags = "";
-	char			 svc_flag = '\0';
+	char			 svc_flag = '-';
         ENTRY;
 
         LASSERT(imp != NULL);
