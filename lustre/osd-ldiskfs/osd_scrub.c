@@ -1414,12 +1414,11 @@ full:
 			RETURN(-EIO);
 		}
 
-		while (param.offset < LDISKFS_INODES_PER_GROUP(param.sb) &&
-		       *count < max) {
+		while (*count < max) {
 			struct osd_idmap_cache *oic = NULL;
 
 			if (param.offset +
-				ldiskfs_itable_unused_count(param.sb, desc) >
+				ldiskfs_itable_unused_count(param.sb, desc) >=
 			    LDISKFS_INODES_PER_GROUP(param.sb)) {
 				next_group = true;
 				goto next_group;
