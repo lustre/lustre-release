@@ -13,13 +13,14 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
+[ "$SLOW" = "no" ] &&
+	skip "skip scrub performance test under non-SLOW mode" && exit 0
+
 [ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
 	skip "OI scrub performance only for ldiskfs" && exit 0
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.2.90) ]] &&
 	skip "Need MDS version at least 2.2.90" && exit 0
 require_dsh_mds || exit 0
-[ "$SLOW" = "no" ] && skip "skip scrub performance test under non-SLOW mode"
-
 
 NTHREADS=${NTHREADS:-0}
 UNIT=${UNIT:-1048576}
@@ -41,10 +42,21 @@ if [ ${NTHREADS} -eq 0 ]; then
 fi
 
 stopall
+
+if ! combined_mgs_mds ; then
+	do_rpc_nodes $(facet_active_host mgs) load_modules_local
+	add mgs $(mkfs_opts mgs $(mgsdevname)) --backfstype ldiskfs \
+		--reformat $(mgsdevname) $(mgsvdevname) ${quiet:+>/dev/null} ||
+		exit 1
+
+	start mgs $(mgsdevname) $MGS_MOUNT_OPTS || error "Fail to start MGS!"
+fi
+
 do_rpc_nodes $(facet_active_host $SINGLEMDS) load_modules_local
 reformat_external_journal ${SINGLEMDS}
 add ${SINGLEMDS} $(mkfs_opts ${SINGLEMDS} ${MDT_DEVNAME}) --backfstype ldiskfs \
-	--reformat ${MDT_DEVNAME} $(mdsvdevname 1) > /dev/null || exit 2
+	--reformat ${MDT_DEVNAME} $(mdsvdevname 1) ${quiet:+>/dev/null} ||
+	exit 2
 
 scrub_attach() {
 	${ECHOCMD} "${LCTL} <<-EOF
@@ -85,7 +97,11 @@ scrub_create() {
 }
 
 scrub_cleanup() {
+	stopall
 	do_rpc_nodes $(facet_active_host $SINGLEMDS) unload_modules
+	if ! combined_mgs_mds ; then
+		do_rpc_nodes $(facet_active_host mgs) unload_modules
+	fi
 	formatall
 }
 
