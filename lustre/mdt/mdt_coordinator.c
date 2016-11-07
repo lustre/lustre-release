@@ -1141,12 +1141,13 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 	int			 cl_flags = 0, rc = 0;
 	struct md_hsm		 mh;
 	bool			 is_mh_changed;
+	bool			 need_changelog = true;
 	ENTRY;
 
 	/* default is to retry */
 	*status = ARS_WAITING;
 
-	/* find object by FID
+	/* find object by FID, mdt_hsm_get_md_hsm() returns obj or err
 	 * if error/removed continue anyway to get correct reporting done */
 	obj = mdt_hsm_get_md_hsm(mti, &car->car_hai->hai_fid, &mh);
 	/* we will update MD HSM only if needed */
@@ -1305,6 +1306,13 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 		if (*status == ARS_WAITING)
 			GOTO(out, rc);
 
+		/* restore special case, need to create ChangeLog record
+		 * before to give back layout lock to avoid concurrent
+		 * file updater to post out of order ChangeLog */
+		mo_changelog(env, CL_HSM, cl_flags, mdt->mdt_child,
+			     &car->car_hai->hai_fid);
+		need_changelog = false;
+
 		/* give back layout lock */
 		mutex_lock(&cdt->cdt_restore_lock);
 		crh = mdt_hsm_restore_hdl_find(cdt, &car->car_hai->hai_fid);
@@ -1326,8 +1334,9 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 
 out:
 	/* always add a ChangeLog record */
-	mo_changelog(env, CL_HSM, cl_flags, mdt->mdt_child,
-		     &car->car_hai->hai_fid);
+	if (need_changelog)
+		mo_changelog(env, CL_HSM, cl_flags, mdt->mdt_child,
+			     &car->car_hai->hai_fid);
 
 	if (!IS_ERR(obj))
 		mdt_object_put(mti->mti_env, obj);
