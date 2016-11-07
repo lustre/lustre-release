@@ -338,15 +338,6 @@ int jt_ptl_network(int argc, char **argv)
 		return -1;
 	}
 
-	if (LNET_NETTYP(net) == QSWLND || LNET_NETTYP(net) == GMLND ||
-	    LNET_NETTYP(net) == PTLLND || LNET_NETTYP(net) == CIBLND ||
-	    LNET_NETTYP(net) == OPENIBLND || LNET_NETTYP(net) == IIBLND ||
-	    LNET_NETTYP(net) == RALND || LNET_NETTYP(net) == VIBLND ||
-	    LNET_NETTYP(net) == MXLND) {
-		fprintf(stderr, "Net %s obsoleted\n", libcfs_lnd2str(net));
-		return -1;
-	}
-
 	g_net_set = true;
 	g_net = net;
 	return 0;

@@ -257,7 +257,7 @@ int external_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
                 head++;
 
         tail = head + strlen(head);
-        if (tail <= head) {
+	if (tail <= head) {
                 printerr(0, "no output from %s\n", gethostname_ex);
                 return -1;
         }
@@ -293,14 +293,9 @@ struct convert_struct {
 
 static struct convert_struct converter[] = {
         [0]             = { "UNUSED0",  NULL},
-        [QSWLND]        = { "QSWLND",   external_nid2hostname},
         [SOCKLND]       = { "SOCKLND",  ipv4_nid2hostname },
-        [GMLND]         = { "GMLND",    external_nid2hostname},
-        [PTLLND]        = { "PTLLND",   external_nid2hostname },
         [O2IBLND]       = { "O2IBLND",  ipv4_nid2hostname },
         [LOLND]         = { "LOLND",    lolnd_nid2hostname },
-        [RALND]         = { "RALND",    external_nid2hostname },
-        [MXLND]         = { "MXLND",    external_nid2hostname },
 	[PTL4LND]	= { "PTL4LND",  external_nid2hostname },
 };
 

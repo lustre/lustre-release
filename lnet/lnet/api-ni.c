@@ -1492,13 +1492,6 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 
 		LASSERT(libcfs_isknown_lnd(lnd_type));
 
-		if (lnd_type == CIBLND || lnd_type == OPENIBLND ||
-		    lnd_type == IIBLND || lnd_type == VIBLND) {
-			CERROR("LND %s obsoleted\n", libcfs_lnd2str(lnd_type));
-			rc = -EINVAL;
-			goto failed0;
-		}
-
 		mutex_lock(&the_lnet.ln_lnd_mutex);
 		lnd = lnet_find_lnd_by_type(lnd_type);
 
