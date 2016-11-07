@@ -1522,7 +1522,9 @@ EXPORT_SYMBOL(lustre_register_kill_super_cb);
 static struct dentry *lustre_mount(struct file_system_type *fs_type, int flags,
 				   const char *devname, void *data)
 {
-	struct lustre_mount_data2 lmd2 = { data, NULL };
+	struct lustre_mount_data2 lmd2 = {
+		.lmd2_data = data,
+	};
 
 	return mount_nodev(fs_type, flags, &lmd2, lustre_fill_super);
 }
@@ -1530,7 +1532,10 @@ static struct dentry *lustre_mount(struct file_system_type *fs_type, int flags,
 static int lustre_get_sb(struct file_system_type *fs_type, int flags,
 			 const char *devname, void *data, struct vfsmount *mnt)
 {
-	struct lustre_mount_data2 lmd2 = { data, mnt };
+	struct lustre_mount_data2 lmd2 = {
+		.lmd2_data = data,
+		.lmd2_mnt = mnt,
+	};
 
 	return get_sb_nodev(fs_type, flags, &lmd2, lustre_fill_super, mnt);
 }

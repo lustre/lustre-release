@@ -477,10 +477,10 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 }
 
 static const struct seq_operations lprocfs_jobstats_seq_sops = {
-	start: lprocfs_jobstats_seq_start,
-	stop:  lprocfs_jobstats_seq_stop,
-	next:  lprocfs_jobstats_seq_next,
-	show:  lprocfs_jobstats_seq_show,
+	.start	= lprocfs_jobstats_seq_start,
+	.stop	= lprocfs_jobstats_seq_stop,
+	.next	= lprocfs_jobstats_seq_next,
+	.show	= lprocfs_jobstats_seq_show,
 };
 
 static int lprocfs_jobstats_seq_open(struct inode *inode, struct file *file)
