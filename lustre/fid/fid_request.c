@@ -544,26 +544,30 @@ int client_fid_init(struct obd_device *obd,
 	int rc;
 	ENTRY;
 
+	down_write(&cli->cl_seq_rwsem);
 	OBD_ALLOC_PTR(cli->cl_seq);
-	if (cli->cl_seq == NULL)
-		RETURN(-ENOMEM);
+	if (!cli->cl_seq)
+		GOTO(out, rc = -ENOMEM);
 
 	OBD_ALLOC(prefix, MAX_OBD_NAME + 5);
-	if (prefix == NULL)
-		GOTO(out_free_seq, rc = -ENOMEM);
+	if (!prefix)
+		GOTO(out, rc = -ENOMEM);
 
 	snprintf(prefix, MAX_OBD_NAME + 5, "cli-%s", obd->obd_name);
 
 	/* Init client side sequence-manager */
 	rc = seq_client_init(cli->cl_seq, exp, type, prefix, NULL);
 	OBD_FREE(prefix, MAX_OBD_NAME + 5);
-	if (rc)
-		GOTO(out_free_seq, rc);
 
-	RETURN(rc);
-out_free_seq:
-	OBD_FREE_PTR(cli->cl_seq);
-	cli->cl_seq = NULL;
+	GOTO(out, rc);
+
+out:
+	if (rc && cli->cl_seq) {
+		OBD_FREE_PTR(cli->cl_seq);
+		cli->cl_seq = NULL;
+	}
+	up_write(&cli->cl_seq_rwsem);
+
 	return rc;
 }
 EXPORT_SYMBOL(client_fid_init);
@@ -573,11 +577,13 @@ int client_fid_fini(struct obd_device *obd)
 	struct client_obd *cli = &obd->u.cli;
 	ENTRY;
 
-	if (cli->cl_seq != NULL) {
+	down_write(&cli->cl_seq_rwsem);
+	if (cli->cl_seq) {
 		seq_client_fini(cli->cl_seq);
 		OBD_FREE_PTR(cli->cl_seq);
 		cli->cl_seq = NULL;
 	}
+	up_write(&cli->cl_seq_rwsem);
 
 	RETURN(0);
 }

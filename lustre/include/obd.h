@@ -323,6 +323,7 @@ struct client_obd {
 
 	/* sequence manager */
 	struct lu_client_seq    *cl_seq;
+	struct rw_semaphore	 cl_seq_rwsem;
 
 	atomic_t             cl_resends; /* resend count */
 
