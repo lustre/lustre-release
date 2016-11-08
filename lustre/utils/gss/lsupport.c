@@ -292,11 +292,11 @@ struct convert_struct {
 };
 
 static struct convert_struct converter[] = {
-        [0]             = { "UNUSED0",  NULL},
-        [SOCKLND]       = { "SOCKLND",  ipv4_nid2hostname },
-        [O2IBLND]       = { "O2IBLND",  ipv4_nid2hostname },
-        [LOLND]         = { "LOLND",    lolnd_nid2hostname },
-	[PTL4LND]	= { "PTL4LND",  external_nid2hostname },
+	[0]	  = { .name = "UNUSED0" },
+	[SOCKLND] = { .name = "SOCKLND", .nid2name = ipv4_nid2hostname },
+	[O2IBLND] = { .name = "O2IBLND", .nid2name = ipv4_nid2hostname },
+	[LOLND]	  = { .name = "LOLND",	 .nid2name = lolnd_nid2hostname },
+	[PTL4LND] = { .name = "PTL4LND", .nid2name = external_nid2hostname }
 };
 
 #define LND_MAX         (sizeof(converter) / sizeof(converter[0]))
@@ -344,7 +344,7 @@ struct user_mapping {
         struct user_map_item *items;
 };
 
-static struct user_mapping mapping = {0, NULL};
+static struct user_mapping mapping;
 /* FIXME to be finished: monitor change of mapping database */
 static int mapping_mtime = 0;
 
