@@ -748,9 +748,11 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 	sfs->os_fprecreated = fid_oid(&d->opd_pre_last_created_fid) -
 			      fid_oid(&d->opd_pre_used_fid);
 	sfs->os_fprecreated -= d->opd_pre_reserved;
+	LASSERTF(sfs->os_fprecreated <= OST_MAX_PRECREATE * 2,
+		 "last_created "DFID", next_fid "DFID", reserved %llu\n",
+		 PFID(&d->opd_pre_last_created_fid), PFID(&d->opd_pre_used_fid),
+		 d->opd_pre_reserved);
 	spin_unlock(&d->opd_pre_lock);
-
-	LASSERT(sfs->os_fprecreated <= OST_MAX_PRECREATE * 2);
 
 	CDEBUG(D_OTHER, "%s: %llu blocks, %llu free, %llu avail, "
 	       "%llu files, %llu free files\n", d->opd_obd->obd_name,
