@@ -207,14 +207,14 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
     <para condition='l23'>Since Lustre software release 2.3, LFSCK can verify
     and repair the Object Index (OI) table that is used internally to map
     Lustre File Identifiers (FIDs) to MDT internal ldiskfs inode numbers, in
-    an internal table called the OI Table. An OI Scrub traverses this the IO
-    Table and makes corrections where necessary. An OI Scrub is required after
+    an internal table called the OI Table. An OI Scrub traverses the OI table
+    and makes corrections where necessary. An OI Scrub is required after
     restoring from a file-level MDT backup (
     <xref linkend="dbdoclet.backup_device" />), or in case the OI Table is
     otherwise corrupted. Later phases of LFSCK will add further checks to the
     Lustre distributed file system state.</para>
     <para condition='l24'>In Lustre software release 2.4, LFSCK namespace
-    scanning can verify and repair the directory FID-in-Dirent and LinkEA
+    scanning can verify and repair the directory FID-in-dirent and LinkEA
     consistency.</para>
     <para condition='l26'>In Lustre software release 2.6, LFSCK layout scanning
     can verify and repair MDT-OST file layout inconsistencies. File layout
@@ -243,6 +243,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                     [-A | --all] \
                     [-c | --create_ostobj <replaceable>on | off</replaceable>] \
                     [-C | --create_mdtobj <replaceable>on | off</replaceable>] \
+                    [-d | --delay_create_ostobj <replaceable>on | off</replaceable>] \
                     [-e | --error <replaceable>{continue | abort}</replaceable>] \
                     [-h | --help] \
                     [-n | --dryrun <replaceable>on | off</replaceable>] \
@@ -328,6 +329,21 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                     <literal>on</literal>. If not specified, then the default
                     behaviour is to keep the dangling name entry there without
                     creating the lost MDT-object.</para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para>
+                      <literal>-d | --delay_create_ostobj</literal>
+                    </para>
+                  </entry>
+                  <entry>
+                    <para condition='l29'>
+                      Delay creating the lost OST-object for dangling LOV EA
+                      until the orphan OST-objects are handled.
+                      <literal>off</literal>(default) or
+                      <literal>on</literal>.
+                    </para>
                   </entry>
                 </row>
                 <row>
@@ -427,7 +443,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                     OI_scrub in that case.</para>
                     <para condition='l24'>
                     <literal>namespace</literal>: check and repair
-                    FID-in-Dirent and LinkEA consistency.</para>
+                    FID-in-dirent and LinkEA consistency.</para>
                     <para condition='l27'> Lustre-2.7 enhances
                     namespace consistency verification under DNE mode.</para>
                     <para condition='l26'>
@@ -528,6 +544,91 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
             </tgroup>
           </informaltable>
         </section>
+      </section>
+    </section>
+    <section>
+      <title>Check the LFSCK global status</title>
+      <section>
+        <title>Description</title>
+        <para>Check the LFSCK global status via a single
+        <literal>lctl lfsck_query</literal> command on the MDS.</para>
+      </section>
+      <section>
+        <title>Usage</title>
+<screen>lctl lfsck_query &lt;-M | --device <replaceable>MDT_device</replaceable>&gt; \
+                    [-h | --help] \
+                    [-t | --type <replaceable>lfsck_type[,lfsck_type...]</replaceable>] \
+                    [-w | --wait]</screen>
+      </section>
+      <section>
+        <title>Options</title>
+        <para>The various
+        <literal>lfsck_query</literal> options are listed and described below.
+        For a complete list of available options, type
+        <literal>lctl lfsck_query -h</literal>.</para>
+        <informaltable frame="all">
+          <tgroup cols="2">
+            <colspec colname="c1" colwidth="3*" />
+            <colspec colname="c2" colwidth="7*" />
+            <thead>
+              <row>
+                <entry>
+                  <para>
+                    <emphasis role="bold">Option</emphasis>
+                  </para>
+                </entry>
+                <entry>
+                  <para>
+                    <emphasis role="bold">Description</emphasis>
+                  </para>
+                </entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry>
+                  <para>
+                    <literal>-M | --device</literal>
+                  </para>
+                </entry>
+                <entry>
+                  <para>The device to query for LFSCK status.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>
+                    <literal>-h | --help</literal>
+                  </para>
+                </entry>
+                <entry>
+                  <para>Operating help information.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>
+                    <literal>-t | --type</literal>
+                  </para>
+                </entry>
+                <entry>
+                  <para>The LFSCK type(s) that should be queried,
+                  including: layout, namespace.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>
+                    <literal>-w | --wait</literal>
+                  </para>
+                </entry>
+                <entry>
+                  <para>will wait if the LFSCK is in scanning.</para>
+                </entry>
+              </row>
+            </tbody>
+            </tgroup>
+          </informaltable>
       </section>
     </section>
     <section>
@@ -806,7 +907,7 @@ root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>
                         <literal>scanned-once</literal>(the first cycle
                         scanning has been completed),
                         <literal>inconsistent</literal>(one or more
-                        inconsistent FID-in-Dirent or LinkEA entries that have
+                        inconsistent FID-in-dirent or LinkEA entries that have
                         been discovered),
                         <literal>upgrade</literal>(from Lustre software release
                         1.8 IGIF format.)</para>
