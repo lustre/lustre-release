@@ -3257,15 +3257,12 @@ again:
 	op_data->op_cli_flags = CLI_MIGRATE;
 	rc = md_rename(ll_i2sbi(parent)->ll_md_exp, op_data, name,
 		       namelen, name, namelen, &request);
-	if (rc == 0)
+	if (rc == 0) {
+		LASSERT(request != NULL);
 		ll_update_times(request, parent);
 
-	if (request != NULL) {
 		body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
-		if (body == NULL) {
-			ptlrpc_req_finished(request);
-			GOTO(out_close, rc = -EPROTO);
-		}
+		LASSERT(body != NULL);
 
 		/* If the server does release layout lock, then we cleanup
 		 * the client och here, otherwise release it in out_close: */
@@ -3278,14 +3275,17 @@ again:
 			OBD_FREE_PTR(och);
 			och = NULL;
 		}
+	}
+
+	if (request != NULL) {
 		ptlrpc_req_finished(request);
+		request = NULL;
 	}
 
 	/* Try again if the file layout has changed. */
-	if (rc == -EAGAIN && S_ISREG(child_inode->i_mode)) {
-		request = NULL;
+	if (rc == -EAGAIN && S_ISREG(child_inode->i_mode))
 		goto again;
-	}
+
 out_close:
 	if (och != NULL) /* close the file */
 		ll_lease_close(och, child_inode, NULL);
