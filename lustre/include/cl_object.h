@@ -2271,7 +2271,6 @@ void  cl_io_rw_advance   (const struct lu_env *env, struct cl_io *io,
                           size_t nob);
 int   cl_io_cancel       (const struct lu_env *env, struct cl_io *io,
                           struct cl_page_list *queue);
-int   cl_io_is_going     (const struct lu_env *env);
 
 /**
  * True, iff \a io is an O_APPEND write(2).

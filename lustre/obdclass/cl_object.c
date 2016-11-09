@@ -1022,20 +1022,8 @@ struct cl_thread_info *cl_env_info(const struct lu_env *env)
         return lu_context_key_get(&env->le_ctx, &cl_key);
 }
 
-/* defines cl0_key_{init,fini}() */
-LU_KEY_INIT_FINI(cl0, struct cl_thread_info);
-
-static void *cl_key_init(const struct lu_context *ctx,
-                         struct lu_context_key *key)
-{
-	return cl0_key_init(ctx, key);
-}
-
-static void cl_key_fini(const struct lu_context *ctx,
-                        struct lu_context_key *key, void *data)
-{
-	cl0_key_fini(ctx, key, data);
-}
+/* defines cl_key_{init,fini}() */
+LU_KEY_INIT_FINI(cl, struct cl_thread_info);
 
 static struct lu_context_key cl_key = {
         .lct_tags = LCT_CL_THREAD,

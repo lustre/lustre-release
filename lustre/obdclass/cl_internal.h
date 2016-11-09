@@ -36,62 +36,18 @@
 #ifndef _CL_INTERNAL_H
 #define _CL_INTERNAL_H
 
-#define CLT_PVEC_SIZE (14)
-
-/**
- * Possible levels of the nesting. Currently this is 2: there are "top"
- * entities (files, extent locks), and "sub" entities (stripes and stripe
- * locks). This is used only for debugging counters right now.
- */
-enum clt_nesting_level {
-        CNL_TOP,
-        CNL_SUB,
-        CNL_NR
-};
-
 /**
  * Thread local state internal for generic cl-code.
  */
 struct cl_thread_info {
-        /*
-         * Common fields.
-         */
-        struct cl_io         clt_io;
-        struct cl_2queue     clt_queue;
-
-        /*
-         * Fields used by cl_lock.c
-         */
-        struct cl_lock_descr clt_descr;
-        struct cl_page_list  clt_list;
-        /** @} debugging */
-
-        /*
-         * Fields used by cl_page.c
-         */
-        struct cl_page      *clt_pvec[CLT_PVEC_SIZE];
-
-        /*
-         * Fields used by cl_io.c
-         */
-        /**
-         * Pointer to the topmost ongoing IO in this thread.
-         */
-        struct cl_io        *clt_current_io;
-        /**
-         * Used for submitting a sync io.
-         */
-        struct cl_sync_io    clt_anchor;
-        /**
-	 * Fields used by cl_lock_discard_pages().
-         */
-        pgoff_t              clt_next_index;
-        pgoff_t              clt_fn_index; /* first non-overlapped index */
+	/**
+	 * Used for submitting a sync I/O.
+	 */
+	struct cl_sync_io clt_anchor;
 };
 
 struct cl_thread_info *cl_env_info(const struct lu_env *env);
 void cl_page_disown0(const struct lu_env *env,
 		     struct cl_io *io, struct cl_page *pg);
-
 
 #endif /* _CL_INTERNAL_H */
