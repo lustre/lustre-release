@@ -1410,15 +1410,18 @@ static ssize_t ll_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
 static ssize_t ll_file_read(struct file *file, char __user *buf, size_t count,
 			    loff_t *ppos)
 {
+	struct lu_env *env;
 	struct iovec   iov = { .iov_base = buf, .iov_len = count };
-        struct kiocb  *kiocb;
-        ssize_t        result;
-        ENTRY;
+	struct kiocb  *kiocb;
+	ssize_t        result;
+	__u16          refcheck;
+	ENTRY;
 
-	OBD_ALLOC_PTR(kiocb);
-	if (kiocb == NULL)
-		RETURN(-ENOMEM);
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
 
+	kiocb = &ll_env_info(env)->lti_kiocb;
         init_sync_kiocb(kiocb, file);
         kiocb->ki_pos = *ppos;
 #ifdef HAVE_KIOCB_KI_LEFT
@@ -1430,7 +1433,7 @@ static ssize_t ll_file_read(struct file *file, char __user *buf, size_t count,
 	result = ll_file_aio_read(kiocb, &iov, 1, kiocb->ki_pos);
 	*ppos = kiocb->ki_pos;
 
-	OBD_FREE_PTR(kiocb);
+	cl_env_put(env, &refcheck);
 	RETURN(result);
 }
 
