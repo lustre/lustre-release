@@ -6958,6 +6958,8 @@ test_99()
 {
 	[[ $(facet_fstype ost1) != ldiskfs ]] &&
 		{ skip "Only applicable to ldiskfs-based OSTs" && return; }
+	[[ $(lustre_version_code ost1) -ge $(version_code 2.8.57) ]] ||
+		{ skip "Need OST version at least 2.8.57" && return 0; }
 
 	local ost_opts="$(mkfs_opts ost1 $(ostdevname 1)) \
 		--reformat $(ostdevname 1) $(ostvdevname 1)"
