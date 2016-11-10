@@ -109,14 +109,22 @@ struct sk_keyfile_config *sk_read_file(char *filename)
 
 	/* allow standard input override */
 	if (strcmp(filename, "-") == 0)
-		fd = dup(STDIN_FILENO);
+		fd = STDIN_FILENO;
 	else
 		fd = open(filename, O_RDONLY);
 
 	if (fd == -1) {
-		printerr(0, "Error opening file %s: %s\n", filename,
+		printerr(0, "Error opening key file '%s': %s\n", filename,
 			 strerror(errno));
 		goto out_free;
+	} else if (fd != STDIN_FILENO) {
+		struct stat st;
+
+		rc = fstat(fd, &st);
+		if (rc == 0 && (st.st_mode & ~0600))
+			fprintf(stderr, "warning: "
+				"secret key '%s' has insecure file mode %#o\n",
+				filename, st.st_mode);
 	}
 
 	ptr = (char *)config;
@@ -138,7 +146,8 @@ struct sk_keyfile_config *sk_read_file(char *filename)
 		remain -= rc;
 	}
 
-	close(fd);
+	if (fd != STDIN_FILENO)
+		close(fd);
 	sk_config_disk_to_cpu(config);
 	return config;
 

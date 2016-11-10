@@ -2,7 +2,7 @@
 .SH NAME
 lgss_sk \- Lustre GSS Shared-Key tool
 .SH SYNOPSIS
-.B "lgss_sk [OPTIONS] -r <keyfile> | -w <keyfile> | -m <keyfile> | -l <keyfile>"
+.B "lgss_sk [OPTIONS] {-r|-w|-m|-l} <keyfile>"
 .br
 .SH DESCRIPTION
 .B lgss_sk
@@ -40,7 +40,8 @@ SHA512
 .RE
 .TP
 .I "-e, --expire <num>"
-Seconds before contexts from key expire (Default: 604800 seconds).
+Seconds before session contexts generated from key expire and are regenerated
+(Default: 604800 seconds (7 days)).
 .TP
 .I "-f, --fsname <name>"
 File system name for key.
@@ -134,7 +135,7 @@ Show key attributes:
 Version:        1
 Type:           server
 HMAC alg:       SHA256
-Crypt alg:      AES-256-CTR
+Crypto alg:     AES-256-CTR
 Ctx Expiration: 604800 seconds
 Shared keylen:  256 bits
 Prime length:   2048 bits
@@ -144,13 +145,12 @@ Nodemap name:   biology
 Shared key:
   0000: c160 00c6 e5ba 11df 50cb c420 ae61 c1b3  .`......P.. .a..
   0010: c76e 5a82 ce48 fde9 d319 ce26 cfc4 b91e  .nZ..H.....&....
-Prime (p) :
 
 [root@client ~]# lgss_sk -r tank.client.biology.key
 Version:        1
 Type:           client
 HMAC alg:       SHA256
-Crypt alg:      AES-256-CTR
+Crypto alg:     AES-256-CTR
 Ctx Expiration: 604800 seconds
 Shared keylen:  256 bits
 Prime length:   2048 bits

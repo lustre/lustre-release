@@ -93,14 +93,12 @@ void usage(FILE *fp, char *program)
 {
 	int i;
 
-	fprintf(fp, "Usage %s [OPTIONS] -l <file> | -m <file> | "
-		"-r <file> | -w <file>\n", program);
-	fprintf(fp, "-l|--load       <file>	Load key from file into user's "
+	fprintf(fp, "Usage %s [OPTIONS] {-l|-m|-r|-w} <keyfile>\n", program);
+	fprintf(fp, "-l|--load       <keyfile>	Load key from file into user's "
 		"session keyring\n");
-	fprintf(fp, "-m|--modify     <file>	Modify a file's key "
-		"attributes\n");
-	fprintf(fp, "-r|--read       <file>	Show file's key attributes\n");
-	fprintf(fp, "-w|--write      <file>	Generate key file\n\n");
+	fprintf(fp, "-m|--modify     <keyfile>	Modify keyfile's attributes\n");
+	fprintf(fp, "-r|--read       <keyfile>	Show keyfile's attributes\n");
+	fprintf(fp, "-w|--write      <keyfile>	Generate keyfile\n\n");
 	fprintf(fp, "Modify/Write Options:\n");
 	fprintf(fp, "-c|--crypt      <num>	Cipher for encryption "
 		"(Default: AES Counter mode)\n");
@@ -113,24 +111,23 @@ void usage(FILE *fp, char *program)
 		fprintf(fp, "                        %s\n", sk_hmac2name[i]);
 
 	fprintf(fp, "-e|--expire     <num>	Seconds before contexts from "
-		"key expire (Default: %d seconds)\n", SK_DEFAULT_EXPIRE);
+		"key expire (Default: %d seconds (%.3g days))\n",
+		SK_DEFAULT_EXPIRE, (double)SK_DEFAULT_EXPIRE / 3600 / 24);
 	fprintf(fp, "-f|--fsname     <name>	File system name for key\n");
 	fprintf(fp, "-g|--mgsnids    <nids>	Comma seperated list of MGS "
-		"NIDs.  Only required when mgssec is used (Default: "
-		"\"\")\n");
+		"NIDs.  Only required when mgssec is used (Default: \"\")\n");
 	fprintf(fp, "-n|--nodemap    <name>	Nodemap name for key "
 		"(Default: \"%s\")\n", SK_DEFAULT_NODEMAP);
 	fprintf(fp, "-p|--prime-bits <len>	Prime length (p) for DHKE in "
 		"bits (Default: %d)\n", SK_DEFAULT_PRIME_BITS);
 	fprintf(fp, "-t|--type       <type>	Key type (mgs, server, "
 		"client)\n");
-	fprintf(fp, "-k|--shared     <len>	Shared key length in bits "
+	fprintf(fp, "-k|--key-bits   <len>	Shared key length in bits "
 		"(Default: %d)\n", SK_DEFAULT_SK_KEYLEN);
-	fprintf(fp, "-d|--data       <file>	Shared key data source "
+	fprintf(fp, "-d|--data       <file>	Key random data source "
 		"(Default: /dev/random)\n\n");
 	fprintf(fp, "Other Options:\n");
-	fprintf(fp, "-v|--verbose           Increase verbosity for "
-		"errors\n");
+	fprintf(fp, "-v|--verbose           Increase verbosity for errors\n");
 	exit(EXIT_FAILURE);
 }
 
@@ -144,10 +141,10 @@ ssize_t get_key_data(char *src, void *buffer, size_t bits)
 	/* convert bits to minimum number of bytes */
 	remain = (bits + 7) / 8;
 
-	printf("Reading data for shared key from %s\n", src);
+	printf("Reading random data for shared key from '%s'\n", src);
 	fd = open(src, O_RDONLY);
 	if (fd < 0) {
-		fprintf(stderr, "Failed to open %s: %s\n", src,
+		fprintf(stderr, "error: opening '%s': %s\n", src,
 			strerror(errno));
 		return -errno;
 	}
@@ -157,13 +154,15 @@ ssize_t get_key_data(char *src, void *buffer, size_t bits)
 		if (rc < 0) {
 			if (errno == EINTR)
 				continue;
-			fprintf(stderr, "Error reading from %s: %s\n", src,
+			fprintf(stderr, "error: reading from '%s': %s\n", src,
 				strerror(errno));
 			rc = -errno;
 			goto out;
 
 		} else if (rc == 0) {
-			fprintf(stderr, "Key source too short for key size\n");
+			fprintf(stderr,
+				"error: key source too short for %zd-bit key\n",
+				bits);
 			rc = -ENODATA;
 			goto out;
 		}
@@ -191,19 +190,18 @@ int write_config_file(char *output_file, struct sk_keyfile_config *config,
 
 	fd = open(output_file, flags, 0400);
 	if (fd < 0) {
-		fprintf(stderr, "Failed to open %s: %s\n", output_file,
+		fprintf(stderr, "error: opening '%s': %s\n", output_file,
 			strerror(errno));
 		return -errno;
 	}
 
 	rc = write(fd, config, sizeof(*config));
 	if (rc < 0) {
-		fprintf(stderr, "Error writing to %s: %s\n", output_file,
+		fprintf(stderr, "error: writing to '%s': %s\n", output_file,
 			strerror(errno));
 		rc = -errno;
-
 	} else if (rc != sizeof(*config)) {
-		fprintf(stderr, "Short write to %s\n", output_file);
+		fprintf(stderr, "error: short write to '%s'\n", output_file);
 		rc = -ENOSPC;
 
 	} else {
@@ -224,45 +222,46 @@ int print_config(char *filename)
 		return EXIT_FAILURE;
 
 	if (sk_validate_config(config)) {
-		fprintf(stderr, "Key configuration failed validation\n");
+		fprintf(stderr, "error: key configuration failed validation\n");
 		free(config);
 		return EXIT_FAILURE;
 	}
 
 	printf("Version:        %u\n", config->skc_version);
-	printf("Type:           ");
+	printf("Type:          ");
 	if (config->skc_type & SK_TYPE_MGS)
-		printf("mgs ");
+		printf(" mgs");
 	if (config->skc_type & SK_TYPE_SERVER)
-		printf("server ");
+		printf(" server");
 	if (config->skc_type & SK_TYPE_CLIENT)
-		printf("client ");
+		printf(" client");
 	printf("\n");
 	printf("HMAC alg:       %s\n", sk_hmac2name[config->skc_hmac_alg]);
-	printf("Crypt alg:      %s\n", sk_crypt2name[config->skc_crypt_alg]);
+	printf("Crypto alg:     %s\n", sk_crypt2name[config->skc_crypt_alg]);
 	printf("Ctx Expiration: %u seconds\n", config->skc_expire);
 	printf("Shared keylen:  %u bits\n", config->skc_shared_keylen);
 	printf("Prime length:   %u bits\n", config->skc_prime_bits);
 	printf("File system:    %s\n", config->skc_fsname);
-	printf("MGS NIDs:       ");
+	printf("MGS NIDs:      ");
 	for (i = 0; i < MAX_MGSNIDS; i++) {
 		if (config->skc_mgsnids[i] == LNET_NID_ANY)
 			continue;
-		printf("%s ", libcfs_nid2str(config->skc_mgsnids[i]));
+		printf(" %s", libcfs_nid2str(config->skc_mgsnids[i]));
 	}
 	printf("\n");
 	printf("Nodemap name:   %s\n", config->skc_nodemap);
 	printf("Shared key:\n");
 	print_hex(0, config->skc_shared_key, config->skc_shared_keylen / 8);
-	printf("Prime (p) :\n");
 
 	/* Don't print empty keys */
 	for (i = 0; i < SK_MAX_P_BYTES; i++)
 		if (config->skc_p[i] != 0)
 			break;
 
-	if (i != SK_MAX_P_BYTES)
+	if (i != SK_MAX_P_BYTES) {
+		printf("Prime (p):\n");
 		print_hex(0, config->skc_p, config->skc_prime_bits / 8);
+	}
 
 	free(config);
 	return EXIT_SUCCESS;
@@ -291,7 +290,7 @@ int parse_mgsnids(char *mgsnids, struct sk_keyfile_config *config)
 
 		nid = libcfs_str2nid(ptr);
 		if (nid == LNET_NID_ANY) {
-			fprintf(stderr, "Invalid MGS NID: %s\n", ptr);
+			fprintf(stderr, "error: invalid MGS NID: %s\n", ptr);
 			rc = -EINVAL;
 			break;
 		}
@@ -301,7 +300,7 @@ int parse_mgsnids(char *mgsnids, struct sk_keyfile_config *config)
 	}
 
 	if (i == MAX_MGSNIDS) {
-		fprintf(stderr, "Too many MGS NIDs provided\n");
+		fprintf(stderr, "error: more than %u MGS NIDs provided\n", i);
 		rc = -E2BIG;
 	}
 
@@ -341,6 +340,8 @@ int main(int argc, char **argv)
 		{"mgsnids", 1, 0, 'g'},
 		{"help", 0, 0, 'h'},
 		{"hmac", 1, 0, 'i'},
+		{"integrity", 1, 0, 'i'},
+		{"key-bits", 1, 0, 'k'},
 		{"shared", 1, 0, 'k'},
 		{"load", 1, 0, 'l'},
 		{"modify", 1, 0, 'm'},
@@ -366,14 +367,16 @@ int main(int argc, char **argv)
 		case 'e':
 			expire = atoi(optarg);
 			if (expire < 60)
-				fprintf(stderr, "WARNING: Using a short key "
+				fprintf(stderr, "warning: using a %us key "
 					"expiration may cause issues during "
-					"key renegotiation\n");
+					"key renegotiation\n", expire);
 			break;
 		case 'f':
 			fsname = optarg;
 			if (strlen(fsname) > MTI_NAME_MAXLEN) {
-				fprintf(stderr, "File system name too long\n");
+				fprintf(stderr,
+					"error: file system name longer than "
+					"%u characters\n", MTI_NAME_MAXLEN);
 				return EXIT_FAILURE;
 			}
 			break;
@@ -398,14 +401,18 @@ int main(int argc, char **argv)
 		case 'n':
 			nodemap = optarg;
 			if (strlen(nodemap) > LUSTRE_NODEMAP_NAME_LENGTH) {
-				fprintf(stderr, "Nodemap name too long\n");
+				fprintf(stderr,
+					"error: nodemap name longer than "
+					"%u characters\n",
+					LUSTRE_NODEMAP_NAME_LENGTH);
 				return EXIT_FAILURE;
 			}
 			break;
 		case 'p':
 			prime_bits = atoi(optarg);
 			if (prime_bits <= 0) {
-				fprintf(stderr, "Invalid prime length: %s\n",
+				fprintf(stderr,
+					"error: invalid prime length: '%s'\n",
 					optarg);
 				return EXIT_FAILURE;
 			}
@@ -416,8 +423,8 @@ int main(int argc, char **argv)
 		case 't':
 			tmp2 = strdup(optarg);
 			if (!tmp2) {
-				fprintf(stderr, "Failed to allocated memory "
-					"for type argument\n");
+				fprintf(stderr,
+					"error: failed to allocate type\n");
 				return EXIT_FAILURE;
 			}
 			tmp = strsep(&tmp2, ",");
@@ -429,9 +436,10 @@ int main(int argc, char **argv)
 				} else if (strcasecmp(tmp, "client") == 0) {
 					type |= SK_TYPE_CLIENT;
 				} else {
-					fprintf(stderr, "Invalid type must be "
-						"mgs, server, or  client: "
-						"%s\n", optarg);
+					fprintf(stderr,
+						"error: invalid type '%s', "
+						"must be mgs, server, or client"
+						"\n", optarg);
 					return EXIT_FAILURE;
 				}
 				tmp = strsep(&tmp2, ",");
@@ -445,14 +453,15 @@ int main(int argc, char **argv)
 			output = optarg;
 			break;
 		default:
-			fprintf(stderr, "Unknown option: %c\n", opt);
+			fprintf(stderr, "error: unknown option: '%c'\n", opt);
 			return EXIT_FAILURE;
 			break;
 		}
 	}
 
 	if (optind != argc) {
-		fprintf(stderr, "Extraneous arguments provided, check usage\n");
+		fprintf(stderr,
+			"error: extraneous arguments provided, check usage\n");
 		return EXIT_FAILURE;
 	}
 
@@ -474,11 +483,11 @@ int main(int argc, char **argv)
 	}
 
 	if (crypt == SK_CRYPT_INVALID) {
-		fprintf(stderr, "Invalid crypt algorithm specified\n");
+		fprintf(stderr, "error: invalid crypt algorithm specified\n");
 		return EXIT_FAILURE;
 	}
 	if (hmac == SK_HMAC_INVALID) {
-		fprintf(stderr, "Invalid HMAC algorithm specified\n");
+		fprintf(stderr, "error: invalid HMAC algorithm specified\n");
 		return EXIT_FAILURE;
 	}
 
@@ -520,32 +529,34 @@ int main(int argc, char **argv)
 			goto error;
 		if (sk_validate_config(config)) {
 			fprintf(stderr,
-				"Key configuration failed validation\n");
+				"error: key configuration failed validation\n");
 			goto error;
 		}
 
 		if (data && get_key_data(data, config->skc_shared_key,
 		    config->skc_shared_keylen)) {
-			fprintf(stderr, "Failure getting data for key\n");
+			fprintf(stderr, "error: failure getting key data\n");
 			goto error;
 		}
 
 		if (generate_prime) {
-			printf("Generating DH parameters this can take a "
-			       "while...\n");
+			printf("Generating DH parameters, "
+			       "this can take a while...\n");
 			dh = DH_generate_parameters(config->skc_prime_bits,
 						    SK_GENERATOR, NULL, NULL);
 			if (BN_num_bytes(dh->p) > SK_MAX_P_BYTES) {
-				fprintf(stderr, "Cannot generate DH parameters:"
-					" requested length %d exceeds maximum: "
-					"%d\n", config->skc_prime_bits,
+				fprintf(stderr,
+					"error: cannot generate DH parameters: "
+					"requested length %d over maximum %d\n",
+					config->skc_prime_bits,
 					SK_MAX_P_BYTES * 8);
 				goto error;
 			}
 			if (BN_bn2bin(dh->p, config->skc_p) !=
 			    BN_num_bytes(dh->p)) {
-				fprintf(stderr, "Failed conversion of BIGNUM p"
-					" to binary\n");
+				fprintf(stderr,
+					"error: convert BIGNUM p to binary "
+					"failed\n");
 				goto error;
 			}
 		}
@@ -558,8 +569,8 @@ int main(int argc, char **argv)
 
 	/* write mode for a new key */
 	if (!fsname && !mgsnids) {
-		fprintf(stderr, "Must provide --fsname, "
-			"--mgsnids, or both\n");
+		fprintf(stderr,
+			"error: must provide --fsname, --mgsnids, or both\n");
 		return EXIT_FAILURE;
 	}
 
@@ -599,13 +610,13 @@ int main(int argc, char **argv)
 	if (mgsnids && parse_mgsnids(mgsnids, config))
 		goto error;
 	if (type == SK_TYPE_INVALID) {
-		fprintf(stderr, "No type specified for key\n");
+		fprintf(stderr, "error: no type specified for key\n");
 		goto error;
 	}
 	config->skc_type = type;
 
 	if (sk_validate_config(config)) {
-		fprintf(stderr, "Key configuration failed validation\n");
+		fprintf(stderr, "error: key configuration failed validation\n");
 		goto error;
 	}
 
@@ -613,23 +624,23 @@ int main(int argc, char **argv)
 		data = "/dev/random";
 	if (get_key_data(data, config->skc_shared_key,
 	    config->skc_shared_keylen)) {
-		fprintf(stderr, "Failure getting data for key\n");
+		fprintf(stderr, "error: failure getting data for key\n");
 		goto error;
 	}
 
 	if (type & SK_TYPE_CLIENT) {
-		printf("Generating DH parameters this can take a while...\n");
+		printf("Generating DH parameters, this can take a while...\n");
 		dh = DH_generate_parameters(config->skc_prime_bits,
 					    SK_GENERATOR, NULL, NULL);
 		if (BN_num_bytes(dh->p) > SK_MAX_P_BYTES) {
-			fprintf(stderr, "Cannot generate DH parameters: "
-				"requested length %d exceeds maximum: %d\n",
+			fprintf(stderr, "error: cannot generate DH parameters: "
+				"requested length %d exceeds maximum %d\n",
 				config->skc_prime_bits, SK_MAX_P_BYTES * 8);
 			goto error;
 		}
 		if (BN_bn2bin(dh->p, config->skc_p) != BN_num_bytes(dh->p)) {
-			fprintf(stderr, "Failed conversion of BIGNUM p to "
-				"binary\n");
+			fprintf(stderr,
+				"error: convert BIGNUM p to binary failed\n");
 			goto error;
 		}
 	}
