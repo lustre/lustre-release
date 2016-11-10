@@ -2165,6 +2165,15 @@ sync_all_data() {
 		grep -v 'Found no match'
 }
 
+wait_zfs_commit() {
+	# the occupied disk space will be released
+	# only after DMUs are committed
+	if [[ $(facet_fstype $1) == zfs ]]; then
+		echo "sleep $2 for ZFS OSD"
+		sleep $2
+	fi
+}
+
 wait_delete_completed_mds() {
 	local MAX_WAIT=${1:-20}
 	# for ZFS, waiting more time for DMUs to be committed
@@ -2185,6 +2194,7 @@ wait_delete_completed_mds() {
 		mds2sync="$mds2sync $node"
 	done
 	if [ -z "$mds2sync" ]; then
+		wait_zfs_commit $SINGLEMDS $ZFS_WAIT
 		return
 	fi
 	mds2sync=$(comma_list $mds2sync)
@@ -2202,16 +2212,7 @@ wait_delete_completed_mds() {
 			"$LCTL get_param -n osc.*MDT*.sync_*" | calc_sum)
 		#echo "$node: $changes changes on all"
 		if [[ $changes -eq 0 ]]; then
-			etime=$(date +%s)
-			#echo "delete took $((etime - stime)) seconds"
-
-			# the occupied disk space will be released
-			# only after DMUs are committed
-			if [[ $(facet_fstype $SINGLEMDS) == zfs ]]; then
-				echo "sleep $ZFS_WAIT for ZFS OSD"
-				sleep $ZFS_WAIT
-			fi
-
+			wait_zfs_commit $SINGLEMDS $ZFS_WAIT
 			return
 		fi
 		sleep 1
