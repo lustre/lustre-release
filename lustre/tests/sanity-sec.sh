@@ -875,11 +875,12 @@ wait_nm_sync() {
 
 	local max_retries=20
 	local is_sync
-	local out1=$(do_facet mgs $LCTL get_param nodemap.${proc_param})
+	local out1=""
 	local out2
 	local mgs_ip=$(host_nids_address $mgs_HOST $NETTYPE | cut -d' ' -f1)
 	local i
 
+	out1=$(do_facet mgs $LCTL get_param nodemap.${proc_param})
 	echo "On MGS ${mgs_ip}, ${proc_param} = $out1"
 
 	# wait up to 10 seconds for other servers to sync with mgs
@@ -1654,6 +1655,8 @@ run_test 26 "test transferring very large nodemap"
 test_27() {
 	local subdir=c0dir
 	local subsubdir=c0subdir
+	local fileset_on_mgs=""
+	local loop=0
 
 	nodemap_test_setup
 	trap nodemap_test_cleanup EXIT
@@ -1692,6 +1695,18 @@ test_27() {
 	# remove fileset info from nodemap
 	do_facet mgs $LCTL nodemap_set_fileset --name c0 --fileset \'\' ||
 		error "unable to delete fileset info on nodemap c0"
+	fileset_on_mgs=$(do_facet mgs $LCTL get_param nodemap.c0.fileset)
+	while [ "${fileset_on_mgs}" != "nodemap.c0.fileset=" ]; do
+	    if [ $loop -eq 10 ]; then
+		error "On MGS, fileset cannnot be cleared"
+		break;
+	    else
+		loop=$((loop+1))
+		echo "On MGS, fileset is still ${fileset_on_mgs}, waiting..."
+		sleep 20;
+	    fi
+	    fileset_on_mgs=$(do_facet mgs $LCTL get_param nodemap.c0.fileset)
+	done
 	do_facet mgs $LCTL set_param -P nodemap.c0.fileset=\'\' ||
 		error "unable to reset fileset info on nodemap c0"
 	wait_nm_sync c0 fileset
