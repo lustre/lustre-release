@@ -51,10 +51,6 @@ static int oss_num_threads;
 module_param(oss_num_threads, int, 0444);
 MODULE_PARM_DESC(oss_num_threads, "number of OSS service threads to start");
 
-static int ost_num_threads;
-module_param(ost_num_threads, int, 0444);
-MODULE_PARM_DESC(ost_num_threads, "number of OST service threads to start (deprecated)");
-
 static int oss_num_create_threads;
 module_param(oss_num_create_threads, int, 0444);
 MODULE_PARM_DESC(oss_num_create_threads, "number of OSS create threads to start");
@@ -417,13 +413,6 @@ static int __init ost_init(void)
 
 	rc = class_register_type(&ost_obd_ops, NULL, true, NULL,
 				 LUSTRE_OSS_NAME, NULL);
-
-        if (ost_num_threads != 0 && oss_num_threads == 0) {
-                LCONSOLE_INFO("ost_num_threads module parameter is deprecated, "
-                              "use oss_num_threads instead or unset both for "
-                              "dynamic thread startup\n");
-                oss_num_threads = ost_num_threads;
-        }
 
         RETURN(rc);
 }
