@@ -197,9 +197,9 @@ static int mdt_lvbo_free(struct ldlm_resource *res)
 }
 
 struct ldlm_valblock_ops mdt_lvbo = {
-	lvbo_init:	mdt_lvbo_init,
-	lvbo_update:	mdt_lvbo_update,
-	lvbo_size:	mdt_lvbo_size,
-	lvbo_fill:	mdt_lvbo_fill,
-	lvbo_free:	mdt_lvbo_free
+	.lvbo_init	= mdt_lvbo_init,
+	.lvbo_update	= mdt_lvbo_update,
+	.lvbo_size	= mdt_lvbo_size,
+	.lvbo_fill	= mdt_lvbo_fill,
+	.lvbo_free	= mdt_lvbo_free
 };
