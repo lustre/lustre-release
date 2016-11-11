@@ -65,7 +65,7 @@ char *sk_hmac2name[] = {
 	[SK_HMAC_SHA512] = "SHA512",
 };
 
-int sk_name2crypt(char *name)
+static int sk_name2crypt(char *name)
 {
 	int i;
 
@@ -77,7 +77,7 @@ int sk_name2crypt(char *name)
 	return SK_CRYPT_INVALID;
 }
 
-int sk_name2hmac(char *name)
+static int sk_name2hmac(char *name)
 {
 	int i;
 
@@ -89,7 +89,7 @@ int sk_name2hmac(char *name)
 	return SK_HMAC_INVALID;
 }
 
-void usage(FILE *fp, char *program)
+static void usage(FILE *fp, char *program)
 {
 	int i;
 
@@ -131,7 +131,7 @@ void usage(FILE *fp, char *program)
 	exit(EXIT_FAILURE);
 }
 
-ssize_t get_key_data(char *src, void *buffer, size_t bits)
+static ssize_t get_key_data(char *src, void *buffer, size_t bits)
 {
 	char *ptr = buffer;
 	size_t remain;
@@ -176,8 +176,8 @@ out:
 	return rc;
 }
 
-int write_config_file(char *output_file, struct sk_keyfile_config *config,
-		      bool overwrite)
+static int write_config_file(char *output_file,
+			     struct sk_keyfile_config *config, bool overwrite)
 {
 	size_t rc;
 	int fd;
@@ -212,7 +212,7 @@ int write_config_file(char *output_file, struct sk_keyfile_config *config,
 	return rc;
 }
 
-int print_config(char *filename)
+static int print_config(char *filename)
 {
 	struct sk_keyfile_config *config;
 	int i;
@@ -267,7 +267,7 @@ int print_config(char *filename)
 	return EXIT_SUCCESS;
 }
 
-int parse_mgsnids(char *mgsnids, struct sk_keyfile_config *config)
+static int parse_mgsnids(char *mgsnids, struct sk_keyfile_config *config)
 {
 	lnet_nid_t nid;
 	char *ptr;
@@ -310,7 +310,7 @@ int parse_mgsnids(char *mgsnids, struct sk_keyfile_config *config)
 int main(int argc, char **argv)
 {
 	struct sk_keyfile_config *config;
-	char *data = NULL;
+	char *datafile = NULL;
 	char *input = NULL;
 	char *load = NULL;
 	char *modify = NULL;
@@ -362,7 +362,7 @@ int main(int argc, char **argv)
 			crypt = sk_name2crypt(optarg);
 			break;
 		case 'd':
-			data = optarg;
+			datafile = optarg;
 			break;
 		case 'e':
 			expire = atoi(optarg);
@@ -496,14 +496,6 @@ int main(int argc, char **argv)
 		if (!config)
 			return EXIT_FAILURE;
 
-		if (crypt != SK_CRYPT_EMPTY)
-			config->skc_crypt_alg = crypt;
-		if (hmac != SK_HMAC_EMPTY)
-			config->skc_hmac_alg = hmac;
-		if (expire != -1)
-			config->skc_expire = expire;
-		if (shared_keylen != -1)
-			config->skc_shared_keylen = shared_keylen;
 		if (type != SK_TYPE_INVALID) {
 			/* generate key when adding client type */
 			if (!(config->skc_type & SK_TYPE_CLIENT) &&
@@ -519,75 +511,42 @@ int main(int argc, char **argv)
 			if (config->skc_prime_bits != prime_bits &&
 			    config->skc_type & SK_TYPE_CLIENT)
 				generate_prime = true;
-			config->skc_prime_bits = prime_bits;
 		}
-		if (fsname)
-			strncpy(config->skc_fsname, fsname, strlen(fsname));
-		if (nodemap)
-			strncpy(config->skc_nodemap, nodemap, strlen(nodemap));
-		if (mgsnids && parse_mgsnids(mgsnids, config))
-			goto error;
-		if (sk_validate_config(config)) {
+	} else {
+		/* write mode for a new key */
+		if (!fsname && !mgsnids) {
 			fprintf(stderr,
-				"error: key configuration failed validation\n");
-			goto error;
+				"error: missing --fsname or --mgsnids\n");
+			return EXIT_FAILURE;
 		}
 
-		if (data && get_key_data(data, config->skc_shared_key,
-		    config->skc_shared_keylen)) {
-			fprintf(stderr, "error: failure getting key data\n");
+		config = calloc(1, sizeof(*config));
+		if (!config)
+			return EXIT_FAILURE;
+
+		/* Set the defaults for new key */
+		config->skc_version = SK_CONF_VERSION;
+		config->skc_expire = SK_DEFAULT_EXPIRE;
+		config->skc_shared_keylen = SK_DEFAULT_SK_KEYLEN;
+		config->skc_prime_bits = SK_DEFAULT_PRIME_BITS;
+		config->skc_crypt_alg = SK_CRYPT_AES256_CTR;
+		config->skc_hmac_alg = SK_HMAC_SHA256;
+		for (i = 0; i < MAX_MGSNIDS; i++)
+			config->skc_mgsnids[i] = LNET_NID_ANY;
+
+		if (type == SK_TYPE_INVALID) {
+			fprintf(stderr, "error: no type specified for key\n");
 			goto error;
 		}
+		config->skc_type = type;
+		generate_prime = type & SK_TYPE_CLIENT;
 
-		if (generate_prime) {
-			printf("Generating DH parameters, "
-			       "this can take a while...\n");
-			dh = DH_generate_parameters(config->skc_prime_bits,
-						    SK_GENERATOR, NULL, NULL);
-			if (BN_num_bytes(dh->p) > SK_MAX_P_BYTES) {
-				fprintf(stderr,
-					"error: cannot generate DH parameters: "
-					"requested length %d over maximum %d\n",
-					config->skc_prime_bits,
-					SK_MAX_P_BYTES * 8);
-				goto error;
-			}
-			if (BN_bn2bin(dh->p, config->skc_p) !=
-			    BN_num_bytes(dh->p)) {
-				fprintf(stderr,
-					"error: convert BIGNUM p to binary "
-					"failed\n");
-				goto error;
-			}
-		}
+		strncpy(config->skc_nodemap, SK_DEFAULT_NODEMAP,
+			strlen(SK_DEFAULT_NODEMAP));
 
-		if (write_config_file(modify, config, true))
-			goto error;
-
-		return EXIT_SUCCESS;
+		if (!datafile)
+			datafile = "/dev/random";
 	}
-
-	/* write mode for a new key */
-	if (!fsname && !mgsnids) {
-		fprintf(stderr,
-			"error: must provide --fsname, --mgsnids, or both\n");
-		return EXIT_FAILURE;
-	}
-
-	config = malloc(sizeof(*config));
-	if (!config)
-		return EXIT_FAILURE;
-
-	/* Set the defaults */
-	memset(config, 0, sizeof(*config));
-	config->skc_version = SK_CONF_VERSION;
-	config->skc_expire = SK_DEFAULT_EXPIRE;
-	config->skc_shared_keylen = SK_DEFAULT_SK_KEYLEN;
-	config->skc_prime_bits = SK_DEFAULT_PRIME_BITS;
-	config->skc_crypt_alg = SK_CRYPT_AES256_CTR;
-	config->skc_hmac_alg = SK_HMAC_SHA256;
-	for (i = 0; i < MAX_MGSNIDS; i++)
-		config->skc_mgsnids[i] = LNET_NID_ANY;
 
 	if (crypt != SK_CRYPT_EMPTY)
 		config->skc_crypt_alg = crypt;
@@ -603,32 +562,21 @@ int main(int argc, char **argv)
 		strncpy(config->skc_fsname, fsname, strlen(fsname));
 	if (nodemap)
 		strncpy(config->skc_nodemap, nodemap, strlen(nodemap));
-	else
-		strncpy(config->skc_nodemap, SK_DEFAULT_NODEMAP,
-			strlen(SK_DEFAULT_NODEMAP));
-
 	if (mgsnids && parse_mgsnids(mgsnids, config))
 		goto error;
-	if (type == SK_TYPE_INVALID) {
-		fprintf(stderr, "error: no type specified for key\n");
-		goto error;
-	}
-	config->skc_type = type;
-
 	if (sk_validate_config(config)) {
 		fprintf(stderr, "error: key configuration failed validation\n");
 		goto error;
 	}
 
-	if (!data)
-		data = "/dev/random";
-	if (get_key_data(data, config->skc_shared_key,
-	    config->skc_shared_keylen)) {
-		fprintf(stderr, "error: failure getting data for key\n");
+	if (datafile && get_key_data(datafile, config->skc_shared_key,
+				     config->skc_shared_keylen)) {
+		fprintf(stderr, "error: failure getting key data from '%s'\n",
+			datafile);
 		goto error;
 	}
 
-	if (type & SK_TYPE_CLIENT) {
+	if (generate_prime) {
 		printf("Generating DH parameters, this can take a while...\n");
 		dh = DH_generate_parameters(config->skc_prime_bits,
 					    SK_GENERATOR, NULL, NULL);
@@ -645,13 +593,12 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (write_config_file(output, config, false))
+	if (write_config_file(modify ?: output, config, modify))
 		goto error;
 
 	return EXIT_SUCCESS;
 
 error:
-	if (config)
-		free(config);
+	free(config);
 	return EXIT_FAILURE;
 }
