@@ -1184,6 +1184,48 @@ test_12a() { # former test_2a
 }
 run_test 12a "lost data due to missed REMOTE client during replay"
 
+test_13() { # LU-8826
+	local var=${SINGLEMDS}_svc
+
+	if combined_mgs_mds ; then
+		skip "Needs separate MGS to enable IR"
+		return 0
+	fi
+
+	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+
+	zconf_mount $CLIENT2 $MOUNT2
+	do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile
+
+	# set ir_timeout to a reasonable small value
+	local ir_timeout=$(do_facet mgs $LCTL get_param -n mgs.*.ir_timeout)
+	do_facet mgs $LCTL set_param mgs.*.ir_timeout=5
+	# make sure IR functional
+	sleep 5
+
+	replay_barrier $SINGLEMDS
+	do_node $CLIENT1 chmod 666 $DIR/$tfile
+	do_node $CLIENT2 chmod 777 $DIR2/$tfile
+
+	# make sure client data of $CLIENT2:$MOUNT2 is remained
+	# define OBD_FAIL_TGT_CLIENT_DEL	0x718
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x718
+	zconf_umount $CLIENT2 $MOUNT2
+	# define OBD_FAIL_TGT_SLUGGISH_NET	0x719
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x719
+	facet_failover $SINGLEMDS
+
+	client_up $CLIENT1 || error "$CLIENT1 evicted"
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	do_facet mgs $LCTL set_param mgs.*.ir_timeout=$ir_timeout
+
+	do_node $CLIENT1 $CHECKSTAT -p 0666 $DIR/$tfile ||
+		error "$DIR/$tfile-a: unexpected state"
+}
+run_test 13 "Shouldn't give up VBR easily on sluggish network"
+
 #restore COS setting
 restore_lustre_params < $cos_param_file
 rm -f $cos_param_file

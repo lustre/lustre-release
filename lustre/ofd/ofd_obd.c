@@ -237,7 +237,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		if (!(lsd->lsd_feature_compat & OBD_COMPAT_OST)) {
 			/* this will only happen on the first connect */
 			lsd->lsd_feature_compat |= OBD_COMPAT_OST;
-			/* sync is not needed here as lut_client_add will
+			/* sync is not needed here as tgt_client_new will
 			 * set exp_need_sync flag */
 			tgt_server_data_update(env, &ofd->ofd_lut, 0);
 		}

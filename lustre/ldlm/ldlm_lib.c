@@ -834,20 +834,6 @@ out_already:
 	RETURN(EALREADY);
 }
 
-void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
-                          int error)
-{
-        struct obd_export *exp = cb_data;
-
-        CDEBUG(D_RPCTRACE, "%s: committing for initial connect of %s\n",
-               obd->obd_name, exp->exp_client_uuid.uuid);
-
-	spin_lock(&exp->exp_lock);
-	exp->exp_need_sync = 0;
-	spin_unlock(&exp->exp_lock);
-	class_export_cb_put(exp);
-}
-
 static void
 check_and_start_recovery_timer(struct obd_device *obd,
                                struct ptlrpc_request *req, int new_client);
@@ -1794,8 +1780,13 @@ static void extend_recovery_timer(struct obd_device *obd, int drt, bool extend)
                 to = drt;
         }
 
-        if (to > obd->obd_recovery_time_hard)
-                to = obd->obd_recovery_time_hard;
+	if (to > obd->obd_recovery_time_hard) {
+		to = obd->obd_recovery_time_hard;
+		CWARN("%s: extended recovery timer reaching hard "
+		      "limit: %d, extend: %d\n",
+		      obd->obd_name, to, extend);
+	}
+
 	if (obd->obd_recovery_timeout < to) {
                 obd->obd_recovery_timeout = to;
 		end = obd->obd_recovery_start + to;
@@ -1838,6 +1829,10 @@ check_and_start_recovery_timer(struct obd_device *obd,
 	/* Convert the service time to RPC timeout,
 	 * and reuse service_time to limit stack usage. */
 	service_time = at_est2timeout(service_time);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_SLUGGISH_NET) &&
+	    service_time < at_extra)
+		service_time = at_extra;
 
 	/* We expect other clients to timeout within service_time, then try
 	 * to reconnect, then try the failover server.  The max delay between

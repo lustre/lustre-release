@@ -1904,23 +1904,20 @@ void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd)
 
 	if (has_ir) {
 		int new_soft = soft;
-		int new_hard = hard;
 
 		/* adjust timeout value by imperative recovery */
-
 		new_soft = (soft * factor) / OBD_IR_FACTOR_MAX;
-		new_hard = (hard * factor) / OBD_IR_FACTOR_MAX;
-
 		/* make sure the timeout is not too short */
 		new_soft = max(min, new_soft);
-		new_hard = max(new_soft, new_hard);
 
 		LCONSOLE_INFO("%s: Imperative Recovery enabled, recovery "
 			      "window shrunk from %d-%d down to %d-%d\n",
-			      obd->obd_name, soft, hard, new_soft, new_hard);
+			      obd->obd_name, soft, hard, new_soft, hard);
 
 		soft = new_soft;
-		hard = new_hard;
+	} else {
+		LCONSOLE_INFO("%s: Imperative Recovery not enabled, recovery "
+			      "window %d-%d\n", obd->obd_name, soft, hard);
 	}
 
 	/* we're done */
