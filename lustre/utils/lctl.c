@@ -260,6 +260,44 @@ command_t cmdlist[] = {
 	 "rescan the system to filter out inactive MDT(s) for barrier\n"
 	 "usage: barrier_rescan <fsname> [timeout (in seconds)]"},
 
+	/* Snapshot commands */
+	{"===  Snapshot ==", NULL, 0, "Snapshot management"},
+	{"snapshot_create", jt_snapshot_create, 0,
+	 "create the snapshot\n"
+	 "usage: snapshot_create [-b | --barrier [on | off]]\n"
+	 "			 [-c | --comment comment]\n"
+	 "			 <-F | --fsname fsname>\n"
+	 "			 [-h | --help] <-n | --name ssname>\n"
+	 "			 [-r | --rsh remote_shell]\n"
+	 "			 [-t | --timeout timeout]"},
+	{"snapshot_destroy", jt_snapshot_destroy, 0,
+	 "destroy the snapshot\n"
+	 "usage: snapshot_destroy [-f | --force]\n"
+	 "			  <-F | --fsname fsname> [-h | --help]\n"
+	 "			  <-n | --name ssname>\n"
+	 "			  [-r | --rsh remote_shell]"},
+	{"snapshot_modify", jt_snapshot_modify, 0,
+	 "modify the snapshot\n"
+	 "usage: snapshot_modify [-c | --comment comment]\n"
+	 "			 <-F | --fsname fsname> [-h | --help]\n"
+	 "			 <-n | --name ssname> [-N | --new new_ssname]\n"
+	 "			 [-r | --rsh remote_shell]"},
+	{"snapshot_list", jt_snapshot_list, 0,
+	 "query the snapshot(s)\n"
+	 "usage: snapshot_list [-d | --detail]\n"
+	 "		       <-F | --fsname fsname> [-h | --help]\n"
+	 "		       [-n | --name ssname] [-r | --rsh remote_shell]"},
+	{"snapshot_mount", jt_snapshot_mount, 0,
+	 "mount the snapshot\n"
+	 "usage: snapshot_mount <-F | --fsname fsname> [-h | --help]\n"
+	 "			<-n | --name ssname>\n"
+	 "			[-r | --rsh remote_shell]"},
+	{"snapshot_umount", jt_snapshot_umount, 0,
+	 "umount the snapshot\n"
+	 "usage: snapshot_umount <-F | --fsname fsname> [-h | --help]\n"
+	 "			 <-n | --name ssname>\n"
+	 "			 [-r | --rsh remote_shell]"},
+
 	/* Nodemap commands */
 	{"=== Nodemap ===", NULL, 0, "nodemap management"},
 	{"nodemap_activate", jt_nodemap_activate, 0,

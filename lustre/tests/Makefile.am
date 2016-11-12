@@ -38,6 +38,7 @@ noinst_SCRIPTS += posix.sh sanity-scrub.sh scrub-performance.sh ha.sh
 noinst_SCRIPTS += sanity-lfsck.sh lfsck-performance.sh
 noinst_SCRIPTS += resolveip
 noinst_SCRIPTS += sanity-hsm.sh
+noinst_SCRIPTS += sanity-lsnapshot.sh
 nobase_noinst_SCRIPTS = cfg/local.sh
 nobase_noinst_SCRIPTS += test-groups/regression test-groups/regression-mpi
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh

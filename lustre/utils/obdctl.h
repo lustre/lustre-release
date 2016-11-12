@@ -33,6 +33,8 @@
 #ifndef _OBDCTL_H_
 #define _OBDCTL_H_
 
+#include <lustre/lustre_barrier_user.h>
+
 #define MAX_IOC_BUFLEN 8192
 
 /* ptlctl.a */
@@ -165,8 +167,15 @@ int jt_lcfg_listparam(int argc, char **argv);
 int jt_pool_cmd(int argc, char **argv);
 int jt_barrier_freeze(int argc, char **argv);
 int jt_barrier_thaw(int argc, char **argv);
+int __jt_barrier_stat(int argc, char **argv, struct barrier_ctl *bc);
 int jt_barrier_stat(int argc, char **argv);
 int jt_barrier_rescan(int argc, char **argv);
+int jt_snapshot_create(int argc, char **argv);
+int jt_snapshot_destroy(int argc, char **argv);
+int jt_snapshot_modify(int argc, char **argv);
+int jt_snapshot_list(int argc, char **argv);
+int jt_snapshot_mount(int argc, char **argv);
+int jt_snapshot_umount(int argc, char **argv);
 int jt_nodemap_activate(int argc, char **argv);
 int jt_nodemap_add(int argc, char **argv);
 int jt_nodemap_del(int argc, char **argv);

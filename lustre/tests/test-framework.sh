@@ -20,6 +20,10 @@ export JOBID_VAR=${JOBID_VAR:-"procname_uid"}  # or "existing" or "disable"
 #export PDSH="pdsh -S -Rssh -w"
 export MOUNT_CMD=${MOUNT_CMD:-"mount -t lustre"}
 export UMOUNT=${UMOUNT:-"umount -d"}
+
+export LSNAPSHOT_CONF="/etc/ldev.conf"
+export LSNAPSHOT_LOG="/var/log/lsnapshot.log"
+
 # sles12 umount has a issue with -d option
 [ -e /etc/SuSE-release ] && grep -w VERSION /etc/SuSE-release | grep -wq 12 && {
 	export UMOUNT="umount"
@@ -1038,6 +1042,17 @@ zpool_name() {
 	poolname="${device%%/*}"
 
 	echo -n $poolname
+}
+
+#
+#
+# Get ZFS local fsname.
+#
+zfs_local_fsname() {
+	local facet=$1
+	local lfsname=$(basename $(facet_device $facet))
+
+	echo -n $lfsname
 }
 
 #
@@ -7641,4 +7656,116 @@ killall_process () {
 	local rc=0
 
 	do_nodes $clients "killall $signal $name"
+}
+
+lsnapshot_create()
+{
+	do_facet mgs "$LCTL snapshot_create -F $FSNAME $*"
+}
+
+lsnapshot_destroy()
+{
+	do_facet mgs "$LCTL snapshot_destroy -F $FSNAME $*"
+}
+
+lsnapshot_modify()
+{
+	do_facet mgs "$LCTL snapshot_modify -F $FSNAME $*"
+}
+
+lsnapshot_list()
+{
+	do_facet mgs "$LCTL snapshot_list -F $FSNAME $*"
+}
+
+lsnapshot_mount()
+{
+	do_facet mgs "$LCTL snapshot_mount -F $FSNAME $*"
+}
+
+lsnapshot_umount()
+{
+	do_facet mgs "$LCTL snapshot_umount -F $FSNAME $*"
+}
+
+lss_err()
+{
+	local msg=$1
+
+	do_facet mgs "cat $LSNAPSHOT_LOG"
+	error $msg
+}
+
+lss_cleanup()
+{
+	echo "Cleaning test environment ..."
+
+	# Every lsnapshot command takes exclusive lock with others,
+	# so can NOT destroy the snapshot during list with 'xargs'.
+	while true; do
+		local ssname=$(lsnapshot_list | grep snapshot_name |
+			grep lss_ | awk '{ print $2 }' | head -n 1)
+		[ -z "$ssname" ] && break
+
+		lsnapshot_destroy -n $ssname -f ||
+			lss_err "Fail to destroy $ssname by force"
+	done
+}
+
+lss_gen_conf_one()
+{
+	local facet=$1
+	local role=$2
+	local idx=$3
+
+	local host=$(facet_active_host $facet)
+	local dir=$(dirname $(facet_vdevice $facet))
+	local pool=$(zpool_name $facet)
+	local lfsname=$(zfs_local_fsname $facet)
+	local label=${FSNAME}-${role}$(printf '%04x' $idx)
+
+	do_facet mgs \
+		"echo '$host - $label zfs:${dir}/${pool}/${lfsname} - -' >> \
+		$LSNAPSHOT_CONF"
+}
+
+lss_gen_conf()
+{
+	do_facet mgs "rm -f $LSNAPSHOT_CONF"
+	echo "Generating $LSNAPSHOT_CONF on MGS ..."
+
+	if ! combined_mgs_mds ; then
+		[ $(facet_fstype mgs) != zfs ] &&
+			skip "Lustre snapshot 1 only works for ZFS backend" &&
+			exit 0
+
+		local host=$(facet_active_host mgs)
+		local dir=$(dirname $(facet_vdevice mgs))
+		local pool=$(zpool_name mgs)
+		local lfsname=$(zfs_local_fsname mgs)
+
+		do_facet mgs \
+			"echo '$host - MGS zfs:${dir}/${pool}/${lfsname} - -' \
+			>> $LSNAPSHOT_CONF" || lss_err "generate lss conf (mgs)"
+	fi
+
+	for num in `seq $MDSCOUNT`; do
+		[ $(facet_fstype mds$num) != zfs ] &&
+			skip "Lustre snapshot 1 only works for ZFS backend" &&
+			exit 0
+
+		lss_gen_conf_one mds$num MDT $((num - 1)) ||
+			lss_err "generate lss conf (mds$num)"
+	done
+
+	for num in `seq $OSTCOUNT`; do
+		[ $(facet_fstype ost$num) != zfs ] &&
+			skip "Lustre snapshot 1 only works for ZFS backend" &&
+			exit 0
+
+		lss_gen_conf_one ost$num OST $((num - 1)) ||
+			lss_err "generate lss conf (ost$num)"
+	done
+
+	do_facet mgs "cat $LSNAPSHOT_CONF"
 }

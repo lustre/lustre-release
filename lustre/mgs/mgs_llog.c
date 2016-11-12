@@ -4442,6 +4442,10 @@ int mgs_lcfg_fork(const struct lu_env *env, struct mgs_device *mgs,
 	int rc = 0;
 	ENTRY;
 
+	if (unlikely(!oldname || oldname[0] == '\0' ||
+		     !newname || newname[0] == '\0'))
+		RETURN(-EINVAL);
+
 	if (strcmp(oldname, newname) == 0)
 		RETURN(-EINVAL);
 
@@ -4511,6 +4515,9 @@ int mgs_lcfg_erase(const struct lu_env *env, struct mgs_device *mgs,
 {
 	int rc;
 	ENTRY;
+
+	if (unlikely(!fsname || fsname[0] == '\0'))
+		RETURN(-EINVAL);
 
 	rc = mgs_erase_logs(env, mgs, fsname);
 

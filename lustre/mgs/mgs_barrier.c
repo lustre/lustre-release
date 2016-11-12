@@ -714,7 +714,8 @@ int mgs_iocontrol_barrier(const struct lu_env *env,
 	if (unlikely(bc->bc_version != BARRIER_VERSION_V1))
 		RETURN(-EOPNOTSUPP);
 
-	if (unlikely(strnlen(bc->bc_name, sizeof(bc->bc_name)) > 8))
+	if (unlikely(bc->bc_name[0] == '\0' ||
+		     strnlen(bc->bc_name, sizeof(bc->bc_name)) > 8))
 		RETURN(-EINVAL);
 
 	switch (bc->bc_cmd) {
