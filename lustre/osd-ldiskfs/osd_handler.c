@@ -750,7 +750,8 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 		rc = 0;
 		lustre_lma_swab(lma);
 		if (unlikely((lma->lma_incompat & ~LMA_INCOMPAT_SUPP) ||
-			     CFS_FAIL_CHECK(OBD_FAIL_OSD_LMA_INCOMPAT))) {
+			     (CFS_FAIL_CHECK(OBD_FAIL_OSD_LMA_INCOMPAT) &&
+			      S_ISREG(inode->i_mode)))) {
 			CWARN("%s: unsupported incompat LMA feature(s) %#x for "
 			      "fid = "DFID", ino = %lu\n", osd_name(osd),
 			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,

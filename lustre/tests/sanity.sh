@@ -705,11 +705,11 @@ test_17o() {
 	local rc=0
 
 	test_mkdir -p $WDIR
-	mdt_index=$($LFS getstripe -M $WDIR)
+	touch $WDIR/$tfile
+	mdt_index=$($LFS getstripe -M $WDIR/$tfile)
 	mdt_index=$((mdt_index+1))
 
-	touch $WDIR/$tfile
-
+	cancel_lru_locks mdc
 	#fail mds will wait the failover finish then set
 	#following fail_loc to avoid interfer the recovery process.
 	fail mds${mdt_index}
