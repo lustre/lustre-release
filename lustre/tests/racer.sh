@@ -36,9 +36,13 @@ elif ((MDSCOUNT > 1 &&
 	RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-true}
 fi
 
+[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.54) ||
+   $(facet_fstype mgs) != zfs ]] && RACER_ENABLE_SNAPSHOT=false
+
 RACER_ENABLE_REMOTE_DIRS=${RACER_ENABLE_REMOTE_DIRS:-false}
 RACER_ENABLE_STRIPED_DIRS=${RACER_ENABLE_STRIPED_DIRS:-false}
 RACER_ENABLE_MIGRATION=${RACER_ENABLE_MIGRATION:-false}
+RACER_ENABLE_SNAPSHOT=${RACER_ENABLE_SNAPSHOT:-true}
 
 check_progs_installed $CLIENTS $racer ||
 	{ skip_env "$racer not found" && exit 0; }
@@ -81,6 +85,19 @@ test_1() {
 		rpids="$rpids $pid"
 	done
 
+	local lss_pids=""
+	if $RACER_ENABLE_SNAPSHOT; then
+		lss_gen_conf
+
+		$LUSTRE/tests/racer/lss_create.sh &
+		pid=$!
+		lss_pids="$lss_pids $pid"
+
+		$LUSTRE/tests/racer/lss_destroy.sh &
+		pid=$!
+		lss_pids="$lss_pids $pid"
+	fi
+
 	echo racers pids: $rpids
 	for pid in $rpids; do
 		wait $pid
@@ -90,6 +107,17 @@ test_1() {
 		    rrc=$((rrc + 1))
 		fi
 	done
+
+	if $RACER_ENABLE_SNAPSHOT; then
+		killall -q lss_create.sh
+		killall -q lss_destroy.sh
+
+		for pid in $lss_pids; do
+			wait $pid
+		done
+
+		lss_cleanup
+	fi
 
 	return $rrc
 }

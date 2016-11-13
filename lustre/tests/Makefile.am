@@ -48,6 +48,7 @@ nobase_noinst_SCRIPTS += racer/file_link.sh racer/file_rename.sh racer/file_syml
 nobase_noinst_SCRIPTS += racer/dir_remote.sh racer/dir_migrate.sh racer/file_chmod.sh
 nobase_noinst_SCRIPTS += racer/file_chown.sh racer/file_delxattr.sh racer/file_getxattr.sh
 nobase_noinst_SCRIPTS += racer/file_mknod.sh racer/file_setxattr.sh racer/file_truncate.sh
+nobase_noinst_SCRIPTS += racer/lss_create.sh racer/lss_destroy.sh
 nobase_noinst_SCRIPTS += posix/posix.cfg
 nobase_noinst_DATA = acl/cp.test acl/getfacl-noacl.test acl/inheritance.test
 nobase_noinst_DATA += acl/misc.test acl/permissions.test acl/setfacl.test
