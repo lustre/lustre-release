@@ -130,7 +130,10 @@ static void ldlm_extent_internal_policy_granted(struct ldlm_lock *req,
 	__u64 req_start = req->l_req_extent.start;
 	__u64 req_end = req->l_req_extent.end;
 	struct ldlm_interval_tree *tree;
-	struct interval_node_extent limiter = { new_ex->start, new_ex->end };
+	struct interval_node_extent limiter = {
+		.start	= new_ex->start,
+		.end	= new_ex->end,
+	};
 	int conflicting = 0;
 	int idx;
 	ENTRY;
@@ -139,7 +142,10 @@ static void ldlm_extent_internal_policy_granted(struct ldlm_lock *req,
 
 	/* Using interval tree to handle the LDLM extent granted locks. */
         for (idx = 0; idx < LCK_MODE_NUM; idx++) {
-                struct interval_node_extent ext = { req_start, req_end };
+		struct interval_node_extent ext = {
+			.start	= req_start,
+			.end	= req_end,
+		};
 
                 tree = &res->lr_itree[idx];
                 if (lockmode_compat(tree->lit_mode, req_mode))
