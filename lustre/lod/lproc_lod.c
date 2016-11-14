@@ -765,13 +765,13 @@ static struct lprocfs_vars lprocfs_lod_obd_vars[] = {
 };
 
 static struct lprocfs_vars lprocfs_lod_osd_vars[] = {
-	{ "blocksize",		&lod_dt_blksize_fops		},
-	{ "kbytestotal",	&lod_dt_kbytestotal_fops	},
-	{ "kbytesfree",		&lod_dt_kbytesfree_fops		},
-	{ "kbytesavail",	&lod_dt_kbytesavail_fops	},
-	{ "filestotal",		&lod_dt_filestotal_fops		},
-	{ "filesfree",		&lod_dt_filesfree_fops		},
-	{ NULL }
+	{ .name = "blocksize",	 .fops = &lod_dt_blksize_fops },
+	{ .name = "kbytestotal", .fops = &lod_dt_kbytestotal_fops },
+	{ .name = "kbytesfree",	 .fops = &lod_dt_kbytesfree_fops },
+	{ .name = "kbytesavail", .fops = &lod_dt_kbytesavail_fops },
+	{ .name = "filestotal",	 .fops = &lod_dt_filestotal_fops },
+	{ .name = "filesfree",	 .fops = &lod_dt_filesfree_fops },
+	{ .name = NULL }
 };
 
 static const struct file_operations lod_proc_target_fops = {
