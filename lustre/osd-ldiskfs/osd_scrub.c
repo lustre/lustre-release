@@ -1609,145 +1609,310 @@ struct osd_lf_map {
 /* Add the new introduced local files in the list in the future. */
 static const struct osd_lf_map osd_lf_maps[] = {
 	/* CATALOGS */
-	{ CATLIST, { FID_SEQ_LOCAL_FILE, LLOG_CATALOGS_OID, 0 }, OLF_SHOW_NAME,
-		sizeof(CATLIST) - 1, NULL, NULL },
+	{
+		.olm_name	= CATLIST,
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= LLOG_CATALOGS_OID,
+		},
+		.olm_flags	= OLF_SHOW_NAME,
+		.olm_namelen	= sizeof(CATLIST) - 1,
+	},
 
 	/* CONFIGS */
-	{ MOUNT_CONFIGS_DIR, { FID_SEQ_LOCAL_FILE, MGS_CONFIGS_OID, 0 },
-		OLF_SCAN_SUBITEMS, sizeof(MOUNT_CONFIGS_DIR) - 1,
-		osd_ios_general_scan, osd_ios_varfid_fill },
+	{
+		.olm_name	= MOUNT_CONFIGS_DIR,
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= MGS_CONFIGS_OID,
+		},
+		.olm_flags	= OLF_SCAN_SUBITEMS,
+		.olm_namelen	= sizeof(MOUNT_CONFIGS_DIR) - 1,
+		.olm_scandir	= osd_ios_general_scan,
+		.olm_filldir	= osd_ios_varfid_fill,
+	},
 
 	/* NIDTBL_VERSIONS */
-	{ MGS_NIDTBL_DIR, { 0, 0, 0 }, OLF_SCAN_SUBITEMS,
-		sizeof(MGS_NIDTBL_DIR) - 1, osd_ios_general_scan,
-		osd_ios_varfid_fill },
+	{
+		.olm_name	= MGS_NIDTBL_DIR,
+		.olm_flags	= OLF_SCAN_SUBITEMS,
+		.olm_namelen	= sizeof(MGS_NIDTBL_DIR) - 1,
+		.olm_scandir	= osd_ios_general_scan,
+		.olm_filldir	= osd_ios_varfid_fill,
+	},
 
 	/* PENDING */
-	{ "PENDING", { 0, 0, 0 }, 0, sizeof("PENDING") - 1, NULL, NULL },
+	{
+		.olm_name	= "PENDING",
+		.olm_namelen	= sizeof("PENDING") - 1,
+	},
 
 	/* ROOT */
-	{ "ROOT", { FID_SEQ_ROOT, FID_OID_ROOT, 0 },
-		OLF_SCAN_SUBITEMS | OLF_HIDE_FID, sizeof("ROOT") - 1,
-		osd_ios_ROOT_scan, NULL },
+	{
+		.olm_name	= "ROOT",
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_ROOT,
+			.f_oid	= FID_OID_ROOT,
+		},
+		.olm_flags	= OLF_SCAN_SUBITEMS | OLF_HIDE_FID,
+		.olm_namelen	= sizeof("ROOT") - 1,
+		.olm_scandir	= osd_ios_ROOT_scan,
+	},
 
 	/* changelog_catalog */
-	{ CHANGELOG_CATALOG, { 0, 0, 0 }, 0, sizeof(CHANGELOG_CATALOG) - 1,
-		NULL, NULL },
+	{
+		.olm_name	= CHANGELOG_CATALOG,
+		.olm_namelen	= sizeof(CHANGELOG_CATALOG) - 1,
+	},
 
 	/* changelog_users */
-	{ CHANGELOG_USERS, { 0, 0, 0 }, 0, sizeof(CHANGELOG_USERS) - 1,
-		NULL, NULL },
+	{
+		.olm_name	= CHANGELOG_USERS,
+		.olm_namelen	= sizeof(CHANGELOG_USERS) - 1,
+	},
 
 	/* fld */
-	{ "fld", { FID_SEQ_LOCAL_FILE, FLD_INDEX_OID, 0 }, OLF_SHOW_NAME,
-		sizeof("fld") - 1, NULL, NULL },
+	{
+		.olm_name	= "fld",
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= FLD_INDEX_OID,
+		},
+		.olm_flags	= OLF_SHOW_NAME,
+		.olm_namelen	= sizeof("fld") - 1,
+	},
 
 	/* last_rcvd */
-	{ LAST_RCVD, { FID_SEQ_LOCAL_FILE, LAST_RECV_OID, 0 }, OLF_SHOW_NAME,
-		sizeof(LAST_RCVD) - 1, NULL, NULL },
+	{
+		.olm_name	= LAST_RCVD,
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= LAST_RECV_OID,
+		},
+		.olm_flags	= OLF_SHOW_NAME,
+		.olm_namelen	= sizeof(LAST_RCVD) - 1,
+	},
 
 	/* reply_data */
-	{ REPLY_DATA, { FID_SEQ_LOCAL_FILE, REPLY_DATA_OID, 0 }, OLF_SHOW_NAME,
-		sizeof(REPLY_DATA) - 1, NULL, NULL },
+	{
+		.olm_name	= REPLY_DATA,
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= REPLY_DATA_OID,
+		},
+		.olm_flags	= OLF_SHOW_NAME,
+		.olm_namelen	= sizeof(REPLY_DATA) - 1,
+	},
 
 	/* lov_objid */
-	{ LOV_OBJID, { FID_SEQ_LOCAL_FILE, MDD_LOV_OBJ_OID, 0 }, OLF_SHOW_NAME,
-		sizeof(LOV_OBJID) - 1, NULL, NULL },
+	{
+		.olm_name	= LOV_OBJID,
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= MDD_LOV_OBJ_OID,
+		},
+		.olm_flags	= OLF_SHOW_NAME,
+		.olm_namelen	= sizeof(LOV_OBJID) - 1,
+	},
 
 	/* lov_objseq */
-	{ LOV_OBJSEQ, { FID_SEQ_LOCAL_FILE, MDD_LOV_OBJ_OSEQ, 0 },
-		OLF_SHOW_NAME, sizeof(LOV_OBJSEQ) - 1, NULL, NULL },
+	{
+		.olm_name	= LOV_OBJSEQ,
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= MDD_LOV_OBJ_OSEQ,
+		},
+		.olm_flags	= OLF_SHOW_NAME,
+		.olm_namelen	= sizeof(LOV_OBJSEQ) - 1,
+	},
 
 	/* quota_master */
-	{ QMT_DIR, { 0, 0, 0 }, OLF_SCAN_SUBITEMS, sizeof(QMT_DIR) - 1,
-		osd_ios_general_scan, osd_ios_varfid_fill },
+	{
+		.olm_name	= QMT_DIR,
+		.olm_flags	= OLF_SCAN_SUBITEMS,
+		.olm_namelen	= sizeof(QMT_DIR) - 1,
+		.olm_scandir	= osd_ios_general_scan,
+		.olm_filldir	= osd_ios_varfid_fill,
+	},
 
 	/* quota_slave */
-	{ QSD_DIR, { 0, 0, 0 }, OLF_SCAN_SUBITEMS, sizeof(QSD_DIR) - 1,
-		osd_ios_general_scan, osd_ios_varfid_fill },
+	{
+		.olm_name	= QSD_DIR,
+		.olm_flags	= OLF_SCAN_SUBITEMS,
+		.olm_namelen	= sizeof(QSD_DIR) - 1,
+		.olm_scandir	= osd_ios_general_scan,
+		.olm_filldir	= osd_ios_varfid_fill,
+	},
 
 	/* seq_ctl */
-	{ "seq_ctl", { FID_SEQ_LOCAL_FILE, FID_SEQ_CTL_OID, 0 },
-		OLF_SHOW_NAME, sizeof("seq_ctl") - 1, NULL, NULL },
+	{
+		.olm_name	= "seq_ctl",
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= FID_SEQ_CTL_OID,
+		},
+		.olm_flags	= OLF_SHOW_NAME,
+		.olm_namelen	= sizeof("seq_ctl") - 1,
+	},
 
 	/* seq_srv */
-	{ "seq_srv", { FID_SEQ_LOCAL_FILE, FID_SEQ_SRV_OID, 0 },
-		OLF_SHOW_NAME, sizeof("seq_srv") - 1, NULL, NULL },
+	{
+		.olm_name	= "seq_srv",
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= FID_SEQ_SRV_OID,
+		},
+		.olm_flags	= OLF_SHOW_NAME,
+		.olm_namelen	= sizeof("seq_srv") - 1,
+	},
 
 	/* health_check */
-	{ HEALTH_CHECK, { FID_SEQ_LOCAL_FILE, OFD_HEALTH_CHECK_OID, 0 },
-		OLF_SHOW_NAME, sizeof(HEALTH_CHECK) - 1, NULL, NULL },
+	{
+		.olm_name	= HEALTH_CHECK,
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= OFD_HEALTH_CHECK_OID,
+		},
+		.olm_flags	= OLF_SHOW_NAME,
+		.olm_namelen	= sizeof(HEALTH_CHECK) - 1,
+	},
 
 	/* LFSCK */
-	{ LFSCK_DIR, { 0, 0, 0 }, 0, sizeof(LFSCK_DIR) - 1,
-		osd_ios_general_scan, osd_ios_varfid_fill },
+	{
+		.olm_name	= LFSCK_DIR,
+		.olm_namelen	= sizeof(LFSCK_DIR) - 1,
+		.olm_scandir	= osd_ios_general_scan,
+		.olm_filldir	= osd_ios_varfid_fill,
+	},
 
 	/* lfsck_bookmark */
-	{ LFSCK_BOOKMARK, { 0, 0, 0 }, 0, sizeof(LFSCK_BOOKMARK) - 1,
-		NULL, NULL },
+	{
+		.olm_name	= LFSCK_BOOKMARK,
+		.olm_namelen	= sizeof(LFSCK_BOOKMARK) - 1,
+	},
 
 	/* lfsck_layout */
-	{ LFSCK_LAYOUT, { 0, 0, 0 }, 0, sizeof(LFSCK_LAYOUT) - 1,
-		NULL, NULL },
+	{
+		.olm_name	= LFSCK_LAYOUT,
+		.olm_namelen	= sizeof(LFSCK_LAYOUT) - 1,
+	},
 
 	/* lfsck_namespace */
-	{ LFSCK_NAMESPACE, { 0, 0, 0 }, 0, sizeof(LFSCK_NAMESPACE) - 1,
-		NULL, NULL },
+	{
+		.olm_name	= LFSCK_NAMESPACE,
+		.olm_namelen	= sizeof(LFSCK_NAMESPACE) - 1,
+	},
 
 	/* OBJECTS, upgrade from old device */
-	{ OBJECTS, { 0, 0, 0 }, OLF_SCAN_SUBITEMS, sizeof(OBJECTS) - 1,
-		osd_ios_OBJECTS_scan, NULL },
+	{
+		.olm_name	= OBJECTS,
+		.olm_flags	= OLF_SCAN_SUBITEMS,
+		.olm_namelen	= sizeof(OBJECTS) - 1,
+		.olm_scandir	= osd_ios_OBJECTS_scan,
+	},
 
 	/* lquota_v2.user, upgrade from old device */
-	{ "lquota_v2.user", { 0, 0, 0 }, 0, sizeof("lquota_v2.user") - 1,
-		NULL, NULL },
+	{
+		.olm_name	= "lquota_v2.user",
+		.olm_namelen	= sizeof("lquota_v2.user") - 1,
+	},
 
 	/* lquota_v2.group, upgrade from old device */
-	{ "lquota_v2.group", { 0, 0, 0 }, 0, sizeof("lquota_v2.group") - 1,
-		NULL, NULL },
+	{
+		.olm_name	= "lquota_v2.group",
+		.olm_namelen	= sizeof("lquota_v2.group") - 1,
+	},
 
 	/* LAST_GROUP, upgrade from old device */
-	{ "LAST_GROUP", { FID_SEQ_LOCAL_FILE, OFD_LAST_GROUP_OID, 0 },
-		OLF_SHOW_NAME, sizeof("LAST_GROUP") - 1, NULL, NULL },
+	{
+		.olm_name	= "LAST_GROUP",
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= OFD_LAST_GROUP_OID,
+		},
+		.olm_flags	= OLF_SHOW_NAME,
+		.olm_namelen	= sizeof("LAST_GROUP") - 1,
+	},
 
 	/* committed batchid for cross-MDT operation */
-	{ "BATCHID", { FID_SEQ_LOCAL_FILE, BATCHID_COMMITTED_OID, 0 },
-		OLF_SHOW_NAME, sizeof("BATCHID") - 1, NULL, NULL },
+	{
+		.olm_name	= "BATCHID",
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= BATCHID_COMMITTED_OID,
+		},
+		.olm_flags	= OLF_SHOW_NAME,
+		.olm_namelen	= sizeof("BATCHID") - 1,
+	},
 
 	/* OSP update logs update_log{_dir} use f_seq = FID_SEQ_UPDATE_LOG{_DIR}
 	 * and f_oid = index for their log files.  See lu_update_log{_dir}_fid()
 	 * for more details. */
 
 	/* update_log */
-	{ "update_log", { FID_SEQ_UPDATE_LOG, 0, 0 },
-		OLF_SHOW_NAME | OLF_IDX_IN_FID, sizeof("update_log") - 1,
-		NULL, NULL },
+	{
+		.olm_name	= "update_log",
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_UPDATE_LOG,
+		},
+		.olm_flags	= OLF_SHOW_NAME | OLF_IDX_IN_FID,
+		.olm_namelen	= sizeof("update_log") - 1,
+	},
 
 	/* update_log_dir */
-	{ "update_log_dir", { FID_SEQ_UPDATE_LOG_DIR, 0, 0 },
-		OLF_SHOW_NAME | OLF_SCAN_SUBITEMS | OLF_IDX_IN_FID,
-		sizeof("update_log_dir") - 1,
-		osd_ios_general_scan, osd_ios_uld_fill },
+	{
+		.olm_name	= "update_log_dir",
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_UPDATE_LOG_DIR,
+		},
+		.olm_flags	= OLF_SHOW_NAME | OLF_SCAN_SUBITEMS |
+				  OLF_IDX_IN_FID,
+		.olm_namelen	= sizeof("update_log_dir") - 1,
+		.olm_scandir	= osd_ios_general_scan,
+		.olm_filldir	= osd_ios_uld_fill,
+	},
 
 	/* lost+found */
-	{ "lost+found", { FID_SEQ_LOCAL_FILE, OSD_LPF_OID, 0 },
-		OLF_SCAN_SUBITEMS, sizeof("lost+found") - 1,
-		osd_ios_general_scan, osd_ios_lf_fill },
+	{
+		.olm_name	= "lost+found",
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= OSD_LPF_OID,
+		},
+		.olm_flags	= OLF_SCAN_SUBITEMS,
+		.olm_namelen	= sizeof("lost+found") - 1,
+		.olm_scandir	= osd_ios_general_scan,
+		.olm_filldir	= osd_ios_lf_fill,
+	},
 
-	{ NULL, { 0, 0, 0 }, 0, 0, NULL, NULL }
+	{
+		.olm_name	= NULL
+	}
 };
 
 /* Add the new introduced files under .lustre/ in the list in the future. */
 static const struct osd_lf_map osd_dl_maps[] = {
 	/* .lustre/fid */
-	{ "fid", { FID_SEQ_DOT_LUSTRE, FID_OID_DOT_LUSTRE_OBF, 0 }, 0,
-		sizeof("fid") - 1, NULL, NULL },
-
+	{
+		.olm_name	= "fid",
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_DOT_LUSTRE,
+			.f_oid	= FID_OID_DOT_LUSTRE_OBF,
+		},
+		.olm_namelen	= sizeof("fid") - 1,
+	},
 	/* .lustre/lost+found */
-	{ "lost+found", { FID_SEQ_DOT_LUSTRE, FID_OID_DOT_LUSTRE_LPF, 0 }, 0,
-		sizeof("lost+found") - 1, NULL, NULL },
-
-	{ NULL, { 0, 0, 0 }, 0, 0, NULL, NULL }
+	{
+		.olm_name	= "lost+found",
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_DOT_LUSTRE,
+			.f_oid	= FID_OID_DOT_LUSTRE_LPF,
+		},
+		.olm_namelen	= sizeof("lost+found") - 1,
+	},
+	{
+		.olm_name	= NULL
+	}
 };
 
 struct osd_ios_item {

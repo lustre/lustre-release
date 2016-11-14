@@ -79,19 +79,19 @@ struct named_oid {
 };
 
 static const struct named_oid oids[] = {
-	{ LAST_RECV_OID,		LAST_RCVD },
-	{ OFD_LAST_GROUP_OID,		"LAST_GROUP" },
-	{ LLOG_CATALOGS_OID,		"CATALOGS" },
-	{ MGS_CONFIGS_OID,              NULL /*MOUNT_CONFIGS_DIR*/ },
-	{ FID_SEQ_SRV_OID,              "seq_srv" },
-	{ FID_SEQ_CTL_OID,              "seq_ctl" },
-	{ FLD_INDEX_OID,                "fld" },
-	{ MDD_LOV_OBJ_OID,		LOV_OBJID },
-	{ OFD_HEALTH_CHECK_OID,		HEALTH_CHECK },
-	{ ACCT_USER_OID,		"acct_usr_inode" },
-	{ ACCT_GROUP_OID,		"acct_grp_inode" },
-	{ REPLY_DATA_OID,		REPLY_DATA },
-	{ 0,				NULL }
+	{ .oid = LAST_RECV_OID,	       .name = LAST_RCVD },
+	{ .oid = OFD_LAST_GROUP_OID,   .name = "LAST_GROUP" },
+	{ .oid = LLOG_CATALOGS_OID,    .name = "CATALOGS" },
+	{ .oid = MGS_CONFIGS_OID,      /*MOUNT_CONFIGS_DIR*/ },
+	{ .oid = FID_SEQ_SRV_OID,      .name = "seq_srv" },
+	{ .oid = FID_SEQ_CTL_OID,      .name = "seq_ctl" },
+	{ .oid = FLD_INDEX_OID,	       .name = "fld" },
+	{ .oid = MDD_LOV_OBJ_OID,      .name = LOV_OBJID },
+	{ .oid = OFD_HEALTH_CHECK_OID, .name = HEALTH_CHECK },
+	{ .oid = ACCT_USER_OID,	       .name = "acct_usr_inode" },
+	{ .oid = ACCT_GROUP_OID,       .name = "acct_grp_inode" },
+	{ .oid = REPLY_DATA_OID,       .name = REPLY_DATA },
+	{ .oid = 0 }
 };
 
 static char *oid2name(const unsigned long oid)
