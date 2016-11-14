@@ -255,7 +255,7 @@ cleanup () {
 	fi
 	exit $exit_status
 }
-trap 'cleanup 0 $clean_srv_OSS $cleanup_oscs' SIGHUP SIGINT SIGTERM
+trap 'cleanup 0 $clean_srv_OSS $cleanup_oscs' EXIT SIGHUP SIGINT SIGTERM
 
 # gets echoclient device number and attach it to the client UUID
 # Results are  returned by an echo followed by an exit
