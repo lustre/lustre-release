@@ -1139,6 +1139,8 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry,
 	       dentry->d_name.name, PFID(ll_inode2fid(dir)),
 	       dir, mode, want_excl);
 
+	/* Using mknod(2) to create a regular file is designed to not recognize
+	 * volatile file name, so we use ll_mknod() here. */
 	rc = ll_mknod(dir, dentry, mode, 0);
 
 	ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_CREATE, 1);
@@ -1161,19 +1163,26 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry,
 	if (lld != NULL)
 		it = lld->lld_it;
 
-        if (!it)
-		return ll_mknod(dir, dentry, mode, 0);
+	if (!it) {
+		/* LU-8559: use LUSTRE_OPC_CREATE for non atomic open case
+		 * so that volatile file name is recoginized.
+		 * Mknod(2), however, is designed to not recognize volatile
+		 * file name to avoid inode leak under orphan directory until
+		 * MDT reboot */
+		return ll_new_node(dir, dentry, NULL, mode, 0,
+				   LUSTRE_OPC_CREATE);
+	}
 
 	lld->lld_it = NULL;
 
-        /* Was there an error? Propagate it! */
+	/* Was there an error? Propagate it! */
 	if (it->it_status) {
 		rc = it->it_status;
-                goto out;
-        }
+		goto out;
+	}
 
 	rc = ll_create_it(dir, dentry, it);
-        if (nd && (nd->flags & LOOKUP_OPEN) && dentry->d_inode) { /* Open */
+	if (nd && (nd->flags & LOOKUP_OPEN) && dentry->d_inode) { /* Open */
 		struct file *filp;
 
 		nd->intent.open.file->private_data = it;
