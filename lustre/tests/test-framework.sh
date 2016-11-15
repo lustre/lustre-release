@@ -1000,7 +1000,8 @@ running_in_vm() {
 	virt=$(dmidecode -s system-product-name | awk '{print $1}')
 
 	case $virt in
-		VMware|KVM|VirtualBox|Parallels) echo ${virt,,} ;;
+		VMware|KVM|VirtualBox|Parallels)
+			echo $virt | tr '[A-Z]' '[a-z]' ;;
 		*) ;;
 	esac
 }
