@@ -63,7 +63,9 @@ static int
 lprocfs_fid_write_common(const char __user *buffer, size_t count,
 				struct lu_seq_range *range)
 {
-	struct lu_seq_range tmp = { 0, };
+	struct lu_seq_range tmp = {
+		.lsr_start = 0,
+	};
 	char kernbuf[MAX_FID_RANGE_STRLEN];
 	ENTRY;
 
