@@ -261,10 +261,12 @@ static int mgs_get_fsdb_from_llog(const struct lu_env *env,
 				  struct mgs_device *mgs,
 				  struct fs_db *fsdb)
 {
-	char				*logname;
-	struct llog_handle		*loghandle;
-	struct llog_ctxt		*ctxt;
-	struct mgs_fsdb_handler_data	 d = { fsdb, 0 };
+	char *logname;
+	struct llog_handle *loghandle;
+	struct llog_ctxt *ctxt;
+	struct mgs_fsdb_handler_data d = {
+		.fsdb = fsdb,
+	};
 	int rc;
 
 	ENTRY;

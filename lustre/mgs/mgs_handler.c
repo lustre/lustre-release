@@ -225,7 +225,9 @@ static int mgs_completion_ast_ir(struct ldlm_lock *lock, __u64 flags,
 void mgs_revoke_lock(struct mgs_device *mgs, struct fs_db *fsdb, int type)
 {
 	ldlm_completion_callback cp = NULL;
-	struct lustre_handle     lockh = { 0 };
+	struct lustre_handle     lockh = {
+		.cookie = 0,
+	};
 	struct ldlm_res_id       res_id;
 	__u64 flags = LDLM_FL_ATOMIC_CB;
 	int rc;
@@ -1480,7 +1482,9 @@ static int mgs_obd_connect(const struct lu_env *env, struct obd_export **exp,
 			   struct obd_connect_data *data, void *localdata)
 {
 	struct obd_export	*lexp;
-	struct lustre_handle	 conn = { 0 };
+	struct lustre_handle	 conn = {
+		.cookie = 0,
+	};
 	int			 rc;
 
 	ENTRY;
