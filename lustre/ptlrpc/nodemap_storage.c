@@ -615,6 +615,14 @@ int nodemap_idx_nodemap_activate(bool value)
 	return nodemap_idx_global_add_update(value, NM_UPDATE);
 }
 
+static enum nodemap_idx_type nodemap_get_key_type(const struct nodemap_key *key)
+{
+	u32			 nodemap_id;
+
+	nodemap_id = le32_to_cpu(key->nk_nodemap_id);
+	return nm_idx_get_type(nodemap_id);
+}
+
 /**
  * Process a key/rec pair and modify the new configuration.
  *
@@ -642,10 +650,12 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 	u32			 map[2];
 	int			 rc;
 
+	ENTRY;
+
 	CLASSERT(sizeof(union nodemap_rec) == 32);
 
 	nodemap_id = le32_to_cpu(key->nk_nodemap_id);
-	type = nm_idx_get_type(nodemap_id);
+	type = nodemap_get_key_type(key);
 	nodemap_id = nm_idx_set_type(nodemap_id, 0);
 
 	CDEBUG(D_INFO, "found config entry, nm_id %d type %d\n",
@@ -764,21 +774,29 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 
 	rc = type;
 
+	EXIT;
+
 out:
 	return rc;
 }
 
+enum nm_config_passes {
+	NM_READ_CLUSTERS = 0,
+	NM_READ_ATTRIBUTES = 1,
+};
+
 static int nodemap_load_entries(const struct lu_env *env,
 				struct dt_object *nodemap_idx)
 {
-	const struct dt_it_ops  *iops;
-	struct dt_it            *it;
-	struct lu_nodemap	*recent_nodemap = NULL;
-	struct nodemap_config	*new_config = NULL;
-	u64			 hash = 0;
-	bool			 activate_nodemap = false;
-	bool			 loaded_global_idx = false;
-	int			 rc = 0;
+	const struct dt_it_ops *iops;
+	struct dt_it *it;
+	struct lu_nodemap *recent_nodemap = NULL;
+	struct nodemap_config *new_config = NULL;
+	u64 hash = 0;
+	bool activate_nodemap = false;
+	bool loaded_global_idx = false;
+	enum nm_config_passes cur_pass = NM_READ_CLUSTERS;
+	int rc = 0;
 
 	ENTRY;
 
@@ -816,23 +834,43 @@ static int nodemap_load_entries(const struct lu_env *env,
 	while (rc == 0) {
 		struct nodemap_key *key;
 		union nodemap_rec rec;
+		enum nodemap_idx_type key_type;
 
 		key = (struct nodemap_key *)iops->key(env, it);
-		rc = iops->rec(env, it, (struct dt_rec *)&rec, 0);
-		if (rc != -ESTALE) {
-			if (rc != 0)
-				GOTO(out_nodemap_config, rc);
-			rc = nodemap_process_keyrec(new_config, key, &rec,
-						    &recent_nodemap);
-			if (rc < 0)
-				GOTO(out_nodemap_config, rc);
-			if (rc == NODEMAP_GLOBAL_IDX)
-				loaded_global_idx = true;
+		key_type = nodemap_get_key_type((struct nodemap_key *)key);
+		if ((cur_pass == NM_READ_CLUSTERS &&
+				key_type == NODEMAP_CLUSTER_IDX) ||
+		    (cur_pass == NM_READ_ATTRIBUTES &&
+				key_type != NODEMAP_CLUSTER_IDX &&
+				key_type != NODEMAP_EMPTY_IDX)) {
+			rc = iops->rec(env, it, (struct dt_rec *)&rec, 0);
+			if (rc != -ESTALE) {
+				if (rc != 0)
+					GOTO(out_nodemap_config, rc);
+				rc = nodemap_process_keyrec(new_config, key, &rec,
+							    &recent_nodemap);
+				if (rc < 0)
+					GOTO(out_nodemap_config, rc);
+				if (rc == NODEMAP_GLOBAL_IDX)
+					loaded_global_idx = true;
+			}
 		}
 
 		do
 			rc = iops->next(env, it);
 		while (rc == -ESTALE);
+
+		/* move to second pass */
+		if (rc > 0 && cur_pass == NM_READ_CLUSTERS) {
+			cur_pass = NM_READ_ATTRIBUTES;
+			rc = iops->load(env, it, 0);
+			if (rc == 0)
+				rc = iops->next(env, it);
+			else if (rc > 0)
+				rc = 0;
+			else
+				GOTO(out, rc);
+		}
 	}
 
 	if (rc > 0)
@@ -1234,6 +1272,109 @@ int nodemap_process_idx_pages(struct nodemap_config *config, union lu_page *lip,
 }
 EXPORT_SYMBOL(nodemap_process_idx_pages);
 
+static int nodemap_page_build(const struct lu_env *env, union lu_page *lp,
+			      size_t nob, const struct dt_it_ops *iops,
+			      struct dt_it *it, __u32 attr, void *arg)
+{
+	struct idx_info *ii = (struct idx_info *)arg;
+	struct lu_idxpage *lip = &lp->lp_idx;
+	char *entry;
+	size_t size = ii->ii_keysize + ii->ii_recsize;
+	int rc;
+	ENTRY;
+
+	if (nob < LIP_HDR_SIZE)
+		return -EINVAL;
+
+	/* initialize the header of the new container */
+	memset(lip, 0, LIP_HDR_SIZE);
+	lip->lip_magic = LIP_MAGIC;
+	nob           -= LIP_HDR_SIZE;
+
+	entry = lip->lip_entries;
+	do {
+		char		*tmp_entry = entry;
+		struct dt_key	*key;
+		__u64		hash;
+		enum nodemap_idx_type key_type;
+
+		/* fetch 64-bit hash value */
+		hash = iops->store(env, it);
+		ii->ii_hash_end = hash;
+
+		if (OBD_FAIL_CHECK(OBD_FAIL_OBD_IDX_READ_BREAK)) {
+			if (lip->lip_nr != 0)
+				GOTO(out, rc = 0);
+		}
+
+		if (nob < size) {
+			if (lip->lip_nr == 0)
+				GOTO(out, rc = -EINVAL);
+			GOTO(out, rc = 0);
+		}
+
+		key = iops->key(env, it);
+		key_type = nodemap_get_key_type((struct nodemap_key *)key);
+
+		/* on the first pass, get only the cluster types. On second
+		 * pass, get all the rest */
+		if ((ii->ii_attrs == NM_READ_CLUSTERS &&
+				key_type == NODEMAP_CLUSTER_IDX) ||
+		    (ii->ii_attrs == NM_READ_ATTRIBUTES &&
+				key_type != NODEMAP_CLUSTER_IDX &&
+				key_type != NODEMAP_EMPTY_IDX)) {
+			memcpy(tmp_entry, key, ii->ii_keysize);
+			tmp_entry += ii->ii_keysize;
+
+			/* and finally the record */
+			rc = iops->rec(env, it, (struct dt_rec *)tmp_entry,
+				       attr);
+			if (rc != -ESTALE) {
+				if (rc != 0)
+					GOTO(out, rc);
+
+				/* hash/key/record successfully copied! */
+				lip->lip_nr++;
+				if (unlikely(lip->lip_nr == 1 &&
+				    ii->ii_count == 0))
+					ii->ii_hash_start = hash;
+
+				entry = tmp_entry + ii->ii_recsize;
+				nob -= size;
+			}
+		}
+
+		/* move on to the next record */
+		do {
+			rc = iops->next(env, it);
+		} while (rc == -ESTALE);
+
+		/* move to second pass */
+		if (rc > 0 && ii->ii_attrs == NM_READ_CLUSTERS) {
+			ii->ii_attrs = NM_READ_ATTRIBUTES;
+			rc = iops->load(env, it, 0);
+			if (rc == 0)
+				rc = iops->next(env, it);
+			else if (rc > 0)
+				rc = 0;
+			else
+				GOTO(out, rc);
+		}
+
+	} while (rc == 0);
+
+	GOTO(out, rc);
+out:
+	if (rc >= 0 && lip->lip_nr > 0)
+		/* one more container */
+		ii->ii_count++;
+	if (rc > 0)
+		/* no more entries */
+		ii->ii_hash_end = II_END_OFF;
+	return rc;
+}
+
+
 int nodemap_index_read(struct lu_env *env,
 		       struct nm_config_file *ncf,
 		       struct idx_info *ii,
@@ -1254,7 +1395,8 @@ int nodemap_index_read(struct lu_env *env,
 		       version);
 		ii->ii_hash_end = 0;
 	} else {
-		rc = dt_index_walk(env, nodemap_idx, rdpg, NULL, ii);
+		rc = dt_index_walk(env, nodemap_idx, rdpg, nodemap_page_build,
+				   ii);
 		CDEBUG(D_INFO, "walked index, hashend %llx\n", ii->ii_hash_end);
 	}
 
@@ -1322,6 +1464,7 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	nodemap_ii.ii_magic = IDX_INFO_MAGIC;
 	nodemap_ii.ii_flags = II_FL_NOHASH;
 	nodemap_ii.ii_version = rqexp_ted->ted_nodemap_version;
+	nodemap_ii.ii_attrs = body->mcb_nm_cur_pass;
 
 	bytes = nodemap_index_read(req->rq_svc_thread->t_env,
 				   mgs_obd->u.obt.obt_nodemap_config_file,
@@ -1335,7 +1478,7 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	if (res == NULL)
 		GOTO(out, rc = -EINVAL);
 	res->mcr_offset = nodemap_ii.ii_hash_end;
-	res->mcr_size = bytes;
+	res->mcr_nm_cur_pass = nodemap_ii.ii_attrs;
 
 	page_count = (bytes + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	LASSERT(page_count <= rdpg.rp_count);

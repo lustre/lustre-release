@@ -1579,6 +1579,7 @@ static int mgc_process_recover_nodemap_log(struct obd_device *obd,
 	struct ptlrpc_bulk_desc *desc;
 	struct page **pages = NULL;
 	__u64 config_read_offset = 0;
+	__u8 nodemap_cur_pass = 0;
 	int nrpages = 0;
 	bool eof = true;
 	bool mne_swab = false;
@@ -1650,6 +1651,7 @@ again:
 	body->mcb_type   = cld->cld_type;
 	body->mcb_bits   = PAGE_SHIFT;
 	body->mcb_units  = nrpages;
+	body->mcb_nm_cur_pass = nodemap_cur_pass;
 
 	/* allocate bulk transfer descriptor */
 	desc = ptlrpc_prep_bulk_imp(req, nrpages, 1,
@@ -1675,6 +1677,7 @@ again:
 	if (cld_is_nodemap(cld)) {
 		config_read_offset = res->mcr_offset;
 		eof = config_read_offset == II_END_OFF;
+		nodemap_cur_pass = res->mcr_nm_cur_pass;
 	} else {
 		if (res->mcr_size < res->mcr_offset)
 			GOTO(out, rc = -EINVAL);

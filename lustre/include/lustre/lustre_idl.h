@@ -2918,17 +2918,20 @@ struct mgs_nidtbl_entry {
 };
 
 struct mgs_config_body {
-        char     mcb_name[MTI_NAME_MAXLEN]; /* logname */
-        __u64    mcb_offset;    /* next index of config log to request */
-        __u16    mcb_type;      /* type of log: CONFIG_T_[CONFIG|RECOVER] */
-        __u8     mcb_reserved;
-        __u8     mcb_bits;      /* bits unit size of config log */
-        __u32    mcb_units;     /* # of units for bulk transfer */
+	char     mcb_name[MTI_NAME_MAXLEN]; /* logname */
+	__u64    mcb_offset;    /* next index of config log to request */
+	__u16    mcb_type;      /* type of log: CONFIG_T_[CONFIG|RECOVER] */
+	__u8     mcb_nm_cur_pass;
+	__u8     mcb_bits;      /* bits unit size of config log */
+	__u32    mcb_units;     /* # of units for bulk transfer */
 };
 
 struct mgs_config_res {
-        __u64    mcr_offset;    /* index of last config log */
-        __u64    mcr_size;      /* size of the log */
+	__u64    mcr_offset;    /* index of last config log */
+	union {
+		__u64    mcr_size;		/* size of the log */
+		__u64	 mcr_nm_cur_pass;	/* current nodemap config pass */
+	};
 };
 
 /* Config marker flags (in config log) */
