@@ -1754,7 +1754,7 @@ again:
 			      cld_is_nodemap(cld) ? "nodemap" : "recovery",
 			      cld->cld_logname,
 			      rc2);
-			break;
+			GOTO(out, rc = rc2);
 		}
 
 		ealen -= PAGE_SIZE;
