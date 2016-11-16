@@ -738,7 +738,7 @@ static int mdc_enqueue_base(struct obd_export *exp,
 		LASSERT(policy == NULL);
 
 		saved_flags |= LDLM_FL_HAS_INTENT;
-		if (it->it_op & (IT_OPEN | IT_UNLINK | IT_GETATTR | IT_READDIR))
+		if (it->it_op & (IT_UNLINK | IT_GETATTR | IT_READDIR))
 			policy = &update_policy;
 		else if (it->it_op & IT_LAYOUT)
 			policy = &layout_policy;
