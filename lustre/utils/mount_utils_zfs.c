@@ -32,6 +32,8 @@
 #include <string.h>
 #include <libzfs.h>
 
+#define HOSTID_PATH "/etc/hostid"
+
 /* Persistent mount data is stored in these user attributes */
 #define LDD_PREFIX		"lustre:"
 #define LDD_VERSION_PROP	LDD_PREFIX "version"
@@ -198,6 +200,23 @@ static int zfs_check_hostid(struct mkfs_opts *mop)
 		return rc;
 	}
 
+	if (hostid != 0)
+		return 0;
+
+	f = fopen(HOSTID_PATH, "r");
+	if (f == NULL)
+		goto out;
+
+	rc = fread(&hostid, sizeof(uint32_t), 1, f);
+	fclose(f);
+
+	if (rc != 1) {
+		fprintf(stderr, "Failed to read "HOSTID_PATH": %d\n",
+		       rc);
+		hostid = 0;
+	}
+
+out:
 	if (hostid == 0) {
 		if (mop->mo_flags & MO_NOHOSTID_CHECK) {
 			fprintf(stderr, "WARNING: spl_hostid not set. ZFS has "
