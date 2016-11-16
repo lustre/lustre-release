@@ -5746,10 +5746,6 @@ cleanup_68() {
 		rm -f $LLOOP
 		unset LLOOP
 	fi
-	if [ ! -z "$LLITELOOPLOAD" ]; then
-		rmmod llite_lloop
-		unset LLITELOOPLOAD
-	fi
 	rm -f $DIR/f68*
 }
 
@@ -5760,74 +5756,6 @@ meminfo() {
 swap_used() {
 	swapon -s | awk '($1 == "'$1'") { print $4 }'
 }
-
-# test case for lloop driver, basic function
-test_68a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ "$UID" != 0 ] && skip_env "must run as root" && return
-	llite_lloop_enabled || \
- 		{ skip_env "llite_lloop module disabled" && return; }
-
-	trap cleanup_68 EXIT
-
-	if ! module_loaded llite_lloop; then
-		if load_module llite/llite_lloop; then
-			LLITELOOPLOAD=yes
-		else
-			skip_env "can't find module llite_lloop"
-			return
-		fi
-	fi
-
-	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
-	dd if=/dev/zero of=$DIR/f68a bs=4k count=1024
-	$LCTL blockdev_attach $DIR/f68a $LLOOP || error "attach failed"
-
-	directio rdwr $LLOOP 0 1024 4096 || error "direct write failed"
-	directio rdwr $LLOOP 0 1025 4096 && error "direct write should fail"
-
-	cleanup_68
-}
-run_test 68a "lloop driver - basic test ========================"
-
-# excercise swapping to lustre by adding a high priority swapfile entry
-# and then consuming memory until it is used.
-test_68b() {  # was test_68
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ "$UID" != 0 ] && skip_env "must run as root" && return
-	lctl get_param -n devices | grep -q obdfilter && \
-		skip "local OST" && return
-
-	grep -q llite_lloop /proc/modules
-	[ $? -ne 0 ] && skip "can't find module llite_lloop" && return
-
-	[ -z "`$LCTL list_nids | grep -v tcp`" ] && \
-		skip "can't reliably test swap with TCP" && return
-
-	MEMTOTAL=`meminfo MemTotal`
-	NR_BLOCKS=$((MEMTOTAL>>8))
-	[[ $NR_BLOCKS -le 2048 ]] && NR_BLOCKS=2048
-
-	LLOOP=$TMP/lloop.`date +%s`.`date +%N`
-	dd if=/dev/zero of=$DIR/f68b bs=64k seek=$NR_BLOCKS count=1
-	mkswap $DIR/f68b
-
-	$LCTL blockdev_attach $DIR/f68b $LLOOP || error "attach failed"
-
-	trap cleanup_68 EXIT
-
-	swapon -p 32767 $LLOOP || error "swapon $LLOOP failed"
-
-	echo "before: `swapon -s | grep $LLOOP`"
-	$MEMHOG $MEMTOTAL || error "error allocating $MEMTOTAL kB"
-	echo "after: `swapon -s | grep $LLOOP`"
-	SWAPUSED=`swap_used $LLOOP`
-
-	cleanup_68
-
-	[ $SWAPUSED -eq 0 ] && echo "no swap used???" || true
-}
-run_test 68b "support swapping to Lustre ========================"
 
 # bug5265, obdfilter oa2dentry return -ENOENT
 # #define OBD_FAIL_SRV_ENOENT 0x217

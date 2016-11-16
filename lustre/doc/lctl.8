@@ -266,18 +266,6 @@ communication with the failed OST.
 .BI abort_recovery
 Abort the recovery process on a restarting MDT or OST device
 .PP
-.SS Virtual Block Device Operation
-Lustre is able to emulate a virtual block device upon regular file. It is necessary to be used when you are trying to setup a swap space via file.
-.TP
-.BI blockdev_attach " <file name> <device node>"
-Attach the lustre regular file to a block device. If the device node is not existent, lctl will create it \- it is recommended to create it by lctl since the emulator uses a dynamical major number.
-.TP
-.BI blockdev_detach " <device node>"
-Detach the virtual block device.
-.TP
-.BI blockdev_info " <device node>"
-Acquire which lustre file was attached to the device node.
-.PP
 .SS Changelogs
 .TP
 .BI changelog_register " [-n]"

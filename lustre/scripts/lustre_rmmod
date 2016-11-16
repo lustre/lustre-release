@@ -17,7 +17,7 @@ if [ `uname -r | cut -c 3` -eq 4 ]; then
 fi
 
 unload_dep_module() {
-    # libcfs                107852  17 llite_lloop,lustre,obdfilter,ost,...
+    # libcfs                107852  17 lustre,obdfilter,ost,...
     local MODULE=$1
     local DEPS="$(lsmod | awk '($1 == "'$MODULE'") { print $4 }' | tr ',' ' ')"
     for SUBMOD in $DEPS; do

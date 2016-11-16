@@ -17,10 +17,6 @@ export QUOTA_AUTO=1
 # specify environment variable containing batch job name for server statistics
 export JOBID_VAR=${JOBID_VAR:-"procname_uid"}  # or "existing" or "disable"
 
-# LOAD_LLOOP: LU-409: only load llite_lloop module if kernel < 2.6.32 or
-#             LOAD_LLOOP is true. LOAD_LLOOP is false by default.
-export LOAD_LLOOP=${LOAD_LLOOP:-false}
-
 #export PDSH="pdsh -S -Rssh -w"
 export MOUNT_CMD=${MOUNT_CMD:-"mount -t lustre"}
 export UMOUNT=${UMOUNT:-"umount -d"}
@@ -496,20 +492,6 @@ load_module() {
 	fi
 }
 
-llite_lloop_enabled() {
-    local n1=$(uname -r | cut -d. -f1)
-    local n2=$(uname -r | cut -d. -f2)
-    local n3=$(uname -r | cut -d- -f1 | cut -d. -f3)
-
-    # load the llite_lloop module for < 2.6.32 kernels
-    if [[ $n1 -lt 2 ]] || [[ $n1 -eq 2 && $n2 -lt 6 ]] || \
-       [[ $n1 -eq 2 && $n2 -eq 6 && $n3 -lt 32 ]] || \
-        $LOAD_LLOOP; then
-        return 0
-    fi
-    return 1
-}
-
 load_modules_local() {
 	if [ -n "$MODPROBE" ]; then
 		# use modprobe
@@ -604,7 +586,6 @@ load_modules_local() {
 	fi
 
 	load_module llite/lustre
-	llite_lloop_enabled && load_module llite/llite_lloop
 	[ -d /r ] && OGDB=${OGDB:-"/r/tmp"}
 	OGDB=${OGDB:-$TMP}
 	rm -f $OGDB/ogdb-$HOSTNAME

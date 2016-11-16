@@ -227,18 +227,6 @@ command_t cmdlist[] = {
 	 "provide gdb-friendly module information\n"
 	 "usage: modules <path>"},
 
-	/* virtual block operations */
-	{"==== virtual block device ====", jt_noop, 0, "virtual block device"},
-	{"blockdev_attach", jt_blockdev_attach, 0,
-	 "attach a lustre regular file to a virtual block device\n"
-	 "usage: blockdev_attach <file_name> <device_name>"},
-	{"blockdev_detach", jt_blockdev_detach, 0,
-	 "detach a lustre regular file from a virtual block device\n"
-	 "usage: blockdev_detach <device_name>"},
-	{"blockdev_info", jt_blockdev_info, 0,
-	 "get the device info of an attached file\n"
-	 "usage: blockdev_info <device_name>"},
-
 	/* Pool commands */
 	{"===  Pools ==", jt_noop, 0, "pool management"},
 	{"pool_new", jt_pool_cmd, 0,
