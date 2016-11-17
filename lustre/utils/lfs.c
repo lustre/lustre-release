@@ -755,6 +755,10 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		goto error;
 	}
 
+	/* In case the MDT does not support creation of volatile files
+	 * we should try to unlink it. */
+	(void)unlink(volatile_file);
+
 	/* Not-owner (root?) special case.
 	 * Need to set owner/group of volatile file like original.
 	 * This will allow to pass related check during layout_swap.
