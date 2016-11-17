@@ -507,6 +507,7 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 		__u32 timeout;
 
 		if (req->rq_export && req->rq_reqmsg != NULL &&
+		    (flags & PTLRPC_REPLY_EARLY) &&
 		    lustre_msg_get_flags(req->rq_reqmsg) &
 		    (MSG_REPLAY | MSG_REQ_REPLAY_DONE | MSG_LOCK_REPLAY_DONE))
 			timeout = cfs_time_current_sec() -
