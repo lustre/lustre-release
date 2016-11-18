@@ -3669,7 +3669,7 @@ int jt_nodemap_modify(int argc, char **argv)
 	if (nodemap_name == NULL || param == NULL || value == NULL) {
 		fprintf(stderr, "usage: nodemap_modify --name <nodemap_name> "
 				"--property <property_name> --value <value>\n");
-		fprintf(stderr, "valid properties: admin trusted "
+		fprintf(stderr, "valid properties: admin trusted map_mode "
 				"squash_uid squash_gid deny_unknown\n");
 		return -1;
 	}
@@ -3684,6 +3684,8 @@ int jt_nodemap_modify(int argc, char **argv)
 		cmd = LCFG_NODEMAP_SQUASH_UID;
 	} else if (strcmp("squash_gid", param) == 0) {
 		cmd = LCFG_NODEMAP_SQUASH_GID;
+	} else if (strcmp("map_mode", param) == 0) {
+		cmd = LCFG_NODEMAP_MAP_MODE;
 	} else {
 		fprintf(stderr, "error: %s: nodemap_modify invalid "
 				"subcommand: %s\n",

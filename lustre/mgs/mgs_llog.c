@@ -4936,6 +4936,19 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		bool_switch = simple_strtoul(param, NULL, 10);
 		rc = nodemap_set_deny_unknown(nodemap_name, bool_switch);
 		break;
+	case LCFG_NODEMAP_MAP_MODE:
+		if (strcmp("both", param) == 0)
+			rc = nodemap_set_mapping_mode(nodemap_name,
+						      NODEMAP_MAP_BOTH);
+		else if (strcmp("uid_only", param) == 0)
+			rc = nodemap_set_mapping_mode(nodemap_name,
+						      NODEMAP_MAP_UID_ONLY);
+		else if (strcmp("gid_only", param) == 0)
+			rc = nodemap_set_mapping_mode(nodemap_name,
+						      NODEMAP_MAP_GID_ONLY);
+		else
+			rc = -EINVAL;
+		break;
 	case LCFG_NODEMAP_TRUSTED:
 		bool_switch = simple_strtoul(param, NULL, 10);
 		rc = nodemap_set_trust_client_ids(nodemap_name, bool_switch);

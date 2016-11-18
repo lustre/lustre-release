@@ -481,6 +481,39 @@ static int nodemap_admin_seq_show(struct seq_file *m, void *data)
 }
 
 /**
+ * Reads and prints the mapping mode for the given nodemap.
+ *
+ * \param	m		seq file in proc fs
+ * \param	data		unused
+ * \retval	0		success
+ */
+static int nodemap_map_mode_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+			(char *)m->private, rc);
+		return rc;
+	}
+
+	if (nodemap->nmf_map_uid_only)
+		seq_printf(m, "uid_only\n");
+	else if (nodemap->nmf_map_gid_only)
+		seq_printf(m, "gid_only\n");
+	else
+		seq_printf(m, "both\n");
+
+	nodemap_putref(nodemap);
+	return 0;
+}
+
+/**
  * Reads and prints the deny_unknown flag for the given nodemap.
  *
  * \param	m		seq file in proc fs
@@ -1112,6 +1145,7 @@ LPROC_SEQ_FOPS_RO(nodemap_squash_gid);
 #endif
 
 LPROC_SEQ_FOPS_RO(nodemap_deny_unknown);
+LPROC_SEQ_FOPS_RO(nodemap_map_mode);
 
 const struct file_operations nodemap_ranges_fops = {
 	.open			= nodemap_ranges_open,
@@ -1150,6 +1184,10 @@ static struct lprocfs_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "deny_unknown",
 		.fops		= &nodemap_deny_unknown_fops,
+	},
+	{
+		.name		= "map_mode",
+		.fops		= &nodemap_map_mode_fops,
 	},
 	{
 		.name		= "squash_uid",

@@ -638,6 +638,12 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 	if (unlikely(nodemap == NULL))
 		goto out;
 
+	if (nodemap->nmf_map_uid_only && id_type == NODEMAP_GID)
+		goto out;
+
+	if (nodemap->nmf_map_gid_only && id_type == NODEMAP_UID)
+		goto out;
+
 	if (id == 0) {
 		if (nodemap->nmf_allow_root_access)
 			goto out;
@@ -1012,6 +1018,8 @@ struct lu_nodemap *nodemap_create(const char *name,
 		nodemap->nmf_trust_client_ids = 0;
 		nodemap->nmf_allow_root_access = 0;
 		nodemap->nmf_deny_unknown = 0;
+		nodemap->nmf_map_uid_only = 0;
+		nodemap->nmf_map_gid_only = 0;
 
 		nodemap->nm_squash_uid = NODEMAP_NOBODY_UID;
 		nodemap->nm_squash_gid = NODEMAP_NOBODY_GID;
@@ -1025,6 +1033,10 @@ struct lu_nodemap *nodemap_create(const char *name,
 				default_nodemap->nmf_allow_root_access;
 		nodemap->nmf_deny_unknown =
 				default_nodemap->nmf_deny_unknown;
+		nodemap->nmf_map_uid_only =
+				default_nodemap->nmf_map_uid_only;
+		nodemap->nmf_map_gid_only =
+				default_nodemap->nmf_map_gid_only;
 
 		nodemap->nm_squash_uid = default_nodemap->nm_squash_uid;
 		nodemap->nm_squash_gid = default_nodemap->nm_squash_gid;
@@ -1122,6 +1134,42 @@ out:
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_set_trust_client_ids);
+
+int nodemap_set_mapping_mode(const char *name, enum nodemap_mapping_modes mode)
+{
+	struct lu_nodemap	*nodemap = NULL;
+	int			rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		GOTO(out, rc = PTR_ERR(nodemap));
+
+	switch (mode) {
+	case NODEMAP_MAP_BOTH:
+		nodemap->nmf_map_uid_only = 0;
+		nodemap->nmf_map_gid_only = 0;
+		break;
+	case NODEMAP_MAP_UID_ONLY:
+		nodemap->nmf_map_uid_only = 1;
+		nodemap->nmf_map_gid_only = 0;
+		break;
+	case NODEMAP_MAP_GID_ONLY:
+		nodemap->nmf_map_uid_only = 0;
+		nodemap->nmf_map_gid_only = 1;
+		break;
+	default:
+		CWARN("cannot set unknown mapping mode, mode = %d\n", mode);
+	}
+	rc = nodemap_idx_nodemap_update(nodemap);
+
+	nm_member_revoke_locks(nodemap);
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_set_mapping_mode);
 
 /**
  * Update the squash_uid for a nodemap.
