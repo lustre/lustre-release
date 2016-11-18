@@ -1599,16 +1599,15 @@ int jt_nodemap_info(int argc, char **argv)
 	}
 
 	if (argc == 1 || strcmp("list", argv[1]) == 0) {
-		popt.po_only_path = 1;
 		popt.po_only_dir = 1;
 		rc = param_display(&popt, "nodemap/*", NULL, LIST_PARAM);
 	} else if (strcmp("all", argv[1]) == 0) {
-		rc = param_display(&popt, "nodemap/*/*", NULL, LIST_PARAM);
+		rc = param_display(&popt, "nodemap/*/*", NULL, GET_PARAM);
 	} else {
 		char	pattern[PATH_MAX];
 
 		snprintf(pattern, sizeof(pattern), "nodemap/%s/*", argv[1]);
-		rc = param_display(&popt, pattern, NULL, LIST_PARAM);
+		rc = param_display(&popt, pattern, NULL, GET_PARAM);
 		if (rc == -ESRCH)
 			fprintf(stderr,
 				"error: nodemap_info: cannot find nodemap %s\n",
