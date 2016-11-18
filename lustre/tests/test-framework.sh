@@ -1937,7 +1937,7 @@ check_client_load () {
 	local var=$(node_var_name $client)_load
 	local testload=run_${!var}.sh
 
-	ps -C $testload | grep $client || return 1
+	ps auxww | grep -v grep | grep $client | grep -q $testload || return 1
 
 	# bug 18914: try to connect several times not only when
 	# check ps, but  while check_node_health also
