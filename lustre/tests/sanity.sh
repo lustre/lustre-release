@@ -14443,8 +14443,6 @@ facet_meminfo() {
 }
 
 test_255b() {
-	lfs setstripe -c -1 -i 0 $DIR/$tfile
-
 	ladvise_no_type dontneed $DIR/$tfile &&
 		skip "dontneed ladvise is not supported" && return
 
@@ -14456,6 +14454,8 @@ test_255b() {
 
 	[ "$(facet_fstype ost1)" = "zfs" ] &&
 		skip "zfs-osd does not support dontneed advice" && return
+
+	lfs setstripe -c 1 -i 0 $DIR/$tfile
 
 	local size_mb=100
 	local size=$((size_mb * 1048576))
