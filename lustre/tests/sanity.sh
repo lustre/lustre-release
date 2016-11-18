@@ -7195,21 +7195,21 @@ getxattr() { # getxattr path name
 }
 
 test_102n() { # LU-4101 mdt: protect internal xattrs
-	local file0=$DIR/$tfile.0
-	local file1=$DIR/$tfile.1
-	local xattr0=$TMP/$tfile.0
-	local xattr1=$TMP/$tfile.1
-	local name
-	local value
-
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
 		skip "could not find setfattr" && return
-
 	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.50) ]
 	then
 		skip "MDT < 2.5.50 allows setxattr on internal trusted xattrs"
 		return
 	fi
+
+	local file0=$DIR/$tfile.0
+	local file1=$DIR/$tfile.1
+	local xattr0=$TMP/$tfile.0
+	local xattr1=$TMP/$tfile.1
+	local namelist="lov lma lmv link fid version som hsm"
+	local name
+	local value
 
 	rm -rf $file0 $file1 $xattr0 $xattr1
 	touch $file0 $file1
@@ -7217,7 +7217,9 @@ test_102n() { # LU-4101 mdt: protect internal xattrs
 	# Get 'before' xattrs of $file1.
 	getfattr --absolute-names --dump --match=- $file1 > $xattr0
 
-	for name in lov lma lmv link fid version som hsm; do
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.53) ] &&
+		namelist+=" lfsck_namespace"
+	for name in $namelist; do
 		# Try to copy xattr from $file0 to $file1.
 		value=$(getxattr $file0 trusted.$name 2> /dev/null)
 
