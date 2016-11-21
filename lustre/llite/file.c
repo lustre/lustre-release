@@ -3557,6 +3557,18 @@ ll_inode_revalidate(struct dentry *dentry, __u64 ibits)
 	RETURN(rc);
 }
 
+static inline dev_t ll_compat_encode_dev(dev_t dev)
+{
+	/* The compat_sys_*stat*() syscalls will fail unless the
+	 * device majors and minors are both less than 256. Note that
+	 * the value returned here will be passed through
+	 * old_encode_dev() in cp_compat_stat(). And so we are not
+	 * trying to return a valid compat (u16) device number, just
+	 * one that will pass the old_valid_dev() check. */
+
+	return MKDEV(MAJOR(dev) & 0xff, MINOR(dev) & 0xff);
+}
+
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 {
         struct inode *inode = de->d_inode;
@@ -3573,15 +3585,19 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_GETATTR_DELAY, 30);
 
-	stat->dev = inode->i_sb->s_dev;
-	if (ll_need_32bit_api(sbi))
+	if (ll_need_32bit_api(sbi)) {
 		stat->ino = cl_fid_build_ino(&lli->lli_fid, 1);
-	else
+		stat->dev = ll_compat_encode_dev(inode->i_sb->s_dev);
+		stat->rdev = ll_compat_encode_dev(inode->i_rdev);
+	} else {
 		stat->ino = inode->i_ino;
+		stat->dev = inode->i_sb->s_dev;
+		stat->rdev = inode->i_rdev;
+	}
+
 	stat->mode = inode->i_mode;
 	stat->uid = inode->i_uid;
 	stat->gid = inode->i_gid;
-	stat->rdev = inode->i_rdev;
 	stat->atime = inode->i_atime;
 	stat->mtime = inode->i_mtime;
 	stat->ctime = inode->i_ctime;
