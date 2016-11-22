@@ -6,7 +6,8 @@ llapi_ladvise \- give IO advice/hints on a Lustre file to the server
 .B #include <lustre/lustreapi.h>
 .sp
 .BI "int llapi_ladvise(int " fd ", unsigned long long " flags ,
-.BI "                  int " num_advise ", struct llapi_ladvise *" ladvise ");"
+.BI "                  int " num_advise ",
+.BI "                  struct llapi_lu_ladvise *" ladvise ");"
 .sp
 .fi
 .SH DESCRIPTION
@@ -20,12 +21,12 @@ items) in
 .I ladvise
 for the file descriptor
 .I fd
-from to an application to one or more Lustre servers.  Optionally,
+from an application to one or more Lustre servers.  Optionally,
 .I flags
 can modify how the advice will be processed via bitwise-or'd values:
 .TP
 .B LF_ASYNC
-Client return to userspace immediately after submitting ladvise RPCs, leaving
+Client returns to userspace immediately after submitting ladvise RPCs, leaving
 server threads to handle the advices asynchronously.
 .PP
 Each of the
@@ -69,11 +70,11 @@ set to zero if not explicitly required for a given advice type.
 .PP
 .B llapi_ladvise()
 forwards the advice to Lustre servers without guaranteeing how and when
-servers will react to the advice. Actions may or may not triggered when the
+servers will react to the advice. Actions may or may not be triggered when the
 advices are recieved, depending on the type of the advice as well as the
 real-time decision of the affected server-side components.
 
-A typical usage of
+Typical usage of
 .B llapi_ladvise()
 is to enable applications and users (via
 .BR "lfs ladvise" (1))
@@ -96,7 +97,7 @@ is that
 are client side mechanisms that do not pass advice to the filesystem, while
 .B llapi_ladvise()
 sends advice or hints to one or more Lustre servers on which the file
-is stored.  In some cases it may be desirable to use both interfaces.
+is stored. In some cases it may be desirable to use both interfaces.
 .PP
 .SH RETURN VALUES
 .PP
