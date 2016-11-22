@@ -1302,9 +1302,9 @@ plugin_reg_handoff(void)
 /*                display  functions                                   */
 /* ------------------------------------------------------------------- */
 /* display str in left corner and in COL */
-/* TODO : do we need to use inline here ?*/
 /* @gint col :  the col where we add the information */
-inline static void display_info_str(proto_item *pi, column_info *cinfo, gint col, const gchar* str)
+static void display_info_str(proto_item *pi, column_info *cinfo, gint col,
+			     const gchar *str)
 {
   if (NULL !=pi)
     proto_item_append_text(pi, str);

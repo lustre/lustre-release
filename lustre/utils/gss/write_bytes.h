@@ -35,7 +35,7 @@
 #include <sys/types.h>
 #include <netinet/in.h>		/* for ntohl */
 
-inline static int
+static inline int
 write_bytes(char **ptr, const char *end, const void *arg, int arg_len)
 {
 	char *p = *ptr, *arg_end;
@@ -50,7 +50,7 @@ write_bytes(char **ptr, const char *end, const void *arg, int arg_len)
 
 #define WRITE_BYTES(p, end, arg) write_bytes(p, end, &arg, sizeof(arg))
 
-inline static int
+static inline int
 write_buffer(char **p, char *end, gss_buffer_desc *arg)
 {
 	int len = (int)arg->length;		/* make an int out of size_t */
@@ -63,7 +63,7 @@ write_buffer(char **p, char *end, gss_buffer_desc *arg)
 	return 0;
 }
 
-inline static int
+static inline int
 write_oid(char **p, char *end, gss_OID_desc *arg)
 {
 	int len = (int)arg->length;		/* make an int out of size_t */

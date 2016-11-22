@@ -1937,7 +1937,7 @@ void *kuc_alloc(int payload_len, int transport, int type)
 EXPORT_SYMBOL(kuc_alloc);
 
 /* Takes pointer to payload area */
-inline void kuc_free(void *p, int payload_len)
+void kuc_free(void *p, int payload_len)
 {
         struct kuc_hdr *lh = kuc_ptr(p);
         OBD_FREE(lh, kuc_len(payload_len));

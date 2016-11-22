@@ -302,7 +302,7 @@ kgnilnd_cksum(void *ptr, size_t nob)
 	return sum;
 }
 
-inline __u16
+__u16
 kgnilnd_cksum_kiov(unsigned int nkiov, lnet_kiov_t *kiov,
 		    unsigned int offset, unsigned int nob, int dump_blob)
 {
@@ -1656,7 +1656,7 @@ kgnilnd_sendmsg_trylock(kgn_tx_t *tx, void *immediate, unsigned int immediatenob
 }
 
 /* lets us know if we can push this RDMA through now */
-inline int
+static int
 kgnilnd_auth_rdma_bytes(kgn_device_t *dev, kgn_tx_t *tx)
 {
 	long    bytes_left;
