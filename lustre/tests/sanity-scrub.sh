@@ -674,9 +674,8 @@ test_5() {
 	mount_client $MOUNT || error "(16) Fail to start client!"
 
 	full_scrub_ratio 0
-	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
 	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_val=3 fail_loc=0x190
+		$LCTL set_param fail_loc=0 fail_val=0
 
 	local n
 	declare -a pids
@@ -685,13 +684,6 @@ test_5() {
 		stat $DIR/$tdir/mds$n/${tfile}800 &
 		pids[$n]=$!
 	done
-
-	sleep 3
-
-	scrub_check_status 17 scanning
-
-	do_nodes $(comma_list $(mdts_nodes)) \
-		$LCTL set_param fail_loc=0 fail_val=0
 
 	for n in $(seq $MDSCOUNT); do
 		wait ${pids[$n]} || error "(18) Fail to stat mds$n/${tfile}800"
