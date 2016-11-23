@@ -229,17 +229,17 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 	else
 		cred->cr_mapped_uid = -1;
 
-        realm = strchr(sname, '@');
+	realm = strchr(sname, '@');
 	if (realm) {
-                *realm++ = '\0';
+		*realm++ = '\0';
 	} else {
 		printerr(0, "ERROR: %s has no realm name\n", sname);
 		goto out_free;
 	}
 
-        host = strchr(sname, '/');
-        if (host)
-                *host++ = '\0';
+	host = strchr(sname, '/');
+	if (host)
+		*host++ = '\0';
 
 	if (strcmp(sname, GSSD_SERVICE_MGS) == 0) {
 		printerr(0, "forbid %s as a user name\n", sname);
@@ -345,8 +345,8 @@ out_free:
 		printerr(1, "%s: authenticated %s%s%s@%s from %016llx\n",
 			 lustre_svc_name[lustre_svc], sname,
 			 host ? "/" : "", host ? host : "", realm, nid);
-        free(sname);
-        return res;
+	free(sname);
+	return res;
 }
 
 typedef struct gss_union_ctx_id_t {
@@ -743,32 +743,49 @@ int handle_channel_request(FILE *f)
 	switch (lustre_mech) {
 	case LGSS_MECH_KRB5:
 		if (!krb_enabled) {
-			printerr(1, "WARNING: Request for kerberos but service "
-				 "support not enabled\n");
+			static time_t next_krb;
+
+			if (time(NULL) > next_krb) {
+				printerr(1, "warning: Request for kerberos but "
+					 "service support not enabled\n");
+				next_krb = time(NULL) + 3600;
+			}
 			goto ignore;
 		}
 		snd.mech = &krb5oid;
 		break;
 	case LGSS_MECH_NULL:
 		if (!null_enabled) {
-			printerr(1, "WARNING: Request for gssnull but service "
-				 "support not enabled\n");
+			static time_t next_null;
+
+			if (time(NULL) > next_null) {
+				printerr(1, "warning: Request for gssnull but "
+					 "service support not enabled\n");
+				next_null = time(NULL) + 3600;
+			}
 			goto ignore;
 		}
 		snd.mech = &nulloid;
 		break;
 	case LGSS_MECH_SK:
-#ifdef HAVE_OPENSSL_SSK
 		if (!sk_enabled) {
-			printerr(1, "WARNING: Request for sk but service "
-				 "support not enabled\n");
+			static time_t next_ssk;
+
+			if (time(NULL) > next_ssk) {
+				printerr(1, "warning: Request for SSK but "
+					 "service support not %s\n",
+#ifdef HAVE_OPENSSL_SSK
+					 "enabled"
+#else
+					 "included"
+#endif
+					);
+				next_ssk = time(NULL) + 3600;
+			}
+
 			goto ignore;
 		}
 		snd.mech = &skoid;
-#else
-		printerr(1, "ERROR: Request for sk but service "
-			 "support not enabled\n");
-#endif
 		break;
 	default:
 		printerr(0, "WARNING: invalid mechanism recevied: %d\n",
