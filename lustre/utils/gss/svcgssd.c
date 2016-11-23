@@ -58,6 +58,7 @@
 #include "gss_util.h"
 #include "err_util.h"
 #include "lsupport.h"
+#include "lustre_ver.h"
 
 int null_enabled;
 int krb_enabled;
@@ -192,11 +193,11 @@ usage(FILE *fp, char *progname)
 	fprintf(stderr, "-g      - Service MGS\n");
 	fprintf(stderr, "-k      - Enable kerberos support\n");
 #ifdef HAVE_OPENSSL_SSK
-	fprintf(stderr, "-s      - Enable shared key support\n");
+	fprintf(stderr, "-s      - Enable shared secret key support\n");
 #endif
 	fprintf(stderr, "-z      - Enable gssnull support\n");
 
-	exit(1);
+	exit(fp == stderr);
 }
 
 int
@@ -242,8 +243,9 @@ main(int argc, char *argv[])
 #ifdef HAVE_OPENSSL_SSK
 			sk_enabled = 1;
 #else
-			printerr(0, "ERROR: Request for sk but service "
-				 "support not enabled\n");
+			fprintf(stderr, "error: request for SSK but service "
+				"support not enabled\n");
+			usage(stderr, argv[0]);
 #endif
 			break;
 		case 'z':
@@ -260,6 +262,17 @@ main(int argc, char *argv[])
 	else
 		progname = argv[0];
 
+	if (!sk_enabled && !krb_enabled && !null_enabled) {
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
+		fprintf(stderr, "warning: no -k, -s, or -z option given, "
+			"assume -k for backward compatibility\n");
+		krb_enabled = 1;
+#else
+		fprintf(stderr, "error: need one of -k, -s, or -z options\n");
+		usage(stderr, argv[0]);
+
+#endif
+	}
 	initerr(progname, verbosity, fg);
 
 	/* For kerberos use gss mechanisms but ignore for sk and null */
