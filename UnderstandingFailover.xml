@@ -210,9 +210,8 @@ xml:id="understandingfailover">
         configured in a quasi active/active configuration, with each MDS
         managing metadata for a subset of the Lustre file system.</para>
       </note>
-      <figure>
-        <title xml:id="understandingfailover.fig.configmdt">Lustre failover
-        configuration for a active/passive MDT</title>
+      <figure xml:id="understandingfailover.fig.configmdt">
+        <title>Lustre failover configuration for a active/passive MDT</title>
         <mediaobject>
           <imageobject>
             <imagedata fileref="./figures/MDT_Failover.png" />
@@ -233,9 +232,8 @@ xml:id="understandingfailover">
       release 2.4. MDTs can be setup as an active/active failover
       configuration. A failover cluster is built from two MDSs as shown in 
       <xref linkend="understandingfailover.fig.configmdts" />.</para>
-      <figure>
-        <title xml:id="understandingfailover.fig.configmdts">Lustre failover
-        configuration for a active/active MDTs</title>
+      <figure xml:id="understandingfailover.fig.configmdts">
+        <title>Lustre failover configuration for a active/active MDTs</title>
         <mediaobject>
           <imageobject>
             <imagedata scalefit="1" width="50%"
@@ -261,9 +259,8 @@ xml:id="understandingfailover">
         <para>OSSs configured as a failover pair must have shared
         disks/RAID.</para>
       </note>
-      <figure>
-        <title xml:id="understandingfailover.fig.configost">Lustre failover
-        configuration for an OSTs</title>
+      <figure xml:id="understandingfailover.fig.configost">
+        <title>Lustre failover configuration for an OSTs</title>
         <mediaobject>
           <imageobject>
             <imagedata scalefit="1" width="100%"

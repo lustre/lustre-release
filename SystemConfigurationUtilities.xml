@@ -2736,8 +2736,8 @@ lr_reader</title>
       visible in multiple subdirectory mounts via hard links.  Furthermore, it
       does not prevent the client from subsequently mounting the whole file
       system without a subdirectory being specified.</para>
-      <figure>
-        <title xml:id="understandinglustre.fig.fileset">
+      <figure xml:id="understandinglustre.fig.fileset">
+        <title>
         <indexterm>
           <primary>Lustre</primary>
           <secondary>fileset</secondary>

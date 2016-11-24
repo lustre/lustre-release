@@ -18,7 +18,7 @@ xml:id="installinglustre">
     </listitem>
   </itemizedlist>
   <para>For hardware and system requirements and hardware configuration
-  information, see 
+  information, see
   <xref linkend="settinguplustresystem" />.</para>
   <section xml:id="dbdoclet.50438261_99193">
     <title>
@@ -30,87 +30,9 @@ xml:id="installinglustre">
     or directly from the source code. This chapter describes how to install the
     Lustre RPM packages. Instructions to install from source code are beyond
     the scope of this document, and can be found elsewhere online.</para>
-    <para>The Lustre RPM packages have been tested on the Linux distributions
-    listed in the table below.</para>
-    <para>
-      <table frame="all" xml:id="LustreTestMatrixTable">
-        <title>Lustre Test Matrix</title>
-        <tgroup cols="3">
-          <colspec colname="c1" colnum="1" colwidth="1*" />
-          <colspec colname="c2" colnum="2" colwidth="1.1*" />
-          <colspec colname="c3" colnum="3" colwidth="1.46*" />
-          <thead>
-            <row>
-              <entry>Lustre Release</entry>
-              <entry>Servers Tested
-              <superscript>1</superscript></entry>
-              <entry>Clients Tested</entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry>
-                <para>2.0</para>
-              </entry>
-              <entry>
-                <para>RHEL 5, CentOS 5</para>
-              </entry>
-              <entry>
-                <para>RHEL 5, CentOS 5, SLES 11 SP0</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para>2.1.x</para>
-              </entry>
-              <entry>
-                <para>RHEL 5, CentOS 5, RHEL 6, CentOS 6</para>
-              </entry>
-              <entry>
-                <para>RHEL 5, CentOS 5, RHEL 6, CentOS 6, SLES 11 SP1</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para>2.2</para>
-              </entry>
-              <entry>
-                <para>RHEL 6, CentOS 6</para>
-              </entry>
-              <entry>
-                <para>RHEL 5, CentOS 5, RHEL 6, CentOS 6, SLES 11 SP1</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para>2.3</para>
-              </entry>
-              <entry>
-                <para>RHEL 6.3, CentOS 6.3</para>
-              </entry>
-              <entry>
-                <para>RHEL 6.3, CentOS 6.3, RHEL 5.8, CentOS 5.8, SLES 11
-                SP1</para>
-              </entry>
-            </row>
-            <row>
-              <entry>2.4.x</entry>
-              <entry>
-                <para>RHEL 6.4, CentOS 6.4</para>
-              </entry>
-              <entry>
-                <para>RHEL 6.4, CentOS 6.4, SLES 11 SP2, FC18</para>
-              </entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </table>
-    </para>
-    <para>
-    <superscript>1</superscript>Red Hat Enterprise Edition (RHEL), CentOS
-    Enterprise Linux Distribution (CentOS), SUSE Linux Enterprise Server
-    (SLES), Fedora
-    <superscript>*</superscript>F18 Linux kernel (FC18).</para>
+    <para>The Lustre RPM packages are tested on current versions of Linux
+    enterprise distributions at the time they are created.  See the release
+    notes for each version for specific details.</para>
     <section xml:id="section_rqs_tjw_3k">
       <title>Software Requirements</title>
       <para>To install the Lustre software from RPMs, the following are
@@ -120,14 +42,15 @@ xml:id="installinglustre">
           <para>
           <emphasis role="bold">
             <emphasis role="italic">Lustre server packages</emphasis>
-          </emphasis>. The required packages for Lustre servers are listed in
-          the table below, where 
-          <replaceable>ver</replaceable> refers to the Linux kernel distribution
-          (e.g., 2.6.32-358.6.2.el6) and 
+          </emphasis>. The required packages for Lustre 2.9 EL7 servers are
+	  listed in the table below, where
+          <replaceable>ver</replaceable> refers to the Lustre release and
+	  kernel version (e.g., 2.9.0-1.el7) and
           <replaceable>arch</replaceable> refers to the processor architecture
-          (e.g., x86_64). These packages are available in the 
+          (e.g., x86_64). These packages are available in the
           <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
-          Lustre Releases</link>repository.</para>
+          Lustre Releases</link> repository, and may differ depending on
+	  your distro and version.</para>
           <para>
             <table frame="all" xml:id="table_cnh_5m3_gk">
               <title>Packages Installed on Lustre Servers</title>
@@ -143,65 +66,68 @@ xml:id="installinglustre">
                 <tbody>
                   <row>
                     <entry>
-                      <code>kernel-</code>
-                      <replaceable>ver</replaceable>
-                      <code>_lustre.</code>
-                      <replaceable>arch</replaceable>
+                      <code>kernel-<replaceable>ver</replaceable>_lustre.<replaceable>arch</replaceable></code>
                     </entry>
                     <entry>Linux kernel with Lustre software patches (often
                     referred to as "patched kernel")</entry>
                   </row>
                   <row>
                     <entry>
-                      <code>lustre-</code>
-                      <replaceable>ver</replaceable>
-                      <code>_lustre.</code>
-                      <replaceable>arch</replaceable>
+                      <code>lustre-<replaceable>ver</replaceable>.<replaceable>arch</replaceable></code>
                     </entry>
                     <entry>Lustre software command line tools</entry>
                   </row>
                   <row>
                     <entry>
-                      <code>lustre-modules-</code>
-                      <replaceable>ver</replaceable>
-                      <code>_lustre.</code>
-                      <replaceable>arch</replaceable>
+                      <code>kmod-lustre-<replaceable>ver</replaceable>.<replaceable>arch</replaceable></code>
                     </entry>
                     <entry>Lustre-patched kernel modules</entry>
                   </row>
                   <row>
                     <entry>
-                      <code>lustre-osd-ldiskfs-</code>
-                      <replaceable>ver</replaceable>
-                      <code>_lustre.</code>
-                      <replaceable>arch</replaceable>
+                      <code>kmod-lustre-osd-ldiskfs-<replaceable>ver</replaceable>.<replaceable>arch</replaceable></code>
                     </entry>
-                    <entry>Lustre back-end file system tools</entry>
+                    <entry>Lustre back-end file system tools for ldiskfs-based
+		    servers.
+		    </entry>
                   </row>
                   <row>
                     <entry>
-                      <code>lustre-zfs-ldiskfs-</code>
-                      <replaceable>ver</replaceable>
-                      <code>_lustre.</code>
-                      <replaceable>arch</replaceable>
+                      <code>lustre-osd-ldiskfs-mount-<replaceable>ver</replaceable>.<replaceable>arch</replaceable></code>
+                    </entry>
+                    <entry>Helper library for <literal>mount.lustre</literal>
+		    and <literal>mkfs.lustre</literal> for ldiskfs-based servers.
+		    </entry>
+                  </row>
+                  <row>
+                    <entry>
+                      <code>kmod-lustre-osd-zfs-<replaceable>ver</replaceable>.<replaceable>arch</replaceable></code>
                     </entry>
                     <entry>Lustre back-end file system tools for ZFS. This is 
-                    an alternative to 
-                    <literal>lustre-osd-ldiskfs</literal></entry>
+                    an alternative to
+                    <literal>lustre-osd-ldiskfs</literal> (kmod-spl and
+		    kmod-zfs available separately).</entry>
+                  </row>
+                  <row>
+                    <entry>
+                      <code>lustre-osd-zfs-mount-<replaceable>ver</replaceable>.<replaceable>arch</replaceable></code>
+                    </entry>
+                    <entry>Helper library for <literal>mount.lustre</literal>
+		    and <literal>mkfs.lustre</literal> for ZFS-based servers
+		    (zfs utilities available separately).
+		    </entry>
                   </row>
                   <row>
                     <entry>
                       <code>e2fsprogs</code>
                     </entry>
-                    <entry>Utility to maintain Lustre back-end file
-                    system</entry>
+                    <entry>Utilities to maintain Lustre ldiskfs back-end file
+		    system(s)
+		    </entry>
                   </row>
                   <row>
                     <entry>
-                      <code>lustre-tests-</code>
-                      <replaceable>ver</replaceable>
-                      <code>_lustre.</code>
-                      <replaceable>arch</replaceable>
+                      <code>lustre-tests-<replaceable>ver</replaceable>_lustre.<replaceable>arch</replaceable></code>
                     </entry>
                     <entry>Lustre I/O Kit benchmarking tools
                     <emphasis role="italic">(Included in Lustre software as of
@@ -216,12 +142,12 @@ xml:id="installinglustre">
           <para>
           <emphasis role="bold">
             <emphasis role="italic">Lustre client packages</emphasis>
-          </emphasis>. The required packages for Lustre clients are listed in
-          the table below, where 
+          </emphasis>. The required packages for Lustre 2.9 EL7 clients are
+	  listed in the table below, where
           <replaceable>ver</replaceable> refers to the Linux distribution (e.g.,
-          2.6.18-348.1.1.el5). These packages are available in the 
+          3.6.18-348.1.1.el5). These packages are available in the
           <link xl:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Releases">
-          Lustre Releases</link>repository.</para>
+          Lustre Releases</link> repository.</para>
           <para>
             <table frame="all" xml:id="table_j3r_ym3_gk">
               <title>Packages Installed on Lustre Clients</title>
@@ -237,27 +163,24 @@ xml:id="installinglustre">
                 <tbody>
                   <row>
                     <entry>
-                      <code>lustre-client-modules-</code>
-                      <replaceable>ver</replaceable>
+                      <code>kmod-lustre-client-<replaceable>ver</replaceable>.<replaceable>arch</replaceable></code>
                     </entry>
                     <entry>Patchless kernel modules for client</entry>
                   </row>
                   <row>
                     <entry>
-                      <code>lustre-client-</code>
-                      <replaceable>ver</replaceable>
-                      <code>_lustre</code>
+                      <code>lustre-client-<replaceable>ver</replaceable>.<replaceable>arch</replaceable></code>
                     </entry>
                     <entry>Client command line tools</entry>
                   </row>
                   <row>
                     <entry>
-                      <code>lustre-client-tests-</code>
-                      <replaceable>ver</replaceable>
+                      <code>lustre-client-dkms-<replaceable>ver</replaceable>.<replaceable>arch</replaceable></code>
                     </entry>
-                    <entry>Lustre I/O Kit 
-                    <emphasis role="italic">(Included in Lustre software as of
-                    release 2.2)</emphasis></entry>
+                    <entry>Alternate client RPM to kmod-lustre-client with
+		    Dynamic Kernel Module Support (DKMS) installation. This
+		    avoids the need to install a new RPM for each kernel update,
+		    but requires a full build environment on the client.</entry>
                   </row>
                 </tbody>
               </tgroup>
@@ -266,11 +189,11 @@ xml:id="installinglustre">
           <note>
             <para>The version of the kernel running on a Lustre client must be
             the same as the version of the 
-            <code>lustre-client-modules-</code>
-            <replaceable>ver</replaceable> package being installed. If the
-            kernel running on the client is not compatible, a kernel that is
-            compatible must be installed on the client before the Lustre file
-            system software is installed.</para>
+            <code>kmod-lustre-client-<replaceable>ver</replaceable></code>
+	    package being installed, unless the DKMS package is installed.
+	    If the kernel running on the client is not compatible, a kernel
+	    that is compatible must be installed on the client before the
+	    Lustre file system software is used.</para>
           </note>
         </listitem>
         <listitem>
@@ -306,23 +229,6 @@ xml:id="installinglustre">
                 <row>
                   <entry>gni</entry>
                   <entry>Gemini (Cray)</entry>
-                </row>
-                <row>
-                  <entry>Seastar</entry>
-                  <entry>Cray</entry>
-                </row>
-                <row>
-                  <entry>MX</entry>
-                  <entry>Myrinet network</entry>
-                </row>
-                <row>
-                  <entry>ra</entry>
-                  <entry>RapidArray
-                  <superscript>*</superscript>interconnect</entry>
-                </row>
-                <row>
-                  <entry>Elan</entry>
-                  <entry>Quadrics</entry>
                 </row>
               </tbody>
             </tgroup>
@@ -408,8 +314,8 @@ xml:id="installinglustre">
           <emphasis role="italic">(Required)</emphasis>
           <emphasis role="italic">
             <emphasis role="bold">Disable Security-Enhanced Linux
-            <superscript>*</superscript>(SELinux) on all Lustre servers and
-            clients.</emphasis>
+            <superscript>*</superscript>(SELinux) on all Lustre servers 
+            </emphasis>
           </emphasis>The Lustre software does not support SELinux. Therefore,
           the SELinux system extension must be disabled on all Lustre nodes.
           Also, make sure other security extensions (such as the Novell

@@ -926,8 +926,8 @@ lfs help
         </tgroup>
       </informaltable>
     </section>
-    <section remap="h5">
-      <title xml:id="dbdoclet.50438206_11903">Examples</title>
+    <section remap="h5" xml:id="dbdoclet.50438206_11903">
+      <title>Examples</title>
       <para>Creates a file striped on two OSTs with 128 KB on each
       stripe.</para>
       <screen>

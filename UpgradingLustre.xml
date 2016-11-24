@@ -47,22 +47,16 @@ xml:id="upgradinglustre">
       <itemizedlist>
         <listitem>
           <para>All servers must be upgraded at the same time, while some or
-          all clients may be upgraded.</para>
+          all clients may be upgraded independently of the servers.</para>
         </listitem>
         <listitem>
           <para>All servers must be be upgraded to a Linux kernel supported by
-          the Lustre software. See the Linux Test Matrix at 
-          <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-          linkend="LustreTestMatrixTable" />for a list of tested Lustre
-          distributions.</para>
+          the Lustre software. See the Lustre Release Notes for your Lustre
+	  version for a list of tested Linux distributions.</para>
         </listitem>
         <listitem>
-          <para>Clients to be upgraded to the Lustre software release 2.4 or
-          higher must be running a compatible Linux distribution. See the Linux
-          Test Matrix at 
-          <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-          linkend="LustreTestMatrixTable" />for a list of tested Linux
-          distributions.</para>
+          <para>Clients to be upgraded must be running a compatible Linux
+          distribution as described in the Release Notes.</para>
         </listitem>
       </itemizedlist>
     </para>
@@ -210,16 +204,12 @@ xml:id="upgradinglustre">
       </listitem>
       <listitem>
         <para>Upgrade the Linux operating system on all servers to a compatible
-        (tested) Linux distribution and reboot. See the Linux Test Matrix at 
-        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="LustreTestMatrixTable" />.</para>
+        (tested) Linux distribution and reboot.</para>
       </listitem>
       <listitem>
         <para>Upgrade the Linux operating system on all clients to Red Hat
         Enterprise Linux 6 or other compatible (tested) distribution and
-        reboot. See the Linux Test Matrix at 
-        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="LustreTestMatrixTable" />.</para>
+        reboot.</para>
       </listitem>
       <listitem>
         <para>Download the Lustre server RPMs for your platform from the 
