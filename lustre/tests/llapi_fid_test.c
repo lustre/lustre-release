@@ -279,7 +279,7 @@ static void test12(void)
 	rc = mkdir(mainpath, 0);
 	ASSERTF(rc == 0, "mkdir failed for '%s': %s",
 		mainpath, strerror(errno));
-	fd = llapi_create_volatile_idx(mainpath, -1, 0600);
+	fd = llapi_create_volatile_idx(mainpath, -1, 0);
 	ASSERTF(fd >= 0, "creat failed for '%s': %s",
 		mainpath, strerror(errno));
 
@@ -288,7 +288,7 @@ static void test12(void)
 		mainpath, strerror(-rc));
 
 	/* No many ways to test, except to open by fid. */
-	fd2 = llapi_open_by_fid(mainpath, &fid, 0600);
+	fd2 = llapi_open_by_fid(mainpath, &fid, O_RDONLY);
 	ASSERTF(fd2 >= 0, "llapi_open_by_fid for " DFID_NOBRACE ": %s",
 		PFID(&fid), strerror(errno));
 
@@ -296,7 +296,7 @@ static void test12(void)
 
 	/* Check the file can still be opened, since fd2 is not
 	 * closed. */
-	fd3 = llapi_open_by_fid(mainpath, &fid, 0600);
+	fd3 = llapi_open_by_fid(mainpath, &fid, O_RDONLY);
 	ASSERTF(fd3 >= 0, "llapi_open_by_fid for " DFID_NOBRACE ": %s",
 		PFID(&fid), strerror(errno));
 
@@ -304,7 +304,7 @@ static void test12(void)
 	close(fd3);
 
 	/* The volatile file is gone now. */
-	fd = llapi_open_by_fid(mainpath, &fid, 0600);
+	fd = llapi_open_by_fid(mainpath, &fid, O_RDONLY);
 	ASSERTF(fd < 0, "llapi_open_by_fid for " DFID_NOBRACE ": %d",
 		PFID(&fid), fd);
 }
