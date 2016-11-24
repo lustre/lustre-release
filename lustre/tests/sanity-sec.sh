@@ -867,6 +867,7 @@ run_test 15 "test id mapping"
 wait_nm_sync() {
 	local nodemap_name=$1
 	local key=$2
+	local value=$3
 	local proc_param="${nodemap_name}.${key}"
 	[ "$nodemap_name" == "active" ] && proc_param="active"
 
@@ -880,8 +881,12 @@ wait_nm_sync() {
 	local mgs_ip=$(host_nids_address $mgs_HOST $NETTYPE | cut -d' ' -f1)
 	local i
 
-	out1=$(do_facet mgs $LCTL get_param nodemap.${proc_param})
-	echo "On MGS ${mgs_ip}, ${proc_param} = $out1"
+	if [ -z "$value" ]; then
+		out1=$(do_facet mgs $LCTL get_param nodemap.${proc_param})
+		echo "On MGS ${mgs_ip}, ${proc_param} = $out1"
+	else
+		out1=$value;
+	fi
 
 	# wait up to 10 seconds for other servers to sync with mgs
 	for i in $(seq 1 10); do
@@ -890,7 +895,9 @@ wait_nm_sync() {
 				    cut -d' ' -f1)
 
 		    is_sync=true
-		    [ $node_ip == $mgs_ip ] && continue
+		    if [ -z "$value" ]; then
+			[ $node_ip == $mgs_ip ] && continue
+		    fi
 
 		    out2=$(do_node $node_ip $LCTL get_param \
 				   nodemap.$proc_param 2>/dev/null)
@@ -1664,11 +1671,9 @@ test_27() {
 	fileset_test_setup
 
 	# add fileset info to nodemap
-	do_facet mgs $LCTL set_param nodemap.c0.fileset=/$subdir ||
-		error "unable to set fileset info on nodemap c0"
 	do_facet mgs $LCTL set_param -P nodemap.c0.fileset=/$subdir ||
 		error "unable to add fileset info to nodemap c0"
-	wait_nm_sync c0 fileset
+	wait_nm_sync c0 fileset "nodemap.c0.fileset=/$subdir"
 
 	# re-mount client
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
