@@ -41,3 +41,5 @@ rhel6.3/ext4-not-discard-preallocation-umount.patch
 rhel6.3/ext4-journal-path-opt.patch
 rhel6.3/ext4-recalc-percpu-counters-after-journal.patch
 rhel6.3/ext4-notalloc_under_idatasem.patch
+rhel6.3/ext4-dont-check-in-ro.patch
+rhel6.3/ext4-dont-check-before-replay.patch

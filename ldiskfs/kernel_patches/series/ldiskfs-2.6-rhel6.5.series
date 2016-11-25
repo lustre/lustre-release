@@ -45,3 +45,5 @@ rhel6.3/ext4-drop-inode-from-orphan-list-if-ext4_delete_inode-fails.patch
 rhel6.3/ext4-notalloc_under_idatasem.patch
 rhel6.5/ext4-give-warning-with-dir-htree-growing.patch
 rhel6.5/ext4-fix-journal-quota.patch
+rhel6.3/ext4-dont-check-in-ro.patch
+rhel6.3/ext4-dont-check-before-replay.patch

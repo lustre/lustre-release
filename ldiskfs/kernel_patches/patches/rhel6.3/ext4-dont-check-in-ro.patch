@@ -1,0 +1,28 @@
+--- linux-stage/fs/ext4/mballoc.c	2016-11-25 15:31:40.353249364 +0530
++++ linux-stage.orig/fs/ext4/mballoc.c	2016-11-25 15:35:07.816249363 +0530
+@@ -3369,6 +3369,11 @@
+ 	unsigned short max = EXT4_BLOCKS_PER_GROUP(sb);
+ 	unsigned short i, first, free = 0;
+ 
++#ifdef HAVE_CLEAR_RDONLY_ON_PUT
++	/* be quiet if readonly device */
++	if (dev_check_rdonly(sb->s_bdev))
++		return 0;
++#endif
+ 	i = mb_find_next_zero_bit(bitmap, max, 0);
+ 
+ 	while (i < max) {
+@@ -3750,6 +3755,13 @@
+ 		bit = next + 1;
+ 	}
+ 
++#ifdef HAVE_CLEAR_RDONLY_ON_PUT
++	/* be quiet if readonly device */
++	if (dev_check_rdonly(sb->s_bdev)) {
++		atomic_add(free, &sbi->s_mb_discarded);
++		return err;
++	}
++#endif
+ 	/* "free < pa->pa_free" means we maybe double alloc the same blocks,
+ 	 * otherwise maybe leave some free blocks unavailable, no need to BUG.*/
+ 	if ((free > pa->pa_free && !pa->pa_error) || (free < pa->pa_free)) {

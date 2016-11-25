@@ -1,0 +1,31 @@
+Index: linux-stage/fs/ext4/super.c
+When ldiskfs run in failover mode whith read-only disk.
+Part of allocation updates are lost and ldiskfs may fail
+while mounting this is due to inconsistent state of
+group-descriptor. Group-descriptor check is added after
+journal replay.
+===================================================================
+--- linux-stage/fs/ext4/super.c	2016-11-24 20:50:46.736527130 +0530
++++ linux-stage.orig/fs/ext4/super.c	2016-11-24 20:54:14.941779453 +0530
+@@ -3429,10 +3429,6 @@
+			goto failed_mount2;
+		}
+	}
+-	if (!ext4_check_descriptors(sb, &first_not_zeroed)) {
+-		ext4_msg(sb, KERN_ERR, "group descriptors corrupted!");
+-		goto failed_mount2;
+-	}
+	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_FLEX_BG))
+		if (!ext4_fill_flex_info(sb)) {
+			ext4_msg(sb, KERN_ERR,
+@@ -3609,6 +3605,10 @@
+	sbi->s_journal->j_commit_callback = ext4_journal_commit_callback;
+
+ no_journal:
++	if (!ext4_check_descriptors(sb, &first_not_zeroed)) {
++		ext4_msg(sb, KERN_ERR, "group descriptors corrupted!");
++		goto failed_mount2;
++	}
+	if (test_opt(sb, NOBH)) {
+		if (!(test_opt(sb, DATA_FLAGS) == EXT4_MOUNT_WRITEBACK_DATA)) {
+			ext4_msg(sb, KERN_WARNING, "Ignoring nobh option - "
