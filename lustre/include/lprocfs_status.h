@@ -637,6 +637,13 @@ ssize_t
 lprocfs_ir_factor_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off);
 #endif
+
+/* lprocfs_status.c: dump pages on cksum error */
+int lprocfs_checksum_dump_seq_show(struct seq_file *m, void *data);
+ssize_t
+lprocfs_checksum_dump_seq_write(struct file *file, const char __user *buffer,
+				size_t count, loff_t *off);
+
 extern int lprocfs_single_release(struct inode *, struct file *);
 extern int lprocfs_seq_release(struct inode *, struct file *);
 

@@ -903,6 +903,7 @@ LPROC_SEQ_FOPS_WO_TYPE(ofd, evict_client);
 LPROC_SEQ_FOPS_RO_TYPE(ofd, num_exports);
 LPROC_SEQ_FOPS_RO_TYPE(ofd, target_instance);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, ir_factor);
+LPROC_SEQ_FOPS_RW_TYPE(ofd, checksum_dump);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, job_interval);
 
 struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
@@ -958,6 +959,8 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	  .fops =	&ofd_target_instance_fops	},
 	{ .name =	"ir_factor",
 	  .fops =	&ofd_ir_factor_fops		},
+	{ .name =	"checksum_dump",
+	  .fops =	&ofd_checksum_dump_fops		},
 	{ .name =	"grant_compat_disable",
 	  .fops =	&ofd_grant_compat_disable_fops	},
 	{ .name =	"client_cache_count",

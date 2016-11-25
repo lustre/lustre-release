@@ -689,6 +689,35 @@ lprocfs_ir_factor_seq_write(struct file *file, const char __user *buffer,
 }
 EXPORT_SYMBOL(lprocfs_ir_factor_seq_write);
 
+int lprocfs_checksum_dump_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+
+	LASSERT(obd != NULL);
+	seq_printf(m, "%d\n", obd->obd_checksum_dump);
+	return 0;
+}
+EXPORT_SYMBOL(lprocfs_checksum_dump_seq_show);
+
+ssize_t
+lprocfs_checksum_dump_seq_write(struct file *file, const char __user *buffer,
+			    size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+	int rc;
+	__s64 val;
+
+	LASSERT(obd != NULL);
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	obd->obd_checksum_dump = !!val;
+	return count;
+}
+EXPORT_SYMBOL(lprocfs_checksum_dump_seq_write);
+
 int lprocfs_recovery_time_soft_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;

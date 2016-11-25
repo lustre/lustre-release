@@ -6107,6 +6107,96 @@ test_77b() { # bug 10889
 }
 run_test 77b "checksum error on client write, read"
 
+cleanup_77c() {
+	trap 0
+	set_checksums 0
+	$LCTL set_param osc.*osc-[^mM]*.checksum_dump=0
+	$check_ost &&
+		do_facet ost1 $LCTL set_param obdfilter.*-OST*.checksum_dump=0
+	[ -n $osc_file_prefix ] && rm -f ${osc_file_prefix}*
+	$check_ost && [ -n $ost_file_prefix ] &&
+		do_facet ost1 rm -f ${ost_file_prefix}\*
+}
+
+test_77c() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	$GSS && skip "could not run with gss" && return
+
+	local bad1
+	local osc_file_prefix
+	local osc_file
+	local check_ost=false
+	local ost_file_prefix
+	local ost_file
+	local orig_cksum
+	local dump_cksum
+	local fid
+
+	# ensure corruption will occur on first OSS/OST
+	$LFS setstripe -i 0 $DIR/$tfile
+
+	[ ! -f $F77_TMP ] && setup_f77
+	dd if=$F77_TMP of=$DIR/$tfile bs=1M count=$F77SZ conv=sync ||
+		error "dd write error: $?"
+	fid=$($LFS path2fid $DIR/$tfile)
+
+	if [ $(lustre_version_code ost1) -ge $(version_code 2.5.42.6) ]
+	then
+		check_ost=true
+		ost_file_prefix=$(do_facet ost1 $LCTL get_param -n debug_path)
+		ost_file_prefix=${ost_file_prefix}-checksum_dump-ost-\\${fid}
+	else
+		echo "OSS do not support bulk pages dump upon error"
+	fi
+
+	osc_file_prefix=$($LCTL get_param -n debug_path)
+	osc_file_prefix=${osc_file_prefix}-checksum_dump-osc-\\${fid}
+
+	trap cleanup_77c EXIT
+
+	set_checksums 1
+	# enable bulk pages dump upon error on Client
+	$LCTL set_param osc.*osc-[^mM]*.checksum_dump=1
+	# enable bulk pages dump upon error on OSS
+	$check_ost &&
+		do_facet ost1 $LCTL set_param obdfilter.*-OST*.checksum_dump=1
+
+	# flush Client cache to allow next read to reach OSS
+	cancel_lru_locks osc
+
+	#define OBD_FAIL_OSC_CHECKSUM_RECEIVE       0x408
+	$LCTL set_param fail_loc=0x80000408
+	dd if=$DIR/$tfile of=/dev/null bs=1M || error "dd read error: $?"
+	$LCTL set_param fail_loc=0
+
+	rm -f $DIR/$tfile
+
+	# check cksum dump on Client
+	osc_file=$(ls ${osc_file_prefix}*)
+	[ -n "$osc_file" ] || error "no checksum dump file on Client"
+	# OBD_FAIL_OSC_CHECKSUM_RECEIVE corrupts with "bad1" at start of file
+	bad1=$(dd if=$osc_file bs=1 count=4 2>/dev/null) || error "dd error: $?"
+	[ $bad1 == "bad1" ] || error "unexpected corrupt pattern"
+	orig_cksum=$(dd if=$F77_TMP bs=1 skip=4 count=1048572 2>/dev/null |
+		     cksum)
+	dump_cksum=$(dd if=$osc_file bs=1 skip=4 2>/dev/null | cksum)
+	[[ "$orig_cksum" == "$dump_cksum" ]] ||
+		error "dump content does not match on Client"
+
+	$check_ost || skip "No need to check cksum dump on OSS"
+
+	# check cksum dump on OSS
+	ost_file=$(do_facet ost1 ls ${ost_file_prefix}\*)
+	[ -n "$ost_file" ] || error "no checksum dump file on OSS"
+	orig_cksum=$(dd if=$F77_TMP bs=1048576 count=1 2>/dev/null | cksum)
+	dump_cksum=$(do_facet ost1 dd if=$ost_file 2>/dev/null \| cksum)
+	[[ "$orig_cksum" == "$dump_cksum" ]] ||
+		error "dump content does not match on OSS"
+
+	cleanup_77c
+}
+run_test 77c "checksum error on client read with debug"
+
 test_77d() { # bug 10889
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	$GSS && skip "could not run with gss" && return
