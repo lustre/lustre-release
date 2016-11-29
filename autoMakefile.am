@@ -189,7 +189,7 @@ debs: undef.h
 		echo -e "1i\nlustre ($$lversion-1) unstable; urgency=low\n\n  * Automated changelog entry update\n\n -- Brian J. Murrell <brian@interlinx.bc.ca>  $$(date -R)\n\n.\nwq" | ed debian/changelog; \
 	fi; \
 	rm -rf debs
-	dpkg-buildpackage -I.git -I\*.out[0-9]\* -I\*.swp || { \
+	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp || { \
 		rc=$${PIPESTATUS[0]}; \
 		[ $${rc} -gt 1 ] && exit $${rc}; \
 		exit 0; \

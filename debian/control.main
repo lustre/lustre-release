@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Brian J. Murrell <brian.murrell@intel.com>
 Uploaders: Brian J. Murrell <brian.murrell@intel.com>
 Standards-Version: 3.8.3
-Build-Depends: module-assistant, libreadline-dev, debhelper (>=7.0.0), dpatch, automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, libsnmp-dev, bzip2, quilt, linux-headers-generic | linux-headers, rsync
+Build-Depends: module-assistant, libreadline-dev, debhelper (>=7.0.0), dpatch, automake (>=1.7) | automake1.7 | automake1.8 | automake1.9, libsnmp-dev, bzip2, quilt, linux-headers-generic | linux-headers | linux-headers-amd64, rsync
 Homepage: https://wiki.hpdd.intel.com/
 Vcs-Git: git://git.hpdd.intel.com/fs/lustre-release.git
 

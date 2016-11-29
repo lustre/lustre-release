@@ -1,0 +1,9 @@
+#!/bin/sh
+
+DEPMOD_DIR="/etc/depmod.d"
+LUSTRE_DEPMOD_FILE="${DEPMOD_DIR}/lustre.conf"
+
+[ ! -d ${DEPMOD_DIR} ] && { mkdir -p ${DEPMOD_DIR}; }
+[ ! -e ${LUSTRE_DEPMOD_FILE} ] && { echo "search updates built-in" > ${LUSTRE_DEPMOD_FILE}; }
+
+depmod -a

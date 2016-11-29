@@ -346,6 +346,7 @@ kdist_config: prep-deb-files patch-stamp
 		    --disable-snmp \
 		    --disable-tests \
 		    --enable-quota \
+		    --with-kmp-moddir=updates \
 		    $(IB_OPTIONS)
 
 kdist_configure: kdist_config

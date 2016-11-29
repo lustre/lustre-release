@@ -1,0 +1,10 @@
+#!/bin/sh
+
+DEPMOD_DIR="/etc/depmod.d"
+LUSTRE_DEPMOD_FILE="${DEPMOD_DIR}/lustre.conf"
+
+[ -e ${LUSTRE_DEPMOD_FILE} ] && { rm -f ${LUSTRE_DEPMOD_FILE}; }
+# If DEPMOD_DIR is empty, we also created it, thus remove it.
+[ ! "$(ls -A ${DEPMOD_DIR} 2>/dev/null)" ] && { rm -rf ${DEPMOD_DIR}; }
+
+depmod -a
