@@ -2675,14 +2675,18 @@ unlink:
 		/* The old index is not empty, remove it firstly. */
 		rc = local_object_unlink(env, lfsck->li_bottom, parent, name);
 
-		CDEBUG(D_LFSCK, "%s: unlink lfsck sub trace file %s: rc = %d\n",
+		CERROR("%s: unlink lfsck sub trace file %s: rc = %d\n",
 		       lfsck_lfsck2name(com->lc_lfsck), name, rc);
 
 		if (rc)
 			RETURN(rc);
 
-		lfsck_object_put(env, *child);
-		*child = NULL;
+		if (*child) {
+			lfsck_object_put(env, *child);
+			*child = NULL;
+		}
+	} else if (reset) {
+		goto unlink;
 	}
 
 	obj = local_index_find_or_create(env, lfsck->li_los, parent, name,
@@ -2691,7 +2695,9 @@ unlink:
 		RETURN(PTR_ERR(obj));
 
 	rc = obj->do_ops->do_index_try(env, obj, ft);
-	if (rc == 0)
+	if (rc)
+		lfsck_object_put(env, obj);
+	else
 		*child = obj;
 
 	RETURN(rc);
