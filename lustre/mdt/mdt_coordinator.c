@@ -1930,6 +1930,7 @@ mdt_hsm_cdt_control_seq_write(struct file *file, const char __user *buffer,
 			rc = -EALREADY;
 		} else {
 			cdt->cdt_state = CDT_STOPPING;
+			mdt_hsm_cdt_wakeup(mdt);
 		}
 	} else if (strcmp(kernbuf, CDT_DISABLE_CMD) == 0) {
 		if ((cdt->cdt_state == CDT_STOPPING) ||
