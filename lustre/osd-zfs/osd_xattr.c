@@ -65,20 +65,12 @@
 #include <linux/posix_acl_xattr.h>
 
 
-int __osd_xattr_load(struct osd_device *osd, uint64_t dnode, nvlist_t **sa)
+int __osd_xattr_load(struct osd_device *osd, sa_handle_t *hdl, nvlist_t **sa)
 {
-	sa_handle_t *sa_hdl;
 	char	    *buf;
 	int	     rc, size;
 
-	if (unlikely(dnode == ZFS_NO_OBJECT))
-		return -ENOENT;
-
-	rc = -sa_handle_get(osd->od_os, dnode, NULL, SA_HDL_PRIVATE, &sa_hdl);
-	if (rc)
-		return rc;
-
-	rc = -sa_size(sa_hdl, SA_ZPL_DXATTR(osd), &size);
+	rc = -sa_size(hdl, SA_ZPL_DXATTR(osd), &size);
 	if (rc) {
 		if (rc == -ENOENT)
 			rc = -nvlist_alloc(sa, NV_UNIQUE_NAME, KM_SLEEP);
@@ -90,24 +82,22 @@ int __osd_xattr_load(struct osd_device *osd, uint64_t dnode, nvlist_t **sa)
 		rc = -ENOMEM;
 		goto out_sa;
 	}
-	rc = -sa_lookup(sa_hdl, SA_ZPL_DXATTR(osd), buf, size);
+	rc = -sa_lookup(hdl, SA_ZPL_DXATTR(osd), buf, size);
 	if (rc == 0)
 		rc = -nvlist_unpack(buf, size, sa, KM_SLEEP);
 	osd_zio_buf_free(buf, size);
 out_sa:
-	sa_handle_destroy(sa_hdl);
 
 	return rc;
 }
 
-static inline int __osd_xattr_cache(const struct lu_env *env,
-				    struct osd_object *obj)
+static inline int __osd_xattr_cache(struct osd_object *obj)
 {
-	LASSERT(obj->oo_sa_xattr == NULL);
-	LASSERT(obj->oo_dn != NULL);
-
-	return __osd_xattr_load(osd_obj2dev(obj), obj->oo_dn->dn_object,
-				&obj->oo_sa_xattr);
+	LASSERT(obj->oo_sa_hdl);
+	if (obj->oo_sa_xattr != NULL)
+		return 0;
+	return __osd_xattr_load(osd_obj2dev(obj),
+				obj->oo_sa_hdl, &obj->oo_sa_xattr);
 }
 
 static int
@@ -115,19 +105,15 @@ __osd_sa_xattr_get(const struct lu_env *env, struct osd_object *obj,
 		   const struct lu_buf *buf, const char *name, int *sizep)
 {
 	uchar_t *nv_value;
-	int      rc;
+	int      rc = 0;
 
-	LASSERT(obj->oo_sa_hdl);
-
-	if (obj->oo_sa_xattr == NULL) {
-		rc = __osd_xattr_cache(env, obj);
-		if (rc)
-			return rc;
-	}
+	rc = __osd_xattr_cache(obj);
+	if (rc)
+		return rc;
 
 	LASSERT(obj->oo_sa_xattr);
-	rc = -nvlist_lookup_byte_array(obj->oo_sa_xattr, name, &nv_value,
-			sizep);
+	rc = -nvlist_lookup_byte_array(obj->oo_sa_xattr, name,
+				       &nv_value, sizep);
 	if (rc)
 		return rc;
 
@@ -411,12 +397,9 @@ int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
 	int	rc;
 	int	too_big = 0;
 
-	LASSERT(obj->oo_sa_hdl);
-	if (obj->oo_sa_xattr == NULL) {
-		rc = __osd_xattr_cache(env, obj);
-		if (rc)
-			return rc;
-	}
+	rc = __osd_xattr_cache(obj);
+	if (rc)
+		return rc;
 
 	LASSERT(obj->oo_sa_xattr);
 	/* Limited to 32k to keep nvpair memory allocations small */
@@ -682,11 +665,9 @@ static int __osd_sa_xattr_del(const struct lu_env *env, struct osd_object *obj,
 {
 	int rc;
 
-	if (obj->oo_sa_xattr == NULL) {
-		rc = __osd_xattr_cache(env, obj);
-		if (rc)
-			return rc;
-	}
+	rc = __osd_xattr_cache(obj);
+	if (rc)
+		return rc;
 
 	rc = -nvlist_remove(obj->oo_sa_xattr, name, DATA_TYPE_BYTE_ARRAY);
 	if (rc == 0)
@@ -856,13 +837,9 @@ osd_sa_xattr_list(const struct lu_env *env, struct osd_object *obj,
 	int       len, counted = 0;
 	int       rc = 0;
 
-	if (obj->oo_sa_xattr == NULL) {
-		rc = __osd_xattr_cache(env, obj);
-		if (rc)
-			return rc;
-	}
-
-	LASSERT(obj->oo_sa_xattr);
+	rc = __osd_xattr_cache(obj);
+	if (rc)
+		return rc;
 
 	while ((nvp = nvlist_next_nvpair(obj->oo_sa_xattr, nvp)) != NULL) {
 		const char *name = nvpair_name(nvp);

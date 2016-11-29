@@ -535,8 +535,7 @@ int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
 		   const struct lu_fid *fid);
 
 /* osd_xattr.c */
-int __osd_xattr_load(struct osd_device *osd, uint64_t dnode,
-		     nvlist_t **sa_xattr);
+int __osd_xattr_load(struct osd_device *osd, sa_handle_t *hdl, nvlist_t **sa);
 int __osd_xattr_get_large(const struct lu_env *env, struct osd_device *osd,
 			  uint64_t xattr, struct lu_buf *buf,
 			  const char *name, int *sizep);
@@ -722,6 +721,24 @@ osd_obj_bonuslen(struct osd_object *obj)
 #define osd_dmu_prefetch(os, obj, lvl, off, len, pri)	\
 	dmu_prefetch((os), (obj), (lvl), (off))
 #endif
+
+static inline int osd_sa_handle_get(struct osd_object *obj)
+{
+	struct osd_device *osd = osd_obj2dev(obj);
+	dnode_t *dn = obj->oo_dn;
+	int rc;
+
+	if (obj->oo_sa_hdl)
+		return 0;
+
+	dbuf_read(dn->dn_bonus, NULL, DB_RF_MUST_SUCCEED | DB_RF_NOPREFETCH);
+	rc = -sa_handle_get_from_db(osd->od_os, &dn->dn_bonus->db, obj,
+				    SA_HDL_PRIVATE, &obj->oo_sa_hdl);
+	if (rc)
+		return rc;
+	refcount_add(&dn->dn_bonus->db_holds, osd_obj_tag);
+	return 0;
+}
 
 static inline void osd_dnode_rele(dnode_t *dn)
 {

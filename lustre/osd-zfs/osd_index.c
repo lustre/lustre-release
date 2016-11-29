@@ -213,6 +213,30 @@ static inline void osd_it_append_attrs(struct lu_dirent *ent, __u32 attr,
 	ent->lde_attrs = cpu_to_le32(ent->lde_attrs);
 }
 
+int __osd_xattr_load_by_oid(struct osd_device *osd, uint64_t oid, nvlist_t **sa)
+{
+	sa_handle_t *hdl;
+	dmu_buf_t *db;
+	int rc;
+
+	rc = -dmu_bonus_hold(osd->od_os, oid, osd_obj_tag, &db);
+	if (rc < 0) {
+		CERROR("%s: can't get bonus, rc = %d\n", osd->od_svname, rc);
+		return rc;
+	}
+
+	rc = -sa_handle_get_from_db(osd->od_os, db, NULL, SA_HDL_PRIVATE, &hdl);
+	if (rc) {
+		dmu_buf_rele(db, osd_obj_tag);
+		return rc;
+	}
+
+	rc = __osd_xattr_load(osd, hdl, sa);
+
+	sa_handle_destroy(hdl);
+
+	return rc;
+}
 /**
  * Get the object's FID from its LMA EA.
  *
@@ -240,7 +264,7 @@ static int osd_get_fid_by_oid(const struct lu_env *env, struct osd_device *osd,
 	int			 rc;
 	ENTRY;
 
-	rc = __osd_xattr_load(osd, oid, &sa_xattr);
+	rc = __osd_xattr_load_by_oid(osd, oid, &sa_xattr);
 	if (rc == -ENOENT)
 		goto regular;
 
@@ -310,21 +334,17 @@ static int osd_find_parent_by_dnode(const struct lu_env *env,
 				    struct dt_object *o,
 				    struct lu_fid *fid)
 {
-	struct osd_device	*osd = osd_obj2dev(osd_dt_obj(o));
-	sa_handle_t		*sa_hdl;
+	struct osd_object	*obj = osd_dt_obj(o);
+	struct osd_device	*osd = osd_obj2dev(obj);
 	uint64_t		 dnode = ZFS_NO_OBJECT;
 	int			 rc;
 	ENTRY;
 
 	/* first of all, get parent dnode from own attributes */
-	LASSERT(osd_dt_obj(o)->oo_dn);
-	rc = -sa_handle_get(osd->od_os, osd_dt_obj(o)->oo_dn->dn_object,
-			    NULL, SA_HDL_PRIVATE, &sa_hdl);
+	rc = osd_sa_handle_get(obj);
 	if (rc != 0)
 		RETURN(rc);
-
-	rc = -sa_lookup(sa_hdl, SA_ZPL_PARENT(osd), &dnode, 8);
-	sa_handle_destroy(sa_hdl);
+	rc = -sa_lookup(obj->oo_sa_hdl, SA_ZPL_PARENT(osd), &dnode, 8);
 	if (rc == 0)
 		rc = osd_get_fid_by_oid(env, osd, dnode, fid);
 
@@ -1466,7 +1486,7 @@ static int osd_zfs_otable_it_next(const struct lu_env *env, struct dt_it *di)
 
 		/* LMA is required for this to be a Lustre object.
 		 * If there is no xattr skip it. */
-		rc = __osd_xattr_load(dev, it->mit_pos, &nvbuf);
+		rc = __osd_xattr_load_by_oid(dev, it->mit_pos, &nvbuf);
 		if (unlikely(rc != 0))
 			continue;
 

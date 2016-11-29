@@ -88,8 +88,7 @@ osd_object_sa_init(struct osd_object *obj, struct osd_device *o)
 	LASSERT(obj->oo_sa_hdl == NULL);
 	LASSERT(obj->oo_dn != NULL);
 
-	rc = -sa_handle_get(o->od_os, obj->oo_dn->dn_object, obj,
-			    SA_HDL_PRIVATE, &obj->oo_sa_hdl);
+	rc = osd_sa_handle_get(obj);
 	if (rc)
 		return rc;
 
@@ -184,17 +183,11 @@ int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
 {
 	struct osa_attr	*osa = &osd_oti_get(env)->oti_osa;
 	sa_bulk_attr_t	*bulk = osd_oti_get(env)->oti_attr_bulk;
-	sa_handle_t	*sa_hdl;
 	int		 cnt = 0;
 	int		 rc;
 	ENTRY;
 
 	LASSERT(obj->oo_dn != NULL);
-
-	rc = -sa_handle_get(o->od_os, obj->oo_dn->dn_object, NULL,
-			    SA_HDL_PRIVATE, &sa_hdl);
-	if (rc)
-		RETURN(rc);
 
 	la->la_valid |= LA_ATIME | LA_MTIME | LA_CTIME | LA_MODE | LA_TYPE |
 			LA_SIZE | LA_UID | LA_GID | LA_FLAGS | LA_NLINK;
@@ -210,7 +203,7 @@ int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_FLAGS(o), NULL, &osa->flags, 8);
 	LASSERT(cnt <= ARRAY_SIZE(osd_oti_get(env)->oti_attr_bulk));
 
-	rc = -sa_bulk_lookup(sa_hdl, bulk, cnt);
+	rc = -sa_bulk_lookup(obj->oo_sa_hdl, bulk, cnt);
 	if (rc)
 		GOTO(out_sa, rc);
 
@@ -247,14 +240,13 @@ int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
 	}
 
 	if (S_ISCHR(la->la_mode) || S_ISBLK(la->la_mode)) {
-		rc = -sa_lookup(sa_hdl, SA_ZPL_RDEV(o), &osa->rdev, 8);
+		rc = -sa_lookup(obj->oo_sa_hdl, SA_ZPL_RDEV(o), &osa->rdev, 8);
 		if (rc)
 			GOTO(out_sa, rc);
 		la->la_rdev = osa->rdev;
 		la->la_valid |= LA_RDEV;
 	}
 out_sa:
-	sa_handle_destroy(sa_hdl);
 
 	RETURN(rc);
 }
@@ -1245,6 +1237,7 @@ static int osd_find_new_dnode(const struct lu_env *env, dmu_tx_t *tx,
 			atomic_inc_32(&dn->dn_dbufs_count);
 		}
 		*dnp = dn;
+		dbuf_read(db, NULL, DB_RF_MUST_SUCCEED | DB_RF_NOPREFETCH);
 		break;
 	}
 
@@ -1503,15 +1496,13 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 	rc = -zap_add(osd->od_os, zapid, buf, 8, 1, zde, oh->ot_tx);
 	if (rc)
 		GOTO(out, rc);
-
+	obj->oo_dn = dn;
 	/* Now add in all of the "SA" attributes */
-	rc = -sa_handle_get(osd->od_os, dn->dn_object, NULL,
-			    SA_HDL_PRIVATE, &obj->oo_sa_hdl);
+	rc = osd_sa_handle_get(obj);
 	if (rc)
 		GOTO(out, rc);
 
 	/* configure new osd object */
-	obj->oo_dn = dn;
 	parent = parent != 0 ? parent : zapid;
 	rc = __osd_attr_init(env, osd, obj->oo_sa_hdl, oh->ot_tx,
 			     &obj->oo_attr, parent);
