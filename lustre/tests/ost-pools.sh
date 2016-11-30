@@ -178,9 +178,18 @@ add_pool() {
 	local RC=$?
 	[[ $RC -ne 0 ]] && return $RC
 
+	# wait for OSTs to be added to the pool
+	for mds_id in $(seq $MDSCOUNT); do
+		local mdt_id=$((mds_id-1))
+		local lodname=$FSNAME-MDT$(printf "%04x" $mdt_id)-mdtlov
+		wait_update_facet mds$mds_id \
+			"lctl get_param -n lod.$lodname.pools.$pool |
+				sort -u | tr '\n' ' ' " "$tgt" >/dev/null ||
+			error "mds$mds_id:pool add failed $1; $2"
+	done
 	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$pool |
-		sort -u | tr '\n' ' ' " "$tgt" >/dev/null || RC=1
-	[[ $RC -ne 0 ]] && error "pool_add failed: $1; $2"
+		sort -u | tr '\n' ' ' " "$tgt" >/dev/null ||
+		error "pool_add failed: $1; $2"
 	return $RC
 }
 
