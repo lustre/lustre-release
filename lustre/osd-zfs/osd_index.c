@@ -442,9 +442,9 @@ static int osd_dir_lookup(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	memset(&oti->oti_zde.lzd_fid, 0, sizeof(struct lu_fid));
-	rc = -zap_lookup(osd->od_os, obj->oo_dn->dn_object,
-			 (char *)key, 8, sizeof(oti->oti_zde) / 8,
-			 (void *)&oti->oti_zde);
+	rc = osd_zap_lookup(osd, obj->oo_dn->dn_object, obj->oo_dn,
+			    (char *)key, 8, sizeof(oti->oti_zde) / 8,
+			    (void *)&oti->oti_zde);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -490,7 +490,7 @@ static int osd_declare_dir_insert(const struct lu_env *env,
 	/* do not specify the key as then DMU is trying to look it up
 	 * which is very expensive. usually the layers above lookup
 	 * before insertion */
-	dmu_tx_hold_zap(oh->ot_tx, object, TRUE, NULL);
+	osd_tx_hold_zap(oh->ot_tx, object, obj->oo_dn, TRUE, NULL);
 
 	osd_idc_find_or_init(env, osd, fid);
 
@@ -629,9 +629,9 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 
 	oti->oti_zde.lzd_fid = *fid;
 	/* Insert (key,oid) into ZAP */
-	rc = -zap_add(osd->od_os, parent->oo_dn->dn_object,
-		      (char *)key, 8, sizeof(oti->oti_zde) / 8,
-		      (void *)&oti->oti_zde, oh->ot_tx);
+	rc = osd_zap_add(osd, parent->oo_dn->dn_object, parent->oo_dn,
+			 (char *)key, 8, sizeof(oti->oti_zde) / 8,
+			 (void *)&oti->oti_zde, oh->ot_tx);
 	if (unlikely(rc == -EEXIST &&
 		     name[0] == '.' && name[1] == '.' && name[2] == 0))
 		/* Update (key,oid) in ZAP */
@@ -670,7 +670,7 @@ static int osd_declare_dir_delete(const struct lu_env *env,
 	/* do not specify the key as then DMU is trying to look it up
 	 * which is very expensive. usually the layers above lookup
 	 * before deletion */
-	dmu_tx_hold_zap(oh->ot_tx, dnode, FALSE, NULL);
+	osd_tx_hold_zap(oh->ot_tx, dnode, obj->oo_dn, FALSE, NULL);
 
 	RETURN(0);
 }
@@ -704,8 +704,8 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	/* Remove key from the ZAP */
-	rc = -zap_remove(osd->od_os, zap_dn->dn_object,
-			 (char *) key, oh->ot_tx);
+	rc = osd_zap_remove(osd, zap_dn->dn_object, zap_dn,
+			    (char *)key, oh->ot_tx);
 
 	if (unlikely(rc && rc != -ENOENT))
 		CERROR("%s: zap_remove failed: rc = %d\n", osd->od_svname, rc);
@@ -964,8 +964,9 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 		GOTO(out, rc = -EIO);
 	}
 
-	rc = -zap_lookup(it->ozi_zc->zc_objset, it->ozi_zc->zc_zapobj,
-			 za->za_name, za->za_integer_length, 3, zde);
+	rc = osd_zap_lookup(osd_obj2dev(it->ozi_obj), it->ozi_zc->zc_zapobj,
+			    it->ozi_obj->oo_dn, za->za_name,
+			    za->za_integer_length, 3, zde);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1148,12 +1149,11 @@ static int osd_declare_index_insert(const struct lu_env *env,
 
 	LASSERT(obj->oo_dn);
 
-	dmu_tx_hold_bonus(oh->ot_tx, obj->oo_dn->dn_object);
-
 	/* do not specify the key as then DMU is trying to look it up
 	 * which is very expensive. usually the layers above lookup
 	 * before insertion */
-	dmu_tx_hold_zap(oh->ot_tx, obj->oo_dn->dn_object, TRUE, NULL);
+	osd_tx_hold_zap(oh->ot_tx, obj->oo_dn->dn_object, obj->oo_dn,
+			TRUE, NULL);
 
 	RETURN(0);
 }
@@ -1204,7 +1204,8 @@ static int osd_declare_index_delete(const struct lu_env *env,
 	/* do not specify the key as then DMU is trying to look it up
 	 * which is very expensive. usually the layers above lookup
 	 * before deletion */
-	dmu_tx_hold_zap(oh->ot_tx, obj->oo_dn->dn_object, FALSE, NULL);
+	osd_tx_hold_zap(oh->ot_tx, obj->oo_dn->dn_object, obj->oo_dn,
+			FALSE, NULL);
 
 	RETURN(0);
 }

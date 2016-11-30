@@ -148,7 +148,7 @@ int __osd_xattr_get_large(const struct lu_env *env, struct osd_device *osd,
 	if (rc)
 		return rc;
 
-	rc = __osd_obj2dnode(env, osd->od_os, xa_data_obj, &xa_data_dn);
+	rc = __osd_obj2dnode(osd->od_os, xa_data_obj, &xa_data_dn);
 	if (rc)
 		return rc;
 
@@ -506,7 +506,7 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		 * Entry already exists.
 		 * We'll truncate the existing object.
 		 */
-		rc = __osd_obj2dnode(env, osd->od_os, xa_data_obj, &xa_data_dn);
+		rc = __osd_obj2dnode(osd->od_os, xa_data_obj, &xa_data_dn);
 		if (rc)
 			goto out;
 

@@ -515,6 +515,103 @@ your distribution.
 			AC_DEFINE(HAVE_DMU_USEROBJ_ACCOUNTING, 1,
 				[Have native dnode accounting in ZFS])
 		])
+		dnl # ZFS 0.7.x adds new method zap_lookup_by_dnode
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'zap_lookup_by_dnode'],
+		zap_lookup_by_dnode, [
+			#include <sys/zap.h>
+			#include <sys/dnode.h>
+		],[
+			dnode_t *dn = NULL;
+			zap_lookup_by_dnode(dn, NULL, 1, 1, NULL);
+		],[
+			AC_DEFINE(HAVE_ZAP_LOOKUP_BY_DNODE, 1,
+				[Have zap_lookup_by_dnode() in ZFS])
+		])
+		dnl #
+		dnl # ZFS 0.7.x adds new method zap_add_by_dnode
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'zap_add_by_dnode'],
+		zap_add_by_dnode, [
+			#include <sys/zap.h>
+			#include <sys/dnode.h>
+		],[
+			dnode_t *dn = NULL;
+			zap_add_by_dnode(dn, NULL, 1, 1, NULL, NULL);
+		],[
+			AC_DEFINE(HAVE_ZAP_ADD_BY_DNODE, 1,
+				[Have zap_add_by_dnode() in ZFS])
+		])
+		dnl #
+		dnl # ZFS 0.7.x adds new method zap_remove_by_dnode
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'zap_remove_by_dnode'],
+		zap_remove_by_dnode, [
+			#include <sys/zap.h>
+			#include <sys/dnode.h>
+		],[
+			dnode_t *dn = NULL;
+			zap_remove_by_dnode(dn, NULL, NULL);
+		],[
+			AC_DEFINE(HAVE_ZAP_REMOVE_ADD_BY_DNODE, 1,
+				[Have zap_remove_by_dnode() in ZFS])
+		])
+		dnl #
+		dnl # ZFS 0.7.x adds new method dmu_tx_hold_zap_by_dnode
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'dmu_tx_hold_zap_by_dnode'],
+		dmu_tx_hold_zap_by_dnode, [
+			#include <sys/zap.h>
+			#include <sys/dnode.h>
+		],[
+			dnode_t *dn = NULL;
+			dmu_tx_hold_zap_by_dnode(NULL, dn, TRUE, NULL);
+		],[
+			AC_DEFINE(HAVE_DMU_TX_HOLD_ZAP_BY_DNODE, 1,
+				[Have dmu_tx_hold_zap_by_dnode() in ZFS])
+		])
+		dnl #
+		dnl # ZFS 0.7.x adds new method dmu_tx_hold_write_by_dnode
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'dmu_tx_hold_write_by_dnode'],
+		dmu_tx_hold_write_by_dnode, [
+			#include <sys/zap.h>
+			#include <sys/dnode.h>
+		],[
+			dnode_t *dn = NULL;
+			dmu_tx_hold_write_by_dnode(NULL, dn, 0, 0);
+		],[
+			AC_DEFINE(HAVE_DMU_TX_HOLD_WRITE_BY_DNODE, 1,
+				[Have dmu_tx_hold_write_by_dnode() in ZFS])
+		])
+		dnl #
+		dnl # ZFS 0.7.x adds new method dmu_write_by_dnode
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'dmu_write_by_dnode'],
+		dmu_write_by_dnode, [
+			#include <sys/zap.h>
+			#include <sys/dnode.h>
+		],[
+			dnode_t *dn = NULL;
+			dmu_write_by_dnode(dn, 0, 0, NULL, NULL);
+		],[
+			AC_DEFINE(HAVE_DMU_WRITE_BY_DNODE, 1,
+				[Have dmu_write_by_dnode() in ZFS])
+		])
+		dnl #
+		dnl # ZFS 0.7.x adds new method dmu_read_by_dnode
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'dmu_read_by_dnode'],
+		dmu_read_by_dnode, [
+			#include <sys/zap.h>
+			#include <sys/dnode.h>
+		],[
+			dnode_t *dn = NULL;
+			dmu_read_by_dnode(dn, 0, 0, NULL, 0);
+		],[
+			AC_DEFINE(HAVE_DMU_READ_BY_DNODE, 1,
+				[Have dmu_read_by_dnode() in ZFS])
+		])
 	])
 
 	AM_CONDITIONAL(ZFS_ENABLED, [test "x$enable_zfs" = xyes])

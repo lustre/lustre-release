@@ -251,10 +251,8 @@ out_sa:
 	RETURN(rc);
 }
 
-int __osd_obj2dnode(const struct lu_env *env, objset_t *os,
-		   uint64_t oid, dnode_t **dnp)
+int __osd_obj2dnode(objset_t *os, uint64_t oid, dnode_t **dnp)
 {
-	dmu_object_info_t *doi = &osd_oti_get(env)->oti_doi;
 	dmu_buf_t *db;
 	dmu_buf_impl_t *dbi;
 	int rc;
@@ -266,15 +264,7 @@ int __osd_obj2dnode(const struct lu_env *env, objset_t *os,
 	dbi = (dmu_buf_impl_t *)db;
 	DB_DNODE_ENTER(dbi);
 	*dnp = DB_DNODE(dbi);
-
 	LASSERT(*dnp != NULL);
-	dmu_object_info_from_dnode(*dnp, doi);
-	if (unlikely (oid != DMU_USERUSED_OBJECT &&
-	    oid != DMU_GROUPUSED_OBJECT && doi->doi_bonus_type != DMU_OT_SA)) {
-		osd_dnode_rele(*dnp);
-		*dnp = NULL;
-		return -EINVAL;
-	}
 
 	return 0;
 }
@@ -408,7 +398,7 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 	rc = osd_fid_lookup(env, osd, lu_object_fid(l), &oid);
 	if (rc == 0) {
 		LASSERT(obj->oo_dn == NULL);
-		rc = __osd_obj2dnode(env, osd->od_os, oid, &obj->oo_dn);
+		rc = __osd_obj2dnode(osd->od_os, oid, &obj->oo_dn);
 		/* EEXIST will be returned if object is being deleted in ZFS */
 		if (rc == -EEXIST) {
 			rc = 0;
@@ -498,6 +488,7 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 	struct osd_object	*obj = osd_dt_obj(dt);
 	struct osd_device	*osd = osd_obj2dev(obj);
 	struct osd_thandle	*oh;
+	dnode_t *dn;
 	int			 rc;
 	uint64_t		 zapid;
 	ENTRY;
@@ -509,8 +500,8 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 	LASSERT(oh->ot_tx != NULL);
 
 	/* declare that we'll remove object from fid-dnode mapping */
-	zapid = osd_get_name_n_idx(env, osd, fid, NULL, 0);
-	dmu_tx_hold_zap(oh->ot_tx, zapid, FALSE, NULL);
+	zapid = osd_get_name_n_idx(env, osd, fid, NULL, 0, &dn);
+	osd_tx_hold_zap(oh->ot_tx, zapid, dn, FALSE, NULL);
 
 	osd_declare_xattrs_destroy(env, obj, oh);
 
@@ -531,7 +522,8 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 		dmu_tx_hold_free(oh->ot_tx, obj->oo_dn->dn_object,
 				 0, DMU_OBJECT_END);
 	else
-		dmu_tx_hold_zap(oh->ot_tx, osd->od_unlinkedid, TRUE, NULL);
+		osd_tx_hold_zap(oh->ot_tx, osd->od_unlinked->dn_object,
+				osd->od_unlinked, TRUE, NULL);
 
 	/* will help to find FID->ino when this object is being
 	 * added to PENDING/ */
@@ -551,6 +543,7 @@ static int osd_object_destroy(const struct lu_env *env,
 	struct osd_thandle	*oh;
 	int			 rc;
 	uint64_t		 oid, zapid;
+	dnode_t *zdn;
 	ENTRY;
 
 	down_write(&obj->oo_guard);
@@ -565,8 +558,9 @@ static int osd_object_destroy(const struct lu_env *env,
 	LASSERT(oh->ot_tx != NULL);
 
 	/* remove obj ref from index dir (it depends) */
-	zapid = osd_get_name_n_idx(env, osd, fid, buf, sizeof(info->oti_str));
-	rc = -zap_remove(osd->od_os, zapid, buf, oh->ot_tx);
+	zapid = osd_get_name_n_idx(env, osd, fid, buf,
+				   sizeof(info->oti_str), &zdn);
+	rc = osd_zap_remove(osd, zapid, zdn, buf, oh->ot_tx);
 	if (rc) {
 		CERROR("%s: zap_remove(%s) failed: rc = %d\n",
 		       osd->od_svname, buf, rc);
@@ -597,12 +591,15 @@ static int osd_object_destroy(const struct lu_env *env,
 			CERROR("%s: failed to free %s %llu: rc = %d\n",
 			       osd->od_svname, buf, oid, rc);
 	} else { /* asynchronous destroy */
+		char *key = info->oti_key;
+
 		rc = osd_object_unlinked_add(obj, oh);
 		if (rc)
 			GOTO(out, rc);
 
-		rc = -zap_add_int(osd->od_os, osd->od_unlinkedid,
-				  oid, oh->ot_tx);
+		snprintf(key, sizeof(info->oti_key), "%llx", oid);
+		rc = osd_zap_add(osd, osd->od_unlinked->dn_object,
+				 osd->od_unlinked, key, 8, 1, &oid, oh->ot_tx);
 		if (rc)
 			CERROR("%s: zap_add_int() failed %s %llu: rc = %d\n",
 			       osd->od_svname, buf, oid, rc);
@@ -1085,6 +1082,7 @@ static int osd_declare_object_create(const struct lu_env *env,
 	struct osd_device	*osd = osd_obj2dev(obj);
 	struct osd_thandle	*oh;
 	uint64_t		 zapid;
+	dnode_t			*dn;
 	int			 rc, dnode_size;
 	ENTRY;
 
@@ -1133,8 +1131,8 @@ static int osd_declare_object_create(const struct lu_env *env,
 	}
 
 	/* and we'll add it to some mapping */
-	zapid = osd_get_name_n_idx(env, osd, fid, NULL, 0);
-	dmu_tx_hold_zap(oh->ot_tx, zapid, TRUE, NULL);
+	zapid = osd_get_name_n_idx(env, osd, fid, NULL, 0, &dn);
+	osd_tx_hold_zap(oh->ot_tx, zapid, dn, TRUE, NULL);
 
 	/* will help to find FID->ino mapping at dt_insert() */
 	osd_idc_find_and_init(env, osd, obj);
@@ -1242,7 +1240,7 @@ static int osd_find_new_dnode(const struct lu_env *env, dmu_tx_t *tx,
 	}
 
 	if (unlikely(*dnp == NULL))
-		rc = __osd_obj2dnode(env, tx->tx_objset, oid, dnp);
+		rc = __osd_obj2dnode(tx->tx_objset, oid, dnp);
 
 	return rc;
 }
@@ -1448,7 +1446,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 	struct osd_device	*osd = osd_obj2dev(obj);
 	char			*buf = info->oti_str;
 	struct osd_thandle	*oh;
-	dnode_t *dn = NULL;
+	dnode_t *dn = NULL, *zdn = NULL;
 	uint64_t		 zapid, parent = 0;
 	int			 rc;
 
@@ -1491,9 +1489,9 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 	zde->zde_dnode = dn->dn_object;
 	zde->zde_type = IFTODT(attr->la_mode & S_IFMT);
 
-	zapid = osd_get_name_n_idx(env, osd, fid, buf, sizeof(info->oti_str));
-
-	rc = -zap_add(osd->od_os, zapid, buf, 8, 1, zde, oh->ot_tx);
+	zapid = osd_get_name_n_idx(env, osd, fid, buf,
+				   sizeof(info->oti_str), &zdn);
+	rc = osd_zap_add(osd, zapid, zdn, buf, 8, 1, zde, oh->ot_tx);
 	if (rc)
 		GOTO(out, rc);
 	obj->oo_dn = dn;

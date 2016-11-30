@@ -434,7 +434,7 @@ static void osd_fid2str(char *buf, const struct lu_fid *fid)
  */
 static uint64_t
 osd_get_idx_for_fid(struct osd_device *osd, const struct lu_fid *fid,
-		    char *buf)
+		    char *buf, dnode_t **zdn)
 {
 	struct osd_oi *oi;
 
@@ -442,16 +442,21 @@ osd_get_idx_for_fid(struct osd_device *osd, const struct lu_fid *fid,
 	oi = osd->od_oi_table[fid_seq(fid) & (osd->od_oi_count - 1)];
 	if (buf)
 		osd_fid2str(buf, fid);
+	if (zdn)
+		*zdn = oi->oi_dn;
 
 	return oi->oi_zapid;
 }
 
 uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
-			    const struct lu_fid *fid, char *buf, int bufsize)
+			    const struct lu_fid *fid, char *buf, int bufsize,
+			    dnode_t **zdn)
 {
 	uint64_t zapid;
 
 	LASSERT(fid);
+	if (zdn != NULL)
+		*zdn = NULL;
 
 	if (fid_is_on_ost(env, osd, fid) == 1 || fid_seq(fid) == FID_SEQ_ECHO) {
 		zapid = osd_get_idx_for_ost_obj(env, osd, fid, buf, bufsize);
@@ -466,10 +471,10 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 			if (fid_is_acct(fid))
 				zapid = MASTER_NODE_OBJ;
 		} else {
-			zapid = osd_get_idx_for_fid(osd, fid, buf);
+			zapid = osd_get_idx_for_fid(osd, fid, buf, NULL);
 		}
 	} else {
-		zapid = osd_get_idx_for_fid(osd, fid, buf);
+		zapid = osd_get_idx_for_fid(osd, fid, buf, zdn);
 	}
 
 	return zapid;
@@ -507,7 +512,8 @@ int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 {
 	struct osd_thread_info	*info = osd_oti_get(env);
 	char			*buf = info->oti_buf;
-	uint64_t		zapid;
+	dnode_t *zdn;
+	uint64_t zapid;
 	int			rc = 0;
 	ENTRY;
 
@@ -522,9 +528,9 @@ int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 		*oid = dev->od_root;
 	} else {
 		zapid = osd_get_name_n_idx(env, dev, fid, buf,
-					   sizeof(info->oti_buf));
-		rc = -zap_lookup(dev->od_os, zapid, buf,
-				8, 1, &info->oti_zde);
+					   sizeof(info->oti_buf), &zdn);
+		rc = osd_zap_lookup(dev, zapid, zdn, buf,
+				    8, 1, &info->oti_zde);
 		if (rc)
 			RETURN(rc);
 		*oid = info->oti_zde.lzd_reg.zde_dnode;
@@ -580,7 +586,7 @@ osd_oi_add_table(const struct lu_env *env, struct osd_device *o,
 	}
 
 	o->od_oi_table[key] = oi;
-	__osd_obj2dnode(env, o->od_os, oi->oi_zapid, &oi->oi_dn);
+	__osd_obj2dnode(o->od_os, oi->oi_zapid, &oi->oi_dn);
 
 	return 0;
 }

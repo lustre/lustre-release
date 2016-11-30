@@ -135,8 +135,8 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 
 	record_start_io(osd, READ, 0);
 
-	rc = -dmu_read(osd->od_os, obj->oo_dn->dn_object, *pos, size,
-			buf->lb_buf, DMU_READ_PREFETCH);
+	rc = osd_dmu_read(osd, obj->oo_dn, *pos, size, buf->lb_buf,
+			  DMU_READ_PREFETCH);
 
 	record_end_io(osd, READ, cfs_time_current() - start, size,
 		      size >> PAGE_SHIFT);
@@ -176,7 +176,7 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 	if (pos == -1)
 		pos = max_t(loff_t, 256 * 8 * LLOG_MIN_CHUNK_SIZE,
 			    obj->oo_attr.la_size + (2 << 20));
-	dmu_tx_hold_write(oh->ot_tx, oid, pos, buf->lb_len);
+	osd_tx_hold_write(oh->ot_tx, oid, obj->oo_dn, pos, buf->lb_len);
 
 	/* dt_declare_write() is usually called for system objects, such
 	 * as llog or last_rcvd files. We needn't enforce quota on those
@@ -204,8 +204,8 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
-	dmu_write(osd->od_os, obj->oo_dn->dn_object, offset,
-		(uint64_t)buf->lb_len, buf->lb_buf, oh->ot_tx);
+	osd_dmu_write(osd, obj->oo_dn, offset, (uint64_t)buf->lb_len,
+		      buf->lb_buf, oh->ot_tx);
 	write_lock(&obj->oo_attr_lock);
 	if (obj->oo_attr.la_size < offset + buf->lb_len) {
 		obj->oo_attr.la_size = offset + buf->lb_len;
@@ -596,8 +596,8 @@ static int osd_declare_write_commit(const struct lu_env *env,
 			continue;
 		}
 
-		dmu_tx_hold_write(oh->ot_tx, obj->oo_dn->dn_object,
-				  offset, size);
+		osd_tx_hold_write(oh->ot_tx, obj->oo_dn->dn_object,
+				  obj->oo_dn, offset, size);
 		/* Estimating space to be consumed by a write is rather
 		 * complicated with ZFS. As a consequence, we don't account for
 		 * indirect blocks and just use as a rough estimate the worse
@@ -611,12 +611,10 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	}
 
 	if (size) {
-		dmu_tx_hold_write(oh->ot_tx, obj->oo_dn->dn_object,
+		osd_tx_hold_write(oh->ot_tx, obj->oo_dn->dn_object, obj->oo_dn,
 				  offset, size);
 		space += osd_roundup2blocksz(size, offset, blksz);
 	}
-
-	dmu_tx_hold_sa(oh->ot_tx, obj->oo_sa_hdl, 0);
 
 	oh->ot_write_commit = 1; /* used in osd_trans_start() for fail_loc */
 
@@ -774,9 +772,9 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		}
 
 		if (lnb[i].lnb_page->mapping == (void *)obj) {
-			dmu_write(osd->od_os, obj->oo_dn->dn_object,
-				lnb[i].lnb_file_offset, lnb[i].lnb_len,
-				kmap(lnb[i].lnb_page), oh->ot_tx);
+			osd_dmu_write(osd, obj->oo_dn, lnb[i].lnb_file_offset,
+				      lnb[i].lnb_len, kmap(lnb[i].lnb_page),
+				      oh->ot_tx);
 			kunmap(lnb[i].lnb_page);
 		} else if (lnb[i].lnb_data) {
 			LASSERT(((unsigned long)lnb[i].lnb_data & 1) == 0);
@@ -958,9 +956,6 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 	} else {
 		read_unlock(&obj->oo_attr_lock);
 	}
-
-	/* ... and we'll modify size attribute */
-	dmu_tx_hold_sa(oh->ot_tx, obj->oo_sa_hdl, 0);
 
 	RETURN(osd_declare_quota(env, osd, obj->oo_attr.la_uid,
 				 obj->oo_attr.la_gid, 0, oh, true, NULL,

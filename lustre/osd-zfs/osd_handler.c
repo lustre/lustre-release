@@ -232,9 +232,8 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 	RETURN(rc);
 }
 
-static int osd_unlinked_object_free(struct osd_device *osd, uint64_t oid);
-
-static void osd_unlinked_list_emptify(struct osd_device *osd,
+static void osd_unlinked_list_emptify(const struct lu_env *env,
+				      struct osd_device *osd,
 				      struct list_head *list, bool free)
 {
 	struct osd_object *obj;
@@ -248,7 +247,7 @@ static void osd_unlinked_list_emptify(struct osd_device *osd,
 
 		list_del_init(&obj->oo_unlinked_linkage);
 		if (free)
-			(void)osd_unlinked_object_free(osd, oid);
+			(void)osd_unlinked_object_free(env, osd, oid);
 	}
 }
 
@@ -292,7 +291,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		LASSERT(oh->ot_tx);
 		dmu_tx_abort(oh->ot_tx);
 		osd_object_sa_dirty_rele(oh);
-		osd_unlinked_list_emptify(osd, &unlinked, false);
+		osd_unlinked_list_emptify(env, osd, &unlinked, false);
 		/* there won't be any commit, release reserved quota space now,
 		 * if any */
 		qsd_op_end(env, osd->od_quota_slave, &oh->ot_quota_trans);
@@ -315,7 +314,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	 * by osd_trans_commit_cb already. */
 	dmu_tx_commit(oh->ot_tx);
 
-	osd_unlinked_list_emptify(osd, &unlinked, true);
+	osd_unlinked_list_emptify(env, osd, &unlinked, true);
 
 	if (sync)
 		txg_wait_synced(dmu_objset_pool(osd->od_os), txg);
@@ -846,7 +845,7 @@ err:
 static int osd_objset_open(struct osd_device *o)
 {
 	uint64_t	version = ZPL_VERSION;
-	uint64_t	sa_obj;
+	uint64_t	sa_obj, unlink_obj;
 	int		rc;
 	ENTRY;
 
@@ -891,7 +890,7 @@ static int osd_objset_open(struct osd_device *o)
 	}
 
 	rc = -zap_lookup(o->od_os, MASTER_NODE_OBJ, ZFS_UNLINKED_SET,
-			 8, 1, &o->od_unlinkedid);
+			 8, 1, &unlink_obj);
 	if (rc) {
 		CERROR("%s: lookup for %s failed: rc = %d\n",
 		       o->od_svname, ZFS_UNLINKED_SET, rc);
@@ -907,6 +906,13 @@ static int osd_objset_open(struct osd_device *o)
 		GOTO(out, rc = -ENOTSUPP);
 	}
 
+	rc = __osd_obj2dnode(o->od_os, unlink_obj, &o->od_unlinked);
+	if (rc) {
+		CERROR("%s: can't get dnode for unlinked: rc = %d\n",
+		       o->od_svname, rc);
+		GOTO(out, rc);
+	}
+
 out:
 	if (rc != 0 && o->od_os != NULL) {
 		dmu_objset_disown(o->od_os, o);
@@ -916,9 +922,10 @@ out:
 	RETURN(rc);
 }
 
-static int
-osd_unlinked_object_free(struct osd_device *osd, uint64_t oid)
+int osd_unlinked_object_free(const struct lu_env *env, struct osd_device *osd,
+			 uint64_t oid)
 {
+	char *key = osd_oti_get(env)->oti_str;
 	int	  rc;
 	dmu_tx_t *tx;
 
@@ -939,7 +946,8 @@ osd_unlinked_object_free(struct osd_device *osd, uint64_t oid)
 
 	tx = dmu_tx_create(osd->od_os);
 	dmu_tx_hold_free(tx, oid, 0, DMU_OBJECT_END);
-	dmu_tx_hold_zap(tx, osd->od_unlinkedid, FALSE, NULL);
+	osd_tx_hold_zap(tx, osd->od_unlinked->dn_object, osd->od_unlinked,
+			FALSE, NULL);
 	rc = -dmu_tx_assign(tx, TXG_WAIT);
 	if (rc != 0) {
 		CWARN("%s: Cannot assign tx for %llu: rc = %d\n",
@@ -947,7 +955,9 @@ osd_unlinked_object_free(struct osd_device *osd, uint64_t oid)
 		goto failed;
 	}
 
-	rc = -zap_remove_int(osd->od_os, osd->od_unlinkedid, oid, tx);
+	snprintf(key, sizeof(osd_oti_get(env)->oti_str), "%llx", oid);
+	rc = osd_zap_remove(osd, osd->od_unlinked->dn_object,
+			    osd->od_unlinked, key, tx);
 	if (rc != 0) {
 		CWARN("%s: Cannot remove %llu from unlinked set: rc = %d\n",
 		      osd->od_svname, oid, rc);
@@ -977,13 +987,13 @@ osd_unlinked_drain(const struct lu_env *env, struct osd_device *osd)
 	zap_cursor_t	 zc;
 	zap_attribute_t	*za = &osd_oti_get(env)->oti_za;
 
-	zap_cursor_init(&zc, osd->od_os, osd->od_unlinkedid);
+	zap_cursor_init(&zc, osd->od_os, osd->od_unlinked->dn_object);
 
 	while (zap_cursor_retrieve(&zc, za) == 0) {
 		/* If cannot free the object, leave it in the unlinked set,
 		 * until the OSD is mounted again when obd_unlinked_drain()
 		 * will be called. */
-		if (osd_unlinked_object_free(osd, za->za_first_integer) != 0)
+		if (osd_unlinked_object_free(env, osd, za->za_first_integer))
 			break;
 		zap_cursor_advance(&zc);
 	}
@@ -1045,12 +1055,21 @@ static int osd_mount(const struct lu_env *env,
 	if (rc)
 		GOTO(err, rc);
 
-	rc = __osd_obj2dnode(env, o->od_os, o->od_rootid, &rootdn);
+	rc = __osd_obj2dnode(o->od_os, o->od_rootid, &rootdn);
+	if (rc)
+		GOTO(err, rc);
+	o->od_root = rootdn->dn_object;
+	osd_dnode_rele(rootdn);
+
+	rc = __osd_obj2dnode(o->od_os, DMU_USERUSED_OBJECT,
+			     &o->od_userused_dn);
 	if (rc)
 		GOTO(err, rc);
 
-	o->od_root = rootdn->dn_object;
-	osd_dnode_rele(rootdn);
+	rc = __osd_obj2dnode(o->od_os, DMU_GROUPUSED_OBJECT,
+			     &o->od_groupused_dn);
+	if (rc)
+		GOTO(err, rc);
 
 	/* 1. initialize oi before any file create or file open */
 	rc = osd_oi_init(env, o);
@@ -1107,6 +1126,19 @@ static void osd_umount(const struct lu_env *env, struct osd_device *o)
 	if (atomic_read(&o->od_zerocopy_pin))
 		CERROR("%s: lost %d pinned dbuf(s)\n", o->od_svname,
 		       atomic_read(&o->od_zerocopy_pin));
+
+	if (o->od_unlinked) {
+		osd_dnode_rele(o->od_unlinked);
+		o->od_unlinked = NULL;
+	}
+	if (o->od_userused_dn) {
+		osd_dnode_rele(o->od_userused_dn);
+		o->od_userused_dn = NULL;
+	}
+	if (o->od_groupused_dn) {
+		osd_dnode_rele(o->od_groupused_dn);
+		o->od_groupused_dn = NULL;
+	}
 
 	if (o->od_os != NULL) {
 		if (!o->od_dt_dev.dd_rdonly)
