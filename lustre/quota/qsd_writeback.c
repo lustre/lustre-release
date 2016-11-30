@@ -121,9 +121,14 @@ static void qsd_add_deferred(struct qsd_instance *qsd, struct list_head *list,
 		 * updates. We should just delete the legacy record in such
 		 * case. */
 		if (upd->qur_ver == tmp->qur_ver) {
-			LASSERT(tmp->qur_lqe);
-			LQUOTA_ERROR(tmp->qur_lqe, "Found a conflict record "
-				     "with ver:%llu", tmp->qur_ver);
+			if (tmp->qur_lqe)
+				LQUOTA_WARN(tmp->qur_lqe, "Found a conflict "
+					    "record with ver:%llu",
+					    tmp->qur_ver);
+			else
+				CWARN("%s: Found a conflict record with ver: "
+				      "%llu\n", qsd->qsd_svname, tmp->qur_ver);
+
 			list_del_init(&tmp->qur_link);
 			qsd_upd_free(tmp);
 		} else if (upd->qur_ver < tmp->qur_ver) {
