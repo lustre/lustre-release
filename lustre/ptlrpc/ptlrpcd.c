@@ -606,15 +606,6 @@ int ptlrpcd_start(struct ptlrpcd_ctl *pc)
 		RETURN(0);
 	}
 
-	/*
-	 * So far only "client" ptlrpcd uses an environment. In the future,
-	 * ptlrpcd thread (or a thread-set) has to be given an argument,
-	 * describing its "scope".
-	 */
-	rc = lu_context_init(&pc->pc_env.le_ctx, LCT_CL_THREAD|LCT_REMEMBER);
-	if (rc != 0)
-		GOTO(out, rc);
-
 	task = kthread_run(ptlrpcd, pc, pc->pc_name);
 	if (IS_ERR(task))
 		GOTO(out_set, rc = PTR_ERR(task));
@@ -635,8 +626,6 @@ out_set:
 		spin_unlock(&pc->pc_lock);
 		ptlrpc_set_destroy(set);
 	}
-	lu_context_fini(&pc->pc_env.le_ctx);
-out:
 	clear_bit(LIOD_START, &pc->pc_flags);
 	RETURN(rc);
 }
@@ -670,7 +659,6 @@ void ptlrpcd_free(struct ptlrpcd_ctl *pc)
 	}
 
 	wait_for_completion(&pc->pc_finishing);
-	lu_context_fini(&pc->pc_env.le_ctx);
 
 	spin_lock(&pc->pc_lock);
 	pc->pc_set = NULL;

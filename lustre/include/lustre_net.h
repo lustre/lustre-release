@@ -1890,10 +1890,6 @@ struct ptlrpcd_ctl {
 	 */
 	char				pc_name[16];
 	/**
-	 * Environment for request interpreters to run in.
-	 */
-	struct lu_env			pc_env;
-	/**
 	 * CPT the thread is bound on.
 	 */
 	int				pc_cpt;
