@@ -396,6 +396,10 @@ test_9() {
 	[ $(lustre_version_code ost1) -ge $(version_code 2.6.54) ] ||
 		{ skip "Need OST version at least 2.6.54"; return; }
 	$SETSTRIPE -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
+
+	# LU-1573 - Add duplicate write to generate grants
+	dd if=/dev/zero of=$DIR/$tfile count=1 bs=1M > /dev/null ||
+		error "First write failed"
 	replay_barrier ost1
 	# do IO
 	dd if=/dev/zero of=$DIR/$tfile count=1 bs=1M > /dev/null ||

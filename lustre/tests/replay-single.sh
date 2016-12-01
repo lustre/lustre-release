@@ -2265,7 +2265,7 @@ test_70e () {
 		while true; do
 			mrename $DIR/$tdir/test_0/a $DIR/$tdir/test_1/b > \
 						/dev/null || {
-				echo "a->b fails" 
+				echo "a->b fails"
 				break;
 			}
 
@@ -2301,6 +2301,118 @@ test_70e () {
 	true
 }
 run_test 70e "rename cross-MDT with random fails"
+
+test_70f_write_and_read(){
+	local srcfile=$1
+	local stopflag=$2
+	local client
+
+	echo "Write/read files in: '$DIR/$tdir', clients: '$CLIENTS' ..."
+	for client in ${CLIENTS//,/ }; do
+		[ -f $stopflag ] || return
+
+		local tgtfile=$DIR/$tdir/$tfile.$client
+		do_node $client dd $DD_OPTS bs=1M count=10 if=$srcfile \
+			of=$tgtfile 2>/dev/null ||
+			error "dd $DD_OPTS bs=1M count=10 if=$srcfile " \
+			      "of=$tgtfile failed on $client, rc=$?"
+	done
+
+	local prev_client=$(echo ${CLIENTS//,/ } | awk '{ print $NF }')
+	local index=0
+
+	for client in ${CLIENTS//,/ }; do
+		[ -f $stopflag ] || return
+
+		# flush client cache in case test is running on only one client
+		# do_node $client cancel_lru_locks osc
+		do_node $client $LCTL set_param ldlm.namespaces.*.lru_size=clear
+
+		tgtfile=$DIR/$tdir/$tfile.$client
+		local md5=$(do_node $prev_client "md5sum $tgtfile")
+		[ ${checksum[$index]// */} = ${md5// */} ] ||
+			error "$tgtfile: checksum doesn't match on $prev_client"
+		index=$((index + 1))
+		prev_client=$client
+	done
+}
+
+test_70f_loop(){
+	local srcfile=$1
+	local stopflag=$2
+	DD_OPTS=
+
+	mkdir -p $DIR/$tdir || error "cannot create $DIR/$tdir directory"
+	$SETSTRIPE -c -1 $DIR/$tdir || error "cannot $SETSTRIPE $DIR/$tdir"
+
+	touch $stopflag
+	while [ -f $stopflag ]; do
+		test_70f_write_and_read $srcfile $stopflag
+		# use direct IO and buffer cache in turns if loop
+		[ -n "$DD_OPTS" ] && DD_OPTS="" || DD_OPTS="oflag=direct"
+	done
+}
+
+test_70f_cleanup() {
+	trap 0
+	rm -f $TMP/$tfile.stop
+	do_nodes $CLIENTS rm -f $TMP/$tfile
+	rm -f $DIR/$tdir/$tfile.*
+}
+
+test_70f() {
+#	[ x$ost1failover_HOST = x$ost_HOST ] &&
+#		{ skip "Failover host not defined" && return; }
+#	[ -z "$CLIENTS" ] &&
+#		{ skip "CLIENTS are not specified." && return; }
+#	[ $CLIENTCOUNT -lt 2 ] &&
+#		{ skip "Need 2 or more clients, have $CLIENTCOUNT" && return; }
+
+	echo "mount clients $CLIENTS ..."
+	zconf_mount_clients $CLIENTS $MOUNT
+
+	local srcfile=$TMP/$tfile
+	local client
+	local index=0
+
+	trap test_70f_cleanup EXIT
+	# create a different source file local to each client node so we can
+	# detect if the file wasn't written out properly after failover
+	do_nodes $CLIENTS dd bs=1M count=10 if=/dev/urandom of=$srcfile \
+		2>/dev/null || error "can't create $srcfile on $CLIENTS"
+	for client in ${CLIENTS//,/ }; do
+		checksum[$index]=$(do_node $client "md5sum $srcfile")
+		index=$((index + 1))
+	done
+
+	local duration=120
+	[ "$SLOW" = "no" ] && duration=60
+	# set duration to 900 because it takes some time to boot node
+	[ "$FAILURE_MODE" = HARD ] && duration=900
+
+	local stopflag=$TMP/$tfile.stop
+	test_70f_loop $srcfile $stopflag &
+	local pid=$!
+
+	local elapsed=0
+	local num_failovers=0
+	local start_ts=$SECONDS
+	while [ $elapsed -lt $duration ]; do
+		sleep 3
+		replay_barrier ost1
+		sleep 1
+		num_failovers=$((num_failovers + 1))
+		log "$TESTNAME failing OST $num_failovers times"
+		fail ost1
+		sleep 2
+		elapsed=$((SECONDS - start_ts))
+	done
+
+	rm -f $stopflag
+	wait $pid
+	test_70f_cleanup
+}
+run_test 70f "OSS O_DIRECT recovery with $CLIENTCOUNT clients"
 
 cleanup_71a() {
 	trap 0
