@@ -50,8 +50,9 @@
 
 #define LFSCK_LAYOUT_MAGIC_V1		0xB173AE14
 #define LFSCK_LAYOUT_MAGIC_V2		0xB1734D76
+#define LFSCK_LAYOUT_MAGIC_V3		0xB17371B9
 
-#define LFSCK_LAYOUT_MAGIC		LFSCK_LAYOUT_MAGIC_V2
+#define LFSCK_LAYOUT_MAGIC		LFSCK_LAYOUT_MAGIC_V3
 
 struct lfsck_layout_seq {
 	struct list_head	 lls_list;
