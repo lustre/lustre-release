@@ -425,7 +425,7 @@ test_16() {
 }
 run_test 16 "timeout bulk put, don't evict client (2732)"
 
-test_17() {
+test_17a() {
     local at_max_saved=0
 
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
@@ -459,7 +459,93 @@ test_17() {
     [ $at_max_saved -ne 0 ] && at_max_set $at_max_saved ost1
     return 0
 }
-run_test 17 "timeout bulk get, don't evict client (2732)"
+run_test 17a "timeout bulk get, don't evict client (2732)"
+
+test_17b() {
+	[ -z "$RCLIENTS" ] && skip "Needs multiple clients" && return 0
+
+	# get one of the clients from client list
+	local rcli=$(echo $RCLIENTS | cut -d ' ' -f 1)
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local ldlm_enqueue_min=$(do_facet ost1 find /sys -name ldlm_enqueue_min)
+	[ -z "$ldlm_enqueue_min" ] &&
+		skip "missing /sys/.../ldlm_enqueue_min" && return 0
+
+	$LFS setstripe -i 0 -c 1 -S 1048576 $DIR/$tfile ||
+		error "setstripe failed"
+	$LFS setstripe -i 0 -c 1 -S 1048576 $DIR/${tfile}2 ||
+		error "setstripe 2 failed"
+
+	save_lustre_params ost1 "at_history" > $p
+	save_lustre_params ost1 "bulk_timeout" >> $p
+	local dev="${FSNAME}-OST0000"
+	save_lustre_params ost1 "obdfilter.$dev.brw_size" >> $p
+	local ldlm_enqueue_min_save=$(do_facet ost1 cat $ldlm_enqueue_min)
+
+	local new_at_history=15
+
+	do_facet ost1 "$LCTL set_param at_history=$new_at_history"
+	do_facet ost1 "$LCTL set_param bulk_timeout=30"
+	do_facet ost1 "echo 30 > /sys/module/ptlrpc/parameters/ldlm_enqueue_min"
+
+	# brw_size is required to be 4m so that bulk transfer timeout
+	# could be simulated with OBD_FAIL_PTLRPC_CLIENT_BULK_CB3
+	local brw_size=$($LCTL get_param -n \
+	    osc.$FSNAME-OST0000-osc-[^M]*.import |
+	    awk '/max_brw_size/{print $2}')
+	if [ $brw_size -ne 4194304 ]
+	then
+		save_lustre_params ost1 "obdfilter.$dev.brw_size" >> $p
+		do_facet ost1 "$LCTL set_param obdfilter.$dev.brw_size=4"
+		remount_client $MOUNT
+	fi
+
+	# get service estimate expanded
+	#define OBD_FAIL_OST_BRW_PAUSE_PACK		 0x224
+	do_facet ost1 "$LCTL set_param fail_loc=0x80000224 fail_val=35"
+	echo "delay rpc servicing by 35 seconds"
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 conv=fdatasync
+
+	local estimate
+	estimate=$($LCTL get_param -n osc.$dev-osc-*.timeouts |
+	    awk '/portal 6/ {print $5}')
+	echo "service estimates increased to $estimate"
+
+	# let current worst service estimate to get closer to obliteration
+	sleep $((new_at_history / 3))
+
+	# start i/o and simulate bulk transfer loss
+	#define OBD_FAIL_PTLRPC_CLIENT_BULK_CB3     0x520
+	do_facet ost1 "$LCTL set_param fail_loc=0xa0000520 fail_val=1"
+	dd if=/dev/zero of=$DIR/$tfile bs=2M count=1 conv=fdatasync,notrunc &
+	local writedd=$!
+
+	# start lock conflict handling
+	sleep $((new_at_history / 3))
+	do_node $rcli "dd if=$DIR/$tfile of=/dev/null bs=1M count=1" &
+	local readdd=$!
+
+	# obliterate the worst service estimate
+	sleep $((new_at_history / 3 + 1))
+	dd if=/dev/zero of=$DIR/${tfile}2 bs=1M count=1
+
+	estimate=$($LCTL get_param -n osc.$dev-osc-*.timeouts |
+	    awk '/portal 6/ {print $5}')
+	echo "service estimate dropped to $estimate"
+
+	wait $writedd
+	[[ $? == 0 ]] || error "write failed"
+	wait $readdd
+	[[ $? == 0 ]] || error "read failed"
+
+	restore_lustre_params <$p
+	if [ $brw_size -ne 4194304 ]
+	then
+		remount_client $MOUNT || error "remount_client failed"
+	fi
+	do_facet ost1 "echo $ldlm_enqueue_min_save > $ldlm_enqueue_min"
+}
+run_test 17b "timeout bulk get, dont evict client (3582)"
 
 test_18a() {
     [ -z ${ost2_svc} ] && skip_env "needs 2 osts" && return 0
