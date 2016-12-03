@@ -62,9 +62,11 @@ static int mgs_barrier_gl_interpret_reply(const struct lu_env *env,
 	ENTRY;
 
 	if (rc) {
-		if (rc == -ENODEV)
+		if (rc == -ENODEV) {
 			/* The lock is useless, cancel it. */
 			ldlm_lock_cancel(ca->ca_lock);
+			rc = 0;
+		}
 
 		GOTO(out, rc);
 	}
@@ -717,6 +719,10 @@ int mgs_iocontrol_barrier(const struct lu_env *env,
 	if (unlikely(bc->bc_name[0] == '\0' ||
 		     strnlen(bc->bc_name, sizeof(bc->bc_name)) > 8))
 		RETURN(-EINVAL);
+
+	/* NOT allow barrier operations during recovery. */
+	if (unlikely(mgs->mgs_obd->obd_recovering))
+		RETURN(-EBUSY);
 
 	switch (bc->bc_cmd) {
 	case BC_FREEZE:

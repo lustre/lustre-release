@@ -16114,15 +16114,10 @@ test_409()
 run_test 409 "Large amount of cross-MDTs hard links on the same file"
 
 prep_801() {
-	start_full_debug_logging
-	# cleanup unused barrier locks before test
-
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&
 		skip "Need server version at least 2.9.55" & exit 0
-
-	do_facet mgs $LCTL barrier_rescan $FSNAME ||
-		error "Fail to prep barrier test env"
+	start_full_debug_logging
 }
 
 post_801() {
