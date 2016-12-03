@@ -2177,6 +2177,9 @@ test_24d() {
 	rm -f $file1
 	fid1=$(make_small $file1)
 
+	echo $fid1
+	$LFS getstripe $file1
+
 	trap cleanup_test_24d EXIT
 	zconf_mount $(facet_host $SINGLEAGT) "$MOUNT3" ||
 		error "cannot mount '$MOUNT3' on '$SINGLEAGT'"
@@ -2184,6 +2187,9 @@ test_24d() {
 		error "unable to setup a copytool for the test"
 
 	mount -o remount,ro $MOUNT2
+
+	do_nodes $(comma_list $(nodes_list)) $LCTL clear
+	start_full_debug_logging
 
 	fid2=$(path2fid $file2)
 	[ "$fid1" == "$fid2" ] ||
@@ -2193,8 +2199,10 @@ test_24d() {
 		error "archive should fail on read-only mount"
 	check_hsm_flags $file1 "0x00000000"
 
-	$LFS hsm_archive $file1
+	$LFS hsm_archive $file1 || error "Fail to archive $file1"
 	wait_request_state $fid1 ARCHIVE SUCCEED
+
+	stop_full_debug_logging
 
 	$LFS hsm_release $file1
 	$LFS hsm_restore $file2

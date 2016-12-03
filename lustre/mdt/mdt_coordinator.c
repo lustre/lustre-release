@@ -919,9 +919,6 @@ int mdt_hsm_cdt_stop(struct mdt_device *mdt)
 	struct mdt_thread_info		*cdt_mti;
 	ENTRY;
 
-	if (mdt->mdt_opts.mo_coordinator == 0)
-		RETURN(0);
-
 	if (cdt->cdt_state == CDT_STOPPED) {
 		CERROR("%s: Coordinator already stopped\n",
 		       mdt_obd_name(mdt));
