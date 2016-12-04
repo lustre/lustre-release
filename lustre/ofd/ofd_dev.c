@@ -76,6 +76,7 @@
 #include <lustre_dlm.h>
 #include <lustre_quota.h>
 #include <lustre_nodemap.h>
+#include <lustre_log.h>
 
 #include "ofd_internal.h"
 
@@ -943,8 +944,6 @@ static int ofd_set_info_hdl(struct tgt_session_info *tsi)
 		if (vallen > 0)
 			obd_export_evict_by_nid(tsi->tsi_exp->exp_obd, val);
 		rc = 0;
-	} else if (KEY_IS(KEY_SPTLRPC_CONF)) {
-		rc = tgt_adapt_sptlrpc_conf(tsi->tsi_tgt, 0);
 	} else {
 		CERROR("%s: Unsupported key %s\n",
 		       tgt_name(tsi->tsi_tgt), (char *)key);
@@ -3048,7 +3047,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (rc != 0)
 		GOTO(err_fini_nm, rc);
 
-	tgt_adapt_sptlrpc_conf(&m->ofd_lut, 1);
+	tgt_adapt_sptlrpc_conf(&m->ofd_lut);
 
 	RETURN(0);
 

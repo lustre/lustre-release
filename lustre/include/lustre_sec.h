@@ -47,6 +47,7 @@ struct ptlrpc_request;
 struct ptlrpc_reply_state;
 struct ptlrpc_bulk_desc;
 struct brw_page;
+struct lu_env;
 /* Linux specific */
 struct key;
 struct seq_file;
@@ -386,8 +387,7 @@ void sptlrpc_conf_log_update_begin(const char *logname);
 void sptlrpc_conf_log_update_end(const char *logname);
 void sptlrpc_conf_client_adapt(struct obd_device *obd);
 int  sptlrpc_conf_target_get_rules(struct obd_device *obd,
-                                   struct sptlrpc_rule_set *rset,
-                                   int initial);
+				   struct sptlrpc_rule_set *rset);
 void sptlrpc_target_choose_flavor(struct sptlrpc_rule_set *rset,
                                   enum lustre_sec_part from,
                                   lnet_nid_t nid,

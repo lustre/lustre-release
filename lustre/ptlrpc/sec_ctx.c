@@ -97,34 +97,3 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx)
 	current->fs->umask = saved->umask;
 }
 EXPORT_SYMBOL(pop_ctxt);
-
-/* utility to rename a file */
-int lustre_rename(struct dentry *dir, struct vfsmount *mnt,
-		  char *oldname, char *newname)
-{
-	struct dentry *dchild_old, *dchild_new;
-	int err = 0;
-	ENTRY;
-
-	ASSERT_KERNEL_CTXT("kernel doing rename outside kernel context\n");
-	CDEBUG(D_INODE, "renaming file %.*s to %.*s\n",
-	       (int)strlen(oldname), oldname, (int)strlen(newname), newname);
-
-	dchild_old = ll_lookup_one_len(oldname, dir, strlen(oldname));
-	if (IS_ERR(dchild_old))
-		RETURN(PTR_ERR(dchild_old));
-
-	if (!dchild_old->d_inode)
-		GOTO(put_old, err = -ENOENT);
-
-	dchild_new = ll_lookup_one_len(newname, dir, strlen(newname));
-	if (IS_ERR(dchild_new))
-		GOTO(put_old, err = PTR_ERR(dchild_new));
-
-	err = ll_vfs_rename(dir->d_inode, dchild_old, dir->d_inode, dchild_new);
-
-	dput(dchild_new);
-put_old:
-	dput(dchild_old);
-	RETURN(err);
-}

@@ -4729,7 +4729,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	if (rc)
 		GOTO(err_tgt, rc);
 
-	tgt_adapt_sptlrpc_conf(&m->mdt_lut, 1);
+	tgt_adapt_sptlrpc_conf(&m->mdt_lut);
 
         next = m->mdt_child;
         rc = next->md_ops->mdo_iocontrol(env, next, OBD_IOC_GET_MNTOPT, 0,
@@ -5060,7 +5060,7 @@ static int mdt_obd_set_info_async(const struct lu_env *env,
 	ENTRY;
 
 	if (KEY_IS(KEY_SPTLRPC_CONF)) {
-		rc = tgt_adapt_sptlrpc_conf(class_exp2tgt(exp), 0);
+		rc = tgt_adapt_sptlrpc_conf(class_exp2tgt(exp));
 		RETURN(rc);
 	}
 

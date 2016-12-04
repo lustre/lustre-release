@@ -1901,20 +1901,12 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 	struct client_obd	*cli = &mgc->u.cli;
 	struct lustre_sb_info	*lsi = NULL;
 	int			 rc = 0;
-	bool			 sptlrpc_started = false;
 	struct lu_env		*env;
 
 	ENTRY;
 
 	LASSERT(cld);
 	LASSERT(mutex_is_locked(&cld->cld_lock));
-
-	/*
-	 * local copy of sptlrpc log is controlled elsewhere, don't try to
-	 * read it up here.
-	 */
-	if (cld_is_sptlrpc(cld) && local_only)
-		RETURN(0);
 
 	if (cld->cld_cfg.cfg_sb)
 		lsi = s2lsi(cld->cld_cfg.cfg_sb);
@@ -1966,22 +1958,11 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 			GOTO(out_pop, rc = -EIO);
 	}
 
-	if (cld_is_sptlrpc(cld)) {
-		sptlrpc_conf_log_update_begin(cld->cld_logname);
-		sptlrpc_started = true;
-	}
-
 	/* logname and instance info should be the same, so use our
 	 * copy of the instance for the update.  The cfg_last_idx will
 	 * be updated here. */
 	rc = class_config_parse_llog(env, ctxt, cld->cld_logname,
 				     &cld->cld_cfg);
-	EXIT;
-
-out_pop:
-	__llog_ctxt_put(env, ctxt);
-	if (lctxt)
-		__llog_ctxt_put(env, lctxt);
 
 	/*
 	 * update settings on existing OBDs. doing it inside
@@ -1989,13 +1970,16 @@ out_pop:
 	 * in parallel.
 	 * the logname must be <fsname>-sptlrpc
 	 */
-	if (sptlrpc_started) {
-		LASSERT(cld_is_sptlrpc(cld));
-		sptlrpc_conf_log_update_end(cld->cld_logname);
+	if (rc == 0 && cld_is_sptlrpc(cld))
 		class_notify_sptlrpc_conf(cld->cld_logname,
 					  strlen(cld->cld_logname) -
 					  strlen("-sptlrpc"));
-	}
+	EXIT;
+
+out_pop:
+	__llog_ctxt_put(env, ctxt);
+	if (lctxt)
+		__llog_ctxt_put(env, lctxt);
 
 	lu_env_fini(env);
 out_free:

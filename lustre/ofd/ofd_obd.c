@@ -630,7 +630,7 @@ static int ofd_set_info_async(const struct lu_env *env, struct obd_export *exp,
 	}
 
 	if (KEY_IS(KEY_SPTLRPC_CONF)) {
-		rc = tgt_adapt_sptlrpc_conf(class_exp2tgt(exp), 0);
+		rc = tgt_adapt_sptlrpc_conf(class_exp2tgt(exp));
 	} else {
 		CERROR("%s: Unsupported key %s\n",
 		       exp->exp_obd->obd_name, (char*)key);
