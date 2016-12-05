@@ -955,7 +955,7 @@ int mdd_local_file_create(const struct lu_env *env, struct mdd_device *mdd,
 			  __u32 mode, struct lu_fid *fid)
 {
 	struct dt_object *parent, *dto;
-	int rc;
+	int rc = 0;
 
 	ENTRY;
 
@@ -981,7 +981,7 @@ int mdd_local_file_create(const struct lu_env *env, struct mdd_device *mdd,
 	EXIT;
 out_put:
 	lu_object_put(env, &parent->do_lu);
-	return 0;
+	return rc;
 }
 
 static int mdd_lfsck_out_notify(const struct lu_env *env, void *data,
