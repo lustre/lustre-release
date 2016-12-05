@@ -1739,23 +1739,23 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
 
 int llapi_get_obd_count(char *mnt, int *count, int is_mdt)
 {
-        DIR *root;
-        int rc;
+	int root;
+	int rc;
 
-        root = opendir(mnt);
-        if (!root) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc, "open %s failed", mnt);
-                return rc;
-        }
+	root = open(mnt, O_RDONLY | O_DIRECTORY);
+	if (root < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "open %s failed", mnt);
+		return rc;
+	}
 
-        *count = is_mdt;
-        rc = ioctl(dirfd(root), LL_IOC_GETOBDCOUNT, count);
-        if (rc < 0)
-                rc = -errno;
+	*count = is_mdt;
+	rc = ioctl(root, LL_IOC_GETOBDCOUNT, count);
+	if (rc < 0)
+		rc = -errno;
 
-        closedir(root);
-        return rc;
+	close(root);
+	return rc;
 }
 
 /* Check if user specified value matches a real uuid.  Ignore _UUID,
@@ -1783,7 +1783,7 @@ int llapi_uuid_match(char *real_uuid, char *search_uuid)
 
 /* Here, param->fp_obd_uuid points to a single obduuid, the index of which is
  * returned in param->fp_obd_index */
-static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
+static int setup_obd_uuid(int fd, char *dname, struct find_param *param)
 {
 	struct obd_uuid obd_uuid;
 	char buf[PATH_MAX];
@@ -1797,9 +1797,9 @@ static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
 
 	/* Get the lov/lmv name */
 	if (param->fp_get_lmv)
-		rc = llapi_file_fget_lmv_uuid(dirfd(dir), &obd_uuid);
+		rc = llapi_file_fget_lmv_uuid(fd, &obd_uuid);
 	else
-		rc = llapi_file_fget_lov_uuid(dirfd(dir), &obd_uuid);
+		rc = llapi_file_fget_lov_uuid(fd, &obd_uuid);
 	if (rc) {
 		if (rc != -ENOTTY) {
 			llapi_error(LLAPI_MSG_ERROR, rc,
@@ -1986,17 +1986,17 @@ static int setup_target_indexes(DIR *dir, char *path, struct find_param *param)
 
 int llapi_ostlist(char *path, struct find_param *param)
 {
-        DIR *dir;
-        int ret;
+	int fd;
+	int ret;
 
-        dir = opendir(path);
-        if (dir == NULL)
-                return -errno;
+	fd = open(path, O_RDONLY | O_DIRECTORY);
+	if (fd < 0)
+		return -errno;
 
-        ret = setup_obd_uuid(dir, path, param);
-        closedir(dir);
+	ret = setup_obd_uuid(fd, path, param);
+	close(fd);
 
-        return ret;
+	return ret;
 }
 
 /*
@@ -3243,10 +3243,10 @@ static int cb_getstripe(char *path, DIR *parent, DIR **dirp, void *data,
 
 	if (param->fp_obd_uuid) {
 		param->fp_quiet = 1;
-                ret = setup_obd_uuid(d ? d : parent, path, param);
-                if (ret)
-                        return ret;
-        }
+		ret = setup_obd_uuid(d ? dirfd(d) : dirfd(parent), path, param);
+		if (ret)
+			return ret;
+	}
 
 	if (d) {
 		if (param->fp_get_lmv || param->fp_get_default_lmv) {
@@ -3532,7 +3532,7 @@ int llapi_is_lustre_mnt(struct mntent *mnt)
 int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
 {
 	char fsname[PATH_MAX + 1];
-	DIR *root;
+	int root;
 	int rc;
 
 	rc = llapi_search_fsname(mnt, fsname);
@@ -3542,19 +3542,19 @@ int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
 		return rc;
 	}
 
-        root = opendir(mnt);
-        if (!root) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc, "open %s failed", mnt);
-                return rc;
-        }
+	root = open(mnt, O_RDONLY | O_DIRECTORY);
+	if (root < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "open %s failed", mnt);
+		return rc;
+	}
 
-	rc = ioctl(dirfd(root), OBD_IOC_QUOTACTL, qctl);
-        if (rc < 0)
-                rc = -errno;
+	rc = ioctl(root, OBD_IOC_QUOTACTL, qctl);
+	if (rc < 0)
+		rc = -errno;
 
-        closedir(root);
-        return rc;
+	close(root);
+	return rc;
 }
 
 /* Print mdtname 'name' into 'buf' using 'format'.  Add -MDT0000 if needed.
@@ -3996,24 +3996,24 @@ int llapi_path2parent(const char *path, unsigned int linkno,
 
 int llapi_get_connect_flags(const char *mnt, __u64 *flags)
 {
-        DIR *root;
-        int rc;
+	int root;
+	int rc;
 
-        root = opendir(mnt);
-        if (!root) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc, "open %s failed", mnt);
-                return rc;
-        }
+	root = open(mnt, O_RDONLY | O_DIRECTORY);
+	if (root < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "open %s failed", mnt);
+		return rc;
+	}
 
-        rc = ioctl(dirfd(root), LL_IOC_GET_CONNECT_FLAGS, flags);
-        if (rc < 0) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc,
-                            "ioctl on %s for getting connect flags failed", mnt);
-        }
-        closedir(root);
-        return rc;
+	rc = ioctl(root, LL_IOC_GET_CONNECT_FLAGS, flags);
+	if (rc < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			"ioctl on %s for getting connect flags failed", mnt);
+	}
+	close(root);
+	return rc;
 }
 
 /**
