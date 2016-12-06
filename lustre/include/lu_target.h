@@ -116,9 +116,42 @@ struct target_distribute_txn_data {
 	void			*tdtd_show_retrievers_cbdata;
 };
 
+struct tg_grants_data {
+	/* grants: all values in bytes */
+	/* grant lock to protect all grant counters */
+	spinlock_t		 tgd_grant_lock;
+	/* total amount of dirty data reported by clients in incoming obdo */
+	u64			 tgd_tot_dirty;
+	/* sum of filesystem space granted to clients for async writes */
+	u64			 tgd_tot_granted;
+	/* grant used by I/Os in progress (between prepare and commit) */
+	u64			 tgd_tot_pending;
+	/* number of clients using grants */
+	int			 tgd_tot_granted_clients;
+	/* shall we grant space to clients not
+	 * supporting OBD_CONNECT_GRANT_PARAM? */
+	int			 tgd_grant_compat_disable;
+	/* protect all statfs-related counters */
+	spinlock_t		 tgd_osfs_lock;
+	__u64			 tgd_osfs_age;
+	int			 tgd_blockbits;
+	/* counters used during statfs update, protected by ofd_osfs_lock.
+	 * record when some statfs refresh are in progress */
+	int			 tgd_statfs_inflight;
+	/* writes between prep & commit which might be accounted twice in
+	 * ofd_osfs.os_bavail */
+	u64			 tgd_osfs_unstable;
+	/* track writes completed while statfs refresh is underway.
+	 * tracking is only effective when ofd_statfs_inflight > 1 */
+	u64			 tgd_osfs_inflight;
+	/* statfs optimization: we cache a bit  */
+	struct obd_statfs	 tgd_osfs;
+};
+
 struct lu_target {
 	struct obd_device	*lut_obd;
 	struct dt_device	*lut_bottom;
+	struct dt_device_param	 lut_dt_conf;
 
 	struct target_distribute_txn_data *lut_tdtd;
 	struct ptlrpc_thread	lut_tdtd_commit_thread;
@@ -165,6 +198,9 @@ struct lu_target {
 	/** cross MDT locks which should trigger Sync-on-Lock-Cancel */
 	spinlock_t		 lut_slc_locks_guard;
 	struct list_head	 lut_slc_locks;
+
+	/* target grants fields */
+	struct tg_grants_data	 lut_tgd;
 };
 
 /* number of slots in reply bitmap */
@@ -458,6 +494,35 @@ int tgt_add_reply_data(const struct lu_env *env, struct lu_target *tgt,
 		       struct thandle *th, bool update_lrd_file);
 struct tg_reply_data *tgt_lookup_reply_by_xid(struct tg_export_data *ted,
 					       __u64 xid);
+
+/* target/tgt_grant.c */
+static inline int exp_grant_param_supp(struct obd_export *exp)
+{
+	return !!(exp_connect_flags(exp) & OBD_CONNECT_GRANT_PARAM);
+}
+
+/* Blocksize used for client not supporting OBD_CONNECT_GRANT_PARAM.
+ * That's 4KB=2^12 which is the biggest block size known to work whatever
+ * the client's page size is. */
+#define COMPAT_BSIZE_SHIFT 12
+
+void tgt_grant_sanity_check(struct obd_device *obd, const char *func);
+void tgt_grant_connect(const struct lu_env *env, struct obd_export *exp,
+		       struct obd_connect_data *data, bool new_conn);
+void tgt_grant_discard(struct obd_export *exp);
+void tgt_grant_prepare_read(const struct lu_env *env, struct obd_export *exp,
+			    struct obdo *oa);
+void tgt_grant_prepare_write(const struct lu_env *env, struct obd_export *exp,
+			     struct obdo *oa, struct niobuf_remote *rnb,
+			     int niocount);
+void tgt_grant_commit(struct obd_export *exp, unsigned long grant_used, int rc);
+int tgt_grant_commit_cb_add(struct thandle *th, struct obd_export *exp,
+			    unsigned long grant);
+long tgt_grant_create(const struct lu_env *env, struct obd_export *exp,
+		      int *nr);
+int tgt_statfs_internal(const struct lu_env *env, struct lu_target *lut,
+			struct obd_statfs *osfs, __u64 max_age,
+			int *from_cache);
 
 /* target/update_trans.c */
 int distribute_txn_init(const struct lu_env *env,

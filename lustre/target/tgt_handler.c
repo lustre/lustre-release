@@ -42,7 +42,6 @@
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_cksum.h>
-#include <md_object.h>
 #include <lustre_lfsck.h>
 #include <lustre_nodemap.h>
 

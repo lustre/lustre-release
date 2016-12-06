@@ -81,11 +81,11 @@ LPROC_SEQ_FOPS_RO(ofd_seqs);
 static int ofd_tot_dirty_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
-	struct ofd_device *ofd;
+	struct tg_grants_data *tgd;
 
 	LASSERT(obd != NULL);
-	ofd = ofd_dev(obd->obd_lu_dev);
-	seq_printf(m, "%llu\n", ofd->ofd_tot_dirty);
+	tgd = &obd->u.obt.obt_lut->lut_tgd;
+	seq_printf(m, "%llu\n", tgd->tgd_tot_dirty);
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_tot_dirty);
@@ -102,11 +102,11 @@ LPROC_SEQ_FOPS_RO(ofd_tot_dirty);
 static int ofd_tot_granted_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
-	struct ofd_device *ofd;
+	struct tg_grants_data *tgd;
 
 	LASSERT(obd != NULL);
-	ofd = ofd_dev(obd->obd_lu_dev);
-	seq_printf(m, "%llu\n", ofd->ofd_tot_granted);
+	tgd = &obd->u.obt.obt_lut->lut_tgd;
+	seq_printf(m, "%llu\n", tgd->tgd_tot_granted);
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_tot_granted);
@@ -123,11 +123,11 @@ LPROC_SEQ_FOPS_RO(ofd_tot_granted);
 static int ofd_tot_pending_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
-	struct ofd_device *ofd;
+	struct tg_grants_data *tgd;
 
 	LASSERT(obd != NULL);
-	ofd = ofd_dev(obd->obd_lu_dev);
-	seq_printf(m, "%llu\n", ofd->ofd_tot_pending);
+	tgd = &obd->u.obt.obt_lut->lut_tgd;
+	seq_printf(m, "%llu\n", tgd->tgd_tot_pending);
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_tot_pending);
@@ -147,7 +147,7 @@ static int ofd_grant_precreate_seq_show(struct seq_file *m, void *data)
 
 	LASSERT(obd != NULL);
 	seq_printf(m, "%ld\n",
-		   obd->obd_self_export->exp_filter_data.fed_grant);
+		   obd->obd_self_export->exp_target_data.ted_grant);
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(ofd_grant_precreate);
@@ -532,7 +532,8 @@ ofd_brw_size_seq_write(struct file *file, const char __user *buffer,
 	if (val <= 0)
 		return -EINVAL;
 
-	if (val > DT_MAX_BRW_SIZE || val < (1 << ofd->ofd_blockbits))
+	if (val > DT_MAX_BRW_SIZE ||
+	    val < (1 << ofd->ofd_lut.lut_tgd.tgd_blockbits))
 		return -ERANGE;
 
 	spin_lock(&ofd->ofd_flags_lock);
@@ -635,7 +636,7 @@ LPROC_SEQ_FOPS(ofd_sync_lock_cancel);
 /**
  * Show if grants compatibility mode is disabled.
  *
- * When ofd_grant_compat_disable is set, we don't grant any space to clients
+ * When tgd_grant_compat_disable is set, we don't grant any space to clients
  * not supporting OBD_CONNECT_GRANT_PARAM. Otherwise, space granted to such
  * a client is inflated since it consumes PAGE_SIZE of grant space per
  * block, (i.e. typically 4kB units), but underlaying file system might have
@@ -650,16 +651,16 @@ LPROC_SEQ_FOPS(ofd_sync_lock_cancel);
 static int ofd_grant_compat_disable_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = m->private;
-	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
 
-	seq_printf(m, "%u\n", ofd->ofd_grant_compat_disable);
+	seq_printf(m, "%u\n", tgd->tgd_grant_compat_disable);
 	return 0;
 }
 
 /**
  * Change grant compatibility mode.
  *
- * Setting ofd_grant_compat_disable prohibit any space granting to clients
+ * Setting tgd_grant_compat_disable prohibit any space granting to clients
  * not supporting OBD_CONNECT_GRANT_PARAM. See details above.
  *
  * \param[in] file	proc file
@@ -679,7 +680,7 @@ ofd_grant_compat_disable_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
-	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
 	__s64 val;
 	int rc;
 
@@ -690,9 +691,7 @@ ofd_grant_compat_disable_seq_write(struct file *file,
 	if (val < 0)
 		return -EINVAL;
 
-	spin_lock(&ofd->ofd_flags_lock);
-	ofd->ofd_grant_compat_disable = !!val;
-	spin_unlock(&ofd->ofd_flags_lock);
+	tgd->tgd_grant_compat_disable = !!val;
 
 	return count;
 }

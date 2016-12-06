@@ -202,23 +202,24 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	}
 
 	if (OCD_HAS_FLAG(data, GRANT_PARAM)) {
+		struct dt_device_param *ddp = &ofd->ofd_lut.lut_dt_conf;
+
 		/* client is reporting its page size, for future use */
-		exp->exp_filter_data.fed_pagebits = data->ocd_grant_blkbits;
-		data->ocd_grant_blkbits  = ofd->ofd_blockbits;
+		exp->exp_target_data.ted_pagebits = data->ocd_grant_blkbits;
+		data->ocd_grant_blkbits  = ofd->ofd_lut.lut_tgd.tgd_blockbits;
 		/* ddp_inodespace may not be power-of-two value, eg. for ldiskfs
 		 * it's LDISKFS_DIR_REC_LEN(20) = 28. */
-		data->ocd_grant_inobits =
-				       fls(ofd->ofd_dt_conf.ddp_inodespace - 1);
+		data->ocd_grant_inobits = fls(ddp->ddp_inodespace - 1);
 		/* ocd_grant_tax_kb is in 1K byte blocks */
-		data->ocd_grant_tax_kb = ofd->ofd_dt_conf.ddp_extent_tax >> 10;
-		data->ocd_grant_max_blks = ofd->ofd_dt_conf.ddp_max_extent_blks;
+		data->ocd_grant_tax_kb = ddp->ddp_extent_tax >> 10;
+		data->ocd_grant_max_blks = ddp->ddp_max_extent_blks;
 	}
 
 	if (OCD_HAS_FLAG(data, GRANT)) {
-		/* Save connect_data we have so far because ofd_grant_connect()
+		/* Save connect_data we have so far because tgt_grant_connect()
 		 * uses it to calculate grant. */
 		exp->exp_connect_data = *data;
-		ofd_grant_connect(env, exp, data, new_connection);
+		tgt_grant_connect(env, exp, data, new_connection);
 	}
 
 	if (data->ocd_connect_flags & OBD_CONNECT_INDEX) {
@@ -270,7 +271,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	}
 
 	if (data->ocd_connect_flags & OBD_CONNECT_MAXBYTES)
-		data->ocd_maxbytes = ofd->ofd_dt_conf.ddp_maxbytes;
+		data->ocd_maxbytes = ofd->ofd_lut.lut_dt_conf.ddp_maxbytes;
 
 	if (OCD_HAS_FLAG(data, PINGLESS)) {
 		if (ptlrpc_pinger_suppress_pings()) {
@@ -429,11 +430,11 @@ int ofd_obd_disconnect(struct obd_export *exp)
 	class_export_get(exp);
 
 	if (!(exp->exp_flags & OBD_OPT_FORCE))
-		ofd_grant_sanity_check(ofd_obd(ofd), __FUNCTION__);
+		tgt_grant_sanity_check(ofd_obd(ofd), __func__);
 
 	rc = server_disconnect_export(exp);
 
-	ofd_grant_discard(exp);
+	tgt_grant_discard(exp);
 
 	/* Do not erase record for recoverable client. */
 	if (exp->exp_obd->obd_replayable &&
@@ -502,10 +503,10 @@ static int ofd_destroy_export(struct obd_export *exp)
 {
 	struct ofd_device *ofd = ofd_exp(exp);
 
-	if (exp->exp_filter_data.fed_pending)
+	if (exp->exp_target_data.ted_pending)
 		CERROR("%s: cli %s/%p has %lu pending on destroyed export"
 		       "\n", exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
-		       exp, exp->exp_filter_data.fed_pending);
+		       exp, exp->exp_target_data.ted_pending);
 
 	target_destroy_export(exp);
 
@@ -522,14 +523,14 @@ static int ofd_destroy_export(struct obd_export *exp)
 	 * discard grants once we're sure no more
 	 * interaction with the client is possible
 	 */
-	ofd_grant_discard(exp);
+	tgt_grant_discard(exp);
 	ofd_fmd_cleanup(exp);
 
 	if (exp_connect_flags(exp) & OBD_CONNECT_GRANT)
-		ofd->ofd_tot_granted_clients--;
+		ofd->ofd_lut.lut_tgd.tgd_tot_granted_clients--;
 
 	if (!(exp->exp_flags & OBD_OPT_FORCE))
-		ofd_grant_sanity_check(exp->exp_obd, __FUNCTION__);
+		tgt_grant_sanity_check(exp->exp_obd, __func__);
 
 	LASSERT(list_empty(&exp->exp_filter_data.fed_mod_list));
 	return 0;
@@ -693,105 +694,6 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 }
 
 /**
- * Get file system statistics of OST server.
- *
- * Helper function for ofd_statfs(), also used by grant code.
- * Implements caching for statistics to avoid calling OSD device each time.
- *
- * \param[in]  env	  execution environment
- * \param[in]  ofd	  OFD device
- * \param[out] osfs	  statistic data to return
- * \param[in]  max_age	  maximum age for cached data
- * \param[in]  from_cache show that data was get from cache or not
- *
- * \retval		0 if successful
- * \retval		negative value on error
- */
-int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
-                        struct obd_statfs *osfs, __u64 max_age, int *from_cache)
-{
-	int rc = 0;
-	ENTRY;
-
-	spin_lock(&ofd->ofd_osfs_lock);
-	if (cfs_time_before_64(ofd->ofd_osfs_age, max_age) || max_age == 0) {
-		u64 unstable;
-
-		/* statfs data are too old, get up-to-date one.
-		 * we must be cautious here since multiple threads might be
-		 * willing to update statfs data concurrently and we must
-		 * grant that cached statfs data are always consistent */
-
-		if (ofd->ofd_statfs_inflight == 0)
-			/* clear inflight counter if no users, although it would
-			 * take a while to overflow this 64-bit counter ... */
-			ofd->ofd_osfs_inflight = 0;
-		/* notify ofd_grant_commit() that we want to track writes
-		 * completed as of now */
-		ofd->ofd_statfs_inflight++;
-		/* record value of inflight counter before running statfs to
-		 * compute the diff once statfs is completed */
-		unstable = ofd->ofd_osfs_inflight;
-		spin_unlock(&ofd->ofd_osfs_lock);
-
-		/* statfs can sleep ... hopefully not for too long since we can
-		 * call it fairly often as space fills up */
-		rc = dt_statfs(env, ofd->ofd_osd, osfs);
-		if (unlikely(rc))
-			GOTO(out, rc);
-
-		spin_lock(&ofd->ofd_grant_lock);
-		spin_lock(&ofd->ofd_osfs_lock);
-		/* calculate how much space was written while we released the
-		 * ofd_osfs_lock */
-		unstable = ofd->ofd_osfs_inflight - unstable;
-		ofd->ofd_osfs_unstable = 0;
-		if (unstable) {
-			/* some writes committed while we were running statfs
-			 * w/o the ofd_osfs_lock. Those ones got added to
-			 * the cached statfs data that we are about to crunch.
-			 * Take them into account in the new statfs data */
-			osfs->os_bavail -= min_t(u64, osfs->os_bavail,
-					       unstable >> ofd->ofd_blockbits);
-			/* However, we don't really know if those writes got
-			 * accounted in the statfs call, so tell
-			 * ofd_grant_space_left() there is some uncertainty
-			 * on the accounting of those writes.
-			 * The purpose is to prevent spurious error messages in
-			 * ofd_grant_space_left() since those writes might be
-			 * accounted twice. */
-			ofd->ofd_osfs_unstable += unstable;
-		}
-		/* similarly, there is some uncertainty on write requests
-		 * between prepare & commit */
-		ofd->ofd_osfs_unstable += ofd->ofd_tot_pending;
-		spin_unlock(&ofd->ofd_grant_lock);
-
-		/* finally udpate cached statfs data */
-		ofd->ofd_osfs = *osfs;
-		ofd->ofd_osfs_age = cfs_time_current_64();
-
-		ofd->ofd_statfs_inflight--; /* stop tracking */
-		if (ofd->ofd_statfs_inflight == 0)
-			ofd->ofd_osfs_inflight = 0;
-		spin_unlock(&ofd->ofd_osfs_lock);
-
-		if (from_cache)
-			*from_cache = 0;
-	} else {
-		/* use cached statfs data */
-		*osfs = ofd->ofd_osfs;
-		spin_unlock(&ofd->ofd_osfs_lock);
-		if (from_cache)
-			*from_cache = 1;
-	}
-	GOTO(out, rc);
-
-out:
-	return rc;
-}
-
-/**
  * Implementation of obd_ops::o_statfs.
  *
  * This function returns information about a storage file system.
@@ -817,11 +719,12 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 {
         struct obd_device	*obd = class_exp2obd(exp);
 	struct ofd_device	*ofd = ofd_exp(exp);
+	struct tg_grants_data	*tgd = &ofd->ofd_lut.lut_tgd;
 	int			 rc;
 
 	ENTRY;
 
-	rc = ofd_statfs_internal(env, ofd, osfs, max_age, NULL);
+	rc = tgt_statfs_internal(env, &ofd->ofd_lut, osfs, max_age, NULL);
 	if (unlikely(rc))
 		GOTO(out, rc);
 
@@ -831,25 +734,26 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 
 	CDEBUG(D_SUPER | D_CACHE, "blocks cached %llu granted %llu"
 	       " pending %llu free %llu avail %llu\n",
-	       ofd->ofd_tot_dirty, ofd->ofd_tot_granted, ofd->ofd_tot_pending,
-	       osfs->os_bfree << ofd->ofd_blockbits,
-	       osfs->os_bavail << ofd->ofd_blockbits);
+	       tgd->tgd_tot_dirty, tgd->tgd_tot_granted,
+	       tgd->tgd_tot_pending,
+	       osfs->os_bfree << tgd->tgd_blockbits,
+	       osfs->os_bavail << tgd->tgd_blockbits);
 
 	osfs->os_bavail -= min_t(u64, osfs->os_bavail,
-				 ((ofd->ofd_tot_dirty + ofd->ofd_tot_pending +
-				   osfs->os_bsize - 1) >> ofd->ofd_blockbits));
+				 ((tgd->tgd_tot_dirty + tgd->tgd_tot_pending +
+				   osfs->os_bsize - 1) >> tgd->tgd_blockbits));
 
 	/* The QoS code on the MDS does not care about space reserved for
 	 * precreate, so take it out. */
 	if (exp_connect_flags(exp) & OBD_CONNECT_MDS) {
-		struct filter_export_data *fed;
+		struct tg_export_data *ted;
 
-		fed = &obd->obd_self_export->exp_filter_data;
+		ted = &obd->obd_self_export->exp_target_data;
 		osfs->os_bavail -= min_t(u64, osfs->os_bavail,
-					 fed->fed_grant >> ofd->ofd_blockbits);
+					 ted->ted_grant >> tgd->tgd_blockbits);
 	}
 
-	ofd_grant_sanity_check(obd, __FUNCTION__);
+	tgt_grant_sanity_check(obd, __func__);
 	CDEBUG(D_CACHE, "%llu blocks: %llu free, %llu avail; "
 	       "%llu objects: %llu free; state %x\n",
 	       osfs->os_blocks, osfs->os_bfree, osfs->os_bavail,
@@ -866,16 +770,16 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	if (ofd->ofd_raid_degraded)
 		osfs->os_state |= OS_STATE_DEGRADED;
 
-	if (obd->obd_self_export != exp && !ofd_grant_param_supp(exp) &&
-	    ofd->ofd_blockbits > COMPAT_BSIZE_SHIFT) {
+	if (obd->obd_self_export != exp && !exp_grant_param_supp(exp) &&
+	    tgd->tgd_blockbits > COMPAT_BSIZE_SHIFT) {
 		/* clients which don't support OBD_CONNECT_GRANT_PARAM
 		 * should not see a block size > page size, otherwise
 		 * cl_lost_grant goes mad. Therefore, we emulate a 4KB (=2^12)
 		 * block size which is the biggest block size known to work
 		 * with all client's page size. */
-		osfs->os_blocks <<= ofd->ofd_blockbits - COMPAT_BSIZE_SHIFT;
-		osfs->os_bfree  <<= ofd->ofd_blockbits - COMPAT_BSIZE_SHIFT;
-		osfs->os_bavail <<= ofd->ofd_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_blocks <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_bfree  <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_bavail <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
 		osfs->os_bsize    = 1 << COMPAT_BSIZE_SHIFT;
 	}
 
@@ -1140,7 +1044,7 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 	}
 
 	mutex_lock(&oseq->os_create_lock);
-	granted = ofd_grant_create(env, ofd_obd(ofd)->obd_self_export, &diff);
+	granted = tgt_grant_create(env, ofd_obd(ofd)->obd_self_export, &diff);
 	if (granted < 0) {
 		rc = granted;
 		granted = 0;
@@ -1163,7 +1067,7 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 		rc = 0;
 	}
 
-	ofd_grant_commit(ofd_obd(ofd)->obd_self_export, granted, rc);
+	tgt_grant_commit(ofd_obd(ofd)->obd_self_export, granted, rc);
 out:
 	mutex_unlock(&oseq->os_create_lock);
 	ofd_seq_put(env, oseq);

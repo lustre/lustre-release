@@ -13,8 +13,8 @@ ldlm_objs += $(LDLM)ldlm_reclaim.o
 target_objs := $(TARGET)tgt_main.o $(TARGET)tgt_lastrcvd.o
 target_objs += $(TARGET)tgt_handler.o $(TARGET)out_handler.o
 target_objs += $(TARGET)out_lib.o $(TARGET)update_trans.o
-target_objs += $(TARGET)update_records.o
-target_objs += $(TARGET)update_recovery.o
+target_objs += $(TARGET)update_records.o $(TARGET)update_recovery.o
+target_objs += $(TARGET)tgt_grant.o
 
 ptlrpc_objs := client.o recover.o connection.o niobuf.o pack_generic.o
 ptlrpc_objs += events.o ptlrpc_module.o service.o pinger.o

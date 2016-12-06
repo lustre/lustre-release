@@ -94,6 +94,11 @@ struct tg_export_data {
 	int			ted_reply_max; /* high water mark */
 	int			ted_release_xid;
 	int			ted_release_tag;
+	/* grants */
+	long			ted_dirty;    /* in bytes */
+	long			ted_grant;    /* in bytes */
+	long			ted_pending;  /* bytes just being written */
+	__u8			ted_pagebits; /* log2 of client page size */
 };
 
 /**
@@ -116,16 +121,12 @@ struct filter_export_data {
 	struct tg_export_data	fed_ted;
 	spinlock_t		fed_lock;	/**< protects fed_mod_list */
 	__u64			fed_lastid_gen;
-	long			fed_dirty;    /* in bytes */
-	long			fed_grant;    /* in bytes */
 	struct list_head	fed_mod_list; /* files being modified */
-	long			fed_pending;  /* bytes just being written */
 	/* count of SOFT_SYNC RPCs, which will be reset after
 	 * ofd_soft_sync_limit number of RPCs, and trigger a sync. */
 	atomic_t		fed_soft_sync_count;
 	int			fed_mod_count;/* items in fed_writing list */
 	__u32			fed_group;
-	__u8			fed_pagebits; /* log2 of client page size */
 };
 
 struct mgs_export_data {

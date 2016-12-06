@@ -113,7 +113,6 @@ struct ofd_device {
 	struct dt_device	 ofd_dt_dev;
 	struct dt_device	*ofd_osd;
 	struct obd_export	*ofd_osd_exp;
-	struct dt_device_param	 ofd_dt_conf;
 	/* DLM name-space for meta-data locks maintained by this server */
 	struct ldlm_namespace	*ofd_namespace;
 
@@ -131,36 +130,6 @@ struct ofd_device {
 	int			ofd_precreate_batch;
 	spinlock_t		ofd_batch_lock;
 
-	/* protect all statfs-related counters */
-	spinlock_t		 ofd_osfs_lock;
-	/* statfs optimization: we cache a bit  */
-	struct obd_statfs	 ofd_osfs;
-	__u64			 ofd_osfs_age;
-	int			 ofd_blockbits;
-	/* counters used during statfs update, protected by ofd_osfs_lock.
-	 * record when some statfs refresh are in progress */
-	int			 ofd_statfs_inflight;
-
-	/* writes between prep & commit which might be accounted twice in
-	 * ofd_osfs.os_bavail */
-	u64			 ofd_osfs_unstable;
-
-	/* track writes completed while statfs refresh is underway.
-	 * tracking is only effective when ofd_statfs_inflight > 1 */
-	u64			 ofd_osfs_inflight;
-
-	/* grants: all values in bytes */
-	/* grant lock to protect all grant counters */
-	spinlock_t		 ofd_grant_lock;
-	/* total amount of dirty data reported by clients in incoming obdo */
-	u64			 ofd_tot_dirty;
-	/* sum of filesystem space granted to clients for async writes */
-	u64			 ofd_tot_granted;
-	/* grant used by I/Os in progress (between prepare and commit) */
-	u64			 ofd_tot_pending;
-	/* number of clients using grants */
-	int			 ofd_tot_granted_clients;
-
 	/* preferred BRW size, decided by storage type and capability */
 	__u32			 ofd_brw_size;
 	/* checksum types supported on this node */
@@ -174,9 +143,6 @@ struct ofd_device {
 	unsigned long		 ofd_raid_degraded:1,
 				 /* sync journal on writes */
 				 ofd_syncjournal:1,
-				 /* shall we grant space to clients not
-				  * supporting OBD_CONNECT_GRANT_PARAM? */
-				 ofd_grant_compat_disable:1,
 				 /* Protected by ofd_lastid_rwsem. */
 				 ofd_lastid_rebuilding:1,
 				 ofd_record_fid_accessed:1,
@@ -312,8 +278,6 @@ struct ofd_thread_info {
 	struct lu_buf			 fti_buf;
 	loff_t				 fti_off;
 
-	/* Space used by the I/O, used by grant code */
-	unsigned long			 fti_used;
 	struct ost_lvb			 fti_lvb;
 	union {
 		struct lfsck_req_local	 fti_lrl;
@@ -332,9 +296,6 @@ int ofd_fiemap_get(const struct lu_env *env, struct ofd_device *ofd,
 
 /* ofd_obd.c */
 extern struct obd_ops ofd_obd_ops;
-int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
-			struct obd_statfs *osfs, __u64 max_age,
-			int *from_cache);
 int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 		       const struct lu_fid *fid, int orphan);
 int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
@@ -430,43 +391,6 @@ struct ofd_object *ofd_object_find_exists(const struct lu_env *env,
 	}
 	return fo;
 }
-
-/* ofd_grants.c */
-static inline int ofd_grant_param_supp(struct obd_export *exp)
-{
-	return !!(exp_connect_flags(exp) & OBD_CONNECT_GRANT_PARAM);
-}
-
-/* Blocksize used for client not supporting OBD_CONNECT_GRANT_PARAM.
- * That's 4KB=2^12 which is the biggest block size known to work whatever
- * the client's page size is. */
-#define COMPAT_BSIZE_SHIFT 12
-
-static inline int ofd_grant_prohibit(struct obd_export *exp,
-				     struct ofd_device *ofd)
-{
-	/* When ofd_grant_compat_disable is set, we don't grant any space to
-	 * clients not supporting OBD_CONNECT_GRANT_PARAM.
-	 * Otherwise, space granted to such a client is inflated since it
-	 * consumes PAGE_SIZE of grant space per block */
-	return !!(ofd_obd(ofd)->obd_self_export != exp &&
-		  !ofd_grant_param_supp(exp) && ofd->ofd_grant_compat_disable);
-}
-
-void ofd_grant_sanity_check(struct obd_device *obd, const char *func);
-void ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
-		       struct obd_connect_data *data, bool new_conn);
-void ofd_grant_discard(struct obd_export *exp);
-void ofd_grant_prepare_read(const struct lu_env *env, struct obd_export *exp,
-			    struct obdo *oa);
-void ofd_grant_prepare_write(const struct lu_env *env, struct obd_export *exp,
-			     struct obdo *oa, struct niobuf_remote *rnb,
-			     int niocount);
-void ofd_grant_commit(struct obd_export *exp, unsigned long grant_used, int rc);
-int ofd_grant_commit_cb_add(struct thandle *th, struct obd_export *exp,
-			    unsigned long grant);
-long ofd_grant_create(const struct lu_env *env, struct obd_export *exp,
-		      int *nr);
 
 /* ofd_fmd.c */
 int ofd_fmd_init(void);

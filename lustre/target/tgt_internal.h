@@ -85,6 +85,7 @@ struct tgt_thread_info {
 			struct dt_object	   *tti_dt_object;
 			struct l_wait_info tti_wait_info;
 		} update;
+		struct obd_statfs osfs; /* for obd_statfs() in OFD/MDT */
 	} tti_u;
 	struct lfsck_req_local tti_lrl;
 	struct dt_insert_rec tti_rec;

@@ -647,14 +647,14 @@ static int ofd_recovery_complete(const struct lu_env *env,
 	 * Grant space for object precreation on the self export.
 	 * The initial reserved space (i.e. 10MB for zfs and 280KB for ldiskfs)
 	 * is enough to create 10k objects. More space is then acquired for
-	 * precreation in ofd_grant_create().
+	 * precreation in tgt_grant_create().
 	 */
 	memset(&oti->fti_ocd, 0, sizeof(oti->fti_ocd));
 	oti->fti_ocd.ocd_grant = OST_MAX_PRECREATE / 2;
-	oti->fti_ocd.ocd_grant *= ofd->ofd_dt_conf.ddp_inodespace;
+	oti->fti_ocd.ocd_grant *= ofd->ofd_lut.lut_dt_conf.ddp_inodespace;
 	oti->fti_ocd.ocd_connect_flags = OBD_CONNECT_GRANT |
 					 OBD_CONNECT_GRANT_PARAM;
-	ofd_grant_connect(env, dev->ld_obd->obd_self_export, &oti->fti_ocd,
+	tgt_grant_connect(env, dev->ld_obd->obd_self_export, &oti->fti_ocd,
 			  true);
 	rc = next->ld_ops->ldo_recovery_complete(env, next);
 	RETURN(rc);
@@ -939,7 +939,7 @@ static int ofd_set_info_hdl(struct tgt_session_info *tsi)
 		*repbody = *body;
 
 		/** handle grant shrink, similar to a read request */
-		ofd_grant_prepare_read(tsi->tsi_env, tsi->tsi_exp,
+		tgt_grant_prepare_read(tsi->tsi_env, tsi->tsi_exp,
 				       &repbody->oa);
 	} else if (KEY_IS(KEY_EVICT_BY_NID)) {
 		if (vallen > 0)
@@ -1698,9 +1698,9 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
 		    !(oa->o_flags & OBD_FL_DELORPHAN)) {
 			/* don't enforce grant during orphan recovery */
-			granted = ofd_grant_create(tsi->tsi_env,
-						  ofd_obd(ofd)->obd_self_export,
-						   &diff);
+			granted = tgt_grant_create(tsi->tsi_env,
+						ofd_obd(ofd)->obd_self_export,
+						&diff);
 			if (granted < 0) {
 				rc = granted;
 				granted = 0;
@@ -1776,8 +1776,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 
 		if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
 		    !(oa->o_flags & OBD_FL_DELORPHAN)) {
-			ofd_grant_commit(ofd_obd(ofd)->obd_self_export, granted,
-					 rc);
+			tgt_grant_commit(ofd_obd(ofd)->obd_self_export,
+					 granted, rc);
 			granted = 0;
 		}
 
@@ -2857,7 +2857,6 @@ static void ofd_key_exit(const struct lu_context *ctx,
 
 	info->fti_xid = 0;
 	info->fti_pre_version = 0;
-	info->fti_used = 0;
 
 	memset(&info->fti_attr, 0, sizeof info->fti_attr);
 }
@@ -2890,6 +2889,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	const char *dev = lustre_cfg_string(cfg, 0);
 	struct ofd_thread_info *info = NULL;
 	struct obd_device *obd;
+	struct tg_grants_data *tgd = &m->ofd_lut.lut_tgd;
 	struct obd_statfs *osfs;
 	struct lu_fid fid;
 	struct nm_config_file *nodemap_config;
@@ -2918,21 +2918,22 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	m->ofd_raid_degraded = 0;
 	m->ofd_syncjournal = 0;
 	ofd_slc_set(m);
-	m->ofd_grant_compat_disable = 0;
+	tgd->tgd_grant_compat_disable = 0;
 	m->ofd_soft_sync_limit = OFD_SOFT_SYNC_LIMIT_DEFAULT;
 
 	/* statfs data */
-	spin_lock_init(&m->ofd_osfs_lock);
-	m->ofd_osfs_age = cfs_time_shift_64(-1000);
-	m->ofd_osfs_unstable = 0;
-	m->ofd_statfs_inflight = 0;
-	m->ofd_osfs_inflight = 0;
+	spin_lock_init(&tgd->tgd_osfs_lock);
+	tgd->tgd_osfs_age = cfs_time_shift_64(-1000);
+	tgd->tgd_osfs_unstable = 0;
+	tgd->tgd_statfs_inflight = 0;
+	tgd->tgd_osfs_inflight = 0;
 
 	/* grant data */
-	spin_lock_init(&m->ofd_grant_lock);
-	m->ofd_tot_dirty = 0;
-	m->ofd_tot_granted = 0;
-	m->ofd_tot_pending = 0;
+	spin_lock_init(&tgd->tgd_grant_lock);
+	tgd->tgd_tot_dirty = 0;
+	tgd->tgd_tot_granted = 0;
+	tgd->tgd_tot_pending = 0;
+
 	m->ofd_seq_count = 0;
 	init_waitqueue_head(&m->ofd_inconsistency_thread.t_ctl_waitq);
 	INIT_LIST_HEAD(&m->ofd_inconsistency_list);
@@ -2978,30 +2979,6 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	ofd_procfs_add_brw_stats_symlink(m);
 
-	/* populate cached statfs data */
-	osfs = &ofd_info(env)->fti_u.osfs;
-	rc = ofd_statfs_internal(env, m, osfs, 0, NULL);
-	if (rc != 0) {
-		CERROR("%s: can't get statfs data, rc %d\n", obd->obd_name, rc);
-		GOTO(err_fini_stack, rc);
-	}
-	if (!is_power_of_2(osfs->os_bsize)) {
-		CERROR("%s: blocksize (%d) is not a power of 2\n",
-				obd->obd_name, osfs->os_bsize);
-		GOTO(err_fini_stack, rc = -EPROTO);
-	}
-	m->ofd_blockbits = fls(osfs->os_bsize) - 1;
-
-	if (ONE_MB_BRW_SIZE < (1U << m->ofd_blockbits))
-		m->ofd_brw_size = 1U << m->ofd_blockbits;
-	else
-		m->ofd_brw_size = ONE_MB_BRW_SIZE;
-
-	m->ofd_cksum_types_supported = cksum_types_supported_server();
-	m->ofd_precreate_batch = OFD_PRECREATE_BATCH_DEFAULT;
-	if (osfs->os_bsize * osfs->os_blocks < OFD_PRECREATE_SMALL_FS)
-		m->ofd_precreate_batch = OFD_PRECREATE_BATCH_SMALL;
-
 	snprintf(info->fti_u.name, sizeof(info->fti_u.name), "%s-%s",
 		 "filter"/*LUSTRE_OST_NAME*/, obd->obd_uuid.uuid);
 	m->ofd_namespace = ldlm_namespace_new(obd, info->fti_u.name,
@@ -3019,13 +2996,37 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
 			   "filter_ldlm_cb_client", &obd->obd_ldlm_client);
 
-	dt_conf_get(env, m->ofd_osd, &m->ofd_dt_conf);
+	dt_conf_get(env, m->ofd_osd, &m->ofd_lut.lut_dt_conf);
 
 	rc = tgt_init(env, &m->ofd_lut, obd, m->ofd_osd, ofd_common_slice,
 		      OBD_FAIL_OST_ALL_REQUEST_NET,
 		      OBD_FAIL_OST_ALL_REPLY_NET);
 	if (rc)
 		GOTO(err_free_ns, rc);
+
+	/* populate cached statfs data */
+	osfs = &ofd_info(env)->fti_u.osfs;
+	rc = tgt_statfs_internal(env, &m->ofd_lut, osfs, 0, NULL);
+	if (rc != 0) {
+		CERROR("%s: can't get statfs data, rc %d\n", obd->obd_name, rc);
+		GOTO(err_fini_lut, rc);
+	}
+	if (!is_power_of_2(osfs->os_bsize)) {
+		CERROR("%s: blocksize (%d) is not a power of 2\n",
+			obd->obd_name, osfs->os_bsize);
+		GOTO(err_fini_lut, rc = -EPROTO);
+	}
+	tgd->tgd_blockbits = fls(osfs->os_bsize) - 1;
+
+	if (ONE_MB_BRW_SIZE < (1U << tgd->tgd_blockbits))
+		m->ofd_brw_size = 1U << tgd->tgd_blockbits;
+	else
+		m->ofd_brw_size = ONE_MB_BRW_SIZE;
+
+	m->ofd_cksum_types_supported = cksum_types_supported_server();
+	m->ofd_precreate_batch = OFD_PRECREATE_BATCH_DEFAULT;
+	if (osfs->os_bsize * osfs->os_blocks < OFD_PRECREATE_SMALL_FS)
+		m->ofd_precreate_batch = OFD_PRECREATE_BATCH_SMALL;
 
 	rc = ofd_fs_setup(env, m, obd);
 	if (rc)

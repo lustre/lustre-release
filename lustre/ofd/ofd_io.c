@@ -625,7 +625,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 
 	/* Process incoming grant info, set OBD_BRW_GRANTED flag and grant some
 	 * space back if possible */
-	ofd_grant_prepare_write(env, exp, oa, rnb, obj->ioo_bufcnt);
+	tgt_grant_prepare_write(env, exp, oa, rnb, obj->ioo_bufcnt);
 
 	/* parse remote buffers to local buffers and prepare the latter */
 	*nr_local = 0;
@@ -658,13 +658,13 @@ err:
 	dt_bufs_put(env, ofd_object_child(fo), lnb, *nr_local);
 	ofd_read_unlock(env, fo);
 	ofd_object_put(env, fo);
-	/* ofd_grant_prepare_write() was called, so we must commit */
-	ofd_grant_commit(exp, oa->o_grant_used, rc);
+	/* tgt_grant_prepare_write() was called, so we must commit */
+	tgt_grant_commit(exp, oa->o_grant_used, rc);
 out:
 	/* let's still process incoming grant information packed in the oa,
 	 * but without enforcing grant since we won't proceed with the write.
 	 * Just like a read request actually. */
-	ofd_grant_prepare_read(env, exp, oa);
+	tgt_grant_prepare_read(env, exp, oa);
 	return rc;
 }
 
@@ -745,7 +745,7 @@ int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		rc = ofd_preprw_write(env, exp, ofd, fid, &info->fti_attr, oa,
 				      objcount, obj, rnb, nr_local, lnb, jobid);
 	} else if (cmd == OBD_BRW_READ) {
-		ofd_grant_prepare_read(env, exp, oa);
+		tgt_grant_prepare_read(env, exp, oa);
 		rc = ofd_preprw_read(env, exp, ofd, fid, &info->fti_attr, oa,
 				     obj->ioo_bufcnt, rnb, nr_local, lnb,
 				     jobid);
@@ -1133,7 +1133,7 @@ out_stop:
 	}
 
 	if (rc == 0 && granted > 0) {
-		if (ofd_grant_commit_cb_add(th, exp, granted) == 0)
+		if (tgt_grant_commit_cb_add(th, exp, granted) == 0)
 			granted = 0;
 	}
 
@@ -1160,7 +1160,7 @@ out:
 	/* second put is pair to object_get in ofd_preprw_write */
 	ofd_object_put(env, fo);
 	if (granted > 0)
-		ofd_grant_commit(exp, granted, old_rc);
+		tgt_grant_commit(exp, granted, old_rc);
 	RETURN(rc);
 }
 
