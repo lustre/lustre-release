@@ -928,14 +928,25 @@
           TCP/IP networks). Routing will be configured in <xref linkend="configuringlnet"/>.</para>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">Identify the network interfaces to include in or exclude from LNET. </emphasis>
-    </para>
-        <para>If not explicitly specified, LNET uses either the first available interface or a pre-defined default for a given network type. Interfaces that LNET should not use (such as an administrative network or IP-over-IB), can be excluded.</para>
-        <para>Network interfaces to be used or excluded will be specified using the lnet kernel module parameters networks and <literal>ip2netsas</literal> described in <xref linkend="configuringlnet"/>.</para>
+        <para><emphasis role="bold">Identify the network interfaces to include
+	in or exclude from LNET.</emphasis></para>
+        <para>If not explicitly specified, LNET uses either the first available
+	interface or a pre-defined default for a given network type. Interfaces
+	that LNET should not use (such as an administrative network or
+	IP-over-IB), can be excluded.</para>
+        <para>Network interfaces to be used or excluded will be specified using
+	the lnet kernel module parameters <literal>networks</literal> and
+	<literal>ip2nets</literal> as described in
+	<xref linkend="configuringlnet"/>.</para>
       </listitem>
       <listitem>
-        <para><emphasis role="bold">To ease the setup of networks with complex network configurations, determine a cluster-wide module configuration.</emphasis></para>
-        <para>For large clusters, you can configure the networking setup for all nodes by using a single, unified set of parameters in the <literal>lustre.conf</literal> file on each node. Cluster-wide configuration is described in <xref linkend="configuringlnet"/>.</para>
+        <para><emphasis role="bold">To ease the setup of networks with complex
+	network configurations, determine a cluster-wide module configuration.
+	</emphasis></para>
+        <para>For large clusters, you can configure the networking setup for
+	all nodes by using a single, unified set of parameters in the
+	<literal>lustre.conf</literal> file on each node. Cluster-wide
+	configuration is described in <xref linkend="configuringlnet"/>.</para>
       </listitem>
     </orderedlist>
     <note>
