@@ -258,12 +258,6 @@ copytool_setup() {
 
 	local agent=$(facet_active_host $facet)
 
-	if [[ -z "$arc_id" ]] &&
-		do_facet $facet "pkill -CONT -x $HSMTOOL_BASE"; then
-			echo "Only wakeup running copytool $facet on $agent"
-			return 0
-	fi
-
 	if $HSM_ARCHIVE_PURGE; then
 		echo "Purging archive on $agent"
 		do_facet $facet "rm -rf $hsm_root/$HSMTMP/*"
@@ -851,9 +845,6 @@ echo "Set HSM on and start"
 cdt_set_mount_state enabled
 cdt_check_state enabled
 
-echo "Start copytool"
-copytool_setup
-
 echo "Set sanity-hsm HSM policy"
 cdt_set_sanity_policy
 
@@ -900,6 +891,8 @@ test_1a() {
 	local f=$DIR/$tdir/$tfile
 	local fid=$(make_small $f)
 
+	copytool_setup
+
 	$LFS hsm_archive $f || error "could not archive file"
 	wait_request_state $fid ARCHIVE SUCCEED
 
@@ -909,6 +902,8 @@ test_1a() {
 	check_hsm_flags $f "0x0000000d"
 
 	$MMAP_CAT $f > /dev/null || error "failed mmap & cat release file"
+
+	copytool_cleanup
 }
 run_test 1a "mmap & cat a HSM released file"
 
@@ -2137,6 +2132,7 @@ run_test 24c "check that user,group,other request masks work"
 cleanup_test_24d() {
 	trap 0
 	mount -o remount,rw $MOUNT2
+	zconf_umount $(facet_host $SINGLEAGT) "$MOUNT3"
 }
 
 test_24d() {
@@ -2145,13 +2141,15 @@ test_24d() {
 	local fid1
 	local fid2
 
-	copytool_setup
-
 	mkdir -p $DIR/$tdir
 	rm -f $file1
 	fid1=$(make_small $file1)
 
 	trap cleanup_test_24d EXIT
+	zconf_mount $(facet_host $SINGLEAGT) "$MOUNT3" ||
+		error "cannot mount '$MOUNT3' on '$SINGLEAGT'"
+	copytool_setup $SINGLEAGT "$MOUNT3" ||
+		error "unable to setup a copytool for the test"
 
 	mount -o remount,ro $MOUNT2
 
