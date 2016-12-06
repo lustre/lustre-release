@@ -1795,10 +1795,11 @@ void lu_context_exit(struct lu_context *ctx)
         LINVRNT(ctx->lc_state == LCS_ENTERED);
         ctx->lc_state = LCS_LEFT;
         if (ctx->lc_tags & LCT_HAS_EXIT && ctx->lc_value != NULL) {
+		/* could race with key quiescency */
+		if (ctx->lc_tags & LCT_REMEMBER)
+			read_lock(&lu_keys_guard);
+
                 for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
-			/* could race with key quiescency */
-			if (ctx->lc_tags & LCT_REMEMBER)
-				read_lock(&lu_keys_guard);
 			if (ctx->lc_value[i] != NULL) {
 				struct lu_context_key *key;
 
@@ -1808,9 +1809,10 @@ void lu_context_exit(struct lu_context *ctx)
 					key->lct_exit(ctx,
 						      key, ctx->lc_value[i]);
 			}
-			if (ctx->lc_tags & LCT_REMEMBER)
-				read_unlock(&lu_keys_guard);
                 }
+
+		if (ctx->lc_tags & LCT_REMEMBER)
+			read_unlock(&lu_keys_guard);
         }
 }
 EXPORT_SYMBOL(lu_context_exit);
