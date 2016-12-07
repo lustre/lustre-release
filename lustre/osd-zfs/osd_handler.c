@@ -147,8 +147,13 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 	dt_txn_hook_commit(th);
 
 	/* call per-transaction callbacks if any */
-	list_for_each_entry_safe(dcb, tmp, &oh->ot_dcb_list, dcb_linkage)
+	list_for_each_entry_safe(dcb, tmp, &oh->ot_dcb_list, dcb_linkage) {
+		LASSERTF(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC,
+			 "commit callback entry: magic=%x name='%s'\n",
+			 dcb->dcb_magic, dcb->dcb_name);
+		list_del_init(&dcb->dcb_linkage);
 		dcb->dcb_func(NULL, th, dcb, error);
+	}
 
 	/* Unlike ldiskfs, zfs updates space accounting at commit time.
 	 * As a consequence, op_end is called only now to inform the quota slave
