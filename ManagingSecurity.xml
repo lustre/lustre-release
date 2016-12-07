@@ -117,7 +117,7 @@ other::---</screen>
           <para>The <literal>root_squash</literal> parameter specifies the UID and GID with which the root user accesses the Lustre file system.</para>
         </listitem>
         <listitem>
-          <para>The <literal>nosquash_nids</literal> parameter specifies the set of clients to which root squash does not apply. LNET NID range syntax is used for this parameter (see the NID range syntax rules described in <xref linkend="dbdoclet.50438221_48757"/>). For example:</para>
+          <para>The <literal>nosquash_nids</literal> parameter specifies the set of clients to which root squash does not apply. LNet NID range syntax is used for this parameter (see the NID range syntax rules described in <xref linkend="dbdoclet.50438221_48757"/>). For example:</para>
         </listitem>
       </itemizedlist>
       <screen>nosquash_nids=172.16.245.[0-255/2]@tcp</screen>
@@ -179,10 +179,10 @@ lctl get_param mdt.*.nosquash_nids</screen>
           <para><literal>mkfs.lustre</literal> and <literal>tunefs.lustre</literal> do not perform parameter syntax checking. If the root squash parameters are incorrect, they are ignored on mount and the default values are used instead.</para>
         </listitem>
         <listitem>
-          <para>Root squash parameters are parsed with rigorous syntax checking. The root_squash parameter should be specified as <literal>&lt;decnum&gt;:&lt;decnum&gt;</literal>. The <literal>nosquash_nids</literal> parameter should follow LNET NID range list syntax.</para>
+          <para>Root squash parameters are parsed with rigorous syntax checking. The root_squash parameter should be specified as <literal>&lt;decnum&gt;:&lt;decnum&gt;</literal>. The <literal>nosquash_nids</literal> parameter should follow LNet NID range list syntax.</para>
         </listitem>
       </itemizedlist>
-      <para>LNET NID range syntax:</para>
+      <para>LNet NID range syntax:</para>
       <screen>&lt;nidlist&gt;     :== &lt;nidrange&gt; [ &apos; &apos; &lt;nidrange&gt; ]
 &lt;nidrange&gt;   :== &lt;addrrange&gt; &apos;@&apos; &lt;net&gt;
 &lt;addrrange&gt;  :== &apos;*&apos; |

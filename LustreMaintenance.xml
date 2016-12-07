@@ -242,7 +242,7 @@ Changing a Server NID</title>
       <para>To change a server NID:</para>
       <orderedlist>
         <listitem>
-		<para>Update the LNET configuration in the <literal>/etc/modprobe.conf</literal> file so the list of server NIDs is correct. Use <literal>lctl list_nids</literal> to view the list of server NIDS.</para>
+		<para>Update the LNet configuration in the <literal>/etc/modprobe.conf</literal> file so the list of server NIDs is correct. Use <literal>lctl list_nids</literal> to view the list of server NIDS.</para>
           <para>The <literal>lctl list_nids</literal> command indicates which network(s) are
           configured to work with the Lustre file system.</para>
         </listitem>
@@ -614,7 +614,7 @@ Determining Which Machine is Serving an OST </title>
       <para>In the course of administering a Lustre file system, you may need to determine which
       machine is serving a specific OST. It is not as simple as identifying the machine’s IP
       address, as IP is only one of several networking protocols that the Lustre software uses and,
-      as such, LNET does not use IP addresses as node identifiers, but NIDs instead. To identify the
+      as such, LNet does not use IP addresses as node identifiers, but NIDs instead. To identify the
       NID that is serving a specific OST, run one of the following commands on a client (you do not
       need to be a root user):
       <screen>client$ lctl get_param osc.<replaceable>fsname</replaceable>-OST<replaceable>number</replaceable>*.ost_conn_uuid</screen>

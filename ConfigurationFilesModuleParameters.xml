@@ -12,16 +12,16 @@
   <section xml:id="dbdoclet.50438293_15350">
       <title>
           <indexterm><primary>configuring</primary></indexterm>
-          <indexterm><primary>LNET</primary><see>configuring</see></indexterm>
+          <indexterm><primary>LNet</primary><see>configuring</see></indexterm>
           
           
           Introduction</title>
-    <para>LNET network hardware and routing are now configured via module parameters. Parameters should be specified in the <literal>/etc/modprobe.d/lustre.conf</literal>file, for example:</para>
+    <para>LNet network hardware and routing are now configured via module parameters. Parameters should be specified in the <literal>/etc/modprobe.d/lustre.conf</literal>file, for example:</para>
     <screen>options lnet networks=tcp0(eth2)</screen>
     <para>The above option specifies that this node should use the TCP protocol on the eth2 network interface.</para>
-    <para>Module parameters are read when the module is first loaded. Type-specific LND modules (for instance, <literal>ksocklnd</literal>) are loaded automatically by the LNET module when LNET starts (typically upon <literal>modprobe ptlrpc</literal>).</para>
-    <para>LNET configuration parameters can be viewed under <literal>/sys/module/lnet/parameters/</literal>, and LND-specific parameters under the name of the corresponding LND, for example <literal>/sys/module/ksocklnd/parameters/</literal> for the socklnd (TCP) LND.</para>
-    <para>For the following parameters, default option settings are shown in parenthesis. Changes to parameters marked with a W affect running systems. Unmarked parameters can only be set when LNET loads for the first time.  Changes to parameters marked with <literal>Wc</literal> only have effect when connections are established (existing connections are not affected by these changes.)</para>
+    <para>Module parameters are read when the module is first loaded. Type-specific LND modules (for instance, <literal>ksocklnd</literal>) are loaded automatically by the LNet module when LNet starts (typically upon <literal>modprobe ptlrpc</literal>).</para>
+    <para>LNet configuration parameters can be viewed under <literal>/sys/module/lnet/parameters/</literal>, and LND-specific parameters under the name of the corresponding LND, for example <literal>/sys/module/ksocklnd/parameters/</literal> for the socklnd (TCP) LND.</para>
+    <para>For the following parameters, default option settings are shown in parenthesis. Changes to parameters marked with a W affect running systems. Unmarked parameters can only be set when LNet loads for the first time.  Changes to parameters marked with <literal>Wc</literal> only have effect when connections are established (existing connections are not affected by these changes.)</para>
   </section>
   <section xml:id="dbdoclet.50438293_78010">
       <title>
@@ -39,7 +39,7 @@
         <para>A separate <literal>lustre.conf</literal> file makes distributing the configuration much easier.</para>
       </listitem>
       <listitem>
-        <para>If you set <literal>config_on_load=1</literal>, LNET starts at
+        <para>If you set <literal>config_on_load=1</literal>, LNet starts at
             <literal>modprobe</literal> time rather than waiting for the Lustre file system to
           start. This ensures routers start working at module load time.</para>
       </listitem>
@@ -48,13 +48,13 @@
 # lctl&gt; net down</screen>
     <itemizedlist>
       <listitem>
-        <para>Remember the <literal>lctl ping {nid}</literal> command - it is a handy way to check your LNET configuration.</para>
+        <para>Remember the <literal>lctl ping {nid}</literal> command - it is a handy way to check your LNet configuration.</para>
       </listitem>
     </itemizedlist>
     <section remap="h3">
-      <title><indexterm><primary>configuring</primary><secondary>LNET options</secondary></indexterm>
-LNET Options</title>
-      <para>This section describes LNET options.</para>
+      <title><indexterm><primary>configuring</primary><secondary>LNet options</secondary></indexterm>
+LNet Options</title>
+      <para>This section describes LNet options.</para>
       <section remap="h4">
         <title><indexterm><primary>configuring</primary><secondary>network topology</secondary></indexterm>
 Network Topology</title>
@@ -107,7 +107,7 @@ Network Topology</title>
             Lustre file system uses any IP addresses aliased to the loopback (by default). When in
             doubt, explicitly specify networks.</para>
         </note>
-        <para><literal>ip2nets</literal> (&quot;&quot;) is a string that lists globally-available networks, each with a set of IP address ranges. LNET determines the locally-available networks from this list by matching the IP address ranges with the local IPs of a node. The purpose of this option is to be able to use the same <literal>modules.conf</literal> file across a variety of nodes on different networks. The string has the following syntax.</para>
+        <para><literal>ip2nets</literal> (&quot;&quot;) is a string that lists globally-available networks, each with a set of IP address ranges. LNet determines the locally-available networks from this list by matching the IP address ranges with the local IPs of a node. The purpose of this option is to be able to use the same <literal>modules.conf</literal> file across a variety of nodes on different networks. The string has the following syntax.</para>
         <screen>&lt;ip2nets&gt; :== &lt;net-match&gt; [ &lt;comment&gt; ] { &lt;net-sep&gt; &lt;net-match&gt; }
 &lt;net-match&gt; :== [ &lt;w&gt; ] &lt;net-spec&gt; &lt;w&gt; &lt;ip-range&gt; { &lt;w&gt; &lt;ip-range&gt; }
 [ &lt;w&gt; ]
@@ -184,7 +184,7 @@ routes (&quot;&quot;)</title>
           <title><indexterm><primary>configuring</primary><secondary>network</secondary><tertiary>forwarding</tertiary></indexterm>
 forwarding (&quot;&quot;)</title>
         <para>This is a string that can be set either to &quot;<literal>enabled</literal>&quot; or &quot;<literal>disabled</literal>&quot; for explicit control of whether this node should act as a router, forwarding communications between all local networks.</para>
-        <para>A standalone router can be started by simply starting LNET (&apos;<literal>modprobe ptlrpc</literal>&apos;) with appropriate network topology options.</para>
+        <para>A standalone router can be started by simply starting LNet (&apos;<literal>modprobe ptlrpc</literal>&apos;) with appropriate network topology options.</para>
         <informaltable frame="all">
           <tgroup cols="2">
             <colspec colname="c1" colwidth="50*"/>
@@ -205,7 +205,7 @@ forwarding (&quot;&quot;)</title>
                   <para> <literal>acceptor</literal></para>
                 </entry>
                 <entry>
-                  <para>The acceptor is a TCP/IP service that some LNDs use to establish communications. If a local network requires it and it has not been disabled, the acceptor listens on a single port for connection requests that it redirects to the appropriate local network. The acceptor is part of the LNET module and configured by the following options:</para>
+                  <para>The acceptor is a TCP/IP service that some LNDs use to establish communications. If a local network requires it and it has not been disabled, the acceptor listens on a single port for connection requests that it redirects to the appropriate local network. The acceptor is part of the LNet module and configured by the following options:</para>
                   <itemizedlist>
                     <listitem>
                       <para><literal>secure</literal>  - Accept connections only from reserved TCP ports (below 1023).</para>

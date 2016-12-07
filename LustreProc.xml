@@ -1821,9 +1821,9 @@ req_timeout               6 samples [sec] 1 10 15 105
               messages or enable printing of <literal>D_NETERROR</literal> messages to the console
               using:<screen>lctl set_param printk=+neterror</screen></para>
             <para>Congested routers can be a source of spurious LND timeouts. To avoid this
-              situation, increase the number of LNET router buffers to reduce back-pressure and/or
+              situation, increase the number of LNet router buffers to reduce back-pressure and/or
               increase LND timeouts on all nodes on all connected networks. Also consider increasing
-              the total number of LNET router nodes in the system so that the aggregate router
+              the total number of LNet router nodes in the system so that the aggregate router
               bandwidth matches the aggregate server bandwidth.</para>
           </listitem>
           <listitem>
@@ -1912,12 +1912,12 @@ req_timeout               6 samples [sec] 1 10 15 105
   <section remap="h3">
     <title><indexterm>
         <primary>proc</primary>
-        <secondary>LNET</secondary>
+        <secondary>LNet</secondary>
       </indexterm><indexterm>
-        <primary>LNET</primary>
+        <primary>LNet</primary>
         <secondary>proc</secondary>
-      </indexterm>Monitoring LNET</title>
-    <para>LNET information is located in <literal>/proc/sys/lnet</literal> in these files:<itemizedlist>
+      </indexterm>Monitoring LNet</title>
+    <para>LNet information is located in <literal>/proc/sys/lnet</literal> in these files:<itemizedlist>
         <listitem>
           <para><literal>peers</literal> - Shows all NIDs known to this node and provides
             information on the queue state.</para>
@@ -2032,7 +2032,7 @@ nid                refs   state  max  rtr  min   tx    min   queue
             </tgroup>
           </informaltable>
           <para>Credits are initialized to allow a certain number of operations (in the example
-            above the table, eight as shown in the <literal>max</literal> column. LNET keeps track
+            above the table, eight as shown in the <literal>max</literal> column. LNet keeps track
             of the minimum number of credits ever seen over time showing the peak congestion that
             has occurred during the time monitored. Fewer available credits indicates a more
             congested resource. </para>
@@ -2047,7 +2047,7 @@ nid                refs   state  max  rtr  min   tx    min   queue
             credits (<literal>rtr/tx</literal>) that is less than <literal>max</literal> indicates
             operations are in progress. If the ratio <literal>rtr/tx</literal> is greater than
               <literal>max</literal>, operations are blocking.</para>
-          <para>LNET also limits concurrent sends and number of router buffers allocated to a single
+          <para>LNet also limits concurrent sends and number of router buffers allocated to a single
             peer so that no peer can occupy all these resources.</para>
         </listitem>
         <listitem>

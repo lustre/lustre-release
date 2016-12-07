@@ -335,16 +335,16 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <glossentry xml:id="lnd">
       <glossterm>LND</glossterm>
       <glossdef>
-        <para>Lustre network driver. A code module that enables LNET support
+        <para>Lustre network driver. A code module that enables LNet support
         over particular transports, such as TCP and various kinds of InfiniBand
         networks.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="lnet">
-      <glossterm>LNET</glossterm>
+      <glossterm>LNet</glossterm>
       <glossdef>
         <para>Lustre networking. A message passing network protocol capable of
-        running and routing through various physical layers. LNET forms the
+        running and routing through various physical layers. LNet forms the
         underpinning of LNETrpc.</para>
       </glossdef>
     </glossentry>
@@ -410,7 +410,7 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
       <glossterm>MDC</glossterm>
       <glossdef>
         <para>Metadata client. A Lustre client component that sends metadata
-        requests via RPC over LNET to the metadata target (MDT).</para>
+        requests via RPC over LNet to the metadata target (MDT).</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="mdd">
@@ -479,7 +479,7 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <glossentry xml:id="nioapi">
       <glossterm>NIO API</glossterm>
       <glossdef>
-        <para>A subset of the LNET RPC module that implements a library for
+        <para>A subset of the LNet RPC module that implements a library for
         sending large network requests, moving buffers with RDMA.</para>
       </glossdef>
     </glossentry>
@@ -638,7 +638,7 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <glossentry xml:id="portal">
       <glossterm>Portal</glossterm>
       <glossdef>
-        <para>A service address on an LNET NID that binds requests to a
+        <para>A service address on an LNet NID that binds requests to a
         specific request service, such as an MDS, MGS, OSS, or LDLM. Services
         may listen on multiple portals to ensure that high priority messages
         are not queued behind many slow requests on another portal.</para>
@@ -647,7 +647,7 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <glossentry xml:id="ptlrpc">
       <glossterm>PTLRPC</glossterm>
       <glossdef>
-        <para>An RPC protocol layered on LNET. This protocol deals with
+        <para>An RPC protocol layered on LNet. This protocol deals with
         stateful servers and has exactly-once semantics and built in support
         for recovery.</para>
       </glossdef>
@@ -723,7 +723,7 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <glossentry xml:id="routing">
       <glossterm>Routing</glossterm>
       <glossdef>
-        <para>LNET routing between different networks and LNDs.</para>
+        <para>LNet routing between different networks and LNDs.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="rpc">

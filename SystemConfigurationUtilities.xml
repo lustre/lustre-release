@@ -261,7 +261,7 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
                 <para> <literal>network up|down|tcp|elan|myrinet</literal></para>
               </entry>
               <entry>
-                <para> Starts or stops LNET, or selects a network type for other <literal>lctl</literal> LNET commands.</para>
+                <para> Starts or stops LNet, or selects a network type for other <literal>lctl</literal> LNet commands.</para>
               </entry>
             </row>
             <row>
@@ -269,7 +269,7 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
                 <para> <literal>list_nids</literal></para>
               </entry>
               <entry>
-                <para> Prints all NIDs on the local node. LNET must be running.</para>
+                <para> Prints all NIDs on the local node. LNet must be running.</para>
               </entry>
             </row>
             <row>
@@ -285,7 +285,7 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
                 <para> <literal>ping <replaceable>nid</replaceable></literal></para>
               </entry>
               <entry>
-                <para> Checks LNET connectivity via an LNET ping. This uses the fabric appropriate to the specified NID.</para>
+                <para> Checks LNet connectivity via an LNet ping. This uses the fabric appropriate to the specified NID.</para>
               </entry>
             </row>
             <row>
@@ -398,7 +398,7 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
                 <para> <literal>list_param [-F|-R] <replaceable>parameter</replaceable> <replaceable>[parameter ...]</replaceable></literal></para>
               </entry>
               <entry>
-                <para> Lists the Lustre or LNET parameter name.</para>
+                <para> Lists the Lustre or LNet parameter name.</para>
                 <para>&#160;</para>
               </entry>
             </row>
@@ -429,7 +429,7 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
                 <para> <literal>get_param [-n|-N|-F] <replaceable>parameter</replaceable> <replaceable>[parameter ...]</replaceable></literal></para>
               </entry>
               <entry>
-                <para> Gets the value of a Lustre or LNET parameter from the specified path.</para>
+                <para> Gets the value of a Lustre or LNet parameter from the specified path.</para>
               </entry>
             </row>
             <row>
@@ -470,7 +470,7 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
                 <para> <literal>set_param [-n] <replaceable>parameter</replaceable>=<replaceable>value</replaceable></literal></para>
               </entry>
               <entry>
-                <para> Sets the value of a Lustre or LNET parameter from the specified path.</para>
+                <para> Sets the value of a Lustre or LNet parameter from the specified path.</para>
               </entry>
             </row>
             <row>
@@ -1256,34 +1256,34 @@ lshowmount</title>
   <section xml:id="dbdoclet.50438219_90218">
     <title><indexterm><primary>lst</primary></indexterm>
 lst</title>
-    <para>The lst utility starts LNET self-test.</para>
+    <para>The lst utility starts LNet self-test.</para>
     <section remap="h5">
       <title>Synopsis</title>
       <screen>lst</screen>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>LNET self-test helps site administrators confirm that Lustre Networking (LNET) has been properly installed and configured. The self-test also confirms that LNET and the network software and hardware underlying it are performing as expected.</para>
-      <para>Each LNET self-test runs in the context of a session. A node can be associated with only one session at a time, to ensure that the session has exclusive use of the nodes on which it is running. A session is create, controlled and monitored from a single node; this is referred to as the self-test console.</para>
+      <para>LNet self-test helps site administrators confirm that Lustre Networking (LNet) has been properly installed and configured. The self-test also confirms that LNet and the network software and hardware underlying it are performing as expected.</para>
+      <para>Each LNet self-test runs in the context of a session. A node can be associated with only one session at a time, to ensure that the session has exclusive use of the nodes on which it is running. A session is create, controlled and monitored from a single node; this is referred to as the self-test console.</para>
       <para>Any node may act as the self-test console. Nodes are named and allocated to a self-test session in groups. This allows all nodes in a group to be referenced by a single name.</para>
       <para>Test configurations are built by describing and running test batches. A test batch is a named collection of tests, with each test composed of a number of individual point-to-point tests running in parallel. These individual point-to-point tests are instantiated according to the test type, source group, target group and distribution specified when the test is added to the test batch.</para>
     </section>
     <section remap="h5">
       <title>Modules</title>
-      <para>To run LNET self-test, load these modules: libcfs, lnet, lnet_selftest and any one of the klnds (ksocklnd, ko2iblnd...). To load all necessary modules, run modprobe lnet_selftest, which recursively loads the modules on which lnet_selftest depends.</para>
-      <para>There are two types of nodes for LNET self-test: the console node and test nodes. Both node types require all previously-specified modules to be loaded. (The userspace test node does not require these modules).</para>
+      <para>To run LNet self-test, load these modules: libcfs, lnet, lnet_selftest and any one of the klnds (ksocklnd, ko2iblnd...). To load all necessary modules, run modprobe lnet_selftest, which recursively loads the modules on which lnet_selftest depends.</para>
+      <para>There are two types of nodes for LNet self-test: the console node and test nodes. Both node types require all previously-specified modules to be loaded. (The userspace test node does not require these modules).</para>
       <para>Test nodes can be in either kernel or in userspace. A console user can invite a kernel test node to join the test session by running lst add_group NID, but the user cannot actively add a userspace test node to the test session. However, the console user can passively accept a test node to the test session while the test node runs lst client to connect to the console.</para>
     </section>
     <section remap="h5">
       <title>Utilities</title>
-      <para>LNET self-test includes two user utilities, lst and lstclient.</para>
+      <para>LNet self-test includes two user utilities, lst and lstclient.</para>
       <para>lst is the user interface for the self-test console (run on the console node). It provides a list of commands to control the entire test system, such as create session, create test groups, etc.</para>
-      <para>lstclient is the userspace self-test program which is linked with userspace LNDs and LNET. A user can invoke lstclient to join a self-test session:</para>
+      <para>lstclient is the userspace self-test program which is linked with userspace LNDs and LNet. A user can invoke lstclient to join a self-test session:</para>
       <screen>lstclient -sesid CONSOLE_NID group NAME</screen>
     </section>
     <section remap="h5">
       <title>Example Script</title>
-      <para>This is a sample LNET self-test script which simulates the traffic pattern of a set of Lustre servers on a TCP network, accessed by Lustre clients on an IB network (connected via LNET routers), with half the clients reading and half the clients writing.</para>
+      <para>This is a sample LNet self-test script which simulates the traffic pattern of a set of Lustre servers on a TCP network, accessed by Lustre clients on an IB network (connected via LNet routers), with half the clients reading and half the clients writing.</para>
       <screen>#!/bin/bash
 export LST_SESSION=$$
 lst new_session read/write
@@ -1306,7 +1306,7 @@ lst end_session </screen>
   <section xml:id="dbdoclet.50438219_54734">
     <title><indexterm><primary>lustre_rmmod.sh</primary></indexterm>
 lustre_rmmod.sh</title>
-    <para>The lustre_rmmod.sh utility removes all Lustre and LNET modules (assuming no Lustre services are running). It is located in /usr/bin.</para>
+    <para>The lustre_rmmod.sh utility removes all Lustre and LNet modules (assuming no Lustre services are running). It is located in /usr/bin.</para>
     <note>
       <para>The lustre_rmmod.sh utility does not work if Lustre modules are being used or if you have manually run the lctl network up command.</para>
     </note>
@@ -2196,7 +2196,7 @@ routerstat</title>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The routerstat utility displays LNET router statistics. If no <literal><replaceable>interval</replaceable></literal> is specified, then statistics are sampled and printed only one time. Otherwise, statistics are sampled and printed at the specified <literal><replaceable>interval</replaceable></literal> (in seconds).</para>
+      <para>The routerstat utility displays LNet router statistics. If no <literal><replaceable>interval</replaceable></literal> is specified, then statistics are sampled and printed only one time. Otherwise, statistics are sampled and printed at the specified <literal><replaceable>interval</replaceable></literal> (in seconds).</para>
     </section>
     <section remap="h5">
       <title>Output</title>
@@ -2221,7 +2221,7 @@ routerstat</title>
                 <para> <literal>M</literal></para>
               </entry>
               <entry>
-                <para> Number of messages currently being processed by LNET (The maximum number of messages ever processed by LNET concurrently)</para>
+                <para> Number of messages currently being processed by LNet (The maximum number of messages ever processed by LNet concurrently)</para>
               </entry>
             </row>
             <row>
@@ -2229,7 +2229,7 @@ routerstat</title>
                 <para> <literal>E</literal></para>
               </entry>
               <entry>
-                <para> Number of LNET errors</para>
+                <para> Number of LNet errors</para>
               </entry>
             </row>
             <row>
@@ -2288,7 +2288,7 @@ routerstat</title>
                 <para> <literal>M</literal></para>
               </entry>
               <entry>
-                <para> Number of messages currently being processed by LNET (The maximum number of messages ever processed by LNET concurrently)</para>
+                <para> Number of messages currently being processed by LNet (The maximum number of messages ever processed by LNet concurrently)</para>
               </entry>
             </row>
             <row>
@@ -2296,7 +2296,7 @@ routerstat</title>
                 <para> <literal>E</literal></para>
               </entry>
               <entry>
-                <para> Number of LNET errors per second</para>
+                <para> Number of LNet errors per second</para>
               </entry>
             </row>
             <row>

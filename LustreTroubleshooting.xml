@@ -521,7 +521,7 @@ tail -30 /tmp/objects.{diskname}</screen>
           use</literal> error and reject to start the operation. This is caused by a portmap service
         (often NFS locking) that starts before the Lustre file system and binds to the default port
         988. You must have port 988 open from firewall or IP tables for incoming connections on the
-        client, OSS, and MDS nodes. LNET will create three outgoing connections on available,
+        client, OSS, and MDS nodes. LNet will create three outgoing connections on available,
         reserved ports to each client-server pair, starting with 1023, 1022 and 1021.</para>
       <para>Unfortunately, you cannot set sunprc to avoid port 988. If you receive this error, do the following:</para>
       <itemizedlist>
@@ -530,7 +530,7 @@ tail -30 /tmp/objects.{diskname}</screen>
         </listitem>
         <listitem>
           <para>Use a port other than 988 for the Lustre file system. This is configured in
-              <literal>/etc/modprobe.d/lustre.conf</literal> as an option to the LNET module. For
+              <literal>/etc/modprobe.d/lustre.conf</literal> as an option to the LNet module. For
             example:</para>
           <screen>options lnet accept_port=988</screen>
         </listitem>

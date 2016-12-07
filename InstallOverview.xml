@@ -33,10 +33,10 @@
       </listitem>
       <listitem>
         <para><emphasis>(Optional)</emphasis>
-          <emphasis role="bold">Configure Lustre networking (LNET).</emphasis></para>
-        <para>See <xref linkend="configuringlnet"/> - Describes how to configure LNET if the default
-          configuration is not sufficient. By default, LNET will use the first TCP/IP interface it
-          discovers on a system. LNET configuration is required if you are using InfiniBand or
+          <emphasis role="bold">Configure Lustre Networking (LNet).</emphasis></para>
+        <para>See <xref linkend="configuringlnet"/> - Describes how to configure LNet if the default
+          configuration is not sufficient. By default, LNet will use the first TCP/IP interface it
+          discovers on a system. LNet configuration is required if you are using InfiniBand or
           multiple Ethernet interfaces.</para>
       </listitem>
       <listitem>

@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managinglnet">
-  <title xml:id="managinglnet.title">Managing Lustre Networking (LNET)</title>
-  <para>This chapter describes some tools for managing Lustre networking (LNET) and includes the
+  <title xml:id="managinglnet.title">Managing Lustre Networking (LNet)</title>
+  <para>This chapter describes some tools for managing Lustre networking (LNet) and includes the
     following sections:</para>
   <itemizedlist>
     <listitem>
@@ -20,15 +20,15 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438203_51732">
-      <title><indexterm><primary>LNET</primary><secondary>management</secondary></indexterm>
+      <title><indexterm><primary>LNet</primary><secondary>management</secondary></indexterm>
           Updating the Health Status of a Peer or Router</title>
     <para>There are two mechanisms to update the health status of a peer or a router:</para>
     <itemizedlist>
       <listitem>
-        <para>LNET can actively check health status of all routers and mark them as dead or alive automatically. By default, this is off. To enable it set <literal>auto_down</literal> and if desired <literal>check_routers_before_use</literal>. This initial check may cause a pause equal to <literal>router_ping_timeout</literal> at system startup, if there are dead routers in the system.</para>
+        <para>LNet can actively check health status of all routers and mark them as dead or alive automatically. By default, this is off. To enable it set <literal>auto_down</literal> and if desired <literal>check_routers_before_use</literal>. This initial check may cause a pause equal to <literal>router_ping_timeout</literal> at system startup, if there are dead routers in the system.</para>
       </listitem>
       <listitem>
-        <para>When there is a communication error, all LNDs notify LNET that the peer (not necessarily a router) is down. This mechanism is always on, and there is no parameter to turn it off. However, if you set the LNET module parameter <literal>auto_down</literal> to <literal>0</literal>, LNET ignores all such peer-down notifications.</para>
+        <para>When there is a communication error, all LNDs notify LNet that the peer (not necessarily a router) is down. This mechanism is always on, and there is no parameter to turn it off. However, if you set the LNet module parameter <literal>auto_down</literal> to <literal>0</literal>, LNet ignores all such peer-down notifications.</para>
       </listitem>
     </itemizedlist>
     <para>Several key differences in both mechanisms:</para>
@@ -45,13 +45,13 @@
     </itemizedlist>
   </section>
   <section xml:id="dbdoclet.50438203_48703">
-      <title><indexterm><primary>LNET</primary><secondary>starting/stopping</secondary></indexterm>Starting and Stopping LNET</title>
-    <para>The Lustre software automatically starts and stops LNET, but it can also be manually
+      <title><indexterm><primary>LNet</primary><secondary>starting/stopping</secondary></indexterm>Starting and Stopping LNet</title>
+    <para>The Lustre software automatically starts and stops LNet, but it can also be manually
       started in a standalone manner. This is particularly useful to verify that your networking
       setup is working correctly before you attempt to start the Lustre file system.</para>
     <section remap="h3">
-      <title>Starting LNET</title>
-      <para>To start LNET, run:</para>
+      <title>Starting LNet</title>
+      <para>To start LNet, run:</para>
       <screen>$ modprobe lnet
 $ lctl network up</screen>
       <para>To see the list of local NIDs, run:</para>
@@ -72,18 +72,18 @@ $ lctl network up</screen>
       </section>
     </section>
     <section remap="h3">
-      <title>Stopping LNET</title>
-      <para>Before the LNET modules can be removed, LNET references must be removed. In general,
+      <title>Stopping LNet</title>
+      <para>Before the LNet modules can be removed, LNet references must be removed. In general,
         these references are removed automatically when the Lustre file system is shut down, but for
-        standalone routers, an explicit step is needed to stop LNET. Run:</para>
+        standalone routers, an explicit step is needed to stop LNet. Run:</para>
       <screen>lctl network unconfigure</screen>
       <note>
         <para>Attempting to remove Lustre modules prior to stopping the network may result in a
-          crash or an LNET hang. If this occurs, the node must be rebooted (in most cases). Make
+          crash or an LNet hang. If this occurs, the node must be rebooted (in most cases). Make
           sure that the Lustre network and Lustre file system are stopped prior to unloading the
           modules. Be extremely careful using <literal>rmmod -f</literal>.</para>
       </note>
-      <para>To unconfigure the LNET network, run:</para>
+      <para>To unconfigure the LNet network, run:</para>
       <screen>modprobe -r <replaceable>lnd_and_lnet_modules</replaceable></screen>
       <note>
         <para>
@@ -93,16 +93,16 @@ To remove all Lustre modules, run:</para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438203_82542">
-    <title><indexterm><primary>LNET</primary><secondary>multi-rail configuration</secondary></indexterm>Multi-Rail Configurations with LNET</title>
+    <title><indexterm><primary>LNet</primary><secondary>multi-rail configuration</secondary></indexterm>Multi-Rail Configurations with LNet</title>
     <para>To aggregate bandwidth across both rails of a dual-rail IB cluster (o2iblnd) <footnote>
         <para>Multi-rail configurations are only supported by o2iblnd; other IB LNDs do not support multiple interfaces.</para>
-      </footnote> using LNET, consider these points:</para>
+      </footnote> using LNet, consider these points:</para>
     <itemizedlist>
       <listitem>
-        <para>LNET can work with multiple rails, however, it does not load balance across them. The actual rail used for any communication is determined by the peer NID.</para>
+        <para>LNet can work with multiple rails, however, it does not load balance across them. The actual rail used for any communication is determined by the peer NID.</para>
       </listitem>
       <listitem>
-        <para>Multi-rail LNET configurations do not provide an additional level of network fault
+        <para>Multi-rail LNet configurations do not provide an additional level of network fault
           tolerance. The configurations described below are for bandwidth aggregation only. </para>
       </listitem>
       <listitem>
@@ -115,7 +115,7 @@ To remove all Lustre modules, run:</para>
             <para>Fewest hops (to minimize routing), and</para>
           </listitem>
           <listitem>
-            <para>Appears first in the &quot;<literal>networks</literal>&quot; or &quot;<literal>ip2nets</literal>&quot; LNET configuration strings</para>
+            <para>Appears first in the &quot;<literal>networks</literal>&quot; or &quot;<literal>ip2nets</literal>&quot; LNet configuration strings</para>
           </listitem>
         </itemizedlist>
       </listitem>
@@ -123,15 +123,15 @@ To remove all Lustre modules, run:</para>
   </section>
   <section xml:id="dbdoclet.50438203_78227">
     <title><indexterm>
-        <primary>LNET</primary>
+        <primary>LNet</primary>
         <secondary>InfiniBand load balancing</secondary>
       </indexterm>Load Balancing with an InfiniBand<superscript>*</superscript> Network</title>
     <para>A Lustre file system contains OSSs with two InfiniBand HCAs. Lustre clients have only one
       InfiniBand HCA using OFED-based Infiniband &apos;&apos;o2ib&apos;&apos; drivers. Load
-      balancing between the HCAs on the OSS is accomplished through LNET.</para>
+      balancing between the HCAs on the OSS is accomplished through LNet.</para>
     <section remap="h3">
-      <title><indexterm><primary>LNET</primary><secondary>lustre.conf</secondary></indexterm>Setting Up <literal>lustre.conf</literal> for Load Balancing</title>
-      <para>To configure LNET for load balancing on clients and servers:</para>
+      <title><indexterm><primary>LNet</primary><secondary>lustre.conf</secondary></indexterm>Setting Up <literal>lustre.conf</literal> for Load Balancing</title>
+      <para>To configure LNet for load balancing on clients and servers:</para>
       <orderedlist>
         <listitem>
           <para>Set the <literal>lustre.conf</literal> options.</para>
@@ -234,12 +234,12 @@ ents&quot;</screen>
     </section>
   </section>
   <section xml:id="managinglnet.configuringroutes" condition='l24'>
-    <title><indexterm><primary>LNET</primary></indexterm>Dynamically Configuring LNET Routes</title>
+    <title><indexterm><primary>LNet</primary></indexterm>Dynamically Configuring LNet Routes</title>
     <para>Two scripts are provided: <literal>lustre/scripts/lustre_routes_config</literal> and <literal>lustre/scripts/lustre_routes_conversion</literal>.</para>
-    <para><literal>lustre_routes_config</literal> sets or cleans up LNET routes from the specified config file.  <literal>/etc/sysconfig/lustre_routes.conf</literal> file can be used to automatically configure routes on LNET startup. </para>
+    <para><literal>lustre_routes_config</literal> sets or cleans up LNet routes from the specified config file.  <literal>/etc/sysconfig/lustre_routes.conf</literal> file can be used to automatically configure routes on LNet startup. </para>
     <para><literal>lustre_routes_conversion</literal> converts a legacy routes configuration file to the new syntax, which is parsed by <literal>lustre_routes_config</literal>.</para>
     <section remap="h3">
-      <title><indexterm><primary>LNET</primary></indexterm><literal>lustre_routes_config</literal></title>
+      <title><indexterm><primary>LNet</primary></indexterm><literal>lustre_routes_config</literal></title>
       <para><literal>lustre_routes_config</literal> usage is as follows</para>
       <screen><literal>lustre_routes_config [--setup|--cleanup|--dry-run|--verbose] <replaceable>config_file</replaceable></literal>
          --setup: configure routes listed in config_file
@@ -248,10 +248,10 @@ ents&quot;</screen>
          --verbose: echo commands before they are executed </screen>
       <para> The format of the file which is passed into the script is as follows: </para>
       <para><literal><replaceable>network</replaceable>: { gateway: <replaceable>gateway</replaceable>@<replaceable>exit_network</replaceable> [hop: <replaceable>hop</replaceable>] [priority: <replaceable>priority</replaceable>] }</literal></para>
-      <para> An LNET router is identified when its local NID appears within the list of routes.  However, this can not be achieved by the use of this script, since the script only adds extra routes after the router is identified.  To ensure that a router is identified correctly, make sure to add its local NID in the routes parameter in the modprobe lustre configuration file.  See <xref linkend='dbdoclet.50438293_15350'/>.</para>
+      <para> An LNet router is identified when its local NID appears within the list of routes.  However, this can not be achieved by the use of this script, since the script only adds extra routes after the router is identified.  To ensure that a router is identified correctly, make sure to add its local NID in the routes parameter in the modprobe lustre configuration file.  See <xref linkend='dbdoclet.50438293_15350'/>.</para>
     </section>
     <section remap="h3">
-      <title><indexterm><primary>LNET</primary></indexterm><literal>lustre_routes_conversion</literal></title>
+      <title><indexterm><primary>LNet</primary></indexterm><literal>lustre_routes_conversion</literal></title>
       <para><literal>lustre_routes_conversion</literal> usage is as follows:</para>
       <screen><literal>lustre_routes_conversion <replaceable>legacy_file</replaceable> <replaceable>new_file</replaceable></literal></screen>
       <para><literal>lustre_routes_conversion</literal> takes as a first parameter a file with routes configured as follows:</para>
@@ -261,12 +261,12 @@ ents&quot;</screen>
       <para>and appends each converted entry to the output file passed in as the second parameter to the script.</para>
     </section>
     <section remap="h3">
-      <title><indexterm><primary>LNET</primary></indexterm><literal>Route Configuration Examples</literal></title>
-      <para>Below is an example of a legacy LNET route configuration.  A legacy configuration file can have multiple entries.</para>
+      <title><indexterm><primary>LNet</primary></indexterm><literal>Route Configuration Examples</literal></title>
+      <para>Below is an example of a legacy LNet route configuration.  A legacy configuration file can have multiple entries.</para>
       <screen><literal>tcp1 10.1.1.2@tcp0:1;
 tcp2 10.1.1.3@tcp0:2;
 tcp3 10.1.1.4@tcp0;</literal></screen>
-      <para>Below is an example of the converted LNET route configuration.  The following would be the result of the <literal>lustre_routes_conversion</literal> script, when run on the above legacy entries.</para>
+      <para>Below is an example of the converted LNet route configuration.  The following would be the result of the <literal>lustre_routes_conversion</literal> script, when run on the above legacy entries.</para>
       <screen><literal>tcp1: { gateway: 10.1.1.2@tcp0 priority: 1 }
 tcp2: { gateway: 10.1.1.2@tcp0 priority: 2 }
 tcp1: { gateway: 10.1.1.4@tcp0 }</literal></screen>

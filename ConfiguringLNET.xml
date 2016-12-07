@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringlnet">
-  <title xml:id="configuringlnet.title">Configuring Lustre Networking (LNET)</title>
-  <para>This chapter describes how to configure Lustre Networking (LNET). It includes the following sections:</para>
+  <title xml:id="configuringlnet.title">Configuring Lustre Networking (LNet)</title>
+  <para>This chapter describes how to configure Lustre Networking (LNet). It includes the following sections:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438216_15201"/>
@@ -37,28 +37,28 @@
     </listitem>
   </itemizedlist>
   <note>
-    <para>Configuring LNET is optional.</para>
-    <para> LNET will use the first TCP/IP interface it discovers on a
+    <para>Configuring LNet is optional.</para>
+    <para> LNet will use the first TCP/IP interface it discovers on a
     system (<literal>eth0</literal>) if it's loaded using the
     <literal>lctl network up</literal>.  If this network configuration is
-    sufficient, you do not need to configure LNET. LNet configuration is
+    sufficient, you do not need to configure LNet. LNet configuration is
     required if you are using Infiniband or multiple Ethernet
     interfaces.</para>
     <para condition='l27'>The <literal>lnetctl</literal> utility can be used
-    to initialize LNET without bringing up any network interfaces.  This
-    gives flexibility to the user to add interfaces after LNET has been
+    to initialize LNet without bringing up any network interfaces.  This
+    gives flexibility to the user to add interfaces after LNet has been
     loaded.</para>
     <para condition='l27'>DLC also introduces a C-API to enable
-    configuring LNET programatically.  See <xref
+    configuring LNet programatically.  See <xref
     linkend="lnetconfigurationapi"/></para>
   </note>
   <section xml:id="dbdoclet.50438216_15201" condition='l27'>
     <title><indexterm>
-        <primary>LNET</primary>
-        <secondary>Configuring LNET</secondary>
-    </indexterm>Configuring LNET via <literal>lnetctl</literal></title>
+        <primary>LNet</primary>
+        <secondary>Configuring LNet</secondary>
+    </indexterm>Configuring LNet via <literal>lnetctl</literal></title>
     <para>The <literal>lnetctl</literal> utility can be used to initialize
-    and configure the LNET kernel module after it has been loaded via
+    and configure the LNet kernel module after it has been loaded via
     <literal>modprobe</literal>. In general the lnetctl format is as
     follows: </para>
       <screen>lnetctl cmd subcmd [options]</screen>
@@ -66,7 +66,7 @@
     <para>
       <itemizedlist>
         <listitem>
-          <para>Configuring/unconfiguring LNET</para>
+          <para>Configuring/unconfiguring LNet</para>
         </listitem>
         <listitem>
           <para>Adding/removing/showing Networks</para>
@@ -84,11 +84,11 @@
     </para>
     <section>
       <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>cli</secondary>
-        </indexterm>Configuring LNET</title>
-      <para>After LNET has been loaded via <literal>modprobe</literal>,
-      <literal>lnetctl</literal> utility can be used to configure LNET
+        </indexterm>Configuring LNet</title>
+      <para>After LNet has been loaded via <literal>modprobe</literal>,
+      <literal>lnetctl</literal> utility can be used to configure LNet
       without bringing up networks which are specified in the module
       parameters.  It can also be used to configure network interfaces
       specified in the module prameters by providing the
@@ -96,15 +96,15 @@
       <screen>lnetctl lnet configure [--all]
 # --all: load NI configuration from module parameters</screen>
       <para>The <literal>lnetctl</literal> utility can also be used to
-      unconfigure LNET.</para>
+      unconfigure LNet.</para>
       <screen>lnetctl lnet unconfigure</screen>
     </section>
     <section>
       <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>cli</secondary>
         </indexterm>Adding, Deleting and Showing networks</title>
-      <para>Networks can be added and deleted after the LNET kernel module
+      <para>Networks can be added and deleted after the LNet kernel module
       is loaded.</para>
       <screen>lnetctl net add: add a network
         --net: net name (ex tcp0)
@@ -161,16 +161,16 @@ net:
     </section>
     <section>
       <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>cli</secondary>
         </indexterm>Adding, Deleting and Showing routes</title>
-      <para>A set of routes can be added to identify how LNET messages are
+      <para>A set of routes can be added to identify how LNet messages are
       to be routed.</para>
       <screen>lnetctl route add: add a route
-        --net: net name (ex tcp0) LNET message is destined to.
+        --net: net name (ex tcp0) LNet message is destined to.
                The can not be a local network.
         --gateway: gateway node nid (ex 10.1.1.2@tcp) to route
-                   all LNET messaged destined for the identified
+                   all LNet messaged destined for the identified
                    network
         --hop: number of hops to final destination
                (1 &lt; hops &lt; 255)
@@ -223,10 +223,10 @@ route:
     </section>
     <section>
       <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>cli</secondary>
         </indexterm>Enabling and Disabling Routing</title>
-      <para>When an LNET node is configured as a router it will route LNet
+      <para>When an LNet node is configured as a router it will route LNet
       messages not destined to itself. This feature can be enabled or
       disabled as follows.</para>
       <screen>lnetctl set routing [0 | 1]
@@ -235,7 +235,7 @@ route:
     </section>
     <section>
       <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>cli</secondary>
         </indexterm>Showing routing information</title>
       <para>When routing is enabled on a node, the tiny, small and large
@@ -269,7 +269,7 @@ routing:
     </section>
     <section>
       <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>cli</secondary>
         </indexterm>Configuring Routing Buffers</title>
       <para> The routing buffers values configured specify the number of
@@ -308,7 +308,7 @@ set large_buffers: set large routing buffers
     </section>
     <section>
       <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>cli</secondary>
         </indexterm>Importing YAML Configuration File</title>
       <para>Configuration can be described in YAML format and can be fed
@@ -337,26 +337,26 @@ lnetctl import --show &lt; FILE.yaml</screen>
     </section>
     <section>
       <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>cli</secondary>
         </indexterm>Exporting Configuration in YAML format</title>
       <para><literal>lnetctl</literal> utility provides the 'export'
-      command to dump current LNET configuration in YAML format </para>
+      command to dump current LNet configuration in YAML format </para>
       <screen>lnetctl export FILE.yaml
 lnetctl export > FILE.yaml</screen>
     </section>
     <section>
       <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>cli</secondary>
-        </indexterm>Showing LNET Traffic Statistics</title>
-      <para><literal>lnetctl</literal> utility can dump the LNET traffic
+        </indexterm>Showing LNet Traffic Statistics</title>
+      <para><literal>lnetctl</literal> utility can dump the LNet traffic
       statistiscs as follows</para>
       <screen>lnetctl stats show</screen>
     </section>
     <section>
       <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>yaml syntax</secondary>
         </indexterm>YAML Syntax</title>
       <para>The <literal>lnetctl</literal> utility can take in a YAML file
@@ -378,7 +378,7 @@ lnetctl export > FILE.yaml</screen>
       operation.</para>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>network yaml syntax</secondary>
           </indexterm>Network Configuration</title>
         <para/>
@@ -400,7 +400,7 @@ lnetctl export > FILE.yaml</screen>
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>buffer yaml syntax</secondary>
           </indexterm>Enable Routing and Adjust Router Buffer Configuration</title>
         <para/>
@@ -414,7 +414,7 @@ lnetctl export > FILE.yaml</screen>
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>statistics yaml syntax</secondary>
           </indexterm>Show Statistics</title>
         <para/>
@@ -424,7 +424,7 @@ lnetctl export > FILE.yaml</screen>
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>router yaml syntax</secondary>
           </indexterm>Route Configuration</title>
         <para/>
@@ -439,14 +439,14 @@ lnetctl export > FILE.yaml</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438216_33148">
-      <title><indexterm><primary>LNET</primary></indexterm>
+      <title><indexterm><primary>LNet</primary></indexterm>
 
-          Overview of LNET Module Parameters</title>
-    <para>LNET kernel module (lnet) parameters specify how LNet is to be
+          Overview of LNet Module Parameters</title>
+    <para>LNet kernel module (lnet) parameters specify how LNet is to be
     configured to work with Lustre, including which NICs will be
     configured to work with Lustre and the routing to be used with
     Lustre.</para>
-    <para>Parameters for LNET can be specified in the
+    <para>Parameters for LNet can be specified in the
     <literal>/etc/modprobe.d/lustre.conf</literal> file.  In some cases
     the parameters may have been stored in
     <literal>/etc/modprobe.conf</literal>, but this has been deprecated
@@ -466,7 +466,7 @@ lnetctl export > FILE.yaml</screen>
       </listitem>
       <listitem>
 	<para><literal>ip2nets</literal>  - Lists globally-available
-	networks, each with a range of IP addresses. LNET then identifies
+	networks, each with a range of IP addresses. LNet then identifies
 	locally-available networks through address list-matching
 	lookup.</para>
       </listitem>
@@ -483,8 +483,8 @@ lnetctl export > FILE.yaml</screen>
     Lustre nodes to detect router health status, avoid routers that appear
     dead, and reuse those that restore service after failures. See <xref
     linkend="dbdoclet.50438216_35668"/> for more details.</para>
-    <para>For a complete reference to the LNET module parameters, see
-    <emphasis><xref linkend="configurationfilesmoduleparameters"/>LNET
+    <para>For a complete reference to the LNet module parameters, see
+    <emphasis><xref linkend="configurationfilesmoduleparameters"/>LNet
     Options</emphasis>.</para>
     <note>
       <para>We recommend that you use &apos;dotted-quad&apos; notation for
@@ -492,7 +492,7 @@ lnetctl export > FILE.yaml</screen>
       logs and debug configurations with multiple interfaces.</para>
     </note>
     <section>
-      <title><indexterm><primary>LNET</primary><secondary>using
+      <title><indexterm><primary>LNet</primary><secondary>using
       NID</secondary></indexterm>Using a Lustre Network Identifier (NID)
       to Identify a Node</title>
       <para>A Lustre network identifier (NID) is used to uniquely identify
@@ -517,11 +517,11 @@ lnetctl export > FILE.yaml</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438216_46279">
-    <title><indexterm><primary>LNET</primary><secondary>module parameters</secondary></indexterm>Setting the LNet Module networks Parameter</title>
+    <title><indexterm><primary>LNet</primary><secondary>module parameters</secondary></indexterm>Setting the LNet Module networks Parameter</title>
     <para>If a node has more than one network interface, you&apos;ll
     typically want to dedicate a specific interface to Lustre. You can do
     this by including an entry in the <literal>lustre.conf</literal> file
-    on the node that sets the LNET module <literal>networks</literal>
+    on the node that sets the LNet module <literal>networks</literal>
     parameter:</para>
     <screen>options lnet networks=<replaceable>comma-separated list of
     networks</replaceable></screen>
@@ -543,7 +543,7 @@ lnetctl export > FILE.yaml</screen>
     another interface, even if multiple interfaces are available on the
     same node.</para>
     <note>
-      <para>LNET lines in <literal>lustre.conf</literal> are only used by
+      <para>LNet lines in <literal>lustre.conf</literal> are only used by
       the local node to determine what to call its interfaces. They are
       not used for routing decisions.</para>
     </note>
@@ -600,7 +600,7 @@ lnetctl export > FILE.yaml</screen>
 	(<literal>lo0</literal>) interface. Lustre does not ignore IP
 	addresses aliased to the loopback. If you alias IP addresses to
 	the loopback interface, you must specify all Lustre networks using
-	the LNET networks parameter.</para>
+	the LNet networks parameter.</para>
       </note>
       <note>
 	<para>If the server has multiple interfaces on the same subnet,
@@ -613,7 +613,7 @@ lnetctl export > FILE.yaml</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438216_31414">
-    <title><indexterm><primary>LNET</primary><secondary>ip2nets</secondary></indexterm>Setting the LNet Module ip2nets Parameter</title>
+    <title><indexterm><primary>LNet</primary><secondary>ip2nets</secondary></indexterm>Setting the LNet Module ip2nets Parameter</title>
     <para>The <literal>ip2nets</literal> option is typically used when a
     single, universal <literal>lustre.conf</literal> file is run on all
     servers and clients. Each node identifies the locally available
@@ -622,7 +622,7 @@ lnetctl export > FILE.yaml</screen>
     <para>Note that the IP address patterns listed in the
     <literal>ip2nets</literal> option are <emphasis>only</emphasis> used
     to identify the networks that an individual node should instantiate.
-    They are <emphasis>not</emphasis> used by LNET for any other
+    They are <emphasis>not</emphasis> used by LNet for any other
     communications purpose.</para>
     <para>For the example below, the nodes in the network have these IP
     addresses:</para>
@@ -654,12 +654,12 @@ lnetctl export > FILE.yaml</screen>
     <screen>options lnet &apos;ip2nets=&quot;tcp0(eth0) 192.168.0.[2,4]; \
 tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
     <para>Each entry in <literal>ip2nets</literal> is referred to as a &apos;rule&apos;.</para>
-    <para>The order of LNET entries is important when configuring servers.
+    <para>The order of LNet entries is important when configuring servers.
     If a server node can be reached using more than one network, the first
     network specified in <literal>lustre.conf</literal> will be
     used.</para>
     <para>Because <literal>svr1</literal> and <literal>svr2</literal>
-    match the first rule, LNET uses <literal>eth0</literal> for
+    match the first rule, LNet uses <literal>eth0</literal> for
     <literal>tcp0</literal> on those machines. (Although
     <literal>svr1</literal> and <literal>svr2</literal> also match the
     second rule, the first matching rule for a particular network is
@@ -670,15 +670,15 @@ tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
     network.</para>
   </section>
   <section xml:id="dbdoclet.50438216_71227">
-    <title><indexterm><primary>LNET</primary><secondary>routes</secondary></indexterm>Setting
+    <title><indexterm><primary>LNet</primary><secondary>routes</secondary></indexterm>Setting
     the LNet Module routes Parameter</title>
-    <para>The LNET module routes parameter is used to identify routers in
+    <para>The LNet module routes parameter is used to identify routers in
     a Lustre configuration. These parameters are set in
     <literal>modprobe.conf</literal> on each Lustre node. </para>
     <para>Routes are typically set to connect to segregated subnetworks
     or to cross connect two different types of networks such as tcp and
     o2ib</para>
-    <para>The LNET routes parameter specifies a colon-separated list of
+    <para>The LNet routes parameter specifies a colon-separated list of
     router definitions. Each route is defined as a network number,
     followed by a list of routers:</para>
     <screen>routes=<replaceable>net_type router_NID(s)</replaceable></screen>
@@ -688,14 +688,14 @@ tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
     <screen>options lnet &apos;ip2nets=&quot;tcp0 192.168.0.*; \
   o2ib0(ib0) 132.6.1.[1-128]&quot;&apos; &apos;routes=&quot;tcp0   132.6.1.[1-8]@o2ib0; \
   o2ib0 192.16.8.0.[1-8]@tcp0&quot;&apos;</screen>
-    <para>All LNET routers that bridge two networks are equivalent. They
+    <para>All LNet routers that bridge two networks are equivalent. They
     are not configured as primary or secondary, and the load is balanced
     across all available routers.</para>
-    <para>The number of LNET routers is not limited. Enough routers should
+    <para>The number of LNet routers is not limited. Enough routers should
     be used to handle the required file serving bandwidth plus a 25
     percent margin for headroom.</para>
     <section>
-      <title><indexterm><primary>LNET</primary><secondary>routing
+      <title><indexterm><primary>LNet</primary><secondary>routing
       example</secondary></indexterm>Routing Example</title>
       <para>On the clients, place the following entry in the
       <literal>lustre.conf</literal> file</para>
@@ -710,15 +710,15 @@ lctl network configure</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438216_10523">
-    <title><indexterm><primary>LNET</primary><secondary>testing</secondary></indexterm>Testing
+    <title><indexterm><primary>LNet</primary><secondary>testing</secondary></indexterm>Testing
     the LNet Configuration</title>
     <para>After configuring Lustre Networking, it is highly recommended
-    that you test your LNET configuration using the LNet Self-Test
+    that you test your LNet configuration using the LNet Self-Test
     provided with the Lustre software. For more information about using
-    LNET Self-Test, see <xref linkend="lnetselftest"/>.</para>
+    LNet Self-Test, see <xref linkend="lnetselftest"/>.</para>
   </section>
   <section xml:id="dbdoclet.50438216_35668">
-    <title><indexterm><primary>LNET</primary><secondary>route
+    <title><indexterm><primary>LNet</primary><secondary>route
     checker</secondary></indexterm>Configuring the Router Checker</title>
     <para>In a Lustre configuration in which different types of networks,
     such as a TCP/IP network and an Infiniband network, are connected by
@@ -726,7 +726,7 @@ lctl network configure</screen>
     routed configuration to monitor the status of the routers. In a
     multi-hop routing configuration, router checkers can be configured on
     routers to monitor the health of their next-hop routers.</para>
-    <para>A router checker is configured by setting lnet parameters in
+    <para>A router checker is configured by setting LNet parameters in
     <literal>lustre.conf</literal> by including an entry in this
     form:</para>
     <screen>options lnet
@@ -795,14 +795,14 @@ lctl network configure</screen>
     sent-packets counter for that router will have a value of 100.</para>
   </section>
   <section xml:id="dbdoclet.50438216_15200">
-    <title><indexterm><primary>LNET</primary><secondary>best
-    practice</secondary></indexterm>Best Practices for LNET
+    <title><indexterm><primary>LNet</primary><secondary>best
+    practice</secondary></indexterm>Best Practices for LNet
     Options</title>
     <para>For the <literal>networks</literal>, <literal>ip2nets</literal>,
     and <literal>routes</literal> options, follow these best practices to
     avoid configuration errors.</para>
     <section>
-      <title><indexterm><primary>LNET</primary><secondary>escaping commas
+      <title><indexterm><primary>LNet</primary><secondary>escaping commas
       with quotes</secondary></indexterm>Escaping commas with
       quotes</title>
       <para>Depending on the Linux distribution, commas may need to be
@@ -815,17 +815,17 @@ lctl network configure</screen>
       the following may indicate an issue related to added quotes:</para>
       <para><screen>lnet: Unknown parameter &apos;networks&apos;</screen></para>
       <para>A <literal>&apos;Refusing connection - no matching
-      NID&apos;</literal> message generally points to an error in the LNET
+      NID&apos;</literal> message generally points to an error in the LNet
       module configuration.</para>
     </section>
     <section>
-      <title><indexterm><primary>LNET</primary><secondary>comments</secondary></indexterm>Including
+      <title><indexterm><primary>LNet</primary><secondary>comments</secondary></indexterm>Including
       comments</title>
       <para><emphasis>Place the semicolon terminating a comment
-      immediately after the comment.</emphasis> LNET silently ignores
+      immediately after the comment.</emphasis> LNet silently ignores
       everything between the <literal>#</literal> character at the
       beginning of the comment and the next semicolon.</para>
-      <para>In this <emphasis>incorrect</emphasis> example, LNET silently
+      <para>In this <emphasis>incorrect</emphasis> example, LNet silently
       ignores <literal>pt11 192.168.0.[92,96]</literal>, resulting in
       these nodes not being properly initialized. No error message is
       generated.</para>

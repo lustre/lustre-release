@@ -1,10 +1,10 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lnetconfigurationapi">
   <title xml:id="lnetconfigurationapi.title">LNet Configuration C-API</title>
-  <para>This section describes the LNET Configuration C-API library. This
-  API allows the developer to programatically configure LNET. It provides
-  APIs to add, delete and show LNET configuration items listed below.  The
+  <para>This section describes the LNet Configuration C-API library. This
+  API allows the developer to programatically configure LNet. It provides
+  APIs to add, delete and show LNet configuration items listed below.  The
   API utilizes IOCTL to communicate with the kernel.  Changes take effect
-  immediately and do not require restarting LNET. API calls are
+  immediately and do not require restarting LNet. API calls are
   synchronous</para>
   <para>
     <itemizedlist>
@@ -27,13 +27,13 @@
   </para>
     <section remap="h5">
       <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>capi general information</secondary>
         </indexterm>General API Information</title>
       <para/>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>capi return code</secondary>
           </indexterm>API Return Code</title>
         <screen>LUSTRE_CFG_RC_NO_ERR                 0
@@ -45,7 +45,7 @@ LUSTRE_CFG_RC_GENERIC_ERR           -5</screen>
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>capi input params</secondary>
           </indexterm>API Common Input Parameters</title>
 	<para>All APIs take as input a sequence number. This is a number
@@ -60,13 +60,13 @@ LUSTRE_CFG_RC_GENERIC_ERR           -5</screen>
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>capi output params</secondary>
           </indexterm>API Common Output Parameters</title>
         <para/>
         <section>
           <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>cyaml</secondary>
           </indexterm>Internal YAML Representation (cYAML)</title>
 	  <para>Once a YAML block is parsed it needs to be stored
@@ -111,7 +111,7 @@ typedef struct cYAML {
         </section>
         <section>
           <title><indexterm>
-              <primary>LNET</primary>
+              <primary>LNet</primary>
               <secondary>error block</secondary>
             </indexterm>Error Block</title>
 	  <para>All APIs return a cYAML error block. This error block has
@@ -132,7 +132,7 @@ add:
         </section>
         <section>
           <title><indexterm>
-              <primary>LNET</primary>
+              <primary>LNet</primary>
               <secondary>show block</secondary>
             </indexterm>Show Block</title>
 	  <para>All Show APIs return a cYAML show block. This show block
@@ -155,20 +155,20 @@ add:
     </section>
     <section>
       <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>show block</secondary>
-        </indexterm>The LNET Configuration C-API</title>
+        </indexterm>The LNet Configuration C-API</title>
       <para/>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>lustre_lnet_config_ni_system</secondary>
           </indexterm>Configuring LNet</title>
         <para/>
         <screen>
 /*
  * lustre_lnet_config_ni_system
- *   Initialize/Uninitialize the lnet NI system.
+ *   Initialize/Uninitialize the LNet NI system.
  *
  *   up - whether to init or uninit the system
  *   load_ni_from_mod - load NI from mod params.
@@ -195,7 +195,7 @@ int lustre_lnet_config_ni_system(bool up, bool load_ni_from_mod,
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>lustre_lnet_enable_routing</secondary>
           </indexterm>Enabling and Disabling Routing</title>
         <para/>
@@ -225,14 +225,14 @@ extern int lustre_lnet_enable_routing(int enable,
 	messages not destined to this node are dropped. </para>
 	<para><emphasis role="bold">Enabling Routing on an already enabled
 	node, or vice versa</emphasis></para>
-        <para>In both these cases the LNET Kernel module ignores this request. </para>
+        <para>In both these cases the LNet Kernel module ignores this request. </para>
         <para><emphasis role="bold">Return Value</emphasis></para>
         <para>-ENOMEM: if there is no memory to allocate buffer pools</para>
         <para>0: if success</para>
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>lustre_lnet_config_route</secondary>
           </indexterm>Adding Routes</title>
         <para/>
@@ -253,7 +253,7 @@ extern int lustre_lnet_config_route(char *nw, char *gw,
         <para><emphasis role="bold">IOCTL to Kernel:</emphasis></para>
         <para>IOC_LIBCFS_ADD_ROUTE</para>
 	<para><emphasis role="bold">Description:</emphasis></para>
-	<para>The LNET Kernel module adds this route to the list of
+	<para>The LNet Kernel module adds this route to the list of
 	existing routes, if one doesn't already exist. If hop parameter is
 	not specified (IE: -1) then the hop count is set to 1.  If the
 	priority parameter is not specified (IE: -1) then the priority is
@@ -269,7 +269,7 @@ extern int lustre_lnet_config_route(char *nw, char *gw,
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>lustre_lnet_del_route</secondary>
           </indexterm>Deleting Routes</title>
         <para/>
@@ -286,7 +286,7 @@ extern int lustre_lnet_del_route(char *nw, char *gw,
         <para><emphasis role="bold">IOCTL to Kernel:</emphasis></para>
         <para>IOC_LIBCFS_DEL_ROUTE</para>
         <para><emphasis role="bold">Description:</emphasis></para>
-        <para>LNET will remove the route which matches the network and gateway passed in. If
+        <para>LNet will remove the route which matches the network and gateway passed in. If
           no route matches, then the operation fails with an appropriate error number.</para>
         <para><emphasis role="bold">Return Value</emphasis></para>
         <para>-ENOENT: if the entry being deleted doesn't exist</para>
@@ -294,7 +294,7 @@ extern int lustre_lnet_del_route(char *nw, char *gw,
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>lustre_lnet_show_route</secondary>
           </indexterm>Showing Routes</title>
         <para/>
@@ -343,7 +343,7 @@ extern int lustre_lnet_show_route(char *nw, char *gw,
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>lustre_lnet_config_net</secondary>
           </indexterm>Adding a Network Interface</title>
         <para/>
@@ -379,7 +379,7 @@ extern int lustre_lnet_config_net(char *net,
 	peer timeout, peer credits, peer buffer credits and credits. The
 	CPU affinity of the network interface being added can also be
 	specified. These parameters become
-	network specific under Dynamic LNET Configuration (DLC), as
+	network specific under Dynamic LNet Configuration (DLC), as
 	opposed to being per LND as it was previously.</para>
         <para>If an already existing network is added the request is ignored.</para>
         <para><emphasis role="bold">Return Value</emphasis></para>
@@ -389,7 +389,7 @@ extern int lustre_lnet_config_net(char *net,
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>lustre_lnet_del_net</secondary>
           </indexterm>Deleting a Network Interface</title>
         <para/>
@@ -416,7 +416,7 @@ extern int lustre_lnet_del_net(char *nw,
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>lustre_lnet_show_net</secondary>
           </indexterm>Showing Network Interfaces</title>
         <para/>
@@ -465,7 +465,7 @@ extern int lustre_lnet_show_net(char *nw, int detail,
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>lustre_lnet_config_buf</secondary>
           </indexterm>Adjusting Router Buffer Pools</title>
         <para/>
@@ -508,7 +508,7 @@ extern int lustre_lnet_config_buf(int tiny,
       </section>
       <section>
         <title><indexterm>
-          <primary>LNET</primary>
+          <primary>LNet</primary>
           <secondary>lustre_lnet_show_buf</secondary>
         </indexterm>Showing Routing information</title>
         <para/>
@@ -574,14 +574,14 @@ extern int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>lustre_lnet_show stats</secondary>
-          </indexterm>Showing LNET Traffic Statistics</title>
+          </indexterm>Showing LNet Traffic Statistics</title>
         <para/>
         <screen>/*
  * lustre_lnet_show_stats
- *   Shows internal LNET statistics.  This is useful to display the
- *   current LNET activity, such as number of messages route, etc
+ *   Shows internal LNet statistics.  This is useful to display the
+ *   current LNet activity, such as number of messages route, etc
  *
  *     seq_no - sequence number of the command
  *     show_rc - YAML structure of the resultant show
@@ -592,8 +592,8 @@ extern int lustre_lnet_show_stats(int seq_no, cYAML **show_rc,
         <para><emphasis role="bold">IOCTL to Kernel:</emphasis></para>
         <para>IOC_LIBCFS_GET_LNET_STATS</para>
         <para><emphasis role="bold">Description:</emphasis></para>
-	<para>This API returns a cYAML block describing the LNET traffic
-	statistics. Statistics are continuously incremented by LNET while
+	<para>This API returns a cYAML block describing the LNet traffic
+	statistics. Statistics are continuously incremented by LNet while
 	it's alive.  This API retuns the statistics at the time of the API
 	call. The statistics include the following</para>
         <para>
@@ -652,7 +652,7 @@ extern int lustre_lnet_show_stats(int seq_no, cYAML **show_rc,
       </section>
       <section>
         <title><indexterm>
-            <primary>LNET</primary>
+            <primary>LNet</primary>
             <secondary>lustre_yaml</secondary>
           </indexterm>Adding/Deleting/Showing Parameters through a YAML Block</title>
         <para/>

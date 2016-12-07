@@ -68,7 +68,7 @@
           <para>Password-free remote access to nodes in the system (provided by <literal>ssh</literal> or <literal>rsh</literal>).</para>
         </listitem>
         <listitem>
-          <para>LNET self-test completed to test that Lustre networking has been properly installed
+          <para>LNet self-test completed to test that Lustre networking has been properly installed
             and configured. See <xref linkend="lnetselftest"/>.</para>
         </listitem>
         <listitem>

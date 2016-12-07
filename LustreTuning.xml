@@ -220,14 +220,14 @@ options mdt mds_num_cpts=[0]</screen>
   <section xml:id="dbdoclet.50438272_73839">
     <title>
     <indexterm>
-      <primary>LNET</primary>
+      <primary>LNet</primary>
       <secondary>tuning</secondary>
     </indexterm>
     <indexterm>
       <primary>tuning</primary>
-      <secondary>LNET</secondary>
-    </indexterm>Tuning LNET Parameters</title>
-    <para>This section describes LNET tunables, the use of which may be
+      <secondary>LNet</secondary>
+    </indexterm>Tuning LNet Parameters</title>
+    <para>This section describes LNet tunables, the use of which may be
     necessary on some systems to improve performance. To test the performance
     of your Lustre network, see 
     <xref linkend='lnetselftest' />.</para>
@@ -277,7 +277,7 @@ options ksocklnd enable_irq_affinity=0
       <para>Lustre software release 2.3 and beyond provide enhanced network
       interface control. The enhancement means that an administrator can bind
       an interface to one or more CPU partitions. Bindings are specified as
-      options to the LNET modules. For more information on specifying module
+      options to the LNet modules. For more information on specifying module
       options, see 
       <xref linkend="dbdoclet.50438293_15350" /></para>
       <para>For example, 
@@ -298,11 +298,11 @@ options ksocklnd enable_irq_affinity=0
       <para>Network interface (NI) credits are shared across all CPU partitions
       (CPT). For example, if a machine has four CPTs and the number of NI
       credits is 512, then each partition has 128 credits. If a large number of
-      CPTs exist on the system, LNET checks and validates the NI credits for
+      CPTs exist on the system, LNet checks and validates the NI credits for
       each CPT to ensure each CPT has a workable number of credits. For
       example, if a machine has 16 CPTs and the number of NI credits is 256,
       then each partition only has 16 credits. 16 NI credits is low and could
-      negatively impact performance. As a result, LNET automatically adjusts
+      negatively impact performance. As a result, LNet automatically adjusts
       the credits to 8*
       <literal>peer_credits</literal>(
       <literal>peer_credits</literal> is 8 by default), so each partition has 64
@@ -310,7 +310,7 @@ options ksocklnd enable_irq_affinity=0
       <para>Increasing the number of 
       <literal>credits</literal>/
       <literal>peer_credits</literal> can improve the performance of high
-      latency networks (at the cost of consuming more memory) by enabling LNET
+      latency networks (at the cost of consuming more memory) by enabling LNet
       to send more inflight messages to a specific network/peer and keep the
       pipeline saturated.</para>
       <para>An administrator can modify the NI credit count using 
@@ -325,7 +325,7 @@ ksocklnd credits=256
 ko2iblnd credits=256
 </screen>
       <note condition="l23">
-        <para>In Lustre software release 2.3 and beyond, LNET may revalidate
+        <para>In Lustre software release 2.3 and beyond, LNet may revalidate
         the NI credits, so the administrator's request may not persist.</para>
       </note>
     </section>
@@ -335,7 +335,7 @@ ko2iblnd credits=256
         <primary>tuning</primary>
         <secondary>router buffers</secondary>
       </indexterm>Router Buffers</title>
-      <para>When a node is set up as an LNET router, three pools of buffers are
+      <para>When a node is set up as an LNet router, three pools of buffers are
       allocated: tiny, small and large. These pools are allocated per CPU
       partition and are used to buffer messages that arrive at the router to be
       forwarded to the next hop. The three different buffer sizes accommodate
@@ -367,7 +367,7 @@ ko2iblnd credits=256
         </listitem>
       </itemizedlist>
       <para>The default setting for router buffers typically results in
-      acceptable performance. LNET automatically sets a default value to reduce
+      acceptable performance. LNet automatically sets a default value to reduce
       the likelihood of resource starvation. The size of a router buffer can be
       modified as shown in the example below. In this example, the size of the
       large buffer is modified using the 
@@ -376,7 +376,7 @@ ko2iblnd credits=256
 lnet large_router_buffers=8192
 </screen>
       <note condition="l23">
-        <para>In Lustre software release 2.3 and beyond, LNET may revalidate
+        <para>In Lustre software release 2.3 and beyond, LNet may revalidate
         the router buffer setting, so the administrator's request may not
         persist.</para>
       </note>
@@ -387,15 +387,15 @@ lnet large_router_buffers=8192
         <primary>tuning</primary>
         <secondary>portal round-robin</secondary>
       </indexterm>Portal Round-Robin</title>
-      <para>Portal round-robin defines the policy LNET applies to deliver
+      <para>Portal round-robin defines the policy LNet applies to deliver
       events and messages to the upper layers. The upper layers are PLRPC
-      service or LNET selftest.</para>
-      <para>If portal round-robin is disabled, LNET will deliver messages to
+      service or LNet selftest.</para>
+      <para>If portal round-robin is disabled, LNet will deliver messages to
       CPTs based on a hash of the source NID. Hence, all messages from a
       specific peer will be handled by the same CPT. This can reduce data
       traffic between CPUs. However, for some workloads, this behavior may
       result in poorly balancing loads across the CPU.</para>
-      <para>If portal round-robin is enabled, LNET will round-robin incoming
+      <para>If portal round-robin is enabled, LNet will round-robin incoming
       events across all CPTs. This may balance load better across the CPU but
       can incur a cross CPU overhead.</para>
       <para>The current policy can be changed by an administrator with 
@@ -435,7 +435,7 @@ lnet large_router_buffers=8192
       </itemizedlist>
     </section>
     <section>
-      <title>LNET Peer Health</title>
+      <title>LNet Peer Health</title>
       <para>Two options are available to help determine peer health:
       <itemizedlist>
         <listitem>
@@ -445,7 +445,7 @@ lnet large_router_buffers=8192
           <literal>peer_timeout</literal> is set to 
           <literal>180sec</literal>, an aliveness query is sent to the peer
           every 180 seconds. This feature only takes effect if the node is
-          configured as an LNET router.</para>
+          configured as an LNet router.</para>
           <para>In a routed environment, the 
           <literal>peer_timeout</literal> feature should always be on (set to a
           value in seconds) on routers. If the router checker has been enabled,
@@ -478,7 +478,7 @@ lnet large_router_buffers=8192
           all the routers corresponding to the NIDs identified in the routes
           parameter setting on the node to determine the status of each router
           interface. The default setting is 1. (For more information about the
-          LNET routes parameter, see 
+          LNet routes parameter, see 
           <xref xmlns:xlink="http://www.w3.org/1999/xlink"
           linkend="dbdoclet.50438216_71227" /></para>
           <para>A router is considered down if any of its NIDs are down. For
@@ -844,7 +844,7 @@ ost.OSS.ost_io.nrs_policies="trr reg"
         <tertiary>first in, first out (FIFO) policy</tertiary>
       </indexterm>First In, First Out (FIFO) policy</title>
       <para>The first in, first out (FIFO) policy handles RPCs in a service in
-      the same order as they arrive from the LNET layer, so no special
+      the same order as they arrive from the LNet layer, so no special
       processing takes place to modify the RPC handling stream. FIFO is the
       default policy for all types of RPCs on all PTLRPC services, and is
       always enabled irrespective of the state of other policies, so that it
@@ -1209,7 +1209,7 @@ $ lctl set_param x.x.x.nrs_tbf_rule=
 </screen>
           <para>The format of '
           <replaceable>nidlist</replaceable>' argument is the same as the
-          format when configuring LNET route. The '
+          format when configuring LNet route. The '
           <replaceable>rate</replaceable>' argument is the RPC rate of the
           rule, means the upper limit number of requests per second.</para>
           <para>Following commands are valid. Please note that a newly started

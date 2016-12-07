@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lnetselftest">
-  <title xml:id="lnetselftest.title">Testing Lustre Network Performance (LNET Self-Test)</title>
-  <para><anchor xml:id="dbdoclet.50438223_36273" xreflabel=""/>This chapter describes the LNET
-    self-test, which is used by site administrators to confirm that Lustre networking (LNET) has
+  <title xml:id="lnetselftest.title">Testing Lustre Network Performance (LNet Self-Test)</title>
+  <para><anchor xml:id="dbdoclet.50438223_36273" xreflabel=""/>This chapter describes the LNet
+    self-test, which is used by site administrators to confirm that Lustre Networking (LNet) has
     been properly installed and configured, and that underlying network software and hardware are
     performing according to expectations. The chapter includes:</para>
   <itemizedlist>
@@ -16,9 +16,9 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438223_91742">
-    <title><indexterm><primary>LNET</primary><secondary>self-test</secondary></indexterm>
-LNET Self-Test Overview</title>
-    <para>LNET self-test is a kernel module that runs over LNET and the Lustre network drivers (LNDs). It is designed to:</para>
+    <title><indexterm><primary>LNet</primary><secondary>self-test</secondary></indexterm>
+LNet Self-Test Overview</title>
+    <para>LNet self-test is a kernel module that runs over LNet and the Lustre network drivers (LNDs). It is designed to:</para>
     <itemizedlist>
       <listitem>
         <para>Test the connection ability of the Lustre network</para>
@@ -30,21 +30,21 @@ LNET Self-Test Overview</title>
         <para>Test performance of the Lustre network</para>
       </listitem>
     </itemizedlist>
-    <para>After you have obtained performance results for your Lustre network, refer to <xref linkend="lustretuning"/> for information about parameters that can be used to tune LNET for optimum performance.</para>
+    <para>After you have obtained performance results for your Lustre network, refer to <xref linkend="lustretuning"/> for information about parameters that can be used to tune LNet for optimum performance.</para>
     <note>
-      <para>Apart from the performance impact, LNET self-test is invisible to the Lustre file
+      <para>Apart from the performance impact, LNet self-test is invisible to the Lustre file
         system.</para>
     </note>
-    <para>An LNET self-test cluster includes two types of nodes:</para>
+    <para>An LNet self-test cluster includes two types of nodes:</para>
     <itemizedlist>
       <listitem>
-        <para><emphasis role="bold">Console node</emphasis>  - A node used to control and monitor an LNET self-test cluster. The console node serves as the user interface of the LNET self-test system and can be any node in the test cluster. All self-test commands are entered from the console node. From the console node, a user can control and monitor the status of the entire LNET self-test cluster (session). The console node is exclusive in that a user cannot control two different sessions from one console node.</para>
+        <para><emphasis role="bold">Console node</emphasis>  - A node used to control and monitor an LNet self-test cluster. The console node serves as the user interface of the LNet self-test system and can be any node in the test cluster. All self-test commands are entered from the console node. From the console node, a user can control and monitor the status of the entire LNet self-test cluster (session). The console node is exclusive in that a user cannot control two different sessions from one console node.</para>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Test nodes</emphasis>  - The nodes on which the tests are run. Test nodes are controlled by the user from the console node; the user does not need to log into them directly.</para>
       </listitem>
     </itemizedlist>
-    <para>LNET self-test has two user utilities:</para>
+    <para>LNet self-test has two user utilities:</para>
     <itemizedlist>
       <listitem>
         <para><emphasis role="bold">
@@ -54,7 +54,7 @@ LNET Self-Test Overview</title>
       <listitem>
         <para><emphasis role="bold">
             <literal>lstclient</literal>
-          </emphasis>  - The userspace LNET self-test program (run on a <emphasis>test node</emphasis>). The <literal>lstclient</literal> utility is linked with userspace LNDs and LNET. This utility is not needed if only kernel space LNET and LNDs are used.</para>
+          </emphasis>  - The userspace LNet self-test program (run on a <emphasis>test node</emphasis>). The <literal>lstclient</literal> utility is linked with userspace LNDs and LNet. This utility is not needed if only kernel space LNet and LNDs are used.</para>
       </listitem>
     </itemizedlist>
     <note>
@@ -62,7 +62,7 @@ LNET Self-Test Overview</title>
     </note>
     <section remap="h3">
       <title>Prerequisites</title>
-      <para>To run LNET self-test, these modules must be loaded on both <emphasis>console nodes</emphasis> and <emphasis>test nodes</emphasis>:</para>
+      <para>To run LNet self-test, these modules must be loaded on both <emphasis>console nodes</emphasis> and <emphasis>test nodes</emphasis>:</para>
       <itemizedlist>
         <listitem>
           <para><literal>libcfs</literal></para>
@@ -79,15 +79,15 @@ LNET Self-Test Overview</title>
       </itemizedlist>
       <para>To load the required modules, run:</para>
       <screen>modprobe lnet_selftest </screen>
-      <para>This command recursively loads the modules on which LNET self-test depends.</para>
+      <para>This command recursively loads the modules on which LNet self-test depends.</para>
       <note>
         <para>While the <emphasis>console node</emphasis> and <emphasis>test nodes</emphasis> require all the prerequisite modules to be loaded, userspace test nodes do not require these modules.</para>
       </note>
     </section>
   </section>
   <section xml:id="dbdoclet.50438223_48138">
-    <title>Using LNET Self-Test</title>
-    <para>This section describes how to create and run an LNET self-test. The examples shown are for a test that simulates the traffic pattern of a set of Lustre servers on a TCP network accessed by Lustre clients on an InfiniBand network connected via LNET routers. In this example, half the clients are reading and half the clients are writing.</para>
+    <title>Using LNet Self-Test</title>
+    <para>This section describes how to create and run an LNet self-test. The examples shown are for a test that simulates the traffic pattern of a set of Lustre servers on a TCP network accessed by Lustre clients on an InfiniBand network connected via LNet routers. In this example, half the clients are reading and half the clients are writing.</para>
     <section remap="h3">
       <title>Creating a Session</title>
       <para>A <emphasis>session</emphasis> is a set of processes that run on a <emphasis>test node</emphasis>. Only one session can be run at a time on a test node to ensure that the session has exclusive use of the node. The console node is used to create, change or destroy a session (<literal>new_session</literal>, <literal>end_session</literal>, <literal>show_session</literal>). For more about session parameters, see <xref linkend="dbdoclet.50438223_91247"/>.</para>
@@ -98,7 +98,7 @@ lst new_session read_write</screen>
     </section>
     <section remap="h3">
       <title>Setting Up Groups</title>
-      <para>A <emphasis>group</emphasis> is a named collection of nodes. Any number of groups can exist in a single LNET self-test session. Group membership is not restricted in that a <emphasis>test node</emphasis> can be included in any number of groups.</para>
+      <para>A <emphasis>group</emphasis> is a named collection of nodes. Any number of groups can exist in a single LNet self-test session. Group membership is not restricted in that a <emphasis>test node</emphasis> can be included in any number of groups.</para>
       <para>Each node in a group has a rank, determined by the order in which it was added to the group. The rank is used to establish test traffic patterns.</para>
       <para>A user can only control nodes in his/her session. To allocate nodes to the session, the user needs to add nodes to a group (of the session). All nodes in a group can be referenced by the group name. A node can be allocated to multiple groups of a session.</para>
       <para>In the following example, three groups are established on a console node:</para>
@@ -108,7 +108,7 @@ lst add_group writers 192.168.1.[2-254/2]@o2ib</screen>
       <para>These three groups include:</para>
       <itemizedlist>
         <listitem>
-          <para>Nodes that will function as &apos;servers&apos; to be accessed by &apos;clients&apos; during the LNET self-test session</para>
+          <para>Nodes that will function as &apos;servers&apos; to be accessed by &apos;clients&apos; during the LNet self-test session</para>
         </listitem>
         <listitem>
           <para>Nodes that will function as &apos;clients&apos; that will simulate <emphasis>reading</emphasis> data from the &apos;servers&apos;</para>
@@ -153,7 +153,7 @@ lst add_test --batch bulk_rw --from writers --to servers \
     </section>
     <section remap="h3">
       <title>Sample Script</title>
-      <para>This sample LNET self-test script simulates the traffic pattern of a set of Lustre servers on a TCP network, accessed by Lustre clients on an InfiniBand network (connected via LNET routers). In this example, half the clients are reading and half the clients are writing.</para>
+      <para>This sample LNet self-test script simulates the traffic pattern of a set of Lustre servers on a TCP network, accessed by Lustre clients on an InfiniBand network (connected via LNet routers). In this example, half the clients are reading and half the clients are writing.</para>
       <para>Run this script on the console node:</para>
       <screen>#!/bin/bash
 export LST_SESSION=$$
@@ -178,8 +178,8 @@ lst end_session</screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438223_27277">
-    <title>LNET Self-Test Command Reference</title>
-    <para>The LNET self-test (<literal>lst</literal>) utility is used to issue LNET self-test commands. The <literal>lst</literal> utility takes a number of command line arguments. The first argument is the command name and subsequent arguments are command-specific.</para>
+    <title>LNet Self-Test Command Reference</title>
+    <para>The LNet self-test (<literal>lst</literal>) utility is used to issue LNet self-test commands. The <literal>lst</literal> utility takes a number of command line arguments. The first argument is the command name and subsequent arguments are command-specific.</para>
     <section xml:id="dbdoclet.50438223_91247">
       <title>Session Commands</title>
       <para>This section describes <literal>lst</literal> session commands.</para>
@@ -288,7 +288,7 @@ lst end_session</screen>
                 <para> <literal><replaceable>NIDs</replaceable></literal></para>
               </entry>
               <entry>
-                <para>A string that may be expanded to include one or more LNET NIDs.</para>
+                <para>A string that may be expanded to include one or more LNet NIDs.</para>
               </entry>
             </row>
           </tbody>
@@ -538,7 +538,7 @@ Total 1 node</screen>
                 <literal>--server_mode</literal>
               </entry>
               <entry>
-                <para> When included, forces LNET to behave as a server, such as starting an acceptor if the underlying NID needs it or using privileged ports. Only root is allowed to use the <literal>--server_mode</literal> option.</para>
+                <para> When included, forces LNet to behave as a server, such as starting an acceptor if the underlying NID needs it or using privileged ports. Only root is allowed to use the <literal>--server_mode</literal> option.</para>
               </entry>
             </row>
           </tbody>
@@ -1085,7 +1085,7 @@ $ lst stat clients
       <para>where servers is the name of a test group created by <literal>lst add_group</literal></para>
       <para>Specifying a <literal><replaceable>NID</replaceable></literal> range (<literal><replaceable>NIDs</replaceable></literal>) causes statistics to be gathered for selected nodes. For example:</para>
       <screen>$ lst stat 192.168.0.[1-100/2]@tcp</screen>
-      <para>Only LNET performance statistics are available. By default, all statistics
+      <para>Only LNet performance statistics are available. By default, all statistics
 information is displayed. Users can specify additional information with these options.</para>
       <para><literal>show_error [--session] [<replaceable>group</replaceable>|<replaceable>NIDs</replaceable>]... </literal></para>
       <para>Lists the number of failed RPCs on test nodes.</para>

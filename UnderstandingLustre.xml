@@ -463,7 +463,7 @@ xml:id="understandinglustre">
     </indexterm>Lustre Components</title>
     <para>An installation of the Lustre software includes a management server
     (MGS) and one or more Lustre file systems interconnected with Lustre
-    networking (LNET).</para>
+    networking (LNet).</para>
     <para>A basic configuration of Lustre file system components is shown in
     <xref linkend="understandinglustre.fig.cluster" />.</para>
     <figure xml:id="understandinglustre.fig.cluster">
@@ -656,12 +656,12 @@ xml:id="understandinglustre">
       <title>
       <indexterm>
         <primary>Lustre</primary>
-        <secondary>LNET</secondary>
-      </indexterm>Lustre Networking (LNET)</title>
-      <para>Lustre Networking (LNET) is a custom networking API that provides
+        <secondary>LNet</secondary>
+      </indexterm>Lustre Networking (LNet)</title>
+      <para>Lustre Networking (LNet) is a custom networking API that provides
       the communication infrastructure that handles metadata and file I/O data
       for the Lustre file system servers and clients. For more information
-      about LNET, see
+      about LNet, see
       <xref linkend="understandinglustrenetworking" />.</para>
     </section>
     <section remap="h3">

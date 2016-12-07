@@ -643,7 +643,7 @@ lctl set_param -P -d
       </section>
       <section xml:id="dbdoclet.50438194_88217">
         <title>Listing Parameters</title>
-        <para>To list Lustre or LNET parameters that are available to set, use
+        <para>To list Lustre or LNet parameters that are available to set, use
         the 
         <literal>lctl list_param</literal> command. For example:</para>
         <screen>
@@ -711,7 +711,7 @@ osc.myth-OST0004-osc-ffff8800376bdc00.cur_grant_bytes=33808384
     <literal>--mgsnode=</literal> or 
     <literal>--servicenode=</literal>).</para>
     <para>To display the NIDs of all servers in networks configured to work
-    with the Lustre file system, run (while LNET is running):</para>
+    with the Lustre file system, run (while LNet is running):</para>
     <screen>
 lctl list_nids
 </screen>

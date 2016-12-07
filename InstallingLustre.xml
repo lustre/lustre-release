@@ -276,9 +276,9 @@ xml:id="installinglustre">
         <listitem>
           <para>
           <emphasis role="bold">
-            <emphasis role="italic">Lustre LNET network driver (LND)</emphasis>
+            <emphasis role="italic">Lustre LNet network driver (LND)</emphasis>
           </emphasis>. The Lustre LNDs provided with the Lustre software are
-          listed in the table below. For more information about Lustre LNET,
+          listed in the table below. For more information about Lustre LNet,
           see 
           <xref xmlns:xlink="http://www.w3.org/1999/xlink"
           linkend="understandinglustrenetworking" />.</para>
@@ -579,9 +579,9 @@ rpm -qa|egrep "lustre|wc"|sort
         </orderedlist>
       </listitem>
     </orderedlist>
-    <para>To configure LNET, go to 
+    <para>To configure LNet, go to 
     <xref linkend="configuringlnet" />. If default settings will be used for
-    LNET, go to 
+    LNet, go to 
     <xref linkend="configuringlustre" />.</para>
   </section>
 </chapter>

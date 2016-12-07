@@ -903,7 +903,7 @@
       </listitem>
     </itemizedlist>
     <para>Lustre networks and routing are configured and managed by specifying parameters to the
-      Lustre networking (<literal>lnet</literal>) module in
+      Lustre Networking (<literal>lnet</literal>) module in
         <literal>/etc/modprobe.d/lustre.conf</literal>.</para>
     <para>To prepare to configure Lustre networking, complete the following steps:</para>
     <orderedlist>
@@ -921,18 +921,18 @@
       <listitem>
         <para><emphasis role="bold">If routing is needed, identify the nodes to be used to route traffic between networks.</emphasis></para>
         <para>If you are using multiple network types, then you will need a router. Any node with
-          appropriate interfaces can route Lustre networking (LNET) traffic between different
+          appropriate interfaces can route Lustre networking (LNet) traffic between different
           network hardware types or topologies --the node may be a server, a client, or a standalone
-          router. LNET can route messages between different network types (such as
+          router. LNet can route messages between different network types (such as
           TCP-to-InfiniBand) or across different topologies (such as bridging two InfiniBand or
           TCP/IP networks). Routing will be configured in <xref linkend="configuringlnet"/>.</para>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Identify the network interfaces to include
-	in or exclude from LNET.</emphasis></para>
-        <para>If not explicitly specified, LNET uses either the first available
+	in or exclude from LNet.</emphasis></para>
+        <para>If not explicitly specified, LNet uses either the first available
 	interface or a pre-defined default for a given network type. Interfaces
-	that LNET should not use (such as an administrative network or
+	that LNet should not use (such as an administrative network or
 	IP-over-IB), can be excluded.</para>
         <para>Network interfaces to be used or excluded will be specified using
 	the lnet kernel module parameters <literal>networks</literal> and
