@@ -39,7 +39,7 @@
 
 #include "selftest.h"
 
-lst_sid_t LST_INVALID_SID = {LNET_NID_ANY, -1};
+struct lst_sid LST_INVALID_SID = {LNET_NID_ANY, -1};
 
 static int session_timeout = 100;
 module_param(session_timeout, int, 0444);
@@ -264,7 +264,7 @@ sfw_session_expired (void *data)
 }
 
 static inline void
-sfw_init_session(sfw_session_t *sn, lst_sid_t sid,
+sfw_init_session(sfw_session_t *sn, struct lst_sid sid,
 		 unsigned features, const char *name)
 {
         stt_timer_t *timer = &sn->sn_timer;
@@ -330,7 +330,7 @@ sfw_client_rpc_fini (srpc_client_rpc_t *rpc)
 }
 
 static sfw_batch_t *
-sfw_find_batch (lst_bid_t bid)
+sfw_find_batch(struct lst_bid bid)
 {
 	sfw_session_t *sn = sfw_data.fw_session;
 	sfw_batch_t   *bat;
@@ -346,7 +346,7 @@ sfw_find_batch (lst_bid_t bid)
 }
 
 static sfw_batch_t *
-sfw_bid2batch (lst_bid_t bid)
+sfw_bid2batch(struct lst_bid bid)
 {
         sfw_session_t *sn = sfw_data.fw_session;
         sfw_batch_t   *bat;
@@ -375,7 +375,7 @@ static int
 sfw_get_stats (srpc_stat_reqst_t *request, srpc_stat_reply_t *reply)
 {
         sfw_session_t  *sn = sfw_data.fw_session;
-        sfw_counters_t *cnt = &reply->str_fw;
+	struct sfw_counters *cnt = &reply->str_fw;
         sfw_batch_t    *bat;
         struct timeval  tv;
 

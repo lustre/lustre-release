@@ -321,7 +321,7 @@ typedef struct srpc_service {
 typedef struct {
 	/* chain on fw_zombie_sessions */
 	struct list_head	sn_list;
-	lst_sid_t		sn_id;		/* unique identifier */
+	struct lst_sid		sn_id;		/* unique identifier */
 	/* # seconds' inactivity to expire */
 	unsigned int		sn_timeout;
 	int			sn_timer_active;
@@ -340,7 +340,7 @@ typedef struct {
 
 typedef struct {
 	struct list_head	bat_list;	/* chain on sn_batches */
-	lst_bid_t		bat_id;		/* batch id */
+	struct lst_bid		bat_id;		/* batch id */
 	int			bat_error;	/* error code of batch */
 	sfw_session_t		*bat_session;	/* batch's session */
 	atomic_t		bat_nactive;	/* # of active tests */
@@ -442,8 +442,8 @@ void srpc_abort_service(srpc_service_t *sv);
 int srpc_finish_service(srpc_service_t *sv);
 int srpc_service_add_buffers(srpc_service_t *sv, int nbuffer);
 void srpc_service_remove_buffers(srpc_service_t *sv, int nbuffer);
-void srpc_get_counters(srpc_counters_t *cnt);
-void srpc_set_counters(const srpc_counters_t *cnt);
+void srpc_get_counters(struct srpc_counters *cnt);
+void srpc_set_counters(const struct srpc_counters *cnt);
 
 extern struct cfs_wi_sched *lst_sched_serial;
 extern struct cfs_wi_sched **lst_sched_test;

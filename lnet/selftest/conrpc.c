@@ -44,7 +44,7 @@
 #include "console.h"
 
 void lstcon_rpc_stat_reply(lstcon_rpc_trans_t *, srpc_msg_t *,
-			   lstcon_node_t *, lstcon_trans_stat_t *);
+			   lstcon_node_t *, struct lstcon_trans_stat *);
 
 static void
 lstcon_rpc_done(srpc_client_rpc_t *rpc)
@@ -418,7 +418,7 @@ lstcon_rpc_get_reply(lstcon_rpc_t *crpc, srpc_msg_t **msgpp)
 }
 
 void
-lstcon_rpc_trans_stat(lstcon_rpc_trans_t *trans, lstcon_trans_stat_t *stat)
+lstcon_rpc_trans_stat(lstcon_rpc_trans_t *trans, struct lstcon_trans_stat *stat)
 {
 	lstcon_rpc_t	*crpc;
 	srpc_msg_t	*rep;
@@ -470,7 +470,7 @@ lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
 {
 	struct list_head      tmp;
 	struct list_head     __user *next;
-        lstcon_rpc_ent_t     *ent;
+	struct lstcon_rpc_ent     *ent;
         srpc_generic_reply_t *rep;
         lstcon_rpc_t         *crpc;
         srpc_msg_t           *msg;
@@ -493,7 +493,7 @@ lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
 
 		next = tmp.next;
 
-		ent = list_entry(next, lstcon_rpc_ent_t, rpe_link);
+		ent = list_entry(next, struct lstcon_rpc_ent, rpe_link);
 
 		LASSERT(crpc->crp_stamp != 0);
 
@@ -521,7 +521,7 @@ lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
 		rep = (srpc_generic_reply_t *)&msg->msg_body.reply;
 
 		if (copy_to_user(&ent->rpe_sid,
-				 &rep->sid, sizeof(lst_sid_t)) ||
+				 &rep->sid, sizeof(rep->sid)) ||
 		    copy_to_user(&ent->rpe_fwk_errno,
 				 &rep->status, sizeof(rep->status)))
 			return -EFAULT;
@@ -769,7 +769,7 @@ lstcon_dstnodes_prep(lstcon_group_t *grp, int idx,
 }
 
 static int
-lstcon_pingrpc_prep(lst_test_ping_param_t *param, srpc_test_reqst_t *req)
+lstcon_pingrpc_prep(struct lst_test_ping_param *param, srpc_test_reqst_t *req)
 {
         test_ping_req_t *prq = &req->tsr_u.ping;
 
@@ -780,7 +780,7 @@ lstcon_pingrpc_prep(lst_test_ping_param_t *param, srpc_test_reqst_t *req)
 }
 
 static int
-lstcon_bulkrpc_v0_prep(lst_test_bulk_param_t *param, srpc_test_reqst_t *req)
+lstcon_bulkrpc_v0_prep(struct lst_test_bulk_param *param, srpc_test_reqst_t *req)
 {
 	test_bulk_req_t *brq = &req->tsr_u.bulk_v0;
 
@@ -793,7 +793,7 @@ lstcon_bulkrpc_v0_prep(lst_test_bulk_param_t *param, srpc_test_reqst_t *req)
 }
 
 static int
-lstcon_bulkrpc_v1_prep(lst_test_bulk_param_t *param, bool is_client,
+lstcon_bulkrpc_v1_prep(struct lst_test_bulk_param *param, bool is_client,
 		       srpc_test_reqst_t *req)
 {
 	test_bulk_req_v1_t *brq = &req->tsr_u.bulk_v1;
@@ -890,17 +890,17 @@ lstcon_testrpc_prep(lstcon_node_t *nd, int transop, unsigned feats,
         switch (test->tes_type) {
         case LST_TEST_PING:
                 trq->tsr_service = SRPC_SERVICE_PING;
-		rc = lstcon_pingrpc_prep((lst_test_ping_param_t *)
+		rc = lstcon_pingrpc_prep((struct lst_test_ping_param *)
 					 &test->tes_param[0], trq);
 		break;
 
 	case LST_TEST_BULK:
 		trq->tsr_service = SRPC_SERVICE_BRW;
 		if ((feats & LST_FEAT_BULK_LEN) == 0) {
-			rc = lstcon_bulkrpc_v0_prep((lst_test_bulk_param_t *)
+			rc = lstcon_bulkrpc_v0_prep((struct lst_test_bulk_param *)
 						    &test->tes_param[0], trq);
 		} else {
-			rc = lstcon_bulkrpc_v1_prep((lst_test_bulk_param_t *)
+			rc = lstcon_bulkrpc_v1_prep((struct lst_test_bulk_param *)
 						    &test->tes_param[0],
 						    trq->tsr_is_client, trq);
 		}
@@ -963,7 +963,7 @@ lstcon_sesnew_stat_reply(lstcon_rpc_trans_t *trans,
 
 void
 lstcon_rpc_stat_reply(lstcon_rpc_trans_t *trans, srpc_msg_t *msg,
-                      lstcon_node_t *nd, lstcon_trans_stat_t *stat)
+		      lstcon_node_t *nd, struct lstcon_trans_stat *stat)
 {
         srpc_rmsn_reply_t  *rmsn_rep;
         srpc_debug_reply_t *dbg_rep;
@@ -1319,7 +1319,7 @@ lstcon_rpc_pinger_stop(void)
         lstcon_rpc_trans_stat(console_session.ses_ping, lstcon_trans_stat());
         lstcon_rpc_trans_destroy(console_session.ses_ping);
 
-        memset(lstcon_trans_stat(), 0, sizeof(lstcon_trans_stat_t));
+	memset(lstcon_trans_stat(), 0, sizeof(struct lstcon_trans_stat));
 
         console_session.ses_ping = NULL;
 }
