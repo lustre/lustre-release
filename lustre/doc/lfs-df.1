@@ -1,0 +1,83 @@
+.TH lfs-df 1 "2016 Dec 7" Lustre "user utilities"
+.SH NAME
+lfs df \- report Lustre filesystem disk usage
+.SH SYNOPSIS
+.BR "lfs df" " [" -i "] [" -h "] [" --lazy "] [" --pool | -p
+.IR <fsname> [. <pool> ]]
+.RB [ -v ]
+.RI [ path ]
+.SH DESCRIPTION
+.B lfs df
+displays filesystem usage information by default for each Lustre
+filesystem currently mounted on that node, or for the filesystem
+that contains
+.I path
+if given. It displaying current usage and totals for each MDT and
+OST separately, as well as a per-filesystem summary that matches
+.BR df (1)
+output for each filesystem.
+.SH OPTIONS
+The various options supported by
+.B lfs df
+are listed and explained below:
+.TP
+.BR -h ", " --human-readable
+Print output in a human readable format (e.g. 16.3T, 4.25P).
+Suffixes are SI base-2 units (i.e. 1 GiB = 1024 MiB).
+.TP
+.BR -i ", " --inodes
+Print information about the inode usage and totals for the MDTs and
+OSTs rather than space usage.
+.TP
+.BR -l ", " --lazy
+Do not attempt to contact any OST or MDT not currently connected to
+the client.  This avoids blocking the
+.B lfs df
+output if an OST is down, and only returns the space on the OSTs that
+can currently be accessed.
+.TP
+.BR -p ", " --pool=\fR[\fIfsname\fR.]\fIpool
+Show only OSTs that are in the specified
+.IR pool .
+If multiple filesystems are mounted, list OSTs in
+.I pool
+for every filesystem, or limit the display to only a pool for a
+specific filesystem if
+.I fsname.pool
+is given.  Specifying both the fsname and pool like:
+.br
+.BI "lfs df --pool=" fsname.pool
+.br
+is equivalent to specifying the mountpoint for the given
+.IR fsname :
+.br
+.BI "lfs df --pool=" "pool /mnt/fsname"
+.TP
+.BR -v ", " --verbose
+Show deactivated MDTs and OSTs in the listing.  By default, any
+MDTs and OSTs that are deactivated by the administrator are not shown.
+However, targets that are only temporarily inaccessible are still shown.
+.SH EXAMPLES
+.TP
+.B $ lfs df -h /mnt/testfs
+Lists space usage per OST and MDT for the
+.B testfs
+filesystem in human readable format.
+.TP
+.B $ lfs df -i
+List inode usage per OST and MDT for all mounted Lustre filesystems.
+.TP
+.B $ lfs df --pool ssd /mnt/testfs
+List space usage for only the
+.B ssd
+pool of the
+.B testfs
+filesystem.
+.TP
+.B $ lfs df -v /mnt/testfs
+List all MDTs and OSTs for the
+.B testfs
+filesystem, even if not currently connected.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lustre (7)

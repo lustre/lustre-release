@@ -13,7 +13,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs data_version [-n] \fB<filename>\fR
 .br
-.B lfs df [-i] [-h] [--lazy] [--pool|-p <fsname>[.<pool>] [path]
+.B lfs df [-ihlv] [--pool|-p <fsname>[.<pool>]] [path]
 .br
 .B lfs fid2path [--link <linkno>] <fsname|rootpath> <fid> ...
 .br
@@ -126,16 +126,12 @@ Changelog consumers must be registered on the MDT node using \fBlctl\fR.
 .B check
 Display the status of MDS or OSTs (as specified in the command) or all the servers (MDS and OSTs)
 .TP
-.B df [-i] [-h] [--lazy] [--pool|-p <fsname>[.<pool>] [path]
-Report filesystem disk space usage or inodes usage (with \fB-i\fR) of each
-MDT/OST, or a subset of OSTs if a pool is specified with \fB-p\fR.  By default
-print the usage of all mounted Lustre filesystems, otherwise if \fBpath\fR is
-specified print only the usage of that filesystem.  If \fB-h\fR is given, the
-output is printed in \fIh\fRuman readable format, using SI base-2 suffixes
-for \fBM\fRega-, \fBG\fRiga-, \fBT\fRera-, \fBP\fReta-, or \fBE\fRxabytes.
-The \fB--lazy\fR/\fB-l\fR option skips any OST that is currently disconnected
-from the client.  This avoids blocking the \fBdf\fR output if an OST is down,
-and only returns the space on the OSTs that can currently be accessed.
+.B df
+See
+.BR lfs-df (1)
+for details of
+.B lfs df
+usage.
 .TP
 .B find
 To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST or OSTs), \fB--size\fR (file has size in bytes, or \fBk\fRilo-, \fBM\fRega-, \fBG\fRiga-, \fBT\fRera-, \fBP\fReta-, or \fBE\fRxabytes if a suffix is given), \fB--type\fR (file has the type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory, \fBp\fRipe, \fBf\fRile, sym\fBl\fRink, \fBs\fRocket, or \fBD\fRoor (Solaris)), \fB--uid\fR (file has specific numeric user ID), \fB--user\fR (file owned by specific user, numeric user ID allowed), \fB--gid\fR (file has specific group ID), \fB--group\fR (file belongs to specific group, numeric group ID allowed), \fB--layout\fR (file has a raid0 layout or is released). The option \fB--maxdepth\fR limits find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline or NUL character correspondingly.  Using \fB!\fR before an option negates its meaning (\fIfiles NOT matching the parameter\fR).  Using \fB+\fR before a numeric value means \fIfiles with the parameter OR MORE\fR, while \fB-\fR before a numeric value means \fIfiles with the parameter OR LESS\fR.
@@ -380,15 +376,6 @@ List all the OSTs
 .B $ lfs mdts
 List all the MDTs
 .TP
-.B $ lfs df -h
-Lists space usage per OST and MDT in human readable format.
-.TP
-.B $ lfs df -i
-Lists inode usage per OST and MDT
-.TP
-.B $ lfs df --pool <filesystem>[.<pool>] | <pathname>
-List space or inode usage for a specific OST pool
-.TP
 .B $ lfs quota -u bob /mnt/lustre
 List quotas of user `bob'
 .TP
@@ -418,6 +405,7 @@ The \fBlfs find\fR command isn't as comprehensive as \fBfind\fR(1).
 .SH AUTHOR
 The lfs command is part of the Lustre filesystem.
 .SH SEE ALSO
+.BR lfs-df (1),
 .BR lfs-hsm (1),
 .BR lfs-setdirstripe (1),
 .BR lfs-getdirstripe (1),
