@@ -34,7 +34,7 @@
 
 MANFILES = lustre.7 lfs.1 mount.lustre.8 lctl.8 lnetctl.8 \
 	llverdev.8 llbackup.8 llapi_quotactl.3 llobdstat.8 llstat.8 \
-	plot-llstat.8 l_getgroups.8 lst.8 routerstat.8 llog_reader.8 \
+	plot-llstat.8 l_getidentity.8 lst.8 routerstat.8 llog_reader.8 \
 	llapi_file_open.3 llapi_file_create.3 llapi_file_get_stripe.3 \
 	lustre_rsync.8 lfs_migrate.1 lhbadm.8 ldev.8 ldev.conf.5 nids.5 \
 	lfs-hsm.1 llapi_hsm_state_get.3 llapi_hsm_state_set.3 \

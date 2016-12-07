@@ -1,0 +1,33 @@
+.TH l_getidentity 1 "Dec 7, 2016" Lustre "utilities"
+.SH NAME
+l_getidentity \- Handle Lustre user/group cache upcall
+.SH SYNOPSIS
+.B "l_getidentity {-d | mdtname} uid"
+.SH DESCRIPTION
+The identity upcall command specifies the path to an executable that,
+when properly installed, is invoked to resolve the numeric
+.I uid
+to a group membership list.
+.LP
+.B l_getidentity
+is the reference implementation of the user/group cache upcall.
+This command is normally run directly by the Lustre MDS service
+and specifies the
+.I mdtname
+argument for the MDT that should be updated.
+.SH OPTIONS
+.TP
+.B -d
+Run in debug mode and print supplementary groups information for
+.I uid
+to
+.B stdout
+instead of updating Lustre.
+.SH EXAMPLES
+The identity upcall command can be specified via:
+.br
+.RI "lctl set_param mdt." mdtname .identity_upcall= path_to_upcall
+.SH FILES
+.RI /{proc,sys}/fs/lustre/mdt/ mdt-service /identity_upcall
+.SH SEE ALSO
+Lustre Programming Interfaces section of Lustre Operations Manual.
