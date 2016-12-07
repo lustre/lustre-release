@@ -612,14 +612,22 @@ over all OSTs.</screen>
       </section>
       <section remap="h4">
         <title>Visualizing Results</title>
-        <para>It is useful to import the <literal>obdfilter-survey</literal> script summary data (it
-          is fixed width) into Excel (or any graphing package) and graph the bandwidth versus the
-          number of threads for varying numbers of concurrent regions. This shows how the OSS
-          performs for a given number of concurrently-accessed objects (files) with varying numbers
-          of I/Os in flight.</para>
-        <para>It is also useful to monitor and record average disk I/O sizes during each test using the &apos;disk io size&apos; histogram in the file <literal>/proc/fs/lustre/obdfilter/</literal> (see <xref linkend="dbdoclet.50438271_55057"/> for details). These numbers help identify problems in the system when full-sized I/Os are not submitted to the underlying disk. This may be caused by problems in the device driver or Linux block layer.</para>
-        <screen> */brw_stats</screen>
-        <para>The <literal>plot-obdfilter</literal> script included in the I/O toolkit is an example of processing output files to a .csv format and plotting a graph using <literal>gnuplot</literal>.</para>
+        <para>It is useful to import the <literal>obdfilter-survey</literal>
+        script summary data (it is fixed width) into Excel (or any graphing
+        package) and graph the bandwidth versus the number of threads for
+        varying numbers of concurrent regions. This shows how the OSS performs
+        for a given number of concurrently-accessed objects (files) with varying
+        numbers of I/Os in flight.</para>
+        <para>It is also useful to monitor and record average disk I/O sizes
+        during each test using the &apos;disk io size&apos; histogram in the
+        file <literal>/proc/fs/lustre/obdfilter/*/brw_stats</literal>
+        (see <xref linkend="dbdoclet.50438271_55057"/> for details). These
+        numbers help identify problems in the system when full-sized I/Os are
+        not submitted to the underlying disk. This may be caused by problems in
+        the device driver or Linux block layer.</para>
+        <para>The <literal>plot-obdfilter</literal> script included in the I/O
+        toolkit is an example of processing output files to a .csv format and
+        plotting a graph using <literal>gnuplot</literal>.</para>
       </section>
     </section>
   </section>
