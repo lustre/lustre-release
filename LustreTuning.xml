@@ -1493,6 +1493,56 @@ $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp stop loginnode"
         </screen>
       </section>
   </section>
+  <section condition="l29">
+      <title>
+          <indexterm>
+              <primary>tuning</primary>
+              <secondary>Large Bulk IO</secondary>
+          </indexterm>
+          Large Bulk IO (16MB RPC)
+      </title>
+      <section><title>Overview</title>
+          <para>Beginning with Lustre 2.9, Lustre is extended to support RPCs up
+          to 16MB in size. By enabling a larger RPC size, fewer RPCs will be
+          required to transfer the same amount of data between clients and
+          servers.  With a larger RPC size, the OST can submit more data to the
+          underlying disks at once, therefore it can produce larger disk I/Os
+          to fully utilize the increasing bandwidth of disks.</para>
+          <para>At client connecting time, clients will negotiate with
+          servers for the RPC size it is going to use.</para>
+          <para>A new parameter, <literal>brw_size</literal>, is introduced on
+          the OST to tell the client the preferred IO size.  All clients that
+          talk to this target should never send an RPC greater than this size.
+          </para>
+      </section>
+      <section><title>Usage</title>
+          <para>In order to enable a larger RPC size,
+          <literal>brw_size</literal> must be changed to an IO size value up to
+          16MB.  To temporarily change <literal>brw_size</literal>, the
+          following command should be run on the OSS:</para>
+          <screen>oss# lctl set_param obdfilter.<replaceable>fsname</replaceable>-OST*.brw_size=16</screen>
+          <para>To persistently change <literal>brw_size</literal>, one of the following
+          commands should be run on the OSS:</para>
+          <screen>oss# lctl set_param -P obdfilter.<replaceable>fsname</replaceable>-OST*.brw_size=16</screen>
+          <screen>oss# lctl conf_param <replaceable>fsname</replaceable>-OST*.obdfilter.brw_size=16</screen>
+          <para>When a client connects to an OST target, it will fetch
+          <literal>brw_size</literal> from the target and pick the maximum value
+          of <literal>brw_size</literal> and its local setting for
+          <literal>max_pages_per_rpc</literal> as the actual RPC size.
+          Therefore, the <literal>max_pages_per_rpc</literal> on the client side
+          would have to be set to 16M, or 4096 if the PAGESIZE is 4KB, to enable
+          a 16MB RPC.  To temporarily make the change, the following command
+          should be run on the client to set
+          <literal>max_pages_per_rpc</literal>:</para>
+          <screen>client$ lctl set_param osc.<replaceable>fsname</replaceable>-OST*.max_pages_per_rpc=16M</screen>
+          <para>To persistently make this change, the following command should
+          be run:</para>
+          <screen>client$ lctl conf_param <replaceable>fsname</replaceable>-OST*.osc.max_pages_per_rpc=16M</screen>
+          <caution><para>The <literal>brw_size</literal> of an OST can be
+          changed on the fly.  However, clients have to be remounted to
+          renegotiate the new RPC size.</para></caution>
+      </section>
+  </section>
   <section xml:id="dbdoclet.50438272_80545">
     <title>
     <indexterm>
