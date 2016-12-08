@@ -21,6 +21,8 @@
  *
  * This code handles user interaction with the configuration interface
  * to the Lustre file system to fine tune it.
+ *
+ * Copyright (c) 2016 Intel Corporation.
  */
 #include <errno.h>
 #include <stdint.h>

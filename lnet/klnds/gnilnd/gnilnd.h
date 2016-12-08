@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2009-2012 Cray, Inc.
  *
- * Copyright (c) 2014, Intel Corporation.
+ * Copyright (c) 2014, 2016, Intel Corporation.
  *
  *   Derived from work by: Eric Barton <eric@bartonsoftware.com>
  *   Author: Nic Henke <nic@cray.com>

@@ -19,6 +19,8 @@
  * LGPL HEADER END
  *
  * Copyright (c) 2015, James Simmons <jsimmons@infradead.org>
+ *
+ * Copyright (c) 2016, Intel Corporation.
  */
 
 #ifndef LIB_LND_CONFIG_API_H

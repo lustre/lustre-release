@@ -6,7 +6,7 @@
  * (C) Copyright 2012 Commissariat a l'energie atomique et aux energies
  *     alternatives
  *
- * Copyright (c) 2013, 2015, Intel Corporation.
+ * Copyright (c) 2013, 2016, Intel Corporation.
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the GNU Lesser General Public License

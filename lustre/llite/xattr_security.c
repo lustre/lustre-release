@@ -21,6 +21,8 @@
 
 /*
  * Copyright (c) 2014 Bull SAS
+ *
+ * Copyright (c) 2015, 2016, Intel Corporation.
  * Author: Sebastien Buisson sebastien.buisson@bull.net
  */
 

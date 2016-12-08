@@ -23,7 +23,7 @@
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2011, 2015, Intel Corporation.
+ * Copyright (c) 2014, 2016, Intel Corporation.
  */
 #ifndef LUSTRE_IOCTL_H_
 #define LUSTRE_IOCTL_H_

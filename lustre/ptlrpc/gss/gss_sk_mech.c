@@ -22,7 +22,7 @@
 /*
  * Copyright (C) 2013, 2015, Trustees of Indiana University
  *
- * Copyright (c) 2014, Intel Corporation.
+ * Copyright (c) 2014, 2016, Intel Corporation.
  *
  * Author: Jeremy Filizetti <jfilizet@iu.edu>
  * Author: Andrew Korty <ajk@iu.edu>

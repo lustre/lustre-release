@@ -57,6 +57,8 @@ fc1475ebdd64cd8eccc603d629ac6b4dcd222445
 b6332b5c0dfe28d6b574e206ae651262337a8309
 5acebd778f7427e8221e2cd6e463c76649f83ad3
 2b294992edce5af7b79d4300ed3aa1ea6a8db850
+21d716e6c16424d9deb646456758ebbaa9c70fec
+3c1f519956598b0106bd639f0ccae30ce745eb54
 faeb94fe81e4646b3121c263521d30e0e83fa71f
 3b84a1ee5213563945225854a50e9037bb9646db
 c6aab2ca77831852db22b7dc39baed4d06405b7e
@@ -103,6 +105,16 @@ fdd5596593050d22feef05ecba6ba53c65cb3397
 97da796bd3d9b98f6b65ecce493044a3e7404607
 9bf46408b3c2c8b7f939d7000a9e8df38c3fd6ed
 eebeee9afa368d62b9a0813652a4c14430bd8e35
+ff4357229efe87781e65382c20d3d718ecc3114d
+beca050380b592477153fe16b79b7b6bb3aacbf2
+6c47e7f99f5fa8884751ac549a45dd3c0b81e7f1
+9d06de39731ae16d030cda672ae771496d4f0952
+0b1ad400c8f64575292a7ff54a8ce872a124b19e
+b1ff338ede34421acfc2cdbfe0dbe7b293ebd3b2
+f28cc25929c4e8a111e96b2205a0433542b35e84
+2112bc0e8b54832c303008cfe53957b8a0019407
+bbee5d1ae941a208d7a07d0348e835ab58ca90ce
+dd6623e657032bf34e70446a6d72851c70d605d9
 EXCLUDE_END
 [ -n "$EXCLUDE" ] && echo "$EXCLUDE" >> $EXCFILE
 
@@ -194,7 +206,7 @@ git ls-files $DIRS | while read FILE; do
 	[ "$OLDCOPY" == "$NEWCOPY" ] && continue
 
 	# Log all changes this year, to help find "noisy" patches
-	awk '/'$THISYEAR'-/ { print $5 }' $TMPFILE >> $HASHFILE
+	awk '/'$THISYEAR'-/ { print $5 }' $TMPFILE | cut -c1-12 >> $HASHFILE
 
 	[ ! -w $FILE ] && echo "$FILE: *** can't write, EDIT MANUALLY ***" &&
 		continue
@@ -226,6 +238,9 @@ git ls-files $DIRS | while read FILE; do
 done
 if [ -s $HASHFILE ]; then
 	echo "commits causing the most changes"
-	sort $HASHFILE | uniq -c | sort -nr | head -30
+	sort $HASHFILE | uniq -c | sort -nr | head -30 | while read CNT HASH; do
+		echo $CNT $(git show --oneline --no-patch $HASH)
+	done
+
 fi
 rm -f $TMPFILE $TMPFILE.2

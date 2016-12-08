@@ -21,6 +21,8 @@
  */
 /*
  * (C) Copyright 2012 Commissariat a l'energie atomique et aux energies
+ *
+ * Copyright (c) 2016, Intel Corporation.
  *     alternatives
  *
  */

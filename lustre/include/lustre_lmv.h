@@ -20,7 +20,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2014, 2015, Intel Corporation.
+ * Copyright (c) 2014, 2016, Intel Corporation.
  */
 /*
  * lustre/include/lustre_lmv.h

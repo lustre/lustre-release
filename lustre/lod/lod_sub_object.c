@@ -20,7 +20,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2014, 2015, Intel Corporation.
+ * Copyright (c) 2015, Intel Corporation.
  */
 /*
  * lustre/lod/lod_sub_object.c

@@ -24,7 +24,7 @@
 /*
  * Copyright 2012 Xyratex Technology Limited
  *
- * Copyright (c) 2013, 2015, Intel Corporation.
+ * Copyright (c) 2013, 2016, Intel Corporation.
  *
  * Author: Andrew Perepechko <Andrew_Perepechko@xyratex.com>
  *

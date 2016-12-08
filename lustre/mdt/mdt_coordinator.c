@@ -23,7 +23,7 @@
  * Copyright (c) 2011, 2012 Commissariat a l'energie atomique et aux energies
  *                          alternatives
  *
- * Copyright (c) 2013, 2014, Intel Corporation.
+ * Copyright (c) 2013, 2016, Intel Corporation.
  * Use is subject to license terms.
  */
 /*

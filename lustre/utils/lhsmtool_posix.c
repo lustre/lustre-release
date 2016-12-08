@@ -23,7 +23,7 @@
  * (C) Copyright 2012 Commissariat a l'energie atomique et aux energies
  *     alternatives
  *
- * Copyright (c) 2013, 2015, Intel Corporation.
+ * Copyright (c) 2013, 2016, Intel Corporation.
  */
 /* HSM copytool program for POSIX filesystem-based HSM's.
  *
