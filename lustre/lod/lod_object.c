@@ -1718,7 +1718,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 	if (stripe == NULL)
 		GOTO(out_free, rc = -ENOMEM);
 
-	/* Start index will be the master MDT */
+	/* Start index must be the master MDT */
 	master_index = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_node_id;
 	idx_array[0] = master_index;
 	for (i = 0; i < stripe_count; i++) {
@@ -1738,19 +1738,6 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 
 			CDEBUG(D_INFO, "try idx %d, mdt cnt %u, allocated %u\n",
 			       idx, lod->lod_remote_mdt_count + 1, i);
-			if (idx == master_index) {
-				/* Allocate the FID locally */
-				rc = obd_fid_alloc(env, lod->lod_child_exp,
-						   &fid, NULL);
-				if (rc < 0)
-					GOTO(out_put, rc);
-				tgt_dt = lod->lod_child;
-				break;
-			}
-
-			/* Find next available target */
-			if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap, idx))
-				continue;
 
 			if (likely(!OBD_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE))) {
 				/* check whether the idx already exists
@@ -1764,6 +1751,22 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 
 				if (already_allocated)
 					continue;
+			}
+
+			/* Sigh, this index is not in the bitmap, let's check
+			 * next available target */
+			if (!cfs_bitmap_check(ltd->ltd_tgt_bitmap, idx) &&
+			    idx != master_index)
+				continue;
+
+			if (idx == master_index) {
+				/* Allocate the FID locally */
+				rc = obd_fid_alloc(env, lod->lod_child_exp,
+						   &fid, NULL);
+				if (rc < 0)
+					GOTO(out_put, rc);
+				tgt_dt = lod->lod_child;
+				break;
 			}
 
 			/* check the status of the OSP */
@@ -1791,7 +1794,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 		/* Can not allocate more stripes */
 		if (j == lod->lod_remote_mdt_count) {
 			CDEBUG(D_INFO, "%s: require stripes %u only get %d\n",
-			       lod2obd(lod)->obd_name, stripe_count, i - 1);
+			       lod2obd(lod)->obd_name, stripe_count, i);
 			break;
 		}
 
