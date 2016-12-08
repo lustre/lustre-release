@@ -839,12 +839,18 @@ int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
         }
         rsci.h.expiry_time = (time_t) ctx_expiry;
 
-        if (strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0)
-                rsci.ctx.gsc_usr_mds = 1;
-        else if (strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0)
-                rsci.ctx.gsc_usr_oss = 1;
-        else
-                rsci.ctx.gsc_usr_root = 1;
+	switch (imp->imp_obd->u.cli.cl_sp_to) {
+	case LUSTRE_SP_MDT:
+		rsci.ctx.gsc_usr_mds = 1;
+		break;
+	case LUSTRE_SP_OST:
+		rsci.ctx.gsc_usr_oss = 1;
+		break;
+	case LUSTRE_SP_CLI:
+		rsci.ctx.gsc_usr_root = 1;
+	default:
+		break;
+	}
 
         rscp = rsc_update(&rsci, rscp);
         if (rscp == NULL)

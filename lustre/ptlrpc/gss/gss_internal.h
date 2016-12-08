@@ -124,18 +124,24 @@ enum ptlrpc_gss_header_flags {
 static inline
 __u32 import_to_gss_svc(struct obd_import *imp)
 {
-	const char *name = imp->imp_obd->obd_type->typ_name;
+	int cl_sp_to = LUSTRE_SP_ANY;
 
-	if (!strcmp(name, LUSTRE_MGC_NAME))
-		return LUSTRE_GSS_TGT_MGS;
-	if (!strcmp(name, LUSTRE_MDC_NAME) ||
-	    !strcmp(name, LUSTRE_LWP_NAME))
+	if (imp->imp_obd)
+		cl_sp_to = imp->imp_obd->u.cli.cl_sp_to;
+
+	switch (cl_sp_to) {
+	case LUSTRE_SP_MDT:
 		return LUSTRE_GSS_TGT_MDS;
-	if (!strcmp(name, LUSTRE_OSC_NAME) ||
-	    !strcmp(name, LUSTRE_OSP_NAME))
+	case LUSTRE_SP_OST:
 		return LUSTRE_GSS_TGT_OSS;
-
-	return 0;
+	case LUSTRE_SP_MGC:
+	case LUSTRE_SP_MGS:
+		return LUSTRE_GSS_TGT_MGS;
+	case LUSTRE_SP_CLI:
+	case LUSTRE_SP_ANY:
+	default:
+		return 0;
+	}
 }
 
 /*
