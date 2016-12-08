@@ -24,6 +24,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	6[0-3])	LDISKFS_SERIES="2.6-rhel6.series"	;;
 	esac
 ], [test x$SUSE_KERNEL = xyes], [
+	AS_VERSION_COMPARE([$LINUXRELEASE],[4.4.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[3.12.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[3.0.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[2.6.32], [],
@@ -44,7 +45,8 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 		*) LDISKFS_SERIES="3.12-sles12.series"
 			;;
 		esac
-	])
+	])],[LDISKFS_SERIES="4.4-sles12sp2.series"],
+	    [LDISKFS_SERIES="4.4-sles12sp2.series"])
 ])
 ])
 AS_IF([test -z "$LDISKFS_SERIES"],
@@ -143,6 +145,27 @@ ext4_bread, [
 ]) # LB_EXT4_BREAD_4ARGS
 
 #
+# LB_EXT4_HAVE_INFO_DQUOT
+#
+# in linux 4.4 i_dqout is in ext4_inode_info, not in struct inode
+#
+AC_DEFUN([LB_EXT4_HAVE_INFO_DQUOT], [
+LB_CHECK_COMPILE([if i_dquot is in ext4_inode_info],
+ext4_info_dquot, [
+	#include <linux/fs.h>
+	#include <linux/quota.h>
+	#include "$EXT4_SRC_DIR/ext4.h"
+],[
+	struct ext4_inode_info in;
+	struct dquot *dq;
+
+	dq = in.i_dquot[0];
+],[
+	AC_DEFINE(HAVE_EXT4_INFO_DQUOT, 1, [i_dquot is in ext4_inode_info])
+])
+]) # LB_EXT4_HAVE_INFO_DQUOT
+
+#
 # LDISKFS_AC_PATCH_PROGRAM
 #
 # Determine which program should be used to apply the patches to
@@ -222,10 +245,12 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	LB_EXT4_JOURNAL_START_3ARGS
 	LB_LDISKFS_MAP_BLOCKS
 	LB_EXT4_BREAD_4ARGS
+	LB_EXT4_HAVE_INFO_DQUOT
 	AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1, [posix acls for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [fs security for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1, [extened attributes for ldiskfs])
 	AC_DEFINE(CONFIG_LDISKFS_FS_RW, 1, [enable rw access for ldiskfs])
+	AC_DEFINE(CONFIG_LDISKFS_FS_ENCRYPTION, 1, [enable encryption for ldiskfs])
 	AC_SUBST(LDISKFS_SUBDIR, ldiskfs)
 	AC_DEFINE(HAVE_LDISKFS_OSD, 1, Enable ldiskfs osd)
 ])

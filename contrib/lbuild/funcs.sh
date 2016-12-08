@@ -138,12 +138,18 @@ autodetect_distro() {
             "RedHatEnterpriseServer" | "ScientificSL" | "CentOS")
                 name="rhel"
                 ;;
-            "SUSE LINUX")
-                name="sles"
-		PATCHLEVEL=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
-		if [ "$PATCHLEVEL" -ne "0" ]; then
-			version="${version}.$PATCHLEVEL"
-		fi
+	    "SUSE LINUX" | "SUSE")
+		name="sles"
+		case "$version" in
+		*.*)	# $version already has patchlevel
+			;;
+		*)	# add patchlevel
+			PATCHLEVEL=$(sed -n -e 's/^PATCHLEVEL = //p' /etc/SuSE-release)
+			if [ "$PATCHLEVEL" -ne "0" ]; then
+				version="${version}.$PATCHLEVEL"
+			fi
+			;;
+		esac
 		;;
             "Fedora")
                 name="fc"

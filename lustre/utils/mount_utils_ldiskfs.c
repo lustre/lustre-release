@@ -306,6 +306,7 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 		fclose(filep);
 		goto out_umnt;
 	}
+	fsync(filep->_fileno);
 	fclose(filep);
 
 out_umnt:

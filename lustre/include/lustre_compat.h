@@ -158,7 +158,7 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #ifdef HAVE_BVEC_ITER
 #define bio_idx(bio)			(bio->bi_iter.bi_idx)
 #define bio_set_sector(bio, sector)	(bio->bi_iter.bi_sector = sector)
-#define bvl_to_page(bvl)		(bvl.bv_page)
+#define bvl_to_page(bvl)		(bvl->bv_page)
 #else
 #define bio_idx(bio)			(bio->bi_idx)
 #define bio_set_sector(bio, sector)	(bio->bi_sector = sector)

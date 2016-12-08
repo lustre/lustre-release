@@ -141,16 +141,17 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
 #define __REQ_WRITE BIO_RW
 #endif
 
+#ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
+static void dio_complete_routine(struct bio *bio)
+{
+	int error = bio->bi_error;
+#else
 static void dio_complete_routine(struct bio *bio, int error)
 {
+#endif
 	struct osd_iobuf *iobuf = bio->bi_private;
-#ifdef HAVE_BVEC_ITER
-	struct bvec_iter iter;
-	struct bio_vec bvl;
-#else
 	int iter;
 	struct bio_vec *bvl;
-#endif
 
         /* CAVEAT EMPTOR: possibly in IRQ context
          * DO NOT record procfs stats here!!! */
@@ -166,10 +167,16 @@ static void dio_complete_routine(struct bio *bio, int error)
 		       "IO - you will probably have to reboot this node.\n");
 		CERROR("bi_next: %p, bi_flags: %lx, bi_rw: %lu, bi_vcnt: %d, "
 		       "bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, "
-		       "bi_private: %p\n", bio->bi_next, bio->bi_flags,
+		       "bi_private: %p\n", bio->bi_next,
+			(unsigned long)bio->bi_flags,
 			bio->bi_rw, bio->bi_vcnt, bio_idx(bio),
 			bio_sectors(bio) << 9, bio->bi_end_io,
-			atomic_read(&bio->bi_cnt), bio->bi_private);
+#ifdef HAVE_BI_CNT
+			atomic_read(&bio->bi_cnt),
+#else
+			atomic_read(&bio->__bi_cnt),
+#endif
+			bio->bi_private);
 		return;
 	}
 

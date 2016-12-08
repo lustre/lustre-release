@@ -282,7 +282,7 @@ check_options() {
     fi
 
     case $TARGET in
-        3.12-sles12)
+        3.12-sles12 | 4.4-sles12)
             CANONICAL_TARGET="sles12"
             ;;
         3.10-rhel7)

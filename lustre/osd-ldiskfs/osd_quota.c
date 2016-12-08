@@ -556,7 +556,11 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 			/* reserve credits for adding ID entry to the quota
 			 * file if the i_dquot isn't initialized yet. */
 			else if (inode == NULL ||
+#ifdef HAVE_EXT4_INFO_DQUOT
+				 LDISKFS_I(inode)->i_dquot[qi->lqi_type] == NULL)
+#else
 				 inode->i_dquot[qi->lqi_type] == NULL)
+#endif
 				crd = LDISKFS_QUOTA_INIT_BLOCKS(osd_sb(dev));
 			else
 				crd = 1;

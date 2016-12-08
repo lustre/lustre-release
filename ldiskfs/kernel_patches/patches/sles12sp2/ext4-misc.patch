@@ -1,0 +1,153 @@
+Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ext4.h
+===================================================================
+--- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/ext4.h
++++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ext4.h
+@@ -1427,6 +1427,8 @@ static inline void ext4_clear_state_flag
+ 
+ #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
+ 
++#define JOURNAL_START_HAS_3ARGS	1
++
+ /*
+  * Codes for operating systems
+  */
+@@ -1527,7 +1427,21 @@ static inline void ext4_clear_state_flag
+
+ EXTN_FEATURE_FUNCS(2)
+ EXTN_FEATURE_FUNCS(3)
+-EXTN_FEATURE_FUNCS(4)
++static inline bool ext4_has_unknown_ext4_compat_features(struct super_block *sb)
++{
++	return ((EXT4_SB(sb)->s_es->s_feature_compat &
++		cpu_to_le32(~EXT4_FEATURE_COMPAT_SUPP)) != 0);
++}
++static inline bool ext4_has_unknown_ext4_ro_compat_features(struct super_block *sb)
++{
++	return ((EXT4_SB(sb)->s_es->s_feature_ro_compat &
++		cpu_to_le32(~EXT4_FEATURE_RO_COMPAT_SUPP)) != 0);
++}
++static inline bool ext4_has_unknown_ext4_incompat_features(struct super_block *sb)
++{
++	return ((EXT4_SB(sb)->s_es->s_feature_incompat &
++		cpu_to_le32(~EXT4_FEATURE_INCOMPAT_SUPP)) != 0);
++}
+
+ static inline bool ext4_has_compat_features(struct super_block *sb)
+ {
+@@ -2612,6 +2614,11 @@ struct ext4_extent;
+ 
+ extern int ext4_ext_tree_init(handle_t *handle, struct inode *);
+ extern int ext4_ext_writepage_trans_blocks(struct inode *, int);
++extern struct buffer_head *ext4_read_inode_bitmap(struct super_block *sb,
++						  ext4_group_t block_group);
++extern struct buffer_head *ext4_append(handle_t *handle,
++				       struct inode *inode,
++				       ext4_lblk_t *block);
+ extern int ext4_ext_index_trans_blocks(struct inode *inode, int extents);
+ 				       int chunk);
+ extern int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
+Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
+===================================================================
+--- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/namei.c
++++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
+@@ -48,7 +48,7 @@
+ #define NAMEI_RA_BLOCKS  4
+ #define NAMEI_RA_SIZE	     (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
+ 
+-static struct buffer_head *ext4_append(handle_t *handle,
++struct buffer_head *ext4_append(handle_t *handle,
+ 					struct inode *inode,
+ 					ext4_lblk_t *block)
+ {
+@@ -155,6 +155,7 @@ static struct buffer_head *__ext4_read_d
+ 	}
+ 	return bh;
+ }
++EXPORT_SYMBOL(ext4_append);
+ 
+ #ifndef assert
+ #define assert(test) J_ASSERT(test)
+@@ -2210,7 +2211,7 @@ out:
+  * DIR_NLINK feature is set if 1) nlinks > EXT4_LINK_MAX or 2) nlinks == 2,
+  * since this indicates that nlinks count was previously 1.
+  */
+-static void ext4_inc_count(handle_t *handle, struct inode *inode)
++void ext4_inc_count(handle_t *handle, struct inode *inode)
+ {
+ 	inc_nlink(inode);
+ 	if (is_dx(inode) && inode->i_nlink > 1) {
+@@ -2222,16 +2223,18 @@ static void ext4_inc_count(handle_t *han
+ 		}
+ 	}
+ }
++EXPORT_SYMBOL(ext4_inc_count);
+ 
+ /*
+  * If a directory had nlink == 1, then we should let it be 1. This indicates
+  * directory has >EXT4_LINK_MAX subdirs.
+  */
+-static void ext4_dec_count(handle_t *handle, struct inode *inode)
++void ext4_dec_count(handle_t *handle, struct inode *inode)
+ {
+ 	if (!S_ISDIR(inode->i_mode) || inode->i_nlink > 2)
+ 		drop_nlink(inode);
+ }
++EXPORT_SYMBOL(ext4_dec_count);
+ 
+ 
+ static int ext4_add_nondir(handle_t *handle,
+Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ialloc.c
+===================================================================
+--- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/ialloc.c
++++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ialloc.c
+@@ -111,7 +111,7 @@ void ext4_end_bitmap_read(struct buffer_
+  *
+  * Return buffer_head of bitmap on success or NULL.
+  */
+-static struct buffer_head *
++struct buffer_head *
+ ext4_read_inode_bitmap(struct super_block *sb, ext4_group_t block_group)
+ {
+ 	struct ext4_group_desc *desc;
+@@ -191,6 +191,7 @@ verify:
+ 	set_buffer_verified(bh);
+ 	return bh;
+ }
++EXPORT_SYMBOL(ext4_read_inode_bitmap);
+ 
+ /*
+  * NOTE! When we get the inode, we're the only people
+Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
+===================================================================
+--- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/inode.c
++++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/inode.c
+@@ -5281,3 +5281,17 @@ out:
+ 	sb_end_pagefault(inode->i_sb);
+ 	return ret;
+ }
++EXPORT_SYMBOL(ext4_map_blocks);
++EXPORT_SYMBOL(ext4_truncate);
++EXPORT_SYMBOL(ext4_iget);
++EXPORT_SYMBOL(ext4_bread);
++EXPORT_SYMBOL(ext4_itable_unused_count);
++EXPORT_SYMBOL(ext4_force_commit);
++EXPORT_SYMBOL(ext4_mark_inode_dirty);
++EXPORT_SYMBOL(ext4_get_group_desc);
++EXPORT_SYMBOL(__ext4_journal_get_write_access);
++EXPORT_SYMBOL(__ext4_journal_start_sb);
++EXPORT_SYMBOL(__ext4_journal_stop);
++EXPORT_SYMBOL(__ext4_handle_dirty_metadata);
++EXPORT_SYMBOL(__ext4_std_error);
++EXPORT_SYMBOL(ext4fs_dirhash);
+Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/mballoc.c
+===================================================================
+--- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/mballoc.c
++++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/mballoc.c
+@@ -5281,7 +5281,6 @@ out:
+ 				void *buddy, void *bitmap, ext4_group_t group)
+ {
+ 	struct ext4_group_info *grp = ext4_get_group_info(sb, group);
+-	struct ext4_sb_info *sbi = EXT4_SB(sb);
+ 	ext4_grpblk_t max = EXT4_CLUSTERS_PER_GROUP(sb);
+ 	ext4_grpblk_t i = 0;
+ 	ext4_grpblk_t first;

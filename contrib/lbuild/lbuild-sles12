@@ -13,7 +13,15 @@ source ${LBUILD_DIR}/lbuild-sles
 
 kernel_srpm_location() {
 
-    local site="http://mgmt/cobbler/repo_mirror/updates-sles12.1-src"
+    local site
+    case $lnxmaj in
+    3.12)
+	site="http://mgmt/cobbler/repo_mirror/updates-sles12.1-src"
+	;;
+    4.4)
+	site="http://mgmt/cobbler/repo_mirror/updates-sles12.2-src"
+	;;
+    esac
     echo "$site/src/"
 
 }
@@ -25,12 +33,24 @@ edit_specs() {
     (cd $TOPDIR/SOURCES; ./mkspec --release ${lnxrel})
     for spec in $RPMSMPTYPE source syms; do
         #cp $TOPDIR/SOURCES/kernel-$spec.spec{,.orig}
+	case $lnxmaj in
+	4.4)
+        sed -i -e "s/^\(Release: *\).*$/\1${lnxrel}_${buildid}/" \
+               -e '/^%setup /a\
+cp  %_sourcedir/linux-4.4-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
+! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
+          SOURCES/kernel-${spec}.spec || \
+            fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
+	;;
+	3.12)
         sed -i -e "s/^\(Release: *\).*$/\1${lnxrel}_${buildid}/" \
                -e '/^%setup /a\
 cp  %_sourcedir/linux-3.12-lustre.patch %_builddir/%{name}-%{version}/lustre.patch\
 ! grep -q lustre.patch %_sourcedir/series.conf && echo -e "\\n\\tlustre.patch" >> %_sourcedir/series.conf' \
           SOURCES/kernel-${spec}.spec || \
             fatal 1 "Error while editing SOURCES/kernel-${spec}.spec"
+	;;
+	esac
 
         if $KERNEL_LUSTRE_NAMING; then
             # these are all of the changes needed because we change the package names
@@ -112,7 +132,15 @@ find_linux_rpm-sles12() {
     local wanted_kernel="$2"
     local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
 
-    local site="http://mgmt/cobbler/repo_mirror/updates-sles12.1-x86_64"
+    local site
+    case $lnxmaj in
+    3.12)
+	site="http://mgmt/cobbler/repo_mirror/updates-sles12.1-x86_64"
+	;;
+    4.4)
+	site="http://mgmt/cobbler/repo_mirror/updates-sles12.2-x86_64"
+	;;
+    esac
     if [ ! -f $pathtorpms/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm ]; then
         fetch_url "$site/x86_64/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
     fi

@@ -1713,6 +1713,26 @@ have_bvec_iter, [
 ]) # LC_HAVE_BVEC_ITER
 
 #
+# LC_HAVE_BI_CNT
+#
+# 4.4 redefined bi_cnt as __bi_cnt
+#
+AC_DEFUN([LC_HAVE_BI_CNT], [
+LB_CHECK_COMPILE([if Linux kernel has bi_cnt in struct bio],
+have_bi_cnt, [
+	#include <asm/atomic.h>
+	#include <linux/bio.h>
+],[
+	struct bio bio;
+	int cnt;
+	cnt = atomic_read(&bio.bi_cnt);
+], [
+	AC_DEFINE(HAVE_BI_CNT, 1,
+		[struct bio has bi_cnt])
+])
+]) # LC_HAVE_BI_CNT
+
+#
 # LC_HAVE_TRUNCATE_IPAGE_FINAL
 #
 # 3.14 bring truncate_inode_pages_final for evict_inode
@@ -2429,6 +2449,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_LOCKS_LOCK_FILE_WAIT
 	LC_HAVE_QC_MAKE_REQUEST_FN
 	LC_HAVE_KEY_PAYLOAD_DATA_ARRAY
+	LC_HAVE_BI_CNT
 
 	# 4.5
 	LC_HAVE_FILE_DENTRY
@@ -2742,6 +2763,7 @@ lustre/kernel_patches/targets/3.0-sles11.target
 lustre/kernel_patches/targets/3.0-sles11sp3.target
 lustre/kernel_patches/targets/3.0-sles11sp4.target
 lustre/kernel_patches/targets/3.12-sles12.target
+lustre/kernel_patches/targets/4.4-sles12.target
 lustre/kernel_patches/targets/2.6-fc11.target
 lustre/kernel_patches/targets/2.6-fc12.target
 lustre/kernel_patches/targets/2.6-fc15.target

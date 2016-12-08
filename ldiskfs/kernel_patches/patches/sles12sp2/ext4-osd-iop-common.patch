@@ -1,0 +1,67 @@
+Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ext4.h
+===================================================================
+--- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/ext4.h
++++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/ext4.h
+@@ -2145,6 +2145,11 @@ extern int ext4_orphan_add(handle_t *, s
+ 				   struct ext4_dir_entry *dirent);
+ extern int ext4_orphan_add(handle_t *, struct inode *);
+ extern int ext4_orphan_del(handle_t *, struct inode *);
++extern struct inode *ext4_create_inode(handle_t *handle,
++				       struct inode *dir, int mode);
++extern int ext4_delete_entry(handle_t *handle, struct inode * dir,
++			     struct ext4_dir_entry_2 *de_del,
++			     struct buffer_head *bh);
+ extern int ext4_htree_fill_tree(struct file *dir_file, __u32 start_hash,
+ 				__u32 start_minor_hash, __u32 *next_hash);
+ extern int search_dir(struct buffer_head *bh,
+Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
+===================================================================
+--- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/namei.c
++++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
+@@ -2165,7 +2167,7 @@ int ext4_generic_delete_entry(handle_t *
+ 	return -ENOENT;
+ }
+ 
+-static int ext4_delete_entry(handle_t *handle,
++int ext4_delete_entry(handle_t *handle,
+ 			     struct inode *dir,
+ 			     struct ext4_dir_entry_2 *de_del,
+ 			     struct buffer_head *bh)
+@@ -2206,7 +2208,7 @@ out:
+ 		ext4_std_error(dir->i_sb, err);
+ 	return err;
+ }
+-
++EXPORT_SYMBOL(ext4_delete_entry);
+ /*
+  * DIR_NLINK feature is set if 1) nlinks > EXT4_LINK_MAX or 2) nlinks == 2,
+  * since this indicates that nlinks count was previously 1.
+@@ -2253,6 +2255,28 @@ static int ext4_add_nondir(handle_t *han
+ 	return err;
+ }
+ 
++ /* Return locked inode, then the caller can modify the inode's states/flags
++  * before others finding it. The caller should unlock the inode by itself. */
++struct inode *ext4_create_inode(handle_t *handle, struct inode *dir, int mode)
++{
++	struct inode *inode;
++
++	inode = ext4_new_inode(handle, dir, mode, NULL, 0, NULL);
++	if (!IS_ERR(inode)) {
++		if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) {
++#ifdef CONFIG_LDISKFS_FS_XATTR
++			inode->i_op = &ext4_special_inode_operations;
++#endif
++		} else {
++			inode->i_op = &ext4_file_inode_operations;
++			inode->i_fop = &ext4_file_operations;
++			ext4_set_aops(inode);
++		}
++	}
++	return inode;
++}
++EXPORT_SYMBOL(ext4_create_inode);
++
+ /*
+  * By the time this is called, we already have created
+  * the directory cache entry for the new file, but it

@@ -1,0 +1,44 @@
+Add a proc interface for max_dir_size.
+
+Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/sysfs.c
+===================================================================
+--- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/sysfs.c
++++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/sysfs.c
+@@ -2557,6 +2562,8 @@ EXT4_RW_ATTR(reserved_clusters);
+ EXT4_ATTR_OFFSET(inode_readahead_blks, 0644, sbi_ui_show,
+ 		 inode_readahead_blks_store, s_inode_readahead_blks);
+ EXT4_RW_ATTR_SBI_UI(inode_goal, s_inode_goal);
++EXT4_RW_ATTR_SBI_UI(max_dir_size, s_max_dir_size_kb);
++EXT4_RW_ATTR_SBI_UI(max_dir_size_kb, s_max_dir_size_kb);
+ EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats);
+ EXT4_RW_ATTR_SBI_UI(mb_max_to_scan, s_mb_max_to_scan);
+ EXT4_RW_ATTR_SBI_UI(mb_min_to_scan, s_mb_min_to_scan);
+@@ -2581,6 +2588,8 @@ static struct attribute *ext4_attrs[] =
+ 	ATTR_LIST(reserved_clusters),
+ 	ATTR_LIST(inode_readahead_blks),
+ 	ATTR_LIST(inode_goal),
++	ATTR_LIST(max_dir_size),
++	ATTR_LIST(max_dir_size_kb),
+ 	ATTR_LIST(mb_stats),
+ 	ATTR_LIST(mb_max_to_scan),
+ 	ATTR_LIST(mb_min_to_scan),
+@@ -2676,7 +2476,9 @@ static ssize_t sbi_ui_show(struct ext4_a
+		if (!ptr)
+			return 0;
+		return snprintf(buf, PAGE_SIZE, "%u\n",
+-				*((unsigned int *) ptr));
++				strcmp("max_dir_size", a->attr.name) ?
++				*((unsigned int *) ptr) :
++				(*((unsigned int *) ptr)) << 10);
+	case attr_pointer_atomic:
+		if (!ptr)
+			return 0;
+@@ -2691,6 +2494,8 @@ static ssize_t sbi_ui_store(struct ext4_
+ 		ret = kstrtoul(skip_spaces(buf), 0, &t);
+ 		if (ret)
+ 			return ret;
++		if (strcmp("max_dir_size", a->attr.name) == 0)
++			t >>= 10;
+		*((unsigned int *) ptr) = t;
+		return len;
+	case attr_inode_readahead:

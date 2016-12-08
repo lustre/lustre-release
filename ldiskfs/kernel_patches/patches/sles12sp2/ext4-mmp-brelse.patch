@@ -1,0 +1,19 @@
+--- linux-stage.orig/fs/ext4/mmp.c	2015-10-06 08:21:12.013939184 +0530
++++ linux-stage/fs/ext4/mmp.c	2015-10-06 08:20:35.242939292 +0530
+@@ -99,6 +99,8 @@ static int read_mmp_block(struct super_b
+		return 0;
+
+ warn_exit:
++	brelse(*bh);
++	*bh = NULL;
+	ext4_warning(sb, "Error %d while reading MMP block %llu",
+		     ret, mmp_block);
+	return ret;
+@@ -219,6 +221,7 @@ static int kmmpd(void *data)
+ 					     "The filesystem seems to have been"
+ 					     " multiply mounted.");
+ 				ext4_error(sb, "abort");
++				put_bh(bh_check);
+ 				goto failed;
+ 			}
+ 			put_bh(bh_check);
