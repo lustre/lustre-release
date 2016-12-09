@@ -239,7 +239,7 @@ struct osd_thandle {
 struct osd_oi {
 	char			oi_name[OSD_OI_NAME_SIZE]; /* unused */
 	uint64_t		oi_zapid;
-	dmu_buf_t	       *oi_db;
+	dnode_t *oi_dn;
 };
 
 struct osd_seq {
@@ -333,7 +333,7 @@ struct osd_object {
 	 * Not modified concurrently (either setup early during object
 	 * creation, or assigned by osd_object_create() under write lock).
 	 */
-	dmu_buf_t		*oo_db;
+	dnode_t *oo_dn;
 	sa_handle_t		*oo_sa_hdl;
 	nvlist_t		*oo_sa_xattr;
 	struct list_head	 oo_sa_linkage;
@@ -476,18 +476,18 @@ int osd_procfs_fini(struct osd_device *osd);
 /* osd_object.c */
 extern char *osd_obj_tag;
 void osd_object_sa_dirty_rele(struct osd_thandle *oh);
-int __osd_obj2dbuf(const struct lu_env *env, objset_t *os,
-		   uint64_t oid, dmu_buf_t **dbp);
+int __osd_obj2dnode(const struct lu_env *env, objset_t *os,
+		    uint64_t oid, dnode_t **dnp);
 struct lu_object *osd_object_alloc(const struct lu_env *env,
 				   const struct lu_object_header *hdr,
 				   struct lu_device *d);
 int osd_object_sa_update(struct osd_object *obj, sa_attr_type_t type,
 			 void *buf, uint32_t buflen, struct osd_thandle *oh);
 int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
-		     dmu_buf_t **zap_dbp, dmu_tx_t *tx, struct lu_attr *la,
+		     dnode_t **zap_dnp, dmu_tx_t *tx, struct lu_attr *la,
 		     zap_flags_t flags);
 int __osd_object_create(const struct lu_env *env, struct osd_object *obj,
-			dmu_buf_t **dbp, dmu_tx_t *tx, struct lu_attr *la);
+			dnode_t **dnp, dmu_tx_t *tx, struct lu_attr *la);
 int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 		    sa_handle_t *sa_hdl, dmu_tx_t *tx,
 		    struct lu_attr *la, uint64_t parent);
@@ -570,7 +570,7 @@ osd_xattr_set_internal(const struct lu_env *env, struct osd_object *obj,
 	if (unlikely(!dt_object_exists(&obj->oo_dt) || obj->oo_destroyed))
 		return -ENOENT;
 
-	LASSERT(obj->oo_db);
+	LASSERT(obj->oo_dn);
 	if (osd_obj2dev(obj)->od_xattr_in_sa) {
 		rc = __osd_sa_xattr_set(env, obj, buf, name, fl, oh);
 		if (rc == -EFBIG)
@@ -691,4 +691,14 @@ osd_zap_create_flags(objset_t *os, int normflags, zap_flags_t flags,
 #define DN_MAX_BONUSLEN        DN_OLD_MAX_BONUSLEN
 #endif
 
+static inline void osd_dnode_rele(dnode_t *dn)
+{
+	dmu_buf_impl_t *db;
+	LASSERT(dn);
+	LASSERT(dn->dn_bonus);
+	db = dn->dn_bonus;
+
+	DB_DNODE_EXIT(db);
+	dmu_buf_rele(&db->db, osd_obj_tag);
+}
 #endif /* _OSD_INTERNAL_H */

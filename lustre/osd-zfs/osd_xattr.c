@@ -104,9 +104,9 @@ static inline int __osd_xattr_cache(const struct lu_env *env,
 				    struct osd_object *obj)
 {
 	LASSERT(obj->oo_sa_xattr == NULL);
-	LASSERT(obj->oo_db != NULL);
+	LASSERT(obj->oo_dn != NULL);
 
-	return __osd_xattr_load(osd_obj2dev(obj), obj->oo_db->db_object,
+	return __osd_xattr_load(osd_obj2dev(obj), obj->oo_dn->dn_object,
 				&obj->oo_sa_xattr);
 }
 
@@ -147,8 +147,8 @@ int __osd_xattr_get_large(const struct lu_env *env, struct osd_device *osd,
 			  uint64_t xattr, struct lu_buf *buf,
 			  const char *name, int *sizep)
 {
-	dmu_buf_t	*xa_data_db;
-	sa_handle_t	*sa_hdl = NULL;
+	dnode_t		*xa_data_dn;
+	sa_handle_t *sa_hdl = NULL;
 	uint64_t	 xa_data_obj, size;
 	int		 rc;
 
@@ -162,7 +162,7 @@ int __osd_xattr_get_large(const struct lu_env *env, struct osd_device *osd,
 	if (rc)
 		return rc;
 
-	rc = __osd_obj2dbuf(env, osd->od_os, xa_data_obj, &xa_data_db);
+	rc = __osd_obj2dnode(env, osd->od_os, xa_data_obj, &xa_data_dn);
 	if (rc)
 		return rc;
 
@@ -192,13 +192,13 @@ int __osd_xattr_get_large(const struct lu_env *env, struct osd_device *osd,
 		goto out;
 	}
 
-	rc = -dmu_read(osd->od_os, xa_data_db->db_object, 0,
+	rc = -dmu_read(osd->od_os, xa_data_dn->dn_object, 0,
 			size, buf->lb_buf, DMU_READ_PREFETCH);
 
 out:
 	sa_handle_destroy(sa_hdl);
 out_rele:
-	dmu_buf_rele(xa_data_db, FTAG);
+	osd_dnode_rele(xa_data_dn);
 
 	return rc;
 }
@@ -244,7 +244,7 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	int                 rc, size = 0;
 	ENTRY;
 
-	LASSERT(obj->oo_db != NULL);
+	LASSERT(obj->oo_dn != NULL);
 	LASSERT(osd_invariant(obj));
 
 	if (!osd_obj2dev(obj)->od_posix_acl &&
@@ -309,8 +309,7 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 			     int vallen, const char *name,
 			     struct osd_thandle *oh)
 {
-	dmu_buf_t         *db = obj->oo_db;
-	dmu_tx_t          *tx = oh->ot_tx;
+	dmu_tx_t *tx = oh->ot_tx;
 
 	if (unlikely(obj->oo_destroyed))
 		return;
@@ -326,7 +325,7 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 		/* XXX: it should be possible to skip spill
 		 * declaration if specific EA is part of
 		 * bonus and doesn't grow */
-		dmu_tx_hold_spill(tx, db->db_object);
+		dmu_tx_hold_spill(tx, obj->oo_dn->dn_object);
 		return;
 	}
 
@@ -484,8 +483,8 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		struct osd_thandle *oh)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	dmu_buf_t         *xa_zap_db = NULL;
-	dmu_buf_t         *xa_data_db = NULL;
+	dnode_t *xa_zap_dn = NULL;
+	dnode_t *xa_data_dn = NULL;
 	uint64_t           xa_data_obj;
 	sa_handle_t       *sa_hdl = NULL;
 	dmu_tx_t          *tx = oh->ot_tx;
@@ -499,11 +498,11 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 
 		la->la_valid = LA_MODE;
 		la->la_mode = S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO;
-		rc = __osd_zap_create(env, osd, &xa_zap_db, tx, la, 0);
+		rc = __osd_zap_create(env, osd, &xa_zap_dn, tx, la, 0);
 		if (rc)
 			return rc;
 
-		obj->oo_xattr = xa_zap_db->db_object;
+		obj->oo_xattr = xa_zap_dn->dn_object;
 		rc = osd_object_sa_update(obj, SA_ZPL_XATTR(osd),
 				&obj->oo_xattr, 8, oh);
 		if (rc)
@@ -521,8 +520,7 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		 * Entry already exists.
 		 * We'll truncate the existing object.
 		 */
-		rc = __osd_obj2dbuf(env, osd->od_os, xa_data_obj,
-					&xa_data_db);
+		rc = __osd_obj2dnode(env, osd->od_os, xa_data_obj, &xa_data_dn);
 		if (rc)
 			goto out;
 
@@ -535,7 +533,7 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		if (rc)
 			goto out_sa;
 
-		rc = -dmu_free_range(osd->od_os, xa_data_db->db_object,
+		rc = -dmu_free_range(osd->od_os, xa_data_dn->dn_object,
 				     0, DMU_OBJECT_END, tx);
 		if (rc)
 			goto out_sa;
@@ -554,10 +552,10 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 
 		la->la_valid = LA_MODE;
 		la->la_mode = S_IFREG | S_IRUGO | S_IWUSR;
-		rc = __osd_object_create(env, obj, &xa_data_db, tx, la);
+		rc = __osd_object_create(env, obj, &xa_data_dn, tx, la);
 		if (rc)
 			goto out;
-		xa_data_obj = xa_data_db->db_object;
+		xa_data_obj = xa_data_dn->dn_object;
 
 		rc = -sa_handle_get(osd->od_os, xa_data_obj, NULL,
 					SA_HDL_PRIVATE, &sa_hdl);
@@ -582,10 +580,10 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 out_sa:
 	sa_handle_destroy(sa_hdl);
 out:
-	if (xa_data_db != NULL)
-		dmu_buf_rele(xa_data_db, FTAG);
-	if (xa_zap_db != NULL)
-		dmu_buf_rele(xa_zap_db, FTAG);
+	if (xa_data_dn != NULL)
+		osd_dnode_rele(xa_data_dn);
+	if (xa_zap_dn != NULL)
+		osd_dnode_rele(xa_zap_dn);
 
 	return rc;
 }
@@ -666,7 +664,7 @@ int osd_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
 
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_tx != NULL);
-	LASSERT(obj->oo_db != NULL);
+	LASSERT(obj->oo_dn != NULL);
 
 	down_read(&obj->oo_guard);
 	if (likely(dt_object_exists(&obj->oo_dt) && !obj->oo_destroyed))
@@ -739,7 +737,7 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	ENTRY;
 
 	LASSERT(handle != NULL);
-	LASSERT(obj->oo_db != NULL);
+	LASSERT(obj->oo_dn != NULL);
 	LASSERT(osd_invariant(obj));
 	LASSERT(dt_object_exists(dt));
 	oh = container_of0(handle, struct osd_thandle, ot_super);
@@ -893,7 +891,7 @@ int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 	int                    rc, counted;
 	ENTRY;
 
-	LASSERT(obj->oo_db != NULL);
+	LASSERT(obj->oo_dn != NULL);
 	LASSERT(osd_invariant(obj));
 	LASSERT(dt_object_exists(dt));
 

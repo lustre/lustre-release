@@ -238,8 +238,8 @@ static void osd_unlinked_list_emptify(struct osd_device *osd,
 	while (!list_empty(list)) {
 		obj = list_entry(list->next,
 				 struct osd_object, oo_unlinked_linkage);
-		LASSERT(obj->oo_db != NULL);
-		oid = obj->oo_db->db_object;
+		LASSERT(obj->oo_dn != NULL);
+		oid = obj->oo_dn->dn_object;
 
 		list_del_init(&obj->oo_unlinked_linkage);
 		if (free)
@@ -974,7 +974,7 @@ static int osd_mount(const struct lu_env *env,
 {
 	char			*mntdev = lustre_cfg_string(cfg, 1);
 	char			*svname = lustre_cfg_string(cfg, 4);
-	dmu_buf_t		*rootdb;
+	dnode_t *rootdn;
 	const char		*opts;
 	int			 rc;
 	ENTRY;
@@ -1007,12 +1007,12 @@ static int osd_mount(const struct lu_env *env,
 	if (rc)
 		GOTO(err, rc);
 
-	rc = __osd_obj2dbuf(env, o->od_os, o->od_rootid, &rootdb);
+	rc = __osd_obj2dnode(env, o->od_os, o->od_rootid, &rootdn);
 	if (rc)
 		GOTO(err, rc);
 
-	o->od_root = rootdb->db_object;
-	sa_buf_rele(rootdb, osd_obj_tag);
+	o->od_root = rootdn->dn_object;
+	osd_dnode_rele(rootdn);
 
 	/* 1. initialize oi before any file create or file open */
 	rc = osd_oi_init(env, o);

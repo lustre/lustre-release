@@ -49,7 +49,6 @@
 #include "osd_internal.h"
 
 #include <sys/dnode.h>
-#include <sys/dbuf.h>
 #include <sys/spa.h>
 #include <sys/stat.h>
 #include <sys/zap.h>
@@ -61,19 +60,10 @@
 #include <sys/sa_impl.h>
 #include <sys/txg.h>
 
-static inline int osd_object_is_zap(dmu_buf_t *db)
+static inline int osd_object_is_zap(dnode_t *dn)
 {
-	dmu_buf_impl_t *dbi = (dmu_buf_impl_t *) db;
-	dnode_t *dn;
-	int rc;
-
-	DB_DNODE_ENTER(dbi);
-	dn = DB_DNODE(dbi);
-	rc = (dn->dn_type == DMU_OT_DIRECTORY_CONTENTS ||
+	return (dn->dn_type == DMU_OT_DIRECTORY_CONTENTS ||
 			dn->dn_type == DMU_OT_USERGROUP_USED);
-	DB_DNODE_EXIT(dbi);
-
-	return rc;
 }
 
 /* We don't actually have direct access to the zap_hashbits() function
@@ -135,14 +125,14 @@ static inline void osd_obj_cursor_init_serialized(zap_cursor_t *zc,
 {
 	struct osd_device *d = osd_obj2dev(o);
 	osd_zap_cursor_init_serialized(zc, d->od_os,
-				       o->oo_db->db_object, dirhash);
+				       o->oo_dn->dn_object, dirhash);
 }
 
 static inline int osd_obj_cursor_init(zap_cursor_t **zc, struct osd_object *o,
 			uint64_t dirhash)
 {
 	struct osd_device *d = osd_obj2dev(o);
-	return osd_zap_cursor_init(zc, d->od_os, o->oo_db->db_object, dirhash);
+	return osd_zap_cursor_init(zc, d->od_os, o->oo_dn->dn_object, dirhash);
 }
 
 static struct dt_it *osd_index_it_init(const struct lu_env *env,
@@ -160,7 +150,7 @@ static struct dt_it *osd_index_it_init(const struct lu_env *env,
 		RETURN(ERR_PTR(-ENOENT));
 
 	LASSERT(lu_object_exists(lo));
-	LASSERT(obj->oo_db);
+	LASSERT(obj->oo_dn);
 	LASSERT(info);
 
 	OBD_SLAB_ALLOC_PTR_GFP(it, osd_zapit_cachep, GFP_NOFS);
@@ -327,8 +317,8 @@ static int osd_find_parent_by_dnode(const struct lu_env *env,
 	ENTRY;
 
 	/* first of all, get parent dnode from own attributes */
-	LASSERT(osd_dt_obj(o)->oo_db);
-	rc = -sa_handle_get(osd->od_os, osd_dt_obj(o)->oo_db->db_object,
+	LASSERT(osd_dt_obj(o)->oo_dn);
+	rc = -sa_handle_get(osd->od_os, osd_dt_obj(o)->oo_dn->dn_object,
 			    NULL, SA_HDL_PRIVATE, &sa_hdl);
 	if (rc != 0)
 		RETURN(rc);
@@ -432,7 +422,7 @@ static int osd_dir_lookup(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	memset(&oti->oti_zde.lzd_fid, 0, sizeof(struct lu_fid));
-	rc = -zap_lookup(osd->od_os, obj->oo_db->db_object,
+	rc = -zap_lookup(osd->od_os, obj->oo_dn->dn_object,
 			 (char *)key, 8, sizeof(oti->oti_zde) / 8,
 			 (void *)&oti->oti_zde);
 	if (rc != 0)
@@ -472,10 +462,10 @@ static int osd_declare_dir_insert(const struct lu_env *env,
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
 	/* This is for inserting dot/dotdot for new created dir. */
-	if (obj->oo_db == NULL)
+	if (obj->oo_dn == NULL)
 		object = DMU_NEW_OBJECT;
 	else
-		object = obj->oo_db->db_object;
+		object = obj->oo_dn->dn_object;
 
 	/* do not specify the key as then DMU is trying to look it up
 	 * which is very expensive. usually the layers above lookup
@@ -570,7 +560,7 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	int                  rc;
 	ENTRY;
 
-	LASSERT(parent->oo_db);
+	LASSERT(parent->oo_dn);
 
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(parent));
@@ -630,13 +620,13 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 
 	oti->oti_zde.lzd_fid = *fid;
 	/* Insert (key,oid) into ZAP */
-	rc = -zap_add(osd->od_os, parent->oo_db->db_object,
+	rc = -zap_add(osd->od_os, parent->oo_dn->dn_object,
 		      (char *)key, 8, sizeof(oti->oti_zde) / 8,
 		      (void *)&oti->oti_zde, oh->ot_tx);
 	if (unlikely(rc == -EEXIST &&
 		     name[0] == '.' && name[1] == '.' && name[2] == 0))
 		/* Update (key,oid) in ZAP */
-		rc = -zap_update(osd->od_os, parent->oo_db->db_object,
+		rc = -zap_update(osd->od_os, parent->oo_dn->dn_object,
 				(char *)key, 8, sizeof(oti->oti_zde) / 8,
 				(void *)&oti->oti_zde, oh->ot_tx);
 
@@ -662,8 +652,8 @@ static int osd_declare_dir_delete(const struct lu_env *env,
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
 	if (dt_object_exists(dt)) {
-		LASSERT(obj->oo_db);
-		dnode = obj->oo_db->db_object;
+		LASSERT(obj->oo_dn);
+		dnode = obj->oo_dn->dn_object;
 	} else {
 		dnode = DMU_NEW_OBJECT;
 	}
@@ -682,12 +672,12 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	struct osd_object *obj = osd_dt_obj(dt);
 	struct osd_device *osd = osd_obj2dev(obj);
 	struct osd_thandle *oh;
-	dmu_buf_t *zap_db = obj->oo_db;
+	dnode_t *zap_dn = obj->oo_dn;
 	char	  *name = (char *)key;
 	int rc;
 	ENTRY;
 
-	LASSERT(zap_db);
+	LASSERT(zap_dn);
 
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
@@ -705,7 +695,7 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	/* Remove key from the ZAP */
-	rc = -zap_remove(osd->od_os, zap_db->db_object,
+	rc = -zap_remove(osd->od_os, zap_dn->dn_object,
 			 (char *) key, oh->ot_tx);
 
 	if (unlikely(rc && rc != -ENOENT))
@@ -1128,7 +1118,7 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
 
 	rc = osd_prepare_key_uint64(obj, k, key);
 
-	rc = -zap_lookup_uint64(osd->od_os, obj->oo_db->db_object,
+	rc = -zap_lookup_uint64(osd->od_os, obj->oo_dn->dn_object,
 				k, rc, obj->oo_recusize, obj->oo_recsize,
 				(void *)rec);
 	RETURN(rc == 0 ? 1 : rc);
@@ -1147,14 +1137,14 @@ static int osd_declare_index_insert(const struct lu_env *env,
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
-	LASSERT(obj->oo_db);
+	LASSERT(obj->oo_dn);
 
-	dmu_tx_hold_bonus(oh->ot_tx, obj->oo_db->db_object);
+	dmu_tx_hold_bonus(oh->ot_tx, obj->oo_dn->dn_object);
 
 	/* do not specify the key as then DMU is trying to look it up
 	 * which is very expensive. usually the layers above lookup
 	 * before insertion */
-	dmu_tx_hold_zap(oh->ot_tx, obj->oo_db->db_object, TRUE, NULL);
+	dmu_tx_hold_zap(oh->ot_tx, obj->oo_dn->dn_object, TRUE, NULL);
 
 	RETURN(0);
 }
@@ -1170,7 +1160,7 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
 	int                 rc;
 	ENTRY;
 
-	LASSERT(obj->oo_db);
+	LASSERT(obj->oo_dn);
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 	LASSERT(th != NULL);
@@ -1180,7 +1170,7 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
 	rc = osd_prepare_key_uint64(obj, k, key);
 
 	/* Insert (key,oid) into ZAP */
-	rc = -zap_add_uint64(osd->od_os, obj->oo_db->db_object,
+	rc = -zap_add_uint64(osd->od_os, obj->oo_dn->dn_object,
 			     k, rc, obj->oo_recusize, obj->oo_recsize,
 			     (void *)rec, oh->ot_tx);
 	RETURN(rc);
@@ -1198,14 +1188,14 @@ static int osd_declare_index_delete(const struct lu_env *env,
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 	LASSERT(th != NULL);
-	LASSERT(obj->oo_db);
+	LASSERT(obj->oo_dn);
 
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
 	/* do not specify the key as then DMU is trying to look it up
 	 * which is very expensive. usually the layers above lookup
 	 * before deletion */
-	dmu_tx_hold_zap(oh->ot_tx, obj->oo_db->db_object, FALSE, NULL);
+	dmu_tx_hold_zap(oh->ot_tx, obj->oo_dn->dn_object, FALSE, NULL);
 
 	RETURN(0);
 }
@@ -1220,14 +1210,14 @@ static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
 	int                 rc;
 	ENTRY;
 
-	LASSERT(obj->oo_db);
+	LASSERT(obj->oo_dn);
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
 	rc = osd_prepare_key_uint64(obj, k, key);
 
 	/* Remove binary key from the ZAP */
-	rc = -zap_remove_uint64(osd->od_os, obj->oo_db->db_object,
+	rc = -zap_remove_uint64(osd->od_os, obj->oo_dn->dn_object,
 				k, rc, oh->ot_tx);
 	RETURN(rc);
 }
@@ -1251,7 +1241,7 @@ static int osd_index_it_get(const struct lu_env *env, struct dt_it *di,
 		       *((__u64 *)key));
 
 	zap_cursor_fini(it->ozi_zc);
-	zap_cursor_init(it->ozi_zc, osd->od_os, obj->oo_db->db_object);
+	zap_cursor_init(it->ozi_zc, osd->od_os, obj->oo_dn->dn_object);
 	it->ozi_reset = 1;
 
 	RETURN(+1);
@@ -1327,7 +1317,7 @@ static int osd_index_it_rec(const struct lu_env *env, const struct dt_it *di,
 
 	rc = osd_prepare_key_uint64(obj, k, (const struct dt_key *)za->za_name);
 
-	rc = -zap_lookup_uint64(osd->od_os, obj->oo_db->db_object,
+	rc = -zap_lookup_uint64(osd->od_os, obj->oo_dn->dn_object,
 				k, rc, obj->oo_recusize, obj->oo_recsize,
 				(void *)rec);
 	RETURN(rc);
@@ -1355,7 +1345,7 @@ static int osd_index_it_load(const struct lu_env *env, const struct dt_it *di,
 	/* reset the cursor */
 	zap_cursor_fini(it->ozi_zc);
 	zap_cursor_init_serialized(it->ozi_zc, osd->od_os,
-				   obj->oo_db->db_object, hash);
+				   obj->oo_dn->dn_object, hash);
 	it->ozi_reset = 0;
 
 	rc = -zap_cursor_retrieve(it->ozi_zc, za);
@@ -1613,9 +1603,9 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc = 0);
 	}
 
-	LASSERT(!dt_object_exists(dt) || obj->oo_db != NULL);
+	LASSERT(!dt_object_exists(dt) || obj->oo_dn != NULL);
 	if (likely(feat == &dt_directory_features)) {
-		if (!dt_object_exists(dt) || osd_object_is_zap(obj->oo_db))
+		if (!dt_object_exists(dt) || osd_object_is_zap(obj->oo_dn))
 			dt->do_index_ops = &osd_dir_ops;
 		else
 			GOTO(out, rc = -ENOTDIR);
