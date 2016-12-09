@@ -102,6 +102,54 @@ parameter\.
 .
 .br
 \-\-verbose: display detailed output per network
+
+.
+.SS "Peer Configuration"
+.TP
+\fBlnetctl peer\fR add
+Configure an LNET peer with at least one supplied NID\.  By default, peers are marked as multi-rail capable\.  If prim_nid is not specified, the first NID in this list is assumed to be the primary NID for the peer.
+.
+.br
+.
+\-\-nid: one or more peer NIDs to add to the peer\.
+.
+.br
+.
+\-\-prim_nid: Primary NID of the peer\.
+.
+.br
+\-\-non_mr: create this peer as not Multi-Rail capable\.
+.
+.br
+
+.TP
+\fBlnetctl peer\fR del
+Delete a peer NID.  The primary NID must be specified.  If the removed NID is the primary NID, the peer entry will be deleted.
+.
+.br
+.
+\-\-nid: one or more peer NIDs to remove from the peer\.
+.
+.br
+.
+\-\-prim_nid: Primary NID of the peer\.
+.
+.br
+
+.TP
+\fBlnetctl peer\fR show
+Show configured peers.  By default, lists all peers and associated NIDs.
+.
+.br
+.
+\-\-nid: list of primary nids to filter on
+.
+.br
+.
+\-\-verbose: Include extended statistics, including credits and counters.
+.
+.br
+
 .
 .SS "Route Configuration"
 .
@@ -277,33 +325,6 @@ Show LNET statistics
 .
 .br
 
-.
-.SS "Showing Peer Credits"
-.
-.TP
-\fBlnetctl peer_credits\fR
-Show details on configured peer credits
-.
-.br
-\-> Peer nid
-.
-.br
-\-> State
-.
-.br
-\-> Reference count on the peer
-.
-.br
-\-> Maximum transmit credits
-.
-.br
-\-> Available transmit credits
-.
-.br
-\-> Available router credits
-.
-.br
-\-> Minimum router credits\.
 .
 .SH "EXAMPLES"
 .
@@ -585,10 +606,10 @@ statistics:
 .
 .br
 .
-.SS "Showing peer credits information"
+.SS "Showing peer information"
 .
 .IP "\(bu" 4
-lnetctl peer_credits show
+lnetctl peer show
 .
 .IP "" 0
 .
@@ -596,28 +617,40 @@ lnetctl peer_credits show
 peer:
 .
 .br
-	\- nid: 192\.168\.205\.131@tcp1
+    \- primary nid: 10\.148\.0\.8@o2ib
 .
 .br
-	  state: down
+      Multi\-Rail: True
 .
 .br
-	  refcount: 4
+      peer ni:
 .
 .br
-	  max_ni_tx_credits: 8
+        \- nid: 10\.148\.0\.8@o2ib
 .
 .br
-	  available_tx_credits: 8
+          state: NA
 .
 .br
-	  available_rtr_credits: 8
+    \- primary nid: 10\.148\.0\.20@o2ib
 .
 .br
-	  min_rtr_credits: 7
+      Multi\-Rail: True
 .
 .br
-	  tx_q_num_of_buf: 0
+      peer ni:
+.
+.br
+        \- nid: 10\.148\.0\.20@o2ib
+.
+.br
+          state: NA
+.
+.br
+        \- nid: 10\.148\.0\.25@o2ib
+.
+.br
+          state: NA
 .
 .br
 

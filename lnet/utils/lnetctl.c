@@ -144,8 +144,9 @@ command_t peer_cmds[] = {
 	 "\t--prim_nid: Primary NID of the peer.\n"
 	 "\t--nid: list of NIDs to remove. If none provided,\n"
 	 "\t       peer is deleted\n"},
-	{"show", jt_show_peer, 0, "show peer credits\n"
-	 "\t--nid: NID of peer to filter on.\n"},
+	{"show", jt_show_peer, 0, "show peer information\n"
+	 "\t--nid: NID of peer to filter on.\n"
+	 "\t--verbose: Include  extended  statistics\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -1202,7 +1203,7 @@ static int jt_show_peer(int argc, char **argv)
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
 	int detail = 0;
 
-	const char *const short_options = "k:vh";
+	const char *const short_options = "n:vh";
 	const struct option long_options[] = {
 		{ "nid", 1, NULL, 'n' },
 		{ "verbose", 0, NULL, 'v' },
@@ -1213,7 +1214,7 @@ static int jt_show_peer(int argc, char **argv)
 	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, NULL)) != -1) {
 		switch (opt) {
-		case 'k':
+		case 'n':
 			nid = optarg;
 			break;
 		case 'v':
