@@ -2385,24 +2385,42 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 			snprintf(abuf, sizeof(tbuf), CDF, avail);
 		}
 
-                sprintf(rbuf, RDF, (int)(ratio * 100 + 0.5));
-                printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s",
-                       uuid, tbuf, ubuf, abuf, rbuf, mntdir);
-                if (type)
-                        printf("[%s:%d]\n", type, index);
-                else
-                        printf("\n");
+		sprintf(rbuf, RDF, (int)(ratio * 100 + 0.5));
+		printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s",
+		       uuid, tbuf, ubuf, abuf, rbuf, mntdir);
+		if (type)
+			printf("[%s:%d]", type, index);
 
-                break;
-        case -ENODATA:
-                printf(UUF": inactive device\n", uuid);
-                break;
-        default:
-                printf(UUF": %s\n", uuid, strerror(-rc));
-                break;
-        }
+		if (stat->os_state) {
+			/*
+			 * Each character represents the matching
+			 * OS_STATE_* bit.
+			 */
+			const char state_names[] = "DRSI";
+			__u32	   state;
+			__u32	   i;
 
-        return 0;
+			printf(" ");
+			for (i = 0, state = stat->os_state;
+			     state && i < sizeof(state_names); i++) {
+				if (!(state & (1 << i)))
+					continue;
+				printf("%c", state_names[i]);
+				state ^= 1 << i;
+			}
+		}
+
+		printf("\n");
+		break;
+	case -ENODATA:
+		printf(UUF": inactive device\n", uuid);
+		break;
+	default:
+		printf(UUF": %s\n", uuid, strerror(-rc));
+		break;
+	}
+
+	return 0;
 }
 
 struct ll_stat_type {
