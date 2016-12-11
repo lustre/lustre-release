@@ -2621,16 +2621,14 @@ int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 }
 EXPORT_SYMBOL(osc_set_info_async);
 
-static int osc_reconnect(const struct lu_env *env,
-                         struct obd_export *exp, struct obd_device *obd,
-                         struct obd_uuid *cluuid,
-                         struct obd_connect_data *data,
-                         void *localdata)
+int osc_reconnect(const struct lu_env *env, struct obd_export *exp,
+		  struct obd_device *obd, struct obd_uuid *cluuid,
+		  struct obd_connect_data *data, void *localdata)
 {
-        struct client_obd *cli = &obd->u.cli;
+	struct client_obd *cli = &obd->u.cli;
 
-        if (data != NULL && (data->ocd_connect_flags & OBD_CONNECT_GRANT)) {
-                long lost_grant;
+	if (data != NULL && (data->ocd_connect_flags & OBD_CONNECT_GRANT)) {
+		long lost_grant;
 		long grant;
 
 		spin_lock(&cli->cl_loi_list_lock);
@@ -2651,8 +2649,9 @@ static int osc_reconnect(const struct lu_env *env,
 
 	RETURN(0);
 }
+EXPORT_SYMBOL(osc_reconnect);
 
-static int osc_disconnect(struct obd_export *exp)
+int osc_disconnect(struct obd_export *exp)
 {
 	struct obd_device *obd = class_exp2obd(exp);
 	int rc;
@@ -2679,6 +2678,7 @@ static int osc_disconnect(struct obd_export *exp)
                 osc_del_shrink_grant(&obd->u.cli);
         return rc;
 }
+EXPORT_SYMBOL(osc_disconnect);
 
 int osc_ldlm_resource_invalidate(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				 struct hlist_node *hnode, void *arg)

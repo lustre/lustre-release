@@ -415,7 +415,8 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 {
 	struct ptlrpc_request		*req = tgt_ses_req(tsi);
 	struct mdt_thread_info		*info = tsi2mdt_info(tsi);
-	struct md_device		*next = info->mti_mdt->mdt_child;
+	struct mdt_device		*mdt = info->mti_mdt;
+	struct tg_grants_data		*tgd = &mdt->mdt_lut.lut_tgd;
 	struct ptlrpc_service_part	*svcpt;
 	struct obd_statfs		*osfs;
 	int				rc;
@@ -440,24 +441,44 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 	if (!osfs)
 		GOTO(out, rc = -EPROTO);
 
-	/** statfs information are cached in the mdt_device */
-	if (cfs_time_before_64(info->mti_mdt->mdt_osfs_age,
-			       cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS))) {
-		/** statfs data is too old, get up-to-date one */
-		rc = next->md_ops->mdo_statfs(info->mti_env, next, osfs);
-		if (rc)
-			GOTO(out, rc);
-		spin_lock(&info->mti_mdt->mdt_lock);
-		info->mti_mdt->mdt_osfs = *osfs;
-		info->mti_mdt->mdt_osfs_age = cfs_time_current_64();
-		spin_unlock(&info->mti_mdt->mdt_lock);
-	} else {
-		/** use cached statfs data */
-		spin_lock(&info->mti_mdt->mdt_lock);
-		*osfs = info->mti_mdt->mdt_osfs;
-		spin_unlock(&info->mti_mdt->mdt_lock);
-	}
+	rc = tgt_statfs_internal(tsi->tsi_env, &mdt->mdt_lut, osfs,
+				 cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				 NULL);
+	if (unlikely(rc))
+		GOTO(out, rc);
 
+	/* at least try to account for cached pages.  its still racy and
+	 * might be under-reporting if clients haven't announced their
+	 * caches with brw recently */
+	CDEBUG(D_SUPER | D_CACHE, "blocks cached %llu granted %llu"
+	       " pending %llu free %llu avail %llu\n",
+	       tgd->tgd_tot_dirty, tgd->tgd_tot_granted,
+	       tgd->tgd_tot_pending,
+	       osfs->os_bfree << tgd->tgd_blockbits,
+	       osfs->os_bavail << tgd->tgd_blockbits);
+
+	osfs->os_bavail -= min_t(u64, osfs->os_bavail,
+				 ((tgd->tgd_tot_dirty + tgd->tgd_tot_pending +
+				   osfs->os_bsize - 1) >> tgd->tgd_blockbits));
+
+	tgt_grant_sanity_check(mdt->mdt_lu_dev.ld_obd, __func__);
+	CDEBUG(D_CACHE, "%llu blocks: %llu free, %llu avail; "
+	       "%llu objects: %llu free; state %x\n",
+	       osfs->os_blocks, osfs->os_bfree, osfs->os_bavail,
+	       osfs->os_files, osfs->os_ffree, osfs->os_state);
+
+	if (!exp_grant_param_supp(tsi->tsi_exp) &&
+	    tgd->tgd_blockbits > COMPAT_BSIZE_SHIFT) {
+		/* clients which don't support OBD_CONNECT_GRANT_PARAM
+		 * should not see a block size > page size, otherwise
+		 * cl_lost_grant goes mad. Therefore, we emulate a 4KB (=2^12)
+		 * block size which is the biggest block size known to work
+		 * with all client's page size. */
+		osfs->os_blocks <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_bfree  <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_bavail <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_bsize = 1 << COMPAT_BSIZE_SHIFT;
+	}
 	if (rc == 0)
 		mdt_counter_incr(req, LPROC_MDT_STATFS);
 out:
@@ -4931,8 +4952,9 @@ static int mdt_postrecov(const struct lu_env *, struct mdt_device *);
 static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                      struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
-        struct mdt_thread_info    *info;
-        struct obd_device         *obd;
+	struct mdt_thread_info    *info;
+	struct obd_device         *obd;
+	struct tg_grants_data *tgd = &m->mdt_lut.lut_tgd;
         const char                *dev = lustre_cfg_string(cfg, 0);
         const char                *num = lustre_cfg_string(cfg, 2);
         struct lustre_mount_info  *lmi = NULL;
@@ -4989,7 +5011,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	INIT_LIST_HEAD(&m->mdt_squash.rsi_nosquash_nids);
 	init_rwsem(&m->mdt_squash.rsi_sem);
 	spin_lock_init(&m->mdt_lock);
-	m->mdt_osfs_age = cfs_time_shift_64(-1000);
 	m->mdt_enable_remote_dir = 0;
 	m->mdt_enable_remote_dir_gid = 0;
 
@@ -5069,6 +5090,15 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		      OBD_FAIL_MDS_ALL_REPLY_NET);
 	if (rc)
 		GOTO(err_free_hsm, rc);
+
+	/* Amount of available space excluded from granting and reserved
+	 * for metadata. It is in percentage and 50% is default value. */
+	tgd->tgd_reserved_pcnt = 50;
+
+	if (ONE_MB_BRW_SIZE < (1U << tgd->tgd_blockbits))
+		m->mdt_brw_size = 1U << tgd->tgd_blockbits;
+	else
+		m->mdt_brw_size = ONE_MB_BRW_SIZE;
 
 	rc = mdt_fs_setup(env, m, obd, lsi);
 	if (rc)
@@ -5474,7 +5504,8 @@ static int mdt_connect_internal(const struct lu_env *env,
 		data->ocd_connect_flags &= ~OBD_CONNECT_XATTR;
 
 	if (OCD_HAS_FLAG(data, BRW_SIZE)) {
-		data->ocd_brw_size = min(data->ocd_brw_size, MD_MAX_BRW_SIZE);
+		data->ocd_brw_size = min(data->ocd_brw_size,
+					 mdt->mdt_brw_size);
 		if (data->ocd_brw_size == 0) {
 			CERROR("%s: cli %s/%p ocd_connect_flags: %#llx "
 			       "ocd_version: %x ocd_grant: %d ocd_index: %u "
@@ -5488,9 +5519,29 @@ static int mdt_connect_internal(const struct lu_env *env,
 		}
 	}
 
-	if (OCD_HAS_FLAG(data, GRANT))
-		data->ocd_grant = mdt_grant_connect(env, exp, data->ocd_grant,
-						    !reconnect);
+	if (OCD_HAS_FLAG(data, GRANT_PARAM)) {
+		struct dt_device_param *ddp = &mdt->mdt_lut.lut_dt_conf;
+
+		/* client is reporting its page size, for future use */
+		exp->exp_target_data.ted_pagebits = data->ocd_grant_blkbits;
+		data->ocd_grant_blkbits  = mdt->mdt_lut.lut_tgd.tgd_blockbits;
+		/* ddp_inodespace may not be power-of-two value, eg. for ldiskfs
+		 * it's LDISKFS_DIR_REC_LEN(20) = 28. */
+		data->ocd_grant_inobits = fls(ddp->ddp_inodespace - 1);
+		/* ocd_grant_tax_kb is in 1K byte blocks */
+		data->ocd_grant_tax_kb = ddp->ddp_extent_tax >> 10;
+		data->ocd_grant_max_blks = ddp->ddp_max_extent_blks;
+	}
+
+	if (OCD_HAS_FLAG(data, GRANT)) {
+		/* Save connect_data we have so far because tgt_grant_connect()
+		 * uses it to calculate grant. */
+		exp->exp_connect_data = *data;
+		tgt_grant_connect(env, exp, data, !reconnect);
+	}
+
+	if (OCD_HAS_FLAG(data, MAXBYTES))
+		data->ocd_maxbytes = mdt->mdt_lut.lut_dt_conf.ddp_maxbytes;
 
 	/* NB: Disregard the rule against updating
 	 * exp_connect_data.ocd_connect_flags in this case, since
@@ -5685,11 +5736,15 @@ static inline void mdt_disable_slc(struct mdt_device *mdt)
 
 static int mdt_obd_disconnect(struct obd_export *exp)
 {
-        int rc;
-        ENTRY;
+	int rc;
 
-        LASSERT(exp);
-        class_export_get(exp);
+	ENTRY;
+
+	LASSERT(exp);
+	class_export_get(exp);
+
+	if (!(exp->exp_flags & OBD_OPT_FORCE))
+		tgt_grant_sanity_check(exp->exp_obd, __func__);
 
 	if ((exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS) &&
 	    !(exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT)) {
@@ -5702,6 +5757,8 @@ static int mdt_obd_disconnect(struct obd_export *exp)
 	rc = server_disconnect_export(exp);
 	if (rc != 0)
 		CDEBUG(D_IOCTL, "server disconnect error: rc = %d\n", rc);
+
+	tgt_grant_discard(exp);
 
 	rc = mdt_export_cleanup(exp);
 	nodemap_del_member(exp);
@@ -5872,6 +5929,17 @@ static int mdt_destroy_export(struct obd_export *exp)
 
 	LASSERT(list_empty(&exp->exp_outstanding_replies));
 	LASSERT(list_empty(&exp->exp_mdt_data.med_open_head));
+
+	/*
+	 * discard grants once we're sure no more
+	 * interaction with the client is possible
+	 */
+	tgt_grant_discard(exp);
+	if (exp_connect_flags(exp) & OBD_CONNECT_GRANT)
+		exp->exp_obd->u.obt.obt_lut->lut_tgd.tgd_tot_granted_clients--;
+
+	if (!(exp->exp_flags & OBD_OPT_FORCE))
+		tgt_grant_sanity_check(exp->exp_obd, __func__);
 
 	RETURN(0);
 }

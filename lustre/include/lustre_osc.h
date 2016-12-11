@@ -655,7 +655,10 @@ int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		       struct ptlrpc_request_set *set);
 int osc_ldlm_resource_invalidate(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				 struct hlist_node *hnode, void *arg);
-
+int osc_reconnect(const struct lu_env *env, struct obd_export *exp,
+		  struct obd_device *obd, struct obd_uuid *cluuid,
+		  struct obd_connect_data *data, void *localdata);
+int osc_disconnect(struct obd_export *exp);
 int osc_punch_send(struct obd_export *exp, struct obdo *oa,
 		   obd_enqueue_update_f upcall, void *cookie);
 

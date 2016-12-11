@@ -33,66 +33,12 @@
 #include <dt_object.h>
 #include "mdt_internal.h"
 
-/* --------------- MDT grant code ---------------- */
-
-long mdt_grant_connect(const struct lu_env *env,
-		       struct obd_export *exp,
-		       u64 want, bool conservative)
-{
-	struct mdt_device *mdt = mdt_exp2dev(exp);
-	u64 left;
-	long grant;
-
-	ENTRY;
-
-	dt_statfs(env, mdt->mdt_bottom, &mdt->mdt_osfs);
-
-	left = (mdt->mdt_osfs.os_bavail * mdt->mdt_osfs.os_bsize) / 2;
-
-	grant = left;
-
-	CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %ld want: %llu left: %llu\n",
-	       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
-	       exp, grant, want, left);
-
-	return grant;
-}
-
-void mdt_grant_prepare_write(const struct lu_env *env,
-			     struct obd_export *exp, struct obdo *oa,
-			     struct niobuf_remote *rnb, int niocount)
-{
-	struct mdt_device *mdt = mdt_exp2dev(exp);
-	u64 left;
-
-	ENTRY;
-
-	left = (mdt->mdt_osfs.os_bavail * mdt->mdt_osfs.os_bsize) / 2;
-
-	/* grant more space back to the client if possible */
-	oa->o_grant = left;
-}
-/* ---------------- end of MDT grant code ---------------- */
-
 /* functions below are stubs for now, they will be implemented with
  * grant support on MDT */
 static inline void mdt_io_counter_incr(struct obd_export *exp, int opcode,
 				       char *jobid, long amount)
 {
 	return;
-}
-
-void mdt_grant_prepare_read(const struct lu_env *env,
-			    struct obd_export *exp, struct obdo *oa)
-{
-	return;
-}
-
-void mdt_grant_commit(struct obd_export *exp, unsigned long pending,
-		      int rc)
-{
-	return;
-
 }
 
 static inline void mdt_dom_read_lock(struct mdt_object *mo)
@@ -174,7 +120,7 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 
 	/* Process incoming grant info, set OBD_BRW_GRANTED flag and grant some
 	 * space back if possible */
-	mdt_grant_prepare_write(env, exp, oa, rnb, obj->ioo_bufcnt);
+	tgt_grant_prepare_write(env, exp, oa, rnb, obj->ioo_bufcnt);
 
 	mdt_dom_read_lock(mo);
 	if (!mdt_object_exists(mo)) {
@@ -191,8 +137,11 @@ static int mdt_preprw_write(const struct lu_env *env, struct obd_export *exp,
 		if (unlikely(rc < 0))
 			GOTO(err, rc);
 		/* correct index for local buffers to continue with */
-		for (k = 0; k < rc; k++)
-			lnb[j+k].lnb_flags = rnb[i].rnb_flags;
+		for (k = 0; k < rc; k++) {
+			lnb[j + k].lnb_flags = rnb[i].rnb_flags;
+			if (!(rnb[i].rnb_flags & OBD_BRW_GRANTED))
+				lnb[j + k].lnb_rc = -ENOSPC;
+		}
 		j += rc;
 		*nr_local += rc;
 		tot_bytes += rnb[i].rnb_len;
@@ -209,11 +158,11 @@ err:
 unlock:
 	mdt_dom_read_unlock(mo);
 	/* tgt_grant_prepare_write() was called, so we must commit */
-	mdt_grant_commit(exp, oa->o_grant_used, rc);
+	tgt_grant_commit(exp, oa->o_grant_used, rc);
 	/* let's still process incoming grant information packed in the oa,
 	 * but without enforcing grant since we won't proceed with the write.
 	 * Just like a read request actually. */
-	mdt_grant_prepare_read(env, exp, oa);
+	tgt_grant_prepare_read(env, exp, oa);
 	return rc;
 }
 
@@ -256,7 +205,7 @@ int mdt_obd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 				      objcount, obj, rnb, nr_local, lnb,
 				      jobid);
 	} else if (cmd == OBD_BRW_READ) {
-		mdt_grant_prepare_read(env, exp, oa);
+		tgt_grant_prepare_read(env, exp, oa);
 		rc = mdt_preprw_read(env, exp, mdt, mo, la,
 				     obj->ioo_bufcnt, rnb, nr_local, lnb,
 				     jobid);
@@ -368,6 +317,12 @@ out_stop:
 	if (rc == -ENOSPC)
 		th->th_sync = 1;
 
+
+	if (rc == 0 && granted > 0) {
+		if (tgt_grant_commit_cb_add(th, exp, granted) == 0)
+			granted = 0;
+	}
+
 	th->th_result = rc;
 	dt_trans_stop(env, dt, th);
 	if (rc == -ENOSPC && retries++ < 3) {
@@ -379,7 +334,8 @@ out_stop:
 out:
 	dt_bufs_put(env, dob, lnb, niocount);
 	mdt_dom_read_unlock(mo);
-	mdt_grant_commit(exp, granted, old_rc);
+	if (granted > 0)
+		tgt_grant_commit(exp, granted, old_rc);
 	RETURN(rc);
 }
 

@@ -196,6 +196,10 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 RETURN(-ENOMEM);
         }
 
+	/* pass client page size via ocd_grant_blkbits, the server should report
+	 * back its backend blocksize for grant calculation purpose */
+	data->ocd_grant_blkbits = PAGE_SHIFT;
+
 	/* indicate MDT features supported by this client */
 	data->ocd_connect_flags = OBD_CONNECT_IBITS    | OBD_CONNECT_NODEVOH  |
 				  OBD_CONNECT_ATTRFID  | OBD_CONNECT_GRANT |
@@ -216,7 +220,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 				  OBD_CONNECT_DIR_STRIPE |
 				  OBD_CONNECT_BULK_MBITS | OBD_CONNECT_CKSUM |
 				  OBD_CONNECT_SUBTREE |
-				  OBD_CONNECT_FLAGS2 | OBD_CONNECT_MULTIMODRPCS;
+				  OBD_CONNECT_MULTIMODRPCS |
+				  OBD_CONNECT_GRANT_PARAM | OBD_CONNECT_FLAGS2;
 
 	data->ocd_connect_flags2 = 0;
 

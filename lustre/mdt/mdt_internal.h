@@ -221,6 +221,9 @@ struct mdt_device {
 
 	int			   mdt_max_ea_size;
 
+	/* preferred BRW size, decided by storage type and capability */
+	__u32			   mdt_brw_size;
+
         struct upcall_cache        *mdt_identity_cache;
 
 	unsigned int               mdt_capa_conf:1,
@@ -232,10 +235,6 @@ struct mdt_device {
 
 	/* lock for osfs and md_root */
 	spinlock_t		   mdt_lock;
-
-	/* statfs optimization: we cache a bit  */
-	struct obd_statfs	   mdt_osfs;
-	__u64			   mdt_osfs_age;
 
         /* root squash */
 	struct root_squash_info    mdt_squash;

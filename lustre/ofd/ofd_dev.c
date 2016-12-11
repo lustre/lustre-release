@@ -2902,7 +2902,6 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	struct ofd_thread_info *info = NULL;
 	struct obd_device *obd;
 	struct tg_grants_data *tgd = &m->ofd_lut.lut_tgd;
-	struct obd_statfs *osfs;
 	struct lu_fid fid;
 	struct nm_config_file *nodemap_config;
 	struct obd_device_target *obt;
@@ -2930,21 +2929,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	m->ofd_raid_degraded = 0;
 	m->ofd_syncjournal = 0;
 	ofd_slc_set(m);
-	tgd->tgd_grant_compat_disable = 0;
 	m->ofd_soft_sync_limit = OFD_SOFT_SYNC_LIMIT_DEFAULT;
-
-	/* statfs data */
-	spin_lock_init(&tgd->tgd_osfs_lock);
-	tgd->tgd_osfs_age = cfs_time_shift_64(-1000);
-	tgd->tgd_osfs_unstable = 0;
-	tgd->tgd_statfs_inflight = 0;
-	tgd->tgd_osfs_inflight = 0;
-
-	/* grant data */
-	spin_lock_init(&tgd->tgd_grant_lock);
-	tgd->tgd_tot_dirty = 0;
-	tgd->tgd_tot_granted = 0;
-	tgd->tgd_tot_pending = 0;
 
 	m->ofd_seq_count = 0;
 	init_waitqueue_head(&m->ofd_inconsistency_thread.t_ctl_waitq);
@@ -3008,27 +2993,13 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
 			   "filter_ldlm_cb_client", &obd->obd_ldlm_client);
 
-	dt_conf_get(env, m->ofd_osd, &m->ofd_lut.lut_dt_conf);
-
 	rc = tgt_init(env, &m->ofd_lut, obd, m->ofd_osd, ofd_common_slice,
 		      OBD_FAIL_OST_ALL_REQUEST_NET,
 		      OBD_FAIL_OST_ALL_REPLY_NET);
 	if (rc)
 		GOTO(err_free_ns, rc);
 
-	/* populate cached statfs data */
-	osfs = &ofd_info(env)->fti_u.osfs;
-	rc = tgt_statfs_internal(env, &m->ofd_lut, osfs, 0, NULL);
-	if (rc != 0) {
-		CERROR("%s: can't get statfs data, rc %d\n", obd->obd_name, rc);
-		GOTO(err_fini_lut, rc);
-	}
-	if (!is_power_of_2(osfs->os_bsize)) {
-		CERROR("%s: blocksize (%d) is not a power of 2\n",
-			obd->obd_name, osfs->os_bsize);
-		GOTO(err_fini_lut, rc = -EPROTO);
-	}
-	tgd->tgd_blockbits = fls(osfs->os_bsize) - 1;
+	tgd->tgd_reserved_pcnt = 0;
 
 	if (DT_DEF_BRW_SIZE < (1U << tgd->tgd_blockbits))
 		m->ofd_brw_size = 1U << tgd->tgd_blockbits;
@@ -3037,7 +3008,8 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	m->ofd_cksum_types_supported = cksum_types_supported_server();
 	m->ofd_precreate_batch = OFD_PRECREATE_BATCH_DEFAULT;
-	if (osfs->os_bsize * osfs->os_blocks < OFD_PRECREATE_SMALL_FS)
+	if (tgd->tgd_osfs.os_bsize * tgd->tgd_osfs.os_blocks <
+	    OFD_PRECREATE_SMALL_FS)
 		m->ofd_precreate_batch = OFD_PRECREATE_BATCH_SMALL;
 
 	rc = ofd_fs_setup(env, m, obd);
