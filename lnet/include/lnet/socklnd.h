@@ -45,7 +45,7 @@
 
 #define SOCKLND_CONN_ACK	SOCKLND_CONN_BULK_IN
 
-typedef struct {
+struct ksock_hello_msg {
 	__u32			kshm_magic;	/* magic number of socklnd message */
 	__u32			kshm_version;	/* version of socklnd message */
 	lnet_nid_t		kshm_src_nid;	/* sender's nid */
@@ -57,35 +57,27 @@ typedef struct {
 	__u32			kshm_ctype;	/* connection type */
 	__u32			kshm_nips;	/* # IP addrs */
 	__u32			kshm_ips[0];	/* IP addrs */
-} WIRE_ATTR ksock_hello_msg_t;
+} WIRE_ATTR;
 
-typedef struct {
+struct ksock_lnet_msg {
 	lnet_hdr_t		ksnm_hdr;	/* lnet hdr */
 
 	/*
 	 * ksnm_payload is removed because of winnt compiler's limitation:
 	 * zero-sized array can only be placed at the tail of [nested]
 	 * structure definitions. lnet payload will be stored just after
-	 * the body of structure ksock_lnet_msg_t
+	 * the body of structure struct ksock_lnet_msg
 	 */
-} WIRE_ATTR ksock_lnet_msg_t;
+} WIRE_ATTR;
 
-typedef struct {
+struct ksock_msg {
 	__u32			ksm_type;	/* type of socklnd message */
 	__u32			ksm_csum;	/* checksum if != 0 */
 	__u64			ksm_zc_cookies[2]; /* Zero-Copy request/ACK cookie */
 	union {
-		ksock_lnet_msg_t lnetmsg;	/* lnet message, it's empty if it's NOOP */
+		struct ksock_lnet_msg lnetmsg;	/* lnet message, it's empty if it's NOOP */
 	} WIRE_ATTR ksm_u;
-} WIRE_ATTR ksock_msg_t;
-
-static inline void
-socklnd_init_msg(ksock_msg_t *msg, int type)
-{
-	msg->ksm_csum		= 0;
-	msg->ksm_type		= type;
-	msg->ksm_zc_cookies[0]	= msg->ksm_zc_cookies[1]  = 0;
-}
+} WIRE_ATTR;
 
 #define KSOCK_MSG_NOOP		0xc0		/* ksm_u empty */
 #define KSOCK_MSG_LNET		0xc1		/* lnet msg */

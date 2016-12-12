@@ -1022,7 +1022,7 @@ ksocknal_create_conn(lnet_ni_t *ni, ksock_route_t *route,
         ksock_peer_t      *peer = NULL;
         ksock_peer_t      *peer2;
         ksock_sched_t     *sched;
-        ksock_hello_msg_t *hello;
+	struct ksock_hello_msg *hello;
 	int		   cpt;
         ksock_tx_t        *tx;
         ksock_tx_t        *txtmp;
@@ -1059,7 +1059,7 @@ ksocknal_create_conn(lnet_ni_t *ni, ksock_route_t *route,
 	conn->ksnc_tx_carrier = NULL;
 	atomic_set (&conn->ksnc_tx_nob, 0);
 
-	LIBCFS_ALLOC(hello, offsetof(ksock_hello_msg_t,
+	LIBCFS_ALLOC(hello, offsetof(struct ksock_hello_msg,
 				     kshm_ips[LNET_MAX_INTERFACES]));
         if (hello == NULL) {
                 rc = -ENOMEM;
@@ -1308,7 +1308,7 @@ ksocknal_create_conn(lnet_ni_t *ni, ksock_route_t *route,
                 rc = ksocknal_send_hello(ni, conn, peerid.nid, hello);
         }
 
-        LIBCFS_FREE(hello, offsetof(ksock_hello_msg_t,
+	LIBCFS_FREE(hello, offsetof(struct ksock_hello_msg,
                                     kshm_ips[LNET_MAX_INTERFACES]));
 
         /* setup the socket AFTER I've received hello (it disables
@@ -1384,10 +1384,10 @@ failed_2:
         ksocknal_txlist_done(ni, &zombies, 1);
         ksocknal_peer_decref(peer);
 
- failed_1:
-        if (hello != NULL)
-                LIBCFS_FREE(hello, offsetof(ksock_hello_msg_t,
-                                            kshm_ips[LNET_MAX_INTERFACES]));
+failed_1:
+	if (hello != NULL)
+		LIBCFS_FREE(hello, offsetof(struct ksock_hello_msg,
+					    kshm_ips[LNET_MAX_INTERFACES]));
 
 	LIBCFS_FREE(conn, sizeof(*conn));
 

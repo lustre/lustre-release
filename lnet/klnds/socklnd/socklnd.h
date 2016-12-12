@@ -288,7 +288,7 @@ typedef struct                                  /* transmit packet */
 	struct ksock_conn *tx_conn;        /* owning conn */
         lnet_msg_t    *tx_lnetmsg;     /* lnet message for lnet_finalize() */
         cfs_time_t     tx_deadline;    /* when (in jiffies) tx times out */
-        ksock_msg_t    tx_msg;         /* socklnd message buffer */
+	struct ksock_msg    tx_msg;         /* socklnd message buffer */
         int            tx_desc_size;   /* size of this descriptor */
         union {
                 struct {
@@ -358,7 +358,7 @@ typedef struct ksock_conn
         ksock_rxiovspace_t    ksnc_rx_iov_space;/* space for frag descriptors */
         __u32                 ksnc_rx_csum;     /* partial checksum for incoming data */
         void                 *ksnc_cookie;      /* rx lnet_finalize passthru arg */
-        ksock_msg_t           ksnc_msg;         /* incoming message buffer:
+	struct ksock_msg           ksnc_msg;         /* incoming message buffer:
                                                  * V2.x message takes the
                                                  * whole struct
                                                  * V1.x message is a bare
@@ -452,10 +452,10 @@ extern ksock_tunables_t ksocknal_tunables;
 typedef struct ksock_proto
 {
         int           pro_version;                                              /* version number of protocol */
-        int         (*pro_send_hello)(ksock_conn_t *, ksock_hello_msg_t *);     /* handshake function */
-        int         (*pro_recv_hello)(ksock_conn_t *, ksock_hello_msg_t *, int);/* handshake function */
+	int         (*pro_send_hello)(ksock_conn_t *, struct ksock_hello_msg *);     /* handshake function */
+	int         (*pro_recv_hello)(ksock_conn_t *, struct ksock_hello_msg *, int);/* handshake function */
         void        (*pro_pack)(ksock_tx_t *);                                  /* message pack */
-        void        (*pro_unpack)(ksock_msg_t *);                               /* message unpack */
+	void        (*pro_unpack)(struct ksock_msg *);				/* message unpack */
         ksock_tx_t *(*pro_queue_tx_msg)(ksock_conn_t *, ksock_tx_t *);          /* queue tx on the connection */
         int         (*pro_queue_tx_zcack)(ksock_conn_t *, ksock_tx_t *, __u64); /* queue ZC ack on the connection */
         int         (*pro_handle_zcreq)(ksock_conn_t *, __u64, int);            /* handle ZC request */
@@ -654,11 +654,11 @@ extern int ksocknal_new_packet (ksock_conn_t *conn, int skip);
 extern int ksocknal_scheduler (void *arg);
 extern int ksocknal_connd (void *arg);
 extern int ksocknal_reaper (void *arg);
-extern int ksocknal_send_hello (lnet_ni_t *ni, ksock_conn_t *conn,
-                                lnet_nid_t peer_nid, ksock_hello_msg_t *hello);
-extern int ksocknal_recv_hello (lnet_ni_t *ni, ksock_conn_t *conn,
-                                ksock_hello_msg_t *hello, lnet_process_id_t *id,
-                                __u64 *incarnation);
+extern int ksocknal_send_hello(lnet_ni_t *ni, ksock_conn_t *conn,
+				lnet_nid_t peer_nid, struct ksock_hello_msg *hello);
+extern int ksocknal_recv_hello(lnet_ni_t *ni, ksock_conn_t *conn,
+			       struct ksock_hello_msg *hello, lnet_process_id_t *id,
+			       __u64 *incarnation);
 extern void ksocknal_read_callback(ksock_conn_t *conn);
 extern void ksocknal_write_callback(ksock_conn_t *conn);
 
