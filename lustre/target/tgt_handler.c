@@ -1608,6 +1608,9 @@ int tgt_brw_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 	LASSERT(mode == LCK_PR || mode == LCK_PW);
 	LASSERT(!lustre_handle_is_used(lh));
 
+	if (ns->ns_obd->obd_recovering)
+		RETURN(0);
+
 	if (nrbufs == 0 || !(nb[0].rnb_flags & OBD_BRW_SRVLOCK))
 		RETURN(0);
 
