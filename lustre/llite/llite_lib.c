@@ -955,6 +955,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 		lli->lli_async_rc = 0;
 	}
 	mutex_init(&lli->lli_layout_mutex);
+	memset(lli->lli_jobid, 0, LUSTRE_JOBID_SIZE);
 }
 
 static inline int ll_bdi_register(struct backing_dev_info *bdi)
