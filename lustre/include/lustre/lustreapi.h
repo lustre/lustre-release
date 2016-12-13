@@ -142,10 +142,11 @@ extern int llapi_file_lookup(int dirfd, const char *name);
 #define VERBOSE_COMP_END	0x1000
 #define VERBOSE_COMP_ID		0x2000
 #define VERBOSE_DFID		0x4000
+#define VERBOSE_HASH_TYPE	0x8000
 #define VERBOSE_DEFAULT		(VERBOSE_COUNT | VERBOSE_SIZE | \
 				 VERBOSE_OFFSET | VERBOSE_POOL | \
 				 VERBOSE_OBJID | VERBOSE_GENERATION | \
-				 VERBOSE_LAYOUT)
+				 VERBOSE_LAYOUT | VERBOSE_HASH_TYPE)
 
 struct find_param {
 	unsigned int		 fp_max_depth;

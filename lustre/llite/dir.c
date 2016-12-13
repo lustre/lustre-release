@@ -1350,6 +1350,7 @@ lmv_out_free:
 		tmp->lum_magic = LMV_MAGIC_V1;
 		tmp->lum_stripe_count = 0;
 		tmp->lum_stripe_offset = mdt_index;
+		tmp->lum_hash_type = lmv_mds_md_hash_type_get(lmm);
 		for (i = 0; i < stripe_count; i++) {
 			struct lu_fid	fid;
 

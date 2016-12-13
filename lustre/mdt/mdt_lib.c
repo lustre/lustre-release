@@ -616,10 +616,12 @@ void mdt_dump_lmv(unsigned int level, const union lmv_mds_md *lmv)
 		return;
 
 	lmm1 = &lmv->lmv_md_v1;
-	CDEBUG(level, "magic 0x%08X, master %#X stripe_count %#x\n",
+	CDEBUG(level,
+	       "magic 0x%08X, master %#X stripe_count %#x hash_type %#x\n",
 	       le32_to_cpu(lmm1->lmv_magic),
 	       le32_to_cpu(lmm1->lmv_master_mdt_index),
-	       le32_to_cpu(lmm1->lmv_stripe_count));
+	       le32_to_cpu(lmm1->lmv_stripe_count),
+	       le32_to_cpu(lmm1->lmv_hash_type));
 
 	if (le32_to_cpu(lmm1->lmv_magic) == LMV_MAGIC_STRIPE)
 		return;

@@ -1084,6 +1084,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 			if (!mdt_is_striped_client(req->rq_export))
 				RETURN(-ENOTSUPP);
 			LASSERT(S_ISDIR(la->la_mode));
+			mdt_dump_lmv(D_INFO, ma->ma_lmv);
 			repbody->mbo_eadatasize = ma->ma_lmv_size;
 			repbody->mbo_valid |= (OBD_MD_FLDIREA |
 					       OBD_MD_DEFAULT_MEA);

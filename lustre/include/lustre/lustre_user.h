@@ -441,10 +441,13 @@ enum lmv_hash_type {
 	LMV_HASH_TYPE_UNKNOWN	= 0,	/* 0 is reserved for testing purpose */
 	LMV_HASH_TYPE_ALL_CHARS = 1,
 	LMV_HASH_TYPE_FNV_1A_64 = 2,
+	LMV_HASH_TYPE_MAX,
 };
 
 #define LMV_HASH_NAME_ALL_CHARS	"all_char"
 #define LMV_HASH_NAME_FNV_1A_64	"fnv_1a_64"
+
+extern char *mdt_hash_name[LMV_HASH_TYPE_MAX];
 
 /* Got this according to how get LOV_MAX_STRIPE_COUNT, see above,
  * (max buffer size - lmv+rpc header) / sizeof(struct lmv_user_mds_data) */
