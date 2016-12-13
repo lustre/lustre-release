@@ -36,7 +36,9 @@
 #ifndef _INTERVAL_H__
 #define _INTERVAL_H__
 
-#include <libcfs/libcfs.h>   /* LASSERT. */
+#include <linux/errno.h>
+#include <linux/string.h>
+#include <linux/types.h>
 
 struct interval_node {
         struct interval_node   *in_left;
