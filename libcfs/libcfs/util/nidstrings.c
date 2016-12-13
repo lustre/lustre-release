@@ -482,6 +482,18 @@ static struct netstrfns libcfs_netstrfns[] = {
 		.nf_match_addr		= cfs_ip_addr_match,
 		.nf_is_contiguous	= cfs_ip_is_contiguous,
 		.nf_min_max		= cfs_ip_min_max
+	},
+	{
+		.nf_type		= PTL4LND,
+		.nf_name		= "ptlf",
+		.nf_modname		= "kptl4lnd",
+		.nf_addr2str		= libcfs_decnum_addr2str,
+		.nf_str2addr		= libcfs_num_str2addr,
+		.nf_parse_addrlist	= libcfs_num_parse,
+		.nf_print_addrlist	= libcfs_num_addr_range_print,
+		.nf_match_addr		= libcfs_num_match,
+		.nf_is_contiguous	= cfs_num_is_contiguous,
+		.nf_min_max		= cfs_num_min_max
 	}
 };
 

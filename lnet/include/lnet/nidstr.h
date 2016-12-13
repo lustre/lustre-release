@@ -49,6 +49,7 @@ enum {
 	MXLND		= 12,
 	GNILND		= 13,
 	GNIIPLND	= 14,
+	PTL4LND		= 15,
 };
 
 struct list_head;

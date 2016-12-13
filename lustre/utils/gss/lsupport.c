@@ -301,6 +301,7 @@ static struct convert_struct converter[] = {
         [LOLND]         = { "LOLND",    lolnd_nid2hostname },
         [RALND]         = { "RALND",    external_nid2hostname },
         [MXLND]         = { "MXLND",    external_nid2hostname },
+	[PTL4LND]	= { "PTL4LND",  external_nid2hostname },
 };
 
 #define LND_MAX         (sizeof(converter) / sizeof(converter[0]))

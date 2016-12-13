@@ -594,14 +594,15 @@ jt_ptl_del_interface (int argc, char **argv)
 int
 jt_ptl_print_peers (int argc, char **argv)
 {
-        struct libcfs_ioctl_data data;
-        lnet_process_id_t        id;
+	struct libcfs_ioctl_data data;
+	lnet_process_id_t        id;
 	char                     buffer[2][HOST_NAME_MAX + 1];
-        int                      index;
-        int                      rc;
+	int                      index;
+	int                      rc;
 
-	if (!g_net_is_compatible (argv[0], SOCKLND, O2IBLND, GNILND, 0))
-                return -1;
+	if (!g_net_is_compatible(argv[0], SOCKLND, O2IBLND, GNILND,
+				 PTL4LND, 0))
+		return -1;
 
         for (index = 0;;index++) {
                 LIBCFS_IOC_INIT(data);
@@ -714,14 +715,15 @@ int jt_ptl_add_peer(int argc, char **argv)
 int
 jt_ptl_del_peer (int argc, char **argv)
 {
-        struct libcfs_ioctl_data data;
-        lnet_nid_t               nid = LNET_NID_ANY;
-        lnet_pid_t               pid = LNET_PID_ANY;
-        __u32                    ip = 0;
-        int                      rc;
+	struct libcfs_ioctl_data data;
+	lnet_nid_t               nid = LNET_NID_ANY;
+	lnet_pid_t               pid = LNET_PID_ANY;
+	__u32                    ip = 0;
+	int                      rc;
 
-	if (!g_net_is_compatible(argv[0], SOCKLND, O2IBLND, GNILND, 0))
-                return -1;
+	if (!g_net_is_compatible(argv[0], SOCKLND, O2IBLND, GNILND,
+				 PTL4LND, 0))
+		return -1;
 
         if (g_net_is_compatible(NULL, SOCKLND, 0)) {
                 if (argc > 3) {
