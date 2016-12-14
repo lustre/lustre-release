@@ -1859,9 +1859,11 @@ struct thandle {
 	unsigned int		th_sync:1,
 	/* local transation, no need to inform other layers */
 				th_local:1,
-	/* Whether we need wait the transaction to be submitted */
+	/* Whether we need wait the transaction to be submitted
+	 * (send to remote target) */
 				th_wait_submit:1,
-	/* complex transaction which will track updates on all targets */
+	/* complex transaction which will track updates on all targets,
+	 * including OSTs */
 				th_complex:1;
 };
 

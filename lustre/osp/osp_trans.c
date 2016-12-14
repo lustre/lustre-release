@@ -1258,7 +1258,7 @@ struct thandle *osp_get_storage_thandle(const struct lu_env *env,
  *
  * Set the version for the transaction and add the request to
  * the sending list, then after transaction stop, the request
- * will be picked in the order of version, by sending thread.
+ * will be sent in the order of version by the sending thread.
  *
  * \param [in] oth	osp thandle to be set version.
  *
@@ -1288,6 +1288,7 @@ int osp_check_and_set_rpc_version(struct osp_thandle *oth,
 	/* Assign the version and add it to the sending list */
 	osp_thandle_get(oth);
 	oth->ot_our->our_version = ou->ou_version++;
+	oth->ot_our->our_generation = ou->ou_generation;
 	list_add_tail(&oth->ot_our->our_list,
 		      &osp->opd_update->ou_list);
 	oth->ot_our->our_req_ready = 0;
@@ -1295,8 +1296,8 @@ int osp_check_and_set_rpc_version(struct osp_thandle *oth,
 	spin_unlock(&ou->ou_lock);
 
 	LASSERT(oth->ot_super.th_wait_submit == 1);
-	CDEBUG(D_INFO, "%s: version %llu oth:version %p:%llu\n",
-	       osp->opd_obd->obd_name, ou->ou_version, oth,
+	CDEBUG(D_INFO, "%s: version %llu gen %llu oth:version %p:%llu\n",
+	       osp->opd_obd->obd_name, ou->ou_version, ou->ou_generation, oth,
 	       oth->ot_our->our_version);
 
 	return 0;
@@ -1372,6 +1373,11 @@ void osp_invalidate_request(struct osp_device *osp)
 	if (rc < 0) {
 		CERROR("%s: init env error: rc = %d\n", osp->opd_obd->obd_name,
 		       rc);
+
+		spin_lock(&ou->ou_lock);
+		ou->ou_generation++;
+		spin_unlock(&ou->ou_lock);
+
 		return;
 	}
 
@@ -1397,6 +1403,9 @@ void osp_invalidate_request(struct osp_device *osp)
 		       our);
 	}
 
+	/* Increase the generation, then the update request with old generation
+	 * will fail with -EIO. */
+	ou->ou_generation++;
 	spin_unlock(&ou->ou_lock);
 
 	/* invalidate all of request in the sending list */
@@ -1464,7 +1473,8 @@ int osp_send_update_thread(void *arg)
 			osp_trans_callback(&env, our->our_th,
 				our->our_th->ot_super.th_result);
 			rc = our->our_th->ot_super.th_result;
-		} else if (OBD_FAIL_CHECK(OBD_FAIL_INVALIDATE_UPDATE)) {
+		} else if (ou->ou_generation != our->our_generation ||
+			   OBD_FAIL_CHECK(OBD_FAIL_INVALIDATE_UPDATE)) {
 			rc = -EIO;
 			osp_trans_callback(&env, our->our_th, rc);
 		} else {

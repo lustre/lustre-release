@@ -115,6 +115,7 @@ struct osp_update_request {
 	struct osp_thandle		*our_th;
 
 	__u64				our_version;
+	__u64				our_generation;
 	/* protect our_list and flag */
 	spinlock_t			our_list_lock;
 	/* linked to the list(ou_list) in osp_updates */
@@ -128,9 +129,22 @@ struct osp_updates {
 	struct list_head	ou_list;
 	spinlock_t		ou_lock;
 	wait_queue_head_t	ou_waitq;
-	/* wait for next updates */
+
+	/* The next rpc version which supposed to be sent in
+	 * osp_send_update_thread().*/
 	__u64			ou_rpc_version;
+
+	/* The rpc version assigned to the osp thandle during (osp_md_write()),
+	 * which will be sent by this order. Note: the osp_thandle has be sent
+	 * by this order to make sure the remote update log will follow the
+	 * llog format rule. XXX: these probably should be removed once we
+	 * invent new llog format */
 	__u64			ou_version;
+
+	/* The generation of current osp update RPC, which is used to make sure
+	 * those stale RPC(with older generation) will not be sent, otherwise it
+	 * will cause update lllog corruption */
+	__u64			ou_generation;
 };
 
 struct osp_device {

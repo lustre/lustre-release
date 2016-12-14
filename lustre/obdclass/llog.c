@@ -538,9 +538,13 @@ repeat:
 			}
 
 			if (rec->lrh_len == 0 || rec->lrh_len > chunk_size) {
-				CWARN("invalid length %d in llog record for "
-				      "index %d/%d\n", rec->lrh_len,
-				      rec->lrh_index, index);
+				CWARN("%s: invalid length %d in llog "DOSTID
+				      "record for index %d/%d\n",
+				       loghandle->lgh_ctxt->loc_obd->obd_name,
+				       rec->lrh_len,
+				       POSTID(&loghandle->lgh_id.lgl_oi),
+				       rec->lrh_index, index);
+
 				GOTO(out, rc = -EINVAL);
 			}
 
@@ -551,9 +555,10 @@ repeat:
 			}
 
 			if (rec->lrh_index != index) {
-				CERROR("%s: Invalid record: index %u but "
-				       "expected %u\n",
+				CERROR("%s: "DOSTID" Invalid record: index %u"
+				       " but expected %u\n",
 				       loghandle->lgh_ctxt->loc_obd->obd_name,
+				       POSTID(&loghandle->lgh_id.lgl_oi),
 				       rec->lrh_index, index);
 				GOTO(out, rc = -ERANGE);
 			}
