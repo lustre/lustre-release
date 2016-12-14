@@ -1805,15 +1805,17 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/namei.c
  	err = ext4_handle_dirty_dirent_node(handle, dir, bh2);
  	if (err)
  		goto journal_error;
-@@ -1945,7 +2283,7 @@ static int make_indexed_dir(handle_t *ha
- 	ext4_handle_dirty_dx_node(handle, dir, frame->bh);
- 	ext4_handle_dirty_dirent_node(handle, dir, bh);
+@@ -1945,9 +2283,9 @@ static int make_indexed_dir(handle_t *ha
+ 	retval = ext4_handle_dirty_dirent_node(handle, dir, bh2);
+ 	if (retval)
+ 		goto out_frames;	
  
--	de = do_split(handle,dir, &bh, frame, &fname->hinfo);
-+	de = do_split(handle, dir, &bh, frames, frame, &fname->hinfo, NULL);
+-	de = do_split(handle,dir, &bh2, frame, &fname->hinfo);
++	de = do_split(handle, dir, &bh2, frames, frame, &fname->hinfo, NULL);
 	if (IS_ERR(de)) {
- 		/*
- 		 * Even if the block split failed, we have to properly write
+ 		retval = PTR_ERR(de);
+ 		goto out_frames;
+ 	}
 @@ -2051,8 +2389,8 @@ out:
   * may not sleep between calling this and putting something into
   * the entry, as someone else might have used it while you slept.

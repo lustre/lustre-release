@@ -459,15 +459,22 @@ Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
  
  	/* Initialize as for dx_probe */
  	hinfo.hash_version = dx_info->hash_version;
-@@ -1876,7 +2476,7 @@ static int make_indexed_dir(handle_t *ha
+@@ -1876,14 +2476,14 @@ static int make_indexed_dir(handle_t *ha
  	}
- 	dx_release(frames);
  
--	retval = add_dirent_to_buf(handle, fname, dir, inode, de, bh);
-+	retval = add_dirent_to_buf(handle, fname, dir, inode, de, bh, dentry);
+-	retval = add_dirent_to_buf(handle, fname, dir, inode, de, bh2);
++	retval = add_dirent_to_buf(handle, fname, dir, inode, de, bh2, dentry);
+ out_frames:
+ 	/*
+ 	 * Even if the block split failed, we have to properly write
+ 	 * out all the changes we did so far. Otherwise we can end up
+ 	 * with corrupted filesystem.
+ 	 */
+ 	if (retval)
+ 		ext4_mark_inode_dirty(handle, dir);
+ 	dx_release(frames);
  	brelse(bh);
  	return retval;
- out_frames:
 @@ -1909,6 +1949,8 @@ static int ext4_update_dotdot(handle_t *
  	struct buffer_head * dir_block;
  	struct ext4_dir_entry_2 * de;
