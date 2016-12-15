@@ -3499,14 +3499,21 @@ int jt_nodemap_add_range(int argc, char **argv)
 		return -1;
 	}
 
-	if (!cfs_nidrange_is_contiguous(&nidlist)) {
-		fprintf(stderr, "error: %s: nodemap ranges must be "
-			"contiguous\n", jt_cmdname(argv[0]));
-		return -1;
+	rc = cfs_nidrange_find_min_max(&nidlist, &min_nid[0], &max_nid[0],
+				       LNET_NIDSTR_SIZE);
+	if (rc < 0) {
+		errno = -rc;
+		if (rc == -EINVAL)
+			fprintf(stderr, "error: %s: nid range uses "
+				"currently unsupported features\n",
+				jt_cmdname(argv[0]));
+		else if (rc == -ERANGE)
+			fprintf(stderr, "error: %s: nodemap ranges must be "
+				"contiguous\n", jt_cmdname(argv[0]));
+
+		return rc;
 	}
 
-	cfs_nidrange_find_min_max(&nidlist, &min_nid[0], &max_nid[0],
-				  LNET_NIDSTR_SIZE);
 	snprintf(nid_range, sizeof(nid_range), "%s:%s", min_nid, max_nid);
 
 	rc = nodemap_cmd(LCFG_NODEMAP_ADD_RANGE, NULL, 0, argv[0],
@@ -3588,14 +3595,21 @@ int jt_nodemap_del_range(int argc, char **argv)
 		return -1;
 	}
 
-	if (!cfs_nidrange_is_contiguous(&nidlist)) {
-		fprintf(stderr, "error: %s: nodemap ranges must be "
-			"contiguous\n", jt_cmdname(argv[0]));
-		return -1;
+	rc = cfs_nidrange_find_min_max(&nidlist, &min_nid[0], &max_nid[0],
+				       LNET_NIDSTR_SIZE);
+	if (rc < 0) {
+		errno = -rc;
+		if (rc == -EINVAL)
+			fprintf(stderr, "error: %s: nid range uses "
+				"currently unsupported features\n",
+				jt_cmdname(argv[0]));
+		else if (rc == -ERANGE)
+			fprintf(stderr, "error: %s: nodemap ranges must be "
+				"contiguous\n", jt_cmdname(argv[0]));
+
+		return rc;
 	}
 
-	cfs_nidrange_find_min_max(&nidlist, &min_nid[0], &max_nid[0],
-				  LNET_NIDSTR_SIZE);
 	snprintf(nid_range, sizeof(nid_range), "%s:%s", min_nid, max_nid);
 
 	rc = nodemap_cmd(LCFG_NODEMAP_DEL_RANGE, NULL, 0, argv[0],

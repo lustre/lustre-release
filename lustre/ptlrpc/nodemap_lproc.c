@@ -823,11 +823,11 @@ static int parse_nids(char *rangestr, lnet_nid_t nids[2])
 	    &nidlist) <= 0)
 		return -EINVAL;
 
-	if (!cfs_nidrange_is_contiguous(&nidlist))
-		return -EINVAL;
+	rc = cfs_nidrange_find_min_max(&nidlist, nidstr[0], nidstr[1],
+				       LNET_NIDSTR_SIZE);
+	if (rc < 0)
+		return rc;
 
-	cfs_nidrange_find_min_max(&nidlist, nidstr[0], nidstr[1],
-				  LNET_NIDSTR_SIZE);
 	snprintf(nidrange_str, sizeof(nidrange_str), "%s:%s",
 		nidstr[0], nidstr[1]);
 
