@@ -778,6 +778,36 @@ test_10b() {
 }
 run_test 10b "delete range from the correct nodemap"
 
+test_10c() { #LU-8912
+	[ $(lustre_version_code mgs) -lt $(version_code 2.10.57) ] &&
+		skip "Need MGS >= 2.10.57" && return
+
+	local nm="nodemap_lu8912"
+	local nid_range="10.210.[32-47].[0-255]@o2ib3"
+	local start_nid="10.210.32.0@o2ib3"
+	local end_nid="10.210.47.255@o2ib3"
+	local start_nid_found
+	local end_nid_found
+
+	do_facet mgs $LCTL nodemap_del $nm 2>/dev/null
+	do_facet mgs $LCTL nodemap_add $nm || error "Add $nm failed"
+	do_facet mgs $LCTL nodemap_add_range --name $nm --range $nid_range ||
+		error "Add range $nid_range to $nm failed"
+
+	start_nid_found=$(do_facet mgs $LCTL get_param nodemap.$nm.* |
+		awk -F '[,: ]' /start_nid/'{ print $9 }')
+	[ "$start_nid" == "$start_nid_found" ] ||
+		error "start_nid: $start_nid_found != $start_nid"
+	end_nid_found=$(do_facet mgs $LCTL get_param nodemap.$nm.* |
+		awk -F '[,: ]' /end_nid/'{ print $13 }')
+	[ "$end_nid" == "$end_nid_found" ] ||
+		error "end_nid: $end_nid_found != $end_nid"
+
+	do_facet mgs $LCTL nodemap_del $nm || error "Delete $nm failed"
+	return 0
+}
+run_test 10c "verfify contiguous range support"
+
 test_11() {
 	local rc
 
