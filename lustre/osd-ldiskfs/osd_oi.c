@@ -567,6 +567,14 @@ int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 
 	rc = osd_fld_lookup(info->oti_env, osd, fid_seq(fid), range);
 	if (rc != 0) {
+		/* During upgrade, OST FLDB might not be loaded because
+		 * OST FLDB is not created until 2.6, so if some DNE
+		 * filesystem upgrade from 2.5 to 2.7/2.8, they will
+		 * not be able to find the sequence from local FLDB
+		 * cache see fld_index_init(). */
+		if (rc == -ENOENT && osd->od_is_ost)
+			RETURN(1);
+
 		if (rc != -ENOENT)
 			CERROR("%s: lookup FLD "DFID": rc = %d\n",
 			       osd_name(osd), PFID(fid), rc);
