@@ -14072,8 +14072,8 @@ test_253() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 
-	local ost_name=$($LFS osts | grep ${ostidx}": " | \
-		awk '{print $2}' | sed -e 's/_UUID$//')
+	local ost_name=$($LFS osts |
+		sed -n 's/^'$ostidx': \(.*\)_UUID .*/\1/p')
 	# on the mdt's osc
 	local mdtosc_proc1=$(get_mdtosc_proc_path $SINGLEMDS $ost_name)
 	do_facet $SINGLEMDS $LCTL get_param -n \
