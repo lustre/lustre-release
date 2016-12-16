@@ -551,6 +551,7 @@ typedef struct {
 #define IBLND_REJECT_RDMA_FRAGS      6
 /* peer_ni's msg queue size doesn't match mine */
 #define IBLND_REJECT_MSG_QUEUE_SIZE  7
+#define IBLND_REJECT_INVALID_SRV_ID  8
 
 /***********************************************************************/
 
