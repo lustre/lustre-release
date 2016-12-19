@@ -1235,6 +1235,13 @@ int class_disconnect(struct obd_export *export)
 	spin_lock(&export->exp_lock);
 	already_disconnected = export->exp_disconnected;
 	export->exp_disconnected = 1;
+	/*  We hold references of export for uuid hash
+	 *  and nid_hash and export link at least. So
+	 *  it is safe to call cfs_hash_del in there.  */
+	if (!hlist_unhashed(&export->exp_nid_hash))
+		cfs_hash_del(export->exp_obd->obd_nid_hash,
+			     &export->exp_connection->c_peer.nid,
+			     &export->exp_nid_hash);
 	spin_unlock(&export->exp_lock);
 
         /* class_cleanup(), abort_recovery(), and class_fail_export()
@@ -1247,11 +1254,6 @@ int class_disconnect(struct obd_export *export)
 
 	CDEBUG(D_IOCTL, "disconnect: cookie %#llx\n",
                export->exp_handle.h_cookie);
-
-	if (!hlist_unhashed(&export->exp_nid_hash))
-                cfs_hash_del(export->exp_obd->obd_nid_hash,
-                             &export->exp_connection->c_peer.nid,
-                             &export->exp_nid_hash);
 
         class_export_recovery_cleanup(export);
         class_unlink_export(export);
