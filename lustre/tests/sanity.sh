@@ -12573,7 +12573,7 @@ test_220() { #LU-325
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_val=-1
 	#define OBD_FAIL_OST_ENOINO              0x229
 	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x229
-	do_facet mgs $LCTL pool_new $FSNAME.$TESTNAME || return 1
+	create_pool $FSNAME.$TESTNAME || return 1
 	do_facet mgs $LCTL pool_add $FSNAME.$TESTNAME $OST || return 2
 
 	$SETSTRIPE $DIR/$tdir -i $OSTIDX -c 1 -p $FSNAME.$TESTNAME
@@ -14122,8 +14122,7 @@ test_253() {
 			osp.$mdtosc_proc1.reserved_mb_low)
 	echo "prev high watermark $last_wm_h, prev low watermark $last_wm_l"
 
-	do_facet mgs $LCTL pool_new $FSNAME.$TESTNAME ||
-		error "Pool creation failed"
+	create_pool $FSNAME.$TESTNAME || error "Pool creation failed"
 	do_facet mgs $LCTL pool_add $FSNAME.$TESTNAME $ost_name ||
 		error "Adding $ost_name to pool failed"
 
