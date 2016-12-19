@@ -5839,7 +5839,8 @@ test_82b() { # LU-4665
 	wait_update $HOSTNAME "$LCTL get_param -n lov.$FSNAME-*.pools.$TESTNAME|
 			       sort -u | tr '\n' ' ' " "$ost_targets_uuid" ||
 					error "wait_update $ost_pool failed"
-	pool_list $ost_pool || error "list OST pool $ost_pool failed"
+	[[ -z $(list_pool $ost_pool) ]] &&
+			error "list OST pool $ost_pool failed"
 
 	# If [--pool|-p <pool_name>] is set with [--ost-list|-o <ost_indices>],
 	# then the OSTs must be the members of the pool.
