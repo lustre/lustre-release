@@ -56,6 +56,12 @@ fi
 # write_disjoint
 [ "$SLOW" = "no" ] && wdisjoint_REP=${wdisjoint_REP:-100}
 
+# fs_test
+if [ "$SLOW" = "no" ]; then
+	fs_test_ndirs=${fs_test_ndirs:-10000}
+	fs_test_nobj=${fs_test_nobj:-2}
+fi
+
 . $LUSTRE/tests/functions.sh
 
 build_test_filter
@@ -134,6 +140,11 @@ test_statahead () {
     run_statahead
 }
 run_test statahead "statahead test, multiple clients"
+
+test_fs_test () {
+	run_fs_test
+}
+run_test fs_test "fs_test"
 
 [ $(facet_fstype $SINGLEMDS) = zfs -o $(facet_fstype "ost1") = zfs ] &&
 	SLOW=$ZFSSLOW

@@ -957,3 +957,83 @@ run_statahead () {
     rm -rf $testdir
     cleanup_statahead $clients $mntpt_root $num_mntpts
 }
+
+run_fs_test() {
+	# fs_test.x is the default name for exe
+	FS_TEST=${FS_TEST:=$(which fs_test.x 2> /dev/null || true)}
+
+	local clients=${CLIENTS:-$(hostname)}
+	local testdir=$DIR/d0.fs_test
+	local file=${testdir}/fs_test
+	fs_test_threads=${fs_test_threads:-2}
+	fs_test_type=${fs_test_type:-1}
+	fs_test_nobj=${fs_test_nobj:-10}
+	fs_test_check=${fs_test_check:-3}
+	fs_test_strided=${fs_test_strided:-1}
+	fs_test_touch=${fs_test_touch:-3}
+	fs_test_supersize=${fs_test_supersize:-1}
+	fs_test_op=${fs_test_op:-write}
+	fs_test_barriers=${fs_test_barriers:-bopen,bwrite,bclose}
+	fs_test_io=${fs_test_io:-mpi}
+	fs_test_objsize=${fs_test_objsize:-100}
+	fs_test_objunit=${fs_test_objunit:-1048576} # 1 mb
+	fs_test_ndirs=${fs_test_ndirs:-80000}
+
+	[ x$FS_TEST = x ] &&
+		{ skip "FS_TEST not found" && return; }
+
+	# Space estimation  in bytes
+	local space=$(df -B 1 -P $dir | tail -n 1 | awk '{ print $4 }')
+	local total_threads=$((num_clients * fs_test_threads))
+	echo "+ $fs_test_objsize * $fs_test_objunit * $total_threads "
+	if [ $((space / 2)) -le \
+		$((fs_test_objsize * fs_test_objunit * total_threads)) ]; then
+			fs_test_objsize=$((space / 2 / fs_test_objunit / \
+				total_threads))
+			[ $fs_test_objsize -eq 0 ] && \
+			skip_env "Need free space more than \
+				$((2 * total_threads * fs_test_objunit)) \
+				: have $((space / fs_test_objunit))" &&
+				return
+
+			echo "(reduced objsize to \
+				$((fs_test_objsize * fs_test_objunit)) bytes)"
+	fi
+
+	print_opts FS_TEST clients fs_test_threads fs_test_objsize MACHINEFILE
+
+	mkdir -p $testdir
+	# mpi_run uses mpiuser
+	chmod 0777 $testdir
+
+	# --nodb          Turn off the database code at runtime
+	# -g --target     The path to the data file
+	# -t --type       Whether to do N-N (1) or N-1 (2)
+	# -n --nobj       The number of objects written/read by each proc
+	# -z --size       The size of each object
+	# -d ---num_nn_dirs Number of subdirectories for files
+	# -C --check      Check every byte using argument 3.
+	# --collective    Whether to use collective I/O (for N-1, mpi-io only)
+	# -s --strided    Whether to use a strided pattern (for N-1 only)
+	# -T --touch      Touch every byte using argument 3
+	# -o --op         Whether to read only (read) or write only (write)
+	# -b --barriers   When to barrier.
+	# -i --io         Use POSIX, MPI, or PLFS IO routines (mpi|posix|plfs)
+	# -S --supersize  Specify how many objects per superblock
+
+	local cmd="$FS_TEST -nodb -g $file -t $fs_test_type -n $fs_test_nobj \
+		-z $((fs_test_objsize * fs_test_objunit)) -d $fs_test_ndirs \
+		-C $fs_test_check -collective -s $fs_test_strided \
+		-T $fs_test_touch -o $fs_test_op -b $fs_test_barriers \
+		-i $fs_test_io -S $fs_test_supersize"
+
+	echo "+ $cmd"
+	mpi_run "-np $((num_clients * fs_test_threads))" $cmd
+
+	local rc=$?
+	if [ $rc != 0 ] ; then
+		error "fs_test failed! $rc"
+	fi
+
+	rm -rf $testdir
+}
