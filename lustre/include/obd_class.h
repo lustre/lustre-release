@@ -1163,54 +1163,48 @@ static inline void obd_import_event(struct obd_device *obd,
 }
 
 static inline int obd_notify(struct obd_device *obd,
-                             struct obd_device *watched,
-                             enum obd_notify_event ev,
-                             void *data)
+			     struct obd_device *watched,
+			     enum obd_notify_event ev)
 {
-        int rc;
-        ENTRY;
-        OBD_CHECK_DEV(obd);
+	int rc;
+	ENTRY;
+	OBD_CHECK_DEV(obd);
 
 	if (!obd->obd_set_up) {
-                CDEBUG(D_HA, "obd %s not set up\n", obd->obd_name);
-                RETURN(-EINVAL);
-        }
+		CDEBUG(D_HA, "obd %s not set up\n", obd->obd_name);
+		RETURN(-EINVAL);
+	}
 
-        if (!OBP(obd, notify)) {
-                CDEBUG(D_HA, "obd %s has no notify handler\n", obd->obd_name);
-                RETURN(-ENOSYS);
-        }
+	if (!OBP(obd, notify)) {
+		CDEBUG(D_HA, "obd %s has no notify handler\n", obd->obd_name);
+		RETURN(-ENOSYS);
+	}
 
-        OBD_COUNTER_INCREMENT(obd, notify);
-        rc = OBP(obd, notify)(obd, watched, ev, data);
-        RETURN(rc);
+	OBD_COUNTER_INCREMENT(obd, notify);
+	rc = OBP(obd, notify)(obd, watched, ev);
+
+	RETURN(rc);
 }
 
 static inline int obd_notify_observer(struct obd_device *observer,
-                                      struct obd_device *observed,
-                                      enum obd_notify_event ev,
-                                      void *data)
+				      struct obd_device *observed,
+				      enum obd_notify_event ev)
 {
-        int rc1;
-        int rc2;
+	int rc = 0;
+	int rc2 = 0;
+	struct obd_notify_upcall *onu;
 
-        struct obd_notify_upcall *onu;
+	if (observer->obd_observer)
+		rc = obd_notify(observer->obd_observer, observed, ev);
 
-        if (observer->obd_observer)
-                rc1 = obd_notify(observer->obd_observer, observed, ev, data);
-        else
-                rc1 = 0;
-        /*
-         * Also, call non-obd listener, if any
-         */
-        onu = &observer->obd_upcall;
-        if (onu->onu_upcall != NULL)
-                rc2 = onu->onu_upcall(observer, observed, ev,
-                                      onu->onu_owner, NULL);
-        else
-                rc2 = 0;
+	/*
+	 * Also, call non-obd listener, if any
+	 */
+	onu = &observer->obd_upcall;
+	if (onu->onu_upcall != NULL)
+		rc2 = onu->onu_upcall(observer, observed, ev, onu->onu_owner);
 
-        return rc1 ? rc1 : rc2;
+	return rc ? rc : rc2;
 }
 
 static inline int obd_quotactl(struct obd_export *exp,

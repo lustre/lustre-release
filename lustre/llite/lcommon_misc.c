@@ -75,14 +75,12 @@ static int cl_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
 }
 
 /**
- * This function is used as an upcall-callback hooked by liblustre and llite
- * clients into obd_notify() listeners chain to handle notifications about
- * change of import connect_flags. See llu_fsswop_mount() and
- * lustre_common_fill_super().
+ * This function is used as an upcall-callback hooked llite clients
+ * into obd_notify() listeners chain to handle notifications about
+ * change of import connect_flags. See lustre_common_fill_super().
  */
-int cl_ocd_update(struct obd_device *host,
-                  struct obd_device *watched,
-                  enum obd_notify_event ev, void *owner, void *data)
+int cl_ocd_update(struct obd_device *host, struct obd_device *watched,
+		  enum obd_notify_event ev, void *owner)
 {
         struct lustre_client_ocd *lco;
         struct client_obd        *cli;

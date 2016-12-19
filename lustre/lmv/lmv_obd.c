@@ -143,7 +143,7 @@ struct obd_uuid *lmv_get_uuid(struct obd_export *exp)
 }
 
 static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
-                      enum obd_notify_event ev, void *data)
+		      enum obd_notify_event ev)
 {
         struct obd_connect_data *conn_data;
         struct lmv_obd          *lmv = &obd->u.lmv;
@@ -182,13 +182,13 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
 		obd->obd_self_export->exp_connect_data = *conn_data;
 	}
 
-        /*
-         * Pass the notification up the chain.
-         */
-        if (obd->obd_observer)
-                rc = obd_notify(obd->obd_observer, watched, ev, data);
+	/*
+	 * Pass the notification up the chain.
+	 */
+	if (obd->obd_observer)
+		rc = obd_notify(obd->obd_observer, watched, ev);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int lmv_connect(const struct lu_env *env,
@@ -345,18 +345,17 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
                 RETURN(rc);
         }
 
-        if (obd->obd_observer) {
-                /*
-                 * Tell the observer about the new target.
-                 */
+	if (obd->obd_observer) {
+		/*
+		 * Tell the observer about the new target.
+		 */
 		rc = obd_notify(obd->obd_observer, mdc_exp->exp_obd,
-				OBD_NOTIFY_ACTIVE,
-				(void *)(tgt - lmv->tgts[0]));
+				OBD_NOTIFY_ACTIVE);
 		if (rc) {
 			obd_disconnect(mdc_exp);
 			RETURN(rc);
 		}
-        }
+	}
 
 	tgt->ltd_active = 1;
 	tgt->ltd_exp = mdc_exp;
