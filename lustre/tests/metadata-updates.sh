@@ -6,6 +6,14 @@
 
 set -e
 
+ONLY=${ONLY:-"$*"}
+
+#Bug number for excepting test
+ALWAYS_EXCEPT="$METADATA_UPDATES_EXCEPT"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT LIST
+
+[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
+
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
@@ -39,71 +47,70 @@ SUMFILE=$TESTDIR/mdsum
 
 NUM_FILES=1000
 
-WRITE_DISJOINT=${WRITE_DISJOINT:-$(which write_disjoint 2> /dev/null)} || true
-WRITE_DISJOINT_FILE=$TESTDIR/f0.write_disjoint_file
-NUMLOOPS=1000
-
 log "===== $0 ====== "
 
 check_and_setup_lustre
+build_test_filter
 
 cleanup_prepare () {
 
-    do_nodes $NODES_TO_USE "set $TRACE;
-DIR=$TESTDIR/\\\$(hostname);
-TESTFILE=\\\$DIR/$FILE;
-rm -f \\\$TESTFILE;
-rm -f $SUMFILE;
-rmdir \\\$DIR 2>/dev/null;
-mkdir -p \\\$DIR" || return ${PIPESTATUS[0]}
-    return 0;
+	do_nodes $NODES_TO_USE "set $TRACE;
+	DIR=$TESTDIR/\\\$(hostname);
+	TESTFILE=\\\$DIR/$FILE;
+	rm -f \\\$TESTFILE;
+	rm -f $SUMFILE;
+	rmdir \\\$DIR 2>/dev/null;
+	mkdir -p \\\$DIR" || return ${PIPESTATUS[0]}
+	return 0;
 }
 
 do_mknod () {
-    echo "Creating file(s) by mknod (2) ... "
+	log "Creating file(s) by mknod (2) ... "
 
-    do_nodes $NODES_TO_USE "set $TRACE;
-TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
-mcreate \\\$TESTFILE; " || return ${PIPESTATUS[0]}
-    return 0
+	do_nodes $NODES_TO_USE "set $TRACE;
+	TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
+	mcreate \\\$TESTFILE; " || return ${PIPESTATUS[0]}
+	return 0
 }
 
 do_write () {
-    do_nodes $NODES_TO_USE "set $TRACE;
-TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
-dd if=/dev/zero of=\\\$TESTFILE bs=$FILE_SIZE count=1 2>/dev/null || exit 54;
-echo \\\$(hostname) | dd of=\\\$TESTFILE conv=notrunc 2>/dev/null || exit 55; 
-md5sum \\\$TESTFILE >> $SUMFILE; " || return ${PIPESTATUS[0]}
-    return 0
+	do_nodes $NODES_TO_USE "set $TRACE;
+	TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
+	dd if=/dev/zero of=\\\$TESTFILE bs=$FILE_SIZE count=1 2>/dev/null ||
+		exit 54;
+	echo \\\$(hostname) | dd of=\\\$TESTFILE conv=notrunc 2>/dev/null ||
+		exit 55;
+	md5sum \\\$TESTFILE >> $SUMFILE; " || return ${PIPESTATUS[0]}
+	return 0
 }
 
 do_check_data () {
-    echo "Checking file(s) data ... md5sum : "
-    cat $SUMFILE
+	log "Checking file(s) data ... md5sum : "
+	cat $SUMFILE
 
-    do_nodesv $NODES_TO_USE "md5sum --check $SUMFILE" || \
-        return ${PIPESTATUS[0]}
-    return 0
+	do_nodesv $NODES_TO_USE "md5sum --check $SUMFILE" ||
+		return ${PIPESTATUS[0]}
+	return 0
 }
 
 do_truncate () {
-    echo "Truncating file(s) ... "
+	log "Truncating file(s) ... "
 
-     do_nodes $NODES_TO_USE "set $TRACE;
-TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
-$TRUNCATE \\\$TESTFILE 0" || return ${PIPESTATUS[0]} 
+	do_nodes $NODES_TO_USE "set $TRACE;
+	TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
+	$TRUNCATE \\\$TESTFILE 0" || return ${PIPESTATUS[0]}
 
-    FILE_SIZE=0
-    return 0
+	FILE_SIZE=0
+	return 0
 }
 
 # check st_uid, st_gid, st_size, st_mode
 get_stat () {
 	local attr="$test_USER $test_GROUP $FILE_SIZE $CURRENT_MODE"
 
-	echo "Checking file(s) attributes ... "
+	log "Checking file(s) attributes ... "
 
-    do_nodesv $NODES_TO_USE "set $TRACE;
+	do_nodesv $NODES_TO_USE "set $TRACE;
 for HOST in ${HOSTS//,/ } ; do
     TESTFILE=$TESTDIR/\\\$HOST/$FILE;
     tmp=\\\$(stat -c \\\"%U %G %s 0%a\\\" \\\$TESTFILE);
@@ -117,36 +124,37 @@ done " || return ${PIPESTATUS[0]}
 }
 
 do_chmod () {
-    echo "Performing chmod 0$NEW_MODE ..."
+	log "Performing chmod 0$NEW_MODE ..."
 
-    do_nodes $NODES_TO_USE "set $TRACE;
-TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
-chmod $NEW_MODE \\\$TESTFILE" || return ${PIPESTATUS[0]}
- 
-    CURRENT_MODE=$NEW_MODE
-    return 0
+	do_nodes $NODES_TO_USE "set $TRACE;
+	TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
+	chmod $NEW_MODE \\\$TESTFILE" || return ${PIPESTATUS[0]}
+
+	CURRENT_MODE=$NEW_MODE
+	return 0
 }
 
 do_change_timestamps () {
-    echo "Changing atime, mtime ..."
+	log "Changing atime, mtime ..."
 
-    do_nodes $NODES_TO_USE " set $TRACE;
-TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
-touch -c --date=\\\"$NEW_ATIME\\\" -a \\\$TESTFILE;
-touch -c --date=\\\"$NEW_MTIME\\\" -m \\\$TESTFILE " || return ${PIPESTATUS[0]}
-    return 0
+	do_nodes $NODES_TO_USE " set $TRACE;
+	TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
+	touch -c --date=\\\"$NEW_ATIME\\\" -a \\\$TESTFILE;
+	touch -c --date=\\\"$NEW_MTIME\\\" -m \\\$TESTFILE " ||
+		return ${PIPESTATUS[0]}
+	return 0
 }
 
 # check st_atime, st_mtime
 do_check_timestamps () {
-    local atime=$(date --date="$NEW_ATIME" +%s)
-    local mtime=$(date --date="$NEW_MTIME" +%s)
+	local atime=$(date --date="$NEW_ATIME" +%s)
+	local mtime=$(date --date="$NEW_MTIME" +%s)
 
-    local times="$atime $mtime"
+	local times="$atime $mtime"
 
-    echo "Checking atime, mtime ... "
+	log "Checking atime, mtime ... "
 
-    do_nodesv $NODES_TO_USE "set $TRACE;
+	do_nodesv $NODES_TO_USE "set $TRACE;
 for HOST in ${HOSTS//,/ } ; do
     TESTFILE=$TESTDIR/\\\$HOST/$FILE;
     tmp=\\\$(stat -c \\\"%X %Y\\\" \\\$TESTFILE);
@@ -156,27 +164,27 @@ for HOST in ${HOSTS//,/ } ; do
     fi;
 done;
 exit \\\$RC" || return ${PIPESTATUS[0]}
-    return 0 
+	return 0
 }
 
 do_fill_dir () {
-    echo "Filling up directories ... files : f1 ... f$NUM_FILES) ... "
+	log "Filling up directories ... files : f1 ... f$NUM_FILES) ... "
 
-    do_nodes $NODES_TO_USE "set $TRACE;
-TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
-rm -f \\\$TESTFILE;
-DIR=$TESTDIR/\\\$(hostname);
-for i in \\\$(seq $NUM_FILES) ; do
-    touch \\\$DIR/f\\\$i;
-done " || return ${PIPESTATUS[0]}
-    return 0
+	do_nodes $NODES_TO_USE "set $TRACE;
+	TESTFILE=$TESTDIR/\\\$(hostname)/$FILE;
+	rm -f \\\$TESTFILE;
+	DIR=$TESTDIR/\\\$(hostname);
+	for i in \\\$(seq $NUM_FILES) ; do
+		touch \\\$DIR/f\\\$i;
+	done " || return ${PIPESTATUS[0]}
+	return 0
 }
 
 check_dir_contents () {
-    local num_files=${1:-1}
+	local num_files=${1:-1}
 
-    echo "Checking dir contents ... (should exist files : f$num_files ... f$NUM_FILES) ... "
-    do_nodes $NODES_TO_USE "set $TRACE;
+	log "Directory contents should exist: f$num_files ... f$NUM_FILES)"
+	do_nodes $NODES_TO_USE "set $TRACE;
 for HOST in ${HOSTS//,/ } ; do
     DIR=$TESTDIR/\\\$HOST;
     for i in \\\$(seq $NUM_FILES -1 $num_files) ; do
@@ -193,24 +201,22 @@ for HOST in ${HOSTS//,/ } ; do
     done;
 done;
 exit \\\$RC " || return ${PIPESTATUS[0]}
-    return 0
+	return 0
 }
 
 do_partial_delete () {
-    local num_files=$1
+	local num_files=$1
 
-    echo "Deleting files ... f1 ... f$num_files ... "
-    do_nodes $NODES_TO_USE "set $TRACE;
+	log "Deleting files ... f1 ... f$num_files ... "
+	do_nodes $NODES_TO_USE "set $TRACE;
 DIR=$TESTDIR/\\\$(hostname);
 for i in \\\$(seq $num_files) ; do
     if ! rm -f \\\$DIR/f\\\$i ; then
         exit 1;
     fi;
 done " || return ${PIPESTATUS[0]}
-    return 0
+	return 0
 }
-
-STATUS=0
 
 chmod 0777 $MOUNT   || exit 1
 mkdir -p $TESTDIR   || exit 1
@@ -218,51 +224,62 @@ chmod 0777 $TESTDIR || exit 1
 
 cleanup_prepare     || error_exit "cleanup failed"
 
-# create file(s) (mknod (2)), write data, check data, check file attributes
-echo "Part 1. create file(s) (mknod (2)), write data, check data, check file attributes."
-do_mknod              || error_exit "mknod failed"
-echo "Writing data to file(s) ... store md5sum ... "
-do_write              || error_exit "write data failed"
-do_check_data         || error_exit "md5sum verification failed"
-get_stat              || { error_noexit "attributes check failed" ; STATUS=1; }
+test_1(){
+	log "Create files (mknod (2)) and write data"
+	do_mknod || error "mknod failed"
+	do_write || error "write data failed"
+	log "Check data and file attributes."
+	do_check_data || error "md5sum verification failed"
+	get_stat || error "attributes check failed"
 
-# file(s) attributes modification
-echo "Part 2. file(s) attributes modification."
-do_chmod              || error_exit "chmod failed"
-get_stat              || { error_noexit "wrong attributes after chmod"; STATUS=1; }
+	# file attributes modification
+	log "File attributes modification."
+	do_chmod || error "chmod failed"
+	get_stat || error "wrong attributes after chmod"
 
-do_change_timestamps  || error_exit "timestamps change failed"
-do_check_timestamps   || { error_noexit "wrong timestamps"; STATUS=1; }
+	do_change_timestamps || error "timestamps change failed"
+	do_check_timestamps || error "wrong timestamps"
 
-# truncate file(s) to 0 size, check new file size
-echo "Part 3. truncate file(s) to 0 size, check new file size."
-do_truncate     || error_exit"truncate failed"
-get_stat        || { error_noexit "wrong attributes after truncate"; STATUS=1; }
+	# truncate file(s) to 0 size, check new file size
+	log "Truncate file(s) to 0 size, check new file size."
+	do_truncate || error "truncate failed"
+	get_stat || error "wrong attributes after truncate"
+}
+run_test 1 "create files (mknod), write and check data, truncate files"
 
-# directory content solidity
-echo "Part 4. directory content solidity: fill up directory, check dir content, remove some files, check dir content."
-do_fill_dir        || error_exit "dir creation failed"
-check_dir_contents || { error_noexit "dir contents check failed"; STATUS=1; }
+test_2() {
+	do_fill_dir || error "dir creation failed"
+	check_dir_contents || error "dir contents check failed"
 
-do_partial_delete $(($NUM_FILES / 2))      || error_exit "delete failed"
-check_dir_contents $(($NUM_FILES / 2 + 1)) ||
-    { error_noexit "dir contents check after delete failed"; STATUS=1; }
+	do_partial_delete $(($NUM_FILES / 2)) || error "delete failed"
+	check_dir_contents $(($NUM_FILES / 2 + 1)) ||
+		error "dir contents check after delete failed"
+}
+run_test 2 "directory content create, check, delete files , check"
 
-# "write_disjoint" test
-echo "Part 5. write_disjoint test: see lustre/tests/mpi/write_disjoint.c for details"
-if [ -f "$WRITE_DISJOINT" ]; then
+test_3() {
+	WRITE_DISJOINT=${WRITE_DISJOINT:-$(which write_disjoint 2> /dev/null)} || true
+	disjoint_file=$TESTDIR/$tfile
+	machine_file=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
+	numloops=1000
+
+	if [ ! -f "$WRITE_DISJOINT" ]; then
+		skip_env "$0 : write_disjoint not found "
+		return
+	fi
+
 	set $TRACE
-	MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
-	generate_machine_file $NODES_TO_USE $MACHINEFILE
-	mpi_run ${MACHINEFILE_OPTION} $MACHINEFILE \
-		-np $(get_node_count ${NODES_TO_USE//,/ }) $WRITE_DISJOINT \
-		-f $WRITE_DISJOINT_FILE -n $NUMLOOPS || STATUS=1
-else
-    skip_env "$0 : write_disjoint not found "
-fi
+	generate_machine_file $NODES_TO_USE $machine_file
+	mpi_run ${MACHINEFILE_OPTION} $machine_file \
+		-np $(get_node_count ${NODES_TO_USE//,/ }) \
+		$WRITE_DISJOINT -f $disjoint_file -n $numloops ||
+			error "mpi_run failed"
+
+	rm -f $machine_file
+}
+run_test 3 "write_disjoint test"
 
 complete $SECONDS
 rm -rf $TESTDIR
-rm -f $MACHINEFILE
 check_and_cleanup_lustre
 exit_status
