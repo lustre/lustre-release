@@ -1,0 +1,23 @@
+[Unit]
+Description=lnet management
+
+Requires=network-online.target
+After=network-online.target
+
+ConditionPathExists=!/proc/sys/lnet/
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=@sbindir@/modprobe lnet
+@BUILD_DLC_FALSE@ExecStart=@sbindir@/lctl network up
+@BUILD_DLC_FALSE@ExecStart=@sbindir@/lustre_routes_config @sysconfdir@/lnet_routes.conf
+@BUILD_DLC_TRUE@ExecStart=@sbindir@/lnetctl lnet configure
+@BUILD_DLC_TRUE@ExecStart=@sbindir@/lnetctl import < @sysconfigdir@/lnet.conf
+ExecStop=@sbindir@/lustre_rmmod ptlrpc
+@BUILD_DLC_FALSE@ExecStop=@sbindir@/lctl network down
+@BUILD_DLC_TRUE@ExecStop=@sbindir@/lnetctl lnet unconfigure
+ExecStop=@sbindir@/lustre_rmmod libcfs ldiskfs
+
+[Install]
+WantedBy=multi-user.target

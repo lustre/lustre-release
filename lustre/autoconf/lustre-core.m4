@@ -2903,6 +2903,23 @@ AC_MSG_RESULT([$enable_pgstat_track])
 AS_IF([test "x$enable_pgstat_track" = xyes],
 	[AC_DEFINE([CONFIG_DEBUG_PAGESTATE_TRACKING], 1,
 		[enable page state tracking code])])
+
+PKG_PROG_PKG_CONFIG
+AC_MSG_CHECKING([systemd unit file directory])
+AC_ARG_WITH([systemdsystemunitdir],
+	[AS_HELP_STRING([--with-systemdsystemunitdir=DIR],
+		[Directory for systemd service files])],
+	[], [with_systemdsystemunitdir=auto])
+AS_IF([test "x$with_systemdsystemunitdir" = "xyes" -o "x$with_systemdsystemunitdir" = "xauto"],
+	[def_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)
+	AS_IF([test "x$def_systemdsystemunitdir" = "x"],
+		[AS_IF([test "x$with_systemdsystemunitdir" = "xyes"],
+		[AC_MSG_ERROR([systemd support requested but pkg-config unable to query systemd package])])
+		with_systemdsystemunitdir=no],
+	[with_systemdsystemunitdir="$def_systemdsystemunitdir"])])
+AS_IF([test "x$with_systemdsystemunitdir" != "xno"],
+	[AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])])
+AC_MSG_RESULT([$with_systemdsystemunitdir])
 ]) # LC_CONFIGURE
 
 #
@@ -2922,6 +2939,7 @@ AM_CONDITIONAL(GSS_KEYRING, test x$enable_gss_keyring = xyes)
 AM_CONDITIONAL(GSS_PIPEFS, test x$enable_gss_pipefs = xyes)
 AM_CONDITIONAL(GSS_SSK, test x$enable_ssk = xyes)
 AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)
+AM_CONDITIONAL(HAVE_SYSTEMD, test "x$with_systemdsystemunitdir" != "xno")
 ]) # LC_CONDITIONALS
 
 #
@@ -3003,6 +3021,7 @@ lustre/ptlrpc/gss/autoMakefile
 lustre/quota/Makefile
 lustre/quota/autoMakefile
 lustre/scripts/Makefile
+lustre/scripts/systemd/Makefile
 lustre/tests/Makefile
 lustre/tests/mpi/Makefile
 lustre/utils/Makefile

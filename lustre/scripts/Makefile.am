@@ -35,11 +35,18 @@
 # These are scripts that are generated from .in files
 genscripts = lc_modprobe lc_net lc_hb lc_cluman lc_md lc_lvm lustre_start
 
+SUBDIRS = systemd
+
 sbin_SCRIPTS = lustre_rmmod ko2iblnd-probe
 
 if RHEL
 initdir = $(sysconfdir)/init.d
-init_SCRIPTS  = lnet lsvcgss
+init_SCRIPTS  = lsvcgss
+
+if !HAVE_SYSTEMD
+init_SCRIPTS += lnet
+endif
+
 if SERVER
 init_SCRIPTS += lustre
 endif

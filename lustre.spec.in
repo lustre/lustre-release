@@ -12,6 +12,7 @@
 %bcond_without manpages
 %bcond_without shared
 %bcond_without static
+%bcond_with    systemd
 
 %if %{without servers}
     # --without servers overrides --with {ldiskfs|zfs}
@@ -93,6 +94,28 @@
 	%endif
 %endif
 
+# Generic enable switch for systemd
+%if %{with systemd}
+%define _systemd 1
+%endif
+
+# RHEL >= 7 comes with systemd
+%if 0%{?rhel} >= 7
+%define _systemd 1
+%endif
+
+# Fedora >= 15 comes with systemd, but only >= 18 has
+# the proper macros
+%if 0%{?fedora} >= 18
+%define _systemd 1
+%endif
+
+# opensuse >= 12.1 comes with systemd, but only >= 13.1
+# has the proper macros
+%if 0%{?suse_version} >= 1310
+%define _systemd 1
+%endif
+
 Summary: Lustre File System
 Name: %{lustre_name}
 Version: %{version}
@@ -128,6 +151,13 @@ BuildRequires: %kernel_module_package_buildreqs
 %if %{_vendor}=="redhat"
 BuildRequires: redhat-rpm-config
 %endif
+%endif
+
+%if 0%{?_systemd}
+Requires(post): systemd
+Requires(preun): systemd
+Requires(postun): systemd
+BuildRequires: systemd
 %endif
 
 %description
@@ -240,12 +270,17 @@ ln lustre/ChangeLog ChangeLog-lustre
 ln lnet/ChangeLog ChangeLog-lnet
 
 %build
-
 # Set an explicit path to our Linux tree, if we can.
 cd $RPM_BUILD_DIR/lustre-%{version}
 # override %optflags so that the vendor's overzealous flags don't create
 # build failures
 %define optflags -g -O2 -Werror
+
+%if 0%{?_systemd}
+    %define systemd --with-systemdsystemunitdir=%{_unitdir}
+%else
+    %define systemd --with-systemdsystemunitdir=no
+%endif
 
 CONFIGURE_ARGS="%{?configure_args}"
 if [ -n "$CONFIGURE_ARGS" ]; then
@@ -276,6 +311,7 @@ fi
 	%{!?with_zfs:--without-zfs} \
 	%{!?with_lnet_dlc:--disable-dlc} \
 	%{!?with_manpages:--disable-manpages} \
+	%{systemd} \
 	--with-linux=%{kdir} \
 	--with-linux-obj=%{kobjdir} \
 	--with-kmp-moddir=%{kmoddir}/%{name}
@@ -318,6 +354,11 @@ echo '%{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2' >>lustre.files
 echo '%{_sysconfdir}/ha.d/resource.d/Lustre' >>lustre.files
 %endif
 
+# systemd is on redhat, fedora, and suse
+%if 0%{?_systemd}
+echo '%{_unitdir}/lnet.service' >>lustre.files
+%endif
+
 %if %{_vendor}=="redhat"
 # The following scripts are Red Hat specific
 %if %{with servers}
@@ -325,7 +366,11 @@ echo '%{_sysconfdir}/sysconfig/lustre' >>lustre.files
 echo '%{_sysconfdir}/sysconfig/lsvcgss' >>lustre.files
 echo '%{_sysconfdir}/init.d/lustre' >>lustre.files
 %endif
+
+%if 0%{!?_systemd:1}
 echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
+%endif
+
 echo '%{_sysconfdir}/init.d/lsvcgss' >>lustre.files
 %endif
 
@@ -465,6 +510,21 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %doc lustre-iokit/ost-survey/README.ost-survey
 %doc lustre-iokit/sgpdd-survey/README.sgpdd-survey
 %doc lustre-iokit/stats-collect/README.iokit-lstats
+%endif
+
+%post
+%if 0%{?_systemd}
+%systemd_post lnet.service
+%endif
+
+%preun
+%if 0%{?_systemd}
+%systemd_preun lnet.service
+%endif
+
+%postun
+%if 0%{?_systemd}
+%systemd_postun_with_restart lnet.service
 %endif
 
 %clean
