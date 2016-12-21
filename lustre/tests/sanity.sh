@@ -3127,7 +3127,7 @@ test_38() {
 }
 run_test 38 "open a regular file with O_DIRECTORY should return -ENOTDIR ==="
 
-test_39() {
+test_39a() { # was test_39
 	touch $DIR/$tfile
 	touch $DIR/${tfile}2
 #	ls -l  $DIR/$tfile $DIR/${tfile}2
@@ -3145,7 +3145,7 @@ test_39() {
 		error "O_TRUNC didn't change timestamps"
 	fi
 }
-run_test 39 "mtime changed on create ==========================="
+run_test 39a "mtime changed on create ==========================="
 
 test_39b() {
 	test_mkdir -p -c1 $DIR/$tdir
@@ -3807,7 +3807,7 @@ test_42e() { # bug22074
 }
 run_test 42e "verify sub-RPC writes are not done synchronously"
 
-test_43() {
+test_43A() { # was test_43
 	test_mkdir -p $DIR/$tdir
 	cp -p /bin/ls $DIR/$tdir/$tfile
 	$MULTIOP $DIR/$tdir/$tfile Ow_c &
@@ -3818,7 +3818,7 @@ test_43() {
 	$DIR/$tdir/$tfile && error || true
 	kill -USR1 $pid
 }
-run_test 43 "execution of file opened for write should return -ETXTBSY"
+run_test 43A "execution of file opened for write should return -ETXTBSY"
 
 test_43a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
@@ -3859,12 +3859,12 @@ test_43c() {
 }
 run_test 43c "md5sum of copy into lustre========================"
 
-test_44() {
+test_44A() { # was test_44
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping 2-stripe test" && return
 	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=1023
 	dd if=$DIR/f1 bs=4k count=1 > /dev/null
 }
-run_test 44 "zero length read from a sparse stripe ============="
+run_test 44A "zero length read from a sparse stripe ============="
 
 test_44a() {
 	local nstripe=$($LCTL lov_getconfig $DIR | grep default_stripe_count: |
@@ -13717,7 +13717,7 @@ test_241_dio() {
 	done
 }
 
-test_241() {
+test_241a() { # was test_241
 	dd if=/dev/zero of=$DIR/$tfile count=1 bs=40960
 	ls -la $DIR/$tfile
 	cancel_lru_locks osc
@@ -13726,7 +13726,7 @@ test_241() {
 	test_241_dio 1000
 	wait $PID
 }
-run_test 241 "bio vs dio"
+run_test 241a "bio vs dio"
 
 test_241b() {
 	dd if=/dev/zero of=$DIR/$tfile count=1 bs=40960
