@@ -9,7 +9,7 @@ TBD Intel Corporation
          2.6.32-642.11.1.el6 (RHEL6.8)
          3.10.0-514.2.2.el7  (RHEL7.3)
          3.0.101-0.47.71     (SLES11 SP3)
-         3.0.101-80          (SLES11 SP4)
+         3.0.101-91          (SLES11 SP4)
          3.12.62-60.64.8     (SLES12 SP1)
          vanilla linux 4.5.7 (ZFS only)
        * Client known to build on unpatched kernels:
@@ -19,7 +19,7 @@ TBD Intel Corporation
          2.6.32-642.11.1.el6 (RHEL6.8)
          3.10.0-514.2.2.el7  (RHEL7.3)
          3.0.101-0.47.71     (SLES11 SP3)
-         3.0.101-80          (SLES11 SP4)
+         3.0.101-91          (SLES11 SP4)
          3.12.62-60.64.8     (SLES12 SP1)
          vanilla linux 4.5.7
        * Recommended e2fsprogs version: 1.42.13.wc4 or newer
