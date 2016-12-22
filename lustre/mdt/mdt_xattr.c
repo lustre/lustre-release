@@ -310,6 +310,7 @@ static int mdt_dir_layout_shrink(struct mdt_thread_info *info)
 {
 	const struct lu_env *env = info->mti_env;
 	struct mdt_device *mdt = info->mti_mdt;
+	struct lu_ucred *uc = mdt_ucred(info);
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct lmv_user_md *lmu = rr->rr_eadata;
 	__u32 lum_stripe_count = lmu->lum_stripe_count;
@@ -325,9 +326,13 @@ static int mdt_dir_layout_shrink(struct mdt_thread_info *info)
 
 	ENTRY;
 
-	rc = mdt_remote_dir_permission(info);
-	if (rc)
-		RETURN(rc);
+	if (!mdt->mdt_enable_dir_migration)
+		RETURN(-EPERM);
+
+	if (!md_capable(uc, CFS_CAP_SYS_ADMIN) &&
+	    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
+	    mdt->mdt_enable_remote_dir_gid != -1)
+		RETURN(-EPERM);
 
 	/* mti_big_lmm is used to save LMV, but it may be uninitialized. */
 	if (unlikely(!info->mti_big_lmm)) {

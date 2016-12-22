@@ -217,78 +217,6 @@ static int mdt_lookup_version_check(struct mdt_thread_info *info,
 
 }
 
-static inline int mdt_remote_dir_permission_check(struct mdt_thread_info *info)
-{
-	struct lu_ucred	*uc  = mdt_ucred(info);
-	struct mdt_device *mdt = info->mti_mdt;
-
-	if (!md_capable(uc, CFS_CAP_SYS_ADMIN)) {
-		if (uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
-		    mdt->mdt_enable_remote_dir_gid != -1)
-			return -EPERM;
-	}
-
-	return 0;
-}
-
-/**
- * mdt_remote_dir_permission: Check whether the remote operation is permitted,
- *
- * Only sysadmin can create remote directory / striped directory,
- * migrate directory and set default stripedEA on directory, unless
- *
- * lctl set_param mdt.*.enable_remote_dir_gid=allow_gid.
- *
- * param[in] info: mdt_thread_info.
- *
- * retval	= 0 remote operation is allowed.
- *              < 0 remote operation is denied.
- */
-int mdt_remote_dir_permission(struct mdt_thread_info *info)
-{
-	struct md_op_spec *spec = &info->mti_spec;
-	struct lu_attr *attr = &info->mti_attr.ma_attr;
-	struct obd_export *exp = mdt_info_req(info)->rq_export;
-	int rc;
-
-	if (info->mti_rr.rr_opcode == REINT_MIGRATE) {
-		rc = mdt_remote_dir_permission_check(info);
-		if (rc != 0)
-			return rc;
-	}
-
-	if (info->mti_rr.rr_opcode == REINT_CREATE &&
-	    (S_ISDIR(attr->la_mode) && spec->u.sp_ea.eadata != NULL &&
-	     spec->u.sp_ea.eadatalen != 0)) {
-		const struct lmv_user_md *lum = spec->u.sp_ea.eadata;
-
-		/* Only new clients can create remote dir( >= 2.4) and
-		 * striped dir(>= 2.6), old client will return -ENOTSUPP */
-		if (!mdt_is_dne_client(exp))
-			return -ENOTSUPP;
-
-		if (le32_to_cpu(lum->lum_stripe_count) > 1 &&
-		    !mdt_is_striped_client(exp))
-			return -ENOTSUPP;
-
-		rc = mdt_remote_dir_permission_check(info);
-		if (rc != 0)
-			return rc;
-	}
-
-	if (info->mti_rr.rr_opcode == REINT_SETATTR) {
-		struct md_attr *ma = &info->mti_attr;
-
-		if ((ma->ma_valid & MA_LMV)) {
-			rc = mdt_remote_dir_permission_check(info);
-			if (rc != 0)
-				return rc;
-		}
-	}
-
-	return 0;
-}
-
 static int mdt_unlock_slaves(struct mdt_thread_info *mti,
 			     struct mdt_object *obj,
 			     struct ldlm_enqueue_info *einfo,
@@ -423,6 +351,7 @@ static int mdt_create(struct mdt_thread_info *info)
 	struct mdt_body         *repbody;
 	struct md_attr          *ma = &info->mti_attr;
 	struct mdt_reint_record *rr = &info->mti_rr;
+	struct md_op_spec	*spec = &info->mti_spec;
 	int rc;
 	ENTRY;
 
@@ -432,6 +361,33 @@ static int mdt_create(struct mdt_thread_info *info)
 
 	if (!fid_is_md_operative(rr->rr_fid1))
 		RETURN(-EPERM);
+
+	if (S_ISDIR(ma->ma_attr.la_mode) &&
+	    spec->u.sp_ea.eadata != NULL && spec->u.sp_ea.eadatalen != 0) {
+		const struct lmv_user_md *lum = spec->u.sp_ea.eadata;
+		struct lu_ucred	*uc = mdt_ucred(info);
+		struct obd_export *exp = mdt_info_req(info)->rq_export;
+
+		/* Only new clients can create remote dir( >= 2.4) and
+		 * striped dir(>= 2.6), old client will return -ENOTSUPP */
+		if (!mdt_is_dne_client(exp))
+			RETURN(-ENOTSUPP);
+
+		if (le32_to_cpu(lum->lum_stripe_count) > 1) {
+			if (!mdt_is_striped_client(exp))
+				RETURN(-ENOTSUPP);
+
+			if (!mdt->mdt_enable_striped_dir)
+				RETURN(-EPERM);
+		} else if (!mdt->mdt_enable_remote_dir) {
+			RETURN(-EPERM);
+		}
+
+		if (!md_capable(uc, CFS_CAP_SYS_ADMIN) &&
+		    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
+		    mdt->mdt_enable_remote_dir_gid != -1)
+			RETURN(-EPERM);
+	}
 
 	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
 
@@ -473,10 +429,6 @@ static int mdt_create(struct mdt_thread_info *info)
 	child = mdt_object_new(info->mti_env, mdt, rr->rr_fid2);
 	if (unlikely(IS_ERR(child)))
 		GOTO(unlock_parent, rc = PTR_ERR(child));
-
-	rc = mdt_remote_dir_permission(info);
-	if (rc != 0)
-		GOTO(put_child, rc);
 
 	ma->ma_need = MA_INODE;
 	ma->ma_valid = 0;
@@ -672,26 +624,27 @@ int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 }
 
 static int mdt_reint_setattr(struct mdt_thread_info *info,
-                             struct mdt_lock_handle *lhc)
+			     struct mdt_lock_handle *lhc)
 {
-        struct md_attr          *ma = &info->mti_attr;
-        struct mdt_reint_record *rr = &info->mti_rr;
-        struct ptlrpc_request   *req = mdt_info_req(info);
-        struct mdt_object       *mo;
-        struct mdt_body         *repbody;
-	int			 rc, rc2;
-        ENTRY;
+	struct mdt_device *mdt = info->mti_mdt;
+	struct md_attr *ma = &info->mti_attr;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct mdt_object *mo;
+	struct mdt_body *repbody;
+	int rc, rc2;
+	ENTRY;
 
-        DEBUG_REQ(D_INODE, req, "setattr "DFID" %x", PFID(rr->rr_fid1),
-                  (unsigned int)ma->ma_attr.la_valid);
+	DEBUG_REQ(D_INODE, req, "setattr "DFID" %x", PFID(rr->rr_fid1),
+		  (unsigned int)ma->ma_attr.la_valid);
 
 	if (info->mti_dlm_req)
 		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
 
 	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
-        mo = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
-        if (IS_ERR(mo))
-                GOTO(out, rc = PTR_ERR(mo));
+	mo = mdt_object_find(info->mti_env, mdt, rr->rr_fid1);
+	if (IS_ERR(mo))
+		GOTO(out, rc = PTR_ERR(mo));
 
 	if (!mdt_object_exists(mo))
 		GOTO(out_put, rc = -ENOENT);
@@ -756,12 +709,21 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 			GOTO(out_put, rc);
 	} else if ((ma->ma_valid & (MA_LOV | MA_LMV)) &&
 		   (ma->ma_valid & MA_INODE)) {
-		struct lu_buf *buf  = &info->mti_buf;
-		struct mdt_lock_handle  *lh;
+		struct lu_buf *buf = &info->mti_buf;
+		struct lu_ucred *uc = mdt_ucred(info);
+		struct mdt_lock_handle *lh;
 
-		rc = mdt_remote_dir_permission(info);
-		if (rc < 0)
-			GOTO(out_put, rc);
+		/* reject if either remote or striped dir is disabled */
+		if (ma->ma_valid & MA_LMV) {
+			if (!mdt->mdt_enable_remote_dir ||
+			    !mdt->mdt_enable_striped_dir)
+				GOTO(out_put, rc = -EPERM);
+
+			if (!md_capable(uc, CFS_CAP_SYS_ADMIN) &&
+			    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
+			    mdt->mdt_enable_remote_dir_gid != -1)
+				GOTO(out_put, rc = -EPERM);
+		}
 
 		if (ma->ma_attr.la_valid != 0)
 			GOTO(out_put, rc = -EPROTO);
@@ -1667,7 +1629,6 @@ static int mdt_lock_remote_slaves(struct mdt_thread_info *info,
 		INIT_LIST_HEAD(&msl->msl_linkage);
 		msl->msl_obj = slave;
 		list_add_tail(&msl->msl_linkage, slave_locks);
-
 	}
 	EXIT;
 
@@ -1967,6 +1928,7 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info)
 	const struct lu_env *env = info->mti_env;
 	struct mdt_device *mdt = info->mti_mdt;
 	struct mdt_reint_record *rr = &info->mti_rr;
+	struct lu_ucred *uc = mdt_ucred(info);
 	struct md_attr *ma = &info->mti_attr;
 	struct ldlm_enqueue_info *peinfo = &info->mti_einfo[0];
 	struct ldlm_enqueue_info *seinfo = &info->mti_einfo[1];
@@ -1992,9 +1954,13 @@ static int mdt_reint_migrate_internal(struct mdt_thread_info *info)
 	if (lu_name_is_dot_or_dotdot(&rr->rr_name))
 		RETURN(-EBUSY);
 
-	rc = mdt_remote_dir_permission(info);
-	if (rc)
-		RETURN(rc);
+	if (!mdt->mdt_enable_remote_dir || !mdt->mdt_enable_dir_migration)
+		RETURN(-EPERM);
+
+	if (!md_capable(uc, CFS_CAP_SYS_ADMIN) &&
+	    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
+	    mdt->mdt_enable_remote_dir_gid != -1)
+		RETURN(-EPERM);
 
 	/* pobj is master object of parent */
 	pobj = mdt_object_find_check(info, rr->rr_fid1, 0);

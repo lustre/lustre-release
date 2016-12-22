@@ -19239,7 +19239,6 @@ test_415() {
 }
 run_test 415 "lock revoke is not missing"
 
-
 test_416() {
 	[ $(lustre_version_code mds1) -lt $(version_code 2.11.55) ] &&
 		skip "Need server version at least 2.11.55"
@@ -19252,6 +19251,42 @@ test_416() {
 	true
 }
 run_test 416 "transaction start failure won't cause system hung"
+
+cleanup_417() {
+	trap 0
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param -n mdt.*MDT*.enable_dir_migration=1"
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param -n mdt.*MDT*.enable_remote_dir=1"
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param -n mdt.*MDT*.enable_striped_dir=1"
+}
+
+test_417() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.56) ]] &&
+		skip "Need MDS version at least 2.11.56" && return
+
+	trap cleanup_417 RETURN EXIT
+
+	$LFS mkdir -i 1 $DIR/$tdir.1 || error "create remote dir $tdir.1 failed"
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param -n mdt.*MDT*.enable_dir_migration=0"
+	$LFS migrate -m 0 $DIR/$tdir.1 &&
+		error "migrate dir $tdir.1 should fail"
+
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param -n mdt.*MDT*.enable_remote_dir=0"
+	$LFS mkdir -i 1 $DIR/$tdir.2 &&
+		error "create remote dir $tdir.2 should fail"
+
+	do_nodes $(comma_list $(mdts_nodes)) \
+		"$LCTL set_param -n mdt.*MDT*.enable_striped_dir=0"
+	$LFS mkdir -c 2 $DIR/$tdir.3 &&
+		error "create striped dir $tdir.3 should fail"
+	true
+}
+run_test 417 "disable remote dir, striped dir and dir migration"
 
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||

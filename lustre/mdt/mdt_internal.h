@@ -249,8 +249,12 @@ struct mdt_device {
 	unsigned int               mdt_capa_conf:1,
 				   /* Enable remote dir on non-MDT0 */
 				   mdt_enable_remote_dir:1,
+				   mdt_enable_striped_dir:1,
+				   mdt_enable_dir_migration:1,
 				   mdt_skip_lfsck:1;
 
+				   /* user with gid can create remote/striped
+				    * dir, and set default dir stripe */
 	gid_t			   mdt_enable_remote_dir_gid;
 
 	/* lock for osfs and md_root */
@@ -890,7 +894,6 @@ int mdt_links_read(struct mdt_thread_info *info,
 		   struct linkea_data *ldata);
 int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 		       struct mdt_body *repbody);
-int mdt_remote_dir_permission(struct mdt_thread_info *info);
 
 static inline struct mdt_device *mdt_dev(struct lu_device *d)
 {

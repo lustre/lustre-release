@@ -5073,7 +5073,9 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	INIT_LIST_HEAD(&m->mdt_squash.rsi_nosquash_nids);
 	init_rwsem(&m->mdt_squash.rsi_sem);
 	spin_lock_init(&m->mdt_lock);
-	m->mdt_enable_remote_dir = 0;
+	m->mdt_enable_remote_dir = 1;
+	m->mdt_enable_striped_dir = 1;
+	m->mdt_enable_dir_migration = 1;
 	m->mdt_enable_remote_dir_gid = 0;
 
 	atomic_set(&m->mdt_mds_mds_conns, 0);

@@ -1946,11 +1946,6 @@ mount_facet() {
 
 	set_default_debug_facet $facet
 
-	if [[ $facet == mds* ]]; then
-		do_facet $facet \
-		lctl set_param -n mdt.${FSNAME}*.enable_remote_dir=1 2>/dev/null
-	fi
-
 	if [[ $opts =~ .*nosvc.* ]]; then
 		echo "Start $dm_dev without service"
 	else
@@ -2011,12 +2006,6 @@ start() {
 	eval export ${facet}_MOUNT=$mntpt
 	mount_facet ${facet}
 	RC=$?
-
-	if [[ $facet == mds* ]]; then
-		do_facet $facet \
-			lctl set_param -n mdt.${FSNAME}*.enable_remote_dir=1 \
-				2>/dev/null
-	fi
 
 	return $RC
 }
@@ -5082,15 +5071,6 @@ check_and_setup_lustre() {
 		set_flavor_all null
 	elif $GSS; then
 		set_flavor_all $SEC
-	fi
-
-	if [ -z "$CLIENTONLY" ]; then
-		# Enable remote MDT create for testing
-		for num in $(seq $MDSCOUNT); do
-			do_facet mds$num \
-				lctl set_param -n mdt.${FSNAME}*.enable_remote_dir=1 \
-					2>/dev/null
-		done
 	fi
 
 	if [ "$ONLY" == "setup" ]; then
