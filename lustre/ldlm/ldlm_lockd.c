@@ -713,7 +713,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 			/* update lvbo to return proper attributes.
 			 * see bug 23174 */
 			ldlm_resource_getref(res);
-			ldlm_res_lvbo_update(res, NULL, 1);
+			ldlm_lvbo_update(res, lock, NULL, 1);
 			ldlm_resource_putref(res);
 		}
 		ldlm_lock_cancel(lock);
@@ -748,11 +748,11 @@ static int ldlm_cb_interpret(const struct lu_env *env,
 		} else if (rc == -ELDLM_NO_LOCK_DATA) {
 			LDLM_DEBUG(lock, "lost race - client has a lock but no "
 				   "inode");
-			ldlm_res_lvbo_update(lock->l_resource, NULL, 1);
+			ldlm_lvbo_update(lock->l_resource, lock, NULL, 1);
 		} else if (rc != 0) {
 			rc = ldlm_handle_ast_error(lock, req, rc, "glimpse");
 		} else {
-			rc = ldlm_res_lvbo_update(lock->l_resource, req, 1);
+			rc = ldlm_lvbo_update(lock->l_resource, lock, req, 1);
 		}
 		break;
 	case LDLM_BL_CALLBACK:
@@ -1690,7 +1690,9 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
                         if (res != NULL) {
                                 ldlm_resource_getref(res);
                                 LDLM_RESOURCE_ADDREF(res);
-                                ldlm_res_lvbo_update(res, NULL, 1);
+
+				if (!ldlm_is_discard_data(lock))
+					ldlm_lvbo_update(res, lock, NULL, 1);
                         }
                         pres = res;
                 }

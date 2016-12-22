@@ -51,6 +51,7 @@ static int mdt_lvbo_init(struct ldlm_resource *res)
 }
 
 static int mdt_lvbo_update(struct ldlm_resource *res,
+			   struct ldlm_lock *lock,
 			   struct ptlrpc_request *req,
 			   int increase_only)
 {

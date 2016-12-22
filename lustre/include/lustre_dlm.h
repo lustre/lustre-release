@@ -289,11 +289,10 @@ typedef int (*ldlm_cancel_cbt)(struct ldlm_lock *lock);
  * of ldlm_[res_]lvbo_[init,update,fill]() functions.
  */
 struct ldlm_valblock_ops {
-        int (*lvbo_init)(struct ldlm_resource *res);
-        int (*lvbo_update)(struct ldlm_resource *res,
-                           struct ptlrpc_request *r,
-                           int increase);
-        int (*lvbo_free)(struct ldlm_resource *res);
+	int (*lvbo_init)(struct ldlm_resource *res);
+	int (*lvbo_update)(struct ldlm_resource *res, struct ldlm_lock *lock,
+			   struct ptlrpc_request *r,  int increase);
+	int (*lvbo_free)(struct ldlm_resource *res);
 	/* Return size of lvb data appropriate RPC size can be reserved */
 	int (*lvbo_size)(struct ldlm_lock *lock);
 	/* Called to fill in lvb data to RPC buffer @buf */
@@ -1360,9 +1359,11 @@ ldlm_handle2lock_long(const struct lustre_handle *h, __u64 flags)
  * Update Lock Value Block Operations (LVBO) on a resource taking into account
  * data from request \a r
  */
-static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
-				       struct ptlrpc_request *req, int increase)
+static inline int ldlm_lvbo_update(struct ldlm_resource *res,
+				   struct ldlm_lock *lock,
+				   struct ptlrpc_request *req, int increase)
 {
+	struct ldlm_namespace *ns = ldlm_res_to_ns(res);
 	int rc;
 
 	/* delayed lvb init may be required */
@@ -1372,12 +1373,16 @@ static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
 		return rc;
 	}
 
-	if (ldlm_res_to_ns(res)->ns_lvbo &&
-	    ldlm_res_to_ns(res)->ns_lvbo->lvbo_update) {
-		return ldlm_res_to_ns(res)->ns_lvbo->lvbo_update(res, req,
-								 increase);
-	}
+	if (ns->ns_lvbo && ns->ns_lvbo->lvbo_update)
+		return ns->ns_lvbo->lvbo_update(res, lock, req, increase);
+
 	return 0;
+}
+
+static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
+				       struct ptlrpc_request *req, int increase)
+{
+	return ldlm_lvbo_update(res, NULL, req, increase);
 }
 
 int ldlm_error2errno(enum ldlm_error error);
