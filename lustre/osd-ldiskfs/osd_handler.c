@@ -6722,7 +6722,7 @@ static int osd_mount(const struct lu_env *env,
 	struct osd_thread_info	*info = osd_oti_get(env);
 	struct lu_fid		*fid = &info->oti_fid;
 	struct inode		*inode;
-	int			 rc = 0, force_over_256tb = 0;
+	int			 rc = 0, force_over_512tb = 0;
         ENTRY;
 
 	if (o->od_mnt != NULL)
@@ -6746,15 +6746,25 @@ static int osd_mount(const struct lu_env *env,
 		RETURN(-EINVAL);
 	}
 #endif
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	if (opts != NULL && strstr(opts, "force_over_128tb") != NULL) {
-		CWARN("force_over_128tb option is depricated."
-		      "Filesystems less then 256TB can be created without any"
-		      "force options. Use force_over_256tb option for"
-		      "filesystems greather then 256TB.\n");
+		CWARN("force_over_128tb option is deprecated. "
+		      "Filesystems less than 512TB can be created without any "
+		      "force options. Use force_over_512tb option for "
+		      "filesystems greater than 512TB.\n");
 	}
+#endif
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 1, 53, 0)
+	if (opts != NULL && strstr(opts, "force_over_256tb") != NULL) {
+		CWARN("force_over_256tb option is deprecated. "
+		      "Filesystems less than 512TB can be created without any "
+		      "force options. Use force_over_512tb option for "
+		      "filesystems greater than 512TB.\n");
+	}
+#endif
 
-	if (opts != NULL && strstr(opts, "force_over_256tb") != NULL)
-		force_over_256tb = 1;
+	if (opts != NULL && strstr(opts, "force_over_512tb") != NULL)
+		force_over_512tb = 1;
 
 	__page = alloc_page(GFP_KERNEL);
 	if (__page == NULL)
@@ -6773,12 +6783,9 @@ static int osd_mount(const struct lu_env *env,
 			"noextents",
 			/* strip out option we processed in osd */
 			"bigendian_extents",
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(3,0,53,0)
-#warning "remove force_over_128 option"
-#else
-			"force_over_128tb (deprecated)",
-#endif
+			"force_over_128tb",
 			"force_over_256tb",
+			"force_over_512tb",
 			NULL
 		};
 		strcat(options, opts);
@@ -6824,11 +6831,12 @@ static int osd_mount(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	if (ldiskfs_blocks_count(LDISKFS_SB(osd_sb(o))->s_es) > (64ULL << 30) &&
-	    force_over_256tb == 0) {
+	if (ldiskfs_blocks_count(LDISKFS_SB(osd_sb(o))->s_es) <<
+				 osd_sb(o)->s_blocksize_bits > 512ULL << 40 &&
+				 force_over_512tb == 0) {
 		CERROR("%s: device %s LDISKFS does not support filesystems "
-		       "greater than 256TB and can cause data corruption. "
-		       "Use \"force_over_256tb\" mount option to override.\n",
+		       "greater than 512TB and can cause data corruption. "
+		       "Use \"force_over_512tb\" mount option to override.\n",
 		       name, dev);
 		GOTO(out, rc = -EINVAL);
 	}
