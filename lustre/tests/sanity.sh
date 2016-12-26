@@ -7284,7 +7284,8 @@ test_103a() {
 
 	SAVE_UMASK=$(umask)
 	umask 0022
-	cd $DIR
+	mkdir -p $DIR/$tdir
+	cd $DIR/$tdir
 
 	echo "performing cp ..."
 	run_acl_subtest cp || error "run_acl_subtest cp failed"
