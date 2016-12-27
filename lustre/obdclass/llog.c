@@ -196,13 +196,19 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 {
 	struct llog_thread_info *lgi = llog_info(env);
 	struct dt_device	*dt;
-	struct llog_log_hdr	*llh = loghandle->lgh_hdr;
+	struct llog_log_hdr	*llh;
 	struct thandle		*th;
 	int			 rc;
 	int rc1;
 	bool subtract_count = false;
 
 	ENTRY;
+
+	LASSERT(loghandle != NULL);
+	LASSERT(loghandle->lgh_ctxt != NULL);
+	LASSERT(loghandle->lgh_obj != NULL);
+
+	llh = loghandle->lgh_hdr;
 
 	CDEBUG(D_RPCTRACE, "Canceling %d in log "DFID"\n", index,
 	       PFID(&loghandle->lgh_id.lgl_oi.oi_fid));
@@ -211,10 +217,6 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 		CERROR("Can't cancel index 0 which is header\n");
 		RETURN(-EINVAL);
 	}
-
-	LASSERT(loghandle != NULL);
-	LASSERT(loghandle->lgh_ctxt != NULL);
-	LASSERT(loghandle->lgh_obj != NULL);
 
 	dt = lu2dt_dev(loghandle->lgh_obj->do_lu.lo_dev);
 
