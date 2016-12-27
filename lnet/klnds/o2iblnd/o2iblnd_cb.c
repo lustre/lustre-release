@@ -3147,20 +3147,32 @@ kiblnd_check_conns (int idx)
 {
 	struct list_head  closes = LIST_HEAD_INIT(closes);
 	struct list_head  checksends = LIST_HEAD_INIT(checksends);
+	struct list_head  timedout_txs = LIST_HEAD_INIT(timedout_txs);
 	struct list_head *peers = &kiblnd_data.kib_peers[idx];
 	struct list_head *ptmp;
 	kib_peer_ni_t	 *peer_ni;
 	kib_conn_t	 *conn;
+	kib_tx_t	 *tx, *tx_tmp;
 	struct list_head *ctmp;
 	unsigned long	  flags;
 
 	/* NB. We expect to have a look at all the peers and not find any
 	 * RDMAs to time out, so we just use a shared lock while we
 	 * take a look... */
-	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
 	list_for_each(ptmp, peers) {
 		peer_ni = list_entry(ptmp, kib_peer_ni_t, ibp_list);
+
+		/* Check tx_deadline */
+		list_for_each_entry_safe(tx, tx_tmp, &peer_ni->ibp_tx_queue, tx_list) {
+			if (cfs_time_aftereq(jiffies, tx->tx_deadline)) {
+				CWARN("Timed out tx for %s: %lu seconds\n",
+				      libcfs_nid2str(peer_ni->ibp_nid),
+				      cfs_duration_sec(jiffies - tx->tx_deadline));
+				list_move(&tx->tx_list, &timedout_txs);
+			}
+		}
 
 		list_for_each(ctmp, &peer_ni->ibp_conns) {
 			int timedout;
@@ -3199,7 +3211,10 @@ kiblnd_check_conns (int idx)
 		}
 	}
 
-	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+
+	if (!list_empty(&timedout_txs))
+		kiblnd_txlist_done(&timedout_txs, -ETIMEDOUT);
 
 	/* Handle timeout by closing the whole
 	 * connection. We can only be sure RDMA activity
