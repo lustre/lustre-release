@@ -42,8 +42,6 @@
  * of the format that the request conforms to.
  */
 
-#if !defined(__REQ_LAYOUT_USER__)
-
 #define DEBUG_SUBSYSTEM S_RPC
 
 #include <linux/module.h>
@@ -56,7 +54,6 @@
 #include <lustre_ver.h>
 #include <obd.h>
 #include <obd_support.h>
-#endif /* !__REQ_LAYOUT_USER__ */
 
 /* struct ptlrpc_request, lustre_msg* */
 #include <lustre_req_layout.h>
@@ -1727,8 +1724,6 @@ struct req_format RQF_OST_LADVISE =
 	DEFINE_REQ_FMT0("OST_LADVISE", ost_ladvise, ost_body_only);
 EXPORT_SYMBOL(RQF_OST_LADVISE);
 
-#if !defined(__REQ_LAYOUT_USER__)
-
 /* Convenience macro */
 #define FMT_FIELD(fmt, i, j) (fmt)->rf_fields[(i)].d[(j)]
 
@@ -2546,5 +2541,3 @@ int req_capsule_server_grow(struct req_capsule *pill,
         return 0;
 }
 EXPORT_SYMBOL(req_capsule_server_grow);
-/* __REQ_LAYOUT_USER__ */
-#endif

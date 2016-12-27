@@ -13,7 +13,6 @@
 /llverdev
 /l_getidentity
 /l_facl
-/req_layout
 /mkfs_lustre
 /mount_lustre
 /tunefs_lustre

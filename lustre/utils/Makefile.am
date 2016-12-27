@@ -37,7 +37,6 @@ sbin_SCRIPTS  = ldlm_debug_upcall
 sbin_PROGRAMS = lctl l_getidentity llverfs lustre_rsync ll_decode_linkea
 
 if TESTS
-bin_PROGRAMS  += req_layout
 sbin_PROGRAMS += wiretest
 endif # TESTS
 
@@ -120,8 +119,6 @@ endif # UTILS
 if LDISKFS_ENABLED
 libiam_a_SOURCES = libiam.c
 endif
-
-req_layout_SOURCES = req-layout.c
 
 llog_reader_SOURCES = llog_reader.c
 llog_reader_LDADD := $(LIBPTLCTL) liblustreapi.a
