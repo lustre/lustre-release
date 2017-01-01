@@ -31,17 +31,13 @@
  */
 
 #include <linux/module.h>
-#include <linux/sysctl.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
-#include <linux/sysctl.h>
-#include <linux/version.h>
-#include <linux/proc_fs.h>
 #include <linux/slab.h>
 #include <linux/stat.h>
 #include <linux/ctype.h>
-#include <asm/bitops.h>
-#include <asm/uaccess.h>
+#include <linux/bitops.h>
+#include <linux/uaccess.h>
 #include <linux/utsname.h>
 
 #define DEBUG_SUBSYSTEM S_CLASS
@@ -49,10 +45,6 @@
 #include <obd_support.h>
 #include <lprocfs_status.h>
 #include <obd_class.h>
-
-#ifdef CONFIG_SYSCTL
-static struct ctl_table_header *obd_table_header;
-#endif
 
 struct static_lustre_uintvalue_attr {
 	struct {
@@ -96,7 +88,7 @@ static struct static_lustre_uintvalue_attr lustre_sattr_##name =	\
 					{__ATTR(name, 0644,		\
 						static_uintvalue_show,	\
 						static_uintvalue_store),\
-						value }
+					  value }
 
 LUSTRE_STATIC_UINT_ATTR(timeout, &obd_timeout);
 
@@ -163,24 +155,6 @@ static ssize_t memused_max_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(memused_max);
 
-#ifdef CONFIG_SYSCTL
-static struct ctl_table obd_table[] = {
-	{ 0 }
-};
-
-static struct ctl_table parent_table[] = {
-	{
-		INIT_CTL_NAME
-		.procname	= "lustre",
-		.data		= NULL,
-		.maxlen		= 0,
-		.mode		= 0555,
-		.child		= obd_table
-	},
-	{ 0 }
-};
-#endif
-
 static struct attribute *lustre_attrs[] = {
 	&lustre_sattr_timeout.u.attr,
 	&lustre_attr_max_dirty_mb.attr,
@@ -207,18 +181,10 @@ static struct attribute_group lustre_attr_group = {
 
 int obd_sysctl_init(void)
 {
-#ifdef CONFIG_SYSCTL
-	if ( !obd_table_header )
-		obd_table_header = register_sysctl_table(parent_table);
-#endif
 	return sysfs_create_group(lustre_kobj, &lustre_attr_group);
 }
 
-void obd_sysctl_clean (void)
+void obd_sysctl_clean(void)
 {
-#ifdef CONFIG_SYSCTL
-	if ( obd_table_header )
-		unregister_sysctl_table(obd_table_header);
-	obd_table_header = NULL;
-#endif
+	sysfs_remove_group(lustre_kobj, &lustre_attr_group);
 }
