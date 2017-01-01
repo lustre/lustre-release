@@ -334,6 +334,10 @@ static ssize_t jobid_name_store(struct kobject *kobj, struct attribute *attr,
 	return count;
 }
 
+/* Root for /sys/kernel/debug/lustre */
+struct dentry *debugfs_lustre_root;
+EXPORT_SYMBOL_GPL(debugfs_lustre_root);
+
 #ifdef CONFIG_PROC_FS
 /* Root for /proc/fs/lustre */
 struct proc_dir_entry *proc_lustre_root = NULL;
@@ -422,7 +426,7 @@ static int obd_device_list_open(struct inode *inode, struct file *file)
 		return rc;
 
 	seq = file->private_data;
-	seq->private = PDE_DATA(inode);
+	seq->private = inode->i_private;
 	return 0;
 }
 
@@ -444,6 +448,7 @@ static struct attribute_group lustre_attr_group = {
 int class_procfs_init(void)
 {
 	struct proc_dir_entry *entry;
+	struct dentry *file;
 	int rc = 0;
 	ENTRY;
 
@@ -460,6 +465,23 @@ int class_procfs_init(void)
 
 	obd_sysctl_init();
 
+	debugfs_lustre_root = debugfs_create_dir("lustre", NULL);
+	if (IS_ERR_OR_NULL(debugfs_lustre_root)) {
+		rc = debugfs_lustre_root ? PTR_ERR(debugfs_lustre_root)
+					 : -ENOMEM;
+		debugfs_lustre_root = NULL;
+		kobject_put(lustre_kobj);
+		goto out;
+	}
+
+	file = debugfs_create_file("devices", 0444, debugfs_lustre_root, NULL,
+				   &obd_device_list_fops);
+	if (IS_ERR_OR_NULL(file)) {
+		rc = file ? PTR_ERR(file) : -ENOMEM;
+		kobject_put(lustre_kobj);
+		goto out;
+	}
+
 	entry = lprocfs_register("fs/lustre", NULL, NULL, NULL);
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
@@ -469,19 +491,6 @@ int class_procfs_init(void)
 	}
 
 	proc_lustre_root = entry;
-
-	rc = lprocfs_seq_create(proc_lustre_root, "devices", 0444,
-				&obd_device_list_fops, NULL);
-	if (rc < 0) {
-		CERROR("cannot create '/proc/fs/lustre/devices': rc = %d\n",
-		       rc);
-		GOTO(out_proc, rc);
-	}
-
-	RETURN(rc);
-
-out_proc:
-	lprocfs_remove(&proc_lustre_root);
 out:
 	RETURN(rc);
 }
@@ -489,6 +498,10 @@ out:
 int class_procfs_clean(void)
 {
 	ENTRY;
+
+	debugfs_remove_recursive(debugfs_lustre_root);
+
+	debugfs_lustre_root = NULL;
 
 	if (proc_lustre_root)
 		lprocfs_remove(&proc_lustre_root);
