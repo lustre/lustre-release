@@ -35,6 +35,7 @@
 #include <openssl/evp.h>
 #include <sys/types.h>
 
+#include <libcfs/libcfs_crypto.h>
 #include "lsupport.h"
 
 /* Some limits and defaults */
@@ -67,6 +68,8 @@ enum sk_ctx_init_buffers {
 	SK_RESP_BUFFERS	= 4,
 };
 
+#define SK_HMAC_INVALID	0xFF
+
 /* String consisting of "lustre:fsname:nodemap_hash" */
 #define SK_DESCRIPTION_SIZE (9 + MTI_NAME_MAXLEN + LUSTRE_NODEMAP_NAME_LENGTH)
 
@@ -83,7 +86,7 @@ struct sk_keyfile_config {
 	/* File format version */
 	uint32_t	skc_version;
 	/* HMAC algorithm used for message integrity */
-	uint16_t	skc_hmac_alg;
+	enum cfs_crypto_hash_alg	skc_hmac_alg;
 	/* Crypt algorithm used for privacy mode */
 	uint16_t	skc_crypt_alg;
 	/* Number of seconds that a context is valid after it is created from

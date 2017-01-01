@@ -21,10 +21,10 @@ int gss_setup_sgtable(struct sg_table *sgt, struct scatterlist *prealloc_sg,
 void gss_teardown_sgtable(struct sg_table *sgt);
 int gss_crypt_generic(struct crypto_blkcipher *tfm, int decrypt, const void *iv,
 		      const void *in, void *out, size_t length);
-int gss_digest_hmac(struct crypto_hash *tfm, rawobj_t *key, rawobj_t *hdr,
+int gss_digest_hmac(struct crypto_ahash *tfm, rawobj_t *key, rawobj_t *hdr,
 		    int msgcnt, rawobj_t *msgs, int iovcnt, lnet_kiov_t *iovs,
 		    rawobj_t *cksum);
-int gss_digest_norm(struct crypto_hash *tfm, struct gss_keyblock *kb,
+int gss_digest_norm(struct crypto_ahash *tfm, struct gss_keyblock *kb,
 		    rawobj_t *hdr, int msgcnt, rawobj_t *msgs, int iovcnt,
 		    lnet_kiov_t *iovs, rawobj_t *cksum);
 int gss_add_padding(rawobj_t *msg, int msg_buflen, int blocksize);

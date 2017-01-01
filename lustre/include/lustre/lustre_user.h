@@ -1429,22 +1429,10 @@ enum sk_crypt_alg {
 	SK_CRYPT_MAX		= 2,
 };
 
-enum sk_hmac_alg {
-	SK_HMAC_INVALID	= -1,
-	SK_HMAC_EMPTY	= 0,
-	SK_HMAC_SHA256	= 1,
-	SK_HMAC_SHA512	= 2,
-	SK_HMAC_MAX	= 3,
-};
-
 struct sk_crypt_type {
-	char    *sct_name;
-	size_t   sct_bytes;
-};
-
-struct sk_hmac_type {
-	char    *sht_name;
-	size_t   sht_bytes;
+	char		*cht_name;
+	unsigned int	 cht_key;
+	unsigned int	 cht_bytes;
 };
 
 /** @} lustreuser */

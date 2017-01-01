@@ -193,6 +193,7 @@ int cfs_crypto_hash_digest(enum cfs_crypto_hash_alg hash_alg,
 
 /* cfs crypto hash descriptor */
 struct cfs_crypto_hash_desc;
+struct page;
 
 struct cfs_crypto_hash_desc *
 	cfs_crypto_hash_init(enum cfs_crypto_hash_alg hash_alg,
