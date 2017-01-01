@@ -1800,6 +1800,7 @@ int lprocfs_read_frac_helper(char *buffer, unsigned long count, long val,
         buffer[prtn++] ='\n';
         return prtn;
 }
+EXPORT_SYMBOL(lprocfs_read_frac_helper);
 
 int lprocfs_seq_read_frac_helper(struct seq_file *m, long val, int mult)
 {

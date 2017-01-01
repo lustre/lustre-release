@@ -449,7 +449,7 @@ int class_procfs_init(void)
 {
 	struct proc_dir_entry *entry;
 	struct dentry *file;
-	int rc = 0;
+	int rc = -ENOMEM;
 	ENTRY;
 
 	lustre_kobj = kobject_create_and_add("lustre", fs_kobj);
@@ -463,7 +463,11 @@ int class_procfs_init(void)
 		goto out;
 	}
 
-	obd_sysctl_init();
+	rc = obd_sysctl_init();
+	if (rc) {
+		kobject_put(lustre_kobj);
+		goto out;
+	}
 
 	debugfs_lustre_root = debugfs_create_dir("lustre", NULL);
 	if (IS_ERR_OR_NULL(debugfs_lustre_root)) {
