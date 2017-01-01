@@ -111,7 +111,7 @@ static inline __u32 LNET_MKNET(__u32 type, __u32 num)
 #define WIRE_ATTR	__attribute__((packed))
 
 /* Packed version of lnet_process_id_t to transfer via network */
-typedef struct {
+typedef struct lnet_process_id_packed {
 	lnet_nid_t nid;
 	lnet_pid_t pid;	/* node id / process id */
 } WIRE_ATTR lnet_process_id_packed_t;
@@ -120,7 +120,7 @@ typedef struct {
  * one epoch (i.e. new cookie when the interface restarts or the node
  * reboots).  The object cookie only matches one object on that interface
  * during that object's lifetime (i.e. no cookie re-use). */
-typedef struct {
+typedef struct lnet_handle_wire {
 	__u64 wh_interface_cookie;
 	__u64 wh_object_cookie;
 } WIRE_ATTR lnet_handle_wire_t;
@@ -137,38 +137,38 @@ typedef enum {
  * byte boundary in the message header.  Note that all types used in these
  * wire structs MUST be fixed size and the smaller types are placed at the
  * end. */
-typedef struct lnet_ack {
-	lnet_handle_wire_t	dst_wmd;
+struct lnet_ack {
+	struct lnet_handle_wire	dst_wmd;
 	__u64			match_bits;
 	__u32			mlength;
-} WIRE_ATTR lnet_ack_t;
+} WIRE_ATTR;
 
-typedef struct lnet_put {
-	lnet_handle_wire_t	ack_wmd;
+struct lnet_put {
+	struct lnet_handle_wire	ack_wmd;
 	__u64			match_bits;
 	__u64			hdr_data;
 	__u32			ptl_index;
 	__u32			offset;
-} WIRE_ATTR lnet_put_t;
+} WIRE_ATTR;
 
-typedef struct lnet_get {
-	lnet_handle_wire_t	return_wmd;
+struct lnet_get {
+	struct lnet_handle_wire	return_wmd;
 	__u64			match_bits;
 	__u32			ptl_index;
 	__u32			src_offset;
 	__u32			sink_length;
-} WIRE_ATTR lnet_get_t;
+} WIRE_ATTR;
 
-typedef struct lnet_reply {
-	lnet_handle_wire_t	dst_wmd;
-} WIRE_ATTR lnet_reply_t;
+struct lnet_reply {
+	struct lnet_handle_wire	dst_wmd;
+} WIRE_ATTR;
 
-typedef struct lnet_hello {
+struct lnet_hello {
 	__u64			incarnation;
 	__u32			type;
-} WIRE_ATTR lnet_hello_t;
+} WIRE_ATTR;
 
-typedef struct {
+typedef struct lnet_hdr {
 	lnet_nid_t	dest_nid;
 	lnet_nid_t	src_nid;
 	lnet_pid_t	dest_pid;
@@ -177,11 +177,11 @@ typedef struct {
 	__u32		payload_length;	/* payload data to follow */
 	/*<------__u64 aligned------->*/
 	union {
-		lnet_ack_t	ack;
-		lnet_put_t	put;
-		lnet_get_t	get;
-		lnet_reply_t	reply;
-		lnet_hello_t	hello;
+		struct lnet_ack		ack;
+		struct lnet_put		put;
+		struct lnet_get		get;
+		struct lnet_reply	reply;
+		struct lnet_hello	hello;
 	} msg;
 } WIRE_ATTR lnet_hdr_t;
 
@@ -194,7 +194,7 @@ typedef struct {
  * exchange HELLO messages when a connection is first established.  Individual
  * LNDs can put whatever else they fancy in lnet_hdr_t::msg.
  */
-typedef struct {
+typedef struct lnet_magicversion {
 	__u32	magic;		/* LNET_PROTO_TCP_MAGIC */
 	__u16	version_major;	/* increment on incompatible change */
 	__u16	version_minor;	/* increment on compatible change */
@@ -216,7 +216,7 @@ typedef struct {
 #define LNET_PROTO_TCP_VERSION_MINOR	0
 
 /* Acceptor connection request */
-typedef struct {
+typedef struct lnet_acceptor_connreq {
 	__u32	acr_magic;	/* PTL_ACCEPTOR_PROTO_MAGIC */
 	__u32	acr_version;	/* protocol version */
 	__u64	acr_nid;	/* target NID */

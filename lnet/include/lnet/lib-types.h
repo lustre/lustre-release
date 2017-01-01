@@ -250,7 +250,7 @@ typedef struct lnet_lnd
 	int (*lnd_accept)(struct lnet_ni *ni, struct socket *sock);
 } lnd_t;
 
-typedef struct {
+typedef struct lnet_ni_status {
 	lnet_nid_t ns_nid;
 	__u32	   ns_status;
 	__u32	   ns_unused;
@@ -282,7 +282,7 @@ typedef struct lnet_ni {
 	struct lnet_tx_queue	**ni_tx_queues;	/* percpt TX queues */
 	int			**ni_refs;	/* percpt reference count */
 	time64_t		ni_last_alive;	/* when I was last alive */
-	lnet_ni_status_t	*ni_status;	/* my health status */
+	struct lnet_ni_status	*ni_status;	/* my health status */
 	/* per NI LND tunables */
 	struct lnet_ioctl_config_lnd_tunables *ni_lnd_tunables;
 	/* equivalent interfaces to use */
@@ -302,23 +302,23 @@ typedef struct lnet_ni {
 #define LNET_PING_FEAT_MASK		(LNET_PING_FEAT_BASE | \
 					 LNET_PING_FEAT_NI_STATUS)
 
-typedef struct {
+typedef struct lnet_ping_info {
 	__u32			pi_magic;
 	__u32			pi_features;
 	lnet_pid_t		pi_pid;
 	__u32			pi_nnis;
-	lnet_ni_status_t	pi_ni[0];
+	struct lnet_ni_status	pi_ni[0];
 } WIRE_ATTR lnet_ping_info_t;
 
 /* router checker data, per router */
 #define LNET_MAX_RTR_NIS   16
-#define LNET_PINGINFO_SIZE offsetof(lnet_ping_info_t, pi_ni[LNET_MAX_RTR_NIS])
+#define LNET_PINGINFO_SIZE offsetof(struct lnet_ping_info, pi_ni[LNET_MAX_RTR_NIS])
 typedef struct {
 	/* chain on the_lnet.ln_zombie_rcd or ln_deathrow_rcd */
 	struct list_head	rcd_list;
 	lnet_handle_md_t	rcd_mdh;	/* ping buffer MD */
 	struct lnet_peer	*rcd_gateway;	/* reference to gateway */
-	lnet_ping_info_t	*rcd_pinginfo;	/* ping buffer */
+	struct lnet_ping_info	*rcd_pinginfo;	/* ping buffer */
 } lnet_rc_data_t;
 
 typedef struct lnet_peer {
@@ -618,7 +618,7 @@ typedef struct
 
 	lnet_handle_md_t		ln_ping_target_md;
 	lnet_handle_eq_t		ln_ping_target_eq;
-	lnet_ping_info_t		*ln_ping_info;
+	struct lnet_ping_info		*ln_ping_info;
 
 	/* router checker startup/shutdown state */
 	int				ln_rc_state;

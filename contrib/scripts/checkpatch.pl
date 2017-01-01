@@ -459,6 +459,15 @@ my %dep_functions = (
 	'cfs_hash_lookup_intent_t',	'enum cfs_hash_lookup_intent',
 	'cfs_hash_cond_arg_t',		'struct cfs_hash_cond_arg',
 
+	'lnet_ni_status_t',		'struct lnet_ni_status',
+	'lnet_ping_info_t',		'struct lnet_ping_info',
+	'lnet_process_id_packed_t',	'struct lnet_process_id_packed',
+	'lnet_handle_wire_t',		'struct lnet_handle_wire',
+	'lnet_hdr_t',			'struct lnet_hdr',
+	'lnet_magicversion_t',		'struct lnet_magicversion',
+	'lnet_acceptor_connreq_t',	'struct lnet_acceptor_connreq',
+	'lnet_counters_t',		'struct lnet_counters',
+
 	'ldlm_appetite_t',		'enum ldlm_appetite',
 	'ldlm_cancel_flags_t',		'enum ldlm_cancel_flags',
 	'ldlm_error_t',			'enum ldlm_error',

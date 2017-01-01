@@ -93,11 +93,11 @@ do {                                            \
 } while (0)
 
 void
-check_lnet_handle_wire (void)
+check_lnet_handle_wire(void)
 {
-        CHECK_STRUCT (lnet_handle_wire_t);
-        CHECK_MEMBER (lnet_handle_wire_t, wh_interface_cookie);
-        CHECK_MEMBER (lnet_handle_wire_t, wh_object_cookie);
+	CHECK_STRUCT(struct lnet_handle_wire);
+	CHECK_MEMBER(struct lnet_handle_wire, wh_interface_cookie);
+	CHECK_MEMBER(struct lnet_handle_wire, wh_object_cookie);
 }
 
 void

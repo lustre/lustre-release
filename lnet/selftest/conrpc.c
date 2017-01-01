@@ -699,17 +699,17 @@ lstcon_statrpc_prep(lstcon_node_t *nd, unsigned feats, lstcon_rpc_t **crpc)
         return 0;
 }
 
-static lnet_process_id_packed_t *
+static struct lnet_process_id_packed *
 lstcon_next_id(int idx, int nkiov, lnet_kiov_t *kiov)
 {
-        lnet_process_id_packed_t *pid;
+	struct lnet_process_id_packed *pid;
         int                       i;
 
         i = idx / SFW_ID_PER_PAGE;
 
         LASSERT (i < nkiov);
 
-	pid = (lnet_process_id_packed_t *)page_address(kiov[i].kiov_page);
+	pid = (struct lnet_process_id_packed *)page_address(kiov[i].kiov_page);
 
         return &pid[idx % SFW_ID_PER_PAGE];
 }
@@ -718,7 +718,7 @@ static int
 lstcon_dstnodes_prep(lstcon_group_t *grp, int idx,
                      int dist, int span, int nkiov, lnet_kiov_t *kiov)
 {
-        lnet_process_id_packed_t *pid;
+	struct lnet_process_id_packed *pid;
         lstcon_ndlink_t          *ndl;
         lstcon_node_t            *nd;
         int                       start;
@@ -823,7 +823,7 @@ lstcon_testrpc_prep(lstcon_node_t *nd, int transop, unsigned feats,
 		npg = sfw_id_pages(test->tes_span);
 		nob = (feats & LST_FEAT_BULK_LEN) == 0 ?
 		      npg * PAGE_SIZE :
-		      sizeof(lnet_process_id_packed_t) * test->tes_span;
+		      sizeof(struct lnet_process_id_packed) * test->tes_span;
 	}
 
 	rc = lstcon_rpc_prep(nd, SRPC_SERVICE_TEST, feats, npg, nob, crpc);

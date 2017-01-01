@@ -81,7 +81,7 @@ static inline int lnet_is_route_alive(lnet_route_t *route)
 	return route->lr_downis == 0;
 }
 
-static inline int lnet_is_wire_handle_none (lnet_handle_wire_t *wh)
+static inline int lnet_is_wire_handle_none(struct lnet_handle_wire *wh)
 {
 	return (wh->wh_interface_cookie == LNET_WIRE_HANDLE_COOKIE_NONE &&
 		wh->wh_object_cookie == LNET_WIRE_HANDLE_COOKIE_NONE);
@@ -356,7 +356,7 @@ lnet_handle2md(lnet_handle_md_t *handle)
 }
 
 static inline lnet_libmd_t *
-lnet_wire_handle2md(lnet_handle_wire_t *wh)
+lnet_wire_handle2md(struct lnet_handle_wire *wh)
 {
 	/* ALWAYS called with resource lock held */
 	lnet_libhandle_t *lh;
@@ -759,7 +759,7 @@ int lnet_peer_buffer_credits(lnet_ni_t *ni);
 int lnet_router_checker_start(void);
 void lnet_router_checker_stop(void);
 void lnet_router_ni_update_locked(lnet_peer_t *gw, __u32 net);
-void lnet_swap_pinginfo(lnet_ping_info_t *info);
+void lnet_swap_pinginfo(struct lnet_ping_info *info);
 
 int lnet_parse_ip2nets(char **networksp, char *ip2nets);
 int lnet_parse_routes(char *route_str, int *im_a_router);
