@@ -100,58 +100,6 @@ static struct static_lustre_uintvalue_attr lustre_sattr_##name =	\
 
 LUSTRE_STATIC_UINT_ATTR(timeout, &obd_timeout);
 
-#ifdef CONFIG_SYSCTL
-static int
-proc_memory_alloc(struct ctl_table *table, int write, void __user *buffer,
-		  size_t *lenp, loff_t *ppos)
-{
-        char buf[22];
-        int len;
-
-        if (!*lenp || (*ppos && !write)) {
-                *lenp = 0;
-                return 0;
-        }
-        if (write)
-                return -EINVAL;
-
-	len = snprintf(buf, sizeof(buf), "%llu\n", obd_memory_sum());
-        if (len > *lenp)
-                len = *lenp;
-        buf[len] = '\0';
-	if (copy_to_user(buffer, buf, len))
-                return -EFAULT;
-        *lenp = len;
-        *ppos += *lenp;
-        return 0;
-}
-
-static int
-proc_mem_max(struct ctl_table *table, int write, void __user *buffer,
-	     size_t *lenp, loff_t *ppos)
-{
-        char buf[22];
-        int len;
-
-        if (!*lenp || (*ppos && !write)) {
-                *lenp = 0;
-                return 0;
-        }
-        if (write)
-                return -EINVAL;
-
-	len = snprintf(buf, sizeof(buf), "%llu\n", obd_memory_max());
-        if (len > *lenp)
-                len = *lenp;
-        buf[len] = '\0';
-	if (copy_to_user(buffer, buf, len))
-                return -EFAULT;
-        *lenp = len;
-        *ppos += *lenp;
-        return 0;
-}
-#endif /* CONFIG_SYSCTL */
-
 static ssize_t max_dirty_mb_show(struct kobject *kobj, struct attribute *attr,
 				 char *buf)
 {
@@ -198,34 +146,25 @@ LUSTRE_STATIC_UINT_ATTR(at_history, &at_history);
 
 #ifdef HAVE_SERVER_SUPPORT
 LUSTRE_STATIC_UINT_ATTR(ldlm_timeout, &ldlm_timeout);
+LUSTRE_STATIC_UINT_ATTR(bulk_timeout, &bulk_timeout);
 #endif
+
+static ssize_t memused_show(struct kobject *kobj, struct attribute *attr,
+			    char *buf)
+{
+	return sprintf(buf, "%llu\n", obd_memory_sum());
+}
+LUSTRE_RO_ATTR(memused);
+
+static ssize_t memused_max_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
+{
+	return sprintf(buf, "%llu\n", obd_memory_max());
+}
+LUSTRE_RO_ATTR(memused_max);
 
 #ifdef CONFIG_SYSCTL
 static struct ctl_table obd_table[] = {
-	{
-		INIT_CTL_NAME
-		.procname	= "memused",
-		.data		= NULL,
-		.maxlen		= 0,
-		.mode		= 0444,
-		.proc_handler	= &proc_memory_alloc
-	},
-	{
-		INIT_CTL_NAME
-		.procname	= "memused_max",
-		.data		= NULL,
-		.maxlen		= 0,
-		.mode		= 0444,
-		.proc_handler	= &proc_mem_max
-	},
-	{
-		INIT_CTL_NAME
-		.procname	= "bulk_timeout",
-		.data		= &bulk_timeout,
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.proc_handler	= &proc_dointvec
-	},
 	{ 0 }
 };
 
@@ -253,8 +192,11 @@ static struct attribute *lustre_attrs[] = {
 	&lustre_sattr_at_extra.u.attr,
 	&lustre_sattr_at_early_margin.u.attr,
 	&lustre_sattr_at_history.u.attr,
+	&lustre_attr_memused_max.attr,
+	&lustre_attr_memused.attr,
 #ifdef HAVE_SERVER_SUPPORT
 	&lustre_sattr_ldlm_timeout.u.attr,
+	&lustre_sattr_bulk_timeout.u.attr,
 #endif
 	NULL,
 };
