@@ -798,12 +798,8 @@ cfs_hash_bd_order(struct cfs_hash_bd *bd1, struct cfs_hash_bd *bd2)
         if (rc == 0) {
                 bd2->bd_bucket = NULL;
 
-        } else if (rc > 0) { /* swab bd1 and bd2 */
-		struct cfs_hash_bd tmp;
-
-                tmp = *bd2;
-                *bd2 = *bd1;
-                *bd1 = tmp;
+	} else if (rc > 0) {
+		swap(*bd1, *bd2); /* swab bd1 and bd2 */
         }
 }
 
