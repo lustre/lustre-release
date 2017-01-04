@@ -93,8 +93,8 @@ static struct ptlrpc_enc_page_pool {
         unsigned long    epp_idle_idx;
 
         /* last shrink time due to mem tight */
-        long             epp_last_shrink;
-        long             epp_last_access;
+	time64_t	epp_last_shrink;
+	time64_t	epp_last_access;
 
         /*
          * in-pool pages bookkeeping
@@ -161,8 +161,8 @@ int sptlrpc_proc_enc_pool_seq_show(struct seq_file *m, void *v)
 		   page_pools.epp_total_pages,
 		   page_pools.epp_free_pages,
 		   page_pools.epp_idle_idx,
-		   cfs_time_current_sec() - page_pools.epp_last_shrink,
-		   cfs_time_current_sec() - page_pools.epp_last_access,
+		   (long)(ktime_get_seconds() - page_pools.epp_last_shrink),
+		   (long)(ktime_get_seconds() - page_pools.epp_last_access),
 		   page_pools.epp_st_max_pages,
 		   page_pools.epp_st_grows,
 		   page_pools.epp_st_grow_fails,
@@ -234,7 +234,7 @@ static unsigned long enc_pools_shrink_count(struct shrinker *s,
 	 * if no pool access for a long time, we consider it's fully idle.
 	 * a little race here is fine.
 	 */
-	if (unlikely(cfs_time_current_sec() - page_pools.epp_last_access >
+	if (unlikely(ktime_get_real_seconds() - page_pools.epp_last_access >
 		     CACHE_QUIESCENT_PERIOD)) {
 		spin_lock(&page_pools.epp_lock);
 		page_pools.epp_idle_idx = IDLE_IDX_MAX;
@@ -261,7 +261,7 @@ static unsigned long enc_pools_shrink_scan(struct shrinker *s,
 		       (long)sc->nr_to_scan, page_pools.epp_free_pages);
 
 		page_pools.epp_st_shrinks++;
-		page_pools.epp_last_shrink = cfs_time_current_sec();
+		page_pools.epp_last_shrink = ktime_get_real_seconds();
 	}
 	spin_unlock(&page_pools.epp_lock);
 
@@ -269,7 +269,7 @@ static unsigned long enc_pools_shrink_scan(struct shrinker *s,
 	 * if no pool access for a long time, we consider it's fully idle.
 	 * a little race here is fine.
 	 */
-	if (unlikely(cfs_time_current_sec() - page_pools.epp_last_access >
+	if (unlikely(ktime_get_real_seconds() - page_pools.epp_last_access >
 		     CACHE_QUIESCENT_PERIOD)) {
 		spin_lock(&page_pools.epp_lock);
 		page_pools.epp_idle_idx = IDLE_IDX_MAX;
@@ -486,7 +486,7 @@ static inline void enc_pools_wakeup(void)
 	}
 }
 
-static int enc_pools_should_grow(int page_needed, long now)
+static int enc_pools_should_grow(int page_needed, time64_t now)
 {
 	/* don't grow if someone else is growing the pools right now,
 	 * or the pools has reached its full capacity
@@ -565,7 +565,7 @@ again:
 		if (tick == 0)
 			tick = cfs_time_current();
 
-		now = cfs_time_current_sec();
+		now = ktime_get_real_seconds();
 
 		page_pools.epp_st_missings++;
 		page_pools.epp_pages_short += desc->bd_iov_count;
@@ -660,7 +660,7 @@ again:
                                    this_idle) /
                                   (IDLE_IDX_WEIGHT + 1);
 
-        page_pools.epp_last_access = cfs_time_current_sec();
+	page_pools.epp_last_access = ktime_get_real_seconds();
 
 	spin_unlock(&page_pools.epp_lock);
 	return 0;
@@ -785,8 +785,8 @@ int sptlrpc_enc_pool_init(void)
         page_pools.epp_growing = 0;
 
         page_pools.epp_idle_idx = 0;
-        page_pools.epp_last_shrink = cfs_time_current_sec();
-        page_pools.epp_last_access = cfs_time_current_sec();
+	page_pools.epp_last_shrink = ktime_get_real_seconds();
+	page_pools.epp_last_access = ktime_get_real_seconds();
 
 	spin_lock_init(&page_pools.epp_lock);
         page_pools.epp_total_pages = 0;
