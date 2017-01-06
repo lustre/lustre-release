@@ -3705,7 +3705,6 @@ test_50i() {
 	# prepare MDT/OST, make OSC inactive for OST1
 	[ "$MDSCOUNT" -lt "2" ] && skip_env "$MDSCOUNT < 2, skipping" && return
 
-	load_modules
 	[ $(facet_fstype mds2) == zfs ] && import_zpool mds2
 	do_facet mds2 "$TUNEFS --param mdc.active=0 $(mdsdevname 2)" ||
 		error "tunefs MDT2 failed"
@@ -3736,20 +3735,13 @@ test_50i() {
 	rm -rf $DIR/$tdir/2 || error "unlink dir failed"
 
 	# deactivate MDC for MDT2
-	TEST="$LCTL get_param -n mdc.${FSNAME}-MDT0001-mdc-[!M]*.active"
+	local TEST="$LCTL get_param -n mdc.${FSNAME}-MDT0001-mdc-[!M]*.active"
 	set_conf_param_and_check client					\
 		"$TEST" "${FSNAME}-MDT0001.mdc.active" 0 ||
 		error "Unable to deactivate MDT2"
 
 	$LFS mkdir -i1 $DIR/$tdir/2 &&
 		error "mkdir $DIR/$tdir/2 succeeds after deactive MDT"
-
-	$LFS mkdir -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir ||
-		error "mkdir $DIR/$tdir/striped_dir fails after deactive MDT2"
-
-	local stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir)
-	[ $stripe_count -eq $((MDSCOUNT - 1)) ] ||
-		error "wrong $stripe_count != $((MDSCOUNT -1)) for striped_dir"
 
 	# cleanup
 	umount_client $MOUNT || error "Unable to umount client"

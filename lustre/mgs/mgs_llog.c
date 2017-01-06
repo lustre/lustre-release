@@ -3485,7 +3485,7 @@ static int mgs_write_log_param(const struct lu_env *env,
 				LCONSOLE_ERROR_MSG(0x144, "%s: MDC0 can not be"
 						   " (de)activated.\n",
 						   mti->mti_svname);
-				GOTO(end, rc = -EPERM);
+				GOTO(end, rc = -EINVAL);
 			}
 		}
 
