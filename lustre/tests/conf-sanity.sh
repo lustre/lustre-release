@@ -1207,27 +1207,8 @@ test_29() {
 	fi
 
 	# check MDTs too
-	for num in $(seq $MDSCOUNT); do
-		local mdtosc=$(get_mdtosc_proc_path mds${num} $FSNAME-OST0001)
-		local MPROC="osc.$mdtosc.active"
-		local MAX=30
-		local WAIT=0
-		while [ 1 ]; do
-			sleep 5
-			RESULT=$(do_facet mds${num} "$LCTL get_param -n $MPROC")
-			[ ${PIPESTATUS[0]} = 0 ] || error "Can't read $MPROC"
-			if [ $RESULT -eq $DEAC ]; then
-				echo -n "MDT deactivated also after"
-				echo "$WAIT sec (got $RESULT)"
-				break
-			fi
-			WAIT=$((WAIT + 5))
-			if [ $WAIT -eq $MAX ]; then
-				error "MDT active: wanted $DEAC got $RESULT"
-			fi
-			echo "Waiting $(($MAX - $WAIT))secs for MDT deactivated"
-		done
-	done
+	wait_osp_active ost ${FSNAME}-OST0001 1 0
+
 	# test new client starts deactivated
 	umount_client $MOUNT || error "umount_client $MOUNT failed"
 	mount_client $MOUNT || error "mount_client $MOUNT failed"
@@ -3740,6 +3721,7 @@ test_50i() {
 	# prepare MDT/OST, make OSC inactive for OST1
 	[ "$MDSCOUNT" -lt "2" ] && skip_env "$MDSCOUNT < 2, skipping" && return
 
+	load_modules
 	[ $(facet_fstype mds2) == zfs ] && import_zpool mds2
 	do_facet mds2 "$TUNEFS --param mdc.active=0 $(mdsdevname 2)" ||
 		error "tunefs MDT2 failed"
@@ -3775,8 +3757,17 @@ test_50i() {
 		"$TEST" "${FSNAME}-MDT0001.mdc.active" 0 ||
 		error "Unable to deactivate MDT2"
 
+	wait_osp_active mds ${FSNAME}-MDT0001 1 0
+
 	$LFS mkdir -i1 $DIR/$tdir/2 &&
 		error "mkdir $DIR/$tdir/2 succeeds after deactive MDT"
+
+	$LFS mkdir -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "mkdir $DIR/$tdir/striped_dir fails after deactive MDT2"
+
+	local stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir)
+	[ $stripe_count -eq $((MDSCOUNT - 1)) ] ||
+		error "wrong $stripe_count != $((MDSCOUNT -1)) for striped_dir"
 
 	# cleanup
 	umount_client $MOUNT || error "Unable to umount client"

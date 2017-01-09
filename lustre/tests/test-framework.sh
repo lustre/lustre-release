@@ -6279,6 +6279,47 @@ wait_clients_import_state () {
 	fi
 }
 
+wait_osp_active() {
+	local facet=$1
+	local tgt_name=$2
+	local tgt_idx=$3
+	local expected=$4
+	local num
+
+	# wait until all MDTs are in the expected state
+	for ((num = 1; num <= $MDSCOUNT; num++)); do
+		local mdtosp=$(get_mdtosc_proc_path mds${num} ${tgt_name})
+		local mproc
+
+		if [ $facet = "mds" ]; then
+			mproc="osp.$mdtosp.active"
+			[ $num -eq $((tgt_idx + 1)) ] && continue
+		else
+			mproc="osc.$mdtosp.active"
+		fi
+
+		echo "check $mproc"
+		while [ 1 ]; do
+			sleep 5
+			local result=$(do_facet mds${num} "$LCTL get_param -n $mproc")
+			local max=30
+			local wait=0
+
+			[ ${PIPESTATUS[0]} = 0 ] || error "Can't read $mproc"
+			if [ $result -eq $expected ]; then
+				echo -n "target updated after"
+				echo "$wait sec (got $result)"
+				break
+			fi
+			wait=$((wait + 5))
+			if [ $wait -eq $max ]; then
+				error "$tgt_name: wanted $expected got $result"
+			fi
+			echo "Waiting $((max - wait)) secs for $tgt_name"
+		done
+	done
+}
+
 oos_full() {
 	local -a AVAILA
 	local -a GRANTA
