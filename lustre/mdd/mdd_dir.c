@@ -49,8 +49,8 @@ static const char dot[] = ".";
 static const char dotdot[] = "..";
 
 static struct lu_name lname_dotdot = {
-        (char *) dotdot,
-        sizeof(dotdot) - 1
+	.ln_name	= (char *) dotdot,
+	.ln_namelen	= sizeof(dotdot) - 1,
 };
 
 static inline int
