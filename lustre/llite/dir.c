@@ -466,7 +466,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	if (unlikely(lump->lum_magic != LMV_USER_MAGIC))
 		RETURN(-EINVAL);
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p) name %s"
+	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p) name %s "
 	       "stripe_offset %d, stripe_count: %u\n",
 	       PFID(ll_inode2fid(parent)), parent, dirname,
 	       (int)lump->lum_stripe_offset, lump->lum_stripe_count);
