@@ -1096,8 +1096,8 @@ static int process_param2_config(struct lustre_cfg *lcfg)
 		[2] = param,
 		[3] = NULL
 	};
-	struct timeval	start;
-	struct timeval	end;
+	ktime_t start;
+	ktime_t end;
 	int		rc;
 	ENTRY;
 
@@ -1107,18 +1107,18 @@ static int process_param2_config(struct lustre_cfg *lcfg)
 		RETURN(-EINVAL);
 	}
 
-	do_gettimeofday(&start);
+	start = ktime_get();
 	rc = call_usermodehelper(argv[0], argv, NULL, UMH_WAIT_PROC);
-	do_gettimeofday(&end);
+	end = ktime_get();
 
 	if (rc < 0) {
 		CERROR("lctl: error invoking upcall %s %s %s: rc = %d; "
 		       "time %ldus\n", argv[0], argv[1], argv[2], rc,
-		       cfs_timeval_sub(&end, &start, NULL));
+		       (long)ktime_us_delta(end, start));
 	} else {
 		CDEBUG(D_HA, "lctl: invoked upcall %s %s %s, time %ldus\n",
 		       argv[0], argv[1], argv[2],
-		       cfs_timeval_sub(&end, &start, NULL));
+		       (long)ktime_us_delta(end, start));
 		       rc = 0;
 	}
 
