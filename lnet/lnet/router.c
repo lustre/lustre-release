@@ -551,7 +551,7 @@ lnet_destroy_routes (void)
 
 int lnet_get_rtr_pool_cfg(int idx, struct lnet_ioctl_pool_cfg *pool_cfg)
 {
-	int i, rc = -ENOENT, lidx, j;
+	int i, rc = -ENOENT, j;
 
 	if (the_lnet.ln_rtrpools == NULL)
 		return rc;
@@ -560,20 +560,16 @@ int lnet_get_rtr_pool_cfg(int idx, struct lnet_ioctl_pool_cfg *pool_cfg)
 		lnet_rtrbufpool_t *rbp;
 
 		lnet_net_lock(LNET_LOCK_EX);
-		lidx = idx;
 		cfs_percpt_for_each(rbp, j, the_lnet.ln_rtrpools) {
-			if (lidx-- == 0) {
-				rc = 0;
-				pool_cfg->pl_pools[i].pl_npages =
-					rbp[i].rbp_npages;
-				pool_cfg->pl_pools[i].pl_nbuffers =
-					rbp[i].rbp_nbuffers;
-				pool_cfg->pl_pools[i].pl_credits =
-					rbp[i].rbp_credits;
-				pool_cfg->pl_pools[i].pl_mincredits =
-					rbp[i].rbp_mincredits;
-				break;
-			}
+			if (i++ != idx)
+				continue;
+
+			pool_cfg->pl_pools[i].pl_npages = rbp[i].rbp_npages;
+			pool_cfg->pl_pools[i].pl_nbuffers = rbp[i].rbp_nbuffers;
+			pool_cfg->pl_pools[i].pl_credits = rbp[i].rbp_credits;
+			pool_cfg->pl_pools[i].pl_mincredits = rbp[i].rbp_mincredits;
+			rc = 0;
+			break;
 		}
 		lnet_net_unlock(LNET_LOCK_EX);
 	}

@@ -1574,7 +1574,7 @@ LNetNIInit(lnet_pid_t requested_pid)
 	/* Add in the loopback network */
 	if (lnet_ni_alloc(LNET_MKNET(LOLND, 0), NULL, &net_head) == NULL) {
 		rc = -ENOMEM;
-		goto failed0;
+		goto err_empty_list;
 	}
 
 	/* If LNet is being initialized via DLC it is possible
@@ -1587,44 +1587,45 @@ LNetNIInit(lnet_pid_t requested_pid)
 		rc = lnet_parse_networks(&net_head,
 					 lnet_get_networks());
 		if (rc < 0)
-			goto failed0;
+			goto err_empty_list;
 	}
 
 	ni_count = lnet_startup_lndnis(&net_head);
 	if (ni_count < 0) {
 		rc = ni_count;
-		goto failed0;
+		goto err_empty_list;
 	}
 
 	if (!the_lnet.ln_nis_from_mod_params) {
 		rc = lnet_parse_routes(lnet_get_routes(), &im_a_router);
 		if (rc != 0)
-			goto failed1;
+			goto err_shutdown_lndnis;
 
 		rc = lnet_check_routes();
 		if (rc != 0)
-			goto failed2;
+			goto err_destroy_routes;
 
 		rc = lnet_rtrpools_alloc(im_a_router);
 		if (rc != 0)
-			goto failed2;
+			goto err_destroy_routes;
 	}
 
 	rc = lnet_acceptor_start();
 	if (rc != 0)
-		goto failed2;
+		goto err_destroy_routes;
+
 	the_lnet.ln_refcount = 1;
 	/* Now I may use my own API functions... */
 
 	rc = lnet_ping_info_setup(&pinfo, &md_handle, ni_count, true);
 	if (rc != 0)
-		goto failed3;
+		goto err_acceptor_stop;
 
 	lnet_ping_target_update(pinfo, md_handle);
 
 	rc = lnet_router_checker_start();
 	if (rc != 0)
-		goto failed4;
+		goto err_stop_ping;
 
 	lnet_fault_init();
 	lnet_proc_init();
@@ -1633,22 +1634,23 @@ LNetNIInit(lnet_pid_t requested_pid)
 
 	return 0;
 
-failed4:
+err_stop_ping:
 	lnet_ping_target_fini();
-failed3:
+err_acceptor_stop:
 	the_lnet.ln_refcount = 0;
 	lnet_acceptor_stop();
-failed2:
+err_destroy_routes:
 	if (!the_lnet.ln_nis_from_mod_params)
 		lnet_destroy_routes();
-failed1:
+err_shutdown_lndnis:
 	lnet_shutdown_lndnis();
-failed0:
+err_empty_list:
 	lnet_unprepare();
 	LASSERT(rc < 0);
 	mutex_unlock(&the_lnet.ln_api_mutex);
 	while (!list_empty(&net_head)) {
 		struct lnet_ni *ni;
+
 		ni = list_entry(net_head.next, struct lnet_ni, ni_list);
 		list_del_init(&ni->ni_list);
 		lnet_ni_free(ni);
@@ -1726,17 +1728,16 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_data *config)
 	if (!net_config)
 		return;
 
-	CLASSERT(ARRAY_SIZE(ni->ni_interfaces) ==
-		 ARRAY_SIZE(net_config->ni_interfaces));
+	BUILD_BUG_ON(ARRAY_SIZE(ni->ni_interfaces) !=
+		     ARRAY_SIZE(net_config->ni_interfaces));
 
-	if (ni->ni_interfaces[0] != NULL) {
-		for (i = 0; i < ARRAY_SIZE(ni->ni_interfaces); i++) {
-			if (ni->ni_interfaces[i] != NULL) {
-				strncpy(net_config->ni_interfaces[i],
-					ni->ni_interfaces[i],
-					sizeof(net_config->ni_interfaces[i]));
-			}
-		}
+	for (i = 0; i < ARRAY_SIZE(ni->ni_interfaces); i++) {
+		if (!ni->ni_interfaces[i])
+			break;
+
+		strncpy(net_config->ni_interfaces[i],
+			ni->ni_interfaces[i],
+			sizeof(net_config->ni_interfaces[i]));
 	}
 
 	config->cfg_nid = ni->ni_nid;
@@ -1747,13 +1748,14 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_data *config)
 
 	net_config->ni_status = ni->ni_status->ns_status;
 
-	for (i = 0;
-	     ni->ni_cpts != NULL && i < ni->ni_ncpts &&
-	     i < LNET_MAX_SHOW_NUM_CPT;
-	     i++)
-		net_config->ni_cpts[i] = ni->ni_cpts[i];
+	if (ni->ni_cpts) {
+		int num_cpts = min(ni->ni_ncpts, LNET_MAX_SHOW_NUM_CPT);
 
-	config->cfg_ncpts = ni->ni_ncpts;
+		for (i = 0; i < num_cpts; i++)
+			net_config->ni_cpts[i] = ni->ni_cpts[i];
+
+		config->cfg_ncpts = num_cpts;
+	}
 
 	/*
 	 * See if user land tools sent in a newer and larger version
@@ -1787,7 +1789,7 @@ lnet_get_net_config(struct lnet_ioctl_config_data *config)
 	struct list_head *tmp;
 	int idx = config->cfg_count;
 	int rc = -ENOENT;
-	int cpt;
+	int cpt, i = 0;
 
 	if (unlikely(!config->cfg_bulk))
 		return -EINVAL;
@@ -1795,14 +1797,15 @@ lnet_get_net_config(struct lnet_ioctl_config_data *config)
 	cpt = lnet_net_lock_current();
 
 	list_for_each(tmp, &the_lnet.ln_nis) {
+		if (i++ != idx)
+			continue;
+
 		ni = list_entry(tmp, lnet_ni_t, ni_list);
-		if (idx-- == 0) {
-			rc = 0;
-			lnet_ni_lock(ni);
-			lnet_fill_ni_info(ni, config);
-			lnet_ni_unlock(ni);
-			break;
-		}
+		lnet_ni_lock(ni);
+		lnet_fill_ni_info(ni, config);
+		lnet_ni_unlock(ni);
+		rc = 0;
+		break;
 	}
 
 	lnet_net_unlock(cpt);
@@ -1944,8 +1947,8 @@ LNetCtl(unsigned int cmd, void *arg)
 	lnet_ni_t		 *ni;
 	int			  rc;
 
-	CLASSERT(LIBCFS_IOC_DATA_MAX >= sizeof(struct lnet_ioctl_net_config) +
-					sizeof(struct lnet_ioctl_config_data));
+	BUILD_BUG_ON(sizeof(struct lnet_ioctl_net_config) +
+		     sizeof(struct lnet_ioctl_config_data) > LIBCFS_IOC_DATA_MAX);
 
 	switch (cmd) {
 	case IOC_LIBCFS_GET_NI:

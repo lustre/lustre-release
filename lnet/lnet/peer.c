@@ -405,7 +405,7 @@ int lnet_get_peer_info(__u32 peer_index, __u64 *nid,
 	/* if the cpt number to be examined is >= the number of cpts in
 	 * the system then indicate that there are no more cpts to examin
 	 */
-	if (*cpt_iter > lncpt)
+	if (*cpt_iter >= lncpt)
 		return -ENOENT;
 
 	/* get the current table */
