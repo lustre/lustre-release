@@ -376,11 +376,18 @@ static int osc_cache_too_much(struct client_obd *cli)
 		else if (pages >= budget / 2)
 			return lru_shrink_min(cli);
 	} else {
-		int duration = cfs_time_current_sec() - cli->cl_lru_last_used;
+		time64_t duration = ktime_get_real_seconds();
+		long timediff;
 
 		/* knock out pages by duration of no IO activity */
-		duration >>= 6; /* approximately 1 minute */
-		if (duration > 0 && pages >= budget / duration)
+		duration -= cli->cl_lru_last_used;
+		/*
+		 * The difference shouldn't be more than 70 years
+		 * so we can safely case to a long. Round to
+		 * approximately 1 minute.
+		 */
+		timediff = (long)(duration >> 6);
+		if (timediff > 0 && pages >= budget / timediff)
 			return lru_shrink_min(cli);
 	}
 	return 0;
@@ -429,7 +436,7 @@ void osc_lru_add_batch(struct client_obd *cli, struct list_head *plist)
 		list_splice_tail(&lru, &cli->cl_lru_list);
 		atomic_long_sub(npages, &cli->cl_lru_busy);
 		atomic_long_add(npages, &cli->cl_lru_in_list);
-		cli->cl_lru_last_used = cfs_time_current_sec();
+		cli->cl_lru_last_used = ktime_get_real_seconds();
 		spin_unlock(&cli->cl_lru_list_lock);
 
 		if (waitqueue_active(&osc_lru_waitq))
