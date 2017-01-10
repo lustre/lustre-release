@@ -785,7 +785,7 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 	}
 
 	now = cfs_time_current();
-	deadline = cfs_timer_deadline(&target->obd_recovery_timer);
+	deadline = target->obd_recovery_timer.expires;
 	if (cfs_time_before(now, deadline)) {
 		struct target_distribute_txn_data *tdtd =
 					class_exp2tgt(exp)->lut_tdtd;
@@ -1276,7 +1276,7 @@ no_export:
 			i = atomic_read(&target->obd_lock_replay_clients);
 			k = target->obd_max_recoverable_clients;
 			s = target->obd_stale_clients;
-			t = cfs_timer_deadline(&target->obd_recovery_timer);
+			t = target->obd_recovery_timer.expires;
 			t = cfs_time_sub(t, cfs_time_current());
 			t = cfs_duration_sec(t);
 			LCONSOLE_WARN("%s: Denying connection for new client %s"
@@ -1713,7 +1713,7 @@ EXPORT_SYMBOL(target_cleanup_recovery);
 void target_cancel_recovery_timer(struct obd_device *obd)
 {
         CDEBUG(D_HA, "%s: cancel recovery timer\n", obd->obd_name);
-        cfs_timer_disarm(&obd->obd_recovery_timer);
+	del_timer(&obd->obd_recovery_timer);
 }
 
 static void target_start_recovery_timer(struct obd_device *obd)
@@ -1734,8 +1734,8 @@ static void target_start_recovery_timer(struct obd_device *obd)
 		return;
 	}
 
-	cfs_timer_arm(&obd->obd_recovery_timer,
-		      cfs_time_shift(obd->obd_recovery_timeout));
+	mod_timer(&obd->obd_recovery_timer,
+		  cfs_time_shift(obd->obd_recovery_timeout));
 	obd->obd_recovery_start = cfs_time_current_sec();
 	spin_unlock(&obd->obd_dev_lock);
 
@@ -1790,8 +1790,8 @@ static void extend_recovery_timer(struct obd_device *obd, int drt, bool extend)
 	if (obd->obd_recovery_timeout < to) {
                 obd->obd_recovery_timeout = to;
 		end = obd->obd_recovery_start + to;
-		cfs_timer_arm(&obd->obd_recovery_timer,
-				cfs_time_shift(end - now));
+		mod_timer(&obd->obd_recovery_timer,
+			  cfs_time_shift(end - now));
         }
 	spin_unlock(&obd->obd_dev_lock);
 
@@ -2656,8 +2656,9 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
         obd->obd_recovery_start = 0;
         obd->obd_recovery_end = 0;
 
-        cfs_timer_init(&obd->obd_recovery_timer, target_recovery_expired, obd);
-        target_start_recovery_thread(lut, handler);
+	setup_timer(&obd->obd_recovery_timer, target_recovery_expired,
+		    (unsigned long)obd);
+	target_start_recovery_thread(lut, handler);
 }
 EXPORT_SYMBOL(target_recovery_init);
 

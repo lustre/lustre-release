@@ -358,7 +358,7 @@ static void waiting_locks_callback(unsigned long unused)
 		lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
                                       l_pending_chain);
                 timeout_rounded = (cfs_time_t)round_timeout(lock->l_callback_timeout);
-                cfs_timer_arm(&waiting_locks_timer, timeout_rounded);
+		mod_timer(&waiting_locks_timer, timeout_rounded);
         }
 	spin_unlock_bh(&waiting_locks_spinlock);
 }
@@ -393,10 +393,9 @@ static int __ldlm_add_waiting_lock(struct ldlm_lock *lock, int seconds)
 
         timeout_rounded = round_timeout(lock->l_callback_timeout);
 
-        if (cfs_time_before(timeout_rounded,
-                            cfs_timer_deadline(&waiting_locks_timer)) ||
-            !cfs_timer_is_armed(&waiting_locks_timer)) {
-                cfs_timer_arm(&waiting_locks_timer, timeout_rounded);
+	if (cfs_time_before(timeout_rounded, waiting_locks_timer.expires) ||
+	    !timer_pending(&waiting_locks_timer)) {
+		mod_timer(&waiting_locks_timer, timeout_rounded);
         }
         /* if the new lock has a shorter timeout than something earlier on
            the list, we'll wait the longer amount of time; no big deal. */
@@ -500,13 +499,13 @@ static int __ldlm_del_waiting_lock(struct ldlm_lock *lock)
                 /* Removing the head of the list, adjust timer. */
                 if (list_next == &waiting_locks_list) {
                         /* No more, just cancel. */
-                        cfs_timer_disarm(&waiting_locks_timer);
+			del_timer(&waiting_locks_timer);
                 } else {
                         struct ldlm_lock *next;
 			next = list_entry(list_next, struct ldlm_lock,
                                               l_pending_chain);
-                        cfs_timer_arm(&waiting_locks_timer,
-                                      round_timeout(next->l_callback_timeout));
+			mod_timer(&waiting_locks_timer,
+				  round_timeout(next->l_callback_timeout));
                 }
         }
 	list_del_init(&lock->l_pending_chain);
@@ -3043,7 +3042,7 @@ static int ldlm_setup(void)
 
 	INIT_LIST_HEAD(&waiting_locks_list);
 	spin_lock_init(&waiting_locks_spinlock);
-	cfs_timer_init(&waiting_locks_timer, waiting_locks_callback, NULL);
+	setup_timer(&waiting_locks_timer, waiting_locks_callback, 0);
 
 	task = kthread_run(expired_lock_main, NULL, "ldlm_elt");
 	if (IS_ERR(task)) {

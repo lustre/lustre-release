@@ -97,7 +97,6 @@
 
 typedef unsigned long cfs_time_t;      /* jiffies */
 typedef long cfs_duration_t;
-typedef cycles_t cfs_cycles_t;
 
 #ifndef HAVE_TIMESPEC64
 

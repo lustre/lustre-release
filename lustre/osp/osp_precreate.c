@@ -141,7 +141,7 @@ static int osp_statfs_interpret(const struct lu_env *env,
 
 	/* schedule next update */
 	d->opd_statfs_fresh_till = cfs_time_shift(d->opd_statfs_maxage);
-	cfs_timer_arm(&d->opd_statfs_timer, d->opd_statfs_fresh_till);
+	mod_timer(&d->opd_statfs_timer, d->opd_statfs_fresh_till);
 	d->opd_statfs_update_in_progress = 0;
 
 	CDEBUG(D_CACHE, "updated statfs %p\n", d);
@@ -202,7 +202,7 @@ static int osp_statfs_update(struct osp_device *d)
 	/*
 	 * no updates till reply
 	 */
-	cfs_timer_disarm(&d->opd_statfs_timer);
+	del_timer(&d->opd_statfs_timer);
 	d->opd_statfs_fresh_till = cfs_time_shift(obd_timeout * 1000);
 	d->opd_statfs_update_in_progress = 1;
 
@@ -233,7 +233,7 @@ void osp_statfs_need_now(struct osp_device *d)
 		 * is replied
 		 */
 		d->opd_statfs_fresh_till = cfs_time_shift(-1);
-		cfs_timer_disarm(&d->opd_statfs_timer);
+		del_timer(&d->opd_statfs_timer);
 		wake_up(&d->opd_pre_waitq);
 	}
 }
@@ -1667,7 +1667,8 @@ int osp_init_precreate(struct osp_device *d)
 	CDEBUG(D_OTHER, "current %llu, fresh till %llu\n",
 	       (unsigned long long)cfs_time_current(),
 	       (unsigned long long)d->opd_statfs_fresh_till);
-	cfs_timer_init(&d->opd_statfs_timer, osp_statfs_timer_cb, d);
+	setup_timer(&d->opd_statfs_timer, osp_statfs_timer_cb,
+		    (unsigned long)d);
 
 	/*
 	 * start thread handling precreation and statfs updates
@@ -1701,7 +1702,7 @@ void osp_precreate_fini(struct osp_device *d)
 
 	ENTRY;
 
-	cfs_timer_disarm(&d->opd_statfs_timer);
+	del_timer(&d->opd_statfs_timer);
 
 	if (d->opd_pre == NULL)
 		RETURN_EXIT;

@@ -42,44 +42,6 @@
 #include <asm/kgdb.h>
 #endif
 
-void cfs_init_timer(struct timer_list *t)
-{
-	init_timer(t);
-}
-EXPORT_SYMBOL(cfs_init_timer);
-
-void cfs_timer_init(struct timer_list *t, cfs_timer_func_t *func, void *arg)
-{
-	init_timer(t);
-	t->function = func;
-	t->data = (unsigned long)arg;
-}
-EXPORT_SYMBOL(cfs_timer_init);
-
-void cfs_timer_arm(struct timer_list *t, cfs_time_t deadline)
-{
-	mod_timer(t, deadline);
-}
-EXPORT_SYMBOL(cfs_timer_arm);
-
-void cfs_timer_disarm(struct timer_list *t)
-{
-	del_timer(t);
-}
-EXPORT_SYMBOL(cfs_timer_disarm);
-
-int  cfs_timer_is_armed(struct timer_list *t)
-{
-	return timer_pending(t);
-}
-EXPORT_SYMBOL(cfs_timer_is_armed);
-
-cfs_time_t cfs_timer_deadline(struct timer_list *t)
-{
-	return t->expires;
-}
-EXPORT_SYMBOL(cfs_timer_deadline);
-
 #ifndef HAVE_KTIME_GET_TS64
 void ktime_get_ts64(struct timespec64 *ts)
 {

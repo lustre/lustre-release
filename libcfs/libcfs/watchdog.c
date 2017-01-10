@@ -364,19 +364,19 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
 	lcw->lcw_state    = LC_WATCHDOG_DISABLED;
 
 	INIT_LIST_HEAD(&lcw->lcw_list);
-	cfs_timer_init(&lcw->lcw_timer, lcw_cb, lcw);
+	setup_timer(&lcw->lcw_timer, lcw_cb, (unsigned long)lcw);
 
 	mutex_lock(&lcw_refcount_mutex);
 	if (++lcw_refcount == 1)
 		lcw_dispatch_start();
 	mutex_unlock(&lcw_refcount_mutex);
 
-        /* Keep this working in case we enable them by default */
-        if (lcw->lcw_state == LC_WATCHDOG_ENABLED) {
-                lcw->lcw_last_touched = cfs_time_current();
-                cfs_timer_arm(&lcw->lcw_timer, cfs_time_seconds(timeout) +
-                              cfs_time_current());
-        }
+	/* Keep this working in case we enable them by default */
+	if (lcw->lcw_state == LC_WATCHDOG_ENABLED) {
+		lcw->lcw_last_touched = cfs_time_current();
+		mod_timer(&lcw->lcw_timer, cfs_time_seconds(timeout) +
+			  cfs_time_current());
+	}
 
         RETURN(lcw);
 }
@@ -426,8 +426,8 @@ void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout)
 
         lcw_update_time(lcw, "resumed");
 
-        cfs_timer_arm(&lcw->lcw_timer, cfs_time_current() +
-                      cfs_time_seconds(timeout));
+	mod_timer(&lcw->lcw_timer, cfs_time_current() +
+		  cfs_time_seconds(timeout));
 	lcw->lcw_state = LC_WATCHDOG_ENABLED;
 
         EXIT;
@@ -455,7 +455,7 @@ void lc_watchdog_delete(struct lc_watchdog *lcw)
         ENTRY;
         LASSERT(lcw != NULL);
 
-        cfs_timer_disarm(&lcw->lcw_timer);
+	del_timer(&lcw->lcw_timer);
 
         lcw_update_time(lcw, "stopped");
 
