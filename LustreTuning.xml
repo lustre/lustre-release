@@ -1138,7 +1138,7 @@ ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads_and_writes
         </listitem>
       </itemizedlist>
     </section>
-    <section condition='l26'>
+    <section xml:id="dbdoclet.tbftuning" condition='l26'>
       <title>
       <indexterm>
         <primary>tuning</primary>
@@ -1190,9 +1190,7 @@ ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads_and_writes
           follows:</para>
           <screen>
 $ lctl set_param x.x.x.nrs_tbf_rule=
-                  "[reg|hp] start 
-<replaceable>rule_name</replaceable> 
-<replaceable>arguments</replaceable>..."
+          "[reg|hp] start <replaceable>rule_name</replaceable> <replaceable>arguments</replaceable>..."
 </screen>
           <para>The '
           <replaceable>rule_name</replaceable>' argument is a string which
@@ -1202,10 +1200,7 @@ $ lctl set_param x.x.x.nrs_tbf_rule=
           as follows:</para>
           <screen>
 $ lctl set_param x.x.x.nrs_tbf_rule=
-                  "[reg|hp] start 
-<replaceable>rule_name</replaceable> {
-<replaceable>nidlist</replaceable>} 
-<replaceable>rate</replaceable>"
+          "[reg|hp] start <replaceable>rule_name</replaceable> {<replaceable>nidlist</replaceable>} <replaceable>rate</replaceable>"
 </screen>
           <para>The format of '
           <replaceable>nidlist</replaceable>' argument is the same as the
@@ -1217,64 +1212,59 @@ $ lctl set_param x.x.x.nrs_tbf_rule=
           critical too.</para>
           <screen>
 $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-                  "start other_clients {192.168.*.*@tcp} 50"
+          "start other_clients {192.168.*.*@tcp} 50"
 </screen>
           <screen>
 $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-                  "start loginnode {192.168.1.1@tcp} 100"
+          "start loginnode {192.168.1.1@tcp} 100"
 </screen>
           <para>General rule can be replaced by two rules (reg and hp) as
           follows:</para>
           <screen>
 $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-                  "reg start loginnode {192.168.1.1@tcp} 100"
+          "reg start loginnode {192.168.1.1@tcp} 100"
 </screen>
           <screen>
 $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-                  "hp start loginnode {192.168.1.1@tcp} 100"
+          "hp start loginnode {192.168.1.1@tcp} 100"
 </screen>
           <screen>
 $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-                  "start computes {192.168.1.[2-128]@tcp} 500"
+          "start computes {192.168.1.[2-128]@tcp} 500"
 </screen>
           <para>The above rules will put an upper limit for servers to process
           at most 5x as many RPCs from compute nodes as login nodes.</para>
-          <para>For the JobID (please see 
+          <para>For the JobID (please see
           <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-          linkend="dbdoclet.jobstats" />for more details) based TBF policy, its
-          format is as follows:</para>
+                linkend="dbdoclet.jobstats" /> for more details) based TBF
+          policy, its format is as follows:</para>
           <screen>
 $ lctl set_param x.x.x.nrs_tbf_rule=
-                  "[reg|hp] start 
-<replaceable>name</replaceable> {
-<replaceable>jobid_list</replaceable>} 
-<replaceable>rate</replaceable>"
+          "[reg|hp] start <replaceable>name</replaceable> {<replaceable>jobid_list</replaceable>} <replaceable>rate</replaceable>"
 </screen>
           <para>Following commands are valid:</para>
           <screen>
 $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-                  "start user1 {iozone.500 dd.500} 100"
+          "start user1 {iozone.500 dd.500} 100"
 </screen>
           <screen>
 $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-                  "start iozone_user1 {iozone.500} 100"
+          "start iozone_user1 {iozone.500} 100"
 </screen>
           <para>Same as nid, could use reg and hp rules separately:</para>
           <screen>
 $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-                  "hp start iozone_user1 {iozone.500} 100"
+          "hp start iozone_user1 {iozone.500} 100"
 </screen>
           <screen>
 $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-                  "reg start iozone_user1 {iozone.500} 100"
+          "reg start iozone_user1 {iozone.500} 100"
 </screen>
           <para>The format of the rule change command of TBF policy is as
           follows:</para>
           <screen>
 $ lctl set_param x.x.x.nrs_tbf_rule=
-                  "[reg|hp] change 
-<replaceable>rule_name</replaceable> 
-<replaceable>rate</replaceable>"
+          "[reg|hp] change <replaceable>rule_name</replaceable> <replaceable>rate</replaceable>"
 </screen>
           <para>Following commands are valid:</para>
           <screen>
@@ -1313,8 +1303,8 @@ $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp stop loginnode"
       <secondary>lockless I/O</secondary>
     </indexterm>Lockless I/O Tunables</title>
     <para>The lockless I/O tunable feature allows servers to ask clients to do
-    lockless I/O (liblustre-style where the server does the locking) on
-    contended files.</para>
+    lockless I/O (the server does the locking on behalf of clients) for
+    contended files to avoid lock ping-pong.</para>
     <para>The lockless I/O patch introduces these tunables:</para>
     <itemizedlist>
       <listitem>
@@ -1322,7 +1312,7 @@ $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp stop loginnode"
           <emphasis role="bold">OST-side:</emphasis>
         </para>
         <screen>
-/proc/fs/lustre/ldlm/namespaces/filter-lustre-*
+ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
 </screen>
         <para>
         <literal>contended_locks</literal>- If the number of lock conflicts in
@@ -1333,9 +1323,9 @@ $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp stop loginnode"
         contended state as set in the parameter.</para>
         <para>
         <literal>max_nolock_bytes</literal>- Server-side locking set only for
-        requests less than the blocks set in the 
-        <literal>max_nolock_bytes</literal> parameter. If this tunable is set to
-        zero (0), it disables server-side locking for read/write
+        requests less than the blocks set in the
+        <literal>max_nolock_bytes</literal> parameter. If this tunable is
+        set to zero (0), it disables server-side locking for read/write
         requests.</para>
       </listitem>
       <listitem>
@@ -1548,23 +1538,25 @@ $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp stop loginnode"
     <indexterm>
       <primary>tuning</primary>
       <secondary>for small files</secondary>
-    </indexterm>Improving Lustre File System Performance When Working with
-    Small Files</title>
+    </indexterm>Improving Lustre I/O Performance for Small Files</title>
     <para>An environment where an application writes small file chunks from
-    many clients to a single file will result in bad I/O performance. To
+    many clients to a single file can result in poor I/O performance. To
     improve the performance of the Lustre file system with small files:</para>
     <itemizedlist>
       <listitem>
         <para>Have the application aggregate writes some amount before
         submitting them to the Lustre file system. By default, the Lustre
         software enforces POSIX coherency semantics, so it results in lock
-        ping-pong between client nodes if they are all writing to the same file
-        at one time.</para>
+        ping-pong between client nodes if they are all writing to the same
+        file at one time.</para>
+        <para>Using MPI-IO Collective Write functionality in
+        the Lustre ADIO driver is one way to achieve this in a straight
+        forward manner if the application is already using MPI-IO.</para>
       </listitem>
       <listitem>
-        <para>Have the application do 4kB 
-        <literal>O_DIRECT</literal> sized I/O to the file and disable locking on
-        the output file. This avoids partial-page IO submissions and, by
+        <para>Have the application do 4kB
+        <literal>O_DIRECT</literal> sized I/O to the file and disable locking
+        on the output file. This avoids partial-page IO submissions and, by
         disabling locking, you avoid contention between clients.</para>
       </listitem>
       <listitem>
