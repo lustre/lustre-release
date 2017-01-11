@@ -48,10 +48,6 @@
 #define OBD_STATFS_FOR_MDT0	0x0004	/* The statfs is only for retrieving
 					 * information from MDT0. */
 
-/* OBD Device Declarations */
-extern struct obd_device *obd_devs[MAX_OBD_DEVICES];
-extern struct list_head obd_types;
-extern spinlock_t obd_types_lock;
 extern rwlock_t obd_dev_lock;
 
 /* OBD Operations Declarations */
@@ -121,10 +117,6 @@ struct llog_rec_hdr;
 typedef int (*llog_cb_t)(const struct lu_env *, struct llog_handle *,
 			 struct llog_rec_hdr *, void *);
 
-extern atomic_t         obd_stale_export_num;
-extern struct list_head obd_stale_exports;
-extern spinlock_t       obd_stale_export_lock;
-
 struct obd_export *obd_stale_export_get(void);
 void obd_stale_export_put(struct obd_export *exp);
 void obd_stale_export_adjust(struct obd_export *exp);
@@ -148,7 +140,6 @@ int class_config_llog_handler(const struct lu_env *env,
 			      struct llog_handle *handle,
 			      struct llog_rec_hdr *rec, void *data);
 int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg);
-int class_add_uuid(const char *uuid, __u64 nid);
 
 #define CFG_F_START     0x01   /* Set when we start updating from a log */
 #define CFG_F_MARKER    0x02   /* We are within a maker */
@@ -1703,8 +1694,6 @@ int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index);
 int class_add_uuid(const char *uuid, __u64 nid);
 int class_del_uuid (const char *uuid);
 int class_check_uuid(struct obd_uuid *uuid, __u64 nid);
-void class_init_uuidlist(void);
-void class_exit_uuidlist(void);
 
 /* class_obd.c */
 extern char obd_jobid_node[];

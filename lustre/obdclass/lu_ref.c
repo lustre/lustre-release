@@ -80,8 +80,8 @@ static struct lu_kmem_descr lu_ref_caches[] = {
  *
  * Protected by lu_ref_refs_guard.
  */
-static struct list_head lu_ref_refs;
-static spinlock_t lu_ref_refs_guard;
+static LIST_HEAD(lu_ref_refs);
+static DEFINE_SPINLOCK(lu_ref_refs_guard);
 static struct lu_ref lu_ref_marker = {
 	.lf_guard	= __SPIN_LOCK_UNLOCKED(lu_ref_marker.lf_guard),
 	.lf_list	= LIST_HEAD_INIT(lu_ref_marker.lf_list),
@@ -419,8 +419,6 @@ int lu_ref_global_init(void)
 	CDEBUG(D_CONSOLE,
 	       "lu_ref tracking is enabled. Performance isn't.\n");
 
-	INIT_LIST_HEAD(&lu_ref_refs);
-	spin_lock_init(&lu_ref_refs_guard);
         result = lu_kmem_init(lu_ref_caches);
 
 #ifdef CONFIG_PROC_FS

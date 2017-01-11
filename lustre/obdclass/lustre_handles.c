@@ -43,7 +43,7 @@
 
 static __u64 handle_base;
 #define HANDLE_INCR 7
-static spinlock_t handle_base_lock;
+static DEFINE_SPINLOCK(handle_base_lock);
 
 static struct handle_bucket {
 	spinlock_t	 lock;
@@ -207,7 +207,6 @@ int class_handle_init(void)
         if (handle_hash == NULL)
                 return -ENOMEM;
 
-	spin_lock_init(&handle_base_lock);
 	for (bucket = handle_hash + HANDLE_HASH_SIZE - 1; bucket >= handle_hash;
 	     bucket--) {
 		INIT_LIST_HEAD(&bucket->head);

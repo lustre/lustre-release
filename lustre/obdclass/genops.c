@@ -44,16 +44,19 @@
 #include <lustre_disk.h>
 #include <lustre_kernelcomm.h>
 
-spinlock_t obd_types_lock;
+static DEFINE_SPINLOCK(obd_types_lock);
+static LIST_HEAD(obd_types);
+DEFINE_RWLOCK(obd_dev_lock);
+static struct obd_device *obd_devs[MAX_OBD_DEVICES];
 
 static struct kmem_cache *obd_device_cachep;
 struct kmem_cache *obdo_cachep;
 EXPORT_SYMBOL(obdo_cachep);
 static struct kmem_cache *import_cachep;
 
-static struct list_head obd_zombie_imports;
-static struct list_head obd_zombie_exports;
-static spinlock_t  obd_zombie_impexp_lock;
+static LIST_HEAD(obd_zombie_imports);
+static LIST_HEAD(obd_zombie_exports);
+static DEFINE_SPINLOCK(obd_zombie_impexp_lock);
 
 static void obd_zombie_impexp_notify(void);
 static void obd_zombie_export_add(struct obd_export *exp);
@@ -61,9 +64,9 @@ static void obd_zombie_import_add(struct obd_import *imp);
 static void print_export_data(struct obd_export *exp,
                               const char *status, int locks, int debug_level);
 
-struct list_head obd_stale_exports;
-spinlock_t       obd_stale_export_lock;
-atomic_t         obd_stale_export_num;
+static LIST_HEAD(obd_stale_exports);
+static DEFINE_SPINLOCK(obd_stale_export_lock);
+static atomic_t obd_stale_export_num = ATOMIC_INIT(0);
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
@@ -1665,11 +1668,11 @@ void obd_zombie_impexp_cull(void)
 	EXIT;
 }
 
-static struct completion	obd_zombie_start;
-static struct completion	obd_zombie_stop;
-static unsigned long		obd_zombie_flags;
-static wait_queue_head_t	obd_zombie_waitq;
-static pid_t			obd_zombie_pid;
+static DECLARE_COMPLETION(obd_zombie_start);
+static DECLARE_COMPLETION(obd_zombie_stop);
+static unsigned long obd_zombie_flags;
+static DECLARE_WAIT_QUEUE_HEAD(obd_zombie_waitq);
+static pid_t obd_zombie_pid;
 
 enum {
 	OBD_ZOMBIE_STOP		= 0x0001,
@@ -1870,15 +1873,6 @@ int obd_zombie_impexp_init(void)
 {
 	struct task_struct *task;
 
-	INIT_LIST_HEAD(&obd_zombie_imports);
-
-	INIT_LIST_HEAD(&obd_zombie_exports);
-	spin_lock_init(&obd_zombie_impexp_lock);
-	init_completion(&obd_zombie_start);
-	init_completion(&obd_zombie_stop);
-	init_waitqueue_head(&obd_zombie_waitq);
-	obd_zombie_pid = 0;
-
 	task = kthread_run(obd_zombie_impexp_thread, NULL, "obd_zombid");
 	if (IS_ERR(task))
 		RETURN(PTR_ERR(task));
@@ -1894,6 +1888,7 @@ void obd_zombie_impexp_stop(void)
 	set_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags);
         obd_zombie_impexp_notify();
 	wait_for_completion(&obd_zombie_stop);
+	LASSERT(list_empty(&obd_stale_exports));
 }
 
 /***** Kernel-userspace comm helpers *******/

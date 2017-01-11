@@ -53,10 +53,6 @@
 #include <lustre_ioctl.h>
 #include "llog_internal.h"
 
-struct obd_device *obd_devs[MAX_OBD_DEVICES];
-struct list_head obd_types;
-DEFINE_RWLOCK(obd_dev_lock);
-
 #ifdef CONFIG_PROC_FS
 static __u64 obd_max_alloc;
 #else
@@ -497,50 +493,40 @@ static int obd_init_checks(void)
 
 static int __init obdclass_init(void)
 {
-	int i, err;
-
-	spin_lock_init(&obd_stale_export_lock);
-	INIT_LIST_HEAD(&obd_stale_exports);
-	atomic_set(&obd_stale_export_num, 0);
+	int err;
 
 	LCONSOLE_INFO("Lustre: Build Version: "LUSTRE_VERSION_STRING"\n");
 
-	spin_lock_init(&obd_types_lock);
-	obd_zombie_impexp_init();
+	err = obd_init_checks();
+	if (err == -EOVERFLOW)
+		return err;
+
 #ifdef CONFIG_PROC_FS
 	obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM,
 					 LPROCFS_STATS_FLAG_NONE |
 					 LPROCFS_STATS_FLAG_IRQ_SAFE);
 	if (obd_memory == NULL) {
 		CERROR("kmalloc of 'obd_memory' failed\n");
-		err = -ENOMEM;
-		goto cleanup_zombie_impexp;
+		return -ENOMEM;
 	}
 
 	lprocfs_counter_init(obd_memory, OBD_MEMORY_STAT,
 			     LPROCFS_CNTR_AVGMINMAX,
 			     "memused", "bytes");
 #endif
-	err = obd_init_checks();
-	if (err == -EOVERFLOW)
-		goto cleanup_zombie_impexp;
+	err = obd_zombie_impexp_init();
+	if (err)
+		goto cleanup_obd_memory;
 
-	class_init_uuidlist();
 	err = class_handle_init();
 	if (err)
-		goto cleanup_uuidlist;
-
-	INIT_LIST_HEAD(&obd_types);
+		goto cleanup_zombie_impexp;
 
 	err = misc_register(&obd_psdev);
 	if (err) {
 		CERROR("cannot register %d err %d\n", OBD_DEV_MINOR, err);
 		goto cleanup_class_handle;
 	}
-
-	/* This struct is already zeroed for us (static global) */
-	for (i = 0; i < class_devno_max(); i++)
-		obd_devs[i] = NULL;
 
 	/* Default the dirty page cache cap to 1/2 of system memory.
 	 * For clients with less memory, a larger fraction is needed
@@ -598,7 +584,7 @@ static int __init obdclass_init(void)
 	if (err)
 		goto cleanup_llog_info;
 
-	goto out_success;
+	return 0;
 
 cleanup_llog_info:
 	llog_info_fini();
@@ -630,13 +616,14 @@ cleanup_deregister:
 cleanup_class_handle:
 	class_handle_cleanup();
 
-cleanup_uuidlist:
-	class_exit_uuidlist();
-
 cleanup_zombie_impexp:
 	obd_zombie_impexp_stop();
 
-out_success:
+cleanup_obd_memory:
+#ifdef CONFIG_PROC_FS
+	lprocfs_free_stats(&obd_memory);
+#endif
+
 	return err;
 }
 
@@ -669,8 +656,10 @@ __u64 obd_memory_max(void)
 
 static void __exit obdclass_exit(void)
 {
+#ifdef CONFIG_PROC_FS
 	__u64 memory_leaked;
 	__u64 memory_max;
+#endif /* CONFIG_PROC_FS */
 	ENTRY;
 
 	lustre_unregister_fs();
@@ -690,20 +679,20 @@ static void __exit obdclass_exit(void)
         class_procfs_clean();
 
         class_handle_cleanup();
-        class_exit_uuidlist();
+	class_del_uuid(NULL); /* Delete all UUIDs. */
         obd_zombie_impexp_stop();
-	LASSERT(list_empty(&obd_stale_exports));
 
-        memory_leaked = obd_memory_sum();
+#ifdef CONFIG_PROC_FS
+	memory_leaked = obd_memory_sum();
+	memory_max = obd_memory_max();
 
-        memory_max = obd_memory_max();
-
-        lprocfs_free_stats(&obd_memory);
-        CDEBUG((memory_leaked) ? D_ERROR : D_INFO,
+	lprocfs_free_stats(&obd_memory);
+	CDEBUG((memory_leaked) ? D_ERROR : D_INFO,
 	       "obd_memory max: %llu, leaked: %llu\n",
-               memory_max, memory_leaked);
+	       memory_max, memory_leaked);
+#endif /* CONFIG_PROC_FS */
 
-        EXIT;
+	EXIT;
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");

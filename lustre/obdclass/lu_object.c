@@ -831,25 +831,13 @@ struct lu_object *lu_object_find_slice(const struct lu_env *env,
 }
 EXPORT_SYMBOL(lu_object_find_slice);
 
-/**
- * Global list of all device types.
- */
-static struct list_head lu_device_types;
-
 int lu_device_type_init(struct lu_device_type *ldt)
 {
 	int result = 0;
 
 	atomic_set(&ldt->ldt_device_nr, 0);
-	INIT_LIST_HEAD(&ldt->ldt_linkage);
 	if (ldt->ldt_ops->ldto_init)
 		result = ldt->ldt_ops->ldto_init(ldt);
-
-	if (result == 0) {
-		spin_lock(&obd_types_lock);
-		list_add(&ldt->ldt_linkage, &lu_device_types);
-		spin_unlock(&obd_types_lock);
-	}
 
 	return result;
 }
@@ -857,9 +845,6 @@ EXPORT_SYMBOL(lu_device_type_init);
 
 void lu_device_type_fini(struct lu_device_type *ldt)
 {
-	spin_lock(&obd_types_lock);
-	list_del_init(&ldt->ldt_linkage);
-	spin_unlock(&obd_types_lock);
 	if (ldt->ldt_ops->ldto_fini)
 		ldt->ldt_ops->ldto_fini(ldt);
 }
@@ -868,8 +853,8 @@ EXPORT_SYMBOL(lu_device_type_fini);
 /**
  * Global list of all sites on this node
  */
-static struct list_head lu_sites;
-static struct rw_semaphore lu_sites_guard;
+static LIST_HEAD(lu_sites);
+static DECLARE_RWSEM(lu_sites_guard);
 
 /**
  * Global environment used by site shrinker.
@@ -1594,7 +1579,7 @@ EXPORT_SYMBOL(lu_context_key_get);
 /**
  * List of remembered contexts. XXX document me.
  */
-static struct list_head lu_context_remembered;
+static LIST_HEAD(lu_context_remembered);
 
 /**
  * Destroy \a key in all remembered contexts. This is used to destroy key
@@ -2147,11 +2132,6 @@ int lu_global_init(void)
 			 lu_cache_shrink_count, lu_cache_shrink_scan);
 
         CDEBUG(D_INFO, "Lustre LU module (%p).\n", &lu_keys);
-
-	INIT_LIST_HEAD(&lu_device_types);
-	INIT_LIST_HEAD(&lu_context_remembered);
-	INIT_LIST_HEAD(&lu_sites);
-	init_rwsem(&lu_sites_guard);
 
         result = lu_ref_global_init();
         if (result != 0)

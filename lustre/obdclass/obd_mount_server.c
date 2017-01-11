@@ -64,8 +64,7 @@
 /*********** mount lookup *********/
 
 static DEFINE_MUTEX(lustre_mount_info_lock);
-static struct list_head server_mount_info_list =
-	LIST_HEAD_INIT(server_mount_info_list);
+static LIST_HEAD(server_mount_info_list);
 
 static struct lustre_mount_info *server_find_mount(const char *name)
 {
@@ -383,8 +382,7 @@ cleanup:
 }
 EXPORT_SYMBOL(tgt_name2lwp_name);
 
-static struct list_head lwp_register_list =
-	LIST_HEAD_INIT(lwp_register_list);
+static LIST_HEAD(lwp_register_list);
 static DEFINE_SPINLOCK(lwp_register_list_lock);
 
 static void lustre_put_lwp_item(struct lwp_register_item *lri)

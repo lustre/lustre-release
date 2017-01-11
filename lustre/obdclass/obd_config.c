@@ -833,8 +833,7 @@ static int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
         RETURN(rc);
 }
 
-static struct list_head lustre_profile_list =
-	LIST_HEAD_INIT(lustre_profile_list);
+static LIST_HEAD(lustre_profile_list);
 static DEFINE_SPINLOCK(lustre_profile_list_lock);
 
 struct lustre_profile *class_get_profile(const char * prof)

@@ -335,12 +335,6 @@ struct lu_device_type {
          * Number of existing device type instances.
          */
 	atomic_t				ldt_device_nr;
-	/**
-	 * Linkage into a global list of all device types.
-	 *
-	 * \see lu_device_types.
-	 */
-	struct list_head			ldt_linkage;
 };
 
 /**

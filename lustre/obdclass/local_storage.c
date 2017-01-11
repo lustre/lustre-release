@@ -35,7 +35,7 @@
 #include "local_storage.h"
 
 /* all initialized local storages on this node are linked on this */
-static struct list_head ls_list_head = LIST_HEAD_INIT(ls_list_head);
+static LIST_HEAD(ls_list_head);
 static DEFINE_MUTEX(ls_list_mutex);
 
 static int ls_object_init(const struct lu_env *env, struct lu_object *o,

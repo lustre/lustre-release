@@ -50,20 +50,8 @@ struct uuid_nid_data {
 };
 
 /* FIXME: This should probably become more elegant than a global linked list */
-static struct list_head	g_uuid_list;
-static spinlock_t	g_uuid_lock;
-
-void class_init_uuidlist(void)
-{
-	INIT_LIST_HEAD(&g_uuid_list);
-	spin_lock_init(&g_uuid_lock);
-}
-
-void class_exit_uuidlist(void)
-{
-        /* delete all */
-        class_del_uuid(NULL);
-}
+static LIST_HEAD(g_uuid_list);
+static DEFINE_SPINLOCK(g_uuid_lock);
 
 int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index)
 {
