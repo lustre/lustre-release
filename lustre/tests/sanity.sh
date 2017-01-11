@@ -8339,6 +8339,7 @@ test_120e() {
 	stat $DIR/$tdir $DIR/$tdir/f1 > /dev/null
 	# XXX client can not do early lock cancel of OST lock
 	# during unlink (LU-4206), so cancel osc lock now.
+	sleep 2
 	cancel_lru_locks osc
 	can1=$(do_facet $SINGLEMDS \
 	       "$LCTL get_param -n ldlm.services.ldlm_canceld.stats" |
@@ -8381,6 +8382,7 @@ test_120f() {
 	stat $DIR/$tdir/d1 $DIR/$tdir/d2 $DIR/$tdir/d1/f1 $DIR/$tdir/d2/f2 > /dev/null
 	# XXX client can not do early lock cancel of OST lock
 	# during rename (LU-4206), so cancel osc lock now.
+	sleep 2
 	cancel_lru_locks osc
 	can1=$(do_facet $SINGLEMDS \
 	       "$LCTL get_param -n ldlm.services.ldlm_canceld.stats" |
