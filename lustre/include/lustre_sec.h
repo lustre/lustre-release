@@ -873,8 +873,8 @@ struct ptlrpc_sec {
 	 * garbage collection
 	 */
 	struct list_head		ps_gc_list;
-	cfs_time_t			ps_gc_interval;	/* in seconds */
-	cfs_time_t			ps_gc_next;	/* in seconds */
+	time64_t			ps_gc_interval;	/* in seconds */
+	time64_t			ps_gc_next;	/* in seconds */
 };
 
 static inline int flvr_is_rootonly(__u32 flavor)
