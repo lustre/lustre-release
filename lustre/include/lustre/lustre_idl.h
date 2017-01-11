@@ -949,6 +949,7 @@ enum obdo_flags {
 /* reserved for specifying OSTs */
 #define LOV_MAGIC_SPECIFIC	(0x0BD50000 | LOV_MAGIC_MAGIC)
 #define LOV_MAGIC		LOV_MAGIC_V1
+#define LOV_MAGIC_COMP_V1	(0x0BD60000 | LOV_MAGIC_MAGIC)
 
 /*
  * magic for fully defined striping
@@ -3213,7 +3214,7 @@ struct out_read_reply {
  */
 struct mdc_swap_layouts {
 	__u64           msl_flags;
-} __packed;
+} __attribute__((packed));
 
 struct close_data {
 	struct lustre_handle	cd_handle;

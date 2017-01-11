@@ -2185,6 +2185,75 @@ void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum)
 }
 EXPORT_SYMBOL(lustre_swab_lov_user_md_v3);
 
+void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
+{
+	struct lov_comp_md_entry_v1	*ent;
+	struct lov_user_md_v1	*v1;
+	struct lov_user_md_v3	*v3;
+	int	i;
+	bool	cpu_endian;
+	__u32	off, size;
+	__u16	ent_count, stripe_count;
+	ENTRY;
+
+	cpu_endian = lum->lcm_magic == LOV_USER_MAGIC_COMP_V1;
+	ent_count = lum->lcm_entry_count;
+	if (!cpu_endian)
+		__swab16s(&ent_count);
+
+	CDEBUG(D_IOCTL, "swabbing lov_user_comp_md v1\n");
+	__swab32s(&lum->lcm_magic);
+	__swab32s(&lum->lcm_size);
+	__swab32s(&lum->lcm_layout_gen);
+	__swab16s(&lum->lcm_flags);
+	__swab16s(&lum->lcm_entry_count);
+	CLASSERT(offsetof(typeof(*lum), lcm_padding1) != 0);
+	CLASSERT(offsetof(typeof(*lum), lcm_padding2) != 0);
+
+	for (i = 0; i < ent_count; i++) {
+		ent = &lum->lcm_entries[i];
+		off = ent->lcme_offset;
+		size = ent->lcme_size;
+
+		if (!cpu_endian) {
+			__swab32s(&off);
+			__swab32s(&size);
+		}
+		__swab32s(&ent->lcme_id);
+		__swab32s(&ent->lcme_flags);
+		__swab64s(&ent->lcme_extent.e_start);
+		__swab64s(&ent->lcme_extent.e_end);
+		__swab32s(&ent->lcme_offset);
+		__swab32s(&ent->lcme_size);
+		CLASSERT(offsetof(typeof(*ent), lcme_padding) != 0);
+
+		v1 = (struct lov_user_md_v1 *)((char *)lum + off);
+		stripe_count = v1->lmm_stripe_count;
+		if (!cpu_endian)
+			__swab16s(&stripe_count);
+
+		if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_V1) ||
+		    v1->lmm_magic == LOV_USER_MAGIC_V1) {
+			lustre_swab_lov_user_md_v1(v1);
+			if (size > sizeof(*v1))
+				lustre_swab_lov_user_md_objects(v1->lmm_objects,
+								stripe_count);
+		} else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_V3) ||
+			   v1->lmm_magic == LOV_USER_MAGIC_V3 ||
+			   v1->lmm_magic == __swab32(LOV_USER_MAGIC_SPECIFIC) ||
+			   v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
+			v3 = (struct lov_user_md_v3 *)v1;
+			lustre_swab_lov_user_md_v3(v3);
+			if (size > sizeof(*v3))
+				lustre_swab_lov_user_md_objects(v3->lmm_objects,
+								stripe_count);
+		} else {
+			CERROR("Invalid magic %#x\n", v1->lmm_magic);
+		}
+	}
+}
+EXPORT_SYMBOL(lustre_swab_lov_comp_md_v1);
+
 void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
 {
 	ENTRY;

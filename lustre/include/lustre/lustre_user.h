@@ -334,6 +334,7 @@ enum ll_lease_type {
 #define LOV_USER_MAGIC_V3	0x0BD30BD0
 /* 0x0BD40BD0 is occupied by LOV_MAGIC_MIGRATE */
 #define LOV_USER_MAGIC_SPECIFIC 0x0BD50BD0	/* for specific OSTs */
+#define LOV_USER_MAGIC_COMP_V1	0x0BD60BD0
 
 #define LMV_USER_MAGIC    0x0CD30CD0    /*default lmv magic*/
 
@@ -406,6 +407,58 @@ struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
 	char  lmm_pool_name[LOV_MAXPOOLNAME + 1]; /* pool name */
 	struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
+
+struct lu_extent {
+	__u64	e_start;
+	__u64	e_end;
+};
+
+enum lov_comp_md_entry_flags {
+	LCME_FL_PRIMARY	= 0x00000001,	/* Not used */
+	LCME_FL_STALE	= 0x00000002,	/* Not used */
+	LCME_FL_OFFLINE	= 0x00000004,	/* Not used */
+	LCME_FL_PREFERRED = 0x00000008, /* Not used */
+	LCME_FL_INIT	= 0x00000010,	/* instantiated */
+};
+
+#define LCME_KNOWN_FLAGS	LCME_FL_INIT
+
+/* lcme_id can be specified as certain flags, and the the first
+ * bit of lcme_id is used to indicate that the ID is representing
+ * certain lcme_flags but not a real ID. Which implies we can have
+ * at most 31 flags (see LCME_FL_XXX). */
+enum lcme_id {
+	LCME_ID_INVAL	= 0x0,
+	LCME_ID_MAX	= 0x7FFFFFFF,
+	LCME_ID_ALL	= 0xFFFFFFFF,
+	LCME_ID_NONE	= 0x80000000
+};
+
+#define LCME_ID_MASK	LCME_ID_MAX
+
+struct lov_comp_md_entry_v1 {
+	__u32			lcme_id;        /* unique id of component */
+	__u32			lcme_flags;     /* LCME_FL_XXX */
+	struct lu_extent	lcme_extent;    /* file extent for component */
+	__u32			lcme_offset;    /* offset of component blob,
+						   start from lov_comp_md_v1 */
+	__u32			lcme_size;      /* size of component blob */
+	__u64			lcme_padding[2];
+} __attribute__((packed));
+
+enum lov_comp_md_flags;
+
+struct lov_comp_md_v1 {
+	__u32	lcm_magic;      /* LOV_USER_MAGIC_COMP_V1 */
+	__u32	lcm_size;       /* overall size including this struct */
+	__u32	lcm_layout_gen;
+	__u16	lcm_flags;
+	__u16	lcm_entry_count;
+	__u64	lcm_padding1;
+	__u64	lcm_padding2;
+	struct lov_comp_md_entry_v1 lcm_entries[0];
+} __attribute__((packed));
+
 
 static inline __u32 lov_user_md_size(__u16 stripes, __u32 lmm_magic)
 {

@@ -736,6 +736,38 @@ check_lov_mds_md_v3(void)
 }
 
 static void
+check_lov_comp_md_entry_v1(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lov_comp_md_entry_v1);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_id);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_flags);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_extent);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_offset);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_size);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_padding);
+
+	CHECK_VALUE_X(LCME_FL_INIT);
+}
+
+static void
+check_lov_comp_md_v1(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lov_comp_md_v1);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_magic);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_size);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_layout_gen);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_flags);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_entry_count);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_padding1);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_padding2);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_entries[0]);
+
+	CHECK_CDEFINE(LOV_MAGIC_COMP_V1);
+}
+
+static void
 check_lmv_mds_md_v1(void)
 {
 	BLANK_LINE();
@@ -2699,6 +2731,8 @@ main(int argc, char **argv)
 	check_lov_ost_data_v1();
 	check_lov_mds_md_v1();
 	check_lov_mds_md_v3();
+	check_lov_comp_md_entry_v1();
+	check_lov_comp_md_v1();
 	check_lmv_mds_md_v1();
 	check_obd_statfs();
 	check_obd_ioobj();
