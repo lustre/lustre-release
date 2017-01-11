@@ -619,7 +619,7 @@ void unload_backfs_module(struct module_backfs_ops *ops)
 /* Return true if backfs_ops has operations for the given mount_type. */
 int backfs_mount_type_okay(enum ldd_mount_type mount_type)
 {
-	if (unlikely(mount_type >= LDD_MT_LAST || mount_type < 0)) {
+	if (mount_type >= LDD_MT_LAST || mount_type < 0) {
 		fatal();
 		fprintf(stderr, "fs type out of range %d\n", mount_type);
 		return 0;

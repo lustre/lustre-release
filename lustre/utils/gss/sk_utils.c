@@ -1004,8 +1004,10 @@ int sk_kdf(gss_buffer_desc *derived_key , gss_buffer_desc *origin_key,
 			return rc;
 		}
 
-		LASSERT(sk_hmac_types[hmac_alg].sht_bytes ==
-			tmp_hash.length);
+		if (sk_hmac_types[hmac_alg].sht_bytes != tmp_hash.length) {
+			free(tmp_hash.value);
+			return -EINVAL;
+		}
 
 		bytes = (remain < tmp_hash.length) ? remain : tmp_hash.length;
 		memcpy(keydata, tmp_hash.value, bytes);

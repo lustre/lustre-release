@@ -182,7 +182,9 @@ static inline void *lustre_cfg_buf(struct lustre_cfg *lcfg, __u32 index)
 	__u32 i;
 	size_t offset;
 	__u32 bufcount;
-	LASSERT (lcfg != NULL);
+
+	if (!lcfg)
+		return NULL;
 
         bufcount = lcfg->lcfg_bufcount;
         if (index >= bufcount)
@@ -264,7 +266,10 @@ static inline void lustre_cfg_init(struct lustre_cfg *lcfg, int cmd,
 	ptr = (char *)lcfg + LCFG_HDR_SIZE(lcfg->lcfg_bufcount);
 	for (i = 0; i < lcfg->lcfg_bufcount; i++) {
 		lcfg->lcfg_buflens[i] = bufs->lcfg_buflen[i];
-		LOGL((char *)bufs->lcfg_buf[i], bufs->lcfg_buflen[i], ptr);
+		if (bufs->lcfg_buf[i]) {
+			memcpy(ptr, bufs->lcfg_buf[i], bufs->lcfg_buflen[i]);
+			ptr += cfs_size_round(bufs->lcfg_buflen[i]);
+		}
 	}
 }
 

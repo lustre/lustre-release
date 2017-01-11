@@ -248,17 +248,25 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
 	memcpy(*pbuf, data, sizeof(*data));
 
 	ptr = overlay->ioc_bulk;
-	if (data->ioc_inlbuf1 != NULL)
-		LOGL(data->ioc_inlbuf1, data->ioc_inllen1, ptr);
+	if (data->ioc_inlbuf1) {
+		memcpy(ptr, data->ioc_inlbuf1, data->ioc_inllen1);
+		ptr += cfs_size_round(data->ioc_inllen1);
+	}
 
-	if (data->ioc_inlbuf2 != NULL)
-		LOGL(data->ioc_inlbuf2, data->ioc_inllen2, ptr);
+	if (data->ioc_inlbuf2) {
+		memcpy(ptr, data->ioc_inlbuf2, data->ioc_inllen2);
+		ptr += cfs_size_round(data->ioc_inllen2);
+	}
 
-	if (data->ioc_inlbuf3 != NULL)
-		LOGL(data->ioc_inlbuf3, data->ioc_inllen3, ptr);
+	if (data->ioc_inlbuf3) {
+		memcpy(ptr, data->ioc_inlbuf3, data->ioc_inllen3);
+		ptr += cfs_size_round(data->ioc_inllen3);
+	}
 
-	if (data->ioc_inlbuf4 != NULL)
-		LOGL(data->ioc_inlbuf4, data->ioc_inllen4, ptr);
+	if (data->ioc_inlbuf4) {
+		memcpy(ptr, data->ioc_inlbuf4, data->ioc_inllen4);
+		ptr += cfs_size_round(data->ioc_inllen4);
+	}
 
 	if (obd_ioctl_is_invalid(overlay)) {
 		fprintf(stderr, "invalid ioctl data: ioc_len = %u, "
@@ -290,17 +298,25 @@ obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 	memcpy(data, pbuf, sizeof(*data));
 
 	ptr = overlay->ioc_bulk;
-	if (data->ioc_inlbuf1 != NULL)
-		LOGU(data->ioc_inlbuf1, data->ioc_inllen1, ptr);
+	if (data->ioc_inlbuf1) {
+		memcpy(data->ioc_inlbuf1, ptr, data->ioc_inllen1);
+		ptr += cfs_size_round(data->ioc_inllen1);
+	}
 
-	if (data->ioc_inlbuf2 != NULL)
-		LOGU(data->ioc_inlbuf2, data->ioc_inllen2, ptr);
+	if (data->ioc_inlbuf2) {
+		memcpy(data->ioc_inlbuf2, ptr, data->ioc_inllen2);
+		ptr += cfs_size_round(data->ioc_inllen2);
+	}
 
-	if (data->ioc_inlbuf3 != NULL)
-		LOGU(data->ioc_inlbuf3, data->ioc_inllen3, ptr);
+	if (data->ioc_inlbuf3) {
+		memcpy(data->ioc_inlbuf3, ptr, data->ioc_inllen3);
+		ptr += cfs_size_round(data->ioc_inllen3);
+	}
 
-	if (data->ioc_inlbuf4 != NULL)
-		LOGU(data->ioc_inlbuf4, data->ioc_inllen4, ptr);
+	if (data->ioc_inlbuf4) {
+		memcpy(data->ioc_inlbuf4, ptr, data->ioc_inllen4);
+		ptr += cfs_size_round(data->ioc_inllen4);
+	}
 
 	return 0;
 }

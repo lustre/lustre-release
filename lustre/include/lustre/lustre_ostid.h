@@ -78,7 +78,7 @@ static inline __u64 ostid_seq(const struct ost_id *ostid)
 	if (fid_seq_is_mdt0(ostid->oi.oi_seq))
 		return FID_SEQ_OST_MDT0;
 
-	if (unlikely(fid_seq_is_default(ostid->oi.oi_seq)))
+	if (fid_seq_is_default(ostid->oi.oi_seq))
 		return FID_SEQ_LOV_DEFAULT;
 
 	if (fid_is_idif(&ostid->oi_fid))
@@ -93,7 +93,7 @@ static inline __u64 ostid_id(const struct ost_id *ostid)
 	if (fid_seq_is_mdt0(ostid->oi.oi_seq))
 		return ostid->oi.oi_id & IDIF_OID_MASK;
 
-	if (unlikely(fid_seq_is_default(ostid->oi.oi_seq)))
+	if (fid_seq_is_default(ostid->oi.oi_seq))
 		return ostid->oi.oi_id;
 
 	if (fid_is_idif(&ostid->oi_fid))
@@ -192,7 +192,7 @@ static inline void ostid_le_to_cpu(const struct ost_id *src_oi,
 /* pack any OST FID into an ostid (id/seq) for the wire/disk */
 static inline int fid_to_ostid(const struct lu_fid *fid, struct ost_id *ostid)
 {
-	if (unlikely(fid_seq_is_igif(fid->f_seq))) {
+	if (fid_seq_is_igif(fid->f_seq)) {
 		CERROR("bad IGIF, "DFID"\n", PFID(fid));
 		return -EBADF;
 	}

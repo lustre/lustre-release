@@ -45,6 +45,7 @@
 #include <linux/types.h>
 
 #ifdef __KERNEL__
+# include <linux/fs.h>
 # include <linux/quota.h>
 # include <linux/string.h> /* snprintf() */
 # include <linux/version.h>

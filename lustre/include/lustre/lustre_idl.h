@@ -72,7 +72,6 @@
 #include <asm/byteorder.h>
 #include <linux/types.h>
 
-#include <libcfs/libcfs.h>
 #include <lnet/types.h>
 #include <lustre/lustre_user.h> /* Defn's shared with user-space. */
 #include <lustre_ver.h>

@@ -42,8 +42,6 @@
 # define DEBUG_SUBSYSTEM S_UNDEFINED
 #endif
 
-#ifdef __KERNEL__
-
 #ifdef LIBCFS_DEBUG
 
 /*
@@ -121,11 +119,12 @@ do {                                                                    \
         lbug_with_loc(&msgdata);                                        \
 } while(0)
 
-extern atomic_t libcfs_kmemory;
 /*
  * Memory
  */
 #ifdef LIBCFS_DEBUG
+
+extern atomic_t libcfs_kmemory;
 
 # define libcfs_kmem_inc(ptr, size)		\
 do {						\
@@ -233,17 +232,7 @@ do {									\
 
 /******************************************************************************/
 
-/* htonl hack - either this, or compile with -O2. Stupid byteorder/generic.h */
-#if defined(__GNUC__) && (__GNUC__ >= 2) && !defined(__OPTIMIZE__)
-#define ___htonl(x) __cpu_to_be32(x)
-#define ___htons(x) __cpu_to_be16(x)
-#define ___ntohl(x) __be32_to_cpu(x)
-#define ___ntohs(x) __be16_to_cpu(x)
-#define htonl(x) ___htonl(x)
-#define ntohl(x) ___ntohl(x)
-#define htons(x) ___htons(x)
-#define ntohs(x) ___ntohs(x)
-#endif
+struct task_struct;
 
 void libcfs_debug_dumpstack(struct task_struct *tsk);
 void libcfs_debug_dumplog(void);
@@ -251,59 +240,6 @@ int libcfs_debug_init(unsigned long bufsize);
 int libcfs_debug_cleanup(void);
 int libcfs_debug_clear_buffer(void);
 int libcfs_debug_mark_buffer(const char *text);
-
-#else  /* !__KERNEL__ */
-# ifdef LIBCFS_DEBUG
-#  undef NDEBUG
-#  include <assert.h>
-#  define LASSERT(e)     assert(e)
-#  define LASSERTF(cond, ...)                                                  \
-do {                                                                           \
-          if (!(cond))                                                         \
-                CERROR(__VA_ARGS__);                                           \
-          assert(cond);                                                        \
-} while (0)
-#  define LBUG()   assert(0)
-#  ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
-#   define LINVRNT(exp) LASSERT(exp)
-#  else
-#   define LINVRNT(exp) ((void)sizeof!!(exp))
-#  endif
-# else
-#  define LASSERT(e) ((void)sizeof!!(e))
-#  define LASSERTF(cond, ...) ((void)sizeof!!(cond))
-#  define LBUG()   ((void)(0))
-#  define LINVRNT(exp) ((void)sizeof!!(exp))
-# endif /* LIBCFS_DEBUG */
-# define KLASSERT(e) ((void)0)
-# define printk printf
-#define LIBCFS_ALLOC_GFP(ptr, size, mask)	\
-do {						\
-	(ptr) = calloc(1, size);		\
-} while (0)
-# define LIBCFS_FREE(ptr, size) do { free(ptr); } while((size) - (size))
-# define LIBCFS_ALLOC(ptr, size)				\
-	 LIBCFS_ALLOC_GFP(ptr, size, 0)
-# define LIBCFS_CPT_ALLOC_GFP(ptr, cptab, cpt, size, mask)	\
-	 LIBCFS_ALLOC(ptr, size)
-# define LIBCFS_CPT_ALLOC(ptr, cptab, cpt, size)		\
-	 LIBCFS_ALLOC(ptr, size)
-
-void libcfs_debug_dumplog(void);
-int libcfs_debug_init(unsigned long bufsize);
-int libcfs_debug_cleanup(void);
-
-#define libcfs_debug_dumpstack(tsk)     ((void)0)
-
-/*
- * Generic compiler-dependent macros required for kernel
- * build go below this comment. Actual compiler/compiler version
- * specific implementations come from the above header files
- */
-#define likely(x)      __builtin_expect(!!(x), 1)
-#define unlikely(x)    __builtin_expect(!!(x), 0)
-/* !__KERNEL__ */
-#endif
 
 /*
  * allocate a variable array, returned value is an array of pointers.
@@ -472,20 +408,6 @@ static inline size_t cfs_round_strlen(char *fset)
 {
 	return cfs_size_round(strlen(fset) + 1);
 }
-
-#define LOGL(var,len,ptr)                                       \
-do {                                                            \
-        if (var)                                                \
-                memcpy((char *)ptr, (const char *)var, len);    \
-        ptr += cfs_size_round(len);                             \
-} while (0)
-
-#define LOGU(var,len,ptr)                                       \
-do {                                                            \
-        if (var)                                                \
-                memcpy((char *)var, (const char *)ptr, len);    \
-        ptr += cfs_size_round(len);                             \
-} while (0)
 
 extern struct cfs_psdev_ops libcfs_psdev_ops;
 extern struct miscdevice libcfs_dev;

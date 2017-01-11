@@ -202,11 +202,14 @@ void lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, __u32 *lens,
         if (bufs == NULL)
                 return;
 
-        ptr = (char *)msg + lustre_msg_hdr_size_v2(count);
-        for (i = 0; i < count; i++) {
-                char *tmp = bufs[i];
-                LOGL(tmp, lens[i], ptr);
-        }
+	ptr = (char *)msg + lustre_msg_hdr_size_v2(count);
+	for (i = 0; i < count; i++) {
+		char *tmp = bufs[i];
+
+		if (tmp)
+			memcpy(ptr, tmp, lens[i]);
+		ptr += cfs_size_round(lens[i]);
+	}
 }
 EXPORT_SYMBOL(lustre_init_msg_v2);
 
