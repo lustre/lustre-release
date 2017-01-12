@@ -229,7 +229,7 @@ static int jt_set_numa(int argc, char **argv)
 		return -1;
 	}
 
-	rc = lustre_lnet_config_buffers(value, -1, -1, -1, &err_rc);
+	rc = lustre_lnet_config_numa_range(value, -1, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 
