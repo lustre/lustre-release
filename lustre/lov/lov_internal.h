@@ -69,6 +69,30 @@ struct lov_stripe_md {
 	struct lov_stripe_md_entry *lsm_entries[];
 };
 
+static inline size_t lov_comp_md_size(const struct lov_stripe_md *lsm)
+{
+	struct lov_stripe_md_entry *lsme;
+	size_t size;
+	int entry;
+
+	if (lsm->lsm_magic == LOV_MAGIC_V1 || lsm->lsm_magic == LOV_MAGIC_V3)
+		return lov_mds_md_size(lsm->lsm_entries[0]->lsme_stripe_count,
+				       lsm->lsm_entries[0]->lsme_magic);
+
+	LASSERT(lsm->lsm_magic == LOV_MAGIC_COMP_V1);
+
+	size = sizeof(struct lov_comp_md_v1);
+	for (entry = 0; entry < lsm->lsm_entry_count; entry++) {
+		lsme = lsm->lsm_entries[entry];
+
+		size += sizeof(*lsme);
+		size += lov_mds_md_size(lsme->lsme_stripe_count,
+					lsme->lsme_magic);
+	}
+
+	return size;
+}
+
 static inline bool lsm_has_objects(struct lov_stripe_md *lsm)
 {
 	return lsm != NULL && !lsm->lsm_is_released;

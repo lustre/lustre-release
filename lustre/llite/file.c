@@ -1593,10 +1593,10 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         lmm = req_capsule_server_sized_get(&req->rq_pill, &RMF_MDT_MD, lmmsize);
         LASSERT(lmm != NULL);
 
-        if ((lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V1)) &&
-            (lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V3))) {
-                GOTO(out, rc = -EPROTO);
-        }
+	if (lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V1) &&
+	    lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V3) &&
+	    lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_COMP_V1))
+		GOTO(out, rc = -EPROTO);
 
         /*
          * This is coming from the MDS, so is probably in
@@ -1606,26 +1606,35 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) {
 		int stripe_count;
 
-		stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
-		if (le32_to_cpu(lmm->lmm_pattern) & LOV_PATTERN_F_RELEASED)
-			stripe_count = 0;
+		if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1) ||
+		    lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)) {
+			stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
+			if (le32_to_cpu(lmm->lmm_pattern) &
+			    LOV_PATTERN_F_RELEASED)
+				stripe_count = 0;
+		}
 
                 /* if function called for directory - we should
                  * avoid swab not existent lsm objects */
                 if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1)) {
-                        lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
+			lustre_swab_lov_user_md_v1(
+					(struct lov_user_md_v1 *)lmm);
 			if (S_ISREG(body->mbo_mode))
 				lustre_swab_lov_user_md_objects(
 				    ((struct lov_user_md_v1 *)lmm)->lmm_objects,
 				    stripe_count);
 		} else if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)) {
 			lustre_swab_lov_user_md_v3(
-				(struct lov_user_md_v3 *)lmm);
+					(struct lov_user_md_v3 *)lmm);
 			if (S_ISREG(body->mbo_mode))
-                                lustre_swab_lov_user_md_objects(
-                                 ((struct lov_user_md_v3 *)lmm)->lmm_objects,
-                                 stripe_count);
-                }
+				lustre_swab_lov_user_md_objects(
+				 ((struct lov_user_md_v3 *)lmm)->lmm_objects,
+				 stripe_count);
+		} else if (lmm->lmm_magic ==
+			   cpu_to_le32(LOV_MAGIC_COMP_V1)) {
+			lustre_swab_lov_comp_md_v1(
+					(struct lov_comp_md_v1 *)lmm);
+		}
         }
 
 out:
@@ -1694,14 +1703,6 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 
 	lum_size = rc;
 	rc = ll_lov_setstripe_ea_info(inode, file, flags, klum, lum_size);
-	if (rc == 0) {
-		__u32 gen;
-
-		put_user(0, &lum->lmm_stripe_count);
-
-		ll_layout_refresh(inode, &gen);
-		rc = ll_file_getstripe(inode, (struct lov_user_md __user *)arg);
-	}
 
 	OBD_FREE(klum, lum_size);
 	RETURN(rc);

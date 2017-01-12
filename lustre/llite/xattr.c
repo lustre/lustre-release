@@ -209,82 +209,98 @@ static int get_hsm_state(struct inode *inode, __u32 *hus_states)
 	OBD_FREE_PTR(hus);
 	return rc;
 }
+int ll_setstripe_ea(struct dentry *dentry, struct lov_user_md *lump,
+		    size_t size)
+{
+	struct inode *inode = dentry->d_inode;
+	int rc = 0;
+	bool return_err = false;
+
+	if (lump != NULL && lump->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
+		return_err = true;
+		goto setstripe;
+	}
+
+	/* Attributes that are saved via getxattr will always have
+	 * the stripe_offset as 0.  Instead, the MDS should be
+	 * allowed to pick the starting OST index.   b=17846 */
+	if (lump != NULL && lump->lmm_stripe_offset == 0)
+		lump->lmm_stripe_offset = -1;
+	/* Avoid anyone directly setting the RELEASED flag. */
+	if (lump != NULL &&
+		(lump->lmm_pattern & LOV_PATTERN_F_RELEASED)) {
+		/* Only if we have a released flag check if the file
+		* was indeed archived. */
+		__u32 state = HS_NONE;
+		rc = get_hsm_state(inode, &state);
+		if (rc != 0)
+			RETURN(rc);
+		if (!(state & HS_ARCHIVED)) {
+			CDEBUG(D_VFSTRACE,
+				"hus_states state = %x, pattern = %x\n",
+				state, lump->lmm_pattern);
+			/* Here the state is: real file is not
+			 * archived but user is requesting to set
+			 * the RELEASED flag so we mask off the
+			 * released flag from the request */
+			lump->lmm_pattern ^= LOV_PATTERN_F_RELEASED;
+		}
+	}
+
+setstripe:
+	if (lump != NULL && S_ISREG(inode->i_mode)) {
+		struct file	f;
+		__u64		it_flags = FMODE_WRITE;
+		int		lum_size;
+
+		lum_size = ll_lov_user_md_size(lump);
+		/**
+		 * b=10667: ignore error.
+		 * Silently eat error on setting strusted.lov attribute for
+		 * SuSE 9, it added default option to copy all attributes in
+		 * 'cp' command.
+		 */
+		if (lum_size < 0 || size < lum_size)
+			return return_err ? -ERANGE : 0;
+
+		memset(&f, 0, sizeof(f)); /* f.f_flags is used below */
+		f.f_path.dentry = dentry;
+		rc = ll_lov_setstripe_ea_info(inode, &f, it_flags, lump,
+					      lum_size);
+		/* b=10667 */
+		if (!return_err)
+			rc = 0;
+	} else if (S_ISDIR(inode->i_mode)) {
+		rc = ll_dir_setstripe(inode, lump, 0);
+	}
+
+	return rc;
+}
 
 int ll_setxattr(struct dentry *dentry, const char *name,
-                const void *value, size_t size, int flags)
+		const void *value, size_t size, int flags)
 {
-        struct inode *inode = dentry->d_inode;
+	struct inode *inode = dentry->d_inode;
 
-        LASSERT(inode);
-        LASSERT(name);
+	LASSERT(inode);
+	LASSERT(name);
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p), xattr %s\n",
 	       PFID(ll_inode2fid(inode)), inode, name);
 
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SETXATTR, 1);
+	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SETXATTR, 1);
 
-	if ((strncmp(name, XATTR_TRUSTED_PREFIX,
-		     sizeof(XATTR_TRUSTED_PREFIX) - 1) == 0 &&
-	     strcmp(name + sizeof(XATTR_TRUSTED_PREFIX) - 1, "lov") == 0) ||
-	    (strncmp(name, XATTR_LUSTRE_PREFIX,
-		     sizeof(XATTR_LUSTRE_PREFIX) - 1) == 0 &&
-	     strcmp(name + sizeof(XATTR_LUSTRE_PREFIX) - 1, "lov") == 0)) {
-		struct lov_user_md *lump = (struct lov_user_md *)value;
-		int rc = 0;
+	/* lustre/trusted.lov.xxx would be passed through xattr API */
+	if (strcmp(name, XATTR_NAME_LOV) == 0 ||
+	    strcmp(name, XATTR_LUSTRE_LOV) == 0)
+		return ll_setstripe_ea(dentry, (struct lov_user_md *)value,
+				       size);
+	else if (strcmp(name, XATTR_NAME_LMA) == 0 ||
+		 strcmp(name, XATTR_NAME_LINK) == 0)
+		return 0;
 
-		/* Attributes that are saved via getxattr will always have
-		 * the stripe_offset as 0.  Instead, the MDS should be
-		 * allowed to pick the starting OST index.   b=17846 */
-		if (lump != NULL && lump->lmm_stripe_offset == 0)
-			lump->lmm_stripe_offset = -1;
-		/* Avoid anyone directly setting the RELEASED flag. */
-		if (lump != NULL &&
-			(lump->lmm_pattern & LOV_PATTERN_F_RELEASED)) {
-			/* Only if we have a released flag check if the file
-			* was indeed archived. */
-			__u32 state = HS_NONE;
-			rc = get_hsm_state(inode, &state);
-			if (rc != 0)
-				RETURN(rc);
-			if (!(state & HS_ARCHIVED)) {
-				CDEBUG(D_VFSTRACE,
-					"hus_states state = %x, pattern = %x\n",
-					state, lump->lmm_pattern);
-				/* Here the state is: real file is not
-				 * archived but user is requesting to set
-				 * the RELEASED flag so we mask off the
-				 * released flag from the request */
-				lump->lmm_pattern ^= LOV_PATTERN_F_RELEASED;
-			}
-		}
-
-		if (lump != NULL && S_ISREG(inode->i_mode)) {
-			struct file	f;
-			__u64		it_flags = FMODE_WRITE;
-			int		lum_size;
-
-			lum_size = ll_lov_user_md_size(lump);
-			if (lum_size < 0 || size < lum_size)
-				return 0; /* b=10667: ignore error */
-
-			memset(&f, 0, sizeof(f)); /* f.f_flags is used below */
-			f.f_path.dentry = dentry;
-			rc = ll_lov_setstripe_ea_info(inode, &f, it_flags, lump,
-						      lum_size);
-			/* b=10667: rc always be 0 here for now */
-			rc = 0;
-                } else if (S_ISDIR(inode->i_mode)) {
-                        rc = ll_dir_setstripe(inode, lump, 0);
-                }
-
-                return rc;
-
-        } else if (strcmp(name, XATTR_NAME_LMA) == 0 ||
-                   strcmp(name, XATTR_NAME_LINK) == 0)
-                return 0;
-
-        return ll_setxattr_common(inode, name, value, size, flags,
-                                  OBD_MD_FLXATTR);
+	return ll_setxattr_common(inode, name, value, size, flags,
+				  OBD_MD_FLXATTR);
 }
 
 int ll_removexattr(struct dentry *dentry, const char *name)
@@ -472,6 +488,9 @@ static ssize_t ll_getxattr_lov(struct inode *inode, void *buf, size_t buf_size)
 		 * otherwise it would confuse tar --xattr by
 		 * recognizing layout gen as stripe offset when the
 		 * file is restored. See LU-2809. */
+		if (((struct lov_mds_md *)buf)->lmm_magic == LOV_MAGIC_COMP_V1)
+			goto out_env;
+
 		((struct lov_mds_md *)buf)->lmm_layout_gen = 0;
 out_env:
 		cl_env_put(env, &refcheck);

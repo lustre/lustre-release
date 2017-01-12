@@ -1641,8 +1641,7 @@ static int lov_object_layout_get(const struct lu_env *env,
 		RETURN(0);
 	}
 
-	cl->cl_size = lov_mds_md_size(lsm->lsm_entries[0]->lsme_stripe_count,
-				      lsm->lsm_magic);
+	cl->cl_size = lov_comp_md_size(lsm);
 	cl->cl_layout_gen = lsm->lsm_layout_gen;
 
 	rc = lov_lsm_pack(lsm, buf->lb_buf, buf->lb_len);

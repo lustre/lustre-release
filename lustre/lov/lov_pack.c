@@ -128,8 +128,8 @@ void lov_dump_lmm(int level, void *lmm)
  * then return the size needed. If \a buf_size is too small then
  * return -ERANGE. Otherwise return the size of the result.
  */
-ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
-		     size_t buf_size)
+ssize_t lov_lsm_pack_v1v3(const struct lov_stripe_md *lsm, void *buf,
+			  size_t buf_size)
 {
 	struct lov_mds_md_v1 *lmmv1 = buf;
 	struct lov_mds_md_v3 *lmmv3 = buf;
@@ -176,6 +176,89 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 		lmm_objects[i].l_ost_gen = cpu_to_le32(loi->loi_ost_gen);
 		lmm_objects[i].l_ost_idx = cpu_to_le32(loi->loi_ost_idx);
 	}
+
+	RETURN(lmm_size);
+}
+
+ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
+		     size_t buf_size)
+{
+	struct lov_comp_md_v1 *lcmv1 = buf;
+	struct lov_comp_md_entry_v1 *lcme;
+	struct lov_ost_data_v1 *lmm_objects;
+	size_t lmm_size;
+	unsigned int entry;
+	unsigned int offset;
+	unsigned int size;
+	unsigned int i;
+	ENTRY;
+
+	if (lsm->lsm_magic == LOV_MAGIC_V1 || lsm->lsm_magic == LOV_MAGIC_V3)
+		return lov_lsm_pack_v1v3(lsm, buf, buf_size);
+
+	lmm_size = lov_comp_md_size(lsm);
+	if (buf_size == 0)
+		RETURN(lmm_size);
+
+	if (buf_size < lmm_size)
+		RETURN(-ERANGE);
+
+	lcmv1->lcm_magic = cpu_to_le32(lsm->lsm_magic);
+	lcmv1->lcm_size = cpu_to_le32(lmm_size);
+	lcmv1->lcm_layout_gen = cpu_to_le32(lsm->lsm_layout_gen);
+	lcmv1->lcm_entry_count = cpu_to_le16(lsm->lsm_entry_count);
+
+	offset = sizeof(*lcmv1) + sizeof(*lcme) * lsm->lsm_entry_count;
+
+	for (entry = 0; entry < lsm->lsm_entry_count; entry++) {
+		struct lov_stripe_md_entry *lsme;
+		struct lov_mds_md *lmm;
+
+		lsme = lsm->lsm_entries[entry];
+		lcme = &lcmv1->lcm_entries[entry];
+
+		lcme->lcme_id = cpu_to_le32(lsme->lsme_id);
+		lcme->lcme_extent.e_start =
+			cpu_to_le64(lsme->lsme_extent.e_start);
+		lcme->lcme_extent.e_end =
+			cpu_to_le64(lsme->lsme_extent.e_end);
+		lcme->lcme_offset = cpu_to_le32(offset);
+
+		lmm = (struct lov_mds_md *)((char *)lcmv1 + offset);
+		lmm->lmm_magic = cpu_to_le32(lsme->lsme_magic);
+		/* lmm->lmm_oi not set */
+		lmm->lmm_pattern = cpu_to_le32(lsme->lsme_pattern);
+		lmm->lmm_stripe_size = cpu_to_le32(lsme->lsme_stripe_size);
+		lmm->lmm_stripe_count = cpu_to_le16(lsme->lsme_stripe_count);
+		lmm->lmm_layout_gen = cpu_to_le16(lsme->lsme_layout_gen);
+
+		if (lsme->lsme_magic == LOV_MAGIC_V3) {
+			struct lov_mds_md_v3 *lmmv3 =
+						(struct lov_mds_md_v3 *)lmm;
+
+			strlcpy(lmmv3->lmm_pool_name, lsme->lsme_pool_name,
+				sizeof(lmmv3->lmm_pool_name));
+			lmm_objects = lmmv3->lmm_objects;
+		} else {
+			lmm_objects =
+				((struct lov_mds_md_v1 *)lmm)->lmm_objects;
+		}
+
+		for (i = 0; i < lsme->lsme_stripe_count; i++) {
+			struct lov_oinfo *loi = lsme->lsme_oinfo[i];
+
+			ostid_cpu_to_le(&loi->loi_oi, &lmm_objects[i].l_ost_oi);
+			lmm_objects[i].l_ost_gen =
+					cpu_to_le32(loi->loi_ost_gen);
+			lmm_objects[i].l_ost_idx =
+					cpu_to_le32(loi->loi_ost_idx);
+		}
+
+		size = lov_mds_md_size(lsme->lsme_stripe_count,
+				       lsme->lsme_magic);
+		lcme->lcme_size = cpu_to_le32(size);
+		offset += size;
+	} /* for each layout component */
 
 	RETURN(lmm_size);
 }
@@ -254,44 +337,19 @@ int lov_getstripe(struct lov_object *obj, struct lov_stripe_md *lsm,
 {
 	/* we use lov_user_md_v3 because it is larger than lov_user_md_v1 */
 	struct lov_mds_md	*lmmk;
-	struct lov_user_md_v3	lum;
-	u32			stripe_count;
-	size_t			lum_size;
 	size_t			lmmk_size;
 	ssize_t			lmm_size;
-	int			rc;
+	int			rc = 0;
 	ENTRY;
 
-	if (lsm->lsm_magic != LOV_MAGIC_V1 && lsm->lsm_magic != LOV_MAGIC_V3) {
+	if (lsm->lsm_magic != LOV_MAGIC_V1 && lsm->lsm_magic != LOV_MAGIC_V3 &&
+	    lsm->lsm_magic != LOV_MAGIC_COMP_V1) {
 		CERROR("bad LSM MAGIC: 0x%08X != 0x%08X nor 0x%08X\n",
 		       lsm->lsm_magic, LOV_MAGIC_V1, LOV_MAGIC_V3);
 		GOTO(out, rc = -EIO);
 	}
 
-	if (!lsm->lsm_is_released)
-		stripe_count = lsm->lsm_entries[0]->lsme_stripe_count;
-	else
-		stripe_count = 0;
-
-	/* we only need the header part from user space to get lmm_magic and
-	 * lmm_stripe_count, (the header part is common to v1 and v3) */
-	lum_size = sizeof(struct lov_user_md_v1);
-	if (copy_from_user(&lum, lump, lum_size))
-		GOTO(out, rc = -EFAULT);
-
-	if (lum.lmm_magic != LOV_USER_MAGIC_V1 &&
-	    lum.lmm_magic != LOV_USER_MAGIC_V3 &&
-	    lum.lmm_magic != LOV_USER_MAGIC_SPECIFIC)
-		GOTO(out, rc = -EINVAL);
-
-	if (lum.lmm_stripe_count != 0 && lum.lmm_stripe_count < stripe_count) {
-		/* Return right size of stripe to user */
-		lum.lmm_stripe_count = stripe_count;
-		rc = copy_to_user(lump, &lum, lum_size);
-		GOTO(out, rc = -EOVERFLOW);
-	}
-
-	lmmk_size = lov_mds_md_size(stripe_count, lsm->lsm_magic);
+	lmmk_size = lov_comp_md_size(lsm);
 
 	OBD_ALLOC_LARGE(lmmk, lmmk_size);
 	if (lmmk == NULL)
@@ -301,53 +359,24 @@ int lov_getstripe(struct lov_object *obj, struct lov_stripe_md *lsm,
 	if (lmm_size < 0)
 		GOTO(out_free, rc = lmm_size);
 
-	/* FIXME: Bug 1185 - copy fields properly when structs change */
-	/* struct lov_user_md_v3 and struct lov_mds_md_v3 must be the same */
-	CLASSERT(sizeof(lum) == sizeof(struct lov_mds_md_v3));
-	CLASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lmmk->lmm_objects[0]));
-
-	if (cpu_to_le32(LOV_MAGIC) != LOV_MAGIC &&
-	    (lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC_V1) ||
-	     lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC_V3))) {
-		lustre_swab_lov_mds_md(lmmk);
-		lustre_swab_lov_user_md_objects(
+	if (cpu_to_le32(LOV_MAGIC) != LOV_MAGIC) {
+		if (lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC_V1) ||
+		    lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)) {
+			lustre_swab_lov_mds_md(lmmk);
+			lustre_swab_lov_user_md_objects(
 				(struct lov_user_ost_data *)lmmk->lmm_objects,
 				lmmk->lmm_stripe_count);
-	}
-
-	if (lum.lmm_magic == LOV_USER_MAGIC) {
-		/* User request for v1, we need skip lmm_pool_name */
-		if (lmmk->lmm_magic == LOV_MAGIC_V3) {
-			memmove(((struct lov_mds_md_v1 *)lmmk)->lmm_objects,
-				((struct lov_mds_md_v3 *)lmmk)->lmm_objects,
-				lmmk->lmm_stripe_count *
-				sizeof(struct lov_ost_data_v1));
-			lmm_size -= LOV_MAXPOOLNAME;
+		} else if (lmmk->lmm_magic == cpu_to_le32(LOV_MAGIC_COMP_V1)) {
+			lustre_swab_lov_comp_md_v1(
+					(struct lov_comp_md_v1 *)lmmk);
 		}
-	} else {
-		/* if v3 we just have to update the lum_size */
-		lum_size = sizeof(struct lov_user_md_v3);
 	}
 
-	/* User wasn't expecting this many OST entries */
-	if (lum.lmm_stripe_count == 0)
-		lmm_size = lum_size;
-	else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count)
-		GOTO(out_free, rc = -EOVERFLOW);
-	/*
-	 * Have a difference between lov_mds_md & lov_user_md.
-	 * So we have to re-order the data before copy to user.
-	 */
-	lum.lmm_stripe_count = lmmk->lmm_stripe_count;
-	lum.lmm_layout_gen = lmmk->lmm_layout_gen;
-	((struct lov_user_md *)lmmk)->lmm_layout_gen = lum.lmm_layout_gen;
-	((struct lov_user_md *)lmmk)->lmm_stripe_count = lum.lmm_stripe_count;
-	if (copy_to_user(lump, lmmk, lmm_size))
+	if (copy_to_user(lump, lmmk, lmmk_size))
 		GOTO(out_free, rc = -EFAULT);
 
-	GOTO(out_free, rc = 0);
 out_free:
 	OBD_FREE_LARGE(lmmk, lmmk_size);
 out:
-	return rc;
+	RETURN(rc);
 }
