@@ -5134,23 +5134,30 @@ test_72() { #LU-2634
 	local ostdev=$(ostdevname 1)
 	local cmd="$E2FSCK -fnvd $mdsdev"
 	local fn=3
+	local add_options
 
 	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
 		skip "ldiskfs only test" && return
+
+	if combined_mgs_mds; then
+		add_options='--reformat'
+	else
+		add_options='--reformat --replace'
+	fi
 
 	#tune MDT with "-O extents"
 
 	for num in $(seq $MDSCOUNT); do
 		add mds${num} $(mkfs_opts mds$num $(mdsdevname $num)) \
-			--reformat $(mdsdevname $num) $(mdsvdevname $num) ||
+			$add_options $(mdsdevname $num) $(mdsvdevname $num) ||
 			error "add mds $num failed"
 		do_facet mds${num} "$TUNE2FS -O extents $(mdsdevname $num)" ||
 			error "$TUNE2FS failed on mds${num}"
 	done
 
-	add ost1 $(mkfs_opts ost1 $ostdev) --reformat $ostdev ||
+	add ost1 $(mkfs_opts ost1 $ostdev) $add_options $ostdev ||
 		error "add $ostdev failed"
-	start_mgsmds || error "start mds failed"
+	start_mds || error "start mds failed"
 	start_ost || error "start ost failed"
 	mount_client $MOUNT || error "mount client failed"
 
