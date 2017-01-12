@@ -262,14 +262,11 @@ static void *pool_proc_next(struct seq_file *seq, void *v, loff_t *pos)
 
 	/* iterate to find a non empty entry */
 	prev_idx = iter->lpi_idx;
-	down_read(&pool_tgt_rw_sem(iter->lpi_pool));
 	iter->lpi_idx++;
-	if (iter->lpi_idx == pool_tgt_count(iter->lpi_pool)) {
+	if (iter->lpi_idx >= pool_tgt_count(iter->lpi_pool)) {
 		iter->lpi_idx = prev_idx; /* we stay on the last entry */
-		up_read(&pool_tgt_rw_sem(iter->lpi_pool));
 		return NULL;
 	}
-	up_read(&pool_tgt_rw_sem(iter->lpi_pool));
 	(*pos)++;
 	/* return != NULL to continue */
 	return iter;
@@ -312,6 +309,7 @@ static void *pool_proc_start(struct seq_file *seq, loff_t *pos)
 	iter->lpi_idx = 0;
 
 	seq->private = iter;
+	down_read(&pool_tgt_rw_sem(pool));
 	if (*pos > 0) {
 		loff_t i;
 		void *ptr;
@@ -346,6 +344,7 @@ static void pool_proc_stop(struct seq_file *seq, void *v)
 	struct lod_pool_iterator *iter = seq->private;
 
 	if (iter != NULL && iter->lpi_magic == POOL_IT_MAGIC) {
+		up_read(&pool_tgt_rw_sem(iter->lpi_pool));
 		seq->private = iter->lpi_pool;
 		lod_pool_putref(iter->lpi_pool);
 		OBD_FREE_PTR(iter);
@@ -369,9 +368,7 @@ static int pool_proc_show(struct seq_file *seq, void *v)
 	LASSERT(iter->lpi_pool != NULL);
 	LASSERT(iter->lpi_idx <= pool_tgt_count(iter->lpi_pool));
 
-	down_read(&pool_tgt_rw_sem(iter->lpi_pool));
 	tgt = pool_tgt(iter->lpi_pool, iter->lpi_idx);
-	up_read(&pool_tgt_rw_sem(iter->lpi_pool));
 	if (tgt != NULL)
 		seq_printf(seq, "%s\n", obd_uuid2str(&(tgt->ltd_uuid)));
 
