@@ -42,8 +42,12 @@
 struct nrs_tbf_head;
 struct nrs_tbf_cmd;
 
+#define NRS_TBF_MATCH_FULL	0x0000001
+#define NRS_TBF_MATCH_WILDCARD	0x0000002
+
 struct nrs_tbf_jobid {
 	char		*tj_id;
+	__u32		 tj_match_flag;
 	struct list_head tj_linkage;
 };
 
