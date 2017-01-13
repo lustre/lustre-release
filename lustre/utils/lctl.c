@@ -46,9 +46,7 @@
 #include "obdctl.h"
 #include <lustre_ver.h>
 
-static int jt_noop(int argc, char **argv) {
-        return 0;
-}
+static int lctl_list_commands(int argc, char **argv);
 
 static int jt_opt_ignore_errors(int argc, char **argv) {
         Parser_ignore_errors(1);
@@ -57,7 +55,7 @@ static int jt_opt_ignore_errors(int argc, char **argv) {
 
 command_t cmdlist[] = {
 	/* Metacommands */
-	{"===== metacommands =======", jt_noop, 0, "metacommands"},
+	{"===== metacommands =======", NULL, 0, "metacommands"},
 	{"--device", jt_opt_device, 0,
 	 "run <command> after connecting to device <devno>\n"
 	 "--device <devno> <command [args ...]>"},
@@ -69,7 +67,7 @@ command_t cmdlist[] = {
 	 "ignore_errors"},
 
 	/* User interface commands */
-	{"======== control =========", jt_noop, 0, "control commands"},
+	{"======== control =========", NULL, 0, "control commands"},
 	{"help", Parser_help, 0, "help"},
 	{"lustre_build_version", jt_get_version, 0,
 	 "print version of Lustre modules\n"
@@ -78,9 +76,11 @@ command_t cmdlist[] = {
 	{"quit", Parser_quit, 0, "quit"},
 	{"--version", Parser_version, 0,
 	 "print build version of this utility and exit"},
+	{"--list-commands", lctl_list_commands, 0,
+	 "list commands supported by this utility and exit"},
 
 	/* Network configuration commands */
-	{"===== network config =====", jt_noop, 0, "network config"},
+	{"===== network config =====", NULL, 0, "network config"},
 	{"--net", jt_opt_net, 0, "run <command> after selecting network <net>\n"
 	 "usage: --net <tcp/o2ib/...> <command>"},
 	{"network", jt_ptl_network, 0, "configure LNET"
@@ -143,7 +143,7 @@ command_t cmdlist[] = {
 	 "usage: net_delay_list"},
 
 	/* Device selection commands */
-	{"==== obd device selection ====", jt_noop, 0, "device selection"},
+	{"==== obd device selection ====", NULL, 0, "device selection"},
 	{"device", jt_obd_device, 0,
 	 "set current device to <name|devno>\n"
 	 "usage: device <%name|$name|devno>"},
@@ -153,7 +153,7 @@ command_t cmdlist[] = {
 	 "usage: dl [-t]"},
 
 	/* Device operations */
-	{"==== obd device operations ====", jt_noop, 0, "device operations"},
+	{"==== obd device operations ====", NULL, 0, "device operations"},
 	{"activate", jt_obd_activate, 0, "activate an import\n"},
 	{"deactivate", jt_obd_deactivate, 0, "deactivate an import. "
 	 "This command should be used on failed OSC devices in an MDT LOV.\n"},
@@ -196,7 +196,7 @@ command_t cmdlist[] = {
 	 "  -R  Recursively list all parameters under the specified path.\n"},
 
 	/* Debug commands */
-	{"==== debugging control ====", jt_noop, 0, "debug"},
+	{"==== debugging control ====", NULL, 0, "debug"},
 	{"debug_daemon", jt_dbg_debug_daemon, 0,
 	 "debug daemon control and dump to a file\n"
 	 "usage: debug_daemon {start file [#MB]|stop}"},
@@ -228,7 +228,7 @@ command_t cmdlist[] = {
 	 "usage: modules <path>"},
 
 	/* Pool commands */
-	{"===  Pools ==", jt_noop, 0, "pool management"},
+	{"===  Pools ==", NULL, 0, "pool management"},
 	{"pool_new", jt_pool_cmd, 0,
 	 "add a new pool\n"
 	 "usage: pool_new <fsname>.<poolname>"},
@@ -246,7 +246,7 @@ command_t cmdlist[] = {
 	 "usage: pool_list  <fsname>[.<poolname>] | <pathname>"},
 
 	/* Nodemap commands */
-	{"=== Nodemap ===", jt_noop, 0, "nodemap management"},
+	{"=== Nodemap ===", NULL, 0, "nodemap management"},
 	{"nodemap_activate", jt_nodemap_activate, 0,
 	 "activate nodemap idmapping functions\n"
 	 "usage: nodemap_activate {0|1}"},
@@ -280,7 +280,7 @@ command_t cmdlist[] = {
 	 "Usage: nodemap_info [list|nodemap_name|all]"},
 
 	/* Changelog commands */
-	{"===  Changelogs ==", jt_noop, 0, "changelog user management"},
+	{"===  Changelogs ==", NULL, 0, "changelog user management"},
 	{"changelog_register", jt_changelog_register, 0,
 	 "register a new persistent changelog user, returns id\n"
 	 "usage: --device <mdtname> changelog_register [-n]"},
@@ -290,7 +290,7 @@ command_t cmdlist[] = {
 
 	/* Device configuration commands */
 	{"== device setup (these are not normally used post 1.4) ==",
-		jt_noop, 0, "device config"},
+		NULL, 0, "device config"},
 	{"attach", jt_lcfg_attach, 0,
 	 "set the type, name, and uuid of the current device\n"
 	 "usage: attach type name uuid"},
@@ -304,7 +304,7 @@ command_t cmdlist[] = {
 	 "usage: cleanup [force | failover]"},
 
 	/* Test only commands */
-	{"==== testing (DANGEROUS) ====", jt_noop, 0, "testing (DANGEROUS)"},
+	{"==== testing (DANGEROUS) ====", NULL, 0, "testing (DANGEROUS)"},
 	{"--threads", jt_opt_threads, 0,
 	 "run <threads> separate instances of <command> on device <devno>\n"
 	 "--threads <threads> <verbose> <devno> <command [args ...]>"},
@@ -394,7 +394,7 @@ command_t cmdlist[] = {
 	 "	 getobjversion -i <id> -g <group>"},
 
 	/* LFSCK commands */
-	{"==== LFSCK ====", jt_noop, 0, "LFSCK"},
+	{"==== LFSCK ====", NULL, 0, "LFSCK"},
 	{"lfsck_start", jt_lfsck_start, 0, "start LFSCK\n"
 	 "usage: lfsck_start [-M | --device [MDT,OST]_device]\n"
 	 "		     [-A | --all] [-c | --create-ostobj [on | off]]\n"
@@ -413,7 +413,7 @@ command_t cmdlist[] = {
 	 "		     [-t | --type lfsck_type[,lfsck_type...]]\n"
 	 "		     [-w | --wait]"},
 
-	{"==== obsolete (DANGEROUS) ====", jt_noop, 0, "obsolete (DANGEROUS)"},
+	{"==== obsolete (DANGEROUS) ====", NULL, 0, "obsolete (DANGEROUS)"},
 	/* some test scripts still use these */
 	{"cfg_device", jt_obd_device, 0,
 	 "set current device to <name>\n"
@@ -495,6 +495,24 @@ int lctl_main(int argc, char **argv)
 
         obd_finalize(argc, argv);
         return rc < 0 ? -rc : rc;
+}
+
+static int lctl_list_commands(int argc, char **argv)
+{
+	char buffer[81] = ""; /* 80 printable chars + terminating NUL */
+	command_t *cmd;
+	int rc;
+
+	cmd = cmdlist;
+	while (cmd->pc_name != NULL) {
+		printf("\n%s\n", cmd->pc_name); /* Command category */
+		cmd++;
+		rc = Parser_list_commands(cmd, buffer, sizeof(buffer), NULL,
+					 0, 4);
+		cmd += rc;
+	}
+
+	return 0;
 }
 
 int main(int argc, char **argv)

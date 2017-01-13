@@ -77,6 +77,9 @@ void Parser_printhelp(char *);		/* Detailed help routine */
 void Parser_exit(int, char **);		/* Shuts down command parser */
 int Parser_execarg(int argc, char **argv, command_t cmds[]);
 int execute_line(char * line);
+int Parser_list_commands(const command_t *cmdlist, char *buffer,
+			 size_t buf_size, const char *parent_cmd,
+			 int col_start, int col_num);
 
 /* Converts a string to an integer */
 int Parser_int(char *, int *);

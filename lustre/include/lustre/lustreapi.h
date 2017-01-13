@@ -284,10 +284,6 @@ extern int llapi_quotactl(char *mnt, struct if_quotactl *qctl);
 extern int llapi_target_iterate(int type_num, char **obd_type, void *args,
 				llapi_cb_t cb);
 extern int llapi_get_connect_flags(const char *mnt, __u64 *flags);
-extern int llapi_lsetfacl(int argc, char *argv[]);
-extern int llapi_lgetfacl(int argc, char *argv[]);
-extern int llapi_rsetfacl(int argc, char *argv[]);
-extern int llapi_rgetfacl(int argc, char *argv[]);
 extern int llapi_cp(int argc, char *argv[]);
 extern int llapi_ls(int argc, char *argv[]);
 extern int llapi_fid2path(const char *device, const char *fidstr, char *path,

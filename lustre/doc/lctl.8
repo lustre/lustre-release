@@ -1,4 +1,4 @@
-.TH lctl 1 "2016 Sep 8" Lustre "configuration utilities"
+.TH lctl 8 "2017 Jan 12" Lustre "configuration utilities"
 .SH NAME
 lctl \- Low level Lustre filesystem configuration utility
 .SH SYNOPSIS
@@ -6,6 +6,10 @@ lctl \- Low level Lustre filesystem configuration utility
 .B lctl
 .br
 .B lctl --device <devno> <command [args]>
+.br
+.B lctl --version
+.br
+.B lctl --list-commands
 .br
 .SH DESCRIPTION
 .B lctl
@@ -26,7 +30,7 @@ can be invoked in interactive mode by issuing lctl command. After that, commands
 .BR quit .
 
 To get a complete listing of available commands, type
-.B help
+.B --list-commands
 at the lctl prompt.  To get basic help on the meaning and syntax of a
 command, type
 .B help
@@ -418,6 +422,9 @@ Output the build version of the Lustre kernel modules
 .TP
 .B --version
 Output the build version of the lctl utility
+.TP
+.B --list-commands
+Output a list of the commands supported by the lctl utility
 .TP
 .B help
 Provides brief help on the various arguments

@@ -58,6 +58,7 @@ static int jt_set_numa(int argc, char **argv);
 static int jt_add_peer_nid(int argc, char **argv);
 static int jt_del_peer_nid(int argc, char **argv);
 /*static int jt_show_peer(int argc, char **argv);*/
+static int lnetctl_list_commands(int argc, char **argv);
 
 command_t lnet_cmds[] = {
 	{"configure", jt_config_lnet, 0, "configure lnet\n"
@@ -1250,8 +1251,18 @@ command_t list[] = {
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},
+	{"--list-commands", lnetctl_list_commands, 0, "list commands"},
 	{ 0, 0, 0, NULL }
 };
+
+static int lnetctl_list_commands(int argc, char **argv)
+{
+	char buffer[81] = ""; /* 80 printable chars + terminating NUL */
+
+	Parser_list_commands(list, buffer, sizeof(buffer), NULL, 0, 4);
+
+	return 0;
+}
 
 int main(int argc, char **argv)
 {

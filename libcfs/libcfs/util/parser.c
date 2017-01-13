@@ -53,8 +53,7 @@ static char *skipwhitespace(char *s);
 static char *skiptowhitespace(char *s);
 static command_t *find_cmd(char *name, command_t cmds[], char **next);
 static int process(char *s, char **next, command_t *lookup, command_t **result,
-                   char **prev);
-static void print_commands(char *str, command_t *table);
+		   char **prev);
 
 static char * skipwhitespace(char * s)
 {
@@ -109,21 +108,21 @@ void Parser_ignore_errors(int ignore)
 
 int Parser_execarg(int argc, char **argv, command_t cmds[])
 {
-        command_t *cmd;
+	command_t *cmd;
 
-        cmd = Parser_findargcmd(argv[0], cmds);
-        if ( cmd ) {
-                int rc = (cmd->pc_func)(argc, argv);
-                if (rc == CMD_HELP)
-                        fprintf(stderr, "%s\n", cmd->pc_help);
-                return rc;
-        } else {
+	cmd = Parser_findargcmd(argv[0], cmds);
+	if (cmd != NULL && cmd->pc_func != NULL) {
+		int rc = (cmd->pc_func)(argc, argv);
+		if (rc == CMD_HELP)
+			fprintf(stderr, "%s\n", cmd->pc_help);
+		return rc;
+	} else {
 		printf("Try interactive use without arguments or use one of:\n");
-                for (cmd = cmds; cmd->pc_name; cmd++)
-                        printf("\"%s\"\n", cmd->pc_name);
-                printf("as argument.\n");
-        }
-        return -1;
+		for (cmd = cmds; cmd->pc_name; cmd++)
+			printf("\"%s\"\n", cmd->pc_name);
+		printf("as argument.\n");
+	}
+	return -1;
 }
 
 /* returns the command_t * (NULL if not found) corresponding to a
@@ -192,17 +191,17 @@ static int process(char *s, char ** next, command_t *lookup,
         }
 
 got_it:
-        /* found a unique command: component or full? */
-        if ( (*result)->pc_func ) {
-                return CMD_COMPLETE;
-        } else {
-                if ( *next == '\0' ) {
-                        return CMD_INCOMPLETE;
-                } else {
-                        return process(*next, next, (*result)->pc_sub_cmd,
-                                       result, prev);
-                }
-        }
+	/* found a unique command: component or full? */
+	if ((*result)->pc_func != NULL) {
+		return CMD_COMPLETE;
+	} else {
+		if (*next == '\0') {
+			return CMD_INCOMPLETE;
+		} else {
+			return process(*next, next, (*result)->pc_sub_cmd,
+				       result, prev);
+		}
+	}
 }
 
 #ifdef HAVE_LIBREADLINE
@@ -451,10 +450,12 @@ int Parser_int(char *s, int *val)
 
 void Parser_qhelp(int argc, char *argv[]) {
 
-        printf("Available commands are:\n");
+	printf("usage: %s [COMMAND] [OPTIONS]... [ARGS]\n",
+		program_invocation_short_name);
+	printf("Without any parameters, interactive mode is invoked\n");
 
-        print_commands(NULL, top_level);
-        printf("For more help type: help command-name\n");
+	printf("Try '%s help <COMMAND>' or '%s --list-commands' for more information\n",
+		program_invocation_short_name, program_invocation_short_name);
 }
 
 int Parser_help(int argc, char **argv)
@@ -524,24 +525,78 @@ void Parser_printhelp(char *cmd)
 /*************************************************************************
  * COMMANDS                                                              *
  *************************************************************************/
-static void print_commands(char * str, command_t * table) {
-        command_t * cmds;
-        char         buf[80];
 
-        for (cmds = table; cmds->pc_name; cmds++) {
-                if (cmds->pc_func) {
-                        if (str) printf("\t%s %s\n", str, cmds->pc_name);
-                        else printf("\t%s\n", cmds->pc_name);
-                }
-                if (cmds->pc_sub_cmd) {
-                        if (str) {
-                                sprintf(buf, "%s %s", str, cmds->pc_name);
-                                print_commands(buf, cmds->pc_sub_cmd);
-                        } else {
-                                print_commands(cmds->pc_name, cmds->pc_sub_cmd);
-                        }
-                }
-        }
+/**
+ * Parser_list_commands() - Output a list of the supported commands.
+ * @cmdlist:	  Array of structures describing the commands.
+ * @buffer:	  String buffer used to temporarily store the output text.
+ * @buf_size:	  Length of the string buffer.
+ * @parent_cmd:	  When called recursively, contains the name of the parent cmd.
+ * @col_start:	  Column where printing should begin.
+ * @col_num:	  The number of commands printed in a single row.
+ *
+ * The commands and subcommands supported by the utility are printed, arranged
+ * into several columns for readability.  If a command supports subcommands, the
+ * function is called recursively, and the name of the parent command is
+ * supplied so that it can be prepended to the names of the subcommands.
+ *
+ * Return: The number of items that were printed.
+ */
+int Parser_list_commands(const command_t *cmdlist, char *buffer,
+			 size_t buf_size, const char *parent_cmd,
+			 int col_start, int col_num)
+{
+	int col = col_start;
+	int char_max;
+	int len;
+	char fmt[6];
+	int count = 0;
+	int rc;
+
+	if (col_start >= col_num)
+		return 0;
+
+	char_max = (buf_size - 1) / col_num; /* Reserve 1 char for NUL */
+
+	for (; cmdlist->pc_name != NULL; cmdlist++) {
+		if (cmdlist->pc_func == NULL && cmdlist->pc_sub_cmd == NULL)
+			break;
+		count++;
+		if (parent_cmd != NULL)
+			len = snprintf(&buffer[col * char_max],
+				       char_max + 1, "%s %s", parent_cmd,
+				       cmdlist->pc_name);
+		else
+			len = snprintf(&buffer[col * char_max],
+				       char_max + 1, "%s", cmdlist->pc_name);
+
+		/* Add trailing spaces to pad the entry to the column size */
+		if (len < char_max) {
+			snprintf(fmt, 6, "%%-%2ds", char_max - len);
+			snprintf(&buffer[col * char_max] + len,
+				 char_max - len + 1, fmt, " ");
+		} else {
+			buffer[(col + 1) * char_max - 1] = ' ';
+		}
+
+		col++;
+		if (col >= col_num) {
+			fprintf(stdout, "%s\n", buffer);
+			col = 0;
+			buffer[0] = '\0';
+		}
+
+		if (cmdlist->pc_sub_cmd != NULL) {
+			rc = Parser_list_commands(cmdlist->pc_sub_cmd, buffer,
+						 buf_size, cmdlist->pc_name,
+						 col, col_num);
+			col = (col + rc) % col_num;
+			count += rc;
+		}
+	}
+	if (parent_cmd == NULL && col != 0)
+		fprintf(stdout, "%s\n", buffer);
+	return count;
 }
 
 char *Parser_getstr(const char *prompt, const char *deft, char *res,

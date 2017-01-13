@@ -1,4 +1,4 @@
-.TH lfs 1 "2009 Jan 29" Lustre "user utilities"
+.TH lfs 1 "2017 Jan 12" Lustre "user utilities"
 .SH NAME
 lfs \- Lustre utility to create a file with specific striping pattern, find the striping pattern of existing files, do certain quota operations, and manage distributed namespace options for directories
 .SH SYNOPSIS
@@ -103,6 +103,8 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs setstripe -d <dir>
 .br
 .B lfs --version
+.br
+.B lfs --list-commands
 .br
 .B lfs help
 .SH DESCRIPTION
@@ -341,6 +343,9 @@ See lfs-migrate(1).
 .TP
 .B --version
 Output the build version of the lfs utility. Use "lctl lustre_build_version" to get the version of the Lustre kernel modules
+.TP
+.B --list-commands
+Output a list of the commands supported by the lfs utility
 .TP
 .B help
 Provides brief help on the various arguments

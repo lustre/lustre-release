@@ -1,8 +1,10 @@
-.TH lst 1 "Jul 7, 2008" Lustre "utilities"
+.TH lst 8 "2017 Jan 12" Lustre "configuration utilities"
 .SH NAME
 lst \- Start the Lustre LNET Self-test
 .SH SYNOPSIS
 .B "lst"
+.br
+.B "lst --list-commands"
 .SH DESCRIPTION
 LNET self-test helps site administrators confirm that Lustre
 Networking (LNET) has been properly installed and configured.
@@ -26,6 +28,10 @@ These individual point-to-point tests are instantiated according to the
 test type, source group, target group and distribution specified when the
 test is added to the test batch.
 .LP
+.SH OPTIONS
+.TP
+.B --list-commands
+Output a list of the commands supported by the lst utility
 .SH MODULES
 To run LNET self-test, load these modules: libcfs, lnet, lnet_selftest
 and any one of the klnds (i.e, ksocklnd, ko2iblnd...).

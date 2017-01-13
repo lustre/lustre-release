@@ -1,12 +1,15 @@
 .
-.TH lnetctl 1 "2014 Sep 12" Lustre "configuration utilities"
+.TH lnetctl 8 "2017 Jan 12" Lustre "configuration utilities"
 .
 .SH "SYNOPSIS"
 \fBlnetctl\fR
 .
 .br
+.B lnetctl --list-commands
+.br
 \fBlnetctl\fR \fB<cmd> <subcmd> [optional parameters]\fR
 .
+.br
 .SH "DESCRIPTION"
 \fBlnetctl\fR is used to configure LNet parameters allowing various configuration
 and debugging features to be accessed\.
@@ -16,8 +19,9 @@ and debugging features to be accessed\.
 After that, commands are issued as below\.
 .
 .P
-To get a complete listing of available commands, type \fBhelp\fR at the
-lnetctl prompt\. To get basic help on the meaning and syntax of a command
+To get a complete listing of available commands, type
+.B --list-commands
+at the lnetctl prompt\. To get basic help on the meaning and syntax of a command
 type \fB<command>\fR \-\-help\.
 .
 .P
@@ -326,6 +330,37 @@ Show LNET statistics
 .br
 
 .
+.SS "Showing Peer Credits"
+.
+.TP
+\fBlnetctl peer_credits\fR
+Show details on configured peer credits
+.
+.br
+\-> Peer nid
+.
+.br
+\-> State
+.
+.br
+\-> Reference count on the peer
+.
+.br
+\-> Maximum transmit credits
+.
+.br
+\-> Available transmit credits
+.
+.br
+\-> Available router credits
+.
+.br
+\-> Minimum router credits\.
+.
+.SH "OPTIONS"
+.TP
+.B --list-commands
+Output a list of the commands supported by the lnetctl utility
 .SH "EXAMPLES"
 .
 .SS "Initializing LNet after load"

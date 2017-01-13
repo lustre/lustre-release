@@ -92,11 +92,6 @@ static int lfs_setquota(int argc, char **argv);
 static int lfs_quota(int argc, char **argv);
 #endif
 static int lfs_flushctx(int argc, char **argv);
-static int lfs_join(int argc, char **argv);
-static int lfs_lsetfacl(int argc, char **argv);
-static int lfs_lgetfacl(int argc, char **argv);
-static int lfs_rsetfacl(int argc, char **argv);
-static int lfs_rgetfacl(int argc, char **argv);
 static int lfs_cp(int argc, char **argv);
 static int lfs_ls(int argc, char **argv);
 static int lfs_poollist(int argc, char **argv);
@@ -117,6 +112,7 @@ static int lfs_hsm_cancel(int argc, char **argv);
 static int lfs_swap_layouts(int argc, char **argv);
 static int lfs_mv(int argc, char **argv);
 static int lfs_ladvise(int argc, char **argv);
+static int lfs_list_commands(int argc, char **argv);
 
 /* Setstripe and migrate share mostly the same parameters */
 #define SSM_CMD_COMMON(cmd) \
@@ -236,9 +232,6 @@ command_t cmdlist[] = {
          "Display the status of MDS or OSTs (as specified in the command)\n"
          "or all the servers (MDS and OSTs).\n"
          "usage: check <osts|mds|servers>"},
-        {"join", lfs_join, 0,
-         "join two lustre files into one.\n"
-         "obsolete, HEAD does not support it anymore.\n"},
         {"osts", lfs_osts, 0, "list OSTs connected to client "
          "[for specified path only]\n" "usage: osts [path]"},
         {"mdts", lfs_mdts, 0, "list MDTs connected to client "
@@ -282,18 +275,6 @@ command_t cmdlist[] = {
 #endif
         {"flushctx", lfs_flushctx, 0, "Flush security context for current user.\n"
          "usage: flushctx [-k] [mountpoint...]"},
-        {"lsetfacl", lfs_lsetfacl, 0,
-         "Remote user setfacl for user/group on the same remote client.\n"
-         "usage: lsetfacl [-bkndRLPvh] [{-m|-x} acl_spec] [{-M|-X} acl_file] file ..."},
-        {"lgetfacl", lfs_lgetfacl, 0,
-         "Remote user getfacl for user/group on the same remote client.\n"
-         "usage: lgetfacl [-dRLPvh] file ..."},
-        {"rsetfacl", lfs_rsetfacl, 0,
-         "Remote user setfacl for user/group on other clients.\n"
-         "usage: rsetfacl [-bkndRLPvh] [{-m|-x} acl_spec] [{-M|-X} acl_file] file ..."},
-        {"rgetfacl", lfs_rgetfacl, 0,
-         "Remote user getfacl for user/group on other clients.\n"
-         "usage: rgetfacl [-dRLPvh] file ..."},
         {"cp", lfs_cp, 0,
          "Remote user copy files and directories.\n"
          "usage: cp [OPTION]... [-T] SOURCE DEST\n\tcp [OPTION]... SOURCE... DIRECTORY\n\tcp [OPTION]... -t DIRECTORY SOURCE..."},
@@ -393,6 +374,8 @@ command_t cmdlist[] = {
 	{"quit", Parser_quit, 0, "quit"},
 	{"--version", Parser_version, 0,
 	 "output build version of the utility and exit"},
+	{"--list-commands", lfs_list_commands, 0,
+	 "list commands supported by the utility and exit"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -2682,13 +2665,6 @@ static int lfs_check(int argc, char **argv)
 
 }
 
-static int lfs_join(int argc, char **argv)
-{
-        fprintf(stderr, "join two lustre files into one.\n"
-                        "obsolete, HEAD does not support it anymore.\n");
-        return 0;
-}
-
 #ifdef HAVE_SYS_QUOTA_H
 #define ARG2INT(nr, str, msg)                                           \
 do {                                                                    \
@@ -3507,34 +3483,6 @@ static int lfs_flushctx(int argc, char **argv)
                 }
         }
         return rc;
-}
-
-static int lfs_lsetfacl(int argc, char **argv)
-{
-	fprintf(stderr, "local client sets facl for remote client.\n"
-		"obsolete, does not support it anymore.\n");
-	return 0;
-}
-
-static int lfs_lgetfacl(int argc, char **argv)
-{
-	fprintf(stderr, "local client gets facl for remote client.\n"
-		"obsolete, does not support it anymore.\n");
-	return 0;
-}
-
-static int lfs_rsetfacl(int argc, char **argv)
-{
-	fprintf(stderr, "remote client sets facl for remote client.\n"
-		"obsolete, does not support it anymore.\n");
-	return 0;
-}
-
-static int lfs_rgetfacl(int argc, char **argv)
-{
-	fprintf(stderr, "remote client gets facl for remote client.\n"
-		"obsolete, does not support it anymore.\n");
-	return 0;
 }
 
 static int lfs_cp(int argc, char **argv)
@@ -4564,6 +4512,15 @@ next:
 			rc = rc2;
 	}
 	return rc;
+}
+
+static int lfs_list_commands(int argc, char **argv)
+{
+	char buffer[81] = ""; /* 80 printable chars + terminating NUL */
+
+	Parser_list_commands(cmdlist, buffer, sizeof(buffer), NULL, 0, 4);
+
+	return 0;
 }
 
 int main(int argc, char **argv)
