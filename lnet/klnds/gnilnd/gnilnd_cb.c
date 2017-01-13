@@ -1265,10 +1265,10 @@ kgnilnd_tx_done(kgn_tx_t *tx, int completion)
 	 * could free up lnet credits, resulting in a call chain back into
 	 * the LND via kgnilnd_send and friends */
 
-	lnet_finalize(ni, lntmsg0, status0);
+	lnet_finalize(lntmsg0, status0);
 
 	if (lntmsg1 != NULL) {
-		lnet_finalize(ni, lntmsg1, status1);
+		lnet_finalize(lntmsg1, status1);
 	}
 }
 
@@ -2338,7 +2338,7 @@ kgnilnd_setup_rdma(lnet_ni_t *ni, kgn_rx_t *rx, lnet_msg_t *lntmsg, int mlen)
 	kgnilnd_tx_done(tx, rc);
 	kgnilnd_nak_rdma(conn, done_type, rc, rxmsg->gnm_u.get.gngm_cookie, ni->ni_nid);
  failed_0:
-	lnet_finalize(ni, lntmsg, rc);
+	lnet_finalize(lntmsg, rc);
 }
 
 int
@@ -2464,7 +2464,7 @@ kgnilnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 
 		/* someone closed the conn after we copied this out, nuke it */
 		kgnilnd_consume_rx(rx);
-		lnet_finalize(ni, lntmsg, conn->gnc_error);
+		lnet_finalize(lntmsg, conn->gnc_error);
 		RETURN(0);
 	}
 	read_unlock(&kgnilnd_data.kgn_peer_conn_lock);
@@ -2538,14 +2538,14 @@ kgnilnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 				&rxmsg[1], 0, mlen);
 
 		kgnilnd_consume_rx(rx);
-		lnet_finalize(ni, lntmsg, 0);
+		lnet_finalize(lntmsg, 0);
 		RETURN(0);
 
 	case GNILND_MSG_PUT_REQ:
 		/* LNET wants to truncate or drop transaction, sending NAK */
 		if (mlen == 0) {
 			kgnilnd_consume_rx(rx);
-			lnet_finalize(ni, lntmsg, 0);
+			lnet_finalize(lntmsg, 0);
 
 			/* only error if lntmsg == NULL, otherwise we are just
 			 * short circuiting the rdma process of 0 bytes */
@@ -2604,7 +2604,7 @@ nak_put_req:
 		/* LNET wants to truncate or drop transaction, sending NAK */
 		if (mlen == 0) {
 			kgnilnd_consume_rx(rx);
-			lnet_finalize(ni, lntmsg, 0);
+			lnet_finalize(lntmsg, 0);
 
 			/* only error if lntmsg == NULL, otherwise we are just
 			 * short circuiting the rdma process of 0 bytes */
@@ -2674,7 +2674,7 @@ nak_get_req_rev:
 		/* LNET wants to truncate or drop transaction, sending NAK */
 		if (mlen == 0) {
 			kgnilnd_consume_rx(rx);
-			lnet_finalize(ni, lntmsg, 0);
+			lnet_finalize(lntmsg, 0);
 
 			/* only error if lntmsg == NULL, otherwise we are just
 			 * short circuiting the rdma process of 0 bytes */

@@ -648,7 +648,7 @@ delayed_msg_process(struct list_head *msg_list, bool drop)
 		}
 
 		lnet_drop_message(ni, cpt, msg->msg_private, msg->msg_len);
-		lnet_finalize(ni, msg, rc);
+		lnet_finalize(msg, rc);
 	}
 }
 

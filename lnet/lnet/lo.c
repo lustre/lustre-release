@@ -73,10 +73,10 @@ lolnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 						    sendmsg->msg_offset, mlen);
 		}
 
-		lnet_finalize(ni, lntmsg, 0);
+		lnet_finalize(lntmsg, 0);
 	}
 
-	lnet_finalize(ni, sendmsg, 0);
+	lnet_finalize(sendmsg, 0);
 	return 0;
 }
 

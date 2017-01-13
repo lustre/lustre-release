@@ -639,7 +639,7 @@ struct lnet_msg *lnet_create_reply_msg(struct lnet_ni *ni,
 void lnet_set_reply_msg_len(struct lnet_ni *ni, struct lnet_msg *msg,
 			    unsigned int len);
 
-void lnet_finalize(struct lnet_ni *ni, struct lnet_msg *msg, int rc);
+void lnet_finalize(struct lnet_msg *msg, int rc);
 
 void lnet_drop_message(struct lnet_ni *ni, int cpt, void *private,
 		       unsigned int nob);

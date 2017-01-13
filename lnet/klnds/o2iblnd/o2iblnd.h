@@ -1198,8 +1198,7 @@ void kiblnd_close_conn (kib_conn_t *conn, int error);
 void kiblnd_close_conn_locked (kib_conn_t *conn, int error);
 
 void kiblnd_launch_tx(struct lnet_ni *ni, kib_tx_t *tx, lnet_nid_t nid);
-void kiblnd_txlist_done(struct lnet_ni *ni, struct list_head *txlist,
-			int status);
+void kiblnd_txlist_done(struct list_head *txlist, int status);
 
 void kiblnd_qp_event(struct ib_event *event, void *arg);
 void kiblnd_cq_event(struct ib_event *event, void *arg);

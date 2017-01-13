@@ -1649,9 +1649,8 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
                        conn->ksnc_rx_nob_wanted, conn->ksnc_rx_nob_left,
 		       cfs_duration_sec(cfs_time_sub(ktime_get_real_seconds(),
                                         last_rcv)));
-                lnet_finalize (conn->ksnc_peer->ksnp_ni,
-                               conn->ksnc_cookie, -EIO);
-                break;
+		lnet_finalize(conn->ksnc_cookie, -EIO);
+		break;
         case SOCKNAL_RX_LNET_HEADER:
                 if (conn->ksnc_rx_started)
 			CERROR("Incomplete receive of lnet header from %s, "

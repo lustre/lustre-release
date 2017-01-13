@@ -524,7 +524,7 @@ kiblnd_del_peer(struct lnet_ni *ni, lnet_nid_t nid)
 
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-	kiblnd_txlist_done(ni, &zombies, -EIO);
+	kiblnd_txlist_done(&zombies, -EIO);
 
 	return rc;
 }
