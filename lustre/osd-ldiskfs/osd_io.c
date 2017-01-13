@@ -969,9 +969,9 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
         struct osd_iobuf       *iobuf = &oti->oti_iobuf;
         struct inode           *inode = osd_dt_obj(dt)->oo_inode;
         struct osd_device      *osd   = osd_obj2dev(osd_dt_obj(dt));
-        struct timeval          start;
-        struct timeval          end;
-        unsigned long           timediff;
+	ktime_t start;
+	ktime_t end;
+	s64 timediff;
         ssize_t                 isize;
         __s64                   maxidx;
         int                     rc = 0;
@@ -992,7 +992,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
         if (isize > osd->od_readcache_max_filesize)
                 cache = 0;
 
-	do_gettimeofday(&start);
+	start = ktime_get();
 	for (i = 0; i < npages; i++) {
 
 		if (cache == 0)
@@ -1025,8 +1025,8 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 			kunmap(lnb[i].lnb_page);
 		}
 	}
-	do_gettimeofday(&end);
-	timediff = cfs_timeval_sub(&end, &start, NULL);
+	end = ktime_get();
+	timediff = ktime_us_delta(end, start);
 	lprocfs_counter_add(osd->od_stats, LPROC_OSD_GET_PAGE, timediff);
 
         if (iobuf->dr_npages) {
@@ -1318,9 +1318,9 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
         struct osd_iobuf *iobuf = &oti->oti_iobuf;
         struct inode *inode = osd_dt_obj(dt)->oo_inode;
         struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
-        struct timeval start, end;
-        unsigned long timediff;
 	int rc = 0, i, cache = 0, cache_hits = 0, cache_misses = 0;
+	ktime_t start, end;
+	s64 timediff;
 	loff_t isize;
 
         LASSERT(inode);
@@ -1336,7 +1336,7 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 	if (isize > osd->od_readcache_max_filesize)
 		cache = 0;
 
-	do_gettimeofday(&start);
+	start = ktime_get();
 	for (i = 0; i < npages; i++) {
 
 		if (isize <= lnb[i].lnb_file_offset)
@@ -1360,8 +1360,8 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 			generic_error_remove_page(inode->i_mapping,
 						  lnb[i].lnb_page);
 	}
-	do_gettimeofday(&end);
-	timediff = cfs_timeval_sub(&end, &start, NULL);
+	end = ktime_get();
+	timediff = ktime_us_delta(end, start);
 	lprocfs_counter_add(osd->od_stats, LPROC_OSD_GET_PAGE, timediff);
 
 	if (cache_hits != 0)

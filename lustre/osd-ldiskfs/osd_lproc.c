@@ -121,12 +121,13 @@ static void display_brw_stats(struct seq_file *seq, char *name, char *units,
 
 static void brw_stats_show(struct seq_file *seq, struct brw_stats *brw_stats)
 {
-	struct timeval now;
+	struct timespec64 now;
 
 	/* this sampling races with updates */
-	do_gettimeofday(&now);
-	seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
-		   now.tv_sec, now.tv_usec);
+	ktime_get_real_ts64(&now);
+
+	seq_printf(seq, "snapshot_time:         %lld.%09ld (secs.nsecs)\n",
+		   (s64)now.tv_sec, now.tv_nsec);
 
         display_brw_stats(seq, "pages per bulk r/w", "rpcs",
                           &brw_stats->hist[BRW_R_PAGES],
