@@ -73,8 +73,6 @@ typedef __u32 lnet_pid_t;
 #define LNET_PID_USERFLAG 0x80000000 /* set in userspace peers */
 #define LNET_PID_LUSTRE 12345
 
-#define LNET_TIME_FOREVER    (-1)
-
 /* how an LNET NID encodes net:address */
 /** extract the address part of an lnet_nid_t */
 

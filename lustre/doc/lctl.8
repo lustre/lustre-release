@@ -59,9 +59,11 @@ mount -t lustre <MDT partition> -o nosvc <mount point>
 Note the replace_nids command skips any invalidated records in the configuration log.
 The previous log is backed up with the suffix '.bak'.
 .TP
-.BI ping " <nid> "
+.BI ping " <nid> timeout"
 Check LNET connectivity via an LNET ping. This will use the fabric
-appropriate to the specified NID.
+appropriate to the specified NID. By default lctl will attempt to
+reach the remote node up to 120 seconds and then timeout. To disable
+the timeout just specify an negative timeout value.
 .TP
 .BI interface_list
 Print the network interface information for a given

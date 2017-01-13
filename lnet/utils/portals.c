@@ -954,9 +954,14 @@ int jt_ptl_ping(int argc, char **argv)
                 }
         }
 
-        if (argc > 2)
-                timeout = 1000 * atol(argv[2]);
-        else
+	if (argc > 2) {
+		timeout = 1000 * atol(argv[2]);
+		if (timeout > 120 * 1000) {
+			fprintf(stderr, "Timeout %s is to large\n",
+				argv[2]);
+			return -1;
+		}
+	} else
                 timeout = 1000;                 /* default 1 second timeout */
 
         LIBCFS_IOC_INIT (data);

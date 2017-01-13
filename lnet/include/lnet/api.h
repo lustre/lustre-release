@@ -174,7 +174,7 @@ int LNetEQWait(lnet_handle_eq_t  eventq_in,
 
 int LNetEQPoll(lnet_handle_eq_t *eventqs_in,
 	       int		 neq_in,
-	       int		 timeout_ms,
+	       signed long	 timeout,
 	       lnet_event_t	*event_out,
 	       int		*which_eq_out);
 /** @} lnet_eq */
