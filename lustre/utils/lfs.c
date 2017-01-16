@@ -399,7 +399,7 @@ command_t cmdlist[] = {
 	 "usage: ladvise [--advice|-a ADVICE] [--start|-s START[kMGT]]\n"
 	 "               [--background|-b]\n"
 	 "               {[--end|-e END[kMGT]] | [--length|-l LENGTH[kMGT]]}\n"
-	 "               <file> ..."},
+	 "               <file> ...\n"},
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},

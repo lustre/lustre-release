@@ -14433,65 +14433,87 @@ ladvise_no_ioctl()
 	return 1
 }
 
+percent() {
+	bc <<<"scale=2; ($1 - $2) * 100 / $2"
+}
+
+# run a random read IO workload
+# usage: random_read_iops <filename> <filesize> <iosize>
+random_read_iops() {
+	local file=$1
+	local fsize=$2
+	local iosize=${3:-4096}
+
+	$READS -f $file -s $fsize -b $iosize -n $((fsize / iosize)) -t 60 |
+		sed -e '/^$/d' -e 's#.*s, ##' -e 's#MB/s##'
+}
+
+drop_file_oss_cache() {
+	local file="$1"
+	local nodes="$2"
+
+	$LFS ladvise -a dontneed $file 2>/dev/null ||
+		do_nodes $nodes "echo 3 > /proc/sys/vm/drop_caches"
+}
+
 ladvise_willread_performance()
 {
 	local repeat=10
+	local average_origin=0
 	local average_cache=0
 	local average_ladvise=0
 
 	for ((i = 1; i <= $repeat; i++)); do
 		echo "Iter $i/$repeat: reading without willread hint"
 		cancel_lru_locks osc
-		do_nodes $(comma_list $(osts_nodes)) \
-			"echo 3 > /proc/sys/vm/drop_caches"
-		local speed_origin=$($READS -f $DIR/$tfile -s $size \
-			-b 4096 -n $((size / 4096)) -t 60 |
-			sed -e '/^$/d' -e 's#.*s, ##' -e 's#MB/s##')
+		drop_file_oss_cache $DIR/$tfile $(comma_list $(osts_nodes))
+		local speed_origin=$(random_read_iops $DIR/$tfile $size)
+		echo "Iter $i/$repeat: uncached speed: $speed_origin"
+		average_origin=$(bc <<<"$average_origin + $speed_origin")
 
-		echo "Iter $i/$repeat: Reading again without willread hint"
 		cancel_lru_locks osc
-		local speed_cache=$($READS -f $DIR/$tfile -s $size \
-			-b 4096 -n $((size / 4096)) -t 60 |
-			sed -e '/^$/d' -e 's#.*s, ##' -e 's#MB/s##')
+		local speed_cache=$(random_read_iops $DIR/$tfile $size)
+		echo "Iter $i/$repeat: OSS cache speed: $speed_cache"
+		average_cache=$(bc <<<"$average_cache + $speed_cache")
 
-		echo "Iter $i/$repeat: reading with willread hint"
 		cancel_lru_locks osc
-		do_nodes $(comma_list $(osts_nodes)) \
-			"echo 3 > /proc/sys/vm/drop_caches"
-		lfs ladvise -a willread $DIR/$tfile ||
-			error "Ladvise failed"
-		local speed_ladvise=$($READS -f $DIR/$tfile -s $size \
-			-b 4096 -n $((size / 4096)) -t 60 |
-			sed -e '/^$/d' -e 's#.*s, ##' -e 's#MB/s##')
-
-		local cache_speedup=$(echo "scale=2; \
-			($speed_cache-$speed_origin)/$speed_origin*100" | bc)
-		cache_speedup=$(echo ${cache_speedup%.*})
-		echo "Iter $i/$repeat: cache speedup: $cache_speedup%"
-		average_cache=$((average_cache + cache_speedup))
-
-		local ladvise_speedup=$(echo "scale=2; \
-			($speed_ladvise-$speed_origin)/$speed_origin*100" | bc)
-		ladvise_speedup=$(echo ${ladvise_speedup%.*})
-		echo "Iter $i/$repeat: ladvise speedup: $ladvise_speedup%"
-		average_ladvise=$((average_ladvise + ladvise_speedup))
+		drop_file_oss_cache $DIR/$tfile $(comma_list $(osts_nodes))
+		$LFS ladvise -a willread $DIR/$tfile || error "ladvise failed"
+		local speed_ladvise=$(random_read_iops $DIR/$tfile $size)
+		echo "Iter $i/$repeat: ladvise speed: $speed_ladvise"
+		average_ladvise=$(bc <<<"$average_ladvise + $speed_ladvise")
 	done
-	average_cache=$((average_cache / repeat))
-	average_ladvise=$((average_ladvise / repeat))
+	average_origin=$(bc <<<"scale=2; $average_origin / $repeat")
+	average_cache=$(bc <<<"scale=2; $average_cache / $repeat")
+	average_ladvise=$(bc <<<"scale=2; $average_ladvise / $repeat")
 
-	if [ $average_cache -lt 20 ]; then
-		echo "Speedup with cache is less than 20% ($average_cache%),"\
-			"skipping check of speedup with willread:"\
-			"$average_ladvise%"
+	speedup_cache=$(percent $average_cache $average_origin)
+	speedup_ladvise=$(percent $average_ladvise $average_origin)
+
+	echo "Average uncached read: $average_origin"
+	echo "Average speedup with OSS cached read: " \
+		"$average_cache = +$speedup_cache%"
+	echo "Average speedup with ladvise willread: " \
+		"$average_ladvise = +$speedup_ladvise%"
+
+	local lowest_speedup=20
+	if [ ${average_cache%.*} -lt $lowest_speedup ]; then
+		echo "Speedup with OSS cached read less than $lowest_speedup%, "
+			"got $average_cache%. Skipping ladvise willread check."
 		return 0
 	fi
 
-	local lowest_speedup=$((average_cache / 2))
-	[ $average_ladvise -gt $lowest_speedup ] ||
+	# the test won't work on ZFS until it supports 'ladvise dontneed', but
+	# it is still good to run until then to exercise 'ladvise willread'
+	! $LFS ladvise -a dontneed $DIR/$tfile &&
+		[ "$(facet_fstype ost1)" = "zfs" ] &&
+		echo "osd-zfs does not support dontneed or drop_caches" &&
+		return 0
+
+	lowest_speedup=$(bc <<<"scale=2; $average_cache / 2")
+	[ ${average_ladvise%.*} -gt $lowest_speedup ] ||
 		error_not_in_vm "Speedup with willread is less than " \
-			   "$lowest_speedup%, got $average_ladvise%"
-	echo "Speedup with willread ladvise: $average_ladvise%"
-	echo "Speedup with cache: $average_cache%"
+			"$lowest_speedup%, got $average_ladvise%"
 }
 
 test_255a() {
@@ -14581,6 +14603,8 @@ facet_meminfo() {
 }
 
 test_255b() {
+	lfs setstripe -c 1 -i 0 $DIR/$tfile
+
 	ladvise_no_type dontneed $DIR/$tfile &&
 		skip "dontneed ladvise is not supported" && return
 
@@ -14590,10 +14614,9 @@ test_255b() {
 	[ $(lustre_version_code ost1) -lt $(version_code 2.8.54) ] &&
 		skip "lustre < 2.8.54 does not support ladvise" && return
 
-	[ "$(facet_fstype ost1)" = "zfs" ] &&
-		skip "zfs-osd does not support dontneed advice" && return
-
-	lfs setstripe -c 1 -i 0 $DIR/$tfile
+	! $LFS ladvise -a dontneed $DIR/$tfile &&
+		[ "$(facet_fstype ost1)" = "zfs" ] &&
+		skip "zfs-osd does not support 'ladvise dontneed'" && return
 
 	local size_mb=100
 	local size=$((size_mb * 1048576))

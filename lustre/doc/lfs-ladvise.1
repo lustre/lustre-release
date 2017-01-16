@@ -10,8 +10,11 @@ lfs ladvise \- give file access advices or hints to server.
 .br
 .SH DESCRIPTION
 Give file access advices or hints to Lustre server side, usually OSS. This lfs
-utility is simlar to Linux fadvise() system call, except it can forward the
-advices from Lustre clients to servers.
+command is simlar to the Linux
+.BR fadvise64 (2)
+system call and
+.BR posix_fadvise (2),
+except it can forward the hints from Lustre clients to remote servers.
 .SH OPTIONS
 .TP
 \fB\-a\fR, \fB\-\-advice\fR=\fIADVICE\fR
@@ -38,18 +41,20 @@ File range has length of \fILENGTH\fR. This option may not be specified at the
 same time as the -e option.
 .SH NOTE
 .PP
-Typically, the "lfs ladvise" forwards the advice to Lustre servers without
-guaranteeing what and when servers will react to the advice. Actions may or
-may not triggered when the advices are recieved, depending on the type of the
-advice as well as the real-time decision of the affected server-side
-components.
+Typically,
+.B lfs ladvise
+forwards the advice to Lustre servers without
+guaranteeing how and when servers will react to the advice. Actions may or
+may not be triggered when the advices are recieved, depending on the type of
+the advice, whether the backing filesystem type supports that advice, as well
+as the real-time decision of the affected server-side components.
 
 A typical usage of ladvise is to enable applications and users with external
 knowledge to intervene in server-side cache management. For example, if a
-bunch of different clients are doing small random reads of a file, prefetching
+group of different clients are doing small random reads of a file, prefetching
 pages into OSS cache with big linear reads before the random IO is a net
 benefit. Fetching that data into each client cache with fadvise() may not
-be, due to much more data being sent to the client.
+be a benefit if any individual client only reads a subset of the file.
 
 The main difference between Linux fadvise() system call and ladvise is that
 fadvise() is only a client side mechanism that does not pass the advice to the
@@ -57,18 +62,19 @@ filesystem, while ladvise can send advices or hints to Lustre server sides.
 
 .SH EXAMPLES
 .TP
-.B $ lfs ladvise -a willread -s 0 -e 1048576000 /mnt/lustre/file1
+.B $ lfs ladvise -a willread -s 0 -e 1024M /mnt/lustre/file1
 This gives the OST(s) holding the first 1GB of \fB/mnt/lustre/file1\fR a hint
-that the first 1GB of the file will be read soon.
+that the first 1GB of that file will be read soon.
 .TP
-.B $ lfs ladvise -a dontneed -s 0 -e 1048576000 /mnt/lustre/file1
+.B $ lfs ladvise -a dontneed -s 0 -e 1G /mnt/lustre/file1
 This gives the OST(s) holding the first 1GB of \fB/mnt/lustre/file1\fR a hint
 that the first 1GB of file will not be read in the near future, thus the OST(s)
-could clear the cache of the file in the memory.
+could clear the cache of that file in the memory.
 .SH AVAILABILITY
 The lfs ladvise command is part of the Lustre filesystem.
 .SH SEE ALSO
 .BR lfs (1),
-.BR fadvise (2),
+.BR fadvise64 (2),
+.BR posix_fadvise (2),
 .BR llapi_ladvise (3),
 .BR lustre (7)
