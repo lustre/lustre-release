@@ -313,7 +313,7 @@ cfs_wi_sched_destroy(struct cfs_wi_sched *sched)
 		int i = 2;
 
 		while (sched->ws_nthreads > 0) {
-			CDEBUG(IS_PO2(++i) ? D_WARNING : D_NET,
+			CDEBUG(is_power_of_2(++i) ? D_WARNING : D_NET,
 			       "waiting for %d threads of WI sched[%s] to "
 			       "terminate\n", sched->ws_nthreads,
 			       sched->ws_name);

@@ -382,7 +382,7 @@ lnet_peer_ni_finalize_wait(struct lnet_peer_table *ptable)
 	while (ptable->pt_zombies) {
 		spin_unlock(&ptable->pt_zombie_lock);
 
-		if (IS_PO2(i)) {
+		if (is_power_of_2(i)) {
 			CDEBUG(D_WARNING,
 			       "Waiting for %d zombies on peer table\n",
 			       ptable->pt_zombies);
