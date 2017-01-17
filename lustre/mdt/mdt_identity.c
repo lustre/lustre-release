@@ -102,7 +102,7 @@ static int mdt_identity_do_upcall(struct upcall_cache *cache,
                   [1] = "PATH=/sbin:/usr/sbin",
                   [2] = NULL
         };
-        struct timeval start, end;
+	ktime_t start, end;
         int rc;
         ENTRY;
 
@@ -120,22 +120,20 @@ static int mdt_identity_do_upcall(struct upcall_cache *cache,
 	argv[0] = cache->uc_upcall;
 	snprintf(keystr, sizeof(keystr), "%llu", entry->ue_key);
 
-	do_gettimeofday(&start);
+	start = ktime_get();
 	rc = call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
-	do_gettimeofday(&end);
+	end = ktime_get();
 	if (rc < 0) {
-                CERROR("%s: error invoking upcall %s %s %s: rc %d; "
-                       "check /proc/fs/lustre/mdt/%s/identity_upcall, "
-                       "time %ldus\n",
-                       cache->uc_name, argv[0], argv[1], argv[2], rc,
-                       cache->uc_name, cfs_timeval_sub(&end, &start, NULL));
-        } else {
-                CDEBUG(D_HA, "%s: invoked upcall %s %s %s, time %ldus\n",
-                       cache->uc_name, argv[0], argv[1], argv[2],
-                       cfs_timeval_sub(&end, &start, NULL));
-                rc = 0;
-        }
-        EXIT;
+		CERROR("%s: error invoking upcall %s %s %s: rc %d; check /proc/fs/lustre/mdt/%s/identity_upcall, time %ldus\n",
+		       cache->uc_name, argv[0], argv[1], argv[2], rc,
+		       cache->uc_name, (long)ktime_us_delta(end, start));
+	} else {
+		CDEBUG(D_HA, "%s: invoked upcall %s %s %s, time %ldus\n",
+		       cache->uc_name, argv[0], argv[1], argv[2],
+		       (long)ktime_us_delta(end, start));
+		rc = 0;
+	}
+	EXIT;
 out:
 	up_read(&cache->uc_upcall_rwsem);
 	return rc;
