@@ -2426,10 +2426,10 @@ run_test 31p "remove of open striped directory"
 cleanup_test32_mount() {
 	local rc=0
 	trap 0
-	local loopdev=$(losetup -a | grep $EXT2_DEV | sed -ne 's/:.*$/p')
+	local loopdev=$(losetup -a | grep $EXT2_DEV | sed -ne 's/:.*$//p')
 	$UMOUNT $DIR/$tdir/ext2-mountpoint || rc=$?
 	losetup -d $loopdev || true
-	rm -rf $DIR/$tdir/ext2-mountpoint
+	rm -rf $DIR/$tdir
 	return $rc
 }
 
@@ -2613,59 +2613,49 @@ test_32o() {
 run_test 32o "stat d32o/symlink->tmp/symlink->lustre-root/$tfile"
 
 test_32p() {
-    log 32p_1
+	log 32p_1
 	rm -fr $DIR/d32p
-    log 32p_2
+	log 32p_2
 	rm -f $DIR/$tfile
-    log 32p_3
+	log 32p_3
 	touch $DIR/$tfile
-    log 32p_4
+	log 32p_4
 	test_mkdir -p $DIR/d32p/tmp
-    log 32p_5
+	log 32p_5
 	TMP_DIR=$DIR/d32p/tmp
-    log 32p_6
+	log 32p_6
 	ln -s $DIR/$tfile $TMP_DIR/symlink12
-    log 32p_7
+	log 32p_7
 	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02
-    log 32p_8
+	log 32p_8
 	cat $DIR/d32p/tmp/symlink12 || error
-    log 32p_9
+	log 32p_9
 	cat $DIR/d32p/symlink02 || error
-    log 32p_10
+	log 32p_10
 }
 run_test 32p "open d32p/symlink->tmp/symlink->lustre-root/$tfile"
-
-cleanup_testdir_mount() {
-	local rc=0
-	trap 0
-	local loopdev=$(losetup -a | grep $EXT2_DEV | sed -ne 's/:.*$/p')
-	$UMOUNT $DIR/$tdir || rc=$?
-	losetup -d $loopdev || true
-	rm -rf $DIR/$tdir
-	return $rc
-}
 
 test_32q() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
-	trap cleanup_testdir_mount EXIT
-	test_mkdir -p $DIR/$tdir
-        touch $DIR/$tdir/under_the_mount
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir
-	ls $DIR/$tdir | grep "\<under_the_mount\>" && error
-	cleanup_testdir_mount
+	trap cleanup_test32_mount EXIT
+	test_mkdir -p $DIR/$tdir/ext2-mountpoint
+	touch $DIR/$tdir/ext2-mountpoint/under_the_mount
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint
+	ls $DIR/$tdir/ext2-mountpoint | grep "\<under_the_mount\>" && error
+	cleanup_test32_mount
 }
 run_test 32q "stat follows mountpoints in Lustre (should return error)"
 
 test_32r() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
-	trap cleanup_testdir_mount EXIT
-	test_mkdir -p $DIR/$tdir
-        touch $DIR/$tdir/under_the_mount
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir
-	ls $DIR/$tdir | grep -q under_the_mount && error || true
-	cleanup_testdir_mount
+	trap cleanup_test32_mount EXIT
+	test_mkdir -p $DIR/$tdir/ext2-mountpoint
+	touch $DIR/$tdir/ext2-mountpoint/under_the_mount
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint
+	ls $DIR/$tdir/ext2-mountpoint | grep -q under_the_mount && error || true
+	cleanup_test32_mount
 }
 run_test 32r "opendir follows mountpoints in Lustre (should return error)"
 
