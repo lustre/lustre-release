@@ -1013,8 +1013,10 @@ int ll_merge_attr(const struct lu_env *env, struct inode *inode)
 	 * All in all, the atime in Lustre does not strictly comply with
 	 * POSIX. Solving this problem needs to send an RPC to MDT for each
 	 * read, this will hurt performance. */
-	if (LTIME_S(inode->i_atime) < lli->lli_atime)
+	if (LTIME_S(inode->i_atime) < lli->lli_atime || lli->lli_update_atime) {
 		LTIME_S(inode->i_atime) = lli->lli_atime;
+		lli->lli_update_atime = 0;
+	}
 	LTIME_S(inode->i_mtime) = lli->lli_mtime;
 	LTIME_S(inode->i_ctime) = lli->lli_ctime;
 
