@@ -772,11 +772,26 @@ static inline void i_gid_write(struct inode *inode, gid_t gid)
 }
 #endif
 
+#ifdef HAVE_LDISKFS_INFO_JINODE
+# define osd_attach_jinode(inode) ldiskfs_inode_attach_jinode(inode)
+#else  /* HAVE_LDISKFS_INFO_JINODE */
+# define osd_attach_jinode(inode) 0
+#endif /* HAVE_LDISKFS_INFO_JINODE */
+
 #ifdef LDISKFS_HT_MISC
 # define osd_journal_start_sb(sb, type, nblock) \
 		ldiskfs_journal_start_sb(sb, type, nblock)
-# define osd_ldiskfs_append(handle, inode, nblock) \
-		ldiskfs_append(handle, inode, nblock)
+static inline struct buffer_head *osd_ldiskfs_append(handle_t *handle,
+						     struct inode *inode,
+						     ldiskfs_lblk_t *nblock)
+{
+	int rc;
+
+	rc = osd_attach_jinode(inode);
+	if (rc)
+		return ERR_PTR(rc);
+	return ldiskfs_append(handle, inode, nblock);
+}
 # define osd_ldiskfs_find_entry(dir, name, de, inlined, lock) \
 		(__ldiskfs_find_entry(dir, name, de, inlined, lock) ?: \
 		 ERR_PTR(-ENOENT))
@@ -1213,23 +1228,29 @@ static inline struct buffer_head *__ldiskfs_bread(handle_t *handle,
 						  ldiskfs_lblk_t block,
 						  int create)
 {
-#ifdef HAVE_EXT4_BREAD_4ARGS
-	return ldiskfs_bread(handle, inode, block, create);
-#else
+	int rc = 0;
 	struct buffer_head *bh;
-	int error = 0;
 
-	bh = ldiskfs_bread(handle, inode, block, create, &error);
-	if (bh == NULL && error != 0)
-		bh = ERR_PTR(error);
+	if (create) {
+		rc = osd_attach_jinode(inode);
+		if (rc)
+			return ERR_PTR(rc);
+	}
+#ifdef HAVE_EXT4_BREAD_4ARGS
+	bh = ldiskfs_bread(handle, inode, block, create);
+#else
 
-	return bh;
+	bh = ldiskfs_bread(handle, inode, block, create, &rc);
+	if (bh == NULL && rc != 0)
+		bh = ERR_PTR(rc);
 #endif
+	return bh;
 }
 
 void ldiskfs_inc_count(handle_t *handle, struct inode *inode);
 void ldiskfs_dec_count(handle_t *handle, struct inode *inode);
 
 void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf);
+
 
 #endif /* _OSD_INTERNAL_H */

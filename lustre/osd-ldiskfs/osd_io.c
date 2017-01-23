@@ -887,17 +887,25 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
 	struct page *fp = NULL;
 	int clen = 0;
 	pgoff_t max_page_index;
+	handle_t *handle = NULL;
 
 	max_page_index = inode->i_sb->s_maxbytes >> PAGE_SHIFT;
 
 	CDEBUG(D_OTHER, "inode %lu: map %d pages from %lu\n",
 		inode->i_ino, pages, (*page)->index);
 
+	if (create) {
+		create = LDISKFS_GET_BLOCKS_CREATE;
+		handle = ldiskfs_journal_current_handle();
+		LASSERT(handle != NULL);
+		rc = osd_attach_jinode(inode);
+		if (rc)
+			return rc;
+	}
 	/* pages are sorted already. so, we just have to find
 	 * contig. space and process them properly */
 	while (i < pages) {
 		long blen, total = 0;
-		handle_t *handle = NULL;
 		struct ldiskfs_map_blocks map = { 0 };
 
 		if (fp == NULL) { /* start new extent */
@@ -917,11 +925,6 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode, struct page **page,
 		/* process found extent */
 		map.m_lblk = fp->index * blocks_per_page;
 		map.m_len = blen = clen * blocks_per_page;
-		if (create) {
-			create = LDISKFS_GET_BLOCKS_CREATE;
-			handle = ldiskfs_journal_current_handle();
-			LASSERT(handle != NULL);
-		}
 cont_map:
 		rc = ldiskfs_map_blocks(handle, inode, &map, create);
 		if (rc >= 0) {
