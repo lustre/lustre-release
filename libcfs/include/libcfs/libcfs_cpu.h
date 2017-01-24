@@ -200,11 +200,6 @@ void cfs_cpt_unset_nodemask(struct cfs_cpt_table *cptab,
  */
 int cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt);
 
-/**
- * return number of HTs in the same core of \a cpu
- */
-int cfs_cpu_ht_nsiblings(int cpu);
-
 /*
  * allocate per-cpu-partition data, returned value is an array of pointers,
  * variable can be indexed by CPU ID.

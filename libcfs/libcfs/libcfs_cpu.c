@@ -209,13 +209,6 @@ cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt)
 EXPORT_SYMBOL(cfs_cpt_spread_node);
 
 int
-cfs_cpu_ht_nsiblings(int cpu)
-{
-	return 1;
-}
-EXPORT_SYMBOL(cfs_cpu_ht_nsiblings);
-
-int
 cfs_cpt_current(struct cfs_cpt_table *cptab, int remap)
 {
 	return 0;

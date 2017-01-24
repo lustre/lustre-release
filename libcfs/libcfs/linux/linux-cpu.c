@@ -68,14 +68,6 @@ static char	*cpu_pattern = "N";
 module_param(cpu_pattern, charp, 0444);
 MODULE_PARM_DESC(cpu_pattern, "CPU partitions pattern");
 
-/* return number of HTs in the same core of \a cpu */
-int
-cfs_cpu_ht_nsiblings(int cpu)
-{
-	return cpumask_weight(topology_sibling_cpumask(cpu));
-}
-EXPORT_SYMBOL(cfs_cpu_ht_nsiblings);
-
 void
 cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 {

@@ -89,7 +89,6 @@ struct cfs_cpt_table {
 };
 
 void cfs_cpu_core_siblings(int cpu, cpumask_t *mask);
-int cfs_cpu_ht_nsiblings(int cpu);
 
 #endif /* CONFIG_SMP */
 
