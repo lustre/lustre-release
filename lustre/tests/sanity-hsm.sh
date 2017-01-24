@@ -4681,7 +4681,7 @@ mdc_change_state() # facet, MDT_pattern, activate|deactivate
 	done
 }
 
-test_402() {
+test_402a() {
 	# make sure there is no running copytool
 	copytool_cleanup
 
@@ -4698,7 +4698,34 @@ test_402() {
 	# reactivate MDCs
 	mdc_change_state $SINGLEAGT "$FSNAME-MDT000." "activate"
 }
-run_test 402 "Copytool start fails if all MDTs are inactive"
+run_test 402a "Copytool start fails if all MDTs are inactive"
+
+test_402b() {
+	copytool_setup
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+	touch $f || error "touch $f failed"
+	local fid=$(path2fid $f)
+
+#define OBD_FAIL_MDS_HSM_CT_REGISTER_NET	0x14d
+	do_facet $SINGLEAGT lctl set_param fail_loc=0x14d
+	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
+
+	# give time for CDT to send request and to keep it for retry
+	wait_for_loop_period
+
+	wait_request_state $fid ARCHIVE WAITING
+
+	do_facet $SINGLEAGT lctl set_param fail_loc=0
+
+	# request should succeed now
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	copytool_cleanup
+}
+run_test 402b "CDT must retry request upon slow start of CT"
 
 test_403() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
