@@ -534,9 +534,8 @@ load_modules_local() {
 	# variable to remote nodes
 	unset MODOPTS_LIBCFS
 
-    [ "$PTLDEBUG" ] && lctl set_param debug="$PTLDEBUG"
-    [ "$SUBSYSTEM" ] && lctl set_param subsystem_debug="${SUBSYSTEM# }"
-    load_module ../lnet/lnet/lnet
+	set_default_debug
+	load_module ../lnet/lnet/lnet
 	case $NETTYPE in
 	o2ib)
 		LNETLND="o2iblnd/ko2iblnd"
