@@ -1928,7 +1928,7 @@ static __u32 __req_capsule_offset(const struct req_capsule *pill,
 				  const struct req_msg_field *field,
 				  enum req_location loc)
 {
-        int offset;
+	unsigned int offset;
 
         offset = field->rmf_offset[pill->rc_fmt->rf_idx][loc];
         LASSERTF(offset > 0, "%s:%s, off=%d, loc=%d\n",
@@ -1936,7 +1936,7 @@ static __u32 __req_capsule_offset(const struct req_capsule *pill,
                             field->rmf_name, offset, loc);
         offset --;
 
-        LASSERT(0 <= offset && offset < REQ_MAX_FIELD_NR);
+	LASSERT(offset < REQ_MAX_FIELD_NR);
         return offset;
 }
 
