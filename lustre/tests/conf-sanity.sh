@@ -8,13 +8,6 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT 101"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-if [ "$FAILURE_MODE" = "HARD" ]; then
-	CONFIG_EXCEPTIONS="24a " &&
-	echo "Except the tests: $CONFIG_EXCEPTIONS for " \
-	     "FAILURE_MODE=$FAILURE_MODE, b=23573" &&
-		ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
-fi
-
 # bug number for skipped test:
 # a tool to create lustre filesystem images
 ALWAYS_EXCEPT="32newtarball $ALWAYS_EXCEPT"
