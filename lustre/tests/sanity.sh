@@ -13311,8 +13311,6 @@ test_225b () {
 	      skip_env "Need to mount OST to test" && return
 	fi
 
-	[ $MDSCOUNT -ge 2 ] &&
-		skip "skipping now for more than one MDT" && return
        local mds=$(facet_host $SINGLEMDS)
        local target=$(do_nodes $mds 'lctl dl' | \
                       awk "{if (\$2 == \"UP\" && \$3 == \"mdt\") {print \$4}}")

@@ -114,15 +114,21 @@ mds_survey_run() {
 }
 
 test_1() {
-    mds_survey_run "mdd" "0"
+	mds_survey_run "mdd" "0"
 }
 run_test 1 "Metadata survey with zero-stripe"
 
 test_2() {
-    if [ $ost_count -eq 0 ]; then
-        skip_env "Need to mount OST to test" && return
-    fi
-    mds_survey_run "mdd" "1"
+	local mdscount=$(get_node_count "$(mdts_nodes)")
+
+	if [ $mdscount -gt 1 ]; then
+		skip_env "Only run this test on single MDS" && return
+	fi
+
+	if [ $ost_count -eq 0 ]; then
+		skip_env "Need to mount OST to test" && return
+	fi
+	mds_survey_run "mdd" "1"
 }
 run_test 2 "Metadata survey with stripe_count = 1"
 

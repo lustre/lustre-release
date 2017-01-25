@@ -2102,6 +2102,24 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 		check_perm = false;
 	}
 
+	if (S_ISDIR(cattr->la_mode) &&
+	    unlikely(spec != NULL && spec->sp_cr_flags & MDS_OPEN_HAS_EA) &&
+	    spec->u.sp_ea.eadata != NULL && spec->u.sp_ea.eadatalen > 0) {
+		const struct lmv_user_md *lum = spec->u.sp_ea.eadata;
+
+		if (unlikely(le32_to_cpu(lum->lum_magic) != LMV_USER_MAGIC) &&
+		    le32_to_cpu(lum->lum_magic) != LMV_USER_MAGIC_V0) {
+			rc = -EINVAL;
+			CERROR("%s: invalid lmv_user_md: magic = %x, "
+			       "stripe_offset = %d, stripe_count = %u: "
+			       "rc = %d\n", mdd2obd_dev(m)->obd_name,
+				le32_to_cpu(lum->lum_magic),
+			       (int)le32_to_cpu(lum->lum_stripe_offset),
+			       le32_to_cpu(lum->lum_stripe_count), rc);
+			return rc;
+		}
+	}
+
 	rc = mdd_may_create(env, obj, pattr, NULL, check_perm);
 	if (rc != 0)
 		RETURN(rc);

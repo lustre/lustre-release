@@ -1954,12 +1954,10 @@ static int lod_declare_xattr_set_lmv(const struct lu_env *env,
 				     struct thandle *th)
 {
 	struct lod_object	*lo = lod_dt_obj(dt);
-	struct lod_device	*lod = lu2lod_dev(dt->do_lu.lo_dev);
-	struct lmv_user_md_v1	*lum;
+	struct lmv_user_md_v1	*lum = lum_buf->lb_buf;
 	int			rc;
 	ENTRY;
 
-	lum = lum_buf->lb_buf;
 	LASSERT(lum != NULL);
 
 	CDEBUG(D_INFO, "lum magic = %x count = %u offset = %d\n",
@@ -1968,10 +1966,6 @@ static int lod_declare_xattr_set_lmv(const struct lu_env *env,
 
 	if (le32_to_cpu(lum->lum_stripe_count) == 0)
 		GOTO(out, rc = 0);
-
-	rc = lod_verify_md_striping(lod, lum);
-	if (rc != 0)
-		GOTO(out, rc);
 
 	/* prepare dir striped objects */
 	rc = lod_prep_md_striped_create(env, dt, attr, lum, dof, th);
@@ -3878,6 +3872,8 @@ static void lod_ah_init(const struct lu_env *env,
 		nextc->do_ops->do_ah_init(env, ah, nextp, nextc, child_mode);
 
 	if (S_ISDIR(child_mode)) {
+		const struct lmv_user_md_v1 *lum1 = ah->dah_eadata;
+
 		/* other default values are 0 */
 		lc->ldo_dir_stripe_offset = -1;
 
@@ -3890,10 +3886,12 @@ static void lod_ah_init(const struct lu_env *env,
 			lc->ldo_def_striping = lds;
 
 		/* It should always honour the specified stripes */
+		/* Note: old client (< 2.7)might also do lfs mkdir, whose EA
+		 * will have old magic. In this case, we should ignore the
+		 * stripe count and try to create dir by default stripe.
+		 */
 		if (ah->dah_eadata != NULL && ah->dah_eadata_len != 0 &&
-		    lod_verify_md_striping(d, ah->dah_eadata) == 0) {
-			const struct lmv_user_md_v1 *lum1 = ah->dah_eadata;
-
+		    le32_to_cpu(lum1->lum_magic) == LMV_USER_MAGIC) {
 			lc->ldo_dir_stripe_count =
 				le32_to_cpu(lum1->lum_stripe_count);
 			lc->ldo_dir_stripe_offset =
