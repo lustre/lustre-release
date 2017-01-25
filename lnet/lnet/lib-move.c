@@ -584,13 +584,14 @@ lnet_ni_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
 			iov  = msg->msg_iov;
 			kiov = msg->msg_kiov;
 
-			LASSERT(niov > 0);
-			LASSERT((iov == NULL) != (kiov == NULL));
+			LASSERT (niov > 0);
+			LASSERT ((iov == NULL) != (kiov == NULL));
 		}
 	}
 
-	rc = (ni->ni_lnd->lnd_recv)(ni, private, msg, delayed,
-				    niov, iov, kiov, offset, mlen, rlen);
+	rc = (ni->ni_net->net_lnd->lnd_recv)(ni, private, msg, delayed,
+					     niov, iov, kiov, offset, mlen,
+					     rlen);
 	if (rc < 0)
 		lnet_finalize(ni, msg, rc);
 }
@@ -626,12 +627,11 @@ lnet_prep_send(lnet_msg_t *msg, int type, lnet_process_id_t target,
 	if (len != 0)
 		lnet_setpayloadbuffer(msg);
 
-	memset(&msg->msg_hdr, 0, sizeof(msg->msg_hdr));
-	msg->msg_hdr.type	    = cpu_to_le32(type);
-	msg->msg_hdr.dest_nid	    = cpu_to_le64(target.nid);
-	msg->msg_hdr.dest_pid	    = cpu_to_le32(target.pid);
+	memset (&msg->msg_hdr, 0, sizeof (msg->msg_hdr));
+	msg->msg_hdr.type           = cpu_to_le32(type);
+	msg->msg_hdr.dest_pid       = cpu_to_le32(target.pid);
 	/* src_nid will be set later */
-	msg->msg_hdr.src_pid	    = cpu_to_le32(the_lnet.ln_pid);
+	msg->msg_hdr.src_pid        = cpu_to_le32(the_lnet.ln_pid);
 	msg->msg_hdr.payload_length = cpu_to_le32(len);
 }
 
@@ -645,7 +645,7 @@ lnet_ni_send(lnet_ni_t *ni, lnet_msg_t *msg)
 	LASSERT (LNET_NETTYP(LNET_NIDNET(ni->ni_nid)) == LOLND ||
 		 (msg->msg_txcredit && msg->msg_peertxcredit));
 
-	rc = (ni->ni_lnd->lnd_send)(ni, priv, msg);
+	rc = (ni->ni_net->net_lnd->lnd_send)(ni, priv, msg);
 	if (rc < 0)
 		lnet_finalize(ni, msg, rc);
 }
@@ -658,15 +658,15 @@ lnet_ni_eager_recv(lnet_ni_t *ni, lnet_msg_t *msg)
 	LASSERT(!msg->msg_sending);
 	LASSERT(msg->msg_receiving);
 	LASSERT(!msg->msg_rx_ready_delay);
-	LASSERT(ni->ni_lnd->lnd_eager_recv != NULL);
+	LASSERT(ni->ni_net->net_lnd->lnd_eager_recv != NULL);
 
 	msg->msg_rx_ready_delay = 1;
-	rc = (ni->ni_lnd->lnd_eager_recv)(ni, msg->msg_private, msg,
-					  &msg->msg_private);
+	rc = (ni->ni_net->net_lnd->lnd_eager_recv)(ni, msg->msg_private, msg,
+						  &msg->msg_private);
 	if (rc != 0) {
 		CERROR("recv from %s / send to %s aborted: "
 		       "eager_recv failed %d\n",
-		       libcfs_nid2str(msg->msg_rxpeer->lp_nid),
+		       libcfs_nid2str(msg->msg_rxpeer->lpni_nid),
 		       libcfs_id2str(msg->msg_target), rc);
 		LASSERT(rc < 0); /* required by my callers */
 	}
@@ -674,52 +674,71 @@ lnet_ni_eager_recv(lnet_ni_t *ni, lnet_msg_t *msg)
 	return rc;
 }
 
-/* NB: caller shall hold a ref on 'lp' as I'd drop lnet_net_lock */
+/*
+ * This function can be called from two paths:
+ *	1. when sending a message
+ *	2. when decommiting a message (lnet_msg_decommit_tx())
+ * In both these cases the peer_ni should have it's reference count
+ * acquired by the caller and therefore it is safe to drop the spin
+ * lock before calling lnd_query()
+ */
 static void
-lnet_ni_query_locked(lnet_ni_t *ni, lnet_peer_t *lp)
+lnet_ni_query_locked(lnet_ni_t *ni, struct lnet_peer_ni *lp)
 {
 	cfs_time_t last_alive = 0;
+	int cpt = lnet_cpt_of_nid_locked(lp->lpni_nid, ni);
 
 	LASSERT(lnet_peer_aliveness_enabled(lp));
-	LASSERT(ni->ni_lnd->lnd_query != NULL);
+	LASSERT(ni->ni_net->net_lnd->lnd_query != NULL);
 
-	lnet_net_unlock(lp->lp_cpt);
-	(ni->ni_lnd->lnd_query)(ni, lp->lp_nid, &last_alive);
-	lnet_net_lock(lp->lp_cpt);
+	lnet_net_unlock(cpt);
+	(ni->ni_net->net_lnd->lnd_query)(ni, lp->lpni_nid, &last_alive);
+	lnet_net_lock(cpt);
 
-	lp->lp_last_query = cfs_time_current();
+	lp->lpni_last_query = cfs_time_current();
 
 	if (last_alive != 0) /* NI has updated timestamp */
-		lp->lp_last_alive = last_alive;
+		lp->lpni_last_alive = last_alive;
 }
 
 /* NB: always called with lnet_net_lock held */
 static inline int
-lnet_peer_is_alive (lnet_peer_t *lp, cfs_time_t now)
+lnet_peer_is_alive (struct lnet_peer_ni *lp, cfs_time_t now)
 {
-	int	   alive;
+	int        alive;
 	cfs_time_t deadline;
 
-	LASSERT(lnet_peer_aliveness_enabled(lp));
+	LASSERT (lnet_peer_aliveness_enabled(lp));
 
-	/* Trust lnet_notify() if it has more recent aliveness news, but
+	/*
+	 * Trust lnet_notify() if it has more recent aliveness news, but
 	 * ignore the initial assumed death (see lnet_peers_start_down()).
 	 */
-	if (!lp->lp_alive && lp->lp_alive_count > 0 &&
-	    cfs_time_aftereq(lp->lp_timestamp, lp->lp_last_alive))
+	spin_lock(&lp->lpni_lock);
+	if (!lp->lpni_alive && lp->lpni_alive_count > 0 &&
+	    cfs_time_aftereq(lp->lpni_timestamp, lp->lpni_last_alive)) {
+		spin_unlock(&lp->lpni_lock);
 		return 0;
+	}
 
-	deadline = cfs_time_add(lp->lp_last_alive,
-				cfs_time_seconds(lp->lp_ni->ni_peertimeout));
+	deadline =
+	  cfs_time_add(lp->lpni_last_alive,
+		       cfs_time_seconds(lp->lpni_net->net_tunables.
+					lct_peer_timeout));
 	alive = cfs_time_after(deadline, now);
 
-	/* Update obsolete lp_alive except for routers assumed to be dead
+	/*
+	 * Update obsolete lp_alive except for routers assumed to be dead
 	 * initially, because router checker would update aliveness in this
-	 * case, and moreover lp_last_alive at peer creation is assumed.
+	 * case, and moreover lpni_last_alive at peer creation is assumed.
 	 */
-	if (alive && !lp->lp_alive &&
-	    !(lnet_isrouter(lp) && lp->lp_alive_count == 0))
-		lnet_notify_locked(lp, 0, 1, lp->lp_last_alive);
+	if (alive && !lp->lpni_alive &&
+	    !(lnet_isrouter(lp) && lp->lpni_alive_count == 0)) {
+		spin_unlock(&lp->lpni_lock);
+		lnet_notify_locked(lp, 0, 1, lp->lpni_last_alive);
+	} else {
+		spin_unlock(&lp->lpni_lock);
+	}
 
 	return alive;
 }
@@ -728,7 +747,7 @@ lnet_peer_is_alive (lnet_peer_t *lp, cfs_time_t now)
 /* NB: returns 1 when alive, 0 when dead, negative when error;
  *     may drop the lnet_net_lock */
 static int
-lnet_peer_alive_locked (lnet_peer_t *lp)
+lnet_peer_alive_locked (struct lnet_ni *ni, struct lnet_peer_ni *lp)
 {
 	cfs_time_t now = cfs_time_current();
 
@@ -738,34 +757,36 @@ lnet_peer_alive_locked (lnet_peer_t *lp)
 	if (lnet_peer_is_alive(lp, now))
 		return 1;
 
-	/* Peer appears dead, but we should avoid frequent NI queries (at
-	 * most once per lnet_queryinterval seconds). */
-	if (lp->lp_last_query != 0) {
+	/*
+	 * Peer appears dead, but we should avoid frequent NI queries (at
+	 * most once per lnet_queryinterval seconds).
+	 */
+	if (lp->lpni_last_query != 0) {
 		static const int lnet_queryinterval = 1;
 
 		cfs_time_t next_query =
-			   cfs_time_add(lp->lp_last_query,
+			   cfs_time_add(lp->lpni_last_query,
 					cfs_time_seconds(lnet_queryinterval));
 
 		if (cfs_time_before(now, next_query)) {
-			if (lp->lp_alive)
+			if (lp->lpni_alive)
 				CWARN("Unexpected aliveness of peer %s: "
 				      "%d < %d (%d/%d)\n",
-				      libcfs_nid2str(lp->lp_nid),
+				      libcfs_nid2str(lp->lpni_nid),
 				      (int)now, (int)next_query,
 				      lnet_queryinterval,
-				      lp->lp_ni->ni_peertimeout);
+				      lp->lpni_net->net_tunables.lct_peer_timeout);
 			return 0;
 		}
 	}
 
 	/* query NI for latest aliveness news */
-	lnet_ni_query_locked(lp->lp_ni, lp);
+	lnet_ni_query_locked(ni, lp);
 
 	if (lnet_peer_is_alive(lp, now))
 		return 1;
 
-	lnet_notify_locked(lp, 0, 0, lp->lp_last_alive);
+	lnet_notify_locked(lp, 0, 0, lp->lpni_last_alive);
 	return 0;
 }
 
@@ -783,8 +804,8 @@ lnet_peer_alive_locked (lnet_peer_t *lp)
 static int
 lnet_post_send_locked(lnet_msg_t *msg, int do_send)
 {
-	lnet_peer_t		*lp = msg->msg_txpeer;
-	lnet_ni_t		*ni = lp->lp_ni;
+	struct lnet_peer_ni	*lp = msg->msg_txpeer;
+	struct lnet_ni		*ni = msg->msg_txni;
 	int			cpt = msg->msg_tx_cpt;
 	struct lnet_tx_queue	*tq = ni->ni_tx_queues[cpt];
 
@@ -795,10 +816,14 @@ lnet_post_send_locked(lnet_msg_t *msg, int do_send)
 
 	/* NB 'lp' is always the next hop */
 	if ((msg->msg_target.pid & LNET_PID_USERFLAG) == 0 &&
-	    lnet_peer_alive_locked(lp) == 0) {
+	    lnet_peer_alive_locked(ni, lp) == 0) {
 		the_lnet.ln_counters[cpt]->drop_count++;
 		the_lnet.ln_counters[cpt]->drop_length += msg->msg_len;
 		lnet_net_unlock(cpt);
+		if (msg->msg_txpeer)
+			atomic_inc(&msg->msg_txpeer->lpni_stats.drop_count);
+		if (msg->msg_txni)
+			atomic_inc(&msg->msg_txni->ni_stats.drop_count);
 
 		CNETERR("Dropping message for %s: peer not alive\n",
 			libcfs_id2str(msg->msg_target));
@@ -824,21 +849,24 @@ lnet_post_send_locked(lnet_msg_t *msg, int do_send)
 	}
 
 	if (!msg->msg_peertxcredit) {
-		LASSERT((lp->lp_txcredits < 0) ==
-			!list_empty(&lp->lp_txq));
+		spin_lock(&lp->lpni_lock);
+		LASSERT((lp->lpni_txcredits < 0) ==
+			!list_empty(&lp->lpni_txq));
 
 		msg->msg_peertxcredit = 1;
-		lp->lp_txqnob += msg->msg_len + sizeof(lnet_hdr_t);
-		lp->lp_txcredits--;
+		lp->lpni_txqnob += msg->msg_len + sizeof(lnet_hdr_t);
+		lp->lpni_txcredits--;
 
-		if (lp->lp_txcredits < lp->lp_mintxcredits)
-			lp->lp_mintxcredits = lp->lp_txcredits;
+		if (lp->lpni_txcredits < lp->lpni_mintxcredits)
+			lp->lpni_mintxcredits = lp->lpni_txcredits;
 
-		if (lp->lp_txcredits < 0) {
+		if (lp->lpni_txcredits < 0) {
 			msg->msg_tx_delayed = 1;
-			list_add_tail(&msg->msg_list, &lp->lp_txq);
+			list_add_tail(&msg->msg_list, &lp->lpni_txq);
+			spin_unlock(&lp->lpni_lock);
 			return LNET_CREDIT_WAIT;
 		}
+		spin_unlock(&lp->lpni_lock);
 	}
 
 	if (!msg->msg_txcredit) {
@@ -847,6 +875,7 @@ lnet_post_send_locked(lnet_msg_t *msg, int do_send)
 
 		msg->msg_txcredit = 1;
 		tq->tq_credits--;
+		atomic_dec(&ni->ni_tx_credits);
 
 		if (tq->tq_credits < tq->tq_credits_min)
 			tq->tq_credits_min = tq->tq_credits;
@@ -894,36 +923,39 @@ lnet_post_routed_recv_locked (lnet_msg_t *msg, int do_recv)
 	 * sets do_recv FALSE and I don't do the unlock/send/lock bit.
 	 * I return LNET_CREDIT_WAIT if msg blocked and LNET_CREDIT_OK if
 	 * received or OK to receive */
-	lnet_peer_t	    *lp = msg->msg_rxpeer;
+	struct lnet_peer_ni *lp = msg->msg_rxpeer;
 	lnet_rtrbufpool_t   *rbp;
-	lnet_rtrbuf_t	    *rb;
+	lnet_rtrbuf_t       *rb;
 
-	LASSERT(msg->msg_iov == NULL);
-	LASSERT(msg->msg_kiov == NULL);
-	LASSERT(msg->msg_niov == 0);
-	LASSERT(msg->msg_routing);
-	LASSERT(msg->msg_receiving);
-	LASSERT(!msg->msg_sending);
+	LASSERT (msg->msg_iov == NULL);
+	LASSERT (msg->msg_kiov == NULL);
+	LASSERT (msg->msg_niov == 0);
+	LASSERT (msg->msg_routing);
+	LASSERT (msg->msg_receiving);
+	LASSERT (!msg->msg_sending);
 
 	/* non-lnet_parse callers only receive delayed messages */
 	LASSERT(!do_recv || msg->msg_rx_delayed);
 
 	if (!msg->msg_peerrtrcredit) {
-		LASSERT((lp->lp_rtrcredits < 0) ==
-			!list_empty(&lp->lp_rtrq));
+		spin_lock(&lp->lpni_lock);
+		LASSERT((lp->lpni_rtrcredits < 0) ==
+			!list_empty(&lp->lpni_rtrq));
 
 		msg->msg_peerrtrcredit = 1;
-		lp->lp_rtrcredits--;
-		if (lp->lp_rtrcredits < lp->lp_minrtrcredits)
-			lp->lp_minrtrcredits = lp->lp_rtrcredits;
+		lp->lpni_rtrcredits--;
+		if (lp->lpni_rtrcredits < lp->lpni_minrtrcredits)
+			lp->lpni_minrtrcredits = lp->lpni_rtrcredits;
 
-		if (lp->lp_rtrcredits < 0) {
+		if (lp->lpni_rtrcredits < 0) {
 			/* must have checked eager_recv before here */
 			LASSERT(msg->msg_rx_ready_delay);
 			msg->msg_rx_delayed = 1;
-			list_add_tail(&msg->msg_list, &lp->lp_rtrq);
+			list_add_tail(&msg->msg_list, &lp->lpni_rtrq);
+			spin_unlock(&lp->lpni_lock);
 			return LNET_CREDIT_WAIT;
 		}
+		spin_unlock(&lp->lpni_lock);
 	}
 
 	rbp = lnet_msg2bufpool(msg);
@@ -954,7 +986,7 @@ lnet_post_routed_recv_locked (lnet_msg_t *msg, int do_recv)
 		int cpt = msg->msg_rx_cpt;
 
 		lnet_net_unlock(cpt);
-		lnet_ni_recv(lp->lp_ni, msg->msg_private, msg, 1,
+		lnet_ni_recv(msg->msg_rxni, msg->msg_private, msg, 1,
 			     0, msg->msg_len, msg->msg_len);
 		lnet_net_lock(cpt);
 	}
@@ -964,11 +996,12 @@ lnet_post_routed_recv_locked (lnet_msg_t *msg, int do_recv)
 void
 lnet_return_tx_credits_locked(lnet_msg_t *msg)
 {
-	lnet_peer_t	*txpeer = msg->msg_txpeer;
-	lnet_msg_t	*msg2;
+	struct lnet_peer_ni	*txpeer = msg->msg_txpeer;
+	struct lnet_ni		*txni = msg->msg_txni;
+	lnet_msg_t		*msg2;
 
 	if (msg->msg_txcredit) {
-		struct lnet_ni	     *ni = txpeer->lp_ni;
+		struct lnet_ni	     *ni = msg->msg_txni;
 		struct lnet_tx_queue *tq = ni->ni_tx_queues[msg->msg_tx_cpt];
 
 		/* give back NI txcredits */
@@ -978,13 +1011,15 @@ lnet_return_tx_credits_locked(lnet_msg_t *msg)
 			!list_empty(&tq->tq_delayed));
 
 		tq->tq_credits++;
+		atomic_inc(&ni->ni_tx_credits);
 		if (tq->tq_credits <= 0) {
 			msg2 = list_entry(tq->tq_delayed.next,
 					  lnet_msg_t, msg_list);
 			list_del(&msg2->msg_list);
 
-			LASSERT(msg2->msg_txpeer->lp_ni == ni);
+			LASSERT(msg2->msg_txni == ni);
 			LASSERT(msg2->msg_tx_delayed);
+			LASSERT(msg2->msg_tx_cpt == msg->msg_tx_cpt);
 
 			(void) lnet_post_send_locked(msg2, 1);
 		}
@@ -994,28 +1029,54 @@ lnet_return_tx_credits_locked(lnet_msg_t *msg)
 		/* give back peer txcredits */
 		msg->msg_peertxcredit = 0;
 
-		LASSERT((txpeer->lp_txcredits < 0) ==
-			!list_empty(&txpeer->lp_txq));
+		spin_lock(&txpeer->lpni_lock);
+		LASSERT((txpeer->lpni_txcredits < 0) ==
+			!list_empty(&txpeer->lpni_txq));
 
-		txpeer->lp_txqnob -= msg->msg_len + sizeof(lnet_hdr_t);
-		LASSERT(txpeer->lp_txqnob >= 0);
+		txpeer->lpni_txqnob -= msg->msg_len + sizeof(lnet_hdr_t);
+		LASSERT(txpeer->lpni_txqnob >= 0);
 
-		txpeer->lp_txcredits++;
-		if (txpeer->lp_txcredits <= 0) {
-			msg2 = list_entry(txpeer->lp_txq.next,
-					      lnet_msg_t, msg_list);
+		txpeer->lpni_txcredits++;
+		if (txpeer->lpni_txcredits <= 0) {
+			msg2 = list_entry(txpeer->lpni_txq.next,
+                                              lnet_msg_t, msg_list);
 			list_del(&msg2->msg_list);
+			spin_unlock(&txpeer->lpni_lock);
 
 			LASSERT(msg2->msg_txpeer == txpeer);
 			LASSERT(msg2->msg_tx_delayed);
 
-			(void) lnet_post_send_locked(msg2, 1);
+			if (msg2->msg_tx_cpt != msg->msg_tx_cpt) {
+				lnet_net_unlock(msg->msg_tx_cpt);
+				lnet_net_lock(msg2->msg_tx_cpt);
+			}
+                        (void) lnet_post_send_locked(msg2, 1);
+			if (msg2->msg_tx_cpt != msg->msg_tx_cpt) {
+				lnet_net_unlock(msg2->msg_tx_cpt);
+				lnet_net_lock(msg->msg_tx_cpt);
+			}
+                } else {
+			spin_unlock(&txpeer->lpni_lock);
 		}
+        }
+
+	if (txni != NULL) {
+		msg->msg_txni = NULL;
+		lnet_ni_decref_locked(txni, msg->msg_tx_cpt);
 	}
 
 	if (txpeer != NULL) {
+		/*
+		 * TODO:
+		 * Once the patch for the health comes in we need to set
+		 * the health of the peer ni to bad when we fail to send
+		 * a message.
+		 * int status = msg->msg_ev.status;
+		 * if (status != 0)
+		 *	lnet_set_peer_ni_health_locked(txpeer, false)
+		 */
 		msg->msg_txpeer = NULL;
-		lnet_peer_decref_locked(txpeer);
+		lnet_peer_ni_decref_locked(txpeer);
 	}
 }
 
@@ -1036,18 +1097,13 @@ lnet_schedule_blocked_locked(lnet_rtrbufpool_t *rbp)
 void
 lnet_drop_routed_msgs_locked(struct list_head *list, int cpt)
 {
-	lnet_msg_t	 *msg;
-	lnet_msg_t	 *tmp;
-	struct list_head drop;
-
-	INIT_LIST_HEAD(&drop);
-
-	list_splice_init(list, &drop);
+	lnet_msg_t *msg;
+	lnet_msg_t *tmp;
 
 	lnet_net_unlock(cpt);
 
-	list_for_each_entry_safe(msg, tmp, &drop, msg_list) {
-		lnet_ni_recv(msg->msg_rxpeer->lp_ni, msg->msg_private, NULL,
+	list_for_each_entry_safe(msg, tmp, list, msg_list) {
+		lnet_ni_recv(msg->msg_rxni, msg->msg_private, NULL,
 			     0, 0, 0, msg->msg_hdr.payload_length);
 		list_del_init(&msg->msg_list);
 		lnet_finalize(NULL, msg, -ECANCELED);
@@ -1059,8 +1115,9 @@ lnet_drop_routed_msgs_locked(struct list_head *list, int cpt)
 void
 lnet_return_rx_credits_locked(lnet_msg_t *msg)
 {
-	lnet_peer_t	*rxpeer = msg->msg_rxpeer;
-	lnet_msg_t	*msg2;
+	struct lnet_peer_ni	*rxpeer = msg->msg_rxpeer;
+	struct lnet_ni		*rxni = msg->msg_rxni;
+	lnet_msg_t		*msg2;
 
 	if (msg->msg_rtrcredit) {
 		/* give back global router credits */
@@ -1111,87 +1168,109 @@ routing_off:
 		/* give back peer router credits */
 		msg->msg_peerrtrcredit = 0;
 
-		LASSERT((rxpeer->lp_rtrcredits < 0) ==
-			!list_empty(&rxpeer->lp_rtrq));
+		spin_lock(&rxpeer->lpni_lock);
+		LASSERT((rxpeer->lpni_rtrcredits < 0) ==
+			!list_empty(&rxpeer->lpni_rtrq));
 
-		rxpeer->lp_rtrcredits++;
+		rxpeer->lpni_rtrcredits++;
 
 		/* drop all messages which are queued to be routed on that
 		 * peer. */
 		if (!the_lnet.ln_routing) {
-			lnet_drop_routed_msgs_locked(&rxpeer->lp_rtrq,
-						     msg->msg_rx_cpt);
-		} else if (rxpeer->lp_rtrcredits <= 0) {
-			msg2 = list_entry(rxpeer->lp_rtrq.next,
+			struct list_head drop;
+			INIT_LIST_HEAD(&drop);
+			list_splice_init(&rxpeer->lpni_rtrq, &drop);
+			spin_unlock(&rxpeer->lpni_lock);
+			lnet_drop_routed_msgs_locked(&drop, msg->msg_rx_cpt);
+		} else if (rxpeer->lpni_rtrcredits <= 0) {
+			msg2 = list_entry(rxpeer->lpni_rtrq.next,
 					  lnet_msg_t, msg_list);
 			list_del(&msg2->msg_list);
-
+			spin_unlock(&rxpeer->lpni_lock);
 			(void) lnet_post_routed_recv_locked(msg2, 1);
+		} else {
+			spin_unlock(&rxpeer->lpni_lock);
 		}
+	}
+	if (rxni != NULL) {
+		msg->msg_rxni = NULL;
+		lnet_ni_decref_locked(rxni, msg->msg_rx_cpt);
 	}
 	if (rxpeer != NULL) {
 		msg->msg_rxpeer = NULL;
-		lnet_peer_decref_locked(rxpeer);
+		lnet_peer_ni_decref_locked(rxpeer);
 	}
+}
+
+static int
+lnet_compare_peers(struct lnet_peer_ni *p1, struct lnet_peer_ni *p2)
+{
+	if (p1->lpni_txqnob < p2->lpni_txqnob)
+		return 1;
+
+	if (p1->lpni_txqnob > p2->lpni_txqnob)
+		return -1;
+
+	if (p1->lpni_txcredits > p2->lpni_txcredits)
+		return 1;
+
+	if (p1->lpni_txcredits < p2->lpni_txcredits)
+		return -1;
+
+	return 0;
 }
 
 static int
 lnet_compare_routes(lnet_route_t *r1, lnet_route_t *r2)
 {
-	lnet_peer_t *p1 = r1->lr_gateway;
-	lnet_peer_t *p2 = r2->lr_gateway;
+	struct lnet_peer_ni *p1 = r1->lr_gateway;
+	struct lnet_peer_ni *p2 = r2->lr_gateway;
 	int r1_hops = (r1->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r1->lr_hops;
 	int r2_hops = (r2->lr_hops == LNET_UNDEFINED_HOPS) ? 1 : r2->lr_hops;
+	int rc;
 
 	if (r1->lr_priority < r2->lr_priority)
 		return 1;
 
 	if (r1->lr_priority > r2->lr_priority)
-		return -ERANGE;
+		return -1;
 
 	if (r1_hops < r2_hops)
 		return 1;
 
 	if (r1_hops > r2_hops)
-		return -ERANGE;
+		return -1;
 
-	if (p1->lp_txqnob < p2->lp_txqnob)
-		return 1;
-
-	if (p1->lp_txqnob > p2->lp_txqnob)
-		return -ERANGE;
-
-	if (p1->lp_txcredits > p2->lp_txcredits)
-		return 1;
-
-	if (p1->lp_txcredits < p2->lp_txcredits)
-		return -ERANGE;
+	rc = lnet_compare_peers(p1, p2);
+	if (rc)
+		return rc;
 
 	if (r1->lr_seq - r2->lr_seq <= 0)
 		return 1;
 
-	return -ERANGE;
+	return -1;
 }
 
-static lnet_peer_t *
-lnet_find_route_locked(lnet_ni_t *ni, lnet_nid_t target, lnet_nid_t rtr_nid)
+static struct lnet_peer_ni *
+lnet_find_route_locked(struct lnet_net *net, lnet_nid_t target,
+		       lnet_nid_t rtr_nid)
 {
 	lnet_remotenet_t	*rnet;
 	lnet_route_t		*route;
 	lnet_route_t		*best_route;
 	lnet_route_t		*last_route;
-	struct lnet_peer	*lp_best;
-	struct lnet_peer	*lp;
+	struct lnet_peer_ni	*lpni_best;
+	struct lnet_peer_ni	*lp;
 	int			rc;
 
 	/* If @rtr_nid is not LNET_NID_ANY, return the gateway with
 	 * rtr_nid nid, otherwise find the best gateway I can use */
 
-	rnet = lnet_find_net_locked(LNET_NIDNET(target));
+	rnet = lnet_find_rnet_locked(LNET_NIDNET(target));
 	if (rnet == NULL)
 		return NULL;
 
-	lp_best = NULL;
+	lpni_best = NULL;
 	best_route = last_route = NULL;
 	list_for_each_entry(route, &rnet->lrn_routes, lr_list) {
 		lp = route->lr_gateway;
@@ -1199,15 +1278,15 @@ lnet_find_route_locked(lnet_ni_t *ni, lnet_nid_t target, lnet_nid_t rtr_nid)
 		if (!lnet_is_route_alive(route))
 			continue;
 
-		if (ni != NULL && lp->lp_ni != ni)
+		if (net != NULL && lp->lpni_net != net)
 			continue;
 
-		if (lp->lp_nid == rtr_nid) /* it's pre-determined router */
+		if (lp->lpni_nid == rtr_nid) /* it's pre-determined router */
 			return lp;
 
-		if (lp_best == NULL) {
+		if (lpni_best == NULL) {
 			best_route = last_route = route;
-			lp_best = lp;
+			lpni_best = lp;
 			continue;
 		}
 
@@ -1220,7 +1299,7 @@ lnet_find_route_locked(lnet_ni_t *ni, lnet_nid_t target, lnet_nid_t rtr_nid)
 			continue;
 
 		best_route = route;
-		lp_best = lp;
+		lpni_best = lp;
 	}
 
 	/* set sequence number on the best router to the latest sequence + 1
@@ -1228,179 +1307,635 @@ lnet_find_route_locked(lnet_ni_t *ni, lnet_nid_t target, lnet_nid_t rtr_nid)
 	 * harmless and functional  */
 	if (best_route != NULL)
 		best_route->lr_seq = last_route->lr_seq + 1;
-	return lp_best;
+	return lpni_best;
 }
 
-int
-lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg, lnet_nid_t rtr_nid)
+static struct lnet_ni *
+lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *cur_ni,
+		 int md_cpt)
 {
-	lnet_nid_t		dst_nid = msg->msg_target.nid;
-	struct lnet_ni		*src_ni;
-	struct lnet_ni		*local_ni;
-	struct lnet_peer	*lp;
-	int			cpt;
-	int			cpt2;
-	int			rc;
+	struct lnet_ni *ni = NULL, *best_ni = cur_ni;
+	unsigned int shortest_distance;
+	int best_credits;
 
-	/* NB: rtr_nid is set to LNET_NID_ANY for all current use-cases,
-	 * but we might want to use pre-determined router for ACK/REPLY
-	 * in the future */
-	/* NB: ni != NULL == interface pre-determined (ACK/REPLY) */
-	LASSERT(msg->msg_txpeer == NULL);
-	LASSERT(!msg->msg_sending);
-	LASSERT(!msg->msg_target_is_router);
-	LASSERT(!msg->msg_receiving);
+	if (best_ni == NULL) {
+		shortest_distance = UINT_MAX;
+		best_credits = INT_MIN;
+	} else {
+		shortest_distance = cfs_cpt_distance(lnet_cpt_table(), md_cpt,
+						     best_ni->ni_dev_cpt);
+		best_credits = atomic_read(&best_ni->ni_tx_credits);
+	}
 
-	msg->msg_sending = 1;
+	while ((ni = lnet_get_next_ni_locked(local_net, ni))) {
+		unsigned int distance;
+		int ni_credits;
 
-	LASSERT(!msg->msg_tx_committed);
-	cpt = lnet_cpt_of_nid(rtr_nid == LNET_NID_ANY ? dst_nid : rtr_nid);
- again:
-	lnet_net_lock(cpt);
+		if (!lnet_is_ni_healthy_locked(ni))
+			continue;
+
+		ni_credits = atomic_read(&ni->ni_tx_credits);
+
+		/*
+		 * calculate the distance from the CPT on which
+		 * the message memory is allocated to the CPT of
+		 * the NI's physical device
+		 */
+		distance = cfs_cpt_distance(lnet_cpt_table(),
+					    md_cpt,
+					    ni->ni_dev_cpt);
+
+		/*
+		 * All distances smaller than the NUMA range
+		 * are treated equally.
+		 */
+		if (distance < lnet_numa_range)
+			distance = lnet_numa_range;
+
+		/*
+		 * Select on shorter distance, then available
+		 * credits, then round-robin.
+		 */
+		if (distance > shortest_distance) {
+			continue;
+		} else if (distance < shortest_distance) {
+			shortest_distance = distance;
+		} else if (ni_credits < best_credits) {
+			continue;
+		} else if (ni_credits == best_credits) {
+			if (best_ni && (best_ni)->ni_seq <= ni->ni_seq)
+				continue;
+		}
+		best_ni = ni;
+		best_credits = ni_credits;
+	}
+
+	return best_ni;
+}
+
+static int
+lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
+		    struct lnet_msg *msg, lnet_nid_t rtr_nid)
+{
+	struct lnet_ni		*best_ni;
+	struct lnet_peer_ni	*best_lpni;
+	struct lnet_peer_ni	*best_gw;
+	struct lnet_peer_ni	*lpni;
+	struct lnet_peer_ni	*final_dst;
+	struct lnet_peer	*peer;
+	struct lnet_peer_net	*peer_net;
+	struct lnet_net		*local_net;
+	__u32			seq;
+	int			cpt, cpt2, rc;
+	bool			routing;
+	bool			routing2;
+	bool			ni_is_pref;
+	bool			preferred;
+	bool			local_found;
+	int			best_lpni_credits;
+	int			md_cpt;
+
+	/*
+	 * get an initial CPT to use for locking. The idea here is not to
+	 * serialize the calls to select_pathway, so that as many
+	 * operations can run concurrently as possible. To do that we use
+	 * the CPT where this call is being executed. Later on when we
+	 * determine the CPT to use in lnet_message_commit, we switch the
+	 * lock and check if there was any configuration change.  If none,
+	 * then we proceed, if there is, then we restart the operation.
+	 */
+	cpt = lnet_net_lock_current();
+
+	md_cpt = lnet_cpt_of_md(msg->msg_md);
+	if (md_cpt == CFS_CPT_ANY)
+		md_cpt = cpt;
+
+again:
+	best_ni = NULL;
+	best_lpni = NULL;
+	best_gw = NULL;
+	final_dst = NULL;
+	local_net = NULL;
+	routing = false;
+	routing2 = false;
+	local_found = false;
+
+	seq = lnet_get_dlc_seq_locked();
 
 	if (the_lnet.ln_shutdown) {
 		lnet_net_unlock(cpt);
 		return -ESHUTDOWN;
 	}
 
-	if (src_nid == LNET_NID_ANY) {
-		src_ni = NULL;
-	} else {
-		src_ni = lnet_nid2ni_locked(src_nid, cpt);
-		if (src_ni == NULL) {
+	peer = lnet_find_or_create_peer_locked(dst_nid, cpt);
+	if (IS_ERR(peer)) {
+		lnet_net_unlock(cpt);
+		return PTR_ERR(peer);
+	}
+
+	/* If peer is not healthy then can not send anything to it */
+	if (!lnet_is_peer_healthy_locked(peer)) {
+		lnet_net_unlock(cpt);
+		return -EHOSTUNREACH;
+	}
+
+	if (!peer->lp_multi_rail && lnet_get_num_peer_nis(peer) > 1) {
+		CERROR("peer %s is declared to be non MR capable, "
+		       "yet configured with more than one NID\n",
+		       libcfs_nid2str(dst_nid));
+		return -EINVAL;
+	}
+
+	/*
+	 * STEP 1: first jab at determining best_ni
+	 * if src_nid is explicitly specified, then best_ni is already
+	 * pre-determiend for us. Otherwise we need to select the best
+	 * one to use later on
+	 */
+	if (src_nid != LNET_NID_ANY) {
+		best_ni = lnet_nid2ni_locked(src_nid, cpt);
+		if (!best_ni) {
 			lnet_net_unlock(cpt);
 			LCONSOLE_WARN("Can't send to %s: src %s is not a "
 				      "local nid\n", libcfs_nid2str(dst_nid),
 				      libcfs_nid2str(src_nid));
 			return -EINVAL;
 		}
-		LASSERT(!msg->msg_routing);
 	}
 
-	/* Is this for someone on a local network? */
-	local_ni = lnet_net2ni_locked(LNET_NIDNET(dst_nid), cpt);
+	if (msg->msg_type == LNET_MSG_REPLY ||
+	    msg->msg_type == LNET_MSG_ACK ||
+	    !peer->lp_multi_rail ||
+	    best_ni) {
+		/*
+		 * for replies we want to respond on the same peer_ni we
+		 * received the message on if possible. If not, then pick
+		 * a peer_ni to send to
+		 *
+		 * if the peer is non-multi-rail then you want to send to
+		 * the dst_nid provided as well.
+		 *
+		 * If the best_ni has already been determined, IE the
+		 * src_nid has been specified, then use the
+		 * destination_nid provided as well, since we're
+		 * continuing a series of related messages for the same
+		 * RPC.
+		 *
+		 * It is expected to find the lpni using dst_nid, since we
+		 * created it earlier.
+		 */
+		best_lpni = lnet_find_peer_ni_locked(dst_nid);
+		if (best_lpni)
+			lnet_peer_ni_decref_locked(best_lpni);
 
-	if (local_ni != NULL) {
-		if (src_ni == NULL) {
-			src_ni = local_ni;
-			src_nid = src_ni->ni_nid;
-		} else if (src_ni == local_ni) {
-			lnet_ni_decref_locked(local_ni, cpt);
-		} else {
-			lnet_ni_decref_locked(local_ni, cpt);
-			lnet_ni_decref_locked(src_ni, cpt);
+		if (best_lpni && !lnet_get_net_locked(LNET_NIDNET(dst_nid))) {
+			/*
+			 * this lpni is not on a local network so we need
+			 * to route this reply.
+			 */
+			best_gw = lnet_find_route_locked(NULL,
+							 best_lpni->lpni_nid,
+							 rtr_nid);
+			if (best_gw) {
+				/*
+				* RULE: Each node considers only the next-hop
+				*
+				* We're going to route the message, so change the peer to
+				* the router.
+				*/
+				LASSERT(best_gw->lpni_peer_net);
+				LASSERT(best_gw->lpni_peer_net->lpn_peer);
+				peer = best_gw->lpni_peer_net->lpn_peer;
+
+				/*
+				* if the router is not multi-rail then use the best_gw
+				* found to send the message to
+				*/
+				if (!peer->lp_multi_rail)
+					best_lpni = best_gw;
+				else
+					best_lpni = NULL;
+
+				routing = true;
+			} else {
+				best_lpni = NULL;
+			}
+		} else if (!best_lpni) {
 			lnet_net_unlock(cpt);
-			LCONSOLE_WARN("No route to %s via from %s\n",
-				      libcfs_nid2str(dst_nid),
-				      libcfs_nid2str(src_nid));
+			CERROR("unable to send msg_type %d to "
+			      "originating %s. Destination NID not in DB\n",
+			      msg->msg_type, libcfs_nid2str(dst_nid));
 			return -EINVAL;
 		}
+	}
 
-		LASSERT(src_nid != LNET_NID_ANY);
-		lnet_msg_commit(msg, cpt);
-
-		if (!msg->msg_routing)
-			msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
-
-		if (src_ni == the_lnet.ln_loni) {
-			/* No send credit hassles with LOLND */
+	/*
+	 * if the peer is not MR capable, then we should always send to it
+	 * using the first NI in the NET we determined.
+	 */
+	if (!peer->lp_multi_rail) {
+		if (!best_lpni) {
 			lnet_net_unlock(cpt);
-			lnet_ni_send(src_ni, msg);
-
-			lnet_net_lock(cpt);
-			lnet_ni_decref_locked(src_ni, cpt);
-			lnet_net_unlock(cpt);
-			return 0;
-		}
-
-		rc = lnet_nid2peer_locked(&lp, dst_nid, cpt);
-		/* lp has ref on src_ni; lose mine */
-		lnet_ni_decref_locked(src_ni, cpt);
-		if (rc != 0) {
-			lnet_net_unlock(cpt);
-			LCONSOLE_WARN("Error %d finding peer %s\n", rc,
-				      libcfs_nid2str(dst_nid));
-			/* ENOMEM or shutting down */
-			return rc;
-		}
-		LASSERT(lp->lp_ni == src_ni);
-	} else {
-		/* sending to a remote network */
-		lp = lnet_find_route_locked(src_ni, dst_nid, rtr_nid);
-		if (lp == NULL) {
-			if (src_ni != NULL)
-				lnet_ni_decref_locked(src_ni, cpt);
-			lnet_net_unlock(cpt);
-
-			LCONSOLE_WARN("No route to %s via %s "
-				      "(all routers down)\n",
-				      libcfs_id2str(msg->msg_target),
-				      libcfs_nid2str(src_nid));
+			CERROR("no route to %s\n",
+			       libcfs_nid2str(dst_nid));
 			return -EHOSTUNREACH;
 		}
 
-		/* rtr_nid is LNET_NID_ANY or NID of pre-determined router,
-		 * it's possible that rtr_nid isn't LNET_NID_ANY and lp isn't
-		 * pre-determined router, this can happen if router table
-		 * was changed when we release the lock */
-		if (rtr_nid != lp->lp_nid) {
-			cpt2 = lnet_cpt_of_nid_locked(lp->lp_nid);
-			if (cpt2 != cpt) {
-				if (src_ni != NULL)
-					lnet_ni_decref_locked(src_ni, cpt);
+		/* best ni could be set because src_nid was provided */
+		if (!best_ni) {
+			best_ni = lnet_net2ni_locked(best_lpni->lpni_net->net_id, cpt);
+			if (!best_ni) {
 				lnet_net_unlock(cpt);
-
-				rtr_nid = lp->lp_nid;
-				cpt = cpt2;
-				goto again;
+				CERROR("no path to %s from net %s\n",
+				libcfs_nid2str(best_lpni->lpni_nid),
+				libcfs_net2str(best_lpni->lpni_net->net_id));
+				return -EHOSTUNREACH;
 			}
+		}
+	}
+
+	if (best_ni == the_lnet.ln_loni) {
+		/* No send credit hassles with LOLND */
+		lnet_ni_addref_locked(best_ni, cpt);
+		msg->msg_hdr.dest_nid = cpu_to_le64(best_ni->ni_nid);
+		if (!msg->msg_routing)
+			msg->msg_hdr.src_nid = cpu_to_le64(best_ni->ni_nid);
+		msg->msg_target.nid = best_ni->ni_nid;
+		lnet_msg_commit(msg, cpt);
+		msg->msg_txni = best_ni;
+		lnet_net_unlock(cpt);
+
+		return LNET_CREDIT_OK;
+	}
+
+	/*
+	 * if we already found a best_ni because src_nid is specified and
+	 * best_lpni because we are replying to a message then just send
+	 * the message
+	 */
+	if (best_ni && best_lpni)
+		goto send;
+
+	/*
+	 * If we already found a best_ni because src_nid is specified then
+	 * pick the peer then send the message
+	 */
+	if (best_ni)
+		goto pick_peer;
+
+	/*
+	 * pick the best_ni by going through all the possible networks of
+	 * that peer and see which local NI is best suited to talk to that
+	 * peer.
+	 *
+	 * Locally connected networks will always be preferred over
+	 * a routed network. If there are only routed paths to the peer,
+	 * then the best route is chosen. If all routes are equal then
+	 * they are used in round robin.
+	 */
+	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_on_peer_list) {
+		if (!lnet_is_peer_net_healthy_locked(peer_net))
+			continue;
+
+		local_net = lnet_get_net_locked(peer_net->lpn_net_id);
+		if (!local_net && !routing && !local_found) {
+			struct lnet_peer_ni *net_gw;
+
+			lpni = list_entry(peer_net->lpn_peer_nis.next,
+					  struct lnet_peer_ni,
+					  lpni_on_peer_net_list);
+
+			net_gw = lnet_find_route_locked(NULL,
+							lpni->lpni_nid,
+							rtr_nid);
+			if (!net_gw)
+				continue;
+
+			if (best_gw) {
+				/*
+				 * lnet_find_route_locked() call
+				 * will return the best_Gw on the
+				 * lpni->lpni_nid network.
+				 * However, best_gw and net_gw can
+				 * be on different networks.
+				 * Therefore need to compare them
+				 * to pick the better of either.
+				 */
+				if (lnet_compare_peers(best_gw, net_gw) > 0)
+					continue;
+				if (best_gw->lpni_gw_seq <= net_gw->lpni_gw_seq)
+					continue;
+			}
+			best_gw = net_gw;
+			final_dst = lpni;
+
+			routing2 = true;
+		} else {
+			best_gw = NULL;
+			final_dst = NULL;
+			routing2 = false;
+			local_found = true;
+		}
+
+		/*
+		 * a gw on this network is found, but there could be
+		 * other better gateways on other networks. So don't pick
+		 * the best_ni until we determine the best_gw.
+		 */
+		if (best_gw)
+			continue;
+
+		/* if no local_net found continue */
+		if (!local_net)
+			continue;
+
+		/*
+		 * Iterate through the NIs in this local Net and select
+		 * the NI to send from. The selection is determined by
+		 * these 3 criterion in the following priority:
+		 *	1. NUMA
+		 *	2. NI available credits
+		 *	3. Round Robin
+		 */
+		best_ni = lnet_get_best_ni(local_net, best_ni, md_cpt);
+	}
+
+	if (!best_ni && !best_gw) {
+		lnet_net_unlock(cpt);
+		LCONSOLE_WARN("No local ni found to send from to %s\n",
+			libcfs_nid2str(dst_nid));
+		return -EINVAL;
+	}
+
+	if (!best_ni) {
+		best_ni = lnet_get_best_ni(best_gw->lpni_net, best_ni, md_cpt);
+		LASSERT(best_gw && best_ni);
+
+		/*
+		 * We're going to route the message, so change the peer to
+		 * the router.
+		 */
+		LASSERT(best_gw->lpni_peer_net);
+		LASSERT(best_gw->lpni_peer_net->lpn_peer);
+		best_gw->lpni_gw_seq++;
+		peer = best_gw->lpni_peer_net->lpn_peer;
+	}
+
+	/*
+	 * Now that we selected the NI to use increment its sequence
+	 * number so the Round Robin algorithm will detect that it has
+	 * been used and pick the next NI.
+	 */
+	best_ni->ni_seq++;
+
+pick_peer:
+	/*
+	 * At this point the best_ni is on a local network on which
+	 * the peer has a peer_ni as well
+	 */
+	peer_net = lnet_peer_get_net_locked(peer,
+					    best_ni->ni_net->net_id);
+	/*
+	 * peer_net is not available or the src_nid is explicitly defined
+	 * and the peer_net for that src_nid is unhealthy. find a route to
+	 * the destination nid.
+	 */
+	if (!peer_net ||
+	    (src_nid != LNET_NID_ANY &&
+	     !lnet_is_peer_net_healthy_locked(peer_net))) {
+		best_gw = lnet_find_route_locked(best_ni->ni_net,
+						 dst_nid,
+						 rtr_nid);
+		/*
+		 * if no route is found for that network then
+		 * move onto the next peer_ni in the peer
+		 */
+		if (!best_gw) {
+			lnet_net_unlock(cpt);
+			LCONSOLE_WARN("No route to peer from %s\n",
+				libcfs_nid2str(best_ni->ni_nid));
+			return -EHOSTUNREACH;
 		}
 
 		CDEBUG(D_NET, "Best route to %s via %s for %s %d\n",
-		       libcfs_nid2str(dst_nid), libcfs_nid2str(lp->lp_nid),
-		       lnet_msgtyp2str(msg->msg_type), msg->msg_len);
+			libcfs_nid2str(dst_nid),
+			libcfs_nid2str(best_gw->lpni_nid),
+			lnet_msgtyp2str(msg->msg_type), msg->msg_len);
 
-		if (src_ni == NULL) {
-			src_ni = lp->lp_ni;
-			src_nid = src_ni->ni_nid;
-		} else {
-			LASSERT(src_ni == lp->lp_ni);
-			lnet_ni_decref_locked(src_ni, cpt);
-		}
-
-		lnet_peer_addref_locked(lp);
-
-		LASSERT(src_nid != LNET_NID_ANY);
-		lnet_msg_commit(msg, cpt);
-
-		if (!msg->msg_routing) {
-			/* I'm the source and now I know which NI to send on */
-			msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
-		}
-
-		msg->msg_target_is_router = 1;
-		msg->msg_target.nid = lp->lp_nid;
-		msg->msg_target.pid = LNET_PID_LUSTRE;
+		routing2 = true;
+		/*
+		 * RULE: Each node considers only the next-hop
+		 *
+		 * We're going to route the message, so change the peer to
+		 * the router.
+		 */
+		LASSERT(best_gw->lpni_peer_net);
+		LASSERT(best_gw->lpni_peer_net->lpn_peer);
+		peer = best_gw->lpni_peer_net->lpn_peer;
+	} else if (!lnet_is_peer_net_healthy_locked(peer_net)) {
+		/*
+		 * this peer_net is unhealthy but we still have an opportunity
+		 * to find another peer_net that we can use
+		 */
+		__u32 net_id = peer_net->lpn_net_id;
+		LCONSOLE_WARN("peer net %s unhealthy\n",
+			      libcfs_net2str(net_id));
+		goto again;
 	}
 
-	/* 'lp' is our best choice of peer */
+	/*
+	 * Look at the peer NIs for the destination peer that connect
+	 * to the chosen net. If a peer_ni is preferred when using the
+	 * best_ni to communicate, we use that one. If there is no
+	 * preferred peer_ni, or there are multiple preferred peer_ni,
+	 * the available transmit credits are used. If the transmit
+	 * credits are equal, we round-robin over the peer_ni.
+	 */
+	lpni = NULL;
+	best_lpni_credits = INT_MIN;
+	preferred = false;
+	best_lpni = NULL;
+	while ((lpni = lnet_get_next_peer_ni_locked(peer, peer_net, lpni))) {
+		/*
+		 * if this peer ni is not healthy just skip it, no point in
+		 * examining it further
+		 */
+		if (!lnet_is_peer_ni_healthy_locked(lpni))
+			continue;
+		ni_is_pref = lnet_peer_is_ni_pref_locked(lpni, best_ni);
 
-	LASSERT(!msg->msg_peertxcredit);
-	LASSERT(!msg->msg_txcredit);
-	LASSERT(msg->msg_txpeer == NULL);
+		/* if this is a preferred peer use it */
+		if (!preferred && ni_is_pref) {
+			preferred = true;
+		} else if (preferred && !ni_is_pref) {
+			/*
+			 * this is not the preferred peer so let's ignore
+			 * it.
+			 */
+			continue;
+		} else if (lpni->lpni_txcredits < best_lpni_credits) {
+			/*
+			 * We already have a peer that has more credits
+			 * available than this one. No need to consider
+			 * this peer further.
+			 */
+			continue;
+		} else if (lpni->lpni_txcredits == best_lpni_credits) {
+			/*
+			 * The best peer found so far and the current peer
+			 * have the same number of available credits let's
+			 * make sure to select between them using Round
+			 * Robin
+			 */
+			if (best_lpni) {
+				if (best_lpni->lpni_seq <= lpni->lpni_seq)
+					continue;
+			}
+		}
 
-	msg->msg_txpeer = lp;			/* msg takes my ref on lp */
+		best_lpni = lpni;
+		best_lpni_credits = lpni->lpni_txcredits;
+	}
+
+	/* if we still can't find a peer ni then we can't reach it */
+	if (!best_lpni) {
+		__u32 net_id = (peer_net) ? peer_net->lpn_net_id :
+			LNET_NIDNET(dst_nid);
+		lnet_net_unlock(cpt);
+		LCONSOLE_WARN("no peer_ni found on peer net %s\n",
+				libcfs_net2str(net_id));
+		return -EHOSTUNREACH;
+	}
+
+
+send:
+	routing = routing || routing2;
+
+	/*
+	 * Increment sequence number of the peer selected so that we
+	 * pick the next one in Round Robin.
+	 */
+	best_lpni->lpni_seq++;
+
+	/*
+	 * grab a reference on the peer_ni so it sticks around even if
+	 * we need to drop and relock the lnet_net_lock below.
+	 */
+	lnet_peer_ni_addref_locked(best_lpni);
+
+	/*
+	 * Use lnet_cpt_of_nid() to determine the CPT used to commit the
+	 * message. This ensures that we get a CPT that is correct for
+	 * the NI when the NI has been restricted to a subset of all CPTs.
+	 * If the selected CPT differs from the one currently locked, we
+	 * must unlock and relock the lnet_net_lock(), and then check whether
+	 * the configuration has changed. We don't have a hold on the best_ni
+	 * yet, and it may have vanished.
+	 */
+	cpt2 = lnet_cpt_of_nid_locked(best_lpni->lpni_nid, best_ni);
+	if (cpt != cpt2) {
+		lnet_net_unlock(cpt);
+		cpt = cpt2;
+		lnet_net_lock(cpt);
+		if (seq != lnet_get_dlc_seq_locked()) {
+			lnet_peer_ni_decref_locked(best_lpni);
+			goto again;
+		}
+	}
+
+	/*
+	 * store the best_lpni in the message right away to avoid having
+	 * to do the same operation under different conditions
+	 */
+	msg->msg_txpeer = best_lpni;
+	msg->msg_txni = best_ni;
+
+	/*
+	 * grab a reference for the best_ni since now it's in use in this
+	 * send. the reference will need to be dropped when the message is
+	 * finished in lnet_finalize()
+	 */
+	lnet_ni_addref_locked(msg->msg_txni, cpt);
+
+	/*
+	 * Always set the target.nid to the best peer picked. Either the
+	 * nid will be one of the preconfigured NIDs, or the same NID as
+	 * what was originally set in the target or it will be the NID of
+	 * a router if this message should be routed
+	 */
+	msg->msg_target.nid = msg->msg_txpeer->lpni_nid;
+
+	/*
+	 * lnet_msg_commit assigns the correct cpt to the message, which
+	 * is used to decrement the correct refcount on the ni when it's
+	 * time to return the credits
+	 */
+	lnet_msg_commit(msg, cpt);
+
+	/*
+	 * If we are routing the message then we don't need to overwrite
+	 * the src_nid since it would've been set at the origin. Otherwise
+	 * we are the originator so we need to set it.
+	 */
+	if (!msg->msg_routing)
+		msg->msg_hdr.src_nid = cpu_to_le64(msg->msg_txni->ni_nid);
+
+	if (routing) {
+		msg->msg_target_is_router = 1;
+		msg->msg_target.pid = LNET_PID_LUSTRE;
+		/*
+		 * since we're routing we want to ensure that the
+		 * msg_hdr.dest_nid is set to the final destination. When
+		 * the router receives this message it knows how to route
+		 * it.
+		 */
+		msg->msg_hdr.dest_nid =
+			cpu_to_le64(final_dst ? final_dst->lpni_nid : dst_nid);
+	} else {
+		/*
+		 * if we're not routing set the dest_nid to the best peer
+		 * ni that we picked earlier in the algorithm.
+		 */
+		msg->msg_hdr.dest_nid = cpu_to_le64(msg->msg_txpeer->lpni_nid);
+	}
 
 	rc = lnet_post_send_locked(msg, 0);
+
 	lnet_net_unlock(cpt);
 
+	return rc;
+}
+
+int
+lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg, lnet_nid_t rtr_nid)
+{
+	lnet_nid_t		dst_nid = msg->msg_target.nid;
+	int			rc;
+
+	/*
+	 * NB: rtr_nid is set to LNET_NID_ANY for all current use-cases,
+	 * but we might want to use pre-determined router for ACK/REPLY
+	 * in the future
+	 */
+	/* NB: ni != NULL == interface pre-determined (ACK/REPLY) */
+	LASSERT (msg->msg_txpeer == NULL);
+	LASSERT (!msg->msg_sending);
+	LASSERT (!msg->msg_target_is_router);
+	LASSERT (!msg->msg_receiving);
+
+	msg->msg_sending = 1;
+
+	LASSERT(!msg->msg_tx_committed);
+
+	rc = lnet_select_pathway(src_nid, dst_nid, msg, rtr_nid);
 	if (rc < 0)
 		return rc;
 
 	if (rc == LNET_CREDIT_OK)
-		lnet_ni_send(src_ni, msg);
+		lnet_ni_send(msg->msg_txni, msg);
 
-	return 0; /* rc == LNET_CREDIT_OK or LNET_CREDIT_WAIT */
+	/* rc == LNET_CREDIT_OK or LNET_CREDIT_WAIT */
+	return 0;
 }
 
 void
@@ -1446,15 +1981,17 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
 	hdr->msg.put.ptl_index	= le32_to_cpu(hdr->msg.put.ptl_index);
 	hdr->msg.put.offset	= le32_to_cpu(hdr->msg.put.offset);
 
-	info.mi_id.nid	= hdr->src_nid;
+	/* Primary peer NID. */
+	info.mi_id.nid	= msg->msg_initiator;
 	info.mi_id.pid	= hdr->src_pid;
 	info.mi_opc	= LNET_MD_OP_PUT;
 	info.mi_portal	= hdr->msg.put.ptl_index;
 	info.mi_rlength	= hdr->payload_length;
 	info.mi_roffset	= hdr->msg.put.offset;
 	info.mi_mbits	= hdr->msg.put.match_bits;
+	info.mi_cpt	= lnet_cpt_of_nid(msg->msg_rxpeer->lpni_nid, ni);
 
-	msg->msg_rx_ready_delay = ni->ni_lnd->lnd_eager_recv == NULL;
+	msg->msg_rx_ready_delay = ni->ni_net->net_lnd->lnd_eager_recv == NULL;
 	ready_delay = msg->msg_rx_ready_delay;
 
  again:
@@ -1495,6 +2032,7 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 {
 	struct lnet_match_info	info;
 	lnet_hdr_t		*hdr = &msg->msg_hdr;
+	lnet_process_id_t	source_id;
 	struct lnet_handle_wire	reply_wmd;
 	int			rc;
 
@@ -1504,13 +2042,17 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 	hdr->msg.get.sink_length  = le32_to_cpu(hdr->msg.get.sink_length);
 	hdr->msg.get.src_offset	  = le32_to_cpu(hdr->msg.get.src_offset);
 
-	info.mi_id.nid	= hdr->src_nid;
+	source_id.nid = hdr->src_nid;
+	source_id.pid = hdr->src_pid;
+	/* Primary peer NID */
+	info.mi_id.nid	= msg->msg_initiator;
 	info.mi_id.pid	= hdr->src_pid;
 	info.mi_opc	= LNET_MD_OP_GET;
 	info.mi_portal	= hdr->msg.get.ptl_index;
 	info.mi_rlength	= hdr->msg.get.sink_length;
 	info.mi_roffset	= hdr->msg.get.src_offset;
 	info.mi_mbits	= hdr->msg.get.match_bits;
+	info.mi_cpt	= lnet_cpt_of_nid(msg->msg_rxpeer->lpni_nid, ni);
 
 	rc = lnet_ptl_match_md(&info, msg);
 	if (rc == LNET_MATCHMD_DROP) {
@@ -1527,7 +2069,7 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 
 	reply_wmd = hdr->msg.get.return_wmd;
 
-	lnet_prep_send(msg, LNET_MSG_REPLY, info.mi_id,
+	lnet_prep_send(msg, LNET_MSG_REPLY, source_id,
 		       msg->msg_offset, msg->msg_wanted);
 
 	msg->msg_hdr.msg.reply.dst_wmd = reply_wmd;
@@ -1685,9 +2227,9 @@ lnet_parse_forward_locked(lnet_ni_t *ni, lnet_msg_t *msg)
 	if (!the_lnet.ln_routing)
 		return -ECANCELED;
 
-	if (msg->msg_rxpeer->lp_rtrcredits <= 0 ||
+	if (msg->msg_rxpeer->lpni_rtrcredits <= 0 ||
 	    lnet_msg2bufpool(msg)->rbp_credits <= 0) {
-		if (ni->ni_lnd->lnd_eager_recv == NULL) {
+		if (ni->ni_net->net_lnd->lnd_eager_recv == NULL) {
 			msg->msg_rx_ready_delay = 1;
 		} else {
 			lnet_net_unlock(msg->msg_rx_cpt);
@@ -1820,8 +2362,9 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
 	lnet_pid_t     dest_pid;
 	lnet_nid_t     dest_nid;
 	lnet_nid_t     src_nid;
-	__u32	       payload_length;
-	__u32	       type;
+	struct lnet_peer_ni *lpni;
+	__u32          payload_length;
+	__u32          type;
 
 	LASSERT (!in_interrupt ());
 
@@ -1832,7 +2375,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
 	payload_length = le32_to_cpu(hdr->payload_length);
 
 	for_me = (ni->ni_nid == dest_nid);
-	cpt = lnet_cpt_of_nid(from_nid);
+	cpt = lnet_cpt_of_nid(from_nid, ni);
 
 	switch (type) {
 	case LNET_MSG_ACK:
@@ -1979,21 +2522,26 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
 		msg->msg_hdr.dest_pid	= dest_pid;
 		msg->msg_hdr.payload_length = payload_length;
 	}
+	/* Multi-Rail: Primary NID of source. */
+	msg->msg_initiator = lnet_peer_primary_nid(src_nid);
 
 	lnet_net_lock(cpt);
-	rc = lnet_nid2peer_locked(&msg->msg_rxpeer, from_nid, cpt);
-	if (rc != 0) {
+	lpni = lnet_nid2peerni_locked(from_nid, cpt);
+	if (IS_ERR(lpni)) {
 		lnet_net_unlock(cpt);
 		CERROR("%s, src %s: Dropping %s "
-		       "(error %d looking up sender)\n",
+		       "(error %ld looking up sender)\n",
 		       libcfs_nid2str(from_nid), libcfs_nid2str(src_nid),
-		       lnet_msgtyp2str(type), rc);
+		       lnet_msgtyp2str(type), PTR_ERR(lpni));
 		lnet_msg_free(msg);
 		if (rc == -ESHUTDOWN)
 			/* We are shutting down.  Don't do anything more */
 			return 0;
 		goto drop;
 	}
+	msg->msg_rxpeer = lpni;
+	msg->msg_rxni = ni;
+	lnet_ni_addref_locked(ni, cpt);
 
 	if (lnet_isrouter(msg->msg_rxpeer)) {
 		lnet_peer_set_alive(msg->msg_rxpeer);
@@ -2078,15 +2626,14 @@ lnet_drop_delayed_msg_list(struct list_head *head, char *reason)
 		 * called lnet_drop_message(), so I just hang onto msg as well
 		 * until that's done */
 
-		lnet_drop_message(msg->msg_rxpeer->lp_ni,
-				  msg->msg_rxpeer->lp_cpt,
+		lnet_drop_message(msg->msg_rxni, msg->msg_rx_cpt,
 				  msg->msg_private, msg->msg_len);
 		/*
 		 * NB: message will not generate event because w/o attached MD,
 		 * but we still should give error code so lnet_msg_decommit()
 		 * can skip counters operations and other checks.
 		 */
-		lnet_finalize(msg->msg_rxpeer->lp_ni, msg, -ENOENT);
+		lnet_finalize(msg->msg_rxni, msg, -ENOENT);
 	}
 }
 
@@ -2109,6 +2656,7 @@ lnet_recv_delayed_msg_list(struct list_head *head)
 		LASSERT(msg->msg_rx_delayed);
 		LASSERT(msg->msg_md != NULL);
 		LASSERT(msg->msg_rxpeer != NULL);
+		LASSERT(msg->msg_rxni != NULL);
 		LASSERT(msg->msg_hdr.type == LNET_MSG_PUT);
 
 		CDEBUG(D_NET, "Resuming delayed PUT from %s portal %d "
@@ -2118,7 +2666,7 @@ lnet_recv_delayed_msg_list(struct list_head *head)
 			msg->msg_hdr.msg.put.offset,
 			msg->msg_hdr.payload_length);
 
-		lnet_recv_put(msg->msg_rxpeer->lp_ni, msg);
+		lnet_recv_put(msg->msg_rxni, msg);
 	}
 }
 
@@ -2294,6 +2842,8 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
 	       libcfs_nid2str(ni->ni_nid), libcfs_id2str(peer_id), getmd);
 
 	/* setup information for lnet_build_msg_event */
+	msg->msg_initiator = lnet_peer_primary_nid(peer_id.nid);
+	/* Cheaper: msg->msg_initiator = getmsg->msg_txpeer->lp_nid; */
 	msg->msg_from = peer_id.nid;
 	msg->msg_type = LNET_MSG_GET; /* flag this msg as an "optimized" GET */
 	msg->msg_hdr.src_nid = peer_id.nid;
@@ -2303,7 +2853,7 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
 	lnet_msg_attach_md(msg, getmd, getmd->md_offset, getmd->md_length);
 	lnet_res_unlock(cpt);
 
-	cpt = lnet_cpt_of_nid(peer_id.nid);
+	cpt = lnet_cpt_of_nid(peer_id.nid, ni);
 
 	lnet_net_lock(cpt);
 	lnet_msg_commit(msg, cpt);
@@ -2314,7 +2864,7 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
 	return msg;
 
  drop:
-	cpt = lnet_cpt_of_nid(peer_id.nid);
+	cpt = lnet_cpt_of_nid(peer_id.nid, ni);
 
 	lnet_net_lock(cpt);
 	the_lnet.ln_counters[cpt]->drop_count++;
@@ -2461,7 +3011,7 @@ int
 LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 {
 	struct list_head	*e;
-	struct lnet_ni		*ni;
+	struct lnet_ni		*ni = NULL;
 	lnet_remotenet_t	*rnet;
 	__u32			dstnet = LNET_NIDNET(dstnid);
 	int			hops;
@@ -2478,9 +3028,7 @@ LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 
 	cpt = lnet_net_lock_current();
 
-	list_for_each(e, &the_lnet.ln_nis) {
-		ni = list_entry(e, lnet_ni_t, ni_list);
-
+	while ((ni = lnet_get_next_ni_locked(NULL, ni))) {
 		if (ni->ni_nid == dstnid) {
 			if (srcnidp != NULL)
 				*srcnidp = dstnid;
@@ -2540,8 +3088,12 @@ LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 
 			LASSERT(shortest != NULL);
 			hops = shortest_hops;
-			if (srcnidp != NULL)
-				*srcnidp = shortest->lr_gateway->lp_ni->ni_nid;
+			if (srcnidp != NULL) {
+				ni = lnet_get_next_ni_locked(
+					shortest->lr_gateway->lpni_net,
+					NULL);
+				*srcnidp = ni->ni_nid;
+			}
 			if (orderp != NULL)
 				*orderp = order;
 			lnet_net_unlock(cpt);

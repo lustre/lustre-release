@@ -463,6 +463,55 @@ proc_cpt_table(struct ctl_table *table, int write, void __user *buffer,
 				    __proc_cpt_table);
 }
 
+static int __proc_cpt_distance(void *data, int write,
+			       loff_t pos, void __user *buffer, int nob)
+{
+	char *buf = NULL;
+	int   len = 4096;
+	int   rc  = 0;
+
+	if (write)
+		return -EPERM;
+
+	LASSERT(cfs_cpt_table != NULL);
+
+	while (1) {
+		LIBCFS_ALLOC(buf, len);
+		if (buf == NULL)
+			return -ENOMEM;
+
+		rc = cfs_cpt_distance_print(cfs_cpt_table, buf, len);
+		if (rc >= 0)
+			break;
+
+		if (rc == -EFBIG) {
+			LIBCFS_FREE(buf, len);
+			len <<= 1;
+			continue;
+		}
+		goto out;
+	}
+
+	if (pos >= rc) {
+		rc = 0;
+		goto out;
+	}
+
+	rc = cfs_trace_copyout_string(buffer, nob, buf + pos, NULL);
+ out:
+	if (buf != NULL)
+		LIBCFS_FREE(buf, len);
+	return rc;
+}
+
+static int
+proc_cpt_distance(struct ctl_table *table, int write, void __user *buffer,
+	       size_t *lenp, loff_t *ppos)
+{
+	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
+				     __proc_cpt_distance);
+}
+
 static struct ctl_table lnet_table[] = {
 	/*
 	 * NB No .strategy entries have been provided since sysctl(8) prefers
@@ -535,6 +584,13 @@ static struct ctl_table lnet_table[] = {
 		.maxlen		= 128,
 		.mode		= 0444,
 		.proc_handler	= &proc_cpt_table,
+	},
+	{
+		INIT_CTL_NAME
+		.procname	= "cpu_partition_distance",
+		.maxlen		= 128,
+		.mode		= 0444,
+		.proc_handler	= &proc_cpt_distance,
 	},
 	{
 		INIT_CTL_NAME

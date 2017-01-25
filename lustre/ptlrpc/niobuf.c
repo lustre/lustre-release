@@ -43,55 +43,61 @@
  * over \a conn connection to portal \a portal.
  * Returns 0 on success or error code.
  */
-static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
-                         lnet_ack_req_t ack, struct ptlrpc_cb_id *cbid,
-                         struct ptlrpc_connection *conn, int portal, __u64 xid,
-                         unsigned int offset)
+static int ptl_send_buf(lnet_handle_md_t *mdh, void *base, int len,
+			lnet_ack_req_t ack, struct ptlrpc_cb_id *cbid,
+			lnet_nid_t self, lnet_process_id_t peer_id,
+			int portal, __u64 xid, unsigned int offset,
+			lnet_handle_md_t *bulk_cookie)
 {
-        int              rc;
-        lnet_md_t         md;
-        ENTRY;
+	int              rc;
+	lnet_md_t         md;
+	ENTRY;
 
-        LASSERT (portal != 0);
-        LASSERT (conn != NULL);
-        CDEBUG (D_INFO, "conn=%p id %s\n", conn, libcfs_id2str(conn->c_peer));
-        md.start     = base;
-        md.length    = len;
-        md.threshold = (ack == LNET_ACK_REQ) ? 2 : 1;
-        md.options   = PTLRPC_MD_OPTIONS;
-        md.user_ptr  = cbid;
-        md.eq_handle = ptlrpc_eq_h;
+	LASSERT (portal != 0);
+	CDEBUG (D_INFO, "peer_id %s\n", libcfs_id2str(peer_id));
+	md.start     = base;
+	md.length    = len;
+	md.threshold = (ack == LNET_ACK_REQ) ? 2 : 1;
+	md.options   = PTLRPC_MD_OPTIONS;
+	md.user_ptr  = cbid;
+	md.eq_handle = ptlrpc_eq_h;
+	LNetInvalidateHandle(&md.bulk_handle);
 
-        if (unlikely(ack == LNET_ACK_REQ &&
-                     OBD_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_ACK, OBD_FAIL_ONCE))){
-                /* don't ask for the ack to simulate failing client */
-                ack = LNET_NOACK_REQ;
-        }
+	if (bulk_cookie) {
+		md.bulk_handle = *bulk_cookie;
+		md.options |= LNET_MD_BULK_HANDLE;
+	}
 
-        rc = LNetMDBind (md, LNET_UNLINK, mdh);
-        if (unlikely(rc != 0)) {
-                CERROR ("LNetMDBind failed: %d\n", rc);
-                LASSERT (rc == -ENOMEM);
-                RETURN (-ENOMEM);
-        }
+	if (unlikely(ack == LNET_ACK_REQ &&
+		     OBD_FAIL_CHECK_ORSET(OBD_FAIL_PTLRPC_ACK, OBD_FAIL_ONCE))){
+		/* don't ask for the ack to simulate failing client */
+		ack = LNET_NOACK_REQ;
+	}
+
+	rc = LNetMDBind (md, LNET_UNLINK, mdh);
+	if (unlikely(rc != 0)) {
+		CERROR ("LNetMDBind failed: %d\n", rc);
+		LASSERT (rc == -ENOMEM);
+		RETURN (-ENOMEM);
+	}
 
 	CDEBUG(D_NET, "Sending %d bytes to portal %d, xid %lld, offset %u\n",
-               len, portal, xid, offset);
+	       len, portal, xid, offset);
 
-        rc = LNetPut (conn->c_self, *mdh, ack,
-                      conn->c_peer, portal, xid, offset, 0);
-        if (unlikely(rc != 0)) {
-                int rc2;
-                /* We're going to get an UNLINK event when I unlink below,
-                 * which will complete just like any other failed send, so
-                 * I fall through and return success here! */
+	rc = LNetPut(self, *mdh, ack,
+		     peer_id, portal, xid, offset, 0);
+	if (unlikely(rc != 0)) {
+		int rc2;
+		/* We're going to get an UNLINK event when I unlink below,
+		 * which will complete just like any other failed send, so
+		 * I fall through and return success here! */
 		CERROR("LNetPut(%s, %d, %lld) failed: %d\n",
-                       libcfs_id2str(conn->c_peer), portal, xid, rc);
-                rc2 = LNetMDUnlink(*mdh);
-                LASSERTF(rc2 == 0, "rc2 = %d\n", rc2);
-        }
+		       libcfs_id2str(peer_id), portal, xid, rc);
+		rc2 = LNetMDUnlink(*mdh);
+		LASSERTF(rc2 == 0, "rc2 = %d\n", rc2);
+	}
 
-        RETURN (0);
+	RETURN (0);
 }
 
 static void mdunlink_iterate_helper(lnet_handle_md_t *bd_mds, int count)
@@ -148,7 +154,8 @@ EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 {
 	struct obd_export        *exp = desc->bd_export;
-	struct ptlrpc_connection *conn = exp->exp_connection;
+	lnet_nid_t		  self_nid;
+	lnet_process_id_t	  peer_id;
 	int                       rc = 0;
 	__u64                     mbits;
 	int                       posted_md;
@@ -165,6 +172,14 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 
 	LASSERT(desc->bd_cbid.cbid_fn == server_bulk_callback);
 	LASSERT(desc->bd_cbid.cbid_arg == desc);
+
+	/*
+	 * Multi-Rail: get the preferred self and peer NIDs from the
+	 * request, so they are based on the route taken by the
+	 * message.
+	 */
+	self_nid = desc->bd_req->rq_self;
+	peer_id = desc->bd_req->rq_source;
 
 	/* NB total length may be 0 for a read past EOF, so we send 0
 	 * length bulks, since the client expects bulk events.
@@ -211,18 +226,18 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 
 		/* Network is about to get at the memory */
 		if (ptlrpc_is_bulk_put_source(desc->bd_type))
-			rc = LNetPut(conn->c_self, desc->bd_mds[posted_md],
-				     LNET_ACK_REQ, conn->c_peer,
+			rc = LNetPut(self_nid, desc->bd_mds[posted_md],
+				     LNET_ACK_REQ, peer_id,
 				     desc->bd_portal, mbits, 0, 0);
 		else
-			rc = LNetGet(conn->c_self, desc->bd_mds[posted_md],
-				     conn->c_peer, desc->bd_portal, mbits, 0);
+			rc = LNetGet(self_nid, desc->bd_mds[posted_md],
+				     peer_id, desc->bd_portal, mbits, 0);
 
 		posted_md++;
 		if (rc != 0) {
 			CERROR("%s: failed bulk transfer with %s:%u x%llu: "
 			       "rc = %d\n", exp->exp_obd->obd_name,
-			       libcfs_id2str(conn->c_peer), desc->bd_portal,
+			       libcfs_id2str(peer_id), desc->bd_portal,
 			       mbits, rc);
 			break;
 		}
@@ -243,7 +258,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 
 	CDEBUG(D_NET, "Transferring %u pages %u bytes via portal %d "
 	       "id %s mbits %#llx-%#llx\n", desc->bd_iov_count,
-	       desc->bd_nob, desc->bd_portal, libcfs_id2str(conn->c_peer),
+	       desc->bd_nob, desc->bd_portal, libcfs_id2str(peer_id),
 	       mbits - posted_md, mbits - 1);
 
 	RETURN(0);
@@ -537,9 +552,9 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
  */
 int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 {
-        struct ptlrpc_reply_state *rs = req->rq_reply_state;
-        struct ptlrpc_connection  *conn;
-        int                        rc;
+	struct ptlrpc_reply_state *rs = req->rq_reply_state;
+	struct ptlrpc_connection  *conn;
+	int                        rc;
 
         /* We must already have a reply buffer (only ptlrpc_error() may be
          * called without one). The reply generated by sptlrpc layer (e.g.
@@ -608,12 +623,12 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 
         req->rq_sent = cfs_time_current_sec();
 
-        rc = ptl_send_buf (&rs->rs_md_h, rs->rs_repbuf, rs->rs_repdata_len,
-                           (rs->rs_difficult && !rs->rs_no_ack) ?
-                           LNET_ACK_REQ : LNET_NOACK_REQ,
-			   &rs->rs_cb_id, conn,
-			   ptlrpc_req2svc(req)->srv_rep_portal,
-                           req->rq_xid, req->rq_reply_off);
+	rc = ptl_send_buf(&rs->rs_md_h, rs->rs_repbuf, rs->rs_repdata_len,
+			  (rs->rs_difficult && !rs->rs_no_ack) ?
+			  LNET_ACK_REQ : LNET_NOACK_REQ,
+			  &rs->rs_cb_id, req->rq_self, req->rq_source,
+			  ptlrpc_req2svc(req)->srv_rep_portal,
+			  req->rq_xid, req->rq_reply_off, NULL);
 out:
         if (unlikely(rc != 0))
                 ptlrpc_req_drop_rs(req);
@@ -669,15 +684,18 @@ int ptlrpc_error(struct ptlrpc_request *req)
  */
 int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 {
-        int rc;
-        int rc2;
-        int mpflag = 0;
-        struct ptlrpc_connection *connection;
-        lnet_handle_me_t  reply_me_h;
-        lnet_md_t         reply_md;
+	int rc;
+	int rc2;
+	int mpflag = 0;
+	lnet_handle_md_t bulk_cookie;
+	struct ptlrpc_connection *connection;
+	lnet_handle_me_t  reply_me_h;
+	lnet_md_t         reply_md;
 	struct obd_import *imp = request->rq_import;
 	struct obd_device *obd = imp->imp_obd;
-        ENTRY;
+	ENTRY;
+
+	LNetInvalidateHandle(&bulk_cookie);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_RPC))
                 RETURN(0);
@@ -767,12 +785,18 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	if (rc)
 		GOTO(out, rc);
 
-        /* bulk register should be done after wrap_request() */
-        if (request->rq_bulk != NULL) {
-                rc = ptlrpc_register_bulk (request);
-                if (rc != 0)
-                        GOTO(out, rc);
-        }
+	/* bulk register should be done after wrap_request() */
+	if (request->rq_bulk != NULL) {
+		rc = ptlrpc_register_bulk (request);
+		if (rc != 0)
+			GOTO(out, rc);
+		/*
+		 * All the mds in the request will have the same cpt
+		 * encoded in the cookie. So we can just get the first
+		 * one.
+		 */
+		bulk_cookie = request->rq_bulk->bd_mds[0];
+	}
 
         if (!noreply) {
                 LASSERT (request->rq_replen != 0);
@@ -869,14 +893,14 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
 	ptlrpc_pinger_sending_on_import(imp);
 
-        DEBUG_REQ(D_INFO, request, "send flg=%x",
-                  lustre_msg_get_flags(request->rq_reqmsg));
-        rc = ptl_send_buf(&request->rq_req_md_h,
-                          request->rq_reqbuf, request->rq_reqdata_len,
-                          LNET_NOACK_REQ, &request->rq_req_cbid,
-                          connection,
-                          request->rq_request_portal,
-                          request->rq_xid, 0);
+	DEBUG_REQ(D_INFO, request, "send flg=%x",
+		  lustre_msg_get_flags(request->rq_reqmsg));
+	rc = ptl_send_buf(&request->rq_req_md_h,
+			  request->rq_reqbuf, request->rq_reqdata_len,
+			  LNET_NOACK_REQ, &request->rq_req_cbid,
+			  LNET_NID_ANY, connection->c_peer,
+			  request->rq_request_portal,
+			  request->rq_xid, 0, &bulk_cookie);
 	if (likely(rc == 0))
 		GOTO(out, rc);
 

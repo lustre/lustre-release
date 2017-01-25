@@ -94,7 +94,7 @@ lolnd_shutdown(lnet_ni_t *ni)
 static int
 lolnd_startup (lnet_ni_t *ni)
 {
-	LASSERT (ni->ni_lnd == &the_lolnd);
+	LASSERT (ni->ni_net->net_lnd == &the_lolnd);
 	LASSERT (!lolnd_instanced);
 	lolnd_instanced = 1;
 

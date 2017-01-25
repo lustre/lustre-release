@@ -524,7 +524,7 @@ srpc_init_client_rpc(srpc_client_rpc_t *rpc, lnet_process_id_t peer,
 
 	INIT_LIST_HEAD(&rpc->crpc_list);
 	swi_init_workitem(&rpc->crpc_wi, rpc, srpc_send_rpc,
-			  lst_sched_test[lnet_cpt_of_nid(peer.nid)]);
+			  lst_sched_test[lnet_cpt_of_nid(peer.nid, NULL)]);
 	spin_lock_init(&rpc->crpc_lock);
 	atomic_set(&rpc->crpc_refcount, 1); /* 1 ref for caller */
 

@@ -310,8 +310,8 @@ lnet_accept(struct socket *sock, __u32 magic)
 	if (flip)
 		__swab64s(&cr.acr_nid);
 
-	ni = lnet_net2ni(LNET_NIDNET(cr.acr_nid));
-	if (ni == NULL ||		/* no matching net */
+	ni = lnet_nid2ni_addref(cr.acr_nid);
+	if (ni == NULL ||               /* no matching net */
 	    ni->ni_nid != cr.acr_nid) { /* right NET, wrong NID! */
 		if (ni != NULL)
 			lnet_ni_decref(ni);
@@ -321,7 +321,7 @@ lnet_accept(struct socket *sock, __u32 magic)
 		return -EPERM;
 	}
 
-	if (ni->ni_lnd->lnd_accept == NULL) {
+	if (ni->ni_net->net_lnd->lnd_accept == NULL) {
 		/* This catches a request for the loopback LND */
 		lnet_ni_decref(ni);
 		LCONSOLE_ERROR_MSG(0x121, "Refusing connection from %pI4h "
@@ -333,7 +333,7 @@ lnet_accept(struct socket *sock, __u32 magic)
 	CDEBUG(D_NET, "Accept %s from %pI4h\n",
 	       libcfs_nid2str(cr.acr_nid), &peer_ip);
 
-	rc = ni->ni_lnd->lnd_accept(ni, sock);
+	rc = ni->ni_net->net_lnd->lnd_accept(ni, sock);
 
 	lnet_ni_decref(ni);
 	return rc;
@@ -476,7 +476,7 @@ lnet_acceptor_start(void)
 	if (rc <= 0)
 		return rc;
 
-	if (lnet_count_acceptor_nis() == 0)  /* not required */
+	if (lnet_count_acceptor_nets() == 0)  /* not required */
 		return 0;
 
 	task = kthread_run(lnet_acceptor, (void *)(uintptr_t)secure,

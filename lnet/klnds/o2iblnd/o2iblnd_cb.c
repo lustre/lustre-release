@@ -38,8 +38,8 @@
 
 #define MAX_CONN_RACES_BEFORE_ABORT 20
 
-static void kiblnd_peer_alive(kib_peer_t *peer);
-static void kiblnd_peer_connect_failed(kib_peer_t *peer, int active, int error);
+static void kiblnd_peer_alive(kib_peer_ni_t *peer_ni);
+static void kiblnd_peer_connect_failed(kib_peer_ni_t *peer_ni, int active, int error);
 static void kiblnd_init_tx_msg(lnet_ni_t *ni, kib_tx_t *tx,
 			       int type, int body_nob);
 static int kiblnd_init_rdma(kib_conn_t *conn, kib_tx_t *tx, int type,
@@ -61,7 +61,7 @@ kiblnd_tx_done (lnet_ni_t *ni, kib_tx_t *tx)
 	LASSERT (!in_interrupt());
 	LASSERT (!tx->tx_queued);               /* mustn't be queued for sending */
 	LASSERT (tx->tx_sending == 0);          /* mustn't be awaiting sent callback */
-	LASSERT (!tx->tx_waiting);              /* mustn't be awaiting peer response */
+	LASSERT (!tx->tx_waiting);              /* mustn't be awaiting peer_ni response */
 	LASSERT (tx->tx_pool != NULL);
 
 	kiblnd_unmap_tx(ni, tx);
@@ -116,7 +116,7 @@ kiblnd_get_idle_tx(lnet_ni_t *ni, lnet_nid_t target)
 	kib_tx_t		*tx;
 	kib_tx_poolset_t	*tps;
 
-	tps = net->ibn_tx_ps[lnet_cpt_of_nid(target)];
+	tps = net->ibn_tx_ps[lnet_cpt_of_nid(target, ni)];
 	node = kiblnd_pool_alloc_node(&tps->tps_poolset);
         if (node == NULL)
                 return NULL;
@@ -416,7 +416,7 @@ kiblnd_handle_rx (kib_rx_t *rx)
 
                 LASSERT (tx->tx_waiting);
                 /* CAVEAT EMPTOR: I could be racing with tx_complete, but...
-                 * (a) I can overwrite tx_msg since my peer has received it!
+                 * (a) I can overwrite tx_msg since my peer_ni has received it!
                  * (b) tx_waiting set tells tx_complete() it's not done. */
 
                 tx->tx_nwrq = 0;                /* overwrite PUT_REQ */
@@ -580,7 +580,7 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 		return rc;
 	}
 
-	/* If rd is not tx_rd, it's going to get sent to a peer, who will need
+	/* If rd is not tx_rd, it's going to get sent to a peer_ni, who will need
 	 * the rkey */
 	rd->rd_key = tx->fmr.fmr_key;
 	rd->rd_frags[0].rf_addr &= ~hdev->ibh_page_mask;
@@ -616,7 +616,7 @@ kiblnd_map_tx(lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd, int nfrags)
 	__u32 nob;
 	int i;
 
-        /* If rd is not tx_rd, it's going to get sent to a peer and I'm the
+        /* If rd is not tx_rd, it's going to get sent to a peer_ni and I'm the
          * RDMA sink */
         tx->tx_dmadir = (rd != tx->tx_rd) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 	tx->tx_nfrags = nfrags;
@@ -753,12 +753,12 @@ static int
 kiblnd_post_tx_locked (kib_conn_t *conn, kib_tx_t *tx, int credit)
 __must_hold(&conn->ibc_lock)
 {
-        kib_msg_t         *msg = tx->tx_msg;
-        kib_peer_t        *peer = conn->ibc_peer;
-	struct lnet_ni    *ni = peer->ibp_ni;
-        int                ver = conn->ibc_version;
-        int                rc;
-        int                done;
+	kib_msg_t *msg = tx->tx_msg;
+	kib_peer_ni_t *peer_ni = conn->ibc_peer;
+	struct lnet_ni *ni = peer_ni->ibp_ni;
+	int ver = conn->ibc_version;
+	int rc;
+	int done;
 
 	LASSERT(tx->tx_queued);
 	/* We rely on this for QP sizing */
@@ -775,13 +775,13 @@ __must_hold(&conn->ibc_lock)
 	    kiblnd_concurrent_sends(ver, ni)) {
                 /* tx completions outstanding... */
                 CDEBUG(D_NET, "%s: posted enough\n",
-                       libcfs_nid2str(peer->ibp_nid));
+                       libcfs_nid2str(peer_ni->ibp_nid));
                 return -EAGAIN;
         }
 
         if (credit != 0 && conn->ibc_credits == 0) {   /* no credits */
                 CDEBUG(D_NET, "%s: no credits\n",
-                       libcfs_nid2str(peer->ibp_nid));
+                       libcfs_nid2str(peer_ni->ibp_nid));
                 return -EAGAIN;
         }
 
@@ -789,7 +789,7 @@ __must_hold(&conn->ibc_lock)
             conn->ibc_credits == 1 &&   /* last credit reserved */
             msg->ibm_type != IBLND_MSG_NOOP) {      /* for NOOP */
                 CDEBUG(D_NET, "%s: not using last credit\n",
-                       libcfs_nid2str(peer->ibp_nid));
+                       libcfs_nid2str(peer_ni->ibp_nid));
                 return -EAGAIN;
         }
 
@@ -805,16 +805,16 @@ __must_hold(&conn->ibc_lock)
 		 * kiblnd_check_sends_locked will queue NOOP again when
 		 * posted NOOPs complete */
 		spin_unlock(&conn->ibc_lock);
-		kiblnd_tx_done(peer->ibp_ni, tx);
+		kiblnd_tx_done(peer_ni->ibp_ni, tx);
 		spin_lock(&conn->ibc_lock);
                 CDEBUG(D_NET, "%s(%d): redundant or enough NOOP\n",
-                       libcfs_nid2str(peer->ibp_nid),
+                       libcfs_nid2str(peer_ni->ibp_nid),
                        conn->ibc_noops_posted);
                 return 0;
         }
 
-        kiblnd_pack_msg(peer->ibp_ni, msg, ver, conn->ibc_outstanding_credits,
-                        peer->ibp_nid, conn->ibc_incarnation);
+        kiblnd_pack_msg(peer_ni->ibp_ni, msg, ver, conn->ibc_outstanding_credits,
+                        peer_ni->ibp_nid, conn->ibc_incarnation);
 
         conn->ibc_credits -= credit;
         conn->ibc_outstanding_credits = 0;
@@ -854,7 +854,7 @@ __must_hold(&conn->ibc_lock)
 		}
 
 		LASSERTF(bad->wr_id == kiblnd_ptr2wreqid(tx, IBLND_WID_TX),
-			 "bad wr_id %#llx, opc %d, flags %d, peer: %s\n",
+			 "bad wr_id %#llx, opc %d, flags %d, peer_ni: %s\n",
 			 bad->wr_id, bad->opcode, bad->send_flags,
 			 libcfs_nid2str(conn->ibc_peer->ibp_nid));
 
@@ -887,15 +887,15 @@ __must_hold(&conn->ibc_lock)
 
         if (conn->ibc_state == IBLND_CONN_ESTABLISHED)
                 CERROR("Error %d posting transmit to %s\n",
-                       rc, libcfs_nid2str(peer->ibp_nid));
+                       rc, libcfs_nid2str(peer_ni->ibp_nid));
         else
                 CDEBUG(D_NET, "Error %d posting transmit to %s\n",
-                       rc, libcfs_nid2str(peer->ibp_nid));
+                       rc, libcfs_nid2str(peer_ni->ibp_nid));
 
         kiblnd_close_conn(conn, rc);
 
         if (done)
-                kiblnd_tx_done(peer->ibp_ni, tx);
+                kiblnd_tx_done(peer_ni->ibp_ni, tx);
 
 	spin_lock(&conn->ibc_lock);
 
@@ -1000,12 +1000,12 @@ kiblnd_tx_complete (kib_tx_t *tx, int status)
                 conn->ibc_noops_posted--;
 
         if (failed) {
-                tx->tx_waiting = 0;             /* don't wait for peer */
+                tx->tx_waiting = 0;             /* don't wait for peer_ni */
                 tx->tx_status = -EIO;
         }
 
         idle = (tx->tx_sending == 0) &&         /* This is the final callback */
-               !tx->tx_waiting &&               /* Not waiting for peer */
+               !tx->tx_waiting &&               /* Not waiting for peer_ni */
                !tx->tx_queued;                  /* Not re-queued (PUT_DONE) */
         if (idle)
 		list_del(&tx->tx_list);
@@ -1084,7 +1084,7 @@ kiblnd_init_rdma(kib_conn_t *conn, kib_tx_t *tx, int type,
                 }
 
 		if (tx->tx_nwrq >= conn->ibc_max_frags) {
-			CERROR("RDMA has too many fragments for peer %s (%d), "
+			CERROR("RDMA has too many fragments for peer_ni %s (%d), "
 			       "src idx/frags: %d/%d dst idx/frags: %d/%d\n",
 			       libcfs_nid2str(conn->ibc_peer->ibp_nid),
 			       conn->ibc_max_frags,
@@ -1242,25 +1242,25 @@ static int kiblnd_resolve_addr(struct rdma_cm_id *cmid,
 }
 
 static void
-kiblnd_connect_peer (kib_peer_t *peer)
+kiblnd_connect_peer (kib_peer_ni_t *peer_ni)
 {
         struct rdma_cm_id *cmid;
         kib_dev_t         *dev;
-        kib_net_t         *net = peer->ibp_ni->ni_data;
+        kib_net_t         *net = peer_ni->ibp_ni->ni_data;
         struct sockaddr_in srcaddr;
         struct sockaddr_in dstaddr;
         int                rc;
 
         LASSERT (net != NULL);
-        LASSERT (peer->ibp_connecting > 0);
-	LASSERT(!peer->ibp_reconnecting);
+        LASSERT (peer_ni->ibp_connecting > 0);
+	LASSERT(!peer_ni->ibp_reconnecting);
 
-        cmid = kiblnd_rdma_create_id(kiblnd_cm_callback, peer, RDMA_PS_TCP,
+        cmid = kiblnd_rdma_create_id(kiblnd_cm_callback, peer_ni, RDMA_PS_TCP,
                                      IB_QPT_RC);
 
         if (IS_ERR(cmid)) {
                 CERROR("Can't create CMID for %s: %ld\n",
-                       libcfs_nid2str(peer->ibp_nid), PTR_ERR(cmid));
+                       libcfs_nid2str(peer_ni->ibp_nid), PTR_ERR(cmid));
                 rc = PTR_ERR(cmid);
                 goto failed;
         }
@@ -1273,9 +1273,9 @@ kiblnd_connect_peer (kib_peer_t *peer)
         memset(&dstaddr, 0, sizeof(dstaddr));
         dstaddr.sin_family = AF_INET;
         dstaddr.sin_port = htons(*kiblnd_tunables.kib_service);
-        dstaddr.sin_addr.s_addr = htonl(LNET_NIDADDR(peer->ibp_nid));
+        dstaddr.sin_addr.s_addr = htonl(LNET_NIDADDR(peer_ni->ibp_nid));
 
-        kiblnd_peer_addref(peer);               /* cmid's ref */
+        kiblnd_peer_addref(peer_ni);               /* cmid's ref */
 
         if (*kiblnd_tunables.kib_use_priv_port) {
                 rc = kiblnd_resolve_addr(cmid, &srcaddr, &dstaddr,
@@ -1289,28 +1289,28 @@ kiblnd_connect_peer (kib_peer_t *peer)
         if (rc != 0) {
                 /* Can't initiate address resolution:  */
                 CERROR("Can't resolve addr for %s: %d\n",
-                       libcfs_nid2str(peer->ibp_nid), rc);
+                       libcfs_nid2str(peer_ni->ibp_nid), rc);
                 goto failed2;
         }
 
         LASSERT (cmid->device != NULL);
 	CDEBUG(D_NET, "%s: connection bound to %s:%pI4h:%s\n",
-               libcfs_nid2str(peer->ibp_nid), dev->ibd_ifname,
+               libcfs_nid2str(peer_ni->ibp_nid), dev->ibd_ifname,
 	       &dev->ibd_ifip, cmid->device->name);
 
 	return;
 
  failed2:
-	kiblnd_peer_connect_failed(peer, 1, rc);
-	kiblnd_peer_decref(peer);               /* cmid's ref */
+	kiblnd_peer_connect_failed(peer_ni, 1, rc);
+	kiblnd_peer_decref(peer_ni);               /* cmid's ref */
 	rdma_destroy_id(cmid);
 	return;
  failed:
-	kiblnd_peer_connect_failed(peer, 1, rc);
+	kiblnd_peer_connect_failed(peer_ni, 1, rc);
 }
 
 bool
-kiblnd_reconnect_peer(kib_peer_t *peer)
+kiblnd_reconnect_peer(kib_peer_ni_t *peer_ni)
 {
 	rwlock_t	 *glock = &kiblnd_data.kib_global_lock;
 	char		 *reason = NULL;
@@ -1320,12 +1320,12 @@ kiblnd_reconnect_peer(kib_peer_t *peer)
 	INIT_LIST_HEAD(&txs);
 
 	write_lock_irqsave(glock, flags);
-	if (peer->ibp_reconnecting == 0) {
-		if (peer->ibp_accepting)
+	if (peer_ni->ibp_reconnecting == 0) {
+		if (peer_ni->ibp_accepting)
 			reason = "accepting";
-		else if (peer->ibp_connecting)
+		else if (peer_ni->ibp_connecting)
 			reason = "connecting";
-		else if (!list_empty(&peer->ibp_conns))
+		else if (!list_empty(&peer_ni->ibp_conns))
 			reason = "connected";
 		else /* connected then closed */
 			reason = "closed";
@@ -1333,37 +1333,38 @@ kiblnd_reconnect_peer(kib_peer_t *peer)
 		goto no_reconnect;
 	}
 
-	LASSERT(!peer->ibp_accepting && !peer->ibp_connecting &&
-		list_empty(&peer->ibp_conns));
-	peer->ibp_reconnecting = 0;
+	LASSERT(!peer_ni->ibp_accepting && !peer_ni->ibp_connecting &&
+		list_empty(&peer_ni->ibp_conns));
+	peer_ni->ibp_reconnecting = 0;
 
-	if (!kiblnd_peer_active(peer)) {
-		list_splice_init(&peer->ibp_tx_queue, &txs);
+	if (!kiblnd_peer_active(peer_ni)) {
+		list_splice_init(&peer_ni->ibp_tx_queue, &txs);
 		reason = "unlinked";
 		goto no_reconnect;
 	}
 
-	peer->ibp_connecting++;
-	peer->ibp_reconnected++;
+	peer_ni->ibp_connecting++;
+	peer_ni->ibp_reconnected++;
+
 	write_unlock_irqrestore(glock, flags);
 
-	kiblnd_connect_peer(peer);
+	kiblnd_connect_peer(peer_ni);
 	return true;
 
  no_reconnect:
 	write_unlock_irqrestore(glock, flags);
 
 	CWARN("Abort reconnection of %s: %s\n",
-	      libcfs_nid2str(peer->ibp_nid), reason);
-	kiblnd_txlist_done(peer->ibp_ni, &txs, -ECONNABORTED);
+	      libcfs_nid2str(peer_ni->ibp_nid), reason);
+	kiblnd_txlist_done(peer_ni->ibp_ni, &txs, -ECONNABORTED);
 	return false;
 }
 
 void
 kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
 {
-        kib_peer_t        *peer;
-        kib_peer_t        *peer2;
+        kib_peer_ni_t        *peer_ni;
+        kib_peer_ni_t        *peer2;
         kib_conn_t        *conn;
 	rwlock_t	*g_lock = &kiblnd_data.kib_global_lock;
         unsigned long      flags;
@@ -1375,14 +1376,14 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
         LASSERT (tx == NULL || tx->tx_conn == NULL); /* only set when assigned a conn */
         LASSERT (tx == NULL || tx->tx_nwrq > 0);     /* work items have been set up */
 
-        /* First time, just use a read lock since I expect to find my peer
+        /* First time, just use a read lock since I expect to find my peer_ni
          * connected */
 	read_lock_irqsave(g_lock, flags);
 
-        peer = kiblnd_find_peer_locked(nid);
-	if (peer != NULL && !list_empty(&peer->ibp_conns)) {
-                /* Found a peer with an established connection */
-                conn = kiblnd_get_conn_locked(peer);
+        peer_ni = kiblnd_find_peer_locked(ni, nid);
+	if (peer_ni != NULL && !list_empty(&peer_ni->ibp_conns)) {
+                /* Found a peer_ni with an established connection */
+                conn = kiblnd_get_conn_locked(peer_ni);
                 kiblnd_conn_addref(conn); /* 1 ref for me... */
 
 		read_unlock_irqrestore(g_lock, flags);
@@ -1397,17 +1398,17 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
 	/* Re-try with a write lock */
 	write_lock(g_lock);
 
-        peer = kiblnd_find_peer_locked(nid);
-        if (peer != NULL) {
-		if (list_empty(&peer->ibp_conns)) {
-                        /* found a peer, but it's still connecting... */
-			LASSERT(kiblnd_peer_connecting(peer));
+        peer_ni = kiblnd_find_peer_locked(ni, nid);
+        if (peer_ni != NULL) {
+		if (list_empty(&peer_ni->ibp_conns)) {
+                        /* found a peer_ni, but it's still connecting... */
+			LASSERT(kiblnd_peer_connecting(peer_ni));
                         if (tx != NULL)
 				list_add_tail(&tx->tx_list,
-                                                  &peer->ibp_tx_queue);
+                                                  &peer_ni->ibp_tx_queue);
 			write_unlock_irqrestore(g_lock, flags);
 		} else {
-			conn = kiblnd_get_conn_locked(peer);
+			conn = kiblnd_get_conn_locked(peer_ni);
 			kiblnd_conn_addref(conn); /* 1 ref for me... */
 
 			write_unlock_irqrestore(g_lock, flags);
@@ -1421,10 +1422,10 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
 
 	write_unlock_irqrestore(g_lock, flags);
 
-	/* Allocate a peer ready to add to the peer table and retry */
-	rc = kiblnd_create_peer(ni, &peer, nid);
+	/* Allocate a peer_ni ready to add to the peer_ni table and retry */
+	rc = kiblnd_create_peer(ni, &peer_ni, nid);
 	if (rc != 0) {
-		CERROR("Can't create peer %s\n", libcfs_nid2str(nid));
+		CERROR("Can't create peer_ni %s\n", libcfs_nid2str(nid));
 		if (tx != NULL) {
 			tx->tx_status = -EHOSTUNREACH;
 			tx->tx_waiting = 0;
@@ -1435,10 +1436,10 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
 
 	write_lock_irqsave(g_lock, flags);
 
-        peer2 = kiblnd_find_peer_locked(nid);
+        peer2 = kiblnd_find_peer_locked(ni, nid);
         if (peer2 != NULL) {
 		if (list_empty(&peer2->ibp_conns)) {
-                        /* found a peer, but it's still connecting... */
+                        /* found a peer_ni, but it's still connecting... */
 			LASSERT(kiblnd_peer_connecting(peer2));
                         if (tx != NULL)
 				list_add_tail(&tx->tx_list,
@@ -1455,27 +1456,27 @@ kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid)
                         kiblnd_conn_decref(conn); /* ...to here */
                 }
 
-                kiblnd_peer_decref(peer);
+                kiblnd_peer_decref(peer_ni);
                 return;
         }
 
-        /* Brand new peer */
-        LASSERT (peer->ibp_connecting == 0);
-        peer->ibp_connecting = 1;
+        /* Brand new peer_ni */
+        LASSERT (peer_ni->ibp_connecting == 0);
+        peer_ni->ibp_connecting = 1;
 
         /* always called with a ref on ni, which prevents ni being shutdown */
         LASSERT (((kib_net_t *)ni->ni_data)->ibn_shutdown == 0);
 
         if (tx != NULL)
-		list_add_tail(&tx->tx_list, &peer->ibp_tx_queue);
+		list_add_tail(&tx->tx_list, &peer_ni->ibp_tx_queue);
 
-        kiblnd_peer_addref(peer);
-	list_add_tail(&peer->ibp_list, kiblnd_nid2peerlist(nid));
+        kiblnd_peer_addref(peer_ni);
+	list_add_tail(&peer_ni->ibp_list, kiblnd_nid2peerlist(nid));
 
 	write_unlock_irqrestore(g_lock, flags);
 
-        kiblnd_connect_peer(peer);
-        kiblnd_peer_decref(peer);
+        kiblnd_connect_peer(peer_ni);
+        kiblnd_peer_decref(peer_ni);
 }
 
 int
@@ -1787,7 +1788,7 @@ kiblnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
 			CERROR("Can't setup PUT sink for %s: %d\n",
 			       libcfs_nid2str(conn->ibc_peer->ibp_nid), rc);
 			kiblnd_tx_done(ni, tx);
-			/* tell peer it's over */
+			/* tell peer_ni it's over */
 			kiblnd_send_completion(rx->rx_conn, IBLND_MSG_PUT_NAK, rc,
 					       rxmsg->ibm_u.putreq.ibprm_cookie);
 			break;
@@ -1844,15 +1845,15 @@ kiblnd_thread_fini (void)
 }
 
 static void
-kiblnd_peer_alive (kib_peer_t *peer)
+kiblnd_peer_alive (kib_peer_ni_t *peer_ni)
 {
 	/* This is racy, but everyone's only writing cfs_time_current() */
-	peer->ibp_last_alive = cfs_time_current();
+	peer_ni->ibp_last_alive = cfs_time_current();
 	smp_mb();
 }
 
 static void
-kiblnd_peer_notify (kib_peer_t *peer)
+kiblnd_peer_notify (kib_peer_ni_t *peer_ni)
 {
         int           error = 0;
         cfs_time_t    last_alive = 0;
@@ -1860,18 +1861,18 @@ kiblnd_peer_notify (kib_peer_t *peer)
 
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-	if (kiblnd_peer_idle(peer) && peer->ibp_error != 0) {
-                error = peer->ibp_error;
-                peer->ibp_error = 0;
+	if (kiblnd_peer_idle(peer_ni) && peer_ni->ibp_error != 0) {
+                error = peer_ni->ibp_error;
+                peer_ni->ibp_error = 0;
 
-                last_alive = peer->ibp_last_alive;
+                last_alive = peer_ni->ibp_last_alive;
         }
 
 	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
         if (error != 0)
-                lnet_notify(peer->ibp_ni,
-                            peer->ibp_nid, 0, last_alive);
+                lnet_notify(peer_ni->ibp_ni,
+                            peer_ni->ibp_nid, 0, last_alive);
 }
 
 void
@@ -1883,7 +1884,7 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
          * connection to be finished off by the connd.  Otherwise the connd is
          * already dealing with it (either to set it up or tear it down).
          * Caller holds kib_global_lock exclusively in irq context */
-        kib_peer_t       *peer = conn->ibc_peer;
+        kib_peer_ni_t       *peer_ni = conn->ibc_peer;
         kib_dev_t        *dev;
         unsigned long     flags;
 
@@ -1902,10 +1903,10 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
 	    list_empty(&conn->ibc_tx_queue_nocred) &&
 	    list_empty(&conn->ibc_active_txs)) {
                 CDEBUG(D_NET, "closing conn to %s\n", 
-                       libcfs_nid2str(peer->ibp_nid));
+                       libcfs_nid2str(peer_ni->ibp_nid));
         } else {
                 CNETERR("Closing conn to %s: error %d%s%s%s%s%s\n",
-                       libcfs_nid2str(peer->ibp_nid), error,
+                       libcfs_nid2str(peer_ni->ibp_nid), error,
 		       list_empty(&conn->ibc_tx_queue) ? "" : "(sending)",
 		       list_empty(&conn->ibc_tx_noops) ? "" : "(sending_noops)",
 		       list_empty(&conn->ibc_tx_queue_rsrvd) ?
@@ -1915,16 +1916,16 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
 		       list_empty(&conn->ibc_active_txs) ? "" : "(waiting)");
         }
 
-        dev = ((kib_net_t *)peer->ibp_ni->ni_data)->ibn_dev;
+        dev = ((kib_net_t *)peer_ni->ibp_ni->ni_data)->ibn_dev;
 	list_del(&conn->ibc_list);
         /* connd (see below) takes over ibc_list's ref */
 
-	if (list_empty(&peer->ibp_conns) &&    /* no more conns */
-            kiblnd_peer_active(peer)) {         /* still in peer table */
-                kiblnd_unlink_peer_locked(peer);
+	if (list_empty(&peer_ni->ibp_conns) &&    /* no more conns */
+            kiblnd_peer_active(peer_ni)) {         /* still in peer_ni table */
+                kiblnd_unlink_peer_locked(peer_ni);
 
                 /* set/clear error on last conn */
-                peer->ibp_error = conn->ibc_comms_error;
+                peer_ni->ibp_error = conn->ibc_comms_error;
         }
 
         kiblnd_set_conn_state(conn, IBLND_CONN_CLOSING);
@@ -2041,7 +2042,7 @@ kiblnd_finalise_conn (kib_conn_t *conn)
 }
 
 static void
-kiblnd_peer_connect_failed(kib_peer_t *peer, int active, int error)
+kiblnd_peer_connect_failed(kib_peer_ni_t *peer_ni, int active, int error)
 {
 	struct list_head zombies = LIST_HEAD_INIT(zombies);
 	unsigned long	flags;
@@ -2052,52 +2053,52 @@ kiblnd_peer_connect_failed(kib_peer_t *peer, int active, int error)
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
 	if (active) {
-		LASSERT (peer->ibp_connecting > 0);
-		peer->ibp_connecting--;
+		LASSERT(peer_ni->ibp_connecting > 0);
+		peer_ni->ibp_connecting--;
 	} else {
-		LASSERT (peer->ibp_accepting > 0);
-		peer->ibp_accepting--;
+		LASSERT (peer_ni->ibp_accepting > 0);
+		peer_ni->ibp_accepting--;
 	}
 
-	if (kiblnd_peer_connecting(peer)) {
+	if (kiblnd_peer_connecting(peer_ni)) {
 		/* another connection attempt under way... */
 		write_unlock_irqrestore(&kiblnd_data.kib_global_lock,
 					flags);
 		return;
 	}
 
-	peer->ibp_reconnected = 0;
-	if (list_empty(&peer->ibp_conns)) {
-		/* Take peer's blocked transmits to complete with error */
-		list_add(&zombies, &peer->ibp_tx_queue);
-		list_del_init(&peer->ibp_tx_queue);
+	peer_ni->ibp_reconnected = 0;
+	if (list_empty(&peer_ni->ibp_conns)) {
+		/* Take peer_ni's blocked transmits to complete with error */
+		list_add(&zombies, &peer_ni->ibp_tx_queue);
+		list_del_init(&peer_ni->ibp_tx_queue);
 
-		if (kiblnd_peer_active(peer))
-			kiblnd_unlink_peer_locked(peer);
+		if (kiblnd_peer_active(peer_ni))
+			kiblnd_unlink_peer_locked(peer_ni);
 
-		peer->ibp_error = error;
+		peer_ni->ibp_error = error;
 	} else {
 		/* Can't have blocked transmits if there are connections */
-		LASSERT(list_empty(&peer->ibp_tx_queue));
+		LASSERT(list_empty(&peer_ni->ibp_tx_queue));
 	}
 
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-	kiblnd_peer_notify(peer);
+	kiblnd_peer_notify(peer_ni);
 
 	if (list_empty(&zombies))
 		return;
 
 	CNETERR("Deleting messages for %s: connection failed\n",
-		libcfs_nid2str(peer->ibp_nid));
+		libcfs_nid2str(peer_ni->ibp_nid));
 
-	kiblnd_txlist_done(peer->ibp_ni, &zombies, -EHOSTUNREACH);
+	kiblnd_txlist_done(peer_ni->ibp_ni, &zombies, -EHOSTUNREACH);
 }
 
 static void
 kiblnd_connreq_done(kib_conn_t *conn, int status)
 {
-	kib_peer_t	 *peer = conn->ibc_peer;
+	kib_peer_ni_t	 *peer_ni = conn->ibc_peer;
 	kib_tx_t	 *tx;
 	struct list_head txs;
 	unsigned long	 flags;
@@ -2106,21 +2107,21 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
         active = (conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT);
 
 	CDEBUG(D_NET,"%s: active(%d), version(%x), status(%d)\n",
-	       libcfs_nid2str(peer->ibp_nid), active,
+	       libcfs_nid2str(peer_ni->ibp_nid), active,
 	       conn->ibc_version, status);
 
 	LASSERT (!in_interrupt());
 	LASSERT ((conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT &&
-		  peer->ibp_connecting > 0) ||
+		  peer_ni->ibp_connecting > 0) ||
 		 (conn->ibc_state == IBLND_CONN_PASSIVE_WAIT &&
-		  peer->ibp_accepting > 0));
+		  peer_ni->ibp_accepting > 0));
 
         LIBCFS_FREE(conn->ibc_connvars, sizeof(*conn->ibc_connvars));
         conn->ibc_connvars = NULL;
 
         if (status != 0) {
                 /* failed to establish connection */
-                kiblnd_peer_connect_failed(peer, active, status);
+                kiblnd_peer_connect_failed(peer_ni, active, status);
                 kiblnd_finalise_conn(conn);
                 return;
         }
@@ -2130,38 +2131,38 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
 
         conn->ibc_last_send = jiffies;
         kiblnd_set_conn_state(conn, IBLND_CONN_ESTABLISHED);
-        kiblnd_peer_alive(peer);
+        kiblnd_peer_alive(peer_ni);
 
-	/* Add conn to peer's list and nuke any dangling conns from a different
-	 * peer instance... */
+	/* Add conn to peer_ni's list and nuke any dangling conns from a different
+	 * peer_ni instance... */
 	kiblnd_conn_addref(conn);	/* +1 ref for ibc_list */
-	list_add(&conn->ibc_list, &peer->ibp_conns);
-	peer->ibp_reconnected = 0;
+	list_add(&conn->ibc_list, &peer_ni->ibp_conns);
+	peer_ni->ibp_reconnected = 0;
 	if (active)
-		peer->ibp_connecting--;
+		peer_ni->ibp_connecting--;
 	else
-		peer->ibp_accepting--;
+		peer_ni->ibp_accepting--;
 
-        if (peer->ibp_version == 0) {
-                peer->ibp_version     = conn->ibc_version;
-                peer->ibp_incarnation = conn->ibc_incarnation;
+        if (peer_ni->ibp_version == 0) {
+                peer_ni->ibp_version     = conn->ibc_version;
+                peer_ni->ibp_incarnation = conn->ibc_incarnation;
         }
 
-        if (peer->ibp_version     != conn->ibc_version ||
-            peer->ibp_incarnation != conn->ibc_incarnation) {
-                kiblnd_close_stale_conns_locked(peer, conn->ibc_version,
+        if (peer_ni->ibp_version     != conn->ibc_version ||
+            peer_ni->ibp_incarnation != conn->ibc_incarnation) {
+                kiblnd_close_stale_conns_locked(peer_ni, conn->ibc_version,
                                                 conn->ibc_incarnation);
-                peer->ibp_version     = conn->ibc_version;
-                peer->ibp_incarnation = conn->ibc_incarnation;
+                peer_ni->ibp_version     = conn->ibc_version;
+                peer_ni->ibp_incarnation = conn->ibc_incarnation;
         }
 
 	/* grab pending txs while I have the lock */
-	list_add(&txs, &peer->ibp_tx_queue);
-	list_del_init(&peer->ibp_tx_queue);
+	list_add(&txs, &peer_ni->ibp_tx_queue);
+	list_del_init(&peer_ni->ibp_tx_queue);
 
-        if (!kiblnd_peer_active(peer) ||        /* peer has been deleted */
+        if (!kiblnd_peer_active(peer_ni) ||        /* peer_ni has been deleted */
             conn->ibc_comms_error != 0) {       /* error has happened already */
-                lnet_ni_t *ni = peer->ibp_ni;
+                lnet_ni_t *ni = peer_ni->ibp_ni;
 
                 /* start to shut down connection */
                 kiblnd_close_conn_locked(conn, -ECONNABORTED);
@@ -2214,8 +2215,8 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
         kib_msg_t             *reqmsg = priv;
         kib_msg_t             *ackmsg;
         kib_dev_t             *ibdev;
-        kib_peer_t            *peer;
-        kib_peer_t            *peer2;
+        kib_peer_ni_t            *peer_ni;
+        kib_peer_ni_t            *peer2;
         kib_conn_t            *conn;
         lnet_ni_t             *ni  = NULL;
         kib_net_t             *net = NULL;
@@ -2241,77 +2242,77 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
         if (*kiblnd_tunables.kib_require_priv_port &&
             ntohs(peer_addr->sin_port) >= PROT_SOCK) {
 		__u32 ip = ntohl(peer_addr->sin_addr.s_addr);
-		CERROR("Peer's port (%pI4h:%hu) is not privileged\n",
+		CERROR("peer_ni's port (%pI4h:%hu) is not privileged\n",
 		       &ip, ntohs(peer_addr->sin_port));
-                goto failed;
-        }
+		goto failed;
+	}
 
-        if (priv_nob < offsetof(kib_msg_t, ibm_type)) {
-                CERROR("Short connection request\n");
-                goto failed;
-        }
+	if (priv_nob < offsetof(kib_msg_t, ibm_type)) {
+		CERROR("Short connection request\n");
+		goto failed;
+	}
 
-        /* Future protocol version compatibility support!  If the
-         * o2iblnd-specific protocol changes, or when LNET unifies
-         * protocols over all LNDs, the initial connection will
-         * negotiate a protocol version.  I trap this here to avoid
-         * console errors; the reject tells the peer which protocol I
-         * speak. */
-        if (reqmsg->ibm_magic == LNET_PROTO_MAGIC ||
-            reqmsg->ibm_magic == __swab32(LNET_PROTO_MAGIC))
-                goto failed;
-        if (reqmsg->ibm_magic == IBLND_MSG_MAGIC &&
-            reqmsg->ibm_version != IBLND_MSG_VERSION &&
-            reqmsg->ibm_version != IBLND_MSG_VERSION_1)
-                goto failed;
-        if (reqmsg->ibm_magic == __swab32(IBLND_MSG_MAGIC) &&
-            reqmsg->ibm_version != __swab16(IBLND_MSG_VERSION) &&
-            reqmsg->ibm_version != __swab16(IBLND_MSG_VERSION_1))
-                goto failed;
+	/* Future protocol version compatibility support!  If the
+	 * o2iblnd-specific protocol changes, or when LNET unifies
+	 * protocols over all LNDs, the initial connection will
+	 * negotiate a protocol version.  I trap this here to avoid
+	 * console errors; the reject tells the peer_ni which protocol I
+	 * speak. */
+	if (reqmsg->ibm_magic == LNET_PROTO_MAGIC ||
+	    reqmsg->ibm_magic == __swab32(LNET_PROTO_MAGIC))
+		goto failed;
+	if (reqmsg->ibm_magic == IBLND_MSG_MAGIC &&
+	    reqmsg->ibm_version != IBLND_MSG_VERSION &&
+	    reqmsg->ibm_version != IBLND_MSG_VERSION_1)
+		goto failed;
+	if (reqmsg->ibm_magic == __swab32(IBLND_MSG_MAGIC) &&
+	    reqmsg->ibm_version != __swab16(IBLND_MSG_VERSION) &&
+	    reqmsg->ibm_version != __swab16(IBLND_MSG_VERSION_1))
+		goto failed;
 
-        rc = kiblnd_unpack_msg(reqmsg, priv_nob);
-        if (rc != 0) {
-                CERROR("Can't parse connection request: %d\n", rc);
-                goto failed;
-        }
+	rc = kiblnd_unpack_msg(reqmsg, priv_nob);
+	if (rc != 0) {
+		CERROR("Can't parse connection request: %d\n", rc);
+		goto failed;
+	}
 
-        nid = reqmsg->ibm_srcnid;
-        ni  = lnet_net2ni(LNET_NIDNET(reqmsg->ibm_dstnid));
+	nid = reqmsg->ibm_srcnid;
+	ni  = lnet_nid2ni_addref(reqmsg->ibm_dstnid);
 
-        if (ni != NULL) {
-                net = (kib_net_t *)ni->ni_data;
-                rej.ibr_incarnation = net->ibn_incarnation;
-        }
+	if (ni != NULL) {
+		net = (kib_net_t *)ni->ni_data;
+		rej.ibr_incarnation = net->ibn_incarnation;
+	}
 
-        if (ni == NULL ||                         /* no matching net */
-            ni->ni_nid != reqmsg->ibm_dstnid ||   /* right NET, wrong NID! */
-            net->ibn_dev != ibdev) {              /* wrong device */
+	if (ni == NULL ||                         /* no matching net */
+	    ni->ni_nid != reqmsg->ibm_dstnid ||   /* right NET, wrong NID! */
+	    net->ibn_dev != ibdev) {              /* wrong device */
 		CERROR("Can't accept conn from %s on %s (%s:%d:%pI4h): "
-                       "bad dst nid %s\n", libcfs_nid2str(nid),
-                       ni == NULL ? "NA" : libcfs_nid2str(ni->ni_nid),
-                       ibdev->ibd_ifname, ibdev->ibd_nnets,
+		       "bad dst nid %s\n", libcfs_nid2str(nid),
+		       ni == NULL ? "NA" : libcfs_nid2str(ni->ni_nid),
+		       ibdev->ibd_ifname, ibdev->ibd_nnets,
 			&ibdev->ibd_ifip,
-                       libcfs_nid2str(reqmsg->ibm_dstnid));
+		       libcfs_nid2str(reqmsg->ibm_dstnid));
 
-                goto failed;
-        }
+		goto failed;
+	}
 
        /* check time stamp as soon as possible */
-        if (reqmsg->ibm_dststamp != 0 &&
-            reqmsg->ibm_dststamp != net->ibn_incarnation) {
-                CWARN("Stale connection request\n");
-                rej.ibr_why = IBLND_REJECT_CONN_STALE;
-                goto failed;
-        }
+	if (reqmsg->ibm_dststamp != 0 &&
+	    reqmsg->ibm_dststamp != net->ibn_incarnation) {
+		CWARN("Stale connection request\n");
+		rej.ibr_why = IBLND_REJECT_CONN_STALE;
+		goto failed;
+	}
 
-        /* I can accept peer's version */
-        version = reqmsg->ibm_version;
+	/* I can accept peer_ni's version */
+	version = reqmsg->ibm_version;
 
-        if (reqmsg->ibm_type != IBLND_MSG_CONNREQ) {
-                CERROR("Unexpected connreq msg type: %x from %s\n",
-                       reqmsg->ibm_type, libcfs_nid2str(nid));
-                goto failed;
-        }
+	if (reqmsg->ibm_type != IBLND_MSG_CONNREQ) {
+		CERROR("Unexpected connreq msg type: %x from %s\n",
+		       reqmsg->ibm_type, libcfs_nid2str(nid));
+		goto failed;
+	}
 
 	if (reqmsg->ibm_u.connparams.ibcp_queue_depth >
 	    kiblnd_msg_queue_size(version, ni)) {
@@ -2363,21 +2364,21 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
                 goto failed;
         }
 
-	/* assume 'nid' is a new peer; create  */
-	rc = kiblnd_create_peer(ni, &peer, nid);
+	/* assume 'nid' is a new peer_ni; create  */
+	rc = kiblnd_create_peer(ni, &peer_ni, nid);
 	if (rc != 0) {
-		CERROR("Can't create peer for %s\n", libcfs_nid2str(nid));
+		CERROR("Can't create peer_ni for %s\n", libcfs_nid2str(nid));
 		rej.ibr_why = IBLND_REJECT_NO_RESOURCES;
 		goto failed;
 	}
 
 	/* We have validated the peer's parameters so use those */
-	peer->ibp_max_frags = reqmsg->ibm_u.connparams.ibcp_max_frags;
-	peer->ibp_queue_depth = reqmsg->ibm_u.connparams.ibcp_queue_depth;
+	peer_ni->ibp_max_frags = reqmsg->ibm_u.connparams.ibcp_max_frags;
+	peer_ni->ibp_queue_depth = reqmsg->ibm_u.connparams.ibcp_queue_depth;
 
 	write_lock_irqsave(g_lock, flags);
 
-        peer2 = kiblnd_find_peer_locked(nid);
+        peer2 = kiblnd_find_peer_locked(ni, nid);
         if (peer2 != NULL) {
                 if (peer2->ibp_version == 0) {
                         peer2->ibp_version     = version;
@@ -2399,10 +2400,10 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 			      libcfs_nid2str(nid), peer2->ibp_version, version,
 			      peer2->ibp_incarnation, reqmsg->ibm_srcstamp);
 
-			kiblnd_peer_decref(peer);
-			rej.ibr_why = IBLND_REJECT_CONN_STALE;
-			goto failed;
-		}
+                        kiblnd_peer_decref(peer_ni);
+                        rej.ibr_why = IBLND_REJECT_CONN_STALE;
+                        goto failed;
+                }
 
 		/* Tie-break connection race in favour of the higher NID.
 		 * If we keep running into a race condition multiple times,
@@ -2420,7 +2421,7 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 			CDEBUG(D_NET, "Conn race %s\n",
 			       libcfs_nid2str(peer2->ibp_nid));
 
-			kiblnd_peer_decref(peer);
+			kiblnd_peer_decref(peer_ni);
 			rej.ibr_why = IBLND_REJECT_CONN_RACE;
 			goto failed;
 		}
@@ -2429,7 +2430,7 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 				libcfs_nid2str(peer2->ibp_nid),
 				MAX_CONN_RACES_BEFORE_ABORT);
 		/*
-		 * passive connection is allowed even this peer is waiting for
+		 * passive connection is allowed even this peer_ni is waiting for
 		 * reconnection.
 		 */
 		peer2->ibp_reconnecting = 0;
@@ -2437,38 +2438,38 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 		peer2->ibp_accepting++;
 		kiblnd_peer_addref(peer2);
 
-		/* Race with kiblnd_launch_tx (active connect) to create peer
+		/* Race with kiblnd_launch_tx (active connect) to create peer_ni
 		 * so copy validated parameters since we now know what the
-		 * peer's limits are */
-		peer2->ibp_max_frags = peer->ibp_max_frags;
-		peer2->ibp_queue_depth = peer->ibp_queue_depth;
+		 * peer_ni's limits are */
+		peer2->ibp_max_frags = peer_ni->ibp_max_frags;
+		peer2->ibp_queue_depth = peer_ni->ibp_queue_depth;
 
 		write_unlock_irqrestore(g_lock, flags);
-                kiblnd_peer_decref(peer);
-                peer = peer2;
+                kiblnd_peer_decref(peer_ni);
+                peer_ni = peer2;
         } else {
-                /* Brand new peer */
-                LASSERT (peer->ibp_accepting == 0);
-                LASSERT (peer->ibp_version == 0 &&
-                         peer->ibp_incarnation == 0);
+                /* Brand new peer_ni */
+                LASSERT (peer_ni->ibp_accepting == 0);
+                LASSERT (peer_ni->ibp_version == 0 &&
+                         peer_ni->ibp_incarnation == 0);
 
-                peer->ibp_accepting   = 1;
-                peer->ibp_version     = version;
-                peer->ibp_incarnation = reqmsg->ibm_srcstamp;
+                peer_ni->ibp_accepting   = 1;
+                peer_ni->ibp_version     = version;
+                peer_ni->ibp_incarnation = reqmsg->ibm_srcstamp;
 
                 /* I have a ref on ni that prevents it being shutdown */
                 LASSERT (net->ibn_shutdown == 0);
 
-                kiblnd_peer_addref(peer);
-		list_add_tail(&peer->ibp_list, kiblnd_nid2peerlist(nid));
+                kiblnd_peer_addref(peer_ni);
+		list_add_tail(&peer_ni->ibp_list, kiblnd_nid2peerlist(nid));
 
 		write_unlock_irqrestore(g_lock, flags);
         }
 
-	conn = kiblnd_create_conn(peer, cmid, IBLND_CONN_PASSIVE_WAIT, version);
+	conn = kiblnd_create_conn(peer_ni, cmid, IBLND_CONN_PASSIVE_WAIT, version);
         if (conn == NULL) {
-                kiblnd_peer_connect_failed(peer, 0, -ENOMEM);
-                kiblnd_peer_decref(peer);
+                kiblnd_peer_connect_failed(peer_ni, 0, -ENOMEM);
+                kiblnd_peer_decref(peer_ni);
                 rej.ibr_why = IBLND_REJECT_NO_RESOURCES;
                 goto failed;
         }
@@ -2536,7 +2537,7 @@ kiblnd_check_reconnect(kib_conn_t *conn, int version,
 		       __u64 incarnation, int why, kib_connparams_t *cp)
 {
 	rwlock_t	*glock = &kiblnd_data.kib_global_lock;
-	kib_peer_t	*peer = conn->ibc_peer;
+	kib_peer_ni_t	*peer_ni = conn->ibc_peer;
 	char		*reason;
 	int		 msg_size = IBLND_MSG_SIZE;
 	int		 frag_num = -1;
@@ -2545,8 +2546,8 @@ kiblnd_check_reconnect(kib_conn_t *conn, int version,
 	unsigned long	 flags;
 
 	LASSERT(conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT);
-	LASSERT(peer->ibp_connecting > 0);	/* 'conn' at least */
-	LASSERT(!peer->ibp_reconnecting);
+	LASSERT(peer_ni->ibp_connecting > 0);	/* 'conn' at least */
+	LASSERT(!peer_ni->ibp_reconnecting);
 
 	if (cp) {
 		msg_size	= cp->ibcp_max_msg_size;
@@ -2560,10 +2561,10 @@ kiblnd_check_reconnect(kib_conn_t *conn, int version,
          * NB: reconnect is still needed even when ibp_tx_queue is
          * empty if ibp_version != version because reconnect may be
          * initiated by kiblnd_query() */
-	reconnect = (!list_empty(&peer->ibp_tx_queue) ||
-		     peer->ibp_version != version) &&
-		    peer->ibp_connecting == 1 &&
-		    peer->ibp_accepting == 0;
+	reconnect = (!list_empty(&peer_ni->ibp_tx_queue) ||
+		     peer_ni->ibp_version != version) &&
+		    peer_ni->ibp_connecting == 1 &&
+		    peer_ni->ibp_accepting == 0;
 	if (!reconnect) {
 		reason = "no need";
 		goto out;
@@ -2575,14 +2576,14 @@ kiblnd_check_reconnect(kib_conn_t *conn, int version,
                 break;
 
 	case IBLND_REJECT_RDMA_FRAGS: {
-		struct lnet_ioctl_config_lnd_tunables *tunables;
+		struct lnet_ioctl_config_o2iblnd_tunables *tunables;
 
 		if (!cp) {
 			reason = "can't negotiate max frags";
 			goto out;
 		}
-		tunables = peer->ibp_ni->ni_lnd_tunables;
-		if (!tunables->lt_tun_u.lt_o2ib.lnd_map_on_demand) {
+		tunables = &peer_ni->ibp_ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
+		if (!tunables->lnd_map_on_demand) {
 			reason = "map_on_demand must be enabled";
 			goto out;
 		}
@@ -2591,7 +2592,7 @@ kiblnd_check_reconnect(kib_conn_t *conn, int version,
 			goto out;
 		}
 
-		peer->ibp_max_frags = frag_num;
+		peer_ni->ibp_max_frags = frag_num;
 		reason = "rdma fragments";
 		break;
 	}
@@ -2605,7 +2606,7 @@ kiblnd_check_reconnect(kib_conn_t *conn, int version,
 			goto out;
 		}
 
-		peer->ibp_queue_depth = queue_dep;
+		peer_ni->ibp_queue_depth = queue_dep;
 		reason = "queue depth";
 		break;
 
@@ -2623,21 +2624,21 @@ kiblnd_check_reconnect(kib_conn_t *conn, int version,
         }
 
 	conn->ibc_reconnect = 1;
-	peer->ibp_reconnecting = 1;
-	peer->ibp_version = version;
+	peer_ni->ibp_reconnecting = 1;
+	peer_ni->ibp_version = version;
 	if (incarnation != 0)
-		peer->ibp_incarnation = incarnation;
+		peer_ni->ibp_incarnation = incarnation;
  out:
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
 	CNETERR("%s: %s (%s), %x, %x, msg_size: %d, queue_depth: %d/%d, max_frags: %d/%d\n",
-		libcfs_nid2str(peer->ibp_nid),
+		libcfs_nid2str(peer_ni->ibp_nid),
 		reconnect ? "reconnect" : "don't reconnect",
 		reason, IBLND_MSG_VERSION, version, msg_size,
 		conn->ibc_queue_depth, queue_dep,
 		conn->ibc_max_frags, frag_num);
 	/*
-	 * if conn::ibc_reconnect is TRUE, connd will reconnect to the peer
+	 * if conn::ibc_reconnect is TRUE, connd will reconnect to the peer_ni
 	 * while destroying the zombie
 	 */
 }
@@ -2645,7 +2646,7 @@ kiblnd_check_reconnect(kib_conn_t *conn, int version,
 static void
 kiblnd_rejected (kib_conn_t *conn, int reason, void *priv, int priv_nob)
 {
-	kib_peer_t    *peer = conn->ibc_peer;
+	kib_peer_ni_t    *peer_ni = conn->ibc_peer;
 
 	LASSERT (!in_interrupt());
 	LASSERT (conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT);
@@ -2658,7 +2659,7 @@ kiblnd_rejected (kib_conn_t *conn, int reason, void *priv, int priv_nob)
 
         case IB_CM_REJ_INVALID_SERVICE_ID:
                 CNETERR("%s rejected: no listener at %d\n",
-                        libcfs_nid2str(peer->ibp_nid),
+                        libcfs_nid2str(peer_ni->ibp_nid),
                         *kiblnd_tunables.kib_service);
                 break;
 
@@ -2674,7 +2675,7 @@ kiblnd_rejected (kib_conn_t *conn, int reason, void *priv, int priv_nob)
                          * b) V2 will provide incarnation while rejecting me,
                          *    -1 will be overwrote.
                          *
-                         * if I try to connect to a V1 peer with V2 protocol,
+                         * if I try to connect to a V1 peer_ni with V2 protocol,
                          * it rejected me then upgrade to V2, I have no idea
                          * about the upgrading and try to reconnect with V1,
                          * in this case upgraded V2 can find out I'm trying to
@@ -2708,22 +2709,22 @@ kiblnd_rejected (kib_conn_t *conn, int reason, void *priv, int priv_nob)
                         if (rej->ibr_magic != IBLND_MSG_MAGIC &&
                             rej->ibr_magic != LNET_PROTO_MAGIC) {
                                 CERROR("%s rejected: consumer defined fatal error\n",
-                                       libcfs_nid2str(peer->ibp_nid));
+                                       libcfs_nid2str(peer_ni->ibp_nid));
                                 break;
                         }
 
                         if (rej->ibr_version != IBLND_MSG_VERSION &&
                             rej->ibr_version != IBLND_MSG_VERSION_1) {
                                 CERROR("%s rejected: o2iblnd version %x error\n",
-                                       libcfs_nid2str(peer->ibp_nid),
+                                       libcfs_nid2str(peer_ni->ibp_nid),
                                        rej->ibr_version);
                                 break;
                         }
 
                         if (rej->ibr_why     == IBLND_REJECT_FATAL &&
                             rej->ibr_version == IBLND_MSG_VERSION_1) {
-                                CDEBUG(D_NET, "rejected by old version peer %s: %x\n",
-                                       libcfs_nid2str(peer->ibp_nid), rej->ibr_version);
+                                CDEBUG(D_NET, "rejected by old version peer_ni %s: %x\n",
+                                       libcfs_nid2str(peer_ni->ibp_nid), rej->ibr_version);
 
                                 if (conn->ibc_version != IBLND_MSG_VERSION_1)
                                         rej->ibr_why = IBLND_REJECT_CONN_UNCOMPAT;
@@ -2741,17 +2742,17 @@ kiblnd_rejected (kib_conn_t *conn, int reason, void *priv, int priv_nob)
 
                         case IBLND_REJECT_NO_RESOURCES:
                                 CERROR("%s rejected: o2iblnd no resources\n",
-                                       libcfs_nid2str(peer->ibp_nid));
+                                       libcfs_nid2str(peer_ni->ibp_nid));
                                 break;
 
                         case IBLND_REJECT_FATAL:
                                 CERROR("%s rejected: o2iblnd fatal error\n",
-                                       libcfs_nid2str(peer->ibp_nid));
+                                       libcfs_nid2str(peer_ni->ibp_nid));
                                 break;
 
                         default:
                                 CERROR("%s rejected: o2iblnd reason %d\n",
-                                       libcfs_nid2str(peer->ibp_nid),
+                                       libcfs_nid2str(peer_ni->ibp_nid),
                                        rej->ibr_why);
                                 break;
                         }
@@ -2760,7 +2761,7 @@ kiblnd_rejected (kib_conn_t *conn, int reason, void *priv, int priv_nob)
                 /* fall through */
         default:
                 CNETERR("%s rejected: reason %d, size %d\n",
-                        libcfs_nid2str(peer->ibp_nid), reason, priv_nob);
+                        libcfs_nid2str(peer_ni->ibp_nid), reason, priv_nob);
                 break;
         }
 
@@ -2770,8 +2771,8 @@ kiblnd_rejected (kib_conn_t *conn, int reason, void *priv, int priv_nob)
 static void
 kiblnd_check_connreply (kib_conn_t *conn, void *priv, int priv_nob)
 {
-        kib_peer_t    *peer = conn->ibc_peer;
-        lnet_ni_t     *ni   = peer->ibp_ni;
+        kib_peer_ni_t    *peer_ni = conn->ibc_peer;
+        lnet_ni_t     *ni   = peer_ni->ibp_ni;
         kib_net_t     *net  = ni->ni_data;
         kib_msg_t     *msg  = priv;
         int            ver  = conn->ibc_version;
@@ -2782,13 +2783,13 @@ kiblnd_check_connreply (kib_conn_t *conn, void *priv, int priv_nob)
 
         if (rc != 0) {
                 CERROR("Can't unpack connack from %s: %d\n",
-                       libcfs_nid2str(peer->ibp_nid), rc);
+                       libcfs_nid2str(peer_ni->ibp_nid), rc);
                 goto failed;
         }
 
         if (msg->ibm_type != IBLND_MSG_CONNACK) {
                 CERROR("Unexpected message %d from %s\n",
-                       msg->ibm_type, libcfs_nid2str(peer->ibp_nid));
+                       msg->ibm_type, libcfs_nid2str(peer_ni->ibp_nid));
                 rc = -EPROTO;
                 goto failed;
         }
@@ -2796,7 +2797,7 @@ kiblnd_check_connreply (kib_conn_t *conn, void *priv, int priv_nob)
         if (ver != msg->ibm_version) {
                 CERROR("%s replied version %x is different with "
                        "requested version %x\n",
-                       libcfs_nid2str(peer->ibp_nid), msg->ibm_version, ver);
+                       libcfs_nid2str(peer_ni->ibp_nid), msg->ibm_version, ver);
                 rc = -EPROTO;
                 goto failed;
         }
@@ -2804,7 +2805,7 @@ kiblnd_check_connreply (kib_conn_t *conn, void *priv, int priv_nob)
 	if (msg->ibm_u.connparams.ibcp_queue_depth >
 	    conn->ibc_queue_depth) {
 		CERROR("%s has incompatible queue depth %d (<=%d wanted)\n",
-		       libcfs_nid2str(peer->ibp_nid),
+		       libcfs_nid2str(peer_ni->ibp_nid),
 		       msg->ibm_u.connparams.ibcp_queue_depth,
 		       conn->ibc_queue_depth);
 		rc = -EPROTO;
@@ -2814,7 +2815,7 @@ kiblnd_check_connreply (kib_conn_t *conn, void *priv, int priv_nob)
 	if (msg->ibm_u.connparams.ibcp_max_frags >
 	    conn->ibc_max_frags) {
 		CERROR("%s has incompatible max_frags %d (<=%d wanted)\n",
-		       libcfs_nid2str(peer->ibp_nid),
+		       libcfs_nid2str(peer_ni->ibp_nid),
 		       msg->ibm_u.connparams.ibcp_max_frags,
 		       conn->ibc_max_frags);
 		rc = -EPROTO;
@@ -2823,7 +2824,7 @@ kiblnd_check_connreply (kib_conn_t *conn, void *priv, int priv_nob)
 
         if (msg->ibm_u.connparams.ibcp_max_msg_size > IBLND_MSG_SIZE) {
                 CERROR("%s max message size %d too big (%d max)\n",
-                       libcfs_nid2str(peer->ibp_nid),
+                       libcfs_nid2str(peer_ni->ibp_nid),
                        msg->ibm_u.connparams.ibcp_max_msg_size,
                        IBLND_MSG_SIZE);
                 rc = -EPROTO;
@@ -2841,7 +2842,7 @@ kiblnd_check_connreply (kib_conn_t *conn, void *priv, int priv_nob)
         if (rc != 0) {
                 CERROR("Bad connection reply from %s, rc = %d, "
                        "version: %x max_frags: %d\n",
-                       libcfs_nid2str(peer->ibp_nid), rc,
+                       libcfs_nid2str(peer_ni->ibp_nid), rc,
                        msg->ibm_version, msg->ibm_u.connparams.ibcp_max_frags);
                 goto failed;
         }
@@ -2871,7 +2872,7 @@ kiblnd_check_connreply (kib_conn_t *conn, void *priv, int priv_nob)
 static int
 kiblnd_active_connect (struct rdma_cm_id *cmid)
 {
-        kib_peer_t              *peer = (kib_peer_t *)cmid->context;
+        kib_peer_ni_t              *peer_ni = (kib_peer_ni_t *)cmid->context;
         kib_conn_t              *conn;
         kib_msg_t               *msg;
         struct rdma_conn_param   cp;
@@ -2882,23 +2883,23 @@ kiblnd_active_connect (struct rdma_cm_id *cmid)
 
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-	incarnation = peer->ibp_incarnation;
-	version     = (peer->ibp_version == 0) ? IBLND_MSG_VERSION :
-						 peer->ibp_version;
+	incarnation = peer_ni->ibp_incarnation;
+	version     = (peer_ni->ibp_version == 0) ? IBLND_MSG_VERSION :
+						 peer_ni->ibp_version;
 
 	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-	conn = kiblnd_create_conn(peer, cmid, IBLND_CONN_ACTIVE_CONNECT,
+	conn = kiblnd_create_conn(peer_ni, cmid, IBLND_CONN_ACTIVE_CONNECT,
 				  version);
         if (conn == NULL) {
-                kiblnd_peer_connect_failed(peer, 1, -ENOMEM);
-                kiblnd_peer_decref(peer); /* lose cmid's ref */
+                kiblnd_peer_connect_failed(peer_ni, 1, -ENOMEM);
+                kiblnd_peer_decref(peer_ni); /* lose cmid's ref */
                 return -ENOMEM;
         }
 
         /* conn "owns" cmid now, so I return success from here on to ensure the
          * CM callback doesn't destroy cmid. conn also takes over cmid's ref
-         * on peer */
+         * on peer_ni */
 
         msg = &conn->ibc_connvars->cv_msg;
 
@@ -2908,8 +2909,8 @@ kiblnd_active_connect (struct rdma_cm_id *cmid)
 	msg->ibm_u.connparams.ibcp_max_frags    = conn->ibc_max_frags;
 	msg->ibm_u.connparams.ibcp_max_msg_size = IBLND_MSG_SIZE;
 
-        kiblnd_pack_msg(peer->ibp_ni, msg, version,
-                        0, peer->ibp_nid, incarnation);
+        kiblnd_pack_msg(peer_ni->ibp_ni, msg, version,
+                        0, peer_ni->ibp_nid, incarnation);
 
         memset(&cp, 0, sizeof(cp));
         cp.private_data        = msg;
@@ -2926,7 +2927,7 @@ kiblnd_active_connect (struct rdma_cm_id *cmid)
         rc = rdma_connect(cmid, &cp);
         if (rc != 0) {
                 CERROR("Can't connect to %s: %d\n",
-                       libcfs_nid2str(peer->ibp_nid), rc);
+                       libcfs_nid2str(peer_ni->ibp_nid), rc);
                 kiblnd_connreq_done(conn, rc);
                 kiblnd_conn_decref(conn);
         }
@@ -2937,7 +2938,7 @@ kiblnd_active_connect (struct rdma_cm_id *cmid)
 int
 kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 {
-        kib_peer_t  *peer;
+        kib_peer_ni_t  *peer_ni;
         kib_conn_t  *conn;
 	int          rc;
 
@@ -2956,22 +2957,22 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                 return rc;
                 
 	case RDMA_CM_EVENT_ADDR_ERROR:
-                peer = (kib_peer_t *)cmid->context;
+                peer_ni = (kib_peer_ni_t *)cmid->context;
                 CNETERR("%s: ADDR ERROR %d\n",
-                       libcfs_nid2str(peer->ibp_nid), event->status);
-                kiblnd_peer_connect_failed(peer, 1, -EHOSTUNREACH);
-                kiblnd_peer_decref(peer);
+                       libcfs_nid2str(peer_ni->ibp_nid), event->status);
+                kiblnd_peer_connect_failed(peer_ni, 1, -EHOSTUNREACH);
+                kiblnd_peer_decref(peer_ni);
                 return -EHOSTUNREACH;      /* rc != 0 destroys cmid */
 
 	case RDMA_CM_EVENT_ADDR_RESOLVED:
-                peer = (kib_peer_t *)cmid->context;
+                peer_ni = (kib_peer_ni_t *)cmid->context;
 
                 CDEBUG(D_NET,"%s Addr resolved: %d\n",
-                       libcfs_nid2str(peer->ibp_nid), event->status);
+                       libcfs_nid2str(peer_ni->ibp_nid), event->status);
 
                 if (event->status != 0) {
                         CNETERR("Can't resolve address for %s: %d\n",
-                                libcfs_nid2str(peer->ibp_nid), event->status);
+                                libcfs_nid2str(peer_ni->ibp_nid), event->status);
                         rc = event->status;
                 } else {
                         rc = rdma_resolve_route(
@@ -2980,32 +2981,32 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                                 return 0;
                         /* Can't initiate route resolution */
                         CERROR("Can't resolve route for %s: %d\n",
-                               libcfs_nid2str(peer->ibp_nid), rc);
+                               libcfs_nid2str(peer_ni->ibp_nid), rc);
                 }
-                kiblnd_peer_connect_failed(peer, 1, rc);
-                kiblnd_peer_decref(peer);
+                kiblnd_peer_connect_failed(peer_ni, 1, rc);
+                kiblnd_peer_decref(peer_ni);
                 return rc;                      /* rc != 0 destroys cmid */
 
 	case RDMA_CM_EVENT_ROUTE_ERROR:
-                peer = (kib_peer_t *)cmid->context;
+                peer_ni = (kib_peer_ni_t *)cmid->context;
                 CNETERR("%s: ROUTE ERROR %d\n",
-                        libcfs_nid2str(peer->ibp_nid), event->status);
-                kiblnd_peer_connect_failed(peer, 1, -EHOSTUNREACH);
-                kiblnd_peer_decref(peer);
+                        libcfs_nid2str(peer_ni->ibp_nid), event->status);
+                kiblnd_peer_connect_failed(peer_ni, 1, -EHOSTUNREACH);
+                kiblnd_peer_decref(peer_ni);
                 return -EHOSTUNREACH;           /* rc != 0 destroys cmid */
 
 	case RDMA_CM_EVENT_ROUTE_RESOLVED:
-                peer = (kib_peer_t *)cmid->context;
+                peer_ni = (kib_peer_ni_t *)cmid->context;
                 CDEBUG(D_NET,"%s Route resolved: %d\n",
-                       libcfs_nid2str(peer->ibp_nid), event->status);
+                       libcfs_nid2str(peer_ni->ibp_nid), event->status);
 
                 if (event->status == 0)
                         return kiblnd_active_connect(cmid);
 
                 CNETERR("Can't resolve route for %s: %d\n",
-                       libcfs_nid2str(peer->ibp_nid), event->status);
-                kiblnd_peer_connect_failed(peer, 1, event->status);
-                kiblnd_peer_decref(peer);
+                       libcfs_nid2str(peer_ni->ibp_nid), event->status);
+                kiblnd_peer_connect_failed(peer_ni, 1, event->status);
+                kiblnd_peer_decref(peer_ni);
                 return event->status;           /* rc != 0 destroys cmid */
                 
 	case RDMA_CM_EVENT_UNREACHABLE:
@@ -3148,7 +3149,7 @@ kiblnd_check_conns (int idx)
 	struct list_head  checksends = LIST_HEAD_INIT(checksends);
 	struct list_head *peers = &kiblnd_data.kib_peers[idx];
 	struct list_head *ptmp;
-	kib_peer_t	 *peer;
+	kib_peer_ni_t	 *peer_ni;
 	kib_conn_t	 *conn;
 	struct list_head *ctmp;
 	unsigned long	  flags;
@@ -3159,9 +3160,9 @@ kiblnd_check_conns (int idx)
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
 	list_for_each(ptmp, peers) {
-		peer = list_entry(ptmp, kib_peer_t, ibp_list);
+		peer_ni = list_entry(ptmp, kib_peer_ni_t, ibp_list);
 
-		list_for_each(ctmp, &peer->ibp_conns) {
+		list_for_each(ctmp, &peer_ni->ibp_conns) {
 			int timedout;
 			int sendnoop;
 
@@ -3181,9 +3182,9 @@ kiblnd_check_conns (int idx)
 			if (timedout) {
 				CERROR("Timed out RDMA with %s (%lu): "
 				       "c: %u, oc: %u, rc: %u\n",
-				       libcfs_nid2str(peer->ibp_nid),
+				       libcfs_nid2str(peer_ni->ibp_nid),
 				       cfs_duration_sec(cfs_time_current() -
-							peer->ibp_last_alive),
+							peer_ni->ibp_last_alive),
 				       conn->ibc_credits,
 				       conn->ibc_outstanding_credits,
 				       conn->ibc_reserved_credits);
@@ -3241,7 +3242,7 @@ kiblnd_disconnect_conn (kib_conn_t *conn)
 }
 
 /*
- * High-water for reconnection to the same peer, reconnection attempt should
+ * High-water for reconnection to the same peer_ni, reconnection attempt should
  * be delayed after trying more than KIB_RECONN_HIGH_RACE.
  */
 #define KIB_RECONN_HIGH_RACE	10
@@ -3277,27 +3278,27 @@ kiblnd_connd (void *arg)
                 dropped_lock = 0;
 
 		if (!list_empty(&kiblnd_data.kib_connd_zombies)) {
-			kib_peer_t *peer = NULL;
+			kib_peer_ni_t *peer_ni = NULL;
 
 			conn = list_entry(kiblnd_data.kib_connd_zombies.next,
 					  kib_conn_t, ibc_list);
 			list_del(&conn->ibc_list);
 			if (conn->ibc_reconnect) {
-				peer = conn->ibc_peer;
-				kiblnd_peer_addref(peer);
+				peer_ni = conn->ibc_peer;
+				kiblnd_peer_addref(peer_ni);
 			}
 
 			spin_unlock_irqrestore(lock, flags);
 			dropped_lock = 1;
 
-			kiblnd_destroy_conn(conn, !peer);
+			kiblnd_destroy_conn(conn, !peer_ni);
 
 			spin_lock_irqsave(lock, flags);
-			if (!peer)
+			if (!peer_ni)
 				continue;
 
-			conn->ibc_peer = peer;
-			if (peer->ibp_reconnected < KIB_RECONN_HIGH_RACE)
+			conn->ibc_peer = peer_ni;
+			if (peer_ni->ibp_reconnected < KIB_RECONN_HIGH_RACE)
 				list_add_tail(&conn->ibc_list,
 					      &kiblnd_data.kib_reconn_list);
 			else
@@ -3356,7 +3357,7 @@ kiblnd_connd (void *arg)
 
                         /* Time to check for RDMA timeouts on a few more
                          * peers: I do checks every 'p' seconds on a
-                         * proportion of the peer table and I need to check
+                         * proportion of the peer_ni table and I need to check
                          * every connection 'n' times within a timeout
                          * interval, to ensure I detect a timeout on any
                          * connection within (n+1)/n times the timeout

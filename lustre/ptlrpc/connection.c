@@ -42,30 +42,31 @@ static struct cfs_hash_ops conn_hash_ops;
 
 struct ptlrpc_connection *
 ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
-                      struct obd_uuid *uuid)
+		      struct obd_uuid *uuid)
 {
-        struct ptlrpc_connection *conn, *conn2;
-        ENTRY;
+	struct ptlrpc_connection *conn, *conn2;
+	ENTRY;
 
-        conn = cfs_hash_lookup(conn_hash, &peer);
-        if (conn)
-                GOTO(out, conn);
+	peer.nid = LNetPrimaryNID(peer.nid);
+	conn = cfs_hash_lookup(conn_hash, &peer);
+	if (conn)
+		GOTO(out, conn);
 
-        OBD_ALLOC_PTR(conn);
-        if (!conn)
-                RETURN(NULL);
+	OBD_ALLOC_PTR(conn);
+	if (!conn)
+		RETURN(NULL);
 
-        conn->c_peer = peer;
-        conn->c_self = self;
+	conn->c_peer = peer;
+	conn->c_self = self;
 	INIT_HLIST_NODE(&conn->c_hash);
 	atomic_set(&conn->c_refcount, 1);
-        if (uuid)
-                obd_str2uuid(&conn->c_remote_uuid, uuid->uuid);
+	if (uuid)
+		obd_str2uuid(&conn->c_remote_uuid, uuid->uuid);
 
 	/*
 	 * Add the newly created conn to the hash, on key collision we
 	 * lost a racing addition and must destroy our newly allocated
-	 * connection.  The object which exists in the has will be
+	 * connection.	The object which exists in the hash will be
 	 * returned and may be compared against out object.
 	 */
 	/* In the function below, .hs_keycmp resolves to

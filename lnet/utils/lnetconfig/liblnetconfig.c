@@ -35,15 +35,20 @@
 
 #include <errno.h>
 #include <limits.h>
+#include <byteswap.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <net/if.h>
 #include <libcfs/util/ioctl.h>
 #include <lnet/lnetctl.h>
 #include <lnet/socklnd.h>
 #include "liblnd.h"
+#include <lnet/lnet.h>
+#include <sys/types.h>
+#include <ifaddrs.h>
 #include "liblnetconfig.h"
 #include "cyaml.h"
 
@@ -52,11 +57,289 @@
 #define ADD_CMD			"add"
 #define DEL_CMD			"del"
 #define SHOW_CMD		"show"
+#define DBG_CMD			"dbg"
+
+/*
+ * lustre_lnet_ip_range_descr
+ *	Describes an IP range.
+ *	Each octect is an expression
+ */
+struct lustre_lnet_ip_range_descr {
+	struct list_head ipr_entry;
+	struct list_head ipr_expr;
+};
+
+/*
+ * lustre_lnet_ip2nets
+ *	Describes an ip2nets rule. This can be on a list of rules.
+ */
+struct lustre_lnet_ip2nets {
+	struct lnet_dlc_network_descr ip2nets_net;
+	struct list_head ip2nets_ip_ranges;
+};
+
+/*
+ * free_intf_descr
+ *	frees the memory allocated for an intf descriptor.
+ */
+void free_intf_descr(struct lnet_dlc_intf_descr *intf_descr)
+{
+	if (!intf_descr)
+		return;
+
+	if (intf_descr->cpt_expr != NULL)
+		cfs_expr_list_free(intf_descr->cpt_expr);
+	free(intf_descr);
+}
+
+/*
+ * lustre_lnet_add_ip_range
+ * Formatting:
+ *	given a string of the format:
+ *	<expr.expr.expr.expr> parse each expr into
+ *	a lustre_lnet_ip_range_descr structure and insert on the list.
+ *
+ *	This function is called from
+ *		YAML on each ip-range.
+ *		As a result of lnetctl command
+ *		When building a NID or P2P selection rules
+ */
+int lustre_lnet_add_ip_range(struct list_head *list, char *str_ip_range)
+{
+	struct lustre_lnet_ip_range_descr *ip_range;
+	int rc;
+
+	ip_range = calloc(1, sizeof(*ip_range));
+	if (ip_range == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	INIT_LIST_HEAD(&ip_range->ipr_entry);
+	INIT_LIST_HEAD(&ip_range->ipr_expr);
+
+	rc = cfs_ip_addr_parse(str_ip_range, strlen(str_ip_range),
+			       &ip_range->ipr_expr);
+	if (rc != 0)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	list_add_tail(&ip_range->ipr_entry, list);
+
+	return LUSTRE_CFG_RC_NO_ERR;
+}
+
+int lustre_lnet_add_intf_descr(struct list_head *list, char *intf, int len)
+{
+	char *open_sq_bracket = NULL, *close_sq_bracket = NULL,
+	     *intf_name;
+	struct lnet_dlc_intf_descr *intf_descr = NULL;
+	int rc;
+	char intf_string[LNET_MAX_STR_LEN];
+
+	if (len >= LNET_MAX_STR_LEN)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	strncpy(intf_string, intf, len);
+	intf_string[len] = '\0';
+
+	intf_descr = calloc(1, sizeof(*intf_descr));
+	if (intf_descr == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	INIT_LIST_HEAD(&intf_descr->intf_on_network);
+
+	intf_name = intf_string;
+	open_sq_bracket = strchr(intf_string, '[');
+	if (open_sq_bracket != NULL) {
+		close_sq_bracket = strchr(intf_string, ']');
+		if (close_sq_bracket == NULL) {
+			free(intf_descr);
+			return LUSTRE_CFG_RC_BAD_PARAM;
+		}
+		rc = cfs_expr_list_parse(open_sq_bracket,
+					 strlen(open_sq_bracket), 0, UINT_MAX,
+					 &intf_descr->cpt_expr);
+		if (rc < 0) {
+			free(intf_descr);
+			return LUSTRE_CFG_RC_BAD_PARAM;
+		}
+		strncpy(intf_descr->intf_name, intf_name,
+			open_sq_bracket - intf_name);
+		intf_descr->intf_name[open_sq_bracket - intf_name] = '\0';
+	} else {
+		strcpy(intf_descr->intf_name, intf_name);
+		intf_descr->cpt_expr = NULL;
+	}
+
+	list_add_tail(&intf_descr->intf_on_network, list);
+
+	return LUSTRE_CFG_RC_NO_ERR;
+}
+
+void lustre_lnet_init_nw_descr(struct lnet_dlc_network_descr *nw_descr)
+{
+	if (nw_descr != NULL) {
+		INIT_LIST_HEAD(&nw_descr->network_on_rule);
+		INIT_LIST_HEAD(&nw_descr->nw_intflist);
+	}
+}
+
+int lustre_lnet_parse_nids(char *nids, char **array, int size,
+			   char ***out_array)
+{
+	int num_nids = 0;
+	char *comma = nids, *cur, *entry;
+	char **new_array;
+	int i, len, start = 0, finish = 0;
+
+	if (nids == NULL || strlen(nids) == 0)
+		return size;
+
+	/* count the number or new nids, by counting the number of commas */
+	while (comma) {
+		comma = strchr(comma, ',');
+		if (comma) {
+			comma++;
+			num_nids++;
+		} else {
+			num_nids++;
+		}
+	}
+
+	/*
+	 * if the array is not NULL allocate a large enough array to house
+	 * the old and new entries
+	 */
+	new_array = calloc(sizeof(char*),
+			   (size > 0) ? size + num_nids : num_nids);
+
+	if (!new_array)
+		goto failed;
+
+	/* parse our the new nids and add them to the tail of the array */
+	comma = nids;
+	cur = nids;
+	start = (size > 0) ? size: 0;
+	finish = (size > 0) ? size + num_nids : num_nids;
+	for (i = start; i < finish; i++) {
+		comma = strchr(comma, ',');
+		if (!comma)
+			/*
+			 * the length of the string to be parsed out is
+			 * from cur to end of string. So it's good enough
+			 * to strlen(cur)
+			 */
+			len = strlen(cur) + 1;
+		else
+			/* length of the string is comma - cur */
+			len = (comma - cur) + 1;
+
+		entry = calloc(1, len);
+		if (!entry) {
+			finish = i > 0 ? i - 1: 0;
+			goto failed;
+		}
+		strncpy(entry, cur, len - 1);
+		entry[len] = '\0';
+		new_array[i] = entry;
+		if (comma) {
+			comma++;
+			cur = comma;
+		}
+	}
+
+	/* add the old entries in the array and delete the old array*/
+	for (i = 0; i < size; i++)
+		new_array[i] = array[i];
+
+	if (array)
+		free(array);
+
+	*out_array = new_array;
+
+	return finish;
+
+failed:
+	for (i = start; i < finish; i++)
+		free(new_array[i]);
+	if (new_array)
+		free(new_array);
+
+	return size;
+}
+
+/*
+ * format expected:
+ *	<intf>[<expr>], <intf>[<expr>],..
+ */
+int lustre_lnet_parse_interfaces(char *intf_str,
+				 struct lnet_dlc_network_descr *nw_descr)
+{
+	char *open_square;
+	char *close_square;
+	char *comma;
+	char *cur = intf_str, *next = NULL;
+	char *end = intf_str + strlen(intf_str);
+	int rc, len;
+	struct lnet_dlc_intf_descr *intf_descr, *tmp;
+
+	if (nw_descr == NULL)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	while (cur < end) {
+		open_square = strchr(cur, '[');
+		if (open_square != NULL) {
+			close_square = strchr(cur, ']');
+			if (close_square == NULL) {
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				goto failed;
+			}
+
+			comma = strchr(cur, ',');
+			if (comma != NULL && comma > close_square) {
+				next = comma + 1;
+				len = next - close_square;
+			} else {
+				len = strlen(cur);
+				next = cur + len;
+			}
+		} else {
+			comma = strchr(cur, ',');
+			if (comma != NULL) {
+				next = comma + 1;
+				len = comma - cur;
+			} else {
+				len = strlen(cur);
+				next = cur + len;
+			}
+		}
+
+		rc = lustre_lnet_add_intf_descr(&nw_descr->nw_intflist, cur, len);
+		if (rc != LUSTRE_CFG_RC_NO_ERR)
+			goto failed;
+
+		cur = next;
+	}
+
+	return LUSTRE_CFG_RC_NO_ERR;
+
+failed:
+	list_for_each_entry_safe(intf_descr, tmp, &nw_descr->nw_intflist,
+				 intf_on_network) {
+		list_del(&intf_descr->intf_on_network);
+		free_intf_descr(intf_descr);
+	}
+
+	return rc;
+}
 
 int lustre_lnet_config_lib_init(void)
 {
 	return register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH,
 				LNET_DEV_MAJOR, LNET_DEV_MINOR);
+}
+
+void lustre_lnet_config_lib_uninit(void)
+{
+	unregister_ioc_dev(LNET_DEV_ID);
 }
 
 int lustre_lnet_config_ni_system(bool up, bool load_ni_from_mod,
@@ -89,6 +372,185 @@ int lustre_lnet_config_ni_system(bool up, bool load_ni_from_mod,
 	cYAML_build_error(rc, seq_no, (up) ? CONFIG_CMD : UNCONFIG_CMD,
 			  "lnet", err_str, err_rc);
 
+	return rc;
+}
+
+static lnet_nid_t *allocate_create_nid_array(char **nids, __u32 num_nids,
+					     char *err_str)
+{
+	lnet_nid_t *array = NULL;
+	__u32 i;
+
+	if (!nids) {
+		snprintf(err_str, LNET_MAX_STR_LEN, "no NIDs to add");
+		return NULL;
+	}
+
+	array = calloc(sizeof(*array) * num_nids, 1);
+	if (array == NULL) {
+		snprintf(err_str, LNET_MAX_STR_LEN, "out of memory");
+		return NULL;
+	}
+
+	for (i = 0; i < num_nids; i++) {
+		array[i] = libcfs_str2nid(nids[i]);
+		if (array[i] == LNET_NID_ANY) {
+			free(array);
+			snprintf(err_str, LNET_MAX_STR_LEN,
+				 "bad NID: '%s'",
+				 nids[i]);
+			return NULL;
+		}
+	}
+
+	return array;
+}
+
+static int dispatch_peer_ni_cmd(lnet_nid_t pnid, lnet_nid_t nid, __u32 cmd,
+				struct lnet_ioctl_peer_cfg *data,
+				char *err_str, char *cmd_str)
+{
+	int rc;
+
+	data->prcfg_prim_nid = pnid;
+	data->prcfg_cfg_nid = nid;
+
+	rc = l_ioctl(LNET_DEV_ID, cmd, data);
+	if (rc != 0) {
+		rc = -errno;
+		snprintf(err_str,
+			LNET_MAX_STR_LEN,
+			"\"cannot %s peer ni: %s\"",
+			(cmd_str) ? cmd_str : "add", strerror(errno));
+	}
+
+	return rc;
+}
+
+int lustre_lnet_config_peer_nid(char *pnid, char **nid, int num_nids,
+				bool mr, int seq_no, struct cYAML **err_rc)
+{
+	struct lnet_ioctl_peer_cfg data;
+	lnet_nid_t prim_nid = LNET_NID_ANY;
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	int idx = 0;
+	bool nid0_used = false;
+	char err_str[LNET_MAX_STR_LEN] = {0};
+	lnet_nid_t *nids = allocate_create_nid_array(nid, num_nids, err_str);
+
+	if (pnid) {
+		prim_nid = libcfs_str2nid(pnid);
+		if (prim_nid == LNET_NID_ANY) {
+			snprintf(err_str, sizeof(err_str),
+				 "bad key NID: '%s'",
+				 pnid);
+			rc = LUSTRE_CFG_RC_MISSING_PARAM;
+			goto out;
+		}
+	} else if (!nids || nids[0] == LNET_NID_ANY) {
+		snprintf(err_str, sizeof(err_str),
+			 "no NIDs provided for configuration");
+		rc = LUSTRE_CFG_RC_MISSING_PARAM;
+		goto out;
+	} else {
+		prim_nid = LNET_NID_ANY;
+	}
+
+	snprintf(err_str, sizeof(err_str), "\"Success\"");
+
+	LIBCFS_IOC_INIT_V2(data, prcfg_hdr);
+	data.prcfg_mr = mr;
+
+	/*
+	 * if prim_nid is not specified use the first nid in the list of
+	 * nids provided as the prim_nid. NOTE: on entering 'if' we must
+	 * have at least 1 NID
+	 */
+	if (prim_nid == LNET_NID_ANY) {
+		nid0_used = true;
+		prim_nid = nids[0];
+	}
+
+	/* Create the prim_nid first */
+	rc = dispatch_peer_ni_cmd(prim_nid, LNET_NID_ANY,
+				  IOC_LIBCFS_ADD_PEER_NI,
+				  &data, err_str, "add");
+
+	if (rc != 0)
+		goto out;
+
+	/* add the rest of the nids to the key nid if any are available */
+	for (idx = nid0_used ? 1 : 0 ; nids && idx < num_nids; idx++) {
+		/*
+		 * If prim_nid is not provided then the first nid in the
+		 * list becomes the prim_nid. First time round the loop use
+		 * LNET_NID_ANY for the first parameter, then use nid[0]
+		 * as the key nid after wards
+		 */
+		rc = dispatch_peer_ni_cmd(prim_nid, nids[idx],
+					  IOC_LIBCFS_ADD_PEER_NI, &data,
+					  err_str, "add");
+
+		if (rc != 0)
+			goto out;
+	}
+
+out:
+	if (nids != NULL)
+		free(nids);
+	cYAML_build_error(rc, seq_no, ADD_CMD, "peer_ni", err_str, err_rc);
+	return rc;
+}
+
+int lustre_lnet_del_peer_nid(char *pnid, char **nid, int num_nids,
+			     int seq_no, struct cYAML **err_rc)
+{
+	struct lnet_ioctl_peer_cfg data;
+	lnet_nid_t prim_nid;
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	int idx = 0;
+	char err_str[LNET_MAX_STR_LEN] = {0};
+	lnet_nid_t *nids = allocate_create_nid_array(nid, num_nids, err_str);
+
+	if (pnid == NULL) {
+		snprintf(err_str, sizeof(err_str),
+			 "\"Primary nid is not provided\"");
+		rc = LUSTRE_CFG_RC_MISSING_PARAM;
+		goto out;
+	} else {
+		prim_nid = libcfs_str2nid(pnid);
+		if (prim_nid == LNET_NID_ANY) {
+			rc = LUSTRE_CFG_RC_BAD_PARAM;
+			snprintf(err_str, sizeof(err_str),
+				 "bad key NID: '%s'",
+				 pnid);
+			goto out;
+		}
+	}
+
+	snprintf(err_str, sizeof(err_str), "\"Success\"");
+
+	LIBCFS_IOC_INIT_V2(data, prcfg_hdr);
+	if (!nids || nids[0] == LNET_NID_ANY) {
+		rc = dispatch_peer_ni_cmd(prim_nid, LNET_NID_ANY,
+					  IOC_LIBCFS_DEL_PEER_NI,
+					  &data, err_str, "del");
+		goto out;
+	}
+
+	for (idx = 0; nids && idx < num_nids; idx++) {
+		rc = dispatch_peer_ni_cmd(prim_nid, nids[idx],
+					  IOC_LIBCFS_DEL_PEER_NI, &data,
+					  err_str, "del");
+
+		if (rc != 0)
+			goto out;
+	}
+
+out:
+	if (nids != NULL)
+		free(nids);
+	cYAML_build_error(rc, seq_no, DEL_CMD, "peer_ni", err_str, err_rc);
 	return rc;
 }
 
@@ -440,42 +902,419 @@ out:
 	return rc;
 }
 
-int lustre_lnet_config_net(char *net, char *intf, char *ip2net,
-			   int peer_to, int peer_cr, int peer_buf_cr,
-			   int credits, char *smp, int seq_no,
-			   struct lnet_ioctl_config_lnd_tunables *lnd_tunables,
-			   struct cYAML **err_rc)
+static int socket_intf_query(int request, char *intf,
+			     struct ifreq *ifr)
 {
-	struct lnet_ioctl_config_lnd_tunables *lnd = NULL;
-	struct lnet_ioctl_config_data *data;
-	size_t ioctl_size = sizeof(*data);
-	char buf[LNET_MAX_STR_LEN];
+	int rc;
+	int sockfd;
+
+	if (strlen(intf) >= IFNAMSIZ || ifr == NULL)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sockfd < 0)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	strcpy(ifr->ifr_name, intf);
+	rc = ioctl(sockfd, request, ifr);
+	if (rc != 0)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	return 0;
+}
+
+/*
+ * for each interface in the array of interfaces find the IP address of
+ * that interface, create its nid and add it to an array of NIDs.
+ * Stop if any of the interfaces is down
+ */
+static int lustre_lnet_intf2nids(struct lnet_dlc_network_descr *nw,
+				 lnet_nid_t **nids, __u32 *nnids)
+{
+	int i = 0, count = 0, rc;
+	struct ifreq ifr;
+	__u32 ip;
+	struct lnet_dlc_intf_descr *intf;
+
+	if (nw == NULL || nids == NULL)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	list_for_each_entry(intf, &nw->nw_intflist, intf_on_network)
+		count++;
+
+	*nids = calloc(count, sizeof(lnet_nid_t));
+	if (*nids == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	list_for_each_entry(intf, &nw->nw_intflist, intf_on_network) {
+		memset(&ifr, 0, sizeof(ifr));
+		rc = socket_intf_query(SIOCGIFFLAGS, intf->intf_name, &ifr);
+		if (rc != 0)
+			goto failed;
+
+		if ((ifr.ifr_flags & IFF_UP) == 0) {
+			rc = LUSTRE_CFG_RC_BAD_PARAM;
+			goto failed;
+		}
+
+		memset(&ifr, 0, sizeof(ifr));
+		rc = socket_intf_query(SIOCGIFADDR, intf->intf_name, &ifr);
+		if (rc != 0)
+			goto failed;
+
+		ip = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr;
+		ip = bswap_32(ip);
+		(*nids)[i] = LNET_MKNID(nw->nw_id, ip);
+		i++;
+	}
+
+	*nnids = count;
+
+	return 0;
+
+failed:
+	free(*nids);
+	*nids = NULL;
+	return rc;
+}
+
+/*
+ * called repeatedly until a match or no more ip range
+ * What do you have?
+ *	ip_range expression
+ *	interface list with all the interface names.
+ *	all the interfaces in the system.
+ *
+ *	try to match the ip_range expr to one of the interfaces' IPs in
+ *	the system. If we hit a patch for an interface. Check if that
+ *	interface name is in the list.
+ *
+ *	If there are more than one interface in the list, then make sure
+ *	that the IPs for all of these interfaces match the ip ranges
+ *	given.
+ *
+ *	for each interface in intf_list
+ *		look up the intf name in ifa
+ *		if not there then no match
+ *		check ip obtained from ifa against a match to any of the
+ *		ip_ranges given.
+ *		If no match, then fail
+ *
+ *	The result is that all the interfaces have to match.
+ */
+int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
+				 struct list_head *intf_list,
+				 struct list_head *ip_ranges)
+{
+	int rc;
+	__u32 ip;
+	struct lnet_dlc_intf_descr *intf_descr, *tmp;
+	struct ifaddrs *ifaddr = ifa;
+	struct lustre_lnet_ip_range_descr *ip_range;
+	int family;
+
+	/*
+	 * if there are no explicit interfaces, and no ip ranges, then
+	 * configure the first tcp interface we encounter.
+	 */
+	if (list_empty(intf_list) && list_empty(ip_ranges)) {
+		for (ifaddr = ifa; ifaddr != NULL; ifaddr = ifaddr->ifa_next) {
+			if (ifaddr->ifa_addr == NULL)
+				continue;
+
+			if ((ifaddr->ifa_flags & IFF_UP) == 0)
+				continue;
+
+			family = ifaddr->ifa_addr->sa_family;
+			if (family == AF_INET &&
+			    strcmp(ifaddr->ifa_name, "lo") != 0) {
+				rc = lustre_lnet_add_intf_descr
+					(intf_list, ifaddr->ifa_name,
+					strlen(ifaddr->ifa_name));
+
+				if (rc != LUSTRE_CFG_RC_NO_ERR)
+					return rc;
+
+				return LUSTRE_CFG_RC_MATCH;
+			}
+		}
+		return LUSTRE_CFG_RC_NO_MATCH;
+	}
+
+	/*
+	 * First interface which matches an IP pattern will be used
+	 */
+	if (list_empty(intf_list)) {
+		/*
+		 * no interfaces provided in the rule, but an ip range is
+		 * provided, so try and match an interface to the ip
+		 * range.
+		 */
+		for (ifaddr = ifa; ifaddr != NULL; ifaddr = ifaddr->ifa_next) {
+			if (ifaddr->ifa_addr == NULL)
+				continue;
+
+			if ((ifaddr->ifa_flags & IFF_UP) == 0)
+				continue;
+
+			family = ifaddr->ifa_addr->sa_family;
+			if (family == AF_INET) {
+				ip = ((struct sockaddr_in *)ifaddr->ifa_addr)->
+					sin_addr.s_addr;
+
+				list_for_each_entry(ip_range, ip_ranges,
+						    ipr_entry) {
+					rc = cfs_ip_addr_match(bswap_32(ip),
+							&ip_range->ipr_expr);
+					if (!rc)
+						continue;
+
+					rc = lustre_lnet_add_intf_descr
+					  (intf_list, ifaddr->ifa_name,
+					   strlen(ifaddr->ifa_name));
+
+					if (rc != LUSTRE_CFG_RC_NO_ERR)
+						return rc;
+				}
+			}
+		}
+
+		if (!list_empty(intf_list))
+			return LUSTRE_CFG_RC_MATCH;
+
+		return LUSTRE_CFG_RC_NO_MATCH;
+	}
+
+	/*
+	 * If an interface is explicitly specified the ip-range might or
+	 * might not be specified. if specified the interface needs to match the
+	 * ip-range. If no ip-range then the interfaces are
+	 * automatically matched if they are all up.
+	 * If > 1 interfaces all the interfaces must match for the NI to
+	 * be configured.
+	 */
+	list_for_each_entry_safe(intf_descr, tmp, intf_list, intf_on_network) {
+		for (ifaddr = ifa; ifaddr != NULL; ifaddr = ifaddr->ifa_next) {
+			if (ifaddr->ifa_addr == NULL)
+				continue;
+
+			family = ifaddr->ifa_addr->sa_family;
+			if (family == AF_INET &&
+			    strcmp(intf_descr->intf_name,
+				   ifaddr->ifa_name) == 0)
+				break;
+		}
+
+		if (ifaddr == NULL) {
+			list_del(&intf_descr->intf_on_network);
+			free_intf_descr(intf_descr);
+			continue;
+		}
+
+		if ((ifaddr->ifa_flags & IFF_UP) == 0) {
+			list_del(&intf_descr->intf_on_network);
+			free_intf_descr(intf_descr);
+			continue;
+		}
+
+		ip = ((struct sockaddr_in *)ifaddr->ifa_addr)->sin_addr.s_addr;
+
+		rc = 1;
+		list_for_each_entry(ip_range, ip_ranges, ipr_entry) {
+			rc = cfs_ip_addr_match(bswap_32(ip), &ip_range->ipr_expr);
+			if (rc)
+				break;
+		}
+
+		if (!rc) {
+			/* no match for this interface */
+			list_del(&intf_descr->intf_on_network);
+			free_intf_descr(intf_descr);
+		}
+	}
+
+	return LUSTRE_CFG_RC_MATCH;
+}
+
+int lustre_lnet_resolve_ip2nets_rule(struct lustre_lnet_ip2nets *ip2nets,
+				     lnet_nid_t **nids, __u32 *nnids)
+{
+	struct ifaddrs *ifa;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
+
+	rc = getifaddrs(&ifa);
+	if (rc < 0)
+		return -errno;
+
+	rc = lustre_lnet_match_ip_to_intf(ifa,
+					  &ip2nets->ip2nets_net.nw_intflist,
+					  &ip2nets->ip2nets_ip_ranges);
+	if (rc != LUSTRE_CFG_RC_MATCH) {
+		freeifaddrs(ifa);
+		return rc;
+	}
+
+	rc = lustre_lnet_intf2nids(&ip2nets->ip2nets_net, nids, nnids);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		*nids = NULL;
+		*nnids = 0;
+	}
+
+	freeifaddrs(ifa);
+
+	return rc;
+}
+
+static int
+lustre_lnet_ioctl_config_ni(struct list_head *intf_list,
+			    struct lnet_ioctl_config_lnd_tunables *tunables,
+			    struct cfs_expr_list *global_cpts,
+			    lnet_nid_t *nids, char *err_str)
+{
+	char *data;
+	struct lnet_ioctl_config_ni *conf;
+	struct lnet_ioctl_config_lnd_tunables *tun = NULL;
+	int rc = LUSTRE_CFG_RC_NO_ERR, i = 0;
+	size_t len;
+	int count;
+	struct lnet_dlc_intf_descr *intf_descr;
+	__u32 *cpt_array;
+	struct cfs_expr_list *cpt_expr;
+
+	list_for_each_entry(intf_descr, intf_list,
+			    intf_on_network) {
+		if (i == 0 && tunables != NULL)
+			len = sizeof(struct lnet_ioctl_config_ni) +
+			      sizeof(struct lnet_ioctl_config_lnd_tunables);
+		else
+			len = sizeof(struct lnet_ioctl_config_ni);
+
+		data = calloc(1, len);
+		conf = (struct lnet_ioctl_config_ni*) data;
+		if (i == 0 && tunables != NULL)
+			tun = (struct lnet_ioctl_config_lnd_tunables*)
+				conf->lic_bulk;
+
+		LIBCFS_IOC_INIT_V2(*conf, lic_cfg_hdr);
+		conf->lic_cfg_hdr.ioc_len = len;
+		conf->lic_nid = nids[i];
+		strncpy(conf->lic_ni_intf[0], intf_descr->intf_name,
+			LNET_MAX_STR_LEN);
+
+		if (intf_descr->cpt_expr != NULL)
+			cpt_expr = intf_descr->cpt_expr;
+		else if (global_cpts != NULL)
+			cpt_expr = global_cpts;
+		else
+			cpt_expr = NULL;
+
+		if (cpt_expr != NULL) {
+			count = cfs_expr_list_values(cpt_expr,
+						     LNET_MAX_SHOW_NUM_CPT,
+						     &cpt_array);
+			if (count > 0) {
+				memcpy(conf->lic_cpts, cpt_array,
+				       sizeof(cpt_array[0]) * LNET_MAX_STR_LEN);
+				free(cpt_array);
+			} else {
+				count = 0;
+			}
+		} else {
+			count = 0;
+		}
+
+		conf->lic_ncpts = count;
+
+		if (i == 0 && tunables != NULL)
+			/* TODO put in the LND tunables */
+			memcpy(tun, tunables, sizeof(*tunables));
+
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_ADD_LOCAL_NI, data);
+		if (rc < 0) {
+			rc = -errno;
+			snprintf(err_str,
+				 LNET_MAX_STR_LEN,
+				 "\"cannot add network: %s\"", strerror(errno));
+			return rc;
+		}
+		i++;
+	}
+
+	return LUSTRE_CFG_RC_NO_ERR;
+}
+
+int
+lustre_lnet_config_ip2nets(struct lustre_lnet_ip2nets *ip2nets,
+			   struct lnet_ioctl_config_lnd_tunables *tunables,
+			   struct cfs_expr_list *global_cpts,
+			   int seq_no, struct cYAML **err_rc)
+{
+	lnet_nid_t *nids = NULL;
+	__u32 nnids = 0;
+	int rc;
 	char err_str[LNET_MAX_STR_LEN];
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 
-	/* No need to register lo */
-	if (net != NULL && !strcmp(net, "lo"))
-		return 0;
-
-	if (ip2net == NULL && (intf == NULL || net == NULL)) {
+	if (!ip2nets) {
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"mandatory parameter '%s' not specified."
-			 " Optionally specify ip2net parameter\"",
-			 (intf == NULL && net == NULL) ? "net, if" :
-			 (intf == NULL) ? "if" : "net");
-		rc = LUSTRE_CFG_RC_MISSING_PARAM;
+			 "\"incomplete ip2nets information\"");
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
 	}
 
-	if (peer_to != -1 && peer_to <= 0) {
+	rc = lustre_lnet_resolve_ip2nets_rule(ip2nets, &nids, &nnids);
+	if (rc != LUSTRE_CFG_RC_NO_ERR && rc != LUSTRE_CFG_RC_MATCH) {
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"peer timeout %d, must be greater than 0\"",
-			 peer_to);
-		rc = LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM;
+			 "\"cannot resolve ip2nets rule\"");
+		goto out;
+	}
+
+	if (list_empty(&ip2nets->ip2nets_net.nw_intflist)) {
+		snprintf(err_str, sizeof(err_str),
+			 "\"no interfaces match ip2nets rules\"");
+		goto out;
+	}
+
+	rc = lustre_lnet_ioctl_config_ni(&ip2nets->ip2nets_net.nw_intflist,
+					 tunables, global_cpts, nids,
+					 err_str);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		free(nids);
+
+out:
+	cYAML_build_error(rc, seq_no, ADD_CMD, "ip2nets", err_str, err_rc);
+	return rc;
+}
+
+int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
+			  struct cfs_expr_list *global_cpts,
+			  char *ip2net,
+			  struct lnet_ioctl_config_lnd_tunables *tunables,
+			  int seq_no, struct cYAML **err_rc)
+{
+	char *data = NULL;
+	struct lnet_ioctl_config_ni *conf;
+	struct lnet_ioctl_config_lnd_tunables *tun = NULL;
+	char buf[LNET_MAX_STR_LEN];
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	lnet_nid_t *nids = NULL;
+	__u32 nnids = 0;
+	size_t len;
+	int count;
+	struct lnet_dlc_intf_descr *intf_descr, *tmp;
+	__u32 *cpt_array;
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	if (ip2net == NULL && nw_descr == NULL) {
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"mandatory parameters not specified.\"");
+		rc = LUSTRE_CFG_RC_MISSING_PARAM;
 		goto out;
 	}
 
@@ -488,58 +1327,124 @@ int lustre_lnet_config_net(char *net, char *intf, char *ip2net,
 		goto out;
 	}
 
-	if (lnd_tunables != NULL)
-		ioctl_size += sizeof(*lnd_tunables);
+	if (ip2net != NULL) {
+		if (tunables != NULL)
+			len = sizeof(struct lnet_ioctl_config_ni) +
+			      sizeof(struct lnet_ioctl_config_lnd_tunables);
+		else
+			len = sizeof(struct lnet_ioctl_config_ni);
+		data = calloc(1, len);
+		conf = (struct lnet_ioctl_config_ni*) data;
+		if (tunables != NULL)
+			tun = (struct lnet_ioctl_config_lnd_tunables*)
+				(data + sizeof(*conf));
 
-	data = calloc(1, ioctl_size);
-	if (data == NULL)
+		LIBCFS_IOC_INIT_V2(*conf, lic_cfg_hdr);
+		conf->lic_cfg_hdr.ioc_len = len;
+		strncpy(conf->lic_legacy_ip2nets, ip2net,
+			LNET_MAX_STR_LEN);
+
+		if (global_cpts != NULL) {
+			count = cfs_expr_list_values(global_cpts,
+						     LNET_MAX_SHOW_NUM_CPT,
+						     &cpt_array);
+			if (count > 0) {
+				memcpy(conf->lic_cpts, cpt_array,
+				       sizeof(cpt_array[0]) * LNET_MAX_STR_LEN);
+				free(cpt_array);
+			} else {
+				count = 0;
+			}
+		} else {
+			count = 0;
+		}
+
+		conf->lic_ncpts = count;
+
+		if (tunables != NULL)
+			memcpy(tun, tunables, sizeof(*tunables));
+
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_ADD_LOCAL_NI, data);
+		if (rc < 0) {
+			rc = -errno;
+			snprintf(err_str,
+				sizeof(err_str),
+				"\"cannot add network: %s\"", strerror(errno));
+			goto out;
+		}
+
 		goto out;
-
-	if (ip2net == NULL)
-		snprintf(buf, sizeof(buf) - 1, "%s(%s)%s",
-			net, intf,
-			(smp) ? smp : "");
-
-	LIBCFS_IOC_INIT_V2(*data, cfg_hdr);
-	strncpy(data->cfg_config_u.cfg_net.net_intf,
-		(ip2net != NULL) ? ip2net : buf, sizeof(buf));
-	data->cfg_config_u.cfg_net.net_peer_timeout = peer_to;
-	data->cfg_config_u.cfg_net.net_peer_tx_credits = peer_cr;
-	data->cfg_config_u.cfg_net.net_peer_rtr_credits = peer_buf_cr;
-	data->cfg_config_u.cfg_net.net_max_tx_credits = credits;
-	/* Add in tunable settings if available */
-	if (lnd_tunables != NULL) {
-		lnd = (struct lnet_ioctl_config_lnd_tunables *)data->cfg_bulk;
-
-		data->cfg_hdr.ioc_len = ioctl_size;
-		memcpy(lnd, lnd_tunables, sizeof(*lnd_tunables));
 	}
 
-	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_ADD_NET, data);
-	if (rc < 0) {
-		rc = -errno;
+	if (LNET_NETTYP(nw_descr->nw_id) == LOLND)
+		return LUSTRE_CFG_RC_NO_ERR;
+
+	if (nw_descr->nw_id == LNET_NIDNET(LNET_NID_ANY)) {
 		snprintf(err_str,
-			 sizeof(err_str),
-			 "\"cannot add network: %s\"", strerror(errno));
+			sizeof(err_str),
+			"\"cannot parse net '%s'\"",
+			libcfs_net2str(nw_descr->nw_id));
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		goto out;
 	}
-	free(data);
+
+	if (list_empty(&nw_descr->nw_intflist)) {
+		snprintf(err_str,
+			sizeof(err_str),
+			"\"no interface name provided\"");
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		goto out;
+	}
+
+	rc = lustre_lnet_intf2nids(nw_descr, &nids, &nnids);
+	if (rc != 0) {
+		snprintf(err_str, sizeof(err_str),
+			 "\"bad parameter\"");
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
+		goto out;
+	}
+
+	rc = lustre_lnet_ioctl_config_ni(&nw_descr->nw_intflist,
+					 tunables, global_cpts, nids,
+					 err_str);
 
 out:
+	if (nw_descr != NULL) {
+		list_for_each_entry_safe(intf_descr, tmp,
+					 &nw_descr->nw_intflist,
+					 intf_on_network) {
+			list_del(&intf_descr->intf_on_network);
+			free_intf_descr(intf_descr);
+		}
+	}
+
 	cYAML_build_error(rc, seq_no, ADD_CMD, "net", err_str, err_rc);
+
+	if (nids)
+		free(nids);
+
+	if (data)
+		free(data);
 
 	return rc;
 }
 
-int lustre_lnet_del_net(char *nw, int seq_no, struct cYAML **err_rc)
+int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
+		       int seq_no, struct cYAML **err_rc)
 {
-	struct lnet_ioctl_config_data data;
-	__u32 net = LNET_NIDNET(LNET_NID_ANY);
-	int rc = LUSTRE_CFG_RC_NO_ERR;
+	struct lnet_ioctl_config_ni data;
+	int rc = LUSTRE_CFG_RC_NO_ERR, i;
 	char err_str[LNET_MAX_STR_LEN];
+	lnet_nid_t *nids = NULL;
+	__u32 nnids = 0;
+	struct lnet_dlc_intf_descr *intf_descr, *tmp;
+
+	if (LNET_NETTYP(nw_descr->nw_id) == LOLND)
+		return LUSTRE_CFG_RC_NO_ERR;
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 
-	if (nw == NULL) {
+	if (nw_descr == NULL) {
 		snprintf(err_str,
 			 sizeof(err_str),
 			 "\"missing mandatory parameter\"");
@@ -547,29 +1452,62 @@ int lustre_lnet_del_net(char *nw, int seq_no, struct cYAML **err_rc)
 		goto out;
 	}
 
-	net = libcfs_str2net(nw);
-	if (net == LNET_NIDNET(LNET_NID_ANY)) {
+	if (nw_descr->nw_id == LNET_NIDNET(LNET_NID_ANY)) {
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"cannot parse net '%s'\"", nw);
+			 "\"cannot parse net '%s'\"",
+			 libcfs_net2str(nw_descr->nw_id));
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
 	}
 
-	LIBCFS_IOC_INIT_V2(data, cfg_hdr);
-	data.cfg_net = net;
-
-	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_NET, &data);
+	rc = lustre_lnet_intf2nids(nw_descr, &nids, &nnids);
 	if (rc != 0) {
-		rc = -errno;
-		snprintf(err_str,
-			 sizeof(err_str),
-			 "\"cannot delete network: %s\"", strerror(errno));
+		snprintf(err_str, sizeof(err_str),
+			 "\"bad parameter\"");
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
+	}
+
+	/*
+	 * no interfaces just the nw_id is specified
+	 */
+	if (nnids == 0) {
+		nids = calloc(1, sizeof(*nids));
+		if (nids == NULL) {
+			snprintf(err_str, sizeof(err_str),
+				"\"out of memory\"");
+			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+			goto out;
+		}
+		nids[0] = LNET_MKNID(nw_descr->nw_id, 0);
+		nnids = 1;
+	}
+
+	for (i = 0; i < nnids; i++) {
+		LIBCFS_IOC_INIT_V2(data, lic_cfg_hdr);
+		data.lic_nid = nids[i];
+
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DEL_LOCAL_NI, &data);
+		if (rc < 0) {
+			rc = -errno;
+			snprintf(err_str,
+				sizeof(err_str),
+				"\"cannot del network: %s\"", strerror(errno));
+		}
+	}
+
+	list_for_each_entry_safe(intf_descr, tmp, &nw_descr->nw_intflist,
+				 intf_on_network) {
+		list_del(&intf_descr->intf_on_network);
+		free_intf_descr(intf_descr);
 	}
 
 out:
 	cYAML_build_error(rc, seq_no, DEL_CMD, "net", err_str, err_rc);
+
+	if (nids != NULL)
+		free(nids);
 
 	return rc;
 }
@@ -578,29 +1516,32 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 			 struct cYAML **show_rc, struct cYAML **err_rc)
 {
 	char *buf;
-	struct lnet_ioctl_config_lnd_tunables *lnd_cfg;
-	struct lnet_ioctl_config_data *data;
-	struct lnet_ioctl_net_config *net_config;
+	struct lnet_ioctl_config_ni *ni_data;
+	struct lnet_ioctl_config_lnd_tunables *lnd;
+	struct lnet_ioctl_element_stats *stats;
 	__u32 net = LNET_NIDNET(LNET_NID_ANY);
+	__u32 prev_net = LNET_NIDNET(LNET_NID_ANY);
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, i, j;
 	int l_errno = 0;
-	struct cYAML *root = NULL, *tunables = NULL, *net_node = NULL,
-		*interfaces = NULL, *item = NULL, *first_seq = NULL;
+	struct cYAML *root = NULL, *tunables = NULL,
+		*net_node = NULL, *interfaces = NULL,
+		*item = NULL, *first_seq = NULL,
+		*tmp = NULL, *statistics = NULL;
 	int str_buf_len = LNET_MAX_SHOW_NUM_CPT * 2;
 	char str_buf[str_buf_len];
 	char *pos;
 	char err_str[LNET_MAX_STR_LEN];
-	bool exist = false;
-	size_t buf_len;
+	bool exist = false, new_net = true;
+	int net_num = 0;
+	size_t buf_size = sizeof(*ni_data) + sizeof(*lnd) + sizeof(*stats);
 
 	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
 
-	buf_len = sizeof(*data) + sizeof(*net_config) + sizeof(*lnd_cfg);
-	buf = calloc(1, buf_len);
+	buf = calloc(1, buf_size);
 	if (buf == NULL)
 		goto out;
 
-	data = (struct lnet_ioctl_config_data *)buf;
+	ni_data = (struct lnet_ioctl_config_ni *)buf;
 
 	if (nw != NULL) {
 		net = libcfs_str2net(nw);
@@ -623,116 +1564,158 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 
 	for (i = 0;; i++) {
 		pos = str_buf;
+		__u32 rc_net;
 
-		memset(buf, 0, buf_len);
+		memset(buf, 0, buf_size);
 
-		LIBCFS_IOC_INIT_V2(*data, cfg_hdr);
+		LIBCFS_IOC_INIT_V2(*ni_data, lic_cfg_hdr);
 		/*
 		 * set the ioc_len to the proper value since INIT assumes
 		 * size of data
 		 */
-		data->cfg_hdr.ioc_len = buf_len;
-		data->cfg_count = i;
+		ni_data->lic_cfg_hdr.ioc_len = buf_size;
+		ni_data->lic_idx = i;
 
-		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NET, data);
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_LOCAL_NI, ni_data);
 		if (rc != 0) {
 			l_errno = errno;
 			break;
 		}
 
+		rc_net = LNET_NIDNET(ni_data->lic_nid);
+
 		/* filter on provided data */
 		if (net != LNET_NIDNET(LNET_NID_ANY) &&
-		    net != LNET_NIDNET(data->cfg_nid))
+		    net != rc_net)
 			continue;
 
 		/* default rc to -1 in case we hit the goto */
 		rc = -1;
 		exist = true;
 
-		net_config = (struct lnet_ioctl_net_config *)data->cfg_bulk;
+		stats = (struct lnet_ioctl_element_stats *)ni_data->lic_bulk;
+		lnd = (struct lnet_ioctl_config_lnd_tunables *)
+			(ni_data->lic_bulk + sizeof(*stats));
+
+		if (rc_net != prev_net) {
+			prev_net = rc_net;
+			new_net = true;
+			net_num++;
+		}
+
+		if (new_net) {
+			if (!cYAML_create_string(net_node, "net type",
+						 libcfs_net2str(rc_net)))
+				goto out;
+
+			tmp = cYAML_create_seq(net_node, "local NI(s)");
+			if (tmp == NULL)
+				goto out;
+			new_net = false;
+		}
 
 		/* create the tree to be printed. */
-		item = cYAML_create_seq_item(net_node);
+		item = cYAML_create_seq_item(tmp);
 		if (item == NULL)
 			goto out;
 
 		if (first_seq == NULL)
 			first_seq = item;
 
-		if (cYAML_create_string(item, "net",
-					libcfs_net2str(
-						LNET_NIDNET(data->cfg_nid)))
-		    == NULL)
-			goto out;
-
 		if (cYAML_create_string(item, "nid",
-					libcfs_nid2str(data->cfg_nid)) == NULL)
+					libcfs_nid2str(ni_data->lic_nid)) == NULL)
 			goto out;
 
-		if (cYAML_create_string(item, "status",
-					(net_config->ni_status ==
+		if (cYAML_create_string(item,
+					"status",
+					(ni_data->lic_status ==
 					  LNET_NI_STATUS_UP) ?
 					    "up" : "down") == NULL)
 			goto out;
 
 		/* don't add interfaces unless there is at least one
 		 * interface */
-		if (strlen(net_config->ni_interfaces[0]) > 0) {
+		if (strlen(ni_data->lic_ni_intf[0]) > 0) {
 			interfaces = cYAML_create_object(item, "interfaces");
 			if (interfaces == NULL)
 				goto out;
 
 			for (j = 0; j < LNET_MAX_INTERFACES; j++) {
-				if (lustre_interface_show_net(interfaces, j,
-							      detail, data,
-							      net_config) < 0)
-					goto out;
+				if (strlen(ni_data->lic_ni_intf[j]) > 0) {
+					snprintf(str_buf,
+						 sizeof(str_buf), "%d", j);
+					if (cYAML_create_string(interfaces,
+						str_buf,
+						ni_data->lic_ni_intf[j]) ==
+							NULL)
+						goto out;
+				}
 			}
 		}
 
 		if (detail) {
 			char *limit;
 
+			statistics = cYAML_create_object(item, "statistics");
+			if (statistics == NULL)
+				goto out;
+
+			if (cYAML_create_number(statistics, "send_count",
+						stats->send_count)
+							== NULL)
+				goto out;
+
+			if (cYAML_create_number(statistics, "recv_count",
+						stats->recv_count)
+							== NULL)
+				goto out;
+
+			if (cYAML_create_number(statistics, "drop_count",
+						stats->drop_count)
+							== NULL)
+				goto out;
+
 			tunables = cYAML_create_object(item, "tunables");
+			if (!tunables)
+				goto out;
+
+			rc = lustre_net_show_tunables(tunables, &lnd->lt_cmn);
+			if (rc != LUSTRE_CFG_RC_NO_ERR)
+				goto out;
+
+			tunables = cYAML_create_object(item, "lnd tunables");
 			if (tunables == NULL)
 				goto out;
 
-			if (cYAML_create_number(tunables, "peer_timeout",
-						data->cfg_config_u.cfg_net.
-						net_peer_timeout) == NULL)
+			rc = lustre_ni_show_tunables(tunables, LNET_NETTYP(rc_net),
+						     &lnd->lt_tun);
+			if (rc != LUSTRE_CFG_RC_NO_ERR)
 				goto out;
 
-			if (cYAML_create_number(tunables, "peer_credits",
-						data->cfg_config_u.cfg_net.
-						net_peer_tx_credits) == NULL)
+			if (cYAML_create_number(item, "tcp bonding",
+						ni_data->lic_tcp_bonding)
+							== NULL)
 				goto out;
 
-			if (cYAML_create_number(tunables,
-						"peer_buffer_credits",
-						data->cfg_config_u.cfg_net.
-						net_peer_rtr_credits) == NULL)
-				goto out;
-
-			if (cYAML_create_number(tunables, "credits",
-						data->cfg_config_u.cfg_net.
-						net_max_tx_credits) == NULL)
+			if (cYAML_create_number(item, "dev cpt",
+						ni_data->lic_dev_cpt) == NULL)
 				goto out;
 
 			/* out put the CPTs in the format: "[x,x,x,...]" */
 			limit = str_buf + str_buf_len - 3;
 			pos += snprintf(pos, limit - pos, "\"[");
-			for (j = 0 ; data->cfg_ncpts > 1 &&
-				j < data->cfg_ncpts &&
+			for (j = 0 ; ni_data->lic_ncpts >= 1 &&
+				j < ni_data->lic_ncpts &&
 				pos < limit; j++) {
 				pos += snprintf(pos, limit - pos,
-						"%d", net_config->ni_cpts[j]);
-				if ((j + 1) < data->cfg_ncpts)
+						"%d", ni_data->lic_cpts[j]);
+				if ((j + 1) < ni_data->lic_ncpts)
 					pos += snprintf(pos, limit - pos, ",");
 			}
 			pos += snprintf(pos, 3, "]\"");
 
-			if (data->cfg_ncpts > 1 &&
-			    cYAML_create_string(tunables, "CPT",
+			if (ni_data->lic_ncpts >= 1 &&
+			    cYAML_create_string(item, "CPT",
 						str_buf) == NULL)
 				goto out;
 		}
@@ -807,6 +1790,40 @@ out:
 	cYAML_build_error(rc, seq_no,
 			 (enable) ? ADD_CMD : DEL_CMD,
 			 "routing", err_str, err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_config_numa_range(int range, int seq_no, struct cYAML **err_rc)
+{
+	struct lnet_ioctl_numa_range data;
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	if (range < 0) {
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"range must be >= 0\"");
+		rc = LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM;
+		goto out;
+	}
+
+	LIBCFS_IOC_INIT_V2(data, nr_hdr);
+	data.nr_range = range;
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_SET_NUMA_RANGE, &data);
+	if (rc != 0) {
+		rc = -errno;
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"cannot configure buffers: %s\"", strerror(errno));
+		goto out;
+	}
+
+out:
+	cYAML_build_error(rc, seq_no, ADD_CMD, "numa_range", err_str, err_rc);
 
 	return rc;
 }
@@ -1002,19 +2019,34 @@ out:
 	return rc;
 }
 
-int lustre_lnet_show_peer_credits(int seq_no, struct cYAML **show_rc,
-				  struct cYAML **err_rc)
+int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
+			  struct cYAML **show_rc, struct cYAML **err_rc)
 {
-	struct lnet_ioctl_peer peer_info;
+	/*
+	 * TODO: This function is changing in a future patch to accommodate
+	 * PEER_LIST and proper filtering on any nid of the peer
+	 */
+	struct lnet_ioctl_peer_cfg *peer_info;
+	struct lnet_peer_ni_credit_info *lpni_cri;
+	struct lnet_ioctl_element_stats *lpni_stats;
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, ncpt = 0, i = 0, j = 0;
 	int l_errno = 0;
-	struct cYAML *root = NULL, *peer = NULL, *first_seq = NULL,
-		     *peer_root = NULL;
+	struct cYAML *root = NULL, *peer = NULL, *peer_ni = NULL,
+		     *first_seq = NULL, *peer_root = NULL, *tmp = NULL;
 	char err_str[LNET_MAX_STR_LEN];
-	bool ncpt_set = false;
+	lnet_nid_t prev_primary_nid = LNET_NID_ANY, primary_nid = LNET_NID_ANY;
+	int data_size = sizeof(*peer_info) + sizeof(*lpni_cri) +
+			sizeof(*lpni_stats);
+	char *data = calloc(data_size, 1);
+	bool new_peer = true;
 
 	snprintf(err_str, sizeof(err_str),
 		 "\"out of memory\"");
+
+	if (data == NULL)
+		goto out;
+
+	peer_info = (struct lnet_ioctl_peer_cfg *)data;
 
 	/* create struct cYAML root object */
 	root = cYAML_create_object(NULL, NULL);
@@ -1025,82 +2057,126 @@ int lustre_lnet_show_peer_credits(int seq_no, struct cYAML **show_rc,
 	if (peer_root == NULL)
 		goto out;
 
+	if (knid != NULL)
+		primary_nid = libcfs_str2nid(knid);
+
 	do {
 		for (i = 0;; i++) {
-			LIBCFS_IOC_INIT_V2(peer_info, pr_hdr);
-			peer_info.pr_count = i;
-			peer_info.pr_lnd_u.pr_peer_credits.cr_ncpt = j;
+			memset(data, 0, data_size);
+			LIBCFS_IOC_INIT_V2(*peer_info, prcfg_hdr);
+			peer_info->prcfg_hdr.ioc_len = data_size;
+			peer_info->prcfg_idx = i;
+
 			rc = l_ioctl(LNET_DEV_ID,
-				     IOC_LIBCFS_GET_PEER_INFO, &peer_info);
+				     IOC_LIBCFS_GET_PEER_NI, peer_info);
 			if (rc != 0) {
 				l_errno = errno;
 				break;
 			}
 
-			if (ncpt_set != 0) {
-				ncpt = peer_info.pr_lnd_u.pr_peer_credits.
-					cr_ncpt;
-				ncpt_set = true;
-			}
+			if (primary_nid != LNET_NID_ANY &&
+			    primary_nid != peer_info->prcfg_prim_nid)
+					continue;
+
+			lpni_cri = (struct lnet_peer_ni_credit_info*)peer_info->prcfg_bulk;
+			lpni_stats = (struct lnet_ioctl_element_stats *)
+				     (peer_info->prcfg_bulk +
+				     sizeof(*lpni_cri));
 
 			peer = cYAML_create_seq_item(peer_root);
 			if (peer == NULL)
 				goto out;
 
+			if (peer_info->prcfg_prim_nid != prev_primary_nid) {
+				prev_primary_nid = peer_info->prcfg_prim_nid;
+				new_peer = true;
+			}
+
+			if (new_peer) {
+				lnet_nid_t pnid = peer_info->prcfg_prim_nid;
+				if (cYAML_create_string(peer, "primary nid",
+							libcfs_nid2str(pnid))
+				    == NULL)
+					goto out;
+				if (cYAML_create_string(peer, "Multi-Rail",
+							peer_info->prcfg_mr ?
+							"True" : "False")
+				    == NULL)
+					goto out;
+				tmp = cYAML_create_seq(peer, "peer ni");
+				if (tmp == NULL)
+					goto out;
+				new_peer = false;
+			}
+
 			if (first_seq == NULL)
 				first_seq = peer;
 
-			if (cYAML_create_string(peer, "nid",
+			peer_ni = cYAML_create_seq_item(tmp);
+			if (peer_ni == NULL)
+				goto out;
+
+			if (cYAML_create_string(peer_ni, "nid",
 						libcfs_nid2str
-						 (peer_info.pr_nid)) == NULL)
-				goto out;
-
-			if (cYAML_create_string(peer, "state",
-						peer_info.pr_lnd_u.
-						  pr_peer_credits.
-							cr_aliveness) ==
-			    NULL)
-				goto out;
-
-			if (cYAML_create_number(peer, "refcount",
-						peer_info.pr_lnd_u.
-						  pr_peer_credits.
-							cr_refcount) == NULL)
-				goto out;
-
-			if (cYAML_create_number(peer, "max_ni_tx_credits",
-						peer_info.pr_lnd_u.
-						  pr_peer_credits.
-						    cr_ni_peer_tx_credits)
+						 (peer_info->prcfg_cfg_nid))
 			    == NULL)
 				goto out;
 
-			if (cYAML_create_number(peer, "available_tx_credits",
-						peer_info.pr_lnd_u.
-						  pr_peer_credits.
-						    cr_peer_tx_credits)
+			if (cYAML_create_string(peer_ni, "state",
+						lpni_cri->cr_aliveness)
 			    == NULL)
 				goto out;
 
-			if (cYAML_create_number(peer, "available_rtr_credits",
-						peer_info.pr_lnd_u.
-						  pr_peer_credits.
-						    cr_peer_rtr_credits)
+			if (!detail)
+				continue;
+
+			if (cYAML_create_number(peer_ni, "max_ni_tx_credits",
+						lpni_cri->cr_ni_peer_tx_credits)
 			    == NULL)
 				goto out;
 
-			if (cYAML_create_number(peer, "min_rtr_credits",
-						peer_info.pr_lnd_u.
-						  pr_peer_credits.
-						    cr_peer_min_rtr_credits)
+			if (cYAML_create_number(peer_ni, "available_tx_credits",
+						lpni_cri->cr_peer_tx_credits)
 			    == NULL)
 				goto out;
 
-			if (cYAML_create_number(peer, "tx_q_num_of_buf",
-						peer_info.pr_lnd_u.
-						  pr_peer_credits.
-						    cr_peer_tx_qnob)
+			if (cYAML_create_number(peer_ni, "min_tx_credits",
+						lpni_cri->cr_peer_min_tx_credits)
 			    == NULL)
+				goto out;
+
+			if (cYAML_create_number(peer_ni, "tx_q_num_of_buf",
+						lpni_cri->cr_peer_tx_qnob)
+			    == NULL)
+				goto out;
+
+			if (cYAML_create_number(peer_ni, "available_rtr_credits",
+						lpni_cri->cr_peer_rtr_credits)
+			    == NULL)
+				goto out;
+
+			if (cYAML_create_number(peer_ni, "min_rtr_credits",
+						lpni_cri->cr_peer_min_rtr_credits)
+			    == NULL)
+				goto out;
+
+			if (cYAML_create_number(peer_ni, "send_count",
+						lpni_stats->send_count)
+			    == NULL)
+				goto out;
+
+			if (cYAML_create_number(peer_ni, "recv_count",
+						lpni_stats->recv_count)
+			    == NULL)
+				goto out;
+
+			if (cYAML_create_number(peer_ni, "drop_count",
+						lpni_stats->drop_count)
+			    == NULL)
+				goto out;
+
+			if (cYAML_create_number(peer_ni, "refcount",
+						lpni_cri->cr_refcount) == NULL)
 				goto out;
 		}
 
@@ -1132,7 +2208,7 @@ out:
 		 * insert one.  Otherwise add to the one there
 		 */
 		show_node = cYAML_get_object_item(*show_rc,
-						  "peer_credits");
+						  "peer");
 		if (show_node != NULL && cYAML_is_sequence(show_node)) {
 			cYAML_insert_child(show_node, first_seq);
 			free(peer_root);
@@ -1148,8 +2224,64 @@ out:
 		*show_rc = root;
 	}
 
-	cYAML_build_error(rc, seq_no, SHOW_CMD, "peer_credits", err_str,
+	cYAML_build_error(rc, seq_no, SHOW_CMD, "peer", err_str,
 			  err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
+				struct cYAML **err_rc)
+{
+	struct lnet_ioctl_numa_range data;
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	int l_errno;
+	char err_str[LNET_MAX_STR_LEN];
+	struct cYAML *root = NULL, *range = NULL;
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	LIBCFS_IOC_INIT_V2(data, nr_hdr);
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NUMA_RANGE, &data);
+	if (rc != 0) {
+		l_errno = errno;
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"cannot get numa range: %s\"",
+			 strerror(l_errno));
+		rc = -l_errno;
+		goto out;
+	}
+
+	root = cYAML_create_object(NULL, NULL);
+	if (root == NULL)
+		goto out;
+
+	range = cYAML_create_object(root, "numa");
+	if (range == NULL)
+		goto out;
+
+	if (cYAML_create_number(range, "range",
+				data.nr_range) == NULL)
+		goto out;
+
+	if (show_rc == NULL)
+		cYAML_print_tree(root);
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+out:
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_free_tree(root);
+	} else if (show_rc != NULL && *show_rc != NULL) {
+		cYAML_insert_sibling((*show_rc)->cy_child,
+					root->cy_child);
+		free(root);
+	} else {
+		*show_rc = root;
+	}
+
+	cYAML_build_error(rc, seq_no, SHOW_CMD, "numa", err_str, err_rc);
 
 	return rc;
 }
@@ -1273,79 +2405,466 @@ static int handle_yaml_config_route(struct cYAML *tree, struct cYAML **show_rc,
 					err_rc);
 }
 
-static int handle_yaml_config_net(struct cYAML *tree, struct cYAML **show_rc,
-				  struct cYAML **err_rc)
+static void yaml_free_string_array(char **array, int num)
 {
-	struct cYAML *net, *intf, *tunables, *seq_no,
-	      *peer_to = NULL, *peer_buf_cr = NULL, *peer_cr = NULL,
-	      *credits = NULL, *ip2net = NULL, *smp = NULL, *child;
-	struct lnet_ioctl_config_lnd_tunables *lnd_tunables_p = NULL;
-	struct lnet_ioctl_config_lnd_tunables lnd_tunables;
-	char devs[LNET_MAX_STR_LEN];
-	char *loc = devs;
-	int size = LNET_MAX_STR_LEN;
-	int num;
-	bool intf_found = false;
+	int i;
+	char **sub_array = array;
+
+	for (i = 0; i < num; i++) {
+		if (*sub_array != NULL)
+			free(*sub_array);
+		sub_array++;
+	}
+	if (array)
+		free(array);
+}
+
+/*
+ *    interfaces:
+ *        0: <intf_name>['['<expr>']']
+ *        1: <intf_name>['['<expr>']']
+ */
+static int yaml_copy_intf_info(struct cYAML *intf_tree,
+			       struct lnet_dlc_network_descr *nw_descr)
+{
+	struct cYAML *child = NULL;
+	int intf_num = 0, rc = LUSTRE_CFG_RC_NO_ERR;
+	struct lnet_dlc_intf_descr *intf_descr, *tmp;
+
+	if (intf_tree == NULL || nw_descr == NULL)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	/* now grab all the interfaces and their cpts */
+	child = intf_tree->cy_child;
+	while (child != NULL) {
+		if (child->cy_valuestring == NULL) {
+			child = child->cy_next;
+			continue;
+		}
+
+		if (strlen(child->cy_valuestring) >= LNET_MAX_STR_LEN)
+			goto failed;
+
+		rc = lustre_lnet_add_intf_descr(&nw_descr->nw_intflist,
+						child->cy_valuestring,
+						strlen(child->cy_valuestring));
+		if (rc != LUSTRE_CFG_RC_NO_ERR)
+			goto failed;
+
+		intf_num++;
+		child = child->cy_next;
+	}
+
+	if (intf_num == 0)
+		return LUSTRE_CFG_RC_MISSING_PARAM;
+
+	return intf_num;
+
+failed:
+	list_for_each_entry_safe(intf_descr, tmp, &nw_descr->nw_intflist,
+				 intf_on_network) {
+		list_del(&intf_descr->intf_on_network);
+		free_intf_descr(intf_descr);
+	}
+
+	return rc;
+}
+
+static bool
+yaml_extract_cmn_tunables(struct cYAML *tree,
+			  struct lnet_ioctl_config_lnd_cmn_tunables *tunables,
+			  struct cfs_expr_list **global_cpts)
+{
+	struct cYAML *tun, *item, *smp;
+	int rc;
+
+	tun = cYAML_get_object_item(tree, "tunables");
+	if (tun != NULL) {
+		item = cYAML_get_object_item(tun, "peer_timeout");
+		if (item != NULL)
+			tunables->lct_peer_timeout = item->cy_valueint;
+		item = cYAML_get_object_item(tun, "peer_credits");
+		if (item != NULL)
+			tunables->lct_peer_tx_credits = item->cy_valueint;
+		item = cYAML_get_object_item(tun, "peer_buffer_credits");
+		if (item != NULL)
+			tunables->lct_peer_rtr_credits = item->cy_valueint;
+		item = cYAML_get_object_item(tun, "credits");
+		if (item != NULL)
+			tunables->lct_max_tx_credits = item->cy_valueint;
+		smp = cYAML_get_object_item(tun, "CPT");
+		if (smp != NULL) {
+			rc = cfs_expr_list_parse(smp->cy_valuestring,
+						 strlen(smp->cy_valuestring),
+						 0, UINT_MAX, global_cpts);
+			if (rc != 0)
+				*global_cpts = NULL;
+		}
+
+		return true;
+	}
+
+	return false;
+}
+
+static bool
+yaml_extract_tunables(struct cYAML *tree,
+		      struct lnet_ioctl_config_lnd_tunables *tunables,
+		      struct cfs_expr_list **global_cpts,
+		      __u32 net_type)
+{
+	bool rc;
+
+	rc = yaml_extract_cmn_tunables(tree, &tunables->lt_cmn,
+				       global_cpts);
+
+	if (!rc)
+		return rc;
+
+	lustre_yaml_extract_lnd_tunables(tree, net_type,
+					 &tunables->lt_tun);
+
+	return rc;
+}
+
+/*
+ * net:
+ *    - net type: <net>[<NUM>]
+  *      local NI(s):
+ *        - nid: <ip>@<net>[<NUM>]
+ *          status: up
+ *          interfaces:
+ *               0: <intf_name>['['<expr>']']
+ *               1: <intf_name>['['<expr>']']
+ *        tunables:
+ *               peer_timeout: <NUM>
+ *               peer_credits: <NUM>
+ *               peer_buffer_credits: <NUM>
+ *               credits: <NUM>
+*         lnd tunables:
+ *               peercredits_hiw: <NUM>
+ *               map_on_demand: <NUM>
+ *               concurrent_sends: <NUM>
+ *               fmr_pool_size: <NUM>
+ *               fmr_flush_trigger: <NUM>
+ *               fmr_cache: <NUM>
+ *
+ * At least one interface is required. If no interfaces are provided the
+ * network interface can not be configured.
+ */
+static int handle_yaml_config_ni(struct cYAML *tree, struct cYAML **show_rc,
+				 struct cYAML **err_rc)
+{
+	struct cYAML *net, *intf, *seq_no, *ip2net = NULL, *local_nis = NULL,
+		     *item = NULL;
+	int num_entries = 0, rc;
+	struct lnet_dlc_network_descr nw_descr;
+	struct cfs_expr_list *global_cpts = NULL;
+	struct lnet_ioctl_config_lnd_tunables tunables;
+	bool found = false;
+
+	memset(&tunables, 0, sizeof(tunables));
+
+	INIT_LIST_HEAD(&nw_descr.network_on_rule);
+	INIT_LIST_HEAD(&nw_descr.nw_intflist);
 
 	ip2net = cYAML_get_object_item(tree, "ip2net");
-	net = cYAML_get_object_item(tree, "net");
-	intf = cYAML_get_object_item(tree, "interfaces");
-	if (intf != NULL) {
-		/* grab all the interfaces */
-		child = intf->cy_child;
-		while (child != NULL && size > 0) {
-			struct cYAML *lnd_params;
+	net = cYAML_get_object_item(tree, "net type");
+	if (net)
+		nw_descr.nw_id = libcfs_str2net(net->cy_valuestring);
 
-			if (child->cy_valuestring == NULL)
-				goto ignore_child;
+	/*
+	 * if neither net nor ip2nets are present, then we can not
+	 * configure the network.
+	 */
+	if (!net && !ip2net)
+		return LUSTRE_CFG_RC_MISSING_PARAM;
 
-			if (loc > devs)
-				num  = snprintf(loc, size, ",%s",
-						child->cy_valuestring);
-			else
-				num = snprintf(loc, size, "%s",
-					       child->cy_valuestring);
-			size -= num;
-			loc += num;
-			intf_found = true;
+	local_nis = cYAML_get_object_item(tree, "local NI(s)");
+	if (local_nis == NULL)
+		return LUSTRE_CFG_RC_MISSING_PARAM;
 
-			lnd_params = cYAML_get_object_item(intf,
-							   "lnd tunables");
-			if (lnd_params != NULL) {
-				const char *dev_name = child->cy_valuestring;
-				lnd_tunables_p = &lnd_tunables;
+	if (!cYAML_is_sequence(local_nis))
+		return LUSTRE_CFG_RC_BAD_PARAM;
 
-				lustre_interface_parse(lnd_params, dev_name,
-						       lnd_tunables_p);
-			}
-ignore_child:
-			child = child->cy_next;
+	while (cYAML_get_next_seq_item(local_nis, &item) != NULL) {
+		intf = cYAML_get_object_item(item, "interfaces");
+		if (intf == NULL)
+			continue;
+		num_entries = yaml_copy_intf_info(intf, &nw_descr);
+		if (num_entries <= 0) {
+			cYAML_build_error(num_entries, -1, "ni", "add",
+					"bad interface list",
+					err_rc);
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
-	tunables = cYAML_get_object_item(tree, "tunables");
-	if (tunables != NULL) {
-		peer_to = cYAML_get_object_item(tunables, "peer_timeout");
-		peer_cr = cYAML_get_object_item(tunables, "peer_credits");
-		peer_buf_cr = cYAML_get_object_item(tunables,
-						    "peer_buffer_credits");
-		credits = cYAML_get_object_item(tunables, "credits");
-		smp = cYAML_get_object_item(tunables, "CPT");
-	}
+	found = yaml_extract_tunables(tree, &tunables, &global_cpts,
+				      LNET_NETTYP(nw_descr.nw_id));
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 
-	return lustre_lnet_config_net((net) ? net->cy_valuestring : NULL,
-				      (intf_found) ? devs : NULL,
-				      (ip2net) ? ip2net->cy_valuestring : NULL,
-				      (peer_to) ? peer_to->cy_valueint : -1,
-				      (peer_cr) ? peer_cr->cy_valueint : -1,
-				      (peer_buf_cr) ?
-					peer_buf_cr->cy_valueint : -1,
-				      (credits) ? credits->cy_valueint : -1,
-				      (smp) ? smp->cy_valuestring : NULL,
+	rc = lustre_lnet_config_ni(&nw_descr,
+				   global_cpts,
+				   (ip2net) ? ip2net->cy_valuestring : NULL,
+				   (found) ? &tunables: NULL,
+				   (seq_no) ? seq_no->cy_valueint : -1,
+				   err_rc);
+
+	if (global_cpts != NULL)
+		cfs_expr_list_free(global_cpts);
+
+	return rc;
+}
+
+/*
+ * ip2nets:
+ *  - net-spec: <tcp|o2ib|gni>[NUM]
+ *    interfaces:
+ *        0: <intf name>['['<expr>']']
+ *        1: <intf name>['['<expr>']']
+ *    ip-range:
+ *        0: <expr.expr.expr.expr>
+ *        1: <expr.expr.expr.expr>
+ */
+static int handle_yaml_config_ip2nets(struct cYAML *tree,
+				      struct cYAML **show_rc,
+				      struct cYAML **err_rc)
+{
+	struct cYAML *net, *ip_range, *item = NULL, *intf = NULL,
+		     *seq_no = NULL;
+	struct lustre_lnet_ip2nets ip2nets;
+	struct lustre_lnet_ip_range_descr *ip_range_descr = NULL,
+					  *tmp = NULL;
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	struct cfs_expr_list *global_cpts = NULL;
+	struct cfs_expr_list *el, *el_tmp;
+	struct lnet_ioctl_config_lnd_tunables tunables;
+	struct lnet_dlc_intf_descr *intf_descr, *intf_tmp;
+	bool found = false;
+
+	memset(&tunables, 0, sizeof(tunables));
+
+	/* initialize all lists */
+	INIT_LIST_HEAD(&ip2nets.ip2nets_ip_ranges);
+	INIT_LIST_HEAD(&ip2nets.ip2nets_net.network_on_rule);
+	INIT_LIST_HEAD(&ip2nets.ip2nets_net.nw_intflist);
+
+	net = cYAML_get_object_item(tree, "net-spec");
+	if (net == NULL)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	if (net != NULL && net->cy_valuestring == NULL)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	/* assign the network id */
+	ip2nets.ip2nets_net.nw_id = libcfs_str2net(net->cy_valuestring);
+	if (ip2nets.ip2nets_net.nw_id == LNET_NID_ANY)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+
+	intf = cYAML_get_object_item(tree, "interfaces");
+	if (intf != NULL) {
+		rc = yaml_copy_intf_info(intf, &ip2nets.ip2nets_net);
+		if (rc <= 0)
+			return LUSTRE_CFG_RC_BAD_PARAM;
+	}
+
+	ip_range = cYAML_get_object_item(tree, "ip-range");
+	if (ip_range != NULL) {
+		item = ip_range->cy_child;
+		while (item != NULL) {
+			if (item->cy_valuestring == NULL) {
+				item = item->cy_next;
+				continue;
+			}
+
+			rc = lustre_lnet_add_ip_range(&ip2nets.ip2nets_ip_ranges,
+						      item->cy_valuestring);
+
+			if (rc != LUSTRE_CFG_RC_NO_ERR)
+				goto out;
+
+			item = item->cy_next;
+		}
+	}
+
+	found = yaml_extract_tunables(tree, &tunables, &global_cpts,
+				      LNET_NETTYP(ip2nets.ip2nets_net.nw_id));
+
+	rc = lustre_lnet_config_ip2nets(&ip2nets,
+			(found) ? &tunables : NULL,
+			global_cpts,
+			(seq_no) ? seq_no->cy_valueint : -1,
+			err_rc);
+
+	/*
+	 * don't stop because there was no match. Continue processing the
+	 * rest of the rules. If non-match then nothing is configured
+	 */
+	if (rc == LUSTRE_CFG_RC_NO_MATCH)
+		rc = LUSTRE_CFG_RC_NO_ERR;
+out:
+	list_for_each_entry_safe(intf_descr, intf_tmp,
+				 &ip2nets.ip2nets_net.nw_intflist,
+				 intf_on_network) {
+		list_del(&intf_descr->intf_on_network);
+		free_intf_descr(intf_descr);
+	}
+
+	list_for_each_entry_safe(ip_range_descr, tmp,
+				 &ip2nets.ip2nets_ip_ranges,
+				 ipr_entry) {
+		list_del(&ip_range_descr->ipr_entry);
+		list_for_each_entry_safe(el, el_tmp, &ip_range_descr->ipr_expr,
+					 el_link) {
+			list_del(&el->el_link);
+			cfs_expr_list_free(el);
+		}
+		free(ip_range_descr);
+	}
+
+	return rc;
+}
+
+static int handle_yaml_del_ni(struct cYAML *tree, struct cYAML **show_rc,
+			      struct cYAML **err_rc)
+{
+	struct cYAML *net = NULL, *intf = NULL, *seq_no = NULL, *item = NULL,
+		     *local_nis = NULL;
+	int num_entries, rc;
+	struct lnet_dlc_network_descr nw_descr;
+
+	INIT_LIST_HEAD(&nw_descr.network_on_rule);
+	INIT_LIST_HEAD(&nw_descr.nw_intflist);
+
+	net = cYAML_get_object_item(tree, "net type");
+	if (net != NULL)
+		nw_descr.nw_id = libcfs_str2net(net->cy_valuestring);
+
+	local_nis = cYAML_get_object_item(tree, "local NI(s)");
+	if (local_nis == NULL)
+		return LUSTRE_CFG_RC_MISSING_PARAM;
+
+	if (!cYAML_is_sequence(local_nis))
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	while (cYAML_get_next_seq_item(local_nis, &item) != NULL) {
+		intf = cYAML_get_object_item(item, "interfaces");
+		if (intf == NULL)
+			continue;
+		num_entries = yaml_copy_intf_info(intf, &nw_descr);
+		if (num_entries <= 0) {
+			cYAML_build_error(num_entries, -1, "ni", "add",
+					"bad interface list",
+					err_rc);
+			return LUSTRE_CFG_RC_BAD_PARAM;
+		}
+	}
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+
+	rc = lustre_lnet_del_ni((net) ? &nw_descr : NULL,
+				(seq_no) ? seq_no->cy_valueint : -1,
+				err_rc);
+
+	return rc;
+}
+
+static int yaml_copy_peer_nids(struct cYAML *tree, char ***nidsppp)
+{
+	struct cYAML *nids_entry = NULL, *child = NULL, *entry = NULL;
+	char **nids = NULL;
+	int num = 0, rc = LUSTRE_CFG_RC_NO_ERR;
+
+	nids_entry = cYAML_get_object_item(tree, "peer ni");
+	if (cYAML_is_sequence(nids_entry)) {
+		while (cYAML_get_next_seq_item(nids_entry, &child))
+			num++;
+	}
+
+	if (num == 0)
+		return LUSTRE_CFG_RC_MISSING_PARAM;
+
+	nids = calloc(sizeof(*nids) * num, 1);
+	if (nids == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	/* now grab all the nids */
+	num = 0;
+	child = NULL;
+	while (cYAML_get_next_seq_item(nids_entry, &child)) {
+		entry = cYAML_get_object_item(child, "nid");
+		if (!entry)
+			continue;
+		nids[num] = calloc(strlen(entry->cy_valuestring) + 1, 1);
+		if (!nids[num]) {
+			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+			goto failed;
+		}
+		strncpy(nids[num], entry->cy_valuestring,
+			strlen(entry->cy_valuestring));
+		num++;
+	}
+	rc = num;
+
+	*nidsppp = nids;
+	return rc;
+
+failed:
+	if (nids != NULL)
+		yaml_free_string_array(nids, num);
+	*nidsppp = NULL;
+	return rc;
+}
+
+static int handle_yaml_config_peer(struct cYAML *tree, struct cYAML **show_rc,
+				   struct cYAML **err_rc)
+{
+	char **nids = NULL;
+	int num, rc;
+	struct cYAML *seq_no, *prim_nid, *non_mr;
+
+	num = yaml_copy_peer_nids(tree, &nids);
+	if (num < 0)
+		return num;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	prim_nid = cYAML_get_object_item(tree, "primary nid");
+	non_mr = cYAML_get_object_item(tree, "non_mr");
+
+	rc = lustre_lnet_config_peer_nid((prim_nid) ? prim_nid->cy_valuestring : NULL,
+					 nids, num,
+					 (non_mr) ? false : true,
+					 (seq_no) ? seq_no->cy_valueint : -1,
+					 err_rc);
+
+	yaml_free_string_array(nids, num);
+	return rc;
+}
+
+static int handle_yaml_del_peer(struct cYAML *tree, struct cYAML **show_rc,
+				struct cYAML **err_rc)
+{
+	char **nids = NULL;
+	int num, rc;
+	struct cYAML *seq_no, *prim_nid;
+
+	num = yaml_copy_peer_nids(tree, &nids);
+	if (num < 0)
+		return num;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	prim_nid = cYAML_get_object_item(tree, "primary nid");
+
+	rc = lustre_lnet_del_peer_nid((prim_nid) ? prim_nid->cy_valuestring : NULL,
+				      nids, num,
 				      (seq_no) ? seq_no->cy_valueint : -1,
-				      lnd_tunables_p,
 				      err_rc);
+
+	yaml_free_string_array(nids, num);
+	return rc;
 }
 
 static int handle_yaml_config_buffers(struct cYAML *tree,
@@ -1404,19 +2923,6 @@ static int handle_yaml_del_route(struct cYAML *tree, struct cYAML **show_rc,
 				     (gw) ? gw->cy_valuestring : NULL,
 				     (seq_no) ? seq_no->cy_valueint : -1,
 				     err_rc);
-}
-
-static int handle_yaml_del_net(struct cYAML *tree, struct cYAML **show_rc,
-			       struct cYAML **err_rc)
-{
-	struct cYAML *net, *seq_no;
-
-	net = cYAML_get_object_item(tree, "net");
-	seq_no = cYAML_get_object_item(tree, "seq_no");
-
-	return lustre_lnet_del_net((net) ? net->cy_valuestring : NULL,
-				   (seq_no) ? seq_no->cy_valueint : -1,
-				   err_rc);
 }
 
 static int handle_yaml_del_routing(struct cYAML *tree, struct cYAML **show_rc,
@@ -1485,16 +2991,19 @@ static int handle_yaml_show_routing(struct cYAML *tree, struct cYAML **show_rc,
 					show_rc, err_rc);
 }
 
-static int handle_yaml_show_credits(struct cYAML *tree, struct cYAML **show_rc,
-				    struct cYAML **err_rc)
+static int handle_yaml_show_peers(struct cYAML *tree, struct cYAML **show_rc,
+				  struct cYAML **err_rc)
 {
-	struct cYAML *seq_no;
+	struct cYAML *seq_no, *nid, *detail;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
+	detail = cYAML_get_object_item(tree, "detail");
+	nid = cYAML_get_object_item(tree, "nid");
 
-	return lustre_lnet_show_peer_credits((seq_no) ?
-						seq_no->cy_valueint : -1,
-					     show_rc, err_rc);
+	return lustre_lnet_show_peer((nid) ? nid->cy_valuestring : NULL,
+				     (detail) ? detail->cy_valueint : 0,
+				     (seq_no) ? seq_no->cy_valueint : -1,
+				     show_rc, err_rc);
 }
 
 static int handle_yaml_show_stats(struct cYAML *tree, struct cYAML **show_rc,
@@ -1508,6 +3017,41 @@ static int handle_yaml_show_stats(struct cYAML *tree, struct cYAML **show_rc,
 				      show_rc, err_rc);
 }
 
+static int handle_yaml_config_numa(struct cYAML *tree, struct cYAML **show_rc,
+				  struct cYAML **err_rc)
+{
+	struct cYAML *seq_no, *range;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	range = cYAML_get_object_item(tree, "range");
+
+	return lustre_lnet_config_numa_range(range ? range->cy_valueint : -1,
+					     seq_no ? seq_no->cy_valueint : -1,
+					     err_rc);
+}
+
+static int handle_yaml_del_numa(struct cYAML *tree, struct cYAML **show_rc,
+			       struct cYAML **err_rc)
+{
+	struct cYAML *seq_no;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+
+	return lustre_lnet_config_numa_range(0, seq_no ? seq_no->cy_valueint : -1,
+					     err_rc);
+}
+
+static int handle_yaml_show_numa(struct cYAML *tree, struct cYAML **show_rc,
+				struct cYAML **err_rc)
+{
+	struct cYAML *seq_no;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+
+	return lustre_lnet_show_numa_range(seq_no ? seq_no->cy_valueint : -1,
+					   show_rc, err_rc);
+}
+
 struct lookup_cmd_hdlr_tbl {
 	char *name;
 	cmd_handler_t cb;
@@ -1515,16 +3059,21 @@ struct lookup_cmd_hdlr_tbl {
 
 static struct lookup_cmd_hdlr_tbl lookup_config_tbl[] = {
 	{"route", handle_yaml_config_route},
-	{"net", handle_yaml_config_net},
+	{"net", handle_yaml_config_ni},
+	{"ip2nets", handle_yaml_config_ip2nets},
+	{"peer", handle_yaml_config_peer},
 	{"routing", handle_yaml_config_routing},
 	{"buffers", handle_yaml_config_buffers},
+	{"numa", handle_yaml_config_numa},
 	{NULL, NULL}
 };
 
 static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
 	{"route", handle_yaml_del_route},
-	{"net", handle_yaml_del_net},
+	{"net", handle_yaml_del_ni},
+	{"peer", handle_yaml_del_peer},
 	{"routing", handle_yaml_del_routing},
+	{"numa", handle_yaml_del_numa},
 	{NULL, NULL}
 };
 
@@ -1533,8 +3082,9 @@ static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {
 	{"net", handle_yaml_show_net},
 	{"buffers", handle_yaml_show_routing},
 	{"routing", handle_yaml_show_routing},
-	{"credits", handle_yaml_show_credits},
+	{"peer", handle_yaml_show_peers},
 	{"statistics", handle_yaml_show_stats},
+	{"numa", handle_yaml_show_numa},
 	{NULL, NULL}
 };
 
@@ -1561,7 +3111,7 @@ static int lustre_yaml_cb_helper(char *f, struct lookup_cmd_hdlr_tbl *table,
 	char err_str[LNET_MAX_STR_LEN];
 	int rc = LUSTRE_CFG_RC_NO_ERR, return_rc = LUSTRE_CFG_RC_NO_ERR;
 
-	tree = cYAML_build_tree(f, NULL, 0, err_rc);
+	tree = cYAML_build_tree(f, NULL, 0, err_rc, false);
 	if (tree == NULL)
 		return LUSTRE_CFG_RC_BAD_PARAM;
 
@@ -1616,3 +3166,47 @@ int lustre_yaml_show(char *f, struct cYAML **show_rc, struct cYAML **err_rc)
 	return lustre_yaml_cb_helper(f, lookup_show_tbl,
 				     show_rc, err_rc);
 }
+
+int lustre_lnet_send_dbg_task(enum lnet_dbg_task dbg_task,
+			      struct lnet_dbg_task_info *dbg_info,
+			      struct cYAML **show_rc,
+			      struct cYAML **err_rc)
+{
+	struct lnet_ioctl_dbg *dbg;
+	struct lnet_dbg_task_info *info;
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	dbg = calloc(1, sizeof(*dbg) + sizeof(*info));
+	if (!dbg) {
+		snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+		rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+		goto out;
+	}
+
+	info = (struct lnet_dbg_task_info *)dbg->dbg_bulk;
+
+	LIBCFS_IOC_INIT_V2(*dbg, dbg_hdr);
+
+	dbg->dbg_task = dbg_task;
+	if (dbg_info)
+		memcpy(info, dbg_info, sizeof(*info));
+
+	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_DBG, dbg);
+	if (rc != 0) {
+		rc = -errno;
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"debug task failed %s\"", strerror(errno));
+		goto out;
+	}
+
+out:
+	cYAML_build_error(rc, -1, DBG_CMD,
+			 "debug", err_str, err_rc);
+
+	return rc;
+}
+

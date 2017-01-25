@@ -57,6 +57,25 @@ static int rnet_htable_size = LNET_REMOTE_NETS_HASH_DEFAULT;
 module_param(rnet_htable_size, int, 0444);
 MODULE_PARM_DESC(rnet_htable_size, "size of remote network hash table");
 
+static int use_tcp_bonding = false;
+module_param(use_tcp_bonding, int, 0444);
+MODULE_PARM_DESC(use_tcp_bonding,
+		 "Set to 1 to use socklnd bonding. 0 to use Multi-Rail");
+
+unsigned int lnet_numa_range = 0;
+module_param(lnet_numa_range, uint, 0444);
+MODULE_PARM_DESC(lnet_numa_range,
+		"NUMA range to consider during Multi-Rail selection");
+
+/*
+ * This sequence number keeps track of how many times DLC was used to
+ * update the local NIs. It is incremented when a NI is added or
+ * removed and checked when sending a message to determine if there is
+ * a need to re-run the selection algorithm. See lnet_select_pathway()
+ * for more details on its usage.
+ */
+static atomic_t lnet_dlc_seq_no = ATOMIC_INIT(0);
+
 static int lnet_ping(lnet_process_id_t id, signed long timeout,
 		     lnet_process_id_t __user *ids, int n_ids);
 
@@ -584,9 +603,9 @@ lnet_prepare(lnet_pid_t requested_pid)
 	the_lnet.ln_pid = requested_pid;
 
 	INIT_LIST_HEAD(&the_lnet.ln_test_peers);
-	INIT_LIST_HEAD(&the_lnet.ln_nis);
-	INIT_LIST_HEAD(&the_lnet.ln_nis_cpt);
-	INIT_LIST_HEAD(&the_lnet.ln_nis_zombie);
+	INIT_LIST_HEAD(&the_lnet.ln_peers);
+	INIT_LIST_HEAD(&the_lnet.ln_remote_peer_ni_list);
+	INIT_LIST_HEAD(&the_lnet.ln_nets);
 	INIT_LIST_HEAD(&the_lnet.ln_routers);
 	INIT_LIST_HEAD(&the_lnet.ln_drop_rules);
 	INIT_LIST_HEAD(&the_lnet.ln_delay_rules);
@@ -667,9 +686,7 @@ lnet_unprepare (void)
 
 	LASSERT(the_lnet.ln_refcount == 0);
 	LASSERT(list_empty(&the_lnet.ln_test_peers));
-	LASSERT(list_empty(&the_lnet.ln_nis));
-	LASSERT(list_empty(&the_lnet.ln_nis_cpt));
-	LASSERT(list_empty(&the_lnet.ln_nis_zombie));
+	LASSERT(list_empty(&the_lnet.ln_nets));
 
 	lnet_portals_destroy();
 
@@ -686,7 +703,7 @@ lnet_unprepare (void)
 	lnet_res_container_cleanup(&the_lnet.ln_eq_container);
 
 	lnet_msg_containers_destroy();
-	lnet_peer_tables_destroy();
+	lnet_peer_uninit();
 	lnet_rtrpools_free(0);
 
 	if (the_lnet.ln_counters != NULL) {
@@ -700,18 +717,17 @@ lnet_unprepare (void)
 }
 
 lnet_ni_t  *
-lnet_net2ni_locked(__u32 net, int cpt)
+lnet_net2ni_locked(__u32 net_id, int cpt)
 {
-	struct list_head *tmp;
-	lnet_ni_t	 *ni;
+	struct lnet_ni	 *ni;
+	struct lnet_net	 *net;
 
 	LASSERT(cpt != LNET_LOCK_EX);
 
-	list_for_each(tmp, &the_lnet.ln_nis) {
-		ni = list_entry(tmp, lnet_ni_t, ni_list);
-
-		if (LNET_NIDNET(ni->ni_nid) == net) {
-			lnet_ni_addref_locked(ni, cpt);
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		if (net->net_id == net_id) {
+			ni = list_entry(net->net_ni_list.next, struct lnet_ni,
+					ni_netlist);
 			return ni;
 		}
 	}
@@ -720,19 +736,34 @@ lnet_net2ni_locked(__u32 net, int cpt)
 }
 
 lnet_ni_t *
-lnet_net2ni(__u32 net)
+lnet_net2ni_addref(__u32 net)
 {
 	lnet_ni_t *ni;
 
 	lnet_net_lock(0);
 	ni = lnet_net2ni_locked(net, 0);
+	if (ni)
+		lnet_ni_addref_locked(ni, 0);
 	lnet_net_unlock(0);
 
 	return ni;
 }
-EXPORT_SYMBOL(lnet_net2ni);
+EXPORT_SYMBOL(lnet_net2ni_addref);
 
-static unsigned int
+struct lnet_net *
+lnet_get_net_locked(__u32 net_id)
+{
+	struct lnet_net	 *net;
+
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		if (net->net_id == net_id)
+			return net;
+	}
+
+	return NULL;
+}
+
+unsigned int
 lnet_nid_cpt_hash(lnet_nid_t nid, unsigned int number)
 {
 	__u64		key = nid;
@@ -752,31 +783,41 @@ lnet_nid_cpt_hash(lnet_nid_t nid, unsigned int number)
 }
 
 int
-lnet_cpt_of_nid_locked(lnet_nid_t nid)
+lnet_cpt_of_nid_locked(lnet_nid_t nid, struct lnet_ni *ni)
 {
-	struct lnet_ni *ni;
+	struct lnet_net *net;
 
 	/* must called with hold of lnet_net_lock */
 	if (LNET_CPT_NUMBER == 1)
 		return 0; /* the only one */
 
-	/* take lnet_net_lock(any) would be OK */
-	if (!list_empty(&the_lnet.ln_nis_cpt)) {
-		list_for_each_entry(ni, &the_lnet.ln_nis_cpt, ni_cptlist) {
-			if (LNET_NIDNET(ni->ni_nid) != LNET_NIDNET(nid))
-				continue;
+	/*
+	 * If NI is provided then use the CPT identified in the NI cpt
+	 * list if one exists. If one doesn't exist, then that NI is
+	 * associated with all CPTs and it follows that the net it belongs
+	 * to is implicitly associated with all CPTs, so just hash the nid
+	 * and return that.
+	 */
+	if (ni != NULL) {
+		if (ni->ni_cpts != NULL)
+			return ni->ni_cpts[lnet_nid_cpt_hash(nid,
+							     ni->ni_ncpts)];
+		else
+			return lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
+	}
 
-			LASSERT(ni->ni_cpts != NULL);
-			return ni->ni_cpts[lnet_nid_cpt_hash
-					   (nid, ni->ni_ncpts)];
-		}
+	/* no NI provided so look at the net */
+	net = lnet_get_net_locked(LNET_NIDNET(nid));
+
+	if (net != NULL && net->net_cpts != NULL) {
+		return net->net_cpts[lnet_nid_cpt_hash(nid, net->net_ncpts)];
 	}
 
 	return lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
 }
 
 int
-lnet_cpt_of_nid(lnet_nid_t nid)
+lnet_cpt_of_nid(lnet_nid_t nid, struct lnet_ni *ni)
 {
 	int	cpt;
 	int	cpt2;
@@ -784,11 +825,10 @@ lnet_cpt_of_nid(lnet_nid_t nid)
 	if (LNET_CPT_NUMBER == 1)
 		return 0; /* the only one */
 
-	if (list_empty(&the_lnet.ln_nis_cpt))
-		return lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
-
 	cpt = lnet_net_lock_current();
-	cpt2 = lnet_cpt_of_nid_locked(nid);
+
+	cpt2 = lnet_cpt_of_nid_locked(nid, ni);
+
 	lnet_net_unlock(cpt);
 
 	return cpt2;
@@ -796,41 +836,65 @@ lnet_cpt_of_nid(lnet_nid_t nid)
 EXPORT_SYMBOL(lnet_cpt_of_nid);
 
 int
-lnet_islocalnet(__u32 net)
+lnet_islocalnet(__u32 net_id)
 {
-	struct lnet_ni	*ni;
+	struct lnet_net *net;
 	int		cpt;
+	bool		local;
 
 	cpt = lnet_net_lock_current();
 
-	ni = lnet_net2ni_locked(net, cpt);
-	if (ni != NULL)
-		lnet_ni_decref_locked(ni, cpt);
+	net = lnet_get_net_locked(net_id);
+
+	local = net != NULL;
 
 	lnet_net_unlock(cpt);
 
-	return ni != NULL;
+	return local;
+}
+
+bool
+lnet_is_ni_healthy_locked(struct lnet_ni *ni)
+{
+	if (ni->ni_state == LNET_NI_STATE_ACTIVE ||
+	    ni->ni_state == LNET_NI_STATE_DEGRADED)
+		return true;
+
+	return false;
 }
 
 lnet_ni_t  *
 lnet_nid2ni_locked(lnet_nid_t nid, int cpt)
 {
+	struct lnet_net  *net;
 	struct lnet_ni	 *ni;
-	struct list_head *tmp;
 
 	LASSERT(cpt != LNET_LOCK_EX);
 
-	list_for_each(tmp, &the_lnet.ln_nis) {
-		ni = list_entry(tmp, lnet_ni_t, ni_list);
-
-		if (ni->ni_nid == nid) {
-			lnet_ni_addref_locked(ni, cpt);
-			return ni;
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			if (ni->ni_nid == nid)
+				return ni;
 		}
 	}
 
 	return NULL;
 }
+
+lnet_ni_t *
+lnet_nid2ni_addref(lnet_nid_t nid)
+{
+	lnet_ni_t *ni;
+
+	lnet_net_lock(0);
+	ni = lnet_nid2ni_locked(nid, 0);
+	if (ni)
+		lnet_ni_addref_locked(ni, 0);
+	lnet_net_unlock(0);
+
+	return ni;
+}
+EXPORT_SYMBOL(lnet_nid2ni_addref);
 
 int
 lnet_islocalnid(lnet_nid_t nid)
@@ -840,27 +904,24 @@ lnet_islocalnid(lnet_nid_t nid)
 
 	cpt = lnet_net_lock_current();
 	ni = lnet_nid2ni_locked(nid, cpt);
-	if (ni != NULL)
-		lnet_ni_decref_locked(ni, cpt);
 	lnet_net_unlock(cpt);
 
 	return ni != NULL;
 }
 
 int
-lnet_count_acceptor_nis (void)
+lnet_count_acceptor_nets(void)
 {
 	/* Return the # of NIs that need the acceptor. */
 	int		 count = 0;
-	struct list_head *tmp;
-	struct lnet_ni	 *ni;
+	struct lnet_net  *net;
 	int		 cpt;
 
 	cpt = lnet_net_lock_current();
-	list_for_each(tmp, &the_lnet.ln_nis) {
-		ni = list_entry(tmp, lnet_ni_t, ni_list);
-
-		if (ni->ni_lnd->lnd_accept != NULL)
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		/* all socklnd type networks should have the acceptor
+		 * thread started */
+		if (net->net_lnd->lnd_accept != NULL)
 			count++;
 	}
 
@@ -891,15 +952,42 @@ lnet_ping_info_create(int num_ni)
 }
 
 static inline int
+lnet_get_net_ni_count_locked(struct lnet_net *net)
+{
+	struct lnet_ni	*ni;
+	int		count = 0;
+
+	list_for_each_entry(ni, &net->net_ni_list, ni_netlist)
+		count++;
+
+	return count;
+}
+
+static inline int
+lnet_get_net_ni_count_pre(struct lnet_net *net)
+{
+	struct lnet_ni	*ni;
+	int		count = 0;
+
+	list_for_each_entry(ni, &net->net_ni_added, ni_netlist)
+		count++;
+
+	return count;
+}
+
+static inline int
 lnet_get_ni_count(void)
 {
-	struct lnet_ni *ni;
-	int	       count = 0;
+	struct lnet_ni	*ni;
+	struct lnet_net *net;
+	int		count = 0;
 
 	lnet_net_lock(0);
 
-	list_for_each_entry(ni, &the_lnet.ln_nis, ni_list)
-		count++;
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist)
+			count++;
+	}
 
 	lnet_net_unlock(0);
 
@@ -917,14 +1005,17 @@ lnet_ping_info_free(struct lnet_ping_info *pinfo)
 static void
 lnet_ping_info_destroy(void)
 {
+	struct lnet_net *net;
 	struct lnet_ni	*ni;
 
 	lnet_net_lock(LNET_LOCK_EX);
 
-	list_for_each_entry(ni, &the_lnet.ln_nis, ni_list) {
-		lnet_ni_lock(ni);
-		ni->ni_status = NULL;
-		lnet_ni_unlock(ni);
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			lnet_ni_lock(ni);
+			ni->ni_status = NULL;
+			lnet_ni_unlock(ni);
+		}
 	}
 
 	lnet_ping_info_free(the_lnet.ln_ping_info);
@@ -1029,24 +1120,29 @@ static void
 lnet_ping_info_install_locked(struct lnet_ping_info *ping_info)
 {
 	int			i;
-	lnet_ni_t		*ni;
+	struct lnet_ni		*ni;
+	struct lnet_net		*net;
 	struct lnet_ni_status *ns;
 
 	i = 0;
-	list_for_each_entry(ni, &the_lnet.ln_nis, ni_list) {
-		LASSERT(i < ping_info->pi_nnis);
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			LASSERT(i < ping_info->pi_nnis);
 
-		ns = &ping_info->pi_ni[i];
+			ns = &ping_info->pi_ni[i];
 
-		ns->ns_nid = ni->ni_nid;
+			ns->ns_nid = ni->ni_nid;
 
-		lnet_ni_lock(ni);
-		ns->ns_status = (ni->ni_status != NULL) ?
-				ni->ni_status->ns_status : LNET_NI_STATUS_UP;
-		ni->ni_status = ns;
-		lnet_ni_unlock(ni);
+			lnet_ni_lock(ni);
+			ns->ns_status = (ni->ni_status != NULL) ?
+					ni->ni_status->ns_status :
+						LNET_NI_STATUS_UP;
+			ni->ni_status = ns;
+			lnet_ni_unlock(ni);
 
-		i++;
+			i++;
+		}
+
 	}
 }
 
@@ -1101,11 +1197,11 @@ lnet_ni_tq_credits(lnet_ni_t *ni)
 	LASSERT(ni->ni_ncpts >= 1);
 
 	if (ni->ni_ncpts == 1)
-		return ni->ni_maxtxcredits;
+		return ni->ni_net->net_tunables.lct_max_tx_credits;
 
-	credits = ni->ni_maxtxcredits / ni->ni_ncpts;
-	credits = max(credits, 8 * ni->ni_peertxcredits);
-	credits = min(credits, ni->ni_maxtxcredits);
+	credits = ni->ni_net->net_tunables.lct_max_tx_credits / ni->ni_ncpts;
+	credits = max(credits, 8 * ni->ni_net->net_tunables.lct_peer_tx_credits);
+	credits = min(credits, ni->ni_net->net_tunables.lct_max_tx_credits);
 
 	return credits;
 }
@@ -1119,37 +1215,43 @@ lnet_ni_unlink_locked(lnet_ni_t *ni)
 	}
 
 	/* move it to zombie list and nobody can find it anymore */
-	LASSERT(!list_empty(&ni->ni_list));
-	list_move(&ni->ni_list, &the_lnet.ln_nis_zombie);
-	lnet_ni_decref_locked(ni, 0);	/* drop ln_nis' ref */
+	LASSERT(!list_empty(&ni->ni_netlist));
+	list_move(&ni->ni_netlist, &ni->ni_net->net_ni_zombie);
+	lnet_ni_decref_locked(ni, 0);
 }
 
 static void
-lnet_clear_zombies_nis_locked(void)
+lnet_clear_zombies_nis_locked(struct lnet_net *net)
 {
 	int		i;
 	int		islo;
 	lnet_ni_t	*ni;
+	struct list_head *zombie_list = &net->net_ni_zombie;
 
-	/* Now wait for the NI's I just nuked to show up on ln_zombie_nis
-	 * and shut them down in guaranteed thread context */
+	/*
+	 * Now wait for the NIs I just nuked to show up on the zombie
+	 * list and shut them down in guaranteed thread context
+	 */
 	i = 2;
-	while (!list_empty(&the_lnet.ln_nis_zombie)) {
+	while (!list_empty(zombie_list)) {
 		int	*ref;
 		int	j;
 
-		ni = list_entry(the_lnet.ln_nis_zombie.next,
-				lnet_ni_t, ni_list);
-		list_del_init(&ni->ni_list);
+		ni = list_entry(zombie_list->next,
+				lnet_ni_t, ni_netlist);
+		list_del_init(&ni->ni_netlist);
+		/* the ni should be in deleting state. If it's not it's
+		 * a bug */
+		LASSERT(ni->ni_state == LNET_NI_STATE_DELETING);
 		cfs_percpt_for_each(ref, j, ni->ni_refs) {
 			if (*ref == 0)
 				continue;
 			/* still busy, add it back to zombie list */
-			list_add(&ni->ni_list, &the_lnet.ln_nis_zombie);
+			list_add(&ni->ni_netlist, zombie_list);
 			break;
 		}
 
-		if (!list_empty(&ni->ni_list)) {
+		if (!list_empty(&ni->ni_netlist)) {
 			lnet_net_unlock(LNET_LOCK_EX);
 			++i;
 			if ((i & (-i)) == i) {
@@ -1163,16 +1265,12 @@ lnet_clear_zombies_nis_locked(void)
 			continue;
 		}
 
-		ni->ni_lnd->lnd_refcount--;
 		lnet_net_unlock(LNET_LOCK_EX);
 
-		islo = ni->ni_lnd->lnd_type == LOLND;
+		islo = ni->ni_net->net_lnd->lnd_type == LOLND;
 
 		LASSERT(!in_interrupt());
-		(ni->ni_lnd->lnd_shutdown)(ni);
-
-		/* can't deref lnd anymore now; it might have unregistered
-		 * itself...  */
+		(net->net_lnd->lnd_shutdown)(ni);
 
 		if (!islo)
 			CDEBUG(D_LNI, "Removed LNI %s\n",
@@ -1184,212 +1282,155 @@ lnet_clear_zombies_nis_locked(void)
 	}
 }
 
-static void
-lnet_shutdown_lndnis(void)
-{
-	int		i;
-	lnet_ni_t	*ni;
-
-	/* NB called holding the global mutex */
-
-	/* All quiet on the API front */
-	LASSERT(!the_lnet.ln_shutdown);
-	LASSERT(the_lnet.ln_refcount == 0);
-	LASSERT(list_empty(&the_lnet.ln_nis_zombie));
-
-	lnet_net_lock(LNET_LOCK_EX);
-	the_lnet.ln_shutdown = 1;	/* flag shutdown */
-
-	/* Unlink NIs from the global table */
-	while (!list_empty(&the_lnet.ln_nis)) {
-		ni = list_entry(the_lnet.ln_nis.next,
-				lnet_ni_t, ni_list);
-		lnet_ni_unlink_locked(ni);
-	}
-
-	/* Drop the cached loopback NI. */
-	if (the_lnet.ln_loni != NULL) {
-		lnet_ni_decref_locked(the_lnet.ln_loni, 0);
-		the_lnet.ln_loni = NULL;
-	}
-
-	lnet_net_unlock(LNET_LOCK_EX);
-
-	/* Clear lazy portals and drop delayed messages which hold refs
-	 * on their lnet_msg_t::msg_rxpeer */
-	for (i = 0; i < the_lnet.ln_nportals; i++)
-		LNetClearLazyPortal(i);
-
-	/* Clear the peer table and wait for all peers to go (they hold refs on
-	 * their NIs) */
-	lnet_peer_tables_cleanup(NULL);
-
-	lnet_net_lock(LNET_LOCK_EX);
-
-	lnet_clear_zombies_nis_locked();
-	the_lnet.ln_shutdown = 0;
-	lnet_net_unlock(LNET_LOCK_EX);
-}
-
 /* shutdown down the NI and release refcount */
 static void
 lnet_shutdown_lndni(struct lnet_ni *ni)
 {
 	int i;
+	struct lnet_net *net = ni->ni_net;
 
 	lnet_net_lock(LNET_LOCK_EX);
+	ni->ni_state = LNET_NI_STATE_DELETING;
 	lnet_ni_unlink_locked(ni);
+	lnet_incr_dlc_seq();
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	/* clear messages for this NI on the lazy portal */
 	for (i = 0; i < the_lnet.ln_nportals; i++)
 		lnet_clear_lazy_portal(ni, i, "Shutting down NI");
 
-	/* Do peer table cleanup for this ni */
-	lnet_peer_tables_cleanup(ni);
+	lnet_net_lock(LNET_LOCK_EX);
+	lnet_clear_zombies_nis_locked(net);
+	lnet_net_unlock(LNET_LOCK_EX);
+}
+
+static void
+lnet_shutdown_lndnet(struct lnet_net *net)
+{
+	struct lnet_ni *ni;
 
 	lnet_net_lock(LNET_LOCK_EX);
-	lnet_clear_zombies_nis_locked();
+
+	net->net_state = LNET_NET_STATE_DELETING;
+
+	list_del_init(&net->net_list);
+
+	while (!list_empty(&net->net_ni_list)) {
+		ni = list_entry(net->net_ni_list.next,
+				lnet_ni_t, ni_netlist);
+		lnet_net_unlock(LNET_LOCK_EX);
+		lnet_shutdown_lndni(ni);
+		lnet_net_lock(LNET_LOCK_EX);
+	}
+
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	/* Do peer table cleanup for this net */
+	lnet_peer_tables_cleanup(net);
+
+	lnet_net_lock(LNET_LOCK_EX);
+	/*
+	 * decrement ref count on lnd only when the entire network goes
+	 * away
+	 */
+	net->net_lnd->lnd_refcount--;
+
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	lnet_net_free(net);
+}
+
+static void
+lnet_shutdown_lndnets(void)
+{
+	struct lnet_net *net;
+
+	/* NB called holding the global mutex */
+
+	/* All quiet on the API front */
+	LASSERT(!the_lnet.ln_shutdown);
+	LASSERT(the_lnet.ln_refcount == 0);
+
+	lnet_net_lock(LNET_LOCK_EX);
+	the_lnet.ln_shutdown = 1;	/* flag shutdown */
+
+	while (!list_empty(&the_lnet.ln_nets)) {
+		/*
+		 * move the nets to the zombie list to avoid them being
+		 * picked up for new work. LONET is also included in the
+		 * Nets that will be moved to the zombie list
+		 */
+		net = list_entry(the_lnet.ln_nets.next,
+				 struct lnet_net, net_list);
+		list_move(&net->net_list, &the_lnet.ln_net_zombie);
+	}
+
+	/* Drop the cached loopback Net. */
+	if (the_lnet.ln_loni != NULL) {
+		lnet_ni_decref_locked(the_lnet.ln_loni, 0);
+		the_lnet.ln_loni = NULL;
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	/* iterate through the net zombie list and delete each net */
+	while (!list_empty(&the_lnet.ln_net_zombie)) {
+		net = list_entry(the_lnet.ln_net_zombie.next,
+				 struct lnet_net, net_list);
+		lnet_shutdown_lndnet(net);
+	}
+
+	lnet_net_lock(LNET_LOCK_EX);
+	the_lnet.ln_shutdown = 0;
 	lnet_net_unlock(LNET_LOCK_EX);
 }
 
 static int
-lnet_startup_lndni(struct lnet_ni *ni, struct lnet_ioctl_config_data *conf)
+lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
 {
-	struct lnet_ioctl_config_lnd_tunables *lnd_tunables = NULL;
 	int			rc = -EINVAL;
-	__u32			lnd_type;
-	lnd_t			*lnd;
 	struct lnet_tx_queue	*tq;
 	int			i;
-
-	lnd_type = LNET_NETTYP(LNET_NIDNET(ni->ni_nid));
-
-	LASSERT(libcfs_isknown_lnd(lnd_type));
-
-	if (lnd_type == CIBLND || lnd_type == OPENIBLND ||
-	    lnd_type == IIBLND || lnd_type == VIBLND) {
-		CERROR("LND %s obsoleted\n", libcfs_lnd2str(lnd_type));
-		goto failed0;
-	}
-
-	/* Make sure this new NI is unique. */
-	lnet_net_lock(LNET_LOCK_EX);
-	rc = lnet_net_unique(LNET_NIDNET(ni->ni_nid), &the_lnet.ln_nis);
-	lnet_net_unlock(LNET_LOCK_EX);
-
-	if (!rc) {
-		if (lnd_type == LOLND) {
-			lnet_ni_free(ni);
-			return 0;
-		}
-
-		CERROR("Net %s is not unique\n",
-		       libcfs_net2str(LNET_NIDNET(ni->ni_nid)));
-
-		rc = -EEXIST;
-		goto failed0;
-	}
+	struct lnet_net		*net = ni->ni_net;
 
 	mutex_lock(&the_lnet.ln_lnd_mutex);
-	lnd = lnet_find_lnd_by_type(lnd_type);
 
-	if (lnd == NULL) {
-		mutex_unlock(&the_lnet.ln_lnd_mutex);
-		rc = request_module("%s", libcfs_lnd2modname(lnd_type));
-		mutex_lock(&the_lnet.ln_lnd_mutex);
-
-		lnd = lnet_find_lnd_by_type(lnd_type);
-		if (lnd == NULL) {
-			mutex_unlock(&the_lnet.ln_lnd_mutex);
-			CERROR("Can't load LND %s, module %s, rc=%d\n",
-			       libcfs_lnd2str(lnd_type),
-			       libcfs_lnd2modname(lnd_type), rc);
-#ifndef HAVE_MODULE_LOADING_SUPPORT
-			LCONSOLE_ERROR_MSG(0x104, "Your kernel must be "
-					   "compiled with kernel module "
-					   "loading support.");
-#endif
-			rc = -EINVAL;
-			goto failed0;
-		}
+	if (tun) {
+		memcpy(&ni->ni_lnd_tunables, tun, sizeof(*tun));
+		ni->ni_lnd_tunables_set = true;
 	}
 
-	lnet_net_lock(LNET_LOCK_EX);
-	lnd->lnd_refcount++;
-	lnet_net_unlock(LNET_LOCK_EX);
-
-	ni->ni_lnd = lnd;
-
-	if (conf && conf->cfg_hdr.ioc_len > sizeof(*conf))
-		lnd_tunables = (struct lnet_ioctl_config_lnd_tunables *)conf->cfg_bulk;
-
-	if (lnd_tunables != NULL) {
-		LIBCFS_ALLOC(ni->ni_lnd_tunables,
-			     sizeof(*ni->ni_lnd_tunables));
-		if (ni->ni_lnd_tunables == NULL) {
-			mutex_unlock(&the_lnet.ln_lnd_mutex);
-			rc = -ENOMEM;
-			goto failed0;
-		}
-		memcpy(ni->ni_lnd_tunables, lnd_tunables,
-		       sizeof(*ni->ni_lnd_tunables));
-	}
-
-	/* If given some LND tunable parameters, parse those now to
-	 * override the values in the NI structure. */
-	if (conf) {
-		if (conf->cfg_config_u.cfg_net.net_peer_rtr_credits >= 0)
-			ni->ni_peerrtrcredits =
-				conf->cfg_config_u.cfg_net.net_peer_rtr_credits;
-		if (conf->cfg_config_u.cfg_net.net_peer_timeout >= 0)
-			ni->ni_peertimeout =
-				conf->cfg_config_u.cfg_net.net_peer_timeout;
-		if (conf->cfg_config_u.cfg_net.net_peer_tx_credits >= 0)
-			ni->ni_peertxcredits =
-				conf->cfg_config_u.cfg_net.net_peer_tx_credits;
-		if (conf->cfg_config_u.cfg_net.net_max_tx_credits >= 0)
-			ni->ni_maxtxcredits =
-				conf->cfg_config_u.cfg_net.net_max_tx_credits;
-	}
-
-	rc = (lnd->lnd_startup)(ni);
+	rc = (net->net_lnd->lnd_startup)(ni);
 
 	mutex_unlock(&the_lnet.ln_lnd_mutex);
 
 	if (rc != 0) {
 		LCONSOLE_ERROR_MSG(0x105, "Error %d starting up LNI %s\n",
-				   rc, libcfs_lnd2str(lnd->lnd_type));
+				   rc, libcfs_lnd2str(net->net_lnd->lnd_type));
 		lnet_net_lock(LNET_LOCK_EX);
-		lnd->lnd_refcount--;
+		net->net_lnd->lnd_refcount--;
 		lnet_net_unlock(LNET_LOCK_EX);
 		goto failed0;
 	}
 
-	LASSERT(ni->ni_peertimeout <= 0 || lnd->lnd_query != NULL);
+	ni->ni_state = LNET_NI_STATE_ACTIVE;
 
-	lnet_net_lock(LNET_LOCK_EX);
-	/* refcount for ln_nis */
-	lnet_ni_addref_locked(ni, 0);
-	list_add_tail(&ni->ni_list, &the_lnet.ln_nis);
-	if (ni->ni_cpts != NULL) {
-		lnet_ni_addref_locked(ni, 0);
-		list_add_tail(&ni->ni_cptlist, &the_lnet.ln_nis_cpt);
-	}
-
-	lnet_net_unlock(LNET_LOCK_EX);
-
-	if (lnd->lnd_type == LOLND) {
+	/* We keep a reference on the loopback net through the loopback NI */
+	if (net->net_lnd->lnd_type == LOLND) {
 		lnet_ni_addref(ni);
 		LASSERT(the_lnet.ln_loni == NULL);
 		the_lnet.ln_loni = ni;
+		ni->ni_net->net_tunables.lct_peer_tx_credits = 0;
+		ni->ni_net->net_tunables.lct_peer_rtr_credits = 0;
+		ni->ni_net->net_tunables.lct_max_tx_credits = 0;
+		ni->ni_net->net_tunables.lct_peer_timeout = 0;
 		return 0;
 	}
 
-	if (ni->ni_peertxcredits == 0 || ni->ni_maxtxcredits == 0) {
+	if (ni->ni_net->net_tunables.lct_peer_tx_credits == 0 ||
+	    ni->ni_net->net_tunables.lct_max_tx_credits == 0) {
 		LCONSOLE_ERROR_MSG(0x107, "LNI %s has no %scredits\n",
-				   libcfs_lnd2str(lnd->lnd_type),
-				   ni->ni_peertxcredits == 0 ?
+				   libcfs_lnd2str(net->net_lnd->lnd_type),
+				   ni->ni_net->net_tunables.lct_peer_tx_credits == 0 ?
 					"" : "per-peer ");
 		/* shutdown the NI since if we get here then it must've already
 		 * been started
@@ -1404,10 +1445,15 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_ioctl_config_data *conf)
 		tq->tq_credits = lnet_ni_tq_credits(ni);
 	}
 
+	atomic_set(&ni->ni_tx_credits,
+		   lnet_ni_tq_credits(ni) * ni->ni_ncpts);
+
 	CDEBUG(D_LNI, "Added LNI %s [%d/%d/%d/%d]\n",
-		libcfs_nid2str(ni->ni_nid), ni->ni_peertxcredits,
+		libcfs_nid2str(ni->ni_nid),
+		ni->ni_net->net_tunables.lct_peer_tx_credits,
 		lnet_ni_tq_credits(ni) * LNET_CPT_NUMBER,
-		ni->ni_peerrtrcredits, ni->ni_peertimeout);
+		ni->ni_net->net_tunables.lct_peer_rtr_credits,
+		ni->ni_net->net_tunables.lct_peer_timeout);
 
 	return 0;
 failed0:
@@ -1416,26 +1462,217 @@ failed0:
 }
 
 static int
-lnet_startup_lndnis(struct list_head *nilist)
+lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 {
 	struct lnet_ni		*ni;
+	struct lnet_net		*net_l = NULL;
+	struct list_head	local_ni_list;
 	int			rc;
 	int			ni_count = 0;
+	__u32			lnd_type;
+	lnd_t			*lnd;
+	int			peer_timeout =
+		net->net_tunables.lct_peer_timeout;
+	int			maxtxcredits =
+		net->net_tunables.lct_max_tx_credits;
+	int			peerrtrcredits =
+		net->net_tunables.lct_peer_rtr_credits;
 
-	while (!list_empty(nilist)) {
-		ni = list_entry(nilist->next, lnet_ni_t, ni_list);
-		list_del(&ni->ni_list);
-		rc = lnet_startup_lndni(ni, NULL);
+	INIT_LIST_HEAD(&local_ni_list);
+
+	/*
+	 * make sure that this net is unique. If it isn't then
+	 * we are adding interfaces to an already existing network, and
+	 * 'net' is just a convenient way to pass in the list.
+	 * if it is unique we need to find the LND and load it if
+	 * necessary.
+	 */
+	if (lnet_net_unique(net->net_id, &the_lnet.ln_nets, &net_l)) {
+		lnd_type = LNET_NETTYP(net->net_id);
+
+		LASSERT(libcfs_isknown_lnd(lnd_type));
+
+		if (lnd_type == CIBLND || lnd_type == OPENIBLND ||
+		    lnd_type == IIBLND || lnd_type == VIBLND) {
+			CERROR("LND %s obsoleted\n", libcfs_lnd2str(lnd_type));
+			rc = -EINVAL;
+			goto failed0;
+		}
+
+		mutex_lock(&the_lnet.ln_lnd_mutex);
+		lnd = lnet_find_lnd_by_type(lnd_type);
+
+		if (lnd == NULL) {
+			mutex_unlock(&the_lnet.ln_lnd_mutex);
+			rc = request_module("%s", libcfs_lnd2modname(lnd_type));
+			mutex_lock(&the_lnet.ln_lnd_mutex);
+
+			lnd = lnet_find_lnd_by_type(lnd_type);
+			if (lnd == NULL) {
+				mutex_unlock(&the_lnet.ln_lnd_mutex);
+				CERROR("Can't load LND %s, module %s, rc=%d\n",
+				libcfs_lnd2str(lnd_type),
+				libcfs_lnd2modname(lnd_type), rc);
+#ifndef HAVE_MODULE_LOADING_SUPPORT
+				LCONSOLE_ERROR_MSG(0x104, "Your kernel must be "
+						"compiled with kernel module "
+						"loading support.");
+#endif
+				rc = -EINVAL;
+				goto failed0;
+			}
+		}
+
+		lnet_net_lock(LNET_LOCK_EX);
+		lnd->lnd_refcount++;
+		lnet_net_unlock(LNET_LOCK_EX);
+
+		net->net_lnd = lnd;
+
+		mutex_unlock(&the_lnet.ln_lnd_mutex);
+
+		net_l = net;
+	}
+
+	/*
+	 * net_l: if the network being added is unique then net_l
+	 *        will point to that network
+	 *        if the network being added is not unique then
+	 *        net_l points to the existing network.
+	 *
+	 * When we enter the loop below, we'll pick NIs off he
+	 * network beign added and start them up, then add them to
+	 * a local ni list. Once we've successfully started all
+	 * the NIs then we join the local NI list (of started up
+	 * networks) with the net_l->net_ni_list, which should
+	 * point to the correct network to add the new ni list to
+	 *
+	 * If any of the new NIs fail to start up, then we want to
+	 * iterate through the local ni list, which should include
+	 * any NIs which were successfully started up, and shut
+	 * them down.
+	 *
+	 * After than we want to delete the network being added,
+	 * to avoid a memory leak.
+	 */
+
+	/*
+	 * When a network uses TCP bonding then all its interfaces
+	 * must be specified when the network is first defined: the
+	 * TCP bonding code doesn't allow for interfaces to be added
+	 * or removed.
+	 */
+	if (net_l != net && net_l != NULL && use_tcp_bonding &&
+	    LNET_NETTYP(net_l->net_id) == SOCKLND) {
+		rc = -EINVAL;
+		goto failed0;
+	}
+
+	while (!list_empty(&net->net_ni_added)) {
+		ni = list_entry(net->net_ni_added.next, struct lnet_ni,
+				ni_netlist);
+		list_del_init(&ni->ni_netlist);
+
+		/* make sure that the the NI we're about to start
+		 * up is actually unique. if it's not fail. */
+		if (!lnet_ni_unique_net(&net_l->net_ni_list,
+					ni->ni_interfaces[0])) {
+			rc = -EINVAL;
+			goto failed1;
+		}
+
+		/* adjust the pointer the parent network, just in case it
+		 * the net is a duplicate */
+		ni->ni_net = net_l;
+
+		rc = lnet_startup_lndni(ni, tun);
+
+		LASSERT(ni->ni_net->net_tunables.lct_peer_timeout <= 0 ||
+			ni->ni_net->net_lnd->lnd_query != NULL);
 
 		if (rc < 0)
-			goto failed;
+			goto failed1;
+
+		lnet_ni_addref(ni);
+		list_add_tail(&ni->ni_netlist, &local_ni_list);
 
 		ni_count++;
 	}
 
+	lnet_net_lock(LNET_LOCK_EX);
+	list_splice_tail(&local_ni_list, &net_l->net_ni_list);
+	lnet_incr_dlc_seq();
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	/* if the network is not unique then we don't want to keep
+	 * it around after we're done. Free it. Otherwise add that
+	 * net to the global the_lnet.ln_nets */
+	if (net_l != net && net_l != NULL) {
+		/*
+		 * TODO - note. currently the tunables can not be updated
+		 * once added
+		 */
+		lnet_net_free(net);
+	} else {
+		net->net_state = LNET_NET_STATE_ACTIVE;
+		/*
+		 * restore tunables after it has been overwitten by the
+		 * lnd
+		 */
+		if (peer_timeout != -1)
+			net->net_tunables.lct_peer_timeout = peer_timeout;
+		if (maxtxcredits != -1)
+			net->net_tunables.lct_max_tx_credits = maxtxcredits;
+		if (peerrtrcredits != -1)
+			net->net_tunables.lct_peer_rtr_credits = peerrtrcredits;
+
+		lnet_net_lock(LNET_LOCK_EX);
+		list_add_tail(&net->net_list, &the_lnet.ln_nets);
+		lnet_net_unlock(LNET_LOCK_EX);
+	}
+
+	return ni_count;
+
+failed1:
+	/*
+	 * shutdown the new NIs that are being started up
+	 * free the NET being started
+	 */
+	while (!list_empty(&local_ni_list)) {
+		ni = list_entry(local_ni_list.next, struct lnet_ni,
+				ni_netlist);
+
+		lnet_shutdown_lndni(ni);
+	}
+
+failed0:
+	lnet_net_free(net);
+
+	return rc;
+}
+
+static int
+lnet_startup_lndnets(struct list_head *netlist)
+{
+	struct lnet_net		*net;
+	int			rc;
+	int			ni_count = 0;
+
+	while (!list_empty(netlist)) {
+		net = list_entry(netlist->next, struct lnet_net, net_list);
+		list_del_init(&net->net_list);
+
+		rc = lnet_startup_lndnet(net, NULL);
+
+		if (rc < 0)
+			goto failed;
+
+		ni_count += rc;
+	}
+
 	return ni_count;
 failed:
-	lnet_shutdown_lndnis();
+	lnet_shutdown_lndnets();
 
 	return rc;
 }
@@ -1483,6 +1720,7 @@ int lnet_lib_init(void)
 	the_lnet.ln_refcount = 0;
 	LNetInvalidateHandle(&the_lnet.ln_rc_eqh);
 	INIT_LIST_HEAD(&the_lnet.ln_lnds);
+	INIT_LIST_HEAD(&the_lnet.ln_net_zombie);
 	INIT_LIST_HEAD(&the_lnet.ln_rcd_zombie);
 	INIT_LIST_HEAD(&the_lnet.ln_rcd_deathrow);
 
@@ -1543,6 +1781,7 @@ LNetNIInit(lnet_pid_t requested_pid)
 	struct lnet_ping_info	*pinfo;
 	lnet_handle_md_t	md_handle;
 	struct list_head	net_head;
+	struct lnet_net		*net;
 
 	INIT_LIST_HEAD(&net_head);
 
@@ -1562,8 +1801,15 @@ LNetNIInit(lnet_pid_t requested_pid)
 		return rc;
 	}
 
-	/* Add in the loopback network */
-	if (lnet_ni_alloc(LNET_MKNET(LOLND, 0), NULL, &net_head) == NULL) {
+	/* create a network for Loopback network */
+	net = lnet_net_alloc(LNET_MKNET(LOLND, 0), &net_head);
+	if (net == NULL) {
+		rc = -ENOMEM;
+		goto err_empty_list;
+	}
+
+	/* Add in the loopback NI */
+	if (lnet_ni_alloc(net, NULL, NULL) == NULL) {
 		rc = -ENOMEM;
 		goto err_empty_list;
 	}
@@ -1575,13 +1821,13 @@ LNetNIInit(lnet_pid_t requested_pid)
 	 * in this case.  On cleanup in case of failure only clean up
 	 * routes if it has been loaded */
 	if (!the_lnet.ln_nis_from_mod_params) {
-		rc = lnet_parse_networks(&net_head,
-					 lnet_get_networks());
+		rc = lnet_parse_networks(&net_head, lnet_get_networks(),
+					 use_tcp_bonding);
 		if (rc < 0)
 			goto err_empty_list;
 	}
 
-	ni_count = lnet_startup_lndnis(&net_head);
+	ni_count = lnet_startup_lndnets(&net_head);
 	if (ni_count < 0) {
 		rc = ni_count;
 		goto err_empty_list;
@@ -1634,17 +1880,17 @@ err_destroy_routes:
 	if (!the_lnet.ln_nis_from_mod_params)
 		lnet_destroy_routes();
 err_shutdown_lndnis:
-	lnet_shutdown_lndnis();
+	lnet_shutdown_lndnets();
 err_empty_list:
 	lnet_unprepare();
 	LASSERT(rc < 0);
 	mutex_unlock(&the_lnet.ln_api_mutex);
 	while (!list_empty(&net_head)) {
-		struct lnet_ni *ni;
+		struct lnet_net *net;
 
-		ni = list_entry(net_head.next, struct lnet_ni, ni_list);
-		list_del_init(&ni->ni_list);
-		lnet_ni_free(ni);
+		net = list_entry(net_head.next, struct lnet_net, net_list);
+		list_del_init(&net->net_list);
+		lnet_net_free(net);
 	}
 	return rc;
 }
@@ -1682,7 +1928,7 @@ LNetNIFini()
 
 		lnet_acceptor_stop();
 		lnet_destroy_routes();
-		lnet_shutdown_lndnis();
+		lnet_shutdown_lndnets();
 		lnet_unprepare();
 	}
 
@@ -1691,21 +1937,98 @@ LNetNIFini()
 }
 EXPORT_SYMBOL(LNetNIFini);
 
+
+static int lnet_handle_dbg_task(struct lnet_ioctl_dbg *dbg,
+				struct lnet_dbg_task_info *dbg_info)
+{
+	switch (dbg->dbg_task) {
+	case LNET_DBG_INCR_DLC_SEQ:
+		lnet_incr_dlc_seq();
+	}
+
+	return 0;
+}
 /**
  * Grabs the ni data from the ni structure and fills the out
  * parameters
  *
  * \param[in] ni network	interface structure
- * \param[out] cpt_count	the number of cpts the ni is on
- * \param[out] nid		Network Interface ID
- * \param[out] peer_timeout	NI peer timeout
- * \param[out] peer_tx_crdits	NI peer transmit credits
- * \param[out] peer_rtr_credits NI peer router credits
- * \param[out] max_tx_credits	NI max transmit credit
- * \param[out] net_config	Network configuration
+ * \param[out] cfg_ni		NI config information
+ * \param[out] tun		network and LND tunables
  */
 static void
-lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_data *config)
+lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
+		   struct lnet_ioctl_config_lnd_tunables *tun,
+		   struct lnet_ioctl_element_stats *stats,
+		   __u32 tun_size)
+{
+	size_t min_size = 0;
+	int i;
+
+	if (!ni || !cfg_ni || !tun)
+		return;
+
+	if (ni->ni_interfaces[0] != NULL) {
+		for (i = 0; i < ARRAY_SIZE(ni->ni_interfaces); i++) {
+			if (ni->ni_interfaces[i] != NULL) {
+				strncpy(cfg_ni->lic_ni_intf[i],
+					ni->ni_interfaces[i],
+					sizeof(cfg_ni->lic_ni_intf[i]));
+			}
+		}
+	}
+
+	cfg_ni->lic_nid = ni->ni_nid;
+	cfg_ni->lic_status = ni->ni_status->ns_status;
+	cfg_ni->lic_tcp_bonding = use_tcp_bonding;
+	cfg_ni->lic_dev_cpt = ni->ni_dev_cpt;
+
+	memcpy(&tun->lt_cmn, &ni->ni_net->net_tunables, sizeof(tun->lt_cmn));
+
+	if (stats) {
+		stats->send_count = atomic_read(&ni->ni_stats.send_count);
+		stats->recv_count = atomic_read(&ni->ni_stats.recv_count);
+	}
+
+	/*
+	 * tun->lt_tun will always be present, but in order to be
+	 * backwards compatible, we need to deal with the cases when
+	 * tun->lt_tun is smaller than what the kernel has, because it
+	 * comes from an older version of a userspace program, then we'll
+	 * need to copy as much information as we have available space.
+	 */
+	min_size = tun_size - sizeof(tun->lt_cmn);
+	memcpy(&tun->lt_tun, &ni->ni_lnd_tunables, min_size);
+
+	/* copy over the cpts */
+	if (ni->ni_ncpts == LNET_CPT_NUMBER &&
+	    ni->ni_cpts == NULL)  {
+		for (i = 0; i < ni->ni_ncpts; i++)
+			cfg_ni->lic_cpts[i] = i;
+	} else {
+		for (i = 0;
+		     ni->ni_cpts != NULL && i < ni->ni_ncpts &&
+		     i < LNET_MAX_SHOW_NUM_CPT;
+		     i++)
+			cfg_ni->lic_cpts[i] = ni->ni_cpts[i];
+	}
+	cfg_ni->lic_ncpts = ni->ni_ncpts;
+}
+
+/**
+ * NOTE: This is a legacy function left in the code to be backwards
+ * compatible with older userspace programs. It should eventually be
+ * removed.
+ *
+ * Grabs the ni data from the ni structure and fills the out
+ * parameters
+ *
+ * \param[in] ni network	interface structure
+ * \param[out] config		config information
+ */
+static void
+lnet_fill_ni_info_legacy(struct lnet_ni *ni,
+			 struct lnet_ioctl_config_data *config)
 {
 	struct lnet_ioctl_net_config *net_config;
 	struct lnet_ioctl_config_lnd_tunables *lnd_cfg = NULL;
@@ -1732,10 +2055,14 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_data *config)
 	}
 
 	config->cfg_nid = ni->ni_nid;
-	config->cfg_config_u.cfg_net.net_peer_timeout = ni->ni_peertimeout;
-	config->cfg_config_u.cfg_net.net_max_tx_credits = ni->ni_maxtxcredits;
-	config->cfg_config_u.cfg_net.net_peer_tx_credits = ni->ni_peertxcredits;
-	config->cfg_config_u.cfg_net.net_peer_rtr_credits = ni->ni_peerrtrcredits;
+	config->cfg_config_u.cfg_net.net_peer_timeout =
+		ni->ni_net->net_tunables.lct_peer_timeout;
+	config->cfg_config_u.cfg_net.net_max_tx_credits =
+		ni->ni_net->net_tunables.lct_max_tx_credits;
+	config->cfg_config_u.cfg_net.net_peer_tx_credits =
+		ni->ni_net->net_tunables.lct_peer_tx_credits;
+	config->cfg_config_u.cfg_net.net_peer_rtr_credits =
+		ni->ni_net->net_tunables.lct_peer_rtr_credits;
 
 	net_config->ni_status = ni->ni_status->ns_status;
 
@@ -1757,46 +2084,99 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_data *config)
 	if (config->cfg_hdr.ioc_len > min_size)
 		tunable_size = config->cfg_hdr.ioc_len - min_size;
 
-	/* Don't copy to much data to user space */
-	min_size = min(tunable_size, sizeof(*ni->ni_lnd_tunables));
+	/* Don't copy too much data to user space */
+	min_size = min(tunable_size, sizeof(ni->ni_lnd_tunables));
 	lnd_cfg = (struct lnet_ioctl_config_lnd_tunables *)net_config->cfg_bulk;
 
-	if (ni->ni_lnd_tunables && lnd_cfg && min_size) {
-		memcpy(lnd_cfg, ni->ni_lnd_tunables, min_size);
+	if (lnd_cfg && min_size) {
+		memcpy(&lnd_cfg->lt_tun, &ni->ni_lnd_tunables, min_size);
 		config->cfg_config_u.cfg_net.net_interface_count = 1;
 
 		/* Tell user land that kernel side has less data */
-		if (tunable_size > sizeof(*ni->ni_lnd_tunables)) {
+		if (tunable_size > sizeof(ni->ni_lnd_tunables)) {
 			min_size = tunable_size - sizeof(ni->ni_lnd_tunables);
 			config->cfg_hdr.ioc_len -= min_size;
 		}
 	}
 }
 
-static int
+struct lnet_ni *
+lnet_get_ni_idx_locked(int idx)
+{
+	struct lnet_ni		*ni;
+	struct lnet_net		*net;
+
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			if (idx-- == 0)
+				return ni;
+		}
+	}
+
+	return NULL;
+}
+
+struct lnet_ni *
+lnet_get_next_ni_locked(struct lnet_net *mynet, struct lnet_ni *prev)
+{
+	struct lnet_ni		*ni;
+	struct lnet_net		*net = mynet;
+
+	if (prev == NULL) {
+		if (net == NULL)
+			net = list_entry(the_lnet.ln_nets.next, struct lnet_net,
+					net_list);
+		ni = list_entry(net->net_ni_list.next, struct lnet_ni,
+				ni_netlist);
+
+		return ni;
+	}
+
+	if (prev->ni_netlist.next == &prev->ni_net->net_ni_list) {
+		/* if you reached the end of the ni list and the net is
+		 * specified, then there are no more nis in that net */
+		if (net != NULL)
+			return NULL;
+
+		/* we reached the end of this net ni list. move to the
+		 * next net */
+		if (prev->ni_net->net_list.next == &the_lnet.ln_nets)
+			/* no more nets and no more NIs. */
+			return NULL;
+
+		/* get the next net */
+		net = list_entry(prev->ni_net->net_list.next, struct lnet_net,
+				 net_list);
+		/* get the ni on it */
+		ni = list_entry(net->net_ni_list.next, struct lnet_ni,
+				ni_netlist);
+
+		return ni;
+	}
+
+	/* there are more nis left */
+	ni = list_entry(prev->ni_netlist.next, struct lnet_ni, ni_netlist);
+
+	return ni;
+}
+
+int
 lnet_get_net_config(struct lnet_ioctl_config_data *config)
 {
 	struct lnet_ni *ni;
-	struct list_head *tmp;
-	int idx = config->cfg_count;
+	int cpt;
 	int rc = -ENOENT;
-	int cpt, i = 0;
-
-	if (unlikely(!config->cfg_bulk))
-		return -EINVAL;
+	int idx = config->cfg_count;
 
 	cpt = lnet_net_lock_current();
 
-	list_for_each(tmp, &the_lnet.ln_nis) {
-		if (i++ != idx)
-			continue;
+	ni = lnet_get_ni_idx_locked(idx);
 
-		ni = list_entry(tmp, lnet_ni_t, ni_list);
-		lnet_ni_lock(ni);
-		lnet_fill_ni_info(ni, config);
-		lnet_ni_unlock(ni);
+	if (ni != NULL) {
 		rc = 0;
-		break;
+		lnet_ni_lock(ni);
+		lnet_fill_ni_info_legacy(ni, config);
+		lnet_ni_unlock(ni);
 	}
 
 	lnet_net_unlock(cpt);
@@ -1804,125 +2184,419 @@ lnet_get_net_config(struct lnet_ioctl_config_data *config)
 }
 
 int
-lnet_dyn_add_ni(lnet_pid_t requested_pid, struct lnet_ioctl_config_data *conf)
+lnet_get_ni_config(struct lnet_ioctl_config_ni *cfg_ni,
+		   struct lnet_ioctl_config_lnd_tunables *tun,
+		   struct lnet_ioctl_element_stats *stats,
+		   __u32 tun_size)
 {
-	char			*nets = conf->cfg_config_u.cfg_net.net_intf;
-	struct lnet_ping_info	*pinfo;
-	lnet_handle_md_t	md_handle;
 	struct lnet_ni		*ni;
-	struct list_head	net_head;
+	int			cpt;
+	int			rc = -ENOENT;
+
+	if (!cfg_ni || !tun || !stats)
+		return -EINVAL;
+
+	cpt = lnet_net_lock_current();
+
+	ni = lnet_get_ni_idx_locked(cfg_ni->lic_idx);
+
+	if (ni) {
+		rc = 0;
+		lnet_ni_lock(ni);
+		lnet_fill_ni_info(ni, cfg_ni, tun, stats, tun_size);
+		lnet_ni_unlock(ni);
+	}
+
+	lnet_net_unlock(cpt);
+	return rc;
+}
+
+static int lnet_add_net_common(struct lnet_net *net,
+			       struct lnet_ioctl_config_lnd_tunables *tun)
+{
+	__u32			net_id;
+	lnet_ping_info_t	*pinfo;
+	lnet_handle_md_t	md_handle;
 	int			rc;
 	lnet_remotenet_t	*rnet;
-
-	INIT_LIST_HEAD(&net_head);
-
-	/* Create a ni structure for the network string */
-	rc = lnet_parse_networks(&net_head, nets);
-	if (rc <= 0)
-		return rc == 0 ? -EINVAL : rc;
-
-	mutex_lock(&the_lnet.ln_api_mutex);
-
-	if (rc > 1) {
-		rc = -EINVAL; /* only add one interface per call */
-		goto failed0;
-	}
-
-	ni = list_entry(net_head.next, struct lnet_ni, ni_list);
+	int			net_ni_count;
+	int			num_acceptor_nets;
 
 	lnet_net_lock(LNET_LOCK_EX);
-	rnet = lnet_find_net_locked(LNET_NIDNET(ni->ni_nid));
+	rnet = lnet_find_rnet_locked(net->net_id);
 	lnet_net_unlock(LNET_LOCK_EX);
-	/* make sure that the net added doesn't invalidate the current
-	 * configuration LNet is keeping */
-	if (rnet != NULL) {
+	/*
+	 * make sure that the net added doesn't invalidate the current
+	 * configuration LNet is keeping
+	 */
+	if (rnet) {
 		CERROR("Adding net %s will invalidate routing configuration\n",
-		       nets);
-		rc = -EUSERS;
-		goto failed0;
+		       libcfs_net2str(net->net_id));
+		lnet_net_free(net);
+		return -EUSERS;
 	}
 
-	rc = lnet_ping_info_setup(&pinfo, &md_handle, 1 + lnet_get_ni_count(),
+	/*
+	 * make sure you calculate the correct number of slots in the ping
+	 * info. Since the ping info is a flattened list of all the NIs,
+	 * we should allocate enough slots to accomodate the number of NIs
+	 * which will be added.
+	 *
+	 * since ni hasn't been configured yet, use
+	 * lnet_get_net_ni_count_pre() which checks the net_ni_added list
+	 */
+	net_ni_count = lnet_get_net_ni_count_pre(net);
+
+	rc = lnet_ping_info_setup(&pinfo, &md_handle,
+				  net_ni_count + lnet_get_ni_count(),
 				  false);
-	if (rc != 0)
-		goto failed0;
+	if (rc < 0) {
+		lnet_net_free(net);
+		return rc;
+	}
 
-	list_del_init(&ni->ni_list);
+	if (tun)
+		memcpy(&net->net_tunables,
+		       &tun->lt_cmn, sizeof(net->net_tunables));
+	else
+		memset(&net->net_tunables, -1, sizeof(net->net_tunables));
 
-	rc = lnet_startup_lndni(ni, conf);
-	if (rc != 0)
-		goto failed1;
+	/*
+	 * before starting this network get a count of the current TCP
+	 * networks which require the acceptor thread running. If that
+	 * count is == 0 before we start up this network, then we'd want to
+	 * start up the acceptor thread after starting up this network
+	 */
+	num_acceptor_nets = lnet_count_acceptor_nets();
 
-	if (ni->ni_lnd->lnd_accept != NULL) {
+	net_id = net->net_id;
+
+	rc = lnet_startup_lndnet(net,
+				 (tun) ? &tun->lt_tun : NULL);
+	if (rc < 0)
+		goto failed;
+
+	lnet_net_lock(LNET_LOCK_EX);
+	net = lnet_get_net_locked(net_id);
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	LASSERT(net);
+
+	/*
+	 * Start the acceptor thread if this is the first network
+	 * being added that requires the thread.
+	 */
+	if (net->net_lnd->lnd_accept && num_acceptor_nets == 0) {
 		rc = lnet_acceptor_start();
 		if (rc < 0) {
-			/* shutdown the ni that we just started */
+			/* shutdown the net that we just started */
 			CERROR("Failed to start up acceptor thread\n");
-			lnet_shutdown_lndni(ni);
-			goto failed1;
+			lnet_shutdown_lndnet(net);
+			goto failed;
 		}
 	}
 
+	lnet_net_lock(LNET_LOCK_EX);
+	lnet_peer_net_added(net);
+	lnet_net_unlock(LNET_LOCK_EX);
+
 	lnet_ping_target_update(pinfo, md_handle);
-	mutex_unlock(&the_lnet.ln_api_mutex);
 
 	return 0;
 
-failed1:
+failed:
 	lnet_ping_md_unlink(pinfo, &md_handle);
 	lnet_ping_info_free(pinfo);
-failed0:
-	mutex_unlock(&the_lnet.ln_api_mutex);
+	return rc;
+}
+
+static int lnet_handle_legacy_ip2nets(char *ip2nets,
+				      struct lnet_ioctl_config_lnd_tunables *tun)
+{
+	struct lnet_net *net;
+	char *nets;
+	int rc;
+	struct list_head net_head;
+
+	INIT_LIST_HEAD(&net_head);
+
+	rc = lnet_parse_ip2nets(&nets, ip2nets);
+	if (rc < 0)
+		return rc;
+
+	rc = lnet_parse_networks(&net_head, nets, use_tcp_bonding);
+	if (rc < 0)
+		return rc;
+
+	mutex_lock(&the_lnet.ln_api_mutex);
 	while (!list_empty(&net_head)) {
-		ni = list_entry(net_head.next, struct lnet_ni, ni_list);
-		list_del_init(&ni->ni_list);
-		lnet_ni_free(ni);
+		net = list_entry(net_head.next, struct lnet_net, net_list);
+		list_del_init(&net->net_list);
+		rc = lnet_add_net_common(net, tun);
+		if (rc < 0)
+			goto out;
+	}
+
+out:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	while (!list_empty(&net_head)) {
+		net = list_entry(net_head.next, struct lnet_net, net_list);
+		list_del_init(&net->net_list);
+		lnet_net_free(net);
 	}
 	return rc;
 }
 
-int
-lnet_dyn_del_ni(__u32 net)
+int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf)
 {
-	lnet_ni_t	 *ni;
-	struct lnet_ping_info *pinfo;
+	struct lnet_net *net;
+	struct lnet_ni *ni;
+	struct lnet_ioctl_config_lnd_tunables *tun = NULL;
+	int rc, i;
+	__u32 net_id;
+
+	/* get the tunables if they are available */
+	if (conf->lic_cfg_hdr.ioc_len >=
+	    sizeof(*conf) + sizeof(*tun))
+		tun = (struct lnet_ioctl_config_lnd_tunables *)
+			conf->lic_bulk;
+
+	/* handle legacy ip2nets from DLC */
+	if (conf->lic_legacy_ip2nets[0] != '\0')
+		return lnet_handle_legacy_ip2nets(conf->lic_legacy_ip2nets,
+						  tun);
+
+	net_id = LNET_NIDNET(conf->lic_nid);
+
+	net = lnet_net_alloc(net_id, NULL);
+	if (!net)
+		return -ENOMEM;
+
+	for (i = 0; i < conf->lic_ncpts; i++) {
+		if (conf->lic_cpts[i] >= LNET_CPT_NUMBER)
+			return -EINVAL;
+	}
+
+	ni = lnet_ni_alloc_w_cpt_array(net, conf->lic_cpts, conf->lic_ncpts,
+				       conf->lic_ni_intf[0]);
+	if (!ni)
+		return -ENOMEM;
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+
+	rc = lnet_add_net_common(net, tun);
+
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	return rc;
+}
+
+int lnet_dyn_del_ni(struct lnet_ioctl_config_ni *conf)
+{
+	struct lnet_net	 *net;
+	struct lnet_ni *ni;
+	__u32 net_id = LNET_NIDNET(conf->lic_nid);
+	lnet_ping_info_t *pinfo;
 	lnet_handle_md_t  md_handle;
 	int		  rc;
+	int		  net_count;
+	__u32		  addr;
 
 	/* don't allow userspace to shutdown the LOLND */
-	if (LNET_NETTYP(net) == LOLND)
+	if (LNET_NETTYP(net_id) == LOLND)
 		return -EINVAL;
 
 	mutex_lock(&the_lnet.ln_api_mutex);
+
+	lnet_net_lock(0);
+
+	net = lnet_get_net_locked(net_id);
+	if (!net) {
+		CERROR("net %s not found\n",
+		       libcfs_net2str(net_id));
+		rc = -ENOENT;
+		goto net_unlock;
+	}
+
+	addr = LNET_NIDADDR(conf->lic_nid);
+	if (addr == 0) {
+		/* remove the entire net */
+		net_count = lnet_get_net_ni_count_locked(net);
+
+		lnet_net_unlock(0);
+
+		/* create and link a new ping info, before removing the old one */
+		rc = lnet_ping_info_setup(&pinfo, &md_handle,
+					lnet_get_ni_count() - net_count,
+					false);
+		if (rc != 0)
+			goto out;
+
+		lnet_shutdown_lndnet(net);
+
+		if (lnet_count_acceptor_nets() == 0)
+			lnet_acceptor_stop();
+
+		lnet_ping_target_update(pinfo, md_handle);
+
+		goto out;
+	}
+
+	ni = lnet_nid2ni_locked(conf->lic_nid, 0);
+	if (!ni) {
+		CERROR("nid %s not found \n",
+		       libcfs_nid2str(conf->lic_nid));
+		rc = -ENOENT;
+		goto net_unlock;
+	}
+
+	net_count = lnet_get_net_ni_count_locked(net);
+
+	lnet_net_unlock(0);
+
 	/* create and link a new ping info, before removing the old one */
 	rc = lnet_ping_info_setup(&pinfo, &md_handle,
 				  lnet_get_ni_count() - 1, false);
 	if (rc != 0)
 		goto out;
 
-	ni = lnet_net2ni(net);
-	if (ni == NULL) {
-		rc = -EINVAL;
-		goto failed;
-	}
-
-	/* decrement the reference counter taken by lnet_net2ni() */
-	lnet_ni_decref_locked(ni, 0);
-
 	lnet_shutdown_lndni(ni);
 
-	if (lnet_count_acceptor_nis() == 0)
+	if (lnet_count_acceptor_nets() == 0)
 		lnet_acceptor_stop();
 
 	lnet_ping_target_update(pinfo, md_handle);
+
+	/* check if the net is empty and remove it if it is */
+	if (net_count == 1)
+		lnet_shutdown_lndnet(net);
+
 	goto out;
-failed:
-	lnet_ping_md_unlink(pinfo, &md_handle);
-	lnet_ping_info_free(pinfo);
+
+net_unlock:
+	lnet_net_unlock(0);
 out:
 	mutex_unlock(&the_lnet.ln_api_mutex);
 
 	return rc;
+}
+
+/*
+ * lnet_dyn_add_net and lnet_dyn_del_net are now deprecated.
+ * They are only expected to be called for unique networks.
+ * That can be as a result of older DLC library
+ * calls. Multi-Rail DLC and beyond no longer uses these APIs.
+ */
+int
+lnet_dyn_add_net(struct lnet_ioctl_config_data *conf)
+{
+	struct lnet_net		*net;
+	struct list_head	net_head;
+	int			rc;
+	struct lnet_ioctl_config_lnd_tunables tun;
+	char *nets = conf->cfg_config_u.cfg_net.net_intf;
+
+	INIT_LIST_HEAD(&net_head);
+
+	/* Create a net/ni structures for the network string */
+	rc = lnet_parse_networks(&net_head, nets, use_tcp_bonding);
+	if (rc <= 0)
+		return rc == 0 ? -EINVAL : rc;
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+
+	if (rc > 1) {
+		rc = -EINVAL; /* only add one network per call */
+		goto failed;
+	}
+
+	net = list_entry(net_head.next, struct lnet_net, net_list);
+	list_del_init(&net->net_list);
+
+	LASSERT(lnet_net_unique(net->net_id, &the_lnet.ln_nets, NULL));
+
+	memset(&tun, 0, sizeof(tun));
+
+	tun.lt_cmn.lct_peer_timeout =
+	  conf->cfg_config_u.cfg_net.net_peer_timeout;
+	tun.lt_cmn.lct_peer_tx_credits =
+	  conf->cfg_config_u.cfg_net.net_peer_tx_credits;
+	tun.lt_cmn.lct_peer_rtr_credits =
+	  conf->cfg_config_u.cfg_net.net_peer_rtr_credits;
+	tun.lt_cmn.lct_max_tx_credits =
+	  conf->cfg_config_u.cfg_net.net_max_tx_credits;
+
+	rc = lnet_add_net_common(net, &tun);
+	if (rc != 0)
+		goto failed;
+
+	return 0;
+
+failed:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+	while (!list_empty(&net_head)) {
+		net = list_entry(net_head.next, struct lnet_net, net_list);
+		list_del_init(&net->net_list);
+		lnet_net_free(net);
+	}
+	return rc;
+}
+
+int
+lnet_dyn_del_net(__u32 net_id)
+{
+	struct lnet_net	 *net;
+	struct lnet_ping_info *pinfo;
+	lnet_handle_md_t  md_handle;
+	int		  rc;
+	int		  net_ni_count;
+
+	/* don't allow userspace to shutdown the LOLND */
+	if (LNET_NETTYP(net_id) == LOLND)
+		return -EINVAL;
+
+	mutex_lock(&the_lnet.ln_api_mutex);
+
+	lnet_net_lock(0);
+
+	net = lnet_get_net_locked(net_id);
+	if (net == NULL) {
+		rc = -EINVAL;
+		goto out;
+	}
+
+	net_ni_count = lnet_get_net_ni_count_locked(net);
+
+	lnet_net_unlock(0);
+
+	/* create and link a new ping info, before removing the old one */
+	rc = lnet_ping_info_setup(&pinfo, &md_handle,
+				  lnet_get_ni_count() - net_ni_count, false);
+	if (rc != 0)
+		goto out;
+
+	lnet_shutdown_lndnet(net);
+
+	if (lnet_count_acceptor_nets() == 0)
+		lnet_acceptor_stop();
+
+	lnet_ping_target_update(pinfo, md_handle);
+
+out:
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	return rc;
+}
+
+void lnet_incr_dlc_seq(void)
+{
+	atomic_inc(&lnet_dlc_seq_no);
+}
+
+__u32 lnet_get_dlc_seq_locked(void)
+{
+	return atomic_read(&lnet_dlc_seq_no);
 }
 
 /**
@@ -1988,13 +2662,42 @@ LNetCtl(unsigned int cmd, void *arg)
 		if (config->cfg_hdr.ioc_len < sizeof(*config))
 			return -EINVAL;
 
-		return lnet_get_route(config->cfg_count,
-				      &config->cfg_net,
-				      &config->cfg_config_u.cfg_route.rtr_hop,
-				      &config->cfg_nid,
-				      &config->cfg_config_u.cfg_route.rtr_flags,
-				      &config->cfg_config_u.cfg_route.
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_get_route(config->cfg_count,
+				    &config->cfg_net,
+				    &config->cfg_config_u.cfg_route.rtr_hop,
+				    &config->cfg_nid,
+				    &config->cfg_config_u.cfg_route.rtr_flags,
+				    &config->cfg_config_u.cfg_route.
 					rtr_priority);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return rc;
+
+	case IOC_LIBCFS_GET_LOCAL_NI: {
+		struct lnet_ioctl_config_ni *cfg_ni;
+		struct lnet_ioctl_config_lnd_tunables *tun = NULL;
+		struct lnet_ioctl_element_stats *stats;
+		__u32 tun_size;
+
+		cfg_ni = arg;
+		/* get the tunables if they are available */
+		if (cfg_ni->lic_cfg_hdr.ioc_len <
+		    sizeof(*cfg_ni) + sizeof(*stats)+ sizeof(*tun))
+			return -EINVAL;
+
+		stats = (struct lnet_ioctl_element_stats *)
+			cfg_ni->lic_bulk;
+		tun = (struct lnet_ioctl_config_lnd_tunables *)
+				(cfg_ni->lic_bulk + sizeof(*stats));
+
+		tun_size = cfg_ni->lic_cfg_hdr.ioc_len - sizeof(*cfg_ni) -
+			sizeof(*stats);
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_get_ni_config(cfg_ni, tun, stats, tun_size);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return rc;
+	}
 
 	case IOC_LIBCFS_GET_NET: {
 		size_t total = sizeof(*config) +
@@ -2004,7 +2707,10 @@ LNetCtl(unsigned int cmd, void *arg)
 		if (config->cfg_hdr.ioc_len < total)
 			return -EINVAL;
 
-		return lnet_get_net_config(config);
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_get_net_config(config);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return rc;
 	}
 
 	case IOC_LIBCFS_GET_LNET_STATS:
@@ -2014,7 +2720,9 @@ LNetCtl(unsigned int cmd, void *arg)
 		if (lnet_stats->st_hdr.ioc_len < sizeof(*lnet_stats))
 			return -EINVAL;
 
+		mutex_lock(&the_lnet.ln_api_mutex);
 		lnet_counters_get(&lnet_stats->st_cntrs);
+		mutex_unlock(&the_lnet.ln_api_mutex);
 		return 0;
 	}
 
@@ -2050,6 +2758,26 @@ LNetCtl(unsigned int cmd, void *arg)
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 
+	case IOC_LIBCFS_SET_NUMA_RANGE: {
+		struct lnet_ioctl_numa_range *numa;
+		numa = arg;
+		if (numa->nr_hdr.ioc_len != sizeof(*numa))
+			return -EINVAL;
+		mutex_lock(&the_lnet.ln_api_mutex);
+		lnet_numa_range = numa->nr_range;
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return 0;
+	}
+
+	case IOC_LIBCFS_GET_NUMA_RANGE: {
+		struct lnet_ioctl_numa_range *numa;
+		numa = arg;
+		if (numa->nr_hdr.ioc_len != sizeof(*numa))
+			return -EINVAL;
+		numa->nr_range = lnet_numa_range;
+		return 0;
+	}
+
 	case IOC_LIBCFS_GET_BUF: {
 		struct lnet_ioctl_pool_cfg *pool_cfg;
 		size_t total = sizeof(*config) + sizeof(*pool_cfg);
@@ -2060,7 +2788,38 @@ LNetCtl(unsigned int cmd, void *arg)
 			return -EINVAL;
 
 		pool_cfg = (struct lnet_ioctl_pool_cfg *)config->cfg_bulk;
-		return lnet_get_rtr_pool_cfg(config->cfg_count, pool_cfg);
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_get_rtr_pool_cfg(config->cfg_count, pool_cfg);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return rc;
+	}
+
+	case IOC_LIBCFS_ADD_PEER_NI: {
+		struct lnet_ioctl_peer_cfg *cfg = arg;
+
+		if (cfg->prcfg_hdr.ioc_len < sizeof(*cfg))
+			return -EINVAL;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_add_peer_ni_to_peer(cfg->prcfg_prim_nid,
+					      cfg->prcfg_cfg_nid,
+					      cfg->prcfg_mr);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return rc;
+	}
+
+	case IOC_LIBCFS_DEL_PEER_NI: {
+		struct lnet_ioctl_peer_cfg *cfg = arg;
+
+		if (cfg->prcfg_hdr.ioc_len < sizeof(*cfg))
+			return -EINVAL;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_del_peer_ni_from_peer(cfg->prcfg_prim_nid,
+						cfg->prcfg_cfg_nid);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return rc;
 	}
 
 	case IOC_LIBCFS_GET_PEER_INFO: {
@@ -2069,7 +2828,8 @@ LNetCtl(unsigned int cmd, void *arg)
 		if (peer_info->pr_hdr.ioc_len < sizeof(*peer_info))
 			return -EINVAL;
 
-		return lnet_get_peer_info(
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_get_peer_ni_info(
 		   peer_info->pr_count,
 		   &peer_info->pr_nid,
 		   peer_info->pr_lnd_u.pr_peer_credits.cr_aliveness,
@@ -2078,8 +2838,32 @@ LNetCtl(unsigned int cmd, void *arg)
 		   &peer_info->pr_lnd_u.pr_peer_credits.cr_ni_peer_tx_credits,
 		   &peer_info->pr_lnd_u.pr_peer_credits.cr_peer_tx_credits,
 		   &peer_info->pr_lnd_u.pr_peer_credits.cr_peer_rtr_credits,
-		   &peer_info->pr_lnd_u.pr_peer_credits.cr_peer_min_rtr_credits,
+		   &peer_info->pr_lnd_u.pr_peer_credits.cr_peer_min_tx_credits,
 		   &peer_info->pr_lnd_u.pr_peer_credits.cr_peer_tx_qnob);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return rc;
+	}
+
+	case IOC_LIBCFS_GET_PEER_NI: {
+		struct lnet_ioctl_peer_cfg *cfg = arg;
+		struct lnet_peer_ni_credit_info *lpni_cri;
+		struct lnet_ioctl_element_stats *lpni_stats;
+		size_t total = sizeof(*cfg) + sizeof(*lpni_cri) +
+			       sizeof(*lpni_stats);
+
+		if (cfg->prcfg_hdr.ioc_len < total)
+			return -EINVAL;
+
+		lpni_cri = (struct lnet_peer_ni_credit_info*) cfg->prcfg_bulk;
+		lpni_stats = (struct lnet_ioctl_element_stats *)
+			     (cfg->prcfg_bulk + sizeof(*lpni_cri));
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_get_peer_info(cfg->prcfg_idx, &cfg->prcfg_prim_nid,
+					&cfg->prcfg_cfg_nid, &cfg->prcfg_mr,
+					lpni_cri, lpni_stats);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return rc;
 	}
 
 	case IOC_LIBCFS_NOTIFY_ROUTER: {
@@ -2132,15 +2916,29 @@ LNetCtl(unsigned int cmd, void *arg)
 		data->ioc_count = rc;
 		return 0;
 	}
+
+	case IOC_LIBCFS_DBG: {
+		struct lnet_ioctl_dbg *dbg = arg;
+		struct lnet_dbg_task_info *dbg_info;
+		size_t total = sizeof(*dbg) + sizeof(*dbg_info);
+
+		if (dbg->dbg_hdr.ioc_len < total)
+			return -EINVAL;
+
+		dbg_info = (struct lnet_dbg_task_info*) dbg->dbg_bulk;
+
+		return lnet_handle_dbg_task(dbg, dbg_info);
+	}
+
 	default:
-		ni = lnet_net2ni(data->ioc_net);
+		ni = lnet_net2ni_addref(data->ioc_net);
 		if (ni == NULL)
 			return -EINVAL;
 
-		if (ni->ni_lnd->lnd_ctl == NULL)
+		if (ni->ni_net->net_lnd->lnd_ctl == NULL)
 			rc = -EINVAL;
 		else
-			rc = ni->ni_lnd->lnd_ctl(ni, cmd, arg);
+			rc = ni->ni_net->net_lnd->lnd_ctl(ni, cmd, arg);
 
 		lnet_ni_decref(ni);
 		return rc;
@@ -2170,7 +2968,7 @@ int
 LNetGetId(unsigned int index, lnet_process_id_t *id)
 {
 	struct lnet_ni	 *ni;
-	struct list_head *tmp;
+	struct lnet_net  *net;
 	int		  cpt;
 	int		  rc = -ENOENT;
 
@@ -2178,16 +2976,16 @@ LNetGetId(unsigned int index, lnet_process_id_t *id)
 
 	cpt = lnet_net_lock_current();
 
-	list_for_each(tmp, &the_lnet.ln_nis) {
-		if (index-- != 0)
-			continue;
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			if (index-- != 0)
+				continue;
 
-		ni = list_entry(tmp, lnet_ni_t, ni_list);
-
-		id->nid = ni->ni_nid;
-		id->pid = the_lnet.ln_pid;
-		rc = 0;
-		break;
+			id->nid = ni->ni_nid;
+			id->pid = the_lnet.ln_pid;
+			rc = 0;
+			break;
+		}
 	}
 
 	lnet_net_unlock(cpt);

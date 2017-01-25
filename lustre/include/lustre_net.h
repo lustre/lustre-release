@@ -1105,6 +1105,8 @@ struct ptlrpc_request {
 	lnet_nid_t			 rq_self;
 	/** Peer description (the other side) */
 	lnet_process_id_t		 rq_peer;
+	/** Descriptor for the NID from which the peer sent the request. */
+	lnet_process_id_t		 rq_source;
 	/**
 	 * service time estimate (secs)
 	 * If the request is not served by this time, it is marked as timed out.

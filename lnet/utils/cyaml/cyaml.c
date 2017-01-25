@@ -160,6 +160,32 @@ static yaml_token_handler dispatch_tbl[] = {
 	[YAML_SCALAR_TOKEN] = yaml_scalar,
 };
 
+/* dispatch table */
+static char *token_type_string[] = {
+	[YAML_NO_TOKEN] = "YAML_NO_TOKEN",
+	[YAML_STREAM_START_TOKEN] = "YAML_STREAM_START_TOKEN",
+	[YAML_STREAM_END_TOKEN] = "YAML_STREAM_END_TOKEN",
+	[YAML_VERSION_DIRECTIVE_TOKEN] = "YAML_VERSION_DIRECTIVE_TOKEN",
+	[YAML_TAG_DIRECTIVE_TOKEN] = "YAML_TAG_DIRECTIVE_TOKEN",
+	[YAML_DOCUMENT_START_TOKEN] = "YAML_DOCUMENT_START_TOKEN",
+	[YAML_DOCUMENT_END_TOKEN] = "YAML_DOCUMENT_END_TOKEN",
+	[YAML_BLOCK_SEQUENCE_START_TOKEN] = "YAML_BLOCK_SEQUENCE_START_TOKEN",
+	[YAML_BLOCK_MAPPING_START_TOKEN] = "YAML_BLOCK_MAPPING_START_TOKEN",
+	[YAML_BLOCK_END_TOKEN] = "YAML_BLOCK_END_TOKEN",
+	[YAML_FLOW_SEQUENCE_START_TOKEN] = "YAML_FLOW_SEQUENCE_START_TOKEN",
+	[YAML_FLOW_SEQUENCE_END_TOKEN] = "YAML_FLOW_SEQUENCE_END_TOKEN",
+	[YAML_FLOW_MAPPING_START_TOKEN] = "YAML_FLOW_MAPPING_START_TOKEN",
+	[YAML_FLOW_MAPPING_END_TOKEN] = "YAML_FLOW_MAPPING_END_TOKEN",
+	[YAML_BLOCK_ENTRY_TOKEN] = "YAML_BLOCK_ENTRY_TOKEN",
+	[YAML_FLOW_ENTRY_TOKEN] = "YAML_FLOW_ENTRY_TOKEN",
+	[YAML_KEY_TOKEN] = "YAML_KEY_TOKEN",
+	[YAML_VALUE_TOKEN] = "YAML_VALUE_TOKEN",
+	[YAML_ALIAS_TOKEN] = "YAML_ALIAS_TOKEN",
+	[YAML_ANCHOR_TOKEN] = "YAML_ANCHOR_TOKEN",
+	[YAML_TAG_TOKEN] = "YAML_TAG_TOKEN",
+	[YAML_SCALAR_TOKEN] = "YAML_SCALAR_TOKEN",
+};
+
 static void cYAML_ll_free(struct list_head *ll)
 {
 	struct cYAML_ll *node, *tmp;
@@ -661,19 +687,23 @@ static bool find_obj_iter(struct cYAML *node, void *usr_data, void **out)
 
 struct cYAML *cYAML_get_object_item(struct cYAML *parent, const char *name)
 {
-	struct cYAML *node;
+	struct cYAML *node = parent, *found = NULL;
 
-	if (parent == NULL || parent->cy_child == NULL || name == NULL)
+	if (!node || !name)
 		return NULL;
 
-	node = parent->cy_child;
-
-	while (node != NULL &&
-		strcmp(node->cy_string, name) != 0) {
-		node = node->cy_next;
+	if (node->cy_string) {
+		if (strcmp(node->cy_string, name) == 0)
+			return node;
 	}
 
-	return node;
+	if (node->cy_child)
+		found = cYAML_get_object_item(node->cy_child, name);
+
+	if (!found && node->cy_next)
+		found = cYAML_get_object_item(node->cy_next, name);
+
+	return found;
 }
 
 struct cYAML *cYAML_get_next_seq_item(struct cYAML *seq, struct cYAML **itm)
@@ -1097,7 +1127,8 @@ failed:
 struct cYAML *cYAML_build_tree(char *yaml_file,
 			       const char *yaml_blk,
 			       size_t yaml_blk_size,
-			       struct cYAML **err_rc)
+			       struct cYAML **err_rc,
+			       bool debug)
 {
 	yaml_parser_t parser;
 	yaml_token_t token;
@@ -1145,6 +1176,11 @@ struct cYAML *cYAML_build_tree(char *yaml_file,
 		*/
 		yaml_parser_scan(&parser, &token);
 
+		if (debug)
+			fprintf(stderr, "token.type = %s: %s\n",
+				token_type_string[token.type],
+				(token.type == YAML_SCALAR_TOKEN) ?
+				(char*)token.data.scalar.value : "");
 		rc = dispatch_tbl[token.type](&token, &tree);
 		if (rc != CYAML_ERROR_NONE) {
 			snprintf(err_str, sizeof(err_str),

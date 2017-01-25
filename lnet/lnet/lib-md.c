@@ -80,6 +80,34 @@ lnet_md_unlink(lnet_libmd_t *md)
 	lnet_md_free(md);
 }
 
+int
+lnet_cpt_of_md(lnet_libmd_t *md)
+{
+	int cpt = CFS_CPT_ANY;
+
+	if (!md)
+		return CFS_CPT_ANY;
+
+	if ((md->md_options & LNET_MD_BULK_HANDLE) != 0 &&
+	    !LNetHandleIsInvalid(md->md_bulk_handle)) {
+		md = lnet_handle2md(&md->md_bulk_handle);
+
+		if (!md)
+			return CFS_CPT_ANY;
+	}
+
+	if ((md->md_options & LNET_MD_KIOV) != 0) {
+		if (md->md_iov.kiov[0].kiov_page != NULL)
+			cpt = cfs_cpt_of_node(lnet_cpt_table(),
+				page_to_nid(md->md_iov.kiov[0].kiov_page));
+	} else if (md->md_iov.iov[0].iov_base != NULL) {
+		cpt = cfs_cpt_of_node(lnet_cpt_table(),
+			page_to_nid(virt_to_page(md->md_iov.iov[0].iov_base)));
+	}
+
+	return cpt;
+}
+
 static int
 lnet_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
 {
@@ -97,6 +125,7 @@ lnet_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
 	lmd->md_threshold = umd->threshold;
 	lmd->md_refcount = 0;
 	lmd->md_flags = (unlink == LNET_UNLINK) ? LNET_MD_FLAG_AUTO_UNLINK : 0;
+	lmd->md_bulk_handle = umd->bulk_handle;
 
 	if ((umd->options & LNET_MD_IOVEC) != 0) {
 

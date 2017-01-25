@@ -34,6 +34,6 @@ liblnetconfig_la_SOURCES  = liblnetconfig.c liblnetconfig.h \
 			    liblnetconfig_lnd.c liblnd.h $(CYAML)
 liblnetconfig_la_CPPFLAGS = -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 \
 			    -DLUSTRE_UTILS=1 -I$(top_builddir)/lnet/utils/cyaml
-liblnetconfig_la_LDFLAGS = -L$(top_builddir)/libcfs/libcfs -version-info 1:1:0
+liblnetconfig_la_LDFLAGS = -L$(top_builddir)/libcfs/libcfs -version-info 2:0:0
 
 EXTRA_DIST =

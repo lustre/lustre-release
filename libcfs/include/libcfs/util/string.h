@@ -78,6 +78,7 @@ struct cfs_expr_list {
 	struct list_head	el_exprs;
 };
 
+int cfs_expr_list_values(struct cfs_expr_list *expr_list, int max, __u32 **valpp);
 int cfs_gettok(struct cfs_lstr *next, char delim, struct cfs_lstr *res);
 int cfs_str2num_check(char *str, int nob, unsigned *num,
 		      unsigned min, unsigned max);
@@ -86,6 +87,7 @@ int cfs_expr_list_print(char *buffer, int count,
 			struct cfs_expr_list *expr_list);
 int cfs_expr_list_parse(char *str, int len, unsigned min, unsigned max,
 			struct cfs_expr_list **elpp);
+void cfs_expr_list_free(struct cfs_expr_list *expr_list);
 void cfs_expr_list_free_list(struct list_head *list);
 int cfs_ip_addr_parse(char *str, int len, struct list_head *list);
 int cfs_ip_addr_match(__u32 addr, struct list_head *list);

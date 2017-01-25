@@ -25,6 +25,9 @@
  * Author:
  *   James Simmons <jsimmons@infradead.org>
  */
+
+#include <limits.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <libcfs/util/ioctl.h>
@@ -32,108 +35,126 @@
 #include "cyaml.h"
 
 static int
-lustre_ko2iblnd_show_net(struct cYAML *lndparams,
-			 struct lnet_ioctl_config_lnd_tunables *tunables)
+lustre_o2iblnd_show_tun(struct cYAML *lndparams,
+			struct lnet_ioctl_config_o2iblnd_tunables *lnd_cfg)
 {
-	struct lnet_ioctl_config_o2iblnd_tunables *lnd_cfg;
-
-	lnd_cfg = &tunables->lt_tun_u.lt_o2ib;
-
 	if (cYAML_create_number(lndparams, "peercredits_hiw",
 				lnd_cfg->lnd_peercredits_hiw) == NULL)
-		return -1;
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
 	if (cYAML_create_number(lndparams, "map_on_demand",
 				lnd_cfg->lnd_map_on_demand) == NULL)
-		return -1;
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
 	if (cYAML_create_number(lndparams, "concurrent_sends",
 				lnd_cfg->lnd_concurrent_sends) == NULL)
-		return -1;
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
 	if (cYAML_create_number(lndparams, "fmr_pool_size",
 				lnd_cfg->lnd_fmr_pool_size) == NULL)
-		return -1;
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
 	if (cYAML_create_number(lndparams, "fmr_flush_trigger",
 				lnd_cfg->lnd_fmr_flush_trigger) == NULL)
-		return -1;
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
 	if (cYAML_create_number(lndparams, "fmr_cache",
 				lnd_cfg->lnd_fmr_cache) == NULL)
-		return -1;
-	return 0;
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
+	return LUSTRE_CFG_RC_NO_ERR;
 }
 
 int
-lustre_interface_show_net(struct cYAML *interfaces, unsigned int index,
-			  bool detail, struct lnet_ioctl_config_data *data,
-			  struct lnet_ioctl_net_config *net_config)
+lustre_net_show_tunables(struct cYAML *tunables,
+			 struct lnet_ioctl_config_lnd_cmn_tunables *cmn)
 {
-	char ni_index[2]; /* LNET_MAX_INTERFACES is only 16 */
 
-	if (strlen(net_config->ni_interfaces[index]) == 0)
-		return 0;
 
-	snprintf(ni_index, sizeof(ni_index), "%d", index);
-	if (cYAML_create_string(interfaces, ni_index,
-				net_config->ni_interfaces[index]) == NULL)
-		return -1;
+	if (cYAML_create_number(tunables, "peer_timeout",
+				cmn->lct_peer_timeout)
+					== NULL)
+		goto out;
 
-	if (detail) {
-		__u32 net = LNET_NETTYP(LNET_NIDNET(data->cfg_nid));
-		struct lnet_ioctl_config_lnd_tunables *lnd_cfg;
-		struct cYAML *lndparams;
+	if (cYAML_create_number(tunables, "peer_credits",
+				cmn->lct_peer_tx_credits)
+					== NULL)
+		goto out;
 
-		if (data->cfg_config_u.cfg_net.net_interface_count == 0 ||
-		    net != O2IBLND)
-			return 0;
+	if (cYAML_create_number(tunables,
+				"peer_buffer_credits",
+				cmn->lct_peer_rtr_credits)
+					== NULL)
+		goto out;
 
-		lndparams = cYAML_create_object(interfaces, "lnd tunables");
-		if (lndparams == NULL)
-			return -1;
+	if (cYAML_create_number(tunables, "credits",
+				cmn->lct_max_tx_credits)
+					== NULL)
+		goto out;
 
-		lnd_cfg = (struct lnet_ioctl_config_lnd_tunables *)net_config->cfg_bulk;
-		if (lustre_ko2iblnd_show_net(lndparams, lnd_cfg) < 0)
-			return -1;
-	}
-	return 0;
+	return LUSTRE_CFG_RC_NO_ERR;
+
+out:
+	return LUSTRE_CFG_RC_OUT_OF_MEM;
+}
+
+int
+lustre_ni_show_tunables(struct cYAML *lnd_tunables,
+			__u32 net_type,
+			struct lnet_lnd_tunables *lnd)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+
+	if (net_type == O2IBLND)
+		rc = lustre_o2iblnd_show_tun(lnd_tunables,
+					     &lnd->lnd_tun_u.lnd_o2ib);
+
+	return rc;
 }
 
 static void
-lustre_ko2iblnd_parse_net(struct cYAML *lndparams,
-			  struct lnet_ioctl_config_lnd_tunables *lnd_cfg)
+yaml_extract_o2ib_tun(struct cYAML *tree,
+		      struct lnet_ioctl_config_o2iblnd_tunables *lnd_cfg)
 {
 	struct cYAML *map_on_demand = NULL, *concurrent_sends = NULL;
 	struct cYAML *fmr_pool_size = NULL, *fmr_cache = NULL;
-	struct cYAML *fmr_flush_trigger = NULL;
+	struct cYAML *fmr_flush_trigger = NULL, *lndparams = NULL;
+
+	lndparams = cYAML_get_object_item(tree, "lnd tunables");
+	if (!lndparams)
+		return;
 
 	map_on_demand = cYAML_get_object_item(lndparams, "map_on_demand");
-	lnd_cfg->lt_tun_u.lt_o2ib.lnd_map_on_demand =
+	lnd_cfg->lnd_map_on_demand =
 		(map_on_demand) ? map_on_demand->cy_valueint : 0;
 
 	concurrent_sends = cYAML_get_object_item(lndparams, "concurrent_sends");
-	lnd_cfg->lt_tun_u.lt_o2ib.lnd_concurrent_sends =
+	lnd_cfg->lnd_concurrent_sends =
 		(concurrent_sends) ? concurrent_sends->cy_valueint : 0;
 
 	fmr_pool_size = cYAML_get_object_item(lndparams, "fmr_pool_size");
-	lnd_cfg->lt_tun_u.lt_o2ib.lnd_fmr_pool_size =
+	lnd_cfg->lnd_fmr_pool_size =
 		(fmr_pool_size) ? fmr_pool_size->cy_valueint : 0;
 
 	fmr_flush_trigger = cYAML_get_object_item(lndparams,
 						  "fmr_flush_trigger");
-	lnd_cfg->lt_tun_u.lt_o2ib.lnd_fmr_flush_trigger =
+	lnd_cfg->lnd_fmr_flush_trigger =
 		(fmr_flush_trigger) ? fmr_flush_trigger->cy_valueint : 0;
 
 	fmr_cache = cYAML_get_object_item(lndparams, "fmr_cache");
-	lnd_cfg->lt_tun_u.lt_o2ib.lnd_fmr_cache =
+	lnd_cfg->lnd_fmr_cache =
 		(fmr_cache) ? fmr_cache->cy_valueint : 0;
 }
 
+
 void
-lustre_interface_parse(struct cYAML *lndparams, const char *dev_name,
-		       struct lnet_ioctl_config_lnd_tunables *lnd_cfg)
+lustre_yaml_extract_lnd_tunables(struct cYAML *tree,
+				 __u32 net_type,
+				 struct lnet_lnd_tunables *tun)
 {
-	if (dev_name != NULL && strstr(dev_name, "ib"))
-		lustre_ko2iblnd_parse_net(lndparams, lnd_cfg);
+	if (net_type == O2IBLND)
+		yaml_extract_o2ib_tun(tree,
+				      &tun->lnd_tun_u.lnd_o2ib);
+
 }
+

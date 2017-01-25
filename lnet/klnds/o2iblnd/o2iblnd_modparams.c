@@ -164,7 +164,7 @@ kiblnd_msg_queue_size(int version, lnet_ni_t *ni)
 	if (version == IBLND_MSG_VERSION_1)
 		return IBLND_MSG_QUEUE_SIZE_V1;
 	else if (ni)
-		return ni->ni_peertxcredits;
+		return ni->ni_net->net_tunables.lct_peer_tx_credits;
 	else
 		return peer_credits;
 }
@@ -173,21 +173,17 @@ int
 kiblnd_tunables_setup(lnet_ni_t *ni)
 {
 	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
+	struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables;
 
 	/*
 	 * if there was no tunables specified, setup the tunables to be
 	 * defaulted
 	 */
-	if (!ni->ni_lnd_tunables) {
-		LIBCFS_ALLOC(ni->ni_lnd_tunables,
-			     sizeof(*ni->ni_lnd_tunables));
-		if (!ni->ni_lnd_tunables)
-			return -ENOMEM;
-
-		memcpy(&ni->ni_lnd_tunables->lt_tun_u.lt_o2ib,
+	if (!ni->ni_lnd_tunables_set)
+		memcpy(&ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib,
 		       &default_tunables, sizeof(*tunables));
-	}
-	tunables = &ni->ni_lnd_tunables->lt_tun_u.lt_o2ib;
+
+	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
 
 	/* Current API version */
 	tunables->lnd_version = 0;
@@ -198,35 +194,39 @@ kiblnd_tunables_setup(lnet_ni_t *ni)
 		return -EINVAL;
 	}
 
-	if (!ni->ni_peertimeout)
-		ni->ni_peertimeout = peer_timeout;
+	net_tunables = &ni->ni_net->net_tunables;
 
-	if (!ni->ni_maxtxcredits)
-		ni->ni_maxtxcredits = credits;
+	if (net_tunables->lct_peer_timeout == -1)
+		net_tunables->lct_peer_timeout = peer_timeout;
 
-	if (!ni->ni_peertxcredits)
-		ni->ni_peertxcredits = peer_credits;
+	if (net_tunables->lct_max_tx_credits == -1)
+		net_tunables->lct_max_tx_credits = credits;
 
-	if (!ni->ni_peerrtrcredits)
-		ni->ni_peerrtrcredits = peer_buffer_credits;
+	if (net_tunables->lct_peer_tx_credits == -1)
+		net_tunables->lct_peer_tx_credits = peer_credits;
 
-	if (ni->ni_peertxcredits < IBLND_CREDITS_DEFAULT)
-		ni->ni_peertxcredits = IBLND_CREDITS_DEFAULT;
+	if (net_tunables->lct_peer_rtr_credits == -1)
+		net_tunables->lct_peer_rtr_credits = peer_buffer_credits;
 
-	if (ni->ni_peertxcredits > IBLND_CREDITS_MAX)
-		ni->ni_peertxcredits = IBLND_CREDITS_MAX;
+	if (net_tunables->lct_peer_tx_credits < IBLND_CREDITS_DEFAULT)
+		net_tunables->lct_peer_tx_credits = IBLND_CREDITS_DEFAULT;
 
-	if (ni->ni_peertxcredits > credits)
-		ni->ni_peertxcredits = credits;
+	if (net_tunables->lct_peer_tx_credits > IBLND_CREDITS_MAX)
+		net_tunables->lct_peer_tx_credits = IBLND_CREDITS_MAX;
+
+	if (net_tunables->lct_peer_tx_credits >
+	    net_tunables->lct_max_tx_credits)
+		net_tunables->lct_peer_tx_credits =
+			net_tunables->lct_max_tx_credits;
 
 	if (!tunables->lnd_peercredits_hiw)
 		tunables->lnd_peercredits_hiw = peer_credits_hiw;
 
-	if (tunables->lnd_peercredits_hiw < ni->ni_peertxcredits / 2)
-		tunables->lnd_peercredits_hiw = ni->ni_peertxcredits / 2;
+	if (tunables->lnd_peercredits_hiw < net_tunables->lct_peer_tx_credits / 2)
+		tunables->lnd_peercredits_hiw = net_tunables->lct_peer_tx_credits / 2;
 
-	if (tunables->lnd_peercredits_hiw >= ni->ni_peertxcredits)
-		tunables->lnd_peercredits_hiw = ni->ni_peertxcredits - 1;
+	if (tunables->lnd_peercredits_hiw >= net_tunables->lct_peer_tx_credits)
+		tunables->lnd_peercredits_hiw = net_tunables->lct_peer_tx_credits - 1;
 
 	if (tunables->lnd_map_on_demand < 0 ||
 	    tunables->lnd_map_on_demand > IBLND_MAX_RDMA_FRAGS) {
@@ -243,22 +243,24 @@ kiblnd_tunables_setup(lnet_ni_t *ni)
 		if (tunables->lnd_map_on_demand > 0 &&
 		    tunables->lnd_map_on_demand <= IBLND_MAX_RDMA_FRAGS / 8) {
 			tunables->lnd_concurrent_sends =
-						ni->ni_peertxcredits * 2;
+					net_tunables->lct_peer_tx_credits * 2;
 		} else {
-			tunables->lnd_concurrent_sends = ni->ni_peertxcredits;
+			tunables->lnd_concurrent_sends =
+				net_tunables->lct_peer_tx_credits;
 		}
 	}
 
-	if (tunables->lnd_concurrent_sends > ni->ni_peertxcredits * 2)
-		tunables->lnd_concurrent_sends = ni->ni_peertxcredits * 2;
+	if (tunables->lnd_concurrent_sends > net_tunables->lct_peer_tx_credits * 2)
+		tunables->lnd_concurrent_sends = net_tunables->lct_peer_tx_credits * 2;
 
-	if (tunables->lnd_concurrent_sends < ni->ni_peertxcredits / 2)
-		tunables->lnd_concurrent_sends = ni->ni_peertxcredits / 2;
+	if (tunables->lnd_concurrent_sends < net_tunables->lct_peer_tx_credits / 2)
+		tunables->lnd_concurrent_sends = net_tunables->lct_peer_tx_credits / 2;
 
-	if (tunables->lnd_concurrent_sends < ni->ni_peertxcredits) {
+	if (tunables->lnd_concurrent_sends < net_tunables->lct_peer_tx_credits) {
 		CWARN("Concurrent sends %d is lower than message "
 		      "queue size: %d, performance may drop slightly.\n",
-		      tunables->lnd_concurrent_sends, ni->ni_peertxcredits);
+		      tunables->lnd_concurrent_sends,
+		      net_tunables->lct_peer_tx_credits);
 	}
 
 	if (!tunables->lnd_fmr_pool_size)
