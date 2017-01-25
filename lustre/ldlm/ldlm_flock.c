@@ -270,19 +270,10 @@ static void ldlm_flock_cancel_on_deadlock(struct ldlm_lock *lock,
  * This function looks for any conflicts for \a lock in the granted or
  * waiting queues. The lock is granted if no conflicts are found in
  * either queue.
- *
- * It is also responsible for splitting a lock if a portion of the lock
- * is released.
- *
- * If \a first_enq is 0 (ie, called from ldlm_reprocess_queue):
- *   - blocking ASTs have already been sent
- *
- * If \a first_enq is 1 (ie, called from ldlm_lock_enqueue):
- *   - blocking ASTs have not been sent yet, so list of conflicting locks
- *     would be collected and ASTs sent.
  */
 int
-ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags, int first_enq,
+ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
+			enum ldlm_process_intention intention,
 			enum ldlm_error *err, struct list_head *work_list)
 {
 	struct ldlm_resource *res = req->l_resource;
@@ -353,7 +344,7 @@ reprocess:
                         if (!ldlm_flocks_overlap(lock, req))
                                 continue;
 
-			if (!first_enq) {
+			if (intention != LDLM_PROCESS_ENQUEUE) {
 				reprocess_failed = 1;
 				if (ldlm_flock_deadlock(req, lock)) {
 					ldlm_flock_cancel_on_deadlock(req,
@@ -570,7 +561,7 @@ reprocess:
 
         if (*flags != LDLM_FL_WAIT_NOREPROC) {
 #ifdef HAVE_SERVER_SUPPORT
-                if (first_enq) {
+		if (intention == LDLM_PROCESS_ENQUEUE) {
                         /* If this is an unlock, reprocess the waitq and
                          * send completions ASTs for locks that can now be
                          * granted. The only problem with doing this
@@ -578,16 +569,17 @@ reprocess:
                          * newly granted locks will be sent before the unlock
                          * completion is sent. It shouldn't be an issue. Also
                          * note that ldlm_process_flock_lock() will recurse,
-                         * but only once because first_enq will be false from
-                         * ldlm_reprocess_queue. */
+			 * but only once because 'intention' won't be
+			 * LDLM_PROCESS_ENQUEUE from ldlm_reprocess_queue. */
 			if ((mode == LCK_NL) && overlaps) {
 				struct list_head rpc_list;
                                 int rc;
 
 				INIT_LIST_HEAD(&rpc_list);
 restart:
-                                ldlm_reprocess_queue(res, &res->lr_waiting,
-                                                     &rpc_list);
+				ldlm_reprocess_queue(res, &res->lr_waiting,
+						     &rpc_list,
+						     LDLM_PROCESS_RESCAN);
 
                                 unlock_res_and_lock(req);
                                 rc = ldlm_run_ast_work(ns, &rpc_list,

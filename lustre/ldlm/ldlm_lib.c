@@ -1579,7 +1579,7 @@ static void target_finish_recovery(struct lu_target *lut)
 			obd->obd_stale_clients == 1 ? "was" : "were");
 	}
 
-        ldlm_reprocess_all_ns(obd->obd_namespace);
+	ldlm_reprocess_recovery_done(obd->obd_namespace);
 	spin_lock(&obd->obd_recovery_task_lock);
 	if (!list_empty(&obd->obd_req_replay_queue) ||
 	    !list_empty(&obd->obd_lock_replay_queue) ||

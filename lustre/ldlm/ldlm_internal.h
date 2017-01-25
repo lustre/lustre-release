@@ -149,7 +149,11 @@ void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
 			    struct list_head *work_list);
 #ifdef HAVE_SERVER_SUPPORT
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
-			 struct list_head *work_list);
+			 struct list_head *work_list,
+			 enum ldlm_process_intention intention);
+int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
+			      struct list_head *rpc_list, __u64 grant_flags);
+void ldlm_discard_bl_list(struct list_head *bl_list);
 #endif
 int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list,
                       ldlm_desc_ast_t ast_type);
@@ -181,28 +185,26 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
 #ifdef HAVE_SERVER_SUPPORT
 /* ldlm_plain.c */
 int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
-			    int first_enq, enum ldlm_error *err,
-			    struct list_head *work_list);
+			    enum ldlm_process_intention intention,
+			    enum ldlm_error *err, struct list_head *work_list);
 
 /* ldlm_inodebits.c */
 int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
-				int first_enq, enum ldlm_error *err,
+				enum ldlm_process_intention intention,
+				enum ldlm_error *err,
 				struct list_head *work_list);
-#endif
-
 /* ldlm_extent.c */
-#ifdef HAVE_SERVER_SUPPORT
 int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
-			     int first_enq, enum ldlm_error *err,
-			     struct list_head *work_list);
+			     enum ldlm_process_intention intention,
+			     enum ldlm_error *err, struct list_head *work_list);
 #endif
 void ldlm_extent_add_lock(struct ldlm_resource *res, struct ldlm_lock *lock);
 void ldlm_extent_unlink_lock(struct ldlm_lock *lock);
 
 /* ldlm_flock.c */
 int ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
-			    int first_enq, enum ldlm_error *err,
-			    struct list_head *work_list);
+			    enum ldlm_process_intention intention,
+			    enum ldlm_error *err, struct list_head *work_list);
 int ldlm_init_flock_export(struct obd_export *exp);
 void ldlm_destroy_flock_export(struct obd_export *exp);
 

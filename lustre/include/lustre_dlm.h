@@ -1191,8 +1191,41 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 # define LDLM_ERROR(lock, fmt, a...) ((void)0)
 #endif
 
+/*
+ * Three intentions can be used for the policy functions in
+ * ldlm_processing_policy.
+ *
+ * LDLM_PROCESS_RESCAN:
+ *
+ * It's used when policy functions are called from ldlm_reprocess_queue() to
+ * reprocess the wait & convert list and try to grant locks, blocking ASTs
+ * have already been sent in this situation, completion ASTs need be sent for
+ * the locks being granted.
+ *
+ * LDLM_PROCESS_ENQUEUE:
+ *
+ * It's used when policy functions are called from ldlm_lock_enqueue() to
+ * process the wait & convert list for handling an enqueue request, blocking
+ * ASTs have not been sent yet, so list of conflicting locks would be
+ * collected and ASTs sent.
+ *
+ * LDLM_PROCESS_RECOVERY:
+ *
+ * It's used when policy functions are called from ldlm_reprocess_queue() to
+ * reprocess the wait & convert list when recovery done. In case of blocking
+ * ASTs are lost before recovery, it needs not only to grant locks if
+ * available, but also send blocking ASTs to the locks doesn't have AST sent
+ * flag. Completion ASTs need be sent for the locks being granted.
+ */
+enum ldlm_process_intention {
+	LDLM_PROCESS_RESCAN = 0,
+	LDLM_PROCESS_ENQUEUE = 1,
+	LDLM_PROCESS_RECOVERY = 2,
+};
+
 typedef int (*ldlm_processing_policy)(struct ldlm_lock *lock, __u64 *flags,
-				      int first_enq, enum ldlm_error *err,
+				      enum ldlm_process_intention intention,
+				      enum ldlm_error *err,
 				      struct list_head *work_list);
 
 /**
@@ -1421,7 +1454,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock,
 void ldlm_lock_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
 void ldlm_reprocess_all(struct ldlm_resource *res);
-void ldlm_reprocess_all_ns(struct ldlm_namespace *ns);
+void ldlm_reprocess_recovery_done(struct ldlm_namespace *ns);
 void ldlm_lock_dump_handle(int level, const struct lustre_handle *lockh);
 void ldlm_unlink_lock_skiplist(struct ldlm_lock *req);
 

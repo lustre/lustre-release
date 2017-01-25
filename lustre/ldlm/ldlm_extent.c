@@ -737,34 +737,6 @@ void ldlm_resource_prolong(struct ldlm_prolong_args *arg)
 }
 EXPORT_SYMBOL(ldlm_resource_prolong);
 
-
-/**
- * Discard all AST work items from list.
- *
- * If for whatever reason we do not want to send ASTs to conflicting locks
- * anymore, disassemble the list with this function.
- */
-static void discard_bl_list(struct list_head *bl_list)
-{
-	struct list_head *tmp, *pos;
-        ENTRY;
-
-	list_for_each_safe(pos, tmp, bl_list) {
-                struct ldlm_lock *lock =
-			list_entry(pos, struct ldlm_lock, l_bl_ast);
-
-		list_del_init(&lock->l_bl_ast);
-		LASSERT(ldlm_is_ast_sent(lock));
-		ldlm_clear_ast_sent(lock);
-                LASSERT(lock->l_bl_ast_run == 0);
-                LASSERT(lock->l_blocking_lock);
-                LDLM_LOCK_RELEASE(lock->l_blocking_lock);
-                lock->l_blocking_lock = NULL;
-                LDLM_LOCK_RELEASE(lock);
-        }
-        EXIT;
-}
-
 /**
  * Process a granting attempt for extent lock.
  * Must be called with ns lock held.
@@ -772,17 +744,10 @@ static void discard_bl_list(struct list_head *bl_list)
  * This function looks for any conflicts for \a lock in the granted or
  * waiting queues. The lock is granted if no conflicts are found in
  * either queue.
- *
- * If \a first_enq is 0 (ie, called from ldlm_reprocess_queue):
- *   - blocking ASTs have already been sent
- *
- * If \a first_enq is 1 (ie, called from ldlm_lock_enqueue):
- *   - blocking ASTs have not been sent yet, so list of conflicting locks
- *     would be collected and ASTs sent.
  */
 int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
-			     int first_enq, enum ldlm_error *err,
-			     struct list_head *work_list)
+			     enum ldlm_process_intention intention,
+			     enum ldlm_error *err, struct list_head *work_list)
 {
 	struct ldlm_resource *res = lock->l_resource;
 	struct list_head rpc_list;
@@ -798,7 +763,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 	check_res_locked(res);
 	*err = ELDLM_OK;
 
-        if (!first_enq) {
+	if (intention == LDLM_PROCESS_RESCAN) {
                 /* Careful observers will note that we don't handle -EWOULDBLOCK
                  * here, but it's ok for a non-obvious reason -- compat_queue
                  * can only return -EWOULDBLOCK if (flags & BLOCK_NOWAIT).
@@ -823,79 +788,44 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
                 RETURN(LDLM_ITER_CONTINUE);
         }
 
+	LASSERT((intention == LDLM_PROCESS_ENQUEUE && work_list == NULL) ||
+		(intention == LDLM_PROCESS_RECOVERY && work_list != NULL));
  restart:
         contended_locks = 0;
         rc = ldlm_extent_compat_queue(&res->lr_granted, lock, flags, err,
                                       &rpc_list, &contended_locks);
-        if (rc < 0)
-                GOTO(out, rc); /* lock was destroyed */
-        if (rc == 2)
-                goto grant;
+	if (rc < 0)
+		GOTO(out_rpc_list, rc);
 
-        rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock, flags, err,
-                                       &rpc_list, &contended_locks);
-        if (rc2 < 0)
-                GOTO(out, rc = rc2); /* lock was destroyed */
-
-        if (rc + rc2 == 2) {
-        grant:
-                ldlm_extent_policy(res, lock, flags);
-                ldlm_resource_unlink_lock(lock);
-                ldlm_grant_lock(lock, NULL);
-        } else {
-                /* If either of the compat_queue()s returned failure, then we
-                 * have ASTs to send and must go onto the waiting list.
-                 *
-                 * bug 2322: we used to unlink and re-add here, which was a
-                 * terrible folly -- if we goto restart, we could get
-                 * re-ordered!  Causes deadlock, because ASTs aren't sent! */
-		if (list_empty(&lock->l_res_link))
-                        ldlm_resource_add_lock(res, &res->lr_waiting, lock);
-                unlock_res(res);
-                rc = ldlm_run_ast_work(ldlm_res_to_ns(res), &rpc_list,
-                                       LDLM_WORK_BL_AST);
-
-                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_OST_FAIL_RACE) &&
-                    !ns_is_client(ldlm_res_to_ns(res)))
-                        class_fail_export(lock->l_export);
-
-		lock_res(res);
-		if (rc == -ERESTART) {
-			/* 15715: The lock was granted and destroyed after
-			 * resource lock was dropped. Interval node was freed
-			 * in ldlm_lock_destroy. Anyway, this always happens
-			 * when a client is being evicted. So it would be
-			 * ok to return an error. -jay */
-			if (ldlm_is_destroyed(lock)) {
-				*err = -EAGAIN;
-				GOTO(out, rc = -EAGAIN);
-			}
-
-			/* lock was granted while resource was unlocked. */
-			if (lock->l_granted_mode == lock->l_req_mode) {
-				/* bug 11300: if the lock has been granted,
-				 * break earlier because otherwise, we will go
-				 * to restart and ldlm_resource_unlink will be
-				 * called and it causes the interval node to be
-				 * freed. Then we will fail at
-				 * ldlm_extent_add_lock() */
-				*flags &= ~LDLM_FL_BLOCKED_MASK;
-				GOTO(out, rc = 0);
-			}
-
-			GOTO(restart, rc);
-		}
-
-		/* this way we force client to wait for the lock
-		 * endlessly once the lock is enqueued -bzzz */
-		*flags |= LDLM_FL_BLOCK_GRANTED | LDLM_FL_NO_TIMEOUT;
-
+	rc2 = 0;
+	if (rc != 2) {
+		rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock,
+					       flags, err, &rpc_list,
+					       &contended_locks);
+		if (rc2 < 0)
+			GOTO(out_rpc_list, rc = rc2);
 	}
-	RETURN(0);
-out:
+
+	if (rc + rc2 != 2) {
+		/* Adding LDLM_FL_NO_TIMEOUT flag to granted lock to force
+		 * client to wait for the lock endlessly once the lock is
+		 * enqueued -bzzz */
+		rc = ldlm_handle_conflict_lock(lock, flags, &rpc_list,
+					       LDLM_FL_NO_TIMEOUT);
+		if (rc == -ERESTART)
+			GOTO(restart, rc);
+		*err = rc;
+	} else {
+		ldlm_extent_policy(res, lock, flags);
+		ldlm_resource_unlink_lock(lock);
+		ldlm_grant_lock(lock, work_list);
+		rc = 0;
+	}
+
+out_rpc_list:
 	if (!list_empty(&rpc_list)) {
 		LASSERT(!ldlm_is_ast_discard_data(lock));
-		discard_bl_list(&rpc_list);
+		ldlm_discard_bl_list(&rpc_list);
 	}
 	RETURN(rc);
 }

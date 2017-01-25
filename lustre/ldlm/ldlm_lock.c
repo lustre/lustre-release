@@ -1835,7 +1835,7 @@ enum ldlm_error ldlm_lock_enqueue(struct ldlm_namespace *ns,
         }
 
         policy = ldlm_processing_policy_table[res->lr_type];
-        policy(lock, flags, 1, &rc, NULL);
+	policy(lock, flags, LDLM_PROCESS_ENQUEUE, &rc, NULL);
         GOTO(out, rc);
 #else
         } else {
@@ -1860,7 +1860,8 @@ out:
  * Must be called with resource lock held.
  */
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
-			 struct list_head *work_list)
+			 struct list_head *work_list,
+			 enum ldlm_process_intention intention)
 {
 	struct list_head *tmp, *pos;
 	ldlm_processing_policy policy;
@@ -1873,6 +1874,8 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 
 	policy = ldlm_processing_policy_table[res->lr_type];
 	LASSERT(policy);
+	LASSERT(intention == LDLM_PROCESS_RESCAN ||
+		intention == LDLM_PROCESS_RECOVERY);
 
 	list_for_each_safe(tmp, pos, queue) {
 		struct ldlm_lock *pending;
@@ -1882,13 +1885,116 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
                 CDEBUG(D_INFO, "Reprocessing lock %p\n", pending);
 
                 flags = 0;
-                rc = policy(pending, &flags, 0, &err, work_list);
-                if (rc != LDLM_ITER_CONTINUE)
-                        break;
+		rc = policy(pending, &flags, intention, &err, work_list);
+		/*
+		 * When this is called from recovery done, we always want
+		 * to scan the whole list no matter what 'rc' is returned.
+		 */
+		if (rc != LDLM_ITER_CONTINUE &&
+		    intention == LDLM_PROCESS_RESCAN)
+			break;
         }
 
-        RETURN(rc);
+        RETURN(intention == LDLM_PROCESS_RESCAN ? rc : LDLM_ITER_CONTINUE);
 }
+
+/**
+ * Conflicting locks are detected for a lock to be enqueued, add the lock
+ * into waiting list and send blocking ASTs to the conflicting locks.
+ *
+ * \param[in] lock		The lock to be enqueued.
+ * \param[out] flags		Lock flags for the lock to be enqueued.
+ * \param[in] rpc_list		Conflicting locks list.
+ * \param[in] grant_flags	extra flags when granting a lock.
+ *
+ * \retval -ERESTART:	Some lock was instantly canceled while sending
+ * 			blocking ASTs, caller needs to re-check conflicting
+ * 			locks.
+ * \retval -EAGAIN:	Lock was destroyed, caller should return error.
+ * \reval 0:		Lock is successfully added in waiting list.
+ */
+int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
+			      struct list_head *rpc_list, __u64 grant_flags)
+{
+	struct ldlm_resource *res = lock->l_resource;
+	int rc;
+	ENTRY;
+
+	check_res_locked(res);
+
+	/* If either of the compat_queue()s returned failure, then we
+	 * have ASTs to send and must go onto the waiting list.
+	 *
+	 * bug 2322: we used to unlink and re-add here, which was a
+	 * terrible folly -- if we goto restart, we could get
+	 * re-ordered!  Causes deadlock, because ASTs aren't sent! */
+	if (list_empty(&lock->l_res_link))
+		ldlm_resource_add_lock(res, &res->lr_waiting, lock);
+	unlock_res(res);
+
+	rc = ldlm_run_ast_work(ldlm_res_to_ns(res), rpc_list,
+			       LDLM_WORK_BL_AST);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_OST_FAIL_RACE) &&
+	    !ns_is_client(ldlm_res_to_ns(res)))
+		class_fail_export(lock->l_export);
+
+	lock_res(res);
+	if (rc == -ERESTART) {
+		/* 15715: The lock was granted and destroyed after
+		 * resource lock was dropped. Interval node was freed
+		 * in ldlm_lock_destroy. Anyway, this always happens
+		 * when a client is being evicted. So it would be
+		 * ok to return an error. -jay */
+		if (ldlm_is_destroyed(lock))
+			RETURN(-EAGAIN);
+
+		/* lock was granted while resource was unlocked. */
+		if (lock->l_granted_mode == lock->l_req_mode) {
+			/* bug 11300: if the lock has been granted,
+			 * break earlier because otherwise, we will go
+			 * to restart and ldlm_resource_unlink will be
+			 * called and it causes the interval node to be
+			 * freed. Then we will fail at
+			 * ldlm_extent_add_lock() */
+			*flags &= ~LDLM_FL_BLOCKED_MASK;
+			RETURN(0);
+		}
+
+		RETURN(rc);
+	}
+	*flags |= (LDLM_FL_BLOCK_GRANTED | grant_flags);
+
+	RETURN(0);
+}
+
+/**
+ * Discard all AST work items from list.
+ *
+ * If for whatever reason we do not want to send ASTs to conflicting locks
+ * anymore, disassemble the list with this function.
+ */
+void ldlm_discard_bl_list(struct list_head *bl_list)
+{
+	struct list_head *tmp, *pos;
+        ENTRY;
+
+	list_for_each_safe(pos, tmp, bl_list) {
+                struct ldlm_lock *lock =
+			list_entry(pos, struct ldlm_lock, l_bl_ast);
+
+		list_del_init(&lock->l_bl_ast);
+		LASSERT(ldlm_is_ast_sent(lock));
+		ldlm_clear_ast_sent(lock);
+		LASSERT(lock->l_bl_ast_run == 0);
+		LASSERT(lock->l_blocking_lock);
+		LDLM_LOCK_RELEASE(lock->l_blocking_lock);
+		lock->l_blocking_lock = NULL;
+		LDLM_LOCK_RELEASE(lock);
+	}
+	EXIT;
+}
+
 #endif
 
 /**
@@ -2102,38 +2208,6 @@ out:
 	return rc;
 }
 
-static int reprocess_one_queue(struct ldlm_resource *res, void *closure)
-{
-        ldlm_reprocess_all(res);
-        return LDLM_ITER_CONTINUE;
-}
-
-static int ldlm_reprocess_res(struct cfs_hash *hs, struct cfs_hash_bd *bd,
-			      struct hlist_node *hnode, void *arg)
-{
-        struct ldlm_resource *res = cfs_hash_object(hs, hnode);
-        int    rc;
-
-        rc = reprocess_one_queue(res, arg);
-
-        return rc == LDLM_ITER_STOP;
-}
-
-/**
- * Iterate through all resources on a namespace attempting to grant waiting
- * locks.
- */
-void ldlm_reprocess_all_ns(struct ldlm_namespace *ns)
-{
-	ENTRY;
-
-	if (ns != NULL) {
-		cfs_hash_for_each_nolock(ns->ns_rs_hash,
-					 ldlm_reprocess_res, NULL, 0);
-	}
-	EXIT;
-}
-
 /**
  * Try to grant all waiting locks on a resource.
  *
@@ -2142,7 +2216,8 @@ void ldlm_reprocess_all_ns(struct ldlm_namespace *ns)
  * Typically called after some resource locks are cancelled to see
  * if anything could be granted as a result of the cancellation.
  */
-void ldlm_reprocess_all(struct ldlm_resource *res)
+static void __ldlm_reprocess_all(struct ldlm_resource *res,
+				 enum ldlm_process_intention intention)
 {
 	struct list_head rpc_list;
 #ifdef HAVE_SERVER_SUPPORT
@@ -2165,11 +2240,13 @@ void ldlm_reprocess_all(struct ldlm_resource *res)
 	    atomic_read(&obd->obd_req_replay_clients) == 0)
 		RETURN_EXIT;
 restart:
-        lock_res(res);
-        rc = ldlm_reprocess_queue(res, &res->lr_converting, &rpc_list);
-        if (rc == LDLM_ITER_CONTINUE)
-                ldlm_reprocess_queue(res, &res->lr_waiting, &rpc_list);
-        unlock_res(res);
+	lock_res(res);
+	rc = ldlm_reprocess_queue(res, &res->lr_converting, &rpc_list,
+				  intention);
+	if (rc == LDLM_ITER_CONTINUE)
+		ldlm_reprocess_queue(res, &res->lr_waiting, &rpc_list,
+				     intention);
+	unlock_res(res);
 
         rc = ldlm_run_ast_work(ldlm_res_to_ns(res), &rpc_list,
                                LDLM_WORK_CP_AST);
@@ -2189,7 +2266,37 @@ restart:
 #endif
         EXIT;
 }
+
+void ldlm_reprocess_all(struct ldlm_resource *res)
+{
+	__ldlm_reprocess_all(res, LDLM_PROCESS_RESCAN);
+}
 EXPORT_SYMBOL(ldlm_reprocess_all);
+
+static int ldlm_reprocess_res(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+			      struct hlist_node *hnode, void *arg)
+{
+	struct ldlm_resource *res = cfs_hash_object(hs, hnode);
+
+	/* This is only called once after recovery done. LU-8306. */
+	__ldlm_reprocess_all(res, LDLM_PROCESS_RECOVERY);
+	return 0;
+}
+
+/**
+ * Iterate through all resources on a namespace attempting to grant waiting
+ * locks.
+ */
+void ldlm_reprocess_recovery_done(struct ldlm_namespace *ns)
+{
+	ENTRY;
+
+	if (ns != NULL) {
+		cfs_hash_for_each_nolock(ns->ns_rs_hash,
+					 ldlm_reprocess_res, NULL, 0);
+	}
+	EXIT;
+}
 
 static bool is_bl_done(struct ldlm_lock *lock)
 {
@@ -2557,7 +2664,8 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock,
 		ldlm_processing_policy policy;
 
                 policy = ldlm_processing_policy_table[res->lr_type];
-                rc = policy(lock, &pflags, 0, &err, &rpc_list);
+		rc = policy(lock, &pflags, LDLM_PROCESS_RESCAN, &err,
+			    &rpc_list);
                 if (rc == LDLM_ITER_STOP) {
                         lock->l_req_mode = old_mode;
                         if (res->lr_type == LDLM_EXTENT)

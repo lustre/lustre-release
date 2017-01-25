@@ -189,7 +189,7 @@ int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 		rc = LDLM_ITER_CONTINUE;
 	} else {
 		__u64 tmpflags = 0;
-		rc = policy(lock, &tmpflags, 0, &err, NULL);
+		rc = policy(lock, &tmpflags, LDLM_PROCESS_RESCAN, &err, NULL);
 		check_res_locked(res);
 	}
 
