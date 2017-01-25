@@ -1345,63 +1345,87 @@ static int lfs_setstripe(int argc, char **argv)
 	__u32				 comp_id = 0;
 	struct llapi_layout		*layout = NULL;
 
-	struct option		 long_opts[] = {
+	struct option long_opts[] = {
 		/* --block is only valid in migrate mode */
-		{"block",	 no_argument,	    0, 'b'},
-		{"comp-add",	 no_argument,	    0, LFS_COMP_ADD_OPT},
-		{"component-add", no_argument,	    0, LFS_COMP_ADD_OPT},
-		{"comp-del",	 no_argument,	    0, LFS_COMP_DEL_OPT},
-		{"component-del", no_argument,	    0, LFS_COMP_DEL_OPT},
-		{"comp-flags",	 required_argument, 0, LFS_COMP_FLAGS_OPT},
-		{"component-flags", required_argument, 0, LFS_COMP_FLAGS_OPT},
-		{"comp-set",	 no_argument,	    0, LFS_COMP_SET_OPT},
-		{"component-set", no_argument,	    0, LFS_COMP_SET_OPT},
+	{ .val = 'b',	.name = "block",	.has_arg = no_argument},
+	{ .val = LFS_COMP_ADD_OPT,
+			.name = "comp-add",	.has_arg = no_argument},
+	{ .val = LFS_COMP_ADD_OPT,
+			.name = "component-add",
+						.has_arg = no_argument},
+	{ .val = LFS_COMP_DEL_OPT,
+			.name = "comp-del",	.has_arg = no_argument},
+	{ .val = LFS_COMP_DEL_OPT,
+			.name = "component-del",
+						.has_arg = no_argument},
+	{ .val = LFS_COMP_FLAGS_OPT,
+			.name = "comp-flags",	.has_arg = required_argument},
+	{ .val = LFS_COMP_FLAGS_OPT,
+			.name = "component-flags",
+						.has_arg = required_argument},
+	{ .val = LFS_COMP_SET_OPT,
+			.name = "comp-set",	.has_arg = no_argument},
+	{ .val = LFS_COMP_SET_OPT,
+			.name = "component-set",
+						.has_arg = no_argument},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-		/* This formerly implied "stripe-count", but was explicitly
-		 * made "stripe-count" for consistency with other options,
-		 * and to separate it from "mdt-count" when DNE arrives. */
-		{"count",	 required_argument, 0, 'c'},
+	/* This formerly implied "stripe-count", but was explicitly
+	 * made "stripe-count" for consistency with other options,
+	 * and to separate it from "mdt-count" when DNE arrives. */
+	{ .val = 'c',	.name = "count",	.has_arg = required_argument },
 #endif
-		{"stripe-count", required_argument, 0, 'c'},
-		{"stripe_count", required_argument, 0, 'c'},
-		{"delete",       no_argument,       0, 'd'},
-		{"comp-end",	 required_argument, 0, 'E'},
-		{"component-end", required_argument, 0, 'E'},
-		/* dirstripe {"mdt-hash",     required_argument, 0, 'H'}, */
+	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument},
+	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument},
+	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
+	{ .val = 'E',	.name = "comp-end",	.has_arg = required_argument},
+	{ .val = 'E',	.name = "component-end",
+						.has_arg = required_argument},
+	/* dirstripe {"mdt-hash",     required_argument, 0, 'H'}, */
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-		/* This formerly implied "stripe-index", but was explicitly
-		 * made "stripe-index" for consistency with other options,
-		 * and to separate it from "mdt-index" when DNE arrives. */
-		{"index",	 required_argument, 0, 'i'},
+	/* This formerly implied "stripe-index", but was explicitly
+	 * made "stripe-index" for consistency with other options,
+	 * and to separate it from "mdt-index" when DNE arrives. */
+	{ .val = 'i',	.name = "index",	.has_arg = required_argument },
 #endif
-		{"stripe-index", required_argument, 0, 'i'},
-		{"stripe_index", required_argument, 0, 'i'},
-		{"comp-id",	 required_argument, 0, 'I'},
-		{"component-id", required_argument, 0, 'I'},
-		{"mdt",		 required_argument, 0, 'm'},
-		{"mdt-index",	 required_argument, 0, 'm'},
-		{"mdt_index",	 required_argument, 0, 'm'},
-		/* --non-block is only valid in migrate mode */
-		{"non-block",	 no_argument,	    0, 'n'},
-		{"ost",		 required_argument, 0, 'o'},
+	{ .val = 'i',	.name = "stripe-index",	.has_arg = required_argument},
+	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument},
+	{ .val = 'I',	.name = "comp-id",	.has_arg = required_argument},
+	{ .val = 'I',	.name = "component-id",	.has_arg = required_argument},
+	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument},
+	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument},
+	{ .val = 'm',	.name = "mdt_index",	.has_arg = required_argument},
+	/* --non-block is only valid in migrate mode */
+	{ .val = 'n',	.name = "non-block",	.has_arg = no_argument},
+	{ .val = 'o',	.name = "ost",		.has_arg = required_argument},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-		{"ost-list",     required_argument, 0, 'o'},
-		{"ost_list",     required_argument, 0, 'o'},
+	{ .val = 'o',	.name = "ost-list",	.has_arg = required_argument },
+	{ .val = 'o',	.name = "ost_list",	.has_arg = required_argument },
 #endif
-		{"pool",	 required_argument, 0, 'p'},
+	{ .val = 'p',	.name = "pool",		.has_arg = required_argument },
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-		/* This formerly implied "--stripe-size", but was confusing
-		 * with "lfs find --size|-s", which means "file size", so use
-		 * the consistent "--stripe-size|-S" for all commands. */
-		{"size",	 required_argument, 0, 's'},
+	/* This formerly implied "--stripe-size", but was confusing
+	 * with "lfs find --size|-s", which means "file size", so use
+	 * the consistent "--stripe-size|-S" for all commands. */
+	{ .val = 's',	.name = "size",		.has_arg = required_argument },
 #endif
-		{"stripe-size",  required_argument, 0, 'S'},
-		{"stripe_size",  required_argument, 0, 'S'},
-		/* dirstripe {"mdt-count",    required_argument, 0, 'T'}, */
-		/* --verbose is only valid in migrate mode */
-		{"verbose",	 no_argument,	    0, 'v'},
-		{0, 0, 0, 0}
-	};
+	{ .val = 'S',	.name = "stripe-size",	.has_arg = required_argument },
+	{ .val = 'S',	.name = "stripe_size",	.has_arg = required_argument },
+	/* dirstripe {"mdt-count",    required_argument, 0, 'T'}, */
+	/* --verbose is only valid in migrate mode */
+	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+	{ .val = LFS_COMP_ADD_OPT,
+			.name = "component-add",
+						.has_arg = no_argument },
+	{ .val = LFS_COMP_DEL_OPT,
+			.name = "component-del",
+						.has_arg = no_argument },
+	{ .val = LFS_COMP_FLAGS_OPT,
+			.name = "component-flags",
+						.has_arg = required_argument },
+	{ .val = LFS_COMP_SET_OPT,
+			.name = "component-set",
+						.has_arg = no_argument },
+	{ .name = NULL } };
 
 	setstripe_args_init(&lsa);
 
