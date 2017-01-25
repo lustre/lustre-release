@@ -836,17 +836,19 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	if (body == NULL)
 		GOTO(out, rc = -EPROTO);
 
-	body->oa.o_flags = OBD_FL_DELORPHAN;
+	body->oa.o_flags = 0;
 	body->oa.o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
 
 	/* unless this is the very first DELORPHAN (when we really
 	 * can destroy some orphans), just tell OST to recreate
 	 * missing objects in our precreate pool */
 	spin_lock(&d->opd_pre_lock);
-	if (d->opd_pre->osp_pre_delorphan_sent)
+	if (d->opd_pre->osp_pre_delorphan_sent) {
 		fid = d->opd_pre_last_created_fid;
-	else
+	} else {
 		fid = d->opd_last_used_fid;
+		body->oa.o_flags = OBD_FL_DELORPHAN;
+	}
 	spin_unlock(&d->opd_pre_lock);
 	fid_to_ostid(&fid, &body->oa.o_oi);
 
