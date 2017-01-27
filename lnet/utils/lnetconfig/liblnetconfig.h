@@ -377,17 +377,4 @@ int lustre_lnet_parse_interfaces(char *intf_str,
 int lustre_lnet_parse_nids(char *nids, char **array, int size,
 			   char ***out_array);
 
-/*
- * lustre_lnet_send_dbg_task
- *	send a debug task to be carried out in the kernel. This API will
- *	not be exposed to the user through lnetctl utility. It can only be
- *	executed by being called directly.
- *		dbg_task: The task to be carried out
- *		dbg_info: task specific information
- */
-int lustre_lnet_send_dbg_task(enum lnet_dbg_task dbg_task,
-			      struct lnet_dbg_task_info *dbg_info,
-			      struct cYAML **show_rc,
-			      struct cYAML **err_rc);
-
 #endif /* LIB_LNET_CONFIG_API_H */

@@ -93,10 +93,6 @@ struct lnet_ioctl_net_config {
 /* # different router buffer pools */
 #define LNET_NRBPOOLS		(LNET_LARGE_BUF_IDX + 1)
 
-enum lnet_dbg_task {
-	LNET_DBG_INCR_DLC_SEQ = 0
-};
-
 struct lnet_ioctl_pool_cfg {
 	struct {
 		__u32 pl_npages;
@@ -193,24 +189,6 @@ struct lnet_ioctl_peer {
 	union {
 		struct lnet_peer_ni_credit_info  pr_peer_credits;
 	} pr_lnd_u;
-};
-
-struct lnet_dbg_task_info {
-	/*
-	 * TODO: a union can be added if the task requires more
-	 * information from user space to be carried out in kernel space.
-	 */
-};
-
-/*
- * This structure is intended to allow execution of debugging tasks. This
- * is not intended to be backwards compatible. Extra tasks can be added in
- * the future
- */
-struct lnet_ioctl_dbg {
-	struct libcfs_ioctl_hdr dbg_hdr;
-	enum lnet_dbg_task dbg_task;
-	char dbg_bulk[0];
 };
 
 struct lnet_ioctl_peer_cfg {
