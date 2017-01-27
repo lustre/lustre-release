@@ -1668,7 +1668,7 @@ ksocknal_send_hello(struct lnet_ni *ni, struct ksock_conn *conn,
 	/* CAVEAT EMPTOR: this byte flips 'ipaddrs' */
 	struct ksock_net *net = (struct ksock_net *)ni->ni_data;
 
-	LASSERT(hello->kshm_nips <= LNET_NUM_INTERFACES);
+	LASSERT(hello->kshm_nips <= LNET_INTERFACES_NUM);
 
 	/* rely on caller to hold a ref on socket so it wouldn't disappear */
 	LASSERT(conn->ksnc_proto != NULL);

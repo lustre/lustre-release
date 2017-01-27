@@ -608,7 +608,7 @@ ksocknal_recv_hello_v1(struct ksock_conn *conn, struct ksock_hello_msg *hello,
         hello->kshm_nips            = le32_to_cpu (hdr->payload_length) /
                                          sizeof (__u32);
 
-	if (hello->kshm_nips > LNET_NUM_INTERFACES) {
+	if (hello->kshm_nips > LNET_INTERFACES_NUM) {
 		CERROR("Bad nips %d from ip %pI4h\n",
 		       hello->kshm_nips, &conn->ksnc_ipaddr);
 		rc = -EPROTO;
@@ -678,7 +678,7 @@ ksocknal_recv_hello_v2(struct ksock_conn *conn, struct ksock_hello_msg *hello,
                 __swab32s(&hello->kshm_nips);
         }
 
-	if (hello->kshm_nips > LNET_NUM_INTERFACES) {
+	if (hello->kshm_nips > LNET_INTERFACES_NUM) {
 		CERROR("Bad nips %d from ip %pI4h\n",
 		       hello->kshm_nips, &conn->ksnc_ipaddr);
 		return -EPROTO;

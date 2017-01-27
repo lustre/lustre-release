@@ -1623,7 +1623,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 			if (interfaces == NULL)
 				goto out;
 
-			for (j = 0; j < LNET_NUM_INTERFACES; j++) {
+			for (j = 0; j < LNET_INTERFACES_NUM; j++) {
 				if (strlen(ni_data->lic_ni_intf[j]) > 0) {
 					snprintf(str_buf,
 						 sizeof(str_buf), "%d", j);

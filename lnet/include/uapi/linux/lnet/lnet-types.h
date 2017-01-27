@@ -247,7 +247,12 @@ typedef struct lnet_counters {
  * defined here because it is used in LNet data structures that are
  * common to all LNDs.
  */
-#define LNET_NUM_INTERFACES	16
+#define LNET_INTERFACES_NUM	16
+
+/* The minimum number of interfaces per node supported by LNet. */
+#define LNET_INTERFACES_MIN	16
+/* The default - arbitrary - value of the lnet_max_interfaces tunable. */
+#define LNET_INTERFACES_MAX_DEFAULT	200
 
 /**
  * Objects maintained by the LNet are accessed through handles. Handle types
