@@ -1443,11 +1443,18 @@ again:
 		return -ESHUTDOWN;
 	}
 
-	peer = lnet_find_or_create_peer_locked(dst_nid, cpt);
-	if (IS_ERR(peer)) {
+	/*
+	 * lnet_nid2peerni_locked() is the path that will find an
+	 * existing peer_ni, or create one and mark it as having been
+	 * created due to network traffic.
+	 */
+	lpni = lnet_nid2peerni_locked(dst_nid, cpt);
+	if (IS_ERR(lpni)) {
 		lnet_net_unlock(cpt);
-		return PTR_ERR(peer);
+		return PTR_ERR(lpni);
 	}
+	peer = lpni->lpni_peer_net->lpn_peer;
+	lnet_peer_ni_decref_locked(lpni);
 
 	/* If peer is not healthy then can not send anything to it */
 	if (!lnet_is_peer_healthy_locked(peer)) {
