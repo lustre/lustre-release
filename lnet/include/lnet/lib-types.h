@@ -403,7 +403,7 @@ typedef struct lnet_ni {
 	 * equivalent interfaces to use
 	 * This is an array because socklnd bonding can still be configured
 	 */
-	char			*ni_interfaces[LNET_MAX_INTERFACES];
+	char			*ni_interfaces[LNET_NUM_INTERFACES];
 	struct net		*ni_net_ns;     /* original net namespace */
 } lnet_ni_t;
 

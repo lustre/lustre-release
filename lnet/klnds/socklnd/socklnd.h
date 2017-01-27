@@ -183,7 +183,7 @@ typedef struct
 	int		  ksnn_npeers;		/* # peers */
 	int		  ksnn_shutdown;	/* shutting down? */
 	int		  ksnn_ninterfaces;	/* IP interfaces */
-	ksock_interface_t ksnn_interfaces[LNET_MAX_INTERFACES];
+	ksock_interface_t ksnn_interfaces[LNET_NUM_INTERFACES];
 } ksock_net_t;
 
 /** connd timeout */
@@ -415,21 +415,21 @@ typedef struct ksock_peer
 	atomic_t              ksnp_refcount; /* # users */
 	int                   ksnp_sharecount;  /* lconf usage counter */
 	int                   ksnp_closing;  /* being closed */
-        int                   ksnp_accepting;/* # passive connections pending */
-        int                   ksnp_error;    /* errno on closing last conn */
-        __u64                 ksnp_zc_next_cookie;/* ZC completion cookie */
-        __u64                 ksnp_incarnation;   /* latest known peer_ni incarnation */
-        struct ksock_proto   *ksnp_proto;    /* latest known peer_ni protocol */
+	int                   ksnp_accepting;/* # passive connections pending */
+	int                   ksnp_error;    /* errno on closing last conn */
+	__u64                 ksnp_zc_next_cookie;/* ZC completion cookie */
+	__u64                 ksnp_incarnation;   /* latest known peer_ni incarnation */
+	struct ksock_proto   *ksnp_proto;    /* latest known peer_ni protocol */
 	struct list_head	ksnp_conns;	/* all active connections */
 	struct list_head	ksnp_routes;	/* routes */
 	struct list_head	ksnp_tx_queue;	/* waiting packets */
 	spinlock_t	      ksnp_lock;	/* serialize, g_lock unsafe */
 	/* zero copy requests wait for ACK  */
 	struct list_head	ksnp_zc_req_list;
-        cfs_time_t            ksnp_send_keepalive; /* time to send keepalive */
-	struct lnet_ni            *ksnp_ni;       /* which network */
-        int                   ksnp_n_passive_ips; /* # of... */
-        __u32                 ksnp_passive_ips[LNET_MAX_INTERFACES]; /* preferred local interfaces */
+	cfs_time_t            ksnp_send_keepalive; /* time to send keepalive */
+	struct lnet_ni       *ksnp_ni;       /* which network */
+	int                   ksnp_n_passive_ips; /* # of... */
+	__u32                 ksnp_passive_ips[LNET_NUM_INTERFACES]; /* preferred local interfaces */
 } ksock_peer_ni_t;
 
 typedef struct ksock_connreq

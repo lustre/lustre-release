@@ -3233,19 +3233,19 @@ kiblnd_startup(struct lnet_ni *ni)
 
 	kiblnd_tunables_setup(ni);
 
-        if (ni->ni_interfaces[0] != NULL) {
-                /* Use the IPoIB interface specified in 'networks=' */
+	if (ni->ni_interfaces[0] != NULL) {
+		/* Use the IPoIB interface specified in 'networks=' */
 
-                CLASSERT (LNET_MAX_INTERFACES > 1);
-                if (ni->ni_interfaces[1] != NULL) {
-                        CERROR("Multiple interfaces not supported\n");
-                        goto failed;
-                }
+		CLASSERT(LNET_NUM_INTERFACES > 1);
+		if (ni->ni_interfaces[1] != NULL) {
+			CERROR("Multiple interfaces not supported\n");
+			goto failed;
+		}
 
-                ifname = ni->ni_interfaces[0];
-        } else {
-                ifname = *kiblnd_tunables.kib_default_ipif;
-        }
+		ifname = ni->ni_interfaces[0];
+	} else {
+		ifname = *kiblnd_tunables.kib_default_ipif;
+	}
 
         if (strlen(ifname) >= sizeof(ibdev->ibd_ifname)) {
                 CERROR("IPoIB interface name too long: %s\n", ifname);

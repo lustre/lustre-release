@@ -1666,22 +1666,22 @@ int
 ksocknal_send_hello(struct lnet_ni *ni, ksock_conn_t *conn,
 		    lnet_nid_t peer_nid, struct ksock_hello_msg *hello)
 {
-        /* CAVEAT EMPTOR: this byte flips 'ipaddrs' */
-        ksock_net_t         *net = (ksock_net_t *)ni->ni_data;
+	/* CAVEAT EMPTOR: this byte flips 'ipaddrs' */
+	ksock_net_t         *net = (ksock_net_t *)ni->ni_data;
 
-        LASSERT (hello->kshm_nips <= LNET_MAX_INTERFACES);
+	LASSERT(hello->kshm_nips <= LNET_NUM_INTERFACES);
 
-        /* rely on caller to hold a ref on socket so it wouldn't disappear */
-        LASSERT (conn->ksnc_proto != NULL);
+	/* rely on caller to hold a ref on socket so it wouldn't disappear */
+	LASSERT(conn->ksnc_proto != NULL);
 
-        hello->kshm_src_nid         = ni->ni_nid;
-        hello->kshm_dst_nid         = peer_nid;
-        hello->kshm_src_pid         = the_lnet.ln_pid;
+	hello->kshm_src_nid         = ni->ni_nid;
+	hello->kshm_dst_nid         = peer_nid;
+	hello->kshm_src_pid         = the_lnet.ln_pid;
 
-        hello->kshm_src_incarnation = net->ksnn_incarnation;
-        hello->kshm_ctype           = conn->ksnc_type;
+	hello->kshm_src_incarnation = net->ksnn_incarnation;
+	hello->kshm_ctype           = conn->ksnc_type;
 
-        return conn->ksnc_proto->pro_send_hello(conn, hello);
+	return conn->ksnc_proto->pro_send_hello(conn, hello);
 }
 
 static int

@@ -241,7 +241,13 @@ typedef struct lnet_counters {
 #define LNET_NI_STATUS_DOWN	0xdeadface
 #define LNET_NI_STATUS_INVALID	0x00000000
 
-#define LNET_MAX_INTERFACES	16
+/*
+ * This is a hard-coded limit on the number of interfaces supported by
+ * the interface bonding implemented by the ksocknal LND. It must be
+ * defined here because it is used in LNet data structures that are
+ * common to all LNDs.
+ */
+#define LNET_NUM_INTERFACES	16
 
 /**
  * Objects maintained by the LNet are accessed through handles. Handle types
