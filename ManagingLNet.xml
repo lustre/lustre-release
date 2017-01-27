@@ -234,21 +234,36 @@ ents&quot;</screen>
     </section>
   </section>
   <section xml:id="managinglnet.configuringroutes" condition='l24'>
-    <title><indexterm><primary>LNet</primary></indexterm>Dynamically Configuring LNet Routes</title>
-    <para>Two scripts are provided: <literal>lustre/scripts/lustre_routes_config</literal> and <literal>lustre/scripts/lustre_routes_conversion</literal>.</para>
-    <para><literal>lustre_routes_config</literal> sets or cleans up LNet routes from the specified config file.  <literal>/etc/sysconfig/lustre_routes.conf</literal> file can be used to automatically configure routes on LNet startup. </para>
-    <para><literal>lustre_routes_conversion</literal> converts a legacy routes configuration file to the new syntax, which is parsed by <literal>lustre_routes_config</literal>.</para>
+    <title><indexterm><primary>LNet</primary></indexterm>Dynamically Configuring
+    LNet Routes</title>
+    <para>Two scripts are provided:
+    <literal>lustre/scripts/lustre_routes_config</literal> and
+    <literal>lustre/scripts/lustre_routes_conversion</literal>.</para>
+    <para><literal>lustre_routes_config</literal> sets or cleans up LNet routes
+    from the specified config file.  The
+    <literal>/etc/sysconfig/lnet_routes.conf</literal> file can be used to
+    automatically configure routes on LNet startup. </para>
+    <para><literal>lustre_routes_conversion</literal> converts a legacy routes
+    configuration file to the new syntax, which is parsed by
+    <literal>lustre_routes_config</literal>.</para>
     <section remap="h3">
-      <title><indexterm><primary>LNet</primary></indexterm><literal>lustre_routes_config</literal></title>
+      <title><indexterm><primary>LNet</primary></indexterm>
+      <literal>lustre_routes_config</literal></title>
       <para><literal>lustre_routes_config</literal> usage is as follows</para>
       <screen><literal>lustre_routes_config [--setup|--cleanup|--dry-run|--verbose] <replaceable>config_file</replaceable></literal>
          --setup: configure routes listed in config_file
          --cleanup: unconfigure routes listed in config_file
          --dry-run: echo commands to be run, but do not execute them
          --verbose: echo commands before they are executed </screen>
-      <para> The format of the file which is passed into the script is as follows: </para>
+      <para> The format of the file which is passed into the script is as
+      follows: </para>
       <para><literal><replaceable>network</replaceable>: { gateway: <replaceable>gateway</replaceable>@<replaceable>exit_network</replaceable> [hop: <replaceable>hop</replaceable>] [priority: <replaceable>priority</replaceable>] }</literal></para>
-      <para> An LNet router is identified when its local NID appears within the list of routes.  However, this can not be achieved by the use of this script, since the script only adds extra routes after the router is identified.  To ensure that a router is identified correctly, make sure to add its local NID in the routes parameter in the modprobe lustre configuration file.  See <xref linkend='dbdoclet.50438293_15350'/>.</para>
+      <para> An LNet router is identified when its local NID appears within the
+      list of routes.  However, this can not be achieved by the use of this
+      script, since the script only adds extra routes after the router is
+      identified.  To ensure that a router is identified correctly, make sure to
+      add its local NID in the routes parameter in the modprobe lustre
+      configuration file.  See <xref linkend='dbdoclet.50438293_15350'/>.</para>
     </section>
     <section remap="h3">
       <title><indexterm><primary>LNet</primary></indexterm><literal>lustre_routes_conversion</literal></title>
