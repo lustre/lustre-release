@@ -711,8 +711,11 @@ lnet_parse_rc_info(struct lnet_rc_data *rcd)
 
 	/* Determine the number of NIs for which there is data. */
 	nnis = pbuf->pb_info.pi_nnis;
-	if (pbuf->pb_nnis < nnis)
+	if (pbuf->pb_nnis < nnis) {
+		if (rcd->rcd_nnis < nnis)
+			rcd->rcd_nnis = nnis;
 		nnis = pbuf->pb_nnis;
+	}
 
 	list_for_each_entry(rte, &gw->lpni_routes, lr_gwlist) {
 		int	down = 0;
@@ -726,7 +729,7 @@ lnet_parse_rc_info(struct lnet_rc_data *rcd)
 		}
 
 		for (i = 0; i < nnis; i++) {
-			lnet_ni_status_t *stat = &pbuf->pb_info.pi_ni[i];
+			struct lnet_ni_status *stat = &pbuf->pb_info.pi_ni[i];
 			lnet_nid_t	 nid = stat->ns_nid;
 
 			if (nid == LNET_NID_ANY) {
@@ -939,28 +942,47 @@ lnet_destroy_rc_data(struct lnet_rc_data *rcd)
 	LIBCFS_FREE(rcd, sizeof(*rcd));
 }
 
-static struct lnet_rc_data *
-lnet_create_rc_data_locked(struct lnet_peer_ni *gateway)
+static lnet_rc_data_t *
+lnet_update_rc_data_locked(struct lnet_peer_ni *gateway)
 {
-	struct lnet_rc_data		*rcd = NULL;
-	struct lnet_ping_buffer	*pbuf;
-	int			rc;
-	int			i;
+	struct lnet_handle_md mdh;
+	struct lnet_rc_data *rcd;
+	struct lnet_ping_buffer *pbuf = NULL;
+	int nnis = LNET_INTERFACES_MIN;
+	int rc;
+	int i;
+
+	rcd = gateway->lpni_rcd;
+	if (rcd) {
+		nnis = rcd->rcd_nnis;
+		mdh = rcd->rcd_mdh;
+		LNetInvalidateMDHandle(&rcd->rcd_mdh);
+		pbuf = rcd->rcd_pingbuffer;
+		rcd->rcd_pingbuffer = NULL;
+	} else {
+		LNetInvalidateMDHandle(&mdh);
+	}
 
 	lnet_net_unlock(gateway->lpni_cpt);
 
-	LIBCFS_ALLOC(rcd, sizeof(*rcd));
-	if (rcd == NULL)
-		goto out;
+	if (rcd) {
+		LNetMDUnlink(mdh);
+		lnet_ping_buffer_decref(pbuf);
+	} else {
+		LIBCFS_ALLOC(rcd, sizeof(*rcd));
+		if (rcd == NULL)
+			goto out;
 
-	LNetInvalidateMDHandle(&rcd->rcd_mdh);
-	INIT_LIST_HEAD(&rcd->rcd_list);
+		LNetInvalidateMDHandle(&rcd->rcd_mdh);
+		INIT_LIST_HEAD(&rcd->rcd_list);
+		rcd->rcd_nnis = nnis;
+	}
 
-	pbuf = lnet_ping_buffer_alloc(LNET_MAX_RTR_NIS, GFP_NOFS);
+	pbuf = lnet_ping_buffer_alloc(nnis, GFP_NOFS);
 	if (pbuf == NULL)
 		goto out;
 
-	for (i = 0; i < LNET_MAX_RTR_NIS; i++) {
+	for (i = 0; i < nnis; i++) {
 		pbuf->pb_info.pi_ni[i].ns_nid = LNET_NID_ANY;
 		pbuf->pb_info.pi_ni[i].ns_status = LNET_NI_STATUS_INVALID;
 	}
@@ -969,7 +991,7 @@ lnet_create_rc_data_locked(struct lnet_peer_ni *gateway)
 	LASSERT(!LNetEQHandleIsInvalid(the_lnet.ln_rc_eqh));
 	rc = LNetMDBind((struct lnet_md){.start     = &pbuf->pb_info,
 				    .user_ptr  = rcd,
-				    .length    = LNET_RTR_PINGINFO_SIZE,
+				    .length    = LNET_PING_INFO_SIZE(nnis),
 				    .threshold = LNET_MD_THRESH_INF,
 				    .options   = LNET_MD_TRUNCATE,
 				    .eq_handle = the_lnet.ln_rc_eqh},
@@ -977,33 +999,37 @@ lnet_create_rc_data_locked(struct lnet_peer_ni *gateway)
 			&rcd->rcd_mdh);
 	if (rc < 0) {
 		CERROR("Can't bind MD: %d\n", rc);
-		goto out;
+		goto out_ping_buffer_decref;
 	}
 	LASSERT(rc == 0);
 
 	lnet_net_lock(gateway->lpni_cpt);
-	/* router table changed or someone has created rcd for this gateway */
-	if (!lnet_isrouter(gateway) || gateway->lpni_rcd != NULL) {
-		lnet_net_unlock(gateway->lpni_cpt);
-		goto out;
-	}
+	/* Check if this is still a router. */
+	if (!lnet_isrouter(gateway))
+		goto out_unlock;
+	/* Check if someone else installed router data. */
+	if (gateway->lpni_rcd && gateway->lpni_rcd != rcd)
+		goto out_unlock;
 
-	lnet_peer_ni_addref_locked(gateway);
-	rcd->rcd_gateway = gateway;
-	gateway->lpni_rcd = rcd;
+	/* Install and/or update the router data. */
+	if (!gateway->lpni_rcd) {
+		lnet_peer_ni_addref_locked(gateway);
+		rcd->rcd_gateway = gateway;
+		gateway->lpni_rcd = rcd;
+	}
 	gateway->lpni_ping_notsent = 0;
 
 	return rcd;
 
+out_unlock:
+	lnet_net_unlock(gateway->lpni_cpt);
+	rc = LNetMDUnlink(mdh);
+	LASSERT(rc == 0);
+out_ping_buffer_decref:
+	lnet_ping_buffer_decref(pbuf);
 out:
-	if (rcd != NULL) {
-		if (!LNetMDHandleIsInvalid(rcd->rcd_mdh)) {
-			rc = LNetMDUnlink(rcd->rcd_mdh);
-			LASSERT(rc == 0);
-		}
+	if (rcd && rcd != gateway->lpni_rcd)
 		lnet_destroy_rc_data(rcd);
-	}
-
 	lnet_net_lock(gateway->lpni_cpt);
 	return gateway->lpni_rcd;
 }
@@ -1046,9 +1072,9 @@ lnet_ping_router_locked(struct lnet_peer_ni *rtr)
 		return;
 	}
 
-	rcd = rtr->lpni_rcd != NULL ?
-	      rtr->lpni_rcd : lnet_create_rc_data_locked(rtr);
-
+	rcd = rtr->lpni_rcd;
+	if (!rcd || rcd->rcd_nnis > rcd->rcd_pingbuffer->pb_nnis)
+		rcd = lnet_update_rc_data_locked(rtr);
 	if (rcd == NULL)
 		return;
 
