@@ -1237,6 +1237,11 @@ lnet_ping_target_update(struct lnet_ping_buffer *pbuf,
 
 	if (!the_lnet.ln_routing)
 		pbuf->pb_info.pi_features |= LNET_PING_FEAT_RTE_DISABLED;
+
+	/* Ensure only known feature bits have been set. */
+	LASSERT(pbuf->pb_info.pi_features & LNET_PING_FEAT_BITS);
+	LASSERT(!(pbuf->pb_info.pi_features & ~LNET_PING_FEAT_BITS));
+
 	lnet_ping_target_install_locked(pbuf);
 
 	if (the_lnet.ln_ping_target) {

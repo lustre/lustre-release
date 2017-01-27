@@ -416,6 +416,22 @@ typedef struct lnet_ni {
 #define LNET_PING_FEAT_BASE		(1 << 0)	/* just a ping */
 #define LNET_PING_FEAT_NI_STATUS	(1 << 1)	/* return NI status */
 #define LNET_PING_FEAT_RTE_DISABLED	(1 << 2)	/* Routing enabled */
+#define LNET_PING_FEAT_MULTI_RAIL	(1 << 3)	/* Multi-Rail aware */
+#define LNET_PING_FEAT_DISCOVERY	(1 << 4)	/* Supports Discovery */
+
+/*
+ * All ping feature bits fit to hit the wire.
+ * In lnet_assert_wire_constants() this is compared against its open-coded
+ * value, and in lnet_ping_target_update() it is used to verify that no
+ * unknown bits have been set.
+ * New feature bits can be added, just be aware that this does change the
+ * over-the-wire protocol.
+ */
+#define LNET_PING_FEAT_BITS		(LNET_PING_FEAT_BASE | \
+					 LNET_PING_FEAT_NI_STATUS | \
+					 LNET_PING_FEAT_RTE_DISABLED | \
+					 LNET_PING_FEAT_MULTI_RAIL | \
+					 LNET_PING_FEAT_DISCOVERY)
 
 typedef struct lnet_ping_info {
 	__u32			pi_magic;
