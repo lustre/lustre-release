@@ -789,7 +789,27 @@ int lnet_peer_buffer_credits(struct lnet_net *net);
 int lnet_router_checker_start(void);
 void lnet_router_checker_stop(void);
 void lnet_router_ni_update_locked(struct lnet_peer_ni *gw, __u32 net);
-void lnet_swap_pinginfo(struct lnet_ping_info *info);
+void lnet_swap_pinginfo(struct lnet_ping_buffer *pbuf);
+
+int lnet_ping_info_validate(struct lnet_ping_info *pinfo);
+struct lnet_ping_buffer *lnet_ping_buffer_alloc(int nnis, gfp_t gfp);
+void lnet_ping_buffer_free(struct lnet_ping_buffer *pbuf);
+
+static inline void lnet_ping_buffer_addref(struct lnet_ping_buffer *pbuf)
+{
+	atomic_inc(&pbuf->pb_refcnt);
+}
+
+static inline void lnet_ping_buffer_decref(struct lnet_ping_buffer *pbuf)
+{
+	if (atomic_dec_and_test(&pbuf->pb_refcnt))
+		lnet_ping_buffer_free(pbuf);
+}
+
+static inline int lnet_ping_buffer_numref(struct lnet_ping_buffer *pbuf)
+{
+	return atomic_read(&pbuf->pb_refcnt);
+}
 
 int lnet_parse_ip2nets(char **networksp, char *ip2nets);
 int lnet_parse_routes(char *route_str, int *im_a_router);
