@@ -65,6 +65,7 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
 	LASSERT(!msg->msg_routing);
 
 	ev->type = ev_type;
+	ev->msg_type = msg->msg_type;
 
 	if (ev_type == LNET_EVENT_SEND) {
 		/* event for active message */
@@ -75,7 +76,6 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
 		ev->source.nid	  = LNET_NID_ANY;
 		ev->source.pid    = the_lnet.ln_pid;
 		ev->sender	  = LNET_NID_ANY;
-
 	} else {
 		/* event for passive message */
 		ev->target.pid	  = hdr->dest_pid;

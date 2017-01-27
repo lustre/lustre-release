@@ -658,6 +658,11 @@ typedef struct lnet_event {
 	 */
 	__u64               hdr_data;
 	/**
+	 * The message type, to ensure a handler for LNET_EVENT_SEND can
+	 * distinguish between LNET_MSG_GET and LNET_MSG_PUT.
+	 */
+	__u32               msg_type;
+	/**
 	 * Indicates the completion status of the operation. It's 0 for
 	 * successful operations, otherwise it's an error code.
 	 */
