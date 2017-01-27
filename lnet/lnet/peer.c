@@ -216,6 +216,7 @@ lnet_peer_alloc(lnet_nid_t nid)
 
 	INIT_LIST_HEAD(&lp->lp_on_lnet_peer_list);
 	INIT_LIST_HEAD(&lp->lp_peer_nets);
+	spin_lock_init(&lp->lp_lock);
 	lp->lp_primary_nid = nid;
 
 	/* TODO: update flags */
@@ -792,13 +793,15 @@ lnet_peer_add(lnet_nid_t nid, bool mr)
 	 *
 	 * TODO: update flags if necessary
 	 */
-	if (mr && !lp->lp_multi_rail) {
-		lp->lp_multi_rail = true;
-	} else if (!mr && lp->lp_multi_rail) {
+	spin_lock(&lp->lp_lock);
+	if (mr && !(lp->lp_state & LNET_PEER_MULTI_RAIL)) {
+		lp->lp_state |= LNET_PEER_MULTI_RAIL;
+	} else if (!mr && (lp->lp_state & LNET_PEER_MULTI_RAIL)) {
 		/* The mr state is sticky. */
-		CDEBUG(D_NET, "Cannot clear multi-flag from peer %s\n",
+		CDEBUG(D_NET, "Cannot clear multi-rail flag from peer %s\n",
 		       libcfs_nid2str(nid));
 	}
+	spin_unlock(&lp->lp_lock);
 
 	return 0;
 }
@@ -811,15 +814,18 @@ lnet_peer_add_nid(struct lnet_peer *lp, lnet_nid_t nid, bool mr)
 	LASSERT(lp);
 	LASSERT(nid != LNET_NID_ANY);
 
-	if (!mr && !lp->lp_multi_rail) {
+	spin_lock(&lp->lp_lock);
+	if (!mr && !(lp->lp_state & LNET_PEER_MULTI_RAIL)) {
+		spin_unlock(&lp->lp_lock);
 		CERROR("Cannot add nid %s to non-multi-rail peer %s\n",
 		       libcfs_nid2str(nid),
 		       libcfs_nid2str(lp->lp_primary_nid));
 		return -EPERM;
 	}
 
-	if (!lp->lp_multi_rail)
-		lp->lp_multi_rail = true;
+	if (!(lp->lp_state & LNET_PEER_MULTI_RAIL))
+		lp->lp_state |= LNET_PEER_MULTI_RAIL;
+	spin_unlock(&lp->lp_lock);
 
 	lpni = lnet_find_peer_ni_locked(nid);
 	if (!lpni)
@@ -1178,7 +1184,7 @@ int lnet_get_peer_info(__u32 idx, lnet_nid_t *primary_nid, lnet_nid_t *nid,
 		return -ENOENT;
 
 	*primary_nid = lp->lp_primary_nid;
-	*mr = lp->lp_multi_rail;
+	*mr = lnet_peer_is_multi_rail(lp);
 	*nid = lpni->lpni_nid;
 	snprintf(ni_info.cr_aliveness, LNET_MAX_STR_LEN, "NA");
 	if (lnet_isrouter(lpni) ||

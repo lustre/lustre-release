@@ -1462,8 +1462,8 @@ again:
 		return -EHOSTUNREACH;
 	}
 
-	if (!peer->lp_multi_rail && lnet_get_num_peer_nis(peer) > 1) {
-		lnet_net_unlock(cpt);
+	if (!lnet_peer_is_multi_rail(peer) &&
+	     lnet_get_num_peer_nis(peer) > 1) {
 		CERROR("peer %s is declared to be non MR capable, "
 		       "yet configured with more than one NID\n",
 		       libcfs_nid2str(dst_nid));
@@ -1489,7 +1489,7 @@ again:
 
 	if (msg->msg_type == LNET_MSG_REPLY ||
 	    msg->msg_type == LNET_MSG_ACK ||
-	    !peer->lp_multi_rail ||
+	    !lnet_peer_is_multi_rail(peer) ||
 	    best_ni) {
 		/*
 		 * for replies we want to respond on the same peer_ni we
@@ -1535,7 +1535,7 @@ again:
 				* if the router is not multi-rail then use the best_gw
 				* found to send the message to
 				*/
-				if (!peer->lp_multi_rail)
+				if (!lnet_peer_is_multi_rail(peer))
 					best_lpni = best_gw;
 				else
 					best_lpni = NULL;
@@ -1557,7 +1557,7 @@ again:
 	 * if the peer is not MR capable, then we should always send to it
 	 * using the first NI in the NET we determined.
 	 */
-	if (!peer->lp_multi_rail) {
+	if (!lnet_peer_is_multi_rail(peer)) {
 		if (!best_lpni) {
 			lnet_net_unlock(cpt);
 			CERROR("no route to %s\n",

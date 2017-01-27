@@ -912,4 +912,12 @@ lnet_peer_set_alive(struct lnet_peer_ni *lp)
 		lnet_notify_locked(lp, 0, 1, lp->lpni_last_alive);
 }
 
+static inline bool
+lnet_peer_is_multi_rail(struct lnet_peer *lp)
+{
+	if (lp->lp_state & LNET_PEER_MULTI_RAIL)
+		return true;
+	return false;
+}
+
 #endif
