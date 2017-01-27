@@ -2117,21 +2117,22 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	struct lnet_ioctl_peer_cfg peer_info;
 	struct lnet_peer_ni_credit_info *lpni_cri;
 	struct lnet_ioctl_element_stats *lpni_stats;
-	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, ncpt = 0, i = 0, j = 0;
+	lnet_nid_t *nidp;
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	int i;
+	int j;
 	int l_errno = 0;
+	__u32 count;
+	__u32 size;
 	struct cYAML *root = NULL, *peer = NULL, *peer_ni = NULL,
 		     *first_seq = NULL, *peer_root = NULL, *tmp = NULL;
 	char err_str[LNET_MAX_STR_LEN];
-	lnet_nid_t prev_primary_nid = LNET_NID_ANY, primary_nid = LNET_NID_ANY;
-	int data_size = sizeof(*lpni_cri) + sizeof(*lpni_stats);
-	char *data = malloc(data_size);
-	bool new_peer = true;
+	lnet_process_id_t *list = NULL;
+	void *data = NULL;
+	void *lpni_data;
 
 	snprintf(err_str, sizeof(err_str),
 		 "\"out of memory\"");
-
-	if (data == NULL)
-		goto out;
 
 	/* create struct cYAML root object */
 	root = cYAML_create_object(NULL, NULL);
@@ -2142,69 +2143,121 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	if (peer_root == NULL)
 		goto out;
 
-	if (knid != NULL)
-		primary_nid = libcfs_str2nid(knid);
-
-	do {
-		for (i = 0;; i++) {
-			memset(data, 0, data_size);
+	count = 1000;
+	size = count * sizeof(lnet_process_id_t);
+	list = malloc(size);
+	if (list == NULL) {
+		l_errno = ENOMEM;
+		goto out;
+	}
+	if (knid != NULL) {
+		list[0].nid = libcfs_str2nid(knid);
+		count = 1;
+	} else {
+		for (;;) {
 			memset(&peer_info, 0, sizeof(peer_info));
 			LIBCFS_IOC_INIT_V2(peer_info, prcfg_hdr);
 			peer_info.prcfg_hdr.ioc_len = sizeof(peer_info);
-			peer_info.prcfg_count = i;
-			peer_info.prcfg_bulk = (void *)data;
-			peer_info.prcfg_size = data_size;
+			peer_info.prcfg_size = size;
+			peer_info.prcfg_bulk = list;
 
-			rc = l_ioctl(LNET_DEV_ID,
-				     IOC_LIBCFS_GET_PEER_NI, &peer_info);
-			if (rc != 0) {
-				l_errno = errno;
+			l_errno = 0;
+			rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_PEER_LIST,
+				     &peer_info);
+			count = peer_info.prcfg_count;
+			if (rc == 0)
 				break;
-			}
-
-			if (primary_nid != LNET_NID_ANY &&
-			    primary_nid != peer_info.prcfg_prim_nid)
-					continue;
-
-			lpni_cri = peer_info.prcfg_bulk;
-			lpni_stats = peer_info.prcfg_bulk + sizeof(*lpni_cri);
-
-			peer = cYAML_create_seq_item(peer_root);
-			if (peer == NULL)
+			l_errno = errno;
+			if (l_errno != E2BIG) {
+				snprintf(err_str,
+					sizeof(err_str),
+					"\"cannot get peer list: %s\"",
+					strerror(l_errno));
+				rc = -l_errno;
 				goto out;
-
-			if (peer_info.prcfg_prim_nid != prev_primary_nid) {
-				prev_primary_nid = peer_info.prcfg_prim_nid;
-				new_peer = true;
 			}
-
-			if (new_peer) {
-				lnet_nid_t pnid = peer_info.prcfg_prim_nid;
-				if (cYAML_create_string(peer, "primary nid",
-							libcfs_nid2str(pnid))
-				    == NULL)
-					goto out;
-				if (cYAML_create_string(peer, "Multi-Rail",
-							peer_info.prcfg_mr ?
-							"True" : "False")
-				    == NULL)
-					goto out;
-				tmp = cYAML_create_seq(peer, "peer ni");
-				if (tmp == NULL)
-					goto out;
-				new_peer = false;
+			free(list);
+			size = peer_info.prcfg_size;
+			list = malloc(size);
+			if (list == NULL) {
+				l_errno = ENOMEM;
+				goto out;
 			}
+		}
+	}
 
-			if (first_seq == NULL)
-				first_seq = peer;
+	size = 4096;
+	data = malloc(size);
+	if (data == NULL) {
+		l_errno = ENOMEM;
+		goto out;
+	}
+	for (i = 0; i < count; i++) {
+		for (;;) {
+			memset(&peer_info, 0, sizeof(peer_info));
+			LIBCFS_IOC_INIT_V2(peer_info, prcfg_hdr);
+			peer_info.prcfg_hdr.ioc_len = sizeof(peer_info);
+			peer_info.prcfg_prim_nid = list[i].nid;
+			peer_info.prcfg_size = size;
+			peer_info.prcfg_bulk = data;
+
+			l_errno = 0;
+			rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_PEER_NI,
+				     &peer_info);
+			if (rc == 0)
+				break;
+			l_errno = errno;
+			if (l_errno != E2BIG) {
+				snprintf(err_str,
+					sizeof(err_str),
+					"\"cannot get peer information: %s\"",
+					strerror(l_errno));
+				rc = -l_errno;
+				goto out;
+			}
+			free(data);
+			size = peer_info.prcfg_size;
+			data = malloc(size);
+			if (data == NULL) {
+				l_errno = ENOMEM;
+				goto out;
+			}
+		}
+
+		peer = cYAML_create_seq_item(peer_root);
+		if (peer == NULL)
+			goto out;
+
+		if (first_seq == NULL)
+			first_seq = peer;
+
+		lnet_nid_t pnid = peer_info.prcfg_prim_nid;
+		if (cYAML_create_string(peer, "primary nid",
+					libcfs_nid2str(pnid))
+		    == NULL)
+			goto out;
+		if (cYAML_create_string(peer, "Multi-Rail",
+					peer_info.prcfg_mr ? "True" : "False")
+		    == NULL)
+			goto out;
+
+		tmp = cYAML_create_seq(peer, "peer ni");
+		if (tmp == NULL)
+			goto out;
+
+		lpni_data = data;
+		for (j = 0; j < peer_info.prcfg_count; j++) {
+			nidp = lpni_data;
+			lpni_cri = (void*)nidp + sizeof(nidp);
+			lpni_stats = (void *)lpni_cri + sizeof(*lpni_cri);
+			lpni_data = (void *)lpni_stats + sizeof(*lpni_stats);
 
 			peer_ni = cYAML_create_seq_item(tmp);
 			if (peer_ni == NULL)
 				goto out;
 
 			if (cYAML_create_string(peer_ni, "nid",
-						libcfs_nid2str
-						 (peer_info.prcfg_cfg_nid))
+						libcfs_nid2str(*nidp))
 			    == NULL)
 				goto out;
 
@@ -2265,18 +2318,7 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 						lpni_cri->cr_refcount) == NULL)
 				goto out;
 		}
-
-		if (l_errno != ENOENT) {
-			snprintf(err_str,
-				sizeof(err_str),
-				"\"cannot get peer information: %s\"",
-				strerror(l_errno));
-			rc = -l_errno;
-			goto out;
-		}
-
-		j++;
-	} while (j < ncpt);
+	}
 
 	/* print output iff show_rc is not provided */
 	if (show_rc == NULL)
@@ -2286,6 +2328,8 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	rc = LUSTRE_CFG_RC_NO_ERR;
 
 out:
+	free(list);
+	free(data);
 	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_free_tree(root);
 	} else if (show_rc != NULL && *show_rc != NULL) {
@@ -2302,6 +2346,117 @@ out:
 		} else if (show_node == NULL) {
 			cYAML_insert_sibling((*show_rc)->cy_child,
 					     peer_root);
+			free(root);
+		} else {
+			cYAML_free_tree(root);
+		}
+	} else {
+		*show_rc = root;
+	}
+
+	cYAML_build_error(rc, seq_no, SHOW_CMD, "peer", err_str,
+			  err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_list_peer(int seq_no,
+			  struct cYAML **show_rc, struct cYAML **err_rc)
+{
+	struct lnet_ioctl_peer_cfg peer_info;
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	__u32 count;
+	__u32 size;
+	int i = 0;
+	int l_errno = 0;
+	struct cYAML *root = NULL, *list_root = NULL, *first_seq = NULL;
+	char err_str[LNET_MAX_STR_LEN];
+	lnet_process_id_t *list = NULL;
+
+	snprintf(err_str, sizeof(err_str),
+		 "\"out of memory\"");
+
+	memset(&peer_info, 0, sizeof(peer_info));
+
+	/* create struct cYAML root object */
+	root = cYAML_create_object(NULL, NULL);
+	if (root == NULL)
+		goto out;
+
+	list_root = cYAML_create_seq(root, "peer list");
+	if (list_root == NULL)
+		goto out;
+
+	count = 1000;
+	size = count * sizeof(lnet_process_id_t);
+	list = malloc(size);
+	if (list == NULL) {
+		l_errno = ENOMEM;
+		goto out;
+	}
+	for (;;) {
+		LIBCFS_IOC_INIT_V2(peer_info, prcfg_hdr);
+		peer_info.prcfg_hdr.ioc_len = sizeof(peer_info);
+		peer_info.prcfg_size = size;
+		peer_info.prcfg_bulk = list;
+
+		l_errno = 0;
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_PEER_LIST, &peer_info);
+		count = peer_info.prcfg_count;
+		if (rc == 0)
+			break;
+		l_errno = errno;
+		if (l_errno != E2BIG) {
+			snprintf(err_str,
+				sizeof(err_str),
+				"\"cannot get peer list: %s\"",
+				strerror(l_errno));
+			rc = -l_errno;
+			goto out;
+		}
+		free(list);
+		size = peer_info.prcfg_size;
+		list = malloc(size);
+		if (list == NULL) {
+			l_errno = ENOMEM;
+			goto out;
+		}
+	}
+
+	/* count is now the actual number of ids in the list. */
+	for (i = 0; i < count; i++) {
+		if (cYAML_create_string(list_root, "nid",
+					libcfs_nid2str(list[i].nid))
+		    == NULL)
+			goto out;
+	}
+
+	/* print output iff show_rc is not provided */
+	if (show_rc == NULL)
+		cYAML_print_tree(root);
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+	rc = LUSTRE_CFG_RC_NO_ERR;
+
+out:
+	if (list != NULL)
+		free(list);
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_free_tree(root);
+	} else if (show_rc != NULL && *show_rc != NULL) {
+		struct cYAML *show_node;
+		/* find the peer node, if one doesn't exist then
+		 * insert one.  Otherwise add to the one there
+		 */
+		show_node = cYAML_get_object_item(*show_rc,
+						  "peer");
+		if (show_node != NULL && cYAML_is_sequence(show_node)) {
+			cYAML_insert_child(show_node, first_seq);
+			free(list_root);
+			free(root);
+		} else if (show_node == NULL) {
+			cYAML_insert_sibling((*show_rc)->cy_child,
+					     list_root);
 			free(root);
 		} else {
 			cYAML_free_tree(root);

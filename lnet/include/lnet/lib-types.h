@@ -674,7 +674,6 @@ struct lnet_peer_net {
  *    pt_hash[...]
  *    pt_peer_list
  *    pt_peers
- *    pt_peer_nnids
  * protected by pt_zombie_lock:
  *    pt_zombie_list
  *    pt_zombies
@@ -687,7 +686,6 @@ struct lnet_peer_table {
 	struct list_head	*pt_hash;	/* NID->peer hash */
 	struct list_head	pt_peer_list;	/* peers */
 	int			pt_peers;	/* # peers */
-	int			pt_peer_nnids;	/* # NIDS on listed peers */
 	struct list_head	pt_zombie_list;	/* zombie peer_ni */
 	int			pt_zombies;	/* # zombie peers_ni */
 	spinlock_t		pt_zombie_lock;	/* protect list and count */

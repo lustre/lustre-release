@@ -357,6 +357,18 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 			  struct cYAML **show_rc, struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_list_peer
+ *   List the known peers.
+ *
+ *     seq_no - sequence number of the command
+ *     show_rc - YAML structure of the resultant show
+ *     err_rc - YAML strucutre of the resultant return code.
+ *
+ */
+int lustre_lnet_list_peer(int seq_no,
+			  struct cYAML **show_rc, struct cYAML **err_rc);
+
+/*
  * lustre_yaml_config
  *   Parses the provided YAML file and then calls the specific APIs
  *   to configure the entities identified in the file

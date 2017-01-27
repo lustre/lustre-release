@@ -299,9 +299,7 @@ lnet_peer_detach_peer_ni_locked(struct lnet_peer_ni *lpni)
 
 	/* Update peer NID count. */
 	lp = lpn->lpn_peer;
-	ptable = the_lnet.ln_peer_tables[lp->lp_cpt];
 	lp->lp_nnis--;
-	ptable->pt_peer_nnids--;
 
 	/*
 	 * If there are no more peer nets, make the peer unfindable
@@ -313,6 +311,7 @@ lnet_peer_detach_peer_ni_locked(struct lnet_peer_ni *lpni)
 	 */
 	if (list_empty(&lp->lp_peer_nets)) {
 		list_del_init(&lp->lp_peer_list);
+		ptable = the_lnet.ln_peer_tables[lp->lp_cpt];
 		ptable->pt_peers--;
 	} else if (the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING) {
 		/* Discovery isn't running, nothing to do here. */
@@ -634,44 +633,6 @@ lnet_find_peer(lnet_nid_t nid)
 }
 
 struct lnet_peer_ni *
-lnet_get_peer_ni_idx_locked(int idx, struct lnet_peer_net **lpn,
-			    struct lnet_peer **lp)
-{
-	struct lnet_peer_table	*ptable;
-	struct lnet_peer_ni	*lpni;
-	int			lncpt;
-	int			cpt;
-
-	lncpt = cfs_percpt_number(the_lnet.ln_peer_tables);
-
-	for (cpt = 0; cpt < lncpt; cpt++) {
-		ptable = the_lnet.ln_peer_tables[cpt];
-		if (ptable->pt_peer_nnids > idx)
-			break;
-		idx -= ptable->pt_peer_nnids;
-	}
-	if (cpt >= lncpt)
-		return NULL;
-
-	list_for_each_entry((*lp), &ptable->pt_peer_list, lp_peer_list) {
-		if ((*lp)->lp_nnis <= idx) {
-			idx -= (*lp)->lp_nnis;
-			continue;
-		}
-		list_for_each_entry((*lpn), &((*lp)->lp_peer_nets),
-				    lpn_peer_nets) {
-			list_for_each_entry(lpni, &((*lpn)->lpn_peer_nis),
-					    lpni_peer_nis) {
-				if (idx-- == 0)
-					return lpni;
-			}
-		}
-	}
-
-	return NULL;
-}
-
-struct lnet_peer_ni *
 lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
 			     struct lnet_peer_net *peer_net,
 			     struct lnet_peer_ni *prev)
@@ -728,6 +689,68 @@ lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
 			  struct lnet_peer_ni, lpni_peer_nis);
 
 	return lpni;
+}
+
+/* Call with the ln_api_mutex held */
+int
+lnet_get_peer_list(__u32 *countp, __u32 *sizep, lnet_process_id_t __user *ids)
+{
+	lnet_process_id_t id;
+	struct lnet_peer_table *ptable;
+	struct lnet_peer *lp;
+	__u32 count = 0;
+	__u32 size = 0;
+	int lncpt;
+	int cpt;
+	__u32 i;
+	int rc;
+
+	rc = -ESHUTDOWN;
+	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+		goto done;
+
+	lncpt = cfs_percpt_number(the_lnet.ln_peer_tables);
+
+	/*
+	 * Count the number of peers, and return E2BIG if the buffer
+	 * is too small. We'll also return the desired size.
+	 */
+	rc = -E2BIG;
+	for (cpt = 0; cpt < lncpt; cpt++) {
+		ptable = the_lnet.ln_peer_tables[cpt];
+		count += ptable->pt_peers;
+	}
+	size = count * sizeof(*ids);
+	if (size > *sizep)
+		goto done;
+
+	/*
+	 * Walk the peer lists and copy out the primary nids.
+	 * This is safe because the peer lists are only modified
+	 * while the ln_api_mutex is held. So we don't need to
+	 * hold the lnet_net_lock as well, and can therefore
+	 * directly call copy_to_user().
+	 */
+	rc = -EFAULT;
+	memset(&id, 0, sizeof(id));
+	id.pid = LNET_PID_LUSTRE;
+	i = 0;
+	for (cpt = 0; cpt < lncpt; cpt++) {
+		ptable = the_lnet.ln_peer_tables[cpt];
+		list_for_each_entry(lp, &ptable->pt_peer_list, lp_peer_list) {
+			if (i >= count)
+				goto done;
+			id.nid = lp->lp_primary_nid;
+			if (copy_to_user(&ids[i], &id, sizeof(id)))
+				goto done;
+			i++;
+		}
+	}
+	rc = 0;
+done:
+	*countp = count;
+	*sizep = size;
+	return rc;
 }
 
 /*
@@ -1130,7 +1153,6 @@ lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 	spin_unlock(&lp->lp_lock);
 
 	lp->lp_nnis++;
-	the_lnet.ln_peer_tables[lp->lp_cpt]->pt_peer_nnids++;
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	CDEBUG(D_NET, "peer %s NID %s flags %#x\n",
@@ -3277,56 +3299,94 @@ int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 }
 
 /* ln_api_mutex is held, which keeps the peer list stable */
-int lnet_get_peer_info(__u32 idx, lnet_nid_t *primary_nid, lnet_nid_t *nid,
-		       bool *mr,
-		       struct lnet_peer_ni_credit_info __user *peer_ni_info,
-		       struct lnet_ioctl_element_stats __user *peer_ni_stats)
+int lnet_get_peer_info(lnet_nid_t *primary_nid, lnet_nid_t *nidp,
+		       __u32 *nnis, bool *mr, __u32 *sizep,
+		       void __user *bulk)
 {
-	struct lnet_peer_ni *lpni = NULL;
-	struct lnet_peer_net *lpn = NULL;
-	struct lnet_peer *lp = NULL;
-	struct lnet_peer_ni_credit_info ni_info;
-	struct lnet_ioctl_element_stats ni_stats;
+	struct lnet_ioctl_element_stats *lpni_stats;
+	struct lnet_peer_ni_credit_info *lpni_info;
+	struct lnet_peer_ni *lpni;
+	struct lnet_peer *lp;
+	lnet_nid_t nid;
+	__u32 size;
 	int rc;
 
-	lpni = lnet_get_peer_ni_idx_locked(idx, &lpn, &lp);
+	lp = lnet_find_peer(*primary_nid);
 
-	if (!lpni)
-		return -ENOENT;
+	if (!lp) {
+		rc = -ENOENT;
+		goto out;
+	}
+
+	size = sizeof(nid) + sizeof(*lpni_info) + sizeof(*lpni_stats);
+	size *= lp->lp_nnis;
+	if (size > *sizep) {
+		*sizep = size;
+		rc = -E2BIG;
+		goto out_lp_decref;
+	}
 
 	*primary_nid = lp->lp_primary_nid;
 	*mr = lnet_peer_is_multi_rail(lp);
-	*nid = lpni->lpni_nid;
-	snprintf(ni_info.cr_aliveness, LNET_MAX_STR_LEN, "NA");
-	if (lnet_isrouter(lpni) ||
-		lnet_peer_aliveness_enabled(lpni))
-		snprintf(ni_info.cr_aliveness, LNET_MAX_STR_LEN,
-			 lpni->lpni_alive ? "up" : "down");
+	*nidp = lp->lp_primary_nid;
+	*nnis = lp->lp_nnis;
+	*sizep = size;
 
-	ni_info.cr_refcount = atomic_read(&lpni->lpni_refcount);
-	ni_info.cr_ni_peer_tx_credits = (lpni->lpni_net != NULL) ?
-		lpni->lpni_net->net_tunables.lct_peer_tx_credits : 0;
-	ni_info.cr_peer_tx_credits = lpni->lpni_txcredits;
-	ni_info.cr_peer_rtr_credits = lpni->lpni_rtrcredits;
-	ni_info.cr_peer_min_rtr_credits = lpni->lpni_minrtrcredits;
-	ni_info.cr_peer_min_tx_credits = lpni->lpni_mintxcredits;
-	ni_info.cr_peer_tx_qnob = lpni->lpni_txqnob;
-	ni_info.cr_ncpt = lpni->lpni_cpt;
+	/* Allocate helper buffers. */
+	rc = -ENOMEM;
+	LIBCFS_ALLOC(lpni_info, sizeof(*lpni_info));
+	if (!lpni_info)
+		goto out_lp_decref;
+	LIBCFS_ALLOC(lpni_stats, sizeof(*lpni_stats));
+	if (!lpni_stats)
+		goto out_free_info;
 
-	ni_stats.iel_send_count = atomic_read(&lpni->lpni_stats.send_count);
-	ni_stats.iel_recv_count = atomic_read(&lpni->lpni_stats.recv_count);
-	ni_stats.iel_drop_count = atomic_read(&lpni->lpni_stats.drop_count);
-
-	/* If copy_to_user fails */
+	lpni = NULL;
 	rc = -EFAULT;
-	if (copy_to_user(peer_ni_info, &ni_info, sizeof(ni_info)))
-		goto copy_failed;
+	while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL) {
+		nid = lpni->lpni_nid;
+		if (copy_to_user(bulk, &nid, sizeof(nid)))
+			goto out_free_stats;
+		bulk += sizeof(nid);
 
-	if (copy_to_user(peer_ni_stats, &ni_stats, sizeof(ni_stats)))
-		goto copy_failed;
+		memset(lpni_info, 0, sizeof(*lpni_info));
+		snprintf(lpni_info->cr_aliveness, LNET_MAX_STR_LEN, "NA");
+		if (lnet_isrouter(lpni) ||
+			lnet_peer_aliveness_enabled(lpni))
+			snprintf(lpni_info->cr_aliveness, LNET_MAX_STR_LEN,
+				lpni->lpni_alive ? "up" : "down");
 
+		lpni_info->cr_refcount = atomic_read(&lpni->lpni_refcount);
+		lpni_info->cr_ni_peer_tx_credits = (lpni->lpni_net != NULL) ?
+			lpni->lpni_net->net_tunables.lct_peer_tx_credits : 0;
+		lpni_info->cr_peer_tx_credits = lpni->lpni_txcredits;
+		lpni_info->cr_peer_rtr_credits = lpni->lpni_rtrcredits;
+		lpni_info->cr_peer_min_rtr_credits = lpni->lpni_minrtrcredits;
+		lpni_info->cr_peer_min_tx_credits = lpni->lpni_mintxcredits;
+		lpni_info->cr_peer_tx_qnob = lpni->lpni_txqnob;
+		if (copy_to_user(bulk, lpni_info, sizeof(*lpni_info)))
+			goto out_free_stats;
+		bulk += sizeof(*lpni_info);
+
+		memset(lpni_stats, 0, sizeof(*lpni_stats));
+		lpni_stats->iel_send_count =
+			atomic_read(&lpni->lpni_stats.send_count);
+		lpni_stats->iel_recv_count =
+			atomic_read(&lpni->lpni_stats.recv_count);
+		lpni_stats->iel_drop_count =
+			atomic_read(&lpni->lpni_stats.drop_count);
+		if (copy_to_user(bulk, lpni_stats, sizeof(*lpni_stats)))
+			goto out_free_stats;
+		bulk += sizeof(*lpni_stats);
+	}
 	rc = 0;
 
-copy_failed:
+out_free_stats:
+	LIBCFS_FREE(lpni_stats, sizeof(*lpni_stats));
+out_free_info:
+	LIBCFS_FREE(lpni_info, sizeof(*lpni_info));
+out_lp_decref:
+	lnet_peer_decref_locked(lp);
+out:
 	return rc;
 }

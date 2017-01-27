@@ -57,6 +57,7 @@ static int jt_add_peer_nid(int argc, char **argv);
 static int jt_del_peer_nid(int argc, char **argv);
 static int jt_set_max_intf(int argc, char **argv);
 static int jt_set_discovery(int argc, char **argv);
+static int jt_list_peer(int argc, char **argv);
 /*static int jt_show_peer(int argc, char **argv);*/
 static int lnetctl_list_commands(int argc, char **argv);
 
@@ -154,6 +155,7 @@ command_t peer_cmds[] = {
 	{"show", jt_show_peer, 0, "show peer information\n"
 	 "\t--nid: NID of peer to filter on.\n"
 	 "\t--verbose: Include  extended  statistics\n"},
+	{"list", jt_list_peer, 0, "list all peers\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -1252,7 +1254,7 @@ static int jt_del_peer_nid(int argc, char **argv)
 			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 			break;
 		case 'h':
-			print_help(peer_cmds, "peer", "del");
+			print_help(peer_cmds, "peer", "show");
 			return 0;
 		default:
 			return 0;
@@ -1317,6 +1319,41 @@ static int jt_show_peer(int argc, char **argv)
 
 	cYAML_free_tree(err_rc);
 	cYAML_free_tree(show_rc);
+
+	return rc;
+}
+
+static int jt_list_peer(int argc, char **argv)
+{
+	int rc, opt;
+	struct cYAML *err_rc = NULL, *list_rc = NULL;
+
+	const char *const short_options = "h";
+	const struct option long_options[] = {
+		{ "help", 0, NULL, 'h' },
+		{ NULL, 0, NULL, 0 },
+	};
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				  long_options, NULL)) != -1) {
+		switch (opt) {
+		case 'h':
+			print_help(peer_cmds, "peer", "list");
+			return 0;
+		default:
+			return 0;
+		}
+	}
+
+	rc = lustre_lnet_list_peer(-1, &list_rc, &err_rc);
+
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+	else if (list_rc)
+		cYAML_print_tree(list_rc);
+
+	cYAML_free_tree(err_rc);
+	cYAML_free_tree(list_rc);
 
 	return rc;
 }

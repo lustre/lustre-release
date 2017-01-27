@@ -567,6 +567,8 @@ extern int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand);
 extern int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
 extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 				struct libcfs_ioctl_hdr __user *uparam);
+extern int lnet_get_peer_list(__u32 *countp, __u32 *sizep,
+			      lnet_process_id_t __user *ids);
 
 void lnet_proc_init(void);
 void lnet_proc_fini(void);
@@ -885,10 +887,9 @@ bool lnet_peer_is_pref_nid_locked(struct lnet_peer_ni *lpni, lnet_nid_t nid);
 int lnet_peer_ni_set_non_mr_pref_nid(struct lnet_peer_ni *lpni, lnet_nid_t nid);
 int lnet_add_peer_ni(lnet_nid_t key_nid, lnet_nid_t nid, bool mr);
 int lnet_del_peer_ni(lnet_nid_t key_nid, lnet_nid_t nid);
-int lnet_get_peer_info(__u32 idx, lnet_nid_t *primary_nid, lnet_nid_t *nid,
-		       bool *mr,
-		       struct lnet_peer_ni_credit_info __user *peer_ni_info,
-		       struct lnet_ioctl_element_stats __user *peer_ni_stats);
+int lnet_get_peer_info(lnet_nid_t *primary_nid, lnet_nid_t *nid,
+		       __u32 *nnis, bool *mr, __u32 *sizep,
+		       void __user *bulk);
 int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 			  char alivness[LNET_MAX_STR_LEN],
 			  __u32 *cpt_iter, __u32 *refcount,

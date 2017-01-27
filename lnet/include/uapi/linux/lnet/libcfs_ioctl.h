@@ -145,7 +145,8 @@ struct libcfs_debug_ioctl_data {
 #define IOC_LIBCFS_GET_LOCAL_NI		   _IOWR(IOC_LIBCFS_TYPE, 97, IOCTL_CONFIG_SIZE)
 #define IOC_LIBCFS_SET_NUMA_RANGE	   _IOWR(IOC_LIBCFS_TYPE, 98, IOCTL_CONFIG_SIZE)
 #define IOC_LIBCFS_GET_NUMA_RANGE	   _IOWR(IOC_LIBCFS_TYPE, 99, IOCTL_CONFIG_SIZE)
-#define IOC_LIBCFS_MAX_NR					  99
+#define IOC_LIBCFS_GET_PEER_LIST	   _IOWR(IOC_LIBCFS_TYPE, 100, IOCTL_CONFIG_SIZE)
+#define IOC_LIBCFS_MAX_NR					  100
 
 extern int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 
