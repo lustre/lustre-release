@@ -389,25 +389,24 @@ ksocknal_receive (ksock_conn_t *conn)
 }
 
 void
-ksocknal_tx_done(struct lnet_ni *ni, ksock_tx_t *tx)
+ksocknal_tx_done(struct lnet_ni *ni, ksock_tx_t *tx, int rc)
 {
 	struct lnet_msg *lnetmsg = tx->tx_lnetmsg;
-        int          rc = (tx->tx_resid == 0 && !tx->tx_zc_aborted) ? 0 : -EIO;
         ENTRY;
 
-        LASSERT(ni != NULL || tx->tx_conn != NULL);
+	LASSERT(ni != NULL || tx->tx_conn != NULL);
 
-        if (tx->tx_conn != NULL)
-                ksocknal_conn_decref(tx->tx_conn);
+	if (!rc && (tx->tx_resid != 0 || tx->tx_zc_aborted))
+		rc = -EIO;
 
-        if (ni == NULL && tx->tx_conn != NULL)
-                ni = tx->tx_conn->ksnc_peer->ksnp_ni;
+	if (tx->tx_conn != NULL)
+		ksocknal_conn_decref(tx->tx_conn);
 
 	ksocknal_free_tx(tx);
 	if (lnetmsg != NULL) /* KSOCK_MSG_NOOP go without lnetmsg */
 		lnet_finalize(lnetmsg, rc);
 
-        EXIT;
+	EXIT;
 }
 
 void
@@ -418,21 +417,21 @@ ksocknal_txlist_done(struct lnet_ni *ni, struct list_head *txlist, int error)
 	while (!list_empty(txlist)) {
 		tx = list_entry(txlist->next, ksock_tx_t, tx_list);
 
-                if (error && tx->tx_lnetmsg != NULL) {
-                        CNETERR("Deleting packet type %d len %d %s->%s\n",
-                                le32_to_cpu (tx->tx_lnetmsg->msg_hdr.type),
-                                le32_to_cpu (tx->tx_lnetmsg->msg_hdr.payload_length),
-                                libcfs_nid2str(le64_to_cpu(tx->tx_lnetmsg->msg_hdr.src_nid)),
-                                libcfs_nid2str(le64_to_cpu(tx->tx_lnetmsg->msg_hdr.dest_nid)));
-                } else if (error) {
-                        CNETERR("Deleting noop packet\n");
-                }
+		if (error && tx->tx_lnetmsg != NULL) {
+			CNETERR("Deleting packet type %d len %d %s->%s\n",
+				le32_to_cpu(tx->tx_lnetmsg->msg_hdr.type),
+				le32_to_cpu(tx->tx_lnetmsg->msg_hdr.payload_length),
+				libcfs_nid2str(le64_to_cpu(tx->tx_lnetmsg->msg_hdr.src_nid)),
+				libcfs_nid2str(le64_to_cpu(tx->tx_lnetmsg->msg_hdr.dest_nid)));
+		} else if (error) {
+			CNETERR("Deleting noop packet\n");
+		}
 
 		list_del(&tx->tx_list);
 
-		LASSERT (atomic_read(&tx->tx_refcount) == 1);
-                ksocknal_tx_done (ni, tx);
-        }
+		LASSERT(atomic_read(&tx->tx_refcount) == 1);
+		ksocknal_tx_done(ni, tx, error);
+	}
 }
 
 static void
@@ -2000,9 +1999,9 @@ ksocknal_connect (ksock_route_t *route)
 
 	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 
-        ksocknal_peer_failed(peer_ni);
-        ksocknal_txlist_done(peer_ni->ksnp_ni, &zombies, 1);
-        return 0;
+	ksocknal_peer_failed(peer_ni);
+	ksocknal_txlist_done(peer_ni->ksnp_ni, &zombies, rc);
+	return 0;
 }
 
 /*
@@ -2332,26 +2331,26 @@ ksocknal_find_timed_out_conn (ksock_peer_ni_t *peer_ni)
 static inline void
 ksocknal_flush_stale_txs(ksock_peer_ni_t *peer_ni)
 {
-        ksock_tx_t        *tx;
-	struct list_head        stale_txs = LIST_HEAD_INIT(stale_txs);
+	ksock_tx_t	  *tx;
+	struct list_head	stale_txs = LIST_HEAD_INIT(stale_txs);
 
 	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 
 	while (!list_empty(&peer_ni->ksnp_tx_queue)) {
 		tx = list_entry(peer_ni->ksnp_tx_queue.next,
-                                     ksock_tx_t, tx_list);
+				     ksock_tx_t, tx_list);
 
-                if (!cfs_time_aftereq(cfs_time_current(),
-                                      tx->tx_deadline))
-                        break;
+		if (!cfs_time_aftereq(cfs_time_current(),
+				      tx->tx_deadline))
+			break;
 
 		list_del(&tx->tx_list);
 		list_add_tail(&tx->tx_list, &stale_txs);
-        }
+	}
 
 	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 
-        ksocknal_txlist_done(peer_ni->ksnp_ni, &stale_txs, 1);
+	ksocknal_txlist_done(peer_ni->ksnp_ni, &stale_txs, -ETIMEDOUT);
 }
 
 static int
