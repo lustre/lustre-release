@@ -1389,6 +1389,27 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *cur_ni,
 	return best_ni;
 }
 
+/*
+ * Traffic to the LNET_RESERVED_PORTAL may not trigger peer discovery,
+ * because such traffic is required to perform discovery. We therefore
+ * exclude all GET and PUT on that portal. We also exclude all ACK and
+ * REPLY traffic, but that is because the portal is not tracked in the
+ * message structure for these message types. We could restrict this
+ * further by also checking for LNET_PROTO_PING_MATCHBITS.
+ */
+static bool
+lnet_msg_discovery(struct lnet_msg *msg)
+{
+	if (msg->msg_type == LNET_MSG_PUT) {
+		if (msg->msg_hdr.msg.put.ptl_index != LNET_RESERVED_PORTAL)
+			return true;
+	} else if (msg->msg_type == LNET_MSG_GET) {
+		if (msg->msg_hdr.msg.get.ptl_index != LNET_RESERVED_PORTAL)
+			return true;
+	}
+	return false;
+}
+
 static int
 lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
 		    struct lnet_msg *msg, lnet_nid_t rtr_nid)
@@ -1401,7 +1422,6 @@ lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
 	struct lnet_peer	*peer;
 	struct lnet_peer_net	*peer_net;
 	struct lnet_net		*local_net;
-	__u32			seq;
 	int			cpt, cpt2, rc;
 	bool			routing;
 	bool			routing2;
@@ -1436,13 +1456,6 @@ again:
 	routing2 = false;
 	local_found = false;
 
-	seq = lnet_get_dlc_seq_locked();
-
-	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
-		lnet_net_unlock(cpt);
-		return -ESHUTDOWN;
-	}
-
 	/*
 	 * lnet_nid2peerni_locked() is the path that will find an
 	 * existing peer_ni, or create one and mark it as having been
@@ -1453,7 +1466,22 @@ again:
 		lnet_net_unlock(cpt);
 		return PTR_ERR(lpni);
 	}
+	/*
+	 * Now that we have a peer_ni, check if we want to discover
+	 * the peer. Traffic to the LNET_RESERVED_PORTAL should not
+	 * trigger discovery.
+	 */
 	peer = lpni->lpni_peer_net->lpn_peer;
+	if (lnet_msg_discovery(msg) && !lnet_peer_is_uptodate(peer)) {
+		rc = lnet_discover_peer_locked(lpni, cpt);
+		if (rc) {
+			lnet_peer_ni_decref_locked(lpni);
+			lnet_net_unlock(cpt);
+			return rc;
+		}
+		/* The peer may have changed. */
+		peer = lpni->lpni_peer_net->lpn_peer;
+	}
 	lnet_peer_ni_decref_locked(lpni);
 
 	/* If peer is not healthy then can not send anything to it */
@@ -1881,6 +1909,7 @@ send:
 	 */
 	cpt2 = lnet_cpt_of_nid_locked(best_lpni->lpni_nid, best_ni);
 	if (cpt != cpt2) {
+		__u32 seq = lnet_get_dlc_seq_locked();
 		lnet_net_unlock(cpt);
 		cpt = cpt2;
 		lnet_net_lock(cpt);

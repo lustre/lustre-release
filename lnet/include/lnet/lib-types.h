@@ -543,10 +543,61 @@ struct lnet_peer {
 
 	/* peer state flags */
 	unsigned		lp_state;
+
+	/* link on discovery-related lists */
+	struct list_head	lp_dc_list;
+
+	/* tasks waiting on discovery of this peer */
+	wait_queue_head_t	lp_dc_waitq;
 };
 
-#define LNET_PEER_MULTI_RAIL	(1 << 0)
-#define LNET_PEER_CONFIGURED	(1 << 1)
+/*
+ * The status flags in lp_state. Their semantics have chosen so that
+ * lp_state can be zero-initialized.
+ *
+ * A peer is marked MULTI_RAIL in two cases: it was configured using DLC
+ * as multi-rail aware, or the LNET_PING_FEAT_MULTI_RAIL bit was set.
+ *
+ * A peer is marked NO_DISCOVERY if the LNET_PING_FEAT_DISCOVERY bit was
+ * NOT set when the peer was pinged by discovery.
+ */
+#define LNET_PEER_MULTI_RAIL	(1 << 0)	/* Multi-rail aware */
+#define LNET_PEER_NO_DISCOVERY	(1 << 1)	/* Peer disabled discovery */
+/*
+ * A peer is marked CONFIGURED if it was configured by DLC.
+ *
+ * In addition, a peer is marked DISCOVERED if it has fully passed
+ * through Peer Discovery.
+ *
+ * When Peer Discovery is disabled, the discovery thread will mark
+ * peers REDISCOVER to indicate that they should be re-examined if
+ * discovery is (re)enabled on the node.
+ *
+ * A peer that was created as the result of inbound traffic will not
+ * be marked at all.
+ */
+#define LNET_PEER_CONFIGURED	(1 << 2)	/* Configured via DLC */
+#define LNET_PEER_DISCOVERED	(1 << 3)	/* Peer was discovered */
+#define LNET_PEER_REDISCOVER	(1 << 4)	/* Discovery was disabled */
+/*
+ * A peer is marked DISCOVERING when discovery is in progress.
+ * The other flags below correspond to stages of discovery.
+ */
+#define LNET_PEER_DISCOVERING	(1 << 5)	/* Discovering */
+#define LNET_PEER_DATA_PRESENT	(1 << 6)	/* Remote peer data present */
+#define LNET_PEER_NIDS_UPTODATE	(1 << 7)	/* Remote peer info uptodate */
+#define LNET_PEER_PING_SENT	(1 << 8)	/* Waiting for REPLY to Ping */
+#define LNET_PEER_PUSH_SENT	(1 << 9)	/* Waiting for ACK of Push */
+#define LNET_PEER_PING_FAILED	(1 << 10)	/* Ping send failure */
+#define LNET_PEER_PUSH_FAILED	(1 << 11)	/* Push send failure */
+/*
+ * A ping can be forced as a way to fix up state, or as a manual
+ * intervention by an admin.
+ * A push can be forced in circumstances that would normally not
+ * allow for one to happen.
+ */
+#define LNET_PEER_FORCE_PING	(1 << 12)	/* Forced Ping */
+#define LNET_PEER_FORCE_PUSH	(1 << 13)	/* Forced Push */
 
 struct lnet_peer_net {
 	/* chain on lp_peer_nets */
@@ -767,6 +818,11 @@ struct lnet_msg_container {
 	void			**msc_finalizers;
 };
 
+/* Peer Discovery states */
+#define LNET_DC_STATE_SHUTDOWN		0	/* not started */
+#define LNET_DC_STATE_RUNNING		1	/* started up OK */
+#define LNET_DC_STATE_STOPPING		2	/* telling thread to stop */
+
 /* Router Checker states */
 #define LNET_RC_STATE_SHUTDOWN		0	/* not started */
 #define LNET_RC_STATE_RUNNING		1	/* started up OK */
@@ -843,6 +899,17 @@ typedef struct lnet {
 	struct lnet_handle_eq		ln_ping_target_eq;
 	struct lnet_ping_buffer		*ln_ping_target;
 	atomic_t			ln_ping_target_seqno;
+
+	/* discovery event queue handle */
+	lnet_handle_eq_t		ln_dc_eqh;
+	/* discovery requests */
+	struct list_head		ln_dc_request;
+	/* discovery working list */
+	struct list_head		ln_dc_working;
+	/* discovery thread wait queue */
+	wait_queue_head_t		ln_dc_waitq;
+	/* discovery startup/shutdown state */
+	int				ln_dc_state;
 
 	/* router checker startup/shutdown state */
 	int				ln_rc_state;
