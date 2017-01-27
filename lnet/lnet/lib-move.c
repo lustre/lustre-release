@@ -1555,20 +1555,6 @@ again:
 		}
 	}
 
-	if (best_ni == the_lnet.ln_loni) {
-		/* No send credit hassles with LOLND */
-		lnet_ni_addref_locked(best_ni, cpt);
-		msg->msg_hdr.dest_nid = cpu_to_le64(best_ni->ni_nid);
-		if (!msg->msg_routing)
-			msg->msg_hdr.src_nid = cpu_to_le64(best_ni->ni_nid);
-		msg->msg_target.nid = best_ni->ni_nid;
-		lnet_msg_commit(msg, cpt);
-		msg->msg_txni = best_ni;
-		lnet_net_unlock(cpt);
-
-		return LNET_CREDIT_OK;
-	}
-
 	/*
 	 * if we already found a best_ni because src_nid is specified and
 	 * best_lpni because we are replying to a message then just send
@@ -1810,6 +1796,21 @@ pick_peer:
 
 
 send:
+	/* Shortcut for loopback. */
+	if (best_ni == the_lnet.ln_loni) {
+		/* No send credit hassles with LOLND */
+		lnet_ni_addref_locked(best_ni, cpt);
+		msg->msg_hdr.dest_nid = cpu_to_le64(best_ni->ni_nid);
+		if (!msg->msg_routing)
+			msg->msg_hdr.src_nid = cpu_to_le64(best_ni->ni_nid);
+		msg->msg_target.nid = best_ni->ni_nid;
+		lnet_msg_commit(msg, cpt);
+		msg->msg_txni = best_ni;
+		lnet_net_unlock(cpt);
+
+		return LNET_CREDIT_OK;
+	}
+
 	routing = routing || routing2;
 
 	/*
