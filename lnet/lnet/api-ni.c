@@ -823,7 +823,7 @@ static void lnet_assert_wire_constants(void)
 				   wh_object_cookie) != 8);
 	BUILD_BUG_ON((int)sizeof(((struct lnet_handle_wire *)0)->wh_object_cookie) != 8);
 
-	/* Checks for struct struct lnet_magicversion */
+	/* Checks for lnet_magicversion */
 	BUILD_BUG_ON((int)sizeof(struct lnet_magicversion) != 8);
 	BUILD_BUG_ON((int)offsetof(struct lnet_magicversion, magic) != 0);
 	BUILD_BUG_ON((int)sizeof(((struct lnet_magicversion *)0)->magic) != 4);
@@ -833,7 +833,7 @@ static void lnet_assert_wire_constants(void)
 				   version_minor) != 6);
 	BUILD_BUG_ON((int)sizeof(((struct lnet_magicversion *)0)->version_minor) != 2);
 
-	/* Checks for struct _lnet_hdr_nid4 */
+	/* Checks for _lnet_hdr_nid4 */
 	BUILD_BUG_ON((int)sizeof(struct _lnet_hdr_nid4) != 72);
 	BUILD_BUG_ON((int)offsetof(struct _lnet_hdr_nid4, dest_nid) != 0);
 	BUILD_BUG_ON((int)sizeof(((struct _lnet_hdr_nid4 *)0)->dest_nid) != 8);

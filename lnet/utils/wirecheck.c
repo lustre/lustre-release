@@ -61,7 +61,7 @@ do {									\
 #define CHECK_STRUCT(s)							\
 do {									\
 	BLANK_LINE();							\
-	COMMENT("Checks for struct "#s);				\
+	COMMENT("Checks for "#s);					\
 	CHECK_VALUE((int)sizeof(s));					\
 } while (0)
 
