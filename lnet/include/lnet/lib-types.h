@@ -537,6 +537,7 @@ struct lnet_peer {
 };
 
 #define LNET_PEER_MULTI_RAIL	(1 << 0)
+#define LNET_PEER_CONFIGURED	(1 << 1)
 
 struct lnet_peer_net {
 	/* chain on peer block */
