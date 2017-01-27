@@ -505,13 +505,19 @@ struct lnet_peer_ni {
 	unsigned int		lpni_ping_feats;
 	/* routes on this peer */
 	struct list_head	lpni_routes;
-	/* array of preferred local nids */
-	lnet_nid_t		*lpni_pref_nids;
+	/* preferred local nids: if only one, use lpni_pref.nid */
+	union lpni_pref {
+		lnet_nid_t	nid;
+		lnet_nid_t	*nids;
+	} lpni_pref;
 	/* number of preferred NIDs in lnpi_pref_nids */
 	__u32			lpni_pref_nnids;
 	/* router checker state */
 	struct lnet_rc_data	*lpni_rcd;
 };
+
+/* Preferred path added due to traffic on non-MR peer_ni */
+#define LNET_PEER_NI_NON_MR_PREF	(1 << 0)
 
 struct lnet_peer {
 	/* chain on global peer list */

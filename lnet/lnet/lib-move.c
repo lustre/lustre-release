@@ -1448,7 +1448,7 @@ again:
 	 * existing peer_ni, or create one and mark it as having been
 	 * created due to network traffic.
 	 */
-	lpni = lnet_nid2peerni_locked(dst_nid, cpt);
+	lpni = lnet_nid2peerni_locked(dst_nid, LNET_NID_ANY, cpt);
 	if (IS_ERR(lpni)) {
 		lnet_net_unlock(cpt);
 		return PTR_ERR(lpni);
@@ -1460,14 +1460,6 @@ again:
 	if (!lnet_is_peer_healthy_locked(peer)) {
 		lnet_net_unlock(cpt);
 		return -EHOSTUNREACH;
-	}
-
-	if (!lnet_peer_is_multi_rail(peer) &&
-	     lnet_get_num_peer_nis(peer) > 1) {
-		CERROR("peer %s is declared to be non MR capable, "
-		       "yet configured with more than one NID\n",
-		       libcfs_nid2str(dst_nid));
-		return -EINVAL;
 	}
 
 	/*
@@ -1554,8 +1546,14 @@ again:
 	}
 
 	/*
-	 * if the peer is not MR capable, then we should always send to it
-	 * using the first NI in the NET we determined.
+	 * We must use a consistent source address when sending to a
+	 * non-MR peer. However, a non-MR peer can have multiple NIDs
+	 * on multiple networks, and we may even need to talk to this
+	 * peer on multiple networks -- certain types of
+	 * load-balancing configuration do this.
+	 *
+	 * So we need to pick the NI the peer prefers for this
+	 * particular network.
 	 */
 	if (!lnet_peer_is_multi_rail(peer)) {
 		if (!best_lpni) {
@@ -1565,17 +1563,40 @@ again:
 			return -EHOSTUNREACH;
 		}
 
-		/* best ni could be set because src_nid was provided */
+		/* best ni is already set if src_nid was provided */
 		if (!best_ni) {
-			best_ni = lnet_net2ni_locked(best_lpni->lpni_net->net_id, cpt);
+			/* Get the target peer_ni */
+			peer_net = lnet_peer_get_net_locked(peer,
+					LNET_NIDNET(best_lpni->lpni_nid));
+			list_for_each_entry(lpni, &peer_net->lpn_peer_nis,
+					    lpni_on_peer_net_list) {
+				if (lpni->lpni_pref_nnids == 0)
+					continue;
+				LASSERT(lpni->lpni_pref_nnids == 1);
+				best_ni = lnet_nid2ni_locked(
+						lpni->lpni_pref.nid, cpt);
+				break;
+			}
+		}
+		/* if best_ni is still not set just pick one */
+		if (!best_ni) {
+			best_ni = lnet_net2ni_locked(
+				best_lpni->lpni_net->net_id, cpt);
+			/* If there is no best_ni we don't have a route */
 			if (!best_ni) {
 				lnet_net_unlock(cpt);
 				CERROR("no path to %s from net %s\n",
-				libcfs_nid2str(best_lpni->lpni_nid),
-				libcfs_net2str(best_lpni->lpni_net->net_id));
+					libcfs_nid2str(best_lpni->lpni_nid),
+					libcfs_net2str(best_lpni->lpni_net->net_id));
 				return -EHOSTUNREACH;
 			}
+			lpni = list_entry(peer_net->lpn_peer_nis.next,
+					struct lnet_peer_ni,
+					lpni_on_peer_net_list);
 		}
+		/* Set preferred NI if necessary. */
+		if (lpni->lpni_pref_nnids == 0)
+			lnet_peer_ni_set_non_mr_pref_nid(lpni, best_ni->ni_nid);
 	}
 
 	/*
@@ -1772,7 +1793,8 @@ pick_peer:
 		 */
 		if (!lnet_is_peer_ni_healthy_locked(lpni))
 			continue;
-		ni_is_pref = lnet_peer_is_ni_pref_locked(lpni, best_ni);
+		ni_is_pref = lnet_peer_is_pref_nid_locked(lpni,
+							  best_ni->ni_nid);
 
 		/* if this is a preferred peer use it */
 		if (!preferred && ni_is_pref) {
@@ -2565,7 +2587,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	}
 
 	lnet_net_lock(cpt);
-	lpni = lnet_nid2peerni_locked(from_nid, cpt);
+	lpni = lnet_nid2peerni_locked(from_nid, ni->ni_nid, cpt);
 	if (IS_ERR(lpni)) {
 		lnet_net_unlock(cpt);
 		CERROR("%s, src %s: Dropping %s "
