@@ -1569,7 +1569,7 @@ again:
 			peer_net = lnet_peer_get_net_locked(peer,
 					LNET_NIDNET(best_lpni->lpni_nid));
 			list_for_each_entry(lpni, &peer_net->lpn_peer_nis,
-					    lpni_on_peer_net_list) {
+					    lpni_peer_nis) {
 				if (lpni->lpni_pref_nnids == 0)
 					continue;
 				LASSERT(lpni->lpni_pref_nnids == 1);
@@ -1592,7 +1592,7 @@ again:
 			}
 			lpni = list_entry(peer_net->lpn_peer_nis.next,
 					struct lnet_peer_ni,
-					lpni_on_peer_net_list);
+					lpni_peer_nis);
 		}
 		/* Set preferred NI if necessary. */
 		if (lpni->lpni_pref_nnids == 0)
@@ -1624,7 +1624,7 @@ again:
 	 * then the best route is chosen. If all routes are equal then
 	 * they are used in round robin.
 	 */
-	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_on_peer_list) {
+	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_peer_nets) {
 		if (!lnet_is_peer_net_healthy_locked(peer_net))
 			continue;
 
@@ -1634,7 +1634,7 @@ again:
 
 			lpni = list_entry(peer_net->lpn_peer_nis.next,
 					  struct lnet_peer_ni,
-					  lpni_on_peer_net_list);
+					  lpni_peer_nis);
 
 			net_gw = lnet_find_route_locked(NULL,
 							lpni->lpni_nid,

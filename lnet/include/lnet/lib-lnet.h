@@ -382,6 +382,36 @@ lnet_handle2me(struct lnet_handle_me *handle)
 }
 
 static inline void
+lnet_peer_net_addref_locked(struct lnet_peer_net *lpn)
+{
+	atomic_inc(&lpn->lpn_refcount);
+}
+
+extern void lnet_destroy_peer_net_locked(struct lnet_peer_net *lpn);
+
+static inline void
+lnet_peer_net_decref_locked(struct lnet_peer_net *lpn)
+{
+	if (atomic_dec_and_test(&lpn->lpn_refcount))
+		lnet_destroy_peer_net_locked(lpn);
+}
+
+static inline void
+lnet_peer_addref_locked(struct lnet_peer *lp)
+{
+	atomic_inc(&lp->lp_refcount);
+}
+
+extern void lnet_destroy_peer_locked(struct lnet_peer *lp);
+
+static inline void
+lnet_peer_decref_locked(struct lnet_peer *lp)
+{
+	if (atomic_dec_and_test(&lp->lp_refcount))
+		lnet_destroy_peer_locked(lp);
+}
+
+static inline void
 lnet_peer_ni_addref_locked(struct lnet_peer_ni *lp)
 {
 	LASSERT(atomic_read(&lp->lpni_refcount) > 0);
@@ -851,21 +881,6 @@ int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 			  __u32 *peer_tx_qnob);
 
 
-static inline __u32
-lnet_get_num_peer_nis(struct lnet_peer *peer)
-{
-	struct lnet_peer_net *lpn;
-	struct lnet_peer_ni *lpni;
-	__u32 count = 0;
-
-	list_for_each_entry(lpn, &peer->lp_peer_nets, lpn_on_peer_list)
-		list_for_each_entry(lpni, &lpn->lpn_peer_nis,
-				    lpni_on_peer_net_list)
-			count++;
-
-	return count;
-}
-
 static inline bool
 lnet_is_peer_ni_healthy_locked(struct lnet_peer_ni *lpni)
 {
@@ -884,7 +899,7 @@ lnet_is_peer_net_healthy_locked(struct lnet_peer_net *peer_net)
 	struct lnet_peer_ni *lpni;
 
 	list_for_each_entry(lpni, &peer_net->lpn_peer_nis,
-			    lpni_on_peer_net_list) {
+			    lpni_peer_nis) {
 		if (lnet_is_peer_ni_healthy_locked(lpni))
 			return true;
 	}
@@ -897,7 +912,7 @@ lnet_is_peer_healthy_locked(struct lnet_peer *peer)
 {
 	struct lnet_peer_net *peer_net;
 
-	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_on_peer_list) {
+	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_peer_nets) {
 		if (lnet_is_peer_net_healthy_locked(peer_net))
 			return true;
 	}

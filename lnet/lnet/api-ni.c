@@ -671,7 +671,6 @@ lnet_prepare(lnet_pid_t requested_pid)
 	the_lnet.ln_pid = requested_pid;
 
 	INIT_LIST_HEAD(&the_lnet.ln_test_peers);
-	INIT_LIST_HEAD(&the_lnet.ln_peers);
 	INIT_LIST_HEAD(&the_lnet.ln_remote_peer_ni_list);
 	INIT_LIST_HEAD(&the_lnet.ln_nets);
 	INIT_LIST_HEAD(&the_lnet.ln_routers);
