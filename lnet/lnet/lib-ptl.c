@@ -584,7 +584,7 @@ lnet_ptl_match_md(struct lnet_match_info *info, struct lnet_msg *msg)
 	mtable = lnet_mt_of_match(info, msg);
 	lnet_res_lock(mtable->mt_cpt);
 
-	if (the_lnet.ln_shutdown) {
+	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
 		rc = LNET_MATCHMD_DROP;
 		goto out1;
 	}
@@ -946,7 +946,7 @@ lnet_clear_lazy_portal(struct lnet_ni *ni, int portal, char *reason)
 				list_move(&msg->msg_list, &zombies);
 		}
 	} else {
-		if (the_lnet.ln_shutdown)
+		if (the_lnet.ln_state != LNET_STATE_RUNNING)
 			CWARN("Active lazy portal %d on exit\n", portal);
 		else
 			CDEBUG(D_NET, "clearing portal %d lazy\n", portal);

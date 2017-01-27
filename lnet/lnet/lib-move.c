@@ -1423,7 +1423,7 @@ again:
 
 	seq = lnet_get_dlc_seq_locked();
 
-	if (the_lnet.ln_shutdown) {
+	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
 		lnet_net_unlock(cpt);
 		return -ESHUTDOWN;
 	}
