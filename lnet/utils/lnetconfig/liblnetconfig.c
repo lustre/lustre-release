@@ -47,6 +47,8 @@
 #include <linux/lnet/lnetctl.h>
 #include "liblnd.h"
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <ifaddrs.h>
 #include "liblnetconfig.h"
 #include "cyaml.h"
@@ -57,6 +59,8 @@
 #define DEL_CMD			"del"
 #define SHOW_CMD		"show"
 #define DBG_CMD			"dbg"
+
+#define modparam_path "/sys/module/lnet/parameters/"
 
 /*
  * lustre_lnet_ip_range_descr
@@ -76,6 +80,62 @@ struct lustre_lnet_ip2nets {
 	struct lnet_dlc_network_descr ip2nets_net;
 	struct list_head ip2nets_ip_ranges;
 };
+
+int open_sysfs_file(const char *path, const char *attr, const int mode)
+{
+	int fd;
+	char filename[LNET_MAX_STR_LEN];
+
+	if (strlen(path) + strlen(attr) >= LNET_MAX_STR_LEN)
+		return -1;
+
+	snprintf(filename, sizeof(filename), "%s%s",
+		 path, attr);
+
+	fd = open(filename, mode);
+
+	return fd;
+}
+
+static int read_sysfs_file(const char *path, const char *attr,
+			   void *val, const size_t size, const int nelem)
+{
+	int fd;
+	int rc = LUSTRE_CFG_RC_GENERIC_ERR;
+
+	fd = open_sysfs_file(path, attr, O_RDONLY);
+	if (fd == -1)
+		return LUSTRE_CFG_RC_NO_MATCH;
+
+	if (read(fd, val, size * nelem) == -1)
+		goto close_fd;
+
+	rc = LUSTRE_CFG_RC_NO_ERR;
+
+close_fd:
+	close(fd);
+	return rc;
+}
+
+static int write_sysfs_file(const char *path, const char *attr,
+			    void *val, const size_t size, const int nelem)
+{
+	int fd;
+	int rc = LUSTRE_CFG_RC_GENERIC_ERR;
+
+	fd = open_sysfs_file(path, attr, O_WRONLY | O_TRUNC);
+	if (fd == -1)
+		return LUSTRE_CFG_RC_NO_MATCH;
+
+	if (write(fd, val, size * nelem) == -1)
+		goto close_fd;
+
+	rc = LUSTRE_CFG_RC_NO_ERR;
+
+close_fd:
+	close(fd);
+	return rc;
+}
 
 /*
  * free_intf_descr
@@ -1777,9 +1837,31 @@ out:
 	return rc;
 }
 
+int lustre_lnet_config_max_intf(int max, int seq_no, struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	char val[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	snprintf(val, sizeof(val), "%d", max);
+
+	rc = write_sysfs_file(modparam_path, "lnet_interfaces_max", val,
+			      1, strlen(val) + 1);
+	if (rc)
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot configure max interfaces: %s\"",
+			 strerror(errno));
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "max_interfaces", err_str, err_rc);
+
+	return rc;
+}
+
 int lustre_lnet_config_numa_range(int range, int seq_no, struct cYAML **err_rc)
 {
-	struct lnet_ioctl_numa_range data;
+	struct lnet_ioctl_set_value data;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
 	char err_str[LNET_MAX_STR_LEN];
 
@@ -1793,15 +1875,15 @@ int lustre_lnet_config_numa_range(int range, int seq_no, struct cYAML **err_rc)
 		goto out;
 	}
 
-	LIBCFS_IOC_INIT_V2(data, nr_hdr);
-	data.nr_range = range;
+	LIBCFS_IOC_INIT_V2(data, sv_hdr);
+	data.sv_value = range;
 
 	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_SET_NUMA_RANGE, &data);
 	if (rc != 0) {
 		rc = -errno;
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"cannot configure buffers: %s\"", strerror(errno));
+			 "\"cannot configure numa_range: %s\"", strerror(errno));
 		goto out;
 	}
 
@@ -2211,18 +2293,83 @@ out:
 	return rc;
 }
 
-int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
-				struct cYAML **err_rc)
+static void add_to_global(struct cYAML *show_rc, struct cYAML *node,
+			  struct cYAML *root)
 {
-	struct lnet_ioctl_numa_range data;
-	int rc;
-	int l_errno;
+	struct cYAML *show_node;
+
+	show_node = cYAML_get_object_item(show_rc, "global");
+	if (show_node != NULL)
+		cYAML_insert_sibling(show_node->cy_child,
+				     node->cy_child);
+	else
+		cYAML_insert_sibling(show_rc->cy_child,
+				     node);
+	free(root);
+}
+
+int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
+			      struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int max_intf;
 	char err_str[LNET_MAX_STR_LEN];
-	struct cYAML *root = NULL, *range = NULL;
+	struct cYAML *root = NULL, *global = NULL;
 
 	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
 
-	LIBCFS_IOC_INIT_V2(data, nr_hdr);
+	rc = read_sysfs_file(modparam_path, "lnet_interfaces_max", val,
+			     1, LNET_MAX_STR_LEN);
+	if (rc) {
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get max interfaces: %d\"", rc);
+		goto out;
+	}
+
+	max_intf = atoi(val);
+
+	root = cYAML_create_object(NULL, NULL);
+	if (root == NULL)
+		goto out;
+
+	global = cYAML_create_object(root, "global");
+	if (global == NULL)
+		goto out;
+
+	if (cYAML_create_number(global, "max_intf",
+				max_intf) == NULL)
+		goto out;
+
+	if (show_rc == NULL)
+		cYAML_print_tree(root);
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+out:
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_free_tree(root);
+	else if (show_rc != NULL && *show_rc != NULL)
+		add_to_global(*show_rc, global, root);
+	else
+		*show_rc = root;
+
+	cYAML_build_error(rc, seq_no, SHOW_CMD, "global", err_str, err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
+				struct cYAML **err_rc)
+{
+	struct lnet_ioctl_set_value data;
+	int rc;
+	int l_errno;
+	char err_str[LNET_MAX_STR_LEN];
+	struct cYAML *root = NULL, *global = NULL;
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	LIBCFS_IOC_INIT_V2(data, sv_hdr);
 
 	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NUMA_RANGE, &data);
 	if (rc != 0) {
@@ -2241,12 +2388,12 @@ int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 	if (root == NULL)
 		goto out;
 
-	range = cYAML_create_object(root, "numa");
-	if (range == NULL)
+	global = cYAML_create_object(root, "global");
+	if (global == NULL)
 		goto out;
 
-	if (cYAML_create_number(range, "range",
-				data.nr_range) == NULL)
+	if (cYAML_create_number(global, "numa_range",
+				data.sv_value) == NULL)
 		goto out;
 
 	if (show_rc == NULL)
@@ -2258,14 +2405,12 @@ out:
 	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_free_tree(root);
 	} else if (show_rc != NULL && *show_rc != NULL) {
-		cYAML_insert_sibling((*show_rc)->cy_child,
-					root->cy_child);
-		free(root);
+		add_to_global(*show_rc, global, root);
 	} else {
 		*show_rc = root;
 	}
 
-	cYAML_build_error(rc, seq_no, SHOW_CMD, "numa", err_str, err_rc);
+	cYAML_build_error(rc, seq_no, SHOW_CMD, "global", err_str, err_rc);
 
 	return rc;
 }
@@ -3029,39 +3174,77 @@ static int handle_yaml_show_stats(struct cYAML *tree, struct cYAML **show_rc,
 				      show_rc, err_rc);
 }
 
-static int handle_yaml_config_numa(struct cYAML *tree, struct cYAML **show_rc,
-				  struct cYAML **err_rc)
+static int handle_yaml_config_global_settings(struct cYAML *tree,
+					      struct cYAML **show_rc,
+					      struct cYAML **err_rc)
 {
-	struct cYAML *seq_no, *range;
+	struct cYAML *max_intf, *numa, *seq_no;
+	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
-	range = cYAML_get_object_item(tree, "range");
+	max_intf = cYAML_get_object_item(tree, "max_intf");
+	if (max_intf)
+		rc = lustre_lnet_config_max_intf(max_intf->cy_valueint,
+						 seq_no ? seq_no->cy_valueint
+							: -1,
+						 err_rc);
 
-	return lustre_lnet_config_numa_range(range ? range->cy_valueint : -1,
-					     seq_no ? seq_no->cy_valueint : -1,
-					     err_rc);
+	numa = cYAML_get_object_item(tree, "numa_range");
+	if (numa)
+		rc = lustre_lnet_config_numa_range(numa->cy_valueint,
+						   seq_no ? seq_no->cy_valueint
+							: -1,
+						   err_rc);
+
+	return rc;
 }
 
-static int handle_yaml_del_numa(struct cYAML *tree, struct cYAML **show_rc,
-			       struct cYAML **err_rc)
+static int handle_yaml_del_global_settings(struct cYAML *tree,
+					   struct cYAML **show_rc,
+					   struct cYAML **err_rc)
 {
-	struct cYAML *seq_no;
+	struct cYAML *max_intf, *numa, *seq_no;
+	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
+	max_intf = cYAML_get_object_item(tree, "max_intf");
+	if (max_intf)
+		rc = lustre_lnet_config_max_intf(LNET_INTERFACES_MAX_DEFAULT,
+						 seq_no ? seq_no->cy_valueint
+							: -1,
+						 err_rc);
 
-	return lustre_lnet_config_numa_range(0, seq_no ? seq_no->cy_valueint : -1,
-					     err_rc);
+	numa = cYAML_get_object_item(tree, "numa_range");
+	if (numa)
+		rc = lustre_lnet_config_numa_range(0,
+						   seq_no ? seq_no->cy_valueint
+							: -1,
+						   err_rc);
+
+	return rc;
 }
 
-static int handle_yaml_show_numa(struct cYAML *tree, struct cYAML **show_rc,
-				struct cYAML **err_rc)
+static int handle_yaml_show_global_settings(struct cYAML *tree,
+					    struct cYAML **show_rc,
+					    struct cYAML **err_rc)
 {
-	struct cYAML *seq_no;
+	struct cYAML *max_intf, *numa, *seq_no;
+	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
+	max_intf = cYAML_get_object_item(tree, "max_intf");
+	if (max_intf)
+		rc = lustre_lnet_show_max_intf(seq_no ? seq_no->cy_valueint
+							: -1,
+						show_rc, err_rc);
 
-	return lustre_lnet_show_numa_range(seq_no ? seq_no->cy_valueint : -1,
-					   show_rc, err_rc);
+	numa = cYAML_get_object_item(tree, "numa_range");
+	if (numa)
+		rc = lustre_lnet_show_numa_range(seq_no ? seq_no->cy_valueint
+							: -1,
+						 show_rc, err_rc);
+
+	return rc;
 }
 
 struct lookup_cmd_hdlr_tbl {
@@ -3076,7 +3259,7 @@ static struct lookup_cmd_hdlr_tbl lookup_config_tbl[] = {
 	{ .name = "peer",	.cb = handle_yaml_config_peer },
 	{ .name = "routing",	.cb = handle_yaml_config_routing },
 	{ .name = "buffers",	.cb = handle_yaml_config_buffers },
-	{ .name = "numa",	.cb = handle_yaml_config_numa },
+	{ .name = "global",	.cb = handle_yaml_config_global_settings},
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
@@ -3084,7 +3267,7 @@ static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
 	{ .name = "net",	.cb = handle_yaml_del_ni },
 	{ .name = "peer",	.cb = handle_yaml_del_peer },
 	{ .name = "routing",	.cb = handle_yaml_del_routing },
-	{ .name = "numa",	.cb = handle_yaml_del_numa },
+	{ .name = "global",	.cb = handle_yaml_del_global_settings},
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {
@@ -3094,7 +3277,7 @@ static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {
 	{ .name = "routing",	.cb = handle_yaml_show_routing },
 	{ .name = "peer",	.cb = handle_yaml_show_peers },
 	{ .name = "statistics",	.cb = handle_yaml_show_stats },
-	{ .name = "numa",	.cb = handle_yaml_show_numa },
+	{ .name = "global",	.cb = handle_yaml_show_global_settings},
 	{ .name = NULL } };
 
 static cmd_handler_t lookup_fn(char *key,

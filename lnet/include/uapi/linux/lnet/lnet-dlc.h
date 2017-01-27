@@ -239,9 +239,9 @@ struct lnet_ioctl_peer_cfg {
 	void __user *prcfg_bulk;
 };
 
-struct lnet_ioctl_numa_range {
-	struct libcfs_ioctl_hdr nr_hdr;
-	__u32 nr_range;
+struct lnet_ioctl_set_value {
+	struct libcfs_ioctl_hdr sv_hdr;
+	__u32 sv_value;
 };
 
 struct lnet_ioctl_lnet_stats {

@@ -2784,22 +2784,22 @@ LNetCtl(unsigned int cmd, void *arg)
 		return rc;
 
 	case IOC_LIBCFS_SET_NUMA_RANGE: {
-		struct lnet_ioctl_numa_range *numa;
+		struct lnet_ioctl_set_value *numa;
 		numa = arg;
-		if (numa->nr_hdr.ioc_len != sizeof(*numa))
+		if (numa->sv_hdr.ioc_len != sizeof(*numa))
 			return -EINVAL;
-		mutex_lock(&the_lnet.ln_api_mutex);
-		lnet_numa_range = numa->nr_range;
-		mutex_unlock(&the_lnet.ln_api_mutex);
+		lnet_net_lock(LNET_LOCK_EX);
+		lnet_numa_range = numa->sv_value;
+		lnet_net_unlock(LNET_LOCK_EX);
 		return 0;
 	}
 
 	case IOC_LIBCFS_GET_NUMA_RANGE: {
-		struct lnet_ioctl_numa_range *numa;
+		struct lnet_ioctl_set_value *numa;
 		numa = arg;
-		if (numa->nr_hdr.ioc_len != sizeof(*numa))
+		if (numa->sv_hdr.ioc_len != sizeof(*numa))
 			return -EINVAL;
-		numa->nr_range = lnet_numa_range;
+		numa->sv_value = lnet_numa_range;
 		return 0;
 	}
 

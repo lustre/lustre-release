@@ -217,6 +217,30 @@ int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 				struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_config_max_intf
+ *   Sets the maximum number of interfaces per node. this tunable is
+ *   primarily useful for sanity checks prior to allocating memory.
+ *
+ *   max - maximum value to configure
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_max_intf(int max, int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_max_intf
+ *    show current maximum interface setting
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing NUMA range info
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
+			      struct cYAML **err_rc);
+
+/*
  * lustre_lnet_config_buffers
  *   Send down an IOCTL to configure routing buffer sizes.  A value of 0 means
  *   default that particular buffer to default size. A value of -1 means
