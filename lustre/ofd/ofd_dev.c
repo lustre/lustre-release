@@ -2984,7 +2984,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 		CERROR("%s: can't get statfs data, rc %d\n", obd->obd_name, rc);
 		GOTO(err_fini_stack, rc);
 	}
-	if (!IS_PO2(osfs->os_bsize)) {
+	if (!is_power_of_2(osfs->os_bsize)) {
 		CERROR("%s: blocksize (%d) is not a power of 2\n",
 				obd->obd_name, osfs->os_bsize);
 		GOTO(err_fini_stack, rc = -EPROTO);

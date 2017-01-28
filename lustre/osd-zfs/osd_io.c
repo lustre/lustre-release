@@ -527,7 +527,7 @@ static inline uint64_t osd_roundup2blocksz(uint64_t size,
 
 	size += offset % blksz;
 
-	if (likely(IS_PO2(blksz)))
+	if (likely(is_power_of_2(blksz)))
 		return PO2_ROUNDUP_TYPED(size, blksz, uint64_t);
 
 	size += blksz - 1;

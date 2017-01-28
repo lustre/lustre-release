@@ -979,15 +979,17 @@ static inline bool mdt_slc_is_enabled(struct mdt_device *mdt)
 extern mdl_mode_t mdt_mdl_lock_modes[];
 extern enum ldlm_mode mdt_dlm_lock_modes[];
 
+/* LCK_MINMODE which is zero returns false for is_power_of_2 */
+
 static inline mdl_mode_t mdt_dlm_mode2mdl_mode(enum ldlm_mode mode)
 {
-	LASSERT(IS_PO2(mode));
+	LASSERT(mode == LCK_MINMODE || is_power_of_2(mode));
 	return mdt_mdl_lock_modes[mode];
 }
 
 static inline enum ldlm_mode mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
 {
-	LASSERT(IS_PO2(mode));
+	LASSERT(mode == MDL_MINMODE || is_power_of_2(mode));
 	return mdt_dlm_lock_modes[mode];
 }
 
