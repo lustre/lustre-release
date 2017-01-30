@@ -56,6 +56,10 @@ MODULE_PARM_DESC(ldlm_cpts, "CPU partitions ldlm threads should run on");
 static struct mutex	ldlm_ref_mutex;
 static int ldlm_refcount;
 
+struct kobject *ldlm_kobj;
+struct kset *ldlm_ns_kset;
+struct kset *ldlm_svc_kset;
+
 struct ldlm_cb_async_args {
         struct ldlm_cb_set_arg *ca_set_arg;
         struct ldlm_lock       *ca_lock;
@@ -2901,6 +2905,40 @@ void ldlm_destroy_export(struct obd_export *exp)
 }
 EXPORT_SYMBOL(ldlm_destroy_export);
 
+static ssize_t cancel_unused_locks_before_replay_show(struct kobject *kobj,
+						      struct attribute *attr,
+						      char *buf)
+{
+	return sprintf(buf, "%d\n", ldlm_cancel_unused_locks_before_replay);
+}
+
+static ssize_t cancel_unused_locks_before_replay_store(struct kobject *kobj,
+						       struct attribute *attr,
+						       const char *buffer,
+						       size_t count)
+{
+	int rc;
+	unsigned long val;
+
+	rc = kstrtoul(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	ldlm_cancel_unused_locks_before_replay = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(cancel_unused_locks_before_replay);
+
+static struct attribute *ldlm_attrs[] = {
+	&lustre_attr_cancel_unused_locks_before_replay.attr,
+	NULL,
+};
+
+static struct attribute_group ldlm_attr_group = {
+	.attrs = ldlm_attrs,
+};
+
 static int ldlm_setup(void)
 {
 	static struct ptlrpc_service_conf	conf;
@@ -2920,9 +2958,25 @@ static int ldlm_setup(void)
         if (ldlm_state == NULL)
                 RETURN(-ENOMEM);
 
+	ldlm_kobj = kobject_create_and_add("ldlm", lustre_kobj);
+	if (!ldlm_kobj)
+		GOTO(out, -ENOMEM);
+
+	rc = sysfs_create_group(ldlm_kobj, &ldlm_attr_group);
+	if (rc)
+		GOTO(out, rc);
+
+	ldlm_ns_kset = kset_create_and_add("namespaces", NULL, ldlm_kobj);
+	if (!ldlm_ns_kset)
+		GOTO(out, -ENOMEM);
+
+	ldlm_svc_kset = kset_create_and_add("services", NULL, ldlm_kobj);
+	if (!ldlm_svc_kset)
+		GOTO(out, -ENOMEM);
+
 #ifdef CONFIG_PROC_FS
-        rc = ldlm_proc_setup();
-        if (rc != 0)
+	rc = ldlm_proc_setup();
+	if (rc != 0)
 		GOTO(out, rc);
 #endif /* CONFIG_PROC_FS */
 
@@ -3113,6 +3167,13 @@ static int ldlm_cleanup(void)
 	if (ldlm_state->ldlm_cancel_service != NULL)
 		ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
 #endif
+
+	if (ldlm_ns_kset)
+		kset_unregister(ldlm_ns_kset);
+	if (ldlm_svc_kset)
+		kset_unregister(ldlm_svc_kset);
+	if (ldlm_kobj)
+		kobject_put(ldlm_kobj);
 
 	ldlm_proc_cleanup();
 

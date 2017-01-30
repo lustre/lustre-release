@@ -56,6 +56,9 @@
 struct obd_ops;
 struct obd_device;
 
+extern struct kset *ldlm_ns_kset;
+extern struct kset *ldlm_svc_kset;
+
 #define OBD_LDLM_DEVICENAME  "ldlm"
 
 #define LDLM_DEFAULT_LRU_SIZE (100 * num_online_cpus())
@@ -260,6 +263,10 @@ struct ldlm_pool {
 	int			pl_grant_plan;
 	/** Pool statistics. */
 	struct lprocfs_stats	*pl_stats;
+
+	/* sysfs object */
+	struct kobject		 pl_kobj;
+	struct completion	 pl_kobj_unregister;
 };
 
 typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
@@ -506,6 +513,9 @@ struct ldlm_namespace {
 	 * Which bucket should we start with the lock reclaim.
 	 */
 	int			ns_reclaim_start;
+
+	struct kobject		ns_kobj; /* sysfs object */
+	struct completion	ns_kobj_unregister;
 };
 
 /**

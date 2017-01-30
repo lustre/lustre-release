@@ -85,10 +85,10 @@
  * pl_server_lock_volume - Current server lock volume (calculated);
  *
  * As it may be seen from list above, we have few possible tunables which may
- * affect behavior much. They all may be modified via proc. However, they also
+ * affect behavior much. They all may be modified via sysfs. However, they also
  * give a possibility for constructing few pre-defined behavior policies. If
  * none of predefines is suitable for a working pattern being used, new one may
- * be "constructed" via proc tunables.
+ * be "constructed" via sysfs tunables.
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -696,39 +696,87 @@ static int lprocfs_pool_state_seq_show(struct seq_file *m, void *unused)
 }
 LPROC_SEQ_FOPS_RO(lprocfs_pool_state);
 
-static int lprocfs_grant_speed_seq_show(struct seq_file *m, void *unused)
+static ssize_t grant_speed_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct ldlm_pool *pl = m->private;
-	int               grant_speed;
+	struct ldlm_pool *pl = container_of(kobj, struct ldlm_pool,
+					    pl_kobj);
+	int grant_speed;
 
 	spin_lock(&pl->pl_lock);
 	/* serialize with ldlm_pool_recalc */
 	grant_speed = atomic_read(&pl->pl_grant_rate) -
 			atomic_read(&pl->pl_cancel_rate);
 	spin_unlock(&pl->pl_lock);
-	return lprocfs_uint_seq_show(m, &grant_speed);
+	return sprintf(buf, "%d\n", grant_speed);
 }
+LUSTRE_RO_ATTR(grant_speed);
 
-LDLM_POOL_PROC_READER_SEQ_SHOW(grant_plan, int);
-LPROC_SEQ_FOPS_RO(lprocfs_grant_plan);
+LDLM_POOL_SYSFS_READER_SHOW(grant_plan, int);
+LUSTRE_RO_ATTR(grant_plan);
 
-LDLM_POOL_PROC_READER_SEQ_SHOW(recalc_period, int);
-LDLM_POOL_PROC_WRITER(recalc_period, int);
-static ssize_t lprocfs_recalc_period_seq_write(struct file *file,
-					       const char __user *buf,
-					       size_t len, loff_t *off)
+LDLM_POOL_SYSFS_READER_SHOW(recalc_period, int);
+LDLM_POOL_SYSFS_WRITER_STORE(recalc_period, int);
+LUSTRE_RW_ATTR(recalc_period);
+
+LDLM_POOL_SYSFS_READER_NOLOCK_SHOW(server_lock_volume, u64);
+LUSTRE_RO_ATTR(server_lock_volume);
+
+LDLM_POOL_SYSFS_READER_NOLOCK_SHOW(limit, atomic);
+LDLM_POOL_SYSFS_WRITER_NOLOCK_STORE(limit, atomic);
+LUSTRE_RW_ATTR(limit);
+
+LDLM_POOL_SYSFS_READER_NOLOCK_SHOW(granted, atomic);
+LUSTRE_RO_ATTR(granted);
+
+LDLM_POOL_SYSFS_READER_NOLOCK_SHOW(cancel_rate, atomic);
+LUSTRE_RO_ATTR(cancel_rate);
+
+LDLM_POOL_SYSFS_READER_NOLOCK_SHOW(grant_rate, atomic);
+LUSTRE_RO_ATTR(grant_rate);
+
+LDLM_POOL_SYSFS_READER_NOLOCK_SHOW(lock_volume_factor, atomic);
+LDLM_POOL_SYSFS_WRITER_NOLOCK_STORE(lock_volume_factor, atomic);
+LUSTRE_RW_ATTR(lock_volume_factor);
+
+/* These are for pools in /sys/fs/lustre/ldlm/namespaces/.../pool */
+static struct attribute *ldlm_pl_attrs[] = {
+	&lustre_attr_grant_speed.attr,
+	&lustre_attr_grant_plan.attr,
+	&lustre_attr_recalc_period.attr,
+	&lustre_attr_server_lock_volume.attr,
+	&lustre_attr_limit.attr,
+	&lustre_attr_granted.attr,
+	&lustre_attr_cancel_rate.attr,
+	&lustre_attr_grant_rate.attr,
+	&lustre_attr_lock_volume_factor.attr,
+	NULL,
+};
+
+static void ldlm_pl_release(struct kobject *kobj)
 {
-	struct seq_file *seq = file->private_data;
-
-	return lprocfs_wr_recalc_period(file, buf, len, seq->private);
+	struct ldlm_pool *pl = container_of(kobj, struct ldlm_pool,
+					    pl_kobj);
+	complete(&pl->pl_kobj_unregister);
 }
-LPROC_SEQ_FOPS(lprocfs_recalc_period);
 
-LPROC_SEQ_FOPS_RO_TYPE(ldlm_pool, u64);
-LPROC_SEQ_FOPS_RO_TYPE(ldlm_pool, atomic);
-LPROC_SEQ_FOPS_RW_TYPE(ldlm_pool_rw, atomic);
+static struct kobj_type ldlm_pl_ktype = {
+	.default_attrs	= ldlm_pl_attrs,
+	.sysfs_ops	= &lustre_sysfs_ops,
+	.release	= ldlm_pl_release,
+};
 
-LPROC_SEQ_FOPS_RO(lprocfs_grant_speed);
+static int ldlm_pool_sysfs_init(struct ldlm_pool *pl)
+{
+	struct ldlm_namespace *ns = ldlm_pl2ns(pl);
+	int err;
+
+	init_completion(&pl->pl_kobj_unregister);
+	err = kobject_init_and_add(&pl->pl_kobj, &ldlm_pl_ktype, &ns->ns_kobj,
+				   "pool");
+
+	return err;
+}
 
 static int ldlm_pool_proc_init(struct ldlm_pool *pl)
 {
@@ -763,24 +811,6 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
 	memset(pool_vars, 0, sizeof(pool_vars));
 	pool_vars[0].name = var_name;
 
-	ldlm_add_var(&pool_vars[0], pl->pl_proc_dir, "server_lock_volume",
-		     &pl->pl_server_lock_volume, &ldlm_pool_u64_fops);
-	ldlm_add_var(&pool_vars[0], pl->pl_proc_dir, "limit", &pl->pl_limit,
-		     &ldlm_pool_rw_atomic_fops);
-	ldlm_add_var(&pool_vars[0], pl->pl_proc_dir, "granted",
-		     &pl->pl_granted, &ldlm_pool_atomic_fops);
-	ldlm_add_var(&pool_vars[0], pl->pl_proc_dir, "grant_speed", pl,
-		     &lprocfs_grant_speed_fops);
-	ldlm_add_var(&pool_vars[0], pl->pl_proc_dir, "cancel_rate",
-		     &pl->pl_cancel_rate, &ldlm_pool_atomic_fops);
-	ldlm_add_var(&pool_vars[0], pl->pl_proc_dir, "grant_rate",
-		     &pl->pl_grant_rate, &ldlm_pool_atomic_fops);
-	ldlm_add_var(&pool_vars[0], pl->pl_proc_dir, "grant_plan", pl,
-		     &lprocfs_grant_plan_fops);
-	ldlm_add_var(&pool_vars[0], pl->pl_proc_dir, "recalc_period",
-		     pl, &lprocfs_recalc_period_fops);
-	ldlm_add_var(&pool_vars[0], pl->pl_proc_dir, "lock_volume_factor",
-		     &pl->pl_lock_volume_factor, &ldlm_pool_rw_atomic_fops);
 	ldlm_add_var(&pool_vars[0], pl->pl_proc_dir, "state", pl,
 		     &lprocfs_pool_state_fops);
 
@@ -830,6 +860,12 @@ out_free_name:
         return rc;
 }
 
+static void ldlm_pool_sysfs_fini(struct ldlm_pool *pl)
+{
+	kobject_put(&pl->pl_kobj);
+	wait_for_completion(&pl->pl_kobj_unregister);
+}
+
 static void ldlm_pool_proc_fini(struct ldlm_pool *pl)
 {
         if (pl->pl_stats != NULL) {
@@ -876,15 +912,20 @@ int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_DLMTRACE, "Lock pool %s is initialized\n", pl->pl_name);
+	rc = ldlm_pool_sysfs_init(pl);
+	if (rc)
+		RETURN(rc);
 
-        RETURN(rc);
+	CDEBUG(D_DLMTRACE, "Lock pool %s is initialized\n", pl->pl_name);
+
+	RETURN(rc);
 }
 
 void ldlm_pool_fini(struct ldlm_pool *pl)
 {
-        ENTRY;
-        ldlm_pool_proc_fini(pl);
+	ENTRY;
+	ldlm_pool_sysfs_fini(pl);
+	ldlm_pool_proc_fini(pl);
 
         /*
          * Pool should not be used after this point. We can't free it here as
