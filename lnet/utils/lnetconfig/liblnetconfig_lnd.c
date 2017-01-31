@@ -62,6 +62,10 @@ lustre_o2iblnd_show_tun(struct cYAML *lndparams,
 				lnd_cfg->lnd_fmr_cache) == NULL)
 		return LUSTRE_CFG_RC_OUT_OF_MEM;
 
+	if (cYAML_create_number(lndparams, "conns_per_peer",
+				lnd_cfg->lnd_conns_per_peer) == NULL)
+		return LUSTRE_CFG_RC_OUT_OF_MEM;
+
 	return LUSTRE_CFG_RC_NO_ERR;
 }
 
@@ -119,6 +123,7 @@ yaml_extract_o2ib_tun(struct cYAML *tree,
 	struct cYAML *map_on_demand = NULL, *concurrent_sends = NULL;
 	struct cYAML *fmr_pool_size = NULL, *fmr_cache = NULL;
 	struct cYAML *fmr_flush_trigger = NULL, *lndparams = NULL;
+	struct cYAML *conns_per_peer = NULL;
 
 	lndparams = cYAML_get_object_item(tree, "lnd tunables");
 	if (!lndparams)
@@ -144,6 +149,10 @@ yaml_extract_o2ib_tun(struct cYAML *tree,
 	fmr_cache = cYAML_get_object_item(lndparams, "fmr_cache");
 	lnd_cfg->lnd_fmr_cache =
 		(fmr_cache) ? fmr_cache->cy_valueint : 0;
+
+	conns_per_peer = cYAML_get_object_item(lndparams, "conns_per_peer");
+	lnd_cfg->lnd_conns_per_peer =
+		(conns_per_peer) ? conns_per_peer->cy_valueint : 1;
 }
 
 

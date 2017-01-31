@@ -36,6 +36,8 @@
 
 #include "o2iblnd.h"
 
+#define CURRENT_LND_VERSION 1
+
 static int service = 987;
 module_param(service, int, 0444);
 MODULE_PARM_DESC(service, "service number (within RDMA_PS_TCP)");
@@ -53,6 +55,10 @@ MODULE_PARM_DESC(timeout, "timeout (seconds)");
 static int nscheds;
 module_param(nscheds, int, 0444);
 MODULE_PARM_DESC(nscheds, "number of threads in each scheduler pool");
+
+static unsigned int conns_per_peer = 1;
+module_param(conns_per_peer, uint, 0444);
+MODULE_PARM_DESC(conns_per_peer, "number of connections per peer");
 
 /* NB: this value is shared by all CPTs, it can grow at runtime */
 static int ntx = 512;
@@ -198,7 +204,7 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
 
 	/* Current API version */
-	tunables->lnd_version = 0;
+	tunables->lnd_version = CURRENT_LND_VERSION;
 
 	if (kiblnd_translate_mtu(*kiblnd_tunables.kib_ib_mtu) < 0) {
 		CERROR("Invalid ib_mtu %d, expected 256/512/1024/2048/4096\n",
@@ -284,6 +290,10 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 		tunables->lnd_fmr_flush_trigger = fmr_flush_trigger;
 	if (!tunables->lnd_fmr_cache)
 		tunables->lnd_fmr_cache = fmr_cache;
+	if (!tunables->lnd_conns_per_peer) {
+		tunables->lnd_conns_per_peer = (conns_per_peer) ?
+			conns_per_peer : 1;
+	}
 
 	return 0;
 }
@@ -291,12 +301,13 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 int
 kiblnd_tunables_init(void)
 {
-	default_tunables.lnd_version = 0;
+	default_tunables.lnd_version = CURRENT_LND_VERSION;
 	default_tunables.lnd_peercredits_hiw = peer_credits_hiw,
 	default_tunables.lnd_map_on_demand = map_on_demand;
 	default_tunables.lnd_concurrent_sends = concurrent_sends;
 	default_tunables.lnd_fmr_pool_size = fmr_pool_size;
 	default_tunables.lnd_fmr_flush_trigger = fmr_flush_trigger;
 	default_tunables.lnd_fmr_cache = fmr_cache;
+	default_tunables.lnd_conns_per_peer = conns_per_peer;
 	return 0;
 }

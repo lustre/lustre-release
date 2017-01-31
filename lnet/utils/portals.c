@@ -784,38 +784,38 @@ jt_ptl_print_connections (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                if (g_net_is_compatible (NULL, SOCKLND, 0)) {
-                        id.nid = data.ioc_nid;
-                        id.pid = data.ioc_u32[6];
-                        printf ("%-20s %s[%d]%s->%s:%d %d/%d %s\n",
-                                libcfs_id2str(id),
-                                (data.ioc_u32[3] == SOCKLND_CONN_ANY) ? "A" :
-                                (data.ioc_u32[3] == SOCKLND_CONN_CONTROL) ? "C" :
-                                (data.ioc_u32[3] == SOCKLND_CONN_BULK_IN) ? "I" :
-                                (data.ioc_u32[3] == SOCKLND_CONN_BULK_OUT) ? "O" : "?",
-                                data.ioc_u32[4], /* scheduler */
-				/* local IP addr */
-				ptl_ipaddr_2_str(data.ioc_u32[2], buffer[0],
-						 sizeof(buffer[0]), 1),
-				/* remote IP addr */
-				ptl_ipaddr_2_str(data.ioc_u32[0], buffer[1],
-						 sizeof(buffer[1]), 1),
-                                data.ioc_u32[1],         /* remote port */
-                                data.ioc_count, /* tx buffer size */
-                                data.ioc_u32[5], /* rx buffer size */
-                                data.ioc_flags ? "nagle" : "nonagle");
-                } else if (g_net_is_compatible (NULL, O2IBLND, 0)) {
-                        printf ("%s mtu %d\n",
-                                libcfs_nid2str(data.ioc_nid),
-                                data.ioc_u32[0]); /* path MTU */
-		} else if (g_net_is_compatible (NULL, GNILND, 0)) {
-			printf ("%-20s [%d]\n",
-				libcfs_nid2str(data.ioc_nid),
-				data.ioc_u32[0] /* device id */);
-                } else {
-                        printf ("%s\n", libcfs_nid2str(data.ioc_nid));
-                }
-        }
+		if (g_net_is_compatible(NULL, SOCKLND, 0)) {
+			id.nid = data.ioc_nid;
+			id.pid = data.ioc_u32[6];
+			printf("%-20s %s[%d]%s->%s:%d %d/%d %s\n",
+			       libcfs_id2str(id),
+			       (data.ioc_u32[3] == SOCKLND_CONN_ANY) ? "A" :
+			       (data.ioc_u32[3] == SOCKLND_CONN_CONTROL) ? "C" :
+			       (data.ioc_u32[3] == SOCKLND_CONN_BULK_IN) ? "I" :
+			 (data.ioc_u32[3] == SOCKLND_CONN_BULK_OUT) ? "O" : "?",
+			       data.ioc_u32[4], /* scheduler */
+			       /* local IP addr */
+			       ptl_ipaddr_2_str(data.ioc_u32[2], buffer[0],
+						sizeof(buffer[0]), 1),
+			       /* remote IP addr */
+			       ptl_ipaddr_2_str(data.ioc_u32[0], buffer[1],
+						sizeof(buffer[1]), 1),
+			       data.ioc_u32[1],         /* remote port */
+			       data.ioc_count, /* tx buffer size */
+			       data.ioc_u32[5], /* rx buffer size */
+			       data.ioc_flags ? "nagle" : "nonagle");
+		} else if (g_net_is_compatible(NULL, O2IBLND, 0)) {
+			printf("%s mtu %d\n",
+			       libcfs_nid2str(data.ioc_nid),
+			       data.ioc_u32[0]); /* path MTU */
+		} else if (g_net_is_compatible(NULL, GNILND, 0)) {
+			printf("%-20s [%d]\n",
+			       libcfs_nid2str(data.ioc_nid),
+			       data.ioc_u32[0] /* device id */);
+		} else {
+			printf("%s\n", libcfs_nid2str(data.ioc_nid));
+		}
+	}
 
         if (index == 0) {
                 if (errno == ENOENT) {

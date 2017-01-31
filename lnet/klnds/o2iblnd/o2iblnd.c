@@ -1126,15 +1126,15 @@ kiblnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
                         break;
                 }
 
-                LASSERT (conn->ibc_cmid != NULL);
-                data->ioc_nid = conn->ibc_peer->ibp_nid;
-                if (conn->ibc_cmid->route.path_rec == NULL)
-                        data->ioc_u32[0] = 0; /* iWarp has no path MTU */
-                else
-                        data->ioc_u32[0] =
-                        ib_mtu_enum_to_int(conn->ibc_cmid->route.path_rec->mtu);
-                kiblnd_conn_decref(conn);
-                break;
+		LASSERT(conn->ibc_cmid != NULL);
+		data->ioc_nid = conn->ibc_peer->ibp_nid;
+		if (conn->ibc_cmid->route.path_rec == NULL)
+			data->ioc_u32[0] = 0; /* iWarp has no path MTU */
+		else
+			data->ioc_u32[0] =
+			ib_mtu_enum_to_int(conn->ibc_cmid->route.path_rec->mtu);
+		kiblnd_conn_decref(conn);
+		break;
         }
         case IOC_LIBCFS_CLOSE_CONNECTION: {
                 rc = kiblnd_close_matching_conns(ni, data->ioc_nid);

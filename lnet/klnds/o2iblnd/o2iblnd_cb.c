@@ -819,19 +819,19 @@ __must_hold(&conn->ibc_lock)
         kiblnd_pack_msg(peer_ni->ibp_ni, msg, ver, conn->ibc_outstanding_credits,
                         peer_ni->ibp_nid, conn->ibc_incarnation);
 
-        conn->ibc_credits -= credit;
-        conn->ibc_outstanding_credits = 0;
-        conn->ibc_nsends_posted++;
-        if (msg->ibm_type == IBLND_MSG_NOOP)
-                conn->ibc_noops_posted++;
+	conn->ibc_credits -= credit;
+	conn->ibc_outstanding_credits = 0;
+	conn->ibc_nsends_posted++;
+	if (msg->ibm_type == IBLND_MSG_NOOP)
+		conn->ibc_noops_posted++;
 
-        /* CAVEAT EMPTOR!  This tx could be the PUT_DONE of an RDMA
-         * PUT.  If so, it was first queued here as a PUT_REQ, sent and
-         * stashed on ibc_active_txs, matched by an incoming PUT_ACK,
-         * and then re-queued here.  It's (just) possible that
-         * tx_sending is non-zero if we've not done the tx_complete()
-         * from the first send; hence the ++ rather than = below. */
-        tx->tx_sending++;
+	/* CAVEAT EMPTOR!  This tx could be the PUT_DONE of an RDMA
+	 * PUT.  If so, it was first queued here as a PUT_REQ, sent and
+	 * stashed on ibc_active_txs, matched by an incoming PUT_ACK,
+	 * and then re-queued here.  It's (just) possible that
+	 * tx_sending is non-zero if we've not done the tx_complete()
+	 * from the first send; hence the ++ rather than = below. */
+	tx->tx_sending++;
 	list_add(&tx->tx_list, &conn->ibc_active_txs);
 
         /* I'm still holding ibc_lock! */
@@ -1272,7 +1272,6 @@ kiblnd_connect_peer (kib_peer_ni_t *peer_ni)
 
         LASSERT (net != NULL);
         LASSERT (peer_ni->ibp_connecting > 0);
-	LASSERT(!peer_ni->ibp_reconnecting);
 
         cmid = kiblnd_rdma_create_id(kiblnd_cm_callback, peer_ni, RDMA_PS_TCP,
                                      IB_QPT_RC);
@@ -1354,7 +1353,7 @@ kiblnd_reconnect_peer(kib_peer_ni_t *peer_ni)
 
 	LASSERT(!peer_ni->ibp_accepting && !peer_ni->ibp_connecting &&
 		list_empty(&peer_ni->ibp_conns));
-	peer_ni->ibp_reconnecting = 0;
+	peer_ni->ibp_reconnecting--;
 
 	if (!kiblnd_peer_active(peer_ni)) {
 		list_splice_init(&peer_ni->ibp_tx_queue, &txs);
@@ -1388,6 +1387,8 @@ kiblnd_launch_tx(struct lnet_ni *ni, kib_tx_t *tx, lnet_nid_t nid)
 	rwlock_t	*g_lock = &kiblnd_data.kib_global_lock;
         unsigned long      flags;
         int                rc;
+	int		   i;
+	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
 
         /* If I get here, I've committed to send, so I complete the tx with
          * failure on any problems */
@@ -1479,14 +1480,15 @@ kiblnd_launch_tx(struct lnet_ni *ni, kib_tx_t *tx, lnet_nid_t nid)
                 return;
         }
 
-        /* Brand new peer_ni */
-        LASSERT (peer_ni->ibp_connecting == 0);
-        peer_ni->ibp_connecting = 1;
+	/* Brand new peer_ni */
+	LASSERT(peer_ni->ibp_connecting == 0);
+	tunables = &peer_ni->ibp_ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
+	peer_ni->ibp_connecting = tunables->lnd_conns_per_peer;
 
-        /* always called with a ref on ni, which prevents ni being shutdown */
-        LASSERT (((kib_net_t *)ni->ni_data)->ibn_shutdown == 0);
+	/* always called with a ref on ni, which prevents ni being shutdown */
+	LASSERT(((kib_net_t *)ni->ni_data)->ibn_shutdown == 0);
 
-        if (tx != NULL)
+	if (tx != NULL)
 		list_add_tail(&tx->tx_list, &peer_ni->ibp_tx_queue);
 
         kiblnd_peer_addref(peer_ni);
@@ -1494,7 +1496,8 @@ kiblnd_launch_tx(struct lnet_ni *ni, kib_tx_t *tx, lnet_nid_t nid)
 
 	write_unlock_irqrestore(g_lock, flags);
 
-        kiblnd_connect_peer(peer_ni);
+	for (i = 0; i < tunables->lnd_conns_per_peer; i++)
+		kiblnd_connect_peer(peer_ni);
         kiblnd_peer_decref(peer_ni);
 }
 
@@ -1935,11 +1938,14 @@ kiblnd_close_conn_locked (kib_conn_t *conn, int error)
 		       list_empty(&conn->ibc_tx_queue_nocred) ?
 						 "" : "(sending_nocred)",
 		       list_empty(&conn->ibc_active_txs) ? "" : "(waiting)");
-        }
+	}
 
-        dev = ((kib_net_t *)peer_ni->ibp_ni->ni_data)->ibn_dev;
+	dev = ((kib_net_t *)peer_ni->ibp_ni->ni_data)->ibn_dev;
+	if (peer_ni->ibp_next_conn == conn)
+		/* clear next_conn so it won't be used */
+		peer_ni->ibp_next_conn = NULL;
 	list_del(&conn->ibc_list);
-        /* connd (see below) takes over ibc_list's ref */
+	/* connd (see below) takes over ibc_list's ref */
 
 	if (list_empty(&peer_ni->ibp_conns) &&    /* no more conns */
             kiblnd_peer_active(peer_ni)) {         /* still in peer_ni table */
@@ -2201,7 +2207,11 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
 	kiblnd_conn_addref(conn);
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-	/* Schedule blocked txs */
+	/* Schedule blocked txs
+	 * Note: if we are running with conns_per_peer > 1, these blocked
+	 * txs will all get scheduled to the first connection which gets
+	 * scheduled.  We won't be using round robin on this first batch.
+	 */
 	spin_lock(&conn->ibc_lock);
 	while (!list_empty(&txs)) {
 		tx = list_entry(txs.next, kib_tx_t, tx_list);
@@ -2567,7 +2577,6 @@ kiblnd_check_reconnect(kib_conn_t *conn, int version,
 
 	LASSERT(conn->ibc_state == IBLND_CONN_ACTIVE_CONNECT);
 	LASSERT(peer_ni->ibp_connecting > 0);	/* 'conn' at least */
-	LASSERT(!peer_ni->ibp_reconnecting);
 
 	if (cp) {
 		msg_size	= cp->ibcp_max_msg_size;
@@ -2583,7 +2592,7 @@ kiblnd_check_reconnect(kib_conn_t *conn, int version,
          * initiated by kiblnd_query() */
 	reconnect = (!list_empty(&peer_ni->ibp_tx_queue) ||
 		     peer_ni->ibp_version != version) &&
-		    peer_ni->ibp_connecting == 1 &&
+		    peer_ni->ibp_connecting &&
 		    peer_ni->ibp_accepting == 0;
 	if (!reconnect) {
 		reason = "no need";
@@ -2648,7 +2657,7 @@ kiblnd_check_reconnect(kib_conn_t *conn, int version,
         }
 
 	conn->ibc_reconnect = 1;
-	peer_ni->ibp_reconnecting = 1;
+	peer_ni->ibp_reconnecting++;
 	peer_ni->ibp_version = version;
 	if (incarnation != 0)
 		peer_ni->ibp_incarnation = incarnation;
