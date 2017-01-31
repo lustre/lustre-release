@@ -991,6 +991,9 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 	 * We can't use that env from osc_cache_truncate_start() because
 	 * it's from lov_io_sub and not fully initialized. */
 	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
+
 	io  = &osc_env_info(env)->oti_io;
 	io->ci_obj = cl_object_top(osc2cl(obj));
 	io->ci_ignore_layout = 1;
