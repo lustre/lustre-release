@@ -5360,15 +5360,17 @@ test_77() { # LU-3445
 	local mgsnid
 	local failnid="$(h2$NETTYPE 1.2.3.4),$(h2$NETTYPE 4.3.2.1)"
 
+	combined_mgs_mds || stop_mgs || error "stopping MGS service failed"
+
 	add fs2mds $(mkfs_opts mds1 $fs2mdsdev) --mgs --fsname=$fsname \
 		--reformat $fs2mdsdev $fs2mdsvdev || error "add fs2mds failed"
 	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_fs2 EXIT INT ||
 		error "start fs2mds failed"
 
 	mgsnid=$(do_facet fs2mds $LCTL list_nids | xargs | tr ' ' ,)
-	mgsnid="$mgsnid,$mgsnid:$mgsnid"
+	mgsnid="0.0.0.0@tcp,$mgsnid,$mgsnid:$mgsnid"
 
-	add fs2ost $(mkfs_opts ost1 $fs2ostdev) --mgsnode=$mgsnid \
+	add fs2ost --mgsnode=$mgsnid $(mkfs_opts ost1 $fs2ostdev) \
 		--failnode=$failnid --fsname=$fsname \
 		--reformat $fs2ostdev $fs2ostvdev ||
 			error "add fs2ost failed"

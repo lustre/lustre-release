@@ -360,19 +360,18 @@ int lustre_start_mgc(struct super_block *sb)
 				GOTO(out_free, rc = -EINVAL);
 			}
 			/*
-			 * LU-3829.
-			 * Here we only take the first mgsnid as its primary
-			 * serving mgs node, the rest mgsnid will be taken as
-			 * failover mgs node, otherwise they would be takens
-			 * as multiple nids of a single mgs node.
+			 * Add primary MGS nid(s).
+			 * Multiple nids on one MGS node are separated
+			 * by commas.
 			 */
 			while (class_parse_nid(ptr, &nid, &ptr) == 0) {
 				rc = do_lcfg(mgcname, nid, LCFG_ADD_UUID,
 					     niduuid, NULL, NULL, NULL);
-				if (rc == 0) {
-					i = 1;
+				if (rc == 0)
+					++i;
+				/* Stop at the first failover nid */
+				if (*ptr == ':')
 					break;
-				}
 			}
 		}
         } else { /* client */
