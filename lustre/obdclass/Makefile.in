@@ -13,7 +13,7 @@ obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o
 obdclass-all-objs += lu_object.o dt_object.o
 obdclass-all-objs += cl_object.o cl_page.o cl_lock.o cl_io.o lu_ref.o
 obdclass-all-objs += linkea.o
-obdclass-all-objs += kernelcomm.o
+obdclass-all-objs += kernelcomm.o jobid.o
 
 @SERVER_TRUE@obdclass-all-objs += acl.o
 @SERVER_TRUE@obdclass-all-objs += idmap.o

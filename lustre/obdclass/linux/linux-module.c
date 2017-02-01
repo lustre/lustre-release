@@ -387,6 +387,11 @@ static ssize_t jobid_name_store(struct kobject *kobj, struct attribute *attr,
 	if (!count || count > LUSTRE_JOBID_SIZE)
 		return -EINVAL;
 
+	if (strcmp(obd_jobid_var, JOBSTATS_NODELOCAL) != 0) {
+		lustre_jobid_clear(buffer);
+		return count;
+	}
+
 	/* clear previous value */
 	memset(obd_jobid_node, 0, LUSTRE_JOBID_SIZE);
 
@@ -538,6 +543,12 @@ int class_procfs_init(void)
 		goto out;
 	}
 
+	rc = jobid_cache_init();
+	if (rc) {
+		kobject_put(lustre_kobj);
+		goto out;
+	}
+
 	debugfs_lustre_root = debugfs_create_dir("lustre", NULL);
 	if (IS_ERR_OR_NULL(debugfs_lustre_root)) {
 		rc = debugfs_lustre_root ? PTR_ERR(debugfs_lustre_root)
@@ -575,6 +586,7 @@ int class_procfs_clean(void)
 	debugfs_remove_recursive(debugfs_lustre_root);
 
 	debugfs_lustre_root = NULL;
+	jobid_cache_fini();
 
 	if (proc_lustre_root)
 		lprocfs_remove(&proc_lustre_root);
