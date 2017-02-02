@@ -124,7 +124,7 @@ struct sk_keyfile_config *sk_read_file(char *filename)
 		struct stat st;
 
 		rc = fstat(fd, &st);
-		if (rc == 0 && (st.st_mode & ~0600))
+		if (rc == 0 && (st.st_mode & ~(S_IFREG | 0600)))
 			fprintf(stderr, "warning: "
 				"secret key '%s' has insecure file mode %#o\n",
 				filename, st.st_mode);
