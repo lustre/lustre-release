@@ -2331,8 +2331,12 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 	memcpy(&tun->lt_cmn, &ni->ni_net->net_tunables, sizeof(tun->lt_cmn));
 
 	if (stats) {
-		stats->iel_send_count = atomic_read(&ni->ni_stats.send_count);
-		stats->iel_recv_count = atomic_read(&ni->ni_stats.recv_count);
+		stats->iel_send_count = lnet_sum_stats(&ni->ni_stats,
+						       LNET_STATS_TYPE_SEND);
+		stats->iel_recv_count = lnet_sum_stats(&ni->ni_stats,
+						       LNET_STATS_TYPE_RECV);
+		stats->iel_drop_count = lnet_sum_stats(&ni->ni_stats,
+						       LNET_STATS_TYPE_DROP);
 	}
 
 	/*
@@ -2556,6 +2560,29 @@ lnet_get_ni_config(struct lnet_ioctl_config_ni *cfg_ni,
 	}
 
 	lnet_net_unlock(cpt);
+	return rc;
+}
+
+int lnet_get_ni_stats(struct lnet_ioctl_element_msg_stats *msg_stats)
+{
+	struct lnet_ni *ni;
+	int cpt;
+	int rc = -ENOENT;
+
+	if (!msg_stats)
+		return -EINVAL;
+
+	cpt = lnet_net_lock_current();
+
+	ni = lnet_get_ni_idx_locked(msg_stats->im_idx);
+
+	if (ni) {
+		lnet_usr_translate_stats(msg_stats, &ni->ni_stats);
+		rc = 0;
+	}
+
+	lnet_net_unlock(cpt);
+
 	return rc;
 }
 
@@ -3026,9 +3053,10 @@ LNetCtl(unsigned int cmd, void *arg)
 		__u32 tun_size;
 
 		cfg_ni = arg;
+
 		/* get the tunables if they are available */
 		if (cfg_ni->lic_cfg_hdr.ioc_len <
-		    sizeof(*cfg_ni) + sizeof(*stats)+ sizeof(*tun))
+		    sizeof(*cfg_ni) + sizeof(*stats) + sizeof(*tun))
 			return -EINVAL;
 
 		stats = (struct lnet_ioctl_element_stats *)
@@ -3042,6 +3070,19 @@ LNetCtl(unsigned int cmd, void *arg)
 		mutex_lock(&the_lnet.ln_api_mutex);
 		rc = lnet_get_ni_config(cfg_ni, tun, stats, tun_size);
 		mutex_unlock(&the_lnet.ln_api_mutex);
+		return rc;
+	}
+
+	case IOC_LIBCFS_GET_LOCAL_NI_MSG_STATS: {
+		struct lnet_ioctl_element_msg_stats *msg_stats = arg;
+
+		if (msg_stats->im_hdr.ioc_len != sizeof(*msg_stats))
+			return -EINVAL;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
+		rc = lnet_get_ni_stats(msg_stats);
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
 		return rc;
 	}
 

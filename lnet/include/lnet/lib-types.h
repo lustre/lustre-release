@@ -294,10 +294,24 @@ enum lnet_ni_state {
 	LNET_NI_STATE_DELETING
 };
 
+enum lnet_stats_type {
+	LNET_STATS_TYPE_SEND = 0,
+	LNET_STATS_TYPE_RECV,
+	LNET_STATS_TYPE_DROP
+};
+
+struct lnet_comm_count {
+	atomic_t co_get_count;
+	atomic_t co_put_count;
+	atomic_t co_reply_count;
+	atomic_t co_ack_count;
+	atomic_t co_hello_count;
+};
+
 struct lnet_element_stats {
-	atomic_t	send_count;
-	atomic_t	recv_count;
-	atomic_t	drop_count;
+	struct lnet_comm_count el_send_stats;
+	struct lnet_comm_count el_recv_stats;
+	struct lnet_comm_count el_drop_stats;
 };
 
 struct lnet_net {

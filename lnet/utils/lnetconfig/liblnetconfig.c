@@ -63,6 +63,9 @@
 
 #define modparam_path "/sys/module/lnet/parameters/"
 
+const char *gmsg_stat_names[] = {"sent_stats", "received_stats",
+				 "dropped_stats"};
+
 /*
  * lustre_lnet_ip_range_descr
  *	Describes an IP range.
@@ -1748,6 +1751,47 @@ out:
 	return rc;
 }
 
+static bool
+add_msg_stats_to_yaml_blk(struct cYAML *yaml,
+			  struct lnet_ioctl_comm_count *counts)
+{
+	if (cYAML_create_number(yaml, "put",
+				counts->ico_put_count)
+					== NULL)
+		return false;
+	if (cYAML_create_number(yaml, "get",
+				counts->ico_get_count)
+					== NULL)
+		return false;
+	if (cYAML_create_number(yaml, "reply",
+				counts->ico_reply_count)
+					== NULL)
+		return false;
+	if (cYAML_create_number(yaml, "ack",
+				counts->ico_ack_count)
+					== NULL)
+		return false;
+	if (cYAML_create_number(yaml, "hello",
+				counts->ico_hello_count)
+					== NULL)
+		return false;
+
+	return true;
+}
+
+static struct lnet_ioctl_comm_count *
+get_counts(struct lnet_ioctl_element_msg_stats *msg_stats, int idx)
+{
+	if (idx == 0)
+		return &msg_stats->im_send_stats;
+	if (idx == 1)
+		return &msg_stats->im_recv_stats;
+	if (idx == 2)
+		return &msg_stats->im_drop_stats;
+
+	return NULL;
+}
+
 int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 			 struct cYAML **show_rc, struct cYAML **err_rc)
 {
@@ -1755,6 +1799,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	struct lnet_ioctl_config_ni *ni_data;
 	struct lnet_ioctl_config_lnd_tunables *lnd;
 	struct lnet_ioctl_element_stats *stats;
+	struct lnet_ioctl_element_msg_stats msg_stats;
 	__u32 net = LNET_NIDNET(LNET_NID_ANY);
 	__u32 prev_net = LNET_NIDNET(LNET_NID_ANY);
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, i, j;
@@ -1891,6 +1936,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 
 		if (detail) {
 			char *limit;
+			int k;
 
 			statistics = cYAML_create_object(item, "statistics");
 			if (statistics == NULL)
@@ -1911,6 +1957,40 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 							== NULL)
 				goto out;
 
+			if (detail < 2)
+				goto continue_without_msg_stats;
+
+			LIBCFS_IOC_INIT_V2(msg_stats, im_hdr);
+			msg_stats.im_hdr.ioc_len = sizeof(msg_stats);
+			msg_stats.im_idx = i;
+
+			rc = l_ioctl(LNET_DEV_ID,
+				     IOC_LIBCFS_GET_LOCAL_NI_MSG_STATS,
+				     &msg_stats);
+			if (rc != 0) {
+				l_errno = errno;
+				goto continue_without_msg_stats;
+			}
+
+			for (k = 0; k < 3; k++) {
+				struct lnet_ioctl_comm_count *counts;
+				struct cYAML *msg_statistics = NULL;
+
+				msg_statistics = cYAML_create_object(item,
+						 (char *)gmsg_stat_names[k]);
+				if (msg_statistics == NULL)
+					goto out;
+
+				counts = get_counts(&msg_stats, k);
+				if (counts == NULL)
+					goto out;
+
+				if (!add_msg_stats_to_yaml_blk(msg_statistics,
+							       counts))
+					goto out;
+			}
+
+continue_without_msg_stats:
 			tunables = cYAML_create_object(item, "tunables");
 			if (!tunables)
 				goto out;
@@ -2308,15 +2388,16 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	struct lnet_ioctl_peer_cfg peer_info;
 	struct lnet_peer_ni_credit_info *lpni_cri;
 	struct lnet_ioctl_element_stats *lpni_stats;
+	struct lnet_ioctl_element_msg_stats *msg_stats;
 	lnet_nid_t *nidp;
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
-	int i;
-	int j;
+	int i, j, k;
 	int l_errno = 0;
 	__u32 count;
 	__u32 size;
 	struct cYAML *root = NULL, *peer = NULL, *peer_ni = NULL,
-		     *first_seq = NULL, *peer_root = NULL, *tmp = NULL;
+		     *first_seq = NULL, *peer_root = NULL, *tmp = NULL,
+		     *msg_statistics = NULL, *statistics = NULL;
 	char err_str[LNET_MAX_STR_LEN];
 	lnet_process_id_t *list = NULL;
 	void *data = NULL;
@@ -2441,7 +2522,8 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 			nidp = lpni_data;
 			lpni_cri = (void*)nidp + sizeof(nidp);
 			lpni_stats = (void *)lpni_cri + sizeof(*lpni_cri);
-			lpni_data = (void *)lpni_stats + sizeof(*lpni_stats);
+			msg_stats = (void *)lpni_stats + sizeof(*lpni_stats);
+			lpni_data = (void *)msg_stats + sizeof(*msg_stats);
 
 			peer_ni = cYAML_create_seq_item(tmp);
 			if (peer_ni == NULL)
@@ -2490,24 +2572,49 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 			    == NULL)
 				goto out;
 
-			if (cYAML_create_number(peer_ni, "send_count",
+			if (cYAML_create_number(peer_ni, "refcount",
+						lpni_cri->cr_refcount) == NULL)
+				goto out;
+
+			statistics = cYAML_create_object(peer_ni, "statistics");
+			if (statistics == NULL)
+				goto out;
+
+			if (cYAML_create_number(statistics, "send_count",
 						lpni_stats->iel_send_count)
 			    == NULL)
 				goto out;
 
-			if (cYAML_create_number(peer_ni, "recv_count",
+			if (cYAML_create_number(statistics, "recv_count",
 						lpni_stats->iel_recv_count)
 			    == NULL)
 				goto out;
 
-			if (cYAML_create_number(peer_ni, "drop_count",
+			if (cYAML_create_number(statistics, "drop_count",
 						lpni_stats->iel_drop_count)
 			    == NULL)
 				goto out;
 
-			if (cYAML_create_number(peer_ni, "refcount",
-						lpni_cri->cr_refcount) == NULL)
-				goto out;
+			if (detail < 2)
+				continue;
+
+			for (k = 0; k < 3; k++) {
+				struct lnet_ioctl_comm_count *counts;
+
+				msg_statistics = cYAML_create_object(peer_ni,
+						 (char *) gmsg_stat_names[k]);
+				if (msg_statistics == NULL)
+					goto out;
+
+				counts = get_counts(msg_stats, k);
+				if (counts == NULL)
+					goto out;
+
+				if (!add_msg_stats_to_yaml_blk(msg_statistics,
+							       counts))
+					goto out;
+			}
+
 		}
 	}
 

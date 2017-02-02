@@ -680,7 +680,7 @@ void lnet_set_reply_msg_len(struct lnet_ni *ni, struct lnet_msg *msg,
 void lnet_finalize(struct lnet_msg *msg, int rc);
 
 void lnet_drop_message(struct lnet_ni *ni, int cpt, void *private,
-		       unsigned int nob);
+		       unsigned int nob, __u32 msg_type);
 void lnet_drop_delayed_msg_list(struct list_head *head, char *reason);
 void lnet_recv_delayed_msg_list(struct list_head *head);
 
@@ -983,5 +983,14 @@ lnet_peer_needs_push(struct lnet_peer *lp)
 		return true;
 	return false;
 }
+
+void lnet_incr_stats(struct lnet_element_stats *stats, lnet_msg_type_t msg_type,
+		     enum lnet_stats_type stats_type);
+
+__u32 lnet_sum_stats(struct lnet_element_stats *stats,
+		     enum lnet_stats_type stats_type);
+
+void lnet_usr_translate_stats(struct lnet_ioctl_element_msg_stats *msg_stats,
+			      struct lnet_element_stats *stats);
 
 #endif

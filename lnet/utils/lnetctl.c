@@ -101,7 +101,8 @@ command_t net_cmds[] = {
 	 "\t--if: physical interface (e.g. eth0)\n"},
 	{"show", jt_show_net, 0, "show networks\n"
 	 "\t--net: net name (e.g. tcp0) to filter on\n"
-	 "\t--verbose: display detailed output per network\n"},
+	 "\t--verbose: display detailed output per network."
+		       "optional argument of 2 outputs more stats\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -154,7 +155,8 @@ command_t peer_cmds[] = {
 	 "\t       peer is deleted\n"},
 	{"show", jt_show_peer, 0, "show peer information\n"
 	 "\t--nid: NID of peer to filter on.\n"
-	 "\t--verbose: Include  extended  statistics\n"},
+	 "\t--verbose: display detailed output per peer."
+		       "optional argument of 2 outputs more stats\n"},
 	{"list", jt_list_peer, 0, "list all peers\n"},
 	{ 0, 0, 0, NULL }
 };
@@ -801,13 +803,14 @@ static int jt_show_route(int argc, char **argv)
 static int jt_show_net(int argc, char **argv)
 {
 	char *network = NULL;
-	int detail = 0, rc, opt;
+	int rc, opt;
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
+	long int detail = 0;
 
 	const char *const short_options = "n:vh";
 	static const struct option long_options[] = {
 		{ .name = "net",     .has_arg = required_argument, .val = 'n' },
-		{ .name = "verbose", .has_arg = no_argument,	   .val = 'v' },
+		{ .name = "verbose", .has_arg = optional_argument, .val = 'v' },
 		{ .name = "help",    .has_arg = no_argument,	   .val = 'h' },
 		{ .name = NULL } };
 
@@ -818,7 +821,13 @@ static int jt_show_net(int argc, char **argv)
 			network = optarg;
 			break;
 		case 'v':
-			detail = 1;
+			if ((!optarg) && (argv[optind] != NULL) &&
+			    (argv[optind][0] != '-')) {
+				if (parse_long(argv[optind++], &detail) != 0)
+					detail = 1;
+			} else {
+				detail = 1;
+			}
 			break;
 		case 'h':
 			print_help(net_cmds, "net", "show");
@@ -828,7 +837,7 @@ static int jt_show_net(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_show_net(network, detail, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_net(network, (int) detail, -1, &show_rc, &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
@@ -1130,7 +1139,7 @@ static int jt_export(int argc, char **argv)
 	} else
 		f = stdout;
 
-	rc = lustre_lnet_show_net(NULL, 1, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_net(NULL, 2, -1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
@@ -1152,7 +1161,7 @@ static int jt_export(int argc, char **argv)
 		err_rc = NULL;
 	}
 
-	rc = lustre_lnet_show_peer(NULL, 1, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_peer(NULL, 2, -1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
@@ -1312,12 +1321,12 @@ static int jt_show_peer(int argc, char **argv)
 	char *nid = NULL;
 	int rc, opt;
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
-	int detail = 0;
+	long int detail = 0;
 
-	const char *const short_options = "n:vh";
+	const char *const short_options = "n:v::h";
 	const struct option long_options[] = {
 		{ "nid", 1, NULL, 'n' },
-		{ "verbose", 0, NULL, 'v' },
+		{ "verbose", 2, NULL, 'v' },
 		{ "help", 0, NULL, 'h' },
 		{ NULL, 0, NULL, 0 },
 	};
@@ -1329,7 +1338,13 @@ static int jt_show_peer(int argc, char **argv)
 			nid = optarg;
 			break;
 		case 'v':
-			detail = 1;
+			if ((!optarg) && (argv[optind] != NULL) &&
+			    (argv[optind][0] != '-')) {
+				if (parse_long(argv[optind++], &detail) != 0)
+					detail = 1;
+			} else {
+				detail = 1;
+			}
 			break;
 		case 'h':
 			print_help(peer_cmds, "peer", "show");
@@ -1339,7 +1354,7 @@ static int jt_show_peer(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_show_peer(nid, detail, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_peer(nid, (int) detail, -1, &show_rc, &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
