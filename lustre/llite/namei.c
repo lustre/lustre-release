@@ -804,7 +804,7 @@ out_release:
 
 #else /* !HAVE_IOP_ATOMIC_OPEN */
 static struct lookup_intent *
-ll_convert_intent(struct open_intent *oit, int lookup_flags)
+ll_convert_intent(struct open_intent *oit, int lookup_flags, bool is_readonly)
 {
 	struct lookup_intent *it;
 
@@ -814,10 +814,12 @@ ll_convert_intent(struct open_intent *oit, int lookup_flags)
 
 	if (lookup_flags & LOOKUP_OPEN) {
 		it->it_op = IT_OPEN;
-		if (lookup_flags & LOOKUP_CREATE)
+		/* Avoid file creation for ro bind mount point(is_readonly) */
+		if ((lookup_flags & LOOKUP_CREATE) && !is_readonly)
 			it->it_op |= IT_CREAT;
 		it->it_create_mode = (oit->create_mode & S_IALLUGO) | S_IFREG;
-		it->it_flags = ll_namei_to_lookup_intent_flag(oit->flags);
+		it->it_flags = ll_namei_to_lookup_intent_flag(oit->flags &
+						~(is_readonly ? O_CREAT : 0));
 		it->it_flags &= ~MDS_OPEN_FL_INTERNAL;
 	} else {
 		it->it_op = IT_GETATTR;
@@ -851,7 +853,9 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 					      MAY_WRITE | MAY_EXEC) == 0))
 				RETURN(NULL);
 
-			it = ll_convert_intent(&nd->intent.open, nd->flags);
+			it = ll_convert_intent(&nd->intent.open, nd->flags,
+				(nd->path.mnt->mnt_flags & MNT_READONLY) ||
+				(nd->path.mnt->mnt_sb->s_flags & MS_RDONLY));
 			if (IS_ERR(it))
 				RETURN((struct dentry *)it);
 		}

@@ -7416,6 +7416,43 @@ test_104() { # LU-6952
 }
 run_test 104 "Make sure user defined options are reflected in mount"
 
+error_and_umount() {
+	umount $TMP/$tdir
+	rmdir $TMP/$tdir
+	error $*
+}
+
+test_105() {
+	cleanup
+	reformat
+	setup
+	mkdir -p $TMP/$tdir
+	mount --bind $DIR $TMP/$tdir || error "mount bind mnt pt failed"
+	rm -f $TMP/$tdir/$tfile
+	rm -f $TMP/$tdir/${tfile}1
+
+	# Files should not be created in ro bind mount point
+	# remounting from rw to ro
+	mount -o remount,ro $TMP/$tdir ||
+		error_and_umount "readonly remount of bind mnt pt failed"
+	touch $TMP/$tdir/$tfile &&
+		error_and_umount "touch succeeds on ro bind mnt pt"
+	[ -e $TMP/$tdir/$tfile ] &&
+		error_and_umount "file created on ro bind mnt pt"
+
+	# Files should be created in rw bind mount point
+	# remounting from ro to rw
+	mount -o remount,rw $TMP/$tdir ||
+		error_and_umount "read-write remount of bind mnt pt failed"
+	touch $TMP/$tdir/${tfile}1 ||
+		error_and_umount "touch fails on rw bind mnt pt"
+	[ -e $TMP/$tdir/${tfile}1 ] ||
+		error_and_umount "file not created on rw bind mnt pt"
+	umount $TMP/$tdir || error "umount of bind mnt pt failed"
+	rmdir $TMP/$tdir
+}
+run_test 105 "check file creation for ro and rw bind mnt pt"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
