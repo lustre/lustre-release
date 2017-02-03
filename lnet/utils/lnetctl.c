@@ -1126,9 +1126,12 @@ static int jt_add_peer_nid(int argc, char **argv)
 					 !non_mr, -1, &err_rc);
 
 failed:
-	for (i = 0; i < size; i++)
-		free(nids[i]);
-	free(nids);
+	if (nids) {
+		/* free the array of nids */
+		for (i = 0; i < size; i++)
+			free(nids[i]);
+		free(nids);
+	}
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
@@ -1178,9 +1181,11 @@ static int jt_del_peer_nid(int argc, char **argv)
 	rc = lustre_lnet_del_peer_nid(prim_nid, nids, size, -1, &err_rc);
 
 failed:
-	for (i = 0; i < size; i++)
-		free(nids[i]);
-	free(nids);
+	if (nids) {
+		for (i = 0; i < size; i++)
+			free(nids[i]);
+		free(nids);
+	}
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);

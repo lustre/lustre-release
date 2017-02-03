@@ -718,7 +718,7 @@ out_enomem:
 static int
 lnet_add_prim_lpni(lnet_nid_t nid)
 {
-	int rc;
+	int rc = 0;
 	struct lnet_peer *peer;
 	struct lnet_peer_ni *lpni;
 

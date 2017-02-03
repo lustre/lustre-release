@@ -40,6 +40,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <libcfs/util/ioctl.h>
@@ -872,7 +873,7 @@ out:
 static int socket_intf_query(int request, char *intf,
 			     struct ifreq *ifr)
 {
-	int rc;
+	int rc = 0;
 	int sockfd;
 
 	if (strlen(intf) >= IFNAMSIZ || ifr == NULL)
@@ -885,9 +886,11 @@ static int socket_intf_query(int request, char *intf,
 	strcpy(ifr->ifr_name, intf);
 	rc = ioctl(sockfd, request, ifr);
 	if (rc != 0)
-		return LUSTRE_CFG_RC_BAD_PARAM;
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
 
-	return 0;
+	close(sockfd);
+
+	return rc;
 }
 
 /*
@@ -1157,6 +1160,8 @@ lustre_lnet_ioctl_config_ni(struct list_head *intf_list,
 			len = sizeof(struct lnet_ioctl_config_ni);
 
 		data = calloc(1, len);
+		if (!data)
+			return LUSTRE_CFG_RC_OUT_OF_MEM;
 		conf = (struct lnet_ioctl_config_ni*) data;
 		if (i == 0 && tunables != NULL)
 			tun = (struct lnet_ioctl_config_lnd_tunables*)
@@ -1202,8 +1207,10 @@ lustre_lnet_ioctl_config_ni(struct list_head *intf_list,
 			snprintf(err_str,
 				 LNET_MAX_STR_LEN,
 				 "\"cannot add network: %s\"", strerror(errno));
+			free(data);
 			return rc;
 		}
+		free(data);
 		i++;
 	}
 
@@ -1231,6 +1238,11 @@ lustre_lnet_config_ip2nets(struct lustre_lnet_ip2nets *ip2nets,
 		goto out;
 	}
 
+	/*
+	 * call below function to resolve the rules into a list of nids.
+	 * The memory is allocated in that function then freed here when
+	 * it's no longer needed.
+	 */
 	rc = lustre_lnet_resolve_ip2nets_rule(ip2nets, &nids, &nnids);
 	if (rc != LUSTRE_CFG_RC_NO_ERR && rc != LUSTRE_CFG_RC_MATCH) {
 		snprintf(err_str,
@@ -1242,14 +1254,15 @@ lustre_lnet_config_ip2nets(struct lustre_lnet_ip2nets *ip2nets,
 	if (list_empty(&ip2nets->ip2nets_net.nw_intflist)) {
 		snprintf(err_str, sizeof(err_str),
 			 "\"no interfaces match ip2nets rules\"");
-		goto out;
+		goto free_nids_out;
 	}
 
 	rc = lustre_lnet_ioctl_config_ni(&ip2nets->ip2nets_net.nw_intflist,
 					 tunables, global_cpts, nids,
 					 err_str);
-	if (rc != LUSTRE_CFG_RC_NO_ERR)
-		free(nids);
+
+free_nids_out:
+	free(nids);
 
 out:
 	cYAML_build_error(rc, seq_no, ADD_CMD, "ip2nets", err_str, err_rc);
@@ -1301,6 +1314,10 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 		else
 			len = sizeof(struct lnet_ioctl_config_ni);
 		data = calloc(1, len);
+		if (!data) {
+			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+			goto out;
+		}
 		conf = (struct lnet_ioctl_config_ni*) data;
 		if (tunables != NULL)
 			tun = (struct lnet_ioctl_config_lnd_tunables*)
@@ -1343,8 +1360,10 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 		goto out;
 	}
 
-	if (LNET_NETTYP(nw_descr->nw_id) == LOLND)
-		return LUSTRE_CFG_RC_NO_ERR;
+	if (LNET_NETTYP(nw_descr->nw_id) == LOLND) {
+		rc = LUSTRE_CFG_RC_NO_ERR;
+		goto out;
+	}
 
 	if (nw_descr->nw_id == LNET_NIDNET(LNET_NID_ANY)) {
 		snprintf(err_str,
@@ -1406,9 +1425,6 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 	__u32 nnids = 0;
 	struct lnet_dlc_intf_descr *intf_descr, *tmp;
 
-	if (LNET_NETTYP(nw_descr->nw_id) == LOLND)
-		return LUSTRE_CFG_RC_NO_ERR;
-
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 
 	if (nw_descr == NULL) {
@@ -1418,6 +1434,9 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 		rc = LUSTRE_CFG_RC_MISSING_PARAM;
 		goto out;
 	}
+
+	if (LNET_NETTYP(nw_descr->nw_id) == LOLND)
+		return LUSTRE_CFG_RC_NO_ERR;
 
 	if (nw_descr->nw_id == LNET_NIDNET(LNET_NID_ANY)) {
 		snprintf(err_str,
@@ -2201,7 +2220,7 @@ int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 				struct cYAML **err_rc)
 {
 	struct lnet_ioctl_numa_range data;
-	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	int rc;
 	int l_errno;
 	char err_str[LNET_MAX_STR_LEN];
 	struct cYAML *root = NULL, *range = NULL;
@@ -2221,6 +2240,8 @@ int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 		goto out;
 	}
 
+	rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+
 	root = cYAML_create_object(NULL, NULL);
 	if (root == NULL)
 		goto out;
@@ -2237,6 +2258,7 @@ int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 		cYAML_print_tree(root);
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
+	rc = LUSTRE_CFG_RC_NO_ERR;
 out:
 	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_free_tree(root);
@@ -2257,7 +2279,7 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 			   struct cYAML **err_rc)
 {
 	struct lnet_ioctl_lnet_stats data;
-	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	int rc;
 	int l_errno;
 	char err_str[LNET_MAX_STR_LEN];
 	struct cYAML *root = NULL, *stats = NULL;
@@ -2276,6 +2298,8 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 		rc = -l_errno;
 		goto out;
 	}
+
+	rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 
 	root = cYAML_create_object(NULL, NULL);
 	if (root == NULL)
@@ -2333,6 +2357,7 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 		cYAML_print_tree(root);
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
+	rc = LUSTRE_CFG_RC_NO_ERR;
 out:
 	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_free_tree(root);
@@ -2539,6 +2564,8 @@ static int handle_yaml_config_ni(struct cYAML *tree, struct cYAML **show_rc,
 	net = cYAML_get_object_item(tree, "net type");
 	if (net)
 		nw_descr.nw_id = libcfs_str2net(net->cy_valuestring);
+	else
+		nw_descr.nw_id = LOLND;
 
 	/*
 	 * if neither net nor ip2nets are present, then we can not
