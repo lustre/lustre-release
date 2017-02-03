@@ -284,7 +284,7 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 		 */
 		car = mdt_cdt_find_request(cdt, larr->arr_hai.hai_cookie, NULL);
 		if (car == NULL) {
-			last = larr->arr_req_create;
+			last = larr->arr_req_change;
 		} else {
 			last = car->car_req_update;
 			mdt_cdt_put_request(car);
@@ -1427,15 +1427,14 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 
 		rc = hsm_cdt_request_completed(mti, pgs, car, &status);
 
-		/* remove request from memory list */
-		mdt_cdt_remove_request(cdt, pgs->hpk_cookie);
-
-		CDEBUG(D_HSM, "Updating record: fid="DFID" cookie=%#llx"
-			      " action=%s status=%s\n", PFID(&pgs->hpk_fid),
-		       pgs->hpk_cookie,
+		CDEBUG(D_HSM, "%s record: fid="DFID" cookie=%#llx action=%s "
+			      "status=%s\n",
+		       update_record ? "Updating" : "Not updating",
+		       PFID(&pgs->hpk_fid), pgs->hpk_cookie,
 		       hsm_copytool_action2name(car->car_hai->hai_action),
 		       agent_req_status2name(status));
 
+		/* update record first (LU-9075) */
 		if (update_record) {
 			int rc1;
 
@@ -1451,6 +1450,10 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 				       pgs->hpk_cookie);
 			rc = (rc != 0 ? rc : rc1);
 		}
+
+		/* then remove request from memory list (LU-9075) */
+		mdt_cdt_remove_request(cdt, pgs->hpk_cookie);
+
 		/* ct has completed a request, so a slot is available, wakeup
 		 * cdt to find new work */
 		mdt_hsm_cdt_wakeup(mdt);
