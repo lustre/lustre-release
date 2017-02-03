@@ -807,8 +807,8 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 
 		if (detail) {
 			if (cYAML_create_number(item, "hop",
-						data.cfg_config_u.cfg_route.
-							rtr_hop) ==
+						(int) data.cfg_config_u.
+						cfg_route.rtr_hop) ==
 			    NULL)
 				goto out;
 

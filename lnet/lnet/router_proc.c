@@ -228,7 +228,7 @@ proc_lnet_routes(struct ctl_table *table, int write, void __user *buffer,
 			int          alive	= lnet_is_route_alive(route);
 
 			s += snprintf(s, tmpstr + tmpsiz - s,
-				      "%-8s %4u %8u %7s %s\n",
+				      "%-8s %4d %8u %7s %s\n",
 				      libcfs_net2str(net), hops,
 				      priority,
 				      alive ? "up" : "down",
