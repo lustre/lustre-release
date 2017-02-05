@@ -343,10 +343,13 @@ static int tgt_request_preprocess(struct tgt_session_info *tsi,
 
 		dlm_req = req_capsule_client_get(pill, &RMF_DLM_REQ);
 		if (dlm_req != NULL) {
+			union ldlm_wire_policy_data *policy =
+					&dlm_req->lock_desc.l_policy_data;
+
 			if (unlikely(dlm_req->lock_desc.l_resource.lr_type ==
 				     LDLM_IBITS &&
-				     dlm_req->lock_desc.l_policy_data.\
-				     l_inodebits.bits == 0)) {
+				     (policy->l_inodebits.bits |
+				      policy->l_inodebits.try_bits) == 0)) {
 				/*
 				 * Lock without inodebits makes no sense and
 				 * will oops later in ldlm. If client miss to

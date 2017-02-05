@@ -2282,6 +2282,7 @@ struct ldlm_extent {
 
 struct ldlm_inodebits {
         __u64 bits;
+	__u64 try_bits; /* optional bits to try */
 };
 
 struct ldlm_flock_wire {

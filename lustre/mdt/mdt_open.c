@@ -863,12 +863,9 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		 * lock for each open.
 		 * However this is a double-edged sword because changing
 		 * permission will revoke huge # of LOOKUP locks. */
-		*ibits |= MDS_INODELOCK_LAYOUT | MDS_INODELOCK_LOOKUP;
-		if (!mdt_object_lock_try(info, obj, lhc, *ibits)) {
-			*ibits &= ~(MDS_INODELOCK_LAYOUT|MDS_INODELOCK_LOOKUP);
-			if (*ibits != 0)
-				rc = mdt_object_lock(info, obj, lhc, *ibits);
-		}
+		rc = mdt_object_lock_try(info, obj, lhc, ibits,
+					 MDS_INODELOCK_LAYOUT |
+					 MDS_INODELOCK_LOOKUP, false);
 	} else if (*ibits != 0) {
 		rc = mdt_object_lock(info, obj, lhc, *ibits);
 	}
@@ -1215,7 +1212,7 @@ static int mdt_lock_root_xattr(struct mdt_thread_info *info,
 
 	rc = mdt_remote_object_lock(info, md_root, mdt_object_fid(md_root),
 				    &lhroot, LCK_PR, MDS_INODELOCK_XATTR,
-				    false, true);
+				    true);
 	if (rc < 0)
 		return rc;
 

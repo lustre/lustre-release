@@ -872,8 +872,6 @@ static int osp_md_object_lock(const struct lu_env *env,
 	res_id = einfo->ei_res_id;
 	LASSERT(res_id != NULL);
 
-	if (einfo->ei_nonblock)
-		flags |= LDLM_FL_BLOCK_NOWAIT;
 	if (einfo->ei_mode & (LCK_EX | LCK_PW))
 		flags |= LDLM_FL_COS_INCOMPAT;
 

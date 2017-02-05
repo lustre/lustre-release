@@ -2827,7 +2827,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 	case LDLM_IBITS:
 		libcfs_debug_vmsg2(msgdata, fmt, args,
 			" ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s "
-			"res: "DLDLMRES" bits %#llx rrc: %d type: %s "
+			"res: "DLDLMRES" bits %#llx/%#llx rrc: %d type: %s "
 			"flags: %#llx nid: %s remote: %#llx expref: %d "
 			"pid: %u timeout: %lu lvb_type: %d\n",
 			ldlm_lock_to_ns_name(lock),
@@ -2838,6 +2838,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 			ldlm_lockname[lock->l_req_mode],
 			PLDLMRES(resource),
 			lock->l_policy_data.l_inodebits.bits,
+			lock->l_policy_data.l_inodebits.try_bits,
 			atomic_read(&resource->lr_refcount),
 			ldlm_typename[resource->lr_type],
 			lock->l_flags, nid, lock->l_remote_handle.cookie,

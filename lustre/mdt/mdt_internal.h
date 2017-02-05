@@ -634,11 +634,8 @@ int mdt_reint_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
 			  bool cos_incompat);
 
 int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *mo,
-			struct mdt_lock_handle *lh, __u64 ibits);
-
-int mdt_reint_object_lock_try(struct mdt_thread_info *info,
-			      struct mdt_object *o, struct mdt_lock_handle *lh,
-			      __u64 ibits, bool cos_incompat);
+			struct mdt_lock_handle *lh, __u64 *ibits,
+			__u64 trybits, bool cos_incompat);
 
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *mo,
 		       struct mdt_lock_handle *lh, int decref);
@@ -663,8 +660,7 @@ void mdt_client_compatibility(struct mdt_thread_info *info);
 int mdt_remote_object_lock(struct mdt_thread_info *mti,
 			   struct mdt_object *o, const struct lu_fid *fid,
 			   struct lustre_handle *lh,
-			   enum ldlm_mode mode, __u64 ibits, bool nonblock,
-			   bool cache);
+			   enum ldlm_mode mode, __u64 ibits, bool cache);
 
 enum mdt_name_flags {
 	MNF_FIX_ANON = 1,

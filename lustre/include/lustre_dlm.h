@@ -1123,8 +1123,7 @@ struct ldlm_enqueue_info {
 	void		*ei_cb_gl;	/** lock glimpse callback */
 	void		*ei_cbdata;	/** Data to be passed into callbacks. */
 	void		*ei_namespace;	/** lock namespace **/
-	unsigned int	ei_enq_slave:1,	/** whether enqueue slave stripes */
-			ei_nonblock:1;	/** non block enqueue */
+	unsigned int	ei_enq_slave:1;	/** whether enqueue slave stripes */
 };
 
 #define ei_res_id	ei_cb_gl

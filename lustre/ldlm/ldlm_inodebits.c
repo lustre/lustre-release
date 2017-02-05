@@ -79,12 +79,18 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 	struct list_head *tmp;
 	struct ldlm_lock *lock;
 	__u64 req_bits = req->l_policy_data.l_inodebits.bits;
+	__u64 *try_bits = &req->l_policy_data.l_inodebits.try_bits;
 	int compat = 1;
+
 	ENTRY;
 
-	/* There is no sense in lock with no bits set, I think.
-	 * Also, such a lock would be compatible with any other bit lock */
-	LASSERT(req_bits != 0);
+	/* There is no sense in lock with no bits set. Also such a lock
+	 * would be compatible with any other bit lock.
+	 * Meanwhile that can be true if there were just try_bits and all
+	 * are failed, so just exit gracefully and let the caller to care.
+	 */
+	if ((req_bits | *try_bits) == 0)
+		RETURN(0);
 
 	list_for_each(tmp, queue) {
 		struct list_head *mode_tail;
@@ -99,11 +105,10 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
 		/* last lock in mode group */
 		LASSERT(lock->l_sl_mode.prev != NULL);
-		mode_tail = &list_entry(lock->l_sl_mode.prev,
-					struct ldlm_lock,
+		mode_tail = &list_entry(lock->l_sl_mode.prev, struct ldlm_lock,
 					l_sl_mode)->l_res_link;
 
-		/* if reqest lock is not COS_INCOMPAT and COS is disabled,
+		/* if request lock is not COS_INCOMPAT and COS is disabled,
 		 * they are compatible, IOW this request is from a local
 		 * transaction on a DNE system. */
 		if (lock->l_req_mode == LCK_COS && !ldlm_is_cos_incompat(req) &&
@@ -125,8 +130,13 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
 			/* Advance loop cursor to last lock in policy group. */
 			tmp = &list_entry(lock->l_sl_policy.prev,
-					      struct ldlm_lock,
-					      l_sl_policy)->l_res_link;
+					  struct ldlm_lock,
+					  l_sl_policy)->l_res_link;
+
+			/* drop try_bits used by other locks */
+			*try_bits &= ~(lock->l_policy_data.l_inodebits.bits);
+			if ((req_bits | *try_bits) == 0)
+				RETURN(0);
 
 			/* Locks with overlapping bits conflict. */
 			if (lock->l_policy_data.l_inodebits.bits & req_bits) {
@@ -146,22 +156,21 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
 				/* Add locks of the policy group to @work_list
 				 * as blocking locks for @req */
-                                if (lock->l_blocking_ast)
-                                        ldlm_add_ast_work_item(lock, req,
-                                                               work_list);
-                                head = &lock->l_sl_policy;
+				if (lock->l_blocking_ast)
+					ldlm_add_ast_work_item(lock, req,
+							       work_list);
+				head = &lock->l_sl_policy;
 				list_for_each_entry(lock, head, l_sl_policy)
-                                        if (lock->l_blocking_ast)
-                                                ldlm_add_ast_work_item(lock, req,
-                                                                       work_list);
-                        }
-                not_conflicting:
-                        if (tmp == mode_tail)
-                                break;
+					if (lock->l_blocking_ast)
+						ldlm_add_ast_work_item(lock,
+								req, work_list);
+			}
+not_conflicting:
+			if (tmp == mode_tail)
+				break;
 
-                        tmp = tmp->next;
-			lock = list_entry(tmp, struct ldlm_lock,
-                                              l_res_link);
+			tmp = tmp->next;
+			lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 		} /* Loop over policy groups within one mode group. */
 	} /* Loop over mode groups within @queue. */
 
@@ -184,6 +193,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 	struct ldlm_resource *res = lock->l_resource;
 	struct list_head rpc_list;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(lock->l_granted_mode != lock->l_req_mode);
@@ -191,22 +201,26 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 	INIT_LIST_HEAD(&rpc_list);
 	check_res_locked(res);
 
-	/* (*flags & LDLM_FL_BLOCK_NOWAIT) is for layout lock right now. */
-	if (intention == LDLM_PROCESS_RESCAN ||
-	    (*flags & LDLM_FL_BLOCK_NOWAIT)) {
+	if (intention == LDLM_PROCESS_RESCAN) {
 		*err = ELDLM_LOCK_ABORTED;
-		if (*flags & LDLM_FL_BLOCK_NOWAIT)
-			*err = ELDLM_LOCK_WOULDBLOCK;
 
-                rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, NULL);
-                if (!rc)
-                        RETURN(LDLM_ITER_STOP);
-                rc = ldlm_inodebits_compat_queue(&res->lr_waiting, lock, NULL);
-                if (!rc)
-                        RETURN(LDLM_ITER_STOP);
+		LASSERT(lock->l_policy_data.l_inodebits.bits != 0);
 
-                ldlm_resource_unlink_lock(lock);
-                ldlm_grant_lock(lock, work_list);
+		rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, NULL);
+		if (!rc)
+			RETURN(LDLM_ITER_STOP);
+		rc = ldlm_inodebits_compat_queue(&res->lr_waiting, lock, NULL);
+		if (!rc)
+			RETURN(LDLM_ITER_STOP);
+
+		/* grant also try_bits if any */
+		if (lock->l_policy_data.l_inodebits.try_bits != 0) {
+			lock->l_policy_data.l_inodebits.bits |=
+				lock->l_policy_data.l_inodebits.try_bits;
+			*flags |= LDLM_FL_LOCK_CHANGED;
+		}
+		ldlm_resource_unlink_lock(lock);
+		ldlm_grant_lock(lock, work_list);
 
 		*err = ELDLM_OK;
 		RETURN(LDLM_ITER_CONTINUE);
@@ -214,16 +228,30 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 
 	LASSERT((intention == LDLM_PROCESS_ENQUEUE && work_list == NULL) ||
 		(intention == LDLM_PROCESS_RECOVERY && work_list != NULL));
- restart:
-        rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, &rpc_list);
-        rc += ldlm_inodebits_compat_queue(&res->lr_waiting, lock, &rpc_list);
+restart:
+	rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, &rpc_list);
+	rc += ldlm_inodebits_compat_queue(&res->lr_waiting, lock, &rpc_list);
 
-        if (rc != 2) {
-		rc = ldlm_handle_conflict_lock(lock, flags, &rpc_list, 0);
-		if (rc == -ERESTART)
-			GOTO(restart, rc);
+	if (rc != 2) {
+		/* if there were only bits to try and all are conflicting */
+		if ((lock->l_policy_data.l_inodebits.bits |
+		     lock->l_policy_data.l_inodebits.try_bits) == 0) {
+			rc = ELDLM_LOCK_WOULDBLOCK;
+		} else {
+			rc = ldlm_handle_conflict_lock(lock, flags,
+						       &rpc_list, 0);
+			if (rc == -ERESTART)
+				GOTO(restart, rc);
+		}
 		*err = rc;
 	} else {
+		/* grant also all remaining try_bits */
+		if (lock->l_policy_data.l_inodebits.try_bits != 0) {
+			lock->l_policy_data.l_inodebits.bits |=
+				lock->l_policy_data.l_inodebits.try_bits;
+			*flags |= LDLM_FL_LOCK_CHANGED;
+		}
+		LASSERT(lock->l_policy_data.l_inodebits.bits);
 		ldlm_resource_unlink_lock(lock);
 		ldlm_grant_lock(lock, work_list);
 		rc = 0;
@@ -240,6 +268,7 @@ void ldlm_ibits_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
 				     union ldlm_policy_data *lpolicy)
 {
 	lpolicy->l_inodebits.bits = wpolicy->l_inodebits.bits;
+	lpolicy->l_inodebits.try_bits = wpolicy->l_inodebits.try_bits;
 }
 
 void ldlm_ibits_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
@@ -247,4 +276,5 @@ void ldlm_ibits_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 {
 	memset(wpolicy, 0, sizeof(*wpolicy));
 	wpolicy->l_inodebits.bits = lpolicy->l_inodebits.bits;
+	wpolicy->l_inodebits.try_bits = lpolicy->l_inodebits.try_bits;
 }
