@@ -360,10 +360,10 @@ struct osd_thandle {
 	struct lquota_trans    *ot_quota_trans;
 #if OSD_THANDLE_STATS
         /** time when this handle was allocated */
-        cfs_time_t oth_alloced;
+	ktime_t oth_alloced;
 
         /** time when this thanle was started */
-        cfs_time_t oth_started;
+	ktime_t oth_started;
 #endif
 };
 

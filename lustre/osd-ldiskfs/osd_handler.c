@@ -1466,7 +1466,7 @@ enum {
  */
 static void osd_th_alloced(struct osd_thandle *oth)
 {
-        oth->oth_alloced = cfs_time_current();
+	oth->oth_alloced = ktime_get();
 }
 
 /**
@@ -1474,58 +1474,42 @@ static void osd_th_alloced(struct osd_thandle *oth)
  */
 static void osd_th_started(struct osd_thandle *oth)
 {
-        oth->oth_started = cfs_time_current();
-}
-
-/**
- * Helper function to convert time interval to microseconds packed in
- * long int.
- */
-static long interval_to_usec(cfs_time_t start, cfs_time_t end)
-{
-        struct timeval val;
-
-        cfs_duration_usec(cfs_time_sub(end, start), &val);
-        return val.tv_sec * 1000000 + val.tv_usec;
+	oth->oth_started = ktime_get();
 }
 
 /**
  * Check whether the we deal with this handle for too long.
  */
 static void __osd_th_check_slow(void *oth, struct osd_device *dev,
-                                cfs_time_t alloced, cfs_time_t started,
-                                cfs_time_t closed)
+				ktime_t alloced, ktime_t started,
+				ktime_t closed)
 {
-        cfs_time_t now = cfs_time_current();
+	ktime_t now = ktime_get();
 
-        LASSERT(dev != NULL);
+	LASSERT(dev != NULL);
 
-        lprocfs_counter_add(dev->od_stats, LPROC_OSD_THANDLE_STARTING,
-                            interval_to_usec(alloced, started));
-        lprocfs_counter_add(dev->od_stats, LPROC_OSD_THANDLE_OPEN,
-                            interval_to_usec(started, closed));
-        lprocfs_counter_add(dev->od_stats, LPROC_OSD_THANDLE_CLOSING,
-                            interval_to_usec(closed, now));
+	lprocfs_counter_add(dev->od_stats, LPROC_OSD_THANDLE_STARTING,
+			    ktime_us_delta(started, alloced));
+	lprocfs_counter_add(dev->od_stats, LPROC_OSD_THANDLE_OPEN,
+			    ktime_us_delta(closed, started));
+	lprocfs_counter_add(dev->od_stats, LPROC_OSD_THANDLE_CLOSING,
+			    ktime_us_delta(now, closed));
 
-        if (cfs_time_before(cfs_time_add(alloced, cfs_time_seconds(30)), now)) {
-                CWARN("transaction handle %p was open for too long: "
-                      "now "CFS_TIME_T" ,"
-                      "alloced "CFS_TIME_T" ,"
-                      "started "CFS_TIME_T" ,"
-                      "closed "CFS_TIME_T"\n",
+	if (ktime_before(ktime_add_ns(alloced, 30 * NSEC_PER_SEC), now)) {
+		CWARN("transaction handle %p was open for too long: now %lld, alloced %lld, started %lld, closed %lld\n",
                       oth, now, alloced, started, closed);
                 libcfs_debug_dumpstack(NULL);
         }
 }
 
-#define OSD_CHECK_SLOW_TH(oth, dev, expr)                               \
-{                                                                       \
-        cfs_time_t __closed = cfs_time_current();                       \
-        cfs_time_t __alloced = oth->oth_alloced;                        \
-        cfs_time_t __started = oth->oth_started;                        \
-                                                                        \
-        expr;                                                           \
-        __osd_th_check_slow(oth, dev, __alloced, __started, __closed);  \
+#define OSD_CHECK_SLOW_TH(oth, dev, expr)				\
+{									\
+	ktime_t __closed = ktime_get();					\
+	ktime_t __alloced = oth->oth_alloced;				\
+	ktime_t __started = oth->oth_started;				\
+									\
+	expr;								\
+	__osd_th_check_slow(oth, dev, __alloced, __started, __closed);	\
 }
 
 #else /* OSD_THANDLE_STATS */
