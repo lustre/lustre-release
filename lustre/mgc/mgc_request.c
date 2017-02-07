@@ -312,9 +312,9 @@ config_log_add(struct obd_device *obd, char *logname,
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct config_llog_data *cld;
-	struct config_llog_data *sptlrpc_cld;
-	struct config_llog_data *params_cld;
-	struct config_llog_data *nodemap_cld;
+	struct config_llog_data *sptlrpc_cld = NULL;
+	struct config_llog_data *params_cld = NULL;
+	struct config_llog_data *nodemap_cld = NULL;
 	char seclogname[32];
 	char *ptr;
 	int rc;
@@ -336,15 +336,16 @@ config_log_add(struct obd_device *obd, char *logname,
 	memcpy(seclogname, logname, ptr - logname);
 	strcpy(seclogname + (ptr - logname), "-sptlrpc");
 
-	sptlrpc_cld = config_log_find_or_add(obd, seclogname, NULL,
-					     CONFIG_T_SPTLRPC, cfg);
-	if (IS_ERR(sptlrpc_cld)) {
-		CERROR("can't create sptlrpc log: %s\n", seclogname);
-		GOTO(out, rc = PTR_ERR(sptlrpc_cld));
+	if (cfg->cfg_sub_clds & CONFIG_T_SPTLRPC) {
+		sptlrpc_cld = config_log_find_or_add(obd, seclogname, NULL,
+						     CONFIG_T_SPTLRPC, cfg);
+		if (IS_ERR(sptlrpc_cld)) {
+			CERROR("can't create sptlrpc log: %s\n", seclogname);
+			GOTO(out, rc = PTR_ERR(sptlrpc_cld));
+		}
 	}
 
-	nodemap_cld = NULL;
-	if (IS_SERVER(lsi) && !IS_MGS(lsi)) {
+	if (!IS_MGS(lsi) && cfg->cfg_sub_clds & CONFIG_T_NODEMAP) {
 		nodemap_cld = config_log_find_or_add(obd, LUSTRE_NODEMAP_NAME,
 						     NULL, CONFIG_T_NODEMAP,
 						     cfg);
@@ -356,13 +357,15 @@ config_log_add(struct obd_device *obd, char *logname,
 		}
 	}
 
-	params_cld = config_log_find_or_add(obd, PARAMS_FILENAME, sb,
-					    CONFIG_T_PARAMS, cfg);
-	if (IS_ERR(params_cld)) {
-		rc = PTR_ERR(params_cld);
-		CERROR("%s: can't create params log: rc = %d\n",
-		       obd->obd_name, rc);
-		GOTO(out_nodemap, rc);
+	if (cfg->cfg_sub_clds & CONFIG_T_PARAMS) {
+		params_cld = config_log_find_or_add(obd, PARAMS_FILENAME, sb,
+						    CONFIG_T_PARAMS, cfg);
+		if (IS_ERR(params_cld)) {
+			rc = PTR_ERR(params_cld);
+			CERROR("%s: can't create params log: rc = %d\n",
+			       obd->obd_name, rc);
+			GOTO(out_nodemap, rc);
+		}
 	}
 
 	cld = do_config_log_add(obd, logname, CONFIG_T_CONFIG, cfg, sb);
@@ -372,7 +375,8 @@ config_log_add(struct obd_device *obd, char *logname,
 	}
 
 	LASSERT(lsi->lsi_lmd);
-	if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOIR)) {
+	if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOIR) &&
+	    cfg->cfg_sub_clds & CONFIG_T_RECOVER) {
 		struct config_llog_data *recover_cld;
 
 		ptr = strrchr(seclogname, '-');

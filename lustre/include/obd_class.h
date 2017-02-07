@@ -166,18 +166,22 @@ struct config_llog_instance {
 	int			 cfg_last_idx; /* for partial llog processing */
 	int			 cfg_flags;
 	__u32			 cfg_lwp_idx;
+	__u32			 cfg_sub_clds;
 };
 int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 			    char *name, struct config_llog_instance *cfg);
 
-enum {
-	CONFIG_T_CONFIG  = 0,
-	CONFIG_T_SPTLRPC = 1,
-	CONFIG_T_RECOVER = 2,
-	CONFIG_T_PARAMS  = 3,
-	CONFIG_T_NODEMAP = 4,
-	CONFIG_T_MAX     = 5
-};
+#define CONFIG_T_CONFIG		0x01
+#define CONFIG_T_SPTLRPC	0x02
+#define CONFIG_T_RECOVER	0x04
+#define CONFIG_T_PARAMS		0x08
+#define CONFIG_T_NODEMAP	0x10
+
+/* Sub clds should be attached to the config_llog_data when processing
+ * config log for client or server target. */
+#define CONFIG_SUB_CLIENT	(CONFIG_T_SPTLRPC | CONFIG_T_RECOVER | \
+				 CONFIG_T_PARAMS)
+#define CONFIG_SUB_SERVER	(CONFIG_SUB_CLIENT | CONFIG_T_NODEMAP)
 
 #define PARAMS_FILENAME		"params"
 #define LCTL_UPCALL		"lctl"

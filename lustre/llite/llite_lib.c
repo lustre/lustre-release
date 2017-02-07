@@ -1025,6 +1025,7 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
         cfg->cfg_instance = sb;
         cfg->cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
 	cfg->cfg_callback = class_config_llog_handler;
+	cfg->cfg_sub_clds = CONFIG_SUB_CLIENT;
         /* set up client obds */
         err = lustre_process_log(sb, profilenm, cfg);
 	if (err < 0)

@@ -1346,6 +1346,7 @@ static int server_start_targets(struct super_block *sb)
 	/* Start targets using the llog named for the target */
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.cfg_callback = class_config_llog_handler;
+	cfg.cfg_sub_clds = CONFIG_SUB_SERVER;
 	rc = lustre_process_log(sb, lsi->lsi_svname, &cfg);
 	if (rc) {
 		CERROR("failed to start server %s: %d\n",
