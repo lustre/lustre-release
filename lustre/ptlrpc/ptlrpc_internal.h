@@ -257,7 +257,7 @@ struct ptlrpc_nrs_policy *nrs_request_policy(struct ptlrpc_nrs_request *nrq)
 int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink);
 
 /* pers.c */
-void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc,
+void ptlrpc_fill_bulk_md(struct lnet_md *md, struct ptlrpc_bulk_desc *desc,
 			 int mdcnt);
 
 /* pack_generic.c */

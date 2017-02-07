@@ -657,7 +657,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 				 struct ptlrpc_request *req, int rc,
 				 const char *ast_type)
 {
-	lnet_process_id_t peer = req->rq_import->imp_connection->c_peer;
+	struct lnet_process_id peer = req->rq_import->imp_connection->c_peer;
 
 	if (!req->rq_replied || (rc && rc != -EINVAL)) {
 		if (lock->l_export && lock->l_export->exp_libclient) {

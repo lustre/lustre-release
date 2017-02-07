@@ -265,7 +265,7 @@ struct lu_nodemap *nodemap_classify_nid(lnet_nid_t nid)
 
 	/* don't use 0@lo, use the first non-lo local NID instead */
 	if (LNET_NETTYP(LNET_NIDNET(nid)) == LOLND) {
-		lnet_process_id_t id;
+		struct lnet_process_id id;
 		int i = 0;
 
 		do {

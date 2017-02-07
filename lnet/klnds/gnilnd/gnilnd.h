@@ -395,12 +395,12 @@ typedef struct {
 } WIRE_ATTR kgn_rdma_desc_t;
 
 typedef struct {
-	lnet_hdr_t        gnim_hdr;             /* LNet header */
+	struct lnet_hdr	  gnim_hdr;             /* LNet header */
 	/* LNet payload is in FMA "Message Data" */
 } WIRE_ATTR kgn_immediate_msg_t;
 
 typedef struct {
-	lnet_hdr_t        gnprm_hdr;            /* LNet header */
+	struct lnet_hdr   gnprm_hdr;            /* LNet header */
 	__u64             gnprm_cookie;         /* opaque completion cookie */
 } WIRE_ATTR kgn_putreq_msg_t;
 
@@ -412,7 +412,7 @@ typedef struct {
 } WIRE_ATTR kgn_putack_msg_t;
 
 typedef struct {
-	lnet_hdr_t        gngm_hdr;             /* LNet header */
+	struct lnet_hdr   gngm_hdr;             /* LNet header */
 	__u64             gngm_cookie;          /* opaque completion cookie */
 	__u16		  gngm_payload_cksum;   /* checksum for put msg */
 	kgn_rdma_desc_t   gngm_desc;            /* sender's sink buffer */

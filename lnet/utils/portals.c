@@ -218,7 +218,7 @@ lnet_parse_time (time_t *t, char *str)
 }
 
 int
-lnet_parse_nid(char *nid_str, lnet_process_id_t *id_ptr)
+lnet_parse_nid(char *nid_str, struct lnet_process_id *id_ptr)
 {
         id_ptr->pid = LNET_PID_ANY;
         id_ptr->nid = libcfs_str2nid(nid_str);
@@ -586,7 +586,7 @@ int
 jt_ptl_print_peers (int argc, char **argv)
 {
 	struct libcfs_ioctl_data data;
-	lnet_process_id_t        id;
+	struct lnet_process_id        id;
 	char                     buffer[2][HOST_NAME_MAX + 1];
 	int                      index;
 	int                      rc;
@@ -762,7 +762,7 @@ int
 jt_ptl_print_connections (int argc, char **argv)
 {
         struct libcfs_ioctl_data data;
-        lnet_process_id_t        id;
+	struct lnet_process_id        id;
 	char                     buffer[2][HOST_NAME_MAX + 1];
         int                      index;
         int                      rc;
@@ -905,8 +905,8 @@ int jt_ptl_ping(int argc, char **argv)
 {
         int                      rc;
         int                      timeout;
-        lnet_process_id_t        id;
-        lnet_process_id_t        ids[16];
+	struct lnet_process_id id;
+	struct lnet_process_id ids[16];
         int                      maxids = sizeof(ids)/sizeof(ids[0]);
         struct libcfs_ioctl_data data;
         char                    *sep;

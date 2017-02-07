@@ -48,7 +48,7 @@
 #include "conrpc.h"
 
 typedef struct lstcon_node {
-        lnet_process_id_t    nd_id;          /* id of the node */
+	struct lnet_process_id    nd_id;          /* id of the node */
         int                  nd_ref;         /* reference count */
         int                  nd_state;       /* state of the node */
         int                  nd_timeout;     /* session timeout */
@@ -186,7 +186,7 @@ lstcon_trans_stat(void)
 }
 
 static inline struct list_head *
-lstcon_id2hash(lnet_process_id_t id, struct list_head *hash)
+lstcon_id2hash(struct lnet_process_id id, struct list_head *hash)
 {
         unsigned int idx = LNET_NIDADDR(id.nid) % LST_NODE_HASHSIZE;
 
@@ -209,18 +209,18 @@ extern int lstcon_batch_debug(int timeout, char *name,
 extern int lstcon_group_debug(int timeout, char *name,
 			      struct list_head __user *result_up);
 extern int lstcon_nodes_debug(int timeout, int nnd,
-			      lnet_process_id_t __user *nds_up,
+			      struct lnet_process_id __user *nds_up,
 			      struct list_head __user *result_up);
 extern int lstcon_group_add(char *name);
 extern int lstcon_group_del(char *name);
 extern int lstcon_group_clean(char *name, int args);
 extern int lstcon_group_refresh(char *name, struct list_head __user *result_up);
 extern int lstcon_nodes_add(char *name, int nnd,
-			    lnet_process_id_t __user *nds_up,
+			    struct lnet_process_id __user *nds_up,
 			    unsigned *featp,
 			    struct list_head __user *result_up);
 extern int lstcon_nodes_remove(char *name, int nnd,
-			       lnet_process_id_t __user *nds_up,
+			       struct lnet_process_id __user *nds_up,
 			       struct list_head __user *result_up);
 extern int lstcon_group_info(char *name, struct lstcon_ndlist_ent __user *gent_up,
 			     int *index_p, int *ndent_p,
@@ -243,7 +243,7 @@ extern int lstcon_batch_info(char *name,
 			     struct lstcon_node_ent __user *dents_up);
 extern int lstcon_group_stat(char *grp_name, int timeout,
 			     struct list_head __user *result_up);
-extern int lstcon_nodes_stat(int count, lnet_process_id_t __user *ids_up,
+extern int lstcon_nodes_stat(int count, struct lnet_process_id __user *ids_up,
 			     int timeout, struct list_head __user *result_up);
 extern int lstcon_test_add(char *batch_name, int type, int loop,
 			   int concur, int dist, int span,

@@ -103,54 +103,54 @@ check_lnet_handle_wire(void)
 void
 check_lnet_magicversion (void)
 {
-        CHECK_STRUCT (lnet_magicversion_t);
-        CHECK_MEMBER (lnet_magicversion_t, magic);
-        CHECK_MEMBER (lnet_magicversion_t, version_major);
-        CHECK_MEMBER (lnet_magicversion_t, version_minor);
+	CHECK_STRUCT(struct lnet_magicversion);
+	CHECK_MEMBER(struct lnet_magicversion, magic);
+	CHECK_MEMBER(struct lnet_magicversion, version_major);
+	CHECK_MEMBER(struct lnet_magicversion, version_minor);
 }
 
 void
 check_lnet_hdr (void)
 {
-        CHECK_STRUCT (lnet_hdr_t);
-        CHECK_MEMBER (lnet_hdr_t, dest_nid);
-        CHECK_MEMBER (lnet_hdr_t, src_nid);
-        CHECK_MEMBER (lnet_hdr_t, dest_pid);
-        CHECK_MEMBER (lnet_hdr_t, src_pid);
-        CHECK_MEMBER (lnet_hdr_t, type);
-        CHECK_MEMBER (lnet_hdr_t, payload_length);
-        CHECK_MEMBER (lnet_hdr_t, msg);
+	CHECK_STRUCT(struct lnet_hdr);
+	CHECK_MEMBER(struct lnet_hdr, dest_nid);
+	CHECK_MEMBER(struct lnet_hdr, src_nid);
+	CHECK_MEMBER(struct lnet_hdr, dest_pid);
+	CHECK_MEMBER(struct lnet_hdr, src_pid);
+	CHECK_MEMBER(struct lnet_hdr, type);
+	CHECK_MEMBER(struct lnet_hdr, payload_length);
+	CHECK_MEMBER(struct lnet_hdr, msg);
 
         BLANK_LINE ();
         COMMENT ("Ack");
-        CHECK_MEMBER (lnet_hdr_t, msg.ack.dst_wmd);
-        CHECK_MEMBER (lnet_hdr_t, msg.ack.match_bits);
-        CHECK_MEMBER (lnet_hdr_t, msg.ack.mlength);
+	CHECK_MEMBER(struct lnet_hdr, msg.ack.dst_wmd);
+	CHECK_MEMBER(struct lnet_hdr, msg.ack.match_bits);
+	CHECK_MEMBER(struct lnet_hdr, msg.ack.mlength);
 
         BLANK_LINE ();
         COMMENT ("Put");
-        CHECK_MEMBER (lnet_hdr_t, msg.put.ack_wmd);
-        CHECK_MEMBER (lnet_hdr_t, msg.put.match_bits);
-        CHECK_MEMBER (lnet_hdr_t, msg.put.hdr_data);
-        CHECK_MEMBER (lnet_hdr_t, msg.put.ptl_index);
-        CHECK_MEMBER (lnet_hdr_t, msg.put.offset);
+	CHECK_MEMBER(struct lnet_hdr, msg.put.ack_wmd);
+	CHECK_MEMBER(struct lnet_hdr, msg.put.match_bits);
+	CHECK_MEMBER(struct lnet_hdr, msg.put.hdr_data);
+	CHECK_MEMBER(struct lnet_hdr, msg.put.ptl_index);
+	CHECK_MEMBER(struct lnet_hdr, msg.put.offset);
 
         BLANK_LINE ();
         COMMENT ("Get");
-        CHECK_MEMBER (lnet_hdr_t, msg.get.return_wmd);
-        CHECK_MEMBER (lnet_hdr_t, msg.get.match_bits);
-        CHECK_MEMBER (lnet_hdr_t, msg.get.ptl_index);
-        CHECK_MEMBER (lnet_hdr_t, msg.get.src_offset);
-        CHECK_MEMBER (lnet_hdr_t, msg.get.sink_length);
+	CHECK_MEMBER(struct lnet_hdr, msg.get.return_wmd);
+	CHECK_MEMBER(struct lnet_hdr, msg.get.match_bits);
+	CHECK_MEMBER(struct lnet_hdr, msg.get.ptl_index);
+	CHECK_MEMBER(struct lnet_hdr, msg.get.src_offset);
+	CHECK_MEMBER(struct lnet_hdr, msg.get.sink_length);
 
         BLANK_LINE ();
         COMMENT ("Reply");
-        CHECK_MEMBER (lnet_hdr_t, msg.reply.dst_wmd);
+	CHECK_MEMBER(struct lnet_hdr, msg.reply.dst_wmd);
 
         BLANK_LINE ();
         COMMENT ("Hello");
-        CHECK_MEMBER (lnet_hdr_t, msg.hello.incarnation);
-        CHECK_MEMBER (lnet_hdr_t, msg.hello.type);
+	CHECK_MEMBER(struct lnet_hdr, msg.hello.incarnation);
+	CHECK_MEMBER(struct lnet_hdr, msg.hello.type);
 }
 
 void

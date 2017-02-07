@@ -2111,7 +2111,7 @@ kgnilnd_consume_rx(kgn_rx_t *rx)
 int
 kgnilnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
 {
-	lnet_hdr_t       *hdr = &lntmsg->msg_hdr;
+	struct lnet_hdr  *hdr = &lntmsg->msg_hdr;
 	int               type = lntmsg->msg_type;
 	lnet_process_id_t target = lntmsg->msg_target;
 	int               target_is_router = lntmsg->msg_target_is_router;

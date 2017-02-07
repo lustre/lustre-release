@@ -252,7 +252,7 @@ expand_strs(char *str, lstr_t **head)
 }
 
 int
-lst_parse_nids(char *str, int *countp, lnet_process_id_t **idspp)
+lst_parse_nids(char *str, int *countp, struct lnet_process_id **idspp)
 {
         lstr_t  *head = NULL;
         lstr_t  *l;
@@ -270,7 +270,7 @@ lst_parse_nids(char *str, int *countp, lnet_process_id_t **idspp)
                 c++;
         }
 
-        *idspp = malloc(c * sizeof(lnet_process_id_t));
+	*idspp = malloc(c * sizeof(struct lnet_process_id));
         if (*idspp == NULL) {
                 fprintf(stderr, "Out of memory\n");
                 rc = -1;
@@ -715,7 +715,7 @@ jt_lst_end_session(int argc, char **argv)
 
 int
 lst_ping_ioctl(char *str, int type, int timeout,
-	       int count, lnet_process_id_t *ids, struct list_head *head)
+	       int count, struct lnet_process_id *ids, struct list_head *head)
 {
 	struct lstio_debug_args args = { 0 };
 
@@ -733,7 +733,8 @@ lst_ping_ioctl(char *str, int type, int timeout,
 }
 
 int
-lst_get_node_count(int type, char *str, int *countp, lnet_process_id_t **idspp)
+lst_get_node_count(int type, char *str, int *countp,
+		   struct lnet_process_id **idspp)
 {
         char                    buf[LST_NAME_SIZE];
 	struct lstcon_test_batch_ent ent;
@@ -778,7 +779,7 @@ int
 jt_lst_ping(int argc,  char **argv)
 {
 	struct list_head   head;
-	lnet_process_id_t *ids = NULL;
+	struct lnet_process_id *ids = NULL;
 	struct lstcon_rpc_ent  *ent = NULL;
 	char              *str = NULL;
 	int                optidx  = 0;
@@ -907,7 +908,7 @@ out:
 }
 
 int
-lst_add_nodes_ioctl(char *name, int count, lnet_process_id_t *ids,
+lst_add_nodes_ioctl(char *name, int count, struct lnet_process_id *ids,
 		    unsigned *featp, struct list_head *resultp)
 {
 	struct lstio_group_nodes_args args = { 0 };
@@ -987,7 +988,7 @@ int
 jt_lst_add_group(int argc, char **argv)
 {
 	struct list_head   head;
-	lnet_process_id_t *ids;
+	struct lnet_process_id *ids;
 	char		  *name;
 	unsigned	   feats = session_features;
 	int		   count;
@@ -1138,7 +1139,7 @@ jt_lst_del_group(int argc, char **argv)
 
 int
 lst_update_group_ioctl(int opc, char *name, int clean, int count,
-		       lnet_process_id_t *ids, struct list_head *resultp)
+		       struct lnet_process_id *ids, struct list_head *resultp)
 {
 	struct lstio_group_update_args args = { 0 };
 
@@ -1158,7 +1159,7 @@ int
 jt_lst_update_group(int argc, char **argv)
 {
 	struct list_head   head;
-	lnet_process_id_t *ids = NULL;
+	struct lnet_process_id *ids = NULL;
 	char              *str = NULL;
 	char              *grp = NULL;
 	int                optidx = 0;
@@ -1483,8 +1484,8 @@ jt_lst_list_group(int argc, char **argv)
 }
 
 int
-lst_stat_ioctl (char *name, int count, lnet_process_id_t *idsp,
-		int timeout, struct list_head *resultp)
+lst_stat_ioctl(char *name, int count, struct lnet_process_id *idsp,
+	       int timeout, struct list_head *resultp)
 {
 	struct lstio_stat_args args = { 0 };
 
@@ -1503,7 +1504,7 @@ typedef struct {
 	struct list_head              srp_link;
         int                     srp_count;
         char                   *srp_name;
-        lnet_process_id_t      *srp_ids;
+	struct lnet_process_id      *srp_ids;
 	struct list_head              srp_result[2];
 } lst_stat_req_param_t;
 
@@ -1559,7 +1560,7 @@ lst_stat_req_param_alloc(char *name, lst_stat_req_param_t **srpp, int save_old)
                 rc = lst_alloc_rpcent(&srp->srp_result[i], srp->srp_count,
 				      sizeof(struct sfw_counters)  +
 				      sizeof(struct srpc_counters) +
-                                      sizeof(lnet_counters_t));
+				      sizeof(struct lnet_counters));
                 if (rc != 0) {
                         fprintf(stderr, "Out of memory\n");
                         break;
@@ -1644,8 +1645,8 @@ lst_timeval_diff(struct timeval *tv1,
 }
 
 static void
-lst_cal_lnet_stat(float delta, lnet_counters_t *lnet_new,
-		  lnet_counters_t *lnet_old, int mbs)
+lst_cal_lnet_stat(float delta, struct lnet_counters *lnet_new,
+		  struct lnet_counters *lnet_old, int mbs)
 {
 	float perf;
 	float rate;
@@ -1777,8 +1778,8 @@ lst_print_stat(char *name, struct list_head *resultp,
 	struct sfw_counters   *sfwk_old;
 	struct srpc_counters  *srpc_new;
 	struct srpc_counters  *srpc_old;
-        lnet_counters_t  *lnet_new;
-        lnet_counters_t  *lnet_old;
+	struct lnet_counters  *lnet_new;
+	struct lnet_counters  *lnet_old;
         float             delta;
         int               errcount = 0;
 
@@ -1826,8 +1827,8 @@ lst_print_stat(char *name, struct list_head *resultp,
 		srpc_new = (struct srpc_counters *)((char *)sfwk_new + sizeof(*sfwk_new));
 		srpc_old = (struct srpc_counters *)((char *)sfwk_old + sizeof(*sfwk_old));
 
-                lnet_new = (lnet_counters_t *)((char *)srpc_new + sizeof(*srpc_new));
-                lnet_old = (lnet_counters_t *)((char *)srpc_old + sizeof(*srpc_old));
+		lnet_new = (struct lnet_counters *)((char *)srpc_new + sizeof(*srpc_new));
+		lnet_old = (struct lnet_counters *)((char *)srpc_old + sizeof(*srpc_old));
 
 		/* Prior to version 2.3, the running_ms field was a counter for
 		 * the number of running tests.  We are looking at this value

@@ -83,7 +83,7 @@ struct lst_bid {
 #define LST_NODE_UNKNOWN	0x8	/* node not in session */
 
 struct lstcon_node_ent {
-	lnet_process_id_t	nde_id;		/* id of node */
+	struct lnet_process_id	nde_id;		/* id of node */
 	int			nde_state;	/* state of node */
 };						/*** node entry, for list_group command */
 
@@ -119,7 +119,7 @@ struct lstcon_test_batch_ent {
 
 struct lstcon_rpc_ent {
 	struct list_head	rpe_link;		/* link chain */
-	lnet_process_id_t	rpe_peer;		/* peer's id */
+	struct lnet_process_id	rpe_peer;		/* peer's id */
 	struct timeval		rpe_stamp;		/* time stamp of RPC */
 	int			rpe_state;		/* peer's state */
 	int			rpe_rpc_errno;		/* RPC errno */
@@ -271,7 +271,7 @@ struct lstio_debug_args {
 	int			lstio_dbg_nmlen;	/* IN: len of name */
 	char __user	       *lstio_dbg_namep;	/* IN: name of group|batch */
 	int			lstio_dbg_count;	/* IN: # of test nodes to debug */
-	lnet_process_id_t __user *lstio_dbg_idsp;	/* IN: id of test nodes */
+	struct lnet_process_id __user *lstio_dbg_idsp;	/* IN: id of test nodes */
 	/* OUT: list head of result buffer */
 	struct list_head __user *lstio_dbg_resultp;
 };
@@ -299,7 +299,7 @@ struct lstio_group_update_args {
 	int			lstio_grp_nmlen;	/* IN: name length */
 	char __user	       *lstio_grp_namep;	/* IN: group name */
 	int			lstio_grp_count;	/* IN: # of nodes id */
-	lnet_process_id_t __user *lstio_grp_idsp;	/* IN: array of nodes */
+	struct lnet_process_id __user *lstio_grp_idsp;	/* IN: array of nodes */
 	/* OUT: list head of result buffer */
 	struct list_head __user	*lstio_grp_resultp;
 };
@@ -311,7 +311,7 @@ struct lstio_group_nodes_args {
 	int			 lstio_grp_count;	/* IN: # of nodes */
 	/** OUT: session features */
 	unsigned __user		*lstio_grp_featp;
-	lnet_process_id_t __user *lstio_grp_idsp;	/* IN: nodes */
+	struct lnet_process_id __user *lstio_grp_idsp;	/* IN: nodes */
 	/* OUT: list head of result buffer */
 	struct list_head __user	*lstio_grp_resultp;
 };
@@ -424,7 +424,7 @@ struct lstio_stat_args {
 	/* IN: # of pid */
 	int			lstio_sta_count;
 	/* IN: pid */
-	lnet_process_id_t __user *lstio_sta_idsp;
+	struct lnet_process_id __user *lstio_sta_idsp;
 	/* OUT: list head of result buffer */
 	struct list_head __user *lstio_sta_resultp;
 };

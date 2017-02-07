@@ -46,7 +46,7 @@
 #include <lnet/lnet.h>
 #include <lnet/lib-types.h>
 
-extern lnet_t  the_lnet;			/* THE network */
+extern struct lnet the_lnet;			/* THE network */
 
 #if (BITS_PER_LONG == 32)
 /* 2 CPTs, allowing more CPTs might make us under memory pressure */
@@ -70,7 +70,7 @@ extern lnet_t  the_lnet;			/* THE network */
 /** exclusive lock */
 #define LNET_LOCK_EX		CFS_PERCPT_LOCK_EX
 
-static inline int lnet_is_route_alive(lnet_route_t *route)
+static inline int lnet_is_route_alive(struct lnet_route *route)
 {
 	if (!route->lr_gateway->lpni_alive)
 		return 0; /* gateway is down */
@@ -87,14 +87,14 @@ static inline int lnet_is_wire_handle_none(struct lnet_handle_wire *wh)
 		wh->wh_object_cookie == LNET_WIRE_HANDLE_COOKIE_NONE);
 }
 
-static inline int lnet_md_exhausted (lnet_libmd_t *md)
+static inline int lnet_md_exhausted(struct lnet_libmd *md)
 {
 	return (md->md_threshold == 0 ||
 		((md->md_options & LNET_MD_MAX_SIZE) != 0 &&
 		 md->md_offset + md->md_max_size > md->md_length));
 }
 
-static inline int lnet_md_unlinkable (lnet_libmd_t *md)
+static inline int lnet_md_unlinkable(struct lnet_libmd *md)
 {
 	/* Should unlink md when its refcount is 0 and either:
 	 *  - md has been flagged for deletion (by auto unlink or LNetM[DE]Unlink,
@@ -178,40 +178,40 @@ lnet_net_lock_current(void)
 
 #define MAX_PORTALS	64
 
-#define LNET_SMALL_MD_SIZE   offsetof(lnet_libmd_t, md_iov.iov[1])
+#define LNET_SMALL_MD_SIZE   offsetof(struct lnet_libmd, md_iov.iov[1])
 extern struct kmem_cache *lnet_mes_cachep;	 /* MEs kmem_cache */
 extern struct kmem_cache *lnet_small_mds_cachep; /* <= LNET_SMALL_MD_SIZE bytes
 						  * MDs kmem_cache */
 
-static inline lnet_eq_t *
+static inline struct lnet_eq *
 lnet_eq_alloc (void)
 {
-	lnet_eq_t *eq;
+	struct lnet_eq *eq;
 
 	LIBCFS_ALLOC(eq, sizeof(*eq));
 	return (eq);
 }
 
 static inline void
-lnet_eq_free(lnet_eq_t *eq)
+lnet_eq_free(struct lnet_eq *eq)
 {
 	LIBCFS_FREE(eq, sizeof(*eq));
 }
 
-static inline lnet_libmd_t *
-lnet_md_alloc (lnet_md_t *umd)
+static inline struct lnet_libmd *
+lnet_md_alloc(struct lnet_md *umd)
 {
-	lnet_libmd_t *md;
+	struct lnet_libmd *md;
 	unsigned int  size;
 	unsigned int  niov;
 
 	if ((umd->options & LNET_MD_KIOV) != 0) {
 		niov = umd->length;
-		size = offsetof(lnet_libmd_t, md_iov.kiov[niov]);
+		size = offsetof(struct lnet_libmd, md_iov.kiov[niov]);
 	} else {
 		niov = ((umd->options & LNET_MD_IOVEC) != 0) ?
 		       umd->length : 1;
-		size = offsetof(lnet_libmd_t, md_iov.iov[niov]);
+		size = offsetof(struct lnet_libmd, md_iov.iov[niov]);
 	}
 
 	if (size <= LNET_SMALL_MD_SIZE) {
@@ -240,14 +240,14 @@ lnet_md_alloc (lnet_md_t *umd)
 }
 
 static inline void
-lnet_md_free(lnet_libmd_t *md)
+lnet_md_free(struct lnet_libmd *md)
 {
 	unsigned int  size;
 
 	if ((md->md_options & LNET_MD_KIOV) != 0)
-		size = offsetof(lnet_libmd_t, md_iov.kiov[md->md_niov]);
+		size = offsetof(struct lnet_libmd, md_iov.kiov[md->md_niov]);
 	else
-		size = offsetof(lnet_libmd_t, md_iov.iov[md->md_niov]);
+		size = offsetof(struct lnet_libmd, md_iov.iov[md->md_niov]);
 
 	if (size <= LNET_SMALL_MD_SIZE) {
 		CDEBUG(D_MALLOC, "slab-freed 'md' at %p.\n", md);
@@ -257,10 +257,10 @@ lnet_md_free(lnet_libmd_t *md)
 	}
 }
 
-static inline lnet_me_t *
+static inline struct lnet_me *
 lnet_me_alloc (void)
 {
-	lnet_me_t *me;
+	struct lnet_me *me;
 
 	me = kmem_cache_alloc(lnet_mes_cachep, GFP_NOFS | __GFP_ZERO);
 
@@ -273,18 +273,18 @@ lnet_me_alloc (void)
 }
 
 static inline void
-lnet_me_free(lnet_me_t *me)
+lnet_me_free(struct lnet_me *me)
 {
 	CDEBUG(D_MALLOC, "slab-freed 'me' at %p.\n", me);
 	kmem_cache_free(lnet_mes_cachep, me);
 }
 
-lnet_libhandle_t *lnet_res_lh_lookup(struct lnet_res_container *rec,
+struct lnet_libhandle *lnet_res_lh_lookup(struct lnet_res_container *rec,
 				     __u64 cookie);
 void lnet_res_lh_initialize(struct lnet_res_container *rec,
-			    lnet_libhandle_t *lh);
+			    struct lnet_libhandle *lh);
 static inline void
-lnet_res_lh_invalidate(lnet_libhandle_t *lh)
+lnet_res_lh_invalidate(struct lnet_libhandle *lh)
 {
 	/* ALWAYS called with resource lock held */
 	/* NB: cookie is still useful, don't reset it */
@@ -292,40 +292,40 @@ lnet_res_lh_invalidate(lnet_libhandle_t *lh)
 }
 
 static inline void
-lnet_eq2handle (lnet_handle_eq_t *handle, lnet_eq_t *eq)
+lnet_eq2handle(struct lnet_handle_eq *handle, struct lnet_eq *eq)
 {
 	if (eq == NULL) {
-		LNetInvalidateHandle(handle);
+		LNetInvalidateEQHandle(handle);
 		return;
 	}
 
 	handle->cookie = eq->eq_lh.lh_cookie;
 }
 
-static inline lnet_eq_t *
-lnet_handle2eq(lnet_handle_eq_t *handle)
+static inline struct lnet_eq *
+lnet_handle2eq(struct lnet_handle_eq *handle)
 {
 	/* ALWAYS called with resource lock held */
-	lnet_libhandle_t *lh;
+	struct lnet_libhandle *lh;
 
 	lh = lnet_res_lh_lookup(&the_lnet.ln_eq_container, handle->cookie);
 	if (lh == NULL)
 		return NULL;
 
-	return lh_entry(lh, lnet_eq_t, eq_lh);
+	return lh_entry(lh, struct lnet_eq, eq_lh);
 }
 
 static inline void
-lnet_md2handle (lnet_handle_md_t *handle, lnet_libmd_t *md)
+lnet_md2handle(struct lnet_handle_md *handle, struct lnet_libmd *md)
 {
 	handle->cookie = md->md_lh.lh_cookie;
 }
 
-static inline lnet_libmd_t *
-lnet_handle2md(lnet_handle_md_t *handle)
+static inline struct lnet_libmd *
+lnet_handle2md(struct lnet_handle_md *handle)
 {
 	/* ALWAYS called with resource lock held */
-	lnet_libhandle_t *lh;
+	struct lnet_libhandle *lh;
 	int		 cpt;
 
 	cpt = lnet_cpt_of_cookie(handle->cookie);
@@ -334,14 +334,14 @@ lnet_handle2md(lnet_handle_md_t *handle)
 	if (lh == NULL)
 		return NULL;
 
-	return lh_entry(lh, lnet_libmd_t, md_lh);
+	return lh_entry(lh, struct lnet_libmd, md_lh);
 }
 
-static inline lnet_libmd_t *
+static inline struct lnet_libmd *
 lnet_wire_handle2md(struct lnet_handle_wire *wh)
 {
 	/* ALWAYS called with resource lock held */
-	lnet_libhandle_t *lh;
+	struct lnet_libhandle *lh;
 	int		 cpt;
 
 	if (wh->wh_interface_cookie != the_lnet.ln_interface_cookie)
@@ -353,20 +353,20 @@ lnet_wire_handle2md(struct lnet_handle_wire *wh)
 	if (lh == NULL)
 		return NULL;
 
-	return lh_entry(lh, lnet_libmd_t, md_lh);
+	return lh_entry(lh, struct lnet_libmd, md_lh);
 }
 
 static inline void
-lnet_me2handle (lnet_handle_me_t *handle, lnet_me_t *me)
+lnet_me2handle(struct lnet_handle_me *handle, struct lnet_me *me)
 {
 	handle->cookie = me->me_lh.lh_cookie;
 }
 
-static inline lnet_me_t *
-lnet_handle2me(lnet_handle_me_t *handle)
+static inline struct lnet_me *
+lnet_handle2me(struct lnet_handle_me *handle)
 {
 	/* ALWAYS called with resource lock held */
-	lnet_libhandle_t *lh;
+	struct lnet_libhandle *lh;
 	int		 cpt;
 
 	cpt = lnet_cpt_of_cookie(handle->cookie);
@@ -375,7 +375,7 @@ lnet_handle2me(lnet_handle_me_t *handle)
 	if (lh == NULL)
 		return NULL;
 
-	return lh_entry(lh, lnet_me_t, me_lh);
+	return lh_entry(lh, struct lnet_me, me_lh);
 }
 
 static inline void
@@ -403,7 +403,7 @@ lnet_isrouter(struct lnet_peer_ni *lp)
 }
 
 static inline void
-lnet_ni_addref_locked(lnet_ni_t *ni, int cpt)
+lnet_ni_addref_locked(struct lnet_ni *ni, int cpt)
 {
 	LASSERT(cpt >= 0 && cpt < LNET_CPT_NUMBER);
 	LASSERT(*ni->ni_refs[cpt] >= 0);
@@ -412,7 +412,7 @@ lnet_ni_addref_locked(lnet_ni_t *ni, int cpt)
 }
 
 static inline void
-lnet_ni_addref(lnet_ni_t *ni)
+lnet_ni_addref(struct lnet_ni *ni)
 {
 	lnet_net_lock(0);
 	lnet_ni_addref_locked(ni, 0);
@@ -420,7 +420,7 @@ lnet_ni_addref(lnet_ni_t *ni)
 }
 
 static inline void
-lnet_ni_decref_locked(lnet_ni_t *ni, int cpt)
+lnet_ni_decref_locked(struct lnet_ni *ni, int cpt)
 {
 	LASSERT(cpt >= 0 && cpt < LNET_CPT_NUMBER);
 	LASSERT(*ni->ni_refs[cpt] > 0);
@@ -429,17 +429,17 @@ lnet_ni_decref_locked(lnet_ni_t *ni, int cpt)
 }
 
 static inline void
-lnet_ni_decref(lnet_ni_t *ni)
+lnet_ni_decref(struct lnet_ni *ni)
 {
 	lnet_net_lock(0);
 	lnet_ni_decref_locked(ni, 0);
 	lnet_net_unlock(0);
 }
 
-static inline lnet_msg_t *
+static inline struct lnet_msg *
 lnet_msg_alloc(void)
 {
-	lnet_msg_t *msg;
+	struct lnet_msg *msg;
 
 	LIBCFS_ALLOC(msg, sizeof(*msg));
 
@@ -448,7 +448,7 @@ lnet_msg_alloc(void)
 }
 
 static inline void
-lnet_msg_free(lnet_msg_t *msg)
+lnet_msg_free(struct lnet_msg *msg)
 {
 	LASSERT(!msg->msg_onactivelist);
 	LIBCFS_FREE(msg, sizeof(*msg));
@@ -481,16 +481,16 @@ lnet_net2rnethash(__u32 net)
 		((1U << the_lnet.ln_remote_nets_hbits) - 1)];
 }
 
-extern lnd_t the_lolnd;
+extern struct lnet_lnd the_lolnd;
 extern int avoid_asym_router_failure;
 
 extern unsigned int lnet_nid_cpt_hash(lnet_nid_t nid, unsigned int number);
 extern int lnet_cpt_of_nid_locked(lnet_nid_t nid, struct lnet_ni *ni);
 extern int lnet_cpt_of_nid(lnet_nid_t nid, struct lnet_ni *ni);
-extern lnet_ni_t *lnet_nid2ni_locked(lnet_nid_t nid, int cpt);
-extern lnet_ni_t *lnet_nid2ni_addref(lnet_nid_t nid);
-extern lnet_ni_t *lnet_net2ni_locked(__u32 net, int cpt);
-extern lnet_ni_t *lnet_net2ni_addref(__u32 net);
+extern struct lnet_ni *lnet_nid2ni_locked(lnet_nid_t nid, int cpt);
+extern struct lnet_ni *lnet_nid2ni_addref(lnet_nid_t nid);
+extern struct lnet_ni *lnet_net2ni_locked(__u32 net, int cpt);
+extern struct lnet_ni *lnet_net2ni_addref(__u32 net);
 bool lnet_is_ni_healthy_locked(struct lnet_ni *ni);
 struct lnet_net *lnet_get_net_locked(__u32 net_id);
 
@@ -500,7 +500,8 @@ void lnet_lib_exit(void);
 extern unsigned int lnet_numa_range;
 extern int portal_rotor;
 
-int lnet_notify(lnet_ni_t *ni, lnet_nid_t peer, int alive, cfs_time_t when);
+int lnet_notify(struct lnet_ni *ni, lnet_nid_t peer, int alive,
+		cfs_time_t when);
 void lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
 			cfs_time_t when);
 int lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway_nid,
@@ -534,12 +535,12 @@ extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 void lnet_proc_init(void);
 void lnet_proc_fini(void);
 int  lnet_rtrpools_alloc(int im_a_router);
-void lnet_destroy_rtrbuf(lnet_rtrbuf_t *rb, int npages);
+void lnet_destroy_rtrbuf(struct lnet_rtrbuf *rb, int npages);
 int  lnet_rtrpools_adjust(int tiny, int small, int large);
 int lnet_rtrpools_enable(void);
 void lnet_rtrpools_disable(void);
 void lnet_rtrpools_free(int keep_pools);
-lnet_remotenet_t *lnet_find_rnet_locked(__u32 net);
+struct lnet_remotenet *lnet_find_rnet_locked(__u32 net);
 int lnet_dyn_add_net(struct lnet_ioctl_config_data *conf);
 int lnet_dyn_del_net(__u32 net);
 int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf);
@@ -550,69 +551,70 @@ struct lnet_net *lnet_get_net_locked(__u32 net_id);
 int lnet_islocalnid(lnet_nid_t nid);
 int lnet_islocalnet(__u32 net);
 
-void lnet_msg_attach_md(lnet_msg_t *msg, lnet_libmd_t *md,
+void lnet_msg_attach_md(struct lnet_msg *msg, struct lnet_libmd *md,
 			unsigned int offset, unsigned int mlen);
-void lnet_msg_detach_md(lnet_msg_t *msg, int status);
-void lnet_build_unlink_event(lnet_libmd_t *md, lnet_event_t *ev);
-void lnet_build_msg_event(lnet_msg_t *msg, lnet_event_kind_t ev_type);
-void lnet_msg_commit(lnet_msg_t *msg, int cpt);
-void lnet_msg_decommit(lnet_msg_t *msg, int cpt, int status);
+void lnet_msg_detach_md(struct lnet_msg *msg, int status);
+void lnet_build_unlink_event(struct lnet_libmd *md, struct lnet_event *ev);
+void lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type);
+void lnet_msg_commit(struct lnet_msg *msg, int cpt);
+void lnet_msg_decommit(struct lnet_msg *msg, int cpt, int status);
 
-void lnet_eq_enqueue_event(lnet_eq_t *eq, lnet_event_t *ev);
-void lnet_prep_send(lnet_msg_t *msg, int type, lnet_process_id_t target,
-		    unsigned int offset, unsigned int len);
-int lnet_send(lnet_nid_t nid, lnet_msg_t *msg, lnet_nid_t rtr_nid);
-void lnet_return_tx_credits_locked(lnet_msg_t *msg);
-void lnet_return_rx_credits_locked(lnet_msg_t *msg);
-void lnet_schedule_blocked_locked(lnet_rtrbufpool_t *rbp);
+void lnet_eq_enqueue_event(struct lnet_eq *eq, struct lnet_event *ev);
+void lnet_prep_send(struct lnet_msg *msg, int type,
+		    struct lnet_process_id target, unsigned int offset,
+		    unsigned int len);
+int lnet_send(lnet_nid_t nid, struct lnet_msg *msg, lnet_nid_t rtr_nid);
+void lnet_return_tx_credits_locked(struct lnet_msg *msg);
+void lnet_return_rx_credits_locked(struct lnet_msg *msg);
+void lnet_schedule_blocked_locked(struct lnet_rtrbufpool *rbp);
 void lnet_drop_routed_msgs_locked(struct list_head *list, int cpt);
 
 /* portals functions */
 /* portals attributes */
 static inline int
-lnet_ptl_is_lazy(lnet_portal_t *ptl)
+lnet_ptl_is_lazy(struct lnet_portal *ptl)
 {
 	return !!(ptl->ptl_options & LNET_PTL_LAZY);
 }
 
 static inline int
-lnet_ptl_is_unique(lnet_portal_t *ptl)
+lnet_ptl_is_unique(struct lnet_portal *ptl)
 {
 	return !!(ptl->ptl_options & LNET_PTL_MATCH_UNIQUE);
 }
 
 static inline int
-lnet_ptl_is_wildcard(lnet_portal_t *ptl)
+lnet_ptl_is_wildcard(struct lnet_portal *ptl)
 {
 	return !!(ptl->ptl_options & LNET_PTL_MATCH_WILDCARD);
 }
 
 static inline void
-lnet_ptl_setopt(lnet_portal_t *ptl, int opt)
+lnet_ptl_setopt(struct lnet_portal *ptl, int opt)
 {
 	ptl->ptl_options |= opt;
 }
 
 static inline void
-lnet_ptl_unsetopt(lnet_portal_t *ptl, int opt)
+lnet_ptl_unsetopt(struct lnet_portal *ptl, int opt)
 {
 	ptl->ptl_options &= ~opt;
 }
 
 /* match-table functions */
 struct list_head *lnet_mt_match_head(struct lnet_match_table *mtable,
-			       lnet_process_id_t id, __u64 mbits);
+			       struct lnet_process_id id, __u64 mbits);
 struct lnet_match_table *lnet_mt_of_attach(unsigned int index,
-					   lnet_process_id_t id, __u64 mbits,
-					   __u64 ignore_bits,
-					   lnet_ins_pos_t pos);
+					   struct lnet_process_id id,
+					   __u64 mbits, __u64 ignore_bits,
+					   enum lnet_ins_pos pos);
 int lnet_mt_match_md(struct lnet_match_table *mtable,
 		     struct lnet_match_info *info, struct lnet_msg *msg);
 
 /* portals match/attach functions */
-void lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
+void lnet_ptl_attach_md(struct lnet_me *me, struct lnet_libmd *md,
 			struct list_head *matches, struct list_head *drops);
-void lnet_ptl_detach_md(lnet_me_t *me, lnet_libmd_t *md);
+void lnet_ptl_detach_md(struct lnet_me *me, struct lnet_libmd *md);
 int lnet_ptl_match_md(struct lnet_match_info *info, struct lnet_msg *msg);
 
 /* initialized and finalize portals */
@@ -620,23 +622,26 @@ int lnet_portals_create(void);
 void lnet_portals_destroy(void);
 
 /* message functions */
-int lnet_parse (lnet_ni_t *ni, lnet_hdr_t *hdr,
-		lnet_nid_t fromnid, void *private, int rdma_req);
-int lnet_parse_local(lnet_ni_t *ni, lnet_msg_t *msg);
-int lnet_parse_forward_locked(lnet_ni_t *ni, lnet_msg_t *msg);
+int lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
+	       lnet_nid_t fromnid, void *private, int rdma_req);
+int lnet_parse_local(struct lnet_ni *ni, struct lnet_msg *msg);
+int lnet_parse_forward_locked(struct lnet_ni *ni, struct lnet_msg *msg);
 
-void lnet_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
-	       unsigned int offset, unsigned int mlen, unsigned int rlen);
-void lnet_ni_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg,
+void lnet_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
+	       int delayed, unsigned int offset, unsigned int mlen,
+	       unsigned int rlen);
+void lnet_ni_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 		  int delayed, unsigned int offset,
 		  unsigned int mlen, unsigned int rlen);
 
-lnet_msg_t *lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *get_msg);
-void lnet_set_reply_msg_len(lnet_ni_t *ni, lnet_msg_t *msg, unsigned int len);
+struct lnet_msg *lnet_create_reply_msg(struct lnet_ni *ni,
+				       struct lnet_msg *get_msg);
+void lnet_set_reply_msg_len(struct lnet_ni *ni, struct lnet_msg *msg,
+			    unsigned int len);
 
-void lnet_finalize(lnet_ni_t *ni, lnet_msg_t *msg, int rc);
+void lnet_finalize(struct lnet_ni *ni, struct lnet_msg *msg, int rc);
 
-void lnet_drop_message(lnet_ni_t *ni, int cpt, void *private,
+void lnet_drop_message(struct lnet_ni *ni, int cpt, void *private,
 		       unsigned int nob);
 void lnet_drop_delayed_msg_list(struct list_head *head, char *reason);
 void lnet_recv_delayed_msg_list(struct list_head *head);
@@ -646,8 +651,8 @@ void lnet_msg_container_cleanup(struct lnet_msg_container *container);
 void lnet_msg_containers_destroy(void);
 int lnet_msg_containers_create(void);
 
-char *lnet_msgtyp2str (int type);
-void lnet_print_hdr (lnet_hdr_t * hdr);
+char *lnet_msgtyp2str(int type);
+void lnet_print_hdr(struct lnet_hdr *hdr);
 int lnet_fail_nid(lnet_nid_t nid, unsigned int threshold);
 
 /** \addtogroup lnet_fault_simulation @{ */
@@ -656,7 +661,7 @@ int lnet_fault_ctl(int cmd, struct libcfs_ioctl_data *data);
 int lnet_fault_init(void);
 void lnet_fault_fini(void);
 
-bool lnet_drop_rule_match(lnet_hdr_t *hdr);
+bool lnet_drop_rule_match(struct lnet_hdr *hdr);
 
 int lnet_delay_rule_add(struct lnet_fault_attr *attr);
 int lnet_delay_rule_del(lnet_nid_t src, lnet_nid_t dst, bool shutdown);
@@ -664,11 +669,11 @@ int lnet_delay_rule_list(int pos, struct lnet_fault_attr *attr,
 			 struct lnet_fault_stat *stat);
 void lnet_delay_rule_reset(void);
 void lnet_delay_rule_check(void);
-bool lnet_delay_rule_match_locked(lnet_hdr_t *hdr, struct lnet_msg *msg);
+bool lnet_delay_rule_match_locked(struct lnet_hdr *hdr, struct lnet_msg *msg);
 
 /** @} lnet_fault_simulation */
 
-void lnet_counters_get(lnet_counters_t *counters);
+void lnet_counters_get(struct lnet_counters *counters);
 void lnet_counters_reset(void);
 
 unsigned int lnet_iov_nob(unsigned int niov, struct kvec *iov);
@@ -740,14 +745,14 @@ lnet_copy_flat2kiov(unsigned int ndiov, lnet_kiov_t *dkiov,
 			   1, &siov, soffset, nob);
 }
 
-void lnet_me_unlink(lnet_me_t *me);
+void lnet_me_unlink(struct lnet_me *me);
 
-void lnet_md_unlink(lnet_libmd_t *md);
-void lnet_md_deconstruct(lnet_libmd_t *lmd, lnet_md_t *umd);
-int lnet_cpt_of_md(lnet_libmd_t *md);
+void lnet_md_unlink(struct lnet_libmd *md);
+void lnet_md_deconstruct(struct lnet_libmd *lmd, struct lnet_md *umd);
+int lnet_cpt_of_md(struct lnet_libmd *md);
 
-void lnet_register_lnd(lnd_t *lnd);
-void lnet_unregister_lnd(lnd_t *lnd);
+void lnet_register_lnd(struct lnet_lnd *lnd);
+void lnet_unregister_lnd(struct lnet_lnd *lnd);
 
 int lnet_connect(struct socket **sockp, lnet_nid_t peer_nid,
 		 __u32 local_ip, __u32 peer_ip, int peer_port);

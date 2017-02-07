@@ -506,7 +506,7 @@ lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
                 cfs_duration_usec(dur, &tv);
 
 		if (copy_to_user(&ent->rpe_peer,
-				 &nd->nd_id, sizeof(lnet_process_id_t)) ||
+				 &nd->nd_id, sizeof(struct lnet_process_id)) ||
 		    copy_to_user(&ent->rpe_stamp, &tv, sizeof(tv)) ||
 		    copy_to_user(&ent->rpe_state,
 				 &nd->nd_state, sizeof(nd->nd_state)) ||

@@ -286,7 +286,7 @@ ksocknal_match_tx(ksock_conn_t *conn, ksock_tx_t *tx, int nonblk)
         } else {
                 nob = tx->tx_lnetmsg->msg_len +
                       ((conn->ksnc_proto == &ksocknal_protocol_v1x) ?
-		       sizeof(lnet_hdr_t) : sizeof(struct ksock_msg));
+		       sizeof(struct lnet_hdr) : sizeof(struct ksock_msg));
         }
 
         /* default checking for typed connection */
@@ -451,23 +451,24 @@ ksocknal_handle_zcack(ksock_conn_t *conn, __u64 cookie1, __u64 cookie2)
 static int
 ksocknal_send_hello_v1 (ksock_conn_t *conn, struct ksock_hello_msg *hello)
 {
-	struct socket        *sock = conn->ksnc_sock;
-        lnet_hdr_t          *hdr;
-        lnet_magicversion_t *hmv;
-        int                  rc;
-        int                  i;
+	struct socket *sock = conn->ksnc_sock;
+	struct lnet_hdr *hdr;
+	struct lnet_magicversion *hmv;
+	int rc;
+	int i;
 
-        CLASSERT(sizeof(lnet_magicversion_t) == offsetof(lnet_hdr_t, src_nid));
+	CLASSERT(sizeof(struct lnet_magicversion) ==
+		 offsetof(struct lnet_hdr, src_nid));
 
-        LIBCFS_ALLOC(hdr, sizeof(*hdr));
-        if (hdr == NULL) {
-                CERROR("Can't allocate lnet_hdr_t\n");
-                return -ENOMEM;
-        }
+	LIBCFS_ALLOC(hdr, sizeof(*hdr));
+	if (hdr == NULL) {
+		CERROR("Can't allocate struct lnet_hdr\n");
+		return -ENOMEM;
+	}
 
-        hmv = (lnet_magicversion_t *)&hdr->dest_nid;
+	hmv = (struct lnet_magicversion *)&hdr->dest_nid;
 
-        /* Re-organize V2.x message header to V1.x (lnet_hdr_t)
+	/* Re-organize V2.x message header to V1.x (struct lnet_hdr)
          * header and send out */
         hmv->magic         = cpu_to_le32 (LNET_PROTO_TCP_MAGIC);
         hmv->version_major = cpu_to_le16 (KSOCK_PROTO_V1_MAJOR);
@@ -568,19 +569,19 @@ ksocknal_send_hello_v2 (ksock_conn_t *conn, struct ksock_hello_msg *hello)
 static int
 ksocknal_recv_hello_v1(ksock_conn_t *conn, struct ksock_hello_msg *hello,int timeout)
 {
-	struct socket        *sock = conn->ksnc_sock;
-        lnet_hdr_t          *hdr;
-        int                  rc;
-        int                  i;
+	struct socket *sock = conn->ksnc_sock;
+	struct lnet_hdr *hdr;
+	int rc;
+	int i;
 
-        LIBCFS_ALLOC(hdr, sizeof(*hdr));
-        if (hdr == NULL) {
-                CERROR("Can't allocate lnet_hdr_t\n");
-                return -ENOMEM;
-        }
+	LIBCFS_ALLOC(hdr, sizeof(*hdr));
+	if (hdr == NULL) {
+		CERROR("Can't allocate struct lnet_hdr\n");
+		return -ENOMEM;
+	}
 
 	rc = lnet_sock_read(sock, &hdr->src_nid,
-			      sizeof(*hdr) - offsetof(lnet_hdr_t, src_nid),
+			      sizeof(*hdr) - offsetof(struct lnet_hdr, src_nid),
 			      timeout);
 	if (rc != 0) {
 		CERROR("Error %d reading rest of HELLO hdr from %pI4h\n",
@@ -711,14 +712,15 @@ ksocknal_recv_hello_v2(ksock_conn_t *conn, struct ksock_hello_msg *hello,
 static void
 ksocknal_pack_msg_v1(ksock_tx_t *tx)
 {
-        /* V1.x has no KSOCK_MSG_NOOP */
-        LASSERT(tx->tx_msg.ksm_type != KSOCK_MSG_NOOP);
-        LASSERT(tx->tx_lnetmsg != NULL);
+	/* V1.x has no KSOCK_MSG_NOOP */
+	LASSERT(tx->tx_msg.ksm_type != KSOCK_MSG_NOOP);
+	LASSERT(tx->tx_lnetmsg != NULL);
 
-        tx->tx_iov[0].iov_base = (void *)&tx->tx_lnetmsg->msg_hdr;
-        tx->tx_iov[0].iov_len  = sizeof(lnet_hdr_t);
+	tx->tx_iov[0].iov_base = (void *)&tx->tx_lnetmsg->msg_hdr;
+	tx->tx_iov[0].iov_len  = sizeof(struct lnet_hdr);
 
-        tx->tx_resid = tx->tx_nob = tx->tx_lnetmsg->msg_len + sizeof(lnet_hdr_t);
+	tx->tx_nob = tx->tx_lnetmsg->msg_len + sizeof(struct lnet_hdr);
+	tx->tx_resid = tx->tx_nob;
 }
 
 static void

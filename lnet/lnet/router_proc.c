@@ -80,7 +80,7 @@ static int __proc_lnet_stats(void *data, int write,
 			     loff_t pos, void __user *buffer, int nob)
 {
 	int		 rc;
-	lnet_counters_t *ctrs;
+	struct lnet_counters *ctrs;
 	int		 len;
 	char		*tmpstr;
 	const int	 tmpsiz = 256; /* 7 %u and 4 __u64 */
@@ -177,8 +177,8 @@ proc_lnet_routes(struct ctl_table *table, int write, void __user *buffer,
 	} else {
 		struct list_head	*n;
 		struct list_head	*r;
-		lnet_route_t		*route = NULL;
-		lnet_remotenet_t	*rnet  = NULL;
+		struct lnet_route		*route = NULL;
+		struct lnet_remotenet	*rnet  = NULL;
 		int			skip  = off - 1;
 		struct list_head	*rn_list;
 		int			i;
@@ -198,14 +198,14 @@ proc_lnet_routes(struct ctl_table *table, int write, void __user *buffer,
 			n = rn_list->next;
 
 			while (n != rn_list && route == NULL) {
-				rnet = list_entry(n, lnet_remotenet_t,
+				rnet = list_entry(n, struct lnet_remotenet,
 						  lrn_list);
 
 				r = rnet->lrn_routes.next;
 
 				while (r != &rnet->lrn_routes) {
-					lnet_route_t *re =
-						list_entry(r, lnet_route_t,
+					struct lnet_route *re =
+						list_entry(r, struct lnet_route,
 							   lr_list);
 					if (skip == 0) {
 						route = re;
@@ -340,7 +340,7 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 			int last_ping = cfs_duration_sec(cfs_time_sub(now,
 						     peer->lpni_ping_timestamp));
 			int down_ni   = 0;
-			lnet_route_t *rtr;
+			struct lnet_route *rtr;
 
 			if ((peer->lpni_ping_feats &
 			     LNET_PING_FEAT_NI_STATUS) != 0) {
@@ -599,7 +599,7 @@ static int __proc_lnet_buffers(void *data, int write,
 		goto out; /* I'm not a router */
 
 	for (idx = 0; idx < LNET_NRBPOOLS; idx++) {
-		lnet_rtrbufpool_t *rbp;
+		struct lnet_rtrbufpool *rbp;
 
 		lnet_net_lock(LNET_LOCK_EX);
 		cfs_percpt_for_each(rbp, i, the_lnet.ln_rtrpools) {
@@ -663,8 +663,8 @@ proc_lnet_nis(struct ctl_table *table, int write, void __user *buffer,
 			      "rtr", "max", "tx", "min");
 		LASSERT (tmpstr + tmpsiz - s > 0);
 	} else {
-		lnet_ni_t         *ni   = NULL;
-		int                skip = *ppos - 1;
+		struct lnet_ni *ni   = NULL;
+		int skip = *ppos - 1;
 
 		lnet_net_lock(0);
 

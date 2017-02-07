@@ -101,7 +101,7 @@ void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg));
 static int __init lustre_init(void)
 {
 	struct proc_dir_entry *entry;
-	lnet_process_id_t lnet_id;
+	struct lnet_process_id lnet_id;
 	struct timespec64 ts;
 	int i, rc, seed[2];
 

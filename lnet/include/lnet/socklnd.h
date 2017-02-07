@@ -60,7 +60,7 @@ struct ksock_hello_msg {
 } WIRE_ATTR;
 
 struct ksock_lnet_msg {
-	lnet_hdr_t		ksnm_hdr;	/* lnet hdr */
+	struct lnet_hdr		ksnm_hdr;	/* lnet hdr */
 
 	/*
 	 * ksnm_payload is removed because of winnt compiler's limitation:

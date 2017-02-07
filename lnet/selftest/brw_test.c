@@ -269,7 +269,7 @@ brw_check_bulk(srpc_bulk_t *bk, int pattern, __u64 magic)
 
 static int
 brw_client_prep_rpc(sfw_test_unit_t *tsu,
-		    lnet_process_id_t dest, srpc_client_rpc_t **rpcpp)
+		    struct lnet_process_id dest, srpc_client_rpc_t **rpcpp)
 {
 	srpc_bulk_t	    *bulk = tsu->tsu_private;
 	sfw_test_instance_t *tsi = tsu->tsu_instance;

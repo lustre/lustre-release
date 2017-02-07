@@ -445,8 +445,8 @@ typedef struct kib_connparams
 
 typedef struct
 {
-        lnet_hdr_t        ibim_hdr;             /* portals header */
-        char              ibim_payload[0];      /* piggy-backed payload */
+	struct lnet_hdr		ibim_hdr;	/* portals header */
+	char			ibim_payload[0];/* piggy-backed payload */
 } WIRE_ATTR kib_immediate_msg_t;
 
 typedef struct
@@ -464,8 +464,8 @@ typedef struct
 
 typedef struct
 {
-        lnet_hdr_t        ibprm_hdr;            /* portals header */
-        __u64             ibprm_cookie;         /* opaque completion cookie */
+	struct lnet_hdr		ibprm_hdr;	/* portals header */
+	__u64			ibprm_cookie;	/* opaque completion cookie */
 } WIRE_ATTR kib_putreq_msg_t;
 
 typedef struct
@@ -477,9 +477,9 @@ typedef struct
 
 typedef struct
 {
-        lnet_hdr_t        ibgm_hdr;             /* portals header */
-        __u64             ibgm_cookie;          /* opaque completion cookie */
-        kib_rdma_desc_t   ibgm_rd;              /* rdma descriptor */
+	struct lnet_hdr		ibgm_hdr;	/* portals header */
+	__u64			ibgm_cookie;	/* opaque completion cookie */
+	kib_rdma_desc_t		ibgm_rd;	/* rdma descriptor */
 } WIRE_ATTR kib_get_msg_t;
 
 typedef struct
@@ -602,7 +602,7 @@ typedef struct kib_tx                           /* transmit message */
 	/* completion cookie */
 	__u64			tx_cookie;
 	/* lnet msgs to finalize on completion */
-	lnet_msg_t		*tx_lntmsg[2];
+	struct lnet_msg		*tx_lntmsg[2];
 	/* message buffer (host vaddr) */
 	kib_msg_t		*tx_msg;
 	/* message buffer (I/O addr) */
@@ -725,7 +725,7 @@ typedef struct kib_peer
 	/* who's on the other end(s) */
 	lnet_nid_t		ibp_nid;
 	/* LNet interface */
-	lnet_ni_t		*ibp_ni;
+	struct lnet_ni		*ibp_ni;
 	/* all active connections */
 	struct list_head	ibp_conns;
 	/* msgs waiting for a conn */
@@ -937,7 +937,7 @@ kiblnd_send_keepalive(kib_conn_t *conn)
 static inline int
 kiblnd_need_noop(kib_conn_t *conn)
 {
-	lnet_ni_t *ni = conn->ibc_peer->ibp_ni;
+	struct lnet_ni *ni = conn->ibc_peer->ibp_ni;
 	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
 
 	LASSERT(conn->ibc_state >= IBLND_CONN_ESTABLISHED);
@@ -1179,7 +1179,8 @@ int  kiblnd_cm_callback(struct rdma_cm_id *cmid,
 int  kiblnd_translate_mtu(int value);
 
 int  kiblnd_dev_failover(kib_dev_t *dev);
-int  kiblnd_create_peer(lnet_ni_t *ni, kib_peer_ni_t **peerp, lnet_nid_t nid);
+int kiblnd_create_peer(struct lnet_ni *ni, kib_peer_ni_t **peerp,
+		       lnet_nid_t nid);
 void kiblnd_destroy_peer (kib_peer_ni_t *peer);
 bool kiblnd_reconnect_peer(kib_peer_ni_t *peer);
 void kiblnd_destroy_dev (kib_dev_t *dev);
@@ -1195,20 +1196,22 @@ void kiblnd_destroy_conn(kib_conn_t *conn, bool free_conn);
 void kiblnd_close_conn (kib_conn_t *conn, int error);
 void kiblnd_close_conn_locked (kib_conn_t *conn, int error);
 
-void kiblnd_launch_tx (lnet_ni_t *ni, kib_tx_t *tx, lnet_nid_t nid);
-void kiblnd_txlist_done(lnet_ni_t *ni, struct list_head *txlist, int status);
+void kiblnd_launch_tx(struct lnet_ni *ni, kib_tx_t *tx, lnet_nid_t nid);
+void kiblnd_txlist_done(struct lnet_ni *ni, struct list_head *txlist,
+			int status);
 
 void kiblnd_qp_event(struct ib_event *event, void *arg);
 void kiblnd_cq_event(struct ib_event *event, void *arg);
 void kiblnd_cq_completion(struct ib_cq *cq, void *arg);
 
-void kiblnd_pack_msg (lnet_ni_t *ni, kib_msg_t *msg, int version,
-                      int credits, lnet_nid_t dstnid, __u64 dststamp);
+void kiblnd_pack_msg(struct lnet_ni *ni, kib_msg_t *msg, int version,
+		     int credits, lnet_nid_t dstnid, __u64 dststamp);
 int  kiblnd_unpack_msg(kib_msg_t *msg, int nob);
 int  kiblnd_post_rx (kib_rx_t *rx, int credit);
 
-int  kiblnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg);
-int  kiblnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
-		 unsigned int niov, struct kvec *iov, lnet_kiov_t *kiov,
-                 unsigned int offset, unsigned int mlen, unsigned int rlen);
+int  kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg);
+int kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
+		int delayed, unsigned int niov, struct kvec *iov,
+		lnet_kiov_t *kiov, unsigned int offset, unsigned int mlen,
+		unsigned int rlen);
 

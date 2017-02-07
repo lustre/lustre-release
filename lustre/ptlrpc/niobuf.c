@@ -43,14 +43,14 @@
  * over \a conn connection to portal \a portal.
  * Returns 0 on success or error code.
  */
-static int ptl_send_buf(lnet_handle_md_t *mdh, void *base, int len,
-			lnet_ack_req_t ack, struct ptlrpc_cb_id *cbid,
-			lnet_nid_t self, lnet_process_id_t peer_id,
+static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
+			enum lnet_ack_req ack, struct ptlrpc_cb_id *cbid,
+			lnet_nid_t self, struct lnet_process_id peer_id,
 			int portal, __u64 xid, unsigned int offset,
-			lnet_handle_md_t *bulk_cookie)
+			struct lnet_handle_md *bulk_cookie)
 {
 	int              rc;
-	lnet_md_t         md;
+	struct lnet_md         md;
 	ENTRY;
 
 	LASSERT (portal != 0);
@@ -61,7 +61,7 @@ static int ptl_send_buf(lnet_handle_md_t *mdh, void *base, int len,
 	md.options   = PTLRPC_MD_OPTIONS;
 	md.user_ptr  = cbid;
 	md.eq_handle = ptlrpc_eq_h;
-	LNetInvalidateHandle(&md.bulk_handle);
+	LNetInvalidateMDHandle(&md.bulk_handle);
 
 	if (bulk_cookie) {
 		md.bulk_handle = *bulk_cookie;
@@ -100,7 +100,7 @@ static int ptl_send_buf(lnet_handle_md_t *mdh, void *base, int len,
 	RETURN (0);
 }
 
-static void mdunlink_iterate_helper(lnet_handle_md_t *bd_mds, int count)
+static void mdunlink_iterate_helper(struct lnet_handle_md *bd_mds, int count)
 {
 	int i;
 
@@ -155,12 +155,12 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 {
 	struct obd_export        *exp = desc->bd_export;
 	lnet_nid_t		  self_nid;
-	lnet_process_id_t	  peer_id;
+	struct lnet_process_id	  peer_id;
 	int                       rc = 0;
 	__u64                     mbits;
 	int                       posted_md;
 	int                       total_md;
-	lnet_md_t                 md;
+	struct lnet_md                 md;
 	ENTRY;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_PUT_NET))
@@ -312,14 +312,14 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 int ptlrpc_register_bulk(struct ptlrpc_request *req)
 {
 	struct ptlrpc_bulk_desc *desc = req->rq_bulk;
-	lnet_process_id_t peer;
+	struct lnet_process_id peer;
 	int rc = 0;
 	int rc2;
 	int posted_md;
 	int total_md;
 	__u64 mbits;
-	lnet_handle_me_t  me_h;
-	lnet_md_t         md;
+	struct lnet_handle_me me_h;
+	struct lnet_md md;
 	ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_GET_NET))
@@ -687,15 +687,15 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	int rc;
 	int rc2;
 	int mpflag = 0;
-	lnet_handle_md_t bulk_cookie;
+	struct lnet_handle_md bulk_cookie;
 	struct ptlrpc_connection *connection;
-	lnet_handle_me_t  reply_me_h;
-	lnet_md_t         reply_md;
+	struct lnet_handle_me reply_me_h;
+	struct lnet_md reply_md;
 	struct obd_import *imp = request->rq_import;
 	struct obd_device *obd = imp->imp_obd;
 	ENTRY;
 
-	LNetInvalidateHandle(&bulk_cookie);
+	LNetInvalidateMDHandle(&bulk_cookie);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DROP_RPC))
                 RETURN(0);
@@ -934,11 +934,11 @@ EXPORT_SYMBOL(ptl_send_rpc);
  */
 int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 {
-	struct ptlrpc_service	  *service = rqbd->rqbd_svcpt->scp_service;
-	static lnet_process_id_t  match_id = {LNET_NID_ANY, LNET_PID_ANY};
-	int			  rc;
-        lnet_md_t                 md;
-        lnet_handle_me_t          me_h;
+	struct ptlrpc_service *service = rqbd->rqbd_svcpt->scp_service;
+	static struct lnet_process_id match_id = {LNET_NID_ANY, LNET_PID_ANY};
+	int rc;
+	struct lnet_md md;
+	struct lnet_handle_me me_h;
 
         CDEBUG(D_NET, "LNetMEAttach: portal %d\n",
                service->srv_req_portal);

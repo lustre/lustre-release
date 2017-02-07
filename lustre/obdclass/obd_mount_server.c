@@ -1094,7 +1094,7 @@ int server_mti_print(const char *title, struct mgs_target_info *mti)
 static int server_lsi2mti(struct lustre_sb_info *lsi,
 			  struct mgs_target_info *mti)
 {
-	lnet_process_id_t id;
+	struct lnet_process_id id;
 	int rc, i = 0;
 	int cplen = 0;
 	ENTRY;

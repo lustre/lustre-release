@@ -159,7 +159,7 @@ static struct lnet_ioctl_config_o2iblnd_tunables default_tunables;
 
 /* # messages/RDMAs in-flight */
 int
-kiblnd_msg_queue_size(int version, lnet_ni_t *ni)
+kiblnd_msg_queue_size(int version, struct lnet_ni *ni)
 {
 	if (version == IBLND_MSG_VERSION_1)
 		return IBLND_MSG_QUEUE_SIZE_V1;
@@ -170,7 +170,7 @@ kiblnd_msg_queue_size(int version, lnet_ni_t *ni)
 }
 
 int
-kiblnd_tunables_setup(lnet_ni_t *ni)
+kiblnd_tunables_setup(struct lnet_ni *ni)
 {
 	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
 	struct lnet_ioctl_config_lnd_cmn_tunables *net_tunables;
