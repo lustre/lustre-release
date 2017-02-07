@@ -11206,6 +11206,55 @@ test_161c() {
 }
 run_test 161c "check CL_RENME[UNLINK] changelog record flags"
 
+test_161d() {
+	local user
+	local pid
+	local fid
+
+	# cleanup previous run
+	rm -rf $DIR/$tdir/$tfile
+
+	user=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
+		changelog_register -n)
+	[[ $? -eq 0 ]] || error "changelog_register failed"
+
+	# work in a standalone dir to avoid locking on $DIR/$MOUNT to
+	# interfer with $MOUNT/.lustre/fid/ access
+	mkdir $DIR/$tdir
+	[[ $? -eq 0 ]] || error "mkdir failed"
+
+	#define OBD_FAIL_LLITE_CREATE_NODE_PAUSE 0x140c | OBD_FAIL_ONCE
+	$LCTL set_param fail_loc=0x8000140c
+	# 5s pause
+	$LCTL set_param fail_val=5
+
+	# create file
+	echo foofoo > $DIR/$tdir/$tfile &
+	pid=$!
+
+	# wait for create to be delayed
+	sleep 2
+
+	ps -q $pid
+	[[ $? -eq 0 ]] || error "create should be blocked"
+
+	local tempfile=$(mktemp)
+	fid=$(changelog_extract_field $MDT0 "CREAT" "$tfile" "t=")
+	cat $MOUNT/.lustre/fid/$fid 2>/dev/null >$tempfile || error "cat failed"
+	# some delay may occur during ChangeLog publishing and file read just
+	# above, that could allow file write to happen finally
+	[[ -s $tempfile ]] && echo "file should be empty"
+
+	$LCTL set_param fail_loc=0
+
+	wait $pid
+	[[ $? -eq 0 ]] || error "create failed"
+
+	$LFS changelog_clear $MDT0 $user 0
+	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister $user
+}
+run_test 161d "create with concurrent .lustre/fid access"
+
 check_path() {
     local expected=$1
     shift
