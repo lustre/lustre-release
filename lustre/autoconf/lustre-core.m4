@@ -2274,6 +2274,24 @@ in_compat_syscall, [
 ]) # LC_HAVE_IN_COMPAT_SYSCALL
 
 #
+# LC_HAVE_POSIX_ACL_VALID_USER_NS
+#
+# 4.8 posix_acl_valid takes struct user_namespace
+#
+AC_DEFUN([LC_HAVE_POSIX_ACL_VALID_USER_NS], [
+LB_CHECK_COMPILE([if 'posix_acl_valid' takes 'struct user_namespace'],
+posix_acl_valid, [
+	#include <linux/fs.h>
+	#include <linux/posix_acl.h>
+],[
+	posix_acl_valid((struct user_namespace*)NULL, (const struct posix_acl*)NULL);
+],[
+	AC_DEFINE(HAVE_POSIX_ACL_VALID_USER_NS, 1,
+		[posix_acl_valid takes struct user_namespace])
+])
+]) # LC_HAVE_POSIX_ACL_VALID_USER_NS
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2460,6 +2478,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.6
 	LC_HAVE_IN_COMPAT_SYSCALL
+
+	# 4.8
+	LC_HAVE_POSIX_ACL_VALID_USER_NS
 
 	#
 	AS_IF([test "x$enable_server" != xno], [

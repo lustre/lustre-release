@@ -95,4 +95,8 @@ static inline struct dentry *file_dentry(const struct file *file)
 #define posix_acl_from_xattr(a,b,c)	posix_acl_from_xattr(b,c)
 #define posix_acl_to_xattr(a,b,c,d)	posix_acl_to_xattr(b,c,d)
 #endif
+
+#ifndef HAVE_POSIX_ACL_VALID_USER_NS
+#define posix_acl_valid(a,b) posix_acl_valid(b)
+#endif
 #endif
