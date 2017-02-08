@@ -638,7 +638,7 @@ static int nrs_orr_start(struct ptlrpc_nrs_policy *policy, char *arg)
 					      nrs_pol2cptab(policy),
 					      nrs_pol2cptid(policy));
 	if (orrd->od_binheap == NULL)
-		GOTO(failed, rc = -ENOMEM);
+		GOTO(out_orrd, rc = -ENOMEM);
 
 	nrs_orr_genobjname(policy, orrd->od_objname);
 
@@ -649,7 +649,7 @@ static int nrs_orr_start(struct ptlrpc_nrs_policy *policy, char *arg)
 					   sizeof(struct nrs_orr_object),
 					   0, 0, NULL);
 	if (orrd->od_cache == NULL)
-		GOTO(failed, rc = -ENOMEM);
+		GOTO(out_binheap, rc = -ENOMEM);
 
 	if (strncmp(policy->pol_desc->pd_name, NRS_POL_NAME_ORR,
 		    NRS_POL_NAME_MAX) == 0) {
@@ -677,7 +677,7 @@ static int nrs_orr_start(struct ptlrpc_nrs_policy *policy, char *arg)
 					    CFS_HASH_MIN_THETA,
 					    CFS_HASH_MAX_THETA, ops, flags);
 	if (orrd->od_obj_hash == NULL)
-		GOTO(failed, rc = -ENOMEM);
+		GOTO(out_cache, rc = -ENOMEM);
 
 	/* XXX: Fields accessed unlocked */
 	orrd->od_quantum = NRS_ORR_QUANTUM_DFLT;
@@ -693,12 +693,11 @@ static int nrs_orr_start(struct ptlrpc_nrs_policy *policy, char *arg)
 
 	RETURN(rc);
 
-failed:
-	if (orrd->od_cache)
-		kmem_cache_destroy(orrd->od_cache);
-	if (orrd->od_binheap != NULL)
-		cfs_binheap_destroy(orrd->od_binheap);
-
+out_cache:
+	kmem_cache_destroy(orrd->od_cache);
+out_binheap:
+	cfs_binheap_destroy(orrd->od_binheap);
+out_orrd:
 	OBD_FREE_PTR(orrd);
 
 	RETURN(rc);

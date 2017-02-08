@@ -194,7 +194,7 @@ static int nrs_crrn_start(struct ptlrpc_nrs_policy *policy, char *arg)
 					     nrs_pol2cptab(policy),
 					     nrs_pol2cptid(policy));
 	if (net->cn_binheap == NULL)
-		GOTO(failed, rc = -ENOMEM);
+		GOTO(out_net, rc = -ENOMEM);
 
 	net->cn_cli_hash = cfs_hash_create("nrs_crrn_nid_hash",
 					   NRS_NID_BITS, NRS_NID_BITS,
@@ -204,7 +204,7 @@ static int nrs_crrn_start(struct ptlrpc_nrs_policy *policy, char *arg)
 					   &nrs_crrn_hash_ops,
 					   CFS_HASH_RW_BKTLOCK);
 	if (net->cn_cli_hash == NULL)
-		GOTO(failed, rc = -ENOMEM);
+		GOTO(out_binheap, rc = -ENOMEM);
 
 	/**
 	 * Set default quantum value to max_rpcs_in_flight for non-MDS OSCs;
@@ -223,10 +223,9 @@ static int nrs_crrn_start(struct ptlrpc_nrs_policy *policy, char *arg)
 
 	RETURN(rc);
 
-failed:
-	if (net->cn_binheap != NULL)
-		cfs_binheap_destroy(net->cn_binheap);
-
+out_binheap:
+	cfs_binheap_destroy(net->cn_binheap);
+out_net:
 	OBD_FREE_PTR(net);
 
 	RETURN(rc);
