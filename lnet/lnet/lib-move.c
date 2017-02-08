@@ -1610,6 +1610,7 @@ again:
 			/* Get the target peer_ni */
 			peer_net = lnet_peer_get_net_locked(peer,
 					LNET_NIDNET(best_lpni->lpni_nid));
+			LASSERT(peer_net != NULL);
 			list_for_each_entry(lpni, &peer_net->lpn_peer_nis,
 					    lpni_peer_nis) {
 				if (lpni->lpni_pref_nnids == 0)

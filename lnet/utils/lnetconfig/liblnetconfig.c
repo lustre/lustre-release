@@ -2706,6 +2706,8 @@ int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
 		cYAML_print_tree(root);
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
+	rc = LUSTRE_CFG_RC_NO_ERR;
+
 out:
 	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_free_tree(root);
@@ -2760,6 +2762,9 @@ int lustre_lnet_show_discovery(int seq_no, struct cYAML **show_rc,
 		cYAML_print_tree(root);
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	rc = LUSTRE_CFG_RC_NO_ERR;
+
 out:
 	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_free_tree(root);
