@@ -124,21 +124,24 @@ int llapi_get_version_string(char *version, unsigned int version_size)
 	}
 
 	ptr = strstr(buffer, "lustre:");
-	if (ptr != NULL) {
-		llapi_chomp_string(ptr);
+	if (ptr) {
 		ptr += strlen("lustre:");
 		while (*ptr == ' ' || *ptr == '\t')
 			ptr++;
-
-		if (strlcpy(version, ptr, version_size) >= version_size) {
-			errno = EOVERFLOW;
-			return -1;
-		}
 	} else {
+		ptr = buffer;
+	}
+	llapi_chomp_string(ptr);
+
+	if (ptr[0] == '\0') {
 		errno = ENODATA;
 		return -1;
 	}
 
+	if (strlcpy(version, ptr, version_size) >= version_size) {
+		errno = EOVERFLOW;
+		return -1;
+	}
 	return 0;
 }
 
