@@ -55,7 +55,7 @@ sub readstat()
 	chop;
 	($name, $cumulcount, $samples, $unit, $min, $max, $sum, $sumsquare) 
 		= split(/\s+/, $_);
-	$prevcount = %cumulhash->{$name};
+	$prevcount = $cumulhash->{$name};
 	if (defined($prevcount)) {
 		$diff = $cumulcount - $prevcount;
 		if ($name eq "snapshot_time") {
@@ -82,7 +82,7 @@ sub readstat()
 			}
 			if (defined($sum)) {
 				my $sum_orig = $sum;
-				my $sum_diff = $sum - %sumhash->{$name};
+				my $sum_diff = $sum - $sumhash->{$name};
 				if ($graphable) {
 				    printf "   %s %lu %.2f %lu %s",
 				    $name, $sum_diff, ($sum_diff/$tdiff), $sum, $unit;
@@ -118,8 +118,8 @@ sub readstat()
 			$anysumsquare = 1;
 		}
 	}
-	%cumulhash->{$name} = $cumulcount;
-	%sumhash->{$name} = $sum;
+	$cumulhash->{$name} = $cumulcount;
+	$sumhash->{$name} = $sum;
 	} #end of while
 }
 
