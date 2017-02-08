@@ -13,8 +13,8 @@ ALWAYS_EXCEPT="                42a  42b  42c  42d  45   68b   $SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # with LOD/OSP landing
-# bug number for skipped tests: LU-2036 LU-8139 LU-8411
-ALWAYS_EXCEPT="                 76	101g	407 $ALWAYS_EXCEPT"
+# bug number for skipped tests: LU-2036 LU-8411
+ALWAYS_EXCEPT="                 76	407 $ALWAYS_EXCEPT"
 
 is_sles11()						# LU-4341
 {
@@ -6685,60 +6685,73 @@ test_101f() {
 }
 run_test 101f "check mmap read performance"
 
+test_101g_brw_size_test() {
+	local mb=$1
+	local pages=$((mb * 1048576 / $(page_size)))
+
+	$LCTL set_param osc.*.max_pages_per_rpc=${mb}M ||
+		{ error "unable to set max_pages_per_rpc=${mb}M"; return 1; }
+	for mp in $($LCTL get_param -n osc.*.max_pages_per_rpc); do
+		[ $mp -ne $pages ] && error "max_pages_per_rpc $mp != $pages" &&
+			return 2
+	done
+
+	$LCTL set_param -n osc.*.rpc_stats=0
+
+	# 10 RPCs should be enough for the test
+	local count=10
+	dd if=/dev/zero of=$DIR/$tfile bs=${mb}M count=$count ||
+		{ error "dd write ${mb} MB blocks failed"; return 3; }
+	cancel_lru_locks osc
+	dd of=/dev/null if=$DIR/$tfile bs=${mb}M count=$count ||
+		{ error "dd write ${mb} MB blocks failed"; return 4; }
+
+	# calculate number of full-sized read and write RPCs
+	rpcs=($($LCTL get_param -n 'osc.*.rpc_stats' |
+		sed -n '/pages per rpc/,/^$/p' |
+		awk '/'$pages':/ { reads += $2; writes += $5 };' \
+		'END { print reads,writes }'))
+	[ ${rpcs[0]} -ne $count ] && error "${rpcs[0]} != $count read RPCs" &&
+		return 5
+	[ ${rpcs[1]} -ne $count ] && error "${rpcs[1]} != $count write RPCs" &&
+		return 6
+
+	return 0
+}
+
 test_101g() {
 	local rpcs
 	local osts=$(get_facets OST)
 	local list=$(comma_list $(osts_nodes))
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local brw_size="obdfilter.*.brw_size"
 
-	save_lustre_params $osts "obdfilter.*.brw_size" > $p
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile
 
-	$LFS setstripe -c 1 $DIR/$tfile
-
+	local orig_mb=$(do_facet ost1 $LCTL get_param -n $brw_size | head -n 1)
 	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.52) ]; then
-		set_osd_param $list '' brw_size 16M
+		[ $(lustre_version_code ost1) -ge $(version_code 2.9.52) ] &&
+			suffix="M"
+		if [[ $orig_mb < 16 ]]; then
+			save_lustre_params $osts "$brw_size" > $p
+			do_nodes $list $LCTL set_param -n $brw_size=16$suffix ||
+				error "set 16MB RPC size failed"
 
-		echo "remount client to enable large RPC size"
-		remount_client $MOUNT || error "remount_client failed"
+			echo "remount client to enable new RPC size"
+			remount_client $MOUNT || error "remount_client failed"
+		fi
 
-		for mp in $($LCTL get_param -n osc.*.max_pages_per_rpc); do
-			[ "$mp" -eq 4096 ] ||
-				error "max_pages_per_rpc not correctly set"
-		done
-
-		$LCTL set_param -n osc.*.rpc_stats=0
-
-		# 10*16 MiB should be enough for the test
-		dd if=/dev/zero of=$DIR/$tfile bs=16M count=10
-		cancel_lru_locks osc
-		dd of=/dev/null if=$DIR/$tfile bs=16M count=10
-
-		# calculate 16 MiB RPCs
-		rpcs=$($LCTL get_param 'osc.*.rpc_stats' |
-		       sed -n '/pages per rpc/,/^$/p' |
-		       awk 'BEGIN { sum = 0 }; /4096:/ { sum += $2 };
-			    END { print sum }')
-		echo $rpcs RPCs
-		[ "$rpcs" -eq 10 ] || error "not all RPCs are 16 MiB BRW rpcs"
+		test_101g_brw_size_test 16 || error "16MB RPC test failed"
+		# should be able to set brw_size=12, but no rpc_stats for that
+		test_101g_brw_size_test 8 || error "8MB RPC test failed"
 	fi
 
-	echo "set RPC size to 4MB"
+	test_101g_brw_size_test 4 || error "4MB RPC test failed"
 
-	$LCTL set_param -n osc.*.max_pages_per_rpc=4M osc.*.rpc_stats=0
-	dd if=/dev/zero of=$DIR/$tfile bs=4M count=25
-	cancel_lru_locks osc
-	dd of=/dev/null if=$DIR/$tfile bs=4M count=25
-
-	# calculate 4 MiB RPCs
-	rpcs=$($LCTL get_param 'osc.*.rpc_stats' |
-		sed -n '/pages per rpc/,/^$/p' |
-		awk 'BEGIN { sum = 0 }; /1024:/ { sum += $2 };
-		     END { print sum }')
-	echo $rpcs RPCs
-	[ "$rpcs" -eq 25 ] || error "not all RPCs are 4 MiB BRW rpcs"
-
-	restore_lustre_params < $p
-	remount_client $MOUNT || error "remount_client failed"
+	if [[ $orig_mb < 16 ]]; then
+		restore_lustre_params < $p
+		remount_client $MOUNT || error "remount_client restore failed"
+	fi
 
 	rm -f $p $DIR/$tfile
 }

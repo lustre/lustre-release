@@ -525,16 +525,14 @@ ofd_brw_size_seq_write(struct file *file, const char __user *buffer,
 	__s64 val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, 'M');
 	if (rc)
 		return rc;
 
-	if (val < 0)
+	if (val <= 0)
 		return -EINVAL;
 
-	val = val * ONE_MB_BRW_SIZE;
-	if (val <= 0 || val > DT_MAX_BRW_SIZE ||
-	    val < (1 << ofd->ofd_blockbits))
+	if (val > DT_MAX_BRW_SIZE || val < (1 << ofd->ofd_blockbits))
 		return -ERANGE;
 
 	spin_lock(&ofd->ofd_flags_lock);
