@@ -312,6 +312,11 @@ int jt_ptl_network(int argc, char **argv)
 			return 0;
 		}
 
+		if (errno == ENODEV) {
+			printf("LNET is currently not loaded.");
+			return 0;
+		}
+
 		if (errno == EBUSY)
 			fprintf(stderr, "LNET busy\n");
 		else

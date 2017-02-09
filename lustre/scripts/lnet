@@ -52,23 +52,6 @@ run_postexec_check ()
 	fi
 }
 
-stop_lnet ()
-{
-	local errmsg=$(/usr/sbin/lctl network down 2>&1)
-	if [ $? -gt 0 ]; then
-		# The following error message means that lnet is already
-		# unconfigured, and the modules are not loaded.
-		echo $errmsg | grep "LNET unconfigure error 19" > /dev/null
-		if [ $? -gt 0 ]; then
-			return 0
-		else
-			echo "$errmsg"
-			return 1
-		fi
-	fi
-	return 0
-}
-
 status ()
 {
 	old_nullglob="`shopt -p nullglob`"
@@ -148,7 +131,7 @@ case "$1" in
 	;;
   stop)
 	run_preexec_check "stop"
-	stop_lnet || exit 1
+	lctl network down || exit 1
 	lustre_rmmod || exit 1
 	rm -f /var/lock/subsys/lnet
 	run_postexec_check "stop"
