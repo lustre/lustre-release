@@ -9,7 +9,7 @@ TBD Intel Corporation
          2.6.32-642.13.1.el6 (RHEL6.8)
          3.10.0-514.6.1.el7  (RHEL7.3)
          3.0.101-0.47.71     (SLES11 SP3)
-         3.0.101-91          (SLES11 SP4)
+         3.0.101-94          (SLES11 SP4)
          3.12.67-60.64.24    (SLES12 SP1)
          4.4.38-93           (SLES12 SP2)
          vanilla linux 4.5.7 (ZFS only)
@@ -20,7 +20,7 @@ TBD Intel Corporation
          2.6.32-642.13.1.el6 (RHEL6.8)
          3.10.0-514.6.1.el7  (RHEL7.3)
          3.0.101-0.47.71     (SLES11 SP3)
-         3.0.101-91          (SLES11 SP4)
+         3.0.101-94          (SLES11 SP4)
          3.12.67-60.64.24    (SLES12 SP1)
          4.4.38-93           (SLES12 SP2)
          vanilla linux 4.5.7
