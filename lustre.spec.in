@@ -393,7 +393,9 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %{_sysconfdir}/udev/rules.d/99-lustre.rules
 %config(noreplace) %{_sysconfdir}/ldev.conf
 %config(noreplace) %{_sysconfdir}/modprobe.d/ko2iblnd.conf
-
+%if %{with lustre_utils}
+%config(noreplace) %{_sysconfdir}/lnet_routes.conf
+%endif
 %if %{with lustre_modules}
 
 %if %{with ldiskfs}

@@ -33,12 +33,16 @@
 #
 
 EXTRA_DIST = lustre.dtd slapd-lustre.conf lustre2ldif.xsl top.ldif \
-             99-lustre.rules lustre ldev.conf ko2iblnd.conf lsvcgss
+             99-lustre.rules lustre ldev.conf ko2iblnd.conf lsvcgss \
+             lnet_routes.conf
 ldapconfdir = $(sysconfdir)/openldap
+
+sysconf_DATA = ldev.conf
 
 if UTILS
 noinst_SCRIPTS = slapd-lustre.conf
 noinst_DATA = top.ldif lustre2ldif.xsl
+sysconf_DATA += lnet_routes.conf
 endif
 
 udevrulesdir = $(sysconfdir)/udev/rules.d
@@ -53,5 +57,3 @@ endif
 
 modprobedir = $(sysconfdir)/modprobe.d
 modprobe_DATA = ko2iblnd.conf
-
-sysconf_DATA = ldev.conf

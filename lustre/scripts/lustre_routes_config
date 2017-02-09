@@ -83,6 +83,12 @@ find_arg_value() {
 }
 
 while read line; do
+	# skip lines that are entirely whitespace or
+	# when the first non-whitespace character is #
+	if [[ "$line" =~ ^[[:space:]]*(#|$) ]]; then
+		continue
+	fi
+
 	# Parse line using ':' and ',' as delimiters and ignoring all
 	# white space, tabs and linefeed
 	IFS="$IFS:,"

@@ -95,7 +95,7 @@ status ()
 	eval $old_nullglob
 }
 
-LUSTRE_ROUTES_CONFIG_FILE="/etc/sysconfig/lnet_routes.conf"
+LUSTRE_ROUTES_CONFIG_FILE="/etc/lnet_routes.conf"
 LUSTRE_LNET_CONFIG_FILE="/etc/sysconfig/lnet.conf"
 LUSTRE_LNET_CONFIG_UTILITY="/usr/sbin/lnetctl"
 

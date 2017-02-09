@@ -5,7 +5,7 @@ lustre_routes_config \- Configure routes dynamically
 .B "lustre_routes_config"
 .SH DESCRIPTION
 lustre_route_config sets or cleans up LNET routes from the specified config
-file.  /etc/sysconfig/lustre_routes.conf file can be used to automatically
+file.  /etc/lnet_routes.conf file can be used to automatically
 configure routes on LNET startup.
 .LP
 The format of the config file is:
@@ -57,6 +57,6 @@ lustre_routes_config --cleanup <path/to/routes_config_file>
 .BR lctl (8)
 .BR lustre_routes_conversion (8)
 .SH FILES
-/etc/sysconfig/lustre_routes.conf
+/etc/lnet_routes.conf
 .SH AUTHOR
 Amir Shehata
