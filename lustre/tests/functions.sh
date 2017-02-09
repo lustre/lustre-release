@@ -317,7 +317,7 @@ run_compilebench() {
     # t-f _base needs to be modifyed to set properly tdir
     # for new "test_foo" functions names
     # local testdir=$DIR/$tdir
-    local testdir=$dir/d0.compilebench
+    local testdir=$dir/d0.compilebench.$$
     mkdir -p $testdir
 
     local savePWD=$PWD
