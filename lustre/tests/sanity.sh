@@ -9677,17 +9677,15 @@ test_133e() {
 }
 run_test 133e "Verifying OST {read,write}_bytes nid stats ================="
 
-proc_dirs=""
-for dir in /proc/fs/lustre/ /proc/sys/lnet/ /proc/sys/lustre/ \
-	   /sys/fs/lustre/ /sys/fs/lnet/ /sys/kernel/debug/lnet/ \
-	   /sys/kernel/debug/lustre/; do
-	[[ -d $dir ]] && proc_dirs+=" $dir"
-done
+proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
 
 test_133f() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	# First without trusting modes.
+	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
+	echo "proc_dirs='$proc_dirs'"
+	[ -n "$proc_dirs" ] || error "no proc_dirs on $HOSTNAME"
 	find $proc_dirs -exec cat '{}' \; &> /dev/null
 
 	# Second verifying readability.
@@ -9696,12 +9694,16 @@ test_133f() {
 	# eventually, this can also be replaced with "lctl get_param -R",
 	# but not until that option is always available on the server
 	local facet
-	for facet in $SINGLEMDS ost1; do
-		do_facet $facet find $proc_dirs \
+	for facet in mds1 ost1; do
+		local facet_proc_dirs=$(do_facet $facet \
+					\\\ls -d $proc_regexp 2>/dev/null)
+		echo "${facet}_proc_dirs='$facet_proc_dirs'"
+		[ -z "$facet_proc_dirs" ] && error "no proc_dirs on $facet"
+		do_facet $facet find $facet_proc_dirs \
 			! -name req_history \
 			-exec cat '{}' \\\; &> /dev/null
 
-		do_facet $facet find $proc_dirs \
+		do_facet $facet find $facet_proc_dirs \
 			! -name req_history \
 			-type f \
 			-exec cat '{}' \\\; &> /dev/null ||
@@ -9714,6 +9716,9 @@ test_133g() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	# Second verifying writability.
+	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
+	echo "proc_dirs='$proc_dirs'"
+	[ -n "$proc_dirs" ] || error "no proc_dirs on $HOSTNAME"
 	find $proc_dirs \
 		-type f \
 		-not -name force_lbug \
@@ -9721,21 +9726,20 @@ test_133g() {
 		-exec badarea_io '{}' \; &> /dev/null ||
 		error "find $proc_dirs failed"
 
-	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.5.54) ] &&
-		skip "Too old lustre on MDS" && return
-
-	[ $(lustre_version_code ost1) -le $(version_code 2.5.54) ] &&
-		skip "Too old lustre on ost1" && return
-
 	local facet
-	for facet in $SINGLEMDS ost1; do
-		do_facet $facet find $proc_dirs \
+	for facet in mds1 ost1; do
+		[ $(lustre_version_code $facet) -le $(version_code 2.5.54) ] &&
+			skip "Too old lustre on $facet" && continue
+		local facet_proc_dirs=$(do_facet $facet \
+					\\\ls -d $proc_regexp 2> /dev/null)
+		echo "${facet}_proc_dirs='$facet_proc_dirs'"
+		[ -z "$facet_proc_dirs" ] && error "no proc_dirs on $facet"
+		do_facet $facet find $facet_proc_dirs \
 			-type f \
 			-not -name force_lbug \
 			-not -name changelog_mask \
 			-exec badarea_io '{}' \\\; &> /dev/null ||
-		error "$facet find $proc_dirs failed"
-
+				error "$facet find $facet_proc_dirs failed"
 	done
 
 	# remount the FS in case writes/reads /proc break the FS
@@ -15633,6 +15637,9 @@ test_401a() { #LU-7437
 	#count the number of parameters by "list_param -R"
 	local params=$($LCTL list_param -R '*' 2>/dev/null | wc -l)
 	#count the number of parameters by listing proc files
+	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
+	echo "proc_dirs='$proc_dirs'"
+	[ -n "$proc_dirs" ] || error "no proc_dirs on $HOSTNAME"
 	local procs=$(find -L $proc_dirs -mindepth 1 -printf '%P\n' 2>/dev/null|
 		      sort -u | wc -l)
 

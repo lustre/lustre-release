@@ -16,5 +16,6 @@ RPC_MODE=true init_test_env
 # framework's job.
 trap - ERR
 
+log "$HOSTNAME: executing $@"
 # Execute the command
 "$@"
