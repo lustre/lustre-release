@@ -1,0 +1,118 @@
+# This file is provided under a dual BSD/GPLv2 license.  When using or
+# redistributing this file, you may do so under either license.
+#
+# GPL LICENSE SUMMARY
+#
+# Copyright(c) 2016 Intel Corporation.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of version 2 of the GNU General Public License as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# Contact Information:
+# Cong Xu, cong.xu@intel.com
+#
+# BSD LICENSE
+#
+# Copyright(c) 2016 Intel Corporation.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# * Redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer.
+# * Redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in
+# the documentation and/or other materials provided with the
+# distribution.
+# * Neither the name of Intel Corporation nor the names of its
+# contributors may be used to endorse or promote products derived
+# from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+# "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+# LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+# A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+# OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+# LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+# DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+
+
+1. Introduction to launcher.sh
+    This LIOProf logging services script is used to record detailed I/O Tracing
+information carried out on Lustre OSS nodes, it requires superuser privilege.
+
+[Input]
+(1) Input usage information
+    Usage: launcher.sh [-a] [-d] [-l] [-h] [-m] [-n] [-o] [-u]
+        -a  command to launch application
+        -d  shared nfs directory to store LIOProf logs
+        -l  lowest Lustre OSS node [Hostname]
+        -h  highest Lustre OSS node [Hostname]
+        -m  lowest Lustre Client [Hostname]
+        -n  highest Lustre Client [Hostname]
+        -o  use Obdfilter-survey to measure Lustre bandwidth
+        -u  user name
+
+(2) Input example
+    a. Launch application
+        # su
+        # launcher.sh -l wolf-33 -h wolf-36 -m wolf-38 -n wolf-41 -u USER_NAME \
+        # -d /home/USER_NAME/lioprof_home -a "mpirun -np 4 hostname"
+    b. Launch Obdfilter-survey to measure Lustre bandwidth
+        # su
+        # launcher.sh -l wolf-33 -h wolf-36 -u USER_NAME \
+        # -d /home/USER_NAME/lioprof_home -o
+
+[Output]
+(1) Output location
+    All the outputs locate in the directory configured by '-d' argument. In the
+above example, logs are stored in /home/USER_NAME/lioprof_home directory.
+
+(2) Application output information
+    a. job-output: Output of the job.
+    b. brw:  Disk I/O sizes
+    c. iostat: Disks bandwidth, CPU utilization
+    d. rpc: Lustre rpc tracing information
+
+(3) Obdfilter-survey output information
+    a. obdfilter: Lustre OST bandwidth
+    *Note: OBDfilter-survey will be running in the background, it will take
+some time to finish the measurement. Need to check the status until you see "done!"
+in the output of obdfilter.
+
+2. Introduction to parser.sh
+    This LIOProf RPC Parser is used to parse rpc logs collected from OSS nodes,
+it can be run as a normal user (non-admin).
+
+[Input]
+(1) Input usage information
+    Usage: parser.sh [-i] [-x] [-y] [-t]
+        -i  path to LIOProf rpc tracing logs
+        -x  lowest Lustre Client [IB IP Address]
+        -y  highest Lustre Client [IB IP Address]
+        -t  Type of Operation Code (OPC) (OST_READ 3, OST_WRITE 4)
+
+(2) Input example
+    # parser.sh -i /home/USER_NAME/lioprof_home/job-1468618740/rpc \
+    # -x 192.168.1.38 -y 192.168.1.41 -t 3
+
+[Output]
+(1) Output location
+    Output is stored in the same directory as input rpc log. In the above
+example, output locates in /home/USER_NAME/lioprof_home/job-1468618740/rpc-out
+
+(2) Output information
+    Count I/O requests per second.
