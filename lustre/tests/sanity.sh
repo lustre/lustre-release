@@ -14335,6 +14335,9 @@ ladvise_willread_performance()
 }
 
 test_255a() {
+	[ $(lustre_version_code ost1) -lt $(version_code 2.8.54) ] &&
+		skip "lustre < 2.8.54 does not support ladvise " && return
+
 	lfs setstripe -c -1 -i 0 $DIR/$tfile || error "$tfile failed"
 
 	ladvise_no_type willread $DIR/$tfile &&
@@ -14342,9 +14345,6 @@ test_255a() {
 
 	ladvise_no_ioctl $DIR/$tfile &&
 		skip "ladvise ioctl is not supported" && return
-
-	[ $(lustre_version_code ost1) -lt $(version_code 2.8.54) ] &&
-		skip "lustre < 2.8.54 does not support ladvise " && return
 
 	local size_mb=100
 	local size=$((size_mb * 1048576))
