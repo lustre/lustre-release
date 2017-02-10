@@ -2117,6 +2117,9 @@ test_110f () {
 run_test 110f "remove remote directory: drop slave rep"
 
 test_110g () {
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.57) ]] ||
+		{ skip "Need MDS version at least 2.6.57"; return 0; }
+
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
 	local remote_dir=$DIR/$tdir/remote_dir
 	local MDTIDX=1
