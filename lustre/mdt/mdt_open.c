@@ -294,7 +294,7 @@ void mdt_mfd_set_mode(struct mdt_file_data *mfd, __u64 mode)
 {
 	LASSERT(mfd != NULL);
 
-	CDEBUG(D_HA, DFID " Change mfd mode %#llo -> %#llo.\n",
+	CDEBUG(D_DENTRY, DFID " Change mfd mode %#llo -> %#llo.\n",
 	       PFID(mdt_object_fid(mfd->mfd_object)), mfd->mfd_mode, mode);
 
 	mfd->mfd_mode = mode;
