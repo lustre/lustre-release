@@ -2246,7 +2246,7 @@ void ll_open_cleanup(struct super_block *sb, struct ptlrpc_request *open_req)
 
 	op_data->op_fid1 = body->mbo_fid1;
 	op_data->op_handle = body->mbo_handle;
-	op_data->op_mod_time = cfs_time_current_sec();
+	op_data->op_mod_time = ktime_get_real_seconds();
 	md_close(exp, op_data, NULL, &close_req);
 	ptlrpc_req_finished(close_req);
 	ll_finish_md_op_data(op_data);

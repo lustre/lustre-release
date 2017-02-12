@@ -322,7 +322,7 @@ int llog_read_header(const struct lu_env *env, struct llog_handle *handle,
 						LLOG_MIN_CHUNK_SIZE);
 		llh->llh_hdr.lrh_len = handle->lgh_ctxt->loc_chunk_size;
 		llh->llh_hdr.lrh_index = 0;
-		llh->llh_timestamp = cfs_time_current_sec();
+		llh->llh_timestamp = ktime_get_real_seconds();
 		if (uuid)
 			memcpy(&llh->llh_tgtuuid, uuid,
 			       sizeof(llh->llh_tgtuuid));
