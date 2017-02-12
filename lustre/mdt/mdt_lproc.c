@@ -112,13 +112,13 @@ static void display_rename_stats(struct seq_file *seq, char *name,
 static void rename_stats_show(struct seq_file *seq,
                               struct rename_stats *rename_stats)
 {
-        struct timeval now;
+	struct timespec64 now;
 
-        /* this sampling races with updates */
-        do_gettimeofday(&now);
-        seq_printf(seq, "rename_stats:\n");
-        seq_printf(seq, "- %-15s %lu.%lu\n", "snapshot_time:",
-                   now.tv_sec, now.tv_usec);
+	/* this sampling races with updates */
+	ktime_get_real_ts64(&now);
+	seq_printf(seq, "rename_stats:\n");
+	seq_printf(seq, "- %-15s %llu.%9lu\n", "snapshot_time:",
+		   (s64)now.tv_sec, now.tv_nsec);
 
         display_rename_stats(seq, "same_dir",
                              &rename_stats->hist[RENAME_SAMEDIR_SIZE]);
