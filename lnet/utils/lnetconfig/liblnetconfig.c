@@ -604,8 +604,8 @@ static int infra_ping_nid(char *ping_nids, char *oper, int param, int ioc_call,
 					libcfs_nid2str(ping.ping_id.nid)) == NULL)
 			goto out;
 
-		if (cYAML_create_string(item, "Multi-Rail", ping.mr_info ? "True" :
-					"False") == NULL)
+		if (cYAML_create_string(item, "Multi-Rail", ping.mr_info ?
+					"True" : "False") == NULL)
 			goto out;
 
 		tmp = cYAML_create_seq(item, "peer ni");
@@ -665,6 +665,16 @@ int lustre_lnet_ping_nid(char *ping_nids, int timeout, int seq_no,
 	int rc;
 
 	rc = infra_ping_nid(ping_nids, "ping", timeout, IOC_LIBCFS_PING_PEER,
+			    seq_no, show_rc, err_rc);
+	return rc;
+}
+
+int lustre_lnet_discover_nid(char *ping_nids, int force, int seq_no,
+			 struct cYAML **show_rc, struct cYAML **err_rc)
+{
+	int rc;
+
+	rc = infra_ping_nid(ping_nids, "discover", force, IOC_LIBCFS_DISCOVER,
 			    seq_no, show_rc, err_rc);
 	return rc;
 }
@@ -2020,6 +2030,32 @@ out:
 	return rc;
 }
 
+int ioctl_set_value(__u32 val, int ioc, char *name,
+		    int seq_no, struct cYAML **err_rc)
+{
+	struct lnet_ioctl_set_value data;
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	LIBCFS_IOC_INIT_V2(data, sv_hdr);
+	data.sv_value = val;
+
+	rc = l_ioctl(LNET_DEV_ID, ioc , &data);
+	if (rc != 0) {
+		rc = -errno;
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"cannot configure %s to %d: %s\"", name,
+			 val, strerror(errno));
+	}
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, name, err_str, err_rc);
+
+	return rc;
+}
+
 int lustre_lnet_config_max_intf(int max, int seq_no, struct cYAML **err_rc)
 {
 	int rc = LUSTRE_CFG_RC_NO_ERR;
@@ -2067,36 +2103,8 @@ int lustre_lnet_config_discovery(int enable, int seq_no, struct cYAML **err_rc)
 
 int lustre_lnet_config_numa_range(int range, int seq_no, struct cYAML **err_rc)
 {
-	struct lnet_ioctl_set_value data;
-	int rc = LUSTRE_CFG_RC_NO_ERR;
-	char err_str[LNET_MAX_STR_LEN];
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
-
-	if (range < 0) {
-		snprintf(err_str,
-			 sizeof(err_str),
-			 "\"range must be >= 0\"");
-		rc = LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM;
-		goto out;
-	}
-
-	LIBCFS_IOC_INIT_V2(data, sv_hdr);
-	data.sv_value = range;
-
-	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_SET_NUMA_RANGE, &data);
-	if (rc != 0) {
-		rc = -errno;
-		snprintf(err_str,
-			 sizeof(err_str),
-			 "\"cannot configure numa_range: %s\"", strerror(errno));
-		goto out;
-	}
-
-out:
-	cYAML_build_error(rc, seq_no, ADD_CMD, "numa_range", err_str, err_rc);
-
-	return rc;
+	return ioctl_set_value(range, IOC_LIBCFS_SET_NUMA_RANGE,
+			       "numa_range", seq_no, err_rc);
 }
 
 int lustre_lnet_config_buffers(int tiny, int small, int large, int seq_no,
@@ -2669,26 +2677,18 @@ static void add_to_global(struct cYAML *show_rc, struct cYAML *node,
 	free(root);
 }
 
-int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
-			      struct cYAML **err_rc)
+static int build_global_yaml_entry(char *err_str, int err_len, int seq_no,
+				   char *name, __u32 value,
+				   struct cYAML **show_rc,
+				   struct cYAML **err_rc, int err)
 {
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
-	char val[LNET_MAX_STR_LEN];
-	int max_intf;
-	char err_str[LNET_MAX_STR_LEN];
 	struct cYAML *root = NULL, *global = NULL;
 
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
-
-	rc = read_sysfs_file(modparam_path, "lnet_interfaces_max", val,
-			     1, LNET_MAX_STR_LEN);
-	if (rc) {
-		snprintf(err_str, sizeof(err_str),
-			 "\"cannot get max interfaces: %d\"", rc);
+	if (err) {
+		rc = err;
 		goto out;
 	}
-
-	max_intf = atoi(val);
 
 	root = cYAML_create_object(NULL, NULL);
 	if (root == NULL)
@@ -2698,27 +2698,80 @@ int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
 	if (global == NULL)
 		goto out;
 
-	if (cYAML_create_number(global, "max_intf",
-				max_intf) == NULL)
+	if (cYAML_create_number(global, name,
+				value) == NULL)
 		goto out;
 
 	if (show_rc == NULL)
 		cYAML_print_tree(root);
 
-	snprintf(err_str, sizeof(err_str), "\"success\"");
+	snprintf(err_str, err_len, "\"success\"");
+
 	rc = LUSTRE_CFG_RC_NO_ERR;
 
 out:
-	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR)
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_free_tree(root);
-	else if (show_rc != NULL && *show_rc != NULL)
+	} else if (show_rc != NULL && *show_rc != NULL) {
 		add_to_global(*show_rc, global, root);
-	else
+	} else {
 		*show_rc = root;
+	}
 
 	cYAML_build_error(rc, seq_no, SHOW_CMD, "global", err_str, err_rc);
 
 	return rc;
+}
+
+static int ioctl_show_global_values(int ioc, int seq_no, char *name,
+				    struct cYAML **show_rc,
+				    struct cYAML **err_rc)
+{
+	struct lnet_ioctl_set_value data;
+	int rc;
+	int l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	LIBCFS_IOC_INIT_V2(data, sv_hdr);
+
+	rc = l_ioctl(LNET_DEV_ID, ioc, &data);
+	if (rc != 0) {
+		l_errno = -errno;
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"cannot get %s: %s\"",
+			 name, strerror(l_errno));
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no, name,
+				       data.sv_value, show_rc, err_rc, l_errno);
+}
+
+int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
+			      struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int max_intf = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "lnet_interfaces_max", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get max interfaces: %d\"", rc);
+	} else {
+		max_intf = atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "max_intf", max_intf, show_rc,
+				       err_rc, l_errno);
 }
 
 int lustre_lnet_show_discovery(int seq_no, struct cYAML **show_rc,
@@ -2726,114 +2779,36 @@ int lustre_lnet_show_discovery(int seq_no, struct cYAML **show_rc,
 {
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 	char val[LNET_MAX_STR_LEN];
-	__u32 discovery;
+	int discovery = -1, l_errno = 0;
 	char err_str[LNET_MAX_STR_LEN];
-	struct cYAML *root = NULL, *global = NULL;
 
 	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
 
 	rc = read_sysfs_file(modparam_path, "lnet_peer_discovery_disabled", val,
 			     1, sizeof(val));
 	if (rc) {
+		l_errno = -errno;
 		snprintf(err_str, sizeof(err_str),
-			 "\"cannot get discovery value: %d\"", rc);
-		goto out;
-	}
-
-	/*
-	 * the sysfs parameter read indicates if discovery is disabled,
-	 * but we report if discovery is enabled.
-	 */
-	discovery = !atoi(val);
-
-	root = cYAML_create_object(NULL, NULL);
-	if (root == NULL)
-		goto out;
-
-	global = cYAML_create_object(root, "global");
-	if (global == NULL)
-		goto out;
-
-	if (cYAML_create_number(global, "discovery",
-				discovery) == NULL)
-		goto out;
-
-	if (show_rc == NULL)
-		cYAML_print_tree(root);
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
-
-	rc = LUSTRE_CFG_RC_NO_ERR;
-
-out:
-	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
-		cYAML_free_tree(root);
-	} else if (show_rc != NULL && *show_rc != NULL) {
-		add_to_global(*show_rc, global, root);
+			 "\"cannot get discovery setting: %d\"", rc);
 	} else {
-		*show_rc = root;
+		/*
+		 * The kernel stores a discovery disabled value. User space
+		 * shows whether discovery is enabled. So the value must be
+		 * inverted.
+		 */
+		discovery = !atoi(val);
 	}
 
-	cYAML_build_error(rc, seq_no, SHOW_CMD, "global", err_str, err_rc);
-
-	return rc;
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "discovery", discovery, show_rc,
+				       err_rc, l_errno);
 }
 
 int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 				struct cYAML **err_rc)
 {
-	struct lnet_ioctl_set_value data;
-	int rc;
-	int l_errno;
-	char err_str[LNET_MAX_STR_LEN];
-	struct cYAML *root = NULL, *global = NULL;
-
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
-
-	LIBCFS_IOC_INIT_V2(data, sv_hdr);
-
-	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NUMA_RANGE, &data);
-	if (rc != 0) {
-		l_errno = errno;
-		snprintf(err_str,
-			 sizeof(err_str),
-			 "\"cannot get numa range: %s\"",
-			 strerror(l_errno));
-		rc = -l_errno;
-		goto out;
-	}
-
-	rc = LUSTRE_CFG_RC_OUT_OF_MEM;
-
-	root = cYAML_create_object(NULL, NULL);
-	if (root == NULL)
-		goto out;
-
-	global = cYAML_create_object(root, "global");
-	if (global == NULL)
-		goto out;
-
-	if (cYAML_create_number(global, "numa_range",
-				data.sv_value) == NULL)
-		goto out;
-
-	if (show_rc == NULL)
-		cYAML_print_tree(root);
-
-	snprintf(err_str, sizeof(err_str), "\"success\"");
-	rc = LUSTRE_CFG_RC_NO_ERR;
-out:
-	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
-		cYAML_free_tree(root);
-	} else if (show_rc != NULL && *show_rc != NULL) {
-		add_to_global(*show_rc, global, root);
-	} else {
-		*show_rc = root;
-	}
-
-	cYAML_build_error(rc, seq_no, SHOW_CMD, "global", err_str, err_rc);
-
-	return rc;
+	return ioctl_show_global_values(IOC_LIBCFS_GET_NUMA_RANGE, seq_no,
+					"numa_range", show_rc, err_rc);
 }
 
 int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
@@ -3704,6 +3679,21 @@ static int handle_yaml_ping(struct cYAML *tree, struct cYAML **show_rc,
 				    show_rc, err_rc);
 }
 
+static int handle_yaml_discover(struct cYAML *tree, struct cYAML **show_rc,
+				struct cYAML **err_rc)
+{
+	struct cYAML *seq_no, *nid, *force;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	nid = cYAML_get_object_item(tree, "primary nid");
+	force = cYAML_get_object_item(tree, "force");
+
+	return lustre_lnet_discover_nid((nid) ? nid->cy_valuestring : NULL,
+					(force) ? force->cy_valueint : 0,
+					(seq_no) ? seq_no->cy_valueint : -1,
+					show_rc, err_rc);
+}
+
 static int handle_yaml_no_op()
 {
 	return LUSTRE_CFG_RC_NO_ERR;
@@ -3724,6 +3714,7 @@ static struct lookup_cmd_hdlr_tbl lookup_config_tbl[] = {
 	{ .name = "statistics", .cb = handle_yaml_no_op },
 	{ .name = "global",	.cb = handle_yaml_config_global_settings},
 	{ .name = "ping",	.cb = handle_yaml_no_op },
+	{ .name = "discover",	.cb = handle_yaml_no_op },
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
@@ -3736,6 +3727,7 @@ static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
 	{ .name = "statistics", .cb = handle_yaml_no_op },
 	{ .name = "global",	.cb = handle_yaml_del_global_settings},
 	{ .name = "ping",	.cb = handle_yaml_no_op },
+	{ .name = "discover",	.cb = handle_yaml_no_op },
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {
@@ -3748,6 +3740,7 @@ static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {
 	{ .name = "statistics",	.cb = handle_yaml_show_stats },
 	{ .name = "global",	.cb = handle_yaml_show_global_settings},
 	{ .name = "ping",	.cb = handle_yaml_no_op },
+	{ .name = "discover",	.cb = handle_yaml_no_op },
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_exec_tbl[] = {
@@ -3760,6 +3753,7 @@ static struct lookup_cmd_hdlr_tbl lookup_exec_tbl[] = {
 	{ .name = "statistics",	.cb = handle_yaml_no_op },
 	{ .name = "global",	.cb = handle_yaml_no_op },
 	{ .name = "ping",	.cb = handle_yaml_ping },
+	{ .name = "discover",	.cb = handle_yaml_discover },
 	{ .name = NULL } };
 
 static cmd_handler_t lookup_fn(char *key,

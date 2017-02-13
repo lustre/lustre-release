@@ -1134,6 +1134,7 @@ static int jt_export(int argc, char **argv)
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
+		err_rc = NULL;
 	}
 
 	rc = lustre_lnet_show_route(NULL, NULL, -1, -1, 1, -1, &show_rc,
@@ -1141,30 +1142,42 @@ static int jt_export(int argc, char **argv)
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
+		err_rc = NULL;
 	}
 
 	rc = lustre_lnet_show_routing(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
+		err_rc = NULL;
 	}
 
 	rc = lustre_lnet_show_peer(NULL, 1, -1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
+		err_rc = NULL;
 	}
 
 	rc = lustre_lnet_show_numa_range(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
+		err_rc = NULL;
 	}
 
 	rc = lustre_lnet_show_max_intf(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_discovery(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		err_rc = NULL;
 	}
 
 	if (show_rc != NULL) {
@@ -1422,6 +1435,55 @@ static int jt_ping(int argc, char **argv)
 	return rc;
 }
 
+static int jt_discover(int argc, char **argv)
+{
+	struct cYAML *err_rc = NULL;
+	struct cYAML *show_rc = NULL;
+	int force = 0;
+	int rc = 0, opt;
+
+	const char *const short_options = "fh";
+	const struct option long_options[] = {
+		{ "force", 0, NULL, 'f' },
+		{ "help", 0, NULL, 'h' },
+		{ NULL, 0, NULL, 0 },
+	};
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				  long_options, NULL)) != -1) {
+		switch (opt) {
+		case 'f':
+			force = 1;
+			break;
+		case 'h':
+			printf("discover: nid1 nid2 .. nidN (e.g. 10.2.2.2@tcp)\n"
+			       "\t--force\n"
+			       "\t--help: display this help\n");
+			return 0;
+		default:
+			return 0;
+		}
+	}
+
+	if (argc < 2)
+		return CMD_HELP;
+
+	for (; optind < argc; optind++)
+		rc = lustre_lnet_discover_nid(argv[optind], force, -1, &show_rc,
+					      &err_rc);
+
+	if (show_rc)
+		cYAML_print_tree(show_rc);
+
+	if (err_rc)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+	cYAML_free_tree(show_rc);
+
+	return rc;
+}
+
 command_t list[] = {
 	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
 	{"route", jt_route, 0, "route {add | del | show | help}"},
@@ -1437,6 +1499,7 @@ command_t list[] = {
 	{"global", jt_global, 0, "global {show | help}"},
 	{"peer", jt_peers, 0, "peer {add | del | show | help}"},
 	{"ping", jt_ping, 0, "ping {--help}"},
+	{"discover", jt_discover, 0, "discover {--help}"},
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},

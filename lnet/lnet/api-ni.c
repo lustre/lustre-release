@@ -101,6 +101,9 @@ static atomic_t lnet_dlc_seq_no = ATOMIC_INIT(0);
 static int lnet_ping(struct lnet_process_id id, signed long timeout,
 		     struct lnet_process_id __user *ids, int n_ids);
 
+static int lnet_discover(lnet_process_id_t id, __u32 force,
+			 lnet_process_id_t __user *ids, int n_ids);
+
 static int
 discovery_set(const char *val, struct kernel_param *kp)
 {
@@ -3294,6 +3297,25 @@ LNetCtl(unsigned int cmd, void *arg)
 		return 0;
 	}
 
+	case IOC_LIBCFS_DISCOVER: {
+		struct lnet_ioctl_ping_data *discover = arg;
+		struct lnet_peer *lp;
+
+		rc = lnet_discover(discover->ping_id, discover->op_param,
+				   discover->ping_buf,
+				   discover->ping_count);
+		if (rc < 0)
+			return rc;
+		lp = lnet_find_peer(discover->ping_id.nid);
+		if (lp) {
+			discover->ping_id.nid = lp->lp_primary_nid;
+			discover->mr_info = lnet_peer_is_multi_rail(lp);
+		}
+
+		discover->ping_count = rc;
+		return 0;
+	}
+
 	default:
 		ni = lnet_net2ni_addref(data->ioc_net);
 		if (ni == NULL)
@@ -3562,5 +3584,82 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 
  fail_ping_buffer_decref:
 	lnet_ping_buffer_decref(pbuf);
+	return rc;
+}
+
+static int
+lnet_discover(lnet_process_id_t id, __u32 force, lnet_process_id_t __user *ids,
+	      int n_ids)
+{
+	struct lnet_peer_ni *lpni;
+	struct lnet_peer_ni *p;
+	struct lnet_peer *lp;
+	lnet_process_id_t *buf;
+	int cpt;
+	int i;
+	int rc;
+	int max_intf = lnet_interfaces_max;
+
+	if (n_ids <= 0 ||
+	    id.nid == LNET_NID_ANY ||
+	    n_ids > max_intf)
+		return -EINVAL;
+
+	if (id.pid == LNET_PID_ANY)
+		id.pid = LNET_PID_LUSTRE;
+
+	LIBCFS_ALLOC(buf, n_ids * sizeof(*buf));
+	if (!buf)
+		return -ENOMEM;
+
+	cpt = lnet_net_lock_current();
+	lpni = lnet_nid2peerni_locked(id.nid, LNET_NID_ANY, cpt);
+	if (IS_ERR(lpni)) {
+		rc = PTR_ERR(lpni);
+		goto out;
+	}
+
+	/*
+	 * Clearing the NIDS_UPTODATE flag ensures the peer will
+	 * be discovered, provided discovery has not been disabled.
+	 */
+	lp = lpni->lpni_peer_net->lpn_peer;
+	spin_lock(&lp->lp_lock);
+	lp->lp_state &= ~LNET_PEER_NIDS_UPTODATE;
+	/* If the force flag is set, force a PING and PUSH as well. */
+	if (force)
+		lp->lp_state |= LNET_PEER_FORCE_PING | LNET_PEER_FORCE_PUSH;
+	spin_unlock(&lp->lp_lock);
+	rc = lnet_discover_peer_locked(lpni, cpt, true);
+	if (rc)
+		goto out_decref;
+
+	/* Peer may have changed. */
+	lp = lpni->lpni_peer_net->lpn_peer;
+	if (lp->lp_nnis < n_ids)
+		n_ids = lp->lp_nnis;
+
+	i = 0;
+	p = NULL;
+	while ((p = lnet_get_next_peer_ni_locked(lp, NULL, p)) != NULL) {
+		buf[i].pid = id.pid;
+		buf[i].nid = p->lpni_nid;
+		if (++i >= n_ids)
+			break;
+	}
+
+	lnet_net_unlock(cpt);
+
+	rc = -EFAULT;
+	if (copy_to_user(ids, buf, n_ids * sizeof(*buf)))
+		goto out_relock;
+	rc = n_ids;
+out_relock:
+	lnet_net_lock(cpt);
+out_decref:
+	lnet_peer_ni_decref_locked(lpni);
+out:
+	lnet_net_unlock(cpt);
+
 	return rc;
 }
