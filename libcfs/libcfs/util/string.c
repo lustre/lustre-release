@@ -41,6 +41,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <unistd.h>
 #include <libcfs/util/string.h>
 
 /*
@@ -479,4 +481,84 @@ cfs_expr_list_free_list(struct list_head *list)
 		list_del(&el->el_link);
 		cfs_expr_list_free(el);
 	}
+}
+
+/**
+ * cfs_abs_path() - Get the absolute path of a relative path
+ * @request_path:	The relative path to be resolved
+ * @resolved_path:	Set to the resolved absolute path
+ *
+ * Returns the canonicalized absolute pathname.  This function is a wrapper to
+ * realpath, but will work even if the target file does not exist.  All
+ * directories in the path must exist.
+ *
+ * Return: On success, 0 is returned and resolved_path points to an allocated
+ * string containing the absolute pathname.  On error, errno is set
+ * appropriately, -errno is returned, and resolved_path points to NULL.
+ */
+int cfs_abs_path(const char *request_path, char **resolved_path)
+{
+	char  buf[PATH_MAX + 1] = "";
+	char *path;
+	char *ptr;
+	int len;
+	int rc = 0;
+	const char *fmt;
+
+	path = malloc(sizeof(buf));
+	if (path == NULL)
+		return -ENOMEM;
+
+	if (request_path[0] != '/') {
+		if (getcwd(path, sizeof(buf) - 1) == NULL) {
+			rc = -errno;
+			goto out;
+		}
+		len = snprintf(buf, sizeof(buf), "%s/%s", path, request_path);
+		if (len >= sizeof(buf)) {
+			rc = -ENAMETOOLONG;
+			goto out;
+		}
+	} else {
+		/* skip duplicate leading '/' */
+		len = snprintf(buf, sizeof(buf), "%s",
+			       request_path + strspn(request_path, "/") - 1);
+		if (len >= sizeof(buf)) {
+			rc = -ENAMETOOLONG;
+			goto out;
+		}
+	}
+
+	/* if filename not in root directory, call realpath for parent path */
+	ptr = strrchr(buf, '/');
+	if (ptr != buf) {
+		*ptr = '\0';
+		if (path != realpath(buf, path)) {
+			rc = -errno;
+			goto out;
+		}
+		/* add the filename back */
+		len = strlen(path);
+		fmt = (path[len - 1] == '/') ? "%s" : "/%s";
+		len = snprintf(path + len, sizeof(buf) - len, fmt, ptr + 1);
+		if (len >= sizeof(buf) - len) {
+			rc = -ENAMETOOLONG;
+			goto out;
+		}
+	} else {
+		len = snprintf(path, sizeof(buf), "%s", buf);
+		if (len >= sizeof(buf)) {
+			rc = -ENAMETOOLONG;
+			goto out;
+		}
+	}
+
+out:
+	if (rc == 0) {
+		*resolved_path = path;
+	} else {
+		*resolved_path = NULL;
+		free(path);
+	}
+	return rc;
 }

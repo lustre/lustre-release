@@ -70,6 +70,7 @@
 #include <linux/version.h>
 #include <linux/lnet/lnetctl.h>
 #include <linux/lustre/lustre_ver.h>
+#include <libcfs/util/string.h>
 
 #ifdef HAVE_SELINUX
 #include <selinux/selinux.h>
@@ -120,57 +121,6 @@ static void append_context_for_mount(char *mntpt, struct mkfs_opts *mop)
 }
 #endif
 
-/* return canonicalized absolute pathname, even if the target file does not
- * exist, unlike realpath */
-static char *absolute_path(char *devname)
-{
-	char  buf[PATH_MAX + 1] = "";
-	char *path;
-	char *ptr;
-	int len;
-
-	path = malloc(sizeof(buf));
-	if (path == NULL)
-		return NULL;
-
-	if (devname[0] != '/') {
-		if (getcwd(buf, sizeof(buf) - 1) == NULL) {
-			free(path);
-			return NULL;
-		}
-		len = snprintf(path, sizeof(buf), "%s/%s", buf, devname);
-		if (len >= sizeof(buf)) {
-			free(path);
-			return NULL;
-		}
-	} else {
-		len = snprintf(path, sizeof(buf), "%s", devname);
-		if (len >= sizeof(buf)) {
-			free(path);
-			return NULL;
-		}
-	}
-
-	/* truncate filename before calling realpath */
-	ptr = strrchr(path, '/');
-	if (ptr == NULL) {
-		free(path);
-		return NULL;
-	}
-	*ptr = '\0';
-	if (buf != realpath(path, buf)) {
-		free(path);
-		return NULL;
-	}
-	/* add the filename back */
-	len = snprintf(path, PATH_MAX, "%s/%s", buf, ptr+1);
-	if (len >= PATH_MAX) {
-		free(path);
-		return NULL;
-	}
-	return path;
-}
-
 /* Determine if a device is a block device (as opposed to a file) */
 static int is_block(char *devname)
 {
@@ -178,10 +128,10 @@ static int is_block(char *devname)
 	int	ret = 0;
 	char	*devpath;
 
-	devpath = absolute_path(devname);
-	if (devpath == NULL) {
-		fprintf(stderr, "%s: failed to resolve path to %s\n",
-			progname, devname);
+	ret = cfs_abs_path(devname, &devpath);
+	if (ret != 0) {
+		fprintf(stderr, "%s: failed to resolve path '%s': %s\n",
+			progname, devname, strerror(-ret));
 		return -1;
 	}
 

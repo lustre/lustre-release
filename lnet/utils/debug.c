@@ -58,6 +58,7 @@
 #include <libcfs/util/param.h>
 #include <linux/lnet/libcfs_debug.h>
 #include <linux/lnet/lnetctl.h>
+#include <libcfs/util/string.h>
 
 static char rawbuf[8192];
 static char *buf = rawbuf;
@@ -646,6 +647,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
 {
 	int rc;
 	int fd;
+	char *resolved_path = NULL;
 
 	if (argc <= 1) {
 		fprintf(stderr, debug_daemon_usage, argv[0]);
@@ -689,7 +691,15 @@ int jt_dbg_debug_daemon(int argc, char **argv)
 			}
 		}
 
-		rc = dbg_write_cmd(fd, argv[2], strlen(argv[2]));
+		rc = cfs_abs_path(argv[2], &resolved_path);
+		if (rc != 0) {
+			fprintf(stderr,
+				"%s debug_daemon: cannot resolve path '%s': %s\n",
+				program_invocation_short_name, argv[2],
+				strerror(-rc));
+			goto out;
+		}
+		rc = dbg_write_cmd(fd, resolved_path, strlen(resolved_path));
 		if (rc != 0) {
 			fprintf(stderr, "start debug_daemon on %s failed: %s\n",
 				argv[2], strerror(errno));
@@ -714,6 +724,8 @@ int jt_dbg_debug_daemon(int argc, char **argv)
 	rc = -1;
 out:
 	dbg_close_ctlhandle(fd);
+	if (resolved_path != NULL)
+		free(resolved_path);
 	return rc;
 }
 
