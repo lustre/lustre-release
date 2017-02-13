@@ -7,6 +7,12 @@
     %define module  @PACKAGE@-client
 %endif
 
+%if %{_vendor}=="redhat" || %{_vendor}=="fedora"
+	%global requires_kmod_name kmod-%{module}
+%else	#for Suse
+	%global requires_kmod_name %{module}-kmp
+%endif
+
 %define buildid 1
 
 Name:           %{module}-dkms
@@ -34,7 +40,7 @@ Requires:       %{module}-osd-zfs-mount
 %endif
 Requires:       gcc, make, perl
 Requires:       kernel-devel
-Provides:       %{module}-kmod = %{version}
+Provides:       %{requires_kmod_name} = %{version}
 Provides:       %{module}-modules = %{version}
 %if %{with servers}
 # Only zfs Lustre DKMS Server is supported
