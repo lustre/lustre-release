@@ -555,7 +555,6 @@ int client_connect_import(const struct lu_env *env,
 	struct obd_connect_data *ocd;
 	struct lustre_handle    conn    = { 0 };
 	int                     rc;
-	bool			is_mdc = false;
 	ENTRY;
 
 	*exp = NULL;
@@ -580,18 +579,12 @@ int client_connect_import(const struct lu_env *env,
 	ocd = &imp->imp_connect_data;
 	if (data) {
 		*ocd = *data;
-		is_mdc = strncmp(imp->imp_obd->obd_type->typ_name,
-				 LUSTRE_MDC_NAME, 3) == 0;
-		if (is_mdc)
-			data->ocd_connect_flags |= OBD_CONNECT_MULTIMODRPCS;
 		imp->imp_connect_flags_orig = data->ocd_connect_flags;
 		imp->imp_connect_flags2_orig = data->ocd_connect_flags2;
 	}
 
 	rc = ptlrpc_connect_import(imp);
 	if (rc != 0) {
-		if (data && is_mdc)
-			data->ocd_connect_flags &= ~OBD_CONNECT_MULTIMODRPCS;
 		LASSERT(imp->imp_state == LUSTRE_IMP_DISCON);
 		GOTO(out_ldlm, rc);
 	}
@@ -602,10 +595,6 @@ int client_connect_import(const struct lu_env *env,
 			 ocd->ocd_connect_flags, "old %#llx, new %#llx\n",
 			 data->ocd_connect_flags, ocd->ocd_connect_flags);
 		data->ocd_connect_flags = ocd->ocd_connect_flags;
-		/* clear the flag as it was not set and is not known
-		 * by upper layers */
-		if (is_mdc)
-			data->ocd_connect_flags &= ~OBD_CONNECT_MULTIMODRPCS;
 	}
 
 	ptlrpc_pinger_add_import(imp);
