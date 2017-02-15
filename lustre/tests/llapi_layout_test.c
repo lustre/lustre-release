@@ -242,7 +242,7 @@ void test4(void)
 	rc = unlink(path);
 	ASSERTF(rc == 0 || errno == ENOENT, "errno = %d", errno);
 
-	snprintf(cmd, sizeof(cmd), "%s setstripe %s %s -c %d -s %d %s", lfs,
+	snprintf(cmd, sizeof(cmd), "%s setstripe %s %s -c %d -S %d %s", lfs,
 		 strlen(poolname) > 0 ? "-p" : "", poolname, T4_STRIPE_COUNT,
 		 T4_STRIPE_SIZE, path);
 	rc = system(cmd);
@@ -1085,7 +1085,7 @@ void test26(void)
 	if (lfs == NULL)
 		lfs = "/usr/bin/lfs";
 
-	snprintf(cmd, sizeof(cmd), "%s setstripe -s %d %s", lfs,
+	snprintf(cmd, sizeof(cmd), "%s setstripe -S %d %s", lfs,
 		 T26_STRIPE_SIZE, dir);
 	rc = system(cmd);
 	ASSERTF(rc == 0, "system(%s): exit status %d", cmd, WEXITSTATUS(rc));
@@ -1136,7 +1136,7 @@ void test27(void)
 	if (lfs == NULL)
 		lfs = "/usr/bin/lfs";
 
-	snprintf(cmd, sizeof(cmd), "%s setstripe -s %d %s", lfs,
+	snprintf(cmd, sizeof(cmd), "%s setstripe -S %d %s", lfs,
 		 T27_STRIPE_SIZE, dirpath);
 	rc = system(cmd);
 	ASSERTF(rc == 0, "system(%s): exit status %d", cmd, WEXITSTATUS(rc));
