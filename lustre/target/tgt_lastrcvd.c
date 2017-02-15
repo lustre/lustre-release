@@ -804,11 +804,12 @@ static void tgt_cb_last_committed(struct lu_env *env, struct thandle *th,
 	} else {
 		spin_unlock(&ccb->llcc_tgt->lut_translock);
 	}
+
+	CDEBUG(D_HA, "%s: transno %lld is committed\n",
+	       ccb->llcc_tgt->lut_obd->obd_name, ccb->llcc_transno);
+
 out:
 	class_export_cb_put(ccb->llcc_exp);
-	if (ccb->llcc_transno)
-		CDEBUG(D_HA, "%s: transno %lld is committed\n",
-		       ccb->llcc_tgt->lut_obd->obd_name, ccb->llcc_transno);
 	OBD_FREE_PTR(ccb);
 }
 
