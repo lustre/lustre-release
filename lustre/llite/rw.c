@@ -987,13 +987,11 @@ out:
 int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 {
 	struct inode *inode = mapping->host;
-	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	loff_t start;
 	loff_t end;
 	enum cl_fsync_mode mode;
 	int range_whole = 0;
 	int result;
-	int ignore_layout = 0;
 	ENTRY;
 
 	if (wbc->range_cyclic) {
@@ -1012,16 +1010,13 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 	if (wbc->sync_mode == WB_SYNC_ALL)
 		mode = CL_FSYNC_LOCAL;
 
-	if (sbi->ll_umounting)
-		/* if the mountpoint is being umounted, all pages have to be
-		 * evicted to avoid hitting LBUG when truncate_inode_pages()
-		 * is called later on. */
-		ignore_layout = 1;
-
 	if (ll_i2info(inode)->lli_clob == NULL)
 		RETURN(0);
 
-	result = cl_sync_file_range(inode, start, end, mode, ignore_layout);
+	/* for directio, it would call writepages() to evict cached pages
+	 * inside the IO context of write, which will cause deadlock at
+	 * layout_conf since it waits for active IOs to complete. */
+	result = cl_sync_file_range(inode, start, end, mode, 1);
 	if (result > 0) {
 		wbc->nr_to_write -= result;
 		result = 0;
