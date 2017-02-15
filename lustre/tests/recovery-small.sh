@@ -1033,7 +1033,8 @@ test_24b() {
 
 	dmesg -c > /dev/null
 	mkdir -p $DIR/$tdir
-	lfs setstripe $DIR/$tdir -s 0 -i 0 -c 1
+	lfs setstripe $DIR/$tdir -S 0 -i 0 -c 1 ||
+		error "$LFS setstripe failed"
 	cancel_lru_locks osc
 	multiop_bg_pause $DIR/$tdir/$tfile-1 Ow8192_yc ||
 		error "mulitop Ow8192_yc failed"
