@@ -153,9 +153,9 @@ static void print_log_path(struct llog_logid_rec *lid, int is_ext)
 			 (uintmax_t)(fid_from_logid.f_seq & (OSD_OI_FID_NR - 1)),
 			 PFID(&fid_from_logid));
 
-	printf("ogen=%X id="DOSTID" path=%s\n",
-		lid->lid_id.lgl_ogen, POSTID(&lid->lid_id.lgl_oi),
-		object_path);
+	printf("id="DFID":%x path=%s\n",
+	       PFID(&lid->lid_id.lgl_oi.oi_fid), lid->lid_id.lgl_ogen,
+	       object_path);
 }
 
 int main(int argc, char **argv)

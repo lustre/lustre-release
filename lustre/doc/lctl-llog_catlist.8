@@ -1,0 +1,36 @@
+.TH lctl-llog_catlist 8 "2017 Feb 24" Lustre "configuration utilities"
+.SH NAME
+lctl llog_catlist \- list Lustre configuration log files
+.SH SYNOPSIS
+.B lctl llog_catlist
+
+.SH DESCRIPTION
+.B lctl llog_catlist
+is used to list the configuration log files on the MGS, or other target.
+This is useful to find the names of all the configuration files available.
+.SH EXAMPLES
+.TP
+To list all of the records on the MGS:
+.br
+# lctl --device MGS llog_catlist
+.br
+config_log: testfs-OST0000
+.br
+config_log: testfs-MDT0000
+.br
+config_log: testfs-client
+.br
+config_log: params-client
+.br
+config_log: testfs-OST0001
+.SH AVAILABILITY
+.B lctl llog_catlist
+is a subcommand of
+.BR lctl (8)
+and is distributed as part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8)
+.BR lctl-llog_info (8)
+.BR lctl-llog_print (8)

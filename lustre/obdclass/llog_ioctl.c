@@ -39,22 +39,38 @@
 
 static int str2logid(struct llog_logid *logid, char *str, int len)
 {
-        char *start, *end, *endp;
+	char *start, *end, *endp;
 	__u64 id, seq;
 
-        ENTRY;
-        start = str;
-        if (*start != '#')
-                RETURN(-EINVAL);
+	ENTRY;
+	start = str;
+	if (start[0] == '[') {
+		struct lu_fid *fid = &logid->lgl_oi.oi_fid;
+		int num;
 
-        start++;
-        if (start - str >= len - 1)
-                RETURN(-EINVAL);
-        end = strchr(start, '#');
-        if (end == NULL || end == start)
-                RETURN(-EINVAL);
+		fid_zero(fid);
+		logid->lgl_ogen = 0;
+		num = sscanf(start + 1, SFID, RFID(fid));
+		CDEBUG(D_INFO, DFID":%x\n", PFID(fid), logid->lgl_ogen);
+		RETURN(num == 3 && fid_is_sane(fid) ? 0 : -EINVAL);
+	}
 
-        *end = '\0';
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 1, 53, 0)
+	/* logids used to be input in the form "#id#seq:ogen" before they
+	 * were changed over to accept the FID [seq:oid:ver] format.
+	 * This is accepted for compatibility reasons, though I doubt
+	 * anyone is actually using this for anything. */
+	if (start[0] != '#')
+		RETURN(-EINVAL);
+
+	start++;
+	if (start - str >= len - 1)
+		RETURN(-EINVAL);
+	end = strchr(start, '#');
+	if (end == NULL || end == start)
+		RETURN(-EINVAL);
+
+	*end = '\0';
 	id = simple_strtoull(start, &endp, 0);
         if (endp != end)
                 RETURN(-EINVAL);
@@ -82,6 +98,9 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
                 RETURN(-EINVAL);
 
         RETURN(0);
+#else
+	RETURN(-EINVAL);
+#endif
 }
 
 static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
@@ -132,8 +151,8 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
                         RETURN(-EOPNOTSUPP);
 		rc = llog_cat_id2handle(env, handle, &loghandle, &lir->lid_id);
 		if (rc) {
-			CDEBUG(D_IOCTL, "cannot find log #"DOSTID"#%08x\n",
-			       POSTID(&lir->lid_id.lgl_oi),
+			CDEBUG(D_IOCTL, "cannot find log "DFID":%x\n",
+			       PFID(&lir->lid_id.lgl_oi.oi_fid),
 			       lir->lid_id.lgl_ogen);
 			RETURN(rc);
 		}
@@ -213,8 +232,8 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
                 }
 
 		l = snprintf(out, remains,
-			     "[index]: %05d  [logid]: #"DOSTID"#%08x\n",
-			     cur_index, POSTID(&lir->lid_id.lgl_oi),
+			     "[index]: %05d  [logid]: "DFID":%x\n",
+			     cur_index, PFID(&lir->lid_id.lgl_oi.oi_fid),
 			     lir->lid_id.lgl_ogen);
 	} else if (rec->lrh_type == OBD_CFG_REC) {
 		int rc;
@@ -247,14 +266,15 @@ static int llog_remove_log(const struct lu_env *env, struct llog_handle *cat,
 
 	rc = llog_cat_id2handle(env, cat, &log, logid);
 	if (rc) {
-		CDEBUG(D_IOCTL, "cannot find log #"DOSTID"#%08x\n",
-		       POSTID(&logid->lgl_oi), logid->lgl_ogen);
+		CDEBUG(D_IOCTL, "cannot find log "DFID":%x\n",
+		       PFID(&logid->lgl_oi.oi_fid), logid->lgl_ogen);
 		RETURN(-ENOENT);
 	}
 
 	rc = llog_destroy(env, log);
 	if (rc) {
-		CDEBUG(D_IOCTL, "cannot destroy log\n");
+		CDEBUG(D_IOCTL, "cannot destroy log "DFID":%x\n",
+		       PFID(&logid->lgl_oi.oi_fid), logid->lgl_ogen);
 		GOTO(out, rc);
 	}
 	llog_cat_cleanup(env, cat, log, log->u.phd.phd_cookie.lgc_index);
@@ -285,21 +305,24 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 	struct llog_logid	 logid;
 	int			 rc = 0;
 	struct llog_handle	*handle = NULL;
+	char *logname;
 
 	ENTRY;
 
-	if (*data->ioc_inlbuf1 == '#') {
-		rc = str2logid(&logid, data->ioc_inlbuf1, data->ioc_inllen1);
+	logname = data->ioc_inlbuf1;
+	if (logname[0] == '#' || logname[0] == '[') {
+		rc = str2logid(&logid, logname, data->ioc_inllen1);
 		if (rc)
 			RETURN(rc);
 		rc = llog_open(env, ctxt, &handle, &logid, NULL,
 			       LLOG_OPEN_EXISTS);
 		if (rc)
 			RETURN(rc);
-	} else if (*data->ioc_inlbuf1 == '$') {
-		char *name = data->ioc_inlbuf1 + 1;
+	} else if (logname[0] == '$' || isalpha(logname[0])) {
+		if (logname[0] == '$')
+			logname++;
 
-		rc = llog_open(env, ctxt, &handle, NULL, name,
+		rc = llog_open(env, ctxt, &handle, NULL, logname,
 			       LLOG_OPEN_EXISTS);
 		if (rc)
 			RETURN(rc);
@@ -319,19 +342,19 @@ int llog_ioctl(const struct lu_env *env, struct llog_ctxt *ctxt, int cmd,
 		char	*out = data->ioc_bulk;
 
 		l = snprintf(out, remains,
-			     "logid:            #"DOSTID"#%08x\n"
+			     "logid:            "DFID":%x\n"
 			     "flags:            %x (%s)\n"
-			     "records count:    %d\n"
-			     "last index:       %d\n",
-			     POSTID(&handle->lgh_id.lgl_oi),
+			     "records_count:    %d\n"
+			     "last_index:       %d\n",
+			     PFID(&handle->lgh_id.lgl_oi.oi_fid),
 			     handle->lgh_id.lgl_ogen,
 			     handle->lgh_hdr->llh_flags,
 			     handle->lgh_hdr->llh_flags &
-			     LLOG_F_IS_CAT ? "cat" : "plain",
+				LLOG_F_IS_CAT ? "cat" : "plain",
 			     handle->lgh_hdr->llh_count,
 			     handle->lgh_last_idx);
-                out += l;
-                remains -= l;
+		out += l;
+		remains -= l;
 		if (remains <= 0) {
 			CERROR("%s: not enough space for log header info\n",
 			       ctxt->loc_obd->obd_name);
@@ -458,10 +481,8 @@ int llog_catalog_list(const struct lu_env *env, struct dt_device *d,
 	remains = data->ioc_inllen1;
 	for (i = 0; i < count; i++) {
 		id = &idarray[i].lci_logid;
-		l = snprintf(out, remains,
-			     "catalog log: #"DOSTID"#%08x\n",
-			     POSTID(&id->lgl_oi),
-			     id->lgl_ogen);
+		l = snprintf(out, remains, "catalog_log: "DFID":%x\n",
+			     PFID(&id->lgl_oi.oi_fid), id->lgl_ogen);
 		out += l;
 		remains -= l;
 		if (remains <= 0)

@@ -1806,13 +1806,14 @@ static struct lcfg_type_data *lcfg_cmd2data(__u32 cmd)
 }
 
 /**
- * parse config record and output dump in supplied buffer.
+ * Parse config record and output dump in supplied buffer.
+ *
  * This is separated from class_config_dump_handler() to use
  * for ioctl needs as well
  *
  * Sample Output:
- * - { event: attach, device: lustrewt-clilov, type: lov, UUID:
- *     lustrewt-clilov_UUID }
+ * - { index: 4, event: attach, device: lustrewt-clilov, type: lov,
+ *     UUID: lustrewt-clilov_UUID }
  */
 int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
 {
@@ -1835,7 +1836,8 @@ int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size)
 		return 0;
 
 	/* form YAML entity */
-	ptr += snprintf(ptr, end - ptr, "- { event: %s", ldata->ltd_name);
+	ptr += snprintf(ptr, end - ptr, "- { index: %u, event: %s",
+			rec->lrh_index, ldata->ltd_name);
 
 	if (lcfg->lcfg_flags)
 		ptr += snprintf(ptr, end - ptr, ", flags: %#08x",

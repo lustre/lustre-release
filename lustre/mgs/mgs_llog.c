@@ -4107,7 +4107,7 @@ int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
 		list_del_init(&dirent->mde_list);
 		suffix = strrchr(dirent->mde_name, '-');
 		if (suffix != NULL) {
-			l = snprintf(out, remains, "config log: $%s\n",
+			l = snprintf(out, remains, "config_log: %s\n",
 				     dirent->mde_name);
 			out += l;
 			remains -= l;

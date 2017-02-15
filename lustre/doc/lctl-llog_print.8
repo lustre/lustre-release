@@ -1,0 +1,70 @@
+.TH lctl-llog_print 8 "2017 Feb 24" Lustre "configuration utilities"
+.SH NAME
+lctl llog_print \- print the content of a configuration log
+.SH SYNOPSIS
+.B lctl llog_print
+.RI < logname >
+.RI [ start_index ]
+.RI [ end_index ]
+
+.SH DESCRIPTION
+.B lctl llog_print
+is used to dump the contents of the
+.I logname
+configuration log on the MGS in YAML format.  This is useful for debugging
+configuration problems and to list any permanent configuration options
+saved via
+.B lctl conf_param
+on the MGS.
+.SH OPTIONS
+.TP
+.B logname
+The name of the configuration log, in the form
+.IR fsname - target ,
+like
+.B testfs-client
+or
+.BR lustrefs-MDT0000 .
+.TP
+.B start_index
+The first record number in the config log to dump.  Note that deactivated
+records and comment records will not be printed.
+.TP
+.B end_index
+The last record number in the config log to dump.
+.SH EXAMPLES
+.TP
+To print all of the records from the testfs-client configuration log:
+.br
+# lctl --device MGS llog_print testfs-client
+.br
+- { index: 3, event: attach, device: testfs-clilov, type: lov,
+.br
+    UUID: testfs-clilov_UUID }
+.br
+- { index: 6, event: setup, device: testfs-clilov, UUID: }
+.br
+- { index: 9, event: attach, device: testfs-clilmv, type: lov,
+.br
+    UUID: testfs-clilmv_UUID }
+.br
+- { index: 12, event: setup, device: testfs-clilmv, UUID: }
+.br
+- { index: 15, add_uuid: nid: 10.211.55.6@tcp(0x200000ad33706),
+.br
+    node: 10.211.55.6@tcp }
+.br
+:
+.br
+:
+.SH AVAILABILITY
+.B lctl llog_print
+is a subcommand of
+.BR lctl (8)
+and is distributed as part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8)
+.BR lctl-llog_info (8)
+.BR lctl-llog_catlist (8)

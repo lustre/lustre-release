@@ -5378,7 +5378,23 @@ test_60a() {
 	start mgs $(mgsdevname) $MGS_MOUNT_OPTS || error "start mgs failed"
 	$pass || error "test failed, see FAILED test_60a messages for specifics"
 }
-run_test 60a "llog_test run from kernel module and test llog_reader =========="
+run_test 60a "llog_test run from kernel module and test llog_reader"
+
+test_60aa() {
+	# test old logid format
+	if [ $(lustre_version_code mgs) -le $(version_code 3.1.53) ]; then
+		do_facet mgs $LCTL dl | grep MGS
+		do_facet mgs "$LCTL --device %MGS llog_print \\\\\\\$$FSNAME-client" ||
+			error "old llog_print failed"
+	fi
+
+	# test new logid format
+	if [ $(lustre_version_code mgs) -ge $(version_code 2.9.53) ]; then
+		do_facet mgs "$LCTL --device MGS llog_print $FSNAME-client" ||
+			error "new llog_print failed"
+	fi
+}
+run_test 60aa "llog_print works with FIDs and simple names"
 
 test_60b() { # bug 6411
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return

@@ -1,0 +1,40 @@
+.TH lctl-llog_info 8 "2017 Feb 24" Lustre "configuration utilities"
+.SH NAME
+lctl llog_info \- print information about a Lustre configuration log
+.SH SYNOPSIS
+.B lctl llog_info
+.RI < logname >
+
+.SH DESCRIPTION
+.B lctl llog_info
+is used to print information about the configuration log given by
+.IR logname .
+.SH OPTIONS
+.B logname
+The name of the configuration log, in the form
+.IR fsname - target ,
+like
+.B testfs-client
+or
+.BR lustrefs-MDT0000 .
+.SH EXAMPLES
+.TP
+To print all of the records from the testfs-client configuration log:
+.br
+# lctl --device MGS llog_info testfs-client
+.br
+logid:            [0x4:0xa:0x0]:0
+flags:            4 (plain)
+records_count:    48
+last_index:       47
+.SH AVAILABILITY
+.B lctl llog_info
+is a subcommand of
+.BR lctl (8)
+and is distributed as part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8)
+.BR lctl-llog_catlist (8)
+.BR lctl-llog_print (8)

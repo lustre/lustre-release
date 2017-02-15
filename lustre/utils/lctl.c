@@ -452,29 +452,27 @@ command_t cmdlist[] = {
 	 "usage: llog_catlist"},
 	{"llog_info", jt_llog_info, 0,
 	 "print log header information.\n"
-	 "usage: llog_info <$logname|#oid#ogr#ogen>\n"
+	 "usage: llog_info <logname|[FID]>\n"
 	 "       oid, ogr and ogen are hexadecimal."},
 	{"llog_print", jt_llog_print, 0,
 	 "print log content information.\n"
-	 "usage: llog_print <$logname|#oid#ogr#ogen> [from] [to]\n"
-	 "       oid, ogr and ogen are hexadecimal.\n"
+	 "usage: llog_print <logname|[FID]> [start_index [end_index]]\n"
 	 "       print all records from index 1 by default."},
 	{"llog_check", jt_llog_check, 0,
 	 "print log content information.\n"
-	 "usage: llog_check <$logname|#oid#ogr#ogen> [from] [to]\n"
-	 "       oid, ogr and ogen are hexadecimal.\n"
+	 "usage: llog_check <logname|[FID]> [start_index] [end_index]\n"
 	 "       check all records from index 1 by default."},
-	 {"llog_cancel", jt_llog_cancel, 0,
+	{"llog_cancel", jt_llog_cancel, 0,
 	 "cancel one record in log.\n"
 	 "This command supports both positional and optional arguments\n"
 	 "usage (positional args): "
-	 "llog_cancel <catalog id|catalog name> [log id] <index>\n"
+	 "llog_cancel <catalog name|[FID]> [log id] <index>\n"
 	 "usage (optional args): "
 	 "llog_cancel --catalog <catalog id|catalog name> --log_id <log_id> "
 	 "--log_idx <index>"},
 	{"llog_remove", jt_llog_remove, 0,
 	 "remove one log from catalog or plain log, erase it from disk.\n"
-	 "usage: llog_remove <catalog id|catalog name> <log id>"},
+	 "usage: llog_remove <catalog name|[FID]> <log id>"},
 	/* network operations */
 	{"add_interface", jt_ptl_add_interface, 0, "add interface entry\n"
 	 "usage: add_interface ip [netmask]"},
