@@ -589,12 +589,10 @@ void grouplock_test4(char *filename, int fd)
                  * task0's write to start. */
                 MPI_Recv(&temp1, 1, MPI_INT, 0, 1, MPI_COMM_WORLD,
                          MPI_STATUS_IGNORE);
-                usleep(10000);
-                usleep(10000);
 
                 /* tell task2 to go. */
                 MPI_Send(&gid, 1, MPI_INT, 2, 1, MPI_COMM_WORLD);
-
+		sleep(WAIT_TIME);
 
                 read_buf(fd);
                 MPI_Send(&gid, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
@@ -603,8 +601,7 @@ void grouplock_test4(char *filename, int fd)
                 /* Give task0 & 1 a chance to start. */
                 MPI_Recv(&temp1, 1, MPI_INT, 1, 1, MPI_COMM_WORLD,
                          MPI_STATUS_IGNORE);
-                usleep(25000);
-                usleep(25000);
+		sleep(2 * WAIT_TIME);
 
                 if ((rc = ioctl(fd, LL_IOC_GROUP_LOCK, gid)) == -1) {
                         sprintf(errmsg,
