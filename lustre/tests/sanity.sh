@@ -12155,11 +12155,11 @@ default_attr() {
 check_default_stripe_attr() {
 	ACTUAL=$($GETSTRIPE $* $DIR/$tdir)
 	case $1 in
-	--stripe-count|--count)
+	--stripe-count|-c)
 		[ -n "$2" ] && EXPECTED=0 || EXPECTED=$(default_attr count);;
-	--stripe-size|--size)
+	--stripe-size|-S)
 		[ -n "$2" ] && EXPECTED=0 || EXPECTED=$(default_attr size);;
-	--stripe-index|--index)
+	--stripe-index|-i)
 		EXPECTED=-1;;
 	*)
 		error "unknown getstripe attr '$1'"

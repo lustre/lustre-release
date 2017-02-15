@@ -1805,36 +1805,39 @@ run_test 65a "AT: verify early replies"
 
 test_65b() #bug 3055
 {
-    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-    at_start || return 0
-    # turn on D_ADAPTTO
-    debugsave
-    $LCTL set_param debug="other trace"
-    $LCTL dk > /dev/null
-    # Slow down a request to the current service time, this is critical
-    # because previous tests may have caused this value to increase.
-    $SETSTRIPE --stripe-index=0 --count=1 $DIR/$tfile
-    multiop $DIR/$tfile Ow1yc
-    REQ_DELAY=`lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts |
-               awk '/portal 6/ {print $5}'`
-    REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
+	at_start || return 0
+	# turn on D_ADAPTTO
+	debugsave
+	$LCTL set_param debug="other trace"
+	$LCTL dk > /dev/null
+	# Slow down a request to the current service time, this is critical
+	# because previous tests may have caused this value to increase.
+	$SETSTRIPE --stripe-index=0 --stripe-count=1 $DIR/$tfile ||
+		error "$SETSTRIPE failed for $DIR/$tfile"
 
-    do_facet ost1 lctl set_param fail_val=${REQ_DELAY}
-#define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
-    do_facet ost1 $LCTL set_param fail_loc=0x224
+	multiop $DIR/$tfile Ow1yc
+	REQ_DELAY=`lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts |
+		   awk '/portal 6/ {print $5}'`
+	REQ_DELAY=$((${REQ_DELAY} + ${REQ_DELAY} / 4 + 5))
 
-    rm -f $DIR/$tfile
-    $SETSTRIPE --stripe-index=0 --count=1 $DIR/$tfile
-    # force some real bulk transfer
-    multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+	do_facet ost1 lctl set_param fail_val=${REQ_DELAY}
+	#define OBD_FAIL_OST_BRW_PAUSE_PACK      0x224
+	do_facet ost1 $LCTL set_param fail_loc=0x224
 
-    do_facet ost1 $LCTL set_param fail_loc=0
-    # check for log message
-    $LCTL dk | grep "Early reply #" || error "No early reply"
-    debugrestore
-    # client should show REQ_DELAY estimates
-    lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts | grep portal
+	rm -f $DIR/$tfile
+	$SETSTRIPE --stripe-index=0 --stripe-count=1 $DIR/$tfile ||
+		error "$SETSTRIPE failed"
+	# force some real bulk transfer
+	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+
+	do_facet ost1 $LCTL set_param fail_loc=0
+	# check for log message
+	$LCTL dk | grep "Early reply #" || error "No early reply"
+	debugrestore
+	# client should show REQ_DELAY estimates
+	lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts | grep portal
 }
 run_test 65b "AT: verify early replies on packed reply / bulk"
 
@@ -1970,20 +1973,21 @@ test_68 () #bug 13813
 	do_facet ost1 "echo $TIMEOUT >> $ldlm_enqueue_min_r"
 
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	$SETSTRIPE --stripe-index=0 --count=1 $DIR/$tdir
-#define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
-    $LCTL set_param fail_val=$(($TIMEOUT - 1))
-    $LCTL set_param fail_loc=0x80000312
-    cp /etc/profile $DIR/$tdir/${tfile}_1 || error "1st cp failed $?"
-    $LCTL set_param fail_val=$((TIMEOUT * 5 / 4))
-    $LCTL set_param fail_loc=0x80000312
-    cp /etc/profile $DIR/$tdir/${tfile}_2 || error "2nd cp failed $?"
-    $LCTL set_param fail_loc=0
+	$SETSTRIPE --stripe-index=0 -c 1 $DIR/$tdir ||
+		error "$SETSTRIPE failed for $DIR/$tdir"
+	#define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
+	$LCTL set_param fail_val=$(($TIMEOUT - 1))
+	$LCTL set_param fail_loc=0x80000312
+	cp /etc/profile $DIR/$tdir/${tfile}_1 || error "1st cp failed $?"
+	$LCTL set_param fail_val=$((TIMEOUT * 5 / 4))
+	$LCTL set_param fail_loc=0x80000312
+	cp /etc/profile $DIR/$tdir/${tfile}_2 || error "2nd cp failed $?"
+	$LCTL set_param fail_loc=0
 
-    echo $ENQ_MIN >> $ldlm_enqueue_min
-    do_facet ost1 "echo $ENQ_MIN_R >> $ldlm_enqueue_min_r"
-    rm -rf $DIR/$tdir
-    return 0
+	echo $ENQ_MIN >> $ldlm_enqueue_min
+	do_facet ost1 "echo $ENQ_MIN_R >> $ldlm_enqueue_min_r"
+	rm -rf $DIR/$tdir
+	return 0
 }
 run_test 68 "AT: verify slowing locks"
 
