@@ -917,7 +917,7 @@ static int lfs_setstripe(int argc, char **argv)
 	struct option		 long_opts[] = {
 		/* --block is only valid in migrate mode */
 		{"block",	 no_argument,	    0, 'b'},
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "stripe-count", but was explicitly
 		 * made "stripe-count" for consistency with other options,
 		 * and to separate it from "mdt-count" when DNE arrives. */
@@ -926,7 +926,7 @@ static int lfs_setstripe(int argc, char **argv)
 		{"stripe-count", required_argument, 0, 'c'},
 		{"stripe_count", required_argument, 0, 'c'},
 		{"delete",       no_argument,       0, 'd'},
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "stripe-index", but was explicitly
 		 * made "stripe-index" for consistency with other options,
 		 * and to separate it from "mdt-index" when DNE arrives. */
@@ -945,7 +945,7 @@ static int lfs_setstripe(int argc, char **argv)
 		{"ost_list",     required_argument, 0, 'o'},
 #endif
 		{"pool",	 required_argument, 0, 'p'},
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "--stripe-size", but was confusing
 		 * with "lfs find --size|-s", which means "file size", so use
 		 * the consistent "--stripe-size|-S" for all commands. */
@@ -1029,13 +1029,13 @@ static int lfs_setstripe(int argc, char **argv)
 			}
 			migration_flags |= MIGRATION_NONBLOCK;
 			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		case 's':
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
 			fprintf(stderr, "warning: '--size|-s' deprecated, "
 				"use '--stripe-size|-S' instead\n");
 #endif
-#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0) */
+#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0) */
 		case 'S':
 			stripe_size_arg = optarg;
 			break;
@@ -1714,7 +1714,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				  struct find_param *param)
 {
 	struct option long_opts[] = {
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "stripe-count", but was explicitly
 		 * made "stripe-count" for consistency with other options,
 		 * and to separate it from "mdt-count" when DNE arrives. */
@@ -1726,7 +1726,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"default",		no_argument,		0, 'D'},
 		{"fid",			no_argument,		0, 'F'},
 		{"generation",		no_argument,		0, 'g'},
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "stripe-index", but was explicitly
 		 * made "stripe-index" for consistency with other options,
 		 * and to separate it from "mdt-index" when DNE arrives. */
@@ -1742,7 +1742,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"mdt-index",		no_argument,		0, 'M'},
 		{"mdt_index",		no_argument,		0, 'M'},
 #endif
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "stripe-index", but was confusing
 		 * with "file offset" (which will eventually be needed for
 		 * with different layouts by offset), so deprecate it. */
@@ -1754,7 +1754,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"quiet",		no_argument,		0, 'q'},
 		{"recursive",		no_argument,		0, 'r'},
 		{"raw",			no_argument,		0, 'R'},
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "--stripe-size", but was confusing
 		 * with "lfs find --size|-s", which means "file size", so use
 		 * the consistent "--stripe-size|-S" for all commands. */
@@ -1811,20 +1811,20 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				param->fp_max_depth = 0;
 			}
 			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		case 's':
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
 			fprintf(stderr, "warning: '--size|-s' deprecated, "
 				"use '--stripe-size|-S' instead\n");
 #endif
-#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0) */
+#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0) */
 		case 'S':
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
 				param->fp_verbose |= VERBOSE_SIZE;
 				param->fp_max_depth = 0;
 			}
 			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		case 'o':
 			fprintf(stderr, "warning: '--offset|-o' deprecated, "
 				"use '--stripe-index|-i' instead\n");

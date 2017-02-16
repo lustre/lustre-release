@@ -3168,7 +3168,7 @@ int llapi_migrate_mdt(char *path, struct find_param *param)
 
 int llapi_mv(char *path, struct find_param *param)
 {
-#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 9, 53, 0)
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 9, 59, 0)
 	static bool printed;
 
 	if (!printed) {
