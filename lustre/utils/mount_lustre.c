@@ -278,7 +278,10 @@ int parse_options(struct mount_opts *mop, char *orig_options,
 		/* please note that some ldiskfs mount options are also in
 		 * the form of param=value. We should pay attention not to
 		 * remove those mount options, see bug 22097. */
-		if (val && strncmp(arg, "md_stripe_cache_size", 20) == 0) {
+		if (val && strncmp(arg, "max_sectors_kb", 14) == 0) {
+			mop->mo_max_sectors_kb = atoi(val + 1);
+		} else if (val &&
+			   strncmp(arg, "md_stripe_cache_size", 20) == 0) {
 			mop->mo_md_stripe_cache_size = atoi(val + 1);
 		} else if (val && strncmp(arg, "retry", 5) == 0) {
 			mop->mo_retry = atoi(val + 1);
@@ -578,6 +581,7 @@ static void set_defaults(struct mount_opts *mop)
 	mop->mo_md_stripe_cache_size = 16384;
 	mop->mo_orig_options = "";
 	mop->mo_nosvc = 0;
+	mop->mo_max_sectors_kb = -1;
 }
 
 static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)

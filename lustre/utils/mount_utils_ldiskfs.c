@@ -1194,16 +1194,20 @@ set_params:
 		return rc;
 	}
 
-	snprintf(real_path, sizeof(real_path), "%s/%s", path,
-		 MAX_HW_SECTORS_KB_PATH);
-	rc = read_file(real_path, buf, sizeof(buf));
-	if (rc) {
-		if (verbose)
-			fprintf(stderr, "warning: opening %s: %s\n",
-				real_path, strerror(errno));
-		/* No MAX_HW_SECTORS_KB_PATH isn't necessary an
-		 * error for some device. */
-		goto subdevs;
+	if (mop->mo_max_sectors_kb >= 0) {
+		snprintf(buf, sizeof(buf), "%d", mop->mo_max_sectors_kb);
+	} else {
+		snprintf(real_path, sizeof(real_path), "%s/%s", path,
+			 MAX_HW_SECTORS_KB_PATH);
+		rc = read_file(real_path, buf, sizeof(buf));
+		if (rc) {
+			if (verbose)
+				fprintf(stderr, "warning: opening %s: %s\n",
+					real_path, strerror(errno));
+			/* No MAX_HW_SECTORS_KB_PATH isn't necessary an
+			 * error for some device. */
+			goto subdevs;
+		}
 	}
 
 	if (strlen(buf) - 1 > 0) {
@@ -1228,14 +1232,15 @@ set_params:
 		 * PTLRPC_MAX_BRW_SIZE, but that isn't in a public header.
 		 * Note that even though the block layer allows larger values,
 		 * setting max_sectors_kb = 32768 causes crashes (LU-6974). */
-		if (newval > 16 * 1024) {
+		if (mop->mo_max_sectors_kb < 0 && newval > 16 * 1024) {
 			newval = 16 * 1024;
 			snprintf(buf, sizeof(buf), "%llu", newval);
 		}
 
 		oldval = strtoull(oldbuf, &end, 0);
 		/* Don't shrink the current limit. */
-		if (oldval != ULLONG_MAX && newval <= oldval)
+		if (mop->mo_max_sectors_kb < 0 && oldval != ULLONG_MAX &&
+		    newval <= oldval)
 			goto subdevs;
 
 		rc = write_file(real_path, buf);

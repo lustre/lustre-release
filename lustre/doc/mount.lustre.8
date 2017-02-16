@@ -150,6 +150,15 @@ Abort client recovery and start the target service immediately.
 Sets the stripe cache size for server side disk with a striped raid
 configuration.
 .TP
+.BI max_sectors_kb
+Automatically Sets the block device parameter of 'max_sectors_kb' for the
+MDT or OST target. When max_sectors_kb isn't specified, that parameter for
+block device will be set to same as it's own 'max_hw_sectors_kb' (up to a
+maximum of 16M), this is default behavior suited for most users. When
+max_sectors_kb is specified as zero, the old parameter value will be kept.
+When max_sectors_kb is specified as a positive number, the parameter will
+be set to this number arbitrarily.
+.TP
 .BI recovery_time_soft= timeout
 Allow 'timeout' seconds for clients to reconnect for recovery after a server
 crash.  This timeout will be incrementally extended if it is about to expire
