@@ -51,6 +51,7 @@
 #include <sys/zfs_znode.h>
 #include <sys/zap.h>
 #include <sys/dbuf.h>
+#include <sys/dmu_objset.h>
 
 /**
  * By design including kmem.h overrides the Linux slab interfaces to provide
@@ -284,7 +285,6 @@ struct osd_device {
 	unsigned int		 od_dev_set_rdonly:1, /**< osd_ro() called */
 				 od_prop_rdonly:1,  /**< ZFS property readonly */
 				 od_xattr_in_sa:1,
-				 od_quota_iused_est:1,
 				 od_is_ost:1,
 				 od_posix_acl:1;
 
@@ -712,4 +712,26 @@ static inline void osd_dnode_rele(dnode_t *dn)
 	DB_DNODE_EXIT(db);
 	dmu_buf_rele(&db->db, osd_obj_tag);
 }
+
+#ifdef HAVE_DMU_USEROBJ_ACCOUNTING
+
+#define OSD_DMU_USEROBJ_PREFIX        DMU_OBJACCT_PREFIX
+
+static inline bool osd_dmu_userobj_accounting_available(struct osd_device *osd)
+{
+	if (unlikely(dmu_objset_userobjspace_upgradable(osd->od_os)))
+		dmu_objset_userobjspace_upgrade(osd->od_os);
+
+	return dmu_objset_userobjspace_present(osd->od_os);
+}
+#else
+
+#define OSD_DMU_USEROBJ_PREFIX        "obj-"
+
+static inline bool osd_dmu_userobj_accounting_available(struct osd_device *osd)
+{
+	return false;
+}
+#endif /* #ifdef HAVE_DMU_USEROBJ_ACCOUNTING */
+
 #endif /* _OSD_INTERNAL_H */

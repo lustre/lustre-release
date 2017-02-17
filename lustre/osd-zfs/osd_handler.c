@@ -295,16 +295,6 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		RETURN(0);
 	}
 
-	/* When doing our own inode accounting, the ZAPs storing per-uid/gid
-	 * usage are updated at operation execution time, so we should call
-	 * qsd_op_end() straight away. Otherwise (for blk accounting maintained
-	 * by ZFS and when #inode is estimated from #blks) accounting is updated
-	 * at commit time and the call to qsd_op_end() must be delayed */
-	if (oh->ot_quota_trans.lqt_id_cnt > 0 &&
-			!oh->ot_quota_trans.lqt_ids[0].lqi_is_blk &&
-			!osd->od_quota_iused_est)
-		qsd_op_end(env, osd->od_quota_slave, &oh->ot_quota_trans);
-
 	rc = dt_txn_hook_stop(env, th);
 	if (rc != 0)
 		CDEBUG(D_OTHER, "%s: transaction hook failed: rc = %d\n",
@@ -1067,10 +1057,6 @@ static int osd_mount(const struct lu_env *env,
 	rc = lu_site_init_finish(&o->od_site);
 	if (rc)
 		GOTO(err, rc);
-
-	/* Use our own ZAP for inode accounting by default, this can be changed
-	 * via procfs to estimate the inode usage from the block usage */
-	o->od_quota_iused_est = 0;
 
 	rc = osd_procfs_init(o, o->od_svname);
 	if (rc)

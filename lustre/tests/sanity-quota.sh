@@ -1179,6 +1179,15 @@ run_test 7d "Quota reintegration (Transfer index in multiple bulks)"
 test_7e() {
 	[ "$MDSCOUNT" -lt "2" ] && skip "Required more MDTs" && return
 
+	# LU-2435: skip this quota test if underlying zfs version has not
+	# supported native dnode accounting
+	[ "$(facet_fstype mds1)" == "zfs" ] && {
+		local zfs_version=$(do_facet mds1 cat /sys/module/zfs/version)
+
+		[ $(version_code $zfs_version) -lt $(version_code 0.7.0) ] &&
+			skip "requires zfs version at least 0.7.0" && return
+	}
+
 	local ilimit=$((1024 * 2)) # 2k inodes
 	local TESTFILE=$DIR/${tdir}-1/$tfile
 

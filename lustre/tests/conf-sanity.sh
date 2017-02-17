@@ -1606,6 +1606,19 @@ t32_verify_quota() {
 	local qval
 	local cmd
 
+	# LU-2435: if the underlying zfs doesn't support userobj_accounting,
+	# lustre will estimate the object count usage. This fails quota
+	# verification in 32b. The object quota usage should be accurate after
+	# zfs-0.7.0 is released.
+	[ $fstype == "zfs" ] && {
+		local zfs_version=$(do_node $node cat /sys/module/zfs/version)
+
+		[ $(version_code $zfs_version) -lt $(version_code 0.7.0) ] && {
+			echo "Skip quota verify for zfs: $zfs_version"
+			return 0
+		}
+	}
+
 	$LFS quota -u $T32_QID -v $mnt
 
 	qval=$($LFS quota -v -u $T32_QID $mnt |
@@ -1766,6 +1779,10 @@ t32_test() {
 				$ZPOOL list -H $poolname >/dev/null 2>&1 ||
 				$ZPOOL import -f -d $tmp $poolname"
 		done
+
+		# upgrade zpool to latest supported features, including
+		# dnode quota accounting in 0.7.0
+		$r "$ZPOOL upgrade -a"
 
 		mdt_dev=t32fs-mdt1/mdt1
 		ost_dev=t32fs-ost1/ost1
@@ -2290,8 +2307,12 @@ t32_test() {
 		if [[ $fstype == zfs ]]; then
 			local poolname=t32fs-mdt1
 			$r "modprobe zfs;
-				$ZPOOL list -H $poolname >/dev/null 2>&1 ||
+			    $ZPOOL list -H $poolname >/dev/null 2>&1 ||
 				$ZPOOL import -f -d $tmp $poolname"
+
+			# upgrade zpool to latest supported features,
+			# including dnode quota accounting in 0.7.0
+			$r "$ZPOOL upgrade $poolname"
 		fi
 
 		# mount a second time to make sure we didnt leave upgrade flag on
