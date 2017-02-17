@@ -459,6 +459,159 @@ static ssize_t early_lock_cancel_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(early_lock_cancel);
 
+#ifdef HAVE_SERVER_SUPPORT
+static ssize_t ctime_age_limit_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+
+	return sprintf(buf, "%u\n", ns->ns_ctime_age_limit);
+}
+
+static ssize_t ctime_age_limit_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	unsigned long tmp;
+	int err;
+
+	err = kstrtoul(buffer, 10, &tmp);
+	if (err != 0)
+		return -EINVAL;
+
+	ns->ns_ctime_age_limit = tmp;
+
+	return count;
+}
+LUSTRE_RW_ATTR(ctime_age_limit);
+
+static ssize_t lock_timeouts_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+
+	return sprintf(buf, "%d\n", ns->ns_timeouts);
+}
+LUSTRE_RO_ATTR(lock_timeouts);
+
+static ssize_t max_nolock_bytes_show(struct kobject *kobj,
+				     struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+
+	return sprintf(buf, "%u\n", ns->ns_max_nolock_size);
+}
+
+static ssize_t max_nolock_bytes_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer, size_t count)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	unsigned long tmp;
+	int err;
+
+	err = kstrtoul(buffer, 10, &tmp);
+	if (err != 0)
+		return -EINVAL;
+
+	ns->ns_max_nolock_size = tmp;
+
+	return count;
+}
+LUSTRE_RW_ATTR(max_nolock_bytes);
+
+static ssize_t contention_seconds_show(struct kobject *kobj,
+				       struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+
+	return sprintf(buf, "%u\n", ns->ns_contention_time);
+}
+
+static ssize_t contention_seconds_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer, size_t count)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	unsigned long tmp;
+	int err;
+
+	err = kstrtoul(buffer, 10, &tmp);
+	if (err != 0)
+		return -EINVAL;
+
+	ns->ns_contention_time = tmp;
+
+	return count;
+}
+LUSTRE_RW_ATTR(contention_seconds);
+
+static ssize_t contended_locks_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+
+	return sprintf(buf, "%u\n", ns->ns_contended_locks);
+}
+
+static ssize_t contended_locks_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	unsigned long tmp;
+	int err;
+
+	err = kstrtoul(buffer, 10, &tmp);
+	if (err != 0)
+		return -EINVAL;
+
+	ns->ns_contended_locks = tmp;
+
+	return count;
+}
+LUSTRE_RW_ATTR(contended_locks);
+
+static ssize_t max_parallel_ast_show(struct kobject *kobj,
+				     struct attribute *attr, char *buf)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+
+	return sprintf(buf, "%u\n", ns->ns_max_parallel_ast);
+}
+
+static ssize_t max_parallel_ast_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer, size_t count)
+{
+	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
+						 ns_kobj);
+	unsigned long tmp;
+	int err;
+
+	err = kstrtoul(buffer, 10, &tmp);
+	if (err != 0)
+		return -EINVAL;
+
+	ns->ns_max_parallel_ast = tmp;
+
+	return count;
+}
+LUSTRE_RW_ATTR(max_parallel_ast);
+
+#endif /* HAVE_SERVER_SUPPORT */
+
 /* These are for namespaces in /sys/fs/lustre/ldlm/namespaces/ */
 static struct attribute *ldlm_ns_attrs[] = {
 	&lustre_attr_resource_count.attr,
@@ -467,6 +620,14 @@ static struct attribute *ldlm_ns_attrs[] = {
 	&lustre_attr_lru_size.attr,
 	&lustre_attr_lru_max_age.attr,
 	&lustre_attr_early_lock_cancel.attr,
+#ifdef HAVE_SERVER_SUPPORT
+	&lustre_attr_ctime_age_limit.attr,
+	&lustre_attr_lock_timeouts.attr,
+	&lustre_attr_max_nolock_bytes.attr,
+	&lustre_attr_contention_seconds.attr,
+	&lustre_attr_contended_locks.attr,
+	&lustre_attr_max_parallel_ast.attr,
+#endif
 	NULL,
 };
 
@@ -524,8 +685,6 @@ int ldlm_namespace_sysfs_register(struct ldlm_namespace *ns)
 
 static int ldlm_namespace_proc_register(struct ldlm_namespace *ns)
 {
-	struct lprocfs_vars lock_vars[2];
-        char lock_name[MAX_STRING_SIZE + 1];
 	struct proc_dir_entry *ns_pde;
 
         LASSERT(ns != NULL);
@@ -540,25 +699,6 @@ static int ldlm_namespace_proc_register(struct ldlm_namespace *ns)
 		ns->ns_proc_dir_entry = ns_pde;
 	}
 
-        lock_name[MAX_STRING_SIZE] = '\0';
-
-        memset(lock_vars, 0, sizeof(lock_vars));
-        lock_vars[0].name = lock_name;
-
-	if (!ns_is_client(ns)) {
-		ldlm_add_var(&lock_vars[0], ns_pde, "ctime_age_limit",
-			     &ns->ns_ctime_age_limit, &ldlm_rw_uint_fops);
-		ldlm_add_var(&lock_vars[0], ns_pde, "lock_timeouts",
-			     &ns->ns_timeouts, &ldlm_uint_fops);
-		ldlm_add_var(&lock_vars[0], ns_pde, "max_nolock_bytes",
-			     &ns->ns_max_nolock_size, &ldlm_rw_uint_fops);
-		ldlm_add_var(&lock_vars[0], ns_pde, "contention_seconds",
-			     &ns->ns_contention_time, &ldlm_rw_uint_fops);
-		ldlm_add_var(&lock_vars[0], ns_pde, "contended_locks",
-			     &ns->ns_contended_locks, &ldlm_rw_uint_fops);
-		ldlm_add_var(&lock_vars[0], ns_pde, "max_parallel_ast",
-			     &ns->ns_max_parallel_ast, &ldlm_rw_uint_fops);
-	}
 	return 0;
 }
 #undef MAX_STRING_SIZE
