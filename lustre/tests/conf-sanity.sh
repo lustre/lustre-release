@@ -522,6 +522,17 @@ test_5f() {
 }
 run_test 5f "mds down, cleanup after failed mount (bug 2712)"
 
+test_5g() {
+	modprobe lustre
+	[ $(lustre_version_code client) -lt $(version_code 2.9.53) ] &&
+		{ skip "automount of debugfs missing before 2.9.53" && return 0; }
+	umount /sys/kernel/debug
+	$LCTL get_param -n devices | egrep -v "error" && \
+		error "lctl can't access debugfs data"
+	grep " debugfs " /etc/mtab || error "debugfs failed to remount"
+}
+run_test 5g "handle missing debugfs"
+
 test_6() {
 	setup
 	manual_umount_client

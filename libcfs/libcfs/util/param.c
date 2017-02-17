@@ -25,10 +25,16 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <glob.h>
+#include <mntent.h>
+#include <paths.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mount.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <linux/limits.h>
 #include <libcfs/util/string.h>
@@ -58,11 +64,52 @@ cfs_get_param_paths(glob_t *paths, const char *pattern, ...)
 {
 	char path[PATH_MAX] = "{/sys/{fs,kernel/debug}/{lnet,lustre}/,"
 			       "/proc/{fs,sys}/{lnet,lustre}/}";
+	static bool test_mounted = false;
 	size_t len = strlen(path);
 	char buf[PATH_MAX];
 	va_list args;
 	int rc;
 
+	if (test_mounted)
+		goto skip_mounting;
+	test_mounted = true;
+
+	if (mount("none", "/sys/kernel/debug", "debugfs", 0, "") == -1) {
+		/* Already mounted or don't have permission to mount is okay */
+		if (errno != EPERM && errno != EBUSY)
+			fprintf(stderr, "Warning: failed to mount debug: %s\n",
+				strerror(errno));
+	} else {
+		struct stat mtab;
+
+		/* This is all for RHEL6 which is old school. Can be removed
+		 * later when RHEL6 client support is dropped. */
+		rc = lstat(_PATH_MOUNTED, &mtab);
+		if (!rc && !S_ISLNK(mtab.st_mode)) {
+			FILE *fp = setmntent(_PATH_MOUNTED, "r+");
+
+			if (fp != NULL) {
+				const struct mntent fs = {
+					.mnt_fsname	= "debugfs",
+					.mnt_dir	= "/sys/kernel/debug",
+					.mnt_type	= "debugfs",
+					.mnt_opts	= "rw,relatime",
+				};
+
+				rc = addmntent(fp, &fs);
+				if (rc) {
+					fprintf(stderr,
+						"failed to add debugfs to %s: %s\n",
+						_PATH_MOUNTED, strerror(errno));
+				}
+				endmntent(fp);
+			} else {
+				fprintf(stderr, "could not open %s: %s\n",
+					_PATH_MOUNTED, strerror(errno));
+			}
+		}
+	}
+skip_mounting:
 	va_start(args, pattern);
 	rc = vsnprintf(buf, sizeof(buf), pattern, args);
 	va_end(args);
