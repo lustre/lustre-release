@@ -2155,16 +2155,16 @@ EXPORT_SYMBOL(obd_set_max_mod_rpcs_in_flight);
 int obd_mod_rpc_stats_seq_show(struct client_obd *cli,
 			       struct seq_file *seq)
 {
-	struct timeval now;
 	unsigned long mod_tot = 0, mod_cum;
+	struct timespec64 now;
 	int i;
 
-	do_gettimeofday(&now);
+	ktime_get_real_ts64(&now);
 
 	spin_lock(&cli->cl_mod_rpcs_lock);
 
-	seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
-		   now.tv_sec, now.tv_usec);
+	seq_printf(seq, "snapshot_time:         %llu.%9lu (secs.nsecs)\n",
+		   (s64)now.tv_sec, now.tv_nsec);
 	seq_printf(seq, "modify_RPCs_in_flight:  %hu\n",
 		   cli->cl_mod_rpcs_in_flight);
 
