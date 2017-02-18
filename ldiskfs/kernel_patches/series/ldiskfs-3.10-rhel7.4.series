@@ -32,3 +32,4 @@ rhel6.3/ext4-dont-check-in-ro.patch
 rhel7.4/ext4-dont-check-before-replay.patch
 rhel7/ext4-cleanup-goto-next-group.patch
 rhel7/ext4-reduce-lock-contention-in-__ext4_new_inode.patch
+rhel7.2/ext4-preread-gd.patch
