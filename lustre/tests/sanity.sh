@@ -9344,22 +9344,27 @@ test_131e() {
 run_test 131e "test read hitting hole"
 
 check_stats() {
+	local facet=$1
+	local op=$2
+	local want=${3:-0}
 	local res
-	local count
-	case $1 in
-	$SINGLEMDS) res=`do_facet $SINGLEMDS $LCTL get_param mdt.$FSNAME-MDT0000.md_stats | grep "$2"`
+
+	case $facet in
+	mds*) res=$(do_facet $facet \
+		   $LCTL get_param mdt.$FSNAME-MDT0000.md_stats | grep "$op")
 		 ;;
-	ost) res=`do_facet ost1 $LCTL get_param obdfilter.$FSNAME-OST0000.stats | grep "$2"`
+	ost*) res=$(do_facet $facet \
+		   $LCTL get_param obdfilter.$FSNAME-OST0000.stats | grep "$op")
 		 ;;
-	*) error "Wrong argument $1" ;;
+	*) error "Wrong facet '$facet'" ;;
 	esac
 	echo $res
-	[ -z "$res" ] && error "The counter for $2 on $1 was not incremented"
+	[ "$res" ] || error "The counter for $op on $facet was not incremented"
 	# if the argument $3 is zero, it means any stat increment is ok.
-	if [[ $3 -gt 0 ]]; then
-		count=$(echo $res | awk '{ print $2 }')
-		[[ $count -ne $3 ]] &&
-			error "The $2 counter on $1 is wrong - expected $3"
+	if [[ $want -gt 0 ]]; then
+		local count=$(echo $res | awk '{ print $2 }')
+		[[ $count -ne $want ]] &&
+			error "The $op counter on $facet is $count, not $want"
 	fi
 }
 
@@ -9459,17 +9464,17 @@ test_133c() {
 	dd if=/dev/zero of=${testdir}/${tfile} conv=notrunc bs=512k count=1 || error "dd failed"
 	sync
 	cancel_lru_locks osc
-	check_stats ost "write" 1
+	check_stats ost1 "write" 1
 
 	dd if=${testdir}/${tfile} of=/dev/null bs=1k count=1 || error "dd failed"
-	check_stats ost "read" 1
+	check_stats ost1 "read" 1
 
 	> ${testdir}/${tfile} || error "truncate failed"
-	check_stats ost "punch" 1
+	check_stats ost1 "punch" 1
 
 	rm -f ${testdir}/${tfile} || error "file remove failed"
 	wait_delete_completed
-	check_stats ost "destroy" 1
+	check_stats ost1 "destroy" 1
 
 	rm -rf $DIR/${tdir}
 }
