@@ -36,6 +36,11 @@
 
 #ifdef HAVE_COMPAT_RDMA
 #include <linux/compat-2.6.h>
+
+#ifdef LINUX_3_17_COMPAT_H
+#undef NEED_KTIME_GET_REAL_NS
+#endif
+
 #endif
 
 #include <linux/version.h>

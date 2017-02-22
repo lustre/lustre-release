@@ -145,12 +145,12 @@ time64_t ktime_get_real_seconds(void);
 time64_t ktime_get_seconds(void);
 #endif /* HAVE_KTIME_GET_SECONDS */
 
-#ifndef HAVE_KTIME_GET_REAL_NS
+#ifdef NEED_KTIME_GET_REAL_NS
 static inline u64 ktime_get_real_ns(void)
 {
 	return ktime_to_ns(ktime_get_real());
 }
-#endif /* HAVE_KTIME_GET_NS */
+#endif /* NEED_KTIME_GET_REAL_NS */
 
 static inline int cfs_time_before(cfs_time_t t1, cfs_time_t t2)
 {
