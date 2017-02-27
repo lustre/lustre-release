@@ -11632,12 +11632,11 @@ test_180b() {
 	local rc=0
 	local rmmod_remote=0
 
-	do_facet ost1 "lsmod | grep -q obdecho || "                      \
-		      "{ insmod ${LUSTRE}/obdecho/obdecho.ko || "        \
-		      "modprobe obdecho; }" && rmmod_remote=1
+	do_rpc_nodes $(facet_active_host ost1) load_module obdecho/obdecho &&
+		rmmod_remote=true || error "failed to load module obdecho"
 	target=$(do_facet ost1 $LCTL dl | awk '/obdfilter/ {print $4;exit}')
 	[[ -n $target ]] && { obdecho_test $target ost1 || rc=1; }
-	[ $rmmod_remote -eq 1 ] && do_facet ost1 "rmmod obdecho"
+	$rmmod_remote && do_facet ost1 "rmmod obdecho"
 	return $rc
 }
 run_test 180b "test obdecho directly on obdfilter"

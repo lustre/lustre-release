@@ -442,6 +442,33 @@ module_loaded () {
 	/sbin/lsmod | grep -q "^\<$1\>"
 }
 
+PRLFS=false
+lustre_insmod() {
+	local module=$1
+	shift
+	local args="$@"
+	local msg
+	local rc=0
+
+	if ! $PRLFS; then
+		msg="$(insmod $module $args 2>&1)" && return 0 || rc=$?
+	fi
+
+	# parallels can't load modules directly from prlfs, use /tmp instead
+	if $PRLFS || [[ "$(stat -f -c%t $module)" == "7c7c6673" ]]; then
+		local target="$(mktemp)"
+
+		cp "$module" "$target"
+		insmod $target $args
+		rc=$?
+		[[ $rc == 0 ]] && PRLFS=true
+		rm -f $target
+	else
+		echo "$msg"
+	fi
+	return $rc
+}
+
 # Load a module on the system where this is running.
 #
 # usage: load_module module_name [module arguments for insmod/modprobe]
@@ -494,10 +521,10 @@ load_module() {
 	# we're passing options on the command-line.
 	if [[ "$BASE" == "lnet_selftest" ]] &&
 		[[ -f ${LUSTRE}/../lnet/selftest/${module}${EXT} ]]; then
-		insmod ${LUSTRE}/../lnet/selftest/${module}${EXT}
+		lustre_insmod ${LUSTRE}/../lnet/selftest/${module}${EXT}
 	elif [[ -f ${LUSTRE}/${module}${EXT} ]]; then
 		[[ "$BASE" != "ptlrpc_gss" ]] || modprobe sunrpc
-		insmod ${LUSTRE}/${module}${EXT} "$@"
+		lustre_insmod ${LUSTRE}/${module}${EXT} "$@"
 	else
 		# must be testing a "make install" or "rpm" installation
 		# note failed to load ptlrpc_gss is considered not fatal
