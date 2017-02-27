@@ -204,8 +204,8 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 
 	ENTRY;
 
-	CDEBUG(D_RPCTRACE, "Canceling %d in log "DOSTID"\n", index,
-	       POSTID(&loghandle->lgh_id.lgl_oi));
+	CDEBUG(D_RPCTRACE, "Canceling %d in log "DFID"\n", index,
+	       PFID(&loghandle->lgh_id.lgl_oi.oi_fid));
 
 	if (index == 0) {
 		CERROR("Can't cancel index 0 which is header\n");
@@ -270,11 +270,9 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 			 * the bitmap has been clearly, so the record can not
 			 * be accessed anymore, let's return 0 for now, and
 			 * the orphan will be handled by LFSCK. */
-			CERROR("%s: can't destroy empty llog #"DOSTID
-			       "#%08x: rc = %d\n",
+			CERROR("%s: can't destroy empty llog "DFID": rc = %d\n",
 			       loghandle->lgh_ctxt->loc_obd->obd_name,
-			       POSTID(&loghandle->lgh_id.lgl_oi),
-			       loghandle->lgh_id.lgl_ogen, rc);
+			       PFID(&loghandle->lgh_id.lgl_oi.oi_fid), rc);
 			GOTO(out_unlock, rc = 0);
 		}
 		rc = LLOG_DEL_PLAIN;
@@ -538,11 +536,11 @@ repeat:
 			}
 
 			if (rec->lrh_len == 0 || rec->lrh_len > chunk_size) {
-				CWARN("%s: invalid length %d in llog "DOSTID
+				CWARN("%s: invalid length %d in llog "DFID
 				      "record for index %d/%d\n",
 				       loghandle->lgh_ctxt->loc_obd->obd_name,
 				       rec->lrh_len,
-				       POSTID(&loghandle->lgh_id.lgl_oi),
+				       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
 				       rec->lrh_index, index);
 
 				GOTO(out, rc = -EINVAL);
@@ -555,10 +553,10 @@ repeat:
 			}
 
 			if (rec->lrh_index != index) {
-				CERROR("%s: "DOSTID" Invalid record: index %u"
+				CERROR("%s: "DFID" Invalid record: index %u"
 				       " but expected %u\n",
 				       loghandle->lgh_ctxt->loc_obd->obd_name,
-				       POSTID(&loghandle->lgh_id.lgl_oi),
+				       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
 				       rec->lrh_index, index);
 				GOTO(out, rc = -ERANGE);
 			}

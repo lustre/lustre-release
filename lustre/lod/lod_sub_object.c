@@ -998,8 +998,8 @@ int lod_sub_prep_llog(const struct lu_env *env, struct lod_device *lod,
 
 	ctxt->loc_handle = lgh;
 
-	CDEBUG(D_INFO, "%s: Init llog for %d - catid "DOSTID":%x\n",
-	       obd->obd_name, index, POSTID(&cid->lci_logid.lgl_oi),
+	CDEBUG(D_INFO, "%s: init llog for index %d - catid "DFID":%x\n",
+	       obd->obd_name, index, PFID(&cid->lci_logid.lgl_oi.oi_fid),
 	       cid->lci_logid.lgl_ogen);
 out_close:
 	if (rc != 0)

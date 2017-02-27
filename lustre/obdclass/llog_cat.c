@@ -165,10 +165,9 @@ static int llog_cat_new_log(const struct lu_env *env,
 	if (rc < 0)
 		GOTO(out_destroy, rc);
 
-	CDEBUG(D_OTHER, "new plain log "DOSTID":%x for index %u of catalog"
-	       DOSTID"\n", POSTID(&loghandle->lgh_id.lgl_oi),
-	       loghandle->lgh_id.lgl_ogen, rec->lid_hdr.lrh_index,
-	       POSTID(&cathandle->lgh_id.lgl_oi));
+	CDEBUG(D_OTHER, "new plain log "DFID".%u of catalog "DFID"\n",
+	       PFID(&loghandle->lgh_id.lgl_oi.oi_fid), rec->lid_hdr.lrh_index,
+	       PFID(&cathandle->lgh_id.lgl_oi.oi_fid));
 
 	loghandle->lgh_hdr->llh_cat_idx = rec->lid_hdr.lrh_index;
 
@@ -239,10 +238,10 @@ int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 		if (ostid_id(&cgl->lgl_oi) == ostid_id(&logid->lgl_oi) &&
 		    ostid_seq(&cgl->lgl_oi) == ostid_seq(&logid->lgl_oi)) {
 			if (cgl->lgl_ogen != logid->lgl_ogen) {
-				CERROR("%s: log "DOSTID" generation %x != %x\n",
-				       loghandle->lgh_ctxt->loc_obd->obd_name,
-				       POSTID(&logid->lgl_oi), cgl->lgl_ogen,
-				       logid->lgl_ogen);
+				CWARN("%s: log "DFID" generation %x != %x\n",
+				      loghandle->lgh_ctxt->loc_obd->obd_name,
+				      PFID(&logid->lgl_oi.oi_fid),
+				      cgl->lgl_ogen, logid->lgl_ogen);
 				continue;
 			}
 			loghandle->u.phd.phd_cat_handle = cathandle;
@@ -255,9 +254,9 @@ int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 	rc = llog_open(env, cathandle->lgh_ctxt, &loghandle, logid, NULL,
 		       LLOG_OPEN_EXISTS);
 	if (rc < 0) {
-		CERROR("%s: error opening log id "DOSTID":%x: rc = %d\n",
+		CERROR("%s: error opening log id "DFID":%x: rc = %d\n",
 		       cathandle->lgh_ctxt->loc_obd->obd_name,
-		       POSTID(&logid->lgl_oi), logid->lgl_ogen, rc);
+		       PFID(&logid->lgl_oi.oi_fid), logid->lgl_ogen, rc);
 		RETURN(rc);
 	}
 
@@ -731,15 +730,16 @@ int llog_cat_cancel_records(const struct lu_env *env,
 	ENTRY;
 
 	for (i = 0; i < count; i++, cookies++) {
-		struct llog_handle	*loghandle;
-		struct llog_logid	*lgl = &cookies->lgc_lgl;
-		int			 lrc;
+		struct llog_handle *loghandle;
+		struct llog_logid *lgl = &cookies->lgc_lgl;
+		int  lrc;
 
 		rc = llog_cat_id2handle(env, cathandle, &loghandle, lgl);
 		if (rc) {
-			CERROR("%s: cannot find handle for llog "DOSTID": %d\n",
+			CDEBUG(D_HA, "%s: cannot find llog for handle "DFID":%x"
+			       ": rc = %d\n",
 			       cathandle->lgh_ctxt->loc_obd->obd_name,
-			       POSTID(&lgl->lgl_oi), rc);
+			       PFID(&lgl->lgl_oi.oi_fid), lgl->lgl_ogen, rc);
 			failed++;
 			continue;
 		}
@@ -747,8 +747,7 @@ int llog_cat_cancel_records(const struct lu_env *env,
 		lrc = llog_cancel_rec(env, loghandle, cookies->lgc_index);
 		if (lrc == LLOG_DEL_PLAIN) { /* log has been destroyed */
 			index = loghandle->u.phd.phd_cookie.lgc_index;
-			rc = llog_cat_cleanup(env, cathandle, loghandle,
-					      index);
+			rc = llog_cat_cleanup(env, cathandle, loghandle, index);
 		} else if (lrc == -ENOENT) {
 			if (rc == 0) /* ENOENT shouldn't rewrite any error */
 				rc = lrc;
@@ -771,26 +770,26 @@ static int llog_cat_process_cb(const struct lu_env *env,
 			       struct llog_handle *cat_llh,
 			       struct llog_rec_hdr *rec, void *data)
 {
-        struct llog_process_data *d = data;
-        struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
-        struct llog_handle *llh;
+	struct llog_process_data *d = data;
+	struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
+	struct llog_handle *llh;
 	struct llog_log_hdr *hdr;
-        int rc;
+	int rc;
 
-        ENTRY;
-        if (rec->lrh_type != LLOG_LOGID_MAGIC) {
-                CERROR("invalid record in catalog\n");
-                RETURN(-EINVAL);
-        }
-	CDEBUG(D_HA, "processing log "DOSTID":%x at index %u of catalog "
-	       DOSTID"\n", POSTID(&lir->lid_id.lgl_oi), lir->lid_id.lgl_ogen,
-	       rec->lrh_index, POSTID(&cat_llh->lgh_id.lgl_oi));
+	ENTRY;
+	if (rec->lrh_type != LLOG_LOGID_MAGIC) {
+		CERROR("invalid record in catalog\n");
+		RETURN(-EINVAL);
+	}
+	CDEBUG(D_HA, "processing log "DFID":%x at index %u of catalog "
+	       DFID"\n", PFID(&lir->lid_id.lgl_oi.oi_fid), lir->lid_id.lgl_ogen,
+	       rec->lrh_index, PFID(&cat_llh->lgh_id.lgl_oi.oi_fid));
 
 	rc = llog_cat_id2handle(env, cat_llh, &llh, &lir->lid_id);
 	if (rc) {
-		CERROR("%s: cannot find handle for llog "DOSTID": %d\n",
+		CERROR("%s: cannot find handle for llog "DFID": rc = %d\n",
 		       cat_llh->lgh_ctxt->loc_obd->obd_name,
-		       POSTID(&lir->lid_id.lgl_oi), rc);
+		       PFID(&lir->lid_id.lgl_oi.oi_fid), rc);
 		if (rc == -ENOENT || rc == -ESTALE) {
 			/* After a server crash, a stub of index
 			 * record in catlog could be kept, because
@@ -863,13 +862,14 @@ int llog_cat_process_or_fork(const struct lu_env *env,
 
 	if (llh->llh_cat_idx >= cat_llh->lgh_last_idx &&
 	    llh->llh_count > 1) {
-                struct llog_process_cat_data cd;
+		struct llog_process_cat_data cd;
 
-                CWARN("catlog "DOSTID" crosses index zero\n",
-                      POSTID(&cat_llh->lgh_id.lgl_oi));
+		CWARN("%s: catlog "DFID" crosses index zero\n",
+		      cat_llh->lgh_ctxt->loc_obd->obd_name,
+		      PFID(&cat_llh->lgh_id.lgl_oi.oi_fid));
 
-                cd.lpcd_first_idx = llh->llh_cat_idx;
-                cd.lpcd_last_idx = 0;
+		cd.lpcd_first_idx = llh->llh_cat_idx;
+		cd.lpcd_last_idx = 0;
 		rc = llog_process_or_fork(env, cat_llh, cat_cb,
 					  &d, &cd, fork);
 		if (rc != 0)
@@ -912,22 +912,22 @@ static int llog_cat_size_cb(const struct lu_env *env,
 		       cat_llh->lgh_ctxt->loc_obd->obd_name, -EINVAL);
 		RETURN(-EINVAL);
 	}
-	CDEBUG(D_HA, "processing log "DOSTID":%x at index %u of catalog "
-	       DOSTID"\n", POSTID(&lir->lid_id.lgl_oi), lir->lid_id.lgl_ogen,
-	       rec->lrh_index, POSTID(&cat_llh->lgh_id.lgl_oi));
+	CDEBUG(D_HA, "processing log "DFID":%x at index %u of catalog "
+	       DFID"\n", PFID(&lir->lid_id.lgl_oi.oi_fid), lir->lid_id.lgl_ogen,
+	       rec->lrh_index, PFID(&cat_llh->lgh_id.lgl_oi.oi_fid));
 
 	rc = llog_cat_id2handle(env, cat_llh, &llh, &lir->lid_id);
 	if (rc) {
-		CWARN("%s: cannot find handle for llog "DOSTID": rc = %d\n",
+		CWARN("%s: cannot find handle for llog "DFID": rc = %d\n",
 		      cat_llh->lgh_ctxt->loc_obd->obd_name,
-		      POSTID(&lir->lid_id.lgl_oi), rc);
+		      PFID(&lir->lid_id.lgl_oi.oi_fid), rc);
 		RETURN(0);
 	}
 	size = llog_size(env, llh);
 	*cum_size += size;
 
-	CDEBUG(D_INFO, "Add llog entry "DOSTID" size %llu\n",
-	       POSTID(&llh->lgh_id.lgl_oi), size);
+	CDEBUG(D_INFO, "Add llog entry "DFID" size %llu\n",
+	       PFID(&llh->lgh_id.lgl_oi.oi_fid), size);
 
 	llog_handle_put(llh);
 
@@ -960,15 +960,16 @@ static int llog_cat_reverse_process_cb(const struct lu_env *env,
 		CERROR("invalid record in catalog\n");
 		RETURN(-EINVAL);
 	}
-	CDEBUG(D_HA, "processing log "DOSTID":%x at index %u of catalog "
-	       DOSTID"\n", POSTID(&lir->lid_id.lgl_oi), lir->lid_id.lgl_ogen,
-	       le32_to_cpu(rec->lrh_index), POSTID(&cat_llh->lgh_id.lgl_oi));
+	CDEBUG(D_HA, "processing log "DFID":%x at index %u of catalog "
+	       DFID"\n", PFID(&lir->lid_id.lgl_oi.oi_fid), lir->lid_id.lgl_ogen,
+	       le32_to_cpu(rec->lrh_index),
+	       PFID(&cat_llh->lgh_id.lgl_oi.oi_fid));
 
 	rc = llog_cat_id2handle(env, cat_llh, &llh, &lir->lid_id);
 	if (rc) {
-		CERROR("%s: cannot find handle for llog "DOSTID": %d\n",
+		CERROR("%s: cannot find handle for llog "DFID": rc = %d\n",
 		       cat_llh->lgh_ctxt->loc_obd->obd_name,
-		       POSTID(&lir->lid_id.lgl_oi), rc);
+		       PFID(&lir->lid_id.lgl_oi.oi_fid), rc);
 		if (rc == -ENOENT || rc == -ESTALE) {
 			/* After a server crash, a stub of index
 			 * record in catlog could be kept, because
@@ -1023,11 +1024,12 @@ int llog_cat_reverse_process(const struct lu_env *env,
 
 	if (llh->llh_cat_idx >= cat_llh->lgh_last_idx &&
 	    llh->llh_count > 1) {
-		CWARN("catalog "DOSTID" crosses index zero\n",
-		      POSTID(&cat_llh->lgh_id.lgl_oi));
+		CWARN("%s: catalog "DFID" crosses index zero\n",
+		      cat_llh->lgh_ctxt->loc_obd->obd_name,
+		      PFID(&cat_llh->lgh_id.lgl_oi.oi_fid));
 
-                cd.lpcd_first_idx = 0;
-                cd.lpcd_last_idx = cat_llh->lgh_last_idx;
+		cd.lpcd_first_idx = 0;
+		cd.lpcd_last_idx = cat_llh->lgh_last_idx;
 		rc = llog_reverse_process(env, cat_llh,
 					  llog_cat_reverse_process_cb,
 					  &d, &cd);
@@ -1081,8 +1083,8 @@ static int llog_cat_set_first_idx(struct llog_handle *cathandle, int idx)
 			}
 		}
 
-		CDEBUG(D_RPCTRACE, "Set catlog "DOSTID" first idx %u,"
-		       " (last_idx %u)\n", POSTID(&cathandle->lgh_id.lgl_oi),
+		CDEBUG(D_RPCTRACE, "catlog "DFID" first idx %u, last_idx %u\n",
+		       PFID(&cathandle->lgh_id.lgl_oi.oi_fid),
 		       llh->llh_cat_idx, cathandle->lgh_last_idx);
 	}
 
@@ -1117,8 +1119,7 @@ int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
 	llog_cat_set_first_idx(cathandle, index);
 	rc = llog_cancel_rec(env, cathandle, index);
 	if (rc == 0)
-		CDEBUG(D_HA, "cancel plain log at index"
-		       " %u of catalog "DOSTID"\n",
-		       index, POSTID(&cathandle->lgh_id.lgl_oi));
+		CDEBUG(D_HA, "cancel plain log at index %u of catalog "DFID"\n",
+		       index, PFID(&cathandle->lgh_id.lgl_oi.oi_fid));
 	return rc;
 }

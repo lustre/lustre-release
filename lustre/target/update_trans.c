@@ -87,8 +87,8 @@ static void top_multiple_thandle_dump(struct top_multiple_thandle *tmt,
 		       st->st_committed, st->st_stopped, st->st_sub_th);
 
 		list_for_each_entry(stc, &st->st_cookie_list, stc_list) {
-			CDEBUG(mask, " cookie "DOSTID": %u\n",
-			       POSTID(&stc->stc_cookie.lgc_lgl.lgl_oi),
+			CDEBUG(mask, " cookie "DFID".%u\n",
+			       PFID(&stc->stc_cookie.lgc_lgl.lgl_oi.oi_fid),
 			       stc->stc_cookie.lgc_index);
 		}
 	}
@@ -210,9 +210,9 @@ static int sub_updates_write(const struct lu_env *env,
 		rc = llog_add(env, ctxt->loc_handle, &record->lur_hdr,
 			      &stc->stc_cookie, sub_th->st_sub_th);
 
-		CDEBUG(D_INFO, "%s: Add update log "DOSTID":%u: rc = %d\n",
+		CDEBUG(D_INFO, "%s: Add update log "DFID".%u: rc = %d\n",
 		       dt->dd_lu_dev.ld_obd->obd_name,
-		       POSTID(&stc->stc_cookie.lgc_lgl.lgl_oi),
+		       PFID(&stc->stc_cookie.lgc_lgl.lgl_oi.oi_fid),
 		       stc->stc_cookie.lgc_index, rc);
 
 		if (rc > 0) {
@@ -290,9 +290,9 @@ static int sub_updates_write(const struct lu_env *env,
 		rc = llog_add(env, ctxt->loc_handle, &lur->lur_hdr,
 			      &stc->stc_cookie, sub_th->st_sub_th);
 
-		CDEBUG(D_INFO, "%s: Add update log "DOSTID":%u rc = %d\n",
+		CDEBUG(D_INFO, "%s: Add update log "DFID".%u: rc = %d\n",
 			dt->dd_lu_dev.ld_obd->obd_name,
-			POSTID(&stc->stc_cookie.lgc_lgl.lgl_oi),
+			PFID(&stc->stc_cookie.lgc_lgl.lgl_oi.oi_fid),
 			stc->stc_cookie.lgc_index, rc);
 
 		if (rc > 0) {
@@ -1297,9 +1297,9 @@ static int distribute_txn_cancel_records(const struct lu_env *env,
 			rc = llog_cat_cancel_records(env, ctxt->loc_handle, 1,
 						     cookie);
 			CDEBUG(D_HA, "%s: batchid %llu cancel update log "
-			       DOSTID ".%u : rc = %d\n", obd->obd_name,
+			       DFID".%u: rc = %d\n", obd->obd_name,
 			       tmt->tmt_batchid,
-			       POSTID(&cookie->lgc_lgl.lgl_oi),
+			       PFID(&cookie->lgc_lgl.lgl_oi.oi_fid),
 			       cookie->lgc_index, rc);
 		}
 

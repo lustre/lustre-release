@@ -316,9 +316,9 @@ static int lod_process_recovery_updates(const struct lu_env *env,
 
 	if (rec->lrh_len !=
 		llog_update_record_size((struct llog_update_record *)rec)) {
-		CERROR("%s broken update record! index %u "DOSTID":%u :"
+		CERROR("%s broken update record! index %u "DFID".%u :"
 		       " rc = %d\n", lod2obd(lrd->lrd_lod)->obd_name, index,
-		       POSTID(&llh->lgh_id.lgl_oi), rec->lrh_index, -EIO);
+		       PFID(&llh->lgh_id.lgl_oi.oi_fid), rec->lrh_index, -EIO);
 		return -EINVAL;
 	}
 
@@ -326,9 +326,9 @@ static int lod_process_recovery_updates(const struct lu_env *env,
 	cookie->lgc_index = rec->lrh_index;
 	cookie->lgc_subsys = LLOG_UPDATELOG_ORIG_CTXT;
 
-	CDEBUG(D_HA, "%s: process recovery updates "DOSTID":%u\n",
+	CDEBUG(D_HA, "%s: process recovery updates "DFID".%u\n",
 	       lod2obd(lrd->lrd_lod)->obd_name,
-	       POSTID(&llh->lgh_id.lgl_oi), rec->lrh_index);
+	       PFID(&llh->lgh_id.lgl_oi.oi_fid), rec->lrh_index);
 	lut = lod2lu_dev(lrd->lrd_lod)->ld_site->ls_tgt;
 
 	if (lut->lut_obd->obd_stopping ||

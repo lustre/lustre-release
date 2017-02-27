@@ -179,9 +179,9 @@ static int changelog_init_cb(const struct lu_env *env, struct llog_handle *llh,
 
 	CDEBUG(D_INFO,
 	       "seeing record at index %d/%d/%llu t=%x %.*s in log"
-	       DOSTID"\n", hdr->lrh_index, rec->cr_hdr.lrh_index,
+	       DFID"\n", hdr->lrh_index, rec->cr_hdr.lrh_index,
 	       rec->cr.cr_index, rec->cr.cr_type, rec->cr.cr_namelen,
-	       changelog_rec_name(&rec->cr), POSTID(&llh->lgh_id.lgl_oi));
+	       changelog_rec_name(&rec->cr), PFID(&llh->lgh_id.lgl_oi.oi_fid));
 
 	mdd->mdd_cl.mc_index = rec->cr.cr_index;
 	return LLOG_PROC_BREAK;
@@ -191,16 +191,16 @@ static int changelog_user_init_cb(const struct lu_env *env,
 				  struct llog_handle *llh,
 				  struct llog_rec_hdr *hdr, void *data)
 {
-        struct mdd_device *mdd = (struct mdd_device *)data;
-        struct llog_changelog_user_rec *rec =
-                (struct llog_changelog_user_rec *)hdr;
+	struct mdd_device *mdd = (struct mdd_device *)data;
+	struct llog_changelog_user_rec *rec =
+		(struct llog_changelog_user_rec *)hdr;
 
-        LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
-        LASSERT(rec->cur_hdr.lrh_type == CHANGELOG_USER_REC);
+	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
+	LASSERT(rec->cur_hdr.lrh_type == CHANGELOG_USER_REC);
 
 	CDEBUG(D_INFO, "seeing user at index %d/%d id=%d endrec=%llu"
-               " in log "DOSTID"\n", hdr->lrh_index, rec->cur_hdr.lrh_index,
-               rec->cur_id, rec->cur_endrec, POSTID(&llh->lgh_id.lgl_oi));
+	       " in log "DFID"\n", hdr->lrh_index, rec->cur_hdr.lrh_index,
+	       rec->cur_id, rec->cur_endrec, PFID(&llh->lgh_id.lgl_oi.oi_fid));
 
 	spin_lock(&mdd->mdd_cl.mc_user_lock);
 	mdd->mdd_cl.mc_lastuser = rec->cur_id;
@@ -258,9 +258,9 @@ static int llog_changelog_cancel(const struct lu_env *env,
 		/* 0 or 1 means we're done */
 		rc = 0;
 	else
-		CERROR("%s: cancel idx %u of catalog "DOSTID" rc=%d\n",
+		CERROR("%s: cancel idx %u of catalog "DFID": rc = %d\n",
 		       ctxt->loc_obd->obd_name, cathandle->lgh_last_idx,
-		       POSTID(&cathandle->lgh_id.lgl_oi), rc);
+		       PFID(&cathandle->lgh_id.lgl_oi.oi_fid), rc);
 
 	RETURN(rc);
 }

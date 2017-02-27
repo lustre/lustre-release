@@ -433,11 +433,11 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 	llog_ctxt_put(ctxt);
 
 	if (likely(rc >= 0)) {
-		CDEBUG(D_OTHER, "%s: new record "DOSTID":%lu/%lu: %d\n",
+		CDEBUG(D_OTHER, "%s: new record "DFID":%x.%u: rc = %d\n",
 		       d->opd_obd->obd_name,
-		       POSTID(&osi->osi_cookie.lgc_lgl.lgl_oi),
-		       (unsigned long)osi->osi_cookie.lgc_lgl.lgl_ogen,
-		       (unsigned long)osi->osi_cookie.lgc_index, rc);
+		       PFID(&osi->osi_cookie.lgc_lgl.lgl_oi.oi_fid),
+		       osi->osi_cookie.lgc_lgl.lgl_ogen,
+		       osi->osi_cookie.lgc_index, rc);
 		atomic_inc(&d->opd_syn_changes);
 	}
 	/* return 0 always here, error case just cause no llog record */
@@ -1305,9 +1305,9 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 		rc = 0;
 	}
 
-	CDEBUG(D_INFO, "%s: Init llog for %d - catid "DOSTID":%x\n",
+	CDEBUG(D_INFO, "%s: Init llog for %d - catid "DFID":%x\n",
 	       obd->obd_name, d->opd_index,
-	       POSTID(&osi->osi_cid.lci_logid.lgl_oi),
+	       PFID(&osi->osi_cid.lci_logid.lgl_oi.oi_fid),
 	       osi->osi_cid.lci_logid.lgl_ogen);
 
 	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT,

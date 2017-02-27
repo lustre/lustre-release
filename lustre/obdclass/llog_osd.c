@@ -503,9 +503,9 @@ static int llog_osd_write_rec(const struct lu_env *env,
 			}
 
 			lgi->lgi_off = loghandle->lgh_cur_offset;
-			CDEBUG(D_OTHER, "modify record "DOSTID": idx:%d, "
+			CDEBUG(D_OTHER, "modify record "DFID": idx:%u, "
 			       "len:%u offset %llu\n",
-			       POSTID(&loghandle->lgh_id.lgl_oi), idx,
+			       PFID(&loghandle->lgh_id.lgl_oi.oi_fid), idx,
 			       rec->lrh_len, (long long)lgi->lgi_off);
 		} else if (llh->llh_flags & LLOG_F_IS_FIXSIZE) {
 			lgi->lgi_off = llh->llh_hdr.lrh_len +
@@ -559,10 +559,9 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	if (loghandle->lgh_max_size > 0 &&
 	    lgi->lgi_off >= loghandle->lgh_max_size) {
 		CDEBUG(D_OTHER, "llog is getting too large (%u > %u) at %u "
-		       DOSTID"\n", (unsigned)lgi->lgi_off,
-		       loghandle->lgh_max_size,
-		       (int)loghandle->lgh_last_idx,
-		       POSTID(&loghandle->lgh_id.lgl_oi));
+		       DFID"\n", (unsigned)lgi->lgi_off,
+		       loghandle->lgh_max_size, (int)loghandle->lgh_last_idx,
+		       PFID(&loghandle->lgh_id.lgl_oi.oi_fid));
 		/* this is to signal that this llog is full */
 		loghandle->lgh_last_idx = LLOG_HDR_BITMAP_SIZE(llh) - 1;
 		RETURN(-ENOSPC);
@@ -694,7 +693,7 @@ out_unlock:
 	if (rc < 0)
 		GOTO(out, rc);
 
-	CDEBUG(D_HA, "added record "DFID": idx: %u, %u off%llu\n",
+	CDEBUG(D_HA, "added record "DFID".%u, %u off%llu\n",
 	       PFID(lu_object_fid(&o->do_lu)), index, rec->lrh_len,
 	       lgi->lgi_off);
 	if (reccookie != NULL) {
@@ -900,10 +899,10 @@ static int llog_osd_next_block(const struct lu_env *env,
 			if (!force_mini_rec)
 				goto retry;
 
-			CERROR("%s: invalid llog block at log id "DOSTID"/%u "
+			CERROR("%s: invalid llog block at log id "DFID":%x "
 			       "offset %llu\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       POSTID(&loghandle->lgh_id.lgl_oi),
+			       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
 			       loghandle->lgh_id.lgl_ogen, *cur_offset);
 			GOTO(out, rc = -EINVAL);
 		}
@@ -922,11 +921,11 @@ static int llog_osd_next_block(const struct lu_env *env,
 			lustre_swab_llog_rec(last_rec);
 
 		if (last_rec->lrh_index != tail->lrt_index) {
-			CERROR("%s: invalid llog tail at log id "DOSTID"/%u "
+			CERROR("%s: invalid llog tail at log id "DFID":%x "
 			       "offset %llu last_rec idx %u tail idx %u"
 			       "lrt len %u read_size %d\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       POSTID(&loghandle->lgh_id.lgl_oi),
+			       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
 			       loghandle->lgh_id.lgl_ogen, *cur_offset,
 			       last_rec->lrh_index, tail->lrt_index,
 			       tail->lrt_len, rc);
@@ -937,10 +936,10 @@ static int llog_osd_next_block(const struct lu_env *env,
 
 		/* this shouldn't happen */
 		if (tail->lrt_index == 0) {
-			CERROR("%s: invalid llog tail at log id "DOSTID"/%u "
+			CERROR("%s: invalid llog tail at log id "DFID":%x "
 			       "offset %llu bytes %d\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       POSTID(&loghandle->lgh_id.lgl_oi),
+			       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
 			       loghandle->lgh_id.lgl_ogen, *cur_offset, rc);
 			GOTO(out, rc = -EINVAL);
 		}
@@ -1056,10 +1055,10 @@ static int llog_osd_prev_block(const struct lu_env *env,
 			GOTO(out, rc);
 
 		if (rc < sizeof(*tail)) {
-			CERROR("%s: invalid llog block at log id "DOSTID"/%u "
+			CERROR("%s: invalid llog block at log id "DFID":%x "
 			       "offset %llu\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       POSTID(&loghandle->lgh_id.lgl_oi),
+			       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
 			       loghandle->lgh_id.lgl_ogen, cur_offset);
 			GOTO(out, rc = -EINVAL);
 		}
@@ -1080,10 +1079,10 @@ static int llog_osd_prev_block(const struct lu_env *env,
 
 		/* this shouldn't happen */
 		if (tail->lrt_index == 0) {
-			CERROR("%s: invalid llog tail at log id "DOSTID"/%u "
+			CERROR("%s: invalid llog tail at log id "DFID":%x "
 			       "offset %llu\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
-			       POSTID(&loghandle->lgh_id.lgl_oi),
+			       PFID(&loghandle->lgh_id.lgl_oi.oi_fid),
 			       loghandle->lgh_id.lgl_ogen, cur_offset);
 			GOTO(out, rc = -EINVAL);
 		}
