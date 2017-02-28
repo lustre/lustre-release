@@ -76,10 +76,10 @@ if [ -z "$OPT_YES" ]; then
 	echo "lfs_migrate is currently NOT SAFE for moving in-use files." 1>&2
 	echo "Use it only when you are sure migrated files are unused." 1>&2
 	echo "" 1>&2
-	echo "If emptying OST(s) that are not disabled on the MDS, new" 1>&2
-	echo "files may use them.  To prevent MDS allocating any files on" 1>&2
-	echo "OSTNNNN run 'lctl --device %{fsname}-OSTNNNN-osc deactivate'" 1>&2
-	echo "on the MDS." 1>&2
+	echo "If emptying an OST that is active on the MDS, new files may" 1>&2
+	echo "use it.  To stop allocating any new objects on OSTNNNN run:" 1>&2
+	echo "  lctl set_param osp.<fsname>-OSTNNNN*.max_create_count=0'" 1>&2
+	echo "on each MDS using the OST(s) being emptied." 1>&2
 	echo -n "Continue? (y/n) "
 	read CHECK
 	[ "$CHECK" != "y" -a "$CHECK" != "yes" ] && exit 1
