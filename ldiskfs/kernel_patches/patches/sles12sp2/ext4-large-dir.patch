@@ -317,12 +317,17 @@ Index: linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/inode.c
 ===================================================================
 --- linux-3.10.0-229.1.2.fc21.x86_64.orig/fs/ext4/inode.c
 +++ linux-3.10.0-229.1.2.fc21.x86_64/fs/ext4/inode.c
-@@ -4056,7 +4056,7 @@ struct inode *ext4_iget(struct super_blo
- 	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_64BIT))
+@@ -4056,12 +4056,12 @@ struct inode *ext4_iget(struct super_blo
+ 	if (ext4_has_feature_64bit(sb))
  		ei->i_file_acl |=
  			((__u64)le16_to_cpu(raw_inode->i_file_acl_high)) << 32;
 -	inode->i_size = ext4_isize(raw_inode);
 +	inode->i_size = ext4_isize(sb, raw_inode);
+ 	if ((size = i_size_read(inode)) < 0) {
+ 		EXT4_ERROR_INODE(inode, "bad i_size value: %lld", size);
+ 		ret = -EFSCORRUPTED;
+ 		goto bad_inode;
+ 	}
  	ei->i_disksize = inode->i_size;
  #ifdef CONFIG_QUOTA
  	ei->i_reserved_quota = 0;
