@@ -215,7 +215,7 @@ static int is_feature_enabled(const char *feature, const char *devpath)
 	char enabled_features[4096] = "";
 	int ret = 1;
 
-	snprintf(cmd, sizeof(cmd), "%s -R features %s 2>&1",
+	snprintf(cmd, sizeof(cmd), "%s -c -R features %s 2>&1",
 		 DEBUGFS, devpath);
 
 	/* Using popen() instead of run_command() since debugfs does
