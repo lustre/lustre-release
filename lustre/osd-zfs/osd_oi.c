@@ -177,7 +177,7 @@ osd_oi_create(const struct lu_env *env, struct osd_device *o,
 	la->la_valid = LA_MODE | LA_UID | LA_GID;
 	la->la_mode = S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO;
 	la->la_uid = la->la_gid = 0;
-	rc = __osd_attr_init(env, o, sa_hdl, tx, la, parent);
+	rc = __osd_attr_init(env, o, sa_hdl, tx, la, parent, NULL);
 	sa_handle_destroy(sa_hdl);
 	if (rc)
 		goto commit;
