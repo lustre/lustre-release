@@ -213,6 +213,7 @@ struct osd_thread_info {
 	struct osd_idmap_cache *oti_ins_cache;
 	int		       oti_ins_cache_size;
 	int		       oti_ins_cache_used;
+	struct lu_buf	       oti_xattr_lbuf;
 };
 
 extern struct lu_context_key osd_key;
@@ -228,7 +229,6 @@ struct osd_thandle {
 	struct list_head	 ot_stop_dcb_list;
 	struct list_head	 ot_unlinked_list;
 	struct list_head	 ot_sa_list;
-	struct semaphore	 ot_sa_lock;
 	dmu_tx_t		*ot_tx;
 	struct lquota_trans	 ot_quota_trans;
 	__u32			 ot_write_commit:1,
@@ -358,7 +358,9 @@ struct osd_object {
 	uint64_t		 oo_xattr;
 	enum osd_destroy_type	 oo_destroy;
 
-	__u32			 oo_destroyed:1;
+	__u32			 oo_destroyed:1,
+				 oo_late_xattr:1,
+				 oo_late_attr_set:1;
 
 	/* the i_flags in LMA */
 	__u32			 oo_lma_flags;
@@ -370,6 +372,7 @@ struct osd_object {
 			unsigned char		 oo_recsize;
 			unsigned char		 oo_recusize;	/* unit size */
 		};
+		uint64_t	oo_parent; /* used only at object creation */
 	};
 };
 
@@ -487,8 +490,11 @@ int osd_procfs_fini(struct osd_device *osd);
 
 /* osd_object.c */
 extern char *osd_obj_tag;
-void osd_object_sa_dirty_rele(struct osd_thandle *oh);
 int __osd_obj2dnode(objset_t *os, uint64_t oid, dnode_t **dnp);
+void osd_object_sa_dirty_rele(const struct lu_env *env, struct osd_thandle *oh);
+void osd_object_sa_dirty_add(struct osd_object *obj, struct osd_thandle *oh);
+int __osd_obj2dbuf(const struct lu_env *env, objset_t *os,
+		   uint64_t oid, dmu_buf_t **dbp);
 struct lu_object *osd_object_alloc(const struct lu_env *env,
 				   const struct lu_object_header *hdr,
 				   struct lu_device *d);
@@ -501,7 +507,7 @@ int __osd_object_create(const struct lu_env *env, struct osd_object *obj,
 			dnode_t **dnp, dmu_tx_t *tx, struct lu_attr *la);
 int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 		    sa_handle_t *sa_hdl, dmu_tx_t *tx,
-		    struct lu_attr *la, uint64_t parent);
+		    struct lu_attr *la, uint64_t parent, nvlist_t *);
 
 /* osd_oi.c */
 int osd_oi_init(const struct lu_env *env, struct osd_device *o);
@@ -538,7 +544,15 @@ int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
 		   const struct lu_fid *fid);
 
 /* osd_xattr.c */
-int __osd_xattr_load(struct osd_device *osd, sa_handle_t *hdl, nvlist_t **sa);
+int __osd_sa_xattr_schedule_update(const struct lu_env *env,
+				   struct osd_object *obj,
+				   struct osd_thandle *oh);
+int __osd_sa_attr_init(const struct lu_env *env, struct osd_object *obj,
+		       struct osd_thandle *oh);
+int __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
+			  struct osd_thandle *oh);
+int __osd_xattr_load(struct osd_device *osd, sa_handle_t *hdl,
+		     nvlist_t **sa);
 int __osd_xattr_get_large(const struct lu_env *env, struct osd_device *osd,
 			  uint64_t xattr, struct lu_buf *buf,
 			  const char *name, int *sizep);

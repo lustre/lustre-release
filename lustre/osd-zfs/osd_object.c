@@ -107,37 +107,45 @@ osd_object_sa_init(struct osd_object *obj, struct osd_device *o)
 /*
  * Add object to list of dirty objects in tx handle.
  */
-static void
-osd_object_sa_dirty_add(struct osd_object *obj, struct osd_thandle *oh)
+void osd_object_sa_dirty_add(struct osd_object *obj, struct osd_thandle *oh)
 {
 	if (!list_empty(&obj->oo_sa_linkage))
 		return;
 
-	down(&oh->ot_sa_lock);
 	write_lock(&obj->oo_attr_lock);
 	if (likely(list_empty(&obj->oo_sa_linkage)))
 		list_add(&obj->oo_sa_linkage, &oh->ot_sa_list);
 	write_unlock(&obj->oo_attr_lock);
-	up(&oh->ot_sa_lock);
 }
 
 /*
  * Release spill block dbuf hold for all dirty SAs.
  */
-void osd_object_sa_dirty_rele(struct osd_thandle *oh)
+void osd_object_sa_dirty_rele(const struct lu_env *env, struct osd_thandle *oh)
 {
 	struct osd_object *obj;
 
-	down(&oh->ot_sa_lock);
 	while (!list_empty(&oh->ot_sa_list)) {
 		obj = list_entry(oh->ot_sa_list.next,
 				 struct osd_object, oo_sa_linkage);
-		sa_spill_rele(obj->oo_sa_hdl);
 		write_lock(&obj->oo_attr_lock);
 		list_del_init(&obj->oo_sa_linkage);
 		write_unlock(&obj->oo_attr_lock);
+		if (obj->oo_late_xattr) {
+			/*
+			 * take oo_guard to protect oo_sa_xattr buffer
+			 * from concurrent update by osd_xattr_set()
+			 */
+			LASSERT(oh->ot_assigned != 0);
+			down_write(&obj->oo_guard);
+			if (obj->oo_late_attr_set)
+				__osd_sa_attr_init(env, obj, oh);
+			else if (obj->oo_late_xattr)
+				__osd_sa_xattr_update(env, obj, oh);
+			up_write(&obj->oo_guard);
+		}
+		sa_spill_rele(obj->oo_sa_hdl);
 	}
-	up(&oh->ot_sa_lock);
 }
 
 /*
@@ -1181,7 +1189,8 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 
 int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 		    sa_handle_t *sa_hdl, dmu_tx_t *tx,
-		    struct lu_attr *la, uint64_t parent)
+		    struct lu_attr *la, uint64_t parent,
+		    nvlist_t *xattr)
 {
 	sa_bulk_attr_t	*bulk = osd_oti_get(env)->oti_attr_bulk;
 	struct osa_attr	*osa = &osd_oti_get(env)->oti_osa;
@@ -1190,6 +1199,9 @@ int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 	timestruc_t	 now;
 	int		 cnt;
 	int		 rc;
+	char *dxattr = NULL;
+	size_t sa_size;
+
 
 	LASSERT(sa_hdl);
 
@@ -1234,7 +1246,24 @@ int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_RDEV(osd), NULL, &osa->rdev, 8);
 	LASSERT(cnt <= ARRAY_SIZE(osd_oti_get(env)->oti_attr_bulk));
 
+	if (xattr) {
+		rc = -nvlist_size(xattr, &sa_size, NV_ENCODE_XDR);
+		LASSERT(rc == 0);
+
+		dxattr = osd_zio_buf_alloc(sa_size);
+		LASSERT(dxattr);
+
+		rc = -nvlist_pack(xattr, &dxattr, &sa_size,
+				NV_ENCODE_XDR, KM_SLEEP);
+		LASSERT(rc == 0);
+
+		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_DXATTR(osd),
+				NULL, dxattr, sa_size);
+	}
+
 	rc = -sa_replace_all_by_template(sa_hdl, bulk, cnt, tx);
+	if (dxattr)
+		osd_zio_buf_free(dxattr, sa_size);
 
 	return rc;
 }
@@ -1536,17 +1565,6 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 	if (rc)
 		GOTO(out, rc);
 
-	/* configure new osd object */
-	parent = parent != 0 ? parent : zapid;
-	rc = __osd_attr_init(env, osd, obj->oo_sa_hdl, oh->ot_tx,
-			     &obj->oo_attr, parent);
-	if (rc)
-		GOTO(out, rc);
-
-	/* XXX: oo_lma_flags */
-	obj->oo_dt.do_lu.lo_header->loh_attr |= obj->oo_attr.la_mode & S_IFMT;
-	obj->oo_dt.do_body_ops = &osd_body_ops;
-
 	rc = -nvlist_alloc(&obj->oo_sa_xattr, NV_UNIQUE_NAME, KM_SLEEP);
 	if (rc)
 		GOTO(out, rc);
@@ -1558,9 +1576,20 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 				    (uchar_t *)lma, sizeof(*lma));
 	if (rc)
 		GOTO(out, rc);
-	rc = __osd_sa_xattr_update(env, obj, oh);
+
+	/* configure new osd object */
+	obj->oo_parent = parent != 0 ? parent : zapid;
+	obj->oo_late_attr_set = 1;
+	rc = __osd_sa_xattr_schedule_update(env, obj, oh);
 	if (rc)
 		GOTO(out, rc);
+
+	/* XXX: oo_lma_flags */
+	obj->oo_dt.do_lu.lo_header->loh_attr |= obj->oo_attr.la_mode & S_IFMT;
+	if (likely(!fid_is_acct(lu_object_fid(&obj->oo_dt.do_lu))))
+		/* no body operations for accounting objects */
+		obj->oo_dt.do_body_ops = &osd_body_ops;
+
 	osd_idc_find_and_init(env, osd, obj);
 
 out:
