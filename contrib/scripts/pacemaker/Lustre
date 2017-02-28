@@ -1,0 +1,184 @@
+#!/bin/sh
+#
+# License:      GNU General Public License (GPL)v2
+# Description:  Manages Lustre server on a shared storage
+# Written by:   Gabriele Paciucci, Nathaniel Clark
+# Release Date: 28 February 2017
+# Release Version: 1.0.0
+# Copyright (c) 2017, Intel Corporation
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms and conditions of the GNU General Public License,
+# version 2, as published by the Free Software Foundation.
+#
+# This program is distributed in the hope it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+#
+# usage: ./Lustre {start|stop|status|monitor|validate-all|meta-data}
+#
+#               OCF parameters are as follows:
+#               OCF_RESKEY_target - the device or ZFS volume to mount/umount
+#               OCF_RESKEY_mountpoint - the mountpoint to use
+#######################################################################
+# Initialization:
+
+: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
+. ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
+
+
+# Variables used by multiple methods
+
+
+#######################################################################
+
+# USAGE
+
+usage() {
+    usage: $0 {start|stop|status|monitor|validate-all|meta-data}
+}
+
+# META-DATA
+
+meta_data() {
+    cat <<END
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="Lustre">
+<version>1.0.0</version>
+<longdesc lang="en">
+This script manages Lustre Targets (MGT, MDT, OST).
+The script is able to mount/umount Lustre Targets.
+
+The standard monitor operation of depth 0 (also known as probe)
+checks if the filesystem is mounted and lustre is healthy
+</longdesc>
+<shortdesc lang="en">Lustre management</shortdesc>
+
+<parameters>
+
+<parameter name="target" unique="1" required="1">
+<longdesc lang="en">
+The name of the target created during the Lustre format
+(e.g. /dev/sda, ZPOOL/MGS, /dev/mapper/mpatha)
+</longdesc>
+<shortdesc lang="en">Lustre target name</shortdesc>
+<content type="string" default="" />
+</parameter>
+
+<parameter name="mountpoint" unique="1" required="1">
+<longdesc lang="en">
+The mount point where the Lustre target will be mounted.
+</longdesc>
+<shortdesc lang="en">Mount point for Lustre</shortdesc>
+<content type="string" default="" />
+</parameter>
+
+</parameters>
+
+<actions>
+<action name="start"   timeout="300s" />
+<action name="stop"    timeout="300s" />
+<action name="monitor" depth="0"  timeout="300s" interval="20s" />
+<action name="validate-all"  timeout="30s" />
+<action name="meta-data"  timeout="5s" />
+</actions>
+</resource-agent>
+END
+    exit $OCF_SUCCESS
+}
+
+#####################################################################
+# STATUS
+#
+
+lustre_is_mounted () {
+    # Verify if this is consistent
+    grep -q $(realpath "$OCF_RESKEY_mountpoint") /proc/mounts
+}
+
+lustre_monitor () {
+    if ! lustre_is_mounted; then
+	ocf_log err "$OCF_RESKEY_target is not mounted"
+	return $OCF_NOT_RUNNING
+    fi
+
+    # TODO: Add better status monitoring
+    return $OCF_SUCCESS
+}
+
+#####################################################################
+# ACTIONS
+#
+
+lustre_mount () {
+    if ! lustre_is_mounted; then
+	ocf_log info "Starting to mount $OCF_RESKEY_target"
+
+	if mount -t lustre $OCF_RESKEY_target $OCF_RESKEY_mountpoint ; then
+	    ocf_log info "$OCF_RESKEY_target mounted successfully"
+	    return $OCF_SUCCESS
+	fi
+	ocf_log err "$OCF_RESKEY_volume mount failed"
+	return $OCF_ERR_GENERIC
+    fi
+}
+
+lustre_umount () {
+    if lustre_is_mounted; then
+	ocf_log info "Starting to unmount $OCF_RESKEY_target"
+
+	if umount $OCF_RESKEY_mountpoint; then
+	    ocf_log info "$OCF_RESKEY_target unmounted successfully"
+	    return $OCF_SUCCESS
+	fi
+	ocf_log err "$OCF_RESKEY_target unmount failed"
+	return $OCF_ERR_GENERIC
+    fi
+}
+
+all_start () {
+    lustre_mount
+    mnt_success=$?
+    if [ "$mnt_success" != "$OCF_SUCCESS" ]; then
+	ocf_log err "$OCF_RESKEY_target can not be mounted with this error: $mnt_success"
+	return $OCF_ERR_GENERIC
+    fi
+    return $OCF_SUCCESS
+}
+
+all_stop () {
+    lustre_umount
+    mnt_success=$?
+    if [ "$mnt_success" != "$OCF_SUCCESS" ]; then
+	ocf_log err "$OCF_RESKEY_target can not be unmounted with this error: $mnt_success"
+	return $OCF_ERR_GENERIC
+    fi
+    return $OCF_SUCCESS
+}
+
+validate () {
+    if [ ! -d "$OCF_RESKEY_mountpoint" ]; then
+	ocf_log err "$OCF_RESKEY_mountpoint can not be found"
+	return $OCF_ERR_INSTALLED
+    fi
+    if ! modinfo -n lustre >/dev/null 2>&1; then
+	ocf_log err "lustre module not available"
+	return $OCF_ERR_INSTALLED
+    fi
+    return $OCF_SUCCESS
+}
+
+case $1 in
+    meta-data)          meta_data;;
+    start)              all_start;;
+    stop)               all_stop;;
+    status|monitor)     lustre_monitor;;
+    validate-all)       validate;;
+    usage)              usage
+	exit $OCF_SUCCESS
+	;;
+    *)                  exit $OCF_ERR_UNIMPLEMENTED;;
+esac
