@@ -217,6 +217,24 @@ struct md_object_operations {
 				 union ldlm_policy_data *policy);
 
 	int (*moo_invalidate)(const struct lu_env *env, struct md_object *obj);
+	/**
+	 * Trying to write to un-instantiated layout component.
+	 *
+	 * The caller should have held layout lock.
+	 *
+	 * \param[in] env	execution environment
+	 * \param[in] obj	MD object
+	 * \param[in] layout	data structure to describe the changes to
+	 *			the MD object's layout
+	 * \param[in] buf	buffer containing the client's lovea
+	 *
+	 * \retval 0		success
+	 * \retval -ne		error code
+	 */
+	int (*moo_layout_change)(const struct lu_env *env,
+				 struct md_object *obj,
+				 struct layout_intent *layout,
+				 const struct lu_buf *buf);
 };
 
 /**
@@ -426,6 +444,20 @@ static inline int mo_invalidate(const struct lu_env *env, struct md_object *m)
 {
 	LASSERT(m->mo_ops->moo_invalidate);
 	return m->mo_ops->moo_invalidate(env, m);
+}
+
+static inline int mo_layout_change(const struct lu_env *env,
+				   struct md_object *m,
+				   struct layout_intent *layout,
+				   const struct lu_buf *buf)
+{
+	CDEBUG(D_INFO, "got layout change request from client: "
+	       "opc:%u flags:%#x extent[%#llx,%#llx)\n",
+	       layout->li_opc, layout->li_flags,
+	       layout->li_start, layout->li_end);
+	/* need instantiate objects which in the access range */
+	LASSERT(m->mo_ops->moo_layout_change);
+	return m->mo_ops->moo_layout_change(env, m, layout, buf);
 }
 
 static inline int mo_swap_layouts(const struct lu_env *env,

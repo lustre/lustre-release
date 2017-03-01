@@ -263,7 +263,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	int			 xattr_len = rr->rr_eadatalen;
 	__u64			 lockpart = MDS_INODELOCK_UPDATE;
 	int			 rc;
-	bool	reply_ea = false;
 	ENTRY;
 
 	CDEBUG(D_INODE, "setxattr for "DFID": %s %s\n", PFID(rr->rr_fid1),
@@ -337,23 +336,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		}
 
 		lockpart |= MDS_INODELOCK_LAYOUT;
-
-		/*
-		 * For XATTR_LUSTRE_LOV.add, we'd reply LOVEA to client,
-		 * client will save it for replay.
-		 */
-		if (strncmp(xattr_name, XATTR_LUSTRE_LOV".add",
-			    strlen(XATTR_LUSTRE_LOV".add")) == 0 &&
-		    req_capsule_has_field(&req->rq_pill, &RMF_MDT_MD,
-					  RCL_SERVER)) {
-			/*
-			 * Don't need to reply LOVEA for replay request,
-			 * it's already stored in client request.
-			 */
-			if (!req_is_replay(req))
-				reply_ea = true;
-			mdt_fix_lov_magic(info);
-		}
 	}
 
         /* Revoke all clients' lookup lock, since the access
@@ -424,26 +406,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	} else {
 		CDEBUG(D_INFO, "valid bits: %#llx\n", valid);
 		rc = -EINVAL;
-	}
-
-	if (reply_ea && rc == 0) {
-		ma->ma_lmm = req_capsule_server_get(&req->rq_pill, &RMF_MDT_MD);
-		ma->ma_lmm_size = req_capsule_get_size(&req->rq_pill,
-						       &RMF_MDT_MD, RCL_SERVER);
-		ma->ma_need = MA_LOV;
-		ma->ma_valid = 0;
-		if (ma->ma_lmm_size > 0)
-			rc = mdt_attr_get_complex(info, obj, ma);
-
-		if (ma->ma_valid & MA_LOV) {
-			struct mdt_body *repbody;
-
-			repbody	= req_capsule_server_get(&req->rq_pill,
-							 &RMF_MDT_BODY);
-			LASSERT(ma->ma_lmm_size != 0);
-			repbody->mbo_eadatasize = ma->ma_lmm_size;
-			repbody->mbo_valid |= OBD_MD_FLEASIZE;
-		}
 	}
 
 	if (rc == 0)

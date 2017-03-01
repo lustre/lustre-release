@@ -1026,6 +1026,40 @@ struct dt_object_operations {
 	 * \retval negative	negated errno on error
 	 */
 	int   (*do_invalidate)(const struct lu_env *env, struct dt_object *dt);
+
+	/**
+	 * Declare intention to instaintiate extended layout component.
+	 *
+	 * \param[in] env	execution environment
+	 * \param[in] dt	DT object
+	 * \param[in] layout	data structure to describe the changes to
+	 *			the DT object's layout
+	 * \param[in] buf	buffer containing client's lovea or empty
+	 *
+	 * \retval 0		success
+	 * \retval -ne		error code
+	 */
+	int (*do_declare_layout_change)(const struct lu_env *env,
+					struct dt_object *dt,
+					struct layout_intent *layout,
+					const struct lu_buf *buf,
+					struct thandle *th);
+
+	/**
+	 * Client is trying to write to un-instantiated layout component.
+	 *
+	 * \param[in] env	execution environment
+	 * \param[in] dt	DT object
+	 * \param[in] layout	data structure to describe the changes to
+	 *			the DT object's layout
+	 * \param[in] buf	buffer containing client's lovea or empty
+	 *
+	 * \retval 0		success
+	 * \retval -ne		error code
+	 */
+	int (*do_layout_change)(const struct lu_env *env, struct dt_object *dt,
+				struct layout_intent *layout,
+				const struct lu_buf *buf, struct thandle *th);
 };
 
 /**
@@ -2710,6 +2744,30 @@ static inline int dt_lookup(const struct lu_env *env,
         else if (ret == 0)
                 ret = -ENOENT;
         return ret;
+}
+
+static inline int dt_declare_layout_change(const struct lu_env *env,
+					   struct dt_object *o,
+					   struct layout_intent *layout,
+					   const struct lu_buf *buf,
+					   struct thandle *th)
+{
+	LASSERT(o);
+	LASSERT(o->do_ops);
+	LASSERT(o->do_ops->do_declare_layout_change);
+	return o->do_ops->do_declare_layout_change(env, o, layout, buf, th);
+}
+
+static inline int dt_layout_change(const struct lu_env *env,
+				   struct dt_object *o,
+				   struct layout_intent *layout,
+				   const struct lu_buf *buf,
+				   struct thandle *th)
+{
+	LASSERT(o);
+	LASSERT(o->do_ops);
+	LASSERT(o->do_ops->do_layout_change);
+	return o->do_ops->do_layout_change(env, o, layout, buf, th);
 }
 
 struct dt_find_hint {

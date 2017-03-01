@@ -319,12 +319,6 @@ static const struct req_msg_field *mds_reint_setxattr_client[] = {
 	&RMF_DLM_REQ
 };
 
-static const struct req_msg_field *mds_reint_setxattr_server[] = {
-	&RMF_PTLRPC_BODY,
-	&RMF_MDT_BODY,
-	&RMF_MDT_MD
-};
-
 static const struct req_msg_field *mdt_swap_layouts[] = {
 	&RMF_PTLRPC_BODY,
 	&RMF_MDT_BODY,
@@ -1456,7 +1450,7 @@ EXPORT_SYMBOL(RQF_MDS_REINT_SETATTR);
 
 struct req_format RQF_MDS_REINT_SETXATTR =
         DEFINE_REQ_FMT0("MDS_REINT_SETXATTR",
-			mds_reint_setxattr_client, mds_reint_setxattr_server);
+			mds_reint_setxattr_client, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_REINT_SETXATTR);
 
 struct req_format RQF_MDS_CONNECT =

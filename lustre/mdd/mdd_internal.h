@@ -566,6 +566,24 @@ mdo_invalidate(const struct lu_env *env, struct mdd_object *obj)
 	return dt_invalidate(env, mdd_object_child(obj));
 }
 
+static inline int
+mdo_declare_layout_change(const struct lu_env *env, struct mdd_object *obj,
+			  struct layout_intent *layout,
+			  const struct lu_buf *buf, struct thandle *handle)
+{
+	return dt_declare_layout_change(env, mdd_object_child(obj),
+					layout, buf, handle);
+}
+
+static inline int
+mdo_layout_change(const struct lu_env *env, struct mdd_object *obj,
+		  struct layout_intent *layout, const struct lu_buf *buf,
+		  struct thandle *handle)
+{
+	return dt_layout_change(env, mdd_object_child(obj),
+				layout, buf, handle);
+}
+
 static inline
 int mdo_declare_index_insert(const struct lu_env *env, struct mdd_object *obj,
 			     const struct lu_fid *fid, __u32 type,

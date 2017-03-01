@@ -374,30 +374,6 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 	if (opcode == MDS_REINT)
 		mdc_put_mod_rpc_slot(req, NULL);
 
-	/* For XATTR_LUSTRE_LOV.add, we'd save the LOVEA for replay. */
-	if (opcode == MDS_REINT && rc == 0) {
-		struct mdt_body *body;
-		struct req_capsule *pill = &req->rq_pill;
-
-		body = req_capsule_server_get(pill, &RMF_MDT_BODY);
-		if (body == NULL)
-			GOTO(out, rc = -EPROTO);
-
-		if (body->mbo_valid & OBD_MD_FLEASIZE) {
-			void *eadata;
-
-			eadata = req_capsule_server_sized_get(pill, &RMF_MDT_MD,
-							body->mbo_eadatasize);
-			if (eadata == NULL)
-				GOTO(out, rc = -EPROTO);
-
-			rc = mdc_save_lovea(req, &RMF_EADATA, eadata,
-					    body->mbo_eadatasize);
-			if (rc)
-				GOTO(out, rc);
-		}
-	}
-out:
         if (rc)
                 ptlrpc_req_finished(req);
         else

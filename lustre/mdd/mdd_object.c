@@ -1715,6 +1715,60 @@ stop:
 	return rc;
 }
 
+static int mdd_declare_layout_change(const struct lu_env *env,
+				     struct mdd_device *mdd,
+				     struct mdd_object *obj,
+				     struct layout_intent *layout,
+				     const struct lu_buf *buf,
+				     struct thandle *handle)
+{
+	int rc;
+
+	rc = mdo_declare_layout_change(env, obj, layout, buf, handle);
+	if (rc)
+		return rc;
+
+	return mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+}
+
+/* For PFL, this is used to instantiate necessary component objects. */
+int mdd_layout_change(const struct lu_env *env, struct md_object *obj,
+		      struct layout_intent *layout, const struct lu_buf *buf)
+{
+	struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	struct mdd_device *mdd = mdo2mdd(obj);
+	struct thandle *handle;
+	int rc;
+	ENTRY;
+
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		RETURN(PTR_ERR(handle));
+
+	rc = mdd_declare_layout_change(env, mdd, mdd_obj, layout, buf, handle);
+	/**
+	 * It's possible that another layout write intent has already
+	 * instantiated our objects, so a -EALREADY returned, and we need to
+	 * do nothing.
+	 */
+	if (rc)
+		GOTO(stop, rc = (rc == -EALREADY) ? 0 : rc);
+
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(stop, rc);
+
+	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+	rc = mdo_layout_change(env, mdd_obj, layout, buf, handle);
+	mdd_write_unlock(env, mdd_obj);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, mdd_obj, handle);
+stop:
+	RETURN(mdd_trans_stop(env, mdd, rc, handle));
+}
+
 void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 			  struct mdd_object *child, const struct lu_attr *attr,
 			  const struct md_op_spec *spec,
@@ -2230,4 +2284,5 @@ const struct md_object_operations mdd_obj_ops = {
 	.moo_object_sync	= mdd_object_sync,
 	.moo_object_lock	= mdd_object_lock,
 	.moo_object_unlock	= mdd_object_unlock,
+	.moo_layout_change	= mdd_layout_change,
 };

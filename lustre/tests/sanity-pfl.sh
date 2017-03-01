@@ -337,27 +337,28 @@ test_9() {
 
 	rm -f $comp_file
 
-	$LFS setstripe -E 1m -S 1m $comp_file ||
+	$LFS setstripe -E 1m -S 1m -E 2M -c 1 $comp_file ||
 		error "Create $comp_file failed"
 
 	local comp_cnt=$($LFS getstripe --component-count $comp_file)
-	[ $comp_cnt -ne 1 ] && error "component count $comp_cnt != 1"
+	[ $comp_cnt -ne 2 ] && error "component count $comp_cnt != 2"
 
 	replay_barrier $SINGLEMDS
 
-	$LFS setstripe --component-add -E 2M -c 1 $comp_file ||
-		error "Add component to $comp_file failed"
+	# instantiate the 2nd component
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=1k
 
 	local f1=$($LFS getstripe -I 2 $comp_file |
 			awk '/l_fid:/ {print $7}')
-
+	echo "before MDS recovery, the ost fid of 2nd component is $f1"
 	fail $SINGLEMDS
 
 	local f2=$($LFS getstripe -I 2 $comp_file |
 			awk '/l_fid:/ {print $7}')
+	echo "after MDS recovery, the ost fid of 2nd component is $f2"
 	[ $f1 == $f2 ] || error "$f1 != $f2"
 }
-run_test 9 "Replay component add"
+run_test 9 "Replay layout extend object instantiation"
 
 component_dump() {
 	echo $($LFS getstripe $1 |
@@ -408,6 +409,88 @@ test_10() {
 	return 0
 }
 run_test 10 "Inherit composite template from root"
+
+test_11() {
+	local comp_file=$DIR/$tfile
+	rm -f $comp_file
+
+	# only 1st component instantiated
+	$LFS setstripe -E 1m -E 2m -E 3m -E -1 $comp_file ||
+		error "Create $comp_file failed"
+
+	local f1=$($LFS getstripe -I 1 $comp_file | grep "l_fid")
+	[[ -z $f1 ]] && error "1: 1st component uninstantiated"
+	local f2=$($LFS getstripe -I 2 $comp_file | grep "l_fid")
+	[[ -n $f2 ]] && error "1: 2nd component instantiated"
+	local f3=$($LFS getstripe -I 3 $comp_file | grep "l_fid")
+	[[ -n $f3 ]] && error "1: 3rd component instantiated"
+	local f4=$($LFS getstripe -I 4 $comp_file | grep "l_fid")
+	[[ -n $f4 ]] && error "1: 4th component instantiated"
+
+	# the first 2 components instantiated
+	$TRUNCATE $comp_file $((1024*1024*1+1))
+
+	f2=$($LFS getstripe -I 2 $comp_file | grep "l_fid")
+	[[ -z $f2 ]] && error "2: 2nd component uninstantiated"
+	f3=$($LFS getstripe -I 3 $comp_file | grep "l_fid")
+	[[ -n $f3 ]] && error "2: 3rd component instantiated"
+	f4=$($LFS getstripe -I 4 $comp_file | grep "l_fid")
+	[[ -n $f4 ]] && error "2: 4th component instantiated"
+
+	# the first 3 components instantiated
+	$TRUNCATE $comp_file $((1024*1024*3))
+	$TRUNCATE $comp_file $((1024*1024*1+1))
+
+	f2=$($LFS getstripe -I 2 $comp_file | grep "l_fid")
+	[[ -z $f2 ]] && error "2: 2nd component uninstantiated"
+	f3=$($LFS getstripe -I 3 $comp_file | grep "l_fid")
+	[[ -z $f3 ]] && error "3: 3rd component uninstantiated"
+	f4=$($LFS getstripe -I 4 $comp_file | grep "l_fid")
+	[[ -n $f4 ]] && error "3: 4th component instantiated"
+
+	# all 4 components instantiated
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=3k
+
+	f4=$($LFS getstripe -I 4 $comp_file | grep "l_fid")
+	[[ -z $f4 ]] && error "4: 4th component uninstantiated"
+
+	return 0
+}
+run_test 11 "Verify component instantiation with write/truncate"
+
+test_12() {
+	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs" && return
+
+	local file=$DIR/$tfile
+	rm -f $file
+
+	# specify ost list for component
+	$LFS setstripe -E1m -c2 -o0,1 -E2m -c2 -o1,2 -E3m -c2 -o2,1 \
+		-E4m -c2 -o2,0 -E-1 $file ||
+		error "Create $file failed"
+	# instantiate all components
+	$TRUNCATE $file $((1024*1024*4+1))
+
+	#verify object alloc order
+	local o1=$($LFS getstripe -I1 $file |
+			awk '/l_ost_idx:/ {printf("%d",$5)}')
+	[[ $o1 != "01" ]] && error "$o1 is not 01"
+
+	local o2=$($LFS getstripe -I2 $file |
+			awk '/l_ost_idx:/ {printf("%d",$5)}')
+	[[ $o2 != "12" ]] && error "$o2 is not 12"
+
+	local o3=$($LFS getstripe -I3 $file |
+			awk '/l_ost_idx:/ {printf("%d",$5)}')
+	[[ $o3 != "21" ]] && error "$o3 is not 21"
+
+	local o4=$($LFS getstripe -I4 $file |
+			awk '/l_ost_idx:/ {printf("%d",$5)}')
+	[[ $o4 != "20" ]] && error "$o4 is not 20"
+
+	return 0
+}
+run_test 12 "Verify ost list specification"
 
 complete $SECONDS
 check_and_cleanup_lustre

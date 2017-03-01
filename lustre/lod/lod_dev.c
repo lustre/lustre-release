@@ -1831,6 +1831,7 @@ static void lod_key_fini(const struct lu_context *ctx,
 	struct lod_thread_info *info = data;
 	struct lod_layout_component *lds =
 				info->lti_def_striping.lds_def_comp_entries;
+	struct ost_pool *inuse = &info->lti_inuse_osts;
 
 	/* allocated in lod_get_lov_ea
 	 * XXX: this is overload, a tread may have such store but used only
@@ -1845,6 +1846,9 @@ static void lod_key_fini(const struct lu_context *ctx,
 
 	if (lds != NULL)
 		lod_free_def_comp_entries(&info->lti_def_striping);
+
+	if (inuse->op_size)
+		OBD_FREE(inuse->op_array, inuse->op_size);
 
 	OBD_FREE_PTR(info);
 }

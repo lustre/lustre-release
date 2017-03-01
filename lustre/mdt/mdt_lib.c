@@ -1292,12 +1292,10 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 /*
  * please see comment above LOV_MAGIC_V1_DEF
  */
-void mdt_fix_lov_magic(struct mdt_thread_info *info)
+void mdt_fix_lov_magic(struct mdt_thread_info *info, void *eadata)
 {
-	struct mdt_reint_record *rr = &info->mti_rr;
-	struct lov_user_md_v1   *v1;
+	struct lov_user_md_v1   *v1 = eadata;
 
-	v1 = (void *)rr->rr_eadata;
 	LASSERT(v1);
 
 	if (unlikely(req_is_replay(mdt_info_req(info)))) {
@@ -1365,7 +1363,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
                         sp->u.sp_ea.eadatalen = rr->rr_eadatalen;
                         sp->u.sp_ea.eadata = rr->rr_eadata;
                         sp->no_create = !!req_is_replay(req);
-			mdt_fix_lov_magic(info);
+			mdt_fix_lov_magic(info, rr->rr_eadata);
                 }
 
                 /*

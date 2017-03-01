@@ -1229,19 +1229,51 @@ out:
 /**
  * Handler of layout intent RPC requiring the layout modification
  *
- * \param info [in]	thread environment
- * \param obj [in]	object
- * \param layout [in]	layout intent
+ * \param[in] info	thread environment
+ * \param[in] obj	object
+ * \param[in] layout	layout intent
+ * \param[in] buf	buffer containing client's lovea, could be empty
  *
  * \retval 0	on success
  * \retval < 0	error code
  */
 static int mdt_layout_change(struct mdt_thread_info *info,
 			     struct mdt_object *obj,
-			     struct layout_intent *layout)
+			     struct layout_intent *layout,
+			     const struct lu_buf *buf)
 {
-	/* XXX: to do */
-	return 0;
+	struct mdt_lock_handle *lh = &info->mti_lh[MDT_LH_LOCAL];
+	int rc;
+	ENTRY;
+
+	if (layout->li_start >= layout->li_end) {
+		CERROR("Recieved an invalid layout change range [%llu, %llu) "
+		       "for "DFID"\n", layout->li_start, layout->li_end,
+		       PFID(mdt_object_fid(obj)));
+		RETURN(-EINVAL);
+	}
+
+	if (!S_ISREG(lu_object_attr(&obj->mot_obj)))
+		GOTO(out, rc = -EINVAL);
+
+	rc = mo_permission(info->mti_env, NULL, mdt_object_child(obj), NULL,
+			   MAY_WRITE);
+	if (rc)
+		GOTO(out, rc);
+
+	/* take layout lock to prepare layout change */
+	mdt_lock_reg_init(lh, LCK_EX);
+	rc = mdt_object_lock(info, obj, lh,
+			     MDS_INODELOCK_LAYOUT | MDS_INODELOCK_XATTR);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = mo_layout_change(info->mti_env, mdt_object_child(obj), layout,
+			      buf);
+
+	mdt_object_unlock(info, obj, lh, 1);
+out:
+	RETURN(rc);
 }
 
 /**
@@ -3513,6 +3545,10 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 			info->mti_mdt->mdt_max_mdsize = layout_size;
 	}
 
+	/*
+	 * set reply buffer size, so that ldlm_handle_enqueue0()->
+	 * ldlm_lvbo_fill() will fill the reply buffer with lovea.
+	 */
 	(*lockp)->l_lvb_type = LVB_T_LAYOUT;
 	req_capsule_set_size(info->mti_pill, &RMF_DLM_LVB, RCL_SERVER,
 			     layout_size);
@@ -3520,8 +3556,32 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	if (rc)
 		GOTO(out_obj, rc);
 
+
 	if (layout_change) {
-		rc = mdt_layout_change(info, obj, layout);
+		struct lu_buf *buf = &info->mti_buf;
+
+		buf->lb_buf = NULL;
+		buf->lb_len = 0;
+		if (unlikely(req_is_replay(mdt_info_req(info)))) {
+			buf->lb_buf = req_capsule_client_get(info->mti_pill,
+					&RMF_EADATA);
+			buf->lb_len = req_capsule_get_size(info->mti_pill,
+					&RMF_EADATA, RCL_CLIENT);
+			/*
+			 * If it's a replay of layout write intent RPC, the
+			 * client has saved the extended lovea when
+			 * it get reply then.
+			 */
+			if (buf->lb_len > 0)
+				mdt_fix_lov_magic(info, buf->lb_buf);
+		}
+
+		/*
+		 * Instantiate some layout components, if @buf contains
+		 * lovea, then it's a replay of the layout intent write
+		 * RPC.
+		 */
+		rc = mdt_layout_change(info, obj, layout, buf);
 		if (rc)
 			GOTO(out_obj, rc);
 	}

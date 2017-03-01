@@ -627,6 +627,9 @@ static void lod_free_comp_buffer(struct lod_layout_component *entries,
 		entry = &entries[i];
 		if (entry->llc_pool != NULL)
 			lod_set_pool(&entry->llc_pool, NULL);
+		if (entry->llc_ostlist.op_array)
+			OBD_FREE(entry->llc_ostlist.op_array,
+				 entry->llc_ostlist.op_size);
 		LASSERT(entry->llc_stripe == NULL);
 		LASSERT(entry->llc_stripes_allocated == 0);
 	}
@@ -741,6 +744,7 @@ static int lod_gen_component_ea(const struct lu_env *env,
 	struct lov_ost_data_v1	*objs;
 	struct lod_layout_component *lod_comp;
 	__u32	magic;
+	__u16 stripecnt;
 	int	i, rc = 0;
 	ENTRY;
 
@@ -764,8 +768,12 @@ static int lod_gen_component_ea(const struct lu_env *env,
 
 	lmm->lmm_stripe_size = cpu_to_le32(lod_comp->llc_stripe_size);
 	lmm->lmm_stripe_count = cpu_to_le16(lod_comp->llc_stripenr);
-	/* for dir, lmm_layout_gen stores default stripe offset. */
-	lmm->lmm_layout_gen = is_dir ?
+	/**
+	 * for dir and uninstantiated component, lmm_layout_gen stores
+	 * default stripe offset.
+	 */
+	lmm->lmm_layout_gen =
+		(is_dir || !lod_comp_inited(lod_comp)) ?
 			cpu_to_le16(lod_comp->llc_stripe_offset) :
 			cpu_to_le16(lod_comp->llc_layout_gen);
 
@@ -780,50 +788,60 @@ static int lod_gen_component_ea(const struct lu_env *env,
 			RETURN(-E2BIG);
 		objs = &v3->lmm_objects[0];
 	}
+	stripecnt = lod_comp_entry_stripecnt(lo, lod_comp, is_dir);
 
 	if (is_dir || lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)
 		GOTO(done, rc = 0);
 
+	/* generate ost_idx of this component stripe */
 	lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-	for (i = 0; i < lod_comp->llc_stripenr; i++) {
-		struct dt_object	*object;
-		__u32	ost_idx;
-		int	type = LU_SEQ_RANGE_OST;
+	for (i = 0; i < stripecnt; i++) {
+		struct dt_object *object;
+		__u32 ost_idx = (__u32)-1UL;
+		int type = LU_SEQ_RANGE_OST;
 
-		object = lod_comp->llc_stripe[i];
-		LASSERT(object != NULL);
-		info->lti_fid = *lu_object_fid(&object->do_lu);
+		if (lod_comp->llc_stripe && lod_comp->llc_stripe[i]) {
+			object = lod_comp->llc_stripe[i];
+			/* instantiated component */
+			info->lti_fid = *lu_object_fid(&object->do_lu);
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MULTIPLE_REF) &&
-		    comp_idx == 0) {
-			if (cfs_fail_val == 0)
-				cfs_fail_val = info->lti_fid.f_oid;
-			else if (i == 0)
-				info->lti_fid.f_oid = cfs_fail_val;
+			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MULTIPLE_REF) &&
+			    comp_idx == 0) {
+				if (cfs_fail_val == 0)
+					cfs_fail_val = info->lti_fid.f_oid;
+				else if (i == 0)
+					info->lti_fid.f_oid = cfs_fail_val;
+			}
+
+			rc = fid_to_ostid(&info->lti_fid, &info->lti_ostid);
+			LASSERT(rc == 0);
+
+			ostid_cpu_to_le(&info->lti_ostid, &objs[i].l_ost_oi);
+			objs[i].l_ost_gen = cpu_to_le32(0);
+			if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FLD_LOOKUP))
+				rc = -ENOENT;
+			else
+				rc = lod_fld_lookup(env, lod, &info->lti_fid,
+						    &ost_idx, &type);
+			if (rc < 0) {
+				CERROR("%s: Can not locate "DFID": rc = %d\n",
+				       lod2obd(lod)->obd_name,
+				       PFID(&info->lti_fid), rc);
+				RETURN(rc);
+			}
+		} else if (lod_comp->llc_ostlist.op_array) {
+			/* user specified ost list */
+			ost_idx = lod_comp->llc_ostlist.op_array[i];
 		}
-
-		rc = fid_to_ostid(&info->lti_fid, &info->lti_ostid);
-		LASSERT(rc == 0);
-
-		ostid_cpu_to_le(&info->lti_ostid, &objs[i].l_ost_oi);
-		objs[i].l_ost_gen = cpu_to_le32(0);
-		if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FLD_LOOKUP))
-			rc = -ENOENT;
-		else
-			rc = lod_fld_lookup(env, lod, &info->lti_fid,
-					    &ost_idx, &type);
-		if (rc < 0) {
-			CERROR("%s: Can not locate "DFID": rc = %d\n",
-			       lod2obd(lod)->obd_name, PFID(&info->lti_fid),
-			       rc);
-			RETURN(rc);
-		}
+		/*
+		 * with un-instantiated or with no specified ost list
+		 * component, its l_ost_idx does not matter.
+		 */
 		objs[i].l_ost_idx = cpu_to_le32(ost_idx);
 	}
 done:
 	if (lmm_size != NULL)
-		*lmm_size = lov_mds_md_size(is_dir ?
-				0 : lod_comp->llc_stripenr, magic);
+		*lmm_size = lov_mds_md_size(stripecnt, magic);
 	RETURN(rc);
 }
 
@@ -940,8 +958,8 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 				GOTO(out, rc = -ERANGE);
 		}
 		lcme->lcme_id = cpu_to_le32(lod_comp->llc_id);
-		/* component must has been inistantiated */
-		LASSERT(ergo(!is_dir, lod_comp->llc_flags & LCME_FL_INIT));
+
+		/* component could be un-inistantiated */
 		lcme->lcme_flags = cpu_to_le32(lod_comp->llc_flags);
 		lcme->lcme_extent.e_start =
 			cpu_to_le64(lod_comp->llc_extent.e_start);
@@ -980,7 +998,8 @@ out:
  * \param[in] lo		LOD object
  * \param[in] name		name of the EA
  *
- * \retval			0 if EA is fetched successfully
+ * \retval			> 0 if EA is fetched successfully
+ * \retval			0 if EA is empty
  * \retval			negative error number on failure
  */
 int lod_get_ea(const struct lu_env *env, struct lod_object *lo,
@@ -1175,7 +1194,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 	struct lov_comp_md_v1	*comp_v1 = NULL;
 	struct lov_ost_data_v1	*objs;
 	__u32	magic, pattern;
-	int	i, rc = 0;
+	int	i, j, rc = 0;
 	__u16	comp_cnt;
 	ENTRY;
 
@@ -1231,7 +1250,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 			if (lod_comp->llc_id == LCME_ID_INVAL)
 				GOTO(out, rc = -EINVAL);
 		} else {
-			lod_comp->llc_flags = LCME_FL_INIT;
+			lod_comp_set_init(lod_comp);
 		}
 
 		pattern = le32_to_cpu(lmm->lmm_pattern);
@@ -1250,6 +1269,34 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		} else {
 			objs = &lmm->lmm_objects[0];
 		}
+
+		/**
+		 * If uninstantiated template component has valid l_ost_idx,
+		 * then use has specified ost list for this component.
+		 */
+		if (!lod_comp_inited(lod_comp) &&
+		    objs[0].l_ost_idx != (__u32)-1UL) {
+			/**
+			 * load the user specified ost list, when this
+			 * component is instantiated later, it will be used
+			 * in lod_alloc_ost_list().
+			 */
+			lod_comp->llc_ostlist.op_count = lod_comp->llc_stripenr;
+			lod_comp->llc_ostlist.op_size =
+					lod_comp->llc_stripenr * sizeof(__u32);
+			OBD_ALLOC(lod_comp->llc_ostlist.op_array,
+				  lod_comp->llc_ostlist.op_size);
+			if (!lod_comp->llc_ostlist.op_array)
+				GOTO(out, rc = -ENOMEM);
+
+			for (j = 0; j < lod_comp->llc_stripenr; j++)
+				lod_comp->llc_ostlist.op_array[j] =
+						le32_to_cpu(objs[j].l_ost_idx);
+		}
+
+		/* skip un-instantiated component object initialization */
+		if (!lod_comp_inited(lod_comp))
+			continue;
 
 		if (!(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)) {
 			rc = lod_initialize_objects(env, lo, objs, i);
