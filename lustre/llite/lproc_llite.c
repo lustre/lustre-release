@@ -1373,19 +1373,19 @@ static void ll_display_extents_info(struct ll_rw_extents_info *io_extents,
 
 static int ll_rw_extents_stats_pp_seq_show(struct seq_file *seq, void *v)
 {
-        struct timeval now;
-        struct ll_sb_info *sbi = seq->private;
-        struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
+	struct timespec64 now;
+	struct ll_sb_info *sbi = seq->private;
+	struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
 	int k;
 
-	do_gettimeofday(&now);
+	ktime_get_real_ts64(&now);
 
 	if (!sbi->ll_rw_stats_on) {
 		seq_puts(seq, "disabled\n write anything to this file to activate, then '0' or 'disable' to deactivate\n");
 		return 0;
 	}
-        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
-                   now.tv_sec, now.tv_usec);
+	seq_printf(seq, "snapshot_time:         %llu.%09lu (secs.nsecs)\n",
+		   (s64)now.tv_sec, now.tv_nsec);
         seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
         seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n",
                    "extents", "calls", "%", "cum%",
@@ -1437,18 +1437,18 @@ LPROC_SEQ_FOPS(ll_rw_extents_stats_pp);
 
 static int ll_rw_extents_stats_seq_show(struct seq_file *seq, void *v)
 {
-	struct timeval now;
+	struct timespec64 now;
 	struct ll_sb_info *sbi = seq->private;
 	struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
 
-	do_gettimeofday(&now);
+	ktime_get_real_ts64(&now);
 
 	if (!sbi->ll_rw_stats_on) {
 		seq_puts(seq, "disabled\n write anything to this file to activate, then '0' or 'disable' to deactivate\n");
 		return 0;
 	}
-	seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
-		   now.tv_sec, now.tv_usec);
+	seq_printf(seq, "snapshot_time:         %llu.%09lu (secs.nsecs)\n",
+		   (s64)now.tv_sec, now.tv_nsec);
 
 	seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
 	seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n",
@@ -1598,13 +1598,13 @@ void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
 
 static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
 {
-        struct timeval now;
-        struct ll_sb_info *sbi = seq->private;
-        struct ll_rw_process_info *offset = sbi->ll_rw_offset_info;
-        struct ll_rw_process_info *process = sbi->ll_rw_process_info;
+	struct timespec64 now;
+	struct ll_sb_info *sbi = seq->private;
+	struct ll_rw_process_info *offset = sbi->ll_rw_offset_info;
+	struct ll_rw_process_info *process = sbi->ll_rw_process_info;
 	int i;
 
-	do_gettimeofday(&now);
+	ktime_get_real_ts64(&now);
 
 	if (!sbi->ll_rw_stats_on) {
 		seq_puts(seq, "disabled\n write anything to this file to activate, then '0' or 'disable' to deactivate\n");
@@ -1612,11 +1612,11 @@ static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
 	}
 	spin_lock(&sbi->ll_process_lock);
 
-        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
-                   now.tv_sec, now.tv_usec);
-        seq_printf(seq, "%3s %10s %14s %14s %17s %17s %14s\n",
-                   "R/W", "PID", "RANGE START", "RANGE END",
-                   "SMALLEST EXTENT", "LARGEST EXTENT", "OFFSET");
+	seq_printf(seq, "snapshot_time:         %llu.%09lu (secs.nsecs)\n",
+		   (s64)now.tv_sec, now.tv_nsec);
+	seq_printf(seq, "%3s %10s %14s %14s %17s %17s %14s\n",
+		   "R/W", "PID", "RANGE START", "RANGE END",
+		   "SMALLEST EXTENT", "LARGEST EXTENT", "OFFSET");
 
 	/* We stored the discontiguous offsets here; print them first */
 	for (i = 0; i < LL_OFFSET_HIST_MAX; i++) {
