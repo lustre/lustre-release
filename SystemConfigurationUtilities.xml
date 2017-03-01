@@ -602,13 +602,13 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
               </entry>
               <entry>
                 <para> Registers a new changelog user for a particular device.
-		Changelog entries are saved persistently on the MDT with each
-		filesystem operation, and are only purged beyond all registered
-		user&apos;s minimum set point (see
-		<literal>lfs changelog_clear</literal>). This may cause the
-		Changelog to consume a large amount of space, eventually
-		filling the MDT, if a changelog user is registered but never
-		consumes those records.</para>
+                Changelog entries are saved persistently on the MDT with each
+                filesystem operation, and are only purged beyond all registered
+                user&apos;s minimum set point (see
+                <literal>lfs changelog_clear</literal>). This may cause the
+                Changelog to consume a large amount of space, eventually
+                filling the MDT, if a changelog user is registered but never
+                consumes those records.</para>
               </entry>
             </row>
             <row>
@@ -617,9 +617,9 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
               </entry>
               <entry>
                 <para> Unregisters an existing changelog user. If the
-		user&apos;s &quot;clear&quot; record number is the minimum for
-		the device, changelog records are purged until the next minimum.
-		</para>
+                user&apos;s &quot;clear&quot; record number is the minimum for
+                the device, changelog records are purged until the next minimum.
+                </para>
               </entry>
             </row>
           </tbody>
@@ -1089,7 +1089,7 @@ llverdev</title>
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>>-f|--force</literal>></para>
+                <para> <literal>-f|--force</literal></para>
               </entry>
               <entry>
                 <para> Forces the test to run without a confirmation that the device will be overwritten and all data will be permanently destroyed.</para>
@@ -1105,7 +1105,7 @@ llverdev</title>
             </row>
             <row>
               <entry nameend="c2" namest="c1">
-                <para> <literal>-o <replaceable>>offset</replaceable></literal></para>
+                <para> <literal>-o <replaceable>offset</replaceable></literal></para>
               </entry>
               <entry>
                 <para> Offset (in kilobytes) of the start of the test (default value is 0).</para>
@@ -1809,7 +1809,7 @@ mount.lustre</title>
     <para>The mount.lustre utility starts a Lustre client or target service.</para>
     <section remap="h5">
       <title>Synopsis</title>
-      <screen>mount -t lustre [-o options] directory
+      <screen>mount -t lustre [-o options] device mountpoint
 </screen>
     </section>
     <section remap="h5">
@@ -1833,17 +1833,18 @@ mount.lustre</title>
           <tbody>
             <row>
               <entry>
-                <para> <literal><replaceable>mgs_nid</replaceable>:/<replaceable>fsname</replaceable><replaceable>[/subdir]</replaceable></literal></para>
-                <para>&#160;</para>
+                <para> <literal><replaceable>mgsname</replaceable>:/<replaceable>fsname</replaceable><replaceable>[/subdir]</replaceable></literal></para>
               </entry>
               <entry>
               <para> Mounts the Lustre file system named
-              <literal>fsname</literal> (optionally under subdirectory
-		      <literal>subdir</literal> if specified) on the client by
-              contacting the Management Service at <literal>mgsspec</literal> on
-              the pathname given by <literal>directory</literal>.  The format
-              for <literal>mgsspec</literal> is defined below. A mounted client
-              file system appears in fstab(5) and is usable, like any local file
+              <replaceable>fsname</replaceable> (optionally starting at
+              subdirectory <replaceable>subdir</replaceable> within the
+              filesystem, if specified) on the client at the directory
+              <replaceable>mountpoint</replaceable>, by contacting the Lustre
+              Management Service at <replaceable>mgsname</replaceable>.  The
+              format for <replaceable>mgsname</replaceable> is defined below. A
+              client file system can be listed in <literal>fstab(5)</literal>
+              for automatic mount at boot time, is usable like any local file
               system, and provides a full POSIX standard-compliant interface.
               </para>
               </entry>
@@ -1853,7 +1854,23 @@ mount.lustre</title>
                 <para> <replaceable>block_device</replaceable></para>
               </entry>
               <entry>
-                <para> Starts the target service defined by the mkfs.lustre command on the physical disk <replaceable>block_device</replaceable>. A mounted target service file system is only useful for df(1) operations and appears in fstab(5) to show the device is in use.</para>
+                <para> Starts the target service defined by the
+                <literal>mkfs.lustre(8)</literal> command on the physical disk
+                <replaceable>block_device</replaceable>.  The
+		<replaceable>block_device</replaceable> may be specified using
+		<literal>-L <replaceable>label</replaceable></literal> to find
+		the first block device with that label (e.g.
+		<literal>testfs-MDT0000</literal>), or by UUID using the
+		<literal>-U <replaceable>uuid</replaceable></literal> option.
+		Care should be taken if there is a device-level backup of the
+		target filesystem on the same node, which would have a
+		duplicate label and UUID if it has not been changed with
+		<literal>tune2fs(8)</literal> or similar.  The mounted target
+		service filesystem mounted at
+		<replaceable>mountpoint</replaceable> is only useful for
+		<literal>df(1)</literal> operations and appears in
+		<literal>/proc/mounts</literal> to show the device is in use.
+                </para>
               </entry>
             </row>
           </tbody>
@@ -1879,25 +1896,79 @@ mount.lustre</title>
           <tbody>
             <row>
               <entry>
-                <para> <literal>mgsspec:=<replaceable>mgsnode</replaceable>[:<replaceable>mgsnode</replaceable>]</literal></para>
-                <para>&#160;</para>
+                <para> <literal>mgsname=<replaceable>mgsnode</replaceable>[:<replaceable>mgsnode</replaceable>]</literal></para>
               </entry>
               <entry>
-                <para> The MGS specification may be a colon-separated list of nodes.</para>
+                <para><replaceable>mgsname</replaceable> is a colon-separated
+                list of <replaceable>mgsnode</replaceable> names where the MGS
+                service may run.  Multiple <replaceable>mgsnode</replaceable>
+                values can be specified if the MGS service is configured for
+                HA failover and may be running on any one of the nodes.
+                </para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>mgsnode:=<replaceable>mgsnid</replaceable>[,<replaceable>mgsnid</replaceable>]</literal></para>
+                <para> <literal>mgsnode=<replaceable>mgsnid</replaceable>[,<replaceable>mgsnid</replaceable>]</literal></para>
               </entry>
               <entry>
-                <para> Each node may be specified by a comma-separated list of NIDs.</para>
+                <para> Each <replaceable>mgsnode</replaceable> may specify a
+                comma-separated list of NIDs, if there are different LNet
+                interfaces for that <literal>mgsnode</literal>.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>mgssec=<replaceable>flavor</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para>Specifies the encryption flavor for the initial network
+                RPC connection to the MGS.  Non-security flavors are:
+                <literal>null</literal>, <literal>plain</literal>, and
+                <literal>gssnull</literal>, which respectively disable, or
+                have no encryption or integrity features for testing purposes.
+                Kerberos flavors are: <literal>krb5n</literal>,
+                <literal>krb5a</literal>, <literal>krb5i</literal>, and
+                <literal>krb5p</literal>.  Shared-secret key flavors are:
+                <literal>skn</literal>, <literal>ska</literal>,
+                <literal>ski</literal>, and <literal>skpi</literal>, see the
+                <xref linkend="lustressk"/> for more details.  The security
+                flavor for client-to-server connections is specified in the
+                filesystem configuration that the client fetches from the MGS.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>skpath=<replaceable>file|directory</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para condition='l29'>
+		Path to a file or directory with the keyfile(s) to load for
+		this mount command.  Keys are inserted into the
+		<literal>KEY_SPEC_SESSION_KEYRING</literal> keyring in the
+		kernel with a description containing
+		<literal>lustre:</literal> and a suffix which depends on
+		whether the context of the mount command is for an MGS,
+		MDT/OST, or client.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>exclude=<replaceable>ostlist</replaceable></literal></para>
+              </entry>
+              <entry>
+                <para>Starts a client or MDT with a colon-separated list of
+                known inactive OSTs that it will not try to connect to.</para>
               </entry>
             </row>
           </tbody>
         </tgroup>
       </informaltable>
-      <para>In addition to the standard mount options, Lustre understands the following client-specific options:</para>
+      <para>In addition to the standard mount(8) options, Lustre understands
+      the following client-specific options:</para>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="50*"/>
@@ -1915,10 +1986,31 @@ mount.lustre</title>
           <tbody>
             <row>
               <entry>
+                <para><literal>always_ping</literal></para>
+              </entry>
+              <entry>
+                <para condition='l29'>The client will periodically ping the server when it is
+                idle, even if the server <literal>ptlrpc</literal> module
+                is configured with the <literal>suppress_pings</literal>
+                option.  This allows clients to reliably use the filesystem
+                even if they are not part of an external client health
+                monitoring mechanism.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
                 <para> <literal>flock</literal></para>
               </entry>
               <entry>
-                <para> Enables full flock support, coherent across all client nodes.</para>
+                <para>Enables advisory file locking support between
+		participating applications using the <literal>flock(2)</literal>
+                system call.  This causes file locking to be coherent across all
+		client nodes also using this mount option.  This is useful if
+		applications need coherent userspace file locking across
+		multiple client nodes, but also imposes communications overhead
+		in order to maintain locking consistency between client nodes.
+                </para>
               </entry>
             </row>
             <row>
@@ -1926,7 +2018,13 @@ mount.lustre</title>
                 <para> <literal>localflock</literal></para>
               </entry>
               <entry>
-                <para> Enables local flock support, using only client-local flock (faster, for applications that require flock, but do not run on multiple nodes).</para>
+                <para>Enables client-local <literal>flock(2)</literal> support,
+		using only client-local advisory file locking.  This is faster
+		than using the global <literal>flock</literal> option, and can
+		be used for applications that depend on functioning
+		<literal>flock(2)</literal> but run only on a single node.
+		It has minimal overhead using only the Linux kernel's locks.
+                </para>
               </entry>
             </row>
             <row>
@@ -1934,7 +2032,40 @@ mount.lustre</title>
                 <para> <literal>noflock</literal></para>
               </entry>
               <entry>
-                <para> Disables flock support entirely. Applications calling flock get an error. It is up to the administrator to choose either <literal>localflock</literal> (fastest, low impact, not coherent between nodes) or <literal>flock</literal> (slower, performance impact for use, coherent between nodes).</para>
+                <para>Disables <literal>flock(2)</literal> support entirely,
+                and is the default option. Applications calling
+                <literal>flock(2)</literal> get an
+                <literal>ENOSYS</literal> error. It is up to the administrator
+                to choose either the <literal>localflock</literal> or
+                <literal>flock</literal> mount option based on their
+                requirements.  It is possible to mount clients with different
+                options, and only those mounted with <literal>flock</literal>
+                will be coherent amongst each other.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>lazystatfs</literal></para>
+              </entry>
+              <entry>
+                <para>Allows <literal>statfs(2)</literal> (as used by
+                <literal>df(1)</literal> and <literal>lfs-df(1)</literal>) to
+                return even if some OST or MDT is unresponsive or has been
+                temporarily or permanently disabled in the configuration.
+                This avoids blocking until all of the targets are available.
+                This is the default behavior since Lustre 2.9.0.
+                </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>nolazystatfs</literal></para>
+              </entry>
+              <entry>
+                <para>Requires that <literal>statfs(2)</literal> block until all
+                OSTs and MDTs are available and have returned space usage.
+                </para>
               </entry>
             </row>
             <row>
@@ -1942,7 +2073,10 @@ mount.lustre</title>
                 <para> <literal>user_xattr</literal></para>
               </entry>
               <entry>
-                <para> Enables get/set of extended attributes by regular users. See the attr(5) manual page.</para>
+                <para>Enables get/set of extended attributes by regular users
+                in the <literal>user.*</literal> namespace. See the
+                <literal>attr(5)</literal> manual page for more details.
+                </para>
               </entry>
             </row>
             <row>
@@ -1950,23 +2084,9 @@ mount.lustre</title>
                 <para> <literal>nouser_xattr</literal></para>
               </entry>
               <entry>
-                <para> Disables use of extended attributes by regular users. Root and system processes can still use extended attributes.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>acl</literal></para>
-              </entry>
-              <entry>
-                <para> Enables POSIX Access Control List support. See the acl(5) manual page.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>noacl</literal></para>
-              </entry>
-              <entry>
-                <para> Disables Access Control List support.</para>
+                <para>Disables use of extended attributes in the
+                <literal>user.*</literal> namespace by regular users. Root
+                and system processes can still use extended attributes.</para>
               </entry>
             </row>
             <row>
@@ -1974,7 +2094,7 @@ mount.lustre</title>
                 <para> <literal>verbose</literal></para>
               </entry>
               <entry>
-                <para> Enable mount/umount console messages.</para>
+                <para> Enable extra mount/umount console messages.</para>
               </entry>
             </row>
             <row>
@@ -1990,7 +2110,15 @@ mount.lustre</title>
                 <para> <literal>user_fid2path</literal></para>
               </entry>
               <entry>
-                <para condition='l23'>Enable FID to path translation by regular users. Note: This option allows a potential security hole because it allows regular users direct access to a file by its FID, bypassing POSIX path-based permission checks which could otherwise prevent the user from accessing a file in a directory that they do not have access to. Regular permission checks are still performed on the file itself, so the user cannot access a file to which they have no access rights.</para>
+                <para condition='l23'>Enable FID to path translation by regular
+                users. Note: This option allows a potential security hole
+                because it allows regular users direct access to a file by its
+                File ID, bypassing POSIX path-based permission checks which
+                could otherwise prevent the user from accessing a file in a
+                directory that they do not have access to. Regular permission
+                checks are still performed on the file itself, so the user
+                cannot access a file to which they have no access rights.
+                </para>
               </entry>
             </row>
             <row>
@@ -1998,13 +2126,19 @@ mount.lustre</title>
                 <para> <literal>nouser_fid2path</literal></para>
               </entry>
               <entry>
-                <para condition='l23'> Disable FID to path translation by regular users. Root and processes with CAP_DAC_READ_SEARCH can still perform FID to path translation.</para>
+                <para condition='l23'> Disable FID to path translation by
+                regular users. Root and processes with
+                <literal>CAP_DAC_READ_SEARCH</literal> can still perform FID
+                to path translation.
+                </para>
               </entry>
             </row>
           </tbody>
         </tgroup>
       </informaltable>
-      <para>In addition to the standard mount options and backing disk type (e.g. ext3) options, Lustre understands the following server-specific options:</para>
+      <para>In addition to the standard mount options and backing disk type
+      (e.g. ldiskfs) options, Lustre understands the following server-specific
+      mount options:</para>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="50*"/>
@@ -2038,18 +2172,27 @@ mount.lustre</title>
             </row>
             <row>
               <entry>
-                <para> <literal>exclude=<replaceable>ostlist</replaceable></literal></para>
+                <para> <literal>abort_recov</literal></para>
               </entry>
               <entry>
-                <para>  Starts a client or MDT with a colon-separated list of known inactive OSTs.</para>
+                <para>  Aborts client recovery on that server and starts the target service immediately.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal>abort_recov</literal></para>
+                <para> <literal>max_sectors_kb=<replaceable>KB</replaceable></literal></para>
               </entry>
               <entry>
-                <para>  Aborts client recovery and starts the target service immediately.</para>
+                <para condition='l210'>Sets the block device parameter
+                <literal>max_sectors_kb</literal> limit for the MDT or OST
+                target being mounted to specified maximum number of kilobytes.
+                When <literal>max_sectors_kb</literal> isn't specified as a
+                mount option, it will automatically be set to the
+                <literal>max_hw_sectors_kb</literal> (up to a maximum of 16MiB)
+                for that block device. This default behavior is suited for
+                most users. When <literal>max_sectors_kb=0</literal> is used,
+                the current value for this tunable will be kept.
+                </para>
               </entry>
             </row>
             <row>
@@ -2065,8 +2208,19 @@ mount.lustre</title>
                 <para> <literal>recovery_time_soft=<replaceable>timeout</replaceable></literal></para>
               </entry>
               <entry>
-                <para>  Allows <literal>timeout</literal> seconds for clients to reconnect for recovery after a server crash. This timeout is incrementally extended if it is about to expire and the server is still handling new connections from recoverable clients.</para>
-		<para>  The default soft recovery timeout is 3 times the value of the Lustre timeout parameter (see <xref linkend="section_c24_nt5_dl"/>). The default Lustre timeout is 100 seconds, which would make the soft recovery timeout default to 300 seconds (5 minutes). The soft recovery timeout is set at mount time and will not change if the Lustre timeout is changed after mount time.</para>
+                <para>Allows <literal>timeout</literal> seconds for clients to
+                reconnect for recovery after a server crash. This timeout is
+                incrementally extended if it is about to expire and the server
+                is still handling new connections from recoverable clients.
+                </para>
+                <para>The default soft recovery timeout is 3 times the value
+                of the Lustre timeout parameter (see
+                <xref linkend="section_c24_nt5_dl"/>). The default Lustre
+                timeout is 100 seconds, which would make the soft recovery
+                timeout default to 300 seconds (5 minutes). The soft recovery
+                timeout is set at mount time and will not change if the Lustre
+                timeout is changed after mount time.
+                </para>
               </entry>
             </row>
             <row>
@@ -2074,8 +2228,18 @@ mount.lustre</title>
                 <para> <literal>recovery_time_hard=<replaceable>timeout</replaceable></literal></para>
               </entry>
               <entry>
-                <para>  The server is allowed to incrementally extend its timeout up to a hard maximum of <literal>timeout</literal> seconds.</para>
-		<para>  The default hard recovery timeout is 9 times the value of the Lustre timeout parameter (see <xref linkend="section_c24_nt5_dl"/>). The default Lustre timeout is 100 seconds, which would make the hard recovery timeout default to 900 seconds (15 minutes). The hard recovery timeout is set at mount time and will not change if the Lustre timeout is changed after mount time.</para>
+                <para>The server is allowed to incrementally extend its timeout
+                up to a hard maximum of <replaceable>timeout</replaceable>
+                seconds.
+                </para>
+                <para>The default hard recovery timeout is 9 times the value
+                of the Lustre timeout parameter (see
+                <xref linkend="section_c24_nt5_dl"/>). The default Lustre
+                timeout is 100 seconds, which would make the hard recovery
+                timeout default to 900 seconds (15 minutes). The hard recovery
+                timeout is set at mount time and will not change if the Lustre
+                timeout is changed after mount time.
+                </para>
               </entry>
             </row>
             <row>
@@ -2083,7 +2247,15 @@ mount.lustre</title>
                 <para> <literal>noscrub</literal></para>
               </entry>
               <entry>
-		      <para>Typically the MDT will detect restoration from a file-level backup during mount. This mount option prevents the OI Scrub from starting automatically when the MDT is mounted. Manually starting LFSCK after mounting provides finer control over the starting conditions. This mount option also prevents OI scrub from occurring automatically when OI inconsistency is detected (see <xref linkend="dbdoclet.lfsck_auto_scrub"/>)</para>
+                <para>Typically the MDT will detect restoration from a
+                file-level backup during mount. This mount option prevents
+                the OI Scrub from starting automatically when the MDT is
+                mounted. Manually starting LFSCK after mounting provides finer
+                control over the starting conditions. This mount option also
+                prevents OI scrub from occurring automatically when OI
+                inconsistency is detected (see
+                <xref linkend="dbdoclet.lfsck_auto_scrub"/>).
+                </para>
               </entry>
             </row>
           </tbody>
@@ -2672,53 +2844,6 @@ lr_reader</title>
       <section remap="h5">
         <title><indexterm><primary>stats-collect</primary></indexterm>stats-collect</title>
         <para>The stats-collect utility contains scripts used to collect application profiling information from Lustre clients and servers.</para>
-      </section>
-    </section>
-    <section remap="h3">
-      <title><indexterm><primary>flock</primary></indexterm>Flock Feature</title>
-      <para>Lustre now includes the flock feature, which provides file locking support. Flock describes classes of file locks known as &apos;flocks&apos;. Flock can apply or remove a lock on an open file as specified by the user. However, a single file may not, simultaneously, have both shared and exclusive locks.</para>
-      <para>By default, the flock utility is disabled on Lustre. Two modes are available.</para>
-      <informaltable frame="none">
-        <tgroup cols="2">
-          <colspec colname="c1" colwidth="50*"/>
-          <colspec colname="c2" colwidth="50*"/>
-          <tbody>
-            <row>
-              <entry>
-                <para> <literal>local mode</literal></para>
-              </entry>
-              <entry>
-                <para>  In this mode, locks are coherent on one node (a single-node flock), but not across all clients. To enable it, use -o localflock. This is a client-mount option.</para>
-                <note>
-                  <para>This mode does not impact performance and is appropriate for single-node databases.</para>
-                </note>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal>consistent mode</literal></para>
-              </entry>
-              <entry>
-                <para> In this mode, locks are coherent across all clients.</para>
-                <para> To enable it, use the -o flock. This is a client-mount option.</para>
-                <warning><para>This mode affects the performance of the file being flocked and may affect stability, depending on the Lustre version used. Consider using a newer Lustre version which is more stable. If the consistent mode is enabled and no applications are using flock, then it has no effect.</para></warning>
-              </entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-      <para>A call to use flock may be blocked if another process is holding an
-          incompatible lock. Locks created using flock are applicable for an
-          open file table entry. Therefore, a single process may hold only one
-          type of lock (shared or exclusive) on a single file. Subsequent flock
-          calls on a file that is already locked converts the existing lock to
-          the new lock mode.</para>
-      <section remap="h4">
-        <title>Example</title>
-        <screen>$ mount -t lustre -o flock mgs@tcp0:/lustre /mnt/client</screen>
-        <para>You can check it in /etc/mtab. It should look like,</para>
-        <screen>mgs@tcp0:/lustre /mnt/client lustre rw,flock         0       0
-        </screen>
       </section>
     </section>
     <section remap="h3" condition='l29'>
