@@ -2826,8 +2826,10 @@ hostlist_expand() {
     myList="${list%% *}"
 
     while [[ "$list" != ${myList##* } ]]; do
-        list=${list//${list%% *} /}
-        myList="$myList ${list%% *}"
+	local tlist=" $list"
+	list=${tlist// ${list%% *} / }
+	list=${list:1}
+	myList="$myList ${list%% *}"
     done
     myList="${myList%* }";
 
