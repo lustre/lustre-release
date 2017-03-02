@@ -12,7 +12,7 @@
     </listitem>
     <listitem>
       <para>
-          <xref linkend="dbdoclet.50438256_31079"/>
+          <xref linkend="dbdoclet.space_requirements"/>
       </para>
     </listitem>
     <listitem>
@@ -142,7 +142,7 @@
       results.)</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438256_31079">
+  <section xml:id="dbdoclet.space_requirements">
       <title><indexterm><primary>setup</primary><secondary>space</secondary></indexterm>
           <indexterm><primary>space</primary><secondary>determining requirements</secondary></indexterm>
           Determining Space Requirements</title>
@@ -170,20 +170,24 @@
     for growth without the effort of additional storage.</para>
     <para>By default, the ldiskfs file system used by Lustre servers to store
     user-data objects and system data reserves 5% of space that cannot be used
-    by the Lustre file system.  Additionally, a Lustre file system reserves up
-    to 400 MB on each OST, and up to 4GB on each MDT for journal use and a
-    small amount of space outside the journal to store accounting data. This
-    reserved space is unusable for general storage. Thus, at least this much
-    space will be used on each OST before any file object data is saved.</para>
+    by the Lustre file system.  Additionally, an ldiskfs Lustre file system
+    reserves up to 400 MB on each OST, and up to 4GB on each MDT for journal
+    use and a small amount of space outside the journal to store accounting
+    data. This reserved space is unusable for general storage. Thus, at least
+    this much space will be used per OST before any file object data is saved.
+    </para>
     <para condition="l24">With a ZFS backing filesystem for the MDT or OST,
     the space allocation for inodes and file data is dynamic, and inodes are
-    allocated as needed.  A minimum of 2kB of usable space (before mirroring)
+    allocated as needed.  A minimum of 4kB of usable space (before mirroring)
     is needed for each inode, exclusive of other overhead such as directories,
-    internal log files, extended attributes, ACLs, etc.
+    internal log files, extended attributes, ACLs, etc.  ZFS also reserves
+    approximately 3% of the total storage space for internal and redundant
+    metadata, which is not usable by Lustre.
     Since the size of extended attributes and ACLs is highly dependent on
     kernel versions and site-specific policies, it is best to over-estimate
     the amount of space needed for the desired number of inodes, and any
-    excess space will be utilized to store more inodes.</para>
+    excess space will be utilized to store more inodes.
+    </para>
     <section>
       <title><indexterm>
           <primary>setup</primary>
@@ -193,9 +197,9 @@
           <primary>space</primary>
           <secondary>determining MGT requirements</secondary>
         </indexterm> Determining MGT Space Requirements</title>
-      <para>Less than 100 MB of space is required for the MGT. The size
-      is determined by the number of servers in the Lustre file system
-      cluster(s) that are managed by the MGS.</para>
+      <para>Less than 100 MB of space is typically required for the MGT.
+      The size is determined by the total number of servers in the Lustre
+      file system cluster(s) that are managed by the MGS.</para>
     </section>
     <section xml:id="dbdoclet.50438256_87676">
         <title><indexterm>
@@ -207,36 +211,35 @@
           <secondary>determining MDT requirements</secondary>
         </indexterm> Determining MDT Space Requirements</title>
       <para>When calculating the MDT size, the important factor to consider
-      is the number of files to be stored in the file system. This determines
-      the number of inodes needed, which drives the MDT sizing. To be on the
-      safe side, plan for 2 KB per ldiskfs inode on the MDT, which is the
-      default value. Attached storage required for Lustre file system metadata
-      is typically 1-2 percent of the file system capacity depending upon
-      file size.</para>
-      <note condition='l24'><para>Starting in release 2.4, using the DNE
-      remote directory feature it is possible to increase the metadata
-      capacity of a single filesystem by configuring additional MDTs into
-      the filesystem, see <xref linkend="dbdoclet.addingamdt"/> for details.
-      </para></note>
-      <para>For example, if the average file size is 5 MB and you have
-      100 TB of usable OST space, then you can calculate the minimum number
-      of inodes as follows:</para>
+      is the number of files to be stored in the file system, which depends on
+      at least 4 KiB per inode of usable space on the MDT.  Since MDTs typically
+      use RAID-1+0 mirroring, the total storage needed will be double this.
+      </para>
+      <para>Please note that the actual used space per MDT depends on the number
+      of files per directory, the number of stripes per file, whether files
+      have ACLs or user xattrs, and the number of hard links per file.  The
+      storage required for Lustre file system metadata is typically 1-2
+      percent of the total file system capacity depending upon file size.</para>
+      <para>For example, if the average file size is 5 MiB and you have
+      100 TiB of usable OST space, then you can calculate the minimum total
+      number of inodes each for MDTs and OSTs as follows:</para>
       <informalexample>
-        <para>(100 TB * 1024 GB/TB * 1024 MB/GB) / 5 MB/inode = 20 million inodes</para>
+        <para>(500 TB * 1000000 MB/TB) / 5 MB/inode = 100M inodes</para>
       </informalexample>
-      <para>For details about formatting options for MDT and OST file systems,
-      see <xref linkend="dbdoclet.ldiskfs_mdt_mkfs"/>.</para>
+      <para>For details about formatting options for ldiskfs MDT and OST file
+      systems, see <xref linkend="dbdoclet.ldiskfs_mdt_mkfs"/>.</para>
       <para>It is recommended that the MDT have at least twice the minimum
       number of inodes to allow for future expansion and allow for an average
-      file size smaller than expected. Thus, the required space is:</para>
+      file size smaller than expected. Thus, the minimum space for an ldiskfs
+      MDT should be approximately:
+      </para>
       <informalexample>
-        <para>2 KB/inode x 20 million inodes x 2 = 80 GB</para>
+        <para>2 KiB/inode x 100 million inodes x 2 = 400 GiB ldiskfs MDT</para>
       </informalexample>
       <note>
         <para>If the average file size is very small, 4 KB for example, the
-        Lustre file system is not very efficient as the MDT will use as much
-        space for each file as the space used on the OST. However, this is not
-        a common configuration for a Lustre environment.</para>
+        MDT will use as much space for each file as the space used on the OST.
+	However, this is an uncommon usage for a Lustre filesystem.</para>
       </note>
       <note>
         <para>If the MDT has too few inodes, this can cause the space on the
@@ -246,14 +249,30 @@
         number of inodes after the file system is formatted, depending on the
         storage.  For ldiskfs MDT filesystems the <literal>resize2fs</literal>
         tool can be used if the underlying block device is on a LVM logical
-        volume.  For ZFS new (mirrored) VDEVs can be added to the MDT pool.
-        Inodes will be added approximately in proportion to space added.</para>
+        volume and the underlying logical volume size can be increased.
+	For ZFS new (mirrored) VDEVs can be added to the MDT pool to increase
+	the total space available for inode storage.
+        Inodes will be added approximately in proportion to space added.
+	</para>
       </note>
-      <note condition='l24'><para>It is also possible to increase the number
-        of inodes available, as well as increasing the aggregate metadata
-        performance, by adding additional MDTs using the DNE remote directory
-        feature available in Lustre release 2.4 and later, see
-        <xref linkend="dbdoclet.addingamdt"/>.</para>
+      <note condition='l24'>
+        <para>Note that the number of total and free inodes reported by
+        <literal>lfs df -i</literal> for ZFS MDTs and OSTs is estimated based
+        on the current average space used per inode.  When a ZFS filesystem is
+        first formatted, this free inode estimate will be very conservative
+        (low) due to the high ratio of directories to regular files created for
+	internal Lustre metadata storage, but this estimate will improve as
+	more files are created by regular users and the average file size will
+	better reflect actual site usage.
+	</para>
+      </note>
+      <note condition='l24'>
+        <para>Starting in release 2.4, using the DNE remote directory feature
+	it is possible to increase the total number of inodes of a Lustre
+	filesystem, as well as increasing the aggregate metadata performance,
+	by configuring additional MDTs into the filesystem, see
+        <xref linkend="dbdoclet.addingamdt"/> for details.
+        </para>
       </note>
     </section>
     <section remap="h3">
