@@ -555,6 +555,23 @@ stacktrace_ops, [
 ]) # LIBCFS_STACKTRACE_OPS
 
 #
+# Kernel version 4.9 commit 768ae309a96103ed02eb1e111e838c87854d8b51
+# mm: replace get_user_pages() write/force parameters with gup_flags
+#
+AC_DEFUN([LIBCFS_GET_USER_PAGES_GUP_FLAGS], [
+LB_CHECK_COMPILE([if 'get_user_pages()' takes gup_flags in arguments],
+get_user_pages_gup_flags, [
+	#include <linux/mm.h>
+],[
+	int rc;
+	rc = get_user_pages(0, 0, FOLL_WRITE, NULL, NULL);
+],[
+	AC_DEFINE(HAVE_GET_USER_PAGES_GUP_FLAGS, 1,
+		[get_user_pages takes gup_flags in arguments])
+])
+]) # LIBCFS_GET_USER_PAGES_GUP_FLAGS
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -612,6 +629,8 @@ LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
 LIBCFS_GET_USER_PAGES_6ARG
 # 4.8
 LIBCFS_STACKTRACE_OPS
+# 4.9
+LIBCFS_GET_USER_PAGES_GUP_FLAGS
 ]) # LIBCFS_PROG_LINUX
 
 #

@@ -149,7 +149,9 @@ static int cfs_access_process_vm(struct task_struct *tsk,
 		int bytes, rc, offset;
 		void *maddr;
 
-#ifdef HAVE_GET_USER_PAGES_6ARG
+#if defined(HAVE_GET_USER_PAGES_GUP_FLAGS)
+		rc = get_user_pages(addr, 1, write ? FOLL_WRITE : 0, &page, &vma);
+#elif defined(HAVE_GET_USER_PAGES_6ARG)
 		rc = get_user_pages(addr, 1, write, 1, &page, &vma);
 #else
 		rc = get_user_pages(tsk, mm, addr, 1, write, 1, &page, &vma);
