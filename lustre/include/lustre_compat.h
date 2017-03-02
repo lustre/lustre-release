@@ -428,4 +428,10 @@ static inline void truncate_inode_pages_final(struct address_space *map)
 # define ll_task_pid_ns(task)	((task)->nsproxy->pid_ns)
 #endif
 
+#ifdef HAVE_FULL_NAME_HASH_3ARGS
+# define ll_full_name_hash(salt, name, len) full_name_hash(salt, name, len)
+#else
+# define ll_full_name_hash(salt, name, len) full_name_hash(name, len)
+#endif
+
 #endif /* _LUSTRE_COMPAT_H */

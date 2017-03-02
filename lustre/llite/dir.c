@@ -448,7 +448,8 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 		.d_name = {
 			.name = dirname,
 			.len = strlen(dirname),
-			.hash = full_name_hash(dirname, strlen(dirname)),
+			.hash = ll_full_name_hash(dparent, dirname,
+						  strlen(dirname)),
 		},
 	};
 	int err;

@@ -504,7 +504,8 @@ int lfsck_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 		return rc;
 
 	llh->llh_reg_mode = mode;
-	resid->name[LUSTRE_RES_ID_HSH_OFF] = full_name_hash(name, strlen(name));
+	resid->name[LUSTRE_RES_ID_HSH_OFF] = ll_full_name_hash(NULL, name,
+							       strlen(name));
 	LASSERT(resid->name[LUSTRE_RES_ID_HSH_OFF] != 0);
 	rc = __lfsck_ibits_lock(env, lfsck, obj, resid, &llh->llh_reg_lh,
 				bits, llh->llh_reg_mode);

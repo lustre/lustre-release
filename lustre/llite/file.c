@@ -3275,7 +3275,7 @@ int ll_migrate(struct inode *parent, struct file *file, int mdtidx,
 		RETURN(PTR_ERR(op_data));
 
 	/* Get child FID first */
-	qstr.hash = full_name_hash(name, namelen);
+	qstr.hash = ll_full_name_hash(file_dentry(file), name, namelen);
 	qstr.name = name;
 	qstr.len = namelen;
 	dchild = d_lookup(file_dentry(file), &qstr);

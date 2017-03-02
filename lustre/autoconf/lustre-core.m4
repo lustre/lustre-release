@@ -2388,6 +2388,25 @@ d_compare_4args, [
 ]) # LC_D_COMPARE_4ARGS
 
 #
+# LC_FULL_NAME_HASH_3ARGS
+#
+# Kernel version 4.8 commit 8387ff2577eb9ed245df9a39947f66976c6bcd02
+# vfs: make the string hashes salt the hash
+#
+AC_DEFUN([LC_FULL_NAME_HASH_3ARGS], [
+LB_CHECK_COMPILE([if 'full_name_hash' taken 3 arguments],
+full_name_hash_3args, [
+	#include <linux/stringhash.h>
+],[
+	unsigned int hash;
+	hash = full_name_hash(NULL,NULL,0);
+],[
+	AC_DEFINE(HAVE_FULL_NAME_HASH_3ARGS, 1,
+		[full_name_hash need 3 arguments])
+])
+]) # LC_FULL_NAME_HASH_3ARGS
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2584,6 +2603,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 4.8
 	LC_HAVE_POSIX_ACL_VALID_USER_NS
 	LC_D_COMPARE_4ARGS
+	LC_FULL_NAME_HASH_3ARGS
 
 	#
 	AS_IF([test "x$enable_server" != xno], [

@@ -175,8 +175,8 @@ void mdt_lock_pdo_init(struct mdt_lock_handle *lh, enum ldlm_mode lock_mode,
 	lh->mlh_type = MDT_PDO_LOCK;
 
 	if (lu_name_is_valid(lname)) {
-		lh->mlh_pdo_hash = full_name_hash(lname->ln_name,
-						  lname->ln_namelen);
+		lh->mlh_pdo_hash = ll_full_name_hash(NULL, lname->ln_name,
+						     lname->ln_namelen);
 		/* XXX Workaround for LU-2856
 		 *
 		 * Zero is a valid return value of full_name_hash, but

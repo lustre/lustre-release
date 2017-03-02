@@ -179,8 +179,8 @@ static inline int is_omitted_entry(struct ll_statahead_info *sai, __u64 index)
 
 /* allocate sa_entry and hash it to allow scanner process to find it */
 static struct sa_entry *
-sa_alloc(struct ll_statahead_info *sai, __u64 index, const char *name, int len,
-	 const struct lu_fid *fid)
+sa_alloc(struct dentry *parent, struct ll_statahead_info *sai, __u64 index,
+	 const char *name, int len, const struct lu_fid *fid)
 {
 	struct ll_inode_info *lli;
 	struct sa_entry *entry;
@@ -203,7 +203,7 @@ sa_alloc(struct ll_statahead_info *sai, __u64 index, const char *name, int len,
 	dname = (char *)entry + sizeof(struct sa_entry);
 	memcpy(dname, name, len);
 	dname[len] = 0;
-	entry->se_qstr.hash = full_name_hash(name, len);
+	entry->se_qstr.hash = ll_full_name_hash(parent, name, len);
 	entry->se_qstr.len = len;
 	entry->se_qstr.name = dname;
 	entry->se_fid = *fid;
@@ -846,7 +846,7 @@ static void sa_statahead(struct dentry *parent, const char *name, int len,
 	int rc;
 	ENTRY;
 
-	entry = sa_alloc(sai, sai->sai_index, name, len, fid);
+	entry = sa_alloc(parent, sai, sai->sai_index, name, len, fid);
 	if (IS_ERR(entry))
 		RETURN_EXIT;
 
