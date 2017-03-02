@@ -382,7 +382,7 @@ static lnet_nid_t *allocate_create_nid_array(char **nids, __u32 num_nids,
 	lnet_nid_t *array = NULL;
 	__u32 i;
 
-	if (!nids) {
+	if (!nids || num_nids == 0) {
 		snprintf(err_str, LNET_MAX_STR_LEN, "no NIDs to add");
 		return NULL;
 	}
@@ -2764,16 +2764,38 @@ static int handle_yaml_del_ni(struct cYAML *tree, struct cYAML **show_rc,
 	return rc;
 }
 
-static int yaml_copy_peer_nids(struct cYAML *tree, char ***nidsppp)
+static int yaml_copy_peer_nids(struct cYAML *tree, char ***nidsppp, bool del)
 {
-	struct cYAML *nids_entry = NULL, *child = NULL, *entry = NULL;
+	struct cYAML *nids_entry = NULL, *child = NULL, *entry = NULL,
+		     *prim_nid = NULL;
 	char **nids = NULL;
 	int num = 0, rc = LUSTRE_CFG_RC_NO_ERR;
 
+	prim_nid = cYAML_get_object_item(tree, "primary nid");
+	if (!prim_nid || !prim_nid->cy_valuestring)
+		return LUSTRE_CFG_RC_MISSING_PARAM;
+
 	nids_entry = cYAML_get_object_item(tree, "peer ni");
 	if (cYAML_is_sequence(nids_entry)) {
-		while (cYAML_get_next_seq_item(nids_entry, &child))
+		while (cYAML_get_next_seq_item(nids_entry, &child)) {
+			entry = cYAML_get_object_item(child, "nid");
+			/* don't count an empty entry */
+			if (!entry || !entry->cy_valuestring)
+				continue;
+
+			if ((strcmp(entry->cy_valuestring, prim_nid->cy_valuestring)
+					== 0) && del) {
+				/*
+				 * primary nid is present in the list of
+				 * nids so that means we want to delete
+				 * the entire peer, so no need to go
+				 * further. Just delete the entire peer.
+				 */
+				return 0;
+			}
+
 			num++;
+		}
 	}
 
 	if (num == 0)
@@ -2788,8 +2810,9 @@ static int yaml_copy_peer_nids(struct cYAML *tree, char ***nidsppp)
 	child = NULL;
 	while (cYAML_get_next_seq_item(nids_entry, &child)) {
 		entry = cYAML_get_object_item(child, "nid");
-		if (!entry)
+		if (!entry || !entry->cy_valuestring)
 			continue;
+
 		nids[num] = calloc(strlen(entry->cy_valuestring) + 1, 1);
 		if (!nids[num]) {
 			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
@@ -2818,7 +2841,7 @@ static int handle_yaml_config_peer(struct cYAML *tree, struct cYAML **show_rc,
 	int num, rc;
 	struct cYAML *seq_no, *prim_nid, *non_mr;
 
-	num = yaml_copy_peer_nids(tree, &nids);
+	num = yaml_copy_peer_nids(tree, &nids, false);
 	if (num < 0)
 		return num;
 
@@ -2843,7 +2866,7 @@ static int handle_yaml_del_peer(struct cYAML *tree, struct cYAML **show_rc,
 	int num, rc;
 	struct cYAML *seq_no, *prim_nid;
 
-	num = yaml_copy_peer_nids(tree, &nids);
+	num = yaml_copy_peer_nids(tree, &nids, true);
 	if (num < 0)
 		return num;
 
