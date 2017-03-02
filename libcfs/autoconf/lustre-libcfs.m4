@@ -534,6 +534,27 @@ get_user_pages_6arg, [
 ]) # LIBCFS_GET_USER_PAGES_6ARG
 
 #
+# LIBCFS_STACKTRACE_OPS
+#
+# Kernel version 4.8 commit c8fe4609827aedc9c4b45de80e7cdc8ccfa8541b
+# removed both struct stacktrace_ops and dump_trace() function
+#
+AC_DEFUN([LIBCFS_STACKTRACE_OPS], [
+LB_CHECK_COMPILE([if 'struct stacktrace_ops' exists],
+stacktrace_ops, [
+	struct task_struct;
+	struct pt_regs;
+	#include <asm/stacktrace.h>
+],[
+	struct stacktrace_ops ops;
+	ops.stack = NULL;
+],[
+	AC_DEFINE(HAVE_STACKTRACE_OPS, 1,
+		[struct stacktrace_ops exists])
+])
+]) # LIBCFS_STACKTRACE_OPS
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -589,6 +610,8 @@ LIBCFS_CRYPTO_HASH_HELPERS
 # 4.6
 LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
 LIBCFS_GET_USER_PAGES_6ARG
+# 4.8
+LIBCFS_STACKTRACE_OPS
 ]) # LIBCFS_PROG_LINUX
 
 #

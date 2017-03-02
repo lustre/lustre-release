@@ -127,11 +127,12 @@ EXPORT_SYMBOL(lbug_with_loc);
 #include <linux/nmi.h>
 #include <asm/stacktrace.h>
 
+#ifdef HAVE_STACKTRACE_OPS
 #ifdef HAVE_STACKTRACE_WARNING
 static void
 print_trace_warning_symbol(void *data, char *msg, unsigned long symbol)
 {
-        printk("%s", (char *)data);
+	printk("%s", (char *)data);
 	print_symbol(msg, symbol);
 	printk("\n");
 }
@@ -176,22 +177,32 @@ static const struct stacktrace_ops print_trace_ops = {
 	.walk_stack = print_context_stack,
 #endif
 };
+#endif /* HAVE_STACKTRACE_OPS */
 
 static void libcfs_call_trace(struct task_struct *tsk)
 {
+#ifdef HAVE_STACKTRACE_OPS
+	printk("Pid: %d, comm: %.20s\n", tsk->pid, tsk->comm);
+	printk("\nCall Trace:\n");
 	dump_trace(tsk, NULL, NULL,
 #ifdef HAVE_DUMP_TRACE_ADDRESS
 		   0,
 #endif /* HAVE_DUMP_TRACE_ADDRESS */
 		   &print_trace_ops, NULL);
 	printk("\n");
+#else /* !HAVE_STACKTRACE_OPS */
+	if (tsk == current)
+		dump_stack();
+	else
+		CWARN("can't show stack: kernel doesn't export show_task\n");
+#endif /* HAVE_STACKTRACE_OPS */
 }
 
 #else /* !CONFIG_X86 */
 
 static void libcfs_call_trace(struct task_struct *tsk)
 {
-	if ((tsk == NULL) || (tsk == current))
+	if (tsk == current)
 		dump_stack();
 	else
 		CWARN("can't show stack: kernel doesn't export show_task\n");
@@ -201,14 +212,7 @@ static void libcfs_call_trace(struct task_struct *tsk)
 
 void libcfs_debug_dumpstack(struct task_struct *tsk)
 {
-        /* dump_stack() */
-        /* show_trace() */
-        if (tsk == NULL)
-                tsk = current;
-	printk("Pid: %d, comm: %.20s\n", tsk->pid, tsk->comm);
-        /* show_trace_log_lvl() */
-	printk("\nCall Trace:\n");
-	libcfs_call_trace(tsk);
+	libcfs_call_trace(tsk ?: current);
 }
 EXPORT_SYMBOL(libcfs_debug_dumpstack);
 
