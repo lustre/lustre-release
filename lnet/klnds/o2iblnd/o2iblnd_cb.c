@@ -153,7 +153,9 @@ kiblnd_post_rx (kib_rx_t *rx, int credit)
 	kib_conn_t         *conn = rx->rx_conn;
 	kib_net_t          *net = conn->ibc_peer->ibp_ni->ni_data;
 	struct ib_recv_wr  *bad_wrq = NULL;
+#ifdef HAVE_IB_GET_DMA_MR
 	struct ib_mr       *mr = conn->ibc_hdev->ibh_mrs;
+#endif
 	int                 rc;
 
 	LASSERT (net != NULL);
@@ -161,9 +163,13 @@ kiblnd_post_rx (kib_rx_t *rx, int credit)
 	LASSERT (credit == IBLND_POSTRX_NO_CREDIT ||
 		 credit == IBLND_POSTRX_PEER_CREDIT ||
 		 credit == IBLND_POSTRX_RSRVD_CREDIT);
+#ifdef HAVE_IB_GET_DMA_MR
 	LASSERT(mr != NULL);
 
-        rx->rx_sge.lkey   = mr->lkey;
+	rx->rx_sge.lkey   = mr->lkey;
+#else
+	rx->rx_sge.lkey   = conn->ibc_hdev->ibh_pd->local_dma_lkey;
+#endif
         rx->rx_sge.addr   = rx->rx_msgaddr;
         rx->rx_sge.length = IBLND_MSG_SIZE;
 
@@ -605,7 +611,9 @@ kiblnd_map_tx(struct lnet_ni *ni, kib_tx_t *tx, kib_rdma_desc_t *rd, int nfrags)
 {
 	kib_net_t     *net   = ni->ni_data;
 	kib_hca_dev_t *hdev  = net->ibn_dev->ibd_hdev;
+#ifdef HAVE_IB_GET_DMA_MR
 	struct ib_mr  *mr    = NULL;
+#endif
 	__u32 nob;
 	int i;
 
@@ -625,6 +633,7 @@ kiblnd_map_tx(struct lnet_ni *ni, kib_tx_t *tx, kib_rdma_desc_t *rd, int nfrags)
                 nob += rd->rd_frags[i].rf_nob;
         }
 
+#ifdef HAVE_IB_GET_DMA_MR
 	mr = kiblnd_find_rd_dma_mr(ni, rd,
 				   (tx->tx_conn != NULL) ?
 				   tx->tx_conn->ibc_max_frags : -1);
@@ -633,6 +642,7 @@ kiblnd_map_tx(struct lnet_ni *ni, kib_tx_t *tx, kib_rdma_desc_t *rd, int nfrags)
 		rd->rd_key = (rd != tx->tx_rd) ? mr->rkey : mr->lkey;
 		return 0;
 	}
+#endif
 
 	if (net->ibn_fmr_ps != NULL)
 		return kiblnd_fmr_map_tx(net, tx, rd, nob);
@@ -1017,18 +1027,26 @@ kiblnd_init_tx_msg(struct lnet_ni *ni, kib_tx_t *tx, int type, int body_nob)
 	struct ib_sge *sge = &tx->tx_sge[tx->tx_nwrq];
 	struct ib_rdma_wr *wrq;
 	int nob = offsetof(kib_msg_t, ibm_u) + body_nob;
+#ifdef HAVE_IB_GET_DMA_MR
 	struct ib_mr *mr = hdev->ibh_mrs;
+#endif
 
 	LASSERT(tx->tx_nwrq >= 0);
 	LASSERT(tx->tx_nwrq < IBLND_MAX_RDMA_FRAGS + 1);
 	LASSERT(nob <= IBLND_MSG_SIZE);
+#ifdef HAVE_IB_GET_DMA_MR
 	LASSERT(mr != NULL);
+#endif
 
-        kiblnd_init_msg(tx->tx_msg, type, body_nob);
+	kiblnd_init_msg(tx->tx_msg, type, body_nob);
 
-        sge->lkey   = mr->lkey;
-        sge->addr   = tx->tx_msgaddr;
-        sge->length = nob;
+#ifdef HAVE_IB_GET_DMA_MR
+	sge->lkey   = mr->lkey;
+#else
+	sge->lkey   = hdev->ibh_pd->local_dma_lkey;
+#endif
+	sge->addr   = tx->tx_msgaddr;
+	sge->length = nob;
 
 	wrq = &tx->tx_wrq[tx->tx_nwrq];
 	memset(wrq, 0, sizeof(*wrq));

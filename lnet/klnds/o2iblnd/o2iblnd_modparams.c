@@ -104,7 +104,14 @@ static int concurrent_sends;
 module_param(concurrent_sends, int, 0444);
 MODULE_PARM_DESC(concurrent_sends, "send work-queue sizing");
 
-static int map_on_demand;
+#ifdef HAVE_IB_GET_DMA_MR
+#define IBLND_DEFAULT_MAP_ON_DEMAND 0
+#define IBLND_MIN_MAP_ON_DEMAND 0
+#else
+#define IBLND_DEFAULT_MAP_ON_DEMAND IBLND_MAX_RDMA_FRAGS
+#define IBLND_MIN_MAP_ON_DEMAND 1
+#endif
+static int map_on_demand = IBLND_DEFAULT_MAP_ON_DEMAND;
 module_param(map_on_demand, int, 0444);
 MODULE_PARM_DESC(map_on_demand, "map on demand");
 
@@ -228,10 +235,13 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 	if (tunables->lnd_peercredits_hiw >= net_tunables->lct_peer_tx_credits)
 		tunables->lnd_peercredits_hiw = net_tunables->lct_peer_tx_credits - 1;
 
-	if (tunables->lnd_map_on_demand < 0 ||
+	if (tunables->lnd_map_on_demand < IBLND_MIN_MAP_ON_DEMAND ||
 	    tunables->lnd_map_on_demand > IBLND_MAX_RDMA_FRAGS) {
-		/* disable map-on-demand */
-		tunables->lnd_map_on_demand = 0;
+		/* Use the default */
+		CWARN("Invalid map_on_demand (%d), expects %d - %d. Using default of %d\n",
+		      tunables->lnd_map_on_demand, IBLND_MIN_MAP_ON_DEMAND,
+		      IBLND_MAX_RDMA_FRAGS, IBLND_DEFAULT_MAP_ON_DEMAND);
+		tunables->lnd_map_on_demand = IBLND_DEFAULT_MAP_ON_DEMAND;
 	}
 
 	if (tunables->lnd_map_on_demand == 1) {

@@ -427,6 +427,27 @@ AS_IF([test $ENABLEO2IB != "no"], [
 			[ib_alloc_fast_reg_mr is defined])
 	])
 
+	# 4.9 must stop using ib_get_dma_mr and the global MR
+	# We then have to use FMR/Fastreg for all RDMA.
+	LB_CHECK_COMPILE([if 'ib_get_dma_mr' exists],
+	ib_get_dma_mr, [
+		#ifdef HAVE_COMPAT_RDMA
+		#undef PACKAGE_NAME
+		#undef PACKAGE_TARNAME
+		#undef PACKAGE_VERSION
+		#undef PACKAGE_STRING
+		#undef PACKAGE_BUGREPORT
+		#undef PACKAGE_URL
+		#include <linux/compat-2.6.h>
+		#endif
+		#include <rdma/ib_verbs.h>
+	],[
+		ib_get_dma_mr(NULL, 0);
+	],[
+		AC_DEFINE(HAVE_IB_GET_DMA_MR, 1,
+			[ib_get_dma_mr is defined])
+	])
+
 	# In v4.4 Linux kernel,
 	# commit e622f2f4ad2142d2a613a57fb85f8cf737935ef5
 	# split up struct ib_send_wr so that all non-trivial verbs

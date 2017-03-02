@@ -1388,6 +1388,7 @@ kiblnd_map_tx_pool(kib_tx_pool_t *tpo)
 	}
 }
 
+#ifdef HAVE_IB_GET_DMA_MR
 struct ib_mr *
 kiblnd_find_rd_dma_mr(struct lnet_ni *ni, kib_rdma_desc_t *rd,
 		      int negotiated_nfrags)
@@ -1409,6 +1410,7 @@ kiblnd_find_rd_dma_mr(struct lnet_ni *ni, kib_rdma_desc_t *rd,
 
 	return hdev->ibh_mrs;
 }
+#endif
 
 static void
 kiblnd_destroy_fmr_pool(kib_fmr_pool_t *fpo)
@@ -2398,13 +2400,16 @@ kiblnd_net_init_pools(kib_net_t *net, struct lnet_ni *ni, __u32 *cpts,
 		      int ncpts)
 {
 	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
+#ifdef HAVE_IB_GET_DMA_MR
 	unsigned long	flags;
+#endif
 	int		cpt;
 	int		rc;
 	int		i;
 
 	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
 
+#ifdef HAVE_IB_GET_DMA_MR
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 	if (tunables->lnd_map_on_demand == 0) {
 		read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
@@ -2413,6 +2418,7 @@ kiblnd_net_init_pools(kib_net_t *net, struct lnet_ni *ni, __u32 *cpts,
 	}
 
 	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+#endif
 
 	if (tunables->lnd_fmr_pool_size < *kiblnd_tunables.kib_ntx / 4) {
 		CERROR("Can't set fmr pool size (%d) < ntx / 4(%d)\n",
@@ -2451,7 +2457,9 @@ kiblnd_net_init_pools(kib_net_t *net, struct lnet_ni *ni, __u32 *cpts,
 	if (i > 0)
 		LASSERT(i == ncpts);
 
+#ifdef HAVE_IB_GET_DMA_MR
  create_tx_pool:
+#endif
 	net->ibn_tx_ps = cfs_percpt_alloc(lnet_cpt_table(),
 					  sizeof(kib_tx_poolset_t));
 	if (net->ibn_tx_ps == NULL) {
@@ -2526,6 +2534,7 @@ kiblnd_hdev_get_attr(kib_hca_dev_t *hdev)
         return -EINVAL;
 }
 
+#ifdef HAVE_IB_GET_DMA_MR
 static void
 kiblnd_hdev_cleanup_mrs(kib_hca_dev_t *hdev)
 {
@@ -2536,11 +2545,14 @@ kiblnd_hdev_cleanup_mrs(kib_hca_dev_t *hdev)
 
 	hdev->ibh_mrs = NULL;
 }
+#endif
 
 void
 kiblnd_hdev_destroy(kib_hca_dev_t *hdev)
 {
+#ifdef HAVE_IB_GET_DMA_MR
         kiblnd_hdev_cleanup_mrs(hdev);
+#endif
 
         if (hdev->ibh_pd != NULL)
                 ib_dealloc_pd(hdev->ibh_pd);
@@ -2551,6 +2563,7 @@ kiblnd_hdev_destroy(kib_hca_dev_t *hdev)
         LIBCFS_FREE(hdev, sizeof(*hdev));
 }
 
+#ifdef HAVE_IB_GET_DMA_MR
 static int
 kiblnd_hdev_setup_mrs(kib_hca_dev_t *hdev)
 {
@@ -2574,6 +2587,7 @@ kiblnd_hdev_setup_mrs(kib_hca_dev_t *hdev)
 
 	return 0;
 }
+#endif
 
 static int
 kiblnd_dummy_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
@@ -2710,12 +2724,16 @@ kiblnd_dev_failover(kib_dev_t *dev)
         hdev->ibh_cmid  = cmid;
         hdev->ibh_ibdev = cmid->device;
 
-        pd = ib_alloc_pd(cmid->device);
-        if (IS_ERR(pd)) {
-                rc = PTR_ERR(pd);
-                CERROR("Can't allocate PD: %d\n", rc);
-                goto out;
-        }
+#ifdef HAVE_IB_GET_DMA_MR
+	pd = ib_alloc_pd(cmid->device);
+#else
+	pd = ib_alloc_pd(cmid->device, 0);
+#endif
+	if (IS_ERR(pd)) {
+		rc = PTR_ERR(pd);
+		CERROR("Can't allocate PD: %d\n", rc);
+		goto out;
+	}
 
         hdev->ibh_pd = pd;
 
@@ -2725,11 +2743,19 @@ kiblnd_dev_failover(kib_dev_t *dev)
                 goto out;
         }
 
-        rc = kiblnd_hdev_setup_mrs(hdev);
-        if (rc != 0) {
-                CERROR("Can't setup device: %d\n", rc);
-                goto out;
-        }
+#ifdef HAVE_IB_GET_DMA_MR
+	rc = kiblnd_hdev_setup_mrs(hdev);
+	if (rc != 0) {
+		CERROR("Can't setup device: %d\n", rc);
+		goto out;
+	}
+#else
+	rc = kiblnd_hdev_get_attr(hdev);
+	if (rc != 0) {
+		CERROR("Can't get device attributes: %d\n", rc);
+		goto out;
+	}
+#endif
 
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
