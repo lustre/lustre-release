@@ -88,12 +88,15 @@ static int ll_dcompare(const struct dentry *parent, const struct inode *pinode,
 static int ll_dcompare(const struct dentry *parent, const struct dentry *dentry,
 		       unsigned int len, const char *str,
 		       const struct qstr *name)
+#elif defined(HAVE_D_COMPARE_4ARGS)
+static int ll_dcompare(const struct dentry *dentry, unsigned int len,
+		       const char *str, const struct qstr *name)
 #else
 static int ll_dcompare(struct dentry *parent, struct qstr *d_name,
 		       struct qstr *name)
 #endif
 {
-#if !defined(HAVE_D_COMPARE_7ARGS) && !defined(HAVE_D_COMPARE_5ARGS)
+#if !defined(HAVE_D_COMPARE_7ARGS) && !defined(HAVE_D_COMPARE_5ARGS) && !defined(HAVE_D_COMPARE_4ARGS)
 	/* XXX: (ugh !) d_name must be in-dentry structure */
 	struct dentry *dentry = container_of(d_name, struct dentry, d_name);
 	unsigned int len = d_name->len;
