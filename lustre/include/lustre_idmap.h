@@ -45,11 +45,18 @@
 
 #include <libcfs/libcfs.h>
 
+#ifdef HAVE_GROUP_INFO_GID
+
+#define CFS_GROUP_AT(gi, i) ((gi)->gid[(i)])
+
+#else  /* !HAVE_GROUP_INFO_GID */
+
 #define CFS_NGROUPS_PER_BLOCK   ((int)(PAGE_SIZE / sizeof(gid_t)))
 
 #define CFS_GROUP_AT(gi, i) \
         ((gi)->blocks[(i) / CFS_NGROUPS_PER_BLOCK][(i) % CFS_NGROUPS_PER_BLOCK])
 
+#endif /* HAVE_GROUP_INFO_GID */
 
 struct lu_ucred;
 

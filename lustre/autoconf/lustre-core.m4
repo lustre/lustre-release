@@ -2427,6 +2427,25 @@ full_name_hash_3args, [
 ]) # LC_FULL_NAME_HASH_3ARGS
 
 #
+# LC_GROUP_INFO_GID
+#
+# Kernel version 4.9 commit 81243eacfa400f5f7b89f4c2323d0de9982bb0fb
+# cred: simpler, 1D supplementary groups
+#
+AC_DEFUN([LC_GROUP_INFO_GID], [
+LB_CHECK_COMPILE([if 'struct group_info' has member 'gid'],
+group_info_gid, [
+	#include <linux/cred.h>
+],[
+	kgid_t *p;
+	p = ((struct group_info *)0)->gid;
+],[
+	AC_DEFINE(HAVE_GROUP_INFO_GID, 1,
+		[struct group_info has member gid])
+])
+]) # LC_GROUP_INFO_GID
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2625,6 +2644,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_POSIX_ACL_VALID_USER_NS
 	LC_D_COMPARE_4ARGS
 	LC_FULL_NAME_HASH_3ARGS
+
+	# 4.9
+	LC_GROUP_INFO_GID
 
 	#
 	AS_IF([test "x$enable_server" != xno], [

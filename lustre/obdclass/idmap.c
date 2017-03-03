@@ -87,6 +87,9 @@ static int lustre_groups_search(struct group_info *group_info,
 
 void lustre_groups_from_list(struct group_info *ginfo, gid_t *glist)
 {
+#ifdef HAVE_GROUP_INFO_GID
+	memcpy(ginfo->gid, glist, ginfo->ngroups * sizeof(__u32));
+#else
 	int i;
 	int count = ginfo->ngroups;
 
@@ -99,6 +102,7 @@ void lustre_groups_from_list(struct group_info *ginfo, gid_t *glist)
 		memcpy(ginfo->blocks[i], glist + off, len);
 		count -= cp_count;
 	}
+#endif
 }
 EXPORT_SYMBOL(lustre_groups_from_list);
 
