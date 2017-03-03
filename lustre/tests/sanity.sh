@@ -6090,22 +6090,6 @@ test_77g() { # bug 10889
 }
 run_test 77g "checksum error on OST write, read"
 
-test_77i() { # bug 13805
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GSS && skip "could not run with gss" && return
-	#define OBD_FAIL_OSC_CONNECT_CKSUM       0x40b
-	lctl set_param fail_loc=0x40b
-	remount_client $MOUNT
-	lctl set_param fail_loc=0
-	for VALUE in `lctl get_param osc.*osc-[^mM]*.checksum_type`; do
-		PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
-		algo=`lctl get_param -n $PARAM | sed 's/.*\[\(.*\)\].*/\1/g'`
-		[ "$algo" = "adler" ] || error "algo set to $algo instead of adler"
-	done
-	remount_client $MOUNT
-}
-run_test 77i "client not supporting OSD_CONNECT_CKSUM"
-
 test_77j() { # bug 13805
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	$GSS && skip "could not run with gss" && return
@@ -6113,10 +6097,15 @@ test_77j() { # bug 13805
 	lctl set_param fail_loc=0x40c
 	remount_client $MOUNT
 	lctl set_param fail_loc=0
-	sleep 2 # wait async osc connect to finish
-	for VALUE in `lctl get_param osc.*osc-[^mM]*.checksum_type`; do
-                PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
-		algo=`lctl get_param -n $PARAM | sed 's/.*\[\(.*\)\].*/\1/g'`
+	# wait async osc connect to finish and reflect updated state value
+	local i
+	for (( i=0; i < OSTCOUNT; i++ )) ; do
+		wait_osc_import_state client ost$((i+1)) FULL
+	done
+
+	for VALUE in $(lctl get_param osc.*osc-[^mM]*.checksum_type); do
+		PARAM=$(echo ${VALUE[0]} | cut -d "=" -f1)
+		algo=$(lctl get_param -n $PARAM | sed 's/.*\[\(.*\)\].*/\1/g')
 		[ "$algo" = "adler" ] || error "algo set to $algo instead of adler"
 	done
 	remount_client $MOUNT

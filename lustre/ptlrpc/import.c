@@ -867,15 +867,13 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 		 * the checksum types it doesn't support */
 		if ((ocd->ocd_cksum_types &
 		     cksum_types_supported_client()) == 0) {
-			LCONSOLE_WARN("The negotiation of the checksum "
-				      "alogrithm to use with server %s "
-				      "failed (%x/%x), disabling "
-				      "checksums\n",
-				      obd2cli_tgt(imp->imp_obd),
-				      ocd->ocd_cksum_types,
-				      cksum_types_supported_client());
-			cli->cl_checksum = 0;
-			cli->cl_supp_cksum_types = OBD_CKSUM_ADLER;
+			LCONSOLE_ERROR("The negotiation of the checksum "
+				       "alogrithm to use with server %s "
+				       "failed (%x/%x)\n",
+				       obd2cli_tgt(imp->imp_obd),
+				       ocd->ocd_cksum_types,
+				       cksum_types_supported_client());
+			return -EPROTO;
 		} else {
 			cli->cl_supp_cksum_types = ocd->ocd_cksum_types;
 		}

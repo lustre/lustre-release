@@ -6020,9 +6020,8 @@ _wait_osc_import_state() {
 
 	if [[ $facet == client* ]]; then
 		# During setup time, the osc might not be setup, it need wait
-		# until list_param can return valid value. And also if there
-		# are mulitple osc entries we should list all of them before
-		# go to wait.
+		# until list_param can return valid value.
+		param="osc.${ost%?}[^mM]*.ost_server_uuid"
 		params=$($LCTL list_param $param 2>/dev/null || true)
 		while [ -z "$params" ]; do
 			if [ $i -ge $maxtime ]; then

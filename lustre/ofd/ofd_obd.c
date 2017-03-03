@@ -262,10 +262,10 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		       "%x\n", exp->exp_obd->obd_name, obd_export_nid2str(exp),
 		       cksum_types, data->ocd_cksum_types);
 	} else {
-		/* This client does not support OBD_CONNECT_CKSUM
-		 * fall back to CRC32 */
+		/* This client does not support OBD_CONNECT_CKSUM.
+		 * Report failure to negotiate checksum at connect */
 		CDEBUG(D_RPCTRACE, "%s: cli %s does not support "
-		       "OBD_CONNECT_CKSUM, CRC32 will be used\n",
+		       "OBD_CONNECT_CKSUM\n",
 		       exp->exp_obd->obd_name, obd_export_nid2str(exp));
 	}
 
