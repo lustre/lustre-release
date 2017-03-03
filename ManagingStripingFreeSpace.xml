@@ -559,7 +559,7 @@ File 4: OST6, OST7, OST0</screen>
             <literal>/proc/fs/<replaceable>fsname</replaceable>/lov/<replaceable>fsname</replaceable>-mdtlov/qos_threshold_rr</literal>. </para>
       <para>To set the <literal>qos_threshold_r</literal> to <literal>25</literal>,  enter this
         command on the
-        MGS:<screen>lctl set_param lov.<replaceable>fsname</replaceable>-mdtlov.quos_threshold_rr=25</screen></para>
+        MGS:<screen>lctl set_param lov.<replaceable>fsname</replaceable>-mdtlov.qos_threshold_rr=25</screen></para>
     </section>
     <section remap="h3">
       <title><indexterm>
