@@ -394,9 +394,9 @@ uint64_t osd_objs_count_estimate(uint64_t usedbytes, uint64_t usedobjs,
 	CLASSERT(OSD_DNODE_MIN_BLKSHIFT > 0);
 	CLASSERT(OSD_DNODE_EST_BLKSHIFT > 0);
 
-	est_usedblocks = (usedbytes >> est_maxblockshift) +
-			 (OSD_DNODE_EST_COUNT >> OSD_DNODE_EST_BLKSHIFT);
-	est_usedobjs   = usedobjs + OSD_DNODE_EST_COUNT;
+	est_usedblocks = ((OSD_DNODE_EST_COUNT << OSD_DNODE_EST_BLKSHIFT) +
+			  usedbytes) >> est_maxblockshift;
+	est_usedobjs   = OSD_DNODE_EST_COUNT + usedobjs;
 
 	if (est_usedobjs <= est_usedblocks) {
 		/*
