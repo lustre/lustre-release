@@ -2309,6 +2309,28 @@ in_compat_syscall, [
 ]) # LC_HAVE_IN_COMPAT_SYSCALL
 
 #
+# LC_DIRECTIO_2ARGS
+#
+# Kernel version 4.7 commit c8b8e32d700fe943a935e435ae251364d016c497
+# direct-io: eliminate the offset argument to ->direct_IO
+#
+AC_DEFUN([LC_DIRECTIO_2ARGS], [
+LB_CHECK_COMPILE([if '->direct_IO()' taken 2 arguments],
+direct_io_2args, [
+	#include <linux/fs.h>
+],[
+	struct address_space_operations ops;
+	struct iov_iter *iter = NULL;
+	struct kiocb *iocb = NULL;
+	int rc;
+	rc = ops.direct_IO(iocb, iter);
+],[
+	AC_DEFINE(HAVE_DIRECTIO_2ARGS, 1,
+		[direct_IO need 2 arguments])
+])
+]) # LC_DIRECTIO_2ARGS
+
+#
 # LC_HAVE_POSIX_ACL_VALID_USER_NS
 #
 # 4.8 posix_acl_valid takes struct user_namespace
@@ -2533,6 +2555,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.6
 	LC_HAVE_IN_COMPAT_SYSCALL
+
+	# 4.7
+	LC_DIRECTIO_2ARGS
 
 	# 4.8
 	LC_HAVE_POSIX_ACL_VALID_USER_NS

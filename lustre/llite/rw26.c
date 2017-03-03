@@ -345,9 +345,15 @@ ll_direct_IO(
 # ifndef HAVE_IOV_ITER_RW
 	     int rw,
 # endif
-	     struct kiocb *iocb, struct iov_iter *iter,
-	     loff_t file_offset)
+	     struct kiocb *iocb, struct iov_iter *iter
+# ifndef HAVE_DIRECTIO_2ARGS
+	     , loff_t file_offset
+# endif
+	     )
 {
+#ifdef HAVE_DIRECTIO_2ARGS
+	loff_t file_offset = iocb->ki_pos;
+#endif
 	struct ll_cl_context *lcc;
 	const struct lu_env *env;
 	struct cl_io *io;
