@@ -2352,6 +2352,26 @@ direct_io_2args, [
 ]) # LC_DIRECTIO_2ARGS
 
 #
+# LC_GENERIC_WRITE_SYNC_2ARGS
+#
+# Kernel version 4.7 commit c8b8e32d700fe943a935e435ae251364d016c497
+# direct-io: eliminate the offset argument to ->direct_IO
+#
+AC_DEFUN([LC_GENERIC_WRITE_SYNC_2ARGS], [
+LB_CHECK_COMPILE([if 'generic_write_sync()' taken 2 arguments],
+generic_write_sync_2args, [
+	#include <linux/fs.h>
+],[
+	struct kiocb *iocb = NULL;
+	ssize_t rc;
+	rc = generic_write_sync(iocb, 0);
+],[
+	AC_DEFINE(HAVE_GENERIC_WRITE_SYNC_2ARGS, 1,
+		[generic_write_sync need 2 arguments])
+])
+]) # LC_GENERIC_WRITE_SYNC_2ARGS
+
+#
 # LC_HAVE_POSIX_ACL_VALID_USER_NS
 #
 # 4.8 posix_acl_valid takes struct user_namespace
@@ -2599,6 +2619,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.7
 	LC_DIRECTIO_2ARGS
+	LC_GENERIC_WRITE_SYNC_2ARGS
 
 	# 4.8
 	LC_HAVE_POSIX_ACL_VALID_USER_NS
