@@ -1785,6 +1785,27 @@ truncate_ipages_final, [
 ]) # LC_HAVE_TRUNCATE_IPAGES_FINAL
 
 #
+# LC_IOPS_RENAME_WITH_FLAGS
+#
+# 3.14 has inode_operations->rename with 5 args
+# commit 520c8b16505236fc82daa352e6c5e73cd9870cff
+#
+AC_DEFUN([LC_IOPS_RENAME_WITH_FLAGS], [
+LB_CHECK_COMPILE([if 'inode_operations->rename' taken flags as argument],
+iops_rename_with_flags, [
+	#include <linux/fs.h>
+],[
+	struct inode *i1 = NULL, *i2 = NULL;
+	struct dentry *d1 = NULL, *d2 = NULL;
+	int rc;
+	rc = ((struct inode_operations *)0)->rename(i1, d1, i2, d2, 0);
+], [
+	AC_DEFINE(HAVE_IOPS_RENAME_WITH_FLAGS, 1,
+		[inode_operations->rename need flags as argument])
+])
+]) # LC_IOPS_RENAME_WITH_FLAGS
+
+#
 # LC_VFS_RENAME_6ARGS
 #
 # 3.15 has vfs_rename with 6 args
@@ -2500,6 +2521,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 3.14
 	LC_HAVE_BVEC_ITER
 	LC_HAVE_TRUNCATE_IPAGES_FINAL
+	LC_IOPS_RENAME_WITH_FLAGS
 
 	# 3.15
 	LC_VFS_RENAME_6ARGS

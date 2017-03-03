@@ -1375,15 +1375,25 @@ static int ll_unlink(struct inode *dir, struct dentry *dchild)
 }
 
 static int ll_rename(struct inode *src, struct dentry *src_dchild,
-		     struct inode *tgt, struct dentry *tgt_dchild)
+		     struct inode *tgt, struct dentry *tgt_dchild
+#ifdef HAVE_IOPS_RENAME_WITH_FLAGS
+		     , unsigned int flags
+#endif
+		     )
 {
 	struct qstr *src_name = &src_dchild->d_name;
 	struct qstr *tgt_name = &tgt_dchild->d_name;
-        struct ptlrpc_request *request = NULL;
-        struct ll_sb_info *sbi = ll_i2sbi(src);
-        struct md_op_data *op_data;
-        int err;
-        ENTRY;
+	struct ptlrpc_request *request = NULL;
+	struct ll_sb_info *sbi = ll_i2sbi(src);
+	struct md_op_data *op_data;
+	int err;
+	ENTRY;
+
+#ifdef HAVE_IOPS_RENAME_WITH_FLAGS
+	if (flags)
+		return -EINVAL;
+#endif
+
 	CDEBUG(D_VFSTRACE, "VFS Op:oldname=%.*s, src_dir="DFID
 	       "(%p), newname=%.*s, tgt_dir="DFID"(%p)\n",
 	       src_name->len, src_name->name,
