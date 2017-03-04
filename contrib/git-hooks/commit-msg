@@ -99,6 +99,13 @@ function do_changeid() {
 	HAS_CHANGEID=true
 }
 
+function do_testparams() {
+	ck_wrapup
+
+	grep -q mdsfilesystemtype <<< $LINE &&
+		error "mdsfilesystemtype is deprecated, use mdtfilesystemtype"
+}
+
 # All "innocuous" lines specify a person and email address
 #
 function do_innocuous() {
@@ -215,9 +222,9 @@ exec 3< "$ORIGINAL" 4> "$REVISED" || exit 1
 while IFS= read -u3 LINE; do
 	((NUM += 1))
 	case "$LINE" in
-	$SIGNOFF* )   do_signoff   ;;
-	$CHANGEID* )  do_changeid  ;;
-	$TESTPARAMS* ) ck_wrapup   ;;
+	$SIGNOFF* )   do_signoff     ;;
+	$CHANGEID* )  do_changeid    ;;
+	$TESTPARAMS* ) do_testparams ;;
 
 	"")
 		HAS_LAST_BLANK=true

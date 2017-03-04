@@ -1,0 +1,8 @@
+DCO-5866 scripts: check for mdsfilesystemtype
+
+Check if the Test-Parameters line is using the old mdsfilesystemtype=
+option and ask for it to be removed.  The mdtfilesystemtype= option
+should be used instead.
+
+Test-Parameters: trivial mdsfilesystemtype=zfs
+Signed-off-by: Andreas Dilger <andreas.dilger@intel.com>
