@@ -300,6 +300,7 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 
 	memcpy(rule->tr_name, start->tc_name, strlen(start->tc_name));
 	rule->tr_rpc_rate = start->u.tc_start.ts_rpc_rate;
+	rule->tr_flags = start->u.tc_start.ts_rule_flags;
 	rule->tr_nsecs = NSEC_PER_SEC;
 	do_div(rule->tr_nsecs, rule->tr_rpc_rate);
 	rule->tr_depth = tbf_depth;
@@ -521,11 +522,9 @@ tbf_cli_compare(struct cfs_binheap_node *e1, struct cfs_binheap_node *e2)
 	cli1 = container_of(e1, struct nrs_tbf_client, tc_node);
 	cli2 = container_of(e2, struct nrs_tbf_client, tc_node);
 
-	if (cli1->tc_check_time + cli1->tc_nsecs <
-	    cli2->tc_check_time + cli2->tc_nsecs)
+	if (cli1->tc_deadline < cli2->tc_deadline)
 		return 1;
-	else if (cli1->tc_check_time + cli1->tc_nsecs >
-		 cli2->tc_check_time + cli2->tc_nsecs)
+	else if (cli1->tc_deadline > cli2->tc_deadline)
 		return 0;
 
 	if (cli1->tc_check_time < cli2->tc_check_time)
@@ -2477,10 +2476,12 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 				     struct ptlrpc_nrs_request,
 				     nr_u.tbf.tr_list);
 	} else {
+		struct nrs_tbf_rule *rule = cli->tc_rule;
 		__u64 now = ktime_to_ns(ktime_get());
 		__u64 passed;
 		__u64 ntoken;
 		__u64 deadline;
+		__u64 old_resid = 0;
 
 		deadline = cli->tc_check_time +
 			  cli->tc_nsecs;
@@ -2488,9 +2489,19 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 		passed = now - cli->tc_check_time;
 		ntoken = passed * cli->tc_rpc_rate;
 		do_div(ntoken, NSEC_PER_SEC);
+
 		ntoken += cli->tc_ntoken;
-		if (ntoken > cli->tc_depth)
+		if (rule->tr_flags & NTRS_REALTIME) {
+			LASSERT(cli->tc_nsecs_resid < cli->tc_nsecs);
+			old_resid = cli->tc_nsecs_resid;
+			cli->tc_nsecs_resid += passed % cli->tc_nsecs;
+			if (cli->tc_nsecs_resid > cli->tc_nsecs) {
+				ntoken++;
+				cli->tc_nsecs_resid -= cli->tc_nsecs;
+			}
+		} else if (ntoken > cli->tc_depth)
 			ntoken = cli->tc_depth;
+
 		if (ntoken > 0) {
 			struct ptlrpc_request *req;
 			nrq = list_entry(cli->tc_list.next,
@@ -2508,6 +2519,8 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 						   &cli->tc_node);
 				cli->tc_in_heap = false;
 			} else {
+				if (!(rule->tr_flags & NTRS_REALTIME))
+					cli->tc_deadline = now + cli->tc_nsecs;
 				cfs_binheap_relocate(head->th_binheap,
 						     &cli->tc_node);
 			}
@@ -2521,6 +2534,15 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 		} else {
 			ktime_t time;
 
+			if (rule->tr_flags & NTRS_REALTIME) {
+				cli->tc_deadline = deadline;
+				cli->tc_nsecs_resid = old_resid;
+				cfs_binheap_relocate(head->th_binheap,
+						     &cli->tc_node);
+				if (node != cfs_binheap_root(head->th_binheap))
+					return nrs_tbf_req_get(policy,
+							       peek, force);
+			}
 			policy->pol_nrs->nrs_throttling = 1;
 			head->th_deadline = deadline;
 			time = ktime_set(0, 0);
@@ -2556,6 +2578,7 @@ static int nrs_tbf_req_add(struct ptlrpc_nrs_policy *policy,
 			    struct nrs_tbf_head, th_res);
 	if (list_empty(&cli->tc_list)) {
 		LASSERT(!cli->tc_in_heap);
+		cli->tc_deadline = cli->tc_check_time + cli->tc_nsecs;
 		rc = cfs_binheap_insert(head->th_binheap, &cli->tc_node);
 		if (rc == 0) {
 			cli->tc_in_heap = true;
@@ -2563,8 +2586,7 @@ static int nrs_tbf_req_add(struct ptlrpc_nrs_policy *policy,
 			list_add_tail(&nrq->nr_u.tbf.tr_list,
 					  &cli->tc_list);
 			if (policy->pol_nrs->nrs_throttling) {
-				__u64 deadline = cli->tc_check_time +
-						 cli->tc_nsecs;
+				__u64 deadline = cli->tc_deadline;
 				if ((head->th_deadline > deadline) &&
 				    (hrtimer_try_to_cancel(&head->th_timer)
 				     >= 0)) {
@@ -2805,6 +2827,15 @@ nrs_tbf_parse_value_pair(struct nrs_tbf_cmd *cmd, char *buffer)
 			cmd->u.tc_change.tc_next_name = val;
 		else
 			return -EINVAL;
+	} else if (strcmp(key, "realtime") == 0) {
+		unsigned long realtime;
+
+		rc = kstrtoul(val, 10, &realtime);
+		if (rc)
+			return rc;
+
+		if (realtime > 0)
+			cmd->u.tc_start.ts_rule_flags |= NTRS_REALTIME;
 	} else {
 		return -EINVAL;
 	}

@@ -85,6 +85,13 @@ struct nrs_tbf_client {
 	__u64				 tc_depth;
 	/** Time check-point. */
 	__u64				 tc_check_time;
+	/** Deadline of a class */
+	__u64				 tc_deadline;
+	/**
+	 * Time residue: the remainder of elapsed time
+	 * divided by nsecs when dequeue a request.
+	 */
+	__u64				 tc_nsecs_resid;
 	/** List of queued requests. */
 	struct list_head		 tc_list;
 	/** Node in binary heap. */
@@ -102,8 +109,11 @@ struct nrs_tbf_client {
 
 #define MAX_TBF_NAME (16)
 
-#define NTRS_STOPPING	0x0000001
-#define NTRS_DEFAULT	0x0000002
+enum nrs_rule_flags {
+	NTRS_STOPPING	= 0x00000001,
+	NTRS_DEFAULT	= 0x00000002,
+	NTRS_REALTIME	= 0x00000004,
+};
 
 struct nrs_tbf_rule {
 	/** Name of the rule. */
@@ -139,7 +149,7 @@ struct nrs_tbf_rule {
 	/** List of client. */
 	struct list_head		 tr_cli_list;
 	/** Flags of the rule. */
-	__u32				 tr_flags;
+	enum nrs_rule_flags		 tr_flags;
 	/** Usage Reference count taken on the rule. */
 	atomic_t			 tr_ref;
 	/** Generation of the rule. */
@@ -275,7 +285,7 @@ struct nrs_tbf_cmd {
 			struct list_head	 ts_conds;
 			char			*ts_conds_str;
 			__u32			 ts_valid_type;
-			__u32			 ts_rule_flags;
+			enum nrs_rule_flags	 ts_rule_flags;
 			char			*ts_next_name;
 		} tc_start;
 		struct nrs_tbf_cmd_change {
