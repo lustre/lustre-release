@@ -12083,6 +12083,9 @@ cleanup_205() {
 }
 
 test_205() { # Job stats
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.1) ]] ||
+		{ skip "Need MDS version with at least 2.7.1"; return 0; }
+
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
