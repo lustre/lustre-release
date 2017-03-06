@@ -148,8 +148,8 @@ struct obd_import_conn {
 /* state history */
 #define IMP_STATE_HIST_LEN 16
 struct import_state_hist {
-        enum lustre_imp_state ish_state;
-        time_t                ish_time;
+	enum lustre_imp_state	ish_state;
+	time64_t		ish_time;
 };
 
 /**
@@ -321,7 +321,7 @@ struct obd_import {
 
 				  /* adaptive timeout data */
 	struct imp_at             imp_at;
-	time_t                    imp_last_reply_time;    /* for health check */
+	time64_t		  imp_last_reply_time;	/* for health check */
 };
 
 /* import.c */
