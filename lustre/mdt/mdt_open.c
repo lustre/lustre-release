@@ -479,7 +479,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 		mdt_mfd_close(info, mfd);
 	} else {
 		spin_lock(&med->med_open_lock);
-		list_add(&mfd->mfd_list, &med->med_open_head);
+		list_add_tail(&mfd->mfd_list, &med->med_open_head);
 		spin_unlock(&med->med_open_lock);
 	}
 

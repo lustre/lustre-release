@@ -61,9 +61,6 @@ check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 
 build_test_filter
 
-mkdir -p $MOUNT2
-mount_client $MOUNT2
-
 test_1a() {
 	touch $DIR1/f1
 	[ -f $DIR2/f1 ] || error
@@ -2930,7 +2927,7 @@ test_76() { #LU-946
 		skip "Need MDS version at least 2.5.53" && return
 
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	local fcount=2048
+	local fcount=$((MDSCOUNT * 256))
 	declare -a fd_list
 	declare -a fid_list
 
@@ -2946,20 +2943,28 @@ test_76() { #LU-946
 	# drop all open locks and close any cached "open" files on the client
 	cancel_lru_locks mdc
 
-	echo -n "open files "
-	ulimit -n 8096
+	local open_fids_cmd="$LCTL get_param -n mdt.*.exports.'$nid'.open_files"
+	local fid_list=($(do_nodes $(comma_list $(mdts_nodes)) $open_fids_cmd))
+	local already=${#fid_list[@]}
+	for (( i = 0; i < $already; i++ )) ; do
+		log "already open[$i]: $($LFS fid2path $DIR2 ${fid_list[i]})"
+	done
+
+	echo -n "opening files: "
+	ulimit -n $((fcount + 50))
 	for ((i = 0; i < $fcount; i++)); do
 		touch $DIR/$tdir/f_$i
-		local fd=$(free_fd)
-		local cmd="exec $fd<$DIR/$tdir/f_$i"
-		eval $cmd
+		local fd=$(free_fd ${fd_list[i]})
+		local open_cmd="exec $fd<$DIR/$tdir/f_$i"
+		eval $open_cmd
+
 		fd_list[i]=$fd
-		echo -n "."
+
+		(( $i % 32 == 0 )) && echo -n "."
 	done
 	echo
 
-	local get_open_fids="$LCTL get_param -n mdt.*.exports.'$nid'.open_files"
-	local fid_list=($(do_nodes $(comma_list $(mdts_nodes)) $get_open_fids))
+	fid_list=($(do_nodes $(comma_list $(mdts_nodes)) $open_fids_cmd))
 
 	# Possible errors in openfiles FID list.
 	# 1. Missing FIDs. Check 1
@@ -2969,19 +2974,28 @@ test_76() { #LU-946
 	# 5. Valid FID, points to some other file. Check 3
 
 	# Check 1
-	[ ${#fid_list[@]} -ne $fcount ] &&
-		error "${#fid_list[@]} != $fcount open files"
+	[ ${#fid_list[@]} -ne $((fcount + already)) ] &&
+		error "${#fid_list[@]} != $fcount (+$already old) open files"
 
-	for (( i = 0; i < $fcount; i++ )) ; do
-		cmd="exec ${fd_list[i]}</dev/null"
-		eval $cmd
-		filename=$($LFS fid2path $DIR2 ${fid_list[i]})
+	echo -n "closing files: "
+	for (( fd = 0, fid = 0; fd < $fcount; fd++, fid++ )) ; do
+		local close_cmd="exec ${fd_list[fd]}<&-"
+		eval $close_cmd
+		filename=$($LFS fid2path $DIR2 ${fid_list[fid]})
+
+		while [[ ! "$filename" =~ "$DIR2/$tdir/f_" ]]; do
+			echo "skip old open file $filename"
+			((fid++))
+			filename=$($LFS fid2path $DIR2 ${fid_list[fid]})
+		done
 
 		# Check 2
 		rm --interactive=no $filename
 		[ $? -ne 0 ] &&
-			error "Nonexisting fid ${fid_list[i]} listed."
+			error "Nonexisting fid ${fid_list[fid]} listed."
+		(( $fd % 32 == 0 )) && echo -n "."
 	done
+	echo
 
 	# Check 3
 	ls_op=$(ls $DIR2/$tdir | wc -l)
@@ -2990,7 +3004,7 @@ test_76() { #LU-946
 
 	rm -rf $DIR/$tdir
 }
-run_test 76 "Verify MDS open_files tracking for 2048 files"
+run_test 76 "Verify MDT open_files listing"
 
 nrs_write_read() {
 	local n=16
@@ -3910,9 +3924,8 @@ log "cleanup: ======================================================"
 # kill and wait in each test only guarentee script finish, but command in script
 # like 'rm' 'chmod' may still be running, wait for all commands to finish
 # otherwise umount below will fail
-wait_update $HOSTNAME "fuser -m $MOUNT2" "" || true
-
-[ "$(mount | grep $MOUNT2)" ] && umount $MOUNT2
+[ "$(mount | grep $MOUNT2)" ] && wait_update $HOSTNAME "fuser -m $MOUNT2" "" ||
+	true
 
 complete $SECONDS
 rm -f $SAMPLE_FILE

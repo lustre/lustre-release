@@ -1377,8 +1377,7 @@ mount_facet() {
 	# commit the device label change to disk
 	if [[ $devicelabel =~ (:[a-zA-Z]{3}[0-9]{4}) ]]; then
 		echo "Commit the device label on ${!dev}"
-		do_facet $facet "sync; sync; sync"
-		sleep 5
+		do_facet $facet "sync; sleep 5; sync"
 	fi
 
 
@@ -7288,16 +7287,22 @@ test_mkdir() {
 	fi
 }
 
-# find the smallest and not in use file descriptor
+# free_fd: find the smallest and not in use file descriptor [above @last_fd]
+#
+# If called many times, passing @last_fd will avoid repeated searching
+# already-open FDs repeatedly if we know they are still in use.
+#
+# usage: free_fd [last_fd]
 free_fd()
 {
-        local max_fd=$(ulimit -n)
-        local fd=3
-        while [[ $fd -le $max_fd && -e /proc/self/fd/$fd ]]; do
-                ((++fd))
-        done
-        [ $fd -lt $max_fd ] || error "finding free file descriptor failed"
-        echo $fd
+	local max_fd=$(ulimit -n)
+	local fd=$((${1:-2} + 1))
+
+	while [[ $fd -le $max_fd && -e /proc/self/fd/$fd ]]; do
+		((++fd))
+	done
+	[ $fd -lt $max_fd ] || error "finding free file descriptor failed"
+	echo $fd
 }
 
 check_mount_and_prep()
