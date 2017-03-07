@@ -713,6 +713,8 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
 		list_add_tail(&entry->se_list, &sai->sai_interim_entries);
 	}
 	sai->sai_replied++;
+
+	smp_mb();
 	if (waitq != NULL)
 		wake_up(waitq);
 	spin_unlock(&lli->lli_sa_lock);
