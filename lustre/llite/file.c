@@ -348,10 +348,9 @@ int ll_file_release(struct inode *inode, struct file *file)
 	RETURN(rc);
 }
 
-static int ll_intent_file_open(struct file *file, void *lmm, int lmmsize,
+static int ll_intent_file_open(struct dentry *de, void *lmm, int lmmsize,
 				struct lookup_intent *itp)
 {
-	struct dentry *de = file_dentry(file);
 	struct ll_sb_info *sbi = ll_i2sbi(de->d_inode);
 	struct dentry *parent = de->d_parent;
 	const char *name = NULL;
@@ -608,7 +607,8 @@ restart:
 			 * to get file with different fid.
 			 */
 			it->it_flags |= MDS_OPEN_BY_FID;
-                        rc = ll_intent_file_open(file, NULL, 0, it);
+			rc = ll_intent_file_open(file_dentry(file), NULL, 0,
+						 it);
                         if (rc)
                                 GOTO(out_openerr, rc);
 
@@ -1523,9 +1523,8 @@ static ssize_t ll_file_splice_read(struct file *in_file, loff_t *ppos,
         RETURN(result);
 }
 
-int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
-                             __u64  flags, struct lov_user_md *lum,
-			     int lum_size)
+int ll_lov_setstripe_ea_info(struct inode *inode, struct dentry *dentry,
+			     __u64 flags, struct lov_user_md *lum, int lum_size)
 {
 	struct lookup_intent oit = {
 		.it_op = IT_OPEN,
@@ -1535,16 +1534,15 @@ int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
 	ENTRY;
 
 	ll_inode_size_lock(inode);
-	rc = ll_intent_file_open(file, lum, lum_size, &oit);
+	rc = ll_intent_file_open(dentry, lum, lum_size, &oit);
 	if (rc < 0)
 		GOTO(out_unlock, rc);
 
-	ll_release_openhandle(file_dentry(file), &oit);
+	ll_release_openhandle(dentry, &oit);
 
 out_unlock:
 	ll_inode_size_unlock(inode);
 	ll_intent_release(&oit);
-	cl_lov_delay_create_clear(&file->f_flags);
 
 	RETURN(rc);
 }
@@ -1663,7 +1661,9 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
 	if (copy_from_user(lump, (struct lov_user_md __user *)arg, lum_size))
 		GOTO(out_lump, rc = -EFAULT);
 
-	rc = ll_lov_setstripe_ea_info(inode, file, flags, lump, lum_size);
+	rc = ll_lov_setstripe_ea_info(inode, file_dentry(file), flags, lump,
+				      lum_size);
+	cl_lov_delay_create_clear(&file->f_flags);
 
 out_lump:
 	OBD_FREE_LARGE(lump, lum_size);
@@ -1701,8 +1701,9 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 		RETURN(rc);
 
 	lum_size = rc;
-	rc = ll_lov_setstripe_ea_info(inode, file, flags, klum, lum_size);
-
+	rc = ll_lov_setstripe_ea_info(inode, file_dentry(file), flags, klum,
+				      lum_size);
+	cl_lov_delay_create_clear(&file->f_flags);
 	OBD_FREE(klum, lum_size);
 	RETURN(rc);
 }

@@ -249,9 +249,8 @@ int ll_setstripe_ea(struct dentry *dentry, struct lov_user_md *lump,
 
 setstripe:
 	if (lump != NULL && S_ISREG(inode->i_mode)) {
-		struct file	f;
-		__u64		it_flags = FMODE_WRITE;
-		int		lum_size;
+		__u64 it_flags = FMODE_WRITE;
+		int lum_size;
 
 		lum_size = ll_lov_user_md_size(lump);
 		/**
@@ -263,9 +262,7 @@ setstripe:
 		if (lum_size < 0 || size < lum_size)
 			return return_err ? -ERANGE : 0;
 
-		memset(&f, 0, sizeof(f)); /* f.f_flags is used below */
-		f.f_path.dentry = dentry;
-		rc = ll_lov_setstripe_ea_info(inode, &f, it_flags, lump,
+		rc = ll_lov_setstripe_ea_info(inode, dentry, it_flags, lump,
 					      lum_size);
 		/* b=10667 */
 		if (!return_err)

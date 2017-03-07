@@ -819,8 +819,8 @@ int ll_ioctl_fsgetxattr(struct inode *inode, unsigned int cmd,
 int ll_ioctl_fssetxattr(struct inode *inode, unsigned int cmd,
 			unsigned long arg);
 
-int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
-			     __u64  flags, struct lov_user_md *lum,
+int ll_lov_setstripe_ea_info(struct inode *inode, struct dentry *dentry,
+			     __u64 flags, struct lov_user_md *lum,
 			     int lum_size);
 int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
                              struct lov_mds_md **lmm, int *lmm_size,
