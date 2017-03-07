@@ -696,7 +696,7 @@ ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 			enum nodemap_tree_type tree_type)
 {
 	posix_acl_xattr_header	*header = buf;
-	posix_acl_xattr_entry	*entry = &header->a_entries[0];
+	posix_acl_xattr_entry	*entry = GET_POSIX_ACL_XATTR_ENTRY(header);
 	posix_acl_xattr_entry	*new_entry = entry;
 	posix_acl_xattr_entry	*end;
 	int			 count;

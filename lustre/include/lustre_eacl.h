@@ -71,6 +71,11 @@ struct lu_ucred;
 struct lu_attr;
 struct lustre_idmap_table;
 
+#ifdef HAVE_STRUCT_POSIX_ACL_XATTR
+# define posix_acl_xattr_header struct posix_acl_xattr_header
+# define posix_acl_xattr_entry  struct posix_acl_xattr_entry
+#endif
+
 extern int lustre_posix_acl_permission(struct lu_ucred *mu,
 					const struct lu_attr *la, int want,
 					posix_acl_xattr_entry *entry,

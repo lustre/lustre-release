@@ -73,7 +73,7 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
 
 	buf.lb_len = rc;
 	head = (posix_acl_xattr_header *)(buf.lb_buf);
-	entry = head->a_entries;
+	entry = GET_POSIX_ACL_XATTR_ENTRY(head);
 	entry_count = (buf.lb_len - sizeof(head->a_version)) /
 		sizeof(posix_acl_xattr_entry);
 	if (entry_count <= 0)
@@ -102,7 +102,7 @@ int mdd_acl_set(const struct lu_env *env, struct mdd_object *obj,
 	ENTRY;
 
 	head = (posix_acl_xattr_header *)(buf->lb_buf);
-	entry = head->a_entries;
+	entry = GET_POSIX_ACL_XATTR_ENTRY(head);
 	entry_count = (buf->lb_len - sizeof(head->a_version)) /
 		sizeof(posix_acl_xattr_entry);
 	if (entry_count <= 0)
@@ -182,7 +182,7 @@ int __mdd_fix_mode_acl(const struct lu_env *env, struct lu_buf *buf,
 	ENTRY;
 
 	head = (posix_acl_xattr_header *)(buf->lb_buf);
-	entry = head->a_entries;
+	entry = GET_POSIX_ACL_XATTR_ENTRY(head);
 	entry_count = (buf->lb_len - sizeof(head->a_version)) /
 		      sizeof(posix_acl_xattr_entry);
 	if (entry_count <= 0)
@@ -219,7 +219,7 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
 
 	buf.lb_len = rc;
 	head = (posix_acl_xattr_header *)(buf.lb_buf);
-	entry = head->a_entries;
+	entry = GET_POSIX_ACL_XATTR_ENTRY(head);
 	entry_count = posix_acl_xattr_count(buf.lb_len);
 
 	/* Disregard empty ACLs and fall back to

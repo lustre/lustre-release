@@ -434,4 +434,12 @@ static inline void truncate_inode_pages_final(struct address_space *map)
 # define ll_full_name_hash(salt, name, len) full_name_hash(name, len)
 #endif
 
+#ifdef HAVE_STRUCT_POSIX_ACL_XATTR
+# define posix_acl_xattr_header struct posix_acl_xattr_header
+# define posix_acl_xattr_entry  struct posix_acl_xattr_entry
+# define GET_POSIX_ACL_XATTR_ENTRY(head) ((void *)((head) + 1))
+#else
+# define GET_POSIX_ACL_XATTR_ENTRY(head) ((head)->a_entries)
+#endif
+
 #endif /* _LUSTRE_COMPAT_H */

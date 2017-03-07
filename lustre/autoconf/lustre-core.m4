@@ -2446,6 +2446,27 @@ group_info_gid, [
 ]) # LC_GROUP_INFO_GID
 
 #
+# LC_STRUCT_POSIX_ACL_XATTR
+#
+# Kernel version 4.8 commit 2211d5ba5c6c4e972ba6dbc912b2897425ea6621
+# posix_acl: xattr representation cleanups
+#
+AC_DEFUN([LC_STRUCT_POSIX_ACL_XATTR], [
+LB_CHECK_COMPILE([if 'struct posix_acl_xattr_{header,entry}' defined],
+struct_posix_acl_xattr, [
+	#include <linux/fs.h>
+	#include <linux/posix_acl_xattr.h>
+],[
+	struct posix_acl_xattr_header *h = NULL;
+	struct posix_acl_xattr_entry  *e;
+	e = (void *)(h + 1);
+],[
+	AC_DEFINE(HAVE_STRUCT_POSIX_ACL_XATTR, 1,
+		[struct posix_acl_xattr_{header,entry} defined])
+])
+]) # LC_STRUCT_POSIX_ACL_XATTR
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2644,6 +2665,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_POSIX_ACL_VALID_USER_NS
 	LC_D_COMPARE_4ARGS
 	LC_FULL_NAME_HASH_3ARGS
+	LC_STRUCT_POSIX_ACL_XATTR
 
 	# 4.9
 	LC_GROUP_INFO_GID
