@@ -177,7 +177,7 @@ lfs_migrate() {
 			exit 4
 		fi
 
-		if [ "$OPT_CHECK" ] && ! cmp "$OLDNAME" "$NEWNAME"; then
+		if [ "$OPT_CHECK" ] && ! cmp -s "$OLDNAME" "$NEWNAME"; then
 			echo -e "\r$NEWNAME: compare failed, exiting" 1>&2
 			exit 8
 		fi
