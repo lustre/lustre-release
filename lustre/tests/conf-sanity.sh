@@ -4493,27 +4493,27 @@ test_63() {
 		return
 	fi
 
-	local inode_slab=$(do_facet $SINGLEMDS \
-		"awk '/ldiskfs_inode_cache/ { print \\\$5 }' /proc/slabinfo")
+	do_rpc_nodes $(facet_active_host $SINGLEMDS) load_module ldiskfs
+	local inode_slab=$(do_facet $SINGLEMDS "cat /proc/slabinfo" |
+			   awk '/ldiskfs_inode_cache/ { print $5 / $6 }')
 	if [ -z "$inode_slab" ]; then
 		skip "ldiskfs module has not been loaded"
 		return
 	fi
 
-	echo "$inode_slab ldisk inodes per page"
-	if [ "$inode_slab" -ge "3" ] ; then
-		# If kmalloc-128 is also 1 per page - this is a debug kernel
-		# and so this is not an error.
-		local kmalloc128=$(do_facet $SINGLEMDS \
-			"awk '/^(kmalloc|size)-128 / { print \\\$5 }' /proc/slabinfo")
-		# 32 128-byte chunks in 4k
-		[ "$kmalloc128" -eq "32" ] ||
-			error "ldisk inode size is too big, $inode_slab objs per page"
-	fi
+	echo "$inode_slab ldiskfs inodes per page"
+	[ "${inode_slab%.*}" -ge "3" ] && return 0
 
-	return
+	# If kmalloc-128 is also 1 per page - this is a debug kernel
+	# and so this is not an error.
+	local kmalloc128=$(do_facet $SINGLEMDS "cat /proc/slabinfo" |
+			   awk '/^(kmalloc|size)-128 / { print $5 / $6 }')
+	# 32 128-byte chunks in 4k
+	[ "${kmalloc128%.*}" -lt "32" ] ||
+		error "ldiskfs inode too big, only $inode_slab objs/page, " \
+		      "kmalloc128 = $kmalloc128 objs/page"
 }
-run_test 63 "Verify each page can at least hold 3 ldisk inodes"
+run_test 63 "Verify each page can at least hold 3 ldiskfs inodes"
 
 test_64() {
 	start_mds || error "unable to start MDS"
