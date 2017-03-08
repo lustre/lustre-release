@@ -275,7 +275,7 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 			       loghandle->lgh_ctxt->loc_obd->obd_name,
 			       POSTID(&loghandle->lgh_id.lgl_oi),
 			       loghandle->lgh_id.lgl_ogen, rc);
-			GOTO(out_unlock, rc);
+			GOTO(out_unlock, rc = 0);
 		}
 		rc = LLOG_DEL_PLAIN;
 	}
