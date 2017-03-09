@@ -122,7 +122,6 @@ struct ofd_device {
 	struct dt_object	*ofd_health_check_file;
 	struct local_oid_storage *ofd_los;
 
-	int			 ofd_subdir_count;
 	__u64			 ofd_inconsistency_self_detected;
 	__u64			 ofd_inconsistency_self_repaired;
 
@@ -138,13 +137,14 @@ struct ofd_device {
 	struct obd_statfs	 ofd_osfs;
 	__u64			 ofd_osfs_age;
 	int			 ofd_blockbits;
+	/* counters used during statfs update, protected by ofd_osfs_lock.
+	 * record when some statfs refresh are in progress */
+	int			 ofd_statfs_inflight;
+
 	/* writes between prep & commit which might be accounted twice in
 	 * ofd_osfs.os_bavail */
 	u64			 ofd_osfs_unstable;
 
-	/* counters used during statfs update, protected by ofd_osfs_lock.
-	 * record when some statfs refresh are in progress */
-	int			 ofd_statfs_inflight;
 	/* track writes completed while statfs refresh is underway.
 	 * tracking is only effective when ofd_statfs_inflight > 1 */
 	u64			 ofd_osfs_inflight;
@@ -163,6 +163,8 @@ struct ofd_device {
 
 	/* preferred BRW size, decided by storage type and capability */
 	__u32			 ofd_brw_size;
+	/* checksum types supported on this node */
+	enum cksum_types	 ofd_cksum_types_supported;
 
 	/* ofd mod data: ofd_device wide values */
 	int			 ofd_fmd_max_num; /* per ofd ofd_mod_data */

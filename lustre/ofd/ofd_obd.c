@@ -249,7 +249,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		/* The client set in ocd_cksum_types the checksum types it
 		 * supports. We have to mask off the algorithms that we don't
 		 * support */
-		data->ocd_cksum_types &= cksum_types_supported_server();
+		data->ocd_cksum_types &= ofd->ofd_cksum_types_supported;
 
 		if (unlikely(data->ocd_cksum_types == 0)) {
 			CERROR("%s: Connect with checksum support but no "

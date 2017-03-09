@@ -306,7 +306,10 @@ EXPORT_SYMBOL(cfs_crypto_hash_final);
 /**
  * Compute the speed of specified hash function
  *
- * Run a speed test on the given hash algorithm on buffer of the given size.
+ * Run a speed test on the given hash algorithm on buffer using a 1MB buffer
+ * size.  This is a reasonable buffer size for Lustre RPCs, even if the actual
+ * RPC size is larger or smaller.
+ *
  * The speed is stored internally in the cfs_crypto_hash_speeds[] array, and
  * is available through the cfs_crypto_hash_speed() function.
  *
@@ -335,9 +338,8 @@ static void cfs_crypto_performance_test(enum cfs_crypto_hash_alg hash_alg)
 	memset(buf, 0xAD, PAGE_SIZE);
 	kunmap(page);
 
-	for (start = jiffies, end = start + msecs_to_jiffies(MSEC_PER_SEC),
-	     bcount = 0;
-	     time_before(jiffies, end) && err == 0; bcount++) {
+	for (start = jiffies, end = start + msecs_to_jiffies(MSEC_PER_SEC / 4),
+	     bcount = 0; time_before(jiffies, end) && err == 0; bcount++) {
 		struct cfs_crypto_hash_desc *hdesc;
 		int i;
 
@@ -380,8 +382,12 @@ out_err:
 /**
  * hash speed in Mbytes per second for valid hash algorithm
  *
- * Return the performance of the specified \a hash_alg that was previously
- * computed using cfs_crypto_performance_test().
+ * Return the performance of the specified \a hash_alg that was
+ * computed using cfs_crypto_performance_test().  If the performance
+ * has not yet been computed, do that when it is first requested.
+ * That avoids computing the speed when it is not actually needed.
+ * To avoid competing threads computing the checksum speed at the
+ * same time, only compute a single checksum speed at one time.
  *
  * \param[in] hash_alg	hash algorithm id (CFS_HASH_ALG_*)
  *
@@ -391,8 +397,17 @@ out_err:
  */
 int cfs_crypto_hash_speed(enum cfs_crypto_hash_alg hash_alg)
 {
-	if (hash_alg < CFS_HASH_ALG_MAX)
+	if (hash_alg < CFS_HASH_ALG_MAX) {
+		if (unlikely(cfs_crypto_hash_speeds[hash_alg] == 0)) {
+			static DEFINE_MUTEX(crypto_hash_speed_mutex);
+
+			mutex_lock(&crypto_hash_speed_mutex);
+			if (cfs_crypto_hash_speeds[hash_alg] == 0)
+				cfs_crypto_performance_test(hash_alg);
+			mutex_unlock(&crypto_hash_speed_mutex);
+		}
 		return cfs_crypto_hash_speeds[hash_alg];
+	}
 
 	return -ENOENT;
 }
@@ -401,9 +416,10 @@ EXPORT_SYMBOL(cfs_crypto_hash_speed);
 /**
  * Run the performance test for all hash algorithms.
  *
- * Run the cfs_crypto_performance_test() benchmark for all of the available
- * hash functions using a 1MB buffer size.  This is a reasonable buffer size
- * for Lustre RPCs, even if the actual RPC size is larger or smaller.
+ * Run the cfs_crypto_performance_test() benchmark for some of the available
+ * hash functions at module load time.  This can't be reliably done at runtime
+ * since the CPUs may be under load from thousands of connecting clients when
+ * the first client connects and the checksum speeds are needed.
  *
  * Since the setup cost and computation speed of various hash algorithms is
  * a function of the buffer size (and possibly internal contention of offload
@@ -420,7 +436,7 @@ static int cfs_crypto_test_hashes(void)
 {
 	enum cfs_crypto_hash_alg hash_alg;
 
-	for (hash_alg = 0; hash_alg < CFS_HASH_ALG_MAX; hash_alg++)
+	for (hash_alg = 1; hash_alg < CFS_HASH_ALG_SPEED_MAX; hash_alg++)
 		cfs_crypto_performance_test(hash_alg);
 
 	return 0;

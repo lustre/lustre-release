@@ -133,10 +133,10 @@ static inline cksum_type_t cksum_types_supported_client(void)
 }
 
 /* Server uses algos that perform at 50% or better of the Adler */
-static inline cksum_type_t cksum_types_supported_server(void)
+static inline enum cksum_types cksum_types_supported_server(void)
 {
-	int	     base_speed;
-	cksum_type_t    ret = OBD_CKSUM_ADLER;
+	enum cksum_types ret = OBD_CKSUM_ADLER;
+	int base_speed;
 
 	CDEBUG(D_INFO, "Crypto hash speed: crc %d, crc32c %d, adler %d\n",
 	       cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_CRC32)),

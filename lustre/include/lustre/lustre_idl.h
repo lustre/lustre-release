@@ -861,7 +861,7 @@ struct obd_connect_data {
  * Please update DECLARE_CKSUM_NAME/OBD_CKSUM_ALL in obd.h when adding a new
  * algorithm and also the OBD_FL_CKSUM* flags.
  */
-typedef enum {
+typedef enum cksum_types {
         OBD_CKSUM_CRC32 = 0x00000001,
         OBD_CKSUM_ADLER = 0x00000002,
         OBD_CKSUM_CRC32C= 0x00000004,

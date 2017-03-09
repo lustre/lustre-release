@@ -183,8 +183,7 @@ static struct shash_alg alg = {
 int cfs_crypto_crc32_pclmul_register(void)
 {
 	if (!boot_cpu_has(X86_FEATURE_PCLMULQDQ)) {
-		CDEBUG(D_INFO, "PCLMULQDQ-NI instructions are not "
-		       "detected.\n");
+		CDEBUG(D_INFO, "PCLMULQDQ-NI instructions are not detected.\n");
 		return -ENODEV;
 	}
 	return crypto_register_shash(&alg);
