@@ -208,7 +208,7 @@ struct miscdevice obd_psdev = {
 static ssize_t version_show(struct kobject *kobj, struct attribute *attr,
 			    char *buf)
 {
-	return sprintf(buf, "lustre: %s\n", LUSTRE_VERSION_STRING);
+	return sprintf(buf, "%s\n", LUSTRE_VERSION_STRING);
 }
 
 static ssize_t pinger_show(struct kobject *kobj, struct attribute *attr,
