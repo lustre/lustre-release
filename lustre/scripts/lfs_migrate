@@ -1,6 +1,4 @@
 #!/bin/bash
-# set -x
-set -e
 
 # lfs_migrate: a simple tool to copy and check files.
 #
@@ -18,24 +16,51 @@ RSYNC=${RSYNC:-rsync}
 LFS_MIGRATE_RSYNC_MODE=${LFS_MIGRATE_RSYNC_MODE:-false}
 ECHO=echo
 LFS=${LFS:-lfs}
+LFS_MIGRATE_RSYNC=${LFS_MIGRATE_RSYNC:-false}
+RSYNC_WITH_HLINKS=false
+LFS_MIGRATE_TMP=${TMPDIR:-/tmp}
+MIGRATED_SET="$(mktemp ${LFS_MIGRATE_TMP}/lfs_migrate-$$.links.XXXXXX)"
+NEWNAME=""
+REMOVE_FID='s/^\[[0-9a-fx:]*\] //'
+
+add_to_set() {
+	local old_fid="$1"
+	local path="$2"
+
+	echo -e "$old_fid $path" >> "$MIGRATED_SET"
+}
+
+path_in_set() {
+	local path="$1"
+
+	sed -e "$REMOVE_FID" $MIGRATED_SET | grep -q "^$path$"
+}
+
+old_fid_in_set() {
+	local old_fid="$1"
+
+	grep "^\\$old_fid" "$MIGRATED_SET" | head -n 1 |
+		sed -e "$REMOVE_FID"
+}
 
 usage() {
     cat -- <<USAGE 1>&2
-usage: lfs_migrate [-c <stripe_count>] [-h] [-l] [-n] [-q] [-R] [-s] [-y] [-0]
-                   [file|dir ...]
+usage: lfs_migrate [-c <stripe_count>] [-h] [-n] [-q] [-R] [-s]
+                   [-S <stripe_size>] [-y] [-0] [file|dir ...]
     -c <stripe_count>
        restripe file using the specified stripe count
     -h show this usage message
-    -l migrate files with hard links (skip by default for rsync)
     -n only print the names of files to be migrated
     -q run quietly (don't print filenames or status)
     -R restripe file using default directory striping
     -s skip file data comparison after migrate
+    -S <stripe_size>
+       restripe file using the specified stripe size
     -y answer 'y' to usage question
     -0 input file names on stdin are separated by a null character
 
-The -c <stripe_count> option may not be specified at the same time as
-the -R option.
+The -c <stripe_count> and -S <stripe_size> options may not be specified at
+the same time as the -R option.
 
 If a directory is an argument, all files in the directory are migrated.
 If no file/directory is given, the file list is read from standard input.
@@ -46,17 +71,26 @@ USAGE
     exit 1
 }
 
+cleanup() {
+	rm -f "$MIGRATED_SET"
+	[ -n "$NEWNAME" ] && rm -f "$NEWNAME"
+}
+
+trap cleanup EXIT
+
 OPT_CHECK=y
 OPT_STRIPE_COUNT=""
+OPT_STRIPE_SIZE=""
 
-while getopts "c:hlnqRsy0" opt $*; do
+while getopts "c:hlnqRsS:y0" opt $*; do
     case $opt in
 	c) OPT_STRIPE_COUNT=$OPTARG;;
-	l) OPT_NLINK=y;;
+	l) ;; # maintained for backward compatibility
 	n) OPT_DRYRUN=n; OPT_YES=y;;
 	q) ECHO=:;;
 	R) OPT_RESTRIPE=y;;
 	s) OPT_CHECK="";;
+	S) OPT_STRIPE_SIZE=$OPTARG;;
 	y) OPT_YES=y;;
 	0) OPT_NULL=y;;
 	h|\?) usage;;
@@ -64,9 +98,10 @@ while getopts "c:hlnqRsy0" opt $*; do
 done
 shift $((OPTIND - 1))
 
-if [ "$OPT_STRIPE_COUNT" -a "$OPT_RESTRIPE" ]; then
+if [ -n "$OPT_STRIPE_COUNT""$OPT_STRIPE_SIZE" -a "$OPT_RESTRIPE" ]; then
 	echo ""
-	echo "$(basename $0) error: The -c <stripe_count> option may not" 1>&2
+	echo "$(basename $0) error: The -c <stripe_count> option and" 1>&2
+	echo "-S <stripe_size> option may not" 1>&2
 	echo "be specified at the same time as the -R option." 1>&2
 	exit 1
 fi
@@ -99,27 +134,75 @@ umask 0077
 
 lfs_migrate() {
 	while IFS='' read -d '' OLDNAME; do
-		$ECHO -n "$OLDNAME: "
+		local hlinks=()
 
 		# avoid duplicate stat if possible
-		TYPE_LINK=($(LANG=C stat -c "%h %F" "$OLDNAME" || true))
+		local nlink_type=($(LANG=C stat -c "%h %F" "$OLDNAME" || true))
 
 		# skip non-regular files, since they don't have any objects
 		# and there is no point in trying to migrate them.
-		if [ "${TYPE_LINK[1]}" != "regular" ]; then
-			echo -e "not a regular file, skipped"
+		if [ "${nlink_type[1]}" != "regular" ]; then
+			echo -e "$OLDNAME: not a regular file, skipped"
 			continue
 		fi
 
 		# working out write perms is hard, let the shell do it
 		if [ ! -w "$OLDNAME" ]; then
-			echo -e "no write permission, skipped"
+			echo -e "$OLDNAME: no write permission, skipped"
 			continue
 		fi
 
 		if [ "$OPT_DRYRUN" ]; then
-			echo -e "dry run, skipped"
+			echo -e "$OLDNAME: dry run, skipped"
 			continue
+		fi
+
+		# xattrs use absolute file paths, so ensure provided path is
+		# also absolute so that the names can be compared
+		local oldname_absolute=$(readlink -f "$OLDNAME")
+		if [ $? -ne 0 ]; then
+			echo -e "$OLDNAME: cannot resolve full path"
+			continue
+		fi
+		OLDNAME=$oldname_absolute
+
+		# In the future, the path2fid and fid2path calls below
+		# should be replaced with a single call to
+		# "lfs path2links" once that command is available.  The logic
+		# for detecting unlisted hard links could then be removed.
+		local fid=$(lfs path2fid "$OLDNAME" 2> /dev/null)
+		if [ $? -ne 0 ]; then
+			echo -n "$OLDNAME: cannot determine FID; skipping; "
+			echo "is this a Lustre file system?"
+			continue
+		fi
+
+		if [[ ${nlink_type[0]} -gt 1 || $RSYNC_WITH_HLINKS == true ]]; then
+			# don't migrate a hard link if it was already migrated
+			if path_in_set "$OLDNAME"; then
+				$ECHO -e "$OLDNAME: already migrated via another hard link"
+				continue
+			fi
+
+			# There is limited space available in the xattrs
+			# to store all of the hard links for a file, so it's
+			# possible that $OLDNAME is part of a link set but is
+			# not listed in xattrs and therefore not listed as
+			# being migrated.
+			local migrated=$(old_fid_in_set "$fid")
+			if [ -n "$migrated" ]; then
+				$ECHO -e "$OLDNAME: already migrated via another hard link"
+				if [[ $LFS_MIGRATE_RSYNC == true ]]; then
+					# Only the rsync case has to relink.
+					# The lfs migrate case preserves the
+					# inode so the links are already
+					# correct.
+					[ "$migrated" != "$OLDNAME" ] &&
+						ln -f "$migrated" "$OLDNAME"
+				fi
+				add_to_set "$fid" "$OLDNAME"
+				continue;
+			fi
 		fi
 
 		if [ "$OPT_RESTRIPE" ]; then
@@ -130,57 +213,92 @@ lfs_migrate() {
 		# then we don't need to do this getstripe/mktemp stuff.
 			UNLINK="-u"
 
-			[ "$OPT_STRIPE_COUNT" ] && COUNT=$OPT_STRIPE_COUNT ||
-				COUNT=$($LFS getstripe -c "$OLDNAME" \
-					2> /dev/null)
-			SIZE=$($LFS getstripe -S "$OLDNAME" 2> /dev/null)
+			[ "$OPT_STRIPE_COUNT" ] &&
+				stripe_count=$OPT_STRIPE_COUNT ||
+				stripe_count=$($LFS getstripe -c "$OLDNAME" \
+					       2> /dev/null)
+			[ "$OPT_STRIPE_SIZE" ] &&
+				stripe_size=$OPT_STRIPE_SIZE ||
+				stripe_size=$($LFS getstripe -S \
+					      "$OLDNAME" 2> /dev/null)
 
-			[ -z "$COUNT" -o -z "$SIZE" ] && UNLINK=""
-			SIZE="-S${SIZE}"
+			if [ -z "$stripe_count" -o -z "$stripe_size" ]; then
+				UNLINK=""
+				echo -e "$OLDNAME: cannot determine stripe info; skipping"
+				continue
+			fi
+			stripe_size="-S$stripe_size"
+			stripe_count="-c$stripe_count"
 		fi
 
-		# first try to migrate inside lustre
-		# if failed go back to old rsync mode
-		if [[ $LFS_MIGRATE_RSYNC_MODE == false ]]; then
-			if $LFS migrate -c${COUNT} ${SIZE} "$OLDNAME"; then
-				$ECHO "done"
+		# detect other hard links and store them on a global
+		# list so we don't re-migrate them
+		local mntpoint=$(df -P "$OLDNAME" |
+				awk 'NR==2 { print $NF; exit }')
+		if [ -z "$mntpoint" ]; then
+			echo -e "$OLDNAME: cannot determine mount point; skipping"
+			continue
+		fi
+		local hlinks=$(lfs fid2path "$mntpoint" "$fid" 2> /dev/null)
+		if [ $? -ne 0 ]; then
+			echo -n "$OLDNAME: cannot determine hard link paths"
+			continue
+		fi
+		hlinks+=("$OLDNAME")
+
+		# first try to migrate via Lustre tools, then fall back to rsync
+		if [[ $LFS_MIGRATE_RSYNC == false ]]; then
+			if $LFS migrate "$stripe_count" "$stripe_size" "$OLDNAME"; then
+				$ECHO -e "$OLDNAME: done migrate"
+				for link in ${hlinks[*]}; do
+					add_to_set "$fid" "$link"
+				done
 				continue
 			else
-				echo "falling back to rsync-based migration"
-				LFS_MIGRATE_RSYNC_MODE=true
+				echo -e "$OLDNAME: falling back to rsync-based migration"
+				LFS_MIGRATE_RSYNC=true
 			fi
 		fi
 
-		if [ -z "$OPT_NLINK" -a ${TYPE_LINK[0]} -gt 1 ]; then
-			echo -e "multiple hard links, skipped"
-			continue
-		fi
-
-		NEWNAME=$(mktemp $UNLINK "$OLDNAME.tmp.XXXXXX")
+		NEWNAME=$(mktemp $UNLINK "$OLDNAME-lfs_migrate.tmp.XXXXXX")
 		if [ $? -ne 0 -o -z "$NEWNAME" ]; then
-			echo -e "\r$OLDNAME: can't make temp file, skipped" 1>&2
+			echo -e "$OLDNAME: can't make temp file, skipped" 1>&2
 			continue
 		fi
 
-		[ "$UNLINK" ] && $LFS setstripe -c${COUNT} ${SIZE} "$NEWNAME"
+		[ "$UNLINK" ] && $LFS setstripe ${stripe_count}	\
+			${stripe_size} "$NEWNAME"
 
 		# we use --inplace, since we created our own temp file already
 		if ! $RSYNC -a --inplace $RSYNC_OPTS "$OLDNAME" "$NEWNAME";then
-			echo -e "\r$OLDNAME: copy error, exiting" 1>&2
-			rm -f "$NEWNAME"
+			echo -e "$OLDNAME: copy error, exiting" 1>&2
 			exit 4
 		fi
 
 		if [ "$OPT_CHECK" ] && ! cmp -s "$OLDNAME" "$NEWNAME"; then
-			echo -e "\r$NEWNAME: compare failed, exiting" 1>&2
+			echo -e "$NEWNAME: compare failed, exiting" 1>&2
 			exit 8
 		fi
 
 		if ! mv "$NEWNAME" "$OLDNAME"; then
-			echo -e "\r$OLDNAME: rename error, exiting" 1>&2
+			echo -e "$OLDNAME: rename error, exiting" 1>&2
 			exit 12
 		fi
-		$ECHO "done"
+
+		$ECHO -e "$OLDNAME: done migrate via rsync"
+		for link in ${hlinks[*]}; do
+			if [ "$link" != "$OLDNAME" ]; then
+				ln -f "$OLDNAME" "$link"
+			fi
+			add_to_set "$fid" "$link"
+		done
+
+		# If the number of hlinks exceeds the space in the xattrs,
+		# when the final path is statted it will have a link count
+		# of 1 (all other links will point to the new inode).
+		# This flag indicates that even paths with a link count of
+		# 1 are potentially part of a link set.
+		[ ${#hlinks[*]} -gt 1 ] && RSYNC_WITH_HLINKS=true
 	done
 }
 
@@ -193,10 +311,11 @@ if [ "$#" -eq 0 ]; then
 else
 	while [ "$1" ]; do
 		if [ -d "$1" ]; then
-			lfs find "$1" -type f -print0 | lfs_migrate
+			$LFS find "$1" -type f -print0 | lfs_migrate
 		else
 			echo -en "$1\0" | lfs_migrate
 		fi
 		shift
 	done
 fi
+
