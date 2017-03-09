@@ -766,56 +766,76 @@ int llog_cat_cancel_records(const struct lu_env *env,
 }
 EXPORT_SYMBOL(llog_cat_cancel_records);
 
-static int llog_cat_process_cb(const struct lu_env *env,
-			       struct llog_handle *cat_llh,
-			       struct llog_rec_hdr *rec, void *data)
+static int llog_cat_process_common(const struct lu_env *env,
+				   struct llog_handle *cat_llh,
+				   struct llog_rec_hdr *rec,
+				   struct llog_handle **llhp)
 {
-	struct llog_process_data *d = data;
-	struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
-	struct llog_handle *llh;
+	struct llog_logid_rec *lir = container_of(rec, typeof(*lir), lid_hdr);
 	struct llog_log_hdr *hdr;
 	int rc;
 
 	ENTRY;
-	if (rec->lrh_type != LLOG_LOGID_MAGIC) {
-		CERROR("invalid record in catalog\n");
-		RETURN(-EINVAL);
+	if (rec->lrh_type != le32_to_cpu(LLOG_LOGID_MAGIC)) {
+		rc = -EINVAL;
+		CWARN("%s: invalid record in catalog "DFID":%x: rc = %d\n",
+		      cat_llh->lgh_ctxt->loc_obd->obd_name,
+		      PFID(&cat_llh->lgh_id.lgl_oi.oi_fid),
+		      cat_llh->lgh_id.lgl_ogen, rc);
+		RETURN(rc);
 	}
-	CDEBUG(D_HA, "processing log "DFID":%x at index %u of catalog "
-	       DFID"\n", PFID(&lir->lid_id.lgl_oi.oi_fid), lir->lid_id.lgl_ogen,
-	       rec->lrh_index, PFID(&cat_llh->lgh_id.lgl_oi.oi_fid));
+	CDEBUG(D_HA, "processing log "DFID":%x at index %u of catalog "DFID"\n",
+	       PFID(&lir->lid_id.lgl_oi.oi_fid), lir->lid_id.lgl_ogen,
+	       le32_to_cpu(rec->lrh_index),
+	       PFID(&cat_llh->lgh_id.lgl_oi.oi_fid));
 
-	rc = llog_cat_id2handle(env, cat_llh, &llh, &lir->lid_id);
+	rc = llog_cat_id2handle(env, cat_llh, llhp, &lir->lid_id);
 	if (rc) {
-		CERROR("%s: cannot find handle for llog "DFID": rc = %d\n",
-		       cat_llh->lgh_ctxt->loc_obd->obd_name,
-		       PFID(&lir->lid_id.lgl_oi.oi_fid), rc);
-		if (rc == -ENOENT || rc == -ESTALE) {
-			/* After a server crash, a stub of index
-			 * record in catlog could be kept, because
-			 * plain log destroy + catlog index record
-			 * deletion are not atomic. So we end up with
-			 * an index but no actual record. Destroy the
-			 * index and move on. */
+		/* After a server crash, a stub of index record in catlog could
+		 * be kept, because plain log destroy + catlog index record
+		 * deletion are not atomic. So we end up with an index but no
+		 * actual record. Destroy the index and move on. */
+		if (rc == -ENOENT || rc == -ESTALE)
 			rc = llog_cat_cleanup(env, cat_llh, NULL,
 					      rec->lrh_index);
-		}
+		if (rc)
+			CWARN("%s: can't find llog handle "DFID":%x: rc = %d\n",
+			      cat_llh->lgh_ctxt->loc_obd->obd_name,
+			      PFID(&lir->lid_id.lgl_oi.oi_fid),
+			      lir->lid_id.lgl_ogen, rc);
 
 		RETURN(rc);
 	}
 
 	/* clean old empty llogs, do not consider current llog in use */
-	/* ignore remote (lgh_obj=NULL) llogs */
-	hdr = llh->lgh_hdr;
+	/* ignore remote (lgh_obj == NULL) llogs */
+	hdr = (*llhp)->lgh_hdr;
 	if ((hdr->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
 	    hdr->llh_count == 1 && cat_llh->lgh_obj != NULL &&
-	    llh != cat_llh->u.chd.chd_current_log) {
-		rc = llog_destroy(env, llh);
+	    *llhp != cat_llh->u.chd.chd_current_log) {
+		rc = llog_destroy(env, *llhp);
 		if (rc)
-			CERROR("%s: fail to destroy empty log: rc = %d\n",
-			       llh->lgh_ctxt->loc_obd->obd_name, rc);
-		GOTO(out, rc = LLOG_DEL_PLAIN);
+			CWARN("%s: can't destroy empty log "DFID": rc = %d\n",
+			      (*llhp)->lgh_ctxt->loc_obd->obd_name,
+			      PFID(&lir->lid_id.lgl_oi.oi_fid), rc);
+		rc = LLOG_DEL_PLAIN;
 	}
+
+	RETURN(rc);
+}
+
+static int llog_cat_process_cb(const struct lu_env *env,
+			       struct llog_handle *cat_llh,
+			       struct llog_rec_hdr *rec, void *data)
+{
+	struct llog_process_data *d = data;
+	struct llog_handle *llh = NULL;
+	int rc;
+
+	ENTRY;
+	rc = llog_cat_process_common(env, cat_llh, rec, &llh);
+	if (rc)
+		GOTO(out, rc);
 
 	if (rec->lrh_index < d->lpd_startcat) {
 		/* Skip processing of the logs until startcat */
@@ -839,7 +859,8 @@ out:
 	if (rc == LLOG_DEL_PLAIN)
 		rc = llog_cat_cleanup(env, cat_llh, llh,
 				      llh->u.phd.phd_cookie.lgc_index);
-	llog_handle_put(llh);
+	if (llh)
+		llog_handle_put(llh);
 
 	RETURN(rc);
 }
@@ -900,39 +921,31 @@ static int llog_cat_size_cb(const struct lu_env *env,
 			     struct llog_rec_hdr *rec, void *data)
 {
 	struct llog_process_data *d = data;
-	struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
-	struct llog_handle *llh;
-	int rc;
+	struct llog_handle *llh = NULL;
 	__u64 *cum_size = d->lpd_data;
 	__u64 size;
+	int rc;
 
 	ENTRY;
-	if (rec->lrh_type != LLOG_LOGID_MAGIC) {
-		CERROR("%s: invalid record in catalog, rc = %d\n",
-		       cat_llh->lgh_ctxt->loc_obd->obd_name, -EINVAL);
-		RETURN(-EINVAL);
-	}
-	CDEBUG(D_HA, "processing log "DFID":%x at index %u of catalog "
-	       DFID"\n", PFID(&lir->lid_id.lgl_oi.oi_fid), lir->lid_id.lgl_ogen,
-	       rec->lrh_index, PFID(&cat_llh->lgh_id.lgl_oi.oi_fid));
-
-	rc = llog_cat_id2handle(env, cat_llh, &llh, &lir->lid_id);
-	if (rc) {
-		CWARN("%s: cannot find handle for llog "DFID": rc = %d\n",
-		      cat_llh->lgh_ctxt->loc_obd->obd_name,
-		      PFID(&lir->lid_id.lgl_oi.oi_fid), rc);
+	rc = llog_cat_process_common(env, cat_llh, rec, &llh);
+	if (llh == NULL)
 		RETURN(0);
-	}
-	size = llog_size(env, llh);
-	*cum_size += size;
 
-	CDEBUG(D_INFO, "Add llog entry "DFID" size %llu\n",
-	       PFID(&llh->lgh_id.lgl_oi.oi_fid), size);
+	if (rc == LLOG_DEL_PLAIN) {
+		/* empty log was deleted, don't count it */
+		rc = llog_cat_cleanup(env, cat_llh, llh,
+				      llh->u.phd.phd_cookie.lgc_index);
+	} else {
+		size = llog_size(env, llh);
+		*cum_size += size;
+
+		CDEBUG(D_INFO, "Add llog entry "DFID" size=%llu, tot=%llu\n",
+		       PFID(&llh->lgh_id.lgl_oi.oi_fid), size, *cum_size);
+	}
 
 	llog_handle_put(llh);
 
 	RETURN(0);
-
 }
 
 __u64 llog_cat_size(const struct lu_env *env, struct llog_handle *cat_llh)
@@ -951,54 +964,16 @@ static int llog_cat_reverse_process_cb(const struct lu_env *env,
 				       struct llog_rec_hdr *rec, void *data)
 {
 	struct llog_process_data *d = data;
-	struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
 	struct llog_handle *llh;
-	struct llog_log_hdr *hdr;
 	int rc;
 
-	if (le32_to_cpu(rec->lrh_type) != LLOG_LOGID_MAGIC) {
-		CERROR("invalid record in catalog\n");
-		RETURN(-EINVAL);
-	}
-	CDEBUG(D_HA, "processing log "DFID":%x at index %u of catalog "
-	       DFID"\n", PFID(&lir->lid_id.lgl_oi.oi_fid), lir->lid_id.lgl_ogen,
-	       le32_to_cpu(rec->lrh_index),
-	       PFID(&cat_llh->lgh_id.lgl_oi.oi_fid));
-
-	rc = llog_cat_id2handle(env, cat_llh, &llh, &lir->lid_id);
-	if (rc) {
-		CERROR("%s: cannot find handle for llog "DFID": rc = %d\n",
-		       cat_llh->lgh_ctxt->loc_obd->obd_name,
-		       PFID(&lir->lid_id.lgl_oi.oi_fid), rc);
-		if (rc == -ENOENT || rc == -ESTALE) {
-			/* After a server crash, a stub of index
-			 * record in catlog could be kept, because
-			 * plain log destroy + catlog index record
-			 * deletion are not atomic. So we end up with
-			 * an index but no actual record. Destroy the
-			 * index and move on. */
-			rc = llog_cat_cleanup(env, cat_llh, NULL,
-					      rec->lrh_index);
-		}
-
+	ENTRY;
+	rc = llog_cat_process_common(env, cat_llh, rec, &llh);
+	if (rc)
 		RETURN(rc);
-	}
-
-	/* clean old empty llogs, do not consider current llog in use */
-	hdr = llh->lgh_hdr;
-	if ((hdr->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
-	    hdr->llh_count == 1 &&
-	    llh != cat_llh->u.chd.chd_current_log) {
-		rc = llog_destroy(env, llh);
-		if (rc)
-			CERROR("%s: fail to destroy empty log: rc = %d\n",
-			       llh->lgh_ctxt->loc_obd->obd_name, rc);
-		GOTO(out, rc = LLOG_DEL_PLAIN);
-	}
 
 	rc = llog_reverse_process(env, llh, d->lpd_cb, d->lpd_data, NULL);
 
-out:
 	/* The empty plain was destroyed while processing */
 	if (rc == LLOG_DEL_PLAIN)
 		rc = llog_cat_cleanup(env, cat_llh, llh,
