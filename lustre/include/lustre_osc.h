@@ -938,7 +938,9 @@ struct osc_extent {
 	 * called by page WB daemon, or sync write or reading requests. */
 				oe_urgent:1,
 	/** Non-delay RPC should be used for this extent. */
-				oe_ndelay:1;
+				oe_ndelay:1,
+	/** direct IO pages */
+				oe_dio:1;
 	/** how many grants allocated for this extent.
 	 *  Grant allocated for this extent. There is no grant allocated
 	 *  for reading extents and sync write extents. */

@@ -1569,6 +1569,20 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		RETURN(result);
 	}
 
+	/**
+	 * Direct read can fall back to buffered read, but DIO is done
+	 * with lockless i/o, and buffered requires LDLM locking, so in
+	 * this case we must restart without lockless.
+	 */
+	if (file->f_flags & O_DIRECT &&
+	    lcc && lcc->lcc_type == LCC_RW &&
+	    !io->ci_ignore_lockless) {
+		unlock_page(vmpage);
+		io->ci_ignore_lockless = 1;
+		io->ci_need_restart = 1;
+		RETURN(-ENOLCK);
+	}
+
 	LASSERT(io->ci_state == CIS_IO_GOING);
 	page = cl_page_find(env, clob, vmpage->index, vmpage, CPT_CACHEABLE);
 	if (!IS_ERR(page)) {

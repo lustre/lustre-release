@@ -143,6 +143,10 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 	if (crt == CRT_READ && ios->cis_io->ci_ndelay)
 		brw_flags |= OBD_BRW_NDELAY;
 
+	page = cl_page_list_first(qin);
+	if (page->cp_type == CPT_TRANSIENT)
+		brw_flags |= OBD_BRW_NOCACHE;
+
         /*
          * NOTE: here @page is a top-level page. This is done to avoid
          *       creation of sub-page-list.

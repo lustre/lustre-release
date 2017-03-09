@@ -419,55 +419,11 @@ static const struct cl_page_operations vvp_page_ops = {
 	},
 };
 
-static int vvp_transient_page_prep(const struct lu_env *env,
-				   const struct cl_page_slice *slice,
-				   struct cl_io *unused)
-{
-	ENTRY;
-	/* transient page should always be sent. */
-	RETURN(0);
-}
-
-static void vvp_transient_page_verify(const struct cl_page *page)
-{
-}
-
-static int vvp_transient_page_own(const struct lu_env *env,
-                                  const struct cl_page_slice *slice,
-                                  struct cl_io *unused, int nonblock)
-{
-        vvp_transient_page_verify(slice->cpl_page);
-        return 0;
-}
-
-static void vvp_transient_page_assume(const struct lu_env *env,
-                                      const struct cl_page_slice *slice,
-                                      struct cl_io *unused)
-{
-        vvp_transient_page_verify(slice->cpl_page);
-}
-
-static void vvp_transient_page_unassume(const struct lu_env *env,
-                                        const struct cl_page_slice *slice,
-                                        struct cl_io *unused)
-{
-        vvp_transient_page_verify(slice->cpl_page);
-}
-
-static void vvp_transient_page_disown(const struct lu_env *env,
-                                      const struct cl_page_slice *slice,
-                                      struct cl_io *unused)
-{
-        vvp_transient_page_verify(slice->cpl_page);
-}
-
 static void vvp_transient_page_discard(const struct lu_env *env,
                                        const struct cl_page_slice *slice,
                                        struct cl_io *unused)
 {
         struct cl_page *page = slice->cpl_page;
-
-        vvp_transient_page_verify(slice->cpl_page);
 
         /*
          * For transient pages, remove it from the radix tree.
@@ -478,21 +434,7 @@ static void vvp_transient_page_discard(const struct lu_env *env,
 static int vvp_transient_page_is_vmlocked(const struct lu_env *env,
 					  const struct cl_page_slice *slice)
 {
-	struct inode    *inode = vvp_object_inode(slice->cpl_obj);
-	int	locked;
-
-	locked = !inode_trylock(inode);
-	if (!locked)
-		inode_unlock(inode);
-	return locked ? -EBUSY : -ENODATA;
-}
-
-static void
-vvp_transient_page_completion(const struct lu_env *env,
-                              const struct cl_page_slice *slice,
-                              int ioret)
-{
-        vvp_transient_page_verify(slice->cpl_page);
+	return -EBUSY;
 }
 
 static void vvp_transient_page_fini(const struct lu_env *env,
@@ -500,32 +442,17 @@ static void vvp_transient_page_fini(const struct lu_env *env,
 				    struct pagevec *pvec)
 {
 	struct vvp_page *vpg = cl2vvp_page(slice);
-	struct cl_page *clp = slice->cpl_page;
-	struct vvp_object *clobj = cl2vvp(clp->cp_obj);
+	struct vvp_object *clobj = cl2vvp(slice->cpl_obj);
 
 	vvp_page_fini_common(vpg, pvec);
 	atomic_dec(&clobj->vob_transient_pages);
 }
 
 static const struct cl_page_operations vvp_transient_page_ops = {
-	.cpo_own		= vvp_transient_page_own,
-	.cpo_assume		= vvp_transient_page_assume,
-	.cpo_unassume		= vvp_transient_page_unassume,
-	.cpo_disown		= vvp_transient_page_disown,
 	.cpo_discard		= vvp_transient_page_discard,
 	.cpo_fini		= vvp_transient_page_fini,
 	.cpo_is_vmlocked	= vvp_transient_page_is_vmlocked,
 	.cpo_print		= vvp_page_print,
-	.io = {
-		[CRT_READ] = {
-			.cpo_prep	= vvp_transient_page_prep,
-			.cpo_completion	= vvp_transient_page_completion,
-		},
-		[CRT_WRITE] = {
-			.cpo_prep	= vvp_transient_page_prep,
-			.cpo_completion	= vvp_transient_page_completion,
-		}
-	}
 };
 
 int vvp_page_init(const struct lu_env *env, struct cl_object *obj,

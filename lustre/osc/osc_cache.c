@@ -617,7 +617,8 @@ int osc_extent_release(const struct lu_env *env, struct osc_extent *ext)
 	RETURN(rc);
 }
 
-static inline int overlapped(struct osc_extent *ex1, struct osc_extent *ex2)
+static inline bool
+overlapped(const struct osc_extent *ex1, const struct osc_extent *ex2)
 {
 	return !(ex1->oe_end < ex2->oe_start || ex2->oe_end < ex1->oe_start);
 }
@@ -1918,6 +1919,31 @@ static inline unsigned osc_extent_chunks(const struct osc_extent *ext)
 	return (ext->oe_end >> ppc_bits) - (ext->oe_start >> ppc_bits) + 1;
 }
 
+static inline bool
+can_merge(const struct osc_extent *ext, const struct osc_extent *in_rpc)
+{
+	if (ext->oe_no_merge || in_rpc->oe_no_merge)
+		return false;
+
+	if (ext->oe_srvlock != in_rpc->oe_srvlock)
+		return false;
+
+	if (ext->oe_ndelay != in_rpc->oe_ndelay)
+		return false;
+
+	if (!ext->oe_grants != !in_rpc->oe_grants)
+		return false;
+
+	if (ext->oe_dio != in_rpc->oe_dio)
+		return false;
+
+	/* It's possible to have overlap on DIO */
+	if (in_rpc->oe_dio && overlapped(ext, in_rpc))
+		return false;
+
+	return true;
+}
+
 /**
  * Try to add extent to one RPC. We need to think about the following things:
  * - # of pages must not be over max_pages_per_rpc
@@ -1929,9 +1955,6 @@ static int try_to_add_extent_for_io(struct client_obd *cli,
 {
 	struct osc_extent *tmp;
 	unsigned int chunk_count;
-	struct osc_async_page *oap = list_first_entry(&ext->oe_pages,
-						      struct osc_async_page,
-						      oap_pending_item);
 	ENTRY;
 
 	EASSERT((ext->oe_state == OES_CACHE || ext->oe_state == OES_LOCK_DONE),
@@ -1960,26 +1983,9 @@ static int try_to_add_extent_for_io(struct client_obd *cli,
 		RETURN(0);
 
 	list_for_each_entry(tmp, data->erd_rpc_list, oe_link) {
-		struct osc_async_page *oap2;
-		oap2 = list_first_entry(&tmp->oe_pages, struct osc_async_page,
-					oap_pending_item);
 		EASSERT(tmp->oe_owner == current, tmp);
-#if 0
-		if (overlapped(tmp, ext)) {
-			OSC_EXTENT_DUMP(D_ERROR, tmp, "overlapped %p.\n", ext);
-			EASSERT(0, ext);
-		}
-#endif
-		if (oap2cl_page(oap)->cp_type != oap2cl_page(oap2)->cp_type) {
-			CDEBUG(D_CACHE, "Do not permit different types of IO "
-			       "in one RPC\n");
-			RETURN(0);
-		}
 
-		if (tmp->oe_srvlock != ext->oe_srvlock ||
-		    !tmp->oe_grants != !ext->oe_grants ||
-		    tmp->oe_ndelay != ext->oe_ndelay ||
-		    tmp->oe_no_merge || ext->oe_no_merge)
+		if (!can_merge(ext, tmp))
 			RETURN(0);
 
 		/* remove break for strict check */
@@ -2755,6 +2761,7 @@ int osc_queue_sync_pages(const struct lu_env *env, const struct cl_io *io,
 	ext->oe_obj = obj;
 	ext->oe_srvlock = !!(brw_flags & OBD_BRW_SRVLOCK);
 	ext->oe_ndelay = !!(brw_flags & OBD_BRW_NDELAY);
+	ext->oe_dio = !!(brw_flags & OBD_BRW_NOCACHE);
 	ext->oe_nr_pages = page_count;
 	ext->oe_mppr = mppr;
 	list_splice_init(list, &ext->oe_pages);

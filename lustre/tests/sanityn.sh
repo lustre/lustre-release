@@ -457,6 +457,46 @@ test_16c() {
 }
 run_test 16c "verify data consistency on ldiskfs with cache disabled (b=17397)"
 
+test_16d() {
+	local file1=$DIR1/$tfile
+	local file2=$DIR2/$tfile
+	local file3=$DIR1/file
+	local stripe_size=$(do_facet $SINGLEMDS \
+		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
+
+	# to allocate grant because it may run out due to test_15.
+	$LFS setstripe -c -1 $file1
+	dd if=/dev/zero of=$file1 bs=$stripe_size count=$OSTCOUNT oflag=sync
+	dd if=/dev/zero of=$file2 bs=$stripe_size count=$OSTCOUNT oflag=sync
+	rm -f $file1
+
+	local tmpfile=`mktemp`
+	$LFS setstripe -c -1 $file1 # b=10919
+	$LCTL set_param ldlm.namespaces.*.lru_size=clear
+	
+	# direct write on one client and direct read from another
+	dd if=/dev/urandom of=$file1 bs=1M count=100 oflag=direct
+	dd if=$file2 of=$tmpfile iflag=direct bs=1M
+	diff $file1 $tmpfile || error "file different(1)"
+	rm -f $file1
+
+	# buffer write on one client, but direct read from another
+	dd if=$tmpfile of=$file1 bs=1M count=100
+	dd if=$file2 of=$file3 bs=1M iflag=direct count=100
+	diff $file3 $tmpfile || error "file different(2)"
+
+	rm -f $file3 $file2 $file1
+	# direct write on one client
+	dd if=$tmpfile of=$file1 bs=1M count=100 oflag=direct
+	# buffer read from another client
+	dd if=$file2 of=$file3 bs=1M count=100
+	diff $file3 $tmpfile || error "file different(3)"
+
+	rm -f $file1 $file2 $file3 $tmpfile
+
+}
+run_test 16d "Verify DIO and buffer IO with two clients"
+
 
 test_17() { # bug 3513, 3667
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
