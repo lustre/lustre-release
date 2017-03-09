@@ -129,6 +129,17 @@ static inline struct timespec64 timespec_to_timespec64(const struct timespec ts)
 
 #endif /* HAVE_TIMESPEC64 */
 
+#ifndef HAVE_KTIME_ADD
+# define ktime_add(lhs, rhs) ({ (ktime_t){ .tv64 = (lhs).tv64 + (rhs).tv64 }; })
+#endif /* !HAVE_KTIME_ADD */
+
+#ifndef HAVE_KTIME_AFTER
+static inline bool ktime_after(const ktime_t cmp1, const ktime_t cmp2)
+{
+	return cmp1.tv64 > cmp2.tv64;
+}
+#endif /* !HAVE_KTIME_AFTER */
+
 #ifndef HAVE_KTIME_GET_TS64
 void ktime_get_ts64(struct timespec64 *ts);
 #endif /* HAVE_KTIME_GET_TS */
@@ -151,6 +162,15 @@ static inline u64 ktime_get_real_ns(void)
 	return ktime_to_ns(ktime_get_real());
 }
 #endif /* NEED_KTIME_GET_REAL_NS */
+
+#ifndef HAVE_KTIME_TO_TIMESPEC64
+static inline struct timespec64 ktime_to_timespec64(ktime_t kt)
+{
+	struct timespec ts = ns_to_timespec((kt).tv64);
+
+	return timespec_to_timespec64(ts);
+}
+#endif /* HAVE_KTIME_TO_TIMESPEC64 */
 
 static inline int cfs_time_before(cfs_time_t t1, cfs_time_t t2)
 {

@@ -398,21 +398,21 @@ static int mgs_nidtbl_init_fs(const struct lu_env *env, struct fs_db *fsdb)
 /* --------- Imperative Recovery relies on nidtbl stuff ------- */
 void mgs_ir_notify_complete(struct fs_db *fsdb)
 {
-	struct timeval tv;
-	cfs_duration_t delta;
+	struct timespec64 ts;
+	ktime_t delta;
 
 	atomic_set(&fsdb->fsdb_notify_phase, 0);
 
-        /* do statistic */
-        fsdb->fsdb_notify_count++;
-        delta = cfs_time_sub(cfs_time_current(), fsdb->fsdb_notify_start);
-        fsdb->fsdb_notify_total += delta;
-        if (delta > fsdb->fsdb_notify_max)
-                fsdb->fsdb_notify_max = delta;
+	/* do statistic */
+	fsdb->fsdb_notify_count++;
+	delta = ktime_sub(ktime_get(), fsdb->fsdb_notify_start);
+	fsdb->fsdb_notify_total = ktime_add(fsdb->fsdb_notify_total, delta);
+	if (ktime_after(delta, fsdb->fsdb_notify_max))
+		fsdb->fsdb_notify_max = delta;
 
-        cfs_duration_usec(delta, &tv);
-        CDEBUG(D_MGS, "Revoke recover lock of %s completed after %ld.%06lds\n",
-               fsdb->fsdb_name, tv.tv_sec, tv.tv_usec);
+	ts = ktime_to_timespec64(fsdb->fsdb_notify_max);
+	CDEBUG(D_MGS, "Revoke recover lock of %s completed after %lld.%09lds\n",
+	       fsdb->fsdb_name, (s64)ts.tv_sec, ts.tv_nsec);
 }
 
 static int mgs_ir_notify(void *arg)
@@ -440,7 +440,7 @@ static int mgs_ir_notify(void *arg)
 		CDEBUG(D_MGS, "%s woken up, phase is %d\n",
 		       name, atomic_read(&fsdb->fsdb_notify_phase));
 
-		fsdb->fsdb_notify_start = cfs_time_current();
+		fsdb->fsdb_notify_start = ktime_get();
 		mgs_revoke_lock(fsdb->fsdb_mgs, fsdb, CONFIG_T_RECOVER);
 	}
 
@@ -721,13 +721,13 @@ static int lprocfs_ir_set_timeout(struct fs_db *fsdb, const char *buf)
 
 static int lprocfs_ir_clear_stats(struct fs_db *fsdb, const char *buf)
 {
-        if (*buf)
-                return -EINVAL;
+	if (*buf)
+		return -EINVAL;
 
-        fsdb->fsdb_notify_total = 0;
-        fsdb->fsdb_notify_max   = 0;
-        fsdb->fsdb_notify_count = 0;
-        return 0;
+	fsdb->fsdb_notify_total = ktime_set(0, 0);
+	fsdb->fsdb_notify_max = ktime_set(0, 0);
+	fsdb->fsdb_notify_count = 0;
+	return 0;
 }
 
 static struct lproc_ir_cmd {
@@ -800,11 +800,11 @@ int lprocfs_wr_ir_state(struct file *file, const char __user *buffer,
 
 int lprocfs_rd_ir_state(struct seq_file *seq, void *data)
 {
-        struct fs_db      *fsdb = data;
-        struct mgs_nidtbl *tbl  = &fsdb->fsdb_nidtbl;
-        const char        *ir_strings[] = IR_STRINGS;
-        struct timeval     tv_max;
-        struct timeval     tv;
+	struct fs_db *fsdb = data;
+	struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
+	const char *ir_strings[] = IR_STRINGS;
+	struct timespec64 ts_max;
+	struct timespec64 ts;
 
         /* mgs_live_seq_show() already holds fsdb_mutex. */
         ir_state_graduate(fsdb);
@@ -817,17 +817,17 @@ int lprocfs_rd_ir_state(struct seq_file *seq, void *data)
                    ir_strings[fsdb->fsdb_ir_state], fsdb->fsdb_nonir_clients,
                    tbl->mn_version);
 
-        cfs_duration_usec(fsdb->fsdb_notify_total, &tv);
-        cfs_duration_usec(fsdb->fsdb_notify_max, &tv_max);
+	ts = ktime_to_timespec64(fsdb->fsdb_notify_total);
+	ts_max = ktime_to_timespec64(fsdb->fsdb_notify_max);
 
-        seq_printf(seq, "    notify_duration_total: %lu.%06lu\n"
-                        "    notify_duation_max: %lu.%06lu\n"
-                        "    notify_count: %u\n",
-                   tv.tv_sec, tv.tv_usec,
-                   tv_max.tv_sec, tv_max.tv_usec,
-                   fsdb->fsdb_notify_count);
+	seq_printf(seq, "    notify_duration_total: %lld.%09ld\n"
+			"    notify_duation_max: %lld.%09ld\n"
+			"    notify_count: %u\n",
+		   (s64)ts.tv_sec, ts.tv_nsec,
+		   (s64)ts_max.tv_sec, ts_max.tv_nsec,
+		   fsdb->fsdb_notify_count);
 
-        return 0;
+	return 0;
 }
 
 int lprocfs_ir_timeout_seq_show(struct seq_file *m, void *data)

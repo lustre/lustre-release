@@ -279,6 +279,41 @@ ktime_get_ts64, [
 ]) # LIBCFS_KTIME_GET_TS64
 
 #
+# Kernel version 3.12 introduced ktime_add
+#
+AC_DEFUN([LIBCFS_KTIME_ADD],[
+LB_CHECK_COMPILE([does function 'ktime_add' exist],
+ktime_add, [
+	#include <linux/ktime.h>
+],[
+	ktime_t start = ktime_set(0, 0);
+	ktime_t end = start;
+	ktime_t total;
+
+	total = ktime_add(start, end);
+],[
+	AC_DEFINE(HAVE_KTIME_ADD, 1,
+		[ktime_add is available])
+])
+]) # LIBCFS_KTIME_ADD
+
+#
+# Kernel version 3.12 introduced ktime_after
+#
+AC_DEFUN([LIBCFS_KTIME_AFTER],[
+LB_CHECK_COMPILE([does function 'ktime_after' exist],
+ktime_after, [
+	#include <linux/ktime.h>
+],[
+	ktime_t start = ktime_set(0, 0);
+	ktime_t end = start;
+
+	ktime_after(start, end);
+],[
+	AC_DEFINE(HAVE_KTIME_AFTER, 1,
+		[ktime_after is available])
+])
+]) # LIBCFS_KTIME_AFTER
 
 #
 # FC19 3.12 kernel struct shrinker change
@@ -380,6 +415,24 @@ ktime_get_real_ns, [
 		['ktime_get_real_ns' is not available])
 ])
 ]) # LIBCFS_KTIME_GET_REAL_NS
+
+#
+# Kernel version 3.17 introduced ktime_to_timespec64
+#
+AC_DEFUN([LIBCFS_KTIME_TO_TIMESPEC64],[
+LB_CHECK_COMPILE([does function 'ktime_to_timespec64' exist],
+ktime_to_timespec64, [
+	#include <linux/ktime.h>
+],[
+	struct timespec64 ts;
+	ktime_t now;
+
+	ts = ktime_to_timespec64(now);
+],[
+	AC_DEFINE(HAVE_KTIME_TO_TIMESPEC64, 1,
+		['ktime_to_timespec64' is available])
+])
+]) # LIBCFS_KTIME_TO_TIMESPEC64
 
 #
 # Kernel version 3.19 introduced ktime_get_seconds
@@ -516,6 +569,8 @@ LIBCFS_ENABLE_CRC32C_ACCEL
 # 3.11
 LIBCFS_KTIME_GET_TS64
 # 3.12
+LIBCFS_KTIME_ADD
+LIBCFS_KTIME_AFTER
 LIBCFS_SHRINKER_COUNT
 # 3.17
 LIBCFS_HLIST_ADD_AFTER
@@ -523,6 +578,7 @@ LIBCFS_TIMESPEC64
 LIBCFS_KTIME_GET_REAL_TS64
 LIBCFS_KTIME_GET_REAL_SECONDS
 LIBCFS_KTIME_GET_REAL_NS
+LIBCFS_KTIME_TO_TIMESPEC64
 # 3.19
 LIBCFS_KTIME_GET_SECONDS
 # 4.2
