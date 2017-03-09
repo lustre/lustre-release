@@ -5165,16 +5165,15 @@ test_56x() {
 	check_swap_layouts_support && return 0
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 
-	local dir0=$DIR/$tdir/$testnum
-	test_mkdir -p $dir0 || error "creating dir $dir0"
-
+	local dir0=$DIR/$tdir
 	local ref1=/etc/passwd
 	local file1=$dir0/file1
 
-	$SETSTRIPE -c 2 $file1
+	test_mkdir $dir0 || error "creating dir $dir0"
+	$LFS setstripe -c 2 $file1
 	cp $ref1 $file1
 	$LFS migrate -c 1 $file1 || error "migrate failed rc = $?"
-	stripe=$($GETSTRIPE -c $file1)
+	stripe=$($LFS getstripe -c $file1)
 	[[ $stripe == 1 ]] || error "stripe of $file1 is $stripe != 1"
 	cmp $file1 $ref1 || error "content mismatch $file1 differs from $ref1"
 
@@ -5193,10 +5192,10 @@ test_56xa() {
 	local ref1=/etc/passwd
 	local file1=$dir0/file1
 
-	$SETSTRIPE -c 2 $file1
+	$LFS setstripe -c 2 $file1
 	cp $ref1 $file1
 	$LFS migrate --block -c 1 $file1 || error "migrate failed rc = $?"
-	local stripe=$($GETSTRIPE -c $file1)
+	local stripe=$($LFS getstripe -c $file1)
 	[[ $stripe == 1 ]] || error "stripe of $file1 is $stripe != 1"
 	cmp $file1 $ref1 || error "content mismatch $file1 differs from $ref1"
 
@@ -5204,6 +5203,110 @@ test_56xa() {
 	rm -f $file1
 }
 run_test 56xa "lfs migration --block support"
+
+check_migrate_links() {
+	local dir="$1"
+	local file1="$dir/file1"
+	local begin="$2"
+	local count="$3"
+	local total_count=$(($begin + $count - 1))
+	local symlink_count=10
+	local uniq_count=10
+
+	if [ ! -f "$file1" ]; then
+		echo -n "creating initial file..."
+		$LFS setstripe -c 1 -S "512k" "$file1" ||
+			error "cannot setstripe initial file"
+		echo "done"
+
+		echo -n "creating symlinks..."
+		for s in $(seq 1 $symlink_count); do
+			ln -s "$file1" "$dir/slink$s" ||
+				error "cannot create symlinks"
+		done
+		echo "done"
+
+		echo -n "creating nonlinked files..."
+		createmany -o "$dir/uniq" 1 10 &> /dev/null ||
+			error "cannot create nonlinked files"
+		echo "done"
+	fi
+
+	# create hard links
+	if [ ! -f "$dir/file$total_count" ]; then
+		echo -n "creating hard links $begin:$total_count..."
+		createmany -l"$file1" "$dir/file" "$begin" "$count" &>	\
+			/dev/null || error "cannot create hard links"
+		echo "done"
+	fi
+
+	echo -n "checking number of hard links listed in xattrs..."
+	local fid=$($LFS getstripe -F "$file1")
+	local paths=($($LFS fid2path "$MOUNT" "$fid" 2> /dev/null))
+
+	echo "${#paths[*]}"
+	if [ ${#paths[*]} -lt $total_count -a "$begin" -eq 2  ]; then
+			echo "hard link list has unexpected size, skipping test"
+			return 0
+	fi
+	if [ ${#paths[*]} -ge $total_count -a "$begin" -ne 2  ]; then
+			error "link names should exceed xattrs size"
+	fi
+
+	echo -n "migrating files..."
+	local migrate_out=$($LFS_MIGRATE -y -S '1m' $dir)
+	local rc=$?
+	[ $rc -eq 0 ] || error "migrate failed rc = $rc"
+	echo "done"
+
+	# make sure all links have been properly migrated
+	echo -n "verifying files..."
+	fid=$($LFS getstripe -F "$file1") ||
+		error "cannot get fid for file $file1"
+	for i in $(seq 2 $total_count); do
+		local fid2=$($LFS getstripe -F $dir/file$i)
+		[ "$fid2" == "$fid" ] ||
+			error "migrated hard link has mismatched FID"
+	done
+
+	# make sure hard links were properly detected, and migration was
+	# performed only once for the entire link set; nonlinked files should
+	# also be migrated
+	local actual=$(grep -c 'done migrate' <<< "$migrate_out")
+	local expected=$(($uniq_count + 1))
+	[ "$actual" -eq  "$expected" ] ||
+		error "hard links individually migrated ($actual != $expected)"
+
+	# make sure the correct number of hard links are present
+	local hardlinks=$(stat -c '%h' "$file1")
+	[ $hardlinks -eq $total_count ] ||
+		error "num hard links $hardlinks != $total_count"
+	echo "done"
+
+	return 0
+}
+
+test_56xb() {
+	local dir0="$DIR/$tdir"
+
+	test_mkdir "$dir0" || error "cannot create dir $dir0"
+
+	echo "testing lfs migrate mode when all links fit within xattrs"
+	LFS_MIGRATE_RSYNC=false check_migrate_links "$dir0" 2 99
+
+	echo "testing rsync mode when all links fit within xattrs"
+	LFS_MIGRATE_RSYNC=true check_migrate_links "$dir0" 2 99
+
+	echo "testing lfs migrate mode when all links do not fit within xattrs"
+	LFS_MIGRATE_RSYNC=false check_migrate_links "$dir0" 101 100
+
+	echo "testing rsync mode when all links do not fit within xattrs"
+	LFS_MIGRATE_RSYNC=true check_migrate_links "$dir0" 101 100
+
+	# clean up
+	rm -rf $dir0
+}
+run_test 56xb "lfs migration hard link support"
 
 test_56y() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.53) ] &&

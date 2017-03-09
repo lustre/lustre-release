@@ -1,4 +1,4 @@
-.TH lfs_migrate 1 "Jul 21, 2010" Lustre "utilities"
+.TH lfs_migrate 1 "Jun 16, 2017" Lustre "utilities"
 .SH NAME
 .B lfs_migrate
 \- simple tool to migrate files between Lustre OSTs
@@ -6,12 +6,13 @@
 .B lfs_migrate
 .RB [ -c <stripe_count> ]
 .RB [ -h ]
-.RB [ -l ]
 .RB [ -n ]
 .RB [ -q ]
 .RB [ -R ]
 .RB [ -s ]
+.RB [ -S <stripe_size> ]
 .RB [ -y ]
+.RB [ -0 ]
 .RI [ file | "directory ..." ]
 .br
 .SH DESCRIPTION
@@ -64,28 +65,29 @@ specified at the same time as the -R option.
 .B \\-h
 Display help information.
 .TP
-.B \\-l
-Migrate files with hard links (skip by default).  Files with multiple
-hard links will be split into multiple separate files by
-.B lfs_migrate
-so they are skipped by default to avoid breaking the hard links.
-.TP
 .B \\-n
-Only print the names of files to be migrated
+Only print the names of files to be migrated.
 .TP
 .B \\-q
-Run quietly (don't print filenames or status)
+Run quietly (don't print filenames or status).
 .TP
 .B \\-R
 Restripe file using default directory striping instead of keeping striping.
-This option may not be specified at the same time as the -c option.
+This option may not be specified at the same time as the -c or -S options.
 .TP
 .B \\-s
-skip file data comparison after migrate.  Default is to compare migrated file
+Skip file data comparison after migrate.  Default is to compare migrated file
 against original to verify correctness.
+.TP
+.B \\-S <stripe_size>
+Restripe file using the specified stripe size. This option may not be
+specified at the same time as the -R option.
 .TP
 .B \\-y
 Answer 'y' to usage warning without prompting (for scripts, use with caution).
+.TP
+.B \\-0
+Input file names on stdin are separated by a null character.
 .SH EXAMPLES
 To rebalance all files within
 .I /testfs/jobs/2011
@@ -103,9 +105,6 @@ a guarantee the files are not being modified, that is workload specific):
 lfs find /testfs -obd test-OST0004 -size +4G -mtime +2d |
     lfs_migrate -y
 .SH KNOWN BUGS
-Hard links could be handled correctly in Lustre 2.0 by using
-.BR lfs (1) " fid2path" .
-.PP
 Eventually, this functionality will be integrated into
 .BR lfs (1)
 itself and will integrate with the MDS layout locking to make it safe
