@@ -206,20 +206,8 @@ create_pool_fail() {
 	return 0
 }
 
-cleanup_tests() {
-	# Destroy pools from previous test runs
-	for p in $(list_pool $FSNAME | grep $POOL); do
-		destroy_pool_int $p;
-	done
-	rm -rf $DIR/d0.${TESTSUITE}
-}
-
 ost_pools_init() {
-    cleanup_tests
-}
-
-set_cleanup_trap() {
-    trap "cleanup_tests $FSNAME" EXIT
+	destroy_test_pools
 }
 
 # Initialization
@@ -227,45 +215,38 @@ remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
 ost_pools_init
 
-
 # Tests for new commands added
 test_1a() {
-    set_cleanup_trap
-    create_pool_nofail p
-    destroy_pool p
+	create_pool_nofail p
+	destroy_pool p
 }
 run_test 1a "Create a pool with a 1 character pool name"
 
 test_1b() {
-    set_cleanup_trap
-    create_pool_nofail ${POOL}12
-    destroy_pool ${POOL}12
+	create_pool_nofail ${POOL}12
+	destroy_pool ${POOL}12
 }
 run_test 1b "Create a pool with a 10 char pool name"
 
 test_1c() {
-    set_cleanup_trap
-    create_pool_nofail ${POOL}1234567
-    destroy_pool ${POOL}1234567
+	create_pool_nofail ${POOL}1234567
+	destroy_pool ${POOL}1234567
 }
 run_test 1c "Create a pool with a 15 char pool name"
 
 test_1d() {
-    set_cleanup_trap
-    create_pool_fail ${POOL}12345678
+	create_pool_fail ${POOL}12345678
 }
 run_test 1d "Create a pool with a 16 char pool name; should fail"
 
 test_1e() {
-    set_cleanup_trap
-    local pool_name="$POOL"
-    for ((i = 1; i <= 991; i++)); do pool_name=${pool_name}"o"; done
-    create_pool_fail $pool_name
+	local pool_name="$POOL"
+	for ((i = 1; i <= 991; i++)); do pool_name=${pool_name}"o"; done
+	create_pool_fail $pool_name
 }
 run_test 1e "Create a pool with a 1000 char pool name; should fail"
 
 test_1f() {
-	set_cleanup_trap
 	create_pool .$POOL
 	[[ $? -ne 0 ]] ||
 		error "pool_new did not fail even though fs-name was missing"
@@ -273,7 +254,6 @@ test_1f() {
 run_test 1f "pool_new should fail if fs-name is missing"
 
 test_1g() {
-	set_cleanup_trap
 	create_pool $POOL
 	[[ $? -ne 0 ]] ||
 		error "pool_new did not fail even though fs-name was missing"
@@ -281,7 +261,6 @@ test_1g() {
 run_test 1g "pool_new should fail if fs-name is missing"
 
 test_1h() {
-	set_cleanup_trap
 	create_pool ${FSNAME}.
 	[[ $? -ne 0 ]] ||
 		error "pool_new did not fail even though pool name was missing"
@@ -289,7 +268,6 @@ test_1h() {
 run_test 1h "pool_new should fail if poolname is missing"
 
 test_1i() {
-	set_cleanup_trap
 	create_pool .
 	[[ $? -ne 0 ]] ||
 		error "pool_new did not fail even if pool/fs-name was missing"
@@ -297,7 +275,6 @@ test_1i() {
 run_test 1i "pool_new should fail if poolname and fs-name are missing"
 
 test_1j() {
-	set_cleanup_trap
 	create_pool ${FSNAME},$POOL
 	[[ $? -ne 0 ]] ||
 		error "pool_new did not fail even if poolname format was wrong"
@@ -305,7 +282,6 @@ test_1j() {
 run_test 1j "pool_new should fail if poolname format is wrong"
 
 test_1k() {
-	set_cleanup_trap
 	create_pool ${FSNAME}/$POOL
 	[[ $? -ne 0 ]] ||
 		error "pool_new did not fail even if poolname format was wrong"
@@ -313,7 +289,6 @@ test_1k() {
 run_test 1k "pool_new should fail if poolname format is wrong"
 
 test_1m() {
-	set_cleanup_trap
 	create_pool_nofail $POOL2
 	create_pool ${FSNAME}.$POOL2
 	[[ $? -ne 0 ]] ||
@@ -323,7 +298,6 @@ test_1m() {
 run_test 1m "pool_new did not fail even though $POOL2 existed"
 
 test_1n() {
-	set_cleanup_trap
 	create_pool_nofail ${POOL}1234567
 
 	add_pool ${POOL}1234567 "OST0000" "$FSNAME-OST0000_UUID "
@@ -340,7 +314,6 @@ test_1n() {
 run_test 1n "Pool with a 15 char pool name works well"
 
 test_2a() {
-	set_cleanup_trap
 	destroy_pool $POOL
 
 	do_facet mgs lctl pool_add $FSNAME.$POOL $FSNAME-OST0000 2>/dev/null
@@ -350,7 +323,6 @@ test_2a() {
 run_test 2a "pool_add: non-existant pool $POOL"
 
 test_2b() {
-	set_cleanup_trap
 	do_facet mgs lctl pool_add $FSNAME.${POOL}1234567890 \
 		$FSNAME-OST0000 2>/dev/null
 	[[ $? -ne 0 ]] ||
@@ -360,7 +332,6 @@ run_test 2b "pool_add: Invalid pool name"
 
 # Testing various combinations of OST name list
 test_2c() {
-	set_cleanup_trap
 	local TGT
 	local RC
 
@@ -414,7 +385,6 @@ test_2c() {
 run_test 2c "pool_add: OST index combinations"
 
 test_2d() {
-	set_cleanup_trap
 	local TGT
 	local RC
 
@@ -433,7 +403,6 @@ test_2d() {
 run_test 2d "pool_add: OSTs that don't exist should be rejected"
 
 test_2e() {
-	set_cleanup_trap
 	local TGT
 	local RC
 	local RESULT
@@ -463,7 +432,6 @@ test_2e() {
 run_test 2e "pool_add: OST already in a pool should be rejected"
 
 test_3a() {
-	set_cleanup_trap
 	lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
 	[[ $? -ne 0 ]] || destroy_pool $POOL
 
@@ -475,7 +443,6 @@ test_3a() {
 run_test 3a "pool_remove: non-existant pool"
 
 test_3b() {
-	set_cleanup_trap
 	do_facet mgs \
 		lctl pool_remove ${NON_EXISTANT_FS}.$POOL OST0000 2>/dev/null
 	[[ $? -ne 0 ]] ||
@@ -484,7 +451,6 @@ test_3b() {
 run_test 3b "pool_remove: non-existant fsname"
 
 test_3c() {
-	set_cleanup_trap
 	do_facet mgs lctl pool_remove $FSNAME.p1234567891234567890 \
 		$FSNAME-OST0000 2>/dev/null
 	[[ $? -ne 0 ]] ||
@@ -494,7 +460,6 @@ run_test 3c "pool_remove: Invalid pool name"
 
 # Testing various combinations of OST name list
 test_3d() {
-	set_cleanup_trap
 	lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
 	[[ $? -ne 0 ]] || destroy_pool $POOL
 
@@ -525,7 +490,6 @@ test_3d() {
 run_test 3d "pool_remove: OST index combinations"
 
 test_4a() {
-	set_cleanup_trap
 	lctl get_param -n lov.$FSNAME-*.pools.$POOL 2>/dev/null
 	[[ $? -ne 0 ]] || destroy_pool $POOL
 
@@ -536,7 +500,6 @@ test_4a() {
 run_test 4a "pool_destroy: non-existant pool"
 
 test_4b() {
-	set_cleanup_trap
 	do_facet mgs lctl pool_destroy ${NON_EXISTANT_FS}.$POOL 2>/dev/null
 	[[ $? -ne 0 ]] ||
 		error "pool_destroy did not fail even though filesystem did not exist."
@@ -544,7 +507,6 @@ test_4b() {
 run_test 4b "pool_destroy: non-existant fs-name"
 
 test_4c() {
-	set_cleanup_trap
 	create_pool_nofail $POOL
 	add_pool $POOL "OST0000" "$FSNAME-OST0000_UUID "
 
@@ -602,58 +564,54 @@ sub_test_5() {
 }
 
 test_5a() {
-    set_cleanup_trap
-    # Issue commands from client
-    sub_test_5 $LFS
+	# Issue commands from client
+	sub_test_5 $LFS
 }
 run_test 5a "lfs pool_list from client"
 
 test_5b() {
-    set_cleanup_trap
-    sub_test_5 "do_facet $SINGLEMDS lctl"
+	sub_test_5 "do_facet $SINGLEMDS lctl"
 }
 run_test 5b "lctl pool_list from MDS"
 
 test_6() {
-    set_cleanup_trap
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    local POOL_DIR=$POOL_ROOT/dir_tst
-    local POOL_FILE=$POOL_ROOT/file_tst
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	local POOL_DIR=$POOL_ROOT/dir_tst
+	local POOL_FILE=$POOL_ROOT/file_tst
 
-    create_pool_nofail $POOL
+	create_pool_nofail $POOL
 
-    do_facet $SINGLEMDS lctl pool_list $FSNAME
-    [[ $? -eq 0 ]] || error "pool_list $FSNAME failed."
+	do_facet $SINGLEMDS lctl pool_list $FSNAME
+	[[ $? -eq 0 ]] || error "pool_list $FSNAME failed."
 
-    add_pool $POOL $TGT_ALL "$TGT_UUID"
+	add_pool $POOL $TGT_ALL "$TGT_UUID"
 
-    mkdir -p $POOL_DIR
-    $SETSTRIPE -c -1 -p $POOL $POOL_DIR
-    [[ $? -eq 0 ]] || error "$SETSTRIPE -p $POOL failed."
-    check_dir_in_pool $POOL_DIR $POOL
+	mkdir -p $POOL_DIR
+	$SETSTRIPE -c -1 -p $POOL $POOL_DIR
+	[[ $? -eq 0 ]] || error "$SETSTRIPE -p $POOL failed."
+	check_dir_in_pool $POOL_DIR $POOL
 
-    # If an invalid pool name is specified, the command should fail
-    $SETSTRIPE -c 2 -p $INVALID_POOL $POOL_DIR 2>/dev/null
-    [[ $? -ne 0 ]] || error "setstripe to invalid pool did not fail."
+	# If an invalid pool name is specified, the command should fail
+	$SETSTRIPE -c 2 -p $INVALID_POOL $POOL_DIR 2>/dev/null
+	[[ $? -ne 0 ]] || error "setstripe to invalid pool did not fail."
 
-    # If the pool name does not exist, the command should fail
-    $SETSTRIPE -c 2 -p $NON_EXISTANT_POOL $POOL_DIR 2>/dev/null
-    [[ $? -ne 0 ]] || error "setstripe to non-existant pool did not fail."
+	# If the pool name does not exist, the command should fail
+	$SETSTRIPE -c 2 -p $NON_EXISTANT_POOL $POOL_DIR 2>/dev/null
+	[[ $? -ne 0 ]] || error "setstripe to non-existant pool did not fail."
 
-    # lfs setstripe should work as before if a pool name is not specified.
-    $SETSTRIPE -c -1 $POOL_DIR
-    [[ $? -eq 0 ]] || error "$SETSTRIPE -p $POOL_DIR failed."
-    $SETSTRIPE -c -1 $POOL_FILE
-    [[ $? -eq 0 ]] || error "$SETSTRIPE -p $POOL_FILE failed."
+	# lfs setstripe should work as before if a pool name is not specified.
+	$SETSTRIPE -c -1 $POOL_DIR
+	[[ $? -eq 0 ]] || error "$SETSTRIPE -p $POOL_DIR failed."
+	$SETSTRIPE -c -1 $POOL_FILE
+	[[ $? -eq 0 ]] || error "$SETSTRIPE -p $POOL_FILE failed."
 
-    # lfs setstripe should fail if a start index that is outside the
-    # pool is specified.
-    create_pool_nofail $POOL2
-    add_pool $POOL2 "OST0000" "$FSNAME-OST0000_UUID "
-    $SETSTRIPE -i 1 -p $POOL2 $ROOT_POOL/$tfile 2>/dev/null
-    [[ $? -ne 0 ]] ||
-        error "$SETSTRIPE with start index outside the pool did not fail."
-
+	# lfs setstripe should fail if a start index that is outside the
+	# pool is specified.
+	create_pool_nofail $POOL2
+	add_pool $POOL2 "OST0000" "$FSNAME-OST0000_UUID "
+	$SETSTRIPE -i 1 -p $POOL2 $ROOT_POOL/$tfile 2>/dev/null
+	[[ $? -ne 0 ]] ||
+	error "$SETSTRIPE with start index outside the pool did not fail."
 }
 run_test 6 "getstripe/setstripe"
 
@@ -748,7 +706,6 @@ test_7c()
 run_test 7c "create a valid pool name and setstripe with a bad one"
 
 test_11() {
-	set_cleanup_trap
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
 	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
@@ -786,7 +743,6 @@ test_11() {
 run_test 11 "OSTs in overlapping/multiple pools"
 
 test_12() {
-	set_cleanup_trap
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
 	[[ $OSTCOUNT -le 2 ]] && skip_env "Need at least 3 OSTs" && return
@@ -839,22 +795,21 @@ test_12() {
 run_test 12 "OST Pool Membership"
 
 test_13() {
-    set_cleanup_trap
-    [[ $OSTCOUNT -le 2 ]] && skip_env "Need at least 3 OSTs" && return
+	[[ $OSTCOUNT -le 2 ]] && skip_env "Need at least 3 OSTs" && return
 
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    local numfiles=10
-    local count=3
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	local numfiles=10
+	local count=3
 
-    create_pool_nofail $POOL
-    add_pool $POOL $TGT_ALL "$TGT_UUID"
+	create_pool_nofail $POOL
+	add_pool $POOL $TGT_ALL "$TGT_UUID"
 
-    create_dir $POOL_ROOT/dir1 $POOL -1
-    createmany -o $POOL_ROOT/dir1/$tfile $numfiles ||
-        error "createmany $POOL_ROOT/dir1/$tfile failed!"
-    for file in $POOL_ROOT/dir1/*; do
-        check_file_in_pool $file $POOL $OSTCOUNT
-    done
+	create_dir $POOL_ROOT/dir1 $POOL -1
+	createmany -o $POOL_ROOT/dir1/$tfile $numfiles ||
+		error "createmany $POOL_ROOT/dir1/$tfile failed!"
+	for file in $POOL_ROOT/dir1/*; do
+		check_file_in_pool $file $POOL $OSTCOUNT
+	done
 
 	create_file $POOL_ROOT/dir1/file1 $POOL 1 $TGT_FIRST
 	create_file $POOL_ROOT/dir1/file2 $POOL 1 $((TGT_FIRST + 1))
@@ -863,26 +818,26 @@ test_13() {
 	check_file_in_osts $POOL_ROOT/dir1/file2 "$((TGT_FIRST + 1))"
 	check_file_in_osts $POOL_ROOT/dir1/file3 "$((TGT_FIRST + 2))"
 
-    create_dir $POOL_ROOT/dir2 $POOL $count
-    createmany -o $POOL_ROOT/dir2/$tfile- $numfiles ||
-        error "createmany $POOL_ROOT/dir2/$tfile- failed!"
-    for file in $POOL_ROOT/dir2/*; do
-        check_file_in_pool $file $POOL $count
-    done
+	create_dir $POOL_ROOT/dir2 $POOL $count
+	createmany -o $POOL_ROOT/dir2/$tfile- $numfiles ||
+		error "createmany $POOL_ROOT/dir2/$tfile- failed!"
+	for file in $POOL_ROOT/dir2/*; do
+		check_file_in_pool $file $POOL $count
+	done
 
-    create_dir $POOL_ROOT/dir3 $POOL $count $((TGT_FIRST + 1))
-    createmany -o $POOL_ROOT/dir3/$tfile- $numfiles ||
-        error "createmany $POOL_ROOT/dir3/$tfile- failed!"
-    for file in $POOL_ROOT/dir3/*; do
-        check_file_in_pool $file $POOL $count
-    done
+	create_dir $POOL_ROOT/dir3 $POOL $count $((TGT_FIRST + 1))
+	createmany -o $POOL_ROOT/dir3/$tfile- $numfiles ||
+		error "createmany $POOL_ROOT/dir3/$tfile- failed!"
+	for file in $POOL_ROOT/dir3/*; do
+		check_file_in_pool $file $POOL $count
+	done
 
-    create_dir $POOL_ROOT/dir4 $POOL 1
-    createmany -o $POOL_ROOT/dir4/$tfile- $numfiles ||
-        error "createmany $POOL_ROOT/dir4/$tfile- failed!"
-    for file in $POOL_ROOT/dir4/*; do
-        check_file_in_pool $file $POOL 1
-    done
+	create_dir $POOL_ROOT/dir4 $POOL 1
+	createmany -o $POOL_ROOT/dir4/$tfile- $numfiles ||
+		error "createmany $POOL_ROOT/dir4/$tfile- failed!"
+	for file in $POOL_ROOT/dir4/*; do
+		check_file_in_pool $file $POOL 1
+	done
 
 	create_dir $POOL_ROOT/dir5 $POOL 1 $((TGT_FIRST + 2))
 	createmany -o $POOL_ROOT/dir5/$tfile- $numfiles ||
@@ -898,22 +853,21 @@ test_13() {
 run_test 13 "Striping characteristics in a pool"
 
 test_14() {
-    set_cleanup_trap
-    [[ $OSTCOUNT -le 2 ]] && skip_env "Need at least 3 OSTs" && return
+	[[ $OSTCOUNT -le 2 ]] && skip_env "Need at least 3 OSTs" && return
 
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    local numfiles=100
-    local i
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	local numfiles=100
+	local i
 
-    [ $OSTSIZE -gt $((MAXFREE / OSTCOUNT)) ] &&
-        skip_env "OST size $OSTSIZE is larger than $((MAXFREE / OSTCOUNT))" &&
+	[ $OSTSIZE -gt $((MAXFREE / OSTCOUNT)) ] &&
+	skip_env "OST size $OSTSIZE is larger than $((MAXFREE / OSTCOUNT))" &&
 			return 0
 
-    create_pool_nofail $POOL
-    create_pool_nofail $POOL2
+	create_pool_nofail $POOL
+	create_pool_nofail $POOL2
 
-    add_pool $POOL $TGT_HALF "$TGT_UUID2"
-    add_pool $POOL2 "OST0000" "$FSNAME-OST0000_UUID "
+	add_pool $POOL $TGT_HALF "$TGT_UUID2"
+	add_pool $POOL2 "OST0000" "$FSNAME-OST0000_UUID "
 
 	create_dir $POOL_ROOT/dir1 $POOL 1
 	create_file $POOL_ROOT/dir1/file $POOL 1
@@ -929,120 +883,117 @@ test_14() {
 		i=$((i + 1))
 	done
 
-    # Fill up OST0 until it is nearly full.
-    # Create 9 files of size OST0_SIZE/10 each.
-    create_dir $POOL_ROOT/dir2 $POOL2 1
-    $LFS df $POOL_ROOT/dir2
-    OST0_SIZE=$($LFS df $POOL_ROOT/dir2 | awk '/\[OST:0\]/ { print $4 }')
-    FILE_SIZE=$((OST0_SIZE/1024/10))
-    echo "Filling OST0 with 9 files of ${FILE_SIZE}MB in $POOL_ROOT/dir2"
-    i=1
-    while [[ $i -lt 10 ]]; do
-        dd if=/dev/zero of=$POOL_ROOT/dir2/f${i} bs=1M count=$FILE_SIZE
-        i=$((i + 1))
-    done
-    sleep 1 # get new statfs info
-    $LFS df $POOL_ROOT/dir2
+	# Fill up OST0 until it is nearly full.
+	# Create 9 files of size OST0_SIZE/10 each.
+	create_dir $POOL_ROOT/dir2 $POOL2 1
+	$LFS df $POOL_ROOT/dir2
+	OST0_SIZE=$($LFS df $POOL_ROOT/dir2 | awk '/\[OST:0\]/ { print $4 }')
+	FILE_SIZE=$((OST0_SIZE/1024/10))
+	echo "Filling OST0 with 9 files of ${FILE_SIZE}MB in $POOL_ROOT/dir2"
+	i=1
+	while [[ $i -lt 10 ]]; do
+		dd if=/dev/zero of=$POOL_ROOT/dir2/f${i} bs=1M count=$FILE_SIZE
+		i=$((i + 1))
+	done
+	sleep 1 # get new statfs info
+	$LFS df $POOL_ROOT/dir2
 
-    # OST $TGT_FIRST is no longer favored; but it may still be used.
-    create_dir $POOL_ROOT/dir3 $POOL 1
-    create_file $POOL_ROOT/dir3/file $POOL 1
-    createmany -o $POOL_ROOT/dir3/$tfile- $numfiles ||
-        error "createmany $POOL_ROOT/dir3/$tfile- failed!"
-    for file in $POOL_ROOT/dir3/*; do
-        check_file_in_pool $file $POOL
-    done
+	# OST $TGT_FIRST is no longer favored; but it may still be used.
+	create_dir $POOL_ROOT/dir3 $POOL 1
+	create_file $POOL_ROOT/dir3/file $POOL 1
+	createmany -o $POOL_ROOT/dir3/$tfile- $numfiles ||
+		error "createmany $POOL_ROOT/dir3/$tfile- failed!"
+	for file in $POOL_ROOT/dir3/*; do
+		check_file_in_pool $file $POOL
+	done
 
-    rm -rf $POOL_ROOT
+	rm -rf $POOL_ROOT
 
-    return 0
+	return 0
 }
 run_test 14 "Round robin and QOS striping within a pool"
 
 test_15() {
-    set_cleanup_trap
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    local numfiles=100
-    local i=0
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	local numfiles=100
+	local i=0
 
-    while [[ $i -lt $OSTCOUNT ]]; do
-        create_pool_nofail $POOL${i}
+	while [[ $i -lt $OSTCOUNT ]]; do
+		create_pool_nofail $POOL${i}
 
-        local tgt=$(printf "$FSNAME-OST%04x_UUID " $i)
-        add_pool $POOL${i} "$FSNAME-OST[$(printf %04x $i)]" "$tgt"
-        create_dir $POOL_ROOT/dir${i} $POOL${i}
-        createmany -o $POOL_ROOT/dir$i/$tfile $numfiles ||
-            error "createmany $POOL_ROOT/dir$i/$tfile failed!"
+		local tgt=$(printf "$FSNAME-OST%04x_UUID " $i)
+		add_pool $POOL${i} "$FSNAME-OST[$(printf %04x $i)]" "$tgt"
+		create_dir $POOL_ROOT/dir${i} $POOL${i}
+		createmany -o $POOL_ROOT/dir$i/$tfile $numfiles ||
+			error "createmany $POOL_ROOT/dir$i/$tfile failed!"
 
-        for file in $POOL_ROOT/dir$i/*; do
-            check_file_in_osts $file $i
-        done
+		for file in $POOL_ROOT/dir$i/*; do
+			check_file_in_osts $file $i
+		done
 
-        i=$((i + 1))
-    done
+		i=$((i + 1))
+	done
 
-    return 0
+	return 0
 }
 run_test 15 "One directory per OST/pool"
 
 test_16() {
-    set_cleanup_trap
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    local numfiles=10
-    local i=0
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	local numfiles=10
+	local i=0
 
-    create_pool_nofail $POOL
+	create_pool_nofail $POOL
 
-    add_pool $POOL $TGT_HALF "$TGT_UUID2"
+	add_pool $POOL $TGT_HALF "$TGT_UUID2"
 
-    local dir=$POOL_ROOT/$tdir
-    create_dir $dir $POOL
+	local dir=$POOL_ROOT/$tdir
+	create_dir $dir $POOL
 
-    for i in $(seq 1 10); do
-        dir=${dir}/dir${i}
-    done
-    mkdir -p $dir
+	for i in $(seq 1 10); do
+		dir=${dir}/dir${i}
+	done
+	mkdir -p $dir
 
-    createmany -o $dir/$tfile $numfiles ||
-        error "createmany $dir/$tfile failed!"
+	createmany -o $dir/$tfile $numfiles ||
+		error "createmany $dir/$tfile failed!"
 
-    for file in $dir/*; do
-        check_file_in_pool $file $POOL
-    done
+	for file in $dir/*; do
+		check_file_in_pool $file $POOL
+	done
 
-    rm -rf $POOL_ROOT/$tdir
+	rm -rf $POOL_ROOT/$tdir
 
-    return 0
+	return 0
 }
 run_test 16 "Inheritance of pool properties"
 
 test_17() {
-    set_cleanup_trap
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    local numfiles=10
-    local i=0
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	local numfiles=10
+	local i=0
 
-    create_pool_nofail $POOL
+	create_pool_nofail $POOL
 
-    add_pool $POOL $TGT_ALL "$TGT_UUID"
+	add_pool $POOL $TGT_ALL "$TGT_UUID"
 
-    local dir=$POOL_ROOT/dir
-    create_dir $dir $POOL
+	local dir=$POOL_ROOT/dir
+	create_dir $dir $POOL
 
-    createmany -o $dir/${tfile}1_ $numfiles ||
-        error "createmany $dir/${tfile}1_ failed!"
+	createmany -o $dir/${tfile}1_ $numfiles ||
+		error "createmany $dir/${tfile}1_ failed!"
 
-    for file in $dir/*; do
-        check_file_in_pool $file $POOL
-    done
+	for file in $dir/*; do
+		check_file_in_pool $file $POOL
+	done
 
-    destroy_pool $POOL
+	destroy_pool $POOL
 
-    createmany -o $dir/${tfile}2_ $numfiles ||
-          error "createmany $dir/${tfile}2_ failed!"
+	createmany -o $dir/${tfile}2_ $numfiles ||
+		error "createmany $dir/${tfile}2_ failed!"
 
-    rm -rf $dir
-    return 0
+	rm -rf $dir
+	return 0
 }
 run_test 17 "Referencing an empty pool"
 
@@ -1064,7 +1015,6 @@ create_perf() {
 }
 
 test_18() {
-	set_cleanup_trap
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 	local numsec=15
 	local iter=3
@@ -1125,96 +1075,93 @@ test_18() {
 run_test 18 "File create in a directory which references a deleted pool"
 
 test_19() {
-    set_cleanup_trap
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    local numfiles=12
-    local dir1=$POOL_ROOT/dir1
-    local dir2=$POOL_ROOT/dir2
-    local i=0
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	local numfiles=12
+	local dir1=$POOL_ROOT/dir1
+	local dir2=$POOL_ROOT/dir2
+	local i=0
 
-    create_pool_nofail $POOL
+	create_pool_nofail $POOL
 
-    add_pool $POOL $TGT_HALF "$TGT_UUID2"
+	add_pool $POOL $TGT_HALF "$TGT_UUID2"
 
-    create_dir $dir1 $POOL
-    createmany -o $dir1/${tfile} $numfiles ||
-          error "createmany $dir1/${tfile} failed!"
-    for file in $dir1/*; do
-        check_file_in_pool $file $POOL
-    done
+	create_dir $dir1 $POOL
+	createmany -o $dir1/${tfile} $numfiles ||
+		error "createmany $dir1/${tfile} failed!"
+	for file in $dir1/*; do
+		check_file_in_pool $file $POOL
+	done
 
-    mkdir -p $dir2
-    createmany -o $dir2/${tfile} $numfiles ||
-          error "createmany $dir2/${tfile} failed!"
-    for file in $dir2/*; do
-        check_file_not_in_pool $file $POOL
-    done
+	mkdir -p $dir2
+	createmany -o $dir2/${tfile} $numfiles ||
+		error "createmany $dir2/${tfile} failed!"
+	for file in $dir2/*; do
+		check_file_not_in_pool $file $POOL
+	done
 
-    rm -rf $dir1 $dir2
+	rm -rf $dir1 $dir2
 
-    return 0
+	return 0
 }
 run_test 19 "Pools should not come into play when not specified"
 
 test_20() {
-    set_cleanup_trap
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    local numfiles=12
-    local dir1=$POOL_ROOT/dir1
-    local dir2=$dir1/dir2
-    local dir3=$dir1/dir3
-    local i=0
-    local TGT
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	local numfiles=12
+	local dir1=$POOL_ROOT/dir1
+	local dir2=$dir1/dir2
+	local dir3=$dir1/dir3
+	local i=0
+	local TGT
 
-    create_pool_nofail $POOL
-    create_pool_nofail $POOL2
+	create_pool_nofail $POOL
+	create_pool_nofail $POOL2
 
-    add_pool $POOL $TGT_HALF "$TGT_UUID2"
+	add_pool $POOL $TGT_HALF "$TGT_UUID2"
 
-    local start=$(printf %04x $((TGT_FIRST + 1)))
-    TGT=$(for i in $(seq 0x$start 2 0x$TGT_MAX); do \
-          printf "$FSNAME-OST%04x_UUID " $i; done)
-    add_pool $POOL2 "$FSNAME-OST[$start-$TGT_MAX/2]" "$TGT"
+	local start=$(printf %04x $((TGT_FIRST + 1)))
+	TGT=$(for i in $(seq 0x$start 2 0x$TGT_MAX); do \
+		printf "$FSNAME-OST%04x_UUID " $i; done)
+	add_pool $POOL2 "$FSNAME-OST[$start-$TGT_MAX/2]" "$TGT"
 
-    create_dir $dir1 $POOL
-    create_file $dir1/file1 $POOL2
-    create_dir $dir2 $POOL2
-    touch $dir2/file2
-    mkdir $dir3
-    $SETSTRIPE -c 1 $dir3 # No pool assignment
-    touch $dir3/file3
-    $SETSTRIPE -c 1 $dir2/file4 # No pool assignment
+	create_dir $dir1 $POOL
+	create_file $dir1/file1 $POOL2
+	create_dir $dir2 $POOL2
+	touch $dir2/file2
+	mkdir $dir3
+	$SETSTRIPE -c 1 $dir3 # No pool assignment
+	touch $dir3/file3
+	$SETSTRIPE -c 1 $dir2/file4 # No pool assignment
 
-    check_file_in_pool $dir1/file1 $POOL2
-    check_file_in_pool $dir2/file2 $POOL2
+	check_file_in_pool $dir1/file1 $POOL2
+	check_file_in_pool $dir2/file2 $POOL2
 
-    check_dir_not_in_pool $dir3 $POOL
-    check_dir_not_in_pool $dir3 $POOL2
+	check_dir_not_in_pool $dir3 $POOL
+	check_dir_not_in_pool $dir3 $POOL2
 
-    check_file_not_in_pool $dir3/file3 $POOL
-    check_file_not_in_pool $dir3/file3 $POOL2
+	check_file_not_in_pool $dir3/file3 $POOL
+	check_file_not_in_pool $dir3/file3 $POOL2
 
-    check_file_not_in_pool $dir2/file4 $POOL
-    check_file_not_in_pool $dir2/file4 $POOL2
+	check_file_not_in_pool $dir2/file4 $POOL
+	check_file_not_in_pool $dir2/file4 $POOL2
 
-    rm -rf $dir1
+	rm -rf $dir1
 
-    return 0
+	return 0
 }
 run_test 20 "Different pools in a directory hierarchy."
 
 test_21() {
-    set_cleanup_trap
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    [[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
 
-    local numfiles=12
-    local i=0
-    local dir=$POOL_ROOT/dir
+	local numfiles=12
+	local i=0
+	local dir=$POOL_ROOT/dir
 
-    create_pool_nofail $POOL
+	create_pool_nofail $POOL
 
-    add_pool $POOL $TGT_HALF "$TGT_UUID2"
+	add_pool $POOL $TGT_HALF "$TGT_UUID2"
 
 	create_dir $dir $POOL $OSTCOUNT
 	create_file $dir/file1 $POOL $OSTCOUNT
@@ -1247,53 +1194,51 @@ add_loop() {
 }
 
 test_22() {
-    set_cleanup_trap
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    [[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
 
-    local numfiles=100
+	local numfiles=100
 
-    create_pool_nofail $POOL
-    add_pool $POOL "OST0000" "$FSNAME-OST0000_UUID "
-    create_pool_nofail $POOL2
-    add_pool $POOL2 "OST0000" "$FSNAME-OST0000_UUID "
+	create_pool_nofail $POOL
+	add_pool $POOL "OST0000" "$FSNAME-OST0000_UUID "
+	create_pool_nofail $POOL2
+	add_pool $POOL2 "OST0000" "$FSNAME-OST0000_UUID "
 
-    add_loop $POOL 1 &
-    add_loop $POOL2 2 &
-    sleep 5
-    create_dir $POOL_ROOT $POOL
-    createmany -o $POOL_ROOT/${tfile} $numfiles ||
-        error "createmany $POOL_ROOT/${tfile} failed!"
-    wait
+	add_loop $POOL 1 &
+	add_loop $POOL2 2 &
+	sleep 5
+	create_dir $POOL_ROOT $POOL
+	createmany -o $POOL_ROOT/${tfile} $numfiles ||
+		error "createmany $POOL_ROOT/${tfile} failed!"
+	wait
 
-    return 0
+	return 0
 }
 run_test 22 "Simultaneous manipulation of a pool"
 
 test_23a() {
-    set_cleanup_trap
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    [[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
 
-    mkdir -p $POOL_ROOT
-    check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS || {
-        skip_env "User $RUNAS_ID does not exist - skipping"
-        return 0
-    }
+	mkdir -p $POOL_ROOT
+	check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS || {
+		skip_env "User $RUNAS_ID does not exist - skipping"
+		return 0
+	}
 
-    local i=0
-    local TGT
-    local BUNIT_SZ=1024  # min block quota unit(kB)
-    local LIMIT=$((BUNIT_SZ * (OSTCOUNT + 1)))
-    local dir=$POOL_ROOT/dir
-    local file="$dir/$tfile-quota"
+	local i=0
+	local TGT
+	local BUNIT_SZ=1024  # min block quota unit(kB)
+	local LIMIT=$((BUNIT_SZ * (OSTCOUNT + 1)))
+	local dir=$POOL_ROOT/dir
+	local file="$dir/$tfile-quota"
 
-    create_pool_nofail $POOL
+	create_pool_nofail $POOL
 
-    local TGT=$(for i in $(seq 0x$TGT_FIRST 3 0x$TGT_MAX); do \
-                printf "$FSNAME-OST%04x_UUID " $i; done)
-    add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$TGT"
-    create_dir $dir $POOL
+	local TGT=$(for i in $(seq 0x$TGT_FIRST 3 0x$TGT_MAX); do \
+		printf "$FSNAME-OST%04x_UUID " $i; done)
+	add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$TGT"
+	create_dir $dir $POOL
 
 	# XXX remove the interoperability code once we drop the old server
 	#     ( < 2.3.50) support.
@@ -1305,59 +1250,58 @@ test_23a() {
 		sleep 5
 	fi
 
-    $LFS setquota -u $RUNAS_ID -b $LIMIT -B $LIMIT $dir
-    sleep 3
-    $LFS quota -v -u $RUNAS_ID $dir
+	$LFS setquota -u $RUNAS_ID -b $LIMIT -B $LIMIT $dir
+	sleep 3
+	$LFS quota -v -u $RUNAS_ID $dir
 
-    $SETSTRIPE -c 1 -p $POOL $file
-    chown $RUNAS_ID.$RUNAS_GID $file
-    ls -l $file
+	$SETSTRIPE -c 1 -p $POOL $file
+	chown $RUNAS_ID.$RUNAS_GID $file
+	ls -l $file
 
-    # This does two "dd" runs to ensure that the quota failure is returned
-    # to userspace when we check.  The first "dd" might otherwise complete
-    # without error if it is only writing into cache.
-    stat=$(LOCALE=C $RUNAS dd if=/dev/zero of=$file bs=$BUNIT_SZ \
-           count=$((BUNIT_SZ*2)) 2>&1)
-    echo $stat | grep "Disk quota exceeded" > /dev/null
-    if [ $? -eq 0 ]; then
-        $LFS quota -v -u $RUNAS_ID $dir
-        cancel_lru_locks osc
-        stat=$(LOCALE=C $RUNAS dd if=/dev/zero of=$file bs=$BUNIT_SZ \
-               count=$BUNIT_SZ seek=$((BUNIT_SZ*2)) 2>&1)
-        RC=$?
-        echo $stat
-        [[ $RC -eq 0 ]] && error "second dd did not fail."
-        echo $stat | grep "Disk quota exceeded" > /dev/null
-        [[ $? -eq 1 ]] && error "second dd did not fail with EDQUOT."
-    else
-        log "first dd failed with EDQUOT."
-    fi
-    $LFS quota -v -u $RUNAS_ID $dir
+	# This does two "dd" runs to ensure that the quota failure is returned
+	# to userspace when we check.  The first "dd" might otherwise complete
+	# without error if it is only writing into cache.
+	stat=$(LOCALE=C $RUNAS dd if=/dev/zero of=$file bs=$BUNIT_SZ \
+		count=$((BUNIT_SZ*2)) 2>&1)
+	echo $stat | grep "Disk quota exceeded" > /dev/null
+	if [ $? -eq 0 ]; then
+		$LFS quota -v -u $RUNAS_ID $dir
+		cancel_lru_locks osc
+		stat=$(LOCALE=C $RUNAS dd if=/dev/zero of=$file bs=$BUNIT_SZ \
+			count=$BUNIT_SZ seek=$((BUNIT_SZ*2)) 2>&1)
+		RC=$?
+		echo $stat
+		[[ $RC -eq 0 ]] && error "second dd did not fail."
+		echo $stat | grep "Disk quota exceeded" > /dev/null
+		[[ $? -eq 1 ]] && error "second dd did not fail with EDQUOT."
+	else
+		log "first dd failed with EDQUOT."
+	fi
+	$LFS quota -v -u $RUNAS_ID $dir
 }
 run_test 23a "OST pools and quota"
 
 test_23b() {
-    set_cleanup_trap
-    local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-    [[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return 0
+	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
+	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return 0
 
-    mkdir -p $POOL_ROOT
-    check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS || {
-        skip_env "User $RUNAS_ID does not exist - skipping"
-        return 0
-    }
+	mkdir -p $POOL_ROOT
+	check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS || {
+		skip_env "User $RUNAS_ID does not exist - skipping"
+		return 0
+	}
 
-    local i=0
-    local TGT
-    local dir=$POOL_ROOT/dir
-    local file="$dir/$tfile-quota"
+	local i=0
+	local TGT
+	local dir=$POOL_ROOT/dir
+	local file="$dir/$tfile-quota"
 
-    create_pool_nofail $POOL
+	create_pool_nofail $POOL
 
-    local TGT=$(for i in $(seq 0x$TGT_FIRST 3 0x$TGT_MAX); do \
-                printf "$FSNAME-OST%04x_UUID " $i; done)
-    add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$TGT"
-    create_dir $dir $POOL
+	local TGT=$(for i in $(seq 0x$TGT_FIRST 3 0x$TGT_MAX); do \
+		printf "$FSNAME-OST%04x_UUID " $i; done)
+	add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$TGT"
+	create_dir $dir $POOL
 
 	local maxfree=$((1024 * 1024 * 30)) # 30G
 	local AVAIL=$(lfs_df -p $POOL $dir | awk '/summary/ { print $4 }')
@@ -1422,7 +1366,6 @@ test_23b() {
 run_test 23b "OST pools and OOS"
 
 test_24() {
-	set_cleanup_trap
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
 
@@ -1430,27 +1373,27 @@ test_24() {
 		[[ $server_version -ge $(version_code 2.8.56) ]] ||
 		{ skip "Need server version newer than 2.8.55"; return 0; }
 
-    local numfiles=10
-    local i=0
-    local TGT
-    local dir
-    local res
+	local numfiles=10
+	local i=0
+	local TGT
+	local dir
+	local res
 
-    create_pool_nofail $POOL
+	create_pool_nofail $POOL
 
-    add_pool $POOL $TGT_ALL "$TGT_UUID"
+	add_pool $POOL $TGT_ALL "$TGT_UUID"
 
-    create_dir $POOL_ROOT/dir1 $POOL $OSTCOUNT
+	create_dir $POOL_ROOT/dir1 $POOL $OSTCOUNT
 
-    mkdir $POOL_ROOT/dir2
-    $SETSTRIPE -p $POOL -S 65536 -i 0 -c 1 $POOL_ROOT/dir2 ||
-        error "$SETSTRIPE $POOL_ROOT/dir2 failed"
+	mkdir $POOL_ROOT/dir2
+	$SETSTRIPE -p $POOL -S 65536 -i 0 -c 1 $POOL_ROOT/dir2 ||
+		error "$SETSTRIPE $POOL_ROOT/dir2 failed"
 
-    mkdir $POOL_ROOT/dir3
-    $SETSTRIPE -S 65536 -i 0 -c 1 $POOL_ROOT/dir3 ||
-        error "$SETSTRIPE $POOL_ROOT/dir3 failed"
+	mkdir $POOL_ROOT/dir3
+	$SETSTRIPE -S 65536 -i 0 -c 1 $POOL_ROOT/dir3 ||
+		error "$SETSTRIPE $POOL_ROOT/dir3 failed"
 
-    mkdir $POOL_ROOT/dir4
+	mkdir $POOL_ROOT/dir4
 
 	for i in 1 2 3 4; do
 		dir=${POOL_ROOT}/dir${i}
@@ -1492,7 +1435,6 @@ test_24() {
 run_test 24 "Independence of pool from other setstripe parameters"
 
 test_25() {
-	set_cleanup_trap
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
 	mkdir -p $POOL_ROOT
@@ -1534,7 +1476,6 @@ run_test 25 "Create new pool and restart MDS"
 
 test_26() {
 	[[ $OSTCOUNT -le 2 ]] && skip_env "Need at least 3 OSTs" && return
-	set_cleanup_trap
 	local dev=$(mdsdevname ${SINGLEMDS//mds/})
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
@@ -1575,6 +1516,6 @@ run_test 26 "Choose other OSTs in the pool first in the creation remedy"
 cd $ORIG_PWD
 
 complete $SECONDS
-cleanup_pools $FSNAME
+destroy_test_pools $FSNAME
 check_and_cleanup_lustre
 exit_status

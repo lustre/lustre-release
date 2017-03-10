@@ -2057,7 +2057,7 @@ test_27D() {
 	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $skip27D ||
 		error "llapi_layout_test failed"
 
-	cleanup_pools || error "cleanup_pools failed"
+	destroy_test_pools || error "destroy test pools failed"
 }
 run_test 27D "validate llapi_layout API"
 
@@ -11878,7 +11878,7 @@ test_200() {
 		break
 	done
 
-	cleanup_pools
+	destroy_test_pools
 	return $rc
 }
 run_test 200 "OST pools"

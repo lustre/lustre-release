@@ -6233,6 +6233,7 @@ create_pool() {
 	local fsname=${1%%.*}
 	local poolname=${1##$fsname.}
 
+	trap "destroy_test_pools $fsname" EXIT
 	do_facet mgs lctl pool_new $1
 	local RC=$?
 	# get param should return err unless pool is created
@@ -6312,22 +6313,22 @@ destroy_pool() {
 }
 
 destroy_pools () {
-    local fsname=${1:-$FSNAME}
-    local poolname
-    local listvar=${fsname}_CREATED_POOLS
+	local fsname=${1:-$FSNAME}
+	local poolname
+	local listvar=${fsname}_CREATED_POOLS
 
-    [ x${!listvar} = x ] && return 0
+	[ x${!listvar} = x ] && return 0
 
-    echo destroy the created pools: ${!listvar}
-    for poolname in ${!listvar//,/ }; do
-        destroy_pool $fsname.$poolname
-    done
+	echo "Destroy the created pools: ${!listvar}"
+	for poolname in ${!listvar//,/ }; do
+		destroy_pool $fsname.$poolname
+	done
 }
 
-cleanup_pools () {
-    local fsname=${1:-$FSNAME}
-    trap 0
-    destroy_pools $fsname
+destroy_test_pools () {
+	trap 0
+	local fsname=${1:-$FSNAME}
+	destroy_pools $fsname || true
 }
 
 gather_logs () {
