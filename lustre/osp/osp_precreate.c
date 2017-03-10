@@ -577,7 +577,6 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 		RETURN(rc);
 	}
 
-	LASSERT(d->opd_pre->osp_pre_delorphan_sent != 0);
 	spin_lock(&d->opd_pre_lock);
 	if (d->opd_pre_create_count > d->opd_pre_max_create_count / 2)
 		d->opd_pre_create_count = d->opd_pre_max_create_count / 2;
@@ -783,20 +782,18 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	int			 update_status = 0;
 	int			 rc;
 	int			 diff;
-	struct lu_fid		 fid;
 
 	ENTRY;
 
 	/*
-	 * wait for local recovery to finish, so we can cleanup orphans.
-	 * orphans are all objects since "last used" (assigned).
-	 * consider reserved objects as created otherwise we can get into
-	 * a livelock when one blocked thread holding a reservation can
-	 * block recovery. see LU-8367 for the details. in some cases this
-	 * can result in gaps (i.e. leaked objects), but we've got LFSCK...
-	 *
-	 * do not allow new reservations because they may end up getting
-	 * orphans being cleaned up below. so we block new reservations.
+	 * wait for local recovery to finish, so we can cleanup orphans
+	 * orphans are all objects since "last used" (assigned), but
+	 * there might be objects reserved and in some cases they won't
+	 * be used. we can't cleanup them till we're sure they won't be
+	 * used. also can't we allow new reservations because they may
+	 * end up getting orphans being cleaned up below. so we block
+	 * new reservations and wait till all reserved objects either
+	 * user or released.
 	 */
 	spin_lock(&d->opd_pre_lock);
 	d->opd_pre_recovering = 1;
@@ -806,11 +803,15 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	 * catch all osp_precreate_reserve() calls who find
 	 * "!opd_pre_recovering".
 	 */
-	l_wait_event(d->opd_pre_waitq, d->opd_recovery_completed ||
+	l_wait_event(d->opd_pre_waitq,
+		     (!d->opd_pre_reserved && d->opd_recovery_completed) ||
 		     !osp_precreate_running(d) || d->opd_got_disconnected,
 		     &lwi);
 	if (!osp_precreate_running(d) || d->opd_got_disconnected)
 		GOTO(out, rc = -EAGAIN);
+
+	CDEBUG(D_HA, "%s: going to cleanup orphans since "DFID"\n",
+	       d->opd_obd->obd_name, PFID(&d->opd_last_used_fid));
 
 	*last_fid = d->opd_last_used_fid;
 	/* The OSP should already get the valid seq now */
@@ -840,24 +841,10 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	if (body == NULL)
 		GOTO(out, rc = -EPROTO);
 
-	body->oa.o_flags = 0;
+	body->oa.o_flags = OBD_FL_DELORPHAN;
 	body->oa.o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
 
-	/* unless this is the very first DELORPHAN (when we really
-	 * can destroy some orphans), just tell OST to recreate
-	 * missing objects in our precreate pool */
-	spin_lock(&d->opd_pre_lock);
-	if (d->opd_pre->osp_pre_delorphan_sent) {
-		fid = d->opd_pre_last_created_fid;
-	} else {
-		fid = d->opd_last_used_fid;
-		body->oa.o_flags = OBD_FL_DELORPHAN;
-	}
-	spin_unlock(&d->opd_pre_lock);
-	fid_to_ostid(&fid, &body->oa.o_oi);
-
-	CDEBUG(D_HA, "%s: going to cleanup orphans since "DFID"\n",
-	       d->opd_obd->obd_name, PFID(&fid));
+	fid_to_ostid(&d->opd_last_used_fid, &body->oa.o_oi);
 
 	ptlrpc_request_set_replen(req);
 
@@ -880,10 +867,10 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	ostid_to_fid(last_fid, &body->oa.o_oi, d->opd_index);
 
 	spin_lock(&d->opd_pre_lock);
-	diff = osp_fid_diff(&fid, last_fid);
+	diff = osp_fid_diff(&d->opd_last_used_fid, last_fid);
 	if (diff > 0) {
 		d->opd_pre_create_count = OST_MIN_PRECREATE + diff;
-		d->opd_pre_last_created_fid = *last_fid;
+		d->opd_pre_last_created_fid = d->opd_last_used_fid;
 	} else {
 		d->opd_pre_create_count = OST_MIN_PRECREATE;
 		d->opd_pre_last_created_fid = *last_fid;
@@ -894,11 +881,9 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	 */
 	LASSERT(fid_oid(&d->opd_pre_last_created_fid) <=
 		LUSTRE_DATA_SEQ_MAX_WIDTH);
-	if (d->opd_pre->osp_pre_delorphan_sent == 0)
-		d->opd_pre_used_fid = d->opd_pre_last_created_fid;
+	d->opd_pre_used_fid = d->opd_pre_last_created_fid;
 	d->opd_pre_create_slow = 0;
 	spin_unlock(&d->opd_pre_lock);
-	d->opd_pre->osp_pre_delorphan_sent = 1;
 
 	CDEBUG(D_HA, "%s: Got last_id "DFID" from OST, last_created "DFID
 	       "last_used is "DFID"\n", d->opd_obd->obd_name, PFID(last_fid),
@@ -1385,12 +1370,6 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 	/* opd_pre_max_create_count 0 to not use specified OST. */
 	if (d->opd_pre_max_create_count == 0)
 		RETURN(-ENOBUFS);
-
-	if (OBD_FAIL_PRECHECK(OBD_FAIL_MDS_OSP_PRECREATE_WAIT)) {
-		if (d->opd_index == cfs_fail_val)
-			OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_OSP_PRECREATE_WAIT,
-					 obd_timeout);
-	}
 
 	/*
 	 * wait till:
