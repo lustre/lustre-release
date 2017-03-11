@@ -1699,7 +1699,7 @@ t32_test() {
 	local img_blimit
 	local img_ilimit
 	local fsname=t32fs
-	local nid=$($r $LCTL list_nids | head -1)
+	local nid
 	local mopts
 	local uuid
 	local nrpcs_orig
@@ -1717,6 +1717,8 @@ t32_test() {
 	trap 'trap - RETURN; t32_test_cleanup' RETURN
 
 	load_modules
+	nid=$($r $LCTL list_nids | head -1)
+
 	mkdir -p $tmp/mnt/lustre || error "mkdir $tmp/mnt/lustre failed"
 	$r mkdir -p $tmp/mnt/{mdt,mdt1,ost}
 	$r tar xjvf $tarball -S -C $tmp || {
@@ -1918,7 +1920,8 @@ t32_test() {
 			mopts="loop,$mopts"
 		fi
 	fi
-	$r $MOUNT_CMD -o $mopts $ost_dev $tmp/mnt/ost || {
+
+	$r $MOUNT_CMD -onomgs -o$mopts $ost_dev $tmp/mnt/ost || {
 		error_noexit "Mounting the OST"
 		return 1
 	}
