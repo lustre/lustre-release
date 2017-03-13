@@ -2110,11 +2110,10 @@ test_27E() {
 run_test 27E "check that default extended attribute size properly increases"
 
 test_27F() { # LU-5346/LU-7975
-
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.51) ]] &&
 		skip "Need MDS version at least 2.8.51" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	test_mkdir -p $DIR/$tdir
 	rm -f $DIR/$tdir/f0
@@ -4388,6 +4387,8 @@ test_53() {
 run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
 test_54a() {
+	perl -MSocket -e ';' || { skip "no Socket perl module installed" && return; }
+
 	$SOCKETSERVER $DIR/socket ||
 		error "$SOCKETSERVER $DIR/socket failed: $?"
 	$SOCKETCLIENT $DIR/socket ||
@@ -11161,6 +11162,8 @@ test_160d() {
 run_test 160d "verify that changelog log catch the migrate event"
 
 test_160e() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
 	# Create a user
 	CL_USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
 		changelog_register -n)
@@ -14616,6 +14619,7 @@ ladvise_willread_performance()
 test_255a() {
 	[ $(lustre_version_code ost1) -lt $(version_code 2.8.54) ] &&
 		skip "lustre < 2.8.54 does not support ladvise " && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	lfs setstripe -c -1 -i 0 $DIR/$tfile || error "$tfile failed"
 
@@ -14700,6 +14704,8 @@ facet_meminfo() {
 }
 
 test_255b() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
 	lfs setstripe -c 1 -i 0 $DIR/$tfile
 
 	ladvise_no_type dontneed $DIR/$tfile &&
@@ -15417,6 +15423,8 @@ test_300n() {
 		skip "Need MDS version at least 2.7.55" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
 	local stripe_index
 	local list=$(comma_list $(mdts_nodes))
 
@@ -15609,6 +15617,7 @@ test_311() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.54) ] &&
 		skip "lustre < 2.8.54 does not contain LU-4825 fix" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
 	local old_iused=$($LFS df -i | grep OST0000 | awk '{ print $3 }')
 
@@ -15691,6 +15700,8 @@ zfs_object_blksz() {
 }
 
 test_312() { # LU-4856
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
 	[ $(facet_fstype ost1) = "zfs" ] ||
 		{ skip "the test only applies to zfs" && return; }
 
@@ -15755,6 +15766,8 @@ test_312() { # LU-4856
 run_test 312 "make sure ZFS adjusts its block size by write pattern"
 
 test_313() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
 	local file=$DIR/$tfile
 	rm -f $file
 	$SETSTRIPE -c 1 -i 0 $file || error "setstripe failed"
@@ -15827,12 +15840,15 @@ test_fake_rw() {
 	rm -f $DIR/$tfile
 }
 test_399a() { # LU-7655 for OST fake write
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
 	test_fake_rw write
 }
 run_test 399a "fake write should not be slower than normal write"
 
-
 test_399b() { # LU-8726 for OST fake read
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
 	if [ "$(facet_fstype ost1)" != "ldiskfs" ]; then
 		skip "only for ldiskfs" && return 0
 	fi
@@ -16164,9 +16180,9 @@ run_test 406 "DNE support fs default striping"
 
 test_407() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.55) ]] &&
 		skip "Need MDS version at least 2.8.55" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
 	$LFS mkdir -i 0 -c 1 $DIR/$tdir.0 ||
 		error "$LFS mkdir -i 0 -c 1 $tdir.0 failed"
