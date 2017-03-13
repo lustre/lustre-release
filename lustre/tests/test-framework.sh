@@ -1404,7 +1404,7 @@ mount_facet() {
 	# commit the device label change to disk
 	if [[ $devicelabel =~ (:[a-zA-Z]{3}[0-9]{4}) ]]; then
 		echo "Commit the device label on ${!dev}"
-		do_facet $facet "sync; sleep 5; sync"
+		do_facet $facet "sync; sleep 1; sync"
 	fi
 
 
