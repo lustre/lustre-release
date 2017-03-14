@@ -49,6 +49,7 @@
 #include <pwd.h>
 #include <keyutils.h>
 #include <gssapi/gssapi.h>
+#include <sys/wait.h>
 
 #include <libcfs/util/param.h>
 #include <libcfs/util/string.h>
@@ -120,37 +121,49 @@ struct keyring_upcall_param {
  * child process: gss negotiation       *
  ****************************************/
 
-int do_nego_rpc(struct lgss_nego_data *lnd,
-                gss_buffer_desc *gss_token,
-                struct lgss_init_res *gr)
+static int send_to(int fd, const void *buf, size_t size)
 {
-	struct lgssd_ioctl_param param;
-	struct passwd *pw;
-	int fd, ret, res;
-	char outbuf[8192];
-	unsigned int *p;
+	ssize_t sz;
+
+	sz = write(fd, buf, size);
+	if (sz == -1) {
+		logmsg(LL_ERR, "cannot send to GSS process: %s\n",
+		       strerror(errno));
+		return -errno;
+	}
+	if (sz < size) {
+		logmsg(LL_ERR, "short write sending to GSS process: %d/%d\n",
+		       (int)sz, (int)size);
+		return -EPROTO;
+	}
+
+	return 0;
+}
+
+static int receive_from(int fd, void *buf, size_t size)
+{
+	ssize_t sz;
+
+	sz = read(fd, buf, size);
+	if (sz == -1) {
+		logmsg(LL_ERR, "cannot receive from GSS process: %s\n",
+		       strerror(errno));
+		return -errno;
+	}
+	if (sz < size) {
+		logmsg(LL_ERR, "short read receiving from GSS process: %d/%d\n",
+		       (int)sz, (int)size);
+		return -EPROTO;
+	}
+
+	return 0;
+}
+
+static int gss_do_ioctl(struct lgssd_ioctl_param *param)
+{
+	int fd, ret;
 	glob_t path;
 	int rc;
-
-        logmsg(LL_TRACE, "start negotiation rpc\n");
-
-        pw = getpwuid(lnd->lnd_uid);
-        if (!pw) {
-                logmsg(LL_ERR, "no uid %u in local user database\n",
-                       lnd->lnd_uid);
-                return -EACCES;
-        }
-
-        param.version = GSSD_INTERFACE_VERSION;
-        param.secid = lnd->lnd_secid;
-        param.uuid = lnd->lnd_uuid;
-        param.lustre_svc = lnd->lnd_lsvc;
-        param.uid = lnd->lnd_uid;
-        param.gid = pw->pw_gid;
-        param.send_token_size = gss_token->length;
-        param.send_token = (char *) gss_token->value;
-        param.reply_buf_size = sizeof(outbuf);
-        param.reply_buf = outbuf;
 
 	rc = cfs_get_param_paths(&path, "sptlrpc/gss/init_channel");
 	if (rc != 0)
@@ -159,43 +172,113 @@ int do_nego_rpc(struct lgss_nego_data *lnd,
 	logmsg(LL_TRACE, "to open %s\n", path.gl_pathv[0]);
 
 	fd = open(path.gl_pathv[0], O_WRONLY);
-        if (fd < 0) {
+	if (fd < 0) {
 		logmsg(LL_ERR, "can't open %s\n", path.gl_pathv[0]);
 		rc = -EACCES;
 		goto out_params;
-        }
+	}
 
 	logmsg(LL_TRACE, "to down-write\n");
 
-	ret = write(fd, &param, sizeof(param));
+	ret = write(fd, param, sizeof(*param));
 	close(fd);
-	if (ret != sizeof(param)) {
+	if (ret != sizeof(*param)) {
 		logmsg(LL_ERR, "lustre ioctl err: %s\n", strerror(errno));
 		rc = -EACCES;
-		goto out_params;
 	}
 
-        logmsg(LL_TRACE, "do_nego_rpc: to parse reply\n");
-        if (param.status) {
+out_params:
+	cfs_free_param_data(&path);
+	return rc;
+}
+
+int do_nego_rpc(struct lgss_nego_data *lnd,
+		gss_buffer_desc *gss_token,
+		struct lgss_init_res *gr,
+		int req_fd[2], int reply_fd[2])
+{
+	struct lgssd_ioctl_param param;
+	struct passwd *pw;
+	int res;
+	char outbuf[8192] = { 0 };
+	unsigned int *p;
+	int rc = 0;
+
+	logmsg(LL_TRACE, "start negotiation rpc\n");
+
+	pw = getpwuid(lnd->lnd_uid);
+	if (!pw) {
+		logmsg(LL_ERR, "no uid %u in local user database\n",
+		       lnd->lnd_uid);
+		return -EACCES;
+	}
+
+	param.version = GSSD_INTERFACE_VERSION;
+	param.secid = lnd->lnd_secid;
+	param.uuid = lnd->lnd_uuid;
+	param.lustre_svc = lnd->lnd_lsvc;
+	param.uid = lnd->lnd_uid;
+	param.gid = pw->pw_gid;
+	param.send_token_size = gss_token->length;
+	param.send_token = (char *) gss_token->value;
+
+	if (req_fd[0] == -1 && reply_fd[0] == -1) {
+		/* we can do the ioctl directly */
+		param.reply_buf_size = sizeof(outbuf);
+		param.reply_buf = outbuf;
+
+		rc = gss_do_ioctl(&param);
+		if (rc != 0)
+			return rc;
+	} else {
+		/* looks like we are running in a container,
+		 * so we cannot do the ioctl ourselves: delegate to
+		 * parent process running directly on host */
+
+		/* send ioctl buffer to parent */
+		rc = send_to(req_fd[1], &param, sizeof(param));
+		if (rc != 0)
+			return rc;
+		/* send gss token to parent */
+		rc = send_to(req_fd[1], gss_token->value, gss_token->length);
+		if (rc != 0)
+			return rc;
+
+		/* read ioctl status from parent */
+		rc = receive_from(reply_fd[0], &param.status,
+				  sizeof(param.status));
+		if (rc != 0)
+			return rc;
+
+		if (param.status == 0) {
+			/* read reply buffer from parent */
+			rc = receive_from(reply_fd[0], outbuf, sizeof(outbuf));
+			if (rc != 0)
+				return rc;
+		}
+	}
+
+	logmsg(LL_TRACE, "do_nego_rpc: to parse reply\n");
+	if (param.status) {
 		logmsg(LL_ERR, "status: %ld (%s)\n",
 		       param.status, strerror((int)(-param.status)));
 
-                /* kernel return -ETIMEDOUT means the rpc timedout, we should
-                 * notify the caller to reinitiate the gss negotiation, by
-                 * returning -ERESTART
-                 */
-                if (param.status == -ETIMEDOUT)
+		/* kernel return -ETIMEDOUT means the rpc timedout, we should
+		 * notify the caller to reinitiate the gss negotiation, by
+		 * returning -ERESTART
+		 */
+		if (param.status == -ETIMEDOUT)
 			rc = -ERESTART;
 		else
 			rc = param.status;
-		goto out_params;
+		return rc;
 	}
 
-        p = (unsigned int *)outbuf;
-        res = *p++;
-        gr->gr_major = *p++;
-        gr->gr_minor = *p++;
-        gr->gr_win = *p++;
+	p = (unsigned int *)outbuf;
+	res = *p++;
+	gr->gr_major = *p++;
+	gr->gr_minor = *p++;
+	gr->gr_win = *p++;
 
 	gr->gr_ctx.length = *p++;
 	gr->gr_ctx.value = malloc(gr->gr_ctx.length);
@@ -215,8 +298,7 @@ int do_nego_rpc(struct lgss_nego_data *lnd,
 
 	logmsg(LL_DEBUG, "do_nego_rpc: receive handle len %zu, token len %zu, "
 	       "res %d\n", gr->gr_ctx.length, gr->gr_token.length, res);
-out_params:
-	cfs_free_param_data(&path);
+
 	return rc;
 }
 
@@ -227,7 +309,8 @@ out_params:
  * RPC's token with be in gr.gr_token which is validated using
  * lgss_validate_cred. */
 static int lgssc_negotiation_manual(struct lgss_nego_data *lnd,
-				    struct lgss_cred *cred)
+				    struct lgss_cred *cred,
+				    int req_fd[2], int reply_fd[2])
 {
 	struct lgss_init_res gr;
 	OM_uint32 min_stat;
@@ -236,7 +319,8 @@ static int lgssc_negotiation_manual(struct lgss_nego_data *lnd,
 	logmsg(LL_TRACE, "starting gss negotation\n");
 	memset(&gr, 0, sizeof(gr));
 
-	lnd->lnd_rpc_err = do_nego_rpc(lnd, &cred->lc_mech_token, &gr);
+	lnd->lnd_rpc_err = do_nego_rpc(lnd, &cred->lc_mech_token, &gr,
+				       req_fd, reply_fd);
 	if (lnd->lnd_rpc_err) {
 		logmsg(LL_ERR, "negotiation rpc error %d\n", lnd->lnd_rpc_err);
 		rc = lnd->lnd_rpc_err;
@@ -288,106 +372,108 @@ out_error:
 /*
  * if return error, the lnd_rpc_err or lnd_gss_err is set.
  */
-static int lgssc_negotiation(struct lgss_nego_data *lnd)
+static int lgssc_negotiation(struct lgss_nego_data *lnd, int req_fd[2],
+			     int reply_fd[2])
 {
-        struct lgss_init_res    gr;
-        gss_buffer_desc        *recv_tokenp, send_token;
-        OM_uint32               maj_stat, min_stat, ret_flags;
+	struct lgss_init_res    gr;
+	gss_buffer_desc        *recv_tokenp, send_token;
+	OM_uint32               maj_stat, min_stat, ret_flags;
 
-        logmsg(LL_TRACE, "start gss negotiation\n");
+	logmsg(LL_TRACE, "start gss negotiation\n");
 
-        /* GSS context establishment loop. */
-        memset(&gr, 0, sizeof(gr));
-        recv_tokenp = GSS_C_NO_BUFFER;
+	/* GSS context establishment loop. */
+	memset(&gr, 0, sizeof(gr));
+	recv_tokenp = GSS_C_NO_BUFFER;
 
-        for (;;) {
-                maj_stat = gss_init_sec_context(&min_stat,
-                                                lnd->lnd_cred,
-                                                &lnd->lnd_ctx,
-                                                lnd->lnd_svc_name,
-                                                lnd->lnd_mech,
-                                                lnd->lnd_req_flags,
-                                                0,            /* time req */
-                                                NULL,         /* channel */
-                                                recv_tokenp,
-                                                NULL,         /* used mech */
-                                                &send_token,
-                                                &ret_flags,
-                                                NULL);        /* time rec */
+	for (;;) {
+		maj_stat = gss_init_sec_context(&min_stat,
+						lnd->lnd_cred,
+						&lnd->lnd_ctx,
+						lnd->lnd_svc_name,
+						lnd->lnd_mech,
+						lnd->lnd_req_flags,
+						0,            /* time req */
+						NULL,         /* channel */
+						recv_tokenp,
+						NULL,         /* used mech */
+						&send_token,
+						&ret_flags,
+						NULL);        /* time rec */
 
-                if (recv_tokenp != GSS_C_NO_BUFFER) {
-                        gss_release_buffer(&min_stat, &gr.gr_token);
-                        recv_tokenp = GSS_C_NO_BUFFER;
-                }
+		if (recv_tokenp != GSS_C_NO_BUFFER) {
+			gss_release_buffer(&min_stat, &gr.gr_token);
+			recv_tokenp = GSS_C_NO_BUFFER;
+		}
 
-                if (maj_stat != GSS_S_COMPLETE &&
-                    maj_stat != GSS_S_CONTINUE_NEEDED) {
-                        lnd->lnd_gss_err = maj_stat;
+		if (maj_stat != GSS_S_COMPLETE &&
+		    maj_stat != GSS_S_CONTINUE_NEEDED) {
+			lnd->lnd_gss_err = maj_stat;
 
-                        logmsg_gss(LL_ERR, lnd->lnd_mech, maj_stat, min_stat,
-                                   "failed init context");
-                        break;
-                }
+			logmsg_gss(LL_ERR, lnd->lnd_mech, maj_stat, min_stat,
+				   "failed init context");
+			break;
+		}
 
-                if (send_token.length != 0) {
-                        memset(&gr, 0, sizeof(gr));
+		if (send_token.length != 0) {
+			memset(&gr, 0, sizeof(gr));
 
-                        lnd->lnd_rpc_err = do_nego_rpc(lnd, &send_token, &gr);
-                        gss_release_buffer(&min_stat, &send_token);
+			lnd->lnd_rpc_err = do_nego_rpc(lnd, &send_token, &gr,
+						       req_fd, reply_fd);
+			gss_release_buffer(&min_stat, &send_token);
 
-                        if (lnd->lnd_rpc_err) {
-                                logmsg(LL_ERR, "negotiation rpc error: %d\n",
-                                       lnd->lnd_rpc_err);
-                                return -1;
-                        }
+			if (lnd->lnd_rpc_err) {
+				logmsg(LL_ERR, "negotiation rpc error: %d\n",
+				       lnd->lnd_rpc_err);
+				return -1;
+			}
 
-                        if (gr.gr_major != GSS_S_COMPLETE &&
-                            gr.gr_major != GSS_S_CONTINUE_NEEDED) {
-                                lnd->lnd_gss_err = gr.gr_major;
+			if (gr.gr_major != GSS_S_COMPLETE &&
+			    gr.gr_major != GSS_S_CONTINUE_NEEDED) {
+				lnd->lnd_gss_err = gr.gr_major;
 
-                                logmsg(LL_ERR, "negotiation gss error %x\n",
-                                       lnd->lnd_gss_err);
-                                return -1;
-                        }
+				logmsg(LL_ERR, "negotiation gss error %x\n",
+				       lnd->lnd_gss_err);
+				return -1;
+			}
 
-                        if (gr.gr_ctx.length != 0) {
-                                if (lnd->lnd_rmt_ctx.value)
-                                        gss_release_buffer(&min_stat,
-                                                           &lnd->lnd_rmt_ctx);
-                                lnd->lnd_rmt_ctx = gr.gr_ctx;
-                        }
+			if (gr.gr_ctx.length != 0) {
+				if (lnd->lnd_rmt_ctx.value)
+					gss_release_buffer(&min_stat,
+							   &lnd->lnd_rmt_ctx);
+				lnd->lnd_rmt_ctx = gr.gr_ctx;
+			}
 
-                        if (gr.gr_token.length != 0) {
-                                if (maj_stat != GSS_S_CONTINUE_NEEDED)
-                                        break;
-                                recv_tokenp = &gr.gr_token;
-                        }
-                }
+			if (gr.gr_token.length != 0) {
+				if (maj_stat != GSS_S_CONTINUE_NEEDED)
+					break;
+				recv_tokenp = &gr.gr_token;
+			}
+		}
 
-                /* GSS_S_COMPLETE => check gss header verifier,
-                 * usually checked in gss_validate
-                 */
-                if (maj_stat == GSS_S_COMPLETE) {
-                        lnd->lnd_established = 1;
-                        lnd->lnd_seq_win = gr.gr_win;
-                        break;
-                }
-        }
+		/* GSS_S_COMPLETE => check gss header verifier,
+		 * usually checked in gss_validate
+		 */
+		if (maj_stat == GSS_S_COMPLETE) {
+			lnd->lnd_established = 1;
+			lnd->lnd_seq_win = gr.gr_win;
+			break;
+		}
+	}
 
-        /* End context negotiation loop. */
-        if (!lnd->lnd_established) {
-                if (gr.gr_token.length != 0)
-                        gss_release_buffer(&min_stat, &gr.gr_token);
+	/* End context negotiation loop. */
+	if (!lnd->lnd_established) {
+		if (gr.gr_token.length != 0)
+			gss_release_buffer(&min_stat, &gr.gr_token);
 
-                if (lnd->lnd_gss_err == GSS_S_COMPLETE)
-                        lnd->lnd_rpc_err = -EACCES;
+		if (lnd->lnd_gss_err == GSS_S_COMPLETE)
+			lnd->lnd_rpc_err = -EACCES;
 
-                logmsg(LL_ERR, "context negotiation failed\n");
-                return -1;
-        }
+		logmsg(LL_ERR, "context negotiation failed\n");
+		return -1;
+	}
 
-        logmsg(LL_DEBUG, "successfully negotiated a context\n");
-        return 0;
+	logmsg(LL_DEBUG, "successfully negotiated a context\n");
+	return 0;
 }
 
 /*
@@ -557,40 +643,41 @@ out:
 }
 
 static int lgssc_kr_negotiate_krb(key_serial_t keyid, struct lgss_cred *cred,
-				  struct keyring_upcall_param *kup)
+				  struct keyring_upcall_param *kup,
+				  int req_fd[2], int reply_fd[2])
 {
-	struct lgss_nego_data lnd;
-	OM_uint32 min_stat;
-	int rc = -1;
+	struct lgss_nego_data   lnd;
+	OM_uint32               min_stat;
+	int                     rc = -1;
 
 	memset(&lnd, 0, sizeof(lnd));
 
-        if (lgss_get_service_str(&g_service, kup->kup_svc, kup->kup_nid)) {
-                logmsg(LL_ERR, "key %08x: failed to construct service "
-                       "string\n", keyid);
-                error_kernel_key(keyid, -EACCES, 0);
-                goto out_cred;
-        }
+	if (lgss_get_service_str(&g_service, kup->kup_svc, kup->kup_nid)) {
+		logmsg(LL_ERR, "key %08x: failed to construct service "
+		       "string\n", keyid);
+		error_kernel_key(keyid, -EACCES, 0);
+		goto out_cred;
+	}
 
-        if (lgss_using_cred(cred)) {
-                logmsg(LL_ERR, "key %08x: can't using cred\n", keyid);
-                error_kernel_key(keyid, -EACCES, 0);
-                goto out_cred;
-        }
+	if (lgss_using_cred(cred)) {
+		logmsg(LL_ERR, "key %08x: can't using cred\n", keyid);
+		error_kernel_key(keyid, -EACCES, 0);
+		goto out_cred;
+	}
 
-        if (lgssc_init_nego_data(&lnd, kup, cred->lc_mech->lmt_mech_n)) {
-                logmsg(LL_ERR, "key %08x: failed to initialize "
-                       "negotiation data\n", keyid);
-                error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
-                goto out_cred;
-        }
+	if (lgssc_init_nego_data(&lnd, kup, cred->lc_mech->lmt_mech_n)) {
+		logmsg(LL_ERR, "key %08x: failed to initialize "
+		       "negotiation data\n", keyid);
+		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
+		goto out_cred;
+	}
 
-        rc = lgssc_negotiation(&lnd);
-        if (rc) {
-                logmsg(LL_ERR, "key %08x: failed to negotiation\n", keyid);
-                error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
-                goto out;
-        }
+	rc = lgssc_negotiation(&lnd, req_fd, reply_fd);
+	if (rc) {
+		logmsg(LL_ERR, "key %08x: failed to negotiation\n", keyid);
+		error_kernel_key(keyid, lnd.lnd_rpc_err, lnd.lnd_gss_err);
+		goto out;
+	}
 
 	rc = serialize_context_for_kernel(lnd.lnd_ctx, &lnd.lnd_ctx_token,
 					  lnd.lnd_mech);
@@ -619,7 +706,8 @@ out_cred:
 }
 
 static int lgssc_kr_negotiate_manual(key_serial_t keyid, struct lgss_cred *cred,
-				     struct keyring_upcall_param *kup)
+				     struct keyring_upcall_param *kup,
+				     int req_fd[2], int reply_fd[2])
 {
 	struct lgss_nego_data   lnd;
 	OM_uint32               min_stat;
@@ -656,7 +744,7 @@ retry:
 	 * the token is valid.  It also populates the lnd_ctx_token for the
 	 * update to the kernel key
 	 */
-	rc = lgssc_negotiation_manual(&lnd, cred);
+	rc = lgssc_negotiation_manual(&lnd, cred, req_fd, reply_fd);
 	if (rc == -EAGAIN) {
 		logmsg(LL_ERR, "Failed negotiation must retry\n");
 		goto retry;
@@ -688,7 +776,8 @@ out_cred:
  * note we inherited assumed authority from parent process
  */
 static int lgssc_kr_negotiate(key_serial_t keyid, struct lgss_cred *cred,
-			      struct keyring_upcall_param *kup)
+			      struct keyring_upcall_param *kup,
+			      int req_fd[2], int reply_fd[2])
 {
 	int rc;
 
@@ -700,11 +789,12 @@ static int lgssc_kr_negotiate(key_serial_t keyid, struct lgss_cred *cred,
 	switch (cred->lc_mech->lmt_mech_n) {
 	case LGSS_MECH_NULL:
 	case LGSS_MECH_SK:
-		rc = lgssc_kr_negotiate_manual(keyid, cred, kup);
+		rc = lgssc_kr_negotiate_manual(keyid, cred, kup,
+					       req_fd, reply_fd);
 		break;
 	case LGSS_MECH_KRB5:
 	default:
-		rc = lgssc_kr_negotiate_krb(keyid, cred, kup);
+		rc = lgssc_kr_negotiate_krb(keyid, cred, kup, req_fd, reply_fd);
 		break;
 	}
 
@@ -814,9 +904,9 @@ out:
 	fclose(file);
 }
 
-#ifdef HAVE_SETNS
 static int associate_with_ns(char *path)
 {
+#ifdef HAVE_SETNS
 	int fd, rc = -1;
 
 	fd = open(path, O_RDONLY);
@@ -826,8 +916,43 @@ static int associate_with_ns(char *path)
 	}
 
 	return rc;
+#else
+	return -1;
+#endif /* HAVE_SETNS */
 }
-#endif
+
+static int prepare_and_instantiate(struct lgss_cred *cred, key_serial_t keyid,
+				   uint32_t uid)
+{
+	key_serial_t inst_keyring;
+
+	if (lgss_prepare_cred(cred)) {
+		logmsg(LL_ERR, "key %08x: failed to prepare credentials "
+		       "for user %d\n", keyid, uid);
+		return 1;
+	}
+
+	/* pre initialize the key. note the keyring linked to is actually of the
+	 * original requesting process, not _this_ upcall process. if it's for
+	 * root user, don't link to any keyrings because we want fully control
+	 * on it, and share it among all root sessions; otherswise link to
+	 * session keyring.
+	 */
+	if (cred->lc_root_flags != 0)
+		inst_keyring = 0;
+	else
+		inst_keyring = KEY_SPEC_SESSION_KEYRING;
+
+	if (keyctl_instantiate(keyid, NULL, 0, inst_keyring)) {
+		logmsg(LL_ERR, "instantiate key %08x: %s\n",
+		       keyid, strerror(errno));
+		return 1;
+	}
+
+	logmsg(LL_TRACE, "instantiated kernel key %08x\n", keyid);
+
+	return 0;
+}
 
 /****************************************
  * main process                         *
@@ -835,99 +960,103 @@ static int associate_with_ns(char *path)
 
 int main(int argc, char *argv[])
 {
-        struct keyring_upcall_param     uparam;
-        key_serial_t                    keyid;
-        key_serial_t                    sring;
-        key_serial_t                    inst_keyring;
-        pid_t                           child;
-        struct lgss_mech_type          *mech;
-        struct lgss_cred               *cred;
+	struct keyring_upcall_param   uparam;
+	key_serial_t                  keyid;
+	key_serial_t                  sring;
+	pid_t                         child;
+	int			      req_fd[2] = { -1, -1 };
+	int			      reply_fd[2] = { -1, -1 };
+	struct lgss_mech_type        *mech;
+	struct lgss_cred             *cred;
+	char			      path[PATH_MAX] = "";
+	int			      other_ns = 0;
+	int			      rc = 0;
 #ifdef HAVE_SETNS
-	char				path[PATH_MAX];
-	struct stat parent_ns = { .st_ino = 0 }, caller_ns = { .st_ino = 0 };
+	struct stat		      parent_ns = { .st_ino = 0 };
+	struct stat		      caller_ns = { .st_ino = 0 };
 #endif
 
-        set_log_level();
+	set_log_level();
 
-        logmsg(LL_TRACE, "start parsing parameters\n");
-        /*
-         * parse & sanity check upcall parameters
-         * expected to be called with:
-         * [1]:  operation
-         * [2]:  key ID
-         * [3]:  key type
-         * [4]:  key description
-         * [5]:  call out info
-         * [6]:  UID
-         * [7]:  GID
-         * [8]:  thread keyring
-         * [9]:  process keyring
-         * [10]: session keyring
-         */
-        if (argc != 10 + 1) {
-                logmsg(LL_ERR, "invalid parameter number %d\n", argc);
-                return 1;
-        }
+	logmsg(LL_TRACE, "start parsing parameters\n");
+	/*
+	 * parse & sanity check upcall parameters
+	 * expected to be called with:
+	 * [1]:  operation
+	 * [2]:  key ID
+	 * [3]:  key type
+	 * [4]:  key description
+	 * [5]:  call out info
+	 * [6]:  UID
+	 * [7]:  GID
+	 * [8]:  thread keyring
+	 * [9]:  process keyring
+	 * [10]: session keyring
+	 */
+	if (argc != 10 + 1) {
+		logmsg(LL_ERR, "invalid parameter number %d\n", argc);
+		return 1;
+	}
 
-        logmsg(LL_INFO, "key %s, desc %s, ugid %s:%s, sring %s, coinfo %s\n",
-               argv[2], argv[4], argv[6], argv[7], argv[10], argv[5]);
+	logmsg(LL_INFO, "key %s, desc %s, ugid %s:%s, sring %s, coinfo %s\n",
+	       argv[2], argv[4], argv[6], argv[7], argv[10], argv[5]);
 
-        memset(&uparam, 0, sizeof(uparam));
+	memset(&uparam, 0, sizeof(uparam));
 
-        if (strcmp(argv[1], "create") != 0) {
-                logmsg(LL_ERR, "invalid OP %s\n", argv[1]);
-                return 1;
-        }
+	if (strcmp(argv[1], "create") != 0) {
+		logmsg(LL_ERR, "invalid OP %s\n", argv[1]);
+		return 1;
+	}
 
-        if (sscanf(argv[2], "%d", &keyid) != 1) {
-                logmsg(LL_ERR, "can't extract KeyID: %s\n", argv[2]);
-                return 1;
-        }
+	if (sscanf(argv[2], "%d", &keyid) != 1) {
+		logmsg(LL_ERR, "can't extract KeyID: %s\n", argv[2]);
+		return 1;
+	}
 
-        if (sscanf(argv[6], "%d", &uparam.kup_fsuid) != 1) {
-                logmsg(LL_ERR, "can't extract UID: %s\n", argv[6]);
-                return 1;
-        }
+	if (sscanf(argv[6], "%d", &uparam.kup_fsuid) != 1) {
+		logmsg(LL_ERR, "can't extract UID: %s\n", argv[6]);
+		return 1;
+	}
 
-        if (sscanf(argv[7], "%d", &uparam.kup_fsgid) != 1) {
-                logmsg(LL_ERR, "can't extract GID: %s\n", argv[7]);
-                return 1;
-        }
+	if (sscanf(argv[7], "%d", &uparam.kup_fsgid) != 1) {
+		logmsg(LL_ERR, "can't extract GID: %s\n", argv[7]);
+		return 1;
+	}
 
-        if (sscanf(argv[10], "%d", &sring) != 1) {
-                logmsg(LL_ERR, "can't extract session keyring: %s\n", argv[10]);
-                return 1;
-        }
+	if (sscanf(argv[10], "%d", &sring) != 1) {
+		logmsg(LL_ERR, "can't extract session keyring: %s\n", argv[10]);
+		return 1;
+	}
 
-        if (parse_callout_info(argv[5], &uparam)) {
-                logmsg(LL_ERR, "can't extract callout info: %s\n", argv[5]);
-                return 1;
-        }
+	if (parse_callout_info(argv[5], &uparam)) {
+		logmsg(LL_ERR, "can't extract callout info: %s\n", argv[5]);
+		return 1;
+	}
 
-        logmsg(LL_TRACE, "parsing parameters OK\n");
+	logmsg(LL_TRACE, "parsing parameters OK\n");
 
-        /*
-         * prepare a cred
-         */
-        mech = lgss_name2mech(uparam.kup_mech);
-        if (mech == NULL) {
-                logmsg(LL_ERR, "key %08x: unsupported mech: %s\n",
-                       keyid, uparam.kup_mech);
-                return 1;
-        }
+	/*
+	 * prepare a cred
+	 */
+	mech = lgss_name2mech(uparam.kup_mech);
+	if (mech == NULL) {
+		logmsg(LL_ERR, "key %08x: unsupported mech: %s\n",
+		       keyid, uparam.kup_mech);
+		return 1;
+	}
 
-        if (lgss_mech_initialize(mech)) {
-                logmsg(LL_ERR, "key %08x: can't initialize mech %s\n",
-                       keyid, mech->lmt_name);
-                return 1;
-        }
+	if (lgss_mech_initialize(mech)) {
+		logmsg(LL_ERR, "key %08x: can't initialize mech %s\n",
+		       keyid, mech->lmt_name);
+		return 1;
+	}
 
-        cred = lgss_create_cred(mech);
-        if (cred == NULL) {
-                logmsg(LL_ERR, "key %08x: can't create a new %s cred\n",
-                       keyid, mech->lmt_name);
-                return 1;
-        }
+	cred = lgss_create_cred(mech);
+	if (cred == NULL) {
+		logmsg(LL_ERR, "key %08x: can't create a new %s cred\n",
+		       keyid, mech->lmt_name);
+		return 1;
+	}
 
 	cred->lc_uid = uparam.kup_uid;
 	cred->lc_root_flags |= uparam.kup_is_root ? LGSS_ROOT_CRED_ROOT : 0;
@@ -948,58 +1077,181 @@ int main(int argc, char *argv[])
 	if (stat(path, &caller_ns))
 		logmsg(LL_ERR, "cannot stat %s: %s\n", path, strerror(errno));
 	if (caller_ns.st_ino != parent_ns.st_ino) {
-		/*
-		 * do credentials preparation in caller's namespace
-		 */
-		if (associate_with_ns(path) != 0) {
-			logmsg(LL_ERR, "failed to attach to pid %d namespace: "
-			       "%s\n", uparam.kup_pid, strerror(errno));
-			return 1;
-		}
-		logmsg(LL_TRACE, "working in namespace of pid %d\n",
-		       uparam.kup_pid);
-	} else {
-		logmsg(LL_TRACE, "caller's namespace is the same\n");
+		other_ns = 1;
 	}
 #endif /* HAVE_SETNS */
 
-	if (lgss_prepare_cred(cred)) {
-		logmsg(LL_ERR, "key %08x: failed to prepare credentials "
-		       "for user %d\n", keyid, uparam.kup_uid);
-		return 1;
+	/*
+	 * if caller's namespace is different, fork a child and associate it
+	 * with caller's namespace to do credentials preparation
+	 */
+	if (other_ns) {
+		logmsg(LL_TRACE, "caller's namespace is diffent\n");
+
+		/* use pipes to pass info between child and parent processes */
+		if (pipe(req_fd) == -1) {
+			logmsg(LL_ERR, "key %08x: pipe failed: %s\n",
+			       keyid, strerror(errno));
+			return 1;
+		}
+		if (pipe(reply_fd) == -1) {
+			logmsg(LL_ERR, "key %08x: pipe failed: %s\n",
+			       keyid, strerror(errno));
+			return 1;
+		}
+
+		child = fork();
+		if (child == -1) {
+			logmsg(LL_ERR, "key %08x: can't create child: %s\n",
+			       keyid, strerror(errno));
+			rc = 1;
+			goto out_pipe;
+		} else if (child == 0) {
+			int rc2;
+			/* child process: carry out credentials preparation
+			 * in caller's namespace */
+
+			close(req_fd[0]); /* close unsed read end */
+			req_fd[0] = -1;
+			close(reply_fd[1]); /* close unsed write end */
+			reply_fd[1] = -1;
+
+			if (associate_with_ns(path) != 0) {
+				logmsg(LL_ERR,
+				       "failed to attach to pid %d namespace: "
+				       "%s\n", uparam.kup_pid, strerror(errno));
+				rc = 1;
+				goto out_pipe;
+			}
+			logmsg(LL_TRACE, "working in namespace of pid %d\n",
+			       uparam.kup_pid);
+
+			rc = prepare_and_instantiate(cred, keyid,
+						     uparam.kup_uid);
+
+			/* send to parent the status of credentials preparation
+			 * and key instantiation */
+			rc2 = send_to(req_fd[1], &rc, sizeof(rc));
+			rc = (rc == 0 ? rc2 : rc);
+			if (rc != 0)
+				goto out_pipe;
+
+			/* now do real gss negotiation
+			 * parent main process will not wait for us,
+			 * as it has to be done in the background */
+			rc = lgssc_kr_negotiate(keyid, cred, &uparam,
+						req_fd, reply_fd);
+			goto out_pipe;
+		} else {
+			int rc2;
+			/* parent process: exchange info with child carrying out
+			 * credentials preparation */
+
+			close(req_fd[1]); /* close unsed write end */
+			req_fd[1] = -1;
+			close(reply_fd[0]); /* close unsed read end */
+			reply_fd[0] = -1;
+
+			/* get status of credentials preparation
+			 * and key instantiation */
+			rc2 = receive_from(req_fd[0], &rc, sizeof(rc));
+			if (rc2 != 0 || rc != 0) {
+				logmsg(LL_ERR, "child failed preparing creds: "
+				       "%s\n",
+				       rc2 != 0 ? strerror(-rc2)
+						: strerror(rc));
+				goto out_pipe;
+			}
+
+			/*
+			 * fork a child here to participate in gss negotiation,
+			 * as it has to be done in the background
+			 */
+			child = fork();
+			if (child == -1) {
+				logmsg(LL_ERR,
+				       "key %08x: can't create child: %s\n",
+				       keyid, strerror(errno));
+				rc = 1;
+				goto out_pipe;
+			} else if (child == 0) {
+				struct lgssd_ioctl_param param;
+				char outbuf[8192] = { 0 };
+				void *gss_token = NULL;
+
+				/* get ioctl buffer from child */
+				rc = receive_from(req_fd[0], &param,
+						  sizeof(param));
+				if (rc != 0)
+					goto out_pipe;
+
+				gss_token = calloc(1, param.send_token_size);
+				if (gss_token == NULL)
+					goto out_pipe;
+
+				/* get gss token from child */
+				rc = receive_from(req_fd[0], gss_token,
+						  param.send_token_size);
+				if (rc != 0)
+					goto out_token;
+
+				param.send_token = (char *)gss_token;
+				param.reply_buf_size = sizeof(outbuf);
+				param.reply_buf = outbuf;
+
+				/* do ioctl in place of child process carrying
+				 * out credentials negotiation: as it runs in
+				 * a container, it might not be able to
+				 * perform ioctl */
+				rc = gss_do_ioctl(&param);
+				if (rc != 0)
+					goto out_token;
+
+				/* send ioctl status to child */
+				rc = send_to(reply_fd[1], &param.status,
+					     sizeof(param.status));
+				if (rc != 0)
+					goto out_token;
+				/* send reply buffer to child */
+				rc = send_to(reply_fd[1], outbuf,
+					     sizeof(outbuf));
+				if (rc != 0)
+					goto out_token;
+
+out_token:
+				free(gss_token);
+				goto out_pipe;
+			}
+
+			logmsg(LL_TRACE, "forked child %d\n", child);
+		}
+out_pipe:
+		close(req_fd[0]);
+		close(req_fd[1]);
+		close(reply_fd[0]);
+		close(reply_fd[1]);
+		return rc;
+	} else {
+		logmsg(LL_TRACE, "caller's namespace is the same\n");
+
+		rc = prepare_and_instantiate(cred, keyid, uparam.kup_uid);
+		if (rc != 0)
+			return rc;
+
+		/*
+		 * fork a child to do the real gss negotiation
+		 */
+		child = fork();
+		if (child == -1) {
+			logmsg(LL_ERR, "key %08x: can't create child: %s\n",
+			       keyid, strerror(errno));
+			return 1;
+		} else if (child == 0) {
+			return lgssc_kr_negotiate(keyid, cred, &uparam,
+						  req_fd, reply_fd);
+		}
+
+		logmsg(LL_TRACE, "forked child %d\n", child);
+		return 0;
 	}
-
-        /* pre initialize the key. note the keyring linked to is actually of the
-         * original requesting process, not _this_ upcall process. if it's for
-         * root user, don't link to any keyrings because we want fully control
-         * on it, and share it among all root sessions; otherswise link to
-         * session keyring.
-         */
-        if (cred->lc_root_flags != 0)
-                inst_keyring = 0;
-        else
-                inst_keyring = KEY_SPEC_SESSION_KEYRING;
-
-        if (keyctl_instantiate(keyid, NULL, 0, inst_keyring)) {
-                logmsg(LL_ERR, "instantiate key %08x: %s\n",
-                       keyid, strerror(errno));
-                return 1;
-        }
-
-        logmsg(LL_TRACE, "instantiated kernel key %08x\n", keyid);
-
-        /*
-         * fork a child to do the real gss negotiation
-         */
-        child = fork();
-        if (child == -1) {
-                logmsg(LL_ERR, "key %08x: can't create child: %s\n",
-                       keyid, strerror(errno));
-                return 1;
-        } else if (child == 0) {
-                return lgssc_kr_negotiate(keyid, cred, &uparam);
-        }
-
-        logmsg(LL_TRACE, "forked child %d\n", child);
-        return 0;
 }
