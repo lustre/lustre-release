@@ -713,7 +713,10 @@ static void ras_increase_window(struct inode *inode,
 
 		wlen = min(ras->ras_window_len + ras->ras_rpc_size,
 			   ra->ra_max_pages_per_file);
-		ras->ras_window_len = ras_align(ras, wlen, NULL);
+		if (wlen < ras->ras_rpc_size)
+			ras->ras_window_len = wlen;
+		else
+			ras->ras_window_len = ras_align(ras, wlen, NULL);
 	}
 }
 
