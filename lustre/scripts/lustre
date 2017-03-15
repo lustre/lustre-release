@@ -618,9 +618,12 @@ health_check ()
 		fi
 
 		# check for either a server or a client filesystem
-		MDT=""
-		OST=""
-		LLITE=""
+		local MGT=""
+		local MDT=""
+		local OST=""
+		local LLITE=""
+
+		! lctl get_param -n mgs.MGS.* >/dev/null 2>&1 || MGT="YES"
 
 		VAR=$(lctl get_param -n mdt.*.recovery_status 2>&1 | grep '^status:'  )
 		if [ $? = 0 ] ; then
@@ -629,18 +632,18 @@ health_check ()
 
 		VAR=$(lctl get_param -n obdfilter.*.recovery_status 2>&1 | grep '^status:')
 		if [ $? = 0 ] ; then
-                        OST=$VAR
-                fi
+			OST=$VAR
+		fi
 
-                VAR=$(lctl get_param -n llite.fs* 2>&1)
+		VAR=$(lctl get_param -n llite.fs* 2>&1)
 		if [ $? = 0 ] ; then
-                        LLITE="YES"
-                fi
+			LLITE="YES"
+		fi
 
-                if [ "$MDT" -o "$OST" -o "$LLITE" ]; then
-                        STATE="running"
-                        RETVAL=0
-                fi
+		if [ "$MGT" -o "$MDT" -o "$OST" -o "$LLITE" ]; then
+			STATE="running"
+			RETVAL=0
+		fi
 	else
 		# check if this is a router
 		if [[ "$(lctl get_param -n routes)" =~ "Routing enabled" ]]; then
@@ -650,7 +653,7 @@ health_check ()
 	fi
 
 	# check for server disconnections
-        VAR=$(lctl get_param -n *c.*.*server_uuid 2>&1)
+	VAR=$(lctl get_param -n *c.*.*server_uuid 2>&1)
 	if [ $? = 0 ] ; then
 		DISCON="$(echo $VAR | grep -v FULL)"
 	        if [ -n "$DISCON" ] ; then
