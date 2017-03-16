@@ -2,7 +2,7 @@
 
 # increment this if you have made a change that should force a new kernel
 # to build built
-BUILD_GEN+=".1" #LU-3337 add missing build files for sles11sp2 server
+BUILD_GEN+=".2" #LU-3337 add missing build files for sles11sp2 server
 
 DEVEL_KERNEL_TYPE="default-devel"
 RPM_HELPERS_DIR="/usr/lib/rpm"
@@ -125,7 +125,11 @@ find_linux_devel_paths() {
 
 	# symlink the linux-obj to linux-version-obj
 	ln -s $linuxobjpath $LINUXOBJ
-
+	# We need to copy the headers from the source to the object tree for
+	# MOFED to be able to compile (a bug in ofed?)
+	if [ -e ${LINUX}/include ] && [ -e ${LINUXOBJ}/include ]; then
+		cp -rf ${LINUX}/include ${LINUXOBJ}
+	fi
 	# We modify %kernel_module_package macro to use the linux obj
 	# that lbuild install, not the OS installed /usr/src
 	sed -i -e "/^%kernel_module_package/,/^)}$/d" \
