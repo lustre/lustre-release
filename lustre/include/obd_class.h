@@ -162,18 +162,18 @@ struct config_llog_instance {
 int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 			    char *name, struct config_llog_instance *cfg);
 
-#define CONFIG_T_CONFIG		0x01
-#define CONFIG_T_SPTLRPC	0x02
-#define CONFIG_T_RECOVER	0x04
-#define CONFIG_T_PARAMS		0x08
-#define CONFIG_T_NODEMAP	0x10
-#define CONFIG_T_BARRIER	0x20
+#define CONFIG_SUB_SPTLRPC	0x01
+#define CONFIG_SUB_RECOVER	0x02
+#define CONFIG_SUB_PARAMS	0x04
+#define CONFIG_SUB_NODEMAP	0x08
+#define CONFIG_SUB_BARRIER	0x10
 
 /* Sub clds should be attached to the config_llog_data when processing
  * config log for client or server target. */
-#define CONFIG_SUB_CLIENT	(CONFIG_T_SPTLRPC | CONFIG_T_RECOVER | \
-				 CONFIG_T_PARAMS)
-#define CONFIG_SUB_SERVER	(CONFIG_SUB_CLIENT | CONFIG_T_NODEMAP)
+#define CONFIG_SUB_CLIENT	(CONFIG_SUB_SPTLRPC | CONFIG_SUB_RECOVER | \
+				 CONFIG_SUB_PARAMS)
+#define CONFIG_SUB_SERVER	(CONFIG_SUB_CLIENT | CONFIG_SUB_NODEMAP | \
+				 CONFIG_SUB_BARRIER)
 
 #define PARAMS_FILENAME		"params"
 #define BARRIER_FILENAME	"barrier"

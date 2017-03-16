@@ -2335,6 +2335,16 @@ struct mgs_nidtbl_entry {
         } u;
 };
 
+enum {
+	CONFIG_T_CONFIG  = 0,
+	CONFIG_T_SPTLRPC = 1,
+	CONFIG_T_RECOVER = 2,
+	CONFIG_T_PARAMS  = 3,
+	CONFIG_T_NODEMAP = 4,
+	CONFIG_T_BARRIER = 5,
+	CONFIG_T_MAX
+};
+
 struct mgs_config_body {
 	char     mcb_name[MTI_NAME_MAXLEN]; /* logname */
 	__u64    mcb_offset;    /* next index of config log to request */

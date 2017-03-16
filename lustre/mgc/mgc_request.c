@@ -344,7 +344,7 @@ config_log_add(struct obd_device *obd, char *logname,
 	memcpy(seclogname, logname, ptr - logname);
 	strcpy(seclogname + (ptr - logname), "-sptlrpc");
 
-	if (cfg->cfg_sub_clds & CONFIG_T_SPTLRPC) {
+	if (cfg->cfg_sub_clds & CONFIG_SUB_SPTLRPC) {
 		sptlrpc_cld = config_log_find_or_add(obd, seclogname, NULL,
 						     CONFIG_T_SPTLRPC, cfg);
 		if (IS_ERR(sptlrpc_cld)) {
@@ -354,7 +354,7 @@ config_log_add(struct obd_device *obd, char *logname,
 		}
 	}
 
-	if (!IS_MGS(lsi) && cfg->cfg_sub_clds & CONFIG_T_NODEMAP) {
+	if (!IS_MGS(lsi) && cfg->cfg_sub_clds & CONFIG_SUB_NODEMAP) {
 		nodemap_cld = config_log_find_or_add(obd, LUSTRE_NODEMAP_NAME,
 						     NULL, CONFIG_T_NODEMAP,
 						     cfg);
@@ -366,7 +366,7 @@ config_log_add(struct obd_device *obd, char *logname,
 		}
 	}
 
-	if (cfg->cfg_sub_clds & CONFIG_T_PARAMS) {
+	if (cfg->cfg_sub_clds & CONFIG_SUB_PARAMS) {
 		params_cld = config_log_find_or_add(obd, PARAMS_FILENAME, sb,
 						    CONFIG_T_PARAMS, cfg);
 		if (IS_ERR(params_cld)) {
@@ -377,7 +377,7 @@ config_log_add(struct obd_device *obd, char *logname,
 		}
 	}
 
-	if (IS_MDT(s2lsi(sb))) {
+	if (IS_MDT(s2lsi(sb)) && cfg->cfg_sub_clds & CONFIG_SUB_BARRIER) {
 		snprintf(seclogname + (ptr - logname), sizeof(seclogname) - 1,
 			 "-%s", BARRIER_FILENAME);
 		barrier_cld = config_log_find_or_add(obd, seclogname, sb,
@@ -400,7 +400,7 @@ config_log_add(struct obd_device *obd, char *logname,
 
 	LASSERT(lsi->lsi_lmd);
 	if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOIR) &&
-	    cfg->cfg_sub_clds & CONFIG_T_RECOVER) {
+	    cfg->cfg_sub_clds & CONFIG_SUB_RECOVER) {
 		struct config_llog_data *recover_cld;
 
 		ptr = strrchr(seclogname, '-');

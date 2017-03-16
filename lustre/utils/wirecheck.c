@@ -1813,6 +1813,51 @@ check_mgs_target_info(void)
 }
 
 static void
+check_mgs_nidtbl_entry(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(mgs_nidtbl_entry);
+	CHECK_MEMBER(mgs_nidtbl_entry, mne_version);
+	CHECK_MEMBER(mgs_nidtbl_entry, mne_instance);
+	CHECK_MEMBER(mgs_nidtbl_entry, mne_index);
+	CHECK_MEMBER(mgs_nidtbl_entry, mne_length);
+	CHECK_MEMBER(mgs_nidtbl_entry, mne_type);
+	CHECK_MEMBER(mgs_nidtbl_entry, mne_nid_type);
+	CHECK_MEMBER(mgs_nidtbl_entry, mne_nid_size);
+	CHECK_MEMBER(mgs_nidtbl_entry, mne_nid_count);
+	CHECK_MEMBER(mgs_nidtbl_entry, u.nids[0]);
+}
+
+static void
+check_mgs_config_body(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(mgs_config_body);
+	CHECK_MEMBER(mgs_config_body, mcb_name);
+	CHECK_MEMBER(mgs_config_body, mcb_offset);
+	CHECK_MEMBER(mgs_config_body, mcb_type);
+	CHECK_MEMBER(mgs_config_body, mcb_nm_cur_pass);
+	CHECK_MEMBER(mgs_config_body, mcb_bits);
+	CHECK_MEMBER(mgs_config_body, mcb_units);
+
+	CHECK_CVALUE(CONFIG_T_CONFIG);
+	CHECK_CVALUE(CONFIG_T_SPTLRPC);
+	CHECK_CVALUE(CONFIG_T_RECOVER);
+	CHECK_CVALUE(CONFIG_T_PARAMS);
+	CHECK_CVALUE(CONFIG_T_NODEMAP);
+	CHECK_CVALUE(CONFIG_T_BARRIER);
+}
+
+static void
+check_mgs_config_res(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(mgs_config_res);
+	CHECK_MEMBER(mgs_config_res, mcr_offset);
+	CHECK_MEMBER(mgs_config_res, mcr_size);
+}
+
+static void
 check_lustre_capa(void)
 {
 	BLANK_LINE();
@@ -2716,6 +2761,9 @@ main(int argc, char **argv)
 	check_ll_fiemap_info_key();
 	check_quota_body();
 	check_mgs_target_info();
+	check_mgs_nidtbl_entry();
+	check_mgs_config_body();
+	check_mgs_config_res();
 	check_lustre_capa();
 	check_lustre_capa_key();
 	check_getinfo_fid2path();
