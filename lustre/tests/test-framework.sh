@@ -392,28 +392,41 @@ export LINUX_VERSION_CODE=$(version_code ${LINUX_VERSION//\./ })
 #
 # All Lustre versions support "lctl get_param" to report the version of the
 # code running in the kernel (what our tests are interested in), but it
-# doesn't work without modules loaded.  If that fails, use "lctl version"
-# instead, which is easy to parse and works without the kernel modules,
-# but was only added in 2.6.50.  If that also fails, fall back to calling
-# "lctl lustre_build_version" which prints either (or both) the userspace
-# and kernel build versions, but is deprecated and should eventually be
-# removed.
+# doesn't work without modules loaded.  After 2.9.53 and in upstream kernels
+# the "version" parameter doesn't include "lustre: " at the beginning.
+# If that fails, call "lctl lustre_build_version" which prints either (or both)
+# the userspace and kernel build versions, but until 2.8.55 required root
+# access to get the Lustre kernel version.  If that also fails, fall back to
+# using "lctl --version", which is easy to parse and works without the kernel
+# modules, but was only added in 2.6.50 and only prints the lctl tool version,
+# not the module version, though they are usually the same.
 #
-# output: prints version string to stdout in dotted-decimal format
+# Various commands and their output format for different Lustre versions:
+# lctl get_param version:	2.9.55
+# lctl get_param version:	lustre: 2.8.53
+# lctl get_param version:	lustre: 2.6.52
+#				kernel: patchless_client
+#				build: v2_6_92_0-2.6.32-431.el6_lustre.x86_64
+# lctl lustre_build_version:	Lustre version: 2.8.53_27_gae67fc01
+# lctl lustre_build_version:	error: lustre_build_version: Permission denied
+#	(as non-root user)	lctl   version: v2_6_92_0-2.6.32-431.el6.x86_64
+# lctl lustre_build_version:	Lustre version: 2.5.3-2.6.32.26-175.fc12.x86_64
+#				lctl   version: 2.5.3-2.6.32..26-175fc12.x86_64
+# lctl --version:		lctl 2.6.50
+#
+# output: prints version string to stdout in (up to 4) dotted-decimal values
 lustre_build_version() {
 	local facet=${1:-client}
+	local ver
 
-	# lustre: 2.8.52
-	local VER=$(do_facet $facet $LCTL get_param -n version 2> /dev/null |
-		    awk '/lustre: / { print $2 }')
-	# lctl 2.6.50
-	[ -z "$VER" ] && VER=$(do_facet $facet $LCTL --version 2>/dev/null |
-			       awk '{ print $2 }')
-	# Lustre version: 2.5.3-gfcfd782-CHANGED-2.6.32.26-175.fc12.x86_64
-	# lctl   version: 2.5.3-gfcfd782-CHANGED-2.6.32.26-175.fc12.x86_64
-	[ -z "$VER" ] && VER=$(do_facet $facet $LCTL lustre_build_version |
-			       awk '/version:/ { print $3; exit; }')
-	sed -e 's/^v//' -e 's/-.*//' -e 's/_/./g' <<<$VER
+	local ver=$(do_facet $facet "$LCTL get_param -n version 2>/dev/null ||
+				$LCTL lustre_build_version 2>/dev/null ||
+				$LCTL --version 2>/dev/null | cut -d' ' -f2")
+	local lver=$(egrep -i "lustre: |version: " <<<$ver | head -n 1)
+	[ -n "$lver" ] && ver="$lver"
+
+	sed -e 's/.*: //' -e 's/^v//' -e 's/-.*//' -e 's/_/./g' <<<$ver |
+		cut -d. -f1-4
 }
 
 # Report the Lustre numeric build version code for the supplied facet.
