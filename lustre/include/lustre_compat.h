@@ -37,6 +37,7 @@
 #include <linux/namei.h>
 #include <linux/pagemap.h>
 #include <linux/bio.h>
+#include <linux/xattr.h>
 
 #include <libcfs/libcfs.h>
 #include <lustre_patchless_compat.h>
