@@ -369,8 +369,6 @@ struct osd_object {
 			unsigned char		 oo_recusize;	/* unit size */
 		};
 	};
-
-
 };
 
 int osd_statfs(const struct lu_env *, struct dt_device *, struct obd_statfs *);
@@ -670,6 +668,27 @@ osd_zap_create_flags(objset_t *os, int normflags, zap_flags_t flags,
 				       DMU_OT_SA, DN_BONUS_SIZE(dnodesize),
 				       dnodesize, tx);
 }
+
+static inline int
+osd_obj_bonuslen(struct osd_object *obj)
+{
+	int bonuslen = DN_BONUS_SIZE(DNODE_MIN_SIZE);
+
+	if (obj->oo_dn != NULL && obj->oo_dn->dn_num_slots != 0) {
+		bonuslen = DN_SLOTS_TO_BONUSLEN(obj->oo_dn->dn_num_slots);
+	} else {
+		objset_t *os = osd_dtobj2objset(&obj->oo_dt);
+		int dnodesize;
+
+		if (os != NULL) {
+			dnodesize = dmu_objset_dnodesize(os);
+			if (dnodesize != 0)
+				bonuslen = DN_BONUS_SIZE(dnodesize);
+		}
+	}
+
+	return bonuslen;
+}
 #else
 static inline uint64_t
 osd_dmu_object_alloc(objset_t *os, dmu_object_type_t objtype, int blocksize,
@@ -688,6 +707,12 @@ osd_zap_create_flags(objset_t *os, int normflags, zap_flags_t flags,
 				indirect_blockshift, DMU_OT_SA,
 				DN_MAX_BONUSLEN, tx);
 }
+
+static inline int
+osd_obj_bonuslen(struct osd_object *obj)
+{
+	return DN_MAX_BONUSLEN;
+}
 #endif /* HAVE_DMU_OBJECT_ALLOC_DNSIZE */
 
 #ifdef HAVE_DMU_PREFETCH_6ARG
@@ -696,10 +721,6 @@ osd_zap_create_flags(objset_t *os, int normflags, zap_flags_t flags,
 #else
 #define osd_dmu_prefetch(os, obj, lvl, off, len, pri)	\
 	dmu_prefetch((os), (obj), (lvl), (off))
-#endif
-
-#ifndef DN_MAX_BONUSLEN
-#define DN_MAX_BONUSLEN        DN_OLD_MAX_BONUSLEN
 #endif
 
 static inline void osd_dnode_rele(dnode_t *dn)

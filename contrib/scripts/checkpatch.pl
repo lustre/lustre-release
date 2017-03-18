@@ -500,6 +500,9 @@ my %dep_functions = (
 	'f_dentry',			'f_path.dentry',
 	'= seq_printf',			'seq_printf',
 	'return seq_printf',		'seq_printf',
+
+	'DN_MAX_BONUSLEN',		'DN_BONUS_SIZE(dnodesize)',
+	'DN_OLD_MAX_BONUSLEN',		'DN_BONUS_SIZE(DNODE_MIN_SIZE)',
 );
 
 my @rawlines = ();

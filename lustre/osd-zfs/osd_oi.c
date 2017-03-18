@@ -168,11 +168,11 @@ osd_oi_create(const struct lu_env *env, struct osd_device *o,
 		return rc;
 	}
 
-	oid = zap_create_flags(o->od_os, 0, ZAP_FLAG_HASH64,
-			       DMU_OT_DIRECTORY_CONTENTS,
-			       14, /* == ZFS fzap_default_block_shift */
-			       DN_MAX_INDBLKSHIFT, /* indirect block shift */
-			       DMU_OT_SA, DN_MAX_BONUSLEN, tx);
+	oid = osd_zap_create_flags(o->od_os, 0, ZAP_FLAG_HASH64,
+				   DMU_OT_DIRECTORY_CONTENTS,
+				   14, /* == ZFS fzap_default_block_shift */
+				   DN_MAX_INDBLKSHIFT,
+				   0, tx);
 
 	rc = -sa_handle_get(o->od_os, oid, NULL, SA_HDL_PRIVATE, &sa_hdl);
 	if (rc)

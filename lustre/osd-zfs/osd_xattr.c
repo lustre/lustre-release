@@ -310,6 +310,7 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 			     struct osd_thandle *oh)
 {
 	dmu_tx_t *tx = oh->ot_tx;
+	int bonuslen;
 
 	if (unlikely(obj->oo_destroyed))
 		return;
@@ -329,11 +330,13 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 		return;
 	}
 
+	bonuslen = osd_obj_bonuslen(obj);
+
 	/* the object doesn't exist, but we've declared bonus
 	 * in osd_declare_object_create() yet */
-	if (obj->oo_ea_in_bonus > DN_MAX_BONUSLEN) {
+	if (obj->oo_ea_in_bonus > bonuslen) {
 		/* spill has been declared already */
-	} else if (obj->oo_ea_in_bonus + vallen > DN_MAX_BONUSLEN) {
+	} else if (obj->oo_ea_in_bonus + vallen > bonuslen) {
 		/* we're about to exceed bonus, let's declare spill */
 		dmu_tx_hold_spill(tx, DMU_NEW_OBJECT);
 	}
