@@ -1108,7 +1108,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 
 	/* Import flags should be updated before waking import at FULL state */
 	rc = ptlrpc_connect_set_flags(imp, ocd, old_connect_flags, exp,
-				 aa->pcaa_initial_connect);
+				      aa->pcaa_initial_connect);
 	class_export_put(exp);
 	if (rc != 0)
 		GOTO(out, rc);

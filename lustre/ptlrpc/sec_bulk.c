@@ -242,7 +242,7 @@ static unsigned long enc_pools_shrink_count(struct shrinker *s,
 	}
 
 	LASSERT(page_pools.epp_idle_idx <= IDLE_IDX_MAX);
-	return max((int)page_pools.epp_free_pages - PTLRPC_MAX_BRW_PAGES, 0) *
+	return max(page_pools.epp_free_pages - PTLRPC_MAX_BRW_PAGES, 0UL) *
 		(IDLE_IDX_MAX - page_pools.epp_idle_idx) / IDLE_IDX_MAX;
 }
 

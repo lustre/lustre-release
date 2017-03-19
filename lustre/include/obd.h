@@ -788,38 +788,35 @@ static inline bool it_has_reply_body(const struct lookup_intent *it)
 }
 
 struct md_op_data {
-        struct lu_fid           op_fid1; /* operation fid1 (usualy parent) */
-        struct lu_fid           op_fid2; /* operation fid2 (usualy child) */
-        struct lu_fid           op_fid3; /* 2 extra fids to find conflicting */
-        struct lu_fid           op_fid4; /* to the operation locks. */
+	struct lu_fid		op_fid1; /* operation fid1 (usualy parent) */
+	struct lu_fid		op_fid2; /* operation fid2 (usualy child) */
+	struct lu_fid		op_fid3; /* 2 extra fids to find conflicting */
+	struct lu_fid		op_fid4; /* to the operation locks. */
 	u32			op_mds;  /* what mds server open will go to */
-	struct lustre_handle    op_handle;
+	__u32			op_mode;
+	struct lustre_handle	op_handle;
 	s64			op_mod_time;
-        const char             *op_name;
+	const char		*op_name;
 	size_t			op_namelen;
-        __u32                   op_mode;
-        struct lmv_stripe_md   *op_mea1;
-        struct lmv_stripe_md   *op_mea2;
-        __u32                   op_suppgids[2];
-        __u32                   op_fsuid;
-        __u32                   op_fsgid;
-        cfs_cap_t               op_cap;
-        void                   *op_data;
+	struct lmv_stripe_md	*op_mea1;
+	struct lmv_stripe_md	*op_mea2;
+	__u32			op_suppgids[2];
+	__u32			op_fsuid;
+	__u32			op_fsgid;
+	cfs_cap_t		op_cap;
+	void			*op_data;
 	size_t			op_data_size;
 
-        /* iattr fields and blocks. */
+	/* iattr fields and blocks. */
 	struct iattr            op_attr;
 	loff_t                  op_attr_blocks;
-	unsigned int		op_attr_flags; /* LUSTRE_{SYNC,..}_FL */
 	__u64                   op_valid; /* OBD_MD_* */
+	unsigned int		op_attr_flags; /* LUSTRE_{SYNC,..}_FL */
 
 	enum md_op_flags	op_flags;
 
 	/* Various operation flags. */
 	enum mds_op_bias        op_bias;
-
-	/* Used by readdir */
-	unsigned int		op_max_pages;
 
 	/* used to transfer info between the stacks of MD client
 	 * see enum op_cli_flags */

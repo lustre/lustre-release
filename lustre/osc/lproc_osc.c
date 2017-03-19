@@ -537,50 +537,7 @@ static int osc_destroys_in_flight_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(osc_destroys_in_flight);
 
-static int osc_obd_max_pages_per_rpc_seq_show(struct seq_file *m, void *v)
-{
-	return lprocfs_obd_max_pages_per_rpc_seq_show(m, m->private);
-}
-
-static ssize_t osc_obd_max_pages_per_rpc_seq_write(struct file *file,
-						   const char __user *buffer,
-						   size_t count, loff_t *off)
-{
-	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
-	struct client_obd *cli = &dev->u.cli;
-	struct obd_connect_data *ocd = &cli->cl_import->imp_connect_data;
-	int chunk_mask, rc;
-	__s64 val;
-
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
-	if (rc)
-		return rc;
-	if (val < 0)
-		return -ERANGE;
-
-	/* if the max_pages is specified in bytes, convert to pages */
-	if (val >= ONE_MB_BRW_SIZE)
-		val >>= PAGE_SHIFT;
-
-	LPROCFS_CLIMP_CHECK(dev);
-
-	chunk_mask = ~((1 << (cli->cl_chunkbits - PAGE_SHIFT)) - 1);
-	/* max_pages_per_rpc must be chunk aligned */
-	val = (val + ~chunk_mask) & chunk_mask;
-	if (val == 0 || (ocd->ocd_brw_size != 0 &&
-			 val > ocd->ocd_brw_size >> PAGE_SHIFT)) {
-		LPROCFS_CLIMP_EXIT(dev);
-		return -ERANGE;
-	}
-	spin_lock(&cli->cl_loi_list_lock);
-	cli->cl_max_pages_per_rpc = val;
-	client_adjust_max_dirty(cli);
-	spin_unlock(&cli->cl_loi_list_lock);
-
-	LPROCFS_CLIMP_EXIT(dev);
-	return count;
-}
-LPROC_SEQ_FOPS(osc_obd_max_pages_per_rpc);
+LPROC_SEQ_FOPS_RW_TYPE(osc, obd_max_pages_per_rpc);
 
 static int osc_unstable_stats_seq_show(struct seq_file *m, void *v)
 {

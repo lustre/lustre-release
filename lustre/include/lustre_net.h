@@ -97,15 +97,15 @@
  * currently supported maximum between peers at connect via ocd_brw_size.
  */
 #define PTLRPC_MAX_BRW_BITS	(LNET_MTU_BITS + PTLRPC_BULK_OPS_BITS)
-#define PTLRPC_MAX_BRW_SIZE	(1 << PTLRPC_MAX_BRW_BITS)
+#define PTLRPC_MAX_BRW_SIZE	(1U << PTLRPC_MAX_BRW_BITS)
 #define PTLRPC_MAX_BRW_PAGES	(PTLRPC_MAX_BRW_SIZE >> PAGE_SHIFT)
 
-#define ONE_MB_BRW_SIZE		(1 << LNET_MTU_BITS)
-#define MD_MAX_BRW_SIZE		(1 << LNET_MTU_BITS)
+#define ONE_MB_BRW_SIZE		(1U << LNET_MTU_BITS)
+#define MD_MAX_BRW_SIZE		(1U << LNET_MTU_BITS)
 #define MD_MAX_BRW_PAGES	(MD_MAX_BRW_SIZE >> PAGE_SHIFT)
 #define DT_MAX_BRW_SIZE		PTLRPC_MAX_BRW_SIZE
 #define DT_MAX_BRW_PAGES	(DT_MAX_BRW_SIZE >> PAGE_SHIFT)
-#define OFD_MAX_BRW_SIZE	(1 << LNET_MTU_BITS)
+#define OFD_MAX_BRW_SIZE	(1U << LNET_MTU_BITS)
 
 /* When PAGE_SIZE is a constant, we can check our arithmetic here with cpp! */
 #if ((PTLRPC_MAX_BRW_PAGES & (PTLRPC_MAX_BRW_PAGES - 1)) != 0)

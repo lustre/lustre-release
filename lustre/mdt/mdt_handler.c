@@ -5277,16 +5277,13 @@ static int mdt_connect_internal(struct obd_export *exp,
 	if (!mdt->mdt_opts.mo_user_xattr)
 		data->ocd_connect_flags &= ~OBD_CONNECT_XATTR;
 
-	if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
-		data->ocd_brw_size = min(data->ocd_brw_size,
-					 (__u32)MD_MAX_BRW_SIZE);
+	if (OCD_HAS_FLAG(data, BRW_SIZE)) {
+		data->ocd_brw_size = min(data->ocd_brw_size, MD_MAX_BRW_SIZE);
 		if (data->ocd_brw_size == 0) {
-			CERROR("%s: cli %s/%p ocd_connect_flags: %#llx"
-			       " ocd_version: %x ocd_grant: %d "
-			       "ocd_index: %u ocd_brw_size is "
-			       "unexpectedly zero, network data "
-			       "corruption? Refusing connection of this"
-			       " client\n",
+			CERROR("%s: cli %s/%p ocd_connect_flags: %#llx "
+			       "ocd_version: %x ocd_grant: %d ocd_index: %u "
+			       "ocd_brw_size unexpectedly zero, network data "
+			       "corruption? Refusing to connect this client\n",
 			       mdt_obd_name(mdt),
 			       exp->exp_client_uuid.uuid,
 			       exp, data->ocd_connect_flags, data->ocd_version,

@@ -5846,32 +5846,22 @@ inodes_available () {
 }
 
 mdsrate_inodes_available () {
-    local min_inodes=$(inodes_available)
-    echo $((min_inodes * 99 / 100))
+	local min_inodes=$(inodes_available)
+	echo $((min_inodes * 99 / 100))
 }
 
-# reset llite stat counters
-clear_llite_stats(){
-        lctl set_param -n llite.*.stats 0
+# reset stat counters
+clear_stats() {
+	local paramfile="$1"
+	lctl set_param -n $paramfile=0
 }
 
-# sum llite stat items
-calc_llite_stats() {
-	local res=$(lctl get_param -n llite.*.stats |
-		awk '/^'"$1"'/ {sum += $2} END { printf("%0.0f", sum) }')
-	echo $((res))
-}
-
-# reset osc stat counters
-clear_osc_stats(){
-	lctl set_param -n osc.*.osc_stats 0
-}
-
-# sum osc stat items
-calc_osc_stats() {
-	local res=$(lctl get_param -n osc.*.osc_stats |
-		awk '/^'"$1"'/ {sum += $2} END { printf("%0.0f", sum) }')
-	echo $((res))
+# sum stat items
+calc_stats() {
+	local paramfile="$1"
+	local stat="$2"
+	lctl get_param -n $paramfile |
+		awk '/^'$stat'/ { sum += $2 } END { printf("%0.0f", sum) }'
 }
 
 calc_sum () {
@@ -5879,8 +5869,8 @@ calc_sum () {
 }
 
 calc_osc_kbytes () {
-        df $MOUNT > /dev/null
-        $LCTL get_param -n osc.*[oO][sS][cC][-_][0-9a-f]*.$1 | calc_sum
+	df $MOUNT > /dev/null
+	$LCTL get_param -n osc.*[oO][sS][cC][-_][0-9a-f]*.$1 | calc_sum
 }
 
 # save_lustre_params(comma separated facet list, parameter_mask)

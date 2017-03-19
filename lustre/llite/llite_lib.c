@@ -352,11 +352,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         if (data->ocd_connect_flags & OBD_CONNECT_64BITHASH)
                 sbi->ll_flags |= LL_SBI_64BIT_HASH;
 
-	if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE)
-		sbi->ll_md_brw_pages = data->ocd_brw_size >> PAGE_SHIFT;
-	else
-		sbi->ll_md_brw_pages = 1;
-
 	if (data->ocd_connect_flags & OBD_CONNECT_LAYOUTLOCK)
 		sbi->ll_flags |= LL_SBI_LAYOUT_LOCK;
 

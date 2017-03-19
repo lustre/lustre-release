@@ -1167,22 +1167,22 @@ static inline void delete_from_page_cache(struct page *page)
  **/
 static int mdc_read_page_remote(void *data, struct page *page0)
 {
-	struct readpage_param	*rp = data;
-	struct page		**page_pool;
-	struct page		*page;
-	struct lu_dirpage	*dp;
-	int			rd_pgs = 0; /* number of pages read actually */
-	int			npages;
-	struct md_op_data	*op_data = rp->rp_mod;
-	struct ptlrpc_request	*req;
-	int			max_pages = op_data->op_max_pages;
-	struct inode		*inode;
-	struct lu_fid		*fid;
-	int			i;
-	int			rc;
+	struct readpage_param *rp = data;
+	struct page **page_pool;
+	struct page *page;
+	struct lu_dirpage *dp;
+	struct md_op_data *op_data = rp->rp_mod;
+	struct ptlrpc_request *req;
+	int max_pages;
+	struct inode *inode;
+	struct lu_fid *fid;
+	int rd_pgs = 0; /* number of pages actually read */
+	int npages;
+	int i;
+	int rc;
 	ENTRY;
 
-	LASSERT(max_pages > 0 && max_pages <= PTLRPC_MAX_BRW_PAGES);
+	max_pages = rp->rp_exp->exp_obd->u.cli.cl_max_pages_per_rpc;
 	inode = op_data->op_data;
 	fid = &op_data->op_fid1;
 	LASSERT(inode != NULL);
@@ -1209,10 +1209,9 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 	} else {
 		int lu_pgs;
 
-		rd_pgs = (req->rq_bulk->bd_nob_transferred +
-			    PAGE_SIZE - 1) >> PAGE_SHIFT;
-		lu_pgs = req->rq_bulk->bd_nob_transferred >>
-							LU_PAGE_SHIFT;
+		rd_pgs = (req->rq_bulk->bd_nob_transferred + PAGE_SIZE - 1) >>
+			PAGE_SHIFT;
+		lu_pgs = req->rq_bulk->bd_nob_transferred >> LU_PAGE_SHIFT;
 		LASSERT(!(req->rq_bulk->bd_nob_transferred & ~LU_PAGE_MASK));
 
 		CDEBUG(D_INODE, "read %d(%d) pages\n", rd_pgs, lu_pgs);

@@ -260,7 +260,6 @@ static int ll_get_name(struct dentry *dentry, char *name,
 	if (IS_ERR(op_data))
 		GOTO(out, rc = PTR_ERR(op_data));
 
-	op_data->op_max_pages = ll_i2sbi(dir)->ll_md_brw_pages;
 	inode_lock(dir);
 #ifdef HAVE_DIR_CONTEXT
 	rc = ll_dir_read(dir, &pos, op_data, &lgd.ctx);

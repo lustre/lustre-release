@@ -1002,8 +1002,6 @@ static int ll_statahead_thread(void *arg)
 	if (IS_ERR(op_data))
 		GOTO(out, rc = PTR_ERR(op_data));
 
-	op_data->op_max_pages = ll_i2sbi(dir)->ll_md_brw_pages;
-
 	if (sbi->ll_flags & LL_SBI_AGL_ENABLED)
 		ll_start_agl(parent, sai);
 
@@ -1290,7 +1288,6 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 	/**
 	 *FIXME choose the start offset of the readdir
 	 */
-	op_data->op_max_pages = ll_i2sbi(dir)->ll_md_brw_pages;
 
 	ll_dir_chain_init(&chain);
 	page = ll_get_dir_page(dir, op_data, 0, &chain);

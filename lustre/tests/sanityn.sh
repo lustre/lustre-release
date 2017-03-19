@@ -745,42 +745,42 @@ enable_lockless_truncate() {
 test_32a() { # bug 11270
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 	save_lustre_params client "osc.*.lockless_truncate" > $p
-        cancel_lru_locks osc
-        enable_lockless_truncate 1
-        rm -f $DIR1/$tfile
-        lfs setstripe -c -1 $DIR1/$tfile
-        dd if=/dev/zero of=$DIR1/$tfile count=$OSTCOUNT bs=$STRIPE_BYTES > \
-                /dev/null 2>&1
-        clear_osc_stats
+	cancel_lru_locks osc
+	enable_lockless_truncate 1
+	rm -f $DIR1/$tfile
+	lfs setstripe -c -1 $DIR1/$tfile
+	dd if=/dev/zero of=$DIR1/$tfile count=$OSTCOUNT bs=$STRIPE_BYTES > \
+		/dev/null 2>&1
+	clear_stats osc.*.osc_stats
 
-        log "checking cached lockless truncate"
-        $TRUNCATE $DIR1/$tfile 8000000
-        $CHECKSTAT -s 8000000 $DIR2/$tfile || error "wrong file size"
-	[ $(calc_osc_stats lockless_truncate) -ne 0 ] ||
+	log "checking cached lockless truncate"
+	$TRUNCATE $DIR1/$tfile 8000000
+	$CHECKSTAT -s 8000000 $DIR2/$tfile || error "wrong file size"
+	[ $(calc_stats osc.*.osc_stats lockless_truncate) -ne 0 ] ||
 		error "cached truncate isn't lockless"
 
-        log "checking not cached lockless truncate"
-        $TRUNCATE $DIR2/$tfile 5000000
-        $CHECKSTAT -s 5000000 $DIR1/$tfile || error "wrong file size"
-	[ $(calc_osc_stats lockless_truncate) -ne 0 ] ||
+	log "checking not cached lockless truncate"
+	$TRUNCATE $DIR2/$tfile 5000000
+	$CHECKSTAT -s 5000000 $DIR1/$tfile || error "wrong file size"
+	[ $(calc_stats osc.*.osc_stats lockless_truncate) -ne 0 ] ||
 		error "not cached truncate isn't lockless"
 
-        log "disabled lockless truncate"
-        enable_lockless_truncate 0
-        clear_osc_stats
-        $TRUNCATE $DIR2/$tfile 3000000
-        $CHECKSTAT -s 3000000 $DIR1/$tfile || error "wrong file size"
-        [ $(calc_osc_stats lockless_truncate) -eq 0 ] ||
-                error "lockless truncate disabling failed"
-        rm $DIR1/$tfile
-        # restore lockless_truncate default values
-        restore_lustre_params < $p
-        rm -f $p
+	log "disabled lockless truncate"
+	enable_lockless_truncate 0
+	clear_stats osc.*.osc_stats
+	$TRUNCATE $DIR2/$tfile 3000000
+	$CHECKSTAT -s 3000000 $DIR1/$tfile || error "wrong file size"
+	[ $(calc_stats osc.*.osc_stats lockless_truncate) -eq 0 ] ||
+		error "lockless truncate disabling failed"
+	rm $DIR1/$tfile
+	# restore lockless_truncate default values
+	restore_lustre_params < $p
+	rm -f $p
 }
 run_test 32a "lockless truncate"
 
 test_32b() { # bug 11270
-        remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	local node
 	local facets=$(get_facets OST)
@@ -793,35 +793,42 @@ test_32b() { # bug 11270
 		"ldlm.namespaces.filter-*.contended_locks" >> $p
 	save_lustre_params $facets \
 		"ldlm.namespaces.filter-*.contention_seconds" >> $p
-	clear_osc_stats
+	clear_stats osc.*.osc_stats
 
-        # agressive lockless i/o settings
-        for node in $(osts_nodes); do
-                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 2000000; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 0; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 60'
-        done
-        lctl set_param -n osc.*.contention_seconds 60
-        for i in $(seq 5); do
-                dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
-                dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
-        done
-        [ $(calc_osc_stats lockless_write_bytes) -ne 0 ] || error "lockless i/o was not triggered"
-        # disable lockless i/o (it is disabled by default)
-        for node in $(osts_nodes); do
-                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 0; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 32; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 0'
-        done
-        # set contention_seconds to 0 at client too, otherwise Lustre still
-        # remembers lock contention
-        lctl set_param -n osc.*.contention_seconds 0
-        clear_osc_stats
-        for i in $(seq 1); do
-                dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
-                dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > /dev/null 2>&1
-        done
-        [ $(calc_osc_stats lockless_write_bytes) -eq 0 ] ||
-                error "lockless i/o works when disabled"
-        rm -f $DIR1/$tfile
-        restore_lustre_params <$p
-        rm -f $p
+	# agressive lockless i/o settings
+	do_nodes $(comma_list $(osts_nodes)) \
+		"lctl set_param -n ldlm.namespaces.*.max_nolock_bytes=2000000 \
+			ldlm.namespaces.filter-*.contended_locks=0 \
+			ldlm.namespaces.filter-*.contention_seconds=60"
+	lctl set_param -n osc.*.contention_seconds=60
+	for i in {1..5}; do
+		dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > \
+			/dev/null 2>&1
+		dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > \
+			/dev/null 2>&1
+	done
+	[ $(calc_stats osc.*.osc_stats lockless_write_bytes) -ne 0 ] ||
+		error "lockless i/o was not triggered"
+	# disable lockless i/o (it is disabled by default)
+	do_nodes $(comma_list $(osts_nodes)) \
+		"lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes=0 \
+			ldlm.namespaces.filter-*.contended_locks=32 \
+			ldlm.namespaces.filter-*.contention_seconds=0"
+	# set contention_seconds to 0 at client too, otherwise Lustre still
+	# remembers lock contention
+	lctl set_param -n osc.*.contention_seconds=0
+	clear_stats osc.*.osc_stats
+	for i in {1..1}; do
+		dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > \
+			/dev/null 2>&1
+		dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > \
+			/dev/null 2>&1
+	done
+	[ $(calc_stats osc.*.osc_stats lockless_write_bytes) -eq 0 ] ||
+		error "lockless i/o works when disabled"
+	rm -f $DIR1/$tfile
+	restore_lustre_params <$p
+	rm -f $p
 }
 run_test 32b "lockless i/o"
 
@@ -2877,14 +2884,16 @@ test_73() {
 		error "setfattr1 failed"
 	getfattr -n user.attr1 $DIR2/$tfile || error "getfattr1 failed"
 	getfattr -n user.attr1 $DIR1/$tfile || error "getfattr2 failed"
-	clear_llite_stats
+	clear_stats llite.*.stats
 	# PR lock should be cached by now on both clients
 	getfattr -n user.attr1 $DIR1/$tfile || error "getfattr3 failed"
 	# 2 hits for getfattr(0)+getfattr(size)
-	[ $(calc_llite_stats getxattr_hits) -eq 2 ] || error "not cached in $DIR1"
+	[ $(calc_stats llite.*.stats getxattr_hits) -eq 2 ] ||
+		error "not cached in $DIR1"
 	getfattr -n user.attr1 $DIR2/$tfile || error "getfattr4 failed"
 	# 4 hits for more getfattr(0)+getfattr(size)
-	[ $(calc_llite_stats getxattr_hits) -eq 4 ] || error "not cached in $DIR2"
+	[ $(calc_stats llite.*.stats getxattr_hits) -eq 4 ] ||
+		error "not cached in $DIR2"
 	rm -f $DIR2/$tfile
 
 	restore_lustre_params < $p

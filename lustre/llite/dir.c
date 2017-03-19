@@ -247,18 +247,11 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 			__u64          ino;
 
 			hash = le64_to_cpu(ent->lde_hash);
-			if (hash < pos)
-				/*
-				 * Skip until we find target hash
-				 * value.
-				 */
+			if (hash < pos) /* Skip until we find target hash */
 				continue;
 
 			namelen = le16_to_cpu(ent->lde_namelen);
-			if (namelen == 0)
-				/*
-				 * Skip dummy record.
-				 */
+			if (namelen == 0) /* Skip dummy record */
 				continue;
 
 			if (is_api32 && is_hash64)
@@ -268,10 +261,9 @@ int ll_dir_read(struct inode *inode, __u64 *ppos, struct md_op_data *op_data,
 			fid_le_to_cpu(&fid, &ent->lde_fid);
 			ino = cl_fid_build_ino(&fid, is_api32);
 			type = ll_dirent_type_get(ent);
-			/* For 'll_nfs_get_name_filldir()', it will try
-			 * to access the 'ent' through its 'lde_name',
-			 * so the parameter 'name' for 'filldir()' must
-			 * be part of the 'ent'. */
+			/* For ll_nfs_get_name_filldir(), it will try to access
+			 * 'ent' through 'lde_name', so the parameter 'name'
+			 * for 'filldir()' must be part of the 'ent'. */
 #ifdef HAVE_DIR_CONTEXT
 			ctx->pos = lhash;
 			done = !dir_emit(ctx, ent->lde_name, namelen, ino,
@@ -377,7 +369,6 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 			}
 		}
 	}
-	op_data->op_max_pages = sbi->ll_md_brw_pages;
 #ifdef HAVE_DIR_CONTEXT
 	ctx->pos = pos;
 	rc = ll_dir_read(inode, &pos, op_data, ctx);

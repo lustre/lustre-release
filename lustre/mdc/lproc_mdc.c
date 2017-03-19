@@ -88,13 +88,13 @@ static int mdc_max_rpcs_in_flight_seq_show(struct seq_file *m, void *v)
 
 static ssize_t mdc_max_rpcs_in_flight_seq_write(struct file *file,
 						const char __user *buffer,
-						size_t count,
-						loff_t *off)
+						size_t count, loff_t *off)
 {
-	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
+	struct obd_device *dev;
 	__s64 val;
 	int rc;
 
+	dev = ((struct seq_file *)file->private_data)->private;
 	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
@@ -110,7 +110,6 @@ static ssize_t mdc_max_rpcs_in_flight_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(mdc_max_rpcs_in_flight);
 
-
 static int mdc_max_mod_rpcs_in_flight_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *dev = m->private;
@@ -124,8 +123,7 @@ static int mdc_max_mod_rpcs_in_flight_seq_show(struct seq_file *m, void *v)
 
 static ssize_t mdc_max_mod_rpcs_in_flight_seq_write(struct file *file,
 						    const char __user *buffer,
-						    size_t count,
-						    loff_t *off)
+						    size_t count, loff_t *off)
 {
 	struct obd_device *dev =
 			((struct seq_file *)file->private_data)->private;
@@ -147,14 +145,12 @@ static ssize_t mdc_max_mod_rpcs_in_flight_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(mdc_max_mod_rpcs_in_flight);
 
-
 static int mdc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 {
 	struct obd_device *dev = seq->private;
 
 	return obd_mod_rpc_stats_seq_show(&dev->u.cli, seq);
 }
-
 
 static ssize_t mdc_rpc_stats_seq_write(struct file *file,
 				       const char __user *buf,
@@ -170,7 +166,6 @@ static ssize_t mdc_rpc_stats_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(mdc_rpc_stats);
 
-
 LPROC_SEQ_FOPS_WO_TYPE(mdc, ping);
 
 LPROC_SEQ_FOPS_RO_TYPE(mdc, uuid);
@@ -185,13 +180,7 @@ LPROC_SEQ_FOPS_RO_TYPE(mdc, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, conn_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, timeouts);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, state);
-
-static int mdc_obd_max_pages_per_rpc_seq_show(struct seq_file *m, void *v)
-{
-	return lprocfs_obd_max_pages_per_rpc_seq_show(m, m->private);
-}
-LPROC_SEQ_FOPS_RO(mdc_obd_max_pages_per_rpc);
-
+LPROC_SEQ_FOPS_RW_TYPE(mdc, obd_max_pages_per_rpc);
 LPROC_SEQ_FOPS_RW_TYPE(mdc, import);
 LPROC_SEQ_FOPS_RW_TYPE(mdc, pinger_recov);
 
@@ -219,12 +208,6 @@ struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
 	  .fops	=	&mdc_server_uuid_fops	},
 	{ .name	=	"mds_conn_uuid",
 	  .fops	=	&mdc_conn_uuid_fops	},
-	/*
-	 * FIXME: below proc entry is provided, but not in used, instead
-	 * sbi->sb_md_brw_size is used, the per obd variable should be used
-	 * when CMD is enabled, and dir pages are managed in MDC layer.
-	 * Remember to enable proc write function.
-	 */
 	{ .name	=	"max_pages_per_rpc",
 	  .fops	=	&mdc_obd_max_pages_per_rpc_fops	},
 	{ .name	=	"max_rpcs_in_flight",

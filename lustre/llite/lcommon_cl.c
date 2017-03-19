@@ -253,28 +253,28 @@ void cl_inode_fini(struct inode *inode)
 }
 
 /**
- * build inode number from passed @fid */
+ * build inode number from passed @fid.
+ *
+ * For 32-bit systems or syscalls limit the inode number to a 32-bit value
+ * to avoid EOVERFLOW errors.  This will inevitably result in inode number
+ * collisions, but fid_flatten32() tries hard to avoid this if possible.
+ */
 __u64 cl_fid_build_ino(const struct lu_fid *fid, int api32)
 {
-        if (BITS_PER_LONG == 32 || api32)
-                RETURN(fid_flatten32(fid));
-        else
-                RETURN(fid_flatten(fid));
+	if (BITS_PER_LONG == 32 || api32)
+		RETURN(fid_flatten32(fid));
+
+	RETURN(fid_flatten(fid));
 }
 
 /**
  * build inode generation from passed @fid.  If our FID overflows the 32-bit
- * inode number then return a non-zero generation to distinguish them. */
+ * inode number then return a non-zero generation to distinguish them.
+ */
 __u32 cl_fid_build_gen(const struct lu_fid *fid)
 {
-        __u32 gen;
-        ENTRY;
+	if (fid_is_igif(fid))
+		RETURN(lu_igif_gen(fid));
 
-        if (fid_is_igif(fid)) {
-                gen = lu_igif_gen(fid);
-                RETURN(gen);
-        }
-
-        gen = (fid_flatten(fid) >> 32);
-        RETURN(gen);
+	RETURN(fid_flatten(fid) >> 32);
 }

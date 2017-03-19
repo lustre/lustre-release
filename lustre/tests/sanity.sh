@@ -75,8 +75,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 init_logging
 
-#                                  5              12          (min)"
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24D 27m 64b 68 71 115 300o"
+#                                  5          12          (min)"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 64b 68 71 115 300o"
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
 	# bug number for skipped test: LU-4536 LU-1957
@@ -1038,53 +1038,73 @@ page_size() {
 }
 
 simple_cleanup_common() {
+	local rc=0
 	trap 0
+	[ -z "$DIR" -o -z "$tdir" ] && return 0
+
+	local start=$SECONDS
 	rm -rf $DIR/$tdir
+	rc=$?
 	wait_delete_completed
+	echo "cleanup time $((SECONDS - start))"
+	return $rc
 }
 
 max_pages_per_rpc() {
-	$LCTL get_param -n mdc.*.max_pages_per_rpc | head -n1
+	local mdtname="$(printf "MDT%04x" ${1:-0})"
+	$LCTL get_param -n mdc.*$mdtname*.max_pages_per_rpc
 }
 
 test_24v() {
-	local NRFILES=100000
-	local FREE_INODES=$(mdt_free_inodes 0)
-	[[ $FREE_INODES -lt $NRFILES ]] &&
-		skip "not enough free inodes $FREE_INODES required $NRFILES" &&
-		return
-
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local nrfiles=${COUNT:-100000}
+	# Performance issue on ZFS see LU-4072 (c.f. LU-2887)
+	[ $(facet_fstype $SINGLEMDS) = "zfs" ] && nrfiles=${COUNT:-10000}
+
+	local fname="$DIR/$tdir/$tfile"
+	test_mkdir "$(dirname $fname)"
+	# assume MDT0000 has the fewest inodes
+	local stripes=$($LFS getdirstripe -c $(dirname $fname))
+	local free_inodes=$(($(mdt_free_inodes 0) * stripes))
+	[[ $free_inodes -lt $nrfiles ]] && nrfiles=$free_inodes
+
 	trap simple_cleanup_common EXIT
 
-	# Performance issue on ZFS see LU-4072 (c.f. LU-2887)
-	[ $(facet_fstype $SINGLEMDS) = "zfs" ] && NRFILES=10000
-
-	test_mkdir -p $DIR/$tdir
-	createmany -m $DIR/$tdir/$tfile $NRFILES
+	createmany -m "$fname" $nrfiles
 
 	cancel_lru_locks mdc
 	lctl set_param mdc.*.stats clear
 
-	ls $DIR/$tdir >/dev/null || error "error in listing large dir"
-
+	# was previously test_24D: LU-6101
+	# readdir() returns correct number of entries after cursor reload
+	local num_ls=$(ls $DIR/$tdir | wc -l)
+	local num_uniq=$(ls $DIR/$tdir | sort -u | wc -l)
+	local num_all=$(ls -a $DIR/$tdir | wc -l)
+	if [ $num_ls -ne $nrfiles -o $num_uniq -ne $nrfiles -o \
+	     $num_all -ne $((nrfiles + 2)) ]; then
+		error "Expected $nrfiles files, got $num_ls " \
+			"($num_uniq unique $num_all .&..)"
+	fi
 	# LU-5 large readdir
-	# DIRENT_SIZE = 32 bytes for sizeof(struct lu_dirent) +
-	#               8 bytes for name(filename is mostly 5 in this test) +
-	#               8 bytes for luda_type
+	# dirent_size = 32 bytes for sizeof(struct lu_dirent) +
+	#               N bytes for name (len($nrfiles) rounded to 8 bytes) +
+	#               8 bytes for luda_type (4 bytes rounded to 8 bytes)
 	# take into account of overhead in lu_dirpage header and end mark in
-	# each page, plus one in RPC_NUM calculation.
-	DIRENT_SIZE=48
-	RPC_SIZE=$(($(max_pages_per_rpc) * $(page_size)))
-	RPC_NUM=$(((NRFILES * DIRENT_SIZE + RPC_SIZE - 1) / RPC_SIZE + 1))
-	mds_readpage=$(lctl get_param mdc.*MDT0000*.stats |
-				awk '/^mds_readpage/ {print $2}')
-	[[ $mds_readpage -gt $RPC_NUM ]] &&
-		error "large readdir doesn't take effect"
+	# each page, plus one in rpc_num calculation.
+	local dirent_size=$((32 + (${#tfile} | 7) + 1 + 8))
+	local page_entries=$((($(page_size) - 24) / dirent_size))
+	local mdt_idx=$($LFS getdirstripe -i $(dirname $fname))
+	local rpc_pages=$(max_pages_per_rpc $mdt_idx)
+	local rpc_max=$((nrfiles / (page_entries * rpc_pages) + stripes))
+	local mds_readpage=$(calc_stats mdc.*.stats mds_readpage)
+	echo "readpages: $mds_readpage rpc_max: $rpc_max"
+	(( $mds_readpage < $rpc_max - 2 || $mds_readpage > $rpc_max + 1)) &&
+		error "large readdir doesn't take effect: " \
+		      "$mds_readpage should be about $rpc_max"
 
 	simple_cleanup_common
 }
-run_test 24v "list directory with large files (handle hash collision, bug: 17560)"
+run_test 24v "list large directory (test hash collision, b=17560)"
 
 test_24w() { # bug21506
         SZ1=234852
@@ -1163,6 +1183,7 @@ test_24A() { # LU-3182
 
 	rm -rf $DIR/$tdir
 	test_mkdir -p $DIR/$tdir
+	trap simple_cleanup_common EXIT
 	createmany -m $DIR/$tdir/$tfile $NFILES
 	local t=$(ls $DIR/$tdir | wc -l)
 	local u=$(ls $DIR/$tdir | sort -u | wc -l)
@@ -1171,7 +1192,7 @@ test_24A() { # LU-3182
 		error "Expected $NFILES files, got $t ($u unique $v .&..)"
 	fi
 
-	rm -rf $DIR/$tdir || error "Can not delete directories"
+	simple_cleanup_common || error "Can not delete directories"
 }
 run_test 24A "readdir() returns correct number of entries."
 
@@ -1228,23 +1249,6 @@ test_24C() {
 		error ".. wrong after mv, expect $d1_ino, get $parent_ino"
 }
 run_test 24C "check .. in striped dir"
-
-test_24D() { # LU-6101
-	local NFILES=50000
-
-	rm -rf $DIR/$tdir
-	mkdir -p $DIR/$tdir
-	createmany -m $DIR/$tdir/$tfile $NFILES
-	local t=$(ls $DIR/$tdir | wc -l)
-	local u=$(ls $DIR/$tdir | sort -u | wc -l)
-	local v=$(ls -ai $DIR/$tdir | sort -u | wc -l)
-	if [ $t -ne $NFILES -o $u -ne $NFILES -o $v -ne $((NFILES + 2)) ] ; then
-		error "Expected $NFILES files, got $t ($u unique $v .&..)"
-	fi
-
-	rm -rf $DIR/$tdir || error "Can not delete directories"
-}
-run_test 24D "readdir() returns correct number of entries after cursor reload"
 
 test_24E() {
 	[[ $MDSCOUNT -lt 4 ]] && skip "needs >= 4 MDTs" && return
@@ -1661,7 +1665,7 @@ test_27u() { # bug 4900
 #define OBD_FAIL_MDS_OSC_PRECREATE      0x139
 	do_nodes $list $LCTL set_param fail_loc=0x139
 	test_mkdir -p $DIR/$tdir
-	rm -rf $DIR/$tdir/*
+	trap simple_cleanup_common EXIT
 	createmany -o $DIR/$tdir/t- 1000
 	do_nodes $list $LCTL set_param fail_loc=0
 
@@ -1669,6 +1673,7 @@ test_27u() { # bug 4900
 	$GETSTRIPE $DIR/$tdir > $TLOG
 	OBJS=$(awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj; }' $TLOG)
 	unlinkmany $DIR/$tdir/t- 1000
+	trap 0
 	[[ $OBJS -gt 0 ]] &&
 		error "$OBJS objects created on OST-0. See $TLOG" || pass
 }
@@ -12641,32 +12646,34 @@ test_216() { # bug 20317
 		"ldlm.namespaces.filter-*.contended_locks" >> $p
 	save_lustre_params $facets \
 		"ldlm.namespaces.filter-*.contention_seconds" >> $p
-	clear_osc_stats
+	clear_stats osc.*.osc_stats
 
-        # agressive lockless i/o settings
-        for node in $(osts_nodes); do
-                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 2000000; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 0; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 60'
-        done
-        lctl set_param -n osc.*.contention_seconds 60
+	# agressive lockless i/o settings
+	do_nodes $(comma_list $(osts_nodes)) \
+		"lctl set_param -n ldlm.namespaces.*.max_nolock_bytes=2000000 \
+			ldlm.namespaces.filter-*.contended_locks=0 \
+			ldlm.namespaces.filter-*.contention_seconds=60"
+	lctl set_param -n osc.*.contention_seconds=60
 
-        $DIRECTIO write $DIR/$tfile 0 10 4096
-        $CHECKSTAT -s 40960 $DIR/$tfile
+	$DIRECTIO write $DIR/$tfile 0 10 4096
+	$CHECKSTAT -s 40960 $DIR/$tfile
 
-        # disable lockless i/o
-        for node in $(osts_nodes); do
-                do_node $node 'lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes 0; lctl set_param -n ldlm.namespaces.filter-*.contended_locks 32; lctl set_param -n ldlm.namespaces.filter-*.contention_seconds 0'
-        done
-        lctl set_param -n osc.*.contention_seconds 0
-        clear_osc_stats
+	# disable lockless i/o
+	do_nodes $(comma_list $(osts_nodes)) \
+		"lctl set_param -n ldlm.namespaces.filter-*.max_nolock_bytes=0 \
+			ldlm.namespaces.filter-*.contended_locks=32 \
+			ldlm.namespaces.filter-*.contention_seconds=0"
+	lctl set_param -n osc.*.contention_seconds=0
+	clear_stats osc.*.osc_stats
 
-        dd if=/dev/zero of=$DIR/$tfile count=0
-        $CHECKSTAT -s 0 $DIR/$tfile
+	dd if=/dev/zero of=$DIR/$tfile count=0
+	$CHECKSTAT -s 0 $DIR/$tfile
 
-        restore_lustre_params <$p
-        rm -f $p
-        rm $DIR/$tfile
+	restore_lustre_params <$p
+	rm -f $p
+	rm $DIR/$tfile
 }
-run_test 216 "check lockless direct write works and updates file size and kms correctly"
+run_test 216 "check lockless direct write updates file size and kms correctly"
 
 test_217() { # bug 22430
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return

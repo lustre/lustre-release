@@ -770,10 +770,9 @@ lprocfs_recovery_time_hard_seq_write(struct file *file,
 int lprocfs_target_instance_seq_show(struct seq_file *m, void *data);
 #endif
 int lprocfs_obd_max_pages_per_rpc_seq_show(struct seq_file *m, void *data);
-ssize_t
-lprocfs_obd_max_pages_per_rpc_seq_write(struct file *file,
-					const char __user *buffer,
-					size_t count, loff_t *off);
+ssize_t lprocfs_obd_max_pages_per_rpc_seq_write(struct file *file,
+						const char __user *buffer,
+						size_t count, loff_t *off);
 
 struct root_squash_info;
 int lprocfs_wr_root_squash(const char __user *buffer, unsigned long count,
