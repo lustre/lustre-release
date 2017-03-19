@@ -281,6 +281,57 @@ Changing a Server NID</title>
       <note><para>The previous configuration log is backed up on the MGS
       disk with the suffix <literal>'.bak'</literal>.</para></note>
     </section>
+    <section xml:id="dbdoclet.clear_conf" condition="l2B">
+      <title><indexterm>
+	    <primary>maintenance</primary>
+		<secondary>Clearing a config</secondary>
+	  </indexterm> Clearing configuration</title>
+      <para>
+	  This command runs on MGS node having the MGS device mounted with
+	  <literal>-o nosvc.</literal> It cleans up configuration files
+	  stored in the CONFIGS/ directory of any records marked SKIP.
+	  If the device name is given, then the specific logs for that
+	  filesystem (e.g. testfs-MDT0000) are processed.  Otherwise, if a
+	  filesystem name is given then all configuration files are cleared.
+	  The previous configuration log is backed up on the MGS disk with
+	  the suffix 'config.timestamp.bak'. Eg: Lustre-MDT0000-1476454535.bak.
+	  </para>
+	  <para> To clear a configuration:</para>
+	  <orderedlist>
+	     <listitem>
+		   <para>Shut down the file system in this order:</para>
+             <orderedlist>
+               <listitem>
+                 <para>Unmount the clients.</para>
+               </listitem>
+               <listitem>
+                 <para>Unmount the MDT.</para>
+               </listitem>
+               <listitem>
+                 <para>Unmount all OSTs.</para>
+               </listitem>
+             </orderedlist>
+	     </listitem>
+	     <listitem>
+	       <para>
+		 If the MGS and MDS share a partition, start the MGS only
+		 using "nosvc" option.
+	       </para>
+           <screen>mount -t lustre <replaceable>MDT partition</replaceable> -o nosvc <replaceable>mount_point</replaceable></screen>
+	     </listitem>
+	     <listitem>
+		 <para>Run the <literal>clear_conf</literal> command on the MGS:
+		 </para>
+           <screen>lctl clear_conf <replaceable>config</replaceable></screen>
+	     <para>
+			Example: To clear the configuration for
+			<literal>MDT0000</literal> on a filesystem named
+			<literal>testfs</literal>
+	     </para>
+           <screen>mgs# lctl clear_conf testfs-MDT0000</screen>
+	     </listitem>
+	   </orderedlist>
+	</section>
     <section xml:id="dbdoclet.adding_new_mdt" condition='l24'>
       <title><indexterm>
         <primary>maintenance</primary>
