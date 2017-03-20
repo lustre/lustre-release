@@ -192,9 +192,9 @@ int mdt_hsm_agent_register_mask(struct mdt_thread_info *mti,
 int mdt_hsm_agent_unregister(struct mdt_thread_info *mti,
 			     const struct obd_uuid *uuid)
 {
-	struct coordinator	*cdt = &mti->mti_mdt->mdt_coordinator;
-	struct hsm_agent	*ha;
-	int			 rc;
+	struct coordinator *cdt = &mti->mti_mdt->mdt_coordinator;
+	struct hsm_agent *ha;
+	int rc;
 	ENTRY;
 
 	/* no coordinator started, so we cannot serve requests */
@@ -217,7 +217,8 @@ int mdt_hsm_agent_unregister(struct mdt_thread_info *mti,
 			 ha->ha_archive_cnt * sizeof(*ha->ha_archive_id));
 	OBD_FREE_PTR(ha);
 
-	GOTO(out, rc = 0);
+	rc = hsm_cancel_agent_requests(mti->mti_mdt, uuid);
+	GOTO(out, rc);
 out:
 	CDEBUG(D_HSM, "agent %s unregistration: %d\n", obd_uuid2str(uuid), rc);
 

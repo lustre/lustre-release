@@ -510,6 +510,8 @@ struct cdt_agent_req {
 	struct obd_uuid		 car_uuid;         /**< agent doing the req. */
 	__u32			 car_archive_id;   /**< archive id */
 	int			 car_canceled;     /**< request was canceled */
+	bool			 car_delay_update; /**< delay update, wait for
+						    *   update from CT */
 	time64_t		 car_req_start;    /**< start time */
 	time64_t		 car_req_update;   /**< last update time */
 	struct hsm_action_item	*car_hai;          /**< req. to the agent */
@@ -925,6 +927,8 @@ int mdt_hsm_find_best_agent(struct coordinator *cdt, __u32 archive,
 			    struct obd_uuid *uuid);
 int mdt_hsm_agent_send(struct mdt_thread_info *mti, struct hsm_action_list *hal,
 		       bool purge);
+int hsm_cancel_agent_requests(struct mdt_device *mdt,
+			      const struct obd_uuid *uuid);
 int mdt_hsm_coordinator_update(struct mdt_thread_info *mti,
 			       struct hsm_progress_kernel *pgs);
 /* mdt/mdt_hsm_cdt_client.c */

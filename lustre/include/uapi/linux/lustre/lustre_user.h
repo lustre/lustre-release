@@ -1722,6 +1722,7 @@ struct hsm_user_import {
 /* Copytool progress reporting */
 #define HP_FLAG_COMPLETED 0x01
 #define HP_FLAG_RETRY     0x02
+#define HP_FLAG_COMPLETE_DELAYED 0x04
 
 struct hsm_progress {
 	struct lu_fid		hp_fid;

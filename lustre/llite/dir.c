@@ -888,7 +888,8 @@ static int ll_ioc_copy_end(struct super_block *sb, struct hsm_copy *copy)
 	hpk.hpk_fid = copy->hc_hai.hai_fid;
 	hpk.hpk_cookie = copy->hc_hai.hai_cookie;
 	hpk.hpk_extent = copy->hc_hai.hai_extent;
-	hpk.hpk_flags = copy->hc_flags | HP_FLAG_COMPLETED;
+	hpk.hpk_flags = copy->hc_flags | HP_FLAG_COMPLETED |
+			HP_FLAG_COMPLETE_DELAYED;
 	hpk.hpk_errval = copy->hc_errval;
 	hpk.hpk_data_version = 0;
 
