@@ -446,10 +446,25 @@ int mdt_hsm_add_actions(struct mdt_thread_info *mti,
 			mdt_object_put(mti->mti_env, obj);
 
 			mutex_lock(&cdt->cdt_restore_lock);
+			if (unlikely((cdt->cdt_state == CDT_STOPPED) ||
+				     (cdt->cdt_state == CDT_STOPPING))) {
+				mutex_unlock(&cdt->cdt_restore_lock);
+				mdt_object_unlock(mti, NULL, &crh->crh_lh, 1);
+				OBD_SLAB_FREE_PTR(crh, mdt_hsm_cdt_kmem);
+				GOTO(out, rc = -EAGAIN);
+			}
 			list_add_tail(&crh->crh_list, &cdt->cdt_restore_hdl);
 			mutex_unlock(&cdt->cdt_restore_lock);
 		}
 record:
+		/*
+		 * Wait here to catch the 2nd RESTORE request to the same FID.
+		 * Normally layout lock protects against adding such request.
+		 * But when cdt is stopping it cancel all locks via
+		 * ldlm_resource_clean and protections may not work.
+		 * See LU-9266 and sanity-hsm_407 for details.
+		 */
+		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_HSM_CDT_DELAY, cfs_fail_val);
 		/* record request */
 		rc = mdt_agent_record_add(mti->mti_env, mdt, compound_id,
 					  archive_id, flags, hai);
