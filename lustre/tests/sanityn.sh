@@ -3033,7 +3033,7 @@ nrs_write_read() {
 	for ((i = 0; i < $n; i++)); do
 		do_nodes $CLIENTS $myRUNAS dd if="$dir/nrs_w_$HOSTNAME" \
 			of=/dev/zero bs=1M seek=$i count=1 > /dev/null ||
-			error "dd at ${i}MB on client failed (3)"
+			error "dd at ${i}MB on client failed (3)" &
 		local pids_r[$i]=$!
 	done
 	cancel_lru_locks osc
@@ -3417,6 +3417,7 @@ test_77j() {
 			ost.OSS.ost_io.nrs_policies="tbf\ opcode" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ost_r\ ${idis}{ost_read}\ ${rateis}5" \
 			ost.OSS.ost_io.nrs_tbf_rule="start\ ost_w\ ${idis}{ost_write}\ ${rateis}20"
+	[ $? -ne 0 ] && error "failed to set TBF OPCode policy"
 
 	nrs_write_read
 	tbf_verify 20 5

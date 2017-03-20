@@ -2367,10 +2367,13 @@ static int nrs_tbf_res_get(struct ptlrpc_nrs_policy *policy,
 			struct nrs_tbf_rule *rule;
 
 			rule = nrs_tbf_rule_match(head, cli);
-			if (rule != cli->tc_rule)
+			if (rule != cli->tc_rule) {
 				nrs_tbf_cli_reset(head, rule, cli);
-			else
+			} else {
+				if (cli->tc_rule_generation != rule->tr_generation)
+					nrs_tbf_cli_reset_value(head, cli);
 				nrs_tbf_rule_put(rule);
+			}
 		} else if (cli->tc_rule_generation !=
 			   cli->tc_rule->tr_generation) {
 			nrs_tbf_cli_reset_value(head, cli);
