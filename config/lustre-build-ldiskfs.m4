@@ -16,6 +16,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	73)	LDISKFS_SERIES="3.10-rhel7.3.series"	;;
 	72)	LDISKFS_SERIES="3.10-rhel7.2.series"	;;
 	71)	LDISKFS_SERIES="3.10-rhel7.series"	;;
+	69)	LDISKFS_SERIES="2.6-rhel6.9.series"	;;
 	68)	LDISKFS_SERIES="2.6-rhel6.8.series"	;;
 	67)	LDISKFS_SERIES="2.6-rhel6.7.series"	;;
 	66)	LDISKFS_SERIES="2.6-rhel6.6.series"	;;
