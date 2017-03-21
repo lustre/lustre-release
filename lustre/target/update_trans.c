@@ -1420,6 +1420,7 @@ distribute_txn_commit_batchid_update(const struct lu_env *env,
 
 	th = dt_trans_create(env, tdtd->tdtd_lut->lut_bottom);
 	if (IS_ERR(th)) {
+		atomic_dec(&tdtd->tdtd_refcount);
 		OBD_FREE_PTR(dtbd);
 		RETURN(PTR_ERR(th));
 	}
@@ -1450,8 +1451,10 @@ distribute_txn_commit_batchid_update(const struct lu_env *env,
 
 stop:
 	dt_trans_stop(env, tdtd->tdtd_lut->lut_bottom, th);
-	if (rc < 0)
+	if (rc < 0) {
+		atomic_dec(&tdtd->tdtd_refcount);
 		OBD_FREE_PTR(dtbd);
+	}
 	RETURN(rc);
 }
 
@@ -1708,7 +1711,7 @@ int distribute_txn_init(const struct lu_env *env,
 	if (rc != 0)
 		RETURN(rc);
 
-	task = kthread_run(distribute_txn_commit_thread, tdtd, "tdtd-%u",
+	task = kthread_run(distribute_txn_commit_thread, tdtd, "dist_txn-%u",
 			   index);
 	if (IS_ERR(task))
 		RETURN(PTR_ERR(task));
