@@ -196,7 +196,7 @@ test_5() {
 	local subdir=$parent/subdir
 
 	rm -fr $parent
-	test_mkdir $parent || error "Create dir $parent failed"
+	test_mkdir $parent
 
 	# set default layout to parent directory
 	$LFS setstripe -E 64M -c 2 -i 0 -E -1 -c 4 -i 0 $parent ||
@@ -300,7 +300,7 @@ test_6() {
 run_test 6 "Migrate composite file"
 
 test_7() {
-	test_mkdir -p $DIR/$tdir || error "mkdir failed"
+	test_mkdir $DIR/$tdir
 	chmod 0777 $DIR/$tdir || error "chmod $tdir failed"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -324,7 +324,7 @@ test_8() {
 	local parent=$DIR/$tdir
 
 	rm -fr $parent
-	test_mkdir -p $parent || error "Create dir $parent failed"
+	test_mkdir $parent
 
 	$LFS setstripe -E 2M -c 1 -S 1M -E 16M -c 2 -S 2M \
 		-E -1 -c 4 -S 4M $parent ||
@@ -384,7 +384,7 @@ test_10() {
 		-E -1 -c 4 -S 4M $MOUNT ||
 		error "Set root layout failed"
 
-	test_mkdir -p $parent || error "Create dir $parent failed"
+	test_mkdir $parent
 	# set a different layout for parent
 	$LFS setstripe -E -1 -c 1 -S 1M $parent ||
 		error "set $parent layout failed"
@@ -576,13 +576,13 @@ test_15() {
 	local parent=$DIR/$tdir
 
 	rm -fr $parent
-	test_mkdir $parent || error "Create dir $parent failed"
+	test_mkdir $parent
 
 	$LFS setstripe -d $parent || error "delete default layout"
 
 	$LFS setstripe -E 1M -E 10M -E eof $parent/f1 || error "create f1"
 	$LFS setstripe -E 4M -E 20M -E eof $parent/f2 || error "create f2"
-	test_mkdir $parent/subdir || error "create subdir"
+	test_mkdir $parent/subdir
 	$LFS setstripe -E 6M -E 30M -E eof $parent/subdir ||
 		error "setstripe to subdir"
 	$LFS setstripe -E 8M -E eof $parent/subdir/f3 || error "create f3"

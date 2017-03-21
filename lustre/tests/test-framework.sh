@@ -7796,11 +7796,14 @@ test_mkdir() {
 		local parent=$(dirname $path)
 
 		[ -d $path ] && return 0
-		[ ! -d ${parent} ] && mkdir -p ${parent}
+		if [ ! -d ${parent} ]; then
+			mkdir -p ${parent} ||
+				error "mkdir parent '$parent' failed"
+		fi
 	fi
 
 	if [ $MDSCOUNT -le 1 ]; then
-		mkdir $path
+		mkdir $path || error "mkdir '$path' failed"
 	else
 		local test_num=$(echo $testnum | sed -e 's/[^0-9]*//g')
 		local mdt_index
@@ -7811,7 +7814,8 @@ test_mkdir() {
 			mdt_index=$stripe_index
 		fi
 		echo "striped dir -i$mdt_index -c$stripe_count $path"
-		$LFS setdirstripe -i$mdt_index -c$stripe_count $path
+		$LFS mkdir -i$mdt_index -c$stripe_count $path ||
+			error "mkdir -i $mdt_index -c$stripe_count $path failed"
 	fi
 }
 

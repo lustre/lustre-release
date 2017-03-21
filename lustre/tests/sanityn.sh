@@ -264,28 +264,28 @@ test_11() {
 run_test 11 "execution of file opened for write should return error ===="
 
 test_12() {
-       DIR=$DIR DIR2=$DIR2 sh lockorder.sh
+	DIR=$DIR DIR2=$DIR2 sh lockorder.sh
 }
-run_test 12 "test lock ordering (link, stat, unlink) ==========="
+run_test 12 "test lock ordering (link, stat, unlink)"
 
 test_13() {	# bug 2451 - directory coherency
-	test_mkdir $DIR1/d13 || error
-       cd $DIR1/d13 || error
-       ls
-       ( touch $DIR1/d13/f13 ) # needs to be a separate shell
-       ls
-       rm -f $DIR2/d13/f13 || error
-       ls 2>&1 | grep f13 && error "f13 shouldn't return an error (1)" || true
-       # need to run it twice
-       ( touch $DIR1/d13/f13 ) # needs to be a separate shell
-       ls
-       rm -f $DIR2/d13/f13 || error
-       ls 2>&1 | grep f13 && error "f13 shouldn't return an error (2)" || true
+	test_mkdir $DIR1/d13
+	cd $DIR1/d13 || error
+	ls
+	( touch $DIR1/d13/f13 ) # needs to be a separate shell
+	ls
+	rm -f $DIR2/d13/f13 || error
+	ls 2>&1 | grep f13 && error "f13 shouldn't return an error (1)" || true
+	# need to run it twice
+	( touch $DIR1/d13/f13 ) # needs to be a separate shell
+	ls
+	rm -f $DIR2/d13/f13 || error
+	ls 2>&1 | grep f13 && error "f13 shouldn't return an error (2)" || true
 }
-run_test 13 "test directory page revocation ===================="
+run_test 13 "test directory page revocation"
 
 test_14aa() {
-	test_mkdir -p $DIR1/$tdir
+	test_mkdir $DIR1/$tdir
 	cp -p /bin/ls $DIR1/$tdir/$tfile
 	multiop_bg_pause $DIR1/$tdir/$tfile Ow_c || return 1
 	MULTIPID=$!
@@ -297,55 +297,59 @@ test_14aa() {
 run_test 14aa "execution of file open for write returns -ETXTBSY"
 
 test_14ab() {
-	test_mkdir -p $DIR1/d14
-	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
-        MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
-        MULTIOP_PID=$!
-        $MULTIOP $DIR2/d14/multiop Oc && error "expected error, got success"
-        kill -USR1 $MULTIOP_PID || return 2
-        wait $MULTIOP_PID || return 3
-        rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
+	test_mkdir $DIR1/$tdir
+	cp -p $(which multiop) $DIR1/$tdir/multiop || error "cp failed"
+	MULTIOP_PROG=$DIR1/$tdir/multiop multiop_bg_pause $TMP/$tfile O_c ||
+		return 1
+	MULTIOP_PID=$!
+	$MULTIOP $DIR2/$tdir/multiop Oc && error "expected error, got success"
+	kill -USR1 $MULTIOP_PID || return 2
+	wait $MULTIOP_PID || return 3
+	rm $TMP/$tfile $DIR1/$tdir/multiop || error "removing multiop"
 }
 run_test 14ab "open(RDWR) of executing file returns -ETXTBSY"
 
 test_14b() { # bug 3192, 7040
-	test_mkdir -p $DIR1/d14
-	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
-        MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
-        MULTIOP_PID=$!
-        $TRUNCATE $DIR2/d14/multiop 0 && kill -9 $MULTIOP_PID && \
+	test_mkdir $DIR1/$tdir
+	cp -p $(which multiop) $DIR1/$tdir/multiop || error "cp failed"
+	MULTIOP_PROG=$DIR1/$tdir/multiop multiop_bg_pause $TMP/$tfile O_c ||
+		return 1
+	MULTIOP_PID=$!
+	$TRUNCATE $DIR2/$tdir/multiop 0 && kill -9 $MULTIOP_PID && \
 		error "expected truncate error, got success"
-        kill -USR1 $MULTIOP_PID || return 2
-        wait $MULTIOP_PID || return 3
-	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
-	rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
+	kill -USR1 $MULTIOP_PID || return 2
+	wait $MULTIOP_PID || return 3
+	cmp $(which multiop) $DIR1/$tdir/multiop || error "binary changed"
+	rm $TMP/$tfile $DIR1/$tdir/multiop || error "removing multiop"
 }
 run_test 14b "truncate of executing file returns -ETXTBSY ======"
 
 test_14c() { # bug 3430, 7040
-	test_mkdir -p $DIR1/d14
-	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
-	MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
-        MULTIOP_PID=$!
-	cp /etc/hosts $DIR2/d14/multiop && error "expected error, got success"
+	test_mkdir $DIR1/$tdir
+	cp -p $(which multiop) $DIR1/$tdir/multiop || error "cp failed"
+	MULTIOP_PROG=$DIR1/$tdir/multiop multiop_bg_pause $TMP/$tfile O_c ||
+		return 1
+	MULTIOP_PID=$!
+	cp /etc/hosts $DIR2/$tdir/multiop && error "expected error, got success"
 	kill -USR1 $MULTIOP_PID || return 2
 	wait $MULTIOP_PID || return 3
-	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
-	rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
+	cmp $(which multiop) $DIR1/$tdir/multiop || error "binary changed"
+	rm $TMP/$tfile $DIR1/$tdir/multiop || error "removing multiop"
 }
 run_test 14c "open(O_TRUNC) of executing file return -ETXTBSY =="
 
 test_14d() { # bug 10921
-	test_mkdir -p $DIR1/d14
-	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
-	MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
-        MULTIOP_PID=$!
+	test_mkdir $DIR1/$tdir
+	cp -p $(which multiop) $DIR1/$tdir/multiop || error "cp failed"
+	MULTIOP_PROG=$DIR1/$tdir/multiop multiop_bg_pause $TMP/$tfile O_c ||
+		return 1
+	MULTIOP_PID=$!
 	log chmod
-	chmod 600 $DIR1/d14/multiop || error "chmod failed"
+	chmod 600 $DIR1/$tdir/multiop || error "chmod failed"
 	kill -USR1 $MULTIOP_PID || return 2
 	wait $MULTIOP_PID || return 3
-	cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
-	rm $TMP/test14.junk $DIR1/d14/multiop || error "removing multiop"
+	cmp $(which multiop) $DIR1/$tdir/multiop || error "binary changed"
+	rm $TMP/$tfile $DIR1/$tdir/multiop || error "removing multiop"
 }
 run_test 14d "chmod of executing file is still possible ========"
 
@@ -688,10 +692,9 @@ test_29() { # bug 10999
 run_test 29 "lock put race between glimpse and enqueue ========="
 
 test_30() { #bug #11110, LU-2523
-	test_mkdir -p $DIR1/$tdir
+	test_mkdir $DIR1/$tdir
 	cp -f /bin/bash $DIR1/$tdir/bash
-	/bin/sh -c 'sleep 1; rm -f $DIR2/$tdir/bash;
-		    cp /bin/bash $DIR2/$tdir' &
+	/bin/sh -c 'sleep 1; rm -f $DIR2/$tdir/bash; cp /bin/bash $DIR2/$tdir' &
 	$DIR1/$tdir/bash -c 'sleep 2;
 		openfile -f O_RDONLY /proc/$$/exe >& /dev/null; echo $?'
 	wait
@@ -701,7 +704,7 @@ test_30() { #bug #11110, LU-2523
 run_test 30 "recreate file race"
 
 test_31a() {
-	test_mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
+	test_mkdir $DIR1/$tdir
 	local writes=$(LANG=C dd if=/dev/zero of=$DIR/$tdir/$tfile \
 		       count=1 2>&1 | awk 'BEGIN { FS="+" } /out/ {print $1}')
 	#define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE   0x314
@@ -720,7 +723,7 @@ test_31b() {
 	wait_mds_ost_sync || error "wait_mds_ost_sync()"
 	wait_delete_completed || error "wait_delete_completed()"
 
-	test_mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
+	test_mkdir $DIR1/$tdir
         lfs setstripe $DIR/$tdir/$tfile -i 0 -c 1
         cp /etc/hosts $DIR/$tdir/$tfile
         #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE   0x314
@@ -1143,52 +1146,54 @@ test_34() { #16129
 run_test 34 "no lock timeout under IO"
 
 test_35() { # bug 17645
-        local generation=[]
-        local count=0
+	local generation=[]
+	local count=0
 	gen=$(lctl get_param mdc.$FSNAME-MDT*-mdc-*.import | grep generation |
-		awk '/generation/{print $2}')
+	      awk '/generation/{print $2}')
 	for g in $gen; do
-            generation[count]=$g
-            let count=count+1
-        done
+		generation[count]=$g
+		let count=count+1
+	done
 
-	test_mkdir -p $MOUNT1/$tfile
-        cancel_lru_locks mdc
+	test_mkdir $MOUNT1/$tdir
+	cancel_lru_locks mdc
 
-        # Let's initiate -EINTR situation by setting fail_loc and take
-        # write lock on same file from same client. This will not cause
-        # bl_ast yet as lock is already in local cache.
-#define OBD_FAIL_LDLM_INTR_CP_AST        0x317
-        do_facet client "lctl set_param fail_loc=0x80000317"
-        local timeout=`do_facet $SINGLEMDS lctl get_param  -n timeout`
-        let timeout=timeout*3
-        local nr=0
-        while test $nr -lt 10; do
-                log "Race attempt $nr"
-                local blk1=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
-                test "x$blk1" = "x" && blk1=0
-                createmany -o $MOUNT2/$tfile/a 4000 &
-                pid1=$!
-                sleep 1
+	# Let's initiate -EINTR situation by setting fail_loc and take
+	# write lock on same file from same client. This will not cause
+	# bl_ast yet as lock is already in local cache.
+	#define OBD_FAIL_LDLM_INTR_CP_AST        0x317
+	do_facet client "lctl set_param fail_loc=0x80000317"
+	local timeout=$(do_facet $SINGLEMDS lctl get_param  -n timeout)
+	let timeout=timeout*3
+	local nr=0
+	while test $nr -lt 10; do
+		log "Race attempt $nr"
+		local blk1=$(lctl get_param -n ldlm.services.ldlm_cbd.stats |
+			     awk '/ldlm_bl_callback/ { print $2 }')
+		test "x$blk1" = "x" && blk1=0
+		createmany -o $MOUNT2/$tdir/a 4000 &
+		pid1=$!
+		sleep 1
 
-                # Let's make conflict and bl_ast
-                ls -la $MOUNT1/$tfile > /dev/null &
-                pid2=$!
+		# Let's make conflict and bl_ast
+		ls -la $MOUNT1/$tdir > /dev/null &
+		pid2=$!
 
-                log "Wait for $pid1 $pid2 for $timeout sec..."
-                sleep $timeout
-                kill -9 $pid1 $pid2 > /dev/null 2>&1
-                wait
-                local blk2=`lctl get_param -n ldlm.services.ldlm_cbd.stats | awk '/ldlm_bl_callback/ {print $2}'`
-                test "x$blk2" = "x" && blk2=0
-                test $blk2 -gt $blk1 && break
-                rm -fr $MOUNT1/$tfile/*
-                cancel_lru_locks mdc
-                let nr=nr+1
-        done
-        do_facet client "lctl set_param fail_loc=0x0"
-        df -h $MOUNT1 $MOUNT2
-        count=0
+		log "Wait for $pid1 $pid2 for $timeout sec..."
+		sleep $timeout
+		kill -9 $pid1 $pid2 > /dev/null 2>&1
+		wait
+		local blk2=$(lctl get_param -n ldlm.services.ldlm_cbd.stats |
+			     awk '/ldlm_bl_callback/ { print $2 }')
+		test "x$blk2" = "x" && blk2=0
+		test $blk2 -gt $blk1 && break
+		rm -fr $MOUNT1/$tdir
+		cancel_lru_locks mdc
+		let nr=nr+1
+	done
+	do_facet client "lctl set_param fail_loc=0x0"
+	df -h $MOUNT1 $MOUNT2
+	count=0
 	gen=$(lctl get_param mdc.$FSNAME-MDT*-mdc-*.import | grep generation |
 		awk '/generation/{print $2}')
 	for g in $gen; do
@@ -1214,7 +1219,7 @@ test_36() { #bug 16417
 	local SIZE_B
 	local i
 
-	test_mkdir -p $DIR1/$tdir
+	test_mkdir $DIR1/$tdir
 	$LFS setstripe -c -1 $DIR1/$tdir
 	i=0
 	SIZE=50
@@ -1251,7 +1256,7 @@ test_36() { #bug 16417
 run_test 36 "handle ESTALE/open-unlink correctly"
 
 test_37() { # bug 18695
-	test_mkdir -p $DIR1/$tdir
+	test_mkdir $DIR1/$tdir
 	multiop_bg_pause $DIR1/$tdir D_c || return 1
 	MULTIPID=$!
 	# create large directory (32kB seems enough from e2fsck, ~= 1000 files)
@@ -2693,7 +2698,7 @@ test_60() {
 		skip "MDS version $MDSVER must be >= 2.3.0" && return 0
 
 	# Create a file
-	test_mkdir -p $DIR1/$tdir
+	test_mkdir $DIR1/$tdir
 	file1=$DIR1/$tdir/file
 	file2=$DIR2/$tdir/file
 
@@ -2954,7 +2959,7 @@ test_76() { #LU-946
 	fi
 
 	rm -rf $DIR/$tdir
-	test_mkdir -p $DIR/$tdir
+	test_mkdir $DIR/$tdir
 
 	# drop all open locks and close any cached "open" files on the client
 	cancel_lru_locks mdc
@@ -3592,7 +3597,7 @@ run_test 78 "Enable policy and specify tunings right away"
 
 test_79() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	test_mkdir -p $DIR/$tdir
+	test_mkdir $DIR/$tdir
 
 	# Prevent interference from layout intent RPCs due to
 	# asynchronous writeback. These will be tested in 130c below.
