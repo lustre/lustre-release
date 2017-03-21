@@ -9804,6 +9804,34 @@ test_133g() {
 }
 run_test 133g "Check for Oopses on bad io area writes/reads in /proc"
 
+test_133h() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.54) ]] &&
+		skip "Need MDS version at least 2.9.54" && return
+
+	local facet
+	for facet in client mds1 ost1; do
+		local facet_proc_dirs=$(do_facet $facet \
+					\\\ls -d $proc_regexp 2> /dev/null)
+		[ -z "$facet_proc_dirs" ] && error "no proc_dirs on $facet"
+		echo "${facet}_proc_dirs='$facet_proc_dirs'"
+		# Get the list of files that are missing the terminating newline
+		local missing=($(do_facet $facet \
+			find ${facet_proc_dirs} -type f \|		\
+				while read F\; do			\
+					awk -v FS='\v' -v RS='\v\v'	\
+					"'END { if(NR>0 &&		\
+					\\\$NF !~ /.*\\\n\$/)		\
+						print FILENAME}'"	\
+					'\$F'\;				\
+				done 2>/dev/null))
+		[ ${#missing[*]} -eq 0 ] ||
+			error "files do not end with newline: ${missing[*]}"
+	done
+}
+run_test 133h "Proc files should end with newlines"
+
 test_134a() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.54) ]] &&

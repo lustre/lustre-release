@@ -90,6 +90,7 @@ static int mdd_changelog_mask_seq_show(struct seq_file *m, void *data)
 			seq_printf(m, "%s ", changelog_type2str(i));
 		i++;
 	}
+	seq_putc(m, '\n');
 	return 0;
 }
 

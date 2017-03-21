@@ -1742,7 +1742,7 @@ static void hsm_policy_bit2str(struct seq_file *m, const __u64 mask,
 	}
 	/* remove last ' ' */
 	m->count--;
-	seq_putc(m, '\0');
+	seq_putc(m, '\n');
 }
 
 /* methods to read/write HSM policy flags */
