@@ -899,6 +899,8 @@ static void osp_sync_process_record(const struct lu_env *env,
 	cookie.lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;
 	cookie.lgc_index = rec->lrh_index;
 
+	d->opd_sync_last_catalog_idx = llh->lgh_hdr->llh_cat_idx;
+
 	if (unlikely(rec->lrh_type == LLOG_GEN_REC)) {
 		struct llog_gen_rec *gen = (struct llog_gen_rec *)rec;
 
@@ -1171,6 +1173,7 @@ static int osp_sync_thread(void *_arg)
 	struct llog_handle	*llh;
 	struct lu_env		 env;
 	int			 rc, count;
+	bool			 wrapped;
 
 	ENTRY;
 
@@ -1205,7 +1208,35 @@ static int osp_sync_thread(void *_arg)
 		GOTO(out, rc = -EINVAL);
 	}
 
-	rc = llog_cat_process(&env, llh, osp_sync_process_queues, d, 0, 0);
+	/*
+	 * Catalog processing stops when it processed last catalog record
+	 * with index equal to the end of catalog bitmap. Or if it is wrapped,
+	 * processing stops with index equal to the lgh_last_idx. We need to
+	 * continue processing.
+	 */
+	d->opd_sync_last_catalog_idx = 0;
+	do {
+		int	size;
+
+		wrapped = (llh->lgh_hdr->llh_cat_idx >= llh->lgh_last_idx &&
+			   llh->lgh_hdr->llh_count > 1);
+
+		rc = llog_cat_process(&env, llh, osp_sync_process_queues, d,
+				      d->opd_sync_last_catalog_idx, 0);
+
+		size = OBD_FAIL_PRECHECK(OBD_FAIL_CAT_RECORDS) ?
+		       cfs_fail_val : (LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) - 1);
+		/* processing reaches catalog bottom */
+		if (d->opd_sync_last_catalog_idx == size)
+			d->opd_sync_last_catalog_idx = 0;
+		else if (wrapped)
+			/* If catalog is wrapped we can`t predict last index of
+			 * processing because lgh_last_idx could be changed.
+			 * Starting form the next one */
+			d->opd_sync_last_catalog_idx++;
+
+	} while (rc == 0 && (wrapped || d->opd_sync_last_catalog_idx == 0));
+
 	if (rc < 0) {
 		CERROR("%s: llog process with osp_sync_process_queues "
 		       "failed: %d\n", d->opd_obd->obd_name, rc);

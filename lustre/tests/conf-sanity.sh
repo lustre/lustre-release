@@ -7494,6 +7494,32 @@ test_105() {
 }
 run_test 105 "check file creation for ro and rw bind mnt pt"
 
+test_106() {
+	local repeat=5
+
+	reformat
+	setupall
+	mkdir -p $DIR/$tdir || error "create $tdir failed"
+	lfs setstripe -c 1 -i 0 $DIR/$tdir
+#define OBD_FAIL_CAT_RECORDS                        0x1312
+	do_facet mds1 $LCTL set_param fail_loc=0x1312 fail_val=$repeat
+
+	for ((i = 1; i <= $repeat; i++)); do
+
+		#one full plain llog
+		createmany -o $DIR/$tdir/f- 64768
+
+		createmany -u $DIR/$tdir/f- 64768
+	done
+	wait_delete_completed $((TIMEOUT * 7))
+#ASSERTION osp_sync_thread() ( thread->t_flags != SVC_RUNNING ) failed
+#shows that osp code is buggy
+	do_facet mds1 $LCTL set_param fail_loc=0 fail_val=0
+
+	cleanupall
+}
+run_test 106 "check osp llog processing when catalog is wrapped"
+
 test_107() {
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.50) ]] ||
 		{ skip "Need MDS version > 2.10.50"; return; }
