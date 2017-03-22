@@ -230,6 +230,8 @@ struct osp_device {
 	__u64				 opd_sync_last_committed_id;
 	/* last processed (taken from llog) id */
 	volatile __u64			 opd_sync_last_processed_id;
+	/* last processed catalog index */
+	int				 opd_sync_last_catalog_idx;
 	struct osp_id_tracker		*opd_sync_tracker;
 	struct list_head		 opd_sync_ontrack;
 	/* stop processing new requests until barrier=0 */

@@ -421,10 +421,11 @@ static int llog_process_thread(void *arg)
 	struct llog_process_cat_data	*cd  = lpi->lpi_catdata;
 	char				*buf;
 	size_t				 chunk_size;
-	__u64				 cur_offset, tmp_offset;
+	__u64				 cur_offset;
 	int				 rc = 0, index = 1, last_index;
 	int				 saved_index = 0;
 	int				 last_called_index = 0;
+	bool				 repeated = false;
 
 	ENTRY;
 
@@ -452,9 +453,10 @@ static int llog_process_thread(void *arg)
 
 	while (rc == 0) {
 		struct llog_rec_hdr *rec;
-		off_t chunk_offset;
+		off_t chunk_offset = 0;
 		unsigned int buf_offset = 0;
 		bool partial_chunk;
+		int	lh_last_idx;
 
 		/* skip records not set in bitmap */
 		while (index <= last_index &&
@@ -471,8 +473,19 @@ static int llog_process_thread(void *arg)
 repeat:
 		/* get the buf with our target record; avoid old garbage */
 		memset(buf, 0, chunk_size);
+		/* the record index for outdated chunk data */
+		lh_last_idx = loghandle->lgh_last_idx + 1;
 		rc = llog_next_block(lpi->lpi_env, loghandle, &saved_index,
 				     index, &cur_offset, buf, chunk_size);
+		if (repeated && rc)
+			CDEBUG(D_OTHER, "cur_offset %llu, chunk_offset %llu,"
+			       " buf_offset %u, rc = %d\n", cur_offset,
+			       (__u64)chunk_offset, buf_offset, rc);
+		/* we`ve tried to reread the chunk, but there is no
+		 * new records */
+		if (rc == -EIO && repeated && (chunk_offset + buf_offset) ==
+		    cur_offset)
+			GOTO(out, rc = 0);
 		if (rc != 0)
 			GOTO(out, rc);
 
@@ -481,8 +494,7 @@ repeat:
 		 * The absolute offset of the current chunk is calculated
 		 * from cur_offset value and stored in chunk_offset variable.
 		 */
-		tmp_offset = cur_offset;
-		if (do_div(tmp_offset, chunk_size) != 0) {
+		if ((cur_offset & (chunk_size - 1)) != 0) {
 			partial_chunk = true;
 			chunk_offset = cur_offset & ~(chunk_size - 1);
 		} else {
@@ -506,15 +518,28 @@ repeat:
 			CDEBUG(D_OTHER, "after swabbing, type=%#x idx=%d\n",
 			       rec->lrh_type, rec->lrh_index);
 
+			/* the bitmap could be changed during processing
+			 * records from the chunk. For wrapped catalog
+			 * it means we can read deleted record and try to
+			 * process it. Check this case and reread the chunk. */
+
 			/* for partial chunk the end of it is zeroed, check
 			 * for index 0 to distinguish it. */
-			if (partial_chunk && rec->lrh_index == 0) {
+			if ((partial_chunk && rec->lrh_index == 0) ||
+			     (index == lh_last_idx &&
+			      lh_last_idx != (loghandle->lgh_last_idx + 1))) {
 				/* concurrent llog_add() might add new records
 				 * while llog_processing, check this is not
 				 * the case and re-read the current chunk
 				 * otherwise. */
 				int records;
-				if (index > loghandle->lgh_last_idx)
+				/* lgh_last_idx could be less then index
+				 * for catalog, if catalog is wrapped */
+				if ((index > loghandle->lgh_last_idx &&
+				    !(loghandle->lgh_hdr->llh_flags &
+				      LLOG_F_IS_CAT)) || repeated ||
+				    (loghandle->lgh_obj != NULL &&
+				     dt_object_remote(loghandle->lgh_obj)))
 					GOTO(out, rc = 0);
 				/* <2 records means no more records
 				 * if the last record we processed was
@@ -532,8 +557,11 @@ repeat:
 				/* save offset inside buffer for the re-read */
 				buf_offset = (char *)rec - (char *)buf;
 				cur_offset = chunk_offset;
+				repeated = true;
 				goto repeat;
 			}
+
+			repeated = false;
 
 			if (rec->lrh_len == 0 || rec->lrh_len > chunk_size) {
 				CWARN("%s: invalid length %d in llog "DFID
@@ -584,6 +612,12 @@ repeat:
 				}
 				if (rc)
 					GOTO(out, rc);
+				/* some stupid callbacks directly cancel records
+				 * and delete llog. Check it and stop
+				 * processing. */
+				if (loghandle->lgh_hdr == NULL ||
+				    loghandle->lgh_hdr->llh_count == 1)
+					GOTO(out, rc = 0);
 			}
 			/* exit if the last index is reached */
 			if (index >= last_index)
@@ -611,7 +645,14 @@ out:
 			 * llog file, probably I/O error or the log got
 			 * corrupted to be able to finally release the log we
 			 * discard any remaining bits in the header */
-			CERROR("Local llog found corrupted\n");
+			CERROR("%s: Local llog found corrupted #"DOSTID":%x"
+			       " %s index %d count %d\n",
+			       loghandle->lgh_ctxt->loc_obd->obd_name,
+			       POSTID(&loghandle->lgh_id.lgl_oi),
+			       loghandle->lgh_id.lgl_ogen,
+			       ((llh->llh_flags & LLOG_F_IS_CAT) ? "catalog" :
+				"plain"), index, llh->llh_count);
+
 			while (index <= last_index) {
 				if (ext2_test_bit(index,
 						  LLOG_HDR_BITMAP(llh)) != 0)
@@ -624,8 +665,8 @@ out:
 	}
 
 	OBD_FREE_LARGE(buf, chunk_size);
-        lpi->lpi_rc = rc;
-        return 0;
+	lpi->lpi_rc = rc;
+	return 0;
 }
 
 static int llog_process_thread_daemonize(void *arg)
