@@ -148,7 +148,9 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
 			 * we came from NFS and so opencache needs to be
 			 * enabled for this one
 			 */
+			spin_lock(&result->d_lock);
 			ldd->lld_nfs_dentry = 1;
+			spin_unlock(&result->d_lock);
 		}
 	}
 

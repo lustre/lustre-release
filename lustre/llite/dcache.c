@@ -170,12 +170,13 @@ int ll_d_init(struct dentry *de)
 		if (likely(lld != NULL)) {
 			spin_lock(&de->d_lock);
 			if (likely(de->d_fsdata == NULL)) {
-				de->d_fsdata = lld;
-				__d_lustre_invalidate(de);
 #ifdef HAVE_DCACHE_LOCK
 				/* kernel >= 2.6.38 d_op is set in d_alloc() */
 				de->d_op = &ll_d_ops;
+				smp_mb();
 #endif
+				de->d_fsdata = lld;
+				__d_lustre_invalidate(de);
 			} else {
 				OBD_FREE_PTR(lld);
 			}
