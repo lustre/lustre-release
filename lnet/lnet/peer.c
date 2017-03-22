@@ -3299,9 +3299,7 @@ int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 }
 
 /* ln_api_mutex is held, which keeps the peer list stable */
-int lnet_get_peer_info(lnet_nid_t *primary_nid, lnet_nid_t *nidp,
-		       __u32 *nnis, bool *mr, __u32 *sizep,
-		       void __user *bulk)
+int lnet_get_peer_info(struct lnet_ioctl_peer_cfg *cfg, void __user *bulk)
 {
 	struct lnet_ioctl_element_stats *lpni_stats;
 	struct lnet_ioctl_element_msg_stats *lpni_msg_stats;
@@ -3312,7 +3310,7 @@ int lnet_get_peer_info(lnet_nid_t *primary_nid, lnet_nid_t *nidp,
 	__u32 size;
 	int rc;
 
-	lp = lnet_find_peer(*primary_nid);
+	lp = lnet_find_peer(cfg->prcfg_prim_nid);
 
 	if (!lp) {
 		rc = -ENOENT;
@@ -3322,17 +3320,18 @@ int lnet_get_peer_info(lnet_nid_t *primary_nid, lnet_nid_t *nidp,
 	size = sizeof(nid) + sizeof(*lpni_info) + sizeof(*lpni_stats)
 		+ sizeof(*lpni_msg_stats);
 	size *= lp->lp_nnis;
-	if (size > *sizep) {
-		*sizep = size;
+	if (size > cfg->prcfg_size) {
+		cfg->prcfg_size = size;
 		rc = -E2BIG;
 		goto out_lp_decref;
 	}
 
-	*primary_nid = lp->lp_primary_nid;
-	*mr = lnet_peer_is_multi_rail(lp);
-	*nidp = lp->lp_primary_nid;
-	*nnis = lp->lp_nnis;
-	*sizep = size;
+	cfg->prcfg_prim_nid = lp->lp_primary_nid;
+	cfg->prcfg_mr = lnet_peer_is_multi_rail(lp);
+	cfg->prcfg_cfg_nid = lp->lp_primary_nid;
+	cfg->prcfg_count = lp->lp_nnis;
+	cfg->prcfg_size = size;
+	cfg->prcfg_state = lp->lp_state;
 
 	/* Allocate helper buffers. */
 	rc = -ENOMEM;

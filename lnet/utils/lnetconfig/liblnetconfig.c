@@ -2512,6 +2512,16 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 					peer_info.prcfg_mr ? "True" : "False")
 		    == NULL)
 			goto out;
+		/*
+		 * print out the state of the peer only if details are
+		 * requested
+		 */
+		if (detail >= 3) {
+			if (cYAML_create_number(peer, "peer state",
+						peer_info.prcfg_state)
+				== NULL)
+				goto out;
+		}
 
 		tmp = cYAML_create_seq(peer, "peer ni");
 		if (tmp == NULL)

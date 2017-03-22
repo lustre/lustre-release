@@ -3238,11 +3238,7 @@ LNetCtl(unsigned int cmd, void *arg)
 			return -EINVAL;
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		rc = lnet_get_peer_info(&cfg->prcfg_prim_nid,
-					&cfg->prcfg_cfg_nid,
-					&cfg->prcfg_count,
-					&cfg->prcfg_mr,
-					&cfg->prcfg_size,
+		rc = lnet_get_peer_info(cfg,
 					(void __user *)cfg->prcfg_bulk);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
