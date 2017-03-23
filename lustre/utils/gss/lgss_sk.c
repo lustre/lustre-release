@@ -550,7 +550,7 @@ int main(int argc, char **argv)
 		generate_prime = type & SK_TYPE_CLIENT;
 
 		strncpy(config->skc_nodemap, SK_DEFAULT_NODEMAP,
-			strlen(SK_DEFAULT_NODEMAP));
+			sizeof(config->skc_nodemap) - 1);
 
 		if (!datafile)
 			datafile = "/dev/random";
@@ -567,9 +567,11 @@ int main(int argc, char **argv)
 	if (prime_bits != -1)
 		config->skc_prime_bits = prime_bits;
 	if (fsname)
-		strncpy(config->skc_fsname, fsname, strlen(fsname));
+		strncpy(config->skc_fsname, fsname,
+			sizeof(config->skc_fsname) - 1);
 	if (nodemap)
-		strncpy(config->skc_nodemap, nodemap, strlen(nodemap));
+		strncpy(config->skc_nodemap, nodemap,
+			sizeof(config->skc_nodemap) - 1);
 	if (mgsnids && parse_mgsnids(mgsnids, config))
 		goto error;
 	if (sk_validate_config(config)) {
