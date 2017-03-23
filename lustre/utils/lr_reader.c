@@ -59,7 +59,8 @@
 #include <string.h>
 #include <getopt.h>
 
-#include <lustre_disk.h>
+#include <asm/byteorder.h>
+#include <linux/lustre_disk.h>
 #include <lustre_ver.h>
 
 char *progname;

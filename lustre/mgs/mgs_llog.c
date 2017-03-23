@@ -616,6 +616,28 @@ static __inline__ int next_index(void *index_map, int map_len)
         return -1;
 }
 
+/* Make the mdt/ost server obd name based on the filesystem name */
+static bool server_make_name(u32 flags, u16 index, const char *fs,
+			     char *name_buf, size_t name_buf_size)
+{
+	bool invalid_flag = false;
+
+	if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
+		if (!(flags & LDD_F_SV_ALL))
+			snprintf(name_buf, name_buf_size, "%.8s%c%s%04x", fs,
+				(flags & LDD_F_VIRGIN) ? ':' :
+					((flags & LDD_F_WRITECONF) ? '=' : '-'),
+				(flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
+				index);
+	} else if (flags & LDD_F_SV_TYPE_MGS) {
+		snprintf(name_buf, name_buf_size, "MGS");
+	} else {
+		CERROR("unknown server type %#x\n", flags);
+		invalid_flag = true;
+	}
+	return invalid_flag;
+}
+
 /* Return codes:
         0  newly marked as in use
         <0 err
@@ -684,7 +706,7 @@ static int mgs_set_index(const struct lu_env *env,
 	clear_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags);
 	if (server_make_name(mti->mti_flags & ~(LDD_F_VIRGIN | LDD_F_WRITECONF),
 			     mti->mti_stripe_index, mti->mti_fsname,
-			     mti->mti_svname)) {
+			     mti->mti_svname, sizeof(mti->mti_svname))) {
 		CERROR("unknown server type %#x\n", mti->mti_flags);
 		GOTO(out_up, rc = -EINVAL);
 	}
@@ -4814,7 +4836,7 @@ int mgs_setparam(const struct lu_env *env, struct mgs_device *mgs,
         else
                 /* Strip -osc or -mdc suffix from svname */
                 if (server_make_name(rc, mti->mti_stripe_index, mti->mti_fsname,
-                                     mti->mti_svname))
+				     mti->mti_svname, sizeof(mti->mti_svname)))
                         GOTO(out, rc = -EINVAL);
 	/*
 	 * Revoke lock so everyone updates.  Should be alright if

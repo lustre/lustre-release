@@ -55,7 +55,7 @@
 #include <sys/stat.h>
 
 #include <libcfs/util/list.h>
-#include <lustre_disk.h>
+#include <linux/lustre_disk.h>
 #include <lustre_param.h>
 
 extern char *progname;
@@ -117,15 +117,38 @@ struct mount_opts {
 
 int get_mountdata(char *, struct lustre_disk_data *);
 
+static inline char *mt_str(enum ldd_mount_type mt)
+{
+	static char *mount_type_string[] = {
+		"ext3",
+		"ldiskfs",
+		"smfs",
+		"reiserfs",
+		"ldiskfs2",
+		"zfs",
+	};
+	return mount_type_string[mt];
+}
+
+static inline char *mt_type(enum ldd_mount_type mt)
+{
+	static char *mount_type_string[] = {
+		"osd-ldiskfs",
+		"osd-ldiskfs",
+		"osd-smfs",
+		"osd-reiserfs",
+		"osd-ldiskfs",
+		"osd-zfs",
+	};
+	return mount_type_string[mt];
+}
+
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
-#undef IS_MDT
 #define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
-#undef IS_OST
 #define IS_OST(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_OST)
-#undef IS_MGS
 #define IS_MGS(data)  ((data)->ldd_flags & LDD_F_SV_TYPE_MGS)
-#undef IS_SERVER
+#define IS_SEPARATED_MGS(data)	((data)->ldd_flags == LDD_F_SV_TYPE_MGS)
 #define IS_SERVER(data) ((data)->ldd_flags & (LDD_F_SV_TYPE_MGS | \
 			  LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST))
 

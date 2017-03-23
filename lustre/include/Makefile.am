@@ -32,9 +32,9 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-SUBDIRS = lustre
+SUBDIRS = lustre uapi/linux
 
-DIST_SUBDIRS = lustre
+DIST_SUBDIRS = lustre uapi/linux
 
 EXTRA_DIST = \
 	cl_object.h \

@@ -940,6 +940,7 @@ void class_unlink_export(struct obd_export *exp)
 			     &exp->exp_client_uuid,
 			     &exp->exp_uuid_hash);
 
+#ifdef HAVE_SERVER_SUPPORT
 	if (!hlist_unhashed(&exp->exp_gen_hash)) {
 		struct tg_export_data	*ted = &exp->exp_target_data;
 		struct cfs_hash		*hash;
@@ -952,6 +953,7 @@ void class_unlink_export(struct obd_export *exp)
 			     &exp->exp_gen_hash);
 		cfs_hash_putref(hash);
 	}
+#endif /* HAVE_SERVER_SUPPORT */
 
 	list_move(&exp->exp_obd_chain, &exp->exp_obd->obd_unlinked_exports);
 	list_del_init(&exp->exp_obd_chain_timed);

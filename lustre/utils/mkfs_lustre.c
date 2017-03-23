@@ -61,7 +61,6 @@
 #include <limits.h>
 #include <ctype.h>
 #include <lnet/nidstr.h>
-#include <lustre_disk.h>
 #include <lustre_param.h>
 #include <lnet/lnetctl.h>
 #include <lustre_ver.h>
@@ -220,6 +219,28 @@ void set_defaults(struct mkfs_opts *mop)
 	mop->mo_mgs_failnodes = 0;
 	mop->mo_stripe_count = 1;
 	mop->mo_pool_vdevs = NULL;
+}
+
+/* Make the mdt/ost server obd name based on the filesystem name */
+static bool server_make_name(__u32 flags, __u16 index, const char *fs,
+			     char *name_buf, size_t name_buf_size)
+{
+	bool invalid_flag = false;
+
+	if (flags & (LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST)) {
+		if (!(flags & LDD_F_SV_ALL))
+			snprintf(name_buf, name_buf_size, "%.8s%c%s%04x", fs,
+				(flags & LDD_F_VIRGIN) ? ':' :
+				((flags & LDD_F_WRITECONF) ? '=' : '-'),
+				(flags & LDD_F_SV_TYPE_MDT) ? "MDT" : "OST",
+				index);
+	} else if (flags & LDD_F_SV_TYPE_MGS) {
+		snprintf(name_buf, name_buf_size, "MGS");
+	} else {
+		fprintf(stderr, "unknown server type %#x\n", flags);
+		invalid_flag = true;
+	}
+	return invalid_flag;
 }
 
 static inline void badopt(const char *opt, char *type)
@@ -952,7 +973,8 @@ int main(int argc, char *const argv[])
 	}
 
 	if (server_make_name(ldd->ldd_flags, ldd->ldd_svindex,
-			     ldd->ldd_fsname, ldd->ldd_svname)) {
+			     ldd->ldd_fsname, ldd->ldd_svname,
+			     sizeof(ldd->ldd_svname))) {
 		printf("unknown server type %#x\n", ldd->ldd_flags);
 		goto out;
 	}

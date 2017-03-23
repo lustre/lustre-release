@@ -33,7 +33,7 @@
 #include <stdio.h>
 #include <lustre/lustre_idl.h>
 #include <lustre/lustre_lfsck_user.h>
-#include <lustre_disk.h>
+#include <linux/lustre_disk.h>
 
 #undef LASSERT
 #undef LASSERTF

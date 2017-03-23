@@ -40,7 +40,7 @@
 #include <sys/wait.h>
 #include <lustre/lustre_idl.h>
 #include <lustre/lustre_lfsck_user.h>
-#include <lustre_disk.h>
+#include <linux/lustre_disk.h>
 
 #define BLANK_LINE()						\
 do {								\

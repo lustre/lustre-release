@@ -40,6 +40,8 @@
 
 #include "tgt_internal.h"
 
+/** version recovery epoch */
+#define LR_EPOCH_BITS	32
 
 /* Allocate a bitmap for a chunk of reply data slots */
 static int tgt_bitmap_chunk_alloc(struct lu_target *lut, int chunk)
@@ -447,6 +449,19 @@ void tgt_client_free(struct obd_export *exp)
 }
 EXPORT_SYMBOL(tgt_client_free);
 
+static inline void tgt_check_lcd(const char *obd_name, int index,
+				 struct lsd_client_data *lcd)
+{
+	size_t uuid_size = sizeof(lcd->lcd_uuid);
+
+	if (strnlen((char*)lcd->lcd_uuid, uuid_size) == uuid_size) {
+		lcd->lcd_uuid[uuid_size - 1] = '\0';
+
+		LCONSOLE_ERROR("the client UUID (%s) on %s for exports stored in last_rcvd(index = %d) is bad!\n",
+			       lcd->lcd_uuid, obd_name, index);
+	}
+}
+
 static int tgt_client_data_read(const struct lu_env *env, struct lu_target *tgt,
 				struct lsd_client_data *lcd,
 				loff_t *off, int index)
@@ -457,7 +472,7 @@ static int tgt_client_data_read(const struct lu_env *env, struct lu_target *tgt,
 	tti_buf_lcd(tti);
 	rc = dt_record_read(env, tgt->lut_last_rcvd, &tti->tti_buf, off);
 	if (rc == 0) {
-		check_lcd(tgt->lut_obd->obd_name, index, &tti->tti_lcd);
+		tgt_check_lcd(tgt->lut_obd->obd_name, index, &tti->tti_lcd);
 		lcd_le_to_cpu(&tti->tti_lcd, lcd);
 		lcd->lcd_last_result = ptlrpc_status_ntoh(lcd->lcd_last_result);
 		lcd->lcd_last_close_result =
@@ -785,7 +800,7 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 	}
 
 	spin_lock(&tgt->lut_translock);
-	start_epoch = lr_epoch(tgt->lut_last_transno) + 1;
+	start_epoch = (tgt->lut_last_transno >> LR_EPOCH_BITS) + 1;
 	tgt->lut_last_transno = (__u64)start_epoch << LR_EPOCH_BITS;
 	tgt->lut_lsd.lsd_start_epoch = start_epoch;
 	spin_unlock(&tgt->lut_translock);
