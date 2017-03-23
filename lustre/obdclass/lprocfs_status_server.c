@@ -577,11 +577,12 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 	/* sampled unlocked, but really... */
 	if (obd->obd_recovering == 0) {
 		seq_printf(m, "COMPLETE\n");
-		seq_printf(m, "recovery_start: %lu\n", obd->obd_recovery_start);
-		seq_printf(m, "recovery_duration: %lu\n",
+		seq_printf(m, "recovery_start: %lld\n",
+			   (s64)obd->obd_recovery_start);
+		seq_printf(m, "recovery_duration: %lld\n",
 			   obd->obd_recovery_end ?
 			   obd->obd_recovery_end - obd->obd_recovery_start :
-			   cfs_time_current_sec() - obd->obd_recovery_start);
+			   ktime_get_real_seconds() - obd->obd_recovery_start);
 		/* Number of clients that have completed recovery */
 		seq_printf(m, "completed_clients: %d/%d\n",
 			   obd->obd_max_recoverable_clients -
@@ -611,11 +612,11 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 			seq_printf(m, "WAITING\n");
 			seq_printf(m, "non-ready MDTs: %s\n",
 				   buf ? buf : "unknown (not enough RAM)");
-			seq_printf(m, "recovery_start: %lu\n",
-				   obd->obd_recovery_start);
-			seq_printf(m, "time_waited: %lu\n",
-				   cfs_time_current_sec() -
-				   obd->obd_recovery_start);
+			seq_printf(m, "recovery_start: %lld\n",
+				   (s64)obd->obd_recovery_start);
+			seq_printf(m, "time_waited: %lld\n",
+				   (s64)(ktime_get_real_seconds() -
+					 obd->obd_recovery_start));
 		}
 
 		if (buf != NULL)
@@ -626,14 +627,14 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 	}
 
 	seq_printf(m, "RECOVERING\n");
-	seq_printf(m, "recovery_start: %lu\n", obd->obd_recovery_start);
-	seq_printf(m, "time_remaining: %lu\n",
-		   cfs_time_current_sec() >=
+	seq_printf(m, "recovery_start: %lld\n", (s64)obd->obd_recovery_start);
+	seq_printf(m, "time_remaining: %lld\n",
+		   ktime_get_real_seconds() >=
 		   obd->obd_recovery_start +
 		   obd->obd_recovery_timeout ? 0 :
-		   obd->obd_recovery_start +
-		   obd->obd_recovery_timeout -
-		   cfs_time_current_sec());
+		   (s64)(obd->obd_recovery_start +
+			 obd->obd_recovery_timeout -
+			 ktime_get_real_seconds()));
 	seq_printf(m, "connected_clients: %d/%d\n",
 		   atomic_read(&obd->obd_connected_clients),
 		   obd->obd_max_recoverable_clients);
@@ -693,7 +694,7 @@ int lprocfs_recovery_time_soft_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 
 	LASSERT(obd != NULL);
-	seq_printf(m, "%d\n", obd->obd_recovery_timeout);
+	seq_printf(m, "%llu\n", obd->obd_recovery_timeout);
 	return 0;
 }
 EXPORT_SYMBOL(lprocfs_recovery_time_soft_seq_show);
@@ -725,7 +726,7 @@ int lprocfs_recovery_time_hard_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 
 	LASSERT(obd != NULL);
-	seq_printf(m, "%u\n", obd->obd_recovery_time_hard);
+	seq_printf(m, "%lld\n", obd->obd_recovery_time_hard);
 	return 0;
 }
 EXPORT_SYMBOL(lprocfs_recovery_time_hard_seq_show);

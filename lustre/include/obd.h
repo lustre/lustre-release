@@ -650,11 +650,11 @@ struct obd_device {
 	/* protected by obd_recovery_task_lock */
 	struct timer_list	obd_recovery_timer;
 	/* seconds */
-	time_t			obd_recovery_start;
+	time64_t		obd_recovery_start;
 	/* seconds, for lprocfs_status */
-	time_t			obd_recovery_end;
-	int			obd_recovery_time_hard;
-	int			obd_recovery_timeout;
+	time64_t		obd_recovery_end;
+	time64_t		obd_recovery_time_hard;
+	time64_t		obd_recovery_timeout;
 	int			obd_recovery_ir_factor;
 
 	/* new recovery stuff from CMD2 */

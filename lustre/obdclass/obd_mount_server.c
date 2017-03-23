@@ -1917,7 +1917,8 @@ void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd)
 	}
 
 	/* we're done */
-	obd->obd_recovery_timeout   = max(obd->obd_recovery_timeout, soft);
+	obd->obd_recovery_timeout = max_t(time64_t, obd->obd_recovery_timeout,
+					  soft);
 	obd->obd_recovery_time_hard = hard;
 	obd->obd_recovery_ir_factor = factor;
 }

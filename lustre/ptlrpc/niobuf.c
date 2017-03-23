@@ -511,27 +511,30 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
         }
         /* Report actual service time for client latency calc */
         lustre_msg_set_service_time(req->rq_repmsg, service_time);
-        /* Report service time estimate for future client reqs, but report 0
+	/* Report service time estimate for future client reqs, but report 0
 	 * (to be ignored by client) if it's an error reply during recovery.
-         * (bz15815) */
-        if (req->rq_type == PTL_RPC_MSG_ERR &&
+	 * b=15815
+	 */
+	if (req->rq_type == PTL_RPC_MSG_ERR &&
 	    (req->rq_export == NULL ||
 	     req->rq_export->exp_obd->obd_recovering)) {
-                lustre_msg_set_timeout(req->rq_repmsg, 0);
+		lustre_msg_set_timeout(req->rq_repmsg, 0);
 	} else {
-		__u32 timeout;
+		time64_t timeout;
 
 		if (req->rq_export && req->rq_reqmsg != NULL &&
 		    (flags & PTLRPC_REPLY_EARLY) &&
 		    lustre_msg_get_flags(req->rq_reqmsg) &
-		    (MSG_REPLAY | MSG_REQ_REPLAY_DONE | MSG_LOCK_REPLAY_DONE))
-			timeout = cfs_time_current_sec() -
-				req->rq_arrival_time.tv_sec +
-				min(at_extra,
-				    req->rq_export->exp_obd->
-				    obd_recovery_timeout / 4);
-		else
+		    (MSG_REPLAY | MSG_REQ_REPLAY_DONE | MSG_LOCK_REPLAY_DONE)) {
+			struct obd_device *exp_obd = req->rq_export->exp_obd;
+
+			timeout = ktime_get_real_seconds() -
+				  req->rq_arrival_time.tv_sec +
+				  min_t(time64_t, at_extra,
+					exp_obd->obd_recovery_timeout / 4);
+		} else {
 			timeout = at_get(&svcpt->scp_at_estimate);
+		}
 		lustre_msg_set_timeout(req->rq_repmsg, timeout);
 	}
 
