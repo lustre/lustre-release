@@ -167,6 +167,18 @@ ZFS hooks for mount/mkfs into a dynamic library.
 
 %endif # with lustre_modules
 
+%if %{with servers}
+%package resource-agents
+Summary: HA Resuable Cluster Resource Scripts for Lustre
+Group: System Environment/Base
+Requires: lustre
+Requires: resource-agents
+
+%description resource-agents
+A set of scripts to operate Lustre resources in a High Availablity
+environment for both Pacemaker and rgmanager.
+%endif
+
 %package tests
 Summary: Lustre testing framework
 Group: Development/Kernel
@@ -318,6 +330,11 @@ echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
 echo '%{_sysconfdir}/init.d/lsvcgss' >>lustre.files
 %endif
 
+%if %{with servers}
+mkdir -p $RPM_BUILD_ROOT%{_prefix}/lib/ocf/resource.d/lustre/
+install -m 0755 contrib/scripts/pacemaker/* $RPM_BUILD_ROOT%{_prefix}/lib/ocf/resource.d/lustre/
+%endif
+
 # fc18 needs 'x' permission for library files
 find $RPM_BUILD_ROOT -name \*.so -type f -exec chmod +x {} \;
 
@@ -415,6 +432,12 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %endif
 
 %endif # with lustre_modules
+
+%if %{with servers}
+%files resource-agents
+%defattr(0755,root,root)
+%{_prefix}/lib/ocf/resource.d/lustre/
+%endif
 
 %if %{with lustre_tests}
 %files tests -f lustre-tests.files
