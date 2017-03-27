@@ -1756,6 +1756,9 @@ migrate_free:
 
 		RETURN(rc);
 	}
+	case LL_IOC_FSGETXATTR:
+	case LL_IOC_FSSETXATTR:
+		RETURN(ll_ioctl_projid(inode, cmd, arg));
 	default:
 		RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp, 0, NULL,
 				     (void __user *)arg));

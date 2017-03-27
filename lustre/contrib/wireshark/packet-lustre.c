@@ -549,7 +549,7 @@ static int hf_lustre_mdt_rec_setattr_sa_ctime = -1;
 static int hf_lustre_mdt_rec_setattr_sa_attr_flags = -1;
 static int hf_lustre_mdt_rec_setattr_sa_mode = -1;
 static int hf_lustre_mdt_rec_setattr_sa_padding_2 = -1;
-static int hf_lustre_mdt_rec_setattr_sa_padding_3 = -1;
+static int hf_lustre_mdt_rec_setattr_sa_projid = -1;
 static int hf_lustre_mdt_rec_setattr_sa_padding_4 = -1;
 static int hf_lustre_mdt_rec_setattr_sa_padding_5 = -1;
 
@@ -3198,7 +3198,7 @@ lustre_dissect_struct_mdt_body(tvbuff_t *tvb _U_, int offset _U_,
 /* IDL: 	uint32 sa_attr_flags; */
 /* IDL: 	uint32 sa_mode; */
 /* IDL: 	uint32 sa_padding_2; */
-/* IDL: 	uint32 sa_padding_3; */
+/* IDL: 	uint32 sa_projid; */
 /* IDL: 	uint32 sa_padding_4; */
 /* IDL: 	uint32 sa_padding_5; */
 /* IDL: } */
@@ -3393,9 +3393,9 @@ lustre_dissect_element_mdt_rec_setattr_sa_padding_2(tvbuff_t *tvb _U_, int offse
 }
 
 static int
-lustre_dissect_element_mdt_rec_setattr_sa_padding_3(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
+lustre_dissect_element_mdt_rec_setattr_sa_projid(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
 {
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_mdt_rec_setattr_sa_padding_3);
+  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_mdt_rec_setattr_sa_projid);
 
   return offset;
 }
@@ -3479,7 +3479,7 @@ lustre_dissect_struct_mdt_rec_setattr(tvbuff_t *tvb _U_, int offset _U_, packet_
 
   offset=lustre_dissect_element_mdt_rec_setattr_sa_padding_2(tvb, offset, pinfo, tree);
 
-  offset=lustre_dissect_element_mdt_rec_setattr_sa_padding_3(tvb, offset, pinfo, tree);
+  offset=lustre_dissect_element_mdt_rec_setattr_sa_projid(tvb, offset, pinfo, tree);
 
   offset=lustre_dissect_element_mdt_rec_setattr_sa_padding_4(tvb, offset, pinfo, tree);
 
@@ -9909,8 +9909,8 @@ void proto_register_dcerpc_lustre(void)
       { "Sa Mode", "lustre.mdt_rec_setattr.sa_mode", FT_UINT32, BASE_OCT, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setattr_sa_padding_2,
       { "Sa Padding 2", "lustre.mdt_rec_setattr.sa_padding_2", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_mdt_rec_setattr_sa_padding_3,
-      { "Sa Padding 3", "lustre.mdt_rec_setattr.sa_padding_3", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
+    { &hf_lustre_mdt_rec_setattr_sa_projid,
+      { "Sa Padding 3", "lustre.mdt_rec_setattr.sa_projid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setattr_sa_padding_4,
       { "Sa Padding 4", "lustre.mdt_rec_setattr.sa_padding_4", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setattr_sa_padding_5,

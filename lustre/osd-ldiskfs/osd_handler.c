@@ -1955,6 +1955,9 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 
 			qi->lqi_id.qid_uid = gid;
 			qsd_op_adjust(env, qsd, &qi->lqi_id, GRPQUOTA);
+
+			qi->lqi_id.qid_uid = i_projid_read(inode);
+			qsd_op_adjust(env, qsd, &qi->lqi_id, PRJQUOTA);
 		}
         }
 }
@@ -4351,10 +4354,6 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
                         result = -ENOTDIR;
         }
         LINVRNT(osd_invariant(obj));
-
-	if (result == 0 && feat == &dt_quota_glb_features &&
-	    fid_seq(lu_object_fid(&dt->do_lu)) == FID_SEQ_QUOTA_GLB)
-		result = osd_quota_migration(env, dt);
 
         return result;
 }

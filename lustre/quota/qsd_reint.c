@@ -638,7 +638,7 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 	if (!qsd_type_enabled(qsd, qqi->qqi_qtype))
 		RETURN(0);
 
-	if (qsd->qsd_acct_failed)
+	if (qqi->qqi_acct_failed)
 		/* no space accounting support, can't enable enforcement */
 		RETURN(0);
 

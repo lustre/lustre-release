@@ -318,6 +318,8 @@ static inline __u64 attr_pack(unsigned int ia_valid) {
         if (ia_valid & MDS_OPEN_OWNEROVERRIDE)
                 /* NFSD hack (see bug 5781) */
                 sa_valid |= MDS_OPEN_OWNEROVERRIDE;
+	if (ia_valid & MDS_ATTR_PROJID)
+		sa_valid |= MDS_ATTR_PROJID;
         return sa_valid;
 }
 
@@ -335,6 +337,7 @@ static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
 	rec->sa_mode   = op_data->op_attr.ia_mode;
 	rec->sa_uid    = from_kuid(&init_user_ns, op_data->op_attr.ia_uid);
 	rec->sa_gid    = from_kgid(&init_user_ns, op_data->op_attr.ia_gid);
+	rec->sa_projid = op_data->op_projid;
 	rec->sa_size   = op_data->op_attr.ia_size;
 	rec->sa_blocks = op_data->op_attr_blocks;
 	rec->sa_atime  = LTIME_S(op_data->op_attr.ia_atime);

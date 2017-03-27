@@ -928,6 +928,7 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 				      NODEMAP_CLIENT_TO_FS, rec->sa_uid);
 	la->la_gid   = nodemap_map_id(nodemap, NODEMAP_GID,
 				      NODEMAP_CLIENT_TO_FS, rec->sa_gid);
+	la->la_projid = rec->sa_projid;
 	nodemap_putref(nodemap);
 
 	la->la_size  = rec->sa_size;

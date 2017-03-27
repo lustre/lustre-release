@@ -107,14 +107,13 @@ struct qsd_instance {
 	 * enforced here (via procfs) */
 	int			 qsd_timeout;
 
-	unsigned long		 qsd_is_md:1,    /* managing quota for mdt */
-				 qsd_started:1,  /* instance is now started */
-				 qsd_prepared:1, /* qsd_prepare() successfully
+	unsigned long		qsd_is_md:1,    /* managing quota for mdt */
+				qsd_started:1,  /* instance is now started */
+				qsd_prepared:1, /* qsd_prepare() successfully
 						  * called */
-				 qsd_exp_valid:1,/* qsd_exp is now valid */
-				 qsd_stopping:1, /* qsd_instance is stopping */
-				 qsd_acct_failed:1; /* failed to set up acct
-						     * for one quota type */
+				qsd_exp_valid:1,/* qsd_exp is now valid */
+				qsd_stopping:1; /* qsd_instance is stopping */
+
 };
 
 /*
@@ -169,11 +168,12 @@ struct qsd_qtype_info {
 
 	/* Various flags representing the current state of the slave for this
 	 * quota type. */
-	unsigned long		 qqi_glb_uptodate:1, /* global index uptodate
+	unsigned long		qqi_glb_uptodate:1, /* global index uptodate
 							with master */
-				 qqi_slv_uptodate:1, /* slave index uptodate
+				qqi_slv_uptodate:1, /* slave index uptodate
 							with master */
-				 qqi_reint:1;    /* in reintegration or not */
+				qqi_reint:1,    /* in reintegration or not */
+				qqi_acct_failed:1; /* failed to setup acct */
 
 	/* A list of references to this instance, for debugging */
 	struct lu_ref		 qqi_reference;

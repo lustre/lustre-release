@@ -100,6 +100,7 @@ static int vvp_attr_get(const struct lu_env *env, struct cl_object *obj,
 	attr->cat_blocks = inode->i_blocks;
 	attr->cat_uid = from_kuid(&init_user_ns, inode->i_uid);
 	attr->cat_gid = from_kgid(&init_user_ns, inode->i_gid);
+	attr->cat_projid = ll_i2info(inode)->lli_projid;
 	/* KMS is not known by this layer */
 	return 0; /* layers below have to fill in the rest */
 }
@@ -121,8 +122,10 @@ static int vvp_attr_update(const struct lu_env *env, struct cl_object *obj,
 		inode->i_ctime.tv_sec = attr->cat_ctime;
 	if (0 && valid & CAT_SIZE)
 		i_size_write(inode, attr->cat_size);
+	if (valid & CAT_PROJID)
+		ll_i2info(inode)->lli_projid = attr->cat_projid;
 	/* not currently necessary */
-	if (0 && valid & (CAT_UID|CAT_GID|CAT_SIZE))
+	if (0 && valid & (CAT_UID|CAT_GID|CAT_SIZE|CAT_PROJID))
 		mark_inode_dirty(inode);
 	return 0;
 }

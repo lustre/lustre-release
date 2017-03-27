@@ -2338,6 +2338,73 @@ static int ll_ladvise(struct inode *inode, struct file *file, __u64 flags,
 	RETURN(rc);
 }
 
+int ll_ioctl_projid(struct inode *inode, unsigned int cmd,
+		    unsigned long arg)
+{
+	int rc = 0;
+	struct fsxattr *fsxattr;
+	int alloc_size = sizeof(*fsxattr);
+
+	switch (cmd) {
+	case LL_IOC_FSGETXATTR: {
+		OBD_ALLOC_PTR(fsxattr);
+		if (fsxattr == NULL)
+			RETURN(-ENOMEM);
+
+		if (copy_from_user(fsxattr,
+				   (const struct fsxattr __user *)arg,
+				   alloc_size))
+			GOTO(out_fsxattr, rc = -EFAULT);
+
+		fsxattr->fsx_projid = ll_i2info(inode)->lli_projid;
+		if (copy_to_user((struct fsxattr __user *)arg,
+				 fsxattr, alloc_size))
+			GOTO(out_fsxattr, rc = -EFAULT);
+out_fsxattr:
+		OBD_FREE(fsxattr, alloc_size);
+		RETURN(rc);
+	}
+
+	case LL_IOC_FSSETXATTR: {
+		struct md_op_data *op_data;
+		struct ptlrpc_request *req = NULL;
+
+		/* only root could change project ID */
+		if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+			RETURN(-EPERM);
+
+		op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+					     LUSTRE_OPC_ANY, NULL);
+		if (IS_ERR(op_data))
+			RETURN(PTR_ERR(op_data));
+
+		OBD_ALLOC_PTR(fsxattr);
+		if (fsxattr == NULL)
+			GOTO(out_fsxattr1, rc = -ENOMEM);
+
+		if (copy_from_user(fsxattr,
+				   (const struct fsxattr __user *)arg,
+				   alloc_size))
+			GOTO(out_fsxattr1, rc = -EFAULT);
+
+		op_data->op_projid = fsxattr->fsx_projid;
+		op_data->op_attr.ia_valid |= MDS_ATTR_PROJID;
+		rc = md_setattr(ll_i2sbi(inode)->ll_md_exp, op_data, NULL,
+				0, &req);
+		ptlrpc_req_finished(req);
+
+out_fsxattr1:
+		ll_finish_md_op_data(op_data);
+		OBD_FREE(fsxattr, alloc_size);
+		RETURN(rc);
+	}
+	default:
+		LASSERT(0);
+	}
+
+	RETURN(rc);
+}
+
 static long
 ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
@@ -2733,6 +2800,9 @@ out_ladvise:
 		OBD_FREE(ladvise_hdr, alloc_size);
 		RETURN(rc);
 	}
+	case LL_IOC_FSGETXATTR:
+	case LL_IOC_FSSETXATTR:
+		RETURN(ll_ioctl_projid(inode, cmd, arg));
 	default: {
 		int err;
 

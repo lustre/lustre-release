@@ -661,8 +661,8 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 
 	/* and now project quota */
 	qi->lqi_id.qid_gid = projid;
-	qi->lqi_type       = PRJQUOTA; /* false now */
-	rcp = osd_declare_qid(env, oh, qi, obj, false, flags);
+	qi->lqi_type       = PRJQUOTA;
+	rcp = osd_declare_qid(env, oh, qi, obj, true, flags);
 
 	if (force && (rcp == -EDQUOT || rcp == -EINPROGRESS))
 		/* as before, ignore EDQUOT & EINPROGRESS for root */
@@ -676,95 +676,4 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 		RETURN(rcp);
 
 	RETURN(0);
-}
-
-int osd_quota_migration(const struct lu_env *env, struct dt_object *dt)
-{
-	struct osd_thread_info	*oti = osd_oti_get(env);
-	struct osd_device	*osd = osd_obj2dev(osd_dt_obj(dt));
-	struct dt_object	*root, *parent = NULL, *admin = NULL;
-	dt_obj_version_t	 version;
-	char			*fname, *fnames[] = {ADMIN_USR, ADMIN_GRP};
-	int			 rc, i;
-	ENTRY;
-
-	/* not newly created global index */
-	version = dt_version_get(env, dt);
-	if (version != 0)
-		RETURN(0);
-
-	/* locate root */
-	rc = dt_root_get(env, &osd->od_dt_dev, &oti->oti_fid);
-	if (rc) {
-		CERROR("%s: Can't get root FID, rc:%d\n", osd->od_svname, rc);
-		RETURN(rc);
-	}
-
-	root = dt_locate(env, &osd->od_dt_dev, &oti->oti_fid);
-	if (IS_ERR(root)) {
-		CERROR("%s: Failed to locate root "DFID", rc:%ld\n",
-		       osd->od_svname, PFID(&oti->oti_fid), PTR_ERR(root));
-		RETURN(PTR_ERR(root));
-	}
-
-	/* locate /OBJECTS */
-	rc = dt_lookup_dir(env, root, OBJECTS, &oti->oti_fid);
-	if (rc == -ENOENT) {
-		GOTO(out, rc = 0);
-	} else if (rc) {
-		CERROR("%s: Failed to lookup %s, rc:%d\n",
-		       osd->od_svname, OBJECTS, rc);
-		GOTO(out, rc);
-	}
-
-	parent = dt_locate(env, &osd->od_dt_dev, &oti->oti_fid);
-	if (IS_ERR(parent)) {
-		CERROR("%s: Failed to locate %s "DFID", rc:%ld\n",
-		       osd->od_svname, OBJECTS, PFID(&oti->oti_fid),
-		       PTR_ERR(parent));
-		GOTO(out, rc = PTR_ERR(parent));
-	}
-
-	/* locate quota admin files */
-	for (i = 0; i < 2; i++) {
-		fname = fnames[i];
-		rc = dt_lookup_dir(env, parent, fname, &oti->oti_fid);
-		if (rc == -ENOENT) {
-			rc = 0;
-			continue;
-		} else if (rc) {
-			CERROR("%s: Failed to lookup %s, rc:%d\n",
-			       osd->od_svname, fname, rc);
-			GOTO(out, rc);
-		}
-
-		admin = dt_locate(env, &osd->od_dt_dev, &oti->oti_fid);
-		if (IS_ERR(admin)) {
-			CERROR("%s: Failed to locate %s "DFID", rc:%d\n",
-			       osd->od_svname, fname, PFID(&oti->oti_fid), rc);
-			GOTO(out, rc = PTR_ERR(admin));
-		}
-
-		if (!dt_object_exists(admin)) {
-			CERROR("%s: Old admin file %s doesn't exist, but is "
-			       "still referenced in parent directory.\n",
-			       osd->od_svname, fname);
-			dt_object_put(env, admin);
-			GOTO(out, rc = -ENOENT);
-		}
-
-		LCONSOLE_WARN("%s: Detected old quota admin file(%s)! If you "
-			      "want to keep the old quota limits settings, "
-			      "please upgrade to lower version(2.5) first to "
-			      "convert them into new format.\n",
-			      osd->od_svname, fname);
-
-		dt_object_put(env, admin);
-		GOTO(out, rc = -EINVAL);
-	}
-out:
-	if (parent && !IS_ERR(parent))
-		dt_object_put(env, parent);
-	dt_object_put(env, root);
-	RETURN(rc);
 }

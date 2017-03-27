@@ -681,7 +681,7 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 			la->la_valid |= LA_GID;
 		}
 		if (attr->la_valid & LA_PROJID) {
-			la->la_gid = attr->la_projid;
+			la->la_projid = attr->la_projid;
 			la->la_valid |= LA_PROJID;
 		}
 		spin_unlock(&o->opo_lock);

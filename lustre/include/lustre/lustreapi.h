@@ -43,7 +43,7 @@
 #include <lustre/lustre_user.h>
 
 #ifndef LL_MAXQUOTAS
-#define LL_MAXQUOTAS 2
+#define LL_MAXQUOTAS 3
 #endif
 
 extern bool liblustreapi_initialized;

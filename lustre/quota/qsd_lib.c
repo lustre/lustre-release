@@ -426,7 +426,7 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 		       qsd->qsd_svname, qtype_name(qtype),
 		       PTR_ERR(qqi->qqi_acct_obj));
 		qqi->qqi_acct_obj = NULL;
-		qsd->qsd_acct_failed = true;
+		qqi->qqi_acct_failed = true;
 	}
 
 	/* open global index copy */
@@ -740,7 +740,8 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++) {
 		struct qsd_qtype_info	*qqi = qsd->qsd_type_array[qtype];
 
-		if (qsd_type_enabled(qsd, qtype) && qsd->qsd_acct_failed) {
+		if (qsd_type_enabled(qsd, qtype) &&
+		    qqi->qqi_acct_failed) {
 			LCONSOLE_ERROR("%s: can't enable quota enforcement "
 				       "since space accounting isn't functional"
 				       ". Please run tunefs.lustre --quota on "

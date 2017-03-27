@@ -65,7 +65,7 @@
  * Should be removed as soon as system header is updated.
  */
 #undef LL_MAXQUOTAS
-#define LL_MAXQUOTAS 2
+#define LL_MAXQUOTAS 3
 #undef INITQFNAMES
 #define INITQFNAMES { \
     "user",	/* USRQUOTA */ \
@@ -361,6 +361,25 @@ struct ll_futimes_3 {
 #define LL_IOC_FID2MDTIDX		_IOWR('f', 248, struct lu_fid)
 #define LL_IOC_GETPARENT		_IOWR('f', 249, struct getparent)
 #define LL_IOC_LADVISE			_IOR('f', 250, struct llapi_lu_ladvise)
+
+#ifdef	FS_IOC_FSGETXATTR
+#define LL_IOC_FSGETXATTR		FS_IOC_FSGETXATTR
+#define LL_IOC_FSSETXATTR		FS_IOC_FSSETXATTR
+#else
+/*
+ * Structure for FS_IOC_FSGETXATTR and FS_IOC_FSSETXATTR.
+*/
+struct fsxattr {
+	__u32           fsx_xflags;     /* xflags field value (get/set) */
+	__u32           fsx_extsize;    /* extsize field value (get/set)*/
+	__u32           fsx_nextents;   /* nextents field value (get)   */
+	__u32           fsx_projid;     /* project identifier (get/set) */
+	unsigned char   fsx_pad[12];
+};
+#define LL_IOC_FSGETXATTR		_IOR('X', 31, struct fsxattr)
+#define LL_IOC_FSSETXATTR		_IOW('X', 32, struct fsxattr)
+#endif
+
 
 /* Lease types for use as arg and return of LL_IOC_{GET,SET}_LEASE ioctl. */
 enum ll_lease_type {

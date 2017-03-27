@@ -856,7 +856,7 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 	 * or - the user/group is root
 	 * or - quota accounting isn't enabled */
 	if (!qsd_type_enabled(qsd, qi->lqi_type) || qi->lqi_id.qid_uid == 0 ||
-	    qsd->qsd_acct_failed)
+	    (qsd->qsd_type_array[qi->lqi_type])->qqi_acct_failed)
 		RETURN(0);
 
 	LASSERTF(trans->lqt_id_cnt <= QUOTA_MAX_TRANSIDS, "id_cnt=%d\n",

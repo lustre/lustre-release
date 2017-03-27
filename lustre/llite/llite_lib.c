@@ -1675,6 +1675,11 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 	    !(attr->ia_valid & ATTR_KILL_SGID))
 		attr->ia_valid |= ATTR_KILL_SGID;
 
+	/* avoid polluted from ATTR_TIMES_SET, projid is not
+	 * expected to be setted here */
+	if (attr->ia_valid & MDS_ATTR_PROJID)
+		attr->ia_valid &= ~MDS_ATTR_PROJID;
+
 	return ll_setattr_raw(de, attr, false);
 }
 

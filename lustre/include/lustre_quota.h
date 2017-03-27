@@ -48,7 +48,7 @@
 #endif
 
 #ifndef LL_MAXQUOTAS
-#define LL_MAXQUOTAS 2
+#define LL_MAXQUOTAS 3
 #endif
 
 struct lquota_id_info;

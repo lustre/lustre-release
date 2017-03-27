@@ -388,15 +388,13 @@ static bool qsd_job_pending(struct qsd_instance *qsd, struct list_head *upd,
 		job_pending = true;
 	}
 
-	if (qsd->qsd_acct_failed) {
-		/* don't bother kicking off reintegration if space accounting
-		 * failed to be enabled */
-		write_unlock(&qsd->qsd_lock);
-		return job_pending;
-	}
-
 	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++) {
 		struct qsd_qtype_info *qqi = qsd->qsd_type_array[qtype];
+
+		/* don't bother kicking off reintegration if space accounting
+		 * failed to be enabled */
+		if (qqi->qqi_acct_failed)
+			continue;
 
 		if (!qsd_type_enabled(qsd, qtype))
 			continue;

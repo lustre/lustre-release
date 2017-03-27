@@ -836,6 +836,7 @@ struct md_op_data {
 
 	/* default stripe offset */
 	__u32			op_default_stripe_offset;
+	__u32			op_projid;
 };
 
 struct md_callback {

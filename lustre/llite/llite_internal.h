@@ -816,6 +816,8 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd);
 int ll_inode_permission(struct inode *inode, int mask);
 # endif
 #endif
+int ll_ioctl_projid(struct inode *inode, unsigned int cmd,
+		    unsigned long arg);
 
 int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
 			     __u64  flags, struct lov_user_md *lum,

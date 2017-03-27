@@ -285,6 +285,40 @@ wait_ost_reint() {
 	return 0
 }
 
+enable_project_quota() {
+	stopall || error "failed to stopall (1)"
+
+	for num in $(seq $MDSCOUNT); do
+		do_facet mds$num $TUNE2FS -O project $(mdsdevname $num) ||
+			error "tune2fs $(mdsdevname $num) failed"
+	done
+
+	for i in $(seq $OSTCOUNT); do
+		do_facet ost$num $TUNE2FS -O project $(ostdevname $num) ||
+			error "tune2fs $(ostdevname $num) failed"
+	done
+
+	mount
+	setupall
+}
+
+disable_project_quota() {
+	stopall || error "failed to stopall (1)"
+
+	for num in $(seq $MDSCOUNT); do
+		do_facet mds$num $TUNE2FS -Q ^prj $(mdsdevname $num) ||
+			error "tune2fs $(mdsdevname $num) failed"
+	done
+
+	for i in $(seq $OSTCOUNT); do
+		do_facet ost$num $TUNE2FS -Q ^prj $(ostdevname $num) ||
+			error "tune2fs $(ostdevname $num) failed"
+	done
+
+	mount
+	setupall
+}
+
 setup_quota_test() {
 	wait_delete_completed
 	echo "Creating test directory"
@@ -2383,6 +2417,41 @@ test_38() {
 	cleanup_quota_test
 }
 run_test 38 "Quota accounting iterator doesn't skip id entries"
+
+test_39() {
+	[ "$(facet_fstype $singlemds)" != "ldiskfs" ] &&
+		skip "only for ldiskfs mdt" && return 0
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10) ] &&
+		skip "Old server doesn't support project quota." && return
+
+	man lsattr | grep -i project ||
+		skip "old e2fsprogs dosen't support project quota" &&
+		return 0
+
+	enable_project_quota
+
+	local TESTFILE="$DIR/project"
+	touch $TESTFILE
+	projectid=$(lsattr -p $TESTFILE | awk '{print $1}')
+	[ $projectid -ne 0 ] &&
+		error "Project id should be 0 not $projectid"
+	chattr -p 1024 $TESTFILE
+	projectid=$(lsattr -p $TESTFILE | awk '{print $1}')
+	[ $projectid -ne 1024 ] &&
+		error "Project id should be 1024 not $projectid"
+
+	stopall || error "failed to stopall (1)"
+	mount
+	setupall
+	projectid=$(lsattr -p $TESTFILE | awk '{print $1}')
+	[ $projectid -ne 1024 ] &&
+		error "Project id should be 1024 not $projectid"
+
+	disable_project_quota
+	cleanup_quota_test
+}
+run_test 39 "Project ID interface works correctly"
 
 quota_fini()
 {

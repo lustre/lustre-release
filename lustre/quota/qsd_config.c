@@ -187,19 +187,19 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 			read_unlock(&qsd->qsd_lock);
 			if (skip)
 				continue;
-			if (qsd->qsd_acct_failed) {
-				LCONSOLE_ERROR("%s: can't enable quota "
-					       "enforcement since space "
-					       "accounting isn't functional. "
-					       "Please run tunefs.lustre "
-					       "--quota on an unmounted "
-					       "filesystem if not done already"
-					       "\n", qsd->qsd_svname);
-				continue;
-			}
 
 			for (type = USRQUOTA; type < LL_MAXQUOTAS; type++) {
 				qqi = qsd->qsd_type_array[type];
+				if (qqi->qqi_acct_failed) {
+					LCONSOLE_ERROR("%s: can't enable quota "
+						       "enforcement since space "
+						       "accounting isn't functional. "
+						       "Please run tunefs.lustre "
+						       "--quota on an unmounted "
+						       "filesystem if not done already"
+						       "\n", qsd->qsd_svname);
+					continue;
+				}
 				qsd_start_reint_thread(qqi);
 			}
 		}

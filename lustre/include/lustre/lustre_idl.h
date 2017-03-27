@@ -1744,7 +1744,7 @@ struct mdt_rec_setattr {
         __u32           sa_attr_flags;
         __u32           sa_mode;
 	__u32           sa_bias;      /* some operation flags */
-        __u32           sa_padding_3;
+	__u32		sa_projid;
         __u32           sa_padding_4;
         __u32           sa_padding_5;
 };

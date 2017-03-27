@@ -1125,7 +1125,7 @@ check_mdt_rec_setattr(void)
 	CHECK_MEMBER(mdt_rec_setattr, sa_attr_flags);
 	CHECK_MEMBER(mdt_rec_setattr, sa_mode);
 	CHECK_MEMBER(mdt_rec_setattr, sa_bias);
-	CHECK_MEMBER(mdt_rec_setattr, sa_padding_3);
+	CHECK_MEMBER(mdt_rec_setattr, sa_projid);
 	CHECK_MEMBER(mdt_rec_setattr, sa_padding_4);
 	CHECK_MEMBER(mdt_rec_setattr, sa_padding_5);
 }
