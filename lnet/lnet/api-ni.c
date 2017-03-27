@@ -356,6 +356,43 @@ static void lnet_assert_wire_constants(void)
 	CLASSERT((int)sizeof(((struct lnet_hdr *)0)->msg.hello.incarnation) == 8);
 	CLASSERT((int)offsetof(struct lnet_hdr, msg.hello.type) == 40);
 	CLASSERT((int)sizeof(((struct lnet_hdr *)0)->msg.hello.type) == 4);
+
+	/* Checks for struct lnet_ni_status and related constants */
+	CLASSERT(LNET_NI_STATUS_INVALID == 0x00000000);
+	CLASSERT(LNET_NI_STATUS_UP == 0x15aac0de);
+	CLASSERT(LNET_NI_STATUS_DOWN == 0xdeadface);
+
+	/* Checks for struct lnet_ni_status */
+	CLASSERT((int)sizeof(struct lnet_ni_status) == 16);
+	CLASSERT((int)offsetof(struct lnet_ni_status, ns_nid) == 0);
+	CLASSERT((int)sizeof(((struct lnet_ni_status *)0)->ns_nid) == 8);
+	CLASSERT((int)offsetof(struct lnet_ni_status, ns_status) == 8);
+	CLASSERT((int)sizeof(((struct lnet_ni_status *)0)->ns_status) == 4);
+	CLASSERT((int)offsetof(struct lnet_ni_status, ns_unused) == 12);
+	CLASSERT((int)sizeof(((struct lnet_ni_status *)0)->ns_unused) == 4);
+
+	/* Checks for struct lnet_ping_info and related constants */
+	CLASSERT(LNET_PROTO_PING_MAGIC == 0x70696E67);
+	CLASSERT(LNET_PING_FEAT_INVAL == 0);
+	CLASSERT(LNET_PING_FEAT_BASE == 1);
+	CLASSERT(LNET_PING_FEAT_NI_STATUS == 2);
+	CLASSERT(LNET_PING_FEAT_RTE_DISABLED == 4);
+	CLASSERT(LNET_PING_FEAT_MULTI_RAIL == 8);
+	CLASSERT(LNET_PING_FEAT_DISCOVERY == 16);
+	CLASSERT(LNET_PING_FEAT_BITS == 31);
+
+	/* Checks for struct lnet_ping_info */
+	CLASSERT((int)sizeof(struct lnet_ping_info) == 16);
+	CLASSERT((int)offsetof(struct lnet_ping_info, pi_magic) == 0);
+	CLASSERT((int)sizeof(((struct lnet_ping_info *)0)->pi_magic) == 4);
+	CLASSERT((int)offsetof(struct lnet_ping_info, pi_features) == 4);
+	CLASSERT((int)sizeof(((struct lnet_ping_info *)0)->pi_features) == 4);
+	CLASSERT((int)offsetof(struct lnet_ping_info, pi_pid) == 8);
+	CLASSERT((int)sizeof(((struct lnet_ping_info *)0)->pi_pid) == 4);
+	CLASSERT((int)offsetof(struct lnet_ping_info, pi_nnis) == 12);
+	CLASSERT((int)sizeof(((struct lnet_ping_info *)0)->pi_nnis) == 4);
+	CLASSERT((int)offsetof(struct lnet_ping_info, pi_ni) == 16);
+	CLASSERT((int)sizeof(((struct lnet_ping_info *)0)->pi_ni) == 0);
 }
 
 static struct lnet_lnd *lnet_find_lnd_by_type(__u32 type)

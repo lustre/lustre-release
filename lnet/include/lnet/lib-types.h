@@ -256,12 +256,6 @@ typedef struct lnet_lnd {
 	int (*lnd_accept)(struct lnet_ni *ni, struct socket *sock);
 } lnd_t;
 
-typedef struct lnet_ni_status {
-	lnet_nid_t ns_nid;
-	__u32	   ns_status;
-	__u32	   ns_unused;
-} WIRE_ATTR lnet_ni_status_t;
-
 struct lnet_tx_queue {
 	int			tq_credits;	/* # tx credits free */
 	int			tq_credits_min;	/* lowest it's been */
@@ -409,42 +403,6 @@ typedef struct lnet_ni {
 } lnet_ni_t;
 
 #define LNET_PROTO_PING_MATCHBITS	0x8000000000000000LL
-
-/* NB: value of these features equal to LNET_PROTO_PING_VERSION_x
- * of old LNet, so there shouldn't be any compatibility issue */
-#define LNET_PING_FEAT_INVAL		(0)		/* no feature */
-#define LNET_PING_FEAT_BASE		(1 << 0)	/* just a ping */
-#define LNET_PING_FEAT_NI_STATUS	(1 << 1)	/* return NI status */
-#define LNET_PING_FEAT_RTE_DISABLED	(1 << 2)	/* Routing enabled */
-#define LNET_PING_FEAT_MULTI_RAIL	(1 << 3)	/* Multi-Rail aware */
-#define LNET_PING_FEAT_DISCOVERY	(1 << 4)	/* Supports Discovery */
-
-/*
- * All ping feature bits fit to hit the wire.
- * In lnet_assert_wire_constants() this is compared against its open-coded
- * value, and in lnet_ping_target_update() it is used to verify that no
- * unknown bits have been set.
- * New feature bits can be added, just be aware that this does change the
- * over-the-wire protocol.
- */
-#define LNET_PING_FEAT_BITS		(LNET_PING_FEAT_BASE | \
-					 LNET_PING_FEAT_NI_STATUS | \
-					 LNET_PING_FEAT_RTE_DISABLED | \
-					 LNET_PING_FEAT_MULTI_RAIL | \
-					 LNET_PING_FEAT_DISCOVERY)
-
-typedef struct lnet_ping_info {
-	__u32			pi_magic;
-	__u32			pi_features;
-	lnet_pid_t		pi_pid;
-	__u32			pi_nnis;
-	struct lnet_ni_status	pi_ni[0];
-} WIRE_ATTR lnet_ping_info_t;
-
-#define LNET_PING_INFO_SIZE(NNIDS) \
-	offsetof(struct lnet_ping_info, pi_ni[NNIDS])
-#define LNET_PING_INFO_LONI(PINFO)	((PINFO)->pi_ni[0].ns_nid)
-#define LNET_PING_INFO_SEQNO(PINFO)	((PINFO)->pi_ni[0].ns_status)
 
 /*
  * Descriptor of a ping info buffer: keep a separate indicator of the
