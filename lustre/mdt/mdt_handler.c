@@ -2153,7 +2153,7 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 				    NODEMAP_CLIENT_TO_FS, id);
 		break;
 	case GRPQUOTA:
-		id = nodemap_map_id(nodemap, NODEMAP_UID,
+		id = nodemap_map_id(nodemap, NODEMAP_GID,
 				    NODEMAP_CLIENT_TO_FS, id);
 		break;
 	case PRJQUOTA:
