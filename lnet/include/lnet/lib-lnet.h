@@ -73,6 +73,9 @@ extern struct lnet the_lnet;			/* THE network */
 /** exclusive lock */
 #define LNET_LOCK_EX		CFS_PERCPT_LOCK_EX
 
+/* Discovery timeout - same as default peer_timeout */
+#define DISCOVERY_TIMEOUT	180
+
 static inline int lnet_is_route_alive(struct lnet_route *route)
 {
 	if (!route->lr_gateway->lpni_alive)
@@ -868,9 +871,10 @@ struct lnet_peer_ni *lnet_nid2peerni_ex(lnet_nid_t nid, int cpt);
 struct lnet_peer_ni *lnet_find_peer_ni_locked(lnet_nid_t nid);
 void lnet_peer_net_added(struct lnet_net *net);
 lnet_nid_t lnet_peer_primary_nid_locked(lnet_nid_t nid);
-int lnet_discover_peer_locked(struct lnet_peer_ni *lpni, int cpt);
+int lnet_discover_peer_locked(struct lnet_peer_ni *lpni, int cpt, bool block);
 int lnet_peer_discovery_start(void);
 void lnet_peer_discovery_stop(void);
+void lnet_push_update_to_peers(int force);
 void lnet_peer_tables_cleanup(struct lnet_net *net);
 void lnet_peer_uninit(void);
 int lnet_peer_tables_create(void);
@@ -963,5 +967,19 @@ lnet_peer_ni_is_primary(struct lnet_peer_ni *lpni)
 }
 
 bool lnet_peer_is_uptodate(struct lnet_peer *lp);
+
+static inline bool
+lnet_peer_needs_push(struct lnet_peer *lp)
+{
+	if (!(lp->lp_state & LNET_PEER_MULTI_RAIL))
+		return false;
+	if (lp->lp_state & LNET_PEER_FORCE_PUSH)
+		return true;
+	if (lp->lp_state & LNET_PEER_NO_DISCOVERY)
+		return false;
+	if (lp->lp_node_seqno < atomic_read(&the_lnet.ln_ping_target_seqno))
+		return true;
+	return false;
+}
 
 #endif

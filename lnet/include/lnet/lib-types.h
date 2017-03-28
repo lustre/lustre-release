@@ -75,6 +75,13 @@ typedef struct lnet_msg {
 	lnet_nid_t		msg_from;
 	__u32			msg_type;
 
+	/*
+	 * hold parameters in case message is with held due
+	 * to discovery
+	 */
+	lnet_nid_t		msg_src_nid_param;
+	lnet_nid_t		msg_rtr_nid_param;
+
 	/* committed for sending */
 	unsigned int		msg_tx_committed:1;
 	/* CPT # this message committed for sending */
@@ -421,6 +428,8 @@ struct lnet_ping_buffer {
 #define LNET_PING_BUFFER_LONI(PBUF)	((PBUF)->pb_info.pi_ni[0].ns_nid)
 #define LNET_PING_BUFFER_SEQNO(PBUF)	((PBUF)->pb_info.pi_ni[0].ns_status)
 
+#define LNET_PING_INFO_TO_BUFFER(PINFO)	\
+	container_of((PINFO), struct lnet_ping_buffer, pb_info)
 
 /* router checker data, per router */
 typedef struct lnet_rc_data {
@@ -526,6 +535,9 @@ struct lnet_peer {
 	/* list of peer nets */
 	struct list_head	lp_peer_nets;
 
+	/* list of messages pending discovery*/
+	struct list_head	lp_dc_pendq;
+
 	/* primary NID of the peer */
 	lnet_nid_t		lp_primary_nid;
 
@@ -547,14 +559,35 @@ struct lnet_peer {
 	/* buffer for data pushed by peer */
 	struct lnet_ping_buffer	*lp_data;
 
+	/* MD handle for ping in progress */
+	lnet_handle_md_t	lp_ping_mdh;
+
+	/* MD handle for push in progress */
+	lnet_handle_md_t	lp_push_mdh;
+
 	/* number of NIDs for sizing push data */
 	int			lp_data_nnis;
 
 	/* NI config sequence number of peer */
 	__u32			lp_peer_seqno;
 
-	/* Local NI config sequence number peer knows */
+	/* Local NI config sequence number acked by peer */
 	__u32			lp_node_seqno;
+
+	/* Local NI config sequence number sent to peer */
+	__u32			lp_node_seqno_sent;
+
+	/* Ping error encountered during discovery. */
+	int			lp_ping_error;
+
+	/* Push error encountered during discovery. */
+	int			lp_push_error;
+
+	/* Error encountered during discovery. */
+	int			lp_dc_error;
+
+	/* time it was put on the ln_dc_working queue */
+	time64_t		lp_last_queued;
 
 	/* link on discovery-related lists */
 	struct list_head	lp_dc_list;
@@ -695,6 +728,8 @@ typedef struct lnet_remotenet {
 #define LNET_CREDIT_OK		0
 /** lnet message is waiting for credit */
 #define LNET_CREDIT_WAIT	1
+/** lnet message is waiting for discovery */
+#define LNET_DC_WAIT		2
 
 typedef struct lnet_rtrbufpool {
 	/* my free buffer pool */
@@ -931,6 +966,8 @@ typedef struct lnet {
 	struct list_head		ln_dc_request;
 	/* discovery working list */
 	struct list_head		ln_dc_working;
+	/* discovery expired list */
+	struct list_head		ln_dc_expired;
 	/* discovery thread wait queue */
 	wait_queue_head_t		ln_dc_waitq;
 	/* discovery startup/shutdown state */
