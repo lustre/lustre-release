@@ -343,8 +343,7 @@ int lfsck_set_param(const struct lu_env *env, struct lfsck_instance *lfsck,
 		}
 
 		if (start->ls_valid & LSV_ASYNC_WINDOWS) {
-			if (start->ls_async_windows < 1 ||
-			    start->ls_async_windows > LFSCK_ASYNC_WIN_MAX)
+			if (start->ls_async_windows < 1)
 				return -EINVAL;
 
 			if (bk->lb_async_windows != start->ls_async_windows) {

@@ -1582,7 +1582,6 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	rep_oa = &repbody->oa;
 	rep_oa->o_oi = oa->o_oi;
 
-	LASSERT(seq >= FID_SEQ_OST_MDT0);
 	LASSERT(oa->o_valid & OBD_MD_FLGROUP);
 
 	CDEBUG(D_INFO, "ofd_create("DOSTID")\n", POSTID(&oa->o_oi));
