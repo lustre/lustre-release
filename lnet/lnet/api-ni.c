@@ -1334,6 +1334,148 @@ lnet_ping_target_fini(void)
 	lnet_ping_target_destroy();
 }
 
+/* Resize the push target. */
+int lnet_push_target_resize(void)
+{
+	lnet_process_id_t id = { LNET_NID_ANY, LNET_PID_ANY };
+	lnet_md_t md = { NULL };
+	lnet_handle_me_t meh;
+	lnet_handle_md_t mdh;
+	lnet_handle_md_t old_mdh;
+	struct lnet_ping_buffer *pbuf;
+	struct lnet_ping_buffer *old_pbuf;
+	int nnis = the_lnet.ln_push_target_nnis;
+	int rc;
+
+	if (nnis <= 0) {
+		rc = -EINVAL;
+		goto fail_return;
+	}
+again:
+	pbuf = lnet_ping_buffer_alloc(nnis, GFP_NOFS);
+	if (!pbuf) {
+		rc = -ENOMEM;
+		goto fail_return;
+	}
+
+	rc = LNetMEAttach(LNET_RESERVED_PORTAL, id,
+			  LNET_PROTO_PING_MATCHBITS, 0,
+			  LNET_UNLINK, LNET_INS_AFTER,
+			  &meh);
+	if (rc) {
+		CERROR("Can't create push target ME: %d\n", rc);
+		goto fail_decref_pbuf;
+	}
+
+	/* initialize md content */
+	md.start     = &pbuf->pb_info;
+	md.length    = LNET_PING_INFO_SIZE(nnis);
+	md.threshold = LNET_MD_THRESH_INF;
+	md.max_size  = 0;
+	md.options   = LNET_MD_OP_PUT | LNET_MD_TRUNCATE |
+		       LNET_MD_MANAGE_REMOTE;
+	md.user_ptr  = pbuf;
+	md.eq_handle = the_lnet.ln_push_target_eq;
+
+	rc = LNetMDAttach(meh, md, LNET_RETAIN, &mdh);
+	if (rc) {
+		CERROR("Can't attach push MD: %d\n", rc);
+		goto fail_unlink_meh;
+	}
+	lnet_ping_buffer_addref(pbuf);
+
+	lnet_net_lock(LNET_LOCK_EX);
+	old_pbuf = the_lnet.ln_push_target;
+	old_mdh = the_lnet.ln_push_target_md;
+	the_lnet.ln_push_target = pbuf;
+	the_lnet.ln_push_target_md = mdh;
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	if (old_pbuf) {
+		LNetMDUnlink(old_mdh);
+		lnet_ping_buffer_decref(old_pbuf);
+	}
+
+	if (nnis < the_lnet.ln_push_target_nnis)
+		goto again;
+
+	CDEBUG(D_NET, "nnis %d success\n", nnis);
+
+	return 0;
+
+fail_unlink_meh:
+	LNetMEUnlink(meh);
+fail_decref_pbuf:
+	lnet_ping_buffer_decref(pbuf);
+fail_return:
+	CDEBUG(D_NET, "nnis %d error %d\n", nnis, rc);
+	return rc;
+}
+
+static void lnet_push_target_event_handler(struct lnet_event *ev)
+{
+	struct lnet_ping_buffer *pbuf = ev->md.user_ptr;
+
+	if (pbuf->pb_info.pi_magic == __swab32(LNET_PROTO_PING_MAGIC))
+		lnet_swap_pinginfo(pbuf);
+
+	if (ev->unlinked)
+		lnet_ping_buffer_decref(pbuf);
+}
+
+/* Initialize the push target. */
+static int lnet_push_target_init(void)
+{
+	int rc;
+
+	if (the_lnet.ln_push_target)
+		return -EALREADY;
+
+	rc = LNetEQAlloc(0, lnet_push_target_event_handler,
+			 &the_lnet.ln_push_target_eq);
+	if (rc) {
+		CERROR("Can't allocated push target EQ: %d\n", rc);
+		return rc;
+	}
+
+	/* Start at the required minimum, we'll enlarge if required. */
+	the_lnet.ln_push_target_nnis = LNET_INTERFACES_MIN;
+
+	rc = lnet_push_target_resize();
+
+	if (rc) {
+		LNetEQFree(the_lnet.ln_push_target_eq);
+		LNetInvalidateEQHandle(&the_lnet.ln_push_target_eq);
+	}
+
+	return rc;
+}
+
+/* Clean up the push target. */
+static void lnet_push_target_fini(void)
+{
+	if (!the_lnet.ln_push_target)
+		return;
+
+	/* Unlink and invalidate to prevent new references. */
+	LNetMDUnlink(the_lnet.ln_push_target_md);
+	LNetInvalidateMDHandle(&the_lnet.ln_push_target_md);
+
+	/* Wait for the unlink to complete. */
+	while (lnet_ping_buffer_numref(the_lnet.ln_push_target) > 1) {
+		CDEBUG(D_NET, "Still waiting for ping data MD to unlink\n");
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(1));
+	}
+
+	lnet_ping_buffer_decref(the_lnet.ln_push_target);
+	the_lnet.ln_push_target = NULL;
+	the_lnet.ln_push_target_nnis = 0;
+
+	LNetEQFree(the_lnet.ln_push_target_eq);
+	LNetInvalidateEQHandle(&the_lnet.ln_push_target_eq);
+}
+
 static int
 lnet_ni_tq_credits(struct lnet_ni *ni)
 {
@@ -2011,9 +2153,13 @@ LNetNIInit(lnet_pid_t requested_pid)
 	if (rc != 0)
 		goto err_stop_ping;
 
-	rc = lnet_peer_discovery_start();
+	rc = lnet_push_target_init();
 	if (rc != 0)
 		goto err_stop_router_checker;
+
+	rc = lnet_peer_discovery_start();
+	if (rc != 0)
+		goto err_destroy_push_target;
 
 	lnet_fault_init();
 	lnet_proc_init();
@@ -2022,6 +2168,8 @@ LNetNIInit(lnet_pid_t requested_pid)
 
 	return 0;
 
+err_destroy_push_target:
+	lnet_push_target_fini();
 err_stop_router_checker:
 	lnet_router_checker_stop();
 err_stop_ping:
@@ -2074,6 +2222,7 @@ LNetNIFini()
 
 		lnet_proc_fini();
 		lnet_peer_discovery_stop();
+		lnet_push_target_fini();
 		lnet_router_checker_stop();
 		lnet_ping_target_fini();
 

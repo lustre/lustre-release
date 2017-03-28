@@ -544,6 +544,18 @@ struct lnet_peer {
 	/* peer state flags */
 	unsigned		lp_state;
 
+	/* buffer for data pushed by peer */
+	struct lnet_ping_buffer	*lp_data;
+
+	/* number of NIDs for sizing push data */
+	int			lp_data_nnis;
+
+	/* NI config sequence number of peer */
+	__u32			lp_peer_seqno;
+
+	/* Local NI config sequence number peer knows */
+	__u32			lp_node_seqno;
+
 	/* link on discovery-related lists */
 	struct list_head	lp_dc_list;
 
@@ -899,6 +911,19 @@ typedef struct lnet {
 	struct lnet_handle_eq		ln_ping_target_eq;
 	struct lnet_ping_buffer		*ln_ping_target;
 	atomic_t			ln_ping_target_seqno;
+
+	/*
+	 * Push Target
+	 *
+	 * ln_push_nnis contains the desired size of the push target.
+	 * The lnet_net_lock is used to handle update races. The old
+	 * buffer may linger a while after it has been unlinked, in
+	 * which case the event handler cleans up.
+	 */
+	lnet_handle_eq_t		ln_push_target_eq;
+	lnet_handle_md_t		ln_push_target_md;
+	struct lnet_ping_buffer		*ln_push_target;
+	int				ln_push_target_nnis;
 
 	/* discovery event queue handle */
 	lnet_handle_eq_t		ln_dc_eqh;

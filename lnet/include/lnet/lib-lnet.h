@@ -841,6 +841,14 @@ static inline int lnet_ping_buffer_numref(struct lnet_ping_buffer *pbuf)
 	return atomic_read(&pbuf->pb_refcnt);
 }
 
+static inline int lnet_push_target_resize_needed(void)
+{
+	return the_lnet.ln_push_target->pb_nnis < the_lnet.ln_push_target_nnis;
+}
+
+int lnet_push_target_resize(void);
+void lnet_peer_push_event(struct lnet_event *ev);
+
 int lnet_parse_ip2nets(char **networksp, char *ip2nets);
 int lnet_parse_routes(char *route_str, int *im_a_router);
 int lnet_parse_networks(struct list_head *nilist, char *networks,
