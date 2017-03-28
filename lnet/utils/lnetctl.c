@@ -56,6 +56,7 @@ static int jt_set_numa(int argc, char **argv);
 static int jt_add_peer_nid(int argc, char **argv);
 static int jt_del_peer_nid(int argc, char **argv);
 static int jt_set_max_intf(int argc, char **argv);
+static int jt_set_discovery(int argc, char **argv);
 /*static int jt_show_peer(int argc, char **argv);*/
 static int lnetctl_list_commands(int argc, char **argv);
 
@@ -133,6 +134,9 @@ command_t set_cmds[] = {
 	{"max_interfaces", jt_set_max_intf, 0, "set the default value for "
 		"max interfaces\n"
 	 "\tValue must be greater than 16\n"},
+	{"discovery", jt_set_discovery, 0, "enable/disable peer discovery\n"
+	 "\t0 - disable peer discovery\n"
+	 "\t1 - enable peer discovery (default)\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -260,6 +264,33 @@ static int jt_set_numa(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_config_numa_range(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_set_discovery(int argc, char **argv)
+{
+	long int value;
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	if (handle_help(set_cmds, "set", "discovery", argc, argv) == 0)
+		return 0;
+
+	rc = parse_long(argv[1], &value);
+	if (rc != 0) {
+		cYAML_build_error(-1, -1, "parser", "set",
+				  "cannot parse discovery value", &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		return -1;
+	}
+
+	rc = lustre_lnet_config_discovery(value, -1, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 
@@ -870,6 +901,12 @@ static int jt_show_global(int argc, char **argv)
 		goto out;
 	}
 
+	rc = lustre_lnet_show_discovery(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		goto out;
+	}
+
 	if (show_rc)
 		cYAML_print_tree(show_rc);
 
@@ -1290,7 +1327,8 @@ command_t list[] = {
 	{"net", jt_net, 0, "net {add | del | show | help}"},
 	{"routing", jt_routing, 0, "routing {show | help}"},
 	{"set", jt_set, 0, "set {tiny_buffers | small_buffers | large_buffers"
-			   " | routing | numa_range | max_interfaces}"},
+			   " | routing | numa_range | max_interfaces"
+			   " | discovery}"},
 	{"import", jt_import, 0, "import {--add | --del | --show | "
 				 "--help} FILE.yaml"},
 	{"export", jt_export, 0, "export {--help} FILE.yaml"},

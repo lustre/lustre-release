@@ -1859,6 +1859,29 @@ int lustre_lnet_config_max_intf(int max, int seq_no, struct cYAML **err_rc)
 	return rc;
 }
 
+int lustre_lnet_config_discovery(int enable, int seq_no, struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	char val[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	snprintf(val, sizeof(val), "%u", (enable) ? 0 : 1);
+
+	rc = write_sysfs_file(modparam_path, "lnet_peer_discovery_disabled", val,
+			      1, strlen(val) + 1);
+	if (rc)
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot configure discovery: %s\"",
+			 strerror(errno));
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "discovery", err_str, err_rc);
+
+	return rc;
+
+}
+
 int lustre_lnet_config_numa_range(int range, int seq_no, struct cYAML **err_rc)
 {
 	struct lnet_ioctl_set_value data;
@@ -2352,6 +2375,61 @@ out:
 		add_to_global(*show_rc, global, root);
 	else
 		*show_rc = root;
+
+	cYAML_build_error(rc, seq_no, SHOW_CMD, "global", err_str, err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_show_discovery(int seq_no, struct cYAML **show_rc,
+			       struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	__u32 discovery;
+	char err_str[LNET_MAX_STR_LEN];
+	struct cYAML *root = NULL, *global = NULL;
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "lnet_peer_discovery_disabled", val,
+			     1, sizeof(val));
+	if (rc) {
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get discovery value: %d\"", rc);
+		goto out;
+	}
+
+	/*
+	 * the sysfs parameter read indicates if discovery is disabled,
+	 * but we report if discovery is enabled.
+	 */
+	discovery = !atoi(val);
+
+	root = cYAML_create_object(NULL, NULL);
+	if (root == NULL)
+		goto out;
+
+	global = cYAML_create_object(root, "global");
+	if (global == NULL)
+		goto out;
+
+	if (cYAML_create_number(global, "discovery",
+				discovery) == NULL)
+		goto out;
+
+	if (show_rc == NULL)
+		cYAML_print_tree(root);
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+out:
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_free_tree(root);
+	} else if (show_rc != NULL && *show_rc != NULL) {
+		add_to_global(*show_rc, global, root);
+	} else {
+		*show_rc = root;
+	}
 
 	cYAML_build_error(rc, seq_no, SHOW_CMD, "global", err_str, err_rc);
 
@@ -3178,7 +3256,7 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 					      struct cYAML **show_rc,
 					      struct cYAML **err_rc)
 {
-	struct cYAML *max_intf, *numa, *seq_no;
+	struct cYAML *max_intf, *numa, *discovery, *seq_no;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -3196,6 +3274,13 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 							: -1,
 						   err_rc);
 
+	discovery = cYAML_get_object_item(tree, "discovery");
+	if (discovery)
+		rc = lustre_lnet_config_discovery(discovery->cy_valueint,
+						  seq_no ? seq_no->cy_valueint
+							: -1,
+						  err_rc);
+
 	return rc;
 }
 
@@ -3203,7 +3288,7 @@ static int handle_yaml_del_global_settings(struct cYAML *tree,
 					   struct cYAML **show_rc,
 					   struct cYAML **err_rc)
 {
-	struct cYAML *max_intf, *numa, *seq_no;
+	struct cYAML *max_intf, *numa, *discovery, *seq_no;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -3221,6 +3306,14 @@ static int handle_yaml_del_global_settings(struct cYAML *tree,
 							: -1,
 						   err_rc);
 
+	/* peer discovery is enabled by default */
+	discovery = cYAML_get_object_item(tree, "discovery");
+	if (discovery)
+		rc = lustre_lnet_config_discovery(1,
+						  seq_no ? seq_no->cy_valueint
+							: -1,
+						  err_rc);
+
 	return rc;
 }
 
@@ -3228,7 +3321,7 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 					    struct cYAML **show_rc,
 					    struct cYAML **err_rc)
 {
-	struct cYAML *max_intf, *numa, *seq_no;
+	struct cYAML *max_intf, *numa, *discovery, *seq_no;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -3243,6 +3336,12 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 		rc = lustre_lnet_show_numa_range(seq_no ? seq_no->cy_valueint
 							: -1,
 						 show_rc, err_rc);
+
+	discovery = cYAML_get_object_item(tree, "discovery");
+	if (discovery)
+		rc = lustre_lnet_show_discovery(seq_no ? seq_no->cy_valueint
+							: -1,
+						show_rc, err_rc);
 
 	return rc;
 }
