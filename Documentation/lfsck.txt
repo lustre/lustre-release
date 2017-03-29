@@ -17,8 +17,9 @@ structure and as a result, no 'fsck' is necessary.
 
 OI scrub is of primary use for ldiskfs-based targets. It maintains the ldiskfs
 special OI mapping consistency, reconstructs the OI mapping after the target
-is restored from file-level backup, and upgrades (if necessary) the OI mapping
-when target (MDT/OST) is upgraded from a previous release.
+is restored from file-level backup or is otherwise corrupted, and upgrades
+(if necessary) the OI mapping when target (MDT/OST) is upgraded from a
+previous release.
 
 * Layout LFSCK
 
@@ -34,55 +35,74 @@ Namespace LFSCK works transparently across single and multiple MDTs.
 Quick usage instructions
 ===============================================
 
-* Start LFSCK
+*** Start LFSCK ***
 
-If you only want OI scrub on a given MDT or OST, use this command on the given
-MDT or OST:
-# lctl lfsck_start -t scrub -M ${FSNAME}-${TARGETNAME}
+If you want all LFSCK checks to be run on all MDTs and OSTs, run on MDT0000:
+# lctl lfsck_start -M $FSNAME-$TARGETNAME -A -t all -r
 
 (FSNAME: the specified file system name created during format, e.g. "testfs".
  TARGETNAME: the target name in the system, e.g. "MDT0000" or "OST0001".)
 
-If you want Layout LFSCK or Namespace LFSCK on a given MDT(s) and OST(s), use
-this command on the specified MDT:
+If you want OI Scrub only on one MDT or OST, use this command on the MDT/OST:
+# lctl lfsck_start -t scrub -M $FSNAME-$TARGETNAME
 
-# lctl lfsck_start -t namespace -M ${FSNAME}-${MDTNAME}
+If you want LFSCK Layout or LFSCK Namespace on the given MDT(s), use:
+# lctl lfsck_start -t namespace -M $FSNAME-$MDTNAME
 or
-# lctl lfsck_start -t layout -M ${FSNAME}-${MDTNAME}
+# lctl lfsck_start -t layout -M $FSNAME-$MDTNAME
 
 (MDTNAME: the MDT name in the system, e.g. "MDT0000", "MDT0001".)
 
 You can trigger multiple LFSCK components via single LFSCK command:
-# lctl lfsck_start -t namespace -t layout -M ${FSNAME}-${MDTNAME}
+# lctl lfsck_start -t namespace -t layout -M $FSNAME-$MDTNAME
 
 For more usage, please run:
 # lctl lfsck_start -h
 
-* review the status of LFSCK
+*** Check the status of LFSCK ***
+
+By default LFSCK logs all operations to the Lustre internal debug
+log, which can be dumped to a file on each server with:
+# lctl debug_kernel /tmp/debug.lfsck
+
+However, since the internal debug log is of limited size, it is
+possible to dump lfsck logs to the console for capture with syslog. 
+# lctl set_param printk=+lfsck
+
+Another option is to dump the LFSCK logs to a file directly from the
+kernel, which is more efficient than logging to the console if there
+are lots of repairs needed (e.g. after a filesystem upgrade or if the
+OI files are lost).  The following command should be run on all MDS
+and OSS nodes to generate a log file (maximum 1024MB in size):
+# lctl debug_daemon start /tmp/debug.lfsck 1024
 
 Each LFSCK component has its own status interface on a given target.
-For example, the Namespace LFSCK status on the MDT:
-# lctl get_param -n mdd.${FSNAME}-${MDTNAME}.lfsck_namespace
+It is possible to monitor the LFSCK status on the local node via:
+# lctl lfsck_query -M $FSNAME-$TARGET
+
+It is also possible to get type-specific status, for example on
+the Namespace LFSCK status on the MDT:
+# lctl get_param -n mdd.$FSNAME-$MDTNAME.lfsck_namespace
 
 Or the Layout LFSCK status on the OST:
-# lctl get_param -n obdfilter.${FSNAME}-${OSTNAME}.lfsck_layout
+# lctl get_param -n obdfilter.$FSNAME-$OSTNAME.lfsck_layout
 NOTE: Layout LFSCK also works on a OST.
 
 (OSTNAME: the OST name in the system, e.g. "OST0000", "OST0001".)
 
-Or the OI Scrub status on the MDT/OST:
-# lctl get_param -n osd-ldiskfs.${FSNAME}-${TARGETNAME}.oi_scrub
+Or the OI Scrub status on the underlying ldiskfs MDT/OST:
+# lctl get_param -n osd-ldiskfs.$FSNAME-$TARGETNAME.oi_scrub
 
-* stop the LFSCK
+*** Stop the currently running LFSCK ***
 
 Run the command on the given MDT/OST:
-# lctl lfsck_stop -M ${FSNAME}-${MDTNAME}
+# lctl lfsck_stop -M $FSNAME-$MDTNAME
 
 To stop all LFSCK across the system:
-# lctl lfsck_stop -M ${FSNAME} -A
+# lctl lfsck_stop -M $FSNAME -A
 
 
-Features
+LFSCK Features Overview
 ===============================================
 
 * online scanning.
@@ -134,19 +154,21 @@ Features
     or it does not recognize the OST-object1 as its child.
 
 
-/proc entries
+Parameter Files
 ===============================================
 
-Information about LFSCK can be found in:
-/proc/fs/lustre/mdd/${FSNAME}-${MDTNAME}/lfsck_{namespace,layout}
-/proc/fs/lustre/obdfilter/${FSNAME}-${OSTNAME}/lfsck_layout
-/proc/fs/lustre/osd-ldiskfs/${FSNAME}-${TARGETNAME}/oi_scrub
+Information about the currently running LFSCK can be found in the following
+parameter files on the MDS and OSS nodes, using "lctl get_param":
+    mdd.$FSNAME-$MDTNAME.lfsck_layout
+    mdd.$FSNAME-$MDTNAME.lfsck_namespace
+    obdfilter.$FSNAME-$OSTNAME.lfsck_layout
+    osd-ldiskfs.$FSNAME-$TARGETNAME.oi_scrub
 
 
 LFSCK master slave design
 ===============================================
 
-* master engine
+*** Master Engine ***
 
 The LFSCK master engine resides on each MDT, and is implemented as a kernel
 thread in the LFSCK layer. The master engine is responsible for scanning on the
@@ -176,7 +198,7 @@ scanning is complete on this MDT. The MDT waits until related targets have
 completed the first-stage scanning. At this point, the first stage scanning is
 complete and the second-stage scanning begins.
 
-* slave engine
+*** Slave Engine ***
 
 The LFSCK slave engine resides on each OST and is implemented as a kernel
 thread in the LFSCK layer. This kernel thread drives the first-stage system
@@ -209,7 +231,7 @@ Object traversal design reference
 Objects are traversed by LFSCK with two methods: object-table based iteration
 and namespace based directory traversal.
 
-* object-table based iteration
+*** Object-table Based Iteration ***
 
 The Object Storage Device (OSD) is the abstract layer above a concrete backend
 file system (i.e. ldiskfs, ZFS, Btrfs, etc.). Each OSD implementation differs
@@ -219,7 +241,7 @@ method, such as linear scanning for ldiskfs backend, to scan the local device.
 Such iteration is presented via the OSD API as a virtual index that contains
 all the objects that reside on this target.
 
-* namespace based directory traversal
+*** Namespace Based Directory Traversal ***
 
 In addition to object-table based iteration, there are directory based items
 that need scanning for namespace consistency. For example, FID-in-dirent and
@@ -234,19 +256,20 @@ employed.
 
 1. LFSCK begins object-table based iteration.
 
-2. If a directory is discovered then namespace traversal begins. LFSCK does not
-descend into sub-directories. LFSCK ignores rename operations during the
-directory traversal because the subsequent object-table based iteration will
-guarantee processing of renamed objects. Reading directory blocks is a small
-fraction of the data needed for the objects they reference. In addition, entries
-in the directory are typically allocated following the directory object on the
-disk so for many directories the children objects will already be available
-because of pre-fetch.
+2. If a directory is discovered then namespace traversal begins. LFSCK reads
+the entries of the directory to verify and repair filename->FID mappings, but
+does not descend into sub-directories.  LFSCK ignores rename operations during
+the directory traversal because the subsequent object-table based iteration
+will guarantee processing of renamed objects. Reading directory blocks is a
+small fraction of the data needed for the objects they reference. In addition,
+entries in the directory are typically allocated following the directory
+object on the disk so for many directories the children objects will already
+be available because of pre-fetch.
 
 3. Process each entry in the directory checking the FID-in-dirent and the FID
-in the object LMA are consistent. Repair if not. Check also that the linkEA
-points back to the parent object. Check also that '.' and '..' entries are
-consistent.
+in the object LMA are consistent. Repair if inconsistent. Check also that the
+linkEA points back to the parent object. Check also that '.' and '..' entries
+of the directory itself are consistent.
 
 4. Once all directory entries are exhausted, return to object-table based
 iteration.
@@ -255,12 +278,12 @@ iteration.
 References
 ===============================================
 
-source code: 	   file:/lustre/lfsck/
+source code: 	   lustre/lfsck/*.[ch], lustre/osd-ldiskfs/scrub.c
 
 operations manual: https://build.hpdd.intel.com/job/lustre-manual/lastSuccessfulBuild/artifact/lustre_manual.xhtml#dbdoclet.lfsckadmin
 
-useful links:      http://insidehpc.com/2013/05/02/video-lfsck-online-lustre-file-system-checker/
-                   http://www.opensfs.org/wp-content/uploads/2013/04/Zhuravlev_LFSCK.pdf
+useful links:      https://www.youtube.com/watch?v=jfLo1eYSh2o
+                   http://wiki.lustre.org/images/c/c6/Zhuravlev_LFSCK_LUG-2013.pdf
 
 
 Glossary of terms
