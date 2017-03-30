@@ -1888,10 +1888,11 @@ check_seq_oid()
 		# update too, until that use mount/ll_decode_filter_fid/mount.
 		# Re-enable when debugfs will understand new filter_fid.
 		#
-		if false && [ $(facet_fstype ost$ost) == ldiskfs ]; then
+		if [ $(facet_fstype ost$ost) == ldiskfs ]; then
 			ff=$(do_facet ost$ost "$DEBUGFS -c -R 'stat $obj_file' \
 				$dev 2>/dev/null" | grep "parent=")
-		else
+		fi
+		if [ -z "$ff" ]; then
 			stop ost$ost
 			mount_fstype ost$ost
 			ff=$(do_facet ost$ost $LL_DECODE_FILTER_FID \
@@ -1907,45 +1908,39 @@ check_seq_oid()
 
 		# /mnt/O/0/d23/23: objid=23 seq=0 parent=[0x200000400:0x1e:0x1]
 		# fid: objid=23 seq=0 parent=[0x200000400:0x1e:0x0] stripe=1
-		local ff_parent=$(echo $ff|sed -e 's/.*parent=.//')
-		local ff_pseq=$(echo $ff_parent | cut -d: -f1)
-		local ff_poid=$(echo $ff_parent | cut -d: -f2)
+		#
+		# fid: parent=[0x200000400:0x1e:0x0] stripe=1 stripe_count=2 \
+		#	stripe_size=1048576 component_id=1 component_start=0 \
+		#	component_end=33554432
+		local ff_parent=$(sed -e 's/.*parent=.//' <<<$ff)
+		local ff_pseq=$(cut -d: -f1 <<<$ff_parent)
+		local ff_poid=$(cut -d: -f2 <<<$ff_parent)
 		local ff_pstripe
-		if echo $ff_parent | grep -q 'stripe='; then
-			ff_pstripe=$(echo $ff_parent | sed -e 's/.*stripe=//')
-			if echo $ff_pstripe | grep -q 'stripe_size='; then
-				ff_pstripe=$(echo $ff_pstripe | cut -d' ' -f1)
-			fi
+		if grep -q 'stripe=' <<<$ff; then
+			ff_pstripe=$(sed -e 's/.*stripe=//' -e 's/ .*//' <<<$ff)
 		else
-			#
 			# $LL_DECODE_FILTER_FID does not print "stripe="; look
-			# into f_ver in this case.  See the comment on
-			# ff_parent.
-			#
-			ff_pstripe=$(echo $ff_parent | cut -d: -f3 |
-				sed -e 's/\]//')
+			# into f_ver in this case.  See comment on ff_parent.
+			ff_pstripe=$(cut -d: -f3 <<<$ff_parent | sed -e 's/]//')
 		fi
 
-		if echo $ff_parent | grep -q 'stripe_count='; then
-			local ff_scnt=$(echo $ff_parent |
-					sed -e 's/.*stripe_count=//' |
-					cut -d' ' -f1)
-
-			[ $lmm_count -eq $ff_scnt ] ||
+		if grep -q 'stripe_count=' <<<$ff; then
+			local ff_scnt=$(sed -e 's/.*stripe_count=//' \
+					    -e 's/ .*//' <<<$ff)
+			[ $lmm_count = $ff_scnt ] ||
 				error "FF stripe count $lmm_count != $ff_scnt"
 		fi
-
-                # compare lmm_seq and filter_fid->ff_parent.f_seq
-                [ $ff_pseq = $lmm_seq ] ||
-                        error "FF parent SEQ $ff_pseq != $lmm_seq"
-                # compare lmm_object_id and filter_fid->ff_parent.f_oid
-                [ $ff_poid = $lmm_oid ] ||
-                        error "FF parent OID $ff_poid != $lmm_oid"
+		# compare lmm_seq and filter_fid->ff_parent.f_seq
+		[ $ff_pseq = $lmm_seq ] ||
+			error "FF parent SEQ $ff_pseq != $lmm_seq"
+		# compare lmm_object_id and filter_fid->ff_parent.f_oid
+		[ $ff_poid = $lmm_oid ] ||
+			error "FF parent OID $ff_poid != $lmm_oid"
 		(($ff_pstripe == $stripe_nr)) ||
-                        error "FF stripe $ff_pstripe != $stripe_nr"
+			error "FF stripe $ff_pstripe != $stripe_nr"
 
-                stripe_nr=$((stripe_nr + 1))
-        done
+		stripe_nr=$((stripe_nr + 1))
+	done
 }
 
 test_27z() {
