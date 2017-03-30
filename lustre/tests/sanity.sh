@@ -6484,6 +6484,17 @@ test_82() { # LU-1031
 }
 run_test 82 "Basic grouplock test ==============================="
 
+test_83() {
+	local sfile="/boot/System.map-$(uname -r)"
+	# define OBD_FAIL_LLITE_PTASK_IO_FAIL 0x140d
+	$LCTL set_param fail_loc=0x140d
+	cp $sfile $DIR/$tfile || error "write failed"
+	diff -c $sfile $DIR/$tfile || error "files are different"
+	$LCTL set_param fail_loc=0
+	rm -f $DIR/$tfile
+}
+run_test 83 "Short write in ptask ==============================="
+
 test_99a() {
 	[ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" &&
 		return

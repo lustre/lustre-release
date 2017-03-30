@@ -926,6 +926,39 @@ ll_fast_read_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(ll_fast_read);
 
+static int ll_pio_seq_show(struct seq_file *m, void *v)
+{
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+	seq_printf(m, "%u\n", !!(sbi->ll_flags & LL_SBI_PIO));
+	return 0;
+}
+
+static ssize_t ll_pio_seq_write(struct file *file, const char __user *buffer,
+				size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	int rc;
+	__s64 val;
+
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	spin_lock(&sbi->ll_lock);
+	if (val == 1)
+		sbi->ll_flags |= LL_SBI_PIO;
+	else
+		sbi->ll_flags &= ~LL_SBI_PIO;
+	spin_unlock(&sbi->ll_lock);
+
+	return count;
+}
+LPROC_SEQ_FOPS(ll_pio);
+
 static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block	*sb    = m->private;
@@ -1105,8 +1138,10 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_root_squash_fops			},
 	{ .name	=	"nosquash_nids",
 	  .fops	=	&ll_nosquash_nids_fops			},
-	{ .name =       "fast_read",
-	  .fops =       &ll_fast_read_fops,                     },
+	{ .name =	"fast_read",
+	  .fops =	&ll_fast_read_fops,			},
+	{ .name =	"pio",
+	  .fops =	&ll_pio_fops,				},
 	{ NULL }
 };
 

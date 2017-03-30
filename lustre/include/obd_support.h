@@ -531,6 +531,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_LLITE_NEWNODE_PAUSE		    0x140a
 #define OBD_FAIL_LLITE_SETDIRSTRIPE_PAUSE	    0x140b
 #define OBD_FAIL_LLITE_CREATE_NODE_PAUSE	    0x140c
+#define OBD_FAIL_LLITE_PTASK_IO_FAIL		    0x140d
 
 
 #define OBD_FAIL_FID_INDIR	0x1501

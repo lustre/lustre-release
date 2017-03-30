@@ -44,6 +44,7 @@
 #include <lustre_fid.h>
 #include <cl_object.h>
 #include "cl_internal.h"
+#include <lustre_compat.h>
 
 /*****************************************************************************
  *
@@ -206,17 +207,26 @@ EXPORT_SYMBOL(cl_io_init);
 int cl_io_rw_init(const struct lu_env *env, struct cl_io *io,
                   enum cl_io_type iot, loff_t pos, size_t count)
 {
-        LINVRNT(iot == CIT_READ || iot == CIT_WRITE);
-        LINVRNT(io->ci_obj != NULL);
-        ENTRY;
+	LINVRNT(iot == CIT_READ || iot == CIT_WRITE);
+	LINVRNT(io->ci_obj != NULL);
+	ENTRY;
 
-        LU_OBJECT_HEADER(D_VFSTRACE, env, &io->ci_obj->co_lu,
-			 "io range: %u [%llu, %llu) %u %u\n",
-                         iot, (__u64)pos, (__u64)pos + count,
-                         io->u.ci_rw.crw_nonblock, io->u.ci_wr.wr_append);
-        io->u.ci_rw.crw_pos    = pos;
-        io->u.ci_rw.crw_count  = count;
-        RETURN(cl_io_init(env, io, iot, io->ci_obj));
+	if (cfs_ptengine_weight(cl_io_engine) < 2)
+		io->ci_pio = 0;
+
+	LU_OBJECT_HEADER(D_VFSTRACE, env, &io->ci_obj->co_lu,
+			 "io %s range: [%llu, %llu) %s %s %s %s\n",
+			 iot == CIT_READ ? "read" : "write",
+			 pos, pos + count,
+			 io->u.ci_rw.rw_nonblock ? "nonblock" : "block",
+			 io->u.ci_rw.rw_append ? "append" : "-",
+			 io->u.ci_rw.rw_sync ? "sync" : "-",
+			 io->ci_pio ? "pio" : "-");
+
+	io->u.ci_rw.rw_range.cir_pos   = pos;
+	io->u.ci_rw.rw_range.cir_count = count;
+
+	RETURN(cl_io_init(env, io, iot, io->ci_obj));
 }
 EXPORT_SYMBOL(cl_io_rw_init);
 
@@ -474,8 +484,8 @@ void cl_io_rw_advance(const struct lu_env *env, struct cl_io *io, size_t nob)
 
         ENTRY;
 
-        io->u.ci_rw.crw_pos   += nob;
-        io->u.ci_rw.crw_count -= nob;
+	io->u.ci_rw.rw_range.cir_pos   += nob;
+	io->u.ci_rw.rw_range.cir_count -= nob;
 
         /* layers have to be notified. */
         cl_io_for_each_reverse(scan, io) {
@@ -733,6 +743,53 @@ int cl_io_cancel(const struct lu_env *env, struct cl_io *io,
         return result;
 }
 
+static
+struct cl_io_pt *cl_io_submit_pt(struct cl_io *io, loff_t pos, size_t count)
+{
+	struct cl_io_pt *pt;
+	int rc;
+
+	OBD_ALLOC(pt, sizeof(*pt));
+	if (pt == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	pt->cip_next = NULL;
+	init_sync_kiocb(&pt->cip_iocb, io->u.ci_rw.rw_file);
+	pt->cip_iocb.ki_pos = pos;
+#ifdef HAVE_KIOCB_KI_LEFT
+	pt->cip_iocb.ki_left = count;
+#elif defined(HAVE_KI_NBYTES)
+	pt->cip_iocb.ki_nbytes = count;
+#endif
+	pt->cip_iter = io->u.ci_rw.rw_iter;
+	iov_iter_truncate(&pt->cip_iter, count);
+	pt->cip_file   = io->u.ci_rw.rw_file;
+	pt->cip_iot    = io->ci_type;
+	pt->cip_pos    = pos;
+	pt->cip_count  = count;
+	pt->cip_result = 0;
+
+	rc = cfs_ptask_init(&pt->cip_task, io->u.ci_rw.rw_ptask, pt,
+			    PTF_ORDERED | PTF_COMPLETE |
+			    PTF_USER_MM | PTF_RETRY, smp_processor_id());
+	if (rc)
+		GOTO(out_error, rc);
+
+	CDEBUG(D_VFSTRACE, "submit %s range: [%llu, %llu)\n",
+		io->ci_type == CIT_READ ? "read" : "write",
+		pos, pos + count);
+
+	rc = cfs_ptask_submit(&pt->cip_task, cl_io_engine);
+	if (rc)
+		GOTO(out_error, rc);
+
+	RETURN(pt);
+
+out_error:
+	OBD_FREE(pt, sizeof(*pt));
+	RETURN(ERR_PTR(rc));
+}
+
 /**
  * Main io loop.
  *
@@ -754,44 +811,124 @@ int cl_io_cancel(const struct lu_env *env, struct cl_io *io,
  */
 int cl_io_loop(const struct lu_env *env, struct cl_io *io)
 {
-        int result   = 0;
+	struct cl_io_pt *pt = NULL, *head = NULL;
+	struct cl_io_pt **tail = &head;
+	loff_t pos;
+	size_t count;
+	size_t last_chunk_count = 0;
+	bool short_io = false;
+	int rc = 0;
+	ENTRY;
 
-        LINVRNT(cl_io_is_loopable(io));
-        ENTRY;
+	LINVRNT(cl_io_is_loopable(io));
 
-        do {
-                size_t nob;
+	do {
+		io->ci_continue = 0;
 
-                io->ci_continue = 0;
-                result = cl_io_iter_init(env, io);
-                if (result == 0) {
-                        nob    = io->ci_nob;
-                        result = cl_io_lock(env, io);
-                        if (result == 0) {
-                                /*
-                                 * Notify layers that locks has been taken,
-                                 * and do actual i/o.
-                                 *
-                                 *   - llite: kms, short read;
-                                 *   - llite: generic_file_read();
-                                 */
-                                result = cl_io_start(env, io);
-                                /*
-                                 * Send any remaining pending
-                                 * io, etc.
-                                 *
-                                 *   - llite: ll_rw_stats_tally.
-                                 */
-                                cl_io_end(env, io);
-                                cl_io_unlock(env, io);
-                                cl_io_rw_advance(env, io, io->ci_nob - nob);
-                        }
-                }
-                cl_io_iter_fini(env, io);
-        } while (result == 0 && io->ci_continue);
-	if (result == 0)
-		result = io->ci_result;
-	RETURN(result < 0 ? result : 0);
+		rc = cl_io_iter_init(env, io);
+		if (rc) {
+			cl_io_iter_fini(env, io);
+			break;
+		}
+
+		pos   = io->u.ci_rw.rw_range.cir_pos;
+		count = io->u.ci_rw.rw_range.cir_count;
+
+		if (io->ci_pio) {
+			/* submit this range for parallel execution */
+			pt = cl_io_submit_pt(io, pos, count);
+			if (IS_ERR(pt)) {
+				cl_io_iter_fini(env, io);
+				rc = PTR_ERR(pt);
+				break;
+			}
+
+			*tail = pt;
+			tail = &pt->cip_next;
+		} else {
+			size_t nob = io->ci_nob;
+
+			CDEBUG(D_VFSTRACE,
+				"execute type %u range: [%llu, %llu) nob: %zu %s\n",
+				io->ci_type, pos, pos + count, nob,
+				io->ci_continue ? "continue" : "stop");
+
+			rc = cl_io_lock(env, io);
+			if (rc) {
+				cl_io_iter_fini(env, io);
+				break;
+			}
+
+			/*
+			 * Notify layers that locks has been taken,
+			 * and do actual i/o.
+			 *
+			 *   - llite: kms, short read;
+			 *   - llite: generic_file_read();
+			 */
+			rc = cl_io_start(env, io);
+
+			/*
+			 * Send any remaining pending
+			 * io, etc.
+			 *
+			 *   - llite: ll_rw_stats_tally.
+			 */
+			cl_io_end(env, io);
+			cl_io_unlock(env, io);
+
+			count = io->ci_nob - nob;
+			last_chunk_count = count;
+		}
+
+		cl_io_rw_advance(env, io, count);
+		cl_io_iter_fini(env, io);
+	} while (!rc && io->ci_continue);
+
+	CDEBUG(D_VFSTRACE, "loop type %u done: nob: %zu, rc: %d %s\n",
+		io->ci_type, io->ci_nob, rc,
+		io->ci_continue ? "continue" : "stop");
+
+	while (head != NULL) {
+		int rc2;
+
+		pt = head;
+		head = head->cip_next;
+
+		rc2 = cfs_ptask_wait_for(&pt->cip_task);
+		LASSERTF(!rc2, "wait for task error: %d\n", rc2);
+
+		rc2 = cfs_ptask_result(&pt->cip_task);
+		CDEBUG(D_VFSTRACE,
+			"done %s range: [%llu, %llu) ret: %zd, rc: %d\n",
+			pt->cip_iot == CIT_READ ? "read" : "write",
+			pt->cip_pos, pt->cip_pos + pt->cip_count,
+			pt->cip_result, rc2);
+		if (rc2)
+			rc = rc ? rc : rc2;
+		if (!short_io) {
+			if (!rc2) /* IO is done by this task successfully */
+				io->ci_nob += pt->cip_result;
+			if (pt->cip_result < pt->cip_count) {
+				/* short IO happened.
+				 * Not necessary to be an error */
+				CDEBUG(D_VFSTRACE,
+					"incomplete range: [%llu, %llu) "
+					"last_chunk_count: %zu\n",
+					pt->cip_pos,
+					pt->cip_pos + pt->cip_count,
+					last_chunk_count);
+				io->ci_nob -= last_chunk_count;
+				short_io = true;
+			}
+		}
+		OBD_FREE(pt, sizeof(*pt));
+	}
+
+	CDEBUG(D_VFSTRACE, "return nob: %zu (%s io), rc: %d\n",
+		io->ci_nob, short_io ? "short" : "full", rc);
+
+	RETURN(rc < 0 ? rc : io->ci_result);
 }
 EXPORT_SYMBOL(cl_io_loop);
 

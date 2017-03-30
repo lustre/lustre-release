@@ -1083,27 +1083,120 @@ static bool file_is_noatime(const struct file *file)
 	return false;
 }
 
-static void ll_io_init(struct cl_io *io, const struct file *file, int write)
+static int ll_file_io_ptask(struct cfs_ptask *ptask);
+
+static void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot)
 {
-	struct inode *inode = file_inode((struct file *)file);
+	struct inode *inode = file_inode(file);
 
-        io->u.ci_rw.crw_nonblock = file->f_flags & O_NONBLOCK;
-	if (write) {
-		io->u.ci_wr.wr_append = !!(file->f_flags & O_APPEND);
-		io->u.ci_wr.wr_sync = file->f_flags & O_SYNC ||
-				      file->f_flags & O_DIRECT ||
-				      IS_SYNC(inode);
+	memset(&io->u.ci_rw.rw_iter, 0, sizeof(io->u.ci_rw.rw_iter));
+	init_sync_kiocb(&io->u.ci_rw.rw_iocb, file);
+	io->u.ci_rw.rw_file = file;
+	io->u.ci_rw.rw_ptask = ll_file_io_ptask;
+	io->u.ci_rw.rw_nonblock = !!(file->f_flags & O_NONBLOCK);
+	if (iot == CIT_WRITE) {
+		io->u.ci_rw.rw_append = !!(file->f_flags & O_APPEND);
+		io->u.ci_rw.rw_sync   = !!(file->f_flags & O_SYNC ||
+					   file->f_flags & O_DIRECT ||
+					   IS_SYNC(inode));
 	}
-        io->ci_obj     = ll_i2info(inode)->lli_clob;
-        io->ci_lockreq = CILR_MAYBE;
-        if (ll_file_nolock(file)) {
-                io->ci_lockreq = CILR_NEVER;
-                io->ci_no_srvlock = 1;
-        } else if (file->f_flags & O_APPEND) {
-                io->ci_lockreq = CILR_MANDATORY;
-        }
-
+	io->ci_obj = ll_i2info(inode)->lli_clob;
+	io->ci_lockreq = CILR_MAYBE;
+	if (ll_file_nolock(file)) {
+		io->ci_lockreq = CILR_NEVER;
+		io->ci_no_srvlock = 1;
+	} else if (file->f_flags & O_APPEND) {
+		io->ci_lockreq = CILR_MANDATORY;
+	}
 	io->ci_noatime = file_is_noatime(file);
+	if (ll_i2sbi(inode)->ll_flags & LL_SBI_PIO)
+		io->ci_pio = !io->u.ci_rw.rw_append;
+	else
+		io->ci_pio = 0;
+}
+
+static int ll_file_io_ptask(struct cfs_ptask *ptask)
+{
+	struct cl_io_pt *pt = ptask->pt_cbdata;
+	struct file *file = pt->cip_file;
+	struct lu_env *env;
+	struct cl_io *io;
+	loff_t pos = pt->cip_pos;
+	int rc;
+	__u16 refcheck;
+	ENTRY;
+
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
+
+	CDEBUG(D_VFSTRACE, "%s: %s range: [%llu, %llu)\n",
+		file_dentry(file)->d_name.name,
+		pt->cip_iot == CIT_READ ? "read" : "write",
+		pos, pos + pt->cip_count);
+
+restart:
+	io = vvp_env_thread_io(env);
+	ll_io_init(io, file, pt->cip_iot);
+	io->u.ci_rw.rw_iter = pt->cip_iter;
+	io->u.ci_rw.rw_iocb = pt->cip_iocb;
+	io->ci_pio = 0; /* It's already in parallel task */
+
+	rc = cl_io_rw_init(env, io, pt->cip_iot, pos,
+			   pt->cip_count - pt->cip_result);
+	if (!rc) {
+		struct vvp_io *vio = vvp_env_io(env);
+
+		vio->vui_io_subtype = IO_NORMAL;
+		vio->vui_fd = LUSTRE_FPRIVATE(file);
+
+		ll_cl_add(file, env, io, LCC_RW);
+		rc = cl_io_loop(env, io);
+		ll_cl_remove(file, env);
+	} else {
+		/* cl_io_rw_init() handled IO */
+		rc = io->ci_result;
+	}
+
+	if (OBD_FAIL_CHECK_RESET(OBD_FAIL_LLITE_PTASK_IO_FAIL, 0)) {
+		if (io->ci_nob > 0)
+			io->ci_nob /= 2;
+		rc = -EIO;
+	}
+
+	if (io->ci_nob > 0) {
+		pt->cip_result += io->ci_nob;
+		iov_iter_advance(&pt->cip_iter, io->ci_nob);
+		pos += io->ci_nob;
+		pt->cip_iocb.ki_pos = pos;
+#ifdef HAVE_KIOCB_KI_LEFT
+		pt->cip_iocb.ki_left = pt->cip_count - pt->cip_result;
+#elif defined(HAVE_KI_NBYTES)
+		pt->cip_iocb.ki_nbytes = pt->cip_count - pt->cip_result;
+#endif
+	}
+
+	cl_io_fini(env, io);
+
+	if ((rc == 0 || rc == -ENODATA) &&
+	    pt->cip_result < pt->cip_count &&
+	    io->ci_need_restart) {
+		CDEBUG(D_VFSTRACE,
+			"%s: restart %s range: [%llu, %llu) ret: %zd, rc: %d\n",
+			file_dentry(file)->d_name.name,
+			pt->cip_iot == CIT_READ ? "read" : "write",
+			pos, pos + pt->cip_count - pt->cip_result,
+			pt->cip_result, rc);
+		goto restart;
+	}
+
+	CDEBUG(D_VFSTRACE, "%s: %s ret: %zd, rc: %d\n",
+		file_dentry(file)->d_name.name,
+		pt->cip_iot == CIT_READ ? "read" : "write",
+		pt->cip_result, rc);
+
+	cl_env_put(env, &refcheck);
+	RETURN(pt->cip_result > 0 ? 0 : rc);
 }
 
 static ssize_t
@@ -1111,39 +1204,45 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 		   struct file *file, enum cl_io_type iot,
 		   loff_t *ppos, size_t count)
 {
+	struct range_lock	range;
 	struct vvp_io		*vio = vvp_env_io(env);
 	struct inode		*inode = file_inode(file);
 	struct ll_inode_info	*lli = ll_i2info(inode);
 	struct ll_file_data	*fd  = LUSTRE_FPRIVATE(file);
 	struct cl_io		*io;
+	loff_t			pos = *ppos;
 	ssize_t			result = 0;
 	int			rc = 0;
-	struct range_lock	range;
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "file: %s, type: %d ppos: %llu, count: %zu\n",
-		file_dentry(file)->d_name.name, iot, *ppos, count);
+	CDEBUG(D_VFSTRACE, "%s: %s range: [%llu, %llu)\n",
+		file_dentry(file)->d_name.name,
+		iot == CIT_READ ? "read" : "write", pos, pos + count);
 
 restart:
 	io = vvp_env_thread_io(env);
-	ll_io_init(io, file, iot == CIT_WRITE);
+	ll_io_init(io, file, iot);
+	if (args->via_io_subtype == IO_NORMAL) {
+		io->u.ci_rw.rw_iter = *args->u.normal.via_iter;
+		io->u.ci_rw.rw_iocb = *args->u.normal.via_iocb;
+	} else {
+		io->ci_pio = 0;
+	}
 
-	if (cl_io_rw_init(env, io, iot, *ppos, count) == 0) {
+	if (cl_io_rw_init(env, io, iot, pos, count) == 0) {
 		bool range_locked = false;
 
 		if (file->f_flags & O_APPEND)
 			range_lock_init(&range, 0, LUSTRE_EOF);
 		else
-			range_lock_init(&range, *ppos, *ppos + count - 1);
+			range_lock_init(&range, pos, pos + count - 1);
 
 		vio->vui_fd  = LUSTRE_FPRIVATE(file);
 		vio->vui_io_subtype = args->via_io_subtype;
 
 		switch (vio->vui_io_subtype) {
 		case IO_NORMAL:
-			vio->vui_iter = args->u.normal.via_iter;
-			vio->vui_iocb = args->u.normal.via_iocb;
 			/* Direct IO reads must also take range lock,
 			 * or multiple reads will try to work on the same pages
 			 * See LU-6227 for details. */
@@ -1169,7 +1268,16 @@ restart:
 		}
 
 		ll_cl_add(file, env, io, LCC_RW);
+		if (io->ci_pio && iot == CIT_WRITE && !IS_NOSEC(inode) &&
+		    !lli->lli_inode_locked) {
+			inode_lock(inode);
+			lli->lli_inode_locked = 1;
+		}
 		rc = cl_io_loop(env, io);
+		if (lli->lli_inode_locked) {
+			lli->lli_inode_locked = 0;
+			inode_unlock(inode);
+		}
 		ll_cl_remove(file, env);
 
 		if (range_locked) {
@@ -1184,22 +1292,31 @@ restart:
 
 	if (io->ci_nob > 0) {
 		result += io->ci_nob;
-		count -= io->ci_nob;
-		*ppos = io->u.ci_wr.wr.crw_pos; /* for splice */
+		count  -= io->ci_nob;
 
-		/* prepare IO restart */
-		if (count > 0 && args->via_io_subtype == IO_NORMAL)
-			args->u.normal.via_iter = vio->vui_iter;
+		if (args->via_io_subtype == IO_NORMAL) {
+			iov_iter_advance(args->u.normal.via_iter, io->ci_nob);
+			pos += io->ci_nob;
+			args->u.normal.via_iocb->ki_pos = pos;
+#ifdef HAVE_KIOCB_KI_LEFT
+			args->u.normal.via_iocb->ki_left = count;
+#elif defined(HAVE_KI_NBYTES)
+			args->u.normal.via_iocb->ki_nbytes = count;
+#endif
+		} else {
+			/* for splice */
+			pos = io->u.ci_rw.rw_range.cir_pos;
+		}
 	}
 out:
 	cl_io_fini(env, io);
 
 	if ((rc == 0 || rc == -ENODATA) && count > 0 && io->ci_need_restart) {
 		CDEBUG(D_VFSTRACE,
-		       "%s: restart %s from %lld, count:%zu, result: %zd\n",
-		       file_dentry(file)->d_name.name,
-		       iot == CIT_READ ? "read" : "write",
-		       *ppos, count, result);
+			"%s: restart %s range: [%llu, %llu) ret: %zd, rc: %d\n",
+			file_dentry(file)->d_name.name,
+			iot == CIT_READ ? "read" : "write",
+			pos, pos + count, result, rc);
 		goto restart;
 	}
 
@@ -1223,7 +1340,11 @@ out:
 		}
 	}
 
-	CDEBUG(D_VFSTRACE, "iot: %d, result: %zd\n", iot, result);
+	CDEBUG(D_VFSTRACE, "%s: %s *ppos: %llu, pos: %llu, ret: %zd, rc: %d\n",
+		file_dentry(file)->d_name.name,
+		iot == CIT_READ ? "read" : "write", *ppos, pos, result, rc);
+
+	*ppos = pos;
 
 	RETURN(result > 0 ? result : rc);
 }
@@ -3007,6 +3128,7 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
 	struct dentry *dentry = file_dentry(file);
+	bool lock_inode;
 #elif defined(HAVE_FILE_FSYNC_2ARGS)
 int ll_fsync(struct file *file, int datasync)
 {
@@ -3031,7 +3153,9 @@ int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
 
 #ifdef HAVE_FILE_FSYNC_4ARGS
 	rc = filemap_write_and_wait_range(inode->i_mapping, start, end);
-	inode_lock(inode);
+	lock_inode = !lli->lli_inode_locked;
+	if (lock_inode)
+		inode_lock(inode);
 #else
 	/* fsync's caller has already called _fdata{sync,write}, we want
 	 * that IO to finish before calling the osc and mdc sync methods */
@@ -3071,7 +3195,8 @@ int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
 	}
 
 #ifdef HAVE_FILE_FSYNC_4ARGS
-	inode_unlock(inode);
+	if (lock_inode)
+		inode_unlock(inode);
 #endif
 	RETURN(rc);
 }

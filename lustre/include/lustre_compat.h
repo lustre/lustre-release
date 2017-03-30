@@ -41,6 +41,7 @@
 
 #include <libcfs/libcfs.h>
 #include <lustre_patchless_compat.h>
+#include <obd_support.h>
 
 #ifdef HAVE_FS_STRUCT_RWLOCK
 # define LOCK_FS_STRUCT(fs)	write_lock(&(fs)->lock)
@@ -441,5 +442,123 @@ static inline void truncate_inode_pages_final(struct address_space *map)
 #else
 # define GET_POSIX_ACL_XATTR_ENTRY(head) ((head)->a_entries)
 #endif
+
+#ifndef HAVE_IOV_ITER_TRUNCATE
+static inline void iov_iter_truncate(struct iov_iter *i, u64 count)
+{
+	if (i->count > count)
+		i->count = count;
+}
+#endif
+
+#ifndef HAVE_IS_SXID
+static inline bool is_sxid(umode_t mode)
+{
+	return (mode & S_ISUID) || ((mode & S_ISGID) && (mode & S_IXGRP));
+}
+#endif
+
+#ifndef IS_NOSEC
+#define IS_NOSEC(inode)	(!is_sxid(inode->i_mode))
+#endif
+
+#ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
+static inline void iov_iter_reexpand(struct iov_iter *i, size_t count)
+{
+	i->count = count;
+}
+
+static inline struct iovec iov_iter_iovec(const struct iov_iter *iter)
+{
+	return (struct iovec) {
+		.iov_base = iter->iov->iov_base + iter->iov_offset,
+		.iov_len = min(iter->count,
+			       iter->iov->iov_len - iter->iov_offset),
+	};
+}
+
+#define iov_for_each(iov, iter, start)					\
+	for (iter = (start);						\
+	     (iter).count && ((iov = iov_iter_iovec(&(iter))), 1);	\
+	     iov_iter_advance(&(iter), (iov).iov_len))
+
+static inline ssize_t
+generic_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
+{
+	struct iovec iov;
+	struct iov_iter i;
+	ssize_t bytes = 0;
+
+	iov_for_each(iov, i, *iter) {
+		ssize_t res;
+
+		res = generic_file_aio_read(iocb, &iov, 1, iocb->ki_pos);
+		if (res <= 0) {
+			if (bytes == 0)
+				bytes = res;
+			break;
+		}
+
+		bytes += res;
+		if (res < iov.iov_len)
+			break;
+	}
+
+	if (bytes > 0)
+		iov_iter_advance(iter, bytes);
+	return bytes;
+}
+
+static inline ssize_t
+__generic_file_write_iter(struct kiocb *iocb, struct iov_iter *iter)
+{
+	struct iovec iov;
+	struct iov_iter i;
+	ssize_t bytes = 0;
+
+	/* Since LLITE updates file size at the end of I/O in
+	 * vvp_io_commit_write(), append write has to be done in atomic when
+	 * there are multiple segments because otherwise each iteration to
+	 * __generic_file_aio_write() will see original file size */
+	if (unlikely(iocb->ki_filp->f_flags & O_APPEND && iter->nr_segs > 1)) {
+		struct iovec *iov_copy;
+		int count = 0;
+
+		OBD_ALLOC(iov_copy, sizeof(*iov_copy) * iter->nr_segs);
+		if (!iov_copy)
+			return -ENOMEM;
+
+		iov_for_each(iov, i, *iter)
+			iov_copy[count++] = iov;
+
+		bytes = __generic_file_aio_write(iocb, iov_copy, count,
+						 &iocb->ki_pos);
+		OBD_FREE(iov_copy, sizeof(*iov_copy) * iter->nr_segs);
+
+		if (bytes > 0)
+			iov_iter_advance(iter, bytes);
+		return bytes;
+	}
+
+	iov_for_each(iov, i, *iter) {
+		ssize_t res;
+
+		res = __generic_file_aio_write(iocb, &iov, 1, &iocb->ki_pos);
+		if (res <= 0) {
+			if (bytes == 0)
+				bytes = res;
+			break;
+		}
+
+		bytes += res;
+		if (res < iov.iov_len)
+			break;
+	}
+
+	if (bytes > 0)
+		iov_iter_advance(iter, bytes);
+	return bytes;
+}
+#endif /* HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 
 #endif /* _LUSTRE_COMPAT_H */
