@@ -271,15 +271,15 @@ command_t cmdlist[] = {
          "Usage: getname [-h]|[path ...] "},
 #ifdef HAVE_SYS_QUOTA_H
         {"setquota", lfs_setquota, 0, "Set filesystem quotas.\n"
-         "usage: setquota <-u|-g> <uname>|<uid>|<gname>|<gid>\n"
+	 "usage: setquota <-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid>\n"
          "                -b <block-softlimit> -B <block-hardlimit>\n"
          "                -i <inode-softlimit> -I <inode-hardlimit> <filesystem>\n"
-         "       setquota <-u|--user|-g|--group> <uname>|<uid>|<gname>|<gid>\n"
+	 "       setquota <-u|--user|-g|--group|-p|--project> <uname>|<uid>|<gname>|<gid>|<projid>\n"
          "                [--block-softlimit <block-softlimit>]\n"
          "                [--block-hardlimit <block-hardlimit>]\n"
          "                [--inode-softlimit <inode-softlimit>]\n"
          "                [--inode-hardlimit <inode-hardlimit>] <filesystem>\n"
-         "       setquota [-t] <-u|--user|-g|--group>\n"
+	 "       setquota [-t] <-u|--user|-g|--group|-p|--project>\n"
          "                [--block-grace <block-grace>]\n"
          "                [--inode-grace <inode-grace>] <filesystem>\n"
          "       -b can be used instead of --block-softlimit/--block-grace\n"
@@ -296,8 +296,8 @@ command_t cmdlist[] = {
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
 	 "usage: quota [-q] [-v] [-h] [-o <obd_uuid>|-i <mdt_idx>|-I "
 		       "<ost_idx>]\n"
-         "             [<-u|-g> <uname>|<uid>|<gname>|<gid>] <filesystem>\n"
-         "       quota [-o <obd_uuid>|-i <mdt_idx>|-I <ost_idx>] -t <-u|-g> <filesystem>"},
+	 "             [<-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid>] <filesystem>\n"
+	 "       quota [-o <obd_uuid>|-i <mdt_idx>|-I <ost_idx>] -t <-u|-g|-p> <filesystem>"},
 #endif
         {"flushctx", lfs_flushctx, 0, "Flush security context for current user.\n"
          "usage: flushctx [-k] [mountpoint...]"},
@@ -1740,6 +1740,11 @@ static int name2gid(unsigned int *id, const char *name)
 	*id = group->gr_gid;
 
 	return 0;
+}
+
+static inline int name2projid(unsigned int *id, const char *name)
+{
+	return -ENOTSUP;
 }
 
 static int uid2name(char **name, unsigned int id)
@@ -3407,6 +3412,7 @@ int lfs_setquota_times(int argc, char **argv)
                 {"block-grace",     required_argument, 0, 'b'},
                 {"group",           no_argument,       0, 'g'},
                 {"inode-grace",     required_argument, 0, 'i'},
+		{"project",         no_argument,       0, 'p'},
                 {"times",           no_argument,       0, 't'},
                 {"user",            no_argument,       0, 'u'},
                 {0, 0, 0, 0}
@@ -3417,7 +3423,7 @@ int lfs_setquota_times(int argc, char **argv)
 	qctl.qc_cmd  = LUSTRE_Q_SETINFO;
 	qctl.qc_type = ALLQUOTA;
 
-	while ((c = getopt_long(argc, argv, "b:gi:tu",
+	while ((c = getopt_long(argc, argv, "b:gi:ptu",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'u':
@@ -3425,9 +3431,12 @@ int lfs_setquota_times(int argc, char **argv)
 			goto quota_type;
 		case 'g':
 			qtype = GRPQUOTA;
+			goto quota_type;
+		case 'p':
+			qtype = PRJQUOTA;
 quota_type:
 			if (qctl.qc_type != ALLQUOTA) {
-				fprintf(stderr, "error: -u and -g can't be used "
+				fprintf(stderr, "error: -u/g/p can't be used "
                                                 "more than once\n");
 				return CMD_HELP;
 			}
@@ -3457,7 +3466,7 @@ quota_type:
         }
 
 	if (qctl.qc_type == ALLQUOTA) {
-                fprintf(stderr, "error: neither -u nor -g specified\n");
+		fprintf(stderr, "error: neither -u, -g nor -p specified\n");
                 return CMD_HELP;
         }
 
@@ -3497,6 +3506,7 @@ int lfs_setquota(int argc, char **argv)
                 {"inode-softlimit", required_argument, 0, 'i'},
                 {"inode-hardlimit", required_argument, 0, 'I'},
                 {"user",            required_argument, 0, 'u'},
+		{"project",         required_argument, 0, 'p'},
                 {0, 0, 0, 0}
         };
         unsigned limit_mask = 0;
@@ -3512,17 +3522,21 @@ int lfs_setquota(int argc, char **argv)
                                  * so it can be used as a marker that qc_type
                                  * isn't reinitialized from command line */
 
-        while ((c = getopt_long(argc, argv, "b:B:g:i:I:u:", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "b:B:g:i:I:p:u:",
+		long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'u':
 			qtype = USRQUOTA;
 			rc = name2uid(&qctl.qc_id, optarg);
-			/* fall through */
+			goto quota_type;
                 case 'g':
-			if (c == 'g') {
-				qtype = GRPQUOTA;
-				rc = name2gid(&qctl.qc_id, optarg);
-			}
+			qtype = GRPQUOTA;
+			rc = name2gid(&qctl.qc_id, optarg);
+			goto quota_type;
+		case 'p':
+			qtype = PRJQUOTA;
+			rc = name2projid(&qctl.qc_id, optarg);
+quota_type:
 			if (qctl.qc_type != ALLQUOTA) {
 				fprintf(stderr, "error: -u and -g can't be used"
 						" more than once\n");
@@ -3586,7 +3600,7 @@ int lfs_setquota(int argc, char **argv)
 	}
 
 	if (qctl.qc_type == ALLQUOTA) {
-		fprintf(stderr, "error: neither -u nor -g was specified\n");
+		fprintf(stderr, "error: neither -u, -g nor -p was specified\n");
 		return CMD_HELP;
 	}
 
@@ -3903,15 +3917,17 @@ static int lfs_quota(int argc, char **argv)
 	bool human_readable = false;
 	int qtype;
 
-	while ((c = getopt(argc, argv, "gi:I:o:qtuvh")) != -1) {
+	while ((c = getopt(argc, argv, "gi:I:o:pqtuvh")) != -1) {
 		switch (c) {
 		case 'u':
 			qtype = USRQUOTA;
-			/* fall through */
+			goto quota_type;
 		case 'g':
-			if (c == 'g')
-				qtype = GRPQUOTA;
-
+			qtype = GRPQUOTA;
+			goto quota_type;
+		case 'p':
+			qtype = PRJQUOTA;
+quota_type:
 			if (qctl.qc_type != ALLQUOTA) {
 				fprintf(stderr, "error: use either -u or -g\n");
 				return CMD_HELP;
@@ -3989,6 +4005,9 @@ all_output:
 			break;
 		case GRPQUOTA:
 			rc = name2gid(&qctl.qc_id, name);
+			break;
+		case PRJQUOTA:
+			rc = name2projid(&qctl.qc_id, name);
 			break;
 		default:
 			rc = -ENOTSUP;
