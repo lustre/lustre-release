@@ -1201,7 +1201,7 @@ static int adjust_first_extent(char *fname, struct llapi_layout *layout)
 	llapi_layout_free(head);
 
 	/* Make sure we use the first component of the layout to be added. */
-	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_FIRST);
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
 	if (rc < 0) {
 		fprintf(stderr, "Move component cursor failed. %s\n",
 			strerror(errno));

@@ -1,0 +1,47 @@
+.TH llapi_layout_comp_use 3 "2017 Apr 7" "Lustre User API"
+.SH NAME
+llapi_layout_comp_use \- change current component to relative position
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_layout_comp_use(struct llapi_layout *" layout ",
+.BI "                          enum llapi_layout_comp_use *" pos );
+.fi
+.SH DESCRIPTION
+.PP
+Changes the currently active component of
+.I layout
+to the relative position given by
+.IR pos .
+Possible values for
+.I pos
+are:
+.PP
+.BR LLAPI_LAYOUT_COMP_USE_FIRST :
+The first component of the layout.
+.PP
+.BR LLAPI_LAYOUT_COMP_USE_NEXT :
+The next component after the current one.
+.PP
+.BR LLAPI_LAYOUT_COMP_USE_LAST :
+The last component of the layout.
+.SH RETURN VALUES
+Return 0 on success, and 1 when there is no next component. Otherwise,
+if an error occurred -1 is returned and
+.I errno
+is set appropriately.
+.SH ERRORS
+.TP 15
+.SM EINVAL
+An invalid argument was specified.
+.TP 15
+.SM ENOENT
+No such component ID exists.
+.SH "SEE ALSO"
+.BR llapi_layout_alloc (3),
+.BR llapi_layout_file_open (3),
+.BR llapi_layout_comp_del (3),
+.BR llapi_layout_comp_use_id (3),
+.BR llapi_layout (7),
+.BR lustreapi (7)

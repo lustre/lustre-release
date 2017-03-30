@@ -151,7 +151,7 @@ Example 3: Traverse components of a composite layout.
 	layout = llapi_layout_get_by_path(path, 0);
 
 	/* Move cursor to the first component */
-	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_FIRST);
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
 
 	/* Traverse all components */
 	while (rc == 0) {
@@ -161,7 +161,7 @@ Example 3: Traverse components of a composite layout.
 		llapi_layout_comp_extent_get(layout, &start, &end);
 
 		/* Advance cursor */
-		rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_NEXT);
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
 	};
 
 	/* Free layout */
@@ -202,8 +202,8 @@ The RAID pattern may only be set to 0.
 .BR llapi_layout_comp_id_get (3),
 .BR llapi_layout_comp_add (3),
 .BR llapi_layout_comp_del (3),
-.BR llapi_layout_comp_move (3),
-.BR llapi_layout_comp_move_at (3),
+.BR llapi_layout_comp_use (3),
+.BR llapi_layout_comp_use_id (3),
 .BR llapi_layout_file_comp_add (3),
 .BR llapi_layout_file_comp_del (3),
 .BR lfs (1),

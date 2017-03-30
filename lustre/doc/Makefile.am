@@ -78,8 +78,8 @@ MANFILES =					\
 	llapi_layout_comp_flags_get.3		\
 	llapi_layout_comp_flags_set.3		\
 	llapi_layout_comp_id_get.3		\
-	llapi_layout_comp_move.3		\
-	llapi_layout_comp_move_at.3		\
+	llapi_layout_comp_use.3			\
+	llapi_layout_comp_use_id.3		\
 	llapi_layout_file_comp_add.3		\
 	llapi_layout_file_comp_del.3		\
 	llapi_layout_file_create.3		\

@@ -762,20 +762,20 @@ int llapi_layout_comp_add(struct llapi_layout *layout);
  */
 int llapi_layout_comp_del(struct llapi_layout *layout);
 
-enum {
-	LLAPI_LAYOUT_COMP_POS_NEXT = 0,
-	LLAPI_LAYOUT_COMP_POS_FIRST = 1,
-	LLAPI_LAYOUT_COMP_POS_LAST = 2
+enum llapi_layout_comp_use {
+	LLAPI_LAYOUT_COMP_USE_FIRST = 1,
+	LLAPI_LAYOUT_COMP_USE_LAST = 2,
+	LLAPI_LAYOUT_COMP_USE_NEXT = 3,
 };
 
 /**
- * Move the current component pointer by specified component ID.
+ * Set the currently active component to the specified component ID.
  */
-int llapi_layout_comp_move_at(struct llapi_layout *layout, uint32_t id);
+int llapi_layout_comp_use_id(struct llapi_layout *layout, uint32_t id);
 /**
- * Move the current component pointer to a specified position.
+ * Select the currently active component at the specified position.
  */
-int llapi_layout_comp_move(struct llapi_layout *layout, uint32_t pos);
+int llapi_layout_comp_use(struct llapi_layout *layout, uint32_t pos);
 /**
  * Add layout components to an existing file.
  */

@@ -1380,7 +1380,7 @@ void test30(void)
 	ASSERTF(s == start[2] && e == end[2],
 		"s: %"PRIu64", e: %"PRIu64"", s, e);
 
-	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_FIRST);
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
 	ASSERTF(rc == 0, "rc %d, errno %d", rc, errno);
 
 	/* delete non-tail component will fail */
@@ -1392,7 +1392,7 @@ void test30(void)
 	ASSERTF(s == start[0] && e == end[0],
 		"s: %"PRIu64", e: %"PRIu64"", s, e);
 
-	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_NEXT);
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
 	ASSERTF(rc == 0, "rc %d, errno %d", rc,  errno);
 
 	rc = llapi_layout_comp_extent_get(layout, &s, &e);
@@ -1400,7 +1400,7 @@ void test30(void)
 	ASSERTF(s == start[1] && e == end[1],
 		"s: %"PRIu64", e: %"PRIu64"", s, e);
 
-	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_NEXT);
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
 	ASSERTF(rc == 0, "rc %d, errno %d", rc,  errno);
 
 	rc = llapi_layout_comp_del(layout);
@@ -1465,7 +1465,7 @@ void test31(void)
 	layout = llapi_layout_get_by_path(path, 0);
 	ASSERTF(layout != NULL, "errno = %d", errno);
 
-	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_FIRST);
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
 	ASSERTF(rc == 0, "rc %d, errno %d", rc, errno);
 	i = 0;
 	do {
@@ -1478,9 +1478,8 @@ void test31(void)
 		ASSERTF(rc == 0 && id[i] != 0, "i %d, errno %d, id %d",
 			i, errno, id[i]);
 
-		rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_NEXT);
-		ASSERTF(rc >= 0, "i %d, rc %d, errno %d", i, rc, errno);
-
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+		ASSERTF(rc == 0 || i == 1, "i=%d rc=%d errno=%d", i, rc, errno);
 		i++;
 	} while (rc == 0);
 
@@ -1497,7 +1496,7 @@ void test31(void)
 	layout = llapi_layout_get_by_path(path, 0);
 	ASSERTF(layout != NULL, "errno = %d", errno);
 
-	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_FIRST);
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
 	ASSERTF(rc == 0, "rc %d, errno %d", rc, errno);
 
 	rc = llapi_layout_comp_extent_get(layout, &s, &e);

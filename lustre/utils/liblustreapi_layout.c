@@ -1785,26 +1785,26 @@ int llapi_layout_comp_del(struct llapi_layout *layout)
  * \retval	=0 : moved successfully
  * \retval	<0 if error occurs
  */
-int llapi_layout_comp_move_at(struct llapi_layout *layout, uint32_t id)
+int llapi_layout_comp_use_id(struct llapi_layout *layout, uint32_t comp_id)
 {
 	struct llapi_layout_comp *comp;
 
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL)
-		return -1;
+		return -1; /* use previously set errno */
 
 	if (!layout->llot_is_composite) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	if (id == 0) {
+	if (comp_id == LCME_ID_INVAL) {
 		errno = EINVAL;
 		return -1;
 	}
 
 	list_for_each_entry(comp, &layout->llot_comp_list, llc_list) {
-		if (comp->llc_id == id) {
+		if (comp->llc_id == comp_id) {
 			layout->llot_cur_comp = comp;
 			return 0;
 		}
@@ -1818,15 +1818,15 @@ int llapi_layout_comp_move_at(struct llapi_layout *layout, uint32_t id)
  *
  * \param[in] layout	composite layout
  * \param[in] pos	the position to be moved, it can be:
- *			LLAPI_LAYOUT_COMP_POS_FIRST: move to head
- *			LLAPI_LAYOUT_COMP_POS_LAST: move to tail
- *			LLAPI_LAYOUT_COMP_POS_NEXT: move to next
+ *			LLAPI_LAYOUT_COMP_USE_FIRST: use first component
+ *			LLAPI_LAYOUT_COMP_USE_LAST: use last component
+ *			LLAPI_LAYOUT_COMP_USE_NEXT: use next component
  *
  * \retval	=0 : moved successfully
- * \retval	=1 : already at the tail when move to the next
+ * \retval	=1 : at last component with NEXT
  * \retval	<0 if error occurs
  */
-int llapi_layout_comp_move(struct llapi_layout *layout, uint32_t pos)
+int llapi_layout_comp_use(struct llapi_layout *layout, uint32_t pos)
 {
 	struct llapi_layout_comp *comp, *head, *tail;
 
@@ -1844,14 +1844,14 @@ int llapi_layout_comp_move(struct llapi_layout *layout, uint32_t pos)
 	tail = list_entry(layout->llot_comp_list.prev, typeof(*tail),
 			  llc_list);
 
-	if (pos == LLAPI_LAYOUT_COMP_POS_NEXT) {
+	if (pos == LLAPI_LAYOUT_COMP_USE_NEXT) {
 		if (comp == tail)
 			return 1;
 		layout->llot_cur_comp = list_entry(comp->llc_list.next,
 						   typeof(*comp), llc_list);
-	} else if (pos == LLAPI_LAYOUT_COMP_POS_FIRST) {
+	} else if (pos == LLAPI_LAYOUT_COMP_USE_FIRST) {
 		layout->llot_cur_comp = head;
-	} else if (pos == LLAPI_LAYOUT_COMP_POS_LAST) {
+	} else if (pos == LLAPI_LAYOUT_COMP_USE_LAST) {
 		layout->llot_cur_comp = tail;
 	} else {
 		errno = EINVAL;
