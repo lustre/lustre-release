@@ -1140,7 +1140,6 @@ int lprocfs_timeouts_seq_show(struct seq_file *m, void *data)
 	struct obd_import *imp;
 	unsigned int cur, worst;
 	time64_t now, worstt;
-	struct dhms ts;
 	int i;
 
 	LASSERT(obd != NULL);
@@ -1150,16 +1149,15 @@ int lprocfs_timeouts_seq_show(struct seq_file *m, void *data)
 	now = ktime_get_real_seconds();
 
 	/* Some network health info for kicks */
-	s2dhms(&ts, now - imp->imp_last_reply_time);
-	seq_printf(m, "%-10s : %lld, "DHMS_FMT" ago\n",
-		   "last reply", (s64)imp->imp_last_reply_time, DHMS_VARS(&ts));
+	seq_printf(m, "%-10s : %lld, %llds ago\n",
+		   "last reply", (s64)imp->imp_last_reply_time,
+		   (s64)(now - imp->imp_last_reply_time));
 
 	cur = at_get(&imp->imp_at.iat_net_latency);
 	worst = imp->imp_at.iat_net_latency.at_worst_ever;
 	worstt = imp->imp_at.iat_net_latency.at_worst_time;
-	s2dhms(&ts, now - worstt);
-	seq_printf(m, "%-10s : cur %3u  worst %3u (at %lld, "DHMS_FMT" ago) ",
-		   "network", cur, worst, (s64)worstt, DHMS_VARS(&ts));
+	seq_printf(m, "%-10s : cur %3u  worst %3u (at %lld, %llds ago) ",
+		   "network", cur, worst, (s64)worstt, (s64)(now - worstt));
 	lprocfs_at_hist_helper(m, &imp->imp_at.iat_net_latency);
 
 	for(i = 0; i < IMP_AT_MAX_PORTALS; i++) {
@@ -1168,10 +1166,9 @@ int lprocfs_timeouts_seq_show(struct seq_file *m, void *data)
 		cur = at_get(&imp->imp_at.iat_service_estimate[i]);
 		worst = imp->imp_at.iat_service_estimate[i].at_worst_ever;
 		worstt = imp->imp_at.iat_service_estimate[i].at_worst_time;
-		s2dhms(&ts, now - worstt);
-		seq_printf(m, "portal %-2d  : cur %3u  worst %3u (at %lld, "
-			   DHMS_FMT" ago) ", imp->imp_at.iat_portal[i],
-			   cur, worst, (s64)worstt, DHMS_VARS(&ts));
+		seq_printf(m, "portal %-2d  : cur %3u  worst %3u (at %lld, %llds ago) ",
+			   imp->imp_at.iat_portal[i], cur, worst, (s64)worstt,
+			   (s64)(now - worstt));
 		lprocfs_at_hist_helper(m, &imp->imp_at.iat_service_estimate[i]);
 	}
 

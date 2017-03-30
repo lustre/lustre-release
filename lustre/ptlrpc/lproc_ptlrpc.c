@@ -1042,7 +1042,6 @@ static int ptlrpc_lprocfs_timeouts_seq_show(struct seq_file *m, void *n)
 {
 	struct ptlrpc_service		*svc = m->private;
 	struct ptlrpc_service_part	*svcpt;
-	struct dhms			ts;
 	time64_t worstt;
 	unsigned int			cur;
 	unsigned int			worst;
@@ -1058,11 +1057,10 @@ static int ptlrpc_lprocfs_timeouts_seq_show(struct seq_file *m, void *n)
 		cur	= at_get(&svcpt->scp_at_estimate);
 		worst	= svcpt->scp_at_estimate.at_worst_ever;
 		worstt	= svcpt->scp_at_estimate.at_worst_time;
-		s2dhms(&ts, ktime_get_real_seconds() - worstt);
 
-		seq_printf(m, "%10s : cur %3u  worst %3u (at %lld, "
-			   DHMS_FMT" ago) ", "service",
-			   cur, worst, (s64)worstt, DHMS_VARS(&ts));
+		seq_printf(m, "%10s : cur %3u  worst %3u (at %lld, %llds ago) ",
+			   "service", cur, worst, (s64)worstt,
+			   (s64)(ktime_get_real_seconds() - worstt));
 
 		lprocfs_at_hist_helper(m, &svcpt->scp_at_estimate);
 	}

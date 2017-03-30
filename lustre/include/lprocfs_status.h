@@ -363,22 +363,6 @@ extern struct kobject *lustre_kobj;
 struct obd_device;
 struct obd_histogram;
 
-/* Days / hours / mins / seconds format */
-struct dhms {
-        int d,h,m,s;
-};
-static inline void s2dhms(struct dhms *ts, time_t secs)
-{
-        ts->d = secs / 86400;
-        secs = secs % 86400;
-        ts->h = secs / 3600;
-        secs = secs % 3600;
-        ts->m = secs / 60;
-        ts->s = secs % 60;
-}
-#define DHMS_FMT "%dd%dh%02dm%02ds"
-#define DHMS_VARS(x) (x)->d, (x)->h, (x)->m, (x)->s
-
 #define JOBSTATS_JOBID_VAR_MAX_LEN	20
 #define JOBSTATS_DISABLE		"disable"
 #define JOBSTATS_PROCNAME_UID		"procname_uid"
