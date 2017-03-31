@@ -308,6 +308,11 @@ static int lprocfs_quota_seq_open(struct inode *inode, struct file *file)
 	if (rc)
 		goto out_env;
 
+	if (!lqp->lqp_obj) {
+		lqp->lqp_it = NULL;
+		goto out_seq;
+	}
+
 	/* initialize iterator */
 	iops = &lqp->lqp_obj->do_index_ops->dio_it;
 	it = iops->init(&lqp->lqp_env, lqp->lqp_obj, 0);
@@ -322,6 +327,7 @@ static int lprocfs_quota_seq_open(struct inode *inode, struct file *file)
 	lqp->lqp_it = it;
 	lqp->lqp_cookie = 0;
 
+out_seq:
 	seq = file->private_data;
 	seq->private = lqp;
 	return 0;
@@ -340,9 +346,10 @@ static int lprocfs_quota_seq_release(struct inode *inode, struct file *file)
 	const struct dt_it_ops	*iops;
 
 	LASSERT(lqp);
-	iops = &lqp->lqp_obj->do_index_ops->dio_it;
-	if (lqp->lqp_it != NULL)
+	if (lqp->lqp_it != NULL) {
+		iops = &lqp->lqp_obj->do_index_ops->dio_it;
 		iops->fini(&lqp->lqp_env, lqp->lqp_it);
+	}
 	lu_env_fini(&lqp->lqp_env);
 	OBD_FREE_PTR(lqp);
 
