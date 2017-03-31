@@ -133,12 +133,12 @@ del_comp_and_verify() {
 	local left=$3
 	local size=$4
 
-	local opt="-I"
-	if [ $id == "init" ]; then
-		opt="--component-flags"
+	local opt="-I "
+	if [ $id == "init" -o $id == "^init" ]; then
+		opt="--component-flags="
 	fi
 
-	$LFS setstripe --component-del $opt $id $comp_file ||
+	$LFS setstripe --component-del $opt$id $comp_file ||
 		error "Delete component $id from $comp_file failed"
 
 	local comp_cnt=$($LFS getstripe --component-count $comp_file)
@@ -176,11 +176,10 @@ test_3() {
 	$LFS setstripe -E 1M -E 16M -E -1 $comp_file ||
 		error "Create second $comp_file failed"
 
-	#instantiate all components, so that objs are allocted
-	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=17k
-
+	del_comp_and_verify $comp_file "^init" 1 0
 	del_comp_and_verify $comp_file "init" 0 0
 	rm -f $comp_file || error "Delete second $comp_file failed"
+
 }
 run_test 3 "Delete component from existing file"
 

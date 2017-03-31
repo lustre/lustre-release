@@ -881,7 +881,7 @@ again:
 		if (i == lo->ldo_comp_cnt)
 			return id;
 	}
-	if (end > LCME_ID_MAX) {
+	if (end == LCME_ID_MAX) {
 		start = 1;
 		end = min(lo->ldo_layout_gen & LCME_ID_MASK,
 			  (__u32)(LCME_ID_MAX - 1));

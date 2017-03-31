@@ -1501,10 +1501,10 @@ void test31(void)
 	llapi_layout_free(layout);
 
 	/* delete non-tail component will fail */
-	rc = llapi_layout_file_comp_del(path, id[0]);
+	rc = llapi_layout_file_comp_del(path, id[0], 0);
 	ASSERTF(rc < 0 && errno == EINVAL, "rc %d, errno %d", rc, errno);
 
-	rc = llapi_layout_file_comp_del(path, id[1]);
+	rc = llapi_layout_file_comp_del(path, id[1], 0);
 	ASSERTF(rc == 0, "rc %d, errno %d", rc, errno);
 
 	/* verify the composite layout after deleting */

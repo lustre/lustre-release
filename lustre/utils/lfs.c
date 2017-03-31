@@ -187,6 +187,7 @@ command_t cmdlist[] = {
 	 "                               <filename>\n"
 	 "\tcomp_id:     Unique component ID\n"
 	 "\tcomp_flags:  'init' indicating all instantiated components\n"
+	 "\t		 '^init' indicating all uninstantiated components\n"
 	 "\t-I and -F can't be specified at the same time\n"
 	 " or\n"
 	 "To add component(s) to an existing composite file:\n"
@@ -684,13 +685,12 @@ static int lfs_component_del(char *fname, __u32 comp_id, __u32 flags)
 			fprintf(stderr, "Invalid component flags %#x\n", flags);
 			return -EINVAL;
 		}
-		comp_id = LCME_ID_NONE | flags;
 	} else if (comp_id > LCME_ID_MAX) {
 		fprintf(stderr, "Invalid component id %u\n", comp_id);
 		return -EINVAL;
 	}
 
-	rc = llapi_layout_file_comp_del(fname, comp_id);
+	rc = llapi_layout_file_comp_del(fname, comp_id, flags);
 	if (rc)
 		fprintf(stderr, "Delete component %#x from %s failed. %s\n",
 			comp_id, fname, strerror(errno));
@@ -1246,9 +1246,25 @@ static int adjust_first_extent(char *fname, struct llapi_layout *layout)
 	return 0;
 }
 
+static inline bool comp_flags_is_neg(__u32 flags)
+{
+	return flags & LCME_FL_NEG;
+}
+
+static inline void comp_flags_set_neg(__u32 *flags)
+{
+	*flags |= LCME_FL_NEG;
+}
+
+static inline void comp_flags_clear_neg(__u32 *flags)
+{
+	*flags &= ~LCME_FL_NEG;
+}
+
 static int comp_name2flags(__u32 *flags, char *name)
 {
 	char *ptr;
+	__u32 neg_flags = 0;
 
 	if (name == NULL)
 		return -EINVAL;
@@ -1260,10 +1276,24 @@ static int comp_name2flags(__u32 *flags, char *name)
 			break;
 		if (strcmp(flg, "init") == 0)
 			*flags |= LCME_FL_INIT;
+		else if (strcmp(flg, "^init") == 0)
+			neg_flags |= LCME_FL_INIT;
 		else
 			return -EINVAL;
 	}
-	return (*flags == 0) ? -EINVAL : 0;
+
+	if (*flags == 0 && neg_flags == 0)
+		return -EINVAL;
+	/* don't support mixed flags for now */
+	if (*flags && neg_flags)
+		return -EINVAL;
+
+	if (neg_flags) {
+		*flags = neg_flags;
+		comp_flags_set_neg(flags);
+	}
+
+	return 0;
 }
 
 enum {

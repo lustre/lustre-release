@@ -522,9 +522,11 @@ enum lov_comp_md_entry_flags {
 	LCME_FL_OFFLINE	= 0x00000004,	/* Not used */
 	LCME_FL_PREFERRED = 0x00000008, /* Not used */
 	LCME_FL_INIT	= 0x00000010,	/* instantiated */
+	LCME_FL_NEG	= 0x80000000	/* used to indicate a negative flag,
+					   won't be stored on disk */
 };
 
-#define LCME_KNOWN_FLAGS	LCME_FL_INIT
+#define LCME_KNOWN_FLAGS	(LCME_FL_NEG | LCME_FL_INIT)
 
 /* lcme_id can be specified as certain flags, and the the first
  * bit of lcme_id is used to indicate that the ID is representing
@@ -534,7 +536,7 @@ enum lcme_id {
 	LCME_ID_INVAL	= 0x0,
 	LCME_ID_MAX	= 0x7FFFFFFF,
 	LCME_ID_ALL	= 0xFFFFFFFF,
-	LCME_ID_NONE	= 0x80000000
+	LCME_ID_NOT_ID	= LCME_FL_NEG
 };
 
 #define LCME_ID_MASK	LCME_ID_MAX

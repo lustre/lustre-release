@@ -1928,35 +1928,67 @@ out:
 }
 
 /**
- * Delete component(s) by the specified component id (accepting lcme_id
- * wildcards also) from an existing file.
+ * Delete component(s) by the specified component id or component flags
+ * from an existing file.
  *
  * \param[in] path	path name of the file
- * \param[in] id	unique component ID or an lcme_id
- *			(LCME_ID_NONE | LCME_FL_* )
+ * \param[in] id	unique component ID
+ * \param[in] flags	flags: LCME_FL_* or;
+ *			negative flags: (LCME_FL_NEG|LCME_FL_*)
  */
-int llapi_layout_file_comp_del(const char *path, uint32_t id)
+int llapi_layout_file_comp_del(const char *path, uint32_t id, uint32_t flags)
 {
-	int rc, fd;
+	int rc, fd, lum_size;
+	struct llapi_layout *layout;
+	struct llapi_layout_comp *comp;
+	struct lov_user_md *lum;
 
-	if (path == NULL || id == 0) {
+	if (path == NULL || id > LCME_ID_MAX || (flags & ~LCME_KNOWN_FLAGS)) {
 		errno = EINVAL;
 		return -1;
 	}
 
-	fd = open(path, O_RDWR);
-	if (fd < 0)
+	/* Can only specify ID or flags, not both. */
+	if (id != 0 && flags != 0) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	layout = llapi_layout_alloc();
+	if (layout == NULL)
 		return -1;
 
-	rc = fsetxattr(fd, XATTR_LUSTRE_LOV".del", &id, sizeof(id), 0);
+	llapi_layout_comp_extent_set(layout, 0, LUSTRE_EOF);
+	comp = __llapi_layout_cur_comp(layout);
+	comp->llc_id = id;
+	comp->llc_flags = flags;
+
+	lum = llapi_layout_to_lum(layout);
+	if (lum == NULL) {
+		llapi_layout_free(layout);
+		return -1;
+	}
+	lum_size = ((struct lov_comp_md_v1 *)lum)->lcm_size;
+
+	fd = open(path, O_RDWR);
+	if (fd < 0) {
+		rc = -1;
+		goto out;
+	}
+
+	rc = fsetxattr(fd, XATTR_LUSTRE_LOV".del", lum, lum_size, 0);
 	if (rc < 0) {
 		int tmp_errno = errno;
 		close(fd);
 		errno = tmp_errno;
-		return -1;
+		rc = -1;
+		goto out;
 	}
 	close(fd);
-	return 0;
+out:
+	free(lum);
+	llapi_layout_free(layout);
+	return rc;
 }
 
 /**

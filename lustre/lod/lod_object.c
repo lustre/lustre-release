@@ -2431,21 +2431,48 @@ static int lod_declare_layout_del(const struct lu_env *env,
 				  struct thandle *th)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
-	struct dt_object	*next = dt_object_child(dt);
-	struct lod_device	*d = lu2lod_dev(dt->do_lu.lo_dev);
-	struct lod_object	*lo = lod_dt_obj(dt);
-	struct lu_attr	*attr = &lod_env_info(env)->lti_attr;
-	__u32	id;
-	int	rc, i, j, left;
+	struct dt_object *next = dt_object_child(dt);
+	struct lod_device *d = lu2lod_dev(dt->do_lu.lo_dev);
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct lu_attr *attr = &lod_env_info(env)->lti_attr;
+	struct lov_comp_md_v1 *comp_v1 = buf->lb_buf;
+	__u32 magic, id, flags, neg_flags = 0;
+	int rc, i, j, left;
 	ENTRY;
 
 	LASSERT(lo->ldo_is_composite);
 
-	id = *(__u32 *)buf->lb_buf;
-	if (id == 0 || id == LCME_ID_NONE) {
-		CDEBUG(D_LAYOUT, "%s: invalid component id %#x\n",
-		       lod2obd(d)->obd_name, id);
+	rc = lod_verify_striping(d, buf, false, 0);
+	if (rc != 0)
+		RETURN(rc);
+
+	magic = comp_v1->lcm_magic;
+	if (magic == __swab32(LOV_USER_MAGIC_COMP_V1)) {
+		lustre_swab_lov_comp_md_v1(comp_v1);
+		magic = comp_v1->lcm_magic;
+	}
+
+	if (magic != LOV_USER_MAGIC_COMP_V1)
 		RETURN(-EINVAL);
+
+	id = comp_v1->lcm_entries[0].lcme_id;
+	flags = comp_v1->lcm_entries[0].lcme_flags;
+
+	if (id > LCME_ID_MAX || (flags & ~LCME_KNOWN_FLAGS)) {
+		CDEBUG(D_LAYOUT, "%s: invalid component id %#x, flags %#x\n",
+		       lod2obd(d)->obd_name, id, flags);
+		RETURN(-EINVAL);
+	}
+
+	if (id != LCME_ID_INVAL && flags != 0) {
+		CDEBUG(D_LAYOUT, "%s: specified both id and flags.\n",
+		       lod2obd(d)->obd_name);
+		RETURN(-EINVAL);
+	}
+
+	if (flags & LCME_FL_NEG) {
+		neg_flags = flags & ~LCME_FL_NEG;
+		flags = 0;
 	}
 
 	left = lo->ldo_comp_cnt;
@@ -2457,10 +2484,11 @@ static int lod_declare_layout_del(const struct lu_env *env,
 
 		lod_comp = &lo->ldo_comp_entries[i];
 
-		if (id <= LCME_ID_MAX && id != lod_comp->llc_id)
+		if (id != LCME_ID_INVAL && id != lod_comp->llc_id)
 			continue;
-		else if (id > LCME_ID_MAX && id < LCME_ID_ALL &&
-			 !(id & lod_comp->llc_flags))
+		else if (flags && !(flags & lod_comp->llc_flags))
+			continue;
+		else if (neg_flags && (neg_flags & lod_comp->llc_flags))
 			continue;
 
 		if (left != (i + 1)) {

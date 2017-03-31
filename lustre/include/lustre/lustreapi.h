@@ -784,10 +784,9 @@ int llapi_layout_comp_use(struct llapi_layout *layout, uint32_t pos);
 int llapi_layout_file_comp_add(const char *path,
 			       const struct llapi_layout *layout);
 /**
- * Delete component(s) by the specified component id (accepting lcme_id
- * wildcards also) from an existing file.
+ * Delete component(s) by the specified component id or flags.
  */
-int llapi_layout_file_comp_del(const char *path, uint32_t id);
+int llapi_layout_file_comp_del(const char *path, uint32_t id, uint32_t flags);
 /**
  * Change flags or other parameters of the component(s) by component ID of an
  * existing file. The component to be modified is specified by the
