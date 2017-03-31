@@ -11,6 +11,7 @@ DIST_SUBDIRS = mpi
 noinst_DATA = disk1_8_up_2_5-ldiskfs.tar.bz2 disk2_1_up_2_5-ldiskfs.tar.bz2
 noinst_DATA += disk2_3_up_2_5-ldiskfs.tar.bz2 disk2_4-ldiskfs.tar.bz2
 noinst_DATA += disk2_4-zfs.tar.bz2 disk2_7-ldiskfs.tar.bz2 disk2_7-zfs.tar.bz2
+noinst_DATA += disk2_9-zfs.tar.bz2 disk2_9-ldiskfs.tar.bz2
 noinst_SCRIPTS = leak_finder.pl llmount.sh llmountcleanup.sh functions.sh
 noinst_SCRIPTS += test-framework.sh runvmstat runiozone runtests sanity.sh
 noinst_SCRIPTS += rundbench acceptance-small.sh compile.sh conf-sanity.sh
