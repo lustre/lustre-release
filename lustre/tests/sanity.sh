@@ -11259,7 +11259,7 @@ test_161d() {
 	# wait for create to be delayed
 	sleep 2
 
-	ps -q $pid
+	ps -p $pid
 	[[ $? -eq 0 ]] || error "create should be blocked"
 
 	local tempfile=$(mktemp)
