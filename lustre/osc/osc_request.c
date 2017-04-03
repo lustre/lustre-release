@@ -650,7 +650,7 @@ static int osc_destroy(const struct lu_env *env, struct obd_export *exp,
 		rc = l_wait_event_exclusive(cli->cl_destroy_waitq,
 					    osc_can_send_destroy(cli), &lwi);
 		if (rc) {
-			ptlrpc_request_free(req);
+			ptlrpc_req_finished(req);
 			RETURN(rc);
 		}
 	}

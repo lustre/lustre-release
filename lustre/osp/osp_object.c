@@ -1737,10 +1737,8 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 				    PTLRPC_BULK_PUT_SINK | PTLRPC_BULK_BUF_KIOV,
 				    MDS_BULK_PORTAL,
 				    &ptlrpc_bulk_kiov_pin_ops);
-	if (desc == NULL) {
-		ptlrpc_request_free(req);
-		RETURN(-ENOMEM);
-	}
+	if (desc == NULL)
+		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < npages; i++)
 		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,

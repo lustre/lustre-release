@@ -392,10 +392,8 @@ int qsd_fetch_index(const struct lu_env *env, struct obd_export *exp,
 				    PTLRPC_BULK_PUT_SINK | PTLRPC_BULK_BUF_KIOV,
 				    MDS_BULK_PORTAL,
 				    &ptlrpc_bulk_kiov_pin_ops);
-	if (desc == NULL) {
-		ptlrpc_request_free(req);
-		RETURN(-ENOMEM);
-	}
+	if (desc == NULL)
+		GOTO(out, rc = -ENOMEM);
 
 	/* req now owns desc and will free it when it gets freed */
 	for (i = 0; i < npages; i++)
