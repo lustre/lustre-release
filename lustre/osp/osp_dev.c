@@ -796,7 +796,7 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	if (unlikely(d->opd_imp_active == 0))
 		RETURN(-ENOTCONN);
 
-	id = d->opd_syn_last_used_id;
+	id = d->opd_sync_last_used_id;
 	down_write(&d->opd_async_updates_rwsem);
 
 	CDEBUG(D_OTHER, "%s: async updates %d\n", d->opd_obd->obd_name,
@@ -805,7 +805,7 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	/* make sure the connection is fine */
 	expire = cfs_time_shift(obd_timeout);
 	lwi = LWI_TIMEOUT(expire - cfs_time_current(), osp_sync_timeout, d);
-	rc = l_wait_event(d->opd_syn_barrier_waitq,
+	rc = l_wait_event(d->opd_sync_barrier_waitq,
 			  atomic_read(&d->opd_async_updates_count) == 0,
 			  &lwi);
 	up_write(&d->opd_async_updates_rwsem);
@@ -813,25 +813,25 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 		GOTO(out, rc);
 
 	CDEBUG(D_CACHE, "%s: id: used %lu, processed %llu\n",
-	       d->opd_obd->obd_name, id, d->opd_syn_last_processed_id);
+	       d->opd_obd->obd_name, id, d->opd_sync_last_processed_id);
 
 	/* wait till all-in-line are processed */
-	while (d->opd_syn_last_processed_id < id) {
+	while (d->opd_sync_last_processed_id < id) {
 
-		old = d->opd_syn_last_processed_id;
+		old = d->opd_sync_last_processed_id;
 
 		/* make sure the connection is fine */
 		expire = cfs_time_shift(obd_timeout);
 		lwi = LWI_TIMEOUT(expire - cfs_time_current(),
 				  osp_sync_timeout, d);
-		l_wait_event(d->opd_syn_barrier_waitq,
-			     d->opd_syn_last_processed_id >= id,
+		l_wait_event(d->opd_sync_barrier_waitq,
+			     d->opd_sync_last_processed_id >= id,
 			     &lwi);
 
-		if (d->opd_syn_last_processed_id >= id)
+		if (d->opd_sync_last_processed_id >= id)
 			break;
 
-		if (d->opd_syn_last_processed_id != old) {
+		if (d->opd_sync_last_processed_id != old) {
 			/* some progress have been made,
 			 * keep trying... */
 			continue;
@@ -842,30 +842,29 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	}
 
 	/* block new processing (barrier>0 - few callers are possible */
-	atomic_inc(&d->opd_syn_barrier);
+	atomic_inc(&d->opd_sync_barrier);
 
 	CDEBUG(D_CACHE, "%s: %u in flight\n", d->opd_obd->obd_name,
-	       atomic_read(&d->opd_syn_rpc_in_flight));
+	       atomic_read(&d->opd_sync_rpcs_in_flight));
 
 	/* wait till all-in-flight are replied, so executed by the target */
 	/* XXX: this is used by LFSCK at the moment, which doesn't require
 	 *	all the changes to be committed, but in general it'd be
 	 *	better to wait till commit */
-	while (atomic_read(&d->opd_syn_rpc_in_flight) > 0) {
-
-		old = atomic_read(&d->opd_syn_rpc_in_flight);
+	while (atomic_read(&d->opd_sync_rpcs_in_flight) > 0) {
+		old = atomic_read(&d->opd_sync_rpcs_in_flight);
 
 		expire = cfs_time_shift(obd_timeout);
 		lwi = LWI_TIMEOUT(expire - cfs_time_current(),
 				  osp_sync_timeout, d);
-		l_wait_event(d->opd_syn_barrier_waitq,
-			     atomic_read(&d->opd_syn_rpc_in_flight) == 0,
+		l_wait_event(d->opd_sync_barrier_waitq,
+			     atomic_read(&d->opd_sync_rpcs_in_flight) == 0,
 			     &lwi);
 
-		if (atomic_read(&d->opd_syn_rpc_in_flight) == 0)
+		if (atomic_read(&d->opd_sync_rpcs_in_flight) == 0)
 			break;
 
-		if (atomic_read(&d->opd_syn_rpc_in_flight) != old) {
+		if (atomic_read(&d->opd_sync_rpcs_in_flight) != old) {
 			/* some progress have been made */
 			continue;
 		}
@@ -876,8 +875,8 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 
 out:
 	/* resume normal processing (barrier=0) */
-	atomic_dec(&d->opd_syn_barrier);
-	__osp_sync_check_for_work(d);
+	atomic_dec(&d->opd_sync_barrier);
+	osp_sync_check_for_work(d);
 
 	CDEBUG(D_CACHE, "%s: done in %lu: rc = %d\n", d->opd_obd->obd_name,
 	       cfs_time_current() - start, rc);
@@ -1621,7 +1620,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		if (d->opd_pre != NULL)
 			wake_up(&d->opd_pre_waitq);
 
-		__osp_sync_check_for_work(d);
+		osp_sync_check_for_work(d);
 		CDEBUG(D_HA, "got connected\n");
 		break;
 	case IMP_EVENT_INVALIDATE:

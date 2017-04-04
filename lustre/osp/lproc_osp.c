@@ -105,7 +105,7 @@ LPROC_SEQ_FOPS(osp_active);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_syn_in_flight_seq_show(struct seq_file *m, void *data)
+static int osp_sync_rpcs_in_flight_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
@@ -113,10 +113,10 @@ static int osp_syn_in_flight_seq_show(struct seq_file *m, void *data)
 	if (osp == NULL)
 		return -EINVAL;
 
-	seq_printf(m, "%u\n", atomic_read(&osp->opd_syn_rpc_in_flight));
+	seq_printf(m, "%u\n", atomic_read(&osp->opd_sync_rpcs_in_flight));
 	return 0;
 }
-LPROC_SEQ_FOPS_RO(osp_syn_in_flight);
+LPROC_SEQ_FOPS_RO(osp_sync_rpcs_in_flight);
 
 /**
  * Show number of RPCs in processing (including uncommitted by OST)
@@ -126,7 +126,7 @@ LPROC_SEQ_FOPS_RO(osp_syn_in_flight);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_syn_in_prog_seq_show(struct seq_file *m, void *data)
+static int osp_sync_rpcs_in_progress_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
@@ -134,10 +134,10 @@ static int osp_syn_in_prog_seq_show(struct seq_file *m, void *data)
 	if (osp == NULL)
 		return -EINVAL;
 
-	seq_printf(m, "%u\n", atomic_read(&osp->opd_syn_rpc_in_progress));
+	seq_printf(m, "%u\n", atomic_read(&osp->opd_sync_rpcs_in_progress));
 	return 0;
 }
-LPROC_SEQ_FOPS_RO(osp_syn_in_prog);
+LPROC_SEQ_FOPS_RO(osp_sync_rpcs_in_progress);
 
 /**
  * Show number of changes to sync
@@ -147,7 +147,7 @@ LPROC_SEQ_FOPS_RO(osp_syn_in_prog);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_syn_changes_seq_show(struct seq_file *m, void *data)
+static int osp_sync_changes_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
@@ -155,7 +155,7 @@ static int osp_syn_changes_seq_show(struct seq_file *m, void *data)
 	if (osp == NULL)
 		return -EINVAL;
 
-	seq_printf(m, "%u\n", atomic_read(&osp->opd_syn_changes));
+	seq_printf(m, "%u\n", atomic_read(&osp->opd_sync_changes));
 	return 0;
 }
 
@@ -169,7 +169,7 @@ static int osp_syn_changes_seq_show(struct seq_file *m, void *data)
  * \retval		\a count on success
  * \retval		negative number on error
  */
-static ssize_t osp_syn_changes_seq_write(struct file *file,
+static ssize_t osp_sync_changes_seq_write(struct file *file,
 					 const char __user *buffer,
 					 size_t count, loff_t *off)
 {
@@ -188,7 +188,7 @@ static ssize_t osp_syn_changes_seq_write(struct file *file,
 
 	return rc == 0 ? count : rc;
 }
-LPROC_SEQ_FOPS(osp_syn_changes);
+LPROC_SEQ_FOPS(osp_sync_changes);
 
 /**
  * Show maximum number of RPCs in flight allowed
@@ -206,7 +206,7 @@ static int osp_max_rpcs_in_flight_seq_show(struct seq_file *m, void *data)
 	if (osp == NULL)
 		return -EINVAL;
 
-	seq_printf(m, "%u\n", osp->opd_syn_max_rpc_in_flight);
+	seq_printf(m, "%u\n", osp->opd_sync_max_rpcs_in_flight);
 	return 0;
 }
 
@@ -240,7 +240,7 @@ osp_max_rpcs_in_flight_seq_write(struct file *file, const char __user *buffer,
 	if (val < 1 || val > INT_MAX)
 		return -ERANGE;
 
-	osp->opd_syn_max_rpc_in_flight = val;
+	osp->opd_sync_max_rpcs_in_flight = val;
 	return count;
 }
 LPROC_SEQ_FOPS(osp_max_rpcs_in_flight);
@@ -253,7 +253,7 @@ LPROC_SEQ_FOPS(osp_max_rpcs_in_flight);
  * \retval		0 on success
  * \retval		negative number on error
  */
-static int osp_max_rpcs_in_prog_seq_show(struct seq_file *m, void *data)
+static int osp_max_rpcs_in_progress_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device	*dev = m->private;
 	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
@@ -261,7 +261,7 @@ static int osp_max_rpcs_in_prog_seq_show(struct seq_file *m, void *data)
 	if (osp == NULL)
 		return -EINVAL;
 
-	seq_printf(m, "%u\n", osp->opd_syn_max_rpc_in_progress);
+	seq_printf(m, "%u\n", osp->opd_sync_max_rpcs_in_progress);
 	return 0;
 }
 
@@ -276,8 +276,8 @@ static int osp_max_rpcs_in_prog_seq_show(struct seq_file *m, void *data)
  * \retval		negative number on error
  */
 static ssize_t
-osp_max_rpcs_in_prog_seq_write(struct file *file, const char __user *buffer,
-				size_t count, loff_t *off)
+osp_max_rpcs_in_progress_seq_write(struct file *file, const char __user *buffer,
+				   size_t count, loff_t *off)
 {
 	struct seq_file *m = file->private_data;
 	struct obd_device *dev = m->private;
@@ -295,11 +295,11 @@ osp_max_rpcs_in_prog_seq_write(struct file *file, const char __user *buffer,
 	if (val < 1 || val > INT_MAX)
 		return -ERANGE;
 
-	osp->opd_syn_max_rpc_in_progress = val;
+	osp->opd_sync_max_rpcs_in_progress = val;
 
 	return count;
 }
-LPROC_SEQ_FOPS(osp_max_rpcs_in_prog);
+LPROC_SEQ_FOPS(osp_max_rpcs_in_progress);
 
 /**
  * Show number of objects to precreate next time
@@ -640,8 +640,8 @@ static int osp_destroys_in_flight_seq_show(struct seq_file *m, void *data)
 		return -EINVAL;
 
 	seq_printf(m, "%u\n",
-		   atomic_read(&osp->opd_syn_rpc_in_progress) +
-		   atomic_read(&osp->opd_syn_changes));
+		   atomic_read(&osp->opd_sync_rpcs_in_progress) +
+		   atomic_read(&osp->opd_sync_changes));
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(osp_destroys_in_flight);
@@ -662,7 +662,7 @@ static int osp_old_sync_processed_seq_show(struct seq_file *m, void *data)
 	if (osp == NULL)
 		return -EINVAL;
 
-	seq_printf(m, "%d\n", osp->opd_syn_prev_done);
+	seq_printf(m, "%d\n", osp->opd_sync_prev_done);
 	return 0;
 }
 LPROC_SEQ_FOPS_RO(osp_old_sync_processed);
@@ -868,7 +868,7 @@ static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	{ .name =	"max_rpcs_in_flight",
 	  .fops =	&osp_max_rpcs_in_flight_fops	},
 	{ .name =	"max_rpcs_in_progress",
-	  .fops =	&osp_max_rpcs_in_prog_fops	},
+	  .fops =	&osp_max_rpcs_in_progress_fops	},
 	{ .name =	"create_count",
 	  .fops =	&osp_create_count_fops		},
 	{ .name =	"max_create_count",
@@ -894,11 +894,11 @@ static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	{ .name =	"prealloc_status",
 	  .fops =	&osp_pre_status_fops		},
 	{ .name =	"sync_changes",
-	  .fops =	&osp_syn_changes_fops		},
+	  .fops =	&osp_sync_changes_fops		},
 	{ .name =	"sync_in_flight",
-	  .fops =	&osp_syn_in_flight_fops		},
+	  .fops =	&osp_sync_rpcs_in_flight_fops	},
 	{ .name =	"sync_in_progress",
-	  .fops =	&osp_syn_in_prog_fops		},
+	  .fops =	&osp_sync_rpcs_in_progress_fops	},
 	{ .name =	"old_sync_processed",
 	  .fops =	&osp_old_sync_processed_fops	},
 	{ .name =	"reserved_mb_high",
@@ -931,7 +931,7 @@ static struct lprocfs_vars lprocfs_osp_md_vars[] = {
 	{ .name =	"max_rpcs_in_flight",
 	  .fops =	&osp_max_rpcs_in_flight_fops	},
 	{ .name =	"max_rpcs_in_progress",
-	  .fops =	&osp_max_rpcs_in_prog_fops	},
+	  .fops =	&osp_max_rpcs_in_progress_fops	},
 	{ .name =	"timeouts",
 	  .fops =	&osp_timeouts_fops		},
 	{ .name =	"import",

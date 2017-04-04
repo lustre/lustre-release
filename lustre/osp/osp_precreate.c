@@ -991,8 +991,8 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 				       d->opd_pre_status, rc);
 			CDEBUG(D_INFO,
 			       "non-committed changes: %u, in progress: %u\n",
-			       atomic_read(&d->opd_syn_changes),
-			       atomic_read(&d->opd_syn_rpc_in_progress));
+			       atomic_read(&d->opd_sync_changes),
+			       atomic_read(&d->opd_sync_rpcs_in_progress));
 		} else if (unlikely(old == -ENOSPC)) {
 			d->opd_pre_status = 0;
 			spin_lock(&d->opd_pre_lock);
@@ -1292,8 +1292,8 @@ static int osp_precreate_ready_condition(const struct lu_env *env,
 		return 1;
 
 	/* ready if OST reported no space and no destroys in progress */
-	if (atomic_read(&d->opd_syn_changes) +
-	    atomic_read(&d->opd_syn_rpc_in_progress) == 0 &&
+	if (atomic_read(&d->opd_sync_changes) +
+	    atomic_read(&d->opd_sync_rpcs_in_progress) == 0 &&
 	    d->opd_pre_status == -ENOSPC)
 		return 1;
 
@@ -1318,12 +1318,12 @@ static int osp_precreate_timeout_condition(void *data)
 	struct osp_device *d = data;
 
 	CDEBUG(D_HA, "%s: slow creates, last="DFID", next="DFID", "
-	      "reserved=%llu, syn_changes=%u, "
-	      "syn_rpc_in_progress=%d, status=%d\n",
+	      "reserved=%llu, sync_changes=%u, "
+	      "sync_rpcs_in_progress=%d, status=%d\n",
 	      d->opd_obd->obd_name, PFID(&d->opd_pre_last_created_fid),
 	      PFID(&d->opd_pre_used_fid), d->opd_pre_reserved,
-	      atomic_read(&d->opd_syn_changes),
-	      atomic_read(&d->opd_syn_rpc_in_progress),
+	      atomic_read(&d->opd_sync_changes),
+	      atomic_read(&d->opd_sync_rpcs_in_progress),
 	      d->opd_pre_status);
 
 	return 1;
@@ -1422,16 +1422,16 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 		 * wait till that is done - some space might be released
 		 */
 		if (unlikely(rc == -ENOSPC)) {
-			if (atomic_read(&d->opd_syn_changes)) {
+			if (atomic_read(&d->opd_sync_changes)) {
 				/* force local commit to release space */
 				dt_commit_async(env, d->opd_storage);
 			}
-			if (atomic_read(&d->opd_syn_rpc_in_progress)) {
+			if (atomic_read(&d->opd_sync_rpcs_in_progress)) {
 				/* just wait till destroys are done */
 				/* see l_wait_even() few lines below */
 			}
-			if (atomic_read(&d->opd_syn_changes) +
-			    atomic_read(&d->opd_syn_rpc_in_progress) == 0) {
+			if (atomic_read(&d->opd_sync_changes) +
+			    atomic_read(&d->opd_sync_rpcs_in_progress) == 0) {
 				/* no hope for free space */
 				break;
 			}

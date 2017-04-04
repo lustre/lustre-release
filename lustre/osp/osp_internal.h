@@ -199,44 +199,42 @@ struct osp_device {
 	struct ptlrpc_thread		 opd_update_thread;
 
 	/*
-	 * OST synchronization
+	 * OST synchronization thread
 	 */
-	spinlock_t			 opd_syn_lock;
+	spinlock_t			 opd_sync_lock;
 	/* unique generation, to recognize start of new records in the llog */
-	struct llog_gen			 opd_syn_generation;
+	struct llog_gen			 opd_sync_generation;
 	/* number of changes to sync, used to wake up sync thread */
-	atomic_t			 opd_syn_changes;
+	atomic_t			 opd_sync_changes;
 	/* processing of changes from previous mount is done? */
-	int				 opd_syn_prev_done;
+	int				 opd_sync_prev_done;
 	/* found records */
-	struct ptlrpc_thread		 opd_syn_thread;
-	wait_queue_head_t		 opd_syn_waitq;
-	/* list of inflight rpc */
-	struct list_head		 opd_syn_inflight_list;
+	struct ptlrpc_thread		 opd_sync_thread;
+	wait_queue_head_t		 opd_sync_waitq;
+	/* list of in flight rpcs */
+	struct list_head		 opd_sync_in_flight_list;
 	/* list of remotely committed rpc */
-	struct list_head		 opd_syn_committed_there;
-	/* number of changes being under sync */
-	int				 opd_syn_sync_in_progress;
+	struct list_head		 opd_sync_committed_there;
 	/* number of RPCs in flight - flow control */
-	atomic_t			 opd_syn_rpc_in_flight;
-	int				 opd_syn_max_rpc_in_flight;
+	atomic_t			 opd_sync_rpcs_in_flight;
+	int				 opd_sync_max_rpcs_in_flight;
 	/* number of RPC in processing (including non-committed by OST) */
-	atomic_t			 opd_syn_rpc_in_progress;
-	int				 opd_syn_max_rpc_in_progress;
+	atomic_t			 opd_sync_rpcs_in_progress;
+	int				 opd_sync_max_rpcs_in_progress;
 	/* osd api's commit cb control structure */
-	struct dt_txn_callback		 opd_syn_txn_cb;
+	struct dt_txn_callback		 opd_sync_txn_cb;
 	/* last used change number -- semantically similar to transno */
-	__u64				 opd_syn_last_used_id;
+	__u64				 opd_sync_last_used_id;
 	/* last committed change number -- semantically similar to
 	 * last_committed */
-	__u64				 opd_syn_last_committed_id;
+	__u64				 opd_sync_last_committed_id;
 	/* last processed (taken from llog) id */
-	volatile __u64			 opd_syn_last_processed_id;
-	struct osp_id_tracker		*opd_syn_tracker;
-	struct list_head		 opd_syn_ontrack;
+	volatile __u64			 opd_sync_last_processed_id;
+	struct osp_id_tracker		*opd_sync_tracker;
+	struct list_head		 opd_sync_ontrack;
 	/* stop processing new requests until barrier=0 */
-	atomic_t			 opd_syn_barrier;
-	wait_queue_head_t		 opd_syn_barrier_waitq;
+	atomic_t			 opd_sync_barrier;
+	wait_queue_head_t		 opd_sync_barrier_waitq;
 
 	/*
 	 * statfs related fields: OSP maintains it on its own
@@ -828,7 +826,7 @@ int osp_sync_add(const struct lu_env *env, struct osp_object *o,
 		 const struct lu_attr *attr);
 int osp_sync_init(const struct lu_env *env, struct osp_device *d);
 int osp_sync_fini(struct osp_device *d);
-void __osp_sync_check_for_work(struct osp_device *d);
+void osp_sync_check_for_work(struct osp_device *osp);
 
 /* lwp_dev.c */
 extern struct obd_ops lwp_obd_device_ops;

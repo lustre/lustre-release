@@ -1151,7 +1151,7 @@ static int osp_send_update_req(const struct lu_env *env,
 		if (!osp->opd_connect_mdt) {
 			down_read(&osp->opd_async_updates_rwsem);
 			args->oaua_count = &osp->opd_async_updates_count;
-			args->oaua_waitq = &osp->opd_syn_barrier_waitq;
+			args->oaua_waitq = &osp->opd_sync_barrier_waitq;
 			up_read(&osp->opd_async_updates_rwsem);
 			atomic_inc(args->oaua_count);
 		}
