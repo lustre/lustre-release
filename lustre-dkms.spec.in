@@ -142,5 +142,5 @@ exit 0
 * Wed Oct  7 2015 Bruno Faccini <bruno.faccini@intel.com>
  - adapted for Lustre Client DKMS creation
  - allow for on-target reconfig to prevent static deps requires
-* Fri Apr  8 2013 Brian Behlendorf <behlendorf1@llnl.gov> - 2.3.63-1
+* Mon Apr  8 2013 Brian Behlendorf <behlendorf1@llnl.gov> - 2.3.63-1
 - First DKMS packages.
