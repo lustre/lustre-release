@@ -220,7 +220,8 @@ nodemap_fileset_seq_write(struct file *file,
 	if (count > PATH_MAX)
 		RETURN(-EINVAL);
 
-	OBD_ALLOC(nm_fileset, count);
+	OBD_ALLOC(nm_fileset, count + 1);
+	/* OBD_ALLOC zero-fills the buffer */
 	if (nm_fileset == NULL)
 		RETURN(-ENOMEM);
 
@@ -233,7 +234,7 @@ nodemap_fileset_seq_write(struct file *file,
 
 	rc = count;
 out:
-	OBD_FREE(nm_fileset, count);
+	OBD_FREE(nm_fileset, count + 1);
 
 	return rc;
 }
