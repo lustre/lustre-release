@@ -261,8 +261,9 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	__u64			 valid = attr->la_valid;
 	const char		*xattr_name = rr->rr_name.ln_name;
 	int			 xattr_len = rr->rr_eadatalen;
-	__u64			 lockpart;
+	__u64			 lockpart = MDS_INODELOCK_UPDATE;
 	int			 rc;
+	bool	reply_ea = false;
 	ENTRY;
 
 	CDEBUG(D_INODE, "setxattr for "DFID": %s %s\n", PFID(rr->rr_fid1),
@@ -320,9 +321,41 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		/* ACLs were mapped out, return an error so the user knows */
 		if (rc != xattr_len)
 			GOTO(out, rc = -EPERM);
+	} else if ((strlen(xattr_name) > strlen(XATTR_LUSTRE_LOV) + 1) &&
+		   strncmp(xattr_name, XATTR_LUSTRE_LOV,
+			   strlen(XATTR_LUSTRE_LOV)) == 0) {
+
+		if (strncmp(xattr_name, XATTR_LUSTRE_LOV".add",
+			    strlen(XATTR_LUSTRE_LOV".add")) &&
+		    strncmp(xattr_name, XATTR_LUSTRE_LOV".set",
+			    strlen(XATTR_LUSTRE_LOV".set")) &&
+		    strncmp(xattr_name, XATTR_LUSTRE_LOV".del",
+			    strlen(XATTR_LUSTRE_LOV".del"))) {
+			CERROR("%s: invalid xattr name: %s\n",
+			       mdt_obd_name(info->mti_mdt), xattr_name);
+			GOTO(out, rc = -EINVAL);
+		}
+
+		lockpart |= MDS_INODELOCK_LAYOUT;
+
+		/*
+		 * For XATTR_LUSTRE_LOV.add, we'd reply LOVEA to client,
+		 * client will save it for replay.
+		 */
+		if (strncmp(xattr_name, XATTR_LUSTRE_LOV".add",
+			    strlen(XATTR_LUSTRE_LOV".add")) == 0 &&
+		    req_capsule_has_field(&req->rq_pill, &RMF_MDT_MD,
+					  RCL_SERVER)) {
+			/*
+			 * Don't need to reply LOVEA for replay request,
+			 * it's already stored in client request.
+			 */
+			if (!req_is_replay(req))
+				reply_ea = true;
+			mdt_fix_lov_magic(info);
+		}
 	}
 
-        lockpart = MDS_INODELOCK_UPDATE;
         /* Revoke all clients' lookup lock, since the access
          * permissions for this inode is changed when ACL_ACCESS is
          * set. This isn't needed for ACL_DEFAULT, since that does
@@ -392,6 +425,27 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		CDEBUG(D_INFO, "valid bits: %#llx\n", valid);
 		rc = -EINVAL;
 	}
+
+	if (reply_ea && rc == 0) {
+		ma->ma_lmm = req_capsule_server_get(&req->rq_pill, &RMF_MDT_MD);
+		ma->ma_lmm_size = req_capsule_get_size(&req->rq_pill,
+						       &RMF_MDT_MD, RCL_SERVER);
+		ma->ma_need = MA_LOV;
+		ma->ma_valid = 0;
+		if (ma->ma_lmm_size > 0)
+			rc = mdt_attr_get_complex(info, obj, ma);
+
+		if (ma->ma_valid & MA_LOV) {
+			struct mdt_body *repbody;
+
+			repbody	= req_capsule_server_get(&req->rq_pill,
+							 &RMF_MDT_BODY);
+			LASSERT(ma->ma_lmm_size != 0);
+			repbody->mbo_eadatasize = ma->ma_lmm_size;
+			repbody->mbo_valid |= OBD_MD_FLEASIZE;
+		}
+	}
+
 	if (rc == 0)
 		mdt_counter_incr(req, LPROC_MDT_SETXATTR);
 

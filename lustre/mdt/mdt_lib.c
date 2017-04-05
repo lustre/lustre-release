@@ -1292,7 +1292,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 /*
  * please see comment above LOV_MAGIC_V1_DEF
  */
-static void mdt_fix_lov_magic(struct mdt_thread_info *info)
+void mdt_fix_lov_magic(struct mdt_thread_info *info)
 {
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct lov_user_md_v1   *v1;
@@ -1301,15 +1301,11 @@ static void mdt_fix_lov_magic(struct mdt_thread_info *info)
 	LASSERT(v1);
 
 	if (unlikely(req_is_replay(mdt_info_req(info)))) {
-		if (v1->lmm_magic == LOV_USER_MAGIC_V1) {
-			v1->lmm_magic = LOV_MAGIC_V1_DEF;
-		} else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_V1)) {
-			v1->lmm_magic = __swab32(LOV_MAGIC_V1_DEF);
-		} else if (v1->lmm_magic == LOV_USER_MAGIC_V3) {
-			v1->lmm_magic = LOV_MAGIC_V3_DEF;
-		} else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_V3)) {
-			v1->lmm_magic = __swab32(LOV_MAGIC_V3_DEF);
-		}
+		if ((v1->lmm_magic & LOV_MAGIC_MASK) == LOV_MAGIC_MAGIC)
+			v1->lmm_magic |= LOV_MAGIC_DEF;
+		else if ((v1->lmm_magic & __swab32(LOV_MAGIC_MAGIC)) ==
+			 __swab32(LOV_MAGIC_MAGIC))
+			v1->lmm_magic |= __swab32(LOV_MAGIC_DEF);
 	}
 }
 

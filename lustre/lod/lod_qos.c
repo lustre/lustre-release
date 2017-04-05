@@ -819,12 +819,54 @@ static int lod_qos_is_ost_used(const struct lu_env *env, int ost, __u32 stripes)
 	return 0;
 }
 
+/**
+ * Check is OST used in a composite layout
+ *
+ * \param[in] inuse	all inuse ost indexs
+ * \param[in] ost	OST target index to check
+ *
+ * \retval 0		not used
+ * \retval 1		used
+ */
+static inline int lod_comp_is_ost_used(struct ost_pool *inuse, int ost)
+{
+	__u32 j;
+	LASSERT(inuse != NULL);
+
+	if (inuse->op_size == 0)
+		return 0;
+
+	LASSERT(inuse->op_count <= inuse->op_size);
+	for (j = 0; j < inuse->op_count; j++) {
+		if (inuse->op_array[j] == ost)
+			return 1;
+	}
+	return 0;
+}
+
+/**
+ * Mark the given target as used for a composite layout
+ *
+ * \param[in] inuse	inuse ost index array
+ * \param[in] idx	index in the array
+ */
+static inline void lod_comp_ost_in_use(struct ost_pool *inuse, int ost)
+{
+	LASSERT(inuse != NULL);
+	if (inuse->op_size && !lod_comp_is_ost_used(inuse,  ost)) {
+		LASSERT(inuse->op_count < inuse->op_size);
+		inuse->op_array[inuse->op_count] = ost;
+		inuse->op_count++;
+	}
+}
+
 static int lod_check_and_reserve_ost(const struct lu_env *env,
 				     struct lod_device *m,
 				     struct obd_statfs *sfs, __u32 ost_idx,
 				     __u32 speed, __u32 *s_idx,
 				     struct dt_object **stripe,
-				     struct thandle *th)
+				     struct thandle *th,
+				     struct ost_pool *inuse)
 {
 	struct dt_object   *o;
 	__u32 stripe_idx = *s_idx;
@@ -854,6 +896,15 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	}
 
 	/*
+	 * try not allocate on OST which has been used by other
+	 * component
+	 */
+	if (speed == 0 && lod_comp_is_ost_used(inuse, ost_idx)) {
+		QOS_DEBUG("#%d: used by other component\n", ost_idx);
+		goto out_return;
+	}
+
+	/*
 	 * do not put >1 objects on a single OST
 	 */
 	if (lod_qos_is_ost_used(env, ost_idx, stripe_idx))
@@ -871,6 +922,7 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	 * We've successfully declared (reserved) an object
 	 */
 	lod_qos_ost_in_use(env, stripe_idx, ost_idx);
+	lod_comp_ost_in_use(inuse, ost_idx);
 	stripe[stripe_idx] = o;
 	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_LOV_CREATE_RACE, 2);
 	stripe_idx++;
@@ -899,6 +951,8 @@ out_return:
  * \param[out] stripe	striping created
  * \param[in] flags	allocation flags (0 or LOV_USES_DEFAULT_STRIPE)
  * \param[in] th	transaction handle
+ * \param[in] comp_idx	index of ldo_comp_entries
+ * \param[in|out] inuse	array of inuse ost index
  *
  * \retval 0		on success
  * \retval -ENOSPC	if not enough OSTs are found
@@ -906,26 +960,29 @@ out_return:
  */
 static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 			struct dt_object **stripe, int flags,
-			struct thandle *th)
+			struct thandle *th, int comp_idx,
+			struct ost_pool *inuse)
 {
+	struct lod_layout_component *lod_comp;
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
 	struct pool_desc  *pool = NULL;
 	struct ost_pool   *osts;
 	struct lod_qos_rr *lqr;
-	unsigned int	   i, array_idx;
-	int		   rc;
-	__u32		   ost_start_idx_temp;
-	int		   speed = 0;
-	int		   ost_connecting = 0;
-	__u32		   stripe_idx = 0;
-	__u32		   stripe_cnt = lo->ldo_stripenr;
-	__u32		   stripe_cnt_min = min_stripe_count(stripe_cnt, flags);
-	__u32		   ost_idx;
+	unsigned int	i, array_idx;
+	__u32	ost_start_idx_temp;
+	__u32	stripe_idx = 0;
+	__u32	stripe_cnt, stripe_cnt_min, ost_idx;
+	int	rc, speed = 0, ost_connecting = 0;
 	ENTRY;
 
-	if (lo->ldo_pool)
-		pool = lod_find_pool(m, lo->ldo_pool);
+	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
+	lod_comp = &lo->ldo_comp_entries[comp_idx];
+	stripe_cnt = lod_comp->llc_stripenr;
+	stripe_cnt_min = min_stripe_count(stripe_cnt, flags);
+
+	if (lod_comp->llc_pool != NULL)
+		pool = lod_find_pool(m, lod_comp->llc_pool);
 
 	if (pool != NULL) {
 		down_read(&pool_tgt_rw_sem(pool));
@@ -940,7 +997,7 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	if (rc)
 		GOTO(out, rc);
 
-	rc = lod_qos_ost_in_use_clear(env, lo->ldo_stripenr);
+	rc = lod_qos_ost_in_use_clear(env, stripe_cnt);
 	if (rc)
 		GOTO(out, rc);
 
@@ -966,11 +1023,11 @@ repeat_find:
 
 	QOS_DEBUG("pool '%s' want %d startidx %d startcnt %d offset %d "
 		  "active %d count %d\n",
-		  lo->ldo_pool ? lo->ldo_pool : "",
+		  lod_comp->llc_pool ? lod_comp->llc_pool : "",
 		  stripe_cnt, lqr->lqr_start_idx, lqr->lqr_start_count,
 		  lqr->lqr_offset_idx, osts->op_count, osts->op_count);
 
-	for (i = 0; i < osts->op_count && stripe_idx < lo->ldo_stripenr; i++) {
+	for (i = 0; i < osts->op_count && stripe_idx < stripe_cnt; i++) {
 		array_idx = (lqr->lqr_start_idx + lqr->lqr_offset_idx) %
 				osts->op_count;
 		++lqr->lqr_start_idx;
@@ -991,7 +1048,7 @@ repeat_find:
 
 		spin_unlock(&lqr->lqr_alloc);
 		rc = lod_check_and_reserve_ost(env, m, sfs, ost_idx, speed,
-					       &stripe_idx, stripe, th);
+					       &stripe_idx, stripe, th, inuse);
 		spin_lock(&lqr->lqr_alloc);
 
 		if (rc != 0 && OST_TGT(m, ost_idx)->ltd_connecting)
@@ -1010,7 +1067,7 @@ repeat_find:
 	up_read(&m->lod_qos.lq_rw_sem);
 
 	if (stripe_idx) {
-		lo->ldo_stripenr = stripe_idx;
+		lod_comp->llc_stripenr = stripe_idx;
 		/* at least one stripe is allocated */
 		rc = 0;
 	} else {
@@ -1049,6 +1106,8 @@ out:
  * \param[out] stripe	striping created
  * \param[in] lum	stripe md to specify list of OSTs
  * \param[in] th	transaction handle
+ * \param[in] comp_idx	index of ldo_comp_entries
+ * \param[in|out] inuse	array of inuse ost index
  *
  * \retval 0		on success
  * \retval -ENODEV	OST index does not exist on file system
@@ -1057,8 +1116,10 @@ out:
  */
 static int lod_alloc_ost_list(const struct lu_env *env,
 			      struct lod_object *lo, struct dt_object **stripe,
-			      struct lov_user_md *lum, struct thandle *th)
+			      struct lov_user_md *lum, struct thandle *th,
+			      int comp_idx, struct ost_pool *inuse)
 {
+	struct lod_layout_component *lod_comp;
 	struct lod_device	*m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct obd_statfs	*sfs = &lod_env_info(env)->lti_osfs;
 	struct dt_object	*o;
@@ -1066,33 +1127,37 @@ static int lod_alloc_ost_list(const struct lu_env *env,
 	unsigned int		array_idx = 0;
 	int			stripe_count = 0;
 	int			i;
-	int			rc;
+	int			rc = -EINVAL;
 	ENTRY;
 
 	/* for specific OSTs layout */
 	LASSERT(lum != NULL && lum->lmm_magic == LOV_USER_MAGIC_SPECIFIC);
 	lustre_print_user_md(D_OTHER, lum, __func__);
 
-	rc = lod_qos_ost_in_use_clear(env, lo->ldo_stripenr);
+	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
+	lod_comp = &lo->ldo_comp_entries[comp_idx];
+
+	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripenr);
 	if (rc < 0)
 		RETURN(rc);
 
 	v3 = (struct lov_user_md_v3 *)lum;
-	for (i = 0; i < lo->ldo_stripenr; i++) {
-		if (v3->lmm_objects[i].l_ost_idx == lo->ldo_stripe_offset) {
+	for (i = 0; i < lod_comp->llc_stripenr; i++) {
+		if (v3->lmm_objects[i].l_ost_idx ==
+				lod_comp->llc_stripe_offset) {
 			array_idx = i;
 			break;
 		}
 	}
-	if (i == lo->ldo_stripenr) {
+	if (i == lod_comp->llc_stripenr) {
 		CDEBUG(D_OTHER,
 		       "%s: start index %d not in the specified list of OSTs\n",
-		       lod2obd(m)->obd_name, lo->ldo_stripe_offset);
+		       lod2obd(m)->obd_name, lod_comp->llc_stripe_offset);
 		RETURN(-EINVAL);
 	}
 
-	for (i = 0; i < lo->ldo_stripenr;
-	     i++, array_idx = (array_idx + 1) % lo->ldo_stripenr) {
+	for (i = 0; i < lod_comp->llc_stripenr;
+	     i++, array_idx = (array_idx + 1) % lod_comp->llc_stripenr) {
 		__u32 ost_idx = v3->lmm_objects[array_idx].l_ost_idx;
 
 		if (!cfs_bitmap_check(m->lod_ost_bitmap, ost_idx)) {
@@ -1125,6 +1190,7 @@ static int lod_alloc_ost_list(const struct lu_env *env,
 		 * We've successfully declared (reserved) an object
 		 */
 		lod_qos_ost_in_use(env, stripe_count, ost_idx);
+		lod_comp_ost_in_use(inuse, ost_idx);
 		stripe[stripe_count] = o;
 		stripe_count++;
 	}
@@ -1149,6 +1215,8 @@ static int lod_alloc_ost_list(const struct lu_env *env,
  * \param[out] stripe	striping created
  * \param[in] flags	not used
  * \param[in] th	transaction handle
+ * \param[in] comp_idx	index of ldo_comp_entries
+ * \param[in|out]inuse	array of inuse ost index
  *
  * \retval 0		on success
  * \retval -ENOSPC	if no OST objects are available at all
@@ -1158,8 +1226,10 @@ static int lod_alloc_ost_list(const struct lu_env *env,
  */
 static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
 			      struct dt_object **stripe, int flags,
-			      struct thandle *th)
+			      struct thandle *th, int comp_idx,
+			      struct ost_pool *inuse)
 {
+	struct lod_layout_component *lod_comp;
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
 	struct dt_object  *o;
@@ -1171,12 +1241,15 @@ static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
 	struct ost_pool   *osts;
 	ENTRY;
 
-	rc = lod_qos_ost_in_use_clear(env, lo->ldo_stripenr);
+	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
+	lod_comp = &lo->ldo_comp_entries[comp_idx];
+
+	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripenr);
 	if (rc)
 		GOTO(out, rc);
 
-	if (lo->ldo_pool)
-		pool = lod_find_pool(m, lo->ldo_pool);
+	if (lod_comp->llc_pool != NULL)
+		pool = lod_find_pool(m, lod_comp->llc_pool);
 
 	if (pool != NULL) {
 		down_read(&pool_tgt_rw_sem(pool));
@@ -1191,14 +1264,15 @@ repeat_find:
 	/* search loi_ost_idx in ost array */
 	array_idx = 0;
 	for (i = 0; i < ost_count; i++) {
-		if (osts->op_array[i] == lo->ldo_stripe_offset) {
+		if (osts->op_array[i] == lod_comp->llc_stripe_offset) {
 			array_idx = i;
 			break;
 		}
 	}
 	if (i == ost_count) {
 		CERROR("Start index %d not found in pool '%s'\n",
-		       lo->ldo_stripe_offset, lo->ldo_pool ?: "");
+		       lod_comp->llc_stripe_offset,
+		       lod_comp->llc_pool ? lod_comp->llc_pool : "");
 		GOTO(out, rc = -EINVAL);
 	}
 
@@ -1218,6 +1292,13 @@ repeat_find:
 		 * do not put >1 objects on a single OST
 		 */
 		if (lod_qos_is_ost_used(env, ost_idx, stripe_num))
+			continue;
+
+		/*
+		 * try not allocate on the OST used by other component
+		 */
+		if (speed == 0 && i != 0 &&
+		    lod_comp_is_ost_used(inuse, ost_idx))
 			continue;
 
 		/* Drop slow OSCs if we can, but not for requested start idx.
@@ -1251,11 +1332,12 @@ repeat_find:
 		 * We've successfully declared (reserved) an object
 		 */
 		lod_qos_ost_in_use(env, stripe_num, ost_idx);
+		lod_comp_ost_in_use(inuse, ost_idx);
 		stripe[stripe_num] = o;
 		stripe_num++;
 
 		/* We have enough stripes */
-		if (stripe_num == lo->ldo_stripenr)
+		if (stripe_num == lod_comp->llc_stripenr)
 			GOTO(out, rc = 0);
 	}
 	if (speed < 2) {
@@ -1270,7 +1352,7 @@ repeat_find:
 	 */
 	CERROR("can't lstripe objid "DFID": have %d want %u\n",
 	       PFID(lu_object_fid(lod2lu_obj(lo))), stripe_num,
-	       lo->ldo_stripenr);
+	       lod_comp->llc_stripenr);
 	rc = stripe_num == 0 ? -ENOSPC : -EFBIG;
 out:
 	if (pool != NULL) {
@@ -1339,6 +1421,8 @@ static inline int lod_qos_is_usable(struct lod_device *lod)
  * \param[out] stripe	striping created
  * \param[in] flags	0 or LOV_USES_DEFAULT_STRIPE
  * \param[in] th	transaction handle
+ * \param[in] comp_idx	index of ldo_comp_entries
+ * \param[in|out]inuse	array of inuse ost index
  *
  * \retval 0		on success
  * \retval -EAGAIN	not enough OSTs are found for specified stripe count
@@ -1347,28 +1431,31 @@ static inline int lod_qos_is_usable(struct lod_device *lod)
  */
 static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			 struct dt_object **stripe, int flags,
-			 struct thandle *th)
+			 struct thandle *th, int comp_idx,
+			 struct ost_pool *inuse)
 {
+	struct lod_layout_component *lod_comp;
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
 	struct lod_tgt_desc *ost;
 	struct dt_object *o;
 	__u64 total_weight = 0;
-	__u32 nfound, good_osts;
-	__u32 stripe_cnt = lo->ldo_stripenr;
-	__u32 stripe_cnt_min;
 	struct pool_desc *pool = NULL;
 	struct ost_pool *osts;
 	unsigned int i;
+	__u32	nfound, good_osts, stripe_cnt, stripe_cnt_min;
 	int rc = 0;
 	ENTRY;
 
+	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
+	lod_comp = &lo->ldo_comp_entries[comp_idx];
+	stripe_cnt = lod_comp->llc_stripenr;
 	stripe_cnt_min = min_stripe_count(stripe_cnt, flags);
 	if (stripe_cnt_min < 1)
 		RETURN(-EINVAL);
 
-	if (lo->ldo_pool)
-		pool = lod_find_pool(lod, lo->ldo_pool);
+	if (lod_comp->llc_pool != NULL)
+		pool = lod_find_pool(lod, lod_comp->llc_pool);
 
 	if (pool != NULL) {
 		down_read(&pool_tgt_rw_sem(pool));
@@ -1395,7 +1482,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	if (rc)
 		GOTO(out, rc);
 
-	rc = lod_qos_ost_in_use_clear(env, lo->ldo_stripenr);
+	rc = lod_qos_ost_in_use_clear(env, lod_comp->llc_stripenr);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1499,9 +1586,11 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			/*
 			 * do not put >1 objects on a single OST
 			 */
-			if (lod_qos_is_ost_used(env, idx, nfound))
+			if (lod_qos_is_ost_used(env, idx, nfound) ||
+			    lod_comp_is_ost_used(inuse, idx))
 				continue;
 			lod_qos_ost_in_use(env, nfound, idx);
+			lod_comp_ost_in_use(inuse, idx);
 
 			o = lod_qos_declare_object_on(env, lod, idx, th);
 			if (IS_ERR(o)) {
@@ -1536,6 +1625,9 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			dt_object_put(env, stripe[i]);
 			stripe[i] = NULL;
 		}
+		LASSERTF(nfound <= inuse->op_count,
+			 "nfound:%d, op_count:%u\n", nfound, inuse->op_count);
+		inuse->op_count -= nfound;
 
 		/* makes sense to rebalance next time */
 		lod->lod_qos.lq_dirty = 1;
@@ -1566,12 +1658,12 @@ out_nolock:
  * If the passed one is 0, then the filesystem's default one is used.
  *
  * \param[in] lod	LOD device
- * \param[in] magic	the format if striping
+ * \param[in] lo	The lod_object
  * \param[in] stripe_count	count the caller would like to use
  *
  * \retval		the maximum usable stripe count
  */
-static __u16 lod_get_stripecnt(struct lod_device *lod, __u32 magic,
+static __u16 lod_get_stripecnt(struct lod_device *lod, struct lod_object *lo,
 			       __u16 stripe_count)
 {
 	__u32 max_stripes = LOV_MAX_STRIPE_COUNT_OLD;
@@ -1584,9 +1676,30 @@ static __u16 lod_get_stripecnt(struct lod_device *lod, __u32 magic,
 		stripe_count = 1;
 
 	/* stripe count is based on whether OSD can handle larger EA sizes */
-	if (lod->lod_osd_max_easize > 0)
-		max_stripes = lov_mds_md_max_stripe_count(
-			lod->lod_osd_max_easize, magic);
+	if (lod->lod_osd_max_easize > 0) {
+		unsigned int easize = lod->lod_osd_max_easize;
+		int i;
+
+		if (lo->ldo_is_composite) {
+			struct lod_layout_component *lod_comp;
+			unsigned int header_sz = sizeof(struct lov_comp_md_v1);
+
+			header_sz += sizeof(struct lov_comp_md_entry_v1) *
+					lo->ldo_comp_cnt;
+			for (i = 0; i < lo->ldo_comp_cnt; i++) {
+				lod_comp = &lo->ldo_comp_entries[i];
+				if (lod_comp->llc_flags & LCME_FL_INIT)
+					header_sz += lov_mds_md_size(
+					lod_comp->llc_stripenr, LOV_MAGIC_V3);
+			}
+			if (easize > header_sz)
+				easize -= header_sz;
+			else
+				easize = 0;
+		}
+
+		max_stripes = lov_mds_md_max_stripe_count(easize, LOV_MAGIC_V3);
+	}
 
 	return (stripe_count < max_stripes) ? stripe_count : max_stripes;
 }
@@ -1606,46 +1719,93 @@ static __u16 lod_get_stripecnt(struct lod_device *lod, __u32 magic,
  * \retval 0		on success
  * \retval negative	negated errno on error
  */
-static int lod_use_defined_striping(const struct lu_env *env,
-				    struct lod_object *mo,
-				    const struct lu_buf *buf)
+int lod_use_defined_striping(const struct lu_env *env,
+			     struct lod_object *mo,
+			     const struct lu_buf *buf)
 {
+	struct lod_layout_component *lod_comp;
 	struct lov_mds_md_v1   *v1 = buf->lb_buf;
 	struct lov_mds_md_v3   *v3 = buf->lb_buf;
+	struct lov_comp_md_v1  *comp_v1 = NULL;
 	struct lov_ost_data_v1 *objs;
-	__u32			magic;
-	int			rc = 0;
+	__u32	magic;
+	__u16	comp_cnt;
+	int	rc = 0, i;
 	ENTRY;
 
-	magic = le32_to_cpu(v1->lmm_magic);
-	if (magic == LOV_MAGIC_V1_DEF) {
-		magic = LOV_MAGIC_V1;
-		objs = &v1->lmm_objects[0];
-	} else if (magic == LOV_MAGIC_V3_DEF) {
-		magic = LOV_MAGIC_V3;
-		objs = &v3->lmm_objects[0];
-		lod_object_set_pool(mo, v3->lmm_pool_name);
+	magic = le32_to_cpu(v1->lmm_magic) & ~LOV_MAGIC_DEF;
+
+	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3 &&
+	    magic != LOV_MAGIC_COMP_V1)
+		RETURN(-EINVAL);
+
+	if (magic == LOV_MAGIC_COMP_V1) {
+		comp_v1 = buf->lb_buf;
+		comp_cnt = le16_to_cpu(comp_v1->lcm_entry_count);
+		if (comp_cnt == 0)
+			RETURN(-EINVAL);
+		mo->ldo_is_composite = 1;
 	} else {
-		GOTO(out, rc = -EINVAL);
+		mo->ldo_is_composite = 0;
+		comp_cnt = 1;
 	}
 
-	mo->ldo_pattern = le32_to_cpu(v1->lmm_pattern);
-	mo->ldo_stripe_size = le32_to_cpu(v1->lmm_stripe_size);
-	mo->ldo_stripenr = le16_to_cpu(v1->lmm_stripe_count);
-	mo->ldo_layout_gen = le16_to_cpu(v1->lmm_layout_gen);
+	rc = lod_alloc_comp_entries(mo, comp_cnt);
+	if (rc)
+		RETURN(rc);
 
-	/* fixup for released file before object initialization */
-	if (mo->ldo_pattern & LOV_PATTERN_F_RELEASED) {
-		mo->ldo_released_stripenr = mo->ldo_stripenr;
-		mo->ldo_stripenr = 0;
+	for (i = 0; i < comp_cnt; i++) {
+		struct lu_extent *ext;
+		char	*pool_name;
+		__u32	offs;
+
+		lod_comp = &mo->ldo_comp_entries[i];
+
+		if (mo->ldo_is_composite) {
+			offs = le32_to_cpu(comp_v1->lcm_entries[i].lcme_offset);
+			v1 = (struct lov_mds_md_v1 *)((char *)comp_v1 + offs);
+			magic = le32_to_cpu(v1->lmm_magic);
+
+			ext = &comp_v1->lcm_entries[i].lcme_extent;
+			lod_comp->llc_extent.e_start =
+				le64_to_cpu(ext->e_start);
+			lod_comp->llc_extent.e_end = le64_to_cpu(ext->e_end);
+			lod_comp->llc_flags =
+				le32_to_cpu(comp_v1->lcm_entries[i].lcme_flags);
+			lod_comp->llc_id =
+				le32_to_cpu(comp_v1->lcm_entries[i].lcme_id);
+			if (lod_comp->llc_id == LCME_ID_INVAL)
+				GOTO(out, rc = -EINVAL);
+		}
+
+		pool_name = NULL;
+		if (magic == LOV_MAGIC_V1) {
+			objs = &v1->lmm_objects[0];
+		} else if (magic == LOV_MAGIC_V3) {
+			objs = &v3->lmm_objects[0];
+			if (v3->lmm_pool_name[0] != '\0')
+				pool_name = v3->lmm_pool_name;
+		} else {
+			CDEBUG(D_LAYOUT, "Invalid magic %x\n", magic);
+			GOTO(out, rc = -EINVAL);
+		}
+
+		lod_comp->llc_pattern = le32_to_cpu(v1->lmm_pattern);
+		lod_comp->llc_stripe_size = le32_to_cpu(v1->lmm_stripe_size);
+		lod_comp->llc_stripenr = le16_to_cpu(v1->lmm_stripe_count);
+		lod_comp->llc_layout_gen = le16_to_cpu(v1->lmm_layout_gen);
+		lod_obj_set_pool(mo, i, pool_name);
+
+		if (!(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)) {
+			rc = lod_initialize_objects(env, mo, objs, i);
+			if (rc)
+				GOTO(out, rc);
+		}
 	}
-
-	LASSERT(buf->lb_len >= lov_mds_md_size(mo->ldo_stripenr, magic));
-
-	if (mo->ldo_stripenr > 0)
-		rc = lod_initialize_objects(env, mo, objs);
-
 out:
+	if (rc)
+		lod_object_free_striping(env, mo);
+
 	RETURN(rc);
 }
 
@@ -1670,23 +1830,32 @@ static int lod_qos_parse_config(const struct lu_env *env,
 				struct lod_object *lo,
 				const struct lu_buf *buf)
 {
-	struct lod_device     *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
-	struct lov_user_md_v1 *v1 = NULL;
-	struct lov_user_md_v3 *v3 = NULL;
-	char		      *pool_name = NULL;
-	__u32		       magic;
-	int		       rc;
-	unsigned int	       size;
+	struct lod_layout_component *lod_comp;
+	struct lod_device	*d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
+	struct lov_desc		*desc = &d->lod_desc;
+	struct lov_user_md_v1	*v1 = NULL;
+	struct lov_user_md_v3	*v3 = NULL;
+	struct lov_comp_md_v1	*comp_v1 = NULL;
+	__u32	magic;
+	__u16	comp_cnt;
+	int	i, rc;
 	ENTRY;
 
 	if (buf == NULL || buf->lb_buf == NULL || buf->lb_len == 0)
 		RETURN(0);
 
+	rc = lod_verify_striping(d, buf, false, 0);
+	if (rc)
+		RETURN(-EINVAL);
+
+	lod_free_comp_entries(lo);
+
 	v3 = buf->lb_buf;
 	v1 = buf->lb_buf;
+	comp_v1 = buf->lb_buf;
 	magic = v1->lmm_magic;
 
-	if (unlikely(magic == LOV_MAGIC_V1_DEF || magic == LOV_MAGIC_V3_DEF)) {
+	if (unlikely(le32_to_cpu(magic) & LOV_MAGIC_DEF)) {
 		/* try to use as fully defined striping */
 		rc = lod_use_defined_striping(env, lo, buf);
 		RETURN(rc);
@@ -1698,18 +1867,13 @@ static int lod_qos_parse_config(const struct lu_env *env,
 		magic = v1->lmm_magic;
 		/* fall through */
 	case LOV_USER_MAGIC_V1:
-		size = sizeof(*v1);
 		break;
-
 	case __swab32(LOV_USER_MAGIC_V3):
 		lustre_swab_lov_user_md_v3(v3);
 		magic = v3->lmm_magic;
 		/* fall through */
 	case LOV_USER_MAGIC_V3:
-		size = sizeof(*v3);
-		pool_name = v3->lmm_pool_name;
 		break;
-
 	case __swab32(LOV_USER_MAGIC_SPECIFIC):
 		lustre_swab_lov_user_md_v3(v3);
 		lustre_swab_lov_user_md_objects(v3->lmm_objects,
@@ -1717,83 +1881,112 @@ static int lod_qos_parse_config(const struct lu_env *env,
 		magic = v3->lmm_magic;
 		/* fall through */
 	case LOV_USER_MAGIC_SPECIFIC:
-		if (v3->lmm_stripe_offset == LOV_OFFSET_DEFAULT)
-			v3->lmm_stripe_offset = v3->lmm_objects[0].l_ost_idx;
-		if (v3->lmm_pool_name[0] != '\0')
-			pool_name = v3->lmm_pool_name;
-		size = lov_user_md_size(v3->lmm_stripe_count,
-					LOV_USER_MAGIC_SPECIFIC);
 		break;
-
+	case __swab32(LOV_USER_MAGIC_COMP_V1):
+		lustre_swab_lov_comp_md_v1(comp_v1);
+		magic = comp_v1->lcm_magic;
+		/* fall trhough */
+	case LOV_USER_MAGIC_COMP_V1:
+		break;
 	default:
 		CERROR("%s: unrecognized magic %X\n",
 		       lod2obd(d)->obd_name, magic);
 		RETURN(-EINVAL);
 	}
 
-	if (unlikely(buf->lb_len < size)) {
-		CERROR("%s: wrong size: %zd, expect: %u\n",
-		       lod2obd(d)->obd_name, buf->lb_len, size);
-		RETURN(-EINVAL);
-	}
-
 	lustre_print_user_md(D_OTHER, v1, "parse config");
 
-	v1->lmm_magic = magic;
-	if (v1->lmm_pattern == 0)
-		v1->lmm_pattern = LOV_PATTERN_RAID0;
-	if (lov_pattern(v1->lmm_pattern) != LOV_PATTERN_RAID0) {
-		CERROR("%s: invalid pattern: %x\n",
-		       lod2obd(d)->obd_name, v1->lmm_pattern);
-		RETURN(-EINVAL);
+	if (magic == LOV_USER_MAGIC_COMP_V1) {
+		comp_cnt = comp_v1->lcm_entry_count;
+		if (comp_cnt == 0)
+			RETURN(-EINVAL);
+		lo->ldo_is_composite = 1;
+	} else {
+		comp_cnt = 1;
+		lo->ldo_is_composite = 0;
 	}
-	lo->ldo_pattern = v1->lmm_pattern;
 
-	if (v1->lmm_stripe_size > 0)
-		lo->ldo_stripe_size = v1->lmm_stripe_size;
+	rc = lod_alloc_comp_entries(lo, comp_cnt);
+	if (rc)
+		RETURN(rc);
 
-	if (lo->ldo_stripe_size & (LOV_MIN_STRIPE_SIZE - 1))
-		lo->ldo_stripe_size = LOV_MIN_STRIPE_SIZE;
+	for (i = 0; i < comp_cnt; i++) {
+		struct pool_desc	*pool;
+		struct lu_extent	*ext;
+		char	*pool_name;
 
-	if (v1->lmm_stripe_count > 0)
-		lo->ldo_stripenr = v1->lmm_stripe_count;
+		lod_comp = &lo->ldo_comp_entries[i];
 
-	lo->ldo_stripe_offset = v1->lmm_stripe_offset;
+		if (lo->ldo_is_composite) {
+			v1 = (struct lov_user_md *)((char *)comp_v1 +
+					comp_v1->lcm_entries[i].lcme_offset);
+			ext = &comp_v1->lcm_entries[i].lcme_extent;
+			lod_comp->llc_extent = *ext;
+		}
 
-	lod_object_set_pool(lo, NULL);
-	if (pool_name != NULL) {
-		struct pool_desc *pool;
+		pool_name = NULL;
+		if (v1->lmm_magic == LOV_USER_MAGIC_V3 ||
+		    v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
+			v3 = (struct lov_user_md_v3 *)v1;
+
+			if (v3->lmm_pool_name[0] != '\0')
+				pool_name = v3->lmm_pool_name;
+
+			if (v3->lmm_magic == LOV_USER_MAGIC_SPECIFIC &&
+			    v3->lmm_stripe_offset == LOV_OFFSET_DEFAULT)
+				v3->lmm_stripe_offset =
+					v3->lmm_objects[0].l_ost_idx;
+		}
+
+		if (v1->lmm_pattern == 0)
+			v1->lmm_pattern = LOV_PATTERN_RAID0;
+		if (lov_pattern(v1->lmm_pattern) != LOV_PATTERN_RAID0) {
+			CDEBUG(D_LAYOUT, "%s: invalid pattern: %x\n",
+			       lod2obd(d)->obd_name, v1->lmm_pattern);
+			lod_free_comp_entries(lo);
+			RETURN(-EINVAL);
+		}
+
+		lod_comp->llc_pattern = v1->lmm_pattern;
+
+		lod_comp->llc_stripe_size = desc->ld_default_stripe_size;
+		if (v1->lmm_stripe_size > 0)
+			lod_comp->llc_stripe_size = v1->lmm_stripe_size;
+
+		lod_comp->llc_stripenr = desc->ld_default_stripe_count;
+		if (v1->lmm_stripe_count > 0)
+			lod_comp->llc_stripenr = v1->lmm_stripe_count;
+
+		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
+		lod_obj_set_pool(lo, i, pool_name);
+
+		if (pool_name == NULL)
+			continue;
 
 		/* In the function below, .hs_keycmp resolves to
 		 * pool_hashkey_keycmp() */
 		/* coverity[overrun-buffer-val] */
 		pool = lod_find_pool(d, pool_name);
-		if (pool != NULL) {
-			if (lo->ldo_stripe_offset != LOV_OFFSET_DEFAULT) {
-				rc = lod_check_index_in_pool(
-						lo->ldo_stripe_offset, pool);
-				if (rc < 0) {
-					lod_pool_putref(pool);
-					CERROR("%s: invalid offset, %u\n",
-					       lod2obd(d)->obd_name,
-					       lo->ldo_stripe_offset);
-					RETURN(-EINVAL);
-				}
+		if (pool == NULL)
+			continue;
+
+		if (lod_comp->llc_stripe_offset != LOV_OFFSET_DEFAULT) {
+			rc = lod_check_index_in_pool(
+					lod_comp->llc_stripe_offset, pool);
+			if (rc < 0) {
+				lod_pool_putref(pool);
+				CDEBUG(D_LAYOUT, "%s: invalid offset, %u\n",
+				       lod2obd(d)->obd_name,
+				       lod_comp->llc_stripe_offset);
+				lod_free_comp_entries(lo);
+				RETURN(-EINVAL);
 			}
-
-			if (lo->ldo_stripenr > pool_tgt_count(pool))
-				lo->ldo_stripenr = pool_tgt_count(pool);
-
-			lod_pool_putref(pool);
 		}
 
-		lod_object_set_pool(lo, pool_name);
-	}
+		if (lod_comp->llc_stripenr > pool_tgt_count(pool))
+			lod_comp->llc_stripenr = pool_tgt_count(pool);
 
-	/* fixup for released file */
-	if (lo->ldo_pattern & LOV_PATTERN_F_RELEASED) {
-		lo->ldo_released_stripenr = lo->ldo_stripenr;
-		lo->ldo_stripenr = 0;
+		lod_pool_putref(pool);
 	}
 
 	RETURN(0);
@@ -1814,61 +2007,49 @@ static int lod_qos_parse_config(const struct lu_env *env,
  * \param[in] attr	attributes OST objects will be declared with
  * \param[in] buf	suggested striping configuration or NULL
  * \param[in] th	transaction handle
+ * \param[in] comp_idx	index of ldo_comp_entries
+ * \param[in|out]inuse	array of inuse ost index
  *
  * \retval 0		on success
  * \retval negative	negated errno on error
  */
-int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
-			struct lu_attr *attr, const struct lu_buf *buf,
-			struct thandle *th)
+static int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
+			       struct lu_attr *attr, const struct lu_buf *buf,
+			       struct thandle *th, int comp_idx,
+			       struct ost_pool *inuse)
 {
+	struct lod_layout_component *lod_comp;
 	struct lod_device      *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
 	struct dt_object      **stripe;
 	int			stripe_len;
 	int			flag = LOV_USES_ASSIGNED_STRIPE;
-	int			i, rc;
+	int			i, rc = 0;
 	ENTRY;
 
 	LASSERT(lo);
+	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
+	lod_comp = &lo->ldo_comp_entries[comp_idx];
 
-	/* no OST available */
-	/* XXX: should we be waiting a bit to prevent failures during
-	 * cluster initialization? */
-	if (d->lod_ostnr == 0)
-		GOTO(out, rc = -EIO);
+	/* A released component is being created */
+	if (lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)
+		RETURN(0);
 
-	/*
-	 * by this time, the object's ldo_stripenr and ldo_stripe_size
-	 * contain default value for striping: taken from the parent
-	 * or from filesystem defaults
-	 *
-	 * in case the caller is passing lovea with new striping config,
-	 * we may need to parse lovea and apply new configuration
-	 */
-	rc = lod_qos_parse_config(env, lo, buf);
-	if (rc)
-		GOTO(out, rc);
-
-	/* A released file is being created */
-	if (lo->ldo_stripenr == 0)
-		GOTO(out, rc = 0);
-
-	if (likely(lo->ldo_stripe == NULL)) {
+	if (likely(lod_comp->llc_stripe == NULL)) {
 		struct lov_user_md *lum = NULL;
 
 		/*
 		 * no striping has been created so far
 		 */
-		LASSERT(lo->ldo_stripenr > 0);
+		LASSERT(lod_comp->llc_stripenr > 0);
 		/*
 		 * statfs and check OST targets now, since ld_active_tgt_count
 		 * could be changed if some OSTs are [de]activated manually.
 		 */
 		lod_qos_statfs_update(env, d);
-		lo->ldo_stripenr = lod_get_stripecnt(d, LOV_MAGIC,
-						     lo->ldo_stripenr);
-
-		stripe_len = lo->ldo_stripenr;
+		stripe_len = lod_get_stripecnt(d, lo, lod_comp->llc_stripenr);
+		if (stripe_len == 0)
+			GOTO(out, rc = -ERANGE);
+		lod_comp->llc_stripenr = stripe_len;
 		OBD_ALLOC(stripe, sizeof(stripe[0]) * stripe_len);
 		if (stripe == NULL)
 			GOTO(out, rc = -ENOMEM);
@@ -1878,17 +2059,29 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		CDEBUG(D_OTHER, "tgt_count %d stripenr %d\n",
 				d->lod_desc.ld_tgt_count, stripe_len);
 
-		if (buf != NULL && buf->lb_buf != NULL)
+		if (buf != NULL && buf->lb_buf != NULL) {
 			lum = buf->lb_buf;
+			if (lum->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
+				struct lov_comp_md_v1 *comp_v1;
+
+				comp_v1 = (struct lov_comp_md_v1 *)lum;
+				lum = (struct lov_user_md *)((char *)comp_v1 +
+				comp_v1->lcm_entries[comp_idx].lcme_offset);
+			}
+		}
 
 		if (lum != NULL && lum->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
-			rc = lod_alloc_ost_list(env, lo, stripe, lum, th);
-		} else if (lo->ldo_stripe_offset == LOV_OFFSET_DEFAULT) {
-			rc = lod_alloc_qos(env, lo, stripe, flag, th);
+			rc = lod_alloc_ost_list(env, lo, stripe, lum, th,
+						comp_idx, inuse);
+		} else if (lod_comp->llc_stripe_offset == LOV_OFFSET_DEFAULT) {
+			rc = lod_alloc_qos(env, lo, stripe, flag, th,
+					   comp_idx, inuse);
 			if (rc == -EAGAIN)
-				rc = lod_alloc_rr(env, lo, stripe, flag, th);
+				rc = lod_alloc_rr(env, lo, stripe, flag, th,
+						  comp_idx, inuse);
 		} else {
-			rc = lod_alloc_specific(env, lo, stripe, flag, th);
+			rc = lod_alloc_specific(env, lo, stripe, flag, th,
+						comp_idx, inuse);
 		}
 		lod_putref(d, &d->lod_ost_descs);
 
@@ -1898,21 +2091,21 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 					dt_object_put(env, stripe[i]);
 
 			OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
-			lo->ldo_stripenr = 0;
+			lod_comp->llc_stripenr = 0;
 		} else {
-			lo->ldo_stripe = stripe;
-			lo->ldo_stripes_allocated = stripe_len;
+			lod_comp->llc_stripe = stripe;
+			lod_comp->llc_stripes_allocated = stripe_len;
 		}
-	} else {
+	} else if (!(lod_comp->llc_flags & LCME_FL_INIT)) {
 		/*
 		 * lod_qos_parse_config() found supplied buf as a predefined
 		 * striping (not a hint), so it allocated all the object
 		 * now we need to create them
 		 */
-		for (i = 0; i < lo->ldo_stripenr; i++) {
+		for (i = 0; i < lod_comp->llc_stripenr; i++) {
 			struct dt_object  *o;
 
-			o = lo->ldo_stripe[i];
+			o = lod_comp->llc_stripe[i];
 			LASSERT(o);
 
 			rc = lod_sub_object_declare_create(env, o, attr, NULL,
@@ -1928,3 +2121,92 @@ out:
 	RETURN(rc);
 }
 
+static int
+lod_obj_stripe_set_inuse_cb(const struct lu_env *env, struct lod_object *lo,
+			    struct dt_object *dt, struct thandle *th,
+			    int stripe_idx, struct lod_obj_stripe_cb_data *data)
+{
+	struct lod_thread_info	*info = lod_env_info(env);
+	struct lod_device	*d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
+	struct lu_fid	*fid = &info->lti_fid;
+	__u32	index;
+	int	rc, type = LU_SEQ_RANGE_OST;
+
+	*fid = *lu_object_fid(&dt->do_lu);
+	rc = lod_fld_lookup(env, d, fid, &index, &type);
+	if (rc < 0) {
+		CERROR("%s: fail to locate "DFID": rc = %d\n",
+		       lod2obd(d)->obd_name, PFID(fid), rc);
+		return rc;
+	}
+	lod_comp_ost_in_use(data->locd_inuse, index);
+	return 0;
+}
+
+int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
+		       struct lu_attr *attr, const struct lu_buf *buf,
+		       struct thandle *th)
+
+{
+	struct lod_device	*d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
+	struct ost_pool	inuse;
+	int	i, rc, comp_cnt;
+	ENTRY;
+
+	LASSERT(lo);
+
+	/* no OST available */
+	/* XXX: should we be waiting a bit to prevent failures during
+	 * cluster initialization? */
+	if (d->lod_ostnr == 0)
+		RETURN(-EIO);
+
+	/*
+	 * by this time, the object's ldo_stripenr and ldo_stripe_size
+	 * contain default value for striping: taken from the parent
+	 * or from filesystem defaults
+	 *
+	 * in case the caller is passing lovea with new striping config,
+	 * we may need to parse lovea and apply new configuration
+	 */
+	rc = lod_qos_parse_config(env, lo, buf);
+	if (rc)
+		RETURN(rc);
+
+	memset(&inuse, 0, sizeof(inuse));
+	init_rwsem(&inuse.op_rw_sem);
+	comp_cnt = lo->ldo_comp_cnt;
+
+	/* Prepare inuse array for composite file */
+	if (lo->ldo_is_composite) {
+		struct lod_obj_stripe_cb_data	data;
+
+		inuse.op_size = comp_cnt * LOV_MAX_STRIPE_COUNT_OLD *
+				sizeof(__u32);
+		if (d->lod_osd_max_easize > 0 &&
+		    inuse.op_size > d->lod_osd_max_easize)
+			inuse.op_size = d->lod_osd_max_easize;
+		OBD_ALLOC(inuse.op_array, inuse.op_size);
+		if (inuse.op_array == NULL)
+			RETURN(-ENOMEM);
+
+		data.locd_inuse = &inuse;
+		rc = lod_obj_for_each_stripe(env, lo, NULL,
+				lod_obj_stripe_set_inuse_cb, &data);
+		if (rc) {
+			OBD_FREE(inuse.op_array, inuse.op_size);
+			RETURN(rc);
+		}
+	}
+
+	/* prepare OST object creation */
+	for (i = 0; i < comp_cnt; i++) {
+		rc = lod_qos_prep_create(env, lo, attr, buf, th, i, &inuse);
+		if (rc)
+			break;
+	}
+
+	if (inuse.op_size)
+		OBD_FREE(inuse.op_array, inuse.op_size);
+	RETURN(rc);
+}

@@ -2115,12 +2115,9 @@ void lustre_swab_lmv_user_md(struct lmv_user_md *lum)
 }
 EXPORT_SYMBOL(lustre_swab_lmv_user_md);
 
-void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
-			  const char *msg)
+static void lustre_print_v1v3(unsigned int lvl, struct lov_user_md *lum,
+			      const char *msg)
 {
-	if (likely(!cfs_cdebug_show(lvl, DEBUG_SUBSYSTEM)))
-		return;
-
 	CDEBUG(lvl, "%s lov_user_md %p:\n", msg, lum);
 	CDEBUG(lvl, "\tlmm_magic: %#x\n", lum->lmm_magic);
 	CDEBUG(lvl, "\tlmm_pattern: %#x\n", lum->lmm_pattern);
@@ -2144,6 +2141,54 @@ void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
 		CDEBUG(lvl, "\ttarget list:\n");
 		for (i = 0; i < v3->lmm_stripe_count; i++)
 			CDEBUG(lvl, "\t\t%u\n", v3->lmm_objects[i].l_ost_idx);
+	}
+}
+
+void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
+			  const char *msg)
+{
+	struct lov_comp_md_v1	*comp_v1;
+	int			 i;
+
+	if (likely(!cfs_cdebug_show(lvl, DEBUG_SUBSYSTEM)))
+		return;
+
+	if (lum->lmm_magic == LOV_USER_MAGIC_V1 ||
+	    lum->lmm_magic == LOV_USER_MAGIC_V3) {
+		lustre_print_v1v3(lvl, lum, msg);
+		return;
+	}
+
+	if (lum->lmm_magic != LOV_USER_MAGIC_COMP_V1) {
+		CDEBUG(lvl, "%s: bad magic: %x\n", msg, lum->lmm_magic);
+		return;
+	}
+
+	comp_v1 = (struct lov_comp_md_v1 *)lum;
+	CDEBUG(lvl, "%s: lov_comp_md_v1 %p:\n", msg, lum);
+	CDEBUG(lvl, "\tlcm_magic: %#x\n", comp_v1->lcm_magic);
+	CDEBUG(lvl, "\tlcm_size: %#x\n", comp_v1->lcm_size);
+	CDEBUG(lvl, "\tlcm_layout_gen: %#x\n", comp_v1->lcm_layout_gen);
+	CDEBUG(lvl, "\tlcm_flags: %#x\n", comp_v1->lcm_flags);
+	CDEBUG(lvl, "\tlcm_entry_count: %#x\n\n", comp_v1->lcm_entry_count);
+
+	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
+		struct lov_comp_md_entry_v1 *ent = &comp_v1->lcm_entries[i];
+		struct lov_user_md *v1;
+
+		CDEBUG(lvl, "\tentry %d:\n", i);
+		CDEBUG(lvl, "\tlcme_id: %#x\n", ent->lcme_id);
+		CDEBUG(lvl, "\tlcme_flags: %#x\n", ent->lcme_flags);
+		CDEBUG(lvl, "\tlcme_extent.e_start: %llu\n",
+		       ent->lcme_extent.e_start);
+		CDEBUG(lvl, "\tlcme_extent.e_end: %llu\n",
+		       ent->lcme_extent.e_end);
+		CDEBUG(lvl, "\tlcme_offset: %#x\n", ent->lcme_offset);
+		CDEBUG(lvl, "\tlcme_size: %#x\n\n", ent->lcme_size);
+
+		v1 = (struct lov_user_md *)((char *)comp_v1 +
+				comp_v1->lcm_entries[i].lcme_offset);
+		lustre_print_v1v3(lvl, v1, msg);
 	}
 }
 EXPORT_SYMBOL(lustre_print_user_md);

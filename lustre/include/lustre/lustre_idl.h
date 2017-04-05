@@ -962,9 +962,14 @@ enum obdo_flags {
  * depending on the case (replay uses ready striping, non-replay req uses
  * hints), so MDT replaces magic with appropriate one and now LOD can
  * easily understand what's inside -bzzz
+ *
+ * those *_DEF magics are only used on server side internally, they
+ * won't be put on wire or disk.
  */
-#define LOV_MAGIC_V1_DEF  0x0CD10BD0
-#define LOV_MAGIC_V3_DEF  0x0CD30BD0
+#define LOV_MAGIC_DEF		0x10000000
+#define LOV_MAGIC_V1_DEF	(LOV_MAGIC_DEF | LOV_MAGIC_V1)
+#define LOV_MAGIC_V3_DEF	(LOV_MAGIC_DEF | LOV_MAGIC_V3)
+#define LOV_MAGIC_COMP_V1_DEF	(LOV_MAGIC_DEF | LOV_MAGIC_COMP_V1)
 
 #define lov_pattern(pattern)		(pattern & ~LOV_PATTERN_F_MASK)
 #define lov_pattern_flags(pattern)	(pattern & LOV_PATTERN_F_MASK)

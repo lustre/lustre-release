@@ -347,6 +347,12 @@ enum ll_lease_type {
 #define LOV_PATTERN_F_HOLE	0x40000000 /* there is hole in LOV EA */
 #define LOV_PATTERN_F_RELEASED	0x80000000 /* HSM released file */
 
+static inline bool lov_pattern_supported(__u32 pattern)
+{
+	return pattern == LOV_PATTERN_RAID0 ||
+	       pattern == (LOV_PATTERN_RAID0 | LOV_PATTERN_F_RELEASED);
+}
+
 #define LOV_MAXPOOLNAME 15
 #define LOV_POOLNAMEF "%.15s"
 
@@ -425,7 +431,7 @@ enum lov_comp_md_entry_flags {
 
 /* lcme_id can be specified as certain flags, and the the first
  * bit of lcme_id is used to indicate that the ID is representing
- * certain lcme_flags but not a real ID. Which implies we can have
+ * certain LCME_FL_* but not a real ID. Which implies we can have
  * at most 31 flags (see LCME_FL_XXX). */
 enum lcme_id {
 	LCME_ID_INVAL	= 0x0,

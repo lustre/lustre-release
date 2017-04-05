@@ -522,6 +522,30 @@ int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
 }
 #endif
 
+/* XXX Look into layout in MDT layer. */
+static inline bool mdt_hsm_is_released(struct lov_mds_md *lmm)
+{
+	struct lov_comp_md_v1	*comp_v1;
+	struct lov_mds_md	*v1;
+	int			 i;
+
+	if (lmm->lmm_magic == LOV_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)lmm;
+
+		for (i = 0; i < comp_v1->lcm_entry_count; i++) {
+			v1 = (struct lov_mds_md *)((char *)comp_v1 +
+				comp_v1->lcm_entries[i].lcme_offset);
+			/* We don't support partial release for now */
+			if (!(v1->lmm_pattern & LOV_PATTERN_F_RELEASED))
+				return false;
+		}
+		return true;
+	} else {
+		return (lmm->lmm_pattern & LOV_PATTERN_F_RELEASED) ?
+			true : false;
+	}
+}
+
 void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
                         const struct lu_attr *attr, const struct lu_fid *fid)
 {
@@ -600,7 +624,7 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 		 * b=22272 */
 		b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 	} else if ((ma->ma_valid & MA_LOV) && ma->ma_lmm != NULL &&
-		   ma->ma_lmm->lmm_pattern & LOV_PATTERN_F_RELEASED) {
+		   mdt_hsm_is_released(ma->ma_lmm)) {
 		/* A released file stores its size on MDS. */
 		/* But return 1 block for released file, unless tools like tar
 		 * will consider it fully sparse. (LU-3864)
@@ -947,7 +971,6 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 	struct lu_buf		*buffer = &info->mti_buf;
 	struct obd_export	*exp = info->mti_exp;
 	int			 rc;
-	int			 is_root;
 	ENTRY;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK))
@@ -1027,32 +1050,6 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		if ((ma->ma_hsm.mh_flags & HS_RELEASED) &&
 		    mdt_hsm_restore_is_running(info, mdt_object_fid(o)))
 			repbody->mbo_t_state = MS_RESTORE;
-	}
-
-	is_root = lu_fid_eq(mdt_object_fid(o), &info->mti_mdt->mdt_md_root_fid);
-
-	/* the Lustre protocol supposes to return default striping
-	 * on the user-visible root if explicitly requested */
-	if ((ma->ma_valid & MA_LOV) == 0 && S_ISDIR(la->la_mode) &&
-	    (ma->ma_need & MA_LOV_DEF && is_root) && ma->ma_need & MA_LOV) {
-		struct lu_fid      rootfid;
-		struct mdt_object *root;
-		struct mdt_device *mdt = info->mti_mdt;
-
-		rc = dt_root_get(env, mdt->mdt_bottom, &rootfid);
-		if (rc)
-			RETURN(rc);
-		root = mdt_object_find(env, mdt, &rootfid);
-		if (IS_ERR(root))
-			RETURN(PTR_ERR(root));
-		rc = mdt_stripe_get(info, root, ma, XATTR_NAME_LOV);
-		mdt_object_put(info->mti_env, root);
-		if (unlikely(rc)) {
-			CERROR("%s: getattr error for "DFID": rc = %d\n",
-			       mdt_obd_name(info->mti_mdt),
-			       PFID(mdt_object_fid(o)), rc);
-			RETURN(rc);
-		}
 	}
 
         if (likely(ma->ma_valid & MA_INODE))
