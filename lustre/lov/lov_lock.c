@@ -50,7 +50,7 @@
 
 static struct lov_sublock_env *lov_sublock_env_get(const struct lu_env *env,
 						   const struct cl_lock *parent,
-                                                   struct lov_lock_sub *lls)
+						   struct lov_lock_sub *lls)
 {
         struct lov_sublock_env *subenv;
         struct lov_io          *lio    = lov_env_io(env);
@@ -72,12 +72,12 @@ static struct lov_sublock_env *lov_sublock_env_get(const struct lu_env *env,
 		subenv->lse_env = env;
 		subenv->lse_io = io;
 	} else {
-		sub = lov_sub_get(env, lio, lls->sub_stripe);
+		sub = lov_sub_get(env, lio, lls->sub_index);
 		if (!IS_ERR(sub)) {
 			subenv->lse_env = sub->sub_env;
-			subenv->lse_io  = sub->sub_io;
+			subenv->lse_io  = &sub->sub_io;
 		} else {
-			subenv = (void*)sub;
+			subenv = (void *)sub;
 		}
 	}
 	return subenv;
@@ -114,53 +114,66 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 					  const struct cl_object *obj,
 					  struct cl_lock *lock)
 {
-	int result = 0;
-	int i;
-	int nr;
+	struct lov_object *lov = cl2lov(obj);
+	struct lov_lock *lovlck;
+	struct lu_extent ext;
 	loff_t start;
 	loff_t end;
-	loff_t file_start;
-	loff_t file_end;
-
-	struct lov_object	*loo    = cl2lov(obj);
-	struct lov_layout_raid0	*r0     = lov_r0(loo);
-	struct lov_lock		*lovlck;
+	int result = 0;
+	int i;
+	int index;
+	int nr;
 
 	ENTRY;
 
-	CDEBUG(D_INODE, "%p: lock/io FID "DFID"/"DFID", lock/io clobj %p/%p\n",
-	       loo, PFID(lu_object_fid(lov2lu(loo))),
-	       PFID(lu_object_fid(&obj->co_lu)),
-	       lov2cl(loo), obj);
+	ext.e_start = cl_offset(obj, lock->cll_descr.cld_start);
+	if (lock->cll_descr.cld_end == CL_PAGE_EOF)
+		ext.e_end = OBD_OBJECT_EOF;
+	else
+		ext.e_end  = cl_offset(obj, lock->cll_descr.cld_end + 1);
 
-	file_start = cl_offset(lov2cl(loo), lock->cll_descr.cld_start);
-	file_end   = cl_offset(lov2cl(loo), lock->cll_descr.cld_end + 1) - 1;
+	nr = 0;
+	for (index = lov_lsm_entry(lov->lo_lsm, ext.e_start);
+	     index != -1 && index < lov->lo_lsm->lsm_entry_count; index++) {
+		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
 
-        for (i = 0, nr = 0; i < r0->lo_nr; i++) {
-                /*
-                 * XXX for wide striping smarter algorithm is desirable,
-                 * breaking out of the loop, early.
-                 */
-		if (likely(r0->lo_sub[i] != NULL) && /* spare layout */
-		    lov_stripe_intersects(loo->lo_lsm, i,
-					  file_start, file_end, &start, &end))
-			nr++;
+		/* assume lsm entries are sorted. */
+		if (!lu_extent_is_overlapped(&ext,
+					     &lov_lse(lov, index)->lsme_extent))
+			break;
+
+		for (i = 0; i < r0->lo_nr; i++) {
+			if (likely(r0->lo_sub[i] != NULL) && /* spare layout */
+			    lov_stripe_intersects(lov->lo_lsm, index, i,
+						  &ext, &start, &end))
+				nr++;
+		}
 	}
-	LASSERT(nr > 0);
+	if (nr == 0)
+		RETURN(ERR_PTR(-EINVAL));
 
 	OBD_ALLOC_LARGE(lovlck, offsetof(struct lov_lock, lls_sub[nr]));
 	if (lovlck == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
 	lovlck->lls_nr = nr;
-	for (i = 0, nr = 0; i < r0->lo_nr; ++i) {
-		if (likely(r0->lo_sub[i] != NULL) &&
-		    lov_stripe_intersects(loo->lo_lsm, i,
-					  file_start, file_end, &start, &end)) {
-			struct lov_lock_sub *lls = &lovlck->lls_sub[nr];
-			struct cl_lock_descr *descr;
+	nr = 0;
+	for (index = lov_lsm_entry(lov->lo_lsm, ext.e_start);
+	     index < lov->lo_lsm->lsm_entry_count; index++) {
+		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
 
-			descr = &lls->sub_lock.cll_descr;
+		/* assume lsm entries are sorted. */
+		if (!lu_extent_is_overlapped(&ext,
+					     &lov_lse(lov, index)->lsme_extent))
+			break;
+		for (i = 0; i < r0->lo_nr; ++i) {
+			struct lov_lock_sub *lls = &lovlck->lls_sub[nr];
+			struct cl_lock_descr *descr = &lls->sub_lock.cll_descr;
+
+			if (unlikely(r0->lo_sub[i] == NULL) ||
+			    !lov_stripe_intersects(lov->lo_lsm, index, i,
+						   &ext, &start, &end))
+				continue;
 
 			LASSERT(descr->cld_obj == NULL);
 			descr->cld_obj   = lovsub2cl(r0->lo_sub[i]);
@@ -170,7 +183,7 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 			descr->cld_gid   = lock->cll_descr.cld_gid;
 			descr->cld_enq_flags = lock->cll_descr.cld_enq_flags;
 
-			lls->sub_stripe = i;
+			lls->sub_index = lov_comp_index(index, i);
 
 			/* initialize sub lock */
 			result = lov_sublock_init(env, lock, lls);
@@ -308,8 +321,8 @@ static const struct cl_lock_operations lov_lock_ops = {
         .clo_print     = lov_lock_print
 };
 
-int lov_lock_init_raid0(const struct lu_env *env, struct cl_object *obj,
-			struct cl_lock *lock, const struct cl_io *io)
+int lov_lock_init_composite(const struct lu_env *env, struct cl_object *obj,
+			    struct cl_lock *lock, const struct cl_io *io)
 {
 	struct lov_lock *lck;
 	int result = 0;

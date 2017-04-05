@@ -1137,17 +1137,14 @@ static void osc_lock_set_writer(const struct lu_env *env,
 		io_start = cl_index(obj, io->u.ci_rw.crw_pos);
 		io_end = cl_index(obj, io->u.ci_rw.crw_pos +
 						io->u.ci_rw.crw_count - 1);
-		if (cl_io_is_append(io)) {
-			io_start = 0;
-			io_end = CL_PAGE_EOF;
-		}
 	} else {
 		LASSERT(cl_io_is_mkwrite(io));
 		io_start = io_end = io->u.ci_fault.ft_index;
 	}
 
 	if (descr->cld_mode >= CLM_WRITE &&
-	    descr->cld_start <= io_start && descr->cld_end >= io_end) {
+	    (cl_io_is_append(io) ||
+	     (descr->cld_start <= io_start && descr->cld_end >= io_end))) {
 		struct osc_io *oio = osc_env_io(env);
 
 		/* There must be only one lock to match the write region */

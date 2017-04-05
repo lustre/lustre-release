@@ -74,11 +74,25 @@ static inline bool lsm_has_objects(struct lov_stripe_md *lsm)
 	return lsm != NULL && !lsm->lsm_is_released;
 }
 
+static inline unsigned int lov_comp_index(int entry, int stripe)
+{
+	LASSERT(entry >= 0 && entry <= SHRT_MAX);
+	LASSERT(stripe >= 0 && stripe < USHRT_MAX);
+
+	return entry << 16 | stripe;
+}
+
+static inline int lov_comp_stripe(int index)
+{
+	return index & 0xffff;
+}
+
+static inline int lov_comp_entry(int index)
+{
+	return index >> 16;
+}
+
 struct lsm_operations {
-	void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *, loff_t *,
-				    loff_t *);
-	void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, loff_t *,
-				     loff_t *);
 	struct lov_stripe_md *(*lsm_unpackmd)(struct lov_obd *, void *, size_t);
 };
 
@@ -172,20 +186,21 @@ extern struct lu_kmem_descr lov_caches[];
         (char *)((lv)->lov_tgts[index]->ltd_uuid.uuid)
 
 /* lov_merge.c */
-int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
+int lov_merge_lvb_kms(struct lov_stripe_md *lsm, int index,
                       struct ost_lvb *lvb, __u64 *kms_place);
 
 /* lov_offset.c */
-u64 lov_stripe_size(struct lov_stripe_md *lsm, u64 ost_size, int stripeno);
-int lov_stripe_offset(struct lov_stripe_md *lsm, loff_t lov_off, int stripeno,
-		      loff_t *obd_off);
-loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, u64 file_size,
+u64 lov_stripe_size(struct lov_stripe_md *lsm, int index,
+		    u64 ost_size, int stripeno);
+int lov_stripe_offset(struct lov_stripe_md *lsm, int index, loff_t lov_off,
+		      int stripeno, loff_t *obd_off);
+loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, int index, u64 file_size,
 			  int stripeno);
-int lov_stripe_intersects(struct lov_stripe_md *lsm, int stripeno,
-			  u64 start, u64 end, u64 *obd_start, u64 *obd_end);
-int lov_stripe_number(struct lov_stripe_md *lsm, loff_t lov_off);
-pgoff_t lov_stripe_pgoff(struct lov_stripe_md *lsm, pgoff_t stripe_index,
-			 int stripe);
+int lov_stripe_intersects(struct lov_stripe_md *lsm, int index, int stripeno,
+			  struct lu_extent *ext, u64 *obd_start, u64 *obd_end);
+int lov_stripe_number(struct lov_stripe_md *lsm, int index, loff_t lov_off);
+pgoff_t lov_stripe_pgoff(struct lov_stripe_md *lsm, int index,
+			 pgoff_t stripe_index, int stripe);
 
 /* lov_request.c */
 int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,

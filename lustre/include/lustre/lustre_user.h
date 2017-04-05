@@ -419,6 +419,15 @@ struct lu_extent {
 	__u64	e_end;
 };
 
+#define DEXT "[ %#llx , %#llx )"
+#define PEXT(ext) (ext)->e_start, (ext)->e_end
+
+static inline bool lu_extent_is_overlapped(struct lu_extent *e1,
+					   struct lu_extent *e2)
+{
+	return e1->e_start < e2->e_end && e2->e_start < e1->e_end;
+}
+
 enum lov_comp_md_entry_flags {
 	LCME_FL_PRIMARY	= 0x00000001,	/* Not used */
 	LCME_FL_STALE	= 0x00000002,	/* Not used */
@@ -464,7 +473,6 @@ struct lov_comp_md_v1 {
 	__u64	lcm_padding2;
 	struct lov_comp_md_entry_v1 lcm_entries[0];
 } __attribute__((packed));
-
 
 static inline __u32 lov_user_md_size(__u16 stripes, __u32 lmm_magic)
 {

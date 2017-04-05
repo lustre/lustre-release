@@ -42,9 +42,10 @@
  * initializes the current atime, mtime, ctime to avoid regressing a more
  * uptodate time on the local client.
  */
-int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
+int lov_merge_lvb_kms(struct lov_stripe_md *lsm, int index,
                       struct ost_lvb *lvb, __u64 *kms_place)
 {
+	struct lov_stripe_md_entry *lse = lsm->lsm_entries[index];
 	u64 size = 0;
 	u64 kms = 0;
 	u64 blocks = 0;
@@ -61,8 +62,8 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
 	       " a=%llu c=%llu b=%llu\n", POSTID(&lsm->lsm_oi),
 	       lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_atime, lvb->lvb_ctime,
 	       lvb->lvb_blocks);
-	for (i = 0; i < lsm->lsm_entries[0]->lsme_stripe_count; i++) {
-		struct lov_oinfo *loi = lsm->lsm_entries[0]->lsme_oinfo[i];
+	for (i = 0; i < lse->lsme_stripe_count; i++) {
+		struct lov_oinfo *loi = lse->lsme_oinfo[i];
 		u64 lov_size;
 		u64 tmpsize;
 
@@ -72,14 +73,14 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
                 }
 
                 tmpsize = loi->loi_kms;
-                lov_size = lov_stripe_size(lsm, tmpsize, i);
+		lov_size = lov_stripe_size(lsm, index, tmpsize, i);
                 if (lov_size > kms)
                         kms = lov_size;
 
                 if (loi->loi_lvb.lvb_size > tmpsize)
                         tmpsize = loi->loi_lvb.lvb_size;
 
-                lov_size = lov_stripe_size(lsm, tmpsize, i);
+		lov_size = lov_stripe_size(lsm, index, tmpsize, i);
                 if (lov_size > size)
                         size = lov_size;
                 /* merge blocks, mtime, atime */

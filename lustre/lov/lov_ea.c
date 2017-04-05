@@ -308,24 +308,6 @@ out_lsme:
 	return ERR_PTR(rc);
 }
 
-static void
-lsm_stripe_by_index_plain(struct lov_stripe_md *lsm, int *stripeno,
-			  loff_t *lov_off, loff_t *swidth)
-{
-	if (swidth != NULL)
-		*swidth = (loff_t)lsm->lsm_entries[0]->lsme_stripe_size *
-			  lsm->lsm_entries[0]->lsme_stripe_count;
-}
-
-static void
-lsm_stripe_by_offset_plain(struct lov_stripe_md *lsm, int *stripeno,
-			   loff_t *lov_off, loff_t *swidth)
-{
-	if (swidth != NULL)
-		*swidth = (loff_t)lsm->lsm_entries[0]->lsme_stripe_size *
-			  lsm->lsm_entries[0]->lsme_stripe_count;
-}
-
 static inline struct lov_stripe_md *
 lsm_unpackmd_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 {
@@ -335,8 +317,6 @@ lsm_unpackmd_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 }
 
 const struct lsm_operations lsm_v1_ops = {
-        .lsm_stripe_by_index    = lsm_stripe_by_index_plain,
-        .lsm_stripe_by_offset   = lsm_stripe_by_offset_plain,
         .lsm_unpackmd           = lsm_unpackmd_v1,
 };
 
@@ -350,8 +330,6 @@ lsm_unpackmd_v3(struct lov_obd *lov, void *buf, size_t buf_size)
 }
 
 const struct lsm_operations lsm_v3_ops = {
-	.lsm_stripe_by_index    = lsm_stripe_by_index_plain,
-	.lsm_stripe_by_offset   = lsm_stripe_by_offset_plain,
 	.lsm_unpackmd           = lsm_unpackmd_v3,
 };
 
@@ -499,19 +477,44 @@ out_lsm:
 }
 
 const struct lsm_operations lsm_comp_md_v1_ops = {
-	.lsm_stripe_by_index  = lsm_stripe_by_index_plain,
-	.lsm_stripe_by_offset = lsm_stripe_by_offset_plain,
 	.lsm_unpackmd         = lsm_unpackmd_comp_md_v1,
 };
 
 void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm)
 {
-	CDEBUG(level, "lsm %p, objid "DOSTID", maxbytes %#llx, magic 0x%08X,"
-	       " stripe_size %u, stripe_count %u, refc: %d,"
-	       " layout_gen %u, pool ["LOV_POOLNAMEF"]\n", lsm,
-	       POSTID(&lsm->lsm_oi), lsm->lsm_maxbytes, lsm->lsm_magic,
-	       lsm->lsm_entries[0]->lsme_stripe_size,
-	       lsm->lsm_entries[0]->lsme_stripe_count,
-	       atomic_read(&lsm->lsm_refc), lsm->lsm_layout_gen,
-	       lsm->lsm_entries[0]->lsme_pool_name);
+	int i;
+
+	CDEBUG(level, "lsm %p, objid "DOSTID", maxbytes %#llx, magic 0x%08X, "
+	       "refc: %d, entry: %u, layout_gen %u\n",
+	       lsm, POSTID(&lsm->lsm_oi), lsm->lsm_maxbytes, lsm->lsm_magic,
+	       atomic_read(&lsm->lsm_refc), lsm->lsm_entry_count,
+	       lsm->lsm_layout_gen);
+
+	for (i = 0; i < lsm->lsm_entry_count; i++) {
+		struct lov_stripe_md_entry *lse = lsm->lsm_entries[i];
+
+		CDEBUG(level,
+		       DEXT ": id: %u, magic 0x%08X, stripe count %u, "
+		       "size %u, layout_gen %u, pool: ["LOV_POOLNAMEF"]\n",
+		       PEXT(&lse->lsme_extent), lse->lsme_id, lse->lsme_magic,
+		       lse->lsme_stripe_count, lse->lsme_stripe_size,
+		       lse->lsme_layout_gen, lse->lsme_pool_name);
+	}
+}
+
+int lov_lsm_entry(const struct lov_stripe_md *lsm, __u64 offset)
+{
+	int i;
+
+	for (i = 0; i < lsm->lsm_entry_count; i++) {
+		struct lov_stripe_md_entry *lse = lsm->lsm_entries[i];
+
+		if ((offset >= lse->lsme_extent.e_start &&
+		     offset < lse->lsme_extent.e_end) ||
+		    (offset == OBD_OBJECT_EOF &&
+		     lse->lsme_extent.e_end == OBD_OBJECT_EOF))
+			return i;
+	}
+
+	return -1;
 }
