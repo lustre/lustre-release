@@ -146,7 +146,10 @@ extern int llapi_file_lookup(int dirfd, const char *name);
 #define VERBOSE_DEFAULT		(VERBOSE_COUNT | VERBOSE_SIZE | \
 				 VERBOSE_OFFSET | VERBOSE_POOL | \
 				 VERBOSE_OBJID | VERBOSE_GENERATION | \
-				 VERBOSE_LAYOUT | VERBOSE_HASH_TYPE)
+				 VERBOSE_LAYOUT | VERBOSE_HASH_TYPE | \
+				 VERBOSE_COMP_COUNT | VERBOSE_COMP_FLAGS | \
+				 VERBOSE_COMP_START | VERBOSE_COMP_END | \
+				 VERBOSE_COMP_ID)
 
 struct find_param {
 	unsigned int		 fp_max_depth;
@@ -165,11 +168,14 @@ struct find_param {
 	/* these need to be signed values */
 	int			 fp_size_sign:2,
 				 fp_stripe_size_sign:2,
-				 fp_stripe_count_sign:2;
+				 fp_stripe_count_sign:2,
+				 fp_comp_start_sign:2,
+				 fp_comp_end_sign:2,
+				 fp_comp_count_sign:2;
 	unsigned long long	 fp_size;
 	unsigned long long	 fp_size_units;
 
-	unsigned long		 fp_zero_end:1,
+	unsigned long long	 fp_zero_end:1,
 				 fp_recursive:1,
 				 fp_exclude_pattern:1,
 				 fp_exclude_type:1,
@@ -195,7 +201,17 @@ struct find_param {
 				 fp_check_layout:1,
 				 fp_exclude_layout:1,
 				 fp_get_default_lmv:1, /* Get default LMV */
-				 fp_migrate:1;
+				 fp_migrate:1,
+				 fp_check_comp_count:1,
+				 fp_exclude_comp_count:1,
+				 fp_check_comp_flags:1,
+				 fp_exclude_comp_flags:1,
+				 fp_check_comp_start:1,
+				 fp_exclude_comp_start:1,
+				 fp_check_comp_end:1,
+				 fp_exclude_comp_end:1,
+				 fp_check_comp_id:1,
+				 fp_exclude_comp_id:1;
 
 	int			 fp_verbose;
 	int			 fp_quiet;
@@ -228,6 +244,14 @@ struct find_param {
 	unsigned long long	 fp_stripe_size_units;
 	unsigned long long	 fp_stripe_count;
 	__u32			 fp_layout;
+
+	__u32			 fp_comp_count;
+	__u32			 fp_comp_flags;
+	__u32			 fp_comp_id;
+	unsigned long long	 fp_comp_start;
+	unsigned long long	 fp_comp_start_units;
+	unsigned long long	 fp_comp_end;
+	unsigned long long	 fp_comp_end_units;
 
 	/* In-process parameters. */
 	unsigned long		 fp_got_uuids:1,

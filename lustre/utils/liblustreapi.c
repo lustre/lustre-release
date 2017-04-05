@@ -2101,35 +2101,48 @@ int sattr_cache_get_defaults(const char *const fsname,
         return 0;
 }
 
+enum lov_dump_flags {
+	LDF_IS_DIR	= 0x0001,
+	LDF_IS_RAW	= 0x0002,
+	LDF_INDENT	= 0x0004,
+};
+
 static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 				     struct lov_user_ost_data_v1 *objects,
-				     int is_dir, int verbose, int depth,
-				     int raw, char *pool_name)
+				     int verbose, int depth, char *pool_name,
+				     enum lov_dump_flags flags)
 {
+	bool is_dir = flags & LDF_IS_DIR;
+	bool is_raw = flags & LDF_IS_RAW;
+	bool indent = flags & LDF_INDENT;
 	char *prefix = is_dir ? "" : "lmm_";
 	char *separator = "";
+	char *space = indent ? "      " : "";
 	int rc;
 
 	if (is_dir && lmm_oi_seq(&lum->lmm_oi) == FID_SEQ_LOV_DEFAULT) {
 		lmm_oi_set_seq(&lum->lmm_oi, 0);
-		if (verbose & VERBOSE_DETAIL)
-			llapi_printf(LLAPI_MSG_NORMAL, "(Default) ");
+		if (!indent && (verbose & VERBOSE_DETAIL))
+			llapi_printf(LLAPI_MSG_NORMAL, "%s(Default) ", space);
 	}
 
-	if (depth && path && ((verbose != VERBOSE_OBJID) || !is_dir))
+	if (!indent && depth && path && ((verbose != VERBOSE_OBJID) || !is_dir))
 		llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
 
 	if ((verbose & VERBOSE_DETAIL) && !is_dir) {
-		llapi_printf(LLAPI_MSG_NORMAL, "lmm_magic:          0x%08X\n",
-			     lum->lmm_magic);
-		llapi_printf(LLAPI_MSG_NORMAL, "lmm_seq:            %#jx\n",
+		llapi_printf(LLAPI_MSG_NORMAL, "%s%smagic:         0x%08X\n",
+			     space, prefix, lum->lmm_magic);
+		llapi_printf(LLAPI_MSG_NORMAL, "%s%sseq:           %#jx\n",
+			     space, prefix,
 			     (uintmax_t)lmm_oi_seq(&lum->lmm_oi));
-		llapi_printf(LLAPI_MSG_NORMAL, "lmm_object_id:      %#jx\n",
+		llapi_printf(LLAPI_MSG_NORMAL, "%s%sobject_id:     %#jx\n",
+			     space, prefix,
 			     (uintmax_t)lmm_oi_id(&lum->lmm_oi));
 	}
 	if ((verbose & (VERBOSE_DETAIL | VERBOSE_DFID)) && !is_dir) {
 		if (verbose & ~VERBOSE_DFID)
-			llapi_printf(LLAPI_MSG_NORMAL, "lmm_fid:            ");
+			llapi_printf(LLAPI_MSG_NORMAL, "%slmm_fid:           ",
+				     space);
 		/* This needs a bit of hand-holding since old 1.x lmm_oi
 		 * have { oi.oi_id = mds_inum, oi.oi_seq = 0 } and 2.x lmm_oi
 		 * have { oi.oi_id = mds_oid, oi.oi_seq = mds_seq } instead of
@@ -2158,10 +2171,10 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 
 	if (verbose & VERBOSE_COUNT) {
 		if (verbose & ~VERBOSE_COUNT)
-			llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_count:   ",
-				     prefix);
+			llapi_printf(LLAPI_MSG_NORMAL, "%s%sstripe_count:  ",
+				     space, prefix);
 		if (is_dir) {
-			if (!raw && lum->lmm_stripe_count == 0) {
+			if (!is_raw && lum->lmm_stripe_count == 0) {
 				unsigned int scount;
 				rc = sattr_cache_get_defaults(NULL, path,
 							      &scount, NULL,
@@ -2189,9 +2202,9 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 	if (verbose & VERBOSE_SIZE) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_SIZE)
-			llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_size:    ",
-				     prefix);
-		if (is_dir && !raw && lum->lmm_stripe_size == 0) {
+			llapi_printf(LLAPI_MSG_NORMAL, "%s%sstripe_size:   ",
+				     space, prefix);
+		if (is_dir && !is_raw && lum->lmm_stripe_size == 0) {
 			unsigned int ssize;
 			rc = sattr_cache_get_defaults(NULL, path, NULL, &ssize,
 						      NULL);
@@ -2211,8 +2224,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 	if ((verbose & VERBOSE_LAYOUT) && !is_dir) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_LAYOUT)
-			llapi_printf(LLAPI_MSG_NORMAL, "%spattern:        ",
-				     prefix);
+			llapi_printf(LLAPI_MSG_NORMAL, "%s%spattern:       ",
+				     space, prefix);
 		llapi_printf(LLAPI_MSG_NORMAL, "%.x", lum->lmm_pattern);
 		separator = "\n";
 	}
@@ -2220,8 +2233,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 	if ((verbose & VERBOSE_GENERATION) && !is_dir) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_GENERATION)
-			llapi_printf(LLAPI_MSG_NORMAL, "%slayout_gen:     ",
-				     prefix);
+			llapi_printf(LLAPI_MSG_NORMAL, "%s%slayout_gen:    ",
+				     space, prefix);
 		llapi_printf(LLAPI_MSG_NORMAL, "%u",
 			     (int)lum->lmm_layout_gen);
 		separator = "\n";
@@ -2230,8 +2243,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 	if (verbose & VERBOSE_OFFSET) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_OFFSET)
-			llapi_printf(LLAPI_MSG_NORMAL, "%sstripe_offset:  ",
-				     prefix);
+			llapi_printf(LLAPI_MSG_NORMAL, "%s%sstripe_offset: ",
+				     space, prefix);
 		if (is_dir)
 			llapi_printf(LLAPI_MSG_NORMAL, "%d",
 				     lum->lmm_stripe_offset ==
@@ -2243,49 +2256,70 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		separator = is_dir ? " " : "\n";
 	}
 
-	if ((verbose & VERBOSE_POOL) && (pool_name != NULL)) {
+	if ((verbose & VERBOSE_POOL) && pool_name && (pool_name[0] != '\0')) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		if (verbose & ~VERBOSE_POOL)
-			llapi_printf(LLAPI_MSG_NORMAL, "%spool:           ",
-				     prefix);
+			llapi_printf(LLAPI_MSG_NORMAL, "%s%spool:          ",
+				     space, prefix);
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", pool_name);
+		separator = is_dir ? " " : "\n";
 	}
 
-	if (!is_dir || (is_dir && (verbose != VERBOSE_OBJID)))
+	if (strlen(separator) != 0)
 		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
 void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
-                            struct lov_user_ost_data_v1 *objects,
-                            char *path, int is_dir, int obdindex,
-                            int depth, int header, int raw)
+			    struct lov_user_ost_data_v1 *objects,
+			    char *path, int obdindex, int depth,
+			    int header, enum lov_dump_flags flags)
 {
-        int i, obdstripe = (obdindex != OBD_NOT_FOUND) ? 0 : 1;
+	bool is_dir = flags & LDF_IS_DIR;
+	bool indent = flags & LDF_INDENT;
+	int i, obdstripe = (obdindex != OBD_NOT_FOUND) ? 0 : 1;
 
-        if (!obdstripe) {
-                for (i = 0; !is_dir && i < lum->lmm_stripe_count; i++) {
-                        if (obdindex == objects[i].l_ost_idx) {
-                                obdstripe = 1;
-                                break;
-                        }
-                }
-        }
+	if (!obdstripe) {
+		for (i = 0; !is_dir && i < lum->lmm_stripe_count; i++) {
+			if (obdindex == objects[i].l_ost_idx) {
+				obdstripe = 1;
+				break;
+			}
+		}
+	}
 
-        if (obdstripe == 1)
-                lov_dump_user_lmm_header(lum, path, objects, is_dir, header,
-                                         depth, raw, pool_name);
+	if (obdstripe == 0)
+		return;
 
-        if (!is_dir && (header & VERBOSE_OBJID) &&
+	lov_dump_user_lmm_header(lum, path, objects, header, depth, pool_name,
+				 flags);
+
+	if (!is_dir && (header & VERBOSE_OBJID) &&
 	    !(lum->lmm_pattern & LOV_PATTERN_F_RELEASED)) {
-                if (obdstripe == 1)
-                        llapi_printf(LLAPI_MSG_NORMAL,
-				   "\tobdidx\t\t objid\t\t objid\t\t group\n");
+		char *space = "      - ";
 
-                for (i = 0; i < lum->lmm_stripe_count; i++) {
-                        int idx = objects[i].l_ost_idx;
-                        long long oid = ostid_id(&objects[i].l_ost_oi);
-                        long long gr = ostid_seq(&objects[i].l_ost_oi);
-			if ((obdindex == OBD_NOT_FOUND) || (obdindex == idx)) {
+		if (indent)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%6slmm_objects:\n", " ");
+		else
+			llapi_printf(LLAPI_MSG_NORMAL,
+				"\tobdidx\t\t objid\t\t objid\t\t group\n");
+
+		for (i = 0; i < lum->lmm_stripe_count; i++) {
+			int idx = objects[i].l_ost_idx;
+			long long oid = ostid_id(&objects[i].l_ost_oi);
+			long long gr = ostid_seq(&objects[i].l_ost_oi);
+
+			if (obdindex != OBD_NOT_FOUND && obdindex != idx)
+				continue;
+
+			if (indent) {
+				struct lu_fid fid = { 0 };
+
+				ostid_to_fid(&fid, &objects[i].l_ost_oi, idx);
+				llapi_printf(LLAPI_MSG_NORMAL,
+				    "%s%d: { l_ost_idx: %d, l_fid: "DFID" }\n",
+				    space, i, idx, PFID(&fid));
+			} else {
 				char fmt[48];
 				sprintf(fmt, "%s%s%s\n",
 					"\t%6u\t%14llu\t%#13llx\t",
@@ -2296,10 +2330,9 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 					     oid, gr,
 					     obdindex == idx ? " *" : "");
 			}
-
-                }
-                llapi_printf(LLAPI_MSG_NORMAL, "\n");
-        }
+		}
+		llapi_printf(LLAPI_MSG_NORMAL, "\n");
+	}
 }
 
 void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
@@ -2414,7 +2447,321 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
-void llapi_lov_dump_user_lmm(struct find_param *param, char *path, int is_dir)
+static void lov_dump_comp_v1_header(struct find_param *param, char *path,
+				    enum lov_dump_flags flags)
+{
+	struct lov_comp_md_v1 *comp_v1 = (void *)&param->fp_lmd->lmd_lmm;
+	int depth = param->fp_max_depth;
+	int verbose = param->fp_verbose;
+
+	if (depth && path && ((verbose != VERBOSE_OBJID) ||
+			      !(flags & LDF_IS_DIR)))
+		llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
+
+	if (verbose & VERBOSE_DETAIL) {
+		llapi_printf(LLAPI_MSG_NORMAL, "composite_header:\n");
+		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_magic:       0x%08X\n",
+			     " ", comp_v1->lcm_magic);
+		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_size:        %u\n",
+			     " ", comp_v1->lcm_size);
+		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_flags:       %u\n",
+			     " ", comp_v1->lcm_flags);
+	}
+
+	if (verbose & VERBOSE_GENERATION) {
+		if (verbose & ~VERBOSE_GENERATION)
+			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_layout_gen:  ",
+				     " ");
+		llapi_printf(LLAPI_MSG_NORMAL, "%u\n", comp_v1->lcm_layout_gen);
+	}
+
+	if (verbose & VERBOSE_COMP_COUNT) {
+		if (verbose & ~VERBOSE_COMP_COUNT)
+			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_entry_count: ",
+				     " ");
+		llapi_printf(LLAPI_MSG_NORMAL, "%u\n",
+			     comp_v1->lcm_entry_count);
+	}
+
+	if (verbose & VERBOSE_DETAIL)
+		llapi_printf(LLAPI_MSG_NORMAL, "components:\n");
+}
+
+static void lov_dump_comp_v1_entry(struct find_param *param,
+				   enum lov_dump_flags flags, int index)
+{
+	struct lov_comp_md_v1 *comp_v1 = (void *)&param->fp_lmd->lmd_lmm;
+	struct lov_comp_md_entry_v1 *entry;
+	char *separator = "";
+	int verbose = param->fp_verbose;
+
+	entry = &comp_v1->lcm_entries[index];
+
+	if (verbose & VERBOSE_COMP_ID) {
+		if (verbose & VERBOSE_DETAIL)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%slcme_id:             ", "  - ");
+		else if (verbose & ~VERBOSE_COMP_ID)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%4slcme_id:             ", " ");
+		if (!(flags & LDF_IS_DIR))
+			llapi_printf(LLAPI_MSG_NORMAL, "%u", entry->lcme_id);
+		else
+			llapi_printf(LLAPI_MSG_NORMAL, "N/A");
+		separator = "\n";
+	}
+
+	if (verbose & VERBOSE_COMP_FLAGS) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+		if (verbose & ~VERBOSE_COMP_FLAGS)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%4slcme_flags:          ", " ");
+		llapi_printf(LLAPI_MSG_NORMAL, "%#x", entry->lcme_flags);
+		separator = "\n";
+	}
+
+	if (verbose & VERBOSE_COMP_START) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+		if (verbose & ~VERBOSE_COMP_START)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%4slcme_extent.e_start: ", " ");
+		llapi_printf(LLAPI_MSG_NORMAL, "%llu",
+			     entry->lcme_extent.e_start);
+		separator = "\n";
+	}
+
+	if (verbose & VERBOSE_COMP_END) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+		if (verbose & ~VERBOSE_COMP_END)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%4slcme_extent.e_end:   ", " ");
+		if (entry->lcme_extent.e_end == LUSTRE_EOF)
+			llapi_printf(LLAPI_MSG_NORMAL, "%s", "EOF");
+		else
+			llapi_printf(LLAPI_MSG_NORMAL, "%llu",
+					entry->lcme_extent.e_end);
+		separator = "\n";
+	}
+
+	if (verbose & VERBOSE_DETAIL) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+		llapi_printf(LLAPI_MSG_NORMAL, "%4slcme_offset:         %u\n",
+			     " ", entry->lcme_offset);
+		llapi_printf(LLAPI_MSG_NORMAL, "%4slcme_size:           %u\n",
+			     " ", entry->lcme_size);
+		llapi_printf(LLAPI_MSG_NORMAL, "%4ssub_layout:\n", " ");
+	} else {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+	}
+}
+
+/* Check if the value matches 1 of the given criteria (e.g. --atime +/-N).
+ * @mds indicates if this is MDS timestamps and there are attributes on OSTs.
+ *
+ * The result is -1 if it does not match, 0 if not yet clear, 1 if matches.
+ * The table below gives the answers for the specified parameters (value and
+ * sign), 1st column is the answer for the MDS value, the 2nd is for the OST:
+ * --------------------------------------
+ * 1 | file > limit; sign > 0 | -1 / -1 |
+ * 2 | file = limit; sign > 0 | -1 / -1 |
+ * 3 | file < limit; sign > 0 |  ? /  1 |
+ * 4 | file > limit; sign = 0 | -1 / -1 |
+ * 5 | file = limit; sign = 0 |  ? /  1 |  <- (see the Note below)
+ * 6 | file < limit; sign = 0 |  ? / -1 |
+ * 7 | file > limit; sign < 0 |  1 /  1 |
+ * 8 | file = limit; sign < 0 |  ? / -1 |
+ * 9 | file < limit; sign < 0 |  ? / -1 |
+ * --------------------------------------
+ * Note: 5th actually means that the value is within the interval
+ * (limit - margin, limit]. */
+static int find_value_cmp(unsigned long long file, unsigned long long limit,
+			  int sign, int negopt, unsigned long long margin,
+			  int mds)
+{
+	int ret = -1;
+
+	if (sign > 0) {
+		/* Drop the fraction of margin (of days). */
+		if (file + margin <= limit)
+			ret = mds ? 0 : 1;
+	} else if (sign == 0) {
+		if (file <= limit && file + margin > limit)
+			ret = mds ? 0 : 1;
+		else if (file + margin <= limit)
+			ret = mds ? 0 : -1;
+	} else if (sign < 0) {
+		if (file > limit)
+			ret = 1;
+		else if (mds)
+			ret = 0;
+	}
+
+	return negopt ? ~ret + 1 : ret;
+}
+
+static inline struct lov_user_md *
+lov_comp_entry(struct lov_comp_md_v1 *comp_v1, int ent_idx)
+{
+	return (struct lov_user_md *)((char *)comp_v1 +
+			comp_v1->lcm_entries[ent_idx].lcme_offset);
+}
+
+static inline struct lov_user_ost_data_v1 *
+lov_v1v3_objects(struct lov_user_md *v1)
+{
+	if (v1->lmm_magic == LOV_USER_MAGIC_V3)
+		return ((struct lov_user_md_v3 *)v1)->lmm_objects;
+	else
+		return v1->lmm_objects;
+}
+
+static inline void
+lov_v1v3_pool_name(struct lov_user_md *v1, char *pool_name)
+{
+	if (v1->lmm_magic == LOV_USER_MAGIC_V3)
+		strlcpy(pool_name, ((struct lov_user_md_v3 *)v1)->lmm_pool_name,
+			LOV_MAXPOOLNAME);
+	else
+		pool_name[0] = '\0';
+}
+
+/**
+ * An example of "getstripe -v" for a two components PFL file:
+ *
+ * composite_header:
+ * lcm_magic:       0x0BD60BD0
+ * lcm_size:        264
+ * lcm_flags:       0
+ * lcm_layout_gen:  2
+ * lcm_entry_count: 2
+ * components:
+ * - lcme_id:             1
+ *   lcme_flags:          0x10
+ *   lcme_extent.e_start: 0
+ *   lcme_extent.e_end:   1048576
+ *   lcme_offset:         128
+ *   lcme_size:           56
+ *   sub_layout:
+ *     lmm_magic:         0x0BD10BD0
+ *     lmm_seq:           0x200000401
+ *     lmm_object_id:     0x1
+ *     lmm_fid:           [0x200000401:0x1:0x0]
+ *     lmm_stripe_count:  1
+ *     lmm_stripe_size:   1048576
+ *     lmm_pattern:       1
+ *     lmm_layout_gen:    0
+ *     lmm_stripe_offset: 0
+ *     lmm_objects:
+ *     - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x2:0x0] }
+ *
+ * - lcme_id:             2
+ *   lcme_flags:          0x10
+ *   lcme_extent.e_start: 1048576
+ *   lcme_extent.e_end:   EOF
+ *   lcme_offset:         184
+ *   lcme_size:           80
+ *     sub_layout:
+ *     lmm_magic:         0x0BD10BD0
+ *     lmm_seq:           0x200000401
+ *     lmm_object_id:     0x1
+ *     lmm_fid:           [0x200000401:0x1:0x0]
+ *     lmm_stripe_count:  2
+ *     lmm_stripe_size:   1048576
+ *     lmm_pattern:       1
+ *     lmm_layout_gen:    0
+ *     lmm_stripe_offset: 1
+ *     lmm_objects:
+ *     - 0: { l_ost_idx: 1, l_fid: [0x100010000:0x2:0x0] }
+ *     - 1: { l_ost_idx: 0, l_fid: [0x100000000:0x3:0x0] }
+ */
+static void lov_dump_comp_v1(struct find_param *param, char *path,
+			     enum lov_dump_flags flags)
+{
+	struct lov_comp_md_entry_v1 *entry;
+	struct lov_user_ost_data_v1 *objects;
+	struct lov_comp_md_v1 *comp_v1 = (void *)&param->fp_lmd->lmd_lmm;
+	struct lov_user_md_v1 *v1;
+	char pool_name[LOV_MAXPOOLNAME + 1];
+	int obdindex = param->fp_obd_index;
+	int i, j, match, obdstripe = 0;
+
+	if (obdindex != OBD_NOT_FOUND) {
+		for (i = 0; !(flags & LDF_IS_DIR) &&
+			    i < comp_v1->lcm_entry_count; i++) {
+			if (!(comp_v1->lcm_entries[i].lcme_flags &
+			      LCME_FL_INIT))
+				continue;
+
+			v1 = lov_comp_entry(comp_v1, i);
+			objects = lov_v1v3_objects(v1);
+
+			for (j = 0; j < v1->lmm_stripe_count; j++) {
+				if (obdindex == objects[j].l_ost_idx) {
+					obdstripe = 1;
+					break;
+				}
+			}
+		}
+	} else {
+		obdstripe = 1;
+	}
+
+	if (obdstripe == 0)
+		return;
+
+	lov_dump_comp_v1_header(param, path, flags);
+
+	flags |= LDF_INDENT;
+
+	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
+		entry = &comp_v1->lcm_entries[i];
+
+		if (param->fp_check_comp_flags &&
+		    !(param->fp_comp_flags & entry->lcme_flags))
+			continue;
+
+		if (param->fp_check_comp_id &&
+		    param->fp_comp_id != entry->lcme_id)
+			continue;
+
+		if (param->fp_check_comp_start) {
+			match = find_value_cmp(entry->lcme_extent.e_start,
+					       param->fp_comp_start,
+					       param->fp_comp_start_sign,
+					       0,
+					       param->fp_comp_start_units, 0);
+			if (match == -1)
+				continue;
+		}
+
+		if (param->fp_check_comp_end) {
+			unsigned long long margin;
+
+			margin = entry->lcme_extent.e_end == LUSTRE_EOF ?
+				0 : param->fp_comp_end_units;
+
+			match = find_value_cmp(entry->lcme_extent.e_end,
+					       param->fp_comp_end,
+					       param->fp_comp_end_sign,
+					       0, margin, 0);
+			if (match == -1)
+				continue;
+		}
+
+		lov_dump_comp_v1_entry(param, flags, i);
+
+		v1 = lov_comp_entry(comp_v1, i);
+		objects = lov_v1v3_objects(v1);
+		lov_v1v3_pool_name(v1, pool_name);
+
+		lov_dump_user_lmm_v1v3(v1, pool_name, objects, path, obdindex,
+				       param->fp_max_depth, param->fp_verbose,
+				       flags);
+	}
+}
+
+static void llapi_lov_dump_user_lmm(struct find_param *param, char *path,
+				    enum lov_dump_flags flags)
 {
 	__u32 magic;
 
@@ -2423,27 +2770,29 @@ void llapi_lov_dump_user_lmm(struct find_param *param, char *path, int is_dir)
 	else
 		magic = *(__u32 *)&param->fp_lmd->lmd_lmm; /* lum->lmm_magic */
 
+	if (param->fp_raw)
+		flags |= LDF_IS_RAW;
+
 	switch (magic) {
-        case LOV_USER_MAGIC_V1:
+	case LOV_USER_MAGIC_V1:
 		lov_dump_user_lmm_v1v3(&param->fp_lmd->lmd_lmm, NULL,
 				       param->fp_lmd->lmd_lmm.lmm_objects,
-				       path, is_dir,
-				       param->fp_obd_index, param->fp_max_depth,
-				       param->fp_verbose, param->fp_raw);
-                break;
-        case LOV_USER_MAGIC_V3: {
-                char pool_name[LOV_MAXPOOLNAME + 1];
-                struct lov_user_ost_data_v1 *objects;
+				       path, param->fp_obd_index,
+				       param->fp_max_depth, param->fp_verbose,
+				       flags);
+		break;
+	case LOV_USER_MAGIC_V3: {
+		char pool_name[LOV_MAXPOOLNAME + 1];
+		struct lov_user_ost_data_v1 *objects;
 		struct lov_user_md_v3 *lmmv3 = (void *)&param->fp_lmd->lmd_lmm;
 
 		strlcpy(pool_name, lmmv3->lmm_pool_name, sizeof(pool_name));
 		objects = lmmv3->lmm_objects;
-		lov_dump_user_lmm_v1v3(&param->fp_lmd->lmd_lmm,
-				       pool_name[0] == '\0' ? NULL : pool_name,
-				       objects, path, is_dir,
-				       param->fp_obd_index, param->fp_max_depth,
-				       param->fp_verbose, param->fp_raw);
-                break;
+		lov_dump_user_lmm_v1v3(&param->fp_lmd->lmd_lmm, pool_name,
+				       objects, path, param->fp_obd_index,
+				       param->fp_max_depth, param->fp_verbose,
+				       flags);
+		break;
         }
 	case LMV_MAGIC_V1:
 	case LMV_USER_MAGIC: {
@@ -2452,12 +2801,13 @@ void llapi_lov_dump_user_lmm(struct find_param *param, char *path, int is_dir)
 
 		lum = (struct lmv_user_md *)param->fp_lmv_md;
 		strlcpy(pool_name, lum->lum_pool_name, sizeof(pool_name));
-		lmv_dump_user_lmm(lum,
-				  pool_name[0] == '\0' ? NULL : pool_name,
-				  path, param->fp_obd_index,
+		lmv_dump_user_lmm(lum, pool_name, path, param->fp_obd_index,
 				  param->fp_max_depth, param->fp_verbose);
 		break;
 	}
+	case LOV_USER_MAGIC_COMP_V1:
+		lov_dump_comp_v1(param, path, flags);
+		break;
 	default:
 		llapi_printf(LLAPI_MSG_NORMAL, "unknown lmm_magic:  %#x "
 			     "(expecting one of %#x %#x %#x %#x)\n",
@@ -2539,50 +2889,6 @@ int llapi_file_lookup(int dirfd, const char *name)
         return rc;
 }
 
-/* Check if the value matches 1 of the given criteria (e.g. --atime +/-N).
- * @mds indicates if this is MDS timestamps and there are attributes on OSTs.
- *
- * The result is -1 if it does not match, 0 if not yet clear, 1 if matches.
- * The table below gives the answers for the specified parameters (value and
- * sign), 1st column is the answer for the MDS value, the 2nd is for the OST:
- * --------------------------------------
- * 1 | file > limit; sign > 0 | -1 / -1 |
- * 2 | file = limit; sign > 0 | -1 / -1 |
- * 3 | file < limit; sign > 0 |  ? /  1 |
- * 4 | file > limit; sign = 0 | -1 / -1 |
- * 5 | file = limit; sign = 0 |  ? /  1 |  <- (see the Note below)
- * 6 | file < limit; sign = 0 |  ? / -1 |
- * 7 | file > limit; sign < 0 |  1 /  1 |
- * 8 | file = limit; sign < 0 |  ? / -1 |
- * 9 | file < limit; sign < 0 |  ? / -1 |
- * --------------------------------------
- * Note: 5th actually means that the value is within the interval
- * (limit - margin, limit]. */
-static int find_value_cmp(unsigned long long file, unsigned long long limit,
-                          int sign, int negopt, unsigned long long margin,
-                          int mds)
-{
-        int ret = -1;
-
-        if (sign > 0) {
-                /* Drop the fraction of margin (of days). */
-                if (file + margin <= limit)
-                        ret = mds ? 0 : 1;
-        } else if (sign == 0) {
-                if (file <= limit && file + margin > limit)
-                        ret = mds ? 0 : 1;
-                else if (file + margin <= limit)
-                        ret = mds ? 0 : -1;
-        } else if (sign < 0) {
-                if (file > limit)
-                        ret = 1;
-                else if (mds)
-                        ret = 0;
-        }
-
-        return negopt ? ~ret + 1 : ret;
-}
-
 /* Check if the file time matches all the given criteria (e.g. --atime +/-N).
  * Return -1 or 1 if file timestamp does not or does match the given criteria
  * correspondingly. Return 0 if the MDS time is being checked and there are
@@ -2641,9 +2947,11 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
  */
 static int check_obd_match(struct find_param *param)
 {
+	struct lov_user_ost_data_v1 *objects;
+	struct lov_comp_md_v1 *comp_v1 = NULL;
+	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
 	lstat_t *st = &param->fp_lmd->lmd_st;
-	struct lov_user_ost_data_v1 *lmm_objects;
-	int i, j;
+	int i, j, k, count = 1;
 
 	if (param->fp_obd_uuid && param->fp_obd_index == OBD_NOT_FOUND)
 		return 0;
@@ -2653,37 +2961,27 @@ static int check_obd_match(struct find_param *param)
 
 	/* Only those files should be accepted, which have a
 	 * stripe on the specified OST. */
-	if (!param->fp_lmd->lmd_lmm.lmm_stripe_count)
-		return 0;
-
-	if (param->fp_lmd->lmd_lmm.lmm_magic ==
-	    LOV_USER_MAGIC_V3) {
-		struct lov_user_md_v3 *lmmv3 = (void *)&param->fp_lmd->lmd_lmm;
-
-		lmm_objects = lmmv3->lmm_objects;
-	} else if (param->fp_lmd->lmd_lmm.lmm_magic ==  LOV_USER_MAGIC_V1) {
-		lmm_objects = param->fp_lmd->lmd_lmm.lmm_objects;
-	} else {
-		llapi_err_noerrno(LLAPI_MSG_ERROR, "%s:Unknown magic: 0x%08X\n",
-				  __func__, param->fp_lmd->lmd_lmm.lmm_magic);
-		return -EINVAL;
+	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)v1;
+		count = comp_v1->lcm_entry_count;
 	}
 
-	for (i = 0; i < param->fp_lmd->lmd_lmm.lmm_stripe_count; i++) {
-		for (j = 0; j < param->fp_num_obds; j++) {
-			if (param->fp_obd_indexes[j] ==
-			    lmm_objects[i].l_ost_idx) {
-				if (param->fp_exclude_obd)
-					return 0;
-				return 1;
+	for (i = 0; i < count; i++) {
+		if (comp_v1)
+			v1 = lov_comp_entry(comp_v1, i);
+
+		objects = lov_v1v3_objects(v1);
+
+		for (j = 0; j < v1->lmm_stripe_count; j++) {
+			for (k = 0; k < param->fp_num_obds; k++) {
+				if (param->fp_obd_indexes[k] ==
+				    objects[j].l_ost_idx)
+					return !param->fp_exclude_obd;
 			}
 		}
 	}
 
-	if (param->fp_exclude_obd)
-                return 1;
-
-	return 0;
+	return param->fp_exclude_obd;
 }
 
 static int check_mdt_match(struct find_param *param)
@@ -2734,21 +3032,256 @@ static int print_failed_tgt(struct find_param *param, char *path, int type)
 	return ret;
 }
 
+static int find_check_stripe_size(struct find_param *param)
+{
+	struct lov_comp_md_v1 *comp_v1 = NULL;
+	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
+	int ret, i, count = 1;
+
+	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)v1;
+		count = comp_v1->lcm_entry_count;
+		ret = param->fp_exclude_stripe_size ? 1 : -1;
+	}
+
+	for (i = 0; i < count; i++) {
+		if (comp_v1)
+			v1 = lov_comp_entry(comp_v1, i);
+
+		ret = find_value_cmp(v1->lmm_stripe_size, param->fp_stripe_size,
+				     param->fp_stripe_size_sign,
+				     param->fp_exclude_stripe_size,
+				     param->fp_stripe_size_units, 0);
+		/* If any stripe_size matches */
+		if (ret != -1)
+			break;
+	}
+
+	return ret;
+}
+
+static __u32 find_get_stripe_count(struct find_param *param)
+{
+	struct lov_comp_md_v1 *comp_v1 = NULL;
+	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
+	int i, count = 1;
+	__u32 stripe_count = 0;
+
+	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)v1;
+		count = comp_v1->lcm_entry_count;
+	}
+
+	for (i = 0; i < count; i++) {
+		if (comp_v1)
+			v1 = lov_comp_entry(comp_v1, i);
+		stripe_count += v1->lmm_stripe_count;
+	}
+
+	return stripe_count;
+}
+
+#define LOV_PATTERN_INVALID	0xFFFFFFFF
+
+static int find_check_layout(struct find_param *param)
+{
+	struct lov_comp_md_v1 *comp_v1 = NULL;
+	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
+	int i, count = 1;
+	bool found = false, valid = false;
+
+	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)v1;
+		count = comp_v1->lcm_entry_count;
+	}
+
+	for (i = 0; i < count; i++) {
+		if (comp_v1)
+			v1 = lov_comp_entry(comp_v1, i);
+
+		if (v1->lmm_pattern == LOV_PATTERN_INVALID)
+			continue;
+
+		valid = true;
+		if (v1->lmm_pattern & param->fp_layout) {
+			found = true;
+			break;
+		}
+	}
+
+	if (!valid)
+		return -1;
+
+	if ((found && !param->fp_exclude_layout) ||
+	    (!found && param->fp_exclude_layout))
+		return 1;
+
+	return -1;
+}
+
+static int find_check_pool(struct find_param *param)
+{
+	struct lov_comp_md_v1 *comp_v1 = NULL;
+	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
+	struct lov_user_md_v3 *v3 = (void *)v1;
+	int i, count = 1;
+	bool found = false;
+
+	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)v1;
+		count = comp_v1->lcm_entry_count;
+		/* empty requested pool is taken as no pool search */
+		if (count == 0 && param->fp_poolname[0] == '\0')
+			found = true;
+	}
+
+	for (i = 0; i < count; i++) {
+		if (comp_v1 != NULL)
+			v1 = lov_comp_entry(comp_v1, i);
+
+		if (((v1->lmm_magic == LOV_USER_MAGIC_V1) &&
+		     (param->fp_poolname[0] == '\0')) ||
+		    ((v1->lmm_magic == LOV_USER_MAGIC_V3) &&
+		     (strncmp(v3->lmm_pool_name,
+			      param->fp_poolname, LOV_MAXPOOLNAME) == 0)) ||
+		    ((v1->lmm_magic == LOV_USER_MAGIC_V3) &&
+		     (strcmp(param->fp_poolname, "*") == 0))) {
+			found = true;
+			break;
+		}
+	}
+
+	if ((found && !param->fp_exclude_pool) ||
+	    (!found && param->fp_exclude_pool))
+		return 1;
+
+	return -1;
+}
+
+static int find_check_comp_options(struct find_param *param)
+{
+	struct lov_comp_md_v1 *comp_v1;
+	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
+	struct lov_comp_md_entry_v1 *entry;
+	int i, ret;
+
+	if (v1->lmm_magic != LOV_USER_MAGIC_COMP_V1) {
+		if ((param->fp_check_comp_count &&
+		     !param->fp_exclude_comp_count) ||
+		    (param->fp_check_comp_flags &&
+		     !param->fp_exclude_comp_flags) ||
+		    (param->fp_check_comp_start &&
+		     !param->fp_exclude_comp_start) ||
+		    (param->fp_check_comp_end &&
+		     !param->fp_exclude_comp_end))
+			return -1;
+		else
+			return 1;
+	}
+
+	comp_v1 = (struct lov_comp_md_v1 *)v1;
+
+	if (param->fp_check_comp_count) {
+		ret = find_value_cmp(comp_v1->lcm_entry_count,
+				     param->fp_comp_count,
+				     param->fp_comp_count_sign,
+				     param->fp_exclude_comp_count, 1, 0);
+		if (ret == -1)
+			return ret;
+	}
+
+	if (comp_v1->lcm_entry_count == 0) {
+		if ((param->fp_check_comp_flags &&
+		     !param->fp_exclude_comp_flags) ||
+		    (param->fp_check_comp_start &&
+		     !param->fp_exclude_comp_start) ||
+		    (param->fp_check_comp_end &&
+		     !param->fp_exclude_comp_end))
+			return -1;
+	}
+
+	if (param->fp_check_comp_flags) {
+		for (i = 0; i < comp_v1->lcm_entry_count; i++) {
+			entry = &comp_v1->lcm_entries[i];
+
+			if (((entry->lcme_flags & param->fp_comp_flags) &&
+			     param->fp_exclude_comp_flags) ||
+			    (!(entry->lcme_flags & param->fp_comp_flags) &&
+			     !param->fp_exclude_comp_flags))
+				ret = -1;
+			else
+				ret = 1;
+			/* If any flags matches */
+			if (ret != -1)
+				break;
+		}
+		if (ret == -1)
+			return ret;
+	}
+
+	if (param->fp_check_comp_start) {
+		for (i = 0; i < comp_v1->lcm_entry_count; i++) {
+			entry = &comp_v1->lcm_entries[i];
+
+			ret = find_value_cmp(entry->lcme_extent.e_start,
+					     param->fp_comp_start,
+					     param->fp_comp_start_sign,
+					     param->fp_exclude_comp_start,
+					     param->fp_comp_start_units, 0);
+			/* If any extent start matches */
+			if (ret != -1)
+				break;
+		}
+		if (ret == -1)
+			return ret;
+	}
+
+	if (param->fp_check_comp_end) {
+		for (i = 0; i < comp_v1->lcm_entry_count; i++) {
+			unsigned long long margin;
+			entry = &comp_v1->lcm_entries[i];
+
+			margin = entry->lcme_extent.e_end == LUSTRE_EOF ?
+				0 : param->fp_comp_end_units;
+
+			ret = find_value_cmp(entry->lcme_extent.e_end,
+					     param->fp_comp_end,
+					     param->fp_comp_end_sign,
+					     param->fp_exclude_comp_end, margin,
+					     0);
+			/* If any extent end matches */
+			if (ret != -1)
+				break;
+		}
+		if (ret == -1)
+			return ret;
+	}
+
+	return 1;
+}
+
+static bool find_check_lmm_info(struct find_param *param)
+{
+	return param->fp_check_pool || param->fp_check_stripe_count ||
+	       param->fp_check_stripe_size || param->fp_check_layout ||
+	       param->fp_check_comp_count || param->fp_check_comp_end ||
+	       param->fp_check_comp_start || param->fp_check_comp_flags;
+}
+
 static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 			void *data, struct dirent64 *de)
 {
-        struct find_param *param = (struct find_param *)data;
+	struct find_param *param = (struct find_param *)data;
 	DIR *dir = dirp == NULL ? NULL : *dirp;
-        int decision = 1; /* 1 is accepted; -1 is rejected. */
+	int decision = 1; /* 1 is accepted; -1 is rejected. */
 	lstat_t *st = &param->fp_lmd->lmd_st;
-        int lustre_fs = 1;
-        int checked_type = 0;
-        int ret = 0;
+	int lustre_fs = 1;
+	int checked_type = 0;
+	int ret = 0;
+	__u32 stripe_count = 0;
 
 	if (parent == NULL && dir == NULL)
 		return -EINVAL;
-
-	param->fp_lmd->lmd_lmm.lmm_stripe_count = 0;
 
 	/* If a regular expression is presented, make the initial decision */
 	if (param->fp_pattern != NULL) {
@@ -2780,9 +3313,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	if (param->fp_obd_uuid || param->fp_mdt_uuid ||
 	    param->fp_check_uid || param->fp_check_gid ||
 	    param->fp_atime || param->fp_mtime || param->fp_ctime ||
-	    param->fp_check_pool || param->fp_check_size ||
-	    param->fp_check_stripe_count || param->fp_check_stripe_size ||
-	    param->fp_check_layout)
+	    param->fp_check_size || find_check_lmm_info(param))
 		decision = 0;
 
 	if (param->fp_type != 0 && checked_type == 0)
@@ -2792,8 +3323,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 		ret = get_lmd_info(path, parent, dir, param->fp_lmd,
 				   param->fp_lum_size);
 		if (ret == 0 && param->fp_lmd->lmd_lmm.lmm_magic == 0 &&
-		    (param->fp_check_pool || param->fp_check_stripe_count ||
-		     param->fp_check_stripe_size || param->fp_check_layout)) {
+		    find_check_lmm_info(param)) {
 			struct lov_user_md *lmm = &param->fp_lmd->lmd_lmm;
 
 			/* We need to "fake" the "use the default" values
@@ -2842,6 +3372,8 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 				goto decided;
 
 			return ret;
+		} else {
+			stripe_count = find_get_stripe_count(param);
 		}
 	}
 
@@ -2882,36 +3414,23 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
         }
 
 	if (param->fp_check_stripe_size) {
-		decision = find_value_cmp(
-				param->fp_lmd->lmd_lmm.lmm_stripe_size,
-				param->fp_stripe_size,
-				param->fp_stripe_size_sign,
-				param->fp_exclude_stripe_size,
-				param->fp_stripe_size_units, 0);
+		decision = find_check_stripe_size(param);
 		if (decision == -1)
 			goto decided;
 	}
 
 	if (param->fp_check_stripe_count) {
-		decision = find_value_cmp(
-				param->fp_lmd->lmd_lmm.lmm_stripe_count,
-				param->fp_stripe_count,
-				param->fp_stripe_count_sign,
-				param->fp_exclude_stripe_count, 1, 0);
+		decision = find_value_cmp(stripe_count, param->fp_stripe_count,
+					  param->fp_stripe_count_sign,
+					  param->fp_exclude_stripe_count, 1, 0);
 		if (decision == -1)
 			goto decided;
-        }
+	}
 
 	if (param->fp_check_layout) {
-		__u32 found;
-
-		found = (param->fp_lmd->lmd_lmm.lmm_pattern & param->fp_layout);
-		if ((param->fp_lmd->lmd_lmm.lmm_pattern == 0xFFFFFFFF) ||
-		    (found && param->fp_exclude_layout) ||
-		    (!found && !param->fp_exclude_layout)) {
-			decision = -1;
+		decision = find_check_layout(param);
+		if (decision == -1)
 			goto decided;
-		}
 	}
 
 	/* If an OBD UUID is specified but none matches, skip this file. */
@@ -2964,22 +3483,16 @@ obd_matches:
 	}
 
 	if (param->fp_check_pool) {
-		struct lov_user_md_v3 *lmmv3 = (void *)&param->fp_lmd->lmd_lmm;
+		decision = find_check_pool(param);
+		if (decision == -1)
+			goto decided;
+	}
 
-		/* empty requested pool is taken as no pool search => V1 */
-		if (((param->fp_lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V1) &&
-		     (param->fp_poolname[0] == '\0')) ||
-		    ((param->fp_lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3) &&
-		     (strncmp(lmmv3->lmm_pool_name,
-			      param->fp_poolname, LOV_MAXPOOLNAME) == 0)) ||
-		    ((param->fp_lmd->lmd_lmm.lmm_magic == LOV_USER_MAGIC_V3) &&
-		     (strcmp(param->fp_poolname, "*") == 0))) {
-			if (param->fp_exclude_pool)
-				goto decided;
-		} else {
-			if (!param->fp_exclude_pool)
-				goto decided;
-		}
+	if (param->fp_check_comp_count || param->fp_check_comp_flags ||
+	    param->fp_check_comp_start || param->fp_check_comp_end) {
+		decision = find_check_comp_options(param);
+		if (decision == -1)
+			goto decided;
 	}
 
 	/* Check the time on mds. */
@@ -2987,9 +3500,8 @@ obd_matches:
 	if (param->fp_atime || param->fp_mtime || param->fp_ctime) {
                 int for_mds;
 
-		for_mds = lustre_fs ? (S_ISREG(st->st_mode) &&
-				       param->fp_lmd->lmd_lmm.lmm_stripe_count)
-			: 0;
+		for_mds = lustre_fs ?
+			(S_ISREG(st->st_mode) && stripe_count) : 0;
                 decision = find_time_check(st, param, for_mds);
                 if (decision == -1)
                         goto decided;
@@ -2999,9 +3511,8 @@ obd_matches:
            The regular stat is almost of the same speed as some new
            'glimpse-size-ioctl'. */
 
-	if (param->fp_check_size && S_ISREG(st->st_mode) &&
-	    param->fp_lmd->lmd_lmm.lmm_stripe_count)
-                decision = 0;
+	if (param->fp_check_size && S_ISREG(st->st_mode) && stripe_count)
+		decision = 0;
 
 	if (param->fp_check_size && S_ISDIR(st->st_mode))
 		decision = 0;
@@ -3365,7 +3876,7 @@ err_out:
 
 dump:
 	if (!(param->fp_verbose & VERBOSE_MDTINDEX))
-                llapi_lov_dump_user_lmm(param, path, d ? 1 : 0);
+		llapi_lov_dump_user_lmm(param, path, d ? LDF_IS_DIR : 0);
 
 out:
 	/* Do not get down anymore? */
