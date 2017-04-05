@@ -61,8 +61,8 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
 	       " a=%llu c=%llu b=%llu\n", POSTID(&lsm->lsm_oi),
 	       lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_atime, lvb->lvb_ctime,
 	       lvb->lvb_blocks);
-	for (i = 0; i < lsm->lsm_stripe_count; i++) {
-		struct lov_oinfo *loi = lsm->lsm_oinfo[i];
+	for (i = 0; i < lsm->lsm_entries[0]->lsme_stripe_count; i++) {
+		struct lov_oinfo *loi = lsm->lsm_entries[0]->lsme_oinfo[i];
 		u64 lov_size;
 		u64 tmpsize;
 

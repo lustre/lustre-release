@@ -76,10 +76,6 @@ static inline void loi_kms_set(struct lov_oinfo *oinfo, __u64 kms)
         oinfo->loi_kms_valid = 1;
 }
 
-static inline void loi_init(struct lov_oinfo *loi)
-{
-}
-
 struct lov_stripe_md;
 struct obd_info;
 

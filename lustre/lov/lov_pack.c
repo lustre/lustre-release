@@ -138,7 +138,8 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 	unsigned int i;
 	ENTRY;
 
-	lmm_size = lov_mds_md_size(lsm->lsm_stripe_count, lsm->lsm_magic);
+	lmm_size = lov_mds_md_size(lsm->lsm_entries[0]->lsme_stripe_count,
+				   lsm->lsm_magic);
 	if (buf_size == 0)
 		RETURN(lmm_size);
 
@@ -150,23 +151,26 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 	 */
 	lmmv1->lmm_magic = cpu_to_le32(lsm->lsm_magic);
 	lmm_oi_cpu_to_le(&lmmv1->lmm_oi, &lsm->lsm_oi);
-	lmmv1->lmm_stripe_size = cpu_to_le32(lsm->lsm_stripe_size);
-	lmmv1->lmm_stripe_count = cpu_to_le16(lsm->lsm_stripe_count);
-	lmmv1->lmm_pattern = cpu_to_le32(lsm->lsm_pattern);
+	lmmv1->lmm_stripe_size = cpu_to_le32(
+				lsm->lsm_entries[0]->lsme_stripe_size);
+	lmmv1->lmm_stripe_count = cpu_to_le16(
+				lsm->lsm_entries[0]->lsme_stripe_count);
+	lmmv1->lmm_pattern = cpu_to_le32(lsm->lsm_entries[0]->lsme_pattern);
 	lmmv1->lmm_layout_gen = cpu_to_le16(lsm->lsm_layout_gen);
 
 	if (lsm->lsm_magic == LOV_MAGIC_V3) {
-		CLASSERT(sizeof(lsm->lsm_pool_name) ==
+		CLASSERT(sizeof(lsm->lsm_entries[0]->lsme_pool_name) ==
 			 sizeof(lmmv3->lmm_pool_name));
-		strlcpy(lmmv3->lmm_pool_name, lsm->lsm_pool_name,
+		strlcpy(lmmv3->lmm_pool_name,
+			lsm->lsm_entries[0]->lsme_pool_name,
 			sizeof(lmmv3->lmm_pool_name));
 		lmm_objects = lmmv3->lmm_objects;
 	} else {
 		lmm_objects = lmmv1->lmm_objects;
 	}
 
-	for (i = 0; i < lsm->lsm_stripe_count; i++) {
-		struct lov_oinfo *loi = lsm->lsm_oinfo[i];
+	for (i = 0; i < lsm->lsm_entries[0]->lsme_stripe_count; i++) {
+		struct lov_oinfo *loi = lsm->lsm_entries[0]->lsme_oinfo[i];
 
 		ostid_cpu_to_le(&loi->loi_oi, &lmm_objects[i].l_ost_oi);
 		lmm_objects[i].l_ost_gen = cpu_to_le32(loi->loi_ost_gen);
@@ -201,67 +205,6 @@ __u16 lov_get_stripecnt(struct lov_obd *lov, __u32 magic, __u16 stripe_count)
         return stripe_count;
 }
 
-static int lov_verify_lmm(void *lmm, int lmm_bytes, __u16 *stripe_count)
-{
-        int rc;
-
-        if (lsm_op_find(le32_to_cpu(*(__u32 *)lmm)) == NULL) {
-                char *buffer;
-                int sz;
-
-                CERROR("bad disk LOV MAGIC: 0x%08X; dumping LMM (size=%d):\n",
-                       le32_to_cpu(*(__u32 *)lmm), lmm_bytes);
-                sz = lmm_bytes * 2 + 1;
-                OBD_ALLOC_LARGE(buffer, sz);
-                if (buffer != NULL) {
-                        int i;
-
-                        for (i = 0; i < lmm_bytes; i++)
-                                sprintf(buffer+2*i, "%.2X", ((char *)lmm)[i]);
-			buffer[sz - 1] = '\0';
-                        CERROR("%s\n", buffer);
-                        OBD_FREE_LARGE(buffer, sz);
-                }
-                return -EINVAL;
-        }
-        rc = lsm_op_find(le32_to_cpu(*(__u32 *)lmm))->lsm_lmm_verify(lmm,
-                                     lmm_bytes, stripe_count);
-        return rc;
-}
-
-struct lov_stripe_md *lov_lsm_alloc(u16 stripe_count, u32 pattern, u32 magic)
-{
-	struct lov_stripe_md *lsm;
-	unsigned int i;
-	ENTRY;
-
-	CDEBUG(D_INFO, "alloc lsm, stripe_count %u\n",
-	       (unsigned int)stripe_count);
-
-	lsm = lsm_alloc_plain(stripe_count);
-	if (lsm == NULL) {
-		CERROR("cannot allocate LSM stripe_count %u\n",
-		       (unsigned int)stripe_count);
-		RETURN(ERR_PTR(-ENOMEM));
-	}
-
-	atomic_set(&lsm->lsm_refc, 1);
-	spin_lock_init(&lsm->lsm_lock);
-	lsm->lsm_magic = magic;
-	lsm->lsm_stripe_count = stripe_count;
-	lsm->lsm_maxbytes = LUSTRE_EXT3_STRIPE_MAXBYTES * stripe_count;
-	lsm->lsm_pattern = pattern;
-	lsm->lsm_pool_name[0] = '\0';
-	lsm->lsm_layout_gen = 0;
-	if (stripe_count > 0)
-		lsm->lsm_oinfo[0]->loi_ost_idx = ~0;
-
-	for (i = 0; i < stripe_count; i++)
-		loi_init(lsm->lsm_oinfo[i]);
-
-	RETURN(lsm);
-}
-
 int lov_free_memmd(struct lov_stripe_md **lsmp)
 {
 	struct lov_stripe_md *lsm = *lsmp;
@@ -270,43 +213,32 @@ int lov_free_memmd(struct lov_stripe_md **lsmp)
 	*lsmp = NULL;
 	refc = atomic_dec_return(&lsm->lsm_refc);
 	LASSERT(refc >= 0);
-	if (refc == 0) {
-		LASSERT(lsm_op_find(lsm->lsm_magic) != NULL);
-		lsm_op_find(lsm->lsm_magic)->lsm_free(lsm);
-	}
+	if (refc == 0)
+		lsm_free(lsm);
+
 	return refc;
 }
 
 /* Unpack LOV object metadata from disk storage.  It is packed in LE byte
  * order and is opaque to the networking layer.
  */
-struct lov_stripe_md *lov_unpackmd(struct lov_obd *lov, struct lov_mds_md *lmm,
-				   size_t lmm_size)
+struct lov_stripe_md *lov_unpackmd(struct lov_obd *lov, void *buf,
+				   size_t buf_size)
 {
+	const struct lsm_operations *op;
 	struct lov_stripe_md *lsm;
-	u16 stripe_count;
 	u32 magic;
-	u32 pattern;
-	int rc;
 	ENTRY;
 
-	rc = lov_verify_lmm(lmm, lmm_size, &stripe_count);
-	if (rc != 0)
-		RETURN(ERR_PTR(rc));
+	if (buf_size < sizeof(magic))
+		RETURN(ERR_PTR(-EINVAL));
 
-	magic = le32_to_cpu(lmm->lmm_magic);
-	pattern = le32_to_cpu(lmm->lmm_pattern);
+	magic = le32_to_cpu(*(u32 *)buf);
+	op = lsm_op_find(magic);
+	if (op == NULL)
+		RETURN(ERR_PTR(-EINVAL));
 
-	lsm = lov_lsm_alloc(stripe_count, pattern, magic);
-	if (IS_ERR(lsm))
-		RETURN(lsm);
-
-	LASSERT(lsm_op_find(magic) != NULL);
-	rc = lsm_op_find(magic)->lsm_unpackmd(lov, lsm, lmm);
-	if (rc != 0) {
-		lov_free_memmd(&lsm);
-		RETURN(ERR_PTR(rc));
-	}
+	lsm = lsm_op_find(magic)->lsm_unpackmd(lov, buf, buf_size);
 
 	RETURN(lsm);
 }
@@ -336,8 +268,8 @@ int lov_getstripe(struct lov_object *obj, struct lov_stripe_md *lsm,
 		GOTO(out, rc = -EIO);
 	}
 
-	if (!lsm_is_released(lsm))
-		stripe_count = lsm->lsm_stripe_count;
+	if (!lsm->lsm_is_released)
+		stripe_count = lsm->lsm_entries[0]->lsme_stripe_count;
 	else
 		stripe_count = 0;
 

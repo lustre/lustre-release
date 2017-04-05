@@ -252,7 +252,8 @@ static int lov_io_subio_init(const struct lu_env *env, struct lov_io *lio,
 	 * when writing a page. -jay
 	 */
 	OBD_ALLOC_LARGE(lio->lis_subs,
-			lsm->lsm_stripe_count * sizeof lio->lis_subs[0]);
+			lsm->lsm_entries[0]->lsme_stripe_count *
+			sizeof lio->lis_subs[0]);
 	if (lio->lis_subs != NULL) {
 		lio->lis_nr_subios = lio->lis_stripe_count;
 		lio->lis_single_subio_index = -1;
@@ -273,7 +274,7 @@ static int lov_io_slice_init(struct lov_io *lio,
 	lio->lis_object = obj;
 
 	LASSERT(obj->lo_lsm != NULL);
-	lio->lis_stripe_count = obj->lo_lsm->lsm_stripe_count;
+	lio->lis_stripe_count = obj->lo_lsm->lsm_entries[0]->lsme_stripe_count;
 
         switch (io->ci_type) {
         case CIT_READ:
@@ -286,7 +287,7 @@ static int lov_io_slice_init(struct lov_io *lio,
 
 			/* If there is LOV EA hole, then we may cannot locate
 			 * the current file-tail exactly. */
-			if (unlikely(obj->lo_lsm->lsm_pattern &
+			if (unlikely(obj->lo_lsm->lsm_entries[0]->lsme_pattern &
 				     LOV_PATTERN_F_HOLE))
 				RETURN(-EIO);
 
@@ -423,9 +424,9 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 	struct lov_io        *lio = cl2lov_io(env, ios);
 	struct cl_io         *io  = ios->cis_io;
 	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
-        loff_t start = io->u.ci_rw.crw_pos;
-        loff_t next;
-        unsigned long ssize = lsm->lsm_stripe_size;
+	loff_t start = io->u.ci_rw.crw_pos;
+	loff_t next;
+	unsigned long ssize = lsm->lsm_entries[0]->lsme_stripe_size;
 
         LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
         ENTRY;
@@ -614,12 +615,12 @@ static int lov_io_read_ahead(const struct lu_env *env,
 	if (ra_end != CL_PAGE_EOF)
 		ra_end = lov_stripe_pgoff(loo->lo_lsm, ra_end, stripe);
 
-	pps = loo->lo_lsm->lsm_stripe_size >> PAGE_SHIFT;
+	pps = loo->lo_lsm->lsm_entries[0]->lsme_stripe_size >> PAGE_SHIFT;
 
 	CDEBUG(D_READA, DFID " max_index = %lu, pps = %u, "
 	       "stripe_size = %u, stripe no = %u, start index = %lu\n",
 	       PFID(lu_object_fid(lov2lu(loo))), ra_end, pps,
-	       loo->lo_lsm->lsm_stripe_size, stripe, start);
+	       loo->lo_lsm->lsm_entries[0]->lsme_stripe_size, stripe, start);
 
 	/* never exceed the end of the stripe */
 	ra->cra_end = min_t(pgoff_t, ra_end, start + pps - start % pps - 1);

@@ -41,6 +41,18 @@
  * the old maximum object size from ext3. */
 #define LUSTRE_EXT3_STRIPE_MAXBYTES 0x1fffffff000ULL
 
+struct lov_stripe_md_entry {
+	struct lu_extent	lsme_extent;
+	u32			lsme_id;
+	u32			lsme_magic;
+	u32			lsme_pattern;
+	u32			lsme_stripe_size;
+	u16			lsme_stripe_count;
+	u16			lsme_layout_gen;
+	char			lsme_pool_name[LOV_MAXPOOLNAME + 1];
+	struct lov_oinfo       *lsme_oinfo[];
+};
+
 struct lov_stripe_md {
 	atomic_t	lsm_refc;
 	spinlock_t	lsm_lock;
@@ -51,44 +63,28 @@ struct lov_stripe_md {
 	loff_t		lsm_maxbytes;
 	struct ost_id	lsm_oi;
 	u32		lsm_magic;
-	u32		lsm_stripe_size;
-	u32		lsm_pattern; /* RAID0, RAID1, released, ... */
-	u16		lsm_stripe_count;
-	u16		lsm_layout_gen;
-	char		lsm_pool_name[LOV_MAXPOOLNAME + 1];
-	struct lov_oinfo	*lsm_oinfo[0];
+	u32		lsm_layout_gen;
+	u32		lsm_entry_count;
+	bool		lsm_is_released;
+	struct lov_stripe_md_entry *lsm_entries[];
 };
-
-static inline bool lsm_is_released(struct lov_stripe_md *lsm)
-{
-	return !!(lsm->lsm_pattern & LOV_PATTERN_F_RELEASED);
-}
 
 static inline bool lsm_has_objects(struct lov_stripe_md *lsm)
 {
-	if (lsm == NULL)
-		return false;
-
-	if (lsm_is_released(lsm))
-		return false;
-
-	return true;
+	return lsm != NULL && !lsm->lsm_is_released;
 }
 
 struct lsm_operations {
-	void (*lsm_free)(struct lov_stripe_md *);
 	void (*lsm_stripe_by_index)(struct lov_stripe_md *, int *, loff_t *,
 				    loff_t *);
 	void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, loff_t *,
 				     loff_t *);
-	int (*lsm_lmm_verify)(struct lov_mds_md *lmm, int lmm_bytes,
-			      u16 *stripe_count);
-	int (*lsm_unpackmd)(struct lov_obd *lov, struct lov_stripe_md *lsm,
-			    struct lov_mds_md *lmm);
+	struct lov_stripe_md *(*lsm_unpackmd)(struct lov_obd *, void *, size_t);
 };
 
 extern const struct lsm_operations lsm_v1_ops;
 extern const struct lsm_operations lsm_v3_ops;
+extern const struct lsm_operations lsm_comp_md_v1_ops;
 static inline const struct lsm_operations *lsm_op_find(int magic)
 {
 	switch (magic) {
@@ -96,11 +92,15 @@ static inline const struct lsm_operations *lsm_op_find(int magic)
 		return &lsm_v1_ops;
 	case LOV_MAGIC_V3:
 		return &lsm_v3_ops;
+	case LOV_MAGIC_COMP_V1:
+		return &lsm_comp_md_v1_ops;
 	default:
 		CERROR("unrecognized lsm_magic %08x\n", magic);
 		return NULL;
 	}
 }
+
+void lsm_free(struct lov_stripe_md *lsm);
 
 /* lov_do_div64(a, b) returns a % b, and a = a / b.
  * The 32-bit code is LOV-specific due to knowing about stripe limits in
@@ -212,8 +212,8 @@ int lov_del_target(struct obd_device *obd, __u32 index,
 /* lov_pack.c */
 ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 		     size_t buf_size);
-struct lov_stripe_md *lov_unpackmd(struct lov_obd *lov, struct lov_mds_md *lmm,
-				   size_t lmm_size);
+struct lov_stripe_md *lov_unpackmd(struct lov_obd *lov, void *buf,
+				   size_t buf_size);
 int lov_free_memmd(struct lov_stripe_md **lsmp);
 
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm);
@@ -222,7 +222,6 @@ void lov_dump_lmm_common(int level, void *lmmp);
 void lov_dump_lmm(int level, void *lmm);
 
 /* lov_ea.c */
-struct lov_stripe_md *lsm_alloc_plain(u16 stripe_count);
 void lsm_free_plain(struct lov_stripe_md *lsm);
 void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm);
 
