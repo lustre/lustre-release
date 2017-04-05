@@ -51,8 +51,8 @@ test_0() {
 	#instantiate all components, so that objs are allocted
 	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=2k
 
-	local ost_idx1=$($LFS getstripe -I 1 -i $comp_file)
-	local ost_idx2=$($LFS getstripe -I 2 -i $comp_file)
+	local ost_idx1=$($LFS getstripe -I1 -i $comp_file)
+	local ost_idx2=$($LFS getstripe -I2 -i $comp_file)
 
 	[ $ost_idx1 -eq $ost_idx2 ] && error "$ost_idx1 == $ost_idx2"
 
@@ -75,8 +75,8 @@ test_1() {
 	#instantiate all components, so that objs are allocted
 	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=2k
 
-	local ost_idx1=$($LFS getstripe -I 1 -i $comp_file)
-	local ost_idx2=$($LFS getstripe -I 2 -i $comp_file)
+	local ost_idx1=$($LFS getstripe -I1 -i $comp_file)
+	local ost_idx2=$($LFS getstripe -I2 -i $comp_file)
 
 	[ $ost_idx1 -ne $ost_idx2 ] && error "$ost_idx1 != $ost_idx2"
 
@@ -210,11 +210,11 @@ test_5() {
 	#instantiate all components, so that objs are allocted
 	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=65k
 
-	local ost_idx=$($LFS getstripe -I 1 -i $comp_file)
+	local ost_idx=$($LFS getstripe -I1 -i $comp_file)
 	[ $ost_idx -ne 0 ] &&
 		error "component 1 ost_idx $ost_idx != 0"
 
-	ost_idx=$($LFS getstripe -I 2 -i $comp_file)
+	ost_idx=$($LFS getstripe -I2 -i $comp_file)
 	[ $ost_idx -ne 0 ] &&
 		error "component 2 ost_idx $ost_idx != 0"
 
@@ -330,11 +330,11 @@ test_8() {
 		-E -1 -c 4 -S 4M $parent ||
 		error "Set default layout to $parent failed"
 
-	sh rundbench -C -D $parent 2 || error "debench failed"
+	sh rundbench -C -D $parent 2 || error "dbench failed"
 
 	rm -fr $parent || error "Delete dir $parent failed"
 }
-run_test 8 "Run debench over composite files"
+run_test 8 "Run dbench over composite files"
 
 test_9() {
 	local comp_file=$DIR/$tdir/$tfile
@@ -353,12 +353,12 @@ test_9() {
 	# instantiate the 2nd component
 	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=2k
 
-	local f1=$($LFS getstripe -I 2 $comp_file |
+	local f1=$($LFS getstripe -I2 $comp_file |
 			awk '/l_fid:/ {print $7}')
 	echo "before MDS recovery, the ost fid of 2nd component is $f1"
 	fail $SINGLEMDS
 
-	local f2=$($LFS getstripe -I 2 $comp_file |
+	local f2=$($LFS getstripe -I2 $comp_file |
 			awk '/l_fid:/ {print $7}')
 	echo "after MDS recovery, the ost fid of 2nd component is $f2"
 	[ $f1 == $f2 ] || error "$f1 != $f2"
@@ -427,34 +427,34 @@ test_11() {
 	$LFS setstripe -E 1m -E 2m -E 3m -E -1 $comp_file ||
 		error "Create $comp_file failed"
 
-	local f1=$($LFS getstripe -I 1 $comp_file | grep "l_fid")
+	local f1=$($LFS getstripe -I1 $comp_file | grep "l_fid")
 	[[ -z $f1 ]] && error "1: 1st component uninstantiated"
-	local f2=$($LFS getstripe -I 2 $comp_file | grep "l_fid")
+	local f2=$($LFS getstripe -I2 $comp_file | grep "l_fid")
 	[[ -n $f2 ]] && error "1: 2nd component instantiated"
-	local f3=$($LFS getstripe -I 3 $comp_file | grep "l_fid")
+	local f3=$($LFS getstripe -I3 $comp_file | grep "l_fid")
 	[[ -n $f3 ]] && error "1: 3rd component instantiated"
-	local f4=$($LFS getstripe -I 4 $comp_file | grep "l_fid")
+	local f4=$($LFS getstripe -I4 $comp_file | grep "l_fid")
 	[[ -n $f4 ]] && error "1: 4th component instantiated"
 
 	# the first 2 components instantiated
 	$TRUNCATE $comp_file $((1024*1024*1+1))
 
-	f2=$($LFS getstripe -I 2 $comp_file | grep "l_fid")
+	f2=$($LFS getstripe -I2 $comp_file | grep "l_fid")
 	[[ -z $f2 ]] && error "2: 2nd component uninstantiated"
-	f3=$($LFS getstripe -I 3 $comp_file | grep "l_fid")
+	f3=$($LFS getstripe -I3 $comp_file | grep "l_fid")
 	[[ -n $f3 ]] && error "2: 3rd component instantiated"
-	f4=$($LFS getstripe -I 4 $comp_file | grep "l_fid")
+	f4=$($LFS getstripe -I4 $comp_file | grep "l_fid")
 	[[ -n $f4 ]] && error "2: 4th component instantiated"
 
 	# the first 3 components instantiated
 	$TRUNCATE $comp_file $((1024*1024*3))
 	$TRUNCATE $comp_file $((1024*1024*1+1))
 
-	f2=$($LFS getstripe -I 2 $comp_file | grep "l_fid")
+	f2=$($LFS getstripe -I2 $comp_file | grep "l_fid")
 	[[ -z $f2 ]] && error "2: 2nd component uninstantiated"
-	f3=$($LFS getstripe -I 3 $comp_file | grep "l_fid")
+	f3=$($LFS getstripe -I3 $comp_file | grep "l_fid")
 	[[ -z $f3 ]] && error "3: 3rd component uninstantiated"
-	f4=$($LFS getstripe -I 4 $comp_file | grep "l_fid")
+	f4=$($LFS getstripe -I4 $comp_file | grep "l_fid")
 	[[ -n $f4 ]] && error "3: 4th component instantiated"
 
 	# all 4 components instantiated, using append write
@@ -463,7 +463,7 @@ test_11() {
 	rwv -f $comp_file -w -a -n 2 $((1024*1023)) 1
 	ls -l $comp_file
 
-	f4=$($LFS getstripe -I 4 $comp_file | grep "l_fid")
+	f4=$($LFS getstripe -I4 $comp_file | grep "l_fid")
 	[[ -z $f4 ]] && error "4: 4th component uninstantiated"
 
 	return 0

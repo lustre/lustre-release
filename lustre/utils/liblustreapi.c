@@ -2779,6 +2779,31 @@ print_last_init_comp(struct find_param *param)
 	return true;
 }
 
+static int find_comp_end_cmp(unsigned long long end, struct find_param *param)
+{
+	int match;
+
+	if (param->fp_comp_end == LUSTRE_EOF) {
+		if (param->fp_comp_end_sign == 0) /* equal to EOF */
+			match = end == LUSTRE_EOF ? 1 : -1;
+		else if (param->fp_comp_end_sign > 0) /* at most EOF */
+			match = end == LUSTRE_EOF ? -1 : 1;
+		else /* at least EOF */
+			match = -1;
+		if (param->fp_exclude_comp_end)
+			match = ~match + 1;
+	} else {
+		unsigned long long margin;
+
+		margin = end == LUSTRE_EOF ? 0 : param->fp_comp_end_units;
+		match = find_value_cmp(end, param->fp_comp_end,
+				       param->fp_comp_end_sign,
+				       param->fp_exclude_comp_end, margin, 0);
+	}
+
+	return match;
+}
+
 /**
  * An example of "getstripe -v" for a two components PFL file:
  *
@@ -2870,9 +2895,13 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
 		entry = &comp_v1->lcm_entries[i];
 
-		if (param->fp_check_comp_flags &&
-		    !(param->fp_comp_flags & entry->lcme_flags))
-			continue;
+		if (param->fp_check_comp_flags) {
+			if ((param->fp_exclude_comp_flags &&
+			     (param->fp_comp_flags & entry->lcme_flags)) ||
+			    (!param->fp_exclude_comp_flags &&
+			     !(param->fp_comp_flags & entry->lcme_flags)))
+				continue;
+		}
 
 		if (param->fp_check_comp_id &&
 		    param->fp_comp_id != entry->lcme_id)
@@ -2889,15 +2918,8 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 		}
 
 		if (param->fp_check_comp_end) {
-			unsigned long long margin;
-
-			margin = entry->lcme_extent.e_end == LUSTRE_EOF ?
-				0 : param->fp_comp_end_units;
-
-			match = find_value_cmp(entry->lcme_extent.e_end,
-					       param->fp_comp_end,
-					       param->fp_comp_end_sign,
-					       0, margin, 0);
+			match = find_comp_end_cmp(entry->lcme_extent.e_end,
+						  param);
 			if (match == -1)
 				continue;
 		}
@@ -3432,17 +3454,10 @@ static int find_check_comp_options(struct find_param *param)
 
 	if (param->fp_check_comp_end) {
 		for (i = 0; i < comp_v1->lcm_entry_count; i++) {
-			unsigned long long margin;
 			entry = &comp_v1->lcm_entries[i];
 
-			margin = entry->lcme_extent.e_end == LUSTRE_EOF ?
-				0 : param->fp_comp_end_units;
-
-			ret = find_value_cmp(entry->lcme_extent.e_end,
-					     param->fp_comp_end,
-					     param->fp_comp_end_sign,
-					     param->fp_exclude_comp_end, margin,
-					     0);
+			ret = find_comp_end_cmp(entry->lcme_extent.e_end,
+						param);
 			/* If any extent end matches */
 			if (ret != -1)
 				break;

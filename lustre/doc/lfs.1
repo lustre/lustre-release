@@ -35,13 +35,18 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs getname [-h]|[path ...]
 .br
-.B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v]
-        \fB[--stripe-count|-c ] [--stripe-index|-i] [--mdt-index|-M] [--fid|-F]
-        \fB[--stripe-size|-S] [--directory|-d] [--layout|-L] [--generation|-g]
-        \fB[--component-id|-I [comp_id]] [--component-flags [comp_flags]]
-        \fB[--component-count] [--component-start [+-][N][kMGTPE]]
-        \fB[--component-end|-E [+-][N][kMGTPE]]
-        \fB[--pool|-p] [--recursive|-r] [--raw|-R] <dirname|filename> ...\fR
+.B lfs getstripe [\fB--obd\fR|\fB-O\fR <\fIuuid\fR>] [\fB--quiet\fR|\fB-q\fR]
+        [\fB--verbose\fR|\fB-v\fR] [\fB--stripe-count\fR|\fB-c\fR]
+        [\fB--stripe-index\fR|\fB-i\fR] [\fB--mdt-index\fR|\fB-M\fR]
+        [\fB--fid\fR|\fB-F\fR] [\fB--stripe-size\fR|\fB-S\fR]
+        [\fB--directory\fR|\fB-d\fR] [\fB--layout\fR|\fB-L\fR]
+        [\fB--generation\fR|\fB-g\fR]
+        [\fB--component-id\fR[=\fIcomp_id\fR]|\fB-I\fR[\fIcomp_id\fR]]
+        [\fB--component-flags\fR[=\fIcomp_flags\fR]] [\fB--component-count\fR]
+        [\fB--component-start\fR[=[+-]\fIN\fR[kMGTPE]]]
+        [\fB--component-end\fR[=[+-]\fIN\fR[kMGTPE]]|\fB-E\fR[[+-]\fIN\fR[kMGTPE]]]
+        [\fB--pool\fR|\fB-p\fR] [\fB--recursive\fR|\fB-r\fR] [\fB--raw\fR|\fB-R\fR]
+        <\fIdirname\fR|\fIfilename\fR> ...
 .br
 .B lfs migrate \fB-m <mdt_index>\fR
 .IR directory
@@ -170,15 +175,18 @@ List all the OSTs for all mounted filesystems. If a \fBpath\fR is provided
 that is located on a lustre mounted file system then only the OSTs belonging
 to that filesystem are displayed.
 .TP
-.B getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v]
-        \fB[--count | -c ] [--index | -i | --offset | -o  ]
-        \fB[--pool | -p ] [--size | -s ] [--directory | -d ]
-        \fB[--layout | -L ] [--fid | -F ] [--generation | -g ]
-        \fB[--component-id|-I [comp_id]]
-        \fB[--component-flags [comp_flags]]
-        \fB[--component-count] [--component-start [+-][N][kMGTPE]]
-        \fB[--component-end|-E [+-][N][kMGTPE]]
-        \fB[--recursive | -r ] [--raw | -R ] <dirname|filename>\fR
+.B getstripe [\fB--obd\fR|\fB-O\fR <\fIuuid\fR>] [\fB--quiet\fR|\fB-q\fR]
+        [\fB--verbose\fR|\fB-v\fR] [\fB--stripe-count\fR|\fB-c\fR]
+        [\fB--stripe-index\fR|\fB-i\fR] [\fB--mdt-index\fR|\fB-M\fR]
+        [\fB--fid\fR|\fB-F\fR] [\fB--stripe-size\fR|\fB-S\fR]
+        [\fB--directory\fR|\fB-d\fR] [\fB--layout\fR|\fB-L\fR]
+        [\fB--generation\fR|\fB-g\fR]
+        [\fB--component-id\fR[=\fIcomp_id\fR]|\fB-I\fR[\fIcomp_id\fR]]
+        [\fB--component-flags\fR[=\fIcomp_flags\fR]] [\fB--component-count\fR]
+        [\fB--component-start\fR[=[+-]\fIN\fR[kMGTPE]]]
+        [\fB--component-end\fR[=[+-]\fIN\fR[kMGTPE]]|\fB-E\fR[[+-]\fIN\fR[kMGTPE]]]
+        [\fB--pool\fR|\fB-p\fR] [\fB--recursive\fR|\fB-r\fR] [\fB--raw\fR|\fB-R\fR]
+        <\fIdirname\fR|\fIfilename\fR> ...
 .br
 List the striping information for a given filename or directory tree.
 By default the stripe count, size, and offset will be returned. If you
@@ -229,12 +237,12 @@ The layout generation can be printed with the
 .B --generation
 option.
 You can limit the displayed content by specifing argument for
-.B --component-id
+.B --component-id|-I
 .B --component-flags
 .B --component-start
-.B --component-end
-options. For example, "--component-id 1" will only display the information
-for component 1.
+.B --component-end|-E
+options. For example, "--component-id=2" or "-I2" will only display the layout
+attributes for the component with id equal to 2.
 .TP
 .B fid2path [--link <linkno>] <fsname|rootpath> <fid> ...
 Print out the pathname(s) for the specified \fIfid\fR(s) from the filesystem
@@ -331,11 +339,17 @@ Quit the interactive lfs session
 .B $ lfs getstripe -v /mnt/lustre/file1
 Lists the detailed object allocation of a given file
 .TP
-.B $ lfs getstripe -v --component-id 2 /mnt/lustre/file1
+.B $ lfs getstripe -v -I2 /mnt/lustre/file1
 Lists the detailed information of the component 2 in a given file
 .TP
-.B $ lfs getstripe -E -64M /mnt/lustre/file1
-Lists the information of the components in a file which has at least 64M extent end
+.B $ lfs getstripe --component-flags=^init -I /mnt/lustre/file1
+Print only the component IDs for all the uninstantiated components
+.TP
+.B $ lfs getstripe -E-64M /mnt/lustre/file1
+Lists the information of the components in a file which has at most 64M extent end
+.TP
+.B $ lfs getstripe -I3 --component-start /mnt/lustre/file1
+Print only the component start for the component with ID of 3
 .TP
 .B $ lfs find /mnt/lustre
 Efficiently lists all files in a given directory and its subdirectories
@@ -347,7 +361,7 @@ Recursively list all regular files in given directory more than 30 days old
 Recursively list all files in a given directory that have objects on OST2-UUID.
 .TP
 .B $ lfs find --component-count +3 /mnt/lustre
-Recursively list all files that have at most 3 components.
+Recursively list all files that have at least 3 components.
 .TP
 .B $ lfs check servers
 Check the status of all servers (MDT, OST)

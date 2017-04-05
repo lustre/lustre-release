@@ -3373,38 +3373,38 @@ test_20b() {
 
 	$LFS getstripe -v $name || error "(7.1) cannot getstripe on $name"
 
-	local pattern=$($LFS getstripe -L -I 1 $name)
+	local pattern=$($LFS getstripe -L -I1 $name)
 	[[ "$pattern" = "$PATTERN_WITHOUT_HOLE" ]] ||
 		error "(7.2.1) NOT expect pattern flag hole, but got $pattern"
 
-	pattern=$($LFS getstripe -L -I 2 $name)
+	pattern=$($LFS getstripe -L -I2 $name)
 	[[ "$pattern" = "$PATTERN_WITHOUT_HOLE" ]] ||
 		error "(7.2.2) NOT expect pattern flag hole, but got $pattern"
 
-	local stripes=$($LFS getstripe -c -I 1 $name)
+	local stripes=$($LFS getstripe -c -I1 $name)
 	[ $stripes -eq 2 ] ||
 		error "(7.3.1) expect 2 stripes, but got $stripes"
 
-	stripes=$($LFS getstripe -c -I 2 $name)
+	stripes=$($LFS getstripe -c -I2 $name)
 	[ $stripes -eq 2 ] ||
 		error "(7.3.2) expect 2 stripes, but got $stripes"
 
-	local e_start=$($LFS getstripe -I 1 $name |
+	local e_start=$($LFS getstripe -I1 $name |
 			awk '/lcme_extent.e_start:/ { print $2 }')
 	[ $e_start -eq 0 ] ||
 		error "(7.4.1) expect the COMP1 start at 0, got $e_start"
 
-	local e_end=$($LFS getstripe -I 1 $name |
+	local e_end=$($LFS getstripe -I1 $name |
 		      awk '/lcme_extent.e_end:/ { print $2 }')
 	[ $e_end -eq 2097152 ] ||
 		error "(7.4.2) expect the COMP1 end at 2097152, got $e_end"
 
-	e_start=$($LFS getstripe -I 2 $name |
+	e_start=$($LFS getstripe -I2 $name |
 		  awk '/lcme_extent.e_start:/ { print $2 }')
 	[ $e_start -eq 2097152 ] ||
 		error "(7.5.1) expect the COMP2 start at 2097152, got $e_start"
 
-	e_end=$($LFS getstripe -I 2 $name |
+	e_end=$($LFS getstripe -I2 $name |
 		awk '/lcme_extent.e_end:/ { print $2 }')
 	[ "$e_end" = "EOF" ] ||
 		error "(7.5.2) expect the COMP2 end at (EOF), got $e_end"
@@ -3431,38 +3431,38 @@ test_20b() {
 
 	$LFS getstripe -v $name || error "(8.1) cannot getstripe on $name"
 
-	pattern=$($LFS getstripe -L -I 1 $name)
+	pattern=$($LFS getstripe -L -I1 $name)
 	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
 		error "(8.2.1) expect pattern flag hole, but got $pattern"
 
-	pattern=$($LFS getstripe -L -I 2 $name)
+	pattern=$($LFS getstripe -L -I2 $name)
 	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
 		error "(8.2.2) expect pattern flag hole, but got $pattern"
 
-	stripes=$($LFS getstripe -c -I 1 $name)
+	stripes=$($LFS getstripe -c -I1 $name)
 	[ $stripes -eq 2 ] ||
 		error "(8.3.2) expect 2 stripes, but got $stripes"
 
-	stripes=$($LFS getstripe -c -I 2 $name)
+	stripes=$($LFS getstripe -c -I2 $name)
 	[ $stripes -eq 2 ] ||
 		error "(8.3.2) expect 2 stripes, but got $stripes"
 
-	e_start=$($LFS getstripe -I 1 $name |
+	e_start=$($LFS getstripe -I1 $name |
 		  awk '/lcme_extent.e_start:/ { print $2 }')
 	[ $e_start -eq 0 ] ||
 		error "(8.4.1) expect the COMP1 start at 0, got $e_start"
 
-	e_end=$($LFS getstripe -I 1 $name |
+	e_end=$($LFS getstripe -I1 $name |
 		awk '/lcme_extent.e_end:/ { print $2 }')
 	[ $e_end -eq 2097152 ] ||
 		error "(8.4.2) expect the COMP1 end at 2097152, got $e_end"
 
-	e_start=$($LFS getstripe -I 2 $name |
+	e_start=$($LFS getstripe -I2 $name |
 		  awk '/lcme_extent.e_start:/ { print $2 }')
 	[ $e_start -eq 2097152 ] ||
 		error "(8.5.1) expect the COMP2 start at 2097152, got $e_start"
 
-	e_end=$($LFS getstripe -I 2 $name |
+	e_end=$($LFS getstripe -I2 $name |
 		awk '/lcme_extent.e_end:/ { print $2 }')
 	[ "$e_end" = "EOF" ] ||
 		error "(8.5.2) expect the COMP2 end at (EOF), got $e_end"
@@ -3506,38 +3506,38 @@ test_20b() {
 
 	$LFS getstripe -v $name || error "(9.1) cannot getstripe on $name"
 
-	pattern=$($LFS getstripe -L -I 1 $name)
+	pattern=$($LFS getstripe -L -I1 $name)
 	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
 		error "(9.2.1) expect pattern flag hole, but got $pattern"
 
-	pattern=$($LFS getstripe -L -I 2 $name)
+	pattern=$($LFS getstripe -L -I2 $name)
 	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
 		error "(9.2.2) expect pattern flag hole, but got $pattern"
 
-	stripes=$($LFS getstripe -c -I 1 $name)
+	stripes=$($LFS getstripe -c -I1 $name)
 	[ $stripes -eq 2 ] ||
 		error "(9.3.2) expect 2 stripes, but got $stripes"
 
-	stripes=$($LFS getstripe -c -I 2 $name)
+	stripes=$($LFS getstripe -c -I2 $name)
 	[ $stripes -eq 2 ] ||
 		error "(9.3.2) expect 2 stripes, but got $stripes"
 
-	e_start=$($LFS getstripe -I 1 $name |
+	e_start=$($LFS getstripe -I1 $name |
 		  awk '/lcme_extent.e_start:/ { print $2 }')
 	[ $e_start -eq 0 ] ||
 		error "(9.4.1) expect the COMP1 start at 0, got $e_start"
 
-	e_end=$($LFS getstripe -I 1 $name |
+	e_end=$($LFS getstripe -I1 $name |
 		awk '/lcme_extent.e_end:/ { print $2 }')
 	[ $e_end -eq 2097152 ] ||
 		error "(9.4.2) expect the COMP1 end at 2097152, got $e_end"
 
-	e_start=$($LFS getstripe -I 2 $name |
+	e_start=$($LFS getstripe -I2 $name |
 		  awk '/lcme_extent.e_start:/ { print $2 }')
 	[ $e_start -eq 2097152 ] ||
 		error "(9.5.1) expect the COMP2 start at 2097152, got $e_start"
 
-	e_end=$($LFS getstripe -I 2 $name |
+	e_end=$($LFS getstripe -I2 $name |
 		awk '/lcme_extent.e_end:/ { print $2 }')
 	[ "$e_end" = "EOF" ] ||
 		error "(9.5.2) expect the COMP2 end at (EOF), got $e_end"
