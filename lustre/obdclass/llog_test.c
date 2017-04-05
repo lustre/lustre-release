@@ -942,6 +942,7 @@ static union {
 	struct llog_logid_rec		llr;   /* LLOG_LOGID_MAGIC */
 	struct llog_unlink64_rec	lur;   /* MDS_UNLINK64_REC */
 	struct llog_setattr64_rec	lsr64; /* MDS_SETATTR64_REC */
+	struct llog_setattr64_rec_v2	lsr64_v2; /* MDS_SETATTR64_REC */
 	struct llog_size_change_rec	lscr;  /* OST_SZ_REC */
 	struct llog_changelog_rec	lcr;   /* CHANGELOG_REC */
 	struct llog_changelog_user_rec	lcur;  /* CHANGELOG_USER_REC */
@@ -1139,6 +1140,17 @@ static int llog_test_7(const struct lu_env *env, struct obd_device *obd)
 	rc = llog_test_7_sub(env, ctxt);
 	if (rc) {
 		CERROR("7g: llog_size_change_rec test failed\n");
+		GOTO(out, rc);
+	}
+
+	CWARN("7h: test llog_setattr64_rec_v2\n");
+	llog_records.lsr64.lsr_hdr.lrh_len = sizeof(llog_records.lsr64_v2);
+	llog_records.lsr64.lsr_tail.lrt_len = sizeof(llog_records.lsr64_v2);
+	llog_records.lsr64.lsr_hdr.lrh_type = MDS_SETATTR64_REC;
+
+	rc = llog_test_7_sub(env, ctxt);
+	if (rc) {
+		CERROR("7h: llog_setattr64_rec_v2 test failed\n");
 		GOTO(out, rc);
 	}
 out:

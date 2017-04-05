@@ -24,9 +24,11 @@ TSTID=${TSTID:-60000}
 TSTID2=${TSTID2:-60001}
 TSTUSR=${TSTUSR:-"quota_usr"}
 TSTUSR2=${TSTUSR2:-"quota_2usr"}
+TSTPRJID=${TSTPRJID:-1000}
 BLK_SZ=1024
 MAX_DQ_TIME=604800
 MAX_IQ_TIME=604800
+QTYPE="ugp"
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
@@ -69,12 +71,20 @@ export QUOTA_AUTO=0
 
 check_and_setup_lustre
 
+is_project_quota_supported() {
+	[ "$(facet_fstype $SINGLEMDS)" == "ldiskfs" ] &&
+		[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.9.55) ] &&
+			egrep -q "7." /etc/redhat-release
+}
+
 SHOW_QUOTA_USER="$LFS quota -v -u $TSTUSR $DIR"
 SHOW_QUOTA_USERID="$LFS quota -v -u $TSTID $DIR"
 SHOW_QUOTA_GROUP="$LFS quota -v -g $TSTUSR $DIR"
 SHOW_QUOTA_GROUPID="$LFS quota -v -g $TSTID $DIR"
+SHOW_QUOTA_PROJID="eval is_project_quota_supported && $LFS quota -v -p $TSTPRJID $DIR"
 SHOW_QUOTA_INFO_USER="$LFS quota -t -u $DIR"
 SHOW_QUOTA_INFO_GROUP="$LFS quota -t -g $DIR"
+SHOW_QUOTA_INFO_PROJID="eval is_project_quota_supported && $LFS quota -t -p $DIR"
 
 build_test_filter
 
@@ -107,11 +117,16 @@ check_runas_id_ret $TSTUSR2 $TSTUSR2 $RUNAS2 ||
 # clear quota limits for a user or a group
 # usage: resetquota -u username
 #        resetquota -g groupname
+#	 resetquota -p projid
 
 resetquota() {
 	[ "$#" != 2 ] && error "resetquota: wrong number of arguments: $#"
-	[ "$1" != "-u" -a "$1" != "-g" ] &&
+	[ "$1" != "-u" -a "$1" != "-g" -a "$1" != "-p" ] &&
 		error "resetquota: wrong specifier $1 passed"
+
+	if [ $1 == "-p" ]; then
+		is_project_quota_supported || return 0
+	fi
 
 	$LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT ||
 		error "clear quota for [type:$1 name:$2] failed"
@@ -120,20 +135,27 @@ resetquota() {
 }
 
 quota_scan() {
-	local LOCAL_UG=$1
-	local LOCAL_ID=$2
+	local local_ugp=$1
+	local local_id=$2
 
-	if [ "$LOCAL_UG" == "a" -o "$LOCAL_UG" == "u" ]; then
-		$LFS quota -v -u $LOCAL_ID $DIR
-		log "Files for user ($LOCAL_ID):"
-		($LFS find -user $LOCAL_ID $DIR | head -n 4 |
+	if [ "$local_ugp" == "a" -o "$local_ugp" == "u" ]; then
+		$LFS quota -v -u $local_id $DIR
+		log "Files for user ($local_id):"
+		($LFS find --user $local_id $DIR | head -n 4 |
 			xargs stat 2>/dev/null)
 	fi
 
-	if [ "$LOCAL_UG" == "a" -o "$LOCAL_UG" == "g" ]; then
-		$LFS quota -v -g $LOCAL_ID $DIR
-		log "Files for group ($LOCAL_ID):"
-		($LFS find -group $LOCAL_ID $DIR | head -n 4 |
+	if [ "$local_ugp" == "a" -o "$local_ugp" == "g" ]; then
+		$LFS quota -v -g $local_id $DIR
+		log "Files for group ($local_id):"
+		($LFS find --group $local_id $DIR | head -n 4 |
+			xargs stat 2>/dev/null)
+	fi
+
+	if [ "$local_ugp" == "a" -o "$local_ugp" == "p" ]; then
+		$LFS quota -v -p $local_id $DIR
+		log "Files for project ($local_id):"
+		($LFS find --projid $local_id $DIR | head -n 4 |
 			xargs stat 2>/dev/null)
 	fi
 }
@@ -151,15 +173,15 @@ quota_log() {
 }
 
 # get quota for a user or a group
-# usage: getquota -u|-g <username>|<groupname> global|<obd_uuid> \
+# usage: getquota -u|-g|-p <username>|<groupname>|<projid> global|<obd_uuid> \
 #		  bhardlimit|bsoftlimit|bgrace|ihardlimit|isoftlimit|igrace
 getquota() {
 	local spec
 	local uuid
 
 	[ "$#" != 4 ] && error "getquota: wrong number of arguments: $#"
-	[ "$1" != "-u" -a "$1" != "-g" ] &&
-		error "getquota: wrong u/g specifier $1 passed"
+	[ "$1" != "-u" -a "$1" != "-g" -a "$1" != "-p" ] &&
+		error "getquota: wrong u/g/p specifier $1 passed"
 
 	uuid="$3"
 
@@ -184,12 +206,14 @@ getquota() {
 }
 
 # set mdt quota type
-# usage: set_mdt_qtype ug|u|g|none
+# usage: set_mdt_qtype ugp|u|g|p|none
 set_mdt_qtype() {
 	local qtype=$1
 	local varsvc
 	local mdts=$(get_facets MDS)
 	local cmd
+	[[ "$qtype" =~ "p" ]] && ! is_project_quota_supported &&
+		qtype=$(tr -d 'p' <<<$qtype)
 	do_facet mgs $LCTL conf_param $FSNAME.quota.mdt=$qtype
 	# we have to make sure each MDT received config changes
 	for mdt in ${mdts//,/ }; do
@@ -206,12 +230,14 @@ set_mdt_qtype() {
 }
 
 # set ost quota type
-# usage: set_ost_qtype ug|u|g|none
+# usage: set_ost_qtype ugp|u|g|p|none
 set_ost_qtype() {
 	local qtype=$1
 	local varsvc
 	local osts=$(get_facets OST)
 	local cmd
+	[[ "$qtype" =~ "p" ]] && ! is_project_quota_supported &&
+		qtype=$(tr -d 'p' <<<$qtype)
 	do_facet mgs $LCTL conf_param $FSNAME.quota.ost=$qtype
 	# we have to make sure each OST received config changes
 	for ost in ${osts//,/ }; do
@@ -261,12 +287,17 @@ wait_mdt_reint() {
 	local qtype=$1
 	local max=${2:-90}
 
-	if [ $qtype == "u" ] || [ $qtype == "ug" ]; then
+	if [[ "$qtype" =~ "u" ]]; then
 		wait_reintegration "mdt" "user" $max || return 1
 	fi
 
-	if [ $qtype == "g" ] || [ $qtype == "ug" ]; then
+	if [[ "$qtype" =~ "g" ]]; then
 		wait_reintegration "mdt" "group" $max || return 1
+	fi
+
+	if [[ "$qtype" =~ "p" ]]; then
+		! is_project_quota_supported && return 0
+		wait_reintegration "mdt" "project" $max || return 1
 	fi
 	return 0
 }
@@ -275,34 +306,23 @@ wait_ost_reint() {
 	local qtype=$1
 	local max=${2:-90}
 
-	if [ $qtype == "u" ] || [ $qtype == "ug" ]; then
+	if [[ "$qtype" =~ "u" ]]; then
 		wait_reintegration "ost" "user" $max || return 1
 	fi
 
-	if [ $qtype == "g" ] || [ $qtype == "ug" ]; then
+	if [[ "$qtype" =~ "g" ]]; then
 		wait_reintegration "ost" "group" $max || return 1
+	fi
+
+	if [[ "$qtype" =~ "p" ]]; then
+		! is_project_quota_supported && return 0
+		wait_reintegration "ost" "project" $max || return 1
 	fi
 	return 0
 }
 
-enable_project_quota() {
-	stopall || error "failed to stopall (1)"
-
-	for num in $(seq $MDSCOUNT); do
-		do_facet mds$num $TUNE2FS -O project $(mdsdevname $num) ||
-			error "tune2fs $(mdsdevname $num) failed"
-	done
-
-	for i in $(seq $OSTCOUNT); do
-		do_facet ost$num $TUNE2FS -O project $(ostdevname $num) ||
-			error "tune2fs $(ostdevname $num) failed"
-	done
-
-	mount
-	setupall
-}
-
 disable_project_quota() {
+	is_project_quota_supported || return 0
 	stopall || error "failed to stopall (1)"
 
 	for num in $(seq $MDSCOUNT); do
@@ -310,7 +330,7 @@ disable_project_quota() {
 			error "tune2fs $(mdsdevname $num) failed"
 	done
 
-	for i in $(seq $OSTCOUNT); do
+	for num in $(seq $OSTCOUNT); do
 		do_facet ost$num $TUNE2FS -Q ^prj $(ostdevname $num) ||
 			error "tune2fs $(ostdevname $num) failed"
 	done
@@ -340,34 +360,53 @@ cleanup_quota_test() {
 
 quota_show_check() {
 	local bf=$1
-	local ug=$2
+	local ugp=$2
 	local qid=$3
 	local usage
 
-	$LFS quota -v -$ug $qid $DIR
+	$LFS quota -v -$ugp $qid $DIR
 
 	if [ "$bf" == "a" -o "$bf" == "b" ]; then
-		usage=$(getquota -$ug $qid global curspace)
+		usage=$(getquota -$ugp $qid global curspace)
 		if [ -z $usage ]; then
-			quota_error $ug $qid \
-				"Query block quota failed ($ug:$qid)."
+			quota_error $ugp $qid \
+				"Query block quota failed ($ugp:$qid)."
 		else
-			[ $usage -ne 0 ] && quota_log $ug $qid \
-				"Block quota isn't 0 ($ug:$qid:$usage)."
+			[ $usage -ne 0 ] && quota_log $ugp $qid \
+				"Block quota isn't 0 ($ugp:$qid:$usage)."
 		fi
 	fi
 
 	if [ "$bf" == "a" -o "$bf" == "f" ]; then
-		usage=$(getquota -$ug $qid global curinodes)
+		usage=$(getquota -$ugp $qid global curinodes)
 		if [ -z $usage ]; then
-			quota_error $ug $qid \
-				"Query file quota failed ($ug:$qid)."
+			quota_error $ugp $qid \
+				"Query file quota failed ($ugp:$qid)."
 		else
-			[ $usage -ne 0 ] && quota_log $ug $qid \
-				"File quota isn't 0 ($ug:$qid:$usage)."
+			[ $usage -ne 0 ] && quota_log $ugp $qid \
+				"File quota isn't 0 ($ugp:$qid:$usage)."
 		fi
 	fi
 }
+
+enable_project_quota() {
+	is_project_quota_supported ||  return 0
+	stopall || error "failed to stopall (1)"
+
+	for num in $(seq $MDSCOUNT); do
+		do_facet mds$num $TUNE2FS -O project $(mdsdevname $num) ||
+			error "tune2fs $(mdsdevname $num) failed"
+	done
+
+	for num in $(seq $OSTCOUNT); do
+		do_facet ost$num $TUNE2FS -O project $(ostdevname $num) ||
+			error "tune2fs $(ostdevname $num) failed"
+	done
+
+	mount
+	setupall
+}
+enable_project_quota
 
 # enable quota debug
 quota_init() {
@@ -379,6 +418,7 @@ resetquota -u $TSTUSR
 resetquota -g $TSTUSR
 resetquota -u $TSTUSR2
 resetquota -g $TSTUSR2
+resetquota -p $TSTPRJID
 
 test_quota_performance() {
 	local TESTFILE="$DIR/$tdir/$tfile-0"
@@ -417,7 +457,7 @@ test_0() {
 	set_ost_qtype "none" || error "disable ost quota failed"
 	test_quota_performance $MB
 
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 	$LFS setquota -u $TSTUSR -b 0 -B 10G -i 0 -I 0 $DIR ||
 		error "set quota failed"
 	test_quota_performance $MB
@@ -436,7 +476,7 @@ test_1() {
 	trap cleanup_quota_test EXIT
 
 	# enable ost quota
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
 	# test for user
 	log "User quota (block hardlimit:$LIMIT MB)"
@@ -478,29 +518,68 @@ test_1() {
 	TESTFILE="$DIR/$tdir/$tfile-1"
 	# make sure the system is clean
 	USED=$(getquota -g $TSTUSR global curspace)
-	[ $USED -ne 0 ] && error "Used space($USED) for group $TSTUSR isn't 0"
+	[ $USED -ne 0 ] && error "Used space ($USED) for group $TSTUSR isn't 0"
 
 	$SETSTRIPE $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	log "Write ..."
 	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) ||
-		quota_error g $TSTUSR "group write failure, but expect success"
+		quota_error g $TSTUSR "Group write failure, but expect success"
 	log "Write out of block quota ..."
 	# this time maybe cache write, ignore it's failure
 	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) seek=$((LIMIT/2)) || true
 	cancel_lru_locks osc
 	$RUNAS $DD of=$TESTFILE count=10 seek=$LIMIT &&
-		quota_error g $TSTUSR "group write success, but expect EDQUOT"
+		quota_error g $TSTUSR "Group write success, but expect EDQUOT"
+	rm -f $TESTFILE
+	wait_delete_completed || error "wait_delete_completed failed"
+	sync_all_data || true
+	USED=$(getquota -g $TSTUSR global curspace)
+	[ $USED -ne 0 ] && quota_error g $TSTUSR \
+				"Group quota isn't released after deletion"
+	resetquota -g $TSTUSR
+
+	if ! is_project_quota_supported; then
+		echo "Project quota is not supported"
+		cleanup_quota_test
+		return 0
+	fi
+
+	TESTFILE="$DIR/$tdir/$tfile-2"
+	# make sure the system is clean
+	USED=$(getquota -p $TSTPRJID global curspace)
+	[ $USED -ne 0 ] &&
+		error "used space($USED) for project $TSTPRJID isn't 0"
+
+	# test for Project
+	log "--------------------------------------"
+	log "project quota (block hardlimit:$LIMIT mb)"
+	$LFS setquota -p $TSTPRJID -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
+		error "set project quota failed"
+
+	$SETSTRIPE $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
+	chown $TSTUSR:$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
+	chattr -p $TSTPRJID $TESTFILE
+
+	log "write ..."
+	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) || quota_error p $TSTPRJID \
+		"project write failure, but expect success"
+	log "write out of block quota ..."
+	# this time maybe cache write, ignore it's failure
+	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) seek=$((LIMIT/2)) || true
+	cancel_lru_locks osc
+	$RUNAS $DD of=$TESTFILE count=10 seek=$LIMIT && quota_error p \
+		$TSTPRJID "project write success, but expect edquot"
 
 	# cleanup
 	cleanup_quota_test
 
-	USED=$(getquota -g $TSTUSR global curspace)
-	[ $USED -ne 0 ] && quota_error g $TSTUSR \
-		"group quota isn't released after deletion"
+	USED=$(getquota -p $TSTPRJID global curspace)
+	[ $USED -ne 0 ] && quota_error p $TSTPRJID \
+		"project quota isn't released after deletion"
 
-	resetquota -g $TSTUSR
+	resetquota -p $TSTPRJID
 }
 run_test 1 "Block hard limit (normal use and out of quota)"
 
@@ -521,7 +600,7 @@ test_2() {
 	trap cleanup_quota_test EXIT
 
 	# enable mdt quota
-	set_mdt_qtype "ug" || error "enable mdt quota failed"
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
 
 	# test for user
 	log "User quota (inode hardlimit:$LIMIT files)"
@@ -576,8 +655,40 @@ test_2() {
 	[ $USED -ne 0 ] && quota_error g $TSTUSR \
 		"user quota isn't released after deletion"
 
-	cleanup_quota_test
 	resetquota -g $TSTUSR
+	! is_project_quota_supported && cleanup_quota_test &&
+		echo "Skip project quota is not supported" && return 0
+
+	# test for project
+	log "--------------------------------------"
+	log "Project quota (inode hardlimit:$LIMIT files)"
+	$LFS setquota -p $TSTPRJID -b 0 -B 0 -i 0 -I $LIMIT $DIR ||
+		error "set project quota failed"
+
+	TESTFILE=$DIR/$tdir/$tfile-1
+	# make sure the system is clean
+	USED=$(getquota -p $TSTPRJID global curinodes)
+	[ $USED -ne 0 ] &&
+		error "Used inodes($USED) for project $TSTPRJID isn't 0"
+
+	chattr +P $DIR/$tdir/
+	chattr -p $TSTPRJID -d $DIR/$tdir
+	log "Create $LIMIT files ..."
+	$RUNAS createmany -m ${TESTFILE} $((LIMIT-1)) || quota_error p \
+		$TSTPRJID "project create fail, but expect success"
+	log "Create out of file quota ..."
+	$RUNAS touch ${TESTFILE}_xxx && quota_error p $TSTPRJID \
+		"project create success, but expect EDQUOT"
+	chattr -P $DIR/$tdir
+	chattr -p 0 -d $DIR/$tdir
+
+	cleanup_quota_test
+	USED=$(getquota -p $TSTPRJID global curinodes)
+	[ $USED -ne 0 ] && quota_error p $TSTPRJID \
+		"project quota isn't released after deletion"
+
+	resetquota -p $TSTPRJID
+
 }
 run_test 2 "File hard limit (normal use and out of quota)"
 
@@ -586,12 +697,15 @@ test_block_soft() {
 	local TIMER=$(($2 * 3 / 2))
 	local LIMIT=$3
 	local OFFSET=0
+	local qtype=$4
 
 	setup_quota_test
 	trap cleanup_quota_test EXIT
 
 	$SETSTRIPE $TESTFILE -c 1 -i 0
 	chown $TSTUSR.$TSTUSR $TESTFILE
+	[ "$qtype" == "p" ] && is_project_quota_supported &&
+		chattr -p $TSTPRJID $TESTFILE
 
 	echo "Write up to soft limit"
 	$RUNAS $DD of=$TESTFILE count=$LIMIT ||
@@ -607,8 +721,10 @@ test_block_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
+	$SHOW_QUOTA_PROJID
 	$SHOW_QUOTA_INFO_USER
 	$SHOW_QUOTA_INFO_GROUP
+	$SHOW_QUOTA_INFO_PROJID
 
 	echo "Write before timer goes off"
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=1K count=10 seek=$OFFSET ||
@@ -621,8 +737,10 @@ test_block_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
+	$SHOW_QUOTA_PROJID
 	$SHOW_QUOTA_INFO_USER
 	$SHOW_QUOTA_INFO_GROUP
+	$SHOW_QUOTA_INFO_PROJID
 
 	echo "Write after timer goes off"
 	# maybe cache write, ignore.
@@ -634,8 +752,10 @@ test_block_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
+	$SHOW_QUOTA_PROJID
 	$SHOW_QUOTA_INFO_USER
 	$SHOW_QUOTA_INFO_GROUP
+	$SHOW_QUOTA_INFO_PROJID
 
 	echo "Unlink file to stop timer"
 	rm -f $TESTFILE
@@ -644,11 +764,14 @@ test_block_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
+	$SHOW_QUOTA_PROJID
 	$SHOW_QUOTA_INFO_USER
 	$SHOW_QUOTA_INFO_GROUP
+	$SHOW_QUOTA_INFO_PROJID
 
 	$SETSTRIPE $TESTFILE -c 1 -i 0
 	chown $TSTUSR.$TSTUSR $TESTFILE
+	[ "$qtype" == "p" ] && chattr -p $TSTPRJID $TESTFILE
 
 	echo "Write ..."
 	$RUNAS $DD of=$TESTFILE count=$LIMIT ||
@@ -663,7 +786,7 @@ test_3() {
 	local GRACE=20 # 20s
 	local TESTFILE=$DIR/$tdir/$tfile-0
 
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
 	echo "User quota (soft limit:$LIMIT MB  grace:$GRACE seconds)"
 	# make sure the system is clean
@@ -675,7 +798,7 @@ test_3() {
 	$LFS setquota -u $TSTUSR -b ${LIMIT}M -B 0 -i 0 -I 0 $DIR ||
 		error "set user quota failed"
 
-	test_block_soft $TESTFILE $GRACE $LIMIT
+	test_block_soft $TESTFILE $GRACE $LIMIT "u"
 	resetquota -u $TSTUSR
 
 	echo "Group quota (soft limit:$LIMIT MB  grace:$GRACE seconds)"
@@ -689,8 +812,29 @@ test_3() {
 	$LFS setquota -g $TSTUSR -b ${LIMIT}M -B 0 -i 0 -I 0 $DIR ||
 		error "set group quota failed"
 
-	test_block_soft $TESTFILE $GRACE $LIMIT
+	test_block_soft $TESTFILE $GRACE $LIMIT "g"
 	resetquota -g $TSTUSR
+
+	if is_project_quota_supported; then
+		echo "Project quota (soft limit:$LIMIT MB  grace:$GRACE sec)"
+		TESTFILE=$DIR/$tdir/$tfile-2
+		# make sure the system is clean
+		USED=$(getquota -p $TSTPRJID global curspace)
+		[ $USED -ne 0 ] && error \
+			"Used space($USED) for project $TSTPROJID isn't 0."
+
+		$LFS setquota -t -p --block-grace $GRACE --inode-grace \
+			$MAX_IQ_TIME $DIR ||
+				error "set project grace time failed"
+		$LFS setquota -p $TSTPRJID -b ${LIMIT}M -B 0 -i 0 -I 0 \
+			$DIR || error "set project quota failed"
+
+		test_block_soft $TESTFILE $GRACE $LIMIT "p"
+		resetquota -p $TSTPRJID
+		$LFS setquota -t -p --block-grace $MAX_DQ_TIME --inode-grace \
+			$MAX_IQ_TIME $DIR ||
+				error "restore project grace time failed"
+	fi
 
 	# cleanup
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace \
@@ -708,6 +852,8 @@ test_file_soft() {
 
 	setup_quota_test
 	trap cleanup_quota_test EXIT
+	is_project_quota_supported && chattr +P $DIR/$tdir/ &&
+		chattr -p $TSTPRJID -d $DIR/$tdir
 
 	echo "Create files to exceed soft limit"
 	$RUNAS createmany -m ${TESTFILE}_ $((LIMIT + 1)) ||
@@ -731,8 +877,10 @@ test_file_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
+	$SHOW_QUOTA_PROJID
 	$SHOW_QUOTA_INFO_USER
 	$SHOW_QUOTA_INFO_GROUP
+	$SHOW_QUOTA_INFO_PROJID
 
 	echo "Create file after timer goes off"
 	# There is a window that space is accounted in the quota usage but
@@ -747,8 +895,10 @@ test_file_soft() {
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
+	$SHOW_QUOTA_PROJID
 	$SHOW_QUOTA_INFO_USER
 	$SHOW_QUOTA_INFO_GROUP
+	$SHOW_QUOTA_INFO_PROJID
 
 	echo "Unlink files to stop timer"
 	find $(dirname $TESTFILE) -name "$(basename ${TESTFILE})*" | xargs rm -f
@@ -770,7 +920,7 @@ test_4a() {
 	local TESTFILE=$DIR/$tdir/$tfile-0
 	local GRACE=12
 
-	set_mdt_qtype "ug" || error "enable mdt quota failed"
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
 
 	echo "User quota (soft limit:$LIMIT files  grace:$GRACE seconds)"
 	# make sure the system is clean
@@ -798,6 +948,27 @@ test_4a() {
 
 	test_file_soft $TESTFILE $LIMIT $GRACE
 	resetquota -g $TSTUSR
+
+	if is_project_quota_supported; then
+		echo "Project quota (soft limit:$LIMIT files grace:$GRACE sec)"
+		# make sure the system is clean
+		USED=$(getquota -p $TSTPRJID global curinodes)
+		[ $USED -ne 0 ] && error \
+			"Used space($USED) for project $TSTPRJID isn't 0."
+
+		$LFS setquota -t -p --block-grace $MAX_DQ_TIME --inode-grace \
+			$GRACE $DIR || error "set project grace time failed"
+		$LFS setquota -p $TSTPRJID -b 0 -B 0 -i $LIMIT -I 0 $DIR ||
+			error "set project quota failed"
+
+		TESTFILE=$DIR/$tdir/$tfile-1
+		# one less than limit, because of parent directory included.
+		test_file_soft $TESTFILE $((LIMIT-1)) $GRACE
+		resetquota -p $TSTPRJID
+		$LFS setquota -t -p --block-grace $MAX_DQ_TIME --inode-grace \
+			$MAX_IQ_TIME $DIR ||
+				error "restore project grace time failed"
+	fi
 
 	# cleanup
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace \
@@ -850,14 +1021,18 @@ test_5() {
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
 
-	set_mdt_qtype "ug" || error "enable mdt quota failed"
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
 	echo "Set quota limit (0 ${BLIMIT}M 0 $ILIMIT) for $TSTUSR.$TSTUSR"
 	$LFS setquota -u $TSTUSR -b 0 -B ${BLIMIT}M -i 0 -I $ILIMIT $DIR ||
 		error "set user quota failed"
 	$LFS setquota -g $TSTUSR -b 0 -B ${BLIMIT}M -i 0 -I $ILIMIT $DIR ||
+	if is_project_quota_supported; then
 		error "set group quota failed"
+		$LFS setquota -p $TSTPRJID -b 0 -B ${BLIMIT}M -i 0 \
+			-I $ILIMIT $DIR || error "set project quota failed"
+	fi
 
 	# make sure the system is clean
 	local USED=$(getquota -u $TSTUSR global curinodes)
@@ -868,10 +1043,19 @@ test_5() {
 	[ $USED -ne 0 ] && error "Used block($USED) for user $TSTUSR isn't 0."
 	USED=$(getquota -g $TSTUSR global curspace)
 	[ $USED -ne 0 ] && error "Used block($USED) for group $TSTUSR isn't 0."
+	if is_project_quota_supported; then
+		USED=$(getquota -p $TSTPRJID global curspace)
+		[ $USED -ne 0 ] &&
+			error "Used block($USED) for project $TSTPRJID isn't 0."
+	fi
 
 	echo "Create more than $ILIMIT files and more than $BLIMIT MB ..."
 	createmany -m $DIR/$tdir/$tfile-0_ $((ILIMIT + 1)) ||
 		error "create failure, expect success"
+	if [ "$(facet_fstype $singlemds)" == "ldiskfs" ]; then
+		touch $DIR/$tdir/$tfile-0_1
+		chattr -p $TSTPRJID $DIR/$tdir/$tfile-0_1
+	fi
 	$DD of=$DIR/$tdir/$tfile-0_1 count=$((BLIMIT+1)) ||
 		error "write failure, expect success"
 
@@ -888,6 +1072,7 @@ test_5() {
 
 	resetquota -u $TSTUSR
 	resetquota -g $TSTUSR
+	resetquota -p $TSTPRJID
 }
 run_test 5 "Chown & chgrp successfully even out of block/file quota"
 
@@ -907,7 +1092,7 @@ test_6() {
 	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
 
 	# make sure no granted quota on ost
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 	resetquota -u $TSTUSR
 
 	# create file for $TSTUSR
@@ -1000,7 +1185,7 @@ test_7a() {
 	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
 
 	# make sure no granted quota on ost1
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 	resetquota -u $TSTUSR
 	set_ost_qtype "none" || error "disable ost quota failed"
 
@@ -1017,7 +1202,7 @@ test_7a() {
 	stop ost1
 
 	echo "Enable quota & set quota limit for $TSTUSR"
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
 		error "set quota failed"
 
@@ -1025,7 +1210,7 @@ test_7a() {
 	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS || error "start ost1 failed"
 	quota_init
 
-	wait_ost_reint "ug" || error "reintegration failed"
+	wait_ost_reint $QTYPE || error "reintegration failed"
 
 	# hardlimit should have been fetched by slave during global
 	# reintegration, write will exceed quota
@@ -1047,7 +1232,7 @@ test_7a() {
 	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS || error "start ost1 failed"
 	quota_init
 
-	wait_ost_reint "ug" || error "reintegration failed"
+	wait_ost_reint $QTYPE || error "reintegration failed"
 
 	# hardlimit should be cleared on slave during reintegration
 	$RUNAS $DD of=$TESTFILE count=$((LIMIT + 1)) oflag=sync ||
@@ -1071,7 +1256,7 @@ test_7b() {
 	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
 
 	# make sure no granted quota on ost1
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 	resetquota -u $TSTUSR
 	set_ost_qtype "none" || error "disable ost quota failed"
 
@@ -1092,7 +1277,7 @@ test_7b() {
 	# define OBD_FAIL_QUOTA_EDQUOT 0xa02
 	lustre_fail mds 0xa02
 
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR ||
 		error "set quota failed"
 
@@ -1108,7 +1293,7 @@ test_7b() {
 	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS || error "start ost1 failed"
 	quota_init
 
-	wait_ost_reint "ug" || error "reintegration failed"
+	wait_ost_reint $QTYPE || error "reintegration failed"
 
 	USED=$(getquota -u $TSTUSR $OSTUUID bhardlimit)
 	[ $USED -gt $old_used ] || error "limit on $OSTUUID $USED <= $old_used"
@@ -1141,7 +1326,7 @@ test_7c() {
 	lustre_fail ost 0xa03
 
 	# enable ost quota
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 	# trigger reintegration
 	local procf="osd-$(facet_fstype ost1).$FSNAME-OST*."
 	procf=${procf}quota_slave.force_reint
@@ -1159,7 +1344,7 @@ test_7c() {
 
 	# wait longer than usual to make sure the reintegration
 	# is triggered by quota wb thread.
-	wait_ost_reint "ug" 200 || error "reintegration failed"
+	wait_ost_reint $QTYPE 200 || error "reintegration failed"
 
 	# hardlimit should have been fetched by slave during global
 	# reintegration, write will exceed quota
@@ -1233,7 +1418,7 @@ test_7e() {
 	[ $USED -ne 0 ] && error "Used inode($USED) for user $TSTUSR isn't 0."
 
 	# make sure no granted quota on mdt1
-	set_mdt_qtype "ug" || error "enable mdt quota failed"
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
 	resetquota -u $TSTUSR
 	set_mdt_qtype "none" || error "disable mdt quota failed"
 
@@ -1246,7 +1431,7 @@ test_7e() {
 	stop mds${MDSCOUNT}
 
 	echo "Enable quota & set quota limit for $TSTUSR"
-	set_mdt_qtype "ug" || error "enable mdt quota failed"
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I $ilimit $DIR ||
 		error "set quota failed"
 
@@ -1254,7 +1439,7 @@ test_7e() {
 	start mds${MDSCOUNT} $(mdsdevname $MDSCOUNT) $MDS_MOUNT_OPTS
 	quota_init
 
-	wait_mdt_reint "ug" || error "reintegration failed"
+	wait_mdt_reint $QTYPE || error "reintegration failed"
 
 	echo "create remote dir"
 	$LFS mkdir -i $((MDSCOUNT - 1)) $DIR/${tdir}-1 ||
@@ -1280,7 +1465,7 @@ test_7e() {
 	start mds${MDSCOUNT} $(mdsdevname $MDSCOUNT) $MDS_MOUNT_OPTS
 	quota_init
 
-	wait_mdt_reint "ug" || error "reintegration failed"
+	wait_mdt_reint $QTYPE || error "reintegration failed"
 
 	# hardlimit should be cleared on slave during reintegration
 	$RUNAS createmany -m $TESTFILE $((ilimit + 1)) ||
@@ -1302,8 +1487,8 @@ test_8() {
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
 
-	set_mdt_qtype "ug" || error "enable mdt quota failed"
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
 	echo "Set enough high limit for user: $TSTUSR"
 	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR ||
@@ -1311,15 +1496,25 @@ test_8() {
 	echo "Set enough high limit for group: $TSTUSR"
 	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR ||
 		error "set group quota failed"
+	if is_project_quota_supported; then
+		chattr +P $DIR/$tdir && chattr -p $TSTPRJID -d $DIR/$tdir
+		echo "Set enough high limit for project: $TSTPRJID"
+		$LFS setquota -p $TSTPRJID -b 0 \
+			-B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR ||
+			error "set project quota failed"
+	fi
 
 	local duration=""
 	[ "$SLOW" = "no" ] && duration=" -t 120"
 	$RUNAS bash rundbench -D $DIR/$tdir 3 $duration ||
 		quota_error a $TSTUSR "dbench failed!"
 
+	is_project_quota_supported && chattr -P $DIR/$tdir &&
+	chattr -dp 0 $DIR/$tdir
 	cleanup_quota_test
 	resetquota -u $TSTUSR
 	resetquota -g $TSTUSR
+	resetquota -p $TSTPRJID
 }
 run_test 8 "Run dbench with quota enabled"
 
@@ -1398,6 +1593,8 @@ test_10() {
 		error "set limit for root user successfully, expect failure"
 	$LFS setquota -g root -b 1T -B 10T -i 5K -I 100M $DIR &&
 		error "set limit for root group successfully, expect failure"
+	$LFS setquota -p 0 -b 1T -B 10T -i 5K -I 100M $DIR &&
+		error "set limit for project 0 successfully, expect failure"
 
 	# root user can overrun quota
 	set_ost_qtype "ug" || error "enable ost quota failed"
@@ -1769,7 +1966,7 @@ test_19() {
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
 
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
 	# bind file to a single OST
 	$SETSTRIPE -c 1 $TESTFILE || error "setstripe $TESTFILE failed"
@@ -1846,7 +2043,7 @@ test_21() {
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
 
-	set_ost_qtype "ug" || error "Enable ost quota failed"
+	set_ost_qtype $QTYPE || error "Enable ost quota failed"
 
 	log "Set limit(block:${BLIMIT}G; file:$ILIMIT) for user: $TSTUSR"
 	$LFS setquota -u $TSTUSR -b 0 -B ${BLIMIT}G -i 0 -I $ILIMIT $MOUNT ||
@@ -1854,6 +2051,12 @@ test_21() {
 	log "Set limit(block:${BLIMIT}G; file:$ILIMIT) for group: $TSTUSR"
 	$LFS setquota -g $TSTUSR -b 0 -B $BLIMIT -i 0 -I $ILIMIT $MOUNT ||
 		error "set group quota failed"
+	if is_project_quota_supported; then
+		log "Set limit(block:${BLIMIT}G; file:$LIMIT) for " \
+			"project: $TSTPRJID"
+		$LFS setquota -p $TSTPRJID -b 0 -B $BLIMIT -i 0 -I $ILIMIT \
+			 $MOUNT || error "set project quota failed"
+	fi
 
 	# repeat writing on a 1M file
 	test_21_sub ${TESTFILE}_1 1 30 &
@@ -1872,6 +2075,11 @@ test_21() {
 		$LFS setquota -g $TSTUSR -b 0 -B "$((BLIMIT + i))G" -i 0 \
 			-I $((ILIMIT + i)) $MOUNT ||
 				error "Set group quota failed"
+		if is_project_quota_supported; then
+			$LFS setquota -p $TSTPRJID -b 0 -B \
+			"$((BLIMIT + i))G"  -i 0 -I $((ILIMIT + i)) $MOUNT ||
+				error "Set project quota failed"
+		fi
 		i=$((i+1))
 		sleep 1
 	done
@@ -1901,14 +2109,17 @@ test_21() {
 	cleanup_quota_test
 	resetquota -u $TSTUSR
 	resetquota -g $TSTUSR
+	resetquota -p $TSTPRJID
 }
 run_test 21 "Setquota while writing & deleting (b16053)"
 
 # enable/disable quota enforcement permanently
 test_22() {
 	echo "Set both mdt & ost quota type as ug"
-	set_mdt_qtype "ug" || error "enable mdt quota failed"
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	local qtype="ug"
+	is_project_quota_supported && qtype=$QTYPE
+	set_mdt_qtype $qtype || error "enable mdt quota failed"
+	set_ost_qtype $qtype || error "enable ost quota failed"
 
 	echo "Restart..."
 	stopall || error "failed to stopall (1)"
@@ -1916,10 +2127,10 @@ test_22() {
 	setupall
 
 	echo "Verify if quota is enabled"
-	local qtype=$(mdt_quota_type)
-	[ $qtype != "ug" ] && error "mdt quota setting is lost"
+	local qtype1=$(mdt_quota_type)
+	[ $qtype1 != $qtype] && error "mdt quota setting is lost"
 	qtype=$(ost_quota_type)
-	[ $qtype != "ug" ] && error "ost quota setting is lost"
+	[ $qtype1 != $qtype ] && error "ost quota setting is lost"
 
 	echo "Set both mdt & ost quota type as none"
 	set_mdt_qtype "none" || error "disable mdt quota failed"
@@ -1948,7 +2159,7 @@ test_23_sub() {
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
 
-	set_ost_qtype "ug" || error "Enable ost quota failed"
+	set_ost_qtype $QTYPE || error "Enable ost quota failed"
 
 	# test for user
 	log "User quota (limit: $LIMIT MB)"
@@ -2012,7 +2223,7 @@ test_24() {
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
 
-	set_ost_qtype "ug" || error "enable ost quota failed"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
 	# bind file to a single OST
 	$SETSTRIPE -c 1 $TESTFILE || error "setstripe $TESTFILE failed"
@@ -2049,13 +2260,23 @@ test_27b() { # b20200
 		error "lfs setquota failed with uid argument"
 	$LFS setquota -g $TSTID -b 1000 -B 1000 -i 1000 -I 1000 $DIR ||
 		error "lfs stequota failed with gid argument"
+	if is_project_quota_supported; then
+		$LFS setquota -p $TSTPRJID -b 1000 -B 1000 -i 1000 -I \
+			1000 $DIR || error \
+				"lfs stequota failed with projid argument"
+	fi
 	$SHOW_QUOTA_USERID || error "lfs quota failed with uid argument"
 	$SHOW_QUOTA_GROUPID || error "lfs quota failed with gid argument"
+	if is_project_quota_supported; then
+		$SHOW_QUOTA_PROJID ||
+			error "lfs quota failed with projid argument"
+	fi
 	resetquota -u $TSTUSR
 	resetquota -g $TSTUSR
+	resetquota -p $TSTPRJID
 	return 0
 }
-run_test 27b "lfs quota/setquota should handle user/group ID (b20200)"
+run_test 27b "lfs quota/setquota should handle user/group/project ID (b20200)"
 
 test_27c() {
 	local limit
@@ -2153,11 +2374,18 @@ test_33() {
 	USED=$(getquota -g $TSTID global curspace)
 	[ $USED -ne 0 ] &&
 		error "Used space ($USED) for group $TSTID isn't 0."
+	if is_project_quota_supported; then
+		USED=$(getquota -p $TSTPRJID global curspace)
+		[ $USED -ne 0 ] && error \
+			"Used space ($USED) for project $TSTPRJID isn't 0."
+	fi
 
 	echo "Write files..."
 	for i in $(seq 0 $INODES); do
 		$RUNAS $DD of=$DIR/$tdir/$tfile-$i count=$BLK_CNT 2>/dev/null ||
 			error "write failed"
+			is_project_quota_supported &&
+				chattr -p $TSTPRJID $DIR/$tdir/$tfile-$i
 		echo "Iteration $i/$INODES completed"
 	done
 	cancel_lru_locks osc
@@ -2170,6 +2398,11 @@ test_33() {
 	USED=$(getquota -g $TSTID global curspace)
 	[ $USED -lt $TOTAL_BLKS ] &&
 		error "Used space for group $TSTID:$USED, expected:$TOTAL_BLKS"
+	if is_project_quota_supported; then
+		USED=$(getquota -p $TSTPRJID global curspace)
+		[ $USED -lt $TOTAL_BLKS ] && error \
+			"Used space for project $TSTPRJID:$USED, expected:$TOTAL_BLKS"
+	fi
 
 	echo "Verify inode usage after write"
 	USED=$(getquota -u $TSTID global curinodes)
@@ -2178,6 +2411,11 @@ test_33() {
 	USED=$(getquota -g $TSTID global curinodes)
 	[ $USED -lt $INODES ] &&
 		error "Used inode for group $TSTID is $USED, expected $INODES"
+	if is_project_quota_supported; then
+		USED=$(getquota -p $TSTPRJID global curinodes)
+		[ $USED -lt $INODES ] && error \
+			"Used inode for project $TSTPRJID is $USED, expected $INODES"
+	fi
 
 	cleanup_quota_test
 
@@ -2190,13 +2428,20 @@ test_33() {
 	[ $USED -eq 0 ] || error "Used space for group $TSTID isn't 0. $USED"
 	USED=$(getquota -g $TSTID global curinodes)
 	[ $USED -eq 0 ] || error "Used inodes for group $TSTID isn't 0. $USED"
+	if is_project_quota_supported; then
+		USED=$(getquota -p $TSTPRJID global curinodes)
+		[ $USED -eq 0 ] ||
+			error "Used inodes for project $TSTPRJID isn't 0. $USED"
+	fi
 }
-run_test 33 "Basic usage tracking for user & group"
+run_test 33 "Basic usage tracking for user & group & project"
 
-# usage transfer test for user & group
+# usage transfer test for user & group & project
 test_34() {
 	local BLK_CNT=2 # 2MB
+	local project_supported="no"
 
+	is_project_quota_supported && project_supported="yes"
 	setup_quota_test || error "setup quota failed with $?"
 	trap cleanup_quota_test EXIT
 
@@ -2208,6 +2453,11 @@ test_34() {
 
 	local USED=$(getquota -u $TSTID2 global curspace)
 	[ $USED -ne 0 ] && error "Used space ($USED) for user $TSTID2 isn't 0."
+	if [ $project_supported == "yes" ]; then
+		USED=$(getquota -p $TSTPRJID global curspace)
+		[ $USED -ne 0 ] && error \
+			"Used space ($USED) for Project $TSTPRJID isn't 0."
+	fi
 
 	echo "Write file..."
 	$DD of=$DIR/$tdir/$tfile count=$BLK_CNT 2>/dev/null ||
@@ -2252,6 +2502,12 @@ test_34() {
 	echo "Wait for setattr on objects finished..."
 	wait_delete_completed
 
+	echo "chattr project id to $TSTPRJID"
+	[ $project_supported == "yes" ] &&
+		chattr -p $TSTPRJID $DIR/$tdir/$tfile
+	echo "Wait for setattr on objects finished..."
+	wait_delete_completed
+
 	echo "Verify disk usage for user $TSTID2/$TSTID and group $TSTID"
 	USED=$(getquota -u $TSTID2 global curspace)
 	[ $USED -lt $BLK_CNT ] &&
@@ -2262,10 +2518,15 @@ test_34() {
 	USED=$(getquota -g $TSTID global curspace)
 	[ $USED -lt $BLK_CNT ] &&
 		error "Used space for group $TSTID is $USED, expected $BLK_CNT"
+	if [ $project_supported == "yes" ]; then
+		USED=$(getquota -p $TSTPRJID global curspace)
+		[ $USED -lt $BLK_CNT ] && error \
+			"Used space for group $TSTPRJID is $USED, expected $BLK_CNT"
+	fi
 
 	cleanup_quota_test
 }
-run_test 34 "Usage transfer for user & group"
+run_test 34 "Usage transfer for user & group & project"
 
 # usage is still accessible across restart
 test_35() {
@@ -2277,6 +2538,8 @@ test_35() {
 	echo "Write file..."
 	$RUNAS $DD of=$DIR/$tdir/$tfile count=$BLK_CNT 2>/dev/null ||
 		error "write failed"
+	is_project_quota_supported &&
+		chattr -p $TSTPRJID $DIR/$tdir/$tfile
 	cancel_lru_locks osc
 	sync; sync_all_data || true
 
@@ -2295,6 +2558,16 @@ test_35() {
 	[ $ORIG_GRP_INODES -eq 0 ] &&
 		error "Used inodes for group $TSTID is 0, expected 1"
 	echo "Group $TSTID: ${ORIG_GRP_SPACE}KB $ORIG_GRP_INODES inodes"
+
+	if is_project_quota_supported; then
+		local ORIG_PRJ_SPACE=$(getquota -p $TSTPRJID global curspace)
+		[ $ORIG_PRJ_SPACE -eq 0 ] && error \
+			"Used space for project $TSTPRJID is 0, expected ${BLK_CNT}M"
+		local ORIG_PRJ_INODES=$(getquota -p $TSTPRJID global curinodes)
+		[ $ORIG_PRJ_INODES -eq 0 ] && error \
+			"Used inodes for project $TSTPRJID is 0, expected 1"
+		echo "Project $TSTPRJID: ${ORIG_PRJ_SPACE}KB $ORIG_PRJ_INODES inodes"
+	fi
 
 	log "Restart..."
 	local ORIG_REFORMAT=$REFORMAT
@@ -2320,6 +2593,16 @@ test_35() {
 	[ $USED -eq $ORIG_GRP_INODES ] ||
 		error "Used inodes for group $TSTID changed from " \
 			"$ORIG_GRP_INODES to $USED"
+	if [ $project_supported == "yes" ]; then
+		USED=$(getquota -p $TSTPRJID global curinodes)
+		[ $USED -eq $ORIG_PRJ_INODES ] ||
+			error "Used inodes for project $TSTPRJID " \
+				"changed from $ORIG_PRJ_INODES to $USED"
+		USED=$(getquota -p $TSTPRJID global curspace)
+		[ $USED -eq $ORIG_PRJ_SPACE ] ||
+			error "Used space for project $TSTPRJID "\
+				"changed from $ORIG_PRJ_SPACE to $USED"
+	fi
 
 	# check if the vfs_dq_init() is called before writing
 	echo "Append to the same file..."
@@ -2337,6 +2620,12 @@ test_35() {
 	[ $USED -gt $ORIG_GRP_SPACE ] ||
 		error "Used space for group $TSTID isn't increased" \
 			"orig:$ORIG_GRP_SPACE, now:$USED"
+	if [ $project_supported == "yes" ]; then
+		USED=$(getquota -p $TSTPRJID global curspace)
+		[ $USED -gt $ORIG_PRJ_SPACE ] ||
+			error "Used space for project $TSTPRJID isn't " \
+				"increased orig:$ORIG_PRJ_SPACE, now:$USED"
+	fi
 
 	cleanup_quota_test
 }
@@ -2419,19 +2708,12 @@ test_38() {
 run_test 38 "Quota accounting iterator doesn't skip id entries"
 
 test_39() {
-	[ "$(facet_fstype $singlemds)" != "ldiskfs" ] &&
-		skip "only for ldiskfs mdt" && return 0
+	local TESTFILE="$DIR/$tdir/project"
+	! is_project_quota_supported &&
+		skip "Project quota is not supported" && return 0
 
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10) ] &&
-		skip "Old server doesn't support project quota." && return
+	setup_quota_test || error "setup quota failed with $?"
 
-	man lsattr | grep -i project ||
-		skip "old e2fsprogs dosen't support project quota" &&
-		return 0
-
-	enable_project_quota
-
-	local TESTFILE="$DIR/project"
 	touch $TESTFILE
 	projectid=$(lsattr -p $TESTFILE | awk '{print $1}')
 	[ $projectid -ne 0 ] &&
@@ -2448,14 +2730,150 @@ test_39() {
 	[ $projectid -ne 1024 ] &&
 		error "Project id should be 1024 not $projectid"
 
-	disable_project_quota
 	cleanup_quota_test
 }
 run_test 39 "Project ID interface works correctly"
 
+test_40a() {
+	! is_project_quota_supported &&
+		skip "Project quota is not supported" && return 0
+	local dir1="$DIR/$tdir/dir1"
+	local dir2="$DIR/$tdir/dir2"
+
+	setup_quota_test || error "setup quota failed with $?"
+
+	mkdir -p $dir1 $dir2
+	chattr +P $dir1 && chattr -p 1 -d $dir1 && touch $dir1/1
+	chattr +P $dir2 && chattr -p 2 -d $dir2
+
+	ln $dir1/1 $dir2/1_link &&
+		error "Hard link across different project quota should fail"
+	rm -rf $dir1 $dir2
+
+	cleanup_quota_test
+}
+run_test 40a "Hard link across different project ID"
+
+test_40b() {
+	! is_project_quota_supported &&
+		skip "Project quota is not supported" && return 0
+	local dir1="$DIR/$tdir/dir1"
+	local dir2="$DIR/$tdir/dir2"
+
+	setup_quota_test || error "setup quota failed with $?"
+	mkdir -p $dir1 $dir2
+	chattr +P $dir1 && chattr -p 1 -d $dir1 && touch $dir1/1
+	chattr +P $dir2 && chattr -p 2 -d $dir2
+
+	mv $dir1/1 $dir2/2 || error "mv failed $?"
+	local projid=$(lsattr -p $dir2/2 | awk '{print $1}')
+	if [ "$projid" != "2" ]; then
+		error "project id expected 2 not $projid"
+	fi
+	rm -rf $dir1 $dir2
+	cleanup_quota_test
+}
+run_test 40b "Mv across different project ID"
+
+test_40c() {
+	[ "$MDSCOUNT" -lt "2" ] && skip "Required more MDTs" && return
+		! is_project_quota_supported &&
+			skip "Project quota is not supported" && return 0
+
+	setup_quota_test || error "setup quota failed with $?"
+	local dir="$DIR/$tdir/dir"
+
+	mkdir -p $dir && chattr +P $dir && chattr -dp 1 $dir
+	$LFS mkdir -i 1 $dir/remote_dir || error "create remote dir failed"
+	local projid=$(lsattr -dp $dir/remote_dir | awk '{print $1}')
+	[ "$projid" != "1" ] && error "projid id expected 1 not $projid"
+	touch $dir/remote_dir/file
+	#verify inherit works file for remote dir.
+	local projid=$(lsattr -dp $dir/remote_dir/file | awk '{print $1}')
+	[ "$projid" != "1" ] &&
+		error "file under remote dir expected 1 not $projid"
+
+	#Agent inode should be ignored for project quota
+	USED=$(getquota -p 1 global curinodes)
+	[ "$USED" != "3" ] &&
+		error "file count expected 3 got $USED"
+
+	rm -rf $dir
+	cleanup_quota_test
+	return 0
+}
+run_test 40c "Remote child Dir inherit project quota properly"
+
+test_50() {
+	! is_project_quota_supported &&
+		skip "Project quota is not supported" && return 0
+
+	setup_quota_test || error "setup quota failed with $?"
+	local dir="$DIR/$tdir/dir"
+
+	mkdir $dir && chattr -dp 1 $dir
+	count=$($LFS find --projid 1 $DIR | wc -l)
+	[ "$count" != 1 ] && error "expected 1 but got $count"
+
+	rm -rf $dir
+	cleanup_quota_test
+}
+run_test 50 "Test if lfs find --projid works"
+
+test_51() {
+	! is_project_quota_supported &&
+		skip "Project quota is not supported" && return 0
+	setup_quota_test || error "setup quota failed with $?"
+	local dir="$DIR/$tdir/dir"
+
+	mkdir $dir && chattr -dp 1 $dir && chattr +P $dir
+	local used=$(getquota -p 1 global curinodes)
+	[ $used != "1" ] &&  error "expected 1 got $used"
+
+	touch $dir/1
+	touch $dir/2
+	cp $dir/2 $dir/3
+	used=$(getquota -p 1 global curinodes)
+	[ $used != "4" ] &&  error "expected 4 got $used"
+
+	$DD if=/dev/zero of=$DIR/$tdir/6 bs=1M count=1
+	#try cp to dir
+	cp $DIR/$tdir/6 $dir/6
+	used=$(getquota -p 1 global curinodes)
+	[ $used != "5" ] &&  error "expected 5 got $used"
+
+	#try mv to dir
+	mv $DIR/$tdir/6 $dir/7
+	used=$(getquota -p 1 global curinodes)
+	[ $used != "6" ] &&  error "expected 6 got $used"
+
+	rm -rf $dir
+	cleanup_quota_test
+}
+run_test 51 "Test project accounting with mv/cp"
+
+test_52() {
+	! is_project_quota_supported &&
+		skip "Project quota is not supported" && return 0
+	setup_quota_test || error "setup quota failed with $?"
+	local dir="$DIR/$tdir/dir"
+	mkdir $dir && chattr -dp 1 $dir && chattr +P $dir
+
+	touch $DIR/$tdir/file
+	#Try renaming a file into the project.  This should fail.
+	for num in $(seq 1 2000); do
+		mrename $DIR/$tdir/file $dir/file >&/dev/null &&
+			error "rename should fail"
+	done
+	rm -rf $dir
+	cleanup_quota_test
+}
+run_test 52 "Rename across different project ID"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
+	disable_project_quota
 }
 quota_fini
 
