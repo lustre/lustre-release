@@ -1770,6 +1770,7 @@ struct cl_io {
 			unsigned int		 sa_attr_flags;
 			unsigned int		 sa_valid;
 			int			 sa_stripe_index;
+			struct ost_layout	 sa_layout;
 			const struct lu_fid	*sa_parent_fid;
 		} ci_setattr;
 		struct cl_data_version_io {

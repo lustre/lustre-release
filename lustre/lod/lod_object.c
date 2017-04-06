@@ -2039,21 +2039,23 @@ lod_obj_stripe_replace_parent_fid_cb(const struct lu_env *env,
 				     int stripe_idx,
 				     struct lod_obj_stripe_cb_data *data)
 {
-	struct lod_thread_info	*info = lod_env_info(env);
-	struct dt_object	*obj = &lo->ldo_obj;
-	struct lu_buf	*buf = &info->lti_buf;
-	struct filter_fid *ff = buf->lb_buf;
+	struct lod_thread_info *info = lod_env_info(env);
+	struct filter_fid *ff = &info->lti_ff;
+	struct lu_buf *buf = &info->lti_buf;
 	int rc;
 
+	buf->lb_buf = ff;
+	buf->lb_len = sizeof(*ff);
 	rc = dt_xattr_get(env, dt, buf, XATTR_NAME_FID);
-	if (rc < 0)
+	if (rc == -ENODATA)
 		return 0;
 
-	fid_le_to_cpu(&ff->ff_parent, &ff->ff_parent);
-	ff->ff_parent.f_seq = lu_object_fid(&obj->do_lu)->f_seq;
-	ff->ff_parent.f_oid = lu_object_fid(&obj->do_lu)->f_oid;
-	fid_cpu_to_le(&ff->ff_parent, &ff->ff_parent);
+	if (rc < 0)
+		return rc;
 
+	ff->ff_parent = *lu_object_fid(&lo->ldo_obj.do_lu);
+	ff->ff_parent.f_ver = stripe_idx;
+	fid_cpu_to_le(&ff->ff_parent, &ff->ff_parent);
 	if (data->locd_declare)
 		rc = lod_sub_object_declare_xattr_set(env, dt, buf,
 						      XATTR_NAME_FID,

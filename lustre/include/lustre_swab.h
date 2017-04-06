@@ -51,6 +51,7 @@
 #include <lustre/lustre_idl.h>
 
 void lustre_swab_orphan_ent(struct lu_orphan_ent *ent);
+void lustre_swab_orphan_ent_v2(struct lu_orphan_ent_v2 *ent);
 void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 void lustre_swab_connect(struct obd_connect_data *ocd);
 void lustre_swab_hsm_user_state(struct hsm_user_state *hus);

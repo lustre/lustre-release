@@ -324,6 +324,8 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 						      stripe);
 			io->u.ci_setattr.sa_attr.lvb_size = new_size;
 		}
+		lov_lsm2layout(lsm, lsm->lsm_entries[index],
+			       &io->u.ci_setattr.sa_layout);
 		break;
 	}
 	case CIT_DATA_VERSION: {

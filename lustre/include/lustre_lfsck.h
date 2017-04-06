@@ -63,8 +63,8 @@ struct lfsck_req_local {
 	__u16		lrl_padding0;
 	__u32		lrl_padding1;
 	struct lu_fid	lrl_fid;
-	struct lu_fid	lrl_fid2;
-	struct lu_fid	lrl_fid3;
+	struct filter_fid lrl_ff_client;
+	struct filter_fid lrl_ff_local;
 };
 
 typedef int (*lfsck_out_notify)(const struct lu_env *env, void *data,

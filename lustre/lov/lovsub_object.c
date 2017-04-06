@@ -135,7 +135,7 @@ static void lovsub_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 				struct cl_req_attr *attr)
 {
 	struct lovsub_object *subobj = cl2lovsub(obj);
-
+	struct lov_stripe_md *lsm = subobj->lso_super->lo_lsm;
 	ENTRY;
 	cl_req_attr_set(env, &subobj->lso_super->lo_cl, attr);
 
@@ -144,6 +144,9 @@ static void lovsub_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 	 * unconditionally. It never changes anyway.
 	 */
 	attr->cra_oa->o_stripe_idx = lov_comp_stripe(subobj->lso_index);
+	lov_lsm2layout(lsm, lsm->lsm_entries[lov_comp_entry(subobj->lso_index)],
+		       &attr->cra_oa->o_layout);
+	attr->cra_oa->o_valid |= OBD_MD_FLOSTLAYOUT;
 	EXIT;
 }
 

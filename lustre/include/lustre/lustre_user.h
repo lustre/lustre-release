@@ -159,9 +159,13 @@ static inline bool fid_is_zero(const struct lu_fid *fid)
  * parent MDT-object's layout EA. */
 #define f_stripe_idx f_ver
 
-struct filter_fid {
-	struct lu_fid	ff_parent;  /* ff_parent.f_ver == file stripe number */
-};
+struct ost_layout {
+	__u32	ol_stripe_size;
+	__u32	ol_stripe_count;
+	__u64	ol_comp_start;
+	__u64	ol_comp_end;
+	__u32	ol_comp_id;
+} __attribute__((packed));
 
 /* keep this one for compatibility */
 struct filter_fid_old {
@@ -170,10 +174,42 @@ struct filter_fid_old {
 	__u64		ff_seq;
 };
 
+struct filter_fid {
+	struct lu_fid		ff_parent;
+	struct ost_layout	ff_layout;
+} __attribute__((packed));
+
 /* Userspace should treat lu_fid as opaque, and only use the following methods
  * to print or parse them.  Other functions (e.g. compare, swab) could be moved
  * here from lustre_idl.h if needed. */
 typedef struct lu_fid lustre_fid;
+
+enum lma_compat {
+	LMAC_HSM	 = 0x00000001,
+/*	LMAC_SOM	 = 0x00000002, obsolete since 2.8.0 */
+	LMAC_NOT_IN_OI	 = 0x00000004, /* the object does NOT need OI mapping */
+	LMAC_FID_ON_OST  = 0x00000008, /* For OST-object, its OI mapping is
+				       * under /O/<seq>/d<x>. */
+	LMAC_STRIPE_INFO = 0x00000010, /* stripe info in the LMA EA. */
+	LMAC_COMP_INFO	 = 0x00000020, /* Component info in the LMA EA. */
+};
+
+/**
+ * Masks for all features that should be supported by a Lustre version to
+ * access a specific file.
+ * This information is stored in lustre_mdt_attrs::lma_incompat.
+ */
+enum lma_incompat {
+	LMAI_RELEASED		= 0x00000001, /* file is released */
+	LMAI_AGENT		= 0x00000002, /* agent inode */
+	LMAI_REMOTE_PARENT	= 0x00000004, /* the parent of the object
+						 is on the remote MDT */
+	LMAI_STRIPED		= 0x00000008, /* striped directory inode */
+	LMAI_ORPHAN		= 0x00000010, /* inode is orphan */
+	LMA_INCOMPAT_SUPP	= (LMAI_AGENT | LMAI_REMOTE_PARENT | \
+				   LMAI_STRIPED | LMAI_ORPHAN)
+};
+
 
 /**
  * Following struct for object attributes, that will be kept inode's EA.
@@ -194,6 +230,25 @@ struct lustre_mdt_attrs {
 	__u32   lma_incompat;
 	/** FID of this inode */
 	struct lu_fid  lma_self_fid;
+};
+
+struct lustre_ost_attrs {
+	/* Use lustre_mdt_attrs directly for now, need a common header
+	 * structure if want to change lustre_mdt_attrs in future. */
+	struct lustre_mdt_attrs loa_lma;
+
+	/* Below five elements are for OST-object's PFID EA, the
+	 * lma_parent_fid::f_ver is composed of the stripe_count (high 16 bits)
+	 * and the stripe_index (low 16 bits), the size should not exceed
+	 * 5 * sizeof(__u64)) to be accessable by old Lustre. If the flag
+	 * LMAC_STRIPE_INFO is set, then loa_parent_fid and loa_stripe_size
+	 * are valid; if the flag LMAC_COMP_INFO is set, then the next three
+	 * loa_comp_* elements are valid. */
+	struct lu_fid	loa_parent_fid;
+	__u32		loa_stripe_size;
+	__u32		loa_comp_id;
+	__u64		loa_comp_start;
+	__u64		loa_comp_end;
 };
 
 /**

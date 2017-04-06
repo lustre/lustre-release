@@ -538,7 +538,9 @@ static int osc_io_setattr_start(const struct lu_env *env,
 		oa->o_oi = loi->loi_oi;
 		obdo_set_parent_fid(oa, io->u.ci_setattr.sa_parent_fid);
 		oa->o_stripe_idx = io->u.ci_setattr.sa_stripe_index;
-		oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
+		oa->o_layout = io->u.ci_setattr.sa_layout;
+		oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP |
+			OBD_MD_FLOSTLAYOUT;
 		if (ia_valid & ATTR_CTIME) {
 			oa->o_valid |= OBD_MD_FLCTIME;
 			oa->o_ctime = attr->cat_ctime;

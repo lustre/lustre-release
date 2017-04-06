@@ -1698,6 +1698,15 @@ void lustre_swab_connect(struct obd_connect_data *ocd)
         CLASSERT(offsetof(typeof(*ocd), paddingF) != 0);
 }
 
+static void lustre_swab_ost_layout(struct ost_layout *ol)
+{
+	__swab32s(&ol->ol_stripe_size);
+	__swab32s(&ol->ol_stripe_count);
+	__swab64s(&ol->ol_comp_start);
+	__swab64s(&ol->ol_comp_end);
+	__swab32s(&ol->ol_comp_id);
+}
+
 void lustre_swab_obdo (struct obdo  *o)
 {
         __swab64s (&o->o_valid);
@@ -1720,8 +1729,8 @@ void lustre_swab_obdo (struct obdo  *o)
         __swab64s (&o->o_ioepoch);
         __swab32s (&o->o_stripe_idx);
         __swab32s (&o->o_parent_ver);
-        /* o_handle is opaque */
-        /* o_lcookie is swabbed elsewhere */
+	lustre_swab_ost_layout(&o->o_layout);
+	CLASSERT(offsetof(typeof(*o), o_padding_3) != 0);
         __swab32s (&o->o_uid_h);
         __swab32s (&o->o_gid_h);
         __swab64s (&o->o_data_version);
@@ -2737,9 +2746,11 @@ void lustre_swab_lfsck_request(struct lfsck_request *lr)
 	__swab32s(&lr->lr_flags);
 	lustre_swab_lu_fid(&lr->lr_fid);
 	lustre_swab_lu_fid(&lr->lr_fid2);
-	lustre_swab_lu_fid(&lr->lr_fid3);
+	__swab32s(&lr->lr_comp_id);
+	CLASSERT(offsetof(typeof(*lr), lr_padding_0) != 0);
 	CLASSERT(offsetof(typeof(*lr), lr_padding_1) != 0);
 	CLASSERT(offsetof(typeof(*lr), lr_padding_2) != 0);
+	CLASSERT(offsetof(typeof(*lr), lr_padding_3) != 0);
 }
 
 void lustre_swab_lfsck_reply(struct lfsck_reply *lr)
@@ -2749,14 +2760,28 @@ void lustre_swab_lfsck_reply(struct lfsck_reply *lr)
 	__swab64s(&lr->lr_repaired);
 }
 
+static void lustre_swab_orphan_rec(struct lu_orphan_rec *rec)
+{
+	lustre_swab_lu_fid(&rec->lor_fid);
+	__swab32s(&rec->lor_uid);
+	__swab32s(&rec->lor_gid);
+}
+
 void lustre_swab_orphan_ent(struct lu_orphan_ent *ent)
 {
 	lustre_swab_lu_fid(&ent->loe_key);
-	lustre_swab_lu_fid(&ent->loe_rec.lor_fid);
-	__swab32s(&ent->loe_rec.lor_uid);
-	__swab32s(&ent->loe_rec.lor_gid);
+	lustre_swab_orphan_rec(&ent->loe_rec);
 }
 EXPORT_SYMBOL(lustre_swab_orphan_ent);
+
+void lustre_swab_orphan_ent_v2(struct lu_orphan_ent_v2 *ent)
+{
+	lustre_swab_lu_fid(&ent->loe_key);
+	lustre_swab_orphan_rec(&ent->loe_rec.lor_rec);
+	lustre_swab_ost_layout(&ent->loe_rec.lor_layout);
+	CLASSERT(offsetof(typeof(ent->loe_rec), lor_padding) != 0);
+}
+EXPORT_SYMBOL(lustre_swab_orphan_ent_v2);
 
 void lustre_swab_ladvise(struct lu_ladvise *ladvise)
 {

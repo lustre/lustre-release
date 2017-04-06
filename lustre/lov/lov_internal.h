@@ -312,4 +312,20 @@ static inline struct obd_device *lov2obd(const struct lov_obd *lov)
 	return container_of0(lov, struct obd_device, u.lov);
 }
 
+static inline void lov_lsm2layout(struct lov_stripe_md *lsm,
+				  struct lov_stripe_md_entry *lsme,
+				  struct ost_layout *ol)
+{
+	ol->ol_stripe_size = lsme->lsme_stripe_size;
+	ol->ol_stripe_count = lsme->lsme_stripe_count;
+	if (lsm->lsm_magic == LOV_MAGIC_COMP_V1) {
+		ol->ol_comp_start = lsme->lsme_extent.e_start;
+		ol->ol_comp_end = lsme->lsme_extent.e_end;
+		ol->ol_comp_id = lsme->lsme_id;
+	} else {
+		ol->ol_comp_start = 0;
+		ol->ol_comp_end = 0;
+		ol->ol_comp_id = 0;
+	}
+}
 #endif

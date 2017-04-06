@@ -377,8 +377,7 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 	handle_t		*jh;
 	int			 size	 = 0;
 	int			 rc;
-	bool			 removed = false;
-	bool			 reset   = true;
+	bool			 reset   = false;
 	ENTRY;
 
 	if (dev->od_scrub.os_file.sf_param & SP_DRYRUN)
@@ -418,23 +417,24 @@ osd_scrub_convert_ff(struct osd_thread_info *info, struct osd_device *dev,
 		/* 2) delete the old XATTR_NAME_FID */
 		ll_vfs_dq_init(inode);
 		rc = inode->i_op->removexattr(dentry, XATTR_NAME_FID);
-		if (rc != 0)
+		if (rc)
 			GOTO(stop, rc);
 
-		removed = true;
-	} else if (unlikely(rc == -ENODATA)) {
-		reset = false;
-	} else if (rc != sizeof(struct filter_fid)) {
+		reset = true;
+	} else if (rc != -ENODATA && rc != sizeof(struct filter_fid)) {
 		GOTO(stop, rc = -EINVAL);
 	}
 
 	/* 3) make new LMA and add it */
 	rc = osd_ea_fid_set(info, inode, tfid, LMAC_FID_ON_OST, 0);
-	if (rc == 0 && reset)
-		size = sizeof(struct filter_fid);
-	else if (rc != 0 && removed)
-		/* If failed, we should try to add the old back. */
-		size = sizeof(struct filter_fid_old);
+	if (reset) {
+		if (rc)
+			/* If failed, we should try to add the old back. */
+			size = sizeof(*ff);
+		else
+			/* The new PFID EA will only contains ::ff_parent */
+			size = sizeof(ff->ff_parent);
+	}
 
 	/* 4) generate new XATTR_NAME_FID with the saved parent FID and add it*/
 	if (size > 0) {
@@ -863,11 +863,12 @@ static int osd_scrub_get_fid(struct osd_thread_info *info,
 			     struct osd_device *dev, struct inode *inode,
 			     struct lu_fid *fid, bool scrub)
 {
-	struct lustre_mdt_attrs *lma	 = &info->oti_mdt_attrs;
-	int			 rc;
-	bool			 has_lma = false;
+	struct lustre_mdt_attrs *lma = &info->oti_ost_attrs.loa_lma;
+	int rc;
+	bool has_lma = false;
 
-	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
+	rc = osd_get_lma(info, inode, &info->oti_obj_dentry,
+			 &info->oti_ost_attrs);
 	if (rc == 0) {
 		has_lma = true;
 		if (lma->lma_compat & LMAC_NOT_IN_OI ||
@@ -2001,7 +2002,7 @@ static int
 osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 		 struct inode *inode, const struct lu_fid *fid, int flags)
 {
-	struct lustre_mdt_attrs	*lma	= &info->oti_mdt_attrs;
+	struct lustre_mdt_attrs	*lma	= &info->oti_ost_attrs.loa_lma;
 	struct osd_inode_id	*id	= &info->oti_id;
 	struct osd_inode_id	*id2	= &info->oti_id2;
 	struct osd_scrub	*scrub  = &dev->od_scrub;
@@ -2010,7 +2011,8 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 	int			 rc;
 	ENTRY;
 
-	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
+	rc = osd_get_lma(info, inode, &info->oti_obj_dentry,
+			 &info->oti_ost_attrs);
 	if (rc != 0 && rc != -ENODATA) {
 		CDEBUG(D_LFSCK, "%s: fail to get lma for init OI scrub: "
 		       "rc = %d\n", osd_name(dev), rc);

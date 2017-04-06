@@ -76,8 +76,8 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 	LASSERT(!fo->ofo_pfid_verified);
 
 	lrl->lrl_fid = fo->ofo_header.loh_fid; /* OST-object itself FID. */
-	lrl->lrl_fid2 = client_ff->ff_parent; /* client given PFID. */
-	lrl->lrl_fid3 = local_ff->ff_parent; /* OST local stored PFID. */
+	lrl->lrl_ff_client = *client_ff; /* client given PFID. */
+	lrl->lrl_ff_local = *local_ff; /* OST local stored PFID. */
 
 	rc = lfsck_in_notify_local(env, ofd->ofd_osd, lrl, NULL);
 	ofd_write_lock(env, fo);
@@ -342,6 +342,7 @@ static void ofd_add_inconsistency_item(const struct lu_env *env,
 	ff->ff_parent.f_seq = oa->o_parent_seq;
 	ff->ff_parent.f_oid = oa->o_parent_oid;
 	ff->ff_parent.f_stripe_idx = oa->o_stripe_idx;
+	ff->ff_layout = oa->o_layout;
 
 	spin_lock(&ofd->ofd_inconsistency_lock);
 	if (fo->ofo_pfid_checking || fo->ofo_pfid_verified) {

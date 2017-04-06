@@ -348,6 +348,7 @@ struct osp_it {
 	__u32			  ooi_pos_page;
 	__u32			  ooi_pos_lu_page;
 	__u32			  ooi_attr;
+	__u32			  ooi_rec_size;
 	int			  ooi_pos_ent;
 	int			  ooi_total_npages;
 	int			  ooi_valid_npages;

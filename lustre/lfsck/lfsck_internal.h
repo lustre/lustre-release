@@ -786,6 +786,7 @@ struct lfsck_layout_req {
 	struct dt_object		*llr_child;
 	__u32				 llr_ost_idx;
 	__u32				 llr_lov_idx; /* offset in LOV EA */
+	__u32				 llr_comp_id;
 };
 
 struct lfsck_assistant_operations {
@@ -878,11 +879,7 @@ struct lfsck_thread_info {
 	struct lu_attr		lti_la;
 	struct lu_attr		lti_la2;
 	struct ost_id		lti_oi;
-	union {
-		struct lustre_mdt_attrs lti_lma;
-		/* old LMA for compatibility */
-		char			lti_lma_old[LMA_OLD_SIZE];
-	};
+	struct lustre_ost_attrs lti_loa;
 	struct dt_object_format lti_dof;
 	/* There will be '\0' at the end of the name. */
 	char		lti_key[sizeof(struct lu_dirent) + NAME_MAX + 1];
@@ -896,12 +893,9 @@ struct lfsck_thread_info {
 	union ldlm_policy_data	lti_policy;
 	struct ldlm_enqueue_info lti_einfo;
 	struct ldlm_res_id	lti_resid;
-	union {
-		struct filter_fid_old	lti_old_pfid;
-		struct filter_fid	lti_new_pfid;
-	};
+	struct filter_fid	lti_ff;
 	struct dt_allocation_hint lti_hint;
-	struct lu_orphan_rec	lti_rec;
+	struct lu_orphan_rec_v2	lti_rec;
 	struct lov_user_md	lti_lum;
 	struct dt_insert_rec	lti_dt_rec;
 	struct lu_object_conf	lti_conf;

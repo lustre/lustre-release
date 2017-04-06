@@ -168,37 +168,13 @@ struct lu_seq_range_array {
 /** \defgroup lu_fid lu_fid
  * @{ */
 
-/**
- * Flags for lustre_mdt_attrs::lma_compat and lustre_mdt_attrs::lma_incompat.
- * Deprecated since HSM and SOM attributes are now stored in separate on-disk
- * xattr.
- */
-enum lma_compat {
-	LMAC_HSM	= 0x00000001,
-/*	LMAC_SOM	= 0x00000002, obsolete since 2.8.0 */
-	LMAC_NOT_IN_OI	= 0x00000004, /* the object does NOT need OI mapping */
-	LMAC_FID_ON_OST = 0x00000008, /* For OST-object, its OI mapping is
-				       * under /O/<seq>/d<x>. */
-};
-
-/**
- * Masks for all features that should be supported by a Lustre version to
- * access a specific file.
- * This information is stored in lustre_mdt_attrs::lma_incompat.
- */
-enum lma_incompat {
-	LMAI_RELEASED		= 0x00000001, /* file is released */
-	LMAI_AGENT		= 0x00000002, /* agent inode */
-	LMAI_REMOTE_PARENT	= 0x00000004, /* the parent of the object
-						 is on the remote MDT */
-	LMAI_STRIPED		= 0x00000008, /* striped directory inode */
-	LMAI_ORPHAN		= 0x00000010, /* inode is orphan */
-	LMA_INCOMPAT_SUPP	= (LMAI_AGENT | LMAI_REMOTE_PARENT | \
-				   LMAI_STRIPED | LMAI_ORPHAN)
-};
-
 extern void lustre_lma_swab(struct lustre_mdt_attrs *lma);
 extern void lustre_lma_init(struct lustre_mdt_attrs *lma,
+			    const struct lu_fid *fid,
+			    __u32 compat, __u32 incompat);
+extern void lustre_loa_swab(struct lustre_ost_attrs *loa,
+			    bool to_cpu);
+extern void lustre_loa_init(struct lustre_ost_attrs *loa,
 			    const struct lu_fid *fid,
 			    __u32 compat, __u32 incompat);
 
@@ -399,6 +375,18 @@ struct lu_orphan_ent {
 	/* The orphan OST-object's FID */
 	struct lu_fid		loe_key;
 	struct lu_orphan_rec	loe_rec;
+};
+
+struct lu_orphan_rec_v2 {
+	struct lu_orphan_rec	lor_rec;
+	struct ost_layout	lor_layout;
+	__u32			lor_padding;
+};
+
+struct lu_orphan_ent_v2 {
+	/* The orphan OST-object's FID */
+	struct lu_fid		loe_key;
+	struct lu_orphan_rec_v2	loe_rec;
 };
 
 /** @} lu_fid */
@@ -1209,6 +1197,7 @@ lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
 							      executed */
 
 #define OBD_MD_DEFAULT_MEA   (0x0040000000000000ULL) /* default MEA */
+#define OBD_MD_FLOSTLAYOUT   (0x0080000000000000ULL) /* contain ost_layout */
 
 #define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
                           OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
@@ -2841,8 +2830,15 @@ struct obdo {
 	__u32			o_parent_ver;
 	struct lustre_handle	o_handle;	/* brw: lock handle to prolong
 						 * locks */
-	struct llog_cookie	o_lcookie;	/* destroy: unlink cookie from
-						 * MDS, obsolete in 2.8 */
+	/* Originally, the field is llog_cookie for destroy with unlink cookie
+	 * from MDS, it is obsolete in 2.8. Then reuse it by client to transfer
+	 * layout and PFL information in IO, setattr RPCs. Since llog_cookie is
+	 * not used on wire any longer, remove it from the obdo, then it can be
+	 * enlarged freely in the further without affect related RPCs.
+	 *
+	 * sizeof(ost_layout) + sieof(__u32) == sizeof(llog_cookie). */
+	struct ost_layout	o_layout;
+	__u32			o_padding_3;
 	__u32			o_uid_h;
 	__u32			o_gid_h;
 
@@ -2877,9 +2873,11 @@ struct lfsck_request {
 	__u32		lr_flags2;
 	struct lu_fid	lr_fid;
 	struct lu_fid	lr_fid2;
-	struct lu_fid	lr_fid3;
+	__u32		lr_comp_id;
+	__u32		lr_padding_0;
 	__u64		lr_padding_1;
 	__u64		lr_padding_2;
+	__u64		lr_padding_3;
 };
 
 struct lfsck_reply {
