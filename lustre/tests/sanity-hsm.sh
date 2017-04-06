@@ -907,6 +907,34 @@ test_1a() {
 }
 run_test 1a "mmap & cat a HSM released file"
 
+test_1b() {
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -E 1M -E 64M -c 2 -E -1 -c 4 $DIR/$tdir ||
+		error "failed to set default stripe"
+	local f=$DIR/$tdir/$tfile
+	rm -f $f
+
+	dd if=/dev/random of=$f bs=1M count=1 conv=sync ||
+		error "failed to create file"
+	local fid=$(path2fid $f)
+
+	echo "archive $f"
+	$LFS hsm_archive $f || error "could not archive file"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	echo "release $f"
+	$LFS hsm_release $f || error "could not release file"
+	echo "verify released state: "
+	check_hsm_flags $f "0x0000000d" && echo "pass"
+
+	echo "restore $f"
+	$LFS hsm_restore $f || error "could not restore file"
+	wait_request_state $fid RESTORE SUCCEED
+	echo "verify restored state: "
+	check_hsm_flags $f "0x00000009" && echo "pass"
+}
+run_test 1b "Archive, Release & Restore composite file"
+
 test_2() {
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
