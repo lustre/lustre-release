@@ -2869,7 +2869,6 @@ struct lfsck_request {
 	union {
 		__u32	lr_speed;
 		__u32	lr_status;
-		__u32	lr_type;
 	};
 	__u16		lr_version;
 	__u16		lr_active;
@@ -2897,7 +2896,7 @@ enum lfsck_events {
 	LE_START		= 5,
 	LE_STOP 		= 6,
 	LE_QUERY		= 7,
-	LE_FID_ACCESSED 	= 8,
+	/* LE_FID_ACCESSED	= 8, moved to lfsck_events_local */
 	LE_PEER_EXIT		= 9,
 	LE_CONDITIONAL_DESTROY	= 10,
 	LE_PAIRS_VERIFY 	= 11,

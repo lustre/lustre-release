@@ -4653,16 +4653,15 @@ static void lfsck_namespace_quit(const struct lu_env *env,
 
 static int lfsck_namespace_in_notify(const struct lu_env *env,
 				     struct lfsck_component *com,
-				     struct lfsck_request *lr,
-				     struct thandle *th)
+				     struct lfsck_request *lr)
 {
-	struct lfsck_instance		*lfsck = com->lc_lfsck;
-	struct lfsck_namespace		*ns    = com->lc_file_ram;
-	struct lfsck_assistant_data	*lad   = com->lc_data;
-	struct lfsck_tgt_descs		*ltds  = &lfsck->li_mdt_descs;
-	struct lfsck_tgt_desc		*ltd;
-	int				 rc    = 0;
-	bool				 fail  = false;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_assistant_data *lad = com->lc_data;
+	struct lfsck_tgt_descs *ltds = &lfsck->li_mdt_descs;
+	struct lfsck_tgt_desc *ltd;
+	int rc = 0;
+	bool fail = false;
 	ENTRY;
 
 	switch (lr->lr_event) {

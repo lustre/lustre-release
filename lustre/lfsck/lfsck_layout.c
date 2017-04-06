@@ -4267,13 +4267,13 @@ out:
 
 static int lfsck_layout_slave_repair_pfid(const struct lu_env *env,
 					  struct lfsck_component *com,
-					  struct lfsck_request *lr)
+					  struct lfsck_req_local *lrl)
 {
 	struct dt_object	*obj;
 	int			 rc	= 0;
 	ENTRY;
 
-	obj = lfsck_object_find_bottom(env, com->lc_lfsck, &lr->lr_fid);
+	obj = lfsck_object_find_bottom(env, com->lc_lfsck, &lrl->lrl_fid);
 	if (IS_ERR(obj))
 		GOTO(log, rc = PTR_ERR(obj));
 
@@ -4282,8 +4282,8 @@ static int lfsck_layout_slave_repair_pfid(const struct lu_env *env,
 		     lfsck_is_dead_obj(obj)))
 		GOTO(unlock, rc = 0);
 
-	rc = __lfsck_layout_update_pfid(env, obj, &lr->lr_fid2,
-					lr->lr_fid2.f_ver);
+	rc = __lfsck_layout_update_pfid(env, obj, &lrl->lrl_fid2,
+					lrl->lrl_fid2.f_ver);
 
 	GOTO(unlock, rc);
 
@@ -4294,7 +4294,7 @@ unlock:
 log:
 	CDEBUG(D_LFSCK, "%s: layout LFSCK slave repaired pfid for "DFID
 	       ", parent "DFID": rc = %d\n", lfsck_lfsck2name(com->lc_lfsck),
-	       PFID(&lr->lr_fid), PFID(&lr->lr_fid2), rc);
+	       PFID(&lrl->lrl_fid), PFID(&lrl->lrl_fid2), rc);
 
 	return rc;
 }
@@ -5578,8 +5578,7 @@ static void lfsck_layout_slave_quit(const struct lu_env *env,
 
 static int lfsck_layout_master_in_notify(const struct lu_env *env,
 					 struct lfsck_component *com,
-					 struct lfsck_request *lr,
-					 struct thandle *th)
+					 struct lfsck_request *lr)
 {
 	struct lfsck_instance		*lfsck = com->lc_lfsck;
 	struct lfsck_layout		*lo    = com->lc_file_ram;
@@ -5690,41 +5689,36 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 	RETURN(0);
 }
 
-static int lfsck_layout_slave_in_notify(const struct lu_env *env,
-					struct lfsck_component *com,
-					struct lfsck_request *lr,
-					struct thandle *th)
+static int lfsck_layout_slave_in_notify_local(const struct lu_env *env,
+					      struct lfsck_component *com,
+					      struct lfsck_req_local *lrl,
+					      struct thandle *th)
 {
-	struct lfsck_instance		 *lfsck = com->lc_lfsck;
-	struct lfsck_layout_slave_data	 *llsd  = com->lc_data;
-	struct lfsck_layout_slave_target *llst;
-	int				  rc;
 	ENTRY;
 
-	switch (lr->lr_event) {
-	case LE_FID_ACCESSED:
-		lfsck_rbtree_update_bitmap(env, com, &lr->lr_fid, true);
+	switch (lrl->lrl_event) {
+	case LEL_FID_ACCESSED:
+		lfsck_rbtree_update_bitmap(env, com, &lrl->lrl_fid, true);
 		RETURN(0);
-	case LE_CONDITIONAL_DESTROY:
-		rc = lfsck_layout_slave_conditional_destroy(env, com, lr);
-		RETURN(rc);
-	case LE_PAIRS_VERIFY: {
-		lr->lr_status = LPVS_INIT;
+	case LEL_PAIRS_VERIFY_LOCAL: {
+		int rc;
+
+		lrl->lrl_status = LPVS_INIT;
 		/* Firstly, if the MDT-object which is claimed via OST-object
 		 * local stored PFID xattr recognizes the OST-object, then it
 		 * must be that the client given PFID is wrong. */
-		rc = lfsck_layout_slave_check_pairs(env, com, &lr->lr_fid,
-						    &lr->lr_fid3);
+		rc = lfsck_layout_slave_check_pairs(env, com, &lrl->lrl_fid,
+						    &lrl->lrl_fid3);
 		if (rc <= 0)
 			RETURN(0);
 
-		lr->lr_status = LPVS_INCONSISTENT;
+		lrl->lrl_status = LPVS_INCONSISTENT;
 		/* The OST-object local stored PFID xattr is stale. We need to
 		 * check whether the MDT-object that is claimed via the client
 		 * given PFID information recognizes the OST-object or not. If
 		 * matches, then need to update the OST-object's PFID xattr. */
-		rc = lfsck_layout_slave_check_pairs(env, com, &lr->lr_fid,
-						    &lr->lr_fid2);
+		rc = lfsck_layout_slave_check_pairs(env, com, &lrl->lrl_fid,
+						    &lrl->lrl_fid2);
 		/* For rc < 0 case:
 		 * We are not sure whether the client given PFID information
 		 * is correct or not, do nothing to avoid improper fixing.
@@ -5733,14 +5727,34 @@ static int lfsck_layout_slave_in_notify(const struct lu_env *env,
 		 * The client given PFID information is also invalid, we can
 		 * NOT fix the OST-object inconsistency.
 		 */
-		if (rc != 0)
-			RETURN(rc);
-
-		lr->lr_status = LPVS_INCONSISTENT_TOFIX;
-		rc = lfsck_layout_slave_repair_pfid(env, com, lr);
+		if (!rc) {
+			lrl->lrl_status = LPVS_INCONSISTENT_TOFIX;
+			rc = lfsck_layout_slave_repair_pfid(env, com, lrl);
+		}
 
 		RETURN(rc);
 	}
+	default:
+		break;
+	}
+
+	RETURN(-EOPNOTSUPP);
+}
+
+static int lfsck_layout_slave_in_notify(const struct lu_env *env,
+					struct lfsck_component *com,
+					struct lfsck_request *lr)
+{
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lfsck_layout_slave_data *llsd = com->lc_data;
+	struct lfsck_layout_slave_target *llst;
+	int rc;
+	ENTRY;
+
+	switch (lr->lr_event) {
+	case LE_CONDITIONAL_DESTROY:
+		rc = lfsck_layout_slave_conditional_destroy(env, com, lr);
+		RETURN(rc);
 	case LE_PHASE1_DONE: {
 		if (lr->lr_flags2 & LF_INCOMPLETE) {
 			struct lfsck_layout *lo = com->lc_file_ram;
@@ -5940,6 +5954,7 @@ static struct lfsck_operations lfsck_layout_slave_ops = {
 	.lfsck_double_scan	= lfsck_layout_slave_double_scan,
 	.lfsck_data_release	= lfsck_layout_slave_data_release,
 	.lfsck_quit		= lfsck_layout_slave_quit,
+	.lfsck_in_notify_local	= lfsck_layout_slave_in_notify_local,
 	.lfsck_in_notify	= lfsck_layout_slave_in_notify,
 	.lfsck_query		= lfsck_layout_query,
 	.lfsck_join		= lfsck_layout_slave_join,

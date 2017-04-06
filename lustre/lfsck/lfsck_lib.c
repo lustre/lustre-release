@@ -3388,8 +3388,32 @@ out:
 }
 EXPORT_SYMBOL(lfsck_stop);
 
+int lfsck_in_notify_local(const struct lu_env *env, struct dt_device *key,
+			  struct lfsck_req_local *lrl, struct thandle *th)
+{
+	struct lfsck_instance *lfsck;
+	struct lfsck_component *com;
+	int rc = -EOPNOTSUPP;
+	ENTRY;
+
+	lfsck = lfsck_instance_find(key, true, false);
+	if (unlikely(!lfsck))
+		RETURN(-ENXIO);
+
+	com = lfsck_component_find(lfsck, lrl->lrl_active);
+	if (likely(com && com->lc_ops->lfsck_in_notify_local)) {
+		rc = com->lc_ops->lfsck_in_notify_local(env, com, lrl, th);
+		lfsck_component_put(env, com);
+	}
+
+	lfsck_instance_put(env, lfsck);
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(lfsck_in_notify_local);
+
 int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
-		    struct lfsck_request *lr, struct thandle *th)
+		    struct lfsck_request *lr)
 {
 	int rc = -EOPNOTSUPP;
 	ENTRY;
@@ -3424,7 +3448,6 @@ int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
 	}
 	case LE_PHASE1_DONE:
 	case LE_PHASE2_DONE:
-	case LE_FID_ACCESSED:
 	case LE_PEER_EXIT:
 	case LE_CONDITIONAL_DESTROY:
 	case LE_SET_LMV_MASTER:
@@ -3438,8 +3461,8 @@ int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
 			RETURN(-ENXIO);
 
 		com = lfsck_component_find(lfsck, lr->lr_active);
-		if (likely(com != NULL)) {
-			rc = com->lc_ops->lfsck_in_notify(env, com, lr, th);
+		if (likely(com)) {
+			rc = com->lc_ops->lfsck_in_notify(env, com, lr);
 			lfsck_component_put(env, com);
 		}
 
@@ -3889,7 +3912,8 @@ static int __init lfsck_init(void)
 	INIT_LIST_HEAD(&lfsck_mdt_orphan_list);
 	lfsck_key_init_generic(&lfsck_thread_key, NULL);
 	rc = lu_context_key_register(&lfsck_thread_key);
-	if (rc == 0) {
+	if (!rc) {
+		tgt_register_lfsck_in_notify_local(lfsck_in_notify_local);
 		tgt_register_lfsck_in_notify(lfsck_in_notify);
 		tgt_register_lfsck_query(lfsck_query);
 	}

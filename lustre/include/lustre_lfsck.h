@@ -51,6 +51,22 @@ enum lfsck_pv_status {
 	LPVS_INCONSISTENT_TOFIX = 2,
 };
 
+enum lfsck_events_local {
+	LEL_FID_ACCESSED	= 1,
+	LEL_PAIRS_VERIFY_LOCAL	= 2,
+};
+
+struct lfsck_req_local {
+	__u32		lrl_event;
+	__u32		lrl_status;
+	__u16		lrl_active;
+	__u16		lrl_padding0;
+	__u32		lrl_padding1;
+	struct lu_fid	lrl_fid;
+	struct lu_fid	lrl_fid2;
+	struct lu_fid	lrl_fid3;
+};
+
 typedef int (*lfsck_out_notify)(const struct lu_env *env, void *data,
 				enum lfsck_events event);
 
@@ -71,8 +87,10 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 		struct lfsck_start_param *lsp);
 int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 	       struct lfsck_stop *stop);
+int lfsck_in_notify_local(const struct lu_env *env, struct dt_device *key,
+			  struct lfsck_req_local *lrl, struct thandle *th);
 int lfsck_in_notify(const struct lu_env *env, struct dt_device *key,
-		    struct lfsck_request *lr, struct thandle *th);
+		    struct lfsck_request *lr);
 int lfsck_query(const struct lu_env *env, struct dt_device *key,
 		struct lfsck_request *req, struct lfsck_reply *rep,
 		struct lfsck_query *que);
@@ -84,14 +102,14 @@ int lfsck_set_windows(struct dt_device *key, int val);
 
 int lfsck_dump(struct seq_file *m, struct dt_device *key, enum lfsck_type type);
 
-static inline void lfsck_pack_rfa(struct lfsck_request *lr,
+static inline void lfsck_pack_rfa(struct lfsck_req_local *lrl,
 				  const struct lu_fid *fid,
-				  __u32 event, __u16 com)
+				  enum lfsck_events_local event, __u16 com)
 {
-	memset(lr, 0, sizeof(*lr));
-	lr->lr_fid = *fid;
-	lr->lr_event = event;
-	lr->lr_active = com;
+	memset(lrl, 0, sizeof(*lrl));
+	lrl->lrl_fid = *fid;
+	lrl->lrl_event = event;
+	lrl->lrl_active = com;
 }
 
 static inline bool lovea_slot_is_dummy(const struct lov_ost_data_v1 *obj)

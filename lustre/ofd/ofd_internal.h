@@ -216,7 +216,7 @@ static inline char *ofd_name(struct ofd_device *ofd)
 struct ofd_object {
 	struct lu_object_header	ofo_header;
 	struct dt_object	ofo_obj;
-	struct lu_fid		ofo_pfid;
+	struct filter_fid	ofo_ff;
 	unsigned int		ofo_pfid_checking:1,
 				ofo_pfid_verified:1;
 };
@@ -319,7 +319,7 @@ struct ofd_thread_info {
 	unsigned long			 fti_used;
 	struct ost_lvb			 fti_lvb;
 	union {
-		struct lfsck_request	 fti_lr;
+		struct lfsck_req_local	 fti_lrl;
 		struct obd_connect_data	 fti_ocd;
 	};
 };

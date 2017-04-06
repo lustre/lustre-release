@@ -36,7 +36,6 @@
 
 #include <libcfs/libcfs.h>
 #include <lustre/lustre_fid.h>
-#include <lustre/lustre_idl.h>
 
 static inline __u64 lmm_oi_id(const struct ost_id *oi)
 {

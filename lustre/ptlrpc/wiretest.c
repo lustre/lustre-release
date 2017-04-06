@@ -5040,8 +5040,6 @@ void lustre_assert_wire_constants(void)
 		 (long long)LE_STOP);
 	LASSERTF(LE_QUERY == 7, "found %lld\n",
 		 (long long)LE_QUERY);
-	LASSERTF(LE_FID_ACCESSED == 8, "found %lld\n",
-		 (long long)LE_FID_ACCESSED);
 	LASSERTF(LE_PEER_EXIT == 9, "found %lld\n",
 		 (long long)LE_PEER_EXIT);
 	LASSERTF(LE_CONDITIONAL_DESTROY == 10, "found %lld\n",

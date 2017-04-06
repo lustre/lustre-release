@@ -872,6 +872,10 @@ ofd_lfsck_verify_pfid_seq_write(struct file *file, const char __user *buffer,
 		return rc;
 
 	ofd->ofd_lfsck_verify_pfid = !!val;
+	if (!ofd->ofd_lfsck_verify_pfid) {
+		ofd->ofd_inconsistency_self_detected = 0;
+		ofd->ofd_inconsistency_self_repaired = 0;
+	}
 
 	return count;
 }

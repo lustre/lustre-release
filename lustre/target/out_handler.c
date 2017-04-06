@@ -1082,12 +1082,13 @@ int out_handle(struct tgt_session_info *tsi)
 				GOTO(out, rc = PTR_ERR(dt_obj));
 
 			if (dt->dd_record_fid_accessed) {
-				lfsck_pack_rfa(&tti->tti_lr,
+				struct lfsck_req_local *lrl = &tti->tti_lrl;
+
+				lfsck_pack_rfa(lrl,
 					       lu_object_fid(&dt_obj->do_lu),
-					       LE_FID_ACCESSED,
+					       LEL_FID_ACCESSED,
 					       LFSCK_TYPE_LAYOUT);
-				tgt_lfsck_in_notify(env, dt, &tti->tti_lr,
-						    NULL);
+				tgt_lfsck_in_notify_local(env, dt, lrl, NULL);
 			}
 
 			tti->tti_u.update.tti_dt_object = dt_obj;

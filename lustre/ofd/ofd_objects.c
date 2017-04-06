@@ -121,7 +121,7 @@ struct ofd_object *ofd_object_find(const struct lu_env *env,
  * Get FID of parent MDT object.
  *
  * This function reads extended attribute XATTR_NAME_FID of OFD object which
- * contains the MDT parent object FID and saves it in ofd_object::ofo_pfid.
+ * contains the MDT parent object FID and saves it in ofd_object::ofo_ff.
  *
  * The filter_fid::ff_parent::f_ver field currently holds
  * the OST-object index in the parent MDT-object's layout EA,
@@ -137,13 +137,12 @@ struct ofd_object *ofd_object_find(const struct lu_env *env,
  */
 int ofd_object_ff_load(const struct lu_env *env, struct ofd_object *fo)
 {
-	struct ofd_thread_info	*info = ofd_info(env);
-	struct filter_fid_old	*ff   = &info->fti_mds_fid_old;
-	struct lu_buf		*buf  = &info->fti_buf;
-	struct lu_fid		*pfid = &fo->ofo_pfid;
-	int			 rc   = 0;
+	struct ofd_thread_info *info = ofd_info(env);
+	struct filter_fid *ff = &fo->ofo_ff;
+	struct lu_buf *buf = &info->fti_buf;
+	int rc = 0;
 
-	if (fid_is_sane(pfid))
+	if (fid_is_sane(&ff->ff_parent))
 		return 0;
 
 	buf->lb_buf = ff;
@@ -152,15 +151,13 @@ int ofd_object_ff_load(const struct lu_env *env, struct ofd_object *fo)
 	if (rc < 0)
 		return rc;
 
-	if (rc < sizeof(struct lu_fid)) {
-		fid_zero(pfid);
+	if (unlikely(rc < sizeof(struct lu_fid))) {
+		fid_zero(&ff->ff_parent);
 
 		return -ENODATA;
 	}
 
-	pfid->f_seq = le64_to_cpu(ff->ff_parent.f_seq);
-	pfid->f_oid = le32_to_cpu(ff->ff_parent.f_oid);
-	pfid->f_stripe_idx = le32_to_cpu(ff->ff_parent.f_stripe_idx);
+	filter_fid_le_to_cpu(ff, ff, rc);
 
 	return 0;
 }
@@ -339,12 +336,11 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 
 		/* Only the new created objects need to be recorded. */
 		if (ofd->ofd_osd->dd_record_fid_accessed) {
-			struct lfsck_request *lr = &ofd_info(env)->fti_lr;
+			struct lfsck_req_local *lrl = &ofd_info(env)->fti_lrl;
 
-			lfsck_pack_rfa(lr, lu_object_fid(&fo->ofo_obj.do_lu),
-				       LE_FID_ACCESSED,
-				       LFSCK_TYPE_LAYOUT);
-			lfsck_in_notify(env, ofd->ofd_osd, lr, NULL);
+			lfsck_pack_rfa(lrl, lu_object_fid(&fo->ofo_obj.do_lu),
+				       LEL_FID_ACCESSED, LFSCK_TYPE_LAYOUT);
+			lfsck_in_notify_local(env, ofd->ofd_osd, lrl, NULL);
 		}
 
 		if (likely(!ofd_object_exists(fo) &&
@@ -552,16 +548,8 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 	if (ff_needed) {
 		rc = dt_xattr_set(env, ofd_object_child(fo), &info->fti_buf,
 				  XATTR_NAME_FID, 0, th);
-		if (rc == 0) {
-			fo->ofo_pfid.f_seq = le64_to_cpu(ff->ff_parent.f_seq);
-			fo->ofo_pfid.f_oid = le32_to_cpu(ff->ff_parent.f_oid);
-			/* Currently, the filter_fid::ff_parent::f_ver is not
-			 * the real parent MDT-object's FID::f_ver, instead it
-			 * is the OST-object index in its parent MDT-object's
-			 * layout EA. */
-			fo->ofo_pfid.f_stripe_idx =
-					le32_to_cpu(ff->ff_parent.f_stripe_idx);
-		}
+		if (!rc)
+			filter_fid_le_to_cpu(&fo->ofo_ff, ff, sizeof(*ff));
 	}
 
 	GOTO(stop, rc);
@@ -686,16 +674,8 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 	if (ff_needed) {
 		rc = dt_xattr_set(env, ofd_object_child(fo), &info->fti_buf,
 				  XATTR_NAME_FID, 0, th);
-		if (rc == 0) {
-			fo->ofo_pfid.f_seq = le64_to_cpu(ff->ff_parent.f_seq);
-			fo->ofo_pfid.f_oid = le32_to_cpu(ff->ff_parent.f_oid);
-			/* Currently, the filter_fid::ff_parent::f_ver is not
-			 * the real parent MDT-object's FID::f_ver, instead it
-			 * is the OST-object index in its parent MDT-object's
-			 * layout EA. */
-			fo->ofo_pfid.f_stripe_idx =
-					le32_to_cpu(ff->ff_parent.f_stripe_idx);
-		}
+		if (!rc)
+			filter_fid_le_to_cpu(&fo->ofo_ff, ff, sizeof(*ff));
 	}
 
 	GOTO(stop, rc);

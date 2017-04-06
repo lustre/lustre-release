@@ -432,10 +432,14 @@ struct lfsck_operations {
 	void (*lfsck_quit)(const struct lu_env *env,
 			   struct lfsck_component *com);
 
+	int (*lfsck_in_notify_local)(const struct lu_env *env,
+				     struct lfsck_component *com,
+				     struct lfsck_req_local *lrl,
+				     struct thandle *th);
+
 	int (*lfsck_in_notify)(const struct lu_env *env,
 			       struct lfsck_component *com,
-			       struct lfsck_request *lr,
-			       struct thandle *th);
+			       struct lfsck_request *lr);
 
 	int (*lfsck_query)(const struct lu_env *env,
 			   struct lfsck_component *com,

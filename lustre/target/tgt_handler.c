@@ -1433,15 +1433,27 @@ TGT_SEC_HDL_VAR(0,	SEC_CTX_FINI,		tgt_sec_ctx_handle),
 };
 EXPORT_SYMBOL(tgt_sec_ctx_handlers);
 
+int (*tgt_lfsck_in_notify_local)(const struct lu_env *env,
+				 struct dt_device *key,
+				 struct lfsck_req_local *lrl,
+				 struct thandle *th) = NULL;
+
+void tgt_register_lfsck_in_notify_local(int (*notify)(const struct lu_env *,
+						      struct dt_device *,
+						      struct lfsck_req_local *,
+						      struct thandle *))
+{
+	tgt_lfsck_in_notify_local = notify;
+}
+EXPORT_SYMBOL(tgt_register_lfsck_in_notify_local);
+
 int (*tgt_lfsck_in_notify)(const struct lu_env *env,
 			   struct dt_device *key,
-			   struct lfsck_request *lr,
-			   struct thandle *th) = NULL;
+			   struct lfsck_request *lr) = NULL;
 
 void tgt_register_lfsck_in_notify(int (*notify)(const struct lu_env *,
 						struct dt_device *,
-						struct lfsck_request *,
-						struct thandle *))
+						struct lfsck_request *))
 {
 	tgt_lfsck_in_notify = notify;
 }
@@ -1476,7 +1488,7 @@ static int tgt_handle_lfsck_notify(struct tgt_session_info *tsi)
 	if (lr == NULL)
 		RETURN(-EPROTO);
 
-	rc = tgt_lfsck_in_notify(env, key, lr, NULL);
+	rc = tgt_lfsck_in_notify(env, key, lr);
 
 	RETURN(rc);
 }
