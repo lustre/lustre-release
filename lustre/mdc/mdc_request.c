@@ -384,32 +384,17 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 			GOTO(out, rc = -EPROTO);
 
 		if (body->mbo_valid & OBD_MD_FLEASIZE) {
-			void *eadata, *lmm;
+			void *eadata;
 
 			eadata = req_capsule_server_sized_get(pill, &RMF_MDT_MD,
 							body->mbo_eadatasize);
 			if (eadata == NULL)
 				GOTO(out, rc = -EPROTO);
 
-			if (req_capsule_get_size(pill, &RMF_EADATA,
-						 RCL_CLIENT) <
-					body->mbo_eadatasize) {
-				rc = sptlrpc_cli_enlarge_reqbuf(req, 4,
-							body->mbo_eadatasize);
-				if (rc)
-					GOTO(out, rc = -ENOMEM);
-			} else {
-				req_capsule_shrink(pill, &RMF_EADATA,
-						   body->mbo_eadatasize,
-						   RCL_CLIENT);
-			}
-
-			req_capsule_set_size(pill, &RMF_EADATA, RCL_CLIENT,
-					     body->mbo_eadatasize);
-
-			lmm = req_capsule_client_get(pill, &RMF_EADATA);
-			if (lmm)
-				memcpy(lmm, eadata, body->mbo_eadatasize);
+			rc = mdc_save_lovea(req, &RMF_EADATA, eadata,
+					    body->mbo_eadatasize);
+			if (rc)
+				GOTO(out, rc);
 		}
 	}
 out:

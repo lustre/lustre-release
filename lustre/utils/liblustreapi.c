@@ -2105,6 +2105,7 @@ enum lov_dump_flags {
 	LDF_IS_DIR	= 0x0001,
 	LDF_IS_RAW	= 0x0002,
 	LDF_INDENT	= 0x0004,
+	LDF_SKIP_OBJS	= 0x0008,
 };
 
 static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
@@ -2115,6 +2116,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 	bool is_dir = flags & LDF_IS_DIR;
 	bool is_raw = flags & LDF_IS_RAW;
 	bool indent = flags & LDF_INDENT;
+	bool skip_objs = flags & LDF_SKIP_OBJS;
 	char *prefix = is_dir ? "" : "lmm_";
 	char *separator = "";
 	char *space = indent ? "      " : "";
@@ -2245,7 +2247,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		if (verbose & ~VERBOSE_OFFSET)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%sstripe_offset: ",
 				     space, prefix);
-		if (is_dir)
+		if (is_dir || skip_objs)
 			llapi_printf(LLAPI_MSG_NORMAL, "%d",
 				     lum->lmm_stripe_offset ==
 				     (typeof(lum->lmm_stripe_offset))(-1) ? -1 :
@@ -2276,6 +2278,7 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 {
 	bool is_dir = flags & LDF_IS_DIR;
 	bool indent = flags & LDF_INDENT;
+	bool skip_objs = flags & LDF_SKIP_OBJS;
 	int i, obdstripe = (obdindex != OBD_NOT_FOUND) ? 0 : 1;
 
 	if (!obdstripe) {
@@ -2293,7 +2296,7 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 	lov_dump_user_lmm_header(lum, path, objects, header, depth, pool_name,
 				 flags);
 
-	if (!is_dir && (header & VERBOSE_OBJID) &&
+	if (!is_dir && !skip_objs && (header & VERBOSE_OBJID) &&
 	    !(lum->lmm_pattern & LOV_PATTERN_F_RELEASED)) {
 		char *space = "      - ";
 
@@ -2719,6 +2722,11 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 		if (param->fp_check_comp_flags &&
 		    !(param->fp_comp_flags & entry->lcme_flags))
 			continue;
+
+		if (entry->lcme_flags & LCME_FL_INIT)
+			flags &= ~LDF_SKIP_OBJS;
+		else
+			flags |= LDF_SKIP_OBJS;
 
 		if (param->fp_check_comp_id &&
 		    param->fp_comp_id != entry->lcme_id)

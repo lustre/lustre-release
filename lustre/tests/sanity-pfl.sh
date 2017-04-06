@@ -47,6 +47,9 @@ test_0() {
 	$LFS setstripe -E 1m -S 1M -c 1 -E -1 -c 1 $comp_file ||
 		error "Create $comp_file failed"
 
+	#instantiate all components, so that objs are allocted
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=1k
+
 	local ost_idx1=$($LFS getstripe -I 1 -i $comp_file)
 	local ost_idx2=$($LFS getstripe -I 2 -i $comp_file)
 
@@ -66,6 +69,9 @@ test_1() {
 
 	$LFS setstripe -E 1m -S 1m -o 0 -E -1 -o 0 $comp_file ||
 		error "Create $comp_file failed"
+
+	#instantiate all components, so that objs are allocted
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=1k
 
 	local ost_idx1=$($LFS getstripe -I 1 -i $comp_file)
 	local ost_idx2=$($LFS getstripe -I 2 -i $comp_file)
@@ -97,8 +103,8 @@ test_2() {
 
 	dd if=/dev/zero of=$comp_file bs=1M count=2 > /dev/null 2>&1 &&
 		error "Write beyond component should fail"
-	dd if=$comp_file of=/dev/null bs=1M count=2 > /dev/null 2>&1 &&
-		error "Read beyond component should fail"
+	dd if=$comp_file of=/dev/null bs=1M count=2 > /dev/null 2>&1 ||
+		error "Read beyond component should short read, not fail"
 
 	$LFS setstripe --component-add -E 2M -c 1 $comp_file ||
 		error "Add component to $comp_file failed"
@@ -166,6 +172,9 @@ test_3() {
 	$LFS setstripe -E 1M -E 16M -E -1 $comp_file ||
 		error "Create second $comp_file failed"
 
+	#instantiate all components, so that objs are allocted
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=16k
+
 	del_comp_and_verify $comp_file "init" 0 0
 	rm -f $comp_file || error "Delete second $comp_file failed"
 }
@@ -194,6 +203,9 @@ test_5() {
 	touch $comp_file || error "Create $comp_file failed"
 	local comp_cnt=$($LFS getstripe --component-count $comp_file)
 	[ $comp_cnt -ne 2 ] && error "file $comp_cnt != 2"
+
+	#instantiate all components, so that objs are allocted
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=64k
 
 	local ost_idx=$($LFS getstripe -I 1 -i $comp_file)
 	[ $ost_idx -ne 0 ] &&

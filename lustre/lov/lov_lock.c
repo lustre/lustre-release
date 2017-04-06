@@ -134,7 +134,7 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 
 	nr = 0;
 	for (index = lov_lsm_entry(lov->lo_lsm, ext.e_start);
-	     index != -1 && index < lov->lo_lsm->lsm_entry_count; index++) {
+	     index >= 0 && index < lov->lo_lsm->lsm_entry_count; index++) {
 		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
 
 		/* assume lsm entries are sorted. */
@@ -149,8 +149,11 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 				nr++;
 		}
 	}
-	if (nr == 0)
-		RETURN(ERR_PTR(-EINVAL));
+	/**
+	 * Aggressive lock request (from cl_setattr_ost) which asks for
+	 * [eof, -1) lock, could come across uninstantiated layout extent,
+	 * hence a 0 nr is possible.
+	 */
 
 	OBD_ALLOC_LARGE(lovlck, offsetof(struct lov_lock, lls_sub[nr]));
 	if (lovlck == NULL)
@@ -159,7 +162,7 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 	lovlck->lls_nr = nr;
 	nr = 0;
 	for (index = lov_lsm_entry(lov->lo_lsm, ext.e_start);
-	     index < lov->lo_lsm->lsm_entry_count; index++) {
+	     index >= 0 && index < lov->lo_lsm->lsm_entry_count; index++) {
 		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
 
 		/* assume lsm entries are sorted. */

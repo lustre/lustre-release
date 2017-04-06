@@ -404,6 +404,11 @@ static int lov_io_iter_init(const struct lu_env *env,
 		u64 end;
 		int stripe;
 
+		CDEBUG(D_VFSTRACE, "component[%d] flags %#x\n",
+		       index, lsm->lsm_entries[index]->lsme_flags);
+		if (!lsm_entry_inited(lsm, index))
+			break;
+
 		index++;
 		if (!lu_extent_is_overlapped(&ext, &le->lle_extent))
 			continue;
@@ -453,6 +458,7 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 {
 	struct lov_io        *lio = cl2lov_io(env, ios);
 	struct cl_io         *io  = ios->cis_io;
+	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
 	struct lov_stripe_md_entry *lse;
 	loff_t start = io->u.ci_rw.crw_pos;
 	loff_t next;
@@ -465,7 +471,7 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 	if (cl_io_is_append(io))
 		RETURN(lov_io_iter_init(env, ios));
 
-	index = lov_lsm_entry(lio->lis_object->lo_lsm, io->u.ci_rw.crw_pos);
+	index = lov_lsm_entry(lsm, io->u.ci_rw.crw_pos);
 	if (index < 0) { /* non-existing layout component */
 		if (io->ci_type == CIT_READ) {
 			/* TODO: it needs to detect the next component and
@@ -486,7 +492,9 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 	if (next <= start * ssize)
 		next = ~0ull;
 
-	LASSERT(io->u.ci_rw.crw_pos >= lse->lsme_extent.e_start);
+	LASSERTF(io->u.ci_rw.crw_pos >= lse->lsme_extent.e_start,
+		 "pos %lld, [%lld, %lld)\n", io->u.ci_rw.crw_pos,
+		 lse->lsme_extent.e_start, lse->lsme_extent.e_end);
 	next = min_t(__u64, next, lse->lsme_extent.e_end);
 	next = min_t(loff_t, next, lio->lis_io_endpos);
 
@@ -499,10 +507,36 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 	       (__u64)start, lio->lis_pos, lio->lis_endpos,
 	       (__u64)lio->lis_io_endpos, io->u.ci_rw.crw_count);
 
+	index = lov_lsm_entry(lsm, lio->lis_endpos - 1);
+	if (index > 0 && !lsm_entry_inited(lsm, index)) {
+		io->ci_need_write_intent = 1;
+		RETURN(io->ci_result = -ENODATA);
+	}
+
 	/*
 	 * XXX The following call should be optimized: we know, that
 	 * [lio->lis_pos, lio->lis_endpos) intersects with exactly one stripe.
 	 */
+	RETURN(lov_io_iter_init(env, ios));
+}
+
+static int lov_io_setattr_iter_init(const struct lu_env *env,
+				    const struct cl_io_slice *ios)
+{
+	struct lov_io *lio = cl2lov_io(env, ios);
+	struct cl_io *io = ios->cis_io;
+	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
+	int index;
+	ENTRY;
+
+	if (cl_io_is_trunc(io) && lio->lis_pos) {
+		index = lov_lsm_entry(lsm, lio->lis_pos - 1);
+		if (index > 0 && !lsm_entry_inited(lsm, index)) {
+			io->ci_need_write_intent = 1;
+			RETURN(io->ci_result = -ENODATA);
+		}
+	}
+
 	RETURN(lov_io_iter_init(env, ios));
 }
 
@@ -638,7 +672,7 @@ static int lov_io_read_ahead(const struct lu_env *env,
 
 	offset = cl_offset(obj, start);
 	index = lov_lsm_entry(loo->lo_lsm, offset);
-	if (index < 0)
+	if (index < 0 || !lsm_entry_inited(loo->lo_lsm, index))
 		RETURN(-ENODATA);
 
 	stripe = lov_stripe_number(loo->lo_lsm, index, offset);
@@ -893,15 +927,15 @@ static const struct cl_io_operations lov_io_ops = {
                         .cio_start     = lov_io_start,
                         .cio_end       = lov_io_end
                 },
-                [CIT_SETATTR] = {
-                        .cio_fini      = lov_io_fini,
-                        .cio_iter_init = lov_io_iter_init,
-                        .cio_iter_fini = lov_io_iter_fini,
-                        .cio_lock      = lov_io_lock,
-                        .cio_unlock    = lov_io_unlock,
-                        .cio_start     = lov_io_start,
-                        .cio_end       = lov_io_end
-                },
+		[CIT_SETATTR] = {
+			.cio_fini      = lov_io_fini,
+			.cio_iter_init = lov_io_setattr_iter_init,
+			.cio_iter_fini = lov_io_iter_fini,
+			.cio_lock      = lov_io_lock,
+			.cio_unlock    = lov_io_unlock,
+			.cio_start     = lov_io_start,
+			.cio_end       = lov_io_end
+		},
 		[CIT_DATA_VERSION] = {
 			.cio_fini	= lov_io_fini,
 			.cio_iter_init	= lov_io_iter_init,

@@ -1829,6 +1829,11 @@ struct cl_io {
 	 */
 			     ci_ignore_layout:1,
 	/**
+	 * Need MDS intervention to complete a write. This usually means the
+	 * corresponding component is not initialized for the writing extent.
+	 */
+			     ci_need_write_intent:1,
+	/**
 	 * Check if layout changed after the IO finishes. Mainly for HSM
 	 * requirement. If IO occurs to openning files, it doesn't need to
 	 * verify layout because HSM won't release openning files.

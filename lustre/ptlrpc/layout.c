@@ -1929,17 +1929,17 @@ EXPORT_SYMBOL(req_capsule_server_pack);
  * Returns the PTLRPC request or reply (\a loc) buffer offset of a \a pill
  * corresponding to the given RMF (\a field).
  */
-static __u32 __req_capsule_offset(const struct req_capsule *pill,
-				  const struct req_msg_field *field,
-				  enum req_location loc)
+__u32 __req_capsule_offset(const struct req_capsule *pill,
+			   const struct req_msg_field *field,
+			   enum req_location loc)
 {
 	unsigned int offset;
 
-        offset = field->rmf_offset[pill->rc_fmt->rf_idx][loc];
-        LASSERTF(offset > 0, "%s:%s, off=%d, loc=%d\n",
-                            pill->rc_fmt->rf_name,
-                            field->rmf_name, offset, loc);
-        offset --;
+	offset = field->rmf_offset[pill->rc_fmt->rf_idx][loc];
+	LASSERTF(offset > 0, "%s:%s, off=%d, loc=%d\n",
+			     pill->rc_fmt->rf_name,
+			     field->rmf_name, offset, loc);
+	offset--;
 
 	LASSERT(offset < REQ_MAX_FIELD_NR);
         return offset;

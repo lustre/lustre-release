@@ -3119,22 +3119,22 @@ struct getparent {
 } __attribute__((packed));
 
 enum {
-        LAYOUT_INTENT_ACCESS    = 0,
-        LAYOUT_INTENT_READ      = 1,
-        LAYOUT_INTENT_WRITE     = 2,
-        LAYOUT_INTENT_GLIMPSE   = 3,
-        LAYOUT_INTENT_TRUNC     = 4,
-        LAYOUT_INTENT_RELEASE   = 5,
-        LAYOUT_INTENT_RESTORE   = 6
+	LAYOUT_INTENT_ACCESS	= 0,	/** generic access */
+	LAYOUT_INTENT_READ	= 1,	/** not used */
+	LAYOUT_INTENT_WRITE	= 2,	/** write file, for comp layout */
+	LAYOUT_INTENT_GLIMPSE	= 3,	/** not used */
+	LAYOUT_INTENT_TRUNC	= 4,	/** truncate file, for comp layout */
+	LAYOUT_INTENT_RELEASE	= 5,	/** reserved for HSM release */
+	LAYOUT_INTENT_RESTORE	= 6,	/** reserved for HSM restore */
 };
 
 /* enqueue layout lock with intent */
 struct layout_intent {
-	__u32 li_opc; /* intent operation for enqueue, read, write etc */
+	__u32 li_opc;	/* intent operation for enqueue, read, write etc */
 	__u32 li_flags;
 	__u64 li_start;
 	__u64 li_end;
-};
+} __attribute__((packed));
 
 /**
  * On the wire version of hsm_progress structure.

@@ -1657,11 +1657,14 @@ EXPORT_SYMBOL(_sptlrpc_enlarge_msg_inplace);
  * so caller should refresh its local pointers if needed.
  */
 int sptlrpc_cli_enlarge_reqbuf(struct ptlrpc_request *req,
-                               int segment, int newsize)
+			       const struct req_msg_field *field,
+			       int newsize)
 {
-        struct ptlrpc_cli_ctx    *ctx = req->rq_cli_ctx;
-        struct ptlrpc_sec_cops   *cops;
-        struct lustre_msg        *msg = req->rq_reqmsg;
+	struct req_capsule *pill = &req->rq_pill;
+	struct ptlrpc_cli_ctx *ctx = req->rq_cli_ctx;
+	struct ptlrpc_sec_cops *cops;
+	struct lustre_msg *msg = req->rq_reqmsg;
+	int segment = __req_capsule_offset(pill, field, RCL_CLIENT);
 
         LASSERT(ctx);
         LASSERT(msg);

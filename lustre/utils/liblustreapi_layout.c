@@ -799,8 +799,13 @@ static bool llapi_layout_lum_valid(struct lov_user_md *lum, int lum_size)
 		}
 		obj_count = llapi_layout_objects_in_lum(lum, lum_size);
 
-		if (obj_count != lum->lmm_stripe_count)
+		if (comp_v1) {
+			if (!(comp_v1->lcm_entries[i].lcme_flags &
+				 LCME_FL_INIT) && obj_count != 0)
+				return false;
+		} else if (obj_count != lum->lmm_stripe_count) {
 			return false;
+		}
 	}
 	return true;
 }
@@ -1710,7 +1715,6 @@ int llapi_layout_comp_add(struct llapi_layout *layout)
 			  llc_list);
 
 	/* Inherit some attributes from existing component */
-	new->llc_pattern = comp->llc_pattern;
 	new->llc_stripe_size = comp->llc_stripe_size;
 	new->llc_stripe_count = comp->llc_stripe_count;
 	if (new->llc_extent.e_end <= last->llc_extent.e_end) {

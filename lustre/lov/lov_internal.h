@@ -45,6 +45,7 @@ struct lov_stripe_md_entry {
 	struct lu_extent	lsme_extent;
 	u32			lsme_id;
 	u32			lsme_magic;
+	u32			lsme_flags;
 	u32			lsme_pattern;
 	u32			lsme_stripe_size;
 	u16			lsme_stripe_count;
@@ -52,6 +53,16 @@ struct lov_stripe_md_entry {
 	char			lsme_pool_name[LOV_MAXPOOLNAME + 1];
 	struct lov_oinfo       *lsme_oinfo[];
 };
+
+static inline void copy_lsm_entry(struct lov_stripe_md_entry *dst,
+				  struct lov_stripe_md_entry *src)
+{
+	unsigned i;
+
+	for (i = 0; i < src->lsme_stripe_count; i++)
+		*dst->lsme_oinfo[i] = *src->lsme_oinfo[i];
+	memcpy(dst, src, offsetof(typeof(*src), lsme_oinfo));
+}
 
 struct lov_stripe_md {
 	atomic_t	lsm_refc;
@@ -327,5 +338,15 @@ static inline void lov_lsm2layout(struct lov_stripe_md *lsm,
 		ol->ol_comp_end = 0;
 		ol->ol_comp_id = 0;
 	}
+}
+
+static inline bool lsme_inited(const struct lov_stripe_md_entry *lsme)
+{
+	return lsme->lsme_flags & LCME_FL_INIT;
+}
+
+static inline bool lsm_entry_inited(const struct lov_stripe_md *lsm, int index)
+{
+	return lsme_inited(lsm->lsm_entries[index]);
 }
 #endif

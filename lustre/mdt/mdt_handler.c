@@ -1227,6 +1227,24 @@ out:
 }
 
 /**
+ * Handler of layout intent RPC requiring the layout modification
+ *
+ * \param info [in]	thread environment
+ * \param obj [in]	object
+ * \param layout [in]	layout intent
+ *
+ * \retval 0	on success
+ * \retval < 0	error code
+ */
+static int mdt_layout_change(struct mdt_thread_info *info,
+			     struct mdt_object *obj,
+			     struct layout_intent *layout)
+{
+	/* XXX: to do */
+	return 0;
+}
+
+/**
  * Exchange MOF_LOV_CREATED flags between two objects after a
  * layout swap. No assumption is made on whether o1 or o2 have
  * created objects or not.
@@ -3437,6 +3455,7 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	struct layout_intent *layout;
 	struct lu_fid *fid;
 	struct mdt_object *obj = NULL;
+	bool layout_change = false;
 	int layout_size = 0;
 	int rc = 0;
 	ENTRY;
@@ -3451,11 +3470,29 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	if (layout == NULL)
 		RETURN(-EPROTO);
 
-	if (layout->li_opc != LAYOUT_INTENT_ACCESS) {
+	switch (layout->li_opc) {
+	case LAYOUT_INTENT_TRUNC:
+	case LAYOUT_INTENT_WRITE:
+		layout_change = true;
+		break;
+	case LAYOUT_INTENT_ACCESS:
+		break;
+	case LAYOUT_INTENT_READ:
+	case LAYOUT_INTENT_GLIMPSE:
+	case LAYOUT_INTENT_RELEASE:
+	case LAYOUT_INTENT_RESTORE:
 		CERROR("%s: Unsupported layout intent opc %d\n",
 		       mdt_obd_name(info->mti_mdt), layout->li_opc);
-		RETURN(-EINVAL);
+		rc = -ENOTSUPP;
+		break;
+	default:
+		CERROR("%s: Unknown layout intent opc %d\n",
+		       mdt_obd_name(info->mti_mdt), layout->li_opc);
+		rc = -EINVAL;
+		break;
 	}
+	if (rc < 0)
+		RETURN(rc);
 
 	fid = &info->mti_tmp_fid2;
 	fid_extract_from_res_name(fid, &(*lockp)->l_resource->lr_name);
@@ -3480,8 +3517,14 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	req_capsule_set_size(info->mti_pill, &RMF_DLM_LVB, RCL_SERVER,
 			     layout_size);
 	rc = req_capsule_server_pack(info->mti_pill);
-	GOTO(out_obj, rc);
+	if (rc)
+		GOTO(out_obj, rc);
 
+	if (layout_change) {
+		rc = mdt_layout_change(info, obj, layout);
+		if (rc)
+			GOTO(out_obj, rc);
+	}
 out_obj:
 	mdt_object_put(info->mti_env, obj);
 
