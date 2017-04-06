@@ -794,10 +794,11 @@ static int lod_gen_component_ea(const struct lu_env *env,
 		LASSERT(object != NULL);
 		info->lti_fid = *lu_object_fid(&object->do_lu);
 
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MULTIPLE_REF)) {
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MULTIPLE_REF) &&
+		    comp_idx == 0) {
 			if (cfs_fail_val == 0)
 				cfs_fail_val = info->lti_fid.f_oid;
-			else
+			else if (i == 0)
 				info->lti_fid.f_oid = cfs_fail_val;
 		}
 

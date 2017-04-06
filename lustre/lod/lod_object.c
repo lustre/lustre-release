@@ -1184,23 +1184,29 @@ static int lod_declare_attr_set(const struct lu_env *env,
 				lod_obj_stripe_attr_set_cb, &data);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_STRIPE) &&
-	    dt_object_exists(next) != 0 &&
-	    dt_object_remote(next) == 0)
-		lod_sub_object_declare_xattr_del(env, next,
-						XATTR_NAME_LOV, th);
+	if (rc)
+		RETURN(rc);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CHANGE_STRIPE) &&
-	    dt_object_exists(next) &&
-	    dt_object_remote(next) == 0 && S_ISREG(attr->la_mode)) {
+	if (!dt_object_exists(next) || dt_object_remote(next) ||
+	    !S_ISREG(attr->la_mode))
+		RETURN(0);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_STRIPE)) {
+		rc = lod_sub_object_declare_xattr_del(env, next,
+						      XATTR_NAME_LOV, th);
+		RETURN(rc);
+	}
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CHANGE_STRIPE) ||
+	    OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PFL_RANGE)) {
 		struct lod_thread_info *info = lod_env_info(env);
 		struct lu_buf *buf = &info->lti_buf;
 
 		buf->lb_buf = info->lti_ea_store;
 		buf->lb_len = info->lti_ea_store_size;
-		lod_sub_object_declare_xattr_set(env, next, buf,
-						 XATTR_NAME_LOV,
-						 LU_XATTR_REPLACE, th);
+		rc = lod_sub_object_declare_xattr_set(env, next, buf,
+						      XATTR_NAME_LOV,
+						      LU_XATTR_REPLACE, th);
 	}
 
 	RETURN(rc);
@@ -1273,14 +1279,19 @@ static int lod_attr_set(const struct lu_env *env,
 				lod_obj_stripe_attr_set_cb, &data);
 	}
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_STRIPE) &&
-	    dt_object_exists(next) != 0 &&
-	    dt_object_remote(next) == 0)
-		rc = lod_sub_object_xattr_del(env, next, XATTR_NAME_LOV, th);
+	if (rc)
+		RETURN(rc);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CHANGE_STRIPE) &&
-	    dt_object_exists(next) &&
-	    dt_object_remote(next) == 0 && S_ISREG(attr->la_mode)) {
+	if (!dt_object_exists(next) || dt_object_remote(next) ||
+	    !S_ISREG(attr->la_mode))
+		RETURN(0);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_STRIPE)) {
+		rc = lod_sub_object_xattr_del(env, next, XATTR_NAME_LOV, th);
+		RETURN(rc);
+	}
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_CHANGE_STRIPE)) {
 		struct lod_thread_info *info = lod_env_info(env);
 		struct lu_buf *buf = &info->lti_buf;
 		struct ost_id *oi = &info->lti_ostid;
@@ -1288,16 +1299,24 @@ static int lod_attr_set(const struct lu_env *env,
 		struct lov_mds_md_v1 *lmm;
 		struct lov_ost_data_v1 *objs;
 		__u32 magic;
-		int rc1;
 
-		rc1 = lod_get_lov_ea(env, lo);
-		if (rc1  <= 0)
+		rc = lod_get_lov_ea(env, lo);
+		if (rc <= 0)
 			RETURN(rc);
 
 		buf->lb_buf = info->lti_ea_store;
 		buf->lb_len = info->lti_ea_store_size;
 		lmm = info->lti_ea_store;
 		magic = le32_to_cpu(lmm->lmm_magic);
+		if (magic == LOV_MAGIC_COMP_V1) {
+			struct lov_comp_md_v1 *lcm = buf->lb_buf;
+			struct lov_comp_md_entry_v1 *lcme =
+						&lcm->lcm_entries[0];
+
+			lmm = buf->lb_buf + le32_to_cpu(lcme->lcme_offset);
+			magic = le32_to_cpu(lmm->lmm_magic);
+		}
+
 		if (magic == LOV_MAGIC_V1)
 			objs = &(lmm->lmm_objects[0]);
 		else
@@ -1307,6 +1326,29 @@ static int lod_attr_set(const struct lu_env *env,
 		fid->f_oid--;
 		fid_to_ostid(fid, oi);
 		ostid_cpu_to_le(oi, &objs->l_ost_oi);
+
+		rc = lod_sub_object_xattr_set(env, next, buf, XATTR_NAME_LOV,
+					      LU_XATTR_REPLACE, th);
+	} else if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_PFL_RANGE)) {
+		struct lod_thread_info *info = lod_env_info(env);
+		struct lu_buf *buf = &info->lti_buf;
+		struct lov_comp_md_v1 *lcm;
+		struct lov_comp_md_entry_v1 *lcme;
+
+		rc = lod_get_lov_ea(env, lo);
+		if (rc <= 0)
+			RETURN(rc);
+
+		buf->lb_buf = info->lti_ea_store;
+		buf->lb_len = info->lti_ea_store_size;
+		lcm = buf->lb_buf;
+		if (le32_to_cpu(lcm->lcm_magic) != LOV_MAGIC_COMP_V1)
+			RETURN(-EINVAL);
+
+		le32_add_cpu(&lcm->lcm_layout_gen, 1);
+		lcme = &lcm->lcm_entries[0];
+		le64_add_cpu(&lcme->lcme_extent.e_start, 1);
+		le64_add_cpu(&lcme->lcme_extent.e_end, -1);
 
 		rc = lod_sub_object_xattr_set(env, next, buf, XATTR_NAME_LOV,
 					      LU_XATTR_REPLACE, th);

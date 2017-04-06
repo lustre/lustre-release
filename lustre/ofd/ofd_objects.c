@@ -528,6 +528,11 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 		GOTO(stop, rc);
 
 	if (ff_needed) {
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR1))
+			ff->ff_parent.f_oid = cpu_to_le32(1UL << 31);
+		else if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR2))
+			le32_add_cpu(&ff->ff_parent.f_oid, -1);
+
 		info->fti_buf.lb_buf = ff;
 		info->fti_buf.lb_len = sizeof(*ff);
 		rc = dt_declare_xattr_set(env, ofd_object_child(fo),
@@ -546,6 +551,9 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 		GOTO(stop, rc);
 
 	if (ff_needed) {
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NOPFID))
+			GOTO(stop, rc);
+
 		rc = dt_xattr_set(env, ofd_object_child(fo), &info->fti_buf,
 				  XATTR_NAME_FID, 0, th);
 		if (!rc)
@@ -650,6 +658,11 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 		GOTO(stop, rc);
 
 	if (ff_needed) {
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR1))
+			ff->ff_parent.f_oid = cpu_to_le32(1UL << 31);
+		else if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR2))
+			le32_add_cpu(&ff->ff_parent.f_oid, -1);
+
 		info->fti_buf.lb_buf = ff;
 		info->fti_buf.lb_len = sizeof(*ff);
 		rc = dt_declare_xattr_set(env, ofd_object_child(fo),
@@ -672,6 +685,9 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 		GOTO(stop, rc);
 
 	if (ff_needed) {
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NOPFID))
+			GOTO(stop, rc);
+
 		rc = dt_xattr_set(env, ofd_object_child(fo), &info->fti_buf,
 				  XATTR_NAME_FID, 0, th);
 		if (!rc)
