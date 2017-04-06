@@ -368,6 +368,19 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 int lustre_lnet_list_peer(int seq_no,
 			  struct cYAML **show_rc, struct cYAML **err_rc);
 
+/* lustre_lnet_ping_nid
+ *   Ping the nid list, pnids.
+ *
+ *    pnids - NID list to ping.
+ *    timeout - timeout(seconds) for ping.
+ *    seq_no - sequence number of the command.
+ *    show_rc - YAML structure of the resultant show.
+ *    err_rc - YAML strucutre of the resultant return code.
+ *
+ */
+int lustre_lnet_ping_nid(char *pnid, int timeout, int seq_no,
+			struct cYAML **show_rc, struct cYAML **err_rc);
+
 /*
  * lustre_yaml_config
  *   Parses the provided YAML file and then calls the specific APIs
@@ -398,6 +411,18 @@ int lustre_yaml_del(char *f, struct cYAML **err_rc);
  *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
  */
 int lustre_yaml_show(char *f, struct cYAML **show_rc,
+		     struct cYAML **err_rc);
+
+/*
+ * lustre_yaml_exec
+ *   Parses the provided YAML file and then calls the specific APIs
+ *   to execute the entities identified in the file
+ *
+ *   f - YAML file
+ *   show_rc - [OUT] The show output in YAML.  Must be freed by caller.
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
+ */
+int lustre_yaml_exec(char *f, struct cYAML **show_rc,
 		     struct cYAML **err_rc);
 
 /*

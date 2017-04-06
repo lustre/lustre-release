@@ -59,6 +59,7 @@
 #define DEL_CMD			"del"
 #define SHOW_CMD		"show"
 #define DBG_CMD			"dbg"
+#define MANAGE_CMD              "manage"
 
 #define modparam_path "/sys/module/lnet/parameters/"
 
@@ -483,6 +484,188 @@ static int dispatch_peer_ni_cmd(lnet_nid_t pnid, lnet_nid_t nid, __u32 cmd,
 			(cmd_str) ? cmd_str : "add", strerror(errno));
 	}
 
+	return rc;
+}
+
+static int infra_ping_nid(char *ping_nids, char *oper, int param, int ioc_call,
+			  int seq_no, struct cYAML **show_rc,
+			  struct cYAML **err_rc)
+{
+	void *data = NULL;
+	struct lnet_ioctl_ping_data ping;
+	struct cYAML *root = NULL, *ping_node = NULL, *item = NULL,
+		     *first_seq = NULL,	*tmp = NULL, *peer_ni = NULL;
+	lnet_process_id_t id;
+	char err_str[LNET_MAX_STR_LEN] = {0};
+	char *sep, *token, *end;
+	char buf[6];
+	size_t len;
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	int i;
+	bool flag = false;
+
+	len = (sizeof(lnet_process_id_t) * LNET_INTERFACES_MAX_DEFAULT);
+
+	data = calloc(1, len);
+	if (data == NULL)
+		goto out;
+
+	/* create struct cYAML root object */
+	root = cYAML_create_object(NULL, NULL);
+	if (root == NULL)
+		goto out;
+
+	ping_node = cYAML_create_seq(root, oper);
+	if (ping_node == NULL)
+		goto out;
+
+	/* tokenise each nid in string ping_nids */
+	token = strtok(ping_nids, ",");
+
+	do {
+		item = cYAML_create_seq_item(ping_node);
+		if (item == NULL)
+			goto out;
+
+		if (first_seq == NULL)
+			first_seq = item;
+
+		/* check if '-' is a part of NID, token */
+		sep = strchr(token, '-');
+		if (sep == NULL) {
+			id.pid = LNET_PID_ANY;
+			/* if no net is specified, libcfs_str2nid() will assume tcp */
+			id.nid = libcfs_str2nid(token);
+			if (id.nid == LNET_NID_ANY) {
+				snprintf(err_str, sizeof(err_str),
+					 "\"cannot parse NID '%s'\"",
+					 token);
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				cYAML_build_error(rc, seq_no, MANAGE_CMD,
+						  oper, err_str, err_rc);
+				continue;
+			}
+		} else {
+			if (token[0] == 'u' || token[0] == 'U')
+				id.pid = (strtoul(&token[1], &end, 0) |
+					  (LNET_PID_USERFLAG));
+			else
+				id.pid = strtoul(token, &end, 0);
+
+			/* assuming '-' is part of hostname */
+			if (end != sep) {
+				id.pid = LNET_PID_ANY;
+				id.nid = libcfs_str2nid(token);
+				if (id.nid == LNET_NID_ANY) {
+					snprintf(err_str, sizeof(err_str),
+						 "\"cannot parse NID '%s'\"",
+						 token);
+					rc = LUSTRE_CFG_RC_BAD_PARAM;
+					cYAML_build_error(rc, seq_no, MANAGE_CMD,
+							  oper, err_str,
+							  err_rc);
+					continue;
+				}
+			} else {
+				id.nid = libcfs_str2nid(sep + 1);
+				if (id.nid == LNET_NID_ANY) {
+					snprintf(err_str, sizeof(err_str),
+						 "\"cannot parse NID '%s'\"",
+						 token);
+					rc = LUSTRE_CFG_RC_BAD_PARAM;
+					cYAML_build_error(rc, seq_no, MANAGE_CMD,
+							  oper, err_str,
+							  err_rc);
+					continue;
+				}
+			}
+		}
+		LIBCFS_IOC_INIT_V2(ping, ping_hdr);
+		ping.ping_hdr.ioc_len = sizeof(ping);
+		ping.ping_id          = id;
+		ping.op_param         = param;
+		ping.ping_count       = LNET_INTERFACES_MAX_DEFAULT;
+		ping.ping_buf         = data;
+
+		rc = l_ioctl(LNET_DEV_ID, ioc_call, &ping);
+		if (rc != 0) {
+			snprintf(err_str,
+				 sizeof(err_str), "failed to %s %s: %s\n", oper,
+				 id.pid == LNET_PID_ANY ?
+				 libcfs_nid2str(id.nid) :
+				 libcfs_id2str(id), strerror(errno));
+			rc = LUSTRE_CFG_RC_BAD_PARAM;
+			cYAML_build_error(rc, seq_no, MANAGE_CMD,
+					  oper, err_str, err_rc);
+			continue;
+		}
+
+		if (cYAML_create_string(item, "primary nid",
+					libcfs_nid2str(ping.ping_id.nid)) == NULL)
+			goto out;
+
+		if (cYAML_create_string(item, "Multi-Rail", ping.mr_info ? "True" :
+					"False") == NULL)
+			goto out;
+
+		tmp = cYAML_create_seq(item, "peer ni");
+		if (tmp == NULL)
+			goto out;
+
+		for (i = 0; i < ping.ping_count; i++) {
+			if (!strcmp(libcfs_nid2str(ping.ping_buf[i].nid),
+				    "0@lo"))
+				continue;
+			peer_ni = cYAML_create_seq_item(tmp);
+			if (peer_ni == NULL)
+				goto out;
+			memset(buf, 0, sizeof buf);
+			snprintf(buf, sizeof buf, "nid");
+			if (cYAML_create_string(peer_ni, buf,
+						libcfs_nid2str(ping.ping_buf[i].nid)) == NULL)
+				goto out;
+		}
+
+		flag = true;
+
+	} while ((token = strtok(NULL, ",")) != NULL);
+
+	if (flag)
+		rc = LUSTRE_CFG_RC_NO_ERR;
+
+out:
+	if (data)
+		free(data);
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_free_tree(root);
+	} else if (show_rc != NULL && *show_rc != NULL) {
+		struct cYAML *show_node;
+		show_node = cYAML_get_object_item(*show_rc, oper);
+		if (show_node != NULL && cYAML_is_sequence(show_node)) {
+			cYAML_insert_child(show_node, first_seq);
+			free(ping_node);
+			free(root);
+		} else if (show_node == NULL) {
+			cYAML_insert_sibling((*show_rc)->cy_child,
+					     ping_node);
+			free(root);
+		} else {
+			cYAML_free_tree(root);
+		}
+	} else {
+		*show_rc = root;
+	}
+
+	return rc;
+}
+
+int lustre_lnet_ping_nid(char *ping_nids, int timeout, int seq_no,
+			 struct cYAML **show_rc, struct cYAML **err_rc)
+{
+	int rc;
+
+	rc = infra_ping_nid(ping_nids, "ping", timeout, IOC_LIBCFS_PING_PEER,
+			    seq_no, show_rc, err_rc);
 	return rc;
 }
 
@@ -3501,6 +3684,26 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 	return rc;
 }
 
+static int handle_yaml_ping(struct cYAML *tree, struct cYAML **show_rc,
+			    struct cYAML **err_rc)
+{
+	struct cYAML *seq_no, *nid, *timeout;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	nid = cYAML_get_object_item(tree, "primary nid");
+	timeout = cYAML_get_object_item(tree, "timeout");
+
+	return lustre_lnet_ping_nid((nid) ? nid->cy_valuestring : NULL,
+				    (timeout) ? timeout->cy_valueint : 1000,
+				    (seq_no) ? seq_no->cy_valueint : -1,
+				    show_rc, err_rc);
+}
+
+static int handle_yaml_no_op()
+{
+	return LUSTRE_CFG_RC_NO_ERR;
+}
+
 struct lookup_cmd_hdlr_tbl {
 	char *name;
 	cmd_handler_t cb;
@@ -3513,25 +3716,45 @@ static struct lookup_cmd_hdlr_tbl lookup_config_tbl[] = {
 	{ .name = "peer",	.cb = handle_yaml_config_peer },
 	{ .name = "routing",	.cb = handle_yaml_config_routing },
 	{ .name = "buffers",	.cb = handle_yaml_config_buffers },
+	{ .name = "statistics", .cb = handle_yaml_no_op },
 	{ .name = "global",	.cb = handle_yaml_config_global_settings},
+	{ .name = "ping",	.cb = handle_yaml_no_op },
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
 	{ .name = "route",	.cb = handle_yaml_del_route },
 	{ .name = "net",	.cb = handle_yaml_del_ni },
+	{ .name = "ip2nets",	.cb = handle_yaml_no_op },
 	{ .name = "peer",	.cb = handle_yaml_del_peer },
 	{ .name = "routing",	.cb = handle_yaml_del_routing },
+	{ .name = "buffers",	.cb = handle_yaml_no_op },
+	{ .name = "statistics", .cb = handle_yaml_no_op },
 	{ .name = "global",	.cb = handle_yaml_del_global_settings},
+	{ .name = "ping",	.cb = handle_yaml_no_op },
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {
 	{ .name = "route",	.cb = handle_yaml_show_route },
 	{ .name = "net",	.cb = handle_yaml_show_net },
-	{ .name = "buffers",	.cb = handle_yaml_show_routing },
-	{ .name = "routing",	.cb = handle_yaml_show_routing },
 	{ .name = "peer",	.cb = handle_yaml_show_peers },
+	{ .name = "ip2nets",	.cb = handle_yaml_no_op },
+	{ .name = "routing",	.cb = handle_yaml_show_routing },
+	{ .name = "buffers",	.cb = handle_yaml_show_routing },
 	{ .name = "statistics",	.cb = handle_yaml_show_stats },
 	{ .name = "global",	.cb = handle_yaml_show_global_settings},
+	{ .name = "ping",	.cb = handle_yaml_no_op },
+	{ .name = NULL } };
+
+static struct lookup_cmd_hdlr_tbl lookup_exec_tbl[] = {
+	{ .name = "route",	.cb = handle_yaml_no_op },
+	{ .name = "net",	.cb = handle_yaml_no_op },
+	{ .name = "peer",	.cb = handle_yaml_no_op },
+	{ .name = "ip2nets",	.cb = handle_yaml_no_op },
+	{ .name = "routing",	.cb = handle_yaml_no_op },
+	{ .name = "buffers",	.cb = handle_yaml_no_op },
+	{ .name = "statistics",	.cb = handle_yaml_no_op },
+	{ .name = "global",	.cb = handle_yaml_no_op },
+	{ .name = "ping",	.cb = handle_yaml_ping },
 	{ .name = NULL } };
 
 static cmd_handler_t lookup_fn(char *key,
@@ -3613,3 +3836,8 @@ int lustre_yaml_show(char *f, struct cYAML **show_rc, struct cYAML **err_rc)
 				     show_rc, err_rc);
 }
 
+int lustre_yaml_exec(char *f, struct cYAML **show_rc, struct cYAML **err_rc)
+{
+	return lustre_yaml_cb_helper(f, lookup_exec_tbl,
+				     show_rc, err_rc);
+}

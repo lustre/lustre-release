@@ -82,7 +82,7 @@ static int peer_buffer_credits = 0;
 module_param(peer_buffer_credits, int, 0444);
 MODULE_PARM_DESC(peer_buffer_credits, "# per-peer router buffer credits");
 
-static int peer_timeout = 180;
+static int peer_timeout = DEFAULT_PEER_TIMEOUT;
 module_param(peer_timeout, int, 0444);
 MODULE_PARM_DESC(peer_timeout, "Seconds without aliveness news to declare peer dead (<=0 to disable)");
 

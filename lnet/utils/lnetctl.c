@@ -1020,7 +1020,7 @@ static int jt_import(int argc, char **argv)
 	char *file = NULL;
 	struct cYAML *err_rc = NULL;
 	struct cYAML *show_rc = NULL;
-	int rc = 0, opt, opt_found = 0;
+	int rc = 0, return_rc = 0, opt, opt_found = 0;
 	char cmd = 'a';
 
 	const char *const short_options = "adsh";
@@ -1028,6 +1028,7 @@ static int jt_import(int argc, char **argv)
 		{ .name = "add",  .has_arg = no_argument, .val = 'a' },
 		{ .name = "del",  .has_arg = no_argument, .val = 'd' },
 		{ .name = "show", .has_arg = no_argument, .val = 's' },
+		{ .name = "exec", .has_arg = no_argument, .val = 'e' },
 		{ .name = "help", .has_arg = no_argument, .val = 'h' },
 		{ .name = NULL } };
 
@@ -1036,8 +1037,13 @@ static int jt_import(int argc, char **argv)
 		opt_found = 1;
 		switch (opt) {
 		case 'a':
+			cmd = opt;
+			break;
 		case 'd':
 		case 's':
+			cmd = opt;
+			break;
+		case 'e':
 			cmd = opt;
 			break;
 		case 'h':
@@ -1046,6 +1052,7 @@ static int jt_import(int argc, char **argv)
 			       "\t--add: add configuration\n"
 			       "\t--del: delete configuration\n"
 			       "\t--show: show configuration\n"
+			       "\t--exec: execute command\n"
 			       "\t--help: display this help\n"
 			       "If no command option is given then --add"
 			       " is assumed by default\n");
@@ -1064,6 +1071,9 @@ static int jt_import(int argc, char **argv)
 	switch (cmd) {
 	case 'a':
 		rc = lustre_yaml_config(file, &err_rc);
+		return_rc = lustre_yaml_exec(file, &show_rc, &err_rc);
+		cYAML_print_tree(show_rc);
+		cYAML_free_tree(show_rc);
 		break;
 	case 'd':
 		rc = lustre_yaml_del(file, &err_rc);
@@ -1073,11 +1083,17 @@ static int jt_import(int argc, char **argv)
 		cYAML_print_tree(show_rc);
 		cYAML_free_tree(show_rc);
 		break;
+	case 'e':
+		rc = lustre_yaml_exec(file, &show_rc, &err_rc);
+		cYAML_print_tree(show_rc);
+		cYAML_free_tree(show_rc);
+		break;
 	}
 
-	cYAML_print_tree2file(stderr, err_rc);
-
-	cYAML_free_tree(err_rc);
+	if (rc || return_rc) {
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+	}
 
 	return rc;
 }
@@ -1358,6 +1374,54 @@ static int jt_list_peer(int argc, char **argv)
 	return rc;
 }
 
+static int jt_ping(int argc, char **argv)
+{
+	struct cYAML *err_rc = NULL;
+	struct cYAML *show_rc = NULL;
+	int timeout = 1000;
+	int rc = 0, opt;
+
+	const char *const short_options = "t:h";
+	const struct option long_options[] = {
+		{ "timeout", 1, NULL, 't' },
+		{ "help", 0, NULL, 'h' },
+		{ NULL, 0, NULL, 0 },
+	};
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				  long_options, NULL)) != -1) {
+		switch (opt) {
+		case 't':
+			timeout = 1000 * atol(optarg);
+			break;
+		case 'h':
+			printf("ping: <nid1> <nid2> .. <nidN> (e.g. 10.2.2.2@tcp)\n"
+			       "\t--timeout: timeout(secs)\n"
+			       "\t--help: display this help\n");
+			return 0;
+		default:
+			return 0;
+		}
+	}
+
+	if (argc < 2)
+		return CMD_HELP;
+
+	for (; optind < argc; optind++)
+		rc = lustre_lnet_ping_nid(argv[optind], timeout, -1, &show_rc, &err_rc);
+
+	if (show_rc)
+		cYAML_print_tree(show_rc);
+
+	if (err_rc)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+	cYAML_free_tree(show_rc);
+
+	return rc;
+}
+
 command_t list[] = {
 	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
 	{"route", jt_route, 0, "route {add | del | show | help}"},
@@ -1367,11 +1431,12 @@ command_t list[] = {
 			   " | routing | numa_range | max_interfaces"
 			   " | discovery}"},
 	{"import", jt_import, 0, "import {--add | --del | --show | "
-				 "--help} FILE.yaml"},
+				 "--exec | --help} FILE.yaml"},
 	{"export", jt_export, 0, "export {--help} FILE.yaml"},
 	{"stats", jt_stats, 0, "stats {show | help}"},
 	{"global", jt_global, 0, "global {show | help}"},
 	{"peer", jt_peers, 0, "peer {add | del | show | help}"},
+	{"ping", jt_ping, 0, "ping {--help}"},
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},

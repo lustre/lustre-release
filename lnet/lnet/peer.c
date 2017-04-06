@@ -2907,7 +2907,7 @@ static struct lnet_peer *lnet_peer_dc_timed_out(time64_t now)
 		return NULL;
 	lp = list_first_entry(&the_lnet.ln_dc_working,
 			      struct lnet_peer, lp_dc_list);
-	if (now < lp->lp_last_queued + DISCOVERY_TIMEOUT)
+	if (now < lp->lp_last_queued + DEFAULT_PEER_TIMEOUT)
 		return NULL;
 	return lp;
 }

@@ -3250,21 +3250,47 @@ LNetCtl(unsigned int cmd, void *arg)
 		id.nid = data->ioc_nid;
 		id.pid = data->ioc_u32[0];
 
-		/* Don't block longer than 2 minutes */
-		if (data->ioc_u32[1] > 120 * MSEC_PER_SEC)
-			return -EINVAL;
-
-		/* If timestamp is negative then disable timeout */
-		if ((s32)data->ioc_u32[1] < 0)
-			timeout = MAX_SCHEDULE_TIMEOUT;
+		/* If timeout is negative then set default of 3 minutes */
+		if (((s32)data->ioc_u32[1] <= 0) ||
+		    data->ioc_u32[1] > (DEFAULT_PEER_TIMEOUT * MSEC_PER_SEC))
+			timeout = msecs_to_jiffies(DEFAULT_PEER_TIMEOUT * MSEC_PER_SEC);
 		else
 			timeout = msecs_to_jiffies(data->ioc_u32[1]);
 
 		rc = lnet_ping(id, timeout, data->ioc_pbuf1,
 			       data->ioc_plen1 / sizeof(struct lnet_process_id));
+
 		if (rc < 0)
 			return rc;
+
 		data->ioc_count = rc;
+		return 0;
+	}
+
+	case IOC_LIBCFS_PING_PEER: {
+		struct lnet_ioctl_ping_data *ping = arg;
+		struct lnet_peer *lp;
+		signed long timeout;
+
+		/* If timeout is negative then set default of 3 minutes */
+		if (((s32)ping->op_param) <= 0 ||
+		    ping->op_param > (DEFAULT_PEER_TIMEOUT * MSEC_PER_SEC))
+			timeout = msecs_to_jiffies(DEFAULT_PEER_TIMEOUT * MSEC_PER_SEC);
+		else
+			timeout = msecs_to_jiffies(ping->op_param);
+
+		rc = lnet_ping(ping->ping_id, timeout,
+			       ping->ping_buf,
+			       ping->ping_count);
+		if (rc < 0)
+			return rc;
+
+		lp = lnet_find_peer(ping->ping_id.nid);
+		if (lp) {
+			ping->ping_id.nid = lp->lp_primary_nid;
+			ping->mr_info = lnet_peer_is_multi_rail(lp);
+		}
+		ping->ping_count = rc;
 		return 0;
 	}
 
@@ -3400,7 +3426,7 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 	/* initialize md content */
 	md.start     = &pbuf->pb_info;
 	md.length    = LNET_PING_INFO_SIZE(n_ids);
-	md.threshold = 2; /*GET/REPLY*/
+	md.threshold = 2; /* GET/REPLY */
 	md.max_size  = 0;
 	md.options   = LNET_MD_TRUNCATE;
 	md.user_ptr  = NULL;
@@ -3418,7 +3444,6 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 
 	if (rc != 0) {
 		/* Don't CERROR; this could be deliberate! */
-
 		rc2 = LNetMDUnlink(mdh);
 		LASSERT(rc2 == 0);
 
@@ -3466,7 +3491,6 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 			replied = 1;
 			rc = event.mlength;
 		}
-
 	} while (rc2 <= 0 || !event.unlinked);
 
 	if (!replied) {
@@ -3480,10 +3504,9 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 	nob = rc;
 	LASSERT(nob >= 0 && nob <= LNET_PING_INFO_SIZE(n_ids));
 
-	rc = -EPROTO;				/* if I can't parse... */
+	rc = -EPROTO;		/* if I can't parse... */
 
 	if (nob < 8) {
-		/* can't check magic/version */
 		CERROR("%s: ping info too short %d\n",
 		       libcfs_id2str(id), nob);
 		goto fail_free_eq;
@@ -3504,7 +3527,8 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 	}
 
 	if (nob < LNET_PING_INFO_SIZE(0)) {
-		CERROR("%s: Short reply %d(%d min)\n", libcfs_id2str(id),
+		CERROR("%s: Short reply %d(%d min)\n",
+		       libcfs_id2str(id),
 		       nob, (int)LNET_PING_INFO_SIZE(0));
 		goto fail_free_eq;
 	}
@@ -3513,12 +3537,13 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 		n_ids = pbuf->pb_info.pi_nnis;
 
 	if (nob < LNET_PING_INFO_SIZE(n_ids)) {
-		CERROR("%s: Short reply %d(%d expected)\n", libcfs_id2str(id),
+		CERROR("%s: Short reply %d(%d expected)\n",
+		       libcfs_id2str(id),
 		       nob, (int)LNET_PING_INFO_SIZE(n_ids));
 		goto fail_free_eq;
 	}
 
-	rc = -EFAULT;				/* If I SEGV... */
+	rc = -EFAULT;		/* if I segv in copy_to_user()... */
 
 	memset(&tmpid, 0, sizeof(tmpid));
 	for (i = 0; i < n_ids; i++) {
