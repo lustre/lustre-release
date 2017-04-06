@@ -359,9 +359,9 @@ struct lfsck_layout {
 	__u32	ll_reserved_1;
 
 	/* The latest object has been processed (failed) during double scan. */
-	struct lu_fid	ll_fid_latest_scanned_phase2;
+	struct lfsck_layout_dangling_key ll_lldk_latest_scanned_phase2;
 
-	__u64	ll_reserved_2[9];
+	__u64	ll_reserved_2[8];
 
 	/* The OST targets bitmap to record the OSTs that contain
 	 * non-verified OST-objects. */
@@ -784,9 +784,9 @@ struct lfsck_namespace_req {
 struct lfsck_layout_req {
 	struct lfsck_assistant_req	 llr_lar;
 	struct dt_object		*llr_child;
+	__u32				 llr_comp_id;
 	__u32				 llr_ost_idx;
 	__u32				 llr_lov_idx; /* offset in LOV EA */
-	__u32				 llr_comp_id;
 };
 
 struct lfsck_assistant_operations {
@@ -905,6 +905,7 @@ struct lfsck_thread_info {
 	struct lmv_mds_md_v1	lti_lmv3;
 	struct lmv_mds_md_v1	lti_lmv4;
 	struct lfsck_lock_handle lti_llh;
+	struct lfsck_layout_dangling_key lti_lldk;
 };
 
 /* lfsck_lib.c */

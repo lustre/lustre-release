@@ -67,6 +67,12 @@ struct lfsck_req_local {
 	struct filter_fid lrl_ff_local;
 };
 
+struct lfsck_layout_dangling_key {
+	struct lu_fid	lldk_fid;
+	__u32		lldk_comp_id;
+	__u32		lldk_ea_off;
+};
+
 typedef int (*lfsck_out_notify)(const struct lu_env *env, void *data,
 				enum lfsck_events event);
 
@@ -121,5 +127,4 @@ static inline bool lovea_slot_is_dummy(const struct lov_ost_data_v1 *obj)
 
 	return false;
 }
-
 #endif /* _LUSTRE_LFSCK_H */

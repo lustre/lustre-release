@@ -2392,3 +2392,4 @@ int lu_buf_check_and_grow(struct lu_buf *buf, size_t len)
 	buf->lb_len = len;
 	return 0;
 }
+EXPORT_SYMBOL(lu_buf_check_and_grow);

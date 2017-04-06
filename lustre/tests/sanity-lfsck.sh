@@ -2681,6 +2681,9 @@ test_19b() {
 }
 run_test 19b "OST-object inconsistency self repair"
 
+PATTERN_WITH_HOLE="40000001"
+PATTERN_WITHOUT_HOLE="1"
+
 test_20() {
 	[ $OSTCOUNT -lt 2 ] &&
 		skip "The test needs at least 2 OSTs" && return
@@ -2762,15 +2765,8 @@ test_20() {
 	sleep 2
 	do_facet mds1 $LCTL set_param fail_loc=0 fail_val=0
 
-	echo "Inject failure to slow down the LFSCK on OST0"
-	#define OBD_FAIL_LFSCK_DELAY5		0x161b
-	do_facet ost1 $LCTL set_param fail_loc=0x161b
-
 	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
 	$START_LAYOUT -r -o || error "(1) Fail to start LFSCK for layout!"
-
-	sleep 3
-	do_facet ost1 $LCTL set_param fail_loc=0
 
 	for k in $(seq $MDSCOUNT); do
 		# The LFSCK status query internal is 30 seconds. For the case
@@ -2813,8 +2809,8 @@ test_20() {
 
 	$LFS getstripe -v $name || error "(5.1) cannot getstripe on $name"
 
-	local pattern=0x$($LFS getstripe -L $name)
-	[[ $((pattern & LOV_PATTERN_F_HOLE)) -eq 0 ]] ||
+	local pattern=$($LFS getstripe -L $name)
+	[[ "$pattern" = "$PATTERN_WITHOUT_HOLE" ]] ||
 		error "(5.2) NOT expect pattern flag hole, but got $pattern"
 
 	local stripes=$($LFS getstripe -c $name)
@@ -2852,8 +2848,8 @@ test_20() {
 
 	$LFS getstripe -v $name || error "(6.1) cannot getstripe on $name"
 
-	pattern=0x$($LFS getstripe -L $name)
-	[[ $((pattern & LOV_PATTERN_F_HOLE)) -ne 0 ]] ||
+	pattern=$($LFS getstripe -L $name)
+	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
 		error "(6.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c $name)
@@ -2908,13 +2904,13 @@ test_20() {
 
 	$LFS getstripe -v $name || error "(7.1) cannot getstripe on $name"
 
-	pattern=0x$($LFS getstripe -L $name)
+	pattern=$($LFS getstripe -L $name)
+	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+		error "(7.2) expect pattern flag hole, but got $pattern"
+
 	stripes=$($LFS getstripe -c $name)
 	size=$(stat $name | awk '/Size:/ { print $2 }')
 	if [ $OSTCOUNT -gt 2 ]; then
-		[[ $((pattern & LOV_PATTERN_F_HOLE)) -ne 0 ]] ||
-		error "(7.2.1) expect pattern flag hole, but got $pattern"
-
 		[ $stripes -eq 3 ] ||
 		error "(7.3.1) expect the stripe count is 3, but got $stripes"
 
@@ -2948,19 +2944,28 @@ test_20() {
 
 		touch $name || error "(7.10.1) cannot touch $name"
 	else
-		[[ $((pattern & LOV_PATTERN_F_HOLE)) -eq 0 ]] ||
-		error "(7.2.2) NOT expect pattern flag hole, but got $pattern"
-
-		[ $stripes -eq 1 ] ||
-		error "(7.3.2) expect the stripe count is 1, but got $stripes"
+		[ $stripes -eq 2 ] ||
+		error "(7.3.2) expect the stripe count is 2, but got $stripes"
 
 		# stripe1 is dummy
 		[ $size -eq $((4096 * (256 + 0))) ] ||
 		error "(7.4.2) expect the size $((4096 * 256)), but got $size"
 
-		cat $name > /dev/null || error "(7.5.2) cannot read $name"
+		cat $name > /dev/null &&
+			error "(7.5.2) normal read $name should fail"
 
-		echo "dummy" >> $name || error "(7.8.2) cannot write $name"
+		failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
+			   bs=4096 2>&1 | grep "Input/output error" | wc -l)
+		[ $failures -eq 256 ] ||
+		error "(7.6.2) expect 256 IO failures, but get $failures"
+
+		bcount=$((256 * 2))
+		size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
+		[ $size -eq $((4096 * $bcount)) ] ||
+		error "(7.7.2) expect the size $((4096 * $bcount)), got $size"
+
+		dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 \
+		seek=256 && error "(7.8.2) write to the LOV EA hole should fail"
 
 		chown $RUNAS_ID:$RUNAS_GID $name ||
 			error "(7.9.2) cannot chown on $name"
@@ -2980,32 +2985,42 @@ test_20() {
 
 	$LFS getstripe -v $name || error "(8.1) cannot getstripe on $name"
 
-	pattern=0x$($LFS getstripe -L $name)
-	[[ $((pattern & LOV_PATTERN_F_HOLE)) -eq 0 ]] ||
-		error "(8.2) NOT expect pattern flag hole, but got $pattern"
+	pattern=$($LFS getstripe -L $name)
+	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+		error "(8.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c $name)
-	# LFSCK does not know the old f3 had 3 stripes.
-	# It only tries to find as much as possible.
-	# The stripe count depends on the last stripe's offset.
-	[ $stripes -eq 2 ] ||
-		error "(8.3) expect the stripe count is 2, but got $stripes"
+	[ $stripes -eq 3 ] ||
+		error "(8.3) expect the stripe count is 3, but got $stripes"
 
 	size=$(stat $name | awk '/Size:/ { print $2 }')
 	# stripe2 is lost
 	[ $size -eq $((4096 * (256 + 256 + 0))) ] ||
 		error "(8.4) expect the size $((4096 * 512)), but got $size"
 
-	cat $name > /dev/null || error "(8.5) cannot read $name"
+	cat $name > /dev/null &&
+		error "(8.5) normal read $name should fail"
 
-	echo "dummy" >> $name || error "(8.6) cannot write $name"
+	failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
+		   bs=4096 2>&1 | grep "Input/output error" | wc -l)
+	# stripe2 is dummy
+	[ $failures -eq 256 ] ||
+		error "(8.6) expect 256 IO failures, but get $failures"
+
+	bcount=$((256 * 3))
+	size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
+	[ $size -eq $((4096 * $bcount)) ] ||
+		error "(8.7) expect the size $((4096 * $bcount)), but got $size"
+
+	dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 \
+		seek=512 && error "(8.8) write to the LOV EA hole should fail"
 
 	chown $RUNAS_ID:$RUNAS_GID $name ||
-		error "(8.7) cannot chown on $name"
+		error "(8.9) cannot chown on $name"
 
-	touch $name || error "(8.8) cannot touch $name"
+	touch $name || error "(8.10) cannot touch $name"
 
-	rm -f $name || error "(8.9) cannot unlink $name"
+	rm -f $name || error "(8.11) cannot unlink $name"
 }
 run_test 20 "Handle the orphan with dummy LOV EA slot properly"
 
