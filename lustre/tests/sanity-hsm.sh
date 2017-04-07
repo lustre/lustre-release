@@ -918,6 +918,8 @@ test_1b() {
 		error "failed to create file"
 	local fid=$(path2fid $f)
 
+	copytool_setup
+
 	echo "archive $f"
 	$LFS hsm_archive $f || error "could not archive file"
 	wait_request_state $fid ARCHIVE SUCCEED
@@ -932,6 +934,8 @@ test_1b() {
 	wait_request_state $fid RESTORE SUCCEED
 	echo "verify restored state: "
 	check_hsm_flags $f "0x00000009" && echo "pass"
+
+	copytool_cleanup
 }
 run_test 1b "Archive, Release & Restore composite file"
 
