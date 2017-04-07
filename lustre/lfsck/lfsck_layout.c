@@ -388,7 +388,8 @@ static int lfsck_layout_verify_header(struct dt_object *obj,
 			__u64 end = le64_to_cpu(lcme->lcme_extent.e_end);
 			__u32 comp_id = le32_to_cpu(lcme->lcme_id);
 
-			if (unlikely(comp_id == 0 || comp_id > LCME_ID_MAX)) {
+			if (unlikely(comp_id == LCME_ID_INVAL ||
+				     comp_id > LCME_ID_MAX)) {
 				CDEBUG(D_LFSCK, "found invalid FPL ID %u "
 				       "for the file "DFID" at idx %d\n",
 				       comp_id, PFID(lfsck_dto2fid(obj)), i);
@@ -3208,7 +3209,7 @@ static int lfsck_lmm2layout(struct lov_mds_md_v1 *lmm, struct ost_layout *ol,
 		ol->ol_comp_id = 0;
 	} else if (magic == LOV_MAGIC_COMP_V1) {
 		struct lov_comp_md_v1 *lcm = (struct lov_comp_md_v1 *)lmm;
-		struct lov_comp_md_entry_v1 *lcme;
+		struct lov_comp_md_entry_v1 *lcme = NULL;
 		__u16 count = le16_to_cpu(lcm->lcm_entry_count);
 		int i;
 
@@ -3227,11 +3228,11 @@ static int lfsck_lmm2layout(struct lov_mds_md_v1 *lmm, struct ost_layout *ol,
 			GOTO(out, rc = 1);
 
 		lmm = (void *)lmm + le32_to_cpu(lcme->lcme_offset);
-		ol->ol_stripe_size = lmm->lmm_stripe_size;
-		ol->ol_stripe_count = lmm->lmm_stripe_count;
-		ol->ol_comp_start = lcme->lcme_extent.e_start;
-		ol->ol_comp_end = lcme->lcme_extent.e_end;
-		ol->ol_comp_id = lcme->lcme_id;
+		ol->ol_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
+		ol->ol_stripe_count = le32_to_cpu(lmm->lmm_stripe_count);
+		ol->ol_comp_start = le64_to_cpu(lcme->lcme_extent.e_start);
+		ol->ol_comp_end = le64_to_cpu(lcme->lcme_extent.e_end);
+		ol->ol_comp_id = le32_to_cpu(lcme->lcme_id);
 	} else {
 		GOTO(out, rc = -EINVAL);
 	}

@@ -869,9 +869,9 @@ static __u32 lod_gen_component_id(struct lod_object *lo, int comp_idx)
 
 	/* Layout generation wraps, need to check collisions. */
 	start = id & LCME_ID_MASK;
-	end = (__u32)LCME_ID_MAX + 1;
+	end = LCME_ID_MAX;
 again:
-	for (id = start; id < end; id++) {
+	for (id = start; id <= end; id++) {
 		for (i = 0; i < lo->ldo_comp_cnt; i++) {
 			lod_comp = &lo->ldo_comp_entries[i];
 			if (id == lod_comp->llc_id)
@@ -881,9 +881,10 @@ again:
 		if (i == lo->ldo_comp_cnt)
 			return id;
 	}
-	if (end == (__u32)LCME_ID_MAX + 1) {
-		start = 0;
-		end = lo->ldo_layout_gen & LCME_ID_MASK;
+	if (end > LCME_ID_MAX) {
+		start = 1;
+		end = min(lo->ldo_layout_gen & LCME_ID_MASK,
+			  (__u32)(LCME_ID_MAX - 1));
 		goto again;
 	}
 

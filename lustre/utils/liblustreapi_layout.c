@@ -1734,7 +1734,7 @@ int llapi_layout_comp_add(struct llapi_layout *layout)
 /**
  * Deletes current component from the composite layout. The component
  * to be deleted must be the tail of components list, and it can't be
- * the last component in the layout.
+ * the only component in the layout.
  *
  * \param[in] layout	composite layout
  *
@@ -1754,12 +1754,13 @@ int llapi_layout_comp_del(struct llapi_layout *layout)
 		return -1;
 	}
 
-	/* It must be the tail of the list */
+	/* It must be the tail of the list (for PFL, can be relaxed
+	 * once we get mirrored components) */
 	if (comp->llc_list.next != &layout->llot_comp_list) {
 		errno = EINVAL;
 		return -1;
 	}
-	/* It can't be the last one on the list */
+	/* It can't be the only one on the list */
 	if (comp->llc_list.prev == &layout->llot_comp_list) {
 		errno = EINVAL;
 		return -1;

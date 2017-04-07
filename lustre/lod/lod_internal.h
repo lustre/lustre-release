@@ -336,17 +336,23 @@ static inline int lod_obj_set_pool(struct lod_object *lo, int i,
 			    new_pool);
 }
 
-/*
- * Layout generation is used to generate unique component ID, to check ID
- * collision, we preserve the highest bit of the layout generation when it
- * wrapped.
+/**
+ * Create new layout generation.
+ *
+ * The only requirement for layout generation is that it changes when
+ * the layout is modified, so a circular counter is sufficient for the
+ * low rate of layout modifications.
+ *
+ * Layout generation is also used to generate unique component ID.
+ * To detect generation overflow, we preserve the highest bit of the
+ * generation when it wrapped.
  */
 static inline void lod_obj_inc_layout_gen(struct lod_object *lo)
 {
-	__u32 preserve = lo->ldo_layout_gen & LCME_ID_NONE;
+	__u32 preserve = lo->ldo_layout_gen & ~LCME_ID_MASK;
 	lo->ldo_layout_gen++;
 	lo->ldo_layout_gen |= preserve;
-	/* Zero is not a valid component ID */
+	/* Zero is not a valid generation */
 	if (unlikely((lo->ldo_layout_gen & LCME_ID_MASK) == 0))
 		lo->ldo_layout_gen++;
 }
