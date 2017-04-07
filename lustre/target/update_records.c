@@ -348,7 +348,6 @@ int update_records_create_pack(const struct lu_env *env,
 		obdo = &update_env_info(env)->uti_obdo;
 		obdo->o_valid = 0;
 		obdo_from_la(obdo, attr, attr->la_valid);
-		lustre_set_wire_obdo(NULL, obdo, obdo);
 		bufs[buf_count] = obdo;
 		sizes[buf_count] = sizeof(*obdo);
 		buf_count++;
@@ -422,7 +421,6 @@ int update_records_attr_set_pack(const struct lu_env *env,
 
 	obdo->o_valid = 0;
 	obdo_from_la(obdo, attr, attr->la_valid);
-	lustre_set_wire_obdo(NULL, obdo, obdo);
 	return update_records_update_pack(env, fid, OUT_ATTR_SET, ops, op_count,
 					  max_ops_size, params, param_count,
 					  max_param_size, 1,

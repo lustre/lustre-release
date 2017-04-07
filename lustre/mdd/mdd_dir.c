@@ -1285,6 +1285,15 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 	if (rc != 0)
 		RETURN(rc);
 
+	/*
+	 * If we are using project inheritance, we only allow hard link
+	 * creation in our tree when the project IDs are the same;
+	 * otherwise the tree quota mechanism could be circumvented.
+	 */
+	if ((tattr->la_flags & LUSTRE_PROJINHERIT_FL) &&
+	    (tattr->la_projid != cattr->la_projid))
+		RETURN(-EXDEV);
+
         handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
                 GOTO(out_pending, rc = PTR_ERR(handle));
@@ -1942,6 +1951,16 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 		}
 	}
 
+	/* Inherit project ID from parent directory */
+	if (pattr->la_flags & LUSTRE_PROJINHERIT_FL) {
+		cattr->la_projid = pattr->la_projid;
+		if (S_ISDIR(cattr->la_mode)) {
+			cattr->la_flags |= LUSTRE_PROJINHERIT_FL;
+			cattr->la_valid |= LA_FLAGS;
+		}
+		cattr->la_valid |= LA_PROJID;
+	}
+
 	rc = mdd_name_check(m, lname);
 	if (rc < 0)
 		RETURN(rc);
@@ -2580,6 +2599,17 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
 	 * the other case has been processed in cld_rename
 	 * before mdd_rename and enable MDS_PERM_BYPASS. */
 	LASSERT(sobj);
+
+	/*
+	 * If we are using project inheritance, we only allow renames
+	 * into our tree when the project IDs are the same; otherwise
+	 * tree quota mechanism would be circumvented.
+	 */
+	if (((tpattr->la_flags & LUSTRE_PROJINHERIT_FL) &&
+	    tpattr->la_projid != cattr->la_projid) ||
+	    ((pattr->la_flags & LUSTRE_PROJINHERIT_FL) &&
+	    (pattr->la_projid != tpattr->la_projid)))
+		RETURN(-EXDEV);
 
 	rc = mdd_may_delete(env, src_pobj, pattr, sobj, cattr, NULL, 1, 0);
 	if (rc)

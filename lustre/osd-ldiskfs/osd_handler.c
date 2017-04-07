@@ -2382,6 +2382,13 @@ static void osd_inode_getattr(const struct lu_env *env,
 	attr->la_rdev	 = inode->i_rdev;
 	attr->la_blksize = 1 << inode->i_blkbits;
 	attr->la_blkbits = inode->i_blkbits;
+	/*
+	 * Ext4 did not transfer inherit flags from raw inode
+	 * to inode flags, and ext4 internally test raw inode
+	 * @i_flags directly. Instead of patching ext4, we do it here.
+	 */
+	if (LDISKFS_I(inode)->i_flags & LUSTRE_PROJINHERIT_FL)
+		attr->la_flags |= LUSTRE_PROJINHERIT_FL;
 }
 
 static int osd_attr_get(const struct lu_env *env,
@@ -2586,6 +2593,13 @@ static int osd_inode_setattr(const struct lu_env *env,
 		/* always keep S_NOCMTIME */
 		inode->i_flags = ll_ext_to_inode_flags(attr->la_flags) |
 				 S_NOCMTIME;
+		/*
+		 * Ext4 did not transfer inherit flags from
+		 * @inode->i_flags to raw inode i_flags when writing
+		 * flags, we do it explictly here.
+		 */
+		if (attr->la_flags & LUSTRE_PROJINHERIT_FL)
+			LDISKFS_I(inode)->i_flags |= LUSTRE_PROJINHERIT_FL;
 	}
 	return 0;
 }
@@ -2617,7 +2631,7 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
 	}
 
 #ifdef	HAVE_PROJECT_QUOTA
-	/* Handle project id Transfer here properly */
+	/* Handle project id transfer here properly */
 	if (attr->la_valid & LA_PROJID && attr->la_projid !=
 						i_projid_read(inode)) {
 		rc = __ldiskfs_ioctl_setproject(inode, attr->la_projid);
@@ -3456,6 +3470,19 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	ldiskfs_set_inode_state(local, LDISKFS_STATE_LUSTRE_NOSCRUB);
 	unlock_new_inode(local);
 
+	/* Agent inode should not have project ID*/
+#ifdef	HAVE_PROJECT_QUOTA
+	if (LDISKFS_I(pobj->oo_inode)->i_flags & LUSTRE_PROJINHERIT_FL) {
+		rc = __ldiskfs_ioctl_setproject(local, 0);
+		if (rc) {
+			CERROR("%s: quota transfer failed: rc = %d. Is project "
+			       "quota enforcement enabled on the ldiskfs "
+			       "filesystem?\n", local->i_sb->s_id, rc);
+			RETURN(ERR_PTR(rc));
+		}
+	}
+
+#endif
 	/* Set special LMA flag for local agent inode */
 	rc = osd_ea_fid_set(info, local, fid, 0, LMAI_AGENT);
 	if (rc != 0) {

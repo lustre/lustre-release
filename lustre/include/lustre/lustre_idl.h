@@ -1621,6 +1621,7 @@ enum {
 	LUSTRE_TOPDIR_FL = 0x00020000, /* Top of directory hierarchies*/
 	LUSTRE_DIRECTIO_FL = 0x00100000, /* Use direct i/o */
 	LUSTRE_INLINE_DATA_FL = 0x10000000, /* Inode has inline data. */
+	LUSTRE_PROJINHERIT_FL = 0x20000000, /* Create with parents projid */
 
 	/* These flags will not be identical to any EXT4_*_FL counterparts,
 	 * and only reserved for lustre purpose. Note: these flags might
@@ -1633,6 +1634,10 @@ enum {
 
 	LUSTRE_LMA_FL_MASKS = LUSTRE_ORPHAN_FL,
 };
+
+#ifndef FS_XFLAG_PROJINHERIT
+#define FS_XFLAG_PROJINHERIT	0x00000200	/* create with parents projid */
+#endif
 
 #ifdef __KERNEL__
 /* Convert wire LUSTRE_*_FL to corresponding client local VFS S_* values
@@ -1649,7 +1654,8 @@ static inline int ll_ext_to_inode_flags(int flags)
 #if defined(S_DIRSYNC)
                 ((flags & LUSTRE_DIRSYNC_FL)   ? S_DIRSYNC   : 0) |
 #endif
-                ((flags & LUSTRE_IMMUTABLE_FL) ? S_IMMUTABLE : 0));
+		((flags & LUSTRE_IMMUTABLE_FL) ? S_IMMUTABLE : 0) |
+		((flags & LUSTRE_PROJINHERIT_FL) ? FS_XFLAG_PROJINHERIT : 0));
 }
 
 static inline int ll_inode_to_ext_flags(int iflags)
@@ -1660,7 +1666,8 @@ static inline int ll_inode_to_ext_flags(int iflags)
 #if defined(S_DIRSYNC)
                 ((iflags & S_DIRSYNC)   ? LUSTRE_DIRSYNC_FL   : 0) |
 #endif
-                ((iflags & S_IMMUTABLE) ? LUSTRE_IMMUTABLE_FL : 0));
+		((iflags & S_IMMUTABLE) ? LUSTRE_IMMUTABLE_FL : 0) |
+		((iflags & FS_XFLAG_PROJINHERIT) ? LUSTRE_PROJINHERIT_FL : 0));
 }
 #endif
 

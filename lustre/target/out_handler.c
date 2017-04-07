@@ -224,7 +224,6 @@ static int out_attr_get(struct tgt_session_info *tsi)
 
 	obdo->o_valid = 0;
 	obdo_from_la(obdo, la, la->la_valid);
-	lustre_set_wire_obdo(NULL, obdo, obdo);
 
 out_unlock:
 	dt_read_unlock(env, obj);

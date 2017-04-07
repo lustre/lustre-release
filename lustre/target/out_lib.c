@@ -215,7 +215,6 @@ int out_create_pack(const struct lu_env *env, struct object_update *update,
 
 	obdo->o_valid = 0;
 	obdo_from_la(obdo, attr, attr->la_valid);
-	lustre_set_wire_obdo(NULL, obdo, obdo);
 
 	if (parent_fid != NULL) {
 		struct lu_fid *tmp;
@@ -267,7 +266,6 @@ int out_attr_set_pack(const struct lu_env *env, struct object_update *update,
 
 	obdo->o_valid = 0;
 	obdo_from_la(obdo, attr, attr->la_valid);
-	lustre_set_wire_obdo(NULL, obdo, obdo);
 
 	RETURN(0);
 }
