@@ -322,7 +322,7 @@ static inline void qsd_set_edquot(struct lquota_entry *lqe, bool edquot)
 {
 	lqe->lqe_edquot = edquot;
 	if (edquot)
-		lqe->lqe_edquot_time = cfs_time_current_64();
+		lqe->lqe_edquot_time = ktime_get_seconds();
 }
 
 #define QSD_WB_INTERVAL	60 /* 60 seconds */

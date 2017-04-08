@@ -112,7 +112,7 @@ struct lquota_mst_entry {
 	__u64			lme_gracetime;
 
 	/* last time we glimpsed */
-	__u64			lme_revoke_time;
+	time64_t		lme_revoke_time;
 
 	/* r/w semaphore used to protect concurrent access to the quota
 	 * parameters which are stored on disk */
@@ -153,16 +153,16 @@ struct lquota_slv_entry {
 	__u64			lse_usage;
 
 	/* time to trigger quota adjust */
-	__u64			lse_adjust_time;
+	time64_t		lse_adjust_time;
 
 	/* return code of latest acquire RPC */
 	int			lse_acq_rc;
 
 	/* when latest acquire RPC completed */
-	__u64			lse_acq_time;
+	time64_t		lse_acq_time;
 
 	/* when latest edquot set */
-	__u64			lse_edquot_time;
+	time64_t		lse_edquot_time;
 };
 
 /* In-memory entry for each enforced quota id

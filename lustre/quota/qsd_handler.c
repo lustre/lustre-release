@@ -402,7 +402,7 @@ out:
 	adjust = qsd_adjust_needed(lqe);
 	if (reqbody && req_is_acq(reqbody->qb_flags) && ret != -EDQUOT) {
 		lqe->lqe_acq_rc = ret;
-		lqe->lqe_acq_time = cfs_time_current_64();
+		lqe->lqe_acq_time = ktime_get_seconds();
 	}
 out_noadjust:
 	qsd_request_exit(lqe);
@@ -463,8 +463,7 @@ static int qsd_acquire_local(struct lquota_entry *lqe, __u64 space)
 	 * sometimes due to the race reply of dqacq vs. id lock glimpse
 	 * (see LU-4505), so we revalidate it every 5 seconds. */
 	} else if (lqe->lqe_edquot &&
-		   cfs_time_before_64(cfs_time_shift_64(-5),
-			   	      lqe->lqe_edquot_time)) {
+		   (lqe->lqe_edquot_time > ktime_get_seconds() - 5)) {
 		rc = -EDQUOT;
 	}else {
 		rc = -EAGAIN;
@@ -563,7 +562,7 @@ static int qsd_acquire_remote(const struct lu_env *env,
 
 	/* check whether an acquire request completed recently */
 	if (lqe->lqe_acq_rc != 0 &&
-	    cfs_time_before_64(cfs_time_shift_64(-1), lqe->lqe_acq_time)) {
+	    lqe->lqe_acq_time > ktime_get_seconds() - 1) {
 		lqe_write_unlock(lqe);
 		LQUOTA_DEBUG(lqe, "using cached return code %d", lqe->lqe_acq_rc);
 		RETURN(lqe->lqe_acq_rc);

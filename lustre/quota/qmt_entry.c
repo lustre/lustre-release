@@ -114,7 +114,7 @@ static void qmt_lqe_debug(struct lquota_entry *lqe, void *arg,
 	libcfs_debug_vmsg2(msgdata, fmt, args,
 			   "qmt:%s pool:%d-%s id:%llu enforced:%d hard:%llu"
 			   " soft:%llu granted:%llu time:%llu qunit:"
-			   "%llu edquot:%d may_rel:%llu revoke:%llu\n",
+			   "%llu edquot:%d may_rel:%llu revoke:%lld\n",
 			   pool->qpi_qmt->qmt_svname,
 			   pool->qpi_key & 0x0000ffff,
 			   RES_NAME(pool->qpi_key >> 16),
@@ -426,6 +426,8 @@ void qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 		/* See comment in qmt_adjust_qunit(). LU-4139 */
 		if (qmt_hard_exhausted(lqe) ||
 		    pool->qpi_key >> 16 != LQUOTA_RES_DT) {
+			time64_t lapse;
+
 			/* we haven't reached the minimal qunit yet so there is
 			 * still hope that the rebalancing process might free
 			 * up some quota space */
@@ -437,10 +439,8 @@ void qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 				RETURN_EXIT;
 
 			/* Let's give more time to slave to release space */
-			if (lqe->lqe_may_rel != 0 &&
-			    cfs_time_before_64(cfs_time_shift_64(
-					    		-QMT_REBA_TIMEOUT),
-				    	       lqe->lqe_revoke_time))
+			lapse = ktime_get_seconds() - QMT_REBA_TIMEOUT;
+			if (lqe->lqe_may_rel != 0 && lqe->lqe_revoke_time > lapse)
 				RETURN_EXIT;
 		} else {
 			if (lqe->lqe_qunit > pool->qpi_soft_least_qunit)
@@ -675,7 +675,7 @@ done:
 		qmt_id_lock_notify(pool->qpi_qmt, lqe);
 	else if (lqe->lqe_qunit == pool->qpi_least_qunit)
 		/* initial qunit value is the smallest one */
-		lqe->lqe_revoke_time = cfs_time_current_64();
+		lqe->lqe_revoke_time = ktime_get_seconds();
 	EXIT;
 }
 
@@ -690,6 +690,6 @@ void qmt_revalidate(const struct lu_env *env, struct lquota_entry *lqe)
 		 * were initialized */
 		qmt_adjust_qunit(env, lqe);
 		if (lqe->lqe_qunit != 0)
-			qmt_adjust_edquot(lqe, cfs_time_current_sec());
+			qmt_adjust_edquot(lqe, ktime_get_real_seconds());
 	}
 }
