@@ -1829,6 +1829,10 @@ static void lod_key_fini(const struct lu_context *ctx,
 		struct lu_context_key *key, void *data)
 {
 	struct lod_thread_info *info = data;
+	struct lod_layout_component *lds =
+				info->lti_def_striping.lds_def_comp_entries;
+	struct ost_pool *inuse = &info->lti_inuse_osts;
+
 	/* allocated in lod_get_lov_ea
 	 * XXX: this is overload, a tread may have such store but used only
 	 * once. Probably better would be pool of such stores per LOD.
@@ -1839,6 +1843,13 @@ static void lod_key_fini(const struct lu_context *ctx,
 		info->lti_ea_store_size = 0;
 	}
 	lu_buf_free(&info->lti_linkea_buf);
+
+	if (lds != NULL)
+		lod_free_def_comp_entries(&info->lti_def_striping);
+
+	if (inuse->op_size)
+		OBD_FREE(inuse->op_array, inuse->op_size);
+
 	OBD_FREE_PTR(info);
 }
 

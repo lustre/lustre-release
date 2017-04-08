@@ -3,10 +3,7 @@
 llapi_quotactl \- manipulate disk quotas on a Lustre filesystem
 .SH SYNOPSIS
 .nf
-.B #include <liblustre.h>
-.B #include <lustre/lustre_idl.h>
-.B #include <lustre/liblustreapi.h>
-.B #include <lustre/lustre_user.h>
+.B #include <lustre/lustreapi.h>
 .sp
 .BI "int llapi_quotactl(char" " *mnt," " struct if_quotactl" " *qctl)
 .sp
@@ -186,4 +183,4 @@ Quotas have not been turned on for this filesystem.
 .SH "SEE ALSO"
 .BR lfs (1),
 .BR lustre (7),
-.BR liblustreapi (7)
+.BR lustreapi (7)

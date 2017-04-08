@@ -49,46 +49,54 @@
  *
  */
 
-static int lov_raid0_page_print(const struct lu_env *env,
-				const struct cl_page_slice *slice,
-				void *cookie, lu_printer_t printer)
+static int lov_comp_page_print(const struct lu_env *env,
+			       const struct cl_page_slice *slice,
+			       void *cookie, lu_printer_t printer)
 {
 	struct lov_page *lp = cl2lov_page(slice);
 
 	return (*printer)(env, cookie, LUSTRE_LOV_NAME"-page@%p, raid0\n", lp);
 }
 
-static const struct cl_page_operations lov_raid0_page_ops = {
-	.cpo_print = lov_raid0_page_print
+static const struct cl_page_operations lov_comp_page_ops = {
+	.cpo_print = lov_comp_page_print
 };
 
-int lov_page_init_raid0(const struct lu_env *env, struct cl_object *obj,
-			struct cl_page *page, pgoff_t index)
+int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
+			    struct cl_page *page, pgoff_t index)
 {
 	struct lov_object *loo = cl2lov(obj);
-	struct lov_layout_raid0 *r0 = lov_r0(loo);
 	struct lov_io     *lio = lov_env_io(env);
 	struct cl_object  *subobj;
 	struct cl_object  *o;
 	struct lov_io_sub *sub;
 	struct lov_page   *lpg = cl_object_page_slice(obj, page);
+	struct lov_layout_raid0 *r0;
 	loff_t             offset;
-	loff_t			 suboff;
+	loff_t             suboff;
+	int                entry;
 	int                stripe;
 	int                rc;
 	ENTRY;
 
 	offset = cl_offset(obj, index);
-	stripe = lov_stripe_number(loo->lo_lsm, offset);
+	entry = lov_lsm_entry(loo->lo_lsm, offset);
+	if (entry < 0 || !lsm_entry_inited(loo->lo_lsm, entry)) {
+		/* non-existing layout component */
+		lov_page_init_empty(env, obj, page, index);
+		RETURN(0);
+	}
+
+	r0 = lov_r0(loo, entry);
+	stripe = lov_stripe_number(loo->lo_lsm, entry, offset);
 	LASSERT(stripe < r0->lo_nr);
-	rc = lov_stripe_offset(loo->lo_lsm, offset, stripe,
-			       &suboff);
+	rc = lov_stripe_offset(loo->lo_lsm, entry, offset, stripe, &suboff);
 	LASSERT(rc == 0);
 
-	lpg->lps_stripe = stripe;
-	cl_page_slice_add(page, &lpg->lps_cl, obj, index, &lov_raid0_page_ops);
+	lpg->lps_index = lov_comp_index(entry, stripe);
+	cl_page_slice_add(page, &lpg->lps_cl, obj, index, &lov_comp_page_ops);
 
-	sub = lov_sub_get(env, lio, stripe);
+	sub = lov_sub_get(env, lio, lpg->lps_index);
 	if (IS_ERR(sub))
 		RETURN(PTR_ERR(sub));
 

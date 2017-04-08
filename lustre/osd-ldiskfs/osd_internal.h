@@ -583,9 +583,7 @@ struct osd_thread_info {
 	struct lu_buf	       oti_big_buf;
         /** used in osd_ea_fid_set() to set fid into common ea */
 	union {
-		struct lustre_mdt_attrs oti_mdt_attrs;
-		/* old LMA for compatibility */
-		char			oti_mdt_attrs_old[LMA_OLD_SIZE];
+		struct lustre_ost_attrs oti_ost_attrs;
 		struct filter_fid_old	oti_ff;
 		struct filter_fid	oti_ff_new;
 	};
@@ -667,7 +665,7 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 		   const struct lu_fid *fid, __u32 compat, __u32 incompat);
 int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
-		struct dentry *dentry, struct lustre_mdt_attrs *lma);
+		struct dentry *dentry, struct lustre_ost_attrs *loa);
 void osd_add_oi_cache(struct osd_thread_info *info, struct osd_device *osd,
 		      struct osd_inode_id *id, const struct lu_fid *fid);
 int osd_get_idif(struct osd_thread_info *info, struct inode *inode,

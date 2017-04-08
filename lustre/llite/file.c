@@ -1191,7 +1191,6 @@ restart:
 		if (count > 0 && args->via_io_subtype == IO_NORMAL)
 			args->u.normal.via_iter = vio->vui_iter;
 	}
-	GOTO(out, rc);
 out:
 	cl_io_fini(env, io);
 
@@ -1226,7 +1225,7 @@ out:
 
 	CDEBUG(D_VFSTRACE, "iot: %d, result: %zd\n", iot, result);
 
-	return result > 0 ? result : rc;
+	RETURN(result > 0 ? result : rc);
 }
 
 /**
@@ -1593,10 +1592,10 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         lmm = req_capsule_server_sized_get(&req->rq_pill, &RMF_MDT_MD, lmmsize);
         LASSERT(lmm != NULL);
 
-        if ((lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V1)) &&
-            (lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V3))) {
-                GOTO(out, rc = -EPROTO);
-        }
+	if (lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V1) &&
+	    lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_V3) &&
+	    lmm->lmm_magic != cpu_to_le32(LOV_MAGIC_COMP_V1))
+		GOTO(out, rc = -EPROTO);
 
         /*
          * This is coming from the MDS, so is probably in
@@ -1606,26 +1605,35 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC)) {
 		int stripe_count;
 
-		stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
-		if (le32_to_cpu(lmm->lmm_pattern) & LOV_PATTERN_F_RELEASED)
-			stripe_count = 0;
+		if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1) ||
+		    lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)) {
+			stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
+			if (le32_to_cpu(lmm->lmm_pattern) &
+			    LOV_PATTERN_F_RELEASED)
+				stripe_count = 0;
+		}
 
                 /* if function called for directory - we should
                  * avoid swab not existent lsm objects */
                 if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1)) {
-                        lustre_swab_lov_user_md_v1((struct lov_user_md_v1 *)lmm);
+			lustre_swab_lov_user_md_v1(
+					(struct lov_user_md_v1 *)lmm);
 			if (S_ISREG(body->mbo_mode))
 				lustre_swab_lov_user_md_objects(
 				    ((struct lov_user_md_v1 *)lmm)->lmm_objects,
 				    stripe_count);
 		} else if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V3)) {
 			lustre_swab_lov_user_md_v3(
-				(struct lov_user_md_v3 *)lmm);
+					(struct lov_user_md_v3 *)lmm);
 			if (S_ISREG(body->mbo_mode))
-                                lustre_swab_lov_user_md_objects(
-                                 ((struct lov_user_md_v3 *)lmm)->lmm_objects,
-                                 stripe_count);
-                }
+				lustre_swab_lov_user_md_objects(
+				 ((struct lov_user_md_v3 *)lmm)->lmm_objects,
+				 stripe_count);
+		} else if (lmm->lmm_magic ==
+			   cpu_to_le32(LOV_MAGIC_COMP_V1)) {
+			lustre_swab_lov_comp_md_v1(
+					(struct lov_comp_md_v1 *)lmm);
+		}
         }
 
 out:
@@ -1694,14 +1702,6 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 
 	lum_size = rc;
 	rc = ll_lov_setstripe_ea_info(inode, file, flags, klum, lum_size);
-	if (rc == 0) {
-		__u32 gen;
-
-		put_user(0, &lum->lmm_stripe_count);
-
-		ll_layout_refresh(inode, &gen);
-		rc = ll_file_getstripe(inode, (struct lov_user_md __user *)arg);
-	}
 
 	OBD_FREE(klum, lum_size);
 	RETURN(rc);
@@ -4120,9 +4120,9 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, enum ldlm_mode mode,
 	lock_res_and_lock(lock);
 	lvb_ready = ldlm_is_lvb_ready(lock);
 	unlock_res_and_lock(lock);
+
 	/* checking lvb_ready is racy but this is okay. The worst case is
 	 * that multi processes may configure the file on the same time. */
-
 	if (lvb_ready)
 		GOTO(out, rc = 0);
 
@@ -4147,7 +4147,6 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, enum ldlm_mode mode,
 	/* refresh layout failed, need to wait */
 	wait_layout = rc == -EBUSY;
 	EXIT;
-
 out:
 	LDLM_LOCK_PUT(lock);
 	ldlm_lock_decref(lockh, mode);
@@ -4172,39 +4171,37 @@ out:
 	RETURN(rc);
 }
 
-static int ll_layout_refresh_locked(struct inode *inode)
+/**
+ * Issue layout intent RPC to MDS.
+ * \param inode [in]	file inode
+ * \param intent [in]	layout intent
+ *
+ * \retval 0	on success
+ * \retval < 0	error code
+ */
+static int ll_layout_intent(struct inode *inode, struct layout_intent *intent)
 {
 	struct ll_inode_info  *lli = ll_i2info(inode);
 	struct ll_sb_info     *sbi = ll_i2sbi(inode);
 	struct md_op_data     *op_data;
-	struct lookup_intent	it;
-	struct lustre_handle	lockh;
-	enum ldlm_mode		mode;
+	struct lookup_intent it;
 	struct ptlrpc_request *req;
 	int rc;
 	ENTRY;
-
-again:
-	/* mostly layout lock is caching on the local side, so try to match
-	 * it before grabbing layout lock mutex. */
-	mode = ll_take_md_lock(inode, MDS_INODELOCK_LAYOUT, &lockh, 0,
-			       LCK_CR | LCK_CW | LCK_PR | LCK_PW);
-	if (mode != 0) { /* hit cached lock */
-		rc = ll_layout_lock_set(&lockh, mode, inode);
-		if (rc == -EAGAIN)
-			goto again;
-
-		RETURN(rc);
-	}
 
 	op_data = ll_prep_md_op_data(NULL, inode, inode, NULL,
 				     0, 0, LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
-	/* have to enqueue one */
+	op_data->op_data = intent;
+	op_data->op_data_size = sizeof(*intent);
+
 	memset(&it, 0, sizeof(it));
 	it.it_op = IT_LAYOUT;
+	if (intent->li_opc == LAYOUT_INTENT_WRITE ||
+	    intent->li_opc == LAYOUT_INTENT_TRUNC)
+		it.it_flags = FMODE_WRITE;
 
 	LDLM_DEBUG_NOLOCK("%s: requeue layout lock for file "DFID"(%p)",
 			  ll_get_fsname(inode->i_sb, NULL, 0),
@@ -4218,18 +4215,11 @@ again:
 
 	ll_finish_md_op_data(op_data);
 
-	mode = it.it_lock_mode;
-	it.it_lock_mode = 0;
-	ll_intent_drop_lock(&it);
-
-	if (rc == 0) {
-		/* set lock data in case this is a new lock */
+	/* set lock data in case this is a new lock */
+	if (!rc)
 		ll_set_lock_data(sbi->ll_md_exp, inode, &it, NULL);
-		lockh.cookie = it.it_lock_handle;
-		rc = ll_layout_lock_set(&lockh, mode, inode);
-		if (rc == -EAGAIN)
-			goto again;
-	}
+
+	ll_intent_drop_lock(&it);
 
 	RETURN(rc);
 }
@@ -4251,6 +4241,11 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 {
 	struct ll_inode_info	*lli = ll_i2info(inode);
 	struct ll_sb_info	*sbi = ll_i2sbi(inode);
+	struct lustre_handle lockh;
+	struct layout_intent intent = {
+		.li_opc = LAYOUT_INTENT_ACCESS,
+	};
+	enum ldlm_mode mode;
 	int rc;
 	ENTRY;
 
@@ -4265,13 +4260,52 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 	/* take layout lock mutex to enqueue layout lock exclusively. */
 	mutex_lock(&lli->lli_layout_mutex);
 
-	rc = ll_layout_refresh_locked(inode);
-	if (rc < 0)
-		GOTO(out, rc);
+	while (1) {
+		/* mostly layout lock is caching on the local side, so try to
+		 * match it before grabbing layout lock mutex. */
+		mode = ll_take_md_lock(inode, MDS_INODELOCK_LAYOUT, &lockh, 0,
+				       LCK_CR | LCK_CW | LCK_PR | LCK_PW);
+		if (mode != 0) { /* hit cached lock */
+			rc = ll_layout_lock_set(&lockh, mode, inode);
+			if (rc == -EAGAIN)
+				continue;
+			break;
+		}
 
-	*gen = ll_layout_version_get(lli);
-out:
+		rc = ll_layout_intent(inode, &intent);
+		if (rc != 0)
+			break;
+	}
+
+	if (rc == 0)
+		*gen = ll_layout_version_get(lli);
 	mutex_unlock(&lli->lli_layout_mutex);
+
+	RETURN(rc);
+}
+
+/**
+ * Issue layout intent RPC indicating where in a file an IO is about to write.
+ *
+ * \param[in] inode	file inode.
+ * \param[in] start	start offset of fille in bytes where an IO is about to
+ *			write.
+ * \param[in] end	exclusive end offset in bytes of the write range.
+ *
+ * \retval 0	on success
+ * \retval < 0	error code
+ */
+int ll_layout_write_intent(struct inode *inode, __u64 start, __u64 end)
+{
+	struct layout_intent intent = {
+		.li_opc = LAYOUT_INTENT_WRITE,
+		.li_start = start,
+		.li_end = end,
+	};
+	int rc;
+	ENTRY;
+
+	rc = ll_layout_intent(inode, &intent);
 
 	RETURN(rc);
 }

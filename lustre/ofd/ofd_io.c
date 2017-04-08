@@ -46,7 +46,7 @@
 struct ofd_inconsistency_item {
 	struct list_head	 oii_list;
 	struct ofd_object	*oii_obj;
-	struct lu_fid		 oii_pfid;
+	struct filter_fid	 oii_ff;
 };
 
 /**
@@ -60,27 +60,28 @@ struct ofd_inconsistency_item {
  * \param[in] env	execution environment
  * \param[in] ofd	OFD device
  * \param[in] oii	object-related local data
- * \param[in] lr	LFSCK request data
+ * \param[in] lrl	LFSCK request data
  */
 static void ofd_inconsistency_verify_one(const struct lu_env *env,
 					 struct ofd_device *ofd,
 					 struct ofd_inconsistency_item *oii,
-					 struct lfsck_request *lr)
+					 struct lfsck_req_local *lrl)
 {
-	struct ofd_object	*fo	= oii->oii_obj;
-	struct lu_fid		*pfid	= &fo->ofo_pfid;
-	int			 rc;
+	struct ofd_object *fo = oii->oii_obj;
+	struct filter_fid *client_ff = &oii->oii_ff;
+	struct filter_fid *local_ff = &fo->ofo_ff;
+	int rc;
 
 	LASSERT(fo->ofo_pfid_checking);
 	LASSERT(!fo->ofo_pfid_verified);
 
-	lr->lr_fid = fo->ofo_header.loh_fid; /* OST-object itself FID. */
-	lr->lr_fid2 = oii->oii_pfid; /* client given PFID. */
-	lr->lr_fid3 = *pfid; /* OST local stored PFID. */
+	lrl->lrl_fid = fo->ofo_header.loh_fid; /* OST-object itself FID. */
+	lrl->lrl_ff_client = *client_ff; /* client given PFID. */
+	lrl->lrl_ff_local = *local_ff; /* OST local stored PFID. */
 
-	rc = lfsck_in_notify(env, ofd->ofd_osd, lr, NULL);
+	rc = lfsck_in_notify_local(env, ofd->ofd_osd, lrl, NULL);
 	ofd_write_lock(env, fo);
-	switch (lr->lr_status) {
+	switch (lrl->lrl_status) {
 	case LPVS_INIT:
 		LASSERT(rc <= 0);
 
@@ -89,7 +90,8 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 			       "PFID xattr for "DFID", the client given PFID "
 			       DFID", OST local stored PFID "DFID": rc = %d\n",
 			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
-			       PFID(&oii->oii_pfid), PFID(pfid), rc);
+			       PFID(&client_ff->ff_parent),
+			       PFID(&local_ff->ff_parent), rc);
 		else
 			fo->ofo_pfid_verified = 1;
 		break;
@@ -102,14 +104,16 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 			       "PFID for "DFID", the client given PFID "DFID
 			       ", local stored PFID "DFID": rc = %d\n",
 			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
-			       PFID(&oii->oii_pfid), PFID(pfid), rc);
+			       PFID(&client_ff->ff_parent),
+			       PFID(&local_ff->ff_parent), rc);
 		else
 			CDEBUG(D_LFSCK, "%s: both the client given PFID and "
 			       "the OST local stored PFID are stale for the "
 			       "OST-object "DFID", client given PFID is "DFID
 			       ", local stored PFID is "DFID"\n",
 			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
-			       PFID(&oii->oii_pfid), PFID(pfid));
+			       PFID(&client_ff->ff_parent),
+			       PFID(&local_ff->ff_parent));
 		break;
 	case LPVS_INCONSISTENT_TOFIX:
 		ofd->ofd_inconsistency_self_detected++;
@@ -119,15 +123,17 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 			       "for "DFID", with the client given PFID "DFID
 			       ", the old stored PFID "DFID"\n",
 			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
-			       PFID(&oii->oii_pfid), PFID(pfid));
+			       PFID(&client_ff->ff_parent),
+			       PFID(&local_ff->ff_parent));
 		} else if (rc < 0) {
 			CDEBUG(D_LFSCK, "%s: fail to fix the OST PFID xattr "
 			       "for "DFID", client given PFID "DFID", local "
 			       "stored PFID "DFID": rc = %d\n",
 			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
-			       PFID(&oii->oii_pfid), PFID(pfid), rc);
+			       PFID(&client_ff->ff_parent),
+			       PFID(&local_ff->ff_parent), rc);
 		}
-		*pfid = oii->oii_pfid;
+		local_ff->ff_parent = client_ff->ff_parent;
 		fo->ofo_pfid_verified = 1;
 		break;
 	default:
@@ -153,29 +159,29 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
  */
 static int ofd_inconsistency_verification_main(void *args)
 {
-	struct lu_env		       env;
-	struct ofd_device	      *ofd    = args;
-	struct ptlrpc_thread	      *thread = &ofd->ofd_inconsistency_thread;
+	struct lu_env env;
+	struct ofd_device *ofd = args;
+	struct ptlrpc_thread *thread = &ofd->ofd_inconsistency_thread;
 	struct ofd_inconsistency_item *oii;
-	struct lfsck_request	      *lr     = NULL;
-	struct l_wait_info	       lwi    = { 0 };
-	int			       rc;
+	struct lfsck_req_local *lrl = NULL;
+	struct l_wait_info lwi = { 0 };
+	int rc;
 	ENTRY;
 
 	rc = lu_env_init(&env, LCT_DT_THREAD);
 	spin_lock(&ofd->ofd_inconsistency_lock);
-	thread_set_flags(thread, rc != 0 ? SVC_STOPPED : SVC_RUNNING);
+	thread_set_flags(thread, rc ? SVC_STOPPED : SVC_RUNNING);
 	wake_up_all(&thread->t_ctl_waitq);
 	spin_unlock(&ofd->ofd_inconsistency_lock);
-	if (rc != 0)
+	if (rc)
 		RETURN(rc);
 
-	OBD_ALLOC_PTR(lr);
-	if (unlikely(lr == NULL))
+	OBD_ALLOC_PTR(lrl);
+	if (unlikely(!lrl))
 		GOTO(out_unlocked, rc = -ENOMEM);
 
-	lr->lr_event = LE_PAIRS_VERIFY;
-	lr->lr_active = LFSCK_TYPE_LAYOUT;
+	lrl->lrl_event = LEL_PAIRS_VERIFY_LOCAL;
+	lrl->lrl_active = LFSCK_TYPE_LAYOUT;
 
 	spin_lock(&ofd->ofd_inconsistency_lock);
 	while (1) {
@@ -188,7 +194,7 @@ static int ofd_inconsistency_verification_main(void *args)
 					 oii_list);
 			list_del_init(&oii->oii_list);
 			spin_unlock(&ofd->ofd_inconsistency_lock);
-			ofd_inconsistency_verify_one(&env, ofd, oii, lr);
+			ofd_inconsistency_verify_one(&env, ofd, oii, lrl);
 			spin_lock(&ofd->ofd_inconsistency_lock);
 		}
 
@@ -219,7 +225,7 @@ static int ofd_inconsistency_verification_main(void *args)
 		spin_lock(&ofd->ofd_inconsistency_lock);
 	}
 
-	OBD_FREE_PTR(lr);
+	OBD_FREE_PTR(lrl);
 
 	GOTO(out, rc = 0);
 
@@ -320,9 +326,10 @@ int ofd_stop_inconsistency_verification_thread(struct ofd_device *ofd)
 static void ofd_add_inconsistency_item(const struct lu_env *env,
 				       struct ofd_object *fo, struct obdo *oa)
 {
-	struct ofd_device		*ofd	= ofd_obj2dev(fo);
-	struct ofd_inconsistency_item	*oii;
-	bool				 wakeup = false;
+	struct ofd_device *ofd = ofd_obj2dev(fo);
+	struct ofd_inconsistency_item *oii;
+	struct filter_fid *ff;
+	bool wakeup = false;
 
 	OBD_ALLOC_PTR(oii);
 	if (oii == NULL)
@@ -331,9 +338,11 @@ static void ofd_add_inconsistency_item(const struct lu_env *env,
 	INIT_LIST_HEAD(&oii->oii_list);
 	lu_object_get(&fo->ofo_obj.do_lu);
 	oii->oii_obj = fo;
-	oii->oii_pfid.f_seq = oa->o_parent_seq;
-	oii->oii_pfid.f_oid = oa->o_parent_oid;
-	oii->oii_pfid.f_stripe_idx = oa->o_stripe_idx;
+	ff = &oii->oii_ff;
+	ff->ff_parent.f_seq = oa->o_parent_seq;
+	ff->ff_parent.f_oid = oa->o_parent_oid;
+	ff->ff_parent.f_stripe_idx = oa->o_stripe_idx;
+	ff->ff_layout = oa->o_layout;
 
 	spin_lock(&ofd->ofd_inconsistency_lock);
 	if (fo->ofo_pfid_checking || fo->ofo_pfid_verified) {
@@ -378,8 +387,8 @@ static void ofd_add_inconsistency_item(const struct lu_env *env,
 int ofd_verify_ff(const struct lu_env *env, struct ofd_object *fo,
 		  struct obdo *oa)
 {
-	struct lu_fid	*pfid	= &fo->ofo_pfid;
-	int		 rc	= 0;
+	struct lu_fid *pfid = &fo->ofo_ff.ff_parent;
+	int rc = 0;
 	ENTRY;
 
 	if (fid_is_sane(pfid)) {
@@ -855,9 +864,8 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 	if (ff_needed) {
 		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR1))
 			ff->ff_parent.f_oid = cpu_to_le32(1UL << 31);
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR2))
-			ff->ff_parent.f_oid =
-			cpu_to_le32(le32_to_cpu(ff->ff_parent.f_oid) - 1);
+		else if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_UNMATCHED_PAIR2))
+			le32_add_cpu(&ff->ff_parent.f_oid, -1);
 
 		info->fti_buf.lb_buf = ff;
 		info->fti_buf.lb_len = sizeof(*ff);
@@ -887,16 +895,8 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 
 		rc = dt_xattr_set(env, dt_obj, &info->fti_buf, XATTR_NAME_FID,
 				  0, th);
-		if (rc == 0) {
-			ofd_obj->ofo_pfid.f_seq = le64_to_cpu(ff->ff_parent.f_seq);
-			ofd_obj->ofo_pfid.f_oid = le32_to_cpu(ff->ff_parent.f_oid);
-			/* Currently, the filter_fid::ff_parent::f_ver is not
-			 * the real parent MDT-object's FID::f_ver, instead it
-			 * is the OST-object index in its parent MDT-object's
-			 * layout EA. */
-			ofd_obj->ofo_pfid.f_stripe_idx =
-					le32_to_cpu(ff->ff_parent.f_stripe_idx);
-		}
+		if (!rc)
+			filter_fid_le_to_cpu(&ofd_obj->ofo_ff, ff, sizeof(*ff));
 	}
 
 	GOTO(out_tx, rc);

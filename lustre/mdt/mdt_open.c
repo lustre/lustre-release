@@ -1665,6 +1665,31 @@ out:
 	return obj;
 }
 
+/* XXX Look into layout in MDT layer. */
+static inline int mdt_hsm_set_released(struct lov_mds_md *lmm)
+{
+	struct lov_comp_md_v1	*comp_v1;
+	struct lov_mds_md	*v1;
+	__u32	off;
+	int	i;
+
+	if (lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_COMP_V1_DEF)) {
+		comp_v1 = (struct lov_comp_md_v1 *)lmm;
+
+		if (comp_v1->lcm_entry_count == 0)
+			return -EINVAL;
+
+		for (i = 0; i < le32_to_cpu(comp_v1->lcm_entry_count); i++) {
+			off = le32_to_cpu(comp_v1->lcm_entries[i].lcme_offset);
+			v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
+			v1->lmm_pattern |= cpu_to_le32(LOV_PATTERN_F_RELEASED);
+		}
+	} else {
+		lmm->lmm_pattern |= cpu_to_le32(LOV_PATTERN_F_RELEASED);
+	}
+	return 0;
+}
+
 static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 			   struct md_attr *ma)
 {
@@ -1758,19 +1783,20 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 		ma->ma_lmm->lmm_stripe_size = cpu_to_le32(LOV_MIN_STRIPE_SIZE);
 		ma->ma_lmm_size = sizeof(*ma->ma_lmm);
 	} else {
-		/* Magic must be LOV_MAGIC_Vx_DEF otherwise LOD will interpret
+		/* Magic must be LOV_MAGIC_*_DEF otherwise LOD will interpret
 		 * ma_lmm as lov_user_md, then it will be confused by union of
 		 * layout_gen and stripe_offset. */
-		if (le32_to_cpu(ma->ma_lmm->lmm_magic) == LOV_MAGIC_V1)
-			ma->ma_lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V1_DEF);
-		else if (le32_to_cpu(ma->ma_lmm->lmm_magic) == LOV_MAGIC_V3)
-			ma->ma_lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V3_DEF);
+		if ((le32_to_cpu(ma->ma_lmm->lmm_magic) & LOV_MAGIC_MASK) ==
+		    LOV_MAGIC_MAGIC)
+			ma->ma_lmm->lmm_magic |= cpu_to_le32(LOV_MAGIC_DEF);
 		else
 			GOTO(out_unlock, rc = -EINVAL);
 	}
 
-	/* Set file as released */
-	ma->ma_lmm->lmm_pattern |= cpu_to_le32(LOV_PATTERN_F_RELEASED);
+	/* Set file as released. */
+	rc = mdt_hsm_set_released(ma->ma_lmm);
+	if (rc)
+		GOTO(out_unlock, rc);
 
 	orp_ma = &info->mti_u.hsm.attr;
 	orp_ma->ma_attr.la_mode = S_IFREG | S_IWUSR;

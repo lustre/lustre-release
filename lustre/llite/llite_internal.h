@@ -921,6 +921,8 @@ static inline ssize_t ll_lov_user_md_size(const struct lov_user_md *lum)
 
 		return lov_user_md_size(lum->lmm_stripe_count,
 					LOV_USER_MAGIC_SPECIFIC);
+	case LOV_USER_MAGIC_COMP_V1:
+		return ((struct lov_comp_md_v1 *)lum)->lcm_size;
 	}
 
 	return -EINVAL;
@@ -1417,6 +1419,7 @@ static inline void d_lustre_revalidate(struct dentry *dentry)
 int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf);
 int ll_layout_refresh(struct inode *inode, __u32 *gen);
 int ll_layout_restore(struct inode *inode, loff_t start, __u64 length);
+int ll_layout_write_intent(struct inode *inode, __u64 start, __u64 end);
 
 int ll_xattr_init(void);
 void ll_xattr_fini(void);

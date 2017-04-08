@@ -26,6 +26,10 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
         \fB[[!] --stripe-index|-i <index,...>]
         \fB[[!] --stripe-size|-S [+-]N[kMG]]
         \fB[[!] --layout|-L raid0,released]
+        \fB[[!] --component-count [+-]comp_cnt]
+        \fB[[!] --component-start [+-]N[kMGTPE]]
+        \fB[[!] --component-end|-E [+-]N[kMGTPE]]
+        \fB[[!] --component-flags <comp_flags>]
         \fB[--type |-t {bcdflpsD}] [[!] --gid|-g|--group|-G <gname>|<gid>]
         \fB[[!] --uid|-u|--user|-U <uname>|<uid>] [[!] --pool <pool>]\fR
 .br
@@ -34,6 +38,9 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v]
         \fB[--stripe-count|-c ] [--stripe-index|-i] [--mdt-index|-M] [--fid|-F]
         \fB[--stripe-size|-S] [--directory|-d] [--layout|-L] [--generation|-g]
+        \fB[--component-id|-I [comp_id]] [--component-flags [comp_flags]]
+        \fB[--component-count] [--component-start [+-][N][kMGTPE]]
+        \fB[--component-end|-E [+-][N][kMGTPE]]
         \fB[--pool|-p] [--recursive|-r] [--raw|-R] <dirname|filename> ...\fR
 .br
 .B lfs migrate \fB-m <mdt_index>\fR
@@ -47,6 +54,11 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
                [\fB-b | --block\fR]
                [\fB-n | --non-block\fR]
 .IR file|directory
+.br
+.B lfs migrate <\fB-E | --component-end comp_end1\fR> [\fBSTRIPE_OPTIONS\fR]
+               <\fB-E | --component-end comp_end2\fR> [\fBSTRIPE_OPTIONS\fR]
+               \fB...\fR
+.IR filename
 .br
 .B lfs mkdir [\fB-c | --count <stripe_count>\fR]
              [\fB-i | --index <mdt_idx>\fR]
@@ -102,6 +114,14 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs setstripe -d <dir>
 .br
+.B lfs setstripe <--component-end|-E end1> [STRIPE_OPTIONS]
+       \fB<--component-end|-E end2> [STRIPE_OPTIONS] ... <filename>\fR
+.br
+.B lfs setstripe --component-add <--component-end|-E end1> [STRIPE_OPTIONS]
+       \fB<--component-end|-E end2> [STRIPE_OPTIONS] ... <filename>\fR
+.br
+.B lfs setstripe --component-del <--component-id|-I id | --component-flags flags> <filename>
+.br
 .B lfs --version
 .br
 .B lfs --list-commands
@@ -154,6 +174,10 @@ to that filesystem are displayed.
         \fB[--count | -c ] [--index | -i | --offset | -o  ]
         \fB[--pool | -p ] [--size | -s ] [--directory | -d ]
         \fB[--layout | -L ] [--fid | -F ] [--generation | -g ]
+        \fB[--component-id|-I [comp_id]]
+        \fB[--component-flags [comp_flags]]
+        \fB[--component-count] [--component-start [+-][N][kMGTPE]]
+        \fB[--component-end|-E [+-][N][kMGTPE]]
         \fB[--recursive | -r ] [--raw | -R ] <dirname|filename>\fR
 .br
 List the striping information for a given filename or directory tree.
@@ -166,6 +190,11 @@ only want specific striping information then the options of
 .BR --layout ,
 .BR --fid ,
 .BR --generation ,
+.BR --component-id ,
+.BR --component-flags ,
+.BR --component-count ,
+.BR --component-start ,
+.BR --component-end ,
 or
 .B --pool
 can be used to return only the specific fields.
@@ -199,71 +228,13 @@ To show only the FID use
 The layout generation can be printed with the
 .B --generation
 option.
-.TP
-.B setstripe [--stripe-count|-c stripe_count] [--stripe-size|-S stripe_size]
-        \fB[--stripe-index|-i start_ost_index] [--pool <poolname>]
-        \fB[--ost-index|-o <ost_indices>] <dirname|filename>\fR
-.br
-To create a new file, or set the directory default, with the specified striping
-parameters.  The
-.I stripe_count
-is the number of OSTs to stripe a file over. A
-.I stripe_count
-of 0 means to use the filesystem-wide default stripe count (default 1), and a
-.I stripe_count
-of -1 means to stripe over all available OSTs.  The
-.I stripe_size
-is the number of bytes to store on each OST before moving to the next OST.  A
-.I stripe_size
-of 0 means to use the filesystem-wide default stripe_size (default 1MB).  The
-.I start_ost_index
-is the OST index (starting at 0) on which to start striping for this file.  A
-.I start_ost_index
-of -1 allows the MDS to choose the starting index and it is strongly
-recommended, as this allows space and load balancing to be done by the MDS as
-needed. The
-.B -o
-option is used to specify the exact stripe layout on the file system.
-.I ost_indices
-is a list of OSTs referenced by their indices, which are specified in decimal
-or hex form and can be obtained using the
-.B lfs osts
-command. The list format consists of individual OST indices and index ranges
-separated by commas, e.g. 1,2-4,7. The
-.B -o
-option may be specified multiple times to stripe across the union of all listed
-OSTs. If the
-.B -c
-option is combined with
-.B -o
-the
-.I stripe_count
-must agree with the number of OSTs in
-.IR ost_indices .
-If the
-.B -i
-option is combined with
-.B -o
-the
-.I start_ost_index
-must be in the OST list, and it will be used as the index on which to start
-striping the file. Otherwise the striping will occur in the order specified in
-.IR ost_indices .
-The
-.I poolname
-is the name of a predefined pool of OSTs (see
-.BR lctl (8))
-that will be used for striping. The
-.IR stripe_count ,
-.IR stripe_size ,
-and
-.I start_ost_index
-will be used as well; the
-.I start_ost_index
-must be part of the pool or an error will be returned.
-.TP
-.B setstripe -d
-Delete the default striping on the specified directory.
+You can limit the displayed content by specifing argument for
+.B --component-id
+.B --component-flags
+.B --component-start
+.B --component-end
+options. For example, "--component-id 1" will only display the information
+for component 1.
 .TP
 .B fid2path [--link <linkno>] <fsname|rootpath> <fid> ...
 Print out the pathname(s) for the specified \fIfid\fR(s) from the filesystem
@@ -341,6 +312,9 @@ instead.
 .B migrate
 See lfs-migrate(1).
 .TP
+.B setstripe
+See lfs-setstripe(1).
+.TP
 .B --version
 Output the build version of the lfs utility. Use "lctl lustre_build_version" to get the version of the Lustre kernel modules
 .TP
@@ -354,14 +328,14 @@ Provides brief help on the various arguments
 Quit the interactive lfs session
 .SH EXAMPLES
 .TP
-.B $ lfs setstripe -s 128k -c 2 /mnt/lustre/file1
-This creates a file striped on two OSTs with 128kB on each stripe.
-.TP
-.B $ lfs setstripe -d /mnt/lustre/dir
-This deletes a default stripe pattern on dir. New files will use the default striping pattern created therein.
-.TP
 .B $ lfs getstripe -v /mnt/lustre/file1
 Lists the detailed object allocation of a given file
+.TP
+.B $ lfs getstripe -v --component-id 2 /mnt/lustre/file1
+Lists the detailed information of the component 2 in a given file
+.TP
+.B $ lfs getstripe -E -64M /mnt/lustre/file1
+Lists the information of the components in a file which has at least 64M extent end
 .TP
 .B $ lfs find /mnt/lustre
 Efficiently lists all files in a given directory and its subdirectories
@@ -371,7 +345,10 @@ Recursively list all regular files in given directory more than 30 days old
 .TP
 .B $ lfs find --obd OST2-UUID /mnt/lustre/
 Recursively list all files in a given directory that have objects on OST2-UUID.
-.tP
+.TP
+.B $ lfs find --component-count +3 /mnt/lustre
+Recursively list all files that have at most 3 components.
+.TP
 .B $ lfs check servers
 Check the status of all servers (MDT, OST)
 .TP
@@ -404,7 +381,9 @@ Set quotas of user `bob': 1GB block quota hardlimit and 2 GB block quota softlim
 .TP
 .B $ lfs setquota -t -u --block-grace 1000 --inode-grace 1w4d /mnt/lustre
 Set grace times for user quotas: 1000 seconds for block quotas, 1 week and 4 days for inode quotas
-.TP
+.SH NOTES
+The usage of \fBlfs hsm_*\fR, \fBlfs setstripe\fR, \fBlfs migrate\fR, \fBlfs setdirstripe\fR,
+\fBlfs getdirstripe\fR and \fBlfs mkdir\fR are explained in separated man pages.
 .SH BUGS
 The \fBlfs find\fR command isn't as comprehensive as \fBfind\fR(1).
 .SH AUTHOR
@@ -416,6 +395,7 @@ The lfs command is part of the Lustre filesystem.
 .BR lfs-getdirstripe (1),
 .BR lfs-mkdir (1),
 .BR lfs_migrate (1),
+.BR lfs-setstripe (1),
 .BR lfs-migrate (1),
 .BR lctl (8),
 .BR lustre (7)

@@ -120,7 +120,8 @@ static int lfs_list_commands(int argc, char **argv);
 	"                 [--stripe-index|-i <start_ost_idx>]\n"	\
 	"                 [--stripe-size|-S <stripe_size>]\n"		\
 	"                 [--pool|-p <pool_name>]\n"			\
-	"                 [--ost|-o <ost_indices>]\n"
+	"                 [--ost|-o <ost_indices>]\n"			\
+	"                 [--component-end|-E <comp_end>]\n"
 
 #define SSM_HELP_COMMON \
 	"\tstripe_size:  Number of bytes on each OST (0 filesystem default)\n" \
@@ -134,13 +135,17 @@ static int lfs_list_commands(int argc, char **argv);
 	"\t                -o <ost_1>,<ost_i>-<ost_j>,<ost_n>\n"	\
 	"\t              Or:\n"						\
 	"\t                -o <ost_1> -o <ost_i>-<ost_j> -o <ost_n>\n"	\
-	"\t              If --pool is set with --ost, then the OSTs\n" \
-	"\t              must be the members of the pool."
+	"\t              If --pool is set with --ost, then the OSTs\n"	\
+	"\t              must be the members of the pool."		\
+	"\tcomp_end:     Extent end of the component\n"			\
+	"\t              Can be specified with k, m or g (in KB, MB and GB\n" \
+	"\t              respectively, -1 for EOF), it must be aligned with\n"\
+	"\t              the stripe_size\n"
 
 #define SETSTRIPE_USAGE						\
 	SSM_CMD_COMMON("setstripe")				\
 	"                 <directory|filename>\n"		\
-	SSM_HELP_COMMON
+	SSM_HELP_COMMON						\
 
 #define MIGRATE_USAGE							\
 	SSM_CMD_COMMON("migrate  ")					\
@@ -173,9 +178,24 @@ command_t cmdlist[] = {
 	{"setstripe", lfs_setstripe, 0,
 	 "Create a new file with a specific striping pattern or\n"
 	 "set the default striping pattern on an existing directory or\n"
-	 "delete the default striping pattern from an existing directory\n"
-	 "usage: setstripe -d <directory>   (to delete default striping)\n"\
+	 "delete the default striping pattern from an existing directory or\n"
+	 "add layout component(s) to an existing composite file or\n"
+	 "delete specified component(s) from an existing composite file\n\n"
+	 "To delete default striping from an existing directory:\n"
+	 "usage: setstripe -d <directory>\n"
 	 " or\n"
+	 "To delete component(s) from an existing composite file:\n"
+	 "usage: setstripe --component-del [--component-id|-I <comp_id>]\n"
+	 "                               [--component-flags|-F <comp_flags>]\n"
+	 "                               <filename>\n"
+	 "\tcomp_id:     Unique component ID\n"
+	 "\tcomp_flags:  'init' indicating all instantiated components\n"
+	 "\t-I and -F can't be specified at the same time\n"
+	 " or\n"
+	 "To add component(s) to an existing composite file:\n"
+	 SSM_CMD_COMMON("setstripe --component-add")
+	 " or\n"
+	 "To create a file with specified striping/composite layout:\n"
 	 SETSTRIPE_USAGE},
 	{"getstripe", lfs_getstripe, 0,
 	 "To list the striping info for a given file or files in a\n"
@@ -185,6 +205,11 @@ command_t cmdlist[] = {
 	 "		   [--pool|-p] [--stripe-size|-S] [--directory|-d]\n"
 	 "		   [--mdt|-m] [--recursive|-r] [--raw|-R]\n"
 	 "		   [--layout|-L] [--fid|-F] [--generation|-g]\n"
+	 "		   [--component-id|-I [comp_id]]\n"
+	 "		   [--component-flags [comp_flags]]\n"
+	 "		   [--component-count [comp_count]]\n"
+	 "		   [--component-start [comp_start]]\n"
+	 "		   [--component-end|-E [comp_end]]\n"
 	 "		   <directory|filename> ..."},
 	{"setdirstripe", lfs_setdirstripe, 0,
 	 "To create a striped directory on a specified MDT. This can only\n"
@@ -225,6 +250,10 @@ command_t cmdlist[] = {
          "     [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
          "     [[!] --uid|-u|--user|-U <uid>|<uname>] [[!] --pool <pool>]\n"
 	 "     [[!] --layout|-L released,raid0]\n"
+	 "     [[!] --component-count [+-]<comp_cnt>]\n"
+	 "     [[!] --component-start [+-]N[kMGTPE]]\n"
+	 "     [[!] --component-end|-E [+-]N[kMGTPE]]\n"
+	 "     [[!] --component-flags <comp_flags>]\n"
          "\t !: used before an option indicates 'NOT' requested attribute\n"
          "\t -: used before a value indicates 'AT MOST' requested value\n"
          "\t +: used before a value indicates 'AT LEAST' requested value\n"},
@@ -622,8 +651,82 @@ static int migrate_nonblock(int fd, int fdv, const struct stat *st,
 	return 0;
 }
 
+static int lfs_component_set(char *fname, int comp_id, __u32 flags)
+{
+	return -ENOTSUP;
+}
+
+static int lfs_component_del(char *fname, __u32 comp_id, __u32 flags)
+{
+	int	rc = 0;
+
+	if (flags != 0 && comp_id != 0)
+		return -EINVAL;
+
+	/* LCME_FL_INIT is the only supported flag in PFL */
+	if (flags != 0) {
+		if (flags & ~LCME_KNOWN_FLAGS) {
+			fprintf(stderr, "Invalid component flags %#x\n", flags);
+			return -EINVAL;
+		}
+		comp_id = LCME_ID_NONE | flags;
+	} else if (comp_id > LCME_ID_MAX) {
+		fprintf(stderr, "Invalid component id %u\n", comp_id);
+		return -EINVAL;
+	}
+
+	rc = llapi_layout_file_comp_del(fname, comp_id);
+	if (rc)
+		fprintf(stderr, "Delete component %#x from %s failed. %s\n",
+			comp_id, fname, strerror(errno));
+	return rc;
+}
+
+static int lfs_component_add(char *fname, struct llapi_layout *layout)
+{
+	int	rc;
+
+	if (layout == NULL)
+		return -EINVAL;
+
+	rc = llapi_layout_file_comp_add(fname, layout);
+	if (rc)
+		fprintf(stderr, "Add layout component(s) to %s failed. %s\n",
+			fname, strerror(errno));
+	return rc;
+}
+
+static int lfs_component_create(char *fname, int open_flags, mode_t open_mode,
+				struct llapi_layout *layout)
+{
+	struct stat	st;
+	int	fd;
+
+	if (layout == NULL)
+		return -EINVAL;
+
+	fd = lstat(fname, &st);
+	if (fd == 0 && S_ISDIR(st.st_mode)) {
+		open_flags = O_DIRECTORY | O_RDONLY;
+		fd = llapi_layout_file_open(fname, open_flags, open_mode,
+					    layout);
+	} else {
+		fd = llapi_layout_file_create(fname, open_flags, open_mode,
+					      layout);
+	}
+
+	if (fd < 0)
+		fprintf(stderr, "%s %s failed. %s\n",
+			S_ISDIR(st.st_mode) ?
+				"Set default composite layout to " :
+				"Create composite file",
+			fname, strerror(errno));
+	return fd;
+}
+
 static int lfs_migrate(char *name, __u64 migration_flags,
-		       struct llapi_stripe_param *param)
+		       struct llapi_stripe_param *param,
+		       struct llapi_layout *layout)
 {
 	int			 fd = -1;
 	int			 fdv = -1;
@@ -638,7 +741,7 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	int			 rc;
 	struct lov_user_md	*lum = NULL;
 	int			 lum_size;
-	int			 buf_size;
+	int			 buf_size = 1024 * 1024 * 4;
 	bool			 have_lease_rdlck = false;
 	struct stat		 st;
 	struct stat		 stv;
@@ -656,10 +759,12 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	 * (eg: no stripe)
 	 * in case of a real error, a later call will fail with better
 	 * error management */
-	if (rc < 0)
-		buf_size = 1024 * 1024;
-	else
-		buf_size = lum->lmm_stripe_size;
+	if (rc == 0) {
+		if ((lum->lmm_magic == LOV_USER_MAGIC_V1 ||
+		     lum->lmm_magic == LOV_USER_MAGIC_V3) &&
+		    lum->lmm_stripe_size != 0)
+			buf_size = lum->lmm_stripe_size;
+	}
 
 	/* open file, direct io */
 	/* even if the file is only read, WR mode is nedeed to allow
@@ -715,6 +820,9 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	}
 
 	do {
+		int open_flags = O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW;
+		mode_t open_mode = S_IRUSR | S_IWUSR;
+
 		random_value = random();
 		rc = snprintf(volatile_file, sizeof(volatile_file),
 			      "%s/%s:%.4X:%.4X", parent, LUSTRE_VOLATILE_HDR,
@@ -725,9 +833,14 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		}
 
 		/* create, open a volatile file, use caching (ie no directio) */
-		fdv = llapi_file_open_param(volatile_file,
-				O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW,
-					    S_IRUSR | S_IWUSR, param);
+		if (param != NULL)
+			fdv = llapi_file_open_param(volatile_file, open_flags,
+						    open_mode, param);
+		else if (layout != NULL)
+			fdv = lfs_component_create(volatile_file, open_flags,
+						   open_mode, layout);
+		else
+			fdv = -EINVAL;
 	} while (fdv == -EEXIST);
 
 	if (fdv < 0) {
@@ -886,9 +999,277 @@ static int parse_targets(__u32 *osts, int size, int offset, char *arg)
 	return rc < 0 ? rc : nr;
 }
 
+static int verify_pool_name(char *prog_name, char *pool_name)
+{
+	char	*ptr;
+	int	 rc;
+
+	if (pool_name == NULL)
+		return 0;
+
+	ptr = strchr(pool_name, '.');
+	if (ptr == NULL) {
+		ptr = pool_name;
+	} else {
+		if (ptr == pool_name) {
+			fprintf(stderr, "error: %s: fsname is empty "
+				"in pool name '%s'\n",
+				prog_name, pool_name);
+			return -EINVAL;
+		}
+		++ptr;
+	}
+
+	rc = lustre_is_poolname_valid(ptr, 1, LOV_MAXPOOLNAME);
+	if (rc == -1) {
+		fprintf(stderr, "error: %s: poolname '%s' is empty\n",
+			prog_name, pool_name);
+		return -EINVAL;
+	} else if (rc == -2) {
+		fprintf(stderr, "error: %s: pool name '%s' is too long "
+			"(max is %d characters)\n",
+			prog_name, pool_name, LOV_MAXPOOLNAME);
+		return -EINVAL;
+	} else if (rc > 0) {
+		fprintf(stderr, "error: %s: char '%c' not allowed in "
+			"pool name '%s'\n",
+			prog_name, rc, pool_name);
+		return -EINVAL;
+	}
+	return rc;
+}
+
+struct lfs_setstripe_args {
+	__u64			 lsa_comp_end;
+	unsigned long long	 lsa_stripe_size;
+	int			 lsa_stripe_count;
+	int			 lsa_stripe_off;
+	__u32			 lsa_comp_flags;
+	int			 lsa_nr_osts;
+	__u32			*lsa_osts;
+	char			*lsa_pool_name;
+};
+
+static inline void setstripe_args_init(struct lfs_setstripe_args *lsa)
+{
+	memset(lsa, 0, sizeof(*lsa));
+	lsa->lsa_stripe_off = -1;
+}
+
+static inline bool setstripe_args_specified(struct lfs_setstripe_args *lsa)
+{
+	return (lsa->lsa_stripe_size != 0 || lsa->lsa_stripe_count != 0 ||
+		lsa->lsa_stripe_off != -1 || lsa->lsa_pool_name != NULL ||
+		lsa->lsa_comp_end != 0);
+}
+
+static int comp_args_to_layout(struct llapi_layout **composite,
+			       struct lfs_setstripe_args *lsa)
+{
+	struct llapi_layout *layout = *composite;
+	uint64_t prev_end = 0;
+	int i = 0, rc;
+
+	if (layout == NULL) {
+		layout = llapi_layout_alloc();
+		if (layout == NULL) {
+			fprintf(stderr, "Alloc llapi_layout failed. %s\n",
+				strerror(errno));
+			return -ENOMEM;
+		}
+		*composite = layout;
+	} else {
+		uint64_t start;
+
+		/* Get current component extent, current component
+		 * must be the tail component. */
+		rc = llapi_layout_comp_extent_get(layout, &start, &prev_end);
+		if (rc) {
+			fprintf(stderr, "Get comp extent failed. %s\n",
+				strerror(errno));
+			return rc;
+		}
+
+		rc = llapi_layout_comp_add(layout);
+		if (rc) {
+			fprintf(stderr, "Add component failed. %s\n",
+				strerror(errno));
+			return rc;
+		}
+	}
+
+	rc = llapi_layout_comp_extent_set(layout, prev_end, lsa->lsa_comp_end);
+	if (rc) {
+		fprintf(stderr, "Set extent [%lu, %llu) failed. %s\n",
+			prev_end, lsa->lsa_comp_end, strerror(errno));
+		return rc;
+	}
+
+	if (lsa->lsa_stripe_size != 0) {
+		rc = llapi_layout_stripe_size_set(layout,
+						  lsa->lsa_stripe_size);
+		if (rc) {
+			fprintf(stderr, "Set stripe size %llu failed. %s\n",
+				lsa->lsa_stripe_size, strerror(errno));
+			return rc;
+		}
+	}
+
+	if (lsa->lsa_stripe_count != 0) {
+		rc = llapi_layout_stripe_count_set(layout,
+						   lsa->lsa_stripe_count == -1 ?
+						   LLAPI_LAYOUT_WIDE :
+						   lsa->lsa_stripe_count);
+		if (rc) {
+			fprintf(stderr, "Set stripe count %d failed. %s\n",
+				lsa->lsa_stripe_count, strerror(errno));
+			return rc;
+		}
+	}
+
+	if (lsa->lsa_pool_name != NULL) {
+		rc = llapi_layout_pool_name_set(layout, lsa->lsa_pool_name);
+		if (rc) {
+			fprintf(stderr, "Set pool name: %s failed. %s\n",
+				lsa->lsa_pool_name, strerror(errno));
+			return rc;
+		}
+	}
+
+	if (lsa->lsa_nr_osts > 0) {
+		if (lsa->lsa_stripe_count > 0 &&
+		    lsa->lsa_nr_osts != lsa->lsa_stripe_count) {
+			fprintf(stderr, "stripe_count(%d) != nr_osts(%d)\n",
+				lsa->lsa_stripe_count, lsa->lsa_nr_osts);
+			return -EINVAL;
+		}
+		for (i = 0; i < lsa->lsa_nr_osts; i++) {
+			rc = llapi_layout_ost_index_set(layout, i,
+							lsa->lsa_osts[i]);
+			if (rc)
+				break;
+		}
+	} else if (lsa->lsa_stripe_off != -1) {
+		rc = llapi_layout_ost_index_set(layout, 0, lsa->lsa_stripe_off);
+	}
+	if (rc) {
+		fprintf(stderr, "Set ost index %d failed. %s\n",
+			i, strerror(errno));
+		return rc;
+	}
+
+	return 0;
+}
+
+/* In 'lfs setstripe --component-add' mode, we need to fetch the extent
+ * end of the last component in the existing file, and adjust the
+ * first extent start of the components to be added accordingly. */
+static int adjust_first_extent(char *fname, struct llapi_layout *layout)
+{
+	struct llapi_layout *head;
+	uint64_t start, end, stripe_size, prev_end = 0;
+	int rc;
+
+	if (layout == NULL)
+		return -EINVAL;
+
+	head = llapi_layout_get_by_path(fname, 0);
+	if (head == NULL) {
+		fprintf(stderr, "Read layout from %s failed. %s\n",
+			fname, strerror(errno));
+		return -EINVAL;
+	}
+
+	/* Current component of 'head' should be tail of component list. */
+	rc = llapi_layout_comp_extent_get(head, &start, &prev_end);
+	if (rc) {
+		fprintf(stderr, "Get prev extent failed. %s\n",
+			strerror(errno));
+		llapi_layout_free(head);
+		return rc;
+	}
+
+	llapi_layout_free(head);
+
+	/* Make sure we use the first component of the layout to be added. */
+	rc = llapi_layout_comp_move(layout, LLAPI_LAYOUT_COMP_POS_FIRST);
+	if (rc < 0) {
+		fprintf(stderr, "Move component cursor failed. %s\n",
+			strerror(errno));
+		return rc;
+	}
+
+	rc = llapi_layout_comp_extent_get(layout, &start, &end);
+	if (rc) {
+		fprintf(stderr, "Get extent failed. %s\n", strerror(errno));
+		return rc;
+	}
+
+	if (start > prev_end || end <= prev_end) {
+		fprintf(stderr, "First extent to be set [%lu, %lu) isn't "
+			"adjacent with the existing file extent end: %lu\n",
+			start, end, prev_end);
+		return -EINVAL;
+	}
+
+	rc = llapi_layout_stripe_size_get(layout, &stripe_size);
+	if (rc) {
+		fprintf(stderr, "Get stripe size failed. %s\n",
+			strerror(errno));
+		return rc;
+	}
+
+	if (stripe_size != LLAPI_LAYOUT_DEFAULT &&
+	    (prev_end & (stripe_size - 1))) {
+		fprintf(stderr, "Stripe size %lu not aligned with %lu\n",
+			stripe_size, prev_end);
+		return -EINVAL;
+	}
+
+	rc = llapi_layout_comp_extent_set(layout, prev_end, end);
+	if (rc) {
+		fprintf(stderr, "Set component extent [%lu, %lu) failed. %s\n",
+			prev_end, end, strerror(errno));
+		return rc;
+	}
+
+	return 0;
+}
+
+static int comp_name2flags(__u32 *flags, char *name)
+{
+	char *ptr;
+
+	if (name == NULL)
+		return -EINVAL;
+
+	*flags = 0;
+	for (ptr = name; ; ptr = NULL) {
+		char *flg = strtok(ptr, ",");
+		if (flg == NULL)
+			break;
+		if (strcmp(flg, "init") == 0)
+			*flags |= LCME_FL_INIT;
+		else
+			return -EINVAL;
+	}
+	return (*flags == 0) ? -EINVAL : 0;
+}
+
+enum {
+	LFS_POOL_OPT = 3,
+	LFS_COMP_COUNT_OPT,
+	LFS_COMP_START_OPT,
+	LFS_COMP_FLAGS_OPT,
+	LFS_COMP_DEL_OPT,
+	LFS_COMP_SET_OPT,
+	LFS_COMP_ADD_OPT
+};
+
 /* functions */
 static int lfs_setstripe(int argc, char **argv)
 {
+	struct lfs_setstripe_args	 lsa;
 	struct llapi_stripe_param	*param = NULL;
 	struct find_param		 migrate_mdt_param = {
 		.fp_max_depth = -1,
@@ -897,26 +1278,27 @@ static int lfs_setstripe(int argc, char **argv)
 	char				*fname;
 	int				 result;
 	int				 result2 = 0;
-	unsigned long long		 st_size;
-	int				 st_offset, st_count;
 	char				*end;
 	int				 c;
 	int				 delete = 0;
-	char				*stripe_size_arg = NULL;
-	char				*stripe_off_arg = NULL;
-	char				*stripe_count_arg = NULL;
-	char				*pool_name_arg = NULL;
 	char				*mdt_idx_arg = NULL;
 	unsigned long long		 size_units = 1;
 	bool				 migrate_mode = false;
 	bool				 migration_block = false;
 	__u64				 migration_flags = 0;
 	__u32				 osts[LOV_MAX_STRIPE_COUNT] = { 0 };
-	int				 nr_osts = 0;
+	int				 comp_del = 0, comp_set = 0;
+	int				 comp_add = 0;
+	__u32				 comp_id = 0;
+	struct llapi_layout		*layout = NULL;
 
 	struct option		 long_opts[] = {
 		/* --block is only valid in migrate mode */
 		{"block",	 no_argument,	    0, 'b'},
+		{"component-add", no_argument, 0, LFS_COMP_ADD_OPT},
+		{"component-del", no_argument, 0, LFS_COMP_DEL_OPT},
+		{"component-flags", required_argument, 0, LFS_COMP_FLAGS_OPT},
+		{"component-set", no_argument, 0, LFS_COMP_SET_OPT},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "stripe-count", but was explicitly
 		 * made "stripe-count" for consistency with other options,
@@ -926,6 +1308,7 @@ static int lfs_setstripe(int argc, char **argv)
 		{"stripe-count", required_argument, 0, 'c'},
 		{"stripe_count", required_argument, 0, 'c'},
 		{"delete",       no_argument,       0, 'd'},
+		{"component-end", required_argument, 0, 'E'},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "stripe-index", but was explicitly
 		 * made "stripe-index" for consistency with other options,
@@ -934,6 +1317,7 @@ static int lfs_setstripe(int argc, char **argv)
 #endif
 		{"stripe-index", required_argument, 0, 'i'},
 		{"stripe_index", required_argument, 0, 'i'},
+		{"component-id", required_argument, 0, 'I'},
 		{"mdt",	 	 required_argument, 0, 'm'},
 		{"mdt-index",	 required_argument, 0, 'm'},
 		{"mdt_index",	 required_argument, 0, 'm'},
@@ -958,24 +1342,39 @@ static int lfs_setstripe(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
-	st_size = 0;
-	st_offset = -1;
-	st_count = 0;
+	setstripe_args_init(&lsa);
 
 	if (strcmp(argv[0], "migrate") == 0)
 		migrate_mode = true;
 
-	while ((c = getopt_long(argc, argv, "bc:di:m:no:p:s:S:v",
+	while ((c = getopt_long(argc, argv, "bc:dE:i:I:m:no:p:s:S:v",
 				long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
 			/* Long options. */
 			break;
+		case LFS_COMP_ADD_OPT:
+			comp_add = 1;
+			break;
+		case LFS_COMP_DEL_OPT:
+			comp_del = 1;
+			break;
+		case LFS_COMP_FLAGS_OPT:
+			result = comp_name2flags(&lsa.lsa_comp_flags, optarg);
+			if (result != 0) {
+				fprintf(stderr, "error: %s: bad comp flags "
+					"'%s'\n", argv[0], optarg);
+				goto error;
+			}
+			break;
+		case LFS_COMP_SET_OPT:
+			comp_set = 1;
+			break;
 		case 'b':
 			if (!migrate_mode) {
 				fprintf(stderr, "--block is valid only for"
 						" migrate mode\n");
-				return CMD_HELP;
+				goto error;
 			}
 			migration_block = true;
 			break;
@@ -985,39 +1384,66 @@ static int lfs_setstripe(int argc, char **argv)
 				fprintf(stderr, "warning: '--count' deprecated"
 					", use '--stripe-count' instead\n");
 #endif
-			stripe_count_arg = optarg;
+			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
+			if (*end != '\0') {
+				fprintf(stderr, "error: %s: bad stripe count "
+					"'%s'\n", argv[0], optarg);
+				goto error;
+			}
 			break;
 		case 'd':
 			/* delete the default striping pattern */
 			delete = 1;
 			break;
-		case 'o':
-			nr_osts = parse_targets(osts,
-						sizeof(osts) / sizeof(__u32),
-						nr_osts, optarg);
-			if (nr_osts < 0) {
-				fprintf(stderr,
-					"error: %s: bad OST indices '%s'\n",
-					argv[0], optarg);
-				return CMD_HELP;
+		case 'E':
+			if (lsa.lsa_comp_end != 0) {
+				result = comp_args_to_layout(&layout, &lsa);
+				if (result)
+					goto error;
+
+				setstripe_args_init(&lsa);
 			}
 
-			if (st_offset == -1) /* first in the command line */
-				st_offset = osts[0];
+			if (!strncmp(optarg, "-1", strlen("-1")) ||
+			    !strncmp(optarg, "EOF", strlen("EOF")) ||
+			    !strncmp(optarg, "eof", strlen("eof"))) {
+				lsa.lsa_comp_end = LUSTRE_EOF;
+			} else {
+				result = llapi_parse_size(optarg,
+							&lsa.lsa_comp_end,
+							&size_units, 0);
+				if (result) {
+					fprintf(stderr, "error: %s: "
+						"bad component end '%s'\n",
+						argv[0], optarg);
+					goto error;
+				}
+			}
 			break;
 		case 'i':
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
 			if (strcmp(argv[optind - 1], "--index") == 0)
 				fprintf(stderr, "warning: '--index' deprecated"
 					", use '--stripe-index' instead\n");
-#endif
-			stripe_off_arg = optarg;
+			lsa.lsa_stripe_off = strtol(optarg, &end, 0);
+			if (*end != '\0') {
+				fprintf(stderr, "error: %s: bad stripe offset "
+					"'%s'\n", argv[0], optarg);
+				goto error;
+			}
+			break;
+		case 'I':
+			comp_id = strtoul(optarg, &end, 0);
+			if (*end != '\0' || comp_id == 0) {
+				fprintf(stderr, "error: %s: bad comp ID "
+					"'%s'\n", argv[0], optarg);
+				goto error;
+			}
 			break;
 		case 'm':
 			if (!migrate_mode) {
 				fprintf(stderr, "--mdt-index is valid only for"
 						" migrate mode\n");
-				return CMD_HELP;
+				goto error;
 			}
 			mdt_idx_arg = optarg;
 			break;
@@ -1025,9 +1451,30 @@ static int lfs_setstripe(int argc, char **argv)
 			if (!migrate_mode) {
 				fprintf(stderr, "--non-block is valid only for"
 						" migrate mode\n");
-				return CMD_HELP;
+				goto error;
 			}
 			migration_flags |= MIGRATION_NONBLOCK;
+			break;
+		case 'o':
+			lsa.lsa_nr_osts = parse_targets(osts,
+						sizeof(osts) / sizeof(__u32),
+						lsa.lsa_nr_osts, optarg);
+			if (lsa.lsa_nr_osts < 0) {
+				fprintf(stderr,
+					"error: %s: bad OST indices '%s'\n",
+					argv[0], optarg);
+				goto error;
+			}
+
+			lsa.lsa_osts = osts;
+			if (lsa.lsa_stripe_off == -1)
+				lsa.lsa_stripe_off = osts[0];
+			break;
+		case 'p':
+			result = verify_pool_name(argv[0], optarg);
+			if (result)
+				goto error;
+			lsa.lsa_pool_name = optarg;
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		case 's':
@@ -1037,119 +1484,109 @@ static int lfs_setstripe(int argc, char **argv)
 #endif
 #endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0) */
 		case 'S':
-			stripe_size_arg = optarg;
-			break;
-		case 'p':
-			pool_name_arg = optarg;
+			result = llapi_parse_size(optarg, &lsa.lsa_stripe_size,
+						  &size_units, 0);
+			if (result) {
+				fprintf(stderr, "error: %s: bad stripe size "
+					"'%s'\n", argv[0], optarg);
+				goto error;
+			}
 			break;
 		case 'v':
 			if (!migrate_mode) {
 				fprintf(stderr, "--verbose is valid only for"
 						" migrate mode\n");
-				return CMD_HELP;
+				goto error;
 			}
 			migrate_mdt_param.fp_verbose = VERBOSE_DETAIL;
 			break;
 		default:
-			return CMD_HELP;
+			goto error;
 		}
 	}
 
 	fname = argv[optind];
 
-	if (delete &&
-	    (stripe_size_arg != NULL || stripe_off_arg != NULL ||
-	     stripe_count_arg != NULL || pool_name_arg != NULL)) {
-		fprintf(stderr, "error: %s: cannot specify -d with "
-			"-s, -c, -o, or -p options\n",
-			argv[0]);
-		return CMD_HELP;
+	if (lsa.lsa_comp_end != 0) {
+		result = comp_args_to_layout(&layout, &lsa);
+		if (result)
+			goto error;
 	}
 
 	if (optind == argc) {
 		fprintf(stderr, "error: %s: missing filename|dirname\n",
 			argv[0]);
-		return CMD_HELP;
+		goto error;
+	}
+
+	/* Only LCME_FL_INIT flags is used in PFL, and it shouldn't be
+	 * altered by user space tool, so we don't need to support the
+	 * --component-set for this moment. */
+	if (comp_set != 0) {
+		fprintf(stderr, "error: %s: --component-set isn't supported.\n",
+			argv[0]);
+		goto error;
+	}
+
+	if ((delete + comp_set + comp_del + comp_add) > 1) {
+		fprintf(stderr, "error: %s: can't specify --component-set, "
+			"--component-del, --component-add or -d together\n",
+			argv[0]);
+		goto error;
+	}
+
+	if (delete && (setstripe_args_specified(&lsa) || comp_id != 0 ||
+		       lsa.lsa_comp_flags != 0 || layout != NULL)) {
+		fprintf(stderr, "error: %s: can't specify -d with "
+			"-s, -c, -o, -p, -I, -F or -E options\n",
+			argv[0]);
+		goto error;
+	}
+
+	if ((comp_set || comp_del) &&
+	    (setstripe_args_specified(&lsa) || layout != NULL)) {
+		fprintf(stderr, "error: %s: can't specify --component-del or "
+			"--component-set with -s, -c, -o, -p or -E options.\n",
+			argv[0]);
+		goto error;
+	}
+
+	if (comp_del && comp_id != 0 && lsa.lsa_comp_flags != 0) {
+		fprintf(stderr, "error: %s: can't specify both -I and -F for "
+			"--component-del option.\n", argv[0]);
+		goto error;
+	}
+
+	if (comp_add) {
+		if (layout == NULL) {
+			fprintf(stderr, "error: %s: -E option must be present"
+				"in --component-add mode.\n", argv[0]);
+			goto error;
+		}
+		result = adjust_first_extent(fname, layout);
+		if (result != 0)
+			goto error;
 	}
 
 	if (mdt_idx_arg != NULL && optind > 3) {
 		fprintf(stderr, "error: %s: cannot specify -m with other "
 			"options\n", argv[0]);
-		return CMD_HELP;
+		goto error;
 	}
 
 	if ((migration_flags & MIGRATION_NONBLOCK) && migration_block) {
 		fprintf(stderr,
 			"error: %s: cannot specify --non-block and --block\n",
 			argv[0]);
-		return CMD_HELP;
+		goto error;
 	}
 
-	if (pool_name_arg != NULL) {
-		char	*ptr;
-		int	rc;
-
-		ptr = strchr(pool_name_arg, '.');
-		if (ptr == NULL) {
-			ptr = pool_name_arg;
-		} else {
-			if ((ptr - pool_name_arg) == 0) {
-				fprintf(stderr, "error: %s: fsname is empty "
-					"in pool name '%s'\n",
-					argv[0], pool_name_arg);
-				return CMD_HELP;
-			}
-
-			++ptr;
-		}
-
-		rc = lustre_is_poolname_valid(ptr, 1, LOV_MAXPOOLNAME);
-		if (rc == -1) {
-			fprintf(stderr, "error: %s: poolname '%s' is "
-				"empty\n",
-				argv[0], pool_name_arg);
-			return CMD_HELP;
-		} else if (rc == -2) {
-			fprintf(stderr, "error: %s: pool name '%s' is too long "
-				"(max is %d characters)\n",
-				argv[0], pool_name_arg, LOV_MAXPOOLNAME);
-			return CMD_HELP;
-		} else if (rc > 0) {
-			fprintf(stderr, "error: %s: char '%c' not allowed in "
-				"pool name '%s'\n",
-				argv[0], rc, pool_name_arg);
-			return CMD_HELP;
-		}
+	/* support --component-id option for migrate later. */
+	if (migrate_mode && comp_id != 0) {
+		fprintf(stderr, "error: %s: -I isn't supported yet.\n",
+			argv[0]);
+		goto error;
 	}
-
-	/* get the stripe size */
-	if (stripe_size_arg != NULL) {
-		result = llapi_parse_size(stripe_size_arg, &st_size,
-					  &size_units, 0);
-		if (result) {
-			fprintf(stderr, "error: %s: bad stripe size '%s'\n",
-				argv[0], stripe_size_arg);
-			return CMD_HELP;
-		}
-	}
-        /* get the stripe offset */
-        if (stripe_off_arg != NULL) {
-                st_offset = strtol(stripe_off_arg, &end, 0);
-                if (*end != '\0') {
-                        fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
-                                argv[0], stripe_off_arg);
-                        return CMD_HELP;
-                }
-        }
-        /* get the stripe count */
-        if (stripe_count_arg != NULL) {
-                st_count = strtoul(stripe_count_arg, &end, 0);
-                if (*end != '\0') {
-                        fprintf(stderr, "error: %s: bad stripe count '%s'\n",
-                                argv[0], stripe_count_arg);
-                        return CMD_HELP;
-                }
-        }
 
 	if (mdt_idx_arg != NULL) {
 		/* initialize migrate mdt parameters */
@@ -1157,41 +1594,72 @@ static int lfs_setstripe(int argc, char **argv)
 		if (*end != '\0') {
 			fprintf(stderr, "error: %s: bad MDT index '%s'\n",
 				argv[0], mdt_idx_arg);
-			return CMD_HELP;
+			goto error;
 		}
 		migrate_mdt_param.fp_migrate = 1;
-	} else {
+	} else if (layout == NULL) {
 		/* initialize stripe parameters */
-		param = calloc(1, offsetof(typeof(*param), lsp_osts[nr_osts]));
+		param = calloc(1, offsetof(typeof(*param),
+			       lsp_osts[lsa.lsa_nr_osts]));
 		if (param == NULL) {
-			fprintf(stderr, "error: %s: run out of memory\n",
-				argv[0]);
-			return CMD_HELP;
+			fprintf(stderr, "error: %s: %s\n", argv[0],
+				strerror(ENOMEM));
+			goto error;
 		}
 
-		param->lsp_stripe_size = st_size;
-		param->lsp_stripe_offset = st_offset;
-		param->lsp_stripe_count = st_count;
+		param->lsp_stripe_size = lsa.lsa_stripe_size;
+		param->lsp_stripe_offset = lsa.lsa_stripe_off;
+		param->lsp_stripe_count = lsa.lsa_stripe_count;
 		param->lsp_stripe_pattern = 0;
-		param->lsp_pool = pool_name_arg;
+		param->lsp_pool = lsa.lsa_pool_name;
 		param->lsp_is_specific = false;
-		if (nr_osts > 0) {
-			if (st_count > 0 && nr_osts != st_count) {
+		if (lsa.lsa_nr_osts > 0) {
+			if (lsa.lsa_stripe_count > 0 &&
+			    lsa.lsa_nr_osts != lsa.lsa_stripe_count) {
 				fprintf(stderr, "error: %s: stripe count '%d' "
 					"doesn't match the number of OSTs: %d\n"
-					, argv[0], st_count, nr_osts);
+					, argv[0], lsa.lsa_stripe_count,
+					lsa.lsa_nr_osts);
 				free(param);
-				return CMD_HELP;
+				goto error;
 			}
 
 			param->lsp_is_specific = true;
-			param->lsp_stripe_count = nr_osts;
-			memcpy(param->lsp_osts, osts, sizeof(*osts) * nr_osts);
+			param->lsp_stripe_count = lsa.lsa_nr_osts;
+			memcpy(param->lsp_osts, osts,
+			       sizeof(*osts) * lsa.lsa_nr_osts);
 		}
 	}
 
 	for (fname = argv[optind]; fname != NULL; fname = argv[++optind]) {
-		if (!migrate_mode) {
+		char *op;
+		if (mdt_idx_arg != NULL) {
+			result = llapi_migrate_mdt(fname, &migrate_mdt_param);
+			op = "migrate mdt objects of";
+		} else if (migrate_mode) {
+			result = lfs_migrate(fname, migration_flags, param,
+					     layout);
+			op = "migrate ost objects of";
+		} else if (comp_set != 0) {
+			result = lfs_component_set(fname, comp_id,
+						   lsa.lsa_comp_flags);
+			op = "modify component flags of";
+		} else if (comp_del != 0) {
+			result = lfs_component_del(fname, comp_id,
+						   lsa.lsa_comp_flags);
+			op = "delete component of";
+		} else if (comp_add != 0) {
+			result = lfs_component_add(fname, layout);
+			op = "add component to";
+		} else if (layout != NULL) {
+			result = lfs_component_create(fname, O_CREAT | O_WRONLY,
+						      0644, layout);
+			if (result >= 0) {
+				close(result);
+				result = 0;
+			}
+			op = "create composite";
+		} else {
 			result = llapi_file_open_param(fname,
 						       O_CREAT | O_WRONLY,
 						       0644, param);
@@ -1199,26 +1667,26 @@ static int lfs_setstripe(int argc, char **argv)
 				close(result);
 				result = 0;
 			}
-		} else if (mdt_idx_arg != NULL) {
-			result = llapi_migrate_mdt(fname, &migrate_mdt_param);
-		} else {
-			result = lfs_migrate(fname, migration_flags, param);
+			op = "create striped";
 		}
 		if (result) {
 			/* Save the first error encountered. */
 			if (result2 == 0)
 				result2 = result;
 			fprintf(stderr, "error: %s: %s file '%s' failed: %s\n",
-				argv[0], migrate_mode ? "migrate" : "create",
-				fname,
-				pool_name_arg != NULL && result == EINVAL ?
+				argv[0], op, fname,
+				lsa.lsa_pool_name != NULL && result == EINVAL ?
 				"OST not in pool?" : strerror(errno));
 			continue;
 		}
 	}
 
 	free(param);
+	llapi_layout_free(layout);
 	return result2;
+error:
+	llapi_layout_free(layout);
+	return CMD_HELP;
 }
 
 static int lfs_poollist(int argc, char **argv)
@@ -1330,7 +1798,6 @@ static int name2layout(__u32 *layout, char *name)
 	return 0;
 }
 
-#define FIND_POOL_OPT 3
 static int lfs_find(int argc, char **argv)
 {
 	int c, rc;
@@ -1341,15 +1808,20 @@ static int lfs_find(int argc, char **argv)
 		.fp_quiet = 1,
 	};
         struct option long_opts[] = {
-                {"atime",        required_argument, 0, 'A'},
-                {"stripe-count", required_argument, 0, 'c'},
-                {"stripe_count", required_argument, 0, 'c'},
-                {"ctime",        required_argument, 0, 'C'},
-                {"maxdepth",     required_argument, 0, 'D'},
-                {"gid",          required_argument, 0, 'g'},
-                {"group",        required_argument, 0, 'G'},
-                {"stripe-index", required_argument, 0, 'i'},
-                {"stripe_index", required_argument, 0, 'i'},
+		{"atime",        required_argument, 0, 'A'},
+		{"component-count", required_argument, 0, LFS_COMP_COUNT_OPT},
+		{"component-flags", required_argument, 0, LFS_COMP_FLAGS_OPT},
+		{"component-start", required_argument, 0, LFS_COMP_START_OPT},
+		{"stripe-count", required_argument, 0, 'c'},
+		{"stripe_count", required_argument, 0, 'c'},
+		{"ctime",        required_argument, 0, 'C'},
+		{"maxdepth",     required_argument, 0, 'D'},
+		{"component-end", required_argument, 0, 'E'},
+		{"gid",          required_argument, 0, 'g'},
+		{"group",        required_argument, 0, 'G'},
+		{"stripe-index", required_argument, 0, 'i'},
+		{"stripe_index", required_argument, 0, 'i'},
+		/*{"component-id", required_argument, 0, 'I'},*/
 		{"layout",	 required_argument, 0, 'L'},
                 {"mdt",          required_argument, 0, 'm'},
                 {"mdt-index",    required_argument, 0, 'm'},
@@ -1360,7 +1832,7 @@ static int lfs_find(int argc, char **argv)
                 {"obd",          required_argument, 0, 'O'},
                 {"ost",          required_argument, 0, 'O'},
                 /* no short option for pool, p/P already used */
-                {"pool",         required_argument, 0, FIND_POOL_OPT},
+		{"pool",         required_argument, 0, LFS_POOL_OPT},
                 {"print0",       no_argument,       0, 'p'},
                 {"print",        no_argument,       0, 'P'},
                 {"size",         required_argument, 0, 's'},
@@ -1383,8 +1855,8 @@ static int lfs_find(int argc, char **argv)
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
-				     "-A:c:C:D:g:G:i:L:m:M:n:O:Ppqrs:S:t:u:U:v",
-				     long_opts, NULL)) >= 0) {
+				"-A:c:C:D:E:g:G:i:L:m:M:n:O:Ppqrs:S:t:u:U:v",
+				long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
                 if (neg_opt)
@@ -1445,6 +1917,53 @@ static int lfs_find(int argc, char **argv)
 			if (rc)
 				*xsign = rc;
 			break;
+		case LFS_COMP_COUNT_OPT:
+			if (optarg[0] == '+') {
+				param.fp_comp_count_sign = -1;
+				optarg++;
+			} else if (optarg[0] == '-') {
+				param.fp_comp_count_sign =  1;
+				optarg++;
+			}
+
+			param.fp_comp_count = strtoul(optarg, &endptr, 0);
+			if (*endptr != '\0') {
+				fprintf(stderr, "error: bad component count "
+					"'%s'\n", optarg);
+				goto err;
+			}
+			param.fp_check_comp_count = 1;
+			param.fp_exclude_comp_count = !!neg_opt;
+			break;
+		case LFS_COMP_FLAGS_OPT:
+			rc = comp_name2flags(&param.fp_comp_flags, optarg);
+			if (rc) {
+				fprintf(stderr, "error: bad component flags "
+					"'%s'\n", optarg);
+				goto err;
+			}
+			param.fp_check_comp_flags = 1;
+			param.fp_exclude_comp_flags = !!neg_opt;
+			break;
+		case LFS_COMP_START_OPT:
+			if (optarg[0] == '+') {
+				param.fp_comp_start_sign = -1;
+				optarg++;
+			} else if (optarg[0] == '-') {
+				param.fp_comp_start_sign =  1;
+				optarg++;
+			}
+
+			rc = llapi_parse_size(optarg, &param.fp_comp_start,
+					      &param.fp_comp_start_units, 0);
+			if (rc) {
+				fprintf(stderr, "error: bad component start "
+					"'%s'\n", optarg);
+				goto err;
+			}
+			param.fp_check_comp_start = 1;
+			param.fp_exclude_comp_start = !!neg_opt;
+			break;
                 case 'c':
                         if (optarg[0] == '+') {
 				param.fp_stripe_count_sign = -1;
@@ -1466,6 +1985,25 @@ static int lfs_find(int argc, char **argv)
                         break;
 		case 'D':
 			param.fp_max_depth = strtol(optarg, 0, 0);
+			break;
+		case 'E':
+			if (optarg[0] == '+') {
+				param.fp_comp_end_sign = -1;
+				optarg++;
+			} else if (optarg[0] == '-') {
+				param.fp_comp_end_sign =  1;
+				optarg++;
+			}
+
+			rc = llapi_parse_size(optarg, &param.fp_comp_end,
+					      &param.fp_comp_end_units, 0);
+			if (rc) {
+				fprintf(stderr, "error: bad component end "
+					"'%s'\n", optarg);
+				goto err;
+			}
+			param.fp_check_comp_end = 1;
+			param.fp_exclude_comp_end = !!neg_opt;
 			break;
 		case 'g':
 		case 'G':
@@ -1504,7 +2042,7 @@ static int lfs_find(int argc, char **argv)
 			param.fp_exclude_uid = !!neg_opt;
 			param.fp_check_uid = 1;
                         break;
-                case FIND_POOL_OPT:
+		case LFS_POOL_OPT:
                         if (strlen(optarg) > LOV_MAXPOOLNAME) {
                                 fprintf(stderr,
                                         "Pool name %s is too long"
@@ -1714,6 +2252,9 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				  struct find_param *param)
 {
 	struct option long_opts[] = {
+		{"component-count",	no_argument, 0, LFS_COMP_COUNT_OPT},
+		{"component-flags", required_argument, 0, LFS_COMP_FLAGS_OPT},
+		{"component-start", required_argument, 0, LFS_COMP_START_OPT},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "stripe-count", but was explicitly
 		 * made "stripe-count" for consistency with other options,
@@ -1724,6 +2265,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"stripe_count",	no_argument,		0, 'c'},
 		{"directory",		no_argument,		0, 'd'},
 		{"default",		no_argument,		0, 'D'},
+		{"component-end",	required_argument,	0, 'E'},
 		{"fid",			no_argument,		0, 'F'},
 		{"generation",		no_argument,		0, 'g'},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
@@ -1734,6 +2276,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 #endif
 		{"stripe-index",	no_argument,		0, 'i'},
 		{"stripe_index",	no_argument,		0, 'i'},
+		{"component-id",	required_argument,	0, 'I'},
 		{"layout",		no_argument,		0, 'L'},
 		{"mdt",			no_argument,		0, 'm'},
 		{"mdt-index",		no_argument,		0, 'm'},
@@ -1766,8 +2309,9 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{0, 0, 0, 0}
 	};
 	int c, rc;
+	char *end, *tmp;
 
-	while ((c = getopt_long(argc, argv, "cdDFghiLmMoO:pqrRsSv",
+	while ((c = getopt_long(argc, argv, "cdDE:FghiI:LmMoO:pqrRsSv",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'O':
@@ -1782,11 +2326,82 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		case 'q':
 			param->fp_quiet++;
 			break;
+		case LFS_COMP_COUNT_OPT:
+			param->fp_verbose |= VERBOSE_COMP_COUNT;
+			param->fp_max_depth = 0;
+			break;
+		case LFS_COMP_FLAGS_OPT:
+			if (optarg != NULL) {
+				rc = comp_name2flags(&param->fp_comp_flags,
+						     optarg);
+				if (rc != 0) {
+					param->fp_verbose |=
+						VERBOSE_COMP_FLAGS;
+					param->fp_max_depth = 0;
+					optind--;
+				} else {
+					param->fp_check_comp_flags = 1;
+				}
+			} else {
+				param->fp_verbose |= VERBOSE_COMP_FLAGS;
+				param->fp_max_depth = 0;
+			}
+			break;
+		case LFS_COMP_START_OPT:
+			if (optarg != NULL) {
+				tmp = optarg;
+				if (tmp[0] == '+') {
+					param->fp_comp_start_sign = 1;
+					tmp++;
+				} else if (tmp[0] == '-') {
+					param->fp_comp_start_sign = -1;
+					tmp++;
+				}
+				rc = llapi_parse_size(tmp,
+						&param->fp_comp_start,
+						&param->fp_comp_start_units, 0);
+				if (rc != 0) {
+					param->fp_verbose |= VERBOSE_COMP_START;
+					param->fp_max_depth = 0;
+					optind--;
+				} else {
+					param->fp_check_comp_start = 1;
+				}
+			} else {
+				param->fp_verbose |= VERBOSE_COMP_START;
+				param->fp_max_depth = 0;
+			}
+			break;
 		case 'd':
 			param->fp_max_depth = 0;
 			break;
 		case 'D':
 			param->fp_get_default_lmv = 1;
+			break;
+		case 'E':
+			if (optarg != NULL) {
+				tmp = optarg;
+				if (tmp[0] == '+') {
+					param->fp_comp_end_sign = 1;
+					tmp++;
+				} else if (tmp[0] == '-') {
+					param->fp_comp_end_sign = -1;
+					tmp++;
+				}
+				rc = llapi_parse_size(tmp,
+						&param->fp_comp_end,
+						&param->fp_comp_end_units, 0);
+				if (rc != 0) {
+					param->fp_verbose |= VERBOSE_COMP_END;
+					param->fp_max_depth = 0;
+					optind--;
+				} else {
+					param->fp_check_comp_end = 1;
+				}
+			} else {
+				param->fp_verbose |= VERBOSE_COMP_END;
+				param->fp_max_depth = 0;
+			}
 			break;
 		case 'F':
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
@@ -1840,6 +2455,21 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				param->fp_max_depth = 0;
 			}
 			break;
+		case 'I':
+			if (optarg != NULL) {
+				param->fp_comp_id = strtoul(optarg, &end, 0);
+				if (*end != '\0') {
+					param->fp_verbose |= VERBOSE_COMP_ID;
+					param->fp_max_depth = 0;
+					optind--;
+				} else {
+					param->fp_check_comp_id = 1;
+				}
+			} else {
+				param->fp_max_depth = 0;
+				param->fp_verbose |= VERBOSE_COMP_ID;
+			}
+			break;
 		case 'p':
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
 				param->fp_verbose |= VERBOSE_POOL;
@@ -1883,6 +2513,8 @@ static int lfs_getstripe_internal(int argc, char **argv,
 
 	if (param->fp_recursive)
 		param->fp_max_depth = -1;
+	else if (param->fp_verbose & VERBOSE_DETAIL)
+		param->fp_max_depth = 1;
 
 	if (!param->fp_verbose)
 		param->fp_verbose = VERBOSE_DEFAULT;

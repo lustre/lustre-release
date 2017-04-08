@@ -974,7 +974,9 @@ mdd_xattr_changelog_type(const struct lu_env *env, struct mdd_device *mdd,
 			 const char *xattr_name)
 {
 	/* Layout changes systematically recorded */
-	if (strcmp(XATTR_NAME_LOV, xattr_name) == 0)
+	if (strcmp(XATTR_NAME_LOV, xattr_name) == 0 ||
+	    strncmp(XATTR_LUSTRE_LOV, xattr_name,
+		    strlen(XATTR_LUSTRE_LOV)) == 0)
 		return CL_LAYOUT;
 
 	/* HSM information changes systematically recorded */
@@ -1353,6 +1355,90 @@ static int mdd_layout_swap_allowed(const struct lu_env *env,
 	RETURN(0);
 }
 
+/* XXX To set the proper lmm_oi & lmm_layout_gen when swap layouts, we have to
+ *     look into the layout in MDD layer. */
+static int mdd_lmm_oi(struct lov_mds_md *lmm, struct ost_id *oi, bool get)
+{
+	struct lov_comp_md_v1	*comp_v1;
+	struct lov_mds_md	*v1;
+	int			 i, ent_count;
+	__u32			 off;
+
+	if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)lmm;
+		ent_count = le16_to_cpu(comp_v1->lcm_entry_count);
+
+		if (ent_count == 0)
+			return -EINVAL;
+
+		if (get) {
+			off = le32_to_cpu(comp_v1->lcm_entries[0].lcme_offset);
+			v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
+			*oi = v1->lmm_oi;
+		} else {
+			for (i = 0; i < le32_to_cpu(ent_count); i++) {
+				off = le32_to_cpu(comp_v1->lcm_entries[i].
+						lcme_offset);
+				v1 = (struct lov_mds_md *)((char *)comp_v1 +
+						off);
+				v1->lmm_oi = *oi;
+			}
+		}
+	} else if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V1 ||
+		   le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3) {
+		if (get)
+			*oi = lmm->lmm_oi;
+		else
+			lmm->lmm_oi = *oi;
+	} else {
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static inline int mdd_get_lmm_oi(struct lov_mds_md *lmm, struct ost_id *oi)
+{
+	return mdd_lmm_oi(lmm, oi, true);
+}
+
+static inline int mdd_set_lmm_oi(struct lov_mds_md *lmm, struct ost_id *oi)
+{
+	return mdd_lmm_oi(lmm, oi, false);
+}
+
+static int mdd_lmm_gen(struct lov_mds_md *lmm, __u32 *gen, bool get)
+{
+	struct lov_comp_md_v1 *comp_v1;
+
+	if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)lmm;
+		if (get)
+			*gen = le32_to_cpu(comp_v1->lcm_layout_gen);
+		else
+			comp_v1->lcm_layout_gen = cpu_to_le32(*gen);
+	} else if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V1 ||
+		   le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3) {
+		__u16 tmp_gen = *gen;
+		if (get)
+			*gen = le16_to_cpu(lmm->lmm_layout_gen);
+		else
+			lmm->lmm_layout_gen = cpu_to_le16(tmp_gen);
+	} else {
+		return -EINVAL;
+	}
+	return 0;
+}
+
+static inline int mdd_get_lmm_gen(struct lov_mds_md *lmm, __u32 *gen)
+{
+	return mdd_lmm_gen(lmm, gen, true);
+}
+
+static inline int mdd_set_lmm_gen(struct lov_mds_md *lmm, __u32 *gen)
+{
+	return mdd_lmm_gen(lmm, gen, false);
+}
+
 /**
  * swap layouts between 2 lustre objects
  */
@@ -1372,7 +1458,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	struct lu_buf		*snd_hsm_buf = &info->mti_buf[3];
 	struct ost_id		*saved_oi = NULL;
 	struct thandle		*handle;
-	__u16			 fst_gen, snd_gen;
+	__u32			 fst_gen, snd_gen, saved_gen;
 	int			 fst_fl;
 	int			 rc;
 	int			 rc2;
@@ -1430,10 +1516,11 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		swap(fst_buf, snd_buf);
 	}
 
+	fst_gen = snd_gen = 0;
 	/* lmm and generation layout initialization */
 	if (fst_buf->lb_buf != NULL) {
 		fst_lmm = fst_buf->lb_buf;
-		fst_gen = le16_to_cpu(fst_lmm->lmm_layout_gen);
+		mdd_get_lmm_gen(fst_lmm, &fst_gen);
 		fst_fl  = LU_XATTR_REPLACE;
 	} else {
 		fst_lmm = NULL;
@@ -1442,29 +1529,45 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	}
 
 	snd_lmm = snd_buf->lb_buf;
-	snd_gen = le16_to_cpu(snd_lmm->lmm_layout_gen);
+	mdd_get_lmm_gen(snd_lmm, &snd_gen);
 
+	saved_gen = fst_gen;
 	/* increase the generation layout numbers */
 	snd_gen++;
 	fst_gen++;
 
+	/*
+	 * XXX The layout generation is used to generate component IDs for
+	 *     the composite file, we have to do some special tweaks to make
+	 *     sure the layout generation is always adequate for that job.
+	 */
+
+	/* Skip invalid generation number for composite layout */
+	if ((snd_gen & LCME_ID_MASK) == 0)
+		snd_gen++;
+	if ((fst_gen & LCME_ID_MASK) == 0)
+		fst_gen++;
+	/* Make sure the generation is greater than all the component IDs */
+	if (fst_gen < snd_gen)
+		fst_gen = snd_gen;
+	else if (fst_gen > snd_gen)
+		snd_gen = fst_gen;
+
 	/* set the file specific informations in lmm */
 	if (fst_lmm != NULL) {
 		saved_oi = &info->mti_oa.o_oi;
-
-		*saved_oi = fst_lmm->lmm_oi;
-		fst_lmm->lmm_layout_gen = cpu_to_le16(snd_gen);
-		fst_lmm->lmm_oi = snd_lmm->lmm_oi;
-		snd_lmm->lmm_oi = *saved_oi;
+		mdd_get_lmm_oi(fst_lmm, saved_oi);
+		mdd_set_lmm_gen(fst_lmm, &snd_gen);
+		mdd_set_lmm_oi(fst_lmm, &snd_lmm->lmm_oi);
+		mdd_set_lmm_oi(snd_lmm, saved_oi);
 	} else {
-		if (snd_lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V1))
-			snd_lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V1_DEF);
-		else if (snd_lmm->lmm_magic == cpu_to_le32(LOV_MAGIC_V3))
-			snd_lmm->lmm_magic = cpu_to_le32(LOV_MAGIC_V3_DEF);
+		if ((snd_lmm->lmm_magic & cpu_to_le32(LOV_MAGIC_MASK)) ==
+		    cpu_to_le32(LOV_MAGIC_MAGIC))
+			snd_lmm->lmm_magic |= cpu_to_le32(LOV_MAGIC_DEF);
 		else
 			GOTO(stop, rc = -EPROTO);
 	}
-	snd_lmm->lmm_layout_gen = cpu_to_le16(fst_gen);
+	mdd_set_lmm_gen(snd_lmm, &fst_gen);
 
 	/* Prepare HSM attribute if it's required */
 	if (flags & SWAP_LAYOUTS_MDS_HSM) {
@@ -1554,8 +1657,8 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		/* failure on second file, but first was done, so we have
 		 * to roll back first. */
 		if (fst_buf->lb_buf != NULL) {
-			fst_lmm->lmm_oi = *saved_oi;
-			fst_lmm->lmm_layout_gen = cpu_to_le16(fst_gen - 1);
+			mdd_set_lmm_oi(fst_lmm, saved_oi);
+			mdd_set_lmm_gen(fst_lmm, &saved_gen);
 			rc2 = mdo_xattr_set(env, fst_o, fst_buf, XATTR_NAME_LOV,
 					    LU_XATTR_REPLACE, handle);
 		} else {
@@ -1610,6 +1713,60 @@ stop:
 	lu_buf_free(fst_hsm_buf);
 	lu_buf_free(snd_hsm_buf);
 	return rc;
+}
+
+static int mdd_declare_layout_change(const struct lu_env *env,
+				     struct mdd_device *mdd,
+				     struct mdd_object *obj,
+				     struct layout_intent *layout,
+				     const struct lu_buf *buf,
+				     struct thandle *handle)
+{
+	int rc;
+
+	rc = mdo_declare_layout_change(env, obj, layout, buf, handle);
+	if (rc)
+		return rc;
+
+	return mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+}
+
+/* For PFL, this is used to instantiate necessary component objects. */
+int mdd_layout_change(const struct lu_env *env, struct md_object *obj,
+		      struct layout_intent *layout, const struct lu_buf *buf)
+{
+	struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	struct mdd_device *mdd = mdo2mdd(obj);
+	struct thandle *handle;
+	int rc;
+	ENTRY;
+
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		RETURN(PTR_ERR(handle));
+
+	rc = mdd_declare_layout_change(env, mdd, mdd_obj, layout, buf, handle);
+	/**
+	 * It's possible that another layout write intent has already
+	 * instantiated our objects, so a -EALREADY returned, and we need to
+	 * do nothing.
+	 */
+	if (rc)
+		GOTO(stop, rc = (rc == -EALREADY) ? 0 : rc);
+
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(stop, rc);
+
+	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+	rc = mdo_layout_change(env, mdd_obj, layout, buf, handle);
+	mdd_write_unlock(env, mdd_obj);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, mdd_obj, handle);
+stop:
+	RETURN(mdd_trans_stop(env, mdd, rc, handle));
 }
 
 void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
@@ -2127,4 +2284,5 @@ const struct md_object_operations mdd_obj_ops = {
 	.moo_object_sync	= mdd_object_sync,
 	.moo_object_lock	= mdd_object_lock,
 	.moo_object_unlock	= mdd_object_unlock,
+	.moo_layout_change	= mdd_layout_change,
 };

@@ -308,6 +308,11 @@ void sptlrpc_conf_fini(void);
 int  sptlrpc_init(void);
 void sptlrpc_fini(void);
 
+/* layout.c */
+__u32 __req_capsule_offset(const struct req_capsule *pill,
+			   const struct req_msg_field *field,
+			   enum req_location loc);
+
 static inline bool ptlrpc_recoverable_error(int rc)
 {
 	return (rc == -ENOTCONN || rc == -ENODEV);

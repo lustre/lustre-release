@@ -1909,6 +1909,9 @@ check_seq_oid()
 		local ff_pstripe
 		if echo $ff_parent | grep -q 'stripe='; then
 			ff_pstripe=$(echo $ff_parent | sed -e 's/.*stripe=//')
+			if echo $ff_pstripe | grep -q 'stripe_size='; then
+				ff_pstripe=$(echo $ff_pstripe | cut -d' ' -f1)
+			fi
 		else
 			#
 			# $LL_DECODE_FILTER_FID does not print "stripe="; look
@@ -1917,6 +1920,15 @@ check_seq_oid()
 			#
 			ff_pstripe=$(echo $ff_parent | cut -d: -f3 |
 				sed -e 's/\]//')
+		fi
+
+		if echo $ff_parent | grep -q 'stripe_count='; then
+			local ff_scnt=$(echo $ff_parent |
+					sed -e 's/.*stripe_count=//' |
+					cut -d' ' -f1)
+
+			[ $lmm_count -eq $ff_scnt ] ||
+				error "FF stripe count $lmm_count != $ff_scnt"
 		fi
 
                 # compare lmm_seq and filter_fid->ff_parent.f_seq
@@ -2053,7 +2065,7 @@ test_27D() {
 
 	local skip27D
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
-		skip27D = "-s 29"
+		skip27D = "-s 29,30,31"
 	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $skip27D ||
 		error "llapi_layout_test failed"
 

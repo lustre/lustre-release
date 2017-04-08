@@ -79,13 +79,17 @@ static void lovsub_object_free(const struct lu_env *env, struct lu_object *obj)
         /* We can't assume lov was assigned here, because of the shadow
          * object handling in lu_object_find.
          */
-        if (lov) {
-                LASSERT(lov->lo_type == LLT_RAID0);
-                LASSERT(lov->u.raid0.lo_sub[los->lso_index] == los);
-		spin_lock(&lov->u.raid0.lo_sub_lock);
-		lov->u.raid0.lo_sub[los->lso_index] = NULL;
-		spin_unlock(&lov->u.raid0.lo_sub_lock);
-        }
+	if (lov != NULL) {
+		int index = lov_comp_entry(los->lso_index);
+		int stripe = lov_comp_stripe(los->lso_index);
+		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
+
+		LASSERT(lov->lo_type == LLT_COMP);
+		LASSERT(r0->lo_sub[stripe] == los);
+		spin_lock(&r0->lo_sub_lock);
+		r0->lo_sub[stripe] = NULL;
+		spin_unlock(&r0->lo_sub_lock);
+	}
 
         lu_object_fini(obj);
         lu_object_header_fini(&los->lso_header.coh_lu);
@@ -104,10 +108,11 @@ static int lovsub_object_print(const struct lu_env *env, void *cookie,
 static int lovsub_attr_update(const struct lu_env *env, struct cl_object *obj,
 			      const struct cl_attr *attr, unsigned valid)
 {
+	struct lovsub_object *los = cl2lovsub(obj);
 	struct lov_object *lov = cl2lovsub(obj)->lso_super;
 
 	ENTRY;
-	lov_r0(lov)->lo_attr_valid = 0;
+	lov_r0(lov, lov_comp_entry(los->lso_index))->lo_attr_valid = 0;
 	RETURN(0);
 }
 
@@ -130,7 +135,7 @@ static void lovsub_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 				struct cl_req_attr *attr)
 {
 	struct lovsub_object *subobj = cl2lovsub(obj);
-
+	struct lov_stripe_md *lsm = subobj->lso_super->lo_lsm;
 	ENTRY;
 	cl_req_attr_set(env, &subobj->lso_super->lo_cl, attr);
 
@@ -138,7 +143,10 @@ static void lovsub_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 	 * There is no OBD_MD_* flag for obdo::o_stripe_idx, so set it
 	 * unconditionally. It never changes anyway.
 	 */
-	attr->cra_oa->o_stripe_idx = subobj->lso_index;
+	attr->cra_oa->o_stripe_idx = lov_comp_stripe(subobj->lso_index);
+	lov_lsm2layout(lsm, lsm->lsm_entries[lov_comp_entry(subobj->lso_index)],
+		       &attr->cra_oa->o_layout);
+	attr->cra_oa->o_valid |= OBD_MD_FLOSTLAYOUT;
 	EXIT;
 }
 

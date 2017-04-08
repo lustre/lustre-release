@@ -289,7 +289,6 @@ struct lquota_thread_info {
 	struct lu_buf		qti_lb;
 	struct lu_attr		qti_attr;
 	struct dt_object_format	qti_dof;
-	struct lustre_mdt_attrs	qti_lma;
 	struct lu_fid		qti_fid;
 	char			qti_buf[LQUOTA_NAME_MAX];
 };

@@ -51,6 +51,7 @@
 #include <lustre/lustre_idl.h>
 
 void lustre_swab_orphan_ent(struct lu_orphan_ent *ent);
+void lustre_swab_orphan_ent_v2(struct lu_orphan_ent_v2 *ent);
 void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 void lustre_swab_connect(struct obd_connect_data *ocd);
 void lustre_swab_hsm_user_state(struct hsm_user_state *hus);
@@ -93,6 +94,7 @@ void lustre_swab_ost_last_id(__u64 *id);
 void lustre_swab_fiemap(struct fiemap *fiemap);
 void lustre_swab_lov_user_md_v1(struct lov_user_md_v1 *lum);
 void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum);
+void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum);
 void lustre_swab_lov_user_md_objects(struct lov_user_ost_data *lod,
 				     int stripe_count);
 void lustre_swab_lov_mds_md(struct lov_mds_md *lmm);

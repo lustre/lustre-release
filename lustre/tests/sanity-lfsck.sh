@@ -1492,7 +1492,9 @@ test_13() {
 	echo "Inject failure stub to simulate bad lmm_oi"
 	#define OBD_FAIL_LFSCK_BAD_LMMOI	0x160f
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x160f
-	createmany -o $DIR/$tdir/f 32
+	createmany -o $DIR/$tdir/f 1
+	$LFS setstripe -E 1M -E -1 $DIR/$tdir/f1 ||
+		error "(0) Fail to create PFL $DIR/$tdir/f1"
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 
 	echo "Trigger layout LFSCK to find out the bad lmm_oi and fix them"
@@ -1507,7 +1509,7 @@ test_13() {
 
 	local repaired=$($SHOW_LAYOUT |
 			 awk '/^repaired_others/ { print $2 }')
-	[ $repaired -eq 32 ] ||
+	[ $repaired -eq 2 ] ||
 		error "(3) Fail to repair crashed lmm_oi: $repaired"
 }
 run_test 13 "LFSCK can repair crashed lmm_oi"
@@ -1527,8 +1529,17 @@ test_14a() {
 	do_facet ost1 $LCTL set_param fail_loc=0x1610
 	local count=$(precreated_ost_obj_count 0 0)
 
-	createmany -o $DIR/$tdir/f $((count + 31))
-	touch $DIR/$tdir/guard
+	createmany -o $DIR/$tdir/f $((count + 16)) ||
+		error "(0.1) Fail to create $DIR/$tdir/fx"
+	touch $DIR/$tdir/guard0
+
+	for ((i = 0; i < 16; i++)); do
+		$LFS setstripe -E 512K -S 256K -o 0 -E 2M \
+			$DIR/$tdir/f_comp${i} ||
+			error "(0.2) Fail to create $DIR/$tdir/f_comp${i}"
+	done
+	touch $DIR/$tdir/guard1
+
 	do_facet ost1 $LCTL set_param fail_loc=0
 
 	start_full_debug_logging
@@ -1536,7 +1547,7 @@ test_14a() {
 	# exhaust other pre-created dangling cases
 	count=$(precreated_ost_obj_count 0 0)
 	createmany -o $DIR/$tdir/a $count ||
-		error "(0) Fail to create $count files."
+		error "(0.5) Fail to create $count files."
 
 	echo "'ls' should fail because of dangling referenced MDT-object"
 	ls -ail $DIR/$tdir > /dev/null 2>&1 && error "(1) ls should fail."
@@ -1557,7 +1568,10 @@ test_14a() {
 		error "(4) Fail to repair dangling reference: $repaired"
 
 	echo "'stat' should fail because of not repair dangling by default"
-	stat $DIR/$tdir/guard > /dev/null 2>&1 && error "(5) stat should fail"
+	stat $DIR/$tdir/guard0 > /dev/null 2>&1 &&
+		error "(5.1) stat should fail"
+	stat $DIR/$tdir/guard1 > /dev/null 2>&1 &&
+		error "(5.2) stat should fail"
 
 	echo "Trigger layout LFSCK to repair dangling reference"
 	$START_LAYOUT -r -c || error "(6) Fail to start LFSCK for layout!"
@@ -1573,11 +1587,18 @@ test_14a() {
 	# a while until the target reparation has been done. LU-4970.
 
 	echo "'stat' should success after layout LFSCK repairing"
-	wait_update_facet client "stat $DIR/$tdir/guard |
+	wait_update_facet client "stat $DIR/$tdir/guard0 |
 		awk '/Size/ { print \\\$2 }'" "0" 32 || {
-		stat $DIR/$tdir/guard
+		stat $DIR/$tdir/guard0
 		$SHOW_LAYOUT
-		error "(8) unexpected size"
+		error "(8.1) unexpected size"
+	}
+
+	wait_update_facet client "stat $DIR/$tdir/guard1 |
+		awk '/Size/ { print \\\$2 }'" "0" 32 || {
+		stat $DIR/$tdir/guard1
+		$SHOW_LAYOUT
+		error "(8.2) unexpected size"
 	}
 
 	repaired=$($SHOW_LAYOUT |
@@ -1586,6 +1607,11 @@ test_14a() {
 		error "(9) Fail to repair dangling reference: $repaired"
 
 	stop_full_debug_logging
+
+	echo "stopall to cleanup object cache"
+	stopall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
 }
 run_test 14a "LFSCK can repair MDT-object with dangling LOV EA reference (1)"
 
@@ -1653,6 +1679,11 @@ test_14b() {
 		error "(9) Fail to repair dangling reference: $repaired"
 
 	stop_full_debug_logging
+
+	echo "stopall to cleanup object cache"
+	stopall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
 }
 run_test 14b "LFSCK can repair MDT-object with dangling LOV EA reference (2)"
 
@@ -1670,10 +1701,18 @@ test_15a() {
 	echo "non-exist MDT-object."
 	#define OBD_FAIL_LFSCK_UNMATCHED_PAIR1	0x1611
 
-	do_facet ost1 $LCTL set_param fail_loc=0x1611
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0x1611
 	dd if=/dev/zero of=$DIR/$tdir/f0 bs=1M count=1
+	$LFS setstripe -E 1M -S 256K -c 1 -E -1 -S 512K -c $OSTCOUNT \
+		$DIR/$tdir/f1 ||
+		error "(0) Fail to create PFL $DIR/$tdir/f1"
+	# 'dd' will trigger punch RPC firstly on every OST-objects.
+	# So even though some OST-object will not be write by 'dd',
+	# as long as it is allocated (may be NOT allocated in pfl_3b)
+	# its layout information will be set also.
+	dd if=/dev/zero of=$DIR/$tdir/f1 bs=4K count=257
 	cancel_lru_locks osc
-	do_facet ost1 $LCTL set_param fail_loc=0
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0
 
 	echo "Trigger layout LFSCK to find out unmatched pairs and fix them"
 	$START_LAYOUT -r || error "(1) Fail to start LFSCK for layout!"
@@ -1687,7 +1726,7 @@ test_15a() {
 
 	local repaired=$($SHOW_LAYOUT |
 			 awk '/^repaired_unmatched_pair/ { print $2 }')
-	[ $repaired -eq 1 ] ||
+	[ $repaired -ge 3 ] ||
 		error "(3) Fail to repair unmatched pair: $repaired"
 }
 run_test 15a "LFSCK can repair unmatched MDT-object/OST-object pairs (1)"
@@ -1701,18 +1740,26 @@ test_15b() {
 	echo "#####"
 
 	check_mount_and_prep
-	$LFS setstripe -c 1 -i 0 $DIR/$tdir
-	dd if=/dev/zero of=$DIR/$tdir/guard bs=1M count=1
+	mkdir -p $DIR/$tdir/0
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir/0
+	dd if=/dev/zero of=$DIR/$tdir/0/guard bs=1M count=1
 	cancel_lru_locks osc
 
 	echo "Inject failure stub to make the OST-object to back point to"
 	echo "other MDT-object"
 
+	local stripes=1
+	[ $OSTCOUNT -ge 2 ] && stripes=2
+
 	#define OBD_FAIL_LFSCK_UNMATCHED_PAIR2	0x1612
-	do_facet ost1 $LCTL set_param fail_loc=0x1612
-	dd if=/dev/zero of=$DIR/$tdir/f0 bs=1M count=1
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0x1612
+	dd if=/dev/zero of=$DIR/$tdir/0/f0 bs=1M count=1
+	$LFS setstripe -E 1M -S 256K -c $stripes -E 2M -S 512K -c 1 \
+		$DIR/$tdir/f1 ||
+		error "(0) Fail to create PFL $DIR/$tdir/f1"
+	dd if=/dev/zero of=$DIR/$tdir/f1 bs=1M count=2
 	cancel_lru_locks osc
-	do_facet ost1 $LCTL set_param fail_loc=0
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0
 
 	echo "Trigger layout LFSCK to find out unmatched pairs and fix them"
 	$START_LAYOUT -r || error "(1) Fail to start LFSCK for layout!"
@@ -1726,7 +1773,7 @@ test_15b() {
 
 	local repaired=$($SHOW_LAYOUT |
 			 awk '/^repaired_unmatched_pair/ { print $2 }')
-	[ $repaired -eq 1 ] ||
+	[ $repaired -eq 4 ] ||
 		error "(3) Fail to repair unmatched pair: $repaired"
 }
 run_test 15b "LFSCK can repair unmatched MDT-object/OST-object pairs (2)"
@@ -1834,21 +1881,30 @@ test_17() {
 
 	#define OBD_FAIL_LFSCK_MULTIPLE_REF	0x1614
 	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0x1614
-
 	dd if=/dev/zero of=$DIR/$tdir/guard bs=1M count=1
-	cancel_lru_locks osc
-
-	createmany -o $DIR/$tdir/f 1
-
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
-
 	cancel_lru_locks mdc
 	cancel_lru_locks osc
 
+	createmany -o $DIR/$tdir/f 1
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	$LFS setstripe -E 2M -S 256K -o 0 -E 4M -S 512K -o 0 \
+		$DIR/$tdir/f1 ||
+		error "(0) Fail to create PFL $DIR/$tdir/f1"
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
+
 	echo "$DIR/$tdir/f0 and $DIR/$tdir/guard use the same OST-objects"
+	echo "$DIR/$tdir/f1 and $DIR/$tdir/guard use the same OST-objects"
 	local size=$(ls -l $DIR/$tdir/f0 | awk '{ print $5 }')
 	[ $size -eq 1048576 ] ||
-		error "(1) f0 (wrong) size should be 1048576, but got $size"
+		error "(1.1) f0 (wrong) size should be 1048576, but got $size"
+
+	size=$(ls -l $DIR/$tdir/f1 | awk '{ print $5 }')
+	[ $size -eq 1048576 ] ||
+		error "(1.2) f1 (wrong) size should be 1048576, but got $size"
 
 	echo "Trigger layout LFSCK to find out multiple refenced MDT-objects"
 	echo "and fix them"
@@ -1864,7 +1920,7 @@ test_17() {
 
 	local repaired=$($SHOW_LAYOUT |
 			 awk '/^repaired_multiple_referenced/ { print $2 }')
-	[ $repaired -eq 1 ] ||
+	[ $repaired -eq 2 ] ||
 		error "(4) Fail to repair multiple references: $repaired"
 
 	echo "$DIR/$tdir/f0 and $DIR/$tdir/guard should use diff OST-objects"
@@ -1873,6 +1929,13 @@ test_17() {
 	size=$(ls -l $DIR/$tdir/guard | awk '{ print $5 }')
 	[ $size -eq 1048576 ] ||
 		error "(6) guard size should be 1048576, but got $size"
+
+	echo "$DIR/$tdir/f1 and $DIR/$tdir/guard should use diff OST-objects"
+	dd if=/dev/zero of=$DIR/$tdir/f1 bs=1M count=2 ||
+		error "(7) Fail to write f1."
+	size=$(ls -l $DIR/$tdir/guard | awk '{ print $5 }')
+	[ $size -eq 1048576 ] ||
+		error "(8) guard size should be 1048576, but got $size"
 }
 run_test 17 "LFSCK can repair multiple references"
 
@@ -1887,10 +1950,10 @@ test_18a() {
 
 	check_mount_and_prep
 	$LFS mkdir -i 0 $DIR/$tdir/a1
-	$LFS setstripe -c 1 -i 0 -S 1M $DIR/$tdir/a1
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir/a1
 	dd if=/dev/zero of=$DIR/$tdir/a1/f1 bs=1M count=2
 
-	local saved_size=$(ls -il $DIR/$tdir/a1/f1 | awk '{ print $6 }')
+	local saved_size1=$(ls -il $DIR/$tdir/a1/f1 | awk '{ print $6 }')
 
 	$LFS path2fid $DIR/$tdir/a1/f1
 	$LFS getstripe $DIR/$tdir/a1/f1
@@ -1903,6 +1966,16 @@ test_18a() {
 		$LFS getstripe $DIR/$tdir/a2/f2
 	fi
 
+	$LFS setstripe -E 1M -S 1M -o 0 -E -1 -S 1M $DIR/$tdir/f3 ||
+		error "(0) Fail to create PFL $DIR/$tdir/f3"
+
+	dd if=/dev/zero of=$DIR/$tdir/f3 bs=1M count=2
+
+	local saved_size2=$(ls -il $DIR/$tdir/f3 | awk '{ print $6 }')
+
+	$LFS path2fid $DIR/$tdir/f3
+	$LFS getstripe $DIR/$tdir/f3
+
 	cancel_lru_locks osc
 
 	echo "Inject failure, to make the MDT-object lost its layout EA"
@@ -1914,6 +1987,8 @@ test_18a() {
 		do_facet mds2 $LCTL set_param fail_loc=0x1615
 		chown 1.1 $DIR/$tdir/a2/f2
 	fi
+
+	chown 1.1 $DIR/$tdir/f3
 
 	sync
 	sleep 2
@@ -1928,14 +2003,18 @@ test_18a() {
 
 	echo "The file size should be incorrect since layout EA is lost"
 	local cur_size=$(ls -il $DIR/$tdir/a1/f1 | awk '{ print $6 }')
-	[ "$cur_size" != "$saved_size" ] ||
+	[ "$cur_size" != "$saved_size1" ] ||
 		error "(1) Expect incorrect file1 size"
 
 	if [ $MDSCOUNT -ge 2 ]; then
 		cur_size=$(ls -il $DIR/$tdir/a2/f2 | awk '{ print $6 }')
-		[ "$cur_size" != "$saved_size" ] ||
+		[ "$cur_size" != "$saved_size1" ] ||
 			error "(2) Expect incorrect file2 size"
 	fi
+
+	cur_size=$(ls -il $DIR/$tdir/f3 | awk '{ print $6 }')
+	[ "$cur_size" != "$saved_size2" ] ||
+		error "(1.2) Expect incorrect file3 size"
 
 	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
 	$START_LAYOUT -r -o || error "(3) Fail to start LFSCK for layout!"
@@ -1961,8 +2040,8 @@ test_18a() {
 	local repaired=$(do_facet mds1 $LCTL get_param -n \
 			 mdd.$(facet_svc mds1).lfsck_layout |
 			 awk '/^repaired_orphan/ { print $2 }')
-	[ $repaired -eq 1 ] ||
-	error "(6.1) Expect 1 fixed on mds1, but got: $repaired"
+	[ $repaired -eq 3 ] ||
+	error "(6.1) Expect 3 fixed on mds1, but got: $repaired"
 
 	if [ $MDSCOUNT -ge 2 ]; then
 		repaired=$(do_facet mds2 $LCTL get_param -n \
@@ -1980,16 +2059,23 @@ test_18a() {
 		$LFS getstripe $DIR/$tdir/a2/f2
 	fi
 
+	$LFS path2fid $DIR/$tdir/f3
+	$LFS getstripe $DIR/$tdir/f3
+
 	echo "The file size should be correct after layout LFSCK scanning"
 	cur_size=$(ls -il $DIR/$tdir/a1/f1 | awk '{ print $6 }')
-	[ "$cur_size" == "$saved_size" ] ||
-		error "(7) Expect file1 size $saved_size, but got $cur_size"
+	[ "$cur_size" == "$saved_size1" ] ||
+		error "(7) Expect file1 size $saved_size1, but got $cur_size"
 
 	if [ $MDSCOUNT -ge 2 ]; then
 		cur_size=$(ls -il $DIR/$tdir/a2/f2 | awk '{ print $6 }')
-		[ "$cur_size" == "$saved_size" ] ||
-		error "(8) Expect file2 size $saved_size, but got $cur_size"
+		[ "$cur_size" == "$saved_size1" ] ||
+		error "(8) Expect file2 size $saved_size1, but got $cur_size"
 	fi
+
+	cur_size=$(ls -il $DIR/$tdir/f3 | awk '{ print $6 }')
+	[ "$cur_size" == "$saved_size2" ] ||
+		error "(9) Expect file1 size $saved_size2, but got $cur_size"
 }
 run_test 18a "Find out orphan OST-object and repair it (1)"
 
@@ -2002,9 +2088,9 @@ test_18b() {
 
 	check_mount_and_prep
 	$LFS mkdir -i 0 $DIR/$tdir/a1
-	$LFS setstripe -c 1 -i 0 -S 1M $DIR/$tdir/a1
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir/a1
 	dd if=/dev/zero of=$DIR/$tdir/a1/f1 bs=1M count=2
-	local saved_size=$(ls -il $DIR/$tdir/a1/f1 | awk '{ print $6 }')
+	local saved_size1=$(ls -il $DIR/$tdir/a1/f1 | awk '{ print $6 }')
 	local fid1=$($LFS path2fid $DIR/$tdir/a1/f1)
 	echo ${fid1}
 	$LFS getstripe $DIR/$tdir/a1/f1
@@ -2018,6 +2104,16 @@ test_18b() {
 		$LFS getstripe $DIR/$tdir/a2/f2
 	fi
 
+	$LFS setstripe -E 1M -S 1M -o 0 -E -1 -S 1M $DIR/$tdir/f3 ||
+		error "(0) Fail to create PFL $DIR/$tdir/f3"
+
+	dd if=/dev/zero of=$DIR/$tdir/f3 bs=1M count=2
+
+	local saved_size2=$(ls -il $DIR/$tdir/f3 | awk '{ print $6 }')
+	local fid3=$($LFS path2fid $DIR/$tdir/f3)
+	echo ${fid3}
+	$LFS getstripe $DIR/$tdir/f3
+
 	cancel_lru_locks osc
 
 	echo "Inject failure, to simulate the case of missing the MDT-object"
@@ -2029,6 +2125,8 @@ test_18b() {
 		do_facet mds2 $LCTL set_param fail_loc=0x1616
 		rm -f $DIR/$tdir/a2/f2
 	fi
+
+	rm -f $DIR/$tdir/f3
 
 	sync
 	sleep 2
@@ -2065,8 +2163,8 @@ test_18b() {
 	local repaired=$(do_facet mds1 $LCTL get_param -n \
 			 mdd.$(facet_svc mds1).lfsck_layout |
 			 awk '/^repaired_orphan/ { print $2 }')
-	[ $repaired -eq 1 ] ||
-	error "(4.1) Expect 1 fixed on mds1, but got: $repaired"
+	[ $repaired -eq 3 ] ||
+	error "(4.1) Expect 3 fixed on mds1, but got: $repaired"
 
 	if [ $MDSCOUNT -ge 2 ]; then
 		repaired=$(do_facet mds2 $LCTL get_param -n \
@@ -2085,6 +2183,9 @@ test_18b() {
 		mv $name $DIR/$tdir/a2/f2 || error "(6) Fail to move $name"
 	fi
 
+	mv $MOUNT/.lustre/lost+found/MDT0000/${fid3}-R-0 $DIR/$tdir/f3 ||
+	error "(5) Fail to move $MOUNT/.lustre/lost+found/MDT0000/${fid3}-R-0"
+
 	$LFS path2fid $DIR/$tdir/a1/f1
 	$LFS getstripe $DIR/$tdir/a1/f1
 
@@ -2093,16 +2194,23 @@ test_18b() {
 		$LFS getstripe $DIR/$tdir/a2/f2
 	fi
 
+	$LFS path2fid $DIR/$tdir/f3
+	$LFS getstripe $DIR/$tdir/f3
+
 	echo "The file size should be correct after layout LFSCK scanning"
 	local cur_size=$(ls -il $DIR/$tdir/a1/f1 | awk '{ print $6 }')
-	[ "$cur_size" == "$saved_size" ] ||
-		error "(7) Expect file1 size $saved_size, but got $cur_size"
+	[ "$cur_size" == "$saved_size1" ] ||
+		error "(7) Expect file1 size $saved_size1, but got $cur_size"
 
 	if [ $MDSCOUNT -ge 2 ]; then
 		cur_size=$(ls -il $DIR/$tdir/a2/f2 | awk '{ print $6 }')
-		[ "$cur_size" == "$saved_size" ] ||
-		error "(8) Expect file2 size $saved_size, but got $cur_size"
+		[ "$cur_size" == "$saved_size1" ] ||
+		error "(8) Expect file2 size $saved_size1, but got $cur_size"
 	fi
+
+	cur_size=$(ls -il $DIR/$tdir/f3 | awk '{ print $6 }')
+	[ "$cur_size" == "$saved_size2" ] ||
+		error "(9) Expect file1 size $saved_size2, but got $cur_size"
 }
 run_test 18b "Find out orphan OST-object and repair it (2)"
 
@@ -2115,23 +2223,30 @@ test_18c() {
 
 	check_mount_and_prep
 	$LFS mkdir -i 0 $DIR/$tdir/a1
-	$LFS setstripe -c 1 -i 0 -S 1M $DIR/$tdir/a1
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir/a1
 
 	echo "Inject failure, to simulate the case of missing parent FID"
 	#define OBD_FAIL_LFSCK_NOPFID		0x1617
-	do_facet ost1 $LCTL set_param fail_loc=0x1617
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0x1617
 
 	dd if=/dev/zero of=$DIR/$tdir/a1/f1 bs=1M count=2
 	$LFS getstripe $DIR/$tdir/a1/f1
 
 	if [ $MDSCOUNT -ge 2 ]; then
 		$LFS mkdir -i 1 $DIR/$tdir/a2
-		$LFS setstripe -c 1 -i 0 -S 1M $DIR/$tdir/a2
+		$LFS setstripe -c 1 -i 0 $DIR/$tdir/a2
 		dd if=/dev/zero of=$DIR/$tdir/a2/f2 bs=1M count=2
 		$LFS getstripe $DIR/$tdir/a2/f2
 	fi
 
+	$LFS setstripe -E 1M -S 1M -o 0 -E -1 -S 1M $DIR/$tdir/f3 ||
+		error "(0) Fail to create PFL $DIR/$tdir/f3"
+
+	dd if=/dev/zero of=$DIR/$tdir/f3 bs=1M count=2
+	$LFS getstripe $DIR/$tdir/f3
+
 	cancel_lru_locks osc
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0
 
 	echo "Inject failure, to simulate the case of missing the MDT-object"
 	#define OBD_FAIL_LFSCK_LOST_MDTOBJ	0x1616
@@ -2142,6 +2257,8 @@ test_18c() {
 		do_facet mds2 $LCTL set_param fail_loc=0x1616
 		rm -f $DIR/$tdir/a2/f2
 	fi
+
+	rm -f $DIR/$tdir/f3
 
 	sync
 	sleep 2
@@ -2176,9 +2293,9 @@ test_18c() {
 	done
 
 	if [ $MDSCOUNT -ge 2 ]; then
-		expected=2
+		expected=4
 	else
-		expected=1
+		expected=3
 	fi
 
 	local repaired=$(do_facet mds1 $LCTL get_param -n \
@@ -2223,26 +2340,44 @@ test_18d() {
 
 	check_mount_and_prep
 	mkdir $DIR/$tdir/a1
-	$LFS setstripe -c 1 -i 0 -S 1M $DIR/$tdir/a1
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir/a1
 	echo "guard" > $DIR/$tdir/a1/f1
 	echo "foo" > $DIR/$tdir/a1/f2
-	local saved_size=$(ls -il $DIR/$tdir/a1/f2 | awk '{ print $6 }')
+
+	echo "guard" > $DIR/$tdir/a1/f3
+	$LFS setstripe -E 1M -S 1M -o 0 -E -1 -S 1M $DIR/$tdir/a1/f4 ||
+		error "(0) Fail to create PFL $DIR/$tdir/a1/f4"
+	echo "foo" > $DIR/$tdir/a1/f4
+
+	local saved_size1=$(ls -il $DIR/$tdir/a1/f2 | awk '{ print $6 }')
+	local saved_size2=$(ls -il $DIR/$tdir/a1/f4 | awk '{ print $6 }')
 	$LFS path2fid $DIR/$tdir/a1/f1
 	$LFS getstripe $DIR/$tdir/a1/f1
 	$LFS path2fid $DIR/$tdir/a1/f2
 	$LFS getstripe $DIR/$tdir/a1/f2
+	$LFS path2fid $DIR/$tdir/a1/f3
+	$LFS getstripe $DIR/$tdir/a1/f3
+	$LFS path2fid $DIR/$tdir/a1/f4
+	$LFS getstripe $DIR/$tdir/a1/f4
 	cancel_lru_locks osc
 
 	echo "Inject failure to make $DIR/$tdir/a1/f1 and $DIR/$tdir/a1/f2"
 	echo "to reference the same OST-object (which is f1's OST-obejct)."
 	echo "Then drop $DIR/$tdir/a1/f1 and its OST-object, so f2 becomes"
 	echo "dangling reference case, but f2's old OST-object is there."
+
+	echo "The failure also makes $DIR/$tdir/a1/f3 and $DIR/$tdir/a1/f4"
+	echo "to reference the same OST-object (which is f3's OST-obejct)."
+	echo "Then drop $DIR/$tdir/a1/f3 and its OST-object, so f4 becomes"
+	echo "dangling reference case, but f4's old OST-object is there."
 	echo
 
 	#define OBD_FAIL_LFSCK_CHANGE_STRIPE	0x1618
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1618
 	chown 1.1 $DIR/$tdir/a1/f2
+	chown 1.1 $DIR/$tdir/a1/f4
 	rm -f $DIR/$tdir/a1/f1
+	rm -f $DIR/$tdir/a1/f3
 	sync
 	sleep 2
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
@@ -2251,11 +2386,6 @@ test_18d() {
 	stopall > /dev/null
 	echo "setupall"
 	setupall > /dev/null
-
-	echo "The file size should be incorrect since dangling referenced"
-	local cur_size=$(ls -il $DIR/$tdir/a1/f2 | awk '{ print $6 }')
-	[ "$cur_size" != "$saved_size" ] ||
-		error "(1) Expect incorrect file2 size"
 
 	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
 	$START_LAYOUT -r -o -c -d || error "(2) Fail to start LFSCK for layout!"
@@ -2281,8 +2411,8 @@ test_18d() {
 	local repaired=$(do_facet $SINGLEMDS $LCTL get_param -n \
 			 mdd.$(facet_svc $SINGLEMDS).lfsck_layout |
 			 awk '/^repaired_orphan/ { print $2 }')
-	[ $repaired -eq 1 ] ||
-		error "(5) Expect 1 orphan has been fixed, but got: $repaired"
+	[ $repaired -eq 2 ] ||
+		error "(5) Expect 2 orphans have been fixed, but got: $repaired"
 
 	repaired=$(do_facet $SINGLEMDS $LCTL get_param -n \
 		   mdd.$(facet_svc $SINGLEMDS).lfsck_layout |
@@ -2291,14 +2421,21 @@ test_18d() {
 		error "(6) Expect 0 dangling has been fixed, but got: $repaired"
 
 	echo "The file size should be correct after layout LFSCK scanning"
-	cur_size=$(ls -il $DIR/$tdir/a1/f2 | awk '{ print $6 }')
-	[ "$cur_size" == "$saved_size" ] ||
-		error "(7) Expect file2 size $saved_size, but got $cur_size"
+	local cur_size=$(ls -il $DIR/$tdir/a1/f2 | awk '{ print $6 }')
+	[ "$cur_size" == "$saved_size1" ] ||
+		error "(7) Expect file2 size $saved_size1, but got $cur_size"
+
+	cur_size=$(ls -il $DIR/$tdir/a1/f4 | awk '{ print $6 }')
+	[ "$cur_size" == "$saved_size2" ] ||
+		error "(8) Expect file4 size $saved_size2, but got $cur_size"
 
 	echo "The LFSCK should find back the original data."
 	cat $DIR/$tdir/a1/f2
 	$LFS path2fid $DIR/$tdir/a1/f2
 	$LFS getstripe $DIR/$tdir/a1/f2
+	cat $DIR/$tdir/a1/f4
+	$LFS path2fid $DIR/$tdir/a1/f4
+	$LFS getstripe $DIR/$tdir/a1/f4
 }
 run_test 18d "Find out orphan OST-object and repair it (4)"
 
@@ -2313,26 +2450,45 @@ test_18e() {
 
 	check_mount_and_prep
 	mkdir $DIR/$tdir/a1
-	$LFS setstripe -c 1 -i 0 -S 1M $DIR/$tdir/a1
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir/a1
 	echo "guard" > $DIR/$tdir/a1/f1
 	echo "foo" > $DIR/$tdir/a1/f2
-	local saved_size=$(ls -il $DIR/$tdir/a1/f2 | awk '{ print $6 }')
+
+	echo "guard" > $DIR/$tdir/a1/f3
+	$LFS setstripe -E 1M -S 1M -o 0 -E -1 -S 1M $DIR/$tdir/a1/f4 ||
+		error "(0) Fail to create PFL $DIR/$tdir/a1/f4"
+	echo "foo" > $DIR/$tdir/a1/f4
+
+	local saved_size1=$(ls -il $DIR/$tdir/a1/f2 | awk '{ print $6 }')
+	local saved_size2=$(ls -il $DIR/$tdir/a1/f4 | awk '{ print $6 }')
+
 	$LFS path2fid $DIR/$tdir/a1/f1
 	$LFS getstripe $DIR/$tdir/a1/f1
 	$LFS path2fid $DIR/$tdir/a1/f2
 	$LFS getstripe $DIR/$tdir/a1/f2
+	$LFS path2fid $DIR/$tdir/a1/f3
+	$LFS getstripe $DIR/$tdir/a1/f3
+	$LFS path2fid $DIR/$tdir/a1/f4
+	$LFS getstripe $DIR/$tdir/a1/f4
 	cancel_lru_locks osc
 
 	echo "Inject failure to make $DIR/$tdir/a1/f1 and $DIR/$tdir/a1/f2"
 	echo "to reference the same OST-object (which is f1's OST-obejct)."
 	echo "Then drop $DIR/$tdir/a1/f1 and its OST-object, so f2 becomes"
 	echo "dangling reference case, but f2's old OST-object is there."
+
+	echo "Also the failure makes $DIR/$tdir/a1/f3 and $DIR/$tdir/a1/f4"
+	echo "to reference the same OST-object (which is f3's OST-obejct)."
+	echo "Then drop $DIR/$tdir/a1/f3 and its OST-object, so f4 becomes"
+	echo "dangling reference case, but f4's old OST-object is there."
 	echo
 
 	#define OBD_FAIL_LFSCK_CHANGE_STRIPE	0x1618
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1618
 	chown 1.1 $DIR/$tdir/a1/f2
+	chown 1.1 $DIR/$tdir/a1/f4
 	rm -f $DIR/$tdir/a1/f1
+	rm -f $DIR/$tdir/a1/f3
 	sync
 	sleep 2
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
@@ -2341,11 +2497,6 @@ test_18e() {
 	stopall > /dev/null
 	echo "setupall"
 	setupall > /dev/null
-
-	echo "The file size should be incorrect since dangling referenced"
-	local cur_size=$(ls -il $DIR/$tdir/a1/f2 | awk '{ print $6 }')
-	[ "$cur_size" != "$saved_size" ] ||
-		error "(1) Expect incorrect file2 size"
 
 	#define OBD_FAIL_LFSCK_DELAY3		0x1602
 	do_facet $SINGLEMDS $LCTL set_param fail_val=10 fail_loc=0x1602
@@ -2364,8 +2515,9 @@ test_18e() {
 	sync
 	sleep 2
 
-	echo "Write new data to f2 to modify the new created OST-object."
+	echo "Write new data to f2/f4 to modify the new created OST-object."
 	echo "dummy" >> $DIR/$tdir/a1/f2
+	echo "dummy" >> $DIR/$tdir/a1/f4
 
 	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
 
@@ -2392,30 +2544,45 @@ test_18e() {
 	local repaired=$(do_facet $SINGLEMDS $LCTL get_param -n \
 			 mdd.$(facet_svc $SINGLEMDS).lfsck_layout |
 			 awk '/^repaired_orphan/ { print $2 }')
-	[ $repaired -eq 1 ] ||
-		error "(6) Expect 1 orphan has been fixed, but got: $repaired"
+	[ $repaired -eq 2 ] ||
+		error "(6) Expect 2 orphans have been fixed, but got: $repaired"
 
 	echo "There should be stub file under .lustre/lost+found/MDT0000/"
 	[ -d $MOUNT/.lustre/lost+found/MDT0000 ] ||
 		error "(7) $MOUNT/.lustre/lost+found/MDT0000/ should be there"
 
-	cname=$(find $MOUNT/.lustre/lost+found/MDT0000/ -name *-C-*)
-	[ ! -z "$cname" ] ||
-		error "(8) .lustre/lost+found/MDT0000/ should not be empty"
+	local count=$(ls -l $MOUNT/.lustre/lost+found/MDT0000/*-C-* | wc -l)
+	if [ $count -ne 2 ]; then
+		ls -l $MOUNT/.lustre/lost+found/MDT0000/*-C-*
+		error "(8) Expect 2 stubs under lost+found, but got $count"
+	fi
 
-	echo "The stub file should keep the original f2 data"
-	cur_size=$(ls -il $cname | awk '{ print $6 }')
-	[ "$cur_size" == "$saved_size" ] ||
-		error "(9) Expect file2 size $saved_size, but got $cur_size"
+	echo "The stub file should keep the original f2 or f4 data"
+	cname=$(find $MOUNT/.lustre/lost+found/MDT0000/ -name *-C-* | head -n 1)
+	local cur_size=$(ls -il $cname | awk '{ print $6 }')
+	[ "$cur_size" != "$saved_size1" -a "$cur_size" != "$saved_size2" ] &&
+		error "(9) Got unexpected $cur_size"
 
 	cat $cname
 	$LFS path2fid $cname
 	$LFS getstripe $cname
 
-	echo "The f2 should contains new data."
+	cname=$(find $MOUNT/.lustre/lost+found/MDT0000/ -name *-C-* | tail -n 1)
+	cur_size=$(ls -il $cname | awk '{ print $6 }')
+	[ "$cur_size" != "$saved_size1" -a "$cur_size" != "$saved_size2" ] &&
+		error "(10) Got unexpected $cur_size"
+
+	cat $cname
+	$LFS path2fid $cname
+	$LFS getstripe $cname
+
+	echo "The f2/f4 should contains new data."
 	cat $DIR/$tdir/a1/f2
 	$LFS path2fid $DIR/$tdir/a1/f2
 	$LFS getstripe $DIR/$tdir/a1/f2
+	cat $DIR/$tdir/a1/f4
+	$LFS path2fid $DIR/$tdir/a1/f4
+	$LFS getstripe $DIR/$tdir/a1/f4
 }
 run_test 18e "Find out orphan OST-object and repair it (5)"
 
@@ -2433,7 +2600,7 @@ test_18f() {
 
 	check_mount_and_prep
 	$LFS mkdir -i 0 $DIR/$tdir/a1
-	$LFS setstripe -c 1 -i 0 -S 1M $DIR/$tdir/a1
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir/a1
 	dd if=/dev/zero of=$DIR/$tdir/a1/guard bs=1M count=2
 	dd if=/dev/zero of=$DIR/$tdir/a1/f1 bs=1M count=2
 	$LFS mkdir -i 0 $DIR/$tdir/a2
@@ -2444,7 +2611,7 @@ test_18f() {
 
 	if [ $MDSCOUNT -ge 2 ]; then
 		$LFS mkdir -i 1 $DIR/$tdir/a3
-		$LFS setstripe -c 1 -i 0 -S 1M $DIR/$tdir/a3
+		$LFS setstripe -c 1 -i 0 $DIR/$tdir/a3
 		dd if=/dev/zero of=$DIR/$tdir/a3/guard bs=1M count=2
 		dd if=/dev/zero of=$DIR/$tdir/a3/f3 bs=1M count=2
 		$LFS mkdir -i 1 $DIR/$tdir/a4
@@ -2624,24 +2791,105 @@ test_18g() {
 }
 run_test 18g "Find out orphan OST-object and repair it (7)"
 
+test_18h() {
+	echo "#####"
+	echo "The PFL extent crashed. During the first cycle LFSCK scanning,"
+	echo "the layout LFSCK will keep the bad PFL file(s) there without"
+	echo "scanning its OST-object(s). Then in the second stage scanning,"
+	echo "the OST will return related OST-object(s) to the MDT as orphan."
+	echo "And then the LFSCK on the MDT can rebuild the PFL extent with"
+	echo "the 'orphan(s)' stripe information."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS setstripe -E 2M -c 1 -E -1 $DIR/$tdir/f0 ||
+		error "(0) Fail to create PFL $DIR/$tdir/f0"
+
+	cat $LUSTRE/tests/test-framework.sh > $DIR/$tdir/f0 ||
+		error "(1.1) Fail to write $DIR/$tdir/f0"
+
+	dd if=$LUSTRE/tests/test-framework.sh of=$DIR/$tdir/f0 bs=1M seek=2 ||
+		error "(1.2) Fail to write $DIR/$tdir/f0"
+
+	cp $DIR/$tdir/f0 $DIR/$tdir/guard
+
+	echo "Inject failure stub to simulate bad PFL extent range"
+	#define OBD_FAIL_LFSCK_BAD_PFL_RANGE	0x162f
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x162f
+
+	chown 1.1 $DIR/$tdir/f0
+
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	dd if=/dev/zero of=$DIR/$tdir/f0 bs=1M count=1 &&
+		error "(2) Write to bad PFL file should fail"
+
+	echo "Trigger layout LFSCK to find out the bad lmm_oi and fix them"
+	$START_LAYOUT -r -o || error "(3) Fail to start LFSCK for layout!"
+
+	for k in $(seq $MDSCOUNT); do
+		# The LFSCK status query internal is 30 seconds. For the case
+		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
+		# time to guarantee the status sync up.
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_layout |
+			awk '/^status/ { print \\\$2 }'" "completed" $LTIME ||
+			error "(4.1) MDS${k} is not the expected 'completed'"
+	done
+
+	for k in $(seq $OSTCOUNT); do
+		cur_status=$(do_facet ost${k} $LCTL get_param -n \
+			     obdfilter.$(facet_svc ost${k}).lfsck_layout |
+			     awk '/^status/ { print $2 }')
+		[ "$cur_status" == "completed" ] ||
+		error "(4.2) OST${k} Expect 'completed', but got '$cur_status'"
+
+	done
+
+	local repaired=$($SHOW_LAYOUT |
+			 awk '/^repaired_orphan/ { print $2 }')
+	[ $repaired -eq 2 ] ||
+		error "(5) Fail to repair crashed PFL range: $repaired"
+
+	echo "Data in $DIR/$tdir/f0 should not be broken"
+	diff $DIR/$tdir/f0 $DIR/$tdir/guard ||
+		error "(6) Data in $DIR/$tdir/f0 is broken"
+
+	echo "Write should succeed after LFSCK repairing the bad PFL range"
+	dd if=/dev/zero of=$DIR/$tdir/f0 bs=1M count=1 ||
+		error "(7) Write should succeed after LFSCK"
+}
+run_test 18h "LFSCK can repair crashed PFL extent range"
+
 $LCTL set_param debug=-cache > /dev/null
 
 test_19a() {
 	check_mount_and_prep
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
-	echo "foo" > $DIR/$tdir/a0
-	echo "guard" > $DIR/$tdir/a1
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param -n \
+		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid 0
+
+	echo "foo1" > $DIR/$tdir/a0
+	$LFS setstripe -E 512K -S 512K -o 0 -E -1 -S 1M $DIR/$tdir/a1 ||
+		error "(0) Fail to create PFL $DIR/$tdir/a1"
+	echo "foo2" > $DIR/$tdir/a1
+	echo "guard" > $DIR/$tdir/a2
 	cancel_lru_locks osc
 
 	echo "Inject failure, then client will offer wrong parent FID when read"
-	do_facet ost1 $LCTL set_param -n \
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param -n \
 		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid 1
+
 	#define OBD_FAIL_LFSCK_INVALID_PFID	0x1619
 	$LCTL set_param fail_loc=0x1619
 
 	echo "Read RPC with wrong parent FID should be denied"
-	cat $DIR/$tdir/a0 && error "(3) Read should be denied!"
+	cat $DIR/$tdir/a0 && error "(3.1) Read a0 should be denied!"
+	cat $DIR/$tdir/a1 && error "(3.2) Read a1 should be denied!"
 	$LCTL set_param fail_loc=0
 }
 run_test 19a "OST-object inconsistency self detect"
@@ -2653,12 +2901,20 @@ test_19b() {
 	echo "Inject failure stub to make the OST-object to back point to"
 	echo "non-exist MDT-object"
 
-	#define OBD_FAIL_LFSCK_UNMATCHED_PAIR1	0x1611
-	do_facet ost1 $LCTL set_param fail_loc=0x1611
-	echo "foo" > $DIR/$tdir/f0
-	cancel_lru_locks osc
-	do_facet ost1 $LCTL set_param fail_loc=0
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param -n \
+		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid 0
 
+	#define OBD_FAIL_LFSCK_UNMATCHED_PAIR1	0x1611
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0x1611
+	echo "foo1" > $DIR/$tdir/f0
+	$LFS setstripe -E 1M -S 1M -o 0 -E 4M -S 256K $DIR/$tdir/f1 ||
+		error "(0) Fail to create PFL $DIR/$tdir/f1"
+	echo "foo2" > $DIR/$tdir/f1
+	cancel_lru_locks osc
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param fail_loc=0
+
+	do_facet ost1 $LCTL set_param -n \
+		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid 0
 	echo "Nothing should be fixed since self detect and repair is disabled"
 	local repaired=$(do_facet ost1 $LCTL get_param -n \
 			obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid |
@@ -2669,19 +2925,24 @@ test_19b() {
 	echo "Read RPC with right parent FID should be accepted,"
 	echo "and cause parent FID on OST to be fixed"
 
-	do_facet ost1 $LCTL set_param -n \
+	do_nodes $(comma_list $(osts_nodes)) $LCTL set_param -n \
 		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid 1
-	cat $DIR/$tdir/f0 || error "(2) Read should not be denied!"
+
+	cat $DIR/$tdir/f0 || error "(2.1) Read f0 should not be denied!"
+	cat $DIR/$tdir/f1 || error "(2.2) Read f1 should not be denied!"
 
 	repaired=$(do_facet ost1 $LCTL get_param -n \
 		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid |
 		awk '/^repaired/ { print $2 }')
-	[ $repaired -eq 1 ] ||
+	[ $repaired -eq 2 ] ||
 		error "(3) Expected 1 repaired, but got $repaired"
 }
 run_test 19b "OST-object inconsistency self repair"
 
-test_20() {
+PATTERN_WITH_HOLE="40000001"
+PATTERN_WITHOUT_HOLE="1"
+
+test_20a() {
 	[ $OSTCOUNT -lt 2 ] &&
 		skip "The test needs at least 2 OSTs" && return
 
@@ -2762,15 +3023,8 @@ test_20() {
 	sleep 2
 	do_facet mds1 $LCTL set_param fail_loc=0 fail_val=0
 
-	echo "Inject failure to slow down the LFSCK on OST0"
-	#define OBD_FAIL_LFSCK_DELAY5		0x161b
-	do_facet ost1 $LCTL set_param fail_loc=0x161b
-
 	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
 	$START_LAYOUT -r -o || error "(1) Fail to start LFSCK for layout!"
-
-	sleep 3
-	do_facet ost1 $LCTL set_param fail_loc=0
 
 	for k in $(seq $MDSCOUNT); do
 		# The LFSCK status query internal is 30 seconds. For the case
@@ -2813,8 +3067,8 @@ test_20() {
 
 	$LFS getstripe -v $name || error "(5.1) cannot getstripe on $name"
 
-	local pattern=0x$($LFS getstripe -L $name)
-	[[ $((pattern & LOV_PATTERN_F_HOLE)) -eq 0 ]] ||
+	local pattern=$($LFS getstripe -L $name)
+	[[ "$pattern" = "$PATTERN_WITHOUT_HOLE" ]] ||
 		error "(5.2) NOT expect pattern flag hole, but got $pattern"
 
 	local stripes=$($LFS getstripe -c $name)
@@ -2852,8 +3106,8 @@ test_20() {
 
 	$LFS getstripe -v $name || error "(6.1) cannot getstripe on $name"
 
-	pattern=0x$($LFS getstripe -L $name)
-	[[ $((pattern & LOV_PATTERN_F_HOLE)) -ne 0 ]] ||
+	pattern=$($LFS getstripe -L $name)
+	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
 		error "(6.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c $name)
@@ -2908,13 +3162,13 @@ test_20() {
 
 	$LFS getstripe -v $name || error "(7.1) cannot getstripe on $name"
 
-	pattern=0x$($LFS getstripe -L $name)
+	pattern=$($LFS getstripe -L $name)
+	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+		error "(7.2) expect pattern flag hole, but got $pattern"
+
 	stripes=$($LFS getstripe -c $name)
 	size=$(stat $name | awk '/Size:/ { print $2 }')
 	if [ $OSTCOUNT -gt 2 ]; then
-		[[ $((pattern & LOV_PATTERN_F_HOLE)) -ne 0 ]] ||
-		error "(7.2.1) expect pattern flag hole, but got $pattern"
-
 		[ $stripes -eq 3 ] ||
 		error "(7.3.1) expect the stripe count is 3, but got $stripes"
 
@@ -2948,19 +3202,28 @@ test_20() {
 
 		touch $name || error "(7.10.1) cannot touch $name"
 	else
-		[[ $((pattern & LOV_PATTERN_F_HOLE)) -eq 0 ]] ||
-		error "(7.2.2) NOT expect pattern flag hole, but got $pattern"
-
-		[ $stripes -eq 1 ] ||
-		error "(7.3.2) expect the stripe count is 1, but got $stripes"
+		[ $stripes -eq 2 ] ||
+		error "(7.3.2) expect the stripe count is 2, but got $stripes"
 
 		# stripe1 is dummy
 		[ $size -eq $((4096 * (256 + 0))) ] ||
 		error "(7.4.2) expect the size $((4096 * 256)), but got $size"
 
-		cat $name > /dev/null || error "(7.5.2) cannot read $name"
+		cat $name > /dev/null &&
+			error "(7.5.2) normal read $name should fail"
 
-		echo "dummy" >> $name || error "(7.8.2) cannot write $name"
+		failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
+			   bs=4096 2>&1 | grep "Input/output error" | wc -l)
+		[ $failures -eq 256 ] ||
+		error "(7.6.2) expect 256 IO failures, but get $failures"
+
+		bcount=$((256 * 2))
+		size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
+		[ $size -eq $((4096 * $bcount)) ] ||
+		error "(7.7.2) expect the size $((4096 * $bcount)), got $size"
+
+		dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 \
+		seek=256 && error "(7.8.2) write to the LOV EA hole should fail"
 
 		chown $RUNAS_ID:$RUNAS_GID $name ||
 			error "(7.9.2) cannot chown on $name"
@@ -2980,34 +3243,354 @@ test_20() {
 
 	$LFS getstripe -v $name || error "(8.1) cannot getstripe on $name"
 
-	pattern=0x$($LFS getstripe -L $name)
-	[[ $((pattern & LOV_PATTERN_F_HOLE)) -eq 0 ]] ||
-		error "(8.2) NOT expect pattern flag hole, but got $pattern"
+	pattern=$($LFS getstripe -L $name)
+	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+		error "(8.2) expect pattern flag hole, but got $pattern"
 
 	stripes=$($LFS getstripe -c $name)
-	# LFSCK does not know the old f3 had 3 stripes.
-	# It only tries to find as much as possible.
-	# The stripe count depends on the last stripe's offset.
-	[ $stripes -eq 2 ] ||
-		error "(8.3) expect the stripe count is 2, but got $stripes"
+	[ $stripes -eq 3 ] ||
+		error "(8.3) expect the stripe count is 3, but got $stripes"
 
 	size=$(stat $name | awk '/Size:/ { print $2 }')
 	# stripe2 is lost
 	[ $size -eq $((4096 * (256 + 256 + 0))) ] ||
 		error "(8.4) expect the size $((4096 * 512)), but got $size"
 
-	cat $name > /dev/null || error "(8.5) cannot read $name"
+	cat $name > /dev/null &&
+		error "(8.5) normal read $name should fail"
 
-	echo "dummy" >> $name || error "(8.6) cannot write $name"
+	failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
+		   bs=4096 2>&1 | grep "Input/output error" | wc -l)
+	# stripe2 is dummy
+	[ $failures -eq 256 ] ||
+		error "(8.6) expect 256 IO failures, but get $failures"
+
+	bcount=$((256 * 3))
+	size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
+	[ $size -eq $((4096 * $bcount)) ] ||
+		error "(8.7) expect the size $((4096 * $bcount)), but got $size"
+
+	dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 \
+		seek=512 && error "(8.8) write to the LOV EA hole should fail"
 
 	chown $RUNAS_ID:$RUNAS_GID $name ||
-		error "(8.7) cannot chown on $name"
+		error "(8.9) cannot chown on $name"
 
-	touch $name || error "(8.8) cannot touch $name"
+	touch $name || error "(8.10) cannot touch $name"
 
-	rm -f $name || error "(8.9) cannot unlink $name"
+	rm -f $name || error "(8.11) cannot unlink $name"
 }
-run_test 20 "Handle the orphan with dummy LOV EA slot properly"
+run_test 20a "Handle the orphan with dummy LOV EA slot properly"
+
+test_20b() {
+	[ $OSTCOUNT -lt 2 ] &&
+		skip "The test needs at least 2 OSTs" && return
+
+	echo "#####"
+	echo "The target MDT-object and some of its OST-object are lost."
+	echo "The LFSCK should find out the left OST-objects and re-create"
+	echo "the MDT-object under the direcotry .lustre/lost+found/MDTxxxx/"
+	echo "with the partial OST-objects (LOV EA hole)."
+
+	echo "New client can access the file with LOV EA hole via normal"
+	echo "system tools or commands without crash the system - PFL case."
+	echo "#####"
+
+	check_mount_and_prep
+
+	$LFS setstripe -E 2M -S 1M -c 2 -E -1 -S 1M -c 2 $DIR/$tdir/f0 ||
+		error "(0) Fail to create PFL file $DIR/$tdir/f0"
+	$LFS setstripe -E 2M -S 1M -c 2 -E -1 -S 1M -c 2 $DIR/$tdir/f1 ||
+		error "(1) Fail to create PFL file $DIR/$tdir/f1"
+	$LFS setstripe -E 2M -S 1M -c 2 -E -1 -S 1M -c 2 $DIR/$tdir/f2 ||
+		error "(2) Fail to create PFL file $DIR/$tdir/f2"
+
+	local bcount=$((256 * 3 + 1))
+
+	dd if=/dev/zero of=$DIR/$tdir/f0 bs=4096 count=$bcount
+	dd if=/dev/zero of=$DIR/$tdir/f1 bs=4096 count=$bcount
+	dd if=/dev/zero of=$DIR/$tdir/f2 bs=4096 count=$bcount
+
+	local fid0=$($LFS path2fid $DIR/$tdir/f0)
+	local fid1=$($LFS path2fid $DIR/$tdir/f1)
+	local fid2=$($LFS path2fid $DIR/$tdir/f2)
+
+	echo ${fid0}
+	$LFS getstripe $DIR/$tdir/f0
+	echo ${fid1}
+	$LFS getstripe $DIR/$tdir/f1
+	echo ${fid2}
+	$LFS getstripe $DIR/$tdir/f2
+
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	echo "Inject failure..."
+	echo "To simulate f0 lost MDT-object"
+	#define OBD_FAIL_LFSCK_LOST_MDTOBJ	0x1616
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1616
+	rm -f $DIR/$tdir/f0
+
+	echo "To simulate the case of f1 lost MDT-object and "
+	echo "the first OST-object in each PFL component"
+	#define OBD_FAIL_LFSCK_LOST_SPEOBJ	0x161a
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x161a
+	rm -f $DIR/$tdir/f1
+
+	echo "To simulate the case of f2 lost MDT-object and "
+	echo "the second OST-object in each PFL component"
+	do_facet $SINGLEMDS $LCTL set_param fail_val=1
+	rm -f $DIR/$tdir/f2
+
+	sync
+	sleep 2
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
+
+	echo "Trigger layout LFSCK on all devices to find out orphan OST-object"
+	$START_LAYOUT -r -o || error "(3) Fail to start LFSCK for layout!"
+
+	for k in $(seq $MDSCOUNT); do
+		# The LFSCK status query internal is 30 seconds. For the case
+		# of some LFSCK_NOTIFY RPCs failure/lost, we will wait enough
+		# time to guarantee the status sync up.
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_layout |
+			awk '/^status/ { print \\\$2 }'" "completed" 32 ||
+			error "(4) MDS${k} is not the expected 'completed'"
+	done
+
+	for k in $(seq $OSTCOUNT); do
+		local cur_status=$(do_facet ost${k} $LCTL get_param -n \
+				obdfilter.$(facet_svc ost${k}).lfsck_layout |
+				awk '/^status/ { print $2 }')
+		[ "$cur_status" == "completed" ] ||
+		error "(5) OST${k} Expect 'completed', but got '$cur_status'"
+	done
+
+	local repaired=$(do_facet mds1 $LCTL get_param -n \
+			 mdd.$(facet_svc mds1).lfsck_layout |
+			 awk '/^repaired_orphan/ { print $2 }')
+	[ $repaired -eq 8 ] ||
+		error "(6) Expect 8 fixed on mds1, but got: $repaired"
+
+	#
+	# ${fid0}-R-0 is the old f0
+	#
+	local name="$MOUNT/.lustre/lost+found/MDT0000/${fid0}-R-0"
+	echo "Check $name, which is the old f0"
+
+	$LFS getstripe -v $name || error "(7.1) cannot getstripe on $name"
+
+	local pattern=$($LFS getstripe -L -I 1 $name)
+	[[ "$pattern" = "$PATTERN_WITHOUT_HOLE" ]] ||
+		error "(7.2.1) NOT expect pattern flag hole, but got $pattern"
+
+	pattern=$($LFS getstripe -L -I 2 $name)
+	[[ "$pattern" = "$PATTERN_WITHOUT_HOLE" ]] ||
+		error "(7.2.2) NOT expect pattern flag hole, but got $pattern"
+
+	local stripes=$($LFS getstripe -c -I 1 $name)
+	[ $stripes -eq 2 ] ||
+		error "(7.3.1) expect 2 stripes, but got $stripes"
+
+	stripes=$($LFS getstripe -c -I 2 $name)
+	[ $stripes -eq 2 ] ||
+		error "(7.3.2) expect 2 stripes, but got $stripes"
+
+	local e_start=$($LFS getstripe -I 1 $name |
+			awk '/lcme_extent.e_start:/ { print $2 }')
+	[ $e_start -eq 0 ] ||
+		error "(7.4.1) expect the COMP1 start at 0, got $e_start"
+
+	local e_end=$($LFS getstripe -I 1 $name |
+		      awk '/lcme_extent.e_end:/ { print $2 }')
+	[ $e_end -eq 2097152 ] ||
+		error "(7.4.2) expect the COMP1 end at 2097152, got $e_end"
+
+	e_start=$($LFS getstripe -I 2 $name |
+		  awk '/lcme_extent.e_start:/ { print $2 }')
+	[ $e_start -eq 2097152 ] ||
+		error "(7.5.1) expect the COMP2 start at 2097152, got $e_start"
+
+	e_end=$($LFS getstripe -I 2 $name |
+		awk '/lcme_extent.e_end:/ { print $2 }')
+	[ "$e_end" = "EOF" ] ||
+		error "(7.5.2) expect the COMP2 end at (EOF), got $e_end"
+
+	local size=$(stat $name | awk '/Size:/ { print $2 }')
+	[ $size -eq $((4096 * $bcount)) ] ||
+		error "(7.6) expect the size $((4096 * $bcount)), but got $size"
+
+	cat $name > /dev/null || error "(7.7) cannot read $name"
+
+	echo "dummy" >> $name || error "(7.8) cannot write $name"
+
+	chown $RUNAS_ID:$RUNAS_GID $name || error "(7.9) cannot chown on $name"
+
+	touch $name || error "(7.10) cannot touch $name"
+
+	rm -f $name || error "(7.11) cannot unlink $name"
+
+	#
+	# ${fid1}-R-0 contains the old f1's second stripe in each COMP
+	#
+	name="$MOUNT/.lustre/lost+found/MDT0000/${fid1}-R-0"
+	echo "Check $name, it contains f1's second OST-object in each COMP"
+
+	$LFS getstripe -v $name || error "(8.1) cannot getstripe on $name"
+
+	pattern=$($LFS getstripe -L -I 1 $name)
+	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+		error "(8.2.1) expect pattern flag hole, but got $pattern"
+
+	pattern=$($LFS getstripe -L -I 2 $name)
+	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+		error "(8.2.2) expect pattern flag hole, but got $pattern"
+
+	stripes=$($LFS getstripe -c -I 1 $name)
+	[ $stripes -eq 2 ] ||
+		error "(8.3.2) expect 2 stripes, but got $stripes"
+
+	stripes=$($LFS getstripe -c -I 2 $name)
+	[ $stripes -eq 2 ] ||
+		error "(8.3.2) expect 2 stripes, but got $stripes"
+
+	e_start=$($LFS getstripe -I 1 $name |
+		  awk '/lcme_extent.e_start:/ { print $2 }')
+	[ $e_start -eq 0 ] ||
+		error "(8.4.1) expect the COMP1 start at 0, got $e_start"
+
+	e_end=$($LFS getstripe -I 1 $name |
+		awk '/lcme_extent.e_end:/ { print $2 }')
+	[ $e_end -eq 2097152 ] ||
+		error "(8.4.2) expect the COMP1 end at 2097152, got $e_end"
+
+	e_start=$($LFS getstripe -I 2 $name |
+		  awk '/lcme_extent.e_start:/ { print $2 }')
+	[ $e_start -eq 2097152 ] ||
+		error "(8.5.1) expect the COMP2 start at 2097152, got $e_start"
+
+	e_end=$($LFS getstripe -I 2 $name |
+		awk '/lcme_extent.e_end:/ { print $2 }')
+	[ "$e_end" = "EOF" ] ||
+		error "(8.5.2) expect the COMP2 end at (EOF), got $e_end"
+
+	size=$(stat $name | awk '/Size:/ { print $2 }')
+	[ $size -eq $((4096 * $bcount)) ] ||
+		error "(8.6) expect the size $((4096 * $bcount)), but got $size"
+
+	cat $name > /dev/null && error "(8.7) normal read $name should fail"
+
+	local failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
+			 bs=4096 2>&1 | grep "Input/output error" | wc -l)
+
+	# The first stripe in each COMP was lost
+	[ $failures -eq 512 ] ||
+		error "(8.8) expect 512 IO failures, but get $failures"
+
+	size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
+	[ $size -eq $((4096 * $bcount)) ] ||
+		error "(8.9) expect the size $((4096 * $bcount)), but got $size"
+
+	dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 &&
+		error "(8.10) write to the LOV EA hole should fail"
+
+	dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 seek=300 ||
+		error "(8.11) write to normal stripe should NOT fail"
+
+	echo "foo" >> $name && error "(8.12) append write $name should fail"
+
+	chown $RUNAS_ID:$RUNAS_GID $name || error "(8.13) cannot chown on $name"
+
+	touch $name || error "(8.14) cannot touch $name"
+
+	rm -f $name || error "(8.15) cannot unlink $name"
+
+	#
+	# ${fid2}-R-0 contains the old f2's first stripe in each COMP
+	#
+	name="$MOUNT/.lustre/lost+found/MDT0000/${fid2}-R-0"
+	echo "Check $name, it contains f2's first stripe in each COMP"
+
+	$LFS getstripe -v $name || error "(9.1) cannot getstripe on $name"
+
+	pattern=$($LFS getstripe -L -I 1 $name)
+	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+		error "(9.2.1) expect pattern flag hole, but got $pattern"
+
+	pattern=$($LFS getstripe -L -I 2 $name)
+	[[ "$pattern" = "$PATTERN_WITH_HOLE" ]] ||
+		error "(9.2.2) expect pattern flag hole, but got $pattern"
+
+	stripes=$($LFS getstripe -c -I 1 $name)
+	[ $stripes -eq 2 ] ||
+		error "(9.3.2) expect 2 stripes, but got $stripes"
+
+	stripes=$($LFS getstripe -c -I 2 $name)
+	[ $stripes -eq 2 ] ||
+		error "(9.3.2) expect 2 stripes, but got $stripes"
+
+	e_start=$($LFS getstripe -I 1 $name |
+		  awk '/lcme_extent.e_start:/ { print $2 }')
+	[ $e_start -eq 0 ] ||
+		error "(9.4.1) expect the COMP1 start at 0, got $e_start"
+
+	e_end=$($LFS getstripe -I 1 $name |
+		awk '/lcme_extent.e_end:/ { print $2 }')
+	[ $e_end -eq 2097152 ] ||
+		error "(9.4.2) expect the COMP1 end at 2097152, got $e_end"
+
+	e_start=$($LFS getstripe -I 2 $name |
+		  awk '/lcme_extent.e_start:/ { print $2 }')
+	[ $e_start -eq 2097152 ] ||
+		error "(9.5.1) expect the COMP2 start at 2097152, got $e_start"
+
+	e_end=$($LFS getstripe -I 2 $name |
+		awk '/lcme_extent.e_end:/ { print $2 }')
+	[ "$e_end" = "EOF" ] ||
+		error "(9.5.2) expect the COMP2 end at (EOF), got $e_end"
+
+	size=$(stat $name | awk '/Size:/ { print $2 }')
+	# The second stripe in COMP was lost, so we do not know there
+	# have ever been some data before. 'stat' will regard it as
+	# no data on the lost stripe.
+	bcount=$((256 * 3))
+	[ $size -eq $((4096 * $bcount)) ] ||
+		error "(9.6) expect size $((4096 * $bcount)), but got $size"
+
+	cat $name > /dev/null &&
+		error "(9.7) normal read $name should fail"
+
+	failures=$(dd if=$name of=$DIR/$tdir/dump conv=sync,noerror \
+		   bs=4096 2>&1 | grep "Input/output error" | wc -l)
+	[ $failures -eq 512 ] ||
+		error "(9.8) expect 256 IO failures, but get $failures"
+
+	size=$(stat $DIR/$tdir/dump | awk '/Size:/ { print $2 }')
+	# The second stripe in COMP was lost, so we do not know there
+	# have ever been some data before. Since 'dd' skip failure,
+	# it will regard the lost stripe contains data.
+	bcount=$((256 * 4))
+	[ $size -eq $((4096 * $bcount)) ] ||
+		error "(9.9) expect the size $((4096 * $bcount)), but got $size"
+
+	dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 \
+		seek=300 && error "(9.10) write to the LOV EA hole should fail"
+
+	dd if=/dev/zero of=$name conv=sync,notrunc bs=4096 count=1 ||
+		error "(9.11) write to normal stripe should NOT fail"
+
+	echo "foo" >> $name &&
+		error "(9.12) append write $name should fail"
+
+	chown $RUNAS_ID:$RUNAS_GID $name ||
+		error "(9.13) cannot chown on $name"
+
+	touch $name || error "(9.14) cannot touch $name"
+
+	rm -f $name || error "(7.15) cannot unlink $name"
+}
+run_test 20b "Handle the orphan with dummy LOV EA slot properly - PFL case"
 
 test_21() {
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.59) ]] &&

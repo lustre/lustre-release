@@ -53,7 +53,7 @@ void lustre_lma_init(struct lustre_mdt_attrs *lma, const struct lu_fid *fid,
 	LASSERT(sizeof(*lma) ==
 		(offsetof(struct lustre_mdt_attrs, lma_self_fid) +
 		 sizeof(lma->lma_self_fid)));
-};
+}
 EXPORT_SYMBOL(lustre_lma_init);
 
 /**
@@ -68,8 +68,51 @@ void lustre_lma_swab(struct lustre_mdt_attrs *lma)
 	__swab32s(&lma->lma_incompat);
 	lustre_swab_lu_fid(&lma->lma_self_fid);
 #endif
-};
+}
 EXPORT_SYMBOL(lustre_lma_swab);
+
+void lustre_loa_init(struct lustre_ost_attrs *loa, const struct lu_fid *fid,
+		     __u32 compat, __u32 incompat)
+{
+	CLASSERT(sizeof(*loa) == LMA_OLD_SIZE);
+
+	memset(&loa->loa_parent_fid, 0,
+	       sizeof(*loa) - offsetof(typeof(*loa), loa_parent_fid));
+	lustre_lma_init(&loa->loa_lma, fid, compat, incompat);
+}
+EXPORT_SYMBOL(lustre_loa_init);
+
+/**
+ * Swab, if needed, LOA (for OST-object only) structure with LMA EA and PFID EA
+ * combined together are stored on-disk in little-endian order.
+ *
+ * \param[in] loa	- the pointer to the LOA structure to be swabbed.
+ * \param[in] to_cpu	- to indicate swab for CPU order or not.
+ */
+void lustre_loa_swab(struct lustre_ost_attrs *loa, bool to_cpu)
+{
+	struct lustre_mdt_attrs *lma = &loa->loa_lma;
+#ifdef __BIG_ENDIAN
+	__u32 compat = lma->lma_compat;
+#endif
+
+	lustre_lma_swab(lma);
+#ifdef __BIG_ENDIAN
+	if (to_cpu)
+		compat = lma->lma_compat;
+
+	if (compat & LMAC_STRIPE_INFO) {
+		lustre_swab_lu_fid(&loa->loa_parent_fid);
+		__swab32s(&loa->loa_stripe_size);
+	}
+	if (compat & LMAC_COMP_INFO) {
+		__swab32s(&loa->loa_comp_id);
+		__swab64s(&loa->loa_comp_start);
+		__swab64s(&loa->loa_comp_end);
+	}
+#endif
+}
+EXPORT_SYMBOL(lustre_loa_swab);
 
 /**
  * Swab, if needed, HSM structure which is stored on-disk in little-endian
@@ -85,7 +128,7 @@ void lustre_hsm_swab(struct hsm_attrs *attrs)
 	__swab64s(&attrs->hsm_arch_id);
 	__swab64s(&attrs->hsm_arch_ver);
 #endif
-};
+}
 
 /*
  * Swab and extract HSM attributes from on-disk xattr.

@@ -617,117 +617,373 @@ int lod_ea_store_resize(struct lod_thread_info *info, size_t size)
 	RETURN(0);
 }
 
+static void lod_free_comp_buffer(struct lod_layout_component *entries,
+				 __u16 count, __u32 bufsize)
+{
+	struct lod_layout_component *entry;
+	int i;
+
+	for (i = 0; i < count; i++) {
+		entry = &entries[i];
+		if (entry->llc_pool != NULL)
+			lod_set_pool(&entry->llc_pool, NULL);
+		if (entry->llc_ostlist.op_array)
+			OBD_FREE(entry->llc_ostlist.op_array,
+				 entry->llc_ostlist.op_size);
+		LASSERT(entry->llc_stripe == NULL);
+		LASSERT(entry->llc_stripes_allocated == 0);
+	}
+
+	if (bufsize != 0)
+		OBD_FREE_LARGE(entries, bufsize);
+}
+
+void lod_free_def_comp_entries(struct lod_default_striping *lds)
+{
+	lod_free_comp_buffer(lds->lds_def_comp_entries,
+			     lds->lds_def_comp_size_cnt,
+			     size_roundup_power2(
+				     sizeof(*lds->lds_def_comp_entries) *
+				     lds->lds_def_comp_size_cnt));
+	lds->lds_def_comp_entries = NULL;
+	lds->lds_def_comp_cnt = 0;
+	lds->lds_def_striping_is_composite = 0;
+	lds->lds_def_comp_size_cnt = 0;
+}
+
 /**
- * Make LOV EA for striped object.
+ * Resize per-thread storage to hold default striping component entries
  *
- * Generate striping information and store it in the LOV EA of the given
- * object. The caller must ensure nobody else is calling the function
- * against the object concurrently. The transaction must be started.
- * FLDB service must be running as well; it's used to map FID to the target,
- * which is stored in LOV EA.
+ * A helper function to resize per-thread temporary storage. This storage
+ * is used to hold default LOV/LVM EAs and may be quite large. We do not want
+ * to allocate/release it every time, so instead we put it into the env and
+ * reallocate it on demand. The memory is released when the correspondent
+ * thread is finished.
+ *
+ * \param[in,out] lds		default striping
+ * \param[in] count		new component count to grow the buffer to
+
+ * \retval			0 on success, -ENOMEM if reallocation failed
+ */
+int lod_def_striping_comp_resize(struct lod_default_striping *lds, __u16 count)
+{
+	struct lod_layout_component *entries;
+	__u32 new = size_roundup_power2(sizeof(*lds->lds_def_comp_entries) *
+					count);
+	__u32 old = size_roundup_power2(sizeof(*lds->lds_def_comp_entries) *
+					lds->lds_def_comp_size_cnt);
+
+	if (new <= old)
+		return 0;
+
+	OBD_ALLOC_LARGE(entries, new);
+	if (entries == NULL)
+		return -ENOMEM;
+
+	if (lds->lds_def_comp_entries != NULL) {
+		CDEBUG(D_INFO, "default striping component size %d is not "
+		       "enough, need %d\n", old, new);
+		lod_free_def_comp_entries(lds);
+	}
+
+	lds->lds_def_comp_entries = entries;
+	lds->lds_def_comp_size_cnt = count;
+
+	RETURN(0);
+}
+
+void lod_free_comp_entries(struct lod_object *lo)
+{
+	lod_free_comp_buffer(lo->ldo_comp_entries,
+			     lo->ldo_comp_cnt,
+			     sizeof(*lo->ldo_comp_entries) * lo->ldo_comp_cnt);
+	lo->ldo_comp_entries = NULL;
+	lo->ldo_comp_cnt = 0;
+	lo->ldo_is_composite = 0;
+}
+
+int lod_alloc_comp_entries(struct lod_object *lo, int cnt)
+{
+	LASSERT(cnt != 0);
+	LASSERT(lo->ldo_comp_cnt == 0 && lo->ldo_comp_entries == NULL);
+
+	OBD_ALLOC_LARGE(lo->ldo_comp_entries,
+			sizeof(*lo->ldo_comp_entries) * cnt);
+	if (lo->ldo_comp_entries == NULL)
+		return -ENOMEM;
+	lo->ldo_comp_cnt = cnt;
+	return 0;
+}
+
+/**
+ * Generate on-disk lov_mds_md structure for each layout component based on
+ * the information in lod_object->ldo_comp_entries[i].
  *
  * \param[in] env		execution environment for this thread
  * \param[in] lo		LOD object
- * \param[in] th		transaction handle
+ * \param[in] comp_idx		index of ldo_comp_entries
+ * \param[in] lmm		buffer to cotain the on-disk lov_mds_md
+ * \param[in|out] lmm_size	buffer size/lmm size
+ * \param[in] is_dir		generate lov ea for dir or file? For dir case,
+ *				the stripe info is from the default stripe
+ *				template, which is collected in lod_ah_init(),
+ *				either from parent object or root object; for
+ *				file case, it's from the @lo object
  *
- * \retval			0 if LOV EA is stored successfully
+ * \retval			0 if on disk structure is created successfully
  * \retval			negative error number on failure
  */
-int lod_generate_and_set_lovea(const struct lu_env *env,
-			       struct lod_object *lo, struct thandle *th)
+static int lod_gen_component_ea(const struct lu_env *env,
+				struct lod_object *lo, int comp_idx,
+				struct lov_mds_md *lmm, int *lmm_size,
+				bool is_dir)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
-	struct dt_object	*next = dt_object_child(&lo->ldo_obj);
 	const struct lu_fid	*fid  = lu_object_fid(&lo->ldo_obj.do_lu);
-	struct lov_mds_md_v1	*lmm;
+	struct lod_device	*lod;
 	struct lov_ost_data_v1	*objs;
-	__u32			 magic;
-	int			 i, rc;
-	size_t			 lmm_size;
+	struct lod_layout_component *lod_comp;
+	__u32	magic;
+	__u16 stripecnt;
+	int	i, rc = 0;
 	ENTRY;
 
 	LASSERT(lo);
+	if (is_dir)
+		lod_comp =
+			&lo->ldo_def_striping->lds_def_comp_entries[comp_idx];
+	else
+		lod_comp = &lo->ldo_comp_entries[comp_idx];
 
-	magic = lo->ldo_pool != NULL ? LOV_MAGIC_V3 : LOV_MAGIC_V1;
-	lmm_size = lov_mds_md_size(lo->ldo_stripenr, magic);
-	if (info->lti_ea_store_size < lmm_size) {
-		rc = lod_ea_store_resize(info, lmm_size);
-		if (rc)
-			RETURN(rc);
-	}
-
-	if (lo->ldo_pattern == 0) /* default striping */
-		lo->ldo_pattern = LOV_PATTERN_RAID0;
-
-	lmm = info->lti_ea_store;
+	magic = lod_comp->llc_pool != NULL ? LOV_MAGIC_V3 : LOV_MAGIC_V1;
+	if (lod_comp->llc_pattern == 0) /* default striping */
+		lod_comp->llc_pattern = LOV_PATTERN_RAID0;
 
 	lmm->lmm_magic = cpu_to_le32(magic);
-	lmm->lmm_pattern = cpu_to_le32(lo->ldo_pattern);
+	lmm->lmm_pattern = cpu_to_le32(lod_comp->llc_pattern);
 	fid_to_lmm_oi(fid, &lmm->lmm_oi);
 	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_LMMOI))
 		lmm->lmm_oi.oi.oi_id++;
 	lmm_oi_cpu_to_le(&lmm->lmm_oi, &lmm->lmm_oi);
-	lmm->lmm_stripe_size = cpu_to_le32(lo->ldo_stripe_size);
-	lmm->lmm_stripe_count = cpu_to_le16(lo->ldo_stripenr);
-	if (lo->ldo_pattern & LOV_PATTERN_F_RELEASED)
-		lmm->lmm_stripe_count = cpu_to_le16(lo->ldo_released_stripenr);
-	lmm->lmm_layout_gen = 0;
+
+	lmm->lmm_stripe_size = cpu_to_le32(lod_comp->llc_stripe_size);
+	lmm->lmm_stripe_count = cpu_to_le16(lod_comp->llc_stripenr);
+	/**
+	 * for dir and uninstantiated component, lmm_layout_gen stores
+	 * default stripe offset.
+	 */
+	lmm->lmm_layout_gen =
+		(is_dir || !lod_comp_inited(lod_comp)) ?
+			cpu_to_le16(lod_comp->llc_stripe_offset) :
+			cpu_to_le16(lod_comp->llc_layout_gen);
+
 	if (magic == LOV_MAGIC_V1) {
 		objs = &lmm->lmm_objects[0];
 	} else {
-		struct lov_mds_md_v3 *v3 = (struct lov_mds_md_v3 *) lmm;
-		size_t cplen = strlcpy(v3->lmm_pool_name, lo->ldo_pool,
-				sizeof(v3->lmm_pool_name));
+		struct lov_mds_md_v3 *v3 = (struct lov_mds_md_v3 *)lmm;
+		size_t cplen = strlcpy(v3->lmm_pool_name,
+				       lod_comp->llc_pool,
+				       sizeof(v3->lmm_pool_name));
 		if (cplen >= sizeof(v3->lmm_pool_name))
 			RETURN(-E2BIG);
 		objs = &v3->lmm_objects[0];
 	}
+	stripecnt = lod_comp_entry_stripecnt(lo, lod_comp, is_dir);
 
-	for (i = 0; i < lo->ldo_stripenr; i++) {
-		struct lu_fid		*fid	= &info->lti_fid;
-		struct lod_device	*lod;
-		__u32			index;
-		int			type	= LU_SEQ_RANGE_OST;
+	if (is_dir || lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)
+		GOTO(done, rc = 0);
 
-		lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-		LASSERT(lo->ldo_stripe[i]);
+	/* generate ost_idx of this component stripe */
+	lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	for (i = 0; i < stripecnt; i++) {
+		struct dt_object *object;
+		__u32 ost_idx = (__u32)-1UL;
+		int type = LU_SEQ_RANGE_OST;
 
-		*fid = *lu_object_fid(&lo->ldo_stripe[i]->do_lu);
-		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MULTIPLE_REF)) {
-			if (cfs_fail_val == 0)
-				cfs_fail_val = fid->f_oid;
+		if (lod_comp->llc_stripe && lod_comp->llc_stripe[i]) {
+			object = lod_comp->llc_stripe[i];
+			/* instantiated component */
+			info->lti_fid = *lu_object_fid(&object->do_lu);
+
+			if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_MULTIPLE_REF) &&
+			    comp_idx == 0) {
+				if (cfs_fail_val == 0)
+					cfs_fail_val = info->lti_fid.f_oid;
+				else if (i == 0)
+					info->lti_fid.f_oid = cfs_fail_val;
+			}
+
+			rc = fid_to_ostid(&info->lti_fid, &info->lti_ostid);
+			LASSERT(rc == 0);
+
+			ostid_cpu_to_le(&info->lti_ostid, &objs[i].l_ost_oi);
+			objs[i].l_ost_gen = cpu_to_le32(0);
+			if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FLD_LOOKUP))
+				rc = -ENOENT;
 			else
-				fid->f_oid = cfs_fail_val;
+				rc = lod_fld_lookup(env, lod, &info->lti_fid,
+						    &ost_idx, &type);
+			if (rc < 0) {
+				CERROR("%s: Can not locate "DFID": rc = %d\n",
+				       lod2obd(lod)->obd_name,
+				       PFID(&info->lti_fid), rc);
+				RETURN(rc);
+			}
+		} else if (lod_comp->llc_ostlist.op_array) {
+			/* user specified ost list */
+			ost_idx = lod_comp->llc_ostlist.op_array[i];
 		}
+		/*
+		 * with un-instantiated or with no specified ost list
+		 * component, its l_ost_idx does not matter.
+		 */
+		objs[i].l_ost_idx = cpu_to_le32(ost_idx);
+	}
+done:
+	if (lmm_size != NULL)
+		*lmm_size = lov_mds_md_size(stripecnt, magic);
+	RETURN(rc);
+}
 
-		rc = fid_to_ostid(fid, &info->lti_ostid);
-		LASSERT(rc == 0);
+/**
+ * Generate component ID for new created component.
+ *
+ * \param[in] lo		LOD object
+ * \param[in] comp_idx		index of ldo_comp_entries
+ *
+ * \retval			component ID on success
+ * \retval			LCME_ID_INVAL on failure
+ */
+static __u32 lod_gen_component_id(struct lod_object *lo, int comp_idx)
+{
+	struct lod_layout_component *lod_comp;
+	__u32	id, start, end;
+	int	i;
 
-		ostid_cpu_to_le(&info->lti_ostid, &objs[i].l_ost_oi);
-		objs[i].l_ost_gen    = cpu_to_le32(0);
-		if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FLD_LOOKUP))
-			rc = -ENOENT;
-		else
-			rc = lod_fld_lookup(env, lod, fid,
-					    &index, &type);
-		if (rc < 0) {
-			CERROR("%s: Can not locate "DFID": rc = %d\n",
-			       lod2obd(lod)->obd_name, PFID(fid), rc);
-			lod_object_free_striping(env, lo);
-			RETURN(rc);
+	LASSERT(lo->ldo_comp_entries[comp_idx].llc_id == LCME_ID_INVAL);
+
+	lod_obj_inc_layout_gen(lo);
+	id = lo->ldo_layout_gen;
+	if (likely(id <= LCME_ID_MAX))
+		return id;
+
+	/* Layout generation wraps, need to check collisions. */
+	start = id & LCME_ID_MASK;
+	end = (__u32)LCME_ID_MAX + 1;
+again:
+	for (id = start; id < end; id++) {
+		for (i = 0; i < lo->ldo_comp_cnt; i++) {
+			lod_comp = &lo->ldo_comp_entries[i];
+			if (id == lod_comp->llc_id)
+				break;
 		}
-		objs[i].l_ost_idx = cpu_to_le32(index);
+		/* Found the ununsed ID */
+		if (i == lo->ldo_comp_cnt)
+			return id;
+	}
+	if (end == (__u32)LCME_ID_MAX + 1) {
+		start = 0;
+		end = lo->ldo_layout_gen & LCME_ID_MASK;
+		goto again;
 	}
 
-	info->lti_buf.lb_buf = lmm;
-	info->lti_buf.lb_len = lmm_size;
-	rc = lod_sub_object_xattr_set(env, next, &info->lti_buf, XATTR_NAME_LOV,
-				      0, th);
-	if (rc < 0) {
-		lod_object_free_striping(env, lo);
+	return LCME_ID_INVAL;
+}
+
+/**
+ * Generate on-disk lov_mds_md structure based on the information in
+ * the lod_object->ldo_comp_entries.
+ *
+ * \param[in] env		execution environment for this thread
+ * \param[in] lo		LOD object
+ * \param[in] lmm		buffer to cotain the on-disk lov_mds_md
+ * \param[in|out] lmm_size	buffer size/lmm size
+ * \param[in] is_dir		generate lov ea for dir or file? For dir case,
+ *				the stripe info is from the default stripe
+ *				template, which is collected in lod_ah_init(),
+ *				either from parent object or root object; for
+ *				file case, it's from the @lo object
+ *
+ * \retval			0 if on disk structure is created successfully
+ * \retval			negative error number on failure
+ */
+int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
+		       struct lov_mds_md *lmm, int *lmm_size, bool is_dir)
+{
+	struct lov_comp_md_entry_v1 *lcme;
+	struct lov_comp_md_v1 *lcm;
+	struct lod_layout_component *comp_entries;
+	__u16 comp_cnt;
+	bool is_composite;
+	int i, rc = 0, offset;
+	ENTRY;
+
+	if (is_dir) {
+		comp_cnt = lo->ldo_def_striping->lds_def_comp_cnt;
+		comp_entries = lo->ldo_def_striping->lds_def_comp_entries;
+		is_composite =
+			lo->ldo_def_striping->lds_def_striping_is_composite;
+	} else {
+		comp_cnt = lo->ldo_comp_cnt;
+		comp_entries = lo->ldo_comp_entries;
+		is_composite = lo->ldo_is_composite;
+	}
+
+	LASSERT(lmm_size != NULL);
+	LASSERT(comp_cnt != 0 && comp_entries != NULL);
+
+	if (!is_composite) {
+		rc = lod_gen_component_ea(env, lo, 0, lmm, lmm_size, is_dir);
 		RETURN(rc);
 	}
 
+	lcm = (struct lov_comp_md_v1 *)lmm;
+	lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
+	lcm->lcm_entry_count = cpu_to_le16(comp_cnt);
+
+	offset = sizeof(*lcm) + sizeof(*lcme) * comp_cnt;
+	LASSERT(offset % sizeof(__u64) == 0);
+
+	for (i = 0; i < comp_cnt; i++) {
+		struct lod_layout_component *lod_comp;
+		struct lov_mds_md *sub_md;
+		int size;
+
+		lod_comp = &comp_entries[i];
+		lcme = &lcm->lcm_entries[i];
+
+		if (lod_comp->llc_id == LCME_ID_INVAL && !is_dir) {
+			lod_comp->llc_id = lod_gen_component_id(lo, i);
+			if (lod_comp->llc_id == LCME_ID_INVAL)
+				GOTO(out, rc = -ERANGE);
+		}
+		lcme->lcme_id = cpu_to_le32(lod_comp->llc_id);
+
+		/* component could be un-inistantiated */
+		lcme->lcme_flags = cpu_to_le32(lod_comp->llc_flags);
+		lcme->lcme_extent.e_start =
+			cpu_to_le64(lod_comp->llc_extent.e_start);
+		lcme->lcme_extent.e_end =
+			cpu_to_le64(lod_comp->llc_extent.e_end);
+		lcme->lcme_offset = cpu_to_le32(offset);
+
+		sub_md = (struct lov_mds_md *)((char *)lcm + offset);
+		rc = lod_gen_component_ea(env, lo, i, sub_md, &size, is_dir);
+		if (rc)
+			GOTO(out, rc);
+		lcme->lcme_size = cpu_to_le32(size);
+		offset += size;
+		LASSERTF((offset <= *lmm_size) && (offset % sizeof(__u64) == 0),
+			 "offset:%d lmm_size:%d\n", offset, *lmm_size);
+	}
+	lcm->lcm_size = cpu_to_le32(offset);
+	lcm->lcm_layout_gen = cpu_to_le32(is_dir ? 0 : lo->ldo_layout_gen);
+
+	lustre_print_user_md(D_LAYOUT, (struct lov_user_md *)lmm,
+			     "generate lum");
+out:
+	if (rc == 0)
+		*lmm_size = offset;
 	RETURN(rc);
 }
 
@@ -742,7 +998,8 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
  * \param[in] lo		LOD object
  * \param[in] name		name of the EA
  *
- * \retval			0 if EA is fetched successfully
+ * \retval			> 0 if EA is fetched successfully
+ * \retval			0 if EA is empty
  * \retval			negative error number on failure
  */
 int lod_get_ea(const struct lu_env *env, struct lod_object *lo,
@@ -832,13 +1089,15 @@ static int validate_lod_and_idx(struct lod_device *md, __u32 idx)
  * \param[in] env		execution environment for this thread
  * \param[in,out] lo		LOD object
  * \param[in] objs		an array of IDs to creates the objects from
+ * \param[in] comp_idx		index of ldo_comp_entries
  *
  * \retval			0 if the objects are instantiated successfully
  * \retval			negative error number on failure
  */
 int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
-			   struct lov_ost_data_v1 *objs)
+			   struct lov_ost_data_v1 *objs, int comp_idx)
 {
+	struct lod_layout_component	*lod_comp;
 	struct lod_thread_info	*info = lod_env_info(env);
 	struct lod_device	*md;
 	struct lu_object	*o, *n;
@@ -851,16 +1110,20 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 
 	LASSERT(lo != NULL);
 	md = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
-	LASSERT(lo->ldo_stripe == NULL);
-	LASSERT(lo->ldo_stripenr > 0);
-	LASSERT(lo->ldo_stripe_size > 0);
 
-	stripe_len = lo->ldo_stripenr;
+	LASSERT(lo->ldo_comp_cnt != 0 && lo->ldo_comp_entries != NULL);
+	lod_comp = &lo->ldo_comp_entries[comp_idx];
+
+	LASSERT(lod_comp->llc_stripe == NULL);
+	LASSERT(lod_comp->llc_stripenr > 0);
+	LASSERT(lod_comp->llc_stripe_size > 0);
+
+	stripe_len = lod_comp->llc_stripenr;
 	OBD_ALLOC(stripe, sizeof(stripe[0]) * stripe_len);
 	if (stripe == NULL)
 		RETURN(-ENOMEM);
 
-	for (i = 0; i < lo->ldo_stripenr; i++) {
+	for (i = 0; i < lod_comp->llc_stripenr; i++) {
 		if (unlikely(lovea_slot_is_dummy(&objs[i])))
 			continue;
 
@@ -902,10 +1165,10 @@ out:
 				dt_object_put(env, stripe[i]);
 
 		OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
-		lo->ldo_stripenr = 0;
+		lod_comp->llc_stripenr = 0;
 	} else {
-		lo->ldo_stripe = stripe;
-		lo->ldo_stripes_allocated = stripe_len;
+		lod_comp->llc_stripe = stripe;
+		lod_comp->llc_stripes_allocated = stripe_len;
 	}
 
 	RETURN(rc);
@@ -928,48 +1191,150 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		       const struct lu_buf *buf)
 {
 	struct lov_mds_md_v1	*lmm;
+	struct lov_comp_md_v1	*comp_v1 = NULL;
 	struct lov_ost_data_v1	*objs;
-	__u32			 magic;
-	__u32			 pattern;
-	int			 rc = 0;
+	__u32	magic, pattern;
+	int	i, j, rc = 0;
+	__u16	comp_cnt;
 	ENTRY;
 
 	LASSERT(buf);
 	LASSERT(buf->lb_buf);
 	LASSERT(buf->lb_len);
 
-	lmm = (struct lov_mds_md_v1 *) buf->lb_buf;
+	lmm = (struct lov_mds_md_v1 *)buf->lb_buf;
 	magic = le32_to_cpu(lmm->lmm_magic);
-	pattern = le32_to_cpu(lmm->lmm_pattern);
 
-	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3)
-		GOTO(out, rc = -EINVAL);
-	if (lov_pattern(pattern) != LOV_PATTERN_RAID0)
+	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3 &&
+	    magic != LOV_MAGIC_COMP_V1)
 		GOTO(out, rc = -EINVAL);
 
-	lo->ldo_pattern = pattern;
-	lo->ldo_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
-	lo->ldo_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);
-	lo->ldo_stripenr = le16_to_cpu(lmm->lmm_stripe_count);
-	/* released file stripenr fixup. */
-	if (pattern & LOV_PATTERN_F_RELEASED)
-		lo->ldo_stripenr = 0;
+	lod_free_comp_entries(lo);
 
-	LASSERT(buf->lb_len >= lov_mds_md_size(lo->ldo_stripenr, magic));
-
-	if (magic == LOV_MAGIC_V3) {
-		struct lov_mds_md_v3 *v3 = (struct lov_mds_md_v3 *) lmm;
-		objs = &v3->lmm_objects[0];
-		/* no need to set pool, which is used in create only */
+	if (magic == LOV_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)lmm;
+		comp_cnt = le16_to_cpu(comp_v1->lcm_entry_count);
+		if (comp_cnt == 0)
+			GOTO(out, rc = -EINVAL);
+		lo->ldo_layout_gen = le32_to_cpu(comp_v1->lcm_layout_gen);
+		lo->ldo_is_composite = 1;
 	} else {
-		objs = &lmm->lmm_objects[0];
+		comp_cnt = 1;
+		lo->ldo_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);
+		lo->ldo_is_composite = 0;
 	}
 
-	if (lo->ldo_stripenr > 0)
-		rc = lod_initialize_objects(env, lo, objs);
+	rc = lod_alloc_comp_entries(lo, comp_cnt);
+	if (rc)
+		GOTO(out, rc);
 
+	for (i = 0; i < comp_cnt; i++) {
+		struct lod_layout_component	*lod_comp;
+		struct lu_extent	*ext;
+		__u32	offs;
+
+		lod_comp = &lo->ldo_comp_entries[i];
+		if (lo->ldo_is_composite) {
+			offs = le32_to_cpu(comp_v1->lcm_entries[i].lcme_offset);
+			lmm = (struct lov_mds_md_v1 *)((char *)comp_v1 + offs);
+			magic = le32_to_cpu(lmm->lmm_magic);
+
+			ext = &comp_v1->lcm_entries[i].lcme_extent;
+			lod_comp->llc_extent.e_start =
+				le64_to_cpu(ext->e_start);
+			lod_comp->llc_extent.e_end = le64_to_cpu(ext->e_end);
+			lod_comp->llc_flags =
+				le32_to_cpu(comp_v1->lcm_entries[i].lcme_flags);
+			lod_comp->llc_id =
+				le32_to_cpu(comp_v1->lcm_entries[i].lcme_id);
+			if (lod_comp->llc_id == LCME_ID_INVAL)
+				GOTO(out, rc = -EINVAL);
+		} else {
+			lod_comp_set_init(lod_comp);
+		}
+
+		pattern = le32_to_cpu(lmm->lmm_pattern);
+		if (lov_pattern(pattern) != LOV_PATTERN_RAID0)
+			GOTO(out, rc = -EINVAL);
+
+		lod_comp->llc_pattern = pattern;
+		lod_comp->llc_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
+		lod_comp->llc_stripenr = le16_to_cpu(lmm->lmm_stripe_count);
+		lod_comp->llc_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);
+
+		if (magic == LOV_MAGIC_V3) {
+			struct lov_mds_md_v3 *v3 = (struct lov_mds_md_v3 *)lmm;
+			objs = &v3->lmm_objects[0];
+			/* no need to set pool, which is used in create only */
+		} else {
+			objs = &lmm->lmm_objects[0];
+		}
+
+		/**
+		 * If uninstantiated template component has valid l_ost_idx,
+		 * then use has specified ost list for this component.
+		 */
+		if (!lod_comp_inited(lod_comp) &&
+		    objs[0].l_ost_idx != (__u32)-1UL) {
+			/**
+			 * load the user specified ost list, when this
+			 * component is instantiated later, it will be used
+			 * in lod_alloc_ost_list().
+			 */
+			lod_comp->llc_ostlist.op_count = lod_comp->llc_stripenr;
+			lod_comp->llc_ostlist.op_size =
+					lod_comp->llc_stripenr * sizeof(__u32);
+			OBD_ALLOC(lod_comp->llc_ostlist.op_array,
+				  lod_comp->llc_ostlist.op_size);
+			if (!lod_comp->llc_ostlist.op_array)
+				GOTO(out, rc = -ENOMEM);
+
+			for (j = 0; j < lod_comp->llc_stripenr; j++)
+				lod_comp->llc_ostlist.op_array[j] =
+						le32_to_cpu(objs[j].l_ost_idx);
+		}
+
+		/* skip un-instantiated component object initialization */
+		if (!lod_comp_inited(lod_comp))
+			continue;
+
+		if (!(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)) {
+			rc = lod_initialize_objects(env, lo, objs, i);
+			if (rc)
+				GOTO(out, rc);
+		}
+	}
 out:
+	if (rc)
+		lod_object_free_striping(env, lo);
 	RETURN(rc);
+}
+
+/**
+ * Check whether the striping (LOVEA for regular file, LMVEA for directory)
+ * is already cached.
+ *
+ * \param[in] lo	LOD object
+ *
+ * \retval		True if the striping is cached, otherwise
+ *			return false.
+ */
+static bool lod_striping_loaded(struct lod_object *lo)
+{
+	if (S_ISREG(lod2lu_obj(lo)->lo_header->loh_attr) &&
+	    lo->ldo_comp_cached)
+		return true;
+
+	if (S_ISDIR(lod2lu_obj(lo)->lo_header->loh_attr)) {
+		if (lo->ldo_stripe != NULL)
+			return true;
+
+		/* Never load LMV stripe for slaves of striped dir */
+		if (lo->ldo_dir_slave_stripe)
+			return true;
+	}
+
+	return false;
 }
 
 /**
@@ -977,7 +1342,8 @@ out:
  *
  * Unless the stripes are initialized already, fetch LOV (for regular
  * objects) or LMV (for directory objects) EA and call lod_parse_striping()
- * to instantiate the objects representing the stripes.
+ * to instantiate the objects representing the stripes. Caller should
+ * hold the dt_write_lock(next).
  *
  * \param[in] env		execution environment for this thread
  * \param[in,out] lo		LOD object
@@ -993,18 +1359,13 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 	int			 rc = 0;
 	ENTRY;
 
-	/* already initialized? */
-	if (lo->ldo_stripe != NULL)
-		GOTO(out, rc = 0);
-
 	if (!dt_object_exists(next))
 		GOTO(out, rc = 0);
 
-	/* Do not load stripe for slaves of striped dir */
-	if (lo->ldo_dir_slave_stripe)
+	if (lod_striping_loaded(lo))
 		GOTO(out, rc = 0);
 
-	if (S_ISREG(lu_object_attr(lod2lu_obj(lo)))) {
+	if (S_ISREG(lod2lu_obj(lo)->lo_header->loh_attr)) {
 		rc = lod_get_lov_ea(env, lo);
 		if (rc <= 0)
 			GOTO(out, rc);
@@ -1015,7 +1376,9 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 		buf->lb_buf = info->lti_ea_store;
 		buf->lb_len = info->lti_ea_store_size;
 		rc = lod_parse_striping(env, lo, buf);
-	} else if (S_ISDIR(lu_object_attr(lod2lu_obj(lo)))) {
+		if (rc == 0)
+			lo->ldo_comp_cached = 1;
+	} else if (S_ISDIR(lod2lu_obj(lo)->lo_header->loh_attr)) {
 		rc = lod_get_lmv_ea(env, lo);
 		if (rc < (typeof(rc))sizeof(struct lmv_mds_md_v1))
 			GOTO(out, rc = rc > 0 ? -EINVAL : rc);
@@ -1036,7 +1399,7 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 		}
 
 		/*
-		 * there is LOV EA (striping information) in this object
+		 * there is LMV EA (striping information) in this object
 		 * let's parse it and create in-core objects for the stripes
 		 */
 		rc = lod_parse_dir_striping(env, lo, buf);
@@ -1064,7 +1427,14 @@ out:
 int lod_load_striping(const struct lu_env *env, struct lod_object *lo)
 {
 	struct dt_object	*next = dt_object_child(&lo->ldo_obj);
-	int			rc = 0;
+	int			rc;
+
+	if (!dt_object_exists(next))
+		return 0;
+
+	/* Check without locking first */
+	if (lod_striping_loaded(lo))
+		return 0;
 
 	/* currently this code is supposed to be called from declaration
 	 * phase only, thus the object is not expected to be locked by caller */
@@ -1075,7 +1445,7 @@ int lod_load_striping(const struct lu_env *env, struct lod_object *lo)
 }
 
 /**
- * Verify striping.
+ * Verify lov_user_md_v1/v3 striping.
  *
  * Check the validity of all fields including the magic, stripe size,
  * stripe count, stripe offset and that the pool is present.  Also check
@@ -1091,8 +1461,8 @@ int lod_load_striping(const struct lu_env *env, struct lod_object *lo)
  * \retval			0 if the striping is valid
  * \retval			-EINVAL if striping is invalid
  */
-int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
-			bool is_from_disk)
+static int lod_verify_v1v3(struct lod_device *d, const struct lu_buf *buf,
+			   bool is_from_disk)
 {
 	struct lov_user_md_v1	*lum;
 	struct lov_user_md_v3	*lum3;
@@ -1107,20 +1477,18 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 
 	lum = buf->lb_buf;
 
-	LASSERT(sizeof(*lum) < sizeof(*lum3));
-
 	if (buf->lb_len < sizeof(*lum)) {
-		CDEBUG(D_IOCTL, "buf len %zu too small for lov_user_md\n",
+		CDEBUG(D_LAYOUT, "buf len %zu too small for lov_user_md\n",
 		       buf->lb_len);
 		GOTO(out, rc = -EINVAL);
 	}
 
-	magic = le32_to_cpu(lum->lmm_magic);
+	magic = le32_to_cpu(lum->lmm_magic) & ~LOV_MAGIC_DEF;
 	if (magic != LOV_USER_MAGIC_V1 &&
 	    magic != LOV_USER_MAGIC_V3 &&
-	    magic != LOV_MAGIC_V1_DEF &&
-	    magic != LOV_MAGIC_V3_DEF) {
-		CDEBUG(D_IOCTL, "bad userland LOV MAGIC: %#x\n", magic);
+	    magic != LOV_USER_MAGIC_SPECIFIC) {
+		CDEBUG(D_LAYOUT, "bad userland LOV MAGIC: %#x\n",
+		       le32_to_cpu(lum->lmm_magic));
 		GOTO(out, rc = -EINVAL);
 	}
 
@@ -1128,65 +1496,64 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 	if (!is_from_disk && lum->lmm_pattern == 0)
 		lum->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
 
-	if (le32_to_cpu(lum->lmm_pattern) != LOV_PATTERN_RAID0) {
-		CDEBUG(D_IOCTL, "bad userland stripe pattern: %#x\n",
+	if (!lov_pattern_supported(le32_to_cpu(lum->lmm_pattern))) {
+		CDEBUG(D_LAYOUT, "bad userland stripe pattern: %#x\n",
 		       le32_to_cpu(lum->lmm_pattern));
 		GOTO(out, rc = -EINVAL);
 	}
+
+	/* a released lum comes from creating orphan on hsm release,
+	 * doesn't make sense to verify it. */
+	if (le32_to_cpu(lum->lmm_pattern) & LOV_PATTERN_F_RELEASED)
+		GOTO(out, rc = 0);
 
 	/* 64kB is the largest common page size we see (ia64), and matches the
 	 * check in lfs */
 	stripe_size = le32_to_cpu(lum->lmm_stripe_size);
 	if (stripe_size & (LOV_MIN_STRIPE_SIZE - 1)) {
-		CDEBUG(D_IOCTL, "stripe size %u not a multiple of %u\n",
+		CDEBUG(D_LAYOUT, "stripe size %u not a multiple of %u\n",
 		       stripe_size, LOV_MIN_STRIPE_SIZE);
 		GOTO(out, rc = -EINVAL);
 	}
 
 	stripe_offset = le16_to_cpu(lum->lmm_stripe_offset);
-	if (stripe_offset != LOV_OFFSET_DEFAULT) {
+	if (!is_from_disk && stripe_offset != LOV_OFFSET_DEFAULT) {
 		/* if offset is not within valid range [0, osts_size) */
 		if (stripe_offset >= d->lod_osts_size) {
-			CDEBUG(D_IOCTL, "stripe offset %u >= bitmap size %u\n",
+			CDEBUG(D_LAYOUT, "stripe offset %u >= bitmap size %u\n",
 			       stripe_offset, d->lod_osts_size);
 			GOTO(out, rc = -EINVAL);
 		}
 
 		/* if lmm_stripe_offset is *not* in bitmap */
 		if (!cfs_bitmap_check(d->lod_ost_bitmap, stripe_offset)) {
-			CDEBUG(D_IOCTL, "stripe offset %u not in bitmap\n",
+			CDEBUG(D_LAYOUT, "stripe offset %u not in bitmap\n",
 			       stripe_offset);
 			GOTO(out, rc = -EINVAL);
 		}
 	}
 
-	if (magic == LOV_USER_MAGIC_V1 || magic == LOV_MAGIC_V1_DEF)
+	if (magic == LOV_USER_MAGIC_V1)
 		lum_size = offsetof(struct lov_user_md_v1,
 				    lmm_objects[0]);
-	else if (magic == LOV_USER_MAGIC_V3 || magic == LOV_MAGIC_V3_DEF)
+	else if (magic == LOV_USER_MAGIC_V3 || magic == LOV_USER_MAGIC_SPECIFIC)
 		lum_size = offsetof(struct lov_user_md_v3,
 				    lmm_objects[0]);
 	else
 		GOTO(out, rc = -EINVAL);
 
 	stripe_count = le16_to_cpu(lum->lmm_stripe_count);
-	if (buf->lb_len != lum_size) {
-		CDEBUG(D_IOCTL, "invalid buf len %zu for lov_user_md with "
+	if (buf->lb_len < lum_size) {
+		CDEBUG(D_LAYOUT, "invalid buf len %zu/%zu for lov_user_md with "
 		       "magic %#x and stripe_count %u\n",
-		       buf->lb_len, magic, stripe_count);
+		       buf->lb_len, lum_size, magic, stripe_count);
 		GOTO(out, rc = -EINVAL);
 	}
 
-	if (!(magic == LOV_USER_MAGIC_V3 || magic == LOV_MAGIC_V3_DEF))
+	if (!(magic == LOV_USER_MAGIC_V3 || magic == LOV_USER_MAGIC_SPECIFIC))
 		goto out;
 
 	lum3 = buf->lb_buf;
-	if (buf->lb_len < sizeof(*lum3)) {
-		CDEBUG(D_IOCTL, "buf len %zu too small for lov_user_md_v3\n",
-		       buf->lb_len);
-		GOTO(out, rc = -EINVAL);
-	}
-
 	/* In the function below, .hs_keycmp resolves to
 	 * pool_hashkey_keycmp() */
 	/* coverity[overrun-buffer-val] */
@@ -1194,15 +1561,14 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 	if (pool == NULL)
 		goto out;
 
-	if (stripe_offset != LOV_OFFSET_DEFAULT) {
+	if (!is_from_disk && stripe_offset != LOV_OFFSET_DEFAULT) {
 		rc = lod_check_index_in_pool(stripe_offset, pool);
 		if (rc < 0)
 			GOTO(out, rc = -EINVAL);
 	}
 
 	if (is_from_disk && stripe_count > pool_tgt_count(pool)) {
-		CDEBUG(D_IOCTL,
-		       "stripe count %u > # OSTs %u in the pool\n",
+		CDEBUG(D_LAYOUT, "stripe count %u > # OSTs %u in the pool\n",
 		       stripe_count, pool_tgt_count(pool));
 		GOTO(out, rc = -EINVAL);
 	}
@@ -1210,6 +1576,125 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 out:
 	if (pool != NULL)
 		lod_pool_putref(pool);
+
+	RETURN(rc);
+}
+
+/**
+ * Verify LOV striping.
+ *
+ * \param[in] d			LOD device
+ * \param[in] buf		buffer with LOV EA to verify
+ * \param[in] is_from_disk	0 - from user, allow some fields to be 0
+ *				1 - from disk, do not allow
+ * \param[in] start		extent start for composite layout
+ *
+ * \retval			0 if the striping is valid
+ * \retval			-EINVAL if striping is invalid
+ */
+int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
+			bool is_from_disk, __u64 start)
+{
+	struct lov_user_md_v1	*lum;
+	struct lov_comp_md_v1	*comp_v1;
+	__u32	magic;
+	int	rc = 0, i;
+	ENTRY;
+
+	lum = buf->lb_buf;
+
+	if (buf->lb_len < sizeof(*lum)) {
+		CDEBUG(D_LAYOUT, "buf len %zu too small for lov_user_md\n",
+		       buf->lb_len);
+		RETURN(-EINVAL);
+	}
+
+	magic = le32_to_cpu(lum->lmm_magic) & ~LOV_MAGIC_DEF;
+	if (magic != LOV_USER_MAGIC_V1 &&
+	    magic != LOV_USER_MAGIC_V3 &&
+	    magic != LOV_USER_MAGIC_SPECIFIC &&
+	    magic != LOV_USER_MAGIC_COMP_V1) {
+		CDEBUG(D_LAYOUT, "bad userland LOV MAGIC: %#x\n",
+		       le32_to_cpu(lum->lmm_magic));
+		RETURN(-EINVAL);
+	}
+
+	if (magic == LOV_USER_MAGIC_COMP_V1) {
+		struct lov_comp_md_entry_v1	*ent;
+		struct lu_extent	*ext;
+		struct lov_desc	*desc = &d->lod_desc;
+		struct lu_buf	tmp;
+		__u32	stripe_size = 0;
+		__u64	prev_end = start;
+
+		comp_v1 = buf->lb_buf;
+		if (buf->lb_len < le32_to_cpu(comp_v1->lcm_size)) {
+			CDEBUG(D_LAYOUT, "buf len %zu is less than %u\n",
+			       buf->lb_len, le32_to_cpu(comp_v1->lcm_size));
+			RETURN(-EINVAL);
+		}
+
+		if (le32_to_cpu(comp_v1->lcm_entry_count) == 0) {
+			CDEBUG(D_LAYOUT, "entry count is zero\n");
+			RETURN(-EINVAL);
+		}
+
+		for (i = 0; i < le32_to_cpu(comp_v1->lcm_entry_count); i++) {
+			ent = &comp_v1->lcm_entries[i];
+			ext = &ent->lcme_extent;
+
+			if (is_from_disk &&
+			    (le32_to_cpu(ent->lcme_id) == 0 ||
+			     le32_to_cpu(ent->lcme_id) > LCME_ID_MAX)) {
+				CDEBUG(D_LAYOUT, "invalid id %u\n",
+				       le32_to_cpu(ent->lcme_id));
+				RETURN(-EINVAL);
+			}
+
+			if (le64_to_cpu(ext->e_start) >=
+			    le64_to_cpu(ext->e_end)) {
+				CDEBUG(D_LAYOUT, "invalid extent "
+				       "[%llu, %llu)\n",
+				       le64_to_cpu(ext->e_start),
+				       le64_to_cpu(ext->e_end));
+				RETURN(-EINVAL);
+			}
+
+			/* first component must start with 0, and the next
+			 * must be adjacent with the previous one */
+			if (le64_to_cpu(ext->e_start) != prev_end) {
+				CDEBUG(D_LAYOUT, "invalid start "
+				       "actual:%llu, expect:%llu\n",
+				       le64_to_cpu(ext->e_start), prev_end);
+				RETURN(-EINVAL);
+			}
+			prev_end = le64_to_cpu(ext->e_end);
+
+			tmp.lb_buf = (char *)comp_v1 +
+				     le32_to_cpu(ent->lcme_offset);
+			tmp.lb_len = le32_to_cpu(ent->lcme_size);
+			rc = lod_verify_v1v3(d, &tmp, is_from_disk);
+			if (rc)
+				break;
+
+			lum = tmp.lb_buf;
+
+			/* extent end must be aligned with the stripe_size */
+			stripe_size = le32_to_cpu(lum->lmm_stripe_size);
+			if (stripe_size == 0)
+				stripe_size = desc->ld_default_stripe_size;
+			if (stripe_size == 0 ||
+			    (prev_end != LUSTRE_EOF &&
+			     (prev_end & (stripe_size - 1)))) {
+				CDEBUG(D_LAYOUT, "stripe size isn't aligned. "
+				       " stripe_sz: %u, [%llu, %llu)\n",
+				       stripe_size, ext->e_start, prev_end);
+				RETURN(-EINVAL);
+			}
+		}
+	} else {
+		rc = lod_verify_v1v3(d, buf, is_from_disk);
+	}
 
 	RETURN(rc);
 }

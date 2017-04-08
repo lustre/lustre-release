@@ -53,6 +53,9 @@
 int get_root_path(int want, char *fsname, int *outfd, char *path, int index);
 int root_ioctl(const char *mdtname, int opc, void *data, int *mdtidxp,
 	       int want_error);
+int sattr_cache_get_defaults(const char *const fsname,
+			     const char *const pathname, unsigned int *scount,
+			     unsigned int *ssize, unsigned int *soffset);
 
 /**
  * Often when determining the parameter path in sysfs/procfs we

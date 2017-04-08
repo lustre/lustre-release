@@ -216,7 +216,7 @@ static inline char *ofd_name(struct ofd_device *ofd)
 struct ofd_object {
 	struct lu_object_header	ofo_header;
 	struct dt_object	ofo_obj;
-	struct lu_fid		ofo_pfid;
+	struct filter_fid	ofo_ff;
 	unsigned int		ofo_pfid_checking:1,
 				ofo_pfid_verified:1;
 };
@@ -298,10 +298,7 @@ struct ofd_thread_info {
 	struct lu_attr			 fti_attr;
 	struct lu_attr			 fti_attr2;
 	struct ldlm_res_id		 fti_resid;
-	union {
-		struct filter_fid	 fti_mds_fid;
-		struct filter_fid_old	 fti_mds_fid_old;
-	};
+	struct filter_fid		 fti_mds_fid;
 	struct ost_id			 fti_ostid;
 	struct ofd_object		*fti_obj;
 	union {
@@ -319,7 +316,7 @@ struct ofd_thread_info {
 	unsigned long			 fti_used;
 	struct ost_lvb			 fti_lvb;
 	union {
-		struct lfsck_request	 fti_lr;
+		struct lfsck_req_local	 fti_lrl;
 		struct obd_connect_data	 fti_ocd;
 	};
 };
@@ -573,6 +570,10 @@ static inline void ofd_prepare_fidea(struct filter_fid *ff,
 	/* XXX: we are ignoring o_parent_ver here, since this should
 	 *      be the same for all objects in this fileset. */
 	ff->ff_parent.f_ver = cpu_to_le32(oa->o_stripe_idx);
+	if (oa->o_valid & OBD_MD_FLOSTLAYOUT)
+		ost_layout_cpu_to_le(&ff->ff_layout, &oa->o_layout);
+	else
+		memset(&ff->ff_layout, 0, sizeof(ff->ff_layout));
 }
 
 static inline int ofd_validate_seq(struct obd_export *exp, __u64 seq)

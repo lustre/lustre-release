@@ -1698,6 +1698,15 @@ void lustre_swab_connect(struct obd_connect_data *ocd)
         CLASSERT(offsetof(typeof(*ocd), paddingF) != 0);
 }
 
+static void lustre_swab_ost_layout(struct ost_layout *ol)
+{
+	__swab32s(&ol->ol_stripe_size);
+	__swab32s(&ol->ol_stripe_count);
+	__swab64s(&ol->ol_comp_start);
+	__swab64s(&ol->ol_comp_end);
+	__swab32s(&ol->ol_comp_id);
+}
+
 void lustre_swab_obdo (struct obdo  *o)
 {
         __swab64s (&o->o_valid);
@@ -1720,8 +1729,8 @@ void lustre_swab_obdo (struct obdo  *o)
         __swab64s (&o->o_ioepoch);
         __swab32s (&o->o_stripe_idx);
         __swab32s (&o->o_parent_ver);
-        /* o_handle is opaque */
-        /* o_lcookie is swabbed elsewhere */
+	lustre_swab_ost_layout(&o->o_layout);
+	CLASSERT(offsetof(typeof(*o), o_padding_3) != 0);
         __swab32s (&o->o_uid_h);
         __swab32s (&o->o_gid_h);
         __swab64s (&o->o_data_version);
@@ -2115,12 +2124,9 @@ void lustre_swab_lmv_user_md(struct lmv_user_md *lum)
 }
 EXPORT_SYMBOL(lustre_swab_lmv_user_md);
 
-void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
-			  const char *msg)
+static void lustre_print_v1v3(unsigned int lvl, struct lov_user_md *lum,
+			      const char *msg)
 {
-	if (likely(!cfs_cdebug_show(lvl, DEBUG_SUBSYSTEM)))
-		return;
-
 	CDEBUG(lvl, "%s lov_user_md %p:\n", msg, lum);
 	CDEBUG(lvl, "\tlmm_magic: %#x\n", lum->lmm_magic);
 	CDEBUG(lvl, "\tlmm_pattern: %#x\n", lum->lmm_pattern);
@@ -2144,6 +2150,54 @@ void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
 		CDEBUG(lvl, "\ttarget list:\n");
 		for (i = 0; i < v3->lmm_stripe_count; i++)
 			CDEBUG(lvl, "\t\t%u\n", v3->lmm_objects[i].l_ost_idx);
+	}
+}
+
+void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
+			  const char *msg)
+{
+	struct lov_comp_md_v1	*comp_v1;
+	int			 i;
+
+	if (likely(!cfs_cdebug_show(lvl, DEBUG_SUBSYSTEM)))
+		return;
+
+	if (lum->lmm_magic == LOV_USER_MAGIC_V1 ||
+	    lum->lmm_magic == LOV_USER_MAGIC_V3) {
+		lustre_print_v1v3(lvl, lum, msg);
+		return;
+	}
+
+	if (lum->lmm_magic != LOV_USER_MAGIC_COMP_V1) {
+		CDEBUG(lvl, "%s: bad magic: %x\n", msg, lum->lmm_magic);
+		return;
+	}
+
+	comp_v1 = (struct lov_comp_md_v1 *)lum;
+	CDEBUG(lvl, "%s: lov_comp_md_v1 %p:\n", msg, lum);
+	CDEBUG(lvl, "\tlcm_magic: %#x\n", comp_v1->lcm_magic);
+	CDEBUG(lvl, "\tlcm_size: %#x\n", comp_v1->lcm_size);
+	CDEBUG(lvl, "\tlcm_layout_gen: %#x\n", comp_v1->lcm_layout_gen);
+	CDEBUG(lvl, "\tlcm_flags: %#x\n", comp_v1->lcm_flags);
+	CDEBUG(lvl, "\tlcm_entry_count: %#x\n\n", comp_v1->lcm_entry_count);
+
+	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
+		struct lov_comp_md_entry_v1 *ent = &comp_v1->lcm_entries[i];
+		struct lov_user_md *v1;
+
+		CDEBUG(lvl, "\tentry %d:\n", i);
+		CDEBUG(lvl, "\tlcme_id: %#x\n", ent->lcme_id);
+		CDEBUG(lvl, "\tlcme_flags: %#x\n", ent->lcme_flags);
+		CDEBUG(lvl, "\tlcme_extent.e_start: %llu\n",
+		       ent->lcme_extent.e_start);
+		CDEBUG(lvl, "\tlcme_extent.e_end: %llu\n",
+		       ent->lcme_extent.e_end);
+		CDEBUG(lvl, "\tlcme_offset: %#x\n", ent->lcme_offset);
+		CDEBUG(lvl, "\tlcme_size: %#x\n\n", ent->lcme_size);
+
+		v1 = (struct lov_user_md *)((char *)comp_v1 +
+				comp_v1->lcm_entries[i].lcme_offset);
+		lustre_print_v1v3(lvl, v1, msg);
 	}
 }
 EXPORT_SYMBOL(lustre_print_user_md);
@@ -2184,6 +2238,75 @@ void lustre_swab_lov_user_md_v3(struct lov_user_md_v3 *lum)
         EXIT;
 }
 EXPORT_SYMBOL(lustre_swab_lov_user_md_v3);
+
+void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
+{
+	struct lov_comp_md_entry_v1	*ent;
+	struct lov_user_md_v1	*v1;
+	struct lov_user_md_v3	*v3;
+	int	i;
+	bool	cpu_endian;
+	__u32	off, size;
+	__u16	ent_count, stripe_count;
+	ENTRY;
+
+	cpu_endian = lum->lcm_magic == LOV_USER_MAGIC_COMP_V1;
+	ent_count = lum->lcm_entry_count;
+	if (!cpu_endian)
+		__swab16s(&ent_count);
+
+	CDEBUG(D_IOCTL, "swabbing lov_user_comp_md v1\n");
+	__swab32s(&lum->lcm_magic);
+	__swab32s(&lum->lcm_size);
+	__swab32s(&lum->lcm_layout_gen);
+	__swab16s(&lum->lcm_flags);
+	__swab16s(&lum->lcm_entry_count);
+	CLASSERT(offsetof(typeof(*lum), lcm_padding1) != 0);
+	CLASSERT(offsetof(typeof(*lum), lcm_padding2) != 0);
+
+	for (i = 0; i < ent_count; i++) {
+		ent = &lum->lcm_entries[i];
+		off = ent->lcme_offset;
+		size = ent->lcme_size;
+
+		if (!cpu_endian) {
+			__swab32s(&off);
+			__swab32s(&size);
+		}
+		__swab32s(&ent->lcme_id);
+		__swab32s(&ent->lcme_flags);
+		__swab64s(&ent->lcme_extent.e_start);
+		__swab64s(&ent->lcme_extent.e_end);
+		__swab32s(&ent->lcme_offset);
+		__swab32s(&ent->lcme_size);
+		CLASSERT(offsetof(typeof(*ent), lcme_padding) != 0);
+
+		v1 = (struct lov_user_md_v1 *)((char *)lum + off);
+		stripe_count = v1->lmm_stripe_count;
+		if (!cpu_endian)
+			__swab16s(&stripe_count);
+
+		if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_V1) ||
+		    v1->lmm_magic == LOV_USER_MAGIC_V1) {
+			lustre_swab_lov_user_md_v1(v1);
+			if (size > sizeof(*v1))
+				lustre_swab_lov_user_md_objects(v1->lmm_objects,
+								stripe_count);
+		} else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_V3) ||
+			   v1->lmm_magic == LOV_USER_MAGIC_V3 ||
+			   v1->lmm_magic == __swab32(LOV_USER_MAGIC_SPECIFIC) ||
+			   v1->lmm_magic == LOV_USER_MAGIC_SPECIFIC) {
+			v3 = (struct lov_user_md_v3 *)v1;
+			lustre_swab_lov_user_md_v3(v3);
+			if (size > sizeof(*v3))
+				lustre_swab_lov_user_md_objects(v3->lmm_objects,
+								stripe_count);
+		} else {
+			CERROR("Invalid magic %#x\n", v1->lmm_magic);
+		}
+	}
+}
+EXPORT_SYMBOL(lustre_swab_lov_comp_md_v1);
 
 void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
 {
@@ -2623,9 +2746,11 @@ void lustre_swab_lfsck_request(struct lfsck_request *lr)
 	__swab32s(&lr->lr_flags);
 	lustre_swab_lu_fid(&lr->lr_fid);
 	lustre_swab_lu_fid(&lr->lr_fid2);
-	lustre_swab_lu_fid(&lr->lr_fid3);
+	__swab32s(&lr->lr_comp_id);
+	CLASSERT(offsetof(typeof(*lr), lr_padding_0) != 0);
 	CLASSERT(offsetof(typeof(*lr), lr_padding_1) != 0);
 	CLASSERT(offsetof(typeof(*lr), lr_padding_2) != 0);
+	CLASSERT(offsetof(typeof(*lr), lr_padding_3) != 0);
 }
 
 void lustre_swab_lfsck_reply(struct lfsck_reply *lr)
@@ -2635,14 +2760,28 @@ void lustre_swab_lfsck_reply(struct lfsck_reply *lr)
 	__swab64s(&lr->lr_repaired);
 }
 
+static void lustre_swab_orphan_rec(struct lu_orphan_rec *rec)
+{
+	lustre_swab_lu_fid(&rec->lor_fid);
+	__swab32s(&rec->lor_uid);
+	__swab32s(&rec->lor_gid);
+}
+
 void lustre_swab_orphan_ent(struct lu_orphan_ent *ent)
 {
 	lustre_swab_lu_fid(&ent->loe_key);
-	lustre_swab_lu_fid(&ent->loe_rec.lor_fid);
-	__swab32s(&ent->loe_rec.lor_uid);
-	__swab32s(&ent->loe_rec.lor_gid);
+	lustre_swab_orphan_rec(&ent->loe_rec);
 }
 EXPORT_SYMBOL(lustre_swab_orphan_ent);
+
+void lustre_swab_orphan_ent_v2(struct lu_orphan_ent_v2 *ent)
+{
+	lustre_swab_lu_fid(&ent->loe_key);
+	lustre_swab_orphan_rec(&ent->loe_rec.lor_rec);
+	lustre_swab_ost_layout(&ent->loe_rec.lor_layout);
+	CLASSERT(offsetof(typeof(ent->loe_rec), lor_padding) != 0);
+}
+EXPORT_SYMBOL(lustre_swab_orphan_ent_v2);
 
 void lustre_swab_ladvise(struct lu_ladvise *ladvise)
 {

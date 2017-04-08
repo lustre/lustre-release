@@ -63,6 +63,7 @@ struct ptlrpc_sec;
 struct ptlrpc_svc_ctx;
 struct ptlrpc_cli_ctx;
 struct ptlrpc_ctx_ops;
+struct req_msg_field;
 
 /**
  * \addtogroup flavor flavor
@@ -1084,7 +1085,8 @@ void sptlrpc_cli_free_reqbuf(struct ptlrpc_request *req);
 int sptlrpc_cli_alloc_repbuf(struct ptlrpc_request *req, int msgsize);
 void sptlrpc_cli_free_repbuf(struct ptlrpc_request *req);
 int sptlrpc_cli_enlarge_reqbuf(struct ptlrpc_request *req,
-                               int segment, int newsize);
+			       const struct req_msg_field *field,
+			       int newsize);
 int  sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
                                     struct ptlrpc_request **req_ret);
 void sptlrpc_cli_finish_early_reply(struct ptlrpc_request *early_req);

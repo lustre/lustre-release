@@ -2224,6 +2224,16 @@ static inline bool obd_mod_rpc_slot_avail(struct client_obd *cli,
 	return avail;
 }
 
+static inline bool obd_skip_mod_rpc_slot(const struct lookup_intent *it)
+{
+	if (it != NULL &&
+	    (it->it_op == IT_GETATTR || it->it_op == IT_LOOKUP ||
+	     it->it_op == IT_READDIR ||
+	     (it->it_op == IT_LAYOUT && !(it->it_flags & FMODE_WRITE))))
+			return true;
+	return false;
+}
+
 /* Get a modify RPC slot from the obd client @cli according
  * to the kind of operation @opc that is going to be sent
  * and the intent @it of the operation if it applies.
@@ -2242,8 +2252,7 @@ __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc,
 	/* read-only metadata RPCs don't consume a slot on MDT
 	 * for reply reconstruction
 	 */
-	if (it != NULL && (it->it_op == IT_GETATTR || it->it_op == IT_LOOKUP ||
-			   it->it_op == IT_LAYOUT || it->it_op == IT_READDIR))
+	if (obd_skip_mod_rpc_slot(it))
 		return 0;
 
 	if (opc == MDS_CLOSE)
@@ -2289,8 +2298,7 @@ void obd_put_mod_rpc_slot(struct client_obd *cli, __u32 opc,
 {
 	bool			close_req = false;
 
-	if (it != NULL && (it->it_op == IT_GETATTR || it->it_op == IT_LOOKUP ||
-			   it->it_op == IT_LAYOUT || it->it_op == IT_READDIR))
+	if (obd_skip_mod_rpc_slot(it))
 		return;
 
 	if (opc == MDS_CLOSE)

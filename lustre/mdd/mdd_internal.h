@@ -156,7 +156,7 @@ struct mdd_thread_info {
 	struct linkea_data	  mti_link_data;
 	struct md_op_spec	  mti_spec;
 	struct dt_insert_rec	  mti_dt_rec;
-	struct lfsck_request	  mti_lr;
+	struct lfsck_req_local	  mti_lrl;
 	struct lu_seq_range	  mti_range;
 };
 
@@ -564,6 +564,24 @@ static inline int
 mdo_invalidate(const struct lu_env *env, struct mdd_object *obj)
 {
 	return dt_invalidate(env, mdd_object_child(obj));
+}
+
+static inline int
+mdo_declare_layout_change(const struct lu_env *env, struct mdd_object *obj,
+			  struct layout_intent *layout,
+			  const struct lu_buf *buf, struct thandle *handle)
+{
+	return dt_declare_layout_change(env, mdd_object_child(obj),
+					layout, buf, handle);
+}
+
+static inline int
+mdo_layout_change(const struct lu_env *env, struct mdd_object *obj,
+		  struct layout_intent *layout, const struct lu_buf *buf,
+		  struct thandle *handle)
+{
+	return dt_layout_change(env, mdd_object_child(obj),
+				layout, buf, handle);
 }
 
 static inline

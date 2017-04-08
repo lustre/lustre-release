@@ -146,7 +146,10 @@ extern int llapi_file_lookup(int dirfd, const char *name);
 #define VERBOSE_DEFAULT		(VERBOSE_COUNT | VERBOSE_SIZE | \
 				 VERBOSE_OFFSET | VERBOSE_POOL | \
 				 VERBOSE_OBJID | VERBOSE_GENERATION | \
-				 VERBOSE_LAYOUT | VERBOSE_HASH_TYPE)
+				 VERBOSE_LAYOUT | VERBOSE_HASH_TYPE | \
+				 VERBOSE_COMP_COUNT | VERBOSE_COMP_FLAGS | \
+				 VERBOSE_COMP_START | VERBOSE_COMP_END | \
+				 VERBOSE_COMP_ID)
 
 struct find_param {
 	unsigned int		 fp_max_depth;
@@ -165,11 +168,14 @@ struct find_param {
 	/* these need to be signed values */
 	int			 fp_size_sign:2,
 				 fp_stripe_size_sign:2,
-				 fp_stripe_count_sign:2;
+				 fp_stripe_count_sign:2,
+				 fp_comp_start_sign:2,
+				 fp_comp_end_sign:2,
+				 fp_comp_count_sign:2;
 	unsigned long long	 fp_size;
 	unsigned long long	 fp_size_units;
 
-	unsigned long		 fp_zero_end:1,
+	unsigned long long	 fp_zero_end:1,
 				 fp_recursive:1,
 				 fp_exclude_pattern:1,
 				 fp_exclude_type:1,
@@ -195,7 +201,17 @@ struct find_param {
 				 fp_check_layout:1,
 				 fp_exclude_layout:1,
 				 fp_get_default_lmv:1, /* Get default LMV */
-				 fp_migrate:1;
+				 fp_migrate:1,
+				 fp_check_comp_count:1,
+				 fp_exclude_comp_count:1,
+				 fp_check_comp_flags:1,
+				 fp_exclude_comp_flags:1,
+				 fp_check_comp_start:1,
+				 fp_exclude_comp_start:1,
+				 fp_check_comp_end:1,
+				 fp_exclude_comp_end:1,
+				 fp_check_comp_id:1,
+				 fp_exclude_comp_id:1;
 
 	int			 fp_verbose;
 	int			 fp_quiet;
@@ -228,6 +244,14 @@ struct find_param {
 	unsigned long long	 fp_stripe_size_units;
 	unsigned long long	 fp_stripe_count;
 	__u32			 fp_layout;
+
+	__u32			 fp_comp_count;
+	__u32			 fp_comp_flags;
+	__u32			 fp_comp_id;
+	unsigned long long	 fp_comp_start;
+	unsigned long long	 fp_comp_start_units;
+	unsigned long long	 fp_comp_end;
+	unsigned long long	 fp_comp_end_units;
 
 	/* In-process parameters. */
 	unsigned long		 fp_got_uuids:1,
@@ -688,6 +712,77 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
  */
 int llapi_layout_file_create(const char *path, int open_flags, int mode,
 			     const struct llapi_layout *layout);
+
+/**
+ * Fetch the start and end offset of the current layout component.
+ */
+int llapi_layout_comp_extent_get(const struct llapi_layout *layout,
+				 uint64_t *start, uint64_t *end);
+/**
+ * Set the extent of current layout component.
+ */
+int llapi_layout_comp_extent_set(struct llapi_layout *layout,
+				 uint64_t start, uint64_t end);
+/**
+ * Gets the attribute flags of the current component.
+ */
+int llapi_layout_comp_flags_get(const struct llapi_layout *layout,
+				uint32_t *flags);
+/**
+ * Sets the specified flags of the current component leaving other flags as-is.
+ */
+int llapi_layout_comp_flags_set(struct llapi_layout *layout, uint32_t flags);
+/**
+ * Clears the flags specified in the flags leaving other flags as-is.
+ */
+int llapi_layout_comp_flags_clear(struct llapi_layout *layout, uint32_t flags);
+/**
+ * Fetches the file-unique component ID of the current layout component.
+ */
+int llapi_layout_comp_id_get(const struct llapi_layout *layout, uint32_t *id);
+/**
+ * Adds one component to the existing composite or plain layout.
+ */
+int llapi_layout_comp_add(struct llapi_layout *layout);
+/**
+ * Deletes the current layout component from the composite layout.
+ */
+int llapi_layout_comp_del(struct llapi_layout *layout);
+
+enum {
+	LLAPI_LAYOUT_COMP_POS_NEXT = 0,
+	LLAPI_LAYOUT_COMP_POS_FIRST = 1,
+	LLAPI_LAYOUT_COMP_POS_LAST = 2
+};
+
+/**
+ * Move the current component pointer by specified component ID.
+ */
+int llapi_layout_comp_move_at(struct llapi_layout *layout, uint32_t id);
+/**
+ * Move the current component pointer to a specified position.
+ */
+int llapi_layout_comp_move(struct llapi_layout *layout, uint32_t pos);
+/**
+ * Add layout components to an existing file.
+ */
+int llapi_layout_file_comp_add(const char *path,
+			       const struct llapi_layout *layout);
+/**
+ * Delete component(s) by the specified component id (accepting lcme_id
+ * wildcards also) from an existing file.
+ */
+int llapi_layout_file_comp_del(const char *path, uint32_t id);
+/**
+ * Change flags or other parameters of the component(s) by component ID of an
+ * existing file. The component to be modified is specified by the
+ * comp->lcme_id value, which must be an unique component ID. The new
+ * attributes are passed in by @comp and @valid is used to specify which
+ * attributes in the component are going to be changed.
+ */
+int llapi_layout_file_comp_set(const char *path,
+			       const struct llapi_layout *comp,
+			       uint32_t valid);
 
 /** @} llapi */
 

@@ -1765,6 +1765,7 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 		GOTO(out, rc = -EINVAL);
 	}
 
+	it->ooi_rec_size = ii->ii_recsize;
 	it->ooi_valid_npages = npages;
 	if (ptlrpc_rep_need_swab(req))
 		it->ooi_swab = 1;
@@ -1909,11 +1910,20 @@ again:
 
 		it->ooi_pos_ent++;
 		if (it->ooi_pos_ent < idxpage->lip_nr) {
-			it->ooi_ent =
+			if (it->ooi_rec_size ==
+					sizeof(struct lu_orphan_rec_v2)) {
+				it->ooi_ent =
+				(struct lu_orphan_ent_v2 *)idxpage->lip_entries+
+							it->ooi_pos_ent;
+				if (it->ooi_swab)
+					lustre_swab_orphan_ent_v2(it->ooi_ent);
+			} else {
+				it->ooi_ent =
 				(struct lu_orphan_ent *)idxpage->lip_entries +
 							it->ooi_pos_ent;
-			if (it->ooi_swab)
-				lustre_swab_orphan_ent(it->ooi_ent);
+				if (it->ooi_swab)
+					lustre_swab_orphan_ent(it->ooi_ent);
+			}
 			RETURN(0);
 		}
 	}
@@ -1956,11 +1966,20 @@ static int osp_orphan_it_key_size(const struct lu_env *env,
 static int osp_orphan_it_rec(const struct lu_env *env, const struct dt_it *di,
 			     struct dt_rec *rec, __u32 attr)
 {
-	struct osp_it	*it  = (struct osp_it *)di;
-	struct lu_orphan_ent	*ent = (struct lu_orphan_ent *)it->ooi_ent;
+	struct osp_it *it = (struct osp_it *)di;
 
-	if (likely(ent != NULL)) {
-		*(struct lu_orphan_rec *)rec = ent->loe_rec;
+	if (likely(it->ooi_ent)) {
+		if (it->ooi_rec_size == sizeof(struct lu_orphan_rec_v2)) {
+			struct lu_orphan_ent_v2 *ent =
+				(struct lu_orphan_ent_v2 *)it->ooi_ent;
+
+			*(struct lu_orphan_rec_v2 *)rec = ent->loe_rec;
+		} else {
+			struct lu_orphan_ent *ent =
+				(struct lu_orphan_ent *)it->ooi_ent;
+
+			*(struct lu_orphan_rec *)rec = ent->loe_rec;
+		}
 		return 0;
 	}
 

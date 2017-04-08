@@ -261,7 +261,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	__u64			 valid = attr->la_valid;
 	const char		*xattr_name = rr->rr_name.ln_name;
 	int			 xattr_len = rr->rr_eadatalen;
-	__u64			 lockpart;
+	__u64			 lockpart = MDS_INODELOCK_UPDATE;
 	int			 rc;
 	ENTRY;
 
@@ -320,9 +320,24 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		/* ACLs were mapped out, return an error so the user knows */
 		if (rc != xattr_len)
 			GOTO(out, rc = -EPERM);
+	} else if ((strlen(xattr_name) > strlen(XATTR_LUSTRE_LOV) + 1) &&
+		   strncmp(xattr_name, XATTR_LUSTRE_LOV,
+			   strlen(XATTR_LUSTRE_LOV)) == 0) {
+
+		if (strncmp(xattr_name, XATTR_LUSTRE_LOV".add",
+			    strlen(XATTR_LUSTRE_LOV".add")) &&
+		    strncmp(xattr_name, XATTR_LUSTRE_LOV".set",
+			    strlen(XATTR_LUSTRE_LOV".set")) &&
+		    strncmp(xattr_name, XATTR_LUSTRE_LOV".del",
+			    strlen(XATTR_LUSTRE_LOV".del"))) {
+			CERROR("%s: invalid xattr name: %s\n",
+			       mdt_obd_name(info->mti_mdt), xattr_name);
+			GOTO(out, rc = -EINVAL);
+		}
+
+		lockpart |= MDS_INODELOCK_LAYOUT;
 	}
 
-        lockpart = MDS_INODELOCK_UPDATE;
         /* Revoke all clients' lookup lock, since the access
          * permissions for this inode is changed when ACL_ACCESS is
          * set. This isn't needed for ACL_DEFAULT, since that does
@@ -392,6 +407,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		CDEBUG(D_INFO, "valid bits: %#llx\n", valid);
 		rc = -EINVAL;
 	}
+
 	if (rc == 0)
 		mdt_counter_incr(req, LPROC_MDT_SETXATTR);
 

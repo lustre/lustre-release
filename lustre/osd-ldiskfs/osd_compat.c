@@ -219,7 +219,7 @@ int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 {
 	struct osd_mdobj_map	*omm = osd->od_mdt_map;
 	struct osd_thread_info	*oti = osd_oti_get(env);
-	struct lustre_mdt_attrs	*lma = &oti->oti_mdt_attrs;
+	struct lustre_mdt_attrs	*lma = &oti->oti_ost_attrs.loa_lma;
 	char			*name = oti->oti_name;
 	struct osd_thread_info  *info = osd_oti_get(env);
 	struct dentry		*dentry;
@@ -228,15 +228,16 @@ int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 
 	/* Set REMOTE_PARENT in lma, so other process like unlink or lfsck
 	 * can identify this object quickly */
-	rc = osd_get_lma(oti, obj->oo_inode, &oti->oti_obj_dentry, lma);
-	if (rc != 0)
+	rc = osd_get_lma(oti, obj->oo_inode, &oti->oti_obj_dentry,
+			 &oti->oti_ost_attrs);
+	if (rc)
 		RETURN(rc);
 
 	lma->lma_incompat |= LMAI_REMOTE_PARENT;
 	lustre_lma_swab(lma);
 	rc = __osd_xattr_set(oti, obj->oo_inode, XATTR_NAME_LMA, lma,
 			     sizeof(*lma), XATTR_REPLACE);
-	if (rc != 0)
+	if (rc)
 		RETURN(rc);
 
 	parent = omm->omm_remote_parent;
@@ -261,7 +262,7 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 {
 	struct osd_mdobj_map	   *omm = osd->od_mdt_map;
 	struct osd_thread_info	   *oti = osd_oti_get(env);
-	struct lustre_mdt_attrs    *lma = &oti->oti_mdt_attrs;
+	struct lustre_mdt_attrs    *lma = &oti->oti_ost_attrs.loa_lma;
 	char			   *name = oti->oti_name;
 	struct dentry		   *dentry;
 	struct dentry		   *parent;
@@ -270,7 +271,8 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 	int			   rc;
 
 	/* Check lma to see whether it is remote object */
-	rc = osd_get_lma(oti, obj->oo_inode, &oti->oti_obj_dentry, lma);
+	rc = osd_get_lma(oti, obj->oo_inode, &oti->oti_obj_dentry,
+			 &oti->oti_ost_attrs);
 	if (rc != 0) {
 		/* No LMA if the directory is created before 2.0 */
 		if (rc == -ENODATA)
@@ -542,7 +544,7 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 	struct inode		   *inode;
 	struct dentry		   *dentry = &info->oti_obj_dentry;
 	struct osd_inode_id	   *oi_id  = &info->oti_id3;
-	struct lustre_mdt_attrs	   *lma    = &info->oti_mdt_attrs;
+	struct lustre_mdt_attrs	   *lma    = &info->oti_ost_attrs.loa_lma;
 	struct lu_fid		   *oi_fid = &lma->lma_self_fid;
 	int			    rc;
 	ENTRY;
@@ -581,7 +583,7 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 		goto update;
 	}
 
-	rc = osd_get_lma(info, inode, dentry, lma);
+	rc = osd_get_lma(info, inode, dentry, &info->oti_ost_attrs);
 	if (rc == -ENODATA) {
 		rc = osd_get_idif(info, inode, dentry, oi_fid);
 		if (rc > 0 || rc == -ENODATA) {

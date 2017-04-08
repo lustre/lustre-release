@@ -693,7 +693,7 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 			       (const struct dt_key *)oi_fid, th, true);
 	if (rc != 0) {
 		struct inode *inode;
-		struct lustre_mdt_attrs *lma = &info->oti_mdt_attrs;
+		struct lustre_mdt_attrs *lma = &info->oti_ost_attrs.loa_lma;
 
 		if (rc != -EEXIST)
 			return rc;
@@ -721,7 +721,8 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 			goto update;
 		}
 
-		rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
+		rc = osd_get_lma(info, inode, &info->oti_obj_dentry,
+				 &info->oti_ost_attrs);
 		iput(inode);
 		if (rc == -ENODATA)
 			goto update;

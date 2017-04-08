@@ -43,10 +43,10 @@
 #include <lustre_req_layout.h>
 #include <lustre_sec.h>
 
-extern int (*tgt_lfsck_in_notify)(const struct lu_env *env,
-				  struct dt_device *key,
-				  struct lfsck_request *lr,
-				  struct thandle *th);
+extern int (*tgt_lfsck_in_notify_local)(const struct lu_env *env,
+					struct dt_device *key,
+					struct lfsck_req_local *lrl,
+					struct thandle *th);
 /**
  * Common data shared by tg-level handlers. This is allocated per-thread to
  * reduce stack consumption.
@@ -86,7 +86,7 @@ struct tgt_thread_info {
 			struct l_wait_info tti_wait_info;
 		} update;
 	} tti_u;
-	struct lfsck_request tti_lr;
+	struct lfsck_req_local tti_lrl;
 	struct dt_insert_rec tti_rec;
 };
 

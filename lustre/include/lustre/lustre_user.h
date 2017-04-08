@@ -159,9 +159,13 @@ static inline bool fid_is_zero(const struct lu_fid *fid)
  * parent MDT-object's layout EA. */
 #define f_stripe_idx f_ver
 
-struct filter_fid {
-	struct lu_fid	ff_parent;  /* ff_parent.f_ver == file stripe number */
-};
+struct ost_layout {
+	__u32	ol_stripe_size;
+	__u32	ol_stripe_count;
+	__u64	ol_comp_start;
+	__u64	ol_comp_end;
+	__u32	ol_comp_id;
+} __attribute__((packed));
 
 /* keep this one for compatibility */
 struct filter_fid_old {
@@ -170,10 +174,42 @@ struct filter_fid_old {
 	__u64		ff_seq;
 };
 
+struct filter_fid {
+	struct lu_fid		ff_parent;
+	struct ost_layout	ff_layout;
+} __attribute__((packed));
+
 /* Userspace should treat lu_fid as opaque, and only use the following methods
  * to print or parse them.  Other functions (e.g. compare, swab) could be moved
  * here from lustre_idl.h if needed. */
 typedef struct lu_fid lustre_fid;
+
+enum lma_compat {
+	LMAC_HSM	 = 0x00000001,
+/*	LMAC_SOM	 = 0x00000002, obsolete since 2.8.0 */
+	LMAC_NOT_IN_OI	 = 0x00000004, /* the object does NOT need OI mapping */
+	LMAC_FID_ON_OST  = 0x00000008, /* For OST-object, its OI mapping is
+				       * under /O/<seq>/d<x>. */
+	LMAC_STRIPE_INFO = 0x00000010, /* stripe info in the LMA EA. */
+	LMAC_COMP_INFO	 = 0x00000020, /* Component info in the LMA EA. */
+};
+
+/**
+ * Masks for all features that should be supported by a Lustre version to
+ * access a specific file.
+ * This information is stored in lustre_mdt_attrs::lma_incompat.
+ */
+enum lma_incompat {
+	LMAI_RELEASED		= 0x00000001, /* file is released */
+	LMAI_AGENT		= 0x00000002, /* agent inode */
+	LMAI_REMOTE_PARENT	= 0x00000004, /* the parent of the object
+						 is on the remote MDT */
+	LMAI_STRIPED		= 0x00000008, /* striped directory inode */
+	LMAI_ORPHAN		= 0x00000010, /* inode is orphan */
+	LMA_INCOMPAT_SUPP	= (LMAI_AGENT | LMAI_REMOTE_PARENT | \
+				   LMAI_STRIPED | LMAI_ORPHAN)
+};
+
 
 /**
  * Following struct for object attributes, that will be kept inode's EA.
@@ -194,6 +230,25 @@ struct lustre_mdt_attrs {
 	__u32   lma_incompat;
 	/** FID of this inode */
 	struct lu_fid  lma_self_fid;
+};
+
+struct lustre_ost_attrs {
+	/* Use lustre_mdt_attrs directly for now, need a common header
+	 * structure if want to change lustre_mdt_attrs in future. */
+	struct lustre_mdt_attrs loa_lma;
+
+	/* Below five elements are for OST-object's PFID EA, the
+	 * lma_parent_fid::f_ver is composed of the stripe_count (high 16 bits)
+	 * and the stripe_index (low 16 bits), the size should not exceed
+	 * 5 * sizeof(__u64)) to be accessable by old Lustre. If the flag
+	 * LMAC_STRIPE_INFO is set, then loa_parent_fid and loa_stripe_size
+	 * are valid; if the flag LMAC_COMP_INFO is set, then the next three
+	 * loa_comp_* elements are valid. */
+	struct lu_fid	loa_parent_fid;
+	__u32		loa_stripe_size;
+	__u32		loa_comp_id;
+	__u64		loa_comp_start;
+	__u64		loa_comp_end;
 };
 
 /**
@@ -334,6 +389,7 @@ enum ll_lease_type {
 #define LOV_USER_MAGIC_V3	0x0BD30BD0
 /* 0x0BD40BD0 is occupied by LOV_MAGIC_MIGRATE */
 #define LOV_USER_MAGIC_SPECIFIC 0x0BD50BD0	/* for specific OSTs */
+#define LOV_USER_MAGIC_COMP_V1	0x0BD60BD0
 
 #define LMV_USER_MAGIC    0x0CD30CD0    /*default lmv magic*/
 
@@ -345,6 +401,12 @@ enum ll_lease_type {
 #define LOV_PATTERN_F_MASK	0xffff0000
 #define LOV_PATTERN_F_HOLE	0x40000000 /* there is hole in LOV EA */
 #define LOV_PATTERN_F_RELEASED	0x80000000 /* HSM released file */
+
+static inline bool lov_pattern_supported(__u32 pattern)
+{
+	return pattern == LOV_PATTERN_RAID0 ||
+	       pattern == (LOV_PATTERN_RAID0 | LOV_PATTERN_F_RELEASED);
+}
 
 #define LOV_MAXPOOLNAME 15
 #define LOV_POOLNAMEF "%.15s"
@@ -405,6 +467,66 @@ struct lov_user_md_v3 {           /* LOV EA user data (host-endian) */
 	};
 	char  lmm_pool_name[LOV_MAXPOOLNAME + 1]; /* pool name */
 	struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
+} __attribute__((packed));
+
+struct lu_extent {
+	__u64	e_start;
+	__u64	e_end;
+};
+
+#define DEXT "[ %#llx , %#llx )"
+#define PEXT(ext) (ext)->e_start, (ext)->e_end
+
+static inline bool lu_extent_is_overlapped(struct lu_extent *e1,
+					   struct lu_extent *e2)
+{
+	return e1->e_start < e2->e_end && e2->e_start < e1->e_end;
+}
+
+enum lov_comp_md_entry_flags {
+	LCME_FL_PRIMARY	= 0x00000001,	/* Not used */
+	LCME_FL_STALE	= 0x00000002,	/* Not used */
+	LCME_FL_OFFLINE	= 0x00000004,	/* Not used */
+	LCME_FL_PREFERRED = 0x00000008, /* Not used */
+	LCME_FL_INIT	= 0x00000010,	/* instantiated */
+};
+
+#define LCME_KNOWN_FLAGS	LCME_FL_INIT
+
+/* lcme_id can be specified as certain flags, and the the first
+ * bit of lcme_id is used to indicate that the ID is representing
+ * certain LCME_FL_* but not a real ID. Which implies we can have
+ * at most 31 flags (see LCME_FL_XXX). */
+enum lcme_id {
+	LCME_ID_INVAL	= 0x0,
+	LCME_ID_MAX	= 0x7FFFFFFF,
+	LCME_ID_ALL	= 0xFFFFFFFF,
+	LCME_ID_NONE	= 0x80000000
+};
+
+#define LCME_ID_MASK	LCME_ID_MAX
+
+struct lov_comp_md_entry_v1 {
+	__u32			lcme_id;        /* unique id of component */
+	__u32			lcme_flags;     /* LCME_FL_XXX */
+	struct lu_extent	lcme_extent;    /* file extent for component */
+	__u32			lcme_offset;    /* offset of component blob,
+						   start from lov_comp_md_v1 */
+	__u32			lcme_size;      /* size of component blob */
+	__u64			lcme_padding[2];
+} __attribute__((packed));
+
+enum lov_comp_md_flags;
+
+struct lov_comp_md_v1 {
+	__u32	lcm_magic;      /* LOV_USER_MAGIC_COMP_V1 */
+	__u32	lcm_size;       /* overall size including this struct */
+	__u32	lcm_layout_gen;
+	__u16	lcm_flags;
+	__u16	lcm_entry_count;
+	__u64	lcm_padding1;
+	__u64	lcm_padding2;
+	struct lov_comp_md_entry_v1 lcm_entries[0];
 } __attribute__((packed));
 
 static inline __u32 lov_user_md_size(__u16 stripes, __u32 lmm_magic)

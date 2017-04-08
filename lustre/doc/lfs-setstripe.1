@@ -1,0 +1,169 @@
+.TH LFS-SETSTRIPIE 1 2015-11-06 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs setstripe \- set striping pattern of a file.
+.SH SYNOPSIS
+.B lfs setstripe [\fISTRIPE_OPTIONS\fR] <directory|filename>
+.br
+.B lfs setstripe -d <directory>
+.br
+.B lfs setstripe <--component-end|-E end1> [\fISTRIPE_OPTIONS\fR] \
+[<--component-end|-E end2> [\fISTRIPE_OPTIONS\fR] ...] <filename>
+.br
+.B lfs setstripe --component-add <--component-end|-E end1> [\fISTRIPE_OPTIONS\fR] \
+[<--component-end|-E end2> [\fISTRIPE_OPTIONS\fR] ...] <filename>
+.br
+.B lfs setstripe --component-del <--component-id|-I comp_id | \
+--component-flags comp_flags> <filename>
+.br
+.SH DESCRIPTION
+.TP
+.B lfs setstripe [\fISTRIPE_OPTIONS\fR] <directory|filename>
+Create a file with specified striping pattern, or set default stripping pattern
+to a directory.
+.br
+.TP
+.B lfs setstripe -d <directory>
+.br
+Delete the default striping on the specified directory.
+.TP
+.B lfs setstripe <--component-end|-E end1> [\fISTRIPE_OPTIONS\fR] \
+[<--component-end|-E end2> [\fISTRIPE_OPTIONS\fR] ...] <filename>
+.br
+Create a file with the specified composite layout. Each component defines the
+stripe pattern of the file in the range of [start, end). The first component
+must start from offset 0, and all components must be adjacent with each other,
+no holes are allowed, so each extent will start at the end of previous extent.
+The
+.I -E
+option is used to specify the end offset of each component, and it also
+indicates the following \fISTRIPE_OPTIONS\fR are for this component. A -1 end
+offset indicates the EOF.
+.TP
+.B lfs setstripe --component-add <--component-end|-E end1> [\fISTRIPE_OPTIONS\fR] \
+[<--component-end|-E end2> [\fISTRIPE_OPTIONS\fR] ...] <filename>
+.br
+Add components to an existing composite file. The extent start of the first
+component to be added is equal to the extent end of last component in existing
+file, and all components to be added must be adjacent with each other.
+.TP
+.B lfs setstripe --component-del <--component-id|-I comp_id | \
+--component-flags comp_flags> <filename>
+.br
+Remove the component(s) specified by component ID or flags from an existing
+file. The ID specified by
+.I -I
+option is the numerical unique ID of the component, it can be obtained using
+the
+.B lfs getstripe
+command.
+.I --component-flags
+option is used to specify certain type of components, such as all instantiated
+ones.
+.SH STRIPE_OPTIONS
+The various stripe related options are listed and explained below:
+.TP
+.B -c, --stripe-count <\fIstripe_count\fR>
+The number of OSTs to stripe a file over. 0 means to use the filesystem-wide
+default stripe count (default 1), and -1 means to stripe over all available
+OSTs.
+.TP
+.B -S, --stripe-size <\fIstripe_size\fR>
+The number of bytes to store on each OST before moving to the next OST. 0 means
+to use the filesystem-wide default stripe_size (default 1MB).
+.TP
+.B -i, --stripe-index <\fIstart_ost_index\fR>
+The OST index (starting at 0) on which to start striping for this file. -1
+allows the MDS to choose the starting index and it is strongly recommended, as
+this allows space and load balancing to be done by the MDS as needed.
+.TP
+.B -o, --ost-list <\fIost_indices\fR>
+Used to specify the exact stripe layout on the file system. \fIost_indices\fR
+is a list of OSTs referenced by their indices, which are specified in decimal
+or hex form and can be obtained using the
+.B lfs osts
+command. The list format consists of individual OST indices and index ranges
+separated by commas, e.g. 1,2-4,7. The
+.B -o
+option may be specified multiple times to stripe across the union of all listed
+OSTs. If the
+.B -c
+option is combined with
+.B -o
+the
+.I stripe_count
+must agree with the number of OSTs in
+.IR ost_indices .
+If the
+.B -i
+option is combined with
+.B -o
+the
+.I start_ost_index
+must be in the OST list, and it will be used as the index on which to start
+striping the file. Otherwise the striping will occur in the order specified in
+.IR ost_indices .
+.TP
+.B -p, --pool <\fIpool_name\fR>
+The name of a predefined pool of OSTs (see
+.BR lctl (8))
+that will be used for striping. The
+.IR stripe_count ,
+.IR stripe_size ,
+and
+.I start_ost_index
+will be used as well; the
+.I start_ost_index
+must be part of the pool or an error will be returned.
+.TP
+There are two options available only for \fBlfs migrate\fR:
+.TP
+.B -b, --block
+Block file access during data migration (default).
+.TP
+.B -n, --non-block
+Abort migrations if concurrent access is detected.
+.SH COMPONENT_OPTIONS
+The various component related options are listed and explained below:
+.TP
+.B -E, --component-end <\fIend\fR>
+The end offset of the component,
+.I end
+is specified in bytes, or using a suffix (kMGTP),
+such as 256M. -1 means the end of file.
+.TP
+.B -I, --component-id <\fIcomp_id\fR>
+The numerical unique component id.
+.TP
+.B --component-flags <\fIflags\fR>
+Component flags. Available flags: \fBinit\fR: instatiated component.
+.TP
+.B --component-add
+Add specified components to an existing composite file.
+.TP
+.B --component-del
+Delete specified the components from an existing file. Deletion must start
+with the last component.
+.SH EXAMPLES
+.TP
+.B $ lfs setstripe -S 128k -c 2 /mnt/lustre/file1
+This creates a file striped on two OSTs with 128kB on each stripe.
+.TP
+.B $ lfs setstripe -d /mnt/lustre/dir
+This deletes a default stripe pattern on dir. New files will use the default \
+striping pattern created therein.
+.TP
+.B $ lfs setstripe -E 4M -c 1 -E 64M -c 4 -E -1 -c -1 /mnt/lustre/file1
+This creates a file with composite layout, the component has 1 stripe and \
+covers [0, 4M), the second component has 4 stripes and covers [4M, 64M), the \
+last component stripes over all available OSTs and covers [64M, EOF).
+.TP
+.B $ lfs setstripe --component-add -E -1 -c 4  /mnt/lustre/file1
+This add a component which start from the end of last existing component to \
+the end of file.
+.TP
+.B $ lfs setstripe --component-del -I 1 /mnt/lustre/file1
+This deletes the component with ID equals 1 from an existing file.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-migrate (1),
+.BR lustre (7)

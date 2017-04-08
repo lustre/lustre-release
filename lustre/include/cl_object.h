@@ -1770,6 +1770,7 @@ struct cl_io {
 			unsigned int		 sa_attr_flags;
 			unsigned int		 sa_valid;
 			int			 sa_stripe_index;
+			struct ost_layout	 sa_layout;
 			const struct lu_fid	*sa_parent_fid;
 		} ci_setattr;
 		struct cl_data_version_io {
@@ -1827,6 +1828,11 @@ struct cl_io {
 	 * discarded), or it doesn't matter if it changes(sync).
 	 */
 			     ci_ignore_layout:1,
+	/**
+	 * Need MDS intervention to complete a write. This usually means the
+	 * corresponding component is not initialized for the writing extent.
+	 */
+			     ci_need_write_intent:1,
 	/**
 	 * Check if layout changed after the IO finishes. Mainly for HSM
 	 * requirement. If IO occurs to openning files, it doesn't need to

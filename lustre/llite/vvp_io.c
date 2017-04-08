@@ -298,18 +298,18 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	struct cl_object *obj = io->ci_obj;
 	struct vvp_io    *vio = cl2vvp_io(env, ios);
 	struct inode     *inode = vvp_object_inode(obj);
+	int rc;
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
 	CDEBUG(D_VFSTRACE, DFID" ignore/verify layout %d/%d, layout version %d "
-			   "restore needed %d\n",
+			   "need write layout %d, restore needed %d\n",
 	       PFID(lu_object_fid(&obj->co_lu)),
 	       io->ci_ignore_layout, io->ci_verify_layout,
-	       vio->vui_layout_gen, io->ci_restore_needed);
+	       vio->vui_layout_gen, io->ci_need_write_intent,
+	       io->ci_restore_needed);
 
 	if (io->ci_restore_needed) {
-		int	rc;
-
 		/* file was detected release, we need to restore it
 		 * before finishing the io
 		 */
@@ -332,6 +332,31 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 			io->ci_verify_layout = 0;
 			io->ci_result = rc;
 		}
+	}
+
+	/**
+	 * dynamic layout change needed, send layout intent
+	 * RPC.
+	 */
+	if (io->ci_need_write_intent) {
+		loff_t start = 0;
+		loff_t end = 0;
+
+		LASSERT(io->ci_type == CIT_WRITE || cl_io_is_trunc(io));
+
+		io->ci_need_write_intent = 0;
+
+		if (io->ci_type == CIT_WRITE) {
+			start = io->u.ci_rw.crw_pos;
+			end = io->u.ci_rw.crw_pos + io->u.ci_rw.crw_count;
+		} else {
+			end = io->u.ci_setattr.sa_attr.lvb_size;
+		}
+
+		rc = ll_layout_write_intent(inode, start, end);
+		io->ci_result = rc;
+		if (!rc)
+			io->ci_need_restart = 1;
 	}
 
 	if (!io->ci_ignore_layout && io->ci_verify_layout) {

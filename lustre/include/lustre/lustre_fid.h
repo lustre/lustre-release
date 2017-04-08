@@ -324,6 +324,52 @@ static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
 	dst->f_ver = __be32_to_cpu(fid_ver(src));
 }
 
+static inline void ost_layout_cpu_to_le(struct ost_layout *dst,
+					const struct ost_layout *src)
+{
+	dst->ol_stripe_size = __cpu_to_le32(src->ol_stripe_size);
+	dst->ol_stripe_count = __cpu_to_le32(src->ol_stripe_count);
+	dst->ol_comp_start = __cpu_to_le64(src->ol_comp_start);
+	dst->ol_comp_end = __cpu_to_le64(src->ol_comp_end);
+	dst->ol_comp_id = __cpu_to_le32(src->ol_comp_id);
+}
+
+static inline void ost_layout_le_to_cpu(struct ost_layout *dst,
+					const struct ost_layout *src)
+{
+	dst->ol_stripe_size = __le32_to_cpu(src->ol_stripe_size);
+	dst->ol_stripe_count = __le32_to_cpu(src->ol_stripe_count);
+	dst->ol_comp_start = __le64_to_cpu(src->ol_comp_start);
+	dst->ol_comp_end = __le64_to_cpu(src->ol_comp_end);
+	dst->ol_comp_id = __le32_to_cpu(src->ol_comp_id);
+}
+
+static inline void filter_fid_cpu_to_le(struct filter_fid *dst,
+					const struct filter_fid *src, int size)
+{
+	fid_cpu_to_le(&dst->ff_parent, &src->ff_parent);
+
+	if (size < sizeof(struct filter_fid))
+		memset(&dst->ff_layout, 0, sizeof(dst->ff_layout));
+	else
+		ost_layout_cpu_to_le(&dst->ff_layout, &src->ff_layout);
+
+	/* XXX: Add more if filter_fid is enlarged in the future. */
+}
+
+static inline void filter_fid_le_to_cpu(struct filter_fid *dst,
+					const struct filter_fid *src, int size)
+{
+	fid_le_to_cpu(&dst->ff_parent, &src->ff_parent);
+
+	if (size < sizeof(struct filter_fid))
+		memset(&dst->ff_layout, 0, sizeof(dst->ff_layout));
+	else
+		ost_layout_le_to_cpu(&dst->ff_layout, &src->ff_layout);
+
+	/* XXX: Add more if filter_fid is enlarged in the future. */
+}
+
 static inline bool fid_is_sane(const struct lu_fid *fid)
 {
 	return fid && ((fid_seq(fid) >= FID_SEQ_START && !fid_ver(fid)) ||

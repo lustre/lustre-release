@@ -46,6 +46,7 @@
 #include <lustre_fid.h>
 #include <lustre_nodemap.h>
 #include <lustre_quota.h>
+#include <lustre_lfsck.h>
 
 /* context key constructor/destructor: dt_global_key_init, dt_global_key_fini */
 LU_KEY_INIT(dt_global, struct dt_thread_info);
@@ -584,8 +585,8 @@ const struct dt_index_features dt_lfsck_layout_orphan_features = {
 	.dif_flags		= 0,
 	.dif_keysize_min	= sizeof(struct lu_fid),
 	.dif_keysize_max	= sizeof(struct lu_fid),
-	.dif_recsize_min	= sizeof(struct lu_orphan_rec),
-	.dif_recsize_max	= sizeof(struct lu_orphan_rec),
+	.dif_recsize_min	= sizeof(struct lu_orphan_rec_v2),
+	.dif_recsize_max	= sizeof(struct lu_orphan_rec_v2),
 	.dif_ptrsize		= 4
 };
 EXPORT_SYMBOL(dt_lfsck_layout_orphan_features);
@@ -593,8 +594,8 @@ EXPORT_SYMBOL(dt_lfsck_layout_orphan_features);
 /* lfsck layout dangling */
 const struct dt_index_features dt_lfsck_layout_dangling_features = {
 	.dif_flags		= DT_IND_UPDATE,
-	.dif_keysize_min	= sizeof(struct lu_fid),
-	.dif_keysize_max	= sizeof(struct lu_fid),
+	.dif_keysize_min	= sizeof(struct lfsck_layout_dangling_key),
+	.dif_keysize_max	= sizeof(struct lfsck_layout_dangling_key),
 	.dif_recsize_min	= sizeof(struct lu_fid),
 	.dif_recsize_max	= sizeof(struct lu_fid),
 	.dif_ptrsize		= 4

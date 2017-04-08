@@ -522,6 +522,30 @@ int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
 }
 #endif
 
+/* XXX Look into layout in MDT layer. */
+static inline bool mdt_hsm_is_released(struct lov_mds_md *lmm)
+{
+	struct lov_comp_md_v1	*comp_v1;
+	struct lov_mds_md	*v1;
+	int			 i;
+
+	if (lmm->lmm_magic == LOV_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)lmm;
+
+		for (i = 0; i < comp_v1->lcm_entry_count; i++) {
+			v1 = (struct lov_mds_md *)((char *)comp_v1 +
+				comp_v1->lcm_entries[i].lcme_offset);
+			/* We don't support partial release for now */
+			if (!(v1->lmm_pattern & LOV_PATTERN_F_RELEASED))
+				return false;
+		}
+		return true;
+	} else {
+		return (lmm->lmm_pattern & LOV_PATTERN_F_RELEASED) ?
+			true : false;
+	}
+}
+
 void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
                         const struct lu_attr *attr, const struct lu_fid *fid)
 {
@@ -600,7 +624,7 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 		 * b=22272 */
 		b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 	} else if ((ma->ma_valid & MA_LOV) && ma->ma_lmm != NULL &&
-		   ma->ma_lmm->lmm_pattern & LOV_PATTERN_F_RELEASED) {
+		   mdt_hsm_is_released(ma->ma_lmm)) {
 		/* A released file stores its size on MDS. */
 		/* But return 1 block for released file, unless tools like tar
 		 * will consider it fully sparse. (LU-3864)
@@ -947,7 +971,6 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 	struct lu_buf		*buffer = &info->mti_buf;
 	struct obd_export	*exp = info->mti_exp;
 	int			 rc;
-	int			 is_root;
 	ENTRY;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK))
@@ -1027,32 +1050,6 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		if ((ma->ma_hsm.mh_flags & HS_RELEASED) &&
 		    mdt_hsm_restore_is_running(info, mdt_object_fid(o)))
 			repbody->mbo_t_state = MS_RESTORE;
-	}
-
-	is_root = lu_fid_eq(mdt_object_fid(o), &info->mti_mdt->mdt_md_root_fid);
-
-	/* the Lustre protocol supposes to return default striping
-	 * on the user-visible root if explicitly requested */
-	if ((ma->ma_valid & MA_LOV) == 0 && S_ISDIR(la->la_mode) &&
-	    (ma->ma_need & MA_LOV_DEF && is_root) && ma->ma_need & MA_LOV) {
-		struct lu_fid      rootfid;
-		struct mdt_object *root;
-		struct mdt_device *mdt = info->mti_mdt;
-
-		rc = dt_root_get(env, mdt->mdt_bottom, &rootfid);
-		if (rc)
-			RETURN(rc);
-		root = mdt_object_find(env, mdt, &rootfid);
-		if (IS_ERR(root))
-			RETURN(PTR_ERR(root));
-		rc = mdt_stripe_get(info, root, ma, XATTR_NAME_LOV);
-		mdt_object_put(info->mti_env, root);
-		if (unlikely(rc)) {
-			CERROR("%s: getattr error for "DFID": rc = %d\n",
-			       mdt_obd_name(info->mti_mdt),
-			       PFID(mdt_object_fid(o)), rc);
-			RETURN(rc);
-		}
 	}
 
         if (likely(ma->ma_valid & MA_INODE))
@@ -1227,6 +1224,56 @@ out_shrink:
 out:
 	mdt_thread_info_fini(info);
 	return rc;
+}
+
+/**
+ * Handler of layout intent RPC requiring the layout modification
+ *
+ * \param[in] info	thread environment
+ * \param[in] obj	object
+ * \param[in] layout	layout intent
+ * \param[in] buf	buffer containing client's lovea, could be empty
+ *
+ * \retval 0	on success
+ * \retval < 0	error code
+ */
+static int mdt_layout_change(struct mdt_thread_info *info,
+			     struct mdt_object *obj,
+			     struct layout_intent *layout,
+			     const struct lu_buf *buf)
+{
+	struct mdt_lock_handle *lh = &info->mti_lh[MDT_LH_LOCAL];
+	int rc;
+	ENTRY;
+
+	if (layout->li_start >= layout->li_end) {
+		CERROR("Recieved an invalid layout change range [%llu, %llu) "
+		       "for "DFID"\n", layout->li_start, layout->li_end,
+		       PFID(mdt_object_fid(obj)));
+		RETURN(-EINVAL);
+	}
+
+	if (!S_ISREG(lu_object_attr(&obj->mot_obj)))
+		GOTO(out, rc = -EINVAL);
+
+	rc = mo_permission(info->mti_env, NULL, mdt_object_child(obj), NULL,
+			   MAY_WRITE);
+	if (rc)
+		GOTO(out, rc);
+
+	/* take layout lock to prepare layout change */
+	mdt_lock_reg_init(lh, LCK_EX);
+	rc = mdt_object_lock(info, obj, lh,
+			     MDS_INODELOCK_LAYOUT | MDS_INODELOCK_XATTR);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = mo_layout_change(info->mti_env, mdt_object_child(obj), layout,
+			      buf);
+
+	mdt_object_unlock(info, obj, lh, 1);
+out:
+	RETURN(rc);
 }
 
 /**
@@ -3440,6 +3487,7 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	struct layout_intent *layout;
 	struct lu_fid *fid;
 	struct mdt_object *obj = NULL;
+	bool layout_change = false;
 	int layout_size = 0;
 	int rc = 0;
 	ENTRY;
@@ -3454,11 +3502,29 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	if (layout == NULL)
 		RETURN(-EPROTO);
 
-	if (layout->li_opc != LAYOUT_INTENT_ACCESS) {
+	switch (layout->li_opc) {
+	case LAYOUT_INTENT_TRUNC:
+	case LAYOUT_INTENT_WRITE:
+		layout_change = true;
+		break;
+	case LAYOUT_INTENT_ACCESS:
+		break;
+	case LAYOUT_INTENT_READ:
+	case LAYOUT_INTENT_GLIMPSE:
+	case LAYOUT_INTENT_RELEASE:
+	case LAYOUT_INTENT_RESTORE:
 		CERROR("%s: Unsupported layout intent opc %d\n",
 		       mdt_obd_name(info->mti_mdt), layout->li_opc);
-		RETURN(-EINVAL);
+		rc = -ENOTSUPP;
+		break;
+	default:
+		CERROR("%s: Unknown layout intent opc %d\n",
+		       mdt_obd_name(info->mti_mdt), layout->li_opc);
+		rc = -EINVAL;
+		break;
 	}
+	if (rc < 0)
+		RETURN(rc);
 
 	fid = &info->mti_tmp_fid2;
 	fid_extract_from_res_name(fid, &(*lockp)->l_resource->lr_name);
@@ -3479,12 +3545,46 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 			info->mti_mdt->mdt_max_mdsize = layout_size;
 	}
 
+	/*
+	 * set reply buffer size, so that ldlm_handle_enqueue0()->
+	 * ldlm_lvbo_fill() will fill the reply buffer with lovea.
+	 */
 	(*lockp)->l_lvb_type = LVB_T_LAYOUT;
 	req_capsule_set_size(info->mti_pill, &RMF_DLM_LVB, RCL_SERVER,
 			     layout_size);
 	rc = req_capsule_server_pack(info->mti_pill);
-	GOTO(out_obj, rc);
+	if (rc)
+		GOTO(out_obj, rc);
 
+
+	if (layout_change) {
+		struct lu_buf *buf = &info->mti_buf;
+
+		buf->lb_buf = NULL;
+		buf->lb_len = 0;
+		if (unlikely(req_is_replay(mdt_info_req(info)))) {
+			buf->lb_buf = req_capsule_client_get(info->mti_pill,
+					&RMF_EADATA);
+			buf->lb_len = req_capsule_get_size(info->mti_pill,
+					&RMF_EADATA, RCL_CLIENT);
+			/*
+			 * If it's a replay of layout write intent RPC, the
+			 * client has saved the extended lovea when
+			 * it get reply then.
+			 */
+			if (buf->lb_len > 0)
+				mdt_fix_lov_magic(info, buf->lb_buf);
+		}
+
+		/*
+		 * Instantiate some layout components, if @buf contains
+		 * lovea, then it's a replay of the layout intent write
+		 * RPC.
+		 */
+		rc = mdt_layout_change(info, obj, layout, buf);
+		if (rc)
+			GOTO(out_obj, rc);
+	}
 out_obj:
 	mdt_object_put(info->mti_env, obj);
 

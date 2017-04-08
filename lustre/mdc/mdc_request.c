@@ -370,7 +370,7 @@ static int mdc_xattr_common(struct obd_export *exp,const struct req_format *fmt,
 
         rc = ptlrpc_queue_wait(req);
 
-        if (opcode == MDS_REINT)
+	if (opcode == MDS_REINT)
 		mdc_put_mod_rpc_slot(req, NULL);
 
         if (rc)

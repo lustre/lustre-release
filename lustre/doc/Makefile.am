@@ -46,6 +46,7 @@ MANFILES =					\
 	lfs-migrate.1				\
 	lfs-mkdir.1				\
 	lfs-setdirstripe.1			\
+	lfs-setstripe.1				\
 	l_getidentity.8				\
 	lgss_sk.8				\
 	lhbadm.8				\
@@ -69,6 +70,18 @@ MANFILES =					\
 	llapi_ladvise.3				\
 	llapi_layout.7				\
 	llapi_layout_alloc.3			\
+	llapi_layout_comp_add.3			\
+	llapi_layout_comp_del.3			\
+	llapi_layout_comp_extent_get.3		\
+	llapi_layout_comp_extent_set.3		\
+	llapi_layout_comp_flags_clear.3		\
+	llapi_layout_comp_flags_get.3		\
+	llapi_layout_comp_flags_set.3		\
+	llapi_layout_comp_id_get.3		\
+	llapi_layout_comp_move.3		\
+	llapi_layout_comp_move_at.3		\
+	llapi_layout_file_comp_add.3		\
+	llapi_layout_file_comp_del.3		\
 	llapi_layout_file_create.3		\
 	llapi_layout_file_open.3		\
 	llapi_layout_free.3			\
@@ -88,7 +101,6 @@ MANFILES =					\
 	llapi_path2fid.3			\
 	llapi_path2parent.3			\
 	llapi_quotactl.3			\
-	llbackup.8				\
 	ll_decode_filter_fid.8			\
 	ll_decode_linkea.8			\
 	llobdstat.8				\

@@ -359,9 +359,9 @@ struct lfsck_layout {
 	__u32	ll_reserved_1;
 
 	/* The latest object has been processed (failed) during double scan. */
-	struct lu_fid	ll_fid_latest_scanned_phase2;
+	struct lfsck_layout_dangling_key ll_lldk_latest_scanned_phase2;
 
-	__u64	ll_reserved_2[9];
+	__u64	ll_reserved_2[8];
 
 	/* The OST targets bitmap to record the OSTs that contain
 	 * non-verified OST-objects. */
@@ -432,10 +432,14 @@ struct lfsck_operations {
 	void (*lfsck_quit)(const struct lu_env *env,
 			   struct lfsck_component *com);
 
+	int (*lfsck_in_notify_local)(const struct lu_env *env,
+				     struct lfsck_component *com,
+				     struct lfsck_req_local *lrl,
+				     struct thandle *th);
+
 	int (*lfsck_in_notify)(const struct lu_env *env,
 			       struct lfsck_component *com,
-			       struct lfsck_request *lr,
-			       struct thandle *th);
+			       struct lfsck_request *lr);
 
 	int (*lfsck_query)(const struct lu_env *env,
 			   struct lfsck_component *com,
@@ -780,6 +784,7 @@ struct lfsck_namespace_req {
 struct lfsck_layout_req {
 	struct lfsck_assistant_req	 llr_lar;
 	struct dt_object		*llr_child;
+	__u32				 llr_comp_id;
 	__u32				 llr_ost_idx;
 	__u32				 llr_lov_idx; /* offset in LOV EA */
 };
@@ -874,11 +879,7 @@ struct lfsck_thread_info {
 	struct lu_attr		lti_la;
 	struct lu_attr		lti_la2;
 	struct ost_id		lti_oi;
-	union {
-		struct lustre_mdt_attrs lti_lma;
-		/* old LMA for compatibility */
-		char			lti_lma_old[LMA_OLD_SIZE];
-	};
+	struct lustre_ost_attrs lti_loa;
 	struct dt_object_format lti_dof;
 	/* There will be '\0' at the end of the name. */
 	char		lti_key[sizeof(struct lu_dirent) + NAME_MAX + 1];
@@ -892,12 +893,9 @@ struct lfsck_thread_info {
 	union ldlm_policy_data	lti_policy;
 	struct ldlm_enqueue_info lti_einfo;
 	struct ldlm_res_id	lti_resid;
-	union {
-		struct filter_fid_old	lti_old_pfid;
-		struct filter_fid	lti_new_pfid;
-	};
+	struct filter_fid	lti_ff;
 	struct dt_allocation_hint lti_hint;
-	struct lu_orphan_rec	lti_rec;
+	struct lu_orphan_rec_v2	lti_rec;
 	struct lov_user_md	lti_lum;
 	struct dt_insert_rec	lti_dt_rec;
 	struct lu_object_conf	lti_conf;
@@ -907,6 +905,7 @@ struct lfsck_thread_info {
 	struct lmv_mds_md_v1	lti_lmv3;
 	struct lmv_mds_md_v1	lti_lmv4;
 	struct lfsck_lock_handle lti_llh;
+	struct lfsck_layout_dangling_key lti_lldk;
 };
 
 /* lfsck_lib.c */

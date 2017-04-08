@@ -36,7 +36,6 @@
 
 #include <libcfs/libcfs.h>
 #include <lustre/lustre_fid.h>
-#include <lustre/lustre_idl.h>
 
 static inline __u64 lmm_oi_id(const struct ost_id *oi)
 {
@@ -239,4 +238,58 @@ static inline void fid_to_lmm_oi(const struct lu_fid *fid,
 	oi->oi.oi_seq = fid_seq(fid);
 }
 
+/**
+ * Unpack an OST object id/seq (group) into a FID.  This is needed for
+ * converting all obdo, lmm, lsm, etc. 64-bit id/seq pairs into proper
+ * FIDs.  Note that if an id/seq is already in FID/IDIF format it will
+ * be passed through unchanged.  Only legacy OST objects in "group 0"
+ * will be mapped into the IDIF namespace so that they can fit into the
+ * struct lu_fid fields without loss.
+ */
+static inline int ostid_to_fid(struct lu_fid *fid, const struct ost_id *ostid,
+			       __u32 ost_idx)
+{
+	__u64 seq = ostid_seq(ostid);
+
+	if (ost_idx > 0xffff) {
+		CERROR("bad ost_idx, "DOSTID" ost_idx:%u\n", POSTID(ostid),
+		       ost_idx);
+		return -EBADF;
+	}
+
+	if (fid_seq_is_mdt0(seq)) {
+		__u64 oid = ostid_id(ostid);
+
+		/* This is a "legacy" (old 1.x/2.early) OST object in "group 0"
+		 * that we map into the IDIF namespace.  It allows up to 2^48
+		 * objects per OST, as this is the object namespace that has
+		 * been in production for years.  This can handle create rates
+		 * of 1M objects/s/OST for 9 years, or combinations thereof.
+		 */
+		if (oid >= IDIF_MAX_OID) {
+			CERROR("bad MDT0 id(1), "DOSTID" ost_idx:%u\n",
+			       POSTID(ostid), ost_idx);
+			return -EBADF;
+		}
+		fid->f_seq = fid_idif_seq(oid, ost_idx);
+		/* truncate to 32 bits by assignment */
+		fid->f_oid = oid;
+		/* in theory, not currently used */
+		fid->f_ver = oid >> 48;
+	} else if (!fid_seq_is_default(seq)) {
+		/* This is either an IDIF object, which identifies objects
+		 * across all OSTs, or a regular FID.  The IDIF namespace
+		 * maps legacy OST objects into the FID namespace.  In both
+		 * cases, we just pass the FID through, no conversion needed.
+		 */
+		if (ostid->oi_fid.f_ver) {
+			CERROR("bad MDT0 id(2), "DOSTID" ost_idx:%u\n",
+			       POSTID(ostid), ost_idx);
+			return -EBADF;
+		}
+		*fid = ostid->oi_fid;
+	}
+
+	return 0;
+}
 #endif

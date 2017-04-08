@@ -206,15 +206,31 @@ check_lustre_mdt_attrs(void)
 	CHECK_MEMBER(lustre_mdt_attrs, lma_compat);
 	CHECK_MEMBER(lustre_mdt_attrs, lma_incompat);
 	CHECK_MEMBER(lustre_mdt_attrs, lma_self_fid);
+
+	CHECK_VALUE_X(LMAC_HSM);
+	CHECK_VALUE_X(LMAC_NOT_IN_OI);
+	CHECK_VALUE_X(LMAC_FID_ON_OST);
+	CHECK_VALUE_X(LMAC_STRIPE_INFO);
+	CHECK_VALUE_X(LMAC_COMP_INFO);
+
 	CHECK_VALUE_X(LMAI_RELEASED);
 	CHECK_VALUE_X(LMAI_AGENT);
 	CHECK_VALUE_X(LMAI_REMOTE_PARENT);
 	CHECK_VALUE_X(LMAI_STRIPED);
 	CHECK_VALUE_X(LMAI_ORPHAN);
+}
 
-	CHECK_VALUE_X(LMAC_HSM);
-	CHECK_VALUE_X(LMAC_NOT_IN_OI);
-	CHECK_VALUE_X(LMAC_FID_ON_OST);
+static void
+check_lustre_ost_attrs(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lustre_ost_attrs);
+	CHECK_MEMBER(lustre_ost_attrs, loa_lma);
+	CHECK_MEMBER(lustre_ost_attrs, loa_parent_fid);
+	CHECK_MEMBER(lustre_ost_attrs, loa_stripe_size);
+	CHECK_MEMBER(lustre_ost_attrs, loa_comp_id);
+	CHECK_MEMBER(lustre_ost_attrs, loa_comp_start);
+	CHECK_MEMBER(lustre_ost_attrs, loa_comp_end);
 }
 
 static void
@@ -585,6 +601,18 @@ check_obd_connect_data(void)
 }
 
 static void
+check_ost_layout(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(ost_layout);
+	CHECK_MEMBER(ost_layout, ol_stripe_size);
+	CHECK_MEMBER(ost_layout, ol_stripe_count);
+	CHECK_MEMBER(ost_layout, ol_comp_start);
+	CHECK_MEMBER(ost_layout, ol_comp_end);
+	CHECK_MEMBER(ost_layout, ol_comp_id);
+}
+
+static void
 check_obdo(void)
 {
 	BLANK_LINE();
@@ -610,7 +638,8 @@ check_obdo(void)
 	CHECK_MEMBER(obdo, o_stripe_idx);
 	CHECK_MEMBER(obdo, o_parent_ver);
 	CHECK_MEMBER(obdo, o_handle);
-	CHECK_MEMBER(obdo, o_lcookie);
+	CHECK_MEMBER(obdo, o_layout);
+	CHECK_MEMBER(obdo, o_padding_3);
 	CHECK_MEMBER(obdo, o_uid_h);
 	CHECK_MEMBER(obdo, o_gid_h);
 	CHECK_MEMBER(obdo, o_data_version);
@@ -660,6 +689,9 @@ check_obdo(void)
 	CHECK_DEFINE_64X(OBD_MD_FLCROSSREF);
 	CHECK_DEFINE_64X(OBD_MD_FLGETATTRLOCK);
 	CHECK_DEFINE_64X(OBD_MD_FLDATAVERSION);
+	CHECK_DEFINE_64X(OBD_MD_CLOSE_INTENT_EXECED);
+	CHECK_DEFINE_64X(OBD_MD_DEFAULT_MEA);
+	CHECK_DEFINE_64X(OBD_MD_FLOSTLAYOUT);
 
 	CHECK_CVALUE_X(OBD_FL_INLINEDATA);
 	CHECK_CVALUE_X(OBD_FL_OBDMDEXISTS);
@@ -733,6 +765,38 @@ check_lov_mds_md_v3(void)
 	CHECK_VALUE_X(LOV_PATTERN_RAID1);
 	CHECK_VALUE_X(LOV_PATTERN_FIRST);
 	CHECK_VALUE_X(LOV_PATTERN_CMOBD);
+}
+
+static void
+check_lov_comp_md_entry_v1(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lov_comp_md_entry_v1);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_id);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_flags);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_extent);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_offset);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_size);
+	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_padding);
+
+	CHECK_VALUE_X(LCME_FL_INIT);
+}
+
+static void
+check_lov_comp_md_v1(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lov_comp_md_v1);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_magic);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_size);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_layout_gen);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_flags);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_entry_count);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_padding1);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_padding2);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_entries[0]);
+
+	CHECK_CDEFINE(LOV_MAGIC_COMP_V1);
 }
 
 static void
@@ -1705,17 +1769,6 @@ check_llog_log_hdr(void)
 }
 
 static void
-check_llog_cookie(void)
-{
-	BLANK_LINE();
-	CHECK_STRUCT(llog_cookie);
-	CHECK_MEMBER(llog_cookie, lgc_lgl);
-	CHECK_MEMBER(llog_cookie, lgc_subsys);
-	CHECK_MEMBER(llog_cookie, lgc_index);
-	CHECK_MEMBER(llog_cookie, lgc_padding);
-}
-
-static void
 check_llogd_body(void)
 {
 	BLANK_LINE();
@@ -2309,9 +2362,11 @@ static void check_lfsck_request(void)
 	CHECK_MEMBER(lfsck_request, lr_flags);
 	CHECK_MEMBER(lfsck_request, lr_fid);
 	CHECK_MEMBER(lfsck_request, lr_fid2);
-	CHECK_MEMBER(lfsck_request, lr_fid3);
+	CHECK_MEMBER(lfsck_request, lr_comp_id);
+	CHECK_MEMBER(lfsck_request, lr_padding_0);
 	CHECK_MEMBER(lfsck_request, lr_padding_1);
 	CHECK_MEMBER(lfsck_request, lr_padding_2);
+	CHECK_MEMBER(lfsck_request, lr_padding_3);
 
 	CHECK_VALUE_X(LFSCK_TYPE_SCRUB);
 	CHECK_VALUE_X(LFSCK_TYPE_LAYOUT);
@@ -2324,7 +2379,6 @@ static void check_lfsck_request(void)
 	CHECK_VALUE(LE_START);
 	CHECK_VALUE(LE_STOP);
 	CHECK_VALUE(LE_QUERY);
-	CHECK_VALUE(LE_FID_ACCESSED);
 	CHECK_VALUE(LE_PEER_EXIT);
 	CHECK_VALUE(LE_CONDITIONAL_DESTROY);
 	CHECK_VALUE(LE_PAIRS_VERIFY);
@@ -2666,6 +2720,7 @@ main(int argc, char **argv)
 	CHECK_STRUCT(obd_uuid);
 	check_lu_seq_range();
 	check_lustre_mdt_attrs();
+	check_lustre_ost_attrs();
 
 	CHECK_VALUE(OUT_CREATE);
 	CHECK_VALUE(OUT_DESTROY);
@@ -2695,10 +2750,13 @@ main(int argc, char **argv)
 	check_lustre_msg_v2();
 	check_ptlrpc_body();
 	check_obd_connect_data();
+	check_ost_layout();
 	check_obdo();
 	check_lov_ost_data_v1();
 	check_lov_mds_md_v1();
 	check_lov_mds_md_v3();
+	check_lov_comp_md_entry_v1();
+	check_lov_comp_md_v1();
 	check_lmv_mds_md_v1();
 	check_obd_statfs();
 	check_obd_ioobj();
@@ -2755,7 +2813,6 @@ main(int argc, char **argv)
 	check_llog_gen();
 	check_llog_gen_rec();
 	check_llog_log_hdr();
-	check_llog_cookie();
 	check_llogd_body();
 	check_llogd_conn_body();
 	check_ll_fiemap_info_key();

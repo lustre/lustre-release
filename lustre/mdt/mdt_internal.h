@@ -638,6 +638,7 @@ int mdt_name_unpack(struct req_capsule *pill,
 		    enum mdt_name_flags flags);
 int mdt_close_unpack(struct mdt_thread_info *info);
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
+void mdt_fix_lov_magic(struct mdt_thread_info *info, void *eadata);
 int mdt_reint_rec(struct mdt_thread_info *, struct mdt_lock_handle *);
 #ifdef CONFIG_FS_POSIX_ACL
 int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
