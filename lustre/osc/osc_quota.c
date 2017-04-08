@@ -66,16 +66,36 @@ int osc_quota_chkdq(struct client_obd *cli, const unsigned int qid[])
 	RETURN(QUOTA_OK);
 }
 
-#define MD_QUOTA_FLAG(type) ((type == USRQUOTA) ? OBD_MD_FLUSRQUOTA \
-						: OBD_MD_FLGRPQUOTA)
-#define FL_QUOTA_FLAG(type) ((type == USRQUOTA) ? OBD_FL_NO_USRQUOTA \
-						: OBD_FL_NO_GRPQUOTA)
+static inline u32 md_quota_flag(int qtype)
+{
+	switch (qtype) {
+	case USRQUOTA:
+		return OBD_MD_FLUSRQUOTA;
+	case GRPQUOTA:
+		return OBD_MD_FLGRPQUOTA;
+	default:
+		return 0;
+	}
+}
+
+static inline u32 fl_quota_flag(int qtype)
+{
+	switch (qtype) {
+	case USRQUOTA:
+		return OBD_FL_NO_USRQUOTA;
+	case GRPQUOTA:
+		return OBD_FL_NO_GRPQUOTA;
+	default:
+		return 0;
+	}
+}
 
 int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
 		    u64 valid, u32 flags)
 {
 	int type;
 	int rc = 0;
+
         ENTRY;
 
 	if ((valid & (OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA)) == 0)
@@ -84,12 +104,12 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
 	for (type = 0; type < LL_MAXQUOTAS; type++) {
 		struct osc_quota_info *oqi;
 
-		if ((valid & MD_QUOTA_FLAG(type)) == 0)
+		if ((valid & md_quota_flag(type)) == 0)
 			continue;
 
 		/* lookup the ID in the per-type hash table */
 		oqi = cfs_hash_lookup(cli->cl_quota_hash[type], &qid[type]);
-		if ((flags & FL_QUOTA_FLAG(type)) != 0) {
+		if ((flags & fl_quota_flag(type)) != 0) {
 			/* This ID is getting close to its quota limit, let's
 			 * switch to sync I/O */
 			if (oqi != NULL)
@@ -110,9 +130,7 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
 			}
 
 			CDEBUG(D_QUOTA, "%s: setdq to insert for %s %d (%d)\n",
-			       cli_name(cli),
-			       type == USRQUOTA ? "user" : "group",
-			       qid[type], rc);
+			       cli_name(cli), qtype_name(type), qid[type], rc);
 		} else {
 			/* This ID is now off the hook, let's remove it from
 			 * the hash table */
@@ -125,9 +143,7 @@ int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
 				OBD_SLAB_FREE_PTR(oqi, osc_quota_kmem);
 
 			CDEBUG(D_QUOTA, "%s: setdq to remove for %s %d (%p)\n",
-			       cli_name(cli),
-			       type == USRQUOTA ? "user" : "group",
-			       qid[type], oqi);
+			       cli_name(cli), qtype_name(type), qid[type], oqi);
 		}
 	}
 

@@ -481,6 +481,19 @@ static inline int fid_is_fs_root(const struct lu_fid *fid)
 		fid_oid(fid) == OSD_FS_ROOT_OID;
 }
 
+static inline uint64_t osd_oid(struct osd_device *dev, __u32 local_oid)
+{
+	switch (local_oid) {
+	case ACCT_USER_OID:
+		return dev->od_iusr_oid;
+	case ACCT_GROUP_OID:
+		return dev->od_igrp_oid;
+	}
+
+	LASSERTF(0, "invalid oid: %u for quota type", local_oid);
+	return dev->od_igrp_oid;
+}
+
 int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 		   const struct lu_fid *fid, uint64_t *oid)
 {
@@ -494,10 +507,7 @@ int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 		RETURN(-ENOENT);
 
 	if (unlikely(fid_is_acct(fid))) {
-		if (fid_oid(fid) == ACCT_USER_OID)
-			*oid = dev->od_iusr_oid;
-		else
-			*oid = dev->od_igrp_oid;
+		*oid = osd_oid(dev, fid_oid(fid));
 	} else if (unlikely(fid_is_fs_root(fid))) {
 		*oid = dev->od_root;
 	} else {

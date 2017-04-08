@@ -701,7 +701,17 @@ static inline __u64 lustre_stoqb(size_t space)
 #define LUSTRE_Q_INVALIDATE  0x80000b     /* deprecated as of 2.4 */
 #define LUSTRE_Q_FINVALIDATE 0x80000c     /* deprecated as of 2.4 */
 
-#define UGQUOTA 2       /* set both USRQUOTA and GRPQUOTA */
+#define ALLQUOTA 255       /* set all quota */
+static inline char *qtype_name(int qtype)
+{
+	switch (qtype) {
+	case USRQUOTA:
+		return "usr";
+	case GRPQUOTA:
+		return "grp";
+	}
+	return "unknown";
+}
 
 #define IDENTITY_DOWNCALL_MAGIC 0x6d6dd629
 

@@ -64,10 +64,10 @@ lquota_disk_find_create(const struct lu_env *env, struct dt_device *dev,
 			const struct dt_index_features *idx_feat,
 			char *name)
 {
-	struct lquota_thread_info	*qti = lquota_info(env);
-	struct dt_object		*obj;
-	struct local_oid_storage	*los;
-	int				 rc;
+	struct lquota_thread_info *qti = lquota_info(env);
+	struct dt_object *obj;
+	struct local_oid_storage *los;
+	int rc;
 	ENTRY;
 
 	/* Set up local storage */
@@ -406,8 +406,7 @@ struct dt_object *lquota_disk_slv_find_create(const struct lu_env *env,
 			RETURN(ERR_PTR(rc));
 
 		/* use predefined fid in the reserved oid list */
-		qti->qti_fid.f_oid = (type == USRQUOTA) ? LQUOTA_USR_OID
-							: LQUOTA_GRP_OID;
+		qti->qti_fid.f_oid = qtype2slv_oid(type);
 
 		slv_idx = local_index_find_or_create_with_fid(env, dev,
 							      &qti->qti_fid,

@@ -324,8 +324,6 @@ enum osd_full_scrub_ratio {
  * - 2 for target child uid & gid (if the target child exists);
  * - 2 for root uid & gid (last_rcvd, llog, etc);
  *
- * The 0 to (OSD_MAX_UGID_CNT - 1) bits of ot_id_type is for indicating
- * the id type of each id in the ot_id_array.
  */
 #define OSD_MAX_UGID_CNT        10
 
@@ -354,7 +352,7 @@ struct osd_thandle {
 	struct lu_ref_link      ot_dev_link;
 	unsigned int		ot_credits;
 	unsigned short		ot_id_cnt;
-	unsigned short		ot_id_type;
+	__u8                    ot_id_types[OSD_MAX_UGID_CNT];
 	unsigned int		ot_remove_agents:1;
 	uid_t			ot_id_array[OSD_MAX_UGID_CNT];
 	struct lquota_trans    *ot_quota_trans;

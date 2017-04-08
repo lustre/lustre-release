@@ -687,9 +687,10 @@ static int qsd_op_begin0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 			 struct lquota_id_info *qid, long long space,
 			 int *flags)
 {
-	struct lquota_entry	*lqe;
-	int			 rc, ret = -EINPROGRESS;
-	struct l_wait_info	 lwi;
+	struct lquota_entry *lqe;
+	struct l_wait_info lwi;
+	int qtype_flag = 0;
+	int rc, ret = -EINPROGRESS;
 	ENTRY;
 
 	if (qid->lqi_qentry != NULL) {
@@ -772,7 +773,7 @@ static int qsd_op_begin0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 out_flags:
 		LASSERT(qid->lqi_is_blk);
 		if (rc != 0) {
-			*flags |= LQUOTA_OVER_FL(qqi->qqi_qtype);
+			*flags |= lquota_over_fl(qqi->qqi_qtype);
 		} else {
 			__u64	usage;
 
@@ -782,11 +783,12 @@ out_flags:
 			usage += lqe->lqe_waiting_write;
 			usage += qqi->qqi_qsd->qsd_sync_threshold;
 
+			qtype_flag = lquota_over_fl(qqi->qqi_qtype);
 			/* if we should notify client to start sync write */
 			if (usage >= lqe->lqe_granted - lqe->lqe_pending_rel)
-				*flags |= LQUOTA_OVER_FL(qqi->qqi_qtype);
+				*flags |= qtype_flag;
 			else
-				*flags &= ~LQUOTA_OVER_FL(qqi->qqi_qtype);
+				*flags &= ~qtype_flag;
 			lqe_read_unlock(lqe);
 		}
 	}

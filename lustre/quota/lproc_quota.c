@@ -165,6 +165,18 @@ static void *lprocfs_quota_seq_next(struct seq_file *p, void *v, loff_t *pos)
 	return NULL;
 }
 
+static inline const char *oid2name(__u32 oid)
+{
+	switch (oid) {
+	case ACCT_USER_OID:
+		return "usr_accounting";
+	case ACCT_GROUP_OID:
+		return "grp_accounting";
+	default:
+		return "unknown_accounting";
+	}
+}
+
 /*
  * Output example:
  *
@@ -195,10 +207,7 @@ static int lprocfs_quota_seq_show(struct seq_file *p, void *v)
 
 	if (v == SEQ_START_TOKEN) {
 		if (fid_is_acct(fid)) {
-			if (fid_oid(fid) == ACCT_USER_OID)
-				seq_printf(p, "usr_accounting:\n");
-			else
-				seq_printf(p, "grp_accounting:\n");
+			seq_printf(p, "%s:\n", oid2name(fid_oid(fid)));
 		} else if (fid_seq(fid) == FID_SEQ_QUOTA_GLB) {
 			int	poolid, rtype, qtype;
 
@@ -207,7 +216,7 @@ static int lprocfs_quota_seq_show(struct seq_file *p, void *v)
 				return rc;
 
 			seq_printf(p, "global_pool%d_%s_%s\n", poolid,
-				   RES_NAME(rtype), QTYPE_NAME(qtype));
+				   RES_NAME(rtype), qtype_name(qtype));
 		} else if (fid_seq(fid) == FID_SEQ_LOCAL_NAME) {
 			/* global index copy object */
 			seq_printf(p, "global_index_copy:\n");

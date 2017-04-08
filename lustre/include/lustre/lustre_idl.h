@@ -1199,6 +1199,8 @@ lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
 #define OBD_MD_DEFAULT_MEA   (0x0040000000000000ULL) /* default MEA */
 #define OBD_MD_FLOSTLAYOUT   (0x0080000000000000ULL) /* contain ost_layout */
 
+#define OBD_MD_FLALLQUOTA (OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA)
+
 #define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
                           OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
                           OBD_MD_FLMODE  | OBD_MD_FLTYPE  | OBD_MD_FLUID   | \
@@ -1245,6 +1247,8 @@ struct hsm_state_set {
 				      * that the client is running low on
 				      * space for unstable pages; asking
 				      * it to sync quickly */
+
+#define OBD_BRW_OVER_ALLQUOTA (OBD_BRW_OVER_USRQUOTA | OBD_BRW_OVER_GRPQUOTA)
 
 #define OBD_OBJECT_EOF LUSTRE_EOF
 

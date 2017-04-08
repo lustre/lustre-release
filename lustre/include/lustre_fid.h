@@ -278,11 +278,21 @@ static inline int fid_is_otable_it(const struct lu_fid *fid)
 			fid_oid(fid) == OTABLE_IT_OID);
 }
 
+static inline int fid_oid_is_quota(const struct lu_fid *fid)
+{
+	switch (fid_oid(fid)) {
+	case ACCT_USER_OID:
+	case ACCT_GROUP_OID:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
 static inline int fid_is_acct(const struct lu_fid *fid)
 {
         return fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
-               (fid_oid(fid) == ACCT_USER_OID ||
-                fid_oid(fid) == ACCT_GROUP_OID);
+	       fid_oid_is_quota(fid);
 }
 
 static inline int fid_is_quota(const struct lu_fid *fid)

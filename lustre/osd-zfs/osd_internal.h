@@ -375,7 +375,7 @@ struct osd_object {
 
 int osd_statfs(const struct lu_env *, struct dt_device *, struct obd_statfs *);
 extern const struct dt_index_operations osd_acct_index_ops;
-uint64_t osd_quota_fid2dmu(const struct lu_fid *fid);
+int osd_quota_fid2dmu(const struct lu_fid *fid, uint64_t *oid);
 extern struct lu_device_operations  osd_lu_ops;
 extern struct dt_index_operations osd_dir_ops;
 int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,

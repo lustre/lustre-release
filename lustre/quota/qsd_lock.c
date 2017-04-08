@@ -212,7 +212,7 @@ static int qsd_glb_blocking_ast(struct ldlm_lock *lock,
 		write_unlock(&qqi->qqi_qsd->qsd_lock);
 
 		CDEBUG(D_QUOTA, "%s: losing global index lock for %s type\n",
-		       qqi->qqi_qsd->qsd_svname, QTYPE_NAME((qqi->qqi_qtype)));
+		       qqi->qqi_qsd->qsd_svname, qtype_name((qqi->qqi_qtype)));
 
 		/* kick off reintegration thread if not running already, if
 		 * it's just local cancel (for stack clean up or eviction),

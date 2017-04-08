@@ -1250,7 +1250,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 			}
 
 			oa->o_valid |= OBD_MD_FLFLAGS;
-			oa->o_valid |= OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA;
+			oa->o_valid |= OBD_MD_FLALLQUOTA;
 		}
 	} else if (cmd == OBD_BRW_READ) {
 		struct ldlm_namespace *ns = ofd->ofd_namespace;

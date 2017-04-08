@@ -2137,13 +2137,18 @@ static int mdt_quotactl(struct tgt_session_info *tsi)
 	}
 
 	id = oqctl->qc_id;
-	if (oqctl->qc_type == USRQUOTA)
+	switch (oqctl->qc_type) {
+	case USRQUOTA:
 		id = nodemap_map_id(nodemap, NODEMAP_UID,
 				    NODEMAP_CLIENT_TO_FS, id);
-	else if (oqctl->qc_type == GRPQUOTA)
+		break;
+	case GRPQUOTA:
 		id = nodemap_map_id(nodemap, NODEMAP_UID,
 				    NODEMAP_CLIENT_TO_FS, id);
-
+		break;
+	default:
+		GOTO(out_nodemap, rc = -EOPNOTSUPP);
+	}
 	repoqc = req_capsule_server_get(pill, &RMF_OBD_QUOTACTL);
 	if (repoqc == NULL)
 		GOTO(out_nodemap, rc = err_serious(-EFAULT));
