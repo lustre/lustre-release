@@ -68,7 +68,7 @@
 #include <libcfs/util/string.h>
 
 #include <lnet/nidstr.h>
-#include <lustre/lustre_ostid.h>
+#include <linux/lustre_ostid.h>
 #include <lustre_cfg.h>
 #include <linux/lustre_ioctl.h>
 #include <lustre_ver.h>
@@ -1366,7 +1366,7 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
                                 fprintf(stderr, "Allocate fids error %d.\n",rc);
                                 return rc;
                         }
-			fid_to_ostid(&fid, &data.ioc_obdo1.o_oi);
+			data.ioc_obdo1.o_oi.oi_fid = fid;
                 }
 
                 child_base_id += data.ioc_count;
@@ -1494,8 +1494,12 @@ int jt_obd_create(int argc, char **argv)
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
+		/*
+		 * base_id is 1 so we don't need to worry about it being
+		 * greater than OBIF_MAX_OID
+		 */
+		data.ioc_obdo1.o_oi.oi_fid.f_oid = base_id;
 		data.ioc_obdo1.o_mode = mode;
-		ostid_set_id(&data.ioc_obdo1.o_oi, base_id);
 		data.ioc_obdo1.o_uid = 0;
 		data.ioc_obdo1.o_gid = 0;
 		data.ioc_obdo1.o_projid = 0;
@@ -1537,30 +1541,42 @@ int jt_obd_create(int argc, char **argv)
 
 int jt_obd_setattr(int argc, char **argv)
 {
-        struct obd_ioctl_data data;
-        char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-        char *end;
-        int rc;
+	struct obd_ioctl_data data;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	__u64 objid;
+	char *end;
+	int mode;
+	int rc;
 
         memset(&data, 0, sizeof(data));
         data.ioc_dev = cur_device;
         if (argc != 2)
                 return CMD_HELP;
 
-	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
-	ostid_set_id(&data.ioc_obdo1.o_oi, strtoull(argv[1], &end, 0));
-        if (*end) {
+	objid = strtoull(argv[1], &end, 0);
+	if (*end) {
+		fprintf(stderr, "error: %s: objid '%s' is not a number\n",
+			jt_cmdname(argv[0]), argv[1]);
+		return CMD_HELP;
+	}
+
+	if (objid >= OBIF_MAX_OID) {
                 fprintf(stderr, "error: %s: invalid objid '%s'\n",
                         jt_cmdname(argv[0]), argv[1]);
                 return CMD_HELP;
         }
-        data.ioc_obdo1.o_mode = S_IFREG | strtoul(argv[2], &end, 0);
+
+	mode = strtoul(argv[2], &end, 0);
         if (*end) {
                 fprintf(stderr, "error: %s: invalid mode '%s'\n",
                         jt_cmdname(argv[0]), argv[2]);
                 return CMD_HELP;
         }
-        data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
+
+	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
+	data.ioc_obdo1.o_mode = S_IFREG | mode;
+	data.ioc_obdo1.o_oi.oi_fid.f_oid = objid;
+	data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
 
         memset(buf, 0, sizeof(rawbuf));
         rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
@@ -1630,7 +1646,13 @@ int jt_obd_test_setattr(int argc, char **argv)
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
-		ostid_set_id(&data.ioc_obdo1.o_oi, objid);
+		if (objid >= OBIF_MAX_OID) {
+			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
+				jt_cmdname(argv[0]), objid);
+			return -E2BIG;
+		}
+
+		data.ioc_obdo1.o_oi.oi_fid.f_oid = objid;
                 data.ioc_obdo1.o_mode = S_IFREG;
                 data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
                 memset(buf, 0, sizeof(rawbuf));
@@ -1716,7 +1738,13 @@ int jt_obd_destroy(int argc, char **argv)
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++, id++) {
-		ostid_set_id(&data.ioc_obdo1.o_oi, id);
+		if (id >= OBIF_MAX_OID) {
+			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
+				jt_cmdname(argv[0]), id);
+			return -E2BIG;
+		}
+
+		data.ioc_obdo1.o_oi.oi_fid.f_oid = id;
 		data.ioc_obdo1.o_mode = S_IFREG | 0644;
 		data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
 
@@ -1749,21 +1777,30 @@ int jt_obd_getattr(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	__u64 objid;
         char *end;
         int rc;
 
         if (argc != 2)
                 return CMD_HELP;
 
-	memset(&data, 0, sizeof(data));
-	data.ioc_dev = cur_device;
-	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
-	ostid_set_id(&data.ioc_obdo1.o_oi, strtoull(argv[1], &end, 0));
+	objid = strtoull(argv[1], &end, 0);
 	if (*end) {
+		fprintf(stderr, "error: %s: objid '%s' is not a number\n",
+			jt_cmdname(argv[0]), argv[1]);
+		return CMD_HELP;
+	}
+
+	if (objid >= OBIF_MAX_OID) {
 		fprintf(stderr, "error: %s: invalid objid '%s'\n",
 			jt_cmdname(argv[0]), argv[1]);
 		return CMD_HELP;
 	}
+
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = cur_device;
+	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
+	data.ioc_obdo1.o_oi.oi_fid.f_oid = objid;
 	/* to help obd filter */
 	data.ioc_obdo1.o_mode = 0100644;
 	data.ioc_obdo1.o_valid = 0xffffffff;
@@ -1843,7 +1880,13 @@ int jt_obd_test_getattr(int argc, char **argv)
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
-		ostid_set_id(&data.ioc_obdo1.o_oi, objid);
+		if (objid >= OBIF_MAX_OID) {
+			fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
+				jt_cmdname(argv[0]), objid);
+			return -E2BIG;
+		}
+
+		data.ioc_obdo1.o_oi.oi_fid.f_oid = objid;
 		data.ioc_obdo1.o_mode = S_IFREG;
 		data.ioc_obdo1.o_valid = 0xffffffff;
 		memset(buf, 0, sizeof(rawbuf));
@@ -2050,7 +2093,13 @@ int jt_obd_test_brw(int argc, char **argv)
 #endif
 
 	ostid_set_seq_echo(&data.ioc_obdo1.o_oi);
-	ostid_set_id(&data.ioc_obdo1.o_oi, objid);
+	if (objid >= OBIF_MAX_OID) {
+		fprintf(stderr, "errr: %s: invalid objid '%llu'\n",
+			jt_cmdname(argv[0]), objid);
+		return -E2BIG;
+	}
+
+	data.ioc_obdo1.o_oi.oi_fid.f_oid = objid;
 	data.ioc_obdo1.o_mode = S_IFREG;
 	data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE |
 				 OBD_MD_FLFLAGS | OBD_MD_FLGROUP;

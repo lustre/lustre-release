@@ -494,16 +494,17 @@ static int osp_precreate_fids(const struct lu_env *env, struct osp_device *osp,
 	if (fid_is_idif(fid)) {
 		struct lu_fid	*last_fid;
 		struct ost_id	*oi = &osi->osi_oi;
+		int rc;
 
 		spin_lock(&osp->opd_pre_lock);
 		last_fid = &osp->opd_pre_last_created_fid;
 		fid_to_ostid(last_fid, oi);
 		end = min(ostid_id(oi) + *grow, IDIF_MAX_OID);
 		*grow = end - ostid_id(oi);
-		ostid_set_id(oi, ostid_id(oi) + *grow);
+		rc = ostid_set_id(oi, ostid_id(oi) + *grow);
 		spin_unlock(&osp->opd_pre_lock);
 
-		if (*grow == 0)
+		if (*grow == 0 || rc)
 			return 1;
 
 		ostid_to_fid(fid, oi, osp->opd_index);

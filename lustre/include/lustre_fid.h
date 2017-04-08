@@ -149,9 +149,9 @@
  */
 
 #include <libcfs/libcfs.h>
-#include <lustre/lustre_fid.h>
+#include <uapi/linux/lustre_fid.h>
 #include <lustre/lustre_idl.h>
-#include <lustre/lustre_ostid.h>
+#include <uapi/linux/lustre_ostid.h>
 
 struct lu_env;
 struct lu_site;
@@ -323,6 +323,53 @@ static inline int fid_seq_in_fldb(__u64 seq)
 {
 	return fid_seq_is_igif(seq) || fid_seq_is_norm(seq) ||
 	       fid_seq_is_root(seq) || fid_seq_is_dot(seq);
+}
+
+static inline void ost_layout_cpu_to_le(struct ost_layout *dst,
+					const struct ost_layout *src)
+{
+	dst->ol_stripe_size = __cpu_to_le32(src->ol_stripe_size);
+	dst->ol_stripe_count = __cpu_to_le32(src->ol_stripe_count);
+	dst->ol_comp_start = __cpu_to_le64(src->ol_comp_start);
+	dst->ol_comp_end = __cpu_to_le64(src->ol_comp_end);
+	dst->ol_comp_id = __cpu_to_le32(src->ol_comp_id);
+}
+
+static inline void ost_layout_le_to_cpu(struct ost_layout *dst,
+					const struct ost_layout *src)
+{
+	dst->ol_stripe_size = __le32_to_cpu(src->ol_stripe_size);
+	dst->ol_stripe_count = __le32_to_cpu(src->ol_stripe_count);
+	dst->ol_comp_start = __le64_to_cpu(src->ol_comp_start);
+	dst->ol_comp_end = __le64_to_cpu(src->ol_comp_end);
+	dst->ol_comp_id = __le32_to_cpu(src->ol_comp_id);
+}
+
+/* Both filter_fid_*cpu* functions not currently used */
+static inline void filter_fid_cpu_to_le(struct filter_fid *dst,
+					const struct filter_fid *src, int size)
+{
+	fid_cpu_to_le(&dst->ff_parent, &src->ff_parent);
+
+	if (size < sizeof(struct filter_fid))
+		memset(&dst->ff_layout, 0, sizeof(dst->ff_layout));
+	else
+		ost_layout_cpu_to_le(&dst->ff_layout, &src->ff_layout);
+
+	/* XXX: Add more if filter_fid is enlarged in the future. */
+}
+
+static inline void filter_fid_le_to_cpu(struct filter_fid *dst,
+					const struct filter_fid *src, int size)
+{
+	fid_le_to_cpu(&dst->ff_parent, &src->ff_parent);
+
+	if (size < sizeof(struct filter_fid))
+		memset(&dst->ff_layout, 0, sizeof(dst->ff_layout));
+	else
+		ost_layout_le_to_cpu(&dst->ff_layout, &src->ff_layout);
+
+	/* XXX: Add more if filter_fid is enlarged in the future. */
 }
 
 static inline void lu_last_id_fid(struct lu_fid *fid, __u64 seq, __u32 ost_idx)
@@ -658,6 +705,50 @@ static inline bool ostid_res_name_eq(const struct ost_id *oi,
 	}
 }
 
+/**
+ * Note: we need check oi_seq to decide where to set oi_id,
+ * so oi_seq should always be set ahead of oi_id.
+ */
+static inline int ostid_set_id(struct ost_id *oi, __u64 oid)
+{
+	if (fid_seq_is_mdt0(oi->oi.oi_seq)) {
+		if (oid >= IDIF_MAX_OID)
+			return -E2BIG;
+		oi->oi.oi_id = oid;
+	} else if (fid_is_idif(&oi->oi_fid)) {
+		if (oid >= IDIF_MAX_OID)
+			return -E2BIG;
+		oi->oi_fid.f_seq = fid_idif_seq(oid,
+						fid_idif_ost_idx(&oi->oi_fid));
+		oi->oi_fid.f_oid = oid;
+		oi->oi_fid.f_ver = oid >> 48;
+	} else {
+		if (oid >= OBIF_MAX_OID)
+			return -E2BIG;
+		oi->oi_fid.f_oid = oid;
+	}
+	return 0;
+}
+
+/* pack any OST FID into an ostid (id/seq) for the wire/disk */
+static inline int fid_to_ostid(const struct lu_fid *fid, struct ost_id *ostid)
+{
+	int rc = 0;
+
+	if (fid_seq_is_igif(fid->f_seq))
+		return -EBADF;
+
+	if (fid_is_idif(fid)) {
+		ostid_set_seq_mdt0(ostid);
+		rc = ostid_set_id(ostid, fid_idif_id(fid_seq(fid),
+				  fid_oid(fid), fid_ver(fid)));
+	} else {
+		ostid->oi_fid = *fid;
+	}
+
+	return rc;
+}
+
 /* The same as osc_build_res_name() */
 static inline void ost_fid_build_resid(const struct lu_fid *fid,
 				       struct ldlm_res_id *resname)
@@ -680,8 +771,12 @@ static inline void ost_fid_from_resid(struct lu_fid *fid,
 	if (fid_seq_is_mdt0(name->name[LUSTRE_RES_ID_VER_OID_OFF])) {
 		/* old resid */
 		struct ost_id oi;
+
 		ostid_set_seq(&oi, name->name[LUSTRE_RES_ID_VER_OID_OFF]);
-		ostid_set_id(&oi, name->name[LUSTRE_RES_ID_SEQ_OFF]);
+		if (ostid_set_id(&oi, name->name[LUSTRE_RES_ID_SEQ_OFF])) {
+			CERROR("Bad %llu to set " DOSTID "\n",
+			       name->name[LUSTRE_RES_ID_SEQ_OFF], POSTID(&oi));
+		}
 		ostid_to_fid(fid, &oi, ost_idx);
 	} else {
 		/* new resid */

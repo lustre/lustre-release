@@ -1526,8 +1526,7 @@ done:
 		rc = ofd_seq_last_oid_write(env, ofd, oseq);
 	} else {
 		/* don't reuse orphan object, return last used objid */
-		ostid_set_id(oi, last);
-		rc = 0;
+		rc = ostid_set_id(oi, last);
 	}
 
 	GOTO(out_put, rc);
@@ -1624,16 +1623,17 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		if (!oseq->os_destroys_in_progress) {
 			CERROR("%s:[%llu] destroys_in_progress already"
 			       " cleared\n", ofd_name(ofd), seq);
-			ostid_set_id(&rep_oa->o_oi, ofd_seq_last_oid(oseq));
-			GOTO(out, rc = 0);
+			rc = ostid_set_id(&rep_oa->o_oi,
+					  ofd_seq_last_oid(oseq));
+			GOTO(out, rc);
 		}
 		diff = oid - ofd_seq_last_oid(oseq);
 		CDEBUG(D_HA, "ofd_last_id() = %llu -> diff = %d\n",
 			ofd_seq_last_oid(oseq), diff);
 		if (-diff > OST_MAX_PRECREATE) {
 			/* Let MDS know that we are so far ahead. */
-			ostid_set_id(&rep_oa->o_oi, ofd_seq_last_oid(oseq) + 1);
-			rc = 0;
+			rc = ostid_set_id(&rep_oa->o_oi,
+					  ofd_seq_last_oid(oseq) + 1);
 		} else if (diff < 0) {
 			rc = ofd_orphans_destroy(tsi->tsi_env, exp,
 						 ofd, rep_oa);
@@ -1781,7 +1781,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			granted = 0;
 		}
 
-		ostid_set_id(&rep_oa->o_oi, ofd_seq_last_oid(oseq));
+		rc = ostid_set_id(&rep_oa->o_oi, ofd_seq_last_oid(oseq));
 	}
 	EXIT;
 	ofd_counter_incr(exp, LPROC_OFD_STATS_CREATE,

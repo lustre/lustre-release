@@ -88,7 +88,8 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
                 RETURN(-EINVAL);
 
 	ostid_set_seq(&logid->lgl_oi, seq);
-	ostid_set_id(&logid->lgl_oi, id);
+	if (ostid_set_id(&logid->lgl_oi, id))
+		RETURN(-EINVAL);
 
 	start = ++end;
         if (start - str >= len - 1)

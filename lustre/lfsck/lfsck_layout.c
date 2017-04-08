@@ -3116,7 +3116,10 @@ static int lfsck_layout_scan_orphan(const struct lu_env *env,
 	}
 
 	ostid_set_seq(oi, FID_SEQ_IDIF);
-	ostid_set_id(oi, 0);
+	rc = ostid_set_id(oi, 0);
+	if (rc)
+		GOTO(log, rc);
+
 	rc = ostid_to_fid(fid, oi, ltd->ltd_index);
 	if (rc != 0)
 		GOTO(log, rc);

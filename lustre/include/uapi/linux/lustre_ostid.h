@@ -31,11 +31,18 @@
  * Define ost_id  associated functions
  */
 
-#ifndef _LUSTRE_OSTID_H_
-#define _LUSTRE_OSTID_H_
+#ifndef _UAPI_LUSTRE_OSTID_H_
+#define _UAPI_LUSTRE_OSTID_H_
 
-#include <libcfs/libcfs.h>
-#include <lustre/lustre_fid.h>
+/*
+ * This is due to us being out of kernel and the way the OpenSFS branch
+ * handles CFLAGS. Upstream will just have linux/lustre_fid.h
+ */
+#ifdef __KERNEL__
+#include <uapi/linux/lustre_fid.h>
+#else
+#include <linux/lustre_fid.h>
+#endif
 
 static inline __u64 lmm_oi_id(const struct ost_id *oi)
 {
@@ -133,39 +140,6 @@ static inline void ostid_set_seq_llog(struct ost_id *oi)
 	ostid_set_seq(oi, FID_SEQ_LLOG);
 }
 
-/**
- * Note: we need check oi_seq to decide where to set oi_id,
- * so oi_seq should always be set ahead of oi_id.
- */
-static inline void ostid_set_id(struct ost_id *oi, __u64 oid)
-{
-	if (fid_seq_is_mdt0(oi->oi.oi_seq)) {
-		if (oid >= IDIF_MAX_OID) {
-			CERROR("Bad %llu to set "DOSTID"\n",
-				(unsigned long long)oid, POSTID(oi));
-			return;
-		}
-		oi->oi.oi_id = oid;
-	} else if (fid_is_idif(&oi->oi_fid)) {
-		if (oid >= IDIF_MAX_OID) {
-			CERROR("Bad %llu to set "DOSTID"\n",
-				(unsigned long long)oid, POSTID(oi));
-			return;
-		}
-		oi->oi_fid.f_seq = fid_idif_seq(oid,
-						fid_idif_ost_idx(&oi->oi_fid));
-		oi->oi_fid.f_oid = oid;
-		oi->oi_fid.f_ver = oid >> 48;
-	} else {
-		if (oid > OBIF_MAX_OID) {
-			CERROR("Bad %llu to set "DOSTID"\n",
-				(unsigned long long)oid, POSTID(oi));
-			return;
-		}
-		oi->oi_fid.f_oid = oid;
-	}
-}
-
 static inline void ostid_cpu_to_le(const struct ost_id *src_oi,
 				   struct ost_id *dst_oi)
 {
@@ -186,25 +160,6 @@ static inline void ostid_le_to_cpu(const struct ost_id *src_oi,
 	} else {
 		fid_le_to_cpu(&dst_oi->oi_fid, &src_oi->oi_fid);
 	}
-}
-
-/* pack any OST FID into an ostid (id/seq) for the wire/disk */
-static inline int fid_to_ostid(const struct lu_fid *fid, struct ost_id *ostid)
-{
-	if (fid_seq_is_igif(fid->f_seq)) {
-		CERROR("bad IGIF, "DFID"\n", PFID(fid));
-		return -EBADF;
-	}
-
-	if (fid_is_idif(fid)) {
-		ostid_set_seq_mdt0(ostid);
-		ostid_set_id(ostid, fid_idif_id(fid_seq(fid), fid_oid(fid),
-						fid_ver(fid)));
-	} else {
-		ostid->oi_fid = *fid;
-	}
-
-	return 0;
 }
 
 /**
@@ -251,11 +206,8 @@ static inline int ostid_to_fid(struct lu_fid *fid, const struct ost_id *ostid,
 {
 	__u64 seq = ostid_seq(ostid);
 
-	if (ost_idx > 0xffff) {
-		CERROR("bad ost_idx, "DOSTID" ost_idx:%u\n", POSTID(ostid),
-		       ost_idx);
+	if (ost_idx > 0xffff)
 		return -EBADF;
-	}
 
 	if (fid_seq_is_mdt0(seq)) {
 		__u64 oid = ostid_id(ostid);
@@ -266,11 +218,9 @@ static inline int ostid_to_fid(struct lu_fid *fid, const struct ost_id *ostid,
 		 * been in production for years.  This can handle create rates
 		 * of 1M objects/s/OST for 9 years, or combinations thereof.
 		 */
-		if (oid >= IDIF_MAX_OID) {
-			CERROR("bad MDT0 id(1), "DOSTID" ost_idx:%u\n",
-			       POSTID(ostid), ost_idx);
+		if (oid >= IDIF_MAX_OID)
 			return -EBADF;
-		}
+
 		fid->f_seq = fid_idif_seq(oid, ost_idx);
 		/* truncate to 32 bits by assignment */
 		fid->f_oid = oid;
@@ -282,14 +232,12 @@ static inline int ostid_to_fid(struct lu_fid *fid, const struct ost_id *ostid,
 		 * maps legacy OST objects into the FID namespace.  In both
 		 * cases, we just pass the FID through, no conversion needed.
 		 */
-		if (ostid->oi_fid.f_ver) {
-			CERROR("bad MDT0 id(2), "DOSTID" ost_idx:%u\n",
-			       POSTID(ostid), ost_idx);
+		if (ostid->oi_fid.f_ver)
 			return -EBADF;
-		}
+
 		*fid = ostid->oi_fid;
 	}
 
 	return 0;
 }
-#endif
+#endif /* _UAPI_LUSTRE_OSTID_H_ */

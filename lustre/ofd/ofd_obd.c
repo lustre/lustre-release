@@ -1062,9 +1062,14 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 		CERROR("%s: unable to precreate: rc = %d\n",
 		       ofd_name(ofd), rc);
 	} else {
-		ostid_set_id(&oa->o_oi, ofd_seq_last_oid(oseq));
+		rc = ostid_set_id(&oa->o_oi, ofd_seq_last_oid(oseq));
+		if (rc) {
+			CERROR("%s: Bad %llu to set " DOSTID " : rc %d\n",
+			       ofd_name(ofd),
+			       (unsigned long long)ofd_seq_last_oid(oseq),
+			       POSTID(&oa->o_oi), rc);
+		}
 		oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
-		rc = 0;
 	}
 
 	tgt_grant_commit(ofd_obd(ofd)->obd_self_export, granted, rc);
@@ -1167,7 +1172,9 @@ static int ofd_ioc_get_obj_version(const struct lu_env *env,
 		struct ost_id ostid;
 
 		ostid_set_seq(&ostid, *(__u64 *)data->ioc_inlbuf4);
-		ostid_set_id(&ostid, *(__u64 *)data->ioc_inlbuf3);
+		rc = ostid_set_id(&ostid, *(__u64 *)data->ioc_inlbuf3);
+		if (rc)
+			GOTO(out, rc);
 		rc = ostid_to_fid(&fid, &ostid,
 				  ofd->ofd_lut.lut_lsd.lsd_osd_index);
 		if (rc != 0)

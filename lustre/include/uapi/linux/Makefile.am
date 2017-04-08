@@ -31,4 +31,6 @@
 
 EXTRA_DIST = \
 	lustre_disk.h \
-	lustre_ioctl.h
+	lustre_fid.h \
+	lustre_ioctl.h \
+	lustre_ostid.h

@@ -38,7 +38,7 @@
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
-#include <lustre/lustre_fid.h>
+#include <linux/lustre_fid.h>
 
 #define BUFFER_SIZE 65536
 

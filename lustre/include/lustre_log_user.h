@@ -38,7 +38,7 @@
 #ifndef _LUSTRE_LOG_USER_H
 #define _LUSTRE_LOG_USER_H
 
-#include <lustre/lustre_fid.h>
+#include <uapi/linux/lustre_fid.h>
 
 /*  Lustre logs use FIDs constructed from oi_id and oi_seq directly,
  *  without attempting to use the IGIF and IDIF ranges as is done

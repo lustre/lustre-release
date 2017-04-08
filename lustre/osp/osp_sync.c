@@ -146,9 +146,17 @@ static inline int osp_sync_inflight_conflict(struct osp_device *d,
 
 	memset(&ostid, 0, sizeof(ostid));
 	switch (h->lrh_type) {
-	case MDS_UNLINK_REC:
-		ostid_set_seq(&ostid, ((struct llog_unlink_rec *)h)->lur_oseq);
-		ostid_set_id(&ostid, ((struct llog_unlink_rec *)h)->lur_oid);
+	case MDS_UNLINK_REC: {
+		struct llog_unlink_rec *unlink = (struct llog_unlink_rec *)h;
+
+		ostid_set_seq(&ostid, unlink->lur_oseq);
+		if (ostid_set_id(&ostid, unlink->lur_oid)) {
+			CERROR("Bad %llu to set " DOSTID "\n",
+			       (unsigned long long)(unlink->lur_oid),
+			       POSTID(&ostid));
+			return 1;
+		}
+		}
 		break;
 	case MDS_UNLINK64_REC:
 		fid_to_ostid(&((struct llog_unlink64_rec *)h)->lur_fid, &ostid);
@@ -775,6 +783,7 @@ static int osp_sync_new_unlink_job(struct osp_device *d,
 	struct llog_unlink_rec	*rec = (struct llog_unlink_rec *)h;
 	struct ptlrpc_request	*req;
 	struct ost_body		*body;
+	int rc;
 
 	ENTRY;
 	LASSERT(h->lrh_type == MDS_UNLINK_REC);
@@ -786,7 +795,9 @@ static int osp_sync_new_unlink_job(struct osp_device *d,
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
 	LASSERT(body);
 	ostid_set_seq(&body->oa.o_oi, rec->lur_oseq);
-	ostid_set_id(&body->oa.o_oi, rec->lur_oid);
+	rc = ostid_set_id(&body->oa.o_oi, rec->lur_oid);
+	if (rc)
+		return rc;
 	body->oa.o_misc = rec->lur_count;
 	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID;
 	if (rec->lur_count)
