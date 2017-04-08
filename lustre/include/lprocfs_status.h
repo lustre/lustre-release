@@ -470,6 +470,8 @@ struct nid_stat;
 extern int lprocfs_add_clear_entry(struct obd_device * obd,
 				   struct proc_dir_entry *entry);
 #ifdef HAVE_SERVER_SUPPORT
+void lprocfs_kset_unregister(struct obd_device *obj, struct kset *kset);
+int lprocfs_kset_register(struct obd_device *obd, struct kset **kset);
 extern int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *peer_nid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
 #else

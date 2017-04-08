@@ -227,7 +227,7 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 	int		   rc;
 
 	obd->obd_vars = lprocfs_mgs_obd_vars;
-	rc = lprocfs_obd_setup(obd, true);
+	rc = lprocfs_kset_register(obd, &mgs->mgs_kset);
 	if (rc != 0)
 		GOTO(out, rc);
 
@@ -309,7 +309,7 @@ void lproc_mgs_cleanup(struct mgs_device *mgs)
 	}
 
         lprocfs_free_per_client_stats(obd);
-	lprocfs_obd_cleanup(obd);
+	lprocfs_kset_unregister(obd, mgs->mgs_kset);
         lprocfs_free_obd_stats(obd);
         lprocfs_free_md_stats(obd);
 }

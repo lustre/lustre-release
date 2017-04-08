@@ -179,6 +179,7 @@ struct mgs_device {
 	struct proc_dir_entry		*mgs_proc_mntdev;
 	cfs_time_t			 mgs_start_time;
 	struct obd_device		*mgs_obd;
+	struct kset			*mgs_kset;
 	struct local_oid_storage	*mgs_los;
 	struct mutex			 mgs_mutex;
 	struct mutex			 mgs_health_mutex;

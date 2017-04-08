@@ -50,7 +50,7 @@
  *
  * @{
  */
-
+#include <linux/kobject.h>
 #include <linux/uio.h>
 #include <libcfs/libcfs.h>
 #include <lnet/nidstr.h>
@@ -1731,6 +1731,10 @@ struct ptlrpc_service {
 	int				srv_cpt_bits;
 	/** CPT table this service is running over */
 	struct cfs_cpt_table		*srv_cptable;
+
+	/* sysfs object */
+	struct kobject			srv_kobj;
+	struct completion		srv_kobj_unregister;
 	/**
 	 * partition data for ptlrpc service
 	 */
@@ -2263,6 +2267,7 @@ void ptlrpc_schedule_difficult_reply(struct ptlrpc_reply_state *rs);
 int ptlrpc_hpreq_handler(struct ptlrpc_request *req);
 struct ptlrpc_service *ptlrpc_register_service(
 				struct ptlrpc_service_conf *conf,
+				struct kset *parent,
 				struct proc_dir_entry *proc_entry);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 

@@ -3028,7 +3028,8 @@ static int ldlm_setup(void)
 		},
 	};
 	ldlm_state->ldlm_cb_service = \
-			ptlrpc_register_service(&conf, ldlm_svc_proc_dir);
+			ptlrpc_register_service(&conf, ldlm_svc_kset,
+						ldlm_svc_proc_dir);
 	if (IS_ERR(ldlm_state->ldlm_cb_service)) {
 		CERROR("failed to start service\n");
 		rc = PTR_ERR(ldlm_state->ldlm_cb_service);
@@ -3071,7 +3072,8 @@ static int ldlm_setup(void)
 		},
 	};
 	ldlm_state->ldlm_cancel_service = \
-			ptlrpc_register_service(&conf, ldlm_svc_proc_dir);
+			ptlrpc_register_service(&conf, ldlm_svc_kset,
+						ldlm_svc_proc_dir);
 	if (IS_ERR(ldlm_state->ldlm_cancel_service)) {
 		CERROR("failed to start service\n");
 		rc = PTR_ERR(ldlm_state->ldlm_cancel_service);

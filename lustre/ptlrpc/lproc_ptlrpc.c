@@ -338,26 +338,24 @@ ptlrpc_lprocfs_req_history_max_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(ptlrpc_lprocfs_req_history_max);
 
-static int
-ptlrpc_lprocfs_threads_min_seq_show(struct seq_file *m, void *n)
+static ssize_t threads_min_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct ptlrpc_service *svc = m->private;
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
 
-	seq_printf(m, "%d\n",
-		   svc->srv_nthrs_cpt_init * svc->srv_ncpts);
-	return 0;
+	return sprintf(buf, "%d\n", svc->srv_nthrs_cpt_init * svc->srv_ncpts);
 }
 
-static ssize_t
-ptlrpc_lprocfs_threads_min_seq_write(struct file *file,
-				     const char __user *buffer,
-				     size_t count, loff_t *off)
+static ssize_t threads_min_store(struct kobject *kobj, struct attribute *attr,
+				 const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct ptlrpc_service *svc = m->private;
-	__s64 val;
-	int rc = lprocfs_str_to_s64(buffer, count, &val);
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
+	unsigned long val;
+	int rc;
 
+	rc = kstrtoul(buffer, 10, &val);
 	if (rc < 0)
 		return rc;
 
@@ -376,44 +374,43 @@ ptlrpc_lprocfs_threads_min_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ptlrpc_lprocfs_threads_min);
+LUSTRE_RW_ATTR(threads_min);
 
-static int
-ptlrpc_lprocfs_threads_started_seq_show(struct seq_file *m, void *n)
+static ssize_t threads_started_show(struct kobject *kobj,
+				    struct attribute *attr,
+				    char *buf)
 {
-	struct ptlrpc_service		*svc = m->private;
-	struct ptlrpc_service_part	*svcpt;
-	int	total = 0;
-	int	i;
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
+	struct ptlrpc_service_part *svcpt;
+	int total = 0;
+	int i;
 
 	ptlrpc_service_for_each_part(svcpt, i, svc)
 		total += svcpt->scp_nthrs_running;
 
-	seq_printf(m, "%d\n", total);
-	return 0;
+	return sprintf(buf, "%d\n", total);
 }
-LPROC_SEQ_FOPS_RO(ptlrpc_lprocfs_threads_started);
+LUSTRE_RO_ATTR(threads_started);
 
-static int
-ptlrpc_lprocfs_threads_max_seq_show(struct seq_file *m, void *n)
+static ssize_t threads_max_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct ptlrpc_service *svc = m->private;
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
 
-	seq_printf(m, "%d\n",
-		   svc->srv_nthrs_cpt_limit * svc->srv_ncpts);
-	return 0;
+	return sprintf(buf, "%d\n", svc->srv_nthrs_cpt_limit * svc->srv_ncpts);
 }
 
-static ssize_t
-ptlrpc_lprocfs_threads_max_seq_write(struct file *file,
-				     const char __user *buffer,
-				     size_t count, loff_t *off)
+static ssize_t threads_max_store(struct kobject *kobj, struct attribute *attr,
+				 const char *buffer, size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct ptlrpc_service *svc = m->private;
-	__s64 val;
-	int rc = lprocfs_str_to_s64(buffer, count, &val);
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
+	unsigned long val;
+	int rc;
 
+	rc = kstrtoul(buffer, 10, &val);
 	if (rc < 0)
 		return rc;
 
@@ -432,7 +429,7 @@ ptlrpc_lprocfs_threads_max_seq_write(struct file *file,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ptlrpc_lprocfs_threads_max);
+LUSTRE_RW_ATTR(threads_max);
 
 /**
  * Translates \e ptlrpc_nrs_pol_state values to human-readable strings.
@@ -1068,28 +1065,29 @@ static int ptlrpc_lprocfs_timeouts_seq_show(struct seq_file *m, void *n)
 }
 LPROC_SEQ_FOPS_RO(ptlrpc_lprocfs_timeouts);
 
-static int ptlrpc_lprocfs_hp_ratio_seq_show(struct seq_file *m, void *v)
+static ssize_t high_priority_ratio_show(struct kobject *kobj,
+					struct attribute *attr,
+					char *buf)
 {
-	struct ptlrpc_service *svc = m->private;
-	seq_printf(m, "%d\n", svc->srv_hpreq_ratio);
-	return 0;
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
+
+	return sprintf(buf, "%d\n", svc->srv_hpreq_ratio);
 }
 
-static ssize_t
-ptlrpc_lprocfs_hp_ratio_seq_write(struct file *file, const char __user *buffer,
-				  size_t count, loff_t *off)
+static ssize_t high_priority_ratio_store(struct kobject *kobj,
+					 struct attribute *attr,
+					 const char *buffer,
+					 size_t count)
 {
-	struct seq_file *m = file->private_data;
-	struct ptlrpc_service *svc = m->private;
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
 	int rc;
-	__s64 val;
+	unsigned long val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoul(buffer, 10, &val);
 	if (rc < 0)
 		return rc;
-
-	if (val < 0 || val > INT_MAX)
-		return -ERANGE;
 
 	spin_lock(&svc->srv_lock);
 	svc->srv_hpreq_ratio = val;
@@ -1097,30 +1095,62 @@ ptlrpc_lprocfs_hp_ratio_seq_write(struct file *file, const char __user *buffer,
 
 	return count;
 }
-LPROC_SEQ_FOPS(ptlrpc_lprocfs_hp_ratio);
+LUSTRE_RW_ATTR(high_priority_ratio);
+
+static struct attribute *ptlrpc_svc_attrs[] = {
+	&lustre_attr_threads_min.attr,
+	&lustre_attr_threads_started.attr,
+	&lustre_attr_threads_max.attr,
+	&lustre_attr_high_priority_ratio.attr,
+	NULL,
+};
+
+static void ptlrpc_sysfs_svc_release(struct kobject *kobj)
+{
+	struct ptlrpc_service *svc = container_of(kobj, struct ptlrpc_service,
+						  srv_kobj);
+
+	complete(&svc->srv_kobj_unregister);
+}
+
+static struct kobj_type ptlrpc_svc_ktype = {
+	.default_attrs	= ptlrpc_svc_attrs,
+	.sysfs_ops	= &lustre_sysfs_ops,
+	.release	= ptlrpc_sysfs_svc_release,
+};
+
+void ptlrpc_sysfs_unregister_service(struct ptlrpc_service *svc)
+{
+	/* Let's see if we had a chance at initialization first */
+	if (svc->srv_kobj.kset) {
+		kobject_put(&svc->srv_kobj);
+		wait_for_completion(&svc->srv_kobj_unregister);
+	}
+}
+
+int ptlrpc_sysfs_register_service(struct kset *parent,
+				  struct ptlrpc_service *svc)
+{
+	int rc;
+
+	svc->srv_kobj.kset = parent;
+	init_completion(&svc->srv_kobj_unregister);
+	rc = kobject_init_and_add(&svc->srv_kobj, &ptlrpc_svc_ktype, NULL,
+				  "%s", svc->srv_name);
+
+	return rc;
+}
 
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
 	struct lprocfs_vars lproc_vars[] = {
-		{ .name	= "high_priority_ratio",
-		  .fops	= &ptlrpc_lprocfs_hp_ratio_fops,
-		  .data = svc },
 		{ .name	= "req_buffer_history_len",
 		  .fops	= &ptlrpc_lprocfs_req_history_len_fops,
 		  .data	= svc },
 		{ .name = "req_buffer_history_max",
 		  .fops	= &ptlrpc_lprocfs_req_history_max_fops,
 		  .data	= svc },
-		{ .name = "threads_min",
-		  .fops = &ptlrpc_lprocfs_threads_min_fops,
-		  .data = svc },
-		{ .name = "threads_max",
-		  .fops = &ptlrpc_lprocfs_threads_max_fops,
-		  .data = svc },
-		{ .name = "threads_started",
-		  .fops = &ptlrpc_lprocfs_threads_started_fops,
-		  .data = svc },
 		{ .name = "timeouts",
 		  .fops = &ptlrpc_lprocfs_timeouts_fops,
 		  .data = svc },
