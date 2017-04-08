@@ -41,9 +41,8 @@
 #include <unistd.h>
 #include <time.h>
 #include <limits.h>
-#include <sys/ioctl.h>
 
-#include <lustre_ioctl.h>
+#include <lustre/lustreapi.h>
 
 struct option longopts[] = {
 	{ .name = "lookup", .has_arg = no_argument, .val = 'l' },
@@ -179,29 +178,15 @@ int main(int argc, char ** argv)
                                 break;
                         }
 		} else if (mode == 'l') {
-                        struct obd_ioctl_data data;
-                        char rawbuf[8192];
-                        char *buf = rawbuf;
-                        int max = sizeof(rawbuf);
+			char *name = filename;
 
-                        memset(&data, 0, sizeof(data));
-                        data.ioc_version = OBD_IOCTL_VERSION;
-                        data.ioc_len = sizeof(data);
-                        if (offset >= 0)
-                                data.ioc_inlbuf1 = filename + offset;
-                        else
-                                data.ioc_inlbuf1 = filename;
-                        data.ioc_inllen1 = strlen(data.ioc_inlbuf1) + 1;
+			if (offset >= 0)
+				name += offset;
 
-                        if (obd_ioctl_pack(&data, &buf, max)) {
-                                printf("ioctl_pack failed.\n");
-                                break;
-                        }
-
-                        rc = ioctl(fd, IOC_MDC_LOOKUP, buf);
+			rc = llapi_file_lookup(fd, name);
                         if (rc < 0) {
-                                printf("ioctl(%s) error: %s\n", filename,
-                                       strerror(errno));
+				printf("llapi_file_lookup for (%s) error: %s\n",
+				       filename, strerror(errno));
                                 break;
                         }
                 }

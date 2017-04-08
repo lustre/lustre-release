@@ -47,7 +47,7 @@
 #endif
 #include <lustre/ll_fiemap.h>
 
-#include <lustre_ioctl.h>
+#include <uapi/linux/lustre_ioctl.h>
 #include <lustre_swab.h>
 
 #include "cl_object.h"

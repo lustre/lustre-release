@@ -60,6 +60,7 @@
 #include <limits.h>
 
 #include "obdctl.h"
+#include "lustreapi_internal.h"
 #include <libcfs/util/list.h>
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
@@ -69,7 +70,7 @@
 #include <lnet/nidstr.h>
 #include <lustre/lustre_ostid.h>
 #include <lustre_cfg.h>
-#include <lustre_ioctl.h>
+#include <linux/lustre_ioctl.h>
 #include <lustre_ver.h>
 
 #include <lnet/lnetctl.h>

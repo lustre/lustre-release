@@ -97,6 +97,8 @@ group_lock_test_LDADD=$(LIBLUSTREAPI)
 llapi_fid_test_LDADD=$(LIBLUSTREAPI)
 sendfile_grouplock_LDADD=$(LIBLUSTREAPI)
 swap_lock_test_LDADD=$(LIBLUSTREAPI)
+statmany_LDADD=$(LIBLUSTREAPI)
+statone_LDADD=$(LIBLUSTREAPI)
 it_test_LDADD=$(LIBCFS)
 rwv_LDADD=$(LIBCFS)
 

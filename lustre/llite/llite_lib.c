@@ -48,7 +48,7 @@
 #endif
 #include <linux/security.h>
 
-#include <lustre_ioctl.h>
+#include <uapi/linux/lustre_ioctl.h>
 #include <lustre_ha.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
@@ -2343,9 +2343,8 @@ int ll_obd_statfs(struct inode *inode, void __user *arg)
         if (rc)
                 GOTO(out_statfs, rc);
 out_statfs:
-        if (buf)
-                obd_ioctl_freedata(buf, len);
-        return rc;
+	OBD_FREE_LARGE(buf, len);
+	return rc;
 }
 
 int ll_process_config(struct lustre_cfg *lcfg)

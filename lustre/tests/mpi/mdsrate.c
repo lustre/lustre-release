@@ -227,42 +227,6 @@ sigalrm_handler(int signum)
         alarm_caught++;
 }
 
-/* HAVE_LLAPI_FILE_LOOKUP is defined by liblustreapi.h if this function is
- * defined therein.  Otherwise we can do the equivalent operation via ioctl
- * if we have access to a complete lustre build tree to get the various
- * definitions - then compile with USE_MDC_LOOKUP defined. */
-#if defined(HAVE_LLAPI_FILE_LOOKUP)
-#define HAVE_MDC_LOOKUP
-#elif defined(USE_MDC_LOOKUP)
-#include <config.h>
-#include <lustre_ioctl.h>
-
-int llapi_file_lookup(int dirfd, const char *name)
-{
-        struct obd_ioctl_data data = { 0 };
-        char rawbuf[8192];
-        char *buf = rawbuf;
-        int rc;
-
-        if (dirfd < 0 || name == NULL)
-                return -EINVAL;
-
-        data.ioc_version = OBD_IOCTL_VERSION;
-        data.ioc_len = sizeof(data);
-        data.ioc_inlbuf1 = name;
-        data.ioc_inllen1 = strlen(name) + 1;
-
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
-                fatal(myrank, "ioctl_pack failed: rc = %d\n", rc);
-                return rc;
-        }
-
-        return ioctl(fd, IOC_MDC_LOOKUP, buf);
-}
-#define HAVE_MDC_LOOKUP
-#endif
-
 static void
 process_args(int argc, char *argv[])
 {
@@ -290,9 +254,7 @@ process_args(int argc, char *argv[])
                 case OPEN:
                         openflags &= ~(O_CREAT|O_EXCL);
                 case CREATE:
-#ifdef HAVE_MDC_LOOKUP
                 case LOOKUP:
-#endif
                 case MKNOD:
                 case STAT:
                 case UNLINK:
@@ -532,9 +494,7 @@ process_args(int argc, char *argv[])
                       (order == RANDOM) ? "random_order" : "readdir_order");
         } else {
 		usage(stderr, "one --create, --mknod, --open, --stat,"
-#ifdef HAVE_MDC_LOOKUP
 		      " --lookup,"
-#endif
 		      " --unlink or --setxattr must be specifed.");
         }
 
@@ -782,7 +742,6 @@ main(int argc, char *argv[])
 		dmesg("%d: created %d files, last file '%s'.\n",
 		      myrank, nops, filename);
 		break;
-#ifdef HAVE_MDC_LOOKUP
         case LOOKUP:
                 fd = open(dir, O_RDONLY);
                 if (fd < 0) {
@@ -804,7 +763,6 @@ main(int argc, char *argv[])
                         DISPLAY_PROGRESS();
                 }
                 break;
-#endif
 	case MKNOD:
 		for (; begin <= end && !alarm_caught; begin += dirthreads) {
 			snprintf(filename, sizeof(filename), filefmt, begin);

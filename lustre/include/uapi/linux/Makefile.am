@@ -30,4 +30,5 @@
 #
 
 EXTRA_DIST = \
-	lustre_disk.h
+	lustre_disk.h \
+	lustre_ioctl.h

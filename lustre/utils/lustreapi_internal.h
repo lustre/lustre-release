@@ -36,7 +36,13 @@
 #ifndef _LUSTREAPI_INTERNAL_H_
 #define _LUSTREAPI_INTERNAL_H_
 
+#include <limits.h>
+#include <stdint.h>
+
+#include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
+
+#include <linux/lustre_ioctl.h>
 #include <uapi_kernelcomm.h>
 
 #define WANT_PATH   0x1
@@ -53,6 +59,8 @@
 int get_root_path(int want, char *fsname, int *outfd, char *path, int index);
 int root_ioctl(const char *mdtname, int opc, void *data, int *mdtidxp,
 	       int want_error);
+int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len);
+int obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len);
 int sattr_cache_get_defaults(const char *const fsname,
 			     const char *const pathname, unsigned int *scount,
 			     unsigned int *ssize, unsigned int *soffset);

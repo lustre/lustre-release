@@ -41,7 +41,7 @@
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
 #include <lustre_ha.h>
-#include <lustre_ioctl.h>
+#include <uapi/linux/lustre_ioctl.h>
 #include <lustre_net.h>
 #include <lustre_obdo.h>
 #include <lustre_param.h>

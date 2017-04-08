@@ -33,7 +33,7 @@
 #define DEBUG_SUBSYSTEM S_LOG
 
 #include <obd_class.h>
-#include <lustre_ioctl.h>
+#include <uapi/linux/lustre_ioctl.h>
 #include <lustre_log.h>
 #include "llog_internal.h"
 

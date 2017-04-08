@@ -41,7 +41,7 @@
 
 #include <obd_class.h>
 #include <lprocfs_status.h>
-#include <lustre_ioctl.h>
+#include <uapi/linux/lustre_ioctl.h>
 #include <lustre_param.h>
 #include <lustre/lustre_barrier_user.h>
 

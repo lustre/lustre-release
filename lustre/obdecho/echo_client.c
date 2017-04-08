@@ -46,7 +46,7 @@
 #include <cl_object.h>
 #include <lustre_fid.h>
 #include <lustre_acl.h>
-#include <lustre_ioctl.h>
+#include <uapi/linux/lustre_ioctl.h>
 #include <lustre_net.h>
 #ifdef HAVE_SERVER_SUPPORT
 # include <md_object.h>

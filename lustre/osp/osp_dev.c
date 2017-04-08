@@ -72,7 +72,7 @@
 
 #include <linux/kthread.h>
 
-#include <lustre_ioctl.h>
+#include <uapi/linux/lustre_ioctl.h>
 #include <lustre_log.h>
 #include <lustre_obdo.h>
 #include <lustre_param.h>

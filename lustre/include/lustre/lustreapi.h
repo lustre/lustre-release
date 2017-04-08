@@ -128,7 +128,6 @@ extern int llapi_get_poollist(const char *name, char **poollist, int list_size,
 extern int llapi_get_poolmembers(const char *poolname, char **members,
                                  int list_size, char *buffer, int buffer_size);
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
-#define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);
 
 #define VERBOSE_COUNT		   0x1

@@ -46,7 +46,7 @@
 #include <lustre/lustre_idl.h>
 #include "ofd_internal.h"
 #include <obd_cksum.h>
-#include <lustre_ioctl.h>
+#include <uapi/linux/lustre_ioctl.h>
 #include <lustre_quota.h>
 #include <lustre_lfsck.h>
 #include <lustre_nodemap.h>

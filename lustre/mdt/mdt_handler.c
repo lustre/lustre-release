@@ -50,7 +50,7 @@
 #include <dt_object.h>
 #include <lustre_acl.h>
 #include <lustre_export.h>
-#include <lustre_ioctl.h>
+#include <uapi/linux/lustre_ioctl.h>
 #include <lustre_lfsck.h>
 #include <lustre_log.h>
 #include <lustre_net.h>

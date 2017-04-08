@@ -50,12 +50,13 @@
 #include <stdarg.h>
 #include <ctype.h>
 
+#include <libcfs/util/ioctl.h>
 #include <libcfs/util/string.h>
 #include <libcfs/util/param.h>
 #include <libcfs/util/parser.h>
 #include <lnet/nidstr.h>
 #include <lustre_cfg.h>
-#include <lustre_ioctl.h>
+#include <linux/lustre_ioctl.h>
 #include <lustre_ver.h>
 
 #include <sys/un.h>

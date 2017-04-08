@@ -35,18 +35,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#include <lustre_ioctl.h>
+#include <lustre/lustreapi.h>
 
 int main(int argc, char **argv)
 {
-    struct obd_ioctl_data data = { 0 };
-    char rawbuf[8192], parent[4096], *buf = rawbuf, *base, *t;
-    int max = sizeof(rawbuf), fd, offset, rc;
+    char parent[4096], *base, *name, *t;
+    int fd, offset, rc;
 
     if (argc != 2) {
         printf("usage: %s filename\n", argv[0]);
@@ -69,23 +67,14 @@ int main(int argc, char **argv)
         exit(errno);
     }
 
-    data.ioc_version = OBD_IOCTL_VERSION;
-    data.ioc_len = sizeof(data);
+    name = base;
     if (offset >= 0)
-        data.ioc_inlbuf1 = base + offset + 2;
-    else
-        data.ioc_inlbuf1 = base;
-    data.ioc_inllen1 = strlen(data.ioc_inlbuf1) + 1;
-    
-    if (obd_ioctl_pack(&data, &buf, max)) {
-        printf("ioctl_pack failed.\n");
-        exit(1);
-    }
-    
-    rc = ioctl(fd, IOC_MDC_LOOKUP, buf);
+	name += offset + 2;
+
+    rc = llapi_file_lookup(fd, name);
     if (rc < 0) {
-        printf("ioctl(%s/%s) error: %s\n", parent,
-               data.ioc_inlbuf1, strerror(errno));
+	printf("llapi_file_lookup (%s/%s) error: %s\n", parent,
+	       name, strerror(errno));
         exit(errno);
     }
 

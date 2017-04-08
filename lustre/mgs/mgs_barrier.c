@@ -30,7 +30,7 @@
 #define DEBUG_SUBSYSTEM S_MGS
 #define D_MGS D_CONFIG
 
-#include <lustre_ioctl.h>
+#include <uapi/linux/lustre_ioctl.h>
 #include <lustre_swab.h>
 #include <lustre/lustre_barrier_user.h>
 

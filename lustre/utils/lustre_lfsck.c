@@ -40,10 +40,11 @@
 #include <time.h>
 
 #include "obdctl.h"
+#include "lustreapi_internal.h"
 
 #include <lustre/lustre_lfsck_user.h>
 #include <lnet/lnetctl.h>
-#include <lustre_ioctl.h>
+#include <linux/lustre_ioctl.h>
 /* Needs to be last to avoid clashes */
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>

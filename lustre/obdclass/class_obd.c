@@ -50,7 +50,7 @@
 # include <dt_object.h>
 # include <md_object.h>
 #endif /* HAVE_SERVER_SUPPORT */
-#include <lustre_ioctl.h>
+#include <uapi/linux/lustre_ioctl.h>
 #include "llog_internal.h"
 
 #ifdef CONFIG_PROC_FS
@@ -270,8 +270,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 		memcpy(data->ioc_bulk, LUSTRE_VERSION_STRING,
 		       strlen(LUSTRE_VERSION_STRING) + 1);
 
-		err = obd_ioctl_popdata((void __user *)arg, data, len);
-		if (err)
+		if (copy_to_user((void __user *)arg, data, len))
 			err = -EFAULT;
 		GOTO(out, err);
 
@@ -287,9 +286,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (dev < 0)
                         GOTO(out, err = -EINVAL);
 
-		err = obd_ioctl_popdata((void __user *)arg, data,
-					sizeof(*data));
-                if (err)
+		if (copy_to_user((void __user *)arg, data, sizeof(*data)))
                         err = -EFAULT;
                 GOTO(out, err);
         }
@@ -322,9 +319,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
                 CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
                        dev);
-		err = obd_ioctl_popdata((void __user *)arg, data,
-					sizeof(*data));
-                if (err)
+		if (copy_to_user((void __user *)arg, data, sizeof(*data)))
                         err = -EFAULT;
                 GOTO(out, err);
         }
@@ -359,9 +354,11 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                          (int)index, status, obd->obd_type->typ_name,
                          obd->obd_name, obd->obd_uuid.uuid,
 			 atomic_read(&obd->obd_refcount));
-		err = obd_ioctl_popdata((void __user *)arg, data, len);
 
-                GOTO(out, err = 0);
+		if (copy_to_user((void __user *)arg, data, len))
+			err = -EFAULT;
+
+		GOTO(out, err);
         }
 
         }
@@ -407,17 +404,15 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (err)
                         GOTO(out, err);
 
-		err = obd_ioctl_popdata((void __user *)arg, data, len);
-                if (err)
+		if (copy_to_user((void __user *)arg, data, len))
                         err = -EFAULT;
                 GOTO(out, err);
         }
         }
 
- out:
-        if (buf)
-                obd_ioctl_freedata(buf, len);
-        RETURN(err);
+out:
+	OBD_FREE_LARGE(buf, len);
+	RETURN(err);
 } /* class_handle_ioctl */
 
 #define OBD_INIT_CHECK

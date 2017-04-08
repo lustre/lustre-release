@@ -25,25 +25,22 @@
  *
  * Copyright (c) 2014, 2016, Intel Corporation.
  */
-#ifndef LUSTRE_IOCTL_H_
-#define LUSTRE_IOCTL_H_
+#ifndef _UAPI_LUSTRE_IOCTL_H
+#define _UAPI_LUSTRE_IOCTL_H
 
+#include <linux/ioctl.h>
+#include <linux/kernel.h>
 #include <linux/types.h>
-#include <libcfs/libcfs.h>
 #include <lustre/lustre_idl.h>
-
-#ifdef __KERNEL__
-# include <linux/ioctl.h>
-# include <linux/string.h>
-# include <obd_support.h>
-#else /* __KERNEL__ */
-# include <malloc.h>
-# include <string.h>
-#include <libcfs/util/ioctl.h>
-#endif /* !__KERNEL__ */
 
 #if !defined(__KERNEL__) && !defined(LUSTRE_UTILS)
 # error This file is for Lustre internal use only.
+#endif
+
+/* Handle older distros */
+#ifndef __ALIGN_KERNEL
+# define __ALIGN_KERNEL(x, a)	__ALIGN_KERNEL_MASK(x, (typeof(x))(a) - 1)
+# define __ALIGN_KERNEL_MASK(x, mask)	(((x) + (mask)) & ~(mask))
 #endif
 
 enum md_echo_cmd {
@@ -122,212 +119,23 @@ struct obd_ioctl_hdr {
 
 static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
 {
-	__u32 len = cfs_size_round(sizeof(*data));
+	__u32 len = __ALIGN_KERNEL(sizeof(*data), 8);
 
-	len += cfs_size_round(data->ioc_inllen1);
-	len += cfs_size_round(data->ioc_inllen2);
-	len += cfs_size_round(data->ioc_inllen3);
-	len += cfs_size_round(data->ioc_inllen4);
+	len += __ALIGN_KERNEL(data->ioc_inllen1, 8);
+	len += __ALIGN_KERNEL(data->ioc_inllen2, 8);
+	len += __ALIGN_KERNEL(data->ioc_inllen3, 8);
+	len += __ALIGN_KERNEL(data->ioc_inllen4, 8);
 
 	return len;
 }
 
-static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
-{
-	if (data->ioc_len > (1 << 30)) {
-		CERROR("OBD ioctl: ioc_len larger than 1<<30\n");
-		return 1;
-	}
-
-	if (data->ioc_inllen1 > (1 << 30)) {
-		CERROR("OBD ioctl: ioc_inllen1 larger than 1<<30\n");
-		return 1;
-	}
-
-	if (data->ioc_inllen2 > (1 << 30)) {
-		CERROR("OBD ioctl: ioc_inllen2 larger than 1<<30\n");
-		return 1;
-	}
-
-	if (data->ioc_inllen3 > (1 << 30)) {
-		CERROR("OBD ioctl: ioc_inllen3 larger than 1<<30\n");
-		return 1;
-	}
-
-	if (data->ioc_inllen4 > (1 << 30)) {
-		CERROR("OBD ioctl: ioc_inllen4 larger than 1<<30\n");
-		return 1;
-	}
-
-	if (data->ioc_inlbuf1 != NULL && data->ioc_inllen1 == 0) {
-		CERROR("OBD ioctl: inlbuf1 pointer but 0 length\n");
-		return 1;
-	}
-
-	if (data->ioc_inlbuf2 != NULL && data->ioc_inllen2 == 0) {
-		CERROR("OBD ioctl: inlbuf2 pointer but 0 length\n");
-		return 1;
-	}
-
-	if (data->ioc_inlbuf3 != NULL && data->ioc_inllen3 == 0) {
-		CERROR("OBD ioctl: inlbuf3 pointer but 0 length\n");
-		return 1;
-	}
-
-	if (data->ioc_inlbuf4 != NULL && data->ioc_inllen4 == 0) {
-		CERROR("OBD ioctl: inlbuf4 pointer but 0 length\n");
-		return 1;
-	}
-
-	if (data->ioc_pbuf1 != NULL && data->ioc_plen1 == 0) {
-		CERROR("OBD ioctl: pbuf1 pointer but 0 length\n");
-		return 1;
-	}
-
-	if (data->ioc_pbuf2 != NULL && data->ioc_plen2 == 0) {
-		CERROR("OBD ioctl: pbuf2 pointer but 0 length\n");
-		return 1;
-	}
-
-	if (data->ioc_pbuf1 == NULL && data->ioc_plen1 != 0) {
-		CERROR("OBD ioctl: plen1 set but NULL pointer\n");
-		return 1;
-	}
-
-	if (data->ioc_pbuf2 == NULL && data->ioc_plen2 != 0) {
-		CERROR("OBD ioctl: plen2 set but NULL pointer\n");
-		return 1;
-	}
-
-	if (obd_ioctl_packlen(data) > data->ioc_len) {
-		CERROR("OBD ioctl: packlen exceeds ioc_len (%d > %d)\n",
-		       obd_ioctl_packlen(data), data->ioc_len);
-		return 1;
-	}
-
-	return 0;
-}
-
-#ifdef __KERNEL__
-
-int obd_ioctl_getdata(char **buf, int *len, void __user *arg);
-int obd_ioctl_popdata(void __user *arg, void *data, int len);
-
-static inline void obd_ioctl_freedata(char *buf, size_t len)
-{
-	ENTRY;
-
-	OBD_FREE_LARGE(buf, len);
-	EXIT;
-}
-
-#else /* __KERNEL__ */
-
-static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
-				 int max_len)
-{
-	char *ptr;
-	struct obd_ioctl_data *overlay;
-
-	data->ioc_len = obd_ioctl_packlen(data);
-	data->ioc_version = OBD_IOCTL_VERSION;
-
-	if (*pbuf != NULL && data->ioc_len > max_len) {
-		fprintf(stderr, "pbuf = %p, ioc_len = %u, max_len = %d\n",
-			*pbuf, data->ioc_len, max_len);
-		return -EINVAL;
-	}
-
-	if (*pbuf == NULL)
-		*pbuf = malloc(data->ioc_len);
-
-	if (*pbuf == NULL)
-		return -ENOMEM;
-
-	overlay = (struct obd_ioctl_data *)*pbuf;
-	memcpy(*pbuf, data, sizeof(*data));
-
-	ptr = overlay->ioc_bulk;
-	if (data->ioc_inlbuf1) {
-		memcpy(ptr, data->ioc_inlbuf1, data->ioc_inllen1);
-		ptr += cfs_size_round(data->ioc_inllen1);
-	}
-
-	if (data->ioc_inlbuf2) {
-		memcpy(ptr, data->ioc_inlbuf2, data->ioc_inllen2);
-		ptr += cfs_size_round(data->ioc_inllen2);
-	}
-
-	if (data->ioc_inlbuf3) {
-		memcpy(ptr, data->ioc_inlbuf3, data->ioc_inllen3);
-		ptr += cfs_size_round(data->ioc_inllen3);
-	}
-
-	if (data->ioc_inlbuf4) {
-		memcpy(ptr, data->ioc_inlbuf4, data->ioc_inllen4);
-		ptr += cfs_size_round(data->ioc_inllen4);
-	}
-
-	if (obd_ioctl_is_invalid(overlay)) {
-		fprintf(stderr, "invalid ioctl data: ioc_len = %u, "
-			"max_len = %d\n",
-			data->ioc_len, max_len);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
-static inline int
-obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
-{
-	char *ptr;
-	struct obd_ioctl_data *overlay;
-
-	if (pbuf == NULL)
-		return 1;
-
-	overlay = (struct obd_ioctl_data *)pbuf;
-
-	/* Preserve the caller's buffer pointers */
-	overlay->ioc_inlbuf1 = data->ioc_inlbuf1;
-	overlay->ioc_inlbuf2 = data->ioc_inlbuf2;
-	overlay->ioc_inlbuf3 = data->ioc_inlbuf3;
-	overlay->ioc_inlbuf4 = data->ioc_inlbuf4;
-
-	memcpy(data, pbuf, sizeof(*data));
-
-	ptr = overlay->ioc_bulk;
-	if (data->ioc_inlbuf1) {
-		memcpy(data->ioc_inlbuf1, ptr, data->ioc_inllen1);
-		ptr += cfs_size_round(data->ioc_inllen1);
-	}
-
-	if (data->ioc_inlbuf2) {
-		memcpy(data->ioc_inlbuf2, ptr, data->ioc_inllen2);
-		ptr += cfs_size_round(data->ioc_inllen2);
-	}
-
-	if (data->ioc_inlbuf3) {
-		memcpy(data->ioc_inlbuf3, ptr, data->ioc_inllen3);
-		ptr += cfs_size_round(data->ioc_inllen3);
-	}
-
-	if (data->ioc_inlbuf4) {
-		memcpy(data->ioc_inlbuf4, ptr, data->ioc_inllen4);
-		ptr += cfs_size_round(data->ioc_inllen4);
-	}
-
-	return 0;
-}
-
-#endif /* !__KERNEL__ */
-
-/* OBD_IOC_DATA_TYPE is only for compatibility reasons with older
+/*
+ * OBD_IOC_DATA_TYPE is only for compatibility reasons with older
  * Linux Lustre user tools. New ioctls should NOT use this macro as
  * the ioctl "size". Instead the ioctl should get a "size" argument
  * which is the actual data type used by the ioctl, to ensure the
- * ioctl interface is versioned correctly. */
+ * ioctl interface is versioned correctly.
+ */
 #define OBD_IOC_DATA_TYPE	long
 
 /*	IOC_LDLM_TEST		_IOWR('f', 40, long) */
@@ -336,16 +144,16 @@ obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 /*	IOC_LDLM_REGRESS_STOP	_IOWR('f', 43, long) */
 
 #define OBD_IOC_CREATE		_IOWR('f', 101, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_DESTROY		_IOW ('f', 104, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_DESTROY		_IOW('f', 104, OBD_IOC_DATA_TYPE)
 /*	OBD_IOC_PREALLOCATE	_IOWR('f', 105, OBD_IOC_DATA_TYPE) */
 
-#define OBD_IOC_SETATTR		_IOW ('f', 107, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_SETATTR		_IOW('f', 107, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_GETATTR		_IOWR('f', 108, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_READ		_IOWR('f', 109, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_WRITE		_IOWR('f', 110, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_STATFS		_IOWR('f', 113, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_SYNC		_IOW ('f', 114, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_SYNC		_IOW('f', 114, OBD_IOC_DATA_TYPE)
 /*	OBD_IOC_READ2		_IOWR('f', 115, OBD_IOC_DATA_TYPE) */
 /*	OBD_IOC_FORMAT		_IOWR('f', 116, OBD_IOC_DATA_TYPE) */
 /*	OBD_IOC_PARTITION	_IOWR('f', 117, OBD_IOC_DATA_TYPE) */
@@ -359,21 +167,21 @@ obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 #define OBD_IOC_NAME2DEV	_IOWR('f', 127, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_UUID2DEV	_IOWR('f', 130, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_GETNAME		_IOWR('f', 131, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_GETMDNAME	_IOR ('f', 131, char[MAX_OBD_NAME])
+#define OBD_IOC_GETMDNAME	_IOR('f', 131, char[MAX_OBD_NAME])
 #define OBD_IOC_GETDTNAME	OBD_IOC_GETNAME
 #define OBD_IOC_LOV_GET_CONFIG	_IOWR('f', 132, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_CLIENT_RECOVER	_IOW ('f', 133, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_PING_TARGET	_IOW ('f', 136, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_CLIENT_RECOVER	_IOW('f', 133, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_PING_TARGET	_IOW('f', 136, OBD_IOC_DATA_TYPE)
 
 /*	OBD_IOC_DEC_FS_USE_COUNT _IO('f', 139) */
-#define OBD_IOC_NO_TRANSNO	_IOW ('f', 140, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_SET_READONLY	_IOW ('f', 141, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_ABORT_RECOVERY	_IOR ('f', 142, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_NO_TRANSNO	_IOW('f', 140, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_SET_READONLY	_IOW('f', 141, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_ABORT_RECOVERY	_IOR('f', 142, OBD_IOC_DATA_TYPE)
 /*	OBD_IOC_ROOT_SQUASH	_IOWR('f', 143, OBD_IOC_DATA_TYPE) */
 #define OBD_GET_VERSION		_IOWR('f', 144, OBD_IOC_DATA_TYPE)
 /*	OBD_IOC_GSS_SUPPORT	_IOWR('f', 145, OBD_IOC_DATA_TYPE) */
 /*	OBD_IOC_CLOSE_UUID	_IOWR('f', 147, OBD_IOC_DATA_TYPE) */
-/*	OBD_IOC_CHANGELOG_SEND	_IOW ('f', 148, OBD_IOC_DATA_TYPE) */
+/*	OBD_IOC_CHANGELOG_SEND	_IOW('f', 148, OBD_IOC_DATA_TYPE) */
 #define OBD_IOC_GETDEVICE	_IOWR('f', 149, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_FID2PATH	_IOWR('f', 150, OBD_IOC_DATA_TYPE)
 /*	lustre/lustre_user.h	151-153 */
@@ -381,13 +189,13 @@ obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 /*	OBD_IOC_LOV_GETSTRIPE	155 LL_IOC_LOV_GETSTRIPE */
 /*	OBD_IOC_LOV_SETEA	156 LL_IOC_LOV_SETEA */
 /*	lustre/lustre_user.h	157-159 */
-/*	OBD_IOC_QUOTACHECK	_IOW ('f', 160, int) */
-/*	OBD_IOC_POLL_QUOTACHECK	_IOR ('f', 161, struct if_quotacheck *) */
+/*	OBD_IOC_QUOTACHECK	_IOW('f', 160, int) */
+/*	OBD_IOC_POLL_QUOTACHECK	_IOR('f', 161, struct if_quotacheck *) */
 #define OBD_IOC_QUOTACTL	_IOWR('f', 162, struct if_quotactl)
 /*	lustre/lustre_user.h	163-176 */
-#define OBD_IOC_CHANGELOG_REG	_IOW ('f', 177, struct obd_ioctl_data)
-#define OBD_IOC_CHANGELOG_DEREG	_IOW ('f', 178, struct obd_ioctl_data)
-#define OBD_IOC_CHANGELOG_CLEAR	_IOW ('f', 179, struct obd_ioctl_data)
+#define OBD_IOC_CHANGELOG_REG	_IOW('f', 177, struct obd_ioctl_data)
+#define OBD_IOC_CHANGELOG_DEREG	_IOW('f', 178, struct obd_ioctl_data)
+#define OBD_IOC_CHANGELOG_CLEAR	_IOW('f', 179, struct obd_ioctl_data)
 /*	OBD_IOC_RECORD		_IOWR('f', 180, OBD_IOC_DATA_TYPE) */
 /*	OBD_IOC_ENDRECORD	_IOWR('f', 181, OBD_IOC_DATA_TYPE) */
 /*	OBD_IOC_PARSE		_IOWR('f', 182, OBD_IOC_DATA_TYPE) */
@@ -395,7 +203,7 @@ obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 #define OBD_IOC_PROCESS_CFG	_IOWR('f', 184, OBD_IOC_DATA_TYPE)
 /*	OBD_IOC_DUMP_LOG	_IOWR('f', 185, OBD_IOC_DATA_TYPE) */
 /*	OBD_IOC_CLEAR_LOG	_IOWR('f', 186, OBD_IOC_DATA_TYPE) */
-#define OBD_IOC_PARAM		_IOW ('f', 187, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_PARAM		_IOW('f', 187, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_POOL		_IOWR('f', 188, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_REPLACE_NIDS	_IOWR('f', 189, OBD_IOC_DATA_TYPE)
 
@@ -415,14 +223,14 @@ obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 
 #define OBD_IOC_LCFG_FORK	_IOWR('f', 208, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LCFG_ERASE	_IOWR('f', 209, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_GET_OBJ_VERSION	_IOR ('f', 210, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_GET_OBJ_VERSION	_IOR('f', 210, OBD_IOC_DATA_TYPE)
 
 /*	lustre/lustre_user.h	212-217 */
-#define OBD_IOC_GET_MNTOPT	_IOW ('f', 220, mntopt_t)
-#define OBD_IOC_ECHO_MD		_IOR ('f', 221, struct obd_ioctl_data)
+#define OBD_IOC_GET_MNTOPT	_IOW('f', 220, mntopt_t)
+#define OBD_IOC_ECHO_MD		_IOR('f', 221, struct obd_ioctl_data)
 #define OBD_IOC_ECHO_ALLOC_SEQ	_IOWR('f', 222, struct obd_ioctl_data)
 #define OBD_IOC_START_LFSCK	_IOWR('f', 230, OBD_IOC_DATA_TYPE)
-#define OBD_IOC_STOP_LFSCK	_IOW ('f', 231, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_STOP_LFSCK	_IOW('f', 231, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_QUERY_LFSCK	_IOR('f', 232, struct obd_ioctl_data)
 /*	lustre/lustre_user.h	240-249 */
 /*	LIBCFS_IOC_DEBUG_MASK	250 */
@@ -431,4 +239,4 @@ obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 
 #define IOC_OSC_SET_ACTIVE	_IOWR('h', 21, void *)
 
-#endif /* LUSTRE_IOCTL_H_ */
+#endif /* _UAPI_LUSTRE_IOCTL_H */
