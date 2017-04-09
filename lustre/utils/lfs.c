@@ -246,6 +246,7 @@ command_t cmdlist[] = {
          "     [[!] --stripe-size|-S [+-]N[kMGT]] [[!] --type|-t <filetype>]\n"
          "     [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
          "     [[!] --uid|-u|--user|-U <uid>|<uname>] [[!] --pool <pool>]\n"
+	 "     [[!] --projid <projid>]\n"
 	 "     [[!] --layout|-L released,raid0]\n"
 	 "     [[!] --component-count [+-]<comp_cnt>]\n"
 	 "     [[!] --component-start [+-]N[kMGTPE]]\n"
@@ -1271,7 +1272,8 @@ enum {
 	LFS_COMP_FLAGS_OPT,
 	LFS_COMP_DEL_OPT,
 	LFS_COMP_SET_OPT,
-	LFS_COMP_ADD_OPT
+	LFS_COMP_ADD_OPT,
+	LFS_PROJID_OPT,
 };
 
 /* functions */
@@ -1848,9 +1850,10 @@ static int lfs_find(int argc, char **argv)
                 {"obd",          required_argument, 0, 'O'},
                 {"ost",          required_argument, 0, 'O'},
                 /* no short option for pool, p/P already used */
-		{"pool",         required_argument, 0, LFS_POOL_OPT},
-                {"print0",       no_argument,       0, 'p'},
-                {"print",        no_argument,       0, 'P'},
+		{"pool",	 required_argument, 0, LFS_POOL_OPT},
+		{"print0",	 no_argument,	    0, 'p'},
+		{"print",	 no_argument,	    0, 'P'},
+		{"projid",	 required_argument, 0, LFS_PROJID_OPT},
                 {"size",         required_argument, 0, 's'},
                 {"stripe-size",  required_argument, 0, 'S'},
                 {"stripe_size",  required_argument, 0, 'S'},
@@ -2161,17 +2164,32 @@ static int lfs_find(int argc, char **argv)
 
 				strncpy(puuid->uuid, token,
 					sizeof(puuid->uuid));
-                        }
+			}
 err_free:
-                        if (buf)
-                                free(buf);
-                        break;
-                }
-                case 'p':
+			if (buf)
+				free(buf);
+			break;
+		}
+		case 'p':
 			param.fp_zero_end = 1;
-                        break;
-                case 'P':
-                        break;
+			break;
+		case 'P':
+			break;
+		case LFS_PROJID_OPT:
+			rc = name2projid(&param.fp_projid, optarg);
+			if (rc) {
+				param.fp_projid = strtoul(optarg, &endptr, 10);
+				if (*endptr != '\0') {
+					fprintf(stderr,
+						"Invalid project ID: %s",
+						optarg);
+					ret = -1;
+					goto err;
+				}
+			}
+			param.fp_exclude_projid = !!neg_opt;
+			param.fp_check_projid = 1;
+			break;
 		case 's':
 			if (optarg[0] == '+') {
 				param.fp_size_sign = -1;

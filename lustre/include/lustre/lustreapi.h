@@ -206,6 +206,8 @@ struct find_param {
 				 fp_exclude_layout:1,
 				 fp_get_default_lmv:1, /* Get default LMV */
 				 fp_migrate:1,
+				 fp_check_projid:1,
+				 fp_exclude_projid:1,
 				 fp_check_comp_count:1,
 				 fp_exclude_comp_count:1,
 				 fp_check_comp_flags:1,
@@ -261,6 +263,7 @@ struct find_param {
 	unsigned long long	 fp_comp_end;
 	unsigned long long	 fp_comp_end_units;
 	unsigned long long	 fp_mdt_count;
+	unsigned		 fp_projid;
 
 	/* In-process parameters. */
 	unsigned long		 fp_got_uuids:1,

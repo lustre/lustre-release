@@ -3363,7 +3363,26 @@ static bool find_check_lmm_info(struct find_param *param)
 	return param->fp_check_pool || param->fp_check_stripe_count ||
 	       param->fp_check_stripe_size || param->fp_check_layout ||
 	       param->fp_check_comp_count || param->fp_check_comp_end ||
-	       param->fp_check_comp_start || param->fp_check_comp_flags;
+	       param->fp_check_comp_start || param->fp_check_comp_flags ||
+	       param->fp_check_projid;
+}
+
+/*
+ * Get file/directory project id.
+ * by the open fd resides on.
+ * Return 0 and project id on success, or -ve errno.
+ */
+static int fget_projid(int fd, int *projid)
+{
+	struct fsxattr fsx;
+	int rc;
+
+	rc = ioctl(fd, LL_IOC_FSGETXATTR, &fsx);
+	if (rc)
+		return -errno;
+
+	*projid = fsx.fsx_projid;
+	return 0;
 }
 
 static int cb_find_init(char *path, DIR *parent, DIR **dirp,
@@ -3377,6 +3396,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	int checked_type = 0;
 	int ret = 0;
 	__u32 stripe_count = 0;
+	int fd = -2;
 
 	if (parent == NULL && dir == NULL)
 		return -EINVAL;
@@ -3447,8 +3467,6 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 				ret = llapi_file_fget_mdtidx(dirfd(dir),
 						     &param->fp_file_mdt_index);
 			} else if (S_ISREG(st->st_mode)) {
-				int fd;
-
 				/* FIXME: we could get the MDT index from the
 				 * file's FID in lmd->lmd_lmm.lmm_oi without
 				 * opening the file, once we are sure that
@@ -3459,7 +3477,6 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 				if (fd > 0) {
 					ret = llapi_file_fget_mdtidx(fd,
 						     &param->fp_file_mdt_index);
-					close(fd);
 				} else {
 					ret = -errno;
 				}
@@ -3476,7 +3493,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 			if (ret == -ENOENT)
 				goto decided;
 
-			return ret;
+			goto out;
 		} else {
 			stripe_count = find_get_stripe_count(param);
 		}
@@ -3507,7 +3524,7 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 			ret = setup_target_indexes(dir ? dir : parent, path,
 						   param);
 			if (ret)
-				return ret;
+				goto out;
 
 			param->fp_dev = st->st_dev;
 		} else if (!lustre_fs && param->fp_got_uuids) {
@@ -3608,6 +3625,27 @@ obd_matches:
 		}
 	}
 
+	if (param->fp_check_projid) {
+		int projid = 0;
+
+		if (fd == -2)
+			fd = open(path, O_RDONLY);
+
+		if (fd > 0)
+			ret = fget_projid(fd, &projid);
+		else
+			ret = -errno;
+		if (ret)
+			goto out;
+		if (projid == param->fp_projid) {
+			if (param->fp_exclude_uid)
+				goto decided;
+		} else {
+			if (!param->fp_exclude_projid)
+				goto decided;
+		}
+	}
+
 	if (param->fp_check_pool) {
 		decision = find_check_pool(param);
 		if (decision == -1)
@@ -3667,19 +3705,19 @@ obd_matches:
                                             __func__, path);
                                 goto decided;
                         } else {
-                                ret = -errno;
-                                llapi_error(LLAPI_MSG_ERROR, ret,
-                                            "%s: IOC_LOV_GETINFO on %s failed",
-                                            __func__, path);
-                                return ret;
-                        }
-                }
+				ret = -errno;
+				llapi_error(LLAPI_MSG_ERROR, ret,
+					    "%s: IOC_LOV_GETINFO on %s failed",
+					    __func__, path);
+				goto out;
+			}
+		}
 
-                /* Check the time on osc. */
-                decision = find_time_check(st, param, 0);
-                if (decision == -1)
-                        goto decided;
-        }
+		/* Check the time on osc. */
+		decision = find_time_check(st, param, 0);
+		if (decision == -1)
+			goto decided;
+	}
 
 	if (param->fp_check_size)
 		decision = find_value_cmp(st->st_size, param->fp_size,
@@ -3687,22 +3725,26 @@ obd_matches:
 					  param->fp_exclude_size,
 					  param->fp_size_units, 0);
 
-        if (decision != -1) {
-                llapi_printf(LLAPI_MSG_NORMAL, "%s", path);
+	if (decision != -1) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", path);
 		if (param->fp_zero_end)
-                        llapi_printf(LLAPI_MSG_NORMAL, "%c", '\0');
-                else
-                        llapi_printf(LLAPI_MSG_NORMAL, "\n");
-        }
+			llapi_printf(LLAPI_MSG_NORMAL, "%c", '\0');
+		else
+			llapi_printf(LLAPI_MSG_NORMAL, "\n");
+	}
 
 decided:
-        /* Do not get down anymore? */
-	if (param->fp_depth == param->fp_max_depth)
-		return 1;
-
+	ret = 0;
+	/* Do not get down anymore? */
+	if (param->fp_depth == param->fp_max_depth) {
+		ret = 1;
+		goto out;
+	}
 	param->fp_depth++;
-
-	return 0;
+out:
+	if (fd > 0)
+		close(fd);
+	return ret;
 }
 
 static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
