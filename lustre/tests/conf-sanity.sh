@@ -4734,6 +4734,10 @@ test_68() {
 
 	umount_client $MOUNT || error "umount client failed"
 
+	if ! combined_mgs_mds; then
+		start_mgs || error "start mgs failed"
+	fi
+
 	start_mdt 1 || error "MDT start failed"
 	start_ost || error "Unable to start OST1"
 
@@ -5243,6 +5247,10 @@ test_75() { # LU-2374
 
 	add mds1 $opts_mds || error "add mds1 failed for new params"
 	add ost1 $opts_ost || error "add ost1 failed for new params"
+	if ! combined_mgs_mds; then
+		stop_mgs || error "stop mgs failed"
+	fi
+	reformat
 	return 0
 }
 run_test 75 "The order of --index should be irrelevant"
@@ -5250,6 +5258,10 @@ run_test 75 "The order of --index should be irrelevant"
 test_76a() {
 	[[ $(lustre_version_code mgs) -ge $(version_code 2.4.52) ]] ||
 		{ skip "Need MDS version at least 2.4.52" && return 0; }
+
+	if ! combined_mgs_mds; then
+		start_mgs || error "start mgs failed"
+	fi
 	setup
 	local MDMB_PARAM="osc.*.max_dirty_mb"
 	echo "Change MGS params"
