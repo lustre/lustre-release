@@ -1615,7 +1615,7 @@ int class_config_llog_handler(const struct lu_env *env,
                  * moving them to index [1] and [2], and insert MGC's
                  * obdname at index [0].
                  */
-		if (cfg->cfg_instance == NULL &&
+		if (cfg->cfg_instance != NULL &&
 		    lcfg->lcfg_command == LCFG_SPTLRPC_CONF) {
 			lustre_cfg_bufs_set(&bufs, 2, bufs.lcfg_buf[1],
 					    bufs.lcfg_buflen[1]);

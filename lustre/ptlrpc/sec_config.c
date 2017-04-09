@@ -504,26 +504,38 @@ struct sptlrpc_conf {
 static struct mutex sptlrpc_conf_lock;
 static struct list_head sptlrpc_confs;
 
-static inline int is_hex(char c)
+/*
+ * The goal of this function is to extract the file system name
+ * from the obd name. This can come in two flavors. One is
+ * fsname-MDTXXXX or fsname-XXXXXXX were X is a hexadecimal
+ * number. In both cases we should be returned fsname. If it is
+ * not a valid obd name it is assumed to be the file system
+ * name itself.
+ */
+static void obdname2fsname(const char *tgt, char *fsname, size_t buflen)
 {
-        return ((c >= '0' && c <= '9') ||
-                (c >= 'a' && c <= 'f'));
-}
+	const char *ptr;
+	size_t len;
 
-static void target2fsname(const char *tgt, char *fsname, int buflen)
-{
-        const char     *ptr;
-        int             len;
+	ptr = strrchr(tgt, '-');
+	if (ptr) {
+		if ((!strncmp(ptr, "-MDT", 4) ||
+		     !strncmp(ptr, "-OST", 4)) &&
+		     (isxdigit(ptr[4]) && isxdigit(ptr[5]) &&
+		      isxdigit(ptr[6]) && isxdigit(ptr[7])))
+			goto valid_obd_name;
 
-        ptr = strrchr(tgt, '-');
-        if (ptr) {
-                if ((strncmp(ptr, "-MDT", 4) != 0 &&
-                     strncmp(ptr, "-OST", 4) != 0) ||
-                    !is_hex(ptr[4]) || !is_hex(ptr[5]) ||
-                    !is_hex(ptr[6]) || !is_hex(ptr[7]))
-                        ptr = NULL;
-        }
+		/* The length of the obdname can vary on different platforms */
+		len = strlen(ptr);
+		while (--len) {
+			if (!isxdigit(ptr[len])) {
+				ptr = NULL;
+				break;
+			}
+		}
+	}
 
+valid_obd_name:
         /* if we didn't find the pattern, treat the whole string as fsname */
         if (ptr == NULL)
                 len = strlen(tgt);
@@ -684,7 +696,7 @@ static int __sptlrpc_process_config(struct lustre_cfg *lcfg,
                 RETURN(-EINVAL);
 
         if (conf == NULL) {
-                target2fsname(target, fsname, sizeof(fsname));
+		obdname2fsname(target, fsname, sizeof(fsname));
 
 		mutex_lock(&sptlrpc_conf_lock);
                 conf = sptlrpc_conf_get(fsname, 0);
@@ -855,7 +867,7 @@ void sptlrpc_conf_choose_flavor(enum lustre_sec_part from,
         char                     name[MTI_NAME_MAXLEN];
         int                      len, rc = 0;
 
-        target2fsname(target->uuid, name, sizeof(name));
+	obd_uuid2fsname(name, target->uuid, sizeof(name));
 
 	mutex_lock(&sptlrpc_conf_lock);
 
@@ -957,7 +969,7 @@ int sptlrpc_conf_target_get_rules(struct obd_device *obd,
 		RETURN(-EINVAL);
 	}
 
-	target2fsname(obd->obd_uuid.uuid, fsname, sizeof(fsname));
+	obd_uuid2fsname(fsname, obd->obd_uuid.uuid, sizeof(fsname));
 
 	mutex_lock(&sptlrpc_conf_lock);
 	conf = sptlrpc_conf_get(fsname, 0);
