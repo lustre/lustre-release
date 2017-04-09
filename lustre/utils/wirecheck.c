@@ -643,6 +643,7 @@ check_obdo(void)
 	CHECK_MEMBER(obdo, o_uid_h);
 	CHECK_MEMBER(obdo, o_gid_h);
 	CHECK_MEMBER(obdo, o_data_version);
+	CHECK_MEMBER(obdo, o_projid);
 	CHECK_MEMBER(obdo, o_padding_4);
 	CHECK_MEMBER(obdo, o_padding_5);
 	CHECK_MEMBER(obdo, o_padding_6);
@@ -692,6 +693,7 @@ check_obdo(void)
 	CHECK_DEFINE_64X(OBD_MD_CLOSE_INTENT_EXECED);
 	CHECK_DEFINE_64X(OBD_MD_DEFAULT_MEA);
 	CHECK_DEFINE_64X(OBD_MD_FLOSTLAYOUT);
+	CHECK_DEFINE_64X(OBD_MD_FLPROJID);
 
 	CHECK_CVALUE_X(OBD_FL_INLINEDATA);
 	CHECK_CVALUE_X(OBD_FL_OBDMDEXISTS);
@@ -1036,7 +1038,7 @@ check_mdt_body(void)
 	CHECK_MEMBER(mdt_body, mbo_unused3);
 	CHECK_MEMBER(mdt_body, mbo_uid_h);
 	CHECK_MEMBER(mdt_body, mbo_gid_h);
-	CHECK_MEMBER(mdt_body, mbo_padding_5);
+	CHECK_MEMBER(mdt_body, mbo_projid);
 	CHECK_MEMBER(mdt_body, mbo_padding_6);
 	CHECK_MEMBER(mdt_body, mbo_padding_7);
 	CHECK_MEMBER(mdt_body, mbo_padding_8);
@@ -1655,6 +1657,7 @@ check_llog_setattr64_rec(void)
 	CHECK_MEMBER(llog_setattr64_rec, lsr_gid_h);
 	CHECK_MEMBER(llog_setattr64_rec, lsr_valid);
 	CHECK_MEMBER(llog_setattr64_rec, lsr_tail);
+	CHECK_MEMBER(llog_setattr64_rec_v2, lsr_projid);
 }
 
 static void
@@ -2631,6 +2634,7 @@ main(int argc, char **argv)
 	CHECK_VALUE_64X(MDS_ATTR_CTIME_SET);
 	CHECK_VALUE_64X(MDS_ATTR_FROM_OPEN);
 	CHECK_VALUE_64X(MDS_ATTR_BLOCKS);
+	CHECK_VALUE_64X(MDS_ATTR_PROJID);
 
 	CHECK_VALUE(FLD_QUERY);
 	CHECK_VALUE(FLD_READ);

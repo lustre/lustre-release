@@ -593,6 +593,12 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 		b->mbo_valid |= OBD_MD_FLGID;
 	}
 
+	if (attr->la_valid & LA_PROJID) {
+		/* TODO, nodemap for project id */
+		b->mbo_projid = attr->la_projid;
+		b->mbo_valid |= OBD_MD_FLPROJID;
+	}
+
 	b->mbo_mode = attr->la_mode;
 	if (attr->la_valid & LA_MODE)
 		b->mbo_valid |= OBD_MD_FLMODE;

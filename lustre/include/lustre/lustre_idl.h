@@ -1200,16 +1200,18 @@ lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
 
 #define OBD_MD_DEFAULT_MEA   (0x0040000000000000ULL) /* default MEA */
 #define OBD_MD_FLOSTLAYOUT   (0x0080000000000000ULL) /* contain ost_layout */
+#define OBD_MD_FLPROJID      (0x0100000000000000ULL) /* project ID */
 
 #define OBD_MD_FLALLQUOTA (OBD_MD_FLUSRQUOTA | \
 			   OBD_MD_FLGRPQUOTA | \
 			   OBD_MD_FLPRJQUOTA)
 
 #define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
-                          OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
-                          OBD_MD_FLMODE  | OBD_MD_FLTYPE  | OBD_MD_FLUID   | \
-                          OBD_MD_FLGID   | OBD_MD_FLFLAGS | OBD_MD_FLNLINK | \
-                          OBD_MD_FLGENER | OBD_MD_FLRDEV  | OBD_MD_FLGROUP)
+			  OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
+			  OBD_MD_FLMODE  | OBD_MD_FLTYPE  | OBD_MD_FLUID   | \
+			  OBD_MD_FLGID   | OBD_MD_FLFLAGS | OBD_MD_FLNLINK | \
+			  OBD_MD_FLGENER | OBD_MD_FLRDEV  | OBD_MD_FLGROUP | \
+			  OBD_MD_FLPROJID)
 
 #define OBD_MD_FLXATTRALL (OBD_MD_FLXATTR | OBD_MD_FLXATTRLS)
 
@@ -1697,8 +1699,8 @@ struct mdt_body {
 	__u32	mbo_unused3; /* was max_cookiesize until 2.8 */
 	__u32	mbo_uid_h; /* high 32-bits of uid, for FUID */
 	__u32	mbo_gid_h; /* high 32-bits of gid, for FUID */
-	__u32	mbo_padding_5; /* also fix lustre_swab_mdt_body */
-	__u64	mbo_padding_6;
+	__u32   mbo_projid;
+	__u64	mbo_padding_6; /* also fix lustre_swab_mdt_body */
 	__u64	mbo_padding_7;
 	__u64	mbo_padding_8;
 	__u64	mbo_padding_9;
@@ -1769,6 +1771,7 @@ struct mdt_rec_setattr {
 #define MDS_ATTR_CTIME_SET  0x2000ULL /* = 8192 */
 #define MDS_ATTR_FROM_OPEN  0x4000ULL /* = 16384, called from open path, ie O_TRUNC */
 #define MDS_ATTR_BLOCKS     0x8000ULL /* = 32768 */
+#define MDS_ATTR_PROJID	    0x10000ULL	/* = 65536 */
 
 #ifndef FMODE_READ
 #define FMODE_READ               00000001
@@ -2617,6 +2620,22 @@ struct llog_setattr64_rec {
 	struct llog_rec_tail    lsr_tail;
 } __attribute__((packed));
 
+/* Extended to support project quota */
+struct llog_setattr64_rec_v2 {
+	struct llog_rec_hdr	lsr_hdr;
+	struct ost_id		lsr_oi;
+	__u32			lsr_uid;
+	__u32			lsr_uid_h;
+	__u32			lsr_gid;
+	__u32			lsr_gid_h;
+	__u64			lsr_valid;
+	__u32			lsr_projid;
+	__u32			lsr_padding1;
+	__u64			lsr_padding2;
+	__u64			lsr_padding3;
+	struct llog_rec_tail    lsr_tail;
+} __attribute__((packed));
+
 struct llog_size_change_rec {
 	struct llog_rec_hdr	lsc_hdr;
 	struct ll_fid		lsc_fid;
@@ -2858,7 +2877,8 @@ struct obdo {
 						 * each stripe.
 						 * brw: grant space consumed on
 						 * the client for the write */
-	__u64			o_padding_4;
+	__u32			o_projid;
+	__u32			o_padding_4;
 	__u64			o_padding_5;
 	__u64			o_padding_6;
 };

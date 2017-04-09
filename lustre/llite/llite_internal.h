@@ -227,6 +227,8 @@ struct ll_inode_info {
 	__u32				lli_layout_gen;
 	spinlock_t			lli_layout_lock;
 
+	__u32				lli_projid;   /* project id */
+
 	struct rw_semaphore		lli_xattrs_list_rwsem;
 	struct mutex			lli_xattrs_enq_lock;
 	struct list_head		lli_xattrs; /* ll_xattr_entry->xe_list */

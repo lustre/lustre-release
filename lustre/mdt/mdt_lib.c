@@ -807,6 +807,8 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
 		out |= LA_KILL_SUID;
 	if (in & MDS_ATTR_KILL_SGID)
 		out |= LA_KILL_SGID;
+	if (in & MDS_ATTR_PROJID)
+		out |= LA_PROJID;
 
 	if (in & MDS_ATTR_FROM_OPEN)
 		rr->rr_flags |= MRF_OPEN_TRUNC;
@@ -815,7 +817,7 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
 	if (in & MDS_ATTR_FORCE)
 		ma->ma_attr_flags |= MDS_PERM_BYPASS;
 
-	in &= ~(MDS_ATTR_MODE | MDS_ATTR_UID | MDS_ATTR_GID |
+	in &= ~(MDS_ATTR_MODE | MDS_ATTR_UID | MDS_ATTR_GID | MDS_ATTR_PROJID |
 		MDS_ATTR_ATIME | MDS_ATTR_MTIME | MDS_ATTR_CTIME |
 		MDS_ATTR_ATIME_SET | MDS_ATTR_CTIME_SET | MDS_ATTR_MTIME_SET |
 		MDS_ATTR_SIZE | MDS_ATTR_BLOCKS | MDS_ATTR_ATTR_FLAG |

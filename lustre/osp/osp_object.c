@@ -612,7 +612,7 @@ static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 			RETURN(rc);
 	}
 
-	if (!(attr->la_valid & (LA_UID | LA_GID)))
+	if (!(attr->la_valid & (LA_UID | LA_GID | LA_PROJID)))
 		RETURN(0);
 
 	/* track all UID/GID changes via llog */
@@ -649,8 +649,8 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 	int			 rc = 0;
 	ENTRY;
 
-	/* we're interested in uid/gid changes only */
-	if (!(attr->la_valid & (LA_UID | LA_GID)))
+	/* we're interested in uid/gid/projid changes only */
+	if (!(attr->la_valid & (LA_UID | LA_GID | LA_PROJID)))
 		RETURN(0);
 
 	if (!is_only_remote_trans(th)) {
@@ -679,6 +679,10 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 		if (attr->la_valid & LA_GID) {
 			la->la_gid = attr->la_gid;
 			la->la_valid |= LA_GID;
+		}
+		if (attr->la_valid & LA_PROJID) {
+			la->la_gid = attr->la_projid;
+			la->la_valid |= LA_PROJID;
 		}
 		spin_unlock(&o->opo_lock);
 	}

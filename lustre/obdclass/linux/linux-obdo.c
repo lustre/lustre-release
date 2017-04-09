@@ -87,6 +87,10 @@ void obdo_from_la(struct obdo *dst, const struct lu_attr *la, u64 valid)
                 dst->o_gid = la->la_gid;
                 newvalid |= OBD_MD_FLGID;
         }
+	if (valid & LA_PROJID) {
+		dst->o_projid = la->la_projid;
+		newvalid |= OBD_MD_FLPROJID;
+	}
 	if (valid & LA_FLAGS) {
 		dst->o_flags = la->la_flags;
 		newvalid |= OBD_MD_FLFLAGS;
@@ -140,6 +144,10 @@ void la_from_obdo(struct lu_attr *dst, const struct obdo *obdo, u64 valid)
                 dst->la_gid = obdo->o_gid;
                 newvalid |= LA_GID;
         }
+	if (valid & OBD_MD_FLPROJID) {
+		dst->la_projid = obdo->o_projid;
+		newvalid |= LA_PROJID;
+	}
 	if (valid & OBD_MD_FLFLAGS) {
 		dst->la_flags = obdo->o_flags;
 		newvalid |= LA_FLAGS;

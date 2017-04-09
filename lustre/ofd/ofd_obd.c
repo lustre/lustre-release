@@ -1212,7 +1212,7 @@ static int ofd_echo_getattr(const struct lu_env *env, struct obd_export *exp,
 		__u64 curr_version;
 
 		obdo_from_la(oa, &info->fti_attr,
-			     OFD_VALID_FLAGS | LA_UID | LA_GID);
+			     OFD_VALID_FLAGS | LA_UID | LA_GID | LA_PROJID);
 
 		/* Store object version in reply */
 		curr_version = dt_version_get(env, ofd_object_child(fo));

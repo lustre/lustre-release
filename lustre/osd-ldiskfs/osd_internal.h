@@ -90,6 +90,11 @@ extern struct kmem_cache *dynlock_cachep;
 #define OSD_STATFS_RESERVED		(1ULL << 23) /* 8MB */
 #define OSD_STATFS_RESERVED_SHIFT	(7) /* reserve 0.78% of all space */
 
+/* check if ldiskfs support project quota */
+#ifndef LDISKFS_IOC_FSSETXATTR
+#undef HAVE_PROJECT_QUOTA
+#endif
+
 struct osd_directory {
         struct iam_container od_container;
         struct iam_descr     od_descr;
@@ -316,16 +321,17 @@ enum osd_full_scrub_ratio {
 
 #define FULL_SCRUB_THRESHOLD_RATE_DEFAULT	60
 
-/* There are at most 10 uid/gids are affected in a transaction, and
+/* There are at most 15 uid/gid/projids are affected in a transaction, and
  * that's rename case:
- * - 2 for source parent uid & gid;
- * - 2 for source child uid & gid ('..' entry update when child is directory);
- * - 2 for target parent uid & gid;
- * - 2 for target child uid & gid (if the target child exists);
- * - 2 for root uid & gid (last_rcvd, llog, etc);
+ * - 3 for source parent uid & gid & projid;
+ * - 3 for source child uid & gid & projid ('..' entry update when
+ * child is directory);
+ * - 3 for target parent uid & gid & projid;
+ * - 3 for target child uid & gid & projid(if the target child exists);
+ * - 3 for root uid & gid(last_rcvd, llog, etc);
  *
  */
-#define OSD_MAX_UGID_CNT        10
+#define OSD_MAX_UGID_CNT        15
 
 enum osd_op_type {
 	OSD_OT_ATTR_SET		= 0,
@@ -737,7 +743,7 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 		    struct lquota_id_info *qi, struct osd_object *obj,
 		    bool enforce, int *flags);
 int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
-			  long long space, struct osd_thandle *oh,
+			  __u32 projid, long long space, struct osd_thandle *oh,
 			  struct osd_object *obj, bool is_blk, int *flags,
 			  bool force);
 const struct dt_rec *osd_quota_pack(struct osd_object *obj,
@@ -765,6 +771,29 @@ static inline void i_uid_write(struct inode *inode, uid_t uid)
 static inline void i_gid_write(struct inode *inode, gid_t gid)
 {
 	inode->i_gid = gid;
+}
+#endif
+
+#ifdef HAVE_PROJECT_QUOTA
+static inline __u32 i_projid_read(struct inode *inode)
+{
+	return (__u32)from_kprojid(&init_user_ns, LDISKFS_I(inode)->i_projid);
+}
+
+static inline void i_projid_write(struct inode *inode, __u32 projid)
+{
+	kprojid_t kprojid;
+	kprojid = make_kprojid(&init_user_ns, (projid_t)projid);
+	LDISKFS_I(inode)->i_projid = kprojid;
+}
+#else
+static inline uid_t i_projid_read(struct inode *inode)
+{
+	return 0;
+}
+static inline void i_projid_write(struct inode *inode, __u32 projid)
+{
+	return;
 }
 #endif
 

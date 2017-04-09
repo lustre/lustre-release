@@ -833,9 +833,9 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 	dt_obj = ofd_object_child(ofd_obj);
 	LASSERT(dt_obj != NULL);
 
-	la->la_valid &= LA_UID | LA_GID;
+	la->la_valid &= LA_UID | LA_GID | LA_PROJID;
 
-	rc = ofd_attr_handle_ugid(env, ofd_obj, la, 0 /* !is_setattr */);
+	rc = ofd_attr_handle_id(env, ofd_obj, la, 0 /* !is_setattr */);
 	if (rc != 0)
 		GOTO(out, rc);
 
@@ -881,7 +881,7 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 	if (rc)
 		GOTO(out_tx, rc);
 
-	/* set uid/gid */
+	/* set uid/gid/pid */
 	if (la->la_valid) {
 		rc = dt_attr_set(env, dt_obj, la, th);
 		if (rc)
@@ -1209,7 +1209,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		 * to be changed to ofd_fmd_get() to create the fmd if it
 		 * doesn't already exist so we can store the reservation handle
 		 * there. */
-		valid = OBD_MD_FLUID | OBD_MD_FLGID;
+		valid = OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLPROJID;
 		fmd = ofd_fmd_find(exp, fid);
 		if (!fmd || fmd->fmd_mactime_xid < info->fti_xid)
 			valid |= OBD_MD_FLATIME | OBD_MD_FLMTIME |
@@ -1227,9 +1227,11 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 					oa->o_grant_used, old_rc);
 		if (rc == 0)
 			obdo_from_la(oa, &info->fti_attr,
-				     OFD_VALID_FLAGS | LA_GID | LA_UID);
+				     OFD_VALID_FLAGS | LA_GID | LA_UID |
+				     LA_PROJID);
 		else
-			obdo_from_la(oa, &info->fti_attr, LA_GID | LA_UID);
+			obdo_from_la(oa, &info->fti_attr, LA_GID | LA_UID |
+				     LA_PROJID);
 
 		/* don't report overquota flag if we failed before reaching
 		 * commit */

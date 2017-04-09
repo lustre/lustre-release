@@ -2358,8 +2358,8 @@ static void osd_inode_getattr(const struct lu_env *env,
 {
 	attr->la_valid	|= LA_ATIME | LA_MTIME | LA_CTIME | LA_MODE |
 			   LA_SIZE | LA_BLOCKS | LA_UID | LA_GID |
-			   LA_FLAGS | LA_NLINK | LA_RDEV | LA_BLKSIZE |
-			   LA_TYPE;
+			   LA_PROJID | LA_FLAGS | LA_NLINK | LA_RDEV |
+			   LA_BLKSIZE | LA_TYPE;
 
 	attr->la_atime	 = LTIME_S(inode->i_atime);
 	attr->la_mtime	 = LTIME_S(inode->i_mtime);
@@ -2369,6 +2369,7 @@ static void osd_inode_getattr(const struct lu_env *env,
 	attr->la_blocks	 = inode->i_blocks;
 	attr->la_uid	 = i_uid_read(inode);
 	attr->la_gid	 = i_gid_read(inode);
+	attr->la_projid	 = i_projid_read(inode);
 	attr->la_flags	 = ll_inode_to_ext_flags(inode->i_flags);
 	attr->la_nlink	 = inode->i_nlink;
 	attr->la_rdev	 = inode->i_rdev;
@@ -2399,6 +2400,65 @@ static int osd_attr_get(const struct lu_env *env,
 	return 0;
 }
 
+static int osd_declare_attr_qid(const struct lu_env *env,
+				struct osd_object *obj,
+				struct osd_thandle *oh, long long bspace,
+				qid_t old_id, qid_t new_id, bool enforce,
+				unsigned type)
+{
+	int rc;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lquota_id_info  *qi = &info->oti_qi;
+
+	qi->lqi_type = type;
+	/* inode accounting */
+	qi->lqi_is_blk = false;
+
+	/* one more inode for the new id ... */
+	qi->lqi_id.qid_uid = new_id;
+	qi->lqi_space      = 1;
+	/* Reserve credits for the new id */
+	rc = osd_declare_qid(env, oh, qi, NULL, enforce, NULL);
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
+		rc = 0;
+	if (rc)
+		RETURN(rc);
+
+	/* and one less inode for the current id */
+	qi->lqi_id.qid_uid = old_id;
+	qi->lqi_space      = -1;
+	rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
+		rc = 0;
+	if (rc)
+		RETURN(rc);
+
+	/* block accounting */
+	qi->lqi_is_blk = true;
+
+	/* more blocks for the new uid ... */
+	qi->lqi_id.qid_uid = new_id;
+	qi->lqi_space      = bspace;
+	/*
+	 * Credits for the new uid has been reserved, re-use "obj"
+	 * to save credit reservation.
+	 */
+	rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
+		rc = 0;
+	if (rc)
+		RETURN(rc);
+
+	/* and finally less blocks for the current uid */
+	qi->lqi_id.qid_uid = old_id;
+	qi->lqi_space      = -bspace;
+	rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
+		rc = 0;
+
+	RETURN(rc);
+}
+
 static int osd_declare_attr_set(const struct lu_env *env,
                                 struct dt_object *dt,
                                 const struct lu_attr *attr,
@@ -2406,8 +2466,6 @@ static int osd_declare_attr_set(const struct lu_env *env,
 {
 	struct osd_thandle     *oh;
 	struct osd_object      *obj;
-	struct osd_thread_info *info = osd_oti_get(env);
-	struct lquota_id_info  *qi = &info->oti_qi;
 	qid_t			uid;
 	qid_t			gid;
 	long long               bspace;
@@ -2446,103 +2504,33 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	if (attr->la_valid & LA_UID || attr->la_valid & LA_GID) {
 		/* USERQUOTA */
 		uid = i_uid_read(obj->oo_inode);
-		qi->lqi_type = USRQUOTA;
 		enforce = (attr->la_valid & LA_UID) && (attr->la_uid != uid);
-		/* inode accounting */
-		qi->lqi_is_blk = false;
-
-		/* one more inode for the new uid ... */
-		qi->lqi_id.qid_uid = attr->la_uid;
-		qi->lqi_space      = 1;
-		/* Reserve credits for the new uid */
-		rc = osd_declare_qid(env, oh, qi, NULL, enforce, NULL);
-		if (rc == -EDQUOT || rc == -EINPROGRESS)
-			rc = 0;
+		rc = osd_declare_attr_qid(env, obj, oh, bspace, uid,
+				attr->la_uid, enforce, USRQUOTA);
 		if (rc)
 			RETURN(rc);
 
-		/* and one less inode for the current uid */
-		qi->lqi_id.qid_uid = uid;
-		qi->lqi_space      = -1;
-		rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
-		if (rc == -EDQUOT || rc == -EINPROGRESS)
-			rc = 0;
-		if (rc)
-			RETURN(rc);
-
-		/* block accounting */
-		qi->lqi_is_blk = true;
-
-		/* more blocks for the new uid ... */
-		qi->lqi_id.qid_uid = attr->la_uid;
-		qi->lqi_space      = bspace;
-		/*
-		 * Credits for the new uid has been reserved, re-use "obj"
-		 * to save credit reservation.
-		 */
-		rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
-		if (rc == -EDQUOT || rc == -EINPROGRESS)
-			rc = 0;
-		if (rc)
-			RETURN(rc);
-
-		/* and finally less blocks for the current uid */
-		qi->lqi_id.qid_uid = uid;
-		qi->lqi_space      = -bspace;
-		rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
-		if (rc == -EDQUOT || rc == -EINPROGRESS)
-			rc = 0;
-		if (rc)
-			RETURN(rc);
-
-		/* GROUP QUOTA */
 		gid = i_gid_read(obj->oo_inode);
-		qi->lqi_type = GRPQUOTA;
 		enforce = (attr->la_valid & LA_GID) && (attr->la_gid != gid);
-
-		/* inode accounting */
-		qi->lqi_is_blk = false;
-
-		/* one more inode for the new gid ... */
-		qi->lqi_id.qid_gid = attr->la_gid;
-		qi->lqi_space      = 1;
-		rc = osd_declare_qid(env, oh, qi, NULL, enforce, NULL);
-		if (rc == -EDQUOT || rc == -EINPROGRESS)
-			rc = 0;
+		rc = osd_declare_attr_qid(env, obj, oh, bspace,
+				i_gid_read(obj->oo_inode), attr->la_gid,
+				enforce, GRPQUOTA);
 		if (rc)
 			RETURN(rc);
 
-		/* and one less inode for the current gid */
-		qi->lqi_id.qid_gid = gid;
-		qi->lqi_space      = -1;
-		rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
-		if (rc == -EDQUOT || rc == -EINPROGRESS)
-			rc = 0;
-		if (rc)
-			RETURN(rc);
-
-		/* block accounting */
-		qi->lqi_is_blk = true;
-
-		/* more blocks for the new gid ... */
-		qi->lqi_id.qid_gid = attr->la_gid;
-		qi->lqi_space      = bspace;
-		rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
-		if (rc == -EDQUOT || rc == -EINPROGRESS)
-			rc = 0;
-		if (rc)
-			RETURN(rc);
-
-		/* and finally less blocks for the current gid */
-		qi->lqi_id.qid_gid = gid;
-		qi->lqi_space      = -bspace;
-		rc = osd_declare_qid(env, oh, qi, obj, enforce, NULL);
-		if (rc == -EDQUOT || rc == -EINPROGRESS)
-			rc = 0;
+	}
+#ifdef	HAVE_PROJECT_QUOTA
+	if (attr->la_valid & LA_PROJID) {
+		__u32 projid = i_projid_read(obj->oo_inode);
+		enforce = (attr->la_valid & LA_PROJID) &&
+					(attr->la_projid != projid);
+		rc = osd_declare_attr_qid(env, obj, oh, bspace,
+				(qid_t)projid, (qid_t)attr->la_projid,
+				enforce, PRJQUOTA);
 		if (rc)
 			RETURN(rc);
 	}
-
+#endif
 	RETURN(rc);
 }
 
@@ -2580,6 +2568,8 @@ static int osd_inode_setattr(const struct lu_env *env,
 		i_uid_write(inode, attr->la_uid);
 	if (bits & LA_GID)
 		i_gid_write(inode, attr->la_gid);
+	if (bits & LA_PROJID)
+		i_projid_write(inode, attr->la_projid);
 	if (bits & LA_NLINK)
 		set_nlink(inode, attr->la_nlink);
 	if (bits & LA_RDEV)
@@ -2595,10 +2585,11 @@ static int osd_inode_setattr(const struct lu_env *env,
 
 static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
 {
+	int rc;
+
 	if ((attr->la_valid & LA_UID && attr->la_uid != i_uid_read(inode)) ||
 	    (attr->la_valid & LA_GID && attr->la_gid != i_gid_read(inode))) {
 		struct iattr	iattr;
-		int		rc;
 
 		ll_vfs_dq_init(inode);
 		iattr.ia_valid = 0;
@@ -2617,6 +2608,20 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
 			return rc;
 		}
 	}
+
+#ifdef	HAVE_PROJECT_QUOTA
+	/* Handle project id Transfer here properly */
+	if (attr->la_valid & LA_PROJID && attr->la_projid !=
+						i_projid_read(inode)) {
+		rc = __ldiskfs_ioctl_setproject(inode, attr->la_projid);
+		if (rc) {
+			CERROR("%s: quota transfer failed: rc = %d. Is quota "
+			       "enforcement enabled on the ldiskfs "
+			       "filesystem?\n", inode->i_sb->s_id, rc);
+			return rc;
+		}
+	}
+#endif
 	return 0;
 }
 
@@ -3102,8 +3107,9 @@ static int osd_declare_object_create(const struct lu_env *env,
 	if (!attr)
 		RETURN(0);
 
-	rc = osd_declare_inode_qid(env, attr->la_uid, attr->la_gid, 1, oh,
-				   osd_dt_obj(dt), false, NULL, false);
+	rc = osd_declare_inode_qid(env, attr->la_uid, attr->la_gid,
+				   attr->la_projid, 1, oh, osd_dt_obj(dt),
+				   false, NULL, false);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -3181,12 +3187,14 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 			     osd_dto_credits_noquota[DTO_INDEX_DELETE] + 3);
 	/* one less inode */
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
-				   -1, oh, obj, false, NULL, false);
+				   i_projid_read(inode), -1, oh, obj, false,
+				   NULL, false);
 	if (rc)
 		RETURN(rc);
 	/* data to be truncated */
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
-				   0, oh, obj, true, NULL, false);
+				   i_projid_read(inode), 0, oh, obj, true,
+				   NULL, false);
 	if (rc)
 		RETURN(rc);
 
@@ -4527,7 +4535,8 @@ static int osd_index_declare_ea_delete(const struct lu_env *env,
 		RETURN(-ENOENT);
 
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
-				   0, oh, osd_dt_obj(dt), true, NULL, false);
+				   i_projid_read(inode), 0, oh, osd_dt_obj(dt),
+				   true, NULL, false);
 	RETURN(rc);
 }
 
@@ -5410,8 +5419,10 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 		 * calculate how many blocks will be consumed by this index
 		 * insert */
 		rc = osd_declare_inode_qid(env, i_uid_read(inode),
-					   i_gid_read(inode), 0, oh,
-					   osd_dt_obj(dt), true, NULL, false);
+					   i_gid_read(inode),
+					   i_projid_read(inode), 0,
+					   oh, osd_dt_obj(dt), true,
+					   NULL, false);
 	}
 
 	RETURN(rc);

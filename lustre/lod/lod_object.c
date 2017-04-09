@@ -1131,20 +1131,20 @@ static int lod_declare_attr_set(const struct lu_env *env,
 		RETURN(rc);
 
 	/* osp_declare_attr_set() ignores all attributes other than
-	 * UID, GID, and size, and osp_attr_set() ignores all but UID
-	 * and GID.  Declaration of size attr setting happens through
-	 * lod_declare_init_size(), and not through this function.
+	 * UID, GID, PID, and size, and osp_attr_set() ignores all but
+	 * UID, GID and PID. Declaration of size attr setting happens
+	 * through lod_declare_init_size(), and not through this function.
 	 * Therefore we need not load striping unless ownership is
 	 * changing.  This should save memory and (we hope) speed up
 	 * rename(). */
 	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
-		if (!(attr->la_valid & (LA_UID | LA_GID)))
+		if (!(attr->la_valid & (LA_UID | LA_GID | LA_PROJID)))
 			RETURN(rc);
 
 		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_OWNER))
 			RETURN(0);
 	} else {
-		if (!(attr->la_valid & (LA_UID | LA_GID | LA_MODE |
+		if (!(attr->la_valid & (LA_UID | LA_GID | LA_PROJID | LA_MODE |
 					LA_ATIME | LA_MTIME | LA_CTIME |
 					LA_FLAGS)))
 			RETURN(rc);
@@ -1238,13 +1238,13 @@ static int lod_attr_set(const struct lu_env *env,
 		RETURN(rc);
 
 	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
-		if (!(attr->la_valid & (LA_UID | LA_GID)))
+		if (!(attr->la_valid & (LA_UID | LA_GID | LA_PROJID)))
 			RETURN(rc);
 
 		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_OWNER))
 			RETURN(0);
 	} else {
-		if (!(attr->la_valid & (LA_UID | LA_GID | LA_MODE |
+		if (!(attr->la_valid & (LA_UID | LA_GID | LA_MODE | LA_PROJID |
 					LA_ATIME | LA_MTIME | LA_CTIME |
 					LA_FLAGS)))
 			RETURN(rc);
@@ -2912,7 +2912,7 @@ static int lod_xattr_set_lmv(const struct lu_env *env, struct dt_object *dt,
 		RETURN(rc);
 
 	attr->la_valid = LA_ATIME | LA_MTIME | LA_CTIME |
-			 LA_MODE | LA_UID | LA_GID | LA_TYPE;
+			 LA_MODE | LA_UID | LA_GID | LA_TYPE | LA_PROJID;
 	dof->dof_type = DFT_DIR;
 
 	rc = lod_prep_lmv_md(env, dt, &lmv_buf);

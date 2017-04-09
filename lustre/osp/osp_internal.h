@@ -333,7 +333,7 @@ struct osp_thread_info {
 	union {
 		struct llog_rec_hdr		osi_hdr;
 		struct llog_unlink64_rec	osi_unlink;
-		struct llog_setattr64_rec	osi_setattr;
+		struct llog_setattr64_rec_v2	osi_setattr;
 		struct llog_gen_rec		osi_gen;
 	};
 	struct llog_cookie	 osi_cookie;

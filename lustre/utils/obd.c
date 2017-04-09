@@ -1497,9 +1497,11 @@ int jt_obd_create(int argc, char **argv)
 		ostid_set_id(&data.ioc_obdo1.o_oi, base_id);
 		data.ioc_obdo1.o_uid = 0;
 		data.ioc_obdo1.o_gid = 0;
+		data.ioc_obdo1.o_projid = 0;
 		data.ioc_obdo1.o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
 					 OBD_MD_FLID | OBD_MD_FLUID |
-					 OBD_MD_FLGID | OBD_MD_FLGROUP;
+					 OBD_MD_FLGID | OBD_MD_FLGROUP |
+					 OBD_MD_FLPROJID;
 
                 memset(buf, 0, sizeof(rawbuf));
                 rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));

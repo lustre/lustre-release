@@ -1857,6 +1857,8 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 		inode->i_uid = make_kuid(&init_user_ns, body->mbo_uid);
 	if (body->mbo_valid & OBD_MD_FLGID)
 		inode->i_gid = make_kgid(&init_user_ns, body->mbo_gid);
+	if (body->mbo_valid & OBD_MD_FLPROJID)
+		lli->lli_projid = body->mbo_projid;
 	if (body->mbo_valid & OBD_MD_FLFLAGS)
 		inode->i_flags = ll_ext_to_inode_flags(body->mbo_flags);
 	if (body->mbo_valid & OBD_MD_FLNLINK)

@@ -333,7 +333,7 @@ int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
 		osi->osi_hdr.lrh_len = sizeof(struct llog_unlink64_rec);
 		break;
 	case MDS_SETATTR64_REC:
-		osi->osi_hdr.lrh_len = sizeof(struct llog_setattr64_rec);
+		osi->osi_hdr.lrh_len = sizeof(struct llog_setattr64_rec_v2);
 		break;
 	default:
 		LBUG();
@@ -409,9 +409,11 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 		LASSERT(attr);
 		osi->osi_setattr.lsr_uid = attr->la_uid;
 		osi->osi_setattr.lsr_gid = attr->la_gid;
+		osi->osi_setattr.lsr_projid = attr->la_projid;
 		osi->osi_setattr.lsr_valid =
 			((attr->la_valid & LA_UID) ? OBD_MD_FLUID : 0) |
-			((attr->la_valid & LA_GID) ? OBD_MD_FLGID : 0);
+			((attr->la_valid & LA_GID) ? OBD_MD_FLGID : 0) |
+			((attr->la_valid & LA_PROJID) ? OBD_MD_FLPROJID : 0);
 		break;
 	default:
 		LBUG();
@@ -715,11 +717,13 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSP_CHECK_INVALID_REC))
 		RETURN(1);
-	/* lsr_valid can only be 0 or have OBD_MD_{FLUID,FLGID} set,
+
+	/* lsr_valid can only be 0 or HAVE OBD_MD_{FLUID, FLGID, FLPROJID} set,
 	 * so no bits other than these should be set. */
-	if ((rec->lsr_valid & ~(OBD_MD_FLUID | OBD_MD_FLGID)) != 0) {
+	if ((rec->lsr_valid & ~(OBD_MD_FLUID | OBD_MD_FLGID |
+	    OBD_MD_FLPROJID)) != 0) {
 		CERROR("%s: invalid setattr record, lsr_valid:%llu\n",
-		       d->opd_obd->obd_name, rec->lsr_valid);
+			d->opd_obd->obd_name, rec->lsr_valid);
 		/* return 1 on invalid record */
 		RETURN(1);
 	}
@@ -734,6 +738,10 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 	body->oa.o_uid = rec->lsr_uid;
 	body->oa.o_gid = rec->lsr_gid;
 	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID;
+	if (h->lrh_len > sizeof(struct llog_setattr64_rec))
+		body->oa.o_projid = ((struct llog_setattr64_rec_v2 *)
+				      rec)->lsr_projid;
+
 	/* old setattr record (prior 2.6.0) doesn't have 'valid' stored,
 	 * we assume that both UID and GID are valid in that case. */
 	if (rec->lsr_valid == 0)

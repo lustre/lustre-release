@@ -413,7 +413,7 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 int ofd_object_destroy(const struct lu_env *, struct ofd_object *, int);
 int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 		 struct lu_attr *la);
-int ofd_attr_handle_ugid(const struct lu_env *env, struct ofd_object *fo,
+int ofd_attr_handle_id(const struct lu_env *env, struct ofd_object *fo,
 			 struct lu_attr *la, int is_setattr);
 
 static inline

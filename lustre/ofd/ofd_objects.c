@@ -410,9 +410,9 @@ out:
  *
  * If the object still has SUID+SGID bits set, meaning that it was precreated
  * by the MDT before it was assigned to any file, (see ofd_precreate_objects())
- * then we will accept the UID+GID if sent by the client for initializing the
- * ownership of this object.  We only allow this to happen once (so clear these
- * bits) and later only allow setattr.
+ * then we will accept the UID/GID/PROJID if sent by the client for initializing
+ * the ownership of this object.  We only allow this to happen once (so clear
+ * these bits) and later only allow setattr.
  *
  * \param[in] env	 execution environment
  * \param[in] fo	 OFD object
@@ -422,7 +422,7 @@ out:
  * \retval		0 if successful
  * \retval		negative value on error
  */
-int ofd_attr_handle_ugid(const struct lu_env *env, struct ofd_object *fo,
+int ofd_attr_handle_id(const struct lu_env *env, struct ofd_object *fo,
 			 struct lu_attr *la, int is_setattr)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
@@ -432,7 +432,8 @@ int ofd_attr_handle_ugid(const struct lu_env *env, struct ofd_object *fo,
 
 	ENTRY;
 
-	if (!(la->la_valid & LA_UID) && !(la->la_valid & LA_GID))
+	if (!(la->la_valid & LA_UID) && !(la->la_valid & LA_GID) &&
+	    !(la->la_valid & LA_PROJID))
 		RETURN(0);
 
 	rc = dt_attr_get(env, ofd_object_child(fo), ln);
@@ -441,13 +442,19 @@ int ofd_attr_handle_ugid(const struct lu_env *env, struct ofd_object *fo,
 
 	LASSERT(ln->la_valid & LA_MODE);
 
+	/*
+	 * Only allow setattr to change UID/GID/PROJID, if
+	 * SUID+SGID is not set which means this is not
+	 * initialization of this objects.
+	 */
 	if (!is_setattr) {
 		if (!(ln->la_mode & S_ISUID))
-			la->la_valid &= ~LA_UID;
+			la->la_valid &= ~(LA_UID | LA_PROJID);
 		if (!(ln->la_mode & S_ISGID))
-			la->la_valid &= ~LA_GID;
+			la->la_valid &= ~(LA_GID | LA_PROJID);
 	}
 
+	/* Initialize ownership of this object, clear SUID+SGID bits*/
 	if ((la->la_valid & LA_UID) && (ln->la_mode & S_ISUID))
 		mask |= S_ISUID;
 	if ((la->la_valid & LA_GID) && (ln->la_mode & S_ISGID))
@@ -507,7 +514,7 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 	if (rc)
 		GOTO(unlock, rc);
 
-	rc = ofd_attr_handle_ugid(env, fo, la, 1 /* is_setattr */);
+	rc = ofd_attr_handle_id(env, fo, la, 1 /* is_setattr */);
 	if (rc != 0)
 		GOTO(unlock, rc);
 
@@ -633,7 +640,7 @@ int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 	if (rc)
 		GOTO(unlock, rc);
 
-	rc = ofd_attr_handle_ugid(env, fo, la, 0 /* !is_setattr */);
+	rc = ofd_attr_handle_id(env, fo, la, 0 /* !is_setattr */);
 	if (rc != 0)
 		GOTO(unlock, rc);
 

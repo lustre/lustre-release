@@ -1196,8 +1196,8 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	lnb[0].lnb_flags &= ~OBD_BRW_OVER_ALLQUOTA;
 
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
-				   quota_space, oh, osd_dt_obj(dt), true,
-				   &flags, ignore_quota);
+				   i_projid_read(inode), quota_space, oh,
+				   osd_dt_obj(dt), true, &flags, ignore_quota);
 
 	/* we need only to store the overquota flags in the first lnb for
 	 * now, once we support multiple objects BRW, this code needs be
@@ -1633,8 +1633,9 @@ out:
 	 * objects, so always set the lqi_space as 0. */
 	if (inode != NULL)
 		rc = osd_declare_inode_qid(env, i_uid_read(inode),
-					   i_gid_read(inode), 0, oh, obj, true,
-					   NULL, false);
+					   i_gid_read(inode),
+					   i_projid_read(inode), 0,
+					   oh, obj, true, NULL, false);
 	RETURN(rc);
 }
 
@@ -1808,7 +1809,8 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(inode);
 
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
-				   0, oh, osd_dt_obj(dt), true, NULL, false);
+				   i_projid_read(inode), 0, oh, osd_dt_obj(dt),
+				   true, NULL, false);
 	RETURN(rc);
 }
 

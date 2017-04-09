@@ -595,7 +595,8 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 			struct md_attr *ma)
 {
 	struct mdt_lock_handle  *lh;
-	int do_vbr = ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID|LA_FLAGS);
+	int do_vbr = ma->ma_attr.la_valid &
+			(LA_MODE|LA_UID|LA_GID|LA_PROJID|LA_FLAGS);
 	__u64 lockpart = MDS_INODELOCK_UPDATE;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
 	struct lu_fid *s0_fid = &info->mti_tmp_fid1;
@@ -648,13 +649,13 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
         }
 
 	/* Ensure constant striping during chown(). See LU-2789. */
-	if (ma->ma_attr.la_valid & (LA_UID|LA_GID))
+	if (ma->ma_attr.la_valid & (LA_UID|LA_GID|LA_PROJID))
 		mutex_lock(&mo->mot_lov_mutex);
 
         /* all attrs are packed into mti_attr in unpack_setattr */
         rc = mo_attr_set(info->mti_env, mdt_object_child(mo), ma);
 
-	if (ma->ma_attr.la_valid & (LA_UID|LA_GID))
+	if (ma->ma_attr.la_valid & (LA_UID|LA_GID|LA_PROJID))
 		mutex_unlock(&mo->mot_lov_mutex);
 
         if (rc != 0)

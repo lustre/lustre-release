@@ -1127,6 +1127,7 @@ static inline struct md_open_data *obd_mod_alloc(void)
 
 void obdo_from_inode(struct obdo *dst, struct inode *src, u64 valid);
 void obdo_set_parent_fid(struct obdo *dst, const struct lu_fid *parent);
+void obdo_set_o_projid(struct obdo *dst, u32 projid);
 
 /* return 1 if client should be resend request */
 static inline int client_should_resend(int resend, struct client_obd *cli)

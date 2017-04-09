@@ -55,6 +55,13 @@ void obdo_set_parent_fid(struct obdo *dst, const struct lu_fid *parent)
 }
 EXPORT_SYMBOL(obdo_set_parent_fid);
 
+void obdo_set_o_projid(struct obdo *dst, u32 projid)
+{
+	dst->o_projid = projid;
+	dst->o_valid |= OBD_MD_FLPROJID;
+}
+EXPORT_SYMBOL(obdo_set_o_projid);
+
 /* WARNING: the file systems must take care not to tinker with
    attributes they don't manage (such as blocks). */
 void obdo_from_inode(struct obdo *dst, struct inode *src, u64 valid)
