@@ -461,14 +461,16 @@ static int lov_delete_composite(const struct lu_env *env,
 				union lov_layout_state *state)
 {
 	struct lov_layout_entry *entry;
+	struct lov_layout_composite *comp = &state->composite;
 
 	ENTRY;
 
 	dump_lsm(D_INODE, lov->lo_lsm);
 
 	lov_layout_wait(env, lov);
-	lov_foreach_layout_entry(lov, entry)
-		lov_delete_raid0(env, lov, &entry->lle_raid0);
+	if (comp->lo_entries)
+		lov_foreach_layout_entry(lov, entry)
+			lov_delete_raid0(env, lov, &entry->lle_raid0);
 
 	RETURN(0);
 }
