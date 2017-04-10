@@ -516,7 +516,7 @@ void dump_lsm(unsigned int level, const struct lov_stripe_md *lsm)
 		       lse->lsme_pool_name);
 		if (!lsme_inited(lse) ||
 		    lse->lsme_pattern & LOV_PATTERN_F_RELEASED)
-			break;
+			continue;
 		for (j = 0; j < lse->lsme_stripe_count; j++) {
 			CDEBUG(level, "   oinfo:%p: ostid: "DOSTID
 			       " ost idx: %d gen: %d\n",

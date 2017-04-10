@@ -451,10 +451,6 @@ static inline int mo_layout_change(const struct lu_env *env,
 				   struct layout_intent *layout,
 				   const struct lu_buf *buf)
 {
-	CDEBUG(D_INFO, "got layout change request from client: "
-	       "opc:%u flags:%#x extent[%#llx,%#llx)\n",
-	       layout->li_opc, layout->li_flags,
-	       layout->li_start, layout->li_end);
 	/* need instantiate objects which in the access range */
 	LASSERT(m->mo_ops->moo_layout_change);
 	return m->mo_ops->moo_layout_change(env, m, layout, buf);
