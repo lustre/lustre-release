@@ -1483,6 +1483,21 @@ void test31(void)
 		i++;
 	} while (rc == 0);
 
+	/* Verify reverse iteration gives the same IDs as forward iteration */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_LAST);
+	ASSERTF(rc == 0, "rc %d, errno %d", rc, errno);
+	do {
+		__u32 comp_id;
+
+		--i;
+		rc = llapi_layout_comp_id_get(layout, &comp_id);
+		ASSERTF(rc == 0 && comp_id == id[i],
+			"i %d, errno %d, id[] %u/%u", i, errno, id[i], comp_id);
+
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_PREV);
+		ASSERTF(rc == 0 || i == 0, "i=%d rc=%d errno=%d", i, rc, errno);
+	} while (rc == 0);
+
 	llapi_layout_free(layout);
 
 	/* delete non-tail component will fail */

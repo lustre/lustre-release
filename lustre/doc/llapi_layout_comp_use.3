@@ -21,14 +21,17 @@ are:
 .BR LLAPI_LAYOUT_COMP_USE_FIRST :
 The first component of the layout.
 .PP
+.BR LLAPI_LAYOUT_COMP_USE_LAST :
+The last component of the layout.
+.PP
 .BR LLAPI_LAYOUT_COMP_USE_NEXT :
 The next component after the current one.
 .PP
-.BR LLAPI_LAYOUT_COMP_USE_LAST :
-The last component of the layout.
+.BR LLAPI_LAYOUT_COMP_USE_PREV :
+The previous component before the current one.
 .SH RETURN VALUES
-Return 0 on success, and 1 when there is no next component. Otherwise,
-if an error occurred -1 is returned and
+Return 0 on success, and 1 when there is no next or previous component.
+Otherwise, if an error occurred -1 is returned and
 .I errno
 is set appropriately.
 .SH ERRORS

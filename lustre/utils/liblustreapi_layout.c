@@ -1820,13 +1820,15 @@ int llapi_layout_comp_use_id(struct llapi_layout *layout, uint32_t comp_id)
  * \param[in] pos	the position to be moved, it can be:
  *			LLAPI_LAYOUT_COMP_USE_FIRST: use first component
  *			LLAPI_LAYOUT_COMP_USE_LAST: use last component
- *			LLAPI_LAYOUT_COMP_USE_NEXT: use next component
+ *			LLAPI_LAYOUT_COMP_USE_NEXT: use component after current
+ *			LLAPI_LAYOUT_COMP_USE_PREV: use component before current
  *
  * \retval	=0 : moved successfully
- * \retval	=1 : at last component with NEXT
+ * \retval	=1 : at last component with NEXT, at first component with PREV
  * \retval	<0 if error occurs
  */
-int llapi_layout_comp_use(struct llapi_layout *layout, uint32_t pos)
+int llapi_layout_comp_use(struct llapi_layout *layout,
+			  enum llapi_layout_comp_use pos)
 {
 	struct llapi_layout_comp *comp, *head, *tail;
 
@@ -1839,21 +1841,32 @@ int llapi_layout_comp_use(struct llapi_layout *layout, uint32_t pos)
 		return -1;
 	}
 
-	head = list_entry(layout->llot_comp_list.next, typeof(*head),
-			  llc_list);
-	tail = list_entry(layout->llot_comp_list.prev, typeof(*tail),
-			  llc_list);
-
-	if (pos == LLAPI_LAYOUT_COMP_USE_NEXT) {
-		if (comp == tail)
+	head = list_entry(layout->llot_comp_list.next, typeof(*head), llc_list);
+	tail = list_entry(layout->llot_comp_list.prev, typeof(*tail), llc_list);
+	switch (pos) {
+	case LLAPI_LAYOUT_COMP_USE_FIRST:
+		layout->llot_cur_comp = head;
+		break;
+	case LLAPI_LAYOUT_COMP_USE_NEXT:
+		if (comp == tail) {
+			errno = ENOENT;
 			return 1;
+		}
 		layout->llot_cur_comp = list_entry(comp->llc_list.next,
 						   typeof(*comp), llc_list);
-	} else if (pos == LLAPI_LAYOUT_COMP_USE_FIRST) {
-		layout->llot_cur_comp = head;
-	} else if (pos == LLAPI_LAYOUT_COMP_USE_LAST) {
+		break;
+	case LLAPI_LAYOUT_COMP_USE_LAST:
 		layout->llot_cur_comp = tail;
-	} else {
+		break;
+	case LLAPI_LAYOUT_COMP_USE_PREV:
+		if (comp == head) {
+			errno = ENOENT;
+			return 1;
+		}
+		layout->llot_cur_comp = list_entry(comp->llc_list.prev,
+						   typeof(*comp), llc_list);
+		break;
+	default:
 		errno = EINVAL;
 		return -1;
 	}
