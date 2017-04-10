@@ -157,7 +157,7 @@ static int lfs_list_commands(int argc, char **argv);
 #define SETDIRSTRIPE_USAGE					\
 	"		[--mdt-count|-c stripe_count>\n"	\
 	"		[--mdt-index|-i mdt_index]\n"		\
-	"		[--mdt-hash|-t mdt_hash]\n"		\
+	"		[--mdt-hash|-H mdt_hash]\n"		\
 	"		[--default|-D] [--mode|-m mode] <dir>\n"	\
 	"\tstripe_count: stripe count of the striped directory\n"	\
 	"\tmdt_index: MDT index of first stripe\n"			\
@@ -217,7 +217,7 @@ command_t cmdlist[] = {
 	 "To list the striping info for a given directory\n"
 	 "or recursively for all directories in a directory tree.\n"
 	 "usage: getdirstripe [--obd|-O <uuid>] [--mdt-count|-c]\n"
-	 "		      [--mdt-index|-i] [--mdt-hash|-t]\n"
+	 "		      [--mdt-index|-i] [--mdt-hash|-H]\n"
 	 "		      [--recursive|-r] [--default|-D] <dir> ..."},
 	{"mkdir", lfs_setdirstripe, 0,
 	 "To create a striped directory on a specified MDT. This can only\n"
@@ -251,9 +251,14 @@ command_t cmdlist[] = {
 	 "     [[!] --component-start [+-]N[kMGTPE]]\n"
 	 "     [[!] --component-end|-E [+-]N[kMGTPE]]\n"
 	 "     [[!] --component-flags <comp_flags>]\n"
+	 "     [[!] --mdt-count|-T [+-]<stripes>]\n"
+	 "     [[!] --mdt-hash|-H <hashtype>\n"
          "\t !: used before an option indicates 'NOT' requested attribute\n"
          "\t -: used before a value indicates 'AT MOST' requested value\n"
-         "\t +: used before a value indicates 'AT LEAST' requested value\n"},
+         "\t +: used before a value indicates 'AT LEAST' requested value\n"
+	 "\tmdt-hash:	hash type of the striped directory.\n"
+	 "\t		fnv_1a_64 FNV-1a hash algorithm\n"
+	 "\t		all_char  sum of characters % MDT_COUNT\n"},
         {"check", lfs_check, 0,
          "Display the status of MDS or OSTs (as specified in the command)\n"
          "or all the servers (MDS and OSTs).\n"
@@ -407,6 +412,17 @@ command_t cmdlist[] = {
 
 
 #define MIGRATION_NONBLOCK	1
+
+static int check_hashtype(const char *hashtype)
+{
+	int i;
+
+	for (i = LMV_HASH_TYPE_ALL_CHARS; i < LMV_HASH_TYPE_MAX; i++)
+		if (strcmp(hashtype, mdt_hash_name[i]) == 0)
+			return i;
+
+	return 0;
+}
 
 /**
  * Internal helper for migrate_copy_data(). Check lease and report error if
@@ -1306,6 +1322,7 @@ static int lfs_setstripe(int argc, char **argv)
 		{"stripe_count", required_argument, 0, 'c'},
 		{"delete",       no_argument,       0, 'd'},
 		{"component-end", required_argument, 0, 'E'},
+		/* dirstripe {"mdt-hash",     required_argument, 0, 'H'}, */
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "stripe-index", but was explicitly
 		 * made "stripe-index" for consistency with other options,
@@ -1334,6 +1351,7 @@ static int lfs_setstripe(int argc, char **argv)
 #endif
 		{"stripe-size",  required_argument, 0, 'S'},
 		{"stripe_size",  required_argument, 0, 'S'},
+		/* dirstripe {"mdt-count",    required_argument, 0, 'T'}, */
 		/* --verbose is only valid in migrate mode */
 		{"verbose",	 no_argument,	    0, 'v'},
 		{0, 0, 0, 0}
@@ -1811,6 +1829,7 @@ static int lfs_find(int argc, char **argv)
 		{"component-end", required_argument, 0, 'E'},
 		{"gid",          required_argument, 0, 'g'},
 		{"group",        required_argument, 0, 'G'},
+		{"mdt-hash",     required_argument, 0, 'H'},
 		{"stripe-index", required_argument, 0, 'i'},
 		{"stripe_index", required_argument, 0, 'i'},
 		/*{"component-id", required_argument, 0, 'I'},*/
@@ -1831,6 +1850,7 @@ static int lfs_find(int argc, char **argv)
                 {"stripe-size",  required_argument, 0, 'S'},
                 {"stripe_size",  required_argument, 0, 'S'},
                 {"type",         required_argument, 0, 't'},
+		{"mdt-count",    required_argument, 0, 'T'},
                 {"uid",          required_argument, 0, 'u'},
                 {"user",         required_argument, 0, 'U'},
                 {0, 0, 0, 0}
@@ -1847,8 +1867,8 @@ static int lfs_find(int argc, char **argv)
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
-				"-A:c:C:D:E:g:G:i:L:m:M:n:O:Ppqrs:S:t:u:U:v",
-				long_opts, NULL)) >= 0) {
+			"-A:c:C:D:E:g:G:H:i:L:m:M:n:O:Ppqrs:S:t:T:u:U:v",
+			long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
                 if (neg_opt)
@@ -2012,6 +2032,17 @@ static int lfs_find(int argc, char **argv)
 			param.fp_exclude_gid = !!neg_opt;
 			param.fp_check_gid = 1;
                         break;
+		case 'H':
+			param.fp_hash_type = check_hashtype(optarg);
+			if (param.fp_hash_type == 0) {
+				fprintf(stderr, "error: bad hash_type '%s'\n",
+					optarg);
+				ret = -1;
+				goto err;
+			}
+			param.fp_check_hash_type = 1;
+			param.fp_exclude_hash_type = !!neg_opt;
+			break;
 		case 'L':
 			ret = name2layout(&param.fp_layout, optarg);
 			if (ret)
@@ -2205,6 +2236,25 @@ err_free:
 				goto err;
 			};
 			break;
+		case 'T':
+			if (optarg[0] == '+') {
+				param.fp_mdt_count_sign = -1;
+				optarg++;
+			} else if (optarg[0] == '-') {
+				param.fp_mdt_count_sign =  1;
+				optarg++;
+			}
+
+			param.fp_mdt_count = strtoul(optarg, &endptr, 0);
+			if (*endptr != '\0') {
+				fprintf(stderr, "error: bad mdt_count '%s'\n",
+					optarg);
+				ret = -1;
+				goto err;
+			}
+			param.fp_check_mdt_count = 1;
+			param.fp_exclude_mdt_count = !!neg_opt;
+			break;
                 default:
                         ret = CMD_HELP;
                         goto err;
@@ -2260,6 +2310,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"component-end",	required_argument,	0, 'E'},
 		{"fid",			no_argument,		0, 'F'},
 		{"generation",		no_argument,		0, 'g'},
+		/* dirstripe {"mdt-hash",     required_argument, 0, 'H'}, */
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "stripe-index", but was explicitly
 		 * made "stripe-index" for consistency with other options,
@@ -2297,6 +2348,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 #endif
 		{"stripe-size",		no_argument,		0, 'S'},
 		{"stripe_size",		no_argument,		0, 'S'},
+		/* dirstripe {"mdt-count",    required_argument, 0, 'T'}, */
 		{"verbose",		no_argument,		0, 'v'},
 		{0, 0, 0, 0}
 	};
@@ -2306,17 +2358,14 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	while ((c = getopt_long(argc, argv, "cdDE:FghiI:LmMoO:pqrRsSv",
 				long_opts, NULL)) != -1) {
 		switch (c) {
-		case 'O':
-			if (param->fp_obd_uuid) {
-				fprintf(stderr,
-					"error: %s: only one obduuid allowed",
-					argv[0]);
-				return CMD_HELP;
+		case 'c':
+			if (strcmp(argv[optind - 1], "--count") == 0)
+				fprintf(stderr, "warning: '--count' deprecated,"
+					" use '--stripe-count' instead\n");
+			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
+				param->fp_verbose |= VERBOSE_COUNT;
+				param->fp_max_depth = 0;
 			}
-			param->fp_obd_uuid = (struct obd_uuid *)optarg;
-			break;
-		case 'q':
-			param->fp_quiet++;
 			break;
 		case LFS_COMP_COUNT_OPT:
 			param->fp_verbose |= VERBOSE_COMP_COUNT;
@@ -2401,33 +2450,9 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				param->fp_max_depth = 0;
 			}
 			break;
-		case 'r':
-			param->fp_recursive = 1;
-			break;
-		case 'v':
-			param->fp_verbose = VERBOSE_DEFAULT | VERBOSE_DETAIL;
-			break;
-		case 'c':
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
-			if (strcmp(argv[optind - 1], "--count") == 0)
-				fprintf(stderr, "warning: '--count' deprecated,"
-					" use '--stripe-count' instead\n");
-#endif
+		case 'g':
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
-				param->fp_verbose |= VERBOSE_COUNT;
-				param->fp_max_depth = 0;
-			}
-			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-		case 's':
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
-			fprintf(stderr, "warning: '--size|-s' deprecated, "
-				"use '--stripe-size|-S' instead\n");
-#endif
-#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0) */
-		case 'S':
-			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
-				param->fp_verbose |= VERBOSE_SIZE;
+				param->fp_verbose |= VERBOSE_GENERATION;
 				param->fp_max_depth = 0;
 			}
 			break;
@@ -2462,18 +2487,6 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				param->fp_verbose |= VERBOSE_COMP_ID;
 			}
 			break;
-		case 'p':
-			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
-				param->fp_verbose |= VERBOSE_POOL;
-				param->fp_max_depth = 0;
-			}
-			break;
-		case 'g':
-			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
-				param->fp_verbose |= VERBOSE_GENERATION;
-				param->fp_max_depth = 0;
-			}
-			break;
 		case 'L':
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
 				param->fp_verbose |= VERBOSE_LAYOUT;
@@ -2492,8 +2505,43 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				param->fp_max_depth = 0;
 			param->fp_verbose |= VERBOSE_MDTINDEX;
 			break;
+		case 'O':
+			if (param->fp_obd_uuid) {
+				fprintf(stderr,
+					"error: %s: only one obduuid allowed",
+					argv[0]);
+				return CMD_HELP;
+			}
+			param->fp_obd_uuid = (struct obd_uuid *)optarg;
+			break;
+		case 'p':
+			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
+				param->fp_verbose |= VERBOSE_POOL;
+				param->fp_max_depth = 0;
+			}
+			break;
+		case 'q':
+			param->fp_quiet++;
+			break;
+		case 'r':
+			param->fp_recursive = 1;
+			break;
 		case 'R':
 			param->fp_raw = 1;
+			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
+		case 's':
+			fprintf(stderr, "warning: '--size|-s' deprecated, "
+				"use '--stripe-size|-S' instead\n");
+#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0) */
+		case 'S':
+			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
+				param->fp_verbose |= VERBOSE_SIZE;
+				param->fp_max_depth = 0;
+			}
+			break;
+		case 'v':
+			param->fp_verbose = VERBOSE_DEFAULT | VERBOSE_DETAIL;
 			break;
 		default:
 			return CMD_HELP;
@@ -2574,19 +2622,26 @@ static int lfs_getdirstripe(int argc, char **argv)
 {
 	struct find_param param = { 0 };
 	struct option long_opts[] = {
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		{"mdt-count",	no_argument,		0, 'c'},
+#endif
+		{"mdt-hash",	no_argument,		0, 'H'},
 		{"mdt-index",	no_argument,		0, 'i'},
 		{"recursive",	no_argument,		0, 'r'},
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		{"mdt-hash",	no_argument,		0, 't'},
+#endif
 		{"default",	no_argument,		0, 'D'},
 		{"obd",		required_argument,	0, 'O'},
+		{"mdt-count",	no_argument,		0, 'T'},
 		{0, 0, 0, 0}
 	};
 	int c, rc;
 
 	param.fp_get_lmv = 1;
 
-	while ((c = getopt_long(argc, argv, "cirtDO:", long_opts, NULL)) != -1)
+	while ((c = getopt_long(argc, argv,
+				"cDHiO:rtT", long_opts, NULL)) != -1)
 	{
 		switch (c) {
 		case 'O':
@@ -2598,13 +2653,23 @@ static int lfs_getdirstripe(int argc, char **argv)
 			}
 			param.fp_obd_uuid = (struct obd_uuid *)optarg;
 			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 'c':
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 10, 50, 0)
+			fprintf(stderr, "warning: '-c' deprecated"
+				", use '-T' instead\n");
+#endif
+#endif
+		case 'T':
 			param.fp_verbose |= VERBOSE_COUNT;
 			break;
 		case 'i':
 			param.fp_verbose |= VERBOSE_OFFSET;
 			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 't':
+#endif
+		case 'H':
 			param.fp_verbose |= VERBOSE_HASH_TYPE;
 			break;
 		case 'D':
@@ -2669,8 +2734,9 @@ static int lfs_setdirstripe(int argc, char **argv)
 		{"mode",	required_argument, 0, 'm'},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		{"hash-type",	required_argument, 0, 't'},
-#endif
 		{"mdt-hash",	required_argument, 0, 't'},
+#endif
+		{"mdt-hash",	required_argument, 0, 'H'},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		{"default_stripe", no_argument, 0, 'D'},
 #endif
@@ -2678,7 +2744,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 		{0, 0, 0, 0}
 	};
 
-	while ((c = getopt_long(argc, argv, "c:dDi:m:t:", long_opts,
+	while ((c = getopt_long(argc, argv, "c:dDi:H:m:t:", long_opts,
 				NULL)) >= 0) {
 		switch (c) {
 		case 0:
@@ -2710,7 +2776,10 @@ static int lfs_setdirstripe(int argc, char **argv)
 		case 'm':
 			mode_opt = optarg;
 			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 't':
+#endif
+		case 'H':
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 11, 53, 0)
 			if (strcmp(argv[optind - 1], "--hash-type") == 0)
 				fprintf(stderr, "warning: '--hash-type' "
@@ -2773,20 +2842,13 @@ static int lfs_setdirstripe(int argc, char **argv)
 	if (stripe_hash_opt == NULL) {
 		hash_type = LMV_HASH_TYPE_FNV_1A_64;
 	} else {
-		int i;
-
-		for (i = LMV_HASH_TYPE_ALL_CHARS; i < LMV_HASH_TYPE_MAX; i++)
-			if (strcmp(stripe_hash_opt, mdt_hash_name[i]) == 0)
-				break;
-
-		if (i == LMV_HASH_TYPE_MAX) {
+		hash_type = check_hashtype(stripe_hash_opt);
+		if (hash_type == 0) {
 			fprintf(stderr,
 				"error: %s: bad stripe hash type '%s'\n",
 				argv[0], stripe_hash_opt);
 			return CMD_HELP;
 		}
-
-		hash_type = i;
 	}
 
 	/* get the stripe count */

@@ -3321,13 +3321,20 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	if (param->fp_obd_uuid || param->fp_mdt_uuid ||
 	    param->fp_check_uid || param->fp_check_gid ||
 	    param->fp_atime || param->fp_mtime || param->fp_ctime ||
-	    param->fp_check_size || find_check_lmm_info(param))
+	    param->fp_check_size || find_check_lmm_info(param) ||
+	    param->fp_check_mdt_count || param->fp_check_hash_type)
 		decision = 0;
 
 	if (param->fp_type != 0 && checked_type == 0)
                 decision = 0;
 
 	if (decision == 0) {
+		if (param->fp_check_mdt_count || param->fp_check_hash_type) {
+			param->fp_get_lmv = 1;
+			ret = cb_get_dirstripe(path, dir, param);
+			if (ret != 0)
+				return ret;
+		}
 		ret = get_lmd_info(path, parent, dir, param->fp_lmd,
 				   param->fp_lum_size);
 		if (ret == 0 && param->fp_lmd->lmd_lmm.lmm_magic == 0 &&
@@ -3435,10 +3442,31 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 			goto decided;
 	}
 
+	if (param->fp_check_mdt_count) {
+		decision = find_value_cmp(
+				param->fp_lmv_md->lum_stripe_count,
+				param->fp_mdt_count,
+				param->fp_mdt_count_sign,
+				param->fp_exclude_mdt_count, 1, 0);
+		if (decision == -1)
+			goto decided;
+	}
+
 	if (param->fp_check_layout) {
 		decision = find_check_layout(param);
 		if (decision == -1)
 			goto decided;
+	}
+
+	if (param->fp_check_hash_type) {
+		__u32 found;
+
+		found = param->fp_lmv_md->lum_hash_type & param->fp_hash_type;
+		if ((found && param->fp_exclude_hash_type) ||
+		    (!found && !param->fp_exclude_hash_type)) {
+			decision = -1;
+			goto decided;
+		}
 	}
 
 	/* If an OBD UUID is specified but none matches, skip this file. */

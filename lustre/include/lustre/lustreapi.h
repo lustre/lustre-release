@@ -175,7 +175,8 @@ struct find_param {
 				 fp_stripe_count_sign:2,
 				 fp_comp_start_sign:2,
 				 fp_comp_end_sign:2,
-				 fp_comp_count_sign:2;
+				 fp_comp_count_sign:2,
+				 fp_mdt_count_sign:2;
 	unsigned long long	 fp_size;
 	unsigned long long	 fp_size_units;
 
@@ -215,7 +216,11 @@ struct find_param {
 				 fp_check_comp_end:1,
 				 fp_exclude_comp_end:1,
 				 fp_check_comp_id:1,
-				 fp_exclude_comp_id:1;
+				 fp_exclude_comp_id:1,
+				 fp_check_mdt_count:1,
+				 fp_exclude_mdt_count:1,
+				 fp_check_hash_type:1,
+				 fp_exclude_hash_type:1;
 
 	int			 fp_verbose;
 	int			 fp_quiet;
@@ -256,11 +261,13 @@ struct find_param {
 	unsigned long long	 fp_comp_start_units;
 	unsigned long long	 fp_comp_end;
 	unsigned long long	 fp_comp_end_units;
+	unsigned long long	 fp_mdt_count;
 
 	/* In-process parameters. */
 	unsigned long		 fp_got_uuids:1,
 				 fp_obds_printed:1;
 	unsigned int		 fp_depth;
+	unsigned int		 fp_hash_type;
 };
 
 extern int llapi_ostlist(char *path, struct find_param *param);

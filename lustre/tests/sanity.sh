@@ -14729,7 +14729,11 @@ test_striped_dir() {
 		error "getdirstripe failed"
 	stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir)
 	if [ "$stripe_count" != "2" ]; then
-		error "stripe_count is $stripe_count, expect 2"
+		error "1:stripe_count is $stripe_count, expect 2"
+	fi
+	stripe_count=$($LFS getdirstripe -T $DIR/$tdir/striped_dir)
+	if [ "$stripe_count" != "2" ]; then
+		error "2:stripe_count is $stripe_count, expect 2"
 	fi
 
 	stripe_index=$($LFS getdirstripe -i $DIR/$tdir/striped_dir)
@@ -14895,13 +14899,13 @@ test_300e() {
 	mkdir $DIR/$tdir/striped_dir/dir_c
 
 	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir/stp_a ||
-		error "set striped dir under striped dir error"
+		error "set striped adir under striped dir error"
 
-	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir/stp_b ||
-		error "set striped dir under striped dir error"
+	$LFS setdirstripe -i 0 -c 2 -H all_char $DIR/$tdir/striped_dir/stp_b ||
+		error "set striped bdir under striped dir error"
 
 	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir/stp_c ||
-		error "set striped dir under striped dir error"
+		error "set striped cdir under striped dir error"
 
 	mrename $DIR/$tdir/striped_dir/dir_a $DIR/$tdir/striped_dir/dir_b ||
 		error "rename dir under striped dir fails"
@@ -15105,10 +15109,22 @@ test_300i() {
 	createmany -o $DIR/$tdir/striped_dir/f- 10 ||
 		error "create files under striped dir failed"
 
+	$LFS setdirstripe -i0 -c$MDSCOUNT -H all_char $DIR/$tdir/hashdir ||
+		error "set striped hashdir error"
+
+	$LFS setdirstripe -i0 -c$MDSCOUNT -H all_char $DIR/$tdir/hashdir/d0 ||
+		error "create dir0 under hash dir failed"
+	$LFS setdirstripe -i0 -c$MDSCOUNT -H fnv_1a_64 $DIR/$tdir/hashdir/d1 ||
+		error "create dir1 under hash dir failed"
+
 	# unfortunately, we need to umount to clear dir layout cache for now
 	# once we fully implement dir layout, we can drop this
 	umount_client $MOUNT || error "umount failed"
 	mount_client $MOUNT || error "mount failed"
+
+	$LFS find -H fnv_1a_64 $DIR/$tdir/hashdir
+	local dircnt=$($LFS find -H fnv_1a_64 $DIR/$tdir/hashdir | wc -l)
+	[ $dircnt -eq 1 ] || error "lfs find striped dir got:$dircnt,except:1"
 
 	#set the stripe to be unknown hash type
 	#define OBD_FAIL_UNKNOWN_LMV_STRIPE	0x1901
