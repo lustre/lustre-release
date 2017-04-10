@@ -781,10 +781,6 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 mpflag = cfs_memory_pressure_get_and_set();
 
 	rc = sptlrpc_cli_wrap_request(request);
-	if (rc == -ENOMEM)
-		/* set rq_sent so that this request is treated
-		 * as a delayed send in the upper layers */
-		request->rq_sent = cfs_time_current_sec();
 	if (rc)
 		GOTO(out, rc);
 
@@ -926,9 +922,16 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
          * the chance to have long unlink to sluggish net is smaller here. */
         ptlrpc_unregister_bulk(request, 0);
  out:
-        if (request->rq_memalloc)
-                cfs_memory_pressure_restore(mpflag);
-        return rc;
+	if (rc == -ENOMEM) {
+		/* set rq_sent so that this request is treated
+		 * as a delayed send in the upper layers */
+		request->rq_sent = cfs_time_current_sec();
+	}
+
+	if (request->rq_memalloc)
+		cfs_memory_pressure_restore(mpflag);
+
+	return rc;
 }
 EXPORT_SYMBOL(ptl_send_rpc);
 
