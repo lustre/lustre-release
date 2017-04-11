@@ -3636,6 +3636,34 @@ check_ost_indices() {
 	done
 }
 
+__touch_device()
+{
+	local facet_type=$1 # mgs || mds || ost
+	local facet_num=$2
+	local facet=${1}${2}
+	local device
+
+	case "$(facet_fstype $facet)" in
+	ldiskfs)
+		device=$(${facet_type}devname $facet_num)
+		;;
+	zfs)
+		device=$(${facet_type}vdevname $facet_num)
+		;;
+	*)
+		error "Unhandled filesystem type"
+		;;
+	esac
+
+	do_facet $facet "[ -e \"$device\" ]" && return
+
+	# Note: the following check only works with absolute paths
+	[[ ! "$device" =~ ^/dev/ ]] || [[ "$device" =~ ^/dev/shm/ ]] ||
+		error "$facet: device '$device' does not exist"
+
+	do_facet $facet "touch \"${device}\""
+}
+
 format_mgs() {
 	local quiet
 
@@ -3644,6 +3672,12 @@ format_mgs() {
 	fi
 	echo "Format mgs: $(mgsdevname)"
 	reformat_external_journal mgs
+
+	# touch "device" in case it is a loopback file for testing and needs to
+	# be created. mkfs.lustre doesn't do this to avoid accidentally writing
+	# to non-existent files in /dev if the admin made a typo during setup
+	__touch_device mgs
+
 	add mgs $(mkfs_opts mgs $(mgsdevname)) $(mountfs_opts mgs) --reformat \
 		$(mgsdevname) $(mgsvdevname) ${quiet:+>/dev/null} || exit 10
 }
@@ -3657,6 +3691,9 @@ format_mdt() {
 	fi
 	echo "Format mds$num: $(mdsdevname $num)"
 	reformat_external_journal mds$num
+
+	__touch_device mds $num
+
 	add mds$num $(mkfs_opts mds$num $(mdsdevname ${num})) \
 		$(mountfs_opts mds$num) --reformat $(mdsdevname $num) \
 		$(mdsvdevname $num) ${quiet:+>/dev/null} || exit 10
@@ -3670,6 +3707,9 @@ format_ost() {
 	fi
 	echo "Format ost$num: $(ostdevname $num)"
 	reformat_external_journal ost$num
+
+	__touch_device ost $num
+
 	add ost$num $(mkfs_opts ost$num $(ostdevname ${num})) \
 		$(mountfs_opts ost$num) --reformat $(ostdevname $num) \
 		$(ostvdevname ${num}) ${quiet:+>/dev/null} || exit 10
