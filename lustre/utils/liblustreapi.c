@@ -3356,7 +3356,7 @@ static int find_check_comp_options(struct find_param *param)
 	struct lov_comp_md_v1 *comp_v1;
 	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
 	struct lov_comp_md_entry_v1 *entry;
-	int i, ret;
+	int i, ret = 0;
 
 	if (v1->lmm_magic != LOV_USER_MAGIC_COMP_V1) {
 		if ((param->fp_check_comp_count &&

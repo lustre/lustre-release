@@ -647,10 +647,12 @@ static void get_parent_dir(const char *path, char *buf, size_t size)
 	strncpy(buf, path, size);
 	p = strrchr(buf, '/');
 
-	if (p != NULL)
+	if (p != NULL) {
 		*p = '\0';
-	else if (size >= 2)
+	} else if (size >= 2) {
 		strncpy(buf, ".", 2);
+		buf[size - 1] = '\0';
+	}
 }
 
 /**
@@ -1769,11 +1771,10 @@ int llapi_layout_comp_del(struct llapi_layout *layout)
 		return -1;
 	}
 
+	layout->llot_cur_comp =
+		list_entry(comp->llc_list.prev, typeof(*comp), llc_list);
 	list_del_init(&comp->llc_list);
 	__llapi_comp_free(comp);
-	layout->llot_cur_comp =
-		list_entry(comp->llc_list.prev, typeof(*comp),
-			   llc_list);
 
 	return 0;
 }

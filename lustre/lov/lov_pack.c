@@ -331,7 +331,7 @@ struct lov_stripe_md *lov_unpackmd(struct lov_obd *lov, void *buf,
 	if (op == NULL)
 		RETURN(ERR_PTR(-EINVAL));
 
-	lsm = lsm_op_find(magic)->lsm_unpackmd(lov, buf, buf_size);
+	lsm = op->lsm_unpackmd(lov, buf, buf_size);
 
 	RETURN(lsm);
 }
