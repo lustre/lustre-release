@@ -48,7 +48,7 @@ test_0() {
 		error "Create $comp_file failed"
 
 	#instantiate all components, so that objs are allocted
-	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=1k
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=2k
 
 	local ost_idx1=$($LFS getstripe -I 1 -i $comp_file)
 	local ost_idx2=$($LFS getstripe -I 2 -i $comp_file)
@@ -71,7 +71,7 @@ test_1() {
 		error "Create $comp_file failed"
 
 	#instantiate all components, so that objs are allocted
-	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=1k
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=2k
 
 	local ost_idx1=$($LFS getstripe -I 1 -i $comp_file)
 	local ost_idx2=$($LFS getstripe -I 2 -i $comp_file)
@@ -173,7 +173,7 @@ test_3() {
 		error "Create second $comp_file failed"
 
 	#instantiate all components, so that objs are allocted
-	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=16k
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=17k
 
 	del_comp_and_verify $comp_file "init" 0 0
 	rm -f $comp_file || error "Delete second $comp_file failed"
@@ -205,7 +205,7 @@ test_5() {
 	[ $comp_cnt -ne 2 ] && error "file $comp_cnt != 2"
 
 	#instantiate all components, so that objs are allocted
-	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=64k
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=65k
 
 	local ost_idx=$($LFS getstripe -I 1 -i $comp_file)
 	[ $ost_idx -ne 0 ] &&
@@ -346,7 +346,7 @@ test_9() {
 	replay_barrier $SINGLEMDS
 
 	# instantiate the 2nd component
-	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=1k
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=2k
 
 	local f1=$($LFS getstripe -I 2 $comp_file |
 			awk '/l_fid:/ {print $7}')
@@ -451,8 +451,11 @@ test_11() {
 	f4=$($LFS getstripe -I 4 $comp_file | grep "l_fid")
 	[[ -n $f4 ]] && error "3: 4th component instantiated"
 
-	# all 4 components instantiated
-	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=3k
+	# all 4 components instantiated, using append write
+	dd if=/dev/zero of=$comp_file bs=1k count=1 seek=2k
+	ls -l $comp_file
+	rwv -f $comp_file -w -a -n 2 $((1024*1023)) 1
+	ls -l $comp_file
 
 	f4=$($LFS getstripe -I 4 $comp_file | grep "l_fid")
 	[[ -z $f4 ]] && error "4: 4th component uninstantiated"
