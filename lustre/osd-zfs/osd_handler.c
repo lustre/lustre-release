@@ -746,6 +746,9 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 
 	/* shutdown quota slave instance associated with the device */
 	if (o->od_quota_slave != NULL) {
+		/* complete all in-flight callbacks */
+		osd_sync(env, &o->od_dt_dev);
+		txg_wait_callbacks(spa_get_dsl(dmu_objset_spa(o->od_os)));
 		qsd_fini(env, o->od_quota_slave);
 		o->od_quota_slave = NULL;
 	}
@@ -1204,9 +1207,6 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 	ENTRY;
 
 
-	osd_shutdown(env, o);
-	osd_oi_fini(env, o);
-
 	if (o->od_os) {
 		osd_objset_unregister_callbacks(o);
 		if (!o->od_dt_dev.dd_rdonly) {
@@ -1215,6 +1215,10 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 					spa_get_dsl(dmu_objset_spa(o->od_os)));
 		}
 	}
+
+	/* now with all the callbacks completed we can cleanup the remainings */
+	osd_shutdown(env, o);
+	osd_oi_fini(env, o);
 
 	rc = osd_procfs_fini(o);
 	if (rc) {
