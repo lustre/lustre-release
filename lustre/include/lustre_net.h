@@ -2536,6 +2536,7 @@ ptlrpc_client_recv_or_unlink(struct ptlrpc_request *req)
 static inline void
 ptlrpc_client_wake_req(struct ptlrpc_request *req)
 {
+	smp_mb();
 	if (req->rq_set == NULL)
 		wake_up(&req->rq_reply_waitq);
 	else
