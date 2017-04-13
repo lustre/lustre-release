@@ -7854,3 +7854,69 @@ lss_gen_conf()
 
 	do_facet mgs "cat $LSNAPSHOT_CONF"
 }
+
+parse_plain_param()
+{
+	local line=$1
+	local val=$(awk '{print $2}' <<< $line)
+
+	if [[ $line =~ ^"lmm_stripe_count:" ]]; then
+		echo "-c $val"
+	elif [[ $line =~ ^"lmm_stripe_size:" ]]; then
+		echo "-S $val"
+	elif [[ $line =~ ^"lmm_stripe_offset:" ]]; then
+		echo "-i $val"
+	fi
+}
+
+parse_layout_param()
+{
+	local mode=""
+	local val=""
+	local param=""
+
+	while read line; do
+		if [[ -z $mode ]]; then
+			if [[ $line =~ ^"stripe_count:" ]]; then
+				mode="plain_dir"
+			elif [[ $line =~ ^"lmm_stripe_count:" ]]; then
+				mode="plain_file"
+			elif [[ $line =~ ^"lcm_layout_gen:" ]]; then
+				mode="pfl"
+			fi
+		fi
+
+		if [[ $mode = "plain_dir" ]]; then
+			param=$(echo $line |
+				awk '{printf("-c %d -S %d -i %d",$2,$4,$6)}')
+		elif [[ $mode = "plain_file" ]]; then
+			val=$(parse_plain_param "$line")
+			[[ ! -z $val ]] && param="$param $val"
+		elif [[ $mode = "pfl" ]]; then
+			val=$(echo $line | awk '{print $2}')
+			if [[ $line =~ ^"lcme_extent.e_end:" ]]; then
+				if [[ $val = "EOF" ]]; then
+					param="$param -E -1"
+				else
+					param="$param -E $val"
+				fi
+			elif [[ $line =~ ^"stripe_count:" ]]; then
+				# pfl dir
+				val=$(echo $line |
+				  awk '{printf("-c %d -S %d -i %d",$2,$4,$6)}')
+				param="$param $val"
+			else
+				#pfl file
+				val=$(parse_plain_param "$line")
+				[[ ! -z $val ]] && param="$param $val"
+			fi
+		fi
+	done
+	echo "$param"
+}
+
+get_layout_param()
+{
+	local param=$($LFS getstripe -d $1 | parse_layout_param)
+	echo "$param"
+}
