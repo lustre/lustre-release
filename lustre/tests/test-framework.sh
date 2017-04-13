@@ -2843,6 +2843,8 @@ hostlist_expand() {
                 group=${group%%]*}
 
                 for range in ${group//,/ }; do
+		    local order
+
                     begin=${range%-*}
                     end=${range#*-}
 
@@ -2858,7 +2860,13 @@ hostlist_expand() {
                     begin=$(echo $begin | sed 's/0*//')
                     [ -z $begin ] && begin=0
 
-                    for num in $(seq -f "%0${padlen}g" $begin $end); do
+		    if [ ! -z "${begin##[!0-9]*}" ]; then
+			order=$(seq -f "%0${padlen}g" $begin $end)
+		    else
+			order=$(eval echo {$begin..$end});
+		    fi
+
+		    for num in $order; do
                         value="${name#*,}${num}${back}"
                         [ "$value" != "${value/\[/}" ] && {
                             value=$(hostlist_expand "$value")
