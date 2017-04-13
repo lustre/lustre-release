@@ -17,6 +17,13 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
+[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
+[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&
+	skip "Need server version at least 2.9.55" && exit 0
+[[ $(facet_fstype mds1) = "ldiskfs" ]] ||
+[[ $(facet_fstype ost1) = "ldiskfs" ]] &&
+	skip "can't test snapshots with ldiskfs" && exit 0
+
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
 
