@@ -7335,6 +7335,57 @@ test_103() {
 }
 run_test 103 "rename filesystem name"
 
+test_104() { # LU-6952
+	local mds_mountopts=$MDS_MOUNT_OPTS
+	local ost_mountopts=$OST_MOUNT_OPTS
+	local mds_mountfsopts=$MDS_MOUNT_FS_OPTS
+	local lctl_ver=$(do_facet $SINGLEMDS $LCTL --version |
+			awk '{ print $2 }')
+
+	[[ $(version_code $lctl_ver) -lt $(version_code 2.9.55) ]] &&
+		{ skip "this test needs utils above 2.9.55" && return 0; }
+
+	# specify "acl" in mount options used by mkfs.lustre
+	if [ -z "$MDS_MOUNT_FS_OPTS" ]; then
+		MDS_MOUNT_FS_OPTS="acl,user_xattr"
+	else
+
+		MDS_MOUNT_FS_OPTS="${MDS_MOUNT_FS_OPTS},acl,user_xattr"
+	fi
+
+	echo "mountfsopt: $MDS_MOUNT_FS_OPTS"
+
+	#reformat/remount the MDT to apply the MDT_MOUNT_FS_OPT options
+	formatall
+	if [ -z "$MDS_MOUNT_OPTS" ]; then
+		MDS_MOUNT_OPTS="-o noacl"
+	else
+		MDS_MOUNT_OPTS="${MDS_MOUNT_OPTS},noacl"
+	fi
+
+	for num in $(seq $MDSCOUNT); do
+		start mds$num $(mdsdevname $num) $MDS_MOUNT_OPTS ||
+			error "Failed to start MDS"
+	done
+
+	for num in $(seq $OSTCOUNT); do
+		start ost$num $(ostdevname $num) $OST_MOUNT_OPTS ||
+			error "Failed to start OST"
+	done
+
+	mount_client $MOUNT
+	setfacl -m "d:$RUNAS_ID:rwx" $MOUNT &&
+		error "ACL is applied when FS is mounted with noacl."
+
+	MDS_MOUNT_OPTS=$mds_mountopts
+	OST_MOUNT_OPTS=$ost_mountopts
+	MDS_MOUNT_FS_OPTS=$mds_mountfsopts
+
+	formatall
+	setupall
+}
+run_test 104 "Make sure user defined options are reflected in mount"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

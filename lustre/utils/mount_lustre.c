@@ -439,6 +439,7 @@ static int parse_ldd(char *source, struct mount_opts *mop,
 {
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	char *cur, *start;
+	char *temp_options;
 	int rc = 0;
 
 	rc = osd_is_lustre(source, &ldd->ldd_mount_type);
@@ -477,6 +478,19 @@ static int parse_ldd(char *source, struct mount_opts *mop,
 	/* Since we never rewrite ldd, ignore temp flags */
 	ldd->ldd_flags &= ~(LDD_F_VIRGIN | LDD_F_WRITECONF);
 
+	/* This is to make sure default options go first */
+	temp_options = strdup(options);
+	if (temp_options == NULL) {
+		fprintf(stderr, "%s: can't allocate memory for temp_options\n",
+			progname);
+		return ENOMEM;
+	}
+	strncpy(options, ldd->ldd_mount_opts, options_len);
+	rc = append_option(options, options_len, temp_options, NULL);
+	free(temp_options);
+	if (rc != 0)
+		return rc;
+
 	/* svname of the form lustre:OST1234 means never registered */
 	rc = strlen(ldd->ldd_svname);
 	if (strcmp(ldd->ldd_svname, "MGS") != 0) {
@@ -495,10 +509,6 @@ static int parse_ldd(char *source, struct mount_opts *mop,
 	/* backend osd type */
 	rc = append_option(options, options_len, "osd=",
 			   mt_type(ldd->ldd_mount_type));
-	if (rc != 0)
-		return rc;
-
-	rc = append_option(options, options_len, ldd->ldd_mount_opts, NULL);
 	if (rc != 0)
 		return rc;
 
