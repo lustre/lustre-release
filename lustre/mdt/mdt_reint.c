@@ -596,7 +596,7 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 {
 	struct mdt_lock_handle  *lh;
 	int do_vbr = ma->ma_attr.la_valid &
-			(LA_MODE|LA_UID|LA_GID|LA_PROJID|LA_FLAGS);
+			(LA_MODE | LA_UID | LA_GID | LA_PROJID | LA_FLAGS);
 	__u64 lockpart = MDS_INODELOCK_UPDATE;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
 	struct lu_fid *s0_fid = &info->mti_tmp_fid1;

@@ -746,7 +746,7 @@ static inline char *qtype_name(int qtype)
 	case GRPQUOTA:
 		return "grp";
 	case PRJQUOTA:
-		return "project";
+		return "prj";
 	}
 	return "unknown";
 }

@@ -499,11 +499,11 @@ static inline int osd_oid(struct osd_device *dev, __u32 local_oid,
 		return 0;
 	case ACCT_PROJECT_OID:
 		/* TODO: real oid */
-		CERROR("unsupported quota oid: %#x\n", local_oid);
+		CERROR("%s: unsupported quota oid: %#x\n",
+			osd_name(dev), local_oid);
 		return -ENOTSUPP;
 	}
 
-	LASSERTF(0, "invalid oid: %u for quota type", local_oid);
 	return -ENOTSUPP;
 }
 

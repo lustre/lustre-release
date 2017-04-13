@@ -2450,7 +2450,7 @@ static int osd_declare_attr_qid(const struct lu_env *env,
 	/* block accounting */
 	qi->lqi_is_blk = true;
 
-	/* more blocks for the new uid ... */
+	/* more blocks for the new id ... */
 	qi->lqi_id.qid_uid = new_id;
 	qi->lqi_space      = bspace;
 	/*
@@ -2520,27 +2520,27 @@ static int osd_declare_attr_set(const struct lu_env *env,
 		uid = i_uid_read(obj->oo_inode);
 		enforce = (attr->la_valid & LA_UID) && (attr->la_uid != uid);
 		rc = osd_declare_attr_qid(env, obj, oh, bspace, uid,
-				attr->la_uid, enforce, USRQUOTA);
+					  attr->la_uid, enforce, USRQUOTA);
 		if (rc)
 			RETURN(rc);
 
 		gid = i_gid_read(obj->oo_inode);
 		enforce = (attr->la_valid & LA_GID) && (attr->la_gid != gid);
 		rc = osd_declare_attr_qid(env, obj, oh, bspace,
-				i_gid_read(obj->oo_inode), attr->la_gid,
-				enforce, GRPQUOTA);
+					  i_gid_read(obj->oo_inode),
+					  attr->la_gid, enforce, GRPQUOTA);
 		if (rc)
 			RETURN(rc);
 
 	}
-#ifdef	HAVE_PROJECT_QUOTA
+#ifdef HAVE_PROJECT_QUOTA
 	if (attr->la_valid & LA_PROJID) {
 		__u32 projid = i_projid_read(obj->oo_inode);
 		enforce = (attr->la_valid & LA_PROJID) &&
 					(attr->la_projid != projid);
 		rc = osd_declare_attr_qid(env, obj, oh, bspace,
-				(qid_t)projid, (qid_t)attr->la_projid,
-				enforce, PRJQUOTA);
+					  (qid_t)projid, (qid_t)attr->la_projid,
+					  enforce, PRJQUOTA);
 		if (rc)
 			RETURN(rc);
 	}
@@ -2630,10 +2630,10 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
 		}
 	}
 
-#ifdef	HAVE_PROJECT_QUOTA
+#ifdef HAVE_PROJECT_QUOTA
 	/* Handle project id transfer here properly */
-	if (attr->la_valid & LA_PROJID && attr->la_projid !=
-						i_projid_read(inode)) {
+	if (attr->la_valid & LA_PROJID &&
+	    attr->la_projid != i_projid_read(inode)) {
 		rc = __ldiskfs_ioctl_setproject(inode, attr->la_projid);
 		if (rc) {
 			CERROR("%s: quota transfer failed: rc = %d. Is quota "
@@ -3130,7 +3130,7 @@ static int osd_declare_object_create(const struct lu_env *env,
 
 	rc = osd_declare_inode_qid(env, attr->la_uid, attr->la_gid,
 				   attr->la_projid, 1, oh, osd_dt_obj(dt),
-				   false, NULL, false);
+				   NULL, OSD_QID_INODE);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -3208,14 +3208,14 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 			     osd_dto_credits_noquota[DTO_INDEX_DELETE] + 3);
 	/* one less inode */
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
-				   i_projid_read(inode), -1, oh, obj, false,
-				   NULL, false);
+				   i_projid_read(inode), -1, oh, obj, NULL,
+				   OSD_QID_INODE);
 	if (rc)
 		RETURN(rc);
 	/* data to be truncated */
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
-				   i_projid_read(inode), 0, oh, obj, true,
-				   NULL, false);
+				   i_projid_read(inode), 0, oh, obj, NULL,
+				   OSD_QID_BLK);
 	if (rc)
 		RETURN(rc);
 
@@ -3470,7 +3470,7 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	ldiskfs_set_inode_state(local, LDISKFS_STATE_LUSTRE_NOSCRUB);
 	unlock_new_inode(local);
 
-	/* Agent inode should not have project ID*/
+	/* Agent inode should not have project ID */
 #ifdef	HAVE_PROJECT_QUOTA
 	if (LDISKFS_I(pobj->oo_inode)->i_flags & LUSTRE_PROJINHERIT_FL) {
 		rc = __ldiskfs_ioctl_setproject(local, 0);
@@ -3481,7 +3481,6 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 			RETURN(ERR_PTR(rc));
 		}
 	}
-
 #endif
 	/* Set special LMA flag for local agent inode */
 	rc = osd_ea_fid_set(info, local, fid, 0, LMAI_AGENT);
@@ -4566,7 +4565,7 @@ static int osd_index_declare_ea_delete(const struct lu_env *env,
 
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
 				   i_projid_read(inode), 0, oh, osd_dt_obj(dt),
-				   true, NULL, false);
+				   NULL, OSD_QID_BLK);
 	RETURN(rc);
 }
 
@@ -5451,8 +5450,8 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 		rc = osd_declare_inode_qid(env, i_uid_read(inode),
 					   i_gid_read(inode),
 					   i_projid_read(inode), 0,
-					   oh, osd_dt_obj(dt), true,
-					   NULL, false);
+					   oh, osd_dt_obj(dt), NULL,
+					   OSD_QID_BLK);
 	}
 
 	RETURN(rc);

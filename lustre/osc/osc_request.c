@@ -1462,17 +1462,17 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
                 RETURN(-EPROTO);
         }
 
-        /* set/clear over quota flag for a uid/gid/projid */
-        if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE &&
-            body->oa.o_valid & (OBD_MD_FLALLQUOTA)) {
-		unsigned qid[LL_MAXQUOTAS] =
-					{ body->oa.o_uid, body->oa.o_gid,
+	/* set/clear over quota flag for a uid/gid/projid */
+	if (lustre_msg_get_opc(req->rq_reqmsg) == OST_WRITE &&
+	    body->oa.o_valid & (OBD_MD_FLALLQUOTA)) {
+		unsigned qid[LL_MAXQUOTAS] = {
+					 body->oa.o_uid, body->oa.o_gid,
 					 body->oa.o_projid };
-
 		CDEBUG(D_QUOTA, "setdq for [%u %u %u] with valid %#llx, flags %x\n",
-                       body->oa.o_uid, body->oa.o_gid, body->oa.o_projid,
+		       body->oa.o_uid, body->oa.o_gid, body->oa.o_projid,
 		       body->oa.o_valid, body->oa.o_flags);
-                osc_quota_setdq(cli, qid, body->oa.o_valid, body->oa.o_flags);
+		       osc_quota_setdq(cli, qid, body->oa.o_valid,
+				       body->oa.o_flags);
         }
 
         osc_update_grant(cli, body);

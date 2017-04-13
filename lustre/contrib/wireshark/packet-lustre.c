@@ -9910,7 +9910,7 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_setattr_sa_padding_2,
       { "Sa Padding 2", "lustre.mdt_rec_setattr.sa_padding_2", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setattr_sa_projid,
-      { "Sa Padding 3", "lustre.mdt_rec_setattr.sa_projid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Sa Projid", "lustre.mdt_rec_setattr.sa_projid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setattr_sa_padding_4,
       { "Sa Padding 4", "lustre.mdt_rec_setattr.sa_padding_4", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setattr_sa_padding_5,

@@ -175,13 +175,13 @@ struct cl_attr {
  * Fields in cl_attr that are being set.
  */
 enum cl_attr_valid {
-        CAT_SIZE   = 1 << 0,
-        CAT_KMS    = 1 << 1,
-        CAT_MTIME  = 1 << 3,
-        CAT_ATIME  = 1 << 4,
-        CAT_CTIME  = 1 << 5,
-        CAT_BLOCKS = 1 << 6,
-        CAT_UID    = 1 << 7,
+	CAT_SIZE   = 1 << 0,
+	CAT_KMS    = 1 << 1,
+	CAT_MTIME  = 1 << 3,
+	CAT_ATIME  = 1 << 4,
+	CAT_CTIME  = 1 << 5,
+	CAT_BLOCKS = 1 << 6,
+	CAT_UID    = 1 << 7,
 	CAT_GID    = 1 << 8,
 	CAT_PROJID = 1 << 9
 };

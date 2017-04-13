@@ -280,12 +280,12 @@ command_t cmdlist[] = {
 	 "usage: setquota <-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid>\n"
          "                -b <block-softlimit> -B <block-hardlimit>\n"
          "                -i <inode-softlimit> -I <inode-hardlimit> <filesystem>\n"
-	 "       setquota <-u|--user|-g|--group|-p|--project> <uname>|<uid>|<gname>|<gid>|<projid>\n"
+	 "       setquota <-u|--user|-g|--group|-p|--projid> <uname>|<uid>|<gname>|<gid>|<projid>\n"
          "                [--block-softlimit <block-softlimit>]\n"
          "                [--block-hardlimit <block-hardlimit>]\n"
          "                [--inode-softlimit <inode-softlimit>]\n"
          "                [--inode-hardlimit <inode-hardlimit>] <filesystem>\n"
-	 "       setquota [-t] <-u|--user|-g|--group|-p|--project>\n"
+	 "       setquota [-t] <-u|--user|-g|--group|-p|--projid>\n"
          "                [--block-grace <block-grace>]\n"
          "                [--inode-grace <inode-grace>] <filesystem>\n"
          "       -b can be used instead of --block-softlimit/--block-grace\n"
@@ -3502,7 +3502,7 @@ int lfs_setquota_times(int argc, char **argv)
                 {"block-grace",     required_argument, 0, 'b'},
                 {"group",           no_argument,       0, 'g'},
                 {"inode-grace",     required_argument, 0, 'i'},
-		{"project",         no_argument,       0, 'p'},
+		{"projid",	    no_argument,       0, 'p'},
                 {"times",           no_argument,       0, 't'},
                 {"user",            no_argument,       0, 'u'},
                 {0, 0, 0, 0}
@@ -3596,7 +3596,7 @@ int lfs_setquota(int argc, char **argv)
                 {"inode-softlimit", required_argument, 0, 'i'},
                 {"inode-hardlimit", required_argument, 0, 'I'},
                 {"user",            required_argument, 0, 'u'},
-		{"project",         required_argument, 0, 'p'},
+		{"projid",         required_argument, 0, 'p'},
                 {0, 0, 0, 0}
         };
         unsigned limit_mask = 0;
@@ -3609,13 +3609,13 @@ int lfs_setquota(int argc, char **argv)
 	memset(&qctl, 0, sizeof(qctl));
 	qctl.qc_cmd  = LUSTRE_Q_SETQUOTA;
 	qctl.qc_type = ALLQUOTA; /* ALLQUOTA makes no sense for setquota,
-                                 * so it can be used as a marker that qc_type
-                                 * isn't reinitialized from command line */
+				  * so it can be used as a marker that qc_type
+				  * isn't reinitialized from command line */
 
 	while ((c = getopt_long(argc, argv, "b:B:g:i:I:p:u:",
 		long_opts, NULL)) != -1) {
-                switch (c) {
-                case 'u':
+		switch (c) {
+		case 'u':
 			qtype = USRQUOTA;
 			rc = name2uid(&qctl.qc_id, optarg);
 			goto quota_type;
@@ -4106,8 +4106,8 @@ all_output:
 		if (rc) {
 			qctl.qc_id = strtoul(name, &endptr, 10);
 			if (*endptr != '\0') {
-				fprintf(stderr, "error: can't find id for name "
-                                        "%s\n", name);
+				fprintf(stderr, "error: can't find id for name: %s\n",
+						name);
 				return CMD_HELP;
 			}
 		}
@@ -4116,9 +4116,8 @@ all_output:
 		return CMD_HELP;
 	}
 
-        mnt = argv[optind];
-
-        rc1 = llapi_quotactl(mnt, &qctl);
+	mnt = argv[optind];
+	rc1 = llapi_quotactl(mnt, &qctl);
 	if (rc1 < 0) {
 		switch (rc1) {
 		case -ESRCH:

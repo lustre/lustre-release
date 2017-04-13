@@ -881,7 +881,7 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 	if (rc)
 		GOTO(out_tx, rc);
 
-	/* set uid/gid/pid */
+	/* set uid/gid/projid */
 	if (la->la_valid) {
 		rc = dt_attr_set(env, dt_obj, la, th);
 		if (rc)

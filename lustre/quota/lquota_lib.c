@@ -186,8 +186,7 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 		RETURN(-EOPNOTSUPP);
 	}
 
-	if (oqctl->qc_type < 0 || oqctl->qc_type >= MAXQUOTAS)
-		/* no support for directory quota yet */
+	if (oqctl->qc_type < 0 || oqctl->qc_type >= LL_MAXQUOTAS)
 		RETURN(-EOPNOTSUPP);
 
 	/* qc_id is a 32-bit field while a key has 64 bits */

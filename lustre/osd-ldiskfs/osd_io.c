@@ -1107,19 +1107,19 @@ static int osd_declare_write_commit(const struct lu_env *env,
                                     struct niobuf_local *lnb, int npages,
                                     struct thandle *handle)
 {
-        const struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
-        struct inode            *inode = osd_dt_obj(dt)->oo_inode;
-        struct osd_thandle      *oh;
-        int                      extents = 1;
-        int                      depth;
-        int                      i;
-        int                      newblocks;
-	int			 rc = 0;
-	int			 flags = 0;
-	int			 credits = 0;
-	bool			 ignore_quota = false;
-	long long		 quota_space = 0;
-	struct osd_fextent	 extent = { 0 };
+	const struct osd_device	*osd = osd_obj2dev(osd_dt_obj(dt));
+	struct inode		*inode = osd_dt_obj(dt)->oo_inode;
+	struct osd_thandle	*oh;
+	int			extents = 1;
+	int			depth;
+	int			i;
+	int			newblocks;
+	int			rc = 0;
+	int			flags = 0;
+	int			credits = 0;
+	long long		quota_space = 0;
+	struct osd_fextent	extent = { 0 };
+	enum osd_qid_declare_flags declare_flags = OSD_QID_BLK;
 	ENTRY;
 
         LASSERT(handle != NULL);
@@ -1149,7 +1149,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		if ((lnb[i].lnb_flags & OBD_BRW_NOQUOTA) ||
 		    (lnb[i].lnb_flags & (OBD_BRW_FROM_GRANT | OBD_BRW_SYNC)) ==
 		    OBD_BRW_FROM_GRANT)
-			ignore_quota = true;
+			declare_flags |= OSD_QID_FORCE;
 	}
 
         /*
@@ -1201,7 +1201,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
 				   i_projid_read(inode), quota_space, oh,
-				   osd_dt_obj(dt), true, &flags, ignore_quota);
+				   osd_dt_obj(dt), &flags, declare_flags);
 
 	/* we need only to store the overquota flags in the first lnb for
 	 * now, once we support multiple objects BRW, this code needs be
@@ -1639,7 +1639,7 @@ out:
 		rc = osd_declare_inode_qid(env, i_uid_read(inode),
 					   i_gid_read(inode),
 					   i_projid_read(inode), 0,
-					   oh, obj, true, NULL, false);
+					   oh, obj, NULL, OSD_QID_BLK);
 	RETURN(rc);
 }
 
@@ -1814,7 +1814,7 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
 				   i_projid_read(inode), 0, oh, osd_dt_obj(dt),
-				   true, NULL, false);
+				   NULL, OSD_QID_BLK);
 	RETURN(rc);
 }
 

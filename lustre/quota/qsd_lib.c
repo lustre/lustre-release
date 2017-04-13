@@ -355,6 +355,8 @@ static void qsd_qtype_fini(const struct lu_env *env, struct qsd_instance *qsd,
 
 static const char *qtype2acct_name(int qtype)
 {
+	static char unknown[24];
+
 	switch (qtype) {
 	case USRQUOTA:
 		return "acct_user";
@@ -364,12 +366,14 @@ static const char *qtype2acct_name(int qtype)
 		return "acct_project";
 	}
 
-	LASSERTF(0, "invalid quota type: %d", qtype);
-	return NULL;
+	snprintf(unknown, sizeof(unknown), "acct_unknown_%u", qtype);
+	return unknown;
 }
 
 static const char *qtype2glb_name(int qtype)
 {
+	static char unknown[24];
+
 	switch (qtype) {
 	case USRQUOTA:
 		return "limit_user";
@@ -379,8 +383,8 @@ static const char *qtype2glb_name(int qtype)
 		return "limit_project";
 	}
 
-	LASSERTF(0, "invalid quota type: %d", qtype);
-	return NULL;
+	snprintf(unknown, sizeof(unknown), "acct_unknown_%u", qtype);
+	return unknown;
 }
 
 /*

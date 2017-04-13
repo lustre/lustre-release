@@ -625,6 +625,13 @@ struct osd_thread_info {
 	unsigned int		oti_declare_ops_used[OSD_OT_MAX];
 };
 
+/* flags for inode/block quota accounting */
+enum osd_qid_declare_flags {
+	OSD_QID_INODE	= 1 << 0,
+	OSD_QID_BLK	= 1 << 1,
+	OSD_QID_FORCE	= 1 << 2,
+};
+
 extern int ldiskfs_pdo;
 
 static inline int __osd_xattr_get(struct inode *inode, struct dentry *dentry,
@@ -744,8 +751,8 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
 		    bool enforce, int *flags);
 int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 			  __u32 projid, long long space, struct osd_thandle *oh,
-			  struct osd_object *obj, bool is_blk, int *flags,
-			  bool force);
+			  struct osd_object *obj, int *flags,
+			  enum osd_qid_declare_flags);
 const struct dt_rec *osd_quota_pack(struct osd_object *obj,
 				    const struct dt_rec *rec,
 				    union lquota_rec *quota_rec);

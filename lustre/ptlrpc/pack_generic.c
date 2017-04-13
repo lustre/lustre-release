@@ -1709,35 +1709,35 @@ static void lustre_swab_ost_layout(struct ost_layout *ol)
 
 void lustre_swab_obdo (struct obdo  *o)
 {
-        __swab64s (&o->o_valid);
+	__swab64s(&o->o_valid);
 	lustre_swab_ost_id(&o->o_oi);
-        __swab64s (&o->o_parent_seq);
-        __swab64s (&o->o_size);
-        __swab64s (&o->o_mtime);
-        __swab64s (&o->o_atime);
-        __swab64s (&o->o_ctime);
-        __swab64s (&o->o_blocks);
-        __swab64s (&o->o_grant);
-        __swab32s (&o->o_blksize);
-        __swab32s (&o->o_mode);
-        __swab32s (&o->o_uid);
-        __swab32s (&o->o_gid);
-        __swab32s (&o->o_flags);
-        __swab32s (&o->o_nlink);
-        __swab32s (&o->o_parent_oid);
-        __swab32s (&o->o_misc);
-        __swab64s (&o->o_ioepoch);
-        __swab32s (&o->o_stripe_idx);
-        __swab32s (&o->o_parent_ver);
+	__swab64s(&o->o_parent_seq);
+	__swab64s(&o->o_size);
+	__swab64s(&o->o_mtime);
+	__swab64s(&o->o_atime);
+	__swab64s(&o->o_ctime);
+	__swab64s(&o->o_blocks);
+	__swab64s(&o->o_grant);
+	__swab32s(&o->o_blksize);
+	__swab32s(&o->o_mode);
+	__swab32s(&o->o_uid);
+	__swab32s(&o->o_gid);
+	__swab32s(&o->o_flags);
+	__swab32s(&o->o_nlink);
+	__swab32s(&o->o_parent_oid);
+	__swab32s(&o->o_misc);
+	__swab64s(&o->o_ioepoch);
+	__swab32s(&o->o_stripe_idx);
+	__swab32s(&o->o_parent_ver);
 	lustre_swab_ost_layout(&o->o_layout);
 	CLASSERT(offsetof(typeof(*o), o_padding_3) != 0);
-        __swab32s (&o->o_uid_h);
-        __swab32s (&o->o_gid_h);
-        __swab64s (&o->o_data_version);
+	__swab32s(&o->o_uid_h);
+	__swab32s(&o->o_gid_h);
+	__swab64s(&o->o_data_version);
 	__swab32s(&o->o_projid);
-        CLASSERT(offsetof(typeof(*o), o_padding_4) != 0);
-        CLASSERT(offsetof(typeof(*o), o_padding_5) != 0);
-        CLASSERT(offsetof(typeof(*o), o_padding_6) != 0);
+	CLASSERT(offsetof(typeof(*o), o_padding_4) != 0);
+	CLASSERT(offsetof(typeof(*o), o_padding_5) != 0);
+	CLASSERT(offsetof(typeof(*o), o_padding_6) != 0);
 
 }
 EXPORT_SYMBOL(lustre_swab_obdo);
@@ -1889,6 +1889,10 @@ void lustre_swab_mdt_body (struct mdt_body *b)
 	__swab32s(&b->mbo_gid_h);
 	__swab32s(&b->mbo_projid);
 	CLASSERT(offsetof(typeof(*b), mbo_padding_6) != 0);
+	CLASSERT(offsetof(typeof(*b), mbo_padding_7) != 0);
+	CLASSERT(offsetof(typeof(*b), mbo_padding_8) != 0);
+	CLASSERT(offsetof(typeof(*b), mbo_padding_9) != 0);
+	CLASSERT(offsetof(typeof(*b), mbo_padding_10) != 0);
 }
 
 void lustre_swab_mdt_ioepoch(struct mdt_ioepoch *b)

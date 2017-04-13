@@ -1131,12 +1131,13 @@ static int lod_declare_attr_set(const struct lu_env *env,
 		RETURN(rc);
 
 	/* osp_declare_attr_set() ignores all attributes other than
-	 * UID, GID, PID, and size, and osp_attr_set() ignores all but
-	 * UID, GID and PID. Declaration of size attr setting happens
-	 * through lod_declare_init_size(), and not through this function.
-	 * Therefore we need not load striping unless ownership is
-	 * changing.  This should save memory and (we hope) speed up
-	 * rename(). */
+	 * UID, GID, PROJID, and size, and osp_attr_set() ignores all
+	 * but UID, GID and PROJID. Declaration of size attr setting
+	 * happens through lod_declare_init_size(), and not through
+	 * this function. Therefore we need not load striping unless
+	 * ownership is changing.  This should save memory and (we hope)
+	 * speed up rename().
+	 */
 	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
 		if (!(attr->la_valid & (LA_UID | LA_GID | LA_PROJID)))
 			RETURN(rc);

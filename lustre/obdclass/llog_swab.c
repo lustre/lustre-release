@@ -249,7 +249,7 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 
 		if (rec->lrh_len > sizeof(struct llog_setattr64_rec)) {
 			struct llog_setattr64_rec_v2 *lsr2 =
-			(struct llog_setattr64_rec_v2 *)rec;
+				(struct llog_setattr64_rec_v2 *)rec;
 
 			__swab32s(&lsr2->lsr_projid);
 			tail = &lsr2->lsr_tail;

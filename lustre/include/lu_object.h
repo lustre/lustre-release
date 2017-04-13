@@ -396,6 +396,12 @@ static inline int lu_device_is_md(const struct lu_device *d)
  * Common object attributes.
  */
 struct lu_attr {
+	/**
+	 * valid bits
+	 *
+	 * \see enum la_valid
+	 */
+	__u64          la_valid;
         /** size in bytes */
         __u64          la_size;
 	/** modification time in seconds since Epoch */
@@ -424,12 +430,6 @@ struct lu_attr {
         __u32          la_rdev;
 	/** project id */
 	__u32	       la_projid;
-        /**
-         * valid bits
-         *
-         * \see enum la_valid
-         */
-        __u64          la_valid;
 };
 
 /** Bit-mask of valid attributes */

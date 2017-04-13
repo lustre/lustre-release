@@ -87,16 +87,15 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			le32_to_cpu(LDISKFS_SB(sb)->s_es->s_grp_quota_inum);
 		break;
 	case PRJQUOTA:
-#ifdef	HAVE_PROJECT_QUOTA
-		if (!LDISKFS_HAS_RO_COMPAT_FEATURE(sb,
-				LDISKFS_FEATURE_RO_COMPAT_PROJECT))
-			RETURN(-ENOTSUPP);
-		id->oii_ino =
-			le32_to_cpu(LDISKFS_SB(sb)->s_es->s_prj_quota_inum);
+ #ifdef HAVE_PROJECT_QUOTA
+		if (LDISKFS_HAS_RO_COMPAT_FEATURE(sb,
+					LDISKFS_FEATURE_RO_COMPAT_PROJECT))
+			id->oii_ino =
+				le32_to_cpu(LDISKFS_SB(sb)->s_es->s_prj_quota_inum);
+		else
+ #endif
+			RETURN(-ENOENT);
 		break;
-#else
-		RETURN(-ENOTSUPP);
-#endif
 	}
 	if (!ldiskfs_valid_inum(sb, id->oii_ino))
 		RETURN(-ENOENT);
@@ -611,30 +610,30 @@ int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
  * \param  space  - how many blocks/inodes will be consumed/released
  * \param  oh     - osd transaction handle
  * \param  obj    - osd object, could be NULL when it's under create
- * \param  is_blk - block quota or inode quota?
  * \param  flags  - if the operation is write, return no user quota, no
  *                  group quota, or sync commit flags to the caller
- * \param force   - set to 1 when changes are performed by root user and thus
- *                  can't failed with EDQUOT
+ * \param osd_qid_flags - indicate this is a inode/block accounting
+ *			and whether changes are performed by root user
  *
  * \retval 0      - success
  * \retval -ve    - failure
  */
 int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 			  __u32 projid, long long space, struct osd_thandle *oh,
-			  struct osd_object *obj, bool is_blk, int *flags,
-			  bool force)
+			  struct osd_object *obj, int *flags,
+			  enum osd_qid_declare_flags osd_qid_declare_flags)
 {
 	struct osd_thread_info  *info = osd_oti_get(env);
 	struct lquota_id_info   *qi = &info->oti_qi;
-	int                      rcu, rcg, rcp; /* user & group & project rc */
+	int rcu, rcg, rcp; /* user & group & project rc */
+	int force = osd_qid_declare_flags & OSD_QID_FORCE;
 	ENTRY;
 
 	/* let's start with user quota */
 	qi->lqi_id.qid_uid = uid;
 	qi->lqi_type       = USRQUOTA;
 	qi->lqi_space      = space;
-	qi->lqi_is_blk     = is_blk;
+	qi->lqi_is_blk     = !!(osd_qid_declare_flags & OSD_QID_BLK);
 	rcu = osd_declare_qid(env, oh, qi, obj, true, flags);
 
 	if (force && (rcu == -EDQUOT || rcu == -EINPROGRESS))

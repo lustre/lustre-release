@@ -31,7 +31,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
         \fB[[!] --component-end|-E [+-]N[kMGTPE]]
         \fB[[!] --component-flags <comp_flags>]
         \fB[--type |-t {bcdflpsD}] [[!] --gid|-g|--group|-G <gname>|<gid>]
-        \fB[[!] --uid|-u|--user|-U <uname>|<uid>] [[!] --pool <pool>]\fR
+        \fB[[!] --uid|-u|--user|-U|--projid <uname>|<uid>|<projid>] [[!] --pool <pool>]\fR
 .br
 .B lfs getname [-h]|[path ...]
 .br
@@ -77,9 +77,9 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs pool_list <filesystem>[.<pool>] | <pathname>
 .br
-.B lfs quota [-q] [-v] [-o obd_uuid|-I ost_idx|-i mdt_idx] [-u <uname>| -u <uid>|-g <gname>| -g <gid>] <filesystem>
+.B lfs quota [-q] [-v] [-o obd_uuid|-I ost_idx|-i mdt_idx] [-u <uname>| -u <uid>|-g <gname>| -g <gid>] [-p <projid>] <filesystem>
 .br
-.B lfs quota -t <-u|-g> <filesystem>
+.B lfs quota -t <-u|-g|-p> <filesystem>
 .br
 .B lfs quotacheck [-ug] <filesystem>
 .br
@@ -87,24 +87,24 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs quotaoff [-ug] <filesystem>
 .br
-.B lfs setquota <-u|--user|-g|--group> <uname|uid|gname|gid>
+.B lfs setquota <-u|--user|-g|--group|-p|--projid> <uname|uid|gname|gid|projid>
              \fB[--block-softlimit <block-softlimit>]
              \fB[--block-hardlimit <block-hardlimit>]
              \fB[--inode-softlimit <inode-softlimit>]
              \fB[--inode-hardlimit <inode-hardlimit>]
              \fB<filesystem>\fR
 .br
-.B lfs setquota <-u|--user|-g|--group> <uname|uid|gname|gid>
+.B lfs setquota <-u|--user|-g|--group|-p|--projid> <uname|uid|gname|gid|projid>
              \fB[-b <block-softlimit>] [-B <block-hardlimit>]
              \fB[-i <inode-softlimit>] [-I <inode-hardlimit>]
              \fB<filesystem>\fR
 .br
-.B lfs setquota -t <-u|-g>
+.B lfs setquota -t <-u|-g|-p>
              \fB[--block-grace <block-grace>]\fR
              \fB[--inode-grace <inode-grace>]\fR
              \fB<filesystem>\fR
 .br
-.B lfs setquota -t <-u|-g>
+.B lfs setquota -t <-u|-g|-p>
              \fB[-b <block-grace>] [-i <inode-grace>]\fR
              \fB<filesystem>\fR
 .br
@@ -156,7 +156,7 @@ for details of
 usage.
 .TP
 .B find
-To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST or OSTs), \fB--size\fR (file has size in bytes, or \fBk\fRilo-, \fBM\fRega-, \fBG\fRiga-, \fBT\fRera-, \fBP\fReta-, or \fBE\fRxabytes if a suffix is given), \fB--type\fR (file has the type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory, \fBp\fRipe, \fBf\fRile, sym\fBl\fRink, \fBs\fRocket, or \fBD\fRoor (Solaris)), \fB--uid\fR (file has specific numeric user ID), \fB--user\fR (file owned by specific user, numeric user ID allowed), \fB--gid\fR (file has specific group ID), \fB--group\fR (file belongs to specific group, numeric group ID allowed), \fB--layout\fR (file has a raid0 layout or is released). The option \fB--maxdepth\fR limits find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline or NUL character correspondingly.  Using \fB!\fR before an option negates its meaning (\fIfiles NOT matching the parameter\fR).  Using \fB+\fR before a numeric value means \fIfiles with the parameter OR MORE\fR, while \fB-\fR before a numeric value means \fIfiles with the parameter OR LESS\fR.
+To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST or OSTs), \fB--size\fR (file has size in bytes, or \fBk\fRilo-, \fBM\fRega-, \fBG\fRiga-, \fBT\fRera-, \fBP\fReta-, or \fBE\fRxabytes if a suffix is given), \fB--type\fR (file has the type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory, \fBp\fRipe, \fBf\fRile, sym\fBl\fRink, \fBs\fRocket, or \fBD\fRoor (Solaris)), \fB--uid\fR (file has specific numeric user ID), \fB--user\fR (file owned by specific user, numeric user ID allowed), \fB--gid\fR (file has specific group ID), \fB--group\fR (file belongs to specific group, numeric group ID allowed),\fB--projid\fR (file has specific numeric project ID), \fB--layout\fR (file has a raid0 layout or is released). The option \fB--maxdepth\fR limits find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline or NUL character correspondingly.  Using \fB!\fR before an option negates its meaning (\fIfiles NOT matching the parameter\fR).  Using \fB+\fR before a numeric value means \fIfiles with the parameter OR MORE\fR, while \fB-\fR before a numeric value means \fIfiles with the parameter OR LESS\fR.
 .TP
 .B getname [-h]|[path ...]
 Report all the Lustre mount points and the corresponding Lustre filesystem
@@ -260,11 +260,11 @@ or
 or the OSTs in
 .IR filesystem.pool .
 .TP
-.B quota [-q] [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx] [-u|-g <uname>|<uid>|<gname>|<gid>] <filesystem>
-To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name or an ID can be specified. If both user and group are omitted quotas for current uid/gid are shown. -v provides more verbose (with per-obd statistics) output. -q disables printing of additional descriptions (including column titles).
+.B quota [-q] [-v] [-o obd_uuid|-i mdt_idx|-I ost_idx] [-u|-g|-p <uname>|<uid>|<gname>|<gid>|<projid>] <filesystem>
+To display disk usage and limits, either for the full filesystem, or for objects on a specific obd. A user or group name or an ID can be specified. If user group and project are omitted quotas for current uid/gid/projid are shown. -v provides more verbose (with per-obd statistics) output. -q disables printing of additional descriptions (including column titles).
 .TP
-.B quota -t <-u|-g> <filesystem>
-To display block and inode grace times for user (-u) or group (-g) quotas
+.B quota -t <-u|-g|-p> <filesystem>
+To display block and inode grace times for user (-u) or group (-g) or project (-p) quotas
 .TP
 .B quotacheck [-ugf] <filesystem> (deprecated as of 2.4.0)
 To scan the specified filesystem for disk usage, and create or update quota files. Options specify quota for users (-u) groups (-g) and force (-f). Not useful anymore with servers >= 2.4.0 since space accounting is always turned on.
@@ -275,11 +275,11 @@ To turn filesystem quotas on. Options specify quota for users (-u) groups (-g) a
 .B quotaoff [-ugf] <filesystem> (deprecated as of 2.4.0)
 To turn filesystem quotas off.  Options specify quota for users (-u) groups (-g) and force (-f). Not used anymore in lustre 2.4.0 where quota enforcement can be turned off (for inode or block) by running the following command on the MGS: lctl conf_param ${FSNAME}.quota.<ost|mdt>=""
 .TP
-.B setquota  <-u|-g> <uname>|<uid>|<gname>|<gid> [--block-softlimit <block-softlimit>] [--block-hardlimit <block-hardlimit>] [--inode-softlimit <inode-softlimit>] [--inode-hardlimit <inode-hardlimit>] <filesystem>
-To set filesystem quotas for users or groups. Limits can be specified with -b, -k, -m, -g, -t, -p suffixes which specify units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50 accordingly. Block limits unit is kilobyte (1024) by default and block limits are always kilobyte-grained (even if specified in bytes), see EXAMPLES
+.B setquota  <-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid> [--block-softlimit <block-softlimit>] [--block-hardlimit <block-hardlimit>] [--inode-softlimit <inode-softlimit>] [--inode-hardlimit <inode-hardlimit>] <filesystem>
+To set filesystem quotas for users, groups or project. Limits can be specified with -b, -k, -m, -g, -t, -p suffixes which specify units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50 accordingly. Block limits unit is kilobyte (1024) by default and block limits are always kilobyte-grained (even if specified in bytes), see EXAMPLES
 .TP
-.B setquota -t [-u|-g] [--block-grace <block-grace>] [--inode-grace <inode-grace>] <filesystem>
-To set filesystem quota grace times for users or groups. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds value, see EXAMPLES
+.B setquota -t [-u|-g|-p] [--block-grace <block-grace>] [--inode-grace <inode-grace>] <filesystem>
+To set filesystem quota grace times for users,groups or project. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds value, see EXAMPLES
 .TP
 .B swap_layouts <filename1> <filename2>
 Swap the data (layout and OST objects) of two regular files. The

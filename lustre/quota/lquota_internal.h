@@ -31,22 +31,6 @@
 #ifndef _LQUOTA_INTERNAL_H
 #define _LQUOTA_INTERNAL_H
 
-/*
-static inline char *qtype_name(int qtype)
-{
-	switch (qtype) {
-	case USRQUOTA:
-		return "usr";
-	case GRPQUOTA:
-		return "grp";
-	case PRJQUOTA:
-		return "prj";
-		break;
-	}
-	return "unknown";
-}
-*/
-
 #define RES_NAME(res) ((res) == LQUOTA_RES_MD ? "md" : "dt")
 
 #define QIF_IFLAGS (QIF_INODES | QIF_ITIME | QIF_ILIMITS)
@@ -77,7 +61,7 @@ static inline __u32 qtype2slv_oid(int qtype)
 		return LQUOTA_PRJ_OID;
 	}
 
-	LASSERTF(0, "invalid quota type: %d", qtype);
+	/* should not come here, just make compile happy */
 	return LQUOTA_USR_OID;
 }
 
@@ -321,7 +305,7 @@ static inline int lquota_over_fl(int qtype)
 		return QUOTA_FL_OVER_PRJQUOTA;
 	}
 
-	LASSERTF(0, "invalid quota type: %d", qtype);
+	/* should not come here, just make compile happy */
 	return QUOTA_FL_OVER_USRQUOTA;
 }
 

@@ -1707,7 +1707,7 @@ struct mdt_body {
 	__u32	mbo_unused3; /* was max_cookiesize until 2.8 */
 	__u32	mbo_uid_h; /* high 32-bits of uid, for FUID */
 	__u32	mbo_gid_h; /* high 32-bits of gid, for FUID */
-	__u32   mbo_projid;
+	__u32	mbo_projid;
 	__u64	mbo_padding_6; /* also fix lustre_swab_mdt_body */
 	__u64	mbo_padding_7;
 	__u64	mbo_padding_8;
@@ -2641,7 +2641,7 @@ struct llog_setattr64_rec_v2 {
 	__u32			lsr_padding1;
 	__u64			lsr_padding2;
 	__u64			lsr_padding3;
-	struct llog_rec_tail    lsr_tail;
+	struct llog_rec_tail	lsr_tail;
 } __attribute__((packed));
 
 struct llog_size_change_rec {
@@ -2886,7 +2886,8 @@ struct obdo {
 						 * brw: grant space consumed on
 						 * the client for the write */
 	__u32			o_projid;
-	__u32			o_padding_4;
+	__u32			o_padding_4;	/* also fix
+						 * lustre_swab_obdo() */
 	__u64			o_padding_5;
 	__u64			o_padding_6;
 };

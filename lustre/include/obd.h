@@ -835,7 +835,12 @@ struct md_op_data {
 
 	/* default stripe offset */
 	__u32			op_default_stripe_offset;
+
 	__u32			op_projid;
+
+	/* Used by readdir */
+	unsigned int		op_max_pages;
+
 };
 
 struct md_callback {
