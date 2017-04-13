@@ -3101,7 +3101,7 @@ tbf_verify() {
 
 	# verify the write rate does not exceed 110% of TBF limited rate
 	[ $(bc <<< "$rate < 1.1 * $1") -eq 1 ] ||
-		error "The write rate ($rate) exceeds 110% of preset rate ($1)"
+		error_ignore LU-9140 "The write rate ($rate) exceeds 110% of preset rate ($1)"
 
 	cancel_lru_locks osc
 
@@ -3112,7 +3112,7 @@ tbf_verify() {
 
 	# verify the read rate does not exceed 110% of TBF limited rate
 	[ $(bc <<< "$rate < 1.1 * $2") -eq 1 ] ||
-		error "The read rate ($rate) exceeds 110% of preset rate ($2)"
+		error_ignore LU-9140 "The read rate ($rate) exceeds 110% of preset rate ($2)"
 
 	cancel_lru_locks osc
 	rm -rf $dir || error "rm -rf $dir failed"
