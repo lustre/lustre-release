@@ -564,6 +564,9 @@ struct lov_comp_md_v1 {
 
 static inline __u32 lov_user_md_size(__u16 stripes, __u32 lmm_magic)
 {
+	if (stripes == (__u16)-1)
+		stripes = 0;
+
 	if (lmm_magic == LOV_USER_MAGIC_V1)
 		return sizeof(struct lov_user_md_v1) +
 			      stripes * sizeof(struct lov_user_ost_data_v1);

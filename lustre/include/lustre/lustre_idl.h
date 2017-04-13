@@ -1108,6 +1108,9 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 
 static inline __u32 lov_mds_md_size(__u16 stripes, __u32 lmm_magic)
 {
+	if (stripes == (__u16)-1)
+		stripes = 0;
+
 	if (lmm_magic == LOV_MAGIC_V3)
 		return sizeof(struct lov_mds_md_v3) +
 				stripes * sizeof(struct lov_ost_data_v1);
