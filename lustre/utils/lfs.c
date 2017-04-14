@@ -3606,14 +3606,13 @@ int lfs_setquota_times(int argc, char **argv)
         struct obd_dqblk *dqb = &qctl.qc_dqblk;
         struct obd_dqinfo *dqi = &qctl.qc_dqinfo;
         struct option long_opts[] = {
-                {"block-grace",     required_argument, 0, 'b'},
-                {"group",           no_argument,       0, 'g'},
-                {"inode-grace",     required_argument, 0, 'i'},
-		{"projid",	    no_argument,       0, 'p'},
-                {"times",           no_argument,       0, 't'},
-                {"user",            no_argument,       0, 'u'},
-                {0, 0, 0, 0}
-        };
+	{ .val = 'b',	.name = "block-grace",	.has_arg = required_argument },
+	{ .val = 'g',	.name = "group",	.has_arg = no_argument },
+	{ .val = 'i',	.name = "inode-grace",	.has_arg = required_argument },
+	{ .val = 'p',	.name = "projid",	.has_arg = no_argument },
+	{ .val = 't',	.name = "times",	.has_arg = no_argument },
+	{ .val = 'u',	.name = "user",		.has_arg = no_argument },
+	{ .name = NULL } };
 	int qtype;
 
 	memset(&qctl, 0, sizeof(qctl));
