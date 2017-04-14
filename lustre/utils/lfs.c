@@ -4367,19 +4367,18 @@ static int lfs_ls(int argc, char **argv)
 
 static int lfs_changelog(int argc, char **argv)
 {
-        void *changelog_priv;
+	void *changelog_priv;
 	struct changelog_rec *rec;
-        long long startrec = 0, endrec = 0;
-        char *mdd;
-        struct option long_opts[] = {
-                {"follow", no_argument, 0, 'f'},
-                {0, 0, 0, 0}
-        };
-        char short_opts[] = "f";
-        int rc, follow = 0;
+	long long startrec = 0, endrec = 0;
+	char *mdd;
+	struct option long_opts[] = {
+		{ .val = 'f', .name = "follow", .has_arg = no_argument },
+		{ .name = NULL } };
+	char short_opts[] = "f";
+	int rc, follow = 0;
 
-        while ((rc = getopt_long(argc, argv, short_opts,
-                                long_opts, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, short_opts,
+		long_opts, NULL)) != -1) {
                 switch (rc) {
                 case 'f':
                         follow++;
