@@ -144,29 +144,58 @@ static void ucred_set_jobid(struct mdt_thread_info *info, struct lu_ucred *uc)
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 			  void *buf, bool drop_fs_cap)
 {
-        struct ptlrpc_request   *req = mdt_info_req(info);
-        struct mdt_device       *mdt = info->mti_mdt;
-        struct ptlrpc_user_desc *pud = req->rq_user_desc;
-	struct lu_ucred         *ucred = mdt_ucred(info);
-        lnet_nid_t               peernid = req->rq_peer.nid;
-        __u32                    perm = 0;
-        int                      setuid;
-        int                      setgid;
-        int                      rc = 0;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct mdt_device *mdt = info->mti_mdt;
+	struct ptlrpc_user_desc *pud = req->rq_user_desc;
+	struct lu_ucred *ucred = mdt_ucred(info);
+	struct lu_nodemap *nodemap;
+	lnet_nid_t peernid = req->rq_peer.nid;
+	__u32 perm = 0;
+	int setuid;
+	int setgid;
+	int rc = 0;
 
-        ENTRY;
+	ENTRY;
 
-        LASSERT(req->rq_auth_gss);
-        LASSERT(!req->rq_auth_usr_mdt);
-        LASSERT(req->rq_user_desc);
+	LASSERT(req->rq_auth_gss);
+	LASSERT(!req->rq_auth_usr_mdt);
+	LASSERT(req->rq_user_desc);
 	LASSERT(ucred != NULL);
 
 	ucred->uc_valid = UCRED_INVALID;
 
-	ucred->uc_o_uid   = pud->pud_uid;
-	ucred->uc_o_gid   = pud->pud_gid;
+	nodemap = nodemap_get_from_exp(info->mti_exp);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+
+	pud->pud_uid = nodemap_map_id(nodemap, NODEMAP_UID,
+				       NODEMAP_CLIENT_TO_FS, pud->pud_uid);
+	pud->pud_gid = nodemap_map_id(nodemap, NODEMAP_GID,
+				       NODEMAP_CLIENT_TO_FS, pud->pud_gid);
+	pud->pud_fsuid = nodemap_map_id(nodemap, NODEMAP_UID,
+				       NODEMAP_CLIENT_TO_FS, pud->pud_fsuid);
+	pud->pud_fsgid = nodemap_map_id(nodemap, NODEMAP_GID,
+				       NODEMAP_CLIENT_TO_FS, pud->pud_fsgid);
+
+	ucred->uc_o_uid = pud->pud_uid;
+	ucred->uc_o_gid = pud->pud_gid;
 	ucred->uc_o_fsuid = pud->pud_fsuid;
 	ucred->uc_o_fsgid = pud->pud_fsgid;
+
+	if (nodemap && ucred->uc_o_uid == nodemap->nm_squash_uid) {
+		/* deny access before we get identity ref */
+		if (nodemap->nmf_deny_unknown) {
+			nodemap_putref(nodemap);
+			RETURN(-EACCES);
+		}
+
+		ucred->uc_fsuid = nodemap->nm_squash_uid;
+		ucred->uc_fsgid = nodemap->nm_squash_gid;
+		ucred->uc_cap = 0;
+		ucred->uc_suppgids[0] = -1;
+		ucred->uc_suppgids[1] = -1;
+	}
+	nodemap_putref(nodemap);
 
 	if (type == BODY_INIT) {
 		struct mdt_body *body = (struct mdt_body *)buf;
@@ -217,21 +246,21 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		  (ucred->uc_identity &&
 		   (pud->pud_gid != ucred->uc_identity->mi_gid)));
 
-        /* check permission of setuid */
-        if (setuid && !(perm & CFS_SETUID_PERM)) {
-                CDEBUG(D_SEC, "mdt blocked setuid attempt (%u -> %u) from %s\n",
-                       pud->pud_uid, pud->pud_fsuid, libcfs_nid2str(peernid));
-                GOTO(out, rc = -EACCES);
-        }
+	/* check permission of setuid */
+	if (setuid && !(perm & CFS_SETUID_PERM)) {
+		CDEBUG(D_SEC, "mdt blocked setuid attempt (%u -> %u) from %s\n",
+		       pud->pud_uid, pud->pud_fsuid, libcfs_nid2str(peernid));
+		GOTO(out, rc = -EACCES);
+	}
 
-        /* check permission of setgid */
-        if (setgid && !(perm & CFS_SETGID_PERM)) {
+	/* check permission of setgid */
+	if (setgid && !(perm & CFS_SETGID_PERM)) {
 		CDEBUG(D_SEC, "mdt blocked setgid attempt (%u:%u/%u:%u -> %u) "
 		       "from %s\n", pud->pud_uid, pud->pud_gid,
 		       pud->pud_fsuid, pud->pud_fsgid,
 		       ucred->uc_identity->mi_gid, libcfs_nid2str(peernid));
 		GOTO(out, rc = -EACCES);
-        }
+	}
 
 	if (perm & CFS_SETGRP_PERM) {
 		if (pud->pud_ngroups) {
@@ -255,8 +284,8 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 		ucred->uc_ginfo = NULL;
 	}
 
-	ucred->uc_uid   = pud->pud_uid;
-	ucred->uc_gid   = pud->pud_gid;
+	ucred->uc_uid = pud->pud_uid;
+	ucred->uc_gid = pud->pud_gid;
 	ucred->uc_fsuid = pud->pud_fsuid;
 	ucred->uc_fsgid = pud->pud_fsgid;
 
