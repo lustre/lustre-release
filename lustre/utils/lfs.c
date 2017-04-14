@@ -4747,14 +4747,13 @@ static int lfs_hsm_state(int argc, char **argv)
 static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 {
 	struct option long_opts[] = {
-		{"lost", 0, 0, 'l'},
-		{"norelease", 0, 0, 'r'},
-		{"noarchive", 0, 0, 'a'},
-		{"archived", 0, 0, 'A'},
-		{"dirty", 0, 0, 'd'},
-		{"exists", 0, 0, 'e'},
-		{0, 0, 0, 0}
-	};
+	{ .val = 'A',	.name = "archived",	.has_arg = no_argument },
+	{ .val = 'a',	.name = "noarchive",	.has_arg = no_argument },
+	{ .val = 'd',	.name = "dirty",	.has_arg = no_argument },
+	{ .val = 'e',	.name = "exists",	.has_arg = no_argument },
+	{ .val = 'l',	.name = "lost",		.has_arg = no_argument },
+	{ .val = 'r',	.name = "norelease",	.has_arg = no_argument },
+	{ .name = NULL } };
 	char short_opts[] = "lraAde";
 	__u64 mask = 0;
 	int c, rc;
