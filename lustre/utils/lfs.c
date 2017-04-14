@@ -3065,10 +3065,9 @@ static int lfs_mv(int argc, char **argv)
 	int     c;
 	int     rc = 0;
 	struct option long_opts[] = {
-		{"mdt-index", required_argument, 0, 'M'},
-		{"verbose",	no_argument,	   0, 'v'},
-		{0, 0, 0, 0}
-	};
+	{ .val = 'M',	.name = "mdt-index",	.has_arg = required_argument },
+	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+	{ .name = NULL } };
 
 	while ((c = getopt_long(argc, argv, "M:v", long_opts, NULL)) != -1) {
 		switch (c) {
