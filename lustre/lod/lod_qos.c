@@ -2098,7 +2098,7 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			lod_comp->llc_stripe = stripe;
 			lod_comp->llc_stripes_allocated = stripe_len;
 		}
-	} else if (!(lod_comp->llc_flags & LCME_FL_INIT)) {
+	} else {
 		/*
 		 * lod_qos_parse_config() found supplied buf as a predefined
 		 * striping (not a hint), so it allocated all the object
@@ -2117,6 +2117,12 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 				break;
 			}
 		}
+		/**
+		 * Clear LCME_FL_INIT for the component so that
+		 * lod_striping_create() can create the striping objects
+		 * in replay.
+		 */
+		lod_comp_unset_init(lod_comp);
 	}
 
 out:

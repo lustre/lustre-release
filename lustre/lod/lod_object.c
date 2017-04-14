@@ -4992,13 +4992,6 @@ static int lod_declare_layout_change(const struct lu_env *env,
 			GOTO(out, rc = -EINVAL);
 
 		need_create = true;
-		/*
-		 * In replay, the component EA is passed by client,
-		 * Clear LCME_FL_INIT so that lod_striping_create() can create
-		 * the striping objects.
-		 */
-		if (replay)
-			lod_comp_unset_init(lod_comp);
 
 		rc = lod_qos_prep_create(env, lo, NULL, th, i, inuse);
 		if (rc)
