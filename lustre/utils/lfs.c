@@ -5239,14 +5239,13 @@ static enum lu_ladvise_type lfs_get_ladvice(const char *string)
 
 static int lfs_ladvise(int argc, char **argv)
 {
-	struct option		 long_opts[] = {
-		{"advice",	required_argument,	0, 'a'},
-		{"background",	no_argument,		0, 'b'},
-		{"end",		required_argument,	0, 'e'},
-		{"start",	required_argument,	0, 's'},
-		{"length",	required_argument,	0, 'l'},
-		{0, 0, 0, 0}
-	};
+	struct option long_opts[] = {
+	{ .val = 'a',	.name = "advice",	.has_arg = required_argument },
+	{ .val = 'b',	.name = "background",	.has_arg = no_argument },
+	{ .val = 'e',	.name = "end",		.has_arg = required_argument },
+	{ .val = 'l',	.name = "length",	.has_arg = required_argument },
+	{ .val = 's',	.name = "start",	.has_arg = required_argument },
+	{ .name = NULL } };
 	char			 short_opts[] = "a:be:l:s:";
 	int			 c;
 	int			 rc = 0;
