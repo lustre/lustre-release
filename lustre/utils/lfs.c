@@ -2408,70 +2408,78 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				  struct find_param *param)
 {
 	struct option long_opts[] = {
-		{"comp-count",		no_argument, 0, LFS_COMP_COUNT_OPT},
-		{"component-count",	no_argument, 0, LFS_COMP_COUNT_OPT},
-		{"comp-flags",	    optional_argument, 0, LFS_COMP_FLAGS_OPT},
-		{"component-flags", optional_argument, 0, LFS_COMP_FLAGS_OPT},
-		{"comp-start",	    optional_argument, 0, LFS_COMP_START_OPT},
-		{"component-start", optional_argument, 0, LFS_COMP_START_OPT},
+	{ .val = LFS_COMP_COUNT_OPT,
+			.name = "comp-count",	.has_arg = no_argument },
+	{ .val = LFS_COMP_COUNT_OPT,
+		.name = "component-count",	.has_arg = no_argument },
+	{ .val = LFS_COMP_FLAGS_OPT,
+			.name = "comp-flags",	.has_arg = optional_argument },
+	{ .val = LFS_COMP_FLAGS_OPT,
+		.name = "component-flags",	.has_arg = optional_argument },
+	{ .val = LFS_COMP_START_OPT,
+			.name = "comp-start",	.has_arg = optional_argument },
+	{ .val = LFS_COMP_START_OPT,
+		.name = "component-start",	.has_arg = optional_argument },
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-		/* This formerly implied "stripe-count", but was explicitly
-		 * made "stripe-count" for consistency with other options,
-		 * and to separate it from "mdt-count" when DNE arrives. */
-		{"count",		no_argument,		0, 'c'},
+	/* This formerly implied "stripe-count", but was explicitly
+	 * made "stripe-count" for consistency with other options,
+	 * and to separate it from "mdt-count" when DNE arrives. */
+	{ .val = 'c',	.name = "count",	.has_arg = no_argument },
 #endif
-		{"stripe-count",	no_argument,		0, 'c'},
-		{"stripe_count",	no_argument,		0, 'c'},
-		{"directory",		no_argument,		0, 'd'},
-		{"default",		no_argument,		0, 'D'},
-		{"comp-end",		optional_argument,	0, 'E'},
-		{"component-end",	optional_argument,	0, 'E'},
-		{"fid",			no_argument,		0, 'F'},
-		{"generation",		no_argument,		0, 'g'},
-		/* dirstripe {"mdt-hash",     required_argument, 0, 'H'}, */
+	{ .val = 'c',	.name = "stripe-count",	.has_arg = no_argument },
+	{ .val = 'c',	.name = "stripe_count",	.has_arg = no_argument },
+	{ .val = 'd',	.name = "directory",	.has_arg = no_argument },
+	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
+	{ .val = 'E',	.name = "comp-end",	.has_arg = optional_argument },
+	{ .val = 'E',	.name = "component-end",
+						.has_arg = optional_argument },
+	{ .val = 'F',	.name = "fid",		.has_arg = no_argument },
+	{ .val = 'g',	.name = "generation",	.has_arg = no_argument },
+	/* dirstripe { .val = 'H',	.name =	"mdt-hash",
+	 *	       .has_arg = required_argument }, */
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-		/* This formerly implied "stripe-index", but was explicitly
-		 * made "stripe-index" for consistency with other options,
-		 * and to separate it from "mdt-index" when DNE arrives. */
-		{"index",		no_argument,		0, 'i'},
+	/* This formerly implied "stripe-index", but was explicitly
+	 * made "stripe-index" for consistency with other options,
+	 * and to separate it from "mdt-index" when DNE arrives. */
+	{ .val = 'i',	.name = "index",	.has_arg = no_argument },
 #endif
-		{"stripe-index",	no_argument,		0, 'i'},
-		{"stripe_index",	no_argument,		0, 'i'},
-		{"comp-id",		optional_argument,	0, 'I'},
-		{"component-id",	optional_argument,	0, 'I'},
-		{"layout",		no_argument,		0, 'L'},
-		{"mdt",			no_argument,		0, 'm'},
-		{"mdt-index",		no_argument,		0, 'm'},
-		{"mdt_index",		no_argument,		0, 'm'},
+	{ .val = 'i',	.name = "stripe-index",	.has_arg = no_argument },
+	{ .val = 'i',	.name = "stripe_index",	.has_arg = no_argument },
+	{ .val = 'I',	.name = "comp-id",	.has_arg = optional_argument },
+	{ .val = 'I',	.name = "component-id",	.has_arg = optional_argument },
+	{ .val = 'L',	.name = "layout",	.has_arg = no_argument },
+	{ .val = 'm',	.name = "mdt",		.has_arg = no_argument },
+	{ .val = 'm',	.name = "mdt-index",	.has_arg = no_argument },
+	{ .val = 'm',	.name = "mdt_index",	.has_arg = no_argument },
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-		{"mdt-index",		no_argument,		0, 'M'},
-		{"mdt_index",		no_argument,		0, 'M'},
+	{ .val = 'M',	.name = "mdt-index",	.has_arg = no_argument },
+	{ .val = 'M',	.name = "mdt_index",	.has_arg = no_argument },
 #endif
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-		/* This formerly implied "stripe-index", but was confusing
-		 * with "file offset" (which will eventually be needed for
-		 * with different layouts by offset), so deprecate it. */
-		{"offset",		no_argument,		0, 'o'},
+	/* This formerly implied "stripe-index", but was confusing
+	 * with "file offset" (which will eventually be needed for
+	 * with different layouts by offset), so deprecate it. */
+	{ .val = 'o',	.name = "offset",	.has_arg = no_argument },
 #endif
-		{"obd",			required_argument,	0, 'O'},
-		{"ost",			required_argument,	0, 'O'},
-		{"pool",		no_argument,		0, 'p'},
-		{"quiet",		no_argument,		0, 'q'},
-		{"recursive",		no_argument,		0, 'r'},
-		{"raw",			no_argument,		0, 'R'},
+	{ .val = 'O',	.name = "obd",		.has_arg = required_argument },
+	{ .val = 'O',	.name = "ost",		.has_arg = required_argument },
+	{ .val = 'p',	.name = "pool",		.has_arg = no_argument },
+	{ .val = 'q',	.name = "quiet",	.has_arg = no_argument },
+	{ .val = 'r',	.name = "recursive",	.has_arg = no_argument },
+	{ .val = 'R',	.name = "raw",		.has_arg = no_argument },
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-		/* This formerly implied "--stripe-size", but was confusing
-		 * with "lfs find --size|-s", which means "file size", so use
-		 * the consistent "--stripe-size|-S" for all commands. */
-		{"size",		no_argument,		0, 's'},
+	/* This formerly implied "--stripe-size", but was confusing
+	 * with "lfs find --size|-s", which means "file size", so use
+	 * the consistent "--stripe-size|-S" for all commands. */
+	{ .val = 's',	.name = "size",		.has_arg = no_argument },
 #endif
-		{"stripe-size",		no_argument,		0, 'S'},
-		{"stripe_size",		no_argument,		0, 'S'},
-		/* dirstripe {"mdt-count",    required_argument, 0, 'T'}, */
-		{"verbose",		no_argument,		0, 'v'},
-		{"yaml",		no_argument,		0, 'y'},
-		{0, 0, 0, 0}
-	};
+	{ .val = 'S',	.name = "stripe-size",	.has_arg = no_argument },
+	{ .val = 'S',	.name = "stripe_size",	.has_arg = no_argument },
+	/* dirstripe { .val = 'T',	.name = "mdt-count",
+	 *	       .has_arg = required_argument }, */
+	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument },
+	{ .name = NULL } };
 	int c, rc;
 	char *end, *tmp;
 
