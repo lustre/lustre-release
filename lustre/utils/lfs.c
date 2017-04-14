@@ -3709,15 +3709,18 @@ int lfs_setquota(int argc, char **argv)
         char *mnt, *obd_type = (char *)qctl.obd_type;
         struct obd_dqblk *dqb = &qctl.qc_dqblk;
         struct option long_opts[] = {
-                {"block-softlimit", required_argument, 0, 'b'},
-                {"block-hardlimit", required_argument, 0, 'B'},
-                {"group",           required_argument, 0, 'g'},
-                {"inode-softlimit", required_argument, 0, 'i'},
-                {"inode-hardlimit", required_argument, 0, 'I'},
-                {"user",            required_argument, 0, 'u'},
-		{"projid",         required_argument, 0, 'p'},
-                {0, 0, 0, 0}
-        };
+	{ .val = 'b',	.name = "block-softlimit",
+						.has_arg = required_argument },
+	{ .val = 'B',	.name = "block-hardlimit",
+						.has_arg = required_argument },
+	{ .val = 'g',	.name = "group",	.has_arg = required_argument },
+	{ .val = 'i',	.name = "inode-softlimit",
+						.has_arg = required_argument },
+	{ .val = 'I',	.name = "inode-hardlimit",
+						.has_arg = required_argument },
+	{ .val = 'p',	.name = "projid",	.has_arg = required_argument },
+	{ .val = 'u',	.name = "user",		.has_arg = required_argument },
+	{ .name = NULL } };
         unsigned limit_mask = 0;
         char *endptr;
 	int qtype;
