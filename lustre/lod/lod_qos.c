@@ -1788,9 +1788,16 @@ int lod_use_defined_striping(const struct lu_env *env,
 		lod_comp->llc_stripe_size = le32_to_cpu(v1->lmm_stripe_size);
 		lod_comp->llc_stripenr = le16_to_cpu(v1->lmm_stripe_count);
 		lod_comp->llc_layout_gen = le16_to_cpu(v1->lmm_layout_gen);
+		/**
+		 * The stripe_offset of an uninit-ed component is stored in
+		 * the lmm_layout_gen
+		 */
+		if (mo->ldo_is_composite && !lod_comp_inited(lod_comp))
+			lod_comp->llc_stripe_offset = lod_comp->llc_layout_gen;
 		lod_obj_set_pool(mo, i, pool_name);
 
-		if (!(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)) {
+		if ((!mo->ldo_is_composite || lod_comp_inited(lod_comp)) &&
+		    !(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)) {
 			rc = lod_initialize_objects(env, mo, objs, i);
 			if (rc)
 				GOTO(out, rc);

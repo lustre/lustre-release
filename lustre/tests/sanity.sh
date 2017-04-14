@@ -11867,14 +11867,16 @@ test_184d() {
 		error "create $file2 failed"
 	$OPENFILE -f O_CREAT:O_LOV_DELAY_CREATE $file3 ||
 		error "create $file3 failed"
-	lovea1=$($LFS getstripe $file1 | sed 1d)
+	lovea1=$(get_layout_param $file1)
 
 	$LFS swap_layouts $file2 $file3 ||
 		error "swap $file2 $file3 layouts failed"
 	$LFS swap_layouts $file1 $file2 ||
 		error "swap $file1 $file2 layouts failed"
 
-	lovea2=$($LFS getstripe $file2 | sed 1d)
+	lovea2=$(get_layout_param $file2)
+	echo "$lovea1"
+	echo "$lovea2"
 	[ "$lovea1" == "$lovea2" ] || error "lovea $lovea1 != $lovea2"
 
 	lovea1=$(getfattr -n trusted.lov $file1 | grep ^trusted)
