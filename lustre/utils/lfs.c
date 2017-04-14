@@ -4597,10 +4597,9 @@ static int lfs_fid2path(int argc, char **argv)
 
 static int lfs_path2fid(int argc, char **argv)
 {
-	struct option	  long_opts[] = {
-		{"parents", no_argument, 0, 'p'},
-		{0, 0, 0, 0}
-	};
+	struct option long_opts[] = {
+		{ .val = 'p', .name = "parents", .has_arg = no_argument },
+		{ .name = NULL } };
 	char		**path;
 	const char	  short_opts[] = "p";
 	const char	 *sep = "";
