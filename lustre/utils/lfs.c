@@ -4503,22 +4503,21 @@ static int lfs_changelog_clear(int argc, char **argv)
 
 static int lfs_fid2path(int argc, char **argv)
 {
-        struct option long_opts[] = {
-                {"cur", no_argument, 0, 'c'},
-                {"link", required_argument, 0, 'l'},
-                {"rec", required_argument, 0, 'r'},
-                {0, 0, 0, 0}
-        };
-        char  short_opts[] = "cl:r:";
-        char *device, *fid, *path;
-        long long recno = -1;
-        int linkno = -1;
-        int lnktmp;
-        int printcur = 0;
+	struct option long_opts[] = {
+		{ .val = 'c',	.name = "cur",	.has_arg = no_argument },
+		{ .val = 'l',	.name = "link",	.has_arg = required_argument },
+		{ .val = 'r',	.name = "rec",	.has_arg = required_argument },
+		{ .name = NULL } };
+	char  short_opts[] = "cl:r:";
+	char *device, *fid, *path;
+	long long recno = -1;
+	int linkno = -1;
+	int lnktmp;
+	int printcur = 0;
 	int rc = 0;
 
-        while ((rc = getopt_long(argc, argv, short_opts,
-                                long_opts, NULL)) != -1) {
+	while ((rc = getopt_long(argc, argv, short_opts,
+		long_opts, NULL)) != -1) {
                 switch (rc) {
                 case 'c':
                         printcur++;
