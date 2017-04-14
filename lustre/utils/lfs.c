@@ -2858,26 +2858,26 @@ static int lfs_setdirstripe(int argc, char **argv)
 
 	struct option long_opts[] = {
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-		{"count",	required_argument, 0, 'c'},
+	{ .val = 'c',	.name = "count",	.has_arg = required_argument },
 #endif
-		{"mdt-count",	required_argument, 0, 'c'},
-		{"delete",	no_argument, 0, 'd'},
+	{ .val = 'c',	.name = "mdt-count",	.has_arg = required_argument },
+	{ .val = 'd',	.name = "delete",	.has_arg = no_argument },
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-		{"index",	required_argument, 0, 'i'},
+	{ .val = 'i',	.name = "index",	.has_arg = required_argument },
 #endif
-		{"mdt-index",	required_argument, 0, 'i'},
-		{"mode",	required_argument, 0, 'm'},
+	{ .val = 'i',	.name = "mdt-index",	.has_arg = required_argument },
+	{ .val = 'm',	.name = "mode",		.has_arg = required_argument },
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-		{"hash-type",	required_argument, 0, 't'},
-		{"mdt-hash",	required_argument, 0, 't'},
+	{ .val = 't',	.name = "hash-type",	.has_arg = required_argument },
+	{ .val = 't',	.name = "mdt-hash",	.has_arg = required_argument },
 #endif
 		{"mdt-hash",	required_argument, 0, 'H'},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-		{"default_stripe", no_argument, 0, 'D'},
+	{ .val = 'D',	.name = "default_stripe",
+						.has_arg = no_argument },
 #endif
-		{"default",	no_argument, 0, 'D'},
-		{0, 0, 0, 0}
-	};
+	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
+	{ .name = NULL } };
 
 	while ((c = getopt_long(argc, argv, "c:dDi:H:m:t:", long_opts,
 				NULL)) >= 0) {
