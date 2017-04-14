@@ -3370,13 +3370,13 @@ static int lfs_df(int argc, char **argv)
 	int c, rc = 0, index = 0;
 	char fsname[PATH_MAX] = "", *pool_name = NULL;
 	struct option long_opts[] = {
-		{"human-readable", 0, 0, 'h'},
-		{"inodes", 0, 0, 'i'},
-		{"lazy", 0, 0, 'l'},
-		{"pool", required_argument, 0, 'p'},
-		{"verbose", 0, 0, 'v'},
-		{0, 0, 0, 0}
-	};
+	{ .val = 'h',	.name = "human-readable",
+						.has_arg = no_argument },
+	{ .val = 'i',	.name = "inodes",	.has_arg = no_argument },
+	{ .val = 'l',	.name = "lazy",		.has_arg = no_argument },
+	{ .val = 'p',	.name = "pool",		.has_arg = required_argument },
+	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+	{ .name = NULL} };
 
 	while ((c = getopt_long(argc, argv, "hilp:v", long_opts, NULL)) != -1) {
 		switch (c) {
