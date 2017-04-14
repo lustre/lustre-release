@@ -62,13 +62,12 @@ static void read_exports(char *exports, NIDList nidlist);
 char *prog;
 
 #define OPTIONS "ehlv"
-static struct option long_options[] = {
-	{"enumerate", no_argument, 0, 'e'},
-	{"help",      no_argument, 0, 'h'},
-	{"lookup",    no_argument, 0, 'l'},
-	{"verbose",   no_argument, 0, 'v'},
-	{0, 0, 0, 0},
-};
+static struct option long_opts[] = {
+	{ .val = 'e',	.name = "enumerate",	.has_arg = no_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'l',	.name = "lookup",	.has_arg = no_argument },
+	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+	{ .name = NULL } };
 
 static void usage(void)
 {
@@ -85,7 +84,7 @@ int main(int argc, char **argv)
 
 	prog = basename(argv[0]);
 
-	while ((opt = getopt_long(argc, argv, OPTIONS, long_options,
+	while ((opt = getopt_long(argc, argv, OPTIONS, long_opts,
 				  &optidx)) != -1) {
 		switch (opt) {
 		case 'e':	/* --enumerate */
