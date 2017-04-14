@@ -3258,9 +3258,10 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags)
 	struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
 	struct obd_uuid uuid_buf;
 	char *poolname = NULL;
-	struct ll_stat_type types[] = { { LL_STATFS_LMV, "MDT" },
-					{ LL_STATFS_LOV, "OST" },
-					{ 0, NULL } };
+	struct ll_stat_type types[] = {
+		{ .st_op = LL_STATFS_LMV,	.st_name = "MDT" },
+		{ .st_op = LL_STATFS_LOV,	.st_name = "OST" },
+		{ .st_name = NULL } };
 	struct ll_stat_type *tp;
 	__u64 ost_ffree = 0;
 	__u32 index;
