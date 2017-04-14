@@ -5009,13 +5009,12 @@ static int fill_hur_item(struct hsm_user_request *hur, unsigned int idx,
 
 static int lfs_hsm_request(int argc, char **argv, int action)
 {
-	struct option		 long_opts[] = {
-		{"filelist", 1, 0, 'l'},
-		{"data", 1, 0, 'D'},
-		{"archive", 1, 0, 'a'},
-		{"mntpath", 1, 0, 'm'},
-		{0, 0, 0, 0}
-	};
+	struct option long_opts[] = {
+	{ .val = 'a',	.name = "archive",	.has_arg = required_argument },
+	{ .val = 'D',	.name = "data",		.has_arg = required_argument },
+	{ .val = 'l',	.name = "filelist",	.has_arg = required_argument },
+	{ .val = 'm',	.name = "mntpath",	.has_arg = required_argument },
+	{ .name = NULL } };
 	dev_t			 last_dev = 0;
 	char			 short_opts[] = "l:D:a:m:";
 	struct hsm_user_request	*hur, *oldhur;
