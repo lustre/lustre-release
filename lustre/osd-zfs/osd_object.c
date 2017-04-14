@@ -1520,8 +1520,6 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 
 	/* XXX: oo_lma_flags */
 	obj->oo_dt.do_lu.lo_header->loh_attr |= obj->oo_attr.la_mode & S_IFMT;
-	smp_mb();
-	obj->oo_dt.do_lu.lo_header->loh_attr |= LOHA_EXISTS;
 	if (likely(!fid_is_acct(lu_object_fid(&obj->oo_dt.do_lu))))
 		/* no body operations for accounting objects */
 		obj->oo_dt.do_body_ops = &osd_body_ops;
@@ -1547,6 +1545,8 @@ out:
 		dmu_object_free(osd->od_os, dn->dn_object, oh->ot_tx);
 		osd_dnode_rele(dn);
 		obj->oo_dn = NULL;
+	} else if (!rc) {
+		obj->oo_dt.do_lu.lo_header->loh_attr |= LOHA_EXISTS;
 	}
 	up_write(&obj->oo_guard);
 	RETURN(rc);
