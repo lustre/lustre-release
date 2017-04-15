@@ -17,7 +17,7 @@ set -x
 
 . $(dirname $0)/functions.sh
 
-assert_env MOUNT END_RUN_FILE LOAD_PID_FILE LFS CLIENT_COUNT
+assert_env MOUNT END_RUN_FILE LOAD_PID_FILE LFS CLIENT_COUNT LCTL
 
 trap signaled TERM
 
@@ -35,8 +35,14 @@ CONTINUE=true
 while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 	echoerr "$(date +'%F %H:%M:%S'): tar run starting"
 	mkdir -p $TESTDIR
+	cd $TESTDIR
+	sync
+
 	USAGE=$(du -s /etc | awk '{print $1}')
-	FREE_SPACE=$($LFS df $TESTDIR | awk '/filesystem summary:/ {print $5}')
+	$LCTL set_param llite.*.lazystatfs=0
+	df $TESTDIR || true
+	sleep 2
+	FREE_SPACE=$(df $TESTDIR | awk '/:/ { print $4 }')
 	AVAIL=$((FREE_SPACE * 9 / 10 / CLIENT_COUNT))
 	if [ $AVAIL -lt $USAGE ]; then
 		echoerr "no enough free disk space: need $USAGE, avail $AVAIL"
@@ -44,11 +50,7 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 		break
 	fi
 
-	cd $TESTDIR
-
-	sync
-	do_tar &
-	wait $!
+	do_tar
 	RC=$?
 	PREV_ERRORS=$(grep "exit delayed from previous errors" $LOG) || true
 	if [ $RC -ne 0 -a "$ERRORS_OK" -a "$PREV_ERRORS" ]; then

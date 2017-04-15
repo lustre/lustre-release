@@ -1960,29 +1960,31 @@ node_var_name() {
 }
 
 start_client_load() {
-    local client=$1
-    local load=$2
-    local var=$(node_var_name $client)_load
-    eval export ${var}=$load
+	local client=$1
+	local load=$2
+	local var=$(node_var_name $client)_load
+	eval export ${var}=$load
 
-    do_node $client "PATH=$PATH MOUNT=$MOUNT ERRORS_OK=$ERRORS_OK \
-BREAK_ON_ERROR=$BREAK_ON_ERROR \
-END_RUN_FILE=$END_RUN_FILE \
-LOAD_PID_FILE=$LOAD_PID_FILE \
-TESTLOG_PREFIX=$TESTLOG_PREFIX \
-TESTNAME=$TESTNAME \
-DBENCH_LIB=$DBENCH_LIB \
-DBENCH_SRC=$DBENCH_SRC \
-CLIENT_COUNT=$((CLIENTCOUNT - 1)) \
-LFS=$LFS \
-run_${load}.sh" &
-    local ppid=$!
-    log "Started client load: ${load} on $client"
+	do_node $client "PATH=$PATH MOUNT=$MOUNT ERRORS_OK=$ERRORS_OK \
+			BREAK_ON_ERROR=$BREAK_ON_ERROR \
+			END_RUN_FILE=$END_RUN_FILE \
+			LOAD_PID_FILE=$LOAD_PID_FILE \
+			TESTLOG_PREFIX=$TESTLOG_PREFIX \
+			TESTNAME=$TESTNAME \
+			DBENCH_LIB=$DBENCH_LIB \
+			DBENCH_SRC=$DBENCH_SRC \
+			CLIENT_COUNT=$((CLIENTCOUNT - 1)) \
+			LFS=$LFS \
+			LCTL=$LCTL \
+			FSNAME=$FSNAME \
+			run_${load}.sh" &
+	local ppid=$!
+	log "Started client load: ${load} on $client"
 
-    # get the children process IDs
-    local pids=$(ps --ppid $ppid -o pid= | xargs)
-    CLIENT_LOAD_PIDS="$CLIENT_LOAD_PIDS $ppid $pids"
-    return 0
+	# get the children process IDs
+	local pids=$(ps --ppid $ppid -o pid= | xargs)
+	CLIENT_LOAD_PIDS="$CLIENT_LOAD_PIDS $ppid $pids"
+	return 0
 }
 
 start_client_loads () {

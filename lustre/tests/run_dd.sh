@@ -36,15 +36,13 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 
 	# suppress dd xfer stat to workaround buggy coreutils/gettext
 	# combination in RHEL5 and OEL5, see BZ 21264
-	FREE_SPACE=$($LFS df $TESTDIR|awk '/filesystem summary:/ {print $5}')
+	FREE_SPACE=$(df -P $TESTDIR | awk '/:/ { print $4 }')
 	BLKS=$((FREE_SPACE * 9 / 40 / CLIENT_COUNT))
 	echoerr "Total free disk space is $FREE_SPACE, 4k blocks to dd is $BLKS"
 
+	df $TESTDIR || true
 	dd bs=4k count=$BLKS status=noxfer if=/dev/zero of=$TESTDIR/dd-file \
-								1>$LOG &
-	load_pid=$!
-	wait $load_pid
-
+								1>$LOG
 	if [ $? -eq 0 ]; then
 		echoerr "$(date +'%F %H:%M:%S'): dd succeeded"
 		cd $TMP
@@ -52,7 +50,7 @@ while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
 		echoerr "$(date +'%F %H:%M:%S'): dd run finished"
 	else
 		echoerr "$(date +'%F %H:%M:%S'): dd failed"
-        	if [ -z "$ERRORS_OK" ]; then
+		if [ -z "$ERRORS_OK" ]; then
 			echo $(hostname) >> $END_RUN_FILE
 		fi
 		if [ $BREAK_ON_ERROR ]; then
