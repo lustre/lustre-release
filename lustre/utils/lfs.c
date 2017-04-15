@@ -352,12 +352,14 @@ command_t cmdlist[] = {
 	 "usage: hsm_release [--filelist FILELIST] [--data DATA] <file> ..."},
 	{"hsm_remove", lfs_hsm_remove, 0,
 	 "Remove file copy from external storage.\n"
-	 "usage: hsm_remove [--filelist FILELIST] [--data DATA]\n"
-	 "                  [--mntpath MOUNTPATH] [--archive NUM] <file|FID> ...\n"
+	 "usage: hsm_remove [--filelist FILELIST] [--data DATA] "
+	 "[--archive NUM]\n"
+	 "                  (FILE [FILE ...] | "
+	 "--mntpath MOUNTPATH FID [FID ...])\n"
 	 "\n"
-	 "Note: To remove files from the archive that have been deleted on\n"
-	 "Lustre, set mntpath and optionally archive. In that case, all the\n"
-	 "positional arguments and entries in the file list must be FIDs."
+	 "Note: To remove an archived copy of a file already deleted from a "
+	 "Lustre FS, the\n"
+	 "--mntpath option and a list of FIDs must be specified"
 	},
 	{"hsm_cancel", lfs_hsm_cancel, 0,
 	 "Cancel requests related to specified files.\n"
