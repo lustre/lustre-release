@@ -1710,11 +1710,12 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 static int
 ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 {
-        struct ll_inode_info   *lli = ll_i2info(inode);
-        struct ll_file_data    *fd = LUSTRE_FPRIVATE(file);
-	struct ll_grouplock	grouplock;
-        int                     rc;
-        ENTRY;
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct cl_object *obj = lli->lli_clob;
+	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+	struct ll_grouplock grouplock;
+	int rc;
+	ENTRY;
 
 	if (arg == 0) {
 		CWARN("group id for group lock must not be 0\n");
@@ -1733,6 +1734,31 @@ ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 	}
 	LASSERT(fd->fd_grouplock.lg_lock == NULL);
 	spin_unlock(&lli->lli_lock);
+
+	/**
+	 * XXX: group lock needs to protect all OST objects while PFL
+	 * can add new OST objects during the IO, so we'd instantiate
+	 * all OST objects before getting its group lock.
+	 */
+	if (obj) {
+		struct lu_env *env;
+		__u16 refcheck;
+		struct cl_layout cl = {
+			.cl_is_composite = false,
+		};
+
+		env = cl_env_get(&refcheck);
+		if (IS_ERR(env))
+			RETURN(PTR_ERR(env));
+
+		rc = cl_object_layout_get(env, obj, &cl);
+		if (!rc && cl.cl_is_composite)
+			rc = ll_layout_write_intent(inode, 0, OBD_OBJECT_EOF);
+
+		cl_env_put(env, &refcheck);
+		if (rc)
+			RETURN(rc);
+	}
 
 	rc = cl_get_grouplock(ll_i2info(inode)->lli_clob,
 			      arg, (file->f_flags & O_NONBLOCK), &grouplock);

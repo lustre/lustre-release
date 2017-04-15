@@ -288,6 +288,8 @@ struct cl_layout {
 	size_t		cl_size;
 	/** Layout generation. */
 	u32		cl_layout_gen;
+	/** whether layout is a composite one */
+	bool		cl_is_composite;
 };
 
 /**

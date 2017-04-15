@@ -4947,8 +4947,9 @@ static int lod_declare_layout_change(const struct lu_env *env,
 
 	/* Make sure defined layout covers the requested write range. */
 	lod_comp = &lo->ldo_comp_entries[lo->ldo_comp_cnt - 1];
-	if ((lod_comp->llc_extent.e_end != OBD_OBJECT_EOF &&
-	     lod_comp->llc_extent.e_end < layout->li_end)) {
+	if (lo->ldo_comp_cnt > 1 &&
+	    lod_comp->llc_extent.e_end != OBD_OBJECT_EOF &&
+	    lod_comp->llc_extent.e_end < layout->li_end) {
 		CDEBUG(replay ? D_ERROR : D_LAYOUT,
 		       "%s: the defined layout [0, %#llx) does not covers "
 		       "the write range [%#llx, %#llx).\n",

@@ -266,6 +266,17 @@ static int sendfile_copy(const char *source, int source_gid,
 
 	}
 
+	if (dest_gid != 0) {
+		rc = llapi_group_unlock(fd_out, dest_gid);
+		ASSERTF(rc == 0, "cannot clear group lock %d for '%s': %s",
+			dest_gid, dest, strerror(-rc));
+	}
+	if (source_gid != 0) {
+		rc = llapi_group_unlock(fd_in, source_gid);
+		ASSERTF(rc == 0, "cannot clear group lock %d for '%s': %s",
+			source_gid, source, strerror(-rc));
+	}
+
 	close(fd_out);
 	close(fd_in);
 

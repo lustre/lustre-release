@@ -349,4 +349,10 @@ static inline bool lsm_entry_inited(const struct lov_stripe_md *lsm, int index)
 {
 	return lsme_inited(lsm->lsm_entries[index]);
 }
+
+static inline bool lsm_is_composite(__u32 magic)
+{
+	return !!(magic & LOV_MAGIC_COMP_V1);
+}
+
 #endif
