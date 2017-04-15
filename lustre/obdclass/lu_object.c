@@ -1615,15 +1615,18 @@ void lu_context_key_quiesce(struct lu_context_key *key)
 		list_for_each_entry(ctx, &lu_context_remembered,
 				    lc_remember)
 			key_fini(ctx, key->lct_index);
-		write_unlock(&lu_keys_guard);
+
 		++key_set_version;
+		write_unlock(&lu_keys_guard);
 	}
 }
 
 void lu_context_key_revive(struct lu_context_key *key)
 {
-        key->lct_tags &= ~LCT_QUIESCENT;
-        ++key_set_version;
+	write_lock(&lu_keys_guard);
+	key->lct_tags &= ~LCT_QUIESCENT;
+	++key_set_version;
+	write_unlock(&lu_keys_guard);
 }
 
 static void keys_fini(struct lu_context *ctx)
@@ -1643,6 +1646,7 @@ static void keys_fini(struct lu_context *ctx)
 static int keys_fill(struct lu_context *ctx)
 {
 	unsigned int i;
+	unsigned pre_version;
 
 	/*
 	 * A serialisation with lu_context_key_quiesce() is needed, but some
@@ -1655,24 +1659,26 @@ static int keys_fill(struct lu_context *ctx)
 	 */
 	read_lock(&lu_keys_guard);
 	atomic_inc(&lu_key_initing_cnt);
+	pre_version = key_set_version;
 	read_unlock(&lu_keys_guard);
 
-        LINVRNT(ctx->lc_value != NULL);
-        for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
-                struct lu_context_key *key;
+refill:
+	LINVRNT(ctx->lc_value != NULL);
+	for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
+		struct lu_context_key *key;
 
-                key = lu_keys[i];
-                if (ctx->lc_value[i] == NULL && key != NULL &&
-                    (key->lct_tags & ctx->lc_tags) &&
-                    /*
-                     * Don't create values for a LCT_QUIESCENT key, as this
-                     * will pin module owning a key.
-                     */
-                    !(key->lct_tags & LCT_QUIESCENT)) {
-                        void *value;
+		key = lu_keys[i];
+		if (ctx->lc_value[i] == NULL && key != NULL &&
+		    (key->lct_tags & ctx->lc_tags) &&
+		    /*
+		     * Don't create values for a LCT_QUIESCENT key, as this
+		     * will pin module owning a key.
+		     */
+		    !(key->lct_tags & LCT_QUIESCENT)) {
+			void *value;
 
-                        LINVRNT(key->lct_init != NULL);
-                        LINVRNT(key->lct_index == i);
+			LINVRNT(key->lct_init != NULL);
+			LINVRNT(key->lct_index == i);
 
 			LASSERT(key->lct_owner != NULL);
 			if (!(ctx->lc_tags & LCT_NOREF) &&
@@ -1689,19 +1695,27 @@ static int keys_fill(struct lu_context *ctx)
 
 			lu_ref_add_atomic(&key->lct_reference, "ctx", ctx);
 			atomic_inc(&key->lct_used);
-                        /*
-                         * This is the only place in the code, where an
-                         * element of ctx->lc_value[] array is set to non-NULL
-                         * value.
-                         */
-                        ctx->lc_value[i] = value;
-                        if (key->lct_exit != NULL)
-                                ctx->lc_tags |= LCT_HAS_EXIT;
-                }
-                ctx->lc_version = key_set_version;
-        }
+			/*
+			 * This is the only place in the code, where an
+			 * element of ctx->lc_value[] array is set to non-NULL
+			 * value.
+			 */
+			ctx->lc_value[i] = value;
+			if (key->lct_exit != NULL)
+				ctx->lc_tags |= LCT_HAS_EXIT;
+		}
+	}
+
+	read_lock(&lu_keys_guard);
+	if (pre_version != key_set_version) {
+		pre_version = key_set_version;
+		read_unlock(&lu_keys_guard);
+		goto refill;
+	}
+
 	atomic_dec(&lu_key_initing_cnt);
-        return 0;
+	read_unlock(&lu_keys_guard);
+	return 0;
 }
 
 static int keys_init(struct lu_context *ctx)
