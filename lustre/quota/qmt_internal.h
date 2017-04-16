@@ -116,18 +116,18 @@ struct qmt_pool_info {
 
 	/* pointer to dt object associated with global indexes for both user
 	 * and group quota */
-	struct dt_object	*qpi_glb_obj[MAXQUOTAS];
+	struct dt_object	*qpi_glb_obj[LL_MAXQUOTAS];
 
 	/* A pool supports two different quota types: user and group quota.
 	 * Each quota type has its own global index and lquota_entry hash table.
 	 */
-	struct lquota_site	*qpi_site[MAXQUOTAS];
+	struct lquota_site	*qpi_site[LL_MAXQUOTAS];
 
 	/* number of slaves registered for each quota types */
-	int			 qpi_slv_nr[MAXQUOTAS];
+	int			 qpi_slv_nr[LL_MAXQUOTAS];
 
 	/* reference on lqe (ID 0) storing grace time. */
-	struct lquota_entry	*qpi_grace_lqe[MAXQUOTAS];
+	struct lquota_entry	*qpi_grace_lqe[LL_MAXQUOTAS];
 
 	/* procfs root directory for this pool */
 	struct proc_dir_entry	*qpi_proc;
