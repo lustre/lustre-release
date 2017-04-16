@@ -1,8 +1,8 @@
-diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
-index 9308f35..eeb3d05 100644
---- a/fs/ext4/ext4.h
-+++ b/fs/ext4/ext4.h
-@@ -377,16 +377,18 @@ struct flex_groups {
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -392,16 +392,18 @@ struct flex_groups {
  #define EXT4_EA_INODE_FL	        0x00200000 /* Inode used for large EA */
  #define EXT4_EOFBLOCKS_FL		0x00400000 /* Blocks allocated beyond EOF */
  #define EXT4_INLINE_DATA_FL		0x10000000 /* Inode has inline data. */
@@ -24,7 +24,7 @@ index 9308f35..eeb3d05 100644
  
  /* Flags that are appropriate for regular files (all but dir-specific ones). */
  #define EXT4_REG_FLMASK (~(EXT4_DIRSYNC_FL | EXT4_TOPDIR_FL))
-@@ -434,6 +436,7 @@ enum {
+@@ -449,6 +451,7 @@ enum {
  	EXT4_INODE_EA_INODE	= 21,	/* Inode used for large EA */
  	EXT4_INODE_EOFBLOCKS	= 22,	/* Blocks allocated beyond EOF */
  	EXT4_INODE_INLINE_DATA	= 28,	/* Data in inode. */
@@ -32,7 +32,7 @@ index 9308f35..eeb3d05 100644
  	EXT4_INODE_RESERVED	= 31,	/* reserved for ext4 lib */
  };
  
-@@ -685,6 +688,7 @@ struct ext4_inode {
+@@ -698,6 +701,7 @@ struct ext4_inode {
  	__le32  i_crtime;       /* File Creation time */
  	__le32  i_crtime_extra; /* extra FileCreationtime (nsec << 2 | epoch) */
  	__le32  i_version_hi;	/* high 32 bits for 64-bit version */
@@ -40,7 +40,7 @@ index 9308f35..eeb3d05 100644
  };
  
  struct move_extent {
-@@ -942,6 +946,7 @@ struct ext4_inode_info {
+@@ -953,6 +957,7 @@ struct ext4_inode_info {
  
  	/* Precomputed uuid+inum+igen checksum for seeding inode checksums */
  	__u32 i_csum_seed;
@@ -48,7 +48,7 @@ index 9308f35..eeb3d05 100644
  };
  
  /*
-@@ -1531,6 +1536,7 @@ static inline void ext4_clear_state_flags(struct ext4_inode_info *ei)
+@@ -1555,6 +1560,7 @@ static inline void ext4_clear_state_flag
   * GDT_CSUM bits are mutually exclusive.
   */
  #define EXT4_FEATURE_RO_COMPAT_METADATA_CSUM	0x0400
@@ -56,7 +56,7 @@ index 9308f35..eeb3d05 100644
  
  #define EXT4_FEATURE_INCOMPAT_COMPRESSION	0x0001
  #define EXT4_FEATURE_INCOMPAT_FILETYPE		0x0002
-@@ -1580,7 +1586,8 @@ static inline void ext4_clear_state_flags(struct ext4_inode_info *ei)
+@@ -1607,7 +1613,8 @@ static inline void ext4_clear_state_flag
  					 EXT4_FEATURE_RO_COMPAT_HUGE_FILE |\
  					 EXT4_FEATURE_RO_COMPAT_BIGALLOC |\
  					 EXT4_FEATURE_RO_COMPAT_METADATA_CSUM|\
@@ -66,7 +66,7 @@ index 9308f35..eeb3d05 100644
  
  /*
   * Default values for user and/or group using reserved blocks
-@@ -1588,6 +1595,11 @@ static inline void ext4_clear_state_flags(struct ext4_inode_info *ei)
+@@ -1615,6 +1622,11 @@ static inline void ext4_clear_state_flag
  #define	EXT4_DEF_RESUID		0
  #define	EXT4_DEF_RESGID		0
  
@@ -78,19 +78,19 @@ index 9308f35..eeb3d05 100644
  #define EXT4_DEF_INODE_READAHEAD_BLKS	32
  
  /*
-@@ -2145,6 +2157,7 @@ extern int ext4_zero_partial_blocks(handle_t *handle, struct inode *inode,
+@@ -2303,6 +2315,7 @@ extern int ext4_zero_partial_blocks(hand
+ 			     loff_t lstart, loff_t lend);
  extern int ext4_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf);
- extern int ext4_filemap_fault(struct vm_area_struct *vma, struct vm_fault *vmf);
  extern qsize_t *ext4_get_reserved_space(struct inode *inode);
 +extern int ext4_get_projid(struct inode *inode, kprojid_t *projid);
  extern void ext4_da_update_reserve_space(struct inode *inode,
  					int used, int quota_claim);
- extern int ext4_issue_zeroout(struct inode *inode, ext4_lblk_t lblk,
-diff --git a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
-index ac644c3..10ca9dd 100644
---- a/fs/ext4/ialloc.c
-+++ b/fs/ext4/ialloc.c
-@@ -756,6 +756,11 @@ struct inode *__ext4_new_inode(handle_t *handle, struct inode *dir,
+ 
+Index: linux-stage/fs/ext4/ialloc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/ialloc.c
++++ linux-stage/fs/ext4/ialloc.c
+@@ -732,6 +732,11 @@ struct inode *__ext4_new_inode(handle_t
  		inode->i_gid = dir->i_gid;
  	} else
  		inode_init_owner(inode, dir, mode);
@@ -102,11 +102,11 @@ index ac644c3..10ca9dd 100644
  	dquot_initialize(inode);
  
  	if (!goal)
-diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
-index f094263..34877ac 100644
---- a/fs/ext4/inode.c
-+++ b/fs/ext4/inode.c
-@@ -4099,6 +4099,14 @@ static inline void ext4_iget_extra_inode(struct inode *inode,
+Index: linux-stage/fs/ext4/inode.c
+===================================================================
+--- linux-stage.orig/fs/ext4/inode.c
++++ linux-stage/fs/ext4/inode.c
+@@ -3937,6 +3937,14 @@ static inline void ext4_iget_extra_inode
  		EXT4_I(inode)->i_inline_off = 0;
  }
  
@@ -121,7 +121,7 @@ index f094263..34877ac 100644
  struct inode *ext4_iget(struct super_block *sb, unsigned long ino)
  {
  	struct ext4_iloc iloc;
-@@ -4110,6 +4118,7 @@ struct inode *ext4_iget(struct super_block *sb, unsigned long ino)
+@@ -3948,6 +3956,7 @@ struct inode *ext4_iget(struct super_blo
  	int block;
  	uid_t i_uid;
  	gid_t i_gid;
@@ -129,7 +129,7 @@ index f094263..34877ac 100644
  
  	inode = iget_locked(sb, ino);
  	if (!inode)
-@@ -4159,12 +4168,20 @@ struct inode *ext4_iget(struct super_block *sb, unsigned long ino)
+@@ -3997,12 +4006,20 @@ struct inode *ext4_iget(struct super_blo
  	inode->i_mode = le16_to_cpu(raw_inode->i_mode);
  	i_uid = (uid_t)le16_to_cpu(raw_inode->i_uid_low);
  	i_gid = (gid_t)le16_to_cpu(raw_inode->i_gid_low);
@@ -150,7 +150,7 @@ index f094263..34877ac 100644
  	set_nlink(inode, le16_to_cpu(raw_inode->i_links_count));
  
  	ext4_clear_state_flags(ei);	/* Only relevant on 32-bit archs */
-@@ -4395,6 +4412,7 @@ static int ext4_do_update_inode(handle_t *handle,
+@@ -4233,6 +4250,7 @@ static int ext4_do_update_inode(handle_t
  	int need_datasync = 0, set_large_file = 0;
  	uid_t i_uid;
  	gid_t i_gid;
@@ -158,7 +158,7 @@ index f094263..34877ac 100644
  
  	spin_lock(&ei->i_raw_lock);
  
-@@ -4407,6 +4425,7 @@ static int ext4_do_update_inode(handle_t *handle,
+@@ -4245,6 +4263,7 @@ static int ext4_do_update_inode(handle_t
  	raw_inode->i_mode = cpu_to_le16(inode->i_mode);
  	i_uid = i_uid_read(inode);
  	i_gid = i_gid_read(inode);
@@ -166,7 +166,7 @@ index f094263..34877ac 100644
  	if (!(test_opt(inode->i_sb, NO_UID32))) {
  		raw_inode->i_uid_low = cpu_to_le16(low_16_bits(i_uid));
  		raw_inode->i_gid_low = cpu_to_le16(low_16_bits(i_gid));
-@@ -4486,6 +4505,14 @@ static int ext4_do_update_inode(handle_t *handle,
+@@ -4324,6 +4343,14 @@ static int ext4_do_update_inode(handle_t
  		}
  	}
  
@@ -181,11 +181,11 @@ index f094263..34877ac 100644
  	ext4_inode_csum_set(inode, raw_inode, ei);
  
  	spin_unlock(&ei->i_raw_lock);
-diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
-index a43d2f4..aead238 100644
---- a/fs/ext4/namei.c
-+++ b/fs/ext4/namei.c
-@@ -2927,6 +2927,11 @@ static int ext4_link(struct dentry *old_dentry,
+Index: linux-stage/fs/ext4/namei.c
+===================================================================
+--- linux-stage.orig/fs/ext4/namei.c
++++ linux-stage/fs/ext4/namei.c
+@@ -3650,6 +3650,11 @@ static int ext4_link(struct dentry *old_
  	if (inode->i_nlink >= EXT4_LINK_MAX)
  		return -EMLINK;
  
@@ -197,7 +197,7 @@ index a43d2f4..aead238 100644
  	dquot_initialize(dir);
  
  retry:
-@@ -3201,6 +3206,11 @@ static int ext4_rename(struct inode *old_dir, struct dentry *old_dentry,
+@@ -3924,6 +3929,11 @@ static int ext4_rename(struct inode *old
  	int credits;
  	u8 old_file_type;
  
@@ -209,7 +209,7 @@ index a43d2f4..aead238 100644
  	dquot_initialize(old.dir);
  	dquot_initialize(new.dir);
  
-@@ -3385,6 +3395,14 @@ static int ext4_cross_rename(struct inode *old_dir, struct dentry *old_dentry,
+@@ -4108,6 +4118,14 @@ static int ext4_cross_rename(struct inod
  	u8 new_file_type;
  	int retval;
  
@@ -224,15 +224,17 @@ index a43d2f4..aead238 100644
  	dquot_initialize(old.dir);
  	dquot_initialize(new.dir);
  
-diff --git a/fs/ext4/super.c b/fs/ext4/super.c
-index 24ef7b2..8189081 100644
---- a/fs/ext4/super.c
-+++ b/fs/ext4/super.c
-@@ -1075,6 +1075,7 @@ static const struct dquot_operations ext4_quota_operations = {
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -1109,6 +1109,9 @@ static const struct dquot_operations ext
  	.write_info	= ext4_write_info,
  	.alloc_dquot	= dquot_alloc,
  	.destroy_dquot	= dquot_destroy,
++#ifdef PRJQUOTA
 +	.get_projid	= ext4_get_projid,
++#endif
  };
  
  static const struct quotactl_ops ext4_qctl_operations = {

@@ -362,10 +362,7 @@ struct ll_futimes_3 {
 #define LL_IOC_GETPARENT		_IOWR('f', 249, struct getparent)
 #define LL_IOC_LADVISE			_IOR('f', 250, struct llapi_lu_ladvise)
 
-#ifdef	FS_IOC_FSGETXATTR
-#define LL_IOC_FSGETXATTR		FS_IOC_FSGETXATTR
-#define LL_IOC_FSSETXATTR		FS_IOC_FSSETXATTR
-#else
+#ifndef	FS_IOC_FSGETXATTR
 /*
  * Structure for FS_IOC_FSGETXATTR and FS_IOC_FSSETXATTR.
 */
@@ -376,9 +373,11 @@ struct fsxattr {
 	__u32           fsx_projid;     /* project identifier (get/set) */
 	unsigned char   fsx_pad[12];
 };
-#define LL_IOC_FSGETXATTR		_IOR('X', 31, struct fsxattr)
-#define LL_IOC_FSSETXATTR		_IOW('X', 32, struct fsxattr)
+#define FS_IOC_FSGETXATTR		_IOR('X', 31, struct fsxattr)
+#define FS_IOC_FSSETXATTR		_IOW('X', 32, struct fsxattr)
 #endif
+#define LL_IOC_FSGETXATTR		FS_IOC_FSGETXATTR
+#define LL_IOC_FSSETXATTR		FS_IOC_FSSETXATTR
 
 
 /* Lease types for use as arg and return of LL_IOC_{GET,SET}_LEASE ioctl. */
