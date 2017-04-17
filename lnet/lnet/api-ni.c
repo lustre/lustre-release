@@ -1974,8 +1974,8 @@ lnet_fill_ni_info(struct lnet_ni *ni, struct lnet_ioctl_config_ni *cfg_ni,
 	memcpy(&tun->lt_cmn, &ni->ni_net->net_tunables, sizeof(tun->lt_cmn));
 
 	if (stats) {
-		stats->send_count = atomic_read(&ni->ni_stats.send_count);
-		stats->recv_count = atomic_read(&ni->ni_stats.recv_count);
+		stats->iel_send_count = atomic_read(&ni->ni_stats.send_count);
+		stats->iel_recv_count = atomic_read(&ni->ni_stats.recv_count);
 	}
 
 	/*
@@ -2834,20 +2834,19 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_GET_PEER_NI: {
 		struct lnet_ioctl_peer_cfg *cfg = arg;
-		struct lnet_peer_ni_credit_info *lpni_cri;
-		struct lnet_ioctl_element_stats *lpni_stats;
-		size_t total = sizeof(*cfg) + sizeof(*lpni_cri) +
-			       sizeof(*lpni_stats);
+		struct lnet_peer_ni_credit_info __user *lpni_cri;
+		struct lnet_ioctl_element_stats __user *lpni_stats;
+		size_t usr_size = sizeof(*lpni_cri) + sizeof(*lpni_stats);
 
-		if (cfg->prcfg_hdr.ioc_len < total)
+		if ((cfg->prcfg_hdr.ioc_len != sizeof(*cfg)) ||
+		    (cfg->prcfg_size != usr_size))
 			return -EINVAL;
 
-		lpni_cri = (struct lnet_peer_ni_credit_info*) cfg->prcfg_bulk;
-		lpni_stats = (struct lnet_ioctl_element_stats *)
-			     (cfg->prcfg_bulk + sizeof(*lpni_cri));
+		lpni_cri = cfg->prcfg_bulk;
+		lpni_stats = cfg->prcfg_bulk + sizeof(*lpni_cri);
 
 		mutex_lock(&the_lnet.ln_api_mutex);
-		rc = lnet_get_peer_info(cfg->prcfg_idx, &cfg->prcfg_prim_nid,
+		rc = lnet_get_peer_info(cfg->prcfg_count, &cfg->prcfg_prim_nid,
 					&cfg->prcfg_cfg_nid, &cfg->prcfg_mr,
 					lpni_cri, lpni_stats);
 		mutex_unlock(&the_lnet.ln_api_mutex);

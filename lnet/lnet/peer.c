@@ -1173,12 +1173,16 @@ int lnet_get_peer_ni_info(__u32 peer_index, __u64 *nid,
 }
 
 int lnet_get_peer_info(__u32 idx, lnet_nid_t *primary_nid, lnet_nid_t *nid,
-		       bool *mr, struct lnet_peer_ni_credit_info *peer_ni_info,
-		       struct lnet_ioctl_element_stats *peer_ni_stats)
+		       bool *mr,
+		       struct lnet_peer_ni_credit_info __user *peer_ni_info,
+		       struct lnet_ioctl_element_stats __user *peer_ni_stats)
 {
 	struct lnet_peer_ni *lpni = NULL;
 	struct lnet_peer_net *lpn = NULL;
 	struct lnet_peer *lp = NULL;
+	struct lnet_peer_ni_credit_info ni_info;
+	struct lnet_ioctl_element_stats ni_stats;
+	int rc;
 
 	lpni = lnet_get_peer_ni_idx_locked(idx, &lpn, &lp);
 
@@ -1188,24 +1192,36 @@ int lnet_get_peer_info(__u32 idx, lnet_nid_t *primary_nid, lnet_nid_t *nid,
 	*primary_nid = lp->lp_primary_nid;
 	*mr = lp->lp_multi_rail;
 	*nid = lpni->lpni_nid;
-	snprintf(peer_ni_info->cr_aliveness, LNET_MAX_STR_LEN, "NA");
+	snprintf(ni_info.cr_aliveness, LNET_MAX_STR_LEN, "NA");
 	if (lnet_isrouter(lpni) ||
 		lnet_peer_aliveness_enabled(lpni))
-		snprintf(peer_ni_info->cr_aliveness, LNET_MAX_STR_LEN,
+		snprintf(ni_info.cr_aliveness, LNET_MAX_STR_LEN,
 			 lpni->lpni_alive ? "up" : "down");
 
-	peer_ni_info->cr_refcount = atomic_read(&lpni->lpni_refcount);
-	peer_ni_info->cr_ni_peer_tx_credits = (lpni->lpni_net != NULL) ?
+	ni_info.cr_refcount = atomic_read(&lpni->lpni_refcount);
+	ni_info.cr_ni_peer_tx_credits = (lpni->lpni_net != NULL) ?
 		lpni->lpni_net->net_tunables.lct_peer_tx_credits : 0;
-	peer_ni_info->cr_peer_tx_credits = lpni->lpni_txcredits;
-	peer_ni_info->cr_peer_rtr_credits = lpni->lpni_rtrcredits;
-	peer_ni_info->cr_peer_min_rtr_credits = lpni->lpni_minrtrcredits;
-	peer_ni_info->cr_peer_min_tx_credits = lpni->lpni_mintxcredits;
-	peer_ni_info->cr_peer_tx_qnob = lpni->lpni_txqnob;
+	ni_info.cr_peer_tx_credits = lpni->lpni_txcredits;
+	ni_info.cr_peer_rtr_credits = lpni->lpni_rtrcredits;
+	ni_info.cr_peer_min_rtr_credits = lpni->lpni_minrtrcredits;
+	ni_info.cr_peer_min_tx_credits = lpni->lpni_mintxcredits;
+	ni_info.cr_peer_tx_qnob = lpni->lpni_txqnob;
+	ni_info.cr_ncpt = lpni->lpni_cpt;
 
-	peer_ni_stats->send_count = atomic_read(&lpni->lpni_stats.send_count);
-	peer_ni_stats->recv_count = atomic_read(&lpni->lpni_stats.recv_count);
-	peer_ni_stats->drop_count = atomic_read(&lpni->lpni_stats.drop_count);
+	ni_stats.iel_send_count = atomic_read(&lpni->lpni_stats.send_count);
+	ni_stats.iel_recv_count = atomic_read(&lpni->lpni_stats.recv_count);
+	ni_stats.iel_drop_count = atomic_read(&lpni->lpni_stats.drop_count);
 
-	return 0;
+	/* If copy_to_user fails */
+	rc = -EFAULT;
+	if (copy_to_user(peer_ni_info, &ni_info, sizeof(ni_info)))
+		goto copy_failed;
+
+	if (copy_to_user(peer_ni_stats, &ni_stats, sizeof(ni_stats)))
+		goto copy_failed;
+
+	rc = 0;
+
+copy_failed:
+	return rc;
 }
