@@ -55,7 +55,9 @@ static int lov_comp_page_print(const struct lu_env *env,
 {
 	struct lov_page *lp = cl2lov_page(slice);
 
-	return (*printer)(env, cookie, LUSTRE_LOV_NAME"-page@%p, raid0\n", lp);
+	return (*printer)(env, cookie,
+			  LUSTRE_LOV_NAME"-page@%p, comp index: %x\n",
+			  lp, lp->lps_index);
 }
 
 static const struct cl_page_operations lov_comp_page_ops = {

@@ -703,28 +703,36 @@ static int lov_io_read_ahead(const struct lu_env *env,
 		RETURN(rc);
 
 	/**
-	 * Adjust the stripe index by layout of raid0. ra->cra_end is the
+	 * Adjust the stripe index by layout of comp. ra->cra_end is the
 	 * maximum page index covered by an underlying DLM lock.
 	 * This function converts cra_end from stripe level to file level, and
-	 * make sure it's not beyond stripe boundary.
+	 * make sure it's not beyond stripe and component boundary.
 	 */
-	if (r0->lo_nr == 1) /* single stripe file */
-		RETURN(0);
 
 	/* cra_end is stripe level, convert it into file level */
 	ra_end = ra->cra_end;
 	if (ra_end != CL_PAGE_EOF)
-		ra_end = lov_stripe_pgoff(loo->lo_lsm, index, ra_end, stripe);
+		ra->cra_end = lov_stripe_pgoff(loo->lo_lsm, index,
+					       ra_end, stripe);
+
+	/* boundary of current component */
+	ra_end = cl_index(obj, (loff_t)lov_lse(loo, index)->lsme_extent.e_end);
+	if (ra_end != CL_PAGE_EOF && ra->cra_end >= ra_end)
+		ra->cra_end = ra_end - 1;
+
+	if (r0->lo_nr == 1) /* single stripe file */
+		RETURN(0);
 
 	pps = lov_lse(loo, index)->lsme_stripe_size >> PAGE_SHIFT;
 
 	CDEBUG(D_READA, DFID " max_index = %lu, pps = %u, index = %u, "
 	       "stripe_size = %u, stripe no = %u, start index = %lu\n",
-	       PFID(lu_object_fid(lov2lu(loo))), ra_end, pps, index,
+	       PFID(lu_object_fid(lov2lu(loo))), ra->cra_end, pps, index,
 	       lov_lse(loo, index)->lsme_stripe_size, stripe, start);
 
 	/* never exceed the end of the stripe */
-	ra->cra_end = min_t(pgoff_t, ra_end, start + pps - start % pps - 1);
+	ra->cra_end = min_t(pgoff_t,
+			    ra->cra_end, start + pps - start % pps - 1);
 	RETURN(0);
 }
 
