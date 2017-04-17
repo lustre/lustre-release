@@ -277,6 +277,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	int            page_idx;
 	int            i;
 	int            rc = 0;
+	DECLARE_PLUG(plug);
 	ENTRY;
 
         LASSERT(iobuf->dr_npages == npages);
@@ -284,6 +285,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
         osd_brw_stats_update(osd, iobuf);
         iobuf->dr_start_time = cfs_time_current();
 
+	blk_start_plug(&plug);
         for (page_idx = 0, block_idx = 0;
              page_idx < npages;
              page_idx++, block_idx += blocks_per_page) {
@@ -370,6 +372,8 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	}
 
 out:
+	blk_finish_plug(&plug);
+
 	/* in order to achieve better IO throughput, we don't wait for writes
 	 * completion here. instead we proceed with transaction commit in
 	 * parallel and wait for IO completion once transaction is stopped

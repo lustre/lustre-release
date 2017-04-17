@@ -179,6 +179,14 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define queue_max_hw_segments(rq)         queue_max_segments(rq)
 #endif
 
+#ifdef HAVE_BLK_PLUG
+#define DECLARE_PLUG(plug)	struct blk_plug plug
+#else /* !HAVE_BLK_PLUG */
+#define DECLARE_PLUG(name)
+#define blk_start_plug(plug)	do {} while (0)
+#define blk_finish_plug(plug)	do {} while (0)
+#endif
+
 #ifdef HAVE_KMAP_ATOMIC_HAS_1ARG
 #define ll_kmap_atomic(a, b)	kmap_atomic(a)
 #define ll_kunmap_atomic(a, b)	kunmap_atomic(a)

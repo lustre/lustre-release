@@ -687,6 +687,26 @@ LB_CHECK_EXPORT([simple_setattr], [fs/libfs.c],
 ]) # LC_EXPORT_SIMPLE_SETATTR
 
 #
+# LC_HAVE_BLK_PLUG
+#
+# 2.6.38 add struct blk_plug
+#
+AC_DEFUN([LC_HAVE_BLK_PLUG], [
+LB_CHECK_COMPILE([if 'struct blk_plug' exists],
+blk_plug, [
+	#include <linux/blkdev.h>
+],[
+	struct blk_plug plug;
+
+	blk_start_plug(&plug);
+	blk_finish_plug(&plug);
+],[
+	AC_DEFINE(HAVE_BLK_PLUG, 1,
+		[blk_plug struct exists])
+])
+]) # LC_HAVE_BLK_PLUG
+
+#
 # LC_IOP_TRUNCATE
 #
 # truncate callback removed since 2.6.39
@@ -2369,6 +2389,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_INODE_I_RCU
 	LC_D_COMPARE_7ARGS
 	LC_D_DELETE_CONST
+	LC_HAVE_BLK_PLUG
 
 	# 2.6.39
 	LC_REQUEST_QUEUE_UNPLUG_FN
