@@ -719,15 +719,10 @@ static int lfs_component_create(char *fname, int open_flags, mode_t open_mode,
 		return -EINVAL;
 
 	fd = lstat(fname, &st);
-	if (fd == 0 && S_ISDIR(st.st_mode)) {
+	if (fd == 0 && S_ISDIR(st.st_mode))
 		open_flags = O_DIRECTORY | O_RDONLY;
-		fd = llapi_layout_file_open(fname, open_flags, open_mode,
-					    layout);
-	} else {
-		fd = llapi_layout_file_create(fname, open_flags, open_mode,
-					      layout);
-	}
 
+	fd = llapi_layout_file_open(fname, open_flags, open_mode, layout);
 	if (fd < 0)
 		fprintf(stderr, "%s %s failed. %s\n",
 			S_ISDIR(st.st_mode) ?
