@@ -1303,10 +1303,14 @@ static int lfs_setstripe(int argc, char **argv)
 	struct option		 long_opts[] = {
 		/* --block is only valid in migrate mode */
 		{"block",	 no_argument,	    0, 'b'},
-		{"component-add", no_argument, 0, LFS_COMP_ADD_OPT},
-		{"component-del", no_argument, 0, LFS_COMP_DEL_OPT},
+		{"comp-add",	 no_argument,	    0, LFS_COMP_ADD_OPT},
+		{"component-add", no_argument,	    0, LFS_COMP_ADD_OPT},
+		{"comp-del",	 no_argument,	    0, LFS_COMP_DEL_OPT},
+		{"component-del", no_argument,	    0, LFS_COMP_DEL_OPT},
+		{"comp-flags",	 required_argument, 0, LFS_COMP_FLAGS_OPT},
 		{"component-flags", required_argument, 0, LFS_COMP_FLAGS_OPT},
-		{"component-set", no_argument, 0, LFS_COMP_SET_OPT},
+		{"comp-set",	 no_argument,	    0, LFS_COMP_SET_OPT},
+		{"component-set", no_argument,	    0, LFS_COMP_SET_OPT},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "stripe-count", but was explicitly
 		 * made "stripe-count" for consistency with other options,
@@ -1316,6 +1320,7 @@ static int lfs_setstripe(int argc, char **argv)
 		{"stripe-count", required_argument, 0, 'c'},
 		{"stripe_count", required_argument, 0, 'c'},
 		{"delete",       no_argument,       0, 'd'},
+		{"comp-end",	 required_argument, 0, 'E'},
 		{"component-end", required_argument, 0, 'E'},
 		/* dirstripe {"mdt-hash",     required_argument, 0, 'H'}, */
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
@@ -1326,8 +1331,9 @@ static int lfs_setstripe(int argc, char **argv)
 #endif
 		{"stripe-index", required_argument, 0, 'i'},
 		{"stripe_index", required_argument, 0, 'i'},
+		{"comp-id",	 required_argument, 0, 'I'},
 		{"component-id", required_argument, 0, 'I'},
-		{"mdt",	 	 required_argument, 0, 'm'},
+		{"mdt",		 required_argument, 0, 'm'},
 		{"mdt-index",	 required_argument, 0, 'm'},
 		{"mdt_index",	 required_argument, 0, 'm'},
 		/* --non-block is only valid in migrate mode */
@@ -1814,13 +1820,17 @@ static int lfs_find(int argc, char **argv)
 	};
         struct option long_opts[] = {
 		{"atime",        required_argument, 0, 'A'},
+		{"comp-count",	 required_argument, 0, LFS_COMP_COUNT_OPT},
 		{"component-count", required_argument, 0, LFS_COMP_COUNT_OPT},
+		{"comp-flags",	 required_argument, 0, LFS_COMP_FLAGS_OPT},
 		{"component-flags", required_argument, 0, LFS_COMP_FLAGS_OPT},
+		{"comp-start",	 required_argument, 0, LFS_COMP_START_OPT},
 		{"component-start", required_argument, 0, LFS_COMP_START_OPT},
 		{"stripe-count", required_argument, 0, 'c'},
 		{"stripe_count", required_argument, 0, 'c'},
 		{"ctime",        required_argument, 0, 'C'},
 		{"maxdepth",     required_argument, 0, 'D'},
+		{"comp-end",	 required_argument, 0, 'E'},
 		{"component-end", required_argument, 0, 'E'},
 		{"gid",          required_argument, 0, 'g'},
 		{"group",        required_argument, 0, 'G'},
@@ -2289,8 +2299,11 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				  struct find_param *param)
 {
 	struct option long_opts[] = {
+		{"comp-count",		no_argument, 0, LFS_COMP_COUNT_OPT},
 		{"component-count",	no_argument, 0, LFS_COMP_COUNT_OPT},
+		{"comp-flags",	    required_argument, 0, LFS_COMP_FLAGS_OPT},
 		{"component-flags", required_argument, 0, LFS_COMP_FLAGS_OPT},
+		{"comp-start",	    required_argument, 0, LFS_COMP_START_OPT},
 		{"component-start", required_argument, 0, LFS_COMP_START_OPT},
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
 		/* This formerly implied "stripe-count", but was explicitly
@@ -2302,6 +2315,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"stripe_count",	no_argument,		0, 'c'},
 		{"directory",		no_argument,		0, 'd'},
 		{"default",		no_argument,		0, 'D'},
+		{"comp-end",		required_argument,	0, 'E'},
 		{"component-end",	required_argument,	0, 'E'},
 		{"fid",			no_argument,		0, 'F'},
 		{"generation",		no_argument,		0, 'g'},
@@ -2314,6 +2328,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 #endif
 		{"stripe-index",	no_argument,		0, 'i'},
 		{"stripe_index",	no_argument,		0, 'i'},
+		{"comp-id",		required_argument,	0, 'I'},
 		{"component-id",	required_argument,	0, 'I'},
 		{"layout",		no_argument,		0, 'L'},
 		{"mdt",			no_argument,		0, 'm'},
