@@ -348,6 +348,9 @@ nrs_tbf_rule_start(struct ptlrpc_nrs_policy *policy,
 		head->th_rule = rule;
 	}
 
+	CDEBUG(D_RPCTRACE, "TBF starts rule@%p rate %llu gen %llu\n",
+	       rule, rule->tr_rpc_rate, rule->tr_generation);
+
 	return 0;
 }
 
@@ -2366,6 +2369,13 @@ static int nrs_tbf_res_get(struct ptlrpc_nrs_policy *policy,
 		    cli->tc_rule->tr_flags & NTRS_STOPPING) {
 			struct nrs_tbf_rule *rule;
 
+			CDEBUG(D_RPCTRACE,
+			       "TBF class@%p rate %llu sequence %d, "
+			       "rule flags %d, head sequence %d\n",
+			       cli, cli->tc_rpc_rate,
+			       cli->tc_rule_sequence,
+			       cli->tc_rule->tr_flags,
+			       atomic_read(&head->th_rule_sequence));
 			rule = nrs_tbf_rule_match(head, cli);
 			if (rule != cli->tc_rule) {
 				nrs_tbf_cli_reset(head, rule, cli);
@@ -2502,11 +2512,12 @@ struct ptlrpc_nrs_request *nrs_tbf_req_get(struct ptlrpc_nrs_policy *policy,
 						     &cli->tc_node);
 			}
 			CDEBUG(D_RPCTRACE,
-			       "NRS start %s request from %s, "
-			       "seq: %llu\n",
-			       policy->pol_desc->pd_name,
-			       libcfs_id2str(req->rq_peer),
-			       nrq->nr_u.tbf.tr_sequence);
+			       "TBF dequeues: class@%p rate %llu gen %llu "
+			       "token %llu, rule@%p rate %llu gen %llu\n",
+			       cli, cli->tc_rpc_rate,
+			       cli->tc_rule_generation, cli->tc_ntoken,
+			       cli->tc_rule, cli->tc_rule->tr_rpc_rate,
+			       cli->tc_rule->tr_generation);
 		} else {
 			ktime_t time;
 
@@ -2572,6 +2583,16 @@ static int nrs_tbf_req_add(struct ptlrpc_nrs_policy *policy,
 		list_add_tail(&nrq->nr_u.tbf.tr_list,
 				  &cli->tc_list);
 	}
+
+	if (rc == 0)
+		CDEBUG(D_RPCTRACE,
+		       "TBF enqueues: class@%p rate %llu gen %llu "
+		       "token %llu, rule@%p rate %llu gen %llu\n",
+		       cli, cli->tc_rpc_rate,
+		       cli->tc_rule_generation, cli->tc_ntoken,
+		       cli->tc_rule, cli->tc_rule->tr_rpc_rate,
+		       cli->tc_rule->tr_generation);
+
 	return rc;
 }
 
