@@ -2196,6 +2196,7 @@ enum lov_dump_flags {
 	LDF_IS_RAW	= 0x0002,
 	LDF_INDENT	= 0x0004,
 	LDF_SKIP_OBJS	= 0x0008,
+	LDF_YAML	= 0x0010,
 };
 
 static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
@@ -2206,6 +2207,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 	bool is_dir = flags & LDF_IS_DIR;
 	bool is_raw = flags & LDF_IS_RAW;
 	bool indent = flags & LDF_INDENT;
+	bool yaml = flags & LDF_YAML;
 	bool skip_objs = flags & LDF_SKIP_OBJS;
 	char *prefix = is_dir ? "" : "lmm_";
 	char *separator = "";
@@ -2218,7 +2220,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			llapi_printf(LLAPI_MSG_NORMAL, "%s(Default) ", space);
 	}
 
-	if (!indent && depth && path && ((verbose != VERBOSE_OBJID) || !is_dir))
+	if (!yaml && !indent && depth && path &&
+	    ((verbose != VERBOSE_OBJID) || !is_dir))
 		llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
 
 	if ((verbose & VERBOSE_DETAIL) && !is_dir) {
@@ -2232,6 +2235,10 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			     (uintmax_t)lmm_oi_id(&lum->lmm_oi));
 	}
 	if ((verbose & (VERBOSE_DETAIL | VERBOSE_DFID)) && !is_dir) {
+		__u64 seq;
+		__u32 oid;
+		__u32 ver;
+
 		if (verbose & ~VERBOSE_DFID)
 			llapi_printf(LLAPI_MSG_NORMAL, "%slmm_fid:           ",
 				     space);
@@ -2252,13 +2259,17 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		 * separate lmm_oi_seq() and lmm_oi_id() routines for this.
 		 *
 		 * For newer layout types hopefully this will be a real FID. */
-		llapi_printf(LLAPI_MSG_NORMAL, DFID"\n",
-			     lmm_oi_seq(&lum->lmm_oi) == 0 ?
-				lmm_oi_id(&lum->lmm_oi) :
-				lmm_oi_seq(&lum->lmm_oi),
-			     lmm_oi_seq(&lum->lmm_oi) == 0 ?
-				0 : (__u32)lmm_oi_id(&lum->lmm_oi),
-			     (__u32)(lmm_oi_id(&lum->lmm_oi) >> 32));
+		seq = lmm_oi_seq(&lum->lmm_oi) == 0 ?
+			lmm_oi_id(&lum->lmm_oi) : lmm_oi_seq(&lum->lmm_oi);
+		oid = lmm_oi_seq(&lum->lmm_oi) == 0 ?
+			0 : (__u32)lmm_oi_id(&lum->lmm_oi);
+		ver = (__u32)(lmm_oi_id(&lum->lmm_oi) >> 32);
+		if (yaml)
+			llapi_printf(LLAPI_MSG_NORMAL, DFID_NOBRACE"\n",
+				     seq, oid, ver);
+		else
+			llapi_printf(LLAPI_MSG_NORMAL, DFID"\n",
+				     seq, oid, ver);
 	}
 
 	if (verbose & VERBOSE_COUNT) {
@@ -2288,7 +2299,10 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			llapi_printf(LLAPI_MSG_NORMAL, "%hd",
 				     (__s16)lum->lmm_stripe_count);
 		}
-		separator = is_dir ? " " : "\n";
+		if (!yaml && is_dir)
+			separator = " ";
+		else
+			separator = "\n";
 	}
 
 	if (verbose & VERBOSE_SIZE) {
@@ -2310,7 +2324,10 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			llapi_printf(LLAPI_MSG_NORMAL, "%u",
 				     lum->lmm_stripe_size);
 		}
-		separator = is_dir ? " " : "\n";
+		if (!yaml && is_dir)
+			separator = " ";
+		else
+			separator = "\n";
 	}
 
 	if ((verbose & VERBOSE_LAYOUT) && !is_dir) {
@@ -2345,7 +2362,10 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, "%u",
 				     objects[0].l_ost_idx);
-		separator = is_dir ? " " : "\n";
+		if (!yaml && is_dir)
+			separator = " ";
+		else
+			separator = "\n";
 	}
 
 	if ((verbose & VERBOSE_POOL) && pool_name && (pool_name[0] != '\0')) {
@@ -2354,7 +2374,10 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%spool:          ",
 				     space, prefix);
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", pool_name);
-		separator = is_dir ? " " : "\n";
+		if (!yaml && is_dir)
+			separator = " ";
+		else
+			separator = "\n";
 	}
 
 	if (strlen(separator) != 0)
@@ -2369,6 +2392,7 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 	bool is_dir = flags & LDF_IS_DIR;
 	bool indent = flags & LDF_INDENT;
 	bool skip_objs = flags & LDF_SKIP_OBJS;
+	bool yaml = flags & LDF_YAML;
 	int i, obdstripe = (obdindex != OBD_NOT_FOUND) ? 0 : 1;
 
 	if (!obdstripe) {
@@ -2393,6 +2417,8 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 		if (indent)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "%6slmm_objects:\n", " ");
+		else if (yaml)
+			llapi_printf(LLAPI_MSG_NORMAL, "lmm_objects:\n");
 		else
 			llapi_printf(LLAPI_MSG_NORMAL,
 				"\tobdidx\t\t objid\t\t objid\t\t group\n");
@@ -2405,7 +2431,16 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 			if (obdindex != OBD_NOT_FOUND && obdindex != idx)
 				continue;
 
-			if (indent) {
+			if (yaml) {
+				struct lu_fid fid = { 0 };
+
+				ostid_to_fid(&fid, &objects[i].l_ost_oi, idx);
+				llapi_printf(LLAPI_MSG_NORMAL,
+				    "%sl_ost_idx: %d\n", space, idx);
+				llapi_printf(LLAPI_MSG_NORMAL,
+				    "%8sl_fid:     "DFID_NOBRACE"\n",
+				    " ", PFID(&fid));
+			} else if (indent) {
 				struct lu_fid fid = { 0 };
 
 				ostid_to_fid(&fid, &objects[i].l_ost_oi, idx);
@@ -2429,12 +2464,14 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 }
 
 void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
-		       char *path, int obdindex, int depth, int verbose)
+		       char *path, int obdindex, int depth, int verbose,
+		       enum lov_dump_flags flags)
 {
 	struct lmv_user_mds_data *objects = lum->lum_objects;
 	char *prefix = lum->lum_magic == LMV_USER_MAGIC ? "(Default)" : "";
 	int i, obdstripe = 0;
 	char *separator = "";
+	bool yaml = flags & LDF_YAML;
 
 	if (obdindex != OBD_NOT_FOUND) {
 		if (lum->lum_stripe_count == 0) {
@@ -2476,7 +2513,7 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 			llapi_printf(LLAPI_MSG_NORMAL, "lmv_stripe_count: ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%u",
 			     (int)lum->lum_stripe_count);
-		if (verbose & VERBOSE_OFFSET)
+		if ((verbose & VERBOSE_OFFSET) && !yaml)
 			separator = " ";
 		else
 			separator = "\n";
@@ -2488,7 +2525,7 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 			llapi_printf(LLAPI_MSG_NORMAL, "lmv_stripe_offset: ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%d",
 			     (int)lum->lum_stripe_offset);
-		if (verbose & VERBOSE_HASH_TYPE)
+		if (verbose & VERBOSE_HASH_TYPE && !yaml)
 			separator = " ";
 		else
 			separator = "\n";
@@ -2546,9 +2583,10 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 	struct lov_comp_md_v1 *comp_v1 = (void *)&param->fp_lmd->lmd_lmm;
 	int depth = param->fp_max_depth;
 	int verbose = param->fp_verbose;
+	bool yaml = flags & LDF_YAML;
 
 	if (depth && path && ((verbose != VERBOSE_OBJID) ||
-			      !(flags & LDF_IS_DIR)))
+			      !(flags & LDF_IS_DIR)) && !yaml)
 		llapi_printf(LLAPI_MSG_NORMAL, "%s\n", path);
 
 	if (verbose & VERBOSE_DETAIL) {
@@ -2576,7 +2614,7 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 			     comp_v1->lcm_entry_count);
 	}
 
-	if (verbose & VERBOSE_DETAIL)
+	if (verbose & VERBOSE_DETAIL && !yaml)
 		llapi_printf(LLAPI_MSG_NORMAL, "components:\n");
 }
 
@@ -2587,11 +2625,15 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 	struct lov_comp_md_entry_v1 *entry;
 	char *separator = "";
 	int verbose = param->fp_verbose;
+	bool yaml = flags & LDF_YAML;
 
 	entry = &comp_v1->lcm_entries[index];
 
+	if (yaml)
+		llapi_printf(LLAPI_MSG_NORMAL, "%2scomponent%d:\n", " ", index);
+
 	if (verbose & VERBOSE_COMP_ID) {
-		if (verbose & VERBOSE_DETAIL)
+		if (verbose & VERBOSE_DETAIL && !yaml)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "%slcme_id:             ", "  - ");
 		else if (verbose & ~VERBOSE_COMP_ID)
@@ -2636,7 +2678,10 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 		separator = "\n";
 	}
 
-	if (verbose & VERBOSE_DETAIL) {
+	if (yaml) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+		llapi_printf(LLAPI_MSG_NORMAL, "%4ssub_layout:\n", " ");
+	} else if (verbose & VERBOSE_DETAIL) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 		llapi_printf(LLAPI_MSG_NORMAL, "%4slcme_offset:         %u\n",
 			     " ", entry->lcme_offset);
@@ -2870,6 +2915,8 @@ static void llapi_lov_dump_user_lmm(struct find_param *param, char *path,
 
 	if (param->fp_raw)
 		flags |= LDF_IS_RAW;
+	if (param->fp_yaml)
+		flags |= LDF_YAML;
 
 	switch (magic) {
 	case LOV_USER_MAGIC_V1:
@@ -2900,7 +2947,8 @@ static void llapi_lov_dump_user_lmm(struct find_param *param, char *path,
 		lum = (struct lmv_user_md *)param->fp_lmv_md;
 		strlcpy(pool_name, lum->lum_pool_name, sizeof(pool_name));
 		lmv_dump_user_lmm(lum, pool_name, path, param->fp_obd_index,
-				  param->fp_max_depth, param->fp_verbose);
+				  param->fp_max_depth, param->fp_verbose,
+				  flags);
 		break;
 	}
 	case LOV_USER_MAGIC_COMP_V1:

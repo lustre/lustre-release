@@ -221,7 +221,8 @@ struct find_param {
 				 fp_check_mdt_count:1,
 				 fp_exclude_mdt_count:1,
 				 fp_check_hash_type:1,
-				 fp_exclude_hash_type:1;
+				 fp_exclude_hash_type:1,
+				 fp_yaml:1;	/* output layout in YAML */
 
 	int			 fp_verbose;
 	int			 fp_quiet;

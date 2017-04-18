@@ -200,7 +200,7 @@ command_t cmdlist[] = {
 	 "usage: getstripe [--ost|-O <uuid>] [--quiet|-q] [--verbose|-v]\n"
 	 "		   [--stripe-count|-c] [--stripe-index|-i]\n"
 	 "		   [--pool|-p] [--stripe-size|-S] [--directory|-d]\n"
-	 "		   [--mdt|-m] [--recursive|-r] [--raw|-R]\n"
+	 "		   [--mdt|-m] [--recursive|-r] [--raw|-R] [--yaml|-y]\n"
 	 "		   [--layout|-L] [--fid|-F] [--generation|-g]\n"
 	 "		   [--component-id|-I [comp_id]]\n"
 	 "		   [--component-flags [comp_flags]]\n"
@@ -217,8 +217,9 @@ command_t cmdlist[] = {
 	 "To list the striping info for a given directory\n"
 	 "or recursively for all directories in a directory tree.\n"
 	 "usage: getdirstripe [--obd|-O <uuid>] [--mdt-count|-c]\n"
-	 "		      [--mdt-index|-i] [--mdt-hash|-H]\n"
-	 "		      [--recursive|-r] [--default|-D] <dir> ..."},
+	 "		      [--mdt-index|-i] [--mdt-hash|-t]\n"
+	 "		      [--recursive|-r] [--yaml|-y]\n"
+	 "		      [--default|-D] <dir> ..."},
 	{"mkdir", lfs_setdirstripe, 0,
 	 "To create a striped directory on a specified MDT. This can only\n"
 	 "be done on MDT0 with the right of administrator.\n"
@@ -2378,12 +2379,13 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		{"stripe_size",		no_argument,		0, 'S'},
 		/* dirstripe {"mdt-count",    required_argument, 0, 'T'}, */
 		{"verbose",		no_argument,		0, 'v'},
+		{"yaml",		no_argument,		0, 'y'},
 		{0, 0, 0, 0}
 	};
 	int c, rc;
 	char *end, *tmp;
 
-	while ((c = getopt_long(argc, argv, "cdDE:FghiI:LmMoO:pqrRsSv",
+	while ((c = getopt_long(argc, argv, "cdDE:FghiI:LmMoO:pqrRsSvy",
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
@@ -2571,6 +2573,9 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		case 'v':
 			param->fp_verbose = VERBOSE_DEFAULT | VERBOSE_DETAIL;
 			break;
+		case 'y':
+			param->fp_yaml = 1;
+			break;
 		default:
 			return CMD_HELP;
 		}
@@ -2662,6 +2667,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 		{"default",	no_argument,		0, 'D'},
 		{"obd",		required_argument,	0, 'O'},
 		{"mdt-count",	no_argument,		0, 'T'},
+		{"yaml",	no_argument,		0, 'y'},
 		{0, 0, 0, 0}
 	};
 	int c, rc;
@@ -2669,7 +2675,7 @@ static int lfs_getdirstripe(int argc, char **argv)
 	param.fp_get_lmv = 1;
 
 	while ((c = getopt_long(argc, argv,
-				"cDHiO:rtT", long_opts, NULL)) != -1)
+				"cDHiO:rtTy", long_opts, NULL)) != -1)
 	{
 		switch (c) {
 		case 'O':
@@ -2705,6 +2711,9 @@ static int lfs_getdirstripe(int argc, char **argv)
 			break;
 		case 'r':
 			param.fp_recursive = 1;
+			break;
+		case 'y':
+			param.fp_yaml = 1;
 			break;
 		default:
 			return CMD_HELP;
