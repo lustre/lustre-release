@@ -11,15 +11,16 @@ The
 family of functions functions provides an abstract interface to
 manipulating the layout information of a file in a Lustre filesystem.
 Layouts are represented by the opaque data type
-.B llapi_layout_t
+.B struct llapi_layout
 which is passed as a handle to the various functions.
 .PP
 A layout has a number of attributes that describe how a file's data are
 stored in the filesystem.  These include stripe count, stripe size, RAID
-pattern, pool name, and the OST index associated with each stripe. Refer
-to the Lustre Operations Manual for detailed descriptions of these
-attributes.  For each attribute, there exists a pair of functions with
-the suffixes
+pattern, pool name, and the OST index associated with each stripe. In more
+complex layouts, a file may have multiple components that describe a different
+layout for separate regions of the file. Refer to the Lustre Operations Manual
+for detailed descriptions of these attributes.  For each attribute, there
+exists a pair of functions with the suffixes
 .B _get
 and
 .B _set
@@ -27,7 +28,9 @@ that are used to read and assign the attribute value in a given layout.
 .PP
 Using this interface to create a file might consist of the following steps.
 .IP \[bu]
-Allocate a layout with
+Allocate
+.B struct layout
+with
 .BR llapi_layout_alloc (3).
 .IP \[bu]
 Assign attribute values using the
@@ -42,21 +45,26 @@ Free the layout memory using
 .PP
 Similarly, these steps might be used to read a file layout:
 .IP \[bu]
-Obtain the layout with
+One can allocate and initialize a new
+.B struct layout
+from an existing file with one of the
 .BR llapi_layout_get_by_path (3),
 .BR llapi_layout_get_by_fd (3),
 or
-.BR llapi_layout_get_by_fid (3).
+.BR llapi_layout_get_by_fid (3)
+functions.
 .IP \[bu]
-Read attribute values using the
+To access attribute values from
+.B struct llapi_layout
+use the
 .B llapi_layout_*_get (3)
 functions.
 .IP \[bu]
-Free the layout memory using
+To free the previously allocated layout memory use
 .BR llapi_layout_free (3).
 .PP
 Using this interface to create a file with composite layout consists of the
-following steps.
+following steps:
 .IP \[bu]
 Allocate first layout component with
 .BR llapi_layout_alloc (3).
@@ -88,7 +96,7 @@ Example 1: Create file with specified layout, then query the layout attributes.
 .nf
 {
 	/* Allocate layout */
-	layout = llapi_layout_alloc();
+	struct llapi_layout *layout = llapi_layout_alloc();
 
 	/* Set attributes of layout */
 	llapi_layout_stripe_count_set(layout, count);
@@ -116,6 +124,8 @@ Example 2: Create file with composite layout.
 .PP
 .nf
 {
+	struct llapi_layout *head, *comp;
+
 	/* Create first component */
 	head = llapi_layout_alloc();
 	llapi_layout_stripe_count_set(head, 1);

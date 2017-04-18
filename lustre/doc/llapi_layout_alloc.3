@@ -1,7 +1,7 @@
 .TH llapi_layout_alloc 3 "2013 Oct 31" "Lustre User API"
 .SH NAME
 llapi_layout_alloc, llapi_layout_free \- allocate and destroy
-.B llapi_layout_t
+.B struct llapi_layout
 objects.
 .SH SYNOPSIS
 .nf
@@ -16,9 +16,9 @@ objects.
 .LP
 .B llapi_layout_alloc()
 returns a pointer to a newly-allocated
-.BR struct llapi_layout .
+.BR "struct llapi_layout" .
 The
-.B llapi_layout_t
+.B struct llapi_layout
 is an opaque entity containing the layout information for a file in a
 Lustre filesystem.  Its internal structure should not be directly
 accessed by an application.  It may be used in
@@ -28,12 +28,12 @@ manual page to modify layout attributes and create files with the given
 layout.
 .PP
 The returned
-.B llapi_layout_t
+.B struct llapi_layout
 object is initialized with default attribute values that will effect the
 standard Lustre behavior for assigning layouts to newly-created files.
 These values may be modified using the group of
-functions in the
-.B llapi_layout
+functions in
+.B struct llapi_layout
 API whose names end with
 .BR _set .
 The pointer should be freed with
