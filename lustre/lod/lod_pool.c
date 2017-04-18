@@ -474,8 +474,8 @@ int lod_ost_pool_init(struct ost_pool *op, unsigned int count)
 	op->op_array = NULL;
 	op->op_count = 0;
 	init_rwsem(&op->op_rw_sem);
-	op->op_size = count;
-	OBD_ALLOC(op->op_array, op->op_size * sizeof(op->op_array[0]));
+	op->op_size = count * sizeof(op->op_array[0]);
+	OBD_ALLOC(op->op_array, op->op_size);
 	if (op->op_array == NULL) {
 		op->op_size = 0;
 		RETURN(-ENOMEM);
@@ -500,21 +500,22 @@ int lod_ost_pool_init(struct ost_pool *op, unsigned int count)
 int lod_ost_pool_extend(struct ost_pool *op, unsigned int min_count)
 {
 	__u32 *new;
-	int new_size;
+	__u32 new_size;
 
 	LASSERT(min_count != 0);
 
-	if (op->op_count < op->op_size)
+	if (op->op_count * sizeof(op->op_array[0]) < op->op_size)
 		return 0;
 
-	new_size = max(min_count, 2 * op->op_size);
-	OBD_ALLOC(new, new_size * sizeof(op->op_array[0]));
+	new_size = max_t(__u32, min_count * sizeof(op->op_array[0]),
+			 2 * op->op_size);
+	OBD_ALLOC(new, new_size);
 	if (new == NULL)
 		return -ENOMEM;
 
 	/* copy old array to new one */
-	memcpy(new, op->op_array, op->op_size * sizeof(op->op_array[0]));
-	OBD_FREE(op->op_array, op->op_size * sizeof(op->op_array[0]));
+	memcpy(new, op->op_array, op->op_size);
+	OBD_FREE(op->op_array, op->op_size);
 	op->op_array = new;
 	op->op_size = new_size;
 
@@ -617,7 +618,7 @@ int lod_ost_pool_free(struct ost_pool *op)
 
 	down_write(&op->op_rw_sem);
 
-	OBD_FREE(op->op_array, op->op_size * sizeof(op->op_array[0]));
+	OBD_FREE(op->op_array, op->op_size);
 	op->op_array = NULL;
 	op->op_count = 0;
 	op->op_size = 0;

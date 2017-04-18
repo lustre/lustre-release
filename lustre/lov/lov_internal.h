@@ -182,7 +182,6 @@ void lsm_free(struct lov_stripe_md *lsm);
 })
 #endif
 
-#define pool_tgt_size(p) ((p)->pool_obds.op_size)
 #define pool_tgt_count(p) ((p)->pool_obds.op_count)
 #define pool_tgt_array(p) ((p)->pool_obds.op_array)
 #define pool_tgt_rw_sem(p) ((p)->pool_obds.op_rw_sem)

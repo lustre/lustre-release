@@ -2169,13 +2169,16 @@ inline __u16 lod_comp_entry_stripecnt(struct lod_object *lo,
 				      struct lod_layout_component *entry,
 				      bool is_dir)
 {
+	struct lod_device *lod = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
+
 	if (is_dir)
 		return  0;
 	else if (lod_comp_inited(entry))
 		return entry->llc_stripenr;
+	else if ((__u16)-1 == entry->llc_stripenr)
+		return lod->lod_desc.ld_tgt_count;
 	else
-		return lod_get_stripecnt(lu2lod_dev(lod2lu_obj(lo)->lo_dev), lo,
-					 entry->llc_stripenr);
+		return lod_get_stripecnt(lod, lo, entry->llc_stripenr);
 }
 
 static int lod_comp_md_size(struct lod_object *lo, bool is_dir)
@@ -4069,6 +4072,8 @@ static int lod_declare_init_size(const struct lu_env *env,
 			continue;
 
 		extent = &lod_comp->llc_extent;
+		CDEBUG(D_INFO, "%lld [%lld, %lld)\n",
+		       size, extent->e_start, extent->e_end);
 		if (!lo->ldo_is_composite ||
 		    (size >= extent->e_start && size < extent->e_end)) {
 			objects = lod_comp->llc_stripe;
@@ -4833,41 +4838,6 @@ static int lod_invalidate(const struct lu_env *env, struct dt_object *dt)
 	return dt_invalidate(env, dt_object_child(dt));
 }
 
-/**
- * Resize per-thread ost list to hold OST target index list already used.
- *
- * \param[in,out] inuse		structure contains ost list array
- * \param[in] cnt		total stripe count of all components
- * \param[in] max		array's max size if @max > 0
- *
- * \retval 0		on success
- * \retval -ENOMEM	reallocation failed
- */
-int lod_inuse_resize(struct ost_pool *inuse, __u16 cnt, __u16 max)
-{
-	__u32 *array;
-	__u32 new = cnt * sizeof(__u32);
-
-	inuse->op_count = 0;
-
-	if (new <= inuse->op_size)
-		return 0;
-
-	if (max)
-		new = min_t(__u32, new, max);
-	OBD_ALLOC(array, new);
-	if (!array)
-		return -ENOMEM;
-
-	if (inuse->op_array)
-		OBD_FREE(inuse->op_array, inuse->op_size);
-
-	inuse->op_array = array;
-	inuse->op_size = new;
-
-	return 0;
-}
-
 static int lod_declare_layout_change(const struct lu_env *env,
 				     struct dt_object *dt,
 				     struct layout_intent *layout,
@@ -4878,14 +4848,12 @@ static int lod_declare_layout_change(const struct lu_env *env,
 	struct lod_object *lo = lod_dt_obj(dt);
 	struct lod_device *d = lu2lod_dev(dt->do_lu.lo_dev);
 	struct dt_object *next = dt_object_child(dt);
-	struct lod_obj_stripe_cb_data data;
 	struct ost_pool *inuse = &info->lti_inuse_osts;
 	struct lod_layout_component *lod_comp;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
 	bool replay = false;
 	bool need_create = false;
 	int i, rc;
-	__u32 stripe_cnt = 0;
 	ENTRY;
 
 	if (!S_ISREG(dt->do_lu.lo_header->loh_attr) || !dt_object_exists(dt) ||
@@ -4929,18 +4897,7 @@ static int lod_declare_layout_change(const struct lu_env *env,
 			GOTO(out, rc);
 
 		/* Prepare inuse array for composite file */
-		for (i = 0; i < lo->ldo_comp_cnt; i++)
-			stripe_cnt += lod_comp_entry_stripecnt(lo,
-						&lo->ldo_comp_entries[i],
-						false);
-		rc = lod_inuse_resize(inuse, stripe_cnt, d->lod_osd_max_easize);
-		if (rc)
-			GOTO(out, rc);
-
-		data.locd_inuse = inuse;
-		rc = lod_obj_for_each_stripe(env, lo, NULL,
-					     lod_obj_stripe_set_inuse_cb,
-					     &data);
+		rc = lod_prepare_inuse(env, lo);
 		if (rc)
 			GOTO(out, rc);
 	}

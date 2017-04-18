@@ -836,7 +836,7 @@ static inline int lod_comp_is_ost_used(struct ost_pool *inuse, int ost)
 	if (inuse->op_size == 0)
 		return 0;
 
-	LASSERT(inuse->op_count <= inuse->op_size);
+	LASSERT(inuse->op_count * sizeof(inuse->op_array[0]) <= inuse->op_size);
 	for (j = 0; j < inuse->op_count; j++) {
 		if (inuse->op_array[j] == ost)
 			return 1;
@@ -853,8 +853,9 @@ static inline int lod_comp_is_ost_used(struct ost_pool *inuse, int ost)
 static inline void lod_comp_ost_in_use(struct ost_pool *inuse, int ost)
 {
 	LASSERT(inuse != NULL);
-	if (inuse->op_size && !lod_comp_is_ost_used(inuse,  ost)) {
-		LASSERT(inuse->op_count < inuse->op_size);
+	if (inuse->op_size && !lod_comp_is_ost_used(inuse, ost)) {
+		LASSERT(inuse->op_count * sizeof(inuse->op_array[0]) <
+			inuse->op_size);
 		inuse->op_array[inuse->op_count] = ost;
 		inuse->op_count++;
 	}
@@ -1576,15 +1577,12 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 				continue;
 
 			QOS_DEBUG("stripe=%d to idx=%d\n", nfound, idx);
-
 			/*
 			 * do not put >1 objects on a single OST
 			 */
 			if (lod_qos_is_ost_used(env, idx, nfound) ||
 			    lod_comp_is_ost_used(inuse, idx))
 				continue;
-			lod_qos_ost_in_use(env, nfound, idx);
-			lod_comp_ost_in_use(inuse, idx);
 
 			o = lod_qos_declare_object_on(env, lod, idx, th);
 			if (IS_ERR(o)) {
@@ -1592,6 +1590,9 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 					  idx, (int) PTR_ERR(o));
 				continue;
 			}
+
+			lod_qos_ost_in_use(env, nfound, idx);
+			lod_comp_ost_in_use(inuse, idx);
 			stripe[nfound++] = o;
 			lod_qos_used(lod, osts, idx, &total_weight);
 			rc = 0;
@@ -2152,13 +2153,75 @@ int lod_obj_stripe_set_inuse_cb(const struct lu_env *env,
 	return 0;
 }
 
+/**
+ * Resize per-thread ost list to hold OST target index list already used.
+ *
+ * \param[in,out] inuse		structure contains ost list array
+ * \param[in] cnt		total stripe count of all components
+ * \param[in] max		array's max size if @max > 0
+ *
+ * \retval 0		on success
+ * \retval -ENOMEM	reallocation failed
+ */
+static int lod_inuse_resize(struct ost_pool *inuse, __u16 cnt, __u16 max)
+{
+	__u32 *array;
+	__u32 new = cnt * sizeof(inuse->op_array[0]);
+
+	inuse->op_count = 0;
+
+	if (new <= inuse->op_size)
+		return 0;
+
+	if (max)
+		new = min_t(__u32, new, max);
+
+	OBD_ALLOC(array, new);
+	if (!array)
+		return -ENOMEM;
+
+	if (inuse->op_array)
+		OBD_FREE(inuse->op_array, inuse->op_size);
+
+	inuse->op_array = array;
+	inuse->op_size = new;
+
+	return 0;
+}
+
+int lod_prepare_inuse(const struct lu_env *env, struct lod_object *lo)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
+	struct ost_pool *inuse = &info->lti_inuse_osts;
+	struct lod_obj_stripe_cb_data data;
+	__u32 stripe_cnt = 0;
+	int i;
+	int rc;
+
+	for (i = 0; i < lo->ldo_comp_cnt; i++)
+		stripe_cnt += lod_comp_entry_stripecnt(lo,
+					&lo->ldo_comp_entries[i], false);
+	rc = lod_inuse_resize(inuse, stripe_cnt, d->lod_osd_max_easize);
+	if (rc)
+		return rc;
+
+	data.locd_inuse = inuse;
+	return lod_obj_for_each_stripe(env, lo, NULL,
+				       lod_obj_stripe_set_inuse_cb, &data);
+}
+
 int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 		       struct lu_attr *attr, const struct lu_buf *buf,
 		       struct thandle *th)
 
 {
+	struct lod_thread_info *info = lod_env_info(env);
 	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
-	struct ost_pool inuse = { 0 };
+	struct ost_pool inuse_osts = { 0 };
+	struct ost_pool *inuse = &inuse_osts;
+	uint64_t size = 0;
+	int i;
 	int rc;
 	ENTRY;
 
@@ -2182,8 +2245,36 @@ int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 	if (rc)
 		RETURN(rc);
 
-	/* prepare OST object creation for the 1st comp. */
-	rc = lod_qos_prep_create(env, lo, attr, th, 0, &inuse);
+	if (attr->la_valid & LA_SIZE)
+		size = attr->la_size;
+
+	/* only prepare inuse if multiple components to be created */
+	if (size && lo->ldo_is_composite) {
+		rc = lod_prepare_inuse(env, lo);
+		if (rc)
+			RETURN(rc);
+		inuse = &info->lti_inuse_osts;
+	}
+
+	/**
+	 * prepare OST object creation for the component covering file's
+	 * size, the 1st component (including plain layout file) is always
+	 * instantiated.
+	 */
+	for (i = 0; i < lo->ldo_comp_cnt; i++) {
+		struct lod_layout_component *lod_comp;
+		struct lu_extent *extent;
+
+		lod_comp = &lo->ldo_comp_entries[i];
+		extent = &lod_comp->llc_extent;
+		CDEBUG(D_QOS, "%lld [%lld, %lld)\n",
+		       size, extent->e_start, extent->e_end);
+		if (!lo->ldo_is_composite || size >= extent->e_start) {
+			rc = lod_qos_prep_create(env, lo, attr, th, i, inuse);
+			if (rc)
+				break;
+		}
+	}
 
 	RETURN(rc);
 }

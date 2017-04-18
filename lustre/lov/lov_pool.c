@@ -319,45 +319,46 @@ void lov_dump_pool(int level, struct pool_desc *pool)
 #define LOV_POOL_INIT_COUNT 2
 int lov_ost_pool_init(struct ost_pool *op, unsigned int count)
 {
-        ENTRY;
+	ENTRY;
 
-        if (count == 0)
-                count = LOV_POOL_INIT_COUNT;
-        op->op_array = NULL;
-        op->op_count = 0;
+	if (count == 0)
+		count = LOV_POOL_INIT_COUNT;
+	op->op_array = NULL;
+	op->op_count = 0;
 	init_rwsem(&op->op_rw_sem);
-        op->op_size = count;
-        OBD_ALLOC(op->op_array, op->op_size * sizeof(op->op_array[0]));
-        if (op->op_array == NULL) {
-                op->op_size = 0;
-                RETURN(-ENOMEM);
-        }
-        EXIT;
-        return 0;
+	op->op_size = count * sizeof(op->op_array[0]);
+	OBD_ALLOC(op->op_array, op->op_size);
+	if (op->op_array == NULL) {
+		op->op_size = 0;
+		RETURN(-ENOMEM);
+	}
+	EXIT;
+	return 0;
 }
 
 /* Caller must hold write op_rwlock */
 int lov_ost_pool_extend(struct ost_pool *op, unsigned int min_count)
 {
-        __u32 *new;
-        int new_size;
+	__u32 *new;
+	__u32 new_size;
 
-        LASSERT(min_count != 0);
+	LASSERT(min_count != 0);
 
-        if (op->op_count < op->op_size)
-                return 0;
+	if (op->op_count * sizeof(op->op_array[0]) < op->op_size)
+		return 0;
 
-        new_size = max(min_count, 2 * op->op_size);
-        OBD_ALLOC(new, new_size * sizeof(op->op_array[0]));
-        if (new == NULL)
-                return -ENOMEM;
+	new_size = max_t(__u32, min_count * sizeof(op->op_array[0]),
+			 2 * op->op_size);
+	OBD_ALLOC(new, new_size);
+	if (new == NULL)
+		return -ENOMEM;
 
-        /* copy old array to new one */
-        memcpy(new, op->op_array, op->op_size * sizeof(op->op_array[0]));
-        OBD_FREE(op->op_array, op->op_size * sizeof(op->op_array[0]));
-        op->op_array = new;
-        op->op_size = new_size;
-        return 0;
+	/* copy old array to new one */
+	memcpy(new, op->op_array, op->op_size);
+	OBD_FREE(op->op_array, op->op_size);
+	op->op_array = new;
+	op->op_size = new_size;
+	return 0;
 }
 
 int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count)
@@ -409,20 +410,20 @@ int lov_ost_pool_remove(struct ost_pool *op, __u32 idx)
 
 int lov_ost_pool_free(struct ost_pool *op)
 {
-        ENTRY;
+	ENTRY;
 
-        if (op->op_size == 0)
-                RETURN(0);
+	if (op->op_size == 0)
+		RETURN(0);
 
 	down_write(&op->op_rw_sem);
 
-        OBD_FREE(op->op_array, op->op_size * sizeof(op->op_array[0]));
-        op->op_array = NULL;
-        op->op_count = 0;
-        op->op_size = 0;
+	OBD_FREE(op->op_array, op->op_size);
+	op->op_array = NULL;
+	op->op_count = 0;
+	op->op_size = 0;
 
 	up_write(&op->op_rw_sem);
-        RETURN(0);
+	RETURN(0);
 }
 
 

@@ -499,6 +499,7 @@ static int osc_io_setattr_start(const struct lu_env *env,
 	__u64                    size   = io->u.ci_setattr.sa_attr.lvb_size;
 	unsigned int             ia_valid = io->u.ci_setattr.sa_valid;
 	int                      result = 0;
+	ENTRY;
 
 	/* truncate cache dirty pages first */
 	if (cl_io_is_trunc(io))
@@ -585,7 +586,7 @@ static int osc_io_setattr_start(const struct lu_env *env,
 		cbargs->opc_rpc_sent = result == 0;
 	}
 
-	return result;
+	RETURN(result);
 }
 
 static void osc_io_setattr_end(const struct lu_env *env,

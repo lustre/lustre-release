@@ -76,7 +76,6 @@ struct pool_desc {
 	struct obd_device	*pool_lobd;	/* owner */
 };
 
-#define pool_tgt_size(p) ((p)->pool_obds.op_size)
 #define pool_tgt_count(p) ((p)->pool_obds.op_count)
 #define pool_tgt_array(p)  ((p)->pool_obds.op_array)
 #define pool_tgt_rw_sem(p) ((p)->pool_obds.op_rw_sem)
@@ -612,6 +611,7 @@ typedef int (*lod_obj_stripe_cb_t)(const struct lu_env *env,
 				   struct thandle *th, int stripe_idx,
 				   struct lod_obj_stripe_cb_data *data);
 /* lod_qos.c */
+int lod_prepare_inuse(const struct lu_env *env, struct lod_object *lo);
 int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 		       struct lu_attr *attr, const struct lu_buf *buf,
 		       struct thandle *th);
