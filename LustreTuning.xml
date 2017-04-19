@@ -1495,15 +1495,26 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
           <para>Beginning with Lustre 2.9, Lustre is extended to support RPCs up
           to 16MB in size. By enabling a larger RPC size, fewer RPCs will be
           required to transfer the same amount of data between clients and
-          servers.  With a larger RPC size, the OST can submit more data to the
+          servers.  With a larger RPC size, the OSS can submit more data to the
           underlying disks at once, therefore it can produce larger disk I/Os
           to fully utilize the increasing bandwidth of disks.</para>
-          <para>At client connecting time, clients will negotiate with
-          servers for the RPC size it is going to use.</para>
-          <para>A new parameter, <literal>brw_size</literal>, is introduced on
-          the OST to tell the client the preferred IO size.  All clients that
+          <para>At client connection time, clients will negotiate with
+          servers what the maximum RPC size it is possible to use, but the
+	  client can always send RPCs smaller than this maximum.</para>
+          <para>The parameter <literal>brw_size</literal> is used on the OST
+	  to tell the client the maximum (preferred) IO size.  All clients that
           talk to this target should never send an RPC greater than this size.
+	  Clients can individually set a smaller RPC size limit via the
+	  <literal>osc.*.max_pages_per_rpc</literal> tunable.
           </para>
+	  <note>
+	  <para>The smallest <literal>brw_size</literal> that can be set for
+	  ZFS OSTs is the <literal>recordsize</literal> of that dataset.  This
+	  ensures that the client can always write a full ZFS file block if it
+	  has enough dirty data, and does not otherwise force it to do read-
+	  modify-write operations for every RPC.
+          </para>
+	  </note>
       </section>
       <section><title>Usage</title>
           <para>In order to enable a larger RPC size,
@@ -1530,7 +1541,7 @@ ldlm.namespaces.filter-<replaceable>fsname</replaceable>-*.
           <screen>client$ lctl conf_param <replaceable>fsname</replaceable>-OST*.osc.max_pages_per_rpc=16M</screen>
           <caution><para>The <literal>brw_size</literal> of an OST can be
           changed on the fly.  However, clients have to be remounted to
-          renegotiate the new RPC size.</para></caution>
+          renegotiate the new maximum RPC size.</para></caution>
       </section>
   </section>
   <section xml:id="dbdoclet.50438272_80545">
