@@ -993,14 +993,12 @@ enum obdo_flags {
         OBD_FL_NOSPC_BLK    = 0x00100000, /* no more block space on OST */
 	OBD_FL_FLUSH	    = 0x00200000, /* flush pages on the OST */
 	OBD_FL_SHORT_IO	    = 0x00400000, /* short io request */
+	/* OBD_FL_LOCAL_MASK = 0xF0000000, was local-only flags until 2.10 */
 
-        /* Note that while these checksum values are currently separate bits,
-         * in 2.x we can actually allow all values from 1-31 if we wanted. */
-        OBD_FL_CKSUM_ALL    = OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER |
-                              OBD_FL_CKSUM_CRC32C,
-
-        /* mask for local-only flag, which won't be sent over network */
-        OBD_FL_LOCAL_MASK   = 0xF0000000,
+	/* Note that while these checksum values are currently separate bits,
+	 * in 2.x we can actually allow all values from 1-31 if we wanted. */
+	OBD_FL_CKSUM_ALL    = OBD_FL_CKSUM_CRC32 | OBD_FL_CKSUM_ADLER |
+			      OBD_FL_CKSUM_CRC32C,
 };
 
 /*

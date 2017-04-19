@@ -1508,7 +1508,6 @@ void lustre_assert_wire_constants(void)
 	CLASSERT(OBD_FL_NOSPC_BLK == 0x00100000);
 	CLASSERT(OBD_FL_FLUSH == 0x00200000);
 	CLASSERT(OBD_FL_SHORT_IO == 0x00400000);
-	CLASSERT(OBD_FL_LOCAL_MASK == 0xf0000000);
 
 	/* Checks for struct lov_ost_data_v1 */
 	LASSERTF((int)sizeof(struct lov_ost_data_v1) == 24, "found %lld\n",
