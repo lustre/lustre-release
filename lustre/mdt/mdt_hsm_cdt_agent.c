@@ -463,86 +463,81 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 	fail_request = false;
 	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
-		if (hai->hai_action != HSMA_CANCEL) {
-			struct mdt_object *obj;
-			struct md_hsm hsm;
+		struct mdt_object *obj;
+		struct md_hsm hsm;
 
-			obj = mdt_hsm_get_md_hsm(mti, &hai->hai_fid, &hsm);
-			if (!IS_ERR(obj) && obj != NULL) {
-				mdt_object_put(mti->mti_env, obj);
-			} else {
-				if (hai->hai_action == HSMA_REMOVE)
-					continue;
+		if (hai->hai_action == HSMA_CANCEL)
+			continue;
 
-				if (obj == NULL) {
-					fail_request = true;
-					rc = mdt_agent_record_update(
-							     mti->mti_env, mdt,
-							     &hai->hai_cookie,
-							     1, ARS_FAILED);
-					if (rc) {
-						CERROR(
-					      "%s: mdt_agent_record_update() "
-					      "failed, cannot update "
-					      "status to %s for cookie "
-					      "%#llx: rc = %d\n",
-					      mdt_obd_name(mdt),
-					      agent_req_status2name(ARS_FAILED),
-					      hai->hai_cookie, rc);
-						GOTO(out_buf, rc);
-					}
-					continue;
-				}
-				GOTO(out_buf, rc = PTR_ERR(obj));
+		obj = mdt_hsm_get_md_hsm(mti, &hai->hai_fid, &hsm);
+		if (!IS_ERR(obj)) {
+			mdt_object_put(mti->mti_env, obj);
+		} else if (PTR_ERR(obj) == -ENOENT) {
+			if (hai->hai_action == HSMA_REMOVE)
+				continue;
+
+			fail_request = true;
+			rc = mdt_agent_record_update(mti->mti_env, mdt,
+						     &hai->hai_cookie,
+						     1, ARS_FAILED);
+			if (rc < 0) {
+				CERROR("%s: mdt_agent_record_update() failed, "
+				       "cannot update status to %s for cookie "
+				       "%#llx: rc = %d\n",
+				       mdt_obd_name(mdt),
+				       agent_req_status2name(ARS_FAILED),
+				       hai->hai_cookie, rc);
+				GOTO(out_buf, rc);
 			}
 
-			if (!mdt_hsm_is_action_compat(hai, hal->hal_archive_id,
-						      hal->hal_flags, &hsm)) {
-				/* incompatible request, we abort the request */
-				/* next time coordinator will wake up, it will
-				 * make the same compound with valid only
-				 * records */
-				fail_request = true;
-				rc = mdt_agent_record_update(mti->mti_env, mdt,
-							     &hai->hai_cookie,
-							     1, ARS_FAILED);
-				if (rc) {
-					CERROR("%s: mdt_agent_record_update() "
-					      "failed, cannot update "
-					      "status to %s for cookie "
-					      "%#llx: rc = %d\n",
-					      mdt_obd_name(mdt),
-					      agent_req_status2name(ARS_FAILED),
-					      hai->hai_cookie, rc);
-					GOTO(out_buf, rc);
-				}
+			continue;
+		} else {
+			GOTO(out_buf, rc = PTR_ERR(obj));
+		}
 
-				/* if restore and record status updated, give
-				 * back granted layout lock */
-				if (hai->hai_action == HSMA_RESTORE) {
-					struct cdt_restore_handle *crh = NULL;
-					struct mdt_object *obj = NULL;
+		if (!mdt_hsm_is_action_compat(hai, hal->hal_archive_id,
+					      hal->hal_flags, &hsm)) {
+			/* incompatible request, we abort the request */
+			/* next time coordinator will wake up, it will
+			 * make the same compound with valid only
+			 * records */
+			fail_request = true;
+			rc = mdt_agent_record_update(mti->mti_env, mdt,
+						     &hai->hai_cookie,
+						     1, ARS_FAILED);
+			if (rc) {
+				CERROR("%s: mdt_agent_record_update() failed, "
+				       "cannot update status to %s for cookie "
+				       "%#llx: rc = %d\n",
+				       mdt_obd_name(mdt),
+				       agent_req_status2name(ARS_FAILED),
+				       hai->hai_cookie, rc);
+				GOTO(out_buf, rc);
+			}
 
-					mutex_lock(&cdt->cdt_restore_lock);
-					crh = mdt_hsm_restore_hdl_find(cdt,
-								&hai->hai_fid);
-					if (crh != NULL)
-						list_del(&crh->crh_list);
-					mutex_unlock(&cdt->cdt_restore_lock);
-					obj = mdt_object_find(mti->mti_env,
-							      mti->mti_mdt,
-							      &hai->hai_fid);
-					if (!IS_ERR(obj) && crh != NULL)
-						mdt_object_unlock(mti, obj,
-								  &crh->crh_lh,
-								  1);
-					if (crh != NULL)
-						OBD_SLAB_FREE_PTR(crh,
-							mdt_hsm_cdt_kmem);
-					if (!IS_ERR(obj))
-						mdt_object_put(mti->mti_env,
-							       obj);
-				}
+			/* if restore and record status updated, give
+			 * back granted layout lock */
+			if (hai->hai_action == HSMA_RESTORE) {
+				struct cdt_restore_handle *crh = NULL;
+				struct mdt_object *obj = NULL;
+
+				mutex_lock(&cdt->cdt_restore_lock);
+				crh = mdt_hsm_restore_hdl_find(cdt,
+							       &hai->hai_fid);
+				if (crh != NULL)
+					list_del(&crh->crh_list);
+				mutex_unlock(&cdt->cdt_restore_lock);
+				obj = mdt_object_find(mti->mti_env,
+						      mti->mti_mdt,
+						      &hai->hai_fid);
+				if (!IS_ERR(obj) && crh != NULL)
+					mdt_object_unlock(mti, obj,
+							  &crh->crh_lh, 1);
+				if (crh != NULL)
+					OBD_SLAB_FREE_PTR(crh,
+							  mdt_hsm_cdt_kmem);
+				if (!IS_ERR(obj))
+					mdt_object_put(mti->mti_env, obj);
 			}
 		}
 	}

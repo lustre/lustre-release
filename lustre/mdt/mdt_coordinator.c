@@ -1290,7 +1290,7 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 
 		/* restore in data FID done, we swap the layouts
 		 * only if restore is successful */
-		if (pgs->hpk_errval == 0 && !IS_ERR_OR_NULL(obj)) {
+		if (pgs->hpk_errval == 0 && !IS_ERR(obj)) {
 			rc = hsm_swap_layouts(mti, obj, &car->car_hai->hai_dfid,
 					      &mh);
 			if (rc) {
