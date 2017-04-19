@@ -94,6 +94,8 @@ extern char *progname;
 
 static void append_unique(char *buf, char *prefix, char *key, char *val,
 			  size_t maxbuflen);
+static int is_e2fsprogs_feature_supp(const char *feature);
+static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs);
 
 /*
  * Concatenate context of the temporary mount point if selinux is enabled
@@ -263,6 +265,23 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 	dev = mop->mo_device;
 	if (mop->mo_flags & MO_IS_LOOP)
 		dev = mop->mo_loopdev;
+
+	/* Multiple mount protection enabled if failover node specified */
+	if (mop->mo_flags & MO_FAILOVER &&
+	    !is_feature_enabled("mmp", dev)) {
+		if (is_e2fsprogs_feature_supp("-O mmp") == 0) {
+			char *command = filepnm;
+
+			snprintf(command, sizeof(filepnm),
+				 TUNE2FS" -O mmp '%s' >/dev/null 2>&1", dev);
+			ret = run_command(command, sizeof(filepnm));
+			if (ret)
+				fprintf(stderr,
+					"%s: Unable to set 'mmp' on %s: %d\n",
+					progname, dev, ret);
+		} else
+			disp_old_e2fsprogs_msg("mmp", 1);
+	}
 
 	ret = mount(dev, mntpt, MT_STR(&mop->mo_ldd), 0,
 		(mop->mo_mountopts == NULL) ?
