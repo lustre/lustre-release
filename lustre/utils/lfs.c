@@ -1048,7 +1048,7 @@ static int verify_pool_name(char *prog_name, char *pool_name)
 }
 
 struct lfs_setstripe_args {
-	__u64			 lsa_comp_end;
+	unsigned long long	 lsa_comp_end;
 	unsigned long long	 lsa_stripe_size;
 	int			 lsa_stripe_count;
 	int			 lsa_stripe_off;
