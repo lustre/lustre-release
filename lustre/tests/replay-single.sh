@@ -2368,6 +2368,9 @@ test_70f() {
 #	[ $CLIENTCOUNT -lt 2 ] &&
 #		{ skip "Need 2 or more clients, have $CLIENTCOUNT" && return; }
 
+	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.53) ]] &&
+		skip "Need server version at least 2.9.53" && return
+
 	echo "mount clients $CLIENTS ..."
 	zconf_mount_clients $CLIENTS $MOUNT
 
