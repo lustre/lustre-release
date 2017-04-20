@@ -1717,6 +1717,9 @@ int llapi_layout_comp_add(struct llapi_layout *layout)
 	/* Inherit some attributes from existing component */
 	new->llc_stripe_size = comp->llc_stripe_size;
 	new->llc_stripe_count = comp->llc_stripe_count;
+	if (comp->llc_pool_name[0] != '\0')
+		strncpy(new->llc_pool_name, comp->llc_pool_name,
+			sizeof(comp->llc_pool_name));
 	if (new->llc_extent.e_end <= last->llc_extent.e_end) {
 		__llapi_comp_free(new);
 		errno = EINVAL;

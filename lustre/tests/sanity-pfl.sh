@@ -39,9 +39,10 @@ check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 test_0() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
 
-	local comp_file=$DIR/$tfile
+	local comp_file=$DIR/$tdir/$tfile
 	local rw_len=$((3 * 1024 * 1024))	# 3M
 
+	test_mkdir $DIR/$tdir
 	rm -f $comp_file
 
 	$LFS setstripe -E 1m -S 1M -c 1 -E -1 -c 1 $comp_file ||
@@ -62,9 +63,10 @@ test_0() {
 run_test 0 "Create full components file, no reused OSTs"
 
 test_1() {
-	local comp_file=$DIR/$tfile
+	local comp_file=$DIR/$tdir/$tfile
 	local rw_len=$((3 * 1024 * 1024))	# 3M
 
+	test_mkdir $DIR/$tdir
 	rm -f $comp_file
 
 	$LFS setstripe -E 1m -S 1m -o 0 -E -1 -o 0 $comp_file ||
@@ -85,9 +87,10 @@ test_1() {
 run_test 1 "Create full components file, reused OSTs"
 
 test_2() {
-	local comp_file=$DIR/$tfile
+	local comp_file=$DIR/$tdir/$tfile
 	local rw_len=$((5 * 1024 * 1024))	# 5M
 
+	test_mkdir $DIR/$tdir
 	rm -f $comp_file
 
 	$LFS setstripe -E 1m -S 1m $comp_file ||
@@ -148,8 +151,9 @@ del_comp_and_verify() {
 }
 
 test_3() {
-	local comp_file=$DIR/$tfile
+	local comp_file=$DIR/$tdir/$tfile
 
+	test_mkdir $DIR/$tdir
 	rm -f $comp_file
 
 	$LFS setstripe -E 1M -E 64M -c 2 -E -1 -c 3 $comp_file ||
@@ -193,7 +197,7 @@ test_5() {
 	local subdir=$parent/subdir
 
 	rm -fr $parent
-	mkdir -p $parent || error "Create dir $parent failed"
+	test_mkdir $parent || error "Create dir $parent failed"
 
 	# set default layout to parent directory
 	$LFS setstripe -E 64M -c 2 -i 0 -E -1 -c 4 -i 0 $parent ||
@@ -242,8 +246,9 @@ test_5() {
 run_test 5 "Inherit composite layout from parent directory"
 
 test_6() {
-	local comp_file=$DIR/$tfile
+	local comp_file=$DIR/$tdir/$tfile
 
+	test_mkdir $DIR/$tdir
 	rm -f $DIR/$tfile
 
 	$LFS setstripe -c 1 -S 128K $comp_file ||
@@ -296,7 +301,7 @@ test_6() {
 run_test 6 "Migrate composite file"
 
 test_7() {
-	mkdir -p $DIR/$tdir || error "mkdir failed"
+	test_mkdir -p $DIR/$tdir || error "mkdir failed"
 	chmod 0777 $DIR/$tdir || error "chmod $tdir failed"
 
 	local comp_file=$DIR/$tdir/$tfile
@@ -320,7 +325,7 @@ test_8() {
 	local parent=$DIR/$tdir
 
 	rm -fr $parent
-	mkdir -p $parent || error "Create dir $parent failed"
+	test_mkdir -p $parent || error "Create dir $parent failed"
 
 	$LFS setstripe -E 2M -c 1 -S 1M -E 16M -c 2 -S 2M \
 		-E -1 -c 4 -S 4M $parent ||
@@ -333,8 +338,9 @@ test_8() {
 run_test 8 "Run debench over composite files"
 
 test_9() {
-	local comp_file=$DIR/$tfile
+	local comp_file=$DIR/$tdir/$tfile
 
+	test_mkdir $DIR/$tdir
 	rm -f $comp_file
 
 	$LFS setstripe -E 1m -S 1m -E 2M -c 1 $comp_file ||
@@ -379,7 +385,7 @@ test_10() {
 		-E -1 -c 4 -S 4M $MOUNT ||
 		error "Set root layout failed"
 
-	mkdir -p $parent || error "Create dir $parent failed"
+	test_mkdir -p $parent || error "Create dir $parent failed"
 	# set a different layout for parent
 	$LFS setstripe -E -1 -c 1 -S 1M $parent ||
 		error "set $parent layout failed"
@@ -414,7 +420,8 @@ test_10() {
 run_test 10 "Inherit composite template from root"
 
 test_11() {
-	local comp_file=$DIR/$tfile
+	local comp_file=$DIR/$tdir/$tfile
+	test_mkdir $DIR/$tdir
 	rm -f $comp_file
 
 	# only 1st component instantiated
@@ -467,7 +474,8 @@ run_test 11 "Verify component instantiation with write/truncate"
 test_12() {
 	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs" && return
 
-	local file=$DIR/$tfile
+	local file=$DIR/$tdir/$tfile
+	test_mkdir $DIR/$tdir
 	rm -f $file
 
 	# specify ost list for component
@@ -517,6 +525,47 @@ test_13() { # LU-9311
 	rm -f $file
 }
 run_test 13 "shouldn't reprocess granted resent request"
+
+test_14() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	local file=$DIR/$tdir/$tfile
+	test_mkdir -p $DIR/$tdir
+	rm -f $file
+
+	$LFS setstripe -E1m -c1 -S1m --pool="pool1" -E2m \
+			-E4m -c2 -S2m --pool="pool2" -E-1 $file ||
+		error "Create $file failed"
+
+	# check --pool inheritance
+	local pool
+	pool="$($LFS getstripe -I2 --pool $file)"
+	[ x"$pool" != "xpool1" ] && $LFS getstripe -I2 $file &&
+		error "$file: component 2 doesn't have poolname pool1"
+	pool="$($LFS getstripe -I4 --pool $file)"
+	[ x"$pool" != "xpool2" ] && $LFS getstripe -I4 $file &&
+		error "$file: component 4 doesn't have poolname pool2"
+
+	#check --stripe-count inheritance
+	local count
+	count="$($LFS getstripe -I2 -c $file)"
+	[ $count -ne 1 ] && $LFS getstripe -I2 $file &&
+		error "$file: component 2 doesn't have 1 stripe_count"
+	count="$($LFS getstripe -I4 -c $file)"
+	[ $count -ne 2 ] && $LFS getstripe -I4 $file &&
+		error "$file: component 4 doesn't have 2 stripe_count"
+
+	#check --stripe-size inheritance
+	local size
+	size="$($LFS getstripe -I2 -S $file)"
+	[ $size -ne $((1024*1024)) ] && $LFS getstripe -I2 $file &&
+		error "$file: component 2 doesn't have 1M stripe_size"
+	size="$($LFS getstripe -I4 -S $file)"
+	[ $size -ne $((1024*1024*2)) ] && $LFS getstripe -I4 $file &&
+		error "$file: component 4 doesn't have 2M stripe_size"
+
+	return 0
+}
+run_test 14 "Verify setstripe poolname/stripe_count/stripe_size inheritance"
 
 complete $SECONDS
 check_and_cleanup_lustre
