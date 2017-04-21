@@ -1,7 +1,7 @@
-Index: linux-stage/fs/ext4/ext4.h
-===================================================================
---- linux-stage.orig/fs/ext4/ext4.h
-+++ linux-stage/fs/ext4/ext4.h
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 31317c9..39b31aa 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
 @@ -398,6 +398,13 @@ struct flex_groups {
  #define EXT4_FL_USER_VISIBLE		0x304BDFFF /* User visible flags */
  #define EXT4_FL_USER_MODIFIABLE		0x204380FF /* User modifiable flags */
@@ -61,10 +61,18 @@ Index: linux-stage/fs/ext4/ext4.h
  #if defined(__KERNEL__) && defined(CONFIG_COMPAT)
  /*
   * ioctl commands in 32 bit emulation
-Index: linux-stage/fs/ext4/ioctl.c
-===================================================================
---- linux-stage.orig/fs/ext4/ioctl.c
-+++ linux-stage/fs/ext4/ioctl.c
+@@ -2336,6 +2381,7 @@ extern int ext4_ind_remove_space(handle_t *handle, struct inode *inode,
+ /* ioctl.c */
+ extern long ext4_ioctl(struct file *, unsigned int, unsigned long);
+ extern long ext4_compat_ioctl(struct file *, unsigned int, unsigned long);
++extern int __ext4_ioctl_setproject(struct inode *inode, __u32 projid);
+ 
+ /* migrate.c */
+ extern int ext4_ext_migrate(struct inode *);
+diff --git a/fs/ext4/ioctl.c b/fs/ext4/ioctl.c
+index bfda18a..a4443e9 100644
+--- a/fs/ext4/ioctl.c
++++ b/fs/ext4/ioctl.c
 @@ -15,6 +15,7 @@
  #include <linux/mount.h>
  #include <linux/file.h>
@@ -73,7 +81,7 @@ Index: linux-stage/fs/ext4/ioctl.c
  #include "ext4_jbd2.h"
  #include "ext4.h"
  
-@@ -198,6 +199,239 @@ journal_err_out:
+@@ -198,6 +199,251 @@ journal_err_out:
  	return err;
  }
  
@@ -172,9 +180,8 @@ Index: linux-stage/fs/ext4/ioctl.c
 +}
 +
 +#ifdef CONFIG_QUOTA
-+static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
++int __ext4_ioctl_setproject(struct inode *inode, __u32 projid)
 +{
-+	struct inode *inode = file_inode(filp);
 +	struct super_block *sb = inode->i_sb;
 +	struct ext4_inode_info *ei = EXT4_I(inode);
 +	int err, rc;
@@ -201,10 +208,6 @@ Index: linux-stage/fs/ext4/ioctl.c
 +
 +	if (projid_eq(kprojid, EXT4_I(inode)->i_projid))
 +		return 0;
-+
-+	err = mnt_want_write_file(filp);
-+	if (err)
-+		return err;
 +
 +	err = -EPERM;
 +	mutex_lock(&inode->i_mutex);
@@ -256,6 +259,23 @@ Index: linux-stage/fs/ext4/ioctl.c
 +	ext4_journal_stop(handle);
 +out_unlock:
 +	mutex_unlock(&inode->i_mutex);
++	return err;
++
++
++}
++EXPORT_SYMBOL(__ext4_ioctl_setproject);
++
++static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
++{
++	int err;
++	struct inode *inode = file_inode(filp);
++
++	err = mnt_want_write_file(filp);
++	if (err)
++		return err;
++
++	err = __ext4_ioctl_setproject(inode, projid);
++
 +	mnt_drop_write_file(filp);
 +	return err;
 +}
@@ -313,7 +333,7 @@ Index: linux-stage/fs/ext4/ioctl.c
  long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
  {
  	struct inode *inode = file_inode(filp);
-@@ -213,11 +447,7 @@ long ext4_ioctl(struct file *filp, unsig
+@@ -213,11 +459,7 @@ long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
  		flags = ei->i_flags & EXT4_FL_USER_VISIBLE;
  		return put_user(flags, (int __user *) arg);
  	case EXT4_IOC_SETFLAGS: {
@@ -326,7 +346,7 @@ Index: linux-stage/fs/ext4/ioctl.c
  
  		if (!inode_owner_or_capable(inode))
  			return -EACCES;
-@@ -231,89 +461,8 @@ long ext4_ioctl(struct file *filp, unsig
+@@ -231,89 +473,8 @@ long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
  
  		flags = ext4_mask_flags(inode->i_mode, flags);
  
@@ -417,7 +437,7 @@ Index: linux-stage/fs/ext4/ioctl.c
  		mutex_unlock(&inode->i_mutex);
  		mnt_drop_write_file(filp);
  		return err;
-@@ -617,6 +766,62 @@ resizefs_out:
+@@ -617,6 +778,62 @@ resizefs_out:
  	}
  	case EXT4_IOC_PRECACHE_EXTENTS:
  		return ext4_ext_precache(inode);
