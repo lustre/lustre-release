@@ -2823,12 +2823,14 @@ test_71b() {
 	checkfiemap --test ||
 		{ skip "error $?: checkfiemap failed" && return; }
 
-	$LFS setstripe -c -1 $DIR1 || error "setstripe failed"
-	dd if=/dev/urandom of=$DIR1/$tfile bs=40K count=1
-	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR1/$tfile) + 1)))" = \
+	mkdir -p $DIR1/$tdir
+
+	$LFS setstripe -c -1 $DIR1/$tdir || error "setstripe failed"
+	dd if=/dev/urandom of=$DIR1/$tdir/$tfile bs=40K count=1
+	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR1/$tdir/$tfile) + 1)))" = \
 		"zfs" ] &&
 		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return 0
-	checkfiemap $DIR1/$tfile 40960 || error "checkfiemap failed"
+	checkfiemap $DIR1/$tdir/$tfile 40960 || error "checkfiemap failed"
 }
 run_test 71b "check fiemap support for stripecount > 1"
 
