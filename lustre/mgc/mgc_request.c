@@ -1753,15 +1753,8 @@ again:
 #ifdef HAVE_SERVER_SUPPORT
 		/* config changed since first read RPC */
 		if (cld_is_nodemap(cld) && config_read_offset == 0) {
-			recent_nodemap = NULL;
-			nodemap_config_dealloc(new_config);
-			new_config = NULL;
-
 			CDEBUG(D_INFO, "nodemap config changed in transit, retrying\n");
-
-			/* setting eof to false, we request config again */
-			eof = false;
-			GOTO(out, rc = 0);
+			GOTO(out, rc = -EAGAIN);
 		}
 #endif
 		if (!eof)
@@ -2157,6 +2150,12 @@ restart:
 		rcl = mgc_cancel(mgc->u.cli.cl_mgc_mgsexp, LCK_CR, &lockh);
 		if (rcl)
 			CERROR("Can't drop cfg lock: %d\n", rcl);
+	}
+
+	/* requeue nodemap lock immediately if transfer was interrupted */
+	if (cld_is_nodemap(cld) && rc == -EAGAIN) {
+		mgc_requeue_add(cld);
+		rc = 0;
 	}
 
 	RETURN(rc);
