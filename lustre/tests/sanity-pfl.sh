@@ -566,6 +566,70 @@ test_14() {
 }
 run_test 14 "Verify setstripe poolname/stripe_count/stripe_size inheritance"
 
+test_15() {
+	local parent=$DIR/$tdir
+
+	rm -fr $parent
+	test_mkdir -p $parent || error "Create dir $parent failed"
+
+	$LFS setstripe -d $parent || error "delete default layout"
+
+	$LFS setstripe -E 1M -E 10M -E eof $parent/f1 || error "create f1"
+	$LFS setstripe -E 4M -E 20M -E eof $parent/f2 || error "create f2"
+	test_mkdir -p $parent/subdir || error "create subdir"
+	$LFS setstripe -E 6M -E 30M -E eof $parent/subdir ||
+		error "setstripe to subdir"
+	$LFS setstripe -E 8M -E eof $parent/subdir/f3 || error "create f3"
+	$LFS setstripe -c 1 $parent/subdir/f4 || error "create f4"
+
+	# none
+	local found=$($LFS find --component-start +2M -E -15M $parent | wc -l)
+	[ $found -eq 0 ] || error "start+2M, end-15M, $found != 0"
+
+	# f2, f3
+	found=$($LFS find --component-start +2M -E -35M $parent | wc -l)
+	[ $found -eq 2 ] || error "start+2M, end-35M, $found != 2"
+
+	# subdir
+	found=$($LFS find --component-start +4M -E -eof $parent | wc -l)
+	[ $found -eq 1 ] || error "start+4M, end-eof, $found != 1"
+
+	local flg_opts="--component-flags init"
+	# none
+	found=$($LFS find --component-start 1M -E 10M $flg_opts $parent | wc -l)
+	[ $found -eq 0 ] ||
+		error "before write: start=1M, end=10M, flag=init, $found != 0"
+
+	dd if=/dev/zero of=$parent/f1 bs=1M count=2 ||
+		error "dd $parent/f1 failed"
+
+	# f1
+	found=$($LFS find --component-start 1M -E 10M $flg_opts $parent | wc -l)
+	[ $found -eq 1 ] ||
+		error "after write: start=1M, end=10M, flag=init, $found != 1"
+
+	local ext_opts="--component-start -1M -E +5M"
+	# subdir, f3
+	found=$($LFS find $ext_opts $parent | wc -l)
+	[ $found -eq 2 ] || error "start-1M, end+5M, $found != 2"
+
+	local cnt_opts="--component-count +2"
+	# subdir
+	found=$($LFS find $ext_opts $cnt_opts $parent | wc -l)
+	[ $found -eq 1 ] || error "start-1M, end+5M, count+2, $found != 1"
+
+	# none
+	found=$($LFS find $ext_opts $cnt_opts $flg_opts $parent | wc -l)
+	[ $found -eq 0 ] ||
+		error "start-1M, end+5M, count+2, flag=init, $found != 0"
+
+	# f3
+	found=$($LFS find $ext_opts ! $cnt_opts $flg_opts $parent | wc -l)
+	[ $found -eq 1 ] ||
+		error "start-1M, end+5M, !count+2, flag=init, $found != 1"
+}
+run_test 15 "Verify component options for lfs find"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

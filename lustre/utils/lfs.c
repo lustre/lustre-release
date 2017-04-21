@@ -257,8 +257,8 @@ command_t cmdlist[] = {
 	 "     [[!] --mdt-count|-T [+-]<stripes>]\n"
 	 "     [[!] --mdt-hash|-H <hashtype>\n"
          "\t !: used before an option indicates 'NOT' requested attribute\n"
-         "\t -: used before a value indicates 'AT MOST' requested value\n"
-         "\t +: used before a value indicates 'AT LEAST' requested value\n"
+         "\t -: used before a value indicates less than requested value\n"
+         "\t +: used before a value indicates more than requested value\n"
 	 "\tmdt-hash:	hash type of the striped directory.\n"
 	 "\t		fnv_1a_64 FNV-1a hash algorithm\n"
 	 "\t		all_char  sum of characters % MDT_COUNT\n"},

@@ -3416,10 +3416,11 @@ static int find_check_comp_options(struct find_param *param)
 			return -1;
 	}
 
-	if (param->fp_check_comp_flags) {
-		for (i = 0; i < comp_v1->lcm_entry_count; i++) {
-			entry = &comp_v1->lcm_entries[i];
+	ret = 1;
+	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
+		entry = &comp_v1->lcm_entries[i];
 
+		if (param->fp_check_comp_flags) {
 			if (((entry->lcme_flags & param->fp_comp_flags) &&
 			     param->fp_exclude_comp_flags) ||
 			    (!(entry->lcme_flags & param->fp_comp_flags) &&
@@ -3427,46 +3428,33 @@ static int find_check_comp_options(struct find_param *param)
 				ret = -1;
 			else
 				ret = 1;
-			/* If any flags matches */
-			if (ret != -1)
-				break;
+
+			if (ret == -1)
+				continue;
 		}
-		if (ret == -1)
-			return ret;
-	}
 
-	if (param->fp_check_comp_start) {
-		for (i = 0; i < comp_v1->lcm_entry_count; i++) {
-			entry = &comp_v1->lcm_entries[i];
-
+		if (param->fp_check_comp_start) {
 			ret = find_value_cmp(entry->lcme_extent.e_start,
 					     param->fp_comp_start,
 					     param->fp_comp_start_sign,
 					     param->fp_exclude_comp_start,
 					     param->fp_comp_start_units, 0);
-			/* If any extent start matches */
-			if (ret != -1)
-				break;
+			if (ret == -1)
+				continue;
 		}
-		if (ret == -1)
-			return ret;
-	}
 
-	if (param->fp_check_comp_end) {
-		for (i = 0; i < comp_v1->lcm_entry_count; i++) {
-			entry = &comp_v1->lcm_entries[i];
-
+		if (param->fp_check_comp_end) {
 			ret = find_comp_end_cmp(entry->lcme_extent.e_end,
 						param);
-			/* If any extent end matches */
-			if (ret != -1)
-				break;
+			if (ret == -1)
+				continue;
 		}
-		if (ret == -1)
-			return ret;
+
+		/* the component matches all criteria */
+		break;
 	}
 
-	return 1;
+	return ret;
 }
 
 static bool find_check_lmm_info(struct find_param *param)
