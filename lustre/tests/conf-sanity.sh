@@ -1502,7 +1502,7 @@ t32_check() {
 
 	local IMGTYPE=$(facet_fstype $SINGLEMDS)
 
-	tarballs=$($r find $RLUSTRE/tests -maxdepth 1 -name \'disk*-$IMGTYPE.tar.bz2\')
+	tarballs=$($r find $RLUSTRE/tests -maxdepth 1 -name \'disk*-$IMGTYPE.tar.bz2\' | grep -v "2_9")
 
 	if [ -z "$tarballs" ]; then
 		skip "No applicable tarballs found"
