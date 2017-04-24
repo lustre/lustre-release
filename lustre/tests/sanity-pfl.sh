@@ -498,6 +498,26 @@ test_12() {
 }
 run_test 12 "Verify ost list specification"
 
+test_13() { # LU-9311
+	[ $OSTCOUNT -lt 8 ] && skip "needs >= 8 OSTs" && return
+
+	local file=$DIR/$tfile
+	local dd_count=4
+	local dd_size=$(($dd_count * 1024 * 1024))
+	local real_size
+
+	rm -f $file
+	$LFS setstripe -E 1M -c 1 -E 2M -c 2 -E -1 -c -1 -i 1 $file ||
+		error "Create $file failed"
+	dd if=/dev/zero of=$file bs=1M count=$dd_count
+	real_size=$(stat -c %s $file)
+	[ $real_size -eq $dd_size ] ||
+		error "dd actually wrote $real_size != $dd_size bytes"
+
+	rm -f $file
+}
+run_test 13 "shouldn't reprocess granted resent request"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
