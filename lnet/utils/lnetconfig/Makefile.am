@@ -29,7 +29,7 @@
 lib_LTLIBRARIES = liblnetconfig.la
 
 CYAML := $(top_builddir)/lnet/utils/cyaml/cyaml.c \
-	 $(top_builddir)/lnet/utils/cyaml/cyaml.h
+	 $(top_builddir)/lnet/include/cyaml.h
 liblnetconfig_la_SOURCES  = liblnetconfig.c liblnetconfig.h \
 			    liblnetconfig_lnd.c liblnd.h $(CYAML)
 liblnetconfig_la_CPPFLAGS = -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 \

@@ -32,7 +32,7 @@
 #include <libcfs/util/parser.h>
 #include <lnet/lnetctl.h>
 #include <lnet/nidstr.h>
-#include "cyaml/cyaml.h"
+#include <cyaml.h>
 #include "lnetconfig/liblnetconfig.h"
 
 #define LNET_CONFIGURE		true
