@@ -636,6 +636,74 @@ test_15() {
 }
 run_test 15 "Verify component options for lfs find"
 
+verify_16() {
+	local src=$1
+	local dst=$2
+	local temp=$3
+	local msg_prefix=$4
+
+	echo "getstripe --yaml $src"
+	$LFS getstripe --yaml $src > $temp || error "getstripe $src failed"
+	echo "setstripe --yaml=$temp $dst"
+	$LFS setstripe --yaml=$temp $dst|| error "setstripe $dst failed"
+
+	echo "compare"
+	local layout1=$(get_layout_param $src)
+	local layout2=$(get_layout_param $dst)
+	# compare their layout info
+	[ "$layout1" == "$layout2" ] ||
+		error "$msg_prefix $src/$dst layouts are not equal"
+}
+
+test_16() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+
+	local file=$DIR/$tdir/$tfile
+	local dir=$DIR/$tdir/dir
+	local temp=$DIR/$tdir/template
+	rm -rf $DIR/$tdir
+	test_mkdir $DIR/$tdir
+
+	#####################################################################
+	#	                    1. PFL file
+	# set stripe for source file
+	$LFS setstripe -E1m -c2 -o0,1 -E2m -c2 -E3m -o1,0 -E4m -c1 -E-1 $file ||
+		error "Create $file failed"
+
+	echo "1. PFL file"
+	verify_16 $file $file.copy $temp "1. PFL file"
+
+	#####################################################################
+	#	                    2. plain file
+	# set stripe for source file
+	rm -f $file
+	$LFS setstripe -c2 -o0,1 -i1 $file || error "Create $file failed"
+
+	rm -f $file.copy
+	echo "2. plain file"
+	verify_16 $file $file.copy $temp "2. plain file"
+
+	#####################################################################
+	#	                    3. PFL dir
+	# set stripe for source dir
+	test_mkdir $dir
+	$LFS setstripe -E1m -c2 -E2m -c1 -E-1 $dir ||
+		error "setstripe $dir failed"
+
+	test_mkdir $dir.copy
+	echo "3. PFL dir"
+	verify_16 $dir $dir.copy $temp.dir "3. PFL dir"
+
+	#####################################################################
+	#	                    4. plain dir
+	# set stripe for source dir
+	$LFS setstripe -c2 -i-1 $dir || error "setstripe $dir failed"
+
+	echo "4. plain dir"
+	verify_16 $dir $dir.copy $temp.dir "4. plain dir"
+}
+run_test 16 "Verify setstripe/getstripe with YAML config file"
+
 test_17() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
 	local file=$DIR/$tdir/$tfile

@@ -213,6 +213,9 @@ List information of components in a file with extent end less than 64MiB.
 .TP
 .B $ lfs getstripe -I3 --component-start /mnt/lustre/file1
 Print only the component start for the component with ID of 3
+.TP
+.B $ lfs getstripe --yaml /mnt/lustre/file1
+Lists the information of the components of a file in YAML format.
 .SH AUTHOR
 The lfs command is part of the Lustre filesystem.
 .SH SEE ALSO

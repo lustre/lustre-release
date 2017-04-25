@@ -2,7 +2,6 @@
 
 AM_CFLAGS  := -fPIC -D_GNU_SOURCE \
 	      -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1
-AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 if TESTS
 EXTRA_PROGRAMS = wirecheck
@@ -61,6 +60,7 @@ lctl_DEPENDENCIES := liblustreapi.la
 
 lfs_SOURCES = lfs.c lfs_project.c lfs_project.h
 lfs_LDADD := liblustreapi.la -lz
+lfs_LDADD += $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la
 lfs_DEPENDENCIES := liblustreapi.la
 
 lustre_rsync_SOURCES = lustre_rsync.c lustre_rsync.h callvpe.c callvpe.h

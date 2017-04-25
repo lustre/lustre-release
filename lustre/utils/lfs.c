@@ -73,6 +73,7 @@
 #include <linux/lustre/lustre_ver.h>
 #include <linux/lustre/lustre_param.h>
 #include <linux/lnet/nidstr.h>
+#include <cyaml.h>
 
 #ifndef ARRAY_SIZE
 # define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
@@ -160,7 +161,8 @@ static inline int lfs_mirror_split(int argc, char **argv)
 	"                 [--stripe-size|-S <stripe_size>]\n"		\
 	"                 [--layout|-L <pattern>]\n"		\
 	"                 [--pool|-p <pool_name>]\n"			\
-	"                 [--ost|-o <ost_indices>]\n"
+	"                 [--ost|-o <ost_indices>]\n"			\
+	"                 [--yaml|-y <yaml_template_file>]\n"
 
 #define SSM_HELP_COMMON \
 	"\tstripe_count: Number of OSTs to stripe over (0=fs default, -1 all)\n" \
@@ -180,7 +182,10 @@ static inline int lfs_mirror_split(int argc, char **argv)
 	"\tcomp_end:     Extent end of component, start after previous end.\n"\
 	"\t              Can be specified with K, M or G (for KB, MB, GB\n" \
 	"\t              respectively, -1 for EOF). Must be a multiple of\n"\
-	"\t              stripe_size.\n"
+	"\t              stripe_size.\n"				      \
+	"\tyaml_template_file:\n"					      \
+	"\t              YAML layout template file, can't be used with -c,\n" \
+	"\t              -i, -S, -p, -o, or -E arguments.\n"
 
 #define MIRROR_CREATE_HELP						       \
 	"\tmirror_count: Number of mirrors to be created with the upcoming\n"  \
@@ -1915,13 +1920,18 @@ struct lfs_setstripe_args {
 	__u32			 lsa_comp_flags;
 	__u32			 lsa_comp_neg_flags;
 	unsigned long long	 lsa_pattern;
+	unsigned int		 lsa_mirror_count;
 	int			 lsa_nr_tgts;
+	bool			 lsa_first_comp;
 	__u32			*lsa_tgts;
 	char			*lsa_pool_name;
 };
 
 static inline void setstripe_args_init(struct lfs_setstripe_args *lsa)
 {
+	unsigned int mirror_count = lsa->lsa_mirror_count;
+	bool first_comp = lsa->lsa_first_comp;
+
 	memset(lsa, 0, sizeof(*lsa));
 
 	lsa->lsa_stripe_size = LLAPI_LAYOUT_DEFAULT;
@@ -1929,6 +1939,9 @@ static inline void setstripe_args_init(struct lfs_setstripe_args *lsa)
 	lsa->lsa_stripe_off = LLAPI_LAYOUT_DEFAULT;
 	lsa->lsa_pattern = LLAPI_LAYOUT_RAID0;
 	lsa->lsa_pool_name = NULL;
+
+	lsa->lsa_mirror_count = mirror_count;
+	lsa->lsa_first_comp = first_comp;
 }
 
 /**
@@ -1978,7 +1991,8 @@ static inline bool setstripe_args_specified(struct lfs_setstripe_args *lsa)
  * Return: 0 on success or an error code on failure.
  */
 static int comp_args_to_layout(struct llapi_layout **composite,
-			       struct lfs_setstripe_args *lsa)
+			       struct lfs_setstripe_args *lsa,
+			       bool set_extent)
 {
 	struct llapi_layout *layout = *composite;
 	uint64_t prev_end = 0;
@@ -2004,19 +2018,30 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 			return rc;
 		}
 
-		rc = llapi_layout_comp_add(layout);
+		if (lsa->lsa_first_comp)
+			prev_end = 0;
+
+		if (lsa->lsa_first_comp)
+			rc = llapi_layout_add_first_comp(layout);
+		else
+			rc = llapi_layout_comp_add(layout);
 		if (rc) {
 			fprintf(stderr, "Add component failed. %s\n",
 				strerror(errno));
 			return rc;
 		}
 	}
+	/* reset lsa_first_comp */
+	lsa->lsa_first_comp = false;
 
-	rc = llapi_layout_comp_extent_set(layout, prev_end, lsa->lsa_comp_end);
-	if (rc) {
-		fprintf(stderr, "Set extent [%lu, %llu) failed. %s\n",
-			prev_end, lsa->lsa_comp_end, strerror(errno));
-		return rc;
+	if (set_extent) {
+		rc = llapi_layout_comp_extent_set(layout, prev_end,
+						  lsa->lsa_comp_end);
+		if (rc) {
+			fprintf(stderr, "Set extent [%lu, %llu) failed. %s\n",
+				prev_end, lsa->lsa_comp_end, strerror(errno));
+			return rc;
+		}
 	}
 
 	/* Data-on-MDT component setting */
@@ -2106,7 +2131,7 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 		    lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
 		    lsa->lsa_stripe_count != LLAPI_LAYOUT_WIDE &&
 		    lsa->lsa_nr_tgts != lsa->lsa_stripe_count) {
-			fprintf(stderr, "stripe_count(%lld) != nr_osts(%d)\n",
+			fprintf(stderr, "stripe_count(%lld) != nr_tgts(%d)\n",
 				lsa->lsa_stripe_count, lsa->lsa_nr_tgts);
 			return -EINVAL;
 		}
@@ -2116,7 +2141,8 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 			if (rc)
 				break;
 		}
-	} else if (lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT) {
+	} else if (lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT &&
+		   lsa->lsa_stripe_off != -1) {
 		rc = llapi_layout_ost_index_set(layout, 0, lsa->lsa_stripe_off);
 	}
 	if (rc) {
@@ -2126,6 +2152,140 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 	}
 
 	return 0;
+}
+
+static int build_component(struct llapi_layout **layout,
+			   struct lfs_setstripe_args *lsa, bool set_extent)
+{
+	int rc;
+
+	rc = comp_args_to_layout(layout, lsa, set_extent);
+	if (rc)
+		return rc;
+
+	if (lsa->lsa_mirror_count > 0) {
+		rc = llapi_layout_mirror_count_set(*layout,
+						   lsa->lsa_mirror_count);
+		if (rc)
+			return rc;
+
+		rc = llapi_layout_flags_set(*layout, LCM_FL_RDONLY);
+		if (rc)
+			return rc;
+		lsa->lsa_mirror_count = 0;
+	}
+
+	return rc;
+}
+
+static int build_layout_from_yaml_node(struct cYAML *node,
+				       struct llapi_layout **layout,
+				       struct lfs_setstripe_args *lsa,
+				       __u32 *osts)
+{
+	char *string;
+	int rc = 0;
+
+	while (node) {
+		string = node->cy_string;
+		/* skip leading lmm_ if present, to simplify parsing */
+		if (string != NULL && strncmp(string, "lmm_", 4) == 0)
+			string += 4;
+
+		if (node->cy_type == CYAML_TYPE_STRING) {
+			if (!strcmp(string, "lcme_extent.e_end")) {
+				if (!strcmp(node->cy_valuestring, "EOF") ||
+				    !strcmp(node->cy_valuestring, "eof"))
+					lsa->lsa_comp_end = LUSTRE_EOF;
+			} else if (!strcmp(string, "pool")) {
+				lsa->lsa_pool_name = node->cy_valuestring;
+			} else if (!strcmp(string, "pattern")) {
+				if (!strcmp(node->cy_valuestring, "mdt"))
+					lsa->lsa_pattern = LLAPI_LAYOUT_MDT;
+			}
+		} else if (node->cy_type == CYAML_TYPE_NUMBER) {
+			if (!strcmp(string, "lcm_mirror_count")) {
+				lsa->lsa_mirror_count = node->cy_valueint;
+			} else if (!strcmp(string, "lcme_extent.e_start")) {
+				if (node->cy_valueint != 0 || *layout != NULL) {
+					rc = build_component(layout, lsa, true);
+					if (rc)
+						return rc;
+				}
+
+				if (node->cy_valueint == 0)
+					lsa->lsa_first_comp = true;
+
+				/* initialize lsa */
+				setstripe_args_init(lsa);
+				lsa->lsa_tgts = osts;
+			} else if (!strcmp(string, "lcme_extent.e_end")) {
+				if (node->cy_valueint == -1)
+					lsa->lsa_comp_end = LUSTRE_EOF;
+				else
+					lsa->lsa_comp_end = node->cy_valueint;
+			} else if (!strcmp(string, "stripe_count")) {
+				lsa->lsa_stripe_count = node->cy_valueint;
+			} else if (!strcmp(string, "stripe_size")) {
+				lsa->lsa_stripe_size = node->cy_valueint;
+			} else if (!strcmp(string, "stripe_offset")) {
+				lsa->lsa_stripe_off = node->cy_valueint;
+			} else if (!strcmp(string, "l_ost_idx")) {
+				osts[lsa->lsa_nr_tgts] = node->cy_valueint;
+				lsa->lsa_nr_tgts++;
+			}
+		} else if (node->cy_type == CYAML_TYPE_OBJECT) {
+			/* go deep to sub blocks */
+			rc = build_layout_from_yaml_node(node->cy_child, layout,
+							 lsa, osts);
+			if (rc)
+				return rc;
+		}
+		node = node->cy_next;
+	}
+
+	return rc;
+}
+
+static int lfs_comp_create_from_yaml(char *template,
+				     struct llapi_layout **layout,
+				     struct lfs_setstripe_args *lsa,
+				     __u32 *osts)
+{
+	struct cYAML *tree = NULL, *err_rc = NULL;
+	int rc = 0;
+
+	tree = cYAML_build_tree(template, NULL, 0, &err_rc, false);
+	if (!tree) {
+		fprintf(stderr, "%s: cannot parse YAML file %s\n",
+			progname, template);
+		cYAML_build_error(-EINVAL, -1, "yaml", "from comp yaml",
+				  "can't parse", &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		rc = -EINVAL;
+		goto err;
+	}
+
+	/* initialize lsa for plain file */
+	setstripe_args_init(lsa);
+	lsa->lsa_tgts = osts;
+
+	rc = build_layout_from_yaml_node(tree, layout, lsa, osts);
+	if (rc) {
+		fprintf(stderr, "%s: cannot build layout from YAML file %s.\n",
+			progname, template);
+		goto err;
+	} else {
+		rc = build_component(layout, lsa, *layout != NULL);
+	}
+	/* clean clean lsa */
+	setstripe_args_init(lsa);
+
+err:
+	if (tree)
+		cYAML_free_tree(tree);
+	return rc;
 }
 
 /* In 'lfs setstripe --component-add' mode, we need to fetch the extent
@@ -2305,14 +2465,14 @@ enum {
 static int lfs_setstripe_internal(int argc, char **argv,
 				  enum setstripe_origin opc)
 {
-	struct lfs_setstripe_args	 lsa;
+	struct lfs_setstripe_args	 lsa = { 0 };
 	struct llapi_stripe_param	*param = NULL;
 	struct find_param		 migrate_mdt_param = {
 		.fp_max_depth = -1,
 		.fp_mdt_index = -1,
 	};
 	char				*fname;
-	int				 result;
+	int				 result = 0;
 	int				 result2 = 0;
 	char				*end;
 	int				 c;
@@ -2337,6 +2497,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	struct mirror_args		*last_mirror = NULL;
 	__u16				 mirror_id = 0;
 	char				 cmd[PATH_MAX];
+	bool from_yaml = false;
+	char *template = NULL;
 
 	struct option long_opts[] = {
 /* find	{ .val = 'A',	.name = "atime",	.has_arg = required_argument }*/
@@ -2410,7 +2572,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 /* find	{ .val = 'U',	.name = "user",		.has_arg = required_argument }*/
 	/* --verbose is only valid in migrate mode */
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument},
-/* getstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
+	{ .val = 'y',	.name = "yaml",		.has_arg = required_argument },
 	{ .name = NULL } };
 
 	setstripe_args_init(&lsa);
@@ -2420,7 +2582,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
-	while ((c = getopt_long(argc, argv, "bc:dDE:f:i:I:m:N::no:p:L:s:S:v",
+	while ((c = getopt_long(argc, argv, "bc:dDE:f:i:I:m:N::no:p:L:s:S:vy:",
 				long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
@@ -2541,7 +2703,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			break;
 		case 'E':
 			if (lsa.lsa_comp_end != 0) {
-				result = comp_args_to_layout(lpp, &lsa);
+				result = comp_args_to_layout(lpp, &lsa, true);
 				if (result) {
 					fprintf(stderr,
 						"%s %s: invalid layout\n",
@@ -2681,7 +2843,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				if (lsa.lsa_comp_end == 0)
 					lsa.lsa_comp_end = LUSTRE_EOF;
 
-				result = comp_args_to_layout(lpp, &lsa);
+				result = comp_args_to_layout(lpp, &lsa, true);
 				if (result) {
 					lfs_mirror_free(new_mirror);
 					goto error;
@@ -2744,6 +2906,10 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			migrate_mdt_param.fp_verbose = VERBOSE_DETAIL;
 			break;
+		case 'y':
+			from_yaml = true;
+			template = optarg;
+			break;
 		default:
 			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
 				progname, argv[0], argv[optind - 1]);
@@ -2773,7 +2939,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	}
 
 	if (lsa.lsa_comp_end != 0) {
-		result = comp_args_to_layout(lpp, &lsa);
+		result = comp_args_to_layout(lpp, &lsa, true);
 		if (result)
 			goto error;
 	}
@@ -2867,6 +3033,13 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			goto error;
 	}
 
+	if (from_yaml && (setstripe_args_specified(&lsa) || layout != NULL)) {
+		fprintf(stderr, "error: %s: can't specify --yaml with "
+			"-c, -S, -i, -o, -p or -E options.\n",
+			argv[0]);
+		goto error;
+	}
+
 	if (mdt_idx_arg != NULL && optind > 3) {
 		fprintf(stderr,
 			"%s %s: option -m cannot be used with other options\n",
@@ -2940,6 +3113,18 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			param->lsp_stripe_count = lsa.lsa_nr_tgts;
 			memcpy(param->lsp_osts, osts,
 			       sizeof(*osts) * lsa.lsa_nr_tgts);
+		}
+	}
+
+	if (from_yaml) {
+		/* generate a layout from a YAML template */
+		result = lfs_comp_create_from_yaml(template, &layout,
+						   &lsa, osts);
+		if (result) {
+			fprintf(stderr, "error: %s: can't create composite "
+				"layout from template file %s\n",
+				argv[0], template);
+			goto error;
 		}
 	}
 
@@ -4404,7 +4589,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 {
 	char			*dname;
 	int			result;
-	struct lfs_setstripe_args	 lsa;
+	struct lfs_setstripe_args	 lsa = { 0 };
 	struct llapi_stripe_param	*param = NULL;
 	__u32			mdts[LMV_MAX_STRIPE_COUNT] = { 0 };
 	char			*end;
@@ -4434,6 +4619,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	{ .val = 't',	.name = "hash-type",	.has_arg = required_argument },
 #endif
 	{ .val = 'T',	.name = "mdt-count",	.has_arg = required_argument },
+/* setstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
 	{ .name = NULL } };
 
 	setstripe_args_init(&lsa);

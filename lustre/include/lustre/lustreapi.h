@@ -873,6 +873,10 @@ int llapi_layout_mirror_id_get(const struct llapi_layout *layout, uint32_t *id);
  */
 int llapi_layout_comp_add(struct llapi_layout *layout);
 /**
+ * Adds a first component of a mirror to the existing composite layout.
+ */
+int llapi_layout_add_first_comp(struct llapi_layout *layout);
+/**
  * Deletes the current layout component from the composite layout.
  */
 int llapi_layout_comp_del(struct llapi_layout *layout);

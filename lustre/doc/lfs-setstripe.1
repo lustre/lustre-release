@@ -19,6 +19,8 @@ lfs setstripe \- set striping pattern of a file or directory default
 .br
 .B lfs setstripe -d \fR<\fIdirectory\fR>
 .br
+.B lfs setstripe --yaml=<yaml_template_file> <filename>
+.br
 .SH DESCRIPTION
 .TP
 .B lfs setstripe \fR[\fISTRIPE_OPTIONS\fR] <\fIdirectory\fR|\fIfilename\fR>
@@ -111,6 +113,13 @@ Delete the default layout on the specified directory.  It is not necessary
 to delete the default layout on a directory before replacing it.  This is
 only needed if the directory should revert from a directory-specific layout
 to using the global filesystem default layout stored on the root directory.
+.TP
+.B lfs setstripe --yaml=<yaml_template_file> <filename>
+.br
+Create a file with layout information specified by a YAML format template
+file, the template file can be obtained using the
+.B lfs getstripe --yaml <anotherfile>
+command.
 .SH STRIPE_OPTIONS
 The various stripe related options are listed and explained below:
 .TP
@@ -260,6 +269,11 @@ component with ID 1.
 .B $ lfs setstripe -E 1M -L mdt -E -1 /mnt/lustre/file1
 This created file with Data-on-MDT layout. The first 1M is placed on MDT and \
 rest of file is placed on OST with default striping.
+.TP
+.B $ lfs setstripe --yaml=/tmp/layout_yaml /mnt/lustre/file2
+This creates a file with layout specified by a layout template which can be \
+obtained with \fBlfs getstripe --yaml\fR command.
+
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-migrate (1),

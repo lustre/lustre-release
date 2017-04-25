@@ -1687,7 +1687,7 @@ int llapi_layout_comp_extent_set(struct llapi_layout *layout,
 	if (comp->llc_list.prev != &layout->llot_comp_list) {
 		prev = list_entry(comp->llc_list.prev, typeof(*prev),
 				  llc_list);
-		if (start != prev->llc_extent.e_end) {
+		if (start != 0 && start != prev->llc_extent.e_end) {
 			errno = EINVAL;
 			return -1;
 		}
@@ -1696,7 +1696,8 @@ int llapi_layout_comp_extent_set(struct llapi_layout *layout,
 	if (comp->llc_list.next != &layout->llot_comp_list) {
 		next = list_entry(comp->llc_list.next, typeof(*next),
 				  llc_list);
-		if (end != next->llc_extent.e_start) {
+		if (next->llc_extent.e_start != 0 &&
+		    end != next->llc_extent.e_start) {
 			errno = EINVAL;
 			return -1;
 		}
@@ -1868,6 +1869,37 @@ int llapi_layout_comp_add(struct llapi_layout *layout)
 		return -1;
 	}
 	new->llc_extent.e_start = last->llc_extent.e_end;
+
+	list_add_tail(&new->llc_list, &layout->llot_comp_list);
+	layout->llot_cur_comp = new;
+	layout->llot_is_composite = true;
+
+	return 0;
+}
+/**
+ * Adds a first component of a mirror to \a layout.
+ * The \a layout will change it's current component pointer to
+ * the newly added component, and it'll be turned into a composite
+ * layout if it was not before the adding.
+ *
+ * \param[in] layout		existing composite or plain layout
+ *
+ * \retval	0 on success
+ * \retval	<0 if error occurs
+ */
+int llapi_layout_add_first_comp(struct llapi_layout *layout)
+{
+	struct llapi_layout_comp *comp, *new;
+
+	comp = __llapi_layout_cur_comp(layout);
+	if (comp == NULL)
+		return -1;
+
+	new = __llapi_comp_alloc(0);
+	if (new == NULL)
+		return -1;
+
+	new->llc_extent.e_start = 0;
 
 	list_add_tail(&new->llc_list, &layout->llot_comp_list);
 	layout->llot_cur_comp = new;

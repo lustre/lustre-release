@@ -590,7 +590,8 @@ static enum cYAML_handler_error yaml_entry_token(yaml_token_t *token,
 	struct cYAML *obj;
 
 	if (tree->state != TREE_STATE_SEQ_START &&
-	    tree->state != TREE_STATE_BLK_STARTED)
+	    tree->state != TREE_STATE_BLK_STARTED &&
+	    tree->state != TREE_STATE_VALUE)
 		return CYAML_ERROR_UNEXPECTED_STATE;
 
 	if (tree->state == TREE_STATE_SEQ_START) {
@@ -678,6 +679,10 @@ static bool clean_usr_data(struct cYAML *node, void *usr_data, void **out)
 
 static bool free_node(struct cYAML *node, void *user_data, void **out)
 {
+	if (node->cy_type == CYAML_TYPE_STRING)
+		free(node->cy_valuestring);
+	if (node->cy_string)
+		free(node->cy_string);
 	if (node)
 		free(node);
 

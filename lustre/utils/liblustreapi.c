@@ -2580,7 +2580,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 				     layout2name(lum->lmm_pattern));
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, "%x", lum->lmm_pattern);
-		separator = is_dir ? " " : "\n";
+		separator = (!yaml && is_dir) ? " " : "\n";
 	}
 
 	if ((verbose & VERBOSE_GENERATION) && !is_dir) {
@@ -2589,7 +2589,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%slayout_gen:    ",
 				     space, prefix);
 		llapi_printf(LLAPI_MSG_NORMAL, "%u",
-			     (int)lum->lmm_layout_gen);
+			     skip_objs ? 0 : (int)lum->lmm_layout_gen);
 		separator = "\n";
 	}
 
