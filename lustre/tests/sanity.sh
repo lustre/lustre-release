@@ -15922,6 +15922,10 @@ test_403() {
 run_test 403 "i_nlink should not drop to zero due to aliasing"
 
 test_404() { # LU-6601
+	local server_version=$(lustre_version_code $SINGLEMDS)
+	[[ $server_version -ge $(version_code 2.8.53) ]] ||
+		{ skip "Need server version newer than 2.8.52"; return 0; }
+
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local mosps=$(do_facet $SINGLEMDS $LCTL dl |
 		awk '/osp .*-osc-MDT/ { print $4}')
