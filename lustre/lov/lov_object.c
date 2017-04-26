@@ -89,30 +89,40 @@ static void lov_lsm_put(struct lov_stripe_md *lsm)
  * Lov object layout operations.
  *
  */
-static int lov_init_empty(const struct lu_env *env, struct lov_device *dev,
-			  struct lov_object *lov, struct lov_stripe_md *lsm,
-			  const struct cl_object_conf *conf,
-			  union lov_layout_state *state)
-{
-	return 0;
-}
 
 static struct cl_object *lov_sub_find(const struct lu_env *env,
-                                      struct cl_device *dev,
-                                      const struct lu_fid *fid,
-                                      const struct cl_object_conf *conf)
+				      struct cl_device *dev,
+				      const struct lu_fid *fid,
+				      const struct cl_object_conf *conf)
 {
-        struct lu_object *o;
+	struct lu_object *o;
 
-        ENTRY;
-        o = lu_object_find_at(env, cl2lu_dev(dev), fid, &conf->coc_lu);
-        LASSERT(ergo(!IS_ERR(o), o->lo_dev->ld_type == &lovsub_device_type));
-        RETURN(lu2cl(o));
+	ENTRY;
+
+	o = lu_object_find_at(env, cl2lu_dev(dev), fid, &conf->coc_lu);
+	LASSERT(ergo(!IS_ERR(o), o->lo_dev->ld_type == &lovsub_device_type));
+	RETURN(lu2cl(o));
+}
+
+static int lov_page_slice_fixup(struct lov_object *lov,
+				struct cl_object *stripe)
+{
+	struct cl_object_header *hdr = cl_object_header(&lov->lo_cl);
+	struct cl_object *o;
+
+	if (stripe == NULL)
+		return hdr->coh_page_bufsize - lov->lo_cl.co_slice_off -
+		       cfs_size_round(sizeof(struct lov_page));
+
+	cl_object_for_each(o, stripe)
+		o->co_slice_off += hdr->coh_page_bufsize;
+
+	return cl_object_header(stripe)->coh_page_bufsize;
 }
 
 static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
-			struct cl_object *subobj, struct lov_layout_raid0 *r0,
-			struct lov_oinfo *oinfo, int idx)
+			struct cl_object *subobj, struct lov_oinfo *oinfo,
+			int idx)
 {
 	struct cl_object_header *hdr;
 	struct cl_object_header *subhdr;
@@ -132,7 +142,7 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
 		return -EIO;
 	}
 
-	hdr    = cl_object_header(lov2cl(lov));
+	hdr = cl_object_header(lov2cl(lov));
 	subhdr = cl_object_header(subobj);
 
 	CDEBUG(D_INODE, DFID"@%p[%d:%d] -> "DFID"@%p: ostid: "DOSTID
@@ -145,13 +155,14 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
 	spin_lock(&subhdr->coh_attr_guard);
 	parent = subhdr->coh_parent;
 	if (parent == NULL) {
+		struct lovsub_object *lso = cl2lovsub(subobj);
+
 		subhdr->coh_parent = hdr;
 		spin_unlock(&subhdr->coh_attr_guard);
 		subhdr->coh_nesting = hdr->coh_nesting + 1;
 		lu_object_ref_add(&subobj->co_lu, "lov-parent", lov);
-		r0->lo_sub[stripe] = cl2lovsub(subobj);
-		r0->lo_sub[stripe]->lso_super = lov;
-		r0->lo_sub[stripe]->lso_index = idx;
+		lso->lso_super = lov;
+		lso->lso_index = idx;
 		result = 0;
 	} else {
 		struct lu_object  *old_obj;
@@ -181,33 +192,19 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
 	return result;
 }
 
-static int lov_page_slice_fixup(struct lov_object *lov,
-				struct cl_object *stripe)
-{
-	struct cl_object_header *hdr = cl_object_header(&lov->lo_cl);
-	struct cl_object *o;
-
-	if (stripe == NULL)
-		return hdr->coh_page_bufsize - lov->lo_cl.co_slice_off -
-		       cfs_size_round(sizeof(struct lov_page));
-
-	cl_object_for_each(o, stripe)
-		o->co_slice_off += hdr->coh_page_bufsize;
-
-	return cl_object_header(stripe)->coh_page_bufsize;
-}
-
 static int lov_init_raid0(const struct lu_env *env, struct lov_device *dev,
-			  struct lov_object *lov, int index,
-			  struct lov_layout_raid0 *r0)
+			  struct lov_object *lov, unsigned int index,
+			  const struct cl_object_conf *conf,
+			  struct lov_layout_entry *lle)
 {
-	struct lov_thread_info  *lti     = lov_env_info(env);
-	struct cl_object_conf   *subconf = &lti->lti_stripe_conf;
-	struct lu_fid           *ofid    = &lti->lti_fid;
-	struct cl_object        *stripe;
+	struct lov_layout_raid0 *r0 = &lle->lle_raid0;
+	struct lov_thread_info *lti = lov_env_info(env);
+	struct cl_object_conf *subconf = &lti->lti_stripe_conf;
+	struct lu_fid *ofid = &lti->lti_fid;
+	struct cl_object *stripe;
 	struct lov_stripe_md_entry *lse  = lov_lse(lov, index);
 	int result;
-	int psz;
+	int psz, sz;
 	int i;
 
 	ENTRY;
@@ -255,7 +252,7 @@ static int lov_init_raid0(const struct lu_env *env, struct lov_device *dev,
 		if (IS_ERR(stripe))
 			GOTO(out, result = PTR_ERR(stripe));
 
-		result = lov_init_sub(env, lov, stripe, r0, oinfo,
+		result = lov_init_sub(env, lov, stripe, oinfo,
 				      lov_comp_index(index, i));
 		if (result == -EAGAIN) { /* try again */
 			--i;
@@ -264,7 +261,9 @@ static int lov_init_raid0(const struct lu_env *env, struct lov_device *dev,
 		}
 
 		if (result == 0) {
-			int sz = lov_page_slice_fixup(lov, stripe);
+			r0->lo_sub[i] = cl2lovsub(stripe);
+
+			sz = lov_page_slice_fixup(lov, stripe);
 			LASSERT(ergo(psz > 0, psz == sz));
 			psz = sz;
 		}
@@ -273,116 +272,6 @@ static int lov_init_raid0(const struct lu_env *env, struct lov_device *dev,
 		result = psz;
 out:
 	RETURN(result);
-}
-
-static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
-			      struct lov_object *lov, struct lov_stripe_md *lsm,
-			      const struct cl_object_conf *conf,
-			      union lov_layout_state *state)
-{
-	struct lov_layout_composite *comp = &state->composite;
-	unsigned int entry_count;
-	unsigned int psz = 0;
-	int result = 0;
-	int i;
-
-	ENTRY;
-
-	LASSERT(lsm->lsm_entry_count > 0);
-	LASSERT(lov->lo_lsm == NULL);
-	lov->lo_lsm = lsm_addref(lsm);
-	lov->lo_layout_invalid = true;
-
-	entry_count = lsm->lsm_entry_count;
-	comp->lo_entry_count = entry_count;
-
-	OBD_ALLOC(comp->lo_entries, entry_count * sizeof(*comp->lo_entries));
-	if (comp->lo_entries == NULL)
-		RETURN(-ENOMEM);
-
-	for (i = 0; i < entry_count; i++) {
-		struct lov_layout_entry *le = &comp->lo_entries[i];
-
-		le->lle_extent = lsm->lsm_entries[i]->lsme_extent;
-		/**
-		 * If the component has not been init-ed on MDS side, for
-		 * PFL layout, we'd know that the components beyond this one
-		 * will be dynamically init-ed later on file write/trunc ops.
-		 */
-		if (!lsm_entry_inited(lsm, i))
-			continue;
-
-		result = lov_init_raid0(env, dev, lov, i, &le->lle_raid0);
-		if (result < 0)
-			break;
-
-		LASSERT(ergo(psz > 0, psz == result));
-		psz = result;
-	}
-	if (psz > 0)
-		cl_object_header(&lov->lo_cl)->coh_page_bufsize += psz;
-
-	return result > 0 ? 0 : result;
-}
-
-static int lov_init_released(const struct lu_env *env,
-			     struct lov_device *dev, struct lov_object *lov,
-			     struct lov_stripe_md *lsm,
-			     const struct cl_object_conf *conf,
-			     union lov_layout_state *state)
-{
-	LASSERT(lsm != NULL);
-	LASSERT(lsm->lsm_is_released);
-	LASSERT(lov->lo_lsm == NULL);
-
-	lov->lo_lsm = lsm_addref(lsm);
-	return 0;
-}
-
-static struct cl_object *lov_find_subobj(const struct lu_env *env,
-					 struct lov_object *lov,
-					 struct lov_stripe_md *lsm,
-					 int index)
-{
-	struct lov_device	*dev = lu2lov_dev(lov2lu(lov)->lo_dev);
-	struct lov_thread_info  *lti = lov_env_info(env);
-	struct lu_fid		*ofid = &lti->lti_fid;
-	struct lov_oinfo	*oinfo;
-	struct cl_device	*subdev;
-	int			entry = lov_comp_entry(index);
-	int			stripe = lov_comp_stripe(index);
-	int			ost_idx;
-	int			rc;
-	struct cl_object	*result;
-
-	if (lov->lo_type != LLT_COMP)
-		GOTO(out, result = NULL);
-
-	if (entry >= lsm->lsm_entry_count ||
-	    stripe >= lsm->lsm_entries[entry]->lsme_stripe_count)
-		GOTO(out, result = NULL);
-
-	oinfo = lsm->lsm_entries[entry]->lsme_oinfo[stripe];
-	ost_idx = oinfo->loi_ost_idx;
-	rc = ostid_to_fid(ofid, &oinfo->loi_oi, ost_idx);
-	if (rc != 0)
-		GOTO(out, result = NULL);
-
-	subdev = lovsub2cl_dev(dev->ld_target[ost_idx]);
-	result = lov_sub_find(env, subdev, ofid, NULL);
-out:
-	if (result == NULL)
-		result = ERR_PTR(-EINVAL);
-	return result;
-}
-
-static int lov_delete_empty(const struct lu_env *env, struct lov_object *lov,
-			    union lov_layout_state *state)
-{
-	LASSERT(lov->lo_type == LLT_EMPTY || lov->lo_type == LLT_RELEASED);
-
-	lov_layout_wait(env, lov);
-	return 0;
 }
 
 static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
@@ -405,8 +294,8 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
         lu_object_ref_del(&sub->co_lu, "lov-parent", lov);
         cl_object_put(env, sub);
 
-        /* ... wait until it is actually destroyed---sub-object clears its
-         * ->lo_sub[] slot in lovsub_object_fini() */
+	/* ... wait until it is actually destroyed---sub-object clears its
+	 * ->lo_sub[] slot in lovsub_object_free() */
 	if (r0->lo_sub[idx] == los) {
 		waiter = &lov_env_info(env)->lti_waiter;
 		init_waitqueue_entry(waiter, current);
@@ -432,8 +321,10 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
 }
 
 static void lov_delete_raid0(const struct lu_env *env, struct lov_object *lov,
-			     struct lov_layout_raid0 *r0)
+			     struct lov_layout_entry *lle)
 {
+	struct lov_layout_raid0 *r0 = &lle->lle_raid0;
+
 	ENTRY;
 
         if (r0->lo_sub != NULL) {
@@ -456,6 +347,386 @@ static void lov_delete_raid0(const struct lu_env *env, struct lov_object *lov,
 	EXIT;
 }
 
+static void lov_fini_raid0(const struct lu_env *env,
+			   struct lov_layout_entry *lle)
+{
+	struct lov_layout_raid0 *r0 = &lle->lle_raid0;
+
+	if (r0->lo_sub != NULL) {
+		OBD_FREE_LARGE(r0->lo_sub, r0->lo_nr * sizeof r0->lo_sub[0]);
+		r0->lo_sub = NULL;
+	}
+}
+
+static int lov_print_raid0(const struct lu_env *env, void *cookie,
+			   lu_printer_t p, const struct lov_layout_entry *lle)
+{
+	const struct lov_layout_raid0 *r0 = &lle->lle_raid0;
+	int i;
+
+	for (i = 0; i < r0->lo_nr; ++i) {
+		struct lu_object *sub;
+
+		if (r0->lo_sub[i] != NULL) {
+			sub = lovsub2lu(r0->lo_sub[i]);
+			lu_object_print(env, cookie, p, sub);
+		} else {
+			(*p)(env, cookie, "sub %d absent\n", i);
+		}
+	}
+	return 0;
+}
+
+static int lov_attr_get_raid0(const struct lu_env *env, struct lov_object *lov,
+			      unsigned int index, struct lov_layout_entry *lle,
+			      struct cl_attr **lov_attr)
+{
+	struct lov_layout_raid0 *r0 = &lle->lle_raid0;
+	struct lov_stripe_md *lsm = lov->lo_lsm;
+	struct ost_lvb *lvb = &lov_env_info(env)->lti_lvb;
+	struct cl_attr *attr = &r0->lo_attr;
+	__u64 kms = 0;
+	int result = 0;
+
+	if (r0->lo_attr_valid) {
+		*lov_attr = attr;
+		return 0;
+	}
+
+	memset(lvb, 0, sizeof(*lvb));
+
+	/* XXX: timestamps can be negative by sanity:test_39m,
+	 * how can it be? */
+	lvb->lvb_atime = LLONG_MIN;
+	lvb->lvb_ctime = LLONG_MIN;
+	lvb->lvb_mtime = LLONG_MIN;
+
+	/*
+	 * XXX that should be replaced with a loop over sub-objects,
+	 * doing cl_object_attr_get() on them. But for now, let's
+	 * reuse old lov code.
+	 */
+
+	/*
+	 * XXX take lsm spin-lock to keep lov_merge_lvb_kms()
+	 * happy. It's not needed, because new code uses
+	 * ->coh_attr_guard spin-lock to protect consistency of
+	 * sub-object attributes.
+	 */
+	lov_stripe_lock(lsm);
+	result = lov_merge_lvb_kms(lsm, index, lvb, &kms);
+	lov_stripe_unlock(lsm);
+	if (result == 0) {
+		cl_lvb2attr(attr, lvb);
+		attr->cat_kms = kms;
+		r0->lo_attr_valid = 1;
+		*lov_attr = attr;
+	}
+
+	return result;
+}
+
+static struct lov_comp_layout_entry_ops raid0_ops = {
+	.lco_init      = lov_init_raid0,
+	.lco_fini      = lov_fini_raid0,
+	.lco_getattr   = lov_attr_get_raid0,
+};
+
+static int lov_attr_get_dom(const struct lu_env *env, struct lov_object *lov,
+			    unsigned int index, struct lov_layout_entry *lle,
+			    struct cl_attr **lov_attr)
+{
+	struct lov_layout_dom *dom = &lle->lle_dom;
+	struct lov_oinfo *loi = dom->lo_loi;
+	struct cl_attr *attr = &dom->lo_dom_r0.lo_attr;
+
+	if (dom->lo_dom_r0.lo_attr_valid) {
+		*lov_attr = attr;
+		return 0;
+	}
+
+	if (OST_LVB_IS_ERR(loi->loi_lvb.lvb_blocks))
+		return OST_LVB_GET_ERR(loi->loi_lvb.lvb_blocks);
+
+	cl_lvb2attr(attr, &loi->loi_lvb);
+	attr->cat_kms = attr->cat_size > loi->loi_kms ? attr->cat_size :
+							loi->loi_kms;
+	dom->lo_dom_r0.lo_attr_valid = 1;
+	*lov_attr = attr;
+
+	return 0;
+}
+
+/**
+ * Lookup FLD to get MDS index of the given DOM object FID.
+ *
+ * \param[in]  ld	LOV device
+ * \param[in]  fid	FID to lookup
+ * \param[out] nr	index in MDC array to return back
+ *
+ * \retval		0 and \a mds filled with MDS index if successful
+ * \retval		negative value on error
+ */
+static int lov_fld_lookup(struct lov_device *ld, const struct lu_fid *fid,
+			  __u32 *nr)
+{
+	__u32 mds_idx;
+	int i, rc;
+
+	ENTRY;
+
+	rc = fld_client_lookup(&ld->ld_lmv->u.lmv.lmv_fld, fid_seq(fid),
+			       &mds_idx, LU_SEQ_RANGE_MDT, NULL);
+	if (rc) {
+		CERROR("%s: error while looking for mds number. Seq %#llx"
+		       ", err = %d\n", lu_dev_name(cl2lu_dev(&ld->ld_cl)),
+		       fid_seq(fid), rc);
+		RETURN(rc);
+	}
+
+	CDEBUG(D_INODE, "FLD lookup got mds #%x for fid="DFID"\n",
+	       mds_idx, PFID(fid));
+
+	/* find proper MDC device in the array */
+	for (i = 0; i < ld->ld_md_tgts_nr; i++) {
+		if (ld->ld_md_tgts[i].ldm_mdc != NULL &&
+		    ld->ld_md_tgts[i].ldm_idx == mds_idx)
+			break;
+	}
+
+	if (i == ld->ld_md_tgts_nr) {
+		CERROR("%s: cannot find corresponding MDC device for mds #%x "
+		       "for fid="DFID"\n", lu_dev_name(cl2lu_dev(&ld->ld_cl)),
+		       mds_idx, PFID(fid));
+		rc = -EINVAL;
+	} else {
+		*nr = i;
+	}
+	RETURN(rc);
+}
+
+/**
+ * Implementation of lov_comp_layout_entry_ops::lco_init for DOM object.
+ *
+ * Init the DOM object for the first time. It prepares also RAID0 entry
+ * for it to use in common methods with ordinary RAID0 layout entries.
+ *
+ * \param[in] env	execution environment
+ * \param[in] dev	LOV device
+ * \param[in] lov	LOV object
+ * \param[in] index	Composite layout entry index in LSM
+ * \param[in] lle	Composite LOV layout entry
+ */
+static int lov_init_dom(const struct lu_env *env, struct lov_device *dev,
+			struct lov_object *lov, unsigned int index,
+			const struct cl_object_conf *conf,
+			struct lov_layout_entry *lle)
+{
+	struct lov_thread_info *lti = lov_env_info(env);
+	struct lov_stripe_md_entry *lsme = lov_lse(lov, index);
+	struct cl_object *clo;
+	struct lu_object *o = lov2lu(lov);
+	const struct lu_fid *fid = lu_object_fid(o);
+	struct cl_device *mdcdev;
+	struct lov_oinfo *loi = NULL;
+	struct cl_object_conf *sconf = &lti->lti_stripe_conf;
+	struct inode *inode = conf->coc_inode;
+
+	int rc;
+	__u32 idx = 0;
+
+	ENTRY;
+
+	LASSERT(index == 0);
+
+	/* find proper MDS device */
+	rc = lov_fld_lookup(dev, fid, &idx);
+	if (rc)
+		RETURN(rc);
+
+	LASSERTF(dev->ld_md_tgts[idx].ldm_mdc != NULL,
+		 "LOV md target[%u] is NULL\n", idx);
+
+	/* check lsm is DOM, more checks are needed */
+	LASSERT(lsme->lsme_stripe_count == 0);
+
+	/*
+	 * Create lower cl_objects.
+	 */
+	mdcdev = dev->ld_md_tgts[idx].ldm_mdc;
+
+	LASSERTF(mdcdev != NULL, "non-initialized mdc subdev\n");
+
+	/* DoM object has no oinfo in LSM entry, create it exclusively */
+	OBD_SLAB_ALLOC_PTR_GFP(loi, lov_oinfo_slab, GFP_NOFS);
+	if (loi == NULL)
+		RETURN(-ENOMEM);
+
+	fid_to_ostid(lu_object_fid(lov2lu(lov)), &loi->loi_oi);
+	/* Initialize lvb structure */
+	loi->loi_lvb.lvb_mtime = LTIME_S(inode->i_mtime);
+	loi->loi_lvb.lvb_atime = LTIME_S(inode->i_atime);
+	loi->loi_lvb.lvb_ctime = LTIME_S(inode->i_ctime);
+	loi->loi_lvb.lvb_blocks = inode->i_blocks;
+	loi->loi_lvb.lvb_size = i_size_read(inode);
+	if (loi->loi_lvb.lvb_size > lsme->lsme_stripe_size)
+		loi->loi_lvb.lvb_size = lsme->lsme_stripe_size;
+	loi_kms_set(loi, loi->loi_lvb.lvb_size);
+
+	sconf->u.coc_oinfo = loi;
+again:
+	clo = lov_sub_find(env, mdcdev, fid, sconf);
+	if (IS_ERR(clo))
+		GOTO(out, rc = PTR_ERR(clo));
+
+	rc = lov_init_sub(env, lov, clo, loi, lov_comp_index(index, 0));
+	if (rc == -EAGAIN) /* try again */
+		goto again;
+	else if (rc != 0)
+		GOTO(out, rc);
+
+	lle->lle_dom.lo_dom = cl2lovsub(clo);
+	spin_lock_init(&lle->lle_dom.lo_dom_r0.lo_sub_lock);
+	lle->lle_dom.lo_dom_r0.lo_nr = 1;
+	lle->lle_dom.lo_dom_r0.lo_sub = &lle->lle_dom.lo_dom;
+	lle->lle_dom.lo_loi = loi;
+
+	rc = lov_page_slice_fixup(lov, clo);
+	RETURN(rc);
+
+out:
+	if (loi != NULL)
+		OBD_SLAB_FREE_PTR(loi, lov_oinfo_slab);
+	return rc;
+}
+
+/**
+ * Implementation of lov_layout_operations::llo_fini for DOM object.
+ *
+ * Finish the DOM object and free related memory.
+ *
+ * \param[in] env	execution environment
+ * \param[in] lov	LOV object
+ * \param[in] state	LOV layout state
+ */
+static void lov_fini_dom(const struct lu_env *env,
+			 struct lov_layout_entry *lle)
+{
+	if (lle->lle_dom.lo_dom != NULL)
+		lle->lle_dom.lo_dom = NULL;
+	if (lle->lle_dom.lo_loi != NULL)
+		OBD_SLAB_FREE_PTR(lle->lle_dom.lo_loi, lov_oinfo_slab);
+}
+
+static struct lov_comp_layout_entry_ops dom_ops = {
+	.lco_init = lov_init_dom,
+	.lco_fini = lov_fini_dom,
+	.lco_getattr = lov_attr_get_dom,
+};
+
+static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
+			      struct lov_object *lov, struct lov_stripe_md *lsm,
+			      const struct cl_object_conf *conf,
+			      union lov_layout_state *state)
+{
+	struct lov_layout_composite *comp = &state->composite;
+	struct lov_layout_entry *lle;
+	unsigned int entry_count;
+	unsigned int psz = 0;
+	int result = 0;
+	int i;
+
+	ENTRY;
+
+	LASSERT(lsm->lsm_entry_count > 0);
+	LASSERT(lov->lo_lsm == NULL);
+	lov->lo_lsm = lsm_addref(lsm);
+	lov->lo_layout_invalid = true;
+
+	entry_count = lsm->lsm_entry_count;
+	comp->lo_entry_count = entry_count;
+
+	OBD_ALLOC(comp->lo_entries, entry_count * sizeof(*comp->lo_entries));
+	if (comp->lo_entries == NULL)
+		RETURN(-ENOMEM);
+
+	/* Initiate all entry types and extents data at first */
+	for (i = 0; i < entry_count; i++) {
+		lle = &comp->lo_entries[i];
+
+		lle->lle_type = lov_entry_type(lsm->lsm_entries[i]);
+		switch (lle->lle_type) {
+		case LOV_PATTERN_RAID0:
+			lle->lle_comp_ops = &raid0_ops;
+			break;
+		case LOV_PATTERN_MDT:
+			lle->lle_comp_ops = &dom_ops;
+			break;
+		default:
+			CERROR("%s: unknown composite layout entry type %i\n",
+			       lov2obd(dev->ld_lov)->obd_name,
+			       lsm->lsm_entries[i]->lsme_pattern);
+			dump_lsm(D_ERROR, lsm);
+			RETURN(-EIO);
+		}
+		lle->lle_extent = lsm->lsm_entries[i]->lsme_extent;
+	}
+
+	i = 0;
+	lov_foreach_layout_entry(lov, lle) {
+		/**
+		 * If the component has not been init-ed on MDS side, for
+		 * PFL layout, we'd know that the components beyond this one
+		 * will be dynamically init-ed later on file write/trunc ops.
+		 */
+		if (lsm_entry_inited(lsm, i)) {
+			result = lle->lle_comp_ops->lco_init(env, dev, lov, i,
+							     conf, lle);
+			if (result < 0)
+				break;
+
+			LASSERT(ergo(psz > 0, psz == result));
+			psz = result;
+		}
+		i++;
+	}
+	if (psz > 0)
+		cl_object_header(&lov->lo_cl)->coh_page_bufsize += psz;
+
+	return result > 0 ? 0 : result;
+}
+
+static int lov_init_empty(const struct lu_env *env, struct lov_device *dev,
+			  struct lov_object *lov, struct lov_stripe_md *lsm,
+			  const struct cl_object_conf *conf,
+			  union lov_layout_state *state)
+{
+	return 0;
+}
+
+static int lov_init_released(const struct lu_env *env,
+			     struct lov_device *dev, struct lov_object *lov,
+			     struct lov_stripe_md *lsm,
+			     const struct cl_object_conf *conf,
+			     union lov_layout_state *state)
+{
+	LASSERT(lsm != NULL);
+	LASSERT(lsm->lsm_is_released);
+	LASSERT(lov->lo_lsm == NULL);
+
+	lov->lo_lsm = lsm_addref(lsm);
+	return 0;
+}
+
+static int lov_delete_empty(const struct lu_env *env, struct lov_object *lov,
+			    union lov_layout_state *state)
+{
+	LASSERT(lov->lo_type == LLT_EMPTY || lov->lo_type == LLT_RELEASED);
+
+	lov_layout_wait(env, lov);
+	return 0;
+}
+
 static int lov_delete_composite(const struct lu_env *env,
 				struct lov_object *lov,
 				union lov_layout_state *state)
@@ -470,7 +741,7 @@ static int lov_delete_composite(const struct lu_env *env,
 	lov_layout_wait(env, lov);
 	if (comp->lo_entries)
 		lov_foreach_layout_entry(lov, entry)
-			lov_delete_raid0(env, lov, &entry->lle_raid0);
+			lov_delete_raid0(env, lov, entry);
 
 	RETURN(0);
 }
@@ -479,15 +750,6 @@ static void lov_fini_empty(const struct lu_env *env, struct lov_object *lov,
                            union lov_layout_state *state)
 {
 	LASSERT(lov->lo_type == LLT_EMPTY || lov->lo_type == LLT_RELEASED);
-}
-
-static void lov_fini_raid0(const struct lu_env *env,
-			   struct lov_layout_raid0 *r0)
-{
-	if (r0->lo_sub != NULL) {
-		OBD_FREE_LARGE(r0->lo_sub, r0->lo_nr * sizeof r0->lo_sub[0]);
-		r0->lo_sub = NULL;
-	}
 }
 
 static void lov_fini_composite(const struct lu_env *env,
@@ -501,7 +763,7 @@ static void lov_fini_composite(const struct lu_env *env,
 		struct lov_layout_entry *entry;
 
 		lov_foreach_layout_entry(lov, entry)
-			lov_fini_raid0(env, &entry->lle_raid0);
+			entry->lle_comp_ops->lco_fini(env, entry);
 
 		OBD_FREE(comp->lo_entries,
 			 comp->lo_entry_count * sizeof(*comp->lo_entries));
@@ -530,24 +792,6 @@ static int lov_print_empty(const struct lu_env *env, void *cookie,
         return 0;
 }
 
-static int lov_print_raid0(const struct lu_env *env, void *cookie,
-			   lu_printer_t p, struct lov_layout_raid0 *r0)
-{
-	int i;
-
-	for (i = 0; i < r0->lo_nr; ++i) {
-		struct lu_object *sub;
-
-		if (r0->lo_sub[i] != NULL) {
-			sub = lovsub2lu(r0->lo_sub[i]);
-			lu_object_print(env, cookie, p, sub);
-		} else {
-			(*p)(env, cookie, "sub %d absent\n", i);
-		}
-	}
-	return 0;
-}
-
 static int lov_print_composite(const struct lu_env *env, void *cookie,
 			       lu_printer_t p, const struct lu_object *o)
 {
@@ -563,12 +807,15 @@ static int lov_print_composite(const struct lu_env *env, void *cookie,
 
 	for (i = 0; i < lsm->lsm_entry_count; i++) {
 		struct lov_stripe_md_entry *lse = lsm->lsm_entries[i];
+		struct lov_layout_entry *lle = lov_entry(lov, i);
 
-		(*p)(env, cookie, DEXT ": { 0x%08X, %u, %u, %#x, %u, %u }\n",
+		(*p)(env, cookie,
+		     DEXT ": { 0x%08X, %u, %#x, %u, %#x, %u, %u }\n",
 		     PEXT(&lse->lsme_extent), lse->lsme_magic,
-		     lse->lsme_id, lse->lsme_layout_gen, lse->lsme_flags,
-		     lse->lsme_stripe_count, lse->lsme_stripe_size);
-		lov_print_raid0(env, cookie, p, lov_r0(lov, i));
+		     lse->lsme_id, lse->lsme_pattern, lse->lsme_layout_gen,
+		     lse->lsme_flags, lse->lsme_stripe_count,
+		     lse->lsme_stripe_size);
+		lov_print_raid0(env, cookie, p, lle);
 	}
 
 	return 0;
@@ -602,51 +849,6 @@ static int lov_attr_get_empty(const struct lu_env *env, struct cl_object *obj,
         return 0;
 }
 
-static int lov_attr_get_raid0(const struct lu_env *env, struct lov_object *lov,
-			      unsigned int index, struct lov_layout_raid0 *r0)
-
-{
-	struct lov_stripe_md *lsm = lov->lo_lsm;
-	struct ost_lvb *lvb = &lov_env_info(env)->lti_lvb;
-	struct cl_attr *attr = &r0->lo_attr;
-	__u64 kms = 0;
-	int result = 0;
-
-	if (r0->lo_attr_valid)
-		return 0;
-
-	memset(lvb, 0, sizeof(*lvb));
-
-	/* XXX: timestamps can be negative by sanity:test_39m,
-	 * how can it be? */
-	lvb->lvb_atime = LLONG_MIN;
-	lvb->lvb_ctime = LLONG_MIN;
-	lvb->lvb_mtime = LLONG_MIN;
-
-	/*
-	 * XXX that should be replaced with a loop over sub-objects,
-	 * doing cl_object_attr_get() on them. But for now, let's
-	 * reuse old lov code.
-	 */
-
-	/*
-	 * XXX take lsm spin-lock to keep lov_merge_lvb_kms()
-	 * happy. It's not needed, because new code uses
-	 * ->coh_attr_guard spin-lock to protect consistency of
-	 * sub-object attributes.
-	 */
-	lov_stripe_lock(lsm);
-	result = lov_merge_lvb_kms(lsm, index, lvb, &kms);
-	lov_stripe_unlock(lsm);
-	if (result == 0) {
-		cl_lvb2attr(attr, lvb);
-		attr->cat_kms = kms;
-		r0->lo_attr_valid = 1;
-	}
-
-	return result;
-}
-
 static int lov_attr_get_composite(const struct lu_env *env,
 				  struct cl_object *obj,
 				  struct cl_attr *attr)
@@ -661,18 +863,21 @@ static int lov_attr_get_composite(const struct lu_env *env,
 	attr->cat_size = 0;
 	attr->cat_blocks = 0;
 	lov_foreach_layout_entry(lov, entry) {
-		struct lov_layout_raid0 *r0 = &entry->lle_raid0;
-		struct cl_attr *lov_attr = &r0->lo_attr;
+		struct cl_attr *lov_attr = NULL;
 
 		/* PFL: This component has not been init-ed. */
 		if (!lsm_entry_inited(lov->lo_lsm, index))
 			break;
 
-		result = lov_attr_get_raid0(env, lov, index, r0);
-		if (result != 0)
-			break;
+		result = entry->lle_comp_ops->lco_getattr(env, lov, index,
+							  entry, &lov_attr);
+		if (result < 0)
+			RETURN(result);
 
 		index++;
+
+		if (lov_attr == NULL)
+			continue;
 
 		/* merge results */
 		attr->cat_blocks += lov_attr->cat_blocks;
@@ -687,28 +892,28 @@ static int lov_attr_get_composite(const struct lu_env *env,
 		if (attr->cat_mtime < lov_attr->cat_mtime)
 			attr->cat_mtime = lov_attr->cat_mtime;
 	}
-	RETURN(result);
+	RETURN(0);
 }
 
 const static struct lov_layout_operations lov_dispatch[] = {
-        [LLT_EMPTY] = {
-                .llo_init      = lov_init_empty,
-                .llo_delete    = lov_delete_empty,
-                .llo_fini      = lov_fini_empty,
-                .llo_print     = lov_print_empty,
-                .llo_page_init = lov_page_init_empty,
-                .llo_lock_init = lov_lock_init_empty,
-                .llo_io_init   = lov_io_init_empty,
+	[LLT_EMPTY] = {
+		.llo_init      = lov_init_empty,
+		.llo_delete    = lov_delete_empty,
+		.llo_fini      = lov_fini_empty,
+		.llo_print     = lov_print_empty,
+		.llo_page_init = lov_page_init_empty,
+		.llo_lock_init = lov_lock_init_empty,
+		.llo_io_init   = lov_io_init_empty,
 		.llo_getattr   = lov_attr_get_empty,
-        },
-        [LLT_RELEASED] = {
-                .llo_init      = lov_init_released,
-                .llo_delete    = lov_delete_empty,
-                .llo_fini      = lov_fini_released,
-                .llo_print     = lov_print_released,
-                .llo_page_init = lov_page_init_empty,
-                .llo_lock_init = lov_lock_init_empty,
-                .llo_io_init   = lov_io_init_released,
+	},
+	[LLT_RELEASED] = {
+		.llo_init      = lov_init_released,
+		.llo_delete    = lov_delete_empty,
+		.llo_fini      = lov_fini_released,
+		.llo_print     = lov_print_released,
+		.llo_page_init = lov_page_init_empty,
+		.llo_lock_init = lov_lock_init_empty,
+		.llo_io_init   = lov_io_init_released,
 		.llo_getattr   = lov_attr_get_empty,
 	},
 	[LLT_COMP] = {
@@ -1253,6 +1458,43 @@ struct fiemap_state {
 	bool			fs_enough;
 };
 
+static struct cl_object *lov_find_subobj(const struct lu_env *env,
+					 struct lov_object *lov,
+					 struct lov_stripe_md *lsm,
+					 int index)
+{
+	struct lov_device	*dev = lu2lov_dev(lov2lu(lov)->lo_dev);
+	struct lov_thread_info  *lti = lov_env_info(env);
+	struct lu_fid		*ofid = &lti->lti_fid;
+	struct lov_oinfo	*oinfo;
+	struct cl_device	*subdev;
+	int			entry = lov_comp_entry(index);
+	int			stripe = lov_comp_stripe(index);
+	int			ost_idx;
+	int			rc;
+	struct cl_object	*result;
+
+	if (lov->lo_type != LLT_COMP)
+		GOTO(out, result = NULL);
+
+	if (entry >= lsm->lsm_entry_count ||
+	    stripe >= lsm->lsm_entries[entry]->lsme_stripe_count)
+		GOTO(out, result = NULL);
+
+	oinfo = lsm->lsm_entries[entry]->lsme_oinfo[stripe];
+	ost_idx = oinfo->loi_ost_idx;
+	rc = ostid_to_fid(ofid, &oinfo->loi_oi, ost_idx);
+	if (rc != 0)
+		GOTO(out, result = NULL);
+
+	subdev = lovsub2cl_dev(dev->ld_target[ost_idx]);
+	result = lov_sub_find(env, subdev, ofid, NULL);
+out:
+	if (result == NULL)
+		result = ERR_PTR(-EINVAL);
+	return result;
+}
+
 int fiemap_for_stripe(const struct lu_env *env, struct cl_object *obj,
 		      struct lov_stripe_md *lsm, struct fiemap *fiemap,
 		      size_t *buflen, struct ll_fiemap_info_key *fmkey,
@@ -1465,6 +1707,10 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 		     lsm->lsm_entries[0]->lsme_stripe_count > 1))
 			GOTO(out_lsm, rc = -ENOTSUPP);
 	}
+
+	/* No support for DOM layout yet. */
+	if (lsme_is_dom(lsm->lsm_entries[0]))
+		GOTO(out_lsm, rc = -ENOTSUPP);
 
 	if (lsm->lsm_is_released) {
 		if (fiemap->fm_start < fmkey->lfik_oa.o_size) {

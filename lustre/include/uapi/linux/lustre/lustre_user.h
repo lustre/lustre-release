@@ -432,7 +432,7 @@ enum ll_lease_type {
 #define LOV_PATTERN_NONE	0x000
 #define LOV_PATTERN_RAID0	0x001
 #define LOV_PATTERN_RAID1	0x002
-#define LOV_PATTERN_FIRST	0x100
+#define LOV_PATTERN_MDT		0x100
 #define LOV_PATTERN_CMOBD	0x200
 
 #define LOV_PATTERN_F_MASK	0xffff0000
@@ -443,6 +443,7 @@ enum ll_lease_type {
 static inline bool lov_pattern_supported(__u32 pattern)
 {
 	return pattern == LOV_PATTERN_RAID0 ||
+	       pattern == LOV_PATTERN_MDT ||
 	       pattern == (LOV_PATTERN_RAID0 | LOV_PATTERN_F_RELEASED);
 }
 

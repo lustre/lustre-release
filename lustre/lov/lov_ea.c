@@ -90,7 +90,8 @@ static int lsm_lmm_verify_v1v3(struct lov_mds_md *lmm, size_t lmm_size,
 		return -EINVAL;
 	}
 
-	if (lov_pattern(le32_to_cpu(lmm->lmm_pattern)) != LOV_PATTERN_RAID0) {
+	if (lov_pattern(le32_to_cpu(lmm->lmm_pattern)) != LOV_PATTERN_MDT &&
+	    lov_pattern(le32_to_cpu(lmm->lmm_pattern)) != LOV_PATTERN_RAID0) {
 		CERROR("bad striping pattern\n");
 		lov_dump_lmm_common(D_WARNING, lmm);
 		return -EINVAL;
@@ -201,6 +202,12 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 			GOTO(out_lsme, rc = -E2BIG);
 	}
 
+	/* with Data-on-MDT set maxbytes to stripe size */
+	if (lsme_is_dom(lsme)) {
+		lov_bytes = lsme->lsme_stripe_size;
+		goto out_dom;
+	}
+
 	for (i = 0; i < stripe_count; i++) {
 		struct lov_oinfo *loi;
 		struct lov_tgt_desc *ltd;
@@ -244,6 +251,7 @@ lsme_unpack(struct lov_obd *lov, struct lov_mds_md *lmm, size_t buf_size,
 
 	lov_bytes = min_stripe_maxbytes * stripe_count;
 
+out_dom:
 	if (maxbytes != NULL) {
 		if (lov_bytes < min_stripe_maxbytes) /* handle overflow */
 			*maxbytes = MAX_LFS_FILESIZE;
@@ -381,7 +389,8 @@ lsme_unpack_comp(struct lov_obd *lov, struct lov_mds_md *lmm,
 	unsigned int stripe_count;
 
 	stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
-	if (stripe_count == 0)
+	if (stripe_count == 0 &&
+	    lov_pattern(le32_to_cpu(lmm->lmm_pattern)) != LOV_PATTERN_MDT)
 		RETURN(ERR_PTR(-EINVAL));
 	/* un-instantiated lmm contains no ost id info, i.e. lov_ost_data_v1 */
 	if (!inited)
@@ -467,9 +476,10 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 					    maxbytes;
 			/* the last component hasn't been defined, or
 			 * lsm_maxbytes overflowed. */
-			if (lsme->lsme_extent.e_end != LUSTRE_EOF ||
-			    lsm->lsm_maxbytes <
-			    (loff_t)lsme->lsme_extent.e_start)
+			if (!lsme_is_dom(lsme) &&
+			    (lsme->lsme_extent.e_end != LUSTRE_EOF ||
+			     lsm->lsm_maxbytes <
+			     (loff_t)lsme->lsme_extent.e_start))
 				lsm->lsm_maxbytes = MAX_LFS_FILESIZE;
 		}
 	}

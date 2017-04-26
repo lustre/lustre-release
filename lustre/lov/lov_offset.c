@@ -44,6 +44,9 @@ static loff_t stripe_width(struct lov_stripe_md *lsm, unsigned int index)
 
 	LASSERT(index < lsm->lsm_entry_count);
 
+	if (lsme_is_dom(entry))
+		return (loff_t)entry->lsme_stripe_size;
+
 	return (loff_t)entry->lsme_stripe_size * entry->lsme_stripe_count;
 }
 
@@ -141,12 +144,12 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, int index, loff_t lov_off,
 	loff_t stripe_off;
 	loff_t this_stripe;
 	loff_t swidth;
-        int ret = 0;
+	int ret = 0;
 
-        if (lov_off == OBD_OBJECT_EOF) {
-                *obdoff = OBD_OBJECT_EOF;
-                return 0;
-        }
+	if (lov_off == OBD_OBJECT_EOF) {
+		*obdoff = OBD_OBJECT_EOF;
+		return 0;
+	}
 
 	swidth = stripe_width(lsm, index);
 
@@ -197,8 +200,8 @@ loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, int index, u64 file_size,
 	loff_t this_stripe;
 	loff_t swidth;
 
-        if (file_size == OBD_OBJECT_EOF)
-                return OBD_OBJECT_EOF;
+	if (file_size == OBD_OBJECT_EOF)
+		return OBD_OBJECT_EOF;
 
 	swidth = stripe_width(lsm, index);
 

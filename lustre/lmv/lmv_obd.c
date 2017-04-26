@@ -418,7 +418,7 @@ static int lmv_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 	mutex_lock(&lmv->lmv_init_mutex);
 	if ((index < lmv->tgts_size) && (lmv->tgts[index] != NULL)) {
 		tgt = lmv->tgts[index];
-		CERROR("%s: UUID %s already assigned at LOV target index %d:"
+		CERROR("%s: UUID %s already assigned at LMV target index %d:"
 		       " rc = %d\n", obd->obd_name,
 		       obd_uuid2str(&tgt->ltd_uuid), index, -EEXIST);
 		mutex_unlock(&lmv->lmv_init_mutex);

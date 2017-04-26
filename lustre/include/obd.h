@@ -372,6 +372,11 @@ struct lov_tgt_desc {
                             ltd_reap:1;  /* should this target be deleted */
 };
 
+struct lov_md_tgt_desc {
+	struct obd_device *lmtd_mdc;
+	__u32		   lmtd_index;
+};
+
 struct lov_obd {
 	struct lov_desc		desc;
 	struct lov_tgt_desc   **lov_tgts;		/* sparse array */
@@ -394,10 +399,13 @@ struct lov_obd {
 	struct cl_client_cache *lov_cache;
 
 	struct rw_semaphore	lov_notify_lock;
+	/* Data-on-MDT: MDC array */
+	struct lov_md_tgt_desc	*lov_mdc_tgts;
 };
 
 struct lmv_tgt_desc {
 	struct obd_uuid		ltd_uuid;
+	struct obd_device	*ltd_obd;
 	struct obd_export	*ltd_exp;
 	__u32			ltd_idx;
 	struct mutex		ltd_fid_mutex;

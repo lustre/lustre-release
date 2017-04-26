@@ -2264,7 +2264,12 @@ static int mdc_set_info_async(const struct lu_env *env,
 		RETURN(0);
 	}
 
-	CERROR("Unknown key %s\n", (char *)key);
+	/* TODO: these OSC-related keys are ignored for now */
+	if (KEY_IS(KEY_CHECKSUM) || KEY_IS(KEY_CACHE_SET) ||
+	    KEY_IS(KEY_CACHE_LRU_SHRINK) || KEY_IS(KEY_GRANT_SHRINK))
+		RETURN(0);
+
+	CERROR("%s: Unknown key %s\n", exp->exp_obd->obd_name, (char *)key);
 	RETURN(-EINVAL);
 }
 

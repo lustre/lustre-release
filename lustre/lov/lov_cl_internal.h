@@ -91,6 +91,12 @@ enum lov_device_flags {
  * Upper half.
  */
 
+/* Data-on-MDT array item in lov_device::ld_md_tgts[] */
+struct lovdom_device {
+	struct cl_device	*ldm_mdc;
+	int			 ldm_idx;
+};
+
 struct lov_device {
         /*
          * XXX Locking of lov-private data is missing.
@@ -101,6 +107,13 @@ struct lov_device {
         __u32                     ld_target_nr;
         struct lovsub_device    **ld_target;
         __u32                     ld_flags;
+
+	/* Data-on-MDT devices */
+	__u32			  ld_md_tgts_nr;
+	struct lovdom_device	 *ld_md_tgts;
+	struct obd_device	 *ld_lmv;
+	/* LU site for subdevices */
+	struct lu_site		  ld_site;
 };
 
 /**
@@ -128,6 +141,34 @@ static inline char *llt2str(enum lov_layout_type llt)
 	LBUG();
 	return "";
 }
+
+/**
+ * Return lov_layout_entry_type associated with a given composite layout
+ * entry.
+ */
+static inline __u32 lov_entry_type(struct lov_stripe_md_entry *lsme)
+{
+	if ((lov_pattern(lsme->lsme_pattern) == LOV_PATTERN_RAID0) ||
+	    (lov_pattern(lsme->lsme_pattern) == LOV_PATTERN_MDT))
+		return lov_pattern(lsme->lsme_pattern);
+	return 0;
+}
+
+struct lov_layout_entry;
+struct lov_object;
+struct lov_lock_sub;
+
+struct lov_comp_layout_entry_ops {
+	int (*lco_init)(const struct lu_env *env, struct lov_device *dev,
+			struct lov_object *lov, unsigned int index,
+			const struct cl_object_conf *conf,
+			struct lov_layout_entry *lle);
+	void (*lco_fini)(const struct lu_env *env,
+			 struct lov_layout_entry *lle);
+	int  (*lco_getattr)(const struct lu_env *env, struct lov_object *obj,
+			    unsigned int index, struct lov_layout_entry *lle,
+			    struct cl_attr **attr);
+};
 
 struct lov_layout_raid0 {
 	unsigned               lo_nr;
@@ -165,6 +206,25 @@ struct lov_layout_raid0 {
 	struct cl_attr         lo_attr;
 };
 
+struct lov_layout_dom {
+	/* keep this always at first place so DOM layout entry
+	 * can be addressed also as RAID0 after initialization.
+	 */
+	struct lov_layout_raid0 lo_dom_r0;
+	struct lovsub_object *lo_dom;
+	struct lov_oinfo *lo_loi;
+};
+
+struct lov_layout_entry {
+	__u32 lle_type;
+	struct lu_extent lle_extent;
+	struct lov_comp_layout_entry_ops *lle_comp_ops;
+	union {
+		struct lov_layout_raid0 lle_raid0;
+		struct lov_layout_dom lle_dom;
+	};
+};
+
 /**
  * lov-specific file state.
  *
@@ -180,7 +240,7 @@ struct lov_layout_raid0 {
  * function corresponding to the current layout type.
  */
 struct lov_object {
-	struct cl_object       lo_cl;
+	struct cl_object	lo_cl;
 	/**
 	 * Serializes object operations with transitions between layout types.
 	 *
@@ -220,13 +280,10 @@ struct lov_object {
 		} released;
 		struct lov_layout_composite {
 			/**
-			 * Current valid entry count of lo_entries.
+			 * Current valid entry count of entries.
 			 */
 			unsigned int lo_entry_count;
-			struct lov_layout_entry {
-				struct lu_extent lle_extent;
-				struct lov_layout_raid0 lle_raid0;
-			} *lo_entries;
+			struct lov_layout_entry *lo_entries;
 		} composite;
 	} u;
 	/**
@@ -632,6 +689,15 @@ static inline struct lov_thread_info *lov_env_info(const struct lu_env *env)
         info = lu_context_key_get(&env->le_ctx, &lov_key);
         LASSERT(info != NULL);
         return info;
+}
+
+static inline struct lov_layout_entry *lov_entry(struct lov_object *lov, int i)
+{
+	LASSERT(lov->lo_type == LLT_COMP);
+	LASSERTF(i < lov->u.composite.lo_entry_count,
+		 "entry %d entry_count %d", i, lov->u.composite.lo_entry_count);
+
+	return &lov->u.composite.lo_entries[i];
 }
 
 static inline struct lov_layout_raid0 *lov_r0(struct lov_object *lov, int i)
