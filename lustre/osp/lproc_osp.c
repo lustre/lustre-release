@@ -726,19 +726,6 @@ LPROC_SEQ_FOPS_RO_TYPE(osp, connect_flags);
 LPROC_SEQ_FOPS_RO_TYPE(osp, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(osp, conn_uuid);
 
-/**
- * Show maximum pages per bulk RPC
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- * \retval		0 on success
- * \retval		negative number on error
- */
-static int osp_max_pages_per_rpc_seq_show(struct seq_file *m, void *v)
-{
-	return lprocfs_obd_max_pages_per_rpc_seq_show(m, m->private);
-}
-LPROC_SEQ_FOPS_RO(osp_max_pages_per_rpc);
 LPROC_SEQ_FOPS_RO_TYPE(osp, timeouts);
 
 LPROC_SEQ_FOPS_RW_TYPE(osp, import);
