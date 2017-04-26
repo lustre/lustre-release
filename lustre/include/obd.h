@@ -882,8 +882,9 @@ struct md_op_data {
 	__u64			op_data_version;
 	struct lustre_handle	op_lease_handle;
 
-	/* File security context, for creates. */
+	/* File security context, for creates/metadata ops */
 	const char	       *op_file_secctx_name;
+	__u32			op_file_secctx_name_size;
 	void		       *op_file_secctx;
 	__u32			op_file_secctx_size;
 

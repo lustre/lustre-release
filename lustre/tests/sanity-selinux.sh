@@ -381,6 +381,85 @@ test_20c() {
 }
 run_test 20c "[atomicity] concurrent access from another client (dir via lfs)"
 
+cleanup_20d() {
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	mountcli
+}
+
+trace_cmd() {
+	local cmd="$@"
+	local xattr_prefix=$(grep -E \
+		"#define[[:space:]]+XATTR_SECURITY_PREFIX[[:space:]]+" \
+		/usr/include/linux/xattr.h 2>/dev/null |
+		awk '{print $3}' | sed s+\"++g)
+	local xattr_suffix=$(grep -E \
+		"#define[[:space:]]+XATTR_SELINUX_SUFFIX[[:space:]]+" \
+		/usr/include/linux/xattr.h 2>/dev/null |
+		awk '{print $3}' | sed s+\"++g)
+	local xattr_name=${xattr_prefix}${xattr_suffix}
+
+	[ -z "$xattr_name" ] && xattr_name="security.selinux"
+
+	# umount client
+	if [ "$MOUNT_2" ] && $(grep -q $MOUNT2' ' /proc/mounts); then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+	if $(grep -q $MOUNT' ' /proc/mounts); then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+	lustre_rmmod
+	# remount client
+	mount_client $MOUNT ${MOUNT_OPTS} || error "mount client failed"
+
+	$LCTL set_param debug=+info
+	$LCTL clear
+
+	echo $cmd
+	eval $cmd
+
+	$LCTL dk | grep "get xattr '${xattr_name}'"
+	[ $? -eq 0 ] && error "get xattr event was triggered" || true
+}
+
+test_20d() {
+	if [ $MDS1_VERSION -lt $(version_code 2.12.50) ] ||
+	   [ $CLIENT_VERSION -lt $(version_code 2.12.50) ]; then
+		skip "Need version >= 2.12.50"
+	fi
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+
+	stack_trap cleanup_20d EXIT
+
+	local dirname=$DIR/$tdir/subdir
+
+	mkdir -p $DIR/$tdir
+	mkdir $dirname
+
+	trace_cmd stat $dirname
+	trace_cmd touch $dirname/f1
+	trace_cmd stat $dirname/f1
+	trace_cmd cat $dirname/f1
+	dd if=/dev/zero of=$dirname/f1 bs=1M count=10
+	trace_cmd /usr/bin/truncate -s 10240 $dirname/f1
+	trace_cmd lfs setstripe -E -1 -S 4M $dirname/f2
+	trace_cmd lfs migrate -E -1 -S 256K $dirname/f2
+	trace_cmd lfs setdirstripe -i 1 $dirname/d2
+	trace_cmd lfs migrate -m 0 $dirname/d2
+
+	lfs setdirstripe -i 1 -c 1 $dirname/d3
+	dirname=$dirname/d3/subdir
+	mkdir $dirname
+
+	trace_cmd stat $dirname
+	trace_cmd touch $dirname/f1
+	trace_cmd stat $dirname/f1
+	trace_cmd cat $dirname/f1
+	dd if=/dev/zero of=$dirname/f1 bs=1M count=10
+	trace_cmd /usr/bin/truncate -s 10240 $dirname/f1
+	trace_cmd lfs setstripe -E -1 -S 4M $dirname/f2
+	trace_cmd lfs migrate -E -1 -S 256K $dirname/f2
+}
+run_test 20d "[atomicity] avoid getxattr for security context"
 
 complete $SECONDS
 check_and_cleanup_lustre

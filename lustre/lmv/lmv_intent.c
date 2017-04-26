@@ -54,7 +54,8 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 			     const struct lu_fid *parent_fid,
 			     struct ptlrpc_request **reqp,
 			     ldlm_blocking_callback cb_blocking,
-			     __u64 extra_lock_flags)
+			     __u64 extra_lock_flags,
+			     const char *secctx_name, __u32 secctx_name_size)
 {
 	struct obd_device	*obd = exp->exp_obd;
 	struct lmv_obd		*lmv = &obd->u.lmv;
@@ -106,6 +107,16 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 	op_data->op_bias = MDS_CROSS_REF;
 	CDEBUG(D_INODE, "REMOTE_INTENT with fid="DFID" -> mds #%u\n",
 	       PFID(&body->mbo_fid1), tgt->ltd_idx);
+
+	/* ask for security context upon intent */
+	if (it->it_op & (IT_LOOKUP | IT_GETATTR | IT_OPEN) &&
+	    secctx_name_size != 0 && secctx_name != NULL) {
+		op_data->op_file_secctx_name = secctx_name;
+		op_data->op_file_secctx_name_size = secctx_name_size;
+		CDEBUG(D_SEC, "'%.*s' is security xattr to fetch for "
+		       DFID"\n",
+		       secctx_name_size, secctx_name, PFID(&body->mbo_fid1));
+	}
 
 	rc = md_intent_lock(tgt->ltd_exp, op_data, it, &req, cb_blocking,
 			    extra_lock_flags);
@@ -381,7 +392,9 @@ retry:
 	/* Not cross-ref case, just get out of here. */
 	if (unlikely((body->mbo_valid & OBD_MD_MDS))) {
 		rc = lmv_intent_remote(exp, it, &op_data->op_fid1, reqp,
-				       cb_blocking, extra_lock_flags);
+				       cb_blocking, extra_lock_flags,
+				       op_data->op_file_secctx_name,
+				       op_data->op_file_secctx_name_size);
 		if (rc != 0)
 			RETURN(rc);
 
@@ -465,7 +478,9 @@ retry:
 	/* Not cross-ref case, just get out of here. */
 	if (unlikely((body->mbo_valid & OBD_MD_MDS))) {
 		rc = lmv_intent_remote(exp, it, NULL, reqp, cb_blocking,
-				       extra_lock_flags);
+				       extra_lock_flags,
+				       op_data->op_file_secctx_name,
+				       op_data->op_file_secctx_name_size);
 		if (rc != 0)
 			RETURN(rc);
 		body = req_capsule_server_get(&(*reqp)->rq_pill, &RMF_MDT_BODY);

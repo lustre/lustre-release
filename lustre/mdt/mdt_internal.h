@@ -898,6 +898,8 @@ int mdt_links_read(struct mdt_thread_info *info,
 		   struct linkea_data *ldata);
 int mdt_close_internal(struct mdt_thread_info *info, struct ptlrpc_request *req,
 		       struct mdt_body *repbody);
+void mdt_pack_secctx_in_reply(struct mdt_thread_info *info,
+			      struct mdt_object *child);
 
 static inline struct mdt_device *mdt_dev(struct lu_device *d)
 {
