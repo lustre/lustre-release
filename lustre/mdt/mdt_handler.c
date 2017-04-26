@@ -1735,8 +1735,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		if (unlikely(rc != 0))
 			mdt_object_unlock(info, child, lhc, 1);
 
-                RETURN(rc);
-        }
+		mdt_pack_secctx_in_reply(info, child);
+
+		RETURN(rc);
+	}
 
 	lname = &info->mti_name;
 	mdt_name_unpack(info->mti_pill, &RMF_NAME, lname, MNF_FIX_ANON);
@@ -1910,17 +1912,21 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 				child_bits &= ~MDS_INODELOCK_UPDATE;
 			rc = mdt_object_lock(info, child, lhc, child_bits);
 		}
-                if (unlikely(rc != 0))
-                        GOTO(out_child, rc);
-        }
+		if (unlikely(rc != 0))
+			GOTO(out_child, rc);
+	}
 
-        lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
+	/* finally, we can get attr for child. */
+	rc = mdt_getattr_internal(info, child, ma_need);
+	if (unlikely(rc != 0)) {
+		mdt_object_unlock(info, child, lhc, 1);
+		GOTO(out_child, rc);
+	}
 
-        /* finally, we can get attr for child. */
-        rc = mdt_getattr_internal(info, child, ma_need);
-        if (unlikely(rc != 0)) {
-                mdt_object_unlock(info, child, lhc, 1);
-	} else if (lock) {
+	mdt_pack_secctx_in_reply(info, child);
+
+	lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
+	if (lock) {
 		/* Debugging code. */
 		LDLM_DEBUG(lock, "Returning lock to client");
 		LASSERTF(fid_res_name_eq(mdt_object_fid(child),
@@ -1933,14 +1939,12 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		    S_ISREG(lu_object_attr(&child->mot_obj)) &&
 		    !mdt_object_remote(child) && child != parent) {
 			mdt_object_put(info->mti_env, child);
-			/* NB: call the mdt_pack_size2body always after
-			 * mdt_object_put(), that is why this special
-			 * exit path is used. */
 			rc = mdt_pack_size2body(info, child_fid,
 						&lhc->mlh_reg_lh);
-			if (rc != 0 && child_bits & MDS_INODELOCK_DOM) {
+			if (rc && child_bits & MDS_INODELOCK_DOM) {
 				/* DOM lock was taken in advance but this is
-				 * not DoM file. Drop the lock. */
+				 * not DoM file. Drop the lock.
+				 */
 				lock_res_and_lock(lock);
 				ldlm_inodebits_drop(lock, MDS_INODELOCK_DOM);
 				unlock_res_and_lock(lock);
@@ -1948,9 +1952,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			LDLM_LOCK_PUT(lock);
 			GOTO(unlock_parent, rc = 0);
 		}
-	}
-	if (lock)
 		LDLM_LOCK_PUT(lock);
+	}
 
 	EXIT;
 out_child:
@@ -2368,6 +2371,28 @@ static int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
 	return 0;
 }
 
+static void mdt_preset_secctx_size(struct mdt_thread_info *info)
+{
+	struct req_capsule *pill = info->mti_pill;
+
+	if (req_capsule_has_field(pill, &RMF_FILE_SECCTX,
+				  RCL_SERVER) &&
+	    req_capsule_has_field(pill, &RMF_FILE_SECCTX_NAME,
+				  RCL_CLIENT)) {
+		if (req_capsule_get_size(pill, &RMF_FILE_SECCTX_NAME,
+					 RCL_CLIENT) != 0) {
+			/* pre-set size in server part with max size */
+			req_capsule_set_size(pill, &RMF_FILE_SECCTX,
+					     RCL_SERVER,
+					     info->mti_mdt->mdt_max_ea_size);
+		} else {
+			req_capsule_set_size(pill, &RMF_FILE_SECCTX,
+					     RCL_SERVER, 0);
+		}
+	}
+
+}
+
 static int mdt_reint_internal(struct mdt_thread_info *info,
                               struct mdt_lock_handle *lhc,
                               __u32 op)
@@ -2390,7 +2415,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 				     DEF_REP_MD_SIZE);
 
 	/* llog cookies are always 0, the field is kept for compatibility */
-        if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
+	if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
 		req_capsule_set_size(pill, &RMF_LOGCOOKIES, RCL_SERVER, 0);
 
 	/* Set ACL reply buffer size as LUSTRE_POSIX_ACL_MAX_SIZE_OLD
@@ -2400,33 +2425,35 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 		req_capsule_set_size(pill, &RMF_ACL, RCL_SERVER,
 				     LUSTRE_POSIX_ACL_MAX_SIZE_OLD);
 
-        rc = req_capsule_server_pack(pill);
-        if (rc != 0) {
-                CERROR("Can't pack response, rc %d\n", rc);
-                RETURN(err_serious(rc));
-        }
+	mdt_preset_secctx_size(info);
 
-        if (req_capsule_has_field(pill, &RMF_MDT_BODY, RCL_SERVER)) {
-                repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
-                LASSERT(repbody);
+	rc = req_capsule_server_pack(pill);
+	if (rc != 0) {
+		CERROR("Can't pack response, rc %d\n", rc);
+		RETURN(err_serious(rc));
+	}
+
+	if (req_capsule_has_field(pill, &RMF_MDT_BODY, RCL_SERVER)) {
+		repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
+		LASSERT(repbody);
 		repbody->mbo_eadatasize = 0;
 		repbody->mbo_aclsize = 0;
-        }
+	}
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_REINT_DELAY, 10);
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_REINT_DELAY, 10);
 
-        /* for replay no cookkie / lmm need, because client have this already */
-        if (info->mti_spec.no_create)
-                if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
-                        req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, 0);
+	/* for replay no cookkie / lmm need, because client have this already */
+	if (info->mti_spec.no_create)
+		if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
+			req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, 0);
 
-        rc = mdt_init_ucred_reint(info);
-        if (rc)
-                GOTO(out_shrink, rc);
+	rc = mdt_init_ucred_reint(info);
+	if (rc)
+		GOTO(out_shrink, rc);
 
-        rc = mdt_fix_attr_ucred(info, op);
-        if (rc != 0)
-                GOTO(out_ucred, rc = err_serious(rc));
+	rc = mdt_fix_attr_ucred(info, op);
+	if (rc != 0)
+		GOTO(out_ucred, rc = err_serious(rc));
 
 	rc = mdt_check_resent(info, mdt_reconstruct, lhc);
 	if (rc < 0) {
@@ -2434,12 +2461,12 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 	} else if (rc == 1) {
 		DEBUG_REQ(D_INODE, mdt_info_req(info), "resent opt.");
 		rc = lustre_msg_get_status(mdt_info_req(info)->rq_repmsg);
-                GOTO(out_ucred, rc);
-        }
-        rc = mdt_reint_rec(info, lhc);
-        EXIT;
+		GOTO(out_ucred, rc);
+	}
+	rc = mdt_reint_rec(info, lhc);
+	EXIT;
 out_ucred:
-        mdt_exit_ucred(info);
+	mdt_exit_ucred(info);
 out_shrink:
 	mdt_client_compatibility(info);
 
@@ -3626,9 +3653,14 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info,
 			req_capsule_set_size(pill, &RMF_ACL, RCL_SERVER,
 					     LUSTRE_POSIX_ACL_MAX_SIZE_OLD);
 
-                rc = req_capsule_server_pack(pill);
-        }
-        RETURN(rc);
+		mdt_preset_secctx_size(info);
+
+		rc = req_capsule_server_pack(pill);
+		if (rc)
+			CWARN("%s: cannot pack response: rc = %d\n",
+				      mdt_obd_name(info->mti_mdt), rc);
+	}
+	RETURN(rc);
 }
 
 void mdt_lock_handle_init(struct mdt_lock_handle *lh)

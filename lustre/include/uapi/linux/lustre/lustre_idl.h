@@ -1300,6 +1300,7 @@ lov_mds_md_max_stripe_count(__kernel_size_t buf_size, __u32 lmm_magic)
 #define OBD_MD_DEFAULT_MEA   (0x0040000000000000ULL) /* default MEA */
 #define OBD_MD_FLOSTLAYOUT   (0x0080000000000000ULL) /* contain ost_layout */
 #define OBD_MD_FLPROJID      (0x0100000000000000ULL) /* project ID */
+#define OBD_MD_SECCTX        (0x0200000000000000ULL) /* embed security xattr */
 
 #define OBD_MD_FLLAZYSIZE    (0x0400000000000000ULL) /* Lazy size */
 #define OBD_MD_FLLAZYBLOCKS  (0x0800000000000000ULL) /* Lazy blocks */

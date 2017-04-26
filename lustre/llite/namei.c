@@ -620,7 +620,7 @@ struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de)
 static int ll_lookup_it_finish(struct ptlrpc_request *request,
 			       struct lookup_intent *it,
 			       struct inode *parent, struct dentry **de,
-			       ktime_t kstart)
+			       void *secctx, __u32 secctxlen, ktime_t kstart)
 {
 	struct inode		 *inode = NULL;
 	__u64			  bits = 0;
@@ -633,6 +633,10 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 	CDEBUG(D_DENTRY, "it %p it_disposition %x\n", it,
 	       it->it_disposition);
 	if (!it_disposition(it, DISP_LOOKUP_NEG)) {
+		struct req_capsule *pill = &request->rq_pill;
+		struct mdt_body *body = req_capsule_server_get(pill,
+							       &RMF_MDT_BODY);
+
 		rc = ll_prep_inode(&inode, request, (*de)->d_sb, it);
 		if (rc)
 			RETURN(rc);
@@ -651,6 +655,33 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 		 * ll_glimpse_size or some equivalent themselves anyway.
 		 * Also see bug 7198.
 		 */
+
+		/* If security context was returned by MDT, put it in
+		 * inode now to save an extra getxattr from security hooks,
+		 * and avoid deadlock.
+		 */
+		if (body->mbo_valid & OBD_MD_SECCTX) {
+			secctx = req_capsule_server_get(pill, &RMF_FILE_SECCTX);
+			secctxlen = req_capsule_get_size(pill,
+							   &RMF_FILE_SECCTX,
+							   RCL_SERVER);
+
+			if (secctxlen)
+				CDEBUG(D_SEC, "server returned security context"
+				       " for "DFID"\n",
+				       PFID(ll_inode2fid(inode)));
+		}
+
+		if (secctx && secctxlen) {
+			inode_lock(inode);
+			rc = security_inode_notifysecctx(inode, secctx,
+							 secctxlen);
+			inode_unlock(inode);
+			if (rc)
+				CWARN("cannot set security context for "
+				      DFID": rc = %d\n",
+				      PFID(ll_inode2fid(inode)), rc);
+		}
 	}
 
 	/* Only hash *de if it is unhashed (new dentry).
@@ -719,9 +750,11 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 	struct dentry *save = dentry, *retval;
 	struct ptlrpc_request *req = NULL;
 	struct md_op_data *op_data = NULL;
-        __u32 opc;
-        int rc;
-        ENTRY;
+	__u32 opc;
+	int rc;
+	char secctx_name[XATTR_NAME_MAX + 1];
+
+	ENTRY;
 
         if (dentry->d_name.len > ll_i2sbi(parent)->ll_namelen)
                 RETURN(ERR_PTR(-ENAMETOOLONG));
@@ -769,10 +802,32 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 					     &op_data->op_file_secctx_size);
 		if (rc < 0)
 			GOTO(out, retval = ERR_PTR(rc));
-		if (secctx != NULL)
+		if (secctx)
 			*secctx = op_data->op_file_secctx;
-		if (secctxlen != NULL)
+		if (secctxlen)
 			*secctxlen = op_data->op_file_secctx_size;
+	} else {
+		if (secctx)
+			*secctx = NULL;
+		if (secctxlen)
+			*secctxlen = 0;
+	}
+
+	/* ask for security context upon intent */
+	if (it->it_op & (IT_LOOKUP | IT_GETATTR | IT_OPEN)) {
+		/* get name of security xattr to request to server */
+		rc = ll_listsecurity(parent, secctx_name,
+				     sizeof(secctx_name));
+		if (rc < 0) {
+			CDEBUG(D_SEC, "cannot get security xattr name for "
+			       DFID": rc = %d\n",
+			       PFID(ll_inode2fid(parent)), rc);
+		} else if (rc > 0) {
+			op_data->op_file_secctx_name = secctx_name;
+			op_data->op_file_secctx_name_size = rc;
+			CDEBUG(D_SEC, "'%.*s' is security xattr for "DFID"\n",
+			       rc, secctx_name, PFID(ll_inode2fid(parent)));
+		}
 	}
 
 	rc = md_intent_lock(ll_i2mdexp(parent), op_data, it, &req,
@@ -808,11 +863,13 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
 	/* dir layout may change */
 	ll_unlock_md_op_lsm(op_data);
-	rc = ll_lookup_it_finish(req, it, parent, &dentry, kstart);
-        if (rc != 0) {
-                ll_intent_release(it);
-                GOTO(out, retval = ERR_PTR(rc));
-        }
+	rc = ll_lookup_it_finish(req, it, parent, &dentry,
+				 secctx ? *secctx : NULL,
+				 secctxlen ? *secctxlen : 0, kstart);
+	if (rc != 0) {
+		ll_intent_release(it);
+		GOTO(out, retval = ERR_PTR(rc));
+	}
 
         if ((it->it_op & IT_OPEN) && dentry->d_inode &&
             !S_ISREG(dentry->d_inode->i_mode) &&
@@ -825,7 +882,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
 out:
 	if (op_data != NULL && !IS_ERR(op_data)) {
-		if (secctx != NULL && secctxlen != NULL) {
+		if (secctx && secctxlen) {
 			/* caller needs sec ctx info, so reset it in op_data to
 			 * prevent it from being freed */
 			op_data->op_file_secctx = NULL;
@@ -1166,8 +1223,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry,
 	if (IS_ERR(inode))
 		RETURN(PTR_ERR(inode));
 
-	if ((ll_i2sbi(inode)->ll_flags & LL_SBI_FILE_SECCTX) &&
-	    secctx != NULL) {
+	if ((ll_i2sbi(inode)->ll_flags & LL_SBI_FILE_SECCTX) && secctx) {
 		inode_lock(inode);
 		/* must be done before d_instantiate, because it calls
 		 * security_d_instantiate, which means a getxattr if security
