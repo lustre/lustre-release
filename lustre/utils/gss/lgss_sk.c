@@ -133,8 +133,9 @@ static void usage(FILE *fp, char *program)
 		"client)\n");
 	fprintf(fp, "-k|--key-bits   <len>	Shared key length in bits "
 		"(Default: %d)\n", SK_DEFAULT_SK_KEYLEN);
-	fprintf(fp, "-d|--data       <file>	Key random data source "
-		"(Default: /dev/random)\n\n");
+	fprintf(fp, "-d|--data       <file>	Key data source for new keys "
+		"(Default: /dev/random)\n");
+	fprintf(fp, "                        Not a seed value.  This is the actual key value.\n\n");
 	fprintf(fp, "Other Options:\n");
 	fprintf(fp, "-v|--verbose           Increase verbosity for errors\n");
 	exit(EXIT_FAILURE);
@@ -496,6 +497,10 @@ int main(int argc, char **argv)
 	}
 	if (hmac == SK_HMAC_INVALID) {
 		fprintf(stderr, "error: invalid HMAC algorithm specified\n");
+		return EXIT_FAILURE;
+	}
+	if (modify && datafile) {
+		fprintf(stderr, "error: data file option not valid in key modify\n");
 		return EXIT_FAILURE;
 	}
 
