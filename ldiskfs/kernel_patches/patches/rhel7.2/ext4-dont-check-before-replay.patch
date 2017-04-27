@@ -25,7 +25,7 @@ journal replay.
 +
 +	if (!ext4_check_descriptors(sb, &first_not_zeroed)) {
 +		ext4_msg(sb, KERN_ERR, "group descriptors corrupted!");
-+		goto failed_mount2;
++		goto failed_mount_wq;
 +	}
 +
 	/*

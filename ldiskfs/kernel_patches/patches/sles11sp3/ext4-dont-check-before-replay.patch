@@ -26,6 +26,6 @@ journal replay.
 +		ext4_msg(sb, KERN_ERR, "group descriptors corrupted!");
 +		goto failed_mount_wq;
 +	}
-	if (test_opt(sb, NOBH)) {
-		if (!(test_opt(sb, DATA_FLAGS) == EXT4_MOUNT_WRITEBACK_DATA)) {
-			ext4_msg(sb, KERN_WARNING, "Ignoring nobh option - "
+	/*
+	 * The maximum number of concurrent works can be high and
+	 * concurrency isn't really necessary.  Limit it to 1.
