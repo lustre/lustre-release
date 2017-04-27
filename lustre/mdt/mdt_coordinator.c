@@ -1660,13 +1660,13 @@ out_env:
 /**
  * check if a request is compatible with file status
  * \param hai [IN] request description
- * \param hal_an [IN] request archive number (not used)
+ * \param archive_id [IN] request archive id
  * \param rq_flags [IN] request flags
  * \param hsm [IN] file HSM metadata
  * \retval boolean
  */
 bool mdt_hsm_is_action_compat(const struct hsm_action_item *hai,
-			      const int hal_an, const __u64 rq_flags,
+			      u32 archive_id, u64 rq_flags,
 			      const struct md_hsm *hsm)
 {
 	int	 is_compat = false;
@@ -1679,6 +1679,12 @@ bool mdt_hsm_is_action_compat(const struct hsm_action_item *hai,
 		if (!(hsm_flags & HS_NOARCHIVE) &&
 		    (hsm_flags & HS_DIRTY || !(hsm_flags & HS_ARCHIVED)))
 			is_compat = true;
+
+		if (hsm_flags & HS_EXISTS &&
+		    archive_id != 0 &&
+		    archive_id != hsm->mh_arch_id)
+			is_compat = false;
+
 		break;
 	case HSMA_RESTORE:
 		if (!(hsm_flags & HS_DIRTY) && (hsm_flags & HS_RELEASED) &&

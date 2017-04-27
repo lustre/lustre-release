@@ -876,7 +876,7 @@ struct mdt_object *mdt_hsm_get_md_hsm(struct mdt_thread_info *mti,
 int mdt_hsm_add_hal(struct mdt_thread_info *mti,
 		    struct hsm_action_list *hal, struct obd_uuid *uuid);
 bool mdt_hsm_is_action_compat(const struct hsm_action_item *hai,
-			      const int hal_an, const __u64 rq_flags,
+			      u32 archive_id, u64 rq_flags,
 			      const struct md_hsm *hsm);
 int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 				 struct hsm_progress_kernel *pgs,
