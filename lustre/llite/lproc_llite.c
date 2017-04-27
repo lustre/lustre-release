@@ -68,6 +68,37 @@ static int ll_blksize_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(ll_blksize);
 
+static int ll_stat_blksize_seq_show(struct seq_file *m, void *v)
+{
+	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
+
+	seq_printf(m, "%u\n", sbi->ll_stat_blksize);
+
+	return 0;
+}
+
+static ssize_t ll_stat_blksize_seq_write(struct file *file,
+					 const char __user *buffer,
+					 size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
+	__s64 val;
+	int rc;
+
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	if (val != 0 && (val < PAGE_SIZE || (val & (val - 1))) != 0)
+		return -ERANGE;
+
+	sbi->ll_stat_blksize = val;
+
+	return count;
+}
+LPROC_SEQ_FOPS(ll_stat_blksize);
+
 static int ll_kbytestotal_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
@@ -1022,6 +1053,8 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_site_stats_fops			},
 	{ .name	=	"blocksize",
 	  .fops	=	&ll_blksize_fops			},
+	{ .name	=	"stat_blocksize",
+	  .fops	=	&ll_stat_blksize_fops			},
 	{ .name	=	"kbytestotal",
 	  .fops	=	&ll_kbytestotal_fops			},
 	{ .name	=	"kbytesfree",
