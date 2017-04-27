@@ -9098,18 +9098,16 @@ set_dir_limits () {
 	local canondev
 	local node
 
-	local LDPROC=/proc/fs/ldiskfs
+	local ldproc=/proc/fs/ldiskfs
 	local facets=$(get_facets MDS)
 
 	for facet in ${facets//,/ }; do
 		canondev=$(ldiskfs_canon \
 			   *.$(convert_facet2label $facet).mntdev $facet)
-		do_facet $facet "test -e $LDPROC/$canondev/max_dir_size" ||
-						LDPROC=/sys/fs/ldiskfs
-		do_facet $facet "echo $1 >$LDPROC/$canondev/max_dir_size"
-		do_facet $facet "test -e $LDPROC/$canondev/warning_dir_size" ||
-						LDPROC=/sys/fs/ldiskfs
-		do_facet $facet "echo $2 >$LDPROC/$canondev/warning_dir_size"
+		do_facet $facet "test -e $ldproc/$canondev/max_dir_size" ||
+			ldproc=/sys/fs/ldiskfs
+		do_facet $facet "echo $1 >$ldproc/$canondev/max_dir_size"
+		do_facet $facet "echo $2 >$ldproc/$canondev/warning_dir_size"
 	done
 }
 
@@ -9133,62 +9131,54 @@ test_129() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local ENOSPC=28
 	local EFBIG=27
-	local has_warning=0
+	local has_warning=false
 
 	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
 
 	# block size of mds1
-	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
-	local MDSBLOCKSIZE=$($LCTL get_param -n mdc.*MDT0000*.blocksize)
-	local MAX=$((MDSBLOCKSIZE * 5))
-	set_dir_limits $MAX $MAX
-	local I=$(stat -c%s "$DIR/$tdir")
-	local J=0
-	while [[ $I -le $MAX ]]; do
-		$MULTIOP $DIR/$tdir/$J Oc
+	local maxsize=$(($($LCTL get_param -n mdc.*MDT0000*.blocksize) * 5))
+	set_dir_limits $maxsize $maxsize
+	local dirsize=$(stat -c%s "$DIR/$tdir")
+	local nfiles=0
+	while [[ $dirsize -le $maxsize ]]; do
+		$MULTIOP $DIR/$tdir/file_base_$nfiles Oc
 		rc=$?
-		if [ $has_warning -eq 0 ]; then
-			check_mds_dmesg '"is approaching"' &&
-				has_warning=1
+		if ! $has_warning; then
+			check_mds_dmesg '"is approaching"' && has_warning=true
 		fi
-		#check two errors ENOSPC for new version of ext4 max_dir_size patch
-		#mainline kernel commit df981d03eeff7971ac7e6ff37000bfa702327ef1
-		#and EFBIG for previous versions
+		# check two errors:
+		# ENOSPC for new ext4 max_dir_size (kernel commit df981d03ee)
+		# EFBIG for previous versions included in ldiskfs series
 		if [ $rc -eq $EFBIG -o $rc -eq $ENOSPC ]; then
 			set_dir_limits 0 0
 			echo "return code $rc received as expected"
 
-			createmany -o $DIR/$tdir/$J_file_ 1000 ||
+			createmany -o $DIR/$tdir/file_extra_$nfiles. 5 ||
 				error_exit "create failed w/o dir size limit"
 
 			check_mds_dmesg '"has reached"' ||
-				error_exit "has reached message should be output"
+				error_exit "reached message should be output"
 
 			[ $has_warning -eq 0 ] &&
 				error_exit "warning message should be output"
 
-			I=$(stat -c%s "$DIR/$tdir")
+			dirsize=$(stat -c%s "$DIR/$tdir")
 
-			if [ $(lustre_version_code $SINGLEMDS) -lt \
-					$(version_code 2.4.51) ]
-			then
-				[[ $I -eq $MAX ]] && return 0
-			else
-				[[ $I -gt $MAX ]] && return 0
-			fi
-			error_exit "current dir size $I, previous limit $MAX"
+			[[ $dirsize -ge $maxsize ]] && return 0
+			error_exit "current dir size $dirsize, " \
+				   "previous limit $maxsize"
 		elif [ $rc -ne 0 ]; then
 			set_dir_limits 0 0
-			error_exit "return code $rc received instead of expected " \
-				   "$EFBIG or $ENOSPC, files in dir $I"
+			error_exit "return $rc received instead of expected " \
+				   "$EFBIG or $ENOSPC, files in dir $dirsize"
 		fi
-		J=$((J+1))
-		I=$(stat -c%s "$DIR/$tdir")
+		nfiles=$((nfiles + 1))
+		dirsize=$(stat -c%s "$DIR/$tdir")
 	done
 
 	set_dir_limits 0 0
-	error "exceeded dir size limit $MAX($MDSCOUNT) : $I bytes"
+	error "exceeded dir size limit $maxsize($MDSCOUNT) : $dirsize bytes"
 }
 run_test 129 "test directory size limit ========================"
 
