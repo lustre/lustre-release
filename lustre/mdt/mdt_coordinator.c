@@ -995,6 +995,32 @@ int mdt_hsm_cdt_stop(struct mdt_device *mdt)
 	RETURN(0);
 }
 
+static int mdt_hsm_set_exists(struct mdt_thread_info *mti,
+			      const struct lu_fid *fid,
+			      u32 archive_id)
+{
+	struct mdt_object *obj;
+	struct md_hsm mh;
+	int rc;
+
+	obj = mdt_hsm_get_md_hsm(mti, fid, &mh);
+	if (IS_ERR(obj))
+		GOTO(out, rc = PTR_ERR(obj));
+
+	if (mh.mh_flags & HS_EXISTS &&
+	    mh.mh_arch_id == archive_id)
+		GOTO(out_obj, rc = 0);
+
+	mh.mh_flags |= HS_EXISTS;
+	mh.mh_arch_id = archive_id;
+	rc = mdt_hsm_attr_set(mti, obj, &mh);
+
+out_obj:
+	mdt_object_put(mti->mti_env, obj);
+out:
+	return rc;
+}
+
 /**
  * register all requests from an hal in the memory list
  * \param mti [IN] context
@@ -1054,20 +1080,11 @@ int mdt_hsm_add_hal(struct mdt_thread_info *mti,
 		}
 
 		if (hai->hai_action == HSMA_ARCHIVE) {
-			struct mdt_object *obj;
-			struct md_hsm hsm;
-
-			obj = mdt_hsm_get_md_hsm(mti, &hai->hai_fid, &hsm);
-			if (IS_ERR(obj) && (PTR_ERR(obj) == -ENOENT))
+			rc = mdt_hsm_set_exists(mti, &hai->hai_fid,
+						hal->hal_archive_id);
+			if (rc == -ENOENT)
 				continue;
-			if (IS_ERR(obj))
-				GOTO(out, rc = PTR_ERR(obj));
-
-			hsm.mh_flags |= HS_EXISTS;
-			hsm.mh_arch_id = hal->hal_archive_id;
-			rc = mdt_hsm_attr_set(mti, obj, &hsm);
-			mdt_object_put(mti->mti_env, obj);
-			if (rc)
+			else if (rc < 0)
 				GOTO(out, rc);
 		}
 
