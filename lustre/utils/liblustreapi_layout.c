@@ -560,6 +560,7 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 			goto error;
 		} else {
 			lum = blob;
+			comp_v1 = (struct lov_comp_md_v1 *)lum;
 			blob = (struct lov_user_md *)((char *)lum + lum_size);
 			lum_size += blob_size;
 		}
@@ -611,7 +612,7 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 			lmm_objects[i].l_ost_idx =
 				comp->llc_objects[i].l_ost_idx;
 
-		if (comp_v1 != NULL) {
+		if (layout->llot_is_composite) {
 			ent = &comp_v1->lcm_entries[ent_idx];
 			ent->lcme_id = comp->llc_id;
 			ent->lcme_flags = comp->llc_flags;
