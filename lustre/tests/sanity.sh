@@ -2069,8 +2069,10 @@ test_27D() {
 	pool_add_targets $POOL $ost_range || error "pool_add_targets failed"
 
 	local skip27D
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
-		skip27D = "-s 29,30,31"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.55) ] &&
+		skip27D += "-s 29"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.55) ] &&
+		skip27D += "-s 30,31"
 	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $skip27D ||
 		error "llapi_layout_test failed"
 
