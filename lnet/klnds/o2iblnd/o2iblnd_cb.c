@@ -1079,14 +1079,6 @@ kiblnd_init_rdma(kib_conn_t *conn, kib_tx_t *tx, int type,
 	LASSERT(tx->tx_nwrq == 0 && tx->tx_nsge == 0);
 	LASSERT(type == IBLND_MSG_GET_DONE || type == IBLND_MSG_PUT_DONE);
 
-	if (kiblnd_rd_size(srcrd) > conn->ibc_max_frags << PAGE_SHIFT) {
-		CERROR("RDMA is too large for peer %s (%d), src size: %d dst size: %d\n",
-		       libcfs_nid2str(conn->ibc_peer->ibp_nid),
-		       conn->ibc_max_frags << PAGE_SHIFT,
-		       kiblnd_rd_size(srcrd), kiblnd_rd_size(dstrd));
-		GOTO(too_big, rc = -EMSGSIZE);
-	}
-
 	for (srcidx = dstidx = wrq_sge = sge_nob = 0;
 	     resid > 0; resid -= sge_nob) {
 		int	prev = dstidx;
@@ -1156,7 +1148,6 @@ kiblnd_init_rdma(kib_conn_t *conn, kib_tx_t *tx, int type,
 		tx->tx_nsge++;
 	}
 
-too_big:
 	if (rc < 0)	/* no RDMA if completing with failure */
 		tx->tx_nwrq = tx->tx_nsge = 0;
 
