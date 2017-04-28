@@ -257,7 +257,7 @@ int __osd_obj2dnode(objset_t *os, uint64_t oid, dnode_t **dnp)
 	dmu_buf_impl_t *dbi;
 	int rc;
 
-	rc = dmu_bonus_hold(os, oid, osd_obj_tag, &db);
+	rc = -dmu_bonus_hold(os, oid, osd_obj_tag, &db);
 	if (rc)
 		return rc;
 
