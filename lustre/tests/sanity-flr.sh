@@ -32,6 +32,9 @@ assert_DIR
 
 build_test_filter
 
+assert_DIR
+rm -rf $DIR/[Rdfs][0-9]*
+
 # global array to store mirror IDs
 declare -a mirror_array
 get_mirror_ids() {
@@ -1787,6 +1790,78 @@ test_45() {
 		error "FLR file $file/$file.2 layouts are not equal"
 }
 run_test 45 "Verify setstripe/getstripe with YAML with FLR file"
+
+verify_46() {
+	local src=$1
+	local dst=$2
+	local msg_prefix=$3
+
+	$LFS setstripe --copy=$src $dst || error "setstripe $dst failed"
+
+	local layout1=$(get_layout_param $src)
+	local layout2=$(get_layout_param $dst)
+	# compare their layout info
+	[ "$layout1" == "$layout2" ] ||
+		error "$msg_prefix $src <=> $dst layouts are not equal"
+}
+
+test_46() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+
+	local file=$DIR/$tdir/$tfile
+	test_mkdir $DIR/$tdir
+
+	########################### 1. PFL file #############################
+	echo "  ** 1. PFL file"
+	rm -f $file
+	$LFS setstripe -E1m -c2 -o0,1 -E2m -c2 -E3m -o1,0 -E4m -c1 -E-1 $file ||
+		error "1. Create PFL $file failed"
+
+	rm -f $file.copy
+	verify_46 $file $file.copy "1. PFL file"
+
+	########################### 2. plain file ###########################
+	echo "  ** 2. plain file"
+	rm -f $file
+	$LFS setstripe -c2 -o0,1 -i1 $file ||
+		error "2. Create plain $file failed"
+
+	rm -f $file.copy
+	verify_46 $file $file.copy "2. plain file"
+
+	########################### 3. FLR file #############################
+	echo "  ** 3. FLR file"
+	rm -f $file
+	$LFS setstripe -N -E1m -c2 -o0,1 -E4m -c1 -Eeof -N -E16m -Eeof $file ||
+		error "3. Create FLR $file failed"
+
+	rm -f $file.copy
+	verify_46 $file $file.copy "3. FLR file"
+
+	local dir=$DIR/$tdir/dir
+	########################### 4. PFL dir ##############################
+	echo "  ** 4. PFL dir"
+	test_mkdir $dir
+	$LFS setstripe -E1m -c2 -E2m -c1 -E-1 $dir ||
+		error "4. setstripe PFL $dir failed"
+
+	test_mkdir $dir.copy
+	verify_46 $dir $dir.copy "3. PFL dir"
+
+	########################### 5. plain dir ############################
+	echo "  ** 5. plain dir"
+	$LFS setstripe -c2 -i-1 $dir || error "4. setstripe plain $dir failed"
+
+	verify_46 $dir $dir.copy "5. plain dir"
+
+	########################### 6. FLR dir ##############################
+	echo "  ** 6. FLR dir"
+	$LFS setstripe -N -E1m -c2 -E2m -c1 -Eeof -N -E4m -Eeof $dir ||
+		error "6. setstripe FLR $dir failed"
+
+	verify_46 $dir $dir.copy "6. FLR dir"
+}
+run_test 46 "Verify setstripe --copy option"
 
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)

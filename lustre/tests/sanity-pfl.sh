@@ -36,6 +36,9 @@ build_test_filter
 	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
 
+assert_DIR
+rm -rf $DIR/[Rdfs][0-9]*
+
 test_0() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
 

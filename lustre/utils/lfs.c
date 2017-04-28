@@ -159,10 +159,11 @@ static inline int lfs_mirror_split(int argc, char **argv)
 	"                 [--stripe-count|-c <stripe_count>]\n"		\
 	"                 [--stripe-index|-i <start_ost_idx>]\n"	\
 	"                 [--stripe-size|-S <stripe_size>]\n"		\
-	"                 [--layout|-L <pattern>]\n"		\
+	"                 [--layout|-L <pattern>]\n"			\
 	"                 [--pool|-p <pool_name>]\n"			\
 	"                 [--ost|-o <ost_indices>]\n"			\
-	"                 [--yaml|-y <yaml_template_file>]\n"
+	"                 [--yaml|-y <yaml_template_file>]\n"		\
+	"                 [--copy=<lustre_src>]\n"
 
 #define SSM_HELP_COMMON \
 	"\tstripe_count: Number of OSTs to stripe over (0=fs default, -1 all)\n" \
@@ -185,7 +186,10 @@ static inline int lfs_mirror_split(int argc, char **argv)
 	"\t              stripe_size.\n"				      \
 	"\tyaml_template_file:\n"					      \
 	"\t              YAML layout template file, can't be used with -c,\n" \
-	"\t              -i, -S, -p, -o, or -E arguments.\n"
+	"\t              -i, -S, -p, -o, or -E arguments.\n"		      \
+	"\tlustre_src:   Lustre file/dir whose layout info is used to set\n"  \
+	"\t              another lustre file or directory, can't used with\n" \
+	"\t              -c, -i, -S, -p, -o, or -E arguments.\n"
 
 #define MIRROR_CREATE_HELP						       \
 	"\tmirror_count: Number of mirrors to be created with the upcoming\n"  \
@@ -2459,6 +2463,7 @@ enum {
 	LFS_MIRROR_FLAGS_OPT,
 	LFS_MIRROR_ID_OPT,
 	LFS_MIRROR_STATE_OPT,
+	LFS_LAYOUT_COPY,
 };
 
 /* functions */
@@ -2498,6 +2503,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	__u16				 mirror_id = 0;
 	char				 cmd[PATH_MAX];
 	bool from_yaml = false;
+	bool from_copy = false;
 	char *template = NULL;
 
 	struct option long_opts[] = {
@@ -2528,6 +2534,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			.name = "flags",	.has_arg = required_argument},
 	{ .val = LFS_MIRROR_ID_OPT,
 			.name = "mirror-id",	.has_arg = required_argument},
+	{ .val = LFS_LAYOUT_COPY,
+			.name = "copy",		.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument},
 /* find	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument }*/
@@ -2657,6 +2665,10 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 			break;
 		}
+		case LFS_LAYOUT_COPY:
+			from_copy = true;
+			template = optarg;
+			break;
 		case 'b':
 			if (!migrate_mode) {
 				fprintf(stderr,
@@ -3033,7 +3045,15 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			goto error;
 	}
 
-	if (from_yaml && (setstripe_args_specified(&lsa) || layout != NULL)) {
+	if (from_yaml && from_copy) {
+		fprintf(stderr,
+			"%s: can't specify --yaml and --copy together\n",
+			progname);
+		goto error;
+	}
+
+	if ((from_yaml || from_copy) &&
+	    (setstripe_args_specified(&lsa) || layout != NULL)) {
 		fprintf(stderr, "error: %s: can't specify --yaml with "
 			"-c, -S, -i, -o, -p or -E options.\n",
 			argv[0]);
@@ -3124,6 +3144,14 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			fprintf(stderr, "error: %s: can't create composite "
 				"layout from template file %s\n",
 				argv[0], template);
+			goto error;
+		}
+	} else if (from_copy) {
+		layout = llapi_layout_get_by_path(template, 0);
+		if (layout == NULL) {
+			fprintf(stderr,
+			    "%s: can't create composite layout from file %s.\n",
+				progname, template);
 			goto error;
 		}
 	}
