@@ -43,6 +43,7 @@
 #include <obd_class.h>
 #include <lnet/lnetctl.h>
 #include <lustre_debug.h>
+#include <lustre_kernelcomm.h>
 #include <lprocfs_status.h>
 #include <lustre_ver.h>
 #include <cl_object.h>
@@ -491,6 +492,8 @@ static int __init obdclass_init(void)
 	int err;
 
 	LCONSOLE_INFO("Lustre: Build Version: "LUSTRE_VERSION_STRING"\n");
+
+	libcfs_kkuc_init();
 
 	err = obd_init_checks();
 	if (err == -EOVERFLOW)

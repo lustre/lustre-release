@@ -105,9 +105,22 @@ struct kkuc_reg {
 	char		 kr_data[0];
 };
 
-static struct list_head kkuc_groups[KUC_GRP_MAX+1] = {};
+static struct list_head kkuc_groups[KUC_GRP_MAX + 1];
 /* Protect message sending against remove and adds */
 static DECLARE_RWSEM(kg_sem);
+
+static inline bool libcfs_kkuc_group_is_valid(int group)
+{
+	return 0 <= group && group < ARRAY_SIZE(kkuc_groups);
+}
+
+void libcfs_kkuc_init(void)
+{
+	int group;
+
+	for (group = 0; group < ARRAY_SIZE(kkuc_groups); group++)
+		INIT_LIST_HEAD(&kkuc_groups[group]);
+}
 
 /** Add a receiver to a broadcast group
  * @param filp pipe to write into
@@ -120,7 +133,7 @@ int libcfs_kkuc_group_add(struct file *filp, int uid, int group,
 {
 	struct kkuc_reg *reg;
 
-	if (group > KUC_GRP_MAX) {
+	if (!libcfs_kkuc_group_is_valid(group)) {
 		CDEBUG(D_WARNING, "Kernelcomm: bad group %d\n", group);
 		return -EINVAL;
 	}
@@ -139,8 +152,6 @@ int libcfs_kkuc_group_add(struct file *filp, int uid, int group,
 	memcpy(reg->kr_data, data, data_len);
 
 	down_write(&kg_sem);
-	if (kkuc_groups[group].next == NULL)
-		INIT_LIST_HEAD(&kkuc_groups[group]);
 	list_add(&reg->kr_chain, &kkuc_groups[group]);
 	up_write(&kg_sem);
 
@@ -155,8 +166,10 @@ int libcfs_kkuc_group_rem(int uid, int group)
 	struct kkuc_reg *reg, *next;
 	ENTRY;
 
-	if (kkuc_groups[group].next == NULL)
-		RETURN(0);
+	if (!libcfs_kkuc_group_is_valid(group)) {
+		CDEBUG(D_WARNING, "Kernelcomm: bad group %d\n", group);
+		return -EINVAL;
+	}
 
 	if (uid == 0) {
 		/* Broadcast a shutdown message */
@@ -193,9 +206,14 @@ int libcfs_kkuc_group_put(int group, void *payload)
 	int one_success = 0;
 	ENTRY;
 
+	if (!libcfs_kkuc_group_is_valid(group)) {
+		CDEBUG(D_WARNING, "Kernelcomm: bad group %d\n", group);
+		return -EINVAL;
+	}
+
 	down_write(&kg_sem);
 
-	if (unlikely(kkuc_groups[group].next == NULL) ||
+	if (unlikely(list_empty(&kkuc_groups[group])) ||
 	    unlikely(OBD_FAIL_CHECK(OBD_FAIL_MDS_HSM_CT_REGISTER_NET))) {
 		/* no agent have fully registered, CDT will retry */
 		up_write(&kg_sem);
@@ -237,14 +255,10 @@ int libcfs_kkuc_group_foreach(int group, libcfs_kkuc_cb_t cb_func,
 	int		 rc = 0;
 	ENTRY;
 
-	if (group > KUC_GRP_MAX) {
+	if (!libcfs_kkuc_group_is_valid(group)) {
 		CDEBUG(D_WARNING, "Kernelcomm: bad group %d\n", group);
 		RETURN(-EINVAL);
 	}
-
-	/* no link for this group */
-	if (kkuc_groups[group].next == NULL)
-		RETURN(0);
 
 	down_read(&kg_sem);
 	list_for_each_entry(reg, &kkuc_groups[group], kr_chain) {
