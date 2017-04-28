@@ -96,22 +96,47 @@ rmultiop_stop() {
     wait ${!do_node_pid}
 }
 
+#
+# get_version(): Gets the version of an object on servers
+# Parameter1: Client/Machine Name
+# Parameter2: File Path
+# Returns: Objectversion Or -1 if getobjversion fails.
+#
 get_version() {
-    local var=${SINGLEMDS}_svc
-    local client=$1
-    local file=$2
-    local fid
+	local var=${SINGLEMDS}_svc
+	local client=$1
+	local file=$2
+	local fid=$(do_node $client $LFS path2fid $file)
+	local objver=$(do_facet $SINGLEMDS $LCTL --device ${!var} \
+		getobjversion \\\"$fid\\\")
 
-    fid=$(do_node $client $LFS path2fid $file)
-    do_facet $SINGLEMDS $LCTL --device ${!var} getobjversion \\\"$fid\\\"
+	[[ -z $objver ]] && objver=-1
+	echo $objver
 }
+
+#
+# chk_get_version(): Wrapper to get_version().
+# Parameter1: Client/Machine Name
+# Parameter2: File Path
+# Returns: Objectversion Or Exit with error in case objver is -1.
+#
+chk_get_version() {
+	local objver=$(get_version $1 $2)
+
+	[[ "$objver" == "-1" ]] && error "object version is empty."
+	echo $objver
+}
+
 
 #save COS setting
 cos_param_file=$TMP/rvbr-cos-params
 save_lustre_params $(get_facets MDS) "mdt.*.commit_on_sharing" > $cos_param_file
 
 test_0a() {
-        get_version $CLIENT1 $DIR/$tdir/1a || true
+	local ver=$(get_version $CLIENT1 $DIR/$tdir/1a)
+
+	[[ "$ver" == "-1" ]] && return 0
+	return 1
 }
 run_test 0a "getversion for non existent file shouldn't cause kernel panic"
 
@@ -130,17 +155,17 @@ run_test 0b "getversion for non existent fid shouldn't cause kernel panic"
 
 # test set #1: OPEN
 test_1a() { # former test_0a
-    local file=$DIR/$tfile
-    local pre
-    local post
+	local file=$DIR/$tfile
+	local pre
+	local post
 
-    do_node $CLIENT1 mcreate $file
-    pre=$(get_version $CLIENT1 $file)
-    do_node $CLIENT1 openfile -f O_RDWR $file
-    post=$(get_version $CLIENT1 $file)
-    if (($pre != $post)); then
-        error "version changed unexpectedly: pre $pre, post $post"
-    fi
+	do_node $CLIENT1 mcreate $file
+	pre=$(chk_get_version $CLIENT1 $file)
+	do_node $CLIENT1 openfile -f O_RDWR $file
+	post=$(chk_get_version $CLIENT1 $file)
+	if (($pre != $post)); then
+		error "version changed unexpectedly: pre $pre, post $post"
+	fi
 }
 run_test 1a "open and close do not change versions"
 
@@ -192,46 +217,46 @@ run_test 1c "open (non O_CREAT) does not checks versions"
 # - pre-version should be -1
 # - post-version should be valid
 test_2a() {  # extended former test_0d
-    local pre
-    local post
+	local pre
+	local post
 
-    # fifo
-    pre=$(get_version $CLIENT1 $DIR)
-    do_node $CLIENT1 mkfifo $DIR/$tfile-fifo
-    post=$(get_version $CLIENT1 $DIR)
-    if (($pre != $post)); then
-        error "version was changed: pre $pre, post $post"
-    fi
-    # mkdir
-    pre=$(get_version $CLIENT1 $DIR)
-    do_node $CLIENT1 mkdir $DIR/$tfile-dir
-    post=$(get_version $CLIENT1 $DIR)
-    if (($pre != $post)); then
-        error "version was changed: pre $pre, post $post"
-    fi
-    do_node $CLIENT1 rmdir $DIR/$tfile-dir
+	# fifo
+	pre=$(chk_get_version $CLIENT1 $DIR)
+	do_node $CLIENT1 mkfifo $DIR/$tfile-fifo
+	post=$(chk_get_version $CLIENT1 $DIR)
+	if (($pre != $post)); then
+		error "version was changed: pre $pre, post $post"
+	fi
+	# mkdir
+	pre=$(chk_get_version $CLIENT1 $DIR)
+	do_node $CLIENT1 mkdir $DIR/$tfile-dir
+	post=$(chk_get_version $CLIENT1 $DIR)
+	if (($pre != $post)); then
+		error "version was changed: pre $pre, post $post"
+	fi
+	do_node $CLIENT1 rmdir $DIR/$tfile-dir
 
-    # mknod
-    pre=$(get_version $CLIENT1 $DIR)
-    do_node $CLIENT1 mkfifo $DIR/$tfile-nod
-    post=$(get_version $CLIENT1 $DIR)
-    if (($pre != $post)); then
-        error "version was changed: pre $pre, post $post"
-    fi
-    # symlink
-    pre=$(get_version $CLIENT1 $DIR)
-    do_node $CLIENT1 mkfifo $DIR/$tfile-symlink
-    post=$(get_version $CLIENT1 $DIR)
-    if (($pre != $post)); then
-        error "version was changed: pre $pre, post $post"
-    fi
+	# mknod
+	pre=$(chk_get_version $CLIENT1 $DIR)
+	do_node $CLIENT1 mkfifo $DIR/$tfile-nod
+	post=$(chk_get_version $CLIENT1 $DIR)
+	if (($pre != $post)); then
+		error "version was changed: pre $pre, post $post"
+	fi
+	# symlink
+	pre=$(chk_get_version $CLIENT1 $DIR)
+	do_node $CLIENT1 mkfifo $DIR/$tfile-symlink
+	post=$(chk_get_version $CLIENT1 $DIR)
+	if (($pre != $post)); then
+		error "version was changed: pre $pre, post $post"
+	fi
 	# remote directory
 	if [ $MDSCOUNT -ge 2 ]; then
 		#create remote dir
 		local MDT_IDX=1
-		pre=$(get_version $CLIENT1 $DIR)
+		pre=$(chk_get_version $CLIENT1 $DIR)
 		do_node $CLIENT1 $LFS mkdir -i $MDT_IDX $DIR/$tfile-remote_dir
-		post=$(get_version $CLIENT1 $DIR)
+		post=$(chk_get_version $CLIENT1 $DIR)
 		if (($pre != $post)); then
 			error "version was changed: pre $pre, post $post"
 		fi
@@ -264,24 +289,24 @@ test_2b() { # former test_0e
 run_test 2b "create checks version of parent"
 
 test_3a() { # former test_0f
-    local pre
-    local post
+	local pre
+	local post
 
-    do_node $CLIENT1 mcreate $DIR/$tfile
-    pre=$(get_version $CLIENT1 $DIR)
-    do_node $CLIENT1 rm $DIR/$tfile
-    post=$(get_version $CLIENT1 $DIR)
-    if (($pre != $post)); then
-        error "version was changed: pre $pre, post $post"
-    fi
+	do_node $CLIENT1 mcreate $DIR/$tfile
+	pre=$(chk_get_version $CLIENT1 $DIR)
+	do_node $CLIENT1 rm $DIR/$tfile
+	post=$(chk_get_version $CLIENT1 $DIR)
+	if (($pre != $post)); then
+		error "version was changed: pre $pre, post $post"
+	fi
 
 	if [ $MDSCOUNT -ge 2 ]; then
 		#create remote dir
 		local MDT_IDX=1
 		do_node $CLIENT1 $LFS mkdir -i $MDT_IDX $DIR/$tfile-remote_dir
-		pre=$(get_version $CLIENT1 $DIR)
+		pre=$(chk_get_version $CLIENT1 $DIR)
 		do_node $CLIENT1 rmdir $DIR/$tfile-remote_dir
-		post=$(get_version $CLIENT1 $DIR)
+		post=$(chk_get_version $CLIENT1 $DIR)
 		if (($pre != $post)); then
 			error "version was changed: pre $pre, post $post"
 		fi
@@ -313,32 +338,32 @@ test_3b() { # former test_0g
 run_test 3b "unlink checks version of parent"
 
 test_4a() { # former test_0h
-    local file=$DIR/$tfile
-    local pre
-    local post
+	local file=$DIR/$tfile
+	local pre
+	local post
 
-    do_node $CLIENT1 mcreate $file
-    pre=$(get_version $CLIENT1 $file)
-    do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $file
-    post=$(get_version $CLIENT1 $file)
-    if (($pre == $post)); then
-        error "version not changed: pre $pre, post $post"
-    fi
+	do_node $CLIENT1 mcreate $file
+	pre=$(chk_get_version $CLIENT1 $file)
+	do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $file
+	post=$(chk_get_version $CLIENT1 $file)
+	if (($pre == $post)); then
+		error "version not changed: pre $pre, post $post"
+	fi
 }
 run_test 4a "setattr of UID changes versions"
 
 test_4b() { # former test_0i
-    local file=$DIR/$tfile
-    local pre
-    local post
+	local file=$DIR/$tfile
+	local pre
+	local post
 
-    do_node $CLIENT1 mcreate $file
-    pre=$(get_version $CLIENT1 $file)
-    do_node $CLIENT1 chgrp $RUNAS_GID $file
-    post=$(get_version $CLIENT1 $file)
-    if (($pre == $post)); then
-        error "version not changed: pre $pre, post $post"
-    fi
+	do_node $CLIENT1 mcreate $file
+	pre=$(chk_get_version $CLIENT1 $file)
+	do_node $CLIENT1 chgrp $RUNAS_GID $file
+	post=$(chk_get_version $CLIENT1 $file)
+	if (($pre == $post)); then
+		error "version not changed: pre $pre, post $post"
+	fi
 }
 run_test 4b "setattr of GID changes versions"
 
@@ -389,17 +414,17 @@ test_4d() { # former test_0k
 run_test 4d "setattr of GID checks versions"
 
 test_4e() { # former test_0l
-    local file=$DIR/$tfile
-    local pre
-    local post
+	local file=$DIR/$tfile
+	local pre
+	local post
 
-    do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $file
-    pre=$(get_version $CLIENT1 $file)
-    do_node $CLIENT1 chmod 666 $file
-    post=$(get_version $CLIENT1 $file)
-    if (($pre == $post)); then
-        error "version not changed: pre $pre, post $post"
-    fi
+	do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $file
+	pre=$(chk_get_version $CLIENT1 $file)
+	do_node $CLIENT1 chmod 666 $file
+	post=$(chk_get_version $CLIENT1 $file)
+	if (($pre == $post)); then
+		error "version not changed: pre $pre, post $post"
+	fi
 }
 run_test 4e "setattr of permission changes versions"
 
@@ -427,18 +452,18 @@ test_4f() { # former test_0m
 run_test 4f "setattr of permission checks versions"
 
 test_4g() { # former test_0n
-    local file=$DIR/$tfile
-    local pre
-    local post
+	local file=$DIR/$tfile
+	local pre
+	local post
 
-    do_node $CLIENT1 mcreate $file
-    pre=$(get_version $CLIENT1 $file)
-    do_node $CLIENT1 chattr +i $file
-    post=$(get_version $CLIENT1 $file)
-    do_node $CLIENT1 chattr -i $file
-    if (($pre == $post)); then
-        error "version not changed: pre $pre, post $post"
-    fi
+	do_node $CLIENT1 mcreate $file
+	pre=$(chk_get_version $CLIENT1 $file)
+	do_node $CLIENT1 chattr +i $file
+	post=$(chk_get_version $CLIENT1 $file)
+	do_node $CLIENT1 chattr -i $file
+	if (($pre == $post)); then
+		error "version not changed: pre $pre, post $post"
+	fi
 }
 run_test 4g "setattr of flags changes versions"
 
@@ -482,41 +507,41 @@ test_4h() { # former test_0o
 run_test 4h "setattr of flags checks versions"
 
 test_4i() { # former test_0p
-    local file=$DIR/$tfile
-    local pre
-    local post
-    local ad_orig
-    local var=${SINGLEMDS}_svc
+	local file=$DIR/$tfile
+	local pre
+	local post
+	local ad_orig
+	local var=${SINGLEMDS}_svc
 
-    ad_orig=$(do_facet $SINGLEMDS "$LCTL get_param mdd.${!var}.atime_diff")
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.atime_diff=0"
-    do_node $CLIENT1 mcreate $file
-    pre=$(get_version $CLIENT1 $file)
-    do_node $CLIENT1 touch $file
-    post=$(get_version $CLIENT1 $file)
-    #
-    # We don't fail MDS in this test.  atime_diff shall be
-    # restored to its original value.
-    #
-    do_facet $SINGLEMDS "$LCTL set_param $ad_orig"
-    if (($pre != $post)); then
-        error "version changed unexpectedly: pre $pre, post $post"
-    fi
+	ad_orig=$(do_facet $SINGLEMDS "$LCTL get_param mdd.${!var}.atime_diff")
+	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.atime_diff=0"
+	do_node $CLIENT1 mcreate $file
+	pre=$(chk_get_version $CLIENT1 $file)
+	do_node $CLIENT1 touch $file
+	post=$(chk_get_version $CLIENT1 $file)
+	#
+	# We don't fail MDS in this test.  atime_diff shall be
+	# restored to its original value.
+	#
+	do_facet $SINGLEMDS "$LCTL set_param $ad_orig"
+	if (($pre != $post)); then
+		error "version changed unexpectedly: pre $pre, post $post"
+	fi
 }
 run_test 4i "setattr of times does not change versions"
 
 test_4j() { # former test_0q
-    local file=$DIR/$tfile
-    local pre
-    local post
+	local file=$DIR/$tfile
+	local pre
+	local post
 
-    do_node $CLIENT1 mcreate $file
-    pre=$(get_version $CLIENT1 $file)
-    do_node $CLIENT1 $TRUNCATE $file 1
-    post=$(get_version $CLIENT1 $file)
-    if (($pre != $post)); then
-        error "version changed unexpectedly: pre $pre, post $post"
-    fi
+	do_node $CLIENT1 mcreate $file
+	pre=$(chk_get_version $CLIENT1 $file)
+	do_node $CLIENT1 $TRUNCATE $file 1
+	post=$(chk_get_version $CLIENT1 $file)
+	if (($pre != $post)); then
+		error "version changed unexpectedly: pre $pre, post $post"
+	fi
 }
 run_test 4j "setattr of size does not change versions"
 
@@ -560,24 +585,25 @@ test_4k() { # former test_0r
 run_test 4k "setattr of times and size does not check versions"
 
 test_5a() { # former test_0s
-    local pre
-    local post
-    local tp_pre
-    local tp_post
+	local pre
+	local post
+	local tp_pre
+	local tp_post
 
-    do_node $CLIENT1 mcreate $DIR/$tfile
-    do_node $CLIENT1 mkdir -p $DIR/$tdir
-    pre=$(get_version $CLIENT1 $DIR/$tfile)
-    tp_pre=$(get_version $CLIENT1 $DIR/$tdir)
-    do_node $CLIENT1 link $DIR/$tfile $DIR/$tdir/$tfile
-    post=$(get_version $CLIENT1 $DIR/$tfile)
-    tp_post=$(get_version $CLIENT1 $DIR/$tdir)
-    if (($pre == $post)); then
-        error "version of source not changed: pre $pre, post $post"
-    fi
-    if (($tp_pre != $tp_post)); then
-        error "version of target parent was changed: pre $tp_pre, post $tp_post"
-    fi
+	do_node $CLIENT1 mcreate $DIR/$tfile
+	do_node $CLIENT1 mkdir -p $DIR/$tdir
+	pre=$(chk_get_version $CLIENT1 $DIR/$tfile)
+	tp_pre=$(chk_get_version $CLIENT1 $DIR/$tdir)
+	do_node $CLIENT1 link $DIR/$tfile $DIR/$tdir/$tfile
+	post=$(chk_get_version $CLIENT1 $DIR/$tfile)
+	tp_post=$(chk_get_version $CLIENT1 $DIR/$tdir)
+	if (($pre == $post)); then
+		error "version of source not changed: pre $pre, post $post"
+	fi
+	if (($tp_pre != $tp_post)); then
+		error "version of target parent was changed:"\
+			"pre $tp_pre, post $tp_post"
+	fi
 }
 run_test 5a "link changes versions of source but not target parent"
 
@@ -628,38 +654,40 @@ test_5c() { # former test_0u
 run_test 5c "link checks version of source"
 
 test_6a() { # former test_0v
-    local sp_pre
-    local tp_pre
-    local sp_post
-    local tp_post
+	local sp_pre
+	local tp_pre
+	local sp_post
+	local tp_post
 
-    do_node $CLIENT1 mcreate $DIR/$tfile
-    do_node $CLIENT1 mkdir -p $DIR/$tdir
-    sp_pre=$(get_version $CLIENT1 $DIR)
-    tp_pre=$(get_version $CLIENT1 $DIR/$tdir)
-    do_node $CLIENT1 mv $DIR/$tfile $DIR/$tdir/$tfile
-    sp_post=$(get_version $CLIENT1 $DIR)
-    tp_post=$(get_version $CLIENT1 $DIR/$tdir)
-    if (($sp_pre != $sp_post)); then
-        error "version of source parent was changed: pre $sp_pre, post $sp_post"
-    fi
-    if (($tp_pre != $tp_post)); then
-        error "version of target parent was changed: pre $tp_pre, post $tp_post"
-    fi
+	do_node $CLIENT1 mcreate $DIR/$tfile
+	do_node $CLIENT1 mkdir -p $DIR/$tdir
+	sp_pre=$(chk_get_version $CLIENT1 $DIR)
+	tp_pre=$(chk_get_version $CLIENT1 $DIR/$tdir)
+	do_node $CLIENT1 mv $DIR/$tfile $DIR/$tdir/$tfile
+	sp_post=$(chk_get_version $CLIENT1 $DIR)
+	tp_post=$(chk_get_version $CLIENT1 $DIR/$tdir)
+	if (($sp_pre != $sp_post)); then
+		error "version of source parent was changed:" \
+			"pre $sp_pre, post $sp_post"
+	fi
+	if (($tp_pre != $tp_post)); then
+		error "version of target parent was changed:" \
+			"pre $tp_pre, post $tp_post"
+	fi
 }
 run_test 6a "rename doesn't change versions of source parent and target parent"
 
 test_6b() { # former test_0w
-    local pre
-    local post
+	local pre
+	local post
 
-    do_node $CLIENT1 mcreate $DIR/$tfile
-    pre=$(get_version $CLIENT1 $DIR)
-    do_node $CLIENT1 mv $DIR/$tfile $DIR/$tfile-new
-    post=$(get_version $CLIENT1 $DIR)
-    if (($pre != $post)); then
-        error "version of parent was changed: pre $pre, post $post"
-    fi
+	do_node $CLIENT1 mcreate $DIR/$tfile
+	pre=$(chk_get_version $CLIENT1 $DIR)
+	do_node $CLIENT1 mv $DIR/$tfile $DIR/$tfile-new
+	post=$(chk_get_version $CLIENT1 $DIR)
+	if (($pre != $post)); then
+		error "version of parent was changed: pre $pre, post $post"
+	fi
 }
 run_test 6b "rename within same dir doesn't change version of parent"
 
@@ -1039,74 +1067,75 @@ run_test 8c "create | unlink, create shouldn't fail"
 #   Lustre Client 3:    $CLIENT2:$MOUNT1    ($DIR1)
 #
 test_10b() { # former test_2b
-    local pre
-    local post
-    local var=${SINGLEMDS}_svc
+	local pre
+	local post
+	local var=${SINGLEMDS}_svc
 
-    [ -n "$CLIENTS" ] || { skip "Need two or more clients" && exit 0; }
-    [ $CLIENTCOUNT -ge 2 ] || \
-        { skip "Need two or more clients, have $CLIENTCOUNT" && exit 0; }
+	[ -n "$CLIENTS" ] || { skip "Need two or more clients" && exit 0; }
+	[ $CLIENTCOUNT -ge 2 ] || \
+		{ skip "Need two or more clients, have $CLIENTCOUNT" && \
+			exit 0; }
 
-    do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
-    do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
+	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
-    zconf_mount $CLIENT1 $MOUNT
-    zconf_mount $CLIENT2 $MOUNT1
-    zconf_mount $CLIENT2 $MOUNT2
-    do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile-a
-    do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile-b
+	zconf_mount $CLIENT1 $MOUNT
+	zconf_mount $CLIENT2 $MOUNT1
+	zconf_mount $CLIENT2 $MOUNT2
+	do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile-a
+	do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile-b
 
-    #
-    # Save an MDT transaction number before recovery.
-    #
-    do_node $CLIENT1 touch $DIR1/$tfile
-    pre=$(get_version $CLIENT1 $DIR/$tfile)
+	#
+	# Save an MDT transaction number before recovery.
+	#
+	do_node $CLIENT1 touch $DIR1/$tfile
+	pre=$(chk_get_version $CLIENT1 $DIR/$tfile)
 
-    #
-    # Comments on the replay sequence state the expected result
-    # of each request.
-    #
-    #   "R"     Replayed.
-    #   "U"     Unable to replay.
-    #   "J"     Rejected.
-    #
-    replay_barrier $SINGLEMDS
-    do_node $CLIENT1 chmod 666 $DIR/$tfile-a            # R
-    do_node $CLIENT2 chmod 666 $DIR1/$tfile-b           # R
-    do_node $CLIENT2 chgrp $RUNAS_GID $DIR2/$tfile-a    # U
-    do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $DIR/$tfile-a      # J
-    do_node $CLIENT2 $TRUNCATE $DIR2/$tfile-b 1          # U
-    do_node $CLIENT2 chgrp $RUNAS_GID $DIR1/$tfile-b    # R
-    do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $DIR/$tfile-b      # R
-    zconf_umount $CLIENT2 $MOUNT2
-    facet_failover $SINGLEMDS
+	#
+	# Comments on the replay sequence state the expected result
+	# of each request.
+	#
+	#   "R"     Replayed.
+	#   "U"     Unable to replay.
+	#   "J"     Rejected.
+	#
+	replay_barrier $SINGLEMDS
+	do_node $CLIENT1 chmod 666 $DIR/$tfile-a            # R
+	do_node $CLIENT2 chmod 666 $DIR1/$tfile-b           # R
+	do_node $CLIENT2 chgrp $RUNAS_GID $DIR2/$tfile-a    # U
+	do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $DIR/$tfile-a      # J
+	do_node $CLIENT2 $TRUNCATE $DIR2/$tfile-b 1          # U
+	do_node $CLIENT2 chgrp $RUNAS_GID $DIR1/$tfile-b    # R
+	do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $DIR/$tfile-b      # R
+	zconf_umount $CLIENT2 $MOUNT2
+	facet_failover $SINGLEMDS
 
-    client_evicted $CLIENT1 || error "$CLIENT1:$MOUNT not evicted"
-    client_up $CLIENT2 || error "$CLIENT2:$MOUNT1 evicted"
+	client_evicted $CLIENT1 || error "$CLIENT1:$MOUNT not evicted"
+	client_up $CLIENT2 || error "$CLIENT2:$MOUNT1 evicted"
 
-    #
-    # Check the MDT epoch.  $post must be the first transaction
-    # number assigned after recovery.
-    #
-    do_node $CLIENT2 chmod 666 $DIR1/$tfile
-    post=$(get_version $CLIENT2 $DIR1/$tfile)
-    if (($(($pre >> 32)) == $((post >> 32)))); then
-        error "epoch not changed: pre $pre, post $post"
-    fi
+	#
+	# Check the MDT epoch.  $post must be the first transaction
+	# number assigned after recovery.
+	#
+	do_node $CLIENT2 chmod 666 $DIR1/$tfile
+	post=$(chk_get_version $CLIENT2 $DIR1/$tfile)
+	if (($(($pre >> 32)) == $((post >> 32)))); then
+		error "epoch not changed: pre $pre, post $post"
+	fi
 
-    if (($(($post & 0x00000000ffffffff)) != 1)); then
-        error "transno should restart from one: got $post"
-    fi
+	if (($(($post & 0x00000000ffffffff)) != 1)); then
+		error "transno should restart from one: got $post"
+	fi
 
-    do_node $CLIENT2 stat $DIR1/$tfile-a
-    do_node $CLIENT2 stat $DIR1/$tfile-b
+	do_node $CLIENT2 stat $DIR1/$tfile-a
+	do_node $CLIENT2 stat $DIR1/$tfile-b
 
-    do_node $CLIENT2 $CHECKSTAT -p 0666 -u \\\#$UID -g \\\#$UID \
-            $DIR1/$tfile-a || error "$DIR/$tfile-a: unexpected state"
-    do_node $CLIENT2 $CHECKSTAT -p 0666 -u \\\#$RUNAS_ID -g \\\#$RUNAS_GID \
-            $DIR1/$tfile-b || error "$DIR/$tfile-b: unexpected state"
+	do_node $CLIENT2 $CHECKSTAT -p 0666 -u \\\#$UID -g \\\#$UID \
+		$DIR1/$tfile-a || error "$DIR/$tfile-a: unexpected state"
+	do_node $CLIENT2 $CHECKSTAT -p 0666 -u \\\#$RUNAS_ID -g \\\#$RUNAS_GID \
+		$DIR1/$tfile-b || error "$DIR/$tfile-b: unexpected state"
 
-    zconf_umount $CLIENT2 $MOUNT1
+	zconf_umount $CLIENT2 $MOUNT1
 }
 run_test 10b "3 clients: some, none, and all reqs replayed"
 
