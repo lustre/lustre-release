@@ -190,7 +190,7 @@ lnet_msg_decommit_tx(struct lnet_msg *msg, int status)
 
 		counters->route_length += msg->msg_len;
 		counters->route_count++;
-		goto out;
+		goto incr_stats;
 
 	case LNET_EVENT_PUT:
 		/* should have been decommitted */
@@ -216,6 +216,8 @@ lnet_msg_decommit_tx(struct lnet_msg *msg, int status)
 	}
 
 	counters->send_count++;
+
+incr_stats:
 	if (msg->msg_txpeer)
 		atomic_inc(&msg->msg_txpeer->lpni_stats.send_count);
 	if (msg->msg_txni)
@@ -242,7 +244,7 @@ lnet_msg_decommit_rx(struct lnet_msg *msg, int status)
 	default:
 		LASSERT(ev->type == 0);
 		LASSERT(msg->msg_routing);
-		goto out;
+		goto incr_stats;
 
 	case LNET_EVENT_ACK:
 		LASSERT(msg->msg_type == LNET_MSG_ACK);
@@ -271,6 +273,8 @@ lnet_msg_decommit_rx(struct lnet_msg *msg, int status)
 	}
 
 	counters->recv_count++;
+
+incr_stats:
 	if (msg->msg_rxpeer)
 		atomic_inc(&msg->msg_rxpeer->lpni_stats.recv_count);
 	if (msg->msg_rxni)

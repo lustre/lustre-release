@@ -1903,6 +1903,16 @@ send:
 
 	rc = lnet_post_send_locked(msg, 0);
 
+	if (!rc)
+		CDEBUG(D_NET, "TRACE: %s(%s:%s) -> %s(%s:%s) : %s\n",
+		       libcfs_nid2str(msg->msg_hdr.src_nid),
+		       libcfs_nid2str(msg->msg_txni->ni_nid),
+		       libcfs_nid2str(src_nid),
+		       libcfs_nid2str(msg->msg_hdr.dest_nid),
+		       libcfs_nid2str(dst_nid),
+		       libcfs_nid2str(msg->msg_txpeer->lpni_nid),
+		       lnet_msgtyp2str(msg->msg_type));
+
 	lnet_net_unlock(cpt);
 
 	return rc;
@@ -2378,6 +2388,12 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 
 	for_me = (ni->ni_nid == dest_nid);
 	cpt = lnet_cpt_of_nid(from_nid, ni);
+
+	CDEBUG(D_NET, "TRACE: %s(%s) <- %s : %s\n",
+		libcfs_nid2str(dest_nid),
+		libcfs_nid2str(ni->ni_nid),
+		libcfs_nid2str(src_nid),
+		lnet_msgtyp2str(type));
 
 	switch (type) {
 	case LNET_MSG_ACK:
