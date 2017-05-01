@@ -234,7 +234,7 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
 EXPORT_SYMBOL(ptlrpc_deactivate_import);
 
 static unsigned int
-ptlrpc_inflight_deadline(struct ptlrpc_request *req, time_t now)
+ptlrpc_inflight_deadline(struct ptlrpc_request *req, time64_t now)
 {
         long dl;
 
@@ -259,7 +259,7 @@ ptlrpc_inflight_deadline(struct ptlrpc_request *req, time_t now)
 
 static unsigned int ptlrpc_inflight_timeout(struct obd_import *imp)
 {
-	time_t now = cfs_time_current_sec();
+	time64_t now = ktime_get_real_seconds();
 	struct list_head *tmp, *n;
 	struct ptlrpc_request *req;
 	unsigned int timeout = 0;

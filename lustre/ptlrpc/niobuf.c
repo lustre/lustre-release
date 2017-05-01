@@ -440,7 +440,7 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
 	/* Let's setup deadline for reply unlink. */
 	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK) &&
 	    async && req->rq_bulk_deadline == 0 && cfs_fail_val == 0)
-		req->rq_bulk_deadline = cfs_time_current_sec() + LONG_UNLINK;
+		req->rq_bulk_deadline = ktime_get_real_seconds() + LONG_UNLINK;
 
 	if (ptlrpc_client_bulk_active(req) == 0)	/* completed or */
 		RETURN(1);				/* never registered */
@@ -489,7 +489,7 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 {
 	struct ptlrpc_service_part	*svcpt = req->rq_rqbd->rqbd_svcpt;
 	struct ptlrpc_service		*svc = svcpt->scp_service;
-        int service_time = max_t(int, cfs_time_current_sec() -
+	int service_time = max_t(int, ktime_get_real_seconds() -
                                  req->rq_arrival_time.tv_sec, 1);
 
         if (!(flags & PTLRPC_REPLY_EARLY) &&
@@ -624,7 +624,7 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
         if (unlikely(rc))
                 goto out;
 
-        req->rq_sent = cfs_time_current_sec();
+	req->rq_sent = ktime_get_real_seconds();
 
 	rc = ptl_send_buf(&rs->rs_md_h, rs->rs_repbuf, rs->rs_repdata_len,
 			  (rs->rs_difficult && !rs->rs_no_ack) ?
@@ -883,8 +883,8 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_SEND, request->rq_timeout + 5);
 
-	do_gettimeofday(&request->rq_sent_tv);
-	request->rq_sent = cfs_time_current_sec();
+	request->rq_sent_ns = ktime_get_real();
+	request->rq_sent = ktime_get_real_seconds();
 	/* We give the server rq_timeout secs to process the req, and
 	   add the network latency for our local timeout. */
         request->rq_deadline = request->rq_sent + request->rq_timeout +
@@ -925,7 +925,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	if (rc == -ENOMEM) {
 		/* set rq_sent so that this request is treated
 		 * as a delayed send in the upper layers */
-		request->rq_sent = cfs_time_current_sec();
+		request->rq_sent = ktime_get_real_seconds();
 	}
 
 	if (request->rq_memalloc)

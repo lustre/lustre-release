@@ -59,7 +59,7 @@ void request_out_callback(struct lnet_event *ev)
 	sptlrpc_request_out_callback(req);
 
 	spin_lock(&req->rq_lock);
-	req->rq_real_sent = cfs_time_current_sec();
+	req->rq_real_sent = ktime_get_real_seconds();
 	req->rq_req_unlinked = 1;
 	/* reply_in_callback happened before request_out_callback? */
 	if (req->rq_reply_unlinked)
@@ -250,9 +250,9 @@ void client_bulk_callback(struct lnet_event *ev)
 static void ptlrpc_req_add_history(struct ptlrpc_service_part *svcpt,
 				   struct ptlrpc_request *req)
 {
-	__u64	sec = req->rq_arrival_time.tv_sec;
-	__u32	usec = req->rq_arrival_time.tv_usec >> 4; /* usec / 16 */
-	__u64	new_seq;
+	u64 sec = req->rq_arrival_time.tv_sec;
+	u32 usec = req->rq_arrival_time.tv_nsec / NSEC_PER_USEC / 16; /* usec / 16 */
+	u64 new_seq;
 
 	/* set sequence ID for request and add it to history list,
 	 * it must be called with hold svcpt::scp_lock */
@@ -335,7 +335,7 @@ void request_in_callback(struct lnet_event *ev)
 	req->rq_reqbuf = ev->md.start + ev->offset;
 	if (ev->type == LNET_EVENT_PUT && ev->status == 0)
 		req->rq_reqdata_len = ev->mlength;
-	do_gettimeofday(&req->rq_arrival_time);
+	ktime_get_real_ts64(&req->rq_arrival_time);
 	/* Multi-Rail: keep track of both initiator and source NID. */
 	req->rq_peer = ev->initiator;
 	req->rq_source = ev->source;

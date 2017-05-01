@@ -1926,13 +1926,12 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	 * If getting the lock took more time than
 	 * client was willing to wait, drop it. b=11330
 	 */
-	if (cfs_time_current_sec() > req->rq_deadline ||
+	if (ktime_get_real_seconds() > req->rq_deadline ||
 	    OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
 		no_reply = 1;
-		CERROR("Dropping timed-out read from %s because locking"
-		       "object "DOSTID" took %ld seconds (limit was %ld).\n",
+		CERROR("Dropping timed-out read from %s because locking object " DOSTID " took %lld seconds (limit was %lld).\n",
 		       libcfs_id2str(req->rq_peer), POSTID(&ioo->ioo_oid),
-		       cfs_time_current_sec() - req->rq_arrival_time.tv_sec,
+		       ktime_get_real_seconds() - req->rq_arrival_time.tv_sec,
 		       req->rq_deadline - req->rq_arrival_time.tv_sec);
 		GOTO(out_lock, rc = -ETIMEDOUT);
 	}
@@ -2202,14 +2201,13 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	 * If getting the lock took more time than
 	 * client was willing to wait, drop it. b=11330
 	 */
-	if (cfs_time_current_sec() > req->rq_deadline ||
+	if (ktime_get_real_seconds() > req->rq_deadline ||
 	    OBD_FAIL_CHECK(OBD_FAIL_OST_DROP_REQ)) {
 		no_reply = true;
-		CERROR("%s: Dropping timed-out write from %s because locking "
-		       "object "DOSTID" took %ld seconds (limit was %ld).\n",
+		CERROR("%s: Dropping timed-out write from %s because locking object " DOSTID " took %lld seconds (limit was %lld).\n",
 		       tgt_name(tsi->tsi_tgt), libcfs_id2str(req->rq_peer),
 		       POSTID(&ioo->ioo_oid),
-		       cfs_time_current_sec() - req->rq_arrival_time.tv_sec,
+		       ktime_get_real_seconds() - req->rq_arrival_time.tv_sec,
 		       req->rq_deadline - req->rq_arrival_time.tv_sec);
 		GOTO(out_lock, rc = -ETIMEDOUT);
 	}

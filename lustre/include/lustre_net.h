@@ -786,16 +786,16 @@ struct ptlrpc_cli_req {
 	cfs_duration_t			 cr_delay_limit;
 	/** time request was first queued */
 	cfs_time_t			 cr_queued_time;
-	/** request sent timeval */
-	struct timeval			 cr_sent_tv;
+	/** request sent in nanoseconds */
+	ktime_t				 cr_sent_ns;
 	/** time for request really sent out */
-	time_t				 cr_sent_out;
+	time64_t			 cr_sent_out;
 	/** when req reply unlink must finish. */
-	time_t				 cr_reply_deadline;
+	time64_t			 cr_reply_deadline;
 	/** when req bulk unlink must finish. */
-	time_t				 cr_bulk_deadline;
+	time64_t			 cr_bulk_deadline;
 	/** when req unlink must finish. */
-	time_t				 cr_req_deadline;
+	time64_t			 cr_req_deadline;
 	/** Portal to which this request would be sent */
 	short				 cr_req_ptl;
 	/** Portal where to wait for reply and where reply would be sent */
@@ -850,7 +850,7 @@ struct ptlrpc_cli_req {
 #define rq_bulk			rq_cli.cr_bulk
 #define rq_delay_limit		rq_cli.cr_delay_limit
 #define rq_queued_time		rq_cli.cr_queued_time
-#define rq_sent_tv		rq_cli.cr_sent_tv
+#define rq_sent_ns		rq_cli.cr_sent_ns
 #define rq_real_sent		rq_cli.cr_sent_out
 #define rq_reply_deadline	rq_cli.cr_reply_deadline
 #define rq_bulk_deadline	rq_cli.cr_bulk_deadline
@@ -912,7 +912,7 @@ struct ptlrpc_srv_req {
 	struct ptlrpc_nrs_request	 sr_nrq;
 	/** @} nrs */
 	/** request arrival time */
-	struct timeval			 sr_arrival_time;
+	struct timespec64		 sr_arrival_time;
 	/** server's half ctx */
 	struct ptlrpc_svc_ctx		*sr_svc_ctx;
 	/** (server side), pointed directly into req buffer */
@@ -1117,9 +1117,9 @@ struct ptlrpc_request {
 	/**
 	 * when request/reply sent (secs), or time when request should be sent
 	 */
-	time_t				 rq_sent;
+	time64_t			 rq_sent;
 	/** when request must finish. */
-	time_t				 rq_deadline;
+	time64_t			 rq_deadline;
 	/** request format description */
 	struct req_capsule		 rq_pill;
 };
@@ -2051,7 +2051,7 @@ static inline int ptlrpc_client_bulk_active(struct ptlrpc_request *req)
 	LASSERT(req != NULL);
 	desc = req->rq_bulk;
 
-	if (req->rq_bulk_deadline > cfs_time_current_sec())
+	if (req->rq_bulk_deadline > ktime_get_real_seconds())
 		return 1;
 
 	if (!desc)
@@ -2471,7 +2471,7 @@ ptlrpc_client_early(struct ptlrpc_request *req)
 static inline int
 ptlrpc_client_replied(struct ptlrpc_request *req)
 {
-	if (req->rq_reply_deadline > cfs_time_current_sec())
+	if (req->rq_reply_deadline > ktime_get_real_seconds())
 		return 0;
 	return req->rq_replied;
 }
@@ -2480,7 +2480,7 @@ ptlrpc_client_replied(struct ptlrpc_request *req)
 static inline int
 ptlrpc_client_recv(struct ptlrpc_request *req)
 {
-	if (req->rq_reply_deadline > cfs_time_current_sec())
+	if (req->rq_reply_deadline > ktime_get_real_seconds())
 		return 1;
 	return req->rq_receiving_reply;
 }
@@ -2491,11 +2491,11 @@ ptlrpc_client_recv_or_unlink(struct ptlrpc_request *req)
 	int rc;
 
 	spin_lock(&req->rq_lock);
-	if (req->rq_reply_deadline > cfs_time_current_sec()) {
+	if (req->rq_reply_deadline > ktime_get_real_seconds()) {
 		spin_unlock(&req->rq_lock);
 		return 1;
 	}
-	if (req->rq_req_deadline > cfs_time_current_sec()) {
+	if (req->rq_req_deadline > ktime_get_real_seconds()) {
 		spin_unlock(&req->rq_lock);
 		return 1;
 	}

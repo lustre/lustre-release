@@ -111,6 +111,11 @@ static inline struct timespec64 timespec_to_timespec64(const struct timespec ts)
 	return ts;
 }
 
+static inline struct timespec timespec64_to_timespec(const struct timespec64 ts)
+{
+	return ts;
+}
+
 #else
 struct timespec64 {
 	time64_t	tv_sec;		/* seconds */
@@ -123,6 +128,15 @@ static inline struct timespec64 timespec_to_timespec64(const struct timespec ts)
 
 	ret.tv_sec = ts.tv_sec;
 	ret.tv_nsec = ts.tv_nsec;
+	return ret;
+}
+
+static inline struct timespec timespec64_to_timespec(const struct timespec64 ts64)
+{
+	struct timespec ret;
+
+	ret.tv_sec = (time_t)ts64.tv_sec;
+	ret.tv_nsec = ts64.tv_nsec;
 	return ret;
 }
 #endif /* __BITS_PER_LONG != 64 */
@@ -171,6 +185,25 @@ static inline struct timespec64 ktime_to_timespec64(ktime_t kt)
 	return timespec_to_timespec64(ts);
 }
 #endif /* HAVE_KTIME_TO_TIMESPEC64 */
+
+#ifndef HAVE_TIMESPEC64_SUB
+static inline struct timespec64
+timespec64_sub(struct timespec64 later, struct timespec64 earlier)
+{
+	struct timespec diff;
+
+	diff = timespec_sub(timespec64_to_timespec(later),
+			    timespec64_to_timespec(earlier));
+	return timespec_to_timespec64(diff);
+}
+#endif
+
+#ifndef HAVE_TIMESPEC64_TO_KTIME
+static inline ktime_t timespec64_to_ktime(struct timespec64 ts)
+{
+	return ktime_set(ts.tv_sec, ts.tv_nsec);
+}
+#endif
 
 static inline int cfs_time_before(cfs_time_t t1, cfs_time_t t2)
 {

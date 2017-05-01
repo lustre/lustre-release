@@ -435,6 +435,41 @@ ktime_to_timespec64, [
 ]) # LIBCFS_KTIME_TO_TIMESPEC64
 
 #
+# Kernel version 3.17 introduced timespec64_sub
+#
+AC_DEFUN([LIBCFS_TIMESPEC64_SUB],[
+LB_CHECK_COMPILE([does function 'timespec64_sub' exist],
+timespec64_sub, [
+	#include <linux/time.h>
+],[
+	struct timespec64 later,earlier,diff;
+
+	diff = timespec64_sub(later, earlier);
+],[
+	AC_DEFINE(HAVE_TIMESPEC64_SUB, 1,
+		['timespec64_sub' is available])
+])
+]) # LIBCFS_TIMESPEC64_SUB
+
+#
+# Kernel version 3.17 introduced timespec64_to_ktime
+#
+AC_DEFUN([LIBCFS_TIMESPEC64_TO_KTIME],[
+LB_CHECK_COMPILE([does function 'timespec64_to_ktime' exist],
+timespec64_to_ktime, [
+	#include <linux/ktime.h>
+],[
+	struct timespec64 ts;
+	ktime_t now;
+
+	now = timespec64_to_ktime(ts);
+],[
+	AC_DEFINE(HAVE_TIMESPEC64_TO_KTIME, 1,
+		['timespec64_to_ktime' is available])
+])
+]) # LIBCFS_TIMESPEC64_TO_KTIME
+
+#
 # Kernel version 3.19 introduced ktime_get_seconds
 #
 AC_DEFUN([LIBCFS_KTIME_GET_SECONDS],[
@@ -617,6 +652,8 @@ LIBCFS_KTIME_GET_REAL_TS64
 LIBCFS_KTIME_GET_REAL_SECONDS
 LIBCFS_KTIME_GET_REAL_NS
 LIBCFS_KTIME_TO_TIMESPEC64
+LIBCFS_TIMESPEC64_SUB
+LIBCFS_TIMESPEC64_TO_KTIME
 # 3.19
 LIBCFS_KTIME_GET_SECONDS
 # 4.2
