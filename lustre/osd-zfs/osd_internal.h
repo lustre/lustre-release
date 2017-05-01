@@ -74,6 +74,9 @@
 #undef kmem_cache_free
 #endif
 
+#define ZFS_VERSION_CODE	\
+	OBD_OCD_VERSION(ZFS_MAJOR, ZFS_MINOR, ZFS_PATCH, ZFS_FIX)
+
 #define LUSTRE_ROOT_FID_SEQ	0
 #define DMU_OSD_SVNAME		"svname"
 #define DMU_OSD_OI_NAME_BASE	"oi"

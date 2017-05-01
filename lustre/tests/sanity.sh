@@ -15768,7 +15768,7 @@ zfs_oid_to_objid()
 	local objid=$2
 
 	local vdevdir=$(dirname $(facet_vdevice $ost))
-	local cmd="$ZDB -e -p $vdevdir -dddd $(facet_device $ost)"
+	local cmd="$ZDB -e -p $vdevdir -ddddd $(facet_device $ost)"
 	local zfs_zapid=$(do_facet $ost $cmd |
 			  grep -w "/O/0/d$((objid%32))" -C 5 |
 			  awk '/Object/{getline; print $1}')
@@ -15805,6 +15805,7 @@ test_312() { # LU-4856
 	local max_blksz=$(do_facet ost1 \
 			  $ZFS get -p recordsize $(facet_device ost1) |
 			  awk '!/VALUE/{print $3}')
+	local min_blksz=$(getconf PAGE_SIZE)
 
 	# to make life a little bit easier
 	$LFS mkdir -c 1 -i 0 $DIR/$tdir
@@ -15819,7 +15820,7 @@ test_312() { # LU-4856
 
 	# block size change by sequential over write
 	local blksz
-	for ((bs=4096; bs <= max_blksz; bs <<= 2)); do
+	for ((bs=$min_blksz; bs <= max_blksz; bs <<= 2)); do
 		dd if=/dev/zero of=$tf bs=$bs count=1 oflag=sync conv=notrunc
 
 		blksz=$(zfs_object_blksz ost1 $zfs_objid)
@@ -15828,18 +15829,18 @@ test_312() { # LU-4856
 	rm -f $tf
 
 	# block size change by sequential append write
-	dd if=/dev/zero of=$tf bs=4K count=1 oflag=sync conv=notrunc
+	dd if=/dev/zero of=$tf bs=$min_blksz count=1 oflag=sync conv=notrunc
 	oid=$($LFS getstripe $tf | awk '/obdidx/{getline; print $2}')
 	zfs_objid=$(zfs_oid_to_objid ost1 $oid)
 
-	for ((count = 1; count < $((max_blksz / 4096)); count *= 2)); do
-		dd if=/dev/zero of=$tf bs=4K count=$count seek=$count \
+	for ((count = 1; count < $((max_blksz / min_blksz)); count *= 2)); do
+		dd if=/dev/zero of=$tf bs=$min_blksz count=$count seek=$count \
 			oflag=sync conv=notrunc
 
 		blksz=$(zfs_object_blksz ost1 $zfs_objid)
-		blksz=$((blksz / 8192)) # in 2*4K unit
-		[ $blksz -eq $count ] ||
-			error "blksz error(in 8k): $blksz, expected: $count"
+		[ $blksz -eq $((2 * count * min_blksz)) ] ||
+			error "blksz error, actual $blksz, "	\
+				"expected: 2 * $count * $min_blksz"
 	done
 	rm -f $tf
 
@@ -15848,9 +15849,10 @@ test_312() { # LU-4856
 	oid=$($LFS getstripe $tf | awk '/obdidx/{getline; print $2}')
 	zfs_objid=$(zfs_oid_to_objid ost1 $oid)
 
-	dd if=/dev/zero of=$tf bs=8K count=1 oflag=sync conv=notrunc
+	dd if=/dev/zero of=$tf bs=1K count=1 oflag=sync conv=notrunc
 	blksz=$(zfs_object_blksz ost1 $zfs_objid)
-	[ $blksz -eq 8192 ] || error "blksz error: $blksz, expected: 8k"
+	[ $blksz -eq $min_blksz ] ||
+		error "blksz error: $blksz, expected: $min_blksz"
 
 	dd if=/dev/zero of=$tf bs=64K count=1 oflag=sync conv=notrunc seek=128
 	blksz=$(zfs_object_blksz ost1 $zfs_objid)

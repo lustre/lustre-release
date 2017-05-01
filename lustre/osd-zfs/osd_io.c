@@ -278,6 +278,7 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 
 static inline struct page *kmem_to_page(void *addr)
 {
+	LASSERT(!((unsigned long)addr & ~PAGE_MASK));
 	if (is_vmalloc_addr(addr))
 		return vmalloc_to_page(addr);
 	else
@@ -388,6 +389,29 @@ err:
 	RETURN(rc);
 }
 
+static inline arc_buf_t *osd_request_arcbuf(dnode_t *dn, size_t bs)
+{
+	arc_buf_t *abuf;
+
+	abuf = dmu_request_arcbuf(&dn->dn_bonus->db, bs);
+	if (unlikely(!abuf))
+		return ERR_PTR(-ENOMEM);
+
+#if ZFS_VERSION_CODE < OBD_OCD_VERSION(0, 7, 0, 0)
+	/**
+	 * ZFS prior to 0.7.0 doesn't guarantee PAGE_SIZE alignment for zio
+	 * blocks smaller than (PAGE_SIZE << 2). This poses a problem of
+	 * setting up page array for RDMA transfer. See LU-9305.
+	 */
+	if ((unsigned long)abuf->b_data & ~PAGE_MASK) {
+		dmu_return_arcbuf(abuf);
+		return NULL;
+	}
+#endif
+
+	return abuf;
+}
+
 static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 				loff_t off, ssize_t len, struct niobuf_local *lnb)
 {
@@ -409,13 +433,15 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 		off_in_block = off & (bs - 1);
 		sz_in_block = min_t(int, bs - off_in_block, len);
 
+		abuf = NULL;
 		if (sz_in_block == bs) {
 			/* full block, try to use zerocopy */
+			abuf = osd_request_arcbuf(dn, bs);
+			if (unlikely(IS_ERR(abuf)))
+				GOTO(out_err, rc = PTR_ERR(abuf));
+		}
 
-			abuf = dmu_request_arcbuf(&dn->dn_bonus->db, bs);
-			if (unlikely(abuf == NULL))
-				GOTO(out_err, rc = -ENOMEM);
-
+		if (abuf != NULL) {
 			atomic_inc(&osd->od_zerocopy_loan);
 
 			/* go over pages arcbuf contains, put them as

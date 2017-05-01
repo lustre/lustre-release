@@ -406,6 +406,22 @@ your distribution.
 		])
 	])
 
+	dnl #
+	dnl # Define zfs source code version
+	dnl #
+	AS_IF([test x$enable_zfs = xyes], [
+		ZFS_MAJOR=$(echo $zfsver | sed -re ['s/([0-9]+)\.([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\1/'])
+		ZFS_MINOR=$(echo $zfsver | sed -re ['s/([0-9]+)\.([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\2/'])
+		ZFS_PATCH=$(echo $zfsver | sed -re ['s/([0-9]+)\.([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\3/'])
+		ZFS_FIX=$(echo $zfsver   | sed -re ['s/([0-9]+)\.([0-9]+)\.([0-9]+)(\.([0-9]+))?.*/\5/'])
+		AS_IF([test -z "$ZFS_FIX"], [ZFS_FIX="0"])
+
+		AC_DEFINE_UNQUOTED([ZFS_MAJOR], [$ZFS_MAJOR], [zfs major version])
+		AC_DEFINE_UNQUOTED([ZFS_MINOR], [$ZFS_MINOR], [zfs minor version])
+		AC_DEFINE_UNQUOTED([ZFS_PATCH], [$ZFS_PATCH], [zfs patch version])
+		AC_DEFINE_UNQUOTED([ZFS_FIX],   [$ZFS_FIX],   [zfs fix version])
+	])
+
 	AS_IF([test "x$enable_zfs" = xyes], [
 		LB_CHECK_COMPILE([if zfs defines dsl_pool_config_enter/exit],
 		dsl_pool_config_enter, [
