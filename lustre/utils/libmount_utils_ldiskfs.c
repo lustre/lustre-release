@@ -49,9 +49,9 @@
 #include <string.h>
 #include <inttypes.h>
 #include <unistd.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <mntent.h>
-#include <glob.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -66,6 +66,7 @@
 #ifndef BLKGETSIZE64
 #include <linux/fs.h> /* for BLKGETSIZE64 */
 #endif
+#include <linux/major.h>
 #include <linux/types.h>
 #include <linux/version.h>
 #include <linux/lnet/lnetctl.h>
@@ -996,21 +997,140 @@ static int write_file(const char *path, const char *buf)
 	return rc < 0 ? errno : 0;
 }
 
-static int set_blockdev_scheduler(const char *path, const char *scheduler)
+static int tune_md_stripe_cache_size(const char *sys_path,
+				     struct mount_opts *mop)
 {
-	char buf[PATH_MAX], *s, *e, orig_sched[50];
+	char path[PATH_MAX];
+	unsigned long old_stripe_cache_size;
+	unsigned long new_stripe_cache_size;
+	char buf[3 * sizeof(old_stripe_cache_size) + 2];
 	int rc;
 
-	/* Before setting the scheduler, we need to check to see if it's
-	 * already set to "noop". If it is, we don't want to override
-	 * that setting. If it's set to anything other than "noop", set
-	 * the scheduler to what has been passed in. */
+	if (mop->mo_md_stripe_cache_size <= 0)
+		return 0;
 
+	new_stripe_cache_size = mop->mo_md_stripe_cache_size;
+
+	snprintf(path, sizeof(path), "%s/%s", sys_path, STRIPE_CACHE_SIZE);
 	rc = read_file(path, buf, sizeof(buf));
-	if (rc) {
+	if (rc != 0) {
 		if (verbose)
-			fprintf(stderr, "%s: cannot open '%s': %s\n",
+			fprintf(stderr, "warning: cannot read '%s': %s\n",
+				path, strerror(errno));
+		return rc;
+	}
+
+	old_stripe_cache_size = strtoul(buf, NULL, 0);
+	if (old_stripe_cache_size == 0 || old_stripe_cache_size == ULONG_MAX)
+		return EINVAL;
+
+	if (new_stripe_cache_size <= old_stripe_cache_size)
+		return 0;
+
+	snprintf(buf, sizeof(buf), "%lu", new_stripe_cache_size);
+	rc = write_file(path, buf);
+	if (rc != 0) {
+		if (verbose)
+			fprintf(stderr, "warning: cannot write '%s': %s\n",
+				path, strerror(errno));
+		return rc;
+	}
+
+	return 0;
+}
+
+static int tune_max_sectors_kb(const char *sys_path, struct mount_opts *mop)
+{
+	char path[PATH_MAX];
+	unsigned long max_hw_sectors_kb;
+	unsigned long old_max_sectors_kb;
+	unsigned long new_max_sectors_kb;
+	char buf[3 * sizeof(old_max_sectors_kb) + 2];
+	int rc;
+
+	if (mop->mo_max_sectors_kb >= 0) {
+		new_max_sectors_kb = mop->mo_max_sectors_kb;
+		goto have_new_max_sectors_kb;
+	}
+
+	snprintf(path, sizeof(path), "%s/%s", sys_path, MAX_HW_SECTORS_KB_PATH);
+	rc = read_file(path, buf, sizeof(buf));
+	if (rc != 0) {
+		/* No MAX_HW_SECTORS_KB_PATH isn't necessary an
+		 * error for some devices. */
+		return 0;
+	}
+
+	max_hw_sectors_kb = strtoul(buf, NULL, 0);
+	if (max_hw_sectors_kb == 0 || max_hw_sectors_kb == ULLONG_MAX) {
+		/* No digits at all or something weird. */
+		return 0;
+	}
+
+	new_max_sectors_kb = max_hw_sectors_kb;
+
+	/* Don't increase IO request size limit past 16MB.  It is
+	 * about PTLRPC_MAX_BRW_SIZE, but that isn't in a public
+	 * header.  Note that even though the block layer allows
+	 * larger values, setting max_sectors_kb = 32768 causes
+	 * crashes (LU-6974). */
+	if (new_max_sectors_kb > 16 * 1024)
+		new_max_sectors_kb = 16 * 1024;
+
+have_new_max_sectors_kb:
+	snprintf(path, sizeof(path), "%s/%s", sys_path, MAX_SECTORS_KB_PATH);
+	rc = read_file(path, buf, sizeof(buf));
+	if (rc != 0) {
+		/* No MAX_SECTORS_KB_PATH isn't necessary an error for
+		 * some devices. */
+		return 0;
+	}
+
+	old_max_sectors_kb = strtoul(buf, NULL, 0);
+	if (old_max_sectors_kb == 0 || old_max_sectors_kb == ULLONG_MAX) {
+		/* No digits at all or something weird. */
+		return 0;
+	}
+
+	if (new_max_sectors_kb <= old_max_sectors_kb)
+		return 0;
+
+	snprintf(buf, sizeof(buf), "%lu", new_max_sectors_kb);
+	rc = write_file(path, buf);
+	if (rc != 0) {
+		if (verbose)
+			fprintf(stderr, "warning: cannot write '%s': %s\n",
+				path, strerror(errno));
+		return rc;
+	}
+
+	fprintf(stderr, "%s: increased '%s' from %lu to %lu\n",
+		progname, path, old_max_sectors_kb, new_max_sectors_kb);
+
+	return 0;
+}
+
+static int tune_block_dev_scheduler(const char *sys_path, const char *new_sched)
+{
+	char path[PATH_MAX];
+	char buf[PATH_MAX];
+	char *s, *e;
+	char *old_sched;
+	int rc;
+
+	/* Before setting the scheduler, we need to check to see if
+	 * it's already set to "noop". If it is then we don't want to
+	 * override that setting. If it's set to anything other than
+	 * "noop" then set the scheduler to what has been passed
+	 * in. */
+
+	snprintf(path, sizeof(path), "%s/%s", sys_path, SCHEDULER_PATH);
+	rc = read_file(path, buf, sizeof(buf));
+	if (rc != 0) {
+		if (verbose)
+			fprintf(stderr, "%s: cannot read '%s': %s\n",
 				progname, path, strerror(errno));
+
 		return rc;
 	}
 
@@ -1018,31 +1138,70 @@ static int set_blockdev_scheduler(const char *path, const char *scheduler)
 	s = strchr(buf, '[');
 	e = strchr(buf, ']');
 
-	/* If the format is not what we expect. Play it safe and error out. */
-	if (s == NULL || e == NULL) {
+	/* If the format is not what we expect then be safe and error out. */
+	if (s == NULL || e == NULL || !(s < e)) {
 		if (verbose)
-			fprintf(stderr, "%s: cannot parse scheduler "
-					"options for '%s'\n", progname, path);
-		return -EINVAL;
+			fprintf(stderr,
+				"%s: cannot parse scheduler options for '%s'\n",
+				progname, path);
+
+		return EINVAL;
 	}
 
-	snprintf(orig_sched, e - s, "%s", s + 1);
+	old_sched = s + 1;
+	*e = '\0';
 
-	if (strcmp(orig_sched, "noop") == 0 ||
-	    strcmp(orig_sched, scheduler) == 0)
+	if (strcmp(old_sched, "noop") == 0 ||
+	    strcmp(old_sched, new_sched) == 0)
 		return 0;
 
-	rc = write_file(path, scheduler);
-	if (rc) {
+	rc = write_file(path, new_sched);
+	if (rc != 0) {
 		if (verbose)
-			fprintf(stderr, "%s: cannot set scheduler on "
-					"'%s': %s\n", progname, path,
-					strerror(errno));
+			fprintf(stderr,
+				"%s: cannot set scheduler on '%s': %s\n",
+				progname, path, strerror(errno));
 		return rc;
-	} else {
-		fprintf(stderr, "%s: change scheduler of %s from %s to %s\n",
-			progname, path, orig_sched, scheduler);
 	}
+
+	fprintf(stderr, "%s: changed scheduler of '%s' from %s to %s\n",
+		progname, path, old_sched, new_sched);
+
+	return 0;
+}
+
+static int tune_block_dev(const char *src, struct mount_opts *mop);
+
+static int tune_block_dev_slaves(const char *sys_path, struct mount_opts *mop)
+{
+	char slaves_path[PATH_MAX];
+	DIR *slaves_dir;
+	struct dirent *d;
+	int rc = 0;
+
+	snprintf(slaves_path, sizeof(slaves_path), "%s/slaves", sys_path);
+	slaves_dir = opendir(slaves_path);
+	if (slaves_dir == NULL) {
+		if (errno == ENOENT)
+			return 0;
+
+		return errno;
+	}
+
+	while ((d = readdir(slaves_dir)) != NULL) {
+		char path[PATH_MAX];
+		int rc2;
+
+		if (d->d_type != DT_LNK)
+			continue;
+
+		snprintf(path, sizeof(path), "%s/%s", slaves_path, d->d_name);
+		rc2 = tune_block_dev(path, mop);
+		if (rc2 != 0)
+			rc = rc2;
+	}
+
+	closedir(slaves_dir);
 
 	return rc;
 }
@@ -1050,236 +1209,89 @@ static int set_blockdev_scheduler(const char *path, const char *scheduler)
 /* This is to tune the kernel for good SCSI performance.
  * For that we set the value of /sys/block/{dev}/queue/max_sectors_kb
  * to the value of /sys/block/{dev}/queue/max_hw_sectors_kb */
-static int set_blockdev_tunables(char *source, struct mount_opts *mop)
+static int tune_block_dev(const char *src, struct mount_opts *mop)
 {
-	glob_t glob_info = { 0 };
-	struct stat stat_buf;
-	char *chk_major, *chk_minor;
-	char *savept = NULL, *dev;
-	char *ret_path;
-	char buf[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
-	char real_path[PATH_MAX] = {'\0'};
-	int i, rc = 0;
-	int major, minor;
-	char *slave = NULL;
+	struct stat st;
+	char sys_path[PATH_MAX];
+	char partition_path[PATH_MAX];
+	char *real_sys_path = NULL;
+	int rc;
 
-	if (!source)
-		return -EINVAL;
+	if (src == NULL)
+		return EINVAL;
 
-	ret_path = realpath(source, real_path);
-	if (ret_path == NULL) {
+	rc = stat(src, &st);
+	if (rc < 0) {
 		if (verbose)
-			fprintf(stderr, "warning: %s: cannot resolve: %s\n",
-				source, strerror(errno));
-		return -EINVAL;
+			fprintf(stderr, "warning: cannot stat '%s': %s\n",
+				src, strerror(errno));
+		return errno;
 	}
 
-	if (strncmp(real_path, "/dev/loop", 9) == 0)
+	if (!S_ISBLK(st.st_mode))
 		return 0;
 
-	if ((real_path[0] != '/') && (strpbrk(real_path, ",:") != NULL))
+	if (major(st.st_rdev) == LOOP_MAJOR)
 		return 0;
 
-	snprintf(path, sizeof(path), "/sys/block%s", real_path + 4);
-	if (access(path, X_OK) == 0)
-		goto set_params;
+	snprintf(sys_path, sizeof(sys_path), "/sys/dev/block/%u:%u",
+		 major(st.st_rdev), minor(st.st_rdev));
 
-	/* The name of the device say 'X' specified in /dev/X may not
-	 * match any entry under /sys/block/. In that case we need to
-	 * match the major/minor number to find the entry under
-	 * sys/block corresponding to /dev/X */
+	snprintf(partition_path, sizeof(partition_path), "%s/partition",
+		 sys_path);
 
-	/* Don't chop tail digit on /dev/mapper/xxx, LU-478 */
-	if (strncmp(real_path, "/dev/mapper", 11) != 0) {
-		dev = real_path + strlen(real_path);
-		while (--dev > real_path && isdigit(*dev))
-			*dev = 0;
+	rc = access(partition_path, F_OK);
+	if (rc < 0) {
+		if (errno == ENOENT)
+			goto have_whole_dev;
 
-		if (strncmp(real_path, "/dev/md", 7) == 0 && dev[0] == 'p')
-			*dev = 0;
-	}
-
-	rc = stat(real_path, &stat_buf);
-	if (rc) {
 		if (verbose)
-			fprintf(stderr, "warning: %s, device %s stat failed\n",
-				strerror(errno), real_path);
-		return rc;
+			fprintf(stderr,
+				"warning: cannot access '%s': %s\n",
+				partition_path, strerror(errno));
+		rc = errno;
+		goto out;
 	}
 
-	major = major(stat_buf.st_rdev);
-	minor = minor(stat_buf.st_rdev);
-	rc = glob("/sys/block/*", GLOB_NOSORT, NULL, &glob_info);
-	if (rc) {
+	snprintf(sys_path, sizeof(sys_path), "/sys/dev/block/%u:%u/..",
+		 major(st.st_rdev), minor(st.st_rdev));
+
+have_whole_dev:
+	/* Since we recurse on slave devices we resolve the sys_path to
+	 * avoid path buffer overflows. */
+	real_sys_path = realpath(sys_path, NULL);
+	if (real_sys_path == NULL) {
 		if (verbose)
-			fprintf(stderr, "warning: failed to read entries under "
-				"/sys/block\n");
-		globfree(&glob_info);
-		return rc;
+			fprintf(stderr,
+				"warning: cannot resolve '%s': %s\n",
+				sys_path, strerror(errno));
+		rc = errno;
+		goto out;
 	}
 
-	for (i = 0; i < glob_info.gl_pathc; i++){
-		snprintf(path, sizeof(path), "%s/dev", glob_info.gl_pathv[i]);
-
-		rc = read_file(path, buf, sizeof(buf));
-		if (rc)
-			continue;
-
-		if (buf[strlen(buf) - 1] == '\n')
-			buf[strlen(buf) - 1] = '\0';
-
-		chk_major = strtok_r(buf, ":", &savept);
-		chk_minor = savept;
-		if (chk_major != NULL && major == atoi(chk_major) &&
-		    chk_minor != NULL && minor == atoi(chk_minor))
-			break;
-	}
-
-	if (i == glob_info.gl_pathc) {
-		if (verbose)
-			fprintf(stderr,"warning: device %s does not match any "
-				"entry under /sys/block\n", real_path);
-		globfree(&glob_info);
-		return -EINVAL;
-	}
-
-	/* Chop off "/dev" from path we found */
-	path[strlen(glob_info.gl_pathv[i])] = '\0';
-	globfree(&glob_info);
-
-set_params:
-	if (strncmp(real_path, "/dev/md", 7) == 0) {
-		snprintf(real_path, sizeof(real_path), "%s/%s", path,
-			 STRIPE_CACHE_SIZE);
-
-		rc = read_file(real_path, buf, sizeof(buf));
-		if (rc) {
-			if (verbose)
-				fprintf(stderr, "warning: opening %s: %s\n",
-					real_path, strerror(errno));
-			return 0;
-		}
-
-		if (atoi(buf) >= mop->mo_md_stripe_cache_size)
-			return 0;
-
-		if (strlen(buf) - 1 > 0) {
-			snprintf(buf, sizeof(buf), "%d",
-				 mop->mo_md_stripe_cache_size);
-			rc = write_file(real_path, buf);
-			if (rc != 0 && verbose)
-				fprintf(stderr, "warning: opening %s: %s\n",
-					real_path, strerror(errno));
-		}
-		/* Return since raid and disk tunables are different */
-		return rc;
-	}
-
-	if (mop->mo_max_sectors_kb >= 0) {
-		snprintf(buf, sizeof(buf), "%d", mop->mo_max_sectors_kb);
+	if (major(st.st_rdev) == MD_MAJOR) {
+		rc = tune_md_stripe_cache_size(real_sys_path, mop);
 	} else {
-		snprintf(real_path, sizeof(real_path), "%s/%s", path,
-			 MAX_HW_SECTORS_KB_PATH);
-		rc = read_file(real_path, buf, sizeof(buf));
-		if (rc) {
-			if (verbose)
-				fprintf(stderr, "warning: opening %s: %s\n",
-					real_path, strerror(errno));
-			/* No MAX_HW_SECTORS_KB_PATH isn't necessary an
-			 * error for some device. */
-			goto subdevs;
-		}
+		/* Ignore errors from tune_max_sectors_kb() and
+		 * tune_scheduler(). The worst that will happen is a block
+		 * device with an "incorrect" scheduler. */
+		tune_max_sectors_kb(real_sys_path, mop);
+		tune_block_dev_scheduler(real_sys_path, DEFAULT_SCHEDULER);
+
+		/* If device is multipath device then tune its slave
+		 * devices. */
+		rc = tune_block_dev_slaves(real_sys_path, mop);
 	}
 
-	if (strlen(buf) - 1 > 0) {
-		char oldbuf[32] = "", *end = NULL;
-		unsigned long long oldval, newval;
-
-		snprintf(real_path, sizeof(real_path), "%s/%s", path,
-			 MAX_SECTORS_KB_PATH);
-		rc = read_file(real_path, oldbuf, sizeof(oldbuf));
-		/* Only set new parameter if different from the old one. */
-		if (rc != 0 || strcmp(oldbuf, buf) == 0) {
-			/* No MAX_SECTORS_KB_PATH isn't necessary an
-			 * error for some device. */
-			goto subdevs;
-		}
-
-		newval = strtoull(buf, &end, 0);
-		if (newval == 0 || newval == ULLONG_MAX || end == buf)
-			goto subdevs;
-
-		/* Don't increase IO request size limit past 16MB.  It is about
-		 * PTLRPC_MAX_BRW_SIZE, but that isn't in a public header.
-		 * Note that even though the block layer allows larger values,
-		 * setting max_sectors_kb = 32768 causes crashes (LU-6974). */
-		if (mop->mo_max_sectors_kb < 0 && newval > 16 * 1024) {
-			newval = 16 * 1024;
-			snprintf(buf, sizeof(buf), "%llu", newval);
-		}
-
-		oldval = strtoull(oldbuf, &end, 0);
-		/* Don't shrink the current limit. */
-		if (mop->mo_max_sectors_kb < 0 && oldval != ULLONG_MAX &&
-		    newval <= oldval)
-			goto subdevs;
-
-		rc = write_file(real_path, buf);
-		if (rc != 0) {
-			if (verbose)
-				fprintf(stderr, "warning: writing to %s: %s\n",
-					real_path, strerror(errno));
-			/* No MAX_SECTORS_KB_PATH isn't necessary an
-			 * error for some device. */
-			goto subdevs;
-		}
-		fprintf(stderr, "%s: increased %s from %s to %s\n",
-			progname, real_path, oldbuf, buf);
-	}
-
-subdevs:
-	/* Purposely ignore errors reported from set_blockdev_scheduler.
-	 * The worst that will happen is a block device with an "incorrect"
-	 * scheduler. */
-	snprintf(real_path, sizeof(real_path), "%s/%s", path, SCHEDULER_PATH);
-	set_blockdev_scheduler(real_path, DEFAULT_SCHEDULER);
-
-	/* if device is multipath device, tune its slave devices */
-	glob_info.gl_pathc = 0;
-	glob_info.gl_offs = 0;
-	snprintf(real_path, sizeof(real_path), "%s/slaves/*", path);
-	rc = glob(real_path, GLOB_NOSORT, NULL, &glob_info);
-
-	for (i = 0; rc == 0 && i < glob_info.gl_pathc; i++) {
-		slave = basename(glob_info.gl_pathv[i]);
-		snprintf(real_path, sizeof(real_path), "/dev/%s", slave);
-		rc = set_blockdev_tunables(real_path, mop);
-	}
-
-	if (rc == GLOB_NOMATCH) {
-		/* no slave device is not an error */
-		rc = 0;
-	} else if (rc && verbose) {
-		if (slave == NULL) {
-			fprintf(stderr, "warning: %s, failed to read"
-				" entries under %s/slaves\n",
-				strerror(errno), path);
-		} else {
-			fprintf(stderr, "unable to set tunables for"
-				" slave device %s (slave would be"
-				" unable to handle IO request from"
-				" master %s)\n",
-				real_path, source);
-		}
-	}
-	globfree(&glob_info);
+out:
+	free(real_sys_path);
 
 	return rc;
 }
 
 int ldiskfs_tune_lustre(char *dev, struct mount_opts *mop)
 {
-	return set_blockdev_tunables(dev, mop);
+	return tune_block_dev(dev, mop);
 }
 
 int ldiskfs_label_lustre(struct mount_opts *mop)
