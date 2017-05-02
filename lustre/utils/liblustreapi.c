@@ -3445,6 +3445,8 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 			if (ret != 0)
 				return ret;
 		}
+
+		param->fp_lmd->lmd_lmm.lmm_magic = 0;
 		ret = get_lmd_info(path, parent, dir, param->fp_lmd,
 				   param->fp_lum_size);
 		if (ret == 0 && param->fp_lmd->lmd_lmm.lmm_magic == 0 &&

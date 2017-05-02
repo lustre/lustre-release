@@ -4852,8 +4852,22 @@ run_test 56r "check lfs find -size works =========================="
 
 test_56s() { # LU-611
 	TDIR=$DIR/${tdir}s
-	setup_56 $NUMFILES $NUMDIRS "-c $OSTCOUNT"
 
+	#LU-9369
+	setup_56 0 $NUMDIRS
+	for i in $(seq 1 $NUMDIRS); do
+		$SETSTRIPE -c $((OSTCOUNT + 1)) $TDIR/dir$i/$tfile
+	done
+	EXPECTED=$NUMDIRS
+	CMD="$LFIND -c $OSTCOUNT $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] || {
+		$GETSTRIPE -R $TDIR
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+	}
+	rm -rf $TDIR
+
+	setup_56 $NUMFILES $NUMDIRS "-c $OSTCOUNT"
 	if [[ $OSTCOUNT -gt 1 ]]; then
 		$SETSTRIPE -c 1 $TDIR/$tfile.{0,1,2,3}
 		ONESTRIPE=4
@@ -4906,6 +4920,21 @@ run_test 56s "check lfs find -stripe-count works"
 
 test_56t() { # LU-611
 	TDIR=$DIR/${tdir}t
+
+	#LU-9369
+	setup_56 0 $NUMDIRS
+	for i in $(seq 1 $NUMDIRS); do
+		$SETSTRIPE -S 4M $TDIR/dir$i/$tfile
+	done
+	EXPECTED=$NUMDIRS
+	CMD="$LFIND -S 4M $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] || {
+		$GETSTRIPE -R $TDIR
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+	}
+	rm -rf $TDIR
+
 	setup_56 $NUMFILES $NUMDIRS "--stripe-size 512k"
 
 	$SETSTRIPE -S 256k $TDIR/$tfile.{0,1,2,3}
