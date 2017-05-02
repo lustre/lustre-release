@@ -814,6 +814,7 @@ struct osd_iit_param {
 	ldiskfs_group_t bg;
 	__u32 gbase;
 	__u32 offset;
+	__u32 start;
 };
 
 typedef int (*osd_iit_next_policy)(struct osd_thread_info *info,
@@ -830,15 +831,28 @@ typedef int (*osd_iit_exec_policy)(struct osd_thread_info *info,
 
 static int osd_iit_next(struct osd_iit_param *param, __u32 *pos)
 {
+	__u32 offset;
+
+again:
 	param->offset = ldiskfs_find_next_bit(param->bitmap->b_data,
 			LDISKFS_INODES_PER_GROUP(param->sb), param->offset);
 	if (param->offset >= LDISKFS_INODES_PER_GROUP(param->sb)) {
 		*pos = 1 + (param->bg+1) * LDISKFS_INODES_PER_GROUP(param->sb);
 		return SCRUB_NEXT_BREAK;
-	} else {
-		*pos = param->gbase + param->offset;
-		return 0;
 	}
+
+	offset = param->offset++;
+	if (unlikely(*pos == param->gbase + offset && *pos != param->start)) {
+		/* We should NOT find the same object more than once. */
+		CERROR("%s: scan the same object multiple times at the pos: "
+		       "group = %u, base = %u, offset = %u, start = %u\n",
+		       param->sb->s_id, (__u32)param->bg, param->gbase,
+		       offset, param->start);
+		goto again;
+	}
+
+	*pos = param->gbase + offset;
+	return 0;
 }
 
 /**
@@ -1085,9 +1099,6 @@ static int osd_preload_next(struct osd_thread_info *info,
 			  &ooc->ooc_cache[ooc->ooc_producer_idx].oic_fid,
 			  &ooc->ooc_cache[ooc->ooc_producer_idx].oic_lid,
 			  ooc->ooc_pos_preload, param->sb, false);
-	/* If succeed, it needs to move forward; otherwise up layer LFSCK may
-	 * ignore the failure, so it still need to skip the inode next time. */
-	ooc->ooc_pos_preload = param->gbase + ++(param->offset);
 	return rc;
 }
 
@@ -1118,16 +1129,14 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 	struct osd_otable_cache *ooc    = it ? &it->ooi_cache : NULL;
 
 	switch (rc) {
-	case SCRUB_NEXT_CONTINUE:
-		goto next;
-	case SCRUB_NEXT_WAIT:
-		goto wait;
 	case SCRUB_NEXT_NOSCRUB:
 		down_write(&scrub->os_rwsem);
 		scrub->os_new_checked++;
 		sf->sf_items_noscrub++;
 		up_write(&scrub->os_rwsem);
-		goto next;
+	case SCRUB_NEXT_CONTINUE:
+	case SCRUB_NEXT_WAIT:
+		goto wait;
 	}
 
 	rc = osd_scrub_check_update(info, dev, oic, rc);
@@ -1149,9 +1158,6 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 		return 0;
 	}
 
-next:
-	scrub->os_pos_current = param->gbase + ++(param->offset);
-
 wait:
 	if (it != NULL && it->ooi_waiting && ooc != NULL &&
 	    ooc->ooc_pos_preload < scrub->os_pos_current) {
@@ -1164,7 +1170,7 @@ wait:
 	if (scrub->os_full_speed || rc == SCRUB_NEXT_CONTINUE)
 		return 0;
 
-	if (ooc != NULL && osd_scrub_has_window(scrub, ooc)) {
+	if (!ooc || osd_scrub_has_window(scrub, ooc)) {
 		*noslot = false;
 		return 0;
 	}
@@ -1173,7 +1179,7 @@ wait:
 		l_wait_event(thread->t_ctl_waitq, osd_scrub_wakeup(scrub, it),
 			     &lwi);
 
-	if (ooc != NULL && osd_scrub_has_window(scrub, ooc))
+	if (!ooc || osd_scrub_has_window(scrub, ooc))
 		*noslot = false;
 	else
 		*noslot = true;
@@ -1386,6 +1392,8 @@ full:
 		count = &ooc->ooc_cached_items;
 	}
 
+	rc = 0;
+	param.start = *pos;
 	param.bg = (*pos - 1) / LDISKFS_INODES_PER_GROUP(param.sb);
 	param.offset = (*pos - 1) % LDISKFS_INODES_PER_GROUP(param.sb);
 	param.gbase = 1 + param.bg * LDISKFS_INODES_PER_GROUP(param.sb);
@@ -1399,23 +1407,20 @@ full:
 		if (!desc)
 			RETURN(-EIO);
 
-		ldiskfs_lock_group(param.sb, param.bg);
 		if (desc->bg_flags & cpu_to_le16(LDISKFS_BG_INODE_UNINIT)) {
-			ldiskfs_unlock_group(param.sb, param.bg);
 			next_group = true;
 			goto next_group;
 		}
-		ldiskfs_unlock_group(param.sb, param.bg);
 
 		param.bitmap = ldiskfs_read_inode_bitmap(param.sb, param.bg);
 		if (!param.bitmap) {
-			CDEBUG(D_LFSCK, "%.16s: fail to read bitmap for %u, "
+			CERROR("%.16s: fail to read bitmap for %u, "
 			       "scrub will stop, urgent mode\n",
 			       osd_scrub2name(scrub), (__u32)param.bg);
 			RETURN(-EIO);
 		}
 
-		while (*count < max) {
+		do {
 			struct osd_idmap_cache *oic = NULL;
 
 			if (param.offset +
@@ -1442,11 +1447,7 @@ full:
 			}
 
 			rc = exec(info, dev, &param, oic, &noslot, rc);
-			if (rc != 0) {
-				brelse(param.bitmap);
-				RETURN(rc);
-			}
-		}
+		} while (!rc && *pos <= limit && *count < max);
 
 next_group:
 		if (param.bitmap) {
@@ -1454,18 +1455,29 @@ next_group:
 			param.bitmap = NULL;
 		}
 
+		if (rc < 0)
+			GOTO(out, rc);
+
 		if (next_group) {
 			param.bg++;
 			param.offset = 0;
 			param.gbase = 1 +
 				param.bg * LDISKFS_INODES_PER_GROUP(param.sb);
 			*pos = param.gbase;
+			param.start = *pos;
 		}
 	}
 
 	if (*pos > limit)
 		RETURN(SCRUB_IT_ALL);
-	RETURN(0);
+
+out:
+	/* For preload case, increase the iteration cursor,
+	 * then we will not scan the last object repeatedly. */
+	if (preload)
+		dev->od_otable_it->ooi_cache.ooc_pos_preload++;
+
+	RETURN(rc);
 }
 
 static int osd_otable_it_preload(const struct lu_env *env,
@@ -3088,7 +3100,9 @@ static int osd_otable_it_load(const struct lu_env *env,
 	if (hash > OSD_OTABLE_MAX_HASH)
 		hash = OSD_OTABLE_MAX_HASH;
 
-	ooc->ooc_pos_preload = hash;
+	/* The hash is the last checkpoint position,
+	 * we will start from the next one. */
+	ooc->ooc_pos_preload = hash + 1;
 	if (ooc->ooc_pos_preload <= LDISKFS_FIRST_INO(osd_sb(dev)))
 		ooc->ooc_pos_preload = LDISKFS_FIRST_INO(osd_sb(dev)) + 1;
 
