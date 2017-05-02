@@ -538,6 +538,27 @@ AS_IF([test $ENABLEO2IB != "no"], [
 			[struct ib_device.attrs is defined])
 	])
 
+	# A flags argument was added to ib_alloc_pd() in Linux 4.9,
+	# commit ed082d36a7b2c27d1cda55fdfb28af18040c4a89
+	LB_CHECK_COMPILE([if 2arg 'ib_alloc_pd' exists],
+	ib_alloc_pd, [
+		#ifdef HAVE_COMPAT_RDMA
+		#undef PACKAGE_NAME
+		#undef PACKAGE_TARNAME
+		#undef PACKAGE_VERSION
+		#undef PACKAGE_STRING
+		#undef PACKAGE_BUGREPORT
+		#undef PACKAGE_URL
+		#include <linux/compat-2.6.h>
+		#endif
+		#include <rdma/ib_verbs.h>
+	],[
+		ib_alloc_pd(NULL, 0);
+	],[
+		AC_DEFINE(HAVE_IB_ALLOC_PD_2ARGS, 1,
+			[ib_alloc_pd has 2 arguments])
+	])
+
 	LB_CHECK_COMPILE([if function 'ib_inc_rkey' is defined],
 	ib_inc_rkey, [
 		#ifdef HAVE_COMPAT_RDMA

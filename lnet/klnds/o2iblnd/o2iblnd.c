@@ -2729,10 +2729,10 @@ kiblnd_dev_failover(kib_dev_t *dev)
         hdev->ibh_cmid  = cmid;
         hdev->ibh_ibdev = cmid->device;
 
-#ifdef HAVE_IB_GET_DMA_MR
-	pd = ib_alloc_pd(cmid->device);
-#else
+#ifdef HAVE_IB_ALLOC_PD_2ARGS
 	pd = ib_alloc_pd(cmid->device, 0);
+#else
+	pd = ib_alloc_pd(cmid->device);
 #endif
 	if (IS_ERR(pd)) {
 		rc = PTR_ERR(pd);
