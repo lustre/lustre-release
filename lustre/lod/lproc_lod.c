@@ -669,8 +669,6 @@ static int lod_osts_seq_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-LPROC_SEQ_FOPS_RO_TYPE(lod, uuid);
-
 LPROC_SEQ_FOPS_RO_TYPE(lod, dt_blksize);
 LPROC_SEQ_FOPS_RO_TYPE(lod, dt_kbytestotal);
 LPROC_SEQ_FOPS_RO_TYPE(lod, dt_kbytesfree);
@@ -738,8 +736,6 @@ lod_lmv_failout_seq_write(struct file *file, const char __user *buffer,
 LPROC_SEQ_FOPS(lod_lmv_failout);
 
 static struct lprocfs_vars lprocfs_lod_obd_vars[] = {
-	{ .name	=	"uuid",
-	  .fops	=	&lod_uuid_fops		},
 	{ .name	=	"stripesize",
 	  .fops	=	&lod_stripesize_fops	},
 	{ .name	=	"stripeoffset",
@@ -799,7 +795,7 @@ int lod_procfs_init(struct lod_device *lod)
 	int			 rc;
 
 	obd->obd_vars = lprocfs_lod_obd_vars;
-	rc = lprocfs_obd_setup(obd);
+	rc = lprocfs_obd_setup(obd, true);
 	if (rc) {
 		CERROR("%s: cannot setup procfs entry: %d\n",
 		       obd->obd_name, rc);

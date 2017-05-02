@@ -546,13 +546,6 @@ commitrw_cleanup:
 	return rc;
 }
 
-LPROC_SEQ_FOPS_RO_TYPE(echo, uuid);
-static struct lprocfs_vars lprocfs_echo_obd_vars[] = {
-	{ .name	=	"uuid",
-	  .fops	=	&echo_uuid_fops		},
-	{ NULL }
-};
-
 static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	int			rc;
@@ -581,8 +574,7 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 				    LVB_T_NONE, NULL, &obd->u.echo.eo_nl_lock);
         LASSERT (rc == ELDLM_OK);
 
-	obd->obd_vars = lprocfs_echo_obd_vars;
-	if (lprocfs_obd_setup(obd) == 0 &&
+	if (!lprocfs_obd_setup(obd, true) &&
             lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
                 lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
                                      LPROCFS_CNTR_AVGMINMAX,

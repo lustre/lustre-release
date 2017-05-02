@@ -67,16 +67,6 @@ MODULE_PARM_DESC(oss_io_cpts, "CPU partitions OSS IO threads should run on");
 
 static struct cfs_cpt_table	*ost_io_cptable;
 
-#ifdef CONFIG_PROC_FS
-LPROC_SEQ_FOPS_RO_TYPE(ost, uuid);
-
-static struct lprocfs_vars lprocfs_ost_obd_vars[] = {
-	{ .name	=	"uuid",
-	  .fops	=	&ost_uuid_fops	},
-	{ NULL }
-};
-#endif /* CONFIG_PROC_FS */
-
 /* Sigh - really, this is an OSS, the _server_, not the _target_ */
 static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 {
@@ -86,10 +76,8 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 	int rc;
 	ENTRY;
 
-#ifdef CONFIG_PROC_FS
-	obd->obd_vars = lprocfs_ost_obd_vars;
-	lprocfs_obd_setup(obd);
-#endif
+	lprocfs_obd_setup(obd, true);
+
 	mutex_init(&ost->ost_health_mutex);
 
 	svc_conf = (typeof(svc_conf)) {

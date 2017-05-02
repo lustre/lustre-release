@@ -2874,7 +2874,7 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			obd->obd_proc_entry = NULL;
 		}
 	} else {
-		rc = lprocfs_obd_setup(obd);
+		rc = lprocfs_obd_setup(obd, false);
 	}
 
 	/* If the basic OSC proc tree construction succeeded then

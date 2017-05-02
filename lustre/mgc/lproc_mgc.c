@@ -39,7 +39,6 @@
 
 #ifdef CONFIG_PROC_FS
 
-LPROC_SEQ_FOPS_RO_TYPE(mgc, uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mgc, connect_flags);
 LPROC_SEQ_FOPS_RO_TYPE(mgc, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mgc, conn_uuid);
@@ -55,8 +54,6 @@ static int mgc_ir_state_seq_show(struct seq_file *m, void *v)
 LPROC_SEQ_FOPS_RO(mgc_ir_state);
 
 struct lprocfs_vars lprocfs_mgc_obd_vars[] = {
-	{ .name	=	"uuid",
-	  .fops	=	&mgc_uuid_fops		},
 	{ .name	=	"ping",
 	  .fops	=	&mgc_ping_fops,
 	  .proc_mode =	0222			},

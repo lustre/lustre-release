@@ -168,14 +168,7 @@ LPROC_SEQ_FOPS(mdc_rpc_stats);
 
 LPROC_SEQ_FOPS_WO_TYPE(mdc, ping);
 
-LPROC_SEQ_FOPS_RO_TYPE(mdc, uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, connect_flags);
-LPROC_SEQ_FOPS_RO_TYPE(mdc, blksize);
-LPROC_SEQ_FOPS_RO_TYPE(mdc, kbytestotal);
-LPROC_SEQ_FOPS_RO_TYPE(mdc, kbytesfree);
-LPROC_SEQ_FOPS_RO_TYPE(mdc, kbytesavail);
-LPROC_SEQ_FOPS_RO_TYPE(mdc, filestotal);
-LPROC_SEQ_FOPS_RO_TYPE(mdc, filesfree);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, conn_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mdc, timeouts);
@@ -185,25 +178,11 @@ LPROC_SEQ_FOPS_RW_TYPE(mdc, import);
 LPROC_SEQ_FOPS_RW_TYPE(mdc, pinger_recov);
 
 struct lprocfs_vars lprocfs_mdc_obd_vars[] = {
-	{ .name	=	"uuid",
-	  .fops	=	&mdc_uuid_fops		},
 	{ .name	=	"ping",
 	  .fops	=	&mdc_ping_fops,
 	  .proc_mode =	0222			},
 	{ .name	=	"connect_flags",
 	  .fops	=	&mdc_connect_flags_fops	},
-	{ .name	=	"blocksize",
-	  .fops	=	&mdc_blksize_fops	},
-	{ .name	=	"kbytestotal",
-	  .fops	=	&mdc_kbytestotal_fops	},
-	{ .name	=	"kbytesfree",
-	  .fops	=	&mdc_kbytesfree_fops	},
-	{ .name	=	"kbytesavail",
-	  .fops	=	&mdc_kbytesavail_fops	},
-	{ .name	=	"filestotal",
-	  .fops	=	&mdc_filestotal_fops	},
-	{ .name	=	"filesfree",
-	  .fops	=	&mdc_filesfree_fops	},
 	{ .name	=	"mds_server_uuid",
 	  .fops	=	&mdc_server_uuid_fops	},
 	{ .name	=	"mds_conn_uuid",

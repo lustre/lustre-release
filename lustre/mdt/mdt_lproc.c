@@ -762,8 +762,6 @@ mdt_sync_count_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_sync_count);
 
-
-LPROC_SEQ_FOPS_RO_TYPE(mdt, uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, num_exports);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, target_instance);
@@ -778,8 +776,6 @@ LPROC_SEQ_FOPS_RW_TYPE(mdt, recovery_time_hard);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, recovery_time_soft);
 
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
-	{ .name =	"uuid",
-	  .fops =	&mdt_uuid_fops				},
 	{ .name =	"recovery_status",
 	  .fops =	&mdt_recovery_status_fops		},
 	{ .name =	"num_exports",
@@ -927,7 +923,7 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 	LASSERT(name != NULL);
 
 	obd->obd_vars = lprocfs_mdt_obd_vars;
-	rc = lprocfs_obd_setup(obd);
+	rc = lprocfs_obd_setup(obd, true);
 	if (rc) {
 		CERROR("%s: cannot create proc entries: rc = %d\n",
 		       mdt_obd_name(mdt), rc);

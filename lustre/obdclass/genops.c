@@ -213,6 +213,12 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 		}
 	}
 #endif
+	type->typ_kobj = kobject_create_and_add(type->typ_name, lustre_kobj);
+	if (!type->typ_kobj) {
+		rc = -ENOMEM;
+		GOTO(failed, rc);
+	}
+
         if (ldt != NULL) {
                 type->typ_lu = ldt;
                 rc = lu_device_type_init(ldt);
@@ -227,6 +233,8 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
         RETURN (0);
 
 failed:
+	if (type->typ_kobj)
+		kobject_put(type->typ_kobj);
 	if (type->typ_name != NULL) {
 #ifdef CONFIG_PROC_FS
 		if (type->typ_procroot != NULL)
@@ -261,6 +269,9 @@ int class_unregister_type(const char *name)
                 OBD_FREE_PTR(type->typ_md_ops);
                 RETURN(-EBUSY);
         }
+
+	if (type->typ_kobj)
+		kobject_put(type->typ_kobj);
 
 	/* we do not use type->typ_procroot as for compatibility purposes
 	 * other modules can share names (i.e. lod can use lov entry). so

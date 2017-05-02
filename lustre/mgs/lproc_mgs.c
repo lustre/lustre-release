@@ -202,15 +202,12 @@ int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
 	return 0;
 }
 
-LPROC_SEQ_FOPS_RO_TYPE(mgs, uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mgs, num_exports);
 LPROC_SEQ_FOPS_RO_TYPE(mgs, hash);
 LPROC_SEQ_FOPS_WO_TYPE(mgs, evict_client);
 LPROC_SEQ_FOPS_RW_TYPE(mgs, ir_timeout);
 
 static struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
-	{ .name	=	"uuid",
-	  .fops	=	&mgs_uuid_fops		},
 	{ .name	=	"num_exports",
 	  .fops	=	&mgs_num_exports_fops	},
 	{ .name	=	"hash_stats",
@@ -230,7 +227,7 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 	int		   rc;
 
 	obd->obd_vars = lprocfs_mgs_obd_vars;
-	rc = lprocfs_obd_setup(obd);
+	rc = lprocfs_obd_setup(obd, true);
 	if (rc != 0)
 		GOTO(out, rc);
 

@@ -969,7 +969,7 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 #ifdef CONFIG_PROC_FS
 	obd->obd_vars = lprocfs_mgc_obd_vars;
-	lprocfs_obd_setup(obd);
+	lprocfs_obd_setup(obd, true);
 #endif
 	sptlrpc_lprocfs_cliobd_attach(obd);
 

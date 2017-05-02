@@ -444,6 +444,16 @@ int lprocfs_uuid_seq_show(struct seq_file *m, void *data)
 }
 EXPORT_SYMBOL(lprocfs_uuid_seq_show);
 
+static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,
+			 char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kobj);
+
+	return sprintf(buf, "%s\n", obd->obd_uuid.uuid);
+}
+LUSTRE_RO_ATTR(uuid);
+
 int lprocfs_name_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *dev = data;
@@ -454,104 +464,122 @@ int lprocfs_name_seq_show(struct seq_file *m, void *data)
 }
 EXPORT_SYMBOL(lprocfs_name_seq_show);
 
-int lprocfs_blksize_seq_show(struct seq_file *m, void *data)
+static ssize_t blocksize_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
-	struct obd_device *obd = data;
-	struct obd_statfs  osfs;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kobj);
+	struct obd_statfs osfs;
 	int rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 			    OBD_STATFS_NODELAY);
 	if (!rc)
-		seq_printf(m, "%u\n", osfs.os_bsize);
+		return sprintf(buf, "%u\n", osfs.os_bsize);
+
 	return rc;
 }
-EXPORT_SYMBOL(lprocfs_blksize_seq_show);
+LUSTRE_RO_ATTR(blocksize);
 
-int lprocfs_kbytestotal_seq_show(struct seq_file *m, void *data)
+static ssize_t kbytestotal_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct obd_device *obd = data;
-	struct obd_statfs  osfs;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kobj);
+	struct obd_statfs osfs;
 	int rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 			    OBD_STATFS_NODELAY);
 	if (!rc) {
-		__u32 blk_size = osfs.os_bsize >> 10;
-		__u64 result = osfs.os_blocks;
+		u32 blk_size = osfs.os_bsize >> 10;
+		u64 result = osfs.os_blocks;
 
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		seq_printf(m, "%llu\n", result);
+		return sprintf(buf, "%llu\n", result);
 	}
+
 	return rc;
 }
-EXPORT_SYMBOL(lprocfs_kbytestotal_seq_show);
+LUSTRE_RO_ATTR(kbytestotal);
 
-int lprocfs_kbytesfree_seq_show(struct seq_file *m, void *data)
+static ssize_t kbytesfree_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
 {
-	struct obd_device *obd = data;
-	struct obd_statfs  osfs;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kobj);
+	struct obd_statfs osfs;
 	int rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 			    OBD_STATFS_NODELAY);
 	if (!rc) {
-		__u32 blk_size = osfs.os_bsize >> 10;
-		__u64 result = osfs.os_bfree;
+		u32 blk_size = osfs.os_bsize >> 10;
+		u64 result = osfs.os_bfree;
 
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		seq_printf(m, "%llu\n", result);
+		return sprintf(buf, "%llu\n", result);
 	}
+
 	return rc;
 }
-EXPORT_SYMBOL(lprocfs_kbytesfree_seq_show);
+LUSTRE_RO_ATTR(kbytesfree);
 
-int lprocfs_kbytesavail_seq_show(struct seq_file *m, void *data)
+static ssize_t kbytesavail_show(struct kobject *kobj, struct attribute *attr,
+				char *buf)
 {
-	struct obd_device *obd = data;
-	struct obd_statfs  osfs;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kobj);
+	struct obd_statfs osfs;
 	int rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 			    OBD_STATFS_NODELAY);
 	if (!rc) {
-		__u32 blk_size = osfs.os_bsize >> 10;
-		__u64 result = osfs.os_bavail;
+		u32 blk_size = osfs.os_bsize >> 10;
+		u64 result = osfs.os_bavail;
 
 		while (blk_size >>= 1)
 			result <<= 1;
 
-		seq_printf(m, "%llu\n", result);
+		return sprintf(buf, "%llu\n", result);
 	}
+
 	return rc;
 }
-EXPORT_SYMBOL(lprocfs_kbytesavail_seq_show);
+LUSTRE_RO_ATTR(kbytesavail);
 
-int lprocfs_filestotal_seq_show(struct seq_file *m, void *data)
+static ssize_t filestotal_show(struct kobject *kobj, struct attribute *attr,
+			       char *buf)
 {
-	struct obd_device *obd = data;
-	struct obd_statfs  osfs;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kobj);
+	struct obd_statfs osfs;
 	int rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 			    OBD_STATFS_NODELAY);
 	if (!rc)
-		seq_printf(m, "%llu\n", osfs.os_files);
+		return sprintf(buf, "%llu\n", osfs.os_files);
+
 	return rc;
 }
-EXPORT_SYMBOL(lprocfs_filestotal_seq_show);
+LUSTRE_RO_ATTR(filestotal);
 
-int lprocfs_filesfree_seq_show(struct seq_file *m, void *data)
+static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
+			      char *buf)
 {
-	struct obd_device *obd = data;
-	struct obd_statfs  osfs;
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kobj);
+	struct obd_statfs osfs;
 	int rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
 			    OBD_STATFS_NODELAY);
 	if (!rc)
-		seq_printf(m, "%llu\n", osfs.os_ffree);
+		return sprintf(buf, "%llu\n", osfs.os_ffree);
+
 	return rc;
 }
-EXPORT_SYMBOL(lprocfs_filesfree_seq_show);
+LUSTRE_RO_ATTR(filesfree);
 
 int lprocfs_server_uuid_seq_show(struct seq_file *m, void *data)
 {
@@ -1195,8 +1223,37 @@ int lprocfs_connect_flags_seq_show(struct seq_file *m, void *data)
 }
 EXPORT_SYMBOL(lprocfs_connect_flags_seq_show);
 
+static struct attribute *obd_def_uuid_attrs[] = {
+	&lustre_attr_uuid.attr,
+	NULL,
+};
+
+static struct attribute *obd_def_attrs[] = {
+	&lustre_attr_blocksize.attr,
+	&lustre_attr_kbytestotal.attr,
+	&lustre_attr_kbytesfree.attr,
+	&lustre_attr_kbytesavail.attr,
+	&lustre_attr_filestotal.attr,
+	&lustre_attr_filesfree.attr,
+	&lustre_attr_uuid.attr,
+	NULL,
+};
+
+static void obd_sysfs_release(struct kobject *kobj)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kobj);
+
+	complete(&obd->obd_kobj_unregister);
+}
+
+static struct kobj_type obd_ktype = {
+	.sysfs_ops	= &lustre_sysfs_ops,
+	.release	= obd_sysfs_release,
+};
+
 int
-lprocfs_obd_setup(struct obd_device *obd)
+lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 {
 	int rc = 0;
 
@@ -1204,32 +1261,59 @@ lprocfs_obd_setup(struct obd_device *obd)
 	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
 	LASSERT(obd->obd_type->typ_procroot != NULL);
 
+	if (uuid_only)
+		obd_ktype.default_attrs = obd_def_uuid_attrs;
+	else
+		obd_ktype.default_attrs = obd_def_attrs;
+
+	init_completion(&obd->obd_kobj_unregister);
+	rc = kobject_init_and_add(&obd->obd_kobj, &obd_ktype,
+				  obd->obd_type->typ_kobj,
+				  "%s", obd->obd_name);
+	if (rc)
+		return rc;
+
+	if (obd->obd_attrs) {
+		rc = sysfs_create_group(&obd->obd_kobj, obd->obd_attrs);
+		if (rc) {
+			kobject_put(&obd->obd_kobj);
+			return rc;
+		}
+	}
+
 	obd->obd_proc_entry = lprocfs_register(obd->obd_name,
 					       obd->obd_type->typ_procroot,
 					       obd->obd_vars, obd);
 	if (IS_ERR(obd->obd_proc_entry)) {
+		kobject_put(&obd->obd_kobj);
 		rc = PTR_ERR(obd->obd_proc_entry);
 		CERROR("error %d setting up lprocfs for %s\n",rc,obd->obd_name);
 		obd->obd_proc_entry = NULL;
 	}
+
 	return rc;
 }
 EXPORT_SYMBOL(lprocfs_obd_setup);
 
 int lprocfs_obd_cleanup(struct obd_device *obd)
 {
-        if (!obd)
-                return -EINVAL;
-        if (obd->obd_proc_exports_entry) {
-                /* Should be no exports left */
-                lprocfs_remove(&obd->obd_proc_exports_entry);
-                obd->obd_proc_exports_entry = NULL;
-        }
-        if (obd->obd_proc_entry) {
-                lprocfs_remove(&obd->obd_proc_entry);
-                obd->obd_proc_entry = NULL;
-        }
-        return 0;
+	if (!obd)
+		return -EINVAL;
+
+	if (obd->obd_proc_exports_entry) {
+		/* Should be no exports left */
+		lprocfs_remove(&obd->obd_proc_exports_entry);
+		obd->obd_proc_exports_entry = NULL;
+	}
+
+	if (obd->obd_proc_entry) {
+		lprocfs_remove(&obd->obd_proc_entry);
+		obd->obd_proc_entry = NULL;
+	}
+
+	kobject_put(&obd->obd_kobj);
+	wait_for_completion(&obd->obd_kobj_unregister);
+	return 0;
 }
 EXPORT_SYMBOL(lprocfs_obd_cleanup);
 

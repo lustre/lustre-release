@@ -814,7 +814,7 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			obd->obd_proc_entry = NULL;
 		}
 	} else {
-		rc = lprocfs_obd_setup(obd);
+		rc = lprocfs_obd_setup(obd, false);
 	}
 
 	if (rc == 0) {

@@ -591,14 +591,7 @@ static int osc_unstable_stats_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(osc_unstable_stats);
 
-LPROC_SEQ_FOPS_RO_TYPE(osc, uuid);
 LPROC_SEQ_FOPS_RO_TYPE(osc, connect_flags);
-LPROC_SEQ_FOPS_RO_TYPE(osc, blksize);
-LPROC_SEQ_FOPS_RO_TYPE(osc, kbytestotal);
-LPROC_SEQ_FOPS_RO_TYPE(osc, kbytesfree);
-LPROC_SEQ_FOPS_RO_TYPE(osc, kbytesavail);
-LPROC_SEQ_FOPS_RO_TYPE(osc, filestotal);
-LPROC_SEQ_FOPS_RO_TYPE(osc, filesfree);
 LPROC_SEQ_FOPS_RO_TYPE(osc, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(osc, conn_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(osc, timeouts);
@@ -610,25 +603,11 @@ LPROC_SEQ_FOPS_RW_TYPE(osc, import);
 LPROC_SEQ_FOPS_RW_TYPE(osc, pinger_recov);
 
 struct lprocfs_vars lprocfs_osc_obd_vars[] = {
-	{ .name	=	"uuid",
-	  .fops	=	&osc_uuid_fops			},
 	{ .name	=	"ping",
 	  .fops	=	&osc_ping_fops,
 	  .proc_mode =	0222				},
 	{ .name	=	"connect_flags",
 	  .fops	=	&osc_connect_flags_fops		},
-	{ .name	=	"blocksize",
-	  .fops	=	&osc_blksize_fops		},
-	{ .name	=	"kbytestotal",
-	  .fops	=	&osc_kbytestotal_fops		},
-	{ .name	=	"kbytesfree",
-	  .fops	=	&osc_kbytesfree_fops		},
-	{ .name	=	"kbytesavail",
-	  .fops	=	&osc_kbytesavail_fops		},
-	{ .name	=	"filestotal",
-	  .fops	=	&osc_filestotal_fops		},
-	{ .name	=	"filesfree",
-	  .fops	=	&osc_filesfree_fops		},
 	{ .name	=	"ost_server_uuid",
 	  .fops	=	&osc_server_uuid_fops		},
 	{ .name	=	"ost_conn_uuid",

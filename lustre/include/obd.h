@@ -105,6 +105,7 @@ struct obd_type {
 	int			 typ_refcnt;
 	struct lu_device_type	*typ_lu;
 	spinlock_t		 obd_type_lock;
+	struct kobject		*typ_kobj;
 };
 
 struct brw_page {
@@ -693,6 +694,7 @@ struct obd_device {
 	struct proc_dir_entry	*obd_proc_exports_entry;
 	struct proc_dir_entry	*obd_svc_procroot;
 	struct lprocfs_stats	*obd_svc_stats;
+	struct attribute_group	*obd_attrs;
 	struct lprocfs_vars	*obd_vars;
 	atomic_t		obd_evict_inprogress;
 	wait_queue_head_t	obd_evict_inprogress_waitq;
@@ -710,6 +712,9 @@ struct obd_device {
 	/**
 	 * List of outstanding class_incref()'s fo this OBD. For debugging. */
 	struct lu_ref			obd_reference;
+
+	struct kobject		obd_kobj; /* sysfs object */
+	struct completion	obd_kobj_unregister;
 };
 
 /* get/set_info keys */

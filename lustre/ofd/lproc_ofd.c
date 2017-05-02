@@ -888,14 +888,6 @@ static int ofd_site_stats_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(ofd_site_stats);
 
-LPROC_SEQ_FOPS_RO_TYPE(ofd, uuid);
-LPROC_SEQ_FOPS_RO_TYPE(ofd, blksize);
-LPROC_SEQ_FOPS_RO_TYPE(ofd, kbytestotal);
-LPROC_SEQ_FOPS_RO_TYPE(ofd, kbytesfree);
-LPROC_SEQ_FOPS_RO_TYPE(ofd, kbytesavail);
-LPROC_SEQ_FOPS_RO_TYPE(ofd, filestotal);
-LPROC_SEQ_FOPS_RO_TYPE(ofd, filesfree);
-
 LPROC_SEQ_FOPS_RO_TYPE(ofd, recovery_status);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, recovery_time_soft);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, recovery_time_hard);
@@ -907,20 +899,6 @@ LPROC_SEQ_FOPS_RW_TYPE(ofd, checksum_dump);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, job_interval);
 
 struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
-	{ .name =	"uuid",
-	  .fops =	&ofd_uuid_fops			},
-	{ .name =	"blocksize",
-	  .fops =	&ofd_blksize_fops		},
-	{ .name =	"kbytestotal",
-	  .fops =	&ofd_kbytestotal_fops		},
-	{ .name =	"kbytesfree",
-	  .fops =	&ofd_kbytesfree_fops		},
-	{ .name =	"kbytesavail",
-	  .fops =	&ofd_kbytesavail_fops		},
-	{ .name =	"filestotal",
-	  .fops =	&ofd_filestotal_fops		},
-	{ .name =	"filesfree",
-	  .fops =	&ofd_filesfree_fops		},
 	{ .name =	"seqs_allocated",
 	  .fops =	&ofd_seqs_fops			},
 	{ .name =	"fstype",

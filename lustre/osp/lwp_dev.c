@@ -275,10 +275,23 @@ static int lwp_init0(const struct lu_env *env, struct lwp_device *lwp,
 		RETURN(rc);
 	}
 
-	if (lprocfs_obd_setup(lwp->lpd_obd) == 0) {
-		sptlrpc_lprocfs_cliobd_attach(lwp->lpd_obd);
-		ptlrpc_lprocfs_register_obd(lwp->lpd_obd);
+	rc = lprocfs_obd_setup(lwp->lpd_obd, true);
+	if (rc) {
+		CERROR("%s: lprocfs_obd_setup failed. %d\n",
+		       lwp->lpd_obd->obd_name, rc);
+		ptlrpcd_decref();
+		RETURN(rc);
 	}
+
+	rc = sptlrpc_lprocfs_cliobd_attach(lwp->lpd_obd);
+	if (rc) {
+		CERROR("%s: sptlrpc_lprocfs_cliobd_attached failed. %d\n",
+		       lwp->lpd_obd->obd_name, rc);
+		ptlrpcd_decref();
+		RETURN(rc);
+	}
+
+	ptlrpc_lprocfs_register_obd(lwp->lpd_obd);
 
 	RETURN(0);
 }

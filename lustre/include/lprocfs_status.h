@@ -534,7 +534,8 @@ static inline int LPROCFS_ENTRY_CHECK(struct inode *inode)
 static inline int LPROCFS_ENTRY_CHECK(struct inode *inode)
 { return 0; }
 #endif
-extern int lprocfs_obd_setup(struct obd_device *dev);
+
+extern int lprocfs_obd_setup(struct obd_device *dev, bool uuid_only);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
 #ifdef HAVE_SERVER_SUPPORT
 extern const struct file_operations lprocfs_evict_client_fops;
@@ -597,14 +598,6 @@ extern int lprocfs_pinger_recov_seq_show(struct seq_file *m, void *data);
 extern ssize_t
 lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off);
-
-/* Statfs helpers */
-extern int lprocfs_blksize_seq_show(struct seq_file *m, void *data);
-extern int lprocfs_kbytestotal_seq_show(struct seq_file *m, void *data);
-extern int lprocfs_kbytesfree_seq_show(struct seq_file *m, void *data);
-extern int lprocfs_kbytesavail_seq_show(struct seq_file *m, void *data);
-extern int lprocfs_filestotal_seq_show(struct seq_file *m, void *data);
-extern int lprocfs_filesfree_seq_show(struct seq_file *m, void *data);
 
 extern int lprocfs_seq_read_frac_helper(struct seq_file *m, long val, int mult);
 extern int lprocfs_read_frac_helper(char *buffer, unsigned long count,
@@ -882,7 +875,7 @@ static inline void lprocfs_remove(struct proc_dir_entry **root)
 static inline void lprocfs_remove_proc_entry(const char *name,
                                              struct proc_dir_entry *parent)
 { return; }
-static inline int lprocfs_obd_setup(struct obd_device *dev)
+static inline int lprocfs_obd_setup(struct obd_device *dev, bool uuid_only)
 { return 0; }
 static inline int lprocfs_obd_cleanup(struct obd_device *dev)
 { return 0; }

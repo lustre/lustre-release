@@ -692,7 +692,7 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 	/* lprocfs must be setup before the ofd so state can be safely added
 	 * to /proc incrementally as the ofd is setup */
 	obd->obd_vars = lprocfs_ofd_obd_vars;
-	rc = lprocfs_obd_setup(obd);
+	rc = lprocfs_obd_setup(obd, false);
 	if (rc) {
 		CERROR("%s: lprocfs_obd_setup failed: %d.\n",
 		       obd->obd_name, rc);

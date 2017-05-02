@@ -468,18 +468,6 @@ static struct lu_device *mds_device_free(const struct lu_env *env,
 	RETURN(NULL);
 }
 
-LPROC_SEQ_FOPS_RO_TYPE(mds, uuid);
-
-static struct lprocfs_vars lprocfs_mds_obd_vars[] = {
-	{
-		.name	= "uuid",
-		.fops	= &mds_uuid_fops
-	},
-	{
-		.name	= NULL
-	}
-};
-
 static struct lu_device *mds_device_alloc(const struct lu_env *env,
 					  struct lu_device_type *t,
 					  struct lustre_cfg *cfg)
@@ -503,8 +491,7 @@ static struct lu_device *mds_device_alloc(const struct lu_env *env,
 	/* set this lu_device to obd, because error handling need it */
 	obd->obd_lu_dev = l;
 
-	obd->obd_vars = lprocfs_mds_obd_vars;
-	rc = lprocfs_obd_setup(obd);
+	rc = lprocfs_obd_setup(obd, true);
 	if (rc != 0) {
 		mds_device_free(env, l);
 		l = ERR_PTR(rc);

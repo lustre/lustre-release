@@ -745,7 +745,6 @@ osp_lfsck_max_rpcs_in_flight_seq_write(struct file *file,
 LPROC_SEQ_FOPS(osp_lfsck_max_rpcs_in_flight);
 
 LPROC_SEQ_FOPS_WO_TYPE(osp, ping);
-LPROC_SEQ_FOPS_RO_TYPE(osp, uuid);
 LPROC_SEQ_FOPS_RO_TYPE(osp, connect_flags);
 LPROC_SEQ_FOPS_RO_TYPE(osp, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(osp, conn_uuid);
@@ -876,8 +875,6 @@ osp_reserved_mb_low_seq_write(struct file *file, const char __user *buffer,
 LPROC_SEQ_FOPS(osp_reserved_mb_low);
 
 static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
-	{ .name =	"uuid",
-	  .fops =	&osp_uuid_fops			},
 	{ .name =	"ping",
 	  .fops =	&osp_ping_fops,
 	  .proc_mode =	0222				},
@@ -939,8 +936,6 @@ static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 };
 
 static struct lprocfs_vars lprocfs_osp_md_vars[] = {
-	{ .name =	"uuid",
-	  .fops =	&osp_uuid_fops			},
 	{ .name =	"ping",
 	  .fops =	&osp_ping_fops,
 	  .proc_mode =	0222				},
@@ -1014,7 +1009,7 @@ void osp_lprocfs_init(struct osp_device *osp)
 		obd->obd_vars = lprocfs_osp_md_vars;
 	else
 		obd->obd_vars = lprocfs_osp_obd_vars;
-	if (lprocfs_obd_setup(obd) != 0)
+	if (lprocfs_obd_setup(obd, true) != 0)
 		return;
 
 	rc = lprocfs_add_vars(obd->obd_proc_entry, lprocfs_osp_osd_vars,
