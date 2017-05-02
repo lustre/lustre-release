@@ -393,7 +393,7 @@ struct cl_object_operations {
 	 * Object getstripe method.
 	 */
 	int (*coo_getstripe)(const struct lu_env *env, struct cl_object *obj,
-			     struct lov_user_md __user *lum);
+			     struct lov_user_md __user *lum, size_t size);
 	/**
 	 * Get FIEMAP mapping from the object.
 	 */
@@ -2051,7 +2051,7 @@ int  cl_conf_set          (const struct lu_env *env, struct cl_object *obj,
 int  cl_object_prune      (const struct lu_env *env, struct cl_object *obj);
 void cl_object_kill       (const struct lu_env *env, struct cl_object *obj);
 int cl_object_getstripe(const struct lu_env *env, struct cl_object *obj,
-			struct lov_user_md __user *lum);
+			struct lov_user_md __user *lum, size_t size);
 int cl_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 		     struct ll_fiemap_info_key *fmkey, struct fiemap *fiemap,
 		     size_t *buflen);

@@ -341,12 +341,16 @@ struct lov_stripe_md *lov_unpackmd(struct lov_obd *lov, void *buf,
  * @lump is a pointer to an in-core struct with lmm_ost_count indicating
  * the maximum number of OST indices which will fit in the user buffer.
  * lmm_magic must be LOV_USER_MAGIC.
+ *
+ * If @size > 0, User specified limited buffer size, usually the buffer is from
+ * ll_lov_setstripe(), and the buffer can only hold basic layout template info.
  */
 int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
-		  struct lov_stripe_md *lsm, struct lov_user_md __user *lump)
+		  struct lov_stripe_md *lsm, struct lov_user_md __user *lump,
+		  size_t size)
 {
 	/* we use lov_user_md_v3 because it is larger than lov_user_md_v1 */
-	struct lov_mds_md *lmmk;
+	struct lov_mds_md *lmmk, *lmm;
 	struct lov_user_md_v1 lum;
 	size_t	lmmk_size;
 	ssize_t	lmm_size, lum_size = 0;
@@ -431,12 +435,22 @@ int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
 			comp_md = (struct lov_mds_md *)((char *)comp_v1 +
 					comp_v1->lcm_entries[i].lcme_offset);
 		}
-		if (copy_to_user(lump, comp_md, lum_size))
-			GOTO(out_free, rc = -EFAULT);
+
+		lmm = comp_md;
+		lmm_size = lum_size;
 	} else {
-		if (copy_to_user(lump, lmmk, lmmk_size))
-			GOTO(out_free, rc = -EFAULT);
+		lmm = lmmk;
+		lmm_size = lmmk_size;
 	}
+	/**
+	 * User specified limited buffer size, usually the buffer is
+	 * from ll_lov_setstripe(), and the buffer can only hold basic
+	 * layout template info.
+	 */
+	if (size == 0 || size > lmm_size)
+		size = lmm_size;
+	if (copy_to_user(lump, lmm, size))
+		GOTO(out_free, rc = -EFAULT);
 
 out_free:
 	OBD_FREE_LARGE(lmmk, lmmk_size);

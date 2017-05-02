@@ -314,7 +314,9 @@ struct ll_futimes_3 {
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
 #define LL_IOC_LOV_SETSTRIPE            _IOW ('f', 154, long)
+#define LL_IOC_LOV_SETSTRIPE_NEW	_IOWR('f', 154, struct lov_user_md)
 #define LL_IOC_LOV_GETSTRIPE            _IOW ('f', 155, long)
+#define LL_IOC_LOV_GETSTRIPE_NEW	_IOR('f', 155, struct lov_user_md)
 #define LL_IOC_LOV_SETEA                _IOW ('f', 156, long)
 /*	LL_IOC_RECREATE_OBJ             157 obsolete */
 /*	LL_IOC_RECREATE_FID             157 obsolete */

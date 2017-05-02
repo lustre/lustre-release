@@ -1283,6 +1283,7 @@ lmv_out_free:
 
 		RETURN(rc);
 	}
+	case LL_IOC_LOV_SETSTRIPE_NEW:
 	case LL_IOC_LOV_SETSTRIPE: {
 		struct lov_user_md_v3 lumv3;
 		struct lov_user_md_v1 *lumv1 = (struct lov_user_md_v1 *)&lumv3;
@@ -1434,11 +1435,12 @@ out_rmdir:
 		RETURN(-EPERM);
 	case IOC_OBD_STATFS:
 		RETURN(ll_obd_statfs(inode, (void __user *)arg));
-        case LL_IOC_LOV_GETSTRIPE:
-        case LL_IOC_MDC_GETINFO:
-        case IOC_MDC_GETFILEINFO:
-        case IOC_MDC_GETFILESTRIPE: {
-                struct ptlrpc_request *request = NULL;
+	case LL_IOC_LOV_GETSTRIPE:
+	case LL_IOC_LOV_GETSTRIPE_NEW:
+	case LL_IOC_MDC_GETINFO:
+	case IOC_MDC_GETFILEINFO:
+	case IOC_MDC_GETFILESTRIPE: {
+		struct ptlrpc_request *request = NULL;
 		struct lov_user_md __user *lump;
                 struct lov_mds_md *lmm = NULL;
                 struct mdt_body *body;
@@ -1474,8 +1476,9 @@ out_rmdir:
                                 GOTO(out_req, rc);
                 }
 
-                if (cmd == IOC_MDC_GETFILESTRIPE ||
-                    cmd == LL_IOC_LOV_GETSTRIPE) {
+		if (cmd == IOC_MDC_GETFILESTRIPE ||
+		    cmd == LL_IOC_LOV_GETSTRIPE ||
+		    cmd == LL_IOC_LOV_GETSTRIPE_NEW) {
 			lump = (struct lov_user_md __user *)arg;
                 } else {
 			struct lov_user_mds_data __user *lmdp;
