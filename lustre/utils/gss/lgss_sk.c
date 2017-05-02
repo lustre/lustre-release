@@ -83,15 +83,15 @@ enum cfs_crypto_hash_alg sk_name2hmac(char *name)
 
 	/* convert to lower case */
 	while (name[i]) {
-		putchar(tolower(name[i]));
+		name[i] = tolower(name[i]);
 		i++;
 	}
 
-	if (strcmp(name, "none"))
+	if (strcmp(name, "none") == 0)
 		return CFS_HASH_ALG_NULL;
 
 	algo = cfs_crypto_hash_alg(name);
-	if ((algo != CFS_HASH_ALG_SHA256) ||
+	if ((algo != CFS_HASH_ALG_SHA256) &&
 	    (algo != CFS_HASH_ALG_SHA512))
 		return SK_HMAC_INVALID;
 
