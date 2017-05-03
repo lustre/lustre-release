@@ -762,6 +762,8 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 	oh = container_of0(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_tx != NULL);
 
+	dmu_tx_mark_netfree(oh->ot_tx);
+
 	/* declare that we'll remove object from fid-dnode mapping */
 	zapid = osd_get_name_n_idx(env, osd, fid, NULL, 0, &dn);
 	osd_tx_hold_zap(oh->ot_tx, zapid, dn, FALSE, NULL);
