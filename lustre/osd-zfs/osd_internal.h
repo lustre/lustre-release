@@ -911,4 +911,8 @@ static inline int osd_dmu_read(struct osd_device *osd, dnode_t *dn,
 	dmu_objset_disown((os), (tag))
 #endif
 
+#ifndef HAVE_DMU_TX_MARK_NETFREE
+#define dmu_tx_mark_netfree(tx)
+#endif
+
 #endif /* _OSD_INTERNAL_H */

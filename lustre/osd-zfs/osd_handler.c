@@ -971,6 +971,7 @@ int osd_unlinked_object_free(const struct lu_env *env, struct osd_device *osd,
 	}
 
 	tx = dmu_tx_create(osd->od_os);
+	dmu_tx_mark_netfree(tx);
 	dmu_tx_hold_free(tx, oid, 0, DMU_OBJECT_END);
 	osd_tx_hold_zap(tx, osd->od_unlinked->dn_object, osd->od_unlinked,
 			FALSE, NULL);
