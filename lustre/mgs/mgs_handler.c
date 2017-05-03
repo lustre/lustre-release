@@ -42,7 +42,7 @@
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <uapi/linux/lustre_ioctl.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <lustre/lustre_barrier_user.h>
 
 #include "mgs_internal.h"
@@ -729,22 +729,43 @@ static inline int mgs_destroy_export(struct obd_export *exp)
         RETURN(0);
 }
 
-static int mgs_extract_fs_pool(char * arg, char *fsname, char *poolname)
+static int mgs_extract_fs_pool(char *arg, char *fsname, char *poolname)
 {
-        char *ptr;
+	size_t len;
+	char *ptr;
 
-        ENTRY;
-        for (ptr = arg;  (*ptr != '\0') && (*ptr != '.'); ptr++ ) {
-                *fsname = *ptr;
-                fsname++;
-        }
-        if (*ptr == '\0')
-                return -EINVAL;
-        *fsname = '\0';
-        ptr++;
-        strcpy(poolname, ptr);
+	ENTRY;
+	/* Validate name */
+	for (ptr = arg; *ptr != '\0'; ptr++) {
+		if (!isalnum(*ptr) && *ptr != '_' && *ptr != '-' && *ptr != '.')
+			return -EINVAL;
+	}
 
-        RETURN(0);
+	/* Test for fsname.poolname format.
+	 * strlen() test if poolname is empty
+	 */
+	ptr = strchr(arg, '.');
+	if (!ptr || !strlen(ptr))
+		return -EINVAL;
+	ptr++;
+
+	/* Also make sure poolname is not to long. */
+	if (strlen(ptr) > LOV_MAXPOOLNAME)
+		return -ENAMETOOLONG;
+	strncpy(poolname, ptr, strlen(ptr));
+
+	/* Test if fsname is empty */
+	len = strlen(arg) - strlen(ptr) - 1;
+	if (!len)
+		return -EINVAL;
+
+	/* or too long */
+	if (len > MTI_NAME_MAXLEN)
+		return -ENAMETOOLONG;
+
+	strncpy(fsname, arg, len);
+
+	RETURN(0);
 }
 
 static int mgs_iocontrol_nodemap(const struct lu_env *env,

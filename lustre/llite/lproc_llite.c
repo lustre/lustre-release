@@ -36,7 +36,7 @@
 #ifdef HAVE_UIDGID_HEADER
 # include <linux/uidgid.h>
 #endif
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <lprocfs_status.h>
 #include <obd_support.h>
 

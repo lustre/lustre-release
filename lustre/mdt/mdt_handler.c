@@ -56,7 +56,7 @@
 #include <lustre_net.h>
 #include <lustre_nodemap.h>
 #include <lustre_mds.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <lustre_quota.h>
 #include <lustre_swab.h>
 #include <obd.h>

@@ -67,7 +67,7 @@
 #include <lustre_net.h>
 #include <lustre_fid.h>
 /* process_config */
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 
 #include "osd_internal.h"
 #include "osd_dynlocks.h"

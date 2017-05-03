@@ -35,7 +35,7 @@
 #include <asm/statfs.h>
 #include <lprocfs_status.h>
 #include <obd_class.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include "lov_internal.h"
 
 #ifdef CONFIG_PROC_FS

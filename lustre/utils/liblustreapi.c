@@ -41,6 +41,7 @@
 #define _GNU_SOURCE
 #endif
 
+#include <ctype.h>
 #include <mntent.h>
 #include <stdlib.h>
 #include <stdio.h>

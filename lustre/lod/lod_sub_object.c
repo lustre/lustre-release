@@ -47,7 +47,7 @@
 #include <lprocfs_status.h>
 
 #include <lustre_fid.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <md_object.h>
 #include <lustre_linkea.h>
 #include <lustre_log.h>

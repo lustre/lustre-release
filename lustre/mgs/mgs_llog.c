@@ -43,7 +43,7 @@
 
 #include <obd.h>
 #include <uapi/linux/lustre_ioctl.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <lustre_sec.h>
 #include <lustre_quota.h>
 

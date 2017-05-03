@@ -49,7 +49,7 @@
 #include <lustre_lib.h>
 #include <lustre_mds.h>
 #include <lustre_net.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <lustre_swab.h>
 #include <lprocfs_status.h>
 #include <obd_class.h>

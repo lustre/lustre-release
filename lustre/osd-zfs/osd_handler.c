@@ -47,7 +47,7 @@
 #include <obd_class.h>
 #include <lustre_disk.h>
 #include <lustre_fid.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <md_object.h>
 
 #include "osd_internal.h"

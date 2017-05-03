@@ -122,6 +122,12 @@ void obd_stale_export_put(struct obd_export *exp);
 void obd_stale_export_adjust(struct obd_export *exp);
 
 /* obd_config.c */
+/* For interoperability */
+struct cfg_interop_param {
+	char *old_param;
+	char *new_param;
+};
+
 struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 				     const char *new_name);
 int class_process_config(struct lustre_cfg *lcfg);
@@ -131,6 +137,18 @@ int class_attach(struct lustre_cfg *lcfg);
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg);
+
+int class_find_param(char *buf, char *key, char **valp);
+struct cfg_interop_param *class_find_old_param(const char *param,
+					       struct cfg_interop_param *ptr);
+int class_get_next_param(char **params, char *copy);
+int class_match_param(char *buf, const char *key, char **valp);
+int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh);
+int class_parse_nid_quiet(char *buf, lnet_nid_t *nid, char **endh);
+int class_parse_net(char *buf, u32 *net, char **endh);
+int class_match_nid(char *buf, char *key, lnet_nid_t nid);
+int class_match_net(char *buf, char *key, u32 net);
+
 struct obd_device *class_incref(struct obd_device *obd,
                                 const char *scope, const void *source);
 void class_decref(struct obd_device *obd,

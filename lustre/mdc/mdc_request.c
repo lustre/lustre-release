@@ -53,7 +53,7 @@
 #include <lustre_kernelcomm.h>
 #include <lustre_lmv.h>
 #include <lustre_log.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <lustre_swab.h>
 #include <obd_class.h>
 

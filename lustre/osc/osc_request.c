@@ -44,7 +44,7 @@
 #include <uapi/linux/lustre_ioctl.h>
 #include <lustre_net.h>
 #include <lustre_obdo.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <obd.h>
 #include <obd_cksum.h>
 #include <obd_class.h>

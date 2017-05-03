@@ -35,7 +35,7 @@
 #include <obd_class.h>
 #include <linux/seq_file.h>
 #include "lod_internal.h"
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 
 /*
  * Notice, all the functions below (except for lod_procfs_init() and

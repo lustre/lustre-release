@@ -93,7 +93,7 @@
 #include <obd_class.h>
 #include <md_object.h>
 #include <lustre_fid.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <lustre_update.h>
 #include <lustre_log.h>
 

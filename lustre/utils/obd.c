@@ -75,7 +75,7 @@
 
 #include <lnet/lnetctl.h>
 #include <lustre/lustreapi.h>
-#include <lustre_param.h>
+#include <linux/lustre_param.h>
 #include <lustre/lustre_barrier_user.h>
 
 #define MAX_STRING_SIZE 128
@@ -4011,33 +4011,8 @@ static int extract_fsname_poolname(const char *arg, char *fsname,
 	*ptr = '\0';
 	++ptr;
 
-	rc = lustre_is_fsname_valid(fsname, 1, LUSTRE_MAXFSNAME);
-	if (rc < 0) {
-		fprintf(stderr, "filesystem name %s must be 1-%d chars\n",
-			fsname, LUSTRE_MAXFSNAME);
-		rc = -EINVAL;
-		goto err;
-	} else if (rc > 0) {
-		fprintf(stderr, "char '%c' not allowed in filesystem name\n",
-			rc);
-		rc = -EINVAL;
-		goto err;
-	}
-
-	rc = lustre_is_poolname_valid(ptr, 1, LOV_MAXPOOLNAME);
-	if (rc == -1) {
+	if (strlen(ptr) == 0) {
 		fprintf(stderr, "poolname is empty\n");
-		rc = -EINVAL;
-		goto err;
-	} else if (rc == -2) {
-		fprintf(stderr,
-			"poolname %s is too long (max is %d)\n",
-			ptr, LOV_MAXPOOLNAME);
-		rc = -ENAMETOOLONG;
-		goto err;
-	} else if (rc > 0) {
-		fprintf(stderr, "char '%c' not allowed in pool name '%s'\n",
-			rc, ptr);
 		rc = -EINVAL;
 		goto err;
 	}

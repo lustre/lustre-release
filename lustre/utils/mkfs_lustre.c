@@ -61,7 +61,7 @@
 #include <limits.h>
 #include <ctype.h>
 #include <lnet/nidstr.h>
-#include <lustre_param.h>
+#include <linux/lustre_param.h>
 #include <lnet/lnetctl.h>
 #include <lustre_ver.h>
 
@@ -514,23 +514,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			ldd->ldd_flags &= ~LDD_F_NEED_INDEX;
 			break;
 		}
-		case 'L': {
-			rc = lustre_is_fsname_valid(optarg, 1,
-						    LUSTRE_MAXFSNAME);
-			if (rc < 0) {
-				fprintf(stderr, "%s: filesystem name must be "
-					"1-%d chars\n", progname,
-					LUSTRE_MAXFSNAME);
-				return 1;
-			} else if (rc > 0) {
-				fprintf(stderr, "%s: char '%c' not allowed in "
-					"filesystem name\n", progname, rc);
-				return 1;
-			}
-
+		case 'L':
 			strscpy(new_fsname, optarg, sizeof(new_fsname));
 			break;
-		}
 		case 'm': {
 			char *nids = convert_hostnames(optarg);
 

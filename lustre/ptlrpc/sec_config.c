@@ -44,7 +44,7 @@
 #include <lustre_log.h>
 #include <lustre_disk.h>
 #include <lustre_dlm.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <lustre_sec.h>
 
 #include "ptlrpc_internal.h"

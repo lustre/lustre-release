@@ -66,7 +66,7 @@
 #include <libcfs/util/parser.h>
 #include <lustre/lustreapi.h>
 #include <lustre_ver.h>
-#include <lustre_param.h>
+#include <linux/lustre_param.h>
 
 #ifndef ARRAY_SIZE
 # define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
@@ -1011,42 +1011,19 @@ static int parse_targets(__u32 *osts, int size, int offset, char *arg)
 
 static int verify_pool_name(char *prog_name, char *pool_name)
 {
-	char	*ptr;
-	int	 rc;
+	char *ptr;
 
 	if (pool_name == NULL)
 		return 0;
 
 	ptr = strchr(pool_name, '.');
-	if (ptr == NULL) {
-		ptr = pool_name;
-	} else {
-		if (ptr == pool_name) {
-			fprintf(stderr, "error: %s: fsname is empty "
-				"in pool name '%s'\n",
-				prog_name, pool_name);
-			return -EINVAL;
-		}
-		++ptr;
-	}
-
-	rc = lustre_is_poolname_valid(ptr, 1, LOV_MAXPOOLNAME);
-	if (rc == -1) {
-		fprintf(stderr, "error: %s: poolname '%s' is empty\n",
+	if (ptr != NULL && ptr == pool_name) {
+		fprintf(stderr, "error: %s: fsname is empty in pool name '%s'\n",
 			prog_name, pool_name);
 		return -EINVAL;
-	} else if (rc == -2) {
-		fprintf(stderr, "error: %s: pool name '%s' is too long "
-			"(max is %d characters)\n",
-			prog_name, pool_name, LOV_MAXPOOLNAME);
-		return -EINVAL;
-	} else if (rc > 0) {
-		fprintf(stderr, "error: %s: char '%c' not allowed in "
-			"pool name '%s'\n",
-			prog_name, rc, pool_name);
-		return -EINVAL;
 	}
-	return rc;
+
+	return 0;
 }
 
 struct lfs_setstripe_args {

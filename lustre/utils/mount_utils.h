@@ -56,7 +56,7 @@
 
 #include <libcfs/util/list.h>
 #include <linux/lustre_disk.h>
-#include <lustre_param.h>
+#include <linux/lustre_param.h>
 
 extern char *progname;
 extern int verbose;

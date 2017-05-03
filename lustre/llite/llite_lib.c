@@ -53,7 +53,7 @@
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
 #include <lustre_disk.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <lustre_log.h>
 #include <cl_object.h>
 #include <obd_cksum.h>

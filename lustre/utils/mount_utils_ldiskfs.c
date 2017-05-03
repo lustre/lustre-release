@@ -68,7 +68,6 @@
 #endif
 #include <linux/types.h>
 #include <linux/version.h>
-#include <lustre_param.h>
 #include <lnet/lnetctl.h>
 #include <lustre_ver.h>
 

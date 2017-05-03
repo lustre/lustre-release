@@ -47,7 +47,7 @@
 #include <linux/version.h>
 #include <lustre_log.h>
 #include <lustre_disk.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 
 static int (*client_fill_super)(struct super_block *sb,
 				struct vfsmount *mnt);
@@ -151,11 +151,11 @@ EXPORT_SYMBOL(lustre_end_log);
 /** lustre_cfg_bufs are a holdover from 1.4; we can still set these up from
  * lctl (and do for echo cli/srv.
  */
-int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
-            char *s1, char *s2, char *s3, char *s4)
+static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
+		   char *s1, char *s2, char *s3, char *s4)
 {
         struct lustre_cfg_bufs bufs;
-        struct lustre_cfg    * lcfg = NULL;
+	struct lustre_cfg *lcfg = NULL;
         int rc;
 
         CDEBUG(D_TRACE, "lcfg %s %#x %s %s %s %s\n", cfgname,

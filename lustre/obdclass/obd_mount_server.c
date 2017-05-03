@@ -57,7 +57,7 @@
 #include <lustre_disk.h>
 #include <uapi/linux/lustre_ioctl.h>
 #include <lustre_log.h>
-#include <lustre_param.h>
+#include <uapi/linux/lustre_param.h>
 #include <obd.h>
 #include <obd_class.h>
 
