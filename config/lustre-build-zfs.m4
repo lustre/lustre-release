@@ -655,6 +655,19 @@ your distribution.
 			AC_DEFINE(HAVE_DMU_OBJSET_DISOWN_3ARG, 1,
 				[Have dmu_objset_disown() with 3 args])
 		])
+		dnl #
+		dnl # ZFS 0.7.2 adds new method dmu_tx_mark_netfree
+		dnl #
+		LB_CHECK_COMPILE([if ZFS has 'dmu_tx_mark_netfree'],
+		dmu_tx_mark_netfree, [
+			#include <sys/dmu.h>
+		],[
+			dmu_tx_t *tx = NULL;
+			dmu_tx_mark_netfree(tx);
+		],[
+			AC_DEFINE(HAVE_DMU_TX_MARK_NETFREE, 1,
+				[Have dmu_tx_mark_netfree])
+		])
 	])
 
 	AS_IF([test "x$enable_zfs" = xyes], [

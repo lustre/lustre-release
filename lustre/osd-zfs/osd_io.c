@@ -1028,6 +1028,7 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 	/* declare we'll free some blocks ... */
 	if (start < obj->oo_attr.la_size) {
 		read_unlock(&obj->oo_attr_lock);
+		dmu_tx_mark_netfree(oh->ot_tx);
 		dmu_tx_hold_free(oh->ot_tx, obj->oo_dn->dn_object, start, len);
 	} else {
 		read_unlock(&obj->oo_attr_lock);
