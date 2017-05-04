@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 3192 LU-1205 15528/3811 9977 15528/11549 18080
-ALWAYS_EXCEPT="                14b  18c     19         28   29          35    $SANITYN_EXCEPT"
+# bug number for skipped test: LU-1205 9977/LU-7105 LU-9452
+ALWAYS_EXCEPT="                18c     28           29      $SANITYN_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=$(dirname $0)
