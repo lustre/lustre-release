@@ -2763,6 +2763,21 @@ lov_v1v3_pool_name(struct lov_user_md *v1, char *pool_name)
 		pool_name[0] = '\0';
 }
 
+static inline bool
+print_last_init_comp(struct find_param *param)
+{
+	/* print all component info */
+	if ((param->fp_verbose & VERBOSE_DEFAULT) == VERBOSE_DEFAULT)
+		return false;
+
+	/* print specific component info */
+	if (param->fp_check_comp_id || param->fp_check_comp_flags ||
+	    param->fp_check_comp_start || param->fp_check_comp_end)
+		return false;
+
+	return true;
+}
+
 /**
  * An example of "getstripe -v" for a two components PFL file:
  *
@@ -2858,11 +2873,6 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 		    !(param->fp_comp_flags & entry->lcme_flags))
 			continue;
 
-		if (entry->lcme_flags & LCME_FL_INIT)
-			flags &= ~LDF_SKIP_OBJS;
-		else
-			flags |= LDF_SKIP_OBJS;
-
 		if (param->fp_check_comp_id &&
 		    param->fp_comp_id != entry->lcme_id)
 			continue;
@@ -2890,6 +2900,43 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 			if (match == -1)
 				continue;
 		}
+
+		if (print_last_init_comp(param)) {
+			/**
+			 * if part of stripe info is needed, we'd print only
+			 * the last instantiated component info.
+			 */
+			if (entry->lcme_flags & LCME_FL_INIT)
+				continue;
+			else
+				break;
+		}
+
+		if (entry->lcme_flags & LCME_FL_INIT)
+			flags &= ~LDF_SKIP_OBJS;
+		else
+			flags |= LDF_SKIP_OBJS;
+
+		lov_dump_comp_v1_entry(param, flags, i);
+
+		v1 = lov_comp_entry(comp_v1, i);
+		objects = lov_v1v3_objects(v1);
+		lov_v1v3_pool_name(v1, pool_name);
+
+		lov_dump_user_lmm_v1v3(v1, pool_name, objects, path, obdindex,
+				       param->fp_max_depth, param->fp_verbose,
+				       flags);
+	}
+	if (print_last_init_comp(param)) {
+		/**
+		 * directory layout contains only layout template, print the
+		 * last component.
+		 */
+		if (i == 0)
+			i = comp_v1->lcm_entry_count - 1;
+		else
+			i--;
+		flags &= ~LDF_SKIP_OBJS;
 
 		lov_dump_comp_v1_entry(param, flags, i);
 
