@@ -681,6 +681,27 @@ tcp_sendpage_socket, [
 EXTRA_KCFLAGS="$tmp_flags"
 ]) # LN_CONFIG_TCP_SENDPAGE
 
+# LN_CONFIG_SOCK_CREATE_KERN
+#
+# 4.x sock_create_kern() added a first parameter as 'struct net *'
+# instead of int.
+#
+AC_DEFUN([LN_CONFIG_SOCK_CREATE_KERN], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'sock_create_kern' first parameter is net],
+sock_create_kern_net, [
+	#include <linux/net.h>
+	#include <net/net_namespace.h>
+],[
+	sock_create_kern((struct net*)0, 0, 0, 0, NULL);
+],[
+	AC_DEFINE(HAVE_SOCK_CREATE_KERN_USE_NET, 1,
+		[sock_create_kern use net as first parameter])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LN_CONFIG_SOCK_CREATE_KERN
+
 #
 # LN_CONFIG_SK_DATA_READY
 #
@@ -719,6 +740,8 @@ LN_CONFIG_GNILND
 LN_CONFIG_SK_SLEEP
 # 2.6.36
 LN_CONFIG_TCP_SENDPAGE
+# 4.x
+LN_CONFIG_SOCK_CREATE_KERN
 # 3.15
 LN_CONFIG_SK_DATA_READY
 ]) # LN_PROG_LINUX
