@@ -1160,21 +1160,28 @@ static int adjust_first_extent(char *fname, struct llapi_layout *layout)
 	if (layout == NULL)
 		return -EINVAL;
 
+	errno = 0;
 	head = llapi_layout_get_by_path(fname, 0);
 	if (head == NULL) {
 		fprintf(stderr, "Read layout from %s failed. %s\n",
 			fname, strerror(errno));
 		return -EINVAL;
-	}
-
-	/* Current component of 'head' should be tail of component list by
-	 * default, but we do an extra move cursor operation here to test
-	 * if the layout is non-composite. */
-	rc = llapi_layout_comp_use(head, LLAPI_LAYOUT_COMP_USE_LAST);
-	if (rc < 0) {
-		fprintf(stderr, "'%s' isn't a composite file?\n", fname);
+	} else if (errno == ENODATA) {
+		/* file without LOVEA, this component-add will be turned
+		 * into a component-create. */
 		llapi_layout_free(head);
-		return rc;
+		return -ENODATA;
+	} else {
+		/* Current component of 'head' should be tail of component
+		 * list by default, but we do an extra move cursor operation
+		 * here to test if the layout is non-composite. */
+		rc = llapi_layout_comp_use(head, LLAPI_LAYOUT_COMP_USE_LAST);
+		if (rc < 0) {
+			fprintf(stderr, "'%s' isn't a composite file?\n",
+				fname);
+			llapi_layout_free(head);
+			return rc;
+		}
 	}
 
 	rc = llapi_layout_comp_extent_get(head, &start, &prev_end);
@@ -1598,6 +1605,18 @@ static int lfs_setstripe(int argc, char **argv)
 		goto error;
 	}
 
+	if (comp_add || comp_del) {
+		struct stat st;
+
+		result = lstat(fname, &st);
+		if (result == 0 && S_ISDIR(st.st_mode)) {
+			fprintf(stderr, "error: %s: can't use --component-add "
+				"or --component-del for directory.\n",
+				argv[0]);
+			goto error;
+		}
+	}
+
 	if (comp_add) {
 		if (layout == NULL) {
 			fprintf(stderr, "error: %s: -E option must be present"
@@ -1605,7 +1624,9 @@ static int lfs_setstripe(int argc, char **argv)
 			goto error;
 		}
 		result = adjust_first_extent(fname, layout);
-		if (result != 0)
+		if (result == -ENODATA)
+			comp_add = 0;
+		else if (result != 0)
 			goto error;
 	}
 
