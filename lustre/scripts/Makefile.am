@@ -33,7 +33,7 @@
 #
 
 # These are scripts that are generated from .in files
-genscripts = lc_modprobe lc_net lc_hb lc_cluman lc_md lc_lvm lustre_start
+genscripts = lc_modprobe lc_net lc_hb lc_cluman lc_md lc_lvm lustre_start lnet
 
 SUBDIRS = systemd
 
@@ -77,11 +77,21 @@ endif # UTILS
 EXTRA_DIST = license-status lustre_rmmod ldev lc_mon lhbadm \
 	     lc_servip lustre_routes_config lustre_routes_conversion \
 	     $(addsuffix .in,$(genscripts)) lfs_migrate lustre_req_history \
-	     lustre lnet lsvcgss lc_common haconfig Lustre.ha_v2 dkms.mkconf \
+	     lustre lsvcgss lc_common haconfig Lustre.ha_v2 dkms.mkconf \
 	     zfsobj2fid ko2iblnd-probe
 
 CLEANFILES = $(genscripts)
 
 $(genscripts): %: %.in
-	sed -e 's#@scriptlibdir@#$(scriptlibdir)#' < $< > $@
+if BUILD_DLC
+	sed -e 's,@sysconfdir\@,$(sysconfdir),g' \
+	    -e 's,@scriptlibdir\@,$(scriptlibdir),g' \
+	    -e 's,@BUILD_DLC_TRUE\@,,g' \
+	    -e 's,@BUILD_DLC_FALSE\@,\#,g' $< > $@
+else
+	sed -e 's,@sysconfdir\@,$(sysconfdir),g' \
+	    -e 's,@scriptlibdir\@,$(scriptlibdir),g' \
+	    -e 's,@BUILD_DLC_TRUE\@,\#,g' \
+	    -e 's,@BUILD_DLC_FALSE\@,,g' $< > $@
+endif
 	chmod +x $@
