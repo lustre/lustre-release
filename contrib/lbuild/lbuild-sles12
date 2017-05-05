@@ -131,7 +131,11 @@ find_linux_rpm-sles12() {
     local prefix="$1"
     local wanted_kernel="$2"
     local pathtorpms=${3:-"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH"}
+    local wanted_kernel_org="$wanted_kernel"
 
+	if [ "x$rpmfix_diff" != "x" ] && [ $wanted_kernel != "${lnxmaj}${lnxmin}-${lnxrel}${rpmfix_diff}" ]; then
+		wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}${rpmfix_diff}"
+	fi
     local site
     case $lnxmaj in
     3.12)
@@ -145,12 +149,12 @@ find_linux_rpm-sles12() {
         fetch_url "$site/x86_64/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm" $pathtorpms
     fi
     # SLES 12 also needs kernel-devel in addition to kernel-default-devel
-    if [ ! -f $pathtorpms/kernel-devel-$wanted_kernel.noarch.rpm ]; then
-        fetch_url "$site/noarch/kernel-devel-$wanted_kernel.noarch.rpm" $pathtorpms
+    if [ ! -f $pathtorpms/kernel-devel-$wanted_kernel_org.noarch.rpm ]; then
+        fetch_url "$site/noarch/kernel-devel-$wanted_kernel_org.noarch.rpm" $pathtorpms
     fi
     # SLES also needs the kernel-source along with kernel-devel
-    if [ ! -f $pathtorpms/kernel-source-$wanted_kernel.noarch.rpm ]; then
-        fetch_url "$site/noarch/kernel-source-$wanted_kernel.noarch.rpm" $pathtorpms
+    if [ ! -f $pathtorpms/kernel-source-$wanted_kernel_org.noarch.rpm ]; then
+        fetch_url "$site/noarch/kernel-source-$wanted_kernel_org.noarch.rpm" $pathtorpms
     fi
     echo "kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm"
 
