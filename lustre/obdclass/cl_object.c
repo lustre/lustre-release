@@ -550,19 +550,16 @@ EXPORT_SYMBOL(cl_site_stats_print);
 
 /**
  * The most efficient way is to store cl_env pointer in task specific
- * structures. On Linux, it wont' be easy to use task_struct->journal_info
- * because Lustre code may call into other fs which has certain assumptions
- * about journal_info. Currently following fields in task_struct are identified
- * can be used for this purpose:
- *  - cl_env: for liblustre.
- *  - tux_info: ony on RedHat kernel.
- *  - ...
+ * structures. On Linux, it isn't easy to use task_struct->journal_info
+ * because Lustre code may call into other fs during memory reclaim, which
+ * has certain assumptions about journal_info. There are not currently any
+ * fields in task_struct that can be used for this purpose.
  * \note As long as we use task_struct to store cl_env, we assume that once
  * called into Lustre, we'll never call into the other part of the kernel
  * which will use those fields in task_struct without explicitly exiting
  * Lustre.
  *
- * If there's no space in task_struct is available, hash will be used.
+ * Since there's no space in task_struct is available, hash will be used.
  * bz20044, bz22683.
  */
 

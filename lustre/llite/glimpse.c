@@ -29,8 +29,7 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * glimpse code shared between vvp and liblustre (and other Lustre clients in
- * the future).
+ * glimpse code used by vvp (and other Lustre clients in the future).
  *
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
  *   Author: Oleg Drokin <oleg.drokin@sun.com>

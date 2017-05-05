@@ -23,15 +23,9 @@
 #define LUSTRE_VERSION_CODE						\
 	OBD_OCD_VERSION(LUSTRE_MAJOR, LUSTRE_MINOR, LUSTRE_PATCH, LUSTRE_FIX)
 
-/* liblustre clients are only allowed to connect if their LUSTRE_FIX mismatches
- * by this amount (set in lustre/autoconf/lustre-version.ac). */
-#define LUSTRE_VERSION_ALLOWED_OFFSET OBD_OCD_VERSION(0, 0, 1, 32)
-
-#ifdef __KERNEL__
 /* If lustre version of client and servers it connects to differs by more
  * than this amount, client would issue a warning.
  * (set in lustre/autoconf/lustre-version.ac) */
 #define LUSTRE_VERSION_OFFSET_WARN OBD_OCD_VERSION(0, 4, 50, 0)
-#endif
 
 #endif

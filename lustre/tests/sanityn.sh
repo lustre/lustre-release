@@ -679,19 +679,7 @@ test_28() { # bug 9977
 }
 run_test 28 "read/write/truncate file with lost stripes"
 
-test_29() { # bug 10999
-	touch $DIR1/$tfile
-	#define OBD_FAIL_LDLM_GLIMPSE  0x30f
-	lctl set_param fail_loc=0x8000030f
-	ls -l $DIR2/$tfile &
-	usleep 500
-	dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1
-	wait
-}
-#bug 11549 - permanently turn test off in b1_5
-run_test 29 "lock put race between glimpse and enqueue ========="
-
-test_30() { #bug #11110, LU-2523
+test_30() { #b=11110, LU-2523
 	test_mkdir $DIR1/$tdir
 	cp -f /bin/bash $DIR1/$tdir/bash
 	/bin/sh -c 'sleep 1; rm -f $DIR2/$tdir/bash; cp /bin/bash $DIR2/$tdir' &
@@ -700,7 +688,6 @@ test_30() { #bug #11110, LU-2523
 	wait
 	true
 }
-
 run_test 30 "recreate file race"
 
 test_31a() {

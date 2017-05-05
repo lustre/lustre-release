@@ -246,38 +246,37 @@ struct obd_export {
 	 * protects exp_flags, exp_outstanding_replies and the change
 	 * of exp_imp_reverse
 	 */
-	spinlock_t		  exp_lock;
+	spinlock_t		exp_lock;
 	/** Compatibility flags for this export are embedded into
 	 *  exp_connect_data */
-	struct obd_connect_data   exp_connect_data;
-        enum obd_option           exp_flags;
-        unsigned long             exp_failed:1,
-                                  exp_in_recovery:1,
-                                  exp_disconnected:1,
-                                  exp_connecting:1,
-                                  /** VBR: export missed recovery */
-                                  exp_delayed:1,
-                                  /** VBR: failed version checking */
-                                  exp_vbr_failed:1,
-                                  exp_req_replay_needed:1,
-                                  exp_lock_replay_needed:1,
-                                  exp_need_sync:1,
-                                  exp_flvr_changed:1,
-                                  exp_flvr_adapt:1,
-                                  exp_libclient:1, /* liblustre client? */
-				  /* if to swap nidtbl entries for 2.2 clients.
-				   * Only used by the MGS to fix LU-1644. */
-				  exp_need_mne_swab:1,
-				  /* The export already got final replay ping
-				   * request. */
-				  exp_replay_done:1;
-        /* also protected by exp_lock */
-        enum lustre_sec_part      exp_sp_peer;
-        struct sptlrpc_flavor     exp_flvr;             /* current */
-        struct sptlrpc_flavor     exp_flvr_old[2];      /* about-to-expire */
-	time64_t		  exp_flvr_expire[2];	/* seconds */
+	struct obd_connect_data exp_connect_data;
+	enum obd_option		exp_flags;
+	unsigned long		exp_failed:1,
+				exp_in_recovery:1,
+				exp_disconnected:1,
+				exp_connecting:1,
+				/** VBR: export missed recovery */
+				exp_delayed:1,
+				/** VBR: failed version checking */
+				exp_vbr_failed:1,
+				exp_req_replay_needed:1,
+				exp_lock_replay_needed:1,
+				exp_need_sync:1,
+				exp_flvr_changed:1,
+				exp_flvr_adapt:1,
+				/* if to swap nidtbl entries for 2.2 clients.
+				 * Only used by the MGS to fix LU-1644. */
+				exp_need_mne_swab:1,
+				/* The export already got final replay ping
+				 * request. */
+				exp_replay_done:1;
+	/* also protected by exp_lock */
+	enum lustre_sec_part	exp_sp_peer;
+	struct sptlrpc_flavor	exp_flvr;		/* current */
+	struct sptlrpc_flavor	exp_flvr_old[2];	/* about-to-expire */
+	time64_t		exp_flvr_expire[2];	/* seconds */
 
-        /** protects exp_hp_rpcs */
+	/** protects exp_hp_rpcs */
 	spinlock_t		exp_rpc_lock;
 	struct list_head	exp_hp_rpcs;	/* (potential) HP RPCs */
 	struct list_head	exp_reg_rpcs;  /* RPC being handled */

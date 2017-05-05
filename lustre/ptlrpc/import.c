@@ -822,7 +822,6 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 
 	spin_unlock(&imp->imp_lock);
 
-
 	if (!warned && (ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
 	    (ocd->ocd_version > LUSTRE_VERSION_CODE +
 				LUSTRE_VERSION_OFFSET_WARN ||
@@ -833,7 +832,7 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 		const char *older = "older than client. "
 				    "Consider upgrading server";
 		const char *newer = "newer than client. "
-				    "Consider recompiling application";
+				    "Consider upgrading client";
 
 		LCONSOLE_WARN("Server %s version (%d.%d.%d.%d) "
 			      "is much %s (%s)\n",
@@ -1304,14 +1303,15 @@ out:
                         if (request->rq_repmsg == NULL)
                                 RETURN(-EPROTO);
 
-                        ocd = req_capsule_server_get(&request->rq_pill,
-                                                     &RMF_CONNECT_DATA);
-                        if (ocd &&
-                            (ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
-                            (ocd->ocd_version != LUSTRE_VERSION_CODE)) {
-                           /* Actually servers are only supposed to refuse
-                              connection from liblustre clients, so we should
-                              never see this from VFS context */
+			ocd = req_capsule_server_get(&request->rq_pill,
+						     &RMF_CONNECT_DATA);
+			/* Servers are not supposed to refuse connections from
+			 * clients based on version, only connection feature
+			 * flags.  We should never see this from llite, but it
+			 * may be useful for debugging in the future. */
+			if (ocd &&
+			    (ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
+			    (ocd->ocd_version != LUSTRE_VERSION_CODE)) {
                                 LCONSOLE_ERROR_MSG(0x16a, "Server %s version "
                                         "(%d.%d.%d.%d)"
                                         " refused connection from this client "

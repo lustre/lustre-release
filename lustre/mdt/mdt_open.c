@@ -1284,17 +1284,12 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		result = mdt_cross_open(info, rr->rr_fid2, rr->rr_fid1,
 					ldlm_rep, create_flags);
 		GOTO(out, result);
-	} else if (req_is_replay(req) ||
-	    (req->rq_export->exp_libclient && create_flags & MDS_OPEN_HAS_EA)) {
-		/* This is a replay request or from liblustre with ea. */
+	} else if (req_is_replay(req)) {
 		result = mdt_open_by_fid(info, ldlm_rep);
 
-		if (result != -ENOENT) {
-			if (req->rq_export->exp_libclient &&
-			    create_flags & MDS_OPEN_HAS_EA)
-				GOTO(out, result = 0);
+		if (result != -ENOENT)
 			GOTO(out, result);
-		}
+
 		/* We didn't find the correct object, so we need to re-create it
 		 * via a regular replay. */
 		if (!(create_flags & MDS_OPEN_CREAT)) {

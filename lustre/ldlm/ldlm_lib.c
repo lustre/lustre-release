@@ -1046,32 +1046,17 @@ int target_handle_connect(struct ptlrpc_request *req)
 	 */
 	if (!(data->ocd_connect_flags & OBD_CONNECT_FULL20))
 		GOTO(out, rc = -EPROTO);
-#endif
 
+	/* Don't allow liblustre clients to connect.
+	 * - testing was disabled in v2_2_50_0-61-g6a75d65
+	 * - building was disabled in v2_5_58_0-28-g7277179
+	 * - client code was deleted in v2_6_50_0-101-gcdfbc72,
+	 * - clients were refused connect for version difference > 0.0.1.32  */
 	if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
-		if (data->ocd_version < LUSTRE_VERSION_CODE -
-		                               LUSTRE_VERSION_ALLOWED_OFFSET ||
-		    data->ocd_version > LUSTRE_VERSION_CODE +
-		                               LUSTRE_VERSION_ALLOWED_OFFSET) {
-			DEBUG_REQ(D_WARNING, req, "Refusing %s (%d.%d.%d.%d) "
-				  "libclient connection attempt",
-				  data->ocd_version < LUSTRE_VERSION_CODE ?
-				  "old" : "new",
-				  OBD_OCD_VERSION_MAJOR(data->ocd_version),
-				  OBD_OCD_VERSION_MINOR(data->ocd_version),
-				  OBD_OCD_VERSION_PATCH(data->ocd_version),
-				  OBD_OCD_VERSION_FIX(data->ocd_version));
-			data = req_capsule_server_sized_get(&req->rq_pill,
-							    &RMF_CONNECT_DATA,
-				    offsetof(typeof(*data), ocd_version) +
-					     sizeof(data->ocd_version));
-			if (data) {
-				data->ocd_connect_flags = OBD_CONNECT_VERSION;
-				data->ocd_version = LUSTRE_VERSION_CODE;
-			}
-			GOTO(out, rc = -EPROTO);
-		}
+		DEBUG_REQ(D_WARNING, req, "Refusing libclient connection");
+		GOTO(out, rc = -EPROTO);
 	}
+#endif
 
 	/* Note: lw_client is needed in MDS-MDS failover during update log
 	 * processing, so we needs to allow lw_client to be connected at
@@ -1328,37 +1313,26 @@ dont_check_exports:
 		spin_unlock(&export->exp_lock);
 		CDEBUG(D_RPCTRACE, "%s: %s already connected at greater "
 		       "or equal conn_cnt: %d >= %d\n",
-                       cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
-                       export->exp_conn_cnt,
-                       lustre_msg_get_conn_cnt(req->rq_reqmsg));
+		       cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
+		       export->exp_conn_cnt,
+		       lustre_msg_get_conn_cnt(req->rq_reqmsg));
 
-                GOTO(out, rc = -EALREADY);
-        }
-        LASSERT(lustre_msg_get_conn_cnt(req->rq_reqmsg) > 0);
-        export->exp_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
-
-	/* Don't evict liblustre clients for not pinging. */
-        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
-                export->exp_libclient = 1;
-		spin_unlock(&export->exp_lock);
-
-		spin_lock(&target->obd_dev_lock);
-		list_del_init(&export->exp_obd_chain_timed);
-		spin_unlock(&target->obd_dev_lock);
-	} else {
-		spin_unlock(&export->exp_lock);
+		GOTO(out, rc = -EALREADY);
 	}
+	LASSERT(lustre_msg_get_conn_cnt(req->rq_reqmsg) > 0);
+	export->exp_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
+	spin_unlock(&export->exp_lock);
 
-        if (export->exp_connection != NULL) {
+	if (export->exp_connection != NULL) {
 		/* Check to see if connection came from another NID. */
-                if ((export->exp_connection->c_peer.nid != req->rq_peer.nid) &&
+		if ((export->exp_connection->c_peer.nid != req->rq_peer.nid) &&
 		    !hlist_unhashed(&export->exp_nid_hash))
-                        cfs_hash_del(export->exp_obd->obd_nid_hash,
-                                     &export->exp_connection->c_peer.nid,
-                                     &export->exp_nid_hash);
+			cfs_hash_del(export->exp_obd->obd_nid_hash,
+				     &export->exp_connection->c_peer.nid,
+				     &export->exp_nid_hash);
 
-                ptlrpc_connection_put(export->exp_connection);
-        }
+		ptlrpc_connection_put(export->exp_connection);
+	}
 
 	export->exp_connection = ptlrpc_connection_get(req->rq_peer,
 						       req->rq_self,

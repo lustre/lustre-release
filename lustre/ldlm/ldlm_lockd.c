@@ -654,14 +654,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 	struct lnet_process_id peer = req->rq_import->imp_connection->c_peer;
 
 	if (!req->rq_replied || (rc && rc != -EINVAL)) {
-		if (lock->l_export && lock->l_export->exp_libclient) {
-			LDLM_DEBUG(lock,
-				   "%s AST (req@%p x%llu) to liblustre client (nid %s) timeout, just cancelling lock",
-				   ast_type, req, req->rq_xid,
-				   libcfs_nid2str(peer.nid));
-			ldlm_lock_cancel(lock);
-			rc = -ERESTART;
-		} else if (ldlm_is_cancel(lock)) {
+		if (ldlm_is_cancel(lock)) {
 			LDLM_DEBUG(lock,
 				   "%s AST (req@%p x%llu) timeout from nid %s, but cancel was received (AST reply lost?)",
 				   ast_type, req, req->rq_xid,
@@ -1432,34 +1425,9 @@ existing_lock:
                                 ldlm_add_waiting_lock(lock);
                 }
         }
-        /* Make sure we never ever grant usual metadata locks to liblustre
-           clients */
-        if ((dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN ||
-            dlm_req->lock_desc.l_resource.lr_type == LDLM_IBITS) &&
-             req->rq_export->exp_libclient) {
-		if (unlikely(!ldlm_is_cancel_on_block(lock) ||
-                             !(dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK))){
-                        CERROR("Granting sync lock to libclient. "
-			       "req fl %d, rep fl %d, lock fl %#llx\n",
-                               dlm_req->lock_flags, dlm_rep->lock_flags,
-                               lock->l_flags);
-                        LDLM_ERROR(lock, "sync lock");
-			if (dlm_req->lock_flags & LDLM_FL_HAS_INTENT) {
-				struct ldlm_intent *it;
+	unlock_res_and_lock(lock);
 
-				it = req_capsule_client_get(&req->rq_pill,
-							    &RMF_LDLM_INTENT);
-				if (it != NULL) {
-					CERROR("This is intent %s (%llu)\n",
-					       ldlm_it2str(it->opc), it->opc);
-				}
-			}
-                }
-        }
-
-        unlock_res_and_lock(lock);
-
-        EXIT;
+	EXIT;
  out:
         req->rq_status = rc ?: err; /* return either error - bug 11190 */
         if (!req->rq_packed_final) {

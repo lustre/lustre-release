@@ -138,7 +138,6 @@ static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 
 	/* Find the 'victim' lock from this interval */
 	list_for_each_entry(lck, &node->li_group, l_sl_policy) {
-
 		victim_lock = LDLM_LOCK_GET(lck);
 
 		/* the same policy group - every lock has the

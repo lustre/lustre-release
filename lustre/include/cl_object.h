@@ -703,7 +703,7 @@ enum cl_page_type {
 
         /** Transient page, the transient cl_page is used to bind a cl_page
          *  to vmpage which is not belonging to the same object of cl_page.
-         *  it is used in DirectIO, lockless IO and liblustre. */
+         *  it is used in DirectIO and lockless IO. */
         CPT_TRANSIENT,
 };
 

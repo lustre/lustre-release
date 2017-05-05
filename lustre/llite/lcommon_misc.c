@@ -29,8 +29,7 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * cl code shared between vvp and liblustre (and other Lustre clients in the
- * future).
+ * cl code used by vvp (and other Lustre clients in the future).
  *
  */
 #define DEBUG_SUBSYSTEM S_LLITE

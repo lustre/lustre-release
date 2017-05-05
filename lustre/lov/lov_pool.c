@@ -151,7 +151,6 @@ struct cfs_hash_ops pool_hash_operations = {
 };
 
 #ifdef CONFIG_PROC_FS
-/* ifdef needed for liblustre support */
 /*
  * pool /proc seq_file methods
  */
