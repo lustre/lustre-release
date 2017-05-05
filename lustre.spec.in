@@ -331,6 +331,8 @@ mv $basemodpath/fs/osd_zfs.ko $basemodpath-osd-zfs/fs/osd_zfs.ko
 %if %{with lustre_tests}
 mkdir -p $basemodpath-tests/fs
 mv $basemodpath/fs/llog_test.ko $basemodpath-tests/fs/llog_test.ko
+mkdir -p $RPM_BUILD_ROOT%{_libdir}/lustre/tests/kernel/
+mv $basemodpath/fs/kinode.ko $RPM_BUILD_ROOT%{_libdir}/lustre/tests/kernel/
 %endif
 
 :> lustre.files

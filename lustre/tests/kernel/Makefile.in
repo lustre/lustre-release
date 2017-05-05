@@ -1,0 +1,5 @@
+MODULES := kinode
+
+EXTRA_DIST = kinode.c
+
+@INCLUDE_RULES@

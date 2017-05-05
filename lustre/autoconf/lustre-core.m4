@@ -3068,6 +3068,8 @@ lustre/scripts/Makefile
 lustre/scripts/systemd/Makefile
 lustre/tests/Makefile
 lustre/tests/mpi/Makefile
+lustre/tests/kernel/Makefile
+lustre/tests/kernel/autoMakefile
 lustre/utils/Makefile
 lustre/utils/gss/Makefile
 lustre/osp/Makefile

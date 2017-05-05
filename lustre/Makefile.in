@@ -3,6 +3,7 @@ subdir-m += obdclass
 subdir-m += ptlrpc
 subdir-m += obdecho
 subdir-m += mgc
+subdir-m += tests/kernel
 
 @SERVER_TRUE@subdir-m += ost mgs mdt mdd ofd quota osp lod lfsck
 @CLIENT_TRUE@subdir-m += lov osc mdc lmv llite fld

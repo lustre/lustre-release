@@ -661,7 +661,19 @@ static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
 #if BITS_PER_LONG == 32
 	return 1;
 #elif defined(CONFIG_COMPAT)
-	return unlikely(in_compat_syscall() || (sbi->ll_flags & LL_SBI_32BIT_API));
+	if (unlikely(sbi->ll_flags & LL_SBI_32BIT_API))
+		return true;
+
+# ifdef CONFIG_X86_X32
+	/* in_compat_syscall() returns true when called from a kthread
+	 * and CONFIG_X86_X32 is enabled, which is wrong. So check
+	 * whether the caller comes from a syscall (ie. not a kthread)
+	 * before calling in_compat_syscall(). */
+	if (current->flags & PF_KTHREAD)
+		return false;
+# endif
+
+	return unlikely(in_compat_syscall());
 #else
 	return unlikely(sbi->ll_flags & LL_SBI_32BIT_API);
 #endif

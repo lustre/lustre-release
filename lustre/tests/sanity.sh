@@ -16419,6 +16419,27 @@ test_409()
 }
 run_test 409 "Large amount of cross-MDTs hard links on the same file"
 
+test_410()
+{
+	# Create a file, and stat it from the kernel
+	local testfile=$DIR/$tfile
+	touch $testfile
+
+	local run_id=$RANDOM
+	local my_ino=$(stat --format "%i" $testfile)
+
+	# Try to insert the module. This will always fail as the
+	# module is designed to not be inserted.
+	insmod $LUSTRE/tests/kernel/kinode.ko run_id=$run_id fname=$testfile \
+	    &> /dev/null
+
+	# Anything but success is a test failure
+	dmesg | grep -q \
+	    "lustre_kinode_$run_id: inode numbers are identical: $my_ino" ||
+	    error "no inode match"
+}
+run_test 410 "Test inode number returned from kernel thread"
+
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&
