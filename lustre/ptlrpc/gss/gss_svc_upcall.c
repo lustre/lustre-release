@@ -977,16 +977,16 @@ cache_check:
 	switch (rc) {
 	case -ETIMEDOUT:
 	case -EAGAIN: {
-                int valid;
+		int valid;
 
-                if (first_check) {
-                        first_check = 0;
+		if (first_check) {
+			first_check = 0;
 
-                        read_lock(&rsi_cache.hash_lock);
+			read_lock(&rsi_cache.hash_lock);
 			valid = test_bit(CACHE_VALID, &rsip->h.flags);
-                        if (valid == 0)
+			if (valid == 0)
 				set_current_state(TASK_INTERRUPTIBLE);
-                        read_unlock(&rsi_cache.hash_lock);
+			read_unlock(&rsi_cache.hash_lock);
 
 			if (valid == 0) {
 				unsigned long jiffies;
@@ -996,16 +996,16 @@ cache_check:
 			}
 			cache_get(&rsip->h);
 			goto cache_check;
-                }
-                CWARN("waited %ds timeout, drop\n", GSS_SVC_UPCALL_TIMEOUT);
-                break;
-        }
-        case -ENOENT:
-                CWARN("cache_check return ENOENT, drop\n");
-                break;
-        case 0:
-                /* if not the first check, we have to release the extra
-                 * reference we just added on it. */
+		}
+		CWARN("waited %ds timeout, drop\n", GSS_SVC_UPCALL_TIMEOUT);
+		break;
+	}
+	case -ENOENT:
+		CDEBUG(D_SEC, "cache_check return ENOENT, drop\n");
+		break;
+	case 0:
+		/* if not the first check, we have to release the extra
+		 * reference we just added on it. */
 		if (!first_check)
 			cache_put(&rsip->h, &rsi_cache);
 		CDEBUG(D_SEC, "cache_check is good\n");
