@@ -45,7 +45,7 @@ struct lc_watchdog {
 	int			lcw_refcount;	/* must hold lcw_pending_timers_lock */
 	struct timer_list	lcw_timer;	/* kernel timer */
 	struct list_head	lcw_list;	/* chain on pending list */
-	cfs_time_t		lcw_last_touched;/* last touched stamp */
+	ktime_t			lcw_last_touched;/* last touched stamp */
 	struct task_struct     *lcw_task;	/* owner task */
 	void			(*lcw_callback)(pid_t, void *);
 	void			*lcw_data;
@@ -94,7 +94,7 @@ static DEFINE_SPINLOCK(lcw_pending_timers_lock);
 static struct list_head lcw_pending_timers = LIST_HEAD_INIT(lcw_pending_timers);
 
 /* Last time a watchdog expired */
-static cfs_time_t lcw_last_watchdog_time;
+static time64_t lcw_last_watchdog_time;
 static int lcw_recent_watchdog_count;
 
 static void
@@ -154,49 +154,39 @@ static int is_watchdog_fired(void)
 
 static void lcw_dump_stack(struct lc_watchdog *lcw)
 {
-        cfs_time_t      current_time;
-        cfs_duration_t  delta_time;
-        struct timeval  timediff;
+	time64_t current_time = ktime_get_seconds();
+	struct timespec64 timediff;
+	time64_t delta_time;
 
-        current_time = cfs_time_current();
-        delta_time = cfs_time_sub(current_time, lcw->lcw_last_touched);
-        cfs_duration_usec(delta_time, &timediff);
+	timediff = ktime_to_timespec64(ktime_sub(ktime_get(),
+				       lcw->lcw_last_touched));
+	/*
+	 * Check to see if we should throttle the watchdog timer to avoid
+	 * too many dumps going to the console thus triggering an NMI.
+	 */
+	delta_time = current_time - lcw_last_watchdog_time;
+	if (delta_time < libcfs_watchdog_ratelimit &&
+	    lcw_recent_watchdog_count > 3) {
+		LCONSOLE_WARN("Service thread pid %u was inactive for %lu.%.02lus. Watchdog stack traces are limited to 3 per %d seconds, skipping this one.\n",
+			      (int)lcw->lcw_pid,
+			      timediff.tv_sec,
+			      timediff.tv_nsec / (NSEC_PER_SEC / 100),
+			      libcfs_watchdog_ratelimit);
+	} else {
+		if (delta_time < libcfs_watchdog_ratelimit) {
+			lcw_recent_watchdog_count++;
+		} else {
+			memcpy(&lcw_last_watchdog_time, &current_time,
+			       sizeof(current_time));
+			lcw_recent_watchdog_count = 0;
+		}
 
-        /*
-         * Check to see if we should throttle the watchdog timer to avoid
-         * too many dumps going to the console thus triggering an NMI.
-         */
-        delta_time = cfs_duration_sec(cfs_time_sub(current_time,
-                                                   lcw_last_watchdog_time));
-
-        if (delta_time < libcfs_watchdog_ratelimit &&
-            lcw_recent_watchdog_count > 3) {
-                LCONSOLE_WARN("Service thread pid %u was inactive for "
-                              "%lu.%.02lus. Watchdog stack traces are limited "
-                              "to 3 per %d seconds, skipping this one.\n",
-                              (int)lcw->lcw_pid,
-                              timediff.tv_sec,
-                              timediff.tv_usec / 10000,
-                              libcfs_watchdog_ratelimit);
-        } else {
-                if (delta_time < libcfs_watchdog_ratelimit) {
-                        lcw_recent_watchdog_count++;
-                } else {
-                        memcpy(&lcw_last_watchdog_time, &current_time,
-                               sizeof(current_time));
-                        lcw_recent_watchdog_count = 0;
-                }
-
-                LCONSOLE_WARN("Service thread pid %u was inactive for "
-                              "%lu.%.02lus. The thread might be hung, or it "
-                              "might only be slow and will resume later. "
-                              "Dumping the stack trace for debugging purposes:"
-                              "\n",
-                              (int)lcw->lcw_pid,
-                              timediff.tv_sec,
-                              timediff.tv_usec / 10000);
-                lcw_dump(lcw);
-        }
+		LCONSOLE_WARN("Service thread pid %u was inactive for %lu.%.02lus. The thread might be hung, or it might only be slow and will resume later. Dumping the stack trace for debugging purposes:\n",
+			      (int)lcw->lcw_pid,
+			      timediff.tv_sec,
+			      timediff.tv_nsec / (NSEC_PER_SEC / 100));
+		lcw_dump(lcw);
+	}
 }
 
 /*
@@ -373,9 +363,9 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
 
 	/* Keep this working in case we enable them by default */
 	if (lcw->lcw_state == LC_WATCHDOG_ENABLED) {
-		lcw->lcw_last_touched = cfs_time_current();
+		lcw->lcw_last_touched = ktime_get();
 		mod_timer(&lcw->lcw_timer, cfs_time_seconds(timeout) +
-			  cfs_time_current());
+			  jiffies);
 	}
 
         RETURN(lcw);
@@ -384,24 +374,19 @@ EXPORT_SYMBOL(lc_watchdog_add);
 
 static void lcw_update_time(struct lc_watchdog *lcw, const char *message)
 {
-	cfs_time_t newtime = cfs_time_current();
+	ktime_t newtime = ktime_get();
 
-        if (lcw->lcw_state == LC_WATCHDOG_EXPIRED) {
-                struct timeval timediff;
-                cfs_time_t delta_time = cfs_time_sub(newtime,
-                                                     lcw->lcw_last_touched);
-                cfs_duration_usec(delta_time, &timediff);
+	if (lcw->lcw_state == LC_WATCHDOG_EXPIRED) {
+		ktime_t lapse = ktime_sub(newtime, lcw->lcw_last_touched);
+		struct timespec64 timediff;
 
-                LCONSOLE_WARN("Service thread pid %u %s after %lu.%.02lus. "
-                              "This indicates the system was overloaded (too "
-                              "many service threads, or there were not enough "
-                              "hardware resources).\n",
-                              lcw->lcw_pid,
-                              message,
-                              timediff.tv_sec,
-                              timediff.tv_usec / 10000);
-        }
-        lcw->lcw_last_touched = newtime;
+		timediff = ktime_to_timespec64(lapse);
+		LCONSOLE_WARN("Service thread pid %u %s after %lu.%.02lus. This indicates the system was overloaded (too many service threads, or there were not enough hardware resources).\n",
+			      lcw->lcw_pid, message,
+			      timediff.tv_sec,
+			      timediff.tv_nsec / (NSEC_PER_SEC / 100));
+	}
+	lcw->lcw_last_touched = newtime;
 }
 
 static void lc_watchdog_del_pending(struct lc_watchdog *lcw)
@@ -419,18 +404,17 @@ static void lc_watchdog_del_pending(struct lc_watchdog *lcw)
 
 void lc_watchdog_touch(struct lc_watchdog *lcw, int timeout)
 {
-        ENTRY;
-        LASSERT(lcw != NULL);
+	ENTRY;
+	LASSERT(lcw != NULL);
 
-        lc_watchdog_del_pending(lcw);
+	lc_watchdog_del_pending(lcw);
 
-        lcw_update_time(lcw, "resumed");
+	lcw_update_time(lcw, "resumed");
 
-	mod_timer(&lcw->lcw_timer, cfs_time_current() +
-		  cfs_time_seconds(timeout));
+	mod_timer(&lcw->lcw_timer, jiffies + cfs_time_seconds(timeout));
 	lcw->lcw_state = LC_WATCHDOG_ENABLED;
 
-        EXIT;
+	EXIT;
 }
 EXPORT_SYMBOL(lc_watchdog_touch);
 
