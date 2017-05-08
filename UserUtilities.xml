@@ -46,27 +46,27 @@ lfs setstripe -d <replaceable>dir</replaceable>
 lfs osts [path]
 lfs pool_list <replaceable>filesystem</replaceable>[.<replaceable>pool</replaceable>]| <replaceable>pathname</replaceable>
 lfs quota [-q] [-v] [-h] [-o <replaceable>obd_uuid</replaceable>|-I <replaceable>ost_idx</replaceable>|-i <replaceable>mdt_idx</replaceable>]
-          [-u <replaceable>username|uid|-g</replaceable> <replaceable>group|gid</replaceable>] <replaceable>/mount_point</replaceable>
-lfs quota -t -u|-g <replaceable>/mount_point</replaceable>
+          [-u <replaceable>username|uid|-g</replaceable> <replaceable>group|gid</replaceable>|-p <replaceable>projid</replaceable>] <replaceable>/mount_point</replaceable>
+lfs quota -t -u|-g|-p <replaceable>/mount_point</replaceable>
 lfs quotacheck [-ug] <replaceable>/mount_point</replaceable>
 lfs quotachown [-i] <replaceable>/mount_point</replaceable>
 lfs quotainv [-ug] [-f] <replaceable>/mount_point</replaceable>
 lfs quotaon [-ugf] <replaceable>/mount_point</replaceable>
 lfs quotaoff [-ug] <replaceable>/mount_point</replaceable>
-lfs setquota {-u|--user|-g|--group} <replaceable>uname|uid|gname|gid</replaceable>
+lfs setquota {-u|--user|-g|--group|-p|--project} <replaceable>uname|uid|gname|gid|projid</replaceable>
              [--block-softlimit <replaceable>block_softlimit</replaceable>]
              [--block-hardlimit <replaceable>block_hardlimit</replaceable>]
              [--inode-softlimit <replaceable>inode_softlimit</replaceable>]
              [--inode-hardlimit <replaceable>inode_hardlimit</replaceable>]
              <replaceable>/mount_point</replaceable>
-lfs setquota -u|--user|-g|--group <replaceable>uname|uid|gname|gid</replaceable>
+lfs setquota -u|--user|-g|--group|-p|--project <replaceable>uname|uid|gname|gid|projid</replaceable>
              [-b <replaceable>block_softlimit</replaceable>] [-B <replaceable>block_hardlimit</replaceable>]
              [-i <replaceable>inode-softlimit</replaceable>] [-I <replaceable>inode_hardlimit</replaceable>]
              <replaceable>/mount_point</replaceable>
-lfs setquota -t -u|-g [--block-grace <replaceable>block_grace</replaceable>]
+lfs setquota -t -u|-g|-p [--block-grace <replaceable>block_grace</replaceable>]
              [--inode-grace <replaceable>inode_grace</replaceable>]
              <replaceable>/mount_point</replaceable>
-lfs setquota -t -u|-g [-b <replaceable>block_grace</replaceable>] [-i <replaceable>inode_grace</replaceable>]
+lfs setquota -t -u|-g|-p [-b <replaceable>block_grace</replaceable>] [-i <replaceable>inode_grace</replaceable>]
              <replaceable>/mount_point</replaceable>
 lfs help
 </screen>
@@ -732,8 +732,8 @@ lfs help
                   <literal>quota [-q] [-v] [-o 
                   <replaceable>obd_uuid</replaceable>|-i 
                   <replaceable>mdt_idx</replaceable>|-I 
-                  <replaceable>ost_idx</replaceable>] [-u|-g 
-                  <replaceable>uname|uid|gname|gid]</replaceable>
+                  <replaceable>ost_idx</replaceable>] [-u|-g|-p
+                  <replaceable>uname|uid|gname|gid|projid]</replaceable>
                   <replaceable>/mount_point</replaceable></literal>
                 </para>
                 <para>&#160;</para>
@@ -741,11 +741,11 @@ lfs help
               <entry>
                 <para>Displays disk usage and limits, either for the full file
                 system or for objects on a specific OBD. A user or group name
-                or an ID can be specified. If both user and group are omitted,
-                quotas for the current UID/GID are shown. The 
-                <literal>-q</literal> option disables printing of additional
-                descriptions (including column titles). It fills in blank
-                spaces in the 
+                or an usr, group and project ID can be specified. If all user,
+		group project ID are omitted, quotas for the current UID/GID
+		are shown. The <literal>-q</literal> option disables printing
+		of additional descriptions (including column titles). It fills
+		in blank spaces in the
                 <literal>grace</literal> column with zeros (when there is no
                 grace period set), to ensure that the number of columns is
                 consistent. The 
@@ -757,14 +757,15 @@ lfs help
               <entry nameend="c2" namest="c1">
                 <para>
                   <literal>quota -t 
-                  <replaceable>-u|-g</replaceable>
+                  <replaceable>-u|-g|-p</replaceable>
                   <replaceable>/mount_point</replaceable></literal>
                 </para>
               </entry>
               <entry>
                 <para>Displays block and inode grace times for user (
                 <literal>-u</literal>) or group (
-                <literal>-g</literal>) quotas.</para>
+                <literal>-g</literal>) or project (
+		<literal>-p</literal>) quotas.</para>
               </entry>
             </row>
             <row>
@@ -849,9 +850,9 @@ lfs help
             <row>
               <entry nameend="c2" namest="c1">
                 <para>
-                  <literal>setquota -u|-g 
-                  <replaceable>
-                  uname|uid|gname|gid}</replaceable>[--block-softlimit 
+                  <literal>setquota {-u|-g|-p
+                  <replaceable>uname|uid|gname|gid|projid}</replaceable>
+                  [--block-softlimit
                   <replaceable>block_softlimit</replaceable>]
                   [--block-hardlimit 
                   <replaceable>block_hardlimit</replaceable>]
@@ -863,8 +864,8 @@ lfs help
                 </para>
               </entry>
               <entry>
-                <para>Sets file system quotas for users or groups. Limits can
-                be specified with 
+                <para>Sets file system quotas for users, groups or one project.
+		Limits can be specified with
                 <literal>--{block|inode}-{softlimit|hardlimit}</literal> or
                 their short equivalents 
                 <literal>-b</literal>, 
@@ -886,7 +887,7 @@ lfs help
             <row>
               <entry nameend="c2" namest="c1">
                 <para>
-                  <literal>setquota -t -u|-g [--block-grace 
+                  <literal>setquota -t -u|-g|-p [--block-grace
                   <replaceable>block_grace</replaceable>] [--inode-grace 
                   <replaceable>inode_grace</replaceable>] 
                   <replaceable>/mount_point</replaceable></literal>
@@ -985,6 +986,10 @@ $ lfs df --pool
       <para>List quotas of user 'bob'.</para>
       <screen>
 $ lfs quota -u bob /mnt/lustre
+</screen>
+      <para>List quotas of project ID '1'.</para>
+      <screen>
+$ lfs quota -p 1 /mnt/lustre
 </screen>
       <para>Show grace times for user quotas on 
       <literal>/mnt/lustre</literal>.</para>

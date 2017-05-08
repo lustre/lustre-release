@@ -319,6 +319,18 @@ xml:id="upgradinglustre">
             OSTs:
             <screen>tunefs.lustre --quota</screen></para>
           </listitem>
+      <listitem>
+        <para>(Optional) If you are upgrading before Lustre software release
+        2.10, to enable the project quota feature enter the following on every
+        ldiskfs backend target:
+        <screen>tune2fs –O project /dev/<replaceable>dev</replaceable></screen>
+        </para>
+        <note><para>Enabling the <literal>project</literal> feature will prevent
+            the filesystem from being used by older versions of ldiskfs, so it
+            should only be enabled if the project quota feature is required and/or
+            after it is known that the upgraded release does not need to be
+            downgraded.</para></note>
+      </listitem>
           <listitem>
             <para>When setting up the file system, enter:
             <screen>conf_param $FSNAME.quota.mdt=$QUOTA_TYPE
