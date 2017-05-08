@@ -7448,8 +7448,29 @@ test_105() {
 		error_and_umount "file not created on rw bind mnt pt"
 	umount $TMP/$tdir || error "umount of bind mnt pt failed"
 	rmdir $TMP/$tdir
+	cleanup || error "cleanup failed with $?"
 }
 run_test 105 "check file creation for ro and rw bind mnt pt"
+
+test_107() {
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.50) ]] ||
+		{ skip "Need MDS version > 2.10.50"; return; }
+
+	start_mgsmds || error "start_mgsmds failed"
+	start_ost || error "unable to start OST"
+
+	# add unknown configuration parameter.
+	local PARAM="$FSNAME-OST0000.ost.unknown_param=50"
+	do_facet mgs "$LCTL conf_param $PARAM"
+	cleanup_nocli || error "cleanup_nocli failed with $?"
+	load_modules
+
+	# unknown param should be ignored while mounting.
+	start_ost || error "unable to start OST after unknown param set"
+
+	cleanup || error "cleanup failed with $?"
+}
+run_test 107 "Unknown config param should not fail target mounting"
 
 if ! combined_mgs_mds ; then
 	stop mgs
