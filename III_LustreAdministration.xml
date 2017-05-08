@@ -70,6 +70,11 @@
                 <link linkend='managingsecurity' endterm='managingsecurity.title'/>
             </para>
         </listitem>
+        <listitem>
+            <para>
+                <link linkend='zfssnapshots' endterm='zfssnapshots.title'/>
+            </para>
+        </listitem>
     </itemizedlist>
 
     <tip>
@@ -80,7 +85,6 @@
         <para> - Use the logging resources provided in the Linux distribution.</para>
     </tip>
     </partintro>
-
 
     <xi:include href="LustreMonitoring.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="LustreOperations.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
@@ -97,8 +101,6 @@
     <xi:include href="LustreNodemap.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="LustreSharedSecretKey.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="ManagingSecurity.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
-
-
+    <xi:include href="ZFSSnapshots.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 
 </part>

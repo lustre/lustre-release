@@ -1,0 +1,803 @@
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="zfssnapshots">
+  <title xml:id="zfssnapshots.title">Lustre ZFS Snapshots</title>
+  <para>This chapter describes the ZFS Snapshot feature support in Lustre and
+      contains following sections:</para>
+  <itemizedlist>
+    <listitem>
+      <para><xref linkend="dbdoclet.zfssnapshotIntro"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.zfssnapshotConfig"/></para>
+    </listitem>
+    <listitem>
+        <para><xref linkend="dbdoclet.zfssnapshotOps"/></para>
+    </listitem>
+    <listitem>
+        <para><xref linkend="dbdoclet.zfssnapshotBarrier"/></para>
+    </listitem>
+    <listitem>
+        <para><xref linkend="dbdoclet.zfssnapshotLogs"/></para>
+    </listitem>
+    <listitem>
+        <para><xref linkend="dbdoclet.zfssnapshotLustreLogs"/></para>
+    </listitem>
+  </itemizedlist>
+  <section xml:id="dbdoclet.zfssnapshotIntro">
+      <title><indexterm><primary>Introduction</primary>
+      </indexterm>Introduction</title>
+      <para>Snapshots provide fast recovery of files from a previously created
+      checkpoint without recourse to an offline backup or remote replica.
+      Snapshots also provide a means to version-control storage, and can be used
+      to recover lost files or previous versions of files.</para>
+      <para>Filesystem snapshots are intended to be mounted on user-accessible
+      nodes, such as login nodes, so that users can restore files (e.g. after
+      accidental delete or overwrite) without administrator intervention.  It
+      would be possible to mount the snapshot filesystem(s) via automount when
+      users access them, rather than mounting all snapshots, to reduce overhead
+      on login nodes when the snapshots are not in use.</para>
+      <para>Recovery of lost files from a snapshot is usually considerably
+      faster than from any offline backup or remote replica. However, note that
+      snapshots do not improve storage reliability and are just as exposed to
+      hardware failure as any other storage volume.</para>
+      <section xml:id="dbdoclet.zfssnapshotsReq">
+          <title><indexterm><primary>Introduction</primary>
+              <secondary>Requirements</secondary></indexterm>Requirements
+          </title>
+          <para>All Lustre server targets must be ZFS file systems running
+          Lustre version 2.10 or later.  In addition, the MGS must be able to
+          communicate via ssh or another remote access protocol, without
+          password authentication, to all other servers.</para>
+          <para>The feature is enabled by default and cannot be disabled.  The
+          management of snapshots is done through <literal>lctl</literal>
+          commands on the MGS.</para>
+          <para>Lustre snapshot is based on Copy-On-Write; the snapshot and file
+          system may share a single copy of the data until a file is changed on
+          the file system.  The snapshot will prevent the space of deleted or
+          overwritten files from being released until the snapshot(s)
+          referencing those files is deleted.  The file system administrator
+          needs to establish a snapshot create/backup/remove policy according to
+          their system’s actual size and usage.</para>
+      </section>
+  </section>
+  <section xml:id="dbdoclet.zfssnapshotConfig">
+        <title><indexterm><primary>feature overview</primary>
+            <secondary>configuration</secondary></indexterm>Configuration
+        </title>
+        <para>The snapshot tool loads system configuration from the
+        <literal>/etc/ldev.conf</literal> file on the MGS and calls related
+        ZFS commands to maintian the Lustre snapshot pieces on all targets
+        (MGS/MDT/OST).  Please note that the <literal>/etc/ldev.conf</literal>
+        file is used for other purposes as well.</para>
+        <para>The format of the file is:</para>
+        <screen>&lt;host&gt; foreign/- &lt;label&gt; &lt;device&gt; [journal-path]/- [raidtab]</screen>
+        <para>The format of <literal>&lt;label&gt;</literal> is:</para>
+        <screen>fsname-&lt;role&gt;&lt;index&gt; or &lt;role&gt;&lt;index&gt;</screen>
+        <para>The format of &lt;device&gt; is:</para>
+        <screen>[md|zfs:][pool_dir/]&lt;pool&gt;/&lt;filesystem&gt;</screen>
+        <para>Snapshot only uses the fields &lt;host&gt;, &lt;label&gt; and
+        &lt;device&gt;.</para>
+        <para>Example:</para>
+        <screen>mgs# cat /etc/ldev.conf
+host-mdt1 - myfs-MDT0000 zfs:/tmp/myfs-mdt1/mdt1
+host-mdt2 - myfs-MDT0001 zfs:myfs-mdt2/mdt2
+host-ost1 - OST0000 zfs:/tmp/myfs-ost1/ost1
+host-ost2 - OST0001 zfs:myfs-ost2/ost2</screen>
+        <para>The configuration file is edited manually.</para>
+        <para> Once the configuration file is updated to reflect the current
+        file system setup, you are ready to create a file system snapshot.
+        </para>
+  </section>
+  <section xml:id="dbdoclet.zfssnapshotOps">
+      <title><indexterm><primary>operations</primary>
+      </indexterm>Snapshot Operations</title>
+  <section xml:id="dbdoclet.zfssnapshotCreate">
+      <title><indexterm><primary>operations</primary>
+          <secondary>create</secondary></indexterm>Creating a Snapshot
+      </title>
+      <para>To create a snapshot of an existing Lustre file system, run the
+      following <literal>lctl</literal> command on the MGS:</para>
+      <screen>lctl snapshot_create [-b | --barrier [on | off]] [-c | --comment
+comment] -F | --fsname fsname> [-h | --help] -n | --name ssname>
+[-r | --rsh remote_shell][-t | --timeout timeout]</screen>
+      <informaltable frame="all">
+          <tgroup cols="2">
+              <colspec colname="c1" colwidth="50*"/>
+              <colspec colname="c2" colwidth="50*"/>
+              <thead>
+                  <row>
+                      <entry>
+                          <para><emphasis role="bold">Option</emphasis></para>
+                      </entry>
+                      <entry>
+                          <para><emphasis role="bold">Description</emphasis></para>
+                      </entry>
+                  </row>
+              </thead>
+              <tbody>
+                  <row>
+                      <entry>
+                          <para> <literal>-b</literal></para>
+                      </entry>
+                      <entry>
+                          <para>set write barrier before creating snapshot.  The
+                          default value is 'on'.</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-c</literal></para>
+                      </entry>
+                      <entry>
+                          <para>a description for the purpose of the snapshot
+                          </para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-F</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the filesystem name</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-h</literal></para>
+                      </entry>
+                      <entry>
+                          <para>help information</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-n</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the name of the snapshot</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-r</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the remote shell used for communication with
+                          remote target.  The default value is 'ssh'</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-t</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the lifetime (seconds) for write barrier.  The
+                          default value is 30 seconds</para>
+                      </entry>
+                  </row>
+              </tbody>
+          </tgroup>
+      </informaltable>
+  </section>
+  <section xml:id="dbdoclet.zfssnapshotDelete">
+      <title><indexterm><primary>operations</primary>
+          <secondary>delete</secondary></indexterm>Delete a Snapshot
+      </title>
+      <para>To delete an existing snapshot, run the following
+      <literal>lctl</literal> command on the MGS:</para>
+      <screen>lctl snapshot_destroy [-f | --force] &lt;-F | --fsname fsname&gt;
+&lt;-n | --name ssname&gt; [-r | --rsh remote_shell]</screen>
+      <informaltable frame="all">
+          <tgroup cols="2">
+              <colspec colname="c1" colwidth="50*"/>
+              <colspec colname="c2" colwidth="50*"/>
+              <thead>
+                  <row>
+                      <entry>
+                          <para><emphasis role="bold">Option</emphasis></para>
+                      </entry>
+                      <entry>
+                          <para><emphasis role="bold">Description</emphasis>
+                          </para>
+                      </entry>
+                  </row>
+              </thead>
+              <tbody>
+                  <row>
+                      <entry>
+                          <para> <literal>-f</literal></para>
+                      </entry>
+                      <entry>
+                          <para>destroy the snapshot by force</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-F</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the filesystem name</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-h</literal></para>
+                      </entry>
+                      <entry>
+                          <para>help information</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-n</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the name of the snapshot</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-r</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the remote shell used for communication with
+                              remote target.  The default value is 'ssh'</para>
+                      </entry>
+                  </row>
+              </tbody>
+          </tgroup>
+      </informaltable>
+  </section>
+  <section xml:id="dbdoclet.zfssnapshotMount">
+      <title><indexterm><primary>operations</primary>
+          <secondary>mount</secondary></indexterm>Mounting a Snapshot
+      </title>
+      <para>Snapshots are treated as separate file systems and can be mounted on
+      Lustre clients. The snapshot file system must be mounted as a
+      read-only file system with the <literal>-o ro</literal> option.
+      If the <literal>mount</literal> command does not include the read-only
+      option, the mount will fail.</para>
+      <note><para>Before a snapshot can be mounted on the client, the snapshot
+      must first be mounted on the servers using the <literal>lctl</literal>
+      utility.</para></note>
+      <para>To mount a snapshot on the server, run the following lctl command
+      on the MGS:</para>
+      <screen>lctl snapshot_mount &lt;-F | --fsname fsname&gt; [-h | --help]
+&lt;-n | --name ssname&gt; [-r | --rsh remote_shell]</screen>
+      <informaltable frame="all">
+          <tgroup cols="2">
+              <colspec colname="c1" colwidth="50*"/>
+              <colspec colname="c2" colwidth="50*"/>
+              <thead>
+                  <row>
+                      <entry>
+                          <para><emphasis role="bold">Option</emphasis></para>
+                      </entry>
+                      <entry>
+                          <para><emphasis role="bold">Description</emphasis>
+                          </para>
+                      </entry>
+                  </row>
+              </thead>
+              <tbody>
+                  <row>
+                      <entry>
+                          <para> <literal>-F</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the filesystem name</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-h</literal></para>
+                      </entry>
+                      <entry>
+                          <para>help information</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-n</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the name of the snapshot</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-r</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the remote shell used for communication with
+                              remote target.  The default value is 'ssh'</para>
+                      </entry>
+                  </row>
+              </tbody>
+          </tgroup>
+      </informaltable>
+      <para>After the successful mounting of the snapshot on the server, clients
+      can now mount the snapshot as a read-only filesystem.  For example, to
+      mount a snapshot named <replaceable>snapshot_20170602</replaceable> for a
+      filesystem named <replaceable>myfs</replaceable>, the following mount
+      command would be used:</para>
+      <screen>mgs# lctl snapshot_mount -F myfs -n snapshot_20170602</screen>
+      <para>After mounting on the server, use
+      <literal>lctl snapshot_list</literal> to get the fsname for the snapshot
+      itself as follows:</para>
+      <screen>ss_fsname=$(lctl snapshot_list -F myfs -n snapshot_20170602 |
+          awk '/^snapshot_fsname/ { print $2 }')</screen>
+      <para>Finally, mount the snapshot on the client:</para>
+      <screen>mount -t lustre -o ro $MGS_nid:/$ss_fsname $local_mount_point</screen>
+  </section>
+  <section xml:id="dbdoclet.zfssnapshotUnmount">
+      <title><indexterm><primary>operations</primary>
+          <secondary>unmount</secondary></indexterm>Unmounting a Snapshot
+      </title>
+      <para>To unmount a snapshot from the servers, first unmount the snapshot
+      file system from all clients, using the standard <literal>umount</literal>
+      command on each client.  For example, to unmount the snapshot file system
+      named <replaceable>snapshot_20170602</replaceable> run the following
+      command on each client that has it mounted:</para>
+      <screen>client# umount $local_mount_point</screen>
+      <para>After all clients have unmounted the snapshot file system, run the
+      following <literal>lctl</literal>command on a server node where the
+      snapshot is mounted:</para>
+      <screen>lctl snapshot_umount [-F | --fsname fsname] [-h | --help]
+&lt;-n | -- name ssname&gt; [-r | --rsh remote_shell]</screen>
+      <informaltable frame="all">
+          <tgroup cols="2">
+              <colspec colname="c1" colwidth="50*"/>
+              <colspec colname="c2" colwidth="50*"/>
+              <thead>
+                  <row>
+                      <entry>
+                          <para><emphasis role="bold">Option</emphasis></para>
+                      </entry>
+                      <entry>
+                          <para><emphasis role="bold">Description</emphasis>
+                          </para>
+                      </entry>
+                  </row>
+              </thead>
+              <tbody>
+                  <row>
+                      <entry>
+                          <para> <literal>-F</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the filesystem name</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-h</literal></para>
+                      </entry>
+                      <entry>
+                          <para>help information</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-n</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the name of the snapshot</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-r</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the remote shell used for communication with
+                              remote target.  The default value is 'ssh'</para>
+                      </entry>
+                  </row>
+              </tbody>
+          </tgroup>
+      </informaltable>
+      <para>For example:</para>
+      <screen>lctl snapshot_umount -F myfs -n snapshot_20170602</screen>
+  </section>
+  <section xml:id="dbdoclet.zfssnapshotList">
+      <title><indexterm><primary>operations</primary>
+          <secondary>list</secondary></indexterm>List Snapshots
+      </title>
+      <para>To list the available snapshots for a given file system, use the
+          following <literal>lctl</literal> command on the MGS:</para>
+      <screen>lctl snapshot_list [-d | --detail] &lt;-F | --fsname fsname&gt;
+[-h | -- help] [-n | --name ssname] [-r | --rsh remote_shell]</screen>
+      <informaltable frame="all">
+          <tgroup cols="2">
+              <colspec colname="c1" colwidth="50*"/>
+              <colspec colname="c2" colwidth="50*"/>
+              <thead>
+                  <row>
+                      <entry>
+                          <para><emphasis role="bold">Option</emphasis></para>
+                      </entry>
+                      <entry>
+                          <para><emphasis role="bold">Description</emphasis>
+                          </para>
+                      </entry>
+                  </row>
+              </thead>
+              <tbody>
+                  <row>
+                      <entry>
+                          <para> <literal>-d</literal></para>
+                      </entry>
+                      <entry>
+                          <para>list every piece for the specified snapshot
+                          </para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-F</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the filesystem name</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-h</literal></para>
+                      </entry>
+                      <entry>
+                          <para>help information</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-n</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the snapshot's name. If the snapshot name is not
+                          supplied, all snapshots for this file system will be
+                          displayed</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-r</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the remote shell used for communication with
+                              remote target.  The default value is 'ssh'</para>
+                      </entry>
+                  </row>
+              </tbody>
+          </tgroup>
+      </informaltable>
+  </section>
+  <section xml:id="dbdoclet.zfssnapshotModify">
+      <title><indexterm><primary>operations</primary>
+          <secondary>modify</secondary></indexterm>Modify Snapshot Attributes
+      </title>
+      <para>Currently, Lustre snapshot has five user visible attributes;
+      snapshot name, snapshot comment, create time, modification time, and
+      snapshot file system name. Among them, the former two attributes can be
+      modified. Renaming follows the general ZFS snapshot name rules, such as
+      the maximum length is 256 bytes, cannot conflict with the reserved names,
+      and so on.</para>
+      <para>To modify a snapshot’s attributes, use the following
+      <literal>lctl</literal> command on the MGS:</para>
+      <screen>lctl snapshot_modify [-c | --comment comment]
+&lt;-F | --fsname fsname&gt; [-h | --help] &lt;-n | --name ssname&gt;
+[-N | --new new_ssname] [-r | --rsh remote_shell]</screen>
+      <informaltable frame="all">
+          <tgroup cols="2">
+              <colspec colname="c1" colwidth="50*"/>
+              <colspec colname="c2" colwidth="50*"/>
+              <thead>
+                  <row>
+                      <entry>
+                          <para><emphasis role="bold">Option</emphasis></para>
+                      </entry>
+                      <entry>
+                          <para><emphasis role="bold">Description</emphasis>
+                          </para>
+                      </entry>
+                  </row>
+              </thead>
+              <tbody>
+                  <row>
+                      <entry>
+                          <para> <literal>-c</literal></para>
+                      </entry>
+                      <entry>
+                          <para>update the snapshot's comment</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-F</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the filesystem name</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-h</literal></para>
+                      </entry>
+                      <entry>
+                          <para>help information</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-n</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the snapshot's name</para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-N</literal></para>
+                      </entry>
+                      <entry>
+                          <para>rename the snapshot's name as
+                          <replaceable>new_ssname</replaceable></para>
+                      </entry>
+                  </row>
+                  <row>
+                      <entry>
+                          <para> <literal>-r</literal></para>
+                      </entry>
+                      <entry>
+                          <para>the remote shell used for communication with
+                              remote target.  The default value is 'ssh'</para>
+                      </entry>
+                  </row>
+              </tbody>
+          </tgroup>
+      </informaltable>
+  </section>
+  </section>
+  <section xml:id="dbdoclet.zfssnapshotBarrier">
+      <title><indexterm><primary>barrier</primary>
+      </indexterm>Global Write Barriers</title>
+      <para>Snapshots are non-atomic across multiple MDTs and OSTs, which means
+      that if there is activity on the file system while a snapshot is being
+      taken, there may be user-visible namespace inconsistencies with files
+      created or destroyed in the interval between the MDT and OST snapshots.
+      In order to create a consistent snapshot of the file system, we are able
+      to set a global write barrier, or “freeze” the system. Once set, all
+      metadata modifications will be blocked until the write barrier is actively
+      removed (“thawed”) or expired. The user can set a timeout parameter on a
+      global barrier or the barrier can be explicitly removed. The default
+      timeout period is 30 seconds.</para>
+      <para>It is important to note that snapshots are usable without the global
+      barrier.  Only files that are currently being modified by clients (write,
+      create, unlink) may be inconsistent as noted above if the barrier is not
+      used.  Other files not curently being modified would be usable even
+      without the barrier.</para>
+      <para>The snapshot create command will call the write barrier internally
+      when requested using the <literal>-b</literal> option to
+      <literal>lctl snapshot_create</literal>. So, explicit use of the barrier
+      is not required when using snapshots but included here as an option to
+      quiet the file system before a snapshot is created.</para>
+      <section xml:id="dbdoclet.zfssnapshotBarrierImpose">
+          <title><indexterm><primary>barrier</primary>
+              <secondary>impose</secondary></indexterm>Impose Barrier
+          </title>
+          <para>To impose a global write barrier, run the
+          <literal>lctl barrier_freeze</literal> command on the MGS:</para>
+          <screen>lctl barrier_freeze &lt;fsname&gt; [timeout (in seconds)]
+where timeout default is 30.</screen>
+          <para>For example, to freeze the filesystem
+          <replaceable>testfs</replaceable> for <literal>15</literal> seconds:
+          </para>
+          <screen>mgs# lctl barrier_freeze testfs 15</screen>
+          <para>If the command is successful, there will be no output from
+          the command.  Otherwise, an error message will be printed.</para>
+      </section>
+      <section xml:id="dbdoclet.zfssnapshotBarrierRemove">
+          <title><indexterm><primary>barrier</primary>
+                  <secondary>remove</secondary></indexterm>Remove Barrier
+              </title>
+          <para>To remove a global write barrier, run the
+          <literal>lctl barrier_thaw</literal> command on the MGS:</para>
+          <screen>lctl barrier_thaw &lt;fsname&gt;</screen>
+          <para>For example, to thaw the write barrier for the filesystem
+              <replaceable>testfs</replaceable>:
+          </para>
+          <screen>mgs# lctl barrier_thaw testfs</screen>
+          <para>If the command is successful, there will be no output from
+              the command.  Otherwise, an error message will be printed.</para>
+      </section>
+      <section xml:id="dbdoclet.zfssnapshotBarrierQuery">
+          <title><indexterm><primary>barrier</primary>
+              <secondary>query</secondary></indexterm>Query Barrier
+          </title>
+          <para>To see how much time is left on a global write barrier, run the
+          <literal>lctl barrier_stat</literal> command on the MGS:</para>
+          <screen># lctl barrier_stat &lt;fsname&gt;</screen>
+          <para>For example, to stat the write barrier for the filesystem
+              <replaceable>testfs</replaceable>:
+          </para>
+          <screen>mgs# lctl barrier_stat testfs
+The barrier for testfs is in 'frozen'
+The barrier will be expired after 7 seconds</screen>
+          <para>If the command is successful, a status from the table below
+          will be printed.  Otherwise, an error message will be printed.</para>
+          <para>The possible status and related meanings for the write barrier
+          are as follows:</para>
+          <table frame="all" xml:id="writebarrierstatus.tab1">
+              <title>Write Barrier Status</title>
+              <tgroup cols="2">
+                  <colspec colname="c1" colwidth="50*"/>
+                  <colspec colname="c2" colwidth="50*"/>
+                  <thead>
+                      <row>
+                          <entry>
+                              <para><emphasis role="bold">Status</emphasis>
+                              </para>
+                          </entry>
+                          <entry>
+                              <para><emphasis role="bold">Meaning</emphasis>
+                              </para>
+                          </entry>
+                      </row>
+                  </thead>
+                  <tbody>
+                      <row>
+                          <entry>
+                              <para> <literal>init</literal></para>
+                          </entry>
+                          <entry>
+                              <para>barrier has never been set on the system
+                              </para>
+                          </entry>
+                      </row>
+                      <row>
+                          <entry>
+                              <para> <literal>freezing_p1</literal></para>
+                          </entry>
+                          <entry>
+                              <para>In the first stage of setting the write
+                              barrier</para>
+                          </entry>
+                      </row>
+                      <row>
+                          <entry>
+                              <para> <literal>freezing_p2</literal></para>
+                          </entry>
+                          <entry>
+                              <para> the second stage of setting the write
+                              barrier</para>
+                          </entry>
+                      </row>
+                      <row>
+                          <entry>
+                              <para> <literal>frozen</literal></para>
+                          </entry>
+                          <entry>
+                              <para>the write barrier has been set successfully
+                              </para>
+                          </entry>
+                      </row>
+                      <row>
+                          <entry>
+                              <para> <literal>thawing</literal></para>
+                          </entry>
+                          <entry>
+                              <para>In thawing the write barrier</para>
+                          </entry>
+                      </row>
+                      <row>
+                          <entry>
+                              <para> <literal>thawed</literal></para>
+                          </entry>
+                          <entry>
+                              <para>The write barrier has been thawed</para>
+                          </entry>
+                      </row>
+                      <row>
+                          <entry>
+                              <para> <literal>failed</literal></para>
+                          </entry>
+                          <entry>
+                              <para>Failed to set write barrier</para>
+                          </entry>
+                      </row>
+                      <row>
+                          <entry>
+                              <para> <literal>expired</literal></para>
+                          </entry>
+                          <entry>
+                              <para>The write barrier is expired</para>
+                          </entry>
+                      </row>
+                      <row>
+                          <entry>
+                              <para> <literal>rescan</literal></para>
+                          </entry>
+                          <entry>
+                              <para>In scanning the MDTs status, see the command
+                              <literal>barrier_rescan</literal></para>
+                          </entry>
+                      </row>
+                      <row>
+                          <entry>
+                              <para> <literal>unknown</literal></para>
+                          </entry>
+                          <entry>
+                              <para>Other cases</para>
+                          </entry>
+                      </row>
+                  </tbody>
+              </tgroup>
+          </table>
+          <para>If the barrier is in ’freezing_p1’, ’freezing_p2’ or ’frozen’
+          status, then the remaining lifetime will be returned also.</para>
+      </section>
+      <section xml:id="dbdoclet.zfssnapshotBarrierRescan">
+          <title><indexterm><primary>barrier</primary>
+              <secondary>rescan</secondary></indexterm>Rescan Barrier
+          </title>
+          <para> To rescan a global write barrier to check which MDTs are
+          active, run the <literal>lctl barrier_rescan</literal> command on the
+          MGS:</para>
+          <screen>lctl barrier_rescan &lt;fsname&gt; [timeout (in seconds)],
+where the default timeout is 30 seconds.</screen>
+          <para>For example, to rescan the barrier for filesystem
+          <replaceable>testfs</replaceable>:</para>
+          <screen>mgs# lctl barrier_rescan testfs
+1 of 4 MDT(s) in the filesystem testfs are inactive</screen>
+          <para>If the command is successful, the number of MDTs that are
+          unavailable against the total MDTs will be reported.  Otherwise, an
+          error message will be printed.</para>
+      </section>
+  </section>
+  <section xml:id="dbdoclet.zfssnapshotLogs">
+      <title><indexterm><primary>logs</primary>
+      </indexterm>Snapshot Logs</title>
+      <para>A log of all snapshot activity can be found in the following file:
+      <literal>/var/log/lsnapshot.log</literal>.  This file contains information
+      on when a snapshot was created, an attribute was changed, when it was
+      mounted, and other snapshot information.</para>
+      <para>The following is a sample <literal>/var/log/lsnapshot</literal>
+      file:</para>
+      <screen>Mon Mar 21 19:43:06 2016
+(15826:jt_snapshot_create:1138:scratch:ssh): Create snapshot lss_0_0
+successfully with comment &lt;(null)&gt;, barrier &lt;enable&gt;, timeout &lt;30&gt;
+Mon Mar 21 19:43:11 2016(13030:jt_snapshot_create:1138:scratch:ssh):
+Create snapshot lss_0_1 successfully with comment &lt;(null)&gt;, barrier
+&lt;disable&gt;, timeout &lt;-1&gt;
+Mon Mar 21 19:44:38 2016 (17161:jt_snapshot_mount:2013:scratch:ssh):
+The snapshot lss_1a_0 is mounted
+Mon Mar 21 19:44:46 2016
+(17662:jt_snapshot_umount:2167:scratch:ssh): the snapshot lss_1a_0
+have been umounted
+Mon Mar 21 19:47:12 2016
+(20897:jt_snapshot_destroy:1312:scratch:ssh): Destroy snapshot
+lss_2_0 successfully with force &lt;disable&gt;</screen>
+  </section>
+  <section xml:id="dbdoclet.zfssnapshotLustreLogs">
+      <title><indexterm><primary>configlogs</primary>
+      </indexterm>Lustre Configuration Logs</title>
+      <para>A snapshot is independent from the original file system that it is
+      derived from and is treated as a new file system name that can be mounted
+      by Lustre client nodes. The file system name is part of the configuration
+      log names and exists in configuration log entries. Two commands exist to
+      manipulate configuration logs:  <literal>lctl fork_lcfg</literal> and
+      <literal>lctl erase_lcfg</literal>.</para>
+      <para>The snapshot commands will use configuration log functionality
+      internally when needed. So, use of the barrier is not required to use
+      snapshots but included here as an option. The following configuration log
+      commands are independent of snapshots and can be used independent of
+      snapshot use.</para>
+      <para>To fork a configuration log, run the following
+      <literal>lctl</literal> command on the MGS:</para>
+      <screen>lctl fork_lcfg</screen>
+      <para>Usage:  fork_lcfg &lt;fsname&gt; &lt;newname&gt;</para>
+      <para>To erase a configuration log, run the following
+      <literal>lctl</literal> command on the MGS:</para>
+      <screen>lctl erase_lcfg</screen>
+      <para>Usage:  erase_lcfg &lt;fsname&gt;</para>
+  </section>
+</chapter>
