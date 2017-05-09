@@ -2728,7 +2728,8 @@ test_29d() {
 
 	rm -f $file
 
-	$LFS hsm_remove -a 0 $fid
+	$LFS hsm_remove --mntpath "$MOUNT" -a 0 $fid ||
+		error "cannot hsm_remove '$fid'"
 
 	# give time for CDT to handle remove request and create broadcasted
 	sleep 2
