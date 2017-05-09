@@ -242,7 +242,8 @@ static unsigned long enc_pools_shrink_count(struct shrinker *s,
 	}
 
 	LASSERT(page_pools.epp_idle_idx <= IDLE_IDX_MAX);
-	return max(page_pools.epp_free_pages - PTLRPC_MAX_BRW_PAGES, 0UL) *
+	return (page_pools.epp_free_pages <= PTLRPC_MAX_BRW_PAGES) ? 0 :
+		(page_pools.epp_free_pages - PTLRPC_MAX_BRW_PAGES) *
 		(IDLE_IDX_MAX - page_pools.epp_idle_idx) / IDLE_IDX_MAX;
 }
 
@@ -253,7 +254,10 @@ static unsigned long enc_pools_shrink_scan(struct shrinker *s,
 					   struct shrink_control *sc)
 {
 	spin_lock(&page_pools.epp_lock);
-	sc->nr_to_scan = min_t(unsigned long, sc->nr_to_scan,
+	if (page_pools.epp_free_pages <= PTLRPC_MAX_BRW_PAGES)
+		sc->nr_to_scan = 0;
+	else
+		sc->nr_to_scan = min_t(unsigned long, sc->nr_to_scan,
 			      page_pools.epp_free_pages - PTLRPC_MAX_BRW_PAGES);
 	if (sc->nr_to_scan > 0) {
 		enc_pools_release_free_pages(sc->nr_to_scan);
