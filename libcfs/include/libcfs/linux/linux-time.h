@@ -237,31 +237,6 @@ static inline time_t cfs_duration_sec(cfs_duration_t d)
 	return d / msecs_to_jiffies(MSEC_PER_SEC);
 }
 
-static inline void cfs_duration_usec(cfs_duration_t d, struct timeval *s)
-{
-#if (BITS_PER_LONG == 32)
-	if (msecs_to_jiffies(MSEC_PER_SEC) > 4096) {
-		__u64 t;
-
-		s->tv_sec = d / msecs_to_jiffies(MSEC_PER_SEC);
-		t = (d - (cfs_duration_t)s->tv_sec *
-		     msecs_to_jiffies(MSEC_PER_SEC)) * USEC_PER_SEC;
-		do_div(t, msecs_to_jiffies(MSEC_PER_SEC));
-		s->tv_usec = t;
-	} else {
-		s->tv_sec = d / msecs_to_jiffies(MSEC_PER_SEC);
-		s->tv_usec = ((d - (cfs_duration_t)s->tv_sec *
-			       msecs_to_jiffies(MSEC_PER_SEC)) *
-			       USEC_PER_SEC) / msecs_to_jiffies(MSEC_PER_SEC);
-	}
-#else
-	s->tv_sec = d / msecs_to_jiffies(MSEC_PER_SEC);
-	s->tv_usec = ((d - (cfs_duration_t)s->tv_sec *
-		       msecs_to_jiffies(MSEC_PER_SEC)) *
-		       USEC_PER_SEC) / msecs_to_jiffies(MSEC_PER_SEC);
-#endif
-}
-
 static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
 {
 #if (BITS_PER_LONG == 32)
