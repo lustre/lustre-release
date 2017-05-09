@@ -1367,7 +1367,7 @@ test_32newtarball() {
 	chown $T32_QID.$T32_QID $tmp/src/t32_qf_old
 
 	# format ost with comma-separated NIDs to verify LU-4460
-	local failnid="$(h2$NETTYPE 1.2.3.4),$(h2$NETTYPE 4.3.2.1)"
+	local failnid="$(h2nettype 1.2.3.4),$(h2nettype 4.3.2.1)"
 	MGSNID="$MGSNID,$MGSNID" OSTOPT="--failnode=$failnid" formatall
 
 	setupall
@@ -2480,9 +2480,9 @@ test_35a() { # bug 12459
 	local device=$(do_facet $SINGLEMDS "$LCTL get_param -n devices" |
 		awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
 	do_facet mgs "$LCTL conf_param \
-		      ${device}.failover.node=$(h2$NETTYPE $FAKENID)" ||
+		      ${device}.failover.node=$(h2nettype $FAKENID)" ||
 		error "Setting ${device}.failover.node=\
-		       $(h2$NETTYPE $FAKENID) failed."
+		       $(h2nettype $FAKENID) failed."
 
 	log "Wait for RECONNECT_INTERVAL seconds (10s)"
 	sleep 10
@@ -2538,9 +2538,9 @@ test_35b() { # bug 18674
 	local device=$(do_facet $SINGLEMDS "$LCTL get_param -n devices" |
 		awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
 	do_facet mgs "$LCTL conf_param \
-		      ${device}.failover.node=$(h2$NETTYPE $FAKENID)" ||
+		      ${device}.failover.node=$(h2nettype $FAKENID)" ||
 		error "Set ${device}.failover.node=\
-		       $(h2$NETTYPE $FAKENID) failed"
+		       $(h2nettype $FAKENID) failed"
 
 	local at_max_saved=0
 	# adaptive timeouts may prevent seeing the issue
@@ -3224,7 +3224,7 @@ test_43b() { # LU-5690
 	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
 	local host=${client_ip//*./}
 	local net=${client_ip/%$host/}
-	local nosquash_nids=$(h2$NETTYPE $net[$host,$host,$host])
+	local nosquash_nids=$(h2nettype $net[$host,$host,$host])
 
 	add $fs2mgs $(mkfs_opts mgs $fs2mgsdev) --fsname=$fsname \
 		--param mdt.root_squash=$RUNAS_ID:$RUNAS_ID \
@@ -5381,7 +5381,7 @@ test_77() { # LU-3445
 	local fs2ostvdev=$(ostvdevname 1_2)
 	local fsname=test1234
 	local mgsnid
-	local failnid="$(h2$NETTYPE 1.2.3.4),$(h2$NETTYPE 4.3.2.1)"
+	local failnid="$(h2nettype 1.2.3.4),$(h2nettype 4.3.2.1)"
 
 	combined_mgs_mds || stop_mgs || error "stopping MGS service failed"
 

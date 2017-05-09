@@ -581,14 +581,18 @@ load_modules_local() {
 
 	set_default_debug
 	load_module ../lnet/lnet/lnet
-	case $NETTYPE in
-	o2ib)
-		LNETLND="o2iblnd/ko2iblnd"
-		;;
-	*)
-		;;
-	esac
-    LNETLND=${LNETLND:-"socklnd/ksocklnd"}
+
+	LNDPATH=${LNDPATH:-"../lnet/klnds"}
+	if [ -z "$LNETLND" ]; then
+		case $NETTYPE in
+		o2ib*)  LNETLND="o2iblnd/ko2iblnd" ;;
+		tcp*)   LNETLND="socklnd/ksocklnd" ;;
+		*)      local lnd="${NETTYPE%%[0-9]}lnd"
+			[ -f "$LNDPATH/$lnd/k$lnd.ko" ] &&
+				LNETLND="$lnd/k$lnd" ||
+				LNETLND="socklnd/ksocklnd"
+		esac
+	fi
     load_module ../lnet/klnds/$LNETLND
     load_module obdclass/obdclass
     load_module ptlrpc/ptlrpc
@@ -2753,21 +2757,11 @@ fail_abort() {
 	clients_up || error "post-failover stat: $?"
 }
 
-do_lmc() {
-    echo There is no lmc.  This is mountconf, baby.
-    exit 1
-}
-
 host_nids_address() {
-    local nodes=$1
-    local kind=$2
+	local nodes=$1
+	local net=${2:-"."}
 
-    if [ -n "$kind" ]; then
-        nids=$(do_nodes $nodes "$LCTL list_nids | grep $kind | cut -f 1 -d '@'")
-    else
-        nids=$(do_nodes $nodes "$LCTL list_nids all | cut -f 1 -d '@'")
-    fi
-    echo $nids
+	do_nodes $nodes "$LCTL list_nids | grep $net | cut -f 1 -d @"
 }
 
 h2name_or_ip() {
@@ -2776,40 +2770,34 @@ h2name_or_ip() {
 	fi
 }
 
-h2ptl() {
-	if [ "$1" = "'*'" ]; then echo \'*\'; else
-		ID=`xtprocadmin -n $1 2>/dev/null | egrep -v 'NID' | \
-							awk '{print $1}'`
-		if [ -z "$ID" ]; then
-			echo "Could not get a ptl id for $1..."
-			exit 1
-		fi
-		echo $ID"@ptl"
+h2nettype() {
+	if [[ -v NETTYPE ]]; then
+		h2name_or_ip "$1" "$NETTYPE"
+	else
+		h2name_or_ip "$1" "$2"
 	fi
 }
-declare -fx h2ptl
+declare -fx h2nettype
 
+# Wrapper function to print the deprecation warning
 h2tcp() {
-	h2name_or_ip "$1" "tcp"
-}
-declare -fx h2tcp
-
-h2elan() {
-	if [ "$1" = "'*'" ]; then echo \'*\'; else
-		if type __h2elan >/dev/null 2>&1; then
-			ID=$(__h2elan $1)
-		else
-			ID=`echo $1 | sed 's/[^0-9]*//g'`
-		fi
-		echo $ID"@elan"
+	echo "h2tcp: deprecated, use h2nettype instead" 1>&2
+	if [[ -v NETTYPE ]]; then
+		h2nettype "$@"
+	else
+		h2nettype "$1" "tcp"
 	fi
 }
-declare -fx h2elan
 
+# Wrapper function to print the deprecation warning
 h2o2ib() {
-	h2name_or_ip "$1" "o2ib"
+	echo "h2o2ib: deprecated, use h2nettype instead" 1>&2
+	if [[ -v NETTYPE ]]; then
+		h2nettype "$@"
+	else
+		h2nettype "$1" "o2ib"
+	fi
 }
-declare -fx h2o2ib
 
 # This enables variables in cfg/"setup".sh files to support the pdsh HOSTLIST
 # expressions format. As a bonus we can then just pass in those variables
@@ -3554,7 +3542,7 @@ mkfs_opts() {
 
 	var=${facet}failover_HOST
 	if [ -n "${!var}" ] && [ ${!var} != $(facet_host $facet) ]; then
-		opts+=" --failnode=$(h2$NETTYPE ${!var})"
+		opts+=" --failnode=$(h2nettype ${!var})"
 	fi
 
 	opts+=${TIMEOUT:+" --param=sys.timeout=$TIMEOUT"}
@@ -4094,19 +4082,9 @@ check_config_client () {
         return 0
     fi
 
-    local myMGS_host=$mgs_HOST
-    if [ "$NETTYPE" = "ptl" ]; then
-        myMGS_host=$(h2ptl $mgs_HOST | sed -e s/@ptl//)
-    fi
-
     echo Checking config lustre mounted on $mntpt
     local mgshost=$(mount | grep " $mntpt " | awk -F@ '{print $1}')
     mgshost=$(echo $mgshost | awk -F: '{print $1}')
-
-#    if [ "$mgshost" != "$myMGS_host" ]; then
-#            log "Bad config file: lustre is mounted with mgs $mgshost, but mgs_HOST=$mgs_HOST, NETTYPE=$NETTYPE
-#                   Please use correct config or set mds_HOST correctly!"
-#    fi
 
 }
 

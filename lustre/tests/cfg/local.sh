@@ -75,7 +75,7 @@ OST_INDEX_LIST=${OST_INDEX_LIST:-}
 # More specific ones override more general ones. See facet_index().
 
 NETTYPE=${NETTYPE:-tcp}
-MGSNID=${MGSNID:-$(h2$NETTYPE $mgs_HOST)}
+MGSNID=${MGSNID:-$(h2nettype $mgs_HOST)}
 
 #
 # Back end file system type(s) of facets can be specified with these

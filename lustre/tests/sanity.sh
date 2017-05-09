@@ -6563,13 +6563,13 @@ run_test 99f "cvs commit ======================================="
 
 test_100() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ "$NETTYPE" = tcp ] || \
-		{ skip "TCP secure port test, not useful for NETTYPE=$NETTYPE" && \
+	[[ "$NETTYPE" =~ tcp ]] ||
+		{ skip "TCP secure port test, not useful for NETTYPE=$NETTYPE" &&
 			return ; }
 
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_servers || \
+	remote_servers ||
 		{ skip "useless for local single node setup" && return; }
 
 	netstat -tna | ( rc=1; while read PROT SND RCV LOCAL REMOTE STAT; do
@@ -12892,8 +12892,8 @@ test_217() { # bug 22430
 	for node in $(nodes_list); do
 		nid=$(host_nids_address $node $NETTYPE)
 		if [[ $nid = *-* ]] ; then
-			echo "lctl ping $nid@$NETTYPE"
-			lctl ping $nid@$NETTYPE
+			echo "lctl ping $(h2nettype $nid)"
+			lctl ping $(h2nettype $nid)
 		else
 			echo "skipping $node (no hyphen detected)"
 		fi

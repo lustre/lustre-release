@@ -922,7 +922,7 @@ create_fops_nodemaps() {
 	local client
 	for client in $clients; do
 		local client_ip=$(host_nids_address $client $NETTYPE)
-		local client_nid=$(h2$NETTYPE $client_ip)
+		local client_nid=$(h2nettype $client_ip)
 		do_facet mgs $LCTL nodemap_add c${i} || return 1
 		do_facet mgs $LCTL nodemap_add_range 	\
 			--name c${i} --range $client_nid || return 1
