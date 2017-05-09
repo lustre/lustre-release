@@ -1315,7 +1315,7 @@ static void class_disconnect_export_list(struct list_head *list,
 
                 class_export_get(exp);
                 CDEBUG(D_HA, "%s: disconnecting export at %s (%p), "
-                       "last request at "CFS_TIME_T"\n",
+		       "last request at %ld\n",
                        exp->exp_obd->obd_name, obd_export_nid2str(exp),
                        exp, exp->exp_last_request_time);
                 /* release one export reference anyway */

@@ -326,11 +326,10 @@ drop_rule_match(struct lnet_drop_rule *rule, lnet_nid_t src,
 			rule->dr_time_base += cfs_time_seconds(attr->u.drop.
 							       da_interval);
 
-			CDEBUG(D_NET, "Drop Rule %s->%s: next drop : "
-				      CFS_TIME_T"\n",
-				      libcfs_nid2str(attr->fa_src),
-				      libcfs_nid2str(attr->fa_dst),
-				      rule->dr_drop_time);
+			CDEBUG(D_NET, "Drop Rule %s->%s: next drop : %ld\n",
+			       libcfs_nid2str(attr->fa_src),
+			       libcfs_nid2str(attr->fa_dst),
+			       rule->dr_drop_time);
 		}
 
 	} else { /* rate based drop */
@@ -496,11 +495,10 @@ delay_rule_match(struct lnet_delay_rule *rule, lnet_nid_t src,
 			rule->dl_time_base += cfs_time_seconds(attr->u.delay.
 							       la_interval);
 
-			CDEBUG(D_NET, "Delay Rule %s->%s: next delay : "
-				      CFS_TIME_T"\n",
-				      libcfs_nid2str(attr->fa_src),
-				      libcfs_nid2str(attr->fa_dst),
-				      rule->dl_delay_time);
+			CDEBUG(D_NET, "Delay Rule %s->%s: next delay : %ld\n",
+			       libcfs_nid2str(attr->fa_src),
+			       libcfs_nid2str(attr->fa_dst),
+			       rule->dl_delay_time);
 		}
 
 	} else { /* rate based delay */
