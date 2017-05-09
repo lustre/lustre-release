@@ -429,7 +429,7 @@ static int mdt_coordinator(void *data)
 	 */
 	hsd.max_requests = cdt->cdt_max_requests;
 	request_sz = hsd.max_requests * sizeof(*hsd.request);
-	OBD_ALLOC(hsd.request, request_sz);
+	OBD_ALLOC_LARGE(hsd.request, request_sz);
 	if (!hsd.request)
 		GOTO(out, rc = -ENOMEM);
 
@@ -471,10 +471,10 @@ static int mdt_coordinator(void *data)
 			/* cdt_max_requests has changed,
 			 * we need to allocate a new buffer
 			 */
-			OBD_FREE(hsd.request, request_sz);
+			OBD_FREE_LARGE(hsd.request, request_sz);
 			hsd.max_requests = cdt->cdt_max_requests;
 			request_sz = hsd.max_requests * sizeof(*hsd.request);
-			OBD_ALLOC(hsd.request, request_sz);
+			OBD_ALLOC_LARGE(hsd.request, request_sz);
 			if (!hsd.request) {
 				rc = -ENOMEM;
 				break;
@@ -554,7 +554,7 @@ clean_cb_alloc:
 	EXIT;
 out:
 	if (hsd.request)
-		OBD_FREE(hsd.request, request_sz);
+		OBD_FREE_LARGE(hsd.request, request_sz);
 
 	if (cdt->cdt_state == CDT_STOPPING) {
 		/* request comes from /proc path, so we need to clean cdt
