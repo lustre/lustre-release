@@ -12,9 +12,8 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="                42a  42b  42c  42d  45   68b   $SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-# with LOD/OSP landing
-# bug number for skipped tests: LU-2036 LU-8411
-ALWAYS_EXCEPT="                 76	407 $ALWAYS_EXCEPT"
+# bug number for skipped tests: LU-2036 LU-8411 LU-9096
+ALWAYS_EXCEPT="                 76	407     253 $ALWAYS_EXCEPT"
 
 is_sles11()						# LU-4341
 {
