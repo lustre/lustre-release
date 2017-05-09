@@ -2,6 +2,15 @@
 #set -vx
 set -e
 
+ONLY=${ONLY:-"$*"}
+
+# bug number for skipped test:
+ALWAYS_EXCEPT="$POSIX_EXCEPT"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+[ "$ALWAYS_EXCEPT$EXCEPT" ] &&
+	echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
+
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
