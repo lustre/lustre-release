@@ -596,14 +596,14 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 static void
 kiblnd_unmap_tx(kib_tx_t *tx)
 {
-	if (tx->fmr.fmr_pfmr != NULL)
+	if (tx->fmr.fmr_pfmr || tx->fmr.fmr_frd)
 		kiblnd_fmr_pool_unmap(&tx->fmr, tx->tx_status);
 
-        if (tx->tx_nfrags != 0) {
-                kiblnd_dma_unmap_sg(tx->tx_pool->tpo_hdev->ibh_ibdev,
-                                    tx->tx_frags, tx->tx_nfrags, tx->tx_dmadir);
-                tx->tx_nfrags = 0;
-        }
+	if (tx->tx_nfrags != 0) {
+		kiblnd_dma_unmap_sg(tx->tx_pool->tpo_hdev->ibh_ibdev,
+				    tx->tx_frags, tx->tx_nfrags, tx->tx_dmadir);
+		tx->tx_nfrags = 0;
+	}
 }
 
 static int
