@@ -160,6 +160,11 @@ static void lcw_dump_stack(struct lc_watchdog *lcw)
 
 	timediff = ktime_to_timespec64(ktime_sub(ktime_get(),
 				       lcw->lcw_last_touched));
+
+	/* LU-9235: Don't dump stack if the thread is just touched. */
+	if (timediff.tv_sec == 0)
+		return;
+
 	/*
 	 * Check to see if we should throttle the watchdog timer to avoid
 	 * too many dumps going to the console thus triggering an NMI.
