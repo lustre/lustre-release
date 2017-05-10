@@ -787,21 +787,12 @@
         </tgroup>
       </table>
       <para>&#160;</para>
-      <note>
-        <para condition="l22">In Lustre software releases prior to version 2.2,
-	the maximum stripe count for a single file was limited to 160 OSTs.
-	In version 2.2, the wide striping feature was added to support files
-	striped over up to 2000 OSTs.  In order to store the large layout for
-	such files in ldiskfs, the <literal>ea_inode</literal> feature must
-	be enabled on the MDT, but no similar tunable is needed for ZFS MDTs.
-	This feature is disabled by default at
-	<literal>mkfs.lustre</literal> time. In order to enable this feature,
-	specify <literal>--mkfsoptions="-O ea_inode"</literal> at MDT format
-	time, or use <literal>tune2fs -O ea_inode</literal> to enable it after
-	the MDT has been formatted.  Using either the deprecated
-	<literal>large_xattr</literal> or preferred <literal>ea_inode</literal>
-	feature name results in <literal>ea_inode</literal> being shown in
-	the file system feature list.</para>
+      <note><para>By default for ldiskfs MDTs the maximum stripe count for a
+      <emphasis>single file</emphasis> is limited to 160 OSTs.  In order to
+      increase the maximum file stripe count, use
+      <literal>--mkfsoptions="-O ea_inode"</literal> when formatting the MDT,
+      or use <literal>tune2fs -O ea_inode</literal> to enable it after the
+      MDT has been formatted.</para>
       </note>
     </section>
   </section>

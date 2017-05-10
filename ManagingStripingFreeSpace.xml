@@ -20,7 +20,7 @@
       <para><xref linkend="dbdoclet.50438209_10424"/></para>
     </listitem>
     <listitem>
-      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_syy_gcl_qk"/></para>
+      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="wide_striping"/></para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438209_79324">
@@ -54,11 +54,14 @@
       objects on OSTs with more free space. (This can reduce I/O performance until space usage is
       rebalanced again.) For a more detailed description of how striping is allocated, see <xref
         linkend="dbdoclet.50438209_10424"/>.</para>
-    <para condition="l22">Files can only be striped over a finite number of OSTs. Prior to Lustre
-      software release 2.2, the maximum number of OSTs that a file could be striped across was
-      limited to 160. As of Lustre software release 2.2, the maximum number of OSTs is 2000. For
-      more information, see <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="section_syy_gcl_qk"/>.</para>
+    <para>Files can only be striped over a finite number of OSTs, based on the
+    maximum size of the attributes that can be stored on the MDT. If the MDT
+    is ldiskfs-based without the <literal>ea_inode</literal> feature, a file
+    can be striped across at most 160 OSTs.  With a ZFS-based MDT, or if the
+    <literal>ea_inode</literal> feature is enabled for an ldiskfs-based MDT,
+    a file can be striped across up to 2000 OSTs. For more information, see
+    <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="wide_striping"/>.
+    </para>
   </section>
   <section xml:id="dbdoclet.50438209_48033">
       <title><indexterm>
@@ -585,24 +588,31 @@ File 4: OST6, OST7, OST0</screen>
       </note>
     </section>
   </section>
-  <section xml:id="section_syy_gcl_qk">
+  <section xml:id="wide_striping">
     <title><indexterm>
         <primary>striping</primary>
         <secondary>wide striping</secondary>
       </indexterm><indexterm>
         <primary>wide striping</primary>
       </indexterm>Lustre Striping Internals</title>
-    <para>For Lustre releases prior to Lustre software release 2.2, files can be striped across a
-      maximum of 160 OSTs. Lustre inodes use an extended attribute to record the location of each
-      object (the object ID and the number of the OST on which it is stored). The size of the
-      extended attribute limits the maximum stripe count to 160 objects.</para>
-    <para condition="l22">In Lustre software release 2.2 and subsequent releases, the maximum number
-      of OSTs over which files can be striped has been raised to 2000 by allocating a new block on
-      which to store the extended attribute that holds the object information. This feature, known
-      as "wide striping," only allocates the additional extended attribute data block if the file is
-      striped with a stripe count greater than 160. The file layout (object ID, OST number) is
-      stored on the new data block with a pointer to this block stored in the original Lustre inode
-      for the file. For files smaller than 160 objects, the Lustre inode is used to store the file
-      layout.</para>
+    <para>Individual files can only be striped over a finite number of OSTs,
+    based on the maximum size of the attributes that can be stored on the MDT.
+    If the MDT is ldiskfs-based without the <literal>ea_inode</literal>
+    feature, a file can be striped across at most 160 OSTs.  With ZFS-based
+    MDTs, or if the <literal>ea_inode</literal> feature is enabled for an
+    ldiskfs-based MDT, a file can be striped across up to 2000 OSTs.
+    </para>
+    <para>Lustre inodes use an extended attribute to record on which OST each
+    object is located, and the identifier each object on that OST. The size of
+    the extended attribute is a function of the number of stripes.</para>
+    <para>If using an ldiskfs-based MDT, the maximum number of OSTs over which
+    files can be striped can been raised to 2000 by enabling the
+    <literal>ea_inode</literal> feature on the MDT:
+    <screen>tune2fs -O ea_inode /dev/<replaceable>mdtdev</replaceable></screen>
+    </para>
+    <note><para>The maximum stripe count for a single file does not limit the 
+    maximum number of OSTs that are in the filesystem as a whole, only the
+    maximum possible size and maximum aggregate bandwidth for the file.
+    </para></note>
   </section>
 </chapter>

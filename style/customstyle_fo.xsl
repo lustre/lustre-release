@@ -148,8 +148,6 @@
     </xsl:variable>
 	<xsl:variable name="versionstr">
 		<xsl:choose>
-			<xsl:when test="@condition = 'l21'">Introduced in Lustre 2.1</xsl:when>
-			<xsl:when test="@condition = 'l22'">Introduced in Lustre 2.2</xsl:when>
 			<xsl:when test="@condition = 'l23'">Introduced in Lustre 2.3</xsl:when>
 			<xsl:when test="@condition = 'l24'">Introduced in Lustre 2.4</xsl:when>
 			<xsl:when test="@condition = 'l25'">Introduced in Lustre 2.5</xsl:when>
@@ -157,6 +155,8 @@
 			<xsl:when test="@condition = 'l27'">Introduced in Lustre 2.7</xsl:when>
 			<xsl:when test="@condition = 'l28'">Introduced in Lustre 2.8</xsl:when>
 			<xsl:when test="@condition = 'l29'">Introduced in Lustre 2.9</xsl:when>
+			<xsl:when test="@condition = 'l2A'">Introduced in Lustre 2.10</xsl:when>
+			<xsl:when test="@condition = 'l2B'">Introduced in Lustre 2.11</xsl:when>
 			<xsl:otherwise>Documentation Error: unrecognised condition attribute</xsl:otherwise>
 		</xsl:choose>
 	</xsl:variable>
@@ -186,8 +186,6 @@
 	</xsl:variable>
 	<xsl:variable name="lustrecond">
 		<xsl:choose>
-			<xsl:when test="@condition='l21'">L 2.1</xsl:when>
-			<xsl:when test="@condition='l22'">L 2.2</xsl:when>
 			<xsl:when test="@condition='l23'">L 2.3</xsl:when>
 			<xsl:when test="@condition='l24'">L 2.4</xsl:when>
 			<xsl:when test="@condition='l25'">L 2.5</xsl:when>
@@ -195,6 +193,8 @@
 			<xsl:when test="@condition='l27'">L 2.7</xsl:when>
 			<xsl:when test="@condition='l28'">L 2.8</xsl:when>
 			<xsl:when test="@condition='l29'">L 2.9</xsl:when>
+			<xsl:when test="@condition='l2A'">L 2.10</xsl:when>
+			<xsl:when test="@condition='l2B'">L 2.11</xsl:when>
 			<xsl:otherwise></xsl:otherwise>
 		</xsl:choose>
 	</xsl:variable>

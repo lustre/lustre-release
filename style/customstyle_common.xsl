@@ -32,18 +32,6 @@
 <xsl:template name="condition-decorator">
 	<xsl:param name='content'/>
 	<xsl:choose>
-		<xsl:when test="@condition = 'l21'">
-			<xsl:call-template name='textdecoration-1'>
-				<xsl:with-param name='version' select="'Introduced in Lustre 2.1'"/>
-				<xsl:with-param name='content' select="$content"/>
-			</xsl:call-template>
-		</xsl:when>
-		<xsl:when test="@condition = 'l22'">
-			<xsl:call-template name='textdecoration-1'>
-				<xsl:with-param name='version' select="'Introduced in Lustre 2.2'"/>
-				<xsl:with-param name='content' select="$content"/>
-			</xsl:call-template>
-		</xsl:when>
 		<xsl:when test="@condition = 'l23'">
 			<xsl:call-template name='textdecoration-1'>
 				<xsl:with-param name='version' select="'Introduced in Lustre 2.3'"/>
@@ -86,9 +74,21 @@
 				<xsl:with-param name='content' select="$content"/>
 			</xsl:call-template>
 		</xsl:when>
+		<xsl:when test="@condition = 'l2A'">
+			<xsl:call-template name='textdecoration-1'>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.10'"/>
+				<xsl:with-param name='content' select="$content"/>
+			</xsl:call-template>
+		</xsl:when>
+		<xsl:when test="@condition = 'l2B'">
+			<xsl:call-template name='textdecoration-1'>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.11'"/>
+				<xsl:with-param name='content' select="$content"/>
+			</xsl:call-template>
+		</xsl:when>
 		<xsl:when test="@condition != ''">
 			<xsl:call-template name='textdecoration-1'>
-				<xsl:with-param name='version' select="'Introduced in Lustre 2.9'"/>
+				<xsl:with-param name='version' select="'Introduced in Lustre 2.10'"/>
 				<xsl:with-param name='content' select="$content"/>
 			</xsl:call-template>
 		</xsl:when>
@@ -155,12 +155,6 @@
 	<xsl:param name='condition'/>
 	<!-- add another span to hold the lustre version annotation -->
 	<xsl:choose>
-		<xsl:when test="$condition = 'l21'">
-			<span class='floatright'>L 2.1 </span>
-		</xsl:when>
-		<xsl:when test="$condition = 'l22'">
-			<span class='floatright'>L 2.2 </span>
-		</xsl:when>
 		<xsl:when test="$condition = 'l23'">
 			<span class='floatright'>L 2.3 </span>
 		</xsl:when>
@@ -181,6 +175,12 @@
 		</xsl:when>
 		<xsl:when test="$condition = 'l29'">
 			<span class='floatright'>L 2.9 </span>
+		</xsl:when>
+		<xsl:when test="$condition = 'l2A'">
+			<span class='floatright'>L 2.10 </span>
+		</xsl:when>
+		<xsl:when test="$condition = 'l2B'">
+			<span class='floatright'>L 2.11 </span>
 		</xsl:when>
 		<xsl:when test="$condition != ''">
 			<span class='floatright'>L ?.? </span>

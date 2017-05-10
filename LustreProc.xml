@@ -1246,86 +1246,88 @@ write RPCs in flight: 0
           <primary>proc</primary>
           <secondary>readahead</secondary>
         </indexterm>Tuning File Readahead and Directory Statahead</title>
-      <para>File readahead and directory statahead enable reading of data into memory before a
-        process requests the data. File readahead reads file content data into memory and directory
-        statahead reads metadata into memory. When readahead and statahead work well, a process that
-        accesses data finds that the information it needs is available immediately when requested in
-        memory without the delay of network I/O.</para>
-      <para condition="l22">In Lustre software release 2.2.0, the directory statahead feature was
-        improved to enhance directory traversal performance. The improvements primarily addressed
-        two issues: <orderedlist>
-          <listitem>
-            <para>A race condition existed between the statahead thread and other VFS operations
-              while processing asynchronous <literal>getattr</literal> RPC replies, causing
-              duplicate entries in dcache. This issue was resolved by using statahead local dcache.
-            </para>
-          </listitem>
-          <listitem>
-            <para>File size/block attributes pre-fetching was not supported, so the traversing
-              thread had to send synchronous glimpse size RPCs to OST(s). This issue was resolved by
-              using asynchronous glimpse lock (AGL) RPCs to pre-fetch file size/block attributes
-              from OST(s).</para>
-          </listitem>
-        </orderedlist>
+      <para>File readahead and directory statahead enable reading of data
+      into memory before a process requests the data. File readahead prefetches
+      file content data into memory for <literal>read()</literal> related
+      calls, while directory statahead fetches file metadata into memory for
+      <literal>readdir()</literal> and <literal>stat()</literal> related
+      calls.  When readahead and statahead work well, a process that accesses
+      data finds that the information it needs is available immediately in
+      memory on the client when requested without the delay of network I/O.
       </para>
       <section remap="h4">
         <title>Tuning File Readahead</title>
-        <para>File readahead is triggered when two or more sequential reads by an application fail
-          to be satisfied by data in the Linux buffer cache. The size of the initial readahead is 1
-          MB. Additional readaheads grow linearly and increment until the readahead cache on the
-          client is full at 40 MB.</para>
+        <para>File readahead is triggered when two or more sequential reads
+        by an application fail to be satisfied by data in the Linux buffer
+        cache. The size of the initial readahead is 1 MB. Additional
+        readaheads grow linearly and increment until the readahead cache on
+        the client is full at 40 MB.</para>
         <para>Readahead tunables include:</para>
         <itemizedlist>
           <listitem>
-            <para><literal>llite.<replaceable>fsname-instance</replaceable>.max_read_ahead_mb</literal>
-              - Controls the maximum amount of data readahead on a file. Files are read ahead in
-              RPC-sized chunks (1 MB or the size of the <literal>read()</literal> call, if larger)
-              after the second sequential read on a file descriptor. Random reads are done at the
-              size of the <literal>read()</literal> call only (no readahead). Reads to
-              non-contiguous regions of the file reset the readahead algorithm, and readahead is not
-              triggered again until sequential reads take place again. </para>
-            <para>To disable readahead, set this tunable to 0. The default value is 40 MB.</para>
+            <para><literal>llite.<replaceable>fsname-instance</replaceable>.max_read_ahead_mb</literal> -
+              Controls the maximum amount of data readahead on a file.
+              Files are read ahead in RPC-sized chunks (1 MB or the size of
+              the <literal>read()</literal> call, if larger) after the second
+              sequential read on a file descriptor. Random reads are done at
+              the size of the <literal>read()</literal> call only (no
+              readahead). Reads to non-contiguous regions of the file reset
+              the readahead algorithm, and readahead is not triggered again
+              until sequential reads take place again.
+            </para>
+            <para>To disable readahead, set
+            <literal>max_read_ahead_mb=0</literal>. The default value is 40 MB.
+            </para>
           </listitem>
           <listitem>
-            <para><literal>llite.<replaceable>fsname-instance</replaceable>.max_read_ahead_whole_mb</literal>
-              - Controls the maximum size of a file that is read in its entirety, regardless of the
-              size of the <literal>read()</literal>.</para>
+            <para><literal>llite.<replaceable>fsname-instance</replaceable>.max_read_ahead_whole_mb</literal> -
+              Controls the maximum size of a file that is read in its entirety,
+              regardless of the size of the <literal>read()</literal>.  This
+              avoids multiple small read RPCs on relatively small files, when
+              it is not possible to efficiently detect a sequential read
+              pattern before the whole file has been read.
+            </para>
           </listitem>
         </itemizedlist>
       </section>
       <section>
         <title>Tuning Directory Statahead and AGL</title>
-        <para>Many system commands, such as <literal>ls –l</literal>, <literal>du</literal>, and
-            <literal>find</literal>, traverse a directory sequentially. To make these commands run
-          efficiently, the directory statahead and asynchronous glimpse lock (AGL) can be enabled to
-          improve the performance of traversing.</para>
+        <para>Many system commands, such as <literal>ls –l</literal>,
+        <literal>du</literal>, and <literal>find</literal>, traverse a
+        directory sequentially. To make these commands run efficiently, the
+        directory statahead can be enabled to improve the performance of
+        directory traversal.</para>
         <para>The statahead tunables are:</para>
         <itemizedlist>
           <listitem>
-            <para><literal>statahead_max</literal> - Controls whether directory statahead is enabled
-              and the maximum statahead window size (i.e., how many files can be pre-fetched by the
-              statahead thread). By default, statahead is enabled and the value of
-                <literal>statahead_max</literal> is 32.</para>
-            <para>To disable statahead, run:</para>
+            <para><literal>statahead_max</literal> -
+            Controls the maximum number of file attributes that will be
+            prefetched by the statahead thread. By default, statahead is
+            enabled and <literal>statahead_max</literal> is 32 files.</para>
+            <para>To disable statahead, set <literal>statahead_max</literal>
+            to zero via the following command on the client:</para>
             <screen>lctl set_param llite.*.statahead_max=0</screen>
-            <para>To set the maximum statahead window size (<replaceable>n</replaceable>),
-              run:</para>
+            <para>To change the maximum statahead window size on a client:</para>
             <screen>lctl set_param llite.*.statahead_max=<replaceable>n</replaceable></screen>
-            <para>The maximum value of <replaceable>n</replaceable> is 8192.</para>
-            <para>The AGL can be controlled by entering:</para>
-            <screen>lctl set_param llite.*.statahead_agl=<replaceable>n</replaceable></screen>
-            <para>The default value for <replaceable>n</replaceable> is 1, which enables the AGL. If
-                <replaceable>n</replaceable> is 0, the AGL is disabled.</para>
+            <para>The maximum <literal>statahead_max</literal> is 8192 files.
+            </para>
+            <para>The directory statahead thread will also prefetch the file
+            size/block attributes from the OSTs, so that all file attributes
+            are available on the client when requested by an application.
+            This is controlled by the asynchronous glimpse lock (AGL) setting.
+            The AGL behaviour can be disabled by setting:</para>
+            <screen>lctl set_param llite.*.statahead_agl=0</screen>
           </listitem>
           <listitem>
-            <para><literal>statahead_stats</literal> - A read-only interface that indicates the
-              current statahead and AGL statistics, such as how many times statahead/AGL has been
-              triggered since the last mount, how many statahead/AGL failures have occurred due to
-              an incorrect prediction or other causes.</para>
+            <para><literal>statahead_stats</literal> -
+            A read-only interface that provides current statahead and AGL
+            statistics, such as how many times statahead/AGL has been triggered
+            since the last mount, how many statahead/AGL failures have occurred
+            due to an incorrect prediction or other causes.</para>
             <note>
-              <para>The AGL is affected by statahead because the inodes processed by AGL are built
-                by the statahead thread, which means the statahead thread is the input of the AGL
-                pipeline. So if statahead is disabled, then the AGL is disabled by force.</para>
+              <para>AGL behaviour is affected by statahead since the inodes
+              processed by AGL are built by the statahead thread.  If
+              statahead is disabled, then AGL is also disabled.</para>
             </note>
           </listitem>
         </itemizedlist>

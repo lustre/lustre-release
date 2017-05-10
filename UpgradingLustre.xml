@@ -111,16 +111,14 @@ xml:id="upgradinglustre">
       provider.</para>
     </note>
     <note>
-      <para condition="l22">In Lustre software release 2.2, a feature has been
-      added that allows striping across up to 2000 OSTs. By default, this "wide
-      striping" feature is disabled. It is activated by setting the 
-      <literal>large_xattr</literal> or 
-      <literal>ea_inode</literal> option on the MDT using either 
-      <literal>mkfs.lustre</literal> or 
-      <literal>tune2fs</literal>. For example after upgrading an existing file
-      system to Lustre software release 2.2 or later, wide striping can be
-      enabled by running the following command on the MDT device before
-      mounting it:
+      <para>In Lustre software release 2.2, a feature has been added for
+      ldiskfs-based MDTs that allows striping a single file across up to 2000
+      OSTs. By default, this "wide striping" feature is disabled. It is
+      activated by setting the <literal>ea_inode</literal> option on the MDT
+      using either <literal>mkfs.lustre</literal> or <literal>tune2fs</literal>.
+      For example after upgrading an existing file system to Lustre software
+      release 2.2 or later, wide striping can be enabled by running the
+      following command on the MDT device before mounting it:
       <screen>tune2fs -O large_xattr</screen>
       Once the wide striping feature is enabled and in use on the MDT, it is
       not possible to directly downgrade the MDT file system to an earlier 
@@ -128,14 +126,10 @@ xml:id="upgradinglustre">
       disable wide striping:
       <orderedlist>
         <listitem>
-          <para>Delete all wide-striped files.</para>
-          <para>OR</para>
-          <para>Use 
-          <literal>lfs_migrate</literal> with the option 
-          <literal>-c</literal>
-          <replaceable>stripe_count</replaceable>(set 
-          <replaceable>stripe_count</replaceable>to 160) to move the files to
-          another location.</para>
+          <para>Delete all wide-striped files, <emphasis>OR</emphasis>
+          use <literal>lfs_migrate -c 160</literal> (or fewer stripes)
+          to migrate the files to use fewer OSTs. This does not affect the
+          total number of OSTs that the whole filesystem can access.</para>
         </listitem>
         <listitem>
           <para>Unmount the MDT.</para>
@@ -288,11 +282,11 @@ xml:id="upgradinglustre">
       <listitem>
         <para>(Optional) For upgrades to Lustre software release 2.2 or higher,
         to enable wide striping on an existing MDT, run the following command
-        on the MDT :
-        <screen>mdt# tune2fs -O large_xattr <replaceable>device</replaceable></screen></para>
+        on the MDT:
+        <screen>tune2fs -O ea_inode /dev/<replaceable>mdtdev</replaceable></screen>
+        </para>
         <para>For more information about wide striping, see 
-        <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="section_syy_gcl_qk" />.</para>
+        <xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="wide_striping" />.</para>
       </listitem>
       <listitem>
         <para>(Optional) For upgrades to Lustre software release 2.4 or higher,

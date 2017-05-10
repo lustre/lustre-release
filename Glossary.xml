@@ -793,7 +793,7 @@ xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
         utilization of many OSTs. For more information about wide striping, see
         
         <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-        linkend="section_syy_gcl_qk" />.</para>
+        linkend="wide_striping" />.</para>
       </glossdef>
     </glossentry>
   </glossdiv>
