@@ -82,6 +82,10 @@ rm -rf dbench $LIBS71 client.txt
 exit 0
 ' TERM
 
+# turn off errexit. rundbench will return error code on failure
+trap '' ERR
+set +e
+
 cd $DIR
 echo "running 'dbench $@' $PREFIX $PWD at `date`"
 

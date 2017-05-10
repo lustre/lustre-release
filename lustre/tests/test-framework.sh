@@ -1,6 +1,6 @@
 #!/bin/bash
 
-trap 'print_summary && touch $TF_FAIL && \
+trap 'print_summary && print_stack_trace | tee $TF_FAIL && \
     echo "$TESTSUITE: FAIL: test-framework exiting on error"' ERR
 set -e
 #set -x
