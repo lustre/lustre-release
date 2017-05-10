@@ -431,15 +431,9 @@ static void mdt_hsm_cdt_cleanup(struct mdt_device *mdt)
 	cdt_mti = lu_context_key_get(&cdt->cdt_env.le_ctx, &mdt_thread_key);
 	mutex_lock(&cdt->cdt_restore_lock);
 	list_for_each_entry_safe(crh, tmp3, &cdt->cdt_restore_hdl, crh_list) {
-		struct mdt_object	*child;
-
-		/* give back layout lock */
-		child = mdt_object_find(&cdt->cdt_env, mdt, &crh->crh_fid);
-		if (!IS_ERR(child))
-			mdt_object_unlock_put(cdt_mti, child, &crh->crh_lh, 1);
-
 		list_del(&crh->crh_list);
-
+		/* give back layout lock */
+		mdt_object_unlock(cdt_mti, NULL, &crh->crh_lh, 1);
 		OBD_SLAB_FREE_PTR(crh, mdt_hsm_cdt_kmem);
 	}
 	mutex_unlock(&cdt->cdt_restore_lock);
