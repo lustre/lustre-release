@@ -709,7 +709,9 @@ void test16(void)
 
 	rc = llapi_layout_stripe_count_get(filelayout, &fcount);
 	ASSERTF(rc == 0, "errno = %d", errno);
-	ASSERTF(fcount == dcount, "%"PRIu64" != %"PRIu64, fcount, dcount);
+	ASSERTF(fcount == dcount || dcount == LLAPI_LAYOUT_DEFAULT ||
+		dcount == LLAPI_LAYOUT_WIDE,
+		"%"PRIu64" != %"PRIu64, fcount, dcount);
 
 	rc = llapi_layout_stripe_size_get(filelayout, &fsize);
 	ASSERTF(rc == 0, "errno = %d", errno);
@@ -730,7 +732,9 @@ void test16(void)
 	ASSERTF(rc == 0, "errno = %d", errno);
 	rc = llapi_layout_stripe_size_get(filelayout, &fsize);
 	ASSERTF(rc == 0, "errno = %d", errno);
-	ASSERTF(fcount == dcount, "%"PRIu64" != %"PRIu64, fcount, dcount);
+	ASSERTF(fcount == dcount || dcount == LLAPI_LAYOUT_DEFAULT ||
+		dcount == LLAPI_LAYOUT_WIDE,
+		"%"PRIu64" != %"PRIu64, fcount, dcount);
 	ASSERTF(fsize == dsize, "%"PRIu64" != %"PRIu64, fsize, dsize);
 
 	llapi_layout_free(filelayout);
@@ -888,7 +892,9 @@ void test20(void)
 	ASSERTF(rc == 0, "errno = %d", errno);
 	rc = llapi_layout_stripe_count_get(deflayout, &dcount);
 	ASSERTF(rc == 0, "errno = %d", errno);
-	ASSERTF(fcount == dcount, "%"PRIu64" != %"PRIu64, fcount, dcount);
+	ASSERTF(fcount == dcount || dcount == LLAPI_LAYOUT_DEFAULT ||
+		dcount == LLAPI_LAYOUT_WIDE,
+		"%"PRIu64" != %"PRIu64, fcount, dcount);
 
 	rc = llapi_layout_stripe_size_get(filelayout, &fsize);
 	ASSERTF(rc == 0, "errno = %d", errno);
