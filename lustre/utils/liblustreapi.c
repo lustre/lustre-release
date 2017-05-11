@@ -2612,7 +2612,8 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_entry_count: ",
 				     " ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%u\n",
-			     comp_v1->lcm_entry_count);
+			     comp_v1->lcm_magic == LOV_USER_MAGIC_COMP_V1 ?
+			     comp_v1->lcm_entry_count : 0);
 	}
 
 	if (verbose & VERBOSE_DETAIL && !yaml)
@@ -2640,7 +2641,7 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 		else if (verbose & ~VERBOSE_COMP_ID)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "%4slcme_id:             ", " ");
-		if (!(flags & LDF_IS_DIR))
+		if (entry->lcme_id != LCME_ID_INVAL)
 			llapi_printf(LLAPI_MSG_NORMAL, "%u", entry->lcme_id);
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, "N/A");
@@ -2973,6 +2974,104 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 	}
 }
 
+#define VERBOSE_COMP_OPTS	(VERBOSE_COMP_COUNT | VERBOSE_COMP_ID | \
+				 VERBOSE_COMP_START | VERBOSE_COMP_END | \
+				 VERBOSE_COMP_FLAGS)
+
+static inline bool has_any_comp_options(struct find_param *param)
+{
+	int verbose = param->fp_verbose;
+
+	if (param->fp_check_comp_id || param->fp_check_comp_count ||
+	    param->fp_check_comp_start || param->fp_check_comp_end ||
+	    param->fp_check_comp_flags)
+		return true;
+
+	/* show full layout information, not component specific */
+	if ((verbose & ~VERBOSE_DETAIL) == VERBOSE_DEFAULT)
+		return false;
+
+	return verbose & VERBOSE_COMP_OPTS;
+}
+
+struct lov_user_mds_data *lov_forge_comp_v1(struct lov_user_mds_data *orig,
+					    bool is_dir)
+{
+	struct lov_user_md *lum = &orig->lmd_lmm;
+	struct lov_user_mds_data *new;
+	struct lov_comp_md_v1 *comp_v1;
+	struct lov_comp_md_entry_v1 *ent;
+	int lum_off = sizeof(*comp_v1) + sizeof(*ent);
+	int lum_size = lov_user_md_size(is_dir ? 0 : lum->lmm_stripe_count,
+					lum->lmm_magic);
+
+	new = malloc(sizeof(lstat_t) + lum_off + lum_size);
+	if (new == NULL) {
+		llapi_printf(LLAPI_MSG_NORMAL, "out of memory\n");
+		return new;
+	}
+
+	memcpy(new, orig, sizeof(lstat_t));
+
+	comp_v1 = (struct lov_comp_md_v1 *)&new->lmd_lmm;
+	comp_v1->lcm_magic = lum->lmm_magic;
+	comp_v1->lcm_size = lum_off + lum_size;
+	comp_v1->lcm_layout_gen = is_dir ? 0 : lum->lmm_layout_gen;
+	comp_v1->lcm_flags = 0;
+	comp_v1->lcm_entry_count = 1;
+
+	ent = &comp_v1->lcm_entries[0];
+	ent->lcme_id = 0;
+	ent->lcme_flags = is_dir ? 0 : LCME_FL_INIT;
+	ent->lcme_extent.e_start = 0;
+	ent->lcme_extent.e_end = LUSTRE_EOF;
+	ent->lcme_offset = lum_off;
+	ent->lcme_size = lum_size;
+
+	memcpy((char *)comp_v1 + lum_off, lum, lum_size);
+
+	return new;
+}
+
+static void lov_dump_plain_user_lmm(struct find_param *param, char *path,
+				    enum lov_dump_flags flags)
+{
+	__u32 magic = *(__u32 *)&param->fp_lmd->lmd_lmm;
+
+	if (has_any_comp_options(param)) {
+		struct lov_user_mds_data *new_lmd, *orig_lmd;
+
+		orig_lmd = param->fp_lmd;
+		new_lmd = lov_forge_comp_v1(orig_lmd, flags & LDF_IS_DIR);
+		if (new_lmd != NULL) {
+			param->fp_lmd = new_lmd;
+			lov_dump_comp_v1(param, path, flags);
+			param->fp_lmd = orig_lmd;
+			free(new_lmd);
+		}
+		return;
+	}
+
+	if (magic == LOV_USER_MAGIC_V1) {
+		lov_dump_user_lmm_v1v3(&param->fp_lmd->lmd_lmm, NULL,
+				       param->fp_lmd->lmd_lmm.lmm_objects,
+				       path, param->fp_obd_index,
+				       param->fp_max_depth, param->fp_verbose,
+				       flags);
+	} else {
+		char pool_name[LOV_MAXPOOLNAME + 1];
+		struct lov_user_ost_data_v1 *objects;
+		struct lov_user_md_v3 *lmmv3 = (void *)&param->fp_lmd->lmd_lmm;
+
+		strlcpy(pool_name, lmmv3->lmm_pool_name, sizeof(pool_name));
+		objects = lmmv3->lmm_objects;
+		lov_dump_user_lmm_v1v3(&param->fp_lmd->lmd_lmm, pool_name,
+				       objects, path, param->fp_obd_index,
+				       param->fp_max_depth, param->fp_verbose,
+				       flags);
+	}
+}
+
 static void llapi_lov_dump_user_lmm(struct find_param *param, char *path,
 				    enum lov_dump_flags flags)
 {
@@ -2990,25 +3089,9 @@ static void llapi_lov_dump_user_lmm(struct find_param *param, char *path,
 
 	switch (magic) {
 	case LOV_USER_MAGIC_V1:
-		lov_dump_user_lmm_v1v3(&param->fp_lmd->lmd_lmm, NULL,
-				       param->fp_lmd->lmd_lmm.lmm_objects,
-				       path, param->fp_obd_index,
-				       param->fp_max_depth, param->fp_verbose,
-				       flags);
+	case LOV_USER_MAGIC_V3:
+		lov_dump_plain_user_lmm(param, path, flags);
 		break;
-	case LOV_USER_MAGIC_V3: {
-		char pool_name[LOV_MAXPOOLNAME + 1];
-		struct lov_user_ost_data_v1 *objects;
-		struct lov_user_md_v3 *lmmv3 = (void *)&param->fp_lmd->lmd_lmm;
-
-		strlcpy(pool_name, lmmv3->lmm_pool_name, sizeof(pool_name));
-		objects = lmmv3->lmm_objects;
-		lov_dump_user_lmm_v1v3(&param->fp_lmd->lmd_lmm, pool_name,
-				       objects, path, param->fp_obd_index,
-				       param->fp_max_depth, param->fp_verbose,
-				       flags);
-		break;
-        }
 	case LMV_MAGIC_V1:
 	case LMV_USER_MAGIC: {
 		char pool_name[LOV_MAXPOOLNAME + 1];
@@ -3376,44 +3459,39 @@ static int find_check_pool(struct find_param *param)
 
 static int find_check_comp_options(struct find_param *param)
 {
-	struct lov_comp_md_v1 *comp_v1;
+	lstat_t *st = &param->fp_lmd->lmd_st;
+	struct lov_comp_md_v1 *comp_v1, *forged_v1 = NULL;
 	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
 	struct lov_comp_md_entry_v1 *entry;
 	int i, ret = 0;
 
-	if (v1->lmm_magic != LOV_USER_MAGIC_COMP_V1) {
-		if ((param->fp_check_comp_count &&
-		     !param->fp_exclude_comp_count) ||
-		    (param->fp_check_comp_flags &&
-		     !param->fp_exclude_comp_flags) ||
-		    (param->fp_check_comp_start &&
-		     !param->fp_exclude_comp_start) ||
-		    (param->fp_check_comp_end &&
-		     !param->fp_exclude_comp_end))
+	if (v1->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)v1;
+	} else {
+		forged_v1 = malloc(sizeof(*forged_v1) + sizeof(*entry));
+		if (forged_v1 == NULL)
 			return -1;
-		else
-			return 1;
+		comp_v1 = forged_v1;
+		comp_v1->lcm_entry_count = 1;
+		entry = &comp_v1->lcm_entries[0];
+		entry->lcme_flags = S_ISDIR(st->st_mode) ? 0 : LCME_FL_INIT;
+		entry->lcme_extent.e_start = 0;
+		entry->lcme_extent.e_end = LUSTRE_EOF;
 	}
 
-	comp_v1 = (struct lov_comp_md_v1 *)v1;
+	/* invalid case, don't match for any kind of search. */
+	if (comp_v1->lcm_entry_count == 0) {
+		ret = -1;
+		goto out;
+	}
 
 	if (param->fp_check_comp_count) {
-		ret = find_value_cmp(comp_v1->lcm_entry_count,
+		ret = find_value_cmp(forged_v1 ? 0 : comp_v1->lcm_entry_count,
 				     param->fp_comp_count,
 				     param->fp_comp_count_sign,
 				     param->fp_exclude_comp_count, 1, 0);
 		if (ret == -1)
-			return ret;
-	}
-
-	if (comp_v1->lcm_entry_count == 0) {
-		if ((param->fp_check_comp_flags &&
-		     !param->fp_exclude_comp_flags) ||
-		    (param->fp_check_comp_start &&
-		     !param->fp_exclude_comp_start) ||
-		    (param->fp_check_comp_end &&
-		     !param->fp_exclude_comp_end))
-			return -1;
+			goto out;
 	}
 
 	ret = 1;
@@ -3453,7 +3531,9 @@ static int find_check_comp_options(struct find_param *param)
 		/* the component matches all criteria */
 		break;
 	}
-
+out:
+	if (forged_v1 != NULL)
+		free(forged_v1);
 	return ret;
 }
 

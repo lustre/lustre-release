@@ -235,7 +235,7 @@ test_5() {
 		error "Delete default layout from $parent failed"
 
 	comp_cnt=$($LFS getstripe -d --component-count $parent)
-	[ ! -z "$comp_cnt" ] && error "$comp_cnt isn't empty"
+	[ $comp_cnt -ne 0 ] && error "$comp_cnt isn't 0"
 
 	rm -f $comp_file || error "Delete $comp_file failed"
 	rm -f $subdir/$tfile || error "Delete $subdir/$tfile failed"
@@ -254,7 +254,7 @@ test_6() {
 		error "Create v1 $comp_file failed"
 
 	local comp_cnt=$($LFS getstripe --component-count $comp_file)
-	[ ! -z "$comp_cnt" ] && error "Wrong component count $comp_cnt"
+	[ $comp_cnt -ne 0 ] && error "Wrong component count $comp_cnt"
 
 	dd if=/dev/urandom of=$comp_file bs=1M count=5 oflag=sync ||
 		error "Write to v1 $comp_file failed"
@@ -289,7 +289,7 @@ test_6() {
 		error "Migrate(composite -> v1) $comp_file failed"
 
 	comp_cnt=$($LFS getstripe --component-count $comp_file)
-	[ ! -z "$comp_cnt" ] && error "$comp_cnt isn't empty"
+	[ $comp_cnt -ne 0 ] && error "$comp_cnt isn't 0"
 
 	chksum=$(md5sum $comp_file)
 	[ "$old_chksum" != "$chksum" ] &&
@@ -570,13 +570,13 @@ test_15() {
 	local parent=$DIR/$tdir
 
 	rm -fr $parent
-	test_mkdir -p $parent || error "Create dir $parent failed"
+	test_mkdir $parent || error "Create dir $parent failed"
 
 	$LFS setstripe -d $parent || error "delete default layout"
 
 	$LFS setstripe -E 1M -E 10M -E eof $parent/f1 || error "create f1"
 	$LFS setstripe -E 4M -E 20M -E eof $parent/f2 || error "create f2"
-	test_mkdir -p $parent/subdir || error "create subdir"
+	test_mkdir $parent/subdir || error "create subdir"
 	$LFS setstripe -E 6M -E 30M -E eof $parent/subdir ||
 		error "setstripe to subdir"
 	$LFS setstripe -E 8M -E eof $parent/subdir/f3 || error "create f3"
@@ -609,9 +609,9 @@ test_15() {
 		error "after write: start=1M, end=10M, flag=init, $found != 1"
 
 	local ext_opts="--component-start -1M -E +5M"
-	# subdir, f3
+	# parent, subdir, f3, f4
 	found=$($LFS find $ext_opts $parent | wc -l)
-	[ $found -eq 2 ] || error "start-1M, end+5M, $found != 2"
+	[ $found -eq 4 ] || error "start-1M, end+5M, $found != 4"
 
 	local cnt_opts="--component-count +2"
 	# subdir
@@ -623,10 +623,10 @@ test_15() {
 	[ $found -eq 0 ] ||
 		error "start-1M, end+5M, count+2, flag=init, $found != 0"
 
-	# f3
+	# f3, f4
 	found=$($LFS find $ext_opts ! $cnt_opts $flg_opts $parent | wc -l)
-	[ $found -eq 1 ] ||
-		error "start-1M, end+5M, !count+2, flag=init, $found != 1"
+	[ $found -eq 2 ] ||
+		error "start-1M, end+5M, !count+2, flag=init, $found != 2"
 }
 run_test 15 "Verify component options for lfs find"
 
