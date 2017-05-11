@@ -113,19 +113,19 @@ static int lfs_list_commands(int argc, char **argv);
 
 /* Setstripe and migrate share mostly the same parameters */
 #define SSM_CMD_COMMON(cmd) \
-	"usage: "cmd" [--stripe-count|-c <stripe_count>]\n"		\
+	"usage: "cmd" [--component-end|-E <comp_end>]\n"		\
+	"                 [--stripe-count|-c <stripe_count>]\n"		\
 	"                 [--stripe-index|-i <start_ost_idx>]\n"	\
 	"                 [--stripe-size|-S <stripe_size>]\n"		\
 	"                 [--pool|-p <pool_name>]\n"			\
-	"                 [--ost|-o <ost_indices>]\n"			\
-	"                 [--component-end|-E <comp_end>]\n"
+	"                 [--ost|-o <ost_indices>]\n"
 
 #define SSM_HELP_COMMON \
-	"\tstripe_size:  Number of bytes on each OST (0 filesystem default)\n" \
-	"\t              Can be specified with k, m or g (in KB, MB and GB\n" \
+	"\tstripe_count: Number of OSTs to stripe over (0=fs default, -1 all)\n" \
+	"\tstart_ost_idx: OST index of first stripe (-1=default round robin)\n"\
+	"\tstripe_size:  Number of bytes on each OST (0=fs default)\n" \
+	"\t              Can be specified with K, M or G (for KB, MB, GB\n" \
 	"\t              respectively)\n"				\
-	"\tstart_ost_idx: OST index of first stripe (-1 default)\n"	\
-	"\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)\n" \
 	"\tpool_name:    Name of OST pool to use (default none)\n"	\
 	"\tost_indices:  List of OST indices, can be repeated multiple times\n"\
 	"\t              Indices be specified in a format of:\n"	\
@@ -133,16 +133,12 @@ static int lfs_list_commands(int argc, char **argv);
 	"\t              Or:\n"						\
 	"\t                -o <ost_1> -o <ost_i>-<ost_j> -o <ost_n>\n"	\
 	"\t              If --pool is set with --ost, then the OSTs\n"	\
-	"\t              must be the members of the pool."		\
-	"\tcomp_end:     Extent end of the component\n"			\
-	"\t              Can be specified with k, m or g (in KB, MB and GB\n" \
-	"\t              respectively, -1 for EOF), it must be aligned with\n"\
-	"\t              the stripe_size\n"
+	"\t              must be the members of the pool.\n"		\
+	"\tcomp_end:     Extent end of component, start after previous end.\n"\
+	"\t              Can be specified with K, M or G (for KB, MB, GB\n" \
+	"\t              respectively, -1 for EOF). Must be a multiple of\n"\
+	"\t              stripe_size.\n"
 
-#define SETSTRIPE_USAGE						\
-	SSM_CMD_COMMON("setstripe")				\
-	"                 <directory|filename>\n"		\
-	SSM_HELP_COMMON						\
 
 #define MIGRATE_USAGE							\
 	SSM_CMD_COMMON("migrate  ")					\
@@ -173,28 +169,26 @@ static bool		 file_lease_supported = true;
 /* all available commands */
 command_t cmdlist[] = {
 	{"setstripe", lfs_setstripe, 0,
-	 "Create a new file with a specific striping pattern or\n"
-	 "set the default striping pattern on an existing directory or\n"
-	 "delete the default striping pattern from an existing directory or\n"
-	 "add layout component(s) to an existing composite file or\n"
-	 "delete specified component(s) from an existing composite file\n\n"
-	 "To delete default striping from an existing directory:\n"
-	 "usage: setstripe -d <directory>\n"
-	 " or\n"
-	 "To delete component(s) from an existing composite file:\n"
-	 "usage: setstripe --component-del [--component-id|-I <comp_id>]\n"
-	 "                               [--component-flags|-F <comp_flags>]\n"
-	 "                               <filename>\n"
-	 "\tcomp_id:     Unique component ID\n"
-	 "\tcomp_flags:  'init' indicating all instantiated components\n"
-	 "\t		 '^init' indicating all uninstantiated components\n"
-	 "\t-I and -F can't be specified at the same time\n"
+	 "To create a file with specified striping/composite layout, or\n"
+	 "create/replace the default layout on an existing directory:\n"
+	 SSM_CMD_COMMON("setstripe")
+	 "                 <directory|filename>\n"
 	 " or\n"
 	 "To add component(s) to an existing composite file:\n"
 	 SSM_CMD_COMMON("setstripe --component-add")
+	 SSM_HELP_COMMON
+	 "To totally delete the default striping from an existing directory:\n"
+	 "usage: setstripe -d <directory>\n"
 	 " or\n"
-	 "To create a file with specified striping/composite layout:\n"
-	 SETSTRIPE_USAGE},
+	 "To delete the last component(s) from an existing composite file\n"
+	 "(note that this will also delete any data in those components):\n"
+	 "usage: setstripe --component-del [--component-id|-I <comp_id>]\n"
+	 "                               [--component-flags|-F <comp_flags>]\n"
+	 "                               <filename>\n"
+	 "\tcomp_id:     Unique component ID to delete\n"
+	 "\tcomp_flags:  'init' indicating all instantiated components\n"
+	 "\t             '^init' indicating all uninstantiated components\n"
+	 "\t-I and -F cannot be specified at the same time\n"},
 	{"getstripe", lfs_getstripe, 0,
 	 "To list the striping info for a given file or files in a\n"
 	 "directory or recursively for all files in a directory tree.\n"
