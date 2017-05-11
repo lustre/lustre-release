@@ -2675,10 +2675,9 @@ int lfsck_load_one_trace_file(const struct lu_env *env,
 unlink:
 		/* The old index is not empty, remove it firstly. */
 		rc = local_object_unlink(env, lfsck->li_bottom, parent, name);
-
-		CERROR("%s: unlink lfsck sub trace file %s: rc = %d\n",
-		       lfsck_lfsck2name(com->lc_lfsck), name, rc);
-
+		CDEBUG_LIMIT(rc ? D_ERROR : D_LFSCK,
+			     "%s: unlink lfsck sub trace file %s: rc = %d\n",
+			     lfsck_lfsck2name(com->lc_lfsck), name, rc);
 		if (rc)
 			RETURN(rc);
 
