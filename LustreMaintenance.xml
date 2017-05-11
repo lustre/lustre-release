@@ -381,7 +381,14 @@ Removing and Restoring OSTs</title>
       </itemizedlist>
       <section condition="l24" xml:id="dbdoclet.rmremotedir">
       <title><indexterm><primary>maintenance</primary><secondary>removing a MDT</secondary></indexterm>Removing a MDT from the File System</title>
-	<para>If the MDT is permanently inaccessible, <literal>lfs rmdir {directory}</literal> can be used to delete the directory entry. A normal <literal>rmdir</literal> will report an IO error due to the remote MDT being inactive. After the remote directory has been removed, the administrator should mark the MDT as permanently inactive with:</para>
+	<para>If the MDT is permanently inaccessible,
+    <literal>lfs rm_entry {directory}</literal> can be used to delete the
+    directory entry on the unavailable MDT. A normal <literal>rmdir</literal>
+    will report an IO error due to the remote MDT being inactive. Please note
+    that if the MDT is available, a standard <literal>rm -r</literal> should
+    be used to delete the remote directory.  After the remote directory has been
+    removed, the administrator should mark the MDT as permanently inactive
+    with:</para>
 <screen>lctl conf_param {MDT name}.mdc.active=0
 </screen>
 <para>A user can identify which MDT holds a remote sub-directory using
