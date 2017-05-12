@@ -364,6 +364,891 @@ osc.lustre-OST0002-osc.ost_conn_uuid=192.168.20.1@tcp</screen></para>
           provided in the section <xref linkend="dbdoclet.rmremotedir"/>.</para>
     </section>
   </section>
+  <section xml:id="pfl" condition='l2A'>
+    <title><indexterm>
+	<primary>striping</primary>
+	<secondary>PFL</secondary>
+    </indexterm>Progressive File Layout(PFL)</title>
+    <para>The Lustre Progressive File Layout (PFL) feature simplifies the use
+      of Lustre so that users can expect reasonable performance for a variety of
+      normal file IO patterns without the need to explicitly understand their IO
+      model or Lustre usage details in advance. In particular, users do not
+      necessarily need to know the size or concurrency of output files in
+      advance of their creation and explicitly specify an optimal layout for
+      each file in order to achieve good performance for both highly concurrent
+      shared-single-large-file IO or parallel IO to many smaller per-process
+      files. </para>
+    <para>The layout of a PFL file is stored on disk as <literal>composite
+      layout</literal>. A PFL file is essentially an array of
+      <literal>sub-layout components</literal>, with each sub-layout component
+      being a plain layout covering different and non-overlapped extents of
+      the file. For PFL files, the file layout is composed of a series of
+      components, therefore it's possible that there are some file extents are
+      not described by any components.</para>
+    <para>An example of how data blocks of PFL files are mapped to OST objects
+      of components is shown in the following PFL object mapping diagram:</para>
+    <figure  xml:id="managinglayout.fig.pfl">
+      <title>PFL object mapping diagram</title>
+      <mediaobject>
+        <imageobject>
+          <imagedata scalefit="1" width="100%"
+          fileref="figures/PFL_object_mapping_diagram.png" />
+        </imageobject>
+        <textobject>
+          <phrase>PFL object mapping diagram</phrase>
+        </textobject>
+      </mediaobject>
+    </figure>
+    <para>The PFL file in <xref linkend="managinglayout.fig.pfl"/> has 3
+      components and shows the mapping for the blocks of a 2055MB file.
+      The stripe size for the first two components is 1MB, while the stripe size
+      for the third component is 4MB. The stripe count is increasing for each
+      successive component. The first component only has two 1MB blocks and the
+      single object has a size of 2MB. The second component holds the next 254MB
+      of the file spread over 4 separate OST objects in RAID-0, each one will
+      have a size of 256MB / 4 objects = 64MB per object. Note the first two
+      objects <literal>obj 2,0</literal> and <literal>obj 2,1</literal>
+      have a 1MB hole at the start where the data is stored in the first
+      component. The final component holds the next 1800MB spread over 32 OST
+      objects. There is a 256MB / 32 = 8MB hole at the start each one for the
+      data stored in the first two components. Each object will be
+      2048MB / 32 objects = 64MB per object, except the
+      <literal>obj 3,0</literal> that holds an extra 4MB chunk and
+      <literal>obj 3,1</literal> that holds an extra 3MB chunk. If more data
+      was written to the file, only the objects in component 3 would increase
+      in size.</para>
+    <para>When a file range with defined but not instantiated component is
+      accessed, clients will send a Layout Intent RPC to the MDT, and the MDT
+      would instantiate the objects of the components covering that range.
+    </para>
+    <para>Next, some commands for user to operate PFL files are introduced and
+      some examples of possible composite layout are illustrated as well.
+      Lustre provides commands
+      <literal>lfs setstripe</literal> and <literal>lfs migrate</literal> for
+      users to operate PFL files. <literal>lfs setstripe</literal> commands
+      are used to create PFL files, add or delete components to or from an
+      existing composite file; <literal>lfs migrate</literal> commands are used
+      to re-layout the data in existing files using the new layout parameter by
+      copying the data from the existing OST(s) to the new OST(s). Also,
+      as introduced in the previous sections, <literal>lfs getstripe</literal>
+      commands can be used to list the striping/component information for a
+      given PFL file, and <literal>lfs find</literal> commands can be used to
+      search the directory tree rooted at the given directory or file name for
+      the files that match the given PFL component parameters.</para>
+    <note><para>Using PFL files requires both the client and server to
+      understand the PFL file layout, which isn't available for Lustre 2.9 and
+      earlier. And it will not prevent older clients from accessing non-PFL
+      files in the filesystem.</para></note>
+    <section remap="h3">
+      <title><literal>lfs setstripe</literal></title>
+      <para><literal>lfs setstripe</literal> commands are used to create PFL
+        files, add or delete components to or from an existing composite file.
+        (Suppose we have 8 OSTs in the following examples and stripe size is 1MB
+        by default.)</para>
+      <section remap="h4">
+        <title>Create a PFL file</title>
+        <para><emphasis role="bold">Command</emphasis></para>
+        <screen>lfs setstripe
+[--component-end|-E end1] [STRIPE_OPTIONS]
+[--component-end|-E end2] [STRIPE_OPTIONS] ... <replaceable>filename</replaceable></screen>
+        <para>The <literal>-E</literal> option is used to specify the end offset
+          (in bytes or using a suffix “kMGTP”, e.g. 256M) of each component, and
+          it also indicates the following <literal>STRIPE_OPTIONS</literal> are
+          for this component. Each component defines the stripe pattern of the
+          file in the range of [start, end). The first component must start from
+          offset 0 and all components must be adjacent with each other, no holes
+          are allowed, so each extent will start at the end of previous extent.
+          A <literal>-1</literal> end offset or <literal>eof</literal> indicates
+          this is the last component extending to the end of file.</para>
+        <para><emphasis role="bold">Example</emphasis></para>
+        <screen>$ lfs setstripe -E 4M -c 1 -E 64M -c 4 -E -1 -c -1 -i 4 \
+/mnt/testfs/create_comp</screen>
+        <para>This command creates a file with composite layout illustrated in
+          the following figure. The first component has 1 stripe and covers
+          [0, 4M), the second component has 4 stripes and covers [4M, 64M), and
+          the last component stripes start at OST4, cross over all available
+          OSTs and covers [64M, EOF).</para>
+        <figure  xml:id="managinglayout.fig.pfl_create">
+          <title>Example: create a composite file</title>
+          <mediaobject>
+            <imageobject>
+              <imagedata scalefit="1" depth="2.75in" align="center"
+              fileref="figures/PFL_createfile.png" />
+            </imageobject>
+            <textobject>
+              <phrase>Example: create a composite file</phrase>
+            </textobject>
+          </mediaobject>
+        </figure>
+        <para>The composite layout can be output by the following command:</para>
+        <screen>$ lfs getstripe /mnt/testfs/create_comp
+/mnt/testfs/create_comp
+  lcm_layout_gen:  3
+  lcm_entry_count: 3
+    lcme_id:             1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   4194304
+      lmm_stripe_count:  1
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x2:0x0] }
+
+    lcme_id:             2
+    lcme_flags:          0
+    lcme_extent.e_start: 4194304
+    lcme_extent.e_end:   67108864
+      lmm_stripe_count:  4
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: -1
+    lcme_id:             3
+    lcme_flags:          0
+    lcme_extent.e_start: 67108864
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  -1
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 4</screen>
+        <note><para>Only the first component’s OST objects of the PFL file are
+          instantiated when the layout is being set. Other instantiation is
+          delayed to later write/truncate operations.</para></note>
+        <para>If we write 128M data to this PFL file, the second and third
+          components will be instantiated:</para>
+        <screen>$ dd if=/dev/zero of=/mnt/testfs/create_comp bs=1M count=128
+$ lfs getstripe /mnt/testfs/create_comp
+/mnt/testfs/create_comp
+  lcm_layout_gen:  5
+  lcm_entry_count: 3
+    lcme_id:             1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   4194304
+      lmm_stripe_count:  1
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x2:0x0] }
+
+    lcme_id:             2
+    lcme_flags:          init
+    lcme_extent.e_start: 4194304
+    lcme_extent.e_end:   67108864
+      lmm_stripe_count:  4
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 1
+      lmm_objects:
+      - 0: { l_ost_idx: 1, l_fid: [0x100010000:0x2:0x0] }
+      - 1: { l_ost_idx: 2, l_fid: [0x100020000:0x2:0x0] }
+      - 2: { l_ost_idx: 3, l_fid: [0x100030000:0x2:0x0] }
+      - 3: { l_ost_idx: 4, l_fid: [0x100040000:0x2:0x0] }
+
+    lcme_id:             3
+    lcme_flags:          init
+    lcme_extent.e_start: 67108864
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  8
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 4
+      lmm_objects:
+      - 0: { l_ost_idx: 4, l_fid: [0x100040000:0x3:0x0] }
+      - 1: { l_ost_idx: 5, l_fid: [0x100050000:0x2:0x0] }
+      - 2: { l_ost_idx: 6, l_fid: [0x100060000:0x2:0x0] }
+      - 3: { l_ost_idx: 7, l_fid: [0x100070000:0x2:0x0] }
+      - 4: { l_ost_idx: 0, l_fid: [0x100000000:0x3:0x0] }
+      - 5: { l_ost_idx: 1, l_fid: [0x100010000:0x3:0x0] }
+      - 6: { l_ost_idx: 2, l_fid: [0x100020000:0x3:0x0] }
+      - 7: { l_ost_idx: 3, l_fid: [0x100030000:0x3:0x0] }</screen>
+      </section>
+      <section remap="h4">
+        <title>Add component(s) to an existing composite file</title>
+        <para><emphasis role="bold">Command</emphasis></para>
+        <screen>lfs setstripe --component-add
+[--component-end|-E end1] [STRIPE_OPTIONS]
+[--component-end|-E end2] [STRIPE_OPTIONS] ... <replaceable>filename</replaceable></screen>
+	<para>The option <literal>--component-add</literal> is used to add
+          components to an existing composite file. The extent start of
+          the first component to be added is equal to the extent end of last
+          component in the existing file, and all components to be added must
+          be adjacent with each other.</para>
+        <note><para>If the last existing component is specified by
+          <literal>-E -1</literal> or <literal>-E eof</literal>, which covers
+          to the end of the file, it must be deleted before a new one is added.
+        </para></note>
+        <para><emphasis role="bold">Example</emphasis></para>
+	<screen>$ lfs setstripe -E 4M -c 1 -E 64M -c 4 /mnt/testfs/add_comp
+$ lfs setstripe --component-add -E -1 -c 4 -o 6-7,0,5 \
+/mnt/testfs/add_comp</screen>
+	<para>This command adds a new component which starts from the end of
+          the last existing component to the end of file. The layout of this
+          example is illustrated in
+	  <xref linkend="managinglayout.fig.pfl_addcomp"/>. The last component
+          stripes across 4 OSTs in sequence OST6, OST7, OST0 and OST5, covers
+          [64M, EOF).</para>
+        <figure  xml:id="managinglayout.fig.pfl_addcomp">
+          <title>Example: add a component to an existing composite file</title>
+          <mediaobject>
+            <imageobject>
+              <imagedata scalefit="1" depth="2.75in" align="center"
+              fileref="figures/PFL_addcomp.png" />
+            </imageobject>
+            <textobject>
+              <phrase>Example: add a component to an existing composite file
+              </phrase>
+            </textobject>
+          </mediaobject>
+        </figure>
+	<para>The layout can be printed out by the following command:</para>
+	<screen>$ lfs getstripe /mnt/testfs/add_comp
+/mnt/testfs/add_comp
+  lcm_layout_gen:  5
+  lcm_entry_count: 3
+    lcme_id:             1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   4194304
+      lmm_stripe_count:  1
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x2:0x0] }
+
+    lcme_id:             2
+    lcme_flags:          init
+    lcme_extent.e_start: 4194304
+    lcme_extent.e_end:   67108864
+      lmm_stripe_count:  4
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 1
+      lmm_objects:
+      - 0: { l_ost_idx: 1, l_fid: [0x100010000:0x2:0x0] }
+      - 1: { l_ost_idx: 2, l_fid: [0x100020000:0x2:0x0] }
+      - 2: { l_ost_idx: 3, l_fid: [0x100030000:0x2:0x0] }
+      - 3: { l_ost_idx: 4, l_fid: [0x100040000:0x2:0x0] }
+
+    lcme_id:             5
+    lcme_flags:          0
+    lcme_extent.e_start: 67108864
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  4
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: -1</screen>
+        <para>The component ID "lcme_id" changes as layout generation
+          changes. It is not necessarily sequential and does not imply ordering
+          of individual components.</para>
+        <note><para>Similar to specifying a full-file composite layout at file
+          creation time, <literal>--component-add</literal> won't instantiate
+          OST objects, the instantiation is delayed to later write/truncate
+          operations. For example, after writing beyond the 64MB start of the
+          file's last component, the new component has had objects allocated:
+        </para></note>
+	<screen>$ lfs getstripe -I5 /mnt/testfs/add_comp
+/mnt/testfs/add_comp
+  lcm_layout_gen:  6
+  lcm_entry_count: 3
+    lcme_id:             5
+    lcme_flags:          init
+    lcme_extent.e_start: 67108864
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  4
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 6
+      lmm_objects:
+      - 0: { l_ost_idx: 6, l_fid: [0x100060000:0x4:0x0] }
+      - 1: { l_ost_idx: 7, l_fid: [0x100070000:0x4:0x0] }
+      - 2: { l_ost_idx: 0, l_fid: [0x100000000:0x5:0x0] }
+      - 3: { l_ost_idx: 5, l_fid: [0x100050000:0x4:0x0] }</screen>
+      </section>
+      <section remap="h4">
+        <title>Delete component(s) from an existing file</title>
+        <para><emphasis role="bold">Command</emphasis></para>
+	<screen>lfs setstripe --component-del
+[--component-id|-I comp_id | --component-flags comp_flags]
+<replaceable>filename</replaceable></screen>
+        <para>The option <literal>--component-del</literal> is used to remove
+          the component(s) specified by component ID or flags from an existing
+          file. This operation will result in any data stored in the deleted
+          component will be lost.</para>
+        <para>The ID specified by <literal>-I</literal> option is the numerical
+          unique ID of the component, which can be obtained by command
+          <literal>lfs getstripe -I</literal> command, and the flag specified by
+	  <literal>--component-flags</literal> option is a certain type of
+          components, which can be obtained by command
+          <literal>lfs getstripe --component-flags</literal>. For now, we only
+          have two flags <literal>init</literal> and <literal>^init</literal>
+          for instantiated and un-instantiated components respectively.</para>
+	<note><para>Deletion must start with the last component because hole is
+          not allowed.</para></note>
+        <para><emphasis role="bold">Example</emphasis></para>
+	<screen>$ lfs getstripe -I /mnt/testfs/del_comp
+1
+2
+5
+$ lfs setstripe --component-del -I 5 /mnt/testfs/del_comp</screen>
+	<para>This example deletes the component with ID 5 from file
+          <literal>/mnt/testfs/del_comp</literal>. If we still use the last
+          example, the final result is illustrated in
+          <xref linkend="managinglayout.fig.pfl_delcomp"/>.</para>
+        <figure  xml:id="managinglayout.fig.pfl_delcomp">
+          <title>Example: delete a component from an existing file</title>
+          <mediaobject>
+            <imageobject>
+              <imagedata scalefit="1" depth="2.75in" align="center"
+              fileref="figures/PFL_delcomp.png" />
+            </imageobject>
+            <textobject>
+              <phrase>Example: delete a component from an existing file</phrase>
+            </textobject>
+          </mediaobject>
+        </figure>
+        <para>If you try to delete a non-last component, you will see the
+          following error:</para>
+	<screen>$ lfs setstripe -component-del -I 2 /mnt/testfs/del_comp
+Delete component 0x2 from /mnt/testfs/del_comp failed. Invalid argument
+error: setstripe: delete component of file '/mnt/testfs/del_comp' failed: Invalid argument</screen>
+      </section>
+      <section remap="h4">
+        <title>Set default PFL layout to an existing directory</title>
+	<para>Similar to create a PFL file, you can set default PFL layout to
+          an existing directory. After that, all the files created will inherit
+          this layout by default.</para>
+        <para><emphasis role="bold">Command</emphasis></para>
+	<screen>lfs setstripe
+[--component-end|-E end1] [STRIPE_OPTIONS]
+[--component-end|-E end2] [STRIPE_OPTIONS] ... <replaceable>dirname</replaceable></screen>
+        <para><emphasis role="bold">Example</emphasis></para>
+	<screen>$ mkdir /mnt/testfs/pfldir
+$ touch /mnt/testfs/pfldir/commonfile
+$ lfs setstripe -E 64M -c 2 -i 0 -E -1 -c 4 -i 0 /mnt/testfs/pfldir</screen>
+        <para>When you run <literal>lfs getstripe</literal>, you will see:
+        </para>
+        <screen>$ lfs getstripe /mnt/testfs/pfldir
+/mnt/testfs/pfldir
+  lcm_layout_gen:  0
+  lcm_entry_count: 2
+    lcme_id:             N/A
+    lcme_flags:          0
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   67108864
+      stripe_count:  2       stripe_size:   1048576       stripe_offset: 0
+    lcme_id:             N/A
+    lcme_flags:          0
+    lcme_extent.e_start: 67108864
+    lcme_extent.e_end:   EOF
+      stripe_count:  4       stripe_size:   1048576       stripe_offset: 0
+/mnt/testfs/pfldir/commonfile
+lmm_stripe_count:  1
+lmm_stripe_size:   1048576
+lmm_pattern:       1
+lmm_layout_gen:    0
+lmm_stripe_offset: 0
+	obdidx		 objid		 objid		 group
+	     0	             9	          0x9	             0</screen>
+	<para>If you create a file under <literal>/mnt/testfs/pfldir</literal>,
+          the layout of that file will inherit 2 components from its parent
+          directory:</para>
+	<screen>$ touch /mnt/testfs/pfldir/pflfile
+$ lfs getstripe /mnt/testfs/pfldir/pflfile
+/mnt/testfs/pfldir/pflfile
+  lcm_layout_gen:  2
+  lcm_entry_count: 2
+    lcme_id:             1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   67108864
+      lmm_stripe_count:  2
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0xa:0x0] }
+      - 1: { l_ost_idx: 1, l_fid: [0x100010000:0x9:0x0] }
+
+    lcme_id:             2
+    lcme_flags:          0
+    lcme_extent.e_start: 67108864
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  4
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0</screen>
+	<note><para>
+          <literal>lfs setstripe --component-add/del</literal> can't be run
+          on a directory, because default layout in directory is likea config,
+          which can be arbitrarily changed by <literal>lfs setstripe</literal>,
+          while layout in file may have data (OST objects) attached. If you want
+          to delete default layout in a directory, please run <literal>lfs
+          setstripe -d <replaceable>dirname</replaceable></literal>, like :
+	<screen>$ lfs setstripe -d /mnt/testfs/pfldir
+$ lfs getstripe -d /mnt/testfs/pfldir
+/mnt/testfs/pfldir
+stripe_count:  1 stripe_size:   1048576 stripe_offset: -1
+/mnt/testfs/pfldir/commonfile
+lmm_stripe_count:  1
+lmm_stripe_size:   1048576
+lmm_pattern:       1
+lmm_layout_gen:    0
+lmm_stripe_offset: 0
+	obdidx		 objid		 objid		 group
+	     0	             9	          0x9	             0</screen>
+	</para></note>
+      </section>
+    </section>
+    <section remap="h3">
+      <title><literal>lfs migrate</literal></title>
+      <para><literal>lfs migrate</literal> commands are used to re-layout the
+        data in the existing files with the new layout parameter by copying the
+        data from the existing OST(s) to the new OST(s).</para>
+      <para><emphasis role="bold">Command</emphasis></para>
+      <screen>lfs migrate [--component-end|-E comp_end] [STRIPE_OPTIONS] ...
+<replaceable>filename</replaceable></screen>
+      <para>The difference between <literal>migrate</literal> and
+        <literal>setstripe</literal> is that <literal>migrate</literal> is to
+        re-layout the data in the existing files, while
+        <literal>setstripe</literal> is to create new files with the specified
+        layout.</para>
+      <para><emphasis role="bold">Example</emphasis></para>
+      <para><emphasis role="bold">Case1. Migrate a normal one to a composite
+        layout</emphasis></para>
+      <screen>$ lfs setstripe -c 1 -S 128K /mnt/testfs/norm_to_2comp
+$ dd if=/dev/urandom of=/mnt/testfs/norm_to_2comp bs=1M count=5
+$ lfs getstripe /mnt/testfs/norm_to_2comp --yaml
+/mnt/testfs/norm_to_comp
+lmm_stripe_count:  1
+lmm_stripe_size:   131072
+lmm_pattern:       1
+lmm_layout_gen:    0
+lmm_stripe_offset: 7
+lmm_objects:
+      - l_ost_idx: 7
+        l_fid:     0x100070000:0x2:0x0
+$ lfs migrate -E 1M -S 512K -c 1 -E -1 -S 1M -c 2 \
+/mnt/testfs/norm_to_2comp</screen>
+      <para>In this example, a 5MB size file with 1 stripe and 128K stripe size
+        is migrated to a composite layout file with 2 components, illustrated in
+	<xref linkend="managinglayout.fig.pfl_norm_to_comp"/>.</para>
+      <figure  xml:id="managinglayout.fig.pfl_norm_to_comp">
+        <title>Example: migrate normal to composite</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" depth="2.75in" align="center"
+            fileref="figures/PFL_norm_to_comp.png" />
+          </imageobject>
+          <textobject>
+            <phrase>Example: migrate normal to composite</phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+      <para>The stripe information after migration is like:</para>
+      <screen>$ lfs getstripe /mnt/testfs/norm_to_2comp
+/mnt/testfs/norm_to_2comp
+  lcm_layout_gen:  4
+  lcm_entry_count: 2
+    lcme_id:             1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   1048576
+      lmm_stripe_count:  1
+      lmm_stripe_size:   524288
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x2:0x0] }
+
+    lcme_id:             2
+    lcme_flags:          init
+    lcme_extent.e_start: 1048576
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  2
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 2
+      lmm_objects:
+      - 0: { l_ost_idx: 2, l_fid: [0x100020000:0x2:0x0] }
+      - 1: { l_ost_idx: 3, l_fid: [0x100030000:0x2:0x0] }</screen>
+      <para><emphasis role="bold">Case2. Migrate a composite layout to another
+        composite layout</emphasis></para>
+      <screen>$ lfs setstripe -E 1M -S 512K -c 1 -E -1 -S 1M -c 2 \
+/mnt/testfs/2comp_to_3comp
+$ dd if=/dev/urandom of=/mnt/testfs/norm_to_2comp bs=1M count=5
+$ lfs migrate -E 1M -S 1M -c 2 -E 4M -S 1M -c 2 -E -1 -S 3M -c 3 \
+/mnt/testfs/2comp_to_3comp</screen>
+      <para>In this example, a composite layout file with 2 components is
+        migrated a composite layout file with 3 components. If we still use
+	the example in case1, the migration process is illustrated in
+        <xref linkend="managinglayout.fig.pfl_comp_to_comp"/>.</para>
+      <figure  xml:id="managinglayout.fig.pfl_comp_to_comp">
+        <title>Example: migrate composite to composite</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" depth="2.75in" align="center"
+            fileref="figures/PFL_comp_to_comp.png" />
+          </imageobject>
+          <textobject>
+            <phrase>Example: migrate composite to composite</phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+      <para>The stripe information is like:</para>
+      <screen>$ lfs getstripe /mnt/testfs/2comp_to_3comp
+/mnt/testfs/2comp_to_3comp
+  lcm_layout_gen:  6
+  lcm_entry_count: 3
+    lcme_id:             1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   1048576
+      lmm_stripe_count:  2
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 4
+      lmm_objects:
+      - 0: { l_ost_idx: 4, l_fid: [0x100040000:0x2:0x0] }
+      - 1: { l_ost_idx: 5, l_fid: [0x100050000:0x2:0x0] }
+
+    lcme_id:             2
+    lcme_flags:          init
+    lcme_extent.e_start: 1048576
+    lcme_extent.e_end:   4194304
+      lmm_stripe_count:  2
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 6
+      lmm_objects:
+      - 0: { l_ost_idx: 6, l_fid: [0x100060000:0x2:0x0] }
+      - 1: { l_ost_idx: 7, l_fid: [0x100070000:0x3:0x0] }
+
+    lcme_id:             3
+    lcme_flags:          init
+    lcme_extent.e_start: 4194304
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  3
+      lmm_stripe_size:   3145728
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x3:0x0] }
+      - 1: { l_ost_idx: 1, l_fid: [0x100010000:0x2:0x0] }
+      - 2: { l_ost_idx: 2, l_fid: [0x100020000:0x3:0x0] }</screen>
+      <para><emphasis role="bold">Case3. Migrate a composite layout to a
+        normal one</emphasis></para>
+      <screen>$ lfs migrate -E 1M -S 1M -c 2 -E 4M -S 1M -c 2 -E -1 -S 3M -c 3 \
+/mnt/testfs/3comp_to_norm
+$ dd if=/dev/urandom of=/mnt/testfs/norm_to_2comp bs=1M count=5
+$ lfs migrate -c 2 -S 2M /mnt/testfs/3comp_to_normal</screen>
+      <para>In this example, a composite file with 3 components is migrated to
+        a normal file with 2 stripes and 2M stripe size. If we still use the
+        example in Case2, the migration process is illustrated in
+        <xref linkend="managinglayout.fig.pfl_comp_to_norm"/>.</para>
+      <figure  xml:id="managinglayout.fig.pfl_comp_to_norm">
+        <title>Example: migrate composite to normal</title>
+        <mediaobject>
+          <imageobject>
+            <imagedata scalefit="1" depth="2.75in" align="center"
+            fileref="figures/PFL_comp_to_norm.png" />
+          </imageobject>
+          <textobject>
+            <phrase>Example: migrate composite to normal</phrase>
+          </textobject>
+        </mediaobject>
+      </figure>
+      <para>The stripe information is like:</para>
+      <screen>$ lfs getstripe /mnt/testfs/3comp_to_norm --yaml
+/mnt/testfs/3comp_to_norm
+lmm_stripe_count:  2
+lmm_stripe_size:   2097152
+lmm_pattern:       1
+lmm_layout_gen:    7
+lmm_stripe_offset: 4
+lmm_objects:
+      - l_ost_idx: 4
+        l_fid:     0x100040000:0x3:0x0
+      - l_ost_idx: 5
+        l_fid:     0x100050000:0x3:0x0</screen>
+    </section>
+    <section remap="h3">
+      <title><literal>lfs getstripe</literal></title>
+      <para><literal>lfs getstripe</literal> commands can be used to list the
+        striping/component information for a given PFL file. Here, only those
+        parameters new for PFL files are shown.</para>
+      <para><emphasis role="bold">Command</emphasis></para>
+      <screen>lfs getstripe
+[--component-id|-I [comp_id]]
+[--component-flags [comp_flags]]
+[--component-count]
+[--component-start [+-][N][kMGTPE]]
+[--component-end|-E [+-][N][kMGTPE]]
+<replaceable>dirname|filename</replaceable></screen>
+      <para><emphasis role="bold">Example</emphasis></para>
+      <para>Suppose we already have a composite file
+        <literal>/mnt/testfs/3comp</literal>, created by the following
+        command:</para>
+      <screen>$ lfs setstripe -E 4M -c 1 -E 64M -c 4 -E -1 -c -1 -i 4 \
+/mnt/testfs/3comp</screen>
+      <para>And write some data</para>
+      <screen>$ dd if=/dev/zero of=/mnt/testfs/3comp bs=1M count=5</screen>
+      <para><emphasis role="bold">Case1. List component ID and its related
+        information</emphasis></para>
+      <itemizedlist>
+        <listitem>
+          <para>List all the components ID</para>
+          <screen>$ lfs getstripe -I /mnt/testfs/3comp
+1
+2
+3</screen>
+        </listitem>
+        <listitem>
+          <para>List the detailed striping information of component ID=2</para>
+          <screen>$ lfs getstripe -I2 /mnt/testfs/3comp
+/mnt/testfs/3comp
+  lcm_layout_gen:  4
+  lcm_entry_count: 3
+    lcme_id:             2
+    lcme_flags:          init
+    lcme_extent.e_start: 4194304
+    lcme_extent.e_end:   67108864
+      lmm_stripe_count:  4
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 5
+      lmm_objects:
+      - 0: { l_ost_idx: 5, l_fid: [0x100050000:0x2:0x0] }
+      - 1: { l_ost_idx: 6, l_fid: [0x100060000:0x2:0x0] }
+      - 2: { l_ost_idx: 7, l_fid: [0x100070000:0x2:0x0] }
+      - 3: { l_ost_idx: 0, l_fid: [0x100000000:0x2:0x0] }</screen>
+        </listitem>
+        <listitem>
+          <para>List the stripe offset and stripe count of component ID=2</para>
+          <screen>$ lfs getstripe -I2 -i -c /mnt/testfs/3comp
+      lmm_stripe_count:  4
+      lmm_stripe_offset: 5</screen>
+        </listitem>
+      </itemizedlist>
+      <para><emphasis role="bold">Case2. List the component which contains the
+        specified flag</emphasis></para>
+      <itemizedlist>
+        <listitem>
+          <para>List the flag of each component</para>
+          <screen>$ lfs getstripe -component-flag -I /mnt/testfs/3comp
+    lcme_id:             1
+    lcme_flags:          init
+    lcme_id:             2
+    lcme_flags:          init
+    lcme_id:             3
+    lcme_flags:          0</screen>
+        </listitem>
+        <listitem>
+          <para>List component(s) who is not instantiated</para>
+          <screen>$ lfs getstripe --component-flags=^init /mnt/testfs/3comp
+/mnt/testfs/3comp
+  lcm_layout_gen:  4
+  lcm_entry_count: 3
+    lcme_id:             3
+    lcme_flags:          0
+    lcme_extent.e_start: 67108864
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  -1
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    4
+      lmm_stripe_offset: 4</screen>
+        </listitem>
+      </itemizedlist>
+      <para><emphasis role="bold">Case3. List the total number of all the
+        component(s)</emphasis></para>
+      <itemizedlist>
+        <listitem>
+          <para>List the total number of all the components</para>
+          <screen>$ lfs getstripe --component-count /mnt/testfs/3comp
+3</screen>
+        </listitem>
+      </itemizedlist>
+      <para><emphasis role="bold">Case4. List the component with the specified
+        extent start or end positions</emphasis></para>
+      <itemizedlist>
+        <listitem>
+          <para>List the start position in bytes of each component</para>
+          <screen>$ lfs getstripe --component-start /mnt/testfs/3comp
+0
+4194304
+67108864</screen>
+        </listitem>
+        <listitem>
+          <para>List the start position in bytes of component ID=3</para>
+          <screen>$ lfs getstripe --component-start -I3 /mnt/testfs/3comp
+67108864</screen>
+        </listitem>
+        <listitem>
+          <para>List the component with start = 64M</para>
+          <screen>$ lfs getstripe --component-start=64M /mnt/testfs/3comp
+/mnt/testfs/3comp
+  lcm_layout_gen:  4
+  lcm_entry_count: 3
+    lcme_id:             3
+    lcme_flags:          0
+    lcme_extent.e_start: 67108864
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  -1
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    4
+      lmm_stripe_offset: 4</screen>
+        </listitem>
+        <listitem>
+          <para>List the component(s) with start &gt; 5M</para>
+          <screen>$ lfs getstripe --component-start=+5M /mnt/testfs/3comp
+/mnt/testfs/3comp
+  lcm_layout_gen:  4
+  lcm_entry_count: 3
+    lcme_id:             3
+    lcme_flags:          0
+    lcme_extent.e_start: 67108864
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  -1
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    4
+      lmm_stripe_offset: 4</screen>
+        </listitem>
+        <listitem>
+          <para>List the component(s) with start &lt; 5M</para>
+          <screen>$ lfs getstripe --component-start=-5M /mnt/testfs/3comp
+/mnt/testfs/3comp
+  lcm_layout_gen:  4
+  lcm_entry_count: 3
+    lcme_id:             1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   4194304
+      lmm_stripe_count:  1
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 4
+      lmm_objects:
+      - 0: { l_ost_idx: 4, l_fid: [0x100040000:0x2:0x0] }
+
+    lcme_id:             2
+    lcme_flags:          init
+    lcme_extent.e_start: 4194304
+    lcme_extent.e_end:   67108864
+      lmm_stripe_count:  4
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 5
+      lmm_objects:
+      - 0: { l_ost_idx: 5, l_fid: [0x100050000:0x2:0x0] }
+      - 1: { l_ost_idx: 6, l_fid: [0x100060000:0x2:0x0] }
+      - 2: { l_ost_idx: 7, l_fid: [0x100070000:0x2:0x0] }
+      - 3: { l_ost_idx: 0, l_fid: [0x100000000:0x2:0x0] }</screen>
+        </listitem>
+        <listitem>
+          <para>List the component(s) with start &gt; 3M and end &lt; 70M</para>
+          <screen>$ lfs getstripe --component-start=+3M --component-end=-70M \
+/mnt/testfs/3comp
+/mnt/testfs/3comp
+  lcm_layout_gen:  4
+  lcm_entry_count: 3
+    lcme_id:             2
+    lcme_flags:          init
+    lcme_extent.e_start: 4194304
+    lcme_extent.e_end:   67108864
+      lmm_stripe_count:  4
+      lmm_stripe_size:   1048576
+      lmm_pattern:       1
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 5
+      lmm_objects:
+      - 0: { l_ost_idx: 5, l_fid: [0x100050000:0x2:0x0] }
+      - 1: { l_ost_idx: 6, l_fid: [0x100060000:0x2:0x0] }
+      - 2: { l_ost_idx: 7, l_fid: [0x100070000:0x2:0x0] }
+      - 3: { l_ost_idx: 0, l_fid: [0x100000000:0x2:0x0] }</screen>
+        </listitem>
+      </itemizedlist>
+    </section>
+    <section remap="h3">
+      <title><literal>lfs find</literal></title>
+      <para><literal>lfs find</literal> commands can be used to search the
+        directory tree rooted at the given directory or file name for the files
+        that match the given PFL component parameters. Here, only those
+        parameters new for PFL files are shown. Their usages are similar to
+        <literal>lfs getstripe</literal> commands.</para>
+      <para><emphasis role="bold">Command</emphasis></para>
+      <screen>lfs find <replaceable>directory|filename</replaceable>
+[[!] --component-count [+-=]<replaceable>comp_cnt</replaceable>]
+[[!] --component-start [+-=]<replaceable>N</replaceable>[kMGTPE]]
+[[!] --component-end|-E [+-=]<replaceable>N</replaceable>[kMGTPE]]
+[[!] --component-flags=<replaceable>comp_flags</replaceable>]</screen>
+      <note><para>If you use <literal>--component-xxx</literal> options, only
+        the composite files will be searched; but if you use
+        <literal>! --component-xxx</literal> options, all the files will be
+        searched.</para></note>
+      <para><emphasis role="bold">Example</emphasis></para>
+      <para>We use the following directory and composite files to show how
+        <literal>lfs find</literal> works.</para>
+        <screen>$ mkdir /mnt/testfs/testdir
+$ lfs setstripe -E 1M -E 10M -E eof /mnt/testfs/testdir/3comp
+$ lfs setstripe -E 4M -E 20M -E 30M -E eof /mnt/testfs/testdir/4comp
+$ mkdir -p /mnt/testfs/testdir/dir_3comp
+$ lfs setstripe -E 6M -E 30M -E eof /mnt/testfs/testdir/dir_3comp
+$ lfs setstripe -E 8M -E eof /mnt/testfs/testdir/dir_3comp/2comp
+$ lfs setstripe -c 1 /mnt/testfs/testdir/dir_3comp/commnfile</screen>
+      <para><emphasis role="bold">Case1. Find the files that match the specified
+        component count condition</emphasis></para>
+      <para>Find the files under directory /mnt/testfs/testdir whose number of
+        components is not equal to 3.</para>
+      <screen>$ lfs find /mnt/testfs/testdir ! --component-count=3
+/mnt/testfs/testdir
+/mnt/testfs/testdir/4comp
+/mnt/testfs/testdir/dir_3comp/2comp
+/mnt/testfs/testdir/dir_3comp/commonfile</screen>
+      <para><emphasis role="bold">Case2. Find the files/dirs that match the
+        specified component start/end condition</emphasis></para>
+      <para>Find the file(s) under directory /mnt/testfs/testdir with component
+        start = 4M and end &lt; 70M</para>
+      <screen>$ lfs find /mnt/testfs/testdir --component-start=4M -E -30M
+/mnt/testfs/testdir/4comp</screen>
+      <para><emphasis role="bold">Case3. Find the files/dirs that match the
+        specified component flag condition</emphasis></para>
+      <para>Find the file(s) under directory /mnt/testfs/testdir whose component
+        flags contain <literal>init</literal></para>
+      <screen>$ lfs find /mnt/testfs/testdir --component-flag=init
+/mnt/testfs/testdir/3comp
+/mnt/testfs/testdir/4comp
+/mnt/testfs/testdir/dir_3comp/2comp</screen>
+      <note><para>Since <literal>lfs find</literal> uses
+        &quot;<literal>!</literal>&quot; to do negative search, we don’t support
+        flag <literal>^init</literal> here.</para></note>
+    </section>
+  </section>
   <section xml:id="dbdoclet.50438209_10424">
     <title><indexterm>
         <primary>space</primary>
