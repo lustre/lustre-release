@@ -789,6 +789,8 @@ static int lod_gen_component_ea(const struct lu_env *env,
 		objs = &v3->lmm_objects[0];
 	}
 	stripecnt = lod_comp_entry_stripecnt(lo, lod_comp, is_dir);
+	if (!is_dir && lo->ldo_is_composite)
+		lod_comp_shrink_stripecount(lod_comp, &stripecnt);
 
 	if (is_dir || lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)
 		GOTO(done, rc = 0);
@@ -1273,26 +1275,42 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 
 		/**
 		 * If uninstantiated template component has valid l_ost_idx,
-		 * then use has specified ost list for this component.
+		 * then user has specified ost list for this component.
 		 */
-		if (!lod_comp_inited(lod_comp) &&
-		    objs[0].l_ost_idx != (__u32)-1UL) {
-			/**
-			 * load the user specified ost list, when this
-			 * component is instantiated later, it will be used
-			 * in lod_alloc_ost_list().
-			 */
-			lod_comp->llc_ostlist.op_count = lod_comp->llc_stripenr;
-			lod_comp->llc_ostlist.op_size =
+		if (!lod_comp_inited(lod_comp)) {
+			if (objs[0].l_ost_idx != (__u32)-1UL) {
+				/**
+				 * load the user specified ost list, when this
+				 * component is instantiated later, it will be
+				 * used in lod_alloc_ost_list().
+				 */
+				lod_comp->llc_ostlist.op_count =
+					lod_comp->llc_stripenr;
+				lod_comp->llc_ostlist.op_size =
 					lod_comp->llc_stripenr * sizeof(__u32);
-			OBD_ALLOC(lod_comp->llc_ostlist.op_array,
-				  lod_comp->llc_ostlist.op_size);
-			if (!lod_comp->llc_ostlist.op_array)
-				GOTO(out, rc = -ENOMEM);
+				OBD_ALLOC(lod_comp->llc_ostlist.op_array,
+					  lod_comp->llc_ostlist.op_size);
+				if (!lod_comp->llc_ostlist.op_array)
+					GOTO(out, rc = -ENOMEM);
 
-			for (j = 0; j < lod_comp->llc_stripenr; j++)
-				lod_comp->llc_ostlist.op_array[j] =
+				for (j = 0; j < lod_comp->llc_stripenr; j++)
+					lod_comp->llc_ostlist.op_array[j] =
 						le32_to_cpu(objs[j].l_ost_idx);
+
+				/**
+				 * this component OST objects starts from the
+				 * first ost_idx, lod_alloc_ost_list() will
+				 * check this.
+				 */
+				lod_comp->llc_stripe_offset = objs[0].l_ost_idx;
+			} else {
+				/**
+				 * for uninstantiated component,
+				 * lmm_layout_gen stores default stripe offset.
+				 */
+				lod_comp->llc_stripe_offset =
+							lmm->lmm_layout_gen;
+			}
 		}
 
 		/* skip un-instantiated component object initialization */

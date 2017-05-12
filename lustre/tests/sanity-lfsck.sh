@@ -2508,8 +2508,8 @@ test_18e() {
 	sleep 2
 
 	echo "Write new data to f2/f4 to modify the new created OST-object."
-	echo "dummy" >> $DIR/$tdir/a1/f2
-	echo "dummy" >> $DIR/$tdir/a1/f4
+	echo "dummy" >> $DIR/$tdir/a1/f2 || error "write a1/f2 failed"
+	echo "dummy" >> $DIR/$tdir/a1/f4 || error "write a1/f4 failed"
 
 	do_facet $SINGLEMDS $LCTL set_param fail_val=0 fail_loc=0
 

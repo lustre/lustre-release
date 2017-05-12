@@ -6158,7 +6158,8 @@ test_87() { #LU-6544
 	#set xattr
 	$SETSTRIPE -E 1M -c 1 -E 64M -c 1 -E -1 -c -1 $file ||
 		error "Create file with 3 components failed"
-	i=$($GETSTRIPE -I 3 -c $file)
+	$TRUNCATE $file $((1024*1024*64+1)) || error "truncate file failed"
+	i=$($GETSTRIPE -I3 -c $file) || error "get 3rd stripe count failed"
 	if [ $i -ne $OSTCOUNT ]; then
 		left_size=$(expr $left_size + $(expr $OSTCOUNT - $i) \* 24)
 		echo -n "Since only $i out $OSTCOUNT OSTs are used, "

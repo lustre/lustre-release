@@ -560,6 +560,26 @@ lod_comp_inited(const struct lod_layout_component *entry)
 	return entry->llc_flags & LCME_FL_INIT;
 }
 
+/**
+ * For a PFL file, some of its component could be un-instantiated, so
+ * that their lov_ost_data_v1 array is not needed, we'd use this function
+ * to reduce the LOVEA buffer size.
+ *
+ * Note: if llc_ostlist contains value, we'd need lov_ost_data_v1 array to
+ * save the specified OST index list.
+ */
+static inline void
+lod_comp_shrink_stripecount(struct lod_layout_component *lod_comp,
+			    __u16 *stripe_count)
+{
+	/**
+	 * Need one lov_ost_data_v1 to store invalid ost_idx, please refer to
+	 * lod_parse_striping()
+	 */
+	if (!lod_comp_inited(lod_comp) && lod_comp->llc_ostlist.op_count == 0)
+		*stripe_count = 1;
+}
+
 void lod_fix_desc(struct lov_desc *desc);
 void lod_fix_desc_qos_maxage(__u32 *val);
 void lod_fix_desc_pattern(__u32 *val);

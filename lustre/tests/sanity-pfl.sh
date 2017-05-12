@@ -361,7 +361,7 @@ test_9() {
 	local f2=$($LFS getstripe -I2 $comp_file |
 			awk '/l_fid:/ {print $7}')
 	echo "after MDS recovery, the ost fid of 2nd component is $f2"
-	[ $f1 == $f2 ] || error "$f1 != $f2"
+	[ "x$f1" == "x$f2" ] || error "$f1 != $f2"
 }
 run_test 9 "Replay layout extend object instantiation"
 
@@ -479,8 +479,14 @@ test_12() {
 
 	# specify ost list for component
 	$LFS setstripe -E1m -c2 -o0,1 -E2m -c2 -o1,2 -E3m -c2 -o2,1 \
-		-E4m -c2 -o2,0 -E-1 $file ||
+		-E4m -c1 -i2 -E-1 $file ||
 		error "Create $file failed"
+
+	# clear lod component cache
+	stop $SINGLEMDS || error "stop MDS"
+	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
+	start $SINGLEMDS $MDT_DEV $MDS_MOUNT_OPTS || error "start MDS"
+
 	# instantiate all components
 	$TRUNCATE $file $((1024*1024*4+1))
 
@@ -499,7 +505,7 @@ test_12() {
 
 	local o4=$($LFS getstripe -I4 $file |
 			awk '/l_ost_idx:/ {printf("%d",$5)}')
-	[[ $o4 != "20" ]] && error "$o4 is not 20"
+	[[ $o4 != "2" ]] && error "$o4 is not 2"
 
 	return 0
 }
@@ -629,6 +635,42 @@ test_15() {
 		error "start-1M, end+5M, !count+2, flag=init, $found != 2"
 }
 run_test 15 "Verify component options for lfs find"
+
+test_17() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	local file=$DIR/$tdir/$tfile
+	test_mkdir -p $DIR/$tdir
+	rm -f $file
+
+	$LFS setstripe -E1m -E2m -c2 -E-1 -c-1 $file ||
+		error "Create $file failed"
+
+	local s1=$($LFS getstripe -I1 -v $file | awk '/lcme_size:/{print $2}')
+	local s2=$($LFS getstripe -I2 -v $file | awk '/lcme_size:/{print $2}')
+	local s3=$($LFS getstripe -I3 -v $file | awk '/lcme_size:/{print $2}')
+	echo "1st init: comp size 1:$s1 2:$s2 3:$s3"
+
+	# init 2nd component
+	$TRUNCATE $file $((1024*1024+1))
+	local s1n=$($LFS getstripe -I1 -v $file | awk '/lcme_size:/{print $2}')
+	local s2n=$($LFS getstripe -I2 -v $file | awk '/lcme_size:/{print $2}')
+	echo "2nd init: comp size 1:$s1n 2:$s2n 3:$s3"
+
+	[ $s1 -eq $s1n ] || error "1st comp size $s1 should == $s1n"
+	[ $s2 -lt $s2n ] || error "2nd comp size $s2 should < $s2n"
+
+	# init 3rd component
+	$TRUNCATE $file $((1024*1024*2+1))
+	s1n=$($LFS getstripe -I1 -v $file | awk '/lcme_size:/{print $2}')
+	s2n=$($LFS getstripe -I2 -v $file | awk '/lcme_size:/{print $2}')
+	local s3n=$($LFS getstripe -I3 -v $file | awk '/lcme_size:/{print $2}')
+	echo "3rd init: comp size 1:$s1n 2:$s2n 3:$s3n"
+
+	[ $s1 -eq $s1n ] || error "1st comp size $s1 should == $s1n"
+	[ $s2 -lt $s2n ] || error "2nd comp size $s2 should < $s2n"
+	[ $s3 -lt $s3n ] || error "3rd comp size $s3 should < $s3n"
+}
+run_test 17 "Verify LOVEA grows with more component inited"
 
 complete $SECONDS
 check_and_cleanup_lustre

@@ -2190,6 +2190,10 @@ static int lod_comp_md_size(struct lod_object *lo, bool is_dir)
 		magic = comp_entries[i].llc_pool ? LOV_MAGIC_V3 : LOV_MAGIC_V1;
 		stripenr = lod_comp_entry_stripecnt(lo, &comp_entries[i],
 						    is_dir);
+		if (!is_dir && is_composite)
+			lod_comp_shrink_stripecount(&comp_entries[i],
+						    &stripenr);
+
 		size += lov_user_md_size(stripenr, magic);
 		LASSERT(size % sizeof(__u64) == 0);
 	}
