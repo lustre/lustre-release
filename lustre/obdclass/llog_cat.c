@@ -978,6 +978,28 @@ __u64 llog_cat_size(const struct lu_env *env, struct llog_handle *cat_llh)
 }
 EXPORT_SYMBOL(llog_cat_size);
 
+/* currently returns the number of "free" entries in catalog,
+ * ie the available entries for a new plain LLOG file creation,
+ * even if catalog has wrapped
+ */
+__u32 llog_cat_free_space(struct llog_handle *cat_llh)
+{
+	/* simulate almost full Catalog */
+	if (OBD_FAIL_CHECK(OBD_FAIL_CAT_FREE_RECORDS))
+		return cfs_fail_val;
+
+	if (cat_llh->lgh_hdr->llh_count == 1)
+		return LLOG_HDR_BITMAP_SIZE(cat_llh->lgh_hdr) - 1;
+
+	if (cat_llh->lgh_last_idx > cat_llh->lgh_hdr->llh_cat_idx)
+		return LLOG_HDR_BITMAP_SIZE(cat_llh->lgh_hdr) - 1 +
+		       cat_llh->lgh_hdr->llh_cat_idx - cat_llh->lgh_last_idx;
+
+	/* catalog is presently wrapped */
+	return cat_llh->lgh_hdr->llh_cat_idx - cat_llh->lgh_last_idx;
+}
+EXPORT_SYMBOL(llog_cat_free_space);
+
 static int llog_cat_reverse_process_cb(const struct lu_env *env,
 				       struct llog_handle *cat_llh,
 				       struct llog_rec_hdr *rec, void *data)

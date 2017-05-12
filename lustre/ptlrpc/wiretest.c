@@ -3838,10 +3838,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct llog_changelog_user_rec, cur_id));
 	LASSERTF((int)sizeof(((struct llog_changelog_user_rec *)0)->cur_id) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_changelog_user_rec *)0)->cur_id));
-	LASSERTF((int)offsetof(struct llog_changelog_user_rec, cur_padding) == 20, "found %lld\n",
-		 (long long)(int)offsetof(struct llog_changelog_user_rec, cur_padding));
-	LASSERTF((int)sizeof(((struct llog_changelog_user_rec *)0)->cur_padding) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct llog_changelog_user_rec *)0)->cur_padding));
+	LASSERTF((int)offsetof(struct llog_changelog_user_rec, cur_time) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct llog_changelog_user_rec, cur_time));
+	LASSERTF((int)sizeof(((struct llog_changelog_user_rec *)0)->cur_time) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct llog_changelog_user_rec *)0)->cur_time));
 	LASSERTF((int)offsetof(struct llog_changelog_user_rec, cur_endrec) == 24, "found %lld\n",
 		 (long long)(int)offsetof(struct llog_changelog_user_rec, cur_endrec));
 	LASSERTF((int)sizeof(((struct llog_changelog_user_rec *)0)->cur_endrec) == 8, "found %lld\n",

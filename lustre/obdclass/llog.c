@@ -1307,8 +1307,9 @@ __u64 llog_size(const struct lu_env *env, struct llog_handle *llh)
 
 	rc = llh->lgh_obj->do_ops->do_attr_get(env, llh->lgh_obj, &la);
 	if (rc) {
-		CERROR("%s: attr_get failed, rc = %d\n",
-		       llh->lgh_ctxt->loc_obd->obd_name, rc);
+		CERROR("%s: attr_get failed for "DFID": rc = %d\n",
+		       llh->lgh_ctxt->loc_obd->obd_name,
+		       PFID(&llh->lgh_id.lgl_oi.oi_fid), rc);
 		return 0;
 	}
 
