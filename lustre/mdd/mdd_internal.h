@@ -48,6 +48,26 @@
 #include <lustre_log.h>
 #include <lustre_linkea.h>
 
+/* ChangeLog params for automatic purge mechanism */
+/* max time allowed for a user to stay idle in seconds */
+#define CHLOG_MAX_IDLE_TIME 2592000 /* = 30 days */
+/* max gap allowed for a user to stay idle in number of ChangeLog records
+ * this is an evaluation, assuming that chunk-size is LLOG_MIN_CHUNK_SIZE, of
+ * the indexes gap for half full changelogs */
+#define CHLOG_MAX_IDLE_INDEXES (((LLOG_MIN_CHUNK_SIZE - \
+				  offsetof(struct llog_log_hdr, \
+					   llh_bitmap[0]) - \
+				  sizeof(struct llog_rec_tail)) * 4) * \
+				((LLOG_MIN_CHUNK_SIZE - \
+				  offsetof(struct llog_log_hdr, \
+					   llh_bitmap[0]) - \
+				  sizeof(struct llog_rec_tail)) * 8))
+/* min time in seconds between two gc thread runs if none already started */
+#define CHLOG_MIN_GC_INTERVAL 3600
+/* minimum number of free ChangeLog catalog entries (ie, between cur and
+ * last indexes) before starting garbage collect */
+#define CHLOG_MIN_FREE_CAT_ENTRIES 2
+
 /* Changelog flags */
 /** changelog is recording */
 #define CLM_ON    0x00001
@@ -72,6 +92,8 @@ struct mdd_changelog {
 	ktime_t			mc_starttime;
 	spinlock_t		mc_user_lock;
 	int			mc_lastuser;
+	struct task_struct	*mc_gc_task;
+	time64_t		mc_gc_time;
 };
 
 static inline __u64 cl_time(void)
@@ -107,6 +129,11 @@ struct mdd_device {
         struct dt_object                *mdd_orphans; /* PENDING directory */
 	struct proc_dir_entry            *mdd_proc_entry;
         struct mdd_changelog             mdd_cl;
+	unsigned int			 mdd_changelog_gc;
+	unsigned int			 mdd_changelog_max_idle_time;
+	unsigned long			 mdd_changelog_max_idle_indexes;
+	unsigned int			 mdd_changelog_min_gc_interval;
+	unsigned int			 mdd_changelog_min_free_cat_entries;
         unsigned long                    mdd_atime_diff;
         struct mdd_object               *mdd_dot_lustre;
         struct mdd_dot_lustre_objs       mdd_dot_lustre_objs;
@@ -354,6 +381,8 @@ int mdd_permission(const struct lu_env *env,
 int mdd_generic_thread_start(struct mdd_generic_thread *thread,
 			     int (*func)(void *), void *data, char *name);
 void mdd_generic_thread_stop(struct mdd_generic_thread *thread);
+int mdd_changelog_user_purge(const struct lu_env *env, struct mdd_device *mdd,
+			     __u32 id);
 
 /* mdd_prepare.c */
 int mdd_compat_fixes(const struct lu_env *env, struct mdd_device *mdd);

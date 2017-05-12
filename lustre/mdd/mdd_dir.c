@@ -793,6 +793,136 @@ out_put:
 	return rc;
 }
 
+struct mdd_changelog_gc {
+	struct mdd_device *mcgc_mdd;
+	bool mcgc_found;
+	__u32 mcgc_maxtime;
+	__u64 mcgc_maxindexes;
+	__u32 mcgc_id;
+};
+
+/* return first registered ChangeLog user idle since too long
+ * use ChangeLog's user plain LLOG mtime for this */
+static int mdd_changelog_gc_cb(const struct lu_env *env,
+			       struct llog_handle *llh,
+			       struct llog_rec_hdr *hdr, void *data)
+{
+	struct llog_changelog_user_rec  *rec;
+	struct mdd_changelog_gc *mcgc = (struct mdd_changelog_gc *)data;
+	struct mdd_device *mdd = mcgc->mcgc_mdd;
+	ENTRY;
+
+	if ((llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN) == 0)
+		RETURN(-ENXIO);
+
+	rec = container_of(hdr, struct llog_changelog_user_rec,
+			   cur_hdr);
+
+	/* find oldest idle user, based on last record update/cancel time (new
+	 * behavior), or for old user records, last record index vs current
+	 * ChangeLog index. Late users with old record format will be treated
+	 * first as we assume they could be idle since longer
+	 */
+	if (rec->cur_time != 0) {
+		__u32 time_now = (__u32)get_seconds();
+		__u32 time_out = rec->cur_time +
+				 mdd->mdd_changelog_max_idle_time;
+		__u32 idle_time = time_now - rec->cur_time;
+
+		/* treat oldest idle user first, and if no old format user
+		 * has been already selected
+		 */
+		if (time_after32(time_now, time_out) &&
+		    idle_time > mcgc->mcgc_maxtime &&
+		    mcgc->mcgc_maxindexes == 0) {
+			mcgc->mcgc_maxtime = idle_time;
+			mcgc->mcgc_id = rec->cur_id;
+			mcgc->mcgc_found = true;
+		}
+	} else {
+		/* old user record with no idle time stamp, so use empirical
+		 * method based on its current index/position
+		 */
+		__u64 idle_indexes;
+
+		idle_indexes = mdd->mdd_cl.mc_index - rec->cur_endrec;
+
+		/* treat user with the oldest/smallest current index first */
+		if (idle_indexes >= mdd->mdd_changelog_max_idle_indexes &&
+		    idle_indexes > mcgc->mcgc_maxindexes) {
+			mcgc->mcgc_maxindexes = idle_indexes;
+			mcgc->mcgc_id = rec->cur_id;
+			mcgc->mcgc_found = true;
+		}
+
+	}
+	RETURN(0);
+}
+
+/* recover space from long-term inactive ChangeLog users */
+static int mdd_chlg_garbage_collect(void *data)
+{
+	struct mdd_device *mdd = (struct mdd_device *)data;
+	struct lu_env		  *env = NULL;
+	int			   rc;
+	struct llog_ctxt *ctxt;
+	struct mdd_changelog_gc mcgc = {
+		.mcgc_mdd = mdd,
+		.mcgc_found = false,
+		.mcgc_maxtime = 0,
+		.mcgc_maxindexes = 0,
+	};
+	ENTRY;
+
+	CDEBUG(D_HA, "%s: ChangeLog garbage collect thread start\n",
+	       mdd2obd_dev(mdd)->obd_name);
+
+	OBD_ALLOC_PTR(env);
+	if (env == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	rc = lu_env_init(env, LCT_MD_THREAD);
+	if (rc)
+		GOTO(out, rc);
+
+	for (;;) {
+		ctxt = llog_get_context(mdd2obd_dev(mdd),
+					LLOG_CHANGELOG_USER_ORIG_CTXT);
+		if (ctxt == NULL ||
+		    (ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) == 0)
+			GOTO(out_env, rc = -ENXIO);
+
+		rc = llog_cat_process(env, ctxt->loc_handle,
+				      mdd_changelog_gc_cb, &mcgc, 0, 0);
+		if (rc != 0 || mcgc.mcgc_found == false)
+			break;
+		llog_ctxt_put(ctxt);
+
+		CWARN("%s: Force deregister of ChangeLog user cl%d idle more "
+		      "than %us\n", mdd2obd_dev(mdd)->obd_name, mcgc.mcgc_id,
+		      mcgc.mcgc_maxtime);
+
+		mdd_changelog_user_purge(env, mdd, mcgc.mcgc_id);
+
+		/* try again to search for another candidate */
+		mcgc.mcgc_found = false;
+		mcgc.mcgc_maxtime = 0;
+		mcgc.mcgc_maxindexes = 0;
+	}
+
+out_env:
+	if (ctxt != NULL)
+		llog_ctxt_put(ctxt);
+
+	lu_env_fini(env);
+	GOTO(out, rc);
+out:
+	if (env)
+		OBD_FREE_PTR(env);
+	mdd->mdd_cl.mc_gc_task = NULL;
+	return rc;
+}
+
 /** Add a changelog entry \a rec to the changelog llog
  * \param mdd
  * \param rec
@@ -807,6 +937,7 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 	struct llog_ctxt	*ctxt;
 	struct thandle		*llog_th;
 	int			 rc;
+	bool			 run_gc_task;
 
 	rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) +
 					    changelog_rec_varsize(&rec->cr));
@@ -833,6 +964,41 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 	/* nested journal transaction */
 	rc = llog_add(env, ctxt->loc_handle, &rec->cr_hdr, NULL, llog_th);
 
+	/* time to recover some space ?? */
+	spin_lock(&mdd->mdd_cl.mc_lock);
+	if (unlikely(mdd->mdd_changelog_gc && (ktime_get_real_seconds() -
+	    mdd->mdd_cl.mc_gc_time > mdd->mdd_changelog_min_gc_interval) &&
+	    mdd->mdd_cl.mc_gc_task == NULL &&
+	    llog_cat_free_space(ctxt->loc_handle) <=
+				mdd->mdd_changelog_min_free_cat_entries)) {
+		CWARN("%s: low on changelog_catalog free entries, starting "
+		      "ChangeLog garbage collection thread\n", obd->obd_name);
+
+		/* indicate further kthread run will occur outside right after
+		 * critical section
+		 */
+		mdd->mdd_cl.mc_gc_task = (struct task_struct *)(-1);
+		run_gc_task = true;
+	}
+	spin_unlock(&mdd->mdd_cl.mc_lock);
+	if (run_gc_task) {
+		struct task_struct *gc_task;
+
+		gc_task = kthread_run(mdd_chlg_garbage_collect, mdd,
+				      "chlg_gc_thread");
+		if (IS_ERR(gc_task)) {
+			CERROR("%s: cannot start ChangeLog garbage collection "
+			       "thread: rc = %ld\n", obd->obd_name,
+			       PTR_ERR(gc_task));
+			mdd->mdd_cl.mc_gc_task = NULL;
+		} else {
+			CDEBUG(D_HA, "%s: ChangeLog garbage collection thread "
+			       "has started with Pid %d\n", obd->obd_name,
+			       gc_task->pid);
+			mdd->mdd_cl.mc_gc_task = gc_task;
+			mdd->mdd_cl.mc_gc_time = ktime_get_real_seconds();
+		}
+	}
 out_put:
 	llog_ctxt_put(ctxt);
 	if (rc > 0)

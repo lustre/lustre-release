@@ -1769,7 +1769,7 @@ check_llog_changelog_user_rec(void)
 	CHECK_STRUCT(llog_changelog_user_rec);
 	CHECK_MEMBER(llog_changelog_user_rec, cur_hdr);
 	CHECK_MEMBER(llog_changelog_user_rec, cur_id);
-	CHECK_MEMBER(llog_changelog_user_rec, cur_padding);
+	CHECK_MEMBER(llog_changelog_user_rec, cur_time);
 	CHECK_MEMBER(llog_changelog_user_rec, cur_endrec);
 	CHECK_MEMBER(llog_changelog_user_rec, cur_tail);
 }

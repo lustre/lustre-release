@@ -160,6 +160,7 @@ int llog_cat_process_or_fork(const struct lu_env *env,
 int llog_cat_process(const struct lu_env *env, struct llog_handle *cat_llh,
 		     llog_cb_t cb, void *data, int startcat, int startidx);
 __u64 llog_cat_size(const struct lu_env *env, struct llog_handle *cat_llh);
+__u32 llog_cat_free_space(struct llog_handle *cat_llh);
 int llog_cat_reverse_process(const struct lu_env *env,
 			     struct llog_handle *cat_llh, llog_cb_t cb,
 			     void *data);
