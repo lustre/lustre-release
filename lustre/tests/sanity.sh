@@ -9576,19 +9576,24 @@ run_test 130e "FIEMAP (test continuation FIEMAP calls)"
 
 # Test for writev/readv
 test_131a() {
-	rwv -f $DIR/$tfile -w -n 3 524288 1048576 1572864 || \
-	error "writev test failed"
-	rwv -f $DIR/$tfile -r -v -n 2 1572864 1048576 || \
-	error "readv failed"
+	rwv -f $DIR/$tfile -w -n 3 524288 1048576 1572864 ||
+		error "writev test failed"
+	rwv -f $DIR/$tfile -r -v -n 2 1572864 1048576 ||
+		error "readv failed"
 	rm -f $DIR/$tfile
 }
 run_test 131a "test iov's crossing stripe boundary for writev/readv"
 
 test_131b() {
-	rwv -f $DIR/$tfile -w -a -n 3 524288 1048576 1572864 || \
-	error "append writev test failed"
-	rwv -f $DIR/$tfile -w -a -n 2 1572864 1048576 || \
-	error "append writev test failed"
+	local fsize=$((524288 + 1048576 + 1572864))
+	rwv -f $DIR/$tfile -w -a -n 3 524288 1048576 1572864 &&
+		$CHECKSTAT -t file $DIR/$tfile -s $fsize ||
+			error "append writev test failed"
+
+	((fsize += 1572864 + 1048576))
+	rwv -f $DIR/$tfile -w -a -n 2 1572864 1048576 &&
+		$CHECKSTAT -t file $DIR/$tfile -s $fsize ||
+			error "append writev test failed"
 	rm -f $DIR/$tfile
 }
 run_test 131b "test append writev"

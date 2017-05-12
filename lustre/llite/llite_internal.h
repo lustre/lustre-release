@@ -1521,6 +1521,30 @@ __generic_file_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 	struct iov_iter i;
 	ssize_t bytes = 0;
 
+	/* Since LLITE updates file size at the end of I/O in
+	 * vvp_io_commit_write(), append write has to be done in atomic when
+	 * there are multiple segments because otherwise each iteration to
+	 * __generic_file_aio_write() will see original file size */
+	if (unlikely(iocb->ki_filp->f_flags & O_APPEND && iter->nr_segs > 1)) {
+		struct iovec *iov_copy;
+		int count = 0;
+
+		OBD_ALLOC(iov_copy, sizeof(*iov_copy) * iter->nr_segs);
+		if (!iov_copy)
+			return -ENOMEM;
+
+		iov_for_each(iov, i, *iter)
+			iov_copy[count++] = iov;
+
+		bytes = __generic_file_aio_write(iocb, iov_copy, count,
+						 &iocb->ki_pos);
+		OBD_FREE(iov_copy, sizeof(*iov_copy) * iter->nr_segs);
+
+		if (bytes > 0)
+			iov_iter_advance(iter, bytes);
+		return bytes;
+	}
+
 	iov_for_each(iov, i, *iter) {
 		ssize_t res;
 
