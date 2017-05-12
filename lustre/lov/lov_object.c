@@ -310,7 +310,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		 * will be dynamically init-ed later on file write/trunc ops.
 		 */
 		if (!lsm_entry_inited(lsm, i))
-			break;
+			continue;
 
 		result = lov_init_raid0(env, dev, lov, i, &le->lle_raid0);
 		if (result < 0)
