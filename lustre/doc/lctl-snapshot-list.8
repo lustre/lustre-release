@@ -1,0 +1,48 @@
+.TH lctl-snapshot-list 8 "2017 Apr 13" Lustre "query Lustre snapshot"
+.SH SYNOPSIS
+.TP
+.B lctl snapshot_list \fR[-d | --detail] {-F | --fsname fsname} [-h | --help]
+            [-n | --name ssname] [-r | --rsh remote_shell]
+.br
+.SH DESCRIPTION
+Query the snapshot information, such as fsname of the snapshot, comment,
+create time, the latest modification time, whether mounted or not, and so on.
+.SH OPTIONS
+.TP
+.BR  -d ", " --detail
+List all the information available for each piece of the snapshot on every
+target (MGT/MDT/OST). Usually, the information for each piece of the snapshot
+are the same unless some error occurred during the snapshot operations, such
+as partly modified or mount. This option allows to check related issues.
+.TP
+.BR  -F ", " --fsname " "\fIfsname
+The filesystem name.
+.TP
+.BR  -h ", " --help
+For help information.
+.TP
+.BR  -n ", " --name " "\fIssname
+The snapshot's name to be queried. If no snapshot name is specified, then all
+the snapshots belonging to current Lustre filesystem will be listed.
+.TP
+.BR  -r ", " --rsh " "\fIremote_shell
+Specify a shell to communicate with remote targets. The default value is
+.BR ssh .
+It is the system admin's duty to guarantee that the specified
+.I remote_shell
+works well among targets without password authentication.
+
+.SH AVAILABILITY
+.B lctl-snapshot-list
+is part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-lcfg (8),
+.BR lctl-barrier (8),
+.BR lctl-snapshot-create (8),
+.BR lctl-snapshot-destroy (8),
+.BR lctl-snapshot-modify (8),
+.BR lctl-snapshot-mount (8),
+.BR lctl-snapshot-umount (8)

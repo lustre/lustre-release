@@ -1,0 +1,37 @@
+.TH lctl-lcfg 8 "2017 Apr 13" Lustre "Maintain Lustre configuration"
+.SH SYNOPSIS
+.br
+.B lctl fork_lcfg \fR{fsname} {newname}
+.br
+.br
+.B lctl erase_lcfg \fR{fsname}
+.br
+.SH DESCRIPTION
+.TP
+.B fork_lcfg \fR{fsname} {newname}
+Generate Lustre configuration for the given filesystem
+.I newname
+based on the specified Lustre system
+.I fsname
+configuration. It is not simply copy. Instead, it uses the
+.I newname
+as the filesystem name in the new configuration. It can be used to
+backup the system configuration, or generate configuration for the
+snapshot that has the same configuration as the original filesystem
+but with different filesystem names.
+
+.TP
+.B erase_lcfg \fR{fsname}
+Permanently erase configuration for the named filesystem. It can be
+used to remove the backup configuration or delete inactive filesystem
+(or snapshot) from a shared MGS.
+
+.SH AVAILABILITY
+.B lctl-lcfg
+is part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-snapshot-create (8),
+.BR lctl-snapshot-destroy (8)

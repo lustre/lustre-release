@@ -39,6 +39,12 @@ command, type
 
 For non-interactive use, one uses the second invocation, which runs command after connecting to the device.
 
+.SS System Configuration
+The on-line tool set for backup or removal of Lustre system configuration. For detail, please see:
+.PP
+\fBlctl-lcfg\fR(8)
+.RS 4
+
 .SS Network Configuration
 .TP
 .BR network " <" up / down >|< tcp / o2ib >
@@ -377,73 +383,37 @@ Stop LFSCK on the specified MDT or OST device.
 .RS 4
 Get the LFSCK global status via the specified MDT device.
 .RE
+
 .SS BARRIER
-The tools set for write (modify) barrier on all MDTs.
-.TP
-.B barrier_freeze \fR<fsname> [timeout]
-.br
-Set write barrier on all MDTs. The barrier_freeze command will not return
-until the barrier is set (frozen) or failed. With the write barrier set,
-any subsequent metadata modification will be blocked until the barrier is
-thawed or expired. The barrier lifetime is started when triggering
-barrier_freeze, and will be terminated when barrier thawed. To avoid the
-system being frozen for very long time if miss/fail to call barrier_thaw,
-you can specify its lifetime via the 'timeout' parameter in second, the
-default value is 60 (seconds). If the barrier is not thawed before that,
-it will be expired automatically.
-A barrier_freeze can only succeed when all registered MDTs are available.
-If some MDT has ever registered but become offline, then barrier_freeze
-will fail. To check and update current status of MDTs, see the command
-barrier_rescan.
-.TP
-.B barrier_thaw \fR<fsname>
-.br
-Reset write barrier on all MDTs. With the write barrier thawed, all blocked
-metadata modifications (by the former barrier_freeze) will be handled normally.
-.TP
-.B barrier_stat \fR<fsname>
-.br
-Query the write barrier status, the possible status and related meanings are
-as following:
-.br
-  'init': has never set barrier on the system
-  'freezing_p1': in the first stage of setting the write barrier
-  'freezing_p2': in the second stage of setting the write barrier
-  'frozen': the write barrier has been set successfully
-  'thawing': in thawing the write barrier
-  'thawed': the write barrier has been thawed
-  'failed': fail to set write barrier
-  'expired': the write barrier is expired
-  'rescan': in scanning the MDTs status, see the command barrier_rescan
-  'unknown': other cases
-.br
-If the barrier is in 'freezing_p1', 'freezing_p2' or 'frozen' status, then
-the left lifetime will be returned also.
-.TP
-.B barrier_rescan \fR<fsname> [timeout]
-.br
-Scan the system to check which MDTs are active. The status of the MDTs is
-required because a barrier_freeze will be unsuccessful if any of the MDTs
-are permenantly offline. During barrier_rescan, the MDT status is updated.
-If an MDT does not respond the barrier_rescan within the given "timeout"
-seconds (where the default value is 60 seconds), then it will be marked
-as unavailable or inactive.
+The tools set for write (modify) barrier on all MDTs. For detail, please see:
+.PP
+\fBlctl-barrier\fR(8)
+.RS 4
 
 .SS SNAPSHOT
 ZFS backend based snapshot tools set. The tool loads system configuration
-from the file /etc/ldev.conf on the MGS, and call related ZFS commands to
+from the file
+.B /etc/ldev.conf
+on the MGS, and call related ZFS commands to
 maintain Lustre snapshot pieces on all targets (MGS/MDT/OST).
-The configuration file /etc/ldev.conf is not only for snapshot, but also
+The configuration file
+.B /etc/ldev.conf
+is not only for snapshot, but also
 for other purpose. The format is:
   <host> foreign/- <label> <device> [journal-path]/- [raidtab]
 
-The format of <label> is:
+The format of
+.I <label>
+is:
   fsname-<role><index> or <role><index>
 
-The format of <device> is:
+The format of
+.I <device>
+is:
   [md|zfs:][pool_dir/]<pool>/<filesystem>
 
 Snapshot only uses the fields <host>, <label> and <device>.
+
 .br
 .B Example:
 .br
@@ -455,185 +425,39 @@ Snapshot only uses the fields <host>, <label> and <device>.
  host-ost1 - OST0000 zfs:/tmp/myfs-ost1/ost1
  host-ost2 - OST0001 zfs:myfs-ost2/ost2
 
-For old snasphot tools, the configration is in /etc/lsnapshot/${fsname}.conf,
-the format is as following (per target, per line):
-  <host> <pool_dir> <pool> <local_filesystem> <role(,s)> <index>
-.br
-.B Examples:
-.br
-.B
-# cat /etc/lsnapshot/testfs.conf
-.br
-  VM6_1 /tmp testfs-mdt1 mdt1 MGS,MDT	0
-  VM6_2 /tmp testfs-mdt2 mdt2 MDT	1
-  VM6_3 /tmp testfs-ost1 ost1 OST	0
-  VM6_3 /tmp testfs-ost2 ost2 OST	1
-  VM6_4 /tmp testfs-ost3 ost3 OST	2
-  VM6_4 /tmp testfs-ost4 ost4 OST	3
+See also:
 
-.TP
-.B snapshot_create \fR[-b | --barrier [on | off]] [-c | --comment comment]
-         \fR<-F | --fsname fsname> [-h | --help] <-n | --name ssname>
-         \fR[-r | --rsh remote_shell] [-t | --timeout timeout]
-.br
+.PP
+\fBlctl-snapshot-create\fR(8)
+.RS 4
 Create snapshot with the given name.
-.TP
-  -b, --barrier [on | off]
-Set write barrier on all MDTs before creating the snapshot. The default behavior
-is 'on'. If you are confident about the system consistency, or you do not care
-about the system consistency when create the snapshot, then you can specify
-barrier 'off'. That will save your time of creating the snapshot. If the barrier
-is 'on', then the timeout of the barrier can be specified via '-t' option as
-described in the subsequent section.
-.TP
-  -c, --comment <comment>
-Add an optional comment to the snapshot_create request. The comment can include
-anything to describe what the snapshot is for or for reminder. The comment can
-be shown via snapshot_list.
-.TP
-  -F, --fsname
-The filesystem name.
-.TP
-  -h, --help
-For help information.
-.TP
-  -n, --name <ssname>
-The snapshot's name must be specified. It follows the general ZFS snapshot name
-rules, such as the max length is 256 bytes, cannot be conflict with the reserved
-names, and so on.
-.TP
-  -r, --rsh <remote_shell>
-Specify a shell to communicate with remote targets. The default value is 'ssh'.
-It is the system admin's duty to guarantee that the specified 'remote_shell'
-works well among targets without password authentication.
-.TP
-  -t, --timeout <timeout>
-If write barrier is 'on', then the 'timeout' specified the write barrier's
-lifetime in second. The default vaule is 60 (seconds).
-.TP
-.B snapshot_destroy \fR[-f | --force] <-F | --fsname fsname> [-h | --help]
-          \fR<-n | --name ssname> [-r | --rsh remote_shell]
-.br
+.RE
+.PP
+\fBlctl-snapshot-destroy\fR(8)
+.RS 4
 Destroy the specified snapshot.
-.TP
-  -f, --force
-Destory the specified snapshot by force. If the snapshot is mounted, it will be
-umounted firstly, then destroyed. Even if some pieces of the snapshot are lost
-or broken for some reason(s), the remained parts of the snapshot still can be
-destroyed with this option specified.
-.TP
-  -F, --fsname
-The filesystem name.
-.TP
-  -h, --help
-For help information.
-.TP
-  -n, --name <ssname>
-The snapshot (to be destroyed) name must be specified.
-.TP
-  -r, --rsh <remote_shell>
-Specify a shell to communicate with remote targets. The default value is 'ssh'.
-It is the system admin's duty to guarantee that the specified 'remote_shell'
-works well among targets without password authentication.
-.TP
-.B snapshot_modify \fR[-c | --comment comment] <-F | --fsname fsname>
-         \fR[-h | --help] <-n | --name ssname> [-N | --new new_ssname]
-         \fR[-r | --rsh remote_shell]
-.br
+.RE
+.PP
+\fBlctl-snapshot-modify\fR(8)
+.RS 4
 Modify the specified snapshot.
-.TP
-  -c, --comment <comment>
-Add comment (if it has not been specified when snapshot_create) or change the
-comment for the given snapshot.
-.TP
-  -F, --fsname
-The filesystem name.
-.TP
-  -h, --help
-For help information.
-.TP
-  -n, --name <ssname>
-The snapshot (to be modified) name must be specified.
-.TP
-  -N, --new <new_ssname>
-Rename the snapshot to the new name. It follows the general ZFS snapshot name
-rules, such as the max length is 256 bytes, cannot be conflict with the reserved
-names, and so on.
-.TP
-  -r, --rsh <remote_shell>
-Specify a shell to communicate with remote targets. The default value is 'ssh'.
-It is the system admin's duty to guarantee that the specified 'remote_shell'
-works well among targets without password authentication.
-.TP
-.B snapshot_list \fR[-d | --detail] <-F | --fsname fsname> [-h | --help]
-       \fR[-n | --name ssname] [-r | --rsh remote_shell]
-.br
-Query the snapshot information, such as fsname of the snapshot, comment,
-create time, the latest modification time, whether mounted or not, and so on.
-.TP
-  -d, --detail
-List all the information available for each piece of the snapshot on each
-target. Usually, the information for each piece of the snapshot are the same
-unless an error occurred during the snapshot operations, such as partly
-modification or mount. This option allow to check related issues.
-.TP
-  -F, --fsname
-The filesystem name.
-.TP
-  -h, --help
-For help information.
-.TP
-  -n, --name <ssname>
-The snapshot's name to be queried. If no name is specified, then all the
-snapshots belong to current Lustre filesystem will be listed.
-.TP
-  -r, --rsh <remote_shell>
-Specify a shell to communicate with remote targets. The default value is 'ssh'.
-It is the system admin's duty to guarantee that the specified 'remote_shell'
-works well among targets without password authentication.
-.TP
-.B snapshot_mount \fR<-F | --fsname fsname> [-h | --help] <-n | --name ssname>
-        \fR[-r | --rsh remote_shell]
-.br
-Mount the specified snapshot on the servers. Be as read only mode Lustre
-filesystem, if the snapshot is mounted, then it cannot be renamed. It is
-the user's duty to mount client (must as read only mode "-o ro") to the
-snapshot when need.
-NOTE: the snapshot has its own fsname that is different from the original
-filesystem fsname, it can be queried via snapshot_list.
-.TP
-  -F, --fsname
-The filesystem name.
-.TP
-  -h, --help
-For help information.
-.TP
-  -n, --name <ssname>
-The snapshot (to be mounted) name must be specified.
-.TP
-  -r, --rsh <remote_shell>
-Specify a shell to communicate with remote targets. The default value is 'ssh'.
-It is the system admin's duty to guarantee that the specified 'remote_shell'
-works well among targets without password authentication.
-.TP
-.B snapshot_umount \fR<-F | --fsname fsname> [-h | --help] <-n | --name ssname>
-         \fR[-r | --rsh remote_shell]
-.br
+.RE
+.PP
+\fBlctl-snapshot-list\fR(8)
+.RS 4
+Query the snapshot information.
+.RE
+.PP
+\fBlctl-snapshot-mount\fR(8)
+.RS 4
+Mount the specified snapshot.
+.RE
+.PP
+\fBlctl-snapshot-umount\fR(8)
+.RS 4
 Umount the specified snapshot.
-.TP
-  -F, --fsname
-The filesystem name.
-.TP
-  -h, --help
-For help information.
-.TP
-  -n, --name <ssname>
-The snapshot (to be umounted) name must be specified.
-.TP
-  -r, --rsh <remote_shell>
-Specify a shell to communicate with remote targets. The default value is 'ssh'.
-It is the system admin's duty to guarantee that the specified 'remote_shell'
-works well among targets without password authentication.
+.RE
+
 .SS Debug
 .TP
 .BI debug_daemon
@@ -705,7 +529,7 @@ lctl > quit
 .SH AVAILABILITY
 .B lctl
 is part of the
-.BR Lustre (7)
+.BR lustre (7)
 filesystem package.
 .SH SEE ALSO
 .BR lustre (7),
@@ -715,6 +539,14 @@ filesystem package.
 .BR lctl-lfsck-start (8),
 .BR lctl-lfsck-stop (8),
 .BR lctl-lfsck-query (8),
+.BR lctl-lcfg (8),
+.BR lctl-barrier (8),
+.BR lctl-snapshot-create (8),
+.BR lctl-snapshot-destroy (8),
+.BR lctl-snapshot-modify (8),
+.BR lctl-snapshot-list (8),
+.BR lctl-snapshot-mount (8),
+.BR lctl-snapshot-umount (8),
 .BR lctl-llog_catlist (8),
 .BR lctl-llog_info (8),
 .BR lctl-llog_print (8),

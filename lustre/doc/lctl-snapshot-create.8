@@ -1,0 +1,77 @@
+.TH lctl-snapshot-create 8 "2017 Apr 13" Lustre "create Lustre snapshot"
+.SH SYNOPSIS
+.TP
+.B lctl snapshot_create \fR[-b | --barrier [on | off]] [-c | --comment comment]
+              {-F | --fsname fsname} [-h | --help] {-n | --name ssname}
+              [-r | --rsh remote_shell] [-t | --timeout timeout]
+.br
+.SH DESCRIPTION
+Create snapshot with the given name. The tool loads system configuration from
+the file
+.B /etc/ldev.conf
+as described in the
+.BR lctl (8)
+.B SNAPSHOT
+section. Then, the snapshot pieces are created on every Lustre target
+(MGT/MDT/OST).
+.SH OPTIONS
+.TP
+.BR -b ", " --barrier " [" on | off ]
+Set write barrier on all MDTs before creating the snapshot. The default value is
+.BR on .
+If you are confident about the system consistency, or not require the full
+consistency and want to avoid blocking applications when creating the snapshot,
+then you can specify barrier
+.BR off .
+That will save your time of creating the snapshot. If the barrier is
+.IR on ,
+then the timeout of the barrier can be specified via
+.B -t
+option as described in the subsequent section.
+.TP
+.BR  -c ", " --comment " "\fIcomment
+Add an optional comment to the
+.B snapshot_create
+request. The comment can include anything to describe what the snapshot is for
+or for a reminder. The comment can be shown via
+.BR snapshot_list .
+.TP
+.BR  -F ", " --fsname " "\fIfsname
+The filesystem name.
+.TP
+.BR  -h ", " --help
+For help information.
+.TP
+.BR  -n ", " --name " "\fIssname
+The snapshot's name must be specified. It follows the general ZFS snapshot name
+rules, such as the max length is 256 bytes, cannot conflict with the reserved
+names, and so on.
+.TP
+.BR  -r ", " --rsh " "\fIremote_shell
+Specify a shell to communicate with remote targets. The default value is
+.BR ssh .
+It is the system admin's duty to guarantee that the specified
+.I remote_shell
+works well among targets without password authentication.
+.TP
+.BR  -t ", " --timeout " "\fItimeout
+If write barrier is
+.BR on ,
+then the
+.I timeout
+specifies the write barrier's lifetime in second. The default vaule is 30.
+
+.SH AVAILABILITY
+.B lctl-snapshot-create
+is part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-lcfg (8),
+.BR lctl-barrier (8),
+.BR lctl-snapshot-destroy (8),
+.BR lctl-snapshot-modify (8),
+.BR lctl-snapshot-list (8),
+.BR lctl-snapshot-mount (8),
+.BR lctl-snapshot-umount (8)

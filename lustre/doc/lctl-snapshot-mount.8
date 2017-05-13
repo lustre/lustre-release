@@ -1,0 +1,47 @@
+.TH lctl-snapshot-mount 8 "2017 Apr 13" Lustre "mount Lustre snapshot"
+.SH SYNOPSIS
+.TP
+.B lctl snapshot_mount \fR{-F | --fsname fsname} [-h | --help]
+             {-n | --name ssname} [-r | --rsh remote_shell]
+.br
+.SH DESCRIPTION
+Mount the specified snapshot on the servers. Since it is a read-only mode
+Lustre filesystem, if the snapshot is mounted, then it cannot be renamed.
+It is the user's duty to mount client (must as read only mode with "-o ro")
+to the snapshot when needed.
+.B NOTE:
+the snapshot has its own fsname that is different from the original
+filesystem fsname, it can be queried via
+.BR snapshot_list .
+.SH OPTIONS
+.TP
+.BR  -F ", " --fsname " "\fIfsname
+The filesystem name.
+.TP
+.BR  -h ", " --help
+For help information.
+.TP
+.BR  -n ", " --name " "\fIssname
+The snapshot (to be mounted) name must be specified.
+.TP
+.BR  -r ", " --rsh " "\fIremote_shell
+Specify a shell to communicate with remote targets. The default value is
+.BR ssh .
+It is the system admin's duty to guarantee that the specified
+.I remote_shell
+works well among targets without password authentication.
+
+.SH AVAILABILITY
+.B lctl-snapshot-mount
+is part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-lcfg (8),
+.BR lctl-barrier (8),
+.BR lctl-snapshot-create (8),
+.BR lctl-snapshot-destroy (8),
+.BR lctl-snapshot-modify (8),
+.BR lctl-snapshot-list (8),
+.BR lctl-snapshot-umount (8)

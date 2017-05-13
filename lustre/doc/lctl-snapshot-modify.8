@@ -1,0 +1,58 @@
+.TH lctl-snapshot-modify 8 "2017 Apr 13" Lustre "modify Lustre snapshot"
+.SH SYNOPSIS
+.TP
+.B lctl snapshot_modify \fR[-c | --comment comment] {-F | --fsname fsname}
+              [-h | --help] {-n | --name ssname} [-N | --new new_ssname]
+              [-r | --rsh remote_shell]
+.br
+.SH DESCRIPTION
+Modify the specified snapshot. The tool loads system configuration from
+the file
+.B /etc/ldev.conf
+as described in the
+.BR lctl (8)
+.B SNAPSHOT
+section. Then, the snapshot pieces are modified on every Lustre target
+(MGT/MDT/OST).
+.SH OPTIONS
+.TP
+.BR  -c ", " --comment " "\fIcomment
+Add comment (if it had not been specified with
+.BR snapshot_create )
+or change the comment for the given snapshot.
+.TP
+.BR  -F ", " --fsname " "\fIfsname
+The filesystem name.
+.TP
+.BR  -h ", " --help
+For help information.
+.TP
+.BR  -n ", " --name " "\fIssname
+The snapshot (to be modified) name must be specified.
+.TP
+.BR  -N ", " --new " "\fInew_ssname
+Rename the snapshot to the new name. It follows the general ZFS snapshot name
+rules, such as the max length is 256 bytes, cannot conflict with the reserved
+names, and so on.
+.TP
+.BR  -r ", " --rsh " "\fIremote_shell
+Specify a shell to communicate with remote targets. The default value is
+.BR ssh .
+It is the system admin's duty to guarantee that the specified
+.I remote_shell
+works well among targets without password authentication.
+
+.SH AVAILABILITY
+.B lctl-snapshot-modify
+is part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-lcfg (8),
+.BR lctl-barrier (8),
+.BR lctl-snapshot-create (8),
+.BR lctl-snapshot-destroy (8),
+.BR lctl-snapshot-list (8),
+.BR lctl-snapshot-mount (8),
+.BR lctl-snapshot-umount (8)

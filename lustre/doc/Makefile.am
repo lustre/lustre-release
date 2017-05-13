@@ -134,6 +134,14 @@ SERVER_MANFILES =				\
 	lctl-nodemap-del-idmap.8		\
 	lctl-nodemap-del-range.8		\
 	lctl-nodemap-modify.8			\
+	lctl-lcfg.8				\
+	lctl-barrier.8				\
+	lctl-snapshot-create.8			\
+	lctl-snapshot-destroy.8			\
+	lctl-snapshot-modify.8			\
+	lctl-snapshot-list.8			\
+	lctl-snapshot-mount.8			\
+	lctl-snapshot-umount.8			\
 	lshowmount.8				\
 	mkfs.lustre.8				\
 	tunefs.lustre.8

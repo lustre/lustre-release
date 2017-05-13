@@ -1,0 +1,79 @@
+.TH lctl-barrier 8 "2017 Apr 13" Lustre "Lustre write barrier on all MDTs"
+.SH SYNOPSIS
+.br
+.B lctl barrier_freeze \fR{fsname} [timeout]
+.br
+.br
+.B lctl barrier_thaw \fR{fsname}
+.br
+.br
+.B lctl barrier_stat \fR{fsname}
+.br
+.br
+.B lctl barrier_rescan \fR{fsname} [timeout]
+.br
+.SH DESCRIPTION
+.TP
+.B barrier_freeze \fR{fsname} [timeout]
+Set write barrier on all MDTs. The command will not return until the
+barrier is set (frozen) or failed. With the write barrier set, any
+subsequent metadata modification will be blocked until the barrier is
+thawed or expired. The barrier lifetime is started when triggering
+freeze and will be terminated when barrier thawed. To avoid the system
+being frozen for very long time if miss/fail to call barrier_thaw, you
+can specify its lifetime via the
+.I timeout
+parameter in seconds, the default value is 30 (seconds). If the barrier
+is not thawed before that, it will be expired automatically. The command
+can only succeed when all registered MDTs are available. If some MDT is
+registered but goes offline, then the freeze command will fail. To check
+and update current status of MDTs, see the command
+.B barrier_rescan
+in subsequent section.
+.TP
+.B barrier_thaw \fR{fsname}
+Reset write barrier on all MDTs. After the write barrier thawed, all the
+blocked metadata modifications (because of the former
+.B barrier_freeze
+command) will be handled normally.
+.TP
+.B barrier_stat \fR{fsname}
+.br
+Query the write barrier status, the possible status and related meanings are
+as following:
+.br
+  'init': has never set barrier on the system
+  'freezing_p1': in the first stage of setting the write barrier
+  'freezing_p2': in the second stage of setting the write barrier
+  'frozen': the write barrier has been set successfully
+  'thawing': in thawing the write barrier
+  'thawed': the write barrier has been thawed
+  'failed': fail to set write barrier
+  'expired': the write barrier is expired
+  'rescan': in scanning the MDTs status, see the command barrier_rescan
+  'unknown': other cases
+.br
+If the barrier is in 'freezing_p1', 'freezing_p2' or 'frozen' status, then
+the lifetime remaining will be returned also.
+.TP
+.B barrier_rescan \fR{fsname} [timeout]
+.br
+Scan the system to check which MDTs are active. The status of the MDTs is
+required because the
+.B barrier_freeze
+will be unsuccessful if any of the MDTs are permenantly offline. During
+the rescan, the MDT status is updated. If an MDT does not respond the
+.B barrier_rescan
+within the given
+.I timeout
+seconds (where the default value is 30 seconds), then it will be marked
+as unavailable or inactive.
+
+.SH AVAILABILITY
+.B lctl-barrier
+is part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-snapshot-create (8)

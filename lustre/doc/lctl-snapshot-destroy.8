@@ -1,0 +1,54 @@
+.TH lctl-snapshot-destroy 8 "2017 Apr 13" Lustre "destroy Lustre snapshot"
+.SH SYNOPSIS
+.TP
+.B lctl snapshot_destroy \fR[-f | --force] {-F | --fsname fsname} [-h | --help]
+               {-n | --name ssname} [-r | --rsh remote_shell]
+.br
+.SH DESCRIPTION
+Destroy the specified snapshot. The tool loads system configuration from
+the file
+.B /etc/ldev.conf
+as described in the
+.BR lctl (8)
+.B SNAPSHOT
+section. Then,  the snapshot pieces are destroyed on every Lustre target
+(MGT/MDT/OST).
+.SH OPTIONS
+.TP
+.BR -f ", " --force
+Destroy the specified snapshot by force. If the snapshot is mounted (see
+.BR snapshot_mount ),
+it will be umounted firstly, then destroyed. Even if some pieces of the
+snapshot are lost or broken for some reason(s), the remained parts of the
+snapshot still can be destroyed with this option specified.
+.TP
+.BR  -F ", " --fsname " "\fIfsname
+The filesystem name.
+.TP
+.BR  -h ", " --help
+For help information.
+.TP
+.BR  -n ", " --name " "\fIssname
+The snapshot (to be destroyed) name must be specified.
+.TP
+.BR  -r ", " --rsh " "\fIremote_shell
+Specify a shell to communicate with remote targets. The default value is
+.BR ssh .
+It is the system admin's duty to guarantee that the specified
+.I remote_shell
+works well among targets without password authentication.
+
+.SH AVAILABILITY
+.B lctl-snapshot-destroy
+is part of the
+.BR lustre (7)
+filesystem package.
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-lcfg (8),
+.BR lctl-barrier (8),
+.BR lctl-snapshot-create (8),
+.BR lctl-snapshot-modify (8),
+.BR lctl-snapshot-list (8),
+.BR lctl-snapshot-mount (8),
+.BR lctl-snapshot-umount (8)
