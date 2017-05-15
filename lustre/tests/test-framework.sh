@@ -4870,17 +4870,19 @@ wait_for_function () {
 }
 
 check_network() {
-    local host=$1
-    local max=$2
-    local sleep=${3:-5}
+	local host=$1
+	local max=$2
+	local sleep=${3:-5}
 
-    echo `date +"%H:%M:%S (%s)"` waiting for $host network $max secs ...
-    if ! wait_for_function --quiet "ping -c 1 -w 3 $host" $max $sleep ; then
-        echo "Network not available!"
-        exit 1
-    fi
+	[ "$host" = "$HOSTNAME" ] && return 0
 
-    echo `date +"%H:%M:%S (%s)"` network interface is UP
+	echo "$(date +'%H:%M:%S (%s)') waiting for $host network $max secs ..."
+	if ! wait_for_function --quiet "ping -c 1 -w 3 $host" $max $sleep ; then
+		echo "Network not available!"
+		exit 1
+	fi
+
+	echo "$(date +'%H:%M:%S (%s)') network interface is UP"
 }
 
 no_dsh() {
@@ -6357,10 +6359,7 @@ get_mdtosc_proc_path() {
 	local mdt_label=$(convert_facet2label $mds_facet)
 	local mdt_index=$(echo $mdt_label | sed -e 's/^.*-//')
 
-	if [ $(lustre_version_code $mds_facet) -le $(version_code 1.8.0) ] ||
-	   mds_on_old_device $mds_facet; then
-		echo "${ost_label}-osc"
-	elif [[ $ost_label = *OST* ]]; then
+	if [[ $ost_label = *OST* ]]; then
 		echo "${ost_label}-osc-${mdt_index}"
 	else
 		echo "${ost_label}-osp-${mdt_index}"
