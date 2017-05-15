@@ -3135,6 +3135,17 @@ tbf_rule_operate()
 		error "failed to run operate '$*' on TBF rules"
 }
 
+cleanup_tbf_verify()
+{
+	local rc=0
+	trap 0
+	echo "cleanup_tbf $DIR/$tdir"
+	rm -rf $DIR/$tdir
+	rc=$?
+	wait_delete_completed
+	return $rc
+}
+
 tbf_verify() {
 	local dir=$DIR/$tdir
 	local client1=${CLIENT1:-$(hostname)}
@@ -3144,29 +3155,32 @@ tbf_verify() {
 	$LFS setstripe -c 1 $dir || error "setstripe to $dir failed"
 	chmod 777 $dir
 
+	trap cleanup_tbf_verify EXIT
 	echo "Limited write rate: $1, read rate: $2"
 	echo "Verify the write rate is under TBF control"
-	local rate=$(do_node $client1 $myRUNAS dd if=/dev/zero of=$dir/tbf \
-		bs=1M count=100 oflag=direct 2>&1 | awk '/bytes/ {print $8}')
-	echo "Write speed is $rate"
+	local runtime=$(do_node $client1 $myRUNAS dd if=/dev/zero of=$dir/tbf \
+		bs=1M count=100 oflag=direct 2>&1 | awk '/bytes/ {print $6}')
+	local rate=$(bc <<< "scale=6; 100 / $runtime")
+	echo "Write runtime is $runtime s, speed is $rate IOPS"
 
 	# verify the write rate does not exceed 110% of TBF limited rate
 	[ $(bc <<< "$rate < 1.1 * $1") -eq 1 ] ||
-		error_ignore LU-9140 "The write rate ($rate) exceeds 110% of preset rate ($1)"
+		error "The write rate ($rate) exceeds 110% of preset rate ($1)"
 
 	cancel_lru_locks osc
 
 	echo "Verify the read rate is under TBF control"
-	rate=$(do_node $client1 $myRUNAS dd if=$dir/tbf of=/dev/null \
-		bs=1M count=100 iflag=direct 2>&1 | awk '/bytes/ {print $8}')
-	echo "Read speed is $rate"
+	runtime=$(do_node $client1 $myRUNAS dd if=$dir/tbf of=/dev/null \
+		bs=1M count=100 iflag=direct 2>&1 | awk '/bytes/ {print $6}')
+	rate=$(bc <<< "scale=6; 100 / $runtime")
+	echo "Read runtime is $runtime s, speed is $rate IOPS"
 
 	# verify the read rate does not exceed 110% of TBF limited rate
 	[ $(bc <<< "$rate < 1.1 * $2") -eq 1 ] ||
-		error_ignore LU-9140 "The read rate ($rate) exceeds 110% of preset rate ($2)"
+		error "The read rate ($rate) exceeds 110% of preset rate ($2)"
 
 	cancel_lru_locks osc
-	rm -rf $dir || error "rm -rf $dir failed"
+	cleanup_tbf_verify || error "rm -rf $dir failed"
 }
 
 test_77e() {
