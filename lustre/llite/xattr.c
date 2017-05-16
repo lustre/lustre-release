@@ -204,63 +204,85 @@ static int get_hsm_state(struct inode *inode, __u32 *hus_states)
 	OBD_FREE_PTR(hus);
 	return rc;
 }
+
+static int ll_adjust_lum(struct inode *inode, struct lov_user_md *lump)
+{
+	struct lov_comp_md_v1 *comp_v1 = (struct lov_comp_md_v1 *)lump;
+	struct lov_user_md *v1 = lump;
+	bool release_checked = false;
+	bool need_clear_release = false;
+	__u16 entry_count = 1;
+	bool is_composite = false;
+	int rc = 0;
+	int i;
+
+	if (lump == NULL)
+		return 0;
+
+	if (lump->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
+		entry_count = comp_v1->lcm_entry_count;
+		is_composite = true;
+	}
+
+	for (i = 0; i < entry_count; i++) {
+		if (lump->lmm_magic == LOV_USER_MAGIC_COMP_V1)
+			v1 = (struct lov_user_md *)((char *)comp_v1 +
+					comp_v1->lcm_entries[i].lcme_offset);
+
+		/* Attributes that are saved via getxattr will always
+		 * have the stripe_offset as 0.  Instead, the MDS
+		 * should be allowed to pick the starting OST index.
+		 * b=17846 */
+		if (!is_composite && v1->lmm_stripe_offset == 0)
+			v1->lmm_stripe_offset = -1;
+
+		/* Avoid anyone directly setting the RELEASED flag. */
+		if (v1->lmm_pattern & LOV_PATTERN_F_RELEASED) {
+			if (!release_checked) {
+				__u32 state = HS_NONE;
+				rc = get_hsm_state(inode, &state);
+				if (rc)
+					return rc;
+				if (!(state & HS_ARCHIVED))
+					need_clear_release = true;
+				release_checked = true;
+			}
+			if (need_clear_release)
+				v1->lmm_pattern ^= LOV_PATTERN_F_RELEASED;
+		}
+	}
+
+	return rc;
+}
+
 int ll_setstripe_ea(struct dentry *dentry, struct lov_user_md *lump,
 		    size_t size)
 {
 	struct inode *inode = dentry->d_inode;
 	int rc = 0;
-	bool return_err = false;
 
-	if (lump != NULL && lump->lmm_magic == LOV_USER_MAGIC_COMP_V1) {
-		return_err = true;
-		goto setstripe;
-	}
+	rc = ll_adjust_lum(inode, lump);
+	if (rc)
+		return rc;
 
-	/* Attributes that are saved via getxattr will always have
-	 * the stripe_offset as 0.  Instead, the MDS should be
-	 * allowed to pick the starting OST index.   b=17846 */
-	if (lump != NULL && lump->lmm_stripe_offset == 0)
-		lump->lmm_stripe_offset = -1;
-	/* Avoid anyone directly setting the RELEASED flag. */
-	if (lump != NULL &&
-		(lump->lmm_pattern & LOV_PATTERN_F_RELEASED)) {
-		/* Only if we have a released flag check if the file
-		* was indeed archived. */
-		__u32 state = HS_NONE;
-		rc = get_hsm_state(inode, &state);
-		if (rc != 0)
-			RETURN(rc);
-		if (!(state & HS_ARCHIVED)) {
-			CDEBUG(D_VFSTRACE,
-				"hus_states state = %x, pattern = %x\n",
-				state, lump->lmm_pattern);
-			/* Here the state is: real file is not
-			 * archived but user is requesting to set
-			 * the RELEASED flag so we mask off the
-			 * released flag from the request */
-			lump->lmm_pattern ^= LOV_PATTERN_F_RELEASED;
-		}
-	}
-
-setstripe:
 	if (lump != NULL && S_ISREG(inode->i_mode)) {
 		__u64 it_flags = FMODE_WRITE;
 		int lum_size;
 
 		lum_size = ll_lov_user_md_size(lump);
-		/**
-		 * b=10667: ignore error.
-		 * Silently eat error on setting strusted.lov attribute for
-		 * SuSE 9, it added default option to copy all attributes in
-		 * 'cp' command.
-		 */
 		if (lum_size < 0 || size < lum_size)
-			return return_err ? -ERANGE : 0;
+			return -ERANGE;
 
 		rc = ll_lov_setstripe_ea_info(inode, dentry, it_flags, lump,
 					      lum_size);
-		/* b=10667 */
-		if (!return_err)
+		/**
+		 * b=10667: ignore -EEXIST.
+		 * Silently eat error on setting trusted.lov/lustre.lov
+		 * attribute for SuSE 9, it added default option to copy
+		 * all attributes in 'cp' command. rsync, tar --xattrs
+		 * also will try to set LOVEA for existing files.
+		 */
+		if (rc == -EEXIST)
 			rc = 0;
 	} else if (S_ISDIR(inode->i_mode)) {
 		rc = ll_dir_setstripe(inode, lump, 0);

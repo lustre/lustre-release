@@ -7041,13 +7041,15 @@ test_102a() {
 
 	setfattr -x user.author1 $testfile ||
 		error "$testfile error deleting user.author1"
-	getfattr -d -m user $testfile 2> /dev/null | grep "user.author1" &&
-		error "$testfile did not delete trusted.name1 xattr"
-
-	# b10667: setting lustre special xattr be silently discarded
 	echo "set lustre special xattr ..."
-	setfattr -n "trusted.lov" -v "invalid value" $testfile ||
-		error "$testfile allowed setting trusted.lov"
+	$LFS setstripe -c1 $testfile
+	local lovea=$(getfattr -n "trusted.lov" -e hex $testfile |
+		awk -F "=" '/trusted.lov/ { print $2 }' )
+	setfattr -n "trusted.lov" -v $lovea $testfile ||
+		error "$testfile doesn't ignore setting trusted.lov again"
+	setfattr -n "trusted.lov" -v "invalid_value" $testfile &&
+		error "$testfile allow setting invalid trusted.lov"
+	rm -f $testfile
 }
 run_test 102a "user xattr test =================================="
 
@@ -7362,8 +7364,13 @@ test_102n() { # LU-4101 mdt: protect internal xattrs
 		# Try to set a garbage xattr.
 		value=0sVGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIGl0c2VsZi4=
 
-		setfattr --name=trusted.$name --value="$value" $file1 ||
-			error "setxattr 'trusted.$name' failed"
+		if [[ x$name == "xlov" ]]; then
+			setfattr --name=trusted.lov --value="$value" $file1 &&
+			error "setxattr invalid 'trusted.lov' success"
+		else
+			setfattr --name=trusted.$name --value="$value" $file1 ||
+				error "setxattr invalid 'trusted.$name' failed"
+		fi
 
 		# Try to remove the xattr from $file1. We don't care if this
 		# appears to succeed or fail, we just don't want there to be
