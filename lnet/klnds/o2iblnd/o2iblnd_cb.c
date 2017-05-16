@@ -569,6 +569,7 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 	kib_fmr_poolset_t	*fps;
 	int			cpt;
 	int			rc;
+	bool			is_fastreg = 0;
 
 	LASSERT(tx->tx_pool != NULL);
 	LASSERT(tx->tx_pool->tpo_pool.po_owner != NULL);
@@ -577,7 +578,7 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 	cpt = tx->tx_pool->tpo_pool.po_owner->ps_cpt;
 
 	fps = net->ibn_fmr_ps[cpt];
-	rc = kiblnd_fmr_pool_map(fps, tx, rd, nob, 0, &tx->fmr);
+	rc = kiblnd_fmr_pool_map(fps, tx, rd, nob, 0, &tx->fmr, &is_fastreg);
 	if (rc != 0) {
 		CERROR("Can't map %u pages: %d\n", nob, rc);
 		return rc;
@@ -586,7 +587,8 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 	/* If rd is not tx_rd, it's going to get sent to a peer_ni, who will need
 	 * the rkey */
 	rd->rd_key = tx->fmr.fmr_key;
-	rd->rd_frags[0].rf_addr &= ~hdev->ibh_page_mask;
+	if (!is_fastreg)
+		rd->rd_frags[0].rf_addr &= ~hdev->ibh_page_mask;
 	rd->rd_frags[0].rf_nob   = nob;
 	rd->rd_nfrags = 1;
 
