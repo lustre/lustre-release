@@ -1351,8 +1351,8 @@ kiblnd_reconnect_peer(kib_peer_ni_t *peer_ni)
 		goto no_reconnect;
 	}
 
-	LASSERT(!peer_ni->ibp_accepting && !peer_ni->ibp_connecting &&
-		list_empty(&peer_ni->ibp_conns));
+	if (peer_ni->ibp_accepting)
+		CNETERR("Detecting race between accepting and reconnecting\n");
 	peer_ni->ibp_reconnecting--;
 
 	if (!kiblnd_peer_active(peer_ni)) {
