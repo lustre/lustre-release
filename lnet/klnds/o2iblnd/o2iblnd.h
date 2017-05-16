@@ -1187,7 +1187,7 @@ struct list_head *kiblnd_pool_alloc_node(kib_poolset_t *ps);
 
 int  kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, kib_tx_t *tx,
 			 kib_rdma_desc_t *rd, __u32 nob, __u64 iov,
-			 kib_fmr_t *fmr);
+			 kib_fmr_t *fmr, bool *is_fastreg);
 void kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status);
 
 int  kiblnd_tunables_setup(struct lnet_ni *ni);

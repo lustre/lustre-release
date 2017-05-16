@@ -1848,7 +1848,7 @@ kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status)
 
 int
 kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, kib_tx_t *tx, kib_rdma_desc_t *rd,
-		    __u32 nob, __u64 iov, kib_fmr_t *fmr)
+		    __u32 nob, __u64 iov, kib_fmr_t *fmr, bool *is_fastreg)
 {
 	kib_fmr_pool_t *fpo;
 	__u64 *pages = tx->tx_pages;
@@ -1868,6 +1868,7 @@ again:
 		if (fpo->fpo_is_fmr) {
 			struct ib_pool_fmr *pfmr;
 
+			*is_fastreg = 0;
 			spin_unlock(&fps->fps_lock);
 
 			if (!tx_pages_mapped) {
@@ -1887,6 +1888,7 @@ again:
 			}
 			rc = PTR_ERR(pfmr);
 		} else {
+			*is_fastreg = 1;
 			if (!list_empty(&fpo->fast_reg.fpo_pool_list)) {
 				struct kib_fast_reg_descriptor *frd;
 #ifdef HAVE_IB_MAP_MR_SG
@@ -1938,8 +1940,6 @@ again:
 					       "elements\n", n, tx->tx_nfrags);
 					return n < 0 ? n : -EINVAL;
 				}
-
-				mr->iova = iov;
 
 				wr = &frd->frd_fastreg_wr;
 				memset(wr, 0, sizeof(*wr));
