@@ -1881,7 +1881,7 @@ check_seq_oid()
 		fi
 		local obj_file="O/$seq/d$((oid %32))/$oid_hex"
 
-		local ff
+		local ff=""
 		#
 		# Don't unmount/remount the OSTs if we don't need to do that.
 		# LU-2577 changes filter_fid to be smaller, so debugfs needs
