@@ -1962,6 +1962,11 @@ int llapi_layout_file_comp_del(const char *path, uint32_t id, uint32_t flags)
 
 	llapi_layout_comp_extent_set(layout, 0, LUSTRE_EOF);
 	comp = __llapi_layout_cur_comp(layout);
+	if (comp == NULL) {
+		llapi_layout_free(layout);
+		return -1;
+	}
+
 	comp->llc_id = id;
 	comp->llc_flags = flags;
 
