@@ -213,6 +213,8 @@ cleanup_network () {
 
 # do cleanup and exit.
 cleanup () {
+	trap 0
+
 	local exit_status=$1
 	local host
 
