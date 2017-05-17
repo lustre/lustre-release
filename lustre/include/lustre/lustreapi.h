@@ -46,6 +46,10 @@
 #define LL_MAXQUOTAS 3
 #endif
 
+#ifndef ARRAY_SIZE
+#define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
+#endif
+
 extern bool liblustreapi_initialized;
 
 
@@ -737,6 +741,21 @@ int llapi_layout_comp_extent_get(const struct llapi_layout *layout,
  */
 int llapi_layout_comp_extent_set(struct llapi_layout *layout,
 				 uint64_t start, uint64_t end);
+
+/* PFL component flags table */
+static const struct comp_flag_name {
+	enum lov_comp_md_entry_flags cfn_flag;
+	const char *cfn_name;
+} comp_flags_table[] = {
+	{ LCME_FL_INIT,		"init" },
+	/* For now, only "init" is supported
+	{ LCME_FL_PRIMARY,	"primary" },
+	{ LCME_FL_STALE,	"stale" },
+	{ LCME_FL_OFFLINE,	"offline" },
+	{ LCME_FL_PREFERRED,	"preferred" }
+	*/
+};
+
 /**
  * Gets the attribute flags of the current component.
  */

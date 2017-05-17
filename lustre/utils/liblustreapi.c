@@ -2618,6 +2618,32 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 		llapi_printf(LLAPI_MSG_NORMAL, "components:\n");
 }
 
+static void comp_flags2str(__u32 comp_flags)
+{
+	bool found = false;
+	int i = 0;
+
+	if (!comp_flags) {
+		llapi_printf(LLAPI_MSG_NORMAL, "0");
+		return;
+	}
+	for (i = 0; i < ARRAY_SIZE(comp_flags_table); i++) {
+		if (comp_flags & comp_flags_table[i].cfn_flag) {
+			if (found)
+				llapi_printf(LLAPI_MSG_NORMAL, ",");
+			llapi_printf(LLAPI_MSG_NORMAL, "%s",
+				     comp_flags_table[i].cfn_name);
+			comp_flags &= ~comp_flags_table[i].cfn_flag;
+			found = true;
+		}
+	}
+	if (comp_flags) {
+		if (found)
+			llapi_printf(LLAPI_MSG_NORMAL, ",");
+		llapi_printf(LLAPI_MSG_NORMAL, "%#x", comp_flags);
+	}
+}
+
 static void lov_dump_comp_v1_entry(struct find_param *param,
 				   enum lov_dump_flags flags, int index)
 {
@@ -2651,7 +2677,7 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 		if (verbose & ~VERBOSE_COMP_FLAGS)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "%4slcme_flags:          ", " ");
-		llapi_printf(LLAPI_MSG_NORMAL, "%#x", entry->lcme_flags);
+		comp_flags2str(entry->lcme_flags);
 		separator = "\n";
 	}
 

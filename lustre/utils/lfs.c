@@ -1254,25 +1254,37 @@ static inline void comp_flags_clear_neg(__u32 *flags)
 	*flags &= ~LCME_FL_NEG;
 }
 
-static int comp_name2flags(__u32 *flags, char *name)
+static int comp_str2flags(__u32 *flags, char *string)
 {
-	char *ptr;
+	char *name;
 	__u32 neg_flags = 0;
 
-	if (name == NULL)
+	if (string == NULL)
 		return -EINVAL;
 
 	*flags = 0;
-	for (ptr = name; ; ptr = NULL) {
-		char *flg = strtok(ptr, ",");
-		if (flg == NULL)
-			break;
-		if (strcmp(flg, "init") == 0)
-			*flags |= LCME_FL_INIT;
-		else if (strcmp(flg, "^init") == 0)
-			neg_flags |= LCME_FL_INIT;
-		else
+	for (name = strtok(string, ","); name; name = strtok(NULL, ",")) {
+		bool found = false;
+		int i;
+
+		for (i = 0; i < ARRAY_SIZE(comp_flags_table); i++) {
+			__u32 comp_flag = comp_flags_table[i].cfn_flag;
+			const char *comp_name = comp_flags_table[i].cfn_name;
+
+			if (strcmp(name, comp_name) == 0) {
+				*flags |= comp_flag;
+				found = true;
+			} else if (strncmp(name, "^", 1) == 0 &&
+				   strcmp(name + 1, comp_name) == 0) {
+				neg_flags |= comp_flag;
+				found = true;
+			}
+		}
+		if (!found) {
+			llapi_printf(LLAPI_MSG_ERROR, "Component flag "
+				     "'%s' is not supported.\n", name);
 			return -EINVAL;
+		}
 	}
 
 	if (*flags == 0 && neg_flags == 0)
@@ -1409,7 +1421,7 @@ static int lfs_setstripe(int argc, char **argv)
 			comp_del = 1;
 			break;
 		case LFS_COMP_FLAGS_OPT:
-			result = comp_name2flags(&lsa.lsa_comp_flags, optarg);
+			result = comp_str2flags(&lsa.lsa_comp_flags, optarg);
 			if (result != 0) {
 				fprintf(stderr, "error: %s: bad comp flags "
 					"'%s'\n", argv[0], optarg);
@@ -1999,7 +2011,7 @@ static int lfs_find(int argc, char **argv)
 			param.fp_exclude_comp_count = !!neg_opt;
 			break;
 		case LFS_COMP_FLAGS_OPT:
-			rc = comp_name2flags(&param.fp_comp_flags, optarg);
+			rc = comp_str2flags(&param.fp_comp_flags, optarg);
 			if (rc || comp_flags_is_neg(param.fp_comp_flags)) {
 				fprintf(stderr, "error: bad component flags "
 					"'%s'\n", optarg);
@@ -2453,7 +2465,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		case LFS_COMP_FLAGS_OPT:
 			if (optarg != NULL) {
 				__u32 *flags = &param->fp_comp_flags;
-				rc = comp_name2flags(flags, optarg);
+				rc = comp_str2flags(flags, optarg);
 				if (rc != 0) {
 					fprintf(stderr, "error: %s bad "
 						"component flags '%s'.\n",
