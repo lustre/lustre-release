@@ -1090,8 +1090,8 @@ do_fops_quota_test() {
 	local qused_high=$((qused_orig + quota_fuzz))
 	local qused_low=$((qused_orig - quota_fuzz))
 	local testfile=$DIR/$tdir/$tfile
-	$run_u dd if=/dev/zero of=$testfile bs=1M count=1 >& /dev/null ||
-		error "unable to write quota test file"
+	$run_u dd if=/dev/zero of=$testfile oflag=sync bs=1M count=1 \
+		>& /dev/null || error "unable to write quota test file"
 	sync; sync_all_data || true
 
 	local qused_new=$(nodemap_check_quota "$run_u")

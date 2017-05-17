@@ -3018,10 +3018,10 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	}
 	tgd->tgd_blockbits = fls(osfs->os_bsize) - 1;
 
-	if (ONE_MB_BRW_SIZE < (1U << tgd->tgd_blockbits))
+	if (DT_DEF_BRW_SIZE < (1U << tgd->tgd_blockbits))
 		m->ofd_brw_size = 1U << tgd->tgd_blockbits;
 	else
-		m->ofd_brw_size = ONE_MB_BRW_SIZE;
+		m->ofd_brw_size = DT_DEF_BRW_SIZE;
 
 	m->ofd_cksum_types_supported = cksum_types_supported_server();
 	m->ofd_precreate_batch = OFD_PRECREATE_BATCH_DEFAULT;

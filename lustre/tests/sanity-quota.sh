@@ -498,6 +498,7 @@ test_1() {
 	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) seek=$((LIMIT/2)) || true
 	# flush cache, ensure noquota flag is set on client
 	cancel_lru_locks osc
+	sync; sync_all_data || true
 	$RUNAS $DD of=$TESTFILE count=1 seek=$LIMIT &&
 		quota_error u $TSTUSR "user write success, but expect EDQUOT"
 
@@ -530,6 +531,7 @@ test_1() {
 	# this time maybe cache write, ignore it's failure
 	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) seek=$((LIMIT/2)) || true
 	cancel_lru_locks osc
+	sync; sync_all_data || true
 	$RUNAS $DD of=$TESTFILE count=10 seek=$LIMIT &&
 		quota_error g $TSTUSR "Group write success, but expect EDQUOT"
 	rm -f $TESTFILE
@@ -569,6 +571,7 @@ test_1() {
 	# this time maybe cache write, ignore it's failure
 	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) seek=$((LIMIT/2)) || true
 	cancel_lru_locks osc
+	sync; sync_all_data || true
 	$RUNAS $DD of=$TESTFILE count=10 seek=$LIMIT && quota_error p \
 		$TSTPRJID "project write success, but expect edquot"
 

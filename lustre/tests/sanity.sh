@@ -6897,8 +6897,8 @@ test_101g_brw_size_test() {
 	# calculate number of full-sized read and write RPCs
 	rpcs=($($LCTL get_param -n 'osc.*.rpc_stats' |
 		sed -n '/pages per rpc/,/^$/p' |
-		awk '/'$pages':/ { reads += $2; writes += $5 };' \
-		'END { print reads,writes }'))
+		awk '/'$pages':/ { reads += $2; writes += $6 }; \
+		END { print reads,writes }'))
 	[ ${rpcs[0]} -ne $count ] && error "${rpcs[0]} != $count read RPCs" &&
 		return 5
 	[ ${rpcs[1]} -ne $count ] && error "${rpcs[1]} != $count write RPCs" &&
@@ -6920,7 +6920,7 @@ test_101g() {
 	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.52) ]; then
 		[ $(lustre_version_code ost1) -ge $(version_code 2.9.52) ] &&
 			suffix="M"
-		if [[ $orig_mb < 16 ]]; then
+		if [[ $orig_mb -lt 16 ]]; then
 			save_lustre_params $osts "$brw_size" > $p
 			do_nodes $list $LCTL set_param -n $brw_size=16$suffix ||
 				error "set 16MB RPC size failed"
@@ -6936,7 +6936,7 @@ test_101g() {
 
 	test_101g_brw_size_test 4 || error "4MB RPC test failed"
 
-	if [[ $orig_mb < 16 ]]; then
+	if [[ $orig_mb -lt 16 ]]; then
 		restore_lustre_params < $p
 		remount_client $MOUNT || error "remount_client restore failed"
 	fi
@@ -13847,8 +13847,12 @@ test_231a()
 	# is the same across all OSCs
 	local max_pages=$($LCTL get_param -n osc.*.max_pages_per_rpc | head -n1)
 	local bulk_size=$((max_pages * 4096))
+	local brw_size=$(do_facet ost1 $LCTL get_param -n obdfilter.*.brw_size |
+				       head -n 1)
 
 	mkdir -p $DIR/$tdir
+	$LFS setstripe -S ${brw_size}M $DIR/$tdir ||
+		error "failed to set stripe with -S ${brw_size}M option"
 
 	# clear the OSC stats
 	$LCTL set_param osc.*.stats=0 &>/dev/null
