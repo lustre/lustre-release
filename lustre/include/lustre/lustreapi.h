@@ -94,10 +94,11 @@ static inline const char *llapi_msg_level2str(enum llapi_message_level level)
 
 	return levels[level];
 }
-extern void llapi_msg_set_level(int level);
+
+void llapi_msg_set_level(int level);
 int llapi_msg_get_level(void);
-extern llapi_log_callback_t llapi_error_callback_set(llapi_log_callback_t cb);
-extern llapi_log_callback_t llapi_info_callback_set(llapi_log_callback_t cb);
+llapi_log_callback_t llapi_error_callback_set(llapi_log_callback_t cb);
+llapi_log_callback_t llapi_info_callback_set(llapi_log_callback_t cb);
 
 void llapi_error(enum llapi_message_level level, int err, const char *fmt, ...)
 	__attribute__((__format__(__printf__, 3, 4)));
@@ -117,29 +118,26 @@ struct llapi_stripe_param {
 	__u32			lsp_osts[0];
 };
 
-extern int llapi_file_open_param(const char *name, int flags, mode_t mode,
-				 const struct llapi_stripe_param *param);
-extern int llapi_file_create(const char *name, unsigned long long stripe_size,
-                             int stripe_offset, int stripe_count,
-                             int stripe_pattern);
-extern int llapi_file_open(const char *name, int flags, int mode,
-                           unsigned long long stripe_size, int stripe_offset,
-                           int stripe_count, int stripe_pattern);
-extern int llapi_file_create_pool(const char *name,
-                                  unsigned long long stripe_size,
-                                  int stripe_offset, int stripe_count,
-                                  int stripe_pattern, char *pool_name);
-extern int llapi_file_open_pool(const char *name, int flags, int mode,
-                                unsigned long long stripe_size,
-                                int stripe_offset, int stripe_count,
-                                int stripe_pattern, char *pool_name);
-extern int llapi_poollist(const char *name);
-extern int llapi_get_poollist(const char *name, char **poollist, int list_size,
-                              char *buffer, int buffer_size);
-extern int llapi_get_poolmembers(const char *poolname, char **members,
-                                 int list_size, char *buffer, int buffer_size);
-extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
-extern int llapi_file_lookup(int dirfd, const char *name);
+int llapi_file_open_param(const char *name, int flags, mode_t mode,
+			  const struct llapi_stripe_param *param);
+int llapi_file_create(const char *name, unsigned long long stripe_size,
+		      int stripe_offset, int stripe_count, int stripe_pattern);
+int llapi_file_open(const char *name, int flags, int mode,
+		    unsigned long long stripe_size, int stripe_offset,
+		    int stripe_count, int stripe_pattern);
+int llapi_file_create_pool(const char *name, unsigned long long stripe_size,
+			   int stripe_offset, int stripe_count,
+			   int stripe_pattern, char *pool_name);
+int llapi_file_open_pool(const char *name, int flags, int mode,
+			 unsigned long long stripe_size, int stripe_offset,
+			 int stripe_count, int stripe_pattern, char *pool_name);
+int llapi_poollist(const char *name);
+int llapi_get_poollist(const char *name, char **poollist, int list_size,
+		       char *buffer, int buffer_size);
+int llapi_get_poolmembers(const char *poolname, char **members, int list_size,
+			  char *buffer, int buffer_size);
+int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
+int llapi_file_lookup(int dirfd, const char *name);
 
 #define VERBOSE_COUNT		   0x1
 #define VERBOSE_SIZE		   0x2
@@ -284,104 +282,99 @@ struct find_param {
 	unsigned int		 fp_hash_type;
 };
 
-extern int llapi_ostlist(char *path, struct find_param *param);
-extern int llapi_uuid_match(char *real_uuid, char *search_uuid);
-extern int llapi_getstripe(char *path, struct find_param *param);
-extern int llapi_find(char *path, struct find_param *param);
+int llapi_ostlist(char *path, struct find_param *param);
+int llapi_uuid_match(char *real_uuid, char *search_uuid);
+int llapi_getstripe(char *path, struct find_param *param);
+int llapi_find(char *path, struct find_param *param);
 
-extern int llapi_file_fget_mdtidx(int fd, int *mdtidx);
-extern int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
-					   int stripe_count, int stripe_pattern,
-					    const char *pool_name);
-extern int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
-				 int stripe_count, int stripe_pattern,
-				 const char *poolname);
+int llapi_file_fget_mdtidx(int fd, int *mdtidx);
+int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
+				     int stripe_count, int stripe_pattern,
+				     const char *pool_name);
+int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
+			  int stripe_count, int stripe_pattern,
+			  const char *poolname);
 int llapi_direntry_remove(char *dname);
 
 int llapi_obd_fstatfs(int fd, __u32 type, __u32 index,
 		      struct obd_statfs *stat_buf, struct obd_uuid *uuid_buf);
-extern int llapi_obd_statfs(char *path, __u32 type, __u32 index,
-                     struct obd_statfs *stat_buf,
-                     struct obd_uuid *uuid_buf);
-extern int llapi_ping(char *obd_type, char *obd_name);
-extern int llapi_target_check(int num_types, char **obd_types, char *dir);
-extern int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid);
-extern int llapi_file_get_lmv_uuid(const char *path, struct obd_uuid *lmv_uuid);
-extern int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
-extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
-extern int llapi_lmv_get_uuids(int fd, struct obd_uuid *uuidp, int *mdt_count);
-extern int llapi_is_lustre_mnttype(const char *type);
-extern int llapi_search_ost(char *fsname, char *poolname, char *ostname);
-extern int llapi_get_obd_count(char *mnt, int *count, int is_mdt);
-extern int llapi_parse_size(const char *optarg, unsigned long long *size,
-			    unsigned long long *size_units, int bytes_spec);
-extern int llapi_search_mounts(const char *pathname, int index,
-                               char *mntdir, char *fsname);
-extern int llapi_search_fsname(const char *pathname, char *fsname);
-extern int llapi_getname(const char *path, char *buf, size_t size);
-extern int llapi_search_fileset(const char *pathname, char *fileset);
+int llapi_obd_statfs(char *path, __u32 type, __u32 index,
+		     struct obd_statfs *stat_buf, struct obd_uuid *uuid_buf);
+int llapi_ping(char *obd_type, char *obd_name);
+int llapi_target_check(int num_types, char **obd_types, char *dir);
+int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid);
+int llapi_file_get_lmv_uuid(const char *path, struct obd_uuid *lmv_uuid);
+int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
+int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
+int llapi_lmv_get_uuids(int fd, struct obd_uuid *uuidp, int *mdt_count);
+int llapi_is_lustre_mnttype(const char *type);
+int llapi_search_ost(char *fsname, char *poolname, char *ostname);
+int llapi_get_obd_count(char *mnt, int *count, int is_mdt);
+int llapi_parse_size(const char *optarg, unsigned long long *size,
+		     unsigned long long *size_units, int bytes_spec);
+int llapi_search_mounts(const char *pathname, int index, char *mntdir,
+			char *fsname);
+int llapi_search_fsname(const char *pathname, char *fsname);
+int llapi_getname(const char *path, char *buf, size_t size);
+int llapi_search_fileset(const char *pathname, char *fileset);
 
-extern int llapi_search_rootpath(char *pathname, const char *fsname);
-extern int llapi_nodemap_exists(const char *name);
-extern int llapi_migrate_mdt(char *path, struct find_param *param);
-extern int llapi_mv(char *path, struct find_param *param);
+int llapi_search_rootpath(char *pathname, const char *fsname);
+int llapi_nodemap_exists(const char *name);
+int llapi_migrate_mdt(char *path, struct find_param *param);
+int llapi_mv(char *path, struct find_param *param);
 
 struct mntent;
 #define HAVE_LLAPI_IS_LUSTRE_MNT
-extern int llapi_is_lustre_mnt(struct mntent *mnt);
-extern int llapi_quotactl(char *mnt, struct if_quotactl *qctl);
-extern int llapi_target_iterate(int type_num, char **obd_type, void *args,
-				llapi_cb_t cb);
-extern int llapi_get_connect_flags(const char *mnt, __u64 *flags);
-extern int llapi_cp(int argc, char *argv[]);
-extern int llapi_ls(int argc, char *argv[]);
-extern int llapi_fid2path(const char *device, const char *fidstr, char *path,
-			  int pathlen, long long *recno, int *linkno);
-extern int llapi_path2fid(const char *path, lustre_fid *fid);
-extern int llapi_get_mdt_index_by_fid(int fd, const lustre_fid *fid,
-				      int *mdt_index);
-extern int llapi_fd2fid(const int fd, lustre_fid *fid);
+int llapi_is_lustre_mnt(struct mntent *mnt);
+int llapi_quotactl(char *mnt, struct if_quotactl *qctl);
+int llapi_target_iterate(int type_num, char **obd_type, void *args,
+			 llapi_cb_t cb);
+int llapi_get_connect_flags(const char *mnt, __u64 *flags);
+int llapi_cp(int argc, char *argv[]);
+int llapi_ls(int argc, char *argv[]);
+int llapi_fid2path(const char *device, const char *fidstr, char *path,
+		   int pathlen, long long *recno, int *linkno);
+int llapi_path2fid(const char *path, lustre_fid *fid);
+int llapi_get_mdt_index_by_fid(int fd, const lustre_fid *fid, int *mdt_index);
+int llapi_fd2fid(int fd, lustre_fid *fid);
 /* get FID of parent dir + the related name of entry in this parent dir */
-extern int llapi_path2parent(const char *path, unsigned int linkno,
-			     lustre_fid *parent_fid, char *name,
-			     size_t name_size);
-extern int llapi_fd2parent(int fd, unsigned int linkno,
-			   lustre_fid *parent_fid, char *name,
-			   size_t name_size);
-extern int llapi_chomp_string(char *buf);
-extern int llapi_open_by_fid(const char *dir, const lustre_fid *fid,
-			     int open_flags);
+int llapi_path2parent(const char *path, unsigned int linkno,
+		      lustre_fid *parent_fid, char *name, size_t name_size);
+int llapi_fd2parent(int fd, unsigned int linkno, lustre_fid *parent_fid,
+		    char *name, size_t name_size);
+int llapi_chomp_string(char *buf);
+int llapi_open_by_fid(const char *dir, const lustre_fid *fid, int open_flags);
 
-extern int llapi_get_version_string(char *version, unsigned int version_size);
+int llapi_get_version_string(char *version, unsigned int version_size);
 /* llapi_get_version() is deprecated, use llapi_get_version_string() instead */
-extern int llapi_get_version(char *buffer, int buffer_size, char **version)
+int llapi_get_version(char *buffer, int buffer_size, char **version)
 	__attribute__((deprecated));
-extern int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags);
-extern int llapi_hsm_state_get_fd(int fd, struct hsm_user_state *hus);
-extern int llapi_hsm_state_get(const char *path, struct hsm_user_state *hus);
-extern int llapi_hsm_state_set_fd(int fd, __u64 setmask, __u64 clearmask,
-				  __u32 archive_id);
-extern int llapi_hsm_state_set(const char *path, __u64 setmask, __u64 clearmask,
-			       __u32 archive_id);
-extern int llapi_hsm_register_event_fifo(const char *path);
-extern int llapi_hsm_unregister_event_fifo(const char *path);
-extern void llapi_hsm_log_error(enum llapi_message_level level, int _rc,
-				const char *fmt, va_list args);
+int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags);
+int llapi_hsm_state_get_fd(int fd, struct hsm_user_state *hus);
+int llapi_hsm_state_get(const char *path, struct hsm_user_state *hus);
+int llapi_hsm_state_set_fd(int fd, __u64 setmask, __u64 clearmask,
+			   __u32 archive_id);
+int llapi_hsm_state_set(const char *path, __u64 setmask, __u64 clearmask,
+			__u32 archive_id);
+int llapi_hsm_register_event_fifo(const char *path);
+int llapi_hsm_unregister_event_fifo(const char *path);
+void llapi_hsm_log_error(enum llapi_message_level level, int _rc,
+			 const char *fmt, va_list args);
 
-extern int llapi_get_agent_uuid(char *path, char *buf, size_t bufsize);
-extern int llapi_create_volatile_idx(char *directory, int idx, int mode);
+int llapi_get_agent_uuid(char *path, char *buf, size_t bufsize);
+int llapi_create_volatile_idx(char *directory, int idx, int mode);
+
 static inline int llapi_create_volatile(char *directory, int mode)
 {
 	return llapi_create_volatile_idx(directory, -1, mode);
 }
 
 
-extern int llapi_fswap_layouts_grouplock(int fd1, int fd2, __u64 dv1, __u64 dv2,
-					 int gid, __u64 flags);
-extern int llapi_fswap_layouts(int fd1, int fd2, __u64 dv1, __u64 dv2,
-			       __u64 flags);
-extern int llapi_swap_layouts(const char *path1, const char *path2,
-			      __u64 dv1, __u64 dv2, __u64 flags);
+int llapi_fswap_layouts_grouplock(int fd1, int fd2, __u64 dv1, __u64 dv2,
+				  int gid, __u64 flags);
+int llapi_fswap_layouts(int fd1, int fd2, __u64 dv1, __u64 dv2, __u64 flags);
+int llapi_swap_layouts(const char *path1, const char *path2, __u64 dv1,
+		       __u64 dv2, __u64 flags);
 
 /* Changelog interface.  priv is private state, managed internally by these
  * functions */
@@ -391,15 +384,15 @@ extern int llapi_swap_layouts(const char *path1, const char *path2,
  * converted to extended format in the lustre api to ease changelog analysis. */
 #define HAVE_CHANGELOG_EXTEND_REC 1
 
-extern int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
-				 const char *mdtname, long long startrec);
-extern int llapi_changelog_fini(void **priv);
-extern int llapi_changelog_recv(void *priv, struct changelog_rec **rech);
-extern int llapi_changelog_free(struct changelog_rec **rech);
-extern int llapi_changelog_get_fd(void *priv);
+int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
+			  const char *mdtname, long long startrec);
+int llapi_changelog_fini(void **priv);
+int llapi_changelog_recv(void *priv, struct changelog_rec **rech);
+int llapi_changelog_free(struct changelog_rec **rech);
+int llapi_changelog_get_fd(void *priv);
 /* Allow records up to endrec to be destroyed; requires registered id. */
-extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
-                                 long long endrec);
+int llapi_changelog_clear(const char *mdtname, const char *idstr,
+			  long long endrec);
 
 /* HSM copytool interface.
  * priv is private state, managed internally by these functions
@@ -407,52 +400,48 @@ extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
 struct hsm_copytool_private;
 struct hsm_copyaction_private;
 
-extern int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
-				       const char *mnt, int archive_count,
-				       int *archives, int rfd_flags);
-extern int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv);
-extern int llapi_hsm_copytool_get_fd(struct hsm_copytool_private *ct);
-extern int llapi_hsm_copytool_recv(struct hsm_copytool_private *priv,
-				   struct hsm_action_list **hal, int *msgsize);
-extern int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
-				  const struct hsm_copytool_private *ct,
-				  const struct hsm_action_item *hai,
-				  int restore_mdt_index, int restore_open_flags,
-				  bool is_error);
-extern int llapi_hsm_action_end(struct hsm_copyaction_private **phcp,
-				const struct hsm_extent *he,
-				int hp_flags, int errval);
-extern int llapi_hsm_action_progress(struct hsm_copyaction_private *hcp,
-				     const struct hsm_extent *he, __u64 total,
-				     int hp_flags);
-extern int llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *hcp,
-				     lustre_fid *fid);
-extern int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp);
-extern int llapi_hsm_import(const char *dst, int archive, const struct stat *st,
-			    unsigned long long stripe_size, int stripe_offset,
-			    int stripe_count, int stripe_pattern,
-			    char *pool_name, lustre_fid *newfid);
+int llapi_hsm_copytool_register(struct hsm_copytool_private **priv,
+				const char *mnt, int archive_count,
+				int *archives, int rfd_flags);
+int llapi_hsm_copytool_unregister(struct hsm_copytool_private **priv);
+int llapi_hsm_copytool_get_fd(struct hsm_copytool_private *ct);
+int llapi_hsm_copytool_recv(struct hsm_copytool_private *priv,
+			    struct hsm_action_list **hal, int *msgsize);
+int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
+			   const struct hsm_copytool_private *ct,
+			   const struct hsm_action_item *hai,
+			   int restore_mdt_index, int restore_open_flags,
+			   bool is_error);
+int llapi_hsm_action_end(struct hsm_copyaction_private **phcp,
+			 const struct hsm_extent *he, int hp_flags, int errval);
+int llapi_hsm_action_progress(struct hsm_copyaction_private *hcp,
+			      const struct hsm_extent *he, __u64 total,
+			      int hp_flags);
+int llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *hcp,
+			      lustre_fid *fid);
+int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp);
+int llapi_hsm_import(const char *dst, int archive, const struct stat *st,
+		     unsigned long long stripe_size, int stripe_offset,
+		     int stripe_count, int stripe_pattern, char *pool_name,
+		     lustre_fid *newfid);
 
 /* HSM user interface */
-extern struct hsm_user_request *llapi_hsm_user_request_alloc(int itemcount,
-							     int data_len);
-extern int llapi_hsm_request(const char *path,
-			     const struct hsm_user_request *request);
-extern int llapi_hsm_current_action(const char *path,
-				    struct hsm_current_action *hca);
+struct hsm_user_request *llapi_hsm_user_request_alloc(int itemcount,
+						      int data_len);
+int llapi_hsm_request(const char *path, const struct hsm_user_request *request);
+int llapi_hsm_current_action(const char *path, struct hsm_current_action *hca);
 
 /* JSON handling */
-extern int llapi_json_init_list(struct llapi_json_item_list **item_list);
-extern int llapi_json_destroy_list(struct llapi_json_item_list **item_list);
-extern int llapi_json_add_item(struct llapi_json_item_list **item_list,
-			       char *key, __u32 type, void *val);
-extern int llapi_json_write_list(struct llapi_json_item_list **item_list,
-				 FILE *fp);
+int llapi_json_init_list(struct llapi_json_item_list **item_list);
+int llapi_json_destroy_list(struct llapi_json_item_list **item_list);
+int llapi_json_add_item(struct llapi_json_item_list **item_list, char *key,
+			__u32 type, void *val);
+int llapi_json_write_list(struct llapi_json_item_list **item_list, FILE *fp);
 
 /* File lease */
-extern int llapi_lease_get(int fd, int mode);
-extern int llapi_lease_check(int fd);
-extern int llapi_lease_put(int fd);
+int llapi_lease_get(int fd, int mode);
+int llapi_lease_check(int fd);
+int llapi_lease_put(int fd);
 
 /* Group lock */
 int llapi_group_lock(int fd, int gid);

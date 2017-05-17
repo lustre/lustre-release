@@ -4591,7 +4591,7 @@ out_free:
 	return rc;
 }
 
-static int fid_from_lma(const char *path, const int fd, lustre_fid *fid)
+static int fid_from_lma(const char *path, int fd, lustre_fid *fid)
 {
 	char			 buf[512];
 	struct lustre_mdt_attrs	*lma;
@@ -4622,7 +4622,7 @@ int llapi_get_mdt_index_by_fid(int fd, const lustre_fid *fid,
 	return rc;
 }
 
-int llapi_fd2fid(const int fd, lustre_fid *fid)
+int llapi_fd2fid(int fd, lustre_fid *fid)
 {
 	int rc;
 
