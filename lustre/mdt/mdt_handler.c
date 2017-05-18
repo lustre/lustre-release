@@ -2893,8 +2893,11 @@ static void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 					ldlm_lock_downgrade(lock, LCK_COS);
 					mode = LCK_COS;
 				}
-				ptlrpc_save_lock(req, h, mode, cos,
-						 convert_lock);
+				if (req->rq_export->exp_disconnected)
+					mdt_fid_unlock(h, mode);
+				else
+					ptlrpc_save_lock(req, h, mode, cos,
+							 convert_lock);
 			} else {
 				mdt_fid_unlock(h, mode);
 			}

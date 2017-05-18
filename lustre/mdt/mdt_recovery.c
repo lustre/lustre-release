@@ -126,52 +126,62 @@ void mdt_fs_cleanup(const struct lu_env *env, struct mdt_device *mdt)
 static void mdt_steal_ack_locks(struct ptlrpc_request *req)
 {
 	struct ptlrpc_service_part *svcpt;
-	struct obd_export	   *exp = req->rq_export;
-	struct list_head	   *tmp;
-	struct ptlrpc_reply_state  *oldrep;
-	int			    i;
+	struct obd_export *exp = req->rq_export;
+	struct list_head *tmp;
+	struct ptlrpc_reply_state *rs;
+	int i;
 
 	/* CAVEAT EMPTOR: spinlock order */
 	spin_lock(&exp->exp_lock);
 	list_for_each(tmp, &exp->exp_outstanding_replies) {
-		oldrep = list_entry(tmp, struct ptlrpc_reply_state,
+		rs = list_entry(tmp, struct ptlrpc_reply_state,
 				    rs_exp_list);
 
-		if (oldrep->rs_xid != req->rq_xid)
+		if (rs->rs_xid != req->rq_xid)
 			continue;
 
-		if (oldrep->rs_opc != lustre_msg_get_opc(req->rq_reqmsg))
+		if (rs->rs_opc != lustre_msg_get_opc(req->rq_reqmsg))
 			CERROR("%s: Resent req xid %llu has mismatched opc: "
 			       "new %d old %d\n", exp->exp_obd->obd_name,
 			       req->rq_xid, lustre_msg_get_opc(req->rq_reqmsg),
-			       oldrep->rs_opc);
+			       rs->rs_opc);
 
-		svcpt = oldrep->rs_svcpt;
-		spin_lock(&svcpt->scp_rep_lock);
-
-		list_del_init(&oldrep->rs_exp_list);
+		svcpt = rs->rs_svcpt;
 
 		CDEBUG(D_HA, "Stealing %d locks from rs %p x%lld.t%lld"
 		       " o%d NID %s\n",
-		       oldrep->rs_nlocks, oldrep,
-		       oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_opc,
+		       rs->rs_nlocks, rs,
+		       rs->rs_xid, rs->rs_transno, rs->rs_opc,
 		       libcfs_nid2str(exp->exp_connection->c_peer.nid));
 
-		for (i = 0; i < oldrep->rs_nlocks; i++)
-			ptlrpc_save_lock(req, &oldrep->rs_locks[i],
-					 oldrep->rs_modes[i], oldrep->rs_no_ack,
-					 oldrep->rs_convert_lock);
-		oldrep->rs_nlocks = 0;
+		spin_lock(&svcpt->scp_rep_lock);
+		list_del_init(&rs->rs_exp_list);
+
+		spin_lock(&rs->rs_lock);
+		for (i = 0; i < rs->rs_nlocks; i++)
+			ptlrpc_save_lock(req, &rs->rs_locks[i],
+					 rs->rs_modes[i], rs->rs_no_ack,
+					 rs->rs_convert_lock);
+		rs->rs_nlocks = 0;
 
 		DEBUG_REQ(D_HA, req, "stole locks for");
-		spin_lock(&oldrep->rs_lock);
-		ptlrpc_schedule_difficult_reply(oldrep);
-		spin_unlock(&oldrep->rs_lock);
+		ptlrpc_schedule_difficult_reply(rs);
+		spin_unlock(&rs->rs_lock);
 
 		spin_unlock(&svcpt->scp_rep_lock);
 		break;
 	}
 	spin_unlock(&exp->exp_lock);
+
+	/* if exp_disconnected, decref stolen locks */
+	if (exp->exp_disconnected) {
+		rs = req->rq_reply_state;
+
+		for (i = 0; i < rs->rs_nlocks; i++)
+			ldlm_lock_decref(&rs->rs_locks[i], rs->rs_modes[i]);
+
+		rs->rs_nlocks = 0;
+	}
 }
 
 __u64 mdt_req_from_lrd(struct ptlrpc_request *req,

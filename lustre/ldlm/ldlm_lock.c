@@ -2534,8 +2534,10 @@ int ldlm_export_cancel_locks(struct obd_export *exp)
 /**
  * Downgrade an exclusive lock.
  *
- * A fast variant of ldlm_lock_convert for convertion of exclusive
- * locks. The convertion is always successful.
+ * A fast variant of ldlm_lock_convert for convertion of exclusive locks. The
+ * convertion may fail if lock was canceled before downgrade, but it doesn't
+ * indicate any problem, because such lock has no reader or writer, and will
+ * be released soon.
  * Used by Commit on Sharing (COS) code.
  *
  * \param lock A lock to convert
@@ -2543,25 +2545,34 @@ int ldlm_export_cancel_locks(struct obd_export *exp)
  */
 void ldlm_lock_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode)
 {
-        ENTRY;
+	ENTRY;
 
-        LASSERT(lock->l_granted_mode & (LCK_PW | LCK_EX));
-        LASSERT(new_mode == LCK_COS);
+	LASSERT(new_mode == LCK_COS);
 
-        lock_res_and_lock(lock);
-        ldlm_resource_unlink_lock(lock);
-        /*
-         * Remove the lock from pool as it will be added again in
-         * ldlm_grant_lock() called below.
-         */
-        ldlm_pool_del(&ldlm_lock_to_ns(lock)->ns_pool, lock);
+	lock_res_and_lock(lock);
 
-        lock->l_req_mode = new_mode;
-        ldlm_grant_lock(lock, NULL);
-        unlock_res_and_lock(lock);
-        ldlm_reprocess_all(lock->l_resource);
+	if (!(lock->l_granted_mode & (LCK_PW | LCK_EX))) {
+		unlock_res_and_lock(lock);
 
-        EXIT;
+		LASSERT(lock->l_granted_mode == LCK_MINMODE);
+		LDLM_DEBUG(lock, "lock was canceled before downgrade");
+		RETURN_EXIT;
+	}
+
+	ldlm_resource_unlink_lock(lock);
+	/*
+	 * Remove the lock from pool as it will be added again in
+	 * ldlm_grant_lock() called below.
+	 */
+	ldlm_pool_del(&ldlm_lock_to_ns(lock)->ns_pool, lock);
+	lock->l_req_mode = new_mode;
+	ldlm_grant_lock(lock, NULL);
+
+	unlock_res_and_lock(lock);
+
+	ldlm_reprocess_all(lock->l_resource);
+
+	EXIT;
 }
 EXPORT_SYMBOL(ldlm_lock_downgrade);
 

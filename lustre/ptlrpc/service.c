@@ -185,16 +185,12 @@ ptlrpc_save_lock(struct ptlrpc_request *req, struct lustre_handle *lock,
 	LASSERT(rs != NULL);
 	LASSERT(rs->rs_nlocks < RS_MAX_LOCKS);
 
-	if (req->rq_export->exp_disconnected) {
-		ldlm_lock_decref(lock, mode);
-	} else {
-		idx = rs->rs_nlocks++;
-		rs->rs_locks[idx] = *lock;
-		rs->rs_modes[idx] = mode;
-		rs->rs_difficult = 1;
-		rs->rs_no_ack = no_ack;
-		rs->rs_convert_lock = convert_lock;
-	}
+	idx = rs->rs_nlocks++;
+	rs->rs_locks[idx] = *lock;
+	rs->rs_modes[idx] = mode;
+	rs->rs_difficult = 1;
+	rs->rs_no_ack = no_ack;
+	rs->rs_convert_lock = convert_lock;
 }
 EXPORT_SYMBOL(ptlrpc_save_lock);
 
@@ -2208,13 +2204,28 @@ ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 		if (rs->rs_convert_lock &&
 		    rs->rs_transno > exp->exp_last_committed) {
 			struct ldlm_lock *lock;
+			struct ldlm_lock *ack_locks[RS_MAX_LOCKS] = { NULL };
 
 			spin_lock(&rs->rs_lock);
 			if (rs->rs_convert_lock &&
 			    rs->rs_transno > exp->exp_last_committed) {
 				nlocks = rs->rs_nlocks;
-				while (nlocks-- > 0)
+				while (nlocks-- > 0) {
+					/*
+					 * NB don't assume rs is always handled
+					 * by the same service thread (see
+					 * ptlrpc_hr_select, so REP-ACK hr may
+					 * race with trans commit, while the
+					 * latter will release locks, get locks
+					 * here early to convert to COS mode
+					 * safely.
+					 */
+					lock = ldlm_handle2lock(
+							&rs->rs_locks[nlocks]);
+					LASSERT(lock);
+					ack_locks[nlocks] = lock;
 					rs->rs_modes[nlocks] = LCK_COS;
+				}
 				nlocks = rs->rs_nlocks;
 				rs->rs_convert_lock = 0;
 				/* clear rs_scheduled so that commit callback
@@ -2223,9 +2234,7 @@ ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 				spin_unlock(&rs->rs_lock);
 
 				while (nlocks-- > 0) {
-					lock = ldlm_handle2lock(
-							&rs->rs_locks[nlocks]);
-					LASSERT(lock != NULL);
+					lock = ack_locks[nlocks];
 					ldlm_lock_downgrade(lock, LCK_COS);
 					LDLM_LOCK_PUT(lock);
 				}

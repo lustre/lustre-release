@@ -2525,6 +2525,7 @@ int req_capsule_server_grow(struct req_capsule *pill,
 
                 nrs->rs_difficult = 1;
                 nrs->rs_no_ack = rs->rs_no_ack;
+		nrs->rs_convert_lock = rs->rs_convert_lock;
                 for (i = 0; i < rs->rs_nlocks; i++) {
                         nrs->rs_locks[i] = rs->rs_locks[i];
                         nrs->rs_modes[i] = rs->rs_modes[i];
