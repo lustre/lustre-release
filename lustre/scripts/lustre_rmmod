@@ -1,44 +1,38 @@
-#!/bin/bash
+#!/bin/sh
 #
-# Takes a list of modules and unloads them and all dependent modules.
-# If a module cannot be unloaded (e.g. it's in use), an error is
-# returned.
+# remove all lustre modules.  Won't succeed if they're in use, or if you
+# manually did a 'lctl network up'.
 ###############################################################################
 
-# Unload all modules dependent on $1 (exclude removal of $1)
-unload_dep_modules_exclusive() {
-	local MODULE=$1
-	local DEPS="$(lsmod | awk '($1 == "'$MODULE'") { print $4 }')"
-	for SUBMOD in $(echo $DEPS | tr ',' ' '); do
-		unload_dep_modules_inclusive $SUBMOD || return 1
-	done
-	return 0
+FSTYPE=${1:-ldiskfs}
+
+TMP=${TMP:-/tmp}
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
+[ ! -f "$LCTL" ] && export LCTL=$(which lctl 2> /dev/null)
+
+unload_dep_module() {
+    # libcfs                107852  17 lustre,obdfilter,ost,...
+    local MODULE=$1
+    local DEPS="$(lsmod | awk '($1 == "'$MODULE'") { print $4 }' | tr ',' ' ')"
+    for SUBMOD in $DEPS; do
+        unload_dep_module $SUBMOD
+    done
+    [ "$MODULE" = "libcfs" ] && $LCTL dk $TMP/debug >/dev/null || true
+    rmmod $MODULE 2>/dev/null || true
+    return 0
 }
 
-# Unload all modules dependent on $1 (include removal of $1)
-unload_dep_modules_inclusive() {
-	local MODULE=$1
+lsmod | grep obdclass > /dev/null && $LCTL dl
+lsmod | grep $FSTYPE > /dev/null && unload_dep_module $FSTYPE
+lsmod | grep ptlrpc > /dev/null && unload_dep_module ptlrpc
+lsmod | grep libcfs > /dev/null && unload_dep_module libcfs
 
-	# if $MODULE not loaded, return 0
-	lsmod | egrep -q "^\<$MODULE\>" || return 0
-	unload_dep_modules_exclusive $MODULE || return 1
-	rmmod $MODULE || return 1
-	return 0
-}
-
-modules="$@"
-
-# To maintain backwards compatibility, ldiskfs and libcfs must be
-# unloaded if no parameters are given, or if only the ldiskfs parameter
-# is given. It's ugly, but is needed to emulate the prior functionality
-if [ -z "$modules" ]; then
-	modules="ldiskfs libcfs"
-elif [ "$modules" = "ldiskfs" ]; then
-	modules="ldiskfs libcfs"
+MODULES=$($LCTL modules | awk '{ print $2 }')
+if [ -n "$MODULES" ]; then
+    echo "Modules still loaded: "
+    echo $MODULES
+    exit 1
 fi
-
-for mod in $modules; do
-	unload_dep_modules_inclusive $mod || exit 1
-done
-
 exit 0
+
