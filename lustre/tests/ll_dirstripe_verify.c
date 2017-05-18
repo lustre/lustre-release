@@ -48,7 +48,9 @@
 #include <dirent.h>
 
 #include <libcfs/util/param.h>
+#include <libcfs/util/string.h>
 #include <lustre/lustreapi.h>
+#include <lustre/lustre_idl.h>
 
 #define MAX_LOV_UUID_COUNT      1000
 
@@ -203,6 +205,46 @@ int compare(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
         return 0;
 }
 
+int compare_lum(struct obd_uuid *puuid, struct lov_user_md *lum_dir,
+		struct lov_user_md *lum_file1, struct lov_user_md *lum_file2)
+{
+	struct lov_comp_md_v1 *comp_dir, *comp_file1;
+	struct lov_user_md *sub_dir, *sub_file1;
+	int i, rc = 0;
+
+	if (lum_dir == NULL || lum_dir->lmm_magic != LOV_MAGIC_COMP_V1)
+		return compare(puuid, lum_dir, lum_file1, lum_file2);
+
+	comp_dir = (struct lov_comp_md_v1 *)lum_dir;
+	comp_file1 = (struct lov_comp_md_v1 *)lum_file1;
+
+	if (lum_file1->lmm_magic != lum_dir->lmm_magic) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR, "file1 magic %#x != %#x\n",
+				  lum_file1->lmm_magic, lum_dir->lmm_magic);
+		return 10;
+	}
+
+	if (comp_file1->lcm_entry_count != comp_dir->lcm_entry_count) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR, "file1 comp cnt %d != %d\n",
+				  comp_file1->lcm_entry_count,
+				  comp_dir->lcm_entry_count);
+		return 11;
+	}
+
+	for (i = 0; i < comp_dir->lcm_entry_count; i++) {
+		sub_dir = (struct lov_user_md *)((char *)comp_dir +
+				comp_dir->lcm_entries[i].lcme_offset);
+		sub_file1 = (struct lov_user_md *)((char *)comp_file1 +
+				comp_file1->lcm_entries[i].lcme_offset);
+
+		rc = compare(puuid, sub_dir, sub_file1, NULL);
+		if (rc)
+			break;
+	}
+
+	return rc;
+}
+
 int main(int argc, char **argv)
 {
 	struct lov_user_md *lum_dir, *lum_file1 = NULL, *lum_file2 = NULL;
@@ -236,15 +278,30 @@ int main(int argc, char **argv)
 	}
 
 	rc = llapi_file_get_stripe(argv[1], lum_dir);
-	if (rc) {
+	if (rc == -ENODATA) {
+		char root[PATH_MAX];
+
+		rc = llapi_search_mounts(argv[1], 0, root, NULL);
+		if (rc) {
+			llapi_error(LLAPI_MSG_ERROR, rc, "error: can't get "
+				    "root path for %s\n", argv[1]);
+			goto cleanup;
+		}
+
+		strlcat(root, "/.", PATH_MAX);
+		rc = llapi_file_get_stripe(root, lum_dir);
 		if (rc == -ENODATA) {
 			free(lum_dir);
 			lum_dir = NULL;
-		} else {
-			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "error: can't get EA for %s", argv[1]);
+		} else if (rc) {
+			llapi_error(LLAPI_MSG_ERROR, rc, "error: cant't get "
+				    "root's LOVEA for %s\n", root);
 			goto cleanup;
 		}
+	} else if (rc) {
+		llapi_error(LLAPI_MSG_ERROR, rc, "error: can't get LOVEA for "
+			    "%s", argv[1]);
+		goto cleanup;
 	}
 
 	/* XXX should be llapi_lov_getname() */
@@ -290,7 +347,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	rc = compare(&uuid, lum_dir, lum_file1, lum_file2);
+	rc = compare_lum(&uuid, lum_dir, lum_file1, lum_file2);
 
 cleanup:
 	closedir(dir);
