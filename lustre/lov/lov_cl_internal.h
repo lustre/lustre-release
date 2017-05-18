@@ -652,8 +652,8 @@ static inline struct lov_stripe_md_entry *lov_lse(struct lov_object *lov, int i)
 }
 
 /* lov_pack.c */
-int lov_getstripe(struct lov_object *obj, struct lov_stripe_md *lsm,
-		  struct lov_user_md __user *lump);
+int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
+		  struct lov_stripe_md *lsm, struct lov_user_md __user *lump);
 
 /** @} lov */
 

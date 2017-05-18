@@ -1613,7 +1613,7 @@ static int lov_object_getstripe(const struct lu_env *env, struct cl_object *obj,
 	if (lsm == NULL)
 		RETURN(-ENODATA);
 
-	rc = lov_getstripe(cl2lov(obj), lsm, lum);
+	rc = lov_getstripe(env, cl2lov(obj), lsm, lum);
 	lov_lsm_put(lsm);
 	RETURN(rc);
 }
