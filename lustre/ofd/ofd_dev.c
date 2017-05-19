@@ -2138,7 +2138,7 @@ static int ofd_ladvise_prefetch(const struct lu_env *env,
 	if (end > info->fti_attr.la_size)
 		end = info->fti_attr.la_size;
 
-	if (end == 0)
+	if (end <= start)
 		GOTO(out_unlock, rc);
 
 	/* We need page aligned offset and length */
