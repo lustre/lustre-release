@@ -91,13 +91,12 @@ struct lfsck_type_name {
 };
 
 static struct lfsck_type_name lfsck_types_names[] = {
-	{ "scrub",	LFSCK_TYPE_SCRUB },
-	{ "layout",	LFSCK_TYPE_LAYOUT },
-	{ "namespace",	LFSCK_TYPE_NAMESPACE },
-	{ "default",	LFSCK_TYPES_DEF },
-	{ "all",	LFSCK_TYPES_SUPPORTED },
-	{ NULL,		0 }
-};
+	{ .ltn_name = "all",		.ltn_type = LFSCK_TYPES_SUPPORTED },
+	{ .ltn_name = "default",	.ltn_type = LFSCK_TYPES_DEF },
+	{ .ltn_name = "layout",		.ltn_type = LFSCK_TYPE_LAYOUT },
+	{ .ltn_name = "namespace",	.ltn_type = LFSCK_TYPE_NAMESPACE },
+	{ .ltn_name = "scrub",		.ltn_type = LFSCK_TYPE_SCRUB },
+	{ .ltn_name = NULL } };
 
 static enum lfsck_type lfsck_name2type(const char *name)
 {
