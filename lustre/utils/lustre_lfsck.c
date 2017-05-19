@@ -278,7 +278,7 @@ int jt_lfsck_start(int argc, char **argv)
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char device[MAX_OBD_NAME];
 	struct lfsck_start start;
-	char *optstring = "Ac::C::d::e:hM:n::ors:t:w:";
+	char *short_opts = "Ac::C::d::e:hM:n::ors:t:w:";
 	int opt, index, rc, val, i;
 
 	memset(&data, 0, sizeof(data));
@@ -290,7 +290,7 @@ int jt_lfsck_start(int argc, char **argv)
 	/* Reset the 'optind' for the case of getopt_long() called multiple
 	 * times under the same lctl. */
 	optind = 0;
-	while ((opt = getopt_long(argc, argv, optstring, long_opt_start,
+	while ((opt = getopt_long(argc, argv, short_opts, long_opt_start,
 				  &index)) != EOF) {
 		switch (opt) {
 		case 'A':
@@ -468,7 +468,7 @@ int jt_lfsck_stop(int argc, char **argv)
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char device[MAX_OBD_NAME];
 	struct lfsck_stop stop;
-	char *optstring = "AhM:";
+	char *short_opts = "AhM:";
 	int opt, index, rc;
 
 	memset(&data, 0, sizeof(data));
@@ -478,7 +478,7 @@ int jt_lfsck_stop(int argc, char **argv)
 	/* Reset the 'optind' for the case of getopt_long() called multiple
 	 * times under the same lctl. */
 	optind = 0;
-	while ((opt = getopt_long(argc, argv, optstring, long_opt_stop,
+	while ((opt = getopt_long(argc, argv, short_opts, long_opt_stop,
 				  &index)) != EOF) {
 		switch (opt) {
 		case 'A':
