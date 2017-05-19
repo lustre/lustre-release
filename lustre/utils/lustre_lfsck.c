@@ -50,25 +50,24 @@
 #include <libcfs/util/param.h>
 
 static struct option long_opt_start[] = {
-	{"device",		required_argument, 0, 'M'},
-	{"all",			no_argument,	   0, 'A'},
-	{"create_ostobj",	optional_argument, 0, 'c'},
-	{"create-ostobj",	optional_argument, 0, 'c'},
-	{"create_mdtobj",	optional_argument, 0, 'C'},
-	{"create-mdtobj",	optional_argument, 0, 'C'},
-	{"delay_create_ostobj",	optional_argument, 0, 'd'},
-	{"delay-create-ostobj",	optional_argument, 0, 'd'},
-	{"error",		required_argument, 0, 'e'},
-	{"help",		no_argument,	   0, 'h'},
-	{"dryrun",		optional_argument, 0, 'n'},
-	{"orphan",		no_argument,	   0, 'o'},
-	{"reset",		no_argument,	   0, 'r'},
-	{"speed",		required_argument, 0, 's'},
-	{"type",		required_argument, 0, 't'},
-	{"window_size",		required_argument, 0, 'w'},
-	{"window-size",		required_argument, 0, 'w'},
-	{0,			0,		   0,  0 }
-};
+{ .val = 'A',	.name = "all",			.has_arg = no_argument },
+{ .val = 'c',	.name = "create_ostobj",	.has_arg = optional_argument },
+{ .val = 'c',	.name = "create-ostobj",	.has_arg = optional_argument },
+{ .val = 'C',	.name = "create_mdtobj",	.has_arg = optional_argument },
+{ .val = 'C',	.name = "create-mdtobj",	.has_arg = optional_argument },
+{ .val = 'd',	.name = "delay_create_ostobj",	.has_arg = optional_argument },
+{ .val = 'd',	.name = "delay-create-ostobj",	.has_arg = optional_argument },
+{ .val = 'e',	.name = "error",		.has_arg = required_argument },
+{ .val = 'h',	.name = "help",			.has_arg = no_argument },
+{ .val = 'M',	.name = "device",		.has_arg = required_argument },
+{ .val = 'n',	.name = "dryrun",		.has_arg = optional_argument },
+{ .val = 'o',	.name = "orphan",		.has_arg = no_argument },
+{ .val = 'r',	.name = "reset",		.has_arg = no_argument },
+{ .val = 's',	.name = "speed",		.has_arg = required_argument },
+{ .val = 't',	.name = "type",			.has_arg = required_argument },
+{ .val = 'w',	.name = "window_size",		.has_arg = required_argument },
+{ .val = 'w',	.name = "window-size",		.has_arg = required_argument },
+{ .name = NULL } };
 
 static struct option long_opt_stop[] = {
 	{ .val = 'A',	.name = "all",		.has_arg = no_argument },
