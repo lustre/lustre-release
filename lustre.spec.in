@@ -94,26 +94,21 @@
 	%endif
 %endif
 
-# Generic enable switch for systemd
-%if %{with systemd}
-%define _systemd 1
-%endif
-
 # RHEL >= 7 comes with systemd
 %if 0%{?rhel} >= 7
-%define _systemd 1
+%define with_systemd 1
 %endif
 
 # Fedora >= 15 comes with systemd, but only >= 18 has
 # the proper macros
 %if 0%{?fedora} >= 18
-%define _systemd 1
+%define with_systemd 1
 %endif
 
 # opensuse >= 12.1 comes with systemd, but only >= 13.1
 # has the proper macros
 %if 0%{?suse_version} >= 1310
-%define _systemd 1
+%define with_systemd 1
 %endif
 
 Summary: Lustre File System
@@ -153,7 +148,7 @@ BuildRequires: redhat-rpm-config
 %endif
 %endif
 
-%if 0%{?_systemd}
+%if %{with systemd}
 Requires(post): systemd
 Requires(preun): systemd
 Requires(postun): systemd
@@ -276,12 +271,6 @@ cd $RPM_BUILD_DIR/lustre-%{version}
 # build failures
 %define optflags -g -O2 -Werror
 
-%if 0%{?_systemd}
-    %define systemd --with-systemdsystemunitdir=%{_unitdir}
-%else
-    %define systemd --with-systemdsystemunitdir=no
-%endif
-
 CONFIGURE_ARGS="%{?configure_args}"
 if [ -n "$CONFIGURE_ARGS" ]; then
 	# make sure %%kdir and %%kobjdir are not in the configure arguments
@@ -311,7 +300,8 @@ fi
 	%{!?with_zfs:--without-zfs} \
 	%{!?with_lnet_dlc:--disable-dlc} \
 	%{!?with_manpages:--disable-manpages} \
-	%{systemd} \
+	%{!?with_systemd:--with-systemdsystemunitdir=no} \
+	%{?with_systemd:--with-systemdsystemunitdir=%{_unitdir}} \
 	--with-linux=%{kdir} \
 	--with-linux-obj=%{kobjdir} \
 	--with-kmp-moddir=%{kmoddir}/%{name}
@@ -355,7 +345,7 @@ echo '%{_sysconfdir}/ha.d/resource.d/Lustre' >>lustre.files
 %endif
 
 # systemd is on redhat, fedora, and suse
-%if 0%{?_systemd}
+%if %{with systemd}
 echo '%{_unitdir}/lnet.service' >>lustre.files
 %endif
 
@@ -367,7 +357,7 @@ echo '%{_sysconfdir}/sysconfig/lsvcgss' >>lustre.files
 echo '%{_sysconfdir}/init.d/lustre' >>lustre.files
 %endif
 
-%if 0%{!?_systemd:1}
+%if %{without systemd}
 echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
 %endif
 
@@ -513,17 +503,17 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %endif
 
 %post
-%if 0%{?_systemd}
+%if %{with systemd}
 %systemd_post lnet.service
 %endif
 
 %preun
-%if 0%{?_systemd}
+%if %{with systemd}
 %systemd_preun lnet.service
 %endif
 
 %postun
-%if 0%{?_systemd}
+%if %{with systemd}
 %systemd_postun_with_restart lnet.service
 %endif
 
