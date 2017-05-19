@@ -71,19 +71,17 @@ static struct option long_opt_start[] = {
 };
 
 static struct option long_opt_stop[] = {
-	{"device",      required_argument, 0, 'M'},
-	{"all", 	no_argument,       0, 'A'},
-	{"help",	no_argument,       0, 'h'},
-	{0,		0,		   0,  0 }
-};
+	{ .val = 'A',	.name = "all",		.has_arg = no_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'M',	.name = "device",	.has_arg = required_argument },
+	{ .name = NULL } };
 
 static struct option long_opt_query[] = {
-	{"device",      required_argument, 0, 'M'},
-	{"type",	required_argument, 0, 't'},
-	{"help",	no_argument,       0, 'h'},
-	{"wait",	no_argument,       0, 'w'},
-	{0,		0,		   0,  0 }
-};
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'M',	.name = "device",	.has_arg = required_argument },
+	{ .val = 't',	.name = "type",		.has_arg = required_argument },
+	{ .val = 'w',	.name = "wait",		.has_arg = no_argument },
+	{ .name = NULL } };
 
 struct lfsck_type_name {
 	char		*ltn_name;
