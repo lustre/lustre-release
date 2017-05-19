@@ -12,7 +12,7 @@ sles12/ext4-data-in-dirent.patch
 sles12/ext4-large-eas.patch
 rhel7/ext4-disable-mb-cache.patch
 rhel7/ext4-nocmtime.patch
-rhel7/ext4-large-dir.patch
+sles12sp1/ext4-large-dir.patch
 sles12/ext4-pdirop.patch
 rhel7/ext4-max-dir-size.patch
 rhel7/ext4-remove-truncate-warning.patch
