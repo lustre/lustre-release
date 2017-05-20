@@ -40,6 +40,7 @@
 #include <lustre_obdo.h>
 #include <lustre_osc.h>
 #include <linux/pagevec.h>
+#include <linux/falloc.h>
 
 #include "osc_internal.h"
 
@@ -540,23 +541,30 @@ static void osc_trunc_check(const struct lu_env *env, struct cl_io *io,
 static int osc_io_setattr_start(const struct lu_env *env,
                                 const struct cl_io_slice *slice)
 {
-        struct cl_io            *io     = slice->cis_io;
-        struct osc_io           *oio    = cl2osc_io(env, slice);
-        struct cl_object        *obj    = slice->cis_obj;
-        struct lov_oinfo        *loi    = cl2osc(obj)->oo_oinfo;
-        struct cl_attr          *attr   = &osc_env_info(env)->oti_attr;
-        struct obdo             *oa     = &oio->oi_oa;
+	struct cl_io *io = slice->cis_io;
+	struct osc_io *oio = cl2osc_io(env, slice);
+	struct cl_object *obj = slice->cis_obj;
+	struct lov_oinfo *loi = cl2osc(obj)->oo_oinfo;
+	struct cl_attr *attr = &osc_env_info(env)->oti_attr;
+	struct obdo *oa = &oio->oi_oa;
 	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
-	__u64                    size   = io->u.ci_setattr.sa_attr.lvb_size;
 	unsigned int ia_avalid = io->u.ci_setattr.sa_avalid;
 	enum op_xvalid ia_xvalid = io->u.ci_setattr.sa_xvalid;
 	int result = 0;
+	__u64 size = io->u.ci_setattr.sa_attr.lvb_size;
+	__u64 end = OBD_OBJECT_EOF;
+	bool io_is_falloc = false;
 
 	ENTRY;
 	/* truncate cache dirty pages first */
-	if (cl_io_is_trunc(io))
+	if (cl_io_is_trunc(io)) {
 		result = osc_cache_truncate_start(env, cl2osc(obj), size,
 						  &oio->oi_trunc);
+	} else if (cl_io_is_fallocate(io)) {
+		io_is_falloc = true;
+		size = io->u.ci_setattr.sa_falloc_offset;
+		end = io->u.ci_setattr.sa_falloc_end;
+	}
 
 	if (result == 0 && oio->oi_lockless == 0) {
 		cl_object_attr_lock(obj);
@@ -608,9 +616,15 @@ static int osc_io_setattr_start(const struct lu_env *env,
 			oa->o_mtime = attr->cat_mtime;
 		}
 		if (ia_avalid & ATTR_SIZE) {
-			oa->o_size = size;
-			oa->o_blocks = OBD_OBJECT_EOF;
-			oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+			if (io_is_falloc) {
+				oa->o_size = size;
+				oa->o_blocks = end;
+				oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+			} else {
+				oa->o_size = size;
+				oa->o_blocks = OBD_OBJECT_EOF;
+				oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+			}
 
 			if (oio->oi_lockless) {
 				oa->o_flags = OBD_FL_SRVLOCK;
@@ -633,14 +647,20 @@ static int osc_io_setattr_start(const struct lu_env *env,
 
 		init_completion(&cbargs->opc_sync);
 
-		if (ia_avalid & ATTR_SIZE)
+		if (io_is_falloc) {
+			int falloc_mode = io->u.ci_setattr.sa_falloc_mode;
+
+			result = osc_fallocate_base(osc_export(cl2osc(obj)),
+						    oa, osc_async_upcall,
+						    cbargs, falloc_mode);
+		} else if (ia_avalid & ATTR_SIZE) {
 			result = osc_punch_send(osc_export(cl2osc(obj)),
 						oa, osc_async_upcall, cbargs);
-		else
+		} else {
 			result = osc_setattr_async(osc_export(cl2osc(obj)),
 						   oa, osc_async_upcall,
 						   cbargs, PTLRPCD_SET);
-
+		}
 		cbargs->opc_rpc_sent = result == 0;
 	}
 
@@ -670,6 +690,7 @@ void osc_io_setattr_end(const struct lu_env *env,
 			struct osc_device *osd = lu2osc_dev(obj->co_lu.lo_dev);
 
 			LASSERT(cl_io_is_trunc(io));
+			LASSERT(cl_io_is_trunc(io) || cl_io_is_fallocate(io));
 			/* XXX: Need a lock. */
 			osd->od_stats.os_lockless_truncates++;
 		}
@@ -688,6 +709,25 @@ void osc_io_setattr_end(const struct lu_env *env,
 		osc_trunc_check(env, io, oio, size);
 		osc_cache_truncate_end(env, oio->oi_trunc);
 		oio->oi_trunc = NULL;
+	}
+
+	if (cl_io_is_fallocate(io)) {
+		cl_object_attr_lock(obj);
+
+		/* update blocks */
+		if (oa->o_valid & OBD_MD_FLBLOCKS) {
+			attr->cat_blocks = oa->o_blocks;
+			cl_valid |= CAT_BLOCKS;
+		}
+
+		/* update size */
+		if (oa->o_valid & OBD_MD_FLSIZE) {
+			attr->cat_size = oa->o_size;
+			cl_valid |= CAT_SIZE;
+		}
+
+		cl_object_attr_update(env, obj, attr, cl_valid);
+		cl_object_attr_unlock(obj);
 	}
 }
 EXPORT_SYMBOL(osc_io_setattr_end);

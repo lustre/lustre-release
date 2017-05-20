@@ -72,8 +72,8 @@ int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
 {
 	struct lu_env *env;
 	struct cl_io  *io;
-	int            result;
-	__u16          refcheck;
+	int result;
+	__u16 refcheck;
 
 	ENTRY;
 
@@ -93,7 +93,8 @@ int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
 	io->u.ci_setattr.sa_avalid = attr->ia_valid;
 	io->u.ci_setattr.sa_xvalid = xvalid;
 	io->u.ci_setattr.sa_parent_fid = lu_object_fid(&obj->co_lu);
-
+	if (attr->ia_valid & ATTR_SIZE)
+		io->u.ci_setattr.sa_subtype = CL_SETATTR_TRUNC;
 again:
 	if (attr->ia_valid & ATTR_FILE)
 		ll_io_set_mirror(io, attr->ia_file);
@@ -102,8 +103,10 @@ again:
 		struct vvp_io *vio = vvp_env_io(env);
 
 		if (attr->ia_valid & ATTR_FILE)
-			/* populate the file descriptor for ftruncate to honor
-			 * group lock - see LU-787 */
+			/*
+			 * populate the file descriptor for ftruncate to honor
+			 * group lock - see LU-787
+			 */
 			vio->vui_fd = attr->ia_file->private_data;
 
 		result = cl_io_loop(env, io);

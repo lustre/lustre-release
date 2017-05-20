@@ -497,11 +497,16 @@ static int lov_io_slice_init(struct lov_io *lio,
 		break;
 
 	case CIT_SETATTR:
-		if (cl_io_is_trunc(io))
+		if (cl_io_is_fallocate(io)) {
+			lio->lis_pos = io->u.ci_setattr.sa_falloc_offset;
+			lio->lis_endpos = io->u.ci_setattr.sa_falloc_end;
+		} else if (cl_io_is_trunc(io)) {
 			lio->lis_pos = io->u.ci_setattr.sa_attr.lvb_size;
-		else
+			lio->lis_endpos = OBD_OBJECT_EOF;
+		} else {
 			lio->lis_pos = 0;
-		lio->lis_endpos = OBD_OBJECT_EOF;
+			lio->lis_endpos = OBD_OBJECT_EOF;
+		}
 		break;
 
 	case CIT_DATA_VERSION:
@@ -653,15 +658,24 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 			parent->u.ci_setattr.sa_attr_flags;
 		io->u.ci_setattr.sa_avalid = parent->u.ci_setattr.sa_avalid;
 		io->u.ci_setattr.sa_xvalid = parent->u.ci_setattr.sa_xvalid;
+		io->u.ci_setattr.sa_falloc_mode =
+			parent->u.ci_setattr.sa_falloc_mode;
 		io->u.ci_setattr.sa_stripe_index = stripe;
 		io->u.ci_setattr.sa_parent_fid =
 					parent->u.ci_setattr.sa_parent_fid;
+		/* For SETATTR(fallocate) pass the subtype to lower IO */
+		io->u.ci_setattr.sa_subtype = parent->u.ci_setattr.sa_subtype;
 		if (cl_io_is_trunc(io)) {
 			loff_t new_size = parent->u.ci_setattr.sa_attr.lvb_size;
 
 			new_size = lov_size_to_stripe(lsm, index, new_size,
 						      stripe);
 			io->u.ci_setattr.sa_attr.lvb_size = new_size;
+		} else if (cl_io_is_fallocate(io)) {
+			io->u.ci_setattr.sa_falloc_offset = start;
+			io->u.ci_setattr.sa_falloc_end = end;
+			io->u.ci_setattr.sa_attr.lvb_size =
+				parent->u.ci_setattr.sa_attr.lvb_size;
 		}
 		lov_lsm2layout(lsm, lsm->lsm_entries[index],
 			       &io->u.ci_setattr.sa_layout);
@@ -1534,8 +1548,11 @@ int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 		 * - in open, for open O_TRUNC
 		 * - in setattr, for truncate
 		 */
-		/* the truncate is for size > 0 so triggers a restore */
-		if (cl_io_is_trunc(io)) {
+		/*
+		 * the truncate is for size > 0 so triggers a restore,
+		 * also trigger a restore for prealloc/punch
+		 */
+		if (cl_io_is_trunc(io) || cl_io_is_fallocate(io)) {
 			io->ci_restore_needed = 1;
 			result = -ENODATA;
 		} else

@@ -197,6 +197,7 @@ extern struct req_format RQF_OST_GETATTR;
 extern struct req_format RQF_OST_SETATTR;
 extern struct req_format RQF_OST_CREATE;
 extern struct req_format RQF_OST_PUNCH;
+extern struct req_format RQF_OST_FALLOCATE;
 extern struct req_format RQF_OST_SYNC;
 extern struct req_format RQF_OST_DESTROY;
 extern struct req_format RQF_OST_BRW_READ;

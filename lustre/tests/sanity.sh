@@ -13159,7 +13159,7 @@ test_140() { #bug-17379
 }
 run_test 140 "Check reasonable stack depth (shouldn't LBUG) ===="
 
-test_150() {
+test_150a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local TF="$TMP/$tfile"
@@ -13190,7 +13190,60 @@ test_150() {
 	rm -f $TF
 	true
 }
-run_test 150 "truncate/append tests"
+run_test 150a "truncate/append tests"
+
+test_150b() {
+	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
+	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
+		skip "Need OST version at least 2.13.53"
+	touch $DIR/$tfile
+	check_fallocate $DIR/$tfile || error "fallocate failed"
+}
+run_test 150b "Verify fallocate (prealloc) functionality"
+
+test_150c() {
+	local bytes
+	local want
+
+	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
+	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
+		skip "Need OST version at least 2.13.53"
+
+	$LFS setstripe -c $OSTCOUNT -S1M $DIR/$tdir || error "setstripe failed"
+	fallocate -l ${OSTCOUNT}m $DIR/$tdir || error "fallocate failed"
+	sync; sync_all_data
+	cancel_lru_locks $OSC
+	sleep 5
+	bytes=$(($(stat -c '%b * %B' $DIR/$tdir)))
+	want=$((OSTCOUNT * 1048576))
+
+	# Must allocate all requested space, not more than 5% extra
+	(( $bytes >= $want && $bytes < $want * 105 / 100 )) ||
+		error "bytes $bytes is not $want"
+}
+run_test 150c "Verify fallocate Size and Blocks"
+
+test_150d() {
+	local bytes
+	local want
+
+	[ "$ost1_FSTYPE" != ldiskfs ] && skip "non-ldiskfs backend"
+	[ $OST1_VERSION -lt $(version_code 2.13.50) ] &&
+		skip "Need OST version at least 2.13.53"
+
+	$LFS setstripe -c $OSTCOUNT -S1M $DIR/$tdir || error "setstripe failed"
+	fallocate -o 1G -l ${OSTCOUNT}m $DIR/$tdir || error "fallocate failed"
+	sync; sync_all_data
+	cancel_lru_locks $OSC
+	sleep 5
+	bytes=$(($(stat -c '%b * %B' $DIR/$tdir)))
+	want=$((OSTCOUNT * 1048576))
+
+	# Must allocate all requested space, not more than 5% extra
+	(( $bytes >= $want && $bytes < $want * 105 / 100 )) ||
+		error "bytes $bytes is not $want"
+}
+run_test 150d "Verify fallocate Size and Blocks - Non zero start"
 
 #LU-2902 roc_hit was not able to read all values from lproc
 function roc_hit_init() {

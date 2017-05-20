@@ -380,17 +380,18 @@ enum osd_full_scrub_ratio {
 
 enum osd_op_type {
 	OSD_OT_ATTR_SET		= 0,
-	OSD_OT_PUNCH		= 1,
-	OSD_OT_XATTR_SET	= 2,
-	OSD_OT_CREATE		= 3,
-	OSD_OT_DESTROY		= 4,
-	OSD_OT_REF_ADD		= 5,
-	OSD_OT_REF_DEL		= 6,
-	OSD_OT_WRITE		= 7,
-	OSD_OT_INSERT		= 8,
-	OSD_OT_DELETE		= 9,
-	OSD_OT_QUOTA		= 10,
-	OSD_OT_MAX		= 11
+	OSD_OT_PUNCH,
+	OSD_OT_XATTR_SET,
+	OSD_OT_CREATE,
+	OSD_OT_DESTROY,
+	OSD_OT_REF_ADD,
+	OSD_OT_REF_DEL,
+	OSD_OT_WRITE,
+	OSD_OT_INSERT,
+	OSD_OT_DELETE,
+	OSD_OT_QUOTA,
+	OSD_OT_PREALLOC,
+	OSD_OT_MAX
 };
 
 struct osd_access_lock {

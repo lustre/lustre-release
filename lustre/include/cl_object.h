@@ -1756,6 +1756,31 @@ struct cl_io_rw_common {
 	size_t	crw_count;
 	int	crw_nonblock;
 };
+enum cl_setattr_subtype {
+	/** regular setattr **/
+	CL_SETATTR_REG = 1,
+	/** truncate(2) **/
+	CL_SETATTR_TRUNC,
+	/** fallocate(2) - mode preallocate **/
+	CL_SETATTR_FALLOCATE
+};
+
+struct cl_io_range {
+	loff_t cir_pos;
+	size_t cir_count;
+};
+
+struct cl_io_pt {
+	struct cl_io_pt *cip_next;
+	struct kiocb cip_iocb;
+	struct iov_iter cip_iter;
+	struct file *cip_file;
+	enum cl_io_type cip_iot;
+	unsigned int cip_need_restart:1;
+	loff_t cip_pos;
+	size_t cip_count;
+	ssize_t cip_result;
+};
 
 /**
  * State for io.
@@ -1804,6 +1829,14 @@ struct cl_io {
 			int			 sa_stripe_index;
 			struct ost_layout	 sa_layout;
 			const struct lu_fid	*sa_parent_fid;
+			/* SETATTR interface is used for regular setattr, */
+			/* truncate(2) and fallocate(2) subtypes */
+			enum cl_setattr_subtype	 sa_subtype;
+			/* The following are used for fallocate(2) */
+			int			 sa_falloc_mode;
+			loff_t			 sa_falloc_offset;
+			loff_t			 sa_falloc_len;
+			loff_t			 sa_falloc_end;
 		} ci_setattr;
 		struct cl_data_version_io {
 			u64 dv_data_version;
@@ -2379,7 +2412,14 @@ static inline int cl_io_is_mkwrite(const struct cl_io *io)
 static inline int cl_io_is_trunc(const struct cl_io *io)
 {
 	return io->ci_type == CIT_SETATTR &&
-		(io->u.ci_setattr.sa_avalid & ATTR_SIZE);
+		(io->u.ci_setattr.sa_avalid & ATTR_SIZE) &&
+		(io->u.ci_setattr.sa_subtype != CL_SETATTR_FALLOCATE);
+}
+
+static inline int cl_io_is_fallocate(const struct cl_io *io)
+{
+	return (io->ci_type == CIT_SETATTR) &&
+	       (io->u.ci_setattr.sa_subtype == CL_SETATTR_FALLOCATE);
 }
 
 struct cl_io *cl_io_top(struct cl_io *io);

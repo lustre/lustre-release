@@ -1864,6 +1864,69 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	return result;
 }
 
+static int osd_declare_fallocate(const struct lu_env *env,
+				 struct dt_object *dt, struct thandle *th)
+{
+	struct osd_thandle *oh;
+	struct inode *inode;
+	int rc;
+	ENTRY;
+
+	LASSERT(th);
+	oh = container_of(th, struct osd_thandle, ot_super);
+
+	osd_trans_declare_op(env, oh, OSD_OT_PREALLOC,
+			     osd_dto_credits_noquota[DTO_WRITE_BLOCK]);
+	inode = osd_dt_obj(dt)->oo_inode;
+	LASSERT(inode);
+
+	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
+				   i_projid_read(inode), 0, oh, osd_dt_obj(dt),
+				   NULL, OSD_QID_BLK);
+	RETURN(rc);
+}
+
+static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
+			 __u64 start, __u64 end, int mode, struct thandle *th)
+{
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct inode *inode = obj->oo_inode;
+	int rc = 0;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct dentry *dentry = &info->oti_obj_dentry;
+	struct file *file = &info->oti_file;
+
+	ENTRY;
+	/*
+	 * Only mode == 0 (which is standard prealloc) is supported now.
+	 * Rest of mode options is not supported yet.
+	 */
+	if (mode & ~FALLOC_FL_KEEP_SIZE)
+		RETURN(-EOPNOTSUPP);
+
+	LASSERT(dt_object_exists(dt));
+	LASSERT(osd_invariant(obj));
+	LASSERT(inode != NULL);
+	dquot_initialize(inode);
+
+	LASSERT(th);
+
+	osd_trans_exec_op(env, th, OSD_OT_PREALLOC);
+
+	/*
+	 * Because f_op->fallocate() does not have an inode arg
+	 */
+	dentry->d_inode = inode;
+	dentry->d_sb = inode->i_sb;
+	file->f_path.dentry = dentry;
+	file->f_mapping = inode->i_mapping;
+	file->f_op = inode->i_fop;
+	file->f_inode = inode;
+	rc = file->f_op->fallocate(file, mode, start, end - start);
+
+	RETURN(rc);
+}
+
 static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
                              __u64 start, __u64 end, struct thandle *th)
 {
@@ -1911,7 +1974,6 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 	bool grow = false;
 	ENTRY;
 
-	LASSERT(end == OBD_OBJECT_EOF);
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(obj));
 	LASSERT(inode != NULL);
@@ -2086,6 +2148,8 @@ const struct dt_body_operations osd_body_ops = {
 	.dbo_punch			= osd_punch,
 	.dbo_fiemap_get			= osd_fiemap_get,
 	.dbo_ladvise			= osd_ladvise,
+	.dbo_declare_fallocate		= osd_declare_fallocate,
+	.dbo_fallocate			= osd_fallocate,
 };
 
 /**

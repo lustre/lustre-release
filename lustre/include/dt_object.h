@@ -1413,6 +1413,39 @@ struct dt_body_operations {
 			     __u64 start,
 			     __u64 end,
 			     enum lu_ladvise_type advice);
+
+	/**
+	 * Declare intention to preallocate space for an object
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int (*dbo_declare_fallocate)(const struct lu_env *env,
+				    struct dt_object *dt,
+				    struct thandle *th);
+	/**
+	 * Allocate specified region for an object
+	 *
+	 * \param[in] env	execution environment for this thread
+	 * \param[in] dt	object
+	 * \param[in] start	the start of the region to allocate
+	 * \param[in] end	the end of the region to allocate
+	 * \param[in] mode	fallocate mode
+	 * \param[in] th	transaction handle
+	 *
+	 * \retval 0		on success
+	 * \retval negative	negated errno on error
+	 */
+	int (*dbo_fallocate)(const struct lu_env *env,
+			    struct dt_object *dt,
+			    __u64 start,
+			    __u64 end,
+			    int mode,
+			    struct thandle *th);
 };
 
 /**
@@ -2516,6 +2549,29 @@ static inline int dt_ladvise(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dt->do_body_ops);
 	LASSERT(dt->do_body_ops->dbo_ladvise);
 	return dt->do_body_ops->dbo_ladvise(env, dt, start, end, advice);
+}
+
+static inline int dt_declare_falloc(const struct lu_env *env,
+				      struct dt_object *dt, struct thandle *th)
+{
+	LASSERT(dt);
+	if (!dt->do_body_ops)
+		return -EOPNOTSUPP;
+	LASSERT(dt->do_body_ops);
+	LASSERT(dt->do_body_ops->dbo_declare_fallocate);
+	return dt->do_body_ops->dbo_declare_fallocate(env, dt, th);
+}
+
+static inline int dt_falloc(const struct lu_env *env, struct dt_object *dt,
+			      __u64 start, __u64 end, int mode,
+			      struct thandle *th)
+{
+	LASSERT(dt);
+	if (!dt->do_body_ops)
+		return -EOPNOTSUPP;
+	LASSERT(dt->do_body_ops);
+	LASSERT(dt->do_body_ops->dbo_fallocate);
+	return dt->do_body_ops->dbo_fallocate(env, dt, start, end, mode, th);
 }
 
 static inline int dt_fiemap_get(const struct lu_env *env, struct dt_object *d,

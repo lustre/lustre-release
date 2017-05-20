@@ -396,8 +396,8 @@ test_16a() {
 	rm -f $file1
 
 	$LFS setstripe -c -1 $file1 # b=10919
-	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2 \
-		|| error "fsx failed"
+	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2 ||
+		error "fsx failed"
 	rm -f $file1
 
 	# O_DIRECT reads and writes must be aligned to the device block size.
@@ -423,8 +423,8 @@ test_16b() {
 	lfs setstripe -c -1 $file1 # b=10919
 	# -o is set to 8192 because writes < 1 page and between 1 and 2 pages
 	# create a mix of tiny writes & normal writes
-	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -o 8192 -S 0 $file1 \
-	$file2 || error "fsx with tiny write failed."
+	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -o 8192 -S 0 \
+		$file1 $file2 || error "fsx with tiny write failed."
 }
 run_test 16b "$FSXNUM iterations of dual-mount fsx at small size"
 
@@ -452,8 +452,8 @@ test_16c() {
 	set_osd_param $list '' writethrough_cache_enable 0
 
 	$LFS setstripe -c -1 $file1 # b=10919
-	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2 \
-		|| error "fsx failed"
+	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2 ||
+		error "fsx failed"
 	rm -f $file1
 
 	set_osd_param $list '' read_cache_enable 1

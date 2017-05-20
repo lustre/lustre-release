@@ -180,21 +180,22 @@ test_iozone() {
 run_test iozone "iozone"
 
 test_fsx() {
-    local testfile=$DIR/f0.fsxfile
-    FSX_SIZE=$SIZE
-    FSX_COUNT=1000
-    local SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
-    [ $SPACE -lt $FSX_SIZE ] && FSX_SIZE=$((SPACE * 3 / 4))
-    $DEBUG_OFF
-    FSX_SEED=${FSX_SEED:-$RANDOM}
-    rm -f $testfile
-    $LFS setstripe -c -1 $testfile
-    CMD="fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $FSX_SIZE \
-        -N $((FSX_COUNT * 100)) $FSXOPT $testfile"
-    echo "Using: $CMD"
-    $CMD || error "fsx failed"
-    rm -f $testfile
-    $DEBUG_ON
+	local testfile=$DIR/f0.fsxfile
+	FSX_SIZE=$SIZE
+	FSX_COUNT=1000
+	local SPACE=`df -P $MOUNT | tail -n 1 | awk '{ print $4 }'`
+
+	[ $SPACE -lt $FSX_SIZE ] && FSX_SIZE=$((SPACE * 3 / 4))
+	$DEBUG_OFF
+	FSX_SEED=${FSX_SEED:-$RANDOM}
+	rm -f $testfile
+	$LFS setstripe -c -1 $testfile
+	CMD="fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $FSX_SIZE \
+	-N $((FSX_COUNT * 100)) $FSXOPT $testfile"
+	echo "Using: $CMD"
+	$CMD || error "fsx failed"
+	rm -f $testfile
+	$DEBUG_ON
 }
 run_test fsx "fsx"
 

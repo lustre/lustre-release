@@ -1565,6 +1565,7 @@ static const struct llite_file_opcode {
 	{ LPROC_LL_TRUNC,	LPROCFS_TYPE_LATENCY,	"truncate" },
 	{ LPROC_LL_FLOCK,	LPROCFS_TYPE_LATENCY,	"flock" },
 	{ LPROC_LL_GETATTR,	LPROCFS_TYPE_LATENCY,	"getattr" },
+	{ LPROC_LL_FALLOCATE,	LPROCFS_TYPE_LATENCY, "fallocate"},
 	/* dir inode operation */
 	{ LPROC_LL_CREATE,	LPROCFS_TYPE_LATENCY,	"create" },
 	{ LPROC_LL_LINK,	LPROCFS_TYPE_LATENCY,	"link" },

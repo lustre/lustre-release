@@ -33,6 +33,8 @@
 #define DEBUG_SUBSYSTEM S_OSC
 
 #include <linux/workqueue.h>
+#include <libcfs/libcfs.h>
+#include <linux/falloc.h>
 #include <lprocfs_status.h>
 #include <lustre_debug.h>
 #include <lustre_dlm.h>
@@ -45,6 +47,7 @@
 #include <obd_cksum.h>
 #include <obd_class.h>
 #include <lustre_osc.h>
+#include <linux/falloc.h>
 
 #include "osc_internal.h"
 
@@ -419,6 +422,71 @@ int osc_punch_send(struct obd_export *exp, struct obdo *oa,
 	RETURN(0);
 }
 EXPORT_SYMBOL(osc_punch_send);
+
+/**
+ * osc_fallocate_base() - Handles fallocate request.
+ *
+ * @exp:	Export structure
+ * @oa:		Attributes passed to OSS from client (obdo structure)
+ * @upcall:	Primary & supplementary group information
+ * @cookie:	Exclusive identifier
+ * @rqset:	Request list.
+ * @mode:	Operation done on given range.
+ *
+ * osc_fallocate_base() - Handles fallocate requests only. Only block
+ * allocation or standard preallocate operation is supported currently.
+ * Other mode flags is not supported yet. ftruncate(2) or truncate(2)
+ * is supported via SETATTR request.
+ *
+ * Return: Non-zero on failure and O on success.
+ */
+int osc_fallocate_base(struct obd_export *exp, struct obdo *oa,
+		       obd_enqueue_update_f upcall, void *cookie, int mode)
+{
+	struct ptlrpc_request *req;
+	struct osc_setattr_args *sa;
+	struct ost_body *body;
+	struct obd_import *imp = class_exp2cliimp(exp);
+	int rc;
+	ENTRY;
+
+	/*
+	 * Only mode == 0 (which is standard prealloc) is supported now.
+	 * Punch is not supported yet.
+	 */
+	if (mode & ~FALLOC_FL_KEEP_SIZE)
+		RETURN(-EOPNOTSUPP);
+	oa->o_falloc_mode = mode;
+
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+				   &RQF_OST_FALLOCATE);
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_FALLOCATE);
+	if (rc != 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
+	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+	LASSERT(body);
+
+	lustre_set_wire_obdo(&imp->imp_connect_data, &body->oa, oa);
+
+	ptlrpc_request_set_replen(req);
+
+	req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_setattr_interpret;
+	BUILD_BUG_ON(sizeof(*sa) > sizeof(req->rq_async_args));
+	sa = ptlrpc_req_async_args(sa, req);
+	sa->sa_oa = oa;
+	sa->sa_upcall = upcall;
+	sa->sa_cookie = cookie;
+
+	ptlrpcd_add_req(req);
+
+	RETURN(0);
+}
 
 static int osc_sync_interpret(const struct lu_env *env,
 			      struct ptlrpc_request *req, void *args, int rc)

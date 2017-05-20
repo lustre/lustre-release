@@ -1054,6 +1054,8 @@ void ofd_stats_counter_init(struct lprocfs_stats *stats)
 			     0, "set_info", "reqs");
 	lprocfs_counter_init(stats, LPROC_OFD_STATS_QUOTACTL,
 			     0, "quotactl", "reqs");
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_PREALLOC,
+			     0, "prealloc", "reqs");
 }
 
 LPROC_SEQ_FOPS(lprocfs_nid_stats_clear);

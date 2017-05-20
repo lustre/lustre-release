@@ -73,6 +73,7 @@ enum {
 	LPROC_OFD_STATS_GET_INFO,
 	LPROC_OFD_STATS_SET_INFO,
 	LPROC_OFD_STATS_QUOTACTL,
+	LPROC_OFD_STATS_PREALLOC,
 	LPROC_OFD_STATS_LAST,
 };
 
@@ -392,6 +393,9 @@ int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
 int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 		     __u64 start, __u64 end, struct lu_attr *la,
 		     struct obdo *oa);
+int ofd_object_fallocate(const struct lu_env *env, struct ofd_object *fo,
+			 __u64 start, __u64 end, int mode, struct lu_attr *la,
+			 struct obdo *oa);
 int ofd_destroy(const struct lu_env *, struct ofd_object *, int);
 int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 		 struct lu_attr *la);

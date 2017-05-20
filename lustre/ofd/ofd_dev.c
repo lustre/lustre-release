@@ -77,6 +77,7 @@
 #include <lustre_quota.h>
 #include <lustre_nodemap.h>
 #include <lustre_log.h>
+#include <linux/falloc.h>
 
 #include "ofd_internal.h"
 
@@ -1929,6 +1930,114 @@ put:
 }
 
 /**
+ * OFD request handler for OST_FALLOCATE RPC.
+ *
+ * This is part of request processing. Validate request fields,
+ * preallocate the given OFD object and pack reply.
+ *
+ * \param[in] tsi	target session environment for this request
+ *
+ * \retval		0 if successful
+ * \retval		negative value on error
+ */
+static int ofd_fallocate_hdl(struct tgt_session_info *tsi)
+{
+	struct obdo *oa = &tsi->tsi_ost_body->oa;
+	struct ost_body *repbody;
+	struct ofd_thread_info *info = tsi2ofd_info(tsi);
+	struct ldlm_namespace *ns = tsi->tsi_tgt->lut_obd->obd_namespace;
+	struct ldlm_resource *res;
+	struct ofd_object *fo;
+	__u64 flags = 0;
+	struct lustre_handle lh = { 0, };
+	int rc, mode;
+	__u64 start, end;
+	bool srvlock;
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+	if (repbody == NULL)
+		RETURN(err_serious(-ENOMEM));
+
+	/*
+	 * fallocate start and end are passed in o_size, o_blocks
+	 * on the wire.
+	 */
+	start = oa->o_size;
+	end = oa->o_blocks;
+	mode = oa->o_falloc_mode;
+	/*
+	 * Only mode == 0 (which is standard prealloc) is supported now.
+	 * Punch is not supported yet.
+	 */
+	if (mode & ~FALLOC_FL_KEEP_SIZE)
+		RETURN(-EOPNOTSUPP);
+
+	repbody->oa.o_oi = oa->o_oi;
+	repbody->oa.o_valid = OBD_MD_FLID;
+
+	srvlock = oa->o_valid & OBD_MD_FLFLAGS &&
+		  oa->o_flags & OBD_FL_SRVLOCK;
+
+	if (srvlock) {
+		rc = tgt_extent_lock(tsi->tsi_env, ns, &tsi->tsi_resid,
+				     start, end, &lh, LCK_PW, &flags);
+		if (rc != 0)
+			RETURN(rc);
+	}
+
+	fo = ofd_object_find_exists(tsi->tsi_env, ofd_exp(tsi->tsi_exp),
+				    &tsi->tsi_fid);
+	if (IS_ERR(fo))
+		GOTO(out, rc = PTR_ERR(fo));
+
+	la_from_obdo(&info->fti_attr, oa,
+		     OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME);
+
+	rc = ofd_object_fallocate(tsi->tsi_env, fo, start, end, mode,
+				 &info->fti_attr, oa);
+	if (rc)
+		GOTO(out_put, rc);
+
+	rc = ofd_attr_get(tsi->tsi_env, fo, &info->fti_attr);
+	if (rc == 0)
+		obdo_from_la(&repbody->oa, &info->fti_attr,
+			     OFD_VALID_FLAGS);
+	else
+		rc = 0;
+
+	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_PREALLOC,
+			 tsi->tsi_jobid, 1);
+
+	EXIT;
+out_put:
+	ofd_object_put(tsi->tsi_env, fo);
+out:
+	if (srvlock)
+		tgt_extent_unlock(&lh, LCK_PW);
+	if (rc == 0) {
+		res = ldlm_resource_get(ns, NULL, &tsi->tsi_resid,
+					LDLM_EXTENT, 0);
+		if (!IS_ERR(res)) {
+			struct ost_lvb *res_lvb;
+
+			ldlm_res_lvbo_update(res, NULL, 0);
+			res_lvb = res->lr_lvb_data;
+			/* Blocks */
+			repbody->oa.o_valid |= OBD_MD_FLBLOCKS;
+			repbody->oa.o_blocks = res_lvb->lvb_blocks;
+			/* Size */
+			repbody->oa.o_valid |= OBD_MD_FLSIZE;
+			repbody->oa.o_size = res_lvb->lvb_size;
+
+			ldlm_resource_putref(res);
+		}
+	}
+
+	RETURN(rc);
+}
+
+
+/**
  * OFD request handler for OST_PUNCH RPC.
  *
  * This is part of request processing. Validate request fields,
@@ -2711,6 +2820,7 @@ TGT_OST_HDL_HP(HAS_BODY | HAS_REPLY | IS_MUTABLE,
 TGT_OST_HDL(HAS_BODY | HAS_REPLY,	OST_SYNC,	ofd_sync_hdl),
 TGT_OST_HDL(HAS_REPLY,	OST_QUOTACTL,	ofd_quotactl),
 TGT_OST_HDL(HAS_BODY | HAS_REPLY, OST_LADVISE,	ofd_ladvise_hdl),
+TGT_OST_HDL(HAS_BODY | HAS_REPLY | IS_MUTABLE, OST_FALLOCATE, ofd_fallocate_hdl)
 };
 
 static struct tgt_opc_slice ofd_common_slice[] = {
