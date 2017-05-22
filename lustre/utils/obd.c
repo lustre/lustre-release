@@ -3656,32 +3656,14 @@ int jt_nodemap_modify(int argc, char **argv)
 	char			*param = NULL;
 	char			*value = NULL;
 
-	static struct option long_options[] = {
-		{
-			.name		= "name",
-			.has_arg	= required_argument,
-			.flag		= 0,
-			.val		= 'n',
-		},
-		{
-			.name		= "property",
-			.has_arg	= required_argument,
-			.flag		= 0,
-			.val		= 'p',
-		},
-		{
-			.name		= "value",
-			.has_arg	= required_argument,
-			.flag		= 0,
-			.val		= 'v',
-		},
-		{
-			NULL
-		}
-	};
+	static struct option long_opts[] = {
+	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
+	{ .val = 'p',	.name = "property",	.has_arg = required_argument },
+	{ .val = 'v',	.name = "value",	.has_arg = required_argument },
+	{ .name = NULL } };
 
 	while ((c = getopt_long(argc, argv, "n:p:v:",
-				long_options, NULL)) != -1) {
+				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'n':
 			nodemap_name = optarg;
