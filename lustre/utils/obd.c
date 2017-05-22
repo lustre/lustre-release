@@ -3781,32 +3781,14 @@ int jt_nodemap_del_idmap(int argc, char **argv)
 	char			*idtype = NULL;
 	int			rc = 0;
 
-	static struct option long_options[] = {
-		{
-			.name		= "name",
-			.has_arg	= required_argument,
-			.flag		= 0,
-			.val		= 'n',
-		},
-		{
-			.name		= "idmap",
-			.has_arg	= required_argument,
-			.flag		= 0,
-			.val		= 'm',
-		},
-		{
-			.name		= "idtype",
-			.has_arg	= required_argument,
-			.flag		= 0,
-			.val		= 'i',
-		},
-		{
-			NULL
-		}
-	};
+	static struct option long_opts[] = {
+	{ .val = 'i',	.name = "idtype",	.has_arg = required_argument },
+	{ .val = 'm',	.name = "idmap",	.has_arg = required_argument },
+	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
+	{ .name = NULL } };
 
 	while ((c = getopt_long(argc, argv, "n:m:i:",
-				long_options, NULL)) != -1) {
+				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'n':
 			nodemap_name = optarg;
