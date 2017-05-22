@@ -2656,14 +2656,13 @@ static int llog_cancel_parse_optional(int argc, char **argv,
 				      struct obd_ioctl_data *data)
 {
 	int cOpt;
-	const char *const short_options = "c:l:i:h";
-	const struct option long_options[] = {
-		{"catalog", required_argument, NULL, 'c'},
-		{"log_id", required_argument, NULL, 'l'},
-		{"log_idx", required_argument, NULL, 'i'},
-		{"help", no_argument, NULL, 'h'},
-		{NULL, 0, NULL, 0}
-	};
+	const char *const short_opts = "c:l:i:h";
+	const struct option long_opts[] = {
+	{ .val = 'c',	.name = "catalog",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'i',	.name = "log_idx",	.has_arg = required_argument },
+	{ .val = 'l',	.name = "log_id",	.has_arg = required_argument },
+	{ .name = NULL } };
 
 	/* sanity check */
 	if (!data || argc <= 1) {
@@ -2671,8 +2670,8 @@ static int llog_cancel_parse_optional(int argc, char **argv,
 	}
 
 	/*now process command line arguments*/
-	while ((cOpt = getopt_long(argc, argv, short_options,
-					long_options, NULL)) != -1) {
+	while ((cOpt = getopt_long(argc, argv, short_opts,
+					long_opts, NULL)) != -1) {
 		switch (cOpt) {
 		case 'c':
 			data->ioc_inllen1 = strlen(optarg) + 1;
