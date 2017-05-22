@@ -1150,18 +1150,21 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
         char                  *name = NULL;
         struct jt_fid_space    fid_space = {0};
         int                    version = 0;
-        struct option          long_opts[] = {
-                {"child_base_id",     required_argument, 0, 'b'},
-                {"stripe_count",      required_argument, 0, 'c'},
-                {"parent_basedir",    required_argument, 0, 'd'},
-                {"parent_dircount",   required_argument, 0, 'D'},
-                {"stripe_index",      required_argument, 0, 'i'},
-                {"mode",              required_argument, 0, 'm'},
-                {"count",             required_argument, 0, 'n'},
-                {"time",              required_argument, 0, 't'},
-                {"version",           no_argument,       0, 'v'},
-                {0, 0, 0, 0}
-        };
+	struct option long_opts[] = {
+	{ .val = 'b',	.name = "child_base_id",
+						.has_arg = required_argument },
+	{ .val = 'c',	.name = "stripe_count",
+						.has_arg = required_argument },
+	{ .val = 'd',	.name = "parent_basedir",
+						.has_arg = required_argument },
+	{ .val = 'D',	.name = "parent_dircount",
+						.has_arg = required_argument },
+	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument },
+	{ .val = 'm',	.name = "mode",		.has_arg = required_argument },
+	{ .val = 'n',	.name = "count",	.has_arg = required_argument },
+	{ .val = 't',	.name = "time",		.has_arg = required_argument },
+	{ .val = 'v',	.name = "version",	.has_arg = no_argument },
+	{ .name = NULL } };
 
         while ((c = getopt_long(argc, argv, "b:c:d:D:m:n:t:v",
                                 long_opts, NULL)) >= 0) {
