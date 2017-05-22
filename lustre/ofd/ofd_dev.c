@@ -993,48 +993,24 @@ int ofd_fiemap_get(const struct lu_env *env, struct ofd_device *ofd,
 	return rc;
 }
 
-struct locked_region {
-	struct list_head	list;
-	struct lustre_handle	lh;
-};
 
-/**
- * Lock single extent and save lock handle in the list.
- *
- * This is supplemental function for lock_zero_regions(). It allocates
- * new locked_region structure and locks it with extent lock, then adds
- * it to the list of all such regions.
- *
- * \param[in] ns	LDLM namespace
- * \param[in] res_id	resource ID
- * \param[in] begin	start of region
- * \param[in] end	end of region
- * \param[in] locked	list head of regions list
- *
- * \retval		0 if successful locking
- * \retval		negative value on error
- */
-static int lock_region(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
-		       unsigned long long begin, unsigned long long end,
-		       struct list_head *locked)
+static int ofd_lock_unlock_region(struct ldlm_namespace *ns,
+				  struct ldlm_res_id *res_id,
+				  unsigned long long begin,
+				  unsigned long long end)
 {
-	struct locked_region	*region = NULL;
 	__u64			 flags = 0;
 	int			 rc;
+	struct lustre_handle     lh = { 0 };
 
 	LASSERT(begin <= end);
-	OBD_ALLOC_PTR(region);
-	if (region == NULL)
-		return -ENOMEM;
 
-	rc = tgt_extent_lock(ns, res_id, begin, end, &region->lh,
-			     LCK_PR, &flags);
+	rc = tgt_extent_lock(ns, res_id, begin, end, &lh, LCK_PR, &flags);
 	if (rc != 0)
 		return rc;
 
-	CDEBUG(D_OTHER, "ost lock [%llu,%llu], lh=%p\n", begin, end,
-	       &region->lh);
-	list_add(&region->list, locked);
+	CDEBUG(D_OTHER, "ost lock [%llu,%llu], lh=%p\n", begin, end, &lh);
+	tgt_extent_unlock(&lh, LCK_PR);
 
 	return 0;
 }
@@ -1059,8 +1035,7 @@ static int lock_region(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
  */
 static int lock_zero_regions(struct ldlm_namespace *ns,
 			     struct ldlm_res_id *res_id,
-			     struct fiemap *fiemap,
-			     struct list_head *locked)
+			     struct fiemap *fiemap)
 {
 	__u64 begin = fiemap->fm_start;
 	unsigned int i;
@@ -1074,8 +1049,8 @@ static int lock_zero_regions(struct ldlm_namespace *ns,
 		if (fiemap_start[i].fe_logical > begin) {
 			CDEBUG(D_OTHER, "ost lock [%llu,%llu]\n",
 			       begin, fiemap_start[i].fe_logical);
-			rc = lock_region(ns, res_id, begin,
-					 fiemap_start[i].fe_logical, locked);
+			rc = ofd_lock_unlock_region(ns, res_id, begin,
+						    fiemap_start[i].fe_logical);
 			if (rc)
 				RETURN(rc);
 		}
@@ -1086,34 +1061,13 @@ static int lock_zero_regions(struct ldlm_namespace *ns,
 	if (begin < (fiemap->fm_start + fiemap->fm_length)) {
 		CDEBUG(D_OTHER, "ost lock [%llu,%llu]\n",
 		       begin, fiemap->fm_start + fiemap->fm_length);
-		rc = lock_region(ns, res_id, begin,
-				 fiemap->fm_start + fiemap->fm_length, locked);
+		rc = ofd_lock_unlock_region(ns, res_id, begin,
+				fiemap->fm_start + fiemap->fm_length);
 	}
 
 	RETURN(rc);
 }
 
-/**
- * Unlock all previously locked sparse areas for given resource.
- *
- * This function goes through list of locked regions, unlocking and freeing
- * them one-by-one.
- *
- * \param[in] ns	LDLM namespace
- * \param[in] locked	list head of regions list
- */
-static void
-unlock_zero_regions(struct ldlm_namespace *ns, struct list_head *locked)
-{
-	struct locked_region *entry, *temp;
-
-	list_for_each_entry_safe(entry, temp, locked, list) {
-		CDEBUG(D_OTHER, "ost unlock lh=%p\n", &entry->lh);
-		tgt_extent_unlock(&entry->lh, LCK_PR);
-		list_del(&entry->list);
-		OBD_FREE_PTR(entry);
-	}
-}
 
 /**
  * OFD request handler for OST_GET_INFO RPC.
@@ -1207,19 +1161,12 @@ static int ofd_get_info_hdl(struct tgt_session_info *tsi)
 		 * flushed back from client, then call fiemap again. */
 		if (fm_key->lfik_oa.o_valid & OBD_MD_FLFLAGS &&
 		    fm_key->lfik_oa.o_flags & OBD_FL_SRVLOCK) {
-			struct list_head locked;
-
-			INIT_LIST_HEAD(&locked);
 			ost_fid_build_resid(fid, &fti->fti_resid);
 			rc = lock_zero_regions(ofd->ofd_namespace,
-					       &fti->fti_resid, fiemap,
-					       &locked);
-			if (rc == 0 && !list_empty(&locked)) {
+					       &fti->fti_resid, fiemap);
+			if (rc == 0)
 				rc = ofd_fiemap_get(tsi->tsi_env, ofd, fid,
 						    fiemap);
-				unlock_zero_regions(ofd->ofd_namespace,
-						    &locked);
-			}
 		}
 	} else if (KEY_IS(KEY_LAST_FID)) {
 		struct ofd_device	*ofd = ofd_exp(exp);
