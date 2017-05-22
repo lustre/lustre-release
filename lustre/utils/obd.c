@@ -3599,26 +3599,13 @@ int jt_nodemap_set_fileset(int argc, char **argv)
 	int   rc = 0;
 	int   c;
 
-	static struct option long_options[] = {
-		{
-			.name		= "name",
-			.has_arg	= required_argument,
-			.flag		= 0,
-			.val		= 'n',
-		},
-		{
-			.name		= "fileset",
-			.has_arg	= required_argument,
-			.flag		= 0,
-			.val		= 'f',
-		},
-		{
-			NULL
-		}
-	};
+	static struct option long_opts[] = {
+	{ .val = 'f',	.name = "fileset",	.has_arg = required_argument },
+	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
+	{ .name = NULL } };
 
 	while ((c = getopt_long(argc, argv, "n:f:",
-				long_options, NULL)) != -1) {
+				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'n':
 			nodemap_name = optarg;
