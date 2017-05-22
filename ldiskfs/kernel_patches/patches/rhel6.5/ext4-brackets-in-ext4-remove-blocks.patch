@@ -1,0 +1,16 @@
+diff --git a/fs/ext4/extents.c b/fs/ext4/extents.c
+index 1ed737f..77e2fb3 100644
+--- a/fs/ext4/extents.c
++++ b/fs/ext4/extents.c
+@@ -2276,9 +2276,10 @@ static int ext4_remove_blocks(handle_t *handle, 
+ 	unsigned short ee_len =  ext4_ext_get_actual_len(ex);
+ 	int i, metadata = 0, flags =0;
+
+-	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode))
++	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode)) {
+ 		metadata = 1;
+ 		flags = EXT4_FREE_BLOCKS_METADATA;
++	}
+ #ifdef EXTENTS_STATS
+ 	{
+ 		struct ext4_sb_info *sbi = EXT4_SB(inode->i_sb);

@@ -78,7 +78,6 @@ lprocfs_dump_ns_seq_write(struct file *file, const char __user *buffer,
 LPROC_SEQ_FOPS_WO_TYPE(ldlm, dump_ns);
 
 LPROC_SEQ_FOPS_RW_TYPE(ldlm_rw, uint);
-LPROC_SEQ_FOPS_RO_TYPE(ldlm, uint);
 
 #ifdef HAVE_SERVER_SUPPORT
 

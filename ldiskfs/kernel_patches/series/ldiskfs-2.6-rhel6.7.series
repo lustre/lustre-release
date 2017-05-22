@@ -46,3 +46,4 @@ rhel6.3/ext4-notalloc_under_idatasem.patch
 rhel6.5/ext4-give-warning-with-dir-htree-growing.patch
 rhel6.6/ext4_s_max_ext_tree_depth.patch
 rhel6.5/ext4-fix-journal-quota.patch
+rhel6.5/ext4-brackets-in-ext4-remove-blocks.patch

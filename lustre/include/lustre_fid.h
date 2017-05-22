@@ -772,6 +772,7 @@ static inline void ost_fid_from_resid(struct lu_fid *fid,
 		/* old resid */
 		struct ost_id oi;
 
+		memset(&oi, 0, sizeof(oi));
 		ostid_set_seq(&oi, name->name[LUSTRE_RES_ID_VER_OID_OFF]);
 		if (ostid_set_id(&oi, name->name[LUSTRE_RES_ID_SEQ_OFF])) {
 			CERROR("Bad %llu to set " DOSTID "\n",
