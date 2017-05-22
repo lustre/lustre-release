@@ -599,16 +599,15 @@ static void set_defaults(struct mount_opts *mop)
 
 static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 {
-	static struct option long_opt[] = {
-		{"fake", 0, 0, 'f'},
-		{"force", 0, 0, 1},
-		{"help", 0, 0, 'h'},
-		{"nomtab", 0, 0, 'n'},
-		{"options", 1, 0, 'o'},
-		{"verbose", 0, 0, 'v'},
-		{"version", 0, 0, 'V'},
-		{0, 0, 0, 0}
-	};
+	static struct option long_opts[] = {
+	{ .val = 1,	.name = "force",	.has_arg = no_argument },
+	{ .val = 'f',	.name = "fake",		.has_arg = no_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'n',	.name = "nomtab",	.has_arg = no_argument },
+	{ .val = 'o',	.name = "options",	.has_arg = required_argument },
+	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+	{ .val = 'V',	.name = "version",	.has_arg = no_argument },
+	{ .name = NULL } };
 	char real_path[PATH_MAX] = {'\0'};
 	FILE *f;
 	char path[256], name[256];
@@ -617,7 +616,7 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 	int opt, rc;
 
 	while ((opt = getopt_long(argc, argv, "fhno:vV",
-				  long_opt, NULL)) != EOF){
+				  long_opts, NULL)) != EOF){
 		switch (opt) {
 		case 1:
 			++mop->mo_force;
