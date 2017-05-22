@@ -172,42 +172,45 @@ struct opt_map {
 };
 
 static const struct opt_map opt_map[] = {
-  /*"optname", inv,ms_mask */
-  /* These flags are parsed by mount, not lustre */
-  { "defaults", 0, 0         },      /* default options */
-  { "remount",  0, MS_REMOUNT},      /* remount with different options */
-  { "rw",       1, MS_RDONLY },      /* read-write */
-  { "ro",       0, MS_RDONLY },      /* read-only */
-  { "exec",     1, MS_NOEXEC },      /* permit execution of binaries */
-  { "noexec",   0, MS_NOEXEC },      /* don't execute binaries */
-  { "suid",     1, MS_NOSUID },      /* honor suid executables */
-  { "nosuid",   0, MS_NOSUID },      /* don't honor suid executables */
-  { "dev",      1, MS_NODEV  },      /* interpret device files  */
-  { "nodev",    0, MS_NODEV  },      /* don't interpret devices */
-  { "sync",     0, MS_SYNCHRONOUS},  /* synchronous I/O */
-  { "async",    1, MS_SYNCHRONOUS},  /* asynchronous I/O */
-  { "atime",    1, MS_NOATIME  },    /* set file access time on read */
-  { "noatime",  0, MS_NOATIME  },    /* do not set file access time on read */
+/* these flags are parsed by mount, not Lustre */
+{ .opt = "async",   .mask = MS_SYNCHRONOUS, .inv = 1 }, /* asynchronous I/O */
+{ .opt = "atime",   .mask = MS_NOATIME,	    .inv = 1 }, /* set access time */
+{ .opt = "auto" },					/* allow auto mount */
+{ .opt = "defaults" },					/* default options */
+{ .opt = "dev",	    .mask = MS_NODEV,	    .inv = 1 },	/* interpret devs */
+{ .opt = "exec",    .mask = MS_NOEXEC,	    .inv = 1 }, /* allow execution */
+{ .opt = "loop" },
+{ .opt = "noatime", .mask = MS_NOATIME },		/* do not set atime */
+{ .opt = "noauto" },					/* mount explicitly */
+{ .opt = "nodev",   .mask = MS_NODEV },			/* no interpret devs */
+{ .opt = "noowner",			    .inv = 1 },	/* no special privs */
+{ .opt = "nosuid",  .mask = MS_NOSUID },		/* do not honor suid */
+{ .opt = "nouser",			    .inv = 1 }, /* users cannot mount */
+{ .opt = "nousers",			    .inv = 1 }, /* users cannot mount */
+{ .opt = "_netdev" },					/* network only */
+{ .opt = "noexec",  .mask = MS_NOEXEC },		/* no execute */
+{ .opt = "remount", .mask = MS_REMOUNT },		/* remount */
+{ .opt = "ro",	    .mask = MS_RDONLY },		/* read-only */
+{ .opt = "rw",	    .mask = MS_RDONLY,	    .inv = 1 }, /* read-write */
+{ .opt = "suid",    .mask = MS_NOSUID,	    .inv = 1 }, /* honor suid */
+{ .opt = "sync",    .mask = MS_SYNCHRONOUS },		/* synchronous I/O */
 #ifdef MS_NODIRATIME
-  { "diratime", 1, MS_NODIRATIME },  /* set file access time on read */
-  { "nodiratime",0,MS_NODIRATIME },  /* do not set file access time on read */
+{ .opt = "diratime",					/* set access time */
+		    .mask = MS_NODIRATIME,  .inv = 1 },	/* on read */
+{ .opt = "nodiratime",					/* do not set access */
+		    .mask = MS_NODIRATIME },		/* time on read */
 #endif
 #ifdef MS_RELATIME
-  { "relatime", 0, MS_RELATIME },  /* set file access time on read */
-  { "norelatime",1,MS_RELATIME },  /* do not set file access time on read */
+{ .opt = "norelatime",					/* do not set rel */
+		    .mask = MS_RELATIME,    .inv = 1 },	/* access time */
+{ .opt = "relatime",					/* set relative */
+		    .mask = MS_RELATIME },		/* access time */
 #endif
 #ifdef MS_STRICTATIME
-  { "strictatime",0,MS_STRICTATIME },  /* update access time strictly */
+{ .opt = "strictatime",
+		    .mask = MS_STRICTATIME },		/* strict access time */
 #endif
-  { "auto",     0, 0         },      /* Can be mounted using -a */
-  { "noauto",   0, 0         },      /* Can only be mounted explicitly */
-  { "nousers",  1, 0         },      /* Forbid ordinary user to mount */
-  { "nouser",   1, 0         },      /* Forbid ordinary user to mount */
-  { "noowner",  1, 0         },      /* Device owner has no special privs */
-  { "_netdev",  0, 0         },      /* Device accessible only via network */
-  { "loop",     0, 0         },
-  { NULL,       0, 0         }
-};
+{ .opt = NULL } };
 /****************************************************************************/
 
 /* 1  = don't pass on to lustre
