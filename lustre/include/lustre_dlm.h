@@ -859,8 +859,7 @@ struct ldlm_lock {
 	 * The lists this could be linked into are:
 	 * waiting_locks_list (protected by waiting_locks_spinlock),
 	 * then if the lock timed out, it is moved to
-	 * expired_lock_thread.elt_expired_locks for further processing.
-	 * Protected by elt_lock.
+	 * expired_lock_list for further processing.
 	 */
 	struct list_head	l_pending_chain;
 

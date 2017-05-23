@@ -47,16 +47,16 @@ struct kmem_cache *ldlm_interval_tree_slab;
 int ldlm_srv_namespace_nr = 0;
 int ldlm_cli_namespace_nr = 0;
 
-struct mutex ldlm_srv_namespace_lock;
-struct list_head ldlm_srv_namespace_list;
+DEFINE_MUTEX(ldlm_srv_namespace_lock);
+LIST_HEAD(ldlm_srv_namespace_list);
 
-struct mutex ldlm_cli_namespace_lock;
+DEFINE_MUTEX(ldlm_cli_namespace_lock);
 /* Client Namespaces that have active resources in them.
  * Once all resources go away, ldlm_poold moves such namespaces to the
  * inactive list */
-struct list_head ldlm_cli_active_namespace_list;
+LIST_HEAD(ldlm_cli_active_namespace_list);
 /* Client namespaces that don't have any locks in them */
-struct list_head ldlm_cli_inactive_namespace_list;
+LIST_HEAD(ldlm_cli_inactive_namespace_list);
 
 static struct proc_dir_entry *ldlm_type_proc_dir;
 static struct proc_dir_entry *ldlm_ns_proc_dir;

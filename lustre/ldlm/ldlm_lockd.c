@@ -53,7 +53,7 @@ static char *ldlm_cpts;
 module_param(ldlm_cpts, charp, 0444);
 MODULE_PARM_DESC(ldlm_cpts, "CPU partitions ldlm threads should run on");
 
-static struct mutex	ldlm_ref_mutex;
+static DEFINE_MUTEX(ldlm_ref_mutex);
 static int ldlm_refcount;
 
 struct kobject *ldlm_kobj;
@@ -77,10 +77,6 @@ static inline unsigned int ldlm_get_rq_timeout(void)
 
         return timeout < 1 ? 1 : timeout;
 }
-
-#define ELT_STOPPED   0
-#define ELT_READY     1
-#define ELT_TERMINATE 2
 
 struct ldlm_bl_pool {
 	spinlock_t		blp_lock;
@@ -123,7 +119,7 @@ struct ldlm_bl_work_item {
 /**
  * Protects both waiting_locks_list and expired_lock_thread.
  */
-static spinlock_t waiting_locks_spinlock;   /* BH lock (timer) */
+static DEFINE_SPINLOCK(waiting_locks_spinlock); /* BH lock (timer) */
 
 /**
  * List for contended locks.
@@ -136,15 +132,20 @@ static spinlock_t waiting_locks_spinlock;   /* BH lock (timer) */
  *
  * All access to it should be under waiting_locks_spinlock.
  */
-static struct list_head waiting_locks_list;
-static struct timer_list waiting_locks_timer;
+static LIST_HEAD(waiting_locks_list);
+static void waiting_locks_callback(unsigned long unused);
+static DEFINE_TIMER(waiting_locks_timer, waiting_locks_callback, 0, 0);
 
-static struct expired_lock_thread {
-	wait_queue_head_t	elt_waitq;
-	int			elt_state;
-	int			elt_dump;
-	struct list_head		elt_expired_locks;
-} expired_lock_thread;
+enum elt_state {
+	ELT_STOPPED,
+	ELT_READY,
+	ELT_TERMINATE,
+};
+
+static DECLARE_WAIT_QUEUE_HEAD(expired_lock_wait_queue);
+static enum elt_state expired_lock_thread_state = ELT_STOPPED;
+static int expired_lock_dump;
+static LIST_HEAD(expired_lock_list);
 
 static inline int have_expired_locks(void)
 {
@@ -152,7 +153,7 @@ static inline int have_expired_locks(void)
 
 	ENTRY;
 	spin_lock_bh(&waiting_locks_spinlock);
-	need_to_run = !list_empty(&expired_lock_thread.elt_expired_locks);
+	need_to_run = !list_empty(&expired_lock_list);
 	spin_unlock_bh(&waiting_locks_spinlock);
 
 	RETURN(need_to_run);
@@ -163,30 +164,30 @@ static inline int have_expired_locks(void)
  */
 static int expired_lock_main(void *arg)
 {
-	struct list_head *expired = &expired_lock_thread.elt_expired_locks;
+	struct list_head *expired = &expired_lock_list;
 	struct l_wait_info lwi = { 0 };
 	int do_dump;
 
 	ENTRY;
 
-	expired_lock_thread.elt_state = ELT_READY;
-	wake_up(&expired_lock_thread.elt_waitq);
+	expired_lock_thread_state = ELT_READY;
+	wake_up(&expired_lock_wait_queue);
 
 	while (1) {
-		l_wait_event(expired_lock_thread.elt_waitq,
+		l_wait_event(expired_lock_wait_queue,
 			     have_expired_locks() ||
-			     expired_lock_thread.elt_state == ELT_TERMINATE,
+			     expired_lock_thread_state == ELT_TERMINATE,
 			     &lwi);
 
 		spin_lock_bh(&waiting_locks_spinlock);
-		if (expired_lock_thread.elt_dump) {
+		if (expired_lock_dump) {
 			spin_unlock_bh(&waiting_locks_spinlock);
 
 			/* from waiting_locks_callback, but not in timer */
 			libcfs_debug_dumplog();
 
 			spin_lock_bh(&waiting_locks_spinlock);
-			expired_lock_thread.elt_dump = 0;
+			expired_lock_dump = 0;
 		}
 
 		do_dump = 0;
@@ -248,12 +249,12 @@ static int expired_lock_main(void *arg)
 			libcfs_debug_dumplog();
 		}
 
-		if (expired_lock_thread.elt_state == ELT_TERMINATE)
+		if (expired_lock_thread_state == ELT_TERMINATE)
 			break;
 	}
 
-	expired_lock_thread.elt_state = ELT_STOPPED;
-	wake_up(&expired_lock_thread.elt_waitq);
+	expired_lock_thread_state = ELT_STOPPED;
+	wake_up(&expired_lock_wait_queue);
 	RETURN(0);
 }
 
@@ -336,16 +337,15 @@ static void waiting_locks_callback(unsigned long unused)
                  * the waiting_locks_list and ldlm_add_waiting_lock()
                  * already grabbed a ref */
 		list_del(&lock->l_pending_chain);
-		list_add(&lock->l_pending_chain,
-                             &expired_lock_thread.elt_expired_locks);
+		list_add(&lock->l_pending_chain, &expired_lock_list);
 		need_dump = 1;
 	}
 
-	if (!list_empty(&expired_lock_thread.elt_expired_locks)) {
+	if (!list_empty(&expired_lock_list)) {
 		if (obd_dump_on_timeout && need_dump)
-			expired_lock_thread.elt_dump = __LINE__;
+			expired_lock_dump = __LINE__;
 
-		wake_up(&expired_lock_thread.elt_waitq);
+		wake_up(&expired_lock_wait_queue);
 	}
 
         /*
@@ -639,9 +639,8 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 		/* the lock was not in any list, grab an extra ref before adding
 		 * the lock to the expired list */
 		LDLM_LOCK_GET(lock);
-	list_add(&lock->l_pending_chain,
-		     &expired_lock_thread.elt_expired_locks);
-	wake_up(&expired_lock_thread.elt_waitq);
+	list_add(&lock->l_pending_chain, &expired_lock_list);
+	wake_up(&expired_lock_wait_queue);
 	spin_unlock_bh(&waiting_locks_spinlock);
 }
 
@@ -3109,14 +3108,6 @@ static int ldlm_setup(void)
 	}
 
 #ifdef HAVE_SERVER_SUPPORT
-	INIT_LIST_HEAD(&expired_lock_thread.elt_expired_locks);
-	expired_lock_thread.elt_state = ELT_STOPPED;
-	init_waitqueue_head(&expired_lock_thread.elt_waitq);
-
-	INIT_LIST_HEAD(&waiting_locks_list);
-	spin_lock_init(&waiting_locks_spinlock);
-	setup_timer(&waiting_locks_timer, waiting_locks_callback, 0);
-
 	task = kthread_run(expired_lock_main, NULL, "ldlm_elt");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
@@ -3124,8 +3115,8 @@ static int ldlm_setup(void)
 		GOTO(out, rc);
 	}
 
-	wait_event(expired_lock_thread.elt_waitq,
-		       expired_lock_thread.elt_state == ELT_READY);
+	wait_event(expired_lock_wait_queue,
+		   expired_lock_thread_state == ELT_READY);
 #endif /* HAVE_SERVER_SUPPORT */
 
 	rc = ldlm_pools_init();
@@ -3197,11 +3188,11 @@ static int ldlm_cleanup(void)
 	ldlm_proc_cleanup();
 
 #ifdef HAVE_SERVER_SUPPORT
-	if (expired_lock_thread.elt_state != ELT_STOPPED) {
-		expired_lock_thread.elt_state = ELT_TERMINATE;
-		wake_up(&expired_lock_thread.elt_waitq);
-		wait_event(expired_lock_thread.elt_waitq,
-			       expired_lock_thread.elt_state == ELT_STOPPED);
+	if (expired_lock_thread_state != ELT_STOPPED) {
+		expired_lock_thread_state = ELT_TERMINATE;
+		wake_up(&expired_lock_wait_queue);
+		wait_event(expired_lock_wait_queue,
+			   expired_lock_thread_state == ELT_STOPPED);
 	}
 #endif
 
@@ -3213,14 +3204,6 @@ static int ldlm_cleanup(void)
 
 int ldlm_init(void)
 {
-	mutex_init(&ldlm_ref_mutex);
-	mutex_init(ldlm_namespace_lock(LDLM_NAMESPACE_SERVER));
-	mutex_init(ldlm_namespace_lock(LDLM_NAMESPACE_CLIENT));
-
-	INIT_LIST_HEAD(&ldlm_srv_namespace_list);
-	INIT_LIST_HEAD(&ldlm_cli_active_namespace_list);
-	INIT_LIST_HEAD(&ldlm_cli_inactive_namespace_list);
-
 	ldlm_resource_slab = kmem_cache_create("ldlm_resources",
 					       sizeof(struct ldlm_resource), 0,
 					       SLAB_HWCACHE_ALIGN, NULL);
