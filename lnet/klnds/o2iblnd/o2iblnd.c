@@ -2305,9 +2305,13 @@ out:
         LIBCFS_FREE(tpo, sizeof(kib_tx_pool_t));
 }
 
-static int kiblnd_tx_pool_size(int ncpts)
+static int kiblnd_tx_pool_size(struct lnet_ni *ni, int ncpts)
 {
-	int ntx = *kiblnd_tunables.kib_ntx / ncpts;
+	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
+	int ntx;
+
+	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
+	ntx = tunables->lnd_ntx / ncpts;
 
 	return max(IBLND_TX_POOL, ntx);
 }
@@ -2464,10 +2468,10 @@ kiblnd_net_init_pools(kib_net_t *net, struct lnet_ni *ni, __u32 *cpts,
 	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 #endif
 
-	if (tunables->lnd_fmr_pool_size < *kiblnd_tunables.kib_ntx / 4) {
+	if (tunables->lnd_fmr_pool_size < tunables->lnd_ntx / 4) {
 		CERROR("Can't set fmr pool size (%d) < ntx / 4(%d)\n",
 		       tunables->lnd_fmr_pool_size,
-		       *kiblnd_tunables.kib_ntx / 4);
+		       tunables->lnd_ntx / 4);
 		rc = -EINVAL;
 		goto failed;
 	}
@@ -2516,7 +2520,7 @@ kiblnd_net_init_pools(kib_net_t *net, struct lnet_ni *ni, __u32 *cpts,
 		cpt = (cpts == NULL) ? i : cpts[i];
 		rc = kiblnd_init_poolset(&net->ibn_tx_ps[cpt]->tps_poolset,
 					 cpt, net, "TX",
-					 kiblnd_tx_pool_size(ncpts),
+					 kiblnd_tx_pool_size(ni, ncpts),
 					 kiblnd_create_tx_pool,
 					 kiblnd_destroy_tx_pool,
 					 kiblnd_tx_init, NULL);

@@ -162,7 +162,6 @@ kib_tunables_t kiblnd_tunables = {
         .kib_cksum                  = &cksum,
         .kib_timeout                = &timeout,
         .kib_keepalive              = &keepalive,
-        .kib_ntx                    = &ntx,
         .kib_default_ipif           = &ipif_name,
         .kib_retry_count            = &retry_count,
         .kib_rnr_retry_count        = &rnr_retry_count,
@@ -290,6 +289,8 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 		tunables->lnd_fmr_flush_trigger = fmr_flush_trigger;
 	if (!tunables->lnd_fmr_cache)
 		tunables->lnd_fmr_cache = fmr_cache;
+	if (!tunables->lnd_ntx)
+		tunables->lnd_ntx = ntx;
 	if (!tunables->lnd_conns_per_peer) {
 		tunables->lnd_conns_per_peer = (conns_per_peer) ?
 			conns_per_peer : 1;
@@ -308,6 +309,7 @@ kiblnd_tunables_init(void)
 	default_tunables.lnd_fmr_pool_size = fmr_pool_size;
 	default_tunables.lnd_fmr_flush_trigger = fmr_flush_trigger;
 	default_tunables.lnd_fmr_cache = fmr_cache;
+	default_tunables.lnd_ntx = ntx;
 	default_tunables.lnd_conns_per_peer = conns_per_peer;
 	return 0;
 }

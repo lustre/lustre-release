@@ -1153,7 +1153,7 @@ lustre_lnet_ioctl_config_ni(struct list_head *intf_list,
 
 	list_for_each_entry(intf_descr, intf_list,
 			    intf_on_network) {
-		if (i == 0 && tunables != NULL)
+		if (tunables != NULL)
 			len = sizeof(struct lnet_ioctl_config_ni) +
 			      sizeof(struct lnet_ioctl_config_lnd_tunables);
 		else
@@ -1163,7 +1163,7 @@ lustre_lnet_ioctl_config_ni(struct list_head *intf_list,
 		if (!data)
 			return LUSTRE_CFG_RC_OUT_OF_MEM;
 		conf = (struct lnet_ioctl_config_ni*) data;
-		if (i == 0 && tunables != NULL)
+		if (tunables != NULL)
 			tun = (struct lnet_ioctl_config_lnd_tunables*)
 				conf->lic_bulk;
 
@@ -1197,8 +1197,7 @@ lustre_lnet_ioctl_config_ni(struct list_head *intf_list,
 
 		conf->lic_ncpts = count;
 
-		if (i == 0 && tunables != NULL)
-			/* TODO put in the LND tunables */
+		if (tunables != NULL)
 			memcpy(tun, tunables, sizeof(*tunables));
 
 		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_ADD_LOCAL_NI, data);
