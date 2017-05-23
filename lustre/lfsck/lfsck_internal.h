@@ -1223,9 +1223,7 @@ static inline umode_t lfsck_object_type(const struct dt_object *obj)
 
 static inline int lfsck_is_dead_obj(const struct dt_object *obj)
 {
-	struct lu_object_header *loh = obj->do_lu.lo_header;
-
-	return !!test_bit(LU_OBJECT_HEARD_BANSHEE, &loh->loh_flags);
+	return lu_object_is_dying(obj->do_lu.lo_header);
 }
 
 static inline struct dt_object *lfsck_object_get(struct dt_object *obj)
@@ -1258,16 +1256,6 @@ lfsck_object_find_by_dev_new(const struct lu_env *env, struct dt_device *dev,
 	struct lu_object_conf	*conf = &lfsck_env_info(env)->lti_conf;
 
 	conf->loc_flags = LOC_F_NEW;
-	return lu2dt(lu_object_find_slice(env, dt2lu_dev(dev), fid, conf));
-}
-
-static inline struct dt_object *
-lfsck_object_find_by_dev_nowait(const struct lu_env *env, struct dt_device *dev,
-				const struct lu_fid *fid)
-{
-	struct lu_object_conf	*conf = &lfsck_env_info(env)->lti_conf;
-
-	conf->loc_flags = LOC_F_NOWAIT;
 	return lu2dt(lu_object_find_slice(env, dt2lu_dev(dev), fid, conf));
 }
 
@@ -1318,20 +1306,6 @@ lfsck_object_find_bottom(const struct lu_env *env, struct lfsck_instance *lfsck,
 		return (struct dt_object *)dev;
 
 	return lfsck_object_find_by_dev(env, dev, fid);
-}
-
-static inline struct dt_object *
-lfsck_object_find_bottom_nowait(const struct lu_env *env,
-				struct lfsck_instance *lfsck,
-				const struct lu_fid *fid)
-{
-	struct dt_device *dev;
-
-	dev = lfsck_find_dev_by_fid(env, lfsck, fid);
-	if (IS_ERR(dev))
-		return (struct dt_object *)dev;
-
-	return lfsck_object_find_by_dev_nowait(env, dev, fid);
 }
 
 static inline struct dt_object *

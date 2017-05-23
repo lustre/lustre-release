@@ -58,9 +58,6 @@
 static const char dot[] = ".";
 static const char dotdot[] = "..";
 
-static const struct dt_body_operations lod_body_lnk_ops;
-static const struct dt_body_operations lod_body_ops;
-
 /**
  * Implementation of dt_index_operations::dio_lookup
  *
@@ -4212,11 +4209,6 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 	if (rc != 0)
 		GOTO(out, rc);
 
-	if (dof->dof_type == DFT_SYM)
-		dt->do_body_ops = &lod_body_lnk_ops;
-	else if (dof->dof_type == DFT_REGULAR)
-		dt->do_body_ops = &lod_body_ops;
-
 	/*
 	 * it's lod_ah_init() that has decided the object will be striped
 	 */
@@ -5024,6 +5016,9 @@ static ssize_t lod_read(const struct lu_env *env, struct dt_object *dt,
 			struct lu_buf *buf, loff_t *pos)
 {
 	struct dt_object *next = dt_object_child(dt);
+
+	LASSERT(S_ISREG(dt->do_lu.lo_header->loh_attr) ||
+		S_ISLNK(dt->do_lu.lo_header->loh_attr));
 	return next->do_body_ops->dbo_read(env, next, buf, pos);
 }
 
@@ -5050,6 +5045,8 @@ static ssize_t lod_write(const struct lu_env *env, struct dt_object *dt,
 			 const struct lu_buf *buf, loff_t *pos,
 			 struct thandle *th, int iq)
 {
+	LASSERT(S_ISREG(dt->do_lu.lo_header->loh_attr) ||
+		S_ISLNK(dt->do_lu.lo_header->loh_attr));
 	return lod_sub_write(env, dt_object_child(dt), buf, pos, th, iq);
 }
 
@@ -5068,16 +5065,17 @@ static int lod_punch(const struct lu_env *env, struct dt_object *dt,
 	if (dt_object_remote(dt))
 		return -ENOTSUPP;
 
+	LASSERT(S_ISREG(dt->do_lu.lo_header->loh_attr));
 	return lod_sub_punch(env, dt_object_child(dt), start, end, th);
 }
 
-static const struct dt_body_operations lod_body_lnk_ops = {
-	.dbo_read		= lod_read,
-	.dbo_declare_write	= lod_declare_write,
-	.dbo_write		= lod_write
-};
-
-static const struct dt_body_operations lod_body_ops = {
+/*
+ * different type of files use the same body_ops because object may be created
+ * in OUT, where there is no chance to set correct body_ops for each type, so
+ * body_ops themselves will check file type inside, see lod_read/write/punch for
+ * details.
+ */
+const struct dt_body_operations lod_body_ops = {
 	.dbo_read		= lod_read,
 	.dbo_declare_write	= lod_declare_write,
 	.dbo_write		= lod_write,
@@ -5154,6 +5152,8 @@ static int lod_object_init(const struct lu_env *env, struct lu_object *lo,
 	if (unlikely(cobj == NULL))
 		RETURN(-ENOMEM);
 
+	lu2lod_obj(lo)->ldo_obj.do_body_ops = &lod_body_ops;
+
 	lu_object_add(lo, cobj);
 
 	RETURN(0);
@@ -5213,27 +5213,6 @@ void lod_object_free_striping(const struct lu_env *env, struct lod_object *lo)
 }
 
 /**
- * Implementation of lu_object_operations::loo_object_start.
- *
- * \see lu_object_operations::loo_object_start() in the API description
- * for details.
- */
-static int lod_object_start(const struct lu_env *env, struct lu_object *o)
-{
-	if (S_ISLNK(o->lo_header->loh_attr & S_IFMT)) {
-		lu2lod_obj(o)->ldo_obj.do_body_ops = &lod_body_lnk_ops;
-	} else if (S_ISREG(o->lo_header->loh_attr & S_IFMT) ||
-		   fid_is_local_file(lu_object_fid(o))) {
-		/* Note: some local file (like last rcvd) is created
-		 * through bottom layer (OSD), so the object initialization
-		 * comes to lod, it does not set loh_attr yet, so
-		 * set do_body_ops for local file anyway */
-		lu2lod_obj(o)->ldo_obj.do_body_ops = &lod_body_ops;
-	}
-	return 0;
-}
-
-/**
  * Implementation of lu_object_operations::loo_object_free.
  *
  * \see lu_object_operations::loo_object_free() in the API description
@@ -5277,7 +5256,6 @@ static int lod_object_print(const struct lu_env *env, void *cookie,
 
 struct lu_object_operations lod_lu_obj_ops = {
 	.loo_object_init	= lod_object_init,
-	.loo_object_start	= lod_object_start,
 	.loo_object_free	= lod_object_free,
 	.loo_object_release	= lod_object_release,
 	.loo_object_print	= lod_object_print,

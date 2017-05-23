@@ -809,16 +809,6 @@ static int out_trans_stop(const struct lu_env *env,
 	rc = dt_trans_stop(env, ta->ta_handle->th_dev, ta->ta_handle);
 	for (i = 0; i < ta->ta_argno; i++) {
 		if (ta->ta_args[i]->object != NULL) {
-			struct dt_object *obj = ta->ta_args[i]->object;
-
-			/* If the object is being created during this
-			 * transaction, we need to remove them from the
-			 * cache immediately, because a few layers are
-			 * missing in OUT handler, i.e. the object might
-			 * not be initialized in all layers */
-			if (ta->ta_args[i]->exec_fn == out_tx_create_exec)
-				set_bit(LU_OBJECT_HEARD_BANSHEE,
-					&obj->do_lu.lo_header->loh_flags);
 			dt_object_put(env, ta->ta_args[i]->object);
 			ta->ta_args[i]->object = NULL;
 		}

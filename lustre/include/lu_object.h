@@ -166,10 +166,6 @@ typedef enum {
 	/* This is a new object to be allocated, or the file
 	 * corresponding to the object does not exists. */
 	LOC_F_NEW	= 0x00000001,
-
-	/* When find a dying object, just return -EAGAIN at once instead of
-	 * blocking the thread. */
-	LOC_F_NOWAIT	= 0x00000002,
 } loc_flags_t;
 
 /**
@@ -711,7 +707,7 @@ static inline void lu_object_get(struct lu_object *o)
 }
 
 /**
- * Return true of object will not be cached after last reference to it is
+ * Return true if object will not be cached after last reference to it is
  * released.
  */
 static inline int lu_object_is_dying(const struct lu_object_header *h)

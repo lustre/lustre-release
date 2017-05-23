@@ -5292,13 +5292,8 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 		 *    cause the parent object cannot be purged, then cause the
 		 *    child object cannot be purged also. So the LFSCK thread
 		 *    will fall into deadlock.
-		 *
-		 * We introduce non-blocked version lu_object_find() to allow
-		 * the LFSCK thread to return failure immediately (instead of
-		 * wait) when it finds dying (child) object, then the LFSCK
-		 * thread can check whether the parent object is dying or not.
-		 * So avoid above deadlock. LU-5395 */
-		cobj = lfsck_object_find_by_dev_nowait(env, tgt->ltd_tgt, fid);
+		 */
+		cobj = lfsck_object_find_by_dev(env, tgt->ltd_tgt, fid);
 		if (IS_ERR(cobj)) {
 			if (lfsck_is_dead_obj(parent)) {
 				lfsck_tgt_put(tgt);
