@@ -429,10 +429,11 @@ mmp_init
 
 # Test 1 - two mounts at the same time.
 test_1() {
-    check_failover_pair || return 0
+	check_failover_pair || return 0
 
-    mount_after_interval 0 0 || return ${PIPESTATUS[0]}
-    stop_services primary || return ${PIPESTATUS[0]}
+	mount_after_interval 0 0 || return ${PIPESTATUS[0]}
+	stop_services primary || return ${PIPESTATUS[0]}
+	stop_services failover || return ${PIPESTATUS[0]}
 }
 run_test 1 "two mounts at the same time"
 
