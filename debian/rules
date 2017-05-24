@@ -113,7 +113,6 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 	if [ "$(BUILDDIR)" != "." ]; then \
 		mkdir -p $(BUILDDIR)/build $(BUILDDIR)/lustre/contrib; \
 		cp build/Makefile $(BUILDDIR)/build/; \
-		cp lustre/contrib/mpich-*.patch $(BUILDDIR)/lustre/contrib/; \
 	fi
 	( cd $(BUILDDIR) && \
 	 $(SRCDIR)/configure --disable-dependency-tracking \

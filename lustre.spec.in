@@ -392,6 +392,7 @@ if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
 fi
 
 %if %{with lustre_utils}
+mkdir -p $RPM_BUILD_ROOT/%{_datadir}/lustre
 find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@ -name \*.la -type f -exec rm -f {} \;
 %endif
 
@@ -438,9 +439,9 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %if %{with manpages}
 %{_mandir}/man?/*
 %endif
+%{_datadir}/lustre
 %{_includedir}/lustre
 %endif
-%{_datadir}/lustre
 %{_sysconfdir}/udev/rules.d/99-lustre.rules
 %config(noreplace) %{_sysconfdir}/ldev.conf
 %if %{with lnet_dlc}

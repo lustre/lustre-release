@@ -1,5 +1,4 @@
 # Contributions Makefile
 
-EXTRA_DIST = mpich-*.patch
+EXTRA_DIST =
 pkgdata_DATA = $(EXTRA_DIST)
-
