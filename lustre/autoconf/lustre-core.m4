@@ -2467,6 +2467,25 @@ struct_posix_acl_xattr, [
 ]) # LC_STRUCT_POSIX_ACL_XATTR
 
 #
+# LC_IOP_GENERIC_READLINK
+#
+# Kernel version 4.10 commit dfeef68862edd7d4bafe68ef7aeb5f658ef24bb5
+# removed generic_readlink from individual file systems
+#
+AC_DEFUN([LC_IOP_GENERIC_READLINK], [
+LB_CHECK_COMPILE([if 'generic_readlink' still exist],
+inode_ops_readlink, [
+	#include <linux/fs.h>
+],[
+	struct inode_operations iop;
+	iop.readlink = generic_readlink;
+],[
+	AC_DEFINE(HAVE_IOP_GENERIC_READLINK, 1,
+		[generic_readlink has been removed])
+])
+]) # LC_IOP_GENERIC_READLINK
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2669,6 +2688,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.9
 	LC_GROUP_INFO_GID
+
+	# 4.10
+	LC_IOP_GENERIC_READLINK
 
 	#
 	AS_IF([test "x$enable_server" != xno], [

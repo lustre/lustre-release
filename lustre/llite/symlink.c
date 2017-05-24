@@ -221,7 +221,9 @@ static const char *ll_follow_link(struct dentry *dentry, void **cookie)
 #endif /* HAVE_SYMLINK_OPS_USE_NAMEIDATA */
 
 struct inode_operations ll_fast_symlink_inode_operations = {
+#ifdef HAVE_IOP_GENERIC_READLINK
 	.readlink	= generic_readlink,
+#endif
 	.setattr	= ll_setattr,
 #ifdef HAVE_IOP_GET_LINK
 	.get_link	= ll_get_link,
