@@ -1498,7 +1498,8 @@ test_57() {
 	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
 	replay_barrier $SINGLEMDS
 	fail $SINGLEMDS
-	sleep 1
+	wait_recovery_complete $SINGLEMDS || error "MDS recovery is not done"
+	wait_mds_ost_sync || error "wait_mds_ost_sync failed"
 	$CHECKSTAT -t file $DIR/$tfile ||
 		error "$CHECKSTAT $DIR/$tfile attribute check failed"
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0x0"
