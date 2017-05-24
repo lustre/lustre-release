@@ -805,7 +805,7 @@ struct lnet_peer_ni *lnet_nid2peerni_locked(lnet_nid_t nid, int cpt);
 struct lnet_peer_ni *lnet_nid2peerni_ex(lnet_nid_t nid, int cpt);
 struct lnet_peer_ni *lnet_find_peer_ni_locked(lnet_nid_t nid);
 void lnet_peer_net_added(struct lnet_net *net);
-lnet_nid_t lnet_peer_primary_nid(lnet_nid_t nid);
+lnet_nid_t lnet_peer_primary_nid_locked(lnet_nid_t nid);
 void lnet_peer_tables_cleanup(struct lnet_net *net);
 void lnet_peer_uninit(void);
 int lnet_peer_tables_create(void);

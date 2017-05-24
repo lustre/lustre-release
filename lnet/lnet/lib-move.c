@@ -2524,8 +2524,6 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 		msg->msg_hdr.dest_pid	= dest_pid;
 		msg->msg_hdr.payload_length = payload_length;
 	}
-	/* Multi-Rail: Primary NID of source. */
-	msg->msg_initiator = lnet_peer_primary_nid(src_nid);
 
 	lnet_net_lock(cpt);
 	lpni = lnet_nid2peerni_locked(from_nid, cpt);
@@ -2544,6 +2542,8 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr, lnet_nid_t from_nid,
 	msg->msg_rxpeer = lpni;
 	msg->msg_rxni = ni;
 	lnet_ni_addref_locked(ni, cpt);
+	/* Multi-Rail: Primary NID of source. */
+	msg->msg_initiator = lnet_peer_primary_nid_locked(src_nid);
 
 	if (lnet_isrouter(msg->msg_rxpeer)) {
 		lnet_peer_set_alive(msg->msg_rxpeer);
@@ -2845,8 +2845,7 @@ lnet_create_reply_msg(struct lnet_ni *ni, struct lnet_msg *getmsg)
 	       libcfs_nid2str(ni->ni_nid), libcfs_id2str(peer_id), getmd);
 
 	/* setup information for lnet_build_msg_event */
-	msg->msg_initiator = lnet_peer_primary_nid(peer_id.nid);
-	/* Cheaper: msg->msg_initiator = getmsg->msg_txpeer->lp_nid; */
+	msg->msg_initiator = getmsg->msg_txpeer->lpni_peer_net->lpn_peer->lp_primary_nid;
 	msg->msg_from = peer_id.nid;
 	msg->msg_type = LNET_MSG_GET; /* flag this msg as an "optimized" GET */
 	msg->msg_hdr.src_nid = peer_id.nid;
