@@ -670,8 +670,18 @@ ksocknal_choose_scheduler_locked(unsigned int cpt)
 	ksock_sched_t		*sched;
 	int			i;
 
-	LASSERT(info->ksi_nthreads > 0);
+	if (info->ksi_nthreads == 0) {
+		cfs_percpt_for_each(info, i, ksocknal_data.ksnd_sched_info) {
+			if (info->ksi_nthreads > 0) {
+				CDEBUG(D_NET, "scheduler[%d] has no threads. selected scheduler[%d]\n",
+				       cpt, info->ksi_cpt);
+				goto select_sched;
+			}
+		}
+		return NULL;
+	}
 
+select_sched:
 	sched = &info->ksi_scheds[0];
 	/*
 	 * NB: it's safe so far, but info->ksi_nthreads could be changed
@@ -1263,6 +1273,15 @@ ksocknal_create_conn(struct lnet_ni *ni, ksock_route_t *route,
 	peer_ni->ksnp_error = 0;
 
 	sched = ksocknal_choose_scheduler_locked(cpt);
+	if (!sched) {
+		CERROR("no schedulers available. node is unhealthy\n");
+		goto failed_2;
+	}
+	/*
+	 * The cpt might have changed if we ended up selecting a non cpt
+	 * native scheduler. So use the scheduler's cpt instead.
+	 */
+	cpt = sched->kss_info->ksi_cpt;
         sched->kss_nconns++;
         conn->ksnc_scheduler = sched;
 
@@ -2425,20 +2444,23 @@ ksocknal_base_startup(void)
 		info->ksi_nthreads_max = nthrs;
 		info->ksi_cpt = i;
 
-		LIBCFS_CPT_ALLOC(info->ksi_scheds, lnet_cpt_table(), i,
-				 info->ksi_nthreads_max * sizeof(*sched));
-		if (info->ksi_scheds == NULL)
-			goto failed;
+		if (nthrs != 0) {
+			LIBCFS_CPT_ALLOC(info->ksi_scheds, lnet_cpt_table(), i,
+					 info->ksi_nthreads_max *
+						sizeof(*sched));
+			if (info->ksi_scheds == NULL)
+				goto failed;
 
-		for (; nthrs > 0; nthrs--) {
-			sched = &info->ksi_scheds[nthrs - 1];
+			for (; nthrs > 0; nthrs--) {
+				sched = &info->ksi_scheds[nthrs - 1];
 
-			sched->kss_info = info;
-			spin_lock_init(&sched->kss_lock);
-			INIT_LIST_HEAD(&sched->kss_rx_conns);
-			INIT_LIST_HEAD(&sched->kss_tx_conns);
-			INIT_LIST_HEAD(&sched->kss_zombie_noop_txs);
-			init_waitqueue_head(&sched->kss_waitq);
+				sched->kss_info = info;
+				spin_lock_init(&sched->kss_lock);
+				INIT_LIST_HEAD(&sched->kss_rx_conns);
+				INIT_LIST_HEAD(&sched->kss_tx_conns);
+				INIT_LIST_HEAD(&sched->kss_zombie_noop_txs);
+				init_waitqueue_head(&sched->kss_waitq);
+			}
 		}
         }
 

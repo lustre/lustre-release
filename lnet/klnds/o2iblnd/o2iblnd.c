@@ -698,6 +698,36 @@ kiblnd_get_completion_vector(kib_conn_t *conn, int cpt)
 	return 1;
 }
 
+/*
+ * Get the scheduler bound to this CPT. If the scheduler has no
+ * threads, which means that the CPT has no CPUs, then grab the
+ * next scheduler that we can use.
+ *
+ * This case would be triggered if a NUMA node is configured with
+ * no associated CPUs.
+ */
+static struct kib_sched_info *
+kiblnd_get_scheduler(int cpt)
+{
+	struct kib_sched_info *sched;
+	int i;
+
+	sched = kiblnd_data.kib_scheds[cpt];
+
+	if (sched->ibs_nthreads > 0)
+		return sched;
+
+	cfs_percpt_for_each(sched, i, kiblnd_data.kib_scheds) {
+		if (sched->ibs_nthreads > 0) {
+			CDEBUG(D_NET, "scheduler[%d] has no threads. selected scheduler[%d]\n",
+					cpt, sched->ibs_cpt);
+			return sched;
+		}
+	}
+
+	return NULL;
+}
+
 kib_conn_t *
 kiblnd_create_conn(kib_peer_ni_t *peer_ni, struct rdma_cm_id *cmid,
 		   int state, int version)
@@ -730,9 +760,18 @@ kiblnd_create_conn(kib_peer_ni_t *peer_ni, struct rdma_cm_id *cmid,
 	dev = net->ibn_dev;
 
 	cpt = lnet_cpt_of_nid(peer_ni->ibp_nid, peer_ni->ibp_ni);
-	sched = kiblnd_data.kib_scheds[cpt];
+	sched = kiblnd_get_scheduler(cpt);
 
-	LASSERT(sched->ibs_nthreads > 0);
+	if (sched == NULL) {
+		CERROR("no schedulers available. node is unhealthy\n");
+		goto failed_0;
+	}
+
+	/*
+	 * The cpt might have changed if we ended up selecting a non cpt
+	 * native scheduler. So use the scheduler's cpt instead.
+	 */
+	cpt = sched->ibs_cpt;
 
 	LIBCFS_CPT_ALLOC(init_qp_attr, lnet_cpt_table(), cpt,
 			 sizeof(*init_qp_attr));
