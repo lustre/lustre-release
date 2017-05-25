@@ -186,10 +186,20 @@ struct scrub_file {
 	__u8    sf_oi_bitmap[SCRUB_OI_BITMAP_SIZE];
 };
 
+struct osd_iit_param {
+	struct super_block *sb;
+	struct buffer_head *bitmap;
+	ldiskfs_group_t bg;
+	__u32 gbase;
+	__u32 offset;
+	__u32 start;
+};
+
 struct osd_scrub {
 	struct lvfs_run_ctxt    os_ctxt;
 	struct ptlrpc_thread    os_thread;
 	struct osd_idmap_cache  os_oic;
+	struct osd_iit_param	os_iit_param;
 	struct list_head	os_inconsistent_items;
 
 	/* write lock for scrub prep/update/post/checkpoint,

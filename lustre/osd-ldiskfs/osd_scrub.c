@@ -808,15 +808,6 @@ static int osd_scrub_post(struct osd_scrub *scrub, int result)
 
 /* iteration engine */
 
-struct osd_iit_param {
-	struct super_block *sb;
-	struct buffer_head *bitmap;
-	ldiskfs_group_t bg;
-	__u32 gbase;
-	__u32 offset;
-	__u32 start;
-};
-
 typedef int (*osd_iit_next_policy)(struct osd_thread_info *info,
 				   struct osd_device *dev,
 				   struct osd_iit_param *param,
@@ -1079,20 +1070,18 @@ static int osd_preload_next(struct osd_thread_info *info,
 			    struct osd_device *dev, struct osd_iit_param *param,
 			    struct osd_idmap_cache **oic, const bool noslot)
 {
-	struct osd_otable_cache *ooc    = &dev->od_otable_it->ooi_cache;
-	struct osd_scrub	*scrub;
-	struct ptlrpc_thread	*thread;
-	int			 rc;
+	struct osd_otable_cache *ooc = &dev->od_otable_it->ooi_cache;
+	struct osd_scrub *scrub = &dev->od_scrub;
+	struct ptlrpc_thread *thread = &scrub->os_thread;
+	int rc;
 
-	rc = osd_iit_next(param, &ooc->ooc_pos_preload);
-	if (rc != 0)
-		return rc;
-
-	scrub = &dev->od_scrub;
-	thread = &scrub->os_thread;
 	if (thread_is_running(thread) &&
 	    ooc->ooc_pos_preload >= scrub->os_pos_current)
 		return SCRUB_NEXT_EXIT;
+
+	rc = osd_iit_next(param, &ooc->ooc_pos_preload);
+	if (rc)
+		return rc;
 
 	rc = osd_iit_iget(info, dev,
 			  &ooc->ooc_cache[ooc->ooc_producer_idx].oic_fid,
@@ -1166,10 +1155,10 @@ wait:
 		spin_unlock(&scrub->os_lock);
 	}
 
-	if (scrub->os_full_speed || rc == SCRUB_NEXT_CONTINUE)
+	if (rc == SCRUB_NEXT_CONTINUE)
 		return 0;
 
-	if (!ooc || osd_scrub_has_window(scrub, ooc)) {
+	if (scrub->os_full_speed || !ooc || osd_scrub_has_window(scrub, ooc)) {
 		*noslot = false;
 		return 0;
 	}
@@ -1280,21 +1269,25 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 	osd_iit_exec_policy   exec;
 	__u32		     *pos;
 	__u32		     *count;
-	struct osd_iit_param  param  = { NULL };
+	struct osd_iit_param *param;
 	struct l_wait_info    lwi    = { 0 };
-	__u32		      limit;
+	__u32		      limit =
+		le32_to_cpu(LDISKFS_SB(osd_sb(dev))->s_es->s_inodes_count);
 	int		      rc;
 	bool		      noslot = true;
 	ENTRY;
 
-	param.sb = osd_sb(dev);
 	if (preload)
 		goto full;
+
+	param = &scrub->os_iit_param;
+	memset(param, 0, sizeof(*param));
+	param->sb = osd_sb(dev);
 
 	while (scrub->os_partial_scan && !scrub->os_in_join) {
 		struct osd_idmap_cache *oic = NULL;
 
-		rc = osd_scrub_next(info, dev, &param, &oic, noslot);
+		rc = osd_scrub_next(info, dev, param, &oic, noslot);
 		switch (rc) {
 		case SCRUB_NEXT_EXIT:
 			RETURN(0);
@@ -1317,7 +1310,7 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 				goto full;
 			}
 
-			rc = param.sb->s_op->statfs(param.sb->s_root, ksfs);
+			rc = param->sb->s_op->statfs(param->sb->s_root, ksfs);
 			if (rc == 0) {
 				__u64 used = ksfs->f_files - ksfs->f_ffree;
 
@@ -1361,7 +1354,7 @@ wait:
 		default:
 			LASSERTF(rc == 0, "rc = %d\n", rc);
 
-			osd_scrub_exec(info, dev, &param, oic, &noslot, rc);
+			osd_scrub_exec(info, dev, param, oic, &noslot, rc);
 			break;
 		}
 	}
@@ -1382,6 +1375,12 @@ full:
 		exec = osd_scrub_exec;
 		pos = &scrub->os_pos_current;
 		count = &scrub->os_new_checked;
+		param->start = *pos;
+		param->bg = (*pos - 1) / LDISKFS_INODES_PER_GROUP(param->sb);
+		param->offset =
+			(*pos - 1) % LDISKFS_INODES_PER_GROUP(param->sb);
+		param->gbase =
+			1 + param->bg * LDISKFS_INODES_PER_GROUP(param->sb);
 	} else {
 		struct osd_otable_cache *ooc = &dev->od_otable_it->ooi_cache;
 
@@ -1389,20 +1388,15 @@ full:
 		exec = osd_preload_exec;
 		pos = &ooc->ooc_pos_preload;
 		count = &ooc->ooc_cached_items;
+		param = &dev->od_otable_it->ooi_iit_param;
 	}
 
 	rc = 0;
-	param.start = *pos;
-	param.bg = (*pos - 1) / LDISKFS_INODES_PER_GROUP(param.sb);
-	param.offset = (*pos - 1) % LDISKFS_INODES_PER_GROUP(param.sb);
-	param.gbase = 1 + param.bg * LDISKFS_INODES_PER_GROUP(param.sb);
-	limit = le32_to_cpu(LDISKFS_SB(param.sb)->s_es->s_inodes_count);
-
 	while (*pos <= limit && *count < max) {
 		struct ldiskfs_group_desc *desc;
 		bool next_group = false;
 
-		desc = ldiskfs_get_group_desc(param.sb, param.bg, NULL);
+		desc = ldiskfs_get_group_desc(param->sb, param->bg, NULL);
 		if (!desc)
 			RETURN(-EIO);
 
@@ -1411,59 +1405,59 @@ full:
 			goto next_group;
 		}
 
-		param.bitmap = ldiskfs_read_inode_bitmap(param.sb, param.bg);
-		if (!param.bitmap) {
+		param->bitmap = ldiskfs_read_inode_bitmap(param->sb, param->bg);
+		if (!param->bitmap) {
 			CERROR("%s: fail to read bitmap for %u, "
 			       "scrub will stop, urgent mode\n",
-			       osd_scrub2name(scrub), (__u32)param.bg);
+			       osd_scrub2name(scrub), (__u32)param->bg);
 			RETURN(-EIO);
 		}
 
 		do {
 			struct osd_idmap_cache *oic = NULL;
 
-			if (param.offset +
-				ldiskfs_itable_unused_count(param.sb, desc) >=
-			    LDISKFS_INODES_PER_GROUP(param.sb)) {
+			if (param->offset +
+				ldiskfs_itable_unused_count(param->sb, desc) >=
+			    LDISKFS_INODES_PER_GROUP(param->sb)) {
 				next_group = true;
 				goto next_group;
 			}
 
-			rc = next(info, dev, &param, &oic, noslot);
+			rc = next(info, dev, param, &oic, noslot);
 			switch (rc) {
 			case SCRUB_NEXT_BREAK:
 				next_group = true;
 				goto next_group;
 			case SCRUB_NEXT_EXIT:
-				brelse(param.bitmap);
+				brelse(param->bitmap);
 				RETURN(0);
 			case SCRUB_NEXT_CRASH:
-				brelse(param.bitmap);
+				brelse(param->bitmap);
 				RETURN(SCRUB_IT_CRASH);
 			case SCRUB_NEXT_FATAL:
-				brelse(param.bitmap);
+				brelse(param->bitmap);
 				RETURN(-EINVAL);
 			}
 
-			rc = exec(info, dev, &param, oic, &noslot, rc);
+			rc = exec(info, dev, param, oic, &noslot, rc);
 		} while (!rc && *pos <= limit && *count < max);
 
 next_group:
-		if (param.bitmap) {
-			brelse(param.bitmap);
-			param.bitmap = NULL;
+		if (param->bitmap) {
+			brelse(param->bitmap);
+			param->bitmap = NULL;
 		}
 
 		if (rc < 0)
 			GOTO(out, rc);
 
 		if (next_group) {
-			param.bg++;
-			param.offset = 0;
-			param.gbase = 1 +
-				param.bg * LDISKFS_INODES_PER_GROUP(param.sb);
-			*pos = param.gbase;
-			param.start = *pos;
+			param->bg++;
+			param->offset = 0;
+			param->gbase = 1 +
+				param->bg * LDISKFS_INODES_PER_GROUP(param->sb);
+			*pos = param->gbase;
+			param->start = *pos;
 		}
 	}
 
@@ -1471,11 +1465,6 @@ next_group:
 		RETURN(SCRUB_IT_ALL);
 
 out:
-	/* For preload case, increase the iteration cursor,
-	 * then we will not scan the last object repeatedly. */
-	if (preload)
-		dev->od_otable_it->ooi_cache.ooc_pos_preload++;
-
 	RETURN(rc);
 }
 
@@ -3086,6 +3075,7 @@ static int osd_otable_it_load(const struct lu_env *env,
 	struct osd_device       *dev   = it->ooi_dev;
 	struct osd_otable_cache *ooc   = &it->ooi_cache;
 	struct osd_scrub	*scrub = &dev->od_scrub;
+	struct osd_iit_param	*param = &it->ooi_iit_param;
 	int			 rc;
 	ENTRY;
 
@@ -3107,6 +3097,15 @@ static int osd_otable_it_load(const struct lu_env *env,
 	it->ooi_user_ready = 1;
 	if (!scrub->os_full_speed)
 		wake_up_all(&scrub->os_thread.t_ctl_waitq);
+
+	memset(param, 0, sizeof(*param));
+	param->sb = osd_sb(dev);
+	param->start = ooc->ooc_pos_preload;
+	param->bg = (ooc->ooc_pos_preload - 1) /
+		    LDISKFS_INODES_PER_GROUP(param->sb);
+	param->offset = (ooc->ooc_pos_preload - 1) %
+			LDISKFS_INODES_PER_GROUP(param->sb);
+	param->gbase = 1 + param->bg * LDISKFS_INODES_PER_GROUP(param->sb);
 
 	/* Unplug OSD layer iteration by the first next() call. */
 	rc = osd_otable_it_next(env, (struct dt_it *)it);
@@ -3348,6 +3347,20 @@ int osd_scrub_dump(struct seq_file *m, struct osd_device *dev)
 			   rtime, speed, new_checked, scrub->os_pos_current,
 			   scrub->os_lf_scanned, scrub->os_lf_repaired,
 			   scrub->os_lf_failed);
+		seq_printf(m, "inodes_per_group: %lu\n"
+			   "current_iit_group: %u\n"
+			   "current_iit_base: %u\n"
+			   "current_iit_offset: %u\n"
+			   "scrub_in_prior: %s\n"
+			   "scrub_full_speed: %s\n"
+			   "partial_scan: %s\n",
+			   LDISKFS_INODES_PER_GROUP(osd_sb(dev)),
+			   scrub->os_iit_param.bg,
+			   scrub->os_iit_param.gbase,
+			   scrub->os_iit_param.offset,
+			   scrub->os_in_prior ? "yes" : "no",
+			   scrub->os_full_speed ? "yes" : "no",
+			   scrub->os_partial_scan ? "yes" : "no");
 	} else {
 		if (sf->sf_run_time != 0)
 			do_div(speed, sf->sf_run_time);

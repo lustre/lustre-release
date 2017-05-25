@@ -216,6 +216,7 @@ struct osd_otable_cache {
 struct osd_otable_it {
 	struct osd_device       *ooi_dev;
 	struct osd_otable_cache  ooi_cache;
+	struct osd_iit_param	 ooi_iit_param;
 
 	/* The following bits can be updated/checked w/o lock protection.
 	 * If more bits will be introduced in the future and need lock to
