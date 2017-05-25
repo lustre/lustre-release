@@ -1235,8 +1235,7 @@ int llapi_get_poollist(const char *name, char **poollist, int list_size,
 	char *fsname;
         char *ptr;
         DIR *dir;
-        struct dirent pool;
-        struct dirent *cookie = NULL;
+	struct dirent *pool;
         int rc = 0;
         unsigned int nb_entries = 0;
         unsigned int used = 0;
@@ -1288,20 +1287,16 @@ int llapi_get_poollist(const char *name, char **poollist, int list_size,
 		goto free_path;
 	}
 
-	while(1) {
-		rc = readdir_r(dir, &pool, &cookie);
-		if (rc != 0) {
+	do {
+		errno = 0;
+		pool = readdir(dir);
+		if (pool == NULL) {
 			rc = -errno;
-			llapi_error(LLAPI_MSG_ERROR, rc,
-				    "Error reading pool list for '%s'", name);
-			goto free_path;
-		} else if ((rc == 0) && (cookie == NULL)) {
-			/* end of directory */
-			break;
+			goto free_dir;
 		}
 
                 /* ignore . and .. */
-                if (!strcmp(pool.d_name, ".") || !strcmp(pool.d_name, ".."))
+		if (!strcmp(pool->d_name, ".") || !strcmp(pool->d_name, ".."))
                         continue;
 
                 /* check output bounds */
@@ -1311,19 +1306,22 @@ int llapi_get_poollist(const char *name, char **poollist, int list_size,
 		}
 
                 /* +2 for '.' and final '\0' */
-		if (used + strlen(pool.d_name) + strlen(fsname) + 2
+		if (used + strlen(pool->d_name) + strlen(fsname) + 2
 		    > buffer_size) {
 			rc = -EOVERFLOW;
 			goto free_dir;
 		}
 
-                sprintf(buffer + used, "%s.%s", fsname, pool.d_name);
+		sprintf(buffer + used, "%s.%s", fsname, pool->d_name);
                 poollist[nb_entries] = buffer + used;
-                used += strlen(pool.d_name) + strlen(fsname) + 2;
+		used += strlen(pool->d_name) + strlen(fsname) + 2;
                 nb_entries++;
-        }
+	} while (1);
 
 free_dir:
+	if (rc)
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "Error reading pool list for '%s'", name);
 	closedir(dir);
 free_path:
 	cfs_free_param_data(&pathname);

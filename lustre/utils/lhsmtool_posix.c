@@ -1467,7 +1467,7 @@ static int ct_import_fid(const lustre_fid *import_fid)
 static int ct_import_recurse(const char *relpath)
 {
 	DIR		*dir;
-	struct dirent	 ent, *cookie = NULL;
+	struct dirent	*ent;
 	char		*srcpath, *newpath;
 	lustre_fid	 import_fid;
 	int		 rc;
@@ -1504,31 +1504,20 @@ static int ct_import_recurse(const char *relpath)
 	}
 	free(srcpath);
 
-	while (1) {
-		rc = readdir_r(dir, &ent, &cookie);
-		if (rc != 0) {
-			rc = -errno;
-			CT_ERROR(rc, "cannot readdir_r '%s'", relpath);
-			err_major++;
-			goto out;
-		} else if ((rc == 0) && (cookie == NULL)) {
-			/* end of directory */
-			break;
-		}
-
-		if (!strcmp(ent.d_name, ".") ||
-		    !strcmp(ent.d_name, ".."))
+	while ((ent = readdir(dir)) != NULL) {
+		if (!strcmp(ent->d_name, ".") ||
+		    !strcmp(ent->d_name, ".."))
 			continue;
 
 		/* New relative path */
-		newpath = path_concat(relpath, ent.d_name);
+		newpath = path_concat(relpath, ent->d_name);
 		if (newpath == NULL) {
 			err_major++;
 			rc = -ENOMEM;
 			goto out;
 		}
 
-		if (ent.d_type == DT_DIR) {
+		if (ent->d_type == DT_DIR) {
 			rc = ct_import_recurse(newpath);
 		} else {
 			char src[PATH_MAX];
@@ -1705,7 +1694,7 @@ static int ct_dir_level_max(const char *dirpath, __u16 *sub_seqmax)
 	DIR		*dir;
 	int		 rc;
 	__u16		 sub_seq;
-	struct dirent	 ent, *cookie = NULL;
+	struct dirent *ent;
 
 	*sub_seqmax = 0;
 
@@ -1716,26 +1705,29 @@ static int ct_dir_level_max(const char *dirpath, __u16 *sub_seqmax)
 		return rc;
 	}
 
-	while ((rc = readdir_r(dir, &ent, &cookie)) == 0) {
-		if (cookie == NULL)
+	do {
+		errno = 0;
+		ent = readdir(dir);
+		if (ent == NULL) {
 			/* end of directory.
 			 * rc is 0 and seqmax contains the max value. */
+			rc = -errno;
+			if (rc)
+				CT_ERROR(rc, "cannot readdir '%s'", dirpath);
 			goto out;
+		}
 
-		if (!strcmp(ent.d_name, ".") || !strcmp(ent.d_name, ".."))
+		if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
 			continue;
 
-		if (sscanf(ent.d_name, "%hx", &sub_seq) != 1) {
+		if (sscanf(ent->d_name, "%hx", &sub_seq) != 1) {
 			CT_TRACE("'%s' has an unexpected dirname format, "
-				 "skip entry", ent.d_name);
+				 "skip entry", ent->d_name);
 			continue;
 		}
 		if (sub_seq > *sub_seqmax)
 			*sub_seqmax = sub_seq;
-	}
-	rc = -errno;
-	CT_ERROR(rc, "cannot readdir_r '%s'", dirpath);
-
+	} while (1);
 out:
 	closedir(dir);
 	return rc;
