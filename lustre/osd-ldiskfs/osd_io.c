@@ -1454,8 +1454,8 @@ int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs)
                 csize = min(blocksize - boffs, size);
 		bh = __ldiskfs_bread(NULL, inode, block, 0);
 		if (IS_ERR(bh)) {
-			CERROR("%s: can't read %u@%llu on ino %lu: rc = %ld\n",
-			       LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
+			CERROR("%s: can't read %u@%llu on ino %lu: "
+			       "rc = %ld\n", osd_ino2name(inode),
 			       csize, *offs, inode->i_ino,
 			       PTR_ERR(bh));
 			return PTR_ERR(bh);

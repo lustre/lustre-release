@@ -364,9 +364,9 @@ int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
 		lustre_loa_swab(loa, true);
 		/* Check LMA compatibility */
 		if (lma->lma_incompat & ~LMA_INCOMPAT_SUPP) {
-			CWARN("%.16s: unsupported incompat LMA feature(s) %#x "
+			CWARN("%s: unsupported incompat LMA feature(s) %#x "
 			      "for fid = "DFID", ino = %lu\n",
-			      LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
+			      osd_ino2name(inode),
 			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
 			      PFID(&lma->lma_self_fid), inode->i_ino);
 			rc = -EOPNOTSUPP;
@@ -410,8 +410,8 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		iput(inode);
 		inode = ERR_PTR(-ESTALE);
 	} else if (is_bad_inode(inode)) {
-		CWARN("%.16s: bad inode: ino = %u\n",
-		LDISKFS_SB(osd_sb(dev))->s_es->s_volume_name, id->oii_ino);
+		CWARN("%s: bad inode: ino = %u\n",
+		osd_dev2name(dev), id->oii_ino);
 		iput(inode);
 		inode = ERR_PTR(-ENOENT);
 	} else if ((rc = osd_attach_jinode(inode))) {
@@ -957,9 +957,8 @@ again:
 
 out:
 	if (rc < 0)
-		CDEBUG(D_LFSCK, "%.16s: fail to check LMV EA, inode = %lu/%u,"
-		       DFID": rc = %d\n",
-		       LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
+		CDEBUG(D_LFSCK, "%s: fail to check LMV EA, inode = %lu/%u,"
+		       DFID": rc = %d\n", osd_ino2name(inode),
 		       inode->i_ino, inode->i_generation,
 		       PFID(&oic->oic_fid), rc);
 	else
@@ -1103,7 +1102,7 @@ trigger:
 
 join:
 				rc1 = osd_scrub_start(dev, flags);
-				LCONSOLE_WARN("%.16s: trigger OI scrub by RPC "
+				LCONSOLE_WARN("%s: trigger OI scrub by RPC "
 					      "for the "DFID" with flags 0x%x,"
 					      " rc = %d\n", osd_name(dev),
 					      PFID(fid), flags, rc1);
@@ -5047,10 +5046,9 @@ trigger:
 		rc = osd_scrub_start(dev, SS_AUTO_PARTIAL | SS_CLEAR_DRYRUN |
 				     SS_CLEAR_FAILOUT);
 		CDEBUG(D_LFSCK | D_CONSOLE | D_WARNING,
-		       "%.16s: trigger partial OI scrub for RPC inconsistency "
+		       "%s: trigger partial OI scrub for RPC inconsistency "
 		       "checking FID "DFID": rc = %d\n",
-		       LDISKFS_SB(osd_sb(dev))->s_es->s_volume_name,
-		       PFID(fid), rc);
+		       osd_dev2name(dev), PFID(fid), rc);
 		if (rc == 0 || rc == -EALREADY)
 			goto again;
 	}
@@ -6143,9 +6141,9 @@ osd_dirent_reinsert(const struct lu_env *env, struct osd_device *dev,
 	/* It is too bad, we cannot reinsert the name entry back.
 	 * That means we lose it! */
 	if (rc != 0)
-		CDEBUG(D_LFSCK, "%.16s: fail to reinsert the dirent, "
+		CDEBUG(D_LFSCK, "%s: fail to reinsert the dirent, "
 		       "dir = %lu/%u, name = %.*s, "DFID": rc = %d\n",
-		       LDISKFS_SB(inode->i_sb)->s_es->s_volume_name,
+		       osd_ino2name(inode),
 		       dir->i_ino, dir->i_generation, namelen,
 		       dentry->d_name.name, PFID(fid), rc);
 

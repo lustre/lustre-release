@@ -83,7 +83,7 @@ static inline int osd_scrub_has_window(struct osd_scrub *scrub,
 
 static inline const char *osd_scrub2name(struct osd_scrub *scrub)
 {
-	return LDISKFS_SB(osd_scrub2sb(scrub))->s_es->s_volume_name;
+	return osd_dev2name(osd_scrub2dev(scrub));
 }
 
 /**
@@ -274,7 +274,7 @@ void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags)
 {
 	struct scrub_file *sf = &scrub->os_file;
 
-	CDEBUG(D_LFSCK, "%.16s: reset OI scrub file, old flags = "
+	CDEBUG(D_LFSCK, "%s: reset OI scrub file, old flags = "
 	       "%#llx, add flags = %#llx\n",
 	       osd_scrub2name(scrub), sf->sf_flags, flags);
 
@@ -310,7 +310,7 @@ static int osd_scrub_file_load(struct osd_scrub *scrub)
 
 		osd_scrub_file_to_cpu(sf, &scrub->os_file_disk);
 		if (sf->sf_magic != SCRUB_MAGIC_V1) {
-			CDEBUG(D_LFSCK, "%.16s: invalid scrub magic "
+			CDEBUG(D_LFSCK, "%s: invalid scrub magic "
 			       "0x%x != 0x%x\n", osd_scrub2name(scrub),
 			       sf->sf_magic, SCRUB_MAGIC_V1);
 			/* Process it as new scrub file. */
@@ -319,7 +319,7 @@ static int osd_scrub_file_load(struct osd_scrub *scrub)
 			rc = 0;
 		}
 	} else if (rc != 0) {
-		CDEBUG(D_LFSCK, "%.16s: fail to load scrub file, "
+		CDEBUG(D_LFSCK, "%s: fail to load scrub file, "
 		       "expected = %d: rc = %d\n",
 		       osd_scrub2name(scrub), len, rc);
 		if (rc > 0)
@@ -347,7 +347,7 @@ int osd_scrub_file_store(struct osd_scrub *scrub)
 	jh = osd_journal_start_sb(osd_sb(dev), LDISKFS_HT_MISC, credits);
 	if (IS_ERR(jh)) {
 		rc = PTR_ERR(jh);
-		CDEBUG(D_LFSCK, "%.16s: fail to start trans for scrub store: "
+		CDEBUG(D_LFSCK, "%s: fail to start trans for scrub store: "
 		       "rc = %d\n", osd_scrub2name(scrub), rc);
 		return rc;
 	}
@@ -357,7 +357,7 @@ int osd_scrub_file_store(struct osd_scrub *scrub)
 				      len, 0, &pos, jh);
 	ldiskfs_journal_stop(jh);
 	if (rc != 0)
-		CDEBUG(D_LFSCK, "%.16s: fail to store scrub file, "
+		CDEBUG(D_LFSCK, "%s: fail to store scrub file, "
 		       "expected = %d: rc = %d\n",
 		       osd_scrub2name(scrub), len, rc);
 
@@ -665,7 +665,7 @@ static int osd_scrub_prep(struct osd_device *dev)
 	bool		      drop_dryrun = false;
 	ENTRY;
 
-	CDEBUG(D_LFSCK, "%.16s: OI scrub prep, flags = 0x%x\n",
+	CDEBUG(D_LFSCK, "%s: OI scrub prep, flags = 0x%x\n",
 	       osd_scrub2name(scrub), flags);
 
 	down_write(&scrub->os_rwsem);
@@ -763,7 +763,7 @@ static int osd_scrub_post(struct osd_scrub *scrub, int result)
 	int rc;
 	ENTRY;
 
-	CDEBUG(D_LFSCK, "%.16s: OI scrub post, result = %d\n",
+	CDEBUG(D_LFSCK, "%s: OI scrub post, result = %d\n",
 	       osd_scrub2name(scrub), result);
 
 	down_write(&scrub->os_rwsem);
@@ -984,9 +984,8 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 		if (rc == -ENOENT || rc == -ESTALE)
 			RETURN(SCRUB_NEXT_CONTINUE);
 
-		CDEBUG(D_LFSCK, "%.16s: fail to read inode, ino# = %u: "
-		       "rc = %d\n", LDISKFS_SB(sb)->s_es->s_volume_name,
-		       pos, rc);
+		CDEBUG(D_LFSCK, "%s: fail to read inode, ino# = %u: "
+		       "rc = %d\n", osd_dev2name(dev), pos, rc);
 		RETURN(rc);
 	}
 
@@ -1147,7 +1146,7 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 
 	rc = osd_scrub_checkpoint(scrub);
 	if (rc != 0) {
-		CDEBUG(D_LFSCK, "%.16s: fail to checkpoint, pos = %u: "
+		CDEBUG(D_LFSCK, "%s: fail to checkpoint, pos = %u: "
 		       "rc = %d\n", osd_scrub2name(scrub),
 		       scrub->os_pos_current, rc);
 		/* Continue, as long as the scrub itself can go ahead. */
@@ -1255,7 +1254,7 @@ static void osd_scrub_join(struct osd_device *dev, __u32 flags,
 	sf->sf_pos_last_checkpoint = sf->sf_pos_latest_start - 1;
 	rc = osd_scrub_file_store(scrub);
 	if (rc != 0)
-		CDEBUG(D_LFSCK, "%.16s: fail to store scrub file when join "
+		CDEBUG(D_LFSCK, "%s: fail to store scrub file when join "
 		       "the OI scrub: rc = %d\n", osd_scrub2name(scrub), rc);
 
 	spin_lock(&scrub->os_lock);
@@ -1414,7 +1413,7 @@ full:
 
 		param.bitmap = ldiskfs_read_inode_bitmap(param.sb, param.bg);
 		if (!param.bitmap) {
-			CERROR("%.16s: fail to read bitmap for %u, "
+			CERROR("%s: fail to read bitmap for %u, "
 			       "scrub will stop, urgent mode\n",
 			       osd_scrub2name(scrub), (__u32)param.bg);
 			RETURN(-EIO);
@@ -1515,14 +1514,14 @@ static int osd_scrub_main(void *args)
 
 	rc = lu_env_init(&env, LCT_LOCAL);
 	if (rc != 0) {
-		CDEBUG(D_LFSCK, "%.16s: OI scrub fail to init env: rc = %d\n",
+		CDEBUG(D_LFSCK, "%s: OI scrub fail to init env: rc = %d\n",
 		       osd_scrub2name(scrub), rc);
 		GOTO(noenv, rc);
 	}
 
 	rc = osd_scrub_prep(dev);
 	if (rc != 0) {
-		CDEBUG(D_LFSCK, "%.16s: OI scrub fail to scrub prep: rc = %d\n",
+		CDEBUG(D_LFSCK, "%s: OI scrub fail to scrub prep: rc = %d\n",
 		       osd_scrub2name(scrub), rc);
 		GOTO(out, rc);
 	}
@@ -1541,7 +1540,7 @@ static int osd_scrub_main(void *args)
 		scrub->os_pos_current = ooc->ooc_pos_preload;
 	}
 
-	CDEBUG(D_LFSCK, "%.16s: OI scrub start, flags = 0x%x, pos = %u\n",
+	CDEBUG(D_LFSCK, "%s: OI scrub start, flags = 0x%x, pos = %u\n",
 	       osd_scrub2name(scrub), scrub->os_start_flags,
 	       scrub->os_pos_current);
 
@@ -1552,7 +1551,7 @@ static int osd_scrub_main(void *args)
 
 post:
 	rc = osd_scrub_post(scrub, rc);
-	CDEBUG(D_LFSCK, "%.16s: OI scrub: stop, pos = %u: rc = %d\n",
+	CDEBUG(D_LFSCK, "%s: OI scrub: stop, pos = %u: rc = %d\n",
 	       osd_scrub2name(scrub), scrub->os_pos_current, rc);
 
 out:
@@ -2633,7 +2632,7 @@ again:
 	task = kthread_run(osd_scrub_main, dev, "OI_scrub");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
-		CERROR("%.16s: cannot start iteration thread: rc = %d\n",
+		CERROR("%s: cannot start iteration thread: rc = %d\n",
 		       osd_scrub2name(scrub), rc);
 		RETURN(rc);
 	}
@@ -2770,15 +2769,14 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 			OBD_ALLOC_PTR(old_uuid);
 			OBD_ALLOC_PTR(new_uuid);
 			if (old_uuid == NULL || new_uuid == NULL) {
-				CERROR("%.16s: UUID has been changed, but"
+				CERROR("%s: UUID has been changed, but"
 				       "failed to allocate RAM for report\n",
-				       LDISKFS_SB(sb)->s_es->s_volume_name);
+				       osd_dev2name(dev));
 			} else {
 				class_uuid_unparse(sf->sf_uuid, old_uuid);
 				class_uuid_unparse(es->s_uuid, new_uuid);
-				CERROR("%.16s: UUID has been changed from "
-				       "%s to %s\n",
-				       LDISKFS_SB(sb)->s_es->s_volume_name,
+				CERROR("%s: UUID has been changed from "
+				       "%s to %s\n", osd_dev2name(dev),
 				       old_uuid->uuid, new_uuid->uuid);
 			}
 			osd_scrub_file_reset(scrub, es->s_uuid,SF_INCONSISTENT);

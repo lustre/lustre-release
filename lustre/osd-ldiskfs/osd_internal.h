@@ -935,6 +935,16 @@ static inline struct super_block *osd_sb(const struct osd_device *dev)
 	return dev->od_mnt->mnt_sb;
 }
 
+static inline const char *osd_dev2name(const struct osd_device *dev)
+{
+	return osd_sb(dev)->s_id;
+}
+
+static inline const char *osd_ino2name(const struct inode *inode)
+{
+	return inode->i_sb->s_id;
+}
+
 /**
  * Put the osd object once done with it.
  *

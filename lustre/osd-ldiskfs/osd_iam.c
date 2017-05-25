@@ -178,9 +178,8 @@ iam_load_idle_blocks(struct iam_container *c, iam_ptr_t blk)
 
 	bh = __ldiskfs_bread(NULL, inode, blk, 0);
 	if (IS_ERR_OR_NULL(bh)) {
-		CERROR("%.16s: cannot load idle blocks, blk = %u, err = %ld\n",
-		       LDISKFS_SB(inode->i_sb)->s_es->s_volume_name, blk,
-		       bh ? PTR_ERR(bh) : -EIO);
+		CERROR("%s: cannot load idle blocks, blk = %u, err = %ld\n",
+		       osd_ino2name(inode), blk, bh ? PTR_ERR(bh) : -EIO);
 		c->ic_idle_failed = 1;
 		if (bh == NULL)
 			bh = ERR_PTR(-EIO);
@@ -189,9 +188,8 @@ iam_load_idle_blocks(struct iam_container *c, iam_ptr_t blk)
 
 	head = (struct iam_idle_head *)(bh->b_data);
 	if (le16_to_cpu(head->iih_magic) != IAM_IDLE_HEADER_MAGIC) {
-		CERROR("%.16s: invalid idle block head, blk = %u, magic = %d\n",
-		       LDISKFS_SB(inode->i_sb)->s_es->s_volume_name, blk,
-		       le16_to_cpu(head->iih_magic));
+		CERROR("%s: invalid idle block head, blk = %u, magic = %d\n",
+		       osd_ino2name(inode), blk, le16_to_cpu(head->iih_magic));
 		brelse(bh);
 		c->ic_idle_failed = 1;
 		return ERR_PTR(-EBADF);
@@ -2219,8 +2217,8 @@ static iam_ptr_t iam_index_shrink(handle_t *h, struct iam_path *p,
 
 	lh = iam_lock_htree(c, frame->curidx, DLT_WRITE);
 	if (lh == NULL) {
-		CWARN("%.16s: No memory to recycle idle blocks\n",
-		      LDISKFS_SB(inode->i_sb)->s_es->s_volume_name);
+		CWARN("%s: No memory to recycle idle blocks\n",
+		      osd_ino2name(inode));
 		return 0;
 	}
 
@@ -2361,8 +2359,8 @@ static void iam_recycle_leaf(handle_t *h, struct iam_path *p,
 unlock:
 	mutex_unlock(&c->ic_idle_mutex);
 	if (rc != 0)
-		CWARN("%.16s: idle blocks failed, will lose the blk %u\n",
-		      LDISKFS_SB(inode->i_sb)->s_es->s_volume_name, blk);
+		CWARN("%s: idle blocks failed, will lose the blk %u\n",
+		      osd_ino2name(inode), blk);
 }
 
 /*

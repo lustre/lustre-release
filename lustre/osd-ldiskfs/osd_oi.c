@@ -316,12 +316,11 @@ osd_oi_table_open(struct osd_thread_info *info, struct osd_device *osd,
 			continue;
 		}
 
-		CERROR("%.16s: can't open %s: rc = %d\n",
-		       LDISKFS_SB(osd_sb(osd))->s_es->s_volume_name, name, rc);
+		CERROR("%s: can't open %s: rc = %d\n",
+		       osd_dev2name(osd), name, rc);
 		if (oi_count > 0)
-			CERROR("%.16s: expect to open total %d OI files.\n",
-			       LDISKFS_SB(osd_sb(osd))->s_es->s_volume_name,
-			       oi_count);
+			CERROR("%s: expect to open total %d OI files.\n",
+			       osd_dev2name(osd), oi_count);
 		break;
 	}
 
@@ -362,10 +361,8 @@ static int osd_remove_ois(struct osd_thread_info *info, struct osd_device *osd)
 				   OSD_OI_NAME_BASE, i);
 		rc = osd_remove_oi_one(osd_sb(osd)->s_root, name, namelen);
 		if (rc != 0) {
-			CERROR("%.16s: fail to remove the stale OI file %s: "
-			       "rc = %d\n",
-			       LDISKFS_SB(osd_sb(osd))->s_es->s_volume_name,
-			       name, rc);
+			CERROR("%s: fail to remove the stale OI file %s: "
+			       "rc = %d\n", osd_dev2name(osd), name, rc);
 			return rc;
 		}
 	}
@@ -373,8 +370,8 @@ static int osd_remove_ois(struct osd_thread_info *info, struct osd_device *osd)
 	namelen = snprintf(name, sizeof(name), "%s", OSD_OI_NAME_BASE);
 	rc = osd_remove_oi_one(osd_sb(osd)->s_root, name, namelen);
 	if (rc != 0)
-		CERROR("%.16s: fail to remove the stale OI file %s: rc = %d\n",
-		       LDISKFS_SB(osd_sb(osd))->s_es->s_volume_name, name, rc);
+		CERROR("%s: fail to remove the stale OI file %s: rc = %d\n",
+		       osd_dev2name(osd), name, rc);
 
 	return rc;
 }
@@ -435,9 +432,8 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 					SF_UPGRADE);
 		GOTO(out, rc = 1);
 	} else if (rc != -ENOENT) {
-		CERROR("%.16s: can't open %s: rc = %d\n",
-		       LDISKFS_SB(osd_sb(osd))->s_es->s_volume_name,
-		       OSD_OI_NAME_BASE, rc);
+		CERROR("%s: can't open %s: rc = %d\n",
+		       osd_dev2name(osd), OSD_OI_NAME_BASE, rc);
 		GOTO(out, rc);
 	}
 
@@ -732,9 +728,8 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 
 		if (!(lma->lma_compat & LMAC_NOT_IN_OI) &&
 		    lu_fid_eq(fid, &lma->lma_self_fid)) {
-			CERROR("%.16s: the FID "DFID" is used by two objects: "
-			       "%u/%u %u/%u\n",
-			       LDISKFS_SB(osd_sb(osd))->s_es->s_volume_name,
+			CERROR("%s: the FID "DFID" is used by two objects: "
+			       "%u/%u %u/%u\n", osd_dev2name(osd),
 			       PFID(fid), oi_id->oii_ino, oi_id->oii_gen,
 			       id->oii_ino, id->oii_gen);
 			return -EEXIST;
