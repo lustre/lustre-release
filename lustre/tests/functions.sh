@@ -1069,3 +1069,70 @@ ior_mdtest_parallel() {
 	[[ $rc1 -ne 0 || $rc2 -ne 0 ]] && return 1
 	return 0
 }
+
+run_fio() {
+	FIO=${FIO:=$(which fio 2> /dev/null || true)}
+
+	local clients=${CLIENTS:-$(hostname)}
+	local fio_jobNum=${fio_jobNum:-4}
+	local fio_jobFile=${fio_jobFile:-$TMP/fiojobfile.$(date +%s)}
+	local fio_bs=${fio_bs:-1}
+	local testdir=$DIR/d0.fio
+	local file=${testdir}/fio
+	local runtime=60
+	local propagate=false
+
+	[ "$SLOW" = "no" ] || runtime=600
+
+	[ x$FIO = x ] &&
+		{ skip_env "FIO not found" && return; }
+
+	mkdir -p $testdir
+
+	# use fio job file if exists,
+	# create a simple one if missing
+	if ! [ -f $fio_jobFile ]; then
+		cat >> $fio_jobFile <<EOF
+[global]
+rw=randwrite
+size=128m
+time_based=1
+runtime=$runtime
+filename=${file}_\$(hostname)
+EOF
+		# bs size increased by $i for each job
+		for ((i=1; i<=fio_jobNum; i++)); do
+			cat >> $fio_jobFile <<EOF
+
+[job$i]
+bs=$(( fio_bs * i ))m
+EOF
+		done
+		# job file is created, should be propagated to all clients
+		propagate=true
+	fi
+
+
+	# propagate the job file if not all clients have it yet or
+	# if the job file was created during the test run
+	if ! do_nodesv $clients " [ -f $fio_jobFile ] " ||
+	   $propagate; then
+		local cfg=$(cat $fio_jobFile)
+		do_nodes $clients "echo \\\"$cfg\\\" > ${fio_jobFile}" ||
+			error "job file $fio_jobFile is not propagated"
+		do_nodesv $clients "cat ${fio_jobFile}"
+	fi
+
+	cmd="$FIO $fio_jobFile"
+	echo "+ $cmd"
+
+	log "clients: $clients $cmd"
+
+	local rc=0
+	do_nodesv $clients "$cmd "
+	rc=$?
+
+	[ $rc = 0 ] || error "fio failed: $rc"
+	rm -rf $testdir
+}
+

@@ -156,6 +156,11 @@ test_fs_test () {
 }
 run_test fs_test "fs_test"
 
+test_fio () {
+	run_fio
+}
+run_test fio "fio"
+
 [ $(facet_fstype $SINGLEMDS) = zfs -o $(facet_fstype "ost1") = zfs ] &&
 	SLOW=$ZFSSLOW
 
