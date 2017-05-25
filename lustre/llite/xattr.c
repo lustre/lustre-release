@@ -147,11 +147,6 @@ int ll_setxattr_common(struct inode *inode, const char *name,
 		 strcmp(name, "lustre.lov") == 0))
 		RETURN(0);
 
-	/* b15587: ignore security.capability xattr for now */
-	if ((xattr_type == XATTR_SECURITY_T &&
-	    strcmp(name, "security.capability") == 0))
-		RETURN(0);
-
 	/* LU-549:  Disable security.selinux when selinux is disabled */
 	if (xattr_type == XATTR_SECURITY_T && !selinux_is_enabled() &&
 	    strcmp(name, "security.selinux") == 0)
@@ -342,11 +337,6 @@ int ll_getxattr_common(struct inode *inode, const char *name,
         rc = xattr_type_filter(sbi, xattr_type);
         if (rc)
                 RETURN(rc);
-
-        /* b15587: ignore security.capability xattr for now */
-        if ((xattr_type == XATTR_SECURITY_T &&
-            strcmp(name, "security.capability") == 0))
-                RETURN(-ENODATA);
 
         /* LU-549:  Disable security.selinux when selinux is disabled */
         if (xattr_type == XATTR_SECURITY_T && !selinux_is_enabled() &&
