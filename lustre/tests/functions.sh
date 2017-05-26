@@ -337,26 +337,26 @@ run_compilebench() {
 }
 
 run_metabench() {
-
-    METABENCH=${METABENCH:-$(which metabench 2> /dev/null || true)}
-    mbench_NFILES=${mbench_NFILES:-30400}
-    # threads per client
-    mbench_THREADS=${mbench_THREADS:-4}
+	local dir=${1:-$DIR}
+	METABENCH=${METABENCH:-$(which metabench 2> /dev/null || true)}
+	mbench_NFILES=${mbench_NFILES:-30400}
+	# threads per client
+	mbench_THREADS=${mbench_THREADS:-4}
 	mbench_OPTIONS=${mbench_OPTIONS:-}
 	mbench_CLEANUP=${mbench_CLEANUP:-true}
 
-    [ x$METABENCH = x ] &&
-        { skip_env "metabench not found" && return; }
+	[ x$METABENCH = x ] &&
+		{ skip_env "metabench not found" && return; }
 
-    # FIXME
-    # Need space estimation here.
+	# FIXME
+	# Need space estimation here.
 
-    print_opts METABENCH clients mbench_NFILES mbench_THREADS
+	print_opts METABENCH clients mbench_NFILES mbench_THREADS
 
-    local testdir=$DIR/d0.metabench
-    mkdir -p $testdir
-    # mpi_run uses mpiuser
-    chmod 0777 $testdir
+	local testdir=$dir/d0.metabench
+	mkdir -p $testdir
+	# mpi_run uses mpiuser
+	chmod 0777 $testdir
 
 	# -C             Run the file creation tests.
 	# -S             Run the file stat tests.
@@ -495,20 +495,20 @@ run_mdtest() {
 }
 
 run_connectathon() {
+	local dir=${1:-$DIR}
+	cnt_DIR=${cnt_DIR:-""}
+	cnt_NRUN=${cnt_NRUN:-10}
 
-    cnt_DIR=${cnt_DIR:-""}
-    cnt_NRUN=${cnt_NRUN:-10}
+	print_opts cnt_DIR cnt_NRUN
 
-    print_opts cnt_DIR cnt_NRUN
+	[ x$cnt_DIR = x ] &&
+		{ skip_env "connectathon dir not found" && return; }
 
-    [ x$cnt_DIR = x ] &&
-        { skip_env "connectathon dir not found" && return; }
+	[ -e $cnt_DIR/runtests ] || \
+		{ skip_env "No connectathon runtests found" && return; }
 
-    [ -e $cnt_DIR/runtests ] || \
-        { skip_env "No connectathon runtests found" && return; }
-
-    local testdir=$DIR/d0.connectathon
-    mkdir -p $testdir
+	local testdir=$dir/d0.connectathon
+	mkdir -p $testdir
 
     local savePWD=$PWD
     cd $cnt_DIR
@@ -554,8 +554,20 @@ run_connectathon() {
 
 run_ior() {
 	local type=${1:="ssf"}
+	local dir=${2:-$DIR}
+	local testdir=$dir/d0.ior.$type
+	local nfs_srvmntpt=$3
+
+	if [ "$NFSCLIENT" ]; then
+		[[ -n $nfs_srvmntpt ]] ||
+			{ error "NFSCLIENT mode, but nfs exported dir"\
+				"is not set!" && return 1; }
+	fi
 
 	IOR=${IOR:-$(which IOR 2> /dev/null || true)}
+	[ x$IOR = x ] &&
+		{ skip_env "IOR not found" && return; }
+
 	# threads per client
 	ior_THREADS=${ior_THREADS:-2}
 	ior_iteration=${ior_iteration:-1}
@@ -579,11 +591,8 @@ run_ior() {
 			;;
 	esac
 
-	[ x$IOR = x ] &&
-        { skip_env "IOR not found" && return; }
-
 	# calculate the space in bytes
-	local space=$(df -B 1 -P $DIR | tail -n 1 | awk '{ print $4 }')
+	local space=$(df -B 1 -P $dir | tail -n 1 | awk '{ print $4 }')
 	local total_threads=$((num_clients * ior_THREADS))
 	echo "+ $ior_blockSize * $multiplier * $total_threads "
 	if [ $((space / 2)) -le \
@@ -600,17 +609,16 @@ run_ior() {
 
     print_opts IOR ior_THREADS ior_DURATION MACHINEFILE
 
-    local testdir=$DIR/d0.ior.$type
     mkdir -p $testdir
     # mpi_run uses mpiuser
     chmod 0777 $testdir
-    if [ "$NFSCLIENT" ]; then
-        setstripe_nfsserver $testdir -c -1 ||
-            { error "setstripe on nfsserver failed" && return 1; }
-    else
-        $LFS setstripe $testdir -c -1 ||
-            { error "setstripe failed" && return 2; }
-    fi
+	if [ "$NFSCLIENT" ]; then
+		setstripe_nfsserver $testdir $nfs_srvmntpt -c -1 ||
+			{ error "setstripe on nfsserver failed" && return 1; }
+	else
+		$LFS setstripe $testdir -c -1 ||
+			{ error "setstripe failed" && return 2; }
+	fi
 	#
 	# -b N  blockSize --
 	#       contiguous bytes to write per task (e.g.: 8, 4K, 2M, 1G)"

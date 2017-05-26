@@ -5667,13 +5667,19 @@ get_stripe () {
 
 setstripe_nfsserver () {
 	local dir=$1
+	local nfsexportdir=$2
+	shift
+	shift
 
-	local nfsserver=$(awk '"'$dir'" ~ $2 && $3 ~ "nfs" && $2 != "/" \
-		{ print $1 }' /proc/mounts | cut -f 1 -d : | head -n1)
+	local -a nfsexport=($(awk '"'$dir'" ~ $2 && $3 ~ "nfs" && $2 != "/" \
+		{ print $1 }' /proc/mounts | cut -f 1 -d :))
 
-	[ -z $nfsserver ] && echo "$dir is not nfs mounted" && return 1
+	# check that only one nfs mounted
+	[[ -z $nfsexport ]] && echo "$dir is not nfs mounted" && return 1
+	(( ${#nfsexport[@]} == 1 )) ||
+		error "several nfs mounts found for $dir: ${nfsexport[@]} !"
 
-	do_nodev $nfsserver lfs setstripe "$@"
+	do_nodev ${nfsexport[0]} lfs setstripe $nfsexportdir "$@"
 }
 
 # Check and add a test group.
