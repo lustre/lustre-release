@@ -604,7 +604,11 @@ check_oi:
 
 		/* It is the OI scrub updated the OI mapping by race.
 		 * The new OI mapping must be valid. */
-		if (saved_ino != id->oii_ino || saved_gen != id->oii_gen) {
+		if (saved_ino != id->oii_ino ||
+		    (saved_gen != id->oii_gen && saved_gen != OSD_OII_NOGEN)) {
+			if (!IS_ERR(inode))
+				iput(inode);
+
 			trusted = true;
 			goto again;
 		}
@@ -1008,12 +1012,11 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	 * shouldn't never be re-used, if it's really a duplicate FID from
 	 * unexpected reason, we should be able to detect it later by calling
 	 * do_create->osd_oi_insert(). */
-	if (conf != NULL && conf->loc_flags & LOC_F_NEW)
+	if (conf && conf->loc_flags & LOC_F_NEW)
 		GOTO(out, result = 0);
 
 	/* Search order: 1. per-thread cache. */
-	if (lu_fid_eq(fid, &oic->oic_fid) &&
-	    likely(oic->oic_dev == dev)) {
+	if (lu_fid_eq(fid, &oic->oic_fid) && likely(oic->oic_dev == dev)) {
 		id = &oic->oic_lid;
 		goto iget;
 	}
@@ -1022,7 +1025,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	if (!list_empty(&scrub->os_inconsistent_items)) {
 		/* Search order: 2. OI scrub pending list. */
 		result = osd_oii_lookup(dev, fid, id);
-		if (result == 0)
+		if (!result)
 			goto iget;
 	}
 
@@ -1042,99 +1045,105 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 		goto trigger;
 	}
 
-	if (result != 0)
+	if (result)
 		GOTO(out, result);
 
 iget:
+	obj->oo_inode = NULL;
+	/* for later passes through checks, not true on first pass */
+	if (!IS_ERR_OR_NULL(inode))
+		iput(inode);
+
 	inode = osd_iget_check(info, dev, fid, id, trusted);
-	if (IS_ERR(inode)) {
-		result = PTR_ERR(inode);
-		if (result == -ENOENT || result == -ESTALE)
-			GOTO(out, result = 0);
+	if (!IS_ERR(inode)) {
+		obj->oo_inode = inode;
+		result = 0;
+		if (remote)
+			goto trigger;
 
-		if (result == -EREMCHG) {
-
-trigger:
-			/* We still have chance to get the valid inode: for the
-			 * object which is referenced by remote name entry, the
-			 * object on the local MDT will be linked under the dir
-			 * of "/REMOTE_PARENT_DIR" with its FID string as name.
-			 *
-			 * We do not know whether the object for the given FID
-			 * is referenced by some remote name entry or not, and
-			 * especially for DNE II, a multiple-linked object may
-			 * have many name entries reside on many MDTs.
-			 *
-			 * To simplify the operation, OSD will not distinguish
-			 * more, just lookup "/REMOTE_PARENT_DIR". Usually, it
-			 * only happened for the RPC from other MDT during the
-			 * OI scrub, or for the client side RPC with FID only,
-			 * such as FID to path, or from old connected client. */
-			if (!remote &&
-			    !fid_is_on_ost(info, dev, fid, OI_CHECK_FLD)) {
-				rc1 = osd_lookup_in_remote_parent(info, dev,
-								  fid, id);
-				if (rc1 == 0) {
-					remote = true;
-					trusted = true;
-					flags |= SS_AUTO_PARTIAL;
-					flags &= ~SS_AUTO_FULL;
-					goto iget;
-				}
-			}
-
-			if (thread_is_running(&scrub->os_thread)) {
-				if (scrub->os_partial_scan &&
-				    !scrub->os_in_join) {
-					goto join;
-				} else {
-					if (inode != NULL && !IS_ERR(inode)) {
-						LASSERT(remote);
-
-						osd_add_oi_cache(info, dev, id,
-								 fid);
-						osd_oii_insert(dev, oic, true);
-					} else {
-						result = -EINPROGRESS;
-					}
-				}
-			} else if (!dev->od_noscrub) {
-
-join:
-				rc1 = osd_scrub_start(dev, flags);
-				LCONSOLE_WARN("%s: trigger OI scrub by RPC "
-					      "for the "DFID" with flags 0x%x,"
-					      " rc = %d\n", osd_name(dev),
-					      PFID(fid), flags, rc1);
-				if (rc1 == 0 || rc1 == -EALREADY) {
-					if (inode != NULL && !IS_ERR(inode)) {
-						LASSERT(remote);
-
-						osd_add_oi_cache(info, dev, id,
-								 fid);
-						osd_oii_insert(dev, oic, true);
-					} else {
-						result = -EINPROGRESS;
-					}
-				} else {
-					result = -EREMCHG;
-				}
-			} else {
-				result = -EREMCHG;
-			}
-		}
-
-		if (inode == NULL || IS_ERR(inode))
-			GOTO(out, result);
-	} else if (remote) {
-		goto trigger;
+		goto check_lma;
 	}
 
-	obj->oo_inode = inode;
-	LASSERT(obj->oo_inode->i_sb == osd_sb(dev));
+	result = PTR_ERR(inode);
+	if (result == -ENOENT || result == -ESTALE)
+		GOTO(out, result = 0);
 
+	if (result != -EREMCHG)
+		GOTO(out, result);
+
+trigger:
+	/* We still have chance to get the valid inode: for the
+	 * object which is referenced by remote name entry, the
+	 * object on the local MDT will be linked under the dir
+	 * of "/REMOTE_PARENT_DIR" with its FID string as name.
+	 *
+	 * We do not know whether the object for the given FID
+	 * is referenced by some remote name entry or not, and
+	 * especially for DNE II, a multiple-linked object may
+	 * have many name entries reside on many MDTs.
+	 *
+	 * To simplify the operation, OSD will not distinguish
+	 * more, just lookup "/REMOTE_PARENT_DIR". Usually, it
+	 * only happened for the RPC from other MDT during the
+	 * OI scrub, or for the client side RPC with FID only,
+	 * such as FID to path, or from old connected client. */
+	if (!remote && !fid_is_on_ost(info, dev, fid, OI_CHECK_FLD)) {
+		rc1 = osd_lookup_in_remote_parent(info, dev, fid, id);
+		if (!rc1) {
+			remote = true;
+			trusted = true;
+			flags |= SS_AUTO_PARTIAL;
+			flags &= ~SS_AUTO_FULL;
+			goto iget;
+		}
+	}
+
+	if (thread_is_running(&scrub->os_thread)) {
+		if (scrub->os_partial_scan && !scrub->os_in_join)
+			goto join;
+
+		if (IS_ERR_OR_NULL(inode) || result)
+			GOTO(out, result = -EINPROGRESS);
+
+		LASSERT(remote);
+		LASSERT(obj->oo_inode == inode);
+
+		osd_add_oi_cache(info, dev, id, fid);
+		osd_oii_insert(dev, oic, true);
+		goto found;
+	}
+
+	if (dev->od_noscrub) {
+		if (!remote)
+			GOTO(out, result = -EREMCHG);
+
+		LASSERT(!result);
+		LASSERT(obj->oo_inode == inode);
+
+		osd_add_oi_cache(info, dev, id, fid);
+		goto found;
+	}
+
+join:
+	rc1 = osd_scrub_start(dev, flags);
+	LCONSOLE_WARN("%s: trigger OI scrub by RPC for the " DFID" with flags "
+		      "0x%x, rc = %d\n", osd_name(dev), PFID(fid), flags, rc1);
+	if (rc1 && rc1 != -EALREADY)
+		GOTO(out, result = -EREMCHG);
+
+	if (IS_ERR_OR_NULL(inode) || result)
+		GOTO(out, result = -EINPROGRESS);
+
+	LASSERT(remote);
+	LASSERT(obj->oo_inode == inode);
+
+	osd_add_oi_cache(info, dev, id, fid);
+	osd_oii_insert(dev, oic, true);
+	goto found;
+
+check_lma:
 	result = osd_check_lma(env, obj);
-	if (result == 0)
+	if (!result)
 		goto found;
 
 	LASSERTF(id->oii_ino == inode->i_ino &&
@@ -1153,7 +1162,7 @@ join:
 			goto found;
 
 		result = osd_oi_lookup(info, dev, fid, id, OI_CHECK_FLD);
-		if (result == 0) {
+		if (!result) {
 			/* The OI mapping is still there, the inode is still
 			 * valid. It is just becaues the inode has no LMA EA. */
 			if (saved_ino == id->oii_ino &&
@@ -1162,9 +1171,6 @@ join:
 
 			/* It is the OI scrub updated the OI mapping by race.
 			 * The new OI mapping must be valid. */
-			iput(inode);
-			inode = NULL;
-			obj->oo_inode = NULL;
 			trusted = true;
 			updated = true;
 			goto iget;
@@ -1177,13 +1183,10 @@ join:
 		if (result == -ENOENT) {
 			LASSERT(trusted);
 
+			obj->oo_inode = NULL;
 			result = 0;
 		}
 	}
-
-	iput(inode);
-	inode = NULL;
-	obj->oo_inode = NULL;
 
 	if (result != -EREMCHG)
 		GOTO(out, result);
@@ -1196,14 +1199,17 @@ join:
 	if (result == -ENOENT) {
 		LASSERT(trusted);
 
+		obj->oo_inode = NULL;
 		GOTO(out, result = 0);
 	}
 
-	if (result != 0)
+	if (result)
 		GOTO(out, result);
 
-	if (saved_ino == id->oii_ino && saved_gen == id->oii_gen)
+	if (saved_ino == id->oii_ino && saved_gen == id->oii_gen) {
+		result = -EREMCHG;
 		goto trigger;
+	}
 
 	/* It is the OI scrub updated the OI mapping by race.
 	 * The new OI mapping must be valid. */
@@ -1220,27 +1226,26 @@ found:
 		osd_check_lmv(info, dev, inode, oic);
 
 	result = osd_attach_jinode(inode);
-	if (result) {
-		obj->oo_inode = NULL;
-		iput(inode);
+	if (result)
 		GOTO(out, result);
-	}
 
 	if (!ldiskfs_pdo)
 		GOTO(out, result = 0);
 
-	LASSERT(obj->oo_hl_head == NULL);
+	LASSERT(!obj->oo_hl_head);
 	obj->oo_hl_head = ldiskfs_htree_lock_head_alloc(HTREE_HBITS_DEF);
-	if (obj->oo_hl_head == NULL) {
-		obj->oo_inode = NULL;
-		iput(inode);
-		GOTO(out, result = -ENOMEM);
-	}
-	GOTO(out, result = 0);
+
+	GOTO(out, result = (!obj->oo_hl_head ? -ENOMEM : 0));
 
 out:
-	if (result != 0 && trusted)
-		fid_zero(&oic->oic_fid);
+	if (result || !obj->oo_inode) {
+		if (!IS_ERR_OR_NULL(inode))
+			iput(inode);
+
+		obj->oo_inode = NULL;
+		if (trusted)
+			fid_zero(&oic->oic_fid);
+	}
 
 	LINVRNT(osd_invariant(obj));
 	return result;
@@ -5003,15 +5008,14 @@ again:
 		if (gen != OSD_OII_NOGEN)
 			goto trigger;
 
-		iput(inode);
 		/* The inode may has been reused by others, we do not know,
 		 * leave it to be handled by subsequent osd_fid_lookup(). */
-		RETURN(0);
-	} else if (rc != 0 || osd_id_eq(id, &oti->oti_id)) {
-		RETURN(rc);
-	} else {
-		insert = false;
+		GOTO(out, rc = 0);
+	} else if (rc || osd_id_eq(id, &oti->oti_id)) {
+		GOTO(out, rc);
 	}
+
+	insert = false;
 
 trigger:
 	if (thread_is_running(&scrub->os_thread)) {
@@ -5038,8 +5042,7 @@ trigger:
 		else
 			rc = osd_check_lmv(oti, dev, inode, oic);
 
-		iput(inode);
-		RETURN(rc);
+		GOTO(out, rc);
 	}
 
 	if (!dev->od_noscrub && ++once == 1) {
@@ -5053,7 +5056,10 @@ trigger:
 			goto again;
 	}
 
-	if (inode != NULL)
+	GOTO(out, rc);
+
+out:
+	if (inode)
 		iput(inode);
 
 	RETURN(rc);
