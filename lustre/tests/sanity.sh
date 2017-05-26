@@ -16389,13 +16389,15 @@ post_801() {
 test_801a() {
 	prep_801
 
+	echo "Start barrier_freeze at: $(date)"
 	#define OBD_FAIL_BARRIER_DELAY		0x2202
-	do_facet mgs $LCTL set_param fail_val=3 fail_loc=0x2202
+	do_facet mgs $LCTL set_param fail_val=5 fail_loc=0x2202
 	do_facet mgs $LCTL barrier_freeze $FSNAME 10 &
 
-	sleep 1
+	sleep 2
 	local b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
 			       awk '/The barrier for/ { print $7 }')
+	echo "Got barrier status at: $(date)"
 	[ "$b_status" = "'freezing_p1'" ] ||
 		error "(1) unexpected barrier status $b_status"
 
@@ -16424,13 +16426,15 @@ test_801a() {
 	[ "$b_status" = "'frozen'" ] ||
 		error "(5) unexpected barrier status $b_status"
 
+	echo "Start barrier_thaw at: $(date)"
 	#define OBD_FAIL_BARRIER_DELAY		0x2202
-	do_facet mgs $LCTL set_param fail_val=3 fail_loc=0x2202
+	do_facet mgs $LCTL set_param fail_val=5 fail_loc=0x2202
 	do_facet mgs $LCTL barrier_thaw $FSNAME &
 
-	sleep 1
+	sleep 2
 	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
 			 awk '/The barrier for/ { print $7 }')
+	echo "Got barrier status at: $(date)"
 	[ "$b_status" = "'thawing'" ] ||
 		error "(6) unexpected barrier status $b_status"
 
