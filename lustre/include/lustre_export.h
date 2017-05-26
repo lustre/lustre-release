@@ -164,6 +164,7 @@ do {                                                                           \
 
 enum obd_option {
         OBD_OPT_FORCE =         0x0001,
+        OBD_OPT_FAILOVER =      0x0002,
         OBD_OPT_ABORT_RECOV =   0x0004,
 };
 

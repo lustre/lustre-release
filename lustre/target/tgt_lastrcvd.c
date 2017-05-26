@@ -1079,10 +1079,6 @@ int tgt_client_del(const struct lu_env *env, struct obd_export *exp)
 		RETURN(-EINVAL);
 	}
 
-	/* Do not erase record for recoverable client. */
-	if (exp->exp_obd->obd_fail)
-		RETURN(0);
-
 	/* XXX if lcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
 	if (!strcmp((char *)ted->ted_lcd->lcd_uuid,
 		    (char *)tgt->lut_obd->obd_uuid.uuid) ||
@@ -1109,6 +1105,9 @@ int tgt_client_del(const struct lu_env *env, struct obd_export *exp)
 		LBUG();
 	}
 
+	/* Do not erase record for recoverable client. */
+	if (exp->exp_flags & OBD_OPT_FAILOVER)
+		RETURN(0);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_CLIENT_DEL))
 		RETURN(0);
