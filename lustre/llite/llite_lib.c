@@ -370,7 +370,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 		if (!(data->ocd_connect_flags & OBD_CONNECT_MAX_EASIZE)) {
 			LCONSOLE_INFO("%s: disabling xattr cache due to "
 				      "unknown maximum xattr size.\n", dt);
-		} else {
+		} else if (!sbi->ll_xattr_cache_set) {
+			/* If xattr_cache is already set (no matter 0 or 1)
+			 * during processing llog, it won't be enabled here. */
 			sbi->ll_flags |= LL_SBI_XATTR_CACHE;
 			sbi->ll_xattr_cache_enabled = 1;
 		}
@@ -577,12 +579,18 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 		OBD_FREE_PTR(data);
 	if (osfs != NULL)
 		OBD_FREE_PTR(osfs);
-	if (proc_lustre_fs_root != NULL) {
-		err = lprocfs_register_mountpoint(proc_lustre_fs_root, sb,
-						  dt, md);
+
+	if (sbi->ll_proc_root != NULL) {
+		err = lprocfs_ll_register_obd(sb, dt);
 		if (err < 0) {
-			CERROR("%s: could not register mount in lprocfs: "
-			       "rc = %d\n", ll_get_fsname(sb, NULL, 0), err);
+			CERROR("%s: could not register %s in llite: rc = %d\n",
+			       dt, ll_get_fsname(sb, NULL, 0), err);
+			err = 0;
+		}
+		err = lprocfs_ll_register_obd(sb, md);
+		if (err < 0) {
+			CERROR("%s: could not register %s in llite: rc = %d\n",
+			       md, ll_get_fsname(sb, NULL, 0), err);
 			err = 0;
 		}
 	}
@@ -683,22 +691,22 @@ int ll_set_default_mdsize(struct ll_sb_info *sbi, int lmmsize)
 
 static void client_common_put_super(struct super_block *sb)
 {
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        ENTRY;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	ENTRY;
 
-        cl_sb_fini(sb);
+	cl_sb_fini(sb);
 
 	obd_fid_fini(sbi->ll_dt_exp->exp_obd);
-        obd_disconnect(sbi->ll_dt_exp);
-        sbi->ll_dt_exp = NULL;
+	obd_disconnect(sbi->ll_dt_exp);
+	sbi->ll_dt_exp = NULL;
 
-        lprocfs_unregister_mountpoint(sbi);
+	lprocfs_ll_unregister_mountpoint(sbi);
 
 	obd_fid_fini(sbi->ll_md_exp->exp_obd);
-        obd_disconnect(sbi->ll_md_exp);
-        sbi->ll_md_exp = NULL;
+	obd_disconnect(sbi->ll_md_exp);
+	sbi->ll_md_exp = NULL;
 
-        EXIT;
+	EXIT;
 }
 
 void ll_kill_super(struct super_block *sb)
@@ -925,22 +933,24 @@ static inline int ll_bdi_register(struct backing_dev_info *bdi)
 
 int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 {
-        struct lustre_profile *lprof = NULL;
-        struct lustre_sb_info *lsi = s2lsi(sb);
-        struct ll_sb_info *sbi;
-        char  *dt = NULL, *md = NULL;
-        char  *profilenm = get_profile_name(sb);
-        struct config_llog_instance *cfg;
-        /* %p for void* in printf needs 16+2 characters: 0xffffffffffffffff */
-        const int instlen = sizeof(cfg->cfg_instance) * 2 + 2;
-        int    err;
-        ENTRY;
+	struct	lustre_profile *lprof = NULL;
+	struct	lustre_sb_info *lsi = s2lsi(sb);
+	struct	ll_sb_info *sbi;
+	char	*dt = NULL, *md = NULL;
+	char	*profilenm = get_profile_name(sb);
+	struct config_llog_instance *cfg;
+	/* %p for void* in printf needs 16+2 characters: 0xffffffffffffffff */
+	const int instlen = sizeof(cfg->cfg_instance) * 2 + 2;
+	int	md_len = 0;
+	int	dt_len = 0;
+	int	err;
+	ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
+	CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
 
-        OBD_ALLOC_PTR(cfg);
-        if (cfg == NULL)
-                RETURN(-ENOMEM);
+	OBD_ALLOC_PTR(cfg);
+	if (cfg == NULL)
+		RETURN(-ENOMEM);
 
 	try_module_get(THIS_MODULE);
 
@@ -952,9 +962,9 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 		RETURN(-ENOMEM);
 	}
 
-        err = ll_options(lsi->lsi_lmd->lmd_opts, &sbi->ll_flags);
-        if (err)
-                GOTO(out_free, err);
+	err = ll_options(lsi->lsi_lmd->lmd_opts, &sbi->ll_flags);
+	if (err)
+		GOTO(out_free, err);
 
 	err = bdi_init(&lsi->lsi_bdi);
 	if (err)
@@ -969,57 +979,73 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	if (err)
 		GOTO(out_free, err);
 
-        sb->s_bdi = &lsi->lsi_bdi;
+	sb->s_bdi = &lsi->lsi_bdi;
 #ifndef HAVE_DCACHE_LOCK
 	/* kernel >= 2.6.38 store dentry operations in sb->s_d_op. */
 	sb->s_d_op = &ll_d_ops;
 #endif
 
-        /* Generate a string unique to this super, in case some joker tries
-           to mount the same fs at two mount points.
-           Use the address of the super itself.*/
-        cfg->cfg_instance = sb;
-        cfg->cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
+	/* Call lprocfs_ll_register_mountpoint() before lustre_process_log()
+	 * so that "llite.*.*" params can be processed correctly. */
+	if (proc_lustre_fs_root != NULL) {
+		err = lprocfs_ll_register_mountpoint(proc_lustre_fs_root, sb);
+		if (err < 0) {
+			CERROR("%s: could not register mountpoint in llite: "
+			       "rc = %d\n", ll_get_fsname(sb, NULL, 0), err);
+			err = 0;
+		}
+	}
+
+	/* Generate a string unique to this super, in case some joker tries
+	   to mount the same fs at two mount points.
+	   Use the address of the super itself.*/
+	cfg->cfg_instance = sb;
+	cfg->cfg_uuid = lsi->lsi_llsbi->ll_sb_uuid;
 	cfg->cfg_callback = class_config_llog_handler;
 	cfg->cfg_sub_clds = CONFIG_SUB_CLIENT;
-        /* set up client obds */
-        err = lustre_process_log(sb, profilenm, cfg);
+	/* set up client obds */
+	err = lustre_process_log(sb, profilenm, cfg);
 	if (err < 0)
-		GOTO(out_free, err);
+		GOTO(out_proc, err);
 
-        /* Profile set with LCFG_MOUNTOPT so we can find our mdc and osc obds */
-        lprof = class_get_profile(profilenm);
-        if (lprof == NULL) {
-                LCONSOLE_ERROR_MSG(0x156, "The client profile '%s' could not be"
-                                   " read from the MGS.  Does that filesystem "
-                                   "exist?\n", profilenm);
-                GOTO(out_free, err = -EINVAL);
-        }
-        CDEBUG(D_CONFIG, "Found profile %s: mdc=%s osc=%s\n", profilenm,
-               lprof->lp_md, lprof->lp_dt);
+	/* Profile set with LCFG_MOUNTOPT so we can find our mdc and osc obds */
+	lprof = class_get_profile(profilenm);
+	if (lprof == NULL) {
+		LCONSOLE_ERROR_MSG(0x156, "The client profile '%s' could not be"
+				   " read from the MGS.  Does that filesystem "
+				   "exist?\n", profilenm);
+		GOTO(out_proc, err = -EINVAL);
+	}
+	CDEBUG(D_CONFIG, "Found profile %s: mdc=%s osc=%s\n", profilenm,
+	       lprof->lp_md, lprof->lp_dt);
 
-        OBD_ALLOC(dt, strlen(lprof->lp_dt) + instlen + 2);
-        if (!dt)
-                GOTO(out_free, err = -ENOMEM);
-        sprintf(dt, "%s-%p", lprof->lp_dt, cfg->cfg_instance);
+	dt_len = strlen(lprof->lp_dt) + instlen + 2;
+	OBD_ALLOC(dt, dt_len);
+	if (!dt)
+		GOTO(out_proc, err = -ENOMEM);
+	snprintf(dt, dt_len - 1, "%s-%p", lprof->lp_dt, cfg->cfg_instance);
 
-        OBD_ALLOC(md, strlen(lprof->lp_md) + instlen + 2);
-        if (!md)
-                GOTO(out_free, err = -ENOMEM);
-        sprintf(md, "%s-%p", lprof->lp_md, cfg->cfg_instance);
+	md_len = strlen(lprof->lp_md) + instlen + 2;
+	OBD_ALLOC(md, md_len);
+	if (!md)
+		GOTO(out_proc, err = -ENOMEM);
+	snprintf(md, md_len - 1, "%s-%p", lprof->lp_md, cfg->cfg_instance);
 
-        /* connections, registrations, sb setup */
-        err = client_common_fill_super(sb, md, dt, mnt);
+	/* connections, registrations, sb setup */
+	err = client_common_fill_super(sb, md, dt, mnt);
 	if (err < 0)
-		GOTO(out_free, err);
+		GOTO(out_proc, err);
 
 	sbi->ll_client_common_fill_super_succeeded = 1;
 
+out_proc:
+	if (err < 0)
+		lprocfs_ll_unregister_mountpoint(sbi);
 out_free:
 	if (md)
-		OBD_FREE(md, strlen(lprof->lp_md) + instlen + 2);
+		OBD_FREE(md, md_len);
 	if (dt)
-		OBD_FREE(dt, strlen(lprof->lp_dt) + instlen + 2);
+		OBD_FREE(dt, dt_len);
 	if (lprof != NULL)
 		class_put_profile(lprof);
 	if (err)

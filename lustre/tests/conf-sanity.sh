@@ -5366,6 +5366,34 @@ test_76c() {
 }
 run_test 76c "verify changelog_mask is applied with set_param -P"
 
+test_76d() { #LU-9399
+	setupall
+
+	local xattr_cache="llite.*.xattr_cache"
+	local cmd="$LCTL get_param -n $xattr_cache | head -1"
+	local new=$((($(eval $cmd) + 1) % 2))
+
+	echo "lctl set_param -P llite.*.xattr_cache=$new"
+	do_facet mgs $LCTL set_param -P $xattr_cache=$new ||
+		error "Can't change xattr_cache"
+	wait_update $HOSTNAME "$cmd" "$new"
+
+	echo "Check $xattr_cache on client $MOUNT"
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	mount_client $MOUNT || error "mount $MOUNT failed"
+	[ $(eval $cmd) -eq $new ] ||
+		error "$xattr_cache != $new on client $MOUNT"
+
+	echo "Check $xattr_cache on the new client $MOUNT2"
+	mount_client $MOUNT2 || error "mount $MOUNT2 failed"
+	[ $(eval $cmd) -eq $new ] ||
+		error "$xattr_cache != $new on client $MOUNT2"
+	umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+
+	stopall
+}
+run_test 76d "verify llite.*.xattr_cache can be set by 'set_param -P' correctly"
+
 test_77() { # LU-3445
 	local server_version=$(lustre_version_code $SINGLEMDS)
 	[[ $server_version -ge $(version_code 2.8.55) ]] ||

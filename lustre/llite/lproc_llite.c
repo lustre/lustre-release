@@ -259,6 +259,7 @@ static ssize_t ll_xattr_cache_seq_write(struct file *file,
 		return -ENOTSUPP;
 
 	sbi->ll_xattr_cache_enabled = val;
+	sbi->ll_xattr_cache_set = 1;
 
 	return count;
 }
@@ -1235,14 +1236,12 @@ static const char *ra_stat_string[] = {
 LPROC_SEQ_FOPS_RO_TYPE(llite, name);
 LPROC_SEQ_FOPS_RO_TYPE(llite, uuid);
 
-int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
-                                struct super_block *sb, char *osc, char *mdc)
+int lprocfs_ll_register_mountpoint(struct proc_dir_entry *parent,
+				   struct super_block *sb)
 {
 	struct lprocfs_vars lvars[2];
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	struct obd_device *obd;
-	struct proc_dir_entry *dir;
 	char name[MAX_STRING_SIZE + 1], *ptr;
 	int err, id, len, rc;
 	ENTRY;
@@ -1253,8 +1252,6 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
 	lvars[0].name = name;
 
 	LASSERT(sbi != NULL);
-	LASSERT(mdc != NULL);
-	LASSERT(osc != NULL);
 
 	/* Get fsname */
 	len = strlen(lsi->lsi_lmd->lmd_profile);
@@ -1278,106 +1275,63 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
 	if (rc)
 		CWARN("Error adding the dump_page_cache file\n");
 
-        rc = lprocfs_seq_create(sbi->ll_proc_root, "extents_stats", 0644,
-                                &ll_rw_extents_stats_fops, sbi);
-        if (rc)
-                CWARN("Error adding the extent_stats file\n");
+	rc = lprocfs_seq_create(sbi->ll_proc_root, "extents_stats", 0644,
+				&ll_rw_extents_stats_fops, sbi);
+	if (rc)
+		CWARN("Error adding the extent_stats file\n");
 
-        rc = lprocfs_seq_create(sbi->ll_proc_root, "extents_stats_per_process",
-                                0644, &ll_rw_extents_stats_pp_fops, sbi);
-        if (rc)
-                CWARN("Error adding the extents_stats_per_process file\n");
+	rc = lprocfs_seq_create(sbi->ll_proc_root, "extents_stats_per_process",
+				0644, &ll_rw_extents_stats_pp_fops, sbi);
+	if (rc)
+		CWARN("Error adding the extents_stats_per_process file\n");
 
-        rc = lprocfs_seq_create(sbi->ll_proc_root, "offset_stats", 0644,
-                                &ll_rw_offset_stats_fops, sbi);
-        if (rc)
-                CWARN("Error adding the offset_stats file\n");
+	rc = lprocfs_seq_create(sbi->ll_proc_root, "offset_stats", 0644,
+				&ll_rw_offset_stats_fops, sbi);
+	if (rc)
+		CWARN("Error adding the offset_stats file\n");
 
-        /* File operations stats */
-        sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES,
-                                            LPROCFS_STATS_FLAG_NONE);
-        if (sbi->ll_stats == NULL)
-                GOTO(out, err = -ENOMEM);
-        /* do counter init */
-        for (id = 0; id < LPROC_LL_FILE_OPCODES; id++) {
-                __u32 type = llite_opcode_table[id].type;
-                void *ptr = NULL;
-                if (type & LPROCFS_TYPE_REGS)
-                        ptr = "regs";
-                else if (type & LPROCFS_TYPE_BYTES)
-                        ptr = "bytes";
-                else if (type & LPROCFS_TYPE_PAGES)
-                        ptr = "pages";
-                lprocfs_counter_init(sbi->ll_stats,
-                                     llite_opcode_table[id].opcode,
-                                     (type & LPROCFS_CNTR_AVGMINMAX),
-                                     llite_opcode_table[id].opname, ptr);
-        }
-        err = lprocfs_register_stats(sbi->ll_proc_root, "stats", sbi->ll_stats);
-        if (err)
-                GOTO(out, err);
+	/* File operations stats */
+	sbi->ll_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES,
+					    LPROCFS_STATS_FLAG_NONE);
+	if (sbi->ll_stats == NULL)
+		GOTO(out, err = -ENOMEM);
+	/* do counter init */
+	for (id = 0; id < LPROC_LL_FILE_OPCODES; id++) {
+		__u32 type = llite_opcode_table[id].type;
+		void *ptr = NULL;
+		if (type & LPROCFS_TYPE_REGS)
+			ptr = "regs";
+		else if (type & LPROCFS_TYPE_BYTES)
+			ptr = "bytes";
+		else if (type & LPROCFS_TYPE_PAGES)
+			ptr = "pages";
+		lprocfs_counter_init(sbi->ll_stats,
+				     llite_opcode_table[id].opcode,
+				     (type & LPROCFS_CNTR_AVGMINMAX),
+				     llite_opcode_table[id].opname, ptr);
+	}
+	err = lprocfs_register_stats(sbi->ll_proc_root, "stats", sbi->ll_stats);
+	if (err)
+		GOTO(out, err);
 
-        sbi->ll_ra_stats = lprocfs_alloc_stats(ARRAY_SIZE(ra_stat_string),
-                                               LPROCFS_STATS_FLAG_NONE);
-        if (sbi->ll_ra_stats == NULL)
-                GOTO(out, err = -ENOMEM);
+	sbi->ll_ra_stats = lprocfs_alloc_stats(ARRAY_SIZE(ra_stat_string),
+					       LPROCFS_STATS_FLAG_NONE);
+	if (sbi->ll_ra_stats == NULL)
+		GOTO(out, err = -ENOMEM);
 
-        for (id = 0; id < ARRAY_SIZE(ra_stat_string); id++)
-                lprocfs_counter_init(sbi->ll_ra_stats, id, 0,
-                                     ra_stat_string[id], "pages");
-        err = lprocfs_register_stats(sbi->ll_proc_root, "read_ahead_stats",
-                                     sbi->ll_ra_stats);
-        if (err)
-                GOTO(out, err);
+	for (id = 0; id < ARRAY_SIZE(ra_stat_string); id++)
+		lprocfs_counter_init(sbi->ll_ra_stats, id, 0,
+				     ra_stat_string[id], "pages");
+	err = lprocfs_register_stats(sbi->ll_proc_root, "read_ahead_stats",
+				     sbi->ll_ra_stats);
+	if (err)
+		GOTO(out, err);
 
 
 	err = lprocfs_add_vars(sbi->ll_proc_root, lprocfs_llite_obd_vars, sb);
 	if (err)
 		GOTO(out, err);
 
-	/* MDC info */
-	obd = class_name2obd(mdc);
-
-	LASSERT(obd != NULL);
-	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-	LASSERT(obd->obd_type->typ_name != NULL);
-
-	dir = proc_mkdir(obd->obd_type->typ_name, sbi->ll_proc_root);
-	if (dir == NULL)
-		GOTO(out, err = -ENOMEM);
-
-	snprintf(name, MAX_STRING_SIZE, "common_name");
-	lvars[0].fops = &llite_name_fops;
-	err = lprocfs_add_vars(dir, lvars, obd);
-	if (err)
-		GOTO(out, err);
-
-	snprintf(name, MAX_STRING_SIZE, "uuid");
-	lvars[0].fops = &llite_uuid_fops;
-	err = lprocfs_add_vars(dir, lvars, obd);
-	if (err)
-		GOTO(out, err);
-
-	/* OSC */
-	obd = class_name2obd(osc);
-
-	LASSERT(obd != NULL);
-	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-	LASSERT(obd->obd_type->typ_name != NULL);
-
-	dir = proc_mkdir(obd->obd_type->typ_name, sbi->ll_proc_root);
-	if (dir == NULL)
-		GOTO(out, err = -ENOMEM);
-
-	snprintf(name, MAX_STRING_SIZE, "common_name");
-	lvars[0].fops = &llite_name_fops;
-	err = lprocfs_add_vars(dir, lvars, obd);
-	if (err)
-		GOTO(out, err);
-
-	snprintf(name, MAX_STRING_SIZE, "uuid");
-	lvars[0].fops = &llite_uuid_fops;
-	err = lprocfs_add_vars(dir, lvars, obd);
 out:
 	if (err) {
 		lprocfs_remove(&sbi->ll_proc_root);
@@ -1387,7 +1341,56 @@ out:
 	RETURN(err);
 }
 
-void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi)
+int lprocfs_ll_register_obd(struct super_block *sb, const char *obdname)
+{
+	struct lprocfs_vars lvars[2];
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct obd_device *obd;
+	struct proc_dir_entry *dir;
+	char name[MAX_STRING_SIZE + 1];
+	int err;
+	ENTRY;
+
+	memset(lvars, 0, sizeof(lvars));
+
+	name[MAX_STRING_SIZE] = '\0';
+	lvars[0].name = name;
+
+	LASSERT(sbi != NULL);
+	LASSERT(obdname != NULL);
+
+	obd = class_name2obd(obdname);
+
+	LASSERT(obd != NULL);
+	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+	LASSERT(obd->obd_type->typ_name != NULL);
+
+	dir = proc_mkdir(obd->obd_type->typ_name, sbi->ll_proc_root);
+	if (dir == NULL)
+		GOTO(out, err = -ENOMEM);
+
+	snprintf(name, MAX_STRING_SIZE, "common_name");
+	lvars[0].fops = &llite_name_fops;
+	err = lprocfs_add_vars(dir, lvars, obd);
+	if (err)
+		GOTO(out, err);
+
+	snprintf(name, MAX_STRING_SIZE, "uuid");
+	lvars[0].fops = &llite_uuid_fops;
+	err = lprocfs_add_vars(dir, lvars, obd);
+	if (err)
+		GOTO(out, err);
+
+out:
+	if (err) {
+		lprocfs_remove(&sbi->ll_proc_root);
+		lprocfs_free_stats(&sbi->ll_ra_stats);
+		lprocfs_free_stats(&sbi->ll_stats);
+	}
+	RETURN(err);
+}
+
+void lprocfs_ll_unregister_mountpoint(struct ll_sb_info *sbi)
 {
         if (sbi->ll_proc_root) {
                 lprocfs_remove(&sbi->ll_proc_root);

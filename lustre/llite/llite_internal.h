@@ -489,6 +489,7 @@ struct ll_sb_info {
         int                       ll_flags;
 	unsigned int		  ll_umounting:1,
 				  ll_xattr_cache_enabled:1,
+				  ll_xattr_cache_set:1, /* already set to 0/1 */
 				  ll_client_common_fill_super_succeeded:1;
 
         struct lustre_client_ocd  ll_lco;
@@ -695,15 +696,18 @@ void cl_put_grouplock(struct ll_grouplock *lg);
 
 /* llite/lproc_llite.c */
 #ifdef CONFIG_PROC_FS
-int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
-                                struct super_block *sb, char *osc, char *mdc);
-void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
+int lprocfs_ll_register_mountpoint(struct proc_dir_entry *parent,
+				   struct super_block *sb);
+int lprocfs_ll_register_obd(struct super_block *sb, const char *obdname);
+void lprocfs_ll_unregister_mountpoint(struct ll_sb_info *sbi);
 void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count);
 extern struct lprocfs_vars lprocfs_llite_obd_vars[];
 #else
-static inline int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
-                        struct super_block *sb, char *osc, char *mdc){return 0;}
-static inline void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi) {}
+static inline int lprocfs_ll_register_mountpoint(struct proc_dir_entry *parent,
+					struct super_block *sb) {return 0; }
+static inline int lprocfs_ll_register_obd(struct super_block *sb,
+					  const char *obdname) {return 0; }
+static inline void lprocfs_ll_unregister_mountpoint(struct ll_sb_info *sbi) {}
 static void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count) {}
 #endif
 
