@@ -44,6 +44,8 @@
 #       Workloads dry run for several seconds; no failures will be introduced.
 #       This option is useful to verify the loads.
 #       -u is ignored in this case
+#   -m
+#       Reboot victim nodes simultaneously.
 #
 #
 # ASSUMPTIONS
@@ -72,10 +74,10 @@
 #   applications are run in short loops so that their exit status can be waited
 #   for and checked within reasonable time by ha_wait_loads.
 #   The set of MPI and non-MPI workloads are configurable by parameters:
-#	ha_mpi_loads
-#		default set: dd, tar, iozone
 #	ha_nonmpi_loads
-#		default set: ior, simul.
+#		default set: dd, tar, iozone
+#	ha_mpi_loads
+#		default set: ior, simul, mdtest
 #
 #   The number of clients run MPI loads is configured by parameter
 #   ha_mpi_instances. Only one client runs MPI workloads by default.
@@ -90,6 +92,8 @@
 #               ~ mpirun IOR
 #           ~ ha.sh (ha_repeat_mpi_load simul)
 #               ~ mpirun simul
+#           ~ ha.sh (ha_repeat_mpi_load mdtest)
+#               ~ mpirun mdtest
 #           ~ ... (one for each MPI load)
 #
 #           ~ ha.sh (ha_repeat_nonmpi_load client2 dbench)
@@ -110,6 +114,7 @@
 
 SIMUL=${SIMUL:-$(which simul 2> /dev/null || true)}
 IOR=${IOR:-$(which IOR 2> /dev/null || true)}
+MDTEST=${MDTEST:-$(which mdtest 2> /dev/null || true)}
 
 ior_blockSize=${ior_blockSize:-6g}
 mpi_threads_per_client=${mpi_threads_per_client:-2}
@@ -186,25 +191,30 @@ declare     ha_stop_signals="SIGINT SIGTERM SIGHUP"
 declare     ha_load_timeout=$((60 * 10))
 declare     ha_workloads_only=false
 declare     ha_workloads_dry_run=false
+declare     ha_simultaneous=false
 
 declare     ha_mpi_instances=${ha_mpi_instances:-1}
 
-declare     ha_mpi_loads=${ha_mpi_loads="ior simul"}
+declare     ha_mpi_loads=${ha_mpi_loads="ior simul mdtest"}
 declare -a  ha_mpi_load_tags=($ha_mpi_loads)
 
 declare     ha_ior_params=${IORP:-'" -b $ior_blockSize -t 2m -w -W -T 1"'}
 declare     ha_simul_params=${SIMULP:-'" -n 10"'}
+declare     ha_mdtest_params=${MDTESTP:-'" -i 1 -n 1000"'}
 declare     ha_mpirun_options=${MPIRUN_OPTIONS:-""}
 
 eval ha_params_ior=($ha_ior_params)
 eval ha_params_simul=($ha_simul_params)
+eval ha_params_mdtest=($ha_mdtest_params)
 
 declare ha_nparams_ior=${#ha_params_ior[@]}
 declare ha_nparams_simul=${#ha_params_simul[@]}
+declare ha_nparams_mdtest=${#ha_params_mdtest[@]}
 
 declare -A  ha_mpi_load_cmds=(
-    [ior]="$IOR -o {}/f.ior {params}"
-    [simul]="$SIMUL {params} -d {}"
+	[ior]="$IOR -o {}/f.ior {params}"
+	[simul]="$SIMUL {params} -d {}"
+	[mdtest]="$MDTEST {params} -d {}"
 )
 
 declare     ha_nonmpi_loads=${ha_nonmpi_loads="dd tar iozone"}
@@ -225,7 +235,7 @@ ha_process_arguments()
 {
     local opt
 
-    while getopts hc:s:v:d:p:u:wr opt; do
+	while getopts hc:s:v:d:p:u:wrm opt; do
         case $opt in
         h)
             ha_usage
@@ -254,6 +264,9 @@ ha_process_arguments()
 		;;
 	r)
 		ha_workloads_dry_run=true
+		;;
+	m)
+		ha_simultaneous=true
 		;;
         \?)
             ha_usage
@@ -556,18 +569,18 @@ ha_wait_loads()
 
 ha_power_down()
 {
-    local node=$1
+	local nodes=$1
 
-    ha_info "Powering down $node"
-    $ha_power_down_cmd $node
+	ha_info "Powering down $nodes"
+	$ha_power_down_cmd $nodes
 }
 
 ha_power_up()
 {
-    local node=$1
+	local nodes=$1
 
-    ha_info "Powering up $node"
-    $ha_power_up_cmd $node
+	ha_info "Powering up $nodes"
+	$ha_power_up_cmd $nodes
 }
 
 #
@@ -587,18 +600,27 @@ ha_rand()
 
 ha_aim()
 {
-    local i=$(ha_rand ${#ha_victims[@]})
+	local i
+	local nodes
 
-    echo -n ${ha_victims[$i]}
+	if $ha_simultaneous ; then
+		nodes=$(echo ${ha_victims[@]})
+		nodes=${nodes// /,}
+	else
+		i=$(ha_rand ${#ha_victims[@]})
+		nodes=${ha_victims[$i]}
+	fi
+
+	echo -n $nodes
 }
 
-ha_wait_node()
+ha_wait_nodes()
 {
-	local node=$1
+	local nodes=$1
 	local end=$(($(date +%s) + 10 * 60))
 
-	ha_info "Waiting for $node to boot up"
-	until ha_on $node hostname >/dev/null 2>&1 ||
+	ha_info "Waiting for $nodes to boot up"
+	until ha_on $nodes hostname >/dev/null 2>&1 ||
 		[ -e "$ha_stop_file" ] ||
 			(($(date +%s) >= end)); do
 		ha_sleep 1 >/dev/null
@@ -607,8 +629,8 @@ ha_wait_node()
 
 ha_failback()
 {
-	local node=$1
-	ha_info "Failback resources on $node in $ha_failback_delay sec"
+	local nodes=$1
+	ha_info "Failback resources on $nodes in $ha_failback_delay sec"
 
 	ha_sleep $ha_failback_delay
 	[ "$ha_failback_cmd" ] ||
@@ -617,7 +639,7 @@ ha_failback()
 		return 0
 	}
 
-	$ha_failback_cmd $node
+	$ha_failback_cmd $nodes
 }
 
 ha_summarize()
@@ -630,34 +652,34 @@ ha_summarize()
 
 ha_killer()
 {
-	local node
+	local nodes
 
 	while (($(date +%s) < ha_start_time + ha_expected_duration)) &&
 			[ ! -e "$ha_stop_file" ]; do
 		ha_info "---------------8<---------------"
 
-		$ha_workloads_only || node=$(ha_aim)
+		$ha_workloads_only || nodes=$(ha_aim)
 
-		ha_info "Failing $node"
+		ha_info "Failing $nodes"
 		$ha_workloads_only && ha_info "    is skipped: workload only..."
 
 		ha_sleep $(ha_rand $ha_max_failover_period)
-		$ha_workloads_only || ha_power_down $node
+		$ha_workloads_only || ha_power_down $nodes
 		ha_sleep 10
 		ha_wait_loads || return
 
 		if [ -e $ha_stop_file ]; then
-			$ha_workloads_only || ha_power_up $node
+			$ha_workloads_only || ha_power_up $nodes
 			break
 		fi
 
-		ha_info "Bringing $node back"
+		ha_info "Bringing $nodes back"
 		ha_sleep $(ha_rand 10)
 		$ha_workloads_only ||
 		{
-			ha_power_up $node
-			ha_wait_node $node
-			ha_failback $node
+			ha_power_up $nodes
+			ha_wait_nodes $nodes
+			ha_failback $nodes
 		}
 
 		#
