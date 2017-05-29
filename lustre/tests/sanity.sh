@@ -759,13 +759,10 @@ run_test 19d "cat .../f19 (should return error) =============="
 test_20() {
 	touch $DIR/$tfile
 	rm $DIR/$tfile
-	log "1 done"
 	touch $DIR/$tfile
 	rm $DIR/$tfile
-	log "2 done"
 	touch $DIR/$tfile
 	rm $DIR/$tfile
-	log "3 done"
 	$CHECKSTAT -a $DIR/$tfile || error "$tfile was not removed"
 }
 run_test 20 "touch .../f ; ls -l ... ==========================="
@@ -1352,25 +1349,23 @@ test_26f() {
 	rm -r $tfile             || error "rm $tfile failed"
 	$CHECKSTAT -a $DIR/$tfile || error "$tfile not gone"
 }
-run_test 26f "rm -r of a directory which has recursive symlink ="
+run_test 26f "rm -r of a directory which has recursive symlink"
 
 test_27a() {
-	echo '== stripe sanity =============================================='
 	test_mkdir -p $DIR/d27 || error "mkdir failed"
-	$GETSTRIPE $DIR/d27
-	$SETSTRIPE -c 1 $DIR/d27/f0 || error "setstripe failed"
+	$LFS getstripe $DIR/d27
+	$LFS setstripe -c 1 $DIR/d27/f0 || error "setstripe failed"
 	$CHECKSTAT -t file $DIR/d27/f0 || error "checkstat failed"
-	log "== test_27a: write to one stripe file ========================="
 	cp /etc/hosts $DIR/d27/f0 || error
 }
-run_test 27a "one stripe file =================================="
+run_test 27a "one stripe file"
 
 test_27b() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping 2-stripe test" && return
 	test_mkdir -p $DIR/d27
-	$SETSTRIPE -c 2 $DIR/d27/f01 || error "setstripe failed"
-	$GETSTRIPE -c $DIR/d27/f01
-	[ $($GETSTRIPE -c $DIR/d27/f01) -eq 2 ] ||
+	$LFS setstripe -c 2 $DIR/d27/f01 || error "setstripe failed"
+	$LFS getstripe -c $DIR/d27/f01
+	[ $($LFS getstripe -c $DIR/d27/f01) -eq 2 ] ||
 		error "two-stripe file doesn't have two stripes"
 
 	dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4 || error "dd failed"
@@ -1379,53 +1374,54 @@ run_test 27b "create and write to two stripe file"
 
 test_27d() {
 	test_mkdir -p $DIR/d27
-	$SETSTRIPE -c 0 -i -1 -S 0 $DIR/d27/fdef || error "setstripe failed"
+	$LFS setstripe -c 0 -i -1 -S 0 $DIR/d27/fdef || error "setstripe failed"
 	$CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
 	dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
 }
-run_test 27d "create file with default settings ================"
+run_test 27d "create file with default settings"
 
 test_27e() {
 	# LU-5839 adds check for existed layout before setting it
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.56) ]] &&
 		skip "Need MDS version at least 2.7.56" && return
 	test_mkdir -p $DIR/d27
-	$SETSTRIPE -c 2 $DIR/d27/f12 || error "setstripe failed"
-	$SETSTRIPE -c 2 $DIR/d27/f12 && error "setstripe succeeded twice"
+	$LFS setstripe -c 2 $DIR/d27/f12 || error "setstripe failed"
+	$LFS setstripe -c 2 $DIR/d27/f12 && error "setstripe succeeded twice"
 	$CHECKSTAT -t file $DIR/d27/f12 || error "checkstat failed"
 }
-run_test 27e "setstripe existing file (should return error) ======"
+run_test 27e "setstripe existing file (should return error)"
 
 test_27f() {
 	test_mkdir $DIR/$tdir
-	$SETSTRIPE -S 100 -i 0 -c 1 $DIR/$tdir/$tfile &&
+	$LFS setstripe -S 100 -i 0 -c 1 $DIR/$tdir/$tfile &&
 		error "$SETSTRIPE $DIR/$tdir/$tfile failed"
 	$CHECKSTAT -t file $DIR/$tdir/$tfile &&
 		error "$CHECKSTAT -t file $DIR/$tdir/$tfile should fail"
 	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=4k count=4 || error "dd failed"
-	$GETSTRIPE $DIR/$tdir/$tfile || error "$GETSTRIPE failed"
+	$LFS getstripe $DIR/$tdir/$tfile || error "$LFS getstripe failed"
 }
 run_test 27f "setstripe with bad stripe size (should return error)"
 
 test_27g() {
 	test_mkdir -p $DIR/d27
 	$MCREATE $DIR/d27/fnone || error "mcreate failed"
-	$GETSTRIPE $DIR/d27/fnone 2>&1 | grep "no stripe info" ||
+	$LFS getstripe $DIR/d27/fnone 2>&1 | grep "no stripe info" ||
 		error "$DIR/d27/fnone has object"
 }
-run_test 27g "$GETSTRIPE with no objects"
+run_test 27g "$LFS getstripe with no objects"
 
 test_27i() {
 	test_mkdir $DIR/$tdir
 	touch $DIR/$tdir/$tfile || error "touch failed"
-	[[ $($GETSTRIPE -c $DIR/$tdir/$tfile) -gt 0 ]] ||
+	[[ $($LFS getstripe -c $DIR/$tdir/$tfile) -gt 0 ]] ||
 		error "missing objects"
 }
-run_test 27i "$GETSTRIPE with some objects"
+run_test 27i "$LFS getstripe with some objects"
 
 test_27j() {
 	test_mkdir -p $DIR/d27
-	$SETSTRIPE -i $OSTCOUNT $DIR/d27/f27j && error "setstripe failed"||true
+	$LFS setstripe -i $OSTCOUNT $DIR/d27/f27j &&
+		error "setstripe failed" || true
 }
 run_test 27j "setstripe with bad stripe offset (should return error)"
 
@@ -1434,19 +1430,19 @@ test_27k() { # bug 2844
 	FILE=$DIR/d27/f27k
 	LL_MAX_BLKSIZE=$((4 * 1024 * 1024))
 	[ ! -d $DIR/d27 ] && test_mkdir -p $DIR d27
-	$SETSTRIPE -S 67108864 $FILE || error "setstripe failed"
-	BLKSIZE=`stat $FILE | awk '/IO Block:/ { print $7 }'`
+	$LFS setstripe -S 67108864 $FILE || error "setstripe failed"
+	BLKSIZE=$(stat $FILE | awk '/IO Block:/ { print $7 }')
 	[ $BLKSIZE -le $LL_MAX_BLKSIZE ] || error "1:$BLKSIZE > $LL_MAX_BLKSIZE"
 	dd if=/dev/zero of=$FILE bs=4k count=1
-	BLKSIZE=`stat $FILE | awk '/IO Block:/ { print $7 }'`
+	BLKSIZE=$(stat $FILE | awk '/IO Block:/ { print $7 }')
 	[ $BLKSIZE -le $LL_MAX_BLKSIZE ] || error "2:$BLKSIZE > $LL_MAX_BLKSIZE"
 }
-run_test 27k "limit i_blksize for broken user apps ============="
+run_test 27k "limit i_blksize for broken user apps"
 
 test_27l() {
 	test_mkdir -p $DIR/d27
 	mcreate $DIR/f27l || error "creating file"
-	$RUNAS $SETSTRIPE -c 1 $DIR/f27l && \
+	$RUNAS $SETSTRIPE -c 1 $DIR/f27l &&
 		error "setstripe should have failed" || true
 }
 run_test 27l "check setstripe permissions (should return error)"
@@ -1463,29 +1459,32 @@ test_27m() {
 	fi
 	trap simple_cleanup_common EXIT
 	test_mkdir -p $DIR/$tdir
-	$SETSTRIPE -i 0 -c 1 $DIR/$tdir/f27m_1
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir/f27m_1
 	dd if=/dev/zero of=$DIR/$tdir/f27m_1 bs=1024 count=$MAXFREE &&
 		error "dd should fill OST0"
 	i=2
-	while $SETSTRIPE -i 0 -c 1 $DIR/$tdir/f27m_$i; do
+	while $LFS setstripe -i 0 -c 1 $DIR/$tdir/f27m_$i; do
 		i=$((i + 1))
 		[ $i -gt 256 ] && break
 	done
 	i=$((i + 1))
 	touch $DIR/$tdir/f27m_$i
-	[ `$GETSTRIPE $DIR/$tdir/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] &&
+	[ $($LFS getstripe $DIR/$tdir/f27m_$i | grep -A 10 obdidx |
+	    awk '{print $1}' | grep -w "0") ] &&
 		error "OST0 was full but new created file still use it"
 	i=$((i + 1))
 	touch $DIR/$tdir/f27m_$i
-	[ `$GETSTRIPE $DIR/$tdir/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] &&
+	[ $($LFS getstripe $DIR/$tdir/f27m_$i | grep -A 10 obdidx |
+	    awk '{print $1}'| grep -w "0") ] &&
 		error "OST0 was full but new created file still use it"
 	simple_cleanup_common
 }
-run_test 27m "create file while OST0 was full =================="
+run_test 27m "create file while OST0 was full"
 
 sleep_maxage() {
-        local DELAY=$(do_facet $SINGLEMDS lctl get_param -n lov.*.qos_maxage | head -n 1 | awk '{print $1 * 2}')
-        sleep $DELAY
+	local DELAY=$(do_facet $SINGLEMDS lctl get_param -n lov.*.qos_maxage |
+		      head -n 1 | awk '{print $1 * 2}')
+	sleep $DELAY
 }
 
 # OSCs keep a NOSPC flag that will be reset after ~5s (qos_maxage)
@@ -1551,12 +1550,12 @@ test_27n() {
 	reset_enospc
 	rm -f $DIR/$tdir/$tfile
 	exhaust_precreations 0 0x80000215
-	$SETSTRIPE -c -1 $DIR/$tdir
+	$LFS setstripe -c -1 $DIR/$tdir
 	touch $DIR/$tdir/$tfile || error
-	$GETSTRIPE $DIR/$tdir/$tfile
+	$LFS getstripe $DIR/$tdir/$tfile
 	reset_enospc
 }
-run_test 27n "create file with some full OSTs =================="
+run_test 27n "create file with some full OSTs"
 
 test_27o() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
@@ -1573,7 +1572,7 @@ test_27o() {
 	reset_enospc
 	rm -rf $DIR/$tdir/*
 }
-run_test 27o "create file with all full OSTs (should error) ===="
+run_test 27o "create file with all full OSTs (should error)"
 
 test_27p() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
@@ -1592,11 +1591,11 @@ test_27p() {
 	exhaust_precreations 0 0x80000215
 	echo foo >> $DIR/$tdir/$tfile || error "append failed"
 	$CHECKSTAT -s 80000004 $DIR/$tdir/$tfile || error "checkstat failed"
-	$GETSTRIPE $DIR/$tdir/$tfile
+	$LFS getstripe $DIR/$tdir/$tfile
 
 	reset_enospc
 }
-run_test 27p "append to a truncated file with some full OSTs ==="
+run_test 27p "append to a truncated file with some full OSTs"
 
 test_27q() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
@@ -1609,7 +1608,8 @@ test_27q() {
 
 	test_mkdir -p $DIR/$tdir
 	$MCREATE $DIR/$tdir/$tfile || error "mcreate $DIR/$tdir/$tfile failed"
-	$TRUNCATE $DIR/$tdir/$tfile 80000000 ||error "truncate $DIR/$tdir/$tfile failed"
+	$TRUNCATE $DIR/$tdir/$tfile 80000000 ||
+		error "truncate $DIR/$tdir/$tfile failed"
 	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat failed"
 
 	exhaust_all_precreations 0x215
@@ -1619,7 +1619,7 @@ test_27q() {
 
 	reset_enospc
 }
-run_test 27q "append to truncated file with all OSTs full (should error) ==="
+run_test 27q "append to truncated file with all OSTs full (should error)"
 
 test_27r() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
@@ -1631,7 +1631,7 @@ test_27r() {
 	rm -f $DIR/$tdir/$tfile
 	exhaust_precreations 0 0x80000215
 
-	$SETSTRIPE -i 0 -c 2 $DIR/$tdir/$tfile # && error
+	$LFS setstripe -i 0 -c 2 $DIR/$tdir/$tfile # && error
 
 	reset_enospc
 }
@@ -1642,7 +1642,7 @@ test_27s() { # bug 10725
 	local stripe_size=$((4096 * 1024 * 1024))	# 2^32
 	local stripe_count=0
 	[ $OSTCOUNT -eq 1 ] || stripe_count=2
-	$SETSTRIPE -S $stripe_size -c $stripe_count $DIR/$tdir &&
+	$LFS setstripe -S $stripe_size -c $stripe_count $DIR/$tdir &&
 		error "stripe width >= 2^32 succeeded" || true
 
 }
@@ -1672,26 +1672,26 @@ test_27u() { # bug 4900
 	do_nodes $list $LCTL set_param fail_loc=0
 
 	TLOG=$TMP/$tfile.getstripe
-	$GETSTRIPE $DIR/$tdir > $TLOG
+	$LFS getstripe $DIR/$tdir > $TLOG
 	OBJS=$(awk -vobj=0 '($1 == 0) { obj += 1 } END { print obj; }' $TLOG)
 	unlinkmany $DIR/$tdir/t- 1000
 	trap 0
 	[[ $OBJS -gt 0 ]] &&
 		error "$OBJS objects created on OST-0. See $TLOG" || pass
 }
-run_test 27u "skip object creation on OSC w/o objects =========="
+run_test 27u "skip object creation on OSC w/o objects"
 
 test_27v() { # bug 4900
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        remote_mds_nodsh && skip "remote MDS with nodsh" && return
-        remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
-        exhaust_all_precreations 0x215
-        reset_enospc
+	exhaust_all_precreations 0x215
+	reset_enospc
 
-        test_mkdir -p $DIR/$tdir
-        $SETSTRIPE -c 1 $DIR/$tdir         # 1 stripe / file
+	test_mkdir $DIR/$tdir
+	$LFS setstripe -c 1 $DIR/$tdir         # 1 stripe / file
 
         touch $DIR/$tdir/$tfile
         #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
@@ -1710,35 +1710,35 @@ test_27v() { # bug 4900
         sleep $((TIMEOUT / 2 - PROCESS))
         reset_enospc
 }
-run_test 27v "skip object creation on slow OST ================="
+run_test 27v "skip object creation on slow OST"
 
 test_27w() { # bug 10997
-        test_mkdir -p $DIR/$tdir || error "mkdir failed"
-        $SETSTRIPE -S 65536 $DIR/$tdir/f0 || error "setstripe failed"
-        [ $($GETSTRIPE -S $DIR/$tdir/f0) -ne 65536 ] &&
-                error "stripe size $size != 65536" || true
-        [ $($GETSTRIPE -d $DIR/$tdir | grep -c "stripe_count") -ne 1 ] &&
-                error "$GETSTRIPE -d $DIR/$tdir failed" || true
+	test_mkdir $DIR/$tdir || error "mkdir failed"
+	$LFS setstripe -S 65536 $DIR/$tdir/f0 || error "setstripe failed"
+	[ $($LFS getstripe -S $DIR/$tdir/f0) -ne 65536 ] &&
+		error "stripe size $size != 65536" || true
+	[ $($LFS getstripe -d $DIR/$tdir | grep -c "stripe_count") -ne 1 ] &&
+		error "$LFS getstripe -d $DIR/$tdir failed" || true
 }
-run_test 27w "check $SETSTRIPE -S option"
+run_test 27w "check $LFS setstripe -S option"
 
 test_27wa() {
 	[[ $OSTCOUNT -lt 2 ]] &&
 		skip_env "skipping multiple stripe count/offset test" && return
 
-        test_mkdir -p $DIR/$tdir || error "mkdir failed"
-        for i in $(seq 1 $OSTCOUNT); do
-                offset=$((i - 1))
-                $SETSTRIPE -c $i -i $offset $DIR/$tdir/f$i ||
-                        error "setstripe -c $i -i $offset failed"
-                count=$($GETSTRIPE -c $DIR/$tdir/f$i)
-                index=$($GETSTRIPE -i $DIR/$tdir/f$i)
-                [ $count -ne $i ] && error "stripe count $count != $i" || true
-                [ $index -ne $offset ] &&
-                        error "stripe offset $index != $offset" || true
-        done
+	test_mkdir $DIR/$tdir || error "mkdir failed"
+	for i in $(seq 1 $OSTCOUNT); do
+		offset=$((i - 1))
+		$LFS setstripe -c $i -i $offset $DIR/$tdir/f$i ||
+			error "setstripe -c $i -i $offset failed"
+		count=$($LFS getstripe -c $DIR/$tdir/f$i)
+		index=$($LFS getstripe -i $DIR/$tdir/f$i)
+		[ $count -ne $i ] && error "stripe count $count != $i" || true
+		[ $index -ne $offset ] &&
+			error "stripe offset $index != $offset" || true
+	done
 }
-run_test 27wa "check $SETSTRIPE -c -i options"
+run_test 27wa "check $LFS setstripe -c -i options"
 
 test_27x() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
@@ -1749,12 +1749,13 @@ test_27x() {
 	local OST=$(ostname_from_index $OSTIDX)
 
 	test_mkdir -p $DIR/$tdir
-	$SETSTRIPE -c 1 $DIR/$tdir	# 1 stripe per file
+	$LFS setstripe -c 1 $DIR/$tdir	# 1 stripe per file
 	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 1
 	sleep_maxage
 	createmany -o $DIR/$tdir/$tfile $OSTCOUNT
-	for i in `seq 0 $OFFSET`; do
-		[ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}' | grep -w "$OSTIDX"` ] &&
+	for i in $(seq 0 $OFFSET); do
+		[ $($LFS getstripe $DIR/$tdir/$tfile$i | grep -A 10 obdidx |
+		    awk '{print $1}' | grep -w "$OSTIDX") ] &&
 		error "OST0 was degraded but new created file still use it"
 	done
 	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 0
@@ -1764,16 +1765,16 @@ run_test 27x "create files while OST0 is degraded"
 test_27y() {
 	[[ $OSTCOUNT -lt 2 ]] &&
 		skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
-        remote_mds_nodsh && skip "remote MDS with nodsh" && return
-        remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 
-        local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $FSNAME-OST0000)
-        local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
-            osc.$mdtosc.prealloc_last_id)
-        local next_id=$(do_facet $SINGLEMDS lctl get_param -n \
-            osc.$mdtosc.prealloc_next_id)
-        local fcount=$((last_id - next_id))
+	local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $FSNAME-OST0000)
+	local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
+		osc.$mdtosc.prealloc_last_id)
+	local next_id=$(do_facet $SINGLEMDS lctl get_param -n \
+		osc.$mdtosc.prealloc_next_id)
+	local fcount=$((last_id - next_id))
 	[[ $fcount -eq 0 ]] && skip "not enough space on OST0" && return
 	[[ $fcount -gt $OSTCOUNT ]] && fcount=$OSTCOUNT
 
@@ -1798,7 +1799,7 @@ test_27y() {
 
 	OSTIDX=$(index_from_ostuuid $OST)
 	test_mkdir -p $DIR/$tdir
-	$SETSTRIPE -c 1 $DIR/$tdir      # 1 stripe / file
+	$LFS setstripe -c 1 $DIR/$tdir      # 1 stripe / file
 
 	for OSC in $MDS_OSCS; do
 		OST=$(osc_to_ost $OSC)
@@ -1831,8 +1832,8 @@ test_27y() {
 	# sleep 2*lod_qos_maxage seconds waiting for lod qos to notice osp
 	# devices get activated.
 	sleep_maxage
-	$SETSTRIPE -c -1 $DIR/$tfile
-	stripecnt=$($GETSTRIPE -c $DIR/$tfile)
+	$LFS setstripe -c -1 $DIR/$tfile
+	stripecnt=$($LFS getstripe -c $DIR/$tfile)
 	rm -f $DIR/$tfile
 	[ $stripecnt -ne $OSTCOUNT ] &&
 		error "Of $OSTCOUNT OSTs, only $stripecnt is available"
