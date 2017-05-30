@@ -69,7 +69,7 @@
 
 #include <lnet/nidstr.h>
 #include <linux/lustre_ostid.h>
-#include <lustre_cfg.h>
+#include <linux/lustre_cfg.h>
 #include <linux/lustre_ioctl.h>
 #include <lustre_ver.h>
 
@@ -3117,9 +3117,11 @@ static int pool_cmd(enum lcfg_command_type cmd,
         if (ostname != NULL)
                 lustre_cfg_bufs_set_string(&bufs, 2, ostname);
 
-	lcfg = lustre_cfg_new(cmd, &bufs);
+
+	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
 	if (lcfg == NULL)
 		return -ENOMEM;
+	lustre_cfg_init(lcfg, cmd, &bufs);
 
         memset(&data, 0, sizeof(data));
         rc = data.ioc_dev = get_mgs_device();
@@ -3136,14 +3138,14 @@ static int pool_cmd(enum lcfg_command_type cmd,
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(cmdname));
-		lustre_cfg_free(lcfg);
+		free(lcfg);
                 return rc;
         }
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_POOL, buf);
 out:
         if (rc)
                 rc = -errno;
-        lustre_cfg_free(lcfg);
+	free(lcfg);
         return rc;
 }
 
@@ -3183,9 +3185,10 @@ static int nodemap_cmd(enum lcfg_command_type cmd, void *ret_data,
 	}
 	va_end(ap);
 
-	lcfg = lustre_cfg_new(cmd, &bufs);
+	lcfg = malloc(lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
 	if (lcfg == NULL)
 		return -ENOMEM;
+	lustre_cfg_init(lcfg, cmd, &bufs);
 
 	memset(&data, 0, sizeof(data));
 	rc = data.ioc_dev = get_mgs_device();
@@ -3223,7 +3226,7 @@ static int nodemap_cmd(enum lcfg_command_type cmd, void *ret_data,
 		memcpy(ret_data, data.ioc_pbuf1, ret_size);
 	}
 out:
-	lustre_cfg_free(lcfg);
+	free(lcfg);
 
 	return rc;
 }

@@ -40,6 +40,7 @@
 #include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -57,7 +58,7 @@
 #include <linux/lustre_ostid.h>
 #include <lustre/lustreapi.h>
 #include <lustre_log_user.h>
-#include <lustre_cfg.h>
+#include <linux/lustre_cfg.h>
 
 static inline int ext2_test_bit(int nr, const void *addr)
 {
@@ -377,6 +378,38 @@ static void print_1_cfg(struct lustre_cfg *lcfg)
         return;
 }
 
+static char *lustre_cfg_string(struct lustre_cfg *lcfg, __u32 index)
+{
+	char *s;
+
+	if (lcfg->lcfg_buflens[index] == 0)
+		return NULL;
+
+	s = lustre_cfg_buf(lcfg, index);
+	if (s == NULL)
+		return NULL;
+
+	/*
+	 * make sure it's NULL terminated, even if this kills a char
+	 * of data. Try to use the padding first though.
+	 */
+	if (s[lcfg->lcfg_buflens[index] - 1] != '\0') {
+		size_t last = __ALIGN_KERNEL(lcfg->lcfg_buflens[index], 8) - 1;
+		char lost;
+
+		/* Use the smaller value */
+		if (last > lcfg->lcfg_buflens[index])
+			last = lcfg->lcfg_buflens[index];
+
+		lost = s[last];
+		s[last] = '\0';
+		if (lost != '\0') {
+			fprintf(stderr, "Truncated buf %d to '%s' (lost '%c'...)\n",
+				index, s, lost);
+		}
+	}
+	return s;
+}
 
 static void print_setup_cfg(struct lustre_cfg *lcfg)
 {

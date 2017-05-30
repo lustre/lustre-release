@@ -30,6 +30,7 @@
 #
 
 EXTRA_DIST = \
+	lustre_cfg.h \
 	lustre_disk.h \
 	lustre_fid.h \
 	lustre_ioctl.h \

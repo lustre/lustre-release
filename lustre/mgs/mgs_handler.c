@@ -133,9 +133,11 @@ static int mgs_set_info(struct tgt_session_info *tsi)
 	/* Construct lustre_cfg structure to pass to function mgs_setparam */
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
 	lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 1, msp->mgs_param);
-	lcfg = lustre_cfg_new(LCFG_PARAM, &mgi->mgi_bufs);
-	if (lcfg == NULL)
+	OBD_ALLOC(lcfg, lustre_cfg_len(mgi->mgi_bufs.lcfg_bufcount,
+				       mgi->mgi_bufs.lcfg_buflen));
+	if (!lcfg)
 		RETURN(-ENOMEM);
+	lustre_cfg_init(lcfg, LCFG_PARAM, &mgi->mgi_bufs);
 
 	rc = mgs_setparam(tsi->tsi_env, exp2mgs_dev(tsi->tsi_exp), lcfg,
 			  mgi->mgi_fsname);
@@ -151,7 +153,7 @@ static int mgs_set_info(struct tgt_session_info *tsi)
 	*rep_msp = *msp;
 	EXIT;
 out_cfg:
-	lustre_cfg_free(lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 	return rc;
 }
 #endif

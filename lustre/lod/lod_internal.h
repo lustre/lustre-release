@@ -39,7 +39,7 @@
 #define _LOD_INTERNAL_H
 
 #include <libcfs/libcfs.h>
-#include <lustre_cfg.h>
+#include <uapi/linux/lustre_cfg.h>
 #include <obd.h>
 #include <dt_object.h>
 

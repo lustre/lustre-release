@@ -51,7 +51,7 @@
 #include <dirent.h>
 #include <dlfcn.h>
 #include <lustre/lustre_idl.h>
-#include <lustre_cfg.h>
+#include <linux/lustre_cfg.h>
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/xattr.h>

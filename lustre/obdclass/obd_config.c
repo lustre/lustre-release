@@ -323,6 +323,40 @@ int class_match_net(char *buf, char *key, __u32 net)
         return rc;
 }
 
+char *lustre_cfg_string(struct lustre_cfg *lcfg, u32 index)
+{
+	char *s;
+
+	if (!lcfg->lcfg_buflens[index])
+		return NULL;
+
+	s = lustre_cfg_buf(lcfg, index);
+	if (!s)
+		return NULL;
+
+	/*
+	 * make sure it's NULL terminated, even if this kills a char
+	 * of data.  Try to use the padding first though.
+	 */
+	if (s[lcfg->lcfg_buflens[index] - 1] != '\0') {
+		size_t last = ALIGN(lcfg->lcfg_buflens[index], 8) - 1;
+		char lost;
+
+		/* Use the smaller value */
+		if (last > lcfg->lcfg_buflens[index])
+			last = lcfg->lcfg_buflens[index];
+
+		lost = s[last];
+		s[last] = '\0';
+		if (lost != '\0') {
+			CWARN("Truncated buf %d to '%s' (lost '%c'...)\n",
+			      index, s, lost);
+		}
+	}
+	return s;
+}
+EXPORT_SYMBOL(lustre_cfg_string);
+
 /********************** class fns **********************/
 
 /**
@@ -1037,12 +1071,12 @@ struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 	int			 new_len = 0;
 	ENTRY;
 
-	if (cfg == NULL || new_name == NULL)
-		RETURN(ERR_PTR(-EINVAL));
+	if (!cfg || !new_name)
+		GOTO(out_nocfg, new_cfg = ERR_PTR(-EINVAL));
 
 	param = lustre_cfg_string(cfg, 1);
-	if (param == NULL)
-		RETURN(ERR_PTR(-EINVAL));
+	if (!param)
+		GOTO(out_nocfg, new_cfg = ERR_PTR(-EINVAL));
 
 	value = strchr(param, '=');
 	if (value == NULL)
@@ -1053,34 +1087,37 @@ struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 	new_len = LUSTRE_CFG_BUFLEN(cfg, 1) + strlen(new_name) - name_len;
 
 	OBD_ALLOC(new_param, new_len);
-	if (new_param == NULL)
-		RETURN(ERR_PTR(-ENOMEM));
+	if (!new_param)
+		GOTO(out_nocfg, new_cfg = ERR_PTR(-ENOMEM));
 
 	strcpy(new_param, new_name);
 	if (value != NULL)
 		strcat(new_param, value);
 
 	OBD_ALLOC_PTR(bufs);
-	if (bufs == NULL) {
-		OBD_FREE(new_param, new_len);
-		RETURN(ERR_PTR(-ENOMEM));
-	}
+	if (!bufs)
+		GOTO(out_free_param, new_cfg = ERR_PTR(-ENOMEM));
 
 	lustre_cfg_bufs_reset(bufs, NULL);
 	lustre_cfg_bufs_init(bufs, cfg);
 	lustre_cfg_bufs_set_string(bufs, 1, new_param);
 
-	new_cfg = lustre_cfg_new(cfg->lcfg_command, bufs);
-	OBD_FREE(new_param, new_len);
-	OBD_FREE_PTR(bufs);
-	if (new_cfg == NULL)
-		RETURN(ERR_PTR(-ENOMEM));
+	OBD_ALLOC(new_cfg, lustre_cfg_len(bufs->lcfg_bufcount,
+					  bufs->lcfg_buflen));
+	if (!new_cfg)
+		GOTO(out_free_buf, new_cfg = ERR_PTR(-ENOMEM));
+
+	lustre_cfg_init(new_cfg, cfg->lcfg_command, bufs);
 
 	new_cfg->lcfg_num = cfg->lcfg_num;
 	new_cfg->lcfg_flags = cfg->lcfg_flags;
 	new_cfg->lcfg_nid = cfg->lcfg_nid;
 	new_cfg->lcfg_nal = cfg->lcfg_nal;
-
+out_free_buf:
+	OBD_FREE_PTR(bufs);
+out_free_param:
+	OBD_FREE(new_param, new_len);
+out_nocfg:
 	RETURN(new_cfg);
 }
 EXPORT_SYMBOL(lustre_cfg_rename);
@@ -1466,7 +1503,7 @@ int class_config_llog_handler(const struct lu_env *env,
 		struct lustre_cfg_bufs bufs;
 		char *inst_name = NULL;
 		int inst_len = 0;
-		int inst = 0, swab = 0;
+		int swab = 0;
 
 		lcfg = (struct lustre_cfg *)cfg_buf;
 		if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION)) {
@@ -1587,7 +1624,6 @@ int class_config_llog_handler(const struct lu_env *env,
 
 		if (cfg->cfg_instance &&
 		    LUSTRE_CFG_BUFLEN(lcfg, 0) > 0) {
-			inst = 1;
 			inst_len = LUSTRE_CFG_BUFLEN(lcfg, 0) +
 				   sizeof(cfg->cfg_instance) * 2 + 4;
 			OBD_ALLOC(inst_name, inst_len);
@@ -1667,10 +1703,12 @@ int class_config_llog_handler(const struct lu_env *env,
 			}
 		}
 
-		lcfg_new = lustre_cfg_new(lcfg->lcfg_command, &bufs);
-		if (lcfg_new == NULL)
+		OBD_ALLOC(lcfg_new, lustre_cfg_len(bufs.lcfg_bufcount,
+						   bufs.lcfg_buflen));
+		if (!lcfg_new)
 			GOTO(out, rc = -ENOMEM);
 
+		lustre_cfg_init(lcfg_new, lcfg->lcfg_command, &bufs);
 		lcfg_new->lcfg_num   = lcfg->lcfg_num;
 		lcfg_new->lcfg_flags = lcfg->lcfg_flags;
 
@@ -1692,9 +1730,9 @@ int class_config_llog_handler(const struct lu_env *env,
 		lcfg_new->lcfg_nal = 0; /* illegal value for obsolete field */
 
 		rc = class_process_config(lcfg_new);
-		lustre_cfg_free(lcfg_new);
-
-		if (inst)
+		OBD_FREE(lcfg_new, lustre_cfg_len(lcfg_new->lcfg_bufcount,
+						  lcfg_new->lcfg_buflens));
+		if (inst_name)
 			OBD_FREE(inst_name, inst_len);
 		break;
 	}
@@ -1976,9 +2014,10 @@ int class_manual_cleanup(struct obd_device *obd)
 
 	lustre_cfg_bufs_reset(&bufs, obd->obd_name);
 	lustre_cfg_bufs_set_string(&bufs, 1, flags);
-	lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
-	if (lcfg == NULL)
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
+	if (!lcfg)
 		RETURN(-ENOMEM);
+	lustre_cfg_init(lcfg, LCFG_CLEANUP, &bufs);
 
         rc = class_process_config(lcfg);
         if (rc) {
@@ -1992,8 +2031,8 @@ int class_manual_cleanup(struct obd_device *obd)
         if (rc)
                 CERROR("detach failed %d: %s\n", rc, obd->obd_name);
 out:
-        lustre_cfg_free(lcfg);
-        RETURN(rc);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
+	RETURN(rc);
 }
 EXPORT_SYMBOL(class_manual_cleanup);
 

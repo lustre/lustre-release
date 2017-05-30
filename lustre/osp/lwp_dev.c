@@ -114,9 +114,10 @@ static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 	lustre_cfg_bufs_reset(bufs, lwp_name);
 	lustre_cfg_bufs_set_string(bufs, 1, server_uuid);
 	lustre_cfg_bufs_set_string(bufs, 2, nidstring);
-	lcfg = lustre_cfg_new(LCFG_SETUP, bufs);
-	if (lcfg == NULL)
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+	if (!lcfg)
 		GOTO(out, rc = -ENOMEM);
+	lustre_cfg_init(lcfg, LCFG_SETUP, bufs);
 
 	rc = client_obd_setup(lwp->lpd_obd, lcfg);
 	if (rc != 0) {
@@ -137,8 +138,9 @@ out:
 		OBD_FREE_PTR(bufs);
 	if (server_uuid != NULL)
 		OBD_FREE(server_uuid, len);
-	if (lcfg != NULL)
-		lustre_cfg_free(lcfg);
+	if (lcfg)
+		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
+					      lcfg->lcfg_buflens));
 	if (rc)
 		client_obd_cleanup(lwp->lpd_obd);
 

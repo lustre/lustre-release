@@ -85,16 +85,18 @@ int lustre_process_log(struct super_block *sb, char *logname,
         if (bufs == NULL)
                 RETURN(-ENOMEM);
 
-        /* mgc_process_config */
-        lustre_cfg_bufs_reset(bufs, mgc->obd_name);
-        lustre_cfg_bufs_set_string(bufs, 1, logname);
-        lustre_cfg_bufs_set(bufs, 2, cfg, sizeof(*cfg));
-        lustre_cfg_bufs_set(bufs, 3, &sb, sizeof(sb));
-        lcfg = lustre_cfg_new(LCFG_LOG_START, bufs);
-	if (lcfg == NULL)
+	/* mgc_process_config */
+	lustre_cfg_bufs_reset(bufs, mgc->obd_name);
+	lustre_cfg_bufs_set_string(bufs, 1, logname);
+	lustre_cfg_bufs_set(bufs, 2, cfg, sizeof(*cfg));
+	lustre_cfg_bufs_set(bufs, 3, &sb, sizeof(sb));
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+	if (!lcfg)
 		GOTO(out, rc = -ENOMEM);
+	lustre_cfg_init(lcfg, LCFG_LOG_START, bufs);
+
 	rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
-	lustre_cfg_free(lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 out:
         OBD_FREE_PTR(bufs);
 
@@ -133,16 +135,17 @@ int lustre_end_log(struct super_block *sb, char *logname,
                 RETURN(-ENOENT);
 
         /* mgc_process_config */
-        lustre_cfg_bufs_reset(&bufs, mgc->obd_name);
-        lustre_cfg_bufs_set_string(&bufs, 1, logname);
-        if (cfg)
-                lustre_cfg_bufs_set(&bufs, 2, cfg, sizeof(*cfg));
-        lcfg = lustre_cfg_new(LCFG_LOG_END, &bufs);
-	if (lcfg == NULL)
+	lustre_cfg_bufs_reset(&bufs, mgc->obd_name);
+	lustre_cfg_bufs_set_string(&bufs, 1, logname);
+	if (cfg)
+		lustre_cfg_bufs_set(&bufs, 2, cfg, sizeof(*cfg));
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
+	if (!lcfg)
 		RETURN(-ENOMEM);
-        rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
-        lustre_cfg_free(lcfg);
-        RETURN(rc);
+	lustre_cfg_init(lcfg, LCFG_LOG_END, &bufs);
+	rc = obd_process_config(mgc, sizeof(*lcfg), lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
+	RETURN(rc);
 }
 EXPORT_SYMBOL(lustre_end_log);
 
@@ -171,13 +174,14 @@ static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
         if (s4)
                 lustre_cfg_bufs_set_string(&bufs, 4, s4);
 
-        lcfg = lustre_cfg_new(cmd, &bufs);
-	if (lcfg == NULL)
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
+	if (!lcfg)
 		return -ENOMEM;
-        lcfg->lcfg_nid = nid;
-        rc = class_process_config(lcfg);
-        lustre_cfg_free(lcfg);
-        return(rc);
+	lustre_cfg_init(lcfg, cmd, &bufs);
+	lcfg->lcfg_nid = nid;
+	rc = class_process_config(lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
+	return rc;
 }
 
 /** Call class_attach and class_setup.  These methods in turn call

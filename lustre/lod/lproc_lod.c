@@ -542,9 +542,10 @@ lod_qos_maxage_seq_write(struct file *file, const char __user *buffer,
 	lustre_cfg_bufs_reset(&bufs, NULL);
 	snprintf(str, 32, "%smaxage=%u", PARAM_OSP, (__u32)val);
 	lustre_cfg_bufs_set_string(&bufs, 1, str);
-	lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
 	if (lcfg == NULL)
 		return -ENOMEM;
+	lustre_cfg_init(lcfg, LCFG_PARAM, &bufs);
 
 	lod_getref(&lod->lod_ost_descs);
 	lod_foreach_ost(lod, i) {
@@ -554,7 +555,7 @@ lod_qos_maxage_seq_write(struct file *file, const char __user *buffer,
 			CERROR("can't set maxage on #%d: %d\n", i, rc);
 	}
 	lod_putref(lod, &lod->lod_ost_descs);
-	lustre_cfg_free(lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 
 	return count;
 }

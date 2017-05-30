@@ -128,6 +128,7 @@ struct cfg_interop_param {
 	char *new_param;
 };
 
+char *lustre_cfg_string(struct lustre_cfg *lcfg, u32 index);
 struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 				     const char *new_name);
 int class_process_config(struct lustre_cfg *lcfg);

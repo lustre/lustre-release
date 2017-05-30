@@ -4220,12 +4220,13 @@ static void mdt_stack_pre_fini(const struct lu_env *env,
 	 * by osd only doesn't have mdt/mdd slices -bzzz */
 	lustre_cfg_bufs_reset(bufs, mdt_obd_name(m));
 	lustre_cfg_bufs_set_string(bufs, 1, NULL);
-	lcfg = lustre_cfg_new(LCFG_PRE_CLEANUP, bufs);
-	if (lcfg == NULL)
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+	if (!lcfg)
 		RETURN_EXIT;
+	lustre_cfg_init(lcfg, LCFG_PRE_CLEANUP, bufs);
 
 	top->ld_ops->ldo_process_config(env, top, lcfg);
-	lustre_cfg_free(lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 	EXIT;
 }
 
@@ -4255,13 +4256,14 @@ static void mdt_stack_fini(const struct lu_env *env,
 	if (obd->obd_fail)
 		strcat(flags, "A");
 	lustre_cfg_bufs_set_string(bufs, 1, flags);
-	lcfg = lustre_cfg_new(LCFG_CLEANUP, bufs);
-	if (lcfg == NULL)
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+	if (!lcfg)
 		RETURN_EXIT;
+	lustre_cfg_init(lcfg, LCFG_CLEANUP, bufs);
 
 	LASSERT(top);
 	top->ld_ops->ldo_process_config(env, top, lcfg);
-	lustre_cfg_free(lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 
 	lu_site_purge(env, top->ld_site, -1);
 
@@ -4381,9 +4383,10 @@ static int mdt_stack_init(const struct lu_env *env, struct mdt_device *mdt,
 	lustre_cfg_bufs_set_string(bufs, 2, uuid);
 	lustre_cfg_bufs_set_string(bufs, 3, lprof->lp_dt);
 
-	lcfg = lustre_cfg_new(LCFG_ATTACH, bufs);
-	if (lcfg == NULL)
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+	if (!lcfg)
 		GOTO(put_profile, rc = -ENOMEM);
+	lustre_cfg_init(lcfg, LCFG_ATTACH, bufs);
 
 	rc = class_attach(lcfg);
 	if (rc)
@@ -4396,16 +4399,17 @@ static int mdt_stack_init(const struct lu_env *env, struct mdt_device *mdt,
 		GOTO(lcfg_cleanup, rc = -EINVAL);
 	}
 
-	lustre_cfg_free(lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 
 	lustre_cfg_bufs_reset(bufs, name);
 	lustre_cfg_bufs_set_string(bufs, 1, uuid);
 	lustre_cfg_bufs_set_string(bufs, 2, dev);
 	lustre_cfg_bufs_set_string(bufs, 3, lprof->lp_dt);
 
-	lcfg = lustre_cfg_new(LCFG_SETUP, bufs);
-	if (lcfg == NULL)
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+	if (!lcfg)
 		GOTO(class_detach, rc = -ENOMEM);
+	lustre_cfg_init(lcfg, LCFG_SETUP, bufs);
 
 	rc = class_setup(obd, lcfg);
 	if (rc)
@@ -4442,7 +4446,7 @@ class_detach:
 	if (rc)
 		class_detach(obd, lcfg);
 lcfg_cleanup:
-	lustre_cfg_free(lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 put_profile:
 	class_put_profile(lprof);
 free_bufs:
@@ -4513,9 +4517,10 @@ static int mdt_quota_init(const struct lu_env *env, struct mdt_device *mdt,
 	lustre_cfg_bufs_set_string(bufs, 2, uuid);
 	lustre_cfg_bufs_set_string(bufs, 3, lprof->lp_dt);
 
-	lcfg = lustre_cfg_new(LCFG_ATTACH, bufs);
-	if (lcfg == NULL)
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+	if (!lcfg)
 		GOTO(put_profile, rc = -ENOMEM);
+	lustre_cfg_init(lcfg, LCFG_ATTACH, bufs);
 
 	rc = class_attach(lcfg);
 	if (rc)
@@ -4528,7 +4533,7 @@ static int mdt_quota_init(const struct lu_env *env, struct mdt_device *mdt,
 		GOTO(lcfg_cleanup, rc = -EINVAL);
 	}
 
-	lustre_cfg_free(lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 
 	lustre_cfg_bufs_reset(bufs, qmtname);
 	lustre_cfg_bufs_set_string(bufs, 1, uuid);
@@ -4538,9 +4543,10 @@ static int mdt_quota_init(const struct lu_env *env, struct mdt_device *mdt,
 	lustre_cfg_bufs_set_string(bufs, 3,
 				   mdt->mdt_bottom->dd_lu_dev.ld_obd->obd_name);
 
-	lcfg = lustre_cfg_new(LCFG_SETUP, bufs);
-	if (lcfg == NULL)
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+	if (!lcfg)
 		GOTO(class_detach, rc = -ENOMEM);
+	lustre_cfg_init(lcfg, LCFG_SETUP, bufs);
 
 	rc = class_setup(obd, lcfg);
 	if (rc)
@@ -4576,7 +4582,7 @@ class_detach:
 	if (rc)
 		class_detach(obd, lcfg);
 lcfg_cleanup:
-	lustre_cfg_free(lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 put_profile:
 	class_put_profile(lprof);
 cleanup_mem:
@@ -5113,9 +5119,9 @@ static int mdt_process_config(const struct lu_env *env,
 								      cfg);
 		}
 
-		if (old_cfg != NULL)
-			lustre_cfg_free(cfg);
-
+		if (old_cfg)
+			OBD_FREE(cfg, lustre_cfg_len(cfg->lcfg_bufcount,
+						     cfg->lcfg_buflens));
 		break;
 	}
         default:

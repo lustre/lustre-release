@@ -237,13 +237,14 @@ static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
 	if (obd->obd_fail)
 		strcat(flags, "A");
 	lustre_cfg_bufs_set_string(&bufs, 1, flags);
-	lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
-	if (lcfg == NULL)
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
+	if (!lcfg)
 		RETURN_EXIT;
+	lustre_cfg_init(lcfg, LCFG_CLEANUP, &bufs);
 
 	LASSERT(top);
 	top->ld_ops->ldo_process_config(env, top, lcfg);
-	lustre_cfg_free(lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 
 	lu_site_purge(env, top->ld_site, ~0);
 	if (!cfs_hash_is_empty(top->ld_site->ls_obj_hash)) {

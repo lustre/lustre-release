@@ -1570,17 +1570,20 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 
                 lustre_cfg_bufs_set_string(&bufs, 1, params);
 
-		lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
-		if (lcfg == NULL) {
+		OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount,
+					       bufs.lcfg_buflen));
+		if (!lcfg) {
 			rc = -ENOMEM;
 			break;
 		}
+		lustre_cfg_init(lcfg, LCFG_PARAM, &bufs);
 
 		CDEBUG(D_INFO, "ir apply logs %lld/%lld for %s -> %s\n",
                        prev_version, max_version, obdname, params);
 
                 rc = class_process_config(lcfg);
-                lustre_cfg_free(lcfg);
+		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
+					      lcfg->lcfg_buflens));
                 if (rc)
                         CDEBUG(D_INFO, "process config for %s error %d\n",
                                obdname, rc);

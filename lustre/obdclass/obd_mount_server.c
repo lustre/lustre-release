@@ -739,15 +739,18 @@ static int lustre_lwp_add_conn(struct lustre_cfg *cfg,
 	lustre_cfg_bufs_set_string(bufs, 1,
 				   lustre_cfg_string(cfg, 1));
 
-	lcfg = lustre_cfg_new(LCFG_ADD_CONN, bufs);
-	if (lcfg == NULL)
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+	if (!lcfg)
 		GOTO(out_cfg, rc = -ENOMEM);
+	lustre_cfg_init(lcfg, LCFG_ADD_CONN, bufs);
+
 	rc = class_add_conn(lwp, lcfg);
 	if (rc)
 		CERROR("%s: can't add conn: rc = %d\n", lwpname, rc);
 
-	if (lcfg != NULL)
-		lustre_cfg_free(lcfg);
+	if (lcfg)
+		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
+					      lcfg->lcfg_buflens));
 out_cfg:
 	if (bufs != NULL)
 		OBD_FREE_PTR(bufs);
@@ -937,15 +940,18 @@ static int lustre_disconnect_lwp(struct super_block *sb)
 
 		lustre_cfg_bufs_reset(bufs, lwp->obd_name);
 		lustre_cfg_bufs_set_string(bufs, 1, NULL);
-		lcfg = lustre_cfg_new(LCFG_CLEANUP, bufs);
-		if (lcfg == NULL)
+		OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount,
+					       bufs->lcfg_buflen));
+		if (!lcfg)
 			GOTO(out, rc = -ENOMEM);
+		lustre_cfg_init(lcfg, LCFG_CLEANUP, bufs);
 
 		/* Disconnect import first. NULL is passed for the '@env',
 		 * since it will not be used. */
 		rc = lwp->obd_lu_dev->ld_ops->ldo_process_config(NULL,
 							lwp->obd_lu_dev, lcfg);
-		lustre_cfg_free(lcfg);
+		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
+					      lcfg->lcfg_buflens));
 		if (rc != 0 && rc != -ETIMEDOUT) {
 			CERROR("%s: fail to disconnect LWP: rc = %d\n",
 			       lwp->obd_name, rc);
