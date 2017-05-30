@@ -16380,6 +16380,36 @@ test_410()
 }
 run_test 410 "Test inode number returned from kernel thread"
 
+cleanup_test411_cgroup() {
+	trap 0
+	rmdir "$1"
+}
+
+test_411() {
+	local cg_basedir=/sys/fs/cgroup/memory
+	test -d "$cg_basedir" || { skip "no setup for cgroup"; return; }
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=100 conv=fsync ||
+		error "test file creation failed"
+	cancel_lru_locks osc
+
+	# Create a very small memory cgroup to force a slab allocation error
+	local cgdir=$cg_basedir/osc_slab_alloc
+	mkdir $cgdir || error "cgroup mkdir '$cgdir' failed"
+	trap "cleanup_test411_cgroup $cgdir" EXIT
+	echo 2M > $cgdir/memory.kmem.limit_in_bytes
+	echo 1M > $cgdir/memory.limit_in_bytes
+
+	# Should not LBUG, just be killed by oom-killer
+	sh -c "echo \$$ > $cgdir/tasks && dd if=$DIR/$tfile of=/dev/null" &&
+		error "fail to trigger a memory allocation error"
+
+	cleanup_test411_cgroup $cgdir
+
+	return 0
+}
+run_test 411 "Slab allocation error with cgroup does not LBUG"
+
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&
