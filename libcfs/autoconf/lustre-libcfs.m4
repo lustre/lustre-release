@@ -644,6 +644,22 @@ get_user_pages_gup_flags, [
 ]) # LIBCFS_GET_USER_PAGES_GUP_FLAGS
 
 #
+# Kernel version 4.10 commit 7b737965b33188bd3dbb44e938535c4006d97fbb
+# libcfs: Convert to hotplug state machine
+#
+AC_DEFUN([LIBCFS_HOTPLUG_STATE_MACHINE], [
+LB_CHECK_COMPILE([if libcfs supports CPU hotplug state machine],
+cpu_hotplug_state_machine, [
+	#include <linux/cpuhotplug.h>
+],[
+	cpuhp_remove_state(CPUHP_LUSTRE_CFS_DEAD);
+],[
+	AC_DEFINE(HAVE_HOTPLUG_STATE_MACHINE, 1,
+		[hotplug state machine is supported])
+])
+]) # LIBCFS_HOTPLUG_STATE_MACHINE
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -707,6 +723,8 @@ LIBCFS_GET_USER_PAGES_6ARG
 LIBCFS_STACKTRACE_OPS
 # 4.9
 LIBCFS_GET_USER_PAGES_GUP_FLAGS
+# 4.10
+LIBCFS_HOTPLUG_STATE_MACHINE
 ]) # LIBCFS_PROG_LINUX
 
 #
