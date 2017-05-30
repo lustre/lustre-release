@@ -236,16 +236,27 @@ print_summary () {
 	echo $minusn "$*"
 }
 
+# Return a numeric version code based on a version string.  The version
+# code is useful for comparison two version strings to see which is newer.
 version_code() {
 	# split arguments like "2.3.61" into "2", "3", "61"
 	eval set -- $(tr "[:punct:]" " " <<< $*)
 	echo -n "$((($1 << 16) | ($2 << 8) | $3))"
 }
 
+# inspired from the lustre_build_version routine in test-framework.sh
 get_lustre_version() {
 	local host=${1:-${unique_hosts[0]}}
-	remote_shell $host $lctl get_param -n version |
-		awk '/^lustre:/ {print $2}'
+	local ver
+
+	ver=$(remote_shell $host "$lctl get_param -n version 2>/dev/null ||
+				$lctl lustre_build_version 2>/dev/null ||
+				$lctl --version 2>/dev/null | cut -d' ' -f2")
+	local lver=$(egrep -i "lustre: |version: " <<<$ver | head -n 1)
+	[ -n "$lver" ] && ver="$lver"
+
+	sed -e 's/.*: //' -e 's/^v//' -e 's/-.*//' -e 's/_/./g' <<<$ver |
+		cut -d. -f1-4
 }
 
 # Check whether the record size (KBytes) exceeds the maximum bulk I/O RPC size
