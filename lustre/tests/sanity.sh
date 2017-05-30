@@ -14922,9 +14922,11 @@ test_256() {
 
 	#after mount new plainllog is used
 	touch $DIR/$tdir/{11..19}
+	local TEMP256FILE=$(mktemp TEMP256XXXXXX)
 	cat_sl=$(do_facet mds1 \
-	"$DEBUGFS -R \\\"dump changelog_catalog cat.dmp\\\" $mdt_dev; \
-	 llog_reader cat.dmp | grep \\\"type=1064553b\\\" | wc -l")
+	"$DEBUGFS -R \\\"dump changelog_catalog $TEMP256FILE\\\" $mdt_dev; \
+	 llog_reader $TEMP256FILE | grep \\\"type=1064553b\\\" | wc -l")
+	rm $TEMP256FILE
 
 	if (( cat_sl != 2 )); then
 		do_facet mds1 $LCTL --device $MDT0 changelog_deregister $cl_user
@@ -14933,9 +14935,11 @@ test_256() {
 
 	$LFS changelog_clear $MDT0 $cl_user 0
 
+	TEMP256FILE=$(mktemp TEMP256XXXXXX)
 	cat_sl=$(do_facet mds1 \
-	"$DEBUGFS -R \\\"dump changelog_catalog cat.dmp\\\" $mdt_dev; \
-	 llog_reader cat.dmp | grep \\\"type=1064553b\\\" | wc -l")
+	"$DEBUGFS -R \\\"dump changelog_catalog $TEMP256FILE\\\" $mdt_dev; \
+	 llog_reader $TEMP256FILE | grep \\\"type=1064553b\\\" | wc -l")
+	rm $TEMP256FILE
 
 	do_facet mds1 $LCTL --device $MDT0 changelog_deregister $cl_user
 
