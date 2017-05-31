@@ -109,9 +109,6 @@
         <para> TCP (any network carrying TCP traffic, including GigE, 10GigE, and IPoIB)</para>
       </listitem>
       <listitem>
-        <para> Myrinet: MX</para>
-      </listitem>
-      <listitem>
         <para> RapidArray: ra</para>
       </listitem>
       <listitem>

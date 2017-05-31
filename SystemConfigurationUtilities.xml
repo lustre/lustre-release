@@ -258,7 +258,7 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
           <tbody>
             <row>
               <entry>
-                <para> <literal>network up|down|tcp|elan|myrinet</literal></para>
+                <para> <literal>network up|down|tcp|elan</literal></para>
               </entry>
               <entry>
                 <para> Starts or stops LNet, or selects a network type for other <literal>lctl</literal> LNet commands.</para>

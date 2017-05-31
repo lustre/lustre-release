@@ -198,7 +198,7 @@ lctl get_param mdt.*.nosquash_nids</screen>
            &lt;number&gt; &apos;-&apos; &lt;number&gt; &apos;/&apos; &lt;number&gt;
 &lt;net&gt;        :== &lt;netname&gt; | &lt;netname&gt;&lt;number&gt;
 &lt;netname&gt;    :== &quot;lo&quot; | &quot;tcp&quot; | &quot;o2ib&quot; | &quot;cib&quot; | &quot;openib&quot; | &quot;iib&quot; | 
-           &quot;vib&quot; | &quot;ra&quot; | &quot;elan&quot; | &quot;gm&quot; | &quot;mx&quot;
+           &quot;vib&quot; | &quot;ra&quot; | &quot;elan&quot;
 &lt;number&gt;     :== &lt;nonnegative decimal&gt; | &lt;hexadecimal&gt;</screen>
       <note>
         <para>For networks using numeric addresses (e.g. elan), the address range must be specified in the <literal>&lt;numaddr_range&gt;</literal> syntax. For networks using IP addresses, the address range must be in the <literal>&lt;ipaddr_range&gt;</literal>. For example, if elan is using numeric addresses, <literal>1.2.3.4@elan</literal> is incorrect.</para>
