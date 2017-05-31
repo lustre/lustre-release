@@ -240,6 +240,7 @@ int lustre_lnet_add_intf_descr(struct list_head *list, char *intf, int len)
 void lustre_lnet_init_nw_descr(struct lnet_dlc_network_descr *nw_descr)
 {
 	if (nw_descr != NULL) {
+		nw_descr->nw_id = 0;
 		INIT_LIST_HEAD(&nw_descr->network_on_rule);
 		INIT_LIST_HEAD(&nw_descr->nw_intflist);
 	}
@@ -1543,10 +1544,11 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 
-	if (ip2net == NULL && nw_descr == NULL) {
+	if (ip2net == NULL && (nw_descr == NULL || nw_descr->nw_id == 0 ||
+	    list_empty(&nw_descr->nw_intflist))) {
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"mandatory parameters not specified.\"");
+			 "\"missing mandatory parameters\"");
 		rc = LUSTRE_CFG_RC_MISSING_PARAM;
 		goto out;
 	}
@@ -1680,7 +1682,8 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 
-	if (nw_descr == NULL) {
+	if (nw_descr == NULL || nw_descr->nw_id == 0 ||
+	    list_empty(&nw_descr->nw_intflist)) {
 		snprintf(err_str,
 			 sizeof(err_str),
 			 "\"missing mandatory parameter\"");
