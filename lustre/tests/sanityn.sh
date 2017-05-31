@@ -3680,7 +3680,7 @@ test_80b() {
 	(
 		while true; do
 			mdt_idx=$((RANDOM % MDSCOUNT))
-			$LFS migrate -m $mdt_idx $migrate_dir1 2&>/dev/null ||
+			$LFS migrate -m $mdt_idx $migrate_dir1 &>/dev/null ||
 				rc=$?
 			[ $rc -ne 0 -o $rc -ne 16 ] || break
 		done
@@ -3724,23 +3724,23 @@ test_80b() {
 
 		if [ -e $migrate_dir2/source_file ]; then
 			ln $migrate_dir2/source_file $migrate_dir2/link_file \
-					2&>/dev/null || rc1=$?
+					&>/dev/null || rc1=$?
 			if [ -e $migrate_dir2/link_file ]; then
 				rm -rf $migrate_dir2/link_file
 			fi
 
 			mrename $migrate_dir2/source_file \
-				$migrate_dir2/target_file 2&>/dev/null || rc1=$?
+				$migrate_dir2/target_file &>/dev/null || rc1=$?
 			[ $rc1 -ne 0 -o $rc1 -ne 1 ] || {
 				echo "rename failed with $rc1"
 				break
 			}
 
 			if [ -e $migrate_dir2/target_file ]; then
-				rm -rf $migrate_dir2/target_file 2&>/dev/null ||
+				rm -rf $migrate_dir2/target_file &>/dev/null ||
 								rc1=$?
 			else
-				rm -rf $migrate_dir2/source_file 2&>/dev/null ||
+				rm -rf $migrate_dir2/source_file &>/dev/null ||
 								rc1=$?
 			fi
 			[ $rc1 -ne 0 -o $rc1 -ne 1 ] || {

@@ -2821,7 +2821,7 @@ test_81a() {
 
 	wait $CLIENT_PID || error "rm remote dir failed"
 
-	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+	stat $remote_dir &>/dev/null && error "$remote_dir still exist!"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
 
@@ -2851,7 +2851,7 @@ test_81b() {
 
 	wait $CLIENT_PID || error "rm remote dir failed"
 
-	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+	stat $remote_dir &>/dev/null && error "$remote_dir still exist!"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
 
@@ -2884,7 +2884,7 @@ test_81c() {
 
 	wait $CLIENT_PID || error "rm remote dir failed"
 
-	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+	stat $remote_dir &>/dev/null && error "$remote_dir still exist!"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
 
@@ -2911,7 +2911,7 @@ test_81d() {
 
 	wait $CLIENT_PID || error "rm remote dir failed"
 
-	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+	stat $remote_dir &>/dev/null && error "$remote_dir still exist!"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
 
@@ -2943,7 +2943,7 @@ test_81e() {
 
 	wait $CLIENT_PID || error "rm remote dir failed"
 
-	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+	stat $remote_dir &>/dev/null && error "$remote_dir still exist!"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
 
@@ -2974,7 +2974,7 @@ test_81f() {
 
 	wait $CLIENT_PID || error "rm remote dir failed"
 
-	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+	stat $remote_dir &>/dev/null && error "$remote_dir still exist!"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
 
@@ -3007,7 +3007,7 @@ test_81g() {
 
 	wait $CLIENT_PID || error "rm remote dir failed"
 
-	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+	stat $remote_dir &>/dev/null && error "$remote_dir still exist!"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
 
@@ -3034,7 +3034,7 @@ test_81h() {
 
 	wait $CLIENT_PID || error "rm remote dir failed"
 
-	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+	stat $remote_dir &>/dev/null && error "$remote_dir still exist!"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
 
