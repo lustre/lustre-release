@@ -336,8 +336,11 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 	/* cleanup the state of the bulk for it will be reused */
 	if (req->rq_resend || req->rq_send_state == LUSTRE_IMP_REPLAY)
 		desc->bd_nob_transferred = 0;
-	else
-		LASSERT(desc->bd_nob_transferred == 0);
+	else if (desc->bd_nob_transferred != 0)
+		/* If the network failed after an RPC was sent, this condition
+		 * could happen.  Rather than assert (was here before), return
+		 * an EIO error. */
+		RETURN(-EIO);
 
 	desc->bd_failure = 0;
 
