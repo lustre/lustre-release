@@ -212,6 +212,11 @@ module_param(to_reconn_disable, int, 0644);
 MODULE_PARM_DESC(to_reconn_disable,
 		  "Timed out connection waits for peer before reconnecting");
 
+static int vzalloc_no_retry = GNILND_VZALLOC_RETRY;
+module_param(vzalloc_no_retry, int, 0644);
+MODULE_PARM_DESC(vzalloc_no_retry,
+		 "Should we pass the no_retry flag to vmalloc 1: no_retry 0: normal");
+
 kgn_tunables_t kgnilnd_tunables = {
 	.kgn_min_reconnect_interval = &min_reconnect_interval,
 	.kgn_max_reconnect_interval = &max_reconnect_interval,
@@ -255,7 +260,8 @@ kgn_tunables_t kgnilnd_tunables = {
 	.kgn_thread_safe	    = &thread_safe,
 	.kgn_reg_fail_timeout	    = &reg_fail_timeout,
 	.kgn_to_reconn_disable	    = &to_reconn_disable,
-	.kgn_max_purgatory	    = &max_conn_purg
+	.kgn_max_purgatory	    = &max_conn_purg,
+	.kgn_vzalloc_noretry	    = &vzalloc_no_retry
 };
 
 int

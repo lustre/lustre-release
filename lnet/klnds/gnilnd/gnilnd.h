@@ -87,6 +87,9 @@
 	(cfs_time_seconds(*kgnilnd_tunables.kgn_timeout * \
 	 *kgnilnd_tunables.kgn_timeout))
 
+/* Should we use the no_retry flag with vzalloc */
+#define GNILND_VZALLOC_RETRY 0
+
 /* reaper thread wakup interval */
 #define GNILND_REAPER_THREAD_WAKE  1
 /* reaper thread checks each conn NCHECKS time every kgnilnd_data.kgn_new_min_timeout */
@@ -490,6 +493,7 @@ typedef struct kgn_tunables {
 	int     *kgn_thread_affinity;  /* bind scheduler threads to cpus */
 	int     *kgn_to_reconn_disable;/* disable reconnect after timeout */
 	int     *kgn_thread_safe;      /* use thread safe kgni API */
+	int     *kgn_vzalloc_noretry;  /* Should we pass the noretry flag */
 } kgn_tunables_t;
 
 typedef struct kgn_mbox_info {
@@ -982,8 +986,15 @@ static inline int kgnilnd_trylock(struct mutex *cq_lock,
 
 static inline void *kgnilnd_vzalloc(int size)
 {
-	void *ret = __vmalloc(size, __GFP_HIGHMEM | GFP_NOIO | __GFP_NORETRY | __GFP_ZERO,
-			      PAGE_KERNEL);
+	void *ret;
+	if (*kgnilnd_tunables.kgn_vzalloc_noretry)
+		ret = __vmalloc(size, __GFP_HIGHMEM | GFP_NOIO | __GFP_NORETRY |
+				      __GFP_ZERO,
+				PAGE_KERNEL);
+	else
+		ret = __vmalloc(size, __GFP_HIGHMEM | GFP_NOIO | __GFP_ZERO,
+				PAGE_KERNEL);
+
 	LIBCFS_ALLOC_POST(ret, size);
 	return ret;
 }
