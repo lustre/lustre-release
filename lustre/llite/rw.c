@@ -488,9 +488,6 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 			end = end_index;
 			ria->ria_eof = true;
 		}
-
-		ras->ras_next_readahead = max(end, end + 1);
-		RAS_CDEBUG(ras);
         }
         ria->ria_start = start;
         ria->ria_end = end;
@@ -512,6 +509,7 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 		RETURN(0);
 	}
 
+	RAS_CDEBUG(ras);
 	CDEBUG(D_READA, DFID": ria: %lu/%lu, bead: %lu/%lu, hit: %d\n",
 	       PFID(lu_object_fid(&clob->co_lu)),
 	       ria->ria_start, ria->ria_end,
@@ -549,24 +547,18 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	if (ra_end == end && ra_end == (kms >> PAGE_SHIFT))
 		ll_ra_stats_inc(inode, RA_STAT_EOF);
 
-	/* if we didn't get to the end of the region we reserved from
-	 * the ras we need to go back and update the ras so that the
-	 * next read-ahead tries from where we left off.  we only do so
-	 * if the region we failed to issue read-ahead on is still ahead
-	 * of the app and behind the next index to start read-ahead from */
 	CDEBUG(D_READA, "ra_end = %lu end = %lu stride end = %lu pages = %d\n",
 	       ra_end, end, ria->ria_end, ret);
 
-	if (ra_end > 0 && ra_end != end) {
+	if (ra_end != end)
 		ll_ra_stats_inc(inode, RA_STAT_FAILED_REACH_END);
+	if (ra_end > 0) {
+		/* update the ras so that the next read-ahead tries from
+		 * where we left off. */
 		spin_lock(&ras->ras_lock);
-		if (ra_end <= ras->ras_next_readahead &&
-		    index_in_window(ra_end, ras->ras_window_start, 0,
-				    ras->ras_window_len)) {
-			ras->ras_next_readahead = ra_end + 1;
-			RAS_CDEBUG(ras);
-		}
+		ras->ras_next_readahead = ra_end + 1;
 		spin_unlock(&ras->ras_lock);
+		RAS_CDEBUG(ras);
 	}
 
 	RETURN(ret);
@@ -847,7 +839,8 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 		/* Since stride readahead is sentivite to the offset
 		 * of read-ahead, so we use original offset here,
 		 * instead of ras_window_start, which is RPC aligned */
-		ras->ras_next_readahead = max(index, ras->ras_next_readahead);
+		ras->ras_next_readahead = max(index + 1,
+					      ras->ras_next_readahead);
 		ras->ras_window_start = max(ras->ras_stride_offset,
 					    ras->ras_window_start);
 	} else {
