@@ -97,7 +97,7 @@ Network Topology</title>
 [ &lt;w&gt; ]
 &lt;net-spec&gt; :== &lt;network&gt; [ &quot;(&quot; &lt;interface-list&gt; &quot;)&quot; ]
 &lt;network&gt; :== &lt;nettype&gt; [ &lt;number&gt; ]
-&lt;nettype&gt; :== &quot;tcp&quot; | &quot;elan&quot; | &quot;openib&quot; | ...
+&lt;nettype&gt; :== &quot;tcp&quot; | &quot;elan&quot; | &quot;o2ib&quot; | ...
 &lt;iface-list&gt; :== &lt;interface&gt; [ &quot;,&quot; &lt;iface-list&gt; ]
 &lt;ip-range&gt; :== &lt;r-expr&gt; &quot;.&quot; &lt;r-expr&gt; &quot;.&quot; &lt;r-expr&gt; &quot;.&quot; &lt;r-expr&gt;
 &lt;r-expr&gt; :== &lt;number&gt; | &quot;*&quot; | &quot;[&quot; &lt;r-list&gt; &quot;]&quot;
@@ -107,16 +107,35 @@ Network Topology</title>
 &lt;net-sep&gt; :== &quot;;&quot; | &quot;\n&quot;
 &lt;w&gt; :== &lt;whitespace-chars&gt; { &lt;whitespace-chars&gt; }
 </screen>
-        <para><literal>&lt;net-spec&gt;</literal> contains enough information to uniquely identify the network and load an appropriate LND. The LND determines the missing &quot;address-within-network&quot; part of the NID based on the interfaces it can use.</para>
-        <para><literal>&lt;iface-list&gt;</literal> specifies which hardware interface the network can use. If omitted, all interfaces are used. LNDs that do not support the <literal>&lt;iface-list&gt;</literal> syntax cannot be configured to use particular interfaces and just use what is there. Only a single instance of these LNDs can exist on a node at any time, and <literal>&lt;iface-list&gt;</literal> must be omitted.</para>
-        <para><literal>&lt;net-match&gt;</literal> entries are scanned in the order declared to see if one of the node&apos;s IP addresses matches one of the <literal>&lt;ip-range&gt;</literal> expressions. If there is a match, <literal>&lt;net-spec&gt;</literal> specifies the network to instantiate. Note that it is the first match for a particular network that counts. This can be used to simplify the match expression for the general case by placing it after the special cases. For example:</para>
+        <para><literal>&lt;net-spec&gt;</literal> contains enough information to
+        uniquely identify the network and load an appropriate LND. The LND
+        determines the missing &quot;address-within-network&quot; part of the
+        NID based on the interfaces it can use.</para>
+        <para><literal>&lt;iface-list&gt;</literal> specifies which hardware
+        interface the network can use. If omitted, all interfaces are used. LNDs
+        that do not support the <literal>&lt;iface-list&gt;</literal> syntax
+        cannot be configured to use particular interfaces and just use what is
+        there. Only a single instance of these LNDs can exist on a node at any
+        time, and <literal>&lt;iface-list&gt;</literal> must be omitted.</para>
+        <para><literal>&lt;net-match&gt;</literal> entries are scanned in the
+        order declared to see if one of the node&apos;s IP addresses matches one
+        of the <literal>&lt;ip-range&gt;</literal> expressions. If there is a
+        match, <literal>&lt;net-spec&gt;</literal> specifies the network to
+        instantiate. Note that it is the first match for a particular network
+        that counts. This can be used to simplify the match expression for the
+        general case by placing it after the special cases. For example:</para>
         <screen>ip2nets=&quot;tcp(eth1,eth2) 134.32.1.[4-10/2]; tcp(eth1) *.*.*.*&quot;</screen>
-        <para>4 nodes on the 134.32.1.* network have 2 interfaces (134.32.1.{4,6,8,10}) but all the rest have 1.</para>
-        <screen>ip2nets=&quot;<emphasis role="bold">vib</emphasis> 192.168.0.*; tcp(eth2) 192.168.0.[1,7,4,12]&quot; </screen>
-        <para>This describes an IB cluster on 192.168.0.*. Four of these nodes also have IP interfaces; these four could be used as routers.</para>
-        <para>Note that match-all expressions (For instance, <literal>*.*.*.*</literal>) effectively mask all other</para>
-        <para> <literal>&lt;net-match&gt;</literal> entries specified after them. They should be used with caution.</para>
-        <para>Here is a more complicated situation, the route parameter is explained below. We have:</para>
+        <para>4 nodes on the 134.32.1.* network have 2 interfaces
+        (134.32.1.{4,6,8,10}) but all the rest have 1.</para>
+        <screen>ip2nets=&quot;<emphasis role="bold">o2ib</emphasis> 192.168.0.*; tcp(eth2) 192.168.0.[1,7,4,12]&quot; </screen>
+        <para>This describes an IB cluster on 192.168.0.*. Four of these nodes
+        also have IP interfaces; these four could be used as routers.</para>
+        <para>Note that match-all expressions (For instance,
+        <literal>*.*.*.*</literal>) effectively mask all other</para>
+        <para> <literal>&lt;net-match&gt;</literal> entries specified after
+        them. They should be used with caution.</para>
+        <para>Here is a more complicated situation, the route parameter is
+        explained below. We have:</para>
         <itemizedlist>
           <listitem>
             <para>Two TCP subnets</para>
@@ -125,10 +144,12 @@ Network Topology</title>
             <para>One Elan subnet</para>
           </listitem>
           <listitem>
-            <para>One machine set up as a router, with both TCP and Elan interfaces</para>
+            <para>One machine set up as a router, with both TCP and Elan
+            interfaces</para>
           </listitem>
           <listitem>
-            <para>IP over Elan configured, but only IP will be used to label the nodes.</para>
+            <para>IP over Elan configured, but only IP will be used to label the
+            nodes.</para>
           </listitem>
         </itemizedlist>
         <screen>options lnet ip2nets=â€tcp 198.129.135.* 192.128.88.98; \
@@ -137,9 +158,15 @@ Network Topology</title>
         elan  198.128.88.98@tcp # TCP NID of router  &apos;</screen>
       </section>
       <section remap="h4">
-          <title><indexterm><primary>configuring</primary><secondary>network</secondary><tertiary>tcp</tertiary></indexterm>
-networks (&quot;tcp&quot;)</title>
-        <para>This is an alternative to &quot;<literal>ip2nets</literal>&quot; which can be used to specify the networks to be instantiated explicitly. The syntax is a simple comma separated list of <literal>&lt;net-spec&gt;</literal>s (see above). The default is only used if neither &apos;ip2nets&apos; nor &apos;networks&apos; is specified.</para>
+          <title><indexterm><primary>configuring</primary>
+          <secondary>network</secondary><tertiary>tcp</tertiary></indexterm>
+          networks (&quot;tcp&quot;)</title>
+        <para>This is an alternative to &quot;<literal>ip2nets</literal>&quot;
+        which can be used to specify the networks to be instantiated explicitly.
+        The syntax is a simple comma separated list of
+        <literal>&lt;net-spec&gt;</literal>s (see above). The default is only
+        used if neither &apos;ip2nets&apos; nor &apos;networks&apos; is
+        specified.</para>
       </section>
       <section remap="h4">
           <title><indexterm><primary>configuring</primary><secondary>network</secondary><tertiary>routes</tertiary></indexterm>
@@ -157,7 +184,8 @@ routes (&quot;&quot;)</title>
 &lt;entry&gt; :== &lt;numeric range&gt; | &lt;non-numeric item&gt;
 &lt;numeric range&gt; :== &lt;number&gt; [ &quot;-&quot; &lt;number&gt; [ &quot;/&quot; &lt;number&gt; ] ]</screen>
         <para>The expansion is a list enclosed in square brackets. Numeric items in the list may be a single number, a contiguous range of numbers, or a strided range of numbers. For example, <literal>routes=&quot;elan 192.168.1.[22-24]@tcp&quot;</literal> says that network <literal>elan0</literal> is adjacent (hopcount defaults to 1); and is accessible via 3 routers on the <literal>tcp0</literal> network (<literal>192.168.1.22@tcp</literal>, <literal>192.168.1.23@tcp</literal> and <literal>192.168.1.24@tcp</literal>).</para>
-        <para><literal>routes=&quot;[tcp,vib] 2 [8-14/2]@elan&quot;</literal> says that 2 networks (<literal>tcp0</literal> and <literal>vib0</literal>) are accessible through 4 routers (<literal>8@elan</literal>, <literal>10@elan</literal>, <literal>12@elan</literal> and <literal>14@elan</literal>). The hopcount of 2 means that traffic to both these networks will be traversed 2 routers - first one of the routers specified in this entry, then one more.</para>
+        <para><literal>routes=&quot;[tcp,o2ib] 2 [8-14/2]@elan&quot;</literal>
+says that 2 networks (<literal>tcp0</literal> and <literal>o2ib0</literal>) are accessible through 4 routers (<literal>8@elan</literal>, <literal>10@elan</literal>, <literal>12@elan</literal> and <literal>14@elan</literal>). The hopcount of 2 means that traffic to both these networks will be traversed 2 routers - first one of the routers specified in this entry, then one more.</para>
         <para>Duplicate entries, entries that route to a local network, and entries that specify routers on a non-local network are ignored.</para>
         <para>Prior to release 2.5, a conflict between equivalent entries was resolved in favor of the route with the shorter hopcount. The hopcount, if omitted, defaults to 1 (the remote network is adjacent)..</para>
         <para condition='l25'>Since 2.5, equivalent entries are resolved in favor of the route with the lowest priority number or shorter hopcount if the priorities are equal. The priority, if omitted, defaults to 0.  The hopcount, if omitted, defaults to 1 (the remote network is adjacent).</para>
@@ -266,12 +294,14 @@ forwarding (&quot;&quot;)</title>
         parameter, all non-loopback IP interfaces are used. The address-within-network is determined
         by the address of the first IP interface an instance of the <literal>socklnd</literal>
         encounters.</para>
-      <para>Consider a node on the &apos;edge&apos; of an InfiniBand network, with a low-bandwidth
-        management Ethernet (<literal>eth0</literal>), IP over IB configured
-          (<literal>ipoib0</literal>), and a pair of GigE NICs
-          (<literal>eth1</literal>,<literal>eth2</literal>) providing off-cluster connectivity. This
-        node should be configured with &apos;<literal>networks=vib,tcp(eth1,eth2)</literal>&apos; to
-        ensure that the <literal>socklnd</literal> ignores the management Ethernet and IPoIB.</para>
+      <para>Consider a node on the &apos;edge&apos; of an InfiniBand network,
+      with a low-bandwidth management Ethernet (<literal>eth0</literal>), IP
+      over IB configured (<literal>ipoib0</literal>), and a pair of GigE NICs
+      (<literal>eth1</literal>,<literal>eth2</literal>) providing off-cluster
+      connectivity. This node should be configured with &apos;
+      <literal>networks=o2ib,tcp(eth1,eth2)</literal>&apos; to ensure that the
+      <literal>socklnd</literal> ignores the management Ethernet and IPoIB.
+      </para>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="50*"/>
