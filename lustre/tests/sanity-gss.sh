@@ -102,6 +102,22 @@ stop_dbench()
 calc_connection_cnt
 umask 077
 
+echo "bring up gss daemons..."
+# start gss daemon with -z flag for gssnull
+start_gss_daemons $(comma_list $(mdts_nodes)) "$LSVCGSSD -z -vv" ||
+    error "can't start gss daemons on MDTs"
+start_gss_daemons $(comma_list $(osts_nodes)) "$LSVCGSSD -z -vv" ||
+    error "can't start gss daemons on OSTs"
+
+lctl set_param sptlrpc.gss.lgss_keyring.debug_level=4
+
+echo "cat /etc/request-key.d/lgssc.conf"
+cat /etc/request-key.d/lgssc.conf ||
+    error_noexit "/etc/request-key.d/lgssc.conf does not exist"
+echo "cat /etc/request-key.conf"
+cat /etc/request-key.conf ||
+    error_noexit "/etc/request-key.conf does not exist"
+
 set_flavor_all gssnull
 
 test_1() {
@@ -570,6 +586,8 @@ test_151() {
 	stop mds1 -f
 }
 run_test 151 "secure mgs connection: server flavor control"
+
+stop_gss_daemons
 
 complete $SECONDS
 check_and_cleanup_lustre
