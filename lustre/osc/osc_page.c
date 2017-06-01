@@ -262,31 +262,39 @@ int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 {
 	struct osc_object *osc = cl2osc(obj);
 	struct osc_page   *opg = cl_object_page_slice(obj, page);
+	struct osc_io *oio = osc_env_io(env);
 	int result;
 
 	opg->ops_from = 0;
 	opg->ops_to   = PAGE_SIZE;
 
-	result = osc_prep_async_page(osc, opg, page->cp_vmpage,
-				     cl_offset(obj, index));
-	if (result == 0) {
-		struct osc_io *oio = osc_env_io(env);
-		opg->ops_srvlock = osc_io_srvlock(oio);
-		cl_page_slice_add(page, &opg->ops_cl, obj, index,
-				  &osc_page_ops);
-	}
 	INIT_LIST_HEAD(&opg->ops_lru);
 
+	result = osc_prep_async_page(osc, opg, page->cp_vmpage,
+				     cl_offset(obj, index));
+	if (result != 0)
+		return result;
+
+	opg->ops_srvlock = osc_io_srvlock(oio);
+	cl_page_slice_add(page, &opg->ops_cl, obj, index,
+			  &osc_page_ops);
+
+
 	/* reserve an LRU space for this page */
-	if (page->cp_type == CPT_CACHEABLE && result == 0) {
+	if (page->cp_type == CPT_CACHEABLE) {
 		result = osc_lru_alloc(env, osc_cli(osc), opg);
 		if (result == 0) {
-			spin_lock(&osc->oo_tree_lock);
-			result = radix_tree_insert(&osc->oo_tree, index, opg);
-			if (result == 0)
-				++osc->oo_npages;
-			spin_unlock(&osc->oo_tree_lock);
-			LASSERT(result == 0);
+			result = radix_tree_preload(GFP_NOFS);
+			if (result == 0) {
+				spin_lock(&osc->oo_tree_lock);
+				result = radix_tree_insert(&osc->oo_tree,
+							   index, opg);
+				if (result == 0)
+					++osc->oo_npages;
+				spin_unlock(&osc->oo_tree_lock);
+
+				radix_tree_preload_end();
+			}
 		}
 	}
 
