@@ -52,11 +52,6 @@
  *
  */
 
-#define cl_io_for_each(slice, io) \
-	list_for_each_entry((slice), &io->ci_layers, cis_linkage)
-#define cl_io_for_each_reverse(slice, io)                 \
-	list_for_each_entry_reverse((slice), &io->ci_layers, cis_linkage)
-
 static inline int cl_io_type_is_valid(enum cl_io_type type)
 {
         return CIT_READ <= type && type < CIT_OP_NR;
@@ -357,13 +352,13 @@ int cl_io_lock(const struct lu_env *env, struct cl_io *io)
         LINVRNT(cl_io_invariant(io));
 
         ENTRY;
-        cl_io_for_each(scan, io) {
-                if (scan->cis_iop->op[io->ci_type].cio_lock == NULL)
-                        continue;
-                result = scan->cis_iop->op[io->ci_type].cio_lock(env, scan);
-                if (result != 0)
-                        break;
-        }
+	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
+		if (scan->cis_iop->op[io->ci_type].cio_lock == NULL)
+			continue;
+		result = scan->cis_iop->op[io->ci_type].cio_lock(env, scan);
+		if (result != 0)
+			break;
+	}
         if (result == 0) {
                 cl_io_locks_sort(io);
                 result = cl_lockset_lock(env, io, &io->ci_lockset);
@@ -406,7 +401,7 @@ void cl_io_unlock(const struct lu_env *env, struct cl_io *io)
 			link->cill_fini(env, link);
 	}
 
-	cl_io_for_each_reverse(scan, io) {
+	list_for_each_entry_reverse(scan, &io->ci_layers, cis_linkage) {
 		if (scan->cis_iop->op[io->ci_type].cio_unlock != NULL)
 			scan->cis_iop->op[io->ci_type].cio_unlock(env, scan);
 	}
@@ -433,14 +428,14 @@ int cl_io_iter_init(const struct lu_env *env, struct cl_io *io)
 
         ENTRY;
         result = 0;
-        cl_io_for_each(scan, io) {
-                if (scan->cis_iop->op[io->ci_type].cio_iter_init == NULL)
-                        continue;
-                result = scan->cis_iop->op[io->ci_type].cio_iter_init(env,
-                                                                      scan);
-                if (result != 0)
-                        break;
-        }
+	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
+		if (scan->cis_iop->op[io->ci_type].cio_iter_init == NULL)
+			continue;
+		result = scan->cis_iop->op[io->ci_type].cio_iter_init(env,
+								      scan);
+		if (result != 0)
+			break;
+	}
         if (result == 0)
                 io->ci_state = CIS_IT_STARTED;
         RETURN(result);
@@ -461,10 +456,10 @@ void cl_io_iter_fini(const struct lu_env *env, struct cl_io *io)
         LINVRNT(cl_io_invariant(io));
 
         ENTRY;
-        cl_io_for_each_reverse(scan, io) {
-                if (scan->cis_iop->op[io->ci_type].cio_iter_fini != NULL)
-                        scan->cis_iop->op[io->ci_type].cio_iter_fini(env, scan);
-        }
+	list_for_each_entry_reverse(scan, &io->ci_layers, cis_linkage) {
+		if (scan->cis_iop->op[io->ci_type].cio_iter_fini != NULL)
+			scan->cis_iop->op[io->ci_type].cio_iter_fini(env, scan);
+	}
         io->ci_state = CIS_IT_ENDED;
         EXIT;
 }
@@ -488,11 +483,11 @@ void cl_io_rw_advance(const struct lu_env *env, struct cl_io *io, size_t nob)
 	io->u.ci_rw.rw_range.cir_count -= nob;
 
         /* layers have to be notified. */
-        cl_io_for_each_reverse(scan, io) {
-                if (scan->cis_iop->op[io->ci_type].cio_advance != NULL)
-                        scan->cis_iop->op[io->ci_type].cio_advance(env, scan,
-                                                                   nob);
-        }
+	list_for_each_entry_reverse(scan, &io->ci_layers, cis_linkage) {
+		if (scan->cis_iop->op[io->ci_type].cio_advance != NULL)
+			scan->cis_iop->op[io->ci_type].cio_advance(env, scan,
+								   nob);
+	}
         EXIT;
 }
 
@@ -559,13 +554,13 @@ int cl_io_start(const struct lu_env *env, struct cl_io *io)
         ENTRY;
 
         io->ci_state = CIS_IO_GOING;
-        cl_io_for_each(scan, io) {
-                if (scan->cis_iop->op[io->ci_type].cio_start == NULL)
-                        continue;
-                result = scan->cis_iop->op[io->ci_type].cio_start(env, scan);
-                if (result != 0)
-                        break;
-        }
+	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
+		if (scan->cis_iop->op[io->ci_type].cio_start == NULL)
+			continue;
+		result = scan->cis_iop->op[io->ci_type].cio_start(env, scan);
+		if (result != 0)
+			break;
+	}
         if (result >= 0)
                 result = 0;
         RETURN(result);
@@ -585,11 +580,11 @@ void cl_io_end(const struct lu_env *env, struct cl_io *io)
         LINVRNT(cl_io_invariant(io));
         ENTRY;
 
-        cl_io_for_each_reverse(scan, io) {
-                if (scan->cis_iop->op[io->ci_type].cio_end != NULL)
-                        scan->cis_iop->op[io->ci_type].cio_end(env, scan);
-                /* TODO: error handling. */
-        }
+	list_for_each_entry_reverse(scan, &io->ci_layers, cis_linkage) {
+		if (scan->cis_iop->op[io->ci_type].cio_end != NULL)
+			scan->cis_iop->op[io->ci_type].cio_end(env, scan);
+		/* TODO: error handling. */
+	}
         io->ci_state = CIS_IO_FINISHED;
         EXIT;
 }
@@ -611,7 +606,7 @@ int cl_io_read_ahead(const struct lu_env *env, struct cl_io *io,
 	LINVRNT(cl_io_invariant(io));
 	ENTRY;
 
-	cl_io_for_each(scan, io) {
+	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
 		if (scan->cis_iop->cio_read_ahead == NULL)
 			continue;
 
@@ -637,7 +632,7 @@ int cl_io_commit_async(const struct lu_env *env, struct cl_io *io,
 	int result = 0;
 	ENTRY;
 
-	cl_io_for_each(scan, io) {
+	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
 		if (scan->cis_iop->cio_commit_async == NULL)
 			continue;
 		result = scan->cis_iop->cio_commit_async(env, scan, queue,
@@ -666,7 +661,7 @@ int cl_io_submit_rw(const struct lu_env *env, struct cl_io *io,
 	int result = 0;
 	ENTRY;
 
-	cl_io_for_each(scan, io) {
+	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
 		if (scan->cis_iop->cio_submit == NULL)
 			continue;
 		result = scan->cis_iop->cio_submit(env, scan, crt, queue);
