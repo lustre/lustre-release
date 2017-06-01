@@ -33,8 +33,8 @@ init_test_env $@
 init_logging
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-# bug number for skipped test:        LU-2189 LU-2776
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 36      51a"
+# bug number for skipped test:        LU-2776
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 51a"
 # LU-2829 / LU-2887 - make allowances for ZFS slowness
 	TEST33_NFILES=${TEST33_NFILES:-1000}
 fi
@@ -1213,10 +1213,12 @@ test_36() { #bug 16417
 	i=0
 	SIZE=50
 	let SIZE_B=SIZE*1024*1024
-	sync; sleep 5; sync # wait for delete thread
+	sync; sleep 2; sync # wait for delete thread
+	wait_mds_ost_sync || error "wait_mds_ost_sync failed"
+	wait_destroy_complete || error "wait_destroy_complete failed"
 
 	while [ $i -le 10 ]; do
-		lctl mark "start test"
+		lctl mark "start test - cycle ($i)"
 		local before=$(lfs_df $MOUNT1 | awk '/^filesystem/{ print $4; exit }')
 		dd if=/dev/zero of=$DIR1/$tdir/$tfile bs=1M count=$SIZE ||
 			error "dd $DIR1/$tdir/$tfile ${SIZE}MB failed"
@@ -1229,6 +1231,7 @@ test_36() { #bug 16417
 		rm -f $DIR1/$tdir/$tfile
 		kill -USR1 $read_pid
 		wait $read_pid
+		sync; sleep 2; sync # Ensure new statfs
 		wait_delete_completed
 		local after=$(lfs_df $MOUNT1 | awk '/^filesystem/{ print $4; exit }')
 		echo "*** cycle($i) *** before($before) after_dd($after_dd)" \
