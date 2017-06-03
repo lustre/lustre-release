@@ -60,41 +60,10 @@ static inline int cfs_time_aftereq(cfs_time_t t1, cfs_time_t t2)
         return cfs_time_beforeq(t2, t1);
 }
 
-
 static inline cfs_time_t cfs_time_shift(int seconds)
 {
         return cfs_time_add(cfs_time_current(), cfs_time_seconds(seconds));
 }
-
-static inline long cfs_timeval_sub(struct timeval *large, struct timeval *small,
-                                   struct timeval *result)
-{
-        long r = (long) (
-                (large->tv_sec - small->tv_sec) * ONE_MILLION +
-                (large->tv_usec - small->tv_usec));
-        if (result != NULL) {
-                result->tv_usec = r % ONE_MILLION;
-                result->tv_sec = r / ONE_MILLION;
-        }
-        return r;
-}
-
-#define CFS_RATELIMIT(seconds)                                  \
-({                                                              \
-        /*                                                      \
-         * XXX nikita: non-portable initializer                 \
-         */                                                     \
-        static time_t __next_message = 0;                       \
-        int result;                                             \
-                                                                \
-        if (cfs_time_after(cfs_time_current(), __next_message)) \
-                result = 1;                                     \
-        else {                                                  \
-                __next_message = cfs_time_shift(seconds);       \
-                result = 0;                                     \
-        }                                                       \
-        result;                                                 \
-})
 
 #define CFS_TICK	1
 

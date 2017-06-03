@@ -227,30 +227,12 @@ static inline time_t cfs_time_current_sec(void)
 
 static inline cfs_duration_t cfs_time_seconds(int seconds)
 {
-
 	return ((cfs_duration_t)seconds) * msecs_to_jiffies(MSEC_PER_SEC);
 }
 
 static inline time_t cfs_duration_sec(cfs_duration_t d)
 {
-
 	return d / msecs_to_jiffies(MSEC_PER_SEC);
-}
-
-static inline void cfs_duration_nsec(cfs_duration_t d, struct timespec *s)
-{
-#if (BITS_PER_LONG == 32)
-	__u64 t;
-
-	s->tv_sec = d / msecs_to_jiffies(MSEC_PER_SEC);
-	t = (d - s->tv_sec * msecs_to_jiffies(MSEC_PER_SEC)) * NSEC_PER_SEC;
-	do_div(t, msecs_to_jiffies(MSEC_PER_SEC));
-	s->tv_nsec = t;
-#else
-	s->tv_sec = d / msecs_to_jiffies(MSEC_PER_SEC);
-	s->tv_nsec = ((d - s->tv_sec * msecs_to_jiffies(MSEC_PER_SEC)) *
-		      NSEC_PER_SEC) / msecs_to_jiffies(MSEC_PER_SEC);
-#endif
 }
 
 #define cfs_time_current_64 get_jiffies_64
@@ -281,14 +263,4 @@ static inline int cfs_time_beforeq_64(__u64 t1, __u64 t2)
  */
 #define CFS_DURATION_T          "%ld"
 
-
 #endif /* __LIBCFS_LINUX_LINUX_TIME_H__ */
-/*
- * Local variables:
- * c-indentation-style: "K&R"
- * c-basic-offset: 8
- * tab-width: 8
- * fill-column: 80
- * scroll-step: 1
- * End:
- */

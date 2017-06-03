@@ -432,6 +432,13 @@ my %dep_functions = (
 	'cfs_list_splice_tail',		'list_splice_tail',
 	'cfs_list_t',			'struct list_head',
 
+	'struct timeval',		'struct timespec64',
+	'cfs_time_current_sec',		'ktime_get_real_seconds',
+	'cfs_time_current_64',		'ktime_get',
+	'cfs_time_add_64',		'ktime_add',
+	'cfs_time_before_64',		'ktime_before',
+	'cfs_time_beforeq_64',		'ktime_compare',
+
 	'CFS_PAGE_MASK',		'PAGE_MASK',
 	'CFS_PAGE_SIZE',		'PAGE_SIZE',
 	'PAGE_CACHE_MASK',		'PAGE_MASK',
