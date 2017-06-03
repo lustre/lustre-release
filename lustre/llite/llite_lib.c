@@ -241,6 +241,13 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         if (sbi->ll_flags & LL_SBI_USER_XATTR)
                 data->ocd_connect_flags |= OBD_CONNECT_XATTR;
 
+#ifdef MS_NOSEC
+	/* Setting this indicates we correctly support S_NOSEC (See kernel
+	 * commit 9e1f1de02c2275d7172e18dc4e7c2065777611bf)
+	 */
+	sb->s_flags |= MS_NOSEC;
+#endif
+
         if (sbi->ll_flags & LL_SBI_FLOCK)
                 sbi->ll_fop = &ll_file_operations_flock;
         else if (sbi->ll_flags & LL_SBI_LOCALFLOCK)
@@ -1636,6 +1643,12 @@ out:
 		inode_lock(inode);
 		if ((attr->ia_valid & ATTR_SIZE) && !hsm_import)
 			inode_dio_wait(inode);
+		/* Once we've got the i_mutex, it's safe to set the S_NOSEC
+		 * flag.  ll_update_inode (called from ll_md_setattr), clears
+		 * inode flags, so there is a gap where S_NOSEC is not set.
+		 * This can cause a writer to take the i_mutex unnecessarily,
+		 * but this is safe to do and should be rare. */
+		inode_has_no_xattr(inode);
 	}
 
 	ll_stats_ops_tally(ll_i2sbi(inode), (attr->ia_valid & ATTR_SIZE) ?
@@ -1838,6 +1851,9 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 		lli->lli_ctime = body->mbo_ctime;
 	}
 
+	/* Clear i_flags to remove S_NOSEC before permissions are updated */
+	if (body->mbo_valid & OBD_MD_FLFLAGS)
+		inode->i_flags = ll_ext_to_inode_flags(body->mbo_flags);
 	if (body->mbo_valid & OBD_MD_FLMODE)
 		inode->i_mode = (inode->i_mode & S_IFMT) |
 				(body->mbo_mode & ~S_IFMT);
@@ -1859,8 +1875,6 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 		inode->i_gid = make_kgid(&init_user_ns, body->mbo_gid);
 	if (body->mbo_valid & OBD_MD_FLPROJID)
 		lli->lli_projid = body->mbo_projid;
-	if (body->mbo_valid & OBD_MD_FLFLAGS)
-		inode->i_flags = ll_ext_to_inode_flags(body->mbo_flags);
 	if (body->mbo_valid & OBD_MD_FLNLINK)
 		set_nlink(inode, body->mbo_nlink);
 	if (body->mbo_valid & OBD_MD_FLRDEV)

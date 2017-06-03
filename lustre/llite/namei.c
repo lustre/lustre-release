@@ -136,6 +136,7 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 			iput(inode);
 			inode = ERR_PTR(rc);
 		} else {
+			inode_has_no_xattr(inode);
 			unlock_new_inode(inode);
 		}
 	} else if (!(inode->i_state & (I_FREEING | I_CLEAR))) {

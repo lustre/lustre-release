@@ -1056,6 +1056,13 @@ static int vvp_io_write_start(const struct lu_env *env,
 		RETURN(-EFBIG);
 	}
 
+	/* Tests to verify we take the i_mutex correctly */
+	if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_IMUTEX_SEC) && !lock_inode)
+		RETURN(-EINVAL);
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_IMUTEX_NOSEC) && lock_inode)
+		RETURN(-EINVAL);
+
 	/*
 	 * When using the locked AIO function (generic_file_aio_write())
 	 * testing has shown the inode mutex to be a limiting factor
