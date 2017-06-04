@@ -276,9 +276,15 @@ int cfs_ptengine_set_cpumask(struct cfs_ptask_engine *engine,
 	cpumask_copy(parallel_mask, cpumask);
 	cpumask_copy(serial_mask, cpu_online_mask);
 
-	rc = padata_set_cpumasks(engine->pte_pinst, parallel_mask, serial_mask);
-
+	rc = padata_set_cpumask(engine->pte_pinst, PADATA_CPU_PARALLEL,
+				parallel_mask);
 	free_cpumask_var(parallel_mask);
+	if (rc)
+		goto out_failed_mask;
+
+	rc = padata_set_cpumask(engine->pte_pinst, PADATA_CPU_SERIAL,
+				serial_mask);
+out_failed_mask:
 	free_cpumask_var(serial_mask);
 #endif /* CONFIG_PADATA */
 
