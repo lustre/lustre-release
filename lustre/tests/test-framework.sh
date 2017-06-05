@@ -2699,10 +2699,10 @@ wait_osts_up() {
 	wait_update $HOSTNAME "eval $cmd" $OSTCOUNT ||
 		error "wait_update OSTs up on client failed"
 
-	cmd="$LCTL get_param -n lod.$FSNAME-MDT*-*.target_obd | sort -u |
-	     awk 'BEGIN {c = 0} /ACTIVE/{c += 1} END {printf \\\"%d\\\", c}'"
+	cmd="$LCTL get_param osp.$FSNAME-OST*-MDT0000.prealloc_last_id |
+	     awk '/=[1-9][0-9]/ { c += 1 } END { printf \\\"%d\\\", c }'"
 	wait_update_facet $SINGLEMDS "eval $cmd" $OSTCOUNT ||
-		error "wait_update OSTs up on MDT failed"
+		error "wait_update OSTs up on MDT0000 failed"
 }
 
 wait_destroy_complete () {
