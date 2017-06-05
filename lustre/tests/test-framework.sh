@@ -2771,7 +2771,7 @@ h2name_or_ip() {
 }
 
 h2nettype() {
-	if [[ -v NETTYPE ]]; then
+	if [[ -n "$NETTYPE" ]]; then
 		h2name_or_ip "$1" "$NETTYPE"
 	else
 		h2name_or_ip "$1" "$2"
@@ -2782,7 +2782,7 @@ declare -fx h2nettype
 # Wrapper function to print the deprecation warning
 h2tcp() {
 	echo "h2tcp: deprecated, use h2nettype instead" 1>&2
-	if [[ -v NETTYPE ]]; then
+	if [[ -n "$NETTYPE" ]]; then
 		h2nettype "$@"
 	else
 		h2nettype "$1" "tcp"
@@ -2792,7 +2792,7 @@ h2tcp() {
 # Wrapper function to print the deprecation warning
 h2o2ib() {
 	echo "h2o2ib: deprecated, use h2nettype instead" 1>&2
-	if [[ -v NETTYPE ]]; then
+	if [[ -n "$NETTYPE" ]]; then
 		h2nettype "$@"
 	else
 		h2nettype "$1" "o2ib"
