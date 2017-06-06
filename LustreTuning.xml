@@ -1099,6 +1099,18 @@ regular_requests:
     queued: 2420
     active: 268
 
+  - name: tbf
+    state: stopped
+    fallback: no
+    queued: 0
+    active: 0
+
+  - name: delay
+    state: stopped
+    fallback: no
+    queued: 0
+    active: 0
+
 high_priority_requests:
   - name: fifo
     state: started
@@ -1123,7 +1135,19 @@ high_priority_requests:
     fallback: no
     queued: 0
     active: 0
-      
+
+  - name: tbf
+    state: stopped
+    fallback: no
+    queued: 0
+    active: 0
+
+  - name: delay
+    state: stopped
+    fallback: no
+    queued: 0
+    active: 0
+
 </screen>
     <para>NRS policy state is shown in either one or two sections, depending on
     the PTLRPC service being queried. The first section is named 
@@ -1714,6 +1738,151 @@ $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="reg stop loginnode"
 </screen>
           <screen>
 $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp stop loginnode"
+</screen>
+        </listitem>
+      </itemizedlist>
+    </section>
+    <section xml:id="dbdoclet.delaytuning" condition='l2A'>
+      <title>
+      <indexterm>
+        <primary>tuning</primary>
+        <secondary>Network Request Scheduler (NRS) Tuning</secondary>
+        <tertiary>Delay policy</tertiary>
+      </indexterm>Delay policy</title>
+      <para>The NRS Delay policy seeks to perturb the timing of request
+      processing at the PtlRPC layer, with the goal of simulating high server
+      load, and finding and exposing timing related problems. When this policy
+      is active, upon arrival of a request the policy will calculate an offset,
+      within a defined, user-configurable range, from the request arrival
+      time, to determine a time after which the request should be handled.
+      The request is then stored using the cfs_binheap implementation,
+      which sorts the request according to the assigned start time.
+      Requests are removed from the binheap for handling once their start
+      time has been passed.</para>
+      <para>The Delay policy can be enabled on all types of PtlRPC services,
+      and has the following tunables that can be used to adjust its behavior:
+      </para>
+      <itemizedlist>
+        <listitem>
+          <para>
+            <literal>{service}.nrs_delay_min</literal>
+          </para>
+          <para>The
+          <literal>{service}.nrs_delay_min</literal> tunable controls the
+          minimum amount of time, in seconds, that a request will be delayed by
+          this policy.  The default is 5 seconds. To read this value run:</para>
+          <screen>
+lctl get_param {service}.nrs_delay_min</screen>
+          <para>For example, to read the minimum delay set on the ost_io
+          service, run:</para>
+          <screen>
+$ lctl get_param ost.OSS.ost_io.nrs_delay_min
+ost.OSS.ost_io.nrs_delay_min=reg_delay_min:5
+hp_delay_min:5</screen>
+        <para>To set the minimum delay in RPC processing, run:</para>
+        <screen>
+lctl set_param {service}.nrs_delay_min=<replaceable>0-65535</replaceable></screen>
+        <para>This will set the minimum delay time on a given service, for both
+        regular and high-priority RPCs (if the PtlRPC service supports
+        high-priority RPCs), to the indicated value.</para>
+        <para>For example, to set the minimum delay time on the ost_io service
+        to 10, run:</para>
+        <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_delay_min=10
+ost.OSS.ost_io.nrs_delay_min=10</screen>
+        <para>For PtlRPC services that support high-priority RPCs, to set a
+        different minimum delay time for regular and high-priority RPCs, run:
+        </para>
+        <screen>
+lctl set_param {service}.nrs_delay_min=<replaceable>reg_delay_min|hp_delay_min</replaceable>:<replaceable>0-65535</replaceable>
+        </screen>
+        <para>For example, to set the minimum delay time on the ost_io service
+        for high-priority RPCs to 3, run:</para>
+        <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_delay_min=hp_delay_min:3
+ost.OSS.ost_io.nrs_delay_min=hp_delay_min:3</screen>
+        <para>Note, in all cases the minimum delay time cannot exceed the
+        maximum delay time.</para>
+        </listitem>
+        <listitem>
+          <para>
+            <literal>{service}.nrs_delay_max</literal>
+          </para>
+          <para>The
+          <literal>{service}.nrs_delay_max</literal> tunable controls the
+          maximum amount of time, in seconds, that a request will be delayed by
+          this policy.  The default is 300 seconds. To read this value run:
+          </para>
+          <screen>lctl get_param {service}.nrs_delay_max</screen>
+          <para>For example, to read the maximum delay set on the ost_io
+          service, run:</para>
+          <screen>
+$ lctl get_param ost.OSS.ost_io.nrs_delay_max
+ost.OSS.ost_io.nrs_delay_max=reg_delay_max:300
+hp_delay_max:300</screen>
+        <para>To set the maximum delay in RPC processing, run:</para>
+        <screen>lctl set_param {service}.nrs_delay_max=<replaceable>0-65535</replaceable>
+</screen>
+        <para>This will set the maximum delay time on a given service, for both
+        regular and high-priority RPCs (if the PtlRPC service supports
+        high-priority RPCs), to the indicated value.</para>
+        <para>For example, to set the maximum delay time on the ost_io service
+        to 60, run:</para>
+        <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_delay_max=60
+ost.OSS.ost_io.nrs_delay_max=60</screen>
+        <para>For PtlRPC services that support high-priority RPCs, to set a
+        different maximum delay time for regular and high-priority RPCs, run:
+        </para>
+        <screen>lctl set_param {service}.nrs_delay_max=<replaceable>reg_delay_max|hp_delay_max</replaceable>:<replaceable>0-65535</replaceable></screen>
+        <para>For example, to set the maximum delay time on the ost_io service
+        for high-priority RPCs to 30, run:</para>
+        <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_delay_max=hp_delay_max:30
+ost.OSS.ost_io.nrs_delay_max=hp_delay_max:30</screen>
+        <para>Note, in all cases the maximum delay time cannot be less than the
+        minimum delay time.</para>
+        </listitem>
+        <listitem>
+          <para>
+            <literal>{service}.nrs_delay_pct</literal>
+          </para>
+          <para>The
+          <literal>{service}.nrs_delay_pct</literal> tunable controls the
+          percentage of requests that will be delayed by this policy. The
+          default is 100. Note, when a request is not selected for handling by
+          the delay policy due to this variable then the request will be handled
+          by whatever fallback policy is defined for that service. If no other
+          fallback policy is defined then the request will be handled by the
+          FIFO policy.  To read this value run:</para>
+          <screen>lctl get_param {service}.nrs_delay_pct</screen>
+          <para>For example, to read the percentage of requests being delayed on
+          the ost_io service, run:</para>
+          <screen>
+$ lctl get_param ost.OSS.ost_io.nrs_delay_pct
+ost.OSS.ost_io.nrs_delay_pct=reg_delay_pct:100
+hp_delay_pct:100</screen>
+        <para>To set the percentage of delayed requests, run:</para>
+        <screen>
+lctl set_param {service}.nrs_delay_pct=<replaceable>0-100</replaceable></screen>
+        <para>This will set the percentage of requests delayed on a given
+        service, for both regular and high-priority RPCs (if the PtlRPC service
+        supports high-priority RPCs), to the indicated value.</para>
+        <para>For example, to set the percentage of delayed requests on the
+        ost_io service to 50, run:</para>
+        <screen>
+$ lctl set_param ost.OSS.ost_io.nrs_delay_pct=50
+ost.OSS.ost_io.nrs_delay_pct=50
+</screen>
+        <para>For PtlRPC services that support high-priority RPCs, to set a
+        different delay percentage for regular and high-priority RPCs, run:
+        </para>
+        <screen>lctl set_param {service}.nrs_delay_pct=<replaceable>reg_delay_pct|hp_delay_pct</replaceable>:<replaceable>0-100</replaceable>
+</screen>
+        <para>For example, to set the percentage of delayed requests on the
+        ost_io service for high-priority RPCs to 5, run:</para>
+        <screen>$ lctl set_param ost.OSS.ost_io.nrs_delay_pct=hp_delay_pct:5
+ost.OSS.ost_io.nrs_delay_pct=hp_delay_pct:5
 </screen>
         </listitem>
       </itemizedlist>
