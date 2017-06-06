@@ -154,7 +154,7 @@ lod_stripeoffset_seq_write(struct file *file, const char __user *buffer,
 	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
 	if (rc)
 		return rc;
-	if (val < 0)
+	if (val < -1)
 		return -ERANGE;
 
 	lod->lod_desc.ld_default_stripe_offset = val;
@@ -271,7 +271,7 @@ lod_stripecount_seq_write(struct file *file, const char __user *buffer,
 	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
-	if (val < 0)
+	if (val < -1)
 		return -ERANGE;
 
 	stripe_count = val;

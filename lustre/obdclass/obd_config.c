@@ -1383,8 +1383,10 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
 			 * can pass it down the stack */
 			RETURN(-ENOSYS);
 		sval = strchr(key, '=');
-		if (!sval || (*(sval + 1) == 0)) {
-			CERROR("Can't parse param %s (missing '=')\n", key);
+		if (!sval || *(sval + 1) == 0) {
+			CERROR("%s: can't parse param '%s' (missing '=')\n",
+			       lustre_cfg_string(lcfg, 0),
+			       lustre_cfg_string(lcfg, i));
 			/* rc = -EINVAL;        continue parsing other params */
 			continue;
 		}
@@ -1419,20 +1421,18 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
 			if (strncmp("sec_level", key, keylen) == 0)
 				continue;
 
-			CERROR("%.*s: %s unknown param %s\n",
-			       (int)strlen(prefix) - 1, prefix,
-			       (char *)lustre_cfg_string(lcfg, 0), key);
+			CERROR("%s: unknown config parameter '%s'\n",
+			       lustre_cfg_string(lcfg, 0),
+			       lustre_cfg_string(lcfg, i));
 			/* rc = -EINVAL;        continue parsing other params */
 			skip++;
 		} else if (rc < 0) {
-			CERROR("%s: error writing proc entry '%s': rc = %d\n",
-			       prefix, var->name, rc);
+			CERROR("%s: error writing proc '%s'='%s': rc = %d\n",
+			       lustre_cfg_string(lcfg, 0), key, sval, rc);
 			rc = 0;
 		} else {
-			CDEBUG(D_CONFIG, "%s.%.*s: Set parameter %.*s=%s\n",
-					 lustre_cfg_string(lcfg, 0),
-					 (int)strlen(prefix) - 1, prefix,
-					 (int)(sval - key - 1), key, sval);
+			CDEBUG(D_CONFIG, "%s: Set parameter '%s'='%s'\n",
+			       lustre_cfg_string(lcfg, 0), key, sval);
 		}
 	}
 

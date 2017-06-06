@@ -1718,6 +1718,15 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 	RETURN(rc);
 }
 
+/**
+ * set the default stripe size, if unset.
+ *
+ * \param[in,out] val	number of bytes per OST stripe
+ *
+ * The minimum stripe size is 64KB to ensure that a single stripe is an
+ * even multiple of a client PAGE_SIZE (IA64, PPC, etc).  Otherwise, it
+ * is difficult to split dirty pages across OSCs during writes.
+ */
 void lod_fix_desc_stripe_size(__u64 *val)
 {
 	if (*val < LOV_MIN_STRIPE_SIZE) {
@@ -1734,12 +1743,30 @@ void lod_fix_desc_stripe_size(__u64 *val)
 	}
 }
 
+/**
+ * set the filesystem default number of stripes, if unset.
+ *
+ * \param[in,out] val	number of stripes
+ *
+ * A value of "0" means "use the system-wide default stripe count", which
+ * has either been inherited by now, or falls back to 1 stripe per file.
+ * A value of "-1" (0xffffffff) means "stripe over all available OSTs",
+ * and is a valid value, so is left unchanged here.
+ */
 void lod_fix_desc_stripe_count(__u32 *val)
 {
 	if (*val == 0)
 		*val = 1;
 }
 
+/**
+ * set the filesystem default layout pattern
+ *
+ * \param[in,out] val	LOV_PATTERN_* layout
+ *
+ * A value of "0" means "use the system-wide default layout type", which
+ * has either been inherited by now, or falls back to plain RAID0 striping.
+ */
 void lod_fix_desc_pattern(__u32 *val)
 {
 	/* from lov_setstripe */
