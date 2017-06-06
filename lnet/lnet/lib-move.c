@@ -1441,6 +1441,7 @@ again:
 	}
 
 	if (!peer->lp_multi_rail && lnet_get_num_peer_nis(peer) > 1) {
+		lnet_net_unlock(cpt);
 		CERROR("peer %s is declared to be non MR capable, "
 		       "yet configured with more than one NID\n",
 		       libcfs_nid2str(dst_nid));
