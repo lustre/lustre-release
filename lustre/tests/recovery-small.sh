@@ -2685,53 +2685,6 @@ test_133() {
 }
 run_test 133 "don't fail on flock resend"
 
-test_134() {
-	local file1
-	local pid1
-	local pid2
-	local i
-
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return 0
-	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.59) ]] &&
-		skip "Need MDS version at least 2.8.59" && return
-
-	test_mkdir -p $DIR/$tdir
-	file1="$DIR/$tdir/file1"
-	file2="$DIR/$tdir/file2"
-
-#define OBD_FAIL_MDS_OSP_PRECREATE_WAIT	 0x164
-	# reserve stripe on ost1, block on ost2
-	do_facet $SINGLEMDS \
-		"lctl set_param fail_loc=0x80000164 fail_val=1"
-	$SETSTRIPE  -c 2 -o 0,1 $file1 &
-	pid1=$!
-	sleep 1
-
-	# initiate recovery with orphan cleanup on ost1
-	facet_failover ost1
-
-	# when OST1 recovery is over, the first setstripe should still
-	# have the object reserved, but that should not block new creates
-	# on OST1
-	$SETSTRIPE  -c 1 -o 0 $file2 &
-	pid2=$!
-	for ((i=0;i<$((TIMEOUT/2));i++)); do
-		if ! stat /proc/$pid2 >&/dev/null; then
-			echo "DONE!"
-			break
-		fi
-		echo "WAITING ..."
-		sleep 1
-	done
-	if let "i >= (TIMEOUT/2)"; then
-		error "create seem to get blocked by recovery"
-	fi
-	wait $pid1
-	wait $pid2
-	return 0
-}
-run_test 134 "MDT<>OST recovery don't block multistripe file creation"
-
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -602,28 +602,6 @@ static inline int osp_is_fid_client(struct osp_device *osp)
 	return imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_FID;
 }
 
-/**
- * Return number of precreated objects
- *
- * A simple helper to calculate the number of precreated objects on the device.
- *
- * \param[in] env	LU environment provided by the caller
- * \param[in] osp	OSP device
- *
- * \retval		the number of the precreated objects
- */
-static inline int osp_objs_precreated(const struct lu_env *env,
-				      struct osp_device *osp)
-{
-	/* if pre_used_fid isn't initialized yet,
-	 * then precreated hasn't started and no
-	 * objects have been precreated */
-	if (fid_seq(&osp->opd_pre_used_fid) == 0)
-		return 0;
-	return osp_fid_diff(&osp->opd_pre_last_created_fid,
-			    &osp->opd_pre_used_fid);
-}
-
 struct object_update *
 update_buffer_get_update(struct object_update_request *request,
 			 unsigned int index);
