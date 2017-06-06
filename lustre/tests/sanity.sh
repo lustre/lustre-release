@@ -6169,7 +6169,7 @@ test_77c() {
 		error "dd write error: $?"
 	fid=$($LFS path2fid $DIR/$tfile)
 
-	if [ $(lustre_version_code ost1) -ge $(version_code 2.5.42.6) ]
+	if [ $(lustre_version_code ost1) -ge $(version_code 2.9.57) ]
 	then
 		check_ost=true
 		ost_file_prefix=$(do_facet ost1 $LCTL get_param -n debug_path)
