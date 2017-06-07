@@ -71,14 +71,16 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 		    !strncmp(xattr_name, user_string, sizeof(user_string) - 1))
 			RETURN(-EOPNOTSUPP);
 
-                size = mo_xattr_get(info->mti_env,
-                                    mdt_object_child(info->mti_object),
-                                    &LU_BUF_NULL, xattr_name);
-        } else if (valid == OBD_MD_FLXATTRLS) {
-                size = mo_xattr_list(info->mti_env,
-                                     mdt_object_child(info->mti_object),
-                                     &LU_BUF_NULL);
+		size = mo_xattr_get(info->mti_env,
+				    mdt_object_child(info->mti_object),
+				    &LU_BUF_NULL, xattr_name);
+	} else if (valid == OBD_MD_FLXATTRLS) {
+		xattr_name = "list";
+		size = mo_xattr_list(info->mti_env,
+				     mdt_object_child(info->mti_object),
+				     &LU_BUF_NULL);
 	} else if (valid == OBD_MD_FLXATTRALL) {
+		xattr_name = "all";
 		/* N.B. eadatasize = 0 is not valid for FLXATTRALL */
 		/* We could calculate accurate sizes, but this would
 		 * introduce a lot of overhead, let's do it later... */
@@ -94,8 +96,9 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 	if (size == -ENODATA) {
 		size = 0;
 	} else if (size < 0) {
-		if (size != -EOPNOTSUPP)
-			CERROR("Error geting EA size: %d\n", size);
+		if (size != -EOPNOTSUPP && size != -ENOENT)
+			CERROR("%s: error geting EA size for '%s': rc = %d\n",
+			       mdt_obd_name(info->mti_mdt), xattr_name, size);
 		RETURN(size);
 	}
 

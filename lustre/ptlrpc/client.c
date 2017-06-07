@@ -1155,17 +1155,19 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
         LASSERT (status != NULL);
         *status = 0;
 
-        if (req->rq_ctx_init || req->rq_ctx_fini) {
-                /* always allow ctx init/fini rpc go through */
-        } else if (imp->imp_state == LUSTRE_IMP_NEW) {
-                DEBUG_REQ(D_ERROR, req, "Uninitialized import.");
-                *status = -EIO;
+	if (req->rq_ctx_init || req->rq_ctx_fini) {
+		/* always allow ctx init/fini rpc go through */
+	} else if (imp->imp_state == LUSTRE_IMP_NEW) {
+		DEBUG_REQ(D_ERROR, req, "Uninitialized import.");
+		*status = -EIO;
 	} else if (imp->imp_state == LUSTRE_IMP_CLOSED) {
-		/* pings may safely race with umount */
-		DEBUG_REQ(lustre_msg_get_opc(req->rq_reqmsg) == OBD_PING ?
+		unsigned int opc = lustre_msg_get_opc(req->rq_reqmsg);
+
+		/* pings or MDS-equivalent STATFS may safely race with umount */
+		DEBUG_REQ((opc == OBD_PING || opc == OST_STATFS) ?
 			  D_HA : D_ERROR, req, "IMP_CLOSED ");
 		*status = -EIO;
-        } else if (ptlrpc_send_limit_expired(req)) {
+	} else if (ptlrpc_send_limit_expired(req)) {
 		/* probably doesn't need to be a D_ERROR after initial testing*/
 		DEBUG_REQ(D_HA, req, "send limit expired ");
 		*status = -ETIMEDOUT;
@@ -1213,16 +1215,12 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
  * \retval false if no message should be printed
  * \retval true  if console message should be printed
  */
-static bool ptlrpc_console_allow(struct ptlrpc_request *req)
+static bool ptlrpc_console_allow(struct ptlrpc_request *req, __u32 opc, int err)
 {
-	__u32 opc;
-
 	LASSERT(req->rq_reqmsg != NULL);
-	opc = lustre_msg_get_opc(req->rq_reqmsg);
 
 	/* Suppress particular reconnect errors which are to be expected. */
 	if (opc == OST_CONNECT || opc == MDS_CONNECT || opc == MGS_CONNECT) {
-		int err;
 
 		/* Suppress timed out reconnect requests */
 		if (lustre_handle_is_used(&req->rq_import->imp_remote_handle) ||
@@ -1232,11 +1230,19 @@ static bool ptlrpc_console_allow(struct ptlrpc_request *req)
 		/* Suppress most unavailable/again reconnect requests, but
 		 * print occasionally so it is clear client is trying to
 		 * connect to a server where no target is running. */
-		err = lustre_msg_get_status(req->rq_repmsg);
 		if ((err == -ENODEV || err == -EAGAIN) &&
 		    req->rq_import->imp_conn_cnt % 30 != 20)
 			return false;
 	}
+
+	if (opc == LDLM_ENQUEUE && err == -EAGAIN)
+		/* -EAGAIN is normal when using POSIX flocks */
+		return false;
+
+	if (opc == OBD_PING && (err == -ENODEV || err == -ENOTCONN) &&
+	    (req->rq_xid & 0xf) != 10)
+		/* Suppress most ping requests, they may fail occasionally */
+		return false;
 
 	return true;
 }
@@ -1256,9 +1262,7 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
 		lnet_nid_t nid = imp->imp_connection->c_peer.nid;
 		__u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
 
-		/* -EAGAIN is normal when using POSIX flocks */
-		if (ptlrpc_console_allow(req) &&
-		    !(opc == LDLM_ENQUEUE && err == -EAGAIN))
+		if (ptlrpc_console_allow(req, opc, err))
 			LCONSOLE_ERROR_MSG(0x11, "%s: operation %s to node %s "
 					   "failed: rc = %d\n",
 					   imp->imp_obd->obd_name,
@@ -2097,6 +2101,7 @@ EXPORT_SYMBOL(ptlrpc_check_set);
 int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 {
 	struct obd_import *imp = req->rq_import;
+	unsigned int debug_mask = D_RPCTRACE;
 	int rc = 0;
 	ENTRY;
 
@@ -2104,12 +2109,15 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 	req->rq_timedout = 1;
 	spin_unlock(&req->rq_lock);
 
-	DEBUG_REQ(D_WARNING, req, "Request sent has %s: [sent %lld/real %lld]",
-                  req->rq_net_err ? "failed due to network error" :
-                     ((req->rq_real_sent == 0 ||
+	if (ptlrpc_console_allow(req, lustre_msg_get_opc(req->rq_reqmsg),
+				  lustre_msg_get_status(req->rq_reqmsg)))
+		debug_mask = D_WARNING;
+	DEBUG_REQ(debug_mask, req, "Request sent has %s: [sent %lld/real %lld]",
+		  req->rq_net_err ? "failed due to network error" :
+		     ((req->rq_real_sent == 0 ||
 		       req->rq_real_sent < req->rq_sent ||
 		       req->rq_real_sent >= req->rq_deadline) ?
-                      "timed out for sent delay" : "timed out for slow reply"),
+		      "timed out for sent delay" : "timed out for slow reply"),
 		  (s64)req->rq_sent, (s64)req->rq_real_sent);
 
 	if (imp != NULL && obd_debug_peer_on_timeout)

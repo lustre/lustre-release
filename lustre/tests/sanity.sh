@@ -1674,7 +1674,8 @@ test_27u() { # bug 4900
 	unlinkmany $DIR/$tdir/t- 1000
 	trap 0
 	[[ $OBJS -gt 0 ]] &&
-		error "$OBJS objects created on OST-0. See $TLOG" || pass
+		error "$OBJS objects created on OST-0. See $TLOG" ||
+		rm -f $TLOG
 }
 run_test 27u "skip object creation on OSC w/o objects"
 
@@ -3839,6 +3840,7 @@ test_43a() {
 		cp -p multiop $DIR/$tdir/multiop
 	MULTIOP_PROG=$DIR/$tdir/multiop multiop_bg_pause $TMP/$tfile.junk O_c ||
 		error "multiop open $TMP/$tfile.junk failed"
+	rm $TMP/$tfile.junk	# delete junk file on close (not part of test)
 	MULTIOP_PID=$!
 	$MULTIOP $DIR/$tdir/multiop Oc && error "expected error, got success"
 	kill -USR1 $MULTIOP_PID || error "kill -USR1 PID $MULTIOP_PID failed"
@@ -3853,6 +3855,7 @@ test_43b() {
 		cp -p multiop $DIR/$tdir/multiop
 	MULTIOP_PROG=$DIR/$tdir/multiop multiop_bg_pause $TMP/$tfile.junk O_c ||
 		error "multiop open $TMP/$tfile.junk failed"
+	rm $TMP/$tfile.junk	# delete junk file on close (not part of test)
 	MULTIOP_PID=$!
 	$TRUNCATE $DIR/$tdir/multiop 0 && error "expected error, got success"
 	kill -USR1 $MULTIOP_PID || error "kill -USR1 PID $MULTIOP_PID failed"
@@ -11111,9 +11114,8 @@ test_156() {
 		log "cache hits:: before: $BEFORE, after: $AFTER"
 	fi
 
-	rm -f $file
 	restore_lustre_params < $p
-	rm -f $p
+	rm -f $p $file
 }
 run_test 156 "Verification of tunables"
 
@@ -14299,6 +14301,14 @@ test_246() { # LU-7371
 }
 run_test 246 "Read file of size 4095 should return right length"
 
+cleanup_247() {
+	local submount=$1
+
+	trap 0
+	umount_client $submount
+	rmdir $submount
+}
+
 test_247a() {
 	lctl get_param -n mdc.$FSNAME-MDT0000*.import |
 		grep -q subtree ||
@@ -14310,11 +14320,11 @@ test_247a() {
 	mkdir -p $submount || error "mkdir $submount failed"
 	FILESET="$FILESET/$tdir" mount_client $submount ||
 		error "mount $submount failed"
+	trap "cleanup_247 $submount" EXIT
 	echo foo > $submount/$tfile || error "write $submount/$tfile failed"
 	[ $(cat $MOUNT/$tdir/$tfile) = "foo" ] ||
 		error "read $MOUNT/$tdir/$tfile failed"
-	umount_client $submount || error "umount $submount failed"
-	rmdir $submount
+	cleanup_247 $submount
 }
 run_test 247a "mount subdir as fileset"
 
@@ -14341,12 +14351,12 @@ test_247c() {
 
 	mkdir -p $MOUNT/$tdir/dir1
 	mkdir -p $submount || error "mkdir $submount failed"
+	trap "cleanup_247 $submount" EXIT
 	FILESET="$FILESET/$tdir" mount_client $submount ||
 		error "mount $submount failed"
 	local fid=$($LFS path2fid $MOUNT/)
 	$LFS fid2path $submount $fid && error "fid2path should fail"
-	umount_client $submount || error "umount $submount failed"
-	rmdir $submount
+	cleanup_247 $submount
 }
 run_test 247c "running fid2path outside root"
 
@@ -14360,10 +14370,10 @@ test_247d() {
 	mkdir -p $submount || error "mkdir $submount failed"
 	FILESET="$FILESET/$tdir" mount_client $submount ||
 		error "mount $submount failed"
+	trap "cleanup_247 $submount" EXIT
 	local fid=$($LFS path2fid $submount/dir1)
 	$LFS fid2path $submount $fid || error "fid2path should succeed"
-	umount_client $submount || error "umount $submount failed"
-	rmdir $submount
+	cleanup_247 $submount
 }
 run_test 247d "running fid2path inside root"
 
@@ -16780,7 +16790,7 @@ test_403() {
 
 	wait
 
-	[ `cat $tfile` -gt 0 ] || error "wrong nlink count: `cat $tfile`"
+	[ $(cat $tfile) -gt 0 ] || error "wrong nlink count: $(cat $tfile)"
 
 	rm -f $tfile $file1 $file2
 }
