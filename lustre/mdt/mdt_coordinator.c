@@ -793,7 +793,7 @@ static int mdt_hsm_pending_restore(struct mdt_thread_info *mti)
 	hrd.hrd_mti = mti;
 
 	rc = cdt_llog_process(mti->mti_env, mti->mti_mdt, hsm_restore_cb, &hrd,
-			      0, 0, READ);
+			      0, 0, WRITE);
 
 	RETURN(rc);
 }
