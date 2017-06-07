@@ -626,6 +626,429 @@ cpu_partition_table=
       default values are automatically set and are chosen to work well across a
       number of typical scenarios.</para>
     </note>
+    <section>
+	<title>ko2iblnd Tuning</title>
+	<para>The following table outlines the ko2iblnd module parameters to be used
+    for tuning:</para>
+	<informaltable frame="all">
+	  <tgroup cols="3">
+	    <colspec colname="c1" colwidth="50*" />
+	    <colspec colname="c2" colwidth="50*" />
+	    <colspec colname="c3" colwidth="50*" />
+	    <thead>
+	      <row>
+		<entry>
+		  <para>
+		    <emphasis role="bold">Module Parameter</emphasis>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <emphasis role="bold">Default Value</emphasis>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <emphasis role="bold">Description</emphasis>
+		  </para>
+		</entry>
+	      </row>
+	    </thead>
+	    <tbody>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>service</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>987</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Service number (within RDMA_PS_TCP).</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>cksum</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>0</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Set non-zero to enable message (not RDMA) checksums.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>timeout</literal>
+		  </para>
+		</entry>
+		<entry>
+		<para>
+		  <literal>50</literal>
+		</para>
+	      </entry>
+		<entry>
+		  <para>Timeout in seconds.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>nscheds</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>0</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Number of threads in each scheduler pool (per CPT).  Value of
+          zero means we derive the number from the number of cores.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>conns_per_peer</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>4 (OmniPath), 1 (Everything else)</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Introduced in 2.10. Number of connections to each peer. Messages
+          are sent round-robin over the connection pool.  Provides signifiant
+          improvement with OmniPath.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>ntx</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>512</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Number of message descriptors allocated for each pool at
+          startup. Grows at runtime. Shared by all CPTs.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>credits</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>256</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Number of concurrent sends on network.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>peer_credits</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>8</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Number of concurrent sends to 1 peer. Related/limited by IB
+          queue size.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>peer_credits_hiw</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>0</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>When eagerly to return credits.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>peer_buffer_credits</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>0</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Number per-peer router buffer credits.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>peer_timeout</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>180</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Seconds without aliveness news to declare peer dead (less than
+          or equal to 0 to disable).</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>ipif_name</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>ib0</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>IPoIB interface name.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>retry_count</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>5</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Retransmissions when no ACK received.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>rnr_retry_count</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>6</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>RNR retransmissions.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>keepalive</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>100</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Idle time in seconds before sending a keepalive.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>ib_mtu</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>0</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>IB MTU 256/512/1024/2048/4096.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>concurrent_sends</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>0</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Send work-queue sizing. If zero, derived from
+          <literal>map_on_demand</literal> and <literal>peer_credits</literal>.
+          </para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>map_on_demand</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+            <literal>0 (pre-4.8 Linux) 1 (4.8 Linux onward) 32 (OmniPath)</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Number of fragments reserved for connection.  If zero, use
+          global memory region (found to be security issue).  If non-zero, use
+          FMR or FastReg for memory registration.  Value needs to agree between
+          both peers of connection.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>fmr_pool_size</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>512</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Size of fmr pool on each CPT (>= ntx / 4).  Grows at runtime.
+          </para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>fmr_flush_trigger</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>384</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Number dirty FMRs that triggers pool flush.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>fmr_cache</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>1</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Non-zero to enable FMR caching.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>dev_failover</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>0</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>HCA failover for bonding (0 OFF, 1 ON, other values reserved).
+          </para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>require_privileged_port</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>0</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Require privileged port when accepting connection.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>use_privileged_port</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>1</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Use privileged port when initiating connection.</para>
+		</entry>
+	      </row>
+	      <row>
+		<entry>
+		  <para>
+		    <literal>wrq_sge</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>
+		    <literal>2</literal>
+		  </para>
+		</entry>
+		<entry>
+		  <para>Introduced in 2.10. Number scatter/gather element groups per
+          work request.  Used to deal with fragmentations which can consume
+          double the number of work requests.</para>
+		</entry>
+	      </row>
+	    </tbody>
+	  </tgroup>
+	</informaltable>
+    </section>
   </section>
   <section xml:id="dbdoclet.nrstuning" condition='l24'>
     <title>
