@@ -1,0 +1,13 @@
+Index: linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
+===================================================================
+--- linux-3.10.0-123.13.2.el7.x86_64.orig/fs/ext4/namei.c
++++ linux-3.10.0-123.13.2.el7.x86_64/fs/ext4/namei.c
+@@ -3250,6 +48,7 @@ int ext4_orphan_add(handle_t *handle
+ 	ext4_std_error(sb, err);
+ 	return err;
+ }
++EXPORT_SYMBOL(ext4_orphan_add);
+
+ /*
+  * ext4_orphan_del() removes an unlinked or truncated inode from the list
+

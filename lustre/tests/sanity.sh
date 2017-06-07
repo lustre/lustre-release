@@ -16433,6 +16433,45 @@ test_258b() {
 }
 run_test 258b "verify i_mutex security behavior"
 
+test_259() {
+	local file=$DIR/$tfile
+	local before
+	local after
+
+	[ "$(facet_fstype mds1)" != "ldiskfs" ] &&
+		skip "ldiskfs only test" && return
+
+	stack_trap "rm -f $file" EXIT
+
+	wait_delete_completed
+	before=$(do_facet ost1 "$LCTL get_param -n osd-*.*OST0000.kbytesfree")
+	echo "before: $before"
+
+	$LFS setstripe -i 0 -c 1 $file
+	dd if=/dev/zero of=$file bs=1M count=10 || error "couldn't write"
+	sync_all_data
+	after=$(do_facet ost1 "$LCTL get_param -n osd-*.*OST0000.kbytesfree")
+	echo "after write: $after"
+
+#define OBD_FAIL_OSD_FAIL_AT_TRUNCATE          0x2301
+	do_facet ost1 $LCTL set_param fail_loc=0x2301
+	$TRUNCATE $file 0
+	after=$(do_facet ost1 "$LCTL get_param -n osd-*.*OST0000.kbytesfree")
+	echo "after truncate: $after"
+
+	stop ost1
+	do_facet ost1 $LCTL set_param fail_loc=0
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS || error "cannot start ost1"
+	sleep 2
+	after=$(do_facet ost1 "$LCTL get_param -n osd-*.*OST0000.kbytesfree")
+	echo "after restart: $after"
+	[ $((after - before)) -ge $(fs_log_size ost1) ] &&
+		error "missing truncate?"
+
+	return 0
+}
+run_test 259 "crash at delayed truncate"
+
 test_260() {
 #define OBD_FAIL_MDC_CLOSE               0x806
 	$LCTL set_param fail_loc=0x80000806

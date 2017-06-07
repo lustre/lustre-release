@@ -21,3 +21,4 @@ rhel7/ext4-give-warning-with-dir-htree-growing.patch
 rhel7/ext4-mmp-brelse.patch
 rhel7/ext4-jcb-optimization.patch
 sles12sp1/ext4-attach-jinode-in-writepages.patch
+rhel7/ext4-export-orphan-add.patch

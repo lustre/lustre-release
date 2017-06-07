@@ -20,3 +20,4 @@ sles12/ext4-corrupted-inode-block-bitmaps-handling-patches.patch
 rhel7/ext4-give-warning-with-dir-htree-growing.patch
 rhel7/ext4-mmp-brelse.patch
 rhel7/ext4-jcb-optimization.patch
+rhel7/ext4-export-orphan-add.patch

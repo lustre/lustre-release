@@ -358,6 +358,13 @@ enum osd_op_type {
 	OSD_OT_MAX		= 11
 };
 
+struct osd_access_lock {
+	struct list_head	 tl_list;
+	struct osd_object	*tl_obj;
+	bool			 tl_shared;
+	bool			 tl_truncate;
+};
+
 struct osd_thandle {
         struct thandle          ot_super;
         handle_t               *ot_handle;
@@ -379,6 +386,7 @@ struct osd_thandle {
         /** time when this thanle was started */
 	ktime_t oth_started;
 #endif
+	struct list_head	ot_trunc_locks;
 };
 
 /**
@@ -1396,5 +1404,11 @@ osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
 # endif
 
 #endif
+
+int osd_trunc_lock(struct osd_object *obj, struct osd_thandle *oh,
+		   bool shared);
+void osd_trunc_unlock_all(struct list_head *list);
+void osd_process_truncates(struct list_head *list);
+void osd_execute_truncate(struct osd_object *obj);
 
 #endif /* _OSD_INTERNAL_H */

@@ -22,3 +22,4 @@ sles12sp2/ext4-mmp-brelse.patch
 rhel7/ext4-jcb-optimization.patch
 sles12sp2/ext4-attach-jinode-in-writepages.patch
 rhel7/ext4-use-GFP_NOFS-in-ext4_inode_attach_jinode.patch
+rhel7/ext4-export-orphan-add.patch

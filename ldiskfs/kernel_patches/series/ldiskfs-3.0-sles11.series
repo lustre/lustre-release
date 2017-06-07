@@ -40,3 +40,4 @@ rhel6.3/ext4-journal-path-opt.patch
 sles11sp3/ext4_s_max_ext_tree_depth.patch
 sles11sp1/ext4-notalloc_under_idatasem.patch
 rhel6.5/ext4-fix-journal-quota.patch
+rhel7/ext4-export-orphan-add.patch

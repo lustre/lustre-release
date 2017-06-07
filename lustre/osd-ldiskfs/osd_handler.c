@@ -1710,6 +1710,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	oh->ot_credits = 0;
 	INIT_LIST_HEAD(&oh->ot_commit_dcb_list);
 	INIT_LIST_HEAD(&oh->ot_stop_dcb_list);
+	INIT_LIST_HEAD(&oh->ot_trunc_locks);
 	osd_th_alloced(oh);
 
 	memset(oti->oti_declare_ops, 0,
@@ -1896,13 +1897,14 @@ static void osd_trans_stop_cb(struct osd_thandle *oth, int result)
 static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 			  struct thandle *th)
 {
-	int                     rc = 0, remove_agents = 0;
-	struct osd_thandle     *oh;
 	struct osd_thread_info *oti = osd_oti_get(env);
-	struct osd_iobuf       *iobuf = &oti->oti_iobuf;
-	struct osd_device      *osd = osd_dt_dev(th->th_dev);
-	struct qsd_instance    *qsd = osd->od_quota_slave;
-	struct lquota_trans    *qtrans;
+	struct osd_thandle *oh;
+	struct osd_iobuf *iobuf = &oti->oti_iobuf;
+	struct osd_device *osd = osd_dt_dev(th->th_dev);
+	struct qsd_instance *qsd = osd->od_quota_slave;
+	struct lquota_trans *qtrans;
+	struct list_head truncates = LIST_HEAD_INIT(truncates);
+	int rc = 0, remove_agents = 0;
 	ENTRY;
 
 	oh = container_of0(th, struct osd_thandle, ot_super);
@@ -1911,6 +1913,9 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 
 	qtrans = oh->ot_quota_trans;
 	oh->ot_quota_trans = NULL;
+
+	/* move locks to local list, stop tx, execute truncates */
+	list_splice(&oh->ot_trunc_locks, &truncates);
 
 	if (oh->ot_handle != NULL) {
 		int rc2;
@@ -1943,10 +1948,14 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 			       osd_name(osd), rc2);
 		if (!rc)
 			rc = rc2;
+
+		osd_process_truncates(&truncates);
 	} else {
 		osd_trans_stop_cb(oh, th->th_result);
 		OBD_FREE_PTR(oh);
 	}
+
+	osd_trunc_unlock_all(&truncates);
 
 	/* inform the quota slave device that the transaction is stopping */
 	qsd_op_end(env, qsd, qtrans);

@@ -1308,6 +1308,9 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	if (flags & QUOTA_FL_OVER_PRJQUOTA)
 		lnb[0].lnb_flags |= OBD_BRW_OVER_PRJQUOTA;
 
+	if (rc == 0)
+		rc = osd_trunc_lock(osd_dt_obj(dt), oh, true);
+
 	RETURN(rc);
 }
 
@@ -1733,6 +1736,10 @@ out:
 					   i_gid_read(inode),
 					   i_projid_read(inode), 0,
 					   oh, obj, NULL, OSD_QID_BLK);
+
+	if (rc == 0)
+		rc = osd_trunc_lock(obj, oh, true);
+
 	RETURN(rc);
 }
 
@@ -1913,18 +1920,23 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 	rc = osd_declare_inode_qid(env, i_uid_read(inode), i_gid_read(inode),
 				   i_projid_read(inode), 0, oh, osd_dt_obj(dt),
 				   NULL, OSD_QID_BLK);
+
+	if (rc == 0)
+		rc = osd_trunc_lock(osd_dt_obj(dt), oh, false);
+
 	RETURN(rc);
 }
 
 static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 		     __u64 start, __u64 end, struct thandle *th)
 {
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
+	struct inode *inode = obj->oo_inode;
+	struct osd_access_lock *al;
 	struct osd_thandle *oh;
-	struct osd_object  *obj = osd_dt_obj(dt);
-	struct inode       *inode = obj->oo_inode;
-	handle_t           *h;
-	tid_t               tid;
-	int		   rc = 0, rc2 = 0;
+	int rc = 0, found = 0;
+	bool grow = false;
 	ENTRY;
 
 	LASSERT(end == OBD_OBJECT_EOF);
@@ -1937,49 +1949,51 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle->h_transaction != NULL);
 
+	/* we used to skip truncate to current size to
+	 * optimize truncates on OST. with DoM we can
+	 * get attr_set to set specific size (MDS_REINT)
+	 * and then get truncate RPC which essentially
+	 * would be skipped. this is bad.. so, disable
+	 * this optimization on MDS till the client stop
+	 * to sent MDS_REINT (LU-11033) -bzzz */
+	if (osd->od_is_ost && i_size_read(inode) == start)
+		RETURN(0);
+
 	osd_trans_exec_op(env, th, OSD_OT_PUNCH);
 
-	tid = oh->ot_handle->h_transaction->t_tid;
-
 	spin_lock(&inode->i_lock);
+	if (i_size_read(inode) < start)
+		grow = true;
 	i_size_write(inode, start);
 	spin_unlock(&inode->i_lock);
 	ll_truncate_pagecache(inode, start);
-#ifdef HAVE_INODEOPS_TRUNCATE
-	if (inode->i_op->truncate) {
-		inode->i_op->truncate(inode);
-	} else
-#endif
-		ldiskfs_truncate(inode);
 
-	/*
-	 * For a partial-page truncate, flush the page to disk immediately to
-	 * avoid data corruption during direct disk write.  b=17397
-	 */
-	if ((start & ~PAGE_MASK) != 0)
-                rc = filemap_fdatawrite_range(inode->i_mapping, start, start+1);
+	/* optimize grow case */
+	if (grow) {
+		osd_execute_truncate(obj);
+		GOTO(out, rc);
+	}
 
-        h = journal_current_handle();
-        LASSERT(h != NULL);
-        LASSERT(h == oh->ot_handle);
+	/* add to orphan list to ensure truncate completion
+	 * if this transaction succeed. ldiskfs_truncate()
+	 * will take the inode out of the list */
+	rc = ldiskfs_orphan_add(oh->ot_handle, inode);
+	if (rc != 0)
+		GOTO(out, rc);
 
-	/* do not check credits with osd_trans_exec_check() as the truncate
-	 * can restart the transaction internally and we restart the
-	 * transaction in this case */
+	list_for_each_entry(al, &oh->ot_trunc_locks, tl_list) {
+		if (obj != al->tl_obj)
+			continue;
+		LASSERT(al->tl_shared == 0);
+		found = 1;
+		/* do actual truncate in osd_trans_stop() */
+		al->tl_truncate = 1;
+		break;
+	}
+	LASSERT(found);
 
-        if (tid != h->h_transaction->t_tid) {
-                int credits = oh->ot_credits;
-                /*
-                 * transaction has changed during truncate
-                 * we need to restart the handle with our credits
-                 */
-                if (h->h_buffer_credits < credits) {
-                        if (ldiskfs_journal_extend(h, credits))
-                                rc2 = ldiskfs_journal_restart(h, credits);
-                }
-        }
-
-        RETURN(rc == 0 ? rc2 : rc);
+out:
+	RETURN(rc);
 }
 
 static int fiemap_check_ranges(struct inode *inode,
@@ -2092,3 +2106,111 @@ const struct dt_body_operations osd_body_ops = {
 	.dbo_fiemap_get			= osd_fiemap_get,
 	.dbo_ladvise			= osd_ladvise,
 };
+
+/**
+ * Get a truncate lock
+ *
+ * In order to take multi-transaction truncate out of main transaction we let
+ * the caller grab a lock on the object passed. the lock can be shared (for
+ * writes) and exclusive (for truncate). It's not allowed to mix truncate
+ * and write in the same transaction handle (do not confuse with big ldiskfs
+ * transaction containing lots of handles).
+ * The lock must be taken at declaration.
+ *
+ * \param obj		object to lock
+ * \oh			transaction
+ * \shared		shared or exclusive
+ *
+ * \retval 0		lock is granted
+ * \retval -NOMEM	no memory to allocate lock
+ */
+int osd_trunc_lock(struct osd_object *obj, struct osd_thandle *oh, bool shared)
+{
+	struct osd_access_lock *al, *tmp;
+
+	LASSERT(obj);
+	LASSERT(oh);
+
+	list_for_each_entry(tmp, &oh->ot_trunc_locks, tl_list) {
+		if (tmp->tl_obj != obj)
+			continue;
+		LASSERT(tmp->tl_shared == shared);
+		/* found same lock */
+		return 0;
+	}
+
+	OBD_ALLOC_PTR(al);
+	if (unlikely(al == NULL))
+		return -ENOMEM;
+	al->tl_obj = obj;
+	al->tl_truncate = false;
+	if (shared)
+		down_read(&obj->oo_ext_idx_sem);
+	else
+		down_write(&obj->oo_ext_idx_sem);
+	al->tl_shared = shared;
+
+	list_add(&al->tl_list, &oh->ot_trunc_locks);
+
+	return 0;
+}
+
+void osd_trunc_unlock_all(struct list_head *list)
+{
+	struct osd_access_lock *al, *tmp;
+	list_for_each_entry_safe(al, tmp, list, tl_list) {
+		if (al->tl_shared)
+			up_read(&al->tl_obj->oo_ext_idx_sem);
+		else
+			up_write(&al->tl_obj->oo_ext_idx_sem);
+		list_del(&al->tl_list);
+		OBD_FREE_PTR(al);
+	}
+}
+
+void osd_execute_truncate(struct osd_object *obj)
+{
+	struct inode *inode = obj->oo_inode;
+	__u64 size;
+
+	/* simulate crash before (in the middle) of delayed truncate */
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_FAIL_AT_TRUNCATE)) {
+		struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
+		struct ldiskfs_sb_info *sbi = LDISKFS_SB(inode->i_sb);
+
+		mutex_lock(&sbi->s_orphan_lock);
+		list_del_init(&ei->i_orphan);
+		mutex_unlock(&sbi->s_orphan_lock);
+		return;
+	}
+
+#ifdef HAVE_INODEOPS_TRUNCATE
+	if (inode->i_op->truncate)
+		inode->i_op->truncate(inode);
+	else
+#endif
+		ldiskfs_truncate(inode);
+
+	/*
+	 * For a partial-page truncate, flush the page to disk immediately to
+	 * avoid data corruption during direct disk write.  b=17397
+	 */
+	size = i_size_read(inode);
+	if ((size & ~PAGE_MASK) != 0)
+		filemap_fdatawrite_range(inode->i_mapping, size, size + 1);
+}
+
+void osd_process_truncates(struct list_head *list)
+{
+	struct osd_access_lock *al;
+
+	LASSERT(journal_current_handle() == NULL);
+
+	list_for_each_entry(al, list, tl_list) {
+		if (al->tl_shared)
+			continue;
+		if (!al->tl_truncate)
+			continue;
+		osd_execute_truncate(al->tl_obj);
+	}
+}

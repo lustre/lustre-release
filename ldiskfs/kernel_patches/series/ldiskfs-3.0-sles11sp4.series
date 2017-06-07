@@ -44,3 +44,4 @@ sles11sp1/ext4-notalloc_under_idatasem.patch
 rhel6.5/ext4-fix-journal-quota.patch
 sles11sp3/ext4-dont-check-before-replay.patch
 rhel6.3/ext4-dont-check-in-ro.patch
+rhel7/ext4-export-orphan-add.patch
