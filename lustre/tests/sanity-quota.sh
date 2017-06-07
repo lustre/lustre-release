@@ -74,7 +74,8 @@ check_and_setup_lustre
 is_project_quota_supported() {
 	[ "$(facet_fstype $SINGLEMDS)" == "ldiskfs" ] &&
 		[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.9.55) ] &&
-			egrep -q "7." /etc/redhat-release
+			egrep -q "7." /etc/redhat-release &&
+				man chattr | grep project >&/dev/null
 }
 
 SHOW_QUOTA_USER="$LFS quota -v -u $TSTUSR $DIR"
@@ -101,6 +102,12 @@ lustre_fail() {
 	esac
 
 	do_nodes $NODES "lctl set_param fail_val=$fail_val fail_loc=$fail_loc"
+}
+
+change_project()
+{
+	echo "chattr $*"
+	chattr $* || error "chattr $* failed"
 }
 
 RUNAS="runas -u $TSTID -g $TSTID"
@@ -562,7 +569,7 @@ test_1() {
 
 	$SETSTRIPE $TESTFILE -c 1 || error "setstripe $TESTFILE failed"
 	chown $TSTUSR:$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
-	chattr -p $TSTPRJID $TESTFILE
+	change_project -p $TSTPRJID $TESTFILE
 
 	log "write ..."
 	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) || quota_error p $TSTPRJID \
@@ -674,16 +681,16 @@ test_2() {
 	[ $USED -ne 0 ] &&
 		error "Used inodes($USED) for project $TSTPRJID isn't 0"
 
-	chattr +P $DIR/$tdir/
-	chattr -p $TSTPRJID -d $DIR/$tdir
+	change_project +P $DIR/$tdir/
+	change_project -p $TSTPRJID -d $DIR/$tdir
 	log "Create $LIMIT files ..."
 	$RUNAS createmany -m ${TESTFILE} $((LIMIT-1)) || quota_error p \
 		$TSTPRJID "project create fail, but expect success"
 	log "Create out of file quota ..."
 	$RUNAS touch ${TESTFILE}_xxx && quota_error p $TSTPRJID \
 		"project create success, but expect EDQUOT"
-	chattr -P $DIR/$tdir
-	chattr -p 0 -d $DIR/$tdir
+	change_project -P $DIR/$tdir
+	change_project -p 0 -d $DIR/$tdir
 
 	cleanup_quota_test
 	USED=$(getquota -p $TSTPRJID global curinodes)
@@ -708,7 +715,7 @@ test_block_soft() {
 	$SETSTRIPE $TESTFILE -c 1 -i 0
 	chown $TSTUSR.$TSTUSR $TESTFILE
 	[ "$qtype" == "p" ] && is_project_quota_supported &&
-		chattr -p $TSTPRJID $TESTFILE
+		change_project -p $TSTPRJID $TESTFILE
 
 	echo "Write up to soft limit"
 	$RUNAS $DD of=$TESTFILE count=$LIMIT ||
@@ -774,7 +781,7 @@ test_block_soft() {
 
 	$SETSTRIPE $TESTFILE -c 1 -i 0
 	chown $TSTUSR.$TSTUSR $TESTFILE
-	[ "$qtype" == "p" ] && chattr -p $TSTPRJID $TESTFILE
+	[ "$qtype" == "p" ] && change_project -p $TSTPRJID $TESTFILE
 
 	echo "Write ..."
 	$RUNAS $DD of=$TESTFILE count=$LIMIT ||
@@ -855,8 +862,8 @@ test_file_soft() {
 
 	setup_quota_test
 	trap cleanup_quota_test EXIT
-	is_project_quota_supported && chattr +P $DIR/$tdir/ &&
-		chattr -p $TSTPRJID -d $DIR/$tdir
+	is_project_quota_supported && change_project +P $DIR/$tdir/ &&
+		change_project -p $TSTPRJID -d $DIR/$tdir
 
 	echo "Create files to exceed soft limit"
 	$RUNAS createmany -m ${TESTFILE}_ $((LIMIT + 1)) ||
@@ -1055,9 +1062,9 @@ test_5() {
 	echo "Create more than $ILIMIT files and more than $BLIMIT MB ..."
 	createmany -m $DIR/$tdir/$tfile-0_ $((ILIMIT + 1)) ||
 		error "create failure, expect success"
-	if [ "$(facet_fstype $singlemds)" == "ldiskfs" ]; then
+	if is_project_quota_supported; then
 		touch $DIR/$tdir/$tfile-0_1
-		chattr -p $TSTPRJID $DIR/$tdir/$tfile-0_1
+		change_project -p $TSTPRJID $DIR/$tdir/$tfile-0_1
 	fi
 	$DD of=$DIR/$tdir/$tfile-0_1 count=$((BLIMIT+1)) ||
 		error "write failure, expect success"
@@ -1500,7 +1507,8 @@ test_8() {
 	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR ||
 		error "set group quota failed"
 	if is_project_quota_supported; then
-		chattr +P $DIR/$tdir && chattr -p $TSTPRJID -d $DIR/$tdir
+		change_project +P $DIR/$tdir && change_project -p \
+			$TSTPRJID -d $DIR/$tdir
 		echo "Set enough high limit for project: $TSTPRJID"
 		$LFS setquota -p $TSTPRJID -b 0 \
 			-B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR ||
@@ -1512,8 +1520,8 @@ test_8() {
 	$RUNAS bash rundbench -D $DIR/$tdir 3 $duration ||
 		quota_error a $TSTUSR "dbench failed!"
 
-	is_project_quota_supported && chattr -P $DIR/$tdir &&
-	chattr -dp 0 $DIR/$tdir
+	is_project_quota_supported && change_project -P $DIR/$tdir &&
+	change_project -dp 0 $DIR/$tdir
 	cleanup_quota_test
 	resetquota -u $TSTUSR
 	resetquota -g $TSTUSR
@@ -2388,10 +2396,14 @@ test_33() {
 		$RUNAS $DD of=$DIR/$tdir/$tfile-$i count=$BLK_CNT 2>/dev/null ||
 			error "write failed"
 			is_project_quota_supported &&
-				chattr -p $TSTPRJID $DIR/$tdir/$tfile-$i
+				change_project -p $TSTPRJID $DIR/$tdir/$tfile-$i
 		echo "Iteration $i/$INODES completed"
 	done
 	cancel_lru_locks osc
+
+	echo "Wait for setattr on objects finished..."
+	wait_delete_completed
+
 	sync; sync_all_data || true
 
 	echo "Verify disk usage after write"
@@ -2505,9 +2517,9 @@ test_34() {
 	echo "Wait for setattr on objects finished..."
 	wait_delete_completed
 
-	echo "chattr project id to $TSTPRJID"
+	echo "change_project project id to $TSTPRJID"
 	[ $project_supported == "yes" ] &&
-		chattr -p $TSTPRJID $DIR/$tdir/$tfile
+		change_project -p $TSTPRJID $DIR/$tdir/$tfile
 	echo "Wait for setattr on objects finished..."
 	wait_delete_completed
 
@@ -2542,8 +2554,12 @@ test_35() {
 	$RUNAS $DD of=$DIR/$tdir/$tfile count=$BLK_CNT 2>/dev/null ||
 		error "write failed"
 	is_project_quota_supported &&
-		chattr -p $TSTPRJID $DIR/$tdir/$tfile
+		change_project -p $TSTPRJID $DIR/$tdir/$tfile
 	cancel_lru_locks osc
+
+	echo "Wait for setattr on objects finished..."
+	wait_delete_completed
+
 	sync; sync_all_data || true
 
 	echo "Save disk usage before restart"
@@ -2721,7 +2737,7 @@ test_39() {
 	projectid=$(lsattr -p $TESTFILE | awk '{print $1}')
 	[ $projectid -ne 0 ] &&
 		error "Project id should be 0 not $projectid"
-	chattr -p 1024 $TESTFILE
+	change_project -p 1024 $TESTFILE
 	projectid=$(lsattr -p $TESTFILE | awk '{print $1}')
 	[ $projectid -ne 1024 ] &&
 		error "Project id should be 1024 not $projectid"
@@ -2746,8 +2762,8 @@ test_40a() {
 	setup_quota_test || error "setup quota failed with $?"
 
 	mkdir -p $dir1 $dir2
-	chattr +P $dir1 && chattr -p 1 -d $dir1 && touch $dir1/1
-	chattr +P $dir2 && chattr -p 2 -d $dir2
+	change_project +P $dir1 && change_project -p 1 -d $dir1 && touch $dir1/1
+	change_project +P $dir2 && change_project -p 2 -d $dir2
 
 	ln $dir1/1 $dir2/1_link &&
 		error "Hard link across different project quota should fail"
@@ -2765,8 +2781,8 @@ test_40b() {
 
 	setup_quota_test || error "setup quota failed with $?"
 	mkdir -p $dir1 $dir2
-	chattr +P $dir1 && chattr -p 1 -d $dir1 && touch $dir1/1
-	chattr +P $dir2 && chattr -p 2 -d $dir2
+	change_project +P $dir1 && change_project -p 1 -d $dir1 && touch $dir1/1
+	change_project +P $dir2 && change_project -p 2 -d $dir2
 
 	mv $dir1/1 $dir2/2 || error "mv failed $?"
 	local projid=$(lsattr -p $dir2/2 | awk '{print $1}')
@@ -2786,7 +2802,7 @@ test_40c() {
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
 
-	mkdir -p $dir && chattr +P $dir && chattr -dp 1 $dir
+	mkdir -p $dir && change_project +P $dir && change_project -dp 1 $dir
 	$LFS mkdir -i 1 $dir/remote_dir || error "create remote dir failed"
 	local projid=$(lsattr -dp $dir/remote_dir | awk '{print $1}')
 	[ "$projid" != "1" ] && error "projid id expected 1 not $projid"
@@ -2814,7 +2830,7 @@ test_50() {
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
 
-	mkdir $dir && chattr -dp 1 $dir
+	mkdir $dir && change_project -dp 1 $dir
 	count=$($LFS find --projid 1 $DIR | wc -l)
 	[ "$count" != 1 ] && error "expected 1 but got $count"
 
@@ -2829,7 +2845,7 @@ test_51() {
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
 
-	mkdir $dir && chattr -dp 1 $dir && chattr +P $dir
+	mkdir $dir && change_project -dp 1 $dir && change_project +P $dir
 	local used=$(getquota -p 1 global curinodes)
 	[ $used != "1" ] &&  error "expected 1 got $used"
 
@@ -2860,7 +2876,7 @@ test_52() {
 		skip "Project quota is not supported" && return 0
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
-	mkdir $dir && chattr -dp 1 $dir && chattr +P $dir
+	mkdir $dir && change_project -dp 1 $dir && change_project +P $dir
 
 	touch $DIR/$tdir/file
 	#Try renaming a file into the project.  This should fail.
