@@ -384,7 +384,7 @@ static int cfs_ptengine_padata_init(struct cfs_ptask_engine *engine,
 	}
 
 	engine->pte_weight = cpumask_weight(par_mask);
-	engine->pte_pinst  = padata_alloc(engine->pte_wq, par_mask, all_mask);
+	engine->pte_pinst  = padata_alloc_possible(engine->pte_wq);
 	if (engine->pte_pinst == NULL)
 		GOTO(err_free_par_mask, rc = -ENOMEM);
 
@@ -393,6 +393,10 @@ static int cfs_ptengine_padata_init(struct cfs_ptask_engine *engine,
 					      &engine->pte_notifier);
 	if (rc)
 		GOTO(err_free_padata, rc);
+
+	rc = cfs_ptengine_set_cpumask(engine, par_mask);
+	if (rc)
+		GOTO(err_unregister, rc);
 
 	rc = padata_start(engine->pte_pinst);
 	if (rc)
