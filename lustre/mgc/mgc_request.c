@@ -296,6 +296,10 @@ static struct config_llog_data *config_log_find_or_add(struct obd_device *obd,
 	struct config_llog_data		*cld;
 
 	lcfg.cfg_instance = sb != NULL ? (void *)sb : (void *)obd;
+
+	if (type == CONFIG_T_SPTLRPC)
+		lcfg.cfg_instance = NULL;
+
 	cld = config_log_find(logname, &lcfg);
 	if (unlikely(cld != NULL))
 		return cld;
