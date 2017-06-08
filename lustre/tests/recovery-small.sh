@@ -3,7 +3,7 @@
 set -e
 
 #         bug  5493  LU2034
-ALWAYS_EXCEPT="52    60      $RECOVERY_SMALL_EXCEPT"
+ALWAYS_EXCEPT="52 $RECOVERY_SMALL_EXCEPT"
 
 export MULTIOP=${MULTIOP:-multiop}
 PTLDEBUG=${PTLDEBUG:--1}
@@ -1436,63 +1436,47 @@ test_59() { # bug 10589
 }
 run_test 59 "Read cancel race on client eviction"
 
-err17935 () {
-	# we assume that all md changes are in the MDT0 changelog
-	if [ $MDSCOUNT -gt 1 ]; then
-		error_ignore bz17935 $*
-	else
-		error $*
-	fi
-}
-
 test_60() {
-	MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid |
-		awk '{ gsub(/_UUID/,""); print $1 }' | head -n1)
-
-	NUM_FILES=15000
-	mkdir -p $DIR/$tdir
+	local num_files=${COUNT:-5000}
+	test_mkdir $DIR/$tdir
 
 	# Register (and start) changelog
-	USER=$(do_facet $SINGLEMDS lctl --device $MDT0 changelog_register -n)
-	echo "Registered as $MDT0 changelog user $USER"
+	changelog_register || error "changelog_register failed"
 
 	# Generate a large number of changelog entries
-	createmany -o $DIR/$tdir/$tfile $NUM_FILES
+	createmany -o $DIR/$tdir/$tfile $num_files
 	sync
 	sleep 5
 
 	# Unlink files in the background
-	unlinkmany $DIR/$tdir/$tfile $NUM_FILES	&
-	CLIENT_PID=$!
+	unlinkmany $DIR/$tdir/$tfile $num_files &
+	local client_pid=$!
 	sleep 1
 
 	# Failover the MDS while unlinks are happening
 	facet_failover $SINGLEMDS
 
 	# Wait for unlinkmany to finish
-	wait $CLIENT_PID
+	wait $client_pid
 
 	# Check if all the create/unlink events were recorded
 	# in the changelog
-	$LFS changelog $MDT0 >> $DIR/$tdir/changelog
-	local cl_count=$(grep UNLNK $DIR/$tdir/changelog | wc -l)
-	echo "$cl_count unlinks in $MDT0 changelog"
+	local cl_count=$(changelog_dump | grep -c UNLNK)
+	echo "$cl_count unlinks in changelog"
 
-	do_facet $SINGLEMDS lctl --device $MDT0 changelog_deregister $USER
-	USERS=$(( $(do_facet $SINGLEMDS lctl get_param -n \
-	    mdd.$MDT0.changelog_users | wc -l) - 2 ))
-	if [ $USERS -eq 0 ]; then
-	    [ $cl_count -eq $NUM_FILES ] || \
-		err17935 "Recorded ${cl_count} unlinks out of $NUM_FILES"
-	    # Also make sure we can clear large changelogs
-	    cl_count=$($LFS changelog $FSNAME | wc -l)
-	    [ $cl_count -le 2 ] || \
-		error "Changelog not empty: $cl_count entries"
-	else
-	    # If there are other users, there may be other unlinks in the log
-	    [ $cl_count -ge $NUM_FILES ] || \
-		err17935 "Recorded ${cl_count} unlinks out of $NUM_FILES"
-	    echo "$USERS other changelog users; can't verify clear"
+	changelog_deregister || error "changelog_deregister failed"
+	if ! changelog_users $SINGLEMDS | grep -q "^cl"; then
+		[ $cl_count -eq $num_files ] ||
+			error "Recorded $cl_count of $num_files unlinks"
+		# Also make sure we can clear large changelogs
+		cl_count=$(changelog_dump | wc -l)
+		[ $cl_count -le 2 ] ||
+			error "Changelog not empty: $cl_count entries"
+	else # If other users, there may be other unlinks in the log
+		[ $cl_count -ge $num_files ] ||
+			error "Recorded $cl_count of $num_files unlinks"
+		changelog_users $SINGLEMDS
+		echo "other changelog users; can't verify clear"
 	fi
 }
 run_test 60 "Add Changelog entries during MDS failover"

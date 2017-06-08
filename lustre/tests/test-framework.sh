@@ -6358,7 +6358,7 @@ restore_lustre_params() {
 	local val
 
 	while IFS=" =" read facet name val; do
-		do_facet $facet "$LCTL set_param -n $name $val"
+		do_facet $facet "$LCTL set_param -n $name=$val"
 	done
 }
 
@@ -8562,7 +8562,145 @@ check_clients_full() {
 	done
 }
 
-# restore the layout saved by save_layout(). Only work with directories
+#Changelogs
+__changelog_deregister() {
+	local facet=$1
+	local mdt="$(facet_svc $facet)"
+	local cl_user=$2
+	local rc=0
+
+	# skip cleanup if no user registered for this MDT
+	[ -z "$cl_user" ] && echo "$mdt: no changelog user" && return 0
+	# user is no longer registered, skip cleanup
+	changelog_users "$facet" | grep -q "$cl_user" ||
+		{ echo "$mdt: changelog user '$cl_user' not found"; return 0; }
+
+	# From this point, if any operation fails, it is an error
+	__changelog_clear $facet $cl_user 0 ||
+		error_noexit "$mdt: changelog_clear $cl_user 0 fail: $rc"
+	do_facet $facet $LCTL --device $mdt changelog_deregister $cl_user ||
+		error_noexit "$mdt: changelog_deregister '$cl_user' fail: $rc"
+}
+
+declare -Ax CL_USERS
+changelog_register() {
+	for M in $(seq $MDSCOUNT); do
+		local facet=mds$M
+		local mdt="$(facet_svc $facet)"
+		stack_trap "do_facet $facet $LCTL \
+			set_param mdd.$mdt.changelog_mask=-hsm" EXIT
+		do_facet $facet $LCTL set_param mdd.$mdt.changelog_mask=+hsm ||
+			error "$mdt: changelog_mask=+hsm failed: $?"
+
+		local cl_user
+		cl_user=$(do_facet $facet \
+				  $LCTL --device $mdt changelog_register -n) ||
+			error "$mdt: register changelog user failed: $?"
+		stack_trap "__changelog_deregister $facet $cl_user" EXIT
+
+		stack_trap "CL_USERS[$facet]='${CL_USERS[$facet]}'" EXIT
+		# Bash does not support nested arrays, but the format of a
+		# cl_user is constrained enough to use whitespaces as separators
+		CL_USERS[$facet]+="$cl_user "
+	done
+	echo "Registered $MDSCOUNT changelog users: '${CL_USERS[@]% }'"
+}
+
+changelog_deregister() {
+	local cl_user
+
+	for facet in "${!CL_USERS[@]}"; do
+		for cl_user in ${CL_USERS[$facet]}; do
+			__changelog_deregister $facet $cl_user || return $?
+		done
+		unset CL_USERS[$facet]
+	done
+}
+
+changelog_users() {
+	local facet=$1
+	local service=$(facet_svc $facet)
+
+	do_facet $facet $LCTL get_param -n mdd.$service.changelog_users
+}
+
+changelog_user_rec() {
+	local facet=$1
+	local cl_user=$2
+	local service=$(facet_svc $facet)
+
+	changelog_users $facet | awk '$1 == "'$cl_user'" { print $2 }'
+}
+
+changelog_chmask() {
+	local mask=$1
+
+	do_nodes $(comma_list $(mdts_nodes)) \
+		$LCTL set_param mdd.*.changelog_mask="$mask"
+}
+
+# usage: __changelog_clear FACET CL_USER [+]INDEX
+__changelog_clear()
+{
+	local facet=$1
+	local mdt="$(facet_svc $facet)"
+	local cl_user=$2
+	local -i rec
+
+	case "$3" in
+	+*)
+		# Remove the leading '+'
+		rec=${3:1}
+		rec+=$(changelog_user_rec $facet $cl_user)
+		;;
+	*)
+		rec=$3
+		;;
+	esac
+
+	if [ $rec -eq 0 ]; then
+		echo "$mdt: clear the changelog for $cl_user of all records"
+	else
+		echo "$mdt: clear the changelog for $cl_user to record #$rec"
+	fi
+	$LFS changelog_clear $mdt $cl_user $rec
+}
+
+# usage: changelog_clear [+]INDEX
+#
+# If INDEX is prefixed with '+', increment every changelog user's record index
+# by INDEX. Otherwise, clear the changelog up to INDEX for every changelog
+# users.
+changelog_clear() {
+	local rc
+	for facet in ${!CL_USERS[@]}; do
+		for cl_user in ${CL_USERS[$facet]}; do
+			__changelog_clear $facet $cl_user $1 || rc=${rc:-$?}
+		done
+	done
+
+	return ${rc:-0}
+}
+
+changelog_dump() {
+	for M in $(seq $MDSCOUNT); do
+		local facet=mds$M
+		local mdt="$(facet_svc $facet)"
+
+		$LFS changelog $mdt | sed -e 's/^/'$mdt'./'
+	done
+}
+
+changelog_extract_field() {
+	local cltype=$1
+	local file=$2
+	local identifier=$3
+
+	changelog_dump | gawk "/$cltype.*$file$/ {
+		print gensub(/^.* "$identifier'(\[[^\]]*\]).*$/,"\\1",1)}' |
+		tail -1
+}
+
 restore_layout() {
 	local dir=$1
 	local layout=$2

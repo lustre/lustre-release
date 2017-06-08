@@ -621,14 +621,14 @@ mdts_check_param() {
 }
 
 changelog_setup() {
-	CL_USERS=()
+	_CL_USERS=()
 	local mdtno
 	for mdtno in $(seq 1 $MDSCOUNT); do
 		local idx=$(($mdtno - 1))
 		local cl_user=$(do_facet mds${mdtno} $LCTL \
 			     --device ${MDT[$idx]} \
 			     changelog_register -n)
-		CL_USERS+=($cl_user)
+		_CL_USERS+=($cl_user)
 		do_facet mds${mdtno} lctl set_param \
 			mdd.${MDT[$idx]}.changelog_mask="+hsm"
 		$LFS changelog_clear ${MDT[$idx]} $cl_user 0
@@ -639,12 +639,12 @@ changelog_cleanup() {
 	local mdtno
 	for mdtno in $(seq 1 $MDSCOUNT); do
 		local idx=$(($mdtno - 1))
-		[[ -z  ${CL_USERS[$idx]} ]] && continue
-		$LFS changelog_clear ${MDT[$idx]} ${CL_USERS[$idx]} 0
+		[[ -z  ${_CL_USERS[$idx]} ]] && continue
+		$LFS changelog_clear ${MDT[$idx]} ${_CL_USERS[$idx]} 0
 		do_facet mds${mdtno} lctl --device ${MDT[$idx]} \
-			changelog_deregister ${CL_USERS[$idx]}
+			changelog_deregister ${_CL_USERS[$idx]}
 	done
-	CL_USERS=()
+	_CL_USERS=()
 }
 
 changelog_get_flags() {

@@ -118,8 +118,6 @@ check_and_setup_lustre
 DIR=${DIR:-$MOUNT}
 assert_DIR
 
-MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid |
-	awk '{ gsub(/_UUID/,""); print $1 }' | head -n1)
 MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
 
 [ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
@@ -543,11 +541,7 @@ test_17h() { #bug 17378
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	local mdt_idx
 	test_mkdir $DIR/$tdir
-	if [[ $MDSCOUNT -gt 1 ]]; then
-		mdt_idx=$($LFS getdirstripe -i $DIR/$tdir)
-	else
-		mdt_idx=0
-	fi
+	mdt_idx=$($LFS getdirstripe -i $DIR/$tdir)
 	$LFS setstripe -c -1 $DIR/$tdir
 	#define OBD_FAIL_MDS_LOV_PREP_CREATE 0x141
 	do_facet mds$((mdt_idx + 1)) lctl set_param fail_loc=0x80000141
@@ -561,18 +555,14 @@ test_17i() { #bug 20018
 	test_mkdir -c1 $DIR/$tdir
 	local foo=$DIR/$tdir/$tfile
 	local mdt_idx
-	if [[ $MDSCOUNT -gt 1 ]]; then
-		mdt_idx=$($LFS getdirstripe -i $DIR/$tdir)
-	else
-		mdt_idx=0
-	fi
+	mdt_idx=$($LFS getdirstripe -i $DIR/$tdir)
 	ln -s $foo $foo || error "create symlink failed"
 #define OBD_FAIL_MDS_READLINK_EPROTO     0x143
 	do_facet mds$((mdt_idx + 1)) lctl set_param fail_loc=0x80000143
 	ls -l $foo && error "error not detected"
 	return 0
 }
-run_test 17i "don't panic on short symlink"
+run_test 17i "don't panic on short symlink (should return error)"
 
 test_17k() { #bug 22301
 	[[ -z "$(which rsync 2>/dev/null)" ]] &&
@@ -1557,7 +1547,7 @@ run_test 27m "create file while OST0 was full"
 
 sleep_maxage() {
 	local delay=$(do_facet $SINGLEMDS lctl get_param -n lov.*.qos_maxage |
-		      head -n 1 | awk '{ print $1 * 2 }')
+		      awk '{ print $1 * 2; exit; }')
 	sleep $delay
 }
 
@@ -11032,11 +11022,9 @@ dot_lustre_fid_permission_check() {
 	rm -f $test_dir/$tfile.1
 	echo "truncate fid $fid"
 	$TRUNCATE $ffid 777 || error "truncate $ffid failed."
-	if [ $MDSCOUNT -lt 2 ]; then #FIXME when cross-MDT hard link is working
-		echo "link fid $fid"
-		ln -f $ffid $test_dir/tfile.lnk || error "link $ffid failed."
-	fi
-	if [ -n $(lctl get_param -n mdc.*-mdc-*.connect_flags | grep acl) ]; then
+	echo "link fid $fid"
+	ln -f $ffid $test_dir/tfile.lnk || error "link $ffid failed."
+	if [[ $($LCTL get_param -n mdc.*-mdc-*.connect_flags) =~ acl ]]; then
 		echo "setfacl fid $fid"
 		setfacl -R -m u:bin:rwx $ffid || error "setfacl $ffid failed."
 		echo "getfacl fid $fid"
@@ -11710,141 +11698,122 @@ test_156() {
 }
 run_test 156 "Verification of tunables"
 
-#Changelogs
-cleanup_changelog () {
-	trap 0
-	echo "Deregistering changelog client $CL_USER"
-	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister $CL_USER
-}
-
-err17935 () {
-	if [[ $MDSCOUNT -gt 1 ]]; then
-		error_ignore bz17935 $*
-	else
-		error $*
-	fi
-}
-
-changelog_chmask()
-{
-	local CL_MASK_PARAM="mdd.$MDT0.changelog_mask"
-
-	MASK=$(do_facet $SINGLEMDS $LCTL get_param $CL_MASK_PARAM| grep -c "$1")
-
-	if [ $MASK -eq 1 ]; then
-		do_facet $SINGLEMDS $LCTL set_param $CL_MASK_PARAM="-$1"
-	else
-		do_facet $SINGLEMDS $LCTL set_param $CL_MASK_PARAM="+$1"
-	fi
-}
-
-changelog_extract_field() {
-	local mdt=$1
-	local cltype=$2
-	local file=$3
-	local identifier=$4
-
-	$LFS changelog $mdt | gawk "/$cltype.*$file$/ {
-		print gensub(/^.* "$identifier'(\[[^\]]*\]).*$/,"\\1",1)}' |
-		tail -1
-}
-
 test_160a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] ||
 		{ skip "Need MDS version at least 2.2.0"; return; }
 
-	local CL_USERS="mdd.$MDT0.changelog_users"
-	local GET_CL_USERS="do_facet $SINGLEMDS $LCTL get_param -n $CL_USERS"
-	CL_USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
-		changelog_register -n)
-	echo "Registered as changelog user $CL_USER"
-	trap cleanup_changelog EXIT
-	$GET_CL_USERS | grep -q $CL_USER ||
-		error "User $CL_USER not found in changelog_users"
+	changelog_register || error "changelog_register failed"
+	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+	changelog_users $SINGLEMDS | grep -q $cl_user ||
+		error "User $cl_user not found in changelog_users"
 
 	# change something
 	test_mkdir -p $DIR/$tdir/pics/2008/zachy
-	touch $DIR/$tdir/pics/2008/zachy/timestamp
-	cp /etc/hosts $DIR/$tdir/pics/2008/zachy/pic1.jpg
+	changelog_clear 0 || error "changelog_clear failed"
+	touch $DIR/$tdir/pics/2008/zachy/$tfile			# open 1
+	cp /etc/hosts $DIR/$tdir/pics/2008/zachy/pic1.jpg	# open 2
 	mv $DIR/$tdir/pics/2008/zachy $DIR/$tdir/pics/zach
 	ln $DIR/$tdir/pics/zach/pic1.jpg $DIR/$tdir/pics/2008/portland.jpg
 	ln -s $DIR/$tdir/pics/2008/portland.jpg $DIR/$tdir/pics/desktop.jpg
 	rm $DIR/$tdir/pics/desktop.jpg
 
-	$LFS changelog $MDT0 | tail -5
+	changelog_dump | tail -10
 
 	echo "verifying changelog mask"
-	changelog_chmask "MKDIR"
-	changelog_chmask "CLOSE"
+	changelog_chmask "-MKDIR"
+	changelog_chmask "-CLOSE"
 
-	test_mkdir -p $DIR/$tdir/pics/zach/sofia
-	echo "zzzzzz" > $DIR/$tdir/pics/zach/file
+	test_mkdir -p $DIR/$tdir/pics/zach/sofia		# not logged
+	echo "zzzzzz" > $DIR/$tdir/pics/zach/file		# not logged
 
-	changelog_chmask "MKDIR"
-	changelog_chmask "CLOSE"
+	changelog_chmask "+MKDIR"
+	changelog_chmask "+CLOSE"
 
-	test_mkdir -p $DIR/$tdir/pics/2008/sofia
-	echo "zzzzzz" > $DIR/$tdir/pics/zach/file
+	test_mkdir -p $DIR/$tdir/pics/2008/sofia		# mkdir 1
+	echo "zzzzzz" > $DIR/$tdir/pics/zach/file		# open 3
 
-	$LFS changelog $MDT0
-	MKDIRS=$($LFS changelog $MDT0 | tail -5 | grep -c "MKDIR")
-	CLOSES=$($LFS changelog $MDT0 | tail -5 | grep -c "CLOSE")
-	[ $MKDIRS -eq 1 ] || err17935 "MKDIR changelog mask count $DIRS != 1"
-	[ $CLOSES -eq 1 ] || err17935 "CLOSE changelog mask count $DIRS != 1"
+	changelog_dump | tail -10
+	MKDIRS=$(changelog_dump | grep -c "MKDIR")
+	CLOSES=$(changelog_dump | grep -c "CLOSE")
+	[ $MKDIRS -eq 1 ] || error "MKDIR changelog mask count $MKDIRS != 1"
+	[ $CLOSES -eq 3 ] || error "CLOSE changelog mask count $CLOSES != 3"
 
 	# verify contents
 	echo "verifying target fid"
-	fidc=$(changelog_extract_field $MDT0 "CREAT" "timestamp" "t=")
-	fidf=$($LFS path2fid $DIR/$tdir/pics/zach/timestamp)
+	local fidc=$(changelog_extract_field "CREAT" "$tfile" "t=")
+	local fidf=$($LFS path2fid $DIR/$tdir/pics/zach/$tfile)
 	[ "$fidc" == "$fidf" ] ||
-		err17935 "fid in changelog $fidc != file fid $fidf"
+		error "changelog '$tfile' fid $fidc != file fid $fidf"
 	echo "verifying parent fid"
-	fidc=$(changelog_extract_field $MDT0 "CREAT" "timestamp" "p=")
-	fidf=$($LFS path2fid $DIR/$tdir/pics/zach)
-	[ "$fidc" == "$fidf" ] ||
-		err17935 "pfid in changelog $fidc != dir fid $fidf"
+	# The FID returned from the Changelog may be the directory shard on
+	# a different MDT, and not the FID returned by path2fid on the parent.
+	# Instead of comparing FIDs, verify that fid2path(fidp) is correct,
+	# since this is what will matter when recreating this file in the tree.
+	local fidp=$(changelog_extract_field "CREAT" "$tfile" "p=")
+	local pathp=$($LFS fid2path $MOUNT "$fidp")
+	[ "${pathp%/}" == "$DIR/$tdir/pics/zach" ] ||
+		error "changelog fid2path($fidc) $pathp != $DIR/$tdir/pics/zach"
 
-	USER_REC1=$($GET_CL_USERS | awk "\$1 == \"$CL_USER\" {print \$2}")
-	$LFS changelog_clear $MDT0 $CL_USER $(($USER_REC1 + 5))
-	USER_REC2=$($GET_CL_USERS | awk "\$1 == \"$CL_USER\" {print \$2}")
-	echo "verifying user clear: $(( $USER_REC1 + 5 )) == $USER_REC2"
-	[ $USER_REC2 == $(($USER_REC1 + 5)) ] ||
-		err17935 "user index expected $(($USER_REC1 + 5)) is $USER_REC2"
+	echo "getting records for $cl_user"
+	changelog_users $SINGLEMDS
+	local user_rec1=$(changelog_user_rec $SINGLEMDS $cl_user)
+	local nclr=3
+	__changelog_clear $SINGLEMDS $cl_user +$nclr ||
+		error "changelog_clear failed"
+	local user_rec2=$(changelog_user_rec $SINGLEMDS $cl_user)
+	echo "verifying user clear: $user_rec1 + $nclr == $user_rec2"
+	[ $user_rec2 == $((user_rec1 + nclr)) ] ||
+		error "user index expect $user_rec1 + $nclr != $user_rec2"
 
-	MIN_REC=$($GET_CL_USERS |
-		awk 'min == "" || $2 < min {min = $2}; END {print min}')
-	FIRST_REC=$($LFS changelog $MDT0 | head -n1 | awk '{print $1}')
-	echo "verifying min purge: $(( $MIN_REC + 1 )) == $FIRST_REC"
-	[ $FIRST_REC == $(($MIN_REC + 1)) ] ||
-		err17935 "first index should be $(($MIN_REC + 1)) is $FIRST_REC"
+	local min0_rec=$(changelog_users $SINGLEMDS |
+		awk 'min == "" || $2 < min { min = $2 }; END { print min }')
+	local first_rec=$($LFS changelog $(facet_svc $SINGLEMDS) |
+			  awk '{ print $1; exit; }')
+
+	changelog_dump | tail -n 5
+	echo "verifying user min purge: $min0_rec + 1 == $first_rec"
+	[ $first_rec == $((min0_rec + 1)) ] ||
+		error "first index should be $min0_rec + 1 not $first_rec"
 
 	# LU-3446 changelog index reset on MDT restart
-	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
-	CUR_REC1=$($GET_CL_USERS | head -n1 | cut -f3 -d' ')
-	$LFS changelog_clear $MDT0 $CL_USER 0
-	stop $SINGLEMDS || error "Fail to stop MDT."
-	start $SINGLEMDS $MDT_DEV $MDS_MOUNT_OPTS || error "Fail to start MDT."
-	CUR_REC2=$($GET_CL_USERS | head -n1 | cut -f3 -d' ')
-	echo "verifying index survives MDT restart: $CUR_REC1 == $CUR_REC2"
-	[ $CUR_REC1 == $CUR_REC2 ] ||
-		err17935 "current index should be $CUR_REC1 is $CUR_REC2"
+	local cur_rec1=$(changelog_users $SINGLEMDS |
+			 awk '/^current.index:/ { print $NF }')
+	changelog_clear 0 ||
+		error "clear all changelog records for $cl_user failed"
+	stop $SINGLEMDS || error "Fail to stop $SINGLEMDS"
+	start $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) $MDS_MOUNT_OPTS ||
+		error "Fail to start $SINGLEMDS"
+	local cur_rec2=$(changelog_users $SINGLEMDS |
+			 awk '/^current.index:/ { print $NF }')
+	echo "verifying index survives MDT restart: $cur_rec1 == $cur_rec2"
+	[ $cur_rec1 == $cur_rec2 ] ||
+		error "current index should be $cur_rec1 not $cur_rec2"
 
-	echo "verifying user deregister"
-	cleanup_changelog
-	$GET_CL_USERS | grep -q $CL_USER &&
-		error "User $CL_USER still in changelog_users"
+	echo "verifying users from this test are deregistered"
+	changelog_deregister || error "changelog_deregister failed"
+	changelog_users $SINGLEMDS | grep -q $cl_user &&
+		error "User '$cl_user' still in changelog_users"
 
-	USERS=$(( $($GET_CL_USERS | wc -l) - 2 ))
-	if [ $CL_USER -eq 0 ]; then
-		LAST_REC1=$($GET_CL_USERS | head -n1 | cut -f3 -d' ')
+	# lctl get_param -n mdd.*.changelog_users
+	# current index: 144
+	# ID    index (idle seconds)
+	# cl3   144 (2)
+	if ! changelog_users $SINGLEMDS | grep "^cl"; then
+		# this is the normal case where all users were deregistered
+		# make sure no new records are added when no users are present
+		local last_rec1=$(changelog_users $SINGLEMDS |
+				  awk '/^current.index:/ { print $NF }')
 		touch $DIR/$tdir/chloe
-		LAST_REC2=$($GET_CL_USERS | head -n1 | cut -f3 -d' ')
-		echo "verify changelogs are off: $LAST_REC1 == $LAST_REC2"
-		[ $LAST_REC1 == $LAST_REC2 ] || error "changelogs not off"
+		local last_rec2=$(changelog_users $SINGLEMDS |
+				  awk '/^current.index:/ { print $NF }')
+		echo "verify changelogs are off: $last_rec1 == $last_rec2"
+		[ $last_rec1 == $last_rec2 ] || error "changelogs not off"
 	else
-		echo "$CL_USER other changelog users; can't verify off"
+		# any changelog users must be leftovers from a previous test
+		changelog_users $SINGLEMDS
+		echo "other changelog users; can't verify off"
 	fi
 }
 run_test 160a "changelog sanity"
@@ -11855,27 +11824,22 @@ test_160b() { # LU-3587
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] ||
 		{ skip "Need MDS version at least 2.2.0"; return; }
 
-	local CL_USERS="mdd.$MDT0.changelog_users"
-	local GET_CL_USERS="do_facet $SINGLEMDS $LCTL get_param -n $CL_USERS"
-	CL_USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
-		changelog_register -n)
-	echo "Registered as changelog user $CL_USER"
-	trap cleanup_changelog EXIT
-	$GET_CL_USERS | grep -q $CL_USER ||
-		error "User $CL_USER not found in changelog_users"
+	changelog_register || error "changelog_register failed"
+	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+	changelog_users $SINGLEMDS | grep -q $cl_user ||
+		error "User '$cl_user' not found in changelog_users"
 
-	local LONGNAME1=$(str_repeat a 255)
-	local LONGNAME2=$(str_repeat b 255)
+	local longname1=$(str_repeat a 255)
+	local longname2=$(str_repeat b 255)
 
 	cd $DIR
 	echo "creating very long named file"
-	touch $LONGNAME1 || error "create of $LONGNAME1 failed"
-	echo "moving very long named file"
-	mv $LONGNAME1 $LONGNAME2
+	touch $longname1 || error "create of '$longname1' failed"
+	echo "renaming very long named file"
+	mv $longname1 $longname2
 
-	$LFS changelog $MDT0 | grep RENME
-	rm -f $LONGNAME2
-	cleanup_changelog
+	changelog_dump | grep RENME | tail -n 5
+	rm -f $longname2
 }
 run_test 160b "Verify that very long rename doesn't crash in changelog"
 
@@ -11892,24 +11856,18 @@ test_160c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 
 	# Registration step
-	CL_USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
-		changelog_register -n)
-	trap cleanup_changelog EXIT
+	changelog_register || error "changelog_register failed"
 
 	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
 	$MCREATE $DIR/$tdir/foo_160c
-	changelog_chmask "TRUNC"
+	changelog_chmask "-TRUNC"
 	$TRUNCATE $DIR/$tdir/foo_160c 200
-	changelog_chmask "TRUNC"
+	changelog_chmask "+TRUNC"
 	$TRUNCATE $DIR/$tdir/foo_160c 199
-	$LFS changelog $MDT0
-	TRUNCS=$($LFS changelog $MDT0 | tail -5 | grep -c "TRUNC")
-	[ $TRUNCS -eq 1 ] || err17935 "TRUNC changelog mask count $TRUNCS != 1"
-	$LFS changelog_clear $MDT0 $CL_USER 0
-
-	# Deregistration step
-	cleanup_changelog
+	changelog_dump | tail -n 5
+	local truncs=$(changelog_dump | tail -n 5 | grep -c TRUNC)
+	[ $truncs -eq 1 ] || error "TRUNC changelog mask count $truncs != 1"
 }
 run_test 160c "verify that changelog log catch the truncate event"
 
@@ -11917,30 +11875,20 @@ test_160d() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
-	local server_version=$(lustre_version_code mds1)
-	local CL_MASK_PARAM="mdd.$MDT0.changelog_mask"
-
-	[[ $server_version -ge $(version_code 2.7.60) ]] ||
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.60) ]] ||
 		{ skip "Need MDS version at least 2.7.60+"; return; }
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 
 	# Registration step
-	CL_USER=$(do_facet mds1 $LCTL --device $MDT0 \
-		changelog_register -n)
+	changelog_register || error "changelog_register failed"
 
-	trap cleanup_changelog EXIT
 	mkdir -p $DIR/$tdir/migrate_dir
-	$LFS changelog_clear $MDT0 $CL_USER 0
+	changelog_clear 0 || error "changelog_clear failed"
 
 	$LFS migrate -m 1 $DIR/$tdir/migrate_dir || error "migrate fails"
-	$LFS changelog $MDT0
-	MIGRATES=$($LFS changelog $MDT0 | tail -5 | grep -c "MIGRT")
-	$LFS changelog_clear $MDT0 $CL_USER 0
-	[ $MIGRATES -eq 1 ] ||
-		error "MIGRATE changelog mask count $MIGRATES != 1"
-
-	# Deregistration step
-	cleanup_changelog
+	changelog_dump | tail -n 5
+	local migrates=$(changelog_dump | grep -c "MIGRT")
+	[ $migrates -eq 1 ] || error "MIGRATE changelog count $migrates != 1"
 }
 run_test 160d "verify that changelog log catch the migrate event"
 
@@ -11948,24 +11896,21 @@ test_160e() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
 	# Create a user
-	CL_USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
-		changelog_register -n)
-	echo "Registered as changelog user $CL_USER"
-	trap cleanup_changelog EXIT
+	changelog_register || error "changelog_register failed"
 
 	# Delete a future user (expect fail)
-	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister cl77
+	local MDT0=$(facet_svc $SINGLEMDS)
+	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister "cl77"
 	local rc=$?
 
 	if [ $rc -eq 0 ]; then
 		error "Deleted non-existant user cl77"
 	elif [ $rc -ne 2 ]; then
-		error "changelog_deregister failed with $rc, " \
-			"expected 2 (ENOENT)"
+		error "changelog_deregister failed with $rc, expect 2 (ENOENT)"
 	fi
 
 	# Clear to a bad index (1 billion should be safe)
-	$LFS changelog_clear $MDT0 $CL_USER 1000000000
+	$LFS changelog_clear $MDT0 "${CL_USERS[$SINGLEMDS]%% *}" 1000000000
 	rc=$?
 
 	if [ $rc -eq 0 ]; then
@@ -11974,77 +11919,54 @@ test_160e() {
 		error "changelog_clear failed with $rc, expected 22 (EINVAL)"
 	fi
 }
-run_test 160e "changelog negative testing"
-
-cleanup_160f() {
-	trap 0
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0
-	echo "Deregistering changelog client $CL_USER"
-	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister $CL_USER
-	echo "Deregistering changelog client $CL_USER2"
-	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister $CL_USER2
-	restore_lustre_params < $save_params
-	rm -f $save_params
-}
+run_test 160e "changelog negative testing (should return errors)"
 
 test_160f() {
-	# do_facet $SINGLEMDS $LCTL set_param mdd.$MDT0.changelog_gc=1
-	# should be set by default
-
-	local CL_USERS="mdd.$MDT0.changelog_users"
-	local GET_CL_USERS="do_facet $SINGLEMDS $LCTL get_param -n $CL_USERS"
-	local save_params="$TMP/sanity-$TESTNAME.parameters"
-
-	save_lustre_params $SINGLEMDS \
-		"mdd.$MDT0.changelog_max_idle_time" > $save_params
-	save_lustre_params $SINGLEMDS \
-		"mdd.$MDT0.changelog_min_gc_interval" >> $save_params
-	save_lustre_params $SINGLEMDS \
-		"mdd.$MDT0.changelog_min_free_cat_entries" >> $save_params
-
-	trap cleanup_160f EXIT
+	local mdts=$(comma_list $(mdts_nodes))
 
 	# Create a user
-	CL_USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
-		changelog_register -n)
-	echo "Registered as changelog user $CL_USER"
-	CL_USER2=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
-		changelog_register -n)
-	echo "Registered as changelog user $CL_USER2"
-	$GET_CL_USERS | grep -q $CL_USER ||
-		error "User $CL_USER not found in changelog_users"
-	$GET_CL_USERS | grep -q $CL_USER2 ||
-		error "User $CL_USER2 not found in changelog_users"
+	changelog_register || error "first changelog_register failed"
+	changelog_register || error "second changelog_register failed"
+	local cl_users=(${CL_USERS[$SINGLEMDS]})
+	local cl_user1="${cl_users[0]}"
+	local cl_user2="${cl_users[1]}"
 
-	# generate some changelogs to accumulate
-	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
-	touch $DIR/$tdir/$tfile || error "touch $DIR/$tdir/$tfile failed"
-	touch $DIR/$tdir/${tfile}2 || error "touch $DIR/$tdir/${tfile}2 failed"
-	rm -f $DIR/$tdir/$tfile || error "rm -f $tfile failed"
+	# generate some changelog records to accumulate on each MDT
+	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "test_mkdir $tdir failed"
+	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
+		error "create $DIR/$tdir/$tfile failed"
 
 	# check changelogs have been generated
-	nbcl=$($LFS changelog $MDT0 | wc -l)
+	nbcl=$(changelog_dump | wc -l)
 	[[ $nbcl -eq 0 ]] && error "no changelogs found"
 
-	do_facet $SINGLEMDS $LCTL set_param \
-		mdd.$MDT0.changelog_max_idle_time=10
-	do_facet $SINGLEMDS $LCTL set_param \
-		mdd.$MDT0.changelog_min_gc_interval=2
-	do_facet $SINGLEMDS $LCTL set_param \
-		mdd.$MDT0.changelog_min_free_cat_entries=3
+	# changelog_gc=1 should be set by default
+	for param in "changelog_max_idle_time=10" \
+		     "changelog_min_gc_interval=2" \
+		     "changelog_min_free_cat_entries=3"; do
+		local MDT0=$(facet_svc $SINGLEMDS)
+		local var="${param%=*}"
+		local old=$(do_facet mds1 "$LCTL get_param -n mdd.$MDT0.$var")
+
+		stack_trap "do_nodes $mdts $LCTL set_param mdd.*.$var=$old" EXIT
+		do_nodes $mdts $LCTL set_param mdd.*.$param
+	done
 
 	# simulate changelog catalog almost full
-#define OBD_FAIL_CAT_FREE_RECORDS                  0x1313
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1313
-	do_facet $SINGLEMDS $LCTL set_param fail_val=3
+	#define OBD_FAIL_CAT_FREE_RECORDS	0x1313
+	do_nodes $mdts $LCTL set_param fail_loc=0x1313 fail_val=3
 
 	sleep 6
-	USER_REC1=$($GET_CL_USERS | awk "\$1 == \"$CL_USER\" {print \$2}")
-	$LFS changelog_clear $MDT0 $CL_USER $(($USER_REC1 + 2))
-	USER_REC2=$($GET_CL_USERS | awk "\$1 == \"$CL_USER\" {print \$2}")
-	echo "verifying user clear: $(( $USER_REC1 + 2 )) == $USER_REC2"
-	[ $USER_REC2 == $(($USER_REC1 + 2)) ] ||
-		error "user index expected $(($USER_REC1 + 2)) is $USER_REC2"
+	local user_rec1=$(changelog_user_rec $SINGLEMDS $cl_user1)
+	[ -n "$user_rec1" ] ||
+		error "User $cl_user1 not found in changelog_users"
+	__changelog_clear $SINGLEMDS $cl_user1 +2
+	local user_rec2=$(changelog_user_rec $SINGLEMDS $cl_user1)
+	[ -n "$user_rec2" ] ||
+		error "User $cl_user1 not found in changelog_users"
+	echo "verifying user clear: $user_rec1 + 2 == $user_rec2"
+	[ $((user_rec1 + 2)) == $user_rec2 ] ||
+		error "user index expected $user_rec1 + 2, but is $user_rec2"
 	sleep 5
 
 	# generate one more changelog to trigger fail_loc
@@ -12055,82 +11977,70 @@ test_160f() {
 			  "ps -e -o comm= | grep chlg_gc_thread" "" 20
 
 	# check user still registered
-	$GET_CL_USERS | grep -q $CL_USER ||
-		error "User $CL_USER not found in changelog_users"
+	changelog_users $SINGLEMDS | grep -q "$cl_user1" ||
+		error "User $cl_user1 not found in changelog_users"
 	# check user2 unregistered
-	$GET_CL_USERS | grep -q $CL_USER2 &&
-		error "User $CL_USER2 still found in changelog_users"
+	changelog_users $SINGLEMDS | grep -q "$cl_user2" &&
+		error "User $cl_user2 still found in changelog_users"
 
-	# check changelogs are present and starting at $USER_REC2 + 1
-	FIRST_REC=$($LFS changelog $MDT0 | head -n1 | awk '{print $1}')
-	echo "verifying min purge: $(( $USER_REC2 + 1 )) == $FIRST_REC"
-	[ $FIRST_REC == $(($USER_REC2 + 1)) ] ||
-		error "first index should be $(($USER_REC2 + 1)) is $FIRST_REC"
+	# check changelogs are present and starting at $user_rec2 + 1
+	local first_rec=$($LFS changelog $(facet_svc $SINGLEMDS) |
+			  awk '{ print $1; exit; }')
 
-	cleanup_160f
+	echo "verifying min purge: $user_rec2 + 1 == $first_rec"
+	[ $((user_rec2 + 1)) == $first_rec ] ||
+		error "first index should be $user_rec2 + 1, but is $first_rec"
 }
 run_test 160f "changelog garbage collect (timestamped users)"
 
 test_160g() {
-	# do_facet $SINGLEMDS $LCTL set_param mdd.$MDT0.changelog_gc=1
-	# should be set by default
+	local mdts=$(comma_list $(mdts_nodes))
 
-	local CL_USERS="mdd.$MDT0.changelog_users"
-	local GET_CL_USERS="do_facet $SINGLEMDS $LCTL get_param -n $CL_USERS"
-	local save_params="$TMP/sanity-$TESTNAME.parameters"
-
-	save_lustre_params $SINGLEMDS \
-		"mdd.$MDT0.changelog_max_idle_indexes" > $save_params
-	save_lustre_params $SINGLEMDS \
-		"mdd.$MDT0.changelog_min_gc_interval" >> $save_params
-	save_lustre_params $SINGLEMDS \
-		"mdd.$MDT0.changelog_min_free_cat_entries" >> $save_params
-
-	trap cleanup_160f EXIT
-
-#define OBD_FAIL_TIME_IN_CHLOG_USER                 0x1314
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1314
+	#define OBD_FAIL_TIME_IN_CHLOG_USER	0x1314
+	do_nodes $mdts $LCTL set_param fail_loc=0x1314
 
 	# Create a user
-	CL_USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
-		changelog_register -n)
-	echo "Registered as changelog user $CL_USER"
-	CL_USER2=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
-		changelog_register -n)
-	echo "Registered as changelog user $CL_USER2"
-	$GET_CL_USERS | grep -q $CL_USER ||
-		error "User $CL_USER not found in changelog_users"
-	$GET_CL_USERS | grep -q $CL_USER2 ||
-		error "User $CL_USER2 not found in changelog_users"
+	changelog_register || error "first changelog_register failed"
+	changelog_register || error "second changelog_register failed"
+	local cl_users=(${CL_USERS[$SINGLEMDS]})
+	local cl_user1="${cl_users[0]}"
+	local cl_user2="${cl_users[1]}"
 
-	# generate some changelogs to accumulate
-	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
-	touch $DIR/$tdir/$tfile || error "touch $DIR/$tdir/$tfile failed"
-	touch $DIR/$tdir/${tfile}2 || error "touch $DIR/$tdir/${tfile}2 failed"
-	rm -f $DIR/$tdir/$tfile || error "rm -f $tfile failed"
+	# generate some changelog records to accumulate on each MDT
+	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "mkdir $tdir failed"
+	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
+		error "create $DIR/$tdir/$tfile failed"
 
 	# check changelogs have been generated
-	nbcl=$($LFS changelog $MDT0 | wc -l)
+	nbcl=$(changelog_dump | wc -l)
 	[[ $nbcl -eq 0 ]] && error "no changelogs found"
 
-	do_facet $SINGLEMDS $LCTL set_param \
-		mdd.$MDT0.changelog_max_idle_indexes=$((nbcl - 1))
-	do_facet $SINGLEMDS $LCTL set_param \
-		mdd.$MDT0.changelog_min_gc_interval=2
-	do_facet $SINGLEMDS $LCTL set_param \
-		mdd.$MDT0.changelog_min_free_cat_entries=3
+	# changelog_gc=1 should be set by default
+	for param in "changelog_max_idle_indexes=$((nbcl / 2))" \
+		     "changelog_min_gc_interval=2" \
+		     "changelog_min_free_cat_entries=3"; do
+		local MDT0=$(facet_svc $SINGLEMDS)
+		local var="${param%=*}"
+		local old=$(do_facet mds1 "$LCTL get_param -n mdd.$MDT0.$var")
+
+		stack_trap "do_nodes $mdts $LCTL set_param mdd.*.$var=$old" EXIT
+		do_nodes $mdts $LCTL set_param mdd.*.$param ||
+			error "unable to set mdd.*.$param"
+	done
 
 	# simulate changelog catalog almost full
-#define OBD_FAIL_CAT_FREE_RECORDS                  0x1313
-	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1313
-	do_facet $SINGLEMDS $LCTL set_param fail_val=3
+	#define OBD_FAIL_CAT_FREE_RECORDS	0x1313
+	do_nodes $mdts $LCTL set_param fail_loc=0x1313 fail_val=3
 
-	USER_REC1=$($GET_CL_USERS | awk "\$1 == \"$CL_USER\" {print \$2}")
-	$LFS changelog_clear $MDT0 $CL_USER $(($USER_REC1 + 3))
-	USER_REC2=$($GET_CL_USERS | awk "\$1 == \"$CL_USER\" {print \$2}")
-	echo "verifying user clear: $(( $USER_REC1 + 3 )) == $USER_REC2"
-	[ $USER_REC2 == $(($USER_REC1 + 3)) ] ||
-		error "user index expected $(($USER_REC1 + 3)) is $USER_REC2"
+	local user_rec1=$(changelog_user_rec $SINGLEMDS $cl_user1)
+
+	__changelog_clear $SINGLEMDS $cl_user1 +3
+
+	local user_rec2=$(changelog_user_rec $SINGLEMDS $cl_user1)
+
+	echo "verifying user clear: $user_rec1 + 3 == $user_rec2"
+	[ $((user_rec1 + 3)) == $user_rec2 ] ||
+		error "user index expected $user_rec1 + 3, but is $user_rec2"
 
 	# generate one more changelog to trigger fail_loc
 	rm -rf $DIR/$tdir || error "rm -rf $tdir failed"
@@ -12140,19 +12050,19 @@ test_160g() {
 			  "ps -e -o comm= | grep chlg_gc_thread" "" 20
 
 	# check user still registered
-	$GET_CL_USERS | grep -q $CL_USER ||
-		error "User $CL_USER not found in changelog_users"
+	[ -n "$(changelog_user_rec $SINGLEMDS $cl_user1)" ] ||
+		error "User $cl_user1 not found in changelog_users"
 	# check user2 unregistered
-	$GET_CL_USERS | grep -q $CL_USER2 &&
-		error "User $CL_USER2 still found in changelog_users"
+	[ -z "$(changelog_user_rec $SINGLEMDS $cl_user2)" ] ||
+		error "User $cl_user2 still found in changelog_users"
 
-	# check changelogs are present and starting at $USER_REC2 + 1
-	FIRST_REC=$($LFS changelog $MDT0 | head -n1 | awk '{print $1}')
-	echo "verifying min purge: $(( $USER_REC2 + 1 )) == $FIRST_REC"
-	[ $FIRST_REC == $(($USER_REC2 + 1)) ] ||
-		error "first index should be $(($USER_REC2 + 1)) is $FIRST_REC"
+	# check changelogs are present and starting at $user_rec2 + 1
+	local first_rec=$($LFS changelog $(facet_svc $SINGLEMDS) |
+			  awk '{ print $1; exit; }')
 
-	cleanup_160f
+	echo "verifying min purge: $user_rec2 + 1 == $first_rec"
+	[ $((user_rec2 + 1)) == $first_rec ] ||
+		error "first index should be $user_rec2 + 1, but is $first_rec"
 }
 run_test 160g "changelog garbage collect (old users)"
 
@@ -12169,33 +12079,29 @@ test_161a() {
 	local FID=$($LFS path2fid $DIR/$tdir/$tfile | tr -d '[]')
 	if [ "$($LFS fid2path $DIR $FID | wc -l)" != "5" ]; then
 		$LFS fid2path $DIR $FID
-		err17935 "bad link ea"
+		error "bad link ea"
 	fi
-    # middle
-    rm $DIR/$tdir/foo2/zachary
-    # last
-    rm $DIR/$tdir/foo2/thor
-    # first
-    rm $DIR/$tdir/$tfile
-    # rename
-    mv $DIR/$tdir/foo1/sofia $DIR/$tdir/foo2/maggie
-    if [ "$($LFS fid2path $FSNAME --link 1 $FID)" != "$tdir/foo2/maggie" ]
-	then
-	$LFS fid2path $DIR $FID
-	err17935 "bad link rename"
-    fi
-    rm $DIR/$tdir/foo2/maggie
+	# middle
+	rm $DIR/$tdir/foo2/zachary
+	# last
+	rm $DIR/$tdir/foo2/thor
+	# first
+	rm $DIR/$tdir/$tfile
+	# rename
+	mv $DIR/$tdir/foo1/sofia $DIR/$tdir/foo2/maggie
+	[ "$($LFS fid2path $FSNAME --link 1 $FID)" != "$tdir/foo2/maggie" ] &&
+		{ $LFS fid2path $DIR $FID; error "bad link rename"; }
+	rm $DIR/$tdir/foo2/maggie
 
 	# overflow the EA
-	local longname=filename_avg_len_is_thirty_two_
+	local longname=$tfile.avg_len_is_thirty_two_
+	stack_trap "unlinkmany $DIR/$tdir/foo2/$longname 1000 || \
+		error_noexit 'failed to unlink many hardlinks'" EXIT
 	createmany -l$DIR/$tdir/foo1/luna $DIR/$tdir/foo2/$longname 1000 ||
 		error "failed to hardlink many files"
 	links=$($LFS fid2path $DIR $FID | wc -l)
 	echo -n "${links}/1000 links in link EA"
-	[[ $links -gt 60 ]] ||
-		err17935 "expected at least 60 links in link EA"
-	unlinkmany $DIR/$tdir/foo2/$longname 1000 ||
-		error "failed to unlink many hardlinks"
+	[[ $links -gt 60 ]] || error "expected at least 60 links in link EA"
 }
 run_test 161a "link ea sanity"
 
@@ -12221,7 +12127,7 @@ test_161b() {
 		     tr -d ']')
 	if [ "$($LFS fid2path $DIR $FID | wc -l)" != "5" ]; then
 		$LFS fid2path $DIR $FID
-		err17935 "bad link ea"
+		error "bad link ea"
 	fi
 	# middle
 	rm $remote_dir/foo2/zachary
@@ -12234,7 +12140,7 @@ test_161b() {
 	local link_path=$($LFS fid2path $FSNAME --link 1 $FID)
 	if [ "$DIR/$link_path" != "$remote_dir/foo2/maggie" ]; then
 		$LFS fid2path $DIR $FID
-		err17935 "bad link rename"
+		error "bad link rename"
 	fi
 	rm $remote_dir/foo2/maggie
 
@@ -12245,7 +12151,7 @@ test_161b() {
 	links=$($LFS fid2path $DIR $FID | wc -l)
 	echo -n "${links}/1000 links in link EA"
 	[[ ${links} -gt 60 ]] ||
-		err17935 "expected at least 60 links in link EA"
+		error "expected at least 60 links in link EA"
 	unlinkmany $remote_dir/foo2/$longname 1000 ||
 	error "failed to unlink many hardlinks"
 }
@@ -12259,33 +12165,29 @@ test_161c() {
 
 	# define CLF_RENAME_LAST 0x0001
 	# rename overwrite a target having nlink = 1 (changelog flag 0x1)
-	CL_USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
-		changelog_register -n)
+	changelog_register || error "changelog_register failed"
 
-	trap cleanup_changelog EXIT
 	rm -rf $DIR/$tdir
-	mkdir -p $DIR/$tdir
+	test_mkdir -i $((MDSCOUNT - 1)) $DIR/$tdir
 	touch $DIR/$tdir/foo_161c
 	touch $DIR/$tdir/bar_161c
 	mv -f $DIR/$tdir/foo_161c $DIR/$tdir/bar_161c
-	$LFS changelog $MDT0 | grep RENME
-	local flags=$($LFS changelog $MDT0 | grep RENME | tail -1 | \
-		cut -f5 -d' ')
-	$LFS changelog_clear $MDT0 $CL_USER 0
+	changelog_dump | grep RENME | tail -n 5
+	local flags=$(changelog_dump | grep "RENME.*bar_161c" | cut -f5 -d' ')
+	changelog_clear 0 || error "changelog_clear failed"
 	if [ x$flags != "x0x1" ]; then
 		error "flag $flags is not 0x1"
 	fi
-	echo "rename overwrite a target having nlink = 1," \
-		"changelog record has flags of $flags"
 
+	echo "rename overwrite target with nlink = 1, changelog flags=$flags"
 	# rename overwrite a target having nlink > 1 (changelog flag 0x0)
 	touch $DIR/$tdir/foo_161c
 	touch $DIR/$tdir/bar_161c
 	ln $DIR/$tdir/bar_161c $DIR/$tdir/foobar_161c
 	mv -f $DIR/$tdir/foo_161c $DIR/$tdir/bar_161c
-	$LFS changelog $MDT0 | grep RENME
-	flags=$($LFS changelog $MDT0 | grep RENME | tail -1 | cut -f5 -d' ')
-	$LFS changelog_clear $MDT0 $CL_USER 0
+	changelog_dump | grep RENME | tail -n 5
+	flags=$(changelog_dump | grep "RENME.*bar_161c" | cut -f5 -d' ')
+	changelog_clear 0 || error "changelog_clear failed"
 	if [ x$flags != "x0x0" ]; then
 		error "flag $flags is not 0x0"
 	fi
@@ -12295,9 +12197,9 @@ test_161c() {
 	# rename doesn't overwrite a target (changelog flag 0x0)
 	touch $DIR/$tdir/foo_161c
 	mv -f $DIR/$tdir/foo_161c $DIR/$tdir/foo2_161c
-	$LFS changelog $MDT0 | grep RENME
-	flags=$($LFS changelog $MDT0 | grep RENME | tail -1 | cut -f5 -d' ')
-	$LFS changelog_clear $MDT0 $CL_USER 0
+	changelog_dump | grep RENME | tail -n 5
+	flags=$(changelog_dump | grep RENME | tail -1 | cut -f5 -d' ')
+	changelog_clear 0 || error "changelog_clear failed"
 	if [ x$flags != "x0x0" ]; then
 		error "flag $flags is not 0x0"
 	fi
@@ -12307,9 +12209,9 @@ test_161c() {
 	# define CLF_UNLINK_LAST 0x0001
 	# unlink a file having nlink = 1 (changelog flag 0x1)
 	rm -f $DIR/$tdir/foo2_161c
-	$LFS changelog $MDT0 | grep UNLNK
-	flags=$($LFS changelog $MDT0 | grep UNLNK | tail -1 | cut -f5 -d' ')
-	$LFS changelog_clear $MDT0 $CL_USER 0
+	changelog_dump | grep UNLNK | tail -n 5
+	flags=$(changelog_dump | grep UNLNK | tail -1 | cut -f5 -d' ')
+	changelog_clear 0 || error "changelog_clear failed"
 	if [ x$flags != "x0x1" ]; then
 		error "flag $flags is not 0x1"
 	fi
@@ -12319,29 +12221,21 @@ test_161c() {
 	# unlink a file having nlink > 1 (changelog flag 0x0)
 	ln -f $DIR/$tdir/bar_161c $DIR/$tdir/foobar_161c
 	rm -f $DIR/$tdir/foobar_161c
-	$LFS changelog $MDT0 | grep UNLNK
-	flags=$($LFS changelog $MDT0 | grep UNLNK | tail -1 | cut -f5 -d' ')
-	$LFS changelog_clear $MDT0 $CL_USER 0
+	changelog_dump | grep UNLNK | tail -n 5
+	flags=$(changelog_dump | grep UNLNK | tail -1 | cut -f5 -d' ')
+	changelog_clear 0 || error "changelog_clear failed"
 	if [ x$flags != "x0x0" ]; then
 		error "flag $flags is not 0x0"
 	fi
-	echo "unlink a file having nlink > 1," \
-		"changelog record has flags of $flags"
-	cleanup_changelog
+	echo "unlink a file having nlink > 1, changelog record flags '$flags'"
 }
 run_test 161c "check CL_RENME[UNLINK] changelog record flags"
 
 test_161d() {
-	local user
 	local pid
 	local fid
 
-	# cleanup previous run
-	rm -rf $DIR/$tdir/$tfile
-
-	user=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
-		changelog_register -n)
-	[[ $? -eq 0 ]] || error "changelog_register failed"
+	changelog_register || error "changelog_register failed"
 
 	# work in a standalone dir to avoid locking on $DIR/$MOUNT to
 	# interfer with $MOUNT/.lustre/fid/ access
@@ -12364,7 +12258,7 @@ test_161d() {
 	[[ $? -eq 0 ]] || error "create should be blocked"
 
 	local tempfile=$(mktemp)
-	fid=$(changelog_extract_field $MDT0 "CREAT" "$tfile" "t=")
+	fid=$(changelog_extract_field "CREAT" "$tfile" "t=")
 	cat $MOUNT/.lustre/fid/$fid 2>/dev/null >$tempfile || error "cat failed"
 	# some delay may occur during ChangeLog publishing and file read just
 	# above, that could allow file write to happen finally
@@ -12374,35 +12268,28 @@ test_161d() {
 
 	wait $pid
 	[[ $? -eq 0 ]] || error "create failed"
-
-	$LFS changelog_clear $MDT0 $user 0
-	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister $user
 }
 run_test 161d "create with concurrent .lustre/fid access"
 
 check_path() {
-    local expected=$1
-    shift
-    local fid=$2
+	local expected="$1"
+	shift
+	local fid="$2"
 
-    local path=$(${LFS} fid2path $*)
-    # Remove the '//' indicating a remote directory
-    path=$(echo $path | sed 's#//#/#g')
-    RC=$?
+	local path
+	path=$($LFS fid2path "$@")
+	local rc=$?
 
-    if [ $RC -ne 0 ]; then
-      	err17935 "path looked up of $expected failed. Error $RC"
- 	return $RC
-    elif [ "${path}" != "${expected}" ]; then
-      	err17935 "path looked up \"${path}\" instead of \"${expected}\""
- 	return 2
-    fi
-    echo "fid $fid resolves to path $path (expected $expected)"
+	if [ $rc -ne 0 ]; then
+		error "path looked up of '$expected' failed: rc=$rc"
+	elif [ "$path" != "$expected" ]; then
+		error "path looked up '$path' instead of '$expected'"
+	else
+		echo "FID '$fid' resolves to path '$path' as expected"
+	fi
 }
 
 test_162a() { # was test_162
-	# Make changes to filesystem
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	test_mkdir -p -c1 $DIR/$tdir/d2
 	touch $DIR/$tdir/d2/$tfile
 	touch $DIR/$tdir/d2/x1
@@ -12410,43 +12297,34 @@ test_162a() { # was test_162
 	test_mkdir -p -c1 $DIR/$tdir/d2/a/b/c
 	test_mkdir -p -c1 $DIR/$tdir/d2/p/q/r
 	# regular file
-	FID=$($LFS path2fid $DIR/$tdir/d2/$tfile | tr -d '[]')
-	check_path "$tdir/d2/$tfile" $FSNAME $FID --link 0 ||
-		error "check path $tdir/d2/$tfile failed"
+	local fid=$($LFS path2fid $DIR/$tdir/d2/$tfile | tr -d '[]')
+	check_path "$tdir/d2/$tfile" $FSNAME "$fid" --link 0
 
 	# softlink
 	ln -s $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/slink
-	FID=$($LFS path2fid $DIR/$tdir/d2/p/q/r/slink | tr -d '[]')
-	check_path "$tdir/d2/p/q/r/slink" $FSNAME $FID --link 0 ||
-		error "check path $tdir/d2/p/q/r/slink failed"
+	fid=$($LFS path2fid $DIR/$tdir/d2/p/q/r/slink | tr -d '[]')
+	check_path "$tdir/d2/p/q/r/slink" $FSNAME "$fid" --link 0
 
 	# softlink to wrong file
 	ln -s /this/is/garbage $DIR/$tdir/d2/p/q/r/slink.wrong
-	FID=$($LFS path2fid $DIR/$tdir/d2/p/q/r/slink.wrong | tr -d '[]')
-	check_path "$tdir/d2/p/q/r/slink.wrong" $FSNAME $FID --link 0 ||
-		error "check path $tdir/d2/p/q/r/slink.wrong failed"
+	fid=$($LFS path2fid $DIR/$tdir/d2/p/q/r/slink.wrong | tr -d '[]')
+	check_path "$tdir/d2/p/q/r/slink.wrong" $FSNAME "$fid" --link 0
 
 	# hardlink
 	ln $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/p/q/r/hlink
 	mv $DIR/$tdir/d2/$tfile $DIR/$tdir/d2/a/b/c/new_file
-	FID=$($LFS path2fid $DIR/$tdir/d2/a/b/c/new_file | tr -d '[]')
+	fid=$($LFS path2fid $DIR/$tdir/d2/a/b/c/new_file | tr -d '[]')
 	# fid2path dir/fsname should both work
-	check_path "$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 1 ||
-		error "check path $tdir/d2/a/b/c/new_file failed"
-	check_path "$DIR/$tdir/d2/p/q/r/hlink" $DIR $FID --link 0 ||
-		error "check path $DIR/$tdir/d2/p/q/r/hlink failed"
+	check_path "$tdir/d2/a/b/c/new_file" $FSNAME "$fid" --link 1
+	check_path "$DIR/$tdir/d2/p/q/r/hlink" $DIR "$fid" --link 0
 
 	# hardlink count: check that there are 2 links
-	# Doesnt work with CMD yet: 17935
-	${LFS} fid2path $DIR $FID | wc -l | grep -q 2 || \
-		err17935 "expected 2 links"
+	local nlinks=$($LFS fid2path $DIR "$fid" | wc -l)
+	[ $nlinks -eq 2 ] || error "expect 2 links, found $nlinks"
 
 	# hardlink indexing: remove the first link
 	rm $DIR/$tdir/d2/p/q/r/hlink
-	check_path "$tdir/d2/a/b/c/new_file" $FSNAME $FID --link 0 ||
-		error "check path $DIR/$tdir/d2/a/b/c/new_file failed"
-
-	return 0
+	check_path "$tdir/d2/a/b/c/new_file" $FSNAME $fid --link 0
 }
 run_test 162a "path lookup sanity"
 
@@ -12469,13 +12347,11 @@ test_162b() {
 	for ((i=0;i<5;i++)); do
 		FID=$($LFS path2fid $DIR/$tdir/striped_dir/f$i | tr -d '[]') ||
 			error "get fid for f$i failed"
-		check_path "$tdir/striped_dir/f$i" $FSNAME $FID --link 0 ||
-			error "check path $tdir/striped_dir/f$i failed"
+		check_path "$tdir/striped_dir/f$i" $FSNAME $FID --link 0
 
 		FID=$($LFS path2fid $DIR/$tdir/striped_dir/d$i | tr -d '[]') ||
 			error "get fid for d$i failed"
-		check_path "$tdir/striped_dir/d$i" $FSNAME $FID --link 0 ||
-			error "check path $tdir/striped_dir/d$i failed"
+		check_path "$tdir/striped_dir/d$i" $FSNAME $FID --link 0
 	done
 
 	return 0
@@ -12496,15 +12372,13 @@ test_162c() {
 		mkdir $DIR/$lpath
 		FID=$($LFS path2fid $DIR/$lpath | tr -d '[]') ||
 			error "get fid for local directory $DIR/$lpath failed"
-		check_path "$DIR/$lpath" $MOUNT $FID --link 0 ||
-			error "check path for local directory $DIR/$lpath failed"
+		check_path "$DIR/$lpath" $MOUNT $FID --link 0
 
 		rpath="$rpath/$i"
 		test_mkdir $DIR/$rpath
 		FID=$($LFS path2fid $DIR/$rpath | tr -d '[]') ||
 			error "get fid for remote directory $DIR/$rpath failed"
-		check_path "$DIR/$rpath" $MOUNT $FID --link 0 ||
-			error "check path for remote directory $DIR/$rpath failed"
+		check_path "$DIR/$rpath" $MOUNT $FID --link 0
 	done
 
 	return 0
@@ -12717,8 +12591,7 @@ test_180c() { # LU-2598
 	do_rpc_nodes $(facet_active_host ost1) load_module obdecho/obdecho &&
 		rmmod_remote=true || error "failed to load module obdecho"
 
-	target=$(do_facet ost1 $LCTL dl | awk '/obdfilter/ { print $4 }' |
-		head -n1)
+	target=$(do_facet ost1 $LCTL dl | awk '/obdfilter/ { print $4; exit; }')
 	if [ -n "$target" ]; then
 		obdecho_test "$target" ost1 "$pages" || rc=${PIPESTATUS[0]}
 	else
@@ -13287,18 +13160,10 @@ verify_jobstats() {
 }
 
 jobstats_set() {
-	trap 0
-	NEW_JOBENV=${1:-$OLD_JOBENV}
-	do_facet mgs $LCTL conf_param $FSNAME.sys.jobid_var=$NEW_JOBENV
-	wait_update $HOSTNAME "$LCTL get_param -n jobid_var" $NEW_JOBENV
-}
+	local new_jobenv=$1
 
-cleanup_205() {
-	trap 0
-	do_facet $SINGLEMDS \
-		$LCTL set_param mdt.*.job_cleanup_interval=$OLD_INTERVAL
-	[ $OLD_JOBENV != $JOBENV ] && jobstats_set $OLD_JOBENV
-	cleanup_changelog
+	do_facet mgs $LCTL conf_param $FSNAME.sys.jobid_var=$new_jobenv
+	wait_update $HOSTNAME "$LCTL get_param -n jobid_var" $new_jobenv
 }
 
 test_205() { # Job stats
@@ -13314,20 +13179,22 @@ test_205() { # Job stats
 		skip "Server doesn't support jobstats" && return 0
 	[[ $JOBID_VAR = disable ]] && skip "jobstats is disabled" && return
 
-	OLD_JOBENV=$($LCTL get_param -n jobid_var)
-	if [ $OLD_JOBENV != $JOBENV ]; then
+	local old_jobenv=$($LCTL get_param -n jobid_var)
+	if [ $old_jobenv != $JOBENV ]; then
 		jobstats_set $JOBENV
-		trap cleanup_205 EXIT
+		stack_trap "do_facet mgs \
+			$LCTL conf_param $FSNAME.sys.jobid_var=$old_jobenv" EXIT
 	fi
 
-	CL_USER=$(do_facet $SINGLEMDS lctl --device $MDT0 changelog_register -n)
-	echo "Registered as changelog user $CL_USER"
+	changelog_register
 
-	OLD_INTERVAL=$(do_facet $SINGLEMDS \
-		       lctl get_param -n mdt.*.job_cleanup_interval)
-	local interval_new=5
+	local old_interval=$(do_facet $SINGLEMDS lctl get_param -n \
+				mdt.*.job_cleanup_interval | head -n 1)
+	local new_interval=5
 	do_facet $SINGLEMDS \
-		$LCTL set_param mdt.*.job_cleanup_interval=$interval_new
+		$LCTL set_param mdt.*.job_cleanup_interval=$new_interval
+	stack_trap "do_facet $SINGLEMDS \
+		$LCTL set_param mdt.*.job_cleanup_interval=$old_interval" EXIT
 	local start=$SECONDS
 
 	local cmd
@@ -13369,7 +13236,7 @@ test_205() { # Job stats
 	cmd="mv -f $DIR/$tfile $DIR/$tdir.rename"
 	verify_jobstats "$cmd" "$SINGLEMDS"
 	# jobstats expiry - sleep until old stats should be expired
-	local left=$((interval_new + 5 - (SECONDS - start)))
+	local left=$((new_interval + 5 - (SECONDS - start)))
 	[ $left -ge 0 ] && wait_update_facet $SINGLEMDS \
 		"lctl get_param *.*.job_stats | grep -c 'job_id.*mkdir'" \
 			"0" $left
@@ -13379,10 +13246,9 @@ test_205() { # Job stats
 	    grep -c "job_id.*mkdir") -gt 1 ] && error "old jobstats not expired"
 
 	# Ensure that jobid are present in changelog (if supported by MDS)
-	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.52) ]
-	then
-		$LFS changelog $MDT0 | tail -9
-		jobids=$($LFS changelog $MDT0 | tail -9 | grep -c "j=")
+	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.52) ];then
+		changelog_dump | tail -10
+		jobids=$(changelog_dump | tail -9 | grep -c "j=")
 		[ $jobids -eq 9 ] ||
 			error "Wrong changelog jobid count $jobids != 9"
 
@@ -13390,13 +13256,11 @@ test_205() { # Job stats
 		JOBENV="disable"
 		jobstats_set $JOBENV
 		touch $DIR/$tfile
-		$LFS changelog $MDT0 | tail -1
-		jobids=$($LFS changelog $MDT0 | tail -1 | grep -c "j=")
+		changelog_dump | grep $tfile
+		jobids=$(changelog_dump | grep $tfile | tail -1 | grep -c "j=")
 		[ $jobids -eq 0 ] ||
 			error "Unexpected jobids when jobid_var=$JOBENV"
 	fi
-
-	cleanup_205
 }
 run_test 205 "Verify job stats"
 
@@ -13975,26 +13839,23 @@ test_225a () {
 	      skip_env "mds-survey not found" && return
 	fi
 
-	[ $MDSCOUNT -ge 2 ] &&
-		skip "skipping now for more than one MDT" && return
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ] ||
+		{ skip "Need MDS version at least 2.2.51"; return; }
 
-       [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ] ||
-            { skip "Need MDS version at least 2.2.51"; return; }
+	local mds=$(facet_host $SINGLEMDS)
+	local target=$(do_nodes $mds 'lctl dl' |
+		       awk '{ if ($2 == "UP" && $3 == "mdt") { print $4 }}')
 
-       local mds=$(facet_host $SINGLEMDS)
-       local target=$(do_nodes $mds 'lctl dl' | \
-                      awk "{if (\$2 == \"UP\" && \$3 == \"mdt\") {print \$4}}")
+	local cmd1="file_count=1000 thrhi=4"
+	local cmd2="dir_count=2 layer=mdd stripe_count=0"
+	local cmd3="rslt_loc=${TMP} targets=\"$mds:$target\" $MDSSURVEY"
+	local cmd="$cmd1 $cmd2 $cmd3"
 
-       local cmd1="file_count=1000 thrhi=4"
-       local cmd2="dir_count=2 layer=mdd stripe_count=0"
-       local cmd3="rslt_loc=${TMP} targets=\"$mds:$target\" $MDSSURVEY"
-       local cmd="$cmd1 $cmd2 $cmd3"
-
-       rm -f ${TMP}/mds_survey*
-       echo + $cmd
-       eval $cmd || error "mds-survey with zero-stripe failed"
-       cat ${TMP}/mds_survey*
-       rm -f ${TMP}/mds_survey*
+	rm -f ${TMP}/mds_survey*
+	echo + $cmd
+	eval $cmd || error "mds-survey with zero-stripe failed"
+	cat ${TMP}/mds_survey*
+	rm -f ${TMP}/mds_survey*
 }
 run_test 225a "Metadata survey sanity with zero-stripe"
 
@@ -14011,20 +13872,20 @@ test_225b () {
 	      skip_env "Need to mount OST to test" && return
 	fi
 
-       local mds=$(facet_host $SINGLEMDS)
-       local target=$(do_nodes $mds 'lctl dl' | \
-                      awk "{if (\$2 == \"UP\" && \$3 == \"mdt\") {print \$4}}")
+	local mds=$(facet_host $SINGLEMDS)
+	local target=$(do_nodes $mds 'lctl dl' |
+		       awk '{ if ($2 == "UP" && $3 == "mdt") { print $4 }}')
 
-       local cmd1="file_count=1000 thrhi=4"
-       local cmd2="dir_count=2 layer=mdd stripe_count=1"
-       local cmd3="rslt_loc=${TMP} targets=\"$mds:$target\" $MDSSURVEY"
-       local cmd="$cmd1 $cmd2 $cmd3"
+	local cmd1="file_count=1000 thrhi=4"
+	local cmd2="dir_count=2 layer=mdd stripe_count=1"
+	local cmd3="rslt_loc=${TMP} targets=\"$mds:$target\" $MDSSURVEY"
+	local cmd="$cmd1 $cmd2 $cmd3"
 
-       rm -f ${TMP}/mds_survey*
-       echo + $cmd
-       eval $cmd || error "mds-survey with stripe_count failed"
-       cat ${TMP}/mds_survey*
-       rm -f ${TMP}/mds_survey*
+	rm -f ${TMP}/mds_survey*
+	echo + $cmd
+	eval $cmd || error "mds-survey with stripe_count failed"
+	cat ${TMP}/mds_survey*
+	rm -f ${TMP}/mds_survey*
 }
 run_test 225b "Metadata survey sanity with stripe_count = 1"
 
@@ -15467,15 +15328,17 @@ test_254() {
 
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	do_facet mds1 $LCTL get_param -n mdd.$MDT0.changelog_size ||
+
+	local MDT0=$(facet_svc $SINGLEMDS)
+
+	do_facet $SINGLEMDS $LCTL get_param -n mdd.$MDT0.changelog_size ||
 		{ skip "MDS does not support changelog_size" && return; }
 
-	cl_user=$(do_facet mds1 $LCTL --device $MDT0 changelog_register -n)
-	echo "Registered as changelog user $cl_user"
+	changelog_register || error "changelog_register failed"
 
-	$LFS changelog_clear $MDT0 $cl_user 0
+	changelog_clear 0 || error "changelog_clear failed"
 
-	local size1=$(do_facet mds1 \
+	local size1=$(do_facet $SINGLEMDS \
 		      $LCTL get_param -n mdd.$MDT0.changelog_size)
 	echo "Changelog size $size1"
 
@@ -15490,16 +15353,12 @@ test_254() {
 	ln -s $DIR/$tdir/pics/2008/portland.jpg $DIR/$tdir/pics/desktop.jpg
 	rm $DIR/$tdir/pics/desktop.jpg
 
-	local size2=$(do_facet mds1 \
+	local size2=$(do_facet $SINGLEMDS \
 		      $LCTL get_param -n mdd.$MDT0.changelog_size)
 	echo "Changelog size after work $size2"
 
-	do_facet mds1 $LCTL --device $MDT0 changelog_deregister $cl_user
-
-	if (( size2 <= size1 )); then
-		error "Changelog size after work should be greater than original"
-	fi
-	return 0
+	(( $size2 > $size1 )) ||
+		error "new Changelog size=$size2 less than old size=$size1"
 }
 run_test 254 "Check changelog size"
 
@@ -15857,65 +15716,51 @@ test_256() {
 
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[ "$(facet_fstype mds1)" != "ldiskfs" ] &&
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
 		skip "ldiskfs only test" && return
 
 	mdt_dev=$(mdsdevname 1)
 	echo $mdt_dev
-	cl_user=$(do_facet mds1 \
-	"$LCTL get_param -n mdd.$MDT0.changelog_users | grep cl")
-	if [[ -n $cl_user ]]; then
-		skip "active changelog user"
-		return
-	fi
+	changelog_users $SINGLEMDS | grep "^cl" &&
+		skip "active changelog user" && return
 
-	cl_user=$(do_facet mds1 $LCTL --device $MDT0 changelog_register -n)
-	echo "Registered as changelog user $cl_user"
+	changelog_register || error "changelog_register failed"
 
 	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
 
-	$LFS changelog_clear $MDT0 $cl_user 0
+	changelog_clear 0 || error "changelog_clear failed"
 
 	# change something
 	touch $DIR/$tdir/{1..10}
 
 	# stop the MDT
-	stop mds1 || error "Fail to stop MDT."
+	stop $SINGLEMDS || error "Fail to stop MDT"
 
 	# remount the MDT
-	start mds1 $mdt_dev $MDS_MOUNT_OPTS || error "Fail to start MDT."
+
+	start $SINGLEMDS $mdt_dev $MDS_MOUNT_OPTS || error "Fail to start MDT"
 
 	#after mount new plainllog is used
 	touch $DIR/$tdir/{11..19}
-	do_facet mds1 sync
-	local TEMP256FILE=$(mktemp -u TEMP256XXXXXX)
-	cat_sl=$(do_facet mds1 \
-	"$DEBUGFS -R \\\"dump changelog_catalog $TEMP256FILE\\\" $mdt_dev; \
-	 llog_reader $TEMP256FILE | grep \\\"type=1064553b\\\" | wc -l")
-	do_facet mds1 rm $TEMP256FILE
+	local tmpfile=$(mktemp -u $tfile.XXXXXX)
+	cat_sl=$(do_facet $SINGLEMDS "sync; \
+		 $DEBUGFS -c -R 'dump changelog_catalog $tmpfile' $mdt_dev; \
+		 llog_reader $tmpfile | grep -c type=1064553b")
+	do_facet $SINGLEMDS llog_reader $tmpfile
 
-	if (( cat_sl != 2 )); then
-		do_facet mds1 $LCTL --device $MDT0 changelog_deregister $cl_user
-		error "Changelog catalog has wrong number of slots $cat_sl"
-	fi
+	[ $cat_sl != 2 ] && error "Changelog catalog has $cat_sl != 2 slots"
 
-	$LFS changelog_clear $MDT0 $cl_user 0
+	changelog_clear 0 || error "changelog_clear failed"
 
-	do_facet mds1 sync
-	TEMP256FILE=$(mktemp -u TEMP256XXXXXX)
-	cat_sl=$(do_facet mds1 \
-	"$DEBUGFS -R \\\"dump changelog_catalog $TEMP256FILE\\\" $mdt_dev; \
-	 llog_reader $TEMP256FILE | grep \\\"type=1064553b\\\" | wc -l")
-	do_facet mds1 rm $TEMP256FILE
-
-	do_facet mds1 $LCTL --device $MDT0 changelog_deregister $cl_user
+	cat_sl=$(do_facet $SINGLEMDS "sync; \
+		 $DEBUGFS -c -R 'dump changelog_catalog $tmpfile' $mdt_dev; \
+		 llog_reader $tmpfile | grep -c type=1064553b; rm -f $tmpfile")
 
 	if (( cat_sl == 2 )); then
 		error "Empty plain llog was not deleted from changelog catalog"
-	fi
-	if (( cat_sl != 1 )); then
-		error "Active plain llog shouldn\`t be deleted from catalog"
+	elif (( cat_sl != 1 )); then
+		error "Active plain llog shouldn't be deleted from catalog"
 	fi
 }
 run_test 256 "Check llog delete for empty and not full state"
@@ -16761,7 +16606,7 @@ test_300h() {
 	local stripe_count
 
 	mkdir $DIR/$tdir
-	$LFS setdirstripe -i 0 -c$MDSCOUNT -H all_char $DIR/$tdir/striped_dir ||
+	$LFS setdirstripe -i0 -c$MDSCOUNT -H all_char $DIR/$tdir/striped_dir ||
 		error "set striped dir error"
 
 	test_300_check_default_striped_dir striped_dir $MDSCOUNT 1
