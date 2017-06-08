@@ -260,6 +260,8 @@ static void *pool_proc_next(struct seq_file *seq, void *v, loff_t *pos)
 	if (*pos >= pool_tgt_count(iter->lpi_pool))
 		return NULL;
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_LIST_ASSERT, cfs_fail_val);
+
 	/* iterate to find a non empty entry */
 	prev_idx = iter->lpi_idx;
 	iter->lpi_idx++;

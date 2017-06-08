@@ -1513,6 +1513,37 @@ test_26() {
 }
 run_test 26 "Choose other OSTs in the pool first in the creation remedy"
 
+test_27() {
+	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
+
+	local osts
+	local pid
+	local count=$OSTCOUNT
+
+	create_pool_nofail $POOL
+	do_facet mgs lctl pool_add $FSNAME.$POOL $TGT_ALL
+	osts=$(list_pool $FSNAME.$POOL)
+	for ost in ${osts}; do
+		((count--))
+		if [[ $count -eq 0 ]]; then
+			#define OBD_FAIL_OST_LIST_ASSERT    0x239
+			do_facet $SINGLEMDS \
+				$LCTL set_param fail_loc=0x239 fail_val=10
+			list_pool $FSNAME.$POOL &
+			pid=$!
+			sleep 5
+			do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+			do_facet mgs $LCTL pool_remove $FSNAME.$POOL $ost
+			wait $pid
+			do_facet $SINGLEMDS $LCTL set_param fail_val=0
+		else
+			do_facet mgs $LCTL pool_remove $FSNAME.$POOL $ost
+		fi
+	done
+	destroy_pool $POOL
+}
+run_test 27 "Race pool_list and pool_remove"
+
 cd $ORIG_PWD
 
 complete $SECONDS

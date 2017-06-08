@@ -326,6 +326,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OST_PAUSE_PUNCH         0x236
 #define OBD_FAIL_OST_LADVISE_PAUSE	 0x237
 #define OBD_FAIL_OST_FAKE_RW		 0x238
+#define OBD_FAIL_OST_LIST_ASSERT         0x239
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
