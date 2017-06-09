@@ -2161,44 +2161,47 @@ static int osd_commit_async(const struct lu_env *env,
         RETURN(s->s_op->sync_fs(s, 0));
 }
 
+/* Our own copy of the set readonly functions if present, or NU if not. */
+static int (*priv_dev_set_rdonly)(struct block_device *bdev);
+static int (*priv_dev_check_rdonly)(struct block_device *bdev);
+/* static int (*priv_dev_clear_rdonly)(struct block_device *bdev); */
+
 /*
  * Concurrency: shouldn't matter.
  */
-
 static int osd_ro(const struct lu_env *env, struct dt_device *d)
 {
 	struct super_block *sb = osd_sb(osd_dt_dev(d));
 	struct block_device *dev = sb->s_bdev;
-#ifdef HAVE_DEV_SET_RDONLY
-	struct block_device *jdev = LDISKFS_SB(sb)->journal_bdev;
-	int rc = 0;
-#else
 	int rc = -EOPNOTSUPP;
-#endif
 	ENTRY;
 
-#ifdef HAVE_DEV_SET_RDONLY
-	CERROR("*** setting %s read-only ***\n", osd_dt_dev(d)->od_svname);
+	if (priv_dev_set_rdonly) {
+		struct block_device *jdev = LDISKFS_SB(sb)->journal_bdev;
 
-	if (sb->s_op->freeze_fs) {
-		rc = sb->s_op->freeze_fs(sb);
-		if (rc)
-			goto out;
+		rc = 0;
+		CERROR("*** setting %s read-only ***\n",
+		       osd_dt_dev(d)->od_svname);
+
+		if (sb->s_op->freeze_fs) {
+			rc = sb->s_op->freeze_fs(sb);
+			if (rc)
+				goto out;
+		}
+
+		if (jdev && (jdev != dev)) {
+			CDEBUG(D_IOCTL | D_HA, "set journal dev %lx rdonly\n",
+			       (long)jdev);
+			priv_dev_set_rdonly(jdev);
+		}
+		CDEBUG(D_IOCTL | D_HA, "set dev %lx rdonly\n", (long)dev);
+		priv_dev_set_rdonly(dev);
+
+		if (sb->s_op->unfreeze_fs)
+			sb->s_op->unfreeze_fs(sb);
 	}
-
-	if (jdev && (jdev != dev)) {
-		CDEBUG(D_IOCTL | D_HA, "set journal dev %lx rdonly\n",
-		       (long)jdev);
-		dev_set_rdonly(jdev);
-	}
-	CDEBUG(D_IOCTL | D_HA, "set dev %lx rdonly\n", (long)dev);
-	dev_set_rdonly(dev);
-
-	if (sb->s_op->unfreeze_fs)
-		sb->s_op->unfreeze_fs(sb);
 
 out:
-#endif
 	if (rc)
 		CERROR("%s: %lx CANNOT BE SET READONLY: rc = %d\n",
 		       osd_dt_dev(d)->od_svname, (long)dev, rc);
@@ -6968,25 +6971,23 @@ static int osd_mount(const struct lu_env *env,
 	}
 
 	if (lmd_flags & LMD_FLG_DEV_RDONLY) {
-#ifdef HAVE_DEV_SET_RDONLY
-		dev_set_rdonly(osd_sb(o)->s_bdev);
-		o->od_dt_dev.dd_rdonly = 1;
-		LCONSOLE_WARN("%s: set dev_rdonly on this device\n", name);
-#else
-		LCONSOLE_WARN("%s: not support dev_rdonly on this device",
-			      name);
+		if (priv_dev_set_rdonly) {
+			priv_dev_set_rdonly(osd_sb(o)->s_bdev);
+			o->od_dt_dev.dd_rdonly = 1;
+			LCONSOLE_WARN("%s: set dev_rdonly on this device\n",
+				      name);
+		} else {
+			LCONSOLE_WARN("%s: not support dev_rdonly on this device",
+				      name);
 
-		GOTO(out_mnt, rc = -EOPNOTSUPP);
-#endif
-	} else {
-#ifdef HAVE_DEV_SET_RDONLY
-		if (dev_check_rdonly(osd_sb(o)->s_bdev)) {
-			CERROR("%s: underlying device %s is marked as "
-			       "read-only. Setup failed\n", name, dev);
-
-			GOTO(out_mnt, rc = -EROFS);
+			GOTO(out_mnt, rc = -EOPNOTSUPP);
 		}
-#endif
+	} else if (priv_dev_check_rdonly &&
+		   priv_dev_check_rdonly(osd_sb(o)->s_bdev)) {
+		CERROR("%s: underlying device %s is marked as "
+		       "read-only. Setup failed\n", name, dev);
+
+		GOTO(out_mnt, rc = -EROFS);
 	}
 
 	if (!LDISKFS_HAS_COMPAT_FEATURE(o->od_mnt->mnt_sb,
@@ -7403,6 +7404,13 @@ static int __init osd_init(void)
 	rc = lu_kmem_init(ldiskfs_caches);
 	if (rc)
 		return rc;
+
+#ifdef CONFIG_KALLSYMS
+	priv_dev_set_rdonly = (void *)kallsyms_lookup_name("dev_set_rdonly");
+	priv_dev_check_rdonly = (void *)kallsyms_lookup_name("dev_check_rdonly");
+	/* Clear readonly is unused at this time */
+	/*priv_dev_clear_rdonly = (void *)kallsyms_lookup_name("dev_clear_rdonly");*/
+#endif
 
 	rc = class_register_type(&osd_obd_device_ops, NULL, true,
 				 lprocfs_osd_module_vars,

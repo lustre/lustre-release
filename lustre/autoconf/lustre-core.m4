@@ -74,19 +74,6 @@ AC_CHECK_FUNCS([name_to_handle_at],
 ]) # LC_GLIBC_SUPPORT_FHANDLES
 
 #
-# LC_FUNC_DEV_SET_RDONLY
-#
-# check whether dev_set_rdonly is exported.  This is needed until we
-# have another mechanism to fence IO from the underlying device.
-#
-AC_DEFUN([LC_FUNC_DEV_SET_RDONLY], [
-LB_CHECK_EXPORT([dev_set_rdonly], [block/ll_rw_block.c block/blk-core.c],
-	[AC_DEFINE(HAVE_DEV_SET_RDONLY, 1,
-		[kernel exports dev_set_rdonly])],
-	[AC_MSG_WARN([kernel missing dev_set_rdonly patch for testing])])
-]) # LC_FUNC_DEV_SET_RDONLY
-
-#
 # LC_STACK_SIZE
 #
 # Ensure the stack size is at least 8k in Lustre server (all kernels)
@@ -2694,7 +2681,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	#
 	AS_IF([test "x$enable_server" != xno], [
-		LC_FUNC_DEV_SET_RDONLY
 		LC_STACK_SIZE
 		LC_QUOTA64
 		LC_QUOTA_CONFIG
