@@ -15,6 +15,7 @@ set -e
 # to be 100% safe the administrator needs to ensure this is safe.
 
 RSYNC=${RSYNC:-rsync}
+LFS_MIGRATE_RSYNC_MODE=${LFS_MIGRATE_RSYNC_MODE:-false}
 ECHO=echo
 LFS=${LFS:-lfs}
 LFS_SIZE_OPT="-s"
@@ -26,7 +27,7 @@ usage: lfs_migrate [-c <stripe_count>] [-h] [-l] [-n] [-q] [-R] [-s] [-y] [-0]
     -c <stripe_count>
        restripe file using the specified stripe count
     -h show this usage message
-    -l migrate files with hard links (skip by default)
+    -l migrate files with hard links (skip by default for rsync)
     -n only print the names of files to be migrated
     -q run quietly (don't print filenames or status)
     -R restripe file using default directory striping
@@ -101,8 +102,6 @@ umask 0077
 $LFS getstripe --help 2>&1 | grep -q stripe-size && LFS_SIZE_OPT="-S"
 
 lfs_migrate() {
-	local RSYNC_MODE=false
-
 	while IFS='' read -d '' OLDNAME; do
 		$ECHO -n "$OLDNAME: "
 
@@ -113,11 +112,6 @@ lfs_migrate() {
 		# and there is no point in trying to migrate them.
 		if [ "${TYPE_LINK[1]}" != "regular" ]; then
 			echo -e "not a regular file, skipped"
-			continue
-		fi
-
-		if [ -z "$OPT_NLINK" -a ${TYPE_LINK[0]} -gt 1 ]; then
-			echo -e "multiple hard links, skipped"
 			continue
 		fi
 
@@ -152,14 +146,19 @@ lfs_migrate() {
 
 		# first try to migrate inside lustre
 		# if failed go back to old rsync mode
-		if [[ $RSYNC_MODE == false ]]; then
+		if [[ $LFS_MIGRATE_RSYNC_MODE == false ]]; then
 			if $LFS migrate -c${COUNT} ${SIZE} "$OLDNAME"; then
 				$ECHO "done"
 				continue
 			else
 				echo "falling back to rsync-based migration"
-				RSYNC_MODE=true
+				LFS_MIGRATE_RSYNC_MODE=true
 			fi
+		fi
+
+		if [ -z "$OPT_NLINK" -a ${TYPE_LINK[0]} -gt 1 ]; then
+			echo -e "multiple hard links, skipped"
+			continue
 		fi
 
 		NEWNAME=$(mktemp $UNLINK "$OLDNAME.tmp.XXXXXX")
