@@ -5055,54 +5055,59 @@ test_56w() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	TDIR=$DIR/${tdir}w
 
-    rm -rf $TDIR || error "remove $TDIR failed"
-    setup_56 $NUMFILES $NUMDIRS "-c $OSTCOUNT" "-c1"
+	rm -rf $TDIR || error "remove $TDIR failed"
+	setup_56 $NUMFILES $NUMDIRS "-c $OSTCOUNT" "-c1"
 
-    local stripe_size
-    stripe_size=$($GETSTRIPE -S -d $TDIR) ||
-        error "$GETSTRIPE -S -d $TDIR failed"
-    stripe_size=${stripe_size%% *}
+	local stripe_size
+	stripe_size=$($GETSTRIPE -S -d $TDIR) ||
+		error "$GETSTRIPE -S -d $TDIR failed"
+	stripe_size=${stripe_size%% *}
 
-    local file_size=$((stripe_size * OSTCOUNT))
-    local file_num=$((NUMDIRS * NUMFILES + NUMFILES))
-    local required_space=$((file_num * file_size))
+	local file_size=$((stripe_size * OSTCOUNT))
+	local file_num=$((NUMDIRS * NUMFILES + NUMFILES))
+	local required_space=$((file_num * file_size))
 
-    local free_space=$($LCTL get_param -n lov.$FSNAME-clilov-*.kbytesavail |
-			head -n1)
-    [[ $free_space -le $((required_space / 1024)) ]] &&
-        skip_env "need at least $required_space bytes free space," \
-                 "have $free_space kbytes" && return
+	local free_space=$($LCTL get_param -n lov.$FSNAME-clilov-*.kbytesavail |
+			   head -n1)
+	[[ $free_space -le $((required_space / 1024)) ]] &&
+		skip_env "need $required_space bytes, have $free_space KB" &&
+		return
 
-    local dd_bs=65536
-    local dd_count=$((file_size / dd_bs))
+	local dd_bs=65536
+	local dd_count=$((file_size / dd_bs))
 
-    # write data into the files
-    local i
-    local j
-    local file
-    for i in $(seq 1 $NUMFILES); do
-        file=$TDIR/file$i
-        yes | dd bs=$dd_bs count=$dd_count of=$file >/dev/null 2>&1 ||
-            error "write data into $file failed"
-    done
-    for i in $(seq 1 $NUMDIRS); do
-        for j in $(seq 1 $NUMFILES); do
-            file=$TDIR/dir$i/file$j
-            yes | dd bs=$dd_bs count=$dd_count of=$file \
-                >/dev/null 2>&1 ||
-                error "write data into $file failed"
-        done
-    done
+	# write data into the files
+	local i
+	local j
+	local file
+	for i in $(seq 1 $NUMFILES); do
+		file=$TDIR/file$i
+		yes | dd bs=$dd_bs count=$dd_count of=$file &>/dev/null ||
+			error "write data into $file failed"
+	done
+	for i in $(seq 1 $NUMDIRS); do
+		for j in $(seq 1 $NUMFILES); do
+			file=$TDIR/dir$i/file$j
+			yes|dd bs=$dd_bs count=$dd_count of=$file &>/dev/null ||
+				error "write data into $file failed"
+		done
+	done
 
-    local expected=-1
-    [[ $OSTCOUNT -gt 1 ]] && expected=$((OSTCOUNT - 1))
+	# $LFS_MIGRATE will fail if hard link migration is unsupported
+	if [[ $(lustre_version_code mds1) -gt $(version_code 2.5.55) ]]; then
+		createmany -l$TDIR/dir1/file1 $TDIR/dir1/link 200 ||
+			error "creating links to $TDIR/dir1/file1 failed"
+	fi
 
-    # lfs_migrate file
-    local cmd="$LFS_MIGRATE -y -c $expected $TDIR/file1"
-    echo "$cmd"
-    eval $cmd || error "$cmd failed"
+	local expected=-1
+	[[ $OSTCOUNT -gt 1 ]] && expected=$((OSTCOUNT - 1))
 
-    check_stripe_count $TDIR/file1 $expected
+	# lfs_migrate file
+	local cmd="$LFS_MIGRATE -y -c $expected $TDIR/file1"
+	echo "$cmd"
+	eval $cmd || error "$cmd failed"
+
+	check_stripe_count $TDIR/file1 $expected
 
 	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.90) ];
 	then
