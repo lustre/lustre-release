@@ -660,6 +660,17 @@ cpu_hotplug_state_machine, [
 ]) # LIBCFS_HOTPLUG_STATE_MACHINE
 
 #
+# LIBCFS_SCHED_HEADERS
+#
+# 4.11 has broken up sched.h into more headers.
+#
+AC_DEFUN([LIBCFS_SCHED_HEADERS], [
+LB_CHECK_LINUX_HEADER([linux/sched/signal.h], [
+	AC_DEFINE(HAVE_SCHED_HEADERS, 1,
+		[linux/sched header directory exist])])
+]) # LIBCFS_SCHED_HEADERS
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -725,6 +736,8 @@ LIBCFS_STACKTRACE_OPS
 LIBCFS_GET_USER_PAGES_GUP_FLAGS
 # 4.10
 LIBCFS_HOTPLUG_STATE_MACHINE
+# 4.11
+LIBCFS_SCHED_HEADERS
 ]) # LIBCFS_PROG_LINUX
 
 #

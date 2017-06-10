@@ -64,6 +64,10 @@
 #include <linux/rwsem.h>
 #include <linux/scatterlist.h>
 #include <linux/sched.h>
+#ifdef HAVE_SCHED_HEADERS
+#include <linux/sched/signal.h>
+#include <linux/sched/mm.h>
+#endif
 #include <linux/signal.h>
 #include <linux/slab.h>
 #include <linux/smp.h>
