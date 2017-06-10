@@ -1771,6 +1771,25 @@ have_bvec_iter, [
 ]) # LC_HAVE_BVEC_ITER
 
 #
+# LC_IOP_SET_ACL
+#
+# 3.14 adds set_acl method to inode_operations
+# see kernel commit 893d46e443346370cd4ea81d9d35f72952c62a37
+#
+AC_DEFUN([LC_IOP_SET_ACL], [
+LB_CHECK_COMPILE([if 'inode_operations' has '.set_acl' member function],
+inode_ops_set_acl, [
+	#include <linux/fs.h>
+],[
+	struct inode_operations iop;
+	iop.set_acl = NULL;
+],[
+	AC_DEFINE(HAVE_IOP_SET_ACL, 1,
+		[inode_operations has .set_acl member function])
+])
+]) # LC_IOP_SET_ACL
+
+#
 # LC_HAVE_BI_CNT
 #
 # 4.4 redefined bi_cnt as __bi_cnt
@@ -2751,6 +2770,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_BVEC_ITER
 	LC_HAVE_TRUNCATE_IPAGES_FINAL
 	LC_IOPS_RENAME_WITH_FLAGS
+	LC_IOP_SET_ACL
 
 	# 3.15
 	LC_VFS_RENAME_6ARGS

@@ -1479,30 +1479,33 @@ static int ll_rename(struct inode *src, struct dentry *src_dchild,
 }
 
 const struct inode_operations ll_dir_inode_operations = {
-	.mknod              = ll_mknod,
+	.mknod		= ll_mknod,
 #ifdef HAVE_IOP_ATOMIC_OPEN
-	.atomic_open	    = ll_atomic_open,
+	.atomic_open	= ll_atomic_open,
 #endif
-	.lookup             = ll_lookup_nd,
-	.create             = ll_create_nd,
+	.lookup		= ll_lookup_nd,
+	.create		= ll_create_nd,
 	/* We need all these non-raw things for NFSD, to not patch it. */
-	.unlink             = ll_unlink,
-	.mkdir              = ll_mkdir,
-	.rmdir              = ll_rmdir,
-	.symlink            = ll_symlink,
-	.link               = ll_link,
-	.rename             = ll_rename,
-	.setattr            = ll_setattr,
-	.getattr            = ll_getattr,
-	.permission         = ll_inode_permission,
+	.unlink		= ll_unlink,
+	.mkdir		= ll_mkdir,
+	.rmdir		= ll_rmdir,
+	.symlink	= ll_symlink,
+	.link		= ll_link,
+	.rename		= ll_rename,
+	.setattr	= ll_setattr,
+	.getattr	= ll_getattr,
+	.permission	= ll_inode_permission,
 #ifdef HAVE_IOP_XATTR
-	.setxattr           = ll_setxattr,
-	.getxattr           = ll_getxattr,
-	.removexattr        = ll_removexattr,
+	.setxattr	= ll_setxattr,
+	.getxattr	= ll_getxattr,
+	.removexattr	= ll_removexattr,
 #endif
-	.listxattr          = ll_listxattr,
+	.listxattr	= ll_listxattr,
 #ifdef HAVE_IOP_GET_ACL
-	.get_acl	    = ll_get_acl,
+	.get_acl	= ll_get_acl,
+#endif
+#ifdef HAVE_IOP_SET_ACL
+	.set_acl	= ll_set_acl,
 #endif
 };
 
@@ -1518,5 +1521,8 @@ const struct inode_operations ll_special_inode_operations = {
 	.listxattr      = ll_listxattr,
 #ifdef HAVE_IOP_GET_ACL
 	.get_acl	= ll_get_acl,
+#endif
+#ifdef HAVE_IOP_SET_ACL
+	.set_acl	= ll_set_acl,
 #endif
 };
