@@ -823,6 +823,13 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 	    atomic_read(&mo->mot_open_count) != 0)
 		RETURN(0);
 
+	/* mdt_attr_get_complex will clear ma_valid, so check here first */
+	if ((ma->ma_valid & MA_INODE) && (ma->ma_attr.la_nlink != 0))
+		RETURN(0);
+
+	if ((ma->ma_valid & MA_HSM) && (!(ma->ma_hsm.mh_flags & HS_EXISTS)))
+		RETURN(0);
+
 	need |= (MA_INODE | MA_HSM) & ~ma->ma_valid;
 	if (need != 0) {
 		/* ma->ma_valid is missing either MA_INODE, MA_HSM, or both,
@@ -835,14 +842,25 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 			       PFID(mdt_object_fid(mo)), rc);
 			RETURN(0);
 		}
-	}
-	/* Assume ma->ma_valid & MA_INODE is true, cf. mdt_attr_get_complex() */
-	if (ma->ma_attr.la_nlink != 0)
-		RETURN(0);
 
-	/* ma->ma_valid & MA_HSM may still be false */
-	if (!(ma->ma_valid & MA_HSM && ma->ma_hsm.mh_flags & HS_EXISTS))
-		RETURN(0);
+		if (need & MA_INODE) {
+			if (ma->ma_valid & MA_INODE) {
+				if (ma->ma_attr.la_nlink != 0)
+					RETURN(0);
+			} else {
+				RETURN(0);
+			}
+		}
+
+		if (need & MA_HSM) {
+			if (ma->ma_valid & MA_HSM) {
+				if (!(ma->ma_hsm.mh_flags & HS_EXISTS))
+					RETURN(0);
+			} else {
+				RETURN(0);
+			}
+		}
+	}
 
 	/* RAoLU policy is active, last close on file has occured,
 	 * file is unlinked, file is archived, so create remove request
