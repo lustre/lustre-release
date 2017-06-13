@@ -657,5 +657,10 @@ your distribution.
 		])
 	])
 
+	AS_IF([test "x$enable_zfs" = xyes], [
+		AC_SUBST(ENABLE_ZFS, yes)
+	], [
+		AC_SUBST(ENABLE_ZFS, no)
+	])
 	AM_CONDITIONAL(ZFS_ENABLED, [test "x$enable_zfs" = xyes])
 ])

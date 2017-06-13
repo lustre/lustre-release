@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Brian J. Murrell <brian.murrell@intel.com>
 Uploaders: Brian J. Murrell <brian.murrell@intel.com>
 Standards-Version: 3.7.2
-Build-Depends: debhelper (>= 5.0.0), bzip2
+Build-Depends: debhelper (>= 7.0.0), bzip2
 
 Package: lustre-client-modules-_KVERS_
 Architecture: any
@@ -16,5 +16,24 @@ Description: Lustre Linux kernel module (kernel _KVERS_)
  .
  These modules are compiled for the _KVERS_ linux kernel.
 
- 
-
+Package: lustre-server-modules-_KVERS_
+Architecture: any
+Recommends: linux-image, lustre-utils
+Provides: lustre-server-modules, lustre-client-modules
+Conflicts: lustre-client-modules-_KVERS_
+Replaces: lustre-client-modules-_KVERS_
+Description: Lustre Server Linux kernel module (kernel _KVERS_)
+ This package contains the loadable kernel modules for the
+ ldiskfs filesystem as used by the Lustre cluster filesystem servers.
+ .
+ Do note, that you will only need this, when you're running the
+ node as a Lustre server. The package might also contain the ldiskfs
+ module for use as a backing file system, in case it was enabled.
+ In that case, you should also run a lustre-patched Kernel
+ to achieve optimum performance. If you plan to run this with ZFS
+ enabled, no kernel patches are needed at all.
+ .
+ These server modules provide and supersede the client modules, if they
+ are compiled against same Kernel version.
+ .
+ These modules are compiled for the _KVERS_ linux kernel.

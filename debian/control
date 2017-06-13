@@ -42,24 +42,43 @@ Description: source for Lustre filesystem client kernel modules
  can be built for kernels 2.6.32+ with the use of module-assistant
  or make-kpkg.
 
-Package: lustre-utils
+Package: lustre-client-utils
 Section: utils
 Architecture: i386 powerpc ppc64el amd64 ia64 arm64
 Priority: optional
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Userspace utilities for the Lustre filesystem
+Description: Userspace utilities for the Lustre filesystem (client)
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Intel Corporation and available from
  https://wiki.hpdd.intel.com/
  .
  This package provides a number of userspace utilities for
- maintaining Lustre filesystems.
+ accessing Lustre filesystems from a client. If you need server utils,
+ use lustre-server-utils instead.
+
+Package: lustre-server-utils
+Section: utils
+Architecture: i386 powerpc ppc64el amd64 ia64
+Priority: optional
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: lustre-server-utils, lustre-client-utils
+Conflicts: lustre-client-utils
+Replaces: lustre-client-utils
+Description: Userspace utilities for the Lustre filesystem (server)
+ Lustre is a scalable, secure, robust, highly-available cluster file system.
+ This release is maintained by Intel Corporation and available from
+ https://wiki.hpdd.intel.com/
+ .
+ This package provides a number of userspace utilities for
+ accessing and maintaining Lustre filesystems from a server.
+ If you only need to access the LFS cluster, install lustre-client-utils
+ instead.
 
 Package: lustre-tests
 Section: utils
 Architecture: i386 powerpc ppc64el amd64 ia64 arm64
 Priority: optional
-Depends: lustre-utils (= ${binary:Version})
+Depends: lustre-client-utils (= ${binary:Version})
 Description: Test suite for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Intel Corporation and available from
@@ -71,7 +90,7 @@ Package: lustre-dev
 Section: libdevel
 Priority: optional
 Architecture: i386 powerpc ppc64el amd64 ia64 arm64
-Depends: lustre-utils (= ${binary:Version})
+Depends: lustre-client-utils (= ${binary:Version})
 Description: Development files for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
  This release is maintained by Intel Corporation and available from

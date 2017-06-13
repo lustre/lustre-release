@@ -13,6 +13,7 @@
 DEB_BUILD_GNU_SYSTEM = $(shell dpkg-architecture -qDEB_BUILD_GNU_SYSTEM)
 DEB_BUILD_GNU_CPU = $(shell dpkg-architecture -qDEB_BUILD_GNU_CPU)
 
+
 # whether to use module-assistant to build the kernel modules or not
 USE_MA = true
 
@@ -32,7 +33,11 @@ endif
 export DH_COMPAT=7
 
 # Module-assistant stuff
-PACKAGE=lustre-client-modules
+ifneq (,$(findstring server,$(DEB_BUILD_PROFILES)))
+	PACKAGE=lustre-server-modules
+else
+	PACKAGE=lustre-client-modules
+endif
 MA_DIR ?= /usr/share/modass
 -include $(MA_DIR)/include/generic.make
 -include $(MA_DIR)/include/common-rules.make
@@ -56,13 +61,22 @@ KSRC?=$(LINUX_OBJ)
 KSRC_TREE?=$(LINUX)
 IB_OPTIONS?=""
 
-# Packages
+# Packages provided for both client and server builds
 PATCH_PKG=linux-patch-lustre
-UTILS_PKG=lustre-utils
 TESTS_PKG=lustre-tests
 DEV_PKG=lustre-dev
 SOURCE_PKG=lustre-source
-MODS_PKG=lustre-client-modules
+SOURCE_PKG=lustre-source
+
+# Packages that are only built for server OR client builds
+# The difference is that server build contain more modules & utils
+ifneq (,$(findstring server,$(DEB_BUILD_PROFILES)))
+	UTILS_PKG=lustre-server-utils
+	MODS_PKG=lustre-server-modules
+else
+	UTILS_PKG=lustre-client-utils
+	MODS_PKG=lustre-client-modules
+endif
 
 #Build dir
 #BUILDDIR=debian/build
@@ -105,6 +119,18 @@ autogen-stamp: patch-stamp
 	fi; \
 	touch $@
 
+# This section configures the lustre-utilities packages.
+#
+# Both client and server builds are quite similar, as the utilities build
+# must create the modules too, to produce the "osd_<fstype>.so" libraries.
+#
+# The main difference is that the utilities build does not archive the
+# modules, whereas the modules build omits the utilities, to create two
+# neatly separated debian files.
+#
+# Note: KERNEL_SRC, KERNEL_CFG, ZFS_SRC and SPL_SRC need to be set from the
+# outside. This is done by "make debs". As such, invoking "debuild" or such
+# direct debian build tools will lead to a client-only build.
 configure: configure-stamp
 configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 	dh_testdir
@@ -114,13 +140,33 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 		mkdir -p $(BUILDDIR)/build $(BUILDDIR)/lustre/contrib; \
 		cp build/Makefile $(BUILDDIR)/build/; \
 	fi
+	# Determine flags that are different between server/client module builds
+	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "server"; then \
+		export EXTRAFLAGS="--enable-server"; \
+	else \
+		export EXTRAFLAGS="--disable-server --disable-modules"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "zfs"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --with-zfs=$${ZFS_SRC} --with-spl=$${SPL_SRC}"; \
+	else \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --without-zfs" ; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "ldiskfs"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} \
+			--enable-ldiskfs --enable-quilt"; \
+	else \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --disable-ldiskfs"; \
+	fi; \
+	echo "Final value of EXTRAFLAGS: $${EXTRAFLAGS}"; \
 	( cd $(BUILDDIR) && \
-	 $(SRCDIR)/configure --disable-dependency-tracking \
-		   --disable-modules \
-		   --disable-snmp \
-		   --disable-client \
-		   --enable-quota \
-		   --disable-server )
+		$(SRCDIR)/configure --disable-dependency-tracking \
+			--with-linux=$${KERNEL_SRC} \
+			--with-linux-config=$${KERNEL_CFG} \
+			--disable-snmp \
+			--enable-quota \
+			$${EXTRAFLAGS} \
+	); \
 	touch $@
 
 build-arch build-indep: build
@@ -130,7 +176,7 @@ build-stamp: patch-stamp configure-stamp
 	dh_testdir
 	$(MAKE) -C $(BUILDDIR) $(PMAKEARGS)
 	$(MAKE) -C $(BUILDDIR) DESTDIR=$(TOP_DIR)/debian/tmp install
-	# jump our lustre-client-modules into the control file if not using m-a
+	# jump our lustre-[client|server]-modules into the control file if not using m-a
 	if ! $(USE_MA); then \
 		(cat debian/control.main; sed -e '1,/^$$/d' -e "s/_KVERS_/$(KVER)/g" < debian/control.modules.in) > debian/control; \
 		for file in debian/*_KVERS_*; do \
@@ -271,6 +317,7 @@ binary-$(SOURCE_PKG): build-stamp
 # if only we could use m-a for this, but this stupid "compliant.list"
 # thing fouls that up
 binary-kern-mods:
+	# Build client or server modules
 	mkdir -p debian/m-a_root/usr_src/modules
 	ln -s ../../../../ debian/m-a_root/usr_src/modules/lustre
 	m-a -t -u debian/m-a_root/ -d -v -k $(KSRC) build lustre
@@ -279,7 +326,7 @@ binary-kern-mods:
 # an alternative (to module-assistant) method of building the kernel modules
 binary-$(MODS_PKG): build-stamp
 	if ! $(USE_MA); then \
-		cp debian/lustre-client-modules.install debian/lustre-client-modules-$(KVER).install ; \
+		cp debian/$(MODS_PKG).install debian/$(MODS_PKG)-$(KVER).install ; \
 		dh_testdir; \
 		dh_testroot; \
 		dh_installdirs -p $(MODS_PKG)-$(KVER); \
@@ -295,6 +342,7 @@ binary-$(MODS_PKG): build-stamp
 		dh_md5sums -p $(MODS_PKG)-$(KVER); \
 		dh_builddeb -p $(MODS_PKG)-$(KVER); \
 	fi
+
 
 ###
 ### For module-assistant
@@ -333,19 +381,39 @@ kdist_config: prep-deb-files patch-stamp
 	#-$(MAKE) -C $(KSRC) prepare scripts
 	# touch files to same date, to avoid auto*
 	find . -type f -print0 | xargs -0 touch -r COPYING \;
-	# Doesn't seem possible to only build modules...
+	# Determine flags that are different between server/client module builds
+	# Note: It doesn't seem possible to *only* build modules.
+	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "server"; then \
+		export EXTRAFLAGS="--enable-server"; \
+	else \
+		export EXTRAFLAGS="--disable-server"; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "zfs"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --with-zfs=$${ZFS_SRC} --with-spl=$${SPL_SRC}"; \
+	else \
+		export EXTRAFLAGS="$${EXTRAFLAGS} --without-zfs" ; \
+	fi; \
+	if echo "$${DEB_BUILD_PROFILES}" | grep -q "ldiskfs"; then \
+		export EXTRAFLAGS="$${EXTRAFLAGS} \
+			--enable-ldiskfs --enable-quilt"; \
+	else \
+		export EXTRAFLAGS="$${EXTRAFLAGS} \
+			--disable-ldiskfs --disable-quilt"; \
+	fi; \
+	echo "Final value of EXTRAFLAGS: $${EXTRAFLAGS}"; \
 	./configure --with-linux=$(KSRC_TREE) \
-		    --with-linux-obj=$(KSRC) \
-	            --disable-server \
-		    --disable-quilt  \
-		    --disable-dependency-tracking \
-		    --disable-doc  \
-		    --disable-iokit \
-		    --disable-snmp \
-		    --disable-tests \
-		    --enable-quota \
-		    --with-kmp-moddir=updates \
-		    $(IB_OPTIONS)
+		--with-linux-obj=$(KSRC) \
+		--disable-dependency-tracking \
+		--disable-doc  \
+		--disable-iokit \
+		--disable-snmp \
+		--disable-tests \
+		--enable-quota \
+		--with-kmp-moddir=updates \
+		$${EXTRAFLAGS} \
+		$(IB_OPTIONS)
+
 
 kdist_configure: kdist_config
 
@@ -376,7 +444,7 @@ clean:
 	dpatch deapply-all -v
 	-$(MAKE) distclean
 	rm -rf  debian/substvars debian/*.bak debian/*~ *~  *-stamp debian/$(PATCH_PKG)
-	ls -d debian/lustre-client-modules-* | grep -v _KVERS_ | xargs rm -f || true
+	ls -d debian/lustre-*-modules-* | grep -v _KVERS_ | xargs rm -f || true
 	# only remove this if the clean was not called from kdist_clean
 	if [ "$$MA_SOURCE_PKG" = "" ]; then \
 		rm -rf  debian/m-a_root; \

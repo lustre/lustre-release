@@ -9,4 +9,5 @@
 /lustre-tests.substvars
 /lustre-utils
 /lustre-utils.substvars
+/lustre-*-utils
 /tmp

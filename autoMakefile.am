@@ -188,12 +188,33 @@ debs: undef.h
 	if [ "$$lversion" != "$$cversion" ]; then \
 		echo -e "1i\nlustre ($$lversion-1) unstable; urgency=low\n\n  * Automated changelog entry update\n\n -- Brian J. Murrell <brian@interlinx.bc.ca>  $$(date -R)\n\n.\nwq" | ed debian/changelog; \
 	fi; \
-	rm -rf debs
+	rm -rf debs; \
+	if test "x@ENABLE_SERVER@" = "xyes"; then \
+		DEB_BUILD_PROFILES="server"; \
+	else \
+		DEB_BUILD_PROFILES="client"; \
+	fi; \
+	if test "x@ENABLE_LDISKFS@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} ldiskfs"; \
+	fi; \
+	if test "x@ENABLE_ZFS@" = "xyes"; then \
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} zfs"; \
+		export SPL_SRC="@SPL@"; \
+		export ZFS_SRC="@ZFS@"; \
+		echo "ZFS support is enabled. Will expect pre-compiled SPL and ZFS sources in:"; \
+		echo "SPL: $${SPL_SRC}"; \
+		echo "ZFS: $${ZFS_SRC}"; \
+	fi; \
+	export KERNEL_CFG="$(LINUX_CONFIG)"; \
+	export KERNEL_SRC="$(LINUX)"; \
+	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"; \
+	echo "Kernel Source: $${KERNEL_SRC}"; \
+	echo "Kernel Config: $${KERNEL_CFG}"; \
 	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp || { \
 		rc=$${PIPESTATUS[0]}; \
 		[ $${rc} -gt 1 ] && exit $${rc}; \
 		exit 0; \
-	}
+	}; \
 	export KPKG_DEST_DIR="$$(pwd)/.." && \
 	version=$$(sed -ne '1s/^lustre (\(.*\)).*$$/\1/p' debian/changelog) && \
 	rm -rf debian/tmp/modules-deb && \
@@ -224,9 +245,10 @@ debs: undef.h
 	mkdir -p debs && \
 	mv ../linux-patch-lustre_$${VER}_all.deb ../lustre-dev_$${VER}_*.deb \
 	   ../lustre-source_$${VER}_all.deb ../lustre-tests_$${VER}_*.deb \
-	   ../lustre-utils_$${VER}_*.deb ../lustre_$${VER}.dsc \
+	   ../lustre-*-utils_$${VER}_*.deb ../lustre_$${VER}.dsc \
 	   ../lustre_$${VER}_*.changes ../lustre_$${VER}.tar.gz \
-	   ../lustre-client-modules-$${KVERS}_$${VER}_*.deb debs/
+	   ../lustre-*-modules-$${KVERS}_$${VER}_*.deb \
+	   debs/
 
 if USES_DPKG
 EXTRA_DIST += debian/*

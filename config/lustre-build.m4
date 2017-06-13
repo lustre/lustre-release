@@ -357,6 +357,7 @@ AM_CONDITIONAL([USES_DPKG], [test x$uses_dpkg = xyes])
 AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
 AM_CONDITIONAL([RHEL], [test x$RHEL_KERNEL = xyes])
 AM_CONDITIONAL([SUSE], [test x$SUSE_KERNEL = xyes])
+AM_CONDITIONAL([UBUNTU], [test x$UBUNTU_KERNEL = xyes])
 
 # Sanity check for PCLMULQDQ instruction availability
 # PCLMULQDQ instruction is a new instruction available beginning with
@@ -438,8 +439,12 @@ AS_IF([test x$enable_ldiskfs = xno -a x$enable_zfs = xno], [
 
 AC_MSG_CHECKING([whether to build Lustre server support])
 AC_MSG_RESULT([$enable_server])
-AS_IF([test x$enable_server = xyes],
-	[AC_DEFINE(HAVE_SERVER_SUPPORT, 1, [support server])])
+AS_IF([test x$enable_server = xyes], [
+	AC_DEFINE(HAVE_SERVER_SUPPORT, 1, [support server])
+	AC_SUBST(ENABLE_SERVER, yes)
+], [
+	AC_SUBST(ENABLE_SERVER, no)
+])
 ]) # LB_CONFIG_SERVERS
 
 #

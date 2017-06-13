@@ -54,6 +54,24 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	    [LDISKFS_SERIES="4.4-sles12sp2.series"]
 	)], [LDISKFS_SERIES="4.4-sles12sp3.series"],
             [LDISKFS_SERIES="4.4-sles12sp3.series"])
+], [test x$UBUNTU_KERNEL = xyes], [
+	AS_VERSION_COMPARE([$LINUXRELEASE],[4.4.0],
+		[],
+		[
+			KPLEV=$(echo $LINUXRELEASE | sed -n 's/.*-\([0-9]\+\).*/\1/p')
+			AS_IF(
+				[test -z "$KPLEV"], [
+					AC_MSG_WARN([Failed to determine Kernel patch level. Assume latest.])
+					LDISKFS_SERIES="4.4.0-73-ubuntu14+16.series"
+				],
+				[test $KPLEV -ge 73], [LDISKFS_SERIES="4.4.0-73-ubuntu14+16.series"],
+				[test $KPLEV -ge 62], [LDISKFS_SERIES="4.4.0-62-ubuntu14+16.series"],
+				[test $KPLEV -ge 49], [LDISKFS_SERIES="4.4.0-49-ubuntu14+16.series"],
+				[LDISKFS_SERIES="4.4.0-45-ubuntu14+16.series"]
+			)
+		],
+		[LDISKFS_SERIES="4.4.0-73-ubuntu14+16.series"]
+	)
 ])
 ])
 AS_IF([test -z "$LDISKFS_SERIES"],
@@ -244,6 +262,7 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	# set is available for the detected kernel.  For now, we just always
 	# set it to "yes".
 	AS_IF([test x$enable_ldiskfs = xmaybe], [enable_ldiskfs=yes])
+	AC_SUBST(ENABLE_LDISKFS, yes)
 
 	LDISKFS_LINUX_SERIES
 	LDISKFS_AC_PATCH_PROGRAM
@@ -260,6 +279,8 @@ AS_IF([test x$enable_ldiskfs != xno],[
 	AC_DEFINE(CONFIG_LDISKFS_FS_ENCRYPTION, 1, [enable encryption for ldiskfs])
 	AC_SUBST(LDISKFS_SUBDIR, ldiskfs)
 	AC_DEFINE(HAVE_LDISKFS_OSD, 1, Enable ldiskfs osd)
+], [
+	AC_SUBST(ENABLE_LDISKFS, no)
 ])
 
 AC_MSG_CHECKING([whether to build ldiskfs])
