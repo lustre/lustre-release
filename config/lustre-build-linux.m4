@@ -73,46 +73,81 @@ AC_SUBST(LINUXRELEASE)
 # get the release version of linux
 #
 AC_DEFUN([LB_LINUX_RELEASE], [
-LB_LINUX_UTSRELEASE
+	LB_LINUX_UTSRELEASE
 
-# check if the kernel is one from RHEL or SUSE
-AC_CACHE_CHECK([for RedHat kernel release number], lb_cv_rhel_kernel_version, [
-lb_cv_rhel_kernel_version=""
-AS_IF([fgrep -q RHEL_RELEASE $LINUX_OBJ/include/$VERSION_HDIR/version.h], [
-	lb_cv_rhel_kernel_version=$(awk '/ RHEL_MAJOR / { print [$]3 }' \
-		$LINUX_OBJ/include/$VERSION_HDIR/version.h)$(awk \
-		'/ RHEL_MINOR / { print [$]3 }' \
-		$LINUX_OBJ/include/$VERSION_HDIR/version.h)
-])
-])
-AS_IF([test -n "$lb_cv_rhel_kernel_version"], [
-	RHEL_KERNEL="yes"
-	RHEL_RELEASE_NO=$lb_cv_rhel_kernel_version
-], [
+	# Define default states
 	RHEL_KERNEL="no"
-	LB_CHECK_CONFIG([SUSE_KERNEL], [SUSE_KERNEL="yes"], [SUSE_KERNEL="no"])
-])
+	SUSE_KERNEL="no"
+	UBUNTU_KERNEL="no"
+	# And if any of the above kernels has been detected yet
+	KERNEL_FOUND="no"
 
-AC_MSG_CHECKING([for Linux kernel module package directory])
-AC_ARG_WITH([kmp-moddir],
-	AC_HELP_STRING([--with-kmp-moddir=string],
-		[set the kmod updates or extra directory]),
-	[KMP_MODDIR=$withval
-	 IN_KERNEL=''],[
-	AS_IF([test x$RHEL_KERNEL = xyes], [KMP_MODDIR="extra/kernel"],
-	      [test x$SUSE_KERNEL = xyes], [KMP_MODDIR="updates/kernel"])
-	IN_KERNEL="${PACKAGE}"])
-AC_MSG_RESULT($KMP_MODDIR)
+	# Check for RedHat first (no need to check KERNEL_FOUND
+	AC_CACHE_CHECK([for RedHat kernel release number], lb_cv_rhel_kernel_version, [
+		lb_cv_rhel_kernel_version=""
+		AS_IF([fgrep -q RHEL_RELEASE $LINUX_OBJ/include/$VERSION_HDIR/version.h], [
+			lb_cv_rhel_kernel_version=$(awk '/ RHEL_MAJOR / { print [$]3 }' \
+				$LINUX_OBJ/include/$VERSION_HDIR/version.h)$(awk \
+				'/ RHEL_MINOR / { print [$]3 }' \
+				$LINUX_OBJ/include/$VERSION_HDIR/version.h)
+		])
+	])
+	AS_IF([test -n "$lb_cv_rhel_kernel_version"], [
+		RHEL_KERNEL="yes"
+		KERNEL_FOUND="yes"
+		RHEL_RELEASE_NO=$lb_cv_rhel_kernel_version
+	])
 
-moduledir="/lib/modules/${LINUXRELEASE}/${KMP_MODDIR}"
+	# Check for SuSE
+	AS_IF([test "x$KERNEL_FOUND" = "xno"], [
+		LB_CHECK_CONFIG([SUSE_KERNEL], [
+			SUSE_KERNEL="yes"
+			KERNEL_FOUND="yes"
+		], [])
+	])
 
-modulefsdir="${moduledir}/fs/${IN_KERNEL}"
-AC_SUBST(modulefsdir)
+	# Check for Ubuntu
+	AS_IF([test "x$KERNEL_FOUND" = "xno"], [
+		AC_CACHE_CHECK([for Ubuntu kernel signature], lb_cv_ubuntu_kernel_sig, [
+			lb_cv_ubuntu_kernel_sig="no"
+			AS_IF([fgrep -q "CONFIG_VERSION_SIGNATURE \"Ubuntu" $LINUX_OBJ/include/generated/autoconf.h], [
+				lb_cv_ubuntu_kernel_sig="yes"
+			])
+		])
+		AS_IF([test "x$lb_cv_ubuntu_kernel_sig" = "xyes"], [
+			UBUNTU_KERNEL="yes"
+			KERNEL_FOUND="yes"
+		])
+	])
 
-modulenetdir="${moduledir}/net/${IN_KERNEL}"
-AC_SUBST(modulenetdir)
+	# If still no kernel was found, a warning is issued
+	AS_IF([test "x$KERNEL_FOUND" = "xno"], [
+		AC_MSG_WARN([Kernel Distro seems to be neither RedHat, SuSE nor Ubuntu])
+	])
 
-AC_SUBST(KMP_MODDIR)
+	AC_MSG_CHECKING([for Linux kernel module package directory])
+	AC_ARG_WITH([kmp-moddir],
+		AC_HELP_STRING([--with-kmp-moddir=string],
+			[set the kmod updates or extra directory]),
+		[KMP_MODDIR=$withval
+		 IN_KERNEL=''],[
+		AS_IF([test x$RHEL_KERNEL = xyes], [KMP_MODDIR="extra/kernel"],
+			  [test x$SUSE_KERNEL = xyes], [KMP_MODDIR="updates/kernel"],
+			  [test x$UBUNTU_KERNEL = xyes], [KMP_MODDIR="updates/kernel"],
+			  [AC_MSG_WARN([Kernel Distro seems to be neither RedHat, SuSE nor Ubuntu])]
+		)
+		IN_KERNEL="${PACKAGE}"])
+	AC_MSG_RESULT($KMP_MODDIR)
+
+	moduledir="/lib/modules/${LINUXRELEASE}/${KMP_MODDIR}"
+
+	modulefsdir="${moduledir}/fs/${IN_KERNEL}"
+	AC_SUBST(modulefsdir)
+
+	modulenetdir="${moduledir}/net/${IN_KERNEL}"
+	AC_SUBST(modulenetdir)
+
+	AC_SUBST(KMP_MODDIR)
 ])
 
 #
