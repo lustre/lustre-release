@@ -3748,76 +3748,81 @@ static void lfsck_namespace_dump_statistics(struct seq_file *m,
 					    __u64 checked_phase1,
 					    __u64 checked_phase2,
 					    __u32 time_phase1,
-					    __u32 time_phase2)
+					    __u32 time_phase2, bool dryrun)
 {
+	const char *postfix = dryrun ? "inconsistent" : "repaired";
+
 	seq_printf(m, "checked_phase1: %llu\n"
 		   "checked_phase2: %llu\n"
-		   "updated_phase1: %llu\n"
-		   "updated_phase2: %llu\n"
+		   "%s_phase1: %llu\n"
+		   "%s_phase2: %llu\n"
 		   "failed_phase1: %llu\n"
 		   "failed_phase2: %llu\n"
 		   "directories: %llu\n"
-		   "dirent_repaired: %llu\n"
-		   "linkea_repaired: %llu\n"
-		   "nlinks_repaired: %llu\n"
+		   "dirent_%s: %llu\n"
+		   "linkea_%s: %llu\n"
+		   "nlinks_%s: %llu\n"
 		   "multiple_linked_checked: %llu\n"
-		   "multiple_linked_repaired: %llu\n"
+		   "multiple_linked_%s: %llu\n"
 		   "unknown_inconsistency: %llu\n"
-		   "unmatched_pairs_repaired: %llu\n"
-		   "dangling_repaired: %llu\n"
-		   "multiple_referenced_repaired: %llu\n"
-		   "bad_file_type_repaired: %llu\n"
-		   "lost_dirent_repaired: %llu\n"
+		   "unmatched_pairs_%s: %llu\n"
+		   "dangling_%s: %llu\n"
+		   "multiple_referenced_%s: %llu\n"
+		   "bad_file_type_%s: %llu\n"
+		   "lost_dirent_%s: %llu\n"
 		   "local_lost_found_scanned: %llu\n"
 		   "local_lost_found_moved: %llu\n"
 		   "local_lost_found_skipped: %llu\n"
 		   "local_lost_found_failed: %llu\n"
 		   "striped_dirs_scanned: %llu\n"
-		   "striped_dirs_repaired: %llu\n"
+		   "striped_dirs_%s: %llu\n"
 		   "striped_dirs_failed: %llu\n"
 		   "striped_dirs_disabled: %llu\n"
 		   "striped_dirs_skipped: %llu\n"
 		   "striped_shards_scanned: %llu\n"
-		   "striped_shards_repaired: %llu\n"
+		   "striped_shards_%s: %llu\n"
 		   "striped_shards_failed: %llu\n"
 		   "striped_shards_skipped: %llu\n"
-		   "name_hash_repaired: %llu\n"
-		   "linkea_overflow_cleared: %llu\n"
+		   "name_hash_%s: %llu\n"
+		   "linkea_overflow_%s: %llu\n"
 		   "success_count: %u\n"
 		   "run_time_phase1: %u seconds\n"
 		   "run_time_phase2: %u seconds\n",
 		   checked_phase1,
 		   checked_phase2,
+		   dryrun ? "inconsistent" : "updated",
 		   ns->ln_items_repaired,
+		   dryrun ? "inconsistent" : "updated",
 		   ns->ln_objs_repaired_phase2,
 		   ns->ln_items_failed,
 		   ns->ln_objs_failed_phase2,
 		   ns->ln_dirs_checked,
-		   ns->ln_dirent_repaired,
-		   ns->ln_linkea_repaired,
-		   ns->ln_objs_nlink_repaired,
+		   postfix, ns->ln_dirent_repaired,
+		   postfix, ns->ln_linkea_repaired,
+		   postfix, ns->ln_objs_nlink_repaired,
 		   ns->ln_mul_linked_checked,
-		   ns->ln_mul_linked_repaired,
+		   postfix, ns->ln_mul_linked_repaired,
 		   ns->ln_unknown_inconsistency,
-		   ns->ln_unmatched_pairs_repaired,
-		   ns->ln_dangling_repaired,
-		   ns->ln_mul_ref_repaired,
-		   ns->ln_bad_type_repaired,
-		   ns->ln_lost_dirent_repaired,
+		   postfix, ns->ln_unmatched_pairs_repaired,
+		   postfix, ns->ln_dangling_repaired,
+		   postfix, ns->ln_mul_ref_repaired,
+		   postfix, ns->ln_bad_type_repaired,
+		   postfix, ns->ln_lost_dirent_repaired,
 		   ns->ln_local_lpf_scanned,
 		   ns->ln_local_lpf_moved,
 		   ns->ln_local_lpf_skipped,
 		   ns->ln_local_lpf_failed,
 		   ns->ln_striped_dirs_scanned,
-		   ns->ln_striped_dirs_repaired,
+		   postfix, ns->ln_striped_dirs_repaired,
 		   ns->ln_striped_dirs_failed,
 		   ns->ln_striped_dirs_disabled,
 		   ns->ln_striped_dirs_skipped,
 		   ns->ln_striped_shards_scanned,
-		   ns->ln_striped_shards_repaired,
+		   postfix, ns->ln_striped_shards_repaired,
 		   ns->ln_striped_shards_failed,
 		   ns->ln_striped_shards_skipped,
-		   ns->ln_name_hash_repaired,
+		   postfix, ns->ln_name_hash_repaired,
+		   dryrun ? "inconsistent" : "cleared",
 		   ns->ln_linkea_overflow_cleared,
 		   ns->ln_success_count,
 		   time_phase1,
@@ -4436,7 +4441,8 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 		if (rtime != 0)
 			do_div(speed, rtime);
 
-		lfsck_namespace_dump_statistics(m, ns, checked, 0, rtime, 0);
+		lfsck_namespace_dump_statistics(m, ns, checked, 0, rtime, 0,
+						bk->lb_param & LPF_DRYRUN);
 		seq_printf(m, "average_speed_phase1: %llu items/sec\n"
 			   "average_speed_phase2: N/A\n"
 			   "average_speed_total: %llu items/sec\n"
@@ -4510,7 +4516,8 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 
 		lfsck_namespace_dump_statistics(m, ns, ns->ln_items_checked,
 						checked,
-						ns->ln_run_time_phase1, rtime);
+						ns->ln_run_time_phase1, rtime,
+						bk->lb_param & LPF_DRYRUN);
 		seq_printf(m, "average_speed_phase1: %llu items/sec\n"
 			   "average_speed_phase2: %llu objs/sec\n"
 			   "average_speed_total: %llu items/sec\n"
@@ -4544,7 +4551,8 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 		lfsck_namespace_dump_statistics(m, ns, ns->ln_items_checked,
 						ns->ln_objs_checked_phase2,
 						ns->ln_run_time_phase1,
-						ns->ln_run_time_phase2);
+						ns->ln_run_time_phase2,
+						bk->lb_param & LPF_DRYRUN);
 		seq_printf(m, "average_speed_phase1: %llu items/sec\n"
 			   "average_speed_phase2: %llu objs/sec\n"
 			   "average_speed_total: %llu items/sec\n"

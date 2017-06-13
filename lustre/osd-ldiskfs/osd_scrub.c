@@ -3314,13 +3314,16 @@ int osd_scrub_dump(struct seq_file *m, struct osd_device *dev)
 
 	checked = sf->sf_items_checked + scrub->os_new_checked;
 	seq_printf(m, "checked: %llu\n"
-		   "updated: %llu\n"
+		   "%s: %llu\n"
 		   "failed: %llu\n"
-		   "prior_updated: %llu\n"
+		   "prior_%s: %llu\n"
 		   "noscrub: %llu\n"
 		   "igif: %llu\n"
 		   "success_count: %u\n",
-		   checked, sf->sf_items_updated, sf->sf_items_failed,
+		   checked,
+		   sf->sf_param & SP_DRYRUN ? "inconsistent" : "updated",
+		   sf->sf_items_updated, sf->sf_items_failed,
+		   sf->sf_param & SP_DRYRUN ? "inconsistent" : "updated",
 		   sf->sf_items_updated_prior, sf->sf_items_noscrub,
 		   sf->sf_items_igif, sf->sf_success_count);
 
@@ -3342,10 +3345,13 @@ int osd_scrub_dump(struct seq_file *m, struct osd_device *dev)
 			   "real-time_speed: %llu objects/sec\n"
 			   "current_position: %u\n"
 			   "lf_scanned: %llu\n"
-			   "lf_repaired: %llu\n"
+			   "lf_%s: %llu\n"
 			   "lf_failed: %llu\n",
 			   rtime, speed, new_checked, scrub->os_pos_current,
-			   scrub->os_lf_scanned, scrub->os_lf_repaired,
+			   scrub->os_lf_scanned,
+			   sf->sf_param & SP_DRYRUN ?
+				"inconsistent" : "repaired",
+			   scrub->os_lf_repaired,
 			   scrub->os_lf_failed);
 		seq_printf(m, "inodes_per_group: %lu\n"
 			   "current_iit_group: %u\n"
@@ -3369,9 +3375,11 @@ int osd_scrub_dump(struct seq_file *m, struct osd_device *dev)
 			   "real-time_speed: N/A\n"
 			   "current_position: N/A\n"
 			   "lf_scanned: %llu\n"
-			   "lf_repaired: %llu\n"
+			   "lf_%s: %llu\n"
 			   "lf_failed: %llu\n",
 			   sf->sf_run_time, speed, scrub->os_lf_scanned,
+			   sf->sf_param & SP_DRYRUN ?
+				"inconsistent" : "repaired",
 			   scrub->os_lf_repaired, scrub->os_lf_failed);
 	}
 
