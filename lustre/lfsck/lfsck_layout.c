@@ -5816,8 +5816,14 @@ static void lfsck_layout_dump(const struct lu_env *env,
 	struct lfsck_instance	*lfsck = com->lc_lfsck;
 	struct lfsck_bookmark	*bk    = &lfsck->li_bookmark_ram;
 	struct lfsck_layout	*lo    = com->lc_file_ram;
+	const char *prefix;
 
 	down_read(&com->lc_sem);
+	if (bk->lb_param & LPF_DRYRUN)
+		prefix = "inconsistent";
+	else
+		prefix = "repaired";
+
 	seq_printf(m, "name: lfsck_layout\n"
 		   "magic: %#x\n"
 		   "version: %d\n"
@@ -5844,22 +5850,22 @@ static void lfsck_layout_dump(const struct lu_env *env,
 		   lo->ll_pos_first_inconsistent);
 
 	seq_printf(m, "success_count: %u\n"
-		   "repaired_dangling: %llu\n"
-		   "repaired_unmatched_pair: %llu\n"
-		   "repaired_multiple_referenced: %llu\n"
-		   "repaired_orphan: %llu\n"
-		   "repaired_inconsistent_owner: %llu\n"
-		   "repaired_others: %llu\n"
+		   "%s_dangling: %llu\n"
+		   "%s_unmatched_pair: %llu\n"
+		   "%s_multiple_referenced: %llu\n"
+		   "%s_orphan: %llu\n"
+		   "%s_inconsistent_owner: %llu\n"
+		   "%s_others: %llu\n"
 		   "skipped: %llu\n"
 		   "failed_phase1: %llu\n"
 		   "failed_phase2: %llu\n",
 		   lo->ll_success_count,
-		   lo->ll_objs_repaired[LLIT_DANGLING - 1],
-		   lo->ll_objs_repaired[LLIT_UNMATCHED_PAIR - 1],
-		   lo->ll_objs_repaired[LLIT_MULTIPLE_REFERENCED - 1],
-		   lo->ll_objs_repaired[LLIT_ORPHAN - 1],
-		   lo->ll_objs_repaired[LLIT_INCONSISTENT_OWNER - 1],
-		   lo->ll_objs_repaired[LLIT_OTHERS - 1],
+		   prefix, lo->ll_objs_repaired[LLIT_DANGLING - 1],
+		   prefix, lo->ll_objs_repaired[LLIT_UNMATCHED_PAIR - 1],
+		   prefix, lo->ll_objs_repaired[LLIT_MULTIPLE_REFERENCED - 1],
+		   prefix, lo->ll_objs_repaired[LLIT_ORPHAN - 1],
+		   prefix, lo->ll_objs_repaired[LLIT_INCONSISTENT_OWNER - 1],
+		   prefix, lo->ll_objs_repaired[LLIT_OTHERS - 1],
 		   lo->ll_objs_skipped,
 		   lo->ll_objs_failed_phase1,
 		   lo->ll_objs_failed_phase2);
