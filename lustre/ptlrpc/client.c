@@ -2506,29 +2506,54 @@ void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request)
  * Drops one reference count for request \a request.
  * \a locked set indicates that caller holds import imp_lock.
  * Frees the request whe reference count reaches zero.
+ *
+ * \retval 1	the request is freed
+ * \retval 0	some others still hold references on the request
  */
 static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked)
 {
-        ENTRY;
-        if (request == NULL)
-                RETURN(1);
+	int count;
+	ENTRY;
 
-        if (request == LP_POISON ||
-            request->rq_reqmsg == LP_POISON) {
-                CERROR("dereferencing freed request (bug 575)\n");
-                LBUG();
-                RETURN(1);
-        }
+	if (!request)
+		RETURN(1);
 
-        DEBUG_REQ(D_INFO, request, "refcount now %u",
+	LASSERT(request != LP_POISON);
+	LASSERT(request->rq_reqmsg != LP_POISON);
+
+	DEBUG_REQ(D_INFO, request, "refcount now %u",
 		  atomic_read(&request->rq_refcount) - 1);
 
-	if (atomic_dec_and_test(&request->rq_refcount)) {
-                __ptlrpc_free_req(request, locked);
-                RETURN(1);
-        }
+	spin_lock(&request->rq_lock);
+	count = atomic_dec_return(&request->rq_refcount);
+	LASSERTF(count >= 0, "Invalid ref count %d\n", count);
 
-        RETURN(0);
+	/* For open RPC, the client does not know the EA size (LOV, ACL, and
+	 * so on) before replied, then the client has to reserve very large
+	 * reply buffer. Such buffer will not be released until the RPC freed.
+	 * Since The open RPC is replayable, we need to keep it in the replay
+	 * list until close. If there are a lot of files opened concurrently,
+	 * then the client may be OOM.
+	 *
+	 * If fact, it is unnecessary to keep reply buffer for open replay,
+	 * related EAs have already been saved via mdc_save_lovea() before
+	 * coming here. So it is safe to free the reply buffer some earlier
+	 * before releasing the RPC to avoid client OOM. LU-9514 */
+	if (count == 1 && request->rq_early_free_repbuf && request->rq_repbuf) {
+		spin_lock(&request->rq_early_free_lock);
+		sptlrpc_cli_free_repbuf(request);
+		request->rq_repbuf = NULL;
+		request->rq_repbuf_len = 0;
+		request->rq_repdata = NULL;
+		request->rq_reqdata_len = 0;
+		spin_unlock(&request->rq_early_free_lock);
+	}
+	spin_unlock(&request->rq_lock);
+
+	if (!count)
+		__ptlrpc_free_req(request, locked);
+
+	RETURN(!count);
 }
 
 /**
@@ -3082,6 +3107,9 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         DEBUG_REQ(D_HA, req, "REPLAY");
 
 	atomic_inc(&req->rq_import->imp_replay_inflight);
+	spin_lock(&req->rq_lock);
+	req->rq_early_free_repbuf = 0;
+	spin_unlock(&req->rq_lock);
 	ptlrpc_request_addref(req);	/* ptlrpcd needs a ref */
 
 	ptlrpcd_add_req(req);

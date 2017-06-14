@@ -81,8 +81,8 @@ init_logging
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="27m 64b 68 71 115 300o"
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-	# bug number for skipped test: LU-9514 LU-4536 LU-1957
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  51f     65ic    180"
+	# bug number for skipped test: LU-4536 LU-1957
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  65ic    180"
 	#                                               13    (min)"
 	[ "$SLOW" = "no" ] && EXCEPT_SLOW="$EXCEPT_SLOW 51b"
 fi

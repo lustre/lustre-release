@@ -2511,35 +2511,47 @@ static inline int req_ptlrpc_body_swabbed(struct ptlrpc_request *req)
 
 static inline int rep_ptlrpc_body_swabbed(struct ptlrpc_request *req)
 {
-        LASSERT(req->rq_repmsg);
+	if (unlikely(!req->rq_repmsg))
+		return 0;
 
-        switch (req->rq_repmsg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2:
-                return lustre_rep_swabbed(req, MSG_PTLRPC_BODY_OFF);
-        default:
-                /* uninitialized yet */
-                return 0;
-        }
+	switch (req->rq_repmsg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2:
+		return lustre_rep_swabbed(req, MSG_PTLRPC_BODY_OFF);
+	default:
+		/* uninitialized yet */
+		return 0;
+	}
 }
 
 void _debug_req(struct ptlrpc_request *req,
-                struct libcfs_debug_msg_data *msgdata,
-                const char *fmt, ... )
+		struct libcfs_debug_msg_data *msgdata, const char *fmt, ...)
 {
-        int req_ok = req->rq_reqmsg != NULL;
-        int rep_ok = req->rq_repmsg != NULL;
-        lnet_nid_t nid = LNET_NID_ANY;
-        va_list args;
+	bool req_ok = req->rq_reqmsg != NULL;
+	bool rep_ok = false;
+	lnet_nid_t nid = LNET_NID_ANY;
+	va_list args;
+	int rep_flags = -1;
+	int rep_status = -1;
 
-        if (ptlrpc_req_need_swab(req)) {
-                req_ok = req_ok && req_ptlrpc_body_swabbed(req);
-                rep_ok = rep_ok && rep_ptlrpc_body_swabbed(req);
-        }
+	spin_lock(&req->rq_early_free_lock);
+	if (req->rq_repmsg)
+		rep_ok = true;
 
-        if (req->rq_import && req->rq_import->imp_connection)
-                nid = req->rq_import->imp_connection->c_peer.nid;
-        else if (req->rq_export && req->rq_export->exp_connection)
-                nid = req->rq_export->exp_connection->c_peer.nid;
+	if (ptlrpc_req_need_swab(req)) {
+		req_ok = req_ok && req_ptlrpc_body_swabbed(req);
+		rep_ok = rep_ok && rep_ptlrpc_body_swabbed(req);
+	}
+
+	if (rep_ok) {
+		rep_flags = lustre_msg_get_flags(req->rq_repmsg);
+		rep_status = lustre_msg_get_status(req->rq_repmsg);
+	}
+	spin_unlock(&req->rq_early_free_lock);
+
+	if (req->rq_import && req->rq_import->imp_connection)
+		nid = req->rq_import->imp_connection->c_peer.nid;
+	else if (req->rq_export && req->rq_export->exp_connection)
+		nid = req->rq_export->exp_connection->c_peer.nid;
 
 	va_start(args, fmt);
 	libcfs_debug_vmsg2(msgdata, fmt, args,
@@ -2560,9 +2572,7 @@ void _debug_req(struct ptlrpc_request *req,
 			   atomic_read(&req->rq_refcount),
 			   DEBUG_REQ_FLAGS(req),
 			   req_ok ? lustre_msg_get_flags(req->rq_reqmsg) : -1,
-			   rep_ok ? lustre_msg_get_flags(req->rq_repmsg) : -1,
-			   req->rq_status,
-			   rep_ok ? lustre_msg_get_status(req->rq_repmsg) : -1);
+			   rep_flags, req->rq_status, rep_status);
 	va_end(args);
 }
 EXPORT_SYMBOL(_debug_req);

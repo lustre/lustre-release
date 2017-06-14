@@ -356,6 +356,7 @@ static inline void ptlrpc_reqset_put(struct ptlrpc_request_set *set)
 static inline void ptlrpc_req_comm_init(struct ptlrpc_request *req)
 {
 	spin_lock_init(&req->rq_lock);
+	spin_lock_init(&req->rq_early_free_lock);
 	atomic_set(&req->rq_refcount, 1);
 	INIT_LIST_HEAD(&req->rq_list);
 	INIT_LIST_HEAD(&req->rq_replay_list);
