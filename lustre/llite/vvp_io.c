@@ -1135,7 +1135,7 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
 
 	if (vmf->page) {
 		LL_CDEBUG_PAGE(D_PAGE, vmf->page, "got addr %p type NOPAGE\n",
-			       vmf->virtual_address);
+			       get_vmf_address(vmf));
 		if (unlikely(!(cfio->ft_flags & VM_FAULT_LOCKED))) {
 			lock_page(vmf->page);
 			cfio->ft_flags |= VM_FAULT_LOCKED;
@@ -1147,12 +1147,12 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
 	}
 
 	if (cfio->ft_flags & VM_FAULT_SIGBUS) {
-		CDEBUG(D_PAGE, "got addr %p - SIGBUS\n", vmf->virtual_address);
+		CDEBUG(D_PAGE, "got addr %p - SIGBUS\n", get_vmf_address(vmf));
 		return -EFAULT;
 	}
 
 	if (cfio->ft_flags & VM_FAULT_OOM) {
-		CDEBUG(D_PAGE, "got addr %p - OOM\n", vmf->virtual_address);
+		CDEBUG(D_PAGE, "got addr %p - OOM\n", get_vmf_address(vmf));
 		return -ENOMEM;
 	}
 

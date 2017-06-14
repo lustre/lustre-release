@@ -2473,6 +2473,25 @@ inode_ops_readlink, [
 ]) # LC_IOP_GENERIC_READLINK
 
 #
+# LC_HAVE_VM_FAULT_ADDRESS
+#
+# Kernel version 4.10 commit 1a29d85eb0f19b7d8271923d8917d7b4f5540b3e
+# removed virtual_address field. Need to use address field instead
+#
+AC_DEFUN([LC_HAVE_VM_FAULT_ADDRESS], [
+LB_CHECK_COMPILE([if 'struct vm_fault' replaced virtual_address with address field],
+vm_fault_address, [
+	#include <linux/mm.h>
+],[
+	struct vm_fault vmf;
+	vmf.address = NULL;
+],[
+	AC_DEFINE(HAVE_VM_FAULT_ADDRESS, 1,
+		[virtual_address has been replaced by address field])
+])
+]) # LC_HAVE_VM_FAULT_ADDRESS
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2678,6 +2697,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.10
 	LC_IOP_GENERIC_READLINK
+	LC_HAVE_VM_FAULT_ADDRESS
 
 	#
 	AS_IF([test "x$enable_server" != xno], [

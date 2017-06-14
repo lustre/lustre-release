@@ -568,4 +568,13 @@ __generic_file_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 }
 #endif /* HAVE_FILE_OPERATIONS_READ_WRITE_ITER */
 
+static inline void __user *get_vmf_address(struct vm_fault *vmf)
+{
+#ifdef HAVE_VM_FAULT_ADDRESS
+	return (void __user *)vmf->address;
+#else
+	return vmf->virtual_address;
+#endif
+}
+
 #endif /* _LUSTRE_COMPAT_H */
