@@ -207,11 +207,10 @@ kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 {
 	kgn_device_t           *dev;
 	struct timeval          now;
-	int                     rc;
 
 	if (kgnilnd_data.kgn_init < GNILND_INIT_ALL) {
-		rc = seq_printf(sf, "kgnilnd is not initialized yet\n");
-		return rc;
+		seq_printf(sf, "kgnilnd is not initialized yet\n");
+		return 0;
 	}
 
 	/* only do the first device */
@@ -221,77 +220,83 @@ kgnilnd_stats_seq_show(struct seq_file *sf, void *v)
 	smp_rmb();
 	do_gettimeofday(&now);
 
-	rc = seq_printf(sf, "time: %lu.%lu\n"
-			   "ntx: %d\n"
-			   "npeers: %d\n"
-			   "nconns: %d\n"
-			   "nEPs: %d\n"
-			   "ndgrams: %d\n"
-			   "nfmablk: %d\n"
-			   "n_mdd: %d\n"
-			   "n_mdd_held: %d\n"
-			   "n_eager_allocs: %d\n"
-			   "GART map bytes: %ld\n"
-			   "TX queued maps: %d\n"
-			   "TX phys nmaps: %d\n"
-			   "TX phys bytes: %lu\n"
-			   "TX virt nmaps: %d\n"
-			   "TX virt bytes: %llu\n"
-			   "RDMAQ bytes_auth: %ld\n"
-			   "RDMAQ bytes_left: %ld\n"
-			   "RDMAQ nstalls: %d\n"
-			   "dev mutex delay: %ld\n"
-			   "dev n_yield: %d\n"
-			   "dev n_schedule: %d\n"
-			   "SMSG fast_try: %d\n"
-			   "SMSG fast_ok: %d\n"
-			   "SMSG fast_block: %d\n"
-			   "SMSG ntx: %u\n"
-			   "SMSG tx_bytes: %lu\n"
-			   "SMSG nrx: %u\n"
-			   "SMSG rx_bytes: %lu\n"
-			   "RDMA ntx: %u\n"
-			   "RDMA tx_bytes: %lu\n"
-			   "RDMA nrx: %u\n"
-			   "RDMA rx_bytes: %lu\n"
-			   "VMAP short: %d\n"
-			   "VMAP cksum: %d\n"
-			   "KMAP short: %d\n"
-			   "RDMA REV length: %d\n"
-			   "RDMA REV offset: %d\n"
-			   "RDMA REV copy: %d\n",
-		now.tv_sec, now.tv_usec,
-		atomic_read(&kgnilnd_data.kgn_ntx),
-		atomic_read(&kgnilnd_data.kgn_npeers),
-		atomic_read(&kgnilnd_data.kgn_nconns),
-		atomic_read(&dev->gnd_neps),
-		atomic_read(&dev->gnd_ndgrams),
-		atomic_read(&dev->gnd_nfmablk),
-		atomic_read(&dev->gnd_n_mdd), atomic_read(&dev->gnd_n_mdd_held),
-		atomic_read(&kgnilnd_data.kgn_neager_allocs),
-		atomic64_read(&dev->gnd_nbytes_map),
-		atomic_read(&dev->gnd_nq_map),
-		dev->gnd_map_nphys, dev->gnd_map_physnop * PAGE_SIZE,
-		dev->gnd_map_nvirt, dev->gnd_map_virtnob,
-		atomic64_read(&dev->gnd_rdmaq_bytes_out),
-		atomic64_read(&dev->gnd_rdmaq_bytes_ok),
-		atomic_read(&dev->gnd_rdmaq_nstalls),
-		dev->gnd_mutex_delay,
-		atomic_read(&dev->gnd_n_yield), atomic_read(&dev->gnd_n_schedule),
-		atomic_read(&dev->gnd_fast_try), atomic_read(&dev->gnd_fast_ok),
-		atomic_read(&dev->gnd_fast_block),
-		atomic_read(&dev->gnd_short_ntx), atomic64_read(&dev->gnd_short_txbytes),
-		atomic_read(&dev->gnd_short_nrx), atomic64_read(&dev->gnd_short_rxbytes),
-		atomic_read(&dev->gnd_rdma_ntx), atomic64_read(&dev->gnd_rdma_txbytes),
-		atomic_read(&dev->gnd_rdma_nrx), atomic64_read(&dev->gnd_rdma_rxbytes),
-		atomic_read(&kgnilnd_data.kgn_nvmap_short),
-		atomic_read(&kgnilnd_data.kgn_nvmap_cksum),
-		atomic_read(&kgnilnd_data.kgn_nkmap_short),
-		atomic_read(&kgnilnd_data.kgn_rev_length),
-		atomic_read(&kgnilnd_data.kgn_rev_offset),
-		atomic_read(&kgnilnd_data.kgn_rev_copy_buff));
+	seq_printf(sf, "time: %lu.%lu\n"
+		   "ntx: %d\n"
+		   "npeers: %d\n"
+		   "nconns: %d\n"
+		   "nEPs: %d\n"
+		   "ndgrams: %d\n"
+		   "nfmablk: %d\n"
+		   "n_mdd: %d\n"
+		   "n_mdd_held: %d\n"
+		   "n_eager_allocs: %d\n"
+		   "GART map bytes: %ld\n"
+		   "TX queued maps: %d\n"
+		   "TX phys nmaps: %d\n"
+		   "TX phys bytes: %lu\n"
+		   "TX virt nmaps: %d\n"
+		   "TX virt bytes: %llu\n"
+		   "RDMAQ bytes_auth: %ld\n"
+		   "RDMAQ bytes_left: %ld\n"
+		   "RDMAQ nstalls: %d\n"
+		   "dev mutex delay: %ld\n"
+		   "dev n_yield: %d\n"
+		   "dev n_schedule: %d\n"
+		   "SMSG fast_try: %d\n"
+		   "SMSG fast_ok: %d\n"
+		   "SMSG fast_block: %d\n"
+		   "SMSG ntx: %u\n"
+		   "SMSG tx_bytes: %lu\n"
+		   "SMSG nrx: %u\n"
+		   "SMSG rx_bytes: %lu\n"
+		   "RDMA ntx: %u\n"
+		   "RDMA tx_bytes: %lu\n"
+		   "RDMA nrx: %u\n"
+		   "RDMA rx_bytes: %lu\n"
+		   "VMAP short: %d\n"
+		   "VMAP cksum: %d\n"
+		   "KMAP short: %d\n"
+		   "RDMA REV length: %d\n"
+		   "RDMA REV offset: %d\n"
+		   "RDMA REV copy: %d\n",
+		   now.tv_sec, now.tv_usec,
+		   atomic_read(&kgnilnd_data.kgn_ntx),
+		   atomic_read(&kgnilnd_data.kgn_npeers),
+		   atomic_read(&kgnilnd_data.kgn_nconns),
+		   atomic_read(&dev->gnd_neps),
+		   atomic_read(&dev->gnd_ndgrams),
+		   atomic_read(&dev->gnd_nfmablk),
+		   atomic_read(&dev->gnd_n_mdd), atomic_read(&dev->gnd_n_mdd_held),
+		   atomic_read(&kgnilnd_data.kgn_neager_allocs),
+		   atomic64_read(&dev->gnd_nbytes_map),
+		   atomic_read(&dev->gnd_nq_map),
+		   dev->gnd_map_nphys, dev->gnd_map_physnop * PAGE_SIZE,
+		   dev->gnd_map_nvirt, dev->gnd_map_virtnob,
+		   atomic64_read(&dev->gnd_rdmaq_bytes_out),
+		   atomic64_read(&dev->gnd_rdmaq_bytes_ok),
+		   atomic_read(&dev->gnd_rdmaq_nstalls),
+		   dev->gnd_mutex_delay,
+		   atomic_read(&dev->gnd_n_yield),
+		   atomic_read(&dev->gnd_n_schedule),
+		   atomic_read(&dev->gnd_fast_try),
+		   atomic_read(&dev->gnd_fast_ok),
+		   atomic_read(&dev->gnd_fast_block),
+		   atomic_read(&dev->gnd_short_ntx),
+		   atomic64_read(&dev->gnd_short_txbytes),
+		   atomic_read(&dev->gnd_short_nrx),
+		   atomic64_read(&dev->gnd_short_rxbytes),
+		   atomic_read(&dev->gnd_rdma_ntx),
+		   atomic64_read(&dev->gnd_rdma_txbytes),
+		   atomic_read(&dev->gnd_rdma_nrx),
+		   atomic64_read(&dev->gnd_rdma_rxbytes),
+		   atomic_read(&kgnilnd_data.kgn_nvmap_short),
+		   atomic_read(&kgnilnd_data.kgn_nvmap_cksum),
+		   atomic_read(&kgnilnd_data.kgn_nkmap_short),
+		   atomic_read(&kgnilnd_data.kgn_rev_length),
+		   atomic_read(&kgnilnd_data.kgn_rev_offset),
+		   atomic_read(&kgnilnd_data.kgn_rev_copy_buff));
 
-	return rc;
+	return 0;
 }
 
 static ssize_t
@@ -994,11 +999,10 @@ kgnilnd_proc_peer_conns_seq_show(struct seq_file *sf, void *v)
 	struct tm       ctm;
 	struct timespec now;
 	unsigned long   jifs;
-	int             rc = 0;
 
 	if (kgnilnd_debug_peer_nid == KGN_DEBUG_PEER_NID_DEFAULT) {
-		rc = seq_printf(sf, "peer_conns not initialized\n");
-		return rc;
+		seq_printf(sf, "peer_conns not initialized\n");
+		return 0;
 	}
 
 	/* sample date/time stamp - print time in UTC
@@ -1012,47 +1016,47 @@ kgnilnd_proc_peer_conns_seq_show(struct seq_file *sf, void *v)
 	peer = kgnilnd_find_peer_locked(kgnilnd_debug_peer_nid);
 
 	if (peer == NULL) {
-		rc = seq_printf(sf, "peer not found for this nid %d\n",
+		seq_printf(sf, "peer not found for this nid %d\n",
 			     kgnilnd_debug_peer_nid);
 		write_unlock(&kgnilnd_data.kgn_peer_conn_lock);
-		return rc;
+		return 0;
 	}
 
 	list_for_each_entry(conn, &peer->gnp_conns, gnc_list) {
-		rc = seq_printf(sf,
-			"%04ld-%02d-%02dT%02d:%02d:%02d.%06ld %s "
-			"mbox adr %p "
-			"dg type %s "
-			"%s "
-			"purg %d "
-			"close s/r %d/%d "
-			"err %d peer err %d "
-			"tx sq %u %dms/%dms "
-			"rx sq %u %dms/%dms/%dms "
-			"tx retran %lld\n",
-			ctm.tm_year+1900, ctm.tm_mon+1, ctm.tm_mday,
-			ctm.tm_hour, ctm.tm_min, ctm.tm_sec, now.tv_nsec,
-			libcfs_nid2str(peer->gnp_nid),
-			conn->remote_mbox_addr,
-			kgnilnd_conn_dgram_type2str(conn->gnc_dgram_type),
-			kgnilnd_conn_state2str(conn),
-			conn->gnc_in_purgatory,
-			conn->gnc_close_sent,
-			conn->gnc_close_recvd,
-			conn->gnc_error,
-			conn->gnc_peer_error,
-			atomic_read(&conn->gnc_tx_seq),
-			jiffies_to_msecs(jifs - conn->gnc_last_tx),
-			jiffies_to_msecs(jifs - conn->gnc_last_tx_cq),
-			atomic_read(&conn->gnc_rx_seq),
-			jiffies_to_msecs(jifs - conn->gnc_first_rx),
-			jiffies_to_msecs(jifs - conn->gnc_last_rx),
-			jiffies_to_msecs(jifs - conn->gnc_last_rx_cq),
-			conn->gnc_tx_retrans);
+		seq_printf(sf,
+			   "%04ld-%02d-%02dT%02d:%02d:%02d.%06ld %s "
+			   "mbox adr %p "
+			   "dg type %s "
+			   "%s "
+			   "purg %d "
+			   "close s/r %d/%d "
+			   "err %d peer err %d "
+			   "tx sq %u %dms/%dms "
+			   "rx sq %u %dms/%dms/%dms "
+			   "tx retran %lld\n",
+			   ctm.tm_year+1900, ctm.tm_mon+1, ctm.tm_mday,
+			   ctm.tm_hour, ctm.tm_min, ctm.tm_sec, now.tv_nsec,
+			   libcfs_nid2str(peer->gnp_nid),
+			   conn->remote_mbox_addr,
+			   kgnilnd_conn_dgram_type2str(conn->gnc_dgram_type),
+			   kgnilnd_conn_state2str(conn),
+			   conn->gnc_in_purgatory,
+			   conn->gnc_close_sent,
+			   conn->gnc_close_recvd,
+			   conn->gnc_error,
+			   conn->gnc_peer_error,
+			   atomic_read(&conn->gnc_tx_seq),
+			   jiffies_to_msecs(jifs - conn->gnc_last_tx),
+			   jiffies_to_msecs(jifs - conn->gnc_last_tx_cq),
+			   atomic_read(&conn->gnc_rx_seq),
+			   jiffies_to_msecs(jifs - conn->gnc_first_rx),
+			   jiffies_to_msecs(jifs - conn->gnc_last_rx),
+			   jiffies_to_msecs(jifs - conn->gnc_last_rx_cq),
+			   conn->gnc_tx_retrans);
 	}
 
 	write_unlock(&kgnilnd_data.kgn_peer_conn_lock);
-	return rc;
+	return 0;
 }
 
 static int
