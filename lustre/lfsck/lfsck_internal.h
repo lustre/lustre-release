@@ -1434,6 +1434,10 @@ static inline void lfsck_lad_set_bitmap(const struct lu_env *env,
 
 		ns->ln_flags |= LF_INCOMPLETE;
 	}
+
+	CDEBUG(D_LFSCK, "%s: %s LFSCK set bitmap (%p/%u) for idx %u\n",
+	       lfsck_lfsck2name(com->lc_lfsck), lad->lad_name, bitmap,
+	       bitmap->size, index);
 }
 
 static inline int lfsck_links_read(const struct lu_env *env,

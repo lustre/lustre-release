@@ -1440,6 +1440,9 @@ static int lfsck_layout_double_scan_result(const struct lu_env *env,
 	struct lfsck_instance	*lfsck = com->lc_lfsck;
 	struct lfsck_layout	*lo    = com->lc_file_ram;
 
+	CDEBUG(D_LFSCK, "%s: layout LFSCK double scan: rc = %d\n",
+	       lfsck_lfsck2name(lfsck), rc);
+
 	down_write(&com->lc_sem);
 	lo->ll_run_time_phase2 += ktime_get_seconds() -
 				  com->lc_time_last_checkpoint;
@@ -1477,6 +1480,9 @@ static int lfsck_layout_double_scan_result(const struct lu_env *env,
 
 	rc = lfsck_layout_store(env, com);
 	up_write(&com->lc_sem);
+
+	CDEBUG(D_LFSCK, "%s: layout LFSCK double scan result %u: rc = %d\n",
+	       lfsck_lfsck2name(lfsck), lo->ll_status, rc);
 
 	return rc;
 }
@@ -6302,12 +6308,12 @@ static int lfsck_layout_master_in_notify(const struct lu_env *env,
 		break;
 	case LE_PHASE2_DONE:
 		ltd->ltd_layout_done = 1;
-		if (!list_empty(&ltd->ltd_layout_list)) {
+		if (!list_empty(&ltd->ltd_layout_list))
 			list_del_init(&ltd->ltd_layout_list);
-			if (lr->lr_flags2 & LF_INCOMPLETE) {
-				lfsck_lad_set_bitmap(env, com, ltd->ltd_index);
-				fail = true;
-			}
+
+		if (lr->lr_flags2 & LF_INCOMPLETE) {
+			lfsck_lad_set_bitmap(env, com, ltd->ltd_index);
+			fail = true;
 		}
 
 		break;
