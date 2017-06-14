@@ -569,29 +569,37 @@ void mdc_replay_open(struct ptlrpc_request *req)
         body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
         LASSERT(body != NULL);
 
-        och = mod->mod_och;
-        if (och != NULL) {
-                struct lustre_handle *file_fh;
+	spin_lock(&req->rq_lock);
+	och = mod->mod_och;
+	if (och && och->och_fh.cookie)
+		req->rq_early_free_repbuf = 1;
+	else
+		req->rq_early_free_repbuf = 0;
+	spin_unlock(&req->rq_lock);
 
-                LASSERT(och->och_magic == OBD_CLIENT_HANDLE_MAGIC);
+	if (req->rq_early_free_repbuf) {
+		struct lustre_handle *file_fh;
 
-                file_fh = &och->och_fh;
+		LASSERT(och->och_magic == OBD_CLIENT_HANDLE_MAGIC);
+
+		file_fh = &och->och_fh;
 		CDEBUG(D_HA, "updating handle from %#llx to %#llx\n",
 		       file_fh->cookie, body->mbo_handle.cookie);
 		old = *file_fh;
 		*file_fh = body->mbo_handle;
-        }
-        close_req = mod->mod_close_req;
-        if (close_req != NULL) {
-                __u32 opc = lustre_msg_get_opc(close_req->rq_reqmsg);
-                struct mdt_ioepoch *epoch;
+	}
+
+	close_req = mod->mod_close_req;
+	if (close_req) {
+		__u32 opc = lustre_msg_get_opc(close_req->rq_reqmsg);
+		struct mdt_ioepoch *epoch;
 
 		LASSERT(opc == MDS_CLOSE);
 		epoch = req_capsule_client_get(&close_req->rq_pill,
 					       &RMF_MDT_EPOCH);
 		LASSERT(epoch);
 
-		if (och != NULL)
+		if (req->rq_early_free_repbuf)
 			LASSERT(!memcmp(&old, &epoch->mio_handle, sizeof(old)));
 
 		DEBUG_REQ(D_HA, close_req, "updating close body with new fh");
@@ -675,6 +683,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
 		mod->mod_open_req = open_req;
 		open_req->rq_cb_data = mod;
 		open_req->rq_commit_cb = mdc_commit_open;
+		open_req->rq_early_free_repbuf = 1;
 		spin_unlock(&open_req->rq_lock);
         }
 
@@ -728,8 +737,14 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
         if (mod == NULL)
                 RETURN(0);
 
-        LASSERT(mod != LP_POISON);
+	LASSERT(mod != LP_POISON);
 	LASSERT(mod->mod_open_req != NULL);
+
+	spin_lock(&mod->mod_open_req->rq_lock);
+	if (mod->mod_och)
+		mod->mod_och->och_fh.cookie = 0;
+	mod->mod_open_req->rq_early_free_repbuf = 0;
+	spin_unlock(&mod->mod_open_req->rq_lock);
 	mdc_free_open(mod);
 
         mod->mod_och = NULL;
