@@ -1830,13 +1830,15 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct mdt_body *body = md->body;
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	int rc = 0;
 
-	if (body->mbo_valid & OBD_MD_FLEASIZE)
-		cl_file_inode_init(inode, md);
+	if (body->mbo_valid & OBD_MD_FLEASIZE) {
+		rc = cl_file_inode_init(inode, md);
+		if (rc)
+			return rc;
+	}
 
 	if (S_ISDIR(inode->i_mode)) {
-		int	rc;
-
 		rc = ll_update_lsm_md(inode, md);
 		if (rc != 0)
 			return rc;
