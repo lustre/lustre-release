@@ -220,7 +220,7 @@ int lustre_start_mgc(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
         struct obd_export *exp;
-        struct obd_uuid *uuid;
+	struct obd_uuid *uuid = NULL;
         class_uuid_t uuidc;
         lnet_nid_t nid;
 	char nidstr[LNET_NIDSTR_SIZE];
@@ -409,7 +409,6 @@ int lustre_start_mgc(struct super_block *sb)
         rc = lustre_start_simple(mgcname, LUSTRE_MGC_NAME,
 				 (char *)uuid->uuid, LUSTRE_MGS_OBDNAME,
 				 niduuid, NULL, NULL);
-        OBD_FREE_PTR(uuid);
         if (rc)
                 GOTO(out_free, rc);
 
@@ -470,7 +469,7 @@ int lustre_start_mgc(struct super_block *sb)
             lsi->lsi_lmd->lmd_flags & LMD_FLG_NOIR)
                 data->ocd_connect_flags &= ~OBD_CONNECT_IMP_RECOV;
         data->ocd_version = LUSTRE_VERSION_CODE;
-        rc = obd_connect(NULL, &exp, obd, &(obd->obd_uuid), data, NULL);
+	rc = obd_connect(NULL, &exp, obd, uuid, data, NULL);
         if (rc) {
                 CERROR("connect failed %d\n", rc);
                 GOTO(out, rc);
@@ -485,6 +484,8 @@ out:
 out_free:
 	mutex_unlock(&mgc_start_lock);
 
+	if (uuid)
+		OBD_FREE_PTR(uuid);
         if (data)
                 OBD_FREE_PTR(data);
         if (mgcname)

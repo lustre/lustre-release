@@ -65,9 +65,13 @@ int class_register_type(struct obd_ops *, struct md_ops *, bool enable_proc,
 			const char *nm, struct lu_device_type *ldt);
 int class_unregister_type(const char *nm);
 
-struct obd_device *class_newdev(const char *type_name, const char *name);
-void class_release_dev(struct obd_device *obd);
+struct obd_device *class_newdev(const char *type_name, const char *name,
+				const char *uuid);
+int class_register_device(struct obd_device *obd);
+void class_unregister_device(struct obd_device *obd);
+void class_free_dev(struct obd_device *obd);
 
+struct obd_device *class_dev_by_str(const char *str);
 int class_name2dev(const char *name);
 struct obd_device *class_name2obd(const char *name);
 int class_uuid2dev(struct obd_uuid *uuid);
@@ -315,6 +319,8 @@ struct obd_export *class_export_get(struct obd_export *exp);
 void class_export_put(struct obd_export *exp);
 struct obd_export *class_new_export(struct obd_device *obddev,
                                     struct obd_uuid *cluuid);
+struct obd_export *class_new_export_self(struct obd_device *obd,
+					 struct obd_uuid *uuid);
 void class_unlink_export(struct obd_export *exp);
 
 struct obd_import *class_import_get(struct obd_import *);

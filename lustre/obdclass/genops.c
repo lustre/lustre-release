@@ -40,6 +40,7 @@
 #include <linux/pid_namespace.h>
 #include <linux/kthread.h>
 #include <obd_class.h>
+#include <lustre_log.h>
 #include <lprocfs_status.h>
 #include <lustre_disk.h>
 #include <lustre_kernelcomm.h>
@@ -291,21 +292,20 @@ EXPORT_SYMBOL(class_unregister_type);
 /**
  * Create a new obd device.
  *
- * Find an empty slot in ::obd_devs[], create a new obd device in it.
+ * Allocate the new obd_device and initialize it.
  *
  * \param[in] type_name obd device type string.
  * \param[in] name      obd device name.
+ * \param[in] uuid      obd device UUID
  *
- * \retval NULL if create fails, otherwise return the obd device
- *         pointer created.
+ * \retval newdev         pointer to created obd_device
+ * \retval ERR_PTR(errno) on error
  */
-struct obd_device *class_newdev(const char *type_name, const char *name)
+struct obd_device *class_newdev(const char *type_name, const char *name,
+				const char *uuid)
 {
-        struct obd_device *result = NULL;
         struct obd_device *newdev;
         struct obd_type *type = NULL;
-        int i;
-        int new_obd_minor = 0;
         ENTRY;
 
         if (strlen(name) >= MAX_OBD_NAME) {
@@ -320,93 +320,184 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
         }
 
         newdev = obd_device_alloc();
-	if (newdev == NULL)
-		GOTO(out_type, result = ERR_PTR(-ENOMEM));
-
+	if (newdev == NULL) {
+		class_put_type(type);
+		RETURN(ERR_PTR(-ENOMEM));
+	}
         LASSERT(newdev->obd_magic == OBD_DEVICE_MAGIC);
+	strncpy(newdev->obd_name, name, sizeof(newdev->obd_name) - 1);
+	newdev->obd_type = type;
+	newdev->obd_minor = -1;
 
-	write_lock(&obd_dev_lock);
-        for (i = 0; i < class_devno_max(); i++) {
-                struct obd_device *obd = class_num2obd(i);
+	rwlock_init(&newdev->obd_pool_lock);
+	newdev->obd_pool_limit = 0;
+	newdev->obd_pool_slv = 0;
 
-		if (obd && (strcmp(name, obd->obd_name) == 0)) {
-                        CERROR("Device %s already exists at %d, won't add\n",
-                               name, i);
-                        if (result) {
-                                LASSERTF(result->obd_magic == OBD_DEVICE_MAGIC,
-                                         "%p obd_magic %08x != %08x\n", result,
-                                         result->obd_magic, OBD_DEVICE_MAGIC);
-                                LASSERTF(result->obd_minor == new_obd_minor,
-                                         "%p obd_minor %d != %d\n", result,
-                                         result->obd_minor, new_obd_minor);
+	INIT_LIST_HEAD(&newdev->obd_exports);
+	INIT_LIST_HEAD(&newdev->obd_unlinked_exports);
+	INIT_LIST_HEAD(&newdev->obd_delayed_exports);
+	INIT_LIST_HEAD(&newdev->obd_exports_timed);
+	INIT_LIST_HEAD(&newdev->obd_nid_stats);
+	spin_lock_init(&newdev->obd_nid_lock);
+	spin_lock_init(&newdev->obd_dev_lock);
+	mutex_init(&newdev->obd_dev_mutex);
+	spin_lock_init(&newdev->obd_osfs_lock);
+	/* newdev->obd_osfs_age must be set to a value in the distant
+	 * past to guarantee a fresh statfs is fetched on mount. */
+	newdev->obd_osfs_age = cfs_time_shift_64(-1000);
 
-                                obd_devs[result->obd_minor] = NULL;
-                                result->obd_name[0]='\0';
-                         }
-                        result = ERR_PTR(-EEXIST);
-                        break;
-                }
-                if (!result && !obd) {
-                        result = newdev;
-                        result->obd_minor = i;
-                        new_obd_minor = i;
-                        result->obd_type = type;
-                        strncpy(result->obd_name, name,
-                                sizeof(result->obd_name) - 1);
-                        obd_devs[i] = result;
-                }
-        }
-	write_unlock(&obd_dev_lock);
+	/* XXX belongs in setup not attach  */
+	init_rwsem(&newdev->obd_observer_link_sem);
+	/* recovery data */
+	init_timer(&newdev->obd_recovery_timer);
+	spin_lock_init(&newdev->obd_recovery_task_lock);
+	init_waitqueue_head(&newdev->obd_next_transno_waitq);
+	init_waitqueue_head(&newdev->obd_evict_inprogress_waitq);
+	INIT_LIST_HEAD(&newdev->obd_req_replay_queue);
+	INIT_LIST_HEAD(&newdev->obd_lock_replay_queue);
+	INIT_LIST_HEAD(&newdev->obd_final_req_queue);
+	INIT_LIST_HEAD(&newdev->obd_evict_list);
+	INIT_LIST_HEAD(&newdev->obd_lwp_list);
 
-        if (result == NULL && i >= class_devno_max()) {
-                CERROR("all %u OBD devices used, increase MAX_OBD_DEVICES\n",
-                       class_devno_max());
-		GOTO(out, result = ERR_PTR(-EOVERFLOW));
-        }
+	llog_group_init(&newdev->obd_olg);
+	/* Detach drops this */
+	atomic_set(&newdev->obd_refcount, 1);
+	lu_ref_init(&newdev->obd_reference);
+	lu_ref_add(&newdev->obd_reference, "newdev", newdev);
 
-	if (IS_ERR(result))
-		GOTO(out, result);
+	newdev->obd_conn_inprogress = 0;
 
-	CDEBUG(D_IOCTL, "Adding new device %s (%p)\n",
-	       result->obd_name, result);
+	strncpy(newdev->obd_uuid.uuid, uuid, strlen(uuid));
 
-	RETURN(result);
-out:
-	obd_device_free(newdev);
-out_type:
-	class_put_type(type);
-	return result;
+	CDEBUG(D_IOCTL, "Allocate new device %s (%p)\n",
+	       newdev->obd_name, newdev);
+
+	return newdev;
 }
 
-void class_release_dev(struct obd_device *obd)
+/**
+ * Free obd device.
+ *
+ * \param[in] obd obd_device to be freed
+ *
+ * \retval none
+ */
+void class_free_dev(struct obd_device *obd)
 {
-        struct obd_type *obd_type = obd->obd_type;
+	struct obd_type *obd_type = obd->obd_type;
 
-        LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC, "%p obd_magic %08x != %08x\n",
-                 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
-        LASSERTF(obd == obd_devs[obd->obd_minor], "obd %p != obd_devs[%d] %p\n",
-                 obd, obd->obd_minor, obd_devs[obd->obd_minor]);
-        LASSERT(obd_type != NULL);
+	LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC, "%p obd_magic %08x "
+		 "!= %08x\n", obd, obd->obd_magic, OBD_DEVICE_MAGIC);
+	LASSERTF(obd->obd_minor == -1 || obd_devs[obd->obd_minor] == obd,
+		 "obd %p != obd_devs[%d] %p\n",
+		 obd, obd->obd_minor, obd_devs[obd->obd_minor]);
+	LASSERTF(atomic_read(&obd->obd_refcount) == 0,
+		 "obd_refcount should be 0, not %d\n",
+		 atomic_read(&obd->obd_refcount));
+	LASSERT(obd_type != NULL);
 
-        CDEBUG(D_INFO, "Release obd device %s at %d obd_type name =%s\n",
-               obd->obd_name, obd->obd_minor, obd->obd_type->typ_name);
+	CDEBUG(D_INFO, "Release obd device %s obd_type name = %s\n",
+	       obd->obd_name, obd->obd_type->typ_name);
 
-	write_lock(&obd_dev_lock);
-        obd_devs[obd->obd_minor] = NULL;
-	write_unlock(&obd_dev_lock);
-        obd_device_free(obd);
+	CDEBUG(D_CONFIG, "finishing cleanup of obd %s (%s)\n",
+			 obd->obd_name, obd->obd_uuid.uuid);
+	if (obd->obd_stopping) {
+		int err;
 
-        class_put_type(obd_type);
+		/* If we're not stopping, we were never set up */
+		err = obd_cleanup(obd);
+		if (err)
+			CERROR("Cleanup %s returned %d\n",
+				obd->obd_name, err);
+	}
+
+	obd_device_free(obd);
+
+	class_put_type(obd_type);
 }
 
-int class_name2dev(const char *name)
+/**
+ * Unregister obd device.
+ *
+ * Free slot in obd_dev[] used by \a obd.
+ *
+ * \param[in] new_obd obd_device to be unregistered
+ *
+ * \retval none
+ */
+void class_unregister_device(struct obd_device *obd)
+{
+	write_lock(&obd_dev_lock);
+	if (obd->obd_minor >= 0) {
+		LASSERT(obd_devs[obd->obd_minor] == obd);
+		obd_devs[obd->obd_minor] = NULL;
+		obd->obd_minor = -1;
+	}
+	write_unlock(&obd_dev_lock);
+}
+
+/**
+ * Register obd device.
+ *
+ * Find free slot in obd_devs[], fills it with \a new_obd.
+ *
+ * \param[in] new_obd obd_device to be registered
+ *
+ * \retval 0          success
+ * \retval -EEXIST    device with this name is registered
+ * \retval -EOVERFLOW obd_devs[] is full
+ */
+int class_register_device(struct obd_device *new_obd)
+{
+	int ret = 0;
+	int i;
+	int new_obd_minor = 0;
+	bool minor_assign = false;
+
+	write_lock(&obd_dev_lock);
+	for (i = 0; i < class_devno_max(); i++) {
+		struct obd_device *obd = class_num2obd(i);
+
+		if (obd != NULL &&
+		    (strcmp(new_obd->obd_name, obd->obd_name) == 0)) {
+			CERROR("%s: already exists, won't add\n",
+			       obd->obd_name);
+			/* in case we found a free slot before duplicate */
+			minor_assign = false;
+			ret = -EEXIST;
+			break;
+		}
+		if (!minor_assign && obd == NULL) {
+			new_obd_minor = i;
+			minor_assign = true;
+		}
+	}
+
+	if (minor_assign) {
+		new_obd->obd_minor = new_obd_minor;
+		LASSERTF(obd_devs[new_obd_minor] == NULL, "obd_devs[%d] "
+			 "%p\n", new_obd_minor, obd_devs[new_obd_minor]);
+		obd_devs[new_obd_minor] = new_obd;
+	} else {
+		if (ret == 0) {
+			ret = -EOVERFLOW;
+			CERROR("%s: all %u/%u devices used, increase "
+			       "MAX_OBD_DEVICES: rc = %d\n", new_obd->obd_name,
+			       i, class_devno_max(), ret);
+		}
+	}
+	write_unlock(&obd_dev_lock);
+
+	RETURN(ret);
+}
+
+static int class_name2dev_nolock(const char *name)
 {
         int i;
 
         if (!name)
                 return -1;
 
-	read_lock(&obd_dev_lock);
         for (i = 0; i < class_devno_max(); i++) {
                 struct obd_device *obd = class_num2obd(i);
 
@@ -415,16 +506,29 @@ int class_name2dev(const char *name)
                            out any references */
                         LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
                         if (obd->obd_attached) {
-				read_unlock(&obd_dev_lock);
                                 return i;
                         }
                         break;
                 }
         }
-	read_unlock(&obd_dev_lock);
 
         return -1;
 }
+
+int class_name2dev(const char *name)
+{
+	int i;
+
+	if (!name)
+		return -1;
+
+	read_lock(&obd_dev_lock);
+	i = class_name2dev_nolock(name);
+	read_unlock(&obd_dev_lock);
+
+	return i;
+}
+EXPORT_SYMBOL(class_name2dev);
 
 struct obd_device *class_name2obd(const char *name)
 {
@@ -436,24 +540,33 @@ struct obd_device *class_name2obd(const char *name)
 }
 EXPORT_SYMBOL(class_name2obd);
 
-int class_uuid2dev(struct obd_uuid *uuid)
+int class_uuid2dev_nolock(struct obd_uuid *uuid)
 {
         int i;
 
-	read_lock(&obd_dev_lock);
         for (i = 0; i < class_devno_max(); i++) {
                 struct obd_device *obd = class_num2obd(i);
 
                 if (obd && obd_uuid_equals(uuid, &obd->obd_uuid)) {
                         LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-			read_unlock(&obd_dev_lock);
                         return i;
                 }
         }
-	read_unlock(&obd_dev_lock);
 
         return -1;
 }
+
+int class_uuid2dev(struct obd_uuid *uuid)
+{
+	int i;
+
+	read_lock(&obd_dev_lock);
+	i = class_uuid2dev_nolock(uuid);
+	read_unlock(&obd_dev_lock);
+
+	return i;
+}
+EXPORT_SYMBOL(class_uuid2dev);
 
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
 {
@@ -491,6 +604,40 @@ struct obd_device *class_num2obd(int num)
 
         return obd;
 }
+
+/**
+ * Find obd in obd_dev[] by name or uuid.
+ *
+ * Increment obd's refcount if found.
+ *
+ * \param[in] str obd name or uuid
+ *
+ * \retval NULL    if not found
+ * \retval target  pointer to found obd_device
+ */
+struct obd_device *class_dev_by_str(const char *str)
+{
+	struct obd_device *target = NULL;
+	struct obd_uuid tgtuuid;
+	int rc;
+
+	obd_str2uuid(&tgtuuid, str);
+
+	read_lock(&obd_dev_lock);
+	rc = class_uuid2dev_nolock(&tgtuuid);
+	if (rc < 0)
+		rc = class_name2dev_nolock(str);
+
+	if (rc >= 0)
+		target = class_num2obd(rc);
+
+	if (target != NULL)
+		class_incref(target, "find", current);
+	read_unlock(&obd_dev_lock);
+
+	RETURN(target);
+}
+EXPORT_SYMBOL(class_dev_by_str);
 
 /**
  * Get obd devices count. Device in any
@@ -784,7 +931,10 @@ static void class_export_destroy(struct obd_export *exp)
 	LASSERT(list_empty(&exp->exp_req_replay_queue));
 	LASSERT(list_empty(&exp->exp_hp_rpcs));
         obd_destroy_export(exp);
-        class_decref(obd, "export", exp);
+	/* self export doesn't hold a reference to an obd, although it
+	 * exists until freeing of the obd */
+	if (exp != obd->obd_self_export)
+		class_decref(obd, "export", exp);
 
         OBD_FREE_RCU(exp, sizeof(*exp), &exp->exp_handle);
         EXIT;
@@ -817,24 +967,37 @@ void class_export_put(struct obd_export *exp)
 	       atomic_read(&exp->exp_refcount) - 1);
 
 	if (atomic_dec_and_test(&exp->exp_refcount)) {
-		LASSERT(!list_empty(&exp->exp_obd_chain));
-		LASSERT(list_empty(&exp->exp_stale_list));
+		struct obd_device *obd = exp->exp_obd;
+
 		CDEBUG(D_IOCTL, "final put %p/%s\n",
 		       exp, exp->exp_client_uuid.uuid);
 
 		/* release nid stat refererence */
 		lprocfs_exp_cleanup(exp);
 
-		obd_zombie_export_add(exp);
+		if (exp == obd->obd_self_export) {
+			/* self export should be destroyed without
+			 * zombie thread as it doesn't hold a
+			 * reference to obd and doesn't hold any
+			 * resources */
+			class_export_destroy(exp);
+			/* self export is destroyed, no class
+			 * references exist and it is safe to free
+			 * obd */
+			class_free_dev(obd);
+		} else {
+			LASSERT(!list_empty(&exp->exp_obd_chain));
+			obd_zombie_export_add(exp);
+		}
+
 	}
 }
 EXPORT_SYMBOL(class_export_put);
-
 /* Creates a new export, adds it to the hash table, and returns a
  * pointer to it. The refcount is 2: one for the hash reference, and
  * one for the pointer returned by this function. */
-struct obd_export *class_new_export(struct obd_device *obd,
-                                    struct obd_uuid *cluuid)
+struct obd_export *__class_new_export(struct obd_device *obd,
+				      struct obd_uuid *cluuid, bool is_self)
 {
         struct obd_export *export;
 	struct cfs_hash *hash = NULL;
@@ -848,6 +1011,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
         export->exp_conn_cnt = 0;
         export->exp_lock_hash = NULL;
 	export->exp_flock_hash = NULL;
+	/* 2 = class_handle_hash + last */
 	atomic_set(&export->exp_refcount, 2);
 	atomic_set(&export->exp_rpc_count, 0);
 	atomic_set(&export->exp_cb_count, 0);
@@ -881,17 +1045,17 @@ struct obd_export *class_new_export(struct obd_device *obd,
 	export->exp_client_uuid = *cluuid;
 	obd_init_export(export);
 
-	spin_lock(&obd->obd_dev_lock);
-	/* shouldn't happen, but might race */
-	if (obd->obd_stopping)
-		GOTO(exit_unlock, rc = -ENODEV);
+	if (!obd_uuid_equals(cluuid, &obd->obd_uuid)) {
+		spin_lock(&obd->obd_dev_lock);
+		/* shouldn't happen, but might race */
+		if (obd->obd_stopping)
+			GOTO(exit_unlock, rc = -ENODEV);
 
-	hash = cfs_hash_getref(obd->obd_uuid_hash);
-	if (hash == NULL)
-		GOTO(exit_unlock, rc = -ENODEV);
-	spin_unlock(&obd->obd_dev_lock);
+		hash = cfs_hash_getref(obd->obd_uuid_hash);
+		if (hash == NULL)
+			GOTO(exit_unlock, rc = -ENODEV);
+		spin_unlock(&obd->obd_dev_lock);
 
-        if (!obd_uuid_equals(cluuid, &obd->obd_uuid)) {
                 rc = cfs_hash_add_unique(hash, cluuid, &export->exp_uuid_hash);
                 if (rc != 0) {
                         LCONSOLE_WARN("%s: denying duplicate export for %s, %d\n",
@@ -903,17 +1067,24 @@ struct obd_export *class_new_export(struct obd_device *obd,
 	at_init(&export->exp_bl_lock_at, obd_timeout, 0);
 	spin_lock(&obd->obd_dev_lock);
         if (obd->obd_stopping) {
-                cfs_hash_del(hash, cluuid, &export->exp_uuid_hash);
-                GOTO(exit_unlock, rc = -ENODEV);
+		if (hash)
+			cfs_hash_del(hash, cluuid, &export->exp_uuid_hash);
+		GOTO(exit_unlock, rc = -ESHUTDOWN);
         }
 
-        class_incref(obd, "export", export);
-	list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
-	list_add_tail(&export->exp_obd_chain_timed,
-		      &export->exp_obd->obd_exports_timed);
-        export->exp_obd->obd_num_exports++;
+	if (!is_self) {
+		class_incref(obd, "export", export);
+		list_add_tail(&export->exp_obd_chain_timed,
+			      &obd->obd_exports_timed);
+		list_add(&export->exp_obd_chain, &obd->obd_exports);
+		obd->obd_num_exports++;
+	} else {
+		INIT_LIST_HEAD(&export->exp_obd_chain_timed);
+		INIT_LIST_HEAD(&export->exp_obd_chain);
+	}
 	spin_unlock(&obd->obd_dev_lock);
-	cfs_hash_putref(hash);
+	if (hash)
+		cfs_hash_putref(hash);
 	RETURN(export);
 
 exit_unlock:
@@ -927,11 +1098,28 @@ exit_err:
         OBD_FREE_PTR(export);
         return ERR_PTR(rc);
 }
+
+struct obd_export *class_new_export(struct obd_device *obd,
+				    struct obd_uuid *uuid)
+{
+	return __class_new_export(obd, uuid, false);
+}
 EXPORT_SYMBOL(class_new_export);
+
+struct obd_export *class_new_export_self(struct obd_device *obd,
+					 struct obd_uuid *uuid)
+{
+	return __class_new_export(obd, uuid, true);
+}
 
 void class_unlink_export(struct obd_export *exp)
 {
 	class_handle_unhash(&exp->exp_handle);
+
+	if (exp->exp_obd->obd_self_export == exp) {
+		class_export_put(exp);
+		return;
+	}
 
 	spin_lock(&exp->exp_obd->obd_dev_lock);
 	/* delete an uuid-export hashitem from hashtables */

@@ -950,7 +950,6 @@ int target_handle_connect(struct ptlrpc_request *req)
 	 * reconnect case */
 	struct lustre_handle conn;
 	struct lustre_handle *tmp;
-        struct obd_uuid tgtuuid;
         struct obd_uuid cluuid;
         char *str;
         int rc = 0;
@@ -959,7 +958,6 @@ int target_handle_connect(struct ptlrpc_request *req)
 	bool	 mds_conn = false, lw_client = false, initial_conn = false;
 	bool	 mds_mds_conn = false;
 	bool	 new_mds_mds_conn = false;
-	bool	 target_referenced = false;
         struct obd_connect_data *data, *tmpdata;
         int size, tmpsize;
         lnet_nid_t *client_nid = NULL;
@@ -973,11 +971,7 @@ int target_handle_connect(struct ptlrpc_request *req)
                 GOTO(out, rc = -EINVAL);
         }
 
-        obd_str2uuid(&tgtuuid, str);
-        target = class_uuid2obd(&tgtuuid);
-        if (!target)
-                target = class_name2obd(str);
-
+	target = class_dev_by_str(str);
 	if (!target) {
 		deuuidify(str, NULL, &target_start, &target_len);
 		LCONSOLE_ERROR_MSG(0x137, "%s: not available for connect "
@@ -989,6 +983,9 @@ int target_handle_connect(struct ptlrpc_request *req)
 	}
 
 	spin_lock(&target->obd_dev_lock);
+
+	target->obd_conn_inprogress++;
+
 	if (target->obd_stopping || !target->obd_set_up) {
 		spin_unlock(&target->obd_dev_lock);
 
@@ -1010,13 +1007,6 @@ int target_handle_connect(struct ptlrpc_request *req)
 		GOTO(out, rc = -EAGAIN);
 	}
 
-	/* Make sure the target isn't cleaned up while we're here. Yes,
-	 * there's still a race between the above check and our incref here.
-	 * Really, class_uuid2obd should take the ref. */
-	class_incref(target, __func__, current);
-	target_referenced = true;
-
-	target->obd_conn_inprogress++;
 	spin_unlock(&target->obd_dev_lock);
 
         str = req_capsule_client_get(&req->rq_pill, &RMF_CLUUID);
@@ -1441,12 +1431,11 @@ out:
 
 		class_export_put(export);
 	}
-	if (target_referenced == true && target != NULL) {
+	if (target != NULL) {
 		spin_lock(&target->obd_dev_lock);
 		target->obd_conn_inprogress--;
 		spin_unlock(&target->obd_dev_lock);
-
-		class_decref(target, __func__, current);
+		class_decref(target, "find", current);
 	}
 	req->rq_status = rc;
 	RETURN(rc);

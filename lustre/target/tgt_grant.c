@@ -138,11 +138,6 @@ static int tgt_check_export_grants(struct obd_export *exp, u64 *dirty,
 	struct tg_export_data *ted = &exp->exp_target_data;
 	int level = D_CACHE;
 
-	if (exp->exp_obd->obd_self_export == exp)
-		CDEBUG(D_CACHE, "%s: processing self export: %ld %ld "
-		       "%ld\n", exp->exp_obd->obd_name, ted->ted_grant,
-		       ted->ted_pending, ted->ted_dirty);
-
 	if (ted->ted_grant < 0 || ted->ted_pending < 0 || ted->ted_dirty < 0)
 		level = D_ERROR;
 	CDEBUG_LIMIT(level, "%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
@@ -188,6 +183,7 @@ void tgt_grant_sanity_check(struct obd_device *obd, const char *func)
 	struct lu_target *lut = obd->u.obt.obt_lut;
 	struct tg_grants_data *tgd = &lut->lut_tgd;
 	struct obd_export *exp;
+	struct tg_export_data *ted;
 	u64		   maxsize;
 	u64		   tot_dirty = 0;
 	u64		   tot_pending = 0;
@@ -209,6 +205,15 @@ void tgt_grant_sanity_check(struct obd_device *obd, const char *func)
 
 	spin_lock(&obd->obd_dev_lock);
 	spin_lock(&tgd->tgd_grant_lock);
+	exp = obd->obd_self_export;
+	ted = &exp->exp_target_data;
+	CDEBUG(D_CACHE, "%s: processing self export: %ld %ld "
+	       "%ld\n", obd->obd_name, ted->ted_grant,
+	       ted->ted_pending, ted->ted_dirty);
+	tot_granted += ted->ted_grant + ted->ted_pending;
+	tot_pending += ted->ted_pending;
+	tot_dirty += ted->ted_dirty;
+
 	list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
 		error = tgt_check_export_grants(exp, &tot_dirty, &tot_pending,
 						&tot_granted, maxsize);
