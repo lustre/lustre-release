@@ -261,16 +261,21 @@ static int osp_init_last_objid(const struct lu_env *env, struct osp_device *osp)
 	/* object will be released in device cleanup path */
 	if (osi->osi_attr.la_size >=
 	    sizeof(osi->osi_id) * (osp->opd_index + 1)) {
-		osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_oid,
+		osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, &osi->osi_id,
 				   osp->opd_index);
 		rc = dt_record_read(env, dto, &osi->osi_lb, &osi->osi_off);
 		if (rc != 0 && rc != -EFAULT)
 			GOTO(out, rc);
+		/* In case of idif bits 32-48 go to f_seq
+		 * (see osp_init_last_seq). So don't care
+		 * about u64->u32 convertion. */
+		fid->f_oid = osi->osi_id;
 	}
 
 	if (rc == -EFAULT) { /* fresh LAST_ID */
+		osi->osi_id = 0;
 		fid->f_oid = 0;
-		osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, &fid->f_oid,
+		osp_objid_buf_prep(&osi->osi_lb, &osi->osi_off, &osi->osi_id,
 				   osp->opd_index);
 		rc = osp_write_local_file(env, osp, dto, &osi->osi_lb,
 					  osi->osi_off);
@@ -323,6 +328,8 @@ static int osp_init_last_seq(const struct lu_env *env, struct osp_device *osp)
 		rc = dt_record_read(env, dto, &osi->osi_lb, &osi->osi_off);
 		if (rc != 0 && rc != -EFAULT)
 			GOTO(out, rc);
+		if (fid_is_idif(fid))
+			fid->f_seq = fid_idif_seq(osi->osi_id, osp->opd_index);
 	}
 
 	if (rc == -EFAULT) { /* fresh OSP */
@@ -374,7 +381,7 @@ static int osp_last_used_init(const struct lu_env *env, struct osp_device *osp)
 
 	rc = osp_init_last_seq(env, osp);
 	if (rc < 0) {
-		CERROR("%s: Can not get ids %d from old objid!\n",
+		CERROR("%s: Can not get sequence %d from old objseq!\n",
 		       osp->opd_obd->obd_name, rc);
 		GOTO(out, rc);
 	}
