@@ -2336,7 +2336,7 @@ int kgnilnd_base_startup(void)
 	}
 
 	kgnilnd_data.kgn_mbox_cache =
-		kmem_cache_create("kgn_mbox_block", KMALLOC_MAX_SIZE, 0,
+		kmem_cache_create("kgn_mbox_block", GNILND_MBOX_SIZE, 0,
 				  SLAB_HWCACHE_ALIGN, NULL);
 	if (kgnilnd_data.kgn_mbox_cache == NULL) {
 		CERROR("Can't create slab for physical mbox blocks\n");

@@ -161,7 +161,7 @@ kgnilnd_alloc_fmablk(kgn_device_t *device, int use_phys)
 			rc = -ENOMEM;
 			GOTO(free_desc, rc);
 		}
-		fma_blk->gnm_blk_size = KMALLOC_MAX_SIZE;
+		fma_blk->gnm_blk_size = GNILND_MBOX_SIZE;
 		num_mbox = fma_blk->gnm_blk_size / fma_blk->gnm_mbox_size;
 
 		LASSERTF(num_mbox >= 1,

@@ -68,6 +68,15 @@
 #include <gni_pub.h>
 #include "gnilnd_version.h"
 
+#ifdef CONFIG_SLAB
+#define GNILND_MBOX_SIZE	KMALLOC_MAX_SIZE
+#else
+#define GNILND_SHIFT_HIGH	((MAX_ORDER + PAGE_SHIFT - 1) <= 25 ? \
+				(MAX_ORDER + PAGE_SHIFT - 1) : 25)
+#define GNILND_SHIFT_MAX	GNILND_SHIFT_HIGH
+#define GNILND_MBOX_SIZE	(1UL << GNILND_SHIFT_MAX)
+#endif
+
 
 /* tunables determined at compile time */
 #define GNILND_MIN_TIMEOUT	5		/* minimum timeout interval (seconds) */
