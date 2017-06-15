@@ -33,8 +33,8 @@ init_test_env $@
 init_logging
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-# bug number for skipped test:        LU-2776
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 51a"
+# bug number for skipped test:
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT "
 # LU-2829 / LU-2887 - make allowances for ZFS slowness
 	TEST33_NFILES=${TEST33_NFILES:-1000}
 fi
@@ -2434,7 +2434,10 @@ test_51a() {
 		error "dd $DIR1/$tfile failed"
 
 	# MULTIOP proc should be able to read enough bytes and exit
-	sleep 2
+	for ((i = 0; i < 6; i++)); do
+		sleep 1
+		kill -0 $pid || break
+	done
 	kill -0 $pid 2> /dev/null && error "multiop is still there"
 	cmp $origfile $DIR2/$tfile || error "$origfile and $DIR2/$tfile differs"
 
