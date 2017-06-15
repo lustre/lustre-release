@@ -743,7 +743,8 @@ sa_prep_data(struct inode *dir, struct inode *child, struct sa_entry *entry)
 	if (minfo == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	op_data = ll_prep_md_op_data(&minfo->mi_data, dir, child, NULL, 0, 0,
+	op_data = ll_prep_md_op_data(&minfo->mi_data, dir, child,
+				     entry->se_qstr.name, entry->se_qstr.len, 0,
 				     LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data)) {
 		OBD_FREE_PTR(minfo);
