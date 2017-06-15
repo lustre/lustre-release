@@ -1475,6 +1475,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 int osp_precreate_get_fid(const struct lu_env *env, struct osp_device *d,
 			  struct lu_fid *fid)
 {
+	struct lu_fid *pre_used_fid = &d->opd_pre_used_fid;
 	/* grab next id from the pool */
 	spin_lock(&d->opd_pre_lock);
 
@@ -1483,6 +1484,20 @@ int osp_precreate_get_fid(const struct lu_env *env, struct osp_device *d,
 		 "next fid "DFID" last created fid "DFID"\n",
 		 PFID(&d->opd_pre_used_fid),
 		 PFID(&d->opd_pre_last_created_fid));
+
+	/*
+	 * When sequence is used up, new one should be allocated in
+	 * osp_precreate_rollover_new_seq. So ASSERT here to avoid
+	 * objid overflow.
+	 */
+	LASSERTF(osp_fid_end_seq(env, pre_used_fid) == 0,
+		 "next fid "DFID" last created fid "DFID"\n",
+		 PFID(&d->opd_pre_used_fid),
+		 PFID(&d->opd_pre_last_created_fid));
+	/* Non IDIF fids shoulnd't get here with oid == 0xFFFFFFFF. */
+	if (fid_is_idif(pre_used_fid) &&
+	    unlikely(fid_oid(pre_used_fid) == LUSTRE_DATA_SEQ_MAX_WIDTH))
+		pre_used_fid->f_seq++;
 
 	d->opd_pre_used_fid.f_oid++;
 	memcpy(fid, &d->opd_pre_used_fid, sizeof(*fid));

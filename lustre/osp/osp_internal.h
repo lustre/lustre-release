@@ -394,7 +394,7 @@ static inline bool is_only_remote_trans(struct thandle *th)
 }
 
 static inline void osp_objid_buf_prep(struct lu_buf *buf, loff_t *off,
-				      __u32 *id, int index)
+				      __u64 *id, int index)
 {
 	/* Note: through id is only 32 bits, it will also write 64 bits
 	 * for oid to keep compatibility with the previous version. */
@@ -547,6 +547,7 @@ static inline int osp_fid_diff(const struct lu_fid *fid1,
 static inline void osp_update_last_fid(struct osp_device *d, struct lu_fid *fid)
 {
 	int diff = osp_fid_diff(fid, &d->opd_last_used_fid);
+	struct lu_fid *gap_start = &d->opd_gap_start_fid;
 	/*
 	 * we might have lost precreated objects due to VBR and precreate
 	 * orphans, the gap in objid can be calculated properly only here
@@ -554,7 +555,13 @@ static inline void osp_update_last_fid(struct osp_device *d, struct lu_fid *fid)
 	if (diff > 0) {
 		if (diff > 1) {
 			d->opd_gap_start_fid = d->opd_last_used_fid;
-			d->opd_gap_start_fid.f_oid++;
+			if (fid_oid(gap_start) == LUSTRE_DATA_SEQ_MAX_WIDTH) {
+				gap_start->f_seq++;
+				gap_start->f_oid = fid_is_idif(gap_start) ?
+							       0 : 1;
+			} else {
+				gap_start->f_oid++;
+			}
 			d->opd_gap_count = diff - 1;
 			CDEBUG(D_HA, "Gap in objids: start="DFID", count =%d\n",
 			       PFID(&d->opd_gap_start_fid), d->opd_gap_count);

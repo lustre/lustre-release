@@ -258,8 +258,17 @@ static inline __u32 fid_idif_ost_idx(const struct lu_fid *fid)
 /* Check whether the fid is for LAST_ID */
 static inline bool fid_is_last_id(const struct lu_fid *fid)
 {
-	return !fid_oid(fid) && fid_seq(fid) != FID_SEQ_UPDATE_LOG &&
-	       fid_seq(fid) != FID_SEQ_UPDATE_LOG_DIR;
+	if (fid_oid(fid) != 0)
+		return false;
+
+	if (fid_is_idif(fid) && ((fid_seq(fid) & 0xFFFF) != 0))
+		return false;
+
+	if (fid_seq(fid) == FID_SEQ_UPDATE_LOG ||
+	    fid_seq(fid) == FID_SEQ_UPDATE_LOG_DIR)
+		return false;
+
+	return true;
 }
 
 /**

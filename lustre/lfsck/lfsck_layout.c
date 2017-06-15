@@ -3096,7 +3096,6 @@ static int lfsck_layout_scan_orphan(const struct lu_env *env,
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
 	struct lfsck_bookmark		*bk	= &lfsck->li_bookmark_ram;
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
-	struct ost_id			*oi	= &info->lti_oi;
 	struct lu_fid			*fid	= &info->lti_fid;
 	struct dt_object		*obj;
 	const struct dt_it_ops		*iops;
@@ -3116,14 +3115,8 @@ static int lfsck_layout_scan_orphan(const struct lu_env *env,
 		RETURN(0);
 	}
 
-	ostid_set_seq(oi, FID_SEQ_IDIF);
-	rc = ostid_set_id(oi, 0);
-	if (rc)
-		GOTO(log, rc);
-
-	rc = ostid_to_fid(fid, oi, ltd->ltd_index);
-	if (rc != 0)
-		GOTO(log, rc);
+	fid->f_seq = fid_idif_seq(0, ltd->ltd_index);
+	fid->f_oid = fid->f_ver = 0;
 
 	obj = lfsck_object_find_by_dev(env, ltd->ltd_tgt, fid);
 	if (unlikely(IS_ERR(obj)))
