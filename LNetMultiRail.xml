@@ -1,0 +1,347 @@
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lnetmr" condition='l210'>
+  <title xml:id="lnetmr.title">LNet Software Multi-Rail</title>
+  <para>This chapter describes LNet Software Multi-Rail configuration and
+  administration.</para>
+  <itemizedlist>
+    <listitem>
+      <para><xref linkend="dbdoclet.mroverview"/></para>
+      <para><xref linkend="dbdoclet.mrconfiguring"/></para>
+      <para><xref linkend="dbdoclet.mrrouting"/></para>
+    </listitem>
+  </itemizedlist>
+  <section xml:id="dbdoclet.mroverview">
+    <title><indexterm><primary>MR</primary><secondary>overview</secondary>
+    </indexterm>Multi-Rail Overview</title>
+    <para>In computer networking, multi-rail is an arrangement in which two or
+    more network interfaces to a single network on a computer node are employed,
+    to achieve increased throughput.  Multi-rail can also be where a node has
+    one or more interfaces to multiple, even different kinds of networks, such
+    as Ethernet, Infiniband, and Intel® Omni-Path. For Lustre clients,
+    multi-rail generally presents the combined network capabilities as a single
+    LNet network.  Peer nodes that are multi-rail capable are established during
+    configuration, as are user-defined interface-section policies.</para>
+    <para>The following link contains a detailed high-level design for the
+    feature:
+    <link xl:href="http://wiki.lustre.org/images/b/bb/Multi-Rail_High-Level_Design_20150119.pdf">
+    Multi-Rail High-Level Design</link></para>
+  </section>
+  <section xml:id="dbdoclet.mrconfiguring">
+      <title><indexterm><primary>MR</primary><secondary>configuring</secondary>
+      </indexterm>Configuring Multi-Rail</title>
+      <para>Every node using multi-rail networking needs to be properly
+      configured.  Multi-rail uses <literal>lnetctl</literal> and the LNet
+      Configuration Library for configuration.  Configuring multi-rail for a
+      given node involves two tasks:</para>
+      <orderedlist>
+        <listitem><para>Configuring multiple network interfaces present on the
+        local node.</para></listitem>
+        <listitem><para>Adding remote peers that are multi-rail capable (are
+        connected to one or more common networks with at least two interfaces).
+        </para></listitem>
+      </orderedlist>
+      <para>This section is a supplement to
+          <xref linkend="dbdoclet.lnetaddshowdelete" /> and contains further
+          examples for Multi-Rail configurations.</para>
+      <section xml:id="dbdoclet.addinterfaces">
+          <title><indexterm><primary>MR</primary>
+          <secondary>multipleinterfaces</secondary>
+          </indexterm>Configure Multiple Interfaces on the Local Node</title>
+          <para>Example <literal>lnetctl add</literal> command with multiple
+          interfaces in a Multi-Rail configuration:</para>
+          <screen>lnetctl net add --net tcp --if eth0,eth1</screen>
+          <para>Example of YAML net show:</para>
+          <screen>lnetctl net show -v
+net:
+    - net type: lo
+      local NI(s):
+        - nid: 0@lo
+          status: up
+          statistics:
+              send_count: 0
+              recv_count: 0
+              drop_count: 0
+          tunables:
+              peer_timeout: 0
+              peer_credits: 0
+              peer_buffer_credits: 0
+              credits: 0
+          lnd tunables:
+          tcp bonding: 0
+          dev cpt: 0
+          CPT: "[0]"
+    - net type: tcp
+      local NI(s):
+        - nid: 192.168.122.10@tcp
+          status: up
+          interfaces:
+              0: eth0
+          statistics:
+              send_count: 0
+              recv_count: 0
+              drop_count: 0
+          tunables:
+              peer_timeout: 180
+              peer_credits: 8
+              peer_buffer_credits: 0
+              credits: 256
+          lnd tunables:
+          tcp bonding: 0
+          dev cpt: -1
+          CPT: "[0]"
+        - nid: 192.168.122.11@tcp
+          status: up
+          interfaces:
+              0: eth1
+          statistics:
+              send_count: 0
+              recv_count: 0
+              drop_count: 0
+          tunables:
+              peer_timeout: 180
+              peer_credits: 8
+              peer_buffer_credits: 0
+              credits: 256
+          lnd tunables:
+          tcp bonding: 0
+          dev cpt: -1
+          CPT: "[0]"</screen>
+      </section>
+      <section xml:id="dbdoclet.deleteinterfaces">
+          <title><indexterm><primary>MR</primary>
+              <secondary>deleteinterfaces</secondary>
+          </indexterm>Deleting Network Interfaces</title>
+          <para>Example delete with <literal>lnetctl net del</literal>:</para>
+          <para>Assuming the network configuration is as shown above with the
+          <literal>lnetctl net show -v</literal> in the previous section, we can
+          delete a net with following command:</para>
+          <screen>lnetctl net del --net tcp --if eth0</screen>
+          <para>The resultant net information would look like:</para>
+          <screen>lnetctl net show -v
+net:
+    - net type: lo
+      local NI(s):
+        - nid: 0@lo
+          status: up
+          statistics:
+              send_count: 0
+              recv_count: 0
+              drop_count: 0
+          tunables:
+              peer_timeout: 0
+              peer_credits: 0
+              peer_buffer_credits: 0
+              credits: 0
+          lnd tunables:
+          tcp bonding: 0
+          dev cpt: 0
+          CPT: "[0,1,2,3]"</screen>
+          <para>The syntax of a YAML file to perform a delete would be:</para>
+          <screen>- net type: tcp
+   local NI(s):
+     - nid: 192.168.122.10@tcp
+       interfaces:
+           0: eth0</screen>
+      </section>
+      <section xml:id="dbdoclet.addremotepeers">
+          <title><indexterm><primary>MR</primary>
+              <secondary>addremotepeers</secondary>
+          </indexterm>Adding Remote Peers that are Multi-Rail Capable</title>
+          <para>The following example <literal>lnetctl peer add</literal>
+          command adds a peer with 2 nids, with
+          <literal>192.168.122.30@tcp</literal> being the primary nid:</para>
+          <screen>lnetctl peer add --prim_nid 192.168.122.30@tcp --nid 192.168.122.30@tcp,192.168.122.31@tcp
+          </screen>
+          <para>The resulting <literal>lnetctl peer show</literal> would be:
+          <screen>lnetctl peer show -v
+peer:
+    - primary nid: 192.168.122.30@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 192.168.122.30@tcp
+          state: NA
+          max_ni_tx_credits: 8
+          available_tx_credits: 8
+          min_tx_credits: 7
+          tx_q_num_of_buf: 0
+          available_rtr_credits: 8
+          min_rtr_credits: 8
+          refcount: 1
+          statistics:
+              send_count: 2
+              recv_count: 2
+              drop_count: 0
+        - nid: 192.168.122.31@tcp
+          state: NA
+          max_ni_tx_credits: 8
+          available_tx_credits: 8
+          min_tx_credits: 7
+          tx_q_num_of_buf: 0
+          available_rtr_credits: 8
+          min_rtr_credits: 8
+          refcount: 1
+          statistics:
+              send_count: 1
+              recv_count: 1
+              drop_count: 0</screen>
+          </para>
+          <para>The following is an example YAML file for adding a peer:</para>
+          <screen>addPeer.yaml
+peer:
+    - primary nid: 192.168.122.30@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 192.168.122.31@tcp</screen>
+      </section>
+      <section xml:id="dbdoclet.deleteremotepeers">
+          <title><indexterm><primary>MR</primary>
+              <secondary>deleteremotepeers</secondary>
+          </indexterm>Deleting Remote Peers</title>
+          <para>Example of deleting a single nid of a peer (192.168.122.31@tcp):
+          </para>
+          <screen>lnetctl peer del --prim_nid 192.168.122.30@tcp --nid 192.168.122.31@tcp</screen>
+          <para>Example of deleting the entire peer:</para>
+          <screen>lnetctl peer del --prim_nid 192.168.122.30@tcp</screen>
+          <para>Example of deleting a peer via YAML:</para>
+          <screen>Assuming the following peer configuration:
+peer:
+    - primary nid: 192.168.122.30@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 192.168.122.30@tcp
+          state: NA
+        - nid: 192.168.122.31@tcp
+          state: NA
+        - nid: 192.168.122.32@tcp
+          state: NA
+
+You can delete 192.168.122.32@tcp as follows:
+
+delPeer.yaml
+peer:
+    - primary nid: 192.168.122.30@tcp
+      Multi-Rail: True
+      peer ni:
+        - nid: 192.168.122.32@tcp
+    
+% lnetctl import --del &lt; delPeer.yaml</screen>
+      </section>
+  </section>
+  <section xml:id="dbdoclet.mrrouting">
+      <title><indexterm><primary>MR</primary>
+          <secondary>mrrouting</secondary>
+      </indexterm>Notes on routing with Multi-Rail</title>
+      <para>Multi-Rail configuration can be applied on the Router to aggregate
+      the interfaces performance.</para>
+      <section xml:id="dbdoclet.mrroutingex">
+          <title><indexterm><primary>MR</primary>
+              <secondary>mrrouting</secondary>
+              <tertiary>routingex</tertiary>
+          </indexterm>Multi-Rail Cluster Example</title>
+      <para>The below example outlines a simple system where all the Lustre
+      nodes are MR capable.  Each node in the cluster has two interfaces.</para>
+      <figure xml:id="lnetmultirail.fig.routingdiagram">
+          <title>Routing Configuration with Multi-Rail</title>
+          <mediaobject>
+          <imageobject>
+              <imagedata scalefit="1" width="100%"
+              fileref="./figures/MR_RoutingConfig.png" />
+          </imageobject>
+          <textobject>
+               <phrase>Routing Configuration with Multi-Rail</phrase>
+          </textobject>
+          </mediaobject>
+      </figure>
+      <para>The routers can aggregate the interfaces on each side of the network
+      by configuring them on the appropriate network.</para>
+      <para>An example configuration:</para>
+      <screen>Routers
+lnetctl net add --net o2ib0 --if ib0,ib1
+lnetctl net add --net o2ib1 --if ib2,ib3
+lnetctl peer add --nid &lt;peer1-nidA&gt;@o2ib,&lt;peer1-nidB&gt;@o2ib,...
+lnetctl peer add --nid &lt;peer2-nidA&gt;@o2ib1,&lt;peer2-nidB>&gt;@o2ib1,...
+lnetctl set routing 1
+
+Clients
+lnetctl net add --net o2ib0 --if ib0,ib1
+lnetctl route add --net o2ib1 --gateway &lt;rtrX-nidA&gt;@o2ib
+lnetctl peer add --nid &lt;rtrX-nidA&gt;@o2ib,&lt;rtrX-nidB&gt;@o2ib
+        
+Servers
+lnetctl net add --net o2ib1 --if ib0,ib1
+lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidA&gt;@o2ib1
+lnetctl peer add --nid &lt;rtrX-nidA&gt;@o2ib1,&lt;rtrX-nidB&gt;@o2ib1</screen>
+      <para>In the above configuration the clients and the servers are
+      configured with only one route entry per router. This works because the
+      routers are MR capable. By adding the routers as peers with multiple
+      interfaces to the clients and the servers, when sending to the router the
+      MR algorithm will ensure that bot interfaces of the routers are used.
+      </para>
+      <para>However, as of the Lustre 2.10 release LNet Resiliency is still
+      under development and single interface failure will still cause the entire
+      router to go down.</para>
+      </section>
+      <section xml:id="dbdoclet.mrroutingresiliency">
+          <title><indexterm><primary>MR</primary>
+              <secondary>mrrouting</secondary>
+              <tertiary>routingresiliency</tertiary>
+          </indexterm>Utilizing Router Resiliency</title>
+      <para>Currently, LNet provides a mechanism to monitor each route entry.
+      LNet pings each gateway identified in the route entry on regular,
+      configurable interval to ensure that it is alive. If sending over a
+      specific route fails or if the router pinger determines that the gateway
+      is down, then the route is marked as down and is not used. It is
+      subsequently pinged on regular, configurable intervals to determine when
+      it becomes alive again.</para>
+      <para>This mechanism can be combined with the MR feature in Lustre 2.10 to
+      add this router resiliency feature to the configuration.</para>
+      <screen>Routers
+lnetctl net add --net o2ib0 --if ib0,ib1
+lnetctl net add --net o2ib1 --if ib2,ib3
+lnetctl peer add --nid &lt;peer1-nidA&gt;@o2ib,&lt;peer1-nidB&gt;@o2ib,...
+lnetctl peer add --nid &lt;peer2-nidA&gt;@o2ib1,&lt;peer2-nidB&gt;@o2ib1,...
+lnetctl set routing 1
+
+Clients
+lnetctl net add --net o2ib0 --if ib0,ib1
+lnetctl route add --net o2ib1 --gateway &lt;rtrX-nidA&gt;@o2ib
+lnetctl route add --net o2ib1 --gateway &lt;rtrX-nidB&gt;@o2ib
+        
+Servers
+lnetctl net add --net o2ib1 --if ib0,ib1
+lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidA&gt;@o2ib1
+lnetctl route add --net o2ib0 --gateway &lt;rtrX-nidB&gt;@o2ib1</screen>
+      <para>There are a few things to note in the above configuration:</para>
+      <orderedlist>
+          <listitem>
+              <para>The clients and the servers are now configured with two
+              routes, each route's gateway is one of the interfaces of the
+              route.  The clients and servers will view each interface of the
+              same router as a separate gateway and will monitor them as
+              described above.</para>
+          </listitem>
+          <listitem>
+              <para>The clients and the servers are not configured to view the
+              routers as MR capable. This is important because we want to deal
+              with each interface as a separate peers and not different
+              interfaces of the same peer.</para>
+          </listitem>
+          <listitem>
+              <para>The routers are configured to view the peers as MR capable.
+              This is an oddity in the configuration, but is currently required
+              in order to allow the routers to load balance the traffic load
+              across its interfaces evenly.</para>
+          </listitem>
+        </orderedlist>
+      </section>
+      <section xml:id="dbdoclet.mrroutingmixed">
+          <title><indexterm><primary>MR</primary>
+              <secondary>mrrouting</secondary>
+              <tertiary>routingmixed</tertiary>
+          </indexterm>Mixed Multi-Rail/Non-Multi-Rail Cluster</title>
+          <para>The above principles can be applied to mixed MR/Non-MR cluster.
+          For example, the same configuration shown above can be applied if the
+          clients and the servers are non-MR while the routers are MR capable.
+          This appears to be a common cluster upgrade scenario.</para>
+      </section>
+  </section>
+</chapter>

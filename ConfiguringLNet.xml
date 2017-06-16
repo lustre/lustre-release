@@ -99,13 +99,14 @@
       unconfigure LNet.</para>
       <screen>lnetctl lnet unconfigure</screen>
     </section>
-    <section>
-      <title><indexterm>
-          <primary>LNet</primary>
-          <secondary>cli</secondary>
-        </indexterm>Adding, Deleting and Showing networks</title>
-      <para>Networks can be added and deleted after the LNet kernel module
-      is loaded.</para>
+    <section xml:id="dbdoclet.lnetaddshowdelete">
+      <title><indexterm><primary>LNet</primary>
+      <secondary>cli</secondary></indexterm>Adding, Deleting and Showing
+      Networks</title>
+      <para>Networks can be added, deleted, or shown after the LNet kernel
+      module is loaded.</para>
+      <para>The <emphasis role="bold"><literal>lnetctl net add</literal>
+      </emphasis> command is used to add networks:</para>
       <screen>lnetctl net add: add a network
         --net: net name (ex tcp0)
         --if: physical interface (ex eth0)
@@ -119,15 +120,39 @@
 Example:
 lnetctl net add --net tcp2 --if eth0
                 --peer_timeout 180 --peer_credits 8</screen>
-      <para>Networks can be deleted as shown below:</para>
+      <note condition='l2A'><para>With the addition of Software based Multi-Rail
+      in Lustre 2.10, the following should be noted:</para>
+      <para><itemizedlist>
+          <listitem><para>--net:  no longer needs to be unique since multiple
+          interfaces can be added to the same network.</para></listitem>
+          <listitem><para>--if:  The same interface per network can be added
+          only once, however, more than one interface can now be specified
+          (separated by a comma) for a node. For example: eth0,eth1,eth2.
+          </para></listitem>
+      </itemizedlist></para>
+      <para>For examples on adding multiple interfaces via
+      <literal>lnetctl net add</literal> and/or YAML, please see
+      <xref linkend="dbdoclet.mrconfiguring" />
+      </para></note>
+      
+      <para>Networks can be deleted with the
+      <emphasis role="bold"><literal>lnetctl net del</literal></emphasis>
+      command:</para>
       <screen>net del: delete a network
         --net: net name (ex tcp0)
+        --if:  physical inerface (e.g. eth0)
 
 Example:
 lnetctl net del --net tcp2</screen>
-      <para>All or a subset of the configured networks can be shown. The
-      output can be non-verbose
-        or verbose.</para>
+      <note condition='l2A'><para>In a Software Multi-Rail configuration,
+      specifying only the <literal>--net</literal> argument will delete the
+      entire network and all interfaces under it.  The new
+      <literal>--if</literal> switch should also be used in conjunction with
+      <literal>--net</literal> to specify deletion of a specific interface.
+      </para></note>
+      <para>All or a subset of the configured networks can be shown with the
+      <emphasis role="bold"><literal>lnetctl net show</literal></emphasis>
+      command. The output can be non-verbose or verbose.</para>
       <screen>net show: show networks
         --net: net name (ex tcp0) to filter on
         --verbose: display detailed output per network
@@ -158,6 +183,100 @@ net:
           peer_credits: 8
           peer_buffer_credits: 0
           credits: 256</screen>
+    </section>
+    <section condition='l2A'>
+        <title><indexterm>
+            <primary>LNet</primary>
+            <secondary>cli</secondary>
+        </indexterm>Adding, Deleting and Showing Peers</title>
+        <para>The <emphasis role="bold"><literal>lnetctl peer add</literal>
+        </emphasis> command is used to add a remote peer to a software
+        multi-rail configuration.</para>
+        <para>When configuring peers, use the <literal>–-prim_nid</literal>
+            option to specify the key or primary nid of the peer node.  Then
+            follow that with the <literal>--nid</literal> option to specify a set
+            of comma separated NIDs.</para>
+        <screen>peer add: add a peer
+            --prim_nid: primary NID of the peer
+            --nid: comma separated list of peer nids (e.g. 10.1.1.2@tcp0)
+            --non_mr: if specified this interface is created as a non mulit-rail
+            capable peer. Only one NID can be specified in this case.</screen>
+        <para>For example:</para>
+        <screen>
+            lnetctl peer add --prim_nid 10.10.10.2@tcp --nid 10.10.3.3@tcp1,10.4.4.5@tcp2
+        </screen>
+        <para>The <literal>--prim-nid</literal> (primary nid for the peer
+            node) can go unspecified.  In this case, the first listed NID in the
+            <literal>--nid</literal> option becomes the primary nid of the peer.
+            For example:</para>
+        <screen>
+            lnetctl peer_add --nid 10.10.10.2@tcp,10.10.3.3@tcp1,10.4.4.5@tcp2</screen>
+        <para>YAML can also be used to configure peers:</para>
+        <screen>peer:
+            - primary nid: &lt;key or primary nid&gt;
+            Multi-Rail: True
+            peer ni:
+            - nid: &lt;nid 1&gt;
+            - nid: &lt;nid 2&gt;
+            - nid: &lt;nid n&gt;</screen>
+        <para>As with all other commands, the result of the
+            <literal>lnetctl peer show</literal> command can be used to gather
+            information to aid in configuring or deleting a peer:</para>
+        <screen>lnetctl peer show -v</screen>
+        <para>Example output from the <literal>lnetctl peer show</literal>
+            command:</para>
+        <screen>peer:
+            - primary nid: 192.168.122.218@tcp
+            Multi-Rail: True
+            peer ni:
+            - nid: 192.168.122.218@tcp
+            state: NA
+            max_ni_tx_credits: 8
+            available_tx_credits: 8
+            available_rtr_credits: 8
+            min_rtr_credits: -1
+            tx_q_num_of_buf: 0
+            send_count: 6819
+            recv_count: 6264
+            drop_count: 0
+            refcount: 1
+            - nid: 192.168.122.78@tcp
+            state: NA
+            max_ni_tx_credits: 8
+            available_tx_credits: 8
+            available_rtr_credits: 8
+            min_rtr_credits: -1
+            tx_q_num_of_buf: 0
+            send_count: 7061
+            recv_count: 6273
+            drop_count: 0
+            refcount: 1
+            - nid: 192.168.122.96@tcp
+            state: NA
+            max_ni_tx_credits: 8
+            available_tx_credits: 8
+            available_rtr_credits: 8
+            min_rtr_credits: -1
+            tx_q_num_of_buf: 0
+            send_count: 6939
+            recv_count: 6286
+            drop_count: 0
+            refcount: 1</screen>
+        <para>Use the following <literal>lnetctl</literal> command to delete a
+            peer:</para>
+        <screen>peer del: delete a peer
+            --prim_nid: Primary NID of the peer
+            --nid: comma separated list of peer nids (e.g. 10.1.1.2@tcp0)</screen>
+        <para><literal>prim_nid</literal> should always be specified. The
+            <literal>prim_nid</literal> identifies the peer. If the
+            <literal>prim_nid</literal> is the only one specified, then the entire
+            peer is deleted.</para>
+        <para>Example of deleting a single nid of a peer (10.10.10.3@tcp):
+        </para>
+        <screen>lnetctl peer del --prim_nid 10.10.10.2@tcp --nid 10.10.10.3@tcp</screen>
+        <para>Example of deleting the entire peer:</para>
+        <screen>lnetctl peer del --prim_nid 10.10.10.2@tcp</screen>
+
     </section>
     <section>
       <title><indexterm>
@@ -668,6 +787,38 @@ tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
     stepped by 2; that is 2,4,6,8. Thus, the clients at
     <literal>132.6.3.5</literal> will not find a matching o2ib
     network.</para>
+    <note condition='l2A'>
+        <para>Multi-rail deprecates the kernel parsing of ip2nets. ip2nets
+            patterns are matched in user space and translated into Network interfaces
+            to be added into the system.</para>
+        <para>The first interface that matches the IP pattern will be used when
+            adding a network interface.</para>
+        <para>If an interface is explicitly specified as well as a pattern, the
+            interface matched using the IP pattern will be sanitized against the
+            explicitly-defined interface.</para>
+        <para>For example, <literal>tcp(eth0) 192.168.*.3</literal> and there
+            exists in the system <literal>eth0 == 192.158.19.3</literal> and
+            <literal>eth1 == 192.168.3.3</literal>, then the configuration will fail,
+            because the pattern contradicts the interface specified.</para>
+        <para>A clear warning will be displayed if inconsistent configuration is
+            encountered.</para>
+        <para>You could use the following command to configure ip2nets:</para>
+        <screen>lnetctl import &lt; ip2nets.yaml</screen>
+        <para>For example:</para>
+        <screen>ip2nets:
+  - net-spec: tcp1
+    interfaces:
+         0: eth0
+         1: eth1
+    ip-range:
+         0: 192.168.*.19
+         1: 192.168.100.105
+  - net-spec: tcp2
+    interfaces:
+         0: eth2
+    ip-range:
+         0: 192.168.*.*</screen>
+    </note>
   </section>
   <section xml:id="dbdoclet.50438216_71227">
     <title><indexterm><primary>LNet</primary><secondary>routes</secondary></indexterm>Setting

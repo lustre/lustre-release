@@ -93,29 +93,40 @@ To remove all Lustre modules, run:</para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438203_82542">
-    <title><indexterm><primary>LNet</primary><secondary>multi-rail configuration</secondary></indexterm>Multi-Rail Configurations with LNet</title>
-    <para>To aggregate bandwidth across both rails of a dual-rail IB cluster (o2iblnd) <footnote>
-        <para>Multi-rail configurations are only supported by o2iblnd; other IB LNDs do not support multiple interfaces.</para>
+    <title><indexterm><primary>LNet</primary><secondary>hardware multi-rail
+    configuration</secondary></indexterm>Hardware Based Multi-Rail
+    Configurations with LNet</title>
+    <para>To aggregate bandwidth across both rails of a dual-rail IB cluster
+        (o2iblnd) <footnote>
+        <para>Hardware multi-rail configurations are only supported by o2iblnd;
+        other IB LNDs do not support multiple interfaces.</para>
       </footnote> using LNet, consider these points:</para>
     <itemizedlist>
       <listitem>
-        <para>LNet can work with multiple rails, however, it does not load balance across them. The actual rail used for any communication is determined by the peer NID.</para>
+        <para>LNet can work with multiple rails, however, it does not load
+        balance across them. The actual rail used for any communication is
+        determined by the peer NID.</para>
       </listitem>
       <listitem>
-        <para>Multi-rail LNet configurations do not provide an additional level of network fault
-          tolerance. The configurations described below are for bandwidth aggregation only. </para>
+        <para>Hardware multi-rail LNet configurations do not provide an
+        additional level of network fault tolerance. The configurations
+        described below are for bandwidth aggregation only.</para>
       </listitem>
       <listitem>
-        <para>A Lustre node always uses the same local NID to communicate with a given peer NID. The criteria used to determine the local NID are:</para>
+        <para>A Lustre node always uses the same local NID to communicate with a
+        given peer NID. The criteria used to determine the local NID are:</para>
         <itemizedlist>
-	   <listitem>
-	     <para condition='l25'>Lowest route priority number (lower number, higher priority).</para>
-	   </listitem>
+	      <listitem>
+	        <para condition='l25'>Lowest route priority number (lower number,
+            higher priority).</para>
+	      </listitem>
           <listitem>
             <para>Fewest hops (to minimize routing), and</para>
           </listitem>
           <listitem>
-            <para>Appears first in the &quot;<literal>networks</literal>&quot; or &quot;<literal>ip2nets</literal>&quot; LNet configuration strings</para>
+            <para>Appears first in the &quot;<literal>networks</literal>&quot;
+            or &quot;<literal>ip2nets</literal>&quot; LNet configuration strings
+            </para>
           </listitem>
         </itemizedlist>
       </listitem>
