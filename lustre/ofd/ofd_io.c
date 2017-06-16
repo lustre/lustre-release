@@ -42,6 +42,7 @@
 
 #include <linux/kthread.h>
 #include "ofd_internal.h"
+#include <lustre_nodemap.h>
 
 struct ofd_inconsistency_item {
 	struct list_head	 oii_list;
@@ -1202,6 +1203,8 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	LASSERT(npages > 0);
 
 	if (cmd == OBD_BRW_WRITE) {
+		struct lu_nodemap *nodemap;
+
 		/* Don't update timestamps if this write is older than a
 		 * setattr which modifies the timestamps. b=10150 */
 
@@ -1259,6 +1262,20 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 
 			oa->o_valid |= OBD_MD_FLFLAGS;
 			oa->o_valid |= OBD_MD_FLALLQUOTA;
+		}
+
+		/* Convert back to client IDs. LU-9671.
+		 * nodemap_get_from_exp() may fail due to nodemap deactivated,
+		 * server ID will be returned back to client in that case. */
+		nodemap = nodemap_get_from_exp(exp);
+		if (nodemap != NULL && !IS_ERR(nodemap)) {
+			oa->o_uid = nodemap_map_id(nodemap, NODEMAP_UID,
+						   NODEMAP_FS_TO_CLIENT,
+						   oa->o_uid);
+			oa->o_gid = nodemap_map_id(nodemap, NODEMAP_GID,
+						   NODEMAP_FS_TO_CLIENT,
+						   oa->o_gid);
+			nodemap_putref(nodemap);
 		}
 	} else if (cmd == OBD_BRW_READ) {
 		struct ldlm_namespace *ns = ofd->ofd_namespace;
