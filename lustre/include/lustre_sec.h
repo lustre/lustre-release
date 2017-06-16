@@ -869,6 +869,17 @@ struct ptlrpc_sec {
         /** owning import */
         struct obd_import              *ps_import;
 	spinlock_t			ps_lock;
+	/** mtime of SELinux policy file */
+	time_t				ps_sepol_mtime;
+	/** next check time of SELinux policy file */
+	ktime_t				ps_sepol_checknext;
+	/**
+	 * SELinux policy info
+	 * sepol string format is:
+	 * <mode>:<policy name>:<policy version>:<policy hash>
+	 */
+	char				ps_sepol[LUSTRE_NODEMAP_SEPOL_LENGTH
+						 + 1];
 
 	/*
 	 * garbage collection
@@ -1092,6 +1103,7 @@ int  sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
 void sptlrpc_cli_finish_early_reply(struct ptlrpc_request *early_req);
 
 void sptlrpc_request_out_callback(struct ptlrpc_request *req);
+int sptlrpc_get_sepol(struct ptlrpc_request *req);
 
 /*
  * exported higher interface of import & request

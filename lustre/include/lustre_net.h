@@ -1048,6 +1048,13 @@ struct ptlrpc_request {
 	/** description of flavors for client & server */
 	struct sptlrpc_flavor		 rq_flvr;
 
+	/**
+	 * SELinux policy info at the time of the request
+	 * sepol string format is:
+	 * <mode>:<policy name>:<policy version>:<policy hash>
+	 */
+	char rq_sepol[LUSTRE_NODEMAP_SEPOL_LENGTH + 1];
+
 	/* client/server security flags */
 	unsigned int
                                  rq_ctx_init:1,      /* context initiation */
