@@ -96,6 +96,8 @@ static void arc_prune_func(int64_t bytes, void *private)
 	struct lu_env      env;
 	int rc;
 
+	LASSERT(site->ls_obj_hash);
+
 	rc = lu_env_init(&env, LCT_SHRINKER);
 	if (rc) {
 		CERROR("%s: can't initialize shrinker env: rc = %d\n",
@@ -1051,10 +1053,6 @@ static int osd_mount(const struct lu_env *env,
 	o->od_xattr_in_sa = B_TRUE;
 	o->od_max_blksz = osd_spa_maxblocksize(o->od_os->os_spa);
 
-	rc = osd_objset_register_callbacks(o);
-	if (rc)
-		GOTO(err, rc);
-
 	rc = __osd_obj2dnode(o->od_os, o->od_rootid, &rootdn);
 	if (rc)
 		GOTO(err, rc);
@@ -1082,6 +1080,10 @@ static int osd_mount(const struct lu_env *env,
 	o->od_site.ls_bottom_dev = osd2lu_dev(o);
 
 	rc = lu_site_init_finish(&o->od_site);
+	if (rc)
+		GOTO(err, rc);
+
+	rc = osd_objset_register_callbacks(o);
 	if (rc)
 		GOTO(err, rc);
 
