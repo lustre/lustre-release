@@ -1102,6 +1102,9 @@ int gss_sec_create_common(struct gss_sec *gsec,
 	sec->ps_import = class_import_get(imp);
 	spin_lock_init(&sec->ps_lock);
 	INIT_LIST_HEAD(&sec->ps_gc_list);
+	sec->ps_sepol_mtime = 0;
+	sec->ps_sepol_checknext = ktime_set(0, 0);
+	sec->ps_sepol[0] = '\0';
 
         if (!svcctx) {
                 sec->ps_gc_interval = GSS_GC_INTERVAL;

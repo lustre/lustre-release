@@ -42,6 +42,10 @@ if LIBPTHREAD
 sbin_PROGRAMS += lhsmtool_posix
 endif
 
+if SELINUX
+sbin_PROGRAMS += l_getsepol
+endif
+
 lib_LIBRARIES =
 noinst_LIBRARIES =
 if LDISKFS_ENABLED
@@ -209,6 +213,10 @@ l_getidentity_DEPENDENCIES := $(top_builddir)/libcfs/libcfs/libcfs.la
 lhsmtool_posix_SOURCES = lhsmtool_posix.c
 lhsmtool_posix_LDADD := liblustreapi.la $(PTHREAD_LIBS)
 lhsmtool_posix_DEPENDENCIES := liblustreapi.la
+
+l_getsepol_SOURCES = l_getsepol.c
+l_getsepol_LDADD := liblustreapi.la -lcrypto $(SELINUX)
+l_getsepol_DEPENDENCIES := liblustreapi.la
 
 wirecheck_SOURCES = wirecheck.c
 wirecheck_CPPFLAGS := -DCC="\"$(CC)\""
