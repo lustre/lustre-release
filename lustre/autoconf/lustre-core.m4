@@ -414,6 +414,24 @@ blk_queue_max_segments, [
 ]) # LC_BLK_QUEUE_MAX_SEGMENTS
 
 #
+# LC_HAVE_XATTR_HANDLER_FLAGS
+#
+# 2.6.33 added a private flag to xattr_handler
+#
+AC_DEFUN([LC_HAVE_XATTR_HANDLER_FLAGS], [
+LB_CHECK_COMPILE([if 'struct xattr_handler' has flags field],
+xattr_handler_flags, [
+	#include <linux/xattr.h>
+],[
+	struct xattr_handler handler;
+
+	handler.flags = 0;
+],[
+	AC_DEFINE(HAVE_XATTR_HANDLER_FLAGS, 1, [flags field exist])
+])
+]) # LC_HAVE_XATTR_HANDLER_FLAGS
+
+#
 # LC_HAVE_DQUOT_FS_DISK_QUOTA
 #
 # 2.6.34 has quotactl_ops->[sg]et_dqblk that take struct fs_disk_quota
@@ -2211,6 +2229,29 @@ cache_head_has_hlist, [
 ]) # LC_HAVE_CACHE_HEAD_HLIST
 
 #
+# LC_HAVE_XATTR_HANDLER_SIMPLIFIED
+#
+# Kernel version 4.3 commit e409de992e3ea3674393465f07cc71c948edd87a
+# simplified xattr_handler handling by passing in the handler pointer
+#
+AC_DEFUN([LC_HAVE_XATTR_HANDLER_SIMPLIFIED], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'struct xattr_handler' functions pass in handler pointer],
+xattr_handler_simplified, [
+	#include <linux/xattr.h>
+],[
+	struct xattr_handler handler;
+
+	((struct xattr_handler *)0)->get(&handler, NULL, NULL, NULL, 0);
+	((struct xattr_handler *)0)->set(&handler, NULL, NULL, NULL, 0, 0);
+],[
+	AC_DEFINE(HAVE_XATTR_HANDLER_SIMPLIFIED, 1, [handler pointer is parameter])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_XATTR_HANDLER_SIMPLIFIED
+
+#
 # LC_HAVE_LOCKS_LOCK_FILE_WAIT
 #
 # 4.4 kernel have moved locks API users to
@@ -2335,6 +2376,30 @@ in_compat_syscall, [
 ]) # LC_HAVE_IN_COMPAT_SYSCALL
 
 #
+# LC_HAVE_XATTR_HANDLER_INODE_PARAM
+#
+# Kernel version 4.6 commit b296821a7c42fa58baa17513b2b7b30ae66f3336
+# and commit 5930122683dff58f0846b0f0405b4bd598a3ba6a added inode parameter
+# to xattr_handler functions
+#
+AC_DEFUN([LC_HAVE_XATTR_HANDLER_INODE_PARAM], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'struct xattr_handler' functions have inode parameter],
+xattr_handler_inode_param, [
+	#include <linux/xattr.h>
+],[
+	const struct xattr_handler handler;
+
+	((struct xattr_handler *)0)->get(&handler, NULL, NULL, NULL, NULL, 0);
+	((struct xattr_handler *)0)->set(&handler, NULL, NULL, NULL, NULL, 0, 0);
+],[
+	AC_DEFINE(HAVE_XATTR_HANDLER_INODE_PARAM, 1, [needs inode parameter])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LC_HAVE_XATTR_HANDLER_INODE_PARAM
+
+#
 # LC_DIRECTIO_2ARGS
 #
 # Kernel version 4.7 commit c8b8e32d700fe943a935e435ae251364d016c497
@@ -2432,25 +2497,6 @@ full_name_hash_3args, [
 ]) # LC_FULL_NAME_HASH_3ARGS
 
 #
-# LC_GROUP_INFO_GID
-#
-# Kernel version 4.9 commit 81243eacfa400f5f7b89f4c2323d0de9982bb0fb
-# cred: simpler, 1D supplementary groups
-#
-AC_DEFUN([LC_GROUP_INFO_GID], [
-LB_CHECK_COMPILE([if 'struct group_info' has member 'gid'],
-group_info_gid, [
-	#include <linux/cred.h>
-],[
-	kgid_t *p;
-	p = ((struct group_info *)0)->gid;
-],[
-	AC_DEFINE(HAVE_GROUP_INFO_GID, 1,
-		[struct group_info has member gid])
-])
-]) # LC_GROUP_INFO_GID
-
-#
 # LC_STRUCT_POSIX_ACL_XATTR
 #
 # Kernel version 4.8 commit 2211d5ba5c6c4e972ba6dbc912b2897425ea6621
@@ -2470,6 +2516,64 @@ struct_posix_acl_xattr, [
 		[struct posix_acl_xattr_{header,entry} defined])
 ])
 ]) # LC_STRUCT_POSIX_ACL_XATTR
+
+#
+# LC_IOP_XATTR
+#
+# Kernel version 4.8 commit fd50ecaddf8372a1d96e0daeaac0f93cf04e4d42
+# removed {get,set,remove}xattr inode operations
+#
+AC_DEFUN([LC_IOP_XATTR], [
+LB_CHECK_COMPILE([if 'inode_operations' has {get,set,remove}xattr members],
+inode_ops_xattr, [
+	#include <linux/fs.h>
+],[
+	struct inode_operations iop;
+	iop.setxattr = NULL;
+	iop.getxattr = NULL;
+	iop.removexattr = NULL;
+],[
+	AC_DEFINE(HAVE_IOP_XATTR, 1,
+		[inode_operations has {get,set,remove}xattr members])
+])
+]) # LC_IOP_XATTR
+
+#
+# LC_GROUP_INFO_GID
+#
+# Kernel version 4.9 commit 81243eacfa400f5f7b89f4c2323d0de9982bb0fb
+# cred: simpler, 1D supplementary groups
+#
+AC_DEFUN([LC_GROUP_INFO_GID], [
+LB_CHECK_COMPILE([if 'struct group_info' has member 'gid'],
+group_info_gid, [
+	#include <linux/cred.h>
+],[
+	kgid_t *p;
+	p = ((struct group_info *)0)->gid;
+],[
+	AC_DEFINE(HAVE_GROUP_INFO_GID, 1,
+		[struct group_info has member gid])
+])
+]) # LC_GROUP_INFO_GID
+
+#
+# LC_VFS_SETXATTR
+#
+# Kernel version 4.9 commit 5d6c31910bc0713e37628dc0ce677dcb13c8ccf4
+# added __vfs_{get,set,remove}xattr helpers
+#
+AC_DEFUN([LC_VFS_SETXATTR], [
+LB_CHECK_COMPILE([if '__vfs_setxattr' helper is available],
+vfs_setxattr, [
+	#include <linux/xattr.h>
+],[
+	__vfs_setxattr(NULL, NULL, NULL, NULL, 0, 0);
+],[
+	AC_DEFINE(HAVE_VFS_SETXATTR, 1,
+		['__vfs_setxattr is available])
+])
+]) # LC_VFS_SETXATTR
 
 #
 # LC_IOP_GENERIC_READLINK
@@ -2529,6 +2633,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 2.6.32
 	LC_BLK_QUEUE_MAX_SEGMENTS
+
+	# 2.6.33
+	LC_HAVE_XATTR_HANDLER_FLAGS
 
 	# 2.6.34
 	LC_HAVE_DQUOT_FS_DISK_QUOTA
@@ -2683,6 +2790,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.3
 	LC_HAVE_CACHE_HEAD_HLIST
+	LC_HAVE_XATTR_HANDLER_SIMPLIFIED
 
 	# 4.4
 	LC_HAVE_LOCKS_LOCK_FILE_WAIT
@@ -2699,6 +2807,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.6
 	LC_HAVE_IN_COMPAT_SYSCALL
+	LC_HAVE_XATTR_HANDLER_INODE_PARAM
 
 	# 4.7
 	LC_DIRECTIO_2ARGS
@@ -2709,9 +2818,11 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_D_COMPARE_4ARGS
 	LC_FULL_NAME_HASH_3ARGS
 	LC_STRUCT_POSIX_ACL_XATTR
+	LC_IOP_XATTR
 
 	# 4.9
 	LC_GROUP_INFO_GID
+	LC_VFS_SETXATTR
 
 	# 4.10
 	LC_IOP_GENERIC_READLINK
@@ -3008,6 +3119,7 @@ AM_CONDITIONAL(GSS_PIPEFS, test x$enable_gss_pipefs = xyes)
 AM_CONDITIONAL(GSS_SSK, test x$enable_ssk = xyes)
 AM_CONDITIONAL(LIBPTHREAD, test x$enable_libpthread = xyes)
 AM_CONDITIONAL(HAVE_SYSTEMD, test "x$with_systemdsystemunitdir" != "xno")
+AM_CONDITIONAL(XATTR_HANDLER, test "x$lb_cv_compile_xattr_handler_flags" = xyes)
 ]) # LC_CONDITIONALS
 
 #

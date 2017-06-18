@@ -233,8 +233,10 @@ struct inode_operations ll_fast_symlink_inode_operations = {
 #endif
 	.getattr	= ll_getattr,
 	.permission	= ll_inode_permission,
+#ifdef HAVE_IOP_XATTR
 	.setxattr	= ll_setxattr,
 	.getxattr	= ll_getxattr,
-	.listxattr	= ll_listxattr,
 	.removexattr	= ll_removexattr,
+#endif
+	.listxattr	= ll_listxattr,
 };

@@ -1113,12 +1113,20 @@ static inline loff_t ll_file_maxbytes(struct inode *inode)
 }
 
 /* llite/xattr.c */
-int ll_setxattr(struct dentry *dentry, const char *name,
-                const void *value, size_t size, int flags);
-ssize_t ll_getxattr(struct dentry *dentry, const char *name,
-                    void *buffer, size_t size);
+extern const struct xattr_handler *ll_xattr_handlers[];
+
+#define XATTR_USER_T		1
+#define XATTR_TRUSTED_T		2
+#define XATTR_SECURITY_T	3
+#define XATTR_ACL_ACCESS_T	4
+#define XATTR_ACL_DEFAULT_T	5
+#define XATTR_LUSTRE_T		6
+#define XATTR_OTHER_T		7
+
 ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
-int ll_removexattr(struct dentry *dentry, const char *name);
+int ll_xattr_list(struct inode *inode, const char *name, int type,
+		  void *buffer, size_t size, u64 valid);
+const struct xattr_handler *get_xattr_type(const char *name);
 
 /**
  * Common IO arguments for various VFS I/O interfaces.
@@ -1451,8 +1459,6 @@ int ll_layout_write_intent(struct inode *inode, __u64 start, __u64 end);
 int ll_xattr_init(void);
 void ll_xattr_fini(void);
 
-int ll_getxattr_common(struct inode *inode, const char *name,
-		       void *buffer, size_t size, __u64 valid);
 int ll_page_sync_io(const struct lu_env *env, struct cl_io *io,
 		    struct cl_page *page, enum cl_req_type crt);
 

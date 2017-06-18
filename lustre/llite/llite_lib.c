@@ -479,6 +479,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&sbi->ll_root_fid));
 
 	sb->s_op = &lustre_super_operations;
+#ifdef HAVE_XATTR_HANDLER_FLAGS
+	sb->s_xattr = ll_xattr_handlers;
+#endif
 #if THREAD_SIZE >= 8192 /*b=17630*/
 	sb->s_export_op = &lustre_export_operations;
 #endif
@@ -2745,7 +2748,6 @@ static int ll_linkea_decode(struct linkea_data *ldata, unsigned int linkno,
  */
 int ll_getparent(struct file *file, struct getparent __user *arg)
 {
-	struct dentry		*dentry = file_dentry(file);
 	struct inode		*inode = file_inode(file);
 	struct linkea_data	*ldata;
 	struct lu_buf		 buf = LU_BUF_NULL;
@@ -2778,7 +2780,13 @@ int ll_getparent(struct file *file, struct getparent __user *arg)
 	if (rc < 0)
 		GOTO(ldata_free, rc);
 
-	rc = ll_getxattr(dentry, XATTR_NAME_LINK, buf.lb_buf, buf.lb_len);
+#ifdef HAVE_XATTR_HANDLER_FLAGS
+	rc = ll_xattr_list(inode, XATTR_NAME_LINK, XATTR_TRUSTED_T, buf.lb_buf,
+			   buf.lb_len, OBD_MD_FLXATTR);
+#else
+	rc = ll_getxattr(file_dentry(file), XATTR_NAME_LINK, buf.lb_buf,
+			 buf.lb_len);
+#endif /* HAVE_XATTR_HANDLER_FLAGS */
 	if (rc < 0)
 		GOTO(lb_free, rc);
 
