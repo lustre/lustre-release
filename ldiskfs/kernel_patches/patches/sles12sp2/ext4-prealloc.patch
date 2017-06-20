@@ -30,33 +30,34 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
 ===================================================================
 --- linux-3.10.0-123.el7.x86_64.orig/fs/ext4/mballoc.c
 +++ linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
-@@ -1828,6 +1828,25 @@ int ext4_mb_find_by_goal(struct ext4_all
+@@ -1828,6 +1828,26 @@ int ext4_mb_find_by_goal(struct ext4_all
  	return 0;
  }
  
-+static void ext4_mb_prealloc_table_add(struct ext4_sb_info *sbi, int value)
++static int ext4_mb_prealloc_table_add(struct ext4_sb_info *sbi, int value)
 +{
 +	int i;
 +
 +	if (value > (sbi->s_blocks_per_group - 1 - 1 - sbi->s_itb_per_group))
-+		return;
++		return -1;
 +
 +	for (i = 0; i < sbi->s_mb_prealloc_table_size; i++) {
 +		if (sbi->s_mb_prealloc_table[i] == 0) {
 +			sbi->s_mb_prealloc_table[i] = value;
-+			return;
++			return 0;
 +		}
 +
 +		/* they should add values in order */
 +		if (value <= sbi->s_mb_prealloc_table[i])
-+			return;
++			return -1;
 +	}
++	return -1;
 +}
 +
  /*
   * The routine scans buddy structures (not bitmap!) from given order
   * to max order and tries to find big enough chunk to satisfy the req
-@@ -2263,6 +2282,89 @@ static const struct seq_operations ext4_
+@@ -2263,6 +2282,91 @@ static const struct seq_operations ext4_
  	.show   = ext4_mb_seq_groups_show,
  };
  
@@ -110,9 +111,11 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
 +		while (cur < end && *cur == ' ')
 +			cur++;
 +		value = simple_strtol(cur, &cur, 0);
-+		ext4_mb_prealloc_table_add(sbi, value);
-+		i++;
++		if (ext4_mb_prealloc_table_add(sbi, value) == 0)
++			++i;
 +	}
++	if (i != num)
++		sbi->s_mb_prealloc_table_size = i;
 +
 +	return cnt;
 +}
@@ -146,7 +149,16 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
  static int ext4_mb_seq_groups_open(struct inode *inode, struct file *file)
  {
  	struct super_block *sb = PDE_DATA(inode);
-@@ -2557,7 +2656,6 @@ int ext4_mb_init(struct super_block *sb)
+@@ -2550,7 +2657,7 @@ static int ext4_groupinfo_create_slab(si
+ int ext4_mb_init(struct super_block *sb)
+ {
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+-	unsigned i, j;
++	unsigned i, j, k, l;
+ 	unsigned offset, offset_incr;
+ 	unsigned max;
+ 	int ret;
+@@ -2595,7 +2702,6 @@ int ext4_mb_init(struct super_block *sb)
  	sbi->s_mb_max_to_scan = MB_DEFAULT_MAX_TO_SCAN;
  	sbi->s_mb_min_to_scan = MB_DEFAULT_MIN_TO_SCAN;
  	sbi->s_mb_stats = MB_DEFAULT_STATS;
@@ -154,7 +166,7 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
  	sbi->s_mb_order2_reqs = MB_DEFAULT_ORDER2_REQS;
  	/*
  	 * The default group preallocation is 512, which for 4k block
-@@ -2581,9 +2679,48 @@ int ext4_mb_init(struct super_block *sb)
+@@ -2619,9 +2725,47 @@ int ext4_mb_init(struct super_block *sb)
  	 * RAID stripe size so that preallocations don't fragment
  	 * the stripes.
  	 */
@@ -172,16 +184,12 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
 +		}
 +		memset(sbi->s_mb_prealloc_table, 0, i);
 +
-+		ext4_mb_prealloc_table_add(sbi, 4);
-+		ext4_mb_prealloc_table_add(sbi, 8);
-+		ext4_mb_prealloc_table_add(sbi, 16);
-+		ext4_mb_prealloc_table_add(sbi, 32);
-+		ext4_mb_prealloc_table_add(sbi, 64);
-+		ext4_mb_prealloc_table_add(sbi, 128);
-+		ext4_mb_prealloc_table_add(sbi, 256);
-+		ext4_mb_prealloc_table_add(sbi, 512);
-+		ext4_mb_prealloc_table_add(sbi, 1024);
-+		ext4_mb_prealloc_table_add(sbi, 2048);
++		for (k = 0, l = 4; k <= 9; ++k, l *= 2) {
++			if (ext4_mb_prealloc_table_add(sbi, l) < 0) {
++				sbi->s_mb_prealloc_table_size = k;
++				break;
++			}
++		}
 +
 +		sbi->s_mb_small_req = 256;
 +		sbi->s_mb_large_req = 1024;
@@ -196,9 +204,12 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
 +		}
 +		memset(sbi->s_mb_prealloc_table, 0, i);
 +
-+		ext4_mb_prealloc_table_add(sbi, sbi->s_stripe);
-+		ext4_mb_prealloc_table_add(sbi, sbi->s_stripe * 2);
-+		ext4_mb_prealloc_table_add(sbi, sbi->s_stripe * 4);
++		for (k = 0, l = sbi->s_stripe; k <= 2; ++k, l *= 2) {
++			if (ext4_mb_prealloc_table_add(sbi, l) < 0) {
++				sbi->s_mb_prealloc_table_size = k;
++				break;
++			}
++		}
 +
 +		sbi->s_mb_small_req = sbi->s_stripe;
 +		sbi->s_mb_large_req = sbi->s_stripe * 8;
