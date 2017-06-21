@@ -763,11 +763,11 @@ int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
 				*fail2_t = ktime_get_real_seconds() +
 					   LONG_UNLINK;
 
-			/* The RPC is infected, let the test to change the
-			 * fail_loc */
-			set_current_state(TASK_UNINTERRUPTIBLE);
-			schedule_timeout(cfs_time_seconds(2));
-			set_current_state(TASK_RUNNING);
+			/*
+			 * The RPC is infected, let the test to change the
+			 * fail_loc
+			 */
+			msleep(4 * MSEC_PER_SEC);
 		}
 	}
 
