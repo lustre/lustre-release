@@ -822,7 +822,12 @@ int ll_md_real_close(struct inode *inode, fmode_t fmode);
 extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
                               struct ll_file_data *file, loff_t pos,
                               size_t count, int rw);
+#ifdef HAVE_INODEOPS_ENHANCED_GETATTR
+int ll_getattr(const struct path *path, struct kstat *stat,
+	       u32 request_mask, unsigned int flags);
+#else
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
+#endif
 struct posix_acl *ll_get_acl(struct inode *inode, int type);
 #ifdef HAVE_IOP_SET_ACL
 #ifdef CONFIG_FS_POSIX_ACL

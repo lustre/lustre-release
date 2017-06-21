@@ -63,7 +63,9 @@ static int stat_file(struct kstat *stbuf)
 		return -EIO;
 	}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 9, 0)
+#ifdef HAVE_INODEOPS_ENHANCED_GETATTR
+	rc = vfs_getattr(&fd->f_path, stbuf, STATX_INO, AT_STATX_SYNC_AS_STAT);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(3, 9, 0)
 	rc = vfs_getattr(&fd->f_path, stbuf);
 #else
 	rc = vfs_getattr(fd->f_path.mnt, fd->f_path.dentry, stbuf);

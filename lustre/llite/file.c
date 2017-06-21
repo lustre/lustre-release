@@ -3787,8 +3787,16 @@ static inline dev_t ll_compat_encode_dev(dev_t dev)
 	return MKDEV(MAJOR(dev) & 0xff, MINOR(dev) & 0xff);
 }
 
+#ifdef HAVE_INODEOPS_ENHANCED_GETATTR
+int ll_getattr(const struct path *path, struct kstat *stat,
+	       u32 request_mask, unsigned int flags)
+
+{
+	struct dentry *de = path->dentry;
+#else
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 {
+#endif
         struct inode *inode = de->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);

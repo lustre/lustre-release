@@ -2556,6 +2556,26 @@ vm_fault_address, [
 ]) # LC_HAVE_VM_FAULT_ADDRESS
 
 #
+# LC_INODEOPS_ENHANCED_GETATTR
+#
+# Kernel version 4.11 commit a528d35e8bfcc521d7cb70aaf03e1bd296c8493f
+# expanded getattr to be able to get more stat information.
+#
+AC_DEFUN([LC_INODEOPS_ENHANCED_GETATTR], [
+LB_CHECK_COMPILE([if 'inode_operations' getattr member can gather advance stats],
+getattr_path, [
+	#include <linux/fs.h>
+],[
+	struct path path;
+
+	((struct inode_operations *)1)->getattr(&path, NULL, 0, 0);
+],[
+	AC_DEFINE(HAVE_INODEOPS_ENHANCED_GETATTR, 1,
+		[inode_operations .getattr member function can gather advance stats])
+])
+]) # LC_INODEOPS_ENHANCED_GETATTR
+
+#
 # LC_VM_OPERATIONS_REMOVE_VMF_ARG
 #
 # Kernel version 4.11 commit 11bac80004499ea59f361ef2a5516c84b6eab675
@@ -2791,6 +2811,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_VM_FAULT_ADDRESS
 
 	# 4.11
+	LC_INODEOPS_ENHANCED_GETATTR
 	LC_VM_OPERATIONS_REMOVE_VMF_ARG
 
 	#
