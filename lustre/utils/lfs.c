@@ -721,10 +721,10 @@ static int lfs_component_create(char *fname, int open_flags, mode_t open_mode,
 
 	fd = llapi_layout_file_open(fname, open_flags, open_mode, layout);
 	if (fd < 0)
-		fprintf(stderr, "%s %s failed. %s\n",
+		fprintf(stderr, "%s: cannot %s '%s': %s\n", progname,
 			S_ISDIR(st.st_mode) ?
-				"Set default composite layout to " :
-				"Create composite file",
+				"set default composite layout for" :
+				"create composite file",
 			fname, strerror(errno));
 	return fd;
 }
@@ -777,7 +777,7 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	fd = open(name, O_RDWR | O_DIRECT);
 	if (fd == -1) {
 		rc = -errno;
-		fprintf(stderr, "%s: %s: cannot open: %s\n", progname, name,
+		fprintf(stderr, "%s: cannot open '%s': %s\n", progname, name,
 			strerror(-rc));
 		goto free;
 	}
@@ -1253,8 +1253,9 @@ static int comp_str2flags(__u32 *flags, char *string)
 			}
 		}
 		if (!found) {
-			llapi_printf(LLAPI_MSG_ERROR, "Component flag "
-				     "'%s' is not supported.\n", name);
+			llapi_printf(LLAPI_MSG_ERROR,
+				     "%s: component flag '%s' not supported\n",
+				     progname, name);
 			return -EINVAL;
 		}
 	}
@@ -1340,12 +1341,6 @@ static int lfs_setstripe(int argc, char **argv)
 	{ .val = LFS_COMP_SET_OPT,
 			.name = "component-set",
 						.has_arg = no_argument},
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-	/* This formerly implied "stripe-count", but was explicitly
-	 * made "stripe-count" for consistency with other options,
-	 * and to separate it from "mdt-count" when DNE arrives. */
-	{ .val = 'c',	.name = "count",	.has_arg = required_argument },
-#endif
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument},
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
@@ -1353,12 +1348,6 @@ static int lfs_setstripe(int argc, char **argv)
 	{ .val = 'E',	.name = "component-end",
 						.has_arg = required_argument},
 	/* dirstripe {"mdt-hash",     required_argument, 0, 'H'}, */
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-	/* This formerly implied "stripe-index", but was explicitly
-	 * made "stripe-index" for consistency with other options,
-	 * and to separate it from "mdt-index" when DNE arrives. */
-	{ .val = 'i',	.name = "index",	.has_arg = required_argument },
-#endif
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = required_argument},
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument},
 	{ .val = 'I',	.name = "comp-id",	.has_arg = required_argument},
@@ -1374,12 +1363,6 @@ static int lfs_setstripe(int argc, char **argv)
 	{ .val = 'o',	.name = "ost_list",	.has_arg = required_argument },
 #endif
 	{ .val = 'p',	.name = "pool",		.has_arg = required_argument },
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-	/* This formerly implied "--stripe-size", but was confusing
-	 * with "lfs find --size|-s", which means "file size", so use
-	 * the consistent "--stripe-size|-S" for all commands. */
-	{ .val = 's',	.name = "size",		.has_arg = required_argument },
-#endif
 	{ .val = 'S',	.name = "stripe-size",	.has_arg = required_argument },
 	{ .val = 'S',	.name = "stripe_size",	.has_arg = required_argument },
 	/* dirstripe {"mdt-count",    required_argument, 0, 'T'}, */
@@ -1418,34 +1401,28 @@ static int lfs_setstripe(int argc, char **argv)
 			break;
 		case LFS_COMP_FLAGS_OPT:
 			result = comp_str2flags(&lsa.lsa_comp_flags, optarg);
-			if (result != 0) {
-				fprintf(stderr, "error: %s: bad comp flags "
-					"'%s'\n", argv[0], optarg);
-				goto error;
-			}
+			if (result != 0)
+				goto usage_error;
 			break;
 		case LFS_COMP_SET_OPT:
 			comp_set = 1;
 			break;
 		case 'b':
 			if (!migrate_mode) {
-				fprintf(stderr, "--block is valid only for"
-						" migrate mode\n");
-				goto error;
+				fprintf(stderr,
+					"%s %s: -b|--block valid only for migrate command\n",
+					progname, argv[0]);
+				goto usage_error;
 			}
 			migration_block = true;
 			break;
 		case 'c':
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
-			if (strcmp(argv[optind - 1], "--count") == 0)
-				fprintf(stderr, "warning: '--count' deprecated"
-					", use '--stripe-count' instead\n");
-#endif
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
 			if (*end != '\0') {
-				fprintf(stderr, "error: %s: bad stripe count "
-					"'%s'\n", argv[0], optarg);
-				goto error;
+				fprintf(stderr,
+					"%s %s: invalid stripe count '%s'\n",
+					progname, argv[0], optarg);
+				goto usage_error;
 			}
 			break;
 		case 'd':
@@ -1455,8 +1432,12 @@ static int lfs_setstripe(int argc, char **argv)
 		case 'E':
 			if (lsa.lsa_comp_end != 0) {
 				result = comp_args_to_layout(&layout, &lsa);
-				if (result)
-					goto error;
+				if (result) {
+					fprintf(stderr,
+						"%s %s: invalid layout\n",
+						progname, argv[0]);
+					goto usage_error;
+				}
 
 				setstripe_args_init(&lsa);
 			}
@@ -1468,46 +1449,47 @@ static int lfs_setstripe(int argc, char **argv)
 							&lsa.lsa_comp_end,
 							&size_units, 0);
 				if (result) {
-					fprintf(stderr, "error: %s: "
-						"bad component end '%s'\n",
-						argv[0], optarg);
-					goto error;
+					fprintf(stderr,
+						"%s %s: invalid component end '%s'\n",
+						progname, argv[0], optarg);
+					goto usage_error;
 				}
 			}
 			break;
 		case 'i':
-			if (strcmp(argv[optind - 1], "--index") == 0)
-				fprintf(stderr, "warning: '--index' deprecated"
-					", use '--stripe-index' instead\n");
 			lsa.lsa_stripe_off = strtol(optarg, &end, 0);
 			if (*end != '\0') {
-				fprintf(stderr, "error: %s: bad stripe offset "
-					"'%s'\n", argv[0], optarg);
-				goto error;
+				fprintf(stderr,
+					"%s %s: invalid stripe offset '%s'\n",
+					progname, argv[0], optarg);
+				goto usage_error;
 			}
 			break;
 		case 'I':
 			comp_id = strtoul(optarg, &end, 0);
 			if (*end != '\0' || comp_id == 0 ||
 			    comp_id > LCME_ID_MAX) {
-				fprintf(stderr, "error: %s: bad comp ID "
-					"'%s'\n", argv[0], optarg);
-				goto error;
+				fprintf(stderr,
+					"%s %s: invalid component ID '%s'\n",
+					progname, argv[0], optarg);
+				goto usage_error;
 			}
 			break;
 		case 'm':
 			if (!migrate_mode) {
-				fprintf(stderr, "--mdt-index is valid only for"
-						" migrate mode\n");
-				goto error;
+				fprintf(stderr,
+					"%s %s: -m|--mdt-index valid only for migrate command\n",
+					progname, argv[0]);
+				goto usage_error;
 			}
 			mdt_idx_arg = optarg;
 			break;
 		case 'n':
 			if (!migrate_mode) {
-				fprintf(stderr, "--non-block is valid only for"
-						" migrate mode\n");
-				goto error;
+				fprintf(stderr,
+					"%s %s: -n|--non-block valid only for migrate command\n",
+					progname, argv[0]);
+				goto usage_error;
 			}
 			migration_flags |= MIGRATION_NONBLOCK;
 			break;
@@ -1517,9 +1499,9 @@ static int lfs_setstripe(int argc, char **argv)
 						lsa.lsa_nr_osts, optarg);
 			if (lsa.lsa_nr_osts < 0) {
 				fprintf(stderr,
-					"error: %s: bad OST indices '%s'\n",
-					argv[0], optarg);
-				goto error;
+					"%s %s: invalid OST target(s) '%s'\n",
+					progname, argv[0], optarg);
+				goto usage_error;
 			}
 
 			lsa.lsa_osts = osts;
@@ -1528,35 +1510,32 @@ static int lfs_setstripe(int argc, char **argv)
 			break;
 		case 'p':
 			if (optarg == NULL)
-				goto error;
+				goto usage_error;
 			lsa.lsa_pool_name = optarg;
 			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-		case 's':
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
-			fprintf(stderr, "warning: '--size|-s' deprecated, "
-				"use '--stripe-size|-S' instead\n");
-#endif
-#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0) */
 		case 'S':
 			result = llapi_parse_size(optarg, &lsa.lsa_stripe_size,
 						  &size_units, 0);
 			if (result) {
-				fprintf(stderr, "error: %s: bad stripe size "
-					"'%s'\n", argv[0], optarg);
-				goto error;
+				fprintf(stderr,
+					"%s %s: invalid stripe size '%s'\n",
+					progname, argv[0], optarg);
+				goto usage_error;
 			}
 			break;
 		case 'v':
 			if (!migrate_mode) {
-				fprintf(stderr, "--verbose is valid only for"
-						" migrate mode\n");
-				goto error;
+				fprintf(stderr,
+					"%s %s: -v|--verbose valid only for migrate command\n",
+					progname, argv[0]);
+				goto usage_error;
 			}
 			migrate_mdt_param.fp_verbose = VERBOSE_DETAIL;
 			break;
 		default:
-			goto error;
+			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
+				progname, argv[0], argv[optind - 1]);
+			goto usage_error;
 		}
 	}
 
@@ -1564,52 +1543,56 @@ static int lfs_setstripe(int argc, char **argv)
 
 	if (lsa.lsa_comp_end != 0) {
 		result = comp_args_to_layout(&layout, &lsa);
-		if (result)
-			goto error;
+		if (result) {
+			fprintf(stderr, "%s %s: invalid component layout\n",
+				progname, argv[0]);
+			goto usage_error;
+		}
 	}
 
 	if (optind == argc) {
-		fprintf(stderr, "error: %s: missing filename|dirname\n",
-			argv[0]);
-		goto error;
+		fprintf(stderr, "%s %s: FILE must be specified\n",
+			progname, argv[0]);
+		goto usage_error;
 	}
 
 	/* Only LCME_FL_INIT flags is used in PFL, and it shouldn't be
 	 * altered by user space tool, so we don't need to support the
 	 * --component-set for this moment. */
 	if (comp_set != 0) {
-		fprintf(stderr, "error: %s: --component-set isn't supported.\n",
-			argv[0]);
-		goto error;
+		fprintf(stderr, "%s %s: --component-set not supported\n",
+			progname, argv[0]);
+		goto usage_error;
 	}
 
 	if ((delete + comp_set + comp_del + comp_add) > 1) {
-		fprintf(stderr, "error: %s: can't specify --component-set, "
-			"--component-del, --component-add or -d together\n",
-			argv[0]);
-		goto error;
+		fprintf(stderr,
+			"%s %s: options --component-set, --component-del, --component-add and -d are mutually exclusive\n",
+			progname, argv[0]);
+		goto usage_error;
 	}
 
 	if (delete && (setstripe_args_specified(&lsa) || comp_id != 0 ||
 		       lsa.lsa_comp_flags != 0 || layout != NULL)) {
-		fprintf(stderr, "error: %s: can't specify -d with "
-			"-s, -c, -o, -p, -I, -F or -E options\n",
-			argv[0]);
-		goto error;
+		fprintf(stderr,
+			"%s %s: option -d is mutually exclusive with -s, -c, -o, -p, -I, -F and -E options\n",
+			progname, argv[0]);
+		goto usage_error;
 	}
 
 	if ((comp_set || comp_del) &&
 	    (setstripe_args_specified(&lsa) || layout != NULL)) {
-		fprintf(stderr, "error: %s: can't specify --component-del or "
-			"--component-set with -s, -c, -o, -p or -E options.\n",
-			argv[0]);
-		goto error;
+		fprintf(stderr,
+			"%s %s: options --component-del and --component-set are mutually exclusive when used with -c, -E, -o, -p, or -s\n",
+			progname, argv[0]);
+		goto usage_error;
 	}
 
 	if (comp_del && comp_id != 0 && lsa.lsa_comp_flags != 0) {
-		fprintf(stderr, "error: %s: can't specify both -I and -F for "
-			"--component-del option.\n", argv[0]);
-		goto error;
+		fprintf(stderr,
+			"%s %s: options -I and -F are mutually exclusive when used with --component-del\n",
+			progname, argv[0]);
+		goto usage_error;
 	}
 
 	if (comp_add || comp_del) {
@@ -1617,18 +1600,19 @@ static int lfs_setstripe(int argc, char **argv)
 
 		result = lstat(fname, &st);
 		if (result == 0 && S_ISDIR(st.st_mode)) {
-			fprintf(stderr, "error: %s: can't use --component-add "
-				"or --component-del for directory.\n",
-				argv[0]);
-			goto error;
+			fprintf(stderr,
+				"%s setstripe: cannot use --component-add or --component-del for directory\n",
+				progname);
+			goto usage_error;
 		}
 	}
 
 	if (comp_add) {
 		if (layout == NULL) {
-			fprintf(stderr, "error: %s: -E option must be present"
-				"in --component-add mode.\n", argv[0]);
-			goto error;
+			fprintf(stderr,
+				"%s %s: option -E must be specified with --component-add\n",
+				progname, argv[0]);
+			goto usage_error;
 		}
 		result = adjust_first_extent(fname, layout);
 		if (result == -ENODATA)
@@ -1638,31 +1622,33 @@ static int lfs_setstripe(int argc, char **argv)
 	}
 
 	if (mdt_idx_arg != NULL && optind > 3) {
-		fprintf(stderr, "error: %s: cannot specify -m with other "
-			"options\n", argv[0]);
-		goto error;
+		fprintf(stderr,
+			"%s %s: option -m cannot be used with other options\n",
+			progname, argv[0]);
+		goto usage_error;
 	}
 
 	if ((migration_flags & MIGRATION_NONBLOCK) && migration_block) {
 		fprintf(stderr,
-			"error: %s: cannot specify --non-block and --block\n",
-			argv[0]);
-		goto error;
+			"%s %s: options --non-block and --block are mutually exclusive\n",
+			progname, argv[0]);
+		goto usage_error;
 	}
 
 	if (!comp_del && !comp_set && comp_id != 0) {
-		fprintf(stderr, "error: %s: -I can only be used with "
-			"--component-del.\n", argv[0]);
-		goto error;
+		fprintf(stderr,
+			"%s %s: option -I can only be used with --component-del\n",
+			progname, argv[0]);
+		goto usage_error;
 	}
 
 	if (mdt_idx_arg != NULL) {
 		/* initialize migrate mdt parameters */
 		migrate_mdt_param.fp_mdt_index = strtoul(mdt_idx_arg, &end, 0);
 		if (*end != '\0') {
-			fprintf(stderr, "error: %s: bad MDT index '%s'\n",
-				argv[0], mdt_idx_arg);
-			goto error;
+			fprintf(stderr, "%s %s: invalid MDT index '%s'\n",
+				progname, argv[0], mdt_idx_arg);
+			goto usage_error;
 		}
 		migrate_mdt_param.fp_migrate = 1;
 	} else if (layout == NULL) {
@@ -1670,8 +1656,10 @@ static int lfs_setstripe(int argc, char **argv)
 		param = calloc(1, offsetof(typeof(*param),
 			       lsp_osts[lsa.lsa_nr_osts]));
 		if (param == NULL) {
-			fprintf(stderr, "error: %s: %s\n", argv[0],
-				strerror(ENOMEM));
+			fprintf(stderr,
+				"%s %s: cannot allocate memory for parameters: %s\n",
+				progname, argv[0], strerror(ENOMEM));
+			result = -ENOMEM;
 			goto error;
 		}
 
@@ -1684,12 +1672,12 @@ static int lfs_setstripe(int argc, char **argv)
 		if (lsa.lsa_nr_osts > 0) {
 			if (lsa.lsa_stripe_count > 0 &&
 			    lsa.lsa_nr_osts != lsa.lsa_stripe_count) {
-				fprintf(stderr, "error: %s: stripe count '%d' "
-					"doesn't match the number of OSTs: %d\n"
-					, argv[0], lsa.lsa_stripe_count,
+				fprintf(stderr,
+					"%s %s: stripe count '%d' does not match number of OSTs: %d\n",
+					progname, argv[0], lsa.lsa_stripe_count,
 					lsa.lsa_nr_osts);
 				free(param);
-				goto error;
+				goto usage_error;
 			}
 
 			param->lsp_is_specific = true;
@@ -1700,25 +1688,19 @@ static int lfs_setstripe(int argc, char **argv)
 	}
 
 	for (fname = argv[optind]; fname != NULL; fname = argv[++optind]) {
-		char *op;
 		if (mdt_idx_arg != NULL) {
 			result = llapi_migrate_mdt(fname, &migrate_mdt_param);
-			op = "migrate mdt objects of";
 		} else if (migrate_mode) {
 			result = lfs_migrate(fname, migration_flags, param,
 					     layout);
-			op = "migrate ost objects of";
 		} else if (comp_set != 0) {
 			result = lfs_component_set(fname, comp_id,
 						   lsa.lsa_comp_flags);
-			op = "modify component flags of";
 		} else if (comp_del != 0) {
 			result = lfs_component_del(fname, comp_id,
 						   lsa.lsa_comp_flags);
-			op = "delete component of";
 		} else if (comp_add != 0) {
 			result = lfs_component_add(fname, layout);
-			op = "add component to";
 		} else if (layout != NULL) {
 			result = lfs_component_create(fname, O_CREAT | O_WRONLY,
 						      0644, layout);
@@ -1726,7 +1708,6 @@ static int lfs_setstripe(int argc, char **argv)
 				close(result);
 				result = 0;
 			}
-			op = "create composite";
 		} else {
 			result = llapi_file_open_param(fname,
 						       O_CREAT | O_WRONLY,
@@ -1735,16 +1716,11 @@ static int lfs_setstripe(int argc, char **argv)
 				close(result);
 				result = 0;
 			}
-			op = "create striped";
 		}
 		if (result) {
 			/* Save the first error encountered. */
 			if (result2 == 0)
 				result2 = result;
-			fprintf(stderr, "error: %s: %s file '%s' failed: %s\n",
-				argv[0], op, fname,
-				lsa.lsa_pool_name != NULL && result == EINVAL ?
-				"OST not in pool?" : strerror(errno));
 			continue;
 		}
 	}
@@ -1752,9 +1728,11 @@ static int lfs_setstripe(int argc, char **argv)
 	free(param);
 	llapi_layout_free(layout);
 	return result2;
+usage_error:
+	result = CMD_HELP;
 error:
 	llapi_layout_free(layout);
-	return CMD_HELP;
+	return result;
 }
 
 static int lfs_poollist(int argc, char **argv)
@@ -5461,24 +5439,24 @@ static int lfs_list_commands(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-        int rc;
+	int rc;
 
 	/* Ensure that liblustreapi constructor has run */
 	if (!liblustreapi_initialized)
 		fprintf(stderr, "liblustreapi was not properly initialized\n");
 
-        setlinebuf(stdout);
+	setlinebuf(stdout);
+	opterr = 0;
 
 	Parser_init("lfs > ", cmdlist);
 
 	progname = argv[0]; /* Used in error messages */
-        if (argc > 1) {
-                rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
-        } else {
-                rc = Parser_commands();
-        }
+	if (argc > 1)
+		rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
+	else
+		rc = Parser_commands();
 
-        return rc < 0 ? -rc : rc;
+	return rc < 0 ? -rc : rc;
 }
 
 #ifdef _LUSTRE_IDL_H_
