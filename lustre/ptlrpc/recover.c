@@ -140,10 +140,13 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 	if (req != NULL && imp->imp_resend_replay)
 		lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
 
-	/* The resend replay request may have been removed from the
+	/* ptlrpc_prepare_replay() may fail to add the reqeust into unreplied
+	 * list if the request hasn't been added to replay list then. Another
+	 * exception is that resend replay could have been removed from the
 	 * unreplied list. */
-	if (req != NULL && imp->imp_resend_replay &&
-	    list_empty(&req->rq_unreplied_list)) {
+	if (req != NULL && list_empty(&req->rq_unreplied_list)) {
+		DEBUG_REQ(D_HA, req, "resend_replay: %d, last_transno: %llu\n",
+			  imp->imp_resend_replay, last_transno);
 		ptlrpc_add_unreplied(req);
 		imp->imp_known_replied_xid = ptlrpc_known_replied_xid(imp);
 	}
@@ -152,8 +155,6 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 	spin_unlock(&imp->imp_lock);
 
 	if (req != NULL) {
-		/* The request should have been added back in unreplied list
-		 * by ptlrpc_prepare_replay(). */
 		LASSERT(!list_empty(&req->rq_unreplied_list));
 
 		rc = ptlrpc_replay_req(req);
