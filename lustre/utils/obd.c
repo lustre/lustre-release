@@ -3365,32 +3365,15 @@ int jt_nodemap_test_id(int argc, char **argv)
 	int	rc = 0;
 	int	c;
 
-	static struct option long_options[] = {
-		{
-			.name		= "nid",
-			.has_arg	= required_argument,
-			.flag		= 0,
-			.val		= 'n',
-		},
-		{
-			.name		= "idtype",
-			.has_arg	= required_argument,
-			.flag		= 0,
-			.val		= 't',
-		},
-		{
-			.name		= "id",
-			.has_arg	= required_argument,
-			.flag		= 0,
-			.val		= 'i',
-		},
-		{
-			NULL
-		}
-	};
+	static struct option long_opts[] = {
+		{ .val = 'i',	.name = "id",	.has_arg = required_argument },
+		{ .val = 'n',	.name = "nid",	.has_arg = required_argument },
+		{ .val = 't',	.name = "idtype",
+						.has_arg = required_argument },
+		{ .name = NULL } };
 
 	while ((c = getopt_long(argc, argv, "n:t:i:",
-				long_options, NULL)) != -1) {
+				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'n':
 			nidstr = optarg;
