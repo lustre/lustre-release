@@ -77,10 +77,12 @@ static int zfs_set_prop_str(zfs_handle_t *, char *, void *);
  *              the @name property. (e.g. ldd_fsname, ldd_config_ver, etc.)
  *    - @type: The type of @field. Only "int" and "str" are supported.
  */
-#define ZLB_INIT(name, field, type)			\
-{							\
-	name, offsetof(struct lustre_disk_data, field),	\
-	zfs_get_prop_ ## type, zfs_set_prop_ ## type	\
+#define ZLB_INIT(name, field, type)					\
+{									\
+	.zlpb_prop_name   = name,					\
+	.zlpb_ldd_offset  = offsetof(struct lustre_disk_data, field),	\
+	.zlpb_get_prop_fn = zfs_get_prop_ ## type,			\
+	.zlpb_set_prop_fn = zfs_set_prop_ ## type			\
 }
 
 /* These ldd properties are special because they all have their own
