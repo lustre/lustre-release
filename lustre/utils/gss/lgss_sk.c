@@ -62,7 +62,11 @@ char *sk_crypt2name[] = {
 	[SK_CRYPT_AES256_CTR] = "AES-256-CTR",
 };
 
-const char *sk_hmac2name[] = { "NONE", "SHA256", "SHA512" };
+char *sk_hmac2name[] = {
+	[SK_HMAC_EMPTY] = "NONE",
+	[SK_HMAC_SHA256] = "SHA256",
+	[SK_HMAC_SHA512] = "SHA512",
+};
 
 static int sk_name2crypt(char *name)
 {
@@ -76,26 +80,16 @@ static int sk_name2crypt(char *name)
 	return SK_CRYPT_INVALID;
 }
 
-enum cfs_crypto_hash_alg sk_name2hmac(char *name)
+static int sk_name2hmac(char *name)
 {
-	enum cfs_crypto_hash_alg algo;
-	int i = 0;
+	int i;
 
-	/* convert to lower case */
-	while (name[i]) {
-		name[i] = tolower(name[i]);
-		i++;
+	for (i = 0; i < SK_HMAC_MAX; i++) {
+		if (strcasecmp(name, sk_hmac2name[i]) == 0)
+			return i;
 	}
 
-	if (strcmp(name, "none") == 0)
-		return CFS_HASH_ALG_NULL;
-
-	algo = cfs_crypto_hash_alg(name);
-	if ((algo != CFS_HASH_ALG_SHA256) &&
-	    (algo != CFS_HASH_ALG_SHA512))
-		return SK_HMAC_INVALID;
-
-	return algo;
+	return SK_HMAC_INVALID;
 }
 
 static void usage(FILE *fp, char *program)
@@ -116,7 +110,7 @@ static void usage(FILE *fp, char *program)
 
 	fprintf(fp, "-i|--hmac       <num>	Hash algorithm for integrity "
 		"(Default: SHA256)\n");
-	for (i = 1; i < sizeof(sk_hmac2name) / sizeof(sk_hmac2name[0]); i++)
+	for (i = 1; i < SK_HMAC_MAX; i++)
 		fprintf(fp, "                        %s\n", sk_hmac2name[i]);
 
 	fprintf(fp, "-e|--expire     <num>	Seconds before contexts from "
@@ -133,9 +127,8 @@ static void usage(FILE *fp, char *program)
 		"client)\n");
 	fprintf(fp, "-k|--key-bits   <len>	Shared key length in bits "
 		"(Default: %d)\n", SK_DEFAULT_SK_KEYLEN);
-	fprintf(fp, "-d|--data       <file>	Key data source for new keys "
-		"(Default: /dev/random)\n");
-	fprintf(fp, "                        Not a seed value.  This is the actual key value.\n\n");
+	fprintf(fp, "-d|--data       <file>	Key random data source "
+		"(Default: /dev/random)\n\n");
 	fprintf(fp, "Other Options:\n");
 	fprintf(fp, "-v|--verbose           Increase verbosity for errors\n");
 	exit(EXIT_FAILURE);
@@ -247,7 +240,7 @@ static int print_config(char *filename)
 		printf(" client");
 	printf("\n");
 	printf("HMAC alg:       %s\n", sk_hmac2name[config->skc_hmac_alg]);
-	printf("Crypto alg:     %s\n", cfs_crypto_hash_name(config->skc_hmac_alg));
+	printf("Crypto alg:     %s\n", sk_crypt2name[config->skc_crypt_alg]);
 	printf("Ctx Expiration: %u seconds\n", config->skc_expire);
 	printf("Shared keylen:  %u bits\n", config->skc_shared_keylen);
 	printf("Prime length:   %u bits\n", config->skc_prime_bits);
@@ -331,7 +324,7 @@ int main(int argc, char **argv)
 	char *tmp;
 	char *tmp2;
 	int crypt = SK_CRYPT_EMPTY;
-	enum cfs_crypto_hash_alg hmac = CFS_HASH_ALG_NULL;
+	int hmac = SK_HMAC_EMPTY;
 	int expire = -1;
 	int shared_keylen = -1;
 	int prime_bits = -1;
@@ -499,10 +492,6 @@ int main(int argc, char **argv)
 		fprintf(stderr, "error: invalid HMAC algorithm specified\n");
 		return EXIT_FAILURE;
 	}
-	if (modify && datafile) {
-		fprintf(stderr, "error: data file option not valid in key modify\n");
-		return EXIT_FAILURE;
-	}
 
 	if (modify) {
 		config = sk_read_file(modify);
@@ -543,7 +532,7 @@ int main(int argc, char **argv)
 		config->skc_shared_keylen = SK_DEFAULT_SK_KEYLEN;
 		config->skc_prime_bits = SK_DEFAULT_PRIME_BITS;
 		config->skc_crypt_alg = SK_CRYPT_AES256_CTR;
-		config->skc_hmac_alg = CFS_HASH_ALG_SHA256;
+		config->skc_hmac_alg = SK_HMAC_SHA256;
 		for (i = 0; i < MAX_MGSNIDS; i++)
 			config->skc_mgsnids[i] = LNET_NID_ANY;
 
@@ -555,7 +544,7 @@ int main(int argc, char **argv)
 		generate_prime = type & SK_TYPE_CLIENT;
 
 		strncpy(config->skc_nodemap, SK_DEFAULT_NODEMAP,
-			sizeof(config->skc_nodemap) - 1);
+			strlen(SK_DEFAULT_NODEMAP));
 
 		if (!datafile)
 			datafile = "/dev/random";
@@ -563,7 +552,7 @@ int main(int argc, char **argv)
 
 	if (crypt != SK_CRYPT_EMPTY)
 		config->skc_crypt_alg = crypt;
-	if (hmac != CFS_HASH_ALG_NULL)
+	if (hmac != SK_HMAC_EMPTY)
 		config->skc_hmac_alg = hmac;
 	if (expire != -1)
 		config->skc_expire = expire;
@@ -572,11 +561,9 @@ int main(int argc, char **argv)
 	if (prime_bits != -1)
 		config->skc_prime_bits = prime_bits;
 	if (fsname)
-		strncpy(config->skc_fsname, fsname,
-			sizeof(config->skc_fsname) - 1);
+		strncpy(config->skc_fsname, fsname, strlen(fsname));
 	if (nodemap)
-		strncpy(config->skc_nodemap, nodemap,
-			sizeof(config->skc_nodemap) - 1);
+		strncpy(config->skc_nodemap, nodemap, strlen(nodemap));
 	if (mgsnids && parse_mgsnids(mgsnids, config))
 		goto error;
 	if (sk_validate_config(config)) {

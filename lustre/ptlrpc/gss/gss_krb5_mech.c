@@ -441,18 +441,17 @@ __s32 krb5_make_checksum(__u32 enctype,
 			 rawobj_t *cksum)
 {
         struct krb5_enctype   *ke = &enctypes[enctype];
-	struct crypto_ahash   *tfm;
+	struct crypto_hash    *tfm;
 	rawobj_t	       hdr;
         __u32                  code = GSS_S_FAILURE;
         int                    rc;
 
-	tfm = crypto_alloc_ahash(ke->ke_hash_name, 0, CRYPTO_ALG_ASYNC);
-	if (IS_ERR(tfm)) {
+	if (!(tfm = crypto_alloc_hash(ke->ke_hash_name, 0, 0))) {
                 CERROR("failed to alloc TFM: %s\n", ke->ke_hash_name);
                 return GSS_S_FAILURE;
         }
 
-	cksum->len = crypto_ahash_digestsize(tfm);
+	cksum->len = crypto_hash_digestsize(tfm);
         OBD_ALLOC_LARGE(cksum->data, cksum->len);
         if (!cksum->data) {
                 cksum->len = 0;
@@ -472,7 +471,7 @@ __s32 krb5_make_checksum(__u32 enctype,
         if (rc == 0)
                 code = GSS_S_COMPLETE;
 out_tfm:
-	crypto_free_ahash(tfm);
+	crypto_free_hash(tfm);
         return code;
 }
 

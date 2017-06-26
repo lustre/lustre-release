@@ -270,30 +270,27 @@ out:
 	return ret;
 }
 
-int gss_digest_hmac(struct crypto_ahash *tfm,
+int gss_digest_hmac(struct crypto_hash *tfm,
 		    rawobj_t *key,
 		    rawobj_t *hdr,
 		    int msgcnt, rawobj_t *msgs,
 		    int iovcnt, lnet_kiov_t *iovs,
 		    rawobj_t *cksum)
 {
-	struct ahash_request *req;
+	struct hash_desc desc = {
+		.tfm = tfm,
+		.flags = 0,
+	};
 	struct scatterlist sg[1];
 	struct sg_table sgt;
 	int i;
 	int rc;
 
-	rc = crypto_ahash_setkey(tfm, key->data, key->len);
+	rc = crypto_hash_setkey(tfm, key->data, key->len);
 	if (rc)
 		return rc;
 
-	req = ahash_request_alloc(tfm, GFP_KERNEL);
-	if (!req) {
-		crypto_free_ahash(tfm);
-		return -ENOMEM;
-	}
-
-	rc = crypto_ahash_init(req);
+	rc = crypto_hash_init(&desc);
 	if (rc)
 		return rc;
 
@@ -304,10 +301,7 @@ int gss_digest_hmac(struct crypto_ahash *tfm,
 		rc = gss_setup_sgtable(&sgt, sg, msgs[i].data, msgs[i].len);
 		if (rc != 0)
 			return rc;
-		ahash_request_set_crypt(req, sg, NULL, msgs[i].len);
-		if (rc)
-			return rc;
-		rc = crypto_ahash_update(req);
+		rc = crypto_hash_update(&desc, sg, msgs[i].len);
 		if (rc)
 			return rc;
 
@@ -321,11 +315,7 @@ int gss_digest_hmac(struct crypto_ahash *tfm,
 		sg_init_table(sg, 1);
 		sg_set_page(&sg[0], iovs[i].kiov_page, iovs[i].kiov_len,
 			    iovs[i].kiov_offset);
-
-		ahash_request_set_crypt(req, sg, NULL, iovs[i].kiov_len);
-		if (rc)
-			return rc;
-		rc = crypto_ahash_update(req);
+		rc = crypto_hash_update(&desc, sg, iovs[i].kiov_len);
 		if (rc)
 			return rc;
 	}
@@ -334,42 +324,34 @@ int gss_digest_hmac(struct crypto_ahash *tfm,
 		rc = gss_setup_sgtable(&sgt, sg, hdr, sizeof(*hdr));
 		if (rc != 0)
 			return rc;
-
-		ahash_request_set_crypt(req, sg, NULL, sizeof(hdr->len));
-		if (rc)
-			return rc;
-		rc = crypto_ahash_update(req);
+		rc = crypto_hash_update(&desc, sg, sizeof(hdr->len));
 		if (rc)
 			return rc;
 
 		gss_teardown_sgtable(&sgt);
 	}
 
-	return crypto_ahash_final(req);
+	return crypto_hash_final(&desc, cksum->data);
 }
 
-int gss_digest_norm(struct crypto_ahash *tfm,
+int gss_digest_norm(struct crypto_hash *tfm,
 		    struct gss_keyblock *kb,
 		    rawobj_t *hdr,
 		    int msgcnt, rawobj_t *msgs,
 		    int iovcnt, lnet_kiov_t *iovs,
 		    rawobj_t *cksum)
 {
-	struct ahash_request *req;
+	struct hash_desc   desc;
 	struct scatterlist sg[1];
 	struct sg_table sgt;
 	int                i;
 	int                rc;
 
 	LASSERT(kb->kb_tfm);
+	desc.tfm = tfm;
+	desc.flags = 0;
 
-	req = ahash_request_alloc(tfm, GFP_KERNEL);
-	if (!req) {
-		crypto_free_ahash(tfm);
-		return -ENOMEM;
-	}
-
-	rc = crypto_ahash_init(req);
+	rc = crypto_hash_init(&desc);
 	if (rc)
 		return rc;
 
@@ -381,10 +363,7 @@ int gss_digest_norm(struct crypto_ahash *tfm,
 		if (rc != 0)
 			return rc;
 
-		ahash_request_set_crypt(req, sg, NULL, msgs[i].len);
-		if (rc)
-			return rc;
-		rc = crypto_ahash_update(req);
+		rc = crypto_hash_update(&desc, sg, msgs[i].len);
 		if (rc)
 			return rc;
 
@@ -398,10 +377,7 @@ int gss_digest_norm(struct crypto_ahash *tfm,
 		sg_init_table(sg, 1);
 		sg_set_page(&sg[0], iovs[i].kiov_page, iovs[i].kiov_len,
 			    iovs[i].kiov_offset);
-		ahash_request_set_crypt(req, sg, NULL, iovs[i].kiov_len);
-		if (rc)
-			return rc;
-		rc = crypto_ahash_update(req);
+		rc = crypto_hash_update(&desc, sg, iovs[i].kiov_len);
 		if (rc)
 			return rc;
 	}
@@ -411,17 +387,14 @@ int gss_digest_norm(struct crypto_ahash *tfm,
 		if (rc != 0)
 			return rc;
 
-		ahash_request_set_crypt(req, sg, NULL, sizeof(*hdr));
-		if (rc)
-			return rc;
-		rc = crypto_ahash_update(req);
+		rc = crypto_hash_update(&desc, sg, sizeof(*hdr));
 		if (rc)
 			return rc;
 
 		gss_teardown_sgtable(&sgt);
 	}
 
-	rc = crypto_ahash_final(req);
+	rc = crypto_hash_final(&desc, cksum->data);
 	if (rc)
 		return rc;
 

@@ -283,6 +283,23 @@ kernel SUNRPC support is required by using GSS.
 ]) # LC_CONFIG_SUNRPC
 
 #
+# LC_HAVE_CRYPTO_HASH
+#
+# 4.6 kernel commit 896545098777564212b9e91af4c973f094649aa7
+# removed crypto_hash support. Since GSS only works with
+# crypto_hash it has to be disabled for newer distros.
+#
+AC_DEFUN([LC_HAVE_CRYPTO_HASH], [
+LB_CHECK_COMPILE([if crypto_hash API is supported],
+crypto_hash, [
+	#include <linux/crypto.h>
+],[
+	crypto_hash_digestsize(NULL);
+], [], [enable_gss="no"])
+])
+]) # LC_HAVE_CRYPTO_HASH
+
+#
 # LC_CONFIG_GSS (default 'auto' (tests for dependencies, if found, enables))
 #
 # Build gss and related tools of Lustre. Currently both kernel and user space
@@ -297,6 +314,7 @@ AC_MSG_RESULT([$enable_gss])
 
 AS_IF([test "x$enable_gss" != xno], [
 	LC_CONFIG_GSS_KEYRING
+	LC_HAVE_CRYPTO_HASH
 	LC_HAVE_CRED_TGCRED
 	LC_KEY_TYPE_INSTANTIATE_2ARGS
 	sunrpc_required=$enable_gss
