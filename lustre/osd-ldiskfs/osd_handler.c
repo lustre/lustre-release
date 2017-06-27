@@ -2644,19 +2644,21 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr)
 		}
 	}
 
-#ifdef HAVE_PROJECT_QUOTA
 	/* Handle project id transfer here properly */
 	if (attr->la_valid & LA_PROJID &&
 	    attr->la_projid != i_projid_read(inode)) {
-		rc = __ldiskfs_ioctl_setproject(inode, attr->la_projid);
+#ifdef HAVE_PROJECT_QUOTA
+		rc = ldiskfs_transfer_project(inode, attr->la_projid);
+#else
+		rc = -ENOTSUPP;
+#endif
 		if (rc) {
-			CERROR("%s: quota transfer failed: rc = %d. Is quota "
+			CERROR("%s: quota transfer failed: rc = %d. Is project "
 			       "enforcement enabled on the ldiskfs "
 			       "filesystem?\n", inode->i_sb->s_id, rc);
 			return rc;
 		}
 	}
-#endif
 	return 0;
 }
 
@@ -3441,8 +3443,9 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 
 	/* Agent inode should not have project ID */
 #ifdef	HAVE_PROJECT_QUOTA
-	if (LDISKFS_I(pobj->oo_inode)->i_flags & LUSTRE_PROJINHERIT_FL) {
-		rc = __ldiskfs_ioctl_setproject(local, 0);
+	if (LDISKFS_I(pobj->oo_inode)->i_flags & LUSTRE_PROJINHERIT_FL &&
+	    i_projid_read(pobj->oo_inode) != 0) {
+		rc = ldiskfs_transfer_project(local, 0);
 		if (rc) {
 			CERROR("%s: quota transfer failed: rc = %d. Is project "
 			       "quota enforcement enabled on the ldiskfs "
@@ -5403,7 +5406,22 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 					   i_projid_read(inode), 0,
 					   oh, osd_dt_obj(dt), NULL,
 					   OSD_QID_BLK);
+		if (rc)
+			RETURN(rc);
+
+#ifdef HAVE_PROJECT_QUOTA
+		/* Reserve credits for local agent inode to transfer
+		 * to 0, quota enforcement is ignored in this case.
+		 */
+		if (idc->oic_remote &&
+		    LDISKFS_I(inode)->i_flags & LUSTRE_PROJINHERIT_FL &&
+		    i_projid_read(inode) != 0)
+			rc = osd_declare_attr_qid(env, osd_dt_obj(dt), oh,
+						  0, i_projid_read(inode),
+						  0, false, PRJQUOTA);
+#endif
 	}
+
 
 	RETURN(rc);
 }

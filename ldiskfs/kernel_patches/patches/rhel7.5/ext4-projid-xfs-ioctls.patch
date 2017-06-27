@@ -1,7 +1,7 @@
-Index: linux-stage/fs/ext4/ext4.h
-===================================================================
---- linux-stage.orig/fs/ext4/ext4.h
-+++ linux-stage/fs/ext4/ext4.h
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 3bfbae25..b720e78d 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
 @@ -397,6 +397,13 @@ struct flex_groups {
  #define EXT4_FL_USER_VISIBLE		0x304BDFFF /* User visible flags */
  #define EXT4_FL_USER_MODIFIABLE		0x204380FF /* User modifiable flags */
@@ -61,18 +61,18 @@ Index: linux-stage/fs/ext4/ext4.h
  #if defined(__KERNEL__) && defined(CONFIG_COMPAT)
  /*
   * ioctl commands in 32 bit emulation
-@@ -2405,6 +2450,7 @@ extern int ext4_ind_remove_space(handle_
+@@ -2405,6 +2450,7 @@ extern int ext4_ind_remove_space(handle_t *handle, struct inode *inode,
  /* ioctl.c */
  extern long ext4_ioctl(struct file *, unsigned int, unsigned long);
  extern long ext4_compat_ioctl(struct file *, unsigned int, unsigned long);
-+extern int __ext4_ioctl_setproject(struct inode *inode, __u32 projid);
++extern int ext4_transfer_project(struct inode *inode, __u32 projid);
  
  /* migrate.c */
  extern int ext4_ext_migrate(struct inode *);
-Index: linux-stage/fs/ext4/ioctl.c
-===================================================================
---- linux-stage.orig/fs/ext4/ioctl.c
-+++ linux-stage/fs/ext4/ioctl.c
+diff --git a/fs/ext4/ioctl.c b/fs/ext4/ioctl.c
+index 524ab53f..ac144e47 100644
+--- a/fs/ext4/ioctl.c
++++ b/fs/ext4/ioctl.c
 @@ -16,6 +16,7 @@
  #include <linux/file.h>
  #include <linux/uuid.h>
@@ -81,7 +81,7 @@ Index: linux-stage/fs/ext4/ioctl.c
  #include "ext4_jbd2.h"
  #include "ext4.h"
  
-@@ -199,6 +200,260 @@ journal_err_out:
+@@ -199,6 +200,294 @@ journal_err_out:
  	return err;
  }
  
@@ -164,17 +164,8 @@ Index: linux-stage/fs/ext4/ioctl.c
 +	if (err)
 +		goto flags_out;
 +
-+	if ((jflag ^ oldflags) & (EXT4_JOURNAL_DATA_FL)) {
-+		/*
-+		 * Changes to the journaling mode can cause unsafe
-+		 * changes to S_DAX if we are using the DAX mount option.
-+		 */
-+		if (test_opt(inode->i_sb, DAX)) {
-+			err = -EBUSY;
-+			goto flags_out;
-+		}
++	if ((jflag ^ oldflags) & (EXT4_JOURNAL_DATA_FL))
 +		err = ext4_change_inode_journal_flag(inode, jflag);
-+	}
 +	if (err)
 +		goto flags_out;
 +	if (migrate) {
@@ -189,8 +180,9 @@ Index: linux-stage/fs/ext4/ioctl.c
 +}
 +
 +#ifdef CONFIG_QUOTA
-+int __ext4_ioctl_setproject(struct inode *inode, __u32 projid)
++static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
 +{
++	struct inode *inode = file_inode(filp);
 +	struct super_block *sb = inode->i_sb;
 +	struct ext4_inode_info *ei = EXT4_I(inode);
 +	int err, rc;
@@ -211,12 +203,16 @@ Index: linux-stage/fs/ext4/ioctl.c
 +	}
 +
 +	if (EXT4_INODE_SIZE(sb) <= EXT4_GOOD_OLD_INODE_SIZE)
-+	    	return -EOPNOTSUPP;
++		return -EOPNOTSUPP;
 +
 +	kprojid = make_kprojid(&init_user_ns, (projid_t)projid);
 +
 +	if (projid_eq(kprojid, EXT4_I(inode)->i_projid))
 +		return 0;
++
++	err = mnt_want_write_file(filp);
++	if (err)
++		return err;
 +
 +	err = -EPERM;
 +	mutex_lock(&inode->i_mutex);
@@ -230,9 +226,9 @@ Index: linux-stage/fs/ext4/ioctl.c
 +
 +	raw_inode = ext4_raw_inode(&iloc);
 +	if (!EXT4_FITS_IN_INODE(raw_inode, ei, i_projid)) {
-+	    	err = -EOVERFLOW;
-+	    	brelse(iloc.bh);
-+	    	goto out_unlock;
++		err = -EOVERFLOW;
++		brelse(iloc.bh);
++		goto out_unlock;
 +	}
 +	brelse(iloc.bh);
 +
@@ -268,26 +264,64 @@ Index: linux-stage/fs/ext4/ioctl.c
 +	ext4_journal_stop(handle);
 +out_unlock:
 +	mutex_unlock(&inode->i_mutex);
++	mnt_drop_write_file(filp);
 +	return err;
 +
 +
 +}
-+EXPORT_SYMBOL(__ext4_ioctl_setproject);
 +
-+static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
++int ext4_transfer_project(struct inode *inode, __u32 projid)
 +{
++	struct super_block *sb = inode->i_sb;
++	struct ext4_inode_info *ei = EXT4_I(inode);
 +	int err;
-+	struct inode *inode = file_inode(filp);
++	kprojid_t kprojid;
++	struct ext4_iloc iloc;
++	struct ext4_inode *raw_inode;
++	struct dquot *transfer_to[EXT4_MAXQUOTAS] = { };
 +
-+	err = mnt_want_write_file(filp);
++	if (!EXT4_HAS_RO_COMPAT_FEATURE(sb,
++			EXT4_FEATURE_RO_COMPAT_PROJECT)) {
++		BUG_ON(__kprojid_val(EXT4_I(inode)->i_projid)
++		       != EXT4_DEF_PROJID);
++		if (projid != EXT4_DEF_PROJID)
++			return -EOPNOTSUPP;
++		else
++			return 0;
++	}
++
++	if (EXT4_INODE_SIZE(sb) <= EXT4_GOOD_OLD_INODE_SIZE)
++		return -EOPNOTSUPP;
++
++	kprojid = make_kprojid(&init_user_ns, (projid_t)projid);
++	if (projid_eq(kprojid, EXT4_I(inode)->i_projid))
++		return 0;
++
++	err = ext4_get_inode_loc(inode, &iloc);
 +	if (err)
 +		return err;
 +
-+	err = __ext4_ioctl_setproject(inode, projid);
++	raw_inode = ext4_raw_inode(&iloc);
++	if (!EXT4_FITS_IN_INODE(raw_inode, ei, i_projid)) {
++		err = -EOVERFLOW;
++		brelse(iloc.bh);
++		return err;
++	}
++	brelse(iloc.bh);
 +
-+	mnt_drop_write_file(filp);
++	dquot_initialize(inode);
++	transfer_to[PRJQUOTA] = dqget(sb, make_kqid_projid(kprojid));
++	if (transfer_to[PRJQUOTA]) {
++		err = __dquot_transfer(inode, transfer_to);
++		dqput(transfer_to[PRJQUOTA]);
++		if (err)
++			return err;
++	}
++
 +	return err;
 +}
++EXPORT_SYMBOL(ext4_transfer_project);
++
 +#else
 +static int ext4_ioctl_setproject(struct file *filp, __u32 projid)
 +{
@@ -342,7 +376,7 @@ Index: linux-stage/fs/ext4/ioctl.c
  long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
  {
  	struct inode *inode = file_inode(filp);
-@@ -214,11 +469,7 @@ long ext4_ioctl(struct file *filp, unsig
+@@ -214,11 +503,7 @@ long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
  		flags = ei->i_flags & EXT4_FL_USER_VISIBLE;
  		return put_user(flags, (int __user *) arg);
  	case EXT4_IOC_SETFLAGS: {
@@ -355,7 +389,7 @@ Index: linux-stage/fs/ext4/ioctl.c
  
  		if (!inode_owner_or_capable(inode))
  			return -EACCES;
-@@ -232,98 +483,8 @@ long ext4_ioctl(struct file *filp, unsig
+@@ -232,98 +517,8 @@ long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
  
  		flags = ext4_mask_flags(inode->i_mode, flags);
  
@@ -455,7 +489,7 @@ Index: linux-stage/fs/ext4/ioctl.c
  		mutex_unlock(&inode->i_mutex);
  		mnt_drop_write_file(filp);
  		return err;
-@@ -632,6 +793,62 @@ resizefs_out:
+@@ -632,6 +827,62 @@ resizefs_out:
  	}
  	case EXT4_IOC_PRECACHE_EXTENTS:
  		return ext4_ext_precache(inode);
