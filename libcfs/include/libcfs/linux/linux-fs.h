@@ -66,15 +66,6 @@ static inline struct dentry *file_dentry(const struct file *file)
 	vfs_fsync_range(fp, file_dentry(fp), start, end, datasync)
 #endif
 
-#define flock_type(fl)			((fl)->fl_type)
-#define flock_set_type(fl, type)	do { (fl)->fl_type = (type); } while (0)
-#define flock_pid(fl)			((fl)->fl_pid)
-#define flock_set_pid(fl, pid)		do { (fl)->fl_pid = (pid); } while (0)
-#define flock_start(fl)			((fl)->fl_start)
-#define flock_set_start(fl, st)		do { (fl)->fl_start = (st); } while (0)
-#define flock_end(fl)			((fl)->fl_end)
-#define flock_set_end(fl, end)		do { (fl)->fl_end = (end); } while (0)
-
 #ifndef IFSHIFT
 #define IFSHIFT			12
 #endif

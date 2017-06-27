@@ -245,14 +245,14 @@ s/\bcfs_file_count\b/file_count/g
 s/\bCFS_INT_LIMIT\b/INT_LIMIT/g
 s/\bCFS_OFFSET_MAX\b/OFFSET_MAX/g
 s/\bcfs_flock_t\b/struct file_lock/g
-s/\bcfs_flock_type\b/flock_type/g
-s/\bcfs_flock_set_type\b/flock_set_type/g
-s/\bcfs_flock_pid\b/flock_pid/g
-s/\bcfs_flock_set_pid\b/flock_set_pid/g
-s/\bcfs_flock_start\b/flock_start/g
-s/\bcfs_flock_set_start\b/flock_set_start/g
-s/\bcfs_flock_end\b/flock_end/g
-s/\bcfs_flock_set_end\b/flock_set_end/g
+s/\b[cfs_]*flock_type(\([^)]*\))\b/\1->fl_type/g
+s/\b[cfs_]*flock_set_type(\([^,]*\), \([^)]*\))\b/\1->fl_type = \2/g
+s/\b[cfs_]*flock_pid(\([^)]*\))\b/\1->fl_pid/g
+s/\b[cfs_]*flock_set_pid(\([^,]*\), \([^)]*\))\b/\1->fl_pid = \2/g
+s/\b[cfs_]*flock_start(\([^)]*\))\b/\1->fl_start/g
+s/\b[cfs_]*flock_set_start(\([^,]*\), \([^)]*\))\b/\1->fl_start = \2/g
+s/\b[cfs_]*flock_end(\([^)]*\))\b/\1->fl_end/g
+s/\b[cfs_]*flock_set_end(\([^,]*\), \([^)]*\))\b/\1->fl_end = \2/g
 s/\bcfs_user_write\b/user_write/g
 s/\bCFS_IFSHIFT\b/IFSHIFT/g
 s/\bCFS_IFTODT\b/IFTODT/g

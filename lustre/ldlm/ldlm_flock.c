@@ -742,7 +742,7 @@ granted:
 		RETURN(-EIO);
 	}
 
-        /* ldlm_lock_enqueue() has already placed lock on the granted list. */
+	/* ldlm_lock_enqueue() has already placed lock on the granted list. */
 	ldlm_resource_unlink_lock(lock);
 
 	/* Import invalidation. We need to actually release the lock
@@ -757,7 +757,7 @@ granted:
 			LASSERT(ldlm_is_test_lock(lock));
 
 		if (ldlm_is_test_lock(lock) || ldlm_is_flock_deadlock(lock))
-			mode = flock_type(getlk);
+			mode = getlk->fl_type;
 		else
 			mode = lock->l_granted_mode;
 
@@ -780,27 +780,26 @@ granted:
 	LDLM_DEBUG(lock, "client-side enqueue granted");
 
 	if (flags & LDLM_FL_TEST_LOCK) {
-                /* fcntl(F_GETLK) request */
-                /* The old mode was saved in getlk->fl_type so that if the mode
-                 * in the lock changes we can decref the appropriate refcount.*/
+		/*
+		 * fcntl(F_GETLK) request
+		 * The old mode was saved in getlk->fl_type so that if the mode
+		 * in the lock changes we can decref the appropriate refcount.
+		 */
 		LASSERT(ldlm_is_test_lock(lock));
-		ldlm_flock_destroy(lock, flock_type(getlk),
-				   LDLM_FL_WAIT_NOREPROC);
+		ldlm_flock_destroy(lock, getlk->fl_type, LDLM_FL_WAIT_NOREPROC);
 		switch (lock->l_granted_mode) {
 		case LCK_PR:
-			flock_set_type(getlk, F_RDLCK);
+			getlk->fl_type = F_RDLCK;
 			break;
 		case LCK_PW:
-			flock_set_type(getlk, F_WRLCK);
+			getlk->fl_type = F_WRLCK;
 			break;
 		default:
-			flock_set_type(getlk, F_UNLCK);
+			getlk->fl_type = F_UNLCK;
 		}
-		flock_set_pid(getlk, (pid_t)lock->l_policy_data.l_flock.pid);
-		flock_set_start(getlk,
-				(loff_t)lock->l_policy_data.l_flock.start);
-		flock_set_end(getlk,
-			      (loff_t)lock->l_policy_data.l_flock.end);
+		getlk->fl_pid = (pid_t)lock->l_policy_data.l_flock.pid;
+		getlk->fl_start = (loff_t)lock->l_policy_data.l_flock.start;
+		getlk->fl_end = (loff_t)lock->l_policy_data.l_flock.end;
 	} else {
 		__u64 noreproc = LDLM_FL_WAIT_NOREPROC;
 
