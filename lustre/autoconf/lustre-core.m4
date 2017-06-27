@@ -638,6 +638,23 @@ fs_struct_seqcount, [
 ])
 ]) # LC_FS_STRUCT_SEQCOUNT
 
+# LC_DENTRY_PATH_RAW
+#
+# Kernel version 2.6.37 commit ec2447c278ee973d35f38e53ca16ba7f965ae33d
+# dentry_path_raw is exported
+#
+AC_DEFUN([LC_DENTRY_PATH_RAW], [
+LB_CHECK_COMPILE([if 'dentry_path_raw' exist],
+dentry_path_raw, [
+	#include <linux/dcache.h>
+],[
+	dentry_path_raw(NULL, NULL, 0);
+],[
+	AC_DEFINE(HAVE_DENTRY_PATH_RAW, 1,
+		['dentry_path_raw' is available])
+])
+]) # LC_DENTRY_PATH_RAW
+
 #
 # LC_D_COMPARE_7ARGS
 #
@@ -999,6 +1016,23 @@ security_inode_init_security_callback, [
 	])
 ])
 ]) # LC_HAVE_SECURITY_IINITSEC
+
+#
+# 2.6.39 vfs_create takes a 'struct nameidata' parameter
+#
+AC_DEFUN([LC_VFS_CREATE_USE_NAMEIDATA], [
+LB_CHECK_COMPILE([if vfs_create takes a struct nameidata parameter],
+vfs_create, [
+	#include <linux/namei.h>
+	#include <linux/fs.h>
+],[
+	struct nameidata *nd;
+	vfs_create(NULL, NULL, 0, nd);
+],[
+	AC_DEFINE(HAVE_VFS_CREATE_USE_NAMEIDATA, 1,
+		[vfs_create use nameidata as parameter])
+])
+]) # LC_VFS_CREATE_USE_NAMEIDATA
 
 #
 # LC_HAVE_MIGRATE_HEADER
@@ -1430,6 +1464,23 @@ is_sxid, [
 ]) # LC_HAVE_IS_SXID
 
 #
+# LC_HAVE_VFS_GETATTR_2ARGS
+#
+AC_DEFUN([LC_HAVE_VFS_GETATTR_2ARGS], [
+LB_CHECK_COMPILE([if vfs_getattr takes 2 args],
+vfs_getattr, [
+	#include <linux/fs.h>
+],[
+	struct path path;
+
+	vfs_getattr(&path, NULL);
+],[
+	AC_DEFINE(HAVE_VFS_GETATTR_2ARGS, 1,
+		[vfs_getattr takes 2 args])
+])
+]) # LC_HAVE_VFS_GETATTR_2ARGS
+
+#
 # LC_HAVE_REMOVE_PROC_SUBTREE
 #
 # 3.10 introduced remove_proc_subtree
@@ -1768,6 +1819,23 @@ vfs_unlink_3args, [
 		[kernel has vfs_unlink with 3 args])
 ])
 ]) # LC_VFS_UNLINK_3ARGS
+
+# LC_HAVE_D_IS_POSITIVE
+#
+# Kernel version 3.13 b18825a7c8e37a7cf6abb97a12a6ad71af160de7
+# d_is_positive is added
+#
+AC_DEFUN([LC_HAVE_D_IS_POSITIVE], [
+LB_CHECK_COMPILE([if 'd_is_positive' exist],
+d_is_positive, [
+	#include <linux/dcache.h>
+],[
+	d_is_positive(NULL);
+],[
+	AC_DEFINE(HAVE_D_IS_POSITIVE, 1,
+		['d_is_positive' is available])
+])
+]) # LC_HAVE_D_IS_POSITIVE
 
 #
 # LC_HAVE_BVEC_ITER
@@ -3120,6 +3188,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 2.6.37
 	LC_KERNEL_LOCKED
 	LC_FS_STRUCT_SEQCOUNT
+	LC_DENTRY_PATH_RAW
 
 	# 2.6.38
 	LC_BLKDEV_GET_BY_DEV
@@ -3135,6 +3204,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_FSTYPE_MOUNT
 	LC_HAVE_INODE_OWNER_OR_CAPABLE
 	LC_HAVE_SECURITY_IINITSEC
+	LC_VFS_CREATE_USE_NAMEIDATA
 
 	# 3.0
 	LC_DIRTY_INODE_WITH_FLAG
@@ -3186,6 +3256,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_HLIST_FOR_EACH_3ARG
 	LC_HAVE_BIO_END_SECTOR
 	LC_HAVE_IS_SXID
+	LC_HAVE_VFS_GETATTR_2ARGS
 
 	# 3.10
 	LC_HAVE_REMOVE_PROC_SUBTREE
@@ -3212,6 +3283,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 3.13
 	LC_VFS_RENAME_5ARGS
 	LC_VFS_UNLINK_3ARGS
+	LC_HAVE_D_IS_POSITIVE
 
 	# 3.14
 	LC_HAVE_BVEC_ITER

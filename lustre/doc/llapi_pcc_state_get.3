@@ -1,0 +1,73 @@
+.TH llapi_pcc_state_get 3 "2019 April 20" "Lustre User API"
+.SH NAME
+llapi_pcc_state_get, llapi_pcc_state_get_fd, \- get the current PCC state
+related to a file
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_pcc_state_get(const char *" path ", struct lu_pcc_state *" state ");"
+.PP
+.BI "int llapi_pcc_state_get_fd(int " fd ", struct lu_pcc_state *" state ");"
+.fi
+.SH DESCRIPTION
+.PP
+The function
+.BR llapi_pcc_state_get()
+and
+.BR llapi_pcc_state_get_fd()
+returns the PCC state information for the file referenced by
+.IR path
+or
+.IR fd .
+Information is returned in the
+.IR state
+argument which should be already allocated, which is a
+.B lu_pcc_state
+data structure, which contains the following fields:
+.nf
+.LP
+struct lu_pcc_state {
+	__u32	pccs_type; /* enum lu_pcc_type */
+	__u32	pccs_open_count;
+	__u32	pccs_flags; /* enum lu_pcc_state_flags */
+	__u32	pccs_padding;
+	char	pccs_path[PATH_MAX];
+};
+.fi
+.TP
+.I pccs_type
+specifies the PCC mode for the given file, which is actual an
+.B lu_pcc_type
+data structure.
+.TP
+.I pccs_open_count
+indicates the opener count for the given file on the client.
+.TP
+.I pccs_flags
+is PCC flags for the given file,  not used currently.
+.TP
+.I pccs_path
+is the full path of the cached file on the PCC backend.
+.SH RETURN VALUES
+.PP
+.B llapi_pcc_state_get()
+and
+.B llapi_pcc_state_get_fd()
+return 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -ENOMEM
+Insufficient memory to complete operation.
+.TP
+.SM -EFAULT
+Memory region is not properly mapped.
+.TP
+.SM -EINVAL
+One or more invalid arguments are given.
+.TP
+.SM -EOPNOTSUPP
+PCC state operation is not supported.
+.SH "SEE ALSO"
+.BR llapi_pcc_attach (3),
+.BR lustreapi (7)

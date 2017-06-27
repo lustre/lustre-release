@@ -917,6 +917,8 @@ struct md_op_data {
 	bool			op_post_migrate;
 	/* used to access dir with bash hash */
 	__u32			op_stripe_index;
+	/* Archive ID for PCC attach */
+	__u32			op_archive_id;
 };
 
 struct md_callback {

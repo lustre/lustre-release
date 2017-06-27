@@ -54,6 +54,36 @@ static int jt_opt_ignore_errors(int argc, char **argv) {
         return 0;
 }
 
+static int jt_pcc_list_commands(int argc, char **argv);
+static int jt_pcc(int argc, char **argv);
+
+/**
+ * command_t pccdev_cmdlist - lctl pcc commands.
+ */
+command_t pccdev_cmdlist[] = {
+	{ .pc_name = "add", .pc_func = jt_pcc_add,
+	  .pc_help = "Add a PCC backend to a client.\n"
+		"usage: lctl pcc add <mntpath> <pccpath> [--param|-p <param>]\n"
+		"\tmntpath: Lustre mount point.\n"
+		"\tpccpath: Path of the PCC backend.\n"
+		"\tparam:   Setting parameters for PCC backend.\n" },
+	{ .pc_name = "del", .pc_func = jt_pcc_del,
+	  .pc_help = "Delete the specified PCC backend on a client.\n"
+		"usage: clt pcc del <mntpath> <pccpath>\n" },
+	{ .pc_name = "clear", .pc_func = jt_pcc_clear,
+	  .pc_help = "Remove all PCC backend on a client.\n"
+		"usage: lctl pcc clear <mntpath>\n" },
+	{ .pc_name = "list", .pc_func = jt_pcc_list,
+	  .pc_help = "List all PCC backends on a client.\n"
+		"usage: lctl pcc list <mntpath>\n" },
+	{ .pc_name = "list-commands", .pc_func = jt_pcc_list_commands,
+	  .pc_help = "list commands supported by lctl pcc"},
+	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
+	{ .pc_name = "exit", .pc_func = Parser_quit, .pc_help = "quit" },
+	{ .pc_name = "quit", .pc_func = Parser_quit, .pc_help = "quit" },
+	{ .pc_help = NULL }
+};
+
 command_t cmdlist[] = {
 	/* Metacommands */
 	{"===== metacommands =======", NULL, 0, "metacommands"},
@@ -349,6 +379,15 @@ command_t cmdlist[] = {
 	 "deregister an existing changelog user\n"
 	 "usage: --device <mdtname> changelog_deregister <id>"},
 
+	/* Persistent Client Cache (PCC) commands */
+	{"=== Persistent Client Cache ===", NULL, 0, "PCC user management"},
+	{"pcc", jt_pcc, pccdev_cmdlist,
+	 "lctl commands used to interact with PCC features:\n"
+	 "lclt pcc add    - add a PCC backend to a client\n"
+	 "lclt pcc del    - delete a PCC backend on a client\n"
+	 "lclt pcc clear  - remove all PCC backends on a client\n"
+	 "lclt pcc list   - list all PCC backends on a client\n"},
+
 	/* Device configuration commands */
 	{"== device setup (these are not normally used post 1.4) ==",
 		NULL, 0, "device config"},
@@ -533,6 +572,55 @@ command_t cmdlist[] = {
 
 	{ 0, 0, 0, NULL }
 };
+
+/**
+ * jt_pcc_list_commands() - List lctl pcc commands.
+ * @argc: The count of command line arguments.
+ * @argv: Array of strings for command line arguments.
+ *
+ * This function lists lctl pcc commands defined in pccdev_cmdlist[].
+ *
+ * Return: 0 on success.
+ */
+static int jt_pcc_list_commands(int argc, char **argv)
+{
+	char buffer[81] = "";
+
+	Parser_list_commands(pccdev_cmdlist, buffer, sizeof(buffer),
+			     NULL, 0, 4);
+
+	return 0;
+}
+
+/**
+ * jt_pcc() - Parse and execute lctl pcc commands.
+ * @argc: The count of lctl pcc command line arguments.
+ * @argv: Array of strings for lctl pcc command line arguments.
+ *
+ * This function parses lfs pcc commands and performs the
+ * corresponding functions specified in pccdev_cmdlist[].
+ *
+ * Return: 0 on success or an error code on failure.
+ */
+static int jt_pcc(int argc, char **argv)
+{
+	char cmd[PATH_MAX];
+	int rc = 0;
+
+	setlinebuf(stdout);
+
+	Parser_init("lctl-pcc > ", pccdev_cmdlist);
+
+	snprintf(cmd, sizeof(cmd), "%s %s", program_invocation_short_name,
+		 argv[0]);
+	program_invocation_short_name = cmd;
+	if (argc > 1)
+		rc = Parser_execarg(argc - 1, argv + 1, pccdev_cmdlist);
+	else
+		rc = Parser_commands();
+
+	return rc < 0 ? -rc : rc;
+}
 
 int lctl_main(int argc, char **argv)
 {

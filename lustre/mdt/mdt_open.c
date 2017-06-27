@@ -1805,19 +1805,63 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	if (rc != 0)
 		GOTO(out_unlock, rc);
 
-	if (!mdt_hsm_release_allow(ma))
-		GOTO(out_unlock, rc = -EPERM);
+	if (ma->ma_attr_flags & MDS_PCC_ATTACH) {
+		if (ma->ma_valid & MA_HSM) {
+			if (ma->ma_hsm.mh_flags & HS_RELEASED)
+				GOTO(out_unlock, rc = -EALREADY);
 
-	/* already released? */
-	if (ma->ma_hsm.mh_flags & HS_RELEASED)
-		GOTO(out_unlock, rc = 0);
+			if (ma->ma_hsm.mh_arch_id != data->cd_archive_id)
+				CDEBUG(D_CACHE,
+				       DFID" archive id diff: %llu:%u\n",
+				       PFID(mdt_object_fid(o)),
+				       ma->ma_hsm.mh_arch_id,
+				       data->cd_archive_id);
 
-	/* Compare on-disk and packed data_version */
-	if (data->cd_data_version != ma->ma_hsm.mh_arch_ver) {
-		CDEBUG(D_HSM, DFID" data_version mismatches: packed=%llu"
-		       " and on-disk=%llu\n", PFID(mdt_object_fid(o)),
-		       data->cd_data_version, ma->ma_hsm.mh_arch_ver);
-		GOTO(out_unlock, rc = -EPERM);
+			if (!(ma->ma_hsm.mh_flags & HS_DIRTY) &&
+			    ma->ma_hsm.mh_arch_ver == data->cd_data_version) {
+				CDEBUG(D_CACHE,
+				       DFID" data version matches: packed=%llu "
+				       "and on-disk=%llu\n",
+				       PFID(mdt_object_fid(o)),
+				       data->cd_data_version,
+				       ma->ma_hsm.mh_arch_ver);
+				ma->ma_hsm.mh_flags = HS_ARCHIVED | HS_EXISTS;
+			}
+		} else {
+			/* Set up HSM attribte for PCC archived object */
+			CLASSERT(sizeof(struct hsm_attrs) <=
+				 sizeof(info->mti_xattr_buf));
+			buf = &info->mti_buf;
+			buf->lb_buf = info->mti_xattr_buf;
+			buf->lb_len = sizeof(struct hsm_attrs);
+			memset(&ma->ma_hsm, 0, sizeof(ma->ma_hsm));
+			ma->ma_hsm.mh_flags = HS_ARCHIVED | HS_EXISTS;
+			ma->ma_hsm.mh_arch_id = data->cd_archive_id;
+			ma->ma_hsm.mh_arch_ver = data->cd_data_version;
+			lustre_hsm2buf(buf->lb_buf, &ma->ma_hsm);
+
+			rc = mo_xattr_set(info->mti_env, mdt_object_child(o),
+					  buf, XATTR_NAME_HSM, 0);
+			if (rc)
+				GOTO(out_unlock, rc);
+		}
+	} else {
+		if (!mdt_hsm_release_allow(ma))
+			GOTO(out_unlock, rc = -EPERM);
+
+		/* already released? */
+		if (ma->ma_hsm.mh_flags & HS_RELEASED)
+			GOTO(out_unlock, rc = 0);
+
+		/* Compare on-disk and packed data_version */
+		if (data->cd_data_version != ma->ma_hsm.mh_arch_ver) {
+			CDEBUG(D_HSM, DFID" data_version mismatches: "
+			       "packed=%llu and on-disk=%llu\n",
+			       PFID(mdt_object_fid(o)),
+			       data->cd_data_version,
+			       ma->ma_hsm.mh_arch_ver);
+			GOTO(out_unlock, rc = -EPERM);
+		}
 	}
 
 	ma->ma_valid = MA_INODE;

@@ -1311,6 +1311,43 @@ static ssize_t ll_nosquash_nids_seq_write(struct file *file,
 
 LDEBUGFS_SEQ_FOPS(ll_nosquash_nids);
 
+static int ll_pcc_seq_show(struct seq_file *m, void *v)
+{
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+	return pcc_super_dump(&sbi->ll_pcc_super, m);
+}
+
+static ssize_t ll_pcc_seq_write(struct file *file, const char __user *buffer,
+				size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	int rc;
+	char *kernbuf;
+
+	if (count >= LPROCFS_WR_PCC_MAX_CMD)
+		return -EINVAL;
+
+	if (!(exp_connect_flags2(sbi->ll_md_exp) & OBD_CONNECT2_PCC))
+		return -EOPNOTSUPP;
+
+	OBD_ALLOC(kernbuf, count + 1);
+	if (kernbuf == NULL)
+		return -ENOMEM;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		GOTO(out_free_kernbuff, rc = -EFAULT);
+
+	rc = pcc_cmd_handle(kernbuf, count, &sbi->ll_pcc_super);
+out_free_kernbuff:
+	OBD_FREE(kernbuf, count + 1);
+	return rc ? rc : count;
+}
+LPROC_SEQ_FOPS(ll_pcc);
+
 struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	{ .name	=	"site",
 	  .fops	=	&ll_site_stats_fops			},
@@ -1332,6 +1369,8 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_root_squash_fops			},
 	{ .name	=	"nosquash_nids",
 	  .fops	=	&ll_nosquash_nids_fops			},
+	{ .name =	"pcc",
+	  .fops =	&ll_pcc_fops,				},
 	{ NULL }
 };
 

@@ -1,0 +1,48 @@
+.TH lctl-pcc 8 2019-04-15 "Lustre" "configuration Utilities"
+.SH NAME
+lctl pcc commands used to interact with PCC features.
+.SH SYNOPSIS
+.B lctl pcc add \fR<\fImntpath\fR> <\fIpccpath\fR> [\fB--param\fR|\fB-p\fR <\fIparam\fR>]
+.br
+.B lctl pcc del <\fImntpath\fR> <\fIpccpath\fR>
+.br
+.B lctl pcc clear <\fImntpath\fR>
+.br
+.B lctl pcc list <\fImntpath\fR>
+.SH DESCRIPTION
+.TP
+.B lctl pcc add \fR<\fImntpath\fR> <\fIpccpath\fR> [\fB--param\fR|\fB-p\fR <\fIparam\fR>]
+Add a PCC backend specified by HSM root path
+.IR pccpath
+on a Lustre filesystem client instances with the mount point referenced by
+.IR mntpath .
+The parameter
+.IR param
+is a string to config the PCC backend such as read-write attach id (archive ID)
+and auto-caching project id. i.e. the string "2 100" means that the read-write
+attach id is 2, and the project ID is 100 for the PCC backend. On this client
+any subsequently created files with the project ID of 100 will be persistently
+cached automatically.
+.TP
+.B lctl pcc del <\fImntpath\fR> <\fIpccpath\fR>
+Delete a PCC backend specified by path
+.IR pccpath
+on a Lustre client referenced by the mount point of
+.IR mntpath .
+.TP
+.B lctl pcc clear <\fImntpath\fR>
+Remove all PCC backend on a Lustre client referenced by the mount point of
+.IR mntpath .
+.TP
+.B lctl pcc list <\fImntpath\fR>
+List all PCC backends on a Lustre client referenced by the mount point of
+.IR mntpath .
+.SH OPTIONS
+.TP
+.B --param | -p
+Specifies the configuration parameters for a PCC backend.
+.TP
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-hsm (1),
+.BR lfs-pcc (1)

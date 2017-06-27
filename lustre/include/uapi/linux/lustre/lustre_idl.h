@@ -898,7 +898,8 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT2_ARCHIVE_ID_ARRAY | \
 				OBD_CONNECT2_SELINUX_POLICY | \
 				OBD_CONNECT2_LSOM | \
-				OBD_CONNECT2_ASYNC_DISCARD)
+				OBD_CONNECT2_ASYNC_DISCARD | \
+				OBD_CONNECT2_PCC)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
 				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
@@ -1952,6 +1953,7 @@ enum mds_op_bias {
 	MDS_CLOSE_RESYNC_DONE	= 1 << 16,
 	MDS_CLOSE_LAYOUT_SPLIT	= 1 << 17,
 	MDS_TRUNC_KEEP_LEASE	= 1 << 18,
+	MDS_PCC_ATTACH		= 1 << 19,
 };
 
 #define MDS_CLOSE_INTENT (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP |         \
@@ -1974,7 +1976,10 @@ struct mdt_rec_create {
 	struct lu_fid	cr_fid2;
 	struct lustre_handle cr_open_handle_old; /* in case of open replay */
 	__s64		cr_time;
-	__u64		cr_rdev;
+	union {
+		__u64		cr_rdev;
+		__u32		cr_archive_id;
+	};
 	__u64		cr_ioepoch;
 	__u64		cr_padding_1;   /* rr_blocks */
 	__u32		cr_mode;
@@ -3545,6 +3550,8 @@ struct close_data {
 		struct close_data_resync_done	cd_resync;
 		/* split close */
 		__u16				cd_mirror_id;
+		/* PCC release */
+		__u32				cd_archive_id;
 	};
 };
 

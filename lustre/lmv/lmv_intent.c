@@ -355,7 +355,8 @@ retry:
 		op_data->op_mds = tgt->ltd_idx;
 	} else {
 		LASSERT(fid_is_sane(&op_data->op_fid1));
-		LASSERT(fid_is_zero(&op_data->op_fid2));
+		LASSERT(it->it_flags & MDS_OPEN_PCC ||
+			fid_is_zero(&op_data->op_fid2));
 		LASSERT(op_data->op_name != NULL);
 
 		tgt = lmv_locate_tgt(lmv, op_data, &op_data->op_fid1);
@@ -365,7 +366,8 @@ retry:
 
 	/* If it is ready to open the file by FID, do not need
 	 * allocate FID at all, otherwise it will confuse MDT */
-	if ((it->it_op & IT_CREAT) && !(it->it_flags & MDS_OPEN_BY_FID)) {
+	if ((it->it_op & IT_CREAT) && !(it->it_flags & MDS_OPEN_BY_FID ||
+					it->it_flags & MDS_OPEN_PCC)) {
 		/*
 		 * For lookup(IT_CREATE) cases allocate new fid and setup FLD
 		 * for it.

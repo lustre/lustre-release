@@ -393,6 +393,7 @@ enum ll_lease_flags {
 	LL_LEASE_RESYNC_DONE	= 0x2,
 	LL_LEASE_LAYOUT_MERGE	= 0x4,
 	LL_LEASE_LAYOUT_SPLIT	= 0x8,
+	LL_LEASE_PCC_ATTACH	= 0x10,
 };
 
 #define IOC_IDS_MAX	4096
@@ -481,6 +482,8 @@ struct ll_ioc_lease_id {
 #define LL_IOC_LADVISE			_IOR('f', 250, struct llapi_lu_ladvise)
 #define LL_IOC_HEAT_GET			_IOWR('f', 251, struct lu_heat)
 #define LL_IOC_HEAT_SET			_IOW('f', 251, __u64)
+#define LL_IOC_PCC_DETACH		_IOW('f', 252, struct lu_pcc_detach)
+#define LL_IOC_PCC_STATE		_IOR('f', 252, struct lu_pcc_state)
 
 #ifndef	FS_IOC_FSGETXATTR
 /*
@@ -1214,12 +1217,15 @@ enum la_valid {
 #define MDS_OPEN_RELEASE   02000000000000ULL /* Open the file for HSM release */
 
 #define MDS_OPEN_RESYNC    04000000000000ULL /* FLR: file resync */
+#define MDS_OPEN_PCC      010000000000000ULL /* PCC: auto RW-PCC cache attach
+					      * for newly created file */
 
 /* lustre internal open flags, which should not be set from user space */
 #define MDS_OPEN_FL_INTERNAL (MDS_OPEN_HAS_EA | MDS_OPEN_HAS_OBJS |	\
 			      MDS_OPEN_OWNEROVERRIDE | MDS_OPEN_LOCK |	\
 			      MDS_OPEN_BY_FID | MDS_OPEN_LEASE |	\
-			      MDS_OPEN_RELEASE | MDS_OPEN_RESYNC)
+			      MDS_OPEN_RELEASE | MDS_OPEN_RESYNC |	\
+			      MDS_OPEN_PCC)
 
 
 /********* Changelogs **********/
@@ -2292,6 +2298,47 @@ struct lu_heat {
 	__u32 lh_count;
 	__u32 lh_flags;
 	__u64 lh_heat[0];
+};
+
+enum lu_pcc_type {
+	LU_PCC_NONE = 0,
+	LU_PCC_READWRITE,
+	LU_PCC_MAX
+};
+
+static inline const char *pcc_type2string(enum lu_pcc_type type)
+{
+	switch (type) {
+	case LU_PCC_NONE:
+		return "none";
+	case LU_PCC_READWRITE:
+		return "readwrite";
+	default:
+		return "fault";
+	}
+}
+
+struct lu_pcc_attach {
+	__u32 pcca_type; /* PCC type */
+	__u32 pcca_id; /* archive ID for readwrite, group ID for readonly */
+};
+
+struct lu_pcc_detach {
+	/* fid of the file to detach */
+	struct lu_fid	pccd_fid;
+};
+
+enum lu_pcc_state_flags {
+	/* Whether the inode attr is cached locally */
+	PCC_STATE_FLAG_ATTR_VALID	= 0x1,
+};
+
+struct lu_pcc_state {
+	__u32	pccs_type; /* enum lu_pcc_type */
+	__u32	pccs_open_count;
+	__u32	pccs_flags; /* enum lu_pcc_state_flags */
+	__u32	pccs_padding;
+	char	pccs_path[PATH_MAX];
 };
 
 #if defined(__cplusplus)

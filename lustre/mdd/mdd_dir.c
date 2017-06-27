@@ -2109,6 +2109,7 @@ static int mdd_declare_create_object(const struct lu_env *env,
 				     const struct md_op_spec *spec,
 				     struct lu_buf *def_acl_buf,
 				     struct lu_buf *acl_buf,
+				     struct lu_buf *hsm_buf,
 				     struct dt_allocation_hint *hint)
 {
 	const struct lu_buf *buf;
@@ -2155,6 +2156,14 @@ static int mdd_declare_create_object(const struct lu_env *env,
 					   0, handle);
 		if (rc)
 			GOTO(out, rc);
+
+		if (spec->sp_cr_flags & MDS_OPEN_PCC) {
+			rc = mdo_declare_xattr_set(env, c, hsm_buf,
+						   XATTR_NAME_HSM,
+						   0, handle);
+			if (rc)
+				GOTO(out, rc);
+		}
 	}
 
 	if (S_ISLNK(attr->la_mode)) {
@@ -2191,12 +2200,13 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 			      struct linkea_data *ldata,
 			      struct lu_buf *def_acl_buf,
 			      struct lu_buf *acl_buf,
+			      struct lu_buf *hsm_buf,
 			      struct dt_allocation_hint *hint)
 {
 	int rc;
 
 	rc = mdd_declare_create_object(env, mdd, p, c, attr, handle, spec,
-				       def_acl_buf, acl_buf, hint);
+				       def_acl_buf, acl_buf, hsm_buf, hint);
 	if (rc)
 		GOTO(out, rc);
 
@@ -2291,6 +2301,7 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			     struct mdd_object *son, struct lu_attr *attr,
 			     struct md_op_spec *spec, struct lu_buf *acl_buf,
 			     struct lu_buf *def_acl_buf,
+			     struct lu_buf *hsm_buf,
 			     struct dt_allocation_hint *hint,
 			     struct thandle *handle)
 {
@@ -2334,6 +2345,19 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 		rc = mdo_xattr_set(env, son, buf,
 				   S_ISDIR(attr->la_mode) ? XATTR_NAME_LMV :
 							    XATTR_NAME_LOV,
+				   0, handle);
+		if (rc != 0)
+			GOTO(err_destroy, rc);
+	}
+
+	if (S_ISREG(attr->la_mode) && spec->sp_cr_flags & MDS_OPEN_PCC) {
+		struct md_hsm mh;
+
+		memset(&mh, 0, sizeof(mh));
+		mh.mh_flags = HS_EXISTS | HS_ARCHIVED | HS_RELEASED;
+		mh.mh_arch_id = spec->sp_archive_id;
+		lustre_hsm2buf(hsm_buf->lb_buf, &mh);
+		rc = mdo_xattr_set(env, son, hsm_buf, XATTR_NAME_HSM,
 				   0, handle);
 		if (rc != 0)
 			GOTO(err_destroy, rc);
@@ -2501,6 +2525,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	struct lu_attr		*pattr = &info->mti_pattr;
 	struct lu_buf		acl_buf;
 	struct lu_buf		def_acl_buf;
+	struct lu_buf		hsm_buf;
 	struct linkea_data	*ldata = &info->mti_link_data;
 	const char		*name = lname->ln_name;
 	struct dt_allocation_hint *hint = &mdd_env_info(env)->mti_hint;
@@ -2562,9 +2587,18 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 					lname, 1, 0, ldata);
 	}
 
+	if (spec->sp_cr_flags & MDS_OPEN_PCC) {
+		LASSERT(spec->sp_cr_flags & MDS_OPEN_HAS_EA);
+
+		memset(&hsm_buf, 0, sizeof(hsm_buf));
+		lu_buf_alloc(&hsm_buf, sizeof(struct hsm_attrs));
+		if (hsm_buf.lb_buf == NULL)
+			GOTO(out_stop, rc = -ENOMEM);
+	}
+
 	rc = mdd_declare_create(env, mdd, mdd_pobj, son, lname, attr,
 				handle, spec, ldata, &def_acl_buf, &acl_buf,
-				hint);
+				&hsm_buf, hint);
 	if (rc)
 		GOTO(out_stop, rc);
 
@@ -2573,7 +2607,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 		GOTO(out_stop, rc);
 
 	rc = mdd_create_object(env, mdd_pobj, son, attr, spec, &acl_buf,
-			       &def_acl_buf, hint, handle);
+			       &def_acl_buf, &hsm_buf, hint, handle);
 	if (rc != 0)
 		GOTO(out_stop, rc);
 
@@ -2663,6 +2697,9 @@ out_free:
 	if (is_vmalloc_addr(ldata->ld_buf))
 		/* if we vmalloced a large buffer drop it */
 		lu_buf_free(ldata->ld_buf);
+
+	if (spec->sp_cr_flags & MDS_OPEN_PCC)
+		lu_buf_free(&hsm_buf);
 
 	/* The child object shouldn't be cached anymore */
 	if (rc)
@@ -3905,7 +3942,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 
 	rc = mdd_declare_create(env, mdo2mdd(&tpobj->mod_obj), tpobj, tobj,
 				lname, attr, handle, spec, ldata, NULL, NULL,
-				hint);
+				NULL, hint);
 	if (rc)
 		return rc;
 
@@ -4064,8 +4101,8 @@ static int mdd_migrate_create(const struct lu_env *env,
 	/* don't set nlink from sobj */
 	attr->la_valid &= ~LA_NLINK;
 
-	rc = mdd_create_object(env, tpobj, tobj, attr, spec, NULL, NULL, hint,
-				handle);
+	rc = mdd_create_object(env, tpobj, tobj, attr, spec, NULL, NULL, NULL,
+			       hint, handle);
 	if (rc)
 		RETURN(rc);
 

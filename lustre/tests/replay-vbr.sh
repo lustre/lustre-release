@@ -42,60 +42,6 @@ CLIENT2=${CLIENT2:-$CLIENT1}
 
 is_mounted $MOUNT2 || error "MOUNT2 is not mounted"
 
-rmultiop_start() {
-	local client=$1
-	local file=$2
-	local cmds=$3
-	local WAIT_MAX=${4:-60}
-	local wait_time=0
-
-	# We need to run do_node in bg, because pdsh does not exit
-	# if child process of run script exists.
-	# I.e. pdsh does not exit when runmultiop_bg_pause exited,
-	# because of multiop_bg_pause -> $MULTIOP_PROG &
-	# By the same reason we need sleep a bit after do_nodes starts
-	# to let runmultiop_bg_pause start muliop and
-	# update /tmp/multiop_bg.pid ;
-	# The rm /tmp/multiop_bg.pid guarantees here that
-	# we have the updated by runmultiop_bg_pause
-	# /tmp/multiop_bg.pid file
-
-	local pid_file=$TMP/multiop_bg.pid.$$
-	do_node $client "MULTIOP_PID_FILE=$pid_file LUSTRE= \
-			runmultiop_bg_pause $file $cmds" &
-	local pid=$!
-	local multiop_pid
-
-	while [[ $wait_time -lt $WAIT_MAX ]]; do
-		sleep 3
-		wait_time=$((wait_time + 3))
-		multiop_pid=$(do_node $client cat $pid_file)
-		if [ -n "$multiop_pid" ]; then
-			break
-		fi
-	done
-
-	[ -n "$multiop_pid" ] ||
-		error "$client : Can not get multiop_pid from $pid_file "
-
-	eval export $(node_var_name $client)_multiop_pid=$multiop_pid
-	eval export $(node_var_name $client)_do_node_pid=$pid
-	local var=$(node_var_name $client)_multiop_pid
-	echo client $client multiop_bg started multiop_pid=${!var}
-	return $?
-}
-
-rmultiop_stop() {
-    local client=$1
-    local multiop_pid=$(node_var_name $client)_multiop_pid
-    local do_node_pid=$(node_var_name $client)_do_node_pid
-
-    echo "Stopping multiop_pid=${!multiop_pid} (kill ${!multiop_pid} on $client)"
-    do_node $client kill -USR1 ${!multiop_pid}
-
-    wait ${!do_node_pid}
-}
-
 #
 # get_version(): Gets the version of an object on servers
 # Parameter1: Client/Machine Name
