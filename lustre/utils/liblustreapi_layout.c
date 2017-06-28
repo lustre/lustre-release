@@ -2012,3 +2012,16 @@ int llapi_layout_file_comp_set(const char *path,
 	errno = EOPNOTSUPP;
 	return -1;
 }
+
+/**
+ * Check if the file layout is composite.
+ *
+ * \param[in] layout	the file layout	to check
+ *
+ * \retval true		composite
+ * \retval false	not composite
+ */
+bool llapi_layout_is_composite(struct llapi_layout *layout)
+{
+	return layout->llot_is_composite;
+}

@@ -816,6 +816,10 @@ int llapi_layout_file_comp_del(const char *path, uint32_t id, uint32_t flags);
 int llapi_layout_file_comp_set(const char *path,
 			       const struct llapi_layout *comp,
 			       uint32_t valid);
+/**
+ * Check if the file layout is composite.
+ */
+bool llapi_layout_is_composite(struct llapi_layout *layout);
 
 /** @} llapi */
 
