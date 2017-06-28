@@ -1227,6 +1227,9 @@ static void osc_extent_tree_dump0(int level, struct osc_object *obj,
 	struct osc_extent *ext;
 	int cnt;
 
+	if (!cfs_cdebug_show(level, DEBUG_SUBSYSTEM))
+		return;
+
 	CDEBUG(level, "Dump object %p extents at %s:%d, mppr: %u.\n",
 	       obj, func, line, osc_cli(obj)->cl_max_pages_per_rpc);
 
