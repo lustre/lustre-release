@@ -925,8 +925,11 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 	}
 
 	if (ncpt == 0) { /* scanning bracket which is mark of partition */
-		for (bracket = str; bracket != NULL; bracket++, ncpt++)
-			bracket = strchr(bracket, '[');
+		bracket = str;
+		while ((bracket = strchr(bracket, '['))) {
+			bracket++;
+			ncpt++;
+		}
 	}
 
 	if (ncpt == 0 ||
