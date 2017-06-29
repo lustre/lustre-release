@@ -3161,33 +3161,41 @@ tbf_verify() {
 	local client1=${CLIENT1:-$(hostname)}
 	local myRUNAS="$3"
 
+	local np=$(check_cpt_number ost1)
+	[ $np -gt 0 ] || error "CPU partitions should not be $np."
+	echo "cpu_npartitions on ost1 is $np"
+
 	mkdir $dir || error "mkdir $dir failed"
-	$LFS setstripe -c 1 $dir || error "setstripe to $dir failed"
+	$LFS setstripe -c 1 -i 0 $dir || error "setstripe to $dir failed"
 	chmod 777 $dir
 
 	trap cleanup_tbf_verify EXIT
 	echo "Limited write rate: $1, read rate: $2"
 	echo "Verify the write rate is under TBF control"
-	local runtime=$(do_node $client1 $myRUNAS dd if=/dev/zero of=$dir/tbf \
-		bs=1M count=100 oflag=direct 2>&1 | awk '/bytes/ {print $6}')
+	local start=$SECONDS
+	do_node $client1 $myRUNAS dd if=/dev/zero of=$dir/tbf \
+		bs=1M count=100 oflag=direct 2>&1
+	local runtime=$((SECONDS - start + 1))
 	local rate=$(bc <<< "scale=6; 100 / $runtime")
 	echo "Write runtime is $runtime s, speed is $rate IOPS"
 
-	# verify the write rate does not exceed 110% of TBF limited rate
-	[ $(bc <<< "$rate < 1.1 * $1") -eq 1 ] ||
-		error "The write rate ($rate) exceeds 110% of preset rate ($1)"
+	# verify the write rate does not exceed TBF rate limit
+	[ $(bc <<< "$rate < 1.1 * $np * $1") -eq 1 ] ||
+		error "The write rate ($rate) exceeds 110% of rate limit ($1 * $np)"
 
 	cancel_lru_locks osc
 
 	echo "Verify the read rate is under TBF control"
-	runtime=$(do_node $client1 $myRUNAS dd if=$dir/tbf of=/dev/null \
-		bs=1M count=100 iflag=direct 2>&1 | awk '/bytes/ {print $6}')
+	start=$SECONDS
+	do_node $client1 $myRUNAS dd if=$dir/tbf of=/dev/null \
+		bs=1M count=100 iflag=direct 2>&1
+	runtime=$((SECONDS - start + 1))
 	rate=$(bc <<< "scale=6; 100 / $runtime")
 	echo "Read runtime is $runtime s, speed is $rate IOPS"
 
-	# verify the read rate does not exceed 110% of TBF limited rate
-	[ $(bc <<< "$rate < 1.1 * $2") -eq 1 ] ||
-		error "The read rate ($rate) exceeds 110% of preset rate ($2)"
+	# verify the read rate does not exceed TBF rate limit
+	[ $(bc <<< "$rate < 1.1 * $np * $2") -eq 1 ] ||
+		error "The read rate ($rate) exceeds 110% of rate limit ($2 * $np)"
 
 	cancel_lru_locks osc
 	cleanup_tbf_verify || error "rm -rf $dir failed"
