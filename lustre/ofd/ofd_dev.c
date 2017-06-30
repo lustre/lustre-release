@@ -2116,13 +2116,13 @@ out:
 static int ofd_ladvise_prefetch(const struct lu_env *env,
 				struct ofd_object *fo,
 				struct niobuf_local *lnb,
-				__u64 start, __u64 end)
+				__u64 start, __u64 end, enum dt_bufs_type dbt)
 {
-	struct ofd_thread_info	*info = ofd_info(env);
-	pgoff_t			 start_index, end_index, pages;
-	struct niobuf_remote	 rnb;
-	unsigned long		 nr_local;
-	int			 rc = 0;
+	struct ofd_thread_info *info = ofd_info(env);
+	pgoff_t start_index, end_index, pages;
+	struct niobuf_remote rnb;
+	unsigned long nr_local;
+	int rc = 0;
 
 	if (end <= start)
 		RETURN(-EINVAL);
@@ -2150,7 +2150,7 @@ static int ofd_ladvise_prefetch(const struct lu_env *env,
 			PTLRPC_MAX_BRW_PAGES;
 		rnb.rnb_offset = start_index << PAGE_SHIFT;
 		rnb.rnb_len = nr_local << PAGE_SHIFT;
-		rc = dt_bufs_get(env, ofd_object_child(fo), &rnb, lnb, 0);
+		rc = dt_bufs_get(env, ofd_object_child(fo), &rnb, lnb, dbt);
 		if (unlikely(rc < 0))
 			break;
 		nr_local = rc;
@@ -2188,7 +2188,7 @@ static int ofd_ladvise_hdl(struct tgt_session_info *tsi)
 	struct ptlrpc_thread *svc_thread = req->rq_svc_thread;
 	const struct lu_env *env = svc_thread->t_env;
 	struct tgt_thread_big_cache *tbc = svc_thread->t_data;
-	int rc = 0;
+	enum dt_bufs_type dbt = DT_BUFS_TYPE_READAHEAD;
 	struct lu_ladvise *ladvise;
 	int num_advise;
 	struct ladvise_hdr *ladvise_hdr;
@@ -2199,6 +2199,7 @@ static int ofd_ladvise_hdl(struct tgt_session_info *tsi)
 	struct dt_object *dob;
 	__u64 start;
 	__u64 end;
+	int rc = 0;
 	ENTRY;
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_OST_LADVISE_PAUSE, cfs_fail_val);
@@ -2247,6 +2248,9 @@ static int ofd_ladvise_hdl(struct tgt_session_info *tsi)
 	LASSERT(fo != NULL);
 	dob = ofd_object_child(fo);
 
+	if (ptlrpc_connection_is_local(exp->exp_connection))
+		dbt |= DT_BUFS_TYPE_LOCAL;
+
 	for (i = 0; i < num_advise; i++, ladvise++) {
 		start = ladvise->lla_start;
 		end = ladvise->lla_end;
@@ -2274,7 +2278,7 @@ static int ofd_ladvise_hdl(struct tgt_session_info *tsi)
 
 			req->rq_status = ofd_ladvise_prefetch(env, fo,
 							      tbc->local,
-							      start, end);
+							      start, end, dbt);
 			tgt_extent_unlock(&lockh, LCK_PR);
 			break;
 		case LU_LADVISE_DONTNEED:

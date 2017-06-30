@@ -78,6 +78,7 @@ int LNetNIFini(void);
 int LNetGetId(unsigned int index, struct lnet_process_id *id);
 int LNetDist(lnet_nid_t nid, lnet_nid_t *srcnid, __u32 *order);
 lnet_nid_t LNetPrimaryNID(lnet_nid_t nid);
+bool LNetIsPeerLocal(lnet_nid_t nid);
 
 /** @} lnet_addr */
 

@@ -453,8 +453,9 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 			   struct niobuf_remote *rnb, int *nr_local,
 			   struct niobuf_local *lnb, char *jobid)
 {
-	struct ofd_object	*fo;
-	int			 i, j, rc, tot_bytes = 0;
+	struct ofd_object *fo;
+	int i, j, rc, tot_bytes = 0;
+	enum dt_bufs_type dbt = DT_BUFS_TYPE_READ;
 
 	ENTRY;
 	LASSERT(env != NULL);
@@ -474,10 +475,12 @@ static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
 			GOTO(unlock, rc);
 	}
 
-	*nr_local = 0;
-	for (i = 0, j = 0; i < niocount; i++) {
+	if (ptlrpc_connection_is_local(exp->exp_connection))
+		dbt |= DT_BUFS_TYPE_LOCAL;
+
+	for (*nr_local = 0, i = 0, j = 0; i < niocount; i++) {
 		rc = dt_bufs_get(env, ofd_object_child(fo), rnb + i,
-				 lnb + j, 0);
+				 lnb + j, dbt);
 		if (unlikely(rc < 0))
 			GOTO(buf_put, rc);
 		LASSERT(rc <= PTLRPC_MAX_BRW_PAGES);
@@ -538,8 +541,9 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			    struct niobuf_remote *rnb, int *nr_local,
 			    struct niobuf_local *lnb, char *jobid)
 {
-	struct ofd_object	*fo;
-	int			 i, j, k, rc = 0, tot_bytes = 0;
+	struct ofd_object *fo;
+	int i, j, k, rc = 0, tot_bytes = 0;
+	enum dt_bufs_type dbt = DT_BUFS_TYPE_WRITE;
 
 	ENTRY;
 	LASSERT(env != NULL);
@@ -628,11 +632,13 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	 * space back if possible */
 	tgt_grant_prepare_write(env, exp, oa, rnb, obj->ioo_bufcnt);
 
+	if (ptlrpc_connection_is_local(exp->exp_connection))
+		dbt |= DT_BUFS_TYPE_LOCAL;
+
 	/* parse remote buffers to local buffers and prepare the latter */
-	*nr_local = 0;
-	for (i = 0, j = 0; i < obj->ioo_bufcnt; i++) {
+	for (*nr_local = 0, i = 0, j = 0; i < obj->ioo_bufcnt; i++) {
 		rc = dt_bufs_get(env, ofd_object_child(fo),
-				 rnb + i, lnb + j, 1);
+				 rnb + i, lnb + j, dbt);
 		if (unlikely(rc < 0))
 			GOTO(err, rc);
 		LASSERT(rc <= PTLRPC_MAX_BRW_PAGES);
