@@ -313,7 +313,7 @@ static inline struct page *kmem_to_page(void *addr)
  * \retval		negative error number of failure
  */
 static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
-				loff_t off, ssize_t len, struct niobuf_local *lnb)
+			     loff_t off, ssize_t len, struct niobuf_local *lnb)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
 	unsigned long	   start = cfs_time_current();
@@ -420,7 +420,7 @@ static inline arc_buf_t *osd_request_arcbuf(dnode_t *dn, size_t bs)
 }
 
 static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
-				loff_t off, ssize_t len, struct niobuf_local *lnb)
+			      loff_t off, ssize_t len, struct niobuf_local *lnb)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
 	int                plen, off_in_block, sz_in_block;
@@ -525,7 +525,7 @@ out_err:
 
 static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 			loff_t offset, ssize_t len, struct niobuf_local *lnb,
-			int rw)
+			enum dt_bufs_type rw)
 {
 	struct osd_object *obj  = osd_dt_obj(dt);
 	int                rc;
@@ -533,10 +533,10 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dt_object_exists(dt));
 	LASSERT(obj->oo_dn);
 
-	if (rw == 0)
-		rc = osd_bufs_get_read(env, obj, offset, len, lnb);
-	else
+	if (rw & DT_BUFS_TYPE_WRITE)
 		rc = osd_bufs_get_write(env, obj, offset, len, lnb);
+	else
+		rc = osd_bufs_get_read(env, obj, offset, len, lnb);
 
 	return rc;
 }

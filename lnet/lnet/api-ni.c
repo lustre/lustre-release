@@ -2935,6 +2935,35 @@ void LNetDebugPeer(struct lnet_process_id id)
 EXPORT_SYMBOL(LNetDebugPeer);
 
 /**
+ * Determine if the specified peer \a nid is on the local node.
+ *
+ * \param nid	peer nid to check
+ *
+ * \retval true		If peer NID is on the local node.
+ * \retval false	If peer NID is not on the local node.
+ */
+bool LNetIsPeerLocal(lnet_nid_t nid)
+{
+	struct lnet_net *net;
+	struct lnet_ni *ni;
+	int cpt;
+
+	cpt = lnet_net_lock_current();
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist) {
+			if (ni->ni_nid == nid) {
+				lnet_net_unlock(cpt);
+				return true;
+			}
+		}
+	}
+	lnet_net_unlock(cpt);
+
+	return false;
+}
+EXPORT_SYMBOL(LNetIsPeerLocal);
+
+/**
  * Retrieve the struct lnet_process_id ID of LNet interface at \a index.
  * Note that all interfaces share a same PID, as requested by LNetNIInit().
  *

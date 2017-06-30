@@ -2186,7 +2186,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 		RETURN(err_serious(-EPROTO));
 
 	if ((remote_nb[0].rnb_flags & OBD_BRW_MEMALLOC) &&
-	    (exp->exp_connection->c_peer.nid == exp->exp_connection->c_self))
+	    ptlrpc_connection_is_local(exp->exp_connection))
 		memory_pressure_set();
 
 	req_capsule_set_size(&req->rq_pill, &RMF_RCS, RCL_SERVER,

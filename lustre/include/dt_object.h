@@ -1060,6 +1060,13 @@ struct dt_object_operations {
 				const struct lu_buf *buf, struct thandle *th);
 };
 
+enum dt_bufs_type {
+	DT_BUFS_TYPE_READ	= 0x0000,
+	DT_BUFS_TYPE_WRITE	= 0x0001,
+	DT_BUFS_TYPE_READAHEAD	= 0x0002,
+	DT_BUFS_TYPE_LOCAL	= 0x0004,
+};
+
 /**
  * Per-dt-object operations on "file body" - unstructure raw data.
  */
@@ -1177,7 +1184,7 @@ struct dt_body_operations {
 			    loff_t pos,
 			    ssize_t len,
 			    struct niobuf_local *lb,
-			    int rw);
+			    enum dt_bufs_type rw);
 
 	/**
 	 * Release reference granted by ->dbo_bufs_get().
@@ -2379,7 +2386,7 @@ static inline int dt_ref_del(const struct lu_env *env,
 
 static inline int dt_bufs_get(const struct lu_env *env, struct dt_object *d,
 			      struct niobuf_remote *rnb,
-			      struct niobuf_local *lnb, int rw)
+			      struct niobuf_local *lnb, enum dt_bufs_type rw)
 {
 	LASSERT(d);
 	LASSERT(d->do_body_ops);

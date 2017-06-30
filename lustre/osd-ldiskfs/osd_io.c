@@ -421,16 +421,18 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
         RETURN(0);
 }
 
-static struct page *osd_get_page(struct dt_object *dt, loff_t offset, int rw)
+static struct page *osd_get_page(struct dt_object *dt, loff_t offset,
+				 gfp_t gfp_mask)
 {
-        struct inode      *inode = osd_dt_obj(dt)->oo_inode;
-        struct osd_device *d = osd_obj2dev(osd_dt_obj(dt));
-        struct page       *page;
+	struct inode *inode = osd_dt_obj(dt)->oo_inode;
+	struct osd_device *d = osd_obj2dev(osd_dt_obj(dt));
+	struct page *page;
 
         LASSERT(inode);
 
 	page = find_or_create_page(inode->i_mapping, offset >> PAGE_SHIFT,
-                                   GFP_NOFS | __GFP_HIGHMEM);
+				   gfp_mask);
+
         if (unlikely(page == NULL))
                 lprocfs_counter_add(d->od_stats, LPROC_OSD_NO_PAGE, 1);
 
@@ -504,7 +506,7 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
  * \param pos		byte offset of IO start
  * \param len		number of bytes of IO
  * \param lnb		array of extents undergoing IO
- * \param rw		read or write operation?
+ * \param rw		read or write operation, and other flags
  * \param capa		capabilities
  *
  * \retval pages	(zero or more) loaded successfully
@@ -512,17 +514,22 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
  */
 static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 			loff_t pos, ssize_t len, struct niobuf_local *lnb,
-			int rw)
+			enum dt_bufs_type rw)
 {
-	struct osd_object   *obj    = osd_dt_obj(dt);
+	struct osd_object *obj = osd_dt_obj(dt);
 	int npages, i, rc = 0;
+	gfp_t gfp_mask;
 
 	LASSERT(obj->oo_inode);
 
 	osd_map_remote_to_local(pos, len, &npages, lnb);
 
+	/* this could also try less hard for DT_BUFS_TYPE_READAHEAD pages */
+	gfp_mask = rw & DT_BUFS_TYPE_LOCAL ? (GFP_NOFS | __GFP_HIGHMEM) :
+					     GFP_HIGHUSER;
 	for (i = 0; i < npages; i++, lnb++) {
-		lnb->lnb_page = osd_get_page(dt, lnb->lnb_file_offset, rw);
+		lnb->lnb_page = osd_get_page(dt, lnb->lnb_file_offset,
+					     gfp_mask);
 		if (lnb->lnb_page == NULL)
 			GOTO(cleanup, rc = -ENOMEM);
 
