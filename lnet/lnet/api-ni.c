@@ -2505,7 +2505,7 @@ lnet_dyn_add_net(struct lnet_ioctl_config_data *conf)
 
 	if (rc > 1) {
 		rc = -EINVAL; /* only add one network per call */
-		goto failed;
+		goto out_unlock_clean;
 	}
 
 	net = list_entry(net_head.next, struct lnet_net, net_list);
@@ -2525,14 +2525,11 @@ lnet_dyn_add_net(struct lnet_ioctl_config_data *conf)
 	  conf->cfg_config_u.cfg_net.net_max_tx_credits;
 
 	rc = lnet_add_net_common(net, &tun);
-	if (rc != 0)
-		goto failed;
 
-	return 0;
-
-failed:
+out_unlock_clean:
 	mutex_unlock(&the_lnet.ln_api_mutex);
 	while (!list_empty(&net_head)) {
+		/* net_head list is empty in success case */
 		net = list_entry(net_head.next, struct lnet_net, net_list);
 		list_del_init(&net->net_list);
 		lnet_net_free(net);
