@@ -260,25 +260,27 @@ static int do_name2dev(char *func, char *name)
  */
 int parse_devname(char *func, char *name)
 {
-        int rc;
-        int ret = -1;
+	int rc;
+	int ret = -1;
+	int try_digit;
 
-        if (!name)
-                return ret;
-        if (isdigit(name[0])) {
+	if (!name)
+		return ret;
+
+	try_digit = isdigit(name[0]);
+
+	if (name[0] == '$' || name[0] == '%')
+		name++;
+
+	rc = do_name2dev(func, name);
+	if (rc >= N2D_OFF)
+		return rc - N2D_OFF;
+
+	if (try_digit)
                 ret = strtoul(name, NULL, 0);
-        } else {
-                if (name[0] == '$' || name[0] == '%')
-                        name++;
-                rc = do_name2dev(func, name);
-                if (rc >= N2D_OFF) {
-                        ret = rc - N2D_OFF;
-                        // printf("Name %s is device %d\n", name, ret);
-                } else {
-                        fprintf(stderr, "No device found for name %s: %s\n",
+	else
+		fprintf(stderr, "No device found for name %s: %s\n",
                                 name, strerror(rc));
-                }
-        }
         return ret;
 }
 
