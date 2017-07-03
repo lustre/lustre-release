@@ -960,9 +960,10 @@ test_24a() {
 	local fs2ostdev=$(ostdevname 1_2)
 	local fs2mdsvdev=$(mdsvdevname 1_2)
 	local fs2ostvdev=$(ostvdevname 1_2)
+	local cl_user
 
-	# test 8-char fsname as well
-	local FSNAME2=test1234
+	# LU-9733 test fsname started with numbers as well
+	local FSNAME2=969362ae
 
 	add fs2mds $(mkfs_opts mds1 ${fs2mdsdev} ) --nomgs --mgsnode=$MGSNID \
 		--fsname=${FSNAME2} --reformat $fs2mdsdev $fs2mdsvdev || exit 10
@@ -975,6 +976,15 @@ test_24a() {
 	start fs2ost $fs2ostdev $OST_MOUNT_OPTS
 	mkdir -p $MOUNT2 || error "mkdir $MOUNT2 failed"
 	$MOUNT_CMD $MGSNID:/${FSNAME2} $MOUNT2 || error "$MOUNT_CMD failed"
+
+	# LU-9733 test fsname started with numbers
+	cl_user=$(do_facet $SINGLEMDS lctl --device $FSNAME2-MDT0000 \
+			changelog_register -n) ||
+				error "register changelog failed"
+
+	do_facet $SINGLEMDS lctl --device $FSNAME2-MDT0000 \
+			changelog_deregister $cl_user ||
+				error "deregister changelog failed"
 	# 1 still works
 	check_mount || error "check_mount failed"
 	# files written on 1 should not show up on 2
