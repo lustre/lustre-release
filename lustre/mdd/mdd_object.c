@@ -2520,8 +2520,15 @@ cont:
 out:
 	mdd_write_unlock(env, mdd_obj);
 
+	/* Record CL_CLOSE in changelog only if file was opened in write mode,
+	 * or if CL_OPEN was recorded.
+	 * Changelogs mask may change between open and close operations, but
+	 * this is not a big deal if we have a CL_CLOSE entry with no matching
+	 * CL_OPEN. Plus Changelogs mask may not change often.
+	 */
 	if (!rc && !blocked &&
-	    (mode & (FMODE_WRITE | MDS_OPEN_APPEND | MDS_OPEN_TRUNC)) &&
+	    ((mode & (FMODE_WRITE | MDS_OPEN_APPEND | MDS_OPEN_TRUNC)) ||
+	     (mdd->mdd_cl.mc_mask & (1 << CL_OPEN))) &&
 	    !(ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_RECOV_OPEN)) {
 		if (handle == NULL) {
 			handle = mdd_trans_create(env, mdo2mdd(obj));
