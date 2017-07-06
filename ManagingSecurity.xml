@@ -149,6 +149,10 @@ other::---</screen>
       root squash feature also enables the Lustre file system administrator to
       specify a set of client for which UID/GID re-mapping does not apply.
     </para>
+		<note><para>Nodemaps (<xref linkend="lustrenodemap.title" />) are an
+		alternative to root squash, since it also allows root squash on a per-client
+		basis.  With UID maps, the clients can even have a local root UID without
+		actually having root access to the filesystem itself.</para></note>
     <section xml:id="managingSecurity.root_squash.config" remap="h3">
       <title><indexterm>
         <primary>root squash</primary>
@@ -194,9 +198,13 @@ other::---</screen>
 --param &quot;mdt.nosquash_nids=192.168.0.13@tcp0&quot; /dev/sda1
 </screen>
       <para>Root squash parameters can also be changed with the
-        <literal>lctl conf_param</literal> command. For example:</para>
+      <literal>lctl conf_param</literal> command. For example:</para>
       <screen>mgs# lctl conf_param testfs.mdt.root_squash=&quot;1000:101&quot;
 mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;*@tcp&quot;</screen>
+      <para>To retrieve the current root squash parameter settings, the
+      following <literal>lctl get_param</literal> commands can be used:</para>
+      <screen>mgs# lctl get_param mdt.*.root_squash
+mgs# lctl get_param mdt.*.nosquash_nids</screen>
       <note>
         <para>When using the lctl conf_param command, keep in mind:</para>
         <itemizedlist>
@@ -214,8 +222,12 @@ mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;*@tcp&quot;</screen>
           </listitem>
         </itemizedlist>
       </note>
-      <para>The <literal>nosquash_nids</literal> list can be cleared with:
-      </para>
+      <para>The root squash settings can also be changed temporarily with
+      <literal>lctl set_param</literal> or persistently with
+      <literal>lctl set_param -P</literal>.  For example:</para>
+      <screen>mgs# lctl set_param mdt.testfs-MDT0000.root_squash="1:0"
+mgs# lctl set_param -P mdt.testfs-MDT0000.root_squash="1:0"</screen>
+      <para>The <literal>nosquash_nids</literal> list can be cleared with:</para>
       <screen>mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;NONE&quot;</screen>
       <para>- OR -</para>
       <screen>mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;clear&quot;</screen>
