@@ -82,7 +82,7 @@ static int lov_stripeoffset_seq_show(struct seq_file *m, void *v)
 
 	LASSERT(dev != NULL);
 	desc = &dev->u.lov.desc;
-	seq_printf(m, "%llu\n", desc->ld_default_stripe_offset);
+	seq_printf(m, "%lld\n", desc->ld_default_stripe_offset);
 	return 0;
 }
 
@@ -100,7 +100,7 @@ static ssize_t lov_stripeoffset_seq_write(struct file *file,
 	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
-	if (val < 0)
+	if (val < -1)
 		return -ERANGE;
 
 	desc->ld_default_stripe_offset = val;
@@ -172,7 +172,7 @@ static ssize_t lov_stripecount_seq_write(struct file *file,
 	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
-	if (val < 0)
+	if (val < -1)
 		return -ERANGE;
 
 	stripe_count = val;

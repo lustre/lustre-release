@@ -1427,12 +1427,12 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
 			/* rc = -EINVAL;        continue parsing other params */
 			skip++;
 		} else if (rc < 0) {
-			CERROR("%s: error writing proc '%s'='%s': rc = %d\n",
-			       lustre_cfg_string(lcfg, 0), key, sval, rc);
+			CERROR("%s: error writing parameter '%s': rc = %d\n",
+			       lustre_cfg_string(lcfg, 0), key, rc);
 			rc = 0;
 		} else {
-			CDEBUG(D_CONFIG, "%s: Set parameter '%s'='%s'\n",
-			       lustre_cfg_string(lcfg, 0), key, sval);
+			CDEBUG(D_CONFIG, "%s: set parameter '%s'\n",
+			       lustre_cfg_string(lcfg, 0), key);
 		}
 	}
 

@@ -120,8 +120,7 @@ static int lod_stripeoffset_seq_show(struct seq_file *m, void *v)
 
 	LASSERT(dev != NULL);
 	lod  = lu2lod_dev(dev->obd_lu_dev);
-	seq_printf(m, "%llu\n",
-		   lod->lod_desc.ld_default_stripe_offset);
+	seq_printf(m, "%lld\n", lod->lod_desc.ld_default_stripe_offset);
 	return 0;
 }
 
@@ -151,7 +150,7 @@ lod_stripeoffset_seq_write(struct file *file, const char __user *buffer,
 
 	LASSERT(dev != NULL);
 	lod  = lu2lod_dev(dev->obd_lu_dev);
-	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
+	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
 	if (val < -1)
