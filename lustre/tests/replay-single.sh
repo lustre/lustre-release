@@ -3877,7 +3877,7 @@ test_110f() {
 	replay_barrier mds1
 	replay_barrier mds2
 	$LFS mkdir -i1 -c$MDSCOUNT $DIR/$tdir/striped_dir
-	fail mds1,mds2
+	fail mds2,mds1
 
 	check_striped_dir_110 || error "check striped_dir failed"
 
