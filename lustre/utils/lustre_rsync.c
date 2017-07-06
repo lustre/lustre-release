@@ -1576,7 +1576,8 @@ int lr_replicate()
 	rc = llapi_changelog_set_xflags(changelog_priv,
 					CHANGELOG_EXTRA_FLAG_UIDGID |
 					CHANGELOG_EXTRA_FLAG_NID |
-					CHANGELOG_EXTRA_FLAG_OMODE);
+					CHANGELOG_EXTRA_FLAG_OMODE |
+					CHANGELOG_EXTRA_FLAG_XATTR);
 	if (rc < 0) {
 		fprintf(stderr, "Error setting xflag in changelog for fs %s.\n",
 			status->ls_source_fs);
@@ -1629,12 +1630,13 @@ int lr_replicate()
                 case CL_SETATTR:
                         rc = lr_setattr(info);
                         break;
-                case CL_XATTR:
+		case CL_SETXATTR:
                         rc = lr_setxattr(info);
                         break;
 		case CL_CLOSE:
 		case CL_EXT:
 		case CL_OPEN:
+		case CL_GETXATTR:
 		case CL_LAYOUT:
 		case CL_MARK:
 			/* Nothing needs to be done for these entries */

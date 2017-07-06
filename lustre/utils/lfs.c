@@ -5808,7 +5808,8 @@ static int lfs_changelog(int argc, char **argv)
 	rc = llapi_changelog_set_xflags(changelog_priv,
 					CHANGELOG_EXTRA_FLAG_UIDGID |
 					CHANGELOG_EXTRA_FLAG_NID |
-					CHANGELOG_EXTRA_FLAG_OMODE);
+					CHANGELOG_EXTRA_FLAG_OMODE |
+					CHANGELOG_EXTRA_FLAG_XATTR);
 	if (rc < 0) {
 		fprintf(stderr, "Can't set xflags for changelog: %s\n",
 			strerror(errno = -rc));
@@ -5888,6 +5889,14 @@ static int lfs_changelog(int argc, char **argv)
 				if (strcmp(mode, "---") != 0)
 					printf(" m=%s", mode);
 
+			}
+
+			if (ef->cr_extra_flags & CLFE_XATTR) {
+				struct changelog_ext_xattr *xattr =
+					changelog_rec_xattr(rec);
+
+				if (xattr->cr_xattr[0] != '\0')
+					printf(" x=%s", xattr->cr_xattr);
 			}
 		}
 

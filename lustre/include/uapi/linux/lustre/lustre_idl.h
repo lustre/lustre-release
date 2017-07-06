@@ -2702,10 +2702,11 @@ struct llog_size_change_rec {
 /** default \a changelog_rec_type mask. Allow all of them, except
  * CL_ATIME since it can really be time consuming, and not necessary
  * under normal use.
- * Remove also CL_OPEN from default list as it can be costly and only necessary
- * for audit purpose.
+ * Remove also CL_OPEN and CL_GETXATTR from default list as it can be costly and
+ * only necessary for audit purpose.
  */
-#define CHANGELOG_DEFMASK (CHANGELOG_ALLMASK & ~(1 << CL_ATIME | 1 << CL_OPEN))
+#define CHANGELOG_DEFMASK (CHANGELOG_ALLMASK & \
+			   ~(1 << CL_ATIME | 1 << CL_OPEN | 1 << CL_GETXATTR))
 
 /* changelog llog name, needed by client replicators */
 #define CHANGELOG_CATALOG "changelog_catalog"
@@ -2800,6 +2801,7 @@ enum llog_flag {
 	LLOG_F_EXT_X_UIDGID	= 0x40,
 	LLOG_F_EXT_X_NID	= 0x80,
 	LLOG_F_EXT_X_OMODE	= 0x100,
+	LLOG_F_EXT_X_XATTR	= 0x200,
 
 	/* Note: Flags covered by LLOG_F_EXT_MASK will be inherited from
 	 * catlog to plain log, so do not add LLOG_F_IS_FIXSIZE here,
@@ -2807,7 +2809,7 @@ enum llog_flag {
 	 * log record can be variable */
 	LLOG_F_EXT_MASK = LLOG_F_EXT_JOBID | LLOG_F_EXT_EXTRA_FLAGS |
 			  LLOG_F_EXT_X_UIDGID | LLOG_F_EXT_X_NID |
-			  LLOG_F_EXT_X_OMODE,
+			  LLOG_F_EXT_X_OMODE | LLOG_F_EXT_X_XATTR,
 };
 
 /* On-disk header structure of each log object, stored in little endian order */

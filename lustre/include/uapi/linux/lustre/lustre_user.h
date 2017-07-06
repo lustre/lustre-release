@@ -1055,7 +1055,8 @@ enum changelog_rec_type {
 	CL_LAYOUT   = 12, /* file layout/striping modified */
 	CL_TRUNC    = 13,
 	CL_SETATTR  = 14,
-	CL_XATTR    = 15,
+	CL_SETXATTR = 15,
+	CL_XATTR    = CL_SETXATTR, /* Deprecated name */
 	CL_HSM      = 16, /* HSM specific events, see flags */
 	CL_MTIME    = 17, /* Precedence: setattr > mtime > ctime > atime */
 	CL_CTIME    = 18,
@@ -1063,6 +1064,7 @@ enum changelog_rec_type {
 	CL_MIGRATE  = 20,
 	CL_FLRW     = 21, /* FLR: file was firstly written */
 	CL_RESYNC   = 22, /* FLR: file was resync-ed */
+	CL_GETXATTR = 23,
 	CL_LAST
 };
 
@@ -1071,7 +1073,7 @@ static inline const char *changelog_type2str(int type) {
 		"MARK",  "CREAT", "MKDIR", "HLINK", "SLINK", "MKNOD", "UNLNK",
 		"RMDIR", "RENME", "RNMTO", "OPEN",  "CLOSE", "LYOUT", "TRUNC",
 		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME", "MIGRT",
-		"FLRW",  "RESYNC",
+		"FLRW",  "RESYNC","GXATR",
 	};
 
 	if (type >= 0 && type < CL_LAST)
@@ -1178,7 +1180,8 @@ enum changelog_rec_extra_flags {
 	CLFE_UIDGID	= 0x0001,
 	CLFE_NID	= 0x0002,
 	CLFE_OPEN	= 0x0004,
-	CLFE_SUPPORTED	= CLFE_UIDGID | CLFE_NID | CLFE_OPEN
+	CLFE_XATTR	= 0x0008,
+	CLFE_SUPPORTED	= CLFE_UIDGID | CLFE_NID | CLFE_OPEN | CLFE_XATTR
 };
 
 enum changelog_send_flag {
@@ -1201,6 +1204,8 @@ enum changelog_send_extra_flag {
 	CHANGELOG_EXTRA_FLAG_NID    = 0x02,
 	/* Pack open mode into the changelog record */
 	CHANGELOG_EXTRA_FLAG_OMODE  = 0x04,
+	/* Pack xattr name into the changelog record */
+	CHANGELOG_EXTRA_FLAG_XATTR  = 0x08,
 };
 
 #define CR_MAXSIZE cfs_size_round(2 * NAME_MAX + 2 + \
@@ -1267,6 +1272,11 @@ struct changelog_ext_openmode {
 	__u32 cr_openflags;
 };
 
+/* Changelog extra extension to include xattr */
+struct changelog_ext_xattr {
+	char cr_xattr[XATTR_NAME_MAX + 1]; /**< zero-terminated string. */
+};
+
 static inline struct changelog_ext_extra_flags *changelog_rec_extra_flags(
 	const struct changelog_rec *rec);
 
@@ -1289,6 +1299,8 @@ static inline size_t changelog_rec_offset(enum changelog_rec_flags crf,
 			size += sizeof(struct changelog_ext_nid);
 		if (cref & CLFE_OPEN)
 			size += sizeof(struct changelog_ext_openmode);
+		if (cref & CLFE_XATTR)
+			size += sizeof(struct changelog_ext_xattr);
 	}
 
 	return size;
@@ -1390,6 +1402,23 @@ struct changelog_ext_openmode *changelog_rec_openmode(
 					       changelog_rec_offset(crf, cref));
 }
 
+/* The xattr name is the fourth extra extension */
+static inline
+struct changelog_ext_xattr *changelog_rec_xattr(
+	const struct changelog_rec *rec)
+{
+	enum changelog_rec_flags crf = rec->cr_flags &
+		(CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS);
+	enum changelog_rec_extra_flags cref = CLFE_INVALID;
+
+	if (rec->cr_flags & CLF_EXTRA_FLAGS)
+		cref = changelog_rec_extra_flags(rec)->cr_extra_flags &
+			(CLFE_UIDGID | CLFE_NID | CLFE_OPEN);
+
+	return (struct changelog_ext_xattr *)((char *)rec +
+					      changelog_rec_offset(crf, cref));
+}
+
 /* The name follows the rename, jobid  and extra flags extns, if present */
 static inline char *changelog_rec_name(const struct changelog_rec *rec)
 {
@@ -1439,6 +1468,7 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 				       enum changelog_rec_flags crf_wanted,
 				       enum changelog_rec_extra_flags cref_want)
 {
+	char *xattr_mov = NULL;
 	char *omd_mov = NULL;
 	char *nid_mov = NULL;
 	char *uidgid_mov = NULL;
@@ -1465,18 +1495,24 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 
 	/* Locations of extensions in the remapped record */
 	if (rec->cr_flags & CLF_EXTRA_FLAGS) {
+		xattr_mov = (char *)rec +
+			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
+					     cref_want & ~CLFE_XATTR);
 		omd_mov = (char *)rec +
 			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
-					     cref_want & ~CLFE_OPEN);
+					     cref_want & ~(CLFE_OPEN |
+							   CLFE_XATTR));
 		nid_mov = (char *)rec +
 			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
 					     cref_want & ~(CLFE_NID |
-							   CLFE_OPEN));
+							   CLFE_OPEN |
+							   CLFE_XATTR));
 		uidgid_mov = (char *)rec +
 			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
 					     cref_want & ~(CLFE_UIDGID |
 							   CLFE_NID |
-							   CLFE_OPEN));
+							   CLFE_OPEN |
+							   CLFE_XATTR));
 		cref = changelog_rec_extra_flags(rec)->cr_extra_flags;
 	}
 
@@ -1497,6 +1533,10 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 	/* Move the extension fields to the desired positions */
 	if ((crf_wanted & CLF_EXTRA_FLAGS) &&
 	    (rec->cr_flags & CLF_EXTRA_FLAGS)) {
+		if ((cref_want & CLFE_XATTR) && (cref & CLFE_XATTR))
+			memmove(xattr_mov, changelog_rec_xattr(rec),
+				sizeof(struct changelog_ext_xattr));
+
 		if ((cref_want & CLFE_OPEN) && (cref & CLFE_OPEN))
 			memmove(omd_mov, changelog_rec_openmode(rec),
 				sizeof(struct changelog_ext_openmode));
@@ -1522,6 +1562,10 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 			sizeof(struct changelog_ext_rename));
 
 	/* Clear newly added fields */
+	if (xattr_mov && (cref_want & CLFE_XATTR) &&
+	    !(cref & CLFE_XATTR))
+		memset(xattr_mov, 0, sizeof(struct changelog_ext_xattr));
+
 	if (omd_mov && (cref_want & CLFE_OPEN) &&
 	    !(cref & CLFE_OPEN))
 		memset(omd_mov, 0, sizeof(struct changelog_ext_openmode));

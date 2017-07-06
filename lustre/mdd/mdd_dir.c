@@ -1069,6 +1069,14 @@ void mdd_changelog_rec_extra_omode(struct changelog_rec *rec, int flags)
 	omd->cr_openflags = (__u32)flags;
 }
 
+void mdd_changelog_rec_extra_xattr(struct changelog_rec *rec,
+				   const char *xattr_name)
+{
+	struct changelog_ext_xattr    *xattr = changelog_rec_xattr(rec);
+
+	strlcpy(xattr->cr_xattr, xattr_name, sizeof(xattr->cr_xattr));
+}
+
 /** Store a namespace change changelog record
  * If this fails, we must fail the whole transaction; we don't
  * want the change to commit without the log entry.

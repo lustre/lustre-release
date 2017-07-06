@@ -57,6 +57,15 @@ static int mdd_xattr_get(const struct lu_env *env,
                          struct md_object *obj, struct lu_buf *buf,
                          const char *name);
 
+static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
+					   struct mdd_device *mdd,
+					   enum changelog_rec_type type,
+					   int flags, const struct lu_fid *fid,
+					   const char *xattr_name,
+					   struct thandle *handle);
+
+static inline bool has_prefix(const char *str, const char *prefix);
+
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
 	       struct lu_attr *la)
 {
@@ -224,16 +233,18 @@ static int mdd_xattr_get(const struct lu_env *env,
                          struct md_object *obj, struct lu_buf *buf,
                          const char *name)
 {
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-        int rc;
+	struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	struct md_device *md_dev = lu2md_dev(mdd2lu_dev(mdo2mdd(obj)));
+	int rc;
 
-        ENTRY;
+	ENTRY;
 
-        if (mdd_object_exists(mdd_obj) == 0) {
-                CERROR("%s: object "DFID" not found: rc = -2\n",
-                       mdd_obj_dev_name(mdd_obj),PFID(mdd_object_fid(mdd_obj)));
-                return -ENOENT;
-        }
+	if (mdd_object_exists(mdd_obj) == 0) {
+		CERROR("%s: object "DFID" not found: rc = -2\n",
+		       mdd_obj_dev_name(mdd_obj),
+		       PFID(mdd_object_fid(mdd_obj)));
+		return -ENOENT;
+	}
 
 	/* If the object has been destroyed, then do not get LMVEA, because
 	 * it needs to load stripes from the iteration of the master object,
@@ -250,11 +261,50 @@ static int mdd_xattr_get(const struct lu_env *env,
 		      strcmp(name, XATTR_NAME_LINK) == 0))
 		RETURN(-ENOENT);
 
-        mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
+	mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
 	rc = mdo_xattr_get(env, mdd_obj, buf, name);
-        mdd_read_unlock(env, mdd_obj);
+	mdd_read_unlock(env, mdd_obj);
 
-        RETURN(rc);
+	/* record only getting user xattrs and acls */
+	if (rc >= 0 &&
+	    (has_prefix(name, XATTR_USER_PREFIX) ||
+	     has_prefix(name, XATTR_NAME_POSIX_ACL_ACCESS) ||
+	     has_prefix(name, XATTR_NAME_POSIX_ACL_DEFAULT))) {
+		struct thandle *handle;
+		struct mdd_device *mdd = lu2mdd_dev(&md_dev->md_lu_dev);
+		int rc2;
+
+		/* Not recording */
+		if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+			RETURN(rc);
+		if (!(mdd->mdd_cl.mc_mask & (1 << CL_GETXATTR)))
+			RETURN(rc);
+
+		LASSERT(mdo2fid(mdd_obj) != NULL);
+
+		handle = mdd_trans_create(env, mdd);
+		if (IS_ERR(handle))
+			RETURN(PTR_ERR(handle));
+
+		rc2 = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+		if (rc2)
+			GOTO(stop, rc2);
+
+		rc2 = mdd_trans_start(env, mdd, handle);
+		if (rc2)
+			GOTO(stop, rc2);
+
+		rc2 = mdd_changelog_data_store_by_fid(env, mdd, CL_GETXATTR, 0,
+						      mdo2fid(mdd_obj), name,
+						      handle);
+
+stop:
+		rc2 = mdd_trans_stop(env, mdd, rc2, handle);
+		if (rc2)
+			rc = rc2;
+	}
+
+	RETURN(rc);
 }
 
 /*
@@ -634,10 +684,11 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 }
 
 static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
-				    struct mdd_device *mdd,
-				    enum changelog_rec_type type, int flags,
-				    const struct lu_fid *fid,
-				    struct thandle *handle)
+					   struct mdd_device *mdd,
+					   enum changelog_rec_type type,
+					   int flags, const struct lu_fid *fid,
+					   const char *xattr_name,
+					   struct thandle *handle)
 {
 	const struct lu_ucred *uc = lu_ucred(env);
 	struct llog_changelog_rec *rec;
@@ -656,6 +707,8 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 	}
 	if (type == CL_OPEN)
 		xflags |= CLFE_OPEN;
+	if (type == CL_SETXATTR || type == CL_GETXATTR)
+		xflags |= CLFE_XATTR;
 
 	reclen = llog_data_len(LLOG_CHANGELOG_HDR_SZ +
 			       changelog_rec_offset(flags & CLF_SUPPORTED,
@@ -683,6 +736,11 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 			mdd_changelog_rec_extra_nid(&rec->cr, uc->uc_nid);
 		if (xflags & CLFE_OPEN)
 			mdd_changelog_rec_extra_omode(&rec->cr, flags);
+		if (xflags & CLFE_XATTR) {
+			if (xattr_name == NULL)
+				RETURN(-EINVAL);
+			mdd_changelog_rec_extra_xattr(&rec->cr, xattr_name);
+		}
 	}
 
 	rc = mdd_changelog_store(env, mdd, rec, handle);
@@ -723,7 +781,46 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 	}
 
 	rc = mdd_changelog_data_store_by_fid(env, mdd, type, flags,
-					     mdo2fid(mdd_obj), handle);
+					     mdo2fid(mdd_obj), NULL, handle);
+	if (rc == 0)
+		mdd_obj->mod_cltime = ktime_get();
+
+	RETURN(rc);
+}
+
+static int mdd_changelog_data_store_xattr(const struct lu_env *env,
+					  struct mdd_device *mdd,
+					  enum changelog_rec_type type,
+					  int flags, struct mdd_object *mdd_obj,
+					  const char *xattr_name,
+					  struct thandle *handle)
+{
+	int				 rc;
+
+	LASSERT(mdd_obj != NULL);
+	LASSERT(handle != NULL);
+
+	/* Not recording */
+	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+		RETURN(0);
+	if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
+		RETURN(0);
+
+	if (mdd_is_volatile_obj(mdd_obj))
+		RETURN(0);
+
+	if ((type >= CL_MTIME) && (type <= CL_ATIME) &&
+	    ktime_before(mdd->mdd_cl.mc_starttime, mdd_obj->mod_cltime)) {
+		/* Don't need multiple updates in this log */
+		/* Don't check under lock - no big deal if we get an extra
+		 * entry
+		 */
+		RETURN(0);
+	}
+
+	rc = mdd_changelog_data_store_by_fid(env, mdd, type, flags,
+					     mdo2fid(mdd_obj), xattr_name,
+					     handle);
 	if (rc == 0)
 		mdd_obj->mod_cltime = ktime_get();
 
@@ -759,7 +856,7 @@ static int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
 		GOTO(stop, rc);
 
 	rc = mdd_changelog_data_store_by_fid(env, mdd, type, flags,
-						     fid, handle);
+					     fid, NULL, handle);
 
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
@@ -1036,8 +1133,10 @@ mdd_xattr_changelog_type(const struct lu_env *env, struct mdd_device *mdd,
 
 	if (has_prefix(xattr_name, XATTR_USER_PREFIX) ||
 	    has_prefix(xattr_name, XATTR_NAME_POSIX_ACL_ACCESS) ||
-	    has_prefix(xattr_name, XATTR_NAME_POSIX_ACL_DEFAULT))
-		return CL_XATTR;
+	    has_prefix(xattr_name, XATTR_NAME_POSIX_ACL_DEFAULT) ||
+	    has_prefix(xattr_name, XATTR_TRUSTED_PREFIX) ||
+	    has_prefix(xattr_name, XATTR_SECURITY_PREFIX))
+		return CL_SETXATTR;
 
 	return -1;
 }
@@ -1607,8 +1706,8 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 	if (cl_type < 0)
 		GOTO(stop, rc = 0);
 
-	rc = mdd_changelog_data_store(env, mdd, cl_type, cl_flags, mdd_obj,
-				      handle);
+	rc = mdd_changelog_data_store_xattr(env, mdd, cl_type, cl_flags,
+					    mdd_obj, name, handle);
 
 	EXIT;
 stop:
@@ -1676,7 +1775,8 @@ static int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
 	if (mdd_xattr_changelog_type(env, mdd, name) < 0)
 		GOTO(stop, rc = 0);
 
-	rc = mdd_changelog_data_store(env, mdd, CL_XATTR, 0, mdd_obj, handle);
+	rc = mdd_changelog_data_store_xattr(env, mdd, CL_SETXATTR, 0, mdd_obj,
+					    name, handle);
 
 	EXIT;
 stop:
