@@ -1616,7 +1616,7 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 		credits = depth;
 		/* if not append, then split may need to modify
 		 * existing blocks moving entries into the new ones */
-		if (_pos == -1)
+		if (_pos != -1)
 			credits += depth;
 		/* blocks to store data: bitmap,gd,itself */
 		credits += blocks * 3;
@@ -1680,9 +1680,12 @@ int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
 		((char *)buf)[bufsize] = '\0';
 		++bufsize;
 	}
-        while (bufsize > 0) {
-                if (bh != NULL)
-                        brelse(bh);
+
+	while (bufsize > 0) {
+		int credits = handle->h_buffer_credits;
+
+		if (bh)
+			brelse(bh);
 
 		block = offset >> inode->i_blkbits;
 		boffs = offset & (blocksize - 1);
@@ -1695,9 +1698,11 @@ int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
 				err = PTR_ERR(bh);
 				bh = NULL;
 			}
-                        CERROR("%s: error reading offset %llu (block %lu): "
-                               "rc = %d\n",
-                               inode->i_sb->s_id, offset, block, err);
+
+			CERROR("%s: error reading offset %llu (block %lu, "
+			       "size %d, offs %llu), credits %d/%d: rc = %d\n",
+			       inode->i_sb->s_id, offset, block, bufsize, *offs,
+			       credits, handle->h_buffer_credits, err);
                         break;
                 }
 
