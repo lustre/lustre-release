@@ -2629,18 +2629,19 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 	bool indent = flags & LDF_INDENT;
 	bool skip_objs = flags & LDF_SKIP_OBJS;
 	bool yaml = flags & LDF_YAML;
-	int i, obdstripe = (obdindex != OBD_NOT_FOUND) ? 0 : 1;
+	bool obdstripe = obdindex == OBD_NOT_FOUND;
+	int i;
 
-	if (!obdstripe) {
+	if (!obdstripe && !skip_objs) {
 		for (i = 0; !is_dir && i < lum->lmm_stripe_count; i++) {
 			if (obdindex == objects[i].l_ost_idx) {
-				obdstripe = 1;
+				obdstripe = true;
 				break;
 			}
 		}
 	}
 
-	if (obdstripe == 0)
+	if (!obdstripe)
 		return;
 
 	lov_dump_user_lmm_header(lum, path, objects, header, depth, pool_name,
@@ -2705,27 +2706,28 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 {
 	struct lmv_user_mds_data *objects = lum->lum_objects;
 	char *prefix = lum->lum_magic == LMV_USER_MAGIC ? "(Default)" : "";
-	int i, obdstripe = 0;
 	char *separator = "";
 	bool yaml = flags & LDF_YAML;
+	bool obdstripe = false;
+	int i;
 
 	if (obdindex != OBD_NOT_FOUND) {
 		if (lum->lum_stripe_count == 0) {
 			if (obdindex == lum->lum_stripe_offset)
-				obdstripe = 1;
+				obdstripe = true;
 		} else {
 			for (i = 0; i < lum->lum_stripe_count; i++) {
 				if (obdindex == objects[i].lum_mds) {
 					llapi_printf(LLAPI_MSG_NORMAL,
 						     "%s%s\n", prefix,
 						     path);
-					obdstripe = 1;
+					obdstripe = true;
 					break;
 				}
 			}
 		}
 	} else {
-		obdstripe = 1;
+		obdstripe = true;
 	}
 
 	if (!obdstripe)
@@ -2784,7 +2786,7 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 
 	if (verbose & VERBOSE_OBJID && lum->lum_magic != LMV_USER_MAGIC) {
 		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
-		if (obdstripe == 1 && lum->lum_stripe_count > 0)
+		if (lum->lum_stripe_count > 0)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "mdtidx\t\t FID[seq:oid:ver]\n");
 		for (i = 0; i < lum->lum_stripe_count; i++) {
@@ -3140,10 +3142,11 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 	struct lov_user_md_v1 *v1;
 	char pool_name[LOV_MAXPOOLNAME + 1];
 	int obdindex = param->fp_obd_index;
-	int i, j, match, obdstripe = 0;
+	int i, j, match;
+	bool obdstripe = false;
 
 	if (obdindex != OBD_NOT_FOUND) {
-		for (i = 0; !(flags & LDF_IS_DIR) &&
+		for (i = 0; !(flags & LDF_IS_DIR) && !obdstripe &&
 			    i < comp_v1->lcm_entry_count; i++) {
 			if (!(comp_v1->lcm_entries[i].lcme_flags &
 			      LCME_FL_INIT))
@@ -3154,16 +3157,16 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 
 			for (j = 0; j < v1->lmm_stripe_count; j++) {
 				if (obdindex == objects[j].l_ost_idx) {
-					obdstripe = 1;
+					obdstripe = true;
 					break;
 				}
 			}
 		}
 	} else {
-		obdstripe = 1;
+		obdstripe = true;
 	}
 
-	if (obdstripe == 0)
+	if (!obdstripe)
 		return;
 
 	lov_dump_comp_v1_header(param, path, flags);
@@ -3213,11 +3216,27 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 				break;
 		}
 
-		if (entry->lcme_flags & LCME_FL_INIT)
-			flags &= ~LDF_SKIP_OBJS;
-		else
-			flags |= LDF_SKIP_OBJS;
+		if (entry->lcme_flags & LCME_FL_INIT) {
+			if (obdindex != OBD_NOT_FOUND) {
+				flags |= LDF_SKIP_OBJS;
+				v1 = lov_comp_entry(comp_v1, i);
+				objects = lov_v1v3_objects(v1);
 
+				for (j = 0; j < v1->lmm_stripe_count; j++) {
+					if (obdindex == objects[j].l_ost_idx) {
+						flags &= ~LDF_SKIP_OBJS;
+						break;
+					}
+				}
+			} else {
+				flags &= ~LDF_SKIP_OBJS;
+			}
+		} else {
+			flags |= LDF_SKIP_OBJS;
+		}
+
+		if (obdindex != OBD_NOT_FOUND && (flags & LDF_SKIP_OBJS))
+			continue;
 		lov_dump_comp_v1_entry(param, flags, i);
 
 		v1 = lov_comp_entry(comp_v1, i);
@@ -3549,6 +3568,9 @@ static int check_obd_match(struct find_param *param)
 		objects = lov_v1v3_objects(v1);
 
 		for (j = 0; j < v1->lmm_stripe_count; j++) {
+			if (comp_v1 && !(comp_v1->lcm_entries[i].lcme_flags &
+					 LCME_FL_INIT))
+				continue;
 			for (k = 0; k < param->fp_num_obds; k++) {
 				if (param->fp_obd_indexes[k] ==
 				    objects[j].l_ost_idx)
