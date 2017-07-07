@@ -1011,9 +1011,10 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 	struct ofd_device	*ofd = ofd_exp(exp);
 	u64			 seq = ostid_seq(&oa->o_oi);
 	struct ofd_seq		*oseq;
-	int			 rc = 0, diff = 1;
 	long			 granted;
 	u64			 next_id;
+	s64 diff = 1;
+	int rc = 0;
 	int			 count;
 
 	ENTRY;
@@ -1049,13 +1050,13 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 		rc = granted;
 		granted = 0;
 		CDEBUG(D_HA, "%s: failed to acquire grant space for "
-		       "precreate (%d): rc = %d\n", ofd_name(ofd), diff, rc);
+		       "precreate (%lld): rc = %d\n", ofd_name(ofd), diff, rc);
 		diff = 0;
 		GOTO(out, rc);
 	}
 
 	next_id = ofd_seq_last_oid(oseq) + 1;
-	count = ofd_precreate_batch(ofd, diff);
+	count = ofd_precreate_batch(ofd, (int)diff);
 
 	rc = ofd_precreate_objects(env, ofd, next_id, oseq, count, 0);
 	if (rc < 0) {

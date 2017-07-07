@@ -1271,7 +1271,7 @@ EXPORT_SYMBOL(tgt_grant_prepare_write);
  * \retval >= 0		amount of grant space allocated to the precreate request
  * \retval -ENOSPC	on failure
  */
-long tgt_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
+long tgt_grant_create(const struct lu_env *env, struct obd_export *exp, s64 *nr)
 {
 	struct lu_target	*lut = exp->exp_obd->u.obt.obt_lut;
 	struct tg_grants_data	*tgd = &lut->lut_tgd;
