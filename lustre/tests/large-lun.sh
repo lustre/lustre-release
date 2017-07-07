@@ -150,7 +150,7 @@ trap cleanupall EXIT
 
 test_1 () {
 	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip "Only applicable to ldiskfs-based nodes" && return
+		skip "ldiskfs only test" && return
 	local dev
 	for num in $(seq $OSTCOUNT); do
 		dev=$(ostdevname $num)

@@ -487,7 +487,7 @@ run_test 5e "delayed connect, don't crash (bug 10268)"
 
 test_5f() {
 	if combined_mgs_mds ; then
-		skip "combined mgs and mds"
+		skip "needs separate mgs and mds"
 		return 0
 	fi
 
@@ -608,7 +608,7 @@ is_blkdev () {
 
 test_17() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -637,7 +637,7 @@ run_test 17 "Verify failed mds_postsetup won't fail assertion (2936) (should ret
 
 test_18() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -1183,7 +1183,7 @@ test_28a() { # LU-4221
 run_test 28a "set symlink parameters permanently with conf_param"
 
 test_29() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2, skipping" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs" && return
         setup > /dev/null 2>&1
 	start_ost2 || error "Unable to start OST2"
 	sleep 10
@@ -2607,7 +2607,7 @@ test_35b() { # bug 18674
 run_test 35b "Continue reconnection retries, if the active server is busy"
 
 test_36() { # 12743
-	[ $OSTCOUNT -lt 2 ] && skip_env "skipping test for single OST" && return
+	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs" && return
 
 	[ "$ost_HOST" = "`hostname`" -o "$ost1_HOST" = "`hostname`" ] ||
 		{ skip "remote OST" && return 0; }
@@ -2696,7 +2696,7 @@ test_37() {
 	local rc=0
 
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Currently only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -3674,7 +3674,7 @@ test_50f() {
 run_test 50f "normal statfs one server in down"
 
 test_50g() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2, skipping" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >=2 OSTs" && return
 	setup
 	start_ost2 || error "Unable to start OST2"
         wait_osc_import_state mds ost2 FULL
@@ -3705,7 +3705,7 @@ run_test 50g "deactivated OST should not cause panic"
 # LU-642
 test_50h() {
 	# prepare MDT/OST, make OSC inactive for OST1
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2, skipping" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >=2 OSTs" && return
 
 	[ $(facet_fstype ost1) == zfs ] && import_zpool ost1
 	do_facet ost1 "$TUNEFS --param osc.active=0 `ostdevname 1`" ||
@@ -3743,7 +3743,7 @@ run_test 50h "LU-642: activate deactivated OST"
 
 test_50i() {
 	# prepare MDT/OST, make OSC inactive for OST1
-	[ "$MDSCOUNT" -lt "2" ] && skip_env "$MDSCOUNT < 2, skipping" && return
+	[ "$MDSCOUNT" -lt "2" ] && skip_env "needs >= 2 MDTs" && return
 
 	load_modules
 	[ $(facet_fstype mds2) == zfs ] && import_zpool mds2
@@ -3876,7 +3876,7 @@ diff_files_xattrs()
 
 test_52() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -4095,7 +4095,7 @@ run_test 53b "check MDS thread count params"
 
 test_54a() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -4107,7 +4107,7 @@ run_test 54a "test llverdev and partial verify of device"
 
 test_54b() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -4125,7 +4125,7 @@ lov_objid_size()
 
 test_55() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -4393,7 +4393,7 @@ test_60() { # LU-471
 	local num
 
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -4503,7 +4503,7 @@ run_test 61 "large xattr"
 
 test_62() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -4527,7 +4527,7 @@ run_test 62 "start with disabled journal"
 
 test_63() {
 	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -4571,7 +4571,7 @@ run_test 64 "check lfs df --lazy "
 test_65() { # LU-2237
 	# Currently, the test is only valid for ldiskfs backend
 	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "non-ldiskfs backend" && return
+		skip "ldiskfs only test" && return
 
 	local devname=$(mdsdevname ${SINGLEMDS//mds/})
 	local brpt=$(facet_mntpt brpt)
@@ -5436,7 +5436,7 @@ run_test 77 "comma-separated MGS NIDs and failover node NIDs"
 test_78() {
 	[[ $(facet_fstype $SINGLEMDS) != ldiskfs ||
 	   $(facet_fstype ost1) != ldiskfs ]] &&
-		skip "only applicable to ldiskfs-based MDTs and OSTs" && return
+		skip "ldiskfs only test" && return
 
 	# reformat the Lustre filesystem with a smaller size
 	local saved_MDSCOUNT=$MDSCOUNT
@@ -5695,7 +5695,7 @@ restore_ostindex() {
 test_81() { # LU-4665
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.54) ]] ||
 		{ skip "Need MDS version at least 2.6.54" && return; }
-	[[ $OSTCOUNT -ge 3 ]] || { skip_env "Need at least 3 OSTs" && return; }
+	[[ $OSTCOUNT -ge 3 ]] || { skip_env "needs >= 3 OSTs" && return; }
 
 	stopall
 
@@ -5757,7 +5757,7 @@ run_test 81 "sparse OST indexing"
 test_82a() { # LU-4665
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.54) ]] ||
 		{ skip "Need MDS version at least 2.6.54" && return; }
-	[[ $OSTCOUNT -ge 3 ]] || { skip_env "Need at least 3 OSTs" && return; }
+	[[ $OSTCOUNT -ge 3 ]] || { skip_env "needs >= 3 OSTs" && return; }
 
 	stopall
 
@@ -5865,7 +5865,7 @@ cleanup_82b() {
 test_82b() { # LU-4665
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.54) ]] ||
 		{ skip "Need MDS version at least 2.6.54" && return; }
-	[[ $OSTCOUNT -ge 4 ]] || { skip_env "Need at least 4 OSTs" && return; }
+	[[ $OSTCOUNT -ge 4 ]] || { skip_env "needs >= 4 OSTs" && return; }
 
 	stopall
 
@@ -5956,7 +5956,7 @@ test_83() {
 	[[ $(lustre_version_code ost1) -ge $(version_code 2.6.91) ]] ||
 		{ skip "Need OST version at least 2.6.91" && return 0; }
 	if [ $(facet_fstype ost1) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based OSTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -6134,7 +6134,7 @@ test_87() { #LU-6544
 	[[ $(lustre_version_code $SINGLEMDS1) -ge $(version_code 2.9.51) ]] ||
 		{ skip "Need MDS version at least 2.9.51" && return; }
 	[[ $(facet_fstype $SINGLEMDS) != ldiskfs ]] &&
-		{ skip "Only applicable to ldiskfs-based MDTs" && return; }
+		{ skip "ldiskfs only test" && return; }
 	[[ $OSTCOUNT -gt 59 ]] &&
 		{ skip "Ignore wide striping situation" && return; }
 
@@ -7118,7 +7118,7 @@ run_test 98 "Buffer-overflow check while parsing mount_opts"
 test_99()
 {
 	[[ $(facet_fstype ost1) != ldiskfs ]] &&
-		{ skip "Only applicable to ldiskfs-based OSTs" && return; }
+		{ skip "ldiskfs only test" && return; }
 	[[ $(lustre_version_code ost1) -ge $(version_code 2.8.57) ]] ||
 		{ skip "Need OST version at least 2.8.57" && return 0; }
 

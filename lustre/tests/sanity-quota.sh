@@ -1406,7 +1406,7 @@ run_test 7d "Quota reintegration (Transfer index in multiple bulks)"
 
 # quota reintegration (inode limits)
 test_7e() {
-	[ "$MDSCOUNT" -lt "2" ] && skip "Required more MDTs" && return
+	[ "$MDSCOUNT" -lt "2" ] && skip "needs >= 2 MDTs" && return
 
 	# LU-2435: skip this quota test if underlying zfs version has not
 	# supported native dnode accounting
@@ -1650,7 +1650,7 @@ test_11() {
 run_test 11 "Chown/chgrp ignores quota"
 
 test_12a() {
-	[ "$OSTCOUNT" -lt "2" ] && skip "skipping rebalancing test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip "needs >= 2 OSTs" && return
 
 	local blimit=22 # 22M
 	local blk_cnt=$((blimit - 5))
@@ -1694,7 +1694,7 @@ test_12a() {
 run_test 12a "Block quota rebalancing"
 
 test_12b() {
-	[ "$MDSCOUNT" -lt "2" ] && skip "skipping rebalancing test" && return
+	[ "$MDSCOUNT" -lt "2" ] && skip "needs >= 2 MDTs" && return
 
 	local ilimit=$((1024 * 2)) # 2k inodes
 	local TESTFILE0=$DIR/$tdir/$tfile
@@ -2795,7 +2795,7 @@ test_40b() {
 run_test 40b "Mv across different project ID"
 
 test_40c() {
-	[ "$MDSCOUNT" -lt "2" ] && skip "Required more MDTs" && return
+	[ "$MDSCOUNT" -lt "2" ] && skip "needs >= 2 MDTs" && return
 		! is_project_quota_supported &&
 			skip "Project quota is not supported" && return 0
 

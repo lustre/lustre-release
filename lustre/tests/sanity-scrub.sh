@@ -28,10 +28,10 @@ if ! check_versions; then
 fi
 
 [ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
-	skip "test OI scrub only for ldiskfs" && exit 0
+	skip "ldiskfs only test" && exit 0
 
 [ $(facet_fstype ost1) != "ldiskfs" ] &&
-	skip "test OI scrub only for ldiskfs" && exit 0
+	skip "ldiskfs only test" && exit 0
 
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.2.90) ]] &&
 	skip "Need MDS version at least 2.2.90" && exit 0

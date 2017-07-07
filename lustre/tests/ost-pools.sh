@@ -708,7 +708,7 @@ run_test 7c "create a valid pool name and setstripe with a bad one"
 test_11() {
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
-	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
+	[[ $OSTCOUNT -le 1 ]] && skip_env "needs >= 2 OSTs" && return
 
 	create_pool_nofail $POOL
 	create_pool_nofail $POOL2
@@ -745,7 +745,7 @@ run_test 11 "OSTs in overlapping/multiple pools"
 test_12() {
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 
-	[[ $OSTCOUNT -le 2 ]] && skip_env "Need at least 3 OSTs" && return
+	[[ $OSTCOUNT -le 2 ]] && skip_env "needs >=3 OSTs" && return
 
 	create_pool_nofail $POOL
 	create_pool_nofail $POOL2
@@ -795,7 +795,7 @@ test_12() {
 run_test 12 "OST Pool Membership"
 
 test_13() {
-	[[ $OSTCOUNT -le 2 ]] && skip_env "Need at least 3 OSTs" && return
+	[[ $OSTCOUNT -le 2 ]] && skip_env "needs >= 3 OSTs" && return
 
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 	local numfiles=10
@@ -853,7 +853,7 @@ test_13() {
 run_test 13 "Striping characteristics in a pool"
 
 test_14() {
-	[[ $OSTCOUNT -le 2 ]] && skip_env "Need at least 3 OSTs" && return
+	[[ $OSTCOUNT -le 2 ]] && skip_env "needs >= 3 OSTs" && return
 
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 	local numfiles=100
@@ -1153,7 +1153,7 @@ run_test 20 "Different pools in a directory hierarchy."
 
 test_21() {
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
+	[[ $OSTCOUNT -le 1 ]] && skip_env "needs >= 2 OSTs" && return
 
 	local numfiles=12
 	local i=0
@@ -1195,7 +1195,7 @@ add_loop() {
 
 test_22() {
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
+	[[ $OSTCOUNT -le 1 ]] && skip_env "needs >= 2 OSTs" && return
 
 	local numfiles=100
 
@@ -1218,7 +1218,7 @@ run_test 22 "Simultaneous manipulation of a pool"
 
 test_23a() {
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
+	[[ $OSTCOUNT -le 1 ]] && skip_env "needs >= 2 OSTs" && return
 
 	mkdir -p $POOL_ROOT
 	check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS || {
@@ -1283,7 +1283,7 @@ run_test 23a "OST pools and quota"
 
 test_23b() {
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return 0
+	[[ $OSTCOUNT -le 1 ]] && skip_env "needs >= 2 OSTs" && return 0
 
 	mkdir -p $POOL_ROOT
 	check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS || {
@@ -1367,7 +1367,7 @@ run_test 23b "OST pools and OOS"
 
 test_24() {
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
-	[[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
+	[[ $OSTCOUNT -le 1 ]] && skip_env "needs >= 2 OSTs" && return
 
 	local server_version=$(lustre_version_code $SINGLEMDS)
 		[[ $server_version -ge $(version_code 2.8.56) ]] ||
@@ -1475,7 +1475,7 @@ test_25() {
 run_test 25 "Create new pool and restart MDS"
 
 test_26() {
-	[[ $OSTCOUNT -le 2 ]] && skip_env "Need at least 3 OSTs" && return
+	[[ $OSTCOUNT -le 2 ]] && skip_env "needs >= 3 OSTs" && return
 	local dev=$(mdsdevname ${SINGLEMDS//mds/})
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 

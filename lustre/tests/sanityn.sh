@@ -2466,7 +2466,7 @@ test_51b() {
 run_test 51b "layout lock: glimpse should be able to restart if layout changed"
 
 test_51c() {
-	[ $OSTCOUNT -ge 2 ] || { skip "need at least 2 osts"; return; }
+	[ $OSTCOUNT -ge 2 ] || { skip "needs >= 2 osts"; return; }
 
 	# set default layout to have 1 stripe
 	mkdir $DIR1/$tdir
@@ -2821,7 +2821,7 @@ test_71b() {
 	[[ $server_version -lt $(version_code 2.4.0) ]] &&
 		skip "Need MDS version earlier than 2.2.0 or at least 2.4.0" &&
 			return
-	[[ $OSTCOUNT -ge 2 ]] || { skip "need at least 2 osts"; return; }
+	[[ $OSTCOUNT -ge 2 ]] || { skip "needs >= 2 OSTs"; return; }
 
 	checkfiemap --test ||
 		{ skip "error $?: checkfiemap failed" && return; }

@@ -910,9 +910,7 @@ run_test 40 "cause recovery in ptlrpc, ensure IO continues"
 # the page, guarnateeing that the unlock from the RPC completion would
 # assert on trying to unlock the unlocked page.
 test_41() {
-    [ $OSTCOUNT -lt 2 ] &&
-        skip_env "skipping test 41: we don't have a second OST to test with" &&
-        return
+	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs" && return
 
 	local f=$MOUNT/$tfile
 	# make sure the start of the file is ost1
@@ -1118,8 +1116,7 @@ run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_48() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
-	[ "$OSTCOUNT" -lt "2" ] &&
-		skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs" && return
 
 	replay_barrier $SINGLEMDS
 	createmany -o $DIR/$tfile 20  ||

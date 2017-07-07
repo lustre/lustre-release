@@ -1820,7 +1820,7 @@ test_103()
         do_facet mgs $LCTL list_param mgs.*.ir_timeout ||
                 { skip "MGS without IR support"; return 0; }
 
-        combined_mgs_mds && skip "mgs and mds on the same target" && return 0
+	combined_mgs_mds && skip "needs separate mgs and mds" && return 0
 
         # workaround solution to generate config log on the mds
         remount_facet mds1

@@ -328,26 +328,25 @@ run_test 4 "Fourth Failure Mode: OST/MDS `date`"
 
 ############### Fifth Failure Mode ###############
 test_5() {
-    [ $OSTCOUNT -lt 2 ] && skip_env "$OSTCOUNT < 2, not enough OSTs" && return 0
+	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs" && return 0
 
-    echo "Fifth Failure Mode: OST/OST `date`"
+	echo "Fifth Failure Mode: OST/OST `date`"
 
-    #Create files
-    echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+	#Create files
+	echo "Verify Lustre filesystem is up and running"
+	[ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
 
-    clients_up
-    
-    #OST Portion
-    shutdown_facet ost1
-    reboot_facet ost1
-    
+	clients_up
+	#OST Portion
+	shutdown_facet ost1
+	reboot_facet ost1
+
     #Check FS
     echo "Test Lustre stability after OST failure"
     clients_up &
     DFPIDA=$!
     sleep 5
-    
+
     #OST Portion
     shutdown_facet ost2
     reboot_facet ost2
@@ -364,7 +363,7 @@ test_5() {
     start_ost 1
     wait_for_facet ost2
     start_ost 2
-    
+
     clients_recover_osts ost1
     clients_recover_osts ost2
     sleep $TIMEOUT

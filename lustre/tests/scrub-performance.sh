@@ -17,7 +17,7 @@ init_logging
 	skip "skip scrub performance test under non-SLOW mode" && exit 0
 
 [ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-	skip "OI scrub performance only for ldiskfs" && exit 0
+	skip "ldiskfs only test" && exit 0
 [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.2.90) ]] &&
 	skip "Need MDS version at least 2.2.90" && exit 0
 require_dsh_mds || exit 0

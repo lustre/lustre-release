@@ -22,7 +22,7 @@ init_logging
 	skip "Need server version at least 2.9.55" && exit 0
 [[ $(facet_fstype mds1) = "ldiskfs" ]] ||
 [[ $(facet_fstype ost1) = "ldiskfs" ]] &&
-	skip "can't test snapshots with ldiskfs" && exit 0
+	skip "ZFS only test" && exit 0
 
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
