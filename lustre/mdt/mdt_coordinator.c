@@ -1377,8 +1377,10 @@ static int hsm_cdt_request_completed(struct mdt_thread_info *mti,
 
 	/* rc != 0 means error when analysing action, it may come from
 	 * a crasy CT no need to manage DIRTY
+	 * and if mdt_hsm_get_md_hsm() has returned an error, mh has not been
+	 * filled
 	 */
-	if (rc == 0)
+	if (rc == 0 && !IS_ERR(obj))
 		hsm_set_cl_flags(&cl_flags,
 				 mh.mh_flags & HS_DIRTY ? CLF_HSM_DIRTY : 0);
 
