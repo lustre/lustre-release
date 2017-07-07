@@ -42,7 +42,7 @@ if (!defined($ARGV[0])) {
 open($testfile, $ARGV[0]) or die "Can't open file $ARGV[0]: $!";
 for (;;) {
   my $line = <$testfile>; $line_number++;
-  if (defined $line) {
+  if (defined $line && $line !~ /\%s/) {
     # Substitute %VAR and %{VAR} with environment variables.
     $line =~ s[%(?:(\w+)|\{(\w+)\})][$ENV{"$1$2"}]eg;
   }
