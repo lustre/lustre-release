@@ -918,8 +918,7 @@ test_7c() {
 run_test 7c "namespace LFSCK performance (repairing bad FID-in-dirent) for DNE"
 
 test_8() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for this test" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	[ $INCFACTOR -gt 25 ] && INCFACTOR=25
 

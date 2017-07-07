@@ -1299,7 +1299,7 @@ test_12b() {
 run_test 12b "Restore an imported file implicitly"
 
 test_12c() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs" && return
 
 	# test needs a running copytool
 	copytool_setup

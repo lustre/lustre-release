@@ -187,12 +187,12 @@ mmp_init() {
 	init_vars
 
 	if [ $(facet_fstype $MMP_MDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		exit
 	fi
 
 	if [ $(facet_fstype $MMP_OSS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based OSTs"
+		skip "ldiskfs only test"
 		exit
 	fi
 

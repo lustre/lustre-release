@@ -577,7 +577,7 @@ test_17m() {
 		skip "MDS 2.2.0-2.2.93 do not NUL-terminate symlinks" && return
 
 	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "only for ldiskfs MDT" && return 0
+		skip "ldiskfs only test" && return 0
 
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 
@@ -651,7 +651,7 @@ test_17n() {
 		skip "MDS 2.2.0-2.2.93 do not NUL-terminate symlinks" && return
 
 	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "only for ldiskfs MDT" && return 0
+		skip "ldiskfs only test" && return 0
 
 	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
 
@@ -1361,7 +1361,7 @@ test_27a() {
 run_test 27a "one stripe file"
 
 test_27b() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping 2-stripe test" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	test_mkdir -p $DIR/d27
 	$LFS setstripe -c 2 $DIR/d27/f01 || error "setstripe failed"
 	$LFS getstripe -c $DIR/d27/f01
@@ -1448,8 +1448,7 @@ test_27l() {
 run_test 27l "check setstripe permissions (should return error)"
 
 test_27m() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" &&
-		return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 
 	ORIGFREE=$($LCTL get_param -n lov.$FSNAME-clilov-*.kbytesavail |
 		   head -n1)
@@ -1542,7 +1541,7 @@ exhaust_all_precreations() {
 }
 
 test_27n() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
@@ -1558,7 +1557,7 @@ test_27n() {
 run_test 27n "create file with some full OSTs"
 
 test_27o() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
@@ -1575,7 +1574,7 @@ test_27o() {
 run_test 27o "create file with all full OSTs (should error)"
 
 test_27p() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
@@ -1598,7 +1597,7 @@ test_27p() {
 run_test 27p "append to a truncated file with some full OSTs"
 
 test_27q() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
@@ -1622,7 +1621,7 @@ test_27q() {
 run_test 27q "append to truncated file with all OSTs full (should error)"
 
 test_27r() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
@@ -1659,7 +1658,7 @@ test_27t() { # bug 10864
 run_test 27t "check that utils parse path correctly"
 
 test_27u() { # bug 4900
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local index
 	local list=$(comma_list $(mdts_nodes))
@@ -1682,7 +1681,7 @@ test_27u() { # bug 4900
 run_test 27u "skip object creation on OSC w/o objects"
 
 test_27v() { # bug 4900
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
@@ -1742,7 +1741,7 @@ run_test 27wa "check $LFS setstripe -c -i options"
 
 test_27x() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "$OSTCOUNT < 2 OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	OFFSET=$(($OSTCOUNT - 1))
 	OSTIDX=0
@@ -1755,7 +1754,7 @@ test_27x() {
 	createmany -o $DIR/$tdir/$tfile $OSTCOUNT
 	for i in $(seq 0 $OFFSET); do
 		[ $($LFS getstripe $DIR/$tdir/$tfile$i | grep -A 10 obdidx |
-		    awk '{print $1}' | grep -w "$OSTIDX") ] &&
+			awk '{print $1}' | grep -w "$OSTIDX") ] &&
 		error "OST0 was degraded but new created file still use it"
 	done
 	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 0
@@ -1763,8 +1762,7 @@ test_27x() {
 run_test 27x "create files while OST0 is degraded"
 
 test_27y() {
-	[[ $OSTCOUNT -lt 2 ]] &&
-		skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
@@ -3863,7 +3861,7 @@ test_43c() {
 run_test 43c "md5sum of copy into lustre"
 
 test_44A() { # was test_44
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping 2-stripe test" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=1023
 	dd if=$DIR/f1 bs=4k count=1 > /dev/null
 }
@@ -4196,8 +4194,7 @@ run_test 51b "exceed 64k subdirectory nlink limit on create, verify unlink"
 
 test_51d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[[ $OSTCOUNT -lt 3 ]] &&
-		skip_env "skipping test with few OSTs" && return
+	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs" && return
 	test_mkdir -p $DIR/$tdir
 	createmany -o $DIR/$tdir/t- 1000
 	$GETSTRIPE $DIR/$tdir > $TMP/$tfile
@@ -4234,7 +4231,7 @@ run_test 51d "check object distribution"
 
 test_51e() {
 	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -5042,8 +5039,7 @@ test_56v() {
 run_test 56v "check 'lfs find -mdt match with lfs getstripe -M' ======="
 
 test_56w() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" &&
-		return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	TDIR=$DIR/${tdir}w
 
@@ -5152,8 +5148,7 @@ run_test 56w "check lfs_migrate -c stripe_count works"
 
 test_56x() {
 	check_swap_layouts_support && return 0
-	[[ $OSTCOUNT -lt 2 ]] &&
-		skip_env "need 2 OST, skipping test" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 
 	local dir0=$DIR/$tdir/$testnum
 	test_mkdir -p $dir0 || error "creating dir $dir0"
@@ -5175,8 +5170,7 @@ run_test 56x "lfs migration support"
 
 test_56xa() {
 	check_swap_layouts_support && return 0
-	[[ $OSTCOUNT -lt 2 ]] &&
-		skip_env "need 2 OST, skipping test" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 
 	local dir0=$DIR/$tdir/$testnum
 	test_mkdir -p $dir0 || error "creating dir $dir0"
@@ -5268,7 +5262,7 @@ test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	# note test will not do anything if MDS is not local
 	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -5289,7 +5283,7 @@ run_test 57a "verify MDS filesystem created with large inodes =="
 test_57b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -5755,7 +5749,7 @@ run_test 65j "set default striping on root directory (bug 6367)="
 
 test_65k() { # bug11679
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "too few OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
 	local disable_precreate=true
@@ -6604,7 +6598,7 @@ cleanup_101a() {
 
 test_101a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -ge 2 ] && skip "skip now for >= 2 MDTs" && return #LU-4322
+	[ $MDSCOUNT -ge 2 ] && skip "needs < 2 MDTs" && return #LU-4322
 	local s
 	local discard
 	local nreads=10000
@@ -6693,8 +6687,7 @@ ra_check_101() {
 
 test_101b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[[ $OSTCOUNT -lt 2 ]] &&
-		skip_env "skipping stride IO stride-ahead test" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	local STRIPE_SIZE=1048576
 	local STRIDE_SIZE=$((STRIPE_SIZE*OSTCOUNT))
 	if [ $SLOW == "yes" ]; then
@@ -7048,7 +7041,7 @@ test_102b() {
 
 	# b10930: get/set/list trusted.lov xattr
 	echo "get/set/list trusted.lov xattr ..."
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping 2-stripe test" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	local testfile=$DIR/$tfile
 	$SETSTRIPE -S 65536 -i 1 -c $OSTCOUNT $testfile ||
 		error "setstripe failed"
@@ -7079,7 +7072,7 @@ test_102c() {
 
 	# b10930: get/set/list lustre.lov xattr
 	echo "get/set/list lustre.lov xattr ..."
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping 2-stripe test" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	test_mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
@@ -7140,7 +7133,7 @@ test_102d() {
 	# b10930: tar test for trusted.lov xattr
 	TAR=$(find_lustre_tar)
 	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping N-stripe test" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	setup_test102
 	test_mkdir -p $DIR/d102d
 	$TAR xf $TMP/f102.tar -C $DIR/d102d --xattrs
@@ -7154,7 +7147,7 @@ test_102f() {
 	# b10930: tar test for trusted.lov xattr
 	TAR=$(find_lustre_tar)
 	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping N-stripe test" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	setup_test102
 	test_mkdir -p $DIR/d102f
 	cd $DIR
@@ -7234,7 +7227,7 @@ test_102j() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	TAR=$(find_lustre_tar)
 	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "skipping N-stripe test" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	setup_test102 "$RUNAS"
 	test_mkdir -p $DIR/d102j
 	chown $RUNAS_ID $DIR/d102j
@@ -7834,7 +7827,7 @@ test_116a() { # was previously test_116()
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "$OSTCOUNT < 2 OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 
 	echo -n "Free space priority "
 	do_facet $SINGLEMDS lctl get_param -n lo*.*-mdtlov.qos_prio_free |
@@ -8406,7 +8399,7 @@ run_test 119a "Short directIO read must return actual read amount"
 
 test_119b() # bug 11737
 {
-        [ "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 
         $SETSTRIPE -c 2 $DIR/$tfile || error "setstripe failed"
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
@@ -9180,7 +9173,7 @@ test_129() {
 
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
+		skip "ldiskfs only test"
 		return
 	fi
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
@@ -9294,8 +9287,7 @@ test_130a() {
 run_test 130a "FIEMAP (1-stripe file)"
 
 test_130b() {
-	[ "$OSTCOUNT" -lt "2" ] &&
-		skip_env "skipping FIEMAP on $OSTCOUNT-stripe file" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs" && return
 
 	local filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip_env "filefrag does not support FIEMAP" &&
@@ -9355,8 +9347,7 @@ test_130b() {
 run_test 130b "FIEMAP ($OSTCOUNT-stripe file)"
 
 test_130c() {
-	[ "$OSTCOUNT" -lt "2" ] &&
-		skip_env "skipping FIEMAP on 2-stripe file" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" &&
@@ -9422,8 +9413,7 @@ test_130c() {
 run_test 130c "FIEMAP (2-stripe file with hole)"
 
 test_130d() {
-	[ "$OSTCOUNT" -lt "3" ] &&
-		skip_env "skipping FIEMAP on N-stripe file test" && return
+	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" &&
@@ -9484,8 +9474,7 @@ test_130d() {
 run_test 130d "FIEMAP (N-stripe file)"
 
 test_130e() {
-	[ "$OSTCOUNT" -lt "2" ] &&
-		skip_env "skipping continuation FIEMAP test" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
 	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
@@ -13226,7 +13215,7 @@ test_228a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "non-ldiskfs backend" && return
+		skip "ldiskfs only test" && return
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local myDIR=$DIR/$tdir
@@ -13268,7 +13257,7 @@ test_228b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "non-ldiskfs backend" && return
+		skip "ldiskfs only test" && return
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local myDIR=$DIR/$tdir
@@ -13318,7 +13307,7 @@ test_228c() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "non-ldiskfs backend" && return
+		skip "ldiskfs only test" && return
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local myDIR=$DIR/$tdir
@@ -14378,7 +14367,7 @@ test_252() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	if [ "$(facet_fstype ost1)" != "ldiskfs" -o \
 	     "$(facet_fstype mds1)" != "ldiskfs" ]; then
-		skip "can only run lr_reader on ldiskfs target"
+		skip "ldiskfs only test"
 		return
 	fi
 
@@ -14851,7 +14840,7 @@ test_256() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	[ "$(facet_fstype mds1)" != "ldiskfs" ] &&
-		skip "non-ldiskfs backend" && return
+		skip "ldiskfs only test" && return
 
 	mdt_dev=$(mdsdevname 1)
 	echo $mdt_dev
@@ -15968,7 +15957,7 @@ test_399b() { # LU-8726 for OST fake read
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	if [ "$(facet_fstype ost1)" != "ldiskfs" ]; then
-		skip "only for ldiskfs" && return 0
+		skip "ldiskfs only test" && return 0
 	fi
 	test_fake_rw read
 }

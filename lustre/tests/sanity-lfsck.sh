@@ -454,8 +454,7 @@ run_test 2d "LFSCK can recover the missing linkEA entry"
 
 test_2e()
 {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for this test" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	check_mount_and_prep
 
@@ -1383,8 +1382,7 @@ test_11b() {
 run_test 11b "LFSCK can rebuild crashed last_id"
 
 test_12a() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for test_12a" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	check_mount_and_prep
 	for k in $(seq $MDSCOUNT); do
@@ -1771,8 +1769,7 @@ test_15b() {
 run_test 15b "LFSCK can repair unmatched MDT-object/OST-object pairs (2)"
 
 test_15c() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for this test" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.55) ] &&
 		skip "Skip the test after 2.7.55 see LU-6437" && return
@@ -2579,8 +2576,7 @@ test_18e() {
 run_test 18e "Find out orphan OST-object and repair it (5)"
 
 test_18f() {
-	[ $OSTCOUNT -lt 2 ] &&
-		skip "The test needs at least 2 OSTs" && return
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
 
 	echo "#####"
 	echo "The target MDT-object is lost. The LFSCK should re-create the"
@@ -2935,8 +2931,7 @@ PATTERN_WITH_HOLE="40000001"
 PATTERN_WITHOUT_HOLE="1"
 
 test_20a() {
-	[ $OSTCOUNT -lt 2 ] &&
-		skip "The test needs at least 2 OSTs" && return
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
 
 	echo "#####"
 	echo "The target MDT-object and some of its OST-object are lost."
@@ -3275,8 +3270,7 @@ test_20a() {
 run_test 20a "Handle the orphan with dummy LOV EA slot properly"
 
 test_20b() {
-	[ $OSTCOUNT -lt 2 ] &&
-		skip "The test needs at least 2 OSTs" && return
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
 
 	echo "#####"
 	echo "The target MDT-object and some of its OST-object are lost."
@@ -3612,8 +3606,7 @@ test_21() {
 run_test 21 "run all LFSCK components by default"
 
 test_22a() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for this test" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "The parent_A references the child directory via some name entry,"
@@ -3655,8 +3648,7 @@ test_22a() {
 run_test 22a "LFSCK can repair unmatched pairs (1)"
 
 test_22b() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for this test" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "The parent_A references the child directory via the name entry_B,"
@@ -3705,8 +3697,7 @@ test_22b() {
 run_test 22b "LFSCK can repair unmatched pairs (2)"
 
 test_23a() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for this test" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "The name entry is there, but the MDT-object for such name "
@@ -3948,8 +3939,7 @@ test_23c() {
 run_test 23c "LFSCK can repair dangling name entry (3)"
 
 test_24() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for this test" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "Two MDT-objects back reference the same name entry via their"
@@ -4025,7 +4015,7 @@ run_test 24 "LFSCK can repair multiple-referenced name entry"
 
 test_25() {
 	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip "Only support to inject failure on ldiskfs" && return
+		skip "ldiskfs only test" && return
 
 	echo "#####"
 	echo "The file type in the name entry does not match the file type"
@@ -4113,8 +4103,7 @@ test_26a() {
 run_test 26a "LFSCK can add the missing local name entry back to the namespace"
 
 test_26b() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for this test" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "The remote name entry back referenced by the MDT-object is lost."
@@ -4213,8 +4202,7 @@ test_27a() {
 run_test 27a "LFSCK can recreate the lost local parent directory as orphan"
 
 test_27b() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDSes for this test" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "The remote parent referenced by the MDT-object linkEA is lost."
@@ -4267,8 +4255,7 @@ test_27b() {
 run_test 27b "LFSCK can recreate the lost remote parent directory as orphan"
 
 test_28() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "The test needs at least 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "The target name entry is lost. The LFSCK should insert the"
@@ -4545,7 +4532,7 @@ run_test 29c "verify linkEA size limitation"
 
 test_30() {
 	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip "Only support backend /lost+found for ldiskfs" && return
+		skip "ldiskfs only test" && return
 
 	echo "#####"
 	echo "The namespace LFSCK will move the orphans from backend"
@@ -4626,8 +4613,7 @@ test_30() {
 run_test 30 "LFSCK can recover the orphans from backend /lost+found"
 
 test_31a() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "The test needs at least 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "For the name entry under a striped directory, if the name"
@@ -4677,8 +4663,7 @@ test_31a() {
 run_test 31a "The LFSCK can find/repair the name entry with bad name hash (1)"
 
 test_31b() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "The test needs at least 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "For the name entry under a striped directory, if the name"
@@ -4729,8 +4714,7 @@ test_31b() {
 run_test 31b "The LFSCK can find/repair the name entry with bad name hash (2)"
 
 test_31c() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "The test needs at least 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "For some reason, the master MDT-object of the striped directory"
@@ -4773,8 +4757,7 @@ test_31c() {
 run_test 31c "Re-generate the lost master LMV EA for striped directory"
 
 test_31d() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "The test needs at least 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "For some reason, the master MDT-object of the striped directory"
@@ -4828,8 +4811,7 @@ test_31d() {
 run_test 31d "Set broken striped directory (modified after broken) as read-only"
 
 test_31e() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "The test needs at least 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "For some reason, the slave MDT-object of the striped directory"
@@ -4866,8 +4848,7 @@ test_31e() {
 run_test 31e "Re-generate the lost slave LMV EA for striped directory (1)"
 
 test_31f() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "The test needs at least 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "For some reason, the slave MDT-object of the striped directory"
@@ -4905,8 +4886,7 @@ test_31f() {
 run_test 31f "Re-generate the lost slave LMV EA for striped directory (2)"
 
 test_31g() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "The test needs at least 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "For some reason, the stripe index in the slave LMV EA is"
@@ -4951,8 +4931,7 @@ test_31g() {
 run_test 31g "Repair the corrupted slave LMV EA"
 
 test_31h() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "The test needs at least 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	echo "#####"
 	echo "For some reason, the shard's name entry in the striped"
