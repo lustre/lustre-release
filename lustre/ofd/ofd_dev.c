@@ -1559,7 +1559,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	u64			 seq = ostid_seq(&oa->o_oi);
 	u64			 oid = ostid_id(&oa->o_oi);
 	struct ofd_seq		*oseq;
-	int			 rc = 0, diff;
+	s64 diff;
+	int rc = 0;
 	int			 sync_trans = 0;
 	long			 granted = 0;
 
@@ -1629,9 +1630,16 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			GOTO(out, rc);
 		}
 		diff = oid - ofd_seq_last_oid(oseq);
-		CDEBUG(D_HA, "ofd_last_id() = %llu -> diff = %d\n",
-			ofd_seq_last_oid(oseq), diff);
+		CDEBUG(D_HA, "ofd_last_id() = %llu -> diff = %lld\n",
+		       ofd_seq_last_oid(oseq), diff);
 		if (-diff > OST_MAX_PRECREATE) {
+			LCONSOLE(D_INFO, "%s: too large difference between MDS "
+				 "LAST_ID "DFID" (%llu) and OST LAST_ID "DFID" "
+				 "(%llu), trust the OST\n",
+				 ofd_name(ofd), PFID(&oa->o_oi.oi_fid), oid,
+				 PFID(&oseq->os_oi.oi_fid),
+				 ofd_seq_last_oid(oseq));
+
 			/* Let MDS know that we are so far ahead. */
 			rc = ostid_set_id(&rep_oa->o_oi,
 					  ofd_seq_last_oid(oseq) + 1);
@@ -1706,7 +1714,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 				rc = granted;
 				granted = 0;
 				CDEBUG(D_HA, "%s: failed to acquire grant "
-				       "space for precreate (%d): rc = %d\n",
+				       "space for precreate (%lld): rc = %d\n",
 				       ofd_name(ofd), diff, rc);
 				diff = 0;
 			}
@@ -1726,7 +1734,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 
 			CDEBUG(D_HA, "%s: precreate FID "DOSTID" is over "
 			       "%u larger than the LAST_ID "DOSTID", only "
-			       "precreating the last %u objects.\n",
+			       "precreating the last %lld objects.\n",
 			       ofd_name(ofd), POSTID(&oa->o_oi),
 			       5 * OST_MAX_PRECREATE,
 			       POSTID(&oseq->os_oi), diff);
@@ -1735,7 +1743,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 
 		while (diff > 0) {
 			next_id = ofd_seq_last_oid(oseq) + 1;
-			count = ofd_precreate_batch(ofd, diff);
+			count = ofd_precreate_batch(ofd, (int)diff);
 
 			CDEBUG(D_HA, "%s: reserve %d objects in group %#llx"
 			       " at %llu\n", ofd_name(ofd),
@@ -1743,7 +1751,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 
 			if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
 			    && cfs_time_after(jiffies, enough_time)) {
-				CDEBUG(D_HA, "%s: Slow creates, %d/%d objects"
+				CDEBUG(D_HA, "%s: Slow creates, %d/%lld objects"
 				      " created at a rate of %d/s\n",
 				      ofd_name(ofd), created, diff + created,
 				      created / DISK_TIMEOUT);
@@ -1764,7 +1772,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		    lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
 			LCONSOLE_WARN("%s: can't create the same count of"
 				      " objects when replaying the request"
-				      " (diff is %d). see LU-4621\n",
+				      " (diff is %lld). see LU-4621\n",
 				      ofd_name(ofd), diff);
 
 		if (created > 0)

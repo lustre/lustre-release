@@ -519,7 +519,7 @@ void tgt_grant_commit(struct obd_export *exp, unsigned long grant_used, int rc);
 int tgt_grant_commit_cb_add(struct thandle *th, struct obd_export *exp,
 			    unsigned long grant);
 long tgt_grant_create(const struct lu_env *env, struct obd_export *exp,
-		      int *nr);
+		      s64 *nr);
 int tgt_statfs_internal(const struct lu_env *env, struct lu_target *lut,
 			struct obd_statfs *osfs, __u64 max_age,
 			int *from_cache);
