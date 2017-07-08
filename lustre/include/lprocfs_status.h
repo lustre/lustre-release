@@ -375,7 +375,7 @@ struct obd_job_stats {
 	struct list_head	ojs_list;	/* list of job_stat structs */
 	rwlock_t		ojs_lock;	/* protect ojs_list/js_list */
 	unsigned int		ojs_cleanup_interval;/* seconds before expiry */
-	time_t			ojs_last_cleanup; /* previous cleanup time */
+	time64_t		ojs_last_cleanup; /* previous cleanup time */
 	cntr_init_callback	ojs_cntr_init_fn;/* lprocfs_stats initializer */
 	unsigned short		ojs_cntr_num;	/* number of stats in struct */
 	bool			ojs_cleaning;	/* currently expiring stats */
