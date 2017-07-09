@@ -265,6 +265,13 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 				dmu_buf_rele((void *)ptr, osd_0copy_tag);
 				atomic_dec(&osd->od_zerocopy_pin);
 			} else if (lnb[i].lnb_data != NULL) {
+				int j, apages, abufsz;
+				abufsz = arc_buf_size(lnb[i].lnb_data);
+				apages = abufsz / PAGE_SIZE;
+				/* these references to pages must be invalidated
+				 * to prevent access in osd_bufs_put() */
+				for (j = 0; j < apages; j++)
+					lnb[i + j].lnb_page = NULL;
 				dmu_return_arcbuf(lnb[i].lnb_data);
 				atomic_dec(&osd->od_zerocopy_loan);
 			}
@@ -797,17 +804,32 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			continue;
 		}
 
+		if (new_size < lnb[i].lnb_file_offset + lnb[i].lnb_len)
+			new_size = lnb[i].lnb_file_offset + lnb[i].lnb_len;
+		if (lnb[i].lnb_page == NULL)
+			continue;
+
 		if (lnb[i].lnb_page->mapping == (void *)obj) {
 			osd_dmu_write(osd, obj->oo_dn, lnb[i].lnb_file_offset,
 				      lnb[i].lnb_len, kmap(lnb[i].lnb_page),
 				      oh->ot_tx);
 			kunmap(lnb[i].lnb_page);
+			iosize += lnb[i].lnb_len;
 		} else if (lnb[i].lnb_data) {
+			int j, apages, abufsz;
 			LASSERT(((unsigned long)lnb[i].lnb_data & 1) == 0);
 			/* buffer loaned for zerocopy, try to use it.
 			 * notice that dmu_assign_arcbuf() is smart
 			 * enough to recognize changed blocksize
 			 * in this case it fallbacks to dmu_write() */
+			abufsz = arc_buf_size(lnb[i].lnb_data);
+			LASSERT(abufsz & PAGE_MASK);
+			apages = abufsz / PAGE_SIZE;
+			LASSERT(i + apages <= npages);
+			/* these references to pages must be invalidated
+			 * to prevent access in osd_bufs_put() */
+			for (j = 0; j < apages; j++)
+				lnb[i + j].lnb_page = NULL;
 			dmu_assign_arcbuf(&obj->oo_dn->dn_bonus->db,
 					  lnb[i].lnb_file_offset,
 					  lnb[i].lnb_data, oh->ot_tx);
@@ -815,11 +837,9 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			 * will be releasing it - bad! */
 			lnb[i].lnb_data = NULL;
 			atomic_dec(&osd->od_zerocopy_loan);
+			iosize += abufsz;
 		}
 
-		if (new_size < lnb[i].lnb_file_offset + lnb[i].lnb_len)
-			new_size = lnb[i].lnb_file_offset + lnb[i].lnb_len;
-		iosize += lnb[i].lnb_len;
 	}
 	up_read(&obj->oo_guard);
 
