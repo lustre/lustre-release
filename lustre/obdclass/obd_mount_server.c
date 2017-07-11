@@ -455,18 +455,34 @@ EXPORT_SYMBOL(lustre_register_lwp_item);
 void lustre_deregister_lwp_item(struct obd_export **exp)
 {
 	struct lwp_register_item *lri;
+	bool removed = false;
+	int repeat = 0;
 
 	spin_lock(&lwp_register_list_lock);
 	list_for_each_entry(lri, &lwp_register_list, lri_list) {
 		if (exp == lri->lri_exp) {
 			list_del_init(&lri->lri_list);
-			spin_unlock(&lwp_register_list_lock);
-
-			lustre_put_lwp_item(lri);
-			return;
+			removed = true;
+			break;
 		}
 	}
 	spin_unlock(&lwp_register_list_lock);
+
+	if (!removed)
+		return;
+
+	/* See lustre_notify_lwp_list(), in some extreme race conditions,
+	 * the notify callback could be still on the fly, we need to wait
+	 * for the callback done before moving on to free the data used
+	 * by callback. */
+	while (atomic_read(&lri->lri_ref) > 1) {
+		CDEBUG(D_MOUNT, "lri reference count %u, repeat: %d\n",
+		       atomic_read(&lri->lri_ref), repeat);
+		repeat++;
+		set_current_state(TASK_INTERRUPTIBLE);
+		schedule_timeout(cfs_time_seconds(1));
+	}
+	lustre_put_lwp_item(lri);
 }
 EXPORT_SYMBOL(lustre_deregister_lwp_item);
 
