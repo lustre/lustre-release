@@ -7,3 +7,4 @@ quota-replace-dqptr-sem-el6.8.patch
 quota-avoid-dqget-calls.patch
 jbd2-log_wait_for_space-2.6-rhel6.patch
 module-load-deadlock-rhel6.patch
+kallsyms-rhel6.patch
