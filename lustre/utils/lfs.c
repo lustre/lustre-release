@@ -2882,8 +2882,9 @@ static int lfs_setdirstripe(int argc, char **argv)
 		case 'c':
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 11, 53, 0)
 			if (strcmp(argv[optind - 1], "--count") == 0)
-				fprintf(stderr, "warning: '--count' deprecated"
-					", use '--mdt-count' instead\n");
+				fprintf(stderr,
+					"%s %s: warning: '--count' deprecated, use '--mdt-count' instead\n",
+					progname, argv[0]);
 #endif
 			stripe_count_opt = optarg;
 			break;
@@ -2897,8 +2898,9 @@ static int lfs_setdirstripe(int argc, char **argv)
 		case 'i':
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 11, 53, 0)
 			if (strcmp(argv[optind - 1], "--index") == 0)
-				fprintf(stderr, "warning: '--index' deprecated"
-					", use '--mdt-index' instead\n");
+				fprintf(stderr,
+					"%s %s: warning: '--index' deprecated, use '--mdt-index' instead\n",
+					progname, argv[0]);
 #endif
 			stripe_offset_opt = optarg;
 			break;
@@ -2911,29 +2913,29 @@ static int lfs_setdirstripe(int argc, char **argv)
 		case 'H':
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 11, 53, 0)
 			if (strcmp(argv[optind - 1], "--hash-type") == 0)
-				fprintf(stderr, "warning: '--hash-type' "
-					"deprecated, use '--mdt-hash' "
-					"instead\n");
+				fprintf(stderr,
+					"%s %s: warning: '--hash-type' deprecated, use '--mdt-hash' instead\n",
+					progname, argv[0]);
 #endif
 			stripe_hash_opt = optarg;
 			break;
 		default:
-			fprintf(stderr, "error: %s: option '%s' "
-					"unrecognized\n",
-					argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
+				progname, argv[0], argv[optind - 1]);
 			return CMD_HELP;
 		}
 	}
 
 	if (optind == argc) {
-		fprintf(stderr, "error: %s: missing dirname\n",
-			argv[0]);
+		fprintf(stderr, "%s %s: DIR must be specified\n",
+			progname, argv[0]);
 		return CMD_HELP;
 	}
 
 	if (!delete && stripe_offset_opt == NULL && stripe_count_opt == NULL) {
-		fprintf(stderr, "error: %s: missing stripe offset and count.\n",
-			argv[0]);
+		fprintf(stderr,
+			"%s %s: stripe offset and count must be specified\n",
+			progname, argv[0]);
 		return CMD_HELP;
 	}
 
@@ -2941,16 +2943,18 @@ static int lfs_setdirstripe(int argc, char **argv)
 		/* get the stripe offset */
 		stripe_offset = strtoul(stripe_offset_opt, &end, 0);
 		if (*end != '\0') {
-			fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
-				argv[0], stripe_offset_opt);
+			fprintf(stderr,
+				"%s %s: bad stripe offset '%s'\n",
+				progname, argv[0], stripe_offset_opt);
 			return CMD_HELP;
 		}
 	}
 
 	if (delete) {
 		if (stripe_offset_opt != NULL || stripe_count_opt != NULL) {
-			fprintf(stderr, "error: %s: cannot specify -d with -s,"
-				" or -i options.\n", argv[0]);
+			fprintf(stderr,
+				"%s %s: cannot specify -d with -c or -i options\n",
+				progname, argv[0]);
 			return CMD_HELP;
 		} else {
 			stripe_count = 0;
@@ -2961,8 +2965,9 @@ static int lfs_setdirstripe(int argc, char **argv)
 	if (mode_opt != NULL) {
 		mode = strtoul(mode_opt, &end, 8);
 		if (*end != '\0') {
-			fprintf(stderr, "error: %s: bad mode '%s'\n",
-				argv[0], mode_opt);
+			fprintf(stderr,
+				"%s %s: bad MODE '%s'\n",
+				progname, argv[0], mode_opt);
 			return CMD_HELP;
 		}
 		previous_mode = umask(0);
@@ -2973,9 +2978,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 	} else {
 		hash_type = check_hashtype(stripe_hash_opt);
 		if (hash_type == 0) {
-			fprintf(stderr,
-				"error: %s: bad stripe hash type '%s'\n",
-				argv[0], stripe_hash_opt);
+			fprintf(stderr, "%s %s: bad stripe hash type '%s'\n",
+				progname, argv[0], stripe_hash_opt);
 			return CMD_HELP;
 		}
 	}
@@ -2984,8 +2988,9 @@ static int lfs_setdirstripe(int argc, char **argv)
 	if (stripe_count_opt != NULL) {
 		stripe_count = strtoul(stripe_count_opt, &end, 0);
 		if (*end != '\0') {
-			fprintf(stderr, "error: %s: bad stripe count '%s'\n",
-				argv[0], stripe_count_opt);
+			fprintf(stderr,
+				"%s %s: bad stripe count '%s'\n",
+				progname, argv[0], stripe_count_opt);
 			return CMD_HELP;
 		}
 	}
@@ -3004,8 +3009,9 @@ static int lfs_setdirstripe(int argc, char **argv)
 		}
 
 		if (result) {
-			fprintf(stderr, "error: %s: create stripe dir '%s' "
-				"failed\n", argv[0], dname);
+			fprintf(stderr,
+				"%s setdirstripe: cannot create stripe dir '%s': %s\n",
+				progname, dname, strerror(-result));
 			break;
 		}
 		dname = argv[++optind];
