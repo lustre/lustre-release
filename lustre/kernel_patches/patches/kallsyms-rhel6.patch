@@ -1,0 +1,10 @@
+--- a/kernel/kallsyms.c.orig	2017-07-12 13:01:00.143416830 -0700
++++ a/kernel/kallsyms.c	2017-07-12 13:01:40.438112247 -0700
+@@ -181,6 +181,7 @@ unsigned long kallsyms_lookup_name(const
+ 	}
+ 	return module_kallsyms_lookup_name(name);
+ }
++EXPORT_SYMBOL_GPL(kallsyms_lookup_name);
+ 
+ int kallsyms_on_each_symbol(int (*fn)(void *, const char *, struct module *,
+ 				      unsigned long),
