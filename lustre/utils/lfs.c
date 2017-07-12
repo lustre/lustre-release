@@ -4358,7 +4358,7 @@ do {									\
 									\
 	rc = llapi_parse_size(str, &limit, &units, 1);			\
 	if (rc < 0) {							\
-		fprintf(stderr, "%s: bad limit '%s'\n",			\
+		fprintf(stderr, "%s: invalid limit '%s'\n",		\
 			progname, str);					\
 		return CMD_HELP;					\
 	}								\
@@ -4515,81 +4515,96 @@ int lfs_setquota(int argc, char **argv)
 			rc = name2projid(&qctl.qc_id, optarg);
 quota_type:
 			if (qctl.qc_type != ALLQUOTA) {
-				fprintf(stderr, "error: -u and -g can't be used"
-						" more than once\n");
+				fprintf(stderr,
+					"%s setquota: only one of -u, -g or -p may be specified\n",
+					progname);
 				return CMD_HELP;
-                        }
+			}
 			qctl.qc_type = qtype;
 			if (rc) {
 				qctl.qc_id = strtoul(optarg, &endptr, 10);
 				if (*endptr != '\0') {
-					fprintf(stderr, "error: can't find id "
-						"for name %s\n", optarg);
-					return CMD_HELP;
+					fprintf(stderr,
+						"%s setquota: invalid id '%s'\n",
+						progname, optarg);
+					return -1;
 				}
 			}
 			break;
-                case 'b':
+		case 'b':
 			ARG2ULL(dqb->dqb_bsoftlimit, optarg, 1024);
 			dqb->dqb_bsoftlimit >>= 10;
 			limit_mask |= BSLIMIT;
 			if (dqb->dqb_bsoftlimit &&
 			    dqb->dqb_bsoftlimit <= 1024) /* <= 1M? */
-				fprintf(stderr, "warning: block softlimit is "
-					"smaller than the miminal qunit size, "
-					"please see the help of setquota or "
-					"Lustre manual for details.\n");
-                        break;
-                case 'B':
-                        ARG2ULL(dqb->dqb_bhardlimit, optarg, 1024);
-                        dqb->dqb_bhardlimit >>= 10;
-                        limit_mask |= BHLIMIT;
+				fprintf(stderr,
+					"%s setquota: warning: block softlimit '%llu' smaller than minimum qunit size\n"
+					"See '%s help setquota' or Lustre manual for details\n",
+					progname, dqb->dqb_bsoftlimit,
+					progname);
+			break;
+		case 'B':
+			ARG2ULL(dqb->dqb_bhardlimit, optarg, 1024);
+			dqb->dqb_bhardlimit >>= 10;
+			limit_mask |= BHLIMIT;
 			if (dqb->dqb_bhardlimit &&
 			    dqb->dqb_bhardlimit <= 1024) /* <= 1M? */
-				fprintf(stderr, "warning: block hardlimit is "
-					"smaller than the miminal qunit size, "
-					"please see the help of setquota or "
-					"Lustre manual for details.\n");
-                        break;
-                case 'i':
-                        ARG2ULL(dqb->dqb_isoftlimit, optarg, 1);
-                        limit_mask |= ISLIMIT;
+				fprintf(stderr,
+					"%s setquota: warning: block hardlimit '%llu' smaller than minimum qunit size\n"
+					"See '%s help setquota' or Lustre manual for details\n",
+					progname, dqb->dqb_bhardlimit,
+					progname);
+			break;
+		case 'i':
+			ARG2ULL(dqb->dqb_isoftlimit, optarg, 1);
+			limit_mask |= ISLIMIT;
 			if (dqb->dqb_isoftlimit &&
 			    dqb->dqb_isoftlimit <= 1024) /* <= 1K inodes? */
-				fprintf(stderr, "warning: inode softlimit is "
-					"smaller than the miminal qunit size, "
-					"please see the help of setquota or "
-					"Lustre manual for details.\n");
-                        break;
-                case 'I':
-                        ARG2ULL(dqb->dqb_ihardlimit, optarg, 1);
-                        limit_mask |= IHLIMIT;
+				fprintf(stderr,
+					"%s setquota: warning: inode softlimit '%llu' smaller than minimum qunit size\n"
+					"See '%s help setquota' or Lustre manual for details\n",
+					progname, dqb->dqb_isoftlimit,
+					progname);
+			break;
+		case 'I':
+			ARG2ULL(dqb->dqb_ihardlimit, optarg, 1);
+			limit_mask |= IHLIMIT;
 			if (dqb->dqb_ihardlimit &&
 			    dqb->dqb_ihardlimit <= 1024) /* <= 1K inodes? */
-				fprintf(stderr, "warning: inode hardlimit is "
-					"smaller than the miminal qunit size, "
-					"please see the help of setquota or "
-					"Lustre manual for details.\n");
-                        break;
-                default: /* getopt prints error message for us when opterr != 0 */
+				fprintf(stderr,
+					"%s setquota: warning: inode hardlimit '%llu' smaller than minimum qunit size\n"
+					"See '%s help setquota' or Lustre manual for details\n",
+					progname, dqb->dqb_ihardlimit,
+					progname);
+			break;
+		default:
+			fprintf(stderr,
+				"%s setquota: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
 			return CMD_HELP;
 		}
 	}
 
 	if (qctl.qc_type == ALLQUOTA) {
-		fprintf(stderr, "error: neither -u, -g nor -p was specified\n");
+		fprintf(stderr,
+			"%s setquota: either -u or -g must be specified\n",
+			progname);
 		return CMD_HELP;
 	}
 
-        if (limit_mask == 0) {
-                fprintf(stderr, "error: at least one limit must be specified\n");
-                return CMD_HELP;
-        }
+	if (limit_mask == 0) {
+		fprintf(stderr,
+			"%s setquota: at least one limit must be specified\n",
+			progname);
+		return CMD_HELP;
+	}
 
-        if (optind != argc - 1) {
-                fprintf(stderr, "error: unexpected parameters encountered\n");
-                return CMD_HELP;
-        }
+	if (optind != argc - 1) {
+		fprintf(stderr,
+			"%s setquota: filesystem not specified or unexpected argument '%s'\n",
+			progname, argv[optind]);
+		return CMD_HELP;
+	}
 
         mnt = argv[optind];
 
@@ -4601,12 +4616,8 @@ quota_type:
                                                .qc_id   = qctl.qc_id};
 
                 rc = llapi_quotactl(mnt, &tmp_qctl);
-                if (rc < 0) {
-                        fprintf(stderr, "error: setquota failed while retrieving"
-                                        " current quota settings (%s)\n",
-                                        strerror(-rc));
-                        return rc;
-                }
+		if (rc < 0)
+			return rc;
 
                 if (!(limit_mask & BHLIMIT))
                         dqb->dqb_bhardlimit = tmp_qctl.qc_dqblk.dqb_bhardlimit;
@@ -4633,15 +4644,16 @@ quota_type:
         dqb->dqb_valid |= (limit_mask & (IHLIMIT | ISLIMIT)) ? QIF_ILIMITS : 0;
 
         rc = llapi_quotactl(mnt, &qctl);
-        if (rc) {
-                if (*obd_type)
-                        fprintf(stderr, "%s %s ", obd_type,
-                                obd_uuid2str(&qctl.obd_uuid));
-                fprintf(stderr, "setquota failed: %s\n", strerror(-rc));
-                return rc;
-        }
+	if (rc) {
+		if (*obd_type)
+			fprintf(stderr,
+				"%s setquota: cannot quotactl '%s' '%s': %s",
+				progname, obd_type,
+				obd_uuid2str(&qctl.obd_uuid), strerror(-rc));
+		return rc;
+	}
 
-        return 0;
+	return 0;
 }
 
 /* Converts seconds value into format string
