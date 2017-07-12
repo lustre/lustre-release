@@ -1189,14 +1189,19 @@ static int adjust_first_extent(char *fname, struct llapi_layout *layout)
 	uint64_t start, end, stripe_size, prev_end = 0;
 	int rc;
 
-	if (layout == NULL)
+	if (layout == NULL) {
+		fprintf(stderr,
+			"%s setstripe: layout must be specified\n",
+			progname);
 		return -EINVAL;
+	}
 
 	errno = 0;
 	head = llapi_layout_get_by_path(fname, 0);
 	if (head == NULL) {
-		fprintf(stderr, "Read layout from %s failed. %s\n",
-			fname, strerror(errno));
+		fprintf(stderr,
+			"%s setstripe: cannot read layout from '%s': %s\n",
+			progname, fname, strerror(errno));
 		return -EINVAL;
 	} else if (errno == ENODATA) {
 		/* file without LOVEA, this component-add will be turned
@@ -1204,16 +1209,16 @@ static int adjust_first_extent(char *fname, struct llapi_layout *layout)
 		llapi_layout_free(head);
 		return -ENODATA;
 	} else if (!llapi_layout_is_composite(head)) {
-		fprintf(stderr, "'%s' isn't a composite file.\n",
-			fname);
+		fprintf(stderr, "%s setstripe: '%s' not a composite file\n",
+			progname, fname);
 		llapi_layout_free(head);
 		return -EINVAL;
 	}
 
 	rc = llapi_layout_comp_extent_get(head, &start, &prev_end);
 	if (rc) {
-		fprintf(stderr, "Get prev extent failed. %s\n",
-			strerror(errno));
+		fprintf(stderr, "%s setstripe: cannot get prev extent: %s\n",
+			progname, strerror(errno));
 		llapi_layout_free(head);
 		return rc;
 	}
@@ -1223,42 +1228,46 @@ static int adjust_first_extent(char *fname, struct llapi_layout *layout)
 	/* Make sure we use the first component of the layout to be added. */
 	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
 	if (rc < 0) {
-		fprintf(stderr, "Move component cursor failed. %s\n",
-			strerror(errno));
+		fprintf(stderr,
+			"%s setstripe: cannot move component cursor: %s\n",
+			progname, strerror(errno));
 		return rc;
 	}
 
 	rc = llapi_layout_comp_extent_get(layout, &start, &end);
 	if (rc) {
-		fprintf(stderr, "Get extent failed. %s\n", strerror(errno));
+		fprintf(stderr, "%s setstripe: cannot get extent: %s\n",
+			progname, strerror(errno));
 		return rc;
 	}
 
 	if (start > prev_end || end <= prev_end) {
-		fprintf(stderr, "First extent to be set [%lu, %lu) isn't "
-			"adjacent with the existing file extent end: %lu\n",
-			start, end, prev_end);
+		fprintf(stderr,
+			"%s setstripe: first extent [%lu, %lu) not adjacent with extent end %lu\n",
+			progname, start, end, prev_end);
 		return -EINVAL;
 	}
 
 	rc = llapi_layout_stripe_size_get(layout, &stripe_size);
 	if (rc) {
-		fprintf(stderr, "Get stripe size failed. %s\n",
-			strerror(errno));
+		fprintf(stderr, "%s setstripe: cannot get stripe size: %s\n",
+			progname, strerror(errno));
 		return rc;
 	}
 
 	if (stripe_size != LLAPI_LAYOUT_DEFAULT &&
 	    (prev_end & (stripe_size - 1))) {
-		fprintf(stderr, "Stripe size %lu not aligned with %lu\n",
-			stripe_size, prev_end);
+		fprintf(stderr,
+			"%s setstripe: stripe size %lu not aligned with %lu\n",
+			progname, stripe_size, prev_end);
 		return -EINVAL;
 	}
 
 	rc = llapi_layout_comp_extent_set(layout, prev_end, end);
 	if (rc) {
-		fprintf(stderr, "Set component extent [%lu, %lu) failed. %s\n",
-			prev_end, end, strerror(errno));
+		fprintf(stderr,
+			"%s setstripe: cannot set component extent [%lu, %lu): %s\n",
+			progname, prev_end, end, strerror(errno));
 		return rc;
 	}
 
