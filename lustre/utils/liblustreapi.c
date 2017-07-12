@@ -1131,7 +1131,7 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 	if (fp == NULL) {
 		rc = -EIO;
 		llapi_error(LLAPI_MSG_ERROR, rc,
-                            "setmntent(%s) failed", PROC_MOUNTS);
+			    "cannot retrieve filesystem mount point");
 		return rc;
 	}
         while (1) {
@@ -1199,7 +1199,8 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 			if (fd < 0) {
 				rc = -errno;
 				llapi_error(LLAPI_MSG_ERROR, rc,
-					    "error opening '%s'", mntdir);
+					    "cannot open '%s': %s", mntdir,
+					    strerror(-rc));
 
 			} else {
 				*outfd = fd;
@@ -1207,8 +1208,8 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 		}
 	} else if (want & WANT_ERROR)
 		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "can't find fs root for '%s': %d",
-				  (want & WANT_PATH) ? fsname : path, rc);
+				  "'%s' not on a mounted Lustre filesystem",
+				  (want & WANT_PATH) ? fsname : path);
 	return rc;
 }
 
@@ -1256,34 +1257,52 @@ int llapi_search_fsname(const char *pathname, char *fsname)
 			 * pathnames that actually exist.  We go through the
 			 * extra hurdle of dirname(getcwd() + pathname) in
 			 * case the relative pathname contains ".." in it. */
-			if (getcwd(buf, sizeof(buf) - 2) == NULL)
-				return -errno;
+			if (getcwd(buf, sizeof(buf) - 2) == NULL) {
+				rc = -errno;
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "cannot get current working directory");
+				return rc;
+			}
 			rc = strlcat(buf, "/", sizeof(buf));
-			if (rc >= sizeof(buf))
-				return -E2BIG;
+			if (rc >= sizeof(buf)) {
+				rc = -E2BIG;
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "invalid parent path '%s'",
+					    buf);
+				return rc;
+			}
 		}
 		rc = strlcat(buf, pathname, sizeof(buf));
-		if (rc >= sizeof(buf))
-			return -E2BIG;
-                path = realpath(buf, NULL);
-                if (path == NULL) {
-                        ptr = strrchr(buf, '/');
-                        if (ptr == NULL)
-                                return -ENOENT;
-                        *ptr = '\0';
-                        path = realpath(buf, NULL);
-                        if (path == NULL) {
-                                rc = -errno;
-                                llapi_error(LLAPI_MSG_ERROR, rc,
-                                            "pathname '%s' cannot expand",
-                                            pathname);
-                                return rc;
-                        }
-                }
-        }
-        rc = get_root_path(WANT_FSNAME | WANT_ERROR, fsname, NULL, path, -1);
-        free(path);
-        return rc;
+		if (rc >= sizeof(buf)) {
+			rc = -E2BIG;
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "invalid path '%s'", pathname);
+			return rc;
+		}
+		path = realpath(buf, NULL);
+		if (path == NULL) {
+			ptr = strrchr(buf, '/');
+			if (ptr == NULL) {
+				llapi_error(LLAPI_MSG_ERROR |
+					    LLAPI_MSG_NO_ERRNO, 0,
+					    "cannot resolve path '%s'",
+					    buf);
+				return -ENOENT;
+			}
+			*ptr = '\0';
+			path = realpath(buf, NULL);
+			if (path == NULL) {
+				rc = -errno;
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "cannot resolve path '%s'",
+					     pathname);
+				return rc;
+			}
+		}
+	}
+	rc = get_root_path(WANT_FSNAME | WANT_ERROR, fsname, NULL, path, -1);
+	free(path);
+	return rc;
 }
 
 int llapi_search_rootpath(char *pathname, const char *fsname)
@@ -4661,16 +4680,13 @@ int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
 	int rc;
 
 	rc = llapi_search_fsname(mnt, fsname);
-	if (rc) {
-		llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "'%s' isn't on Lustre filesystem", mnt);
+	if (rc)
 		return rc;
-	}
 
 	root = open(mnt, O_RDONLY | O_DIRECTORY);
 	if (root < 0) {
 		rc = -errno;
-		llapi_error(LLAPI_MSG_ERROR, rc, "open %s failed", mnt);
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot open '%s'", mnt);
 		return rc;
 	}
 

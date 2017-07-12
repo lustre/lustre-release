@@ -5124,7 +5124,9 @@ static int lfs_quota(int argc, char **argv)
 			qtype = PRJQUOTA;
 quota_type:
 			if (qctl.qc_type != ALLQUOTA) {
-				fprintf(stderr, "error: use either -u or -g\n");
+				fprintf(stderr,
+					"%s quota: only one of -u, -g, or -p may be specified\n",
+					progname);
 				return CMD_HELP;
 			}
 			qctl.qc_type = qtype;
@@ -5136,14 +5138,26 @@ quota_type:
                         valid = qctl.qc_valid = QC_UUID;
 			strlcpy(obd_uuid, optarg, sizeof(qctl.obd_uuid));
                         break;
-                case 'i':
-                        valid = qctl.qc_valid = QC_MDTIDX;
-                        idx = qctl.qc_idx = atoi(optarg);
-                        break;
-                case 'I':
-                        valid = qctl.qc_valid = QC_OSTIDX;
-                        idx = qctl.qc_idx = atoi(optarg);
-                        break;
+		case 'i':
+			valid = qctl.qc_valid = QC_MDTIDX;
+			idx = qctl.qc_idx = atoi(optarg);
+			if (idx == 0 && *optarg != '0') {
+				fprintf(stderr,
+					"%s quota: invalid MDT index '%s'\n",
+					progname, optarg);
+				return CMD_HELP;
+			}
+			break;
+		case 'I':
+			valid = qctl.qc_valid = QC_OSTIDX;
+			idx = qctl.qc_idx = atoi(optarg);
+			if (idx == 0 && *optarg != '0') {
+				fprintf(stderr,
+					"%s quota: invalid OST index '%s'\n",
+					progname, optarg);
+				return CMD_HELP;
+			}
+			break;
                 case 'v':
                         verbose = 1;
                         break;
@@ -5153,12 +5167,12 @@ quota_type:
 		case 'h':
 			human_readable = true;
 			break;
-                default:
-                        fprintf(stderr, "error: %s: option '-%c' "
-                                        "unrecognized\n", argv[0], c);
-                        return CMD_HELP;
-                }
-        }
+		default:
+			fprintf(stderr, "%s quota: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
 
         /* current uid/gid info for "lfs quota /path/to/lustre/mount" */
 	if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA && qctl.qc_type == ALLQUOTA &&
@@ -5189,7 +5203,9 @@ quota_type:
 	} else if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) {
 		/* options should be followed by u/g-name and mntpoint */
 		if (optind + 2 != argc || qctl.qc_type == ALLQUOTA) {
-			fprintf(stderr, "error: missing quota argument(s)\n");
+			fprintf(stderr,
+				"%s quota: name and mount point must be specified\n",
+				progname);
 			return CMD_HELP;
 		}
 
@@ -5211,8 +5227,8 @@ quota_type:
 		if (rc) {
 			qctl.qc_id = strtoul(name, &endptr, 10);
 			if (*endptr != '\0') {
-				fprintf(stderr, "error: can't find id for name: %s\n",
-						name);
+				fprintf(stderr, "%s quota: invalid id '%s'\n",
+					progname, name);
 				return CMD_HELP;
 			}
 		}
@@ -5220,7 +5236,8 @@ quota_type:
 		rc = get_print_quota(mnt, name, &qctl, verbose, quiet,
 				     human_readable);
 	} else if (optind + 1 != argc || qctl.qc_type == ALLQUOTA) {
-		fprintf(stderr, "error: missing quota info argument(s)\n");
+		fprintf(stderr, "%s quota: missing quota info argument(s)\n",
+			progname);
 		return CMD_HELP;
 	}
 
