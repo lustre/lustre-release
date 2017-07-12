@@ -6582,14 +6582,18 @@ static int lfs_path2fid(int argc, char **argv)
 			show_parents = true;
 			break;
 		default:
-			fprintf(stderr, "error: %s: option '%s' unrecognized\n",
-				argv[0], argv[optind - 1]);
+			fprintf(stderr,
+				"%s path2fid: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
 			return CMD_HELP;
 		}
 	}
 
-	if (optind > argc - 1)
+	if (optind > argc - 1) {
+		fprintf(stderr, "%s path2fid: FILE... must be specified\n",
+			progname);
 		return CMD_HELP;
+	}
 	else if (optind < argc - 1)
 		sep = ": ";
 
@@ -6624,8 +6628,9 @@ static int lfs_path2fid(int argc, char **argv)
 		}
 
 		if (err) {
-			fprintf(stderr, "%s: can't get %sfid for %s: %s\n",
-				argv[0], show_parents ? "parent " : "", *path,
+			fprintf(stderr,
+				"%s path2fid: cannot get %sfid for '%s': %s\n",
+				progname, show_parents ? "parent " : "", *path,
 				strerror(-err));
 			if (rc == 0) {
 				rc = err;
