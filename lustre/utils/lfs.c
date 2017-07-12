@@ -5000,8 +5000,8 @@ static int lfs_mv(int argc, char **argv)
 		case 'm':
 			param.fp_mdt_index = strtoul(optarg, &end, 0);
 			if (*end != '\0') {
-				fprintf(stderr, "%s: invalid MDT index'%s'\n",
-					argv[0], optarg);
+				fprintf(stderr, "%s mv: bad MDT index '%s'\n",
+					progname, optarg);
 				return CMD_HELP;
 			}
 			break;
@@ -5009,27 +5009,28 @@ static int lfs_mv(int argc, char **argv)
 			param.fp_verbose = VERBOSE_DETAIL;
 			break;
 		default:
-			fprintf(stderr, "error: %s: unrecognized option '%s'\n",
-				argv[0], argv[optind - 1]);
+			fprintf(stderr, "%s mv: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
 			return CMD_HELP;
 		}
 	}
 
 	if (param.fp_mdt_index == -1) {
-		fprintf(stderr, "%s: MDT index must be specified\n", argv[0]);
+		fprintf(stderr, "%s mv: MDT index must be specified\n",
+			progname);
 		return CMD_HELP;
 	}
 
 	if (optind >= argc) {
-		fprintf(stderr, "%s: missing operand path\n", argv[0]);
+		fprintf(stderr, "%s mv: DIR must be specified\n", progname);
 		return CMD_HELP;
 	}
 
 	param.fp_migrate = 1;
 	rc = llapi_migrate_mdt(argv[optind], &param);
 	if (rc != 0)
-		fprintf(stderr, "%s: cannot migrate '%s' to MDT%04x: %s\n",
-			argv[0], argv[optind], param.fp_mdt_index,
+		fprintf(stderr, "%s mv: cannot migrate '%s' to MDT%04x: %s\n",
+			progname, argv[optind], param.fp_mdt_index,
 			strerror(-rc));
 	return rc;
 }
