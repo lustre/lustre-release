@@ -6714,14 +6714,17 @@ int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
 
 	com->lc_obj = obj;
 	rc = lfsck_layout_load(env, com);
-	if (rc > 0)
+	if (rc > 0) {
 		rc = lfsck_layout_reset(env, com, true);
-	else if (rc == -ENOENT)
+	} else if (rc == -ENOENT) {
 		rc = lfsck_layout_init(env, com);
-	else if (lfsck->li_master)
+	} else if (lfsck->li_master) {
 		rc = lfsck_load_sub_trace_files(env, com,
 				&dt_lfsck_layout_dangling_features,
 				LFSCK_LAYOUT, false);
+		if (rc)
+			rc = lfsck_layout_reset(env, com, true);
+	}
 
 	if (rc != 0)
 		GOTO(out, rc);

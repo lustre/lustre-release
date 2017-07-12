@@ -2705,10 +2705,14 @@ unlink:
 		RETURN(PTR_ERR(obj));
 
 	rc = obj->do_ops->do_index_try(env, obj, ft);
-	if (rc)
+	if (rc) {
 		lfsck_object_put(env, obj);
-	else
+		CDEBUG(D_LFSCK, "%s: LFSCK fail to load "
+		       "sub trace file %s: rc = %d\n",
+		       lfsck_lfsck2name(com->lc_lfsck), name, rc);
+	} else {
 		*child = obj;
+	}
 
 	RETURN(rc);
 }

@@ -6831,13 +6831,16 @@ int lfsck_namespace_setup(const struct lu_env *env,
 
 	com->lc_obj = obj;
 	rc = lfsck_namespace_load(env, com);
-	if (rc == -ENODATA)
+	if (rc == -ENODATA) {
 		rc = lfsck_namespace_init(env, com);
-	else if (rc < 0)
+	} else if (rc < 0) {
 		rc = lfsck_namespace_reset(env, com, true);
-	else
+	} else {
 		rc = lfsck_load_sub_trace_files(env, com,
 			&dt_lfsck_namespace_features, LFSCK_NAMESPACE, false);
+		if (rc)
+			rc = lfsck_namespace_reset(env, com, true);
+	}
 	if (rc != 0)
 		GOTO(out, rc);
 
