@@ -6468,36 +6468,55 @@ static int lfs_fid2path(int argc, char **argv)
 	int lnktmp;
 	int printcur = 0;
 	int rc = 0;
+	char *endptr = NULL;
 
 	while ((rc = getopt_long(argc, argv, short_opts,
 		long_opts, NULL)) != -1) {
-                switch (rc) {
-                case 'c':
-                        printcur++;
-                        break;
-                case 'l':
-                        linkno = strtol(optarg, NULL, 10);
-                        break;
-                case 'r':
-                        recno = strtoll(optarg, NULL, 10);
-                        break;
-                case '?':
-                        return CMD_HELP;
-                default:
-                        fprintf(stderr, "error: %s: option '%s' unrecognized\n",
-                                argv[0], argv[optind - 1]);
-                        return CMD_HELP;
-                }
-        }
+		switch (rc) {
+		case 'c':
+			printcur++;
+			break;
+		case 'l':
+			linkno = strtol(optarg, &endptr, 10);
+			if (*endptr != '\0') {
+				fprintf(stderr,
+					"%s fid2path: invalid linkno '%s'\n",
+					progname, optarg);
+				return CMD_HELP;
+			}
+			break;
+		case 'r':
+			recno = strtoll(optarg, &endptr, 10);
+			if (*endptr != '\0') {
+				fprintf(stderr,
+					"%s fid2path: invalid recno '%s'\n",
+					progname, optarg);
+				return CMD_HELP;
+			}
+			break;
+		default:
+			fprintf(stderr,
+				"%s fid2path: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
 
-	if (argc < 3)
+	if (argc < 3) {
+		fprintf(stderr,
+			"%s fid2path: <fsname|rootpath> and <fid>... must be specified\n",
+			progname);
 		return CMD_HELP;
+	}
 
 	device = argv[optind++];
 	path = calloc(1, PATH_MAX);
 	if (path == NULL) {
-		fprintf(stderr, "error: Not enough memory\n");
-		return -errno;
+		rc = -errno;
+		fprintf(stderr,
+			"%s fid2path: cannot allocate memory for path: %s\n",
+			progname, strerror(-rc));
+		return rc;
 	}
 
 	rc = 0;
@@ -6512,8 +6531,9 @@ static int lfs_fid2path(int argc, char **argv)
 			rc2 = llapi_fid2path(device, fid, path, PATH_MAX,
 					     &rectmp, &lnktmp);
 			if (rc2 < 0) {
-				fprintf(stderr, "%s: error on FID %s: %s\n",
-					argv[0], fid, strerror(errno = -rc2));
+				fprintf(stderr,
+					"%s fid2path: cannot find '%s': %s\n",
+					progname, fid, strerror(errno = -rc2));
 				if (rc == 0)
 					rc = rc2;
 				break;
