@@ -4245,8 +4245,11 @@ static int lfs_check(int argc, char **argv)
         char obd_type1[4];
         char obd_type2[4];
 
-        if (argc != 2)
-                return CMD_HELP;
+	if (argc != 2) {
+		fprintf(stderr, "%s check: server type must be specified\n",
+			progname);
+		return CMD_HELP;
+	}
 
         obd_types[0] = obd_type1;
         obd_types[1] = obd_type2;
@@ -4259,24 +4262,26 @@ static int lfs_check(int argc, char **argv)
                 num_types = 2;
                 strcpy(obd_types[0], "osc");
                 strcpy(obd_types[1], "mdc");
-        } else {
-                fprintf(stderr, "error: %s: option '%s' unrecognized\n",
-                                argv[0], argv[1]);
-                        return CMD_HELP;
-        }
+	} else {
+		fprintf(stderr, "%s check: unrecognized option '%s'\n",
+			progname, argv[1]);
+		return CMD_HELP;
+	}
 
         rc = llapi_search_mounts(NULL, 0, mntdir, NULL);
-        if (rc < 0 || mntdir[0] == '\0') {
-                fprintf(stderr, "No suitable Lustre mount found\n");
-                return rc;
-        }
+	if (rc < 0 || mntdir[0] == '\0') {
+		fprintf(stderr,
+			"%s check: cannot find mounted Lustre filesystem: %s\n",
+			progname, (rc < 0) ? strerror(-rc) : strerror(ENODEV));
+		return rc;
+	}
 
 	rc = llapi_target_check(num_types, obd_types, mntdir);
-        if (rc)
-                fprintf(stderr, "error: %s: %s status failed\n",
-                                argv[0],argv[1]);
+	if (rc)
+		fprintf(stderr, "%s check: cannot check target '%s': %s\n",
+			progname, argv[1], strerror(-rc));
 
-        return rc;
+	return rc;
 
 }
 
