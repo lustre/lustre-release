@@ -353,16 +353,19 @@ static int lod_process_recovery_updates(const struct lu_env *env,
  */
 static int lod_sub_recovery_thread(void *arg)
 {
-	struct lod_recovery_data	*lrd = arg;
-	struct lod_device		*lod = lrd->lrd_lod;
-	struct dt_device		*dt;
-	struct ptlrpc_thread		*thread = lrd->lrd_thread;
-	struct llog_ctxt		*ctxt = NULL;
-	struct lu_env			env;
+	struct lod_recovery_data *lrd = arg;
+	struct lod_device *lod = lrd->lrd_lod;
+	struct dt_device *dt;
+	struct ptlrpc_thread *thread = lrd->lrd_thread;
+	struct llog_ctxt *ctxt = NULL;
+	struct lu_env env;
 	struct lu_target *lut;
-
-
-	int				rc;
+	struct lod_tgt_descs *ltd = &lod->lod_mdt_descs;
+	struct lod_tgt_desc *tgt = NULL;
+	time64_t start;
+	int retries = 0;
+	int i;
+	int rc;
 	ENTRY;
 
 	thread->t_flags = SVC_RUNNING;
@@ -382,6 +385,8 @@ static int lod_sub_recovery_thread(void *arg)
 		dt = lod->lod_child;
 	else
 		dt = lrd->lrd_ltd->ltd_tgt;
+
+	start = ktime_get_real_seconds();
 
 again:
 	rc = lod_sub_prep_llog(&env, lod, dt, lrd->lrd_idx);
@@ -412,10 +417,13 @@ again:
 						       ctxt->loc_handle);
 				llog_ctxt_put(ctxt);
 			}
+			retries++;
+			CDEBUG(D_HA, "%s get update log failed %d, retry\n",
+			       dt->dd_lu_dev.ld_obd->obd_name, rc);
 			goto again;
 		}
 
-		CERROR("%s getting update log failed: rc = %d\n",
+		CERROR("%s get update log failed: rc = %d\n",
 		       dt->dd_lu_dev.ld_obd->obd_name, rc);
 		llog_ctxt_put(ctxt);
 
@@ -429,35 +437,35 @@ again:
 	}
 	llog_ctxt_put(ctxt);
 
-	CDEBUG(D_HA, "%s retrieve update log: rc = %d\n",
-	       dt->dd_lu_dev.ld_obd->obd_name, rc);
+	CDEBUG(D_HA, "%s retrieved update log, duration %lld, retries %d\n",
+	       dt->dd_lu_dev.ld_obd->obd_name, ktime_get_real_seconds() - start,
+	       retries);
 
+	spin_lock(&lod->lod_lock);
 	if (lrd->lrd_ltd == NULL)
 		lod->lod_child_got_update_log = 1;
 	else
 		lrd->lrd_ltd->ltd_got_update_log = 1;
 
-	if (lod->lod_child_got_update_log) {
-		struct lod_tgt_descs	*ltd = &lod->lod_mdt_descs;
-		struct lod_tgt_desc	*tgt = NULL;
-		bool			all_got_log = true;
-		int			i;
+	if (!lod->lod_child_got_update_log) {
+		spin_unlock(&lod->lod_lock);
+		GOTO(out, rc = 0);
+	}
 
-		cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
-			tgt = LTD_TGT(ltd, i);
-			if (!tgt->ltd_got_update_log) {
-				all_got_log = false;
-				break;
-			}
-		}
-
-		if (all_got_log) {
-			CDEBUG(D_HA, "%s got update logs from all MDTs.\n",
-			       lut->lut_obd->obd_name);
-			lut->lut_tdtd->tdtd_replay_ready = 1;
-			wake_up(&lut->lut_obd->obd_next_transno_waitq);
+	cfs_foreach_bit(ltd->ltd_tgt_bitmap, i) {
+		tgt = LTD_TGT(ltd, i);
+		if (!tgt->ltd_got_update_log) {
+			spin_unlock(&lod->lod_lock);
+			GOTO(out, rc = 0);
 		}
 	}
+	lut->lut_tdtd->tdtd_replay_ready = 1;
+	spin_unlock(&lod->lod_lock);
+
+	CDEBUG(D_HA, "%s got update logs from all MDTs.\n",
+	       lut->lut_obd->obd_name);
+	wake_up(&lut->lut_obd->obd_next_transno_waitq);
+	EXIT;
 
 out:
 	OBD_FREE_PTR(lrd);
@@ -466,7 +474,7 @@ out:
 	wake_up(&lut->lut_tdtd->tdtd_recovery_threads_waitq);
 	wake_up(&thread->t_ctl_waitq);
 	lu_env_fini(&env);
-	RETURN(rc);
+	return rc;
 }
 
 /**
