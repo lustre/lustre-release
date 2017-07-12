@@ -3570,12 +3570,13 @@ static int lfs_check(int argc, char **argv)
 #ifdef HAVE_SYS_QUOTA_H
 #define ARG2INT(nr, str, msg)                                           \
 do {                                                                    \
-        char *endp;                                                     \
-        nr = strtol(str, &endp, 0);                                     \
-        if (*endp) {                                                    \
-                fprintf(stderr, "error: bad %s: %s\n", msg, str);       \
-                return CMD_HELP;                                        \
-        }                                                               \
+	char *endp;                                                     \
+	nr = strtol(str, &endp, 0);                                     \
+	if (*endp != '\0') {                                            \
+		fprintf(stderr, "%s: bad %s '%s'\n",			\
+			progname, msg, str);				\
+		return CMD_HELP;					\
+	}                                                               \
 } while (0)
 
 #define ADD_OVERFLOW(a,b) ((a + b) < a) ? (a = ULONG_MAX) : (a = a + b)
@@ -3644,7 +3645,8 @@ do {									\
 									\
 	rc = llapi_parse_size(str, &limit, &units, 1);			\
 	if (rc < 0) {							\
-		fprintf(stderr, "error: bad limit value %s\n", str);	\
+		fprintf(stderr, "%s: bad limit '%s'\n",			\
+			progname, str);					\
 		return CMD_HELP;					\
 	}								\
 	nr = limit;							\
