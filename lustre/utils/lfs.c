@@ -3233,28 +3233,38 @@ static int lfs_poollist(int argc, char **argv)
 
 static int set_time(time_t *time, time_t *set, char *str)
 {
-        time_t t;
-        int res = 0;
+	time_t t;
+	int res = 0;
+	char *endptr;
 
-        if (str[0] == '+')
-                res = 1;
-        else if (str[0] == '-')
-                res = -1;
+	if (str[0] == '+')
+		res = 1;
+	else if (str[0] == '-')
+		res = -1;
 
-        if (res)
-                str++;
+	if (res)
+		str++;
 
-        t = strtol(str, NULL, 0);
-        if (*time < t * 24 * 60 * 60) {
-                if (res)
-                        str--;
-                fprintf(stderr, "Wrong time '%s' is specified.\n", str);
-                return INT_MAX;
-        }
+	t = strtol(str, &endptr, 0);
+	if (*endptr != '\0') {
+		fprintf(stderr,
+			"%s find: bad time '%s': %s\n",
+			progname, str, strerror(EINVAL));
+		return INT_MAX;
+	}
+	if (*time < t * 24 * 60 * 60) {
+		if (res != 0)
+			str--;
+		fprintf(stderr,
+			"%s find: bad time '%s': too large\n",
+			progname, str);
+		return INT_MAX;
+	}
 
-        *set = *time - t * 24 * 60 * 60;
-        return res;
+	*set = *time - t * 24 * 60 * 60;
+	return res;
 }
+
 static int name2uid(unsigned int *id, const char *name)
 {
 	struct passwd *passwd;
