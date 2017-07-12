@@ -6626,8 +6626,11 @@ static int lfs_data_version(int argc, char **argv)
 	int c;
 	int data_version_flags = LL_DV_RD_FLUSH; /* Read by default */
 
-	if (argc < 2)
+	if (argc < 2) {
+		fprintf(stderr, "%s data_version: FILE must be specified\n",
+			progname);
 		return CMD_HELP;
+	}
 
 	while ((c = getopt(argc, argv, "nrw")) != -1) {
 		switch (c) {
@@ -6641,20 +6644,32 @@ static int lfs_data_version(int argc, char **argv)
 			data_version_flags |= LL_DV_WR_FLUSH;
 			break;
 		default:
+			fprintf(stderr,
+				"%s data_version: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
 			return CMD_HELP;
 		}
 	}
-	if (optind == argc)
+	if (optind == argc) {
+		fprintf(stderr, "%s data_version: FILE must be specified\n",
+			progname);
 		return CMD_HELP;
+	}
 
 	path = argv[optind];
 	fd = open(path, O_RDONLY);
-	if (fd < 0)
-		err(errno, "cannot open file %s", path);
+	if (fd < 0) {
+		rc = -errno;
+		fprintf(stderr, "%s data_version: cannot open file '%s': %s\n",
+			progname, path, strerror(-rc));
+		return rc;
+	}
 
 	rc = llapi_get_data_version(fd, &data_version, data_version_flags);
 	if (rc < 0)
-		err(errno, "cannot get version for %s", path);
+		fprintf(stderr,
+			"%s data_version: cannot get version for '%s': %s\n",
+			progname, path, strerror(-rc));
 	else
 		printf("%ju" "\n", (uintmax_t)data_version);
 
