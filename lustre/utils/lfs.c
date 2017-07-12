@@ -6259,16 +6259,18 @@ static int lfs_changelog(int argc, char **argv)
                 case 'f':
                         follow++;
                         break;
-                case '?':
-                        return CMD_HELP;
                 default:
-                        fprintf(stderr, "error: %s: option '%s' unrecognized\n",
-                                argv[0], argv[optind - 1]);
+			fprintf(stderr,
+				"%s changelog: unrecognized option '%s'\n",
+				progname, argv[optind - 1]);
                         return CMD_HELP;
                 }
         }
-        if (optind >= argc)
-                return CMD_HELP;
+	if (optind >= argc) {
+		fprintf(stderr, "%s changelog: mdtname must be specified\n",
+			progname);
+		return CMD_HELP;
+	}
 
         mdd = argv[optind++];
         if (argc > optind)
@@ -6283,8 +6285,8 @@ static int lfs_changelog(int argc, char **argv)
 				   (follow ? CHANGELOG_FLAG_FOLLOW : 0),
 				   mdd, startrec);
 	if (rc < 0) {
-		fprintf(stderr, "Can't start changelog: %s\n",
-			strerror(errno = -rc));
+		fprintf(stderr, "%s changelog: cannot start changelog: %s\n",
+			progname, strerror(errno = -rc));
 		return rc;
 	}
 
@@ -6294,8 +6296,9 @@ static int lfs_changelog(int argc, char **argv)
 					CHANGELOG_EXTRA_FLAG_OMODE |
 					CHANGELOG_EXTRA_FLAG_XATTR);
 	if (rc < 0) {
-		fprintf(stderr, "Can't set xflags for changelog: %s\n",
-			strerror(errno = -rc));
+		fprintf(stderr,
+			"%s changelog: cannot set xflags for changelog: %s\n",
+			progname, strerror(errno = -rc));
 		return rc;
 	}
 
@@ -6401,14 +6404,15 @@ static int lfs_changelog(int argc, char **argv)
 		printf("\n");
 
 		llapi_changelog_free(&rec);
-        }
+	}
 
-        llapi_changelog_fini(&changelog_priv);
+	llapi_changelog_fini(&changelog_priv);
 
-        if (rc < 0)
-                fprintf(stderr, "Changelog: %s\n", strerror(errno = -rc));
+	if (rc < 0)
+		fprintf(stderr, "%s changelog: cannot access changelog: %s\n",
+			progname, strerror(errno = -rc));
 
-        return (rc == 1 ? 0 : rc);
+	return (rc == 1 ? 0 : rc);
 }
 
 static int lfs_changelog_clear(int argc, char **argv)
