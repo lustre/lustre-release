@@ -681,18 +681,22 @@ static int lfs_component_del(char *fname, __u32 comp_id, __u32 flags)
 	/* LCME_FL_INIT is the only supported flag in PFL */
 	if (flags != 0) {
 		if (flags & ~LCME_KNOWN_FLAGS) {
-			fprintf(stderr, "Invalid component flags %#x\n", flags);
+			fprintf(stderr,
+				"%s setstripe: bad component flags %#x\n",
+				progname, flags);
 			return -EINVAL;
 		}
 	} else if (comp_id > LCME_ID_MAX) {
-		fprintf(stderr, "Invalid component id %u\n", comp_id);
+		fprintf(stderr, "%s setstripe: bad component id %u\n",
+			progname, comp_id);
 		return -EINVAL;
 	}
 
 	rc = llapi_layout_file_comp_del(fname, comp_id, flags);
 	if (rc)
-		fprintf(stderr, "Delete component %#x from %s failed. %s\n",
-			comp_id, fname, strerror(errno));
+		fprintf(stderr,
+			"%s setstripe: cannot delete component %#x from '%s': %s\n",
+			progname, comp_id, fname, strerror(errno));
 	return rc;
 }
 
