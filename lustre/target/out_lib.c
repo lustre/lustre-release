@@ -797,8 +797,7 @@ static int out_tx_xattr_set_exec(const struct lu_env *env,
 
 				lu_buf_free(&tbuf);
 				if (update) {
-					leh->leh_overflow_time =
-							cfs_time_current_sec();
+					leh->leh_overflow_time = ktime_get_real_seconds();
 					if (unlikely(!leh->leh_overflow_time))
 						leh->leh_overflow_time++;
 				}
