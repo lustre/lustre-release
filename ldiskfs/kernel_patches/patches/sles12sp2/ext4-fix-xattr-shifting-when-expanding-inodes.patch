@@ -173,38 +173,3 @@ Index: linux-4.4.49-92.14_lustre-vanilla/fs/ext4/xattr.c
  	brelse(bh);
  out:
  	ext4_clear_inode_state(inode, EXT4_STATE_NO_EXPAND);
-From 887a9730614727c4fff7cb756711b190593fc1df Mon Sep 17 00:00:00 2001
-From: Konstantin Khlebnikov <khlebnikov@yandex-team.ru>
-Date: Sun, 21 May 2017 22:36:23 -0400
-Subject: [PATCH] ext4: keep existing extra fields when inode expands
-
-ext4_expand_extra_isize() should clear only space between old and new
-size.
-
-Fixes: 6dd4ee7cab7e # v2.6.23
-Cc: stable@vger.kernel.org
-Signed-off-by: Konstantin Khlebnikov <khlebnikov@yandex-team.ru>
-Signed-off-by: Theodore Ts'o <tytso@mit.edu>
----
- fs/ext4/inode.c | 5 +++--
- 1 file changed, 3 insertions(+), 2 deletions(-)
-
-diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
-index 1bd0bfa..7cd99de 100644
---- a/fs/ext4/inode.c
-+++ b/fs/ext4/inode.c
-@@ -5637,8 +5637,9 @@ static int ext4_expand_extra_isize(struct inode *inode,
- 	/* No extended attributes present */
- 	if (!ext4_test_inode_state(inode, EXT4_STATE_XATTR) ||
- 	    header->h_magic != cpu_to_le32(EXT4_XATTR_MAGIC)) {
--		memset((void *)raw_inode + EXT4_GOOD_OLD_INODE_SIZE, 0,
--			new_extra_isize);
-+		memset((void *)raw_inode + EXT4_GOOD_OLD_INODE_SIZE +
-+		       EXT4_I(inode)->i_extra_isize, 0,
-+		       new_extra_isize - EXT4_I(inode)->i_extra_isize);
- 		EXT4_I(inode)->i_extra_isize = new_extra_isize;
- 		return 0;
- 	}
--- 
-2.9.3
-
