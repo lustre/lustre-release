@@ -2556,6 +2556,7 @@ lnet_dyn_del_net(__u32 net_id)
 
 	net = lnet_get_net_locked(net_id);
 	if (net == NULL) {
+		lnet_net_unlock(0);
 		rc = -EINVAL;
 		goto out;
 	}
