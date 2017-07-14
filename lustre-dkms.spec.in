@@ -40,7 +40,7 @@ Requires:       %{module}-osd-zfs-mount
 # If client package is installed when installing server, remove it since
 # the server package also includes the client.  This can be removed if/when
 # the packages are split into independent client/server/common packages.
-Obsoletes:	@PACKAGE@-client
+Obsoletes:	@PACKAGE@-client < %{version}
 %endif
 Requires:       gcc, make, perl
 Requires:       kernel-devel
