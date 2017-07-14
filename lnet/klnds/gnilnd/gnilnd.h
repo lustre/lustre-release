@@ -126,11 +126,13 @@
 #define GNILND_SCHED_NICE         0		/* default nice value for scheduler threads */
 #define GNILND_COMPUTE            1             /* compute image */
 #define GNILND_FAST_RECONNECT     1             /* Fast Reconnect option */
+#define GNILND_DEFAULT_CREDITS    64            /* Default number of simultaneous transmits */
 #else
 #define GNILND_FMABLK             1024          /* default number of mboxes per fmablk */
 #define GNILND_SCHED_NICE         -20		/* default nice value for scheduler threads */
 #define GNILND_COMPUTE            0             /* service image */
 #define GNILND_FAST_RECONNECT     0             /* Fast Reconnect option */
+#define GNILND_DEFAULT_CREDITS    256           /* Default number of simultaneous transmits */
 #endif
 
 /* EXTRA_BITS are there to allow us to hide NOOP/CLOSE and anything else out of band */

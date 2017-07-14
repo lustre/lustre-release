@@ -25,7 +25,7 @@
 
 #include "gnilnd.h"
 
-static int credits = 256;
+static int credits = GNILND_DEFAULT_CREDITS;
 module_param(credits, int, 0444);
 MODULE_PARM_DESC(credits, "# concurrent sends");
 
