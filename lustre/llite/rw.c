@@ -338,12 +338,11 @@ static int ras_inside_ra_window(unsigned long idx, struct ra_io_arg *ria)
 static unsigned long
 ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 		    struct cl_page_list *queue, struct ll_readahead_state *ras,
-		    struct ra_io_arg *ria)
+		    struct ra_io_arg *ria, pgoff_t *ra_end)
 {
 	struct cl_read_ahead ra = { 0 };
-	int rc = 0;
+	int rc = 0, count = 0;
 	bool stride_ria;
-	unsigned long ra_end = 0;
 	pgoff_t page_idx;
 
 	LASSERT(ria != NULL);
@@ -389,9 +388,13 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 			if (rc < 0)
 				break;
 
-			ra_end = page_idx;
-			if (rc == 0)
+			*ra_end = page_idx;
+			/* Only subtract from reserve & count the page if we
+			 * really did readahead on that page. */
+			if (rc == 0) {
 				ria->ria_reserved--;
+				count++;
+			}
                 } else if (stride_ria) {
                         /* If it is not in the read-ahead window, and it is
                          * read-ahead mode, then check whether it should skip
@@ -418,7 +421,7 @@ ll_read_ahead_pages(const struct lu_env *env, struct cl_io *io,
 
 	cl_read_ahead_release(env, &ra);
 
-	return ra_end;
+	return count;
 }
 
 static int ll_readahead(const struct lu_env *env, struct cl_io *io,
@@ -429,7 +432,7 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	struct ll_thread_info *lti = ll_env_info(env);
 	struct cl_attr *attr = vvp_env_thread_attr(env);
 	unsigned long len, mlen = 0;
-	pgoff_t ra_end, start = 0, end = 0;
+	pgoff_t ra_end = 0, start = 0, end = 0;
 	struct inode *inode;
 	struct ra_io_arg *ria = &lti->lti_ria;
 	struct cl_object *clob;
@@ -538,7 +541,7 @@ static int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	       atomic_read(&ll_i2sbi(inode)->ll_ra_info.ra_cur_pages),
 	       ll_i2sbi(inode)->ll_ra_info.ra_max_pages);
 
-	ra_end = ll_read_ahead_pages(env, io, queue, ras, ria);
+	ret = ll_read_ahead_pages(env, io, queue, ras, ria, &ra_end);
 
 	if (ria->ria_reserved != 0)
 		ll_ra_count_put(ll_i2sbi(inode), ria->ria_reserved);
