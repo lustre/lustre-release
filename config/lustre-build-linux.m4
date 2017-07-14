@@ -210,7 +210,7 @@ AC_DEFUN([LB_ARG_CANON_PATH], [
 # Find paths for linux, handling kernel-source rpms
 #
 AC_DEFUN([LB_LINUX_PATH], [
-for DEFAULT_LINUX in /lib/modules/$(uname -r)/{source,build} /usr/src/linux; do
+for DEFAULT_LINUX in /lib/modules/$(uname -r)/{source,build} /usr/src/linux $(find /usr/src/kernels/ -maxdepth 1 -name @<:@0-9@:>@\* | xargs -r ls -d | tail -n 1); do
 	AS_IF([readlink -q -e $DEFAULT_LINUX >/dev/null], [break])
 done
 if test "$DEFAULT_LINUX" = "/lib/modules/$(uname -r)/source"; then
