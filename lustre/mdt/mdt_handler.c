@@ -732,6 +732,8 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 			else
 				b->mbo_blocks = 1;
 			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+		} else if (info->mti_som_valid) { /* som is valid */
+			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 		}
 	}
 
@@ -992,6 +994,9 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 		rc = mo_attr_get(env, next, ma);
 		if (rc)
 			GOTO(out, rc);
+
+		if (S_ISREG(mode))
+			(void) mdt_get_som(info, o, &ma->ma_attr);
 		ma->ma_valid |= MA_INODE;
 	}
 
@@ -3282,6 +3287,7 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
         info->mti_opdata = 0;
 	info->mti_big_lmm_used = 0;
 	info->mti_big_acl_used = 0;
+	info->mti_som_valid = 0;
 
         info->mti_spec.no_create = 0;
 	info->mti_spec.sp_rm_entry = 0;

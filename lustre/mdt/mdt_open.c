@@ -2015,6 +2015,16 @@ int mdt_close_handle_layouts(struct mdt_thread_info *info,
 		buf->lb_buf = mdt_object_child(o == o1 ? o2 : o1);
 		rc = mo_xattr_set(info->mti_env, mdt_object_child(o), buf,
 				  XATTR_LUSTRE_LOV, LU_XATTR_MERGE);
+		if (rc == 0 && ma->ma_attr.la_valid & (LA_SIZE | LA_BLOCKS)) {
+			int rc2;
+
+			rc2 = mdt_set_som(info, o, &ma->ma_attr);
+			if (rc2 < 0)
+				CERROR(DFID": Setting i_blocks error: %d, "
+				       "i_blocks will be reported wrongly and "
+				       "can only be fixed in next resync\n",
+				       PFID(mdt_object_fid(o)), rc2);
+		}
 	}
 	if (rc < 0)
 		GOTO(out_unlock2, rc);

@@ -152,6 +152,62 @@ test_3() {
 }
 run_test 3 "create components from files located on different MDTs"
 
+test_21() {
+	local tf=$DIR/$tfile
+	local tf2=$DIR/$tfile-2
+
+	[[ $OSTCOUNT -lt 2 ]] && skip "need >= 2 OSTs" && return
+
+	$LFS setstripe -E EOF -o 0 $tf
+	$LFS setstripe -E EOF -o 1 $tf2
+
+	local dd_count=$((RANDOM % 20 + 1))
+	dd if=/dev/zero of=$tf bs=1M count=$dd_count
+	dd if=/dev/zero of=$tf2 bs=1M count=1 seek=$((dd_count - 1))
+	cancel_lru_locks osc
+
+	local blocks=$(du -kc $tf $tf2 | awk '/total/{print $1}')
+
+	# add component
+	$LFS setstripe --component-add --mirror=$tf2 $tf
+
+	# cancel layout lock
+	cancel_lru_locks mdc
+
+	local new_blocks=$(du -k $tf | awk '{print $1}')
+	[ $new_blocks -eq $blocks ] ||
+	error "i_blocks error expected: $blocks, actual: $new_blocks"
+}
+run_test 21 "glimpse should report accurate i_blocks"
+
+test_22() {
+	local tf=$DIR/$tfile
+
+	$LFS setstripe -E EOF -o 0 $tf
+	dd if=/dev/zero of=$tf bs=1M count=$((RANDOM % 20 + 1))
+
+	# add component, two mirrors located on the same OST ;-)
+	$LFS setstripe --component-add --mirror -o 0 $tf
+
+	size_blocks=$(stat --format="%b %s" $tf)
+
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	local new_size_blocks=$(stat --format="%b %s" $tf)
+
+	# make sure there is no lock cached
+	local lock_count=$($LCTL get_param -n \
+		ldlm.namespaces.${FSNAME}-OST0000-osc-ffff*.lock_count)
+	[ $lock_count -eq 0 ] || error "glimpse requests were sent"
+
+	[ "$new_size_blocks" = "$size_blocks" ] ||
+		echo "size expected: $size_blocks, actual: $new_size_blocks"
+
+	rm -f $tmpfile
+}
+run_test 22 "no glimpse to OSTs for READ_ONLY files"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

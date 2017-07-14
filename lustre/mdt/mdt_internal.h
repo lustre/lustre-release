@@ -398,7 +398,8 @@ struct mdt_thread_info {
 				   mti_cross_ref:1,
 	/* big_lmm buffer was used and must be used in reply */
 				   mti_big_lmm_used:1,
-				   mti_big_acl_used:1;
+				   mti_big_acl_used:1,
+				   mti_som_valid:1;
 
         /* opdata for mdt_reint_open(), has the same as
          * ldlm_reply:lock_policy_res1.  mdt_update_last_rcvd() stores this
@@ -468,6 +469,8 @@ struct mdt_thread_info {
 	char			   mti_xattr_buf[128];
 	struct ldlm_enqueue_info   mti_einfo;
 	struct tg_reply_data	  *mti_reply_data;
+
+	struct lustre_som_attrs	   mti_som;
 };
 
 extern struct lu_context_key mdt_thread_key;
@@ -1110,6 +1113,12 @@ static inline enum ldlm_mode mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
 	LASSERT(mode == MDL_MINMODE || is_power_of_2(mode));
 	return mdt_dlm_lock_modes[mode];
 }
+
+/* mdt_som.c */
+int mdt_set_som(struct mdt_thread_info *info, struct mdt_object *obj,
+		struct lu_attr *attr);
+int mdt_get_som(struct mdt_thread_info *info, struct mdt_object *obj,
+		struct lu_attr *attr);
 
 /* mdt_lvb.c */
 extern struct ldlm_valblock_ops mdt_lvbo;

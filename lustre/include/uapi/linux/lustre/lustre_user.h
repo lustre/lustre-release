@@ -274,6 +274,17 @@ struct lustre_ost_attrs {
  */
 #define LMA_OLD_SIZE (sizeof(struct lustre_mdt_attrs) + 5 * sizeof(__u64))
 
+enum {
+	LSOM_FL_VALID = 1 << 0,
+};
+
+struct lustre_som_attrs {
+	__u16	lsa_valid;
+	__u16	lsa_reserved[3];
+	__u64	lsa_size;
+	__u64	lsa_blocks;
+};
+
 /**
  * OST object IDentifier.
  */
