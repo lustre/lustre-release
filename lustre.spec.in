@@ -132,7 +132,7 @@ BuildRequires: libtool
 %if %{with servers}
 Requires: lustre-osd
 Requires: lustre-osd-mount
-Obsoletes: lustre-client <= %{version}
+Obsoletes: lustre-client < %{version}
 Provides: lustre-client = %{version}-%{release}
 %endif
 # GSS requires this: BuildRequires: pkgconfig, libgssapi-devel >= 0.10
