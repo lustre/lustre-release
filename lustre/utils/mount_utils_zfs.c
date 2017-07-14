@@ -697,6 +697,22 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 	}
 
 	/*
+	 * Set Options on ZPOOL
+	 *
+	 * ALL   - canmount=off
+	 * 0.7.0 - multihost=on
+	 */
+	php = zpool_open(g_zfs, pool);
+	if (php) {
+		if (pool_exists)
+			zpool_set_prop(php, "canmount", "off");
+
+		zpool_set_prop(php, "multihost", "on");
+
+		zpool_close(php);
+	}
+
+	/*
 	 * Create the ZFS filesystem with any required mkfs options:
 	 * - canmount=off is set to prevent zfs automounting
 	 * - xattr=sa is set to use system attribute based xattrs
