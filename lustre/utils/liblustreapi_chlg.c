@@ -89,6 +89,7 @@ int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
 			  const char *device, long long startrec)
 {
 	struct changelog_private *cp;
+	static bool warned_extra_flags;
 	static bool warned_jobid;
 	static bool warned_follow;
 	char cdev_path[PATH_MAX];
@@ -127,6 +128,17 @@ int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
 	}
 
 	*priv = cp;
+
+	/* CHANGELOG_FLAG_EXTRA_FLAGS will eventually become mandatory.
+	 * If it wasn't specified, display a warning here.
+	 * Code elsewhere will remove the corresponding extension.
+	 */
+	if (!(flags & CHANGELOG_FLAG_EXTRA_FLAGS) && !warned_extra_flags) {
+		llapi_err_noerrno(LLAPI_MSG_WARN,
+		      "warning: %s() called without CHANGELOG_FLAG_EXTRA_FLAGS",
+		      __func__);
+		warned_extra_flags = true;
+	}
 
 	/* CHANGELOG_FLAG_JOBID will eventually become mandatory. Display a
 	 * warning if it's missing. */
@@ -212,6 +224,7 @@ int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
 {
 	struct changelog_private *cp = priv;
 	enum changelog_rec_flags rec_fmt = DEFAULT_RECORD_FMT;
+	enum changelog_rec_extra_flags rec_extra_fmt = CLFE_INVALID;
 	struct changelog_rec *tmp;
 	int rc = 0;
 
@@ -227,6 +240,10 @@ int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
 
 	if (cp->clp_send_flags & CHANGELOG_FLAG_JOBID)
 		rec_fmt |= CLF_JOBID;
+
+	if (cp->clp_send_flags & CHANGELOG_FLAG_EXTRA_FLAGS) {
+		rec_fmt |= CLF_EXTRA_FLAGS;
+	}
 
 	if (cp->clp_buf + cp->clp_buf_len <= cp->clp_buf_pos) {
 		ssize_t refresh;
@@ -249,7 +266,7 @@ int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
 	       changelog_rec_size(tmp) + tmp->cr_namelen);
 
 	cp->clp_buf_pos += changelog_rec_size(tmp) + tmp->cr_namelen;
-	changelog_remap_rec(*rech, rec_fmt);
+	changelog_remap_rec(*rech, rec_fmt, rec_extra_fmt);
 
 	return 0;
 

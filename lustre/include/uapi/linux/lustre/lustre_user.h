@@ -921,7 +921,8 @@ enum changelog_rec_flags {
 	CLF_VERSION	= 0x1000,
 	CLF_RENAME	= 0x2000,
 	CLF_JOBID	= 0x4000,
-	CLF_SUPPORTED	= CLF_VERSION | CLF_RENAME | CLF_JOBID
+	CLF_EXTRA_FLAGS = 0x8000,
+	CLF_SUPPORTED	= CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS
 };
 
 
@@ -1006,28 +1007,37 @@ static inline void hsm_set_cl_error(int *flags, int error)
 	*flags |= (error << CLF_HSM_ERR_L);
 }
 
+enum changelog_rec_extra_flags {
+	CLFE_INVALID	= 0, /* No additional flags currently implemented */
+	CLFE_SUPPORTED	= CLFE_INVALID
+};
+
 enum changelog_send_flag {
 	/* Not yet implemented */
-	CHANGELOG_FLAG_FOLLOW   = 0x01,
+	CHANGELOG_FLAG_FOLLOW      = 0x01,
 	/* Blocking IO makes sense in case of slow user parsing of the records,
 	 * but it also prevents us from cleaning up if the records are not
 	 * consumed. */
-	CHANGELOG_FLAG_BLOCK    = 0x02,
+	CHANGELOG_FLAG_BLOCK       = 0x02,
 	/* Pack jobid into the changelog records if available. */
-	CHANGELOG_FLAG_JOBID    = 0x04,
+	CHANGELOG_FLAG_JOBID       = 0x04,
+	/* Pack additional flag bits into the changelog record */
+	CHANGELOG_FLAG_EXTRA_FLAGS = 0x08,
 };
 
 #define CR_MAXSIZE cfs_size_round(2 * NAME_MAX + 2 + \
-				  changelog_rec_offset(CLF_SUPPORTED))
+				  changelog_rec_offset(CLF_SUPPORTED, \
+							CLFE_SUPPORTED))
 
 /* 31 usable bytes string + null terminator. */
 #define LUSTRE_JOBID_SIZE	32
 
 /* This is the minimal changelog record. It can contain extensions
  * such as rename fields or process jobid. Its exact content is described
- * by the cr_flags.
+ * by the cr_flags and cr_extra_flags.
  *
- * Extensions are packed in the same order as their corresponding flags.
+ * Extensions are packed in the same order as their corresponding flags,
+ * then in the same order as their corresponding extra flags.
  */
 struct changelog_rec {
 	__u16			cr_namelen;
@@ -1054,8 +1064,16 @@ struct changelog_ext_jobid {
 	char	cr_jobid[LUSTRE_JOBID_SIZE];	/**< zero-terminated string. */
 };
 
+/* Changelog extension to include additional flags. */
+struct changelog_ext_extra_flags {
+	__u64 cr_extra_flags; /* Additional CLFE_* flags */
+};
 
-static inline size_t changelog_rec_offset(enum changelog_rec_flags crf)
+static inline struct changelog_ext_extra_flags *changelog_rec_extra_flags(
+	const struct changelog_rec *rec);
+
+static inline size_t changelog_rec_offset(enum changelog_rec_flags crf,
+					  enum changelog_rec_extra_flags cref)
 {
 	size_t size = sizeof(struct changelog_rec);
 
@@ -1065,12 +1083,21 @@ static inline size_t changelog_rec_offset(enum changelog_rec_flags crf)
 	if (crf & CLF_JOBID)
 		size += sizeof(struct changelog_ext_jobid);
 
+	if (crf & CLF_EXTRA_FLAGS) {
+		size += sizeof(struct changelog_ext_extra_flags);
+	}
+
 	return size;
 }
 
 static inline size_t changelog_rec_size(const struct changelog_rec *rec)
 {
-	return changelog_rec_offset(rec->cr_flags);
+	enum changelog_rec_extra_flags cref = CLFE_INVALID;
+
+	if (rec->cr_flags & CLF_EXTRA_FLAGS)
+		cref = changelog_rec_extra_flags(rec)->cr_extra_flags;
+
+	return changelog_rec_offset(rec->cr_flags, cref);
 }
 
 static inline size_t changelog_rec_varsize(const struct changelog_rec *rec)
@@ -1084,7 +1111,8 @@ struct changelog_ext_rename *changelog_rec_rename(const struct changelog_rec *re
 	enum changelog_rec_flags crf = rec->cr_flags & CLF_VERSION;
 
 	return (struct changelog_ext_rename *)((char *)rec +
-					       changelog_rec_offset(crf));
+					       changelog_rec_offset(crf,
+								 CLFE_INVALID));
 }
 
 /* The jobid follows the rename extension, if present */
@@ -1095,14 +1123,33 @@ struct changelog_ext_jobid *changelog_rec_jobid(const struct changelog_rec *rec)
 					(CLF_VERSION | CLF_RENAME);
 
 	return (struct changelog_ext_jobid *)((char *)rec +
-					      changelog_rec_offset(crf));
+					      changelog_rec_offset(crf,
+								 CLFE_INVALID));
 }
 
-/* The name follows the rename and jobid extensions, if present */
+/* The additional flags follow the rename and jobid extensions, if present */
+static inline
+struct changelog_ext_extra_flags *changelog_rec_extra_flags(
+	const struct changelog_rec *rec)
+{
+	enum changelog_rec_flags crf = rec->cr_flags &
+		(CLF_VERSION | CLF_RENAME | CLF_JOBID);
+
+	return (struct changelog_ext_extra_flags *)((char *)rec +
+						 changelog_rec_offset(crf,
+								 CLFE_INVALID));
+}
+
+/* The name follows the rename, jobid  and extra flags extns, if present */
 static inline char *changelog_rec_name(const struct changelog_rec *rec)
 {
-	return (char *)rec + changelog_rec_offset(rec->cr_flags &
-						  CLF_SUPPORTED);
+	enum changelog_rec_extra_flags cref = CLFE_INVALID;
+
+	if (rec->cr_flags & CLF_EXTRA_FLAGS)
+		cref = changelog_rec_extra_flags(rec)->cr_extra_flags;
+
+	return (char *)rec + changelog_rec_offset(rec->cr_flags & CLF_SUPPORTED,
+						  cref & CLFE_SUPPORTED);
 }
 
 static inline size_t changelog_rec_snamelen(const struct changelog_rec *rec)
@@ -1132,32 +1179,58 @@ static inline char *changelog_rec_sname(const struct changelog_rec *rec)
  * The following assumptions are being made:
  *   - CLF_RENAME will not be removed
  *   - CLF_JOBID will not be added without CLF_RENAME being added too
+ *   - CLF_EXTRA_FLAGS will not be added without CLF_JOBID being added too
  *
  * @param[in,out]  rec         The record to remap.
  * @param[in]      crf_wanted  Flags describing the desired extensions.
+ * @param[in]      cref_want   Flags describing the desired extra extensions.
  */
 static inline void changelog_remap_rec(struct changelog_rec *rec,
-				       enum changelog_rec_flags crf_wanted)
+				       enum changelog_rec_flags crf_wanted,
+				       enum changelog_rec_extra_flags cref_want)
 {
+	char *ef_mov;
 	char *jid_mov;
 	char *rnm_mov;
 
 	crf_wanted &= CLF_SUPPORTED;
+	cref_want &= CLFE_SUPPORTED;
 
-	if ((rec->cr_flags & CLF_SUPPORTED) == crf_wanted)
-		return;
+	if ((rec->cr_flags & CLF_SUPPORTED) == crf_wanted) {
+		if (!(rec->cr_flags & CLF_EXTRA_FLAGS) ||
+		    (rec->cr_flags & CLF_EXTRA_FLAGS &&
+		    (changelog_rec_extra_flags(rec)->cr_extra_flags &
+							CLFE_SUPPORTED) ==
+								     cref_want))
+			return;
+	}
 
 	/* First move the variable-length name field */
-	memmove((char *)rec + changelog_rec_offset(crf_wanted),
+	memmove((char *)rec + changelog_rec_offset(crf_wanted, cref_want),
 		changelog_rec_name(rec), rec->cr_namelen);
 
-	/* Locations of jobid and rename extensions in the remapped record */
+	/* Locations of extensions in the remapped record */
+	ef_mov  = (char *)rec +
+		  changelog_rec_offset(crf_wanted & ~CLF_EXTRA_FLAGS,
+				       CLFE_INVALID);
 	jid_mov = (char *)rec +
-		  changelog_rec_offset(crf_wanted & ~CLF_JOBID);
+		  changelog_rec_offset(crf_wanted &
+				       ~(CLF_EXTRA_FLAGS | CLF_JOBID),
+				       CLFE_INVALID);
 	rnm_mov = (char *)rec +
-		  changelog_rec_offset(crf_wanted & ~(CLF_JOBID | CLF_RENAME));
+		  changelog_rec_offset(crf_wanted &
+				       ~(CLF_EXTRA_FLAGS |
+					 CLF_JOBID |
+					 CLF_RENAME),
+				       CLFE_INVALID);
 
 	/* Move the extension fields to the desired positions */
+	if ((crf_wanted & CLF_EXTRA_FLAGS) &&
+	    (rec->cr_flags & CLF_EXTRA_FLAGS)) {
+		memmove(ef_mov, changelog_rec_extra_flags(rec),
+			sizeof(struct changelog_ext_extra_flags));
+	}
+
 	if ((crf_wanted & CLF_JOBID) && (rec->cr_flags & CLF_JOBID))
 		memmove(jid_mov, changelog_rec_jobid(rec),
 			sizeof(struct changelog_ext_jobid));
@@ -1167,6 +1240,10 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 			sizeof(struct changelog_ext_rename));
 
 	/* Clear newly added fields */
+	if ((crf_wanted & CLF_EXTRA_FLAGS) &&
+	    !(rec->cr_flags & CLF_EXTRA_FLAGS))
+		memset(ef_mov, 0, sizeof(struct changelog_ext_extra_flags));
+
 	if ((crf_wanted & CLF_JOBID) && !(rec->cr_flags & CLF_JOBID))
 		memset(jid_mov, 0, sizeof(struct changelog_ext_jobid));
 
@@ -1175,6 +1252,10 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 
 	/* Update the record's flags accordingly */
 	rec->cr_flags = (rec->cr_flags & CLF_FLAGMASK) | crf_wanted;
+	if (rec->cr_flags & CLF_EXTRA_FLAGS)
+		changelog_rec_extra_flags(rec)->cr_extra_flags =
+			changelog_rec_extra_flags(rec)->cr_extra_flags |
+			cref_want;
 }
 
 enum changelog_message_type {

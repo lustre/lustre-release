@@ -781,21 +781,30 @@ static inline void llog_skip_over(struct llog_handle *lgh, __u64 *off,
  * big enough to handle the remapped records. It is also assumed that records
  * of a block have the same format (i.e.: the same features enabled).
  *
- * \param[in,out]    hdr	Header of the block of records to remap.
- * \param[in,out]    last_hdr   Last header, don't read past this point.
- * \param[in]        flags	Flags describing the fields to keep.
+ * \param[in,out]    hdr	   Header of the block of records to remap.
+ * \param[in,out]    last_hdr      Last header, don't read past this point.
+ * \param[in]        flags	   Flags describing the fields to keep.
+ * \param[in]        extra_flags   Flags describing the extra fields to keep.
  */
 static void changelog_block_trim_ext(struct llog_rec_hdr *hdr,
 				     struct llog_rec_hdr *last_hdr,
-				     enum changelog_rec_flags flags)
+				     enum changelog_rec_flags flags,
+				     enum changelog_rec_extra_flags extra_flags)
 {
 	if (hdr->lrh_type != CHANGELOG_REC)
 		return;
 
 	do {
 		struct changelog_rec *rec = (struct changelog_rec *)(hdr + 1);
+		enum changelog_rec_extra_flags xflag = CLFE_INVALID;
 
-		changelog_remap_rec(rec, rec->cr_flags & flags);
+		if (flags & CLF_EXTRA_FLAGS &&
+		    rec->cr_flags & CLF_EXTRA_FLAGS) {
+			xflag = changelog_rec_extra_flags(rec)->cr_extra_flags &
+				extra_flags;
+		}
+
+		changelog_remap_rec(rec, rec->cr_flags & flags, xflag);
 		hdr = llog_rec_hdr_next(hdr);
 	} while ((char *)hdr <= (char *)last_hdr);
 }
@@ -831,6 +840,8 @@ static int llog_osd_next_block(const struct lu_env *env,
 	int last_idx = *cur_idx;
 	__u64 last_offset = *cur_offset;
 	bool force_mini_rec = false;
+	enum changelog_rec_flags flags;
+	enum changelog_rec_extra_flags xflags;
 
 	ENTRY;
 
@@ -962,9 +973,14 @@ static int llog_osd_next_block(const struct lu_env *env,
 		}
 
 		/* Trim unsupported extensions for compat w/ older clients */
+		flags = CLF_SUPPORTED;
+		xflags = CLFE_SUPPORTED;
+		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_EXTRA_FLAGS))
+			flags &= ~CLF_EXTRA_FLAGS;
 		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_JOBID))
-			changelog_block_trim_ext(rec, last_rec,
-						 CLF_VERSION | CLF_RENAME);
+			flags &= ~CLF_JOBID;
+		if (flags != CLF_SUPPORTED || xflags != CLFE_SUPPORTED)
+			changelog_block_trim_ext(rec, last_rec, flags, xflags);
 
 		GOTO(out, rc = 0);
 
@@ -1007,6 +1023,8 @@ static int llog_osd_prev_block(const struct lu_env *env,
 	struct dt_device	*dt;
 	loff_t			 cur_offset;
 	__u32			chunk_size;
+	enum changelog_rec_flags flags;
+	enum changelog_rec_extra_flags xflags;
 	int			 rc;
 
 	ENTRY;
@@ -1099,9 +1117,14 @@ static int llog_osd_prev_block(const struct lu_env *env,
 		}
 
 		/* Trim unsupported extensions for compat w/ older clients */
+		flags = CLF_SUPPORTED;
+		xflags = CLFE_SUPPORTED;
+		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_EXTRA_FLAGS))
+			flags &= ~CLF_EXTRA_FLAGS;
 		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_JOBID))
-			changelog_block_trim_ext(rec, last_rec,
-						 CLF_VERSION | CLF_RENAME);
+			flags &= ~CLF_JOBID;
+		if (flags != CLF_SUPPORTED || xflags != CLFE_SUPPORTED)
+			changelog_block_trim_ext(rec, last_rec, flags, xflags);
 
 		GOTO(out, rc = 0);
 	}

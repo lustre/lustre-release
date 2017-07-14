@@ -643,14 +643,16 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 	struct llog_changelog_rec *rec;
 	struct lu_buf *buf;
 	int reclen;
+	int xflags = CLFE_INVALID;
 	int rc;
 
-	flags = (flags & CLF_FLAGMASK) | CLF_VERSION;
+	flags = (flags & CLF_FLAGMASK) | CLF_VERSION | CLF_EXTRA_FLAGS;
 	if (uc != NULL && uc->uc_jobid[0] != '\0')
 		flags |= CLF_JOBID;
 
 	reclen = llog_data_len(LLOG_CHANGELOG_HDR_SZ +
-			       changelog_rec_offset(flags & CLF_SUPPORTED));
+			       changelog_rec_offset(flags & CLF_SUPPORTED,
+						    xflags & CLFE_SUPPORTED));
 	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf, reclen);
 	if (buf->lb_buf == NULL)
 		RETURN(-ENOMEM);
@@ -664,6 +666,9 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 
 	if (flags & CLF_JOBID)
 		mdd_changelog_rec_ext_jobid(&rec->cr, uc->uc_jobid);
+
+	if (flags & CLF_EXTRA_FLAGS)
+		mdd_changelog_rec_ext_extra_flags(&rec->cr, xflags);
 
 	rc = mdd_changelog_store(env, mdd, rec, handle);
 

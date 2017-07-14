@@ -278,6 +278,7 @@ int mdd_declare_changelog_store(const struct lu_env *env,
 				       const struct lu_name *sname,
 				       struct thandle *handle);
 void mdd_changelog_rec_ext_jobid(struct changelog_rec *rec, const char *jobid);
+void mdd_changelog_rec_ext_extra_flags(struct changelog_rec *rec, __u64 eflags);
 int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 			struct llog_changelog_rec *rec, struct thandle *th);
 int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,

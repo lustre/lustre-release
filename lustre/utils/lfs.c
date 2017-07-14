@@ -43,6 +43,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <inttypes.h>
 #include <getopt.h>
 #include <string.h>
 #include <mntent.h>
@@ -4478,6 +4479,7 @@ static int lfs_changelog(int argc, char **argv)
 	rc = llapi_changelog_start(&changelog_priv,
 				   CHANGELOG_FLAG_BLOCK |
 				   CHANGELOG_FLAG_JOBID |
+				   CHANGELOG_FLAG_EXTRA_FLAGS |
 				   (follow ? CHANGELOG_FLAG_FOLLOW : 0),
 				   mdd, startrec);
 	if (rc < 0) {
@@ -4515,6 +4517,13 @@ static int lfs_changelog(int argc, char **argv)
 
 			if (jid->cr_jobid[0] != '\0')
 				printf(" j=%s", jid->cr_jobid);
+		}
+
+		if (rec->cr_flags & CLF_EXTRA_FLAGS) {
+			struct changelog_ext_extra_flags *ef =
+				changelog_rec_extra_flags(rec);
+
+			printf(" ef=0x%llx", ef->cr_extra_flags);
 		}
 
 		if (rec->cr_namelen)

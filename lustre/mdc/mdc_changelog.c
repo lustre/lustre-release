@@ -214,7 +214,11 @@ static int chlg_load(void *args)
 		GOTO(err_out, rc);
 	}
 
-	rc = llog_init_handle(NULL, llh, LLOG_F_IS_CAT|LLOG_F_EXT_JOBID, NULL);
+	rc = llog_init_handle(NULL, llh,
+			      LLOG_F_IS_CAT |
+			      LLOG_F_EXT_JOBID |
+			      LLOG_F_EXT_EXTRA_FLAGS,
+			      NULL);
 	if (rc) {
 		CERROR("%s: fail to init llog handle: rc = %d\n",
 		       obd->obd_name, rc);

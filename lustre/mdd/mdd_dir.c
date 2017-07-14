@@ -735,7 +735,8 @@ static int mdd_llog_record_calc_size(const struct lu_env *env,
 				     const struct lu_name *sname)
 {
 	const struct lu_ucred	*uc = lu_ucred(env);
-	enum changelog_rec_flags crf = 0;
+	enum changelog_rec_flags crf = CLF_EXTRA_FLAGS;
+	enum changelog_rec_extra_flags crfe = CLFE_INVALID;
 
 	if (sname != NULL)
 		crf |= CLF_RENAME;
@@ -743,7 +744,8 @@ static int mdd_llog_record_calc_size(const struct lu_env *env,
 	if (uc != NULL && uc->uc_jobid[0] != '\0')
 		crf |= CLF_JOBID;
 
-	return llog_data_len(LLOG_CHANGELOG_HDR_SZ + changelog_rec_offset(crf) +
+	return llog_data_len(LLOG_CHANGELOG_HDR_SZ +
+			     changelog_rec_offset(crf, crfe) +
 			     (tname != NULL ? tname->ln_namelen : 0) +
 			     (sname != NULL ? 1 + sname->ln_namelen : 0));
 }
@@ -868,6 +870,13 @@ void mdd_changelog_rec_ext_jobid(struct changelog_rec *rec, const char *jobid)
 	strlcpy(jid->cr_jobid, jobid, sizeof(jid->cr_jobid));
 }
 
+void mdd_changelog_rec_ext_extra_flags(struct changelog_rec *rec, __u64 eflags)
+{
+	struct changelog_ext_extra_flags *ef = changelog_rec_extra_flags(rec);
+
+	ef->cr_extra_flags = eflags;
+}
+
 /** Store a namespace change changelog record
  * If this fails, we must fail the whole transaction; we don't
  * want the change to commit without the log entry.
@@ -895,6 +904,7 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	struct llog_changelog_rec	*rec;
 	struct lu_buf			*buf;
 	int				 reclen;
+	__u64				 xflags = CLFE_INVALID;
 	int				 rc;
 	ENTRY;
 
@@ -916,6 +926,7 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	rec = buf->lb_buf;
 
 	crf &= CLF_FLAGMASK;
+	crf |= CLF_EXTRA_FLAGS;
 
 	if (uc != NULL && uc->uc_jobid[0] != '\0')
 		crf |= CLF_JOBID;
@@ -926,6 +937,11 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 		crf |= CLF_VERSION;
 
 	rec->cr.cr_flags = crf;
+
+	if (crf & CLF_EXTRA_FLAGS) {
+		mdd_changelog_rec_ext_extra_flags(&rec->cr, xflags);
+	}
+
 	rec->cr.cr_type = (__u32)type;
 	rec->cr.cr_pfid = *tpfid;
 	rec->cr.cr_namelen = tname->ln_namelen;
