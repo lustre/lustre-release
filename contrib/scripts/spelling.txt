@@ -1,0 +1,134 @@
+# The format of each line is:
+# mistake||correction
+#
+alloca||malloc
+CFS_ATOMIC_INIT||ATOMIC_INIT
+cfs_atomic_add||atomic_add
+cfs_atomic_add_return||atomic_add_return
+cfs_atomic_add_unless||atomic_add_unless
+cfs_atomic_cmpxchg||atomic_cmpxchg
+cfs_atomic_dec||atomic_dec
+cfs_atomic_dec_and_lock||atomic_dec_and_lock
+cfs_atomic_dec_and_test||atomic_dec_and_test
+cfs_atomic_dec_return||atomic_dec_return
+cfs_atomic_inc||atomic_inc
+cfs_atomic_inc_and_test||atomic_inc_and_test
+cfs_atomic_inc_not_zero||atomic_inc_not_zero
+cfs_atomic_inc_return||atomic_inc_return
+cfs_atomic_read||atomic_read
+cfs_atomic_set||atomic_set
+cfs_atomic_sub||atomic_sub
+cfs_atomic_sub_and_test||atomic_sub_and_test
+cfs_atomic_sub_return||atomic_sub_return
+cfs_atomic_t||atomic_t
+CFS_HLIST_HEAD||HLIST_HEAD
+CFS_HLIST_HEAD_INIT||HLIST_HEAD_INIT
+CFS_INIT_HLIST_HEAD||INIT_HLIST_HEAD
+CFS_INIT_HLIST_NODE||INIT_HLIST_NODE
+cfs_hlist_add_after||hlist_add_after
+cfs_hlist_add_before||hlist_add_before
+cfs_hlist_add_head||hlist_add_head
+cfs_hlist_del||hlist_del
+cfs_hlist_del_init||hlist_del_init
+cfs_hlist_empty||hlist_empty
+cfs_hlist_entry||hlist_entry
+cfs_hlist_for_each||hlist_for_each
+cfs_hlist_for_each_safe||hlist_for_each_safe
+cfs_hlist_head_t||struct hlist_head
+cfs_hlist_node_t||struct hlist_node
+cfs_hlist_unhashed||hlist_unhashed
+cfs_inode_t||struct inode
+CFS_INIT_LIST_HEAD||INIT_LIST_HEAD
+CFS_LIST_HEAD||struct list_head foo = LIST_HEAD_INIT(foo);
+CFS_LIST_HEAD_INIT||LIST_HEAD_INIT
+cfs_list_add||list_add
+cfs_list_add_tail||list_add_tail
+cfs_list_del||list_del
+cfs_list_del_init||list_del_init
+cfs_list_empty||list_empty
+cfs_list_empty_careful||list_empty_careful
+cfs_list_entry||list_entry
+cfs_list_for_each||list_for_each
+cfs_list_for_each_entry||list_for_each_entry
+cfs_list_for_each_entry_continue||list_for_each_entry_continue
+cfs_list_for_each_entry_reverse||list_for_each_entry_reverse
+cfs_list_for_each_entry_safe||list_for_each_entry_safe
+cfs_list_for_each_entry_safe_from||list_for_each_entry_safe_from
+cfs_list_for_each_entry_safe_reverse||list_for_each_entry_safe_reverse
+cfs_list_for_each_entry_safe_typed||list_for_each_entry_safe_typed
+cfs_list_for_each_entry_typed||list_for_each_entry_typed
+cfs_list_for_each_prev||list_for_each_prev
+cfs_list_for_each_safe||list_for_each_safe
+cfs_list_move||list_move
+cfs_list_move_tail||list_move_tail
+cfs_list_splice||list_splice
+cfs_list_splice_init||list_splice_init
+cfs_list_splice_tail||list_splice_tail
+cfs_list_t||struct list_head
+struct timeval||struct timespec64
+cfs_time_current_sec||ktime_get_real_seconds
+cfs_time_current_64||ktime_get
+cfs_time_add_64||ktime_add
+cfs_time_before_64||ktime_before
+cfs_time_beforeq_64||ktime_compare
+CFS_PAGE_MASK||PAGE_MASK
+CFS_PAGE_SIZE||PAGE_SIZE
+PAGE_CACHE_MASK||PAGE_MASK
+PAGE_CACHE_SIZE||PAGE_SIZE
+PAGE_CACHE_SHIFT||PAGE_SHIFT
+page_cache_release||put_page
+page_cache_get||get_page
+cfs_proc_dir_entry_t||struct proc_dir_entry
+cfs_rcu_head_t||struct rcu_head
+cfs_hash_lock_t||union cfs_hash_lock
+cfs_hash_bucket_t||struct cfs_hash_bucket
+cfs_hash_bd_t||struct cfs_hash_bd
+cfs_hash_t||struct cfs_hash
+cfs_hash_lock_ops_t||struct cfs_hash_lock_ops
+cfs_hash_hlist_ops_t||struct cfs_hash_hlist_ops
+cfs_hash_ops_t||struct cfs_hash_ops
+cfs_hash_head_t||struct cfs_hash_head
+cfs_hash_head_dep_t||struct cfs_hash_head_dep
+cfs_hash_dhead_t||struct cfs_hash_dhead
+cfs_hash_dhead_dep_t||struct cfs_hash_dhead_dep
+cfs_hash_lookup_intent_t||enum cfs_hash_lookup_intent
+cfs_hash_cond_arg_t||struct cfs_hash_cond_arg
+lnet_ni_status_t||struct lnet_ni_status
+lnet_ping_info_t||struct lnet_ping_info
+lnet_process_id_packed_t||struct lnet_process_id_packed
+lnet_handle_wire_t||struct lnet_handle_wire
+lnet_hdr_t||struct lnet_hdr
+lnet_magicversion_t||struct lnet_magicversion
+lnet_acceptor_connreq_t||struct lnet_acceptor_connreq
+lnet_counters_t||struct lnet_counters
+ldlm_appetite_t||enum ldlm_appetite
+ldlm_cancel_flags_t||enum ldlm_cancel_flags
+ldlm_error_t||enum ldlm_error
+ldlm_ns_hash_def_t||struct ldlm_ns_hash_def
+ldlm_mode_t||enum ldlm_mode
+ldlm_ns_type_t||enum ldlm_ns_type
+ldlm_policy_data_t||enum ldlm_policy_data
+ldlm_policy_res_t||enum ldlm_policy_res
+ldlm_side_t||enum ldlm_side
+ldlm_type_t||enum ldlm_type
+ldlm_wire_policy_data_t||union ldlm_wire_policy_data
+LPU64||%llu
+LPD64||%lld
+LPX64||%#llx
+LPX64i||%llx
+LPO64||%#llo
+LPLU||%lu
+LPLD||%ld
+LPLX||%#lx
+LPPID||%d
+LPROCFS||CONFIG_PROC_FS
+mktemp||mkstemp
+sprintf||snprintf
+strcpy||strncpy
+strcat||strncat
+tempnam||mkstemp
+f_dentry||f_path.dentry
+= seq_printf||seq_printf
+return seq_printf||seq_printf
+DN_MAX_BONUSLEN||DN_BONUS_SIZE(dnodesize)
+DN_OLD_MAX_BONUSLEN||DN_BONUS_SIZE(DNODE_MIN_SIZE)

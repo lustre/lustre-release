@@ -1,0 +1,7 @@
+address_space_operations
+block_device_operations
+dentry_operations
+file_lock_operations
+file_operations
+inode_operations
+sysfs_ops
