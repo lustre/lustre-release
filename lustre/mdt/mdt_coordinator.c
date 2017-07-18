@@ -538,6 +538,10 @@ static int mdt_coordinator(void *data)
 
 	while (1) {
 		int i;
+		int update_idx = 0;
+		int updates_sz;
+		int updates_cnt;
+		struct hsm_record_update *updates;
 
 		/* Limit execution of the expensive requests traversal
 		 * to at most every "wait_event_time" jiffies. This prevents
@@ -609,14 +613,32 @@ static int mdt_coordinator(void *data)
 			goto clean_cb_alloc;
 		}
 
+		/* Compute how many HAI we have in all the requests */
+		updates_cnt = 0;
+		for (i = 0; i < hsd.request_cnt; i++) {
+			const struct hsm_scan_request *request =
+				&hsd.request[i];
+
+			updates_cnt += request->hal->hal_count;
+		}
+
+		/* Allocate a temporary array to store the cookies to
+		 * update, and their status. */
+		updates_sz = updates_cnt * sizeof(*updates);
+		OBD_ALLOC(updates, updates_sz);
+		if (updates == NULL) {
+			CERROR("%s: Cannot allocate memory (%d o) "
+			       "for %d updates\n",
+			       mdt_obd_name(mdt), updates_sz, updates_cnt);
+			continue;
+		}
+
 		/* here hsd contains a list of requests to be started */
 		for (i = 0; i < hsd.request_cnt; i++) {
 			struct hsm_scan_request *request = &hsd.request[i];
 			struct hsm_action_list	*hal = request->hal;
 			struct hsm_action_item	*hai;
-			__u64			*cookies;
-			int			 sz, j;
-			enum agent_req_status	 status;
+			int			 j;
 
 			/* still room for work ? */
 			if (atomic_read(&cdt->cdt_request_count) >=
@@ -628,34 +650,32 @@ static int mdt_coordinator(void *data)
 			 * if the copy tool failed to do the request
 			 * it has to use hsm_progress
 			 */
-			status = (rc ? ARS_WAITING : ARS_STARTED);
 
 			/* set up cookie vector to set records status
 			 * after copy tools start or failed
 			 */
-			sz = hal->hal_count * sizeof(__u64);
-			OBD_ALLOC(cookies, sz);
-			if (cookies == NULL)
-				continue;
-
 			hai = hai_first(hal);
 			for (j = 0; j < hal->hal_count; j++) {
-				cookies[j] = hai->hai_cookie;
+				updates[update_idx].cookie = hai->hai_cookie;
+				updates[update_idx].status =
+					(rc ? ARS_WAITING : ARS_STARTED);
 				hai = hai_next(hai);
+				update_idx++;
 			}
+		}
 
-			rc = mdt_agent_record_update(mti->mti_env, mdt, cookies,
-						     hal->hal_count, status);
+		if (update_idx) {
+			rc = mdt_agent_record_update(mti->mti_env, mdt,
+						     updates, update_idx);
 			if (rc)
 				CERROR("%s: mdt_agent_record_update() failed, "
-				       "rc=%d, cannot update status to %s "
+				       "rc=%d, cannot update records "
 				       "for %d cookies\n",
-				       mdt_obd_name(mdt), rc,
-				       agent_req_status2name(status),
-				       hal->hal_count);
-
-			OBD_FREE(cookies, sz);
+				       mdt_obd_name(mdt), rc, update_idx);
 		}
+
+		OBD_FREE(updates, updates_sz);
+
 clean_cb_alloc:
 		/* free hal allocated by callback */
 		for (i = 0; i < hsd.request_cnt; i++) {
@@ -1113,9 +1133,13 @@ int mdt_hsm_add_hal(struct mdt_thread_info *mti,
 		 * it will be done when updating the request status
 		 */
 		if (hai->hai_action == HSMA_CANCEL) {
+			struct hsm_record_update update = {
+				.cookie = hai->hai_cookie,
+				.status = ARS_CANCELED,
+			};
+
 			rc = mdt_agent_record_update(mti->mti_env, mti->mti_mdt,
-						     &hai->hai_cookie,
-						     1, ARS_CANCELED);
+						     &update, 1);
 			if (rc) {
 				CERROR("%s: mdt_agent_record_update() failed, "
 				       "rc=%d, cannot update status to %s "
@@ -1540,10 +1564,13 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 		/* update record first (LU-9075) */
 		if (update_record) {
 			int rc1;
+			struct hsm_record_update update = {
+				.cookie = pgs->hpk_cookie,
+				.status = status,
+			};
 
 			rc1 = mdt_agent_record_update(mti->mti_env, mdt,
-						     &pgs->hpk_cookie, 1,
-						     status);
+						      &update, 1);
 			if (rc1)
 				CERROR("%s: mdt_agent_record_update() failed,"
 				       " rc=%d, cannot update status to %s"
