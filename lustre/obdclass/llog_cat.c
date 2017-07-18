@@ -85,8 +85,18 @@ static int llog_cat_new_log(const struct lu_env *env,
 	 * last_idx and cat_idx */
 	if ((index == llh->llh_cat_idx + 1 && llh->llh_count > 1) ||
 	    (index == 0 && llh->llh_cat_idx == 0)) {
-		CWARN("%s: there are no more free slots in catalog\n",
-		      loghandle->lgh_ctxt->loc_obd->obd_name);
+		if (cathandle->lgh_name == NULL) {
+			CWARN("%s: there are no more free slots in catalog "
+			      DFID":%x\n",
+			      loghandle->lgh_ctxt->loc_obd->obd_name,
+			      PFID(&cathandle->lgh_id.lgl_oi.oi_fid),
+			      cathandle->lgh_id.lgl_ogen);
+		} else {
+			CWARN("%s: there are no more free slots in "
+			      "catalog %s\n",
+			      loghandle->lgh_ctxt->loc_obd->obd_name,
+			      cathandle->lgh_name);
+		}
 		RETURN(-ENOSPC);
 	}
 
