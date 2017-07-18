@@ -318,10 +318,9 @@ free:
  */
 struct data_update_cb {
 	struct mdt_device	*mdt;
-	__u64			*cookies;
-	int			 cookies_count;
-	int			 cookies_done;
-	enum agent_req_status	 status;
+	struct hsm_record_update *updates;
+	unsigned int		 updates_count;
+	unsigned int		 updates_done;
 	cfs_time_t		 change_time;
 };
 
@@ -348,32 +347,38 @@ static int mdt_agent_record_update_cb(const struct lu_env *env,
 	ducb = data;
 
 	/* check if all done */
-	if (ducb->cookies_count == ducb->cookies_done)
+	if (ducb->updates_count == ducb->updates_done)
 		RETURN(LLOG_PROC_BREAK);
 
 	/* if record is in final state, never change */
-	/* if record is a cancel request, it cannot be canceled
-	 * this is to manage the following case:
-	 * when a request is canceled, we have 2 records with the
-	 * the same cookie : the one to cancel and the cancel request
-	 * the 1st has to be set to ARS_CANCELED and the 2nd to ARS_SUCCEED
-	 */
-	if (agent_req_in_final_state(larr->arr_status) ||
-	    (larr->arr_hai.hai_action == HSMA_CANCEL &&
-	     ducb->status == ARS_CANCELED))
+	if (agent_req_in_final_state(larr->arr_status))
 		RETURN(0);
 
 	rc = 0;
-	for (i = 0 ; i < ducb->cookies_count ; i++) {
-		CDEBUG(D_HSM, "%s: search %#llx, found %#llx\n",
-		       mdt_obd_name(ducb->mdt), ducb->cookies[i],
-		       larr->arr_hai.hai_cookie);
-		if (larr->arr_hai.hai_cookie == ducb->cookies[i]) {
+	for (i = 0 ; i < ducb->updates_count ; i++) {
+		struct hsm_record_update *update = &ducb->updates[i];
 
-			larr->arr_status = ducb->status;
+		CDEBUG(D_HSM, "%s: search %#llx, found %#llx\n",
+		       mdt_obd_name(ducb->mdt), update->cookie,
+		       larr->arr_hai.hai_cookie);
+		if (larr->arr_hai.hai_cookie == update->cookie) {
+
+			/* If record is a cancel request, it cannot be
+			 * canceled. This is to manage the following
+			 * case: when a request is canceled, we have 2
+			 * records with the the same cookie: the one
+			 * to cancel and the cancel request the 1st
+			 * has to be set to ARS_CANCELED and the 2nd
+			 * to ARS_SUCCEED
+			 */
+			if (larr->arr_hai.hai_action == HSMA_CANCEL &&
+			    update->status == ARS_CANCELED)
+				RETURN(0);
+
+			larr->arr_status = update->status;
 			larr->arr_req_change = ducb->change_time;
 			rc = llog_write(env, llh, hdr, hdr->lrh_index);
-			ducb->cookies_done++;
+			ducb->updates_done++;
 			break;
 		}
 	}
@@ -387,17 +392,18 @@ static int mdt_agent_record_update_cb(const struct lu_env *env,
 
 /**
  * update an entry in agent llog
+ *
  * \param env [IN] environment
  * \param mdt [IN] MDT device
- * \param cookie [IN] entries to update
- *    log cookie are returned by register
- * \param status [IN] new status of the request
- * \retval 0 success
- * \retval -ve failure
+ * \param updates [IN] array of entries to update
+ * \param updates_count [IN] number of entries in updates
+ *
+ * \retval 0 on success
+ * \retval negative on failure
  */
 int mdt_agent_record_update(const struct lu_env *env, struct mdt_device *mdt,
-			    __u64 *cookies, int cookies_count,
-			    enum agent_req_status status)
+			    struct hsm_record_update *updates,
+			    unsigned int updates_count)
 {
 	struct data_update_cb	 ducb;
 	u32 start_cat_idx = -1;
@@ -410,13 +416,14 @@ int mdt_agent_record_update(const struct lu_env *env, struct mdt_device *mdt,
 
 	/* Find the first location (start_cat_idx, start_rec_idx)
 	 * among the records corresponding to cookies. */
-	for (i = 0; i < cookies_count; i++) {
+	for (i = 0; i < updates_count; i++) {
 		/* If we cannot find a cached location for a cookie
 		 * (perhaps because the MDT was restart then we must
 		 * start from the beginning. In this case
 		 * mdt_agent_record_hash_get() sets both of cat_idx and
 		 * rec_idx to 0. */
-		cdt_agent_record_hash_lookup(&mdt->mdt_coordinator, cookies[i],
+		cdt_agent_record_hash_lookup(&mdt->mdt_coordinator,
+					     updates[i].cookie,
 					     &cat_idx, &rec_idx);
 		if (cat_idx < start_cat_idx) {
 			start_cat_idx = cat_idx;
@@ -432,20 +439,18 @@ int mdt_agent_record_update(const struct lu_env *env, struct mdt_device *mdt,
 		start_rec_idx -= 1;
 
 	ducb.mdt = mdt;
-	ducb.cookies = cookies;
-	ducb.cookies_count = cookies_count;
-	ducb.cookies_done = 0;
-	ducb.status = status;
+	ducb.updates = updates;
+	ducb.updates_count = updates_count;
+	ducb.updates_done = 0;
 	ducb.change_time = cfs_time_current_sec();
 
 	rc = cdt_llog_process(env, mdt, mdt_agent_record_update_cb, &ducb,
 			      start_cat_idx, start_rec_idx, WRITE);
 	if (rc < 0)
 		CERROR("%s: cdt_llog_process() failed, rc=%d, cannot update "
-		       "status to %s for %d cookies, done %d\n",
+		       "status for %u cookies, done %u\n",
 		       mdt_obd_name(mdt), rc,
-		       agent_req_status2name(status),
-		       cookies_count, ducb.cookies_done);
+		       updates_count, ducb.updates_done);
 	RETURN(rc);
 }
 
@@ -694,4 +699,3 @@ const struct file_operations mdt_hsm_actions_fops = {
 	.llseek		= seq_lseek,
 	.release	= lprocfs_release_hsm_actions,
 };
-

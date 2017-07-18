@@ -526,6 +526,11 @@ struct cdt_restore_handle {
 };
 extern struct kmem_cache *mdt_hsm_cdt_kmem;	/** restore handle slab cache */
 
+struct hsm_record_update {
+	__u64 cookie;
+	enum agent_req_status status;
+};
+
 static inline const struct md_device_operations *
 mdt_child_ops(struct mdt_device * m)
 {
@@ -832,9 +837,9 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
 			 __u64 compound_id, __u32 archive_id,
 			 __u64 flags, struct hsm_action_item *hai);
-int mdt_agent_record_update(const struct lu_env *env,
-			    struct mdt_device *mdt, __u64 *cookies,
-			    int cookies_count, enum agent_req_status status);
+int mdt_agent_record_update(const struct lu_env *env, struct mdt_device *mdt,
+			    struct hsm_record_update *updates,
+			    unsigned int updates_count);
 void cdt_agent_record_hash_add(struct coordinator *cdt, u64 cookie, u32 cat_idt,
 			       u32 rec_idx);
 void cdt_agent_record_hash_lookup(struct coordinator *cdt, u64 cookie,
