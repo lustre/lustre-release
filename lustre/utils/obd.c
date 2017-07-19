@@ -4202,7 +4202,7 @@ int jt_barrier_thaw(int argc, char **argv)
 	return rc;
 }
 
-int __jt_barrier_stat(int argc, char **argv, struct barrier_ctl *bc)
+int __jt_barrier_stat(const char *fsname, struct barrier_ctl *bc)
 {
 	struct obd_ioctl_data data;
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
@@ -4216,7 +4216,7 @@ int __jt_barrier_stat(int argc, char **argv, struct barrier_ctl *bc)
 	memset(bc, 0, sizeof(*bc));
 	bc->bc_version = BARRIER_VERSION_V1;
 	bc->bc_cmd = BC_STAT;
-	strncpy(bc->bc_name, argv[1], sizeof(bc->bc_name));
+	strncpy(bc->bc_name, fsname, sizeof(bc->bc_name));
 	data.ioc_inlbuf1 = (char *)bc;
 	data.ioc_inllen1 = sizeof(*bc);
 	memset(buf, 0, sizeof(rawbuf));
@@ -4229,7 +4229,7 @@ int __jt_barrier_stat(int argc, char **argv, struct barrier_ctl *bc)
 	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_BARRIER, buf);
 	if (rc < 0)
 		fprintf(stderr, "Fail to query barrier for %s: %s\n",
-			argv[1], strerror(errno));
+			fsname, strerror(errno));
 	else
 		obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
 
@@ -4239,26 +4239,68 @@ int __jt_barrier_stat(int argc, char **argv, struct barrier_ctl *bc)
 int jt_barrier_stat(int argc, char **argv)
 {
 	struct barrier_ctl bc;
+	static struct option long_opt_barrier_stat[] = {
+		{
+			.val		= 's',
+			.name		= "state",
+			.has_arg	= no_argument,
+		},
+		{	.val		= 't',
+			.name		= "timeout",
+			.has_arg	= no_argument,
+		},
+		{
+			NULL
+		}
+	};
+	const char *name;
+	int index;
+	int opt;
 	int rc;
+	bool state = false;
+	bool timeout = false;
 
-	if (argc != 2)
+	while ((opt = getopt_long(argc, argv, "st", long_opt_barrier_stat,
+				  &index)) != EOF) {
+		switch (opt) {
+		case 's':
+			state = true;
+			break;
+		case 't':
+			timeout = true;
+			break;
+		default:
+			return CMD_HELP;
+		}
+	}
+
+	if (optind >= argc)
 		return CMD_HELP;
 
-	if (strlen(argv[1]) > 8) {
+	name = argv[optind];
+	if (strlen(name) > 8) {
 		fprintf(stderr, "fsname name %s is too long. "
-			"It should not exceed 8.\n", argv[1]);
+			"It should not exceed 8.\n", name);
 		return -EINVAL;
 	}
 
-	rc = __jt_barrier_stat(argc, argv, &bc);
+	rc = __jt_barrier_stat(name, &bc);
 	if (!rc) {
-		printf("The barrier for %s is in '%s'\n",
-		       argv[1], barrier_status2name(bc.bc_status));
-		if (bc.bc_status == BS_FREEZING_P1 ||
-		    bc.bc_status == BS_FREEZING_P2 ||
-		    bc.bc_status == BS_FROZEN)
-			printf("The barrier will be expired after %d "
-			       "seconds\n", bc.bc_timeout);
+		if (state && !timeout)
+			printf("%s\n", barrier_status2name(bc.bc_status));
+		else if (timeout && !state)
+			printf("%d\n",
+			       (bc.bc_status == BS_FREEZING_P1 ||
+				bc.bc_status == BS_FREEZING_P2 ||
+				bc.bc_status == BS_FROZEN) ?
+			       bc.bc_timeout : 0);
+		else
+			printf("state: %s\ntimeout: %d seconds\n",
+			       barrier_status2name(bc.bc_status),
+			       (bc.bc_status == BS_FREEZING_P1 ||
+				bc.bc_status == BS_FREEZING_P2 ||
+				bc.bc_status == BS_FROZEN) ?
+			       bc.bc_timeout : 0);
 	}
 
 	return rc;

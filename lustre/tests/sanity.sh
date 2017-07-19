@@ -16457,6 +16457,30 @@ post_801() {
 	stop_full_debug_logging
 }
 
+barrier_stat() {
+	if [ $(lustre_version_code mgs) -le $(version_code 2.10.0) ]; then
+		local st=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			   awk '/The barrier for/ { print $7 }')
+		echo $st
+	else
+		local st=$(do_facet mgs $LCTL barrier_stat -s $FSNAME)
+		echo \'$st\'
+	fi
+}
+
+barrier_expired() {
+	local expired
+
+	if [ $(lustre_version_code mgs) -le $(version_code 2.10.0) ]; then
+		expired=$(do_facet mgs $LCTL barrier_stat $FSNAME |
+			  awk '/will be expired/ { print $7 }')
+	else
+		expired=$(do_facet mgs $LCTL barrier_stat -t $FSNAME)
+	fi
+
+	echo $expired
+}
+
 test_801a() {
 	prep_801
 
@@ -16466,34 +16490,29 @@ test_801a() {
 	do_facet mgs $LCTL barrier_freeze $FSNAME 10 &
 
 	sleep 2
-	local b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			       awk '/The barrier for/ { print $7 }')
+	local b_status=$(barrier_stat)
 	echo "Got barrier status at: $(date)"
 	[ "$b_status" = "'freezing_p1'" ] ||
 		error "(1) unexpected barrier status $b_status"
 
 	do_facet mgs $LCTL set_param fail_val=0 fail_loc=0
 	wait
-	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			 awk '/The barrier for/ { print $7 }')
+	b_status=$(barrier_stat)
 	[ "$b_status" = "'frozen'" ] ||
 		error "(2) unexpected barrier status $b_status"
 
-	local expired=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			awk '/will be expired/ { print $7 }')
+	local expired=$(barrier_expired)
 	echo "sleep $((expired + 3)) seconds, then the barrier will be expired"
 	sleep $((expired + 3))
 
-	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			 awk '/The barrier for/ { print $7 }')
+	b_status=$(barrier_stat)
 	[ "$b_status" = "'expired'" ] ||
 		error "(3) unexpected barrier status $b_status"
 
 	do_facet mgs $LCTL barrier_freeze $FSNAME 10 ||
 		error "(4) fail to freeze barrier"
 
-	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			 awk '/The barrier for/ { print $7 }')
+	b_status=$(barrier_stat)
 	[ "$b_status" = "'frozen'" ] ||
 		error "(5) unexpected barrier status $b_status"
 
@@ -16503,16 +16522,14 @@ test_801a() {
 	do_facet mgs $LCTL barrier_thaw $FSNAME &
 
 	sleep 2
-	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			 awk '/The barrier for/ { print $7 }')
+	b_status=$(barrier_stat)
 	echo "Got barrier status at: $(date)"
 	[ "$b_status" = "'thawing'" ] ||
 		error "(6) unexpected barrier status $b_status"
 
 	do_facet mgs $LCTL set_param fail_val=0 fail_loc=0
 	wait
-	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			 awk '/The barrier for/ { print $7 }')
+	b_status=$(barrier_stat)
 	[ "$b_status" = "'thawed'" ] ||
 		error "(7) unexpected barrier status $b_status"
 
@@ -16520,8 +16537,7 @@ test_801a() {
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x2203
 	do_facet mgs $LCTL barrier_freeze $FSNAME
 
-	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			       awk '/The barrier for/ { print $7 }')
+	b_status=$(barrier_stat)
 	[ "$b_status" = "'failed'" ] ||
 		error "(8) unexpected barrier status $b_status"
 
@@ -16546,8 +16562,7 @@ test_801b() {
 	# 180 seconds should be long enough
 	do_facet mgs $LCTL barrier_freeze $FSNAME 180
 
-	local b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			       awk '/The barrier for/ { print $7 }')
+	local b_status=$(barrier_stat)
 	[ "$b_status" = "'frozen'" ] ||
 		error "(6) unexpected barrier status $b_status"
 
@@ -16569,8 +16584,7 @@ test_801b() {
 	stat $DIR/$tdir/d5 || error "(7) stat should succeed"
 
 	# To guarantee taht the 'stat' is not blocked
-	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			 awk '/The barrier for/ { print $7 }')
+	b_status=$(barrier_stat)
 	[ "$b_status" = "'frozen'" ] ||
 		error "(8) unexpected barrier status $b_status"
 
@@ -16583,14 +16597,12 @@ test_801b() {
 	ps -p $mv_pid || error "(12) rename should be blocked"
 	ps -p $rm_pid || error "(13) unlink should be blocked"
 
-	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			 awk '/The barrier for/ { print $7 }')
+	b_status=$(barrier_stat)
 	[ "$b_status" = "'frozen'" ] ||
 		error "(14) unexpected barrier status $b_status"
 
 	do_facet mgs $LCTL barrier_thaw $FSNAME
-	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			 awk '/The barrier for/ { print $7 }')
+	b_status=$(barrier_stat)
 	[ "$b_status" = "'thawed'" ] ||
 		error "(15) unexpected barrier status $b_status"
 
@@ -16613,8 +16625,7 @@ test_801c() {
 
 	do_facet mgs $LCTL barrier_freeze $FSNAME 30
 
-	local b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			       awk '/The barrier for/ { print $7 }')
+	local b_status=$(barrier_stat)
 	[ "$b_status" = "'expired'" -o "$b_status" = "'failed'" ] || {
 		do_facet mgs $LCTL barrier_thaw $FSNAME
 		error "(2) unexpected barrier status $b_status"
@@ -16625,14 +16636,12 @@ test_801c() {
 
 	do_facet mgs $LCTL barrier_freeze $FSNAME 10
 
-	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			 awk '/The barrier for/ { print $7 }')
+	b_status=$(barrier_stat)
 	[ "$b_status" = "'frozen'" ] ||
 		error "(4) unexpected barrier status $b_status"
 
 	do_facet mgs $LCTL barrier_thaw $FSNAME
-	b_status=$(do_facet mgs $LCTL barrier_stat $FSNAME |
-			 awk '/The barrier for/ { print $7 }')
+	b_status=$(barrier_stat)
 	[ "$b_status" = "'thawed'" ] ||
 		error "(5) unexpected barrier status $b_status"
 
