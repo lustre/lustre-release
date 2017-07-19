@@ -2048,7 +2048,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 
 	work_start = ktime_get_real();
 	arrived = timespec64_to_ktime(request->rq_arrival_time);
-	timediff_usecs = ktime_us_delta(arrived, work_start);
+	timediff_usecs = ktime_us_delta(work_start, arrived);
 	if (likely(svc->srv_stats != NULL)) {
                 lprocfs_counter_add(svc->srv_stats, PTLRPC_REQWAIT_CNTR,
 				    timediff_usecs);
