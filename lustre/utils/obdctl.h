@@ -167,7 +167,7 @@ int jt_lcfg_listparam(int argc, char **argv);
 int jt_pool_cmd(int argc, char **argv);
 int jt_barrier_freeze(int argc, char **argv);
 int jt_barrier_thaw(int argc, char **argv);
-int __jt_barrier_stat(int argc, char **argv, struct barrier_ctl *bc);
+int __jt_barrier_stat(const char *fsname, struct barrier_ctl *bc);
 int jt_barrier_stat(int argc, char **argv);
 int jt_barrier_rescan(int argc, char **argv);
 int jt_snapshot_create(int argc, char **argv);

@@ -7,7 +7,7 @@
 .B lctl barrier_thaw \fR{fsname}
 .br
 .br
-.B lctl barrier_stat \fR{fsname}
+.B lctl barrier_stat \fR[--state|-s] [--timeout|-t] {fsname}
 .br
 .br
 .B lctl barrier_rescan \fR{fsname} [timeout]
@@ -37,7 +37,7 @@ blocked metadata modifications (because of the former
 .B barrier_freeze
 command) will be handled normally.
 .TP
-.B barrier_stat \fR{fsname}
+.B barrier_stat \fR[--state|-s] [--timeout|-t] {fsname}
 .br
 Query the write barrier status, the possible status and related meanings are
 as following:
@@ -54,7 +54,14 @@ as following:
   'unknown': other cases
 .br
 If the barrier is in 'freezing_p1', 'freezing_p2' or 'frozen' status, then
-the lifetime remaining will be returned also.
+the lifetime remaining will be returned also. If no option is specified,
+or both "-s" and "-t" options are specified, then the output format is:
+
+  state: xxx
+  timeout: nnn seconds
+
+Otherwise, only the value ('xxx' or 'nnn') corresponding to the given option
+will be printed.
 .TP
 .B barrier_rescan \fR{fsname} [timeout]
 .br

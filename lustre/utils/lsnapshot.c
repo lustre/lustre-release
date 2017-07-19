@@ -1379,8 +1379,7 @@ out:
 		if (!rc && !rc1) {
 			struct barrier_ctl bc;
 
-			__argv[0] = "barrier_stat";
-			rc = __jt_barrier_stat(2, __argv, &bc);
+			rc = __jt_barrier_stat(__argv[1], &bc);
 			if (rc) {
 				SNAPSHOT_ADD_LOG(si, "Can't get barrier status "
 						 "on %s: rc = %d\n",

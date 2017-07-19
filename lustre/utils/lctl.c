@@ -255,7 +255,7 @@ command_t cmdlist[] = {
 	 "usage: barrier_thaw <fsname>"},
 	{"barrier_stat", jt_barrier_stat, 0,
 	 "query write barrier status on MDTs\n"
-	 "usage: barrier_stat <fsname>"},
+	 "usage: barrier_stat [--state|-s] [--timeout|-t] <fsname>"},
 	{"barrier_rescan", jt_barrier_rescan, 0,
 	 "rescan the system to filter out inactive MDT(s) for barrier\n"
 	 "usage: barrier_rescan <fsname> [timeout (in seconds)]"},
