@@ -9,6 +9,10 @@ set -e
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 19430 19967 19967
 ALWAYS_EXCEPT="                2     5     6    $SANITY_SEC_EXCEPT"
+if $SHARED_KEY; then
+# bug number for skipped test: 9145 9145 9671 9145 9145 9145 9145 9245
+	ALWAYS_EXCEPT="        17   18   19   20   21   22   23   27 $ALWAYS_EXCEPT"
+fi
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=$(dirname $0)
@@ -114,6 +118,7 @@ sec_login() {
 	local user=$1
 	local group=$2
 
+	$GSS_KRB5 || return
 	if ! $RUNAS_CMD -u $user krb5_login.sh; then
 		error "$user login kerberos failed."
 		exit 1
@@ -1342,6 +1347,7 @@ nodemap_test_cleanup() {
 	do_facet mgs $LCTL nodemap_activate 0
 	wait_nm_sync active 0
 
+	export SK_UNIQUE_NM=false
 	return 0
 }
 
@@ -1588,6 +1594,8 @@ run_test 24 "check nodemap proc files for LBUGs and Oopses"
 test_25() {
 	local tmpfile=$(mktemp)
 	local tmpfile2=$(mktemp)
+	local tmpfile3=$(mktemp)
+	local tmpfile4=$(mktemp)
 	local subdir=c0dir
 	local client
 
@@ -1597,6 +1605,7 @@ test_25() {
 	zconf_umount_clients $CLIENTS $MOUNT ||
 	    error "unable to umount clients $CLIENTS"
 
+	export SK_UNIQUE_NM=true
 	nodemap_test_setup
 
 	# enable trusted/admin for setquota call in cleanup_and_setup_lustre()
@@ -1613,36 +1622,42 @@ test_25() {
 	trap nodemap_test_cleanup EXIT
 
 	# create a new, empty nodemap, and add fileset info to it
-	do_facet mgs $LCTL nodemap_add test26 ||
-		error "unable to create nodemap test26"
-	do_facet mgs $LCTL set_param -P nodemap.test26.fileset=/$subdir ||
-		error "unable to add fileset info to nodemap test26"
+	do_facet mgs $LCTL nodemap_add test25 ||
+		error "unable to create nodemap $testname"
+	do_facet mgs $LCTL set_param -P nodemap.$testname.fileset=/$subdir ||
+		error "unable to add fileset info to nodemap test25"
 
-	wait_nm_sync test26 id
+	wait_nm_sync test25 id
 
 	do_facet mgs $LCTL nodemap_info > $tmpfile
 	do_facet mds $LCTL nodemap_info > $tmpfile2
 
-	cleanup_and_setup_lustre
+	if ! $SHARED_KEY; then
+		# will conflict with SK's nodemaps
+		cleanup_and_setup_lustre
+	fi
 	# stop clients for this test
 	zconf_umount_clients $CLIENTS $MOUNT ||
 	    error "unable to umount clients $CLIENTS"
 
-	diff -q <(do_facet mgs $LCTL nodemap_info) $tmpfile >& /dev/null ||
+	do_facet mgs $LCTL nodemap_info > $tmpfile3
+	diff -q $tmpfile3 $tmpfile >& /dev/null ||
 		error "nodemap_info diff on MGS after remount"
 
-	diff -q <(do_facet mds $LCTL nodemap_info) $tmpfile2 >& /dev/null ||
+	do_facet mds $LCTL nodemap_info > $tmpfile4
+	diff -q $tmpfile4 $tmpfile2 >& /dev/null ||
 		error "nodemap_info diff on MDS after remount"
 
 	# cleanup nodemap
-	do_facet mgs $LCTL nodemap_del test26 ||
-	    error "cannot delete nodemap test26 from config"
+	do_facet mgs $LCTL nodemap_del test25 ||
+	    error "cannot delete nodemap test25 from config"
 	nodemap_test_cleanup
 	# restart clients previously stopped
 	zconf_mount_clients $CLIENTS $MOUNT ||
 	    error "unable to mount clients $CLIENTS"
 
 	rm -f $tmpfile $tmpfile2
+	export SK_UNIQUE_NM=false
 }
 run_test 25 "test save and reload nodemap config"
 
@@ -1666,7 +1681,12 @@ test_27() {
 	local loop=0
 
 	nodemap_test_setup
-	trap nodemap_test_cleanup EXIT
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=true
+	else
+		# will conflict with SK's nodemaps
+		trap nodemap_test_cleanup EXIT
+	fi
 
 	fileset_test_setup
 
@@ -1678,8 +1698,11 @@ test_27() {
 	# re-mount client
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
 		error "unable to umount client ${clients_arr[0]}"
+	# set some generic fileset to trigger SSK code
+	export FILESET=/
 	zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
 		error "unable to remount client ${clients_arr[0]}"
+	unset FILESET
 
 	# test mount point content
 	do_node ${clients_arr[0]} test -f $MOUNT/this_is_$subdir ||
@@ -1726,10 +1749,114 @@ test_27() {
 	do_node ${clients_arr[0]} test -d $MOUNT/$subdir ||
 		(ls $MOUNT ; error "fileset not cleared on nodemap c0")
 
+	# back to non-nodemap setup
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=false
+		zconf_umount_clients ${clients_arr[0]} $MOUNT ||
+			error "unable to umount client ${clients_arr[0]}"
+	fi
 	fileset_test_cleanup
 	nodemap_test_cleanup
+	if $SHARED_KEY; then
+		zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
+			error "unable to remount client ${clients_arr[0]}"
+	fi
 }
 run_test 27 "test fileset in nodemap"
+
+test_28() {
+	if ! $SHARED_KEY; then
+		skip "need shared key feature for this test" && return
+	fi
+	mkdir -p $DIR/$tdir || error "mkdir failed"
+	touch $DIR/$tdir/$tdir.out || error "touch failed"
+	if [ ! -f $DIR/$tdir/$tdir.out ]; then
+		error "read before rotation failed"
+	fi
+	# store top key identity to ensure rotation has occurred
+	SK_IDENTITY_OLD=$(lctl get_param *.*.*srpc* | grep "expire" |
+		head -1 | awk '{print $15}' | cut -c1-8)
+	do_facet $SINGLEMDS lfs flushctx ||
+		 error "could not run flushctx on $SINGLEMDS"
+	sleep 5
+	lfs flushctx || error "could not run flushctx on client"
+	sleep 5
+	# verify new key is in place
+	SK_IDENTITY_NEW=$(lctl get_param *.*.*srpc* | grep "expire" |
+		head -1 | awk '{print $15}' | cut -c1-8)
+	if [ $SK_IDENTITY_OLD == $SK_IDENTITY_NEW ]; then
+		error "key did not rotate correctly"
+	fi
+	if [ ! -f $DIR/$tdir/$tdir.out ]; then
+		error "read after rotation failed"
+	fi
+}
+run_test 28 "check shared key rotation method"
+
+test_29() {
+	if ! $SHARED_KEY; then
+		skip "need shared key feature for this test" && return
+	fi
+	if [ $SK_FLAVOR != "ski" ] && [ $SK_FLAVOR != "skpi" ]; then
+		skip "test only valid if integrity is active"
+	fi
+	rm -r $DIR/$tdir
+	mkdir $DIR/$tdir || error "mkdir"
+	touch $DIR/$tdir/$tfile || error "touch"
+	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
+		error "unable to umount clients"
+	keyctl show | awk '/lustre/ { print $1 }' |
+		xargs -IX keyctl unlink X
+	OLD_SK_PATH=$SK_PATH
+	export SK_PATH=/dev/null
+	if zconf_mount_clients ${clients_arr[0]} $MOUNT; then
+		export SK_PATH=$OLD_SK_PATH
+		if [ -e $DIR/$tdir/$tfile ]; then
+			error "able to mount and read without key"
+		else
+			error "able to mount without key"
+		fi
+	else
+		export SK_PATH=$OLD_SK_PATH
+		keyctl show | awk '/lustre/ { print $1 }' |
+			xargs -IX keyctl unlink X
+	fi
+}
+run_test 29 "check for missing shared key"
+
+test_30() {
+	if ! $SHARED_KEY; then
+		skip "need shared key feature for this test" && return
+	fi
+	if [ $SK_FLAVOR != "ski" ] && [ $SK_FLAVOR != "skpi" ]; then
+		skip "test only valid if integrity is active"
+	fi
+	mkdir -p $DIR/$tdir || error "mkdir failed"
+	touch $DIR/$tdir/$tdir.out || error "touch failed"
+	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
+		error "unable to umount clients"
+	# unload keys from ring
+	keyctl show | awk '/lustre/ { print $1 }' |
+		xargs -IX keyctl unlink X
+	# invalidate the key with bogus filesystem name
+	lgss_sk -w $SK_PATH/$FSNAME-bogus.key -f $FSNAME.bogus \
+		-t client -d /dev/urandom || error "lgss_sk failed (1)"
+	do_facet $SINGLEMDS lfs flushctx || error "could not run flushctx"
+	OLD_SK_PATH=$SK_PATH
+	export SK_PATH=$SK_PATH/$FSNAME-bogus.key
+	if zconf_mount_clients ${clients_arr[0]} $MOUNT; then
+		SK_PATH=$OLD_SK_PATH
+		if [ -a $DIR/$tdir/$tdir.out ]; then
+			error "mount and read file with invalid key"
+		else
+			error "mount with invalid key"
+		fi
+	fi
+	SK_PATH=$OLD_SK_PATH
+	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
+		error "unable to umount clients"
+}
+run_test 30 "check for invalid shared key"
 
 log "cleanup: ======================================================"
 
