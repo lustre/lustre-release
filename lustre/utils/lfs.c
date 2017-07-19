@@ -5174,6 +5174,14 @@ static int lfs_changelog(int argc, char **argv)
 		return rc;
 	}
 
+	rc = llapi_changelog_set_xflags(changelog_priv,
+					CHANGELOG_EXTRA_FLAG_UIDGID);
+	if (rc < 0) {
+		fprintf(stderr, "Can't set xflags for changelog: %s\n",
+			strerror(errno = -rc));
+		return rc;
+	}
+
 	while ((rc = llapi_changelog_recv(changelog_priv, &rec)) == 0) {
 		time_t secs;
 		struct tm ts;
@@ -5210,6 +5218,14 @@ static int lfs_changelog(int argc, char **argv)
 				changelog_rec_extra_flags(rec);
 
 			printf(" ef=0x%llx", ef->cr_extra_flags);
+
+			if (ef->cr_extra_flags & CLFE_UIDGID) {
+				struct changelog_ext_uidgid *uidgid =
+					changelog_rec_uidgid(rec);
+
+				printf(" u=%llu:%llu",
+				       uidgid->cr_uid, uidgid->cr_gid);
+			}
 		}
 
 		if (rec->cr_namelen)

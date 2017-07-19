@@ -396,6 +396,8 @@ int llapi_changelog_get_fd(void *priv);
 /* Allow records up to endrec to be destroyed; requires registered id. */
 int llapi_changelog_clear(const char *mdtname, const char *idstr,
 			  long long endrec);
+extern int llapi_changelog_set_xflags(void *priv,
+				    enum changelog_send_extra_flag extra_flags);
 
 /* HSM copytool interface.
  * priv is private state, managed internally by these functions

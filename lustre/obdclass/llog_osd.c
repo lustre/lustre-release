@@ -975,6 +975,8 @@ static int llog_osd_next_block(const struct lu_env *env,
 		/* Trim unsupported extensions for compat w/ older clients */
 		flags = CLF_SUPPORTED;
 		xflags = CLFE_SUPPORTED;
+		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_UIDGID))
+			xflags &= ~CLFE_UIDGID;
 		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_EXTRA_FLAGS))
 			flags &= ~CLF_EXTRA_FLAGS;
 		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_JOBID))
@@ -1119,6 +1121,8 @@ static int llog_osd_prev_block(const struct lu_env *env,
 		/* Trim unsupported extensions for compat w/ older clients */
 		flags = CLF_SUPPORTED;
 		xflags = CLFE_SUPPORTED;
+		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_UIDGID))
+			xflags &= ~CLFE_UIDGID;
 		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_EXTRA_FLAGS))
 			flags &= ~CLF_EXTRA_FLAGS;
 		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_JOBID))

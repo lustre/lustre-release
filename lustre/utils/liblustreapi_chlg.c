@@ -68,6 +68,8 @@ struct changelog_private {
 	int				 clp_fd;
 	/* Changelog delivery mode */
 	enum changelog_send_flag	 clp_send_flags;
+	/* Changelog extra flags */
+	enum changelog_send_extra_flag	 clp_send_extra_flags;
 	/* Available bytes in buffer */
 	size_t				 clp_buf_len;
 	/* Current position in buffer */
@@ -243,6 +245,8 @@ int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
 
 	if (cp->clp_send_flags & CHANGELOG_FLAG_EXTRA_FLAGS) {
 		rec_fmt |= CLF_EXTRA_FLAGS;
+		if (cp->clp_send_extra_flags & CHANGELOG_EXTRA_FLAG_UIDGID)
+			rec_extra_fmt |= CLFE_UIDGID;
 	}
 
 	if (cp->clp_buf + cp->clp_buf_len <= cp->clp_buf_pos) {
@@ -327,4 +331,37 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
 out_close:
 	close(fd);
 	return rc;
+}
+
+/**
+ * Set extra flags for reading changelogs
+ *
+ * @param priv		Opaque private control structure
+ * @param extra_flags	Read extra flags (e.g. CHANGELOG_EXTRA_FLAG_UIDGID)
+ *
+ * Just call this function right after llapi_changelog_start().
+ */
+int llapi_changelog_set_xflags(void *priv,
+			       enum changelog_send_extra_flag extra_flags)
+{
+	struct changelog_private *cp = priv;
+	static bool warned_uidgid;
+
+	if (!cp || cp->clp_magic != CHANGELOG_PRIV_MAGIC)
+		return -EINVAL;
+
+	cp->clp_send_extra_flags = extra_flags;
+
+	/* CHANGELOG_EXTRA_FLAG_UIDGID will eventually become mandatory.
+	 * If it wasn't specified, display a warning here.
+	 * Code elsewhere will remove the corresponding extension.
+	 */
+	if (!(extra_flags & CHANGELOG_EXTRA_FLAG_UIDGID) && !warned_uidgid) {
+		llapi_err_noerrno(LLAPI_MSG_WARN,
+		     "warning: %s() called without CHANGELOG_EXTRA_FLAG_UIDGID",
+		     __func__);
+		warned_uidgid = true;
+	}
+
+	return 0;
 }

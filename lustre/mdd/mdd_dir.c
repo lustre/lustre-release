@@ -736,7 +736,7 @@ static int mdd_llog_record_calc_size(const struct lu_env *env,
 {
 	const struct lu_ucred	*uc = lu_ucred(env);
 	enum changelog_rec_flags crf = CLF_EXTRA_FLAGS;
-	enum changelog_rec_extra_flags crfe = CLFE_INVALID;
+	enum changelog_rec_extra_flags crfe = CLFE_UIDGID;
 
 	if (sname != NULL)
 		crf |= CLF_RENAME;
@@ -845,8 +845,8 @@ static void mdd_changelog_rec_ext_rename(struct changelog_rec *rec,
 					 const struct lu_fid *spfid,
 					 const struct lu_name *sname)
 {
-	struct changelog_ext_rename	*rnm = changelog_rec_rename(rec);
-	size_t				 extsize = sname->ln_namelen + 1;
+	struct changelog_ext_rename *rnm = changelog_rec_rename(rec);
+	size_t extsize = sname->ln_namelen + 1;
 
 	LASSERT(sfid != NULL);
 	LASSERT(spfid != NULL);
@@ -862,7 +862,7 @@ static void mdd_changelog_rec_ext_rename(struct changelog_rec *rec,
 
 void mdd_changelog_rec_ext_jobid(struct changelog_rec *rec, const char *jobid)
 {
-	struct changelog_ext_jobid	*jid = changelog_rec_jobid(rec);
+	struct changelog_ext_jobid *jid = changelog_rec_jobid(rec);
 
 	if (jobid == NULL || jobid[0] == '\0')
 		return;
@@ -875,6 +875,15 @@ void mdd_changelog_rec_ext_extra_flags(struct changelog_rec *rec, __u64 eflags)
 	struct changelog_ext_extra_flags *ef = changelog_rec_extra_flags(rec);
 
 	ef->cr_extra_flags = eflags;
+}
+
+void mdd_changelog_rec_extra_uidgid(struct changelog_rec *rec,
+				    __u64 uid, __u64 gid)
+{
+	struct changelog_ext_uidgid *uidgid = changelog_rec_uidgid(rec);
+
+	uidgid->cr_uid = uid;
+	uidgid->cr_gid = gid;
 }
 
 /** Store a namespace change changelog record
@@ -936,10 +945,15 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	else
 		crf |= CLF_VERSION;
 
+	xflags |= CLFE_UIDGID;
+
 	rec->cr.cr_flags = crf;
 
 	if (crf & CLF_EXTRA_FLAGS) {
 		mdd_changelog_rec_ext_extra_flags(&rec->cr, xflags);
+		if (xflags & CLFE_UIDGID)
+			mdd_changelog_rec_extra_uidgid(&rec->cr,
+						       uc->uc_uid, uc->uc_gid);
 	}
 
 	rec->cr.cr_type = (__u32)type;

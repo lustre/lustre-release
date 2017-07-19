@@ -1551,6 +1551,14 @@ int lr_replicate()
 		goto out;
         }
 
+	rc = llapi_changelog_set_xflags(changelog_priv,
+					CHANGELOG_EXTRA_FLAG_UIDGID);
+	if (rc < 0) {
+		fprintf(stderr, "Error setting xflag in changelog for fs %s.\n",
+			status->ls_source_fs);
+		goto out;
+	}
+
         while (!quit && lr_parse_line(changelog_priv, info) == 0) {
                 rc = 0;
 		if (info->type == CL_RENAME && !info->is_extended) {
