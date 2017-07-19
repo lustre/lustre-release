@@ -47,7 +47,6 @@
 #include <md_object.h>
 #include <lustre_linkea.h>
 
-#define HALF_SEC			msecs_to_jiffies(MSEC_PER_SEC >> 1)
 #define LFSCK_CHECKPOINT_INTERVAL	60
 
 enum lfsck_flags {
@@ -141,19 +140,19 @@ struct lfsck_namespace {
 	__u32	ln_success_count;
 
 	/*  How long the LFSCK phase1 has run in seconds. */
-	__u32	ln_run_time_phase1;
+	time64_t ln_run_time_phase1;
 
 	/*  How long the LFSCK phase2 has run in seconds. */
-	__u32	ln_run_time_phase2;
+	time64_t ln_run_time_phase2;
 
 	/* Time for the last LFSCK completed in seconds since epoch. */
-	__u64	ln_time_last_complete;
+	time64_t ln_time_last_complete;
 
 	/* Time for the latest LFSCK ran in seconds since epoch. */
-	__u64	ln_time_latest_start;
+	time64_t ln_time_latest_start;
 
 	/* Time for the last LFSCK checkpoint in seconds since epoch. */
-	__u64	ln_time_last_checkpoint;
+	time64_t ln_time_last_checkpoint;
 
 	/* Position for the latest LFSCK started from. */
 	struct lfsck_position	ln_pos_latest_start;
@@ -273,14 +272,17 @@ struct lfsck_namespace {
 	 * the MDTs that contain non-verified MDT-objects. */
 	__u32	ln_bitmap_size;
 
+	/* For further using. 256-bytes aligned now. */
+	__u32	ln_reserved_1;
+
 	/* Time for the latest LFSCK scan in seconds from the beginning. */
-	__u32	ln_time_latest_reset;
+	time64_t ln_time_latest_reset;
 
 	/* How many linkEA overflow timestamp have been cleared. */
 	__u64	ln_linkea_overflow_cleared;
 
 	/* For further using. 256-bytes aligned now. */
-	__u64   ln_reserved[14];
+	__u64   ln_reserved[12];
 };
 
 enum lfsck_layout_inconsistency_type {
@@ -308,19 +310,19 @@ struct lfsck_layout {
 	__u32	ll_success_count;
 
 	/*  How long the LFSCK phase1 has run in seconds. */
-	__u32	ll_run_time_phase1;
+	time64_t ll_run_time_phase1;
 
 	/*  How long the LFSCK phase2 has run in seconds. */
-	__u32	ll_run_time_phase2;
+	time64_t ll_run_time_phase2;
 
 	/* Time for the last LFSCK completed in seconds since epoch. */
-	__u64	ll_time_last_complete;
+	time64_t ll_time_last_complete;
 
 	/* Time for the latest LFSCK ran in seconds since epoch. */
-	__u64	ll_time_latest_start;
+	time64_t ll_time_latest_start;
 
 	/* Time for the last LFSCK checkpoint in seconds since epoch. */
-	__u64	ll_time_last_checkpoint;
+	time64_t ll_time_last_checkpoint;
 
 	/* Position for the latest LFSCK started from. */
 	__u64	ll_pos_latest_start;
@@ -361,7 +363,8 @@ struct lfsck_layout {
 	/* The latest object has been processed (failed) during double scan. */
 	struct lfsck_layout_dangling_key ll_lldk_latest_scanned_phase2;
 
-	__u64	ll_reserved_2[8];
+	/* For further using */
+	u64	ll_reserved_2[7];
 
 	/* The OST targets bitmap to record the OSTs that contain
 	 * non-verified OST-objects. */
@@ -556,11 +559,11 @@ struct lfsck_component {
 	void			*lc_data;
 	struct lu_fid		 lc_fid_latest_scanned_phase2;
 
-	/* The time for last checkpoint, jiffies */
-	cfs_time_t		 lc_time_last_checkpoint;
+	/* The time for last checkpoint, seconds */
+	time64_t		 lc_time_last_checkpoint;
 
-	/* The time for next checkpoint, jiffies */
-	cfs_time_t		 lc_time_next_checkpoint;
+	/* The time for next checkpoint, seconds */
+	time64_t		 lc_time_next_checkpoint;
 
 	__u32			 lc_file_size;
 
@@ -670,11 +673,11 @@ struct lfsck_instance {
 	atomic_t		  li_double_scan_count;
 	struct ptlrpc_thread	  li_thread;
 
-	/* The time for last checkpoint, jiffies */
-	cfs_time_t		  li_time_last_checkpoint;
+	/* The time for last checkpoint, seconds */
+	time64_t		  li_time_last_checkpoint;
 
-	/* The time for next checkpoint, jiffies */
-	cfs_time_t		  li_time_next_checkpoint;
+	/* The time for next checkpoint, seconds */
+	time64_t		  li_time_next_checkpoint;
 
 	lfsck_out_notify	  li_out_notify;
 	void			 *li_out_notify_data;
@@ -933,7 +936,7 @@ void lfsck_instance_cleanup(const struct lu_env *env,
 			    struct lfsck_instance *lfsck);
 void lfsck_bits_dump(struct seq_file *m, int bits, const char *names[],
 		     const char *prefix);
-void lfsck_time_dump(struct seq_file *m, __u64 time, const char *name);
+void lfsck_time_dump(struct seq_file *m, time64_t time, const char *name);
 void lfsck_pos_dump(struct seq_file *m, struct lfsck_position *pos,
 		    const char *prefix);
 void lfsck_pos_fill(const struct lu_env *env, struct lfsck_instance *lfsck,

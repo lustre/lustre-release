@@ -43,13 +43,14 @@
 
 #define LFSCK_NAMESPACE_MAGIC_V1	0xA0629D03
 #define LFSCK_NAMESPACE_MAGIC_V2	0xA0621A0B
+#define LFSCK_NAMESPACE_MAGIC_V3	0xA06249FF
 
 /* For Lustre-2.x (x <= 6), the namespace LFSCK used LFSCK_NAMESPACE_MAGIC_V1
  * as the trace file magic. When downgrade to such old release, the old LFSCK
  * will not recognize the new LFSCK_NAMESPACE_MAGIC_V2 in the new trace file,
  * then it will reset the whole LFSCK, and will not cause start failure. The
  * similar case will happen when upgrade from such old release. */
-#define LFSCK_NAMESPACE_MAGIC		LFSCK_NAMESPACE_MAGIC_V2
+#define LFSCK_NAMESPACE_MAGIC		LFSCK_NAMESPACE_MAGIC_V3
 
 enum lfsck_nameentry_check {
 	LFSCK_NAMEENTRY_DEAD		= 1, /* The object has been unlinked. */
@@ -104,8 +105,8 @@ static void lfsck_namespace_le_to_cpu(struct lfsck_namespace *dst,
 	dst->ln_status = le32_to_cpu(src->ln_status);
 	dst->ln_flags = le32_to_cpu(src->ln_flags);
 	dst->ln_success_count = le32_to_cpu(src->ln_success_count);
-	dst->ln_run_time_phase1 = le32_to_cpu(src->ln_run_time_phase1);
-	dst->ln_run_time_phase2 = le32_to_cpu(src->ln_run_time_phase2);
+	dst->ln_run_time_phase1 = le64_to_cpu(src->ln_run_time_phase1);
+	dst->ln_run_time_phase2 = le64_to_cpu(src->ln_run_time_phase2);
 	dst->ln_time_last_complete = le64_to_cpu(src->ln_time_last_complete);
 	dst->ln_time_latest_start = le64_to_cpu(src->ln_time_latest_start);
 	dst->ln_time_last_checkpoint =
@@ -164,7 +165,7 @@ static void lfsck_namespace_le_to_cpu(struct lfsck_namespace *dst,
 	dst->ln_local_lpf_skipped = le64_to_cpu(src->ln_local_lpf_skipped);
 	dst->ln_local_lpf_failed = le64_to_cpu(src->ln_local_lpf_failed);
 	dst->ln_bitmap_size = le32_to_cpu(src->ln_bitmap_size);
-	dst->ln_time_latest_reset = le32_to_cpu(src->ln_time_latest_reset);
+	dst->ln_time_latest_reset = le64_to_cpu(src->ln_time_latest_reset);
 	dst->ln_linkea_overflow_cleared =
 				le64_to_cpu(src->ln_linkea_overflow_cleared);
 }
@@ -176,8 +177,8 @@ static void lfsck_namespace_cpu_to_le(struct lfsck_namespace *dst,
 	dst->ln_status = cpu_to_le32(src->ln_status);
 	dst->ln_flags = cpu_to_le32(src->ln_flags);
 	dst->ln_success_count = cpu_to_le32(src->ln_success_count);
-	dst->ln_run_time_phase1 = cpu_to_le32(src->ln_run_time_phase1);
-	dst->ln_run_time_phase2 = cpu_to_le32(src->ln_run_time_phase2);
+	dst->ln_run_time_phase1 = cpu_to_le64(src->ln_run_time_phase1);
+	dst->ln_run_time_phase2 = cpu_to_le64(src->ln_run_time_phase2);
 	dst->ln_time_last_complete = cpu_to_le64(src->ln_time_last_complete);
 	dst->ln_time_latest_start = cpu_to_le64(src->ln_time_latest_start);
 	dst->ln_time_last_checkpoint =
@@ -236,7 +237,7 @@ static void lfsck_namespace_cpu_to_le(struct lfsck_namespace *dst,
 	dst->ln_local_lpf_skipped = cpu_to_le64(src->ln_local_lpf_skipped);
 	dst->ln_local_lpf_failed = cpu_to_le64(src->ln_local_lpf_failed);
 	dst->ln_bitmap_size = cpu_to_le32(src->ln_bitmap_size);
-	dst->ln_time_latest_reset = cpu_to_le32(src->ln_time_latest_reset);
+	dst->ln_time_latest_reset = cpu_to_le64(src->ln_time_latest_reset);
 	dst->ln_linkea_overflow_cleared =
 				cpu_to_le64(src->ln_linkea_overflow_cleared);
 }
@@ -449,7 +450,7 @@ static int lfsck_namespace_init(const struct lu_env *env,
 	memset(ns, 0, sizeof(*ns));
 	ns->ln_magic = LFSCK_NAMESPACE_MAGIC;
 	ns->ln_status = LS_INIT;
-	ns->ln_time_latest_reset = cfs_time_current_sec();
+	ns->ln_time_latest_reset = ktime_get_real_seconds();
 	down_write(&com->lc_sem);
 	rc = lfsck_namespace_store(env, com);
 	if (rc == 0)
@@ -1007,7 +1008,7 @@ again:
 	}
 
 	memset(la, 0, sizeof(*la));
-	la->la_ctime = cfs_time_current_sec();
+	la->la_ctime = ktime_get_real_seconds();
 	la->la_valid = LA_CTIME;
 	rc = dt_declare_attr_set(env, orphan, la, th);
 	if (rc != 0)
@@ -1168,7 +1169,7 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 	}
 
 	memset(la, 0, sizeof(*la));
-	la->la_ctime = cfs_time_current_sec();
+	la->la_ctime = ktime_get_real_seconds();
 	la->la_valid = LA_CTIME;
 	rc = dt_declare_attr_set(env, parent, la, th);
 	if (rc != 0)
@@ -1195,7 +1196,7 @@ static int lfsck_namespace_insert_normal(const struct lu_env *env,
 			GOTO(stop, rc);
 	}
 
-	la->la_ctime = cfs_time_current_sec();
+	la->la_ctime = ktime_get_real_seconds();
 	rc = dt_attr_set(env, parent, la, th);
 	if (rc != 0)
 		GOTO(stop, rc);
@@ -3223,11 +3224,6 @@ out:
 	return rc;
 }
 
-#define lfsck_time_before(a, b)		\
-	(typecheck(__u32, a) &&		\
-	 typecheck(__u32, b) &&		\
-	 ((int)(a) - (int)(b) < 0))
-
 static inline bool
 lfsck_namespace_linkea_stale_overflow(struct linkea_data *ldata,
 				      struct lfsck_namespace *ns)
@@ -3236,8 +3232,7 @@ lfsck_namespace_linkea_stale_overflow(struct linkea_data *ldata,
 	 * local time based, so need NOT to care about clock drift
 	 * among the servers. */
 	return ldata->ld_leh->leh_overflow_time &&
-	       lfsck_time_before(ldata->ld_leh->leh_overflow_time,
-				 ns->ln_time_latest_reset);
+	       ldata->ld_leh->leh_overflow_time < ns->ln_time_latest_reset;
 }
 
 /**
@@ -3747,8 +3742,8 @@ static void lfsck_namespace_dump_statistics(struct seq_file *m,
 					    struct lfsck_namespace *ns,
 					    __u64 checked_phase1,
 					    __u64 checked_phase2,
-					    __u32 time_phase1,
-					    __u32 time_phase2, bool dryrun)
+					    time64_t time_phase1,
+					    time64_t time_phase2, bool dryrun)
 {
 	const char *postfix = dryrun ? "inconsistent" : "repaired";
 
@@ -3786,8 +3781,8 @@ static void lfsck_namespace_dump_statistics(struct seq_file *m,
 		   "name_hash_%s: %llu\n"
 		   "linkea_overflow_%s: %llu\n"
 		   "success_count: %u\n"
-		   "run_time_phase1: %u seconds\n"
-		   "run_time_phase2: %u seconds\n",
+		   "run_time_phase1: %lld seconds\n"
+		   "run_time_phase2: %lld seconds\n",
 		   checked_phase1,
 		   checked_phase2,
 		   dryrun ? "inconsistent" : "updated",
@@ -3903,7 +3898,7 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 		memset(ns, 0, sizeof(*ns));
 	} else {
 		__u32 count = ns->ln_success_count;
-		__u64 last_time = ns->ln_time_last_complete;
+		time64_t last_time = ns->ln_time_last_complete;
 
 		memset(ns, 0, sizeof(*ns));
 		ns->ln_success_count = count;
@@ -3911,7 +3906,7 @@ static int lfsck_namespace_reset(const struct lu_env *env,
 	}
 	ns->ln_magic = LFSCK_NAMESPACE_MAGIC;
 	ns->ln_status = LS_INIT;
-	ns->ln_time_latest_reset = cfs_time_current_sec();
+	ns->ln_time_latest_reset = ktime_get_real_seconds();
 
 	rc = lfsck_load_one_trace_file(env, com, root, &com->lc_obj,
 				       &dt_lfsck_namespace_features,
@@ -4065,9 +4060,9 @@ static int lfsck_namespace_checkpoint(const struct lu_env *env,
 		ns->ln_pos_latest_start = lfsck->li_pos_checkpoint;
 	} else {
 		ns->ln_pos_last_checkpoint = lfsck->li_pos_checkpoint;
-		ns->ln_run_time_phase1 += cfs_duration_sec(cfs_time_current() +
-				HALF_SEC - lfsck->li_time_last_checkpoint);
-		ns->ln_time_last_checkpoint = cfs_time_current_sec();
+		ns->ln_run_time_phase1 += ktime_get_seconds() -
+					  lfsck->li_time_last_checkpoint;
+		ns->ln_time_last_checkpoint = ktime_get_real_seconds();
 		ns->ln_items_checked += com->lc_new_checked;
 		com->lc_new_checked = 0;
 	}
@@ -4109,7 +4104,7 @@ static int lfsck_namespace_prep(const struct lu_env *env,
 	}
 
 	down_write(&com->lc_sem);
-	ns->ln_time_latest_start = cfs_time_current_sec();
+	ns->ln_time_latest_start = ktime_get_real_seconds();
 	spin_lock(&lfsck->li_lock);
 
 	if (ns->ln_flags & LF_SCANNED_ONCE) {
@@ -4373,9 +4368,9 @@ static int lfsck_namespace_post(const struct lu_env *env,
 	spin_unlock(&lfsck->li_lock);
 
 	if (!init) {
-		ns->ln_run_time_phase1 += cfs_duration_sec(cfs_time_current() +
-				HALF_SEC - lfsck->li_time_last_checkpoint);
-		ns->ln_time_last_checkpoint = cfs_time_current_sec();
+		ns->ln_run_time_phase1 += ktime_get_seconds() -
+					  lfsck->li_time_last_checkpoint;
+		ns->ln_time_last_checkpoint = ktime_get_real_seconds();
 		ns->ln_items_checked += com->lc_new_checked;
 		com->lc_new_checked = 0;
 	}
@@ -4426,20 +4421,18 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 
 	if (ns->ln_status == LS_SCANNING_PHASE1) {
 		struct lfsck_position pos;
-		cfs_duration_t duration = cfs_time_current() -
-					  lfsck->li_time_last_checkpoint;
-		__u64 checked = ns->ln_items_checked + com->lc_new_checked;
-		__u64 speed = checked;
-		__u64 new_checked = com->lc_new_checked *
-				    msecs_to_jiffies(MSEC_PER_SEC);
-		__u32 rtime = ns->ln_run_time_phase1 +
-			      cfs_duration_sec(duration + HALF_SEC);
+		time64_t duration = ktime_get_seconds() -
+				    lfsck->li_time_last_checkpoint;
+		u64 checked = ns->ln_items_checked + com->lc_new_checked;
+		u64 speed = checked;
+		u64 new_checked = com->lc_new_checked;
+		time64_t rtime = ns->ln_run_time_phase1 + duration;
 
 		if (duration != 0)
-			do_div(new_checked, duration);
+			div_u64(new_checked, duration);
 
 		if (rtime != 0)
-			do_div(speed, rtime);
+			div_u64(speed, rtime);
 
 		lfsck_namespace_dump_statistics(m, ns, checked, 0, rtime, 0,
 						bk->lb_param & LPF_DRYRUN);
@@ -4485,34 +4478,32 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 
 		lfsck_pos_dump(m, &pos, "current_position");
 	} else if (ns->ln_status == LS_SCANNING_PHASE2) {
-		cfs_duration_t duration = cfs_time_current() -
-					  com->lc_time_last_checkpoint;
+		time64_t duration = ktime_get_seconds() -
+				    com->lc_time_last_checkpoint;
 		__u64 checked = ns->ln_objs_checked_phase2 +
 				com->lc_new_checked;
 		__u64 speed1 = ns->ln_items_checked;
 		__u64 speed2 = checked;
 		__u64 speed0 = speed1 + speed2;
-		__u64 new_checked = com->lc_new_checked *
-				    msecs_to_jiffies(MSEC_PER_SEC);
-		__u32 rtime = ns->ln_run_time_phase2 +
-			      cfs_duration_sec(duration + HALF_SEC);
-		__u32 time0 = ns->ln_run_time_phase1 + rtime;
+		__u64 new_checked = com->lc_new_checked;
+		time64_t rtime = ns->ln_run_time_phase2 + duration;
+		time64_t time0 = ns->ln_run_time_phase1 + rtime;
 
 		if (duration != 0)
-			do_div(new_checked, duration);
+			div_u64(new_checked, duration);
 
 		if (ns->ln_run_time_phase1 != 0)
-			do_div(speed1, ns->ln_run_time_phase1);
+			div_u64(speed1, ns->ln_run_time_phase1);
 		else if (ns->ln_items_checked != 0)
 			time0++;
 
 		if (rtime != 0)
-			do_div(speed2, rtime);
+			div_u64(speed2, rtime);
 		else if (checked != 0)
 			time0++;
 
 		if (time0 != 0)
-			do_div(speed0, time0);
+			div_u64(speed0, time0);
 
 		lfsck_namespace_dump_statistics(m, ns, ns->ln_items_checked,
 						checked,
@@ -4533,20 +4524,20 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 		__u64 speed1 = ns->ln_items_checked;
 		__u64 speed2 = ns->ln_objs_checked_phase2;
 		__u64 speed0 = speed1 + speed2;
-		__u32 time0 = ns->ln_run_time_phase1 + ns->ln_run_time_phase2;
+		time64_t time0 = ns->ln_run_time_phase1 + ns->ln_run_time_phase2;
 
 		if (ns->ln_run_time_phase1 != 0)
-			do_div(speed1, ns->ln_run_time_phase1);
+			div_u64(speed1, ns->ln_run_time_phase1);
 		else if (ns->ln_items_checked != 0)
 			time0++;
 
 		if (ns->ln_run_time_phase2 != 0)
-			do_div(speed2, ns->ln_run_time_phase2);
+			div_u64(speed2, ns->ln_run_time_phase2);
 		else if (ns->ln_objs_checked_phase2 != 0)
 			time0++;
 
 		if (time0 != 0)
-			do_div(speed0, time0);
+			div_u64(speed0, time0);
 
 		lfsck_namespace_dump_statistics(m, ns, ns->ln_items_checked,
 						ns->ln_objs_checked_phase2,
@@ -6155,23 +6146,22 @@ checkpoint:
 		if (rc < 0 && bk->lb_param & LPF_FAILOUT)
 			GOTO(put, rc);
 
-		if (unlikely(cfs_time_beforeq(com->lc_time_next_checkpoint,
-					      cfs_time_current())) &&
+		if (unlikely(com->lc_time_next_checkpoint <=
+			     ktime_get_seconds()) &&
 		    com->lc_new_checked != 0) {
 			down_write(&com->lc_sem);
-			ns->ln_run_time_phase2 +=
-				cfs_duration_sec(cfs_time_current() +
-				HALF_SEC - com->lc_time_last_checkpoint);
-			ns->ln_time_last_checkpoint = cfs_time_current_sec();
+			ns->ln_run_time_phase2 += ktime_get_seconds() -
+						  com->lc_time_last_checkpoint;
+			ns->ln_time_last_checkpoint = ktime_get_real_seconds();
 			ns->ln_objs_checked_phase2 += com->lc_new_checked;
 			com->lc_new_checked = 0;
 			lfsck_namespace_store(env, com);
 			up_write(&com->lc_sem);
 
-			com->lc_time_last_checkpoint = cfs_time_current();
+			com->lc_time_last_checkpoint = ktime_get_seconds();
 			com->lc_time_next_checkpoint =
 				com->lc_time_last_checkpoint +
-				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
+				LFSCK_CHECKPOINT_INTERVAL;
 		}
 
 		lfsck_control_speed_by_self(com);
@@ -6222,9 +6212,9 @@ static int lfsck_namespace_assistant_handler_p2(const struct lu_env *env,
 
 	com->lc_new_checked = 0;
 	com->lc_new_scanned = 0;
-	com->lc_time_last_checkpoint = cfs_time_current();
+	com->lc_time_last_checkpoint = ktime_get_seconds();
 	com->lc_time_next_checkpoint = com->lc_time_last_checkpoint +
-				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
+				       LFSCK_CHECKPOINT_INTERVAL;
 
 	i = lfsck_sub_trace_file_fid2idx(&ns->ln_fid_latest_scanned_phase2);
 	rc = lfsck_namespace_double_scan_one_trace_file(env, com,
@@ -6269,9 +6259,9 @@ static int lfsck_namespace_double_scan_result(const struct lu_env *env,
 	struct lfsck_namespace	*ns	= com->lc_file_ram;
 
 	down_write(&com->lc_sem);
-	ns->ln_run_time_phase2 += cfs_duration_sec(cfs_time_current() +
-				  HALF_SEC - com->lc_time_last_checkpoint);
-	ns->ln_time_last_checkpoint = cfs_time_current_sec();
+	ns->ln_run_time_phase2 += ktime_get_seconds() -
+				  com->lc_time_last_checkpoint;
+	ns->ln_time_last_checkpoint = ktime_get_real_seconds();
 	ns->ln_objs_checked_phase2 += com->lc_new_checked;
 	com->lc_new_checked = 0;
 

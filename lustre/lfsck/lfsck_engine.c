@@ -395,8 +395,7 @@ static int lfsck_checkpoint(const struct lu_env *env,
 	int			rc  = 0;
 	int			rc1 = 0;
 
-	if (likely(cfs_time_beforeq(cfs_time_current(),
-				    lfsck->li_time_next_checkpoint)))
+	if (likely(ktime_get_seconds() <= lfsck->li_time_next_checkpoint))
 		return 0;
 
 	lfsck_pos_fill(env, lfsck, &lfsck->li_pos_checkpoint, false);
@@ -406,9 +405,9 @@ static int lfsck_checkpoint(const struct lu_env *env,
 			rc1 = rc;
 	}
 
-	lfsck->li_time_last_checkpoint = cfs_time_current();
+	lfsck->li_time_last_checkpoint = ktime_get_seconds();
 	lfsck->li_time_next_checkpoint = lfsck->li_time_last_checkpoint +
-				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
+					 LFSCK_CHECKPOINT_INTERVAL;
 	return rc1 != 0 ? rc1 : rc;
 }
 
@@ -509,9 +508,9 @@ out:
 			break;
 	}
 
-	lfsck->li_time_last_checkpoint = cfs_time_current();
+	lfsck->li_time_last_checkpoint = ktime_get_seconds();
 	lfsck->li_time_next_checkpoint = lfsck->li_time_last_checkpoint +
-				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
+					 LFSCK_CHECKPOINT_INTERVAL;
 	return rc;
 }
 
@@ -608,9 +607,9 @@ static int lfsck_post(const struct lu_env *env, struct lfsck_instance *lfsck,
 			       (__u32)com->lc_type, rc);
 	}
 
-	lfsck->li_time_last_checkpoint = cfs_time_current();
+	lfsck->li_time_last_checkpoint = ktime_get_seconds();
 	lfsck->li_time_next_checkpoint = lfsck->li_time_last_checkpoint +
-				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
+					 LFSCK_CHECKPOINT_INTERVAL;
 
 	/* Ignore some component post failure to make other can go ahead. */
 	return result;
@@ -1672,10 +1671,10 @@ int lfsck_assistant_engine(void *args)
 
 			com->lc_new_checked = 0;
 			com->lc_new_scanned = 0;
-			com->lc_time_last_checkpoint = cfs_time_current();
+			com->lc_time_last_checkpoint = ktime_get_seconds();
 			com->lc_time_next_checkpoint =
 				com->lc_time_last_checkpoint +
-				cfs_time_seconds(LFSCK_CHECKPOINT_INTERVAL);
+				LFSCK_CHECKPOINT_INTERVAL;
 
 			CDEBUG(D_LFSCK, "%s: LFSCK assistant sync before "
 			       "the second-stage scaning\n",
