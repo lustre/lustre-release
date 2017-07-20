@@ -645,6 +645,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 		/* correct index for local buffers to continue with */
 		for (k = 0; k < rc; k++) {
 			lnb[j+k].lnb_flags = rnb[i].rnb_flags;
+			lnb[j+k].lnb_flags &= ~OBD_BRW_LOCALS;
 			if (!(rnb[i].rnb_flags & OBD_BRW_GRANTED))
 				lnb[j+k].lnb_rc = -ENOSPC;
 		}

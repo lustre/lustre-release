@@ -1260,6 +1260,13 @@ struct hsm_state_set {
 			       OBD_BRW_OVER_GRPQUOTA | \
 			       OBD_BRW_OVER_PRJQUOTA)
 
+#define OBD_BRW_LOCAL1	0x80000000UL	/*
+					 * osd-ldiskfs internal,
+					 * page mapped to real block
+					 */
+
+#define OBD_BRW_LOCALS (OBD_BRW_LOCAL1)
+
 #define OBD_OBJECT_EOF LUSTRE_EOF
 
 #define OST_MIN_PRECREATE 32
