@@ -95,6 +95,8 @@ extern struct kmem_cache *dynlock_cachep;
 #undef HAVE_PROJECT_QUOTA
 #endif
 
+#define OBD_BRW_MAPPED	OBD_BRW_LOCAL1
+
 struct osd_directory {
         struct iam_container od_container;
         struct iam_descr     od_descr;
