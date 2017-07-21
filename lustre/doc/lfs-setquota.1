@@ -1,0 +1,88 @@
+.TH LFS-SETQUOTA 1 2017-07-21 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs setquota \- set quota limits or grace time for users, groups or projects.
+.SH SYNOPSIS
+.B lfs setquota {\fB-u|--user|-g|--group|-p|--projid\fR} <\fIuname|uid|gname|gid|projid\fR>
+       [\fB--block-softlimit|-b\fR <\fIblock-softlimit\fR>[kMGTPE]]
+       [\fB--block-hardlimit|-B\fR <\fIblock-hardlimit\fR>[kMGTPE]]
+       [\fB--inode-softlimit|-i\fR <\fIinode-softlimit\fR>[kMGTPE]]
+       [\fB--inode-hardlimit|-I\fR <\fIinode-hardlimit\fR>[kMGTPE]] <\fIfilesystem\fR>
+.br
+.B lfs setquota \fB-t\fR {\fB-u|-g|-p\fR}
+       [\fB--block-grace|-b\fR <\fIblock-grace\fR>]
+       [\fB--inode-grace|-i\fR <\fIinode-grace\fR>] <\fIfilesystem\fR>
+.br
+.SH DESCRIPTION
+.PP
+.BR "lfs setquota " {\fB-u|-g|-p\fR}
+.TP
+Command sets the filesystem quotas for users, groups or projects respectively. \
+Block limits unit is kilobyte (1024) by default and block limits are always \
+kilobyte-grained (even if specified in bytes), block limits can be specified \
+with a \
+.BR k "," M "," G "," T "," P ", or " E \
+suffixes which specify units of 2^10, 2^20, 2^30, 2^40, 2^50 and 2^60 \
+accordingly.
+.TP
+.B -u|--user <\fIuname|uid\fR>
+Set user quota for \fIuname\fR or \fIuid\fR.
+.TP
+.B -g|--group <\fIgname|gid\fR>
+Set group quota for name \fIgname\fR or \fIgid\fR.
+.TP
+.B -p|--project <\fIprojid\fR>
+Set project quota for \fIprojid\fR.
+.TP
+.B -b|--block-softlimit <\fIblock-softlimit\fR>
+Specify block softlimit, zero means unlimited.
+.TP
+.B -B|--block-hardlimit <\fIblock-hardlimit\fR>
+Specify block hardlimit, zero means unlimited. The block hardlimit should be \
+greater than block softlimit when it's being specified.
+.TP
+.B -i|--inode-softlimit <\fIinode-softlimit\fR>
+Specify inode softlimit, zero means unlimited.
+.TP
+.B -I|--inode-hardlimit <\fIinode-hardlimit\fR>
+Specify inode hardlimit, zero means unlimited. The inode hardlimit should be \
+greater than inode softlimit when it's being specified.
+.PP
+.BR "lfs setquota -t "
+.TP
+Command sets the filesystem quota grace time for users, groups, or projects. \
+This is a global value that indicates the amount of time, in seconds, that the \
+soft quota limit can be exceeded before users are prevented from creating \
+new files or consuming more space.  This is intended to allow users to exceed \
+the quota limit for a short time to complete their work, without having to \
+grant each user a larger hard quota limit.  The soft quota limit is reset once \
+the user, group, or project reduces their space usage below the soft quota \
+limit. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer \
+seconds value.
+.TP
+.B -t
+Set quota grace times.
+.TP
+.B -u
+Set grace time for user.
+.TP
+.B -g
+Set grace time for group.
+.TP
+.B -p
+Set grace time for project.
+.TP
+.B -b|--block-grace <\fIblock-grace\fR>
+Specify grace time for block quota.
+.TP
+.B -i|--inode-grace <\fIindoe-grace\fR>
+Specify grace time for inode quota.
+.SH EXAMPLES
+.TP
+.B $ lfs setquota -u bob --block-softlimit 2000000 --block-hardlimit 1000000 /mnt/lustre
+Set quotas of user `bob': 1GB block quota hardlimit and 2 GB block quota softlimit
+.TP
+.B $ lfs setquota -t -u --block-grace 1000 --inode-grace 1w4d /mnt/lustre
+Set grace times for user quotas: 1000 seconds for block quotas, 1 week and 4 \
+days for inode quotas
+.SH SEE ALSO
+.BR lfs (1)

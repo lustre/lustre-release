@@ -92,27 +92,6 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs quotaoff [-ug] <filesystem>
 .br
-.B lfs setquota <-u|--user|-g|--group|-p|--projid> <uname|uid|gname|gid|projid>
-             \fB[--block-softlimit <block-softlimit>]
-             \fB[--block-hardlimit <block-hardlimit>]
-             \fB[--inode-softlimit <inode-softlimit>]
-             \fB[--inode-hardlimit <inode-hardlimit>]
-             \fB<filesystem>\fR
-.br
-.B lfs setquota <-u|--user|-g|--group|-p|--projid> <uname|uid|gname|gid|projid>
-             \fB[-b <block-softlimit>] [-B <block-hardlimit>]
-             \fB[-i <inode-softlimit>] [-I <inode-hardlimit>]
-             \fB<filesystem>\fR
-.br
-.B lfs setquota -t <-u|-g|-p>
-             \fB[--block-grace <block-grace>]\fR
-             \fB[--inode-grace <inode-grace>]\fR
-             \fB<filesystem>\fR
-.br
-.B lfs setquota -t <-u|-g|-p>
-             \fB[-b <block-grace>] [-i <inode-grace>]\fR
-             \fB<filesystem>\fR
-.br
 .B lfs setstripe [--stripe-size|-S stripe_size] [--stripe-count|-c stripe_count]
         \fB[--stripe-index|-i start_ost_index] [--pool|-p <poolname>]
         \fB[--ost-list|-o <ost_indices>] <directory|filename>\fR
@@ -283,12 +262,6 @@ To turn filesystem quotas on. Options specify quota for users (-u) groups (-g) a
 .B quotaoff [-ugf] <filesystem> (deprecated as of 2.4.0)
 To turn filesystem quotas off.  Options specify quota for users (-u) groups (-g) and force (-f). Not used anymore in lustre 2.4.0 where quota enforcement can be turned off (for inode or block) by running the following command on the MGS: lctl conf_param ${FSNAME}.quota.<ost|mdt>=""
 .TP
-.B setquota  <-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid> [--block-softlimit <block-softlimit>] [--block-hardlimit <block-hardlimit>] [--inode-softlimit <inode-softlimit>] [--inode-hardlimit <inode-hardlimit>] <filesystem>
-To set filesystem quotas for users, groups or project. Limits can be specified with -b, -k, -m, -g, -t, -p suffixes which specify units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50 accordingly. Block limits unit is kilobyte (1024) by default and block limits are always kilobyte-grained (even if specified in bytes), see EXAMPLES
-.TP
-.B setquota -t [-u|-g|-p] [--block-grace <block-grace>] [--inode-grace <inode-grace>] <filesystem>
-To set filesystem quota grace times for users,groups or project. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds value, see EXAMPLES
-.TP
 .B swap_layouts <filename1> <filename2>
 Swap the data (layout and OST objects) of two regular files. The
 two files have to be in the same filesystem, owned by the same user,
@@ -389,12 +362,6 @@ Turn quotas of user and group on
 .TP
 .B $ lfs quotaoff -ug /mnt/lustre
 Turn quotas of user and group off
-.TP
-.B $ lfs setquota -u bob --block-softlimit 2000000 --block-hardlimit 1000000 /mnt/lustre
-Set quotas of user `bob': 1GB block quota hardlimit and 2 GB block quota softlimit
-.TP
-.B $ lfs setquota -t -u --block-grace 1000 --inode-grace 1w4d /mnt/lustre
-Set grace times for user quotas: 1000 seconds for block quotas, 1 week and 4 days for inode quotas
 .SH NOTES
 The usage of \fBlfs hsm_*\fR, \fBlfs setstripe\fR, \fBlfs migrate\fR, \fBlfs setdirstripe\fR,
 \fBlfs getdirstripe\fR and \fBlfs mkdir\fR are explained in separated man pages.
@@ -411,5 +378,6 @@ The lfs command is part of the Lustre filesystem.
 .BR lfs_migrate (1),
 .BR lfs-setstripe (1),
 .BR lfs-migrate (1),
+.BR lfs-setquota (1),
 .BR lctl (8),
 .BR lustre (7)
