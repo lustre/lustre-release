@@ -749,7 +749,8 @@ void lnet_me_unlink(struct lnet_me *me);
 
 void lnet_md_unlink(struct lnet_libmd *md);
 void lnet_md_deconstruct(struct lnet_libmd *lmd, struct lnet_md *umd);
-int lnet_cpt_of_md(struct lnet_libmd *md);
+struct page *lnet_kvaddr_to_page(unsigned long vaddr);
+int lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset);
 
 void lnet_register_lnd(struct lnet_lnd *lnd);
 void lnet_unregister_lnd(struct lnet_lnd *lnd);

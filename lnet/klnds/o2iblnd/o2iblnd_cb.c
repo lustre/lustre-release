@@ -539,29 +539,6 @@ kiblnd_rx_complete (kib_rx_t *rx, int status, int nob)
         kiblnd_drop_rx(rx);                     /* Don't re-post rx. */
 }
 
-static struct page *
-kiblnd_kvaddr_to_page (unsigned long vaddr)
-{
-        struct page *page;
-
-        if (is_vmalloc_addr((void *)vaddr)) {
-                page = vmalloc_to_page ((void *)vaddr);
-                LASSERT (page != NULL);
-                return page;
-        }
-#ifdef CONFIG_HIGHMEM
-        if (vaddr >= PKMAP_BASE &&
-            vaddr < (PKMAP_BASE + LAST_PKMAP * PAGE_SIZE)) {
-                /* No highmem pages only used for bulk (kiov) I/O */
-                CERROR("find page for address in highmem\n");
-                LBUG();
-        }
-#endif
-        page = virt_to_page (vaddr);
-        LASSERT (page != NULL);
-        return page;
-}
-
 static int
 kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 {
@@ -675,22 +652,22 @@ kiblnd_setup_rd_iov(struct lnet_ni *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
                 LASSERT (niov > 0);
         }
 
-        sg = tx->tx_frags;
-        do {
-                LASSERT (niov > 0);
+	sg = tx->tx_frags;
+	do {
+		LASSERT(niov > 0);
 
-                vaddr = ((unsigned long)iov->iov_base) + offset;
-                page_offset = vaddr & (PAGE_SIZE - 1);
-                page = kiblnd_kvaddr_to_page(vaddr);
-                if (page == NULL) {
-                        CERROR ("Can't find page\n");
-                        return -EFAULT;
-                }
+		vaddr = ((unsigned long)iov->iov_base) + offset;
+		page_offset = vaddr & (PAGE_SIZE - 1);
+		page = lnet_kvaddr_to_page(vaddr);
+		if (page == NULL) {
+			CERROR("Can't find page\n");
+			return -EFAULT;
+		}
 
-                fragnob = min((int)(iov->iov_len - offset), nob);
-                fragnob = min(fragnob, (int)PAGE_SIZE - page_offset);
+		fragnob = min((int)(iov->iov_len - offset), nob);
+		fragnob = min(fragnob, (int)PAGE_SIZE - page_offset);
 
-                sg_set_page(sg, page, fragnob, page_offset);
+		sg_set_page(sg, page, fragnob, page_offset);
 		sg = sg_next(sg);
 		if (!sg) {
 			CERROR("lacking enough sg entries to map tx\n");

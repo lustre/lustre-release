@@ -80,31 +80,112 @@ lnet_md_unlink(struct lnet_libmd *md)
 	lnet_md_free(md);
 }
 
+struct page *
+lnet_kvaddr_to_page(unsigned long vaddr)
+{
+	if (is_vmalloc_addr((void *)vaddr))
+		return vmalloc_to_page((void *)vaddr);
+
+#ifdef CONFIG_HIGHMEM
+
+#ifdef HAVE_KMAP_TO_PAGE
+	/*
+	 * This ifdef is added to handle the kernel versions
+	 * which have kmap_to_page() function exported. If so,
+	 * we should use it. Otherwise, remain with the legacy check.
+	 */
+	return kmap_to_page((void *)vaddr);
+#else
+
+	if (vaddr >= PKMAP_ADDR(0) && vaddr < PKMAP_ADDR(LAST_PKMAP)) {
+		/* No highmem pages only used for bulk (kiov) I/O */
+		CERROR("find page for address in highmem\n");
+		LBUG();
+	}
+	return virt_to_page(vaddr);
+#endif /* HAVE_KMAP_TO_PAGE */
+#else
+
+	return virt_to_page(vaddr);
+#endif /* CONFIG_HIGHMEM */
+}
+EXPORT_SYMBOL(lnet_kvaddr_to_page);
+
 int
-lnet_cpt_of_md(struct lnet_libmd *md)
+lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset)
 {
 	int cpt = CFS_CPT_ANY;
+	unsigned int niov;
 
-	if (!md)
-		return CFS_CPT_ANY;
-
-	if ((md->md_options & LNET_MD_BULK_HANDLE) != 0 &&
-	    !LNetMDHandleIsInvalid(md->md_bulk_handle)) {
+	/*
+	 * if the md_options has a bulk handle then we want to look at the
+	 * bulk md because that's the data which we will be DMAing
+	 */
+	if (md && (md->md_options & LNET_MD_BULK_HANDLE) != 0 &&
+	    !LNetMDHandleIsInvalid(md->md_bulk_handle))
 		md = lnet_handle2md(&md->md_bulk_handle);
 
-		if (!md)
-			return CFS_CPT_ANY;
-	}
+	if (!md || md->md_niov == 0)
+		return CFS_CPT_ANY;
 
+	niov = md->md_niov;
+
+	/*
+	 * There are three cases to handle:
+	 *  1. The MD is using lnet_kiov_t
+	 *  2. The MD is using struct kvec
+	 *  3. Contiguous buffer allocated via vmalloc
+	 *
+	 *  in case 2 we can use virt_to_page() macro to get the page
+	 *  address of the memory kvec describes.
+	 *
+	 *  in case 3 use is_vmalloc_addr() and vmalloc_to_page()
+	 *
+	 * The offset provided can be within the first iov/kiov entry or
+	 * it could go beyond it. In that case we need to make sure to
+	 * look at the page which actually contains the data that will be
+	 * DMAed.
+	 */
 	if ((md->md_options & LNET_MD_KIOV) != 0) {
-		if (md->md_iov.kiov[0].kiov_page != NULL)
-			cpt = cfs_cpt_of_node(lnet_cpt_table(),
-				page_to_nid(md->md_iov.kiov[0].kiov_page));
-	} else if (md->md_iov.iov[0].iov_base != NULL) {
+		lnet_kiov_t *kiov = md->md_iov.kiov;
+
+		while (offset >= kiov->kiov_len) {
+			offset -= kiov->kiov_len;
+			niov--;
+			kiov++;
+			if (niov == 0) {
+				CERROR("offset %d goes beyond kiov\n", offset);
+				goto out;
+			}
+		}
+
 		cpt = cfs_cpt_of_node(lnet_cpt_table(),
-			page_to_nid(virt_to_page(md->md_iov.iov[0].iov_base)));
+				page_to_nid(kiov->kiov_page));
+	} else {
+		struct kvec *iov = md->md_iov.iov;
+		unsigned long vaddr;
+		struct page *page;
+
+		while (offset >= iov->iov_len) {
+			offset -= iov->iov_len;
+			niov--;
+			iov++;
+			if (niov == 0) {
+				CERROR("offset %d goes beyond iov\n", offset);
+				goto out;
+			}
+		}
+
+		vaddr = ((unsigned long)iov->iov_base) + offset;
+		page = lnet_kvaddr_to_page(vaddr);
+		if (!page) {
+			CERROR("Couldn't resolve vaddr 0x%lx to page\n", vaddr);
+			goto out;
+		}
+		cpt = cfs_cpt_of_node(lnet_cpt_table(), page_to_nid(page));
 	}
 
+out:
 	return cpt;
 }
 

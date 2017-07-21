@@ -1407,7 +1407,7 @@ lnet_select_pathway(lnet_nid_t src_nid, lnet_nid_t dst_nid,
 	 */
 	cpt = lnet_net_lock_current();
 
-	md_cpt = lnet_cpt_of_md(msg->msg_md);
+	md_cpt = lnet_cpt_of_md(msg->msg_md, msg->msg_offset);
 	if (md_cpt == CFS_CPT_ANY)
 		md_cpt = cpt;
 
