@@ -724,6 +724,17 @@ EXTRA_KCFLAGS="$tmp_flags"
 ]) # LN_CONFIG_SK_DATA_READY
 
 #
+# LN_EXPORT_KMAP_TO_PAGE
+#
+# 3.10 Export kmap_to_page
+#
+AC_DEFUN([LN_EXPORT_KMAP_TO_PAGE], [
+LB_CHECK_EXPORT([kmap_to_page], [mm/highmem.c],
+        [AC_DEFINE(HAVE_KMAP_TO_PAGE, 1,
+                [kmap_to_page is exported by the kernel])])
+]) # LN_EXPORT_KMAP_TO_PAG
+
+#
 # LN_PROG_LINUX
 #
 # LNet linux kernel checks
@@ -740,6 +751,8 @@ LN_CONFIG_GNILND
 LN_CONFIG_SK_SLEEP
 # 2.6.36
 LN_CONFIG_TCP_SENDPAGE
+# 3.10
+LN_EXPORT_KMAP_TO_PAGE
 # 4.x
 LN_CONFIG_SOCK_CREATE_KERN
 # 3.15
