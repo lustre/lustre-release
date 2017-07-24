@@ -1121,7 +1121,8 @@ static inline void hsm_set_cl_error(int *flags, int error)
 enum changelog_rec_extra_flags {
 	CLFE_INVALID	= 0,
 	CLFE_UIDGID	= 0x0001,
-	CLFE_SUPPORTED	= CLFE_UIDGID
+	CLFE_NID	= 0x0002,
+	CLFE_SUPPORTED	= CLFE_UIDGID | CLFE_NID
 };
 
 enum changelog_send_flag {
@@ -1140,6 +1141,8 @@ enum changelog_send_flag {
 enum changelog_send_extra_flag {
 	/* Pack uid/gid into the changelog record */
 	CHANGELOG_EXTRA_FLAG_UIDGID = 0x01,
+	/* Pack nid into the changelog record */
+	CHANGELOG_EXTRA_FLAG_NID    = 0x02,
 };
 
 #define CR_MAXSIZE cfs_size_round(2 * NAME_MAX + 2 + \
@@ -1192,6 +1195,15 @@ struct changelog_ext_uidgid {
 	__u64	cr_gid;
 };
 
+/* Changelog extra extension to include NID. */
+struct changelog_ext_nid {
+	/* have __u64 instead of lnet_nid_t type for use by client api */
+	__u64 cr_nid;
+	/* for use when IPv6 support is added */
+	__u64 extra;
+	__u32 padding;
+};
+
 static inline struct changelog_ext_extra_flags *changelog_rec_extra_flags(
 	const struct changelog_rec *rec);
 
@@ -1210,6 +1222,8 @@ static inline size_t changelog_rec_offset(enum changelog_rec_flags crf,
 		size += sizeof(struct changelog_ext_extra_flags);
 		if (cref & CLFE_UIDGID)
 			size += sizeof(struct changelog_ext_uidgid);
+		if (cref & CLFE_NID)
+			size += sizeof(struct changelog_ext_nid);
 	}
 
 	return size;
@@ -1278,6 +1292,22 @@ struct changelog_ext_uidgid *changelog_rec_uidgid(
 								 CLFE_INVALID));
 }
 
+/* The nid is the second extra extension */
+static inline
+struct changelog_ext_nid *changelog_rec_nid(const struct changelog_rec *rec)
+{
+	enum changelog_rec_flags crf = rec->cr_flags &
+		(CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS);
+	enum changelog_rec_extra_flags cref = CLFE_INVALID;
+
+	if (rec->cr_flags & CLF_EXTRA_FLAGS)
+		cref = changelog_rec_extra_flags(rec)->cr_extra_flags &
+		       CLFE_UIDGID;
+
+	return (struct changelog_ext_nid *)((char *)rec +
+					    changelog_rec_offset(crf, cref));
+}
+
 /* The name follows the rename, jobid  and extra flags extns, if present */
 static inline char *changelog_rec_name(const struct changelog_rec *rec)
 {
@@ -1327,6 +1357,7 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 				       enum changelog_rec_flags crf_wanted,
 				       enum changelog_rec_extra_flags cref_want)
 {
+	char *nid_mov = NULL;
 	char *uidgid_mov = NULL;
 	char *ef_mov;
 	char *jid_mov;
@@ -1351,9 +1382,13 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 
 	/* Locations of extensions in the remapped record */
 	if (rec->cr_flags & CLF_EXTRA_FLAGS) {
+		nid_mov = (char *)rec +
+			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
+					     cref_want & ~CLFE_NID);
 		uidgid_mov = (char *)rec +
 			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
-					     CLFE_INVALID);
+					     cref_want & ~(CLFE_UIDGID |
+							   CLFE_NID));
 		cref = changelog_rec_extra_flags(rec)->cr_extra_flags;
 	}
 
@@ -1374,6 +1409,10 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 	/* Move the extension fields to the desired positions */
 	if ((crf_wanted & CLF_EXTRA_FLAGS) &&
 	    (rec->cr_flags & CLF_EXTRA_FLAGS)) {
+		if ((cref_want & CLFE_NID) && (cref & CLFE_NID))
+			memmove(nid_mov, changelog_rec_nid(rec),
+				sizeof(struct changelog_ext_nid));
+
 		if ((cref_want & CLFE_UIDGID) && (cref & CLFE_UIDGID))
 			memmove(uidgid_mov, changelog_rec_uidgid(rec),
 				sizeof(struct changelog_ext_uidgid));
@@ -1391,6 +1430,10 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 			sizeof(struct changelog_ext_rename));
 
 	/* Clear newly added fields */
+	if (nid_mov && (cref_want & CLFE_NID) &&
+	    !(cref & CLFE_NID))
+		memset(nid_mov, 0, sizeof(struct changelog_ext_nid));
+
 	if (uidgid_mov && (cref_want & CLFE_UIDGID) &&
 	    !(cref & CLFE_UIDGID))
 		memset(uidgid_mov, 0, sizeof(struct changelog_ext_uidgid));

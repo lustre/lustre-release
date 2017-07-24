@@ -247,6 +247,8 @@ int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
 		rec_fmt |= CLF_EXTRA_FLAGS;
 		if (cp->clp_send_extra_flags & CHANGELOG_EXTRA_FLAG_UIDGID)
 			rec_extra_fmt |= CLFE_UIDGID;
+		if (cp->clp_send_extra_flags & CHANGELOG_EXTRA_FLAG_NID)
+			rec_extra_fmt |= CLFE_NID;
 	}
 
 	if (cp->clp_buf + cp->clp_buf_len <= cp->clp_buf_pos) {

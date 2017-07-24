@@ -738,7 +738,7 @@ static int mdd_llog_record_calc_size(const struct lu_env *env,
 {
 	const struct lu_ucred	*uc = lu_ucred(env);
 	enum changelog_rec_flags crf = CLF_EXTRA_FLAGS;
-	enum changelog_rec_extra_flags crfe = CLFE_UIDGID;
+	enum changelog_rec_extra_flags crfe = CLFE_UIDGID | CLFE_NID;
 
 	if (sname != NULL)
 		crf |= CLF_RENAME;
@@ -1054,6 +1054,14 @@ void mdd_changelog_rec_extra_uidgid(struct changelog_rec *rec,
 	uidgid->cr_gid = gid;
 }
 
+void mdd_changelog_rec_extra_nid(struct changelog_rec *rec,
+				 lnet_nid_t nid)
+{
+	struct changelog_ext_nid *clnid = changelog_rec_nid(rec);
+
+	clnid->cr_nid = nid;
+}
+
 /** Store a namespace change changelog record
  * If this fails, we must fail the whole transaction; we don't
  * want the change to commit without the log entry.
@@ -1109,6 +1117,7 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 		if (uc->uc_jobid[0] != '\0')
 			crf |= CLF_JOBID;
 		xflags |= CLFE_UIDGID;
+		xflags |= CLFE_NID;
 	}
 
 	if (sname != NULL)
@@ -1123,6 +1132,8 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 		if (xflags & CLFE_UIDGID)
 			mdd_changelog_rec_extra_uidgid(&rec->cr,
 						       uc->uc_uid, uc->uc_gid);
+		if (xflags & CLFE_NID)
+			mdd_changelog_rec_extra_nid(&rec->cr, uc->uc_nid);
 	}
 
 	rec->cr.cr_type = (__u32)type;

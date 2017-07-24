@@ -788,9 +788,23 @@ static inline void llog_skip_over(struct llog_handle *lgh, __u64 *off,
  */
 static void changelog_block_trim_ext(struct llog_rec_hdr *hdr,
 				     struct llog_rec_hdr *last_hdr,
-				     enum changelog_rec_flags flags,
-				     enum changelog_rec_extra_flags extra_flags)
+				     struct llog_handle *loghandle)
 {
+	enum changelog_rec_flags flags = CLF_SUPPORTED;
+	enum changelog_rec_extra_flags extra_flags = CLFE_SUPPORTED;
+
+	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_NID))
+		extra_flags &= ~CLFE_NID;
+	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_UIDGID))
+		extra_flags &= ~CLFE_UIDGID;
+	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_EXTRA_FLAGS))
+		flags &= ~CLF_EXTRA_FLAGS;
+	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_JOBID))
+		flags &= ~CLF_JOBID;
+
+	if (flags == CLF_SUPPORTED && extra_flags == CLFE_SUPPORTED)
+		return;
+
 	if (hdr->lrh_type != CHANGELOG_REC)
 		return;
 
@@ -840,8 +854,6 @@ static int llog_osd_next_block(const struct lu_env *env,
 	int last_idx = *cur_idx;
 	__u64 last_offset = *cur_offset;
 	bool force_mini_rec = false;
-	enum changelog_rec_flags flags;
-	enum changelog_rec_extra_flags xflags;
 
 	ENTRY;
 
@@ -973,16 +985,7 @@ static int llog_osd_next_block(const struct lu_env *env,
 		}
 
 		/* Trim unsupported extensions for compat w/ older clients */
-		flags = CLF_SUPPORTED;
-		xflags = CLFE_SUPPORTED;
-		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_UIDGID))
-			xflags &= ~CLFE_UIDGID;
-		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_EXTRA_FLAGS))
-			flags &= ~CLF_EXTRA_FLAGS;
-		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_JOBID))
-			flags &= ~CLF_JOBID;
-		if (flags != CLF_SUPPORTED || xflags != CLFE_SUPPORTED)
-			changelog_block_trim_ext(rec, last_rec, flags, xflags);
+		changelog_block_trim_ext(rec, last_rec, loghandle);
 
 		GOTO(out, rc = 0);
 
@@ -1025,8 +1028,6 @@ static int llog_osd_prev_block(const struct lu_env *env,
 	struct dt_device	*dt;
 	loff_t			 cur_offset;
 	__u32			chunk_size;
-	enum changelog_rec_flags flags;
-	enum changelog_rec_extra_flags xflags;
 	int			 rc;
 
 	ENTRY;
@@ -1119,16 +1120,7 @@ static int llog_osd_prev_block(const struct lu_env *env,
 		}
 
 		/* Trim unsupported extensions for compat w/ older clients */
-		flags = CLF_SUPPORTED;
-		xflags = CLFE_SUPPORTED;
-		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_UIDGID))
-			xflags &= ~CLFE_UIDGID;
-		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_EXTRA_FLAGS))
-			flags &= ~CLF_EXTRA_FLAGS;
-		if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_JOBID))
-			flags &= ~CLF_JOBID;
-		if (flags != CLF_SUPPORTED || xflags != CLFE_SUPPORTED)
-			changelog_block_trim_ext(rec, last_rec, flags, xflags);
+		changelog_block_trim_ext(rec, last_rec, loghandle);
 
 		GOTO(out, rc = 0);
 	}

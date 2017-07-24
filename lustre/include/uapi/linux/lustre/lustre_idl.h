@@ -2843,13 +2843,14 @@ enum llog_flag {
 	LLOG_F_IS_FIXSIZE	= 0x10,
 	LLOG_F_EXT_EXTRA_FLAGS  = 0x20,
 	LLOG_F_EXT_X_UIDGID	= 0x40,
+	LLOG_F_EXT_X_NID	= 0x80,
 
 	/* Note: Flags covered by LLOG_F_EXT_MASK will be inherited from
 	 * catlog to plain log, so do not add LLOG_F_IS_FIXSIZE here,
 	 * because the catlog record is usually fixed size, but its plain
 	 * log record can be variable */
 	LLOG_F_EXT_MASK = LLOG_F_EXT_JOBID | LLOG_F_EXT_EXTRA_FLAGS |
-			  LLOG_F_EXT_X_UIDGID,
+			  LLOG_F_EXT_X_UIDGID | LLOG_F_EXT_X_NID,
 };
 
 /* On-disk header structure of each log object, stored in little endian order */

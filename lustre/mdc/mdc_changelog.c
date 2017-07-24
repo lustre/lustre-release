@@ -220,7 +220,8 @@ static int chlg_load(void *args)
 			      LLOG_F_IS_CAT |
 			      LLOG_F_EXT_JOBID |
 			      LLOG_F_EXT_EXTRA_FLAGS |
-			      LLOG_F_EXT_X_UIDGID,
+			      LLOG_F_EXT_X_UIDGID |
+			      LLOG_F_EXT_X_NID,
 			      NULL);
 	if (rc) {
 		CERROR("%s: fail to init llog handle: rc = %d\n",

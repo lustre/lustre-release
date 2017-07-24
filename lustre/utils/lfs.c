@@ -71,6 +71,7 @@
 #include <lustre/lustreapi.h>
 #include <linux/lustre/lustre_ver.h>
 #include <linux/lustre/lustre_param.h>
+#include <linux/lnet/nidstr.h>
 
 #ifndef ARRAY_SIZE
 # define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
@@ -5601,7 +5602,8 @@ static int lfs_changelog(int argc, char **argv)
 	}
 
 	rc = llapi_changelog_set_xflags(changelog_priv,
-					CHANGELOG_EXTRA_FLAG_UIDGID);
+					CHANGELOG_EXTRA_FLAG_UIDGID |
+					CHANGELOG_EXTRA_FLAG_NID);
 	if (rc < 0) {
 		fprintf(stderr, "Can't set xflags for changelog: %s\n",
 			strerror(errno = -rc));
@@ -5651,6 +5653,13 @@ static int lfs_changelog(int argc, char **argv)
 
 				printf(" u=%llu:%llu",
 				       uidgid->cr_uid, uidgid->cr_gid);
+			}
+			if (ef->cr_extra_flags & CLFE_NID) {
+				struct changelog_ext_nid *nid =
+					changelog_rec_nid(rec);
+
+				printf(" nid=%s",
+				       libcfs_nid2str(nid->cr_nid));
 			}
 		}
 
