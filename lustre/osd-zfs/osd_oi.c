@@ -88,9 +88,6 @@ static const struct named_oid oids[] = {
 	{ .oid = FLD_INDEX_OID,	       .name = "fld" },
 	{ .oid = MDD_LOV_OBJ_OID,      .name = LOV_OBJID },
 	{ .oid = OFD_HEALTH_CHECK_OID, .name = HEALTH_CHECK },
-	{ .oid = ACCT_USER_OID,	       .name = "acct_usr_inode" },
-	{ .oid = ACCT_GROUP_OID,       .name = "acct_grp_inode" },
-	{ .oid = ACCT_PROJECT_OID,     .name = "acct_prj_inode" },
 	{ .oid = REPLY_DATA_OID,       .name = REPLY_DATA },
 	{ .oid = 0 }
 };
@@ -455,6 +452,8 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 	uint64_t zapid;
 
 	LASSERT(fid);
+	LASSERT(!fid_is_acct(fid));
+
 	if (zdn != NULL)
 		*zdn = NULL;
 
@@ -468,8 +467,6 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 			zapid = osd->od_root;
 			if (buf)
 				strncpy(buf, name, bufsize);
-			if (fid_is_acct(fid))
-				zapid = MASTER_NODE_OBJ;
 		} else {
 			zapid = osd_get_idx_for_fid(osd, fid, buf, NULL);
 		}
@@ -487,26 +484,6 @@ static inline int fid_is_fs_root(const struct lu_fid *fid)
 		fid_oid(fid) == OSD_FS_ROOT_OID;
 }
 
-static inline int osd_oid(struct osd_device *dev, __u32 local_oid,
-			       uint64_t *oid)
-{
-	switch (local_oid) {
-	case ACCT_USER_OID:
-		*oid = dev->od_iusr_oid;
-		return 0;
-	case ACCT_GROUP_OID:
-		*oid = dev->od_igrp_oid;
-		return 0;
-	case ACCT_PROJECT_OID:
-		/* TODO: real oid */
-		CERROR("%s: unsupported quota oid: %#x\n",
-			osd_name(dev), local_oid);
-		return -ENOTSUPP;
-	}
-
-	return -ENOTSUPP;
-}
-
 int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 		   const struct lu_fid *fid, uint64_t *oid)
 {
@@ -520,11 +497,9 @@ int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 	if (OBD_FAIL_CHECK(OBD_FAIL_SRV_ENOENT))
 		RETURN(-ENOENT);
 
-	if (unlikely(fid_is_acct(fid))) {
-		rc = osd_oid(dev, fid_oid(fid), oid);
-		if (rc)
-			RETURN(rc);
-	} else if (unlikely(fid_is_fs_root(fid))) {
+	LASSERT(!fid_is_acct(fid));
+
+	if (unlikely(fid_is_fs_root(fid))) {
 		*oid = dev->od_root;
 	} else {
 		zapid = osd_get_name_n_idx(env, dev, fid, buf,
@@ -694,31 +669,13 @@ static void osd_ost_seq_fini(const struct lu_env *env, struct osd_device *osd)
 static int
 osd_oi_init_compat(const struct lu_env *env, struct osd_device *o)
 {
-	uint64_t	 odb, sdb;
-	int		 rc;
+	uint64_t sdb;
+	int rc;
 	ENTRY;
 
 	rc = osd_oi_find_or_create(env, o, o->od_root, "O", &sdb);
-	if (rc)
-		RETURN(rc);
-
-	o->od_O_id = sdb;
-
-	/* Create on-disk indexes to maintain per-UID/GID inode usage.
-	 * Those new indexes are created in the top-level ZAP outside the
-	 * namespace in order not to confuse ZPL which might interpret those
-	 * indexes as directories and assume the values are object IDs */
-	rc = osd_oi_find_or_create(env, o, MASTER_NODE_OBJ,
-			oid2name(ACCT_USER_OID), &odb);
-	if (rc)
-		RETURN(rc);
-	o->od_iusr_oid = odb;
-
-	rc = osd_oi_find_or_create(env, o, MASTER_NODE_OBJ,
-			oid2name(ACCT_GROUP_OID), &odb);
-	if (rc)
-		RETURN(rc);
-	o->od_igrp_oid = odb;
+	if (!rc)
+		o->od_O_id = sdb;
 
 	RETURN(rc);
 }
@@ -875,6 +832,8 @@ struct osd_idmap_cache *osd_idc_find_or_init(const struct lu_env *env,
 {
 	struct osd_idmap_cache *idc;
 	int rc;
+
+	LASSERT(!fid_is_acct(fid));
 
 	idc = osd_idc_find(env, osd, fid);
 	if (idc != NULL)

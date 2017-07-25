@@ -297,9 +297,6 @@ struct osd_device {
 	int			 od_connects;
 	struct lu_site		 od_site;
 
-	/* object IDs of the inode accounting indexes */
-	uint64_t od_iusr_oid;
-	uint64_t od_igrp_oid;
 	dnode_t	*od_groupused_dn;
 	dnode_t *od_userused_dn;
 
@@ -378,7 +375,6 @@ struct osd_object {
 
 int osd_statfs(const struct lu_env *, struct dt_device *, struct obd_statfs *);
 extern const struct dt_index_operations osd_acct_index_ops;
-dnode_t *osd_quota_fid2dmu(const struct osd_device *, const struct lu_fid *fid);
 extern struct lu_device_operations  osd_lu_ops;
 extern struct dt_index_operations osd_dir_ops;
 int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,

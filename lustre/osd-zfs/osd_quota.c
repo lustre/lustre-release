@@ -32,20 +32,8 @@
 #include "osd_internal.h"
 
 /**
- * Helper function to retrieve DMU object id from fid for accounting object
- */
-dnode_t *osd_quota_fid2dmu(const struct osd_device *osd,
-			   const struct lu_fid *fid)
-{
-	LASSERT(fid_is_acct(fid));
-	if (fid_oid(fid) == ACCT_GROUP_OID)
-		return osd->od_groupused_dn;
-	return osd->od_userused_dn;
-}
-
-/**
- * Helper function to estimate the number of inodes in use for a give uid/gid
- * from the block usage
+ * Helper function to estimate the number of inodes in use for the given
+ * uid/gid from the block usage
  */
 static uint64_t osd_objset_user_iused(struct osd_device *osd, uint64_t uidbytes)
 {
@@ -91,23 +79,26 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 				struct dt_rec *dtrec,
 				const struct dt_key *dtkey)
 {
-	struct osd_thread_info	*info = osd_oti_get(env);
-	char			*buf  = info->oti_buf;
-	size_t			 buflen = sizeof(info->oti_buf);
-	struct lquota_acct_rec	*rec  = (struct lquota_acct_rec *)dtrec;
-	struct osd_object	*obj = osd_dt_obj(dtobj);
-	struct osd_device	*osd = osd_obj2dev(obj);
-	int			 rc;
-	dnode_t *dn;
+	struct osd_thread_info *info = osd_oti_get(env);
+	char *buf = info->oti_buf;
+	struct lquota_acct_rec *rec = (struct lquota_acct_rec *)dtrec;
+	struct osd_object *obj = osd_dt_obj(dtobj);
+	struct osd_device *osd = osd_obj2dev(obj);
+	dnode_t *dn = obj->oo_dn;
+	size_t buflen = sizeof(info->oti_buf);
+	int rc;
 	ENTRY;
 
 	rec->bspace = rec->ispace = 0;
 
 	/* convert the 64-bit uid/gid into a string */
 	snprintf(buf, buflen, "%llx", *((__u64 *)dtkey));
-	/* fetch DMU object (DMU_USERUSED_OBJECT/DMU_GROUPUSED_OBJECT) to be
-	 * used */
-	dn = osd_quota_fid2dmu(osd, lu_object_fid(&dtobj->do_lu));
+	if (unlikely(!dn)) {
+		CDEBUG(D_QUOTA, "%s: miss accounting obj for %s\n",
+		       osd->od_svname, buf);
+
+		RETURN(-ENOENT);
+	}
 
 	/* disk usage (in bytes) is maintained by DMU.
 	 * DMU_USERUSED_OBJECT/DMU_GROUPUSED_OBJECT are special objects which
@@ -118,6 +109,8 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 		/* user/group has not created anything yet */
 		CDEBUG(D_QUOTA, "%s: id %s not found in DMU accounting ZAP\n",
 		       osd->od_svname, buf);
+		/* -ENOENT is normal case, convert it as 1. */
+		rc = 1;
 	} else if (rc) {
 		RETURN(rc);
 	}
@@ -136,6 +129,8 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 			CDEBUG(D_QUOTA,
 			       "%s: id %s not found dnode accounting\n",
 			       osd->od_svname, buf);
+			/* -ENOENT is normal case, convert it as 1. */
+			rc = 1;
 		} else if (rc == 0) {
 			rc = 1;
 		}
@@ -154,15 +149,20 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 				      struct dt_object *dt,
 				      __u32 attr)
 {
-	struct osd_thread_info	*info = osd_oti_get(env);
-	struct osd_it_quota	*it;
-	struct lu_object	*lo   = &dt->do_lu;
-	struct osd_device	*osd  = osd_dev(lo->lo_dev);
-	dnode_t *dn;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct osd_it_quota *it;
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
+	dnode_t *dn = obj->oo_dn;
 	int rc;
 	ENTRY;
 
-	LASSERT(lu_object_exists(lo));
+	if (unlikely(!dn)) {
+		CDEBUG(D_QUOTA, "%s: Not found in DMU accounting ZAP\n",
+		       osd->od_svname);
+
+		RETURN(ERR_PTR(-ENOENT));
+	}
 
 	if (info == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
@@ -172,7 +172,6 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 		RETURN(ERR_PTR(-ENOMEM));
 
 	memset(it, 0, sizeof(*it));
-	dn = osd_quota_fid2dmu(osd, lu_object_fid(lo));
 	it->oiq_oid = dn->dn_object;
 
 	/* initialize zap cursor */
@@ -183,7 +182,7 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 	}
 
 	/* take object reference */
-	lu_object_get(lo);
+	lu_object_get(&dt->do_lu);
 	it->oiq_obj   = osd_dt_obj(dt);
 	it->oiq_reset = 1;
 
