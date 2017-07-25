@@ -2543,6 +2543,11 @@ static int mgs_write_log_mdc_to_lmv(const struct lu_env *env,
 	if (rc)
 		GOTO(out_free, rc);
 
+	rc = mgs_modify(env, mgs, fsdb, mti, logname, mti->mti_svname,
+			"add mdc", CM_SKIP);
+	if (rc < 0)
+		GOTO(out_free, rc);
+
 	rc = record_start_log(env, mgs, &llh, logname);
 	if (rc)
 		GOTO(out_free, rc);
@@ -2687,6 +2692,11 @@ static int mgs_write_log_osp_to_mdt(const struct lu_env *env,
 
 	rc = name_create(&mdtuuid, mdtname, "_UUID");
 	if (rc)
+		GOTO(out_destory, rc);
+
+	rc = mgs_modify(env, mgs, fsdb, mti, logname, mti->mti_svname,
+			"add osp", CM_SKIP);
+	if (rc < 0)
 		GOTO(out_destory, rc);
 
 	rc = record_start_log(env, mgs, &llh, logname);

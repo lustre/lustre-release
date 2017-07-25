@@ -8049,7 +8049,6 @@ test_108b() {
 }
 run_test 108b "migrate from ZFS to ldiskfs"
 
-
 #
 # set number of permanent parameters
 #
@@ -8629,6 +8628,50 @@ test_117() {
 	cleanup || error "cleanup failed with rc $?"
 }
 run_test 117 "lctl get_param return errors properly"
+
+test_119() {
+	local had_config
+	local size_mb
+
+	[[ "$MDSCOUNT" -ge 2 ]] || skip "Need more at least 2 MDTs"
+
+	had_config=$(do_facet mds1 "$LCTL get_param debug | grep config")
+	do_facet mds1 "$LCTL set_param debug=+config"
+	do_facet mds1 "$LCTL clear"
+
+	setup
+	do_facet mds2 "$TUNEFS --writeconf $(mdsdevname 2)" &>/dev/null
+	# mount after writeconf will make "add osp" added to mdt0 config:
+	# 53 (224)marker  60 (flags=0x01, v2.5.1.0) lustre-MDT0001  'add osp'
+	# 54 (080)add_uuid  nid=...  0:  1:...
+	# 55 (144)attach    0:lustre-MDT0001-osp-MDT0000  1:osp  2:...
+	# 56 (144)setup     0:lustre-MDT0001-osp-MDT0000  1:...  2:...
+	# 57 (136)modify_mdc_tgts add 0:lustre-MDT0000-mdtlov  1:...  2:1  3:1
+	# duplicate modify_mdc_tgts caused crashes
+
+	debug_size_save
+	# using larger debug_mb size to avoid lctl dk log truncation
+	size_mb=$((DEBUG_SIZE_SAVED * 4))
+	for i in {1..3}; do
+		stop_mdt 2
+		# though config processing stops after failed attach and setup
+		# it will proceed after the failed command after each writeconf
+		# this is the original scenario of the issue
+		do_facet mds2 "$TUNEFS --writeconf $(mdsdevname 2)" &>/dev/null
+		do_facet mds1 "$LCTL set_param debug_mb=$size_mb"
+		start_mdt 2
+
+		wait_update_cond mds1 \
+			"$LCTL dk | grep -c Processed.log.$FSNAME-MDT0000" \
+			">" 1 300
+	done
+	debug_size_restore
+
+	[[ -z "$had_config" ]] && do_facet mds1 lctl set_param debug=-config
+
+	reformat
+}
+run_test 119 "writeconf on slave mdt shouldn't duplicate mdc/osp and crash"
 
 test_120() { # LU-11130
 	[ "$MDSCOUNT" -lt 2 ] && skip "mdt count < 2"

@@ -1428,52 +1428,22 @@ static int osp_obd_connect(const struct lu_env *env, struct obd_export **exp,
 			   struct obd_device *obd, struct obd_uuid *cluuid,
 			   struct obd_connect_data *data, void *localdata)
 {
-	struct osp_device       *osp = lu2osp_dev(obd->obd_lu_dev);
-	struct obd_connect_data *ocd;
-	struct obd_import       *imp;
-	struct lustre_handle     conn;
-	int                      rc;
+	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+	int rc;
 
 	ENTRY;
 
-	CDEBUG(D_CONFIG, "connect #%d\n", osp->opd_connects);
+	LASSERT(data != NULL);
+	LASSERT(data->ocd_connect_flags & OBD_CONNECT_INDEX);
 
-	rc = class_connect(&conn, obd, cluuid);
+	rc = client_connect_import(env, &osp->opd_exp, obd, cluuid, data,
+				   localdata);
 	if (rc)
 		RETURN(rc);
 
-	*exp = class_conn2export(&conn);
-	/* Why should there ever be more than 1 connect? */
-	osp->opd_connects++;
-	LASSERT(osp->opd_connects == 1);
+	osp->opd_obd->u.cli.cl_seq->lcs_exp = class_export_get(osp->opd_exp);
+	*exp = osp->opd_exp;
 
-	osp->opd_exp = *exp;
-
-	imp = osp->opd_obd->u.cli.cl_import;
-	imp->imp_dlm_handle = conn;
-
-	LASSERT(data != NULL);
-	LASSERT(data->ocd_connect_flags & OBD_CONNECT_INDEX);
-	ocd = &imp->imp_connect_data;
-	*ocd = *data;
-
-	imp->imp_connect_flags_orig = ocd->ocd_connect_flags;
-	imp->imp_connect_flags2_orig = ocd->ocd_connect_flags2;
-
-	ocd->ocd_version = LUSTRE_VERSION_CODE;
-	ocd->ocd_index = data->ocd_index;
-
-	rc = ptlrpc_connect_import(imp);
-	if (rc) {
-		CERROR("%s: can't connect obd: rc = %d\n", obd->obd_name, rc);
-		GOTO(out, rc);
-	} else {
-		osp->opd_obd->u.cli.cl_seq->lcs_exp =
-				class_export_get(osp->opd_exp);
-	}
-
-	ptlrpc_pinger_add_import(imp);
-out:
 	RETURN(rc);
 }
 
@@ -1492,13 +1462,8 @@ out:
 static int osp_obd_disconnect(struct obd_export *exp)
 {
 	struct obd_device *obd = exp->exp_obd;
-	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
 	int                rc;
 	ENTRY;
-
-	/* Only disconnect the underlying layers on the final disconnect. */
-	LASSERT(osp->opd_connects == 1);
-	osp->opd_connects--;
 
 	rc = class_disconnect(exp);
 	if (rc) {

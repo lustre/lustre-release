@@ -181,7 +181,7 @@ struct osp_device {
 	struct obd_device		*opd_obd;
 	struct obd_export		*opd_exp;
 	struct obd_connect_data		*opd_connect_data;
-	int				 opd_connects;
+
 	/* connection status. */
 	unsigned int			 opd_new_connection:1,
 					 opd_got_disconnected:1,
