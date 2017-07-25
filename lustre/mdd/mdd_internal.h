@@ -310,6 +310,7 @@ void mdd_changelog_rec_extra_uidgid(struct changelog_rec *rec,
 				    __u64 uid, __u64 gid);
 void mdd_changelog_rec_extra_nid(struct changelog_rec *rec,
 				 lnet_nid_t nid);
+void mdd_changelog_rec_extra_omode(struct changelog_rec *rec, int flags);
 int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 			struct llog_changelog_rec *rec, struct thandle *th);
 int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,

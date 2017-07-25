@@ -982,6 +982,59 @@ enum la_valid {
 	LA_REMOTE_ATTR_SET = (LA_UID | LA_GID | LA_PROJID | LA_LAYOUT_VERSION)
 };
 
+#ifndef FMODE_READ
+#define FMODE_READ               00000001
+#define FMODE_WRITE              00000002
+#endif
+
+#define MDS_FMODE_CLOSED         00000000
+#define MDS_FMODE_EXEC           00000004
+/*	MDS_FMODE_EPOCH          01000000 obsolete since 2.8.0 */
+/*	MDS_FMODE_TRUNC          02000000 obsolete since 2.8.0 */
+/*	MDS_FMODE_SOM            04000000 obsolete since 2.8.0 */
+
+#define MDS_OPEN_CREATED         00000010
+#define MDS_OPEN_CROSS           00000020
+
+#define MDS_OPEN_CREAT           00000100
+#define MDS_OPEN_EXCL            00000200
+#define MDS_OPEN_TRUNC           00001000
+#define MDS_OPEN_APPEND          00002000
+#define MDS_OPEN_SYNC            00010000
+#define MDS_OPEN_DIRECTORY       00200000
+
+#define MDS_OPEN_BY_FID		040000000 /* open_by_fid for known object */
+#define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
+#define MDS_OPEN_OWNEROVERRIDE 0200000000 /* NFSD rw-reopen ro file for owner */
+#define MDS_OPEN_JOIN_FILE     0400000000 /* open for join file.
+					   * We do not support JOIN FILE
+					   * anymore, reserve this flags
+					   * just for preventing such bit
+					   * to be reused. */
+
+#define MDS_OPEN_LOCK         04000000000 /* This open requires open lock */
+#define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
+#define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
+#define MDS_OPEN_NORESTORE  0100000000000ULL /* Do not restore file at open */
+#define MDS_OPEN_NEWSTRIPE  0200000000000ULL /* New stripe needed (restripe or
+					      * hsm restore) */
+#define MDS_OPEN_VOLATILE   0400000000000ULL /* File is volatile = created
+						unlinked */
+#define MDS_OPEN_LEASE	   01000000000000ULL /* Open the file and grant lease
+					      * delegation, succeed if it's not
+					      * being opened with conflict mode.
+					      */
+#define MDS_OPEN_RELEASE   02000000000000ULL /* Open the file for HSM release */
+
+#define MDS_OPEN_RESYNC    04000000000000ULL /* FLR: file resync */
+
+/* lustre internal open flags, which should not be set from user space */
+#define MDS_OPEN_FL_INTERNAL (MDS_OPEN_HAS_EA | MDS_OPEN_HAS_OBJS |	\
+			      MDS_OPEN_OWNEROVERRIDE | MDS_OPEN_LOCK |	\
+			      MDS_OPEN_BY_FID | MDS_OPEN_LEASE |	\
+			      MDS_OPEN_RELEASE | MDS_OPEN_RESYNC)
+
+
 /********* Changelogs **********/
 /** Changelog record types */
 enum changelog_rec_type {
@@ -1122,7 +1175,8 @@ enum changelog_rec_extra_flags {
 	CLFE_INVALID	= 0,
 	CLFE_UIDGID	= 0x0001,
 	CLFE_NID	= 0x0002,
-	CLFE_SUPPORTED	= CLFE_UIDGID | CLFE_NID
+	CLFE_OPEN	= 0x0004,
+	CLFE_SUPPORTED	= CLFE_UIDGID | CLFE_NID | CLFE_OPEN
 };
 
 enum changelog_send_flag {
@@ -1143,6 +1197,8 @@ enum changelog_send_extra_flag {
 	CHANGELOG_EXTRA_FLAG_UIDGID = 0x01,
 	/* Pack nid into the changelog record */
 	CHANGELOG_EXTRA_FLAG_NID    = 0x02,
+	/* Pack open mode into the changelog record */
+	CHANGELOG_EXTRA_FLAG_OMODE  = 0x04,
 };
 
 #define CR_MAXSIZE cfs_size_round(2 * NAME_MAX + 2 + \
@@ -1204,6 +1260,11 @@ struct changelog_ext_nid {
 	__u32 padding;
 };
 
+/* Changelog extra extension to include OPEN mode. */
+struct changelog_ext_openmode {
+	__u32 cr_openflags;
+};
+
 static inline struct changelog_ext_extra_flags *changelog_rec_extra_flags(
 	const struct changelog_rec *rec);
 
@@ -1224,6 +1285,8 @@ static inline size_t changelog_rec_offset(enum changelog_rec_flags crf,
 			size += sizeof(struct changelog_ext_uidgid);
 		if (cref & CLFE_NID)
 			size += sizeof(struct changelog_ext_nid);
+		if (cref & CLFE_OPEN)
+			size += sizeof(struct changelog_ext_openmode);
 	}
 
 	return size;
@@ -1308,6 +1371,23 @@ struct changelog_ext_nid *changelog_rec_nid(const struct changelog_rec *rec)
 					    changelog_rec_offset(crf, cref));
 }
 
+/* The OPEN mode is the third extra extension */
+static inline
+struct changelog_ext_openmode *changelog_rec_openmode(
+	const struct changelog_rec *rec)
+{
+	enum changelog_rec_flags crf = rec->cr_flags &
+		(CLF_VERSION | CLF_RENAME | CLF_JOBID | CLF_EXTRA_FLAGS);
+	enum changelog_rec_extra_flags cref = CLFE_INVALID;
+
+	if (rec->cr_flags & CLF_EXTRA_FLAGS)
+		cref = changelog_rec_extra_flags(rec)->cr_extra_flags &
+		       (CLFE_UIDGID | CLFE_NID);
+
+	return (struct changelog_ext_openmode *)((char *)rec +
+					       changelog_rec_offset(crf, cref));
+}
+
 /* The name follows the rename, jobid  and extra flags extns, if present */
 static inline char *changelog_rec_name(const struct changelog_rec *rec)
 {
@@ -1357,6 +1437,7 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 				       enum changelog_rec_flags crf_wanted,
 				       enum changelog_rec_extra_flags cref_want)
 {
+	char *omd_mov = NULL;
 	char *nid_mov = NULL;
 	char *uidgid_mov = NULL;
 	char *ef_mov;
@@ -1382,13 +1463,18 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 
 	/* Locations of extensions in the remapped record */
 	if (rec->cr_flags & CLF_EXTRA_FLAGS) {
+		omd_mov = (char *)rec +
+			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
+					     cref_want & ~CLFE_OPEN);
 		nid_mov = (char *)rec +
 			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
-					     cref_want & ~CLFE_NID);
+					     cref_want & ~(CLFE_NID |
+							   CLFE_OPEN));
 		uidgid_mov = (char *)rec +
 			changelog_rec_offset(crf_wanted & CLF_SUPPORTED,
 					     cref_want & ~(CLFE_UIDGID |
-							   CLFE_NID));
+							   CLFE_NID |
+							   CLFE_OPEN));
 		cref = changelog_rec_extra_flags(rec)->cr_extra_flags;
 	}
 
@@ -1409,6 +1495,10 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 	/* Move the extension fields to the desired positions */
 	if ((crf_wanted & CLF_EXTRA_FLAGS) &&
 	    (rec->cr_flags & CLF_EXTRA_FLAGS)) {
+		if ((cref_want & CLFE_OPEN) && (cref & CLFE_OPEN))
+			memmove(omd_mov, changelog_rec_openmode(rec),
+				sizeof(struct changelog_ext_openmode));
+
 		if ((cref_want & CLFE_NID) && (cref & CLFE_NID))
 			memmove(nid_mov, changelog_rec_nid(rec),
 				sizeof(struct changelog_ext_nid));
@@ -1430,6 +1520,10 @@ static inline void changelog_remap_rec(struct changelog_rec *rec,
 			sizeof(struct changelog_ext_rename));
 
 	/* Clear newly added fields */
+	if (omd_mov && (cref_want & CLFE_OPEN) &&
+	    !(cref & CLFE_OPEN))
+		memset(omd_mov, 0, sizeof(struct changelog_ext_openmode));
+
 	if (nid_mov && (cref_want & CLFE_NID) &&
 	    !(cref & CLFE_NID))
 		memset(nid_mov, 0, sizeof(struct changelog_ext_nid));

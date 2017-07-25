@@ -5603,7 +5603,8 @@ static int lfs_changelog(int argc, char **argv)
 
 	rc = llapi_changelog_set_xflags(changelog_priv,
 					CHANGELOG_EXTRA_FLAG_UIDGID |
-					CHANGELOG_EXTRA_FLAG_NID);
+					CHANGELOG_EXTRA_FLAG_NID |
+					CHANGELOG_EXTRA_FLAG_OMODE);
 	if (rc < 0) {
 		fprintf(stderr, "Can't set xflags for changelog: %s\n",
 			strerror(errno = -rc));
@@ -5660,6 +5661,29 @@ static int lfs_changelog(int argc, char **argv)
 
 				printf(" nid=%s",
 				       libcfs_nid2str(nid->cr_nid));
+			}
+
+			if (ef->cr_extra_flags & CLFE_OPEN) {
+				struct changelog_ext_openmode *omd =
+					changelog_rec_openmode(rec);
+				char mode[] = "---";
+
+				/* exec mode must be exclusive */
+				if (omd->cr_openflags & MDS_FMODE_EXEC) {
+					mode[2] = 'x';
+				} else {
+					if (omd->cr_openflags & FMODE_READ)
+						mode[0] = 'r';
+					if (omd->cr_openflags &
+					    (FMODE_WRITE |
+					     MDS_OPEN_TRUNC |
+					     MDS_OPEN_APPEND))
+						mode[1] = 'w';
+				}
+
+				if (strcmp(mode, "---") != 0)
+					printf(" m=%s", mode);
+
 			}
 		}
 

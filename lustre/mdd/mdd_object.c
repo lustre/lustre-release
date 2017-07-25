@@ -654,6 +654,8 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 		xflags |= CLFE_UIDGID;
 		xflags |= CLFE_NID;
 	}
+	if (type == CL_OPEN)
+		xflags |= CLFE_OPEN;
 
 	reclen = llog_data_len(LLOG_CHANGELOG_HDR_SZ +
 			       changelog_rec_offset(flags & CLF_SUPPORTED,
@@ -679,10 +681,11 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 						       uc->uc_uid, uc->uc_gid);
 		if (xflags & CLFE_NID)
 			mdd_changelog_rec_extra_nid(&rec->cr, uc->uc_nid);
+		if (xflags & CLFE_OPEN)
+			mdd_changelog_rec_extra_omode(&rec->cr, flags);
 	}
 
 	rc = mdd_changelog_store(env, mdd, rec, handle);
-
 	RETURN(rc);
 }
 
@@ -2352,6 +2355,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 		    int flags)
 {
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	struct md_device *md_dev = lu2md_dev(mdd2lu_dev(mdo2mdd(obj)));
 	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
 	int rc = 0;
 
@@ -2366,6 +2370,9 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 		GOTO(out, rc);
 
 	mdd_obj->mod_count++;
+
+	mdd_changelog(env, CL_OPEN, flags, md_dev, mdo2fid(mdd_obj));
+
 	EXIT;
 out:
 	mdd_write_unlock(env, mdd_obj);

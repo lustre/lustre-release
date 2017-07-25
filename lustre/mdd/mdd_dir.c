@@ -1062,6 +1062,13 @@ void mdd_changelog_rec_extra_nid(struct changelog_rec *rec,
 	clnid->cr_nid = nid;
 }
 
+void mdd_changelog_rec_extra_omode(struct changelog_rec *rec, int flags)
+{
+	struct changelog_ext_openmode *omd = changelog_rec_openmode(rec);
+
+	omd->cr_openflags = (__u32)flags;
+}
+
 /** Store a namespace change changelog record
  * If this fails, we must fail the whole transaction; we don't
  * want the change to commit without the log entry.

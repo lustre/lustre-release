@@ -1824,58 +1824,6 @@ struct mdt_rec_setattr {
 #define MDS_ATTR_BLOCKS     0x8000ULL /* = 32768 */
 #define MDS_ATTR_PROJID	    0x10000ULL	/* = 65536 */
 
-#ifndef FMODE_READ
-#define FMODE_READ               00000001
-#define FMODE_WRITE              00000002
-#endif
-
-#define MDS_FMODE_CLOSED         00000000
-#define MDS_FMODE_EXEC           00000004
-/*	MDS_FMODE_EPOCH          01000000 obsolete since 2.8.0 */
-/*	MDS_FMODE_TRUNC          02000000 obsolete since 2.8.0 */
-/*	MDS_FMODE_SOM            04000000 obsolete since 2.8.0 */
-
-#define MDS_OPEN_CREATED         00000010
-#define MDS_OPEN_CROSS           00000020
-
-#define MDS_OPEN_CREAT           00000100
-#define MDS_OPEN_EXCL            00000200
-#define MDS_OPEN_TRUNC           00001000
-#define MDS_OPEN_APPEND          00002000
-#define MDS_OPEN_SYNC            00010000
-#define MDS_OPEN_DIRECTORY       00200000
-
-#define MDS_OPEN_BY_FID 	040000000 /* open_by_fid for known object */
-#define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
-#define MDS_OPEN_OWNEROVERRIDE 0200000000 /* NFSD rw-reopen ro file for owner */
-#define MDS_OPEN_JOIN_FILE     0400000000 /* open for join file.
-                                           * We do not support JOIN FILE
-                                           * anymore, reserve this flags
-                                           * just for preventing such bit
-                                           * to be reused. */
-
-#define MDS_OPEN_LOCK         04000000000 /* This open requires open lock */
-#define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
-#define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
-#define MDS_OPEN_NORESTORE  0100000000000ULL /* Do not restore file at open */
-#define MDS_OPEN_NEWSTRIPE  0200000000000ULL /* New stripe needed (restripe or
-                                              * hsm restore) */
-#define MDS_OPEN_VOLATILE   0400000000000ULL /* File is volatile = created
-						unlinked */
-#define MDS_OPEN_LEASE	   01000000000000ULL /* Open the file and grant lease
-					      * delegation, succeed if it's not
-					      * being opened with conflict mode.
-					      */
-#define MDS_OPEN_RELEASE   02000000000000ULL /* Open the file for HSM release */
-
-#define MDS_OPEN_RESYNC    04000000000000ULL /* FLR: file resync */
-
-/* lustre internal open flags, which should not be set from user space */
-#define MDS_OPEN_FL_INTERNAL (MDS_OPEN_HAS_EA | MDS_OPEN_HAS_OBJS |	\
-			      MDS_OPEN_OWNEROVERRIDE | MDS_OPEN_LOCK |	\
-			      MDS_OPEN_BY_FID | MDS_OPEN_LEASE |	\
-			      MDS_OPEN_RELEASE | MDS_OPEN_RESYNC)
-
 enum mds_op_bias {
 	MDS_CHECK_SPLIT		= 1 << 0,
 	MDS_CROSS_REF		= 1 << 1,
@@ -2749,8 +2697,11 @@ struct llog_size_change_rec {
 #define CHANGELOG_ALLMASK 0XFFFFFFFF
 /** default \a changelog_rec_type mask. Allow all of them, except
  * CL_ATIME since it can really be time consuming, and not necessary
- * under normal use. */
-#define CHANGELOG_DEFMASK (CHANGELOG_ALLMASK & ~(1 << CL_ATIME))
+ * under normal use.
+ * Remove also CL_OPEN from default list as it can be costly and only necessary
+ * for audit purpose.
+ */
+#define CHANGELOG_DEFMASK (CHANGELOG_ALLMASK & ~(1 << CL_ATIME | 1 << CL_OPEN))
 
 /* changelog llog name, needed by client replicators */
 #define CHANGELOG_CATALOG "changelog_catalog"
@@ -2844,13 +2795,15 @@ enum llog_flag {
 	LLOG_F_EXT_EXTRA_FLAGS  = 0x20,
 	LLOG_F_EXT_X_UIDGID	= 0x40,
 	LLOG_F_EXT_X_NID	= 0x80,
+	LLOG_F_EXT_X_OMODE	= 0x100,
 
 	/* Note: Flags covered by LLOG_F_EXT_MASK will be inherited from
 	 * catlog to plain log, so do not add LLOG_F_IS_FIXSIZE here,
 	 * because the catlog record is usually fixed size, but its plain
 	 * log record can be variable */
 	LLOG_F_EXT_MASK = LLOG_F_EXT_JOBID | LLOG_F_EXT_EXTRA_FLAGS |
-			  LLOG_F_EXT_X_UIDGID | LLOG_F_EXT_X_NID,
+			  LLOG_F_EXT_X_UIDGID | LLOG_F_EXT_X_NID |
+			  LLOG_F_EXT_X_OMODE,
 };
 
 /* On-disk header structure of each log object, stored in little endian order */

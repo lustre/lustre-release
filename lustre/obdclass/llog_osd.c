@@ -793,6 +793,8 @@ static void changelog_block_trim_ext(struct llog_rec_hdr *hdr,
 	enum changelog_rec_flags flags = CLF_SUPPORTED;
 	enum changelog_rec_extra_flags extra_flags = CLFE_SUPPORTED;
 
+	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_OMODE))
+		extra_flags &= ~CLFE_OPEN;
 	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_NID))
 		extra_flags &= ~CLFE_NID;
 	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_EXT_X_UIDGID))
