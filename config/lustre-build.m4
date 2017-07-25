@@ -394,8 +394,6 @@ AC_DEFUN([LB_CONFIG_FILES], [
 		lustre-iokit/ior-survey/Makefile
 		lustre-iokit/stats-collect/Makefile
 	)
-	AC_CONFIG_FILES([lustre/scripts/dkms.mkconf],
-			[chmod +x lustre/scripts/dkms.mkconf])
 ])
 
 #
