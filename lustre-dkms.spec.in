@@ -9,11 +9,14 @@
 
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 	%global requires_kmod_name kmod-%{module}
-%else	#for Suse
+	%define mkconf_options
+%else	#for Suse / Ubuntu
 	%global requires_kmod_name %{module}-kmp
+	%define mkconf_options "-k updates"
 %endif
 
 %define buildid 1
+%define mkconf  lustre/scripts/dkms.mkconf
 
 Name:           %{module}-dkms
 
@@ -59,47 +62,7 @@ This package contains the dkms Lustre kernel modules.
 %setup -q -n @PACKAGE@-%{version}
 
 %build
-cat << EOF > dkms.conf
-# Embryonic lustre-dkms dkms.conf to allow for on-target accurate and full
-# version re-create during first run of Lustre DKMS module build step.
-PACKAGE_NAME=%{module}
-PACKAGE_VERSION=%{version}
-PACKAGE_CONFIG="/etc/sysconfig/lustre"
-PRE_BUILD="lustre-dkms_pre-build.sh \$module \$module_version \$kernelver \
-	 \$kernel_source_dir \$arch \$source_tree \$dkms_tree"
-POST_BUILD="lustre-dkms_post-build.sh \$module \$module_version \$kernelver \
-	 \$kernel_source_dir \$arch \$source_tree \$dkms_tree"
-EOF
-%if %{with servers}
-cat << EOF >> dkms.conf
-BUILD_DEPENDS[0]="zfs"
-EOF
-%endif
-cat << EOF >> dkms.conf
-AUTOINSTALL="yes"
-REMAKE_INITRD="no"
-MAKE[0]="make"
-# just have to set STRIP[0], it will become the new default.
-STRIP[0]="\$(
-  [[ -r \${PACKAGE_CONFIG} ]] \\
-  && source \${PACKAGE_CONFIG} \\
-  && shopt -q -s extglob \\
-  && [[ \${LUSTRE_DKMS_DISABLE_STRIP,,} == @(y|yes) ]] \\
-  && echo -n no
-)"
-
-# at least one module's set of BUILT_MODULE_NAME[]/BUILT_MODULE_LOCATION[]
-# elements, along with an install path made of either "extra" or "updates"
-# subdir in its DEST_MODULE_LOCATION[] element, are required to fake during
-# dkms.conf validity checks of "dkms [add,build]" steps.
-# Final/full correct BUILT_MODULE_NAME[]/BUILT_MODULE_LOCATION[]/
-# DEST_MODULE_LOCATION[] sets of values for all modules will be fixed during
-# on-target post-configure run of dkms.mkconf as part of build step.
-# it must be for a module shared by both lustre[-client]-dkms packages.
-BUILT_MODULE_NAME[\${#BUILT_MODULE_NAME[@]}]="lustre"
-BUILT_MODULE_LOCATION[\${#BUILT_MODULE_LOCATION[@]}]="lustre/llite/"
-DEST_MODULE_LOCATION[\${#DEST_MODULE_LOCATION[@]}]="/extra/lustre/"
-EOF
+%{mkconf} -n %{module} -v %{version} -f dkms.conf %{mkconf_options}
 
 %install
 if [ "$RPM_BUILD_ROOT" != "/" ]; then

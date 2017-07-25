@@ -72,8 +72,3 @@ if [ $? != 0 ] ; then
 	echo "configure error, check $7/$1/$2/build/config.log"
 	exit 1
 fi
-
-# now re-create dkms.conf based on configure result, to set accurate Lustre
-# modules names that will be built and their future install locations, for
-# next DKMS module install step
-lustre/scripts/dkms.mkconf -n $1 -v $2 -f $6/$1-$2/dkms.conf
