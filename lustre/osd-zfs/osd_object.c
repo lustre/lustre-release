@@ -371,6 +371,30 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	RETURN(rc);
 }
 
+/**
+ * Helper function to retrieve DMU object id from fid for accounting object
+ */
+static dnode_t *osd_quota_fid2dmu(const struct osd_device *osd,
+				  const struct lu_fid *fid)
+{
+	dnode_t *dn = NULL;
+
+	LASSERT(fid_is_acct(fid));
+
+	switch (fid_oid(fid)) {
+	case ACCT_USER_OID:
+		dn = osd->od_userused_dn;
+		break;
+	case ACCT_GROUP_OID:
+		dn = osd->od_groupused_dn;
+		break;
+	default:
+		break;
+	}
+
+	return dn;
+}
+
 /*
  * Concurrency: no concurrent access is possible that early in object
  * life-cycle.
@@ -378,10 +402,11 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 			   const struct lu_object_conf *conf)
 {
-	struct osd_object	*obj = osd_obj(l);
-	struct osd_device	*osd = osd_obj2dev(obj);
-	uint64_t		 oid;
-	int			 rc;
+	struct osd_object *obj = osd_obj(l);
+	struct osd_device *osd = osd_obj2dev(obj);
+	const struct lu_fid *fid = lu_object_fid(l);
+	uint64_t oid;
+	int rc = 0;
 	ENTRY;
 
 	LASSERT(osd_invariant(obj));
@@ -395,7 +420,17 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 	if (conf != NULL && conf->loc_flags & LOC_F_NEW)
 		GOTO(out, rc = 0);
 
-	rc = osd_fid_lookup(env, osd, lu_object_fid(l), &oid);
+	if (unlikely(fid_is_acct(fid))) {
+		obj->oo_dn = osd_quota_fid2dmu(osd, fid);
+		if (obj->oo_dn) {
+			obj->oo_dt.do_index_ops = &osd_acct_index_ops;
+			l->lo_header->loh_attr |= LOHA_EXISTS;
+		}
+
+		GOTO(out, rc = 0);
+	}
+
+	rc = osd_fid_lookup(env, osd, fid, &oid);
 	if (rc == 0) {
 		LASSERT(obj->oo_dn == NULL);
 		rc = __osd_obj2dnode(osd->od_os, oid, &obj->oo_dn);
@@ -616,15 +651,18 @@ out:
 static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 {
 	struct osd_object *obj = osd_obj(l);
+	const struct lu_fid *fid = lu_object_fid(l);
 
-	if (obj->oo_dn != NULL) {
-		osd_object_sa_fini(obj);
-		if (obj->oo_sa_xattr) {
-			nvlist_free(obj->oo_sa_xattr);
-			obj->oo_sa_xattr = NULL;
+	if (obj->oo_dn) {
+		if (likely(!fid_is_acct(fid))) {
+			osd_object_sa_fini(obj);
+			if (obj->oo_sa_xattr) {
+				nvlist_free(obj->oo_sa_xattr);
+				obj->oo_sa_xattr = NULL;
+			}
+			osd_dnode_rele(obj->oo_dn);
+			list_del(&obj->oo_sa_linkage);
 		}
-		osd_dnode_rele(obj->oo_dn);
-		list_del(&obj->oo_sa_linkage);
 		obj->oo_dn = NULL;
 	}
 }
@@ -711,6 +749,9 @@ static int osd_attr_get(const struct lu_env *env,
 
 	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
 		GOTO(out, rc = -ENOENT);
+
+	if (unlikely(fid_is_acct(lu_object_fid(&dt->do_lu))))
+		GOTO(out, rc = 0);
 
 	LASSERT(osd_invariant(obj));
 	LASSERT(obj->oo_dn);
@@ -1445,6 +1486,8 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 
 	ENTRY;
 
+	LASSERT(!fid_is_acct(fid));
+
 	/* concurrent create declarations should not see
 	 * the object inconsistent (db, attr, etc).
 	 * in regular cases acquisition should be cheap */
@@ -1502,16 +1545,14 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 
 	/* XXX: oo_lma_flags */
 	obj->oo_dt.do_lu.lo_header->loh_attr |= obj->oo_attr.la_mode & S_IFMT;
-	if (likely(!fid_is_acct(lu_object_fid(&obj->oo_dt.do_lu))))
-		/* no body operations for accounting objects */
-		obj->oo_dt.do_body_ops = &osd_body_ops;
+	obj->oo_dt.do_body_ops = &osd_body_ops;
 
 	rc = -nvlist_alloc(&obj->oo_sa_xattr, NV_UNIQUE_NAME, KM_SLEEP);
 	if (rc)
 		GOTO(out, rc);
 
 	/* initialize LMA */
-	lustre_lma_init(lma, lu_object_fid(&obj->oo_dt.do_lu), 0, 0);
+	lustre_lma_init(lma, fid, 0, 0);
 	lustre_lma_swab(lma);
 	rc = -nvlist_add_byte_array(obj->oo_sa_xattr, XATTR_NAME_LMA,
 				    (uchar_t *)lma, sizeof(*lma));
