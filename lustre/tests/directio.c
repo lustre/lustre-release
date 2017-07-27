@@ -106,8 +106,8 @@ int main(int argc, char **argv)
                 return 1;
         }
 
-        printf("directio on %s for %dx%lu bytes \n", fname, blocks,
-               st.st_blksize);
+	printf("directio on %s for %dx%lu bytes\n", fname, blocks,
+	       (unsigned long)st.st_blksize);
 
         seek = (off64_t)seek_blocks * (off64_t)st.st_blksize;
         len = blocks * st.st_blksize;
