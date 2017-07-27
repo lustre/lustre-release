@@ -1653,12 +1653,12 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 			RETURN(-EINVAL);
 		}
 
-		if (le32_to_cpu(comp_v1->lcm_entry_count) == 0) {
+		if (le16_to_cpu(comp_v1->lcm_entry_count) == 0) {
 			CDEBUG(D_LAYOUT, "entry count is zero\n");
 			RETURN(-EINVAL);
 		}
 
-		for (i = 0; i < le32_to_cpu(comp_v1->lcm_entry_count); i++) {
+		for (i = 0; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
 			ent = &comp_v1->lcm_entries[i];
 			ext = &ent->lcme_extent;
 
