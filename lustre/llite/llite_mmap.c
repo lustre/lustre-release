@@ -283,7 +283,7 @@ static int ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 	if (ll_sbi_has_fast_read(ll_i2sbi(file_inode(vma->vm_file)))) {
 		/* do fast fault */
 		ll_cl_add(vma->vm_file, env, NULL, LCC_MMAP);
-		fault_ret = filemap_fault(vma, vmf);
+		fault_ret = ll_filemap_fault(vma, vmf);
 		ll_cl_remove(vma->vm_file, env);
 
 		/* - If there is no error, then the page was found in cache and
@@ -342,8 +342,14 @@ out:
 	RETURN(fault_ret);
 }
 
+#ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
+static int ll_fault(struct vm_fault *vmf)
+{
+	struct vm_area_struct *vma = vmf->vma;
+#else
 static int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
+#endif
 	int count = 0;
 	bool printed = false;
 	int result;
@@ -385,8 +391,14 @@ restart:
         return result;
 }
 
+#ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
+static int ll_page_mkwrite(struct vm_fault *vmf)
+{
+	struct vm_area_struct *vma = vmf->vma;
+#else
 static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
+#endif
 	int count = 0;
 	bool printed = false;
 	bool retry;
