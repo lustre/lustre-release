@@ -242,8 +242,8 @@ static void vvp_vmpage_error(struct inode *inode, struct page *vmpage, int ioret
 		else
 			set_bit(AS_EIO, &inode->i_mapping->flags);
 
-		if ((ioret == -ESHUTDOWN || ioret == -EINTR) &&
-		     obj->vob_discard_page_warned == 0) {
+		if ((ioret == -ESHUTDOWN || ioret == -EINTR ||
+		     ioret == -EIO) && obj->vob_discard_page_warned == 0) {
 			obj->vob_discard_page_warned = 1;
 			ll_dirty_page_discard_warn(vmpage, ioret);
 		}
