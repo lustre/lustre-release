@@ -2633,6 +2633,29 @@ vm_fault_address, [
 ]) # LC_HAVE_VM_FAULT_ADDRESS
 
 #
+# LC_VM_OPERATIONS_REMOVE_VMF_ARG
+#
+# Kernel version 4.11 commit 11bac80004499ea59f361ef2a5516c84b6eab675
+# removed struct vm_area_struct as an argument for vm_operations since
+# in the same kernel version struct vma_area_struct was folded into
+# struct vm_fault.
+#
+AC_DEFUN([LC_VM_OPERATIONS_REMOVE_VMF_ARG], [
+LB_CHECK_COMPILE([if 'struct vm_operations' removed struct vm_area_struct],
+vm_operations_no_vm_area_struct, [
+	#include <linux/mm.h>
+],[
+	struct vm_fault vmf;
+
+	((struct vm_operations_struct *)0)->fault(&vmf);
+	((struct vm_operations_struct *)0)->page_mkwrite(&vmf);
+],[
+	AC_DEFINE(HAVE_VM_OPS_USE_VM_FAULT_ONLY, 1,
+		['struct vm_operations' remove struct vm_area_struct argument])
+])
+]) # LC_VM_OPERATIONS_REMOVE_VMF_ARG
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2847,6 +2870,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 4.10
 	LC_IOP_GENERIC_READLINK
 	LC_HAVE_VM_FAULT_ADDRESS
+
+	# 4.11
+	LC_VM_OPERATIONS_REMOVE_VMF_ARG
 
 	#
 	AS_IF([test "x$enable_server" != xno], [
