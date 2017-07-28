@@ -41,6 +41,10 @@
 #define INIT_STRATEGY
 #endif
 
+#ifndef HAVE_MODULE_PARAM_LOCKING
+static DEFINE_MUTEX(param_lock);
+#endif
+
 #ifndef HAVE_UIDGID_HEADER
 
 #ifndef _LINUX_UIDGID_H
@@ -104,6 +108,38 @@ static inline bool gid_valid(kgid_t gid)
 #endif
 
 int cfs_get_environ(const char *key, char *value, int *val_len);
+
+/*
+ * For RHEL6 struct kernel_parm_ops doesn't exist. Also
+ * the arguments for .set and .get take different
+ * parameters which is handled below
+ */
+#ifdef HAVE_KERNEL_PARAM_OPS
+#define cfs_kernel_param_arg_t const struct kernel_param
+#else
+#define cfs_kernel_param_arg_t struct kernel_param_ops
+#define kernel_param_ops kernel_param
+#endif /* ! HAVE_KERNEL_PARAM_OPS */
+
+#ifndef HAVE_KERNEL_PARAM_LOCK
+static inline void kernel_param_unlock(struct module *mod)
+{
+#ifndef	HAVE_MODULE_PARAM_LOCKING
+	mutex_unlock(&param_lock);
+#else
+	__kernel_param_unlock();
+#endif
+}
+
+static inline void kernel_param_lock(struct module *mod)
+{
+#ifndef	HAVE_MODULE_PARAM_LOCKING
+	mutex_lock(&param_lock);
+#else
+	__kernel_param_lock();
+#endif
+}
+#endif /* ! HAVE_KERNEL_PARAM_LOCK */
 
 #ifndef HAVE_KSTRTOUL
 static inline int kstrtoul(const char *s, unsigned int base, unsigned long *res)

@@ -137,6 +137,24 @@ ctl_table_ctl_name, [
 ]) # LIBCFS_SYSCTL_CTLNAME
 
 #
+# LIBCFS_MODULE_LOCKING
+#
+# 2.6.36 introduced locking to module params. RHEL6 lacks this support
+#
+AC_DEFUN([LIBCFS_MODULE_LOCKING],[
+LB_CHECK_COMPILE([does the kernel support module param locking],
+module_param_locking, [
+	#include <linux/moduleparam.h>
+],[
+	__kernel_param_lock(NULL);
+	__kernel_param_unlock(NULL);
+],[
+	AC_DEFINE(HAVE_MODULE_PARAM_LOCKING, 1,
+		[locking module param is supported])
+])
+]) # LIBCFS_MODULE_LOCKING
+
+#
 # LIBCFS_KSTRTOUL
 #
 # 2.6.38 kstrtoul is added
@@ -293,6 +311,23 @@ ktime_get_ts64, [
 		['ktime_get_ts64' is available])
 ])
 ]) # LIBCFS_KTIME_GET_TS64
+
+#
+# Linux kernel 3.12 introduced struct kernel_param_ops
+# This has been backported to all lustre supported
+# clients expect RHEL6. We have to handle the differences.
+#
+AC_DEFUN([LIBCFS_KERNEL_PARAM_OPS],[
+LB_CHECK_COMPILE([does 'struct kernel_param_ops' exist],
+kernel_param_ops, [
+	#include <linux/module.h>
+],[
+	struct kernel_param_ops ops;
+],[
+	AC_DEFINE(HAVE_KERNEL_PARAM_OPS, 1,
+		['struct kernel_param_ops' is available])
+])
+]) # LIBCFS_KERNEL_PARAM_OPS
 
 #
 # Kernel version 3.12 introduced ktime_add
@@ -524,6 +559,25 @@ cpumap_print_to_pagebuf, [
 ]) # LIBCFS_HAVE_CPUMASK_PRINT_TO_PAGEBUF
 
 #
+# Kernel version 4.1 commit b51d23e4e9fea6f264d39535c2a62d1f51e7ccc3
+# create per module locks which added kernel_param_[un]lock(). Older
+# kernels you have to use __kernel_param_[un]lock(). In that case its
+# a global lock for all modules but that is okay since its a rare event.
+#
+AC_DEFUN([LIBCFS_KERNEL_PARAM_LOCK],[
+LB_CHECK_COMPILE([does function 'kernel_param_[un]lock' exist],
+kernel_param_lock, [
+	#include <linux/moduleparam.h>
+],[
+	kernel_param_lock(NULL);
+	kernel_param_unlock(NULL);
+],[
+	AC_DEFINE(HAVE_KERNEL_PARAM_LOCK, 1,
+		['kernel_param_[un]lock' is available])
+])
+]) # LIBCFS_KERNEL_PARAM_LOCK
+
+#
 # Kernel version 4.2 changed topology_thread_cpumask
 # to topology_sibling_cpumask
 #
@@ -685,6 +739,8 @@ LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
 LC_SHRINKER_WANT_SHRINK_PTR
 # 2.6.33
 LIBCFS_SYSCTL_CTLNAME
+# 2.6.36
+LIBCFS_MODULE_LOCKING
 # 2.6.38
 LIBCFS_KSTRTOUL
 # 2.6.39
@@ -707,6 +763,7 @@ LIBCFS_ENABLE_CRC32C_ACCEL
 # 3.11
 LIBCFS_KTIME_GET_TS64
 # 3.12
+LIBCFS_KERNEL_PARAM_OPS
 LIBCFS_KTIME_ADD
 LIBCFS_KTIME_AFTER
 LIBCFS_SHRINKER_COUNT
@@ -722,6 +779,8 @@ LIBCFS_TIMESPEC64_TO_KTIME
 # 3.19
 LIBCFS_KTIME_GET_SECONDS
 LIBCFS_HAVE_CPUMASK_PRINT_TO_PAGEBUF
+# 4.1
+LIBCFS_KERNEL_PARAM_LOCK
 # 4.2
 LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 LIBCFS_FPU_API

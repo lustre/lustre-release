@@ -45,7 +45,7 @@
 #include <linux/list.h>
 
 #include <linux/sysctl.h>
-#include <linux/proc_fs.h>
+#include <linux/debugfs.h>
 #include <asm/div64.h>
 
 #define DEBUG_SUBSYSTEM S_LNET
@@ -55,9 +55,7 @@
 #include <lnet/lib-lnet.h>
 #include "tracefile.h"
 
-#ifdef CONFIG_SYSCTL
-static struct ctl_table_header *lnet_table_header;
-#endif
+static struct dentry *lnet_debugfs_root;
 
 static DECLARE_RWSEM(ioctl_list_sem);
 static LIST_HEAD(ioctl_list);
@@ -156,11 +154,10 @@ out:
 	RETURN(err);
 }
 
-int
-lprocfs_call_handler(void *data, int write, loff_t *ppos,
-		     void __user *buffer, size_t *lenp,
-		     int (*handler)(void *data, int write, loff_t pos,
-				    void __user *buffer, int len))
+int lprocfs_call_handler(void *data, int write, loff_t *ppos,
+			 void __user *buffer, size_t *lenp,
+			 int (*handler)(void *data, int write, loff_t pos,
+					void __user *buffer, int len))
 {
 	int rc = handler(data, write, *ppos, buffer, *lenp);
 
@@ -218,9 +215,8 @@ static int __proc_dobitmasks(void *data, int write,
 	return rc;
 }
 
-static int
-proc_dobitmasks(struct ctl_table *table, int write,
-		void __user *buffer, size_t *lenp, loff_t *ppos)
+static int proc_dobitmasks(struct ctl_table *table, int write,
+			   void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
 				    __proc_dobitmasks);
@@ -238,9 +234,8 @@ static int __proc_dump_kernel(void *data, int write,
 	return cfs_trace_dump_debug_buffer_usrstr(buffer, nob);
 }
 
-static int
-proc_dump_kernel(struct ctl_table *table, int write, void __user *buffer,
-		 size_t *lenp, loff_t *ppos)
+static int proc_dump_kernel(struct ctl_table *table, int write,
+			    void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
 				    __proc_dump_kernel);
@@ -262,148 +257,24 @@ static int __proc_daemon_file(void *data, int write,
 	return cfs_trace_daemon_command_usrstr(buffer, nob);
 }
 
-static int
-proc_daemon_file(struct ctl_table *table, int write, void __user *buffer,
-		 size_t *lenp, loff_t *ppos)
+static int proc_daemon_file(struct ctl_table *table, int write,
+			    void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
 				    __proc_daemon_file);
 }
 
-static int __proc_debug_mb(void *data, int write,
-			   loff_t pos, void __user *buffer, int nob)
-{
-	if (!write) {
-		char tmpstr[32];
-		int  len = snprintf(tmpstr, sizeof(tmpstr), "%d",
-				    cfs_trace_get_debug_mb());
-
-		if (pos >= len)
-			return 0;
-
-		return cfs_trace_copyout_string(buffer, nob, tmpstr + pos,
-						"\n");
-	}
-
-	return cfs_trace_set_debug_mb_usrstr(buffer, nob);
-}
-
-static int
-proc_debug_mb(struct ctl_table *table, int write, void __user *buffer,
-	      size_t *lenp, loff_t *ppos)
-{
-	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
-				    __proc_debug_mb);
-}
-
-static int
-proc_console_max_delay_cs(struct ctl_table *table, int write,
-			  void __user *buffer, size_t *lenp, loff_t *ppos)
-{
-	int rc, max_delay_cs;
-	struct ctl_table dummy = *table;
-	cfs_duration_t d;
-
-	dummy.data = &max_delay_cs;
-	dummy.proc_handler = &proc_dointvec;
-
-	if (!write) { /* read */
-		max_delay_cs = cfs_duration_sec(libcfs_console_max_delay * 100);
-		rc = proc_dointvec(&dummy, write, buffer, lenp, ppos);
-		return rc;
-	}
-
-	/* write */
-	max_delay_cs = 0;
-	rc = proc_dointvec(&dummy, write, buffer, lenp, ppos);
-	if (rc < 0)
-		return rc;
-	if (max_delay_cs <= 0)
-		return -EINVAL;
-
-	d = cfs_time_seconds(max_delay_cs) / 100;
-	if (d == 0 || d < libcfs_console_min_delay)
-		return -EINVAL;
-	libcfs_console_max_delay = d;
-
-	return rc;
-}
-
-static int
-proc_console_min_delay_cs(struct ctl_table *table, int write,
-			  void __user *buffer, size_t *lenp, loff_t *ppos)
-{
-	int rc, min_delay_cs;
-	struct ctl_table dummy = *table;
-	cfs_duration_t d;
-
-	dummy.data = &min_delay_cs;
-	dummy.proc_handler = &proc_dointvec;
-
-	if (!write) { /* read */
-		min_delay_cs = cfs_duration_sec(libcfs_console_min_delay * 100);
-		rc = proc_dointvec(&dummy, write, buffer, lenp, ppos);
-		return rc;
-	}
-
-	/* write */
-	min_delay_cs = 0;
-	rc = proc_dointvec(&dummy, write, buffer, lenp, ppos);
-	if (rc < 0)
-		return rc;
-	if (min_delay_cs <= 0)
-		return -EINVAL;
-
-	d = cfs_time_seconds(min_delay_cs) / 100;
-	if (d == 0 || d > libcfs_console_max_delay)
-		return -EINVAL;
-	libcfs_console_min_delay = d;
-
-	return rc;
-}
-
-static int
-proc_console_backoff(struct ctl_table *table, int write, void __user *buffer,
-		     size_t *lenp, loff_t *ppos)
-{
-	int rc, backoff;
-	struct ctl_table dummy = *table;
-
-	dummy.data = &backoff;
-	dummy.proc_handler = &proc_dointvec;
-
-	if (!write) { /* read */
-		backoff = libcfs_console_backoff;
-		rc = proc_dointvec(&dummy, write, buffer, lenp, ppos);
-		return rc;
-	}
-
-	/* write */
-	backoff = 0;
-	rc = proc_dointvec(&dummy, write, buffer, lenp, ppos);
-	if (rc < 0)
-		return rc;
-
-	if (backoff <= 0)
-		return -EINVAL;
-
-	libcfs_console_backoff = backoff;
-
-	return rc;
-}
-
-static int
-libcfs_force_lbug(struct ctl_table *table, int write, void __user *buffer,
-		  size_t *lenp, loff_t *ppos)
+static int libcfs_force_lbug(struct ctl_table *table, int write,
+			     void __user *buffer,
+			     size_t *lenp, loff_t *ppos)
 {
 	if (write)
 		LBUG();
 	return 0;
 }
 
-static int
-proc_fail_loc(struct ctl_table *table, int write, void __user *buffer,
-	      size_t *lenp, loff_t *ppos)
+static int proc_fail_loc(struct ctl_table *table, int write,
+			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int rc;
 	long old_fail_loc = cfs_fail_loc;
@@ -455,9 +326,8 @@ out:
 	return rc;
 }
 
-static int
-proc_cpt_table(struct ctl_table *table, int write, void __user *buffer,
-	       size_t *lenp, loff_t *ppos)
+static int proc_cpt_table(struct ctl_table *table, int write,
+			  void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
 				    __proc_cpt_table);
@@ -504,19 +374,14 @@ static int __proc_cpt_distance(void *data, int write,
 	return rc;
 }
 
-static int
-proc_cpt_distance(struct ctl_table *table, int write, void __user *buffer,
-	       size_t *lenp, loff_t *ppos)
+static int proc_cpt_distance(struct ctl_table *table, int write,
+			     void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	return lprocfs_call_handler(table->data, write, ppos, buffer, lenp,
 				     __proc_cpt_distance);
 }
 
 static struct ctl_table lnet_table[] = {
-	/*
-	 * NB No .strategy entries have been provided since sysctl(8) prefers
-	 * to go via /proc for portability.
-	 */
 	{
 		INIT_CTL_NAME
 		.procname	= "debug",
@@ -540,43 +405,6 @@ static struct ctl_table lnet_table[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.proc_handler	= &proc_dobitmasks,
-	},
-	{
-		INIT_CTL_NAME
-		.procname	= "console_ratelimit",
-		.data		= &libcfs_console_ratelimit,
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.proc_handler	= &proc_dointvec
-	},
-	{
-		INIT_CTL_NAME
-		.procname	= "console_max_delay_centisecs",
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.proc_handler	= &proc_console_max_delay_cs
-	},
-	{
-		INIT_CTL_NAME
-		.procname	= "console_min_delay_centisecs",
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.proc_handler	= &proc_console_min_delay_cs
-	},
-	{
-		INIT_CTL_NAME
-		.procname	= "console_backoff",
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.proc_handler	= &proc_console_backoff
-	},
-	{
-		INIT_CTL_NAME
-		.procname	= "debug_path",
-		.data		= libcfs_debug_file_path_arr,
-		.maxlen		= sizeof(libcfs_debug_file_path_arr),
-		.mode		= 0644,
-		.proc_handler	= &proc_dostring,
 	},
 	{
 		INIT_CTL_NAME
@@ -618,14 +446,6 @@ static struct ctl_table lnet_table[] = {
 	},
 	{
 		INIT_CTL_NAME
-		.procname	= "panic_on_lbug",
-		.data		= &libcfs_panic_on_lbug,
-		.maxlen		= sizeof(int),
-		.mode		= 0644,
-		.proc_handler	= &proc_dointvec,
-	},
-	{
-		INIT_CTL_NAME
 		.procname	= "dump_kernel",
 		.maxlen		= 256,
 		.mode		= 0200,
@@ -637,12 +457,6 @@ static struct ctl_table lnet_table[] = {
 		.mode		= 0644,
 		.maxlen		= 256,
 		.proc_handler	= &proc_daemon_file,
-	},
-	{
-		INIT_CTL_NAME
-		.procname	= "debug_mb",
-		.mode		= 0644,
-		.proc_handler	= &proc_debug_mb,
 	},
 	{
 		INIT_CTL_NAME
@@ -690,37 +504,109 @@ static struct ctl_table lnet_table[] = {
 	}
 };
 
-#ifdef CONFIG_SYSCTL
-static struct ctl_table top_table[] = {
-	{
-		INIT_CTL_NAME
-		.procname       = "lnet",
-		.mode           = 0555,
-		.data           = NULL,
-		.maxlen         = 0,
-		.child          = lnet_table,
-	},
-	{ 0 }
+static const struct lnet_debugfs_symlink_def lnet_debugfs_symlinks[] = {
+	{ .name		= "console_ratelimit",
+	  .target	= "../../../module/libcfs/parameters/libcfs_console_ratelimit" },
+	{ .name		= "debug_path",
+	  .target	= "../../../module/libcfs/parameters/libcfs_debug_file_path" },
+	{ .name		= "panic_on_lbug",
+	  .target	= "../../../module/libcfs/parameters/libcfs_panic_on_lbug" },
+	{ .name		= "console_backoff",
+	  .target	= "../../../module/libcfs/parameters/libcfs_console_backoff" },
+	{ .name		= "debug_mb",
+	  .target	= "../../../module/libcfs/parameters/libcfs_debug_mb" },
+	{ .name		= "console_min_delay_centisecs",
+	  .target	= "../../../module/libcfs/parameters/libcfs_console_min_delay" },
+	{ .name		= "console_max_delay_centisecs",
+	  .target	= "../../../module/libcfs/parameters/libcfs_console_max_delay" },
+	{ .name		= NULL },
 };
-#endif
 
-static int insert_proc(void)
+static ssize_t lnet_debugfs_read(struct file *filp, char __user *buf,
+				 size_t count, loff_t *ppos)
 {
-#ifdef CONFIG_SYSCTL
-	if (lnet_table_header == NULL)
-		lnet_table_header = register_sysctl_table(top_table);
-#endif
-	return 0;
+	struct ctl_table *table = filp->private_data;
+	ssize_t rc;
+
+	rc = table->proc_handler(table, 0, buf, &count, ppos);
+	if (!rc)
+		rc = count;
+
+	return rc;
 }
 
-static void remove_proc(void)
+static ssize_t lnet_debugfs_write(struct file *filp, const char __user *buf,
+				  size_t count, loff_t *ppos)
 {
-#ifdef CONFIG_SYSCTL
-	if (lnet_table_header != NULL)
-		unregister_sysctl_table(lnet_table_header);
+	struct ctl_table *table = filp->private_data;
+	ssize_t rc;
 
-	lnet_table_header = NULL;
-#endif
+	rc = table->proc_handler(table, 1, (void __user *)buf, &count, ppos);
+	if (!rc)
+		rc = count;
+
+	return rc;
+}
+
+static const struct file_operations lnet_debugfs_file_operations_rw = {
+	.open		= simple_open,
+	.read		= lnet_debugfs_read,
+	.write		= lnet_debugfs_write,
+	.llseek		= default_llseek,
+};
+
+static const struct file_operations lnet_debugfs_file_operations_ro = {
+	.open		= simple_open,
+	.read		= lnet_debugfs_read,
+	.llseek		= default_llseek,
+};
+
+static const struct file_operations lnet_debugfs_file_operations_wo = {
+	.open		= simple_open,
+	.write		= lnet_debugfs_write,
+	.llseek		= default_llseek,
+};
+
+static const struct file_operations *lnet_debugfs_fops_select(umode_t mode)
+{
+	if (!(mode & S_IWUGO))
+		return &lnet_debugfs_file_operations_ro;
+
+	if (!(mode & S_IRUGO))
+		return &lnet_debugfs_file_operations_wo;
+
+	return &lnet_debugfs_file_operations_rw;
+}
+
+void lnet_insert_debugfs(struct ctl_table *table,
+			 const struct lnet_debugfs_symlink_def *symlinks)
+{
+	if (!lnet_debugfs_root)
+		lnet_debugfs_root = debugfs_create_dir("lnet", NULL);
+
+	/* Even if we cannot create, just ignore it altogether) */
+	if (IS_ERR_OR_NULL(lnet_debugfs_root))
+		return;
+
+	/* We don't save the dentry returned in next two calls, because
+	 * we don't call debugfs_remove() but rather remove_recursive()
+	 */
+	for (; table && table->procname; table++)
+		debugfs_create_file(table->procname, table->mode,
+				    lnet_debugfs_root, table,
+				    lnet_debugfs_fops_select(table->mode));
+
+	for (; symlinks && symlinks->name; symlinks++)
+		debugfs_create_symlink(symlinks->name, lnet_debugfs_root,
+				       symlinks->target);
+}
+EXPORT_SYMBOL_GPL(lnet_insert_debugfs);
+
+static void lnet_remove_debugfs(void)
+{
+	debugfs_remove_recursive(lnet_debugfs_root);
+
+	lnet_debugfs_root = NULL;
 }
 
 static int __init libcfs_init(void)
@@ -764,17 +650,10 @@ static int __init libcfs_init(void)
 		goto cleanup_wi;
 	}
 
-
-	rc = insert_proc();
-	if (rc) {
-		CERROR("insert_proc: error %d\n", rc);
-		goto cleanup_crypto;
-	}
+	lnet_insert_debugfs(lnet_table, lnet_debugfs_symlinks);
 
 	CDEBUG (D_OTHER, "portals setup OK\n");
 	return 0;
-cleanup_crypto:
-	cfs_crypto_unregister();
 cleanup_wi:
 	cfs_wi_shutdown();
 cleanup_deregister:
@@ -790,7 +669,7 @@ static void __exit libcfs_exit(void)
 {
 	int rc;
 
-	remove_proc();
+	lnet_remove_debugfs();
 
 	CDEBUG(D_MALLOC, "before Portals cleanup: kmem %d\n",
 	       atomic_read(&libcfs_kmemory));
