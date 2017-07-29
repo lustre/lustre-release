@@ -225,7 +225,7 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 		RETURN(-ENOMEM);
 
 	info->fti_attr.la_valid = LA_TYPE | LA_MODE;
-	info->fti_attr.la_mode = S_IFREG | S_ISUID | S_ISGID | 0666;
+	info->fti_attr.la_mode = S_IFREG | S_ISUID | S_ISGID | S_ISVTX | 0666;
 	info->fti_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
 	info->fti_attr.la_valid |= LA_ATIME | LA_MTIME | LA_CTIME;
@@ -449,9 +449,11 @@ int ofd_attr_handle_id(const struct lu_env *env, struct ofd_object *fo,
 	 */
 	if (!is_setattr) {
 		if (!(ln->la_mode & S_ISUID))
-			la->la_valid &= ~(LA_UID | LA_PROJID);
+			la->la_valid &= ~LA_UID;
 		if (!(ln->la_mode & S_ISGID))
-			la->la_valid &= ~(LA_GID | LA_PROJID);
+			la->la_valid &= ~LA_GID;
+		if (!(ln->la_mode & S_ISVTX))
+			la->la_valid &= ~LA_PROJID;
 	}
 
 	/* Initialize ownership of this object, clear SUID+SGID bits*/
@@ -459,6 +461,8 @@ int ofd_attr_handle_id(const struct lu_env *env, struct ofd_object *fo,
 		mask |= S_ISUID;
 	if ((la->la_valid & LA_GID) && (ln->la_mode & S_ISGID))
 		mask |= S_ISGID;
+	if ((la->la_valid & LA_PROJID) && (ln->la_mode & S_ISVTX))
+		mask |= S_ISVTX;
 	if (mask != 0) {
 		if (!(la->la_valid & LA_MODE) || !is_setattr) {
 			la->la_mode = ln->la_mode;
