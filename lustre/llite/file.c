@@ -4082,10 +4082,12 @@ struct inode_operations ll_file_inode_operations = {
 	.setattr	= ll_setattr,
 	.getattr	= ll_getattr,
 	.permission	= ll_inode_permission,
+#ifdef HAVE_IOP_XATTR
 	.setxattr	= ll_setxattr,
 	.getxattr	= ll_getxattr,
-	.listxattr	= ll_listxattr,
 	.removexattr	= ll_removexattr,
+#endif
+	.listxattr	= ll_listxattr,
 	.fiemap		= ll_fiemap,
 #ifdef HAVE_IOP_GET_ACL
 	.get_acl	= ll_get_acl,

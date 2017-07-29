@@ -443,6 +443,56 @@ static inline void truncate_inode_pages_final(struct address_space *map)
 # define GET_POSIX_ACL_XATTR_ENTRY(head) ((head)->a_entries)
 #endif
 
+#ifdef HAVE_IOP_XATTR
+#ifdef HAVE_XATTR_HANDLER_FLAGS
+#define ll_setxattr     generic_setxattr
+#define ll_getxattr     generic_getxattr
+#define ll_removexattr  generic_removexattr
+#else
+int ll_setxattr(struct dentry *dentry, const char *name,
+		const void *value, size_t size, int flags);
+ssize_t ll_getxattr(struct dentry *dentry, const char *name,
+		    void *buf, size_t buf_size);
+int ll_removexattr(struct dentry *dentry, const char *name);
+#endif /* ! HAVE_XATTR_HANDLER_FLAGS */
+#endif /* HAVE_IOP_XATTR */
+
+#ifndef HAVE_VFS_SETXATTR
+const struct xattr_handler *get_xattr_type(const char *name);
+
+#ifdef HAVE_XATTR_HANDLER_FLAGS
+static inline int
+__vfs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
+	       const void *value, size_t size, int flags)
+{
+	const struct xattr_handler *handler;
+	int rc;
+
+	handler = get_xattr_type(name);
+	if (!handler)
+		return -ENXIO;
+
+#if defined(HAVE_XATTR_HANDLER_INODE_PARAM)
+	rc = handler->set(handler, dentry, inode, name, value, size,
+			  XATTR_CREATE);
+#elif defined(HAVE_XATTR_HANDLER_SIMPLIFIED)
+	rc = handler->set(handler, dentry, name, value, size, XATTR_CREATE);
+#else
+	rc = handler->set(dentry, name, value, size, XATTR_CREATE,
+			  handler->flags);
+#endif /* !HAVE_XATTR_HANDLER_INODE_PARAM */
+	return rc;
+}
+#else /* !HAVE_XATTR_HANDLER_FLAGS */
+static inline int
+__vfs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
+	       const void *value, size_t size, int flags)
+{
+	return ll_setxattr(dentry, name, value, size, flags);
+}
+#endif /* HAVE_XATTR_HANDLER_FLAGS */
+#endif /* HAVE_VFS_SETXATTR */
+
 #ifndef HAVE_IOV_ITER_TRUNCATE
 static inline void iov_iter_truncate(struct iov_iter *i, u64 count)
 {

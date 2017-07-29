@@ -98,26 +98,23 @@ static int
 ll_initxattrs(struct inode *inode, const struct xattr *xattr_array,
 	      void *fs_info)
 {
-	const struct xattr *xattr;
 	struct dentry *dentry = fs_info;
-	size_t name_len;
-	char *full_name;
+	const struct xattr *xattr;
 	int err = 0;
 
-	for (xattr = xattr_array; xattr->name != NULL; xattr++) {
-		name_len = strlen(XATTR_SECURITY_PREFIX) + strlen(xattr->name)
-			   + 1;
-		OBD_ALLOC(full_name, name_len);
-		if (full_name == NULL)
-			return -ENOMEM;
-		strlcpy(full_name, XATTR_SECURITY_PREFIX, name_len);
-		strlcat(full_name, xattr->name, name_len);
+	for (xattr = xattr_array; xattr->name; xattr++) {
+		char *full_name;
 
-		err = ll_setxattr(dentry, full_name, xattr->value,
-				  xattr->value_len, 0);
+		full_name = kasprintf(GFP_KERNEL, "%s%s",
+				      XATTR_SECURITY_PREFIX, xattr->name);
+		if (!full_name) {
+			err = -ENOMEM;
+			break;
+		}
 
-		OBD_FREE(full_name, name_len);
-
+		err = __vfs_setxattr(dentry, inode, full_name, xattr->value,
+				     xattr->value_len, XATTR_CREATE);
+		kfree(full_name);
 		if (err < 0)
 			break;
 	}
@@ -159,10 +156,11 @@ int
 ll_inode_init_security(struct dentry *dentry, struct inode *inode,
 		       struct inode *dir)
 {
-	int err;
-	size_t len, name_len;
+	char *full_name;
 	void *value;
-	char *name, *full_name;
+	char *name;
+	size_t len;
+	int err;
 
 	if (!selinux_is_enabled())
 		return 0;
@@ -175,16 +173,13 @@ ll_inode_init_security(struct dentry *dentry, struct inode *inode,
 		return err;
 	}
 
-	name_len = strlen(XATTR_SECURITY_PREFIX) + strlen(name) + 1;
-	OBD_ALLOC(full_name, name_len);
-	if (full_name == NULL)
+	full_name = kasprintf(GFP_KERNEL, "%s%s", XATTR_SECURITY_PREFIX, name);
+	if (!full_name)
 		GOTO(out_free, err = -ENOMEM);
-	strlcpy(full_name, XATTR_SECURITY_PREFIX, name_len);
-	strlcat(full_name, name, name_len);
 
-	err = ll_setxattr(dentry, full_name, value, len, 0);
-	OBD_FREE(full_name, name_len);
-
+	err = __vfs_setxattr(dentry, inode, full_name, value, len,
+			     XATTR_CREATE);
+	kfree(full_name);
 out_free:
 	kfree(name);
 	kfree(value);

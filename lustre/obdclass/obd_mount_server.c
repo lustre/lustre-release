@@ -1676,6 +1676,7 @@ static struct super_operations server_ops = {
 /*
  * Xattr support for Lustre servers
  */
+#ifdef HAVE_IOP_XATTR
 static ssize_t lustre_getxattr(struct dentry *dentry, const char *name,
 				void *buffer, size_t size)
 {
@@ -1689,6 +1690,7 @@ static int lustre_setxattr(struct dentry *dentry, const char *name,
 {
 	return -EOPNOTSUPP;
 }
+#endif
 
 static ssize_t lustre_listxattr(struct dentry *d_entry, char *name,
 				size_t size)
@@ -1697,8 +1699,10 @@ static ssize_t lustre_listxattr(struct dentry *d_entry, char *name,
 }
 
 static const struct inode_operations server_inode_operations = {
+#ifdef HAVE_IOP_XATTR
 	.setxattr       = lustre_setxattr,
 	.getxattr       = lustre_getxattr,
+#endif
 	.listxattr      = lustre_listxattr,
 };
 
