@@ -469,6 +469,101 @@ test_34b() {
 }
 run_test 34b "read mirrored file with multiple components"
 
+test_35() {
+	local tf=$DIR/$tfile
+
+	$LFS setstripe -E eof $tf
+
+	# add an out-of-sync mirror to the file
+	$LFS setstripe --component-add --mirror -c 2 $tf
+
+	$MULTIOP $tf oO_WRONLY:c ||
+		error "write open a mirrored file failed"
+
+	# truncate file should return error
+	$TRUNCATE $tf 100 || error "error truncating a mirrored file"
+}
+run_test 35 "allow to write to mirrored files"
+
+verify_ost_layout_version() {
+	local tf=$1
+
+	# get file layout version
+	local flv=$($LFS getstripe $tf | awk '/lcm_layout_gen/{print $2}')
+
+	# layout version from OST objects
+	local olv=$($MULTIOP $tf oXc | awk '/ostlayoutversion/{print $2}')
+
+	[ $flv -eq $olv ] || error "layout version mismatch: $flv vs. $olv"
+}
+
+create_file_36() {
+	local tf
+
+	for tf in "$@"; do
+		$LFS setstripe -E 1M -E 2M -E 4M -E eof -c -1 $tf
+		$LFS setstripe -E 3M -E 6M -E eof -c -1 $tf-tmp
+
+		$LFS setstripe --component-add --mirror=$tf-tmp $tf
+		rm -f $tf-tmp
+	done
+}
+
+test_36() {
+	local tf=$DIR/$tfile
+
+	create_file_36 $tf $tf-2 $tf-3
+
+	[ $(get_mirror_ids $tf) -gt 1 ] || error "wrong mirror count"
+
+	# test case 1 - check file write and verify layout version
+	$MULTIOP $tf oO_WRONLY:c ||
+		error "write open a mirrored file failed"
+
+	# write open file should not return error
+	$MULTIOP $tf oO_WRONLY:w1024Yc || error "write mirrored file error"
+
+	# instantiate components should work
+	dd if=/dev/zero of=$tf bs=1M count=12 || error "write file error"
+
+	# verify OST layout version
+	verify_ost_layout_version $tf
+
+	# test case 2
+	local mds_idx=mds$(($($LFS getstripe -M $tf-2) + 1))
+
+	local delay_sec=10
+	do_facet $mds_idx $LCTL set_param fail_val=$delay_sec
+
+	#define OBD_FAIL_FLR_LV_DELAY 0x1A01
+	do_facet $mds_idx $LCTL set_param fail_loc=0x1A01
+
+	# write should take at least $fail_loc seconds and succeed
+	local st=$(date +%s)
+	$MULTIOP $tf-2 oO_WRONLY:w1024Yc || error "write mirrored file error"
+
+	[ $(date +%s) -ge $((st+delay_sec)) ] ||
+		error "write finished before layout version is transmitted"
+
+	# verify OST layout version
+	verify_ost_layout_version $tf
+
+	do_facet $mds_idx $LCTL set_param fail_loc=0
+
+	# test case 3
+	mds_idx=mds$(($($LFS getstripe -M $tf-3) + 1))
+
+	#define OBD_FAIL_FLR_LV_INC 0x1A02
+	do_facet $mds_idx $LCTL set_param fail_loc=0x1A02
+
+	# write open file should return error
+	$MULTIOP $tf-3 oO_WRONLY:O_SYNC:w1024c &&
+		error "write a mirrored file succeeded" || true
+
+	do_facet $mds_idx $LCTL set_param fail_loc=0
+}
+run_test 36 "write to mirrored files"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
