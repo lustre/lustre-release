@@ -157,6 +157,7 @@ struct mdd_object {
 	u32			mod_valid;
 	ktime_t			mod_cltime;
 	unsigned long		mod_flags;
+	struct list_head	mod_users;  /**< unique user opens */
 };
 
 struct mdd_thread_info {

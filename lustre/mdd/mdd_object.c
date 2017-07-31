@@ -53,6 +53,13 @@
 
 static const struct lu_object_operations mdd_lu_obj_ops;
 
+struct mdd_object_user {
+	struct list_head	mou_list;	/**< linked off mod_users */
+	int			mou_flags;	/**< open mode by client */
+	__u64			mou_uidgid;	/**< uid_gid on client */
+	int			mou_opencount;	/**< # opened */
+};
+
 static int mdd_xattr_get(const struct lu_env *env,
                          struct md_object *obj, struct lu_buf *buf,
                          const char *name);
@@ -66,6 +73,137 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 
 static inline bool has_prefix(const char *str, const char *prefix);
 
+
+static fmode_t flags_helper(int flags)
+{
+	fmode_t mflags = 0;
+
+	if (flags & MDS_FMODE_EXEC) {
+		mflags = MDS_FMODE_EXEC;
+	} else {
+		if (flags & FMODE_READ)
+			mflags = FMODE_READ;
+		if (flags & (FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
+			mflags |= FMODE_WRITE;
+	}
+
+	return mflags;
+}
+
+/** Allocate/init a user and its sub-structures.
+ *
+ * \param flags [IN]
+ * \param uid [IN]
+ * \param gid [IN]
+ * \retval mou [OUT] success valid structure
+ * \retval mou [OUT]
+ */
+static struct mdd_object_user *mdd_obj_user_alloc(int flags,
+						  uid_t uid, gid_t gid)
+{
+	struct mdd_object_user *mou;
+
+	ENTRY;
+
+	OBD_SLAB_ALLOC_PTR(mou, mdd_object_kmem);
+	if (mou == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	mou->mou_flags = flags;
+	mou->mou_uidgid = ((__u64)uid << 32) | gid;
+	mou->mou_opencount = 0;
+
+	RETURN(mou);
+}
+
+/**
+ * Free a user and its sub-structures.
+ *
+ * \param mou [IN]  user to be freed.
+ */
+static void mdd_obj_user_free(struct mdd_object_user *mou)
+{
+	OBD_SLAB_FREE_PTR(mou, mdd_object_kmem);
+}
+
+/**
+ * Find if UID/GID already has this file open
+ *
+ * Caller should have write-locked \param mdd_obj.
+ * \param mdd_obj [IN] mdd_obj
+ * \param uid [IN] client uid
+ * \param gid [IN] client gid
+ * \retval user pointer or NULL if not found
+ */
+static
+struct mdd_object_user *mdd_obj_user_find(struct mdd_object *mdd_obj,
+					  uid_t uid, gid_t gid, int flags)
+{
+	struct mdd_object_user *mou;
+	__u64 uidgid;
+
+	ENTRY;
+
+	uidgid = ((__u64)uid << 32) | gid;
+	list_for_each_entry(mou, &mdd_obj->mod_users, mou_list) {
+		if (mou->mou_uidgid == uidgid &&
+		    flags_helper(mou->mou_flags) == flags_helper(flags))
+			RETURN(mou);
+	}
+	RETURN(NULL);
+}
+
+/**
+ * Add a user to the list of openers for this file
+ *
+ * Caller should have write-locked \param mdd_obj.
+ * \param mdd_obj [IN] mdd_obj
+ * \param mou [IN] user
+ * \retval 0 success
+ * \retval -ve failure
+ */
+static int mdd_obj_user_add(struct mdd_object *mdd_obj,
+			    struct mdd_object_user *mou)
+{
+	struct mdd_object_user *tmp;
+	__u32 uid = mou->mou_uidgid >> 32;
+	__u32 gid = mou->mou_uidgid & ((1UL << 32) - 1);
+
+	ENTRY;
+
+	tmp = mdd_obj_user_find(mdd_obj, uid,
+				gid, mou->mou_flags);
+	if (tmp != NULL)
+		RETURN(-EEXIST);
+
+	list_add_tail(&mou->mou_list, &mdd_obj->mod_users);
+
+	mou->mou_opencount++;
+
+	RETURN(0);
+}
+/**
+ * Remove UID from the list
+ *
+ * Caller should have write-locked \param mdd_obj.
+ * \param mdd_obj [IN] mdd_obj
+ * \param uid [IN] user
+ * \retval -ve failure
+ */
+static int mdd_obj_user_remove(struct mdd_object *mdd_obj,
+			       struct mdd_object_user *mou)
+{
+	ENTRY;
+
+	if (mou == NULL)
+		RETURN(-ENOENT);
+
+	list_del_init(&mou->mou_list);
+
+	mdd_obj_user_free(mou);
+
+	RETURN(0);
+}
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
 	       struct lu_attr *la)
 {
@@ -124,21 +262,21 @@ struct lu_object *mdd_object_alloc(const struct lu_env *env,
 				   struct lu_device *d)
 {
 	struct mdd_object *mdd_obj;
+	struct lu_object *o;
 
 	OBD_SLAB_ALLOC_PTR_GFP(mdd_obj, mdd_object_kmem, GFP_NOFS);
-	if (mdd_obj != NULL) {
-		struct lu_object *o;
-
-		o = mdd2lu_obj(mdd_obj);
-		lu_object_init(o, NULL, d);
-		mdd_obj->mod_obj.mo_ops = &mdd_obj_ops;
-		mdd_obj->mod_obj.mo_dir_ops = &mdd_dir_ops;
-		mdd_obj->mod_count = 0;
-		o->lo_ops = &mdd_lu_obj_ops;
-		return o;
-	} else {
+	if (!mdd_obj)
 		return NULL;
-	}
+
+	o = mdd2lu_obj(mdd_obj);
+	lu_object_init(o, NULL, d);
+	mdd_obj->mod_obj.mo_ops = &mdd_obj_ops;
+	mdd_obj->mod_obj.mo_dir_ops = &mdd_dir_ops;
+	mdd_obj->mod_count = 0;
+	o->lo_ops = &mdd_lu_obj_ops;
+	INIT_LIST_HEAD(&mdd_obj->mod_users);
+
+	return o;
 }
 
 static int mdd_object_init(const struct lu_env *env, struct lu_object *o,
@@ -177,9 +315,16 @@ static int mdd_object_start(const struct lu_env *env, struct lu_object *o)
 
 static void mdd_object_free(const struct lu_env *env, struct lu_object *o)
 {
-        struct mdd_object *mdd = lu2mdd_obj(o);
+	struct mdd_object *mdd = lu2mdd_obj(o);
+	struct mdd_object_user *mou, *tmp2;
 
-        lu_object_fini(o);
+	/* free user list */
+	list_for_each_entry_safe(mou, tmp2, &mdd->mod_users, mou_list) {
+		list_del(&mou->mou_list);
+		mdd_obj_user_free(mou);
+	}
+
+	lu_object_fini(o);
 	OBD_SLAB_FREE_PTR(mdd, mdd_object_kmem);
 }
 
@@ -2721,6 +2866,9 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
 	struct md_device *md_dev = lu2md_dev(mdd2lu_dev(mdo2mdd(obj)));
 	struct lu_attr *attr = MDD_ENV_VAR(env, cattr);
+	struct mdd_object_user *mou = NULL;
+	const struct lu_ucred *uc = lu_ucred(env);
+	struct mdd_device *mdd = mdo2mdd(obj);
 	int rc = 0;
 
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
@@ -2735,8 +2883,34 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 
 	mdd_obj->mod_count++;
 
-	mdd_changelog(env, CL_OPEN, flags, md_dev, mdo2fid(mdd_obj));
+	/* Not recording */
+	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+		GOTO(out, rc);
+	if (!(mdd->mdd_cl.mc_mask & (1 << CL_OPEN)))
+		GOTO(out, rc);
 
+find:
+	/* look for existing opener in list under mdd_write_lock */
+	mou = mdd_obj_user_find(mdd_obj, uc->uc_uid, uc->uc_gid, flags);
+
+	if (!mou) {
+		/* add user to list */
+		mou = mdd_obj_user_alloc(flags, uc->uc_uid, uc->uc_gid);
+		if (IS_ERR(mou))
+			GOTO(out, rc = PTR_ERR(mou));
+		rc = mdd_obj_user_add(mdd_obj, mou);
+		if (rc != 0) {
+			mdd_obj_user_free(mou);
+			if (rc == -EEXIST)
+				GOTO(find, rc);
+		}
+	} else {
+		mou->mou_opencount++;
+		/* same user opening file again with same flags: don't record */
+		GOTO(out, rc);
+	}
+
+	mdd_changelog(env, CL_OPEN, flags, md_dev, mdo2fid(mdd_obj));
 	EXIT;
 out:
 	mdd_write_unlock(env, mdd_obj);
@@ -2769,6 +2943,8 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
 	int is_orphan = 0;
 	int rc;
 	bool blocked = false;
+	int last_close_by_uid = 0;
+	const struct lu_ucred *uc = lu_ucred(env);
 	ENTRY;
 
 	if (ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_KEEP_ORPHAN) {
@@ -2829,7 +3005,8 @@ cont:
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
 	rc = mdd_la_get(env, mdd_obj, &ma->ma_attr);
 	if (rc != 0) {
-		CERROR("Failed to get lu_attr of "DFID": %d\n",
+		CERROR("%s: failed to get lu_attr of "DFID": rc = %d\n",
+		       lu_dev_name(mdd2lu_dev(mdd)),
 		       PFID(mdd_object_fid(mdd_obj)), rc);
 		GOTO(out, rc);
 	}
@@ -2845,6 +3022,27 @@ cont:
 	}
 
 	mdd_obj->mod_count--; /*release open count */
+
+	/* under mdd write lock */
+	/* If recording, see if we need to remove UID from list */
+	if ((mdd->mdd_cl.mc_flags & CLM_ON) &&
+	    (mdd->mdd_cl.mc_mask & (1 << CL_OPEN))) {
+		struct mdd_object_user *mou;
+
+		/* look for UID in list */
+		/* If mou is NULL, it probably means logging was enabled after
+		 * the user had the file open. So the corresponding close
+		 * will not be logged.
+		 */
+		mou = mdd_obj_user_find(mdd_obj, uc->uc_uid, uc->uc_gid, mode);
+		if (mou) {
+			mou->mou_opencount--;
+			if (mou->mou_opencount == 0) {
+				mdd_obj_user_remove(mdd_obj, mou);
+				last_close_by_uid = 1;
+			}
+		}
+	}
 
 	if (!is_orphan || blocked)
 		GOTO(out, rc = 0);
@@ -2885,14 +3083,15 @@ out:
 	mdd_write_unlock(env, mdd_obj);
 
 	/* Record CL_CLOSE in changelog only if file was opened in write mode,
-	 * or if CL_OPEN was recorded.
+	 * or if CL_OPEN was recorded and it's last close by user.
 	 * Changelogs mask may change between open and close operations, but
 	 * this is not a big deal if we have a CL_CLOSE entry with no matching
 	 * CL_OPEN. Plus Changelogs mask may not change often.
 	 */
 	if (!rc && !blocked &&
-	    ((mode & (FMODE_WRITE | MDS_OPEN_APPEND | MDS_OPEN_TRUNC)) ||
-	     (mdd->mdd_cl.mc_mask & (1 << CL_OPEN))) &&
+	    ((!(mdd->mdd_cl.mc_mask & (1 << CL_OPEN)) &&
+	      (mode & (FMODE_WRITE | MDS_OPEN_APPEND | MDS_OPEN_TRUNC))) ||
+	     ((mdd->mdd_cl.mc_mask & (1 << CL_OPEN)) && last_close_by_uid)) &&
 	    !(ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_RECOV_OPEN)) {
 		if (handle == NULL) {
 			handle = mdd_trans_create(env, mdo2mdd(obj));
