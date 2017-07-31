@@ -33,11 +33,11 @@
 #include "socklnd.h"
 
 int
-ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
+ksocknal_lib_get_conn_addrs(struct ksock_conn *conn)
 {
 	int rc = lnet_sock_getaddr(conn->ksnc_sock, true,
-                                     &conn->ksnc_ipaddr,
-                                     &conn->ksnc_port);
+				   &conn->ksnc_ipaddr,
+				   &conn->ksnc_port);
 
         /* Didn't need the {get,put}connsock dance to deref ksnc_sock... */
         LASSERT (!conn->ksnc_closing);
@@ -58,7 +58,7 @@ ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
 }
 
 int
-ksocknal_lib_zc_capable(ksock_conn_t *conn)
+ksocknal_lib_zc_capable(struct ksock_conn *conn)
 {
 	int  caps = conn->ksnc_sock->sk->sk_route_caps;
 
@@ -71,7 +71,7 @@ ksocknal_lib_zc_capable(ksock_conn_t *conn)
 }
 
 int
-ksocknal_lib_send_iov(ksock_conn_t *conn, ksock_tx_t *tx)
+ksocknal_lib_send_iov(struct ksock_conn *conn, struct ksock_tx *tx)
 {
 	struct socket  *sock = conn->ksnc_sock;
 	int		nob;
@@ -113,7 +113,7 @@ ksocknal_lib_send_iov(ksock_conn_t *conn, ksock_tx_t *tx)
 }
 
 int
-ksocknal_lib_send_kiov(ksock_conn_t *conn, ksock_tx_t *tx)
+ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx)
 {
         struct socket *sock = conn->ksnc_sock;
         lnet_kiov_t   *kiov = tx->tx_kiov;
@@ -181,10 +181,10 @@ ksocknal_lib_send_kiov(ksock_conn_t *conn, ksock_tx_t *tx)
 }
 
 void
-ksocknal_lib_eager_ack (ksock_conn_t *conn)
+ksocknal_lib_eager_ack(struct ksock_conn *conn)
 {
-        int            opt = 1;
-        struct socket *sock = conn->ksnc_sock;
+	int opt = 1;
+	struct socket *sock = conn->ksnc_sock;
 
         /* Remind the socket to ACK eagerly.  If I don't, the socket might
          * think I'm about to send something it could piggy-back the ACK
@@ -196,7 +196,7 @@ ksocknal_lib_eager_ack (ksock_conn_t *conn)
 }
 
 int
-ksocknal_lib_recv_iov (ksock_conn_t *conn)
+ksocknal_lib_recv_iov(struct ksock_conn *conn)
 {
 #if SOCKNAL_SINGLE_FRAG_RX
 	struct kvec  scratch;
@@ -301,7 +301,7 @@ ksocknal_lib_kiov_vmap(lnet_kiov_t *kiov, int niov,
 }
 
 int
-ksocknal_lib_recv_kiov (ksock_conn_t *conn)
+ksocknal_lib_recv_kiov(struct ksock_conn *conn)
 {
 #if SOCKNAL_SINGLE_FRAG_RX || !SOCKNAL_RISK_KMAP_DEADLOCK
 	struct kvec   scratch;
@@ -380,7 +380,7 @@ ksocknal_lib_recv_kiov (ksock_conn_t *conn)
 }
 
 void
-ksocknal_lib_csum_tx(ksock_tx_t *tx)
+ksocknal_lib_csum_tx(struct ksock_tx *tx)
 {
         int          i;
         __u32        csum;
@@ -419,7 +419,7 @@ ksocknal_lib_csum_tx(ksock_tx_t *tx)
 }
 
 int
-ksocknal_lib_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int *nagle)
+ksocknal_lib_get_conn_tunables(struct ksock_conn *conn, int *txmem, int *rxmem, int *nagle)
 {
         struct socket *sock = conn->ksnc_sock;
         int            len;
@@ -580,13 +580,13 @@ ksocknal_lib_setup_sock (struct socket *sock)
 }
 
 void
-ksocknal_lib_push_conn (ksock_conn_t *conn)
+ksocknal_lib_push_conn(struct ksock_conn *conn)
 {
-        struct sock    *sk;
-        struct tcp_sock *tp;
-        int             nonagle;
-        int             val = 1;
-        int             rc;
+	struct sock *sk;
+	struct tcp_sock *tp;
+	int nonagle;
+	int val = 1;
+	int rc;
 
         rc = ksocknal_connsock_addref(conn);
         if (rc != 0)                            /* being shut down */
@@ -611,8 +611,8 @@ ksocknal_lib_push_conn (ksock_conn_t *conn)
         ksocknal_connsock_decref(conn);
 }
 
-extern void ksocknal_read_callback (ksock_conn_t *conn);
-extern void ksocknal_write_callback (ksock_conn_t *conn);
+void ksocknal_read_callback(struct ksock_conn *conn);
+void ksocknal_write_callback(struct ksock_conn *conn);
 /*
  * socket call back in Linux
  */
@@ -623,7 +623,7 @@ ksocknal_data_ready(struct sock *sk)
 ksocknal_data_ready(struct sock *sk, int n)
 #endif
 {
-	ksock_conn_t  *conn;
+	struct ksock_conn  *conn;
 	ENTRY;
 
         /* interleave correctly with closing sockets... */
@@ -649,7 +649,7 @@ ksocknal_data_ready(struct sock *sk, int n)
 static void
 ksocknal_write_space (struct sock *sk)
 {
-        ksock_conn_t  *conn;
+	struct ksock_conn  *conn;
         int            wspace;
         int            min_wpace;
 
@@ -692,14 +692,14 @@ ksocknal_write_space (struct sock *sk)
 }
 
 void
-ksocknal_lib_save_callback(struct socket *sock, ksock_conn_t *conn)
+ksocknal_lib_save_callback(struct socket *sock, struct ksock_conn *conn)
 {
         conn->ksnc_saved_data_ready = sock->sk->sk_data_ready;
         conn->ksnc_saved_write_space = sock->sk->sk_write_space;
 }
 
 void
-ksocknal_lib_set_callback(struct socket *sock,  ksock_conn_t *conn)
+ksocknal_lib_set_callback(struct socket *sock,  struct ksock_conn *conn)
 {
         sock->sk->sk_user_data = conn;
         sock->sk->sk_data_ready = ksocknal_data_ready;
@@ -708,7 +708,7 @@ ksocknal_lib_set_callback(struct socket *sock,  ksock_conn_t *conn)
 }
 
 void
-ksocknal_lib_reset_callback(struct socket *sock, ksock_conn_t *conn)
+ksocknal_lib_reset_callback(struct socket *sock, struct ksock_conn *conn)
 {
         /* Remove conn's network callbacks.
          * NB I _have_ to restore the callback, rather than storing a noop,
@@ -725,10 +725,10 @@ ksocknal_lib_reset_callback(struct socket *sock, ksock_conn_t *conn)
 }
 
 int
-ksocknal_lib_memory_pressure(ksock_conn_t *conn)
+ksocknal_lib_memory_pressure(struct ksock_conn *conn)
 {
 	int            rc = 0;
-	ksock_sched_t *sched;
+	struct ksock_sched *sched;
 
 	sched = conn->ksnc_scheduler;
 	spin_lock_bh(&sched->kss_lock);
