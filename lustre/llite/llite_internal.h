@@ -1280,70 +1280,8 @@ dentry_may_statahead(struct inode *dir, struct dentry *dentry)
 	return true;
 }
 
-/* llite ioctl register support rountine */
-enum llioc_iter {
-        LLIOC_CONT = 0,
-        LLIOC_STOP
-};
-
-#define LLIOC_MAX_CMD           256
-
-/*
- * Rules to write a callback function:
- *
- * Parameters:
- *  @magic: Dynamic ioctl call routine will feed this vaule with the pointer
- *      returned to ll_iocontrol_register.  Callback functions should use this
- *      data to check the potential collasion of ioctl cmd. If collasion is
- *      found, callback function should return LLIOC_CONT.
- *  @rcp: The result of ioctl command.
- *
- *  Return values:
- *      If @magic matches the pointer returned by ll_iocontrol_data, the
- *      callback should return LLIOC_STOP; return LLIOC_STOP otherwise.
- */
-typedef enum llioc_iter (*llioc_callback_t)(struct inode *inode,
-                struct file *file, unsigned int cmd, unsigned long arg,
-                void *magic, int *rcp);
-
-/* export functions */
-/* Register ioctl block dynamatically for a regular file.
- *
- * @cmd: the array of ioctl command set
- * @count: number of commands in the @cmd
- * @cb: callback function, it will be called if an ioctl command is found to
- *      belong to the command list @cmd.
- *
- * Return vaule:
- *      A magic pointer will be returned if success;
- *      otherwise, NULL will be returned.
- * */
-void *ll_iocontrol_register(llioc_callback_t cb, int count, unsigned int *cmd);
-void ll_iocontrol_unregister(void *magic);
-
 int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 		       enum cl_fsync_mode mode, int ignore_layout);
-
-/** direct write pages */
-struct ll_dio_pages {
-        /** page array to be written. we don't support
-         * partial pages except the last one. */
-        struct page **ldp_pages;
-        /* offset of each page */
-        loff_t       *ldp_offsets;
-        /** if ldp_offsets is NULL, it means a sequential
-         * pages to be written, then this is the file offset
-         * of the * first page. */
-        loff_t        ldp_start_offset;
-        /** how many bytes are to be written. */
-        size_t        ldp_size;
-        /** # of pages in the array. */
-        int           ldp_nr;
-};
-
-extern ssize_t ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io,
-                                  int rw, struct inode *inode,
-                                  struct ll_dio_pages *pv);
 
 static inline int ll_file_nolock(const struct file *file)
 {

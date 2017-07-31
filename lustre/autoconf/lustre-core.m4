@@ -747,23 +747,6 @@ inode_ops_truncate, [
 ]) # LC_IOP_TRUNCATE
 
 #
-# LC_REQUEST_QUEUE_UNPLUG_FN
-#
-# 2.6.39 remove unplug_fn from request_queue.
-#
-AC_DEFUN([LC_REQUEST_QUEUE_UNPLUG_FN], [
-LB_CHECK_COMPILE([if 'request_queue' has 'unplug_fn' field],
-request_queue_unplug_fn, [
-	#include <linux/blkdev.h>
-],[
-	do {} while(sizeof(((struct request_queue *)0)->unplug_fn));
-],[
-	AC_DEFINE(HAVE_REQUEST_QUEUE_UNPLUG_FN, 1,
-		[request_queue has unplug_fn field])
-])
-]) # LC_REQUEST_QUEUE_UNPLUG_FN
-
-#
 # LC_HAVE_FSTYPE_MOUNT
 #
 # 2.6.39 replace get_sb with mount in struct file_system_type
@@ -957,26 +940,6 @@ radix_tree_exceptional_entry, [
 		[radix_tree_exceptional_entry exist])
 ])
 ]) # LC_RADIX_EXCEPTION_ENTRY
-
-#
-# LC_HAVE_VOID_MAKE_REQUEST_FN
-#
-# 3.2 request_queue.make_request_fn defined as function returns with void
-# see kernel commit 5a7bbad27a410350e64a2d7f5ec18fc73836c14f
-#
-AC_DEFUN([LC_HAVE_VOID_MAKE_REQUEST_FN], [
-LB_CHECK_COMPILE([if 'request_queue.make_request_fn' returns void but not int],
-make_request_fn_void, [
-	#include <linux/blkdev.h>
-],[
-	int ret;
-	make_request_fn *mrf;
-	ret = mrf(NULL, NULL);
-],[],[
-	AC_DEFINE(HAVE_VOID_MAKE_REQUEST_FN, 1,
-		[request_queue.make_request_fn returns void but not int])
-])
-]) # LC_HAVE_VOID_MAKE_REQUEST_FN
 
 #
 # LC_HAVE_PROTECT_I_NLINK
@@ -1486,26 +1449,6 @@ proc_remove, [
 		  [proc_remove is defined])
 ])
 ]) # LC_HAVE_PROC_REMOVE
-
-#
-# LC_BLKDEV_RELEASE_RETURN_INT
-#
-# 3.10 release for block device doesn't return int
-#
-AC_DEFUN([LC_BLKDEV_RELEASE_RETURN_INT], [
-LB_CHECK_COMPILE([if 'block_device_operations' release returns 'int'],
-block_device_ops_release_return_int, [
-	#include <linux/blkdev.h>
-],[
-	struct block_device_operations fops;
-	int i __attribute__ ((unused));
-
-	i = fops.release(NULL, 0);
-],[
-	AC_DEFINE(HAVE_BLKDEV_RELEASE_RETURN_INT, 1,
-		[block device release returns int])
-])
-]) # LC_BLKDEV_RELEASE_RETURN_INT
 
 AC_DEFUN([LC_HAVE_PROJECT_QUOTA], [
 LB_CHECK_COMPILE([if get_projid exists],
@@ -2289,26 +2232,6 @@ locks_lock_file_wait, [
 ]) # LC_HAVE_LOCKS_LOCK_FILE_WAIT
 
 #
-# LC_HAVE_QC_MAKE_REQUEST_FN
-#
-# 4.4 request_queue.make_request_fn defined as function returns with blk_qc_t
-# see kernel commit dece16353ef47d8d33f5302bc158072a9d65e26f
-#
-AC_DEFUN([LC_HAVE_QC_MAKE_REQUEST_FN], [
-LB_CHECK_COMPILE([if 'request_queue.make_request_fn' returns blk_qc_t],
-make_request_fn_blk_qc_t, [
-	#include <linux/blkdev.h>
-],[
-	blk_qc_t ret;
-	make_request_fn *mrf;
-	ret = mrf(NULL, NULL);
-],[
-	AC_DEFINE(HAVE_QC_MAKE_REQUEST_FN, 1,
-		[request_queue.make_request_fn returns blk_qc_t])
-])
-]) # LC_HAVE_QC_MAKE_REQUEST_FN
-
-#
 # LC_HAVE_KEY_PAYLOAD_DATA_ARRAY
 #
 # 4.4 kernel merged type-specific data with the payload data for keys
@@ -2706,7 +2629,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_BLK_PLUG
 
 	# 2.6.39
-	LC_REQUEST_QUEUE_UNPLUG_FN
 	LC_HAVE_FHANDLE_SYSCALLS
 	LC_HAVE_FSTYPE_MOUNT
 	LC_IOP_TRUNCATE
@@ -2727,7 +2649,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_LOOP_CTL_GET_FREE
 
 	# 3.2
-	LC_HAVE_VOID_MAKE_REQUEST_FN
 	LC_HAVE_PROTECT_I_NLINK
 
 	# 3.3
@@ -2766,7 +2687,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_IS_SXID
 
 	# 3.10
-	LC_BLKDEV_RELEASE_RETURN_INT
 	LC_HAVE_REMOVE_PROC_SUBTREE
 	LC_HAVE_PROC_REMOVE
 	LC_HAVE_PROJECT_QUOTA
@@ -2837,7 +2757,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 4.4
 	LC_HAVE_LOCKS_LOCK_FILE_WAIT
-	LC_HAVE_QC_MAKE_REQUEST_FN
 	LC_HAVE_KEY_PAYLOAD_DATA_ARRAY
 	LC_HAVE_BI_CNT
 
