@@ -5840,23 +5840,6 @@ test_66() {
 }
 run_test 66 "update inode blocks count on client ==============="
 
-LLOOP=
-LLITELOOPLOAD=
-cleanup_68() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	trap 0
-	if [ ! -z "$LLOOP" ]; then
-		if swapon -s | grep -q $LLOOP; then
-			swapoff $LLOOP || error "swapoff failed"
-		fi
-
-		$LCTL blockdev_detach $LLOOP || error "detach failed"
-		rm -f $LLOOP
-		unset LLOOP
-	fi
-	rm -f $DIR/f68*
-}
-
 meminfo() {
 	awk '($1 == "'$1':") { print $2 }' /proc/meminfo
 }
