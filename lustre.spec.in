@@ -81,11 +81,15 @@
 
 %if %{_vendor}=="redhat" || %{_vendor}=="fedora"
 	%global requires_kmod_name kmod-%{lustre_name}
-	%global requires_kmod_tests_name kmod-%{lustre_name}-tests
+	%if %{with lustre_tests}
+		%global requires_kmod_tests_name kmod-%{lustre_name}-tests
+	%endif
 	%global requires_kmod_version %{version}
 %else	#for Suse
 	%global requires_kmod_name %{lustre_name}-kmp
-	%global requires_kmod_tests_name %{lustre_name}-tests-kmp
+	%if %{with lustre_tests}
+		%global requires_kmod_tests_name %{lustre_name}-tests-kmp
+	%endif
 	%define krequires %(echo %{kversion} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/-default$//')
 	%if 0%{?suse_version} >= 1200
 		%global requires_kmod_version %{version}_k%(echo %{krequires} | sed -r 'y/-/_/; s/^(2\.6\.[0-9]+)_/\\1.0_/;')
@@ -203,11 +207,16 @@ A set of scripts to operate Lustre resources in a High Availablity
 environment for both Pacemaker and rgmanager.
 %endif
 
+%if %{with lustre_tests}
 %package tests
 Summary: Lustre testing framework
 Group: System Environment/Kernel
 Provides: %{name}-tests = %{version}
+%if %{with lustre_iokit}
 Requires: %{name} = %{version}, lustre-iokit
+%else
+Requires: %{name} = %{version}
+%endif
 Requires: %{requires_kmod_name} = %{requires_kmod_version}
 Requires: %{requires_kmod_tests_name} = %{requires_kmod_version}
 Requires: attr, rsync, perl, lsof, /usr/bin/getconf
@@ -218,6 +227,7 @@ to be used by the Lustre testing framework.
 
 %if %{with lustre_modules}
 %kernel_module_package -n %{name}-tests -f %SOURCE7 default
+%endif
 %endif
 
 %if %{with lustre_iokit}
@@ -415,8 +425,10 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %files -f lustre.files
 %defattr(-,root,root)
 %{_sbindir}/*
+%if %{with lustre_tests}
 %exclude %{_sbindir}/wirecheck
 %exclude %{_sbindir}/wiretest
+%endif
 %if %{with zfs}
 %exclude %{_sbindir}/zfsobj2fid
 %endif
