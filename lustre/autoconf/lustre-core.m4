@@ -2672,6 +2672,23 @@ vm_operations_no_vm_area_struct, [
 ]) # LC_VM_OPERATIONS_REMOVE_VMF_ARG
 
 #
+# Kernel version 4.12 commit 47f38c539e9a42344ff5a664942075bd4df93876
+# CURRENT_TIME is not 64 bit time safe so it was replaced with
+# current_time()
+#
+AC_DEFUN([LC_CURRENT_TIME], [
+LB_CHECK_COMPILE([if CURRENT_TIME has been replaced with current_time],
+current_time, [
+	#include <linux/fs.h>
+],[
+	struct timespec ts = current_time(NULL);
+],[
+	AC_DEFINE(HAVE_CURRENT_TIME, 1,
+		[current_time() has replaced CURRENT_TIME])
+])
+]) # LIBCFS_CURRENT_TIME
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2890,6 +2907,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 4.11
 	LC_INODEOPS_ENHANCED_GETATTR
 	LC_VM_OPERATIONS_REMOVE_VMF_ARG
+
+	# 4.12
+	LC_CURRENT_TIME
 
 	#
 	AS_IF([test "x$enable_server" != xno], [

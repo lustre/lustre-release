@@ -644,4 +644,11 @@ static inline void __user *get_vmf_address(struct vm_fault *vmf)
 # define ll_filemap_fault(vma, vmf) filemap_fault(vma, vmf)
 #endif
 
+#ifndef HAVE_CURRENT_TIME
+static inline struct timespec current_time(struct inode *inode)
+{
+	return CURRENT_TIME;
+}
+#endif
+
 #endif /* _LUSTRE_COMPAT_H */

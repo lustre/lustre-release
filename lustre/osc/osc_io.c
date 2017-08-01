@@ -216,7 +216,7 @@ static int osc_io_submit(const struct lu_env *env,
 		struct cl_attr *attr = &osc_env_info(env)->oti_attr;
 
 		cl_object_attr_lock(obj);
-		attr->cat_mtime = attr->cat_ctime = LTIME_S(CURRENT_TIME);
+		attr->cat_mtime = attr->cat_ctime = ktime_get_real_seconds();
 		cl_object_attr_update(env, obj, attr, CAT_MTIME | CAT_CTIME);
 		cl_object_attr_unlock(obj);
 	}
@@ -255,7 +255,7 @@ static void osc_page_touch_at(const struct lu_env *env,
                kms > loi->loi_kms ? "" : "not ", loi->loi_kms, kms,
                loi->loi_lvb.lvb_size);
 
-	attr->cat_mtime = attr->cat_ctime = LTIME_S(CURRENT_TIME);
+	attr->cat_mtime = attr->cat_ctime = ktime_get_real_seconds();
 	valid = CAT_MTIME | CAT_CTIME;
 	if (kms > loi->loi_kms) {
 		attr->cat_kms = kms;
