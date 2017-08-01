@@ -1,5 +1,0 @@
-debian/tmp/sbin/*			sbin
-debian/tmp/usr/sbin/*			usr/sbin
-debian/tmp/usr/bin/*			usr/bin
-debian/tmp/usr/lib/lustre/*.so		usr/lib/lustre
-debian/tmp/usr/lib/lustre/*.la		usr/lib/lustre
