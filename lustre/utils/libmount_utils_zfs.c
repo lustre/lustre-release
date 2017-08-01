@@ -869,6 +869,7 @@ int zfs_init(void)
 	int ret = 0;
 
 	g_zfs = libzfs_init();
+
 	if (g_zfs == NULL) {
 		/* Try to load zfs.ko and retry libzfs_init() */
 
@@ -883,7 +884,6 @@ int zfs_init(void)
 
 	if (ret == 0)
 		osd_zfs_setup = 1;
-
 	else
 		fprintf(stderr, "Failed to initialize ZFS library: %d\n", ret);
 
@@ -898,3 +898,21 @@ void zfs_fini(void)
 	}
 	osd_zfs_setup = 0;
 }
+
+#ifndef PLUGIN_DIR
+struct module_backfs_ops zfs_ops = {
+	.init			= zfs_init,
+	.fini			= zfs_fini,
+	.read_ldd		= zfs_read_ldd,
+	.write_ldd		= zfs_write_ldd,
+	.erase_ldd		= zfs_erase_ldd,
+	.print_ldd_params	= zfs_print_ldd_params,
+	.is_lustre		= zfs_is_lustre,
+	.make_lustre		= zfs_make_lustre,
+	.prepare_lustre		= zfs_prepare_lustre,
+	.tune_lustre		= zfs_tune_lustre,
+	.label_lustre		= zfs_label_lustre,
+	.enable_quota		= zfs_enable_quota,
+	.rename_fsname		= zfs_rename_fsname,
+};
+#endif /* PLUGIN_DIR */

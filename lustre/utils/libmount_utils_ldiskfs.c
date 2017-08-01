@@ -1453,3 +1453,21 @@ void ldiskfs_fini(void)
 	return;
 }
 
+#ifndef PLUGIN_DIR
+struct module_backfs_ops ldiskfs_ops = {
+	.init			= ldiskfs_init,
+	.fini			= ldiskfs_fini,
+	.read_ldd		= ldiskfs_read_ldd,
+	.write_ldd		= ldiskfs_write_ldd,
+	.erase_ldd		= ldiskfs_erase_ldd,
+	.print_ldd_params	= ldiskfs_print_ldd_params,
+	.is_lustre		= ldiskfs_is_lustre,
+	.make_lustre		= ldiskfs_make_lustre,
+	.prepare_lustre		= ldiskfs_prepare_lustre,
+	.fix_mountopts		= ldiskfs_fix_mountopts,
+	.tune_lustre		= ldiskfs_tune_lustre,
+	.label_lustre		= ldiskfs_label_lustre,
+	.enable_quota		= ldiskfs_enable_quota,
+	.rename_fsname		= ldiskfs_rename_fsname,
+};
+#endif /* PLUGIN_DIR */

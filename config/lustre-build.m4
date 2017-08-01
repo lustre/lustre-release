@@ -346,6 +346,7 @@ AC_SUBST(EXTRA_KCFLAGS)
 # (so that portals/lustre can disable some if needed)
 #
 AC_DEFUN([LB_CONDITIONALS], [
+AM_CONDITIONAL([PLUGINS], [test x$enable_shared = xyes])
 AM_CONDITIONAL([MODULES], [test x$enable_modules = xyes])
 AM_CONDITIONAL([UTILS], [test x$enable_utils = xyes])
 AM_CONDITIONAL([TESTS], [test x$enable_tests = xyes])

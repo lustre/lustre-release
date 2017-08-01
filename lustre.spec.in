@@ -455,6 +455,7 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %endif
 %if %{with lustre_modules}
 
+%if %{with shared}
 %if %{with ldiskfs}
 %if %{with lustre_utils}
 %files osd-ldiskfs-mount
@@ -462,12 +463,15 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %{_libdir}/@PACKAGE@/mount_osd_ldiskfs.so
 %endif
 %endif
+%endif
 
+%if %{with shared}
 %if %{with zfs}
 %if %{with lustre_utils}
 %files osd-zfs-mount
 %defattr(-,root,root)
 %{_libdir}/@PACKAGE@/mount_osd_zfs.so
+%endif
 %endif
 %endif
 

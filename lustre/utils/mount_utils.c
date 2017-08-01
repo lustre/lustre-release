@@ -521,12 +521,14 @@ int loop_format(struct mkfs_opts *mop)
 	return 0;
 }
 
+#ifdef PLUGIN_DIR
 #define DLSYM(prefix, sym, func)					\
 	do {								\
 		char _fname[64];					\
 		snprintf(_fname, sizeof(_fname), "%s_%s", prefix, #func); \
 		sym->func = (typeof(sym->func))dlsym(sym->dl_handle, _fname); \
 	} while (0)
+#endif /* PLUGIN_DIR */
 
 /**
  * Load plugin for a given mount_type from ${pkglibdir}/mount_osd_FSTYPE.so and
@@ -538,9 +540,10 @@ int loop_format(struct mkfs_opts *mop)
  */
 struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 {
-	void *handle;
-	char *error, filename[512], fsname[512], *name;
 	struct module_backfs_ops *ops;
+#ifdef PLUGIN_DIR
+	char *error, filename[512], fsname[512], *name;
+	void *handle;
 
 	/* This deals with duplicate ldd_mount_types resolving to same OSD layer
 	 * plugin (e.g. ext3/ldiskfs/ldiskfs2 all being ldiskfs) */
@@ -606,7 +609,23 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 
 	/* optional methods */
 	DLSYM(name, ops, fix_mountopts);
-
+#else
+	switch (mount_type) {
+#ifdef HAVE_LDISKFS_OSD
+	case LDD_MT_LDISKFS:
+		ops = &ldiskfs_ops;
+		break;
+#endif /* HAVE_LDISKFS_OSD */
+#ifdef HAVE_ZFS_OSD
+	case LDD_MT_ZFS:
+		ops = &zfs_ops;
+		break;
+#endif /* HAVE_ZFS_OSD */
+	default:
+		ops = NULL;
+		break;
+	}
+#endif
 	return ops;
 }
 
@@ -616,11 +635,13 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
  */
 void unload_backfs_module(struct module_backfs_ops *ops)
 {
+#ifdef PLUGIN_DIR
 	if (ops == NULL)
 		return;
 
 	dlclose(ops->dl_handle);
 	free(ops);
+#endif
 }
 
 /* Return true if backfs_ops has operations for the given mount_type. */
@@ -814,14 +835,15 @@ int osd_init(void)
 	for (i = 0; i < LDD_MT_LAST; ++i) {
 		rc = 0;
 		backfs_ops[i] = load_backfs_module(i);
-		if (backfs_ops[i] != NULL)
+		if (backfs_ops[i] != NULL) {
 			rc = backfs_ops[i]->init();
-		if (rc != 0) {
-			backfs_ops[i]->fini();
-			unload_backfs_module(backfs_ops[i]);
-			backfs_ops[i] = NULL;
-		} else
-			ret = 0;
+			if (rc != 0) {
+				backfs_ops[i]->fini();
+				unload_backfs_module(backfs_ops[i]);
+				backfs_ops[i] = NULL;
+			} else
+				ret = 0;
+		}
 	}
 
 	return ret;
