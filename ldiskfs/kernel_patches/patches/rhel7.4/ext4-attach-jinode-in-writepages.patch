@@ -1,0 +1,44 @@
+Index: linux-stage/fs/ext4/inode.c
+===================================================================
+--- linux-stage.orig/fs/ext4/inode.c
++++ linux-stage/fs/ext4/inode.c
+@@ -745,6 +745,9 @@ out_sem:
+ 		    !(flags & EXT4_GET_BLOCKS_ZERO) &&
+ 		    !IS_NOQUOTA(inode) &&
+ 		    ext4_should_order_data(inode)) {
++			ret = ext4_inode_attach_jinode(inode);
++			if (ret)
++				return ret;
+ 			ret = ext4_jbd2_file_inode(handle, inode);
+ 			if (ret)
+ 				return ret;
+@@ -2503,6 +2506,9 @@ static int ext4_writepages(struct addres
+ 		mpd.last_page = wbc->range_end >> PAGE_CACHE_SHIFT;
+ 	}
+ 
++	ret = ext4_inode_attach_jinode(inode);
++	if (ret)
++		goto out_writepages;
+ 	mpd.inode = inode;
+ 	mpd.wbc = wbc;
+ 	ext4_io_submit_init(&mpd.io_submit, wbc);
+@@ -3837,6 +3843,7 @@ int ext4_inode_attach_jinode(struct inod
+ 		jbd2_free_inode(jinode);
+ 	return 0;
+ }
++EXPORT_SYMBOL(ext4_inode_attach_jinode);
+ 
+ /*
+  * ext4_truncate()
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -2379,6 +2379,7 @@ extern int ext4_group_add_blocks(handle_
+ extern int ext4_trim_fs(struct super_block *, struct fstrim_range *);
+ 
+ /* inode.c */
++#define HAVE_LDISKFS_INFO_JINODE
+ struct buffer_head *ext4_getblk(handle_t *, struct inode *,
+ 						ext4_lblk_t, int, int *);
+ struct buffer_head *ext4_bread(handle_t *, struct inode *,

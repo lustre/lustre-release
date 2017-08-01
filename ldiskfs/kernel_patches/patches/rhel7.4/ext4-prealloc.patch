@@ -1,0 +1,403 @@
+Index: linux-3.10.0-514.16.1.el7.x86_64/fs/ext4/ext4.h
+===================================================================
+--- linux-3.10.0-514.16.1.el7.x86_64.orig/fs/ext4/ext4.h
++++ linux-3.10.0-514.16.1.el7.x86_64/fs/ext4/ext4.h
+@@ -1270,11 +1270,14 @@ struct ext4_sb_info {
+ 
+ 	/* tunables */
+ 	unsigned long s_stripe;
+-	unsigned int s_mb_stream_request;
++	unsigned long s_mb_small_req;
++	unsigned long s_mb_large_req;
+ 	unsigned int s_mb_max_to_scan;
+ 	unsigned int s_mb_min_to_scan;
+ 	unsigned int s_mb_stats;
+ 	unsigned int s_mb_order2_reqs;
++	unsigned long *s_mb_prealloc_table;
++	unsigned long s_mb_prealloc_table_size;
+ 	unsigned int s_mb_group_prealloc;
+ 	unsigned int s_max_dir_size_kb;
+ 	/* where last allocation was done - for stream allocation */
+Index: linux-3.10.0-514.16.1.el7.x86_64/fs/ext4/mballoc.c
+===================================================================
+--- linux-3.10.0-514.16.1.el7.x86_64.orig/fs/ext4/mballoc.c
++++ linux-3.10.0-514.16.1.el7.x86_64/fs/ext4/mballoc.c
+@@ -1862,6 +1862,26 @@ int ext4_mb_find_by_goal(struct ext4_all
+ 	return 0;
+ }
+ 
++static int ext4_mb_prealloc_table_add(struct ext4_sb_info *sbi, int value)
++{
++	int i;
++
++	if (value > (sbi->s_blocks_per_group - 1 - 1 - sbi->s_itb_per_group))
++		return -1;
++
++	for (i = 0; i < sbi->s_mb_prealloc_table_size; i++) {
++		if (sbi->s_mb_prealloc_table[i] == 0) {
++			sbi->s_mb_prealloc_table[i] = value;
++			return 0;
++		}
++
++		/* they should add values in order */
++		if (value <= sbi->s_mb_prealloc_table[i])
++			return -1;
++	}
++	return -1;
++}
++
+ /*
+  * The routine scans buddy structures (not bitmap!) from given order
+  * to max order and tries to find big enough chunk to satisfy the req
+@@ -2301,6 +2321,93 @@ static const struct seq_operations ext4_
+ 	.show   = ext4_mb_seq_groups_show,
+ };
+ 
++#define EXT4_MB_PREALLOC_TABLE          "prealloc_table"
++
++static ssize_t ext4_mb_prealloc_table_proc_write(struct file *file,
++					     const char __user *buf,
++					     size_t cnt, loff_t *pos)
++{
++	struct ext4_sb_info *sbi = EXT4_SB(PDE_DATA(file_inode(file)));
++	unsigned long value;
++	unsigned long prev = 0;
++	char str[128];
++	char *cur;
++	char *end;
++	unsigned long *new_table;
++	int num = 0;
++	int i = 0;
++
++	if (cnt >= sizeof(str))
++		return -EINVAL;
++	if (copy_from_user(str, buf, cnt))
++		return -EFAULT;
++
++	num = 0;
++	cur = str;
++	end = str + cnt;
++	while (cur < end) {
++		int rc;
++		while ((cur < end) && (*cur == ' '))
++			cur++;
++		rc = kstrtol(cur, 0, &value);
++		if (rc != 0)
++			return -EINVAL;
++		if (value == 0)
++			break;
++		if (value <= prev)
++			return -EINVAL;
++		prev = value;
++		num++;
++	}
++
++	new_table = kmalloc(num * sizeof(*new_table), GFP_KERNEL);
++	if (new_table == NULL)
++		return -ENOMEM;
++	kfree(sbi->s_mb_prealloc_table);
++	memset(new_table, 0, num * sizeof(*new_table));
++	sbi->s_mb_prealloc_table = new_table;
++	sbi->s_mb_prealloc_table_size = num;
++	cur = str;
++	end = str + cnt;
++	while (cur < end && i < num) {
++		while (cur < end && *cur == ' ')
++			cur++;
++		value = simple_strtol(cur, &cur, 0);
++		if (ext4_mb_prealloc_table_add(sbi, value) == 0)
++			++i;
++	}
++	if (i != num)
++		sbi->s_mb_prealloc_table_size = i;
++
++	return cnt;
++}
++
++static int mb_prealloc_table_seq_show(struct seq_file *m, void *v)
++{
++	struct ext4_sb_info *sbi = EXT4_SB(m->private);
++	int i;
++
++	for (i = 0; i < sbi->s_mb_prealloc_table_size; i++)
++		seq_printf(m, "%ld ", sbi->s_mb_prealloc_table[i]);
++	seq_printf(m, "\n");
++
++	return 0;
++}
++
++static int mb_prealloc_table_seq_open(struct inode *inode, struct file *file)
++{
++	return single_open(file, mb_prealloc_table_seq_show, PDE_DATA(inode));
++}
++
++static const struct file_operations ext4_mb_prealloc_seq_fops = {
++	.owner   = THIS_MODULE,
++	.open    = mb_prealloc_table_seq_open,
++	.read    = seq_read,
++	.llseek  = seq_lseek,
++	.release = single_release,
++	.write   = ext4_mb_prealloc_table_proc_write,
++};
++
+ static int ext4_mb_seq_groups_open(struct inode *inode, struct file *file)
+ {
+ 	struct super_block *sb = PDE_DATA(inode);
+@@ -2550,7 +2657,7 @@ static int ext4_groupinfo_create_slab(si
+ int ext4_mb_init(struct super_block *sb)
+ {
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+-	unsigned i, j;
++	unsigned i, j, k, l;
+ 	unsigned offset, offset_incr;
+ 	unsigned max;
+ 	int ret;
+@@ -2595,7 +2702,6 @@ int ext4_mb_init(struct super_block *sb)
+ 	sbi->s_mb_max_to_scan = MB_DEFAULT_MAX_TO_SCAN;
+ 	sbi->s_mb_min_to_scan = MB_DEFAULT_MIN_TO_SCAN;
+ 	sbi->s_mb_stats = MB_DEFAULT_STATS;
+-	sbi->s_mb_stream_request = MB_DEFAULT_STREAM_THRESHOLD;
+ 	sbi->s_mb_order2_reqs = MB_DEFAULT_ORDER2_REQS;
+ 	/*
+ 	 * The default group preallocation is 512, which for 4k block
+@@ -2619,9 +2725,47 @@ int ext4_mb_init(struct super_block *sb)
+ 	 * RAID stripe size so that preallocations don't fragment
+ 	 * the stripes.
+ 	 */
+-	if (sbi->s_stripe > 1) {
+-		sbi->s_mb_group_prealloc = roundup(
+-			sbi->s_mb_group_prealloc, sbi->s_stripe);
++
++	if (sbi->s_stripe == 0) {
++		sbi->s_mb_prealloc_table_size = 10;
++		i = sbi->s_mb_prealloc_table_size * sizeof(unsigned long);
++		sbi->s_mb_prealloc_table = kmalloc(i, GFP_NOFS);
++		if (sbi->s_mb_prealloc_table == NULL) {
++			ret = -ENOMEM;
++			goto out;
++		}
++		memset(sbi->s_mb_prealloc_table, 0, i);
++
++		for (k = 0, l = 4; k <= 9; ++k, l *= 2) {
++			if (ext4_mb_prealloc_table_add(sbi, l) < 0) {
++				sbi->s_mb_prealloc_table_size = k;
++				break;
++			}
++		}
++
++		sbi->s_mb_small_req = 256;
++		sbi->s_mb_large_req = 1024;
++		sbi->s_mb_group_prealloc = 512;
++	} else {
++		sbi->s_mb_prealloc_table_size = 3;
++		i = sbi->s_mb_prealloc_table_size * sizeof(unsigned long);
++		sbi->s_mb_prealloc_table = kmalloc(i, GFP_NOFS);
++		if (sbi->s_mb_prealloc_table == NULL) {
++			ret = -ENOMEM;
++			goto out;
++		}
++		memset(sbi->s_mb_prealloc_table, 0, i);
++
++		for (k = 0, l = sbi->s_stripe; k <= 2; ++k, l *= 2) {
++			if (ext4_mb_prealloc_table_add(sbi, l) < 0) {
++				sbi->s_mb_prealloc_table_size = k;
++				break;
++			}
++		}
++
++		sbi->s_mb_small_req = sbi->s_stripe;
++		sbi->s_mb_large_req = sbi->s_stripe * 8;
++		sbi->s_mb_group_prealloc = sbi->s_stripe * 4;
+ 	}
+ 
+ 	sbi->s_locality_groups = alloc_percpu(struct ext4_locality_group);
+@@ -2643,9 +2787,13 @@ int ext4_mb_init(struct super_block *sb)
+ 	if (ret != 0)
+ 		goto out_free_locality_groups;
+ 
+-	if (sbi->s_proc)
++	if (sbi->s_proc) {
+ 		proc_create_data("mb_groups", S_IRUGO, sbi->s_proc,
+ 				 &ext4_mb_seq_groups_fops, sb);
++		proc_create_data(EXT4_MB_PREALLOC_TABLE, S_IFREG | S_IRUGO |
++				 S_IWUSR, sbi->s_proc,
++				 &ext4_mb_prealloc_seq_fops, sb);
++	}
+ 
+ 	return 0;
+ 
+@@ -2653,6 +2801,7 @@ out_free_locality_groups:
+ 	free_percpu(sbi->s_locality_groups);
+ 	sbi->s_locality_groups = NULL;
+ out:
++	kfree(sbi->s_mb_prealloc_table);
+ 	kfree(sbi->s_mb_offsets);
+ 	sbi->s_mb_offsets = NULL;
+ 	kfree(sbi->s_mb_maxs);
+@@ -2687,8 +2836,10 @@ int ext4_mb_release(struct super_block *
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+ 	struct kmem_cache *cachep = get_groupinfo_cache(sb->s_blocksize_bits);
+ 
+-	if (sbi->s_proc)
++	if (sbi->s_proc) {
+ 		remove_proc_entry("mb_groups", sbi->s_proc);
++		remove_proc_entry(EXT4_MB_PREALLOC_TABLE, sbi->s_proc);
++	}
+ 
+ 	if (sbi->s_group_info) {
+ 		for (i = 0; i < ngroups; i++) {
+@@ -3000,9 +3151,9 @@ ext4_mb_normalize_request(struct ext4_al
+ 				struct ext4_allocation_request *ar)
+ {
+ 	struct ext4_sb_info *sbi = EXT4_SB(ac->ac_sb);
+-	int bsbits, max;
++	int bsbits, i, wind;
+ 	ext4_lblk_t end;
+-	loff_t size, start_off;
++	loff_t size;
+ 	loff_t orig_size __maybe_unused;
+ 	ext4_lblk_t start;
+ 	struct ext4_inode_info *ei = EXT4_I(ac->ac_inode);
+@@ -3035,51 +3186,34 @@ ext4_mb_normalize_request(struct ext4_al
+ 	size = size << bsbits;
+ 	if (size < i_size_read(ac->ac_inode))
+ 		size = i_size_read(ac->ac_inode);
+-	orig_size = size;
++	size = (size + ac->ac_sb->s_blocksize - 1) >> bsbits;
+ 
+-	/* max size of free chunks */
+-	max = 2 << bsbits;
++	start = wind = 0;
+ 
+-#define NRL_CHECK_SIZE(req, size, max, chunk_size)	\
+-		(req <= (size) || max <= (chunk_size))
++	/* let's choose preallocation window depending on file size */
++	for (i = 0; i < sbi->s_mb_prealloc_table_size; i++) {
++		if (size <= sbi->s_mb_prealloc_table[i]) {
++			wind = sbi->s_mb_prealloc_table[i];
++			break;
++		}
++	}
++	size = wind;
+ 
+-	/* first, try to predict filesize */
+-	/* XXX: should this table be tunable? */
+-	start_off = 0;
+-	if (size <= 16 * 1024) {
+-		size = 16 * 1024;
+-	} else if (size <= 32 * 1024) {
+-		size = 32 * 1024;
+-	} else if (size <= 64 * 1024) {
+-		size = 64 * 1024;
+-	} else if (size <= 128 * 1024) {
+-		size = 128 * 1024;
+-	} else if (size <= 256 * 1024) {
+-		size = 256 * 1024;
+-	} else if (size <= 512 * 1024) {
+-		size = 512 * 1024;
+-	} else if (size <= 1024 * 1024) {
+-		size = 1024 * 1024;
+-	} else if (NRL_CHECK_SIZE(size, 4 * 1024 * 1024, max, 2 * 1024)) {
+-		start_off = ((loff_t)ac->ac_o_ex.fe_logical >>
+-						(21 - bsbits)) << 21;
+-		size = 2 * 1024 * 1024;
+-	} else if (NRL_CHECK_SIZE(size, 8 * 1024 * 1024, max, 4 * 1024)) {
+-		start_off = ((loff_t)ac->ac_o_ex.fe_logical >>
+-							(22 - bsbits)) << 22;
+-		size = 4 * 1024 * 1024;
+-	} else if (NRL_CHECK_SIZE(ac->ac_o_ex.fe_len,
+-					(8<<20)>>bsbits, max, 8 * 1024)) {
+-		start_off = ((loff_t)ac->ac_o_ex.fe_logical >>
+-							(23 - bsbits)) << 23;
+-		size = 8 * 1024 * 1024;
+-	} else {
+-		start_off = (loff_t) ac->ac_o_ex.fe_logical << bsbits;
+-		size	  = (loff_t) EXT4_C2B(EXT4_SB(ac->ac_sb),
+-					      ac->ac_o_ex.fe_len) << bsbits;
++	if (wind == 0) {
++		__u64 tstart, tend;
++		/* file is quite large, we now preallocate with
++		 * the biggest configured window with regart to
++		 * logical offset */
++		wind = sbi->s_mb_prealloc_table[i - 1];
++		tstart = ac->ac_o_ex.fe_logical;
++		do_div(tstart, wind);
++		start = tstart * wind;
++		tend = ac->ac_o_ex.fe_logical + ac->ac_o_ex.fe_len - 1;
++		do_div(tend, wind);
++		tend = tend * wind + wind;
++		size = tend - start;
+ 	}
+-	size = size >> bsbits;
+-	start = start_off >> bsbits;
++	orig_size = size;
+ 
+ 	/* don't cover already allocated blocks in selected range */
+ 	if (ar->pleft && start <= ar->lleft) {
+@@ -3154,7 +3288,6 @@ ext4_mb_normalize_request(struct ext4_al
+ 			 (unsigned long) ac->ac_o_ex.fe_logical);
+ 		BUG();
+ 	}
+-	BUG_ON(size <= 0 || size > EXT4_BLOCKS_PER_GROUP(ac->ac_sb));
+ 
+ 	/* now prepare goal request */
+ 
+@@ -4119,11 +4252,19 @@ static void ext4_mb_group_or_file(struct
+ 
+ 	/* don't use group allocation for large files */
+ 	size = max(size, isize);
+-	if (size > sbi->s_mb_stream_request) {
++	if ((ac->ac_o_ex.fe_len >= sbi->s_mb_small_req) ||
++	    (size >= sbi->s_mb_large_req)) {
+ 		ac->ac_flags |= EXT4_MB_STREAM_ALLOC;
+ 		return;
+ 	}
+ 
++	/*
++	 * request is so large that we don't care about
++	 * streaming - it overweights any possible seek
++	 */
++	if (ac->ac_o_ex.fe_len >= sbi->s_mb_large_req)
++		return;
++
+ 	BUG_ON(ac->ac_lg != NULL);
+ 	/*
+ 	 * locality group prealloc space are per cpu. The reason for having
+Index: linux-3.10.0-514.16.1.el7.x86_64/fs/ext4/super.c
+===================================================================
+--- linux-3.10.0-514.16.1.el7.x86_64.orig/fs/ext4/super.c
++++ linux-3.10.0-514.16.1.el7.x86_64/fs/ext4/super.c
+@@ -2672,7 +2672,8 @@ EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats
+ EXT4_RW_ATTR_SBI_UI(mb_max_to_scan, s_mb_max_to_scan);
+ EXT4_RW_ATTR_SBI_UI(mb_min_to_scan, s_mb_min_to_scan);
+ EXT4_RW_ATTR_SBI_UI(mb_order2_req, s_mb_order2_reqs);
+-EXT4_RW_ATTR_SBI_UI(mb_stream_req, s_mb_stream_request);
++EXT4_RW_ATTR_SBI_UI(mb_small_req, s_mb_small_req);
++EXT4_RW_ATTR_SBI_UI(mb_large_req, s_mb_large_req);
+ EXT4_RW_ATTR_SBI_UI(mb_group_prealloc, s_mb_group_prealloc);
+ EXT4_DEPRECATED_ATTR(max_writeback_mb_bump, 128);
+ EXT4_RW_ATTR_SBI_UI(extent_max_zeroout_kb, s_extent_max_zeroout_kb);
+@@ -2698,7 +2699,8 @@ static struct attribute *ext4_attrs[] =
+ 	ATTR_LIST(mb_max_to_scan),
+ 	ATTR_LIST(mb_min_to_scan),
+ 	ATTR_LIST(mb_order2_req),
+-	ATTR_LIST(mb_stream_req),
++	ATTR_LIST(mb_small_req),
++	ATTR_LIST(mb_large_req),
+ 	ATTR_LIST(mb_group_prealloc),
+ 	ATTR_LIST(max_writeback_mb_bump),
+ 	ATTR_LIST(extent_max_zeroout_kb),
+Index: linux-3.10.0-514.16.1.el7.x86_64/fs/ext4/inode.c
+===================================================================
+--- linux-3.10.0-514.16.1.el7.x86_64.orig/fs/ext4/inode.c
++++ linux-3.10.0-514.16.1.el7.x86_64/fs/ext4/inode.c
+@@ -2399,6 +2399,9 @@ static int ext4_writepages(struct addres
+ 		ext4_journal_stop(handle);
+ 	}
+ 
++	if (wbc->nr_to_write < sbi->s_mb_small_req)
++		wbc->nr_to_write = sbi->s_mb_small_req;
++
+ 	if (wbc->range_start == 0 && wbc->range_end == LLONG_MAX)
+ 		range_whole = 1;
+ 
