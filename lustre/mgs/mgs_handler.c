@@ -1313,7 +1313,7 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	/* Internal mgs setup */
 	mgs_init_fsdb_list(mgs);
 	mutex_init(&mgs->mgs_mutex);
-	mgs->mgs_start_time = cfs_time_current_sec();
+	mgs->mgs_start_time = ktime_get_real_seconds();
 	spin_lock_init(&mgs->mgs_lock);
 	mutex_init(&mgs->mgs_health_mutex);
 	init_rwsem(&mgs->mgs_barrier_rwsem);

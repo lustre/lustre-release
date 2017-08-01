@@ -48,7 +48,7 @@
 
 #include "mgs_internal.h"
 
-static unsigned int ir_timeout;
+static time64_t ir_timeout;
 
 static int nidtbl_is_sane(struct mgs_nidtbl *tbl)
 {
@@ -454,11 +454,10 @@ int mgs_ir_init_fs(const struct lu_env *env, struct mgs_device *mgs,
 	struct task_struct *task;
 
 	if (!ir_timeout)
-		ir_timeout = OBD_IR_MGS_TIMEOUT;
+		ir_timeout = (time64_t)OBD_IR_MGS_TIMEOUT;
 
 	fsdb->fsdb_ir_state = IR_FULL;
-	if (cfs_time_before(cfs_time_current_sec(),
-			    mgs->mgs_start_time + ir_timeout))
+	if (mgs->mgs_start_time + ir_timeout > ktime_get_real_seconds())
 		fsdb->fsdb_ir_state = IR_STARTUP;
 	fsdb->fsdb_nonir_clients = 0;
 	/* start notify thread */
@@ -494,8 +493,8 @@ void mgs_ir_fini_fs(struct mgs_device *mgs, struct fs_db *fsdb)
 static inline void ir_state_graduate(struct fs_db *fsdb)
 {
         if (fsdb->fsdb_ir_state == IR_STARTUP) {
-		if (cfs_time_before(fsdb->fsdb_mgs->mgs_start_time + ir_timeout,
-                                    cfs_time_current_sec())) {
+		if (ktime_get_real_seconds() >
+		    fsdb->fsdb_mgs->mgs_start_time + ir_timeout) {
                         fsdb->fsdb_ir_state = IR_FULL;
                         if (fsdb->fsdb_nonir_clients)
                                 fsdb->fsdb_ir_state = IR_PARTIAL;
@@ -832,7 +831,7 @@ int lprocfs_rd_ir_state(struct seq_file *seq, void *data)
 
 int lprocfs_ir_timeout_seq_show(struct seq_file *m, void *data)
 {
-	return lprocfs_uint_seq_show(m, &ir_timeout);
+	return lprocfs_u64_seq_show(m, &ir_timeout);
 }
 
 ssize_t lprocfs_ir_timeout_seq_write(struct file *file,

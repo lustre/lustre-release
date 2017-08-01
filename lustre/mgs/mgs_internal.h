@@ -125,15 +125,15 @@ struct fs_db {
 	};
 	void		 *fsdb_mdt_index_map;	/* bitmap of used indicies */
 	atomic_t	  fsdb_ref;
-	int		  fsdb_mdt_count;
 	char		 *fsdb_clilov;	/* COMPAT_146 client lov name */
 	char		 *fsdb_clilmv;
 	unsigned long	  fsdb_flags;
 	__u32		  fsdb_barrier_status;
-	__u32		  fsdb_barrier_timeout;
+	int		  fsdb_mdt_count;
+	time64_t	  fsdb_barrier_timeout;
 	__u32		  fsdb_barrier_expected;
 	int		  fsdb_barrier_result;
-	time_t		  fsdb_barrier_latest_create_time;
+	time64_t	  fsdb_barrier_latest_create_time;
 
         /* in-memory copy of the srpc rules, guarded by fsdb_lock */
         struct sptlrpc_rule_set   fsdb_srpc_gen;
@@ -177,7 +177,7 @@ struct mgs_device {
 	struct proc_dir_entry           *mgs_proc_osd;
 	struct proc_dir_entry           *mgs_proc_fstype;
 	struct proc_dir_entry		*mgs_proc_mntdev;
-	cfs_time_t			 mgs_start_time;
+	time64_t			 mgs_start_time;
 	struct obd_device		*mgs_obd;
 	struct kset			*mgs_kset;
 	struct local_oid_storage	*mgs_los;

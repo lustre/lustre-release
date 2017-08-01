@@ -247,6 +247,13 @@ static bool mgs_barrier_done(struct fs_db *fsdb)
 	return true;
 }
 
+bool mgs_barrier_expired(struct fs_db *fsdb, time64_t timeout)
+{
+	time64_t expired = fsdb->fsdb_barrier_latest_create_time + timeout;
+
+	return expired > ktime_get_real_seconds();
+}
+
 /**
  * Create the barrier for the given instance.
  *
@@ -293,7 +300,7 @@ static int mgs_barrier_freeze(const struct lu_env *env,
 	char *name = mgs_env_info(env)->mgi_fsname;
 	struct fs_db *fsdb;
 	int rc = 0;
-	int left;
+	time64_t left;
 	bool phase1 = true;
 	bool dirty = false;
 	ENTRY;
@@ -328,9 +335,7 @@ static int mgs_barrier_freeze(const struct lu_env *env,
 		rc = -EINPROGRESS;
 		break;
 	case BS_FROZEN:
-		if (cfs_time_before(cfs_time_current_sec(),
-				    fsdb->fsdb_barrier_latest_create_time +
-				    fsdb->fsdb_barrier_timeout)) {
+		if (mgs_barrier_expired(fsdb, fsdb->fsdb_barrier_timeout)) {
 			rc = -EALREADY;
 			break;
 		}
@@ -344,7 +349,7 @@ static int mgs_barrier_freeze(const struct lu_env *env,
 			rc = -ENODEV;
 		} else {
 			fsdb->fsdb_barrier_latest_create_time =
-							cfs_time_current_sec();
+				ktime_get_real_seconds();
 			fsdb->fsdb_barrier_status = BS_FREEZING_P1;
 			if (bc->bc_timeout != 0)
 				fsdb->fsdb_barrier_timeout = bc->bc_timeout;
@@ -379,7 +384,7 @@ again:
 
 	dirty = true;
 	left = fsdb->fsdb_barrier_latest_create_time +
-		fsdb->fsdb_barrier_timeout - cfs_time_current_sec();
+	       fsdb->fsdb_barrier_timeout - ktime_get_real_seconds();
 	if (left <= 0) {
 		fsdb->fsdb_barrier_status = BS_EXPIRED;
 
@@ -550,13 +555,11 @@ static int mgs_barrier_stat(const struct lu_env *env,
 		if (bc->bc_status == BS_FREEZING_P1 ||
 		    bc->bc_status == BS_FREEZING_P2 ||
 		    bc->bc_status == BS_FROZEN) {
-			if (cfs_time_before(cfs_time_current_sec(),
-					fsdb->fsdb_barrier_latest_create_time +
-					fsdb->fsdb_barrier_timeout))
+			if (mgs_barrier_expired(fsdb, fsdb->fsdb_barrier_timeout))
 				bc->bc_timeout =
 					fsdb->fsdb_barrier_latest_create_time +
 					fsdb->fsdb_barrier_timeout -
-					cfs_time_current_sec();
+					ktime_get_real_seconds();
 			else
 				bc->bc_status = fsdb->fsdb_barrier_status =
 					BS_EXPIRED;
@@ -619,9 +622,7 @@ static int mgs_barrier_rescan(const struct lu_env *env,
 		rc = -EBUSY;
 		break;
 	case BS_FROZEN:
-		if (cfs_time_before(cfs_time_current_sec(),
-				    b_fsdb->fsdb_barrier_latest_create_time +
-				    b_fsdb->fsdb_barrier_timeout)) {
+		if (mgs_barrier_expired(b_fsdb, b_fsdb->fsdb_barrier_timeout)) {
 			rc = -EBUSY;
 			break;
 		}
@@ -629,8 +630,7 @@ static int mgs_barrier_rescan(const struct lu_env *env,
 	case BS_THAWED:
 	case BS_EXPIRED:
 	case BS_FAILED:
-		b_fsdb->fsdb_barrier_latest_create_time =
-							cfs_time_current_sec();
+		b_fsdb->fsdb_barrier_latest_create_time = ktime_get_real_seconds();
 		b_fsdb->fsdb_barrier_status = BS_RESCAN;
 		memcpy(b_fsdb->fsdb_mdt_index_map, c_fsdb->fsdb_mdt_index_map,
 		       INDEX_MAP_SIZE);
@@ -665,9 +665,7 @@ again:
 		b_fsdb->fsdb_barrier_status = rc;
 		rc = -EREMOTE;
 	} else if (rc == -ETIMEDOUT &&
-		   cfs_time_before(cfs_time_current_sec(),
-				   b_fsdb->fsdb_barrier_latest_create_time +
-				   bc->bc_timeout)) {
+		   mgs_barrier_expired(b_fsdb, bc->bc_timeout)) {
 		memset(b_fsdb->fsdb_barrier_map, 0, INDEX_MAP_SIZE);
 
 		goto again;

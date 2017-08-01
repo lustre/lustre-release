@@ -935,7 +935,7 @@ static int mgs_modify(const struct lu_env *env, struct mgs_device *mgs,
 		GOTO(out_free, rc = -E2BIG);
         /* Modify mostly means cancel */
         mml->mml_marker.cm_flags = flags;
-        mml->mml_marker.cm_canceltime = flags ? cfs_time_current_sec() : 0;
+	mml->mml_marker.cm_canceltime = flags ? ktime_get_real_seconds() : 0;
         mml->mml_modified = 0;
 	rc = llog_process(env, loghandle, mgs_modify_handler, (void *)mml,
 			  NULL);
@@ -1591,7 +1591,7 @@ static int record_marker(const struct lu_env *env,
 			sizeof(mgi->mgi_marker.cm_comment));
 	if (cplen >= sizeof(mgi->mgi_marker.cm_comment))
 		return -E2BIG;
-	mgi->mgi_marker.cm_createtime = cfs_time_current_sec();
+	mgi->mgi_marker.cm_createtime = ktime_get_real_seconds();
 	mgi->mgi_marker.cm_canceltime = 0;
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
 	lustre_cfg_bufs_set(&mgi->mgi_bufs, 1, &mgi->mgi_marker,
