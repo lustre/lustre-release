@@ -1039,6 +1039,8 @@ lnet_return_tx_credits_locked(struct lnet_msg *msg)
 
 		txpeer->lpni_txcredits++;
 		if (txpeer->lpni_txcredits <= 0) {
+			int msg2_cpt;
+
 			msg2 = list_entry(txpeer->lpni_txq.next,
 					      struct lnet_msg, msg_list);
 			list_del(&msg2->msg_list);
@@ -1047,13 +1049,26 @@ lnet_return_tx_credits_locked(struct lnet_msg *msg)
 			LASSERT(msg2->msg_txpeer == txpeer);
 			LASSERT(msg2->msg_tx_delayed);
 
-			if (msg2->msg_tx_cpt != msg->msg_tx_cpt) {
+			msg2_cpt = msg2->msg_tx_cpt;
+
+			/*
+			 * The msg_cpt can be different from the msg2_cpt
+			 * so we need to make sure we lock the correct cpt
+			 * for msg2.
+			 * Once we call lnet_post_send_locked() it is no
+			 * longer safe to access msg2, since it could've
+			 * been freed by lnet_finalize(), but we still
+			 * need to relock the correct cpt, so we cache the
+			 * msg2_cpt for the purpose of the check that
+			 * follows the call to lnet_pose_send_locked().
+			 */
+			if (msg2_cpt != msg->msg_tx_cpt) {
 				lnet_net_unlock(msg->msg_tx_cpt);
-				lnet_net_lock(msg2->msg_tx_cpt);
+				lnet_net_lock(msg2_cpt);
 			}
                         (void) lnet_post_send_locked(msg2, 1);
-			if (msg2->msg_tx_cpt != msg->msg_tx_cpt) {
-				lnet_net_unlock(msg2->msg_tx_cpt);
+			if (msg2_cpt != msg->msg_tx_cpt) {
+				lnet_net_unlock(msg2_cpt);
 				lnet_net_lock(msg->msg_tx_cpt);
 			}
                 } else {
