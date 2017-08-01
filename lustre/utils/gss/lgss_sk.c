@@ -55,42 +55,6 @@
 #define SK_DEFAULT_PRIME_BITS 2048
 #define SK_DEFAULT_NODEMAP "default"
 
-/* Names match up with openssl enc and dgst commands */
-char *sk_crypt2name[] = {
-	[SK_CRYPT_EMPTY] = "NONE",
-	[SK_CRYPT_AES256_CTR] = "AES-256-CTR",
-};
-
-char *sk_hmac2name[] = {
-	[SK_HMAC_EMPTY] = "NONE",
-	[SK_HMAC_SHA256] = "SHA256",
-	[SK_HMAC_SHA512] = "SHA512",
-};
-
-static int sk_name2crypt(char *name)
-{
-	int i;
-
-	for (i = 0; i < SK_CRYPT_MAX; i++) {
-		if (strcasecmp(name, sk_crypt2name[i]) == 0)
-			return i;
-	}
-
-	return SK_CRYPT_INVALID;
-}
-
-static int sk_name2hmac(char *name)
-{
-	int i;
-
-	for (i = 0; i < SK_HMAC_MAX; i++) {
-		if (strcasecmp(name, sk_hmac2name[i]) == 0)
-			return i;
-	}
-
-	return SK_HMAC_INVALID;
-}
-
 static void usage(FILE *fp, char *program)
 {
 	int i;
@@ -104,14 +68,14 @@ static void usage(FILE *fp, char *program)
 	fprintf(fp, "Modify/Write Options:\n");
 	fprintf(fp, "-c|--crypt      <num>	Cipher for encryption "
 		"(Default: AES Counter mode)\n");
-	for (i = 1; i < SK_CRYPT_MAX; i++)
-		fprintf(fp, "                        %s\n", sk_crypt2name[i]);
-
+	for (i = 1; i < ARRAY_SIZE(sk_crypt_algs); i++)
+		fprintf(fp, "                        %s\n",
+			sk_crypt_algs[i].sct_name);
 	fprintf(fp, "-i|--hmac       <num>	Hash algorithm for integrity "
 		"(Default: SHA256)\n");
-	for (i = 1; i < SK_HMAC_MAX; i++)
-		fprintf(fp, "                        %s\n", sk_hmac2name[i]);
-
+	for (i = 1; i < ARRAY_SIZE(sk_hmac_algs); i++)
+		fprintf(fp, "                        %s\n",
+			sk_hmac_algs[i].sht_name);
 	fprintf(fp, "-e|--expire     <num>	Seconds before contexts from "
 		"key expire (Default: %d seconds (%.3g days))\n",
 		SK_DEFAULT_EXPIRE, (double)SK_DEFAULT_EXPIRE / 3600 / 24);
@@ -126,8 +90,10 @@ static void usage(FILE *fp, char *program)
 		"client)\n");
 	fprintf(fp, "-k|--key-bits   <len>	Shared key length in bits "
 		"(Default: %d)\n", SK_DEFAULT_SK_KEYLEN);
-	fprintf(fp, "-d|--data       <file>	Key random data source "
-		"(Default: /dev/random)\n\n");
+	fprintf(fp, "-d|--data       <file>	Key data source for new keys "
+		"(Default: /dev/random)\n");
+	fprintf(fp, "                        Not a seed value. "
+		"This is the actual key value.\n\n");
 	fprintf(fp, "Other Options:\n");
 	fprintf(fp, "-v|--verbose           Increase verbosity for errors\n");
 	exit(EXIT_FAILURE);
@@ -238,8 +204,8 @@ static int print_config(char *filename)
 	if (config->skc_type & SK_TYPE_CLIENT)
 		printf(" client");
 	printf("\n");
-	printf("HMAC alg:       %s\n", sk_hmac2name[config->skc_hmac_alg]);
-	printf("Crypto alg:     %s\n", sk_crypt2name[config->skc_crypt_alg]);
+	printf("HMAC alg:       %s\n", sk_hmac2name(config->skc_hmac_alg));
+	printf("Crypto alg:     %s\n", sk_crypt2name(config->skc_crypt_alg));
 	printf("Ctx Expiration: %u seconds\n", config->skc_expire);
 	printf("Shared keylen:  %u bits\n", config->skc_shared_keylen);
 	printf("Prime length:   %u bits\n", config->skc_prime_bits);
@@ -330,7 +296,7 @@ int main(int argc, char **argv)
 	int verbose = 0;
 	int i;
 	int opt;
-	enum sk_key_type  type = SK_TYPE_INVALID;
+	enum sk_key_type type = SK_TYPE_INVALID;
 	bool generate_prime = false;
 	DH *dh;
 
@@ -489,6 +455,12 @@ int main(int argc, char **argv)
 	}
 	if (hmac == SK_HMAC_INVALID) {
 		fprintf(stderr, "error: invalid HMAC algorithm specified\n");
+		return EXIT_FAILURE;
+	}
+
+	if (modify && datafile) {
+		fprintf(stderr,
+			"error: data file option not valid in key modify\n");
 		return EXIT_FAILURE;
 	}
 

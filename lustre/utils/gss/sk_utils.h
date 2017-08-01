@@ -35,7 +35,21 @@
 #include <openssl/evp.h>
 #include <sys/types.h>
 
+#include <libcfs/libcfs_crypto.h>
 #include "lsupport.h"
+
+#ifndef ARRAY_SIZE
+# define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
+#endif /* !ARRAY_SIZE */
+
+/* LL_CRYPTO_MAX_NAME value must match value of
+ * CRYPTO_MAX_ALG_NAME in include/linux/crypto.h
+ */
+#ifdef HAVE_CRYPTO_MAX_ALG_NAME_128
+#define LL_CRYPTO_MAX_NAME 128
+#else
+#define LL_CRYPTO_MAX_NAME 64
+#endif
 
 /* Some limits and defaults */
 #define SK_CONF_VERSION 1
@@ -113,8 +127,8 @@ struct sk_keyfile_config {
 /* Format passed to the kernel from userspace */
 struct sk_kernel_ctx {
 	uint32_t	skc_version;
-	uint16_t	skc_hmac_alg;
-	uint16_t	skc_crypt_alg;
+	char		skc_hmac_alg[LL_CRYPTO_MAX_NAME];
+	char		skc_crypt_alg[LL_CRYPTO_MAX_NAME];
 	uint32_t	skc_expire;
 	uint32_t	skc_host_random;
 	uint32_t	skc_peer_random;
@@ -136,6 +150,103 @@ struct sk_cred {
 	struct sk_kernel_ctx	 sc_kctx;
 	DH			*sc_params;
 };
+
+/* Names match up with openssl enc and dgst commands */
+/* When adding new alg types, make sure first occurrence's name
+ * matches cht_name in hash_types array.
+ */
+static const struct sk_crypt_type sk_crypt_algs[] = {
+	{
+		.sct_name = "null",
+		.sct_type = SK_CRYPT_EMPTY
+	},
+	{
+		.sct_name = "NONE",
+		.sct_type = SK_CRYPT_EMPTY
+	},
+	{
+		.sct_name = "ctr(aes)",
+		.sct_type = SK_CRYPT_AES256_CTR
+	},
+	{
+		.sct_name = "AES-256-CTR",
+		.sct_type = SK_CRYPT_AES256_CTR
+	}
+};
+static const struct sk_hmac_type sk_hmac_algs[] = {
+	{
+		.sht_name = "null",
+		.sht_type = SK_HMAC_EMPTY
+	},
+	{
+		.sht_name = "NONE",
+		.sht_type = SK_HMAC_EMPTY
+	},
+	{
+		.sht_name = "sha256",
+		.sht_type = SK_HMAC_SHA256
+	},
+	{
+		.sht_name = "SHA256",
+		.sht_type = SK_HMAC_SHA256
+	},
+	{
+		.sht_name = "sha512",
+		.sht_type = SK_HMAC_SHA512
+	},
+	{
+		.sht_name = "SHA512",
+		.sht_type = SK_HMAC_SHA512
+	}
+};
+
+static inline int sk_name2crypt(char *name)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(sk_crypt_algs); i++) {
+		if (strcasecmp(name, sk_crypt_algs[i].sct_name) == 0)
+			return sk_crypt_algs[i].sct_type;
+	}
+
+	return SK_CRYPT_INVALID;
+}
+
+static inline int sk_name2hmac(char *name)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(sk_hmac_algs); i++) {
+		if (strcasecmp(name, sk_hmac_algs[i].sht_name) == 0)
+			return sk_hmac_algs[i].sht_type;
+	}
+
+	return SK_HMAC_INVALID;
+}
+
+static inline const char *sk_crypt2name(enum sk_crypt_alg type)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(sk_crypt_algs); i++) {
+		if (type == sk_crypt_algs[i].sct_type)
+			return sk_crypt_algs[i].sct_name;
+	}
+
+	return NULL;
+}
+
+static inline const char *sk_hmac2name(enum sk_hmac_alg type)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(sk_hmac_algs); i++) {
+		if (type == sk_hmac_algs[i].sht_type)
+			return sk_hmac_algs[i].sht_name;
+	}
+
+	return NULL;
+}
 
 void sk_init_logging(char *program, int verbose, int fg);
 struct sk_keyfile_config *sk_read_file(char *filename);

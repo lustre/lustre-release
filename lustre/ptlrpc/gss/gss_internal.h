@@ -11,7 +11,8 @@
 #ifndef __PTLRPC_GSS_GSS_INTERNAL_H_
 #define __PTLRPC_GSS_GSS_INTERNAL_H_
 
-#include <linux/crypto.h>
+#include <crypto/hash.h>
+#include <libcfs/libcfs_crypto.h>
 #include <lustre_sec.h>
 
 /*
@@ -551,6 +552,15 @@ void __dbg_memdump(char *name, void *ptr, int size)
         buf[size + size] = '\0';
         LCONSOLE_INFO("DUMP %s@%p(%d): %s\n", name, ptr, size, buf);
         OBD_FREE(buf, bufsize);
+}
+
+static inline unsigned int ll_read_key_usage(struct key *key)
+{
+#ifdef HAVE_KEY_USAGE_REFCOUNT
+	return refcount_read(&key->usage);
+#else
+	return atomic_read(&key->usage);
+#endif
 }
 
 #endif /* __PTLRPC_GSS_GSS_INTERNAL_H_ */

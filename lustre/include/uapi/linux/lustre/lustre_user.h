@@ -2094,7 +2094,6 @@ enum sk_crypt_alg {
 	SK_CRYPT_INVALID	= -1,
 	SK_CRYPT_EMPTY		= 0,
 	SK_CRYPT_AES256_CTR	= 1,
-	SK_CRYPT_MAX		= 2,
 };
 
 enum sk_hmac_alg {
@@ -2102,17 +2101,16 @@ enum sk_hmac_alg {
 	SK_HMAC_EMPTY	= 0,
 	SK_HMAC_SHA256	= 1,
 	SK_HMAC_SHA512	= 2,
-	SK_HMAC_MAX	= 3,
 };
 
 struct sk_crypt_type {
-	char    *sct_name;
-	size_t   sct_bytes;
+	const char     *sct_name;
+	int		sct_type;
 };
 
 struct sk_hmac_type {
-	char    *sht_name;
-	size_t   sht_bytes;
+	const char     *sht_name;
+	int		sht_type;
 };
 
 enum lock_mode_user {

@@ -61,14 +61,14 @@
 #define SK_IV_REV_START (1ULL << 63)
 
 struct sk_ctx {
-	__u16			sc_hmac;
-	__u16			sc_crypt;
-	__u32			sc_expire;
-	__u32			sc_host_random;
-	__u32			sc_peer_random;
-	atomic64_t		sc_iv;
-	rawobj_t		sc_hmac_key;
-	struct gss_keyblock	sc_session_kb;
+	enum cfs_crypto_crypt_alg sc_crypt;
+	enum cfs_crypto_hash_alg  sc_hmac;
+	__u32			  sc_expire;
+	__u32			  sc_host_random;
+	__u32			  sc_peer_random;
+	atomic64_t		  sc_iv;
+	rawobj_t		  sc_hmac_key;
+	struct gss_keyblock	  sc_session_kb;
 };
 
 struct sk_hdr {
@@ -85,24 +85,6 @@ struct sk_wire {
 	rawobj_t		skw_header;
 	rawobj_t		skw_cipher;
 	rawobj_t		skw_hmac;
-};
-
-static struct sk_crypt_type sk_crypt_types[] = {
-	[SK_CRYPT_AES256_CTR] = {
-		.sct_name = "ctr(aes)",
-		.sct_bytes = 32,
-	},
-};
-
-static struct sk_hmac_type sk_hmac_types[] = {
-	[SK_HMAC_SHA256] = {
-		.sht_name = "hmac(sha256)",
-		.sht_bytes = 32,
-	},
-	[SK_HMAC_SHA512] = {
-		.sht_name = "hmac(sha512)",
-		.sht_bytes = 64,
-	},
 };
 
 static inline unsigned long sk_block_mask(unsigned long len, int blocksize)
@@ -147,22 +129,18 @@ void sk_construct_rfc3686_iv(__u8 *iv, __u32 nonce, __u64 partial_iv)
 	memcpy(iv, &ctr, sizeof(ctr));
 }
 
-static int sk_init_keys(struct sk_ctx *skc)
-{
-	return gss_keyblock_init(&skc->sc_session_kb,
-				 sk_crypt_types[skc->sc_crypt].sct_name, 0);
-}
-
 static int sk_fill_context(rawobj_t *inbuf, struct sk_ctx *skc)
 {
 	char *ptr = inbuf->data;
 	char *end = inbuf->data + inbuf->len;
-	__u32 tmp;
+	char sk_hmac[CRYPTO_MAX_ALG_NAME];
+	char sk_crypt[CRYPTO_MAX_ALG_NAME];
+	u32 tmp;
 
 	/* see sk_serialize_kctx() for format from userspace side */
 	/*  1. Version */
 	if (gss_get_bytes(&ptr, end, &tmp, sizeof(tmp))) {
-		CERROR("Failed to read shared key interface version");
+		CERROR("Failed to read shared key interface version\n");
 		return -1;
 	}
 	if (tmp != SK_INTERFACE_VERSION) {
@@ -171,28 +149,34 @@ static int sk_fill_context(rawobj_t *inbuf, struct sk_ctx *skc)
 	}
 
 	/* 2. HMAC type */
-	if (gss_get_bytes(&ptr, end, &skc->sc_hmac, sizeof(skc->sc_hmac))) {
-		CERROR("Failed to read HMAC algorithm type");
+	if (gss_get_bytes(&ptr, end, &sk_hmac, sizeof(sk_hmac))) {
+		CERROR("Failed to read HMAC algorithm type\n");
 		return -1;
 	}
-	if (skc->sc_hmac <= SK_HMAC_EMPTY || skc->sc_hmac >= SK_HMAC_MAX) {
-		CERROR("Invalid hmac type: %d\n", skc->sc_hmac);
+
+	skc->sc_hmac = cfs_crypto_hash_alg(sk_hmac);
+	if (skc->sc_hmac != CFS_HASH_ALG_NULL &&
+	    skc->sc_hmac != CFS_HASH_ALG_SHA256 &&
+	    skc->sc_hmac != CFS_HASH_ALG_SHA512) {
+		CERROR("Invalid hmac type: %s\n", sk_hmac);
 		return -1;
 	}
 
 	/* 3. crypt type */
-	if (gss_get_bytes(&ptr, end, &skc->sc_crypt, sizeof(skc->sc_crypt))) {
-		CERROR("Failed to read crypt algorithm type");
+	if (gss_get_bytes(&ptr, end, &sk_crypt, sizeof(sk_crypt))) {
+		CERROR("Failed to read crypt algorithm type\n");
 		return -1;
 	}
-	if (skc->sc_crypt <= SK_CRYPT_EMPTY || skc->sc_crypt >= SK_CRYPT_MAX) {
-		CERROR("Invalid crypt type: %d\n", skc->sc_crypt);
+
+	skc->sc_crypt = cfs_crypto_crypt_alg(sk_crypt);
+	if (skc->sc_crypt == CFS_CRYPT_ALG_UNKNOWN) {
+		CERROR("Invalid crypt type: %s\n", sk_crypt);
 		return -1;
 	}
 
 	/* 4. expiration time */
 	if (gss_get_bytes(&ptr, end, &tmp, sizeof(tmp))) {
-		CERROR("Failed to read context expiration time");
+		CERROR("Failed to read context expiration time\n");
 		return -1;
 	}
 	skc->sc_expire = tmp + ktime_get_real_seconds();
@@ -200,20 +184,20 @@ static int sk_fill_context(rawobj_t *inbuf, struct sk_ctx *skc)
 	/* 5. host random is used as nonce for encryption */
 	if (gss_get_bytes(&ptr, end, &skc->sc_host_random,
 			  sizeof(skc->sc_host_random))) {
-		CERROR("Failed to read host random ");
+		CERROR("Failed to read host random\n");
 		return -1;
 	}
 
 	/* 6. peer random is used as nonce for decryption */
 	if (gss_get_bytes(&ptr, end, &skc->sc_peer_random,
 			  sizeof(skc->sc_peer_random))) {
-		CERROR("Failed to read peer random ");
+		CERROR("Failed to read peer random\n");
 		return -1;
 	}
 
 	/* 7. HMAC key */
 	if (gss_get_rawobj(&ptr, end, &skc->sc_hmac_key)) {
-		CERROR("Failed to read HMAC key");
+		CERROR("Failed to read HMAC key\n");
 		return -1;
 	}
 	if (skc->sc_hmac_key.len <= SK_MIN_SIZE) {
@@ -224,7 +208,7 @@ static int sk_fill_context(rawobj_t *inbuf, struct sk_ctx *skc)
 
 	/* 8. Session key, can be empty if not using privacy mode */
 	if (gss_get_rawobj(&ptr, end, &skc->sc_session_kb.kb_key)) {
-		CERROR("Failed to read session key");
+		CERROR("Failed to read session key\n");
 		return -1;
 	}
 
@@ -262,7 +246,8 @@ __u32 gss_import_sec_context_sk(rawobj_t *inbuf, struct gss_ctx *gss_context)
 	/* Only privacy mode needs to initialize keys */
 	if (skc->sc_session_kb.kb_key.len > 0) {
 		privacy = true;
-		if (sk_init_keys(skc))
+		if (gss_keyblock_init(&skc->sc_session_kb,
+				      cfs_crypto_crypt_name(skc->sc_crypt), 0))
 			goto out_err;
 	}
 
@@ -303,7 +288,9 @@ __u32 gss_copy_reverse_context_sk(struct gss_ctx *gss_context_old,
 
 	/* Only privacy mode needs to initialize keys */
 	if (skc_new->sc_session_kb.kb_key.len > 0)
-		if (sk_init_keys(skc_new))
+		if (gss_keyblock_init(&skc_new->sc_session_kb,
+				      cfs_crypto_crypt_name(skc_new->sc_crypt),
+				      0))
 			goto out_err;
 
 	gss_context_new->internal_ctx_id = skc_new;
@@ -327,24 +314,26 @@ __u32 gss_inquire_context_sk(struct gss_ctx *gss_context,
 }
 
 static
-__u32 sk_make_hmac(char *alg_name, rawobj_t *key, int msg_count, rawobj_t *msgs,
-		   int iov_count, lnet_kiov_t *iovs, rawobj_t *token)
+u32 sk_make_hmac(enum cfs_crypto_hash_alg algo, rawobj_t *key, int msg_count,
+		 rawobj_t *msgs, int iov_count, lnet_kiov_t *iovs,
+		 rawobj_t *token)
 {
-	struct crypto_hash *tfm;
-	int rc;
+	struct cfs_crypto_hash_desc *desc;
+	int rc2, rc;
 
-	tfm = crypto_alloc_hash(alg_name, 0, 0);
-	if (IS_ERR(tfm))
-		return GSS_S_FAILURE;
+	desc = cfs_crypto_hash_init(algo, key->data, key->len);
+	if (IS_ERR(desc)) {
+		rc = PTR_ERR(desc);
+		goto out_init_failed;
+	}
 
-	rc = GSS_S_FAILURE;
-	LASSERT(token->len >= crypto_hash_digestsize(tfm));
-	if (!gss_digest_hmac(tfm, key, NULL, msg_count, msgs, iov_count, iovs,
-			    token))
-		rc = GSS_S_COMPLETE;
-
-	crypto_free_hash(tfm);
-	return rc;
+	rc2 = gss_digest_hash(desc, NULL, msg_count, msgs, iov_count, iovs,
+			      token);
+	rc = cfs_crypto_hash_final(desc, key->data, &key->len);
+	if (!rc && rc2)
+		rc = rc2;
+out_init_failed:
+	return rc ? GSS_S_FAILURE : GSS_S_COMPLETE;
 }
 
 static
@@ -356,20 +345,22 @@ __u32 gss_get_mic_sk(struct gss_ctx *gss_context,
 		     rawobj_t *token)
 {
 	struct sk_ctx *skc = gss_context->internal_ctx_id;
-	return sk_make_hmac(sk_hmac_types[skc->sc_hmac].sht_name,
+
+	return sk_make_hmac(skc->sc_hmac,
 			    &skc->sc_hmac_key, message_count, messages,
 			    iov_count, iovs, token);
 }
 
 static
-__u32 sk_verify_hmac(struct sk_hmac_type *sht, rawobj_t *key, int message_count,
-			 rawobj_t *messages, int iov_count, lnet_kiov_t *iovs,
-			 rawobj_t *token)
+u32 sk_verify_hmac(enum cfs_crypto_hash_alg algo, rawobj_t *key,
+		   int message_count, rawobj_t *messages,
+		   int iov_count, lnet_kiov_t *iovs,
+		   rawobj_t *token)
 {
 	rawobj_t checksum = RAWOBJ_EMPTY;
 	__u32 rc = GSS_S_FAILURE;
 
-	checksum.len = sht->sht_bytes;
+	checksum.len = cfs_crypto_hash_digestsize(algo);
 	if (token->len < checksum.len) {
 		CDEBUG(D_SEC, "Token received too short, expected %d "
 		       "received %d\n", token->len, checksum.len);
@@ -380,8 +371,8 @@ __u32 sk_verify_hmac(struct sk_hmac_type *sht, rawobj_t *key, int message_count,
 	if (!checksum.data)
 		return rc;
 
-	if (sk_make_hmac(sht->sht_name, key, message_count, messages,
-			 iov_count, iovs, &checksum)) {
+	if (sk_make_hmac(algo, key, message_count,
+			 messages, iov_count, iovs, &checksum)) {
 		CDEBUG(D_SEC, "Failed to create checksum to validate\n");
 		goto cleanup;
 	}
@@ -404,23 +395,20 @@ cleanup:
  * to decrypt up to the number of bytes actually specified from the sender
  * (bd_nob) otherwise the calulated HMAC will be incorrect. */
 static
-__u32 sk_verify_bulk_hmac(struct sk_hmac_type *sht, rawobj_t *key,
-			  int msgcnt, rawobj_t *msgs, int iovcnt,
-			  lnet_kiov_t *iovs, int iov_bytes, rawobj_t *token)
+u32 sk_verify_bulk_hmac(enum cfs_crypto_hash_alg sc_hmac, rawobj_t *key,
+			int msgcnt, rawobj_t *msgs, int iovcnt,
+			lnet_kiov_t *iovs, int iov_bytes, rawobj_t *token)
 {
+	struct cfs_crypto_hash_desc *desc;
 	rawobj_t checksum = RAWOBJ_EMPTY;
-	struct crypto_hash *tfm;
-	struct hash_desc desc = {
-		.tfm = NULL,
-		.flags = 0,
-	};
+	struct ahash_request *req;
 	struct scatterlist sg[1];
+	int rc = GSS_S_FAILURE;
 	struct sg_table sgt;
 	int bytes;
 	int i;
-	int rc = GSS_S_FAILURE;
 
-	checksum.len = sht->sht_bytes;
+	checksum.len = cfs_crypto_hash_digestsize(sc_hmac);
 	if (token->len < checksum.len) {
 		CDEBUG(D_SEC, "Token received too short, expected %d "
 		       "received %d\n", token->len, checksum.len);
@@ -431,31 +419,21 @@ __u32 sk_verify_bulk_hmac(struct sk_hmac_type *sht, rawobj_t *key,
 	if (!checksum.data)
 		return rc;
 
-	tfm = crypto_alloc_hash(sht->sht_name, 0, 0);
-	if (IS_ERR(tfm))
+	desc = cfs_crypto_hash_init(sc_hmac, key->data, key->len);
+	if (IS_ERR(desc))
 		goto cleanup;
 
-	desc.tfm = tfm;
-
-	LASSERT(token->len >= crypto_hash_digestsize(tfm));
-
-	rc = crypto_hash_setkey(tfm, key->data, key->len);
-	if (rc)
-		goto hash_cleanup;
-
-	rc = crypto_hash_init(&desc);
-	if (rc)
-		goto hash_cleanup;
-
+	req = (struct ahash_request *) desc;
 	for (i = 0; i < msgcnt; i++) {
-		if (msgs[i].len == 0)
+		if (!msgs[i].len)
 			continue;
 
 		rc = gss_setup_sgtable(&sgt, sg, msgs[i].data, msgs[i].len);
 		if (rc != 0)
 			goto hash_cleanup;
 
-		rc = crypto_hash_update(&desc, sg, msgs[i].len);
+		ahash_request_set_crypt(req, sg, NULL, msgs[i].len);
+		rc = crypto_ahash_update(req);
 		if (rc) {
 			gss_teardown_sgtable(&sgt);
 			goto hash_cleanup;
@@ -474,12 +452,11 @@ __u32 sk_verify_bulk_hmac(struct sk_hmac_type *sht, rawobj_t *key,
 		sg_init_table(sg, 1);
 		sg_set_page(&sg[0], iovs[i].kiov_page, bytes,
 			    iovs[i].kiov_offset);
-		rc = crypto_hash_update(&desc, sg, bytes);
+		ahash_request_set_crypt(req, sg, NULL, bytes);
+		rc = crypto_ahash_update(req);
 		if (rc)
 			goto hash_cleanup;
 	}
-
-	crypto_hash_final(&desc, checksum.data);
 
 	if (memcmp(token->data, checksum.data, checksum.len)) {
 		rc = GSS_S_BAD_SIG;
@@ -489,7 +466,7 @@ __u32 sk_verify_bulk_hmac(struct sk_hmac_type *sht, rawobj_t *key,
 	rc = GSS_S_COMPLETE;
 
 hash_cleanup:
-	crypto_free_hash(tfm);
+	cfs_crypto_hash_final(desc, checksum.data, &checksum.len);
 
 cleanup:
 	OBD_FREE_LARGE(checksum.data, checksum.len);
@@ -506,7 +483,8 @@ __u32 gss_verify_mic_sk(struct gss_ctx *gss_context,
 			rawobj_t *token)
 {
 	struct sk_ctx *skc = gss_context->internal_ctx_id;
-	return sk_verify_hmac(&sk_hmac_types[skc->sc_hmac], &skc->sc_hmac_key,
+
+	return sk_verify_hmac(skc->sc_hmac, &skc->sc_hmac_key,
 			      message_count, messages, iov_count, iovs, token);
 }
 
@@ -516,7 +494,7 @@ __u32 gss_wrap_sk(struct gss_ctx *gss_context, rawobj_t *gss_header,
 		    rawobj_t *token)
 {
 	struct sk_ctx *skc = gss_context->internal_ctx_id;
-	struct sk_hmac_type *sht = &sk_hmac_types[skc->sc_hmac];
+	size_t sht_bytes = cfs_crypto_hash_digestsize(skc->sc_hmac);
 	struct sk_wire skw;
 	struct sk_hdr skh;
 	rawobj_t msgbufs[3];
@@ -540,7 +518,7 @@ __u32 gss_wrap_sk(struct gss_ctx *gss_context, rawobj_t *gss_header,
 
 	sk_construct_rfc3686_iv(local_iv, skc->sc_host_random, skh.skh_iv);
 	skw.skw_cipher.data = skw.skw_header.data + skw.skw_header.len;
-	skw.skw_cipher.len = token->len - skw.skw_header.len - sht->sht_bytes;
+	skw.skw_cipher.len = token->len - skw.skw_header.len - sht_bytes;
 	if (gss_crypt_rawobjs(skc->sc_session_kb.kb_tfm, local_iv, 1, message,
 			      &skw.skw_cipher, 1))
 		return GSS_S_FAILURE;
@@ -551,9 +529,9 @@ __u32 gss_wrap_sk(struct gss_ctx *gss_context, rawobj_t *gss_header,
 	msgbufs[2] = skw.skw_cipher;
 
 	skw.skw_hmac.data = skw.skw_cipher.data + skw.skw_cipher.len;
-	skw.skw_hmac.len = sht->sht_bytes;
-	if (sk_make_hmac(sht->sht_name, &skc->sc_hmac_key, 3, msgbufs, 0,
-			 NULL, &skw.skw_hmac))
+	skw.skw_hmac.len = sht_bytes;
+	if (sk_make_hmac(skc->sc_hmac, &skc->sc_hmac_key,
+			 3, msgbufs, 0, NULL, &skw.skw_hmac))
 		return GSS_S_FAILURE;
 
 	token->len = skw.skw_header.len + skw.skw_cipher.len + skw.skw_hmac.len;
@@ -566,7 +544,7 @@ __u32 gss_unwrap_sk(struct gss_ctx *gss_context, rawobj_t *gss_header,
 		      rawobj_t *token, rawobj_t *message)
 {
 	struct sk_ctx *skc = gss_context->internal_ctx_id;
-	struct sk_hmac_type *sht = &sk_hmac_types[skc->sc_hmac];
+	size_t sht_bytes = cfs_crypto_hash_digestsize(skc->sc_hmac);
 	struct sk_wire skw;
 	struct sk_hdr *skh;
 	rawobj_t msgbufs[3];
@@ -576,15 +554,15 @@ __u32 gss_unwrap_sk(struct gss_ctx *gss_context, rawobj_t *gss_header,
 
 	LASSERT(skc->sc_session_kb.kb_tfm);
 
-	if (token->len < sizeof(skh) + sht->sht_bytes)
+	if (token->len < sizeof(skh) + sht_bytes)
 		return GSS_S_DEFECTIVE_TOKEN;
 
 	skw.skw_header.data = token->data;
 	skw.skw_header.len = sizeof(struct sk_hdr);
 	skw.skw_cipher.data = skw.skw_header.data + skw.skw_header.len;
-	skw.skw_cipher.len = token->len - skw.skw_header.len - sht->sht_bytes;
+	skw.skw_cipher.len = token->len - skw.skw_header.len - sht_bytes;
 	skw.skw_hmac.data = skw.skw_cipher.data + skw.skw_cipher.len;
-	skw.skw_hmac.len = sht->sht_bytes;
+	skw.skw_hmac.len = sht_bytes;
 
 	blocksize = crypto_blkcipher_blocksize(skc->sc_session_kb.kb_tfm);
 	if (skw.skw_cipher.len % blocksize != 0)
@@ -599,8 +577,8 @@ __u32 gss_unwrap_sk(struct gss_ctx *gss_context, rawobj_t *gss_header,
 	msgbufs[0] = skw.skw_header;
 	msgbufs[1] = *gss_header;
 	msgbufs[2] = skw.skw_cipher;
-	rc = sk_verify_hmac(sht, &skc->sc_hmac_key, 3, msgbufs, 0, NULL,
-			    &skw.skw_hmac);
+	rc = sk_verify_hmac(skc->sc_hmac, &skc->sc_hmac_key, 3, msgbufs,
+			    0, NULL, &skw.skw_hmac);
 	if (rc)
 		return rc;
 
@@ -809,7 +787,7 @@ __u32 gss_wrap_bulk_sk(struct gss_ctx *gss_context,
 		       int adj_nob)
 {
 	struct sk_ctx *skc = gss_context->internal_ctx_id;
-	struct sk_hmac_type *sht = &sk_hmac_types[skc->sc_hmac];
+	size_t sht_bytes = cfs_crypto_hash_digestsize(skc->sc_hmac);
 	struct sk_wire skw;
 	struct sk_hdr skh;
 	__u8 local_iv[SK_IV_SIZE];
@@ -826,14 +804,14 @@ __u32 gss_wrap_bulk_sk(struct gss_ctx *gss_context,
 
 	sk_construct_rfc3686_iv(local_iv, skc->sc_host_random, skh.skh_iv);
 	skw.skw_cipher.data = skw.skw_header.data + skw.skw_header.len;
-	skw.skw_cipher.len = token->len - skw.skw_header.len - sht->sht_bytes;
+	skw.skw_cipher.len = token->len - skw.skw_header.len - sht_bytes;
 	if (sk_encrypt_bulk(skc->sc_session_kb.kb_tfm, local_iv,
 			    desc, &skw.skw_cipher, adj_nob))
 		return GSS_S_FAILURE;
 
 	skw.skw_hmac.data = skw.skw_cipher.data + skw.skw_cipher.len;
-	skw.skw_hmac.len = sht->sht_bytes;
-	if (sk_make_hmac(sht->sht_name, &skc->sc_hmac_key, 1, &skw.skw_cipher,
+	skw.skw_hmac.len = sht_bytes;
+	if (sk_make_hmac(skc->sc_hmac, &skc->sc_hmac_key, 1, &skw.skw_cipher,
 			 desc->bd_iov_count, GET_ENC_KIOV(desc), &skw.skw_hmac))
 		return GSS_S_FAILURE;
 
@@ -846,7 +824,7 @@ __u32 gss_unwrap_bulk_sk(struct gss_ctx *gss_context,
 			   rawobj_t *token, int adj_nob)
 {
 	struct sk_ctx *skc = gss_context->internal_ctx_id;
-	struct sk_hmac_type *sht = &sk_hmac_types[skc->sc_hmac];
+	size_t sht_bytes = cfs_crypto_hash_digestsize(skc->sc_hmac);
 	struct sk_wire skw;
 	struct sk_hdr *skh;
 	__u8 local_iv[SK_IV_SIZE];
@@ -854,25 +832,25 @@ __u32 gss_unwrap_bulk_sk(struct gss_ctx *gss_context,
 
 	LASSERT(skc->sc_session_kb.kb_tfm);
 
-	if (token->len < sizeof(skh) + sht->sht_bytes)
+	if (token->len < sizeof(skh) + sht_bytes)
 		return GSS_S_DEFECTIVE_TOKEN;
 
 	skw.skw_header.data = token->data;
 	skw.skw_header.len = sizeof(struct sk_hdr);
 	skw.skw_cipher.data = skw.skw_header.data + skw.skw_header.len;
-	skw.skw_cipher.len = token->len - skw.skw_header.len - sht->sht_bytes;
+	skw.skw_cipher.len = token->len - skw.skw_header.len - sht_bytes;
 	skw.skw_hmac.data = skw.skw_cipher.data + skw.skw_cipher.len;
-	skw.skw_hmac.len = sht->sht_bytes;
+	skw.skw_hmac.len = sht_bytes;
 
 	skh = (struct sk_hdr *)skw.skw_header.data;
 	rc = sk_verify_header(skh);
 	if (rc != GSS_S_COMPLETE)
 		return rc;
 
-	rc = sk_verify_bulk_hmac(&sk_hmac_types[skc->sc_hmac],
-				 &skc->sc_hmac_key, 1, &skw.skw_cipher,
-				 desc->bd_iov_count, GET_ENC_KIOV(desc),
-				 desc->bd_nob, &skw.skw_hmac);
+	rc = sk_verify_bulk_hmac(skc->sc_hmac, &skc->sc_hmac_key, 1,
+				 &skw.skw_cipher, desc->bd_iov_count,
+				 GET_ENC_KIOV(desc), desc->bd_nob,
+				 &skw.skw_hmac);
 	if (rc)
 		return rc;
 

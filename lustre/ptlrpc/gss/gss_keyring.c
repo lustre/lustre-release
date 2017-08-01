@@ -107,11 +107,11 @@ static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
 
 #define DUMP_KEY(key)                                                   \
 {                                                                       \
-        CWARN("DUMP KEY: %p(%d) ref %d u%u/g%u desc %s\n",              \
-              key, key->serial, atomic_read(&key->usage),               \
-              key->uid, key->gid,                                       \
-              key->description ? key->description : "n/a"               \
-             );                                                         \
+	CWARN("DUMP KEY: %p(%d) ref %d u%u/g%u desc %s\n",              \
+	      key, key->serial, ll_read_key_usage(key),                 \
+	      key->uid, key->gid,                                       \
+	      key->description ? key->description : "n/a"               \
+	     );							        \
 }
 
 #define key_cred(tsk)   ((tsk)->cred)
@@ -140,10 +140,12 @@ static inline void key_revoke_locked(struct key *key)
         set_bit(KEY_FLAG_REVOKED, &key->flags);
 }
 
-static void ctx_upcall_timeout_kr(unsigned long data)
+static void ctx_upcall_timeout_kr(cfs_timer_cb_arg_t data)
 {
-        struct ptlrpc_cli_ctx *ctx = (struct ptlrpc_cli_ctx *) data;
-        struct key            *key = ctx2gctx_keyring(ctx)->gck_key;
+	struct gss_cli_ctx_keyring *gctx_kr = cfs_from_timer(gctx_kr,
+							     &data, gck_timer);
+	struct ptlrpc_cli_ctx *ctx = &(gctx_kr->gck_base.gc_base);
+	struct key *key	= gctx_kr->gck_key;
 
         CWARN("ctx %p, key %p\n", ctx, key);
 
@@ -162,11 +164,9 @@ static void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, time64_t timeout)
 
 	CDEBUG(D_SEC, "ctx %p: start timer %llds\n", ctx, timeout);
 
-	init_timer(timer);
+	cfs_timer_setup(timer, ctx_upcall_timeout_kr,
+			(unsigned long)gctx_kr, 0);
 	timer->expires = cfs_time_seconds(timeout) + jiffies;
-	timer->data = (unsigned long ) ctx;
-	timer->function = ctx_upcall_timeout_kr;
-
 	add_timer(timer);
 }
 
@@ -195,27 +195,27 @@ static
 struct ptlrpc_cli_ctx *ctx_create_kr(struct ptlrpc_sec *sec,
                                      struct vfs_cred *vcred)
 {
-        struct ptlrpc_cli_ctx      *ctx;
-        struct gss_cli_ctx_keyring *gctx_kr;
+	struct ptlrpc_cli_ctx      *ctx;
+	struct gss_cli_ctx_keyring *gctx_kr;
 
-        OBD_ALLOC_PTR(gctx_kr);
-        if (gctx_kr == NULL)
-                return NULL;
+	OBD_ALLOC_PTR(gctx_kr);
+	if (gctx_kr == NULL)
+		return NULL;
 
-        OBD_ALLOC_PTR(gctx_kr->gck_timer);
-        if (gctx_kr->gck_timer == NULL) {
-                OBD_FREE_PTR(gctx_kr);
-                return NULL;
-        }
-        init_timer(gctx_kr->gck_timer);
+	OBD_ALLOC_PTR(gctx_kr->gck_timer);
+	if (gctx_kr->gck_timer == NULL) {
+		OBD_FREE_PTR(gctx_kr);
+		return NULL;
+	}
+	cfs_timer_setup(gctx_kr->gck_timer, NULL, 0, 0);
 
-        ctx = &gctx_kr->gck_base.gc_base;
+	ctx = &gctx_kr->gck_base.gc_base;
 
-        if (gss_cli_ctx_init_common(sec, ctx, &gss_keyring_ctxops, vcred)) {
-                OBD_FREE_PTR(gctx_kr->gck_timer);
-                OBD_FREE_PTR(gctx_kr);
-                return NULL;
-        }
+	if (gss_cli_ctx_init_common(sec, ctx, &gss_keyring_ctxops, vcred)) {
+		OBD_FREE_PTR(gctx_kr->gck_timer);
+		OBD_FREE_PTR(gctx_kr);
+		return NULL;
+	}
 
 	ctx->cc_expire = ktime_get_real_seconds() + KEYRING_UPCALL_TIMEOUT;
 	clear_bit(PTLRPC_CTX_NEW_BIT, &ctx->cc_flags);
@@ -386,7 +386,7 @@ static int key_set_payload(struct key *key, unsigned int index,
 static void bind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
 {
 	LASSERT(atomic_read(&ctx->cc_refcount) > 0);
-        LASSERT(atomic_read(&key->usage) > 0);
+	LASSERT(ll_read_key_usage(key) > 0);
 	LASSERT(ctx2gctx_keyring(ctx)->gck_key == NULL);
 	LASSERT(!key_get_payload(key, 0));
 
@@ -861,7 +861,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 	if (likely(ctx)) {
 		LASSERT(atomic_read(&ctx->cc_refcount) >= 1);
 		LASSERT(ctx2gctx_keyring(ctx)->gck_key == key);
-		LASSERT(atomic_read(&key->usage) >= 2);
+		LASSERT(ll_read_key_usage(key) >= 2);
 
 		/* simply take a ref and return. it's upper layer's
 		 * responsibility to detect & replace dead ctx. */
@@ -1101,7 +1101,7 @@ int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
 			   atomic_read(&gctx->gc_seq),
 			   gctx->gc_win,
 			   key ? key->serial : 0,
-			   key ? atomic_read(&key->usage) : 0,
+			   key ? ll_read_key_usage(key) : 0,
 			   gss_handle_to_u64(&gctx->gc_handle),
 			   gss_handle_to_u64(&gctx->gc_svc_handle),
 			   mech);

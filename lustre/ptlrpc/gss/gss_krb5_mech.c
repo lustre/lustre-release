@@ -97,7 +97,7 @@ static struct krb5_enctype enctypes[] = {
 	[ENCTYPE_DES3_CBC_RAW] = {		/* des3-hmac-sha1 */
 		.ke_dispname	= "des3-hmac-sha1",
 		.ke_enc_name	= "cbc(des3_ede)",
-		.ke_hash_name	= "hmac(sha1)",
+		.ke_hash_name	= "sha1",
 		.ke_hash_size	= 20,
 		.ke_conf_size	= 8,
 		.ke_hash_hmac	= 1,
@@ -105,7 +105,7 @@ static struct krb5_enctype enctypes[] = {
 	[ENCTYPE_AES128_CTS_HMAC_SHA1_96] = {	/* aes128-cts */
 		.ke_dispname	= "aes128-cts-hmac-sha1-96",
 		.ke_enc_name	= "cbc(aes)",
-		.ke_hash_name	= "hmac(sha1)",
+		.ke_hash_name	= "sha1",
 		.ke_hash_size	= 12,
 		.ke_conf_size	= 16,
 		.ke_hash_hmac	= 1,
@@ -113,7 +113,7 @@ static struct krb5_enctype enctypes[] = {
 	[ENCTYPE_AES256_CTS_HMAC_SHA1_96] = {	/* aes256-cts */
 		.ke_dispname	= "aes256-cts-hmac-sha1-96",
 		.ke_enc_name	= "cbc(aes)",
-		.ke_hash_name	= "hmac(sha1)",
+		.ke_hash_name	= "sha1",
 		.ke_hash_size	= 12,
 		.ke_conf_size	= 16,
 		.ke_hash_hmac	= 1,
@@ -121,33 +121,31 @@ static struct krb5_enctype enctypes[] = {
 	[ENCTYPE_ARCFOUR_HMAC] = {		/* arcfour-hmac-md5 */
 		.ke_dispname	= "arcfour-hmac-md5",
 		.ke_enc_name	= "ecb(arc4)",
-		.ke_hash_name	= "hmac(md5)",
+		.ke_hash_name	= "md5",
 		.ke_hash_size	= 16,
 		.ke_conf_size	= 8,
 		.ke_hash_hmac	= 1,
 	}
 };
 
-#define MAX_ENCTYPES    sizeof(enctypes)/sizeof(struct krb5_enctype)
-
 static const char * enctype2str(__u32 enctype)
 {
-        if (enctype < MAX_ENCTYPES && enctypes[enctype].ke_dispname)
-                return enctypes[enctype].ke_dispname;
+	if (enctype < ARRAY_SIZE(enctypes) && enctypes[enctype].ke_dispname)
+		return enctypes[enctype].ke_dispname;
 
-        return "unknown";
+	return "unknown";
 }
 
 static
 int krb5_init_keys(struct krb5_ctx *kctx)
 {
-        struct krb5_enctype *ke;
+	struct krb5_enctype *ke;
 
-        if (kctx->kc_enctype >= MAX_ENCTYPES ||
-            enctypes[kctx->kc_enctype].ke_hash_size == 0) {
-                CERROR("unsupported enctype %x\n", kctx->kc_enctype);
-                return -1;
-        }
+	if (kctx->kc_enctype >= ARRAY_SIZE(enctypes) ||
+	    enctypes[kctx->kc_enctype].ke_hash_size == 0) {
+		CERROR("unsupported enctype %x\n", kctx->kc_enctype);
+		return -1;
+	}
 
         ke = &enctypes[kctx->kc_enctype];
 
@@ -449,39 +447,58 @@ __s32 krb5_make_checksum(__u32 enctype,
 			 int iovcnt, lnet_kiov_t *iovs,
 			 rawobj_t *cksum)
 {
-        struct krb5_enctype   *ke = &enctypes[enctype];
-	struct crypto_hash    *tfm;
-	rawobj_t	       hdr;
-        __u32                  code = GSS_S_FAILURE;
-        int                    rc;
+	struct krb5_enctype *ke = &enctypes[enctype];
+	struct cfs_crypto_hash_desc *desc = NULL;
+	enum cfs_crypto_hash_alg hash_algo;
+	rawobj_t hdr;
+	int rc;
 
-	if (!(tfm = crypto_alloc_hash(ke->ke_hash_name, 0, 0))) {
-                CERROR("failed to alloc TFM: %s\n", ke->ke_hash_name);
-                return GSS_S_FAILURE;
-        }
+	hash_algo = cfs_crypto_hash_alg(ke->ke_hash_name);
 
-	cksum->len = crypto_hash_digestsize(tfm);
-        OBD_ALLOC_LARGE(cksum->data, cksum->len);
-        if (!cksum->data) {
-                cksum->len = 0;
-                goto out_tfm;
-        }
+	/* For the cbc(des) case we want md5 instead of hmac(md5) */
+	if (strcmp(ke->ke_enc_name, "cbc(des)"))
+		desc = cfs_crypto_hash_init(hash_algo, kb->kb_key.data,
+					   kb->kb_key.len);
+	else
+		desc = cfs_crypto_hash_init(hash_algo, NULL, 0);
+	if (IS_ERR(desc)) {
+		rc = PTR_ERR(desc);
+		CERROR("failed to alloc hash %s : rc = %d\n",
+		       ke->ke_hash_name, rc);
+		goto out_no_hash;
+	}
+
+	cksum->len = cfs_crypto_hash_digestsize(hash_algo);
+	OBD_ALLOC_LARGE(cksum->data, cksum->len);
+	if (!cksum->data) {
+		cksum->len = 0;
+		rc = -ENOMEM;
+		goto out_free_hash;
+	}
 
 	hdr.data = (__u8 *)khdr;
 	hdr.len = sizeof(*khdr);
 
-        if (ke->ke_hash_hmac)
-		rc = gss_digest_hmac(tfm, &kb->kb_key,
-				     &hdr, msgcnt, msgs, iovcnt, iovs, cksum);
-        else
-		rc = gss_digest_norm(tfm, kb,
-				     &hdr, msgcnt, msgs, iovcnt, iovs, cksum);
+	rc = gss_digest_hash(desc, &hdr, msgcnt, msgs,
+			     iovcnt, iovs, cksum);
+	if (rc)
+		goto out_free_hash;
 
-        if (rc == 0)
-                code = GSS_S_COMPLETE;
-out_tfm:
-	crypto_free_hash(tfm);
-        return code;
+	if (!ke->ke_hash_hmac) {
+		LASSERT(kb->kb_tfm);
+
+		cfs_crypto_hash_final(desc, cksum->data, &cksum->len);
+		rc = gss_crypt_generic(kb->kb_tfm, 0, NULL,
+				       cksum->data, cksum->data,
+				       cksum->len);
+		goto out_no_hash;
+	}
+
+out_free_hash:
+	if (desc)
+		cfs_crypto_hash_final(desc, cksum->data, &cksum->len);
+out_no_hash:
+	return rc ? GSS_S_FAILURE : GSS_S_COMPLETE;
 }
 
 static void fill_krb5_header(struct krb5_ctx *kctx,
@@ -563,7 +580,8 @@ __u32 gss_get_mic_kerberos(struct gss_ctx *gctx,
         struct krb5_ctx     *kctx = gctx->internal_ctx_id;
         struct krb5_enctype *ke = &enctypes[kctx->kc_enctype];
         struct krb5_header  *khdr;
-        rawobj_t             cksum = RAWOBJ_EMPTY;
+	rawobj_t cksum = RAWOBJ_EMPTY;
+	u32 major;
 
         /* fill krb5 header */
         LASSERT(token->len >= sizeof(*khdr));
@@ -571,18 +589,20 @@ __u32 gss_get_mic_kerberos(struct gss_ctx *gctx,
         fill_krb5_header(kctx, khdr, 0);
 
         /* checksum */
-        if (krb5_make_checksum(kctx->kc_enctype, &kctx->kc_keyc,
-                               khdr, msgcnt, msgs, iovcnt, iovs, &cksum))
-                return GSS_S_FAILURE;
+	if (krb5_make_checksum(kctx->kc_enctype, &kctx->kc_keyc, khdr,
+			       msgcnt, msgs, iovcnt, iovs, &cksum))
+		GOTO(out_free_cksum, major = GSS_S_FAILURE);
 
         LASSERT(cksum.len >= ke->ke_hash_size);
         LASSERT(token->len >= sizeof(*khdr) + ke->ke_hash_size);
         memcpy(khdr + 1, cksum.data + cksum.len - ke->ke_hash_size,
                ke->ke_hash_size);
 
-        token->len = sizeof(*khdr) + ke->ke_hash_size;
-        rawobj_free(&cksum);
-        return GSS_S_COMPLETE;
+	token->len = sizeof(*khdr) + ke->ke_hash_size;
+	major = GSS_S_COMPLETE;
+out_free_cksum:
+	rawobj_free(&cksum);
+	return major;
 }
 
 static
@@ -593,11 +613,11 @@ __u32 gss_verify_mic_kerberos(struct gss_ctx *gctx,
                               lnet_kiov_t *iovs,
                               rawobj_t *token)
 {
-        struct krb5_ctx     *kctx = gctx->internal_ctx_id;
-        struct krb5_enctype *ke = &enctypes[kctx->kc_enctype];
-        struct krb5_header  *khdr;
-        rawobj_t             cksum = RAWOBJ_EMPTY;
-        __u32                major;
+	struct krb5_ctx *kctx = gctx->internal_ctx_id;
+	struct krb5_enctype *ke = &enctypes[kctx->kc_enctype];
+	struct krb5_header *khdr;
+	rawobj_t cksum = RAWOBJ_EMPTY;
+	u32 major;
 
         if (token->len < sizeof(*khdr)) {
                 CERROR("short signature: %u\n", token->len);
@@ -609,31 +629,32 @@ __u32 gss_verify_mic_kerberos(struct gss_ctx *gctx,
         major = verify_krb5_header(kctx, khdr, 0);
         if (major != GSS_S_COMPLETE) {
                 CERROR("bad krb5 header\n");
-                return major;
+		goto out;
         }
 
         if (token->len < sizeof(*khdr) + ke->ke_hash_size) {
                 CERROR("short signature: %u, require %d\n",
                        token->len, (int) sizeof(*khdr) + ke->ke_hash_size);
-                return GSS_S_FAILURE;
+		GOTO(out, major = GSS_S_FAILURE);
         }
 
         if (krb5_make_checksum(kctx->kc_enctype, &kctx->kc_keyc,
                                khdr, msgcnt, msgs, iovcnt, iovs, &cksum)) {
                 CERROR("failed to make checksum\n");
-                return GSS_S_FAILURE;
+		GOTO(out_free_cksum, major = GSS_S_FAILURE);
         }
 
         LASSERT(cksum.len >= ke->ke_hash_size);
         if (memcmp(khdr + 1, cksum.data + cksum.len - ke->ke_hash_size,
                    ke->ke_hash_size)) {
                 CERROR("checksum mismatch\n");
-                rawobj_free(&cksum);
-                return GSS_S_BAD_SIG;
-        }
-
-        rawobj_free(&cksum);
-        return GSS_S_COMPLETE;
+		GOTO(out_free_cksum, major = GSS_S_BAD_SIG);
+	}
+	major = GSS_S_COMPLETE;
+out_free_cksum:
+	rawobj_free(&cksum);
+out:
+	return major;
 }
 
 /*
@@ -944,6 +965,7 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
         rawobj_t             data_desc[3], cipher;
         __u8                 conf[GSS_MAX_CIPHER_BLOCK];
 	__u8                 local_iv[16] = {0};
+	u32 major;
         int                  rc = 0;
 
         LASSERT(ke);
@@ -998,7 +1020,7 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
         /* compute checksum */
         if (krb5_make_checksum(kctx->kc_enctype, &kctx->kc_keyi,
                                khdr, 3, data_desc, 0, NULL, &cksum))
-                return GSS_S_FAILURE;
+		GOTO(out_free_cksum, major = GSS_S_FAILURE);
         LASSERT(cksum.len >= ke->ke_hash_size);
 
         /*
@@ -1020,13 +1042,13 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
         LASSERT(cipher.len >= ke->ke_conf_size + msg->len + sizeof(*khdr));
 
 	if (kctx->kc_enctype == ENCTYPE_ARCFOUR_HMAC) {
-		rawobj_t		 arc4_keye;
+		rawobj_t arc4_keye = RAWOBJ_EMPTY;
 		struct crypto_blkcipher *arc4_tfm;
 
 		if (krb5_make_checksum(ENCTYPE_ARCFOUR_HMAC, &kctx->kc_keyi,
 				       NULL, 1, &cksum, 0, NULL, &arc4_keye)) {
 			CERROR("failed to obtain arc4 enc key\n");
-			GOTO(arc4_out, rc = -EACCES);
+			GOTO(arc4_out_key, rc = -EACCES);
 		}
 
 		arc4_tfm = crypto_alloc_blkcipher("ecb(arc4)", 0, 0);
@@ -1047,29 +1069,27 @@ __u32 gss_wrap_kerberos(struct gss_ctx *gctx,
 arc4_out_tfm:
 		crypto_free_blkcipher(arc4_tfm);
 arc4_out_key:
-                rawobj_free(&arc4_keye);
-arc4_out:
-                do {} while(0); /* just to avoid compile warning */
+		rawobj_free(&arc4_keye);
         } else {
 		rc = gss_crypt_rawobjs(kctx->kc_keye.kb_tfm, local_iv, 3,
 				       data_desc, &cipher, 1);
         }
 
-        if (rc != 0) {
-                rawobj_free(&cksum);
-                return GSS_S_FAILURE;
-        }
+	if (rc)
+		GOTO(out_free_cksum, major = GSS_S_FAILURE);
 
         /* fill in checksum */
         LASSERT(token->len >= sizeof(*khdr) + cipher.len + ke->ke_hash_size);
         memcpy((char *)(khdr + 1) + cipher.len,
                cksum.data + cksum.len - ke->ke_hash_size,
                ke->ke_hash_size);
-        rawobj_free(&cksum);
 
-        /* final token length */
-        token->len = sizeof(*khdr) + cipher.len + ke->ke_hash_size;
-        return GSS_S_COMPLETE;
+	/* final token length */
+	token->len = sizeof(*khdr) + cipher.len + ke->ke_hash_size;
+	major = GSS_S_COMPLETE;
+out_free_cksum:
+	rawobj_free(&cksum);
+	return major;
 }
 
 static
@@ -1120,7 +1140,8 @@ __u32 gss_wrap_bulk_kerberos(struct gss_ctx *gctx,
         rawobj_t             cksum = RAWOBJ_EMPTY;
         rawobj_t             data_desc[1], cipher;
         __u8                 conf[GSS_MAX_CIPHER_BLOCK];
-        int                  rc = 0;
+	int rc = 0;
+	u32 major;
 
 	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
         LASSERT(ke);
@@ -1174,7 +1195,7 @@ __u32 gss_wrap_bulk_kerberos(struct gss_ctx *gctx,
 			       khdr, 1, data_desc,
 			       desc->bd_iov_count, GET_KIOV(desc),
 			       &cksum))
-		return GSS_S_FAILURE;
+		GOTO(out_free_cksum, major = GSS_S_FAILURE);
 	LASSERT(cksum.len >= ke->ke_hash_size);
 
         /*
@@ -1202,22 +1223,21 @@ __u32 gss_wrap_bulk_kerberos(struct gss_ctx *gctx,
                 rc = krb5_encrypt_bulk(kctx->kc_keye.kb_tfm, khdr,
                                        conf, desc, &cipher, adj_nob);
         }
-
-        if (rc != 0) {
-                rawobj_free(&cksum);
-                return GSS_S_FAILURE;
-        }
+	if (rc)
+		GOTO(out_free_cksum, major = GSS_S_FAILURE);
 
         /* fill in checksum */
         LASSERT(token->len >= sizeof(*khdr) + cipher.len + ke->ke_hash_size);
         memcpy((char *)(khdr + 1) + cipher.len,
                cksum.data + cksum.len - ke->ke_hash_size,
                ke->ke_hash_size);
-        rawobj_free(&cksum);
 
-        /* final token length */
-        token->len = sizeof(*khdr) + cipher.len + ke->ke_hash_size;
-        return GSS_S_COMPLETE;
+	/* final token length */
+	token->len = sizeof(*khdr) + cipher.len + ke->ke_hash_size;
+	major = GSS_S_COMPLETE;
+out_free_cksum:
+	rawobj_free(&cksum);
+	return major;
 }
 
 static

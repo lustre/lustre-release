@@ -55,7 +55,7 @@
 #include "gss_internal.h"
 #include "gss_crypto.h"
 
-int gss_keyblock_init(struct gss_keyblock *kb, char *alg_name,
+int gss_keyblock_init(struct gss_keyblock *kb, const char *alg_name,
 		      const int alg_mode)
 {
 	int rc;
@@ -270,42 +270,30 @@ out:
 	return ret;
 }
 
-int gss_digest_hmac(struct crypto_hash *tfm,
-		    rawobj_t *key,
-		    rawobj_t *hdr,
-		    int msgcnt, rawobj_t *msgs,
+int gss_digest_hash(struct cfs_crypto_hash_desc *desc,
+		    rawobj_t *hdr, int msgcnt, rawobj_t *msgs,
 		    int iovcnt, lnet_kiov_t *iovs,
 		    rawobj_t *cksum)
 {
-	struct hash_desc desc = {
-		.tfm = tfm,
-		.flags = 0,
-	};
+	struct ahash_request *req = (struct ahash_request *)desc;
 	struct scatterlist sg[1];
 	struct sg_table sgt;
+	int rc = 0;
 	int i;
-	int rc;
-
-	rc = crypto_hash_setkey(tfm, key->data, key->len);
-	if (rc)
-		return rc;
-
-	rc = crypto_hash_init(&desc);
-	if (rc)
-		return rc;
 
 	for (i = 0; i < msgcnt; i++) {
 		if (msgs[i].len == 0)
 			continue;
 
 		rc = gss_setup_sgtable(&sgt, sg, msgs[i].data, msgs[i].len);
-		if (rc != 0)
-			return rc;
-		rc = crypto_hash_update(&desc, sg, msgs[i].len);
 		if (rc)
 			return rc;
 
+		ahash_request_set_crypt(req, sg, NULL, msgs[i].len);
+		rc = crypto_ahash_update(req);
 		gss_teardown_sgtable(&sgt);
+		if (rc)
+			return rc;
 	}
 
 	for (i = 0; i < iovcnt; i++) {
@@ -315,91 +303,26 @@ int gss_digest_hmac(struct crypto_hash *tfm,
 		sg_init_table(sg, 1);
 		sg_set_page(&sg[0], iovs[i].kiov_page, iovs[i].kiov_len,
 			    iovs[i].kiov_offset);
-		rc = crypto_hash_update(&desc, sg, iovs[i].kiov_len);
+
+		ahash_request_set_crypt(req, sg, NULL, iovs[i].kiov_len);
+		rc = crypto_ahash_update(req);
 		if (rc)
 			return rc;
 	}
 
 	if (hdr) {
 		rc = gss_setup_sgtable(&sgt, sg, hdr, sizeof(*hdr));
-		if (rc != 0)
-			return rc;
-		rc = crypto_hash_update(&desc, sg, sizeof(hdr->len));
 		if (rc)
 			return rc;
 
+		ahash_request_set_crypt(req, sg, NULL, hdr->len);
+		rc = crypto_ahash_update(req);
 		gss_teardown_sgtable(&sgt);
-	}
-
-	return crypto_hash_final(&desc, cksum->data);
-}
-
-int gss_digest_norm(struct crypto_hash *tfm,
-		    struct gss_keyblock *kb,
-		    rawobj_t *hdr,
-		    int msgcnt, rawobj_t *msgs,
-		    int iovcnt, lnet_kiov_t *iovs,
-		    rawobj_t *cksum)
-{
-	struct hash_desc   desc;
-	struct scatterlist sg[1];
-	struct sg_table sgt;
-	int                i;
-	int                rc;
-
-	LASSERT(kb->kb_tfm);
-	desc.tfm = tfm;
-	desc.flags = 0;
-
-	rc = crypto_hash_init(&desc);
-	if (rc)
-		return rc;
-
-	for (i = 0; i < msgcnt; i++) {
-		if (msgs[i].len == 0)
-			continue;
-
-		rc = gss_setup_sgtable(&sgt, sg, msgs[i].data, msgs[i].len);
-		if (rc != 0)
-			return rc;
-
-		rc = crypto_hash_update(&desc, sg, msgs[i].len);
-		if (rc)
-			return rc;
-
-		gss_teardown_sgtable(&sgt);
-	}
-
-	for (i = 0; i < iovcnt; i++) {
-		if (iovs[i].kiov_len == 0)
-			continue;
-
-		sg_init_table(sg, 1);
-		sg_set_page(&sg[0], iovs[i].kiov_page, iovs[i].kiov_len,
-			    iovs[i].kiov_offset);
-		rc = crypto_hash_update(&desc, sg, iovs[i].kiov_len);
 		if (rc)
 			return rc;
 	}
 
-	if (hdr) {
-		rc = gss_setup_sgtable(&sgt, sg, hdr, sizeof(*hdr));
-		if (rc != 0)
-			return rc;
-
-		rc = crypto_hash_update(&desc, sg, sizeof(*hdr));
-		if (rc)
-			return rc;
-
-		gss_teardown_sgtable(&sgt);
-	}
-
-	rc = crypto_hash_final(&desc, cksum->data);
-	if (rc)
-		return rc;
-
-	return gss_crypt_generic(kb->kb_tfm, 0, NULL, cksum->data,
-				 cksum->data, cksum->len);
+	return rc;
 }
 
 int gss_add_padding(rawobj_t *msg, int msg_buflen, int blocksize)

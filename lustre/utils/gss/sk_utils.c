@@ -45,24 +45,6 @@
 
 #define SK_PBKDF2_ITERATIONS 10000
 
-static struct sk_crypt_type sk_crypt_types[] = {
-	[SK_CRYPT_AES256_CTR] = {
-		.sct_name = "ctr(aes)",
-		.sct_bytes = 32,
-	},
-};
-
-static struct sk_hmac_type sk_hmac_types[] = {
-	[SK_HMAC_SHA256] = {
-		.sht_name = "hmac(sha256)",
-		.sht_bytes = 32,
-	},
-	[SK_HMAC_SHA512] = {
-		.sht_name = "hmac(sha512)",
-		.sht_bytes = 64,
-	},
-};
-
 #ifdef _NEW_BUILD_
 # include "lgss_utils.h"
 #else
@@ -364,18 +346,22 @@ int sk_validate_config(const struct sk_keyfile_config *config)
 		printerr(0, "Null configuration passed\n");
 		return -1;
 	}
+
 	if (config->skc_version != SK_CONF_VERSION) {
 		printerr(0, "Invalid version\n");
 		return -1;
 	}
-	if (config->skc_hmac_alg >= SK_HMAC_MAX) {
+
+	if (config->skc_hmac_alg == SK_HMAC_INVALID) {
 		printerr(0, "Invalid HMAC algorithm\n");
 		return -1;
 	}
-	if (config->skc_crypt_alg >= SK_CRYPT_MAX) {
+
+	if (config->skc_crypt_alg == SK_CRYPT_INVALID) {
 		printerr(0, "Invalid crypt algorithm\n");
 		return -1;
 	}
+
 	if (config->skc_expire < 60 || config->skc_expire > INT_MAX) {
 		/* Try to limit key expiration to some reasonable minimum and
 		 * also prevent values over INT_MAX because there appears
@@ -660,8 +646,8 @@ struct sk_cred *sk_create_cred(const char *tgt, const char *nodemap,
 
 	kctx = &skc->sc_kctx;
 	kctx->skc_version = config->skc_version;
-	kctx->skc_hmac_alg = config->skc_hmac_alg;
-	kctx->skc_crypt_alg = config->skc_crypt_alg;
+	strcpy(kctx->skc_hmac_alg, sk_hmac2name(config->skc_hmac_alg));
+	strcpy(kctx->skc_crypt_alg, sk_crypt2name(config->skc_crypt_alg));
 	kctx->skc_expire = config->skc_expire;
 
 	/* key payload format is in bits, convert to bytes */
@@ -781,12 +767,12 @@ uint32_t sk_gen_params(struct sk_cred *skc)
  *
  * \retval		EVP_MD
  */
-static inline const EVP_MD *sk_hash_to_evp_md(enum sk_hmac_alg alg)
+static inline const EVP_MD *sk_hash_to_evp_md(enum cfs_crypto_hash_alg alg)
 {
 	switch (alg) {
-	case SK_HMAC_SHA256:
+	case CFS_HASH_ALG_SHA256:
 		return EVP_sha256();
-	case SK_HMAC_SHA512:
+	case CFS_HASH_ALG_SHA512:
 		return EVP_sha512();
 	default:
 		return EVP_md_null();
@@ -971,7 +957,8 @@ void sk_free_cred(struct sk_cred *skc)
  * If the size is smaller it will take copy the first N bytes necessary to
  * fill the derived key. */
 int sk_kdf(gss_buffer_desc *derived_key , gss_buffer_desc *origin_key,
-	   gss_buffer_desc *key_binding_bufs, int numbufs, int hmac_alg)
+	   gss_buffer_desc *key_binding_bufs, int numbufs,
+	   enum cfs_crypto_hash_alg hmac_alg)
 {
 	size_t remain;
 	size_t bytes;
@@ -1003,7 +990,7 @@ int sk_kdf(gss_buffer_desc *derived_key , gss_buffer_desc *origin_key,
 			return rc;
 		}
 
-		if (sk_hmac_types[hmac_alg].sht_bytes != tmp_hash.length) {
+		if (cfs_crypto_hash_digestsize(hmac_alg) != tmp_hash.length) {
 			free(tmp_hash.value);
 			return -EINVAL;
 		}
@@ -1033,9 +1020,11 @@ int sk_session_kdf(struct sk_cred *skc, lnet_nid_t client_nid,
 	struct sk_kernel_ctx *kctx = &skc->sc_kctx;
 	gss_buffer_desc *session_key = &kctx->skc_session_key;
 	gss_buffer_desc bufs[5];
+	enum cfs_crypto_crypt_alg crypt_alg;
 	int rc = -1;
 
-	session_key->length = sk_crypt_types[kctx->skc_crypt_alg].sct_bytes;
+	crypt_alg = cfs_crypto_crypt_alg(kctx->skc_crypt_alg);
+	session_key->length = cfs_crypto_crypt_keysize(crypt_alg);
 	session_key->value = malloc(session_key->length);
 	if (!session_key->value) {
 		printerr(0, "Failed to allocate memory for session key\n");
@@ -1057,7 +1046,7 @@ int sk_session_kdf(struct sk_cred *skc, lnet_nid_t client_nid,
 	bufs[4] = *server_token;
 
 	return sk_kdf(&kctx->skc_session_key, &kctx->skc_shared_key, bufs,
-		      5, kctx->skc_hmac_alg);
+		      5, cfs_crypto_hash_alg(kctx->skc_hmac_alg));
 }
 
 /* Uses the session key to create an HMAC key and encryption key.  In
@@ -1089,18 +1078,21 @@ int sk_compute_keys(struct sk_cred *skc)
 	gss_buffer_desc *session_key = &kctx->skc_session_key;
 	gss_buffer_desc *hmac_key = &kctx->skc_hmac_key;
 	gss_buffer_desc *encrypt_key = &kctx->skc_encrypt_key;
+	enum cfs_crypto_hash_alg hmac_alg;
+	enum cfs_crypto_crypt_alg crypt_alg;
 	char *encrypt = "Encrypt";
 	char *integrity = "Integrity";
 	int rc;
 
-	hmac_key->length = sk_hmac_types[kctx->skc_hmac_alg].sht_bytes;
+	hmac_alg = cfs_crypto_hash_alg(kctx->skc_hmac_alg);
+	hmac_key->length = cfs_crypto_hash_digestsize(hmac_alg);
 	hmac_key->value = malloc(hmac_key->length);
 	if (!hmac_key->value)
 		return -ENOMEM;
 
 	rc = PKCS5_PBKDF2_HMAC(integrity, -1, session_key->value,
 			       session_key->length, SK_PBKDF2_ITERATIONS,
-			       sk_hash_to_evp_md(kctx->skc_hmac_alg),
+			       sk_hash_to_evp_md(hmac_alg),
 			       hmac_key->length, hmac_key->value);
 	if (rc == 0)
 		return -EINVAL;
@@ -1109,14 +1101,15 @@ int sk_compute_keys(struct sk_cred *skc)
 	if ((skc->sc_flags & LGSS_SVC_PRIV) == 0)
 		return 0;
 
-	encrypt_key->length = sk_crypt_types[kctx->skc_crypt_alg].sct_bytes;
+	crypt_alg = cfs_crypto_crypt_alg(kctx->skc_crypt_alg);
+	encrypt_key->length = cfs_crypto_crypt_keysize(crypt_alg);
 	encrypt_key->value = malloc(encrypt_key->length);
 	if (!encrypt_key->value)
 		return -ENOMEM;
 
 	rc = PKCS5_PBKDF2_HMAC(encrypt, -1, session_key->value,
 			       session_key->length, SK_PBKDF2_ITERATIONS,
-			       sk_hash_to_evp_md(kctx->skc_hmac_alg),
+			       sk_hash_to_evp_md(hmac_alg),
 			       encrypt_key->length, encrypt_key->value);
 	if (rc == 0)
 		return -EINVAL;

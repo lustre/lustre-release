@@ -266,23 +266,6 @@ kernel SUNRPC support is required by using GSS.
 ]) # LC_CONFIG_SUNRPC
 
 #
-# LC_HAVE_CRYPTO_HASH
-#
-# 4.6 kernel commit 896545098777564212b9e91af4c973f094649aa7
-# removed crypto_hash support. Since GSS only works with
-# crypto_hash it has to be disabled for newer distros.
-#
-AC_DEFUN([LC_HAVE_CRYPTO_HASH], [
-LB_CHECK_COMPILE([if crypto_hash API is supported],
-crypto_hash, [
-	#include <linux/crypto.h>
-],[
-	crypto_hash_digestsize(NULL);
-], [], [enable_gss="no"])
-])
-]) # LC_HAVE_CRYPTO_HASH
-
-#
 # LC_CONFIG_GSS (default 'auto' (tests for dependencies, if found, enables))
 #
 # Build gss and related tools of Lustre. Currently both kernel and user space
@@ -297,7 +280,6 @@ AC_MSG_RESULT([$enable_gss])
 
 AS_IF([test "x$enable_gss" != xno], [
 	LC_CONFIG_GSS_KEYRING
-	LC_HAVE_CRYPTO_HASH
 	LC_HAVE_CRED_TGCRED
 	LC_KEY_TYPE_INSTANTIATE_2ARGS
 	sunrpc_required=$enable_gss
@@ -2850,6 +2832,45 @@ vm_operations_no_vm_area_struct, [
 ]) # LC_VM_OPERATIONS_REMOVE_VMF_ARG
 
 #
+# LC_HAVE_KEY_USAGE_REFCOUNT
+#
+# Kernel version 4.11 commit fff292914d3a2f1efd05ca71c2ba72a3c663201e
+# converted key.usage from atomic_t to refcount_t.
+#
+AC_DEFUN([LC_HAVE_KEY_USAGE_REFCOUNT], [
+LB_CHECK_COMPILE([if 'key.usage' is refcount_t],
+key_usage_refcount, [
+	#include <linux/key.h>
+],[
+	struct key key = { };
+
+	refcount_read(&key.usage);
+],[
+	AC_DEFINE(HAVE_KEY_USAGE_REFCOUNT, 1, [key.usage is of type refcount_t])
+])
+]) #LC_HAVE_KEY_USAGE_REFCOUNT
+
+#
+# LC_HAVE_CRYPTO_MAX_ALG_NAME_128
+#
+# Kernel version 4.11 commit f437a3f477cce402dbec6537b29e9e33962c9f73
+# switched CRYPTO_MAX_ALG_NAME from 64 to 128.
+#
+AC_DEFUN([LC_HAVE_CRYPTO_MAX_ALG_NAME_128], [
+LB_CHECK_COMPILE([if 'CRYPTO_MAX_ALG_NAME' is 128],
+crypto_max_alg_name, [
+	#include <linux/crypto.h>
+],[
+	#if CRYPTO_MAX_ALG_NAME != 128
+	exit(1);
+	#endif
+],[
+	AC_DEFINE(HAVE_CRYPTO_MAX_ALG_NAME_128, 1,
+		['CRYPTO_MAX_ALG_NAME' is 128])
+])
+]) # LC_HAVE_CRYPTO_MAX_ALG_NAME_128
+
+#
 # Kernel version 4.12 commit 47f38c539e9a42344ff5a664942075bd4df93876
 # CURRENT_TIME is not 64 bit time safe so it was replaced with
 # current_time()
@@ -2951,7 +2972,6 @@ bi_bdev, [
 		['bi_bdev' is available])
 ])
 ]) # LC_BI_BDEV
-
 
 #
 # LC_PROG_LINUX
@@ -3179,6 +3199,8 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 4.11
 	LC_INODEOPS_ENHANCED_GETATTR
 	LC_VM_OPERATIONS_REMOVE_VMF_ARG
+	LC_HAVE_KEY_USAGE_REFCOUNT
+	LC_HAVE_CRYPTO_MAX_ALG_NAME_128
 
 	# 4.12
 	LC_CURRENT_TIME
