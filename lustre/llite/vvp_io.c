@@ -363,32 +363,17 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	 * RPC.
 	 */
 	if (io->ci_need_write_intent) {
-		loff_t start = 0;
-		loff_t end = OBD_OBJECT_EOF;
-
 		io->ci_need_write_intent = 0;
 
 		LASSERT(io->ci_type == CIT_WRITE ||
 			cl_io_is_trunc(io) || cl_io_is_mkwrite(io));
 
-		if (io->ci_type == CIT_WRITE) {
-			if (!cl_io_is_append(io)) {
-				start = io->u.ci_rw.rw_range.cir_pos;
-				end = start + io->u.ci_rw.rw_range.cir_count;
-			}
-		} else if (cl_io_is_trunc(io)) {
-			end = io->u.ci_setattr.sa_attr.lvb_size;
-		} else { /* mkwrite */
-			pgoff_t index = io->u.ci_fault.ft_index;
-
-			start = cl_offset(io->ci_obj, index);
-			end = cl_offset(io->ci_obj, index + 1);
-		}
-
-		CDEBUG(D_VFSTRACE, DFID" write layout, type %u [%llu, %llu)\n",
+		CDEBUG(D_VFSTRACE, DFID" write layout, type %u "DEXT"\n",
 		       PFID(lu_object_fid(&obj->co_lu)), io->ci_type,
-		       start, end);
-		rc = ll_layout_write_intent(inode, start, end);
+		       PEXT(&io->ci_write_intent));
+
+		rc = ll_layout_write_intent(inode, io->ci_write_intent.e_start,
+					    io->ci_write_intent.e_end);
 		io->ci_result = rc;
 		if (!rc)
 			io->ci_need_restart = 1;

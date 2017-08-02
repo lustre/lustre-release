@@ -1912,6 +1912,10 @@ struct cl_io {
 	 * Number of pages owned by this IO. For invariant checking.
 	 */
 	unsigned	     ci_owned_nr;
+	/**
+	 * Range of write intent. Valid if ci_need_write_intent is set.
+	 */
+	struct lu_extent	ci_write_intent;
 };
 
 /** @} cl_io */

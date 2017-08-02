@@ -310,6 +310,8 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 static int lov_io_slice_init(struct lov_io *lio,
 			     struct lov_object *obj, struct cl_io *io)
 {
+	struct lu_extent ext;
+	int index;
 	int result = 0;
 	ENTRY;
 
@@ -389,6 +391,34 @@ static int lov_io_slice_init(struct lov_io *lio,
         }
 
 	result = lov_io_mirror_init(lio, obj, io);
+	if (result)
+		RETURN(result);
+
+	/* check if it needs to instantiate layout */
+	if (!(io->ci_type == CIT_WRITE || cl_io_is_mkwrite(io) ||
+	      (cl_io_is_trunc(io) && io->u.ci_setattr.sa_attr.lvb_size > 0)))
+		RETURN(0);
+
+	ext.e_start = lio->lis_pos;
+	ext.e_end = lio->lis_endpos;
+
+	/* for truncate, it only needs to instantiate the components
+	 * before the truncated size. */
+	if (cl_io_is_trunc(io)) {
+		ext.e_start = 0;
+		ext.e_end = io->u.ci_setattr.sa_attr.lvb_size;
+	}
+
+	index = 0;
+	lov_foreach_io_layout(index, lio, &ext) {
+		if (!lsm_entry_inited(obj->lo_lsm, index)) {
+			io->ci_need_write_intent = 1;
+			io->ci_write_intent = ext;
+			result = 1;
+			break;
+		}
+	}
+
 	RETURN(result);
 }
 
@@ -512,7 +542,6 @@ static loff_t lov_offset_mod(loff_t val, int delta)
 static int lov_io_iter_init(const struct lu_env *env,
 			    const struct cl_io_slice *ios)
 {
-	struct cl_io         *io = ios->cis_io;
 	struct lov_io        *lio = cl2lov_io(env, ios);
 	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
 	struct lov_io_sub    *sub;
@@ -534,16 +563,6 @@ static int lov_io_iter_init(const struct lu_env *env,
 		CDEBUG(D_VFSTRACE, "component[%d] flags %#x\n",
 		       index, lsm->lsm_entries[index]->lsme_flags);
 		if (!lsm_entry_inited(lsm, index)) {
-			/* truncate IO will trigger write intent as well, and
-			 * it's handled in lov_io_setattr_iter_init() */
-			if (io->ci_type == CIT_WRITE || cl_io_is_mkwrite(io)) {
-				io->ci_need_write_intent = 1;
-				/* execute it in main thread */
-				io->ci_pio = 0;
-				rc = -ENODATA;
-				break;
-			}
-
 			/* Read from uninitialized components should return
 			 * zero filled pages. */
 			continue;
@@ -595,7 +614,6 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 {
 	struct cl_io *io = ios->cis_io;
 	struct lov_io *lio = cl2lov_io(env, ios);
-	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
 	struct lov_stripe_md_entry *lse;
 	struct cl_io_range *range = &io->u.ci_rw.rw_range;
 	loff_t start = range->cir_pos;
@@ -655,17 +673,8 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 		io->ci_pio = 0;
 	}
 
-	if (io->ci_pio) {
-		/* it only splits IO here for parallel IO,
-		 * there will be no actual IO going to occur,
-		 * so it doesn't need to invoke lov_io_iter_init()
-		 * to initialize sub IOs. */
-		if (!lsm_entry_inited(lsm, index)) {
-			io->ci_need_write_intent = 1;
-			RETURN(-ENODATA);
-		}
+	if (io->ci_pio)
 		RETURN(0);
-	}
 
 	/*
 	 * XXX The following call should be optimized: we know, that
@@ -679,19 +688,14 @@ static int lov_io_setattr_iter_init(const struct lu_env *env,
 {
 	struct lov_io *lio = cl2lov_io(env, ios);
 	struct cl_io *io = ios->cis_io;
-	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
 	int index;
 	ENTRY;
 
 	if (cl_io_is_trunc(io) && lio->lis_pos > 0) {
 		index = lov_io_layout_at(lio, lio->lis_pos - 1);
 		/* no entry found for such offset */
-		if (index < 0) {
+		if (index < 0)
 			RETURN(io->ci_result = -ENODATA);
-		} else if (!lsm_entry_inited(lsm, index)) {
-			io->ci_need_write_intent = 1;
-			RETURN(io->ci_result = -ENODATA);
-		}
 	}
 
 	RETURN(lov_io_iter_init(env, ios));
