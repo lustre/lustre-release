@@ -5116,6 +5116,11 @@ int mgs_nodemap_cmd(const struct lu_env *env, struct mgs_device *mgs,
 		bool_switch = simple_strtoul(param, NULL, 10);
 		rc = nodemap_set_deny_unknown(nodemap_name, bool_switch);
 		break;
+	case LCFG_NODEMAP_AUDIT_MODE:
+		rc = kstrtoul(param, 10, (unsigned long *)&bool_switch);
+		if (rc == 0)
+			rc = nodemap_set_audit_mode(nodemap_name, bool_switch);
+		break;
 	case LCFG_NODEMAP_MAP_MODE:
 		if (strcmp("both", param) == 0)
 			rc = nodemap_set_mapping_mode(nodemap_name,

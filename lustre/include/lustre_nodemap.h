@@ -76,7 +76,8 @@ struct lu_nodemap {
 				 nmf_deny_unknown:1,
 				 nmf_allow_root_access:1,
 				 nmf_map_uid_only:1,
-				 nmf_map_gid_only:1;
+				 nmf_map_gid_only:1,
+				 nmf_enable_audit:1;
 	/* unique ID set by MGS */
 	unsigned int		 nm_id;
 	/* nodemap ref counter */
@@ -135,6 +136,7 @@ int nodemap_set_deny_unknown(const char *name, bool deny_unknown);
 int nodemap_set_mapping_mode(const char *name, enum nodemap_mapping_modes mode);
 int nodemap_set_squash_uid(const char *name, uid_t uid);
 int nodemap_set_squash_gid(const char *name, gid_t gid);
+int nodemap_set_audit_mode(const char *name, bool enable_audit);
 bool nodemap_can_setquota(const struct lu_nodemap *nodemap);
 int nodemap_add_idmap(const char *name, enum nodemap_id_type id_type,
 		      const __u32 map[2]);

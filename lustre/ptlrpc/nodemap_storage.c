@@ -74,6 +74,7 @@ enum nm_flag_shifts {
 	NM_FL_DENY_UNKNOWN = 0x4,
 	NM_FL_MAP_UID_ONLY = 0x8,
 	NM_FL_MAP_GID_ONLY = 0x10,
+	NM_FL_ENABLE_AUDIT = 0x20,
 };
 
 static void nodemap_cluster_key_init(struct nodemap_key *nk, unsigned int nm_id)
@@ -101,7 +102,9 @@ static void nodemap_cluster_rec_init(union nodemap_rec *nr,
 		(nodemap->nmf_map_uid_only ?
 			NM_FL_MAP_UID_ONLY : 0) |
 		(nodemap->nmf_map_gid_only ?
-			NM_FL_MAP_GID_ONLY : 0));
+			NM_FL_MAP_GID_ONLY : 0) |
+		(nodemap->nmf_enable_audit ?
+			NM_FL_ENABLE_AUDIT : 0));
 }
 
 static void nodemap_idmap_key_init(struct nodemap_key *nk, unsigned int nm_id,
@@ -751,6 +754,8 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 					flags & NM_FL_MAP_UID_ONLY;
 		nodemap->nmf_map_gid_only =
 					flags & NM_FL_MAP_GID_ONLY;
+		nodemap->nmf_enable_audit =
+					flags & NM_FL_ENABLE_AUDIT;
 
 		if (*recent_nodemap == NULL) {
 			*recent_nodemap = nodemap;

@@ -1055,6 +1055,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 		nodemap->nmf_deny_unknown = 0;
 		nodemap->nmf_map_uid_only = 0;
 		nodemap->nmf_map_gid_only = 0;
+		nodemap->nmf_enable_audit = 1;
 
 		nodemap->nm_squash_uid = NODEMAP_NOBODY_UID;
 		nodemap->nm_squash_gid = NODEMAP_NOBODY_GID;
@@ -1073,6 +1074,8 @@ struct lu_nodemap *nodemap_create(const char *name,
 				default_nodemap->nmf_map_uid_only;
 		nodemap->nmf_map_gid_only =
 				default_nodemap->nmf_map_gid_only;
+		nodemap->nmf_enable_audit =
+			default_nodemap->nmf_enable_audit;
 
 		nodemap->nm_squash_uid = default_nodemap->nm_squash_uid;
 		nodemap->nm_squash_gid = default_nodemap->nm_squash_gid;
@@ -1284,6 +1287,35 @@ bool nodemap_can_setquota(const struct lu_nodemap *nodemap)
 	return !nodemap_active || (nodemap && nodemap->nmf_allow_root_access);
 }
 EXPORT_SYMBOL(nodemap_can_setquota);
+
+/**
+ * Set the nmf_enable_audit flag to true or false.
+ * \param	name		nodemap name
+ * \param	audit_mode	if true, allow audit
+ * \retval	0 on success
+ *
+ */
+int nodemap_set_audit_mode(const char *name, bool enable_audit)
+{
+	struct lu_nodemap	*nodemap = NULL;
+	int			rc = 0;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(name);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap))
+		GOTO(out, rc = PTR_ERR(nodemap));
+
+	nodemap->nmf_enable_audit = enable_audit;
+	rc = nodemap_idx_nodemap_update(nodemap);
+
+	nm_member_revoke_locks(nodemap);
+	nodemap_putref(nodemap);
+out:
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_set_audit_mode);
+
 
 /**
  * Add a nodemap

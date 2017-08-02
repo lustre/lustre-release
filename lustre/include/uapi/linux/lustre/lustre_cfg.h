@@ -148,6 +148,7 @@ enum lcfg_command_type {
 						 *  users
 						 */
 	LCFG_NODEMAP_MAP_MODE	  = 0x00ce059, /**< set the mapping mode */
+	LCFG_NODEMAP_AUDIT_MODE	  = 0x00ce05a, /**< set the audit mode */
 };
 
 struct lustre_cfg_bufs {

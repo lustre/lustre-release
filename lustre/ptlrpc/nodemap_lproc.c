@@ -541,6 +541,33 @@ static int nodemap_deny_unknown_seq_show(struct seq_file *m, void *data)
 	return 0;
 }
 
+/**
+ * Reads and prints the audit_mode flag for the given nodemap.
+ *
+ * \param	m		seq file in proc fs
+ * \param	data		unused
+ * \retval	0		success
+ */
+static int nodemap_audit_mode_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup(m->private);
+	mutex_unlock(&active_config_lock);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("cannot find nodemap '%s': rc = %d\n",
+		       (char *)m->private, rc);
+		return rc;
+	}
+
+	seq_printf(m, "%d\n", (int)nodemap->nmf_enable_audit);
+	nodemap_putref(nodemap);
+	return 0;
+}
+
 #ifdef NODEMAP_PROC_DEBUG
 /**
  * Helper functions to set nodemap flags.
@@ -1147,6 +1174,7 @@ LPROC_SEQ_FOPS_RO(nodemap_squash_gid);
 
 LPROC_SEQ_FOPS_RO(nodemap_deny_unknown);
 LPROC_SEQ_FOPS_RO(nodemap_map_mode);
+LPROC_SEQ_FOPS_RO(nodemap_audit_mode);
 
 const struct file_operations nodemap_ranges_fops = {
 	.open			= nodemap_ranges_open,
@@ -1189,6 +1217,10 @@ static struct lprocfs_vars lprocfs_nodemap_vars[] = {
 	{
 		.name		= "map_mode",
 		.fops		= &nodemap_map_mode_fops,
+	},
+	{
+		.name		= "audit_mode",
+		.fops		= &nodemap_audit_mode_fops,
 	},
 	{
 		.name		= "squash_uid",
@@ -1247,6 +1279,10 @@ static struct lprocfs_vars lprocfs_default_nodemap_vars[] = {
 	{
 		.name		= "exports",
 		.fops		= &nodemap_exports_fops,
+	},
+	{
+		.name		= "audit_mode",
+		.fops		= &nodemap_audit_mode_fops,
 	},
 	{
 		NULL

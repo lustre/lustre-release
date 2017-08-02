@@ -884,6 +884,7 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 	case LCFG_NODEMAP_SQUASH_UID:
 	case LCFG_NODEMAP_SQUASH_GID:
 	case LCFG_NODEMAP_MAP_MODE:
+	case LCFG_NODEMAP_AUDIT_MODE:
 		if (lcfg->lcfg_bufcount != 4)
 			GOTO(out_lcfg, rc = -EINVAL);
 		nodemap_name = lustre_cfg_string(lcfg, 1);
