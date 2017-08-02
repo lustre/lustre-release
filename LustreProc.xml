@@ -1544,7 +1544,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
           minimum setting is 1 and maximum setting is 256.</para>
         <para>To set the <literal>max_rpcs_in_flight</literal> parameter, run
           the following command on the Lustre client:</para>
-        <screen>client$ lctl set_param mdc.*.max_rcps_in_flight=16</screen>
+        <screen>client$ lctl set_param mdc.*.max_rpcs_in_flight=16</screen>
         <para>The MDC <literal>max_mod_rpcs_in_flight</literal> parameter
           defines the maximum number of file system modifying RPCs that can be
           sent in parallel by a client to a MDT target. For example, the Lustre
@@ -1554,7 +1554,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
           256.</para>
         <para>To set the <literal>max_mod_rpcs_in_flight</literal> parameter,
           run the following command on the Lustre client:</para>
-        <screen>client$ lctl set_param mdc.*.max_mod_rcps_in_flight=12</screen>
+        <screen>client$ lctl set_param mdc.*.max_mod_rpcs_in_flight=12</screen>
         <para>The <literal>max_mod_rpcs_in_flight</literal> value must be
           strictly less than the <literal>max_rpcs_in_flight</literal> value.
           It must also be less or equal to the MDT
