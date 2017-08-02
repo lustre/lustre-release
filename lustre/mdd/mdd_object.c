@@ -923,7 +923,7 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 	LASSERT(handle != NULL);
 
 	/* Not recording */
-	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+	if (!recording_changelog(env, mdd))
 		RETURN(0);
 	if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
 		RETURN(0);
@@ -995,7 +995,7 @@ static int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
 	ENTRY;
 
 	/* Not recording */
-	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+	if (!recording_changelog(env, mdd))
 		RETURN(0);
 	if (!(mdd->mdd_cl.mc_mask & (1 << type)))
 		RETURN(0);

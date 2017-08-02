@@ -767,7 +767,7 @@ int mdd_declare_changelog_store(const struct lu_env *env,
 	int				 rc;
 
 	/* Not recording */
-	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+	if (!recording_changelog(env, mdd))
 		return 0;
 
 	reclen = mdd_llog_record_calc_size(env, tname, sname);
@@ -1109,7 +1109,7 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	ENTRY;
 
 	/* Not recording */
-	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+	if (!recording_changelog(env, mdd))
 		RETURN(0);
 
 	if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)

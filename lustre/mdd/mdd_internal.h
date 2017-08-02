@@ -742,4 +742,13 @@ int mdo_destroy(const struct lu_env *env, struct mdd_object *o,
         return dt_destroy(env, next, handle);
 }
 
+static inline int recording_changelog(const struct lu_env *env,
+				      struct mdd_device *mdd)
+{
+	const struct lu_ucred *uc = lu_ucred_check(env);
+
+	return (mdd->mdd_cl.mc_flags & CLM_ON) &&
+		(uc ? uc->uc_enable_audit : 1);
+}
+
 #endif

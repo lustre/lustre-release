@@ -948,6 +948,8 @@ static int hsm_init_ucred(struct lu_ucred *uc)
 	uc->uc_umask = 0777;
 	uc->uc_ginfo = NULL;
 	uc->uc_identity = NULL;
+	/* always record internal HSM activity if also enabled globally */
+	uc->uc_enable_audit = 1;
 
 	RETURN(0);
 }

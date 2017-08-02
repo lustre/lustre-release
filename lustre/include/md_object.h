@@ -676,6 +676,7 @@ struct lu_ucred {
 	struct md_identity	*uc_identity;
 	char			 uc_jobid[LUSTRE_JOBID_SIZE];
 	lnet_nid_t		 uc_nid;
+	bool			 uc_enable_audit;
 };
 
 struct lu_ucred *lu_ucred(const struct lu_env *env);

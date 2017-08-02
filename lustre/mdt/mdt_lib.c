@@ -149,6 +149,23 @@ static void ucred_set_nid(struct mdt_thread_info *info, struct lu_ucred *uc)
 		uc->uc_nid = LNET_NID_ANY;
 }
 
+static void ucred_set_audit_enabled(struct mdt_thread_info *info,
+				    struct lu_ucred *uc)
+{
+	struct lu_nodemap *nodemap = NULL;
+	bool audit = true;
+
+	if (info && info->mti_exp) {
+		nodemap = nodemap_get_from_exp(info->mti_exp);
+		if (nodemap && !IS_ERR(nodemap)) {
+			audit = nodemap->nmf_enable_audit;
+			nodemap_putref(nodemap);
+		}
+	}
+
+	uc->uc_enable_audit = audit;
+}
+
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 			  void *buf, bool drop_fs_cap)
 {
@@ -308,6 +325,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 	ucred->uc_valid = UCRED_NEW;
 	ucred_set_jobid(info, ucred);
 	ucred_set_nid(info, ucred);
+	ucred_set_audit_enabled(info, ucred);
 
 	EXIT;
 
@@ -481,6 +499,7 @@ static int old_init_ucred_common(struct mdt_thread_info *info,
 	uc->uc_valid = UCRED_OLD;
 	ucred_set_jobid(info, uc);
 	ucred_set_nid(info, uc);
+	ucred_set_audit_enabled(info, uc);
 
 	EXIT;
 
