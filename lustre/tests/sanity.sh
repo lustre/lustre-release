@@ -5366,6 +5366,68 @@ test_56aa() { # LU-5937
 }
 run_test 56aa "lfs find --size under striped dir"
 
+test_56ba() {
+	# Create composite files with one component
+	TDIR=$DIR/$tdir/1Mfiles
+	setup_56 5 1 "--component-end 1M"
+	# Create composite files with three components
+	TDIR=$DIR/$tdir/2Mfiles
+	setup_56 5 2 "-E 2M -E 4M -E 6M"
+	TDIR=$DIR/$tdir
+	# Create non-composite files
+	createmany -o $TDIR/${tfile}- 10
+
+	local nfiles=$($LFIND --component-end 1M --type f $TDIR | wc -l)
+	[[ $nfiles == 10 ]] ||
+		error "lfs find -E 1M found $nfiles != 10 files"
+
+	nfiles=$($LFIND ! -E 1M --type f $TDIR | wc -l)
+	[[ $nfiles == 25 ]] ||
+		error "lfs find ! -E 1M found $nfiles != 25 files"
+
+	# All files have a component that starts at 0
+	local nfiles=$($LFIND --component-start 0 --type f $TDIR | wc -l)
+	[[ $nfiles == 35 ]] ||
+		error "lfs find --component-start 0 found $nfiles != 35 files"
+
+	nfiles=$($LFIND --component-start 2M --type f $TDIR | wc -l)
+	[[ $nfiles == 15 ]] ||
+		error "$LFIND --component-start 2M found $nfiles != 15 files"
+
+	# All files created here have a componenet that does not starts at 2M
+	nfiles=$($LFIND ! --component-start 2M --type f $TDIR | wc -l)
+	[[ $nfiles == 35 ]] ||
+		error "$LFIND ! --component-start 2M found $nfiles != 35 files"
+
+	# Find files with a specified number of components
+	local nfiles=$($LFIND --component-count 3 --type f $TDIR | wc -l)
+	[[ $nfiles == 15 ]] ||
+		error "lfs find --component-count 3 found $nfiles != 15 files"
+
+	# Remember non-composite files have a component count of zero
+	local nfiles=$($LFIND --component-count 0 --type f $TDIR | wc -l)
+	[[ $nfiles == 10 ]] ||
+		error "lfs find --component-count 0 found $nfiles != 10 files"
+
+	nfiles=$($LFIND ! --component-count 3 --type f $TDIR | wc -l)
+	[[ $nfiles == 20 ]] ||
+		error "$LFIND ! --component-count 3 found $nfiles != 20 files"
+
+	# All files have a flag called "init"
+	local nfiles=$($LFIND --component-flags init --type f $TDIR | wc -l)
+	[[ $nfiles == 35 ]] ||
+		error "$LFIND --component-flags init found $nfiles != 35 files"
+
+	# Multi-component files will have a component not initialized
+	local nfiles=$($LFIND ! --component-flags init --type f $TDIR | wc -l)
+	[[ $nfiles == 15 ]] ||
+		error "$LFIND !--component-flags init found $nfiles != 15 files"
+
+	rm -rf $TDIR
+
+}
+run_test 56ba "test lfs find --component-end, -start, -count, and -flags"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	# note test will not do anything if MDS is not local
