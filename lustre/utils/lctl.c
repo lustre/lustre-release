@@ -45,6 +45,7 @@
 #include <linux/lnet/lnetctl.h>
 #include "obdctl.h"
 #include <linux/lustre/lustre_ver.h>
+#include <lustre/lustreapi.h>
 
 static int lctl_list_commands(int argc, char **argv);
 
@@ -546,7 +547,9 @@ int lctl_main(int argc, char **argv)
 	Parser_init("lctl > ", cmdlist);
 
         if (argc > 1) {
+		llapi_set_command_name(argv[1]);
                 rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
+		llapi_clear_command_name();
         } else {
                 rc = Parser_commands();
         }

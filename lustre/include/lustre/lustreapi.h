@@ -139,6 +139,8 @@ int llapi_get_poolmembers(const char *poolname, char **members, int list_size,
 			  char *buffer, int buffer_size);
 int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 int llapi_file_lookup(int dirfd, const char *name);
+void llapi_set_command_name(const char *cmd);
+void llapi_clear_command_name(void);
 
 #define VERBOSE_COUNT		   0x1
 #define VERBOSE_SIZE		   0x2

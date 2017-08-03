@@ -79,6 +79,7 @@
 #include "lustreapi_internal.h"
 
 static int llapi_msg_level = LLAPI_MSG_MAX;
+const char *liblustreapi_cmd;
 
 char *mdt_hash_name[] = { "none",
 			  LMV_HASH_NAME_ALL_CHARS,
@@ -100,9 +101,24 @@ int llapi_msg_get_level(void)
 	return llapi_msg_level;
 }
 
+void llapi_set_command_name(const char *cmd)
+{
+	liblustreapi_cmd = cmd;
+}
+
+void llapi_clear_command_name(void)
+{
+	liblustreapi_cmd = NULL;
+}
+
 static void error_callback_default(enum llapi_message_level level, int err,
 				   const char *fmt, va_list ap)
 {
+	if (liblustreapi_cmd != NULL)
+		fprintf(stderr, "%s %s: ", program_invocation_short_name,
+			liblustreapi_cmd);
+	else
+		fprintf(stderr, "%s: ", program_invocation_short_name);
 	vfprintf(stderr, fmt, ap);
 	if (level & LLAPI_MSG_NO_ERRNO)
 		fprintf(stderr, "\n");
@@ -113,6 +129,11 @@ static void error_callback_default(enum llapi_message_level level, int err,
 static void info_callback_default(enum llapi_message_level level, int err,
 				  const char *fmt, va_list ap)
 {
+	if (liblustreapi_cmd != NULL)
+		fprintf(stderr, "%s %s: ", program_invocation_short_name,
+			liblustreapi_cmd);
+	else
+		fprintf(stderr, "%s: ", program_invocation_short_name);
 	vfprintf(stdout, fmt, ap);
 }
 

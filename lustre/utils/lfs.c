@@ -6829,11 +6829,14 @@ int main(int argc, char **argv)
 
 	Parser_init("lfs > ", cmdlist);
 
-	progname = argv[0]; /* Used in error messages */
-	if (argc > 1)
+	progname = program_invocation_short_name; /* Used in error messages */
+	if (argc > 1) {
+		llapi_set_command_name(argv[1]);
 		rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
-	else
+		llapi_clear_command_name();
+	} else {
 		rc = Parser_commands();
+	}
 
 	return rc < 0 ? -rc : rc;
 }
