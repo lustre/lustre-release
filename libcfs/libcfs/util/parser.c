@@ -195,7 +195,7 @@ got_it:
 	if ((*result)->pc_func != NULL) {
 		return CMD_COMPLETE;
 	} else {
-		if (*next == '\0') {
+		if (**next == '\0') {
 			return CMD_INCOMPLETE;
 		} else {
 			return process(*next, next, (*result)->pc_sub_cmd,
