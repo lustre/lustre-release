@@ -550,11 +550,9 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 	for (qtype = USRQUOTA; qtype < LL_MAXQUOTAS; qtype++)
 		qsd_qtype_fini(env, qsd, qtype);
 
-	if (qsd->qsd_exp) {
-		/* deregister connection to the quota master */
-		qsd->qsd_exp_valid = false;
-		lustre_deregister_lwp_item(&qsd->qsd_exp);
-	}
+	/* deregister connection to the quota master */
+	qsd->qsd_exp_valid = false;
+	lustre_deregister_lwp_item(&qsd->qsd_exp);
 
 	/* release per-filesystem information */
 	if (qsd->qsd_fsinfo != NULL) {
