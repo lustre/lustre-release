@@ -770,7 +770,8 @@ static inline void osd_dnode_rele(dnode_t *dn)
 
 #ifdef HAVE_DMU_USEROBJ_ACCOUNTING
 
-#define OSD_DMU_USEROBJ_PREFIX        DMU_OBJACCT_PREFIX
+#define OSD_DMU_USEROBJ_PREFIX		DMU_OBJACCT_PREFIX
+#define OSD_DMU_USEROBJ_PREFIX_LEN	DMU_OBJACCT_PREFIX_LEN
 
 static inline bool osd_dmu_userobj_accounting_available(struct osd_device *osd)
 {
@@ -781,7 +782,8 @@ static inline bool osd_dmu_userobj_accounting_available(struct osd_device *osd)
 }
 #else
 
-#define OSD_DMU_USEROBJ_PREFIX        "obj-"
+#define OSD_DMU_USEROBJ_PREFIX		"obj-"
+#define OSD_DMU_USEROBJ_PREFIX_LEN	4
 
 static inline bool osd_dmu_userobj_accounting_available(struct osd_device *osd)
 {
