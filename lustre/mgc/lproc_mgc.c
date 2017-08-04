@@ -45,7 +45,7 @@ LPROC_SEQ_FOPS_RO_TYPE(mgc, conn_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(mgc, import);
 LPROC_SEQ_FOPS_RO_TYPE(mgc, state);
 
-LPROC_SEQ_FOPS_WO_TYPE(mgc, ping);
+LPROC_SEQ_FOPS_WR_ONLY(mgc, ping);
 
 static int mgc_ir_state_seq_show(struct seq_file *m, void *v)
 {

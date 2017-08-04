@@ -597,7 +597,7 @@ LPROC_SEQ_FOPS_RO_TYPE(osc, conn_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(osc, timeouts);
 LPROC_SEQ_FOPS_RO_TYPE(osc, state);
 
-LPROC_SEQ_FOPS_WO_TYPE(osc, ping);
+LPROC_SEQ_FOPS_WR_ONLY(osc, ping);
 
 LPROC_SEQ_FOPS_RW_TYPE(osc, import);
 LPROC_SEQ_FOPS_RW_TYPE(osc, pinger_recov);

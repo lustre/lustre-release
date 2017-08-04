@@ -756,7 +756,7 @@ lprocfs_add_nodemap_seq_write(struct file *file, const char __user *buffer,
 
 	return rc;
 }
-LPROC_SEQ_FOPS_WO_TYPE(nodemap, add_nodemap);
+LPROC_SEQ_FOPS_WR_ONLY(nodemap, add_nodemap);
 
 /**
  * Delete a nodemap.
@@ -800,7 +800,7 @@ lprocfs_del_nodemap_seq_write(struct file *file, const char __user *buffer,
 	return rc;
 
 }
-LPROC_SEQ_FOPS_WO_TYPE(nodemap, del_nodemap);
+LPROC_SEQ_FOPS_WR_ONLY(nodemap, del_nodemap);
 
 /**
  * Helper function to parse a NID string.
@@ -897,7 +897,7 @@ lprocfs_add_nodemap_range_seq_write(struct file *file,
 out:
 	return rc;
 }
-LPROC_SEQ_FOPS_WO_TYPE(nodemap, add_nodemap_range);
+LPROC_SEQ_FOPS_WR_ONLY(nodemap, add_nodemap_range);
 
 /**
  * Delete a NID range from nodemap.
@@ -956,7 +956,7 @@ lprocfs_del_nodemap_range_seq_write(struct file *file,
 out:
 	return rc;
 }
-LPROC_SEQ_FOPS_WO_TYPE(nodemap, del_nodemap_range);
+LPROC_SEQ_FOPS_WR_ONLY(nodemap, del_nodemap_range);
 
 /**
  * Add an idmap to nodemap.
@@ -1025,7 +1025,7 @@ lprocfs_add_nodemap_idmap_seq_write(struct file *file,
 out:
 	return rc;
 }
-LPROC_SEQ_FOPS_WO_TYPE(nodemap, add_nodemap_idmap);
+LPROC_SEQ_FOPS_WR_ONLY(nodemap, add_nodemap_idmap);
 
 /**
  * Delete an idmap from nodemap.
@@ -1094,7 +1094,7 @@ lprocfs_del_nodemap_idmap_seq_write(struct file *file,
 out:
 	return rc;
 }
-LPROC_SEQ_FOPS_WO_TYPE(nodemap, del_nodemap_idmap);
+LPROC_SEQ_FOPS_WR_ONLY(nodemap, del_nodemap_idmap);
 #endif /* NODEMAP_PROC_DEBUG */
 
 static struct lprocfs_vars lprocfs_nm_module_vars[] = {

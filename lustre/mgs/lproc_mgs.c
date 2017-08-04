@@ -204,7 +204,7 @@ int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
 
 LPROC_SEQ_FOPS_RO_TYPE(mgs, num_exports);
 LPROC_SEQ_FOPS_RO_TYPE(mgs, hash);
-LPROC_SEQ_FOPS_WO_TYPE(mgs, evict_client);
+LPROC_SEQ_FOPS_WR_ONLY(mgs, evict_client);
 LPROC_SEQ_FOPS_RW_TYPE(mgs, ir_timeout);
 
 static struct lprocfs_vars lprocfs_mgs_obd_vars[] = {

@@ -669,7 +669,8 @@ static int name##_single_open(struct inode *inode, struct file *file)	\
 		return rc;						\
 									\
 	return single_open(file, name##_seq_show,			\
-			   inode->i_private ? : PDE_DATA(inode));	\
+			   inode->i_private ? inode->i_private :	\
+					      PDE_DATA(inode));		\
 }									\
 static const struct file_operations name##_fops = {			\
 	.owner	 = THIS_MODULE,						\
@@ -701,11 +702,11 @@ static const struct file_operations name##_fops = {			\
 	{								\
 		struct seq_file *seq = file->private_data;		\
 		return lprocfs_##type##_seq_write(file, buffer,		\
-						count, seq->private);	\
+						  count, seq->private);	\
 	}								\
 	LPROC_SEQ_FOPS(name##_##type);
 
-#define LPROC_SEQ_FOPS_WO_TYPE(name, type)				\
+#define LPROC_SEQ_FOPS_WR_ONLY(name, type)				\
 	static ssize_t name##_##type##_write(struct file *file,		\
 			const char __user *buffer, size_t count,	\
 			loff_t *off)					\
@@ -715,7 +716,8 @@ static const struct file_operations name##_fops = {			\
 	static int name##_##type##_open(struct inode *inode, struct file *file)\
 	{								\
 		return single_open(file, NULL,				\
-				   inode->i_private ? : PDE_DATA(inode));\
+				   inode->i_private ? inode->i_private : \
+				   PDE_DATA(inode));			\
 	}								\
 	static const struct file_operations name##_##type##_fops = {	\
 		.open	 = name##_##type##_open,			\
@@ -975,7 +977,7 @@ u64 lprocfs_stats_collector(struct lprocfs_stats *stats, int idx,
 #define LPROC_SEQ_FOPS(name)
 #define LPROC_SEQ_FOPS_RO_TYPE(name, type)
 #define LPROC_SEQ_FOPS_RW_TYPE(name, type)
-#define LPROC_SEQ_FOPS_WO_TYPE(name, type)
+#define LPROC_SEQ_FOPS_WR_ONLY(name, type)
 
 /* lprocfs_jobstats.c */
 static inline

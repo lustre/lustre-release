@@ -744,7 +744,7 @@ osp_lfsck_max_rpcs_in_flight_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(osp_lfsck_max_rpcs_in_flight);
 
-LPROC_SEQ_FOPS_WO_TYPE(osp, ping);
+LPROC_SEQ_FOPS_WR_ONLY(osp, ping);
 LPROC_SEQ_FOPS_RO_TYPE(osp, connect_flags);
 LPROC_SEQ_FOPS_RO_TYPE(osp, server_uuid);
 LPROC_SEQ_FOPS_RO_TYPE(osp, conn_uuid);

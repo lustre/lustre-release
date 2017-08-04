@@ -75,7 +75,7 @@ lprocfs_dump_ns_seq_write(struct file *file, const char __user *buffer,
 	ldlm_dump_all_namespaces(LDLM_NAMESPACE_CLIENT, D_DLMTRACE);
 	RETURN(count);
 }
-LPROC_SEQ_FOPS_WO_TYPE(ldlm, dump_ns);
+LPROC_SEQ_FOPS_WR_ONLY(ldlm, dump_ns);
 
 LPROC_SEQ_FOPS_RW_TYPE(ldlm_rw, uint);
 

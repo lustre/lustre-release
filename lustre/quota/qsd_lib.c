@@ -188,7 +188,7 @@ lprocfs_force_reint_seq_write(struct file *file, const char __user *buffer,
 	}
 	return rc == 0 ? count : rc;
 }
-LPROC_SEQ_FOPS_WO_TYPE(qsd, force_reint);
+LPROC_SEQ_FOPS_WR_ONLY(qsd, force_reint);
 
 static int qsd_timeout_seq_show(struct seq_file *m, void *data)
 {

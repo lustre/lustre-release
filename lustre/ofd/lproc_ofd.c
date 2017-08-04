@@ -891,7 +891,7 @@ LPROC_SEQ_FOPS_RO(ofd_site_stats);
 LPROC_SEQ_FOPS_RO_TYPE(ofd, recovery_status);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, recovery_time_soft);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, recovery_time_hard);
-LPROC_SEQ_FOPS_WO_TYPE(ofd, evict_client);
+LPROC_SEQ_FOPS_WR_ONLY(ofd, evict_client);
 LPROC_SEQ_FOPS_RO_TYPE(ofd, num_exports);
 LPROC_SEQ_FOPS_RO_TYPE(ofd, target_instance);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, ir_factor);

@@ -350,7 +350,7 @@ lprocfs_osd_force_sync_seq_write(struct file *file, const char __user *buffer,
 
 	return rc == 0 ? count : rc;
 }
-LPROC_SEQ_FOPS_WO_TYPE(ldiskfs, osd_force_sync);
+LPROC_SEQ_FOPS_WR_ONLY(ldiskfs, osd_force_sync);
 
 static int ldiskfs_osd_pdo_seq_show(struct seq_file *m, void *data)
 {

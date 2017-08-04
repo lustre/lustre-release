@@ -348,7 +348,7 @@ lprocfs_identity_flush_seq_write(struct file *file, const char __user *buffer,
 	mdt_flush_identity(mdt->mdt_identity_cache, uid);
 	return count;
 }
-LPROC_SEQ_FOPS_WO_TYPE(mdt, identity_flush);
+LPROC_SEQ_FOPS_WR_ONLY(mdt, identity_flush);
 
 static ssize_t
 lprocfs_identity_info_seq_write(struct file *file, const char __user *buffer,
@@ -416,7 +416,7 @@ out:
 
 	return rc ? rc : count;
 }
-LPROC_SEQ_FOPS_WO_TYPE(mdt, identity_info);
+LPROC_SEQ_FOPS_WR_ONLY(mdt, identity_info);
 
 static int mdt_site_stats_seq_show(struct seq_file *m, void *data)
 {
@@ -766,7 +766,7 @@ LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, num_exports);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, target_instance);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, hash);
-LPROC_SEQ_FOPS_WO_TYPE(mdt, mds_evict_client);
+LPROC_SEQ_FOPS_WR_ONLY(mdt, mds_evict_client);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, job_interval);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, ir_factor);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, nid_stats_clear);

@@ -137,7 +137,7 @@ lprocfs_cache_flush_seq_write(struct file *file, const char __user *buffer,
 
 LPROC_SEQ_FOPS_RO(fld_proc_targets);
 LPROC_SEQ_FOPS(fld_proc_hash);
-LPROC_SEQ_FOPS_WO_TYPE(fld, cache_flush);
+LPROC_SEQ_FOPS_WR_ONLY(fld, cache_flush);
 
 struct lprocfs_vars fld_client_proc_list[] = {
 	{ .name	=	"targets",
