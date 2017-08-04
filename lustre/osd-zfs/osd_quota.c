@@ -208,6 +208,29 @@ static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 }
 
 /**
+ * Locate the first entry that is for space accounting.
+ */
+static int osd_zap_locate(struct osd_it_quota *it, zap_attribute_t *za)
+{
+	int rc;
+	ENTRY;
+
+	while (1) {
+		rc = -zap_cursor_retrieve(it->oiq_zc, za);
+		if (rc)
+			break;
+
+		if (strncmp(za->za_name, OSD_DMU_USEROBJ_PREFIX,
+			    OSD_DMU_USEROBJ_PREFIX_LEN))
+			break;
+
+		zap_cursor_advance(it->oiq_zc);
+	}
+
+	RETURN(rc);
+}
+
+/**
  * Move on to the next valid entry.
  *
  * \param  di   - osd iterator
@@ -226,10 +249,9 @@ static int osd_it_acct_next(const struct lu_env *env, struct dt_it *di)
 	if (it->oiq_reset == 0)
 		zap_cursor_advance(it->oiq_zc);
 	it->oiq_reset = 0;
-	rc = -zap_cursor_retrieve(it->oiq_zc, za);
-	if (rc == -ENOENT) /* reached the end */
-		rc = 1;
-	RETURN(rc);
+
+	rc = osd_zap_locate(it, za);
+	RETURN(rc == -ENOENT ? 1 : rc);
 }
 
 /**
@@ -246,10 +268,13 @@ static struct dt_key *osd_it_acct_key(const struct lu_env *env,
 	ENTRY;
 
 	it->oiq_reset = 0;
-	rc = -zap_cursor_retrieve(it->oiq_zc, za);
+	rc = osd_zap_locate(it, za);
 	if (rc)
 		RETURN(ERR_PTR(rc));
+
 	rc = kstrtoull(za->za_name, 16, &it->oiq_id);
+	if (rc)
+		CERROR("couldn't parse name %s\n", za->za_name);
 
 	RETURN((struct dt_key *) &it->oiq_id);
 }
@@ -348,15 +373,18 @@ static int osd_it_acct_rec(const struct lu_env *env,
 	if (unlikely(rc != 0))
 		RETURN(rc);
 
-	/* inode accounting is not maintained by DMU, so we use our own ZAP to
-	 * track inode usage */
+	/* inode accounting is maintained by DMU since 0.7.0 */
+	strncpy(info->oti_buf, OSD_DMU_USEROBJ_PREFIX,
+		OSD_DMU_USEROBJ_PREFIX_LEN);
+	strlcpy(info->oti_buf + OSD_DMU_USEROBJ_PREFIX_LEN, za->za_name,
+		sizeof(info->oti_buf) - OSD_DMU_USEROBJ_PREFIX_LEN);
 	rc = osd_zap_lookup(osd, it->oiq_obj->oo_dn->dn_object,
-			    it->oiq_obj->oo_dn, za->za_name, sizeof(uint64_t),
+			    it->oiq_obj->oo_dn, info->oti_buf, sizeof(uint64_t),
 			    1, &rec->ispace);
 	if (rc == -ENOENT)
 		/* user/group has not created any file yet */
 		CDEBUG(D_QUOTA, "%s: id %s not found in accounting ZAP\n",
-		       osd->od_svname, za->za_name);
+		       osd->od_svname, info->oti_buf);
 	else if (rc)
 		RETURN(rc);
 
@@ -406,12 +434,11 @@ static int osd_it_acct_load(const struct lu_env *env,
 	it->oiq_zc = zc;
 	it->oiq_reset = 0;
 
-	rc = -zap_cursor_retrieve(it->oiq_zc, za);
+	rc = osd_zap_locate(it, za);
 	if (rc == 0)
 		rc = 1;
 	else if (rc == -ENOENT)
 		rc = 0;
-
 	RETURN(rc);
 }
 
