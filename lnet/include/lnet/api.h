@@ -47,7 +47,7 @@
 # error This include is only for kernel use.
 #endif
 
-#include <lnet/types.h>
+#include <uapi/linux/lnet/lnet-types.h>
 
 /** \defgroup lnet_init_fini Initialization and cleanup
  * The LNet must be properly initialized before any LNet calls can be made.

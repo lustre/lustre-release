@@ -26,7 +26,8 @@
 #ifndef LIB_LND_CONFIG_API_H
 #define LIB_LND_CONFIG_API_H
 
-#include <lnet/lib-dlc.h>
+#include <linux/lnet/socklnd.h>
+#include <linux/lnet/lnet-dlc.h>
 #include "cyaml.h"
 
 int

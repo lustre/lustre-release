@@ -22,25 +22,23 @@
 /*
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
- *
- * Copyright (c) 2014, Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
- */
-
-#ifndef __LNET_H__
-#define __LNET_H__
-
-/*
- * lnet.h
  *
- * User application interface file
+ * #defines shared between socknal implementation and utilities
  */
+#ifndef __UAPI_LNET_SOCKLND_H__
+#define __UAPI_LNET_SOCKLND_H__
 
-#include <lnet/types.h>
-#include <lnet/lib-dlc.h>
-#include <lnet/nidstr.h>
+#define SOCKLND_CONN_NONE     (-1)
+#define SOCKLND_CONN_ANY	0
+#define SOCKLND_CONN_CONTROL	1
+#define SOCKLND_CONN_BULK_IN	2
+#define SOCKLND_CONN_BULK_OUT	3
+#define SOCKLND_CONN_NTYPES	4
+
+#define SOCKLND_CONN_ACK	SOCKLND_CONN_BULK_IN
 
 #endif

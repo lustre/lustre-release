@@ -29,13 +29,11 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * lnet/include/lnet/lnetst.h
- *
  * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
 
-#ifndef __LNET_ST_H__
-#define __LNET_ST_H__
+#ifndef __UAPI_LNET_ST_H__
+#define __UAPI_LNET_ST_H__
 
 #define LST_FEAT_NONE		(0)
 #define LST_FEAT_BULK_LEN	(1 << 0)	/* enable variable page size */

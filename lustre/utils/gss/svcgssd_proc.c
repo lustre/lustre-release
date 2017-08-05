@@ -48,7 +48,6 @@
 #endif
 
 #include <stdbool.h>
-#include <lnet/nidstr.h>
 
 #include "svcgssd.h"
 #include "gss_util.h"

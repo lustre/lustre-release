@@ -50,7 +50,7 @@
 #include <linux/mutex.h>
 #include <linux/string.h>
 #include <linux/types.h>
-#include <lnet/types.h>
+#include <uapi/linux/lnet/lnet-types.h>
 #include <lustre/lustre_idl.h>
 #include <dt_object.h>
 #include <lu_object.h>

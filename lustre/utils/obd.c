@@ -67,13 +67,13 @@
 #include <libcfs/util/parser.h>
 #include <libcfs/util/string.h>
 
-#include <lnet/nidstr.h>
+#include <linux/lnet/nidstr.h>
+#include <linux/lnet/lnetctl.h>
 #include <linux/lustre_ostid.h>
 #include <linux/lustre_cfg.h>
 #include <linux/lustre_ioctl.h>
 #include <lustre_ver.h>
 
-#include <lnet/lnetctl.h>
 #include <lustre/lustreapi.h>
 #include <linux/lustre_param.h>
 #include <lustre/lustre_barrier_user.h>

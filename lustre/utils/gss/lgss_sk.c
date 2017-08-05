@@ -40,7 +40,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <lnet/nidstr.h>
 #include <lustre/lustre_idl.h>
 
 #include "sk_utils.h"

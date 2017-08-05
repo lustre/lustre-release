@@ -27,7 +27,9 @@
 #ifndef LIB_LNET_CONFIG_API_H
 #define LIB_LNET_CONFIG_API_H
 
-#include <lnet/lnet.h>
+#include <libcfs/util/string.h>
+#include <linux/lnet/lnet-dlc.h>
+#include <linux/lnet/nidstr.h>
 
 #define LUSTRE_CFG_RC_NO_ERR			 0
 #define LUSTRE_CFG_RC_BAD_PARAM			-1
@@ -37,9 +39,6 @@
 #define LUSTRE_CFG_RC_GENERIC_ERR		-5
 #define LUSTRE_CFG_RC_NO_MATCH			-6
 #define LUSTRE_CFG_RC_MATCH			-7
-
-#include <lnet/lnet.h>
-#include <libcfs/util/string.h>
 
 struct lnet_dlc_network_descr {
 	struct list_head network_on_rule;

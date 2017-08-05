@@ -41,7 +41,7 @@
 
 #include <obd_support.h>
 #include <obd_class.h>
-#include <lnet/lnetctl.h>
+#include <uapi/linux/lnet/lnetctl.h>
 #include <lustre_debug.h>
 #include <lustre_kernelcomm.h>
 #include <lprocfs_status.h>

@@ -48,9 +48,9 @@
 #include <libcfs/util/list.h>
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/parser.h>
-#include <lnet/lnetctl.h>
-#include <lnet/lnetst.h>
-#include <lnet/lnet.h>
+#include <linux/lnet/lnetctl.h>
+#include <linux/lnet/lnetst.h>
+#include <linux/lnet/nidstr.h>
 #include <utils/obdctl.h>
 
 struct lst_sid LST_INVALID_SID = { .ses_nid = LNET_NID_ANY, .ses_stamp = -1 };

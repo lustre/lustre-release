@@ -47,7 +47,7 @@
 
 #include <libcfs/util/param.h>
 #include <libcfs/util/string.h>
-#include <lnet/nidstr.h>
+#include <linux/lnet/nidstr.h>
 #include <lustre/lustre_user.h>
 #include <lustre/lustre_idl.h>
 

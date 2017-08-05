@@ -38,9 +38,12 @@
 
 #include <assert.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <stdint.h>
 
-#include <lnet/types.h>
+#include <libcfs/util/list.h>
+#include <linux/lnet/lnet-types.h>
+#include <linux/lnet/nidstr.h>
 
 #define GSSD_CLI        (0)
 #define GSSD_SVC        (1)

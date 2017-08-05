@@ -66,8 +66,8 @@
 #include <libcfs/libcfs.h>
 #include <obd_support.h>
 #include <obd_class.h>
-#include <lnet/lnetctl.h>
 #include <lprocfs_status.h>
+#include <uapi/linux/lnet/lnetctl.h>
 #include <uapi/linux/lustre_ioctl.h>
 #include <lustre_ver.h>
 

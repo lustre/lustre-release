@@ -43,8 +43,11 @@
 
 #include <libcfs/libcfs.h>
 #include <lnet/api.h>
-#include <lnet/lnet.h>
 #include <lnet/lib-types.h>
+#include <uapi/linux/lnet/lnet-dlc.h>
+#include <uapi/linux/lnet/lnet-types.h>
+#include <uapi/linux/lnet/lnetctl.h>
+#include <uapi/linux/lnet/nidstr.h>
 
 extern struct lnet the_lnet;			/* THE network */
 

@@ -72,7 +72,7 @@
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
 #include <libcfs/util/string.h>
-#include <lnet/lnetctl.h>
+#include <linux/lnet/lnetctl.h>
 #include <lustre/lustreapi.h>
 #include <linux/lustre_ostid.h>
 #include <linux/lustre_ioctl.h>

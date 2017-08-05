@@ -33,9 +33,20 @@
 #ifndef __LIBCFS_LIBCFS_H__
 #define __LIBCFS_LIBCFS_H__
 
-#ifdef __KERNEL__
-# include <libcfs/linux/libcfs.h>
-# include "curproc.h"
+#include <uapi/linux/lnet/libcfs_ioctl.h>
+#include <libcfs/linux/libcfs.h>
+#include <libcfs/libcfs_debug.h>
+#include <libcfs/libcfs_private.h>
+#include <libcfs/bitmap.h>
+#include <libcfs/libcfs_cpu.h>
+#include <libcfs/libcfs_prim.h>
+#include <libcfs/libcfs_time.h>
+#include <libcfs/libcfs_string.h>
+#include <libcfs/libcfs_workitem.h>
+#include <libcfs/libcfs_hash.h>
+#include <libcfs/libcfs_heap.h>
+#include <libcfs/libcfs_fail.h>
+#include "curproc.h"
 
 #define LIBCFS_VERSION	"0.5.0"
 
@@ -101,21 +112,6 @@ unsigned int cfs_rand(void);
 /* seed the generator */
 void cfs_srand(unsigned int, unsigned int);
 void cfs_get_random_bytes(void *buf, int size);
-#endif /* __KERNEL__ */
-
-#include <libcfs/libcfs_debug.h>
-#ifdef __KERNEL__
-# include <libcfs/libcfs_private.h>
-# include <libcfs/bitmap.h>
-# include <libcfs/libcfs_cpu.h>
-# include <libcfs/libcfs_ioctl.h>
-# include <libcfs/libcfs_prim.h>
-# include <libcfs/libcfs_time.h>
-# include <libcfs/libcfs_string.h>
-# include <libcfs/libcfs_workitem.h>
-# include <libcfs/libcfs_hash.h>
-# include <libcfs/libcfs_heap.h>
-# include <libcfs/libcfs_fail.h>
 
 int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 int libcfs_ioctl(unsigned long cmd, void __user *uparam);
@@ -131,7 +127,5 @@ static inline void *__container_of(const void *ptr, unsigned long shift)
 
 #define container_of0(ptr, type, member)				\
 	((type *)__container_of((ptr), offsetof(type, member)))
-
-#endif /* __KERNEL__ */
 
 #endif /* _LIBCFS_LIBCFS_H_ */

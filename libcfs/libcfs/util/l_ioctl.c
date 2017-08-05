@@ -35,7 +35,7 @@
 #include <linux/types.h>
 
 #include <libcfs/util/ioctl.h>
-#include <lnet/lnetctl.h>
+#include <linux/lnet/lnetctl.h>
 
 struct ioc_dev {
         const char * dev_name;

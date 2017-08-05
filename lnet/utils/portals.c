@@ -37,10 +37,11 @@
 
 #include <libcfs/util/string.h>
 #include <libcfs/util/ioctl.h>
-#include <libcfs/libcfs_debug.h>
-#include <lnet/lnetctl.h>
-#include <lnet/socklnd.h>
-#include <lnet/lnet.h>
+#include <linux/lnet/libcfs_debug.h>
+#include <linux/lnet/lnet-dlc.h>
+#include <linux/lnet/lnetctl.h>
+#include <linux/lnet/nidstr.h>
+#include <linux/lnet/socklnd.h>
 
 unsigned int libcfs_debug;
 unsigned int libcfs_printk = D_CANTMASK;

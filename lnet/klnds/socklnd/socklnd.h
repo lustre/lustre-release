@@ -51,7 +51,6 @@
 #include <net/tcp.h>
 
 #include <libcfs/libcfs.h>
-#include <lnet/lnet.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/socklnd.h>
 

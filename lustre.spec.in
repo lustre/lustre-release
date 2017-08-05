@@ -455,6 +455,7 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %endif
 %{_datadir}/lustre
 %{_includedir}/lustre
+%{_includedir}/linux/lnet
 %endif
 %{_sysconfdir}/udev/rules.d/99-lustre.rules
 %config(noreplace) %{_sysconfdir}/ldev.conf

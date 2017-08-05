@@ -59,7 +59,6 @@
 #ifdef HAVE_NETDB_H
 # include <netdb.h>
 #endif
-#include <lnet/nidstr.h>
 #ifdef _NEW_BUILD_
 # include "lgss_utils.h"
 #else

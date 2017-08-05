@@ -60,9 +60,9 @@
 #include <getopt.h>
 #include <limits.h>
 #include <ctype.h>
-#include <lnet/nidstr.h>
+#include <linux/lnet/nidstr.h>
+#include <linux/lnet/lnetctl.h>
 #include <linux/lustre_param.h>
-#include <lnet/lnetctl.h>
 #include <lustre_ver.h>
 
 #include "mount_utils.h"

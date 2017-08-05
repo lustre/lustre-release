@@ -54,7 +54,8 @@
 #include <libcfs/util/string.h>
 #include <libcfs/util/param.h>
 #include <libcfs/util/parser.h>
-#include <lnet/nidstr.h>
+#include <linux/lnet/nidstr.h>
+#include <linux/lnet/lnetctl.h>
 #include <linux/lustre_cfg.h>
 #include <linux/lustre_ioctl.h>
 #include <lustre_ver.h>
@@ -66,7 +67,6 @@
 #include <string.h>
 
 #include "obdctl.h"
-#include <lnet/lnetctl.h>
 #include <stdio.h>
 
 static char * lcfg_devname;

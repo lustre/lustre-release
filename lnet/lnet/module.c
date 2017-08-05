@@ -31,8 +31,9 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
+
 #include <lnet/lib-lnet.h>
-#include <lnet/lib-dlc.h>
+#include <uapi/linux/lnet/lnet-dlc.h>
 
 static int config_on_load = 0;
 module_param(config_on_load, int, 0444);

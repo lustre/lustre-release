@@ -52,7 +52,7 @@
 #include <lustre_ver.h>
 #include <ctype.h>
 #include <limits.h>
-#include <lnet/nidstr.h>
+#include <linux/lnet/nidstr.h>
 #include <libcfs/util/string.h>
 
 #include "obdctl.h"

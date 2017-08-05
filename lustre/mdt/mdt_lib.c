@@ -49,7 +49,7 @@
 # include <linux/uidgid.h>
 #endif
 #include "mdt_internal.h"
-#include <lnet/nidstr.h>
+#include <uapi/linux/lnet/nidstr.h>
 #include <lustre_nodemap.h>
 
 typedef enum ucred_init_type {

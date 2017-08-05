@@ -26,11 +26,20 @@
  * Author: Amir Shehata <amir.shehata@intel.com>
  */
 
-#ifndef LNET_DLC_H
-#define LNET_DLC_H
+#ifndef __UAPI_LNET_DLC_H_
+#define __UAPI_LNET_DLC_H_
 
-#include <libcfs/libcfs_ioctl.h>
-#include <lnet/types.h>
+/*
+ * This is due to us being out of kernel and the way the OpenSFS branch
+ * handles CFLAGS.
+ */
+#ifdef __KERNEL__
+# include <uapi/linux/lnet/libcfs_ioctl.h>
+# include <uapi/linux/lnet/lnet-types.h>
+#else
+# include <linux/lnet/libcfs_ioctl.h>
+# include <linux/lnet/lnet-types.h>
+#endif
 
 #define MAX_NUM_SHOW_ENTRIES	32
 #define LNET_MAX_STR_LEN	128
@@ -240,4 +249,4 @@ struct lnet_ioctl_lnet_stats {
 	struct lnet_counters st_cntrs;
 };
 
-#endif /* LNET_DLC_H */
+#endif /* _LNET_DLC_H_ */

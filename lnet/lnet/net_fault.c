@@ -37,7 +37,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <lnet/lib-lnet.h>
-#include <lnet/lnetctl.h>
+#include <uapi/linux/lnet/lnetctl.h>
 
 #define LNET_MSG_MASK		(LNET_PUT_BIT | LNET_ACK_BIT | \
 				 LNET_GET_BIT | LNET_REPLY_BIT)

@@ -68,7 +68,7 @@
 #endif
 #include <linux/types.h>
 #include <linux/version.h>
-#include <lnet/lnetctl.h>
+#include <linux/lnet/lnetctl.h>
 #include <lustre_ver.h>
 
 #ifdef HAVE_SELINUX

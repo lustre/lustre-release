@@ -72,7 +72,7 @@
 #include <asm/byteorder.h>
 #include <linux/types.h>
 
-#include <lnet/types.h>
+#include <uapi/linux/lnet/lnet-types.h>
 #include <lustre/lustre_user.h> /* Defn's shared with user-space. */
 #include <lustre_ver.h>
 

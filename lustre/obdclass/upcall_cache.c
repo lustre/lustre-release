@@ -36,7 +36,7 @@
 #define DEBUG_SUBSYSTEM S_SEC
 
 #include <libcfs/libcfs.h>
-#include <lnet/types.h>
+#include <uapi/linux/lnet/lnet-types.h>
 #include <upcall_cache.h>
 
 static struct upcall_cache_entry *alloc_entry(struct upcall_cache *cache,

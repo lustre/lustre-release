@@ -30,8 +30,8 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
-#ifndef __LNET_TYPES_H__
-#define __LNET_TYPES_H__
+#ifndef __UAPI_LNET_TYPES_H__
+#define __UAPI_LNET_TYPES_H__
 
 /** \addtogroup lnet
  * @{ */

@@ -29,15 +29,13 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * libcfs/include/libcfs/libcfs_ioctl.h
- *
  * Low-level ioctl data structures. Kernel ioctl functions declared here,
  * and user space functions are in libcfs/util/ioctl.h.
  *
  */
 
-#ifndef __LIBCFS_IOCTL_H__
-#define __LIBCFS_IOCTL_H__
+#ifndef __UAPI_LIBCFS_IOCTL_H__
+#define __UAPI_LIBCFS_IOCTL_H__
 
 #include <linux/types.h>
 #include <linux/ioctl.h>
@@ -77,8 +75,7 @@ struct libcfs_ioctl_data {
 	char ioc_bulk[0];
 };
 
-struct libcfs_debug_ioctl_data
-{
+struct libcfs_debug_ioctl_data {
 	struct libcfs_ioctl_hdr hdr;
 	unsigned int subs;
 	unsigned int debug;
@@ -152,4 +149,4 @@ struct libcfs_debug_ioctl_data
 
 extern int libcfs_ioctl_data_adjust(struct libcfs_ioctl_data *data);
 
-#endif /* __LIBCFS_IOCTL_H__ */
+#endif /* __UAPI_LIBCFS_IOCTL_H__ */

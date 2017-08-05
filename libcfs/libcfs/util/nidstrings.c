@@ -44,8 +44,8 @@
 #include <string.h>
 
 #include <libcfs/util/string.h>
-#include <lnet/types.h>
-#include <lnet/nidstr.h>
+#include <linux/lnet/lnet-types.h>
+#include <linux/lnet/nidstr.h>
 #ifdef HAVE_NETDB_H
 # include <netdb.h>
 #endif

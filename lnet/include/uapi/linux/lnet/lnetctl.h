@@ -19,10 +19,18 @@
 /*
  * Copyright (c) 2014, Intel Corporation.
  */
-#ifndef _LNETCTL_H_
-#define _LNETCTL_H_
+#ifndef __UAPI_LNETCTL_H_
+#define __UAPI_LNETCTL_H_
 
-#include <lnet/types.h>
+/*
+ * This is due to us being out of kernel and the way the OpenSFS branch
+ * handles CFLAGS.
+ */
+#ifdef __KERNEL__
+# include <uapi/linux/lnet/lnet-types.h>
+#else
+# include <linux/lnet/lnet-types.h>
+#endif
 
 /** \addtogroup lnet_fault_simulation
  * @{ */

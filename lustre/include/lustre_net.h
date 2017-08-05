@@ -53,8 +53,8 @@
 #include <linux/kobject.h>
 #include <linux/uio.h>
 #include <libcfs/libcfs.h>
-#include <lnet/nidstr.h>
 #include <lnet/api.h>
+#include <uapi/linux/lnet/nidstr.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_ha.h>
 #include <lustre_sec.h>

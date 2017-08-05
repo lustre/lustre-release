@@ -44,10 +44,8 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <libcfs/util/ioctl.h>
-#include <lnet/lnetctl.h>
-#include <lnet/socklnd.h>
+#include <linux/lnet/lnetctl.h>
 #include "liblnd.h"
-#include <lnet/lnet.h>
 #include <sys/types.h>
 #include <ifaddrs.h>
 #include "liblnetconfig.h"

@@ -1,1 +1,1 @@
-SUBDIRS = lnet
+SUBDIRS = lnet uapi/linux/lnet

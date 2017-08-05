@@ -4,7 +4,6 @@
 #include <stdio.h>
 /* For basename() */
 #include <libgen.h>
-#include <lnet/nidstr.h>
 #include "lsupport.h"
 
 int main(int argc, char **argv)

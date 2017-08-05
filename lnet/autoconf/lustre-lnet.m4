@@ -851,6 +851,7 @@ lnet/autoconf/Makefile
 lnet/doc/Makefile
 lnet/include/Makefile
 lnet/include/lnet/Makefile
+lnet/include/uapi/linux/lnet/Makefile
 lnet/klnds/Makefile
 lnet/klnds/autoMakefile
 lnet/klnds/o2iblnd/Makefile

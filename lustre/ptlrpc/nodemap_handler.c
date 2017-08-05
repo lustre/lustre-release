@@ -28,7 +28,7 @@
  */
 #include <linux/module.h>
 #include <linux/sort.h>
-#include <lnet/nidstr.h>
+#include <uapi/linux/lnet/nidstr.h>
 #include <lustre_net.h>
 #include <lustre_acl.h>
 #include <lustre_eacl.h>

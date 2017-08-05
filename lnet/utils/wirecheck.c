@@ -41,7 +41,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <lnet/types.h>
+#include <linux/lnet/lnet-types.h>
 
 #ifndef HAVE_STRNLEN
 #define strnlen(s, i) strlen(s)

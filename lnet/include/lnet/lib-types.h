@@ -46,7 +46,8 @@
 #include <linux/uio.h>
 #include <linux/types.h>
 
-#include <lnet/lnetctl.h>
+#include <uapi/linux/lnet/lnet-dlc.h>
+#include <uapi/linux/lnet/lnetctl.h>
 
 /* Max payload size */
 #ifndef CONFIG_LNET_MAX_PAYLOAD

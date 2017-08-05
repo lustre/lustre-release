@@ -38,8 +38,6 @@
  */
 #ifdef __KERNEL__
 # include <lustre_dlm.h>
-#else
-# include <libcfs/libcfs.h>
 #endif
 #include <interval_tree.h>
 

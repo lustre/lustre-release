@@ -57,7 +57,7 @@
 #include <unistd.h>
 #endif
 
-#include <lnet/lnetctl.h>
+#include <linux/lnet/lnetctl.h>
 #include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"

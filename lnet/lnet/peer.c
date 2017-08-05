@@ -35,7 +35,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <lnet/lib-lnet.h>
-#include <lnet/lib-dlc.h>
+#include <uapi/linux/lnet/lnet-dlc.h>
 
 static void
 lnet_peer_remove_from_remote_list(struct lnet_peer_ni *lpni)

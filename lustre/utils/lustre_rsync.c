@@ -121,9 +121,9 @@
 #include <sys/xattr.h>
 #include <linux/types.h>
 
-#include <libcfs/libcfs_debug.h>
 #include <libcfs/util/string.h>
 #include <libcfs/util/parser.h>
+#include <linux/lnet/libcfs_debug.h>
 #include <lustre/lustreapi.h>
 #include "lustre_rsync.h"
 

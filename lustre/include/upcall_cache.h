@@ -34,7 +34,7 @@
 #define _UPCALL_CACHE_H
 
 #include <libcfs/libcfs.h>
-#include <lnet/types.h>
+#include <uapi/linux/lnet/lnet-types.h>
 
 /** \defgroup ucache ucache
  *

@@ -40,9 +40,8 @@
 #define __LST_CONRPC_H__
 
 #include <libcfs/libcfs.h>
-#include <lnet/lnet.h>
 #include <lnet/lib-types.h>
-#include <lnet/lnetst.h>
+#include <uapi/linux/lnet/lnetst.h>
 #include "rpc.h"
 #include "selftest.h"
 

@@ -41,7 +41,7 @@
 #include <asm/statfs.h>
 
 #include <linux/module.h>
-#include <lnet/nidstr.h>
+#include <uapi/linux/lnet/nidstr.h>
 /* LUSTRE_VERSION_CODE */
 #include <lustre_ver.h>
 /*

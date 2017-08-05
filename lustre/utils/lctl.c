@@ -42,7 +42,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <libcfs/util/parser.h>
-#include <lnet/lnetctl.h>
+#include <linux/lnet/lnetctl.h>
 #include "obdctl.h"
 #include <lustre_ver.h>
 

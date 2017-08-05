@@ -56,8 +56,8 @@
 
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
-#include <libcfs/libcfs_debug.h>
-#include <lnet/lnetctl.h>
+#include <linux/lnet/libcfs_debug.h>
+#include <linux/lnet/lnetctl.h>
 
 static char rawbuf[8192];
 static char *buf = rawbuf;

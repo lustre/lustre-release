@@ -53,6 +53,9 @@
  */
 #define EXPORT_SYMBOL(s)
 #define LASSERT assert
+#define RETURN return
+#define ENTRY
+#define EXIT
 
 #include <../ldlm/interval_tree.c>
 

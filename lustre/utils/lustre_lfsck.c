@@ -43,7 +43,7 @@
 #include "lustreapi_internal.h"
 
 #include <lustre/lustre_lfsck_user.h>
-#include <lnet/lnetctl.h>
+#include <linux/lnet/lnetctl.h>
 #include <linux/lustre_ioctl.h>
 /* Needs to be last to avoid clashes */
 #include <libcfs/util/ioctl.h>

@@ -53,7 +53,7 @@
 #include <linux/magic.h>
 #include <errno.h>
 #include <time.h>
-#include <lnet/nidstr.h>
+#include <linux/lnet/nidstr.h>
 #include <linux/lustre_fid.h>
 #include <linux/lustre_ostid.h>
 #include <lustre/lustreapi.h>

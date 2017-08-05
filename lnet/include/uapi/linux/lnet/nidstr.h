@@ -27,7 +27,16 @@
  */
 #ifndef _LNET_NIDSTRINGS_H
 #define _LNET_NIDSTRINGS_H
-#include <lnet/types.h>
+
+/*
+ * This is due to us being out of kernel and the way the OpenSFS branch
+ * handles CFLAGS.
+ */
+#ifdef __KERNEL__
+# include <uapi/linux/lnet/lnet-types.h>
+#else
+# include <linux/lnet/lnet-types.h>
+#endif
 
 /**
  *  Lustre Network Driver types.

@@ -41,9 +41,8 @@
 
 
 #include <libcfs/libcfs.h>
-#include <lnet/lnet.h>
 #include <lnet/lib-types.h>
-#include <lnet/lnetst.h>
+#include <uapi/linux/lnet/lnetst.h>
 #include "selftest.h"
 #include "conrpc.h"
 

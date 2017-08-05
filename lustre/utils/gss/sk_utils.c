@@ -39,7 +39,6 @@
 #include <openssl/hmac.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <lnet/nidstr.h>
 
 #include "sk_utils.h"
 #include "write_bytes.h"
