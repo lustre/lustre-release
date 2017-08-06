@@ -5041,14 +5041,18 @@ static int lod_declare_layout_change(const struct lu_env *env,
 	lod_comp = &lo->ldo_comp_entries[lo->ldo_comp_cnt - 1];
 	if (lo->ldo_comp_cnt > 1 &&
 	    lod_comp->llc_extent.e_end != OBD_OBJECT_EOF &&
-	    lod_comp->llc_extent.e_end < layout->li_end) {
+	    lod_comp->llc_extent.e_end < layout->li_extent.e_end) {
 		CDEBUG(replay ? D_ERROR : D_LAYOUT,
 		       "%s: the defined layout [0, %#llx) does not covers "
-		       "the write range [%#llx, %#llx).\n",
+		       "the write range "DEXT"\n",
 		       lod2obd(d)->obd_name, lod_comp->llc_extent.e_end,
-		       layout->li_start, layout->li_end);
+		       PEXT(&layout->li_extent));
 		GOTO(out, rc = -EINVAL);
 	}
+
+	CDEBUG(D_LAYOUT, "%s: "DFID": instantiate components "DEXT"\n",
+	       lod2obd(d)->obd_name, PFID(lu_object_fid(&dt->do_lu)),
+	       PEXT(&layout->li_extent));
 
 	/*
 	 * Iterate ld->ldo_comp_entries, find the component whose extent under
@@ -5057,7 +5061,7 @@ static int lod_declare_layout_change(const struct lu_env *env,
 	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		lod_comp = &lo->ldo_comp_entries[i];
 
-		if (lod_comp->llc_extent.e_start >= layout->li_end)
+		if (lod_comp->llc_extent.e_start >= layout->li_extent.e_end)
 			break;
 
 		if (!replay) {

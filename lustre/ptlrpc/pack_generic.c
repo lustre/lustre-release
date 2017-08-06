@@ -2630,12 +2630,17 @@ void lustre_swab_hsm_user_item(struct hsm_user_item *hui)
 	lustre_swab_hsm_extent(&hui->hui_extent);
 }
 
+void lustre_swab_lu_extent(struct lu_extent *le)
+{
+	__swab64s(&le->e_start);
+	__swab64s(&le->e_end);
+}
+
 void lustre_swab_layout_intent(struct layout_intent *li)
 {
 	__swab32s(&li->li_opc);
 	__swab32s(&li->li_flags);
-	__swab64s(&li->li_start);
-	__swab64s(&li->li_end);
+	lustre_swab_lu_extent(&li->li_extent);
 }
 
 void lustre_swab_hsm_progress_kernel(struct hsm_progress_kernel *hpk)

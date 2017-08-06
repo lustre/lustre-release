@@ -1357,13 +1357,14 @@ static int mdt_layout_change(struct mdt_thread_info *info,
 	ENTRY;
 
 	CDEBUG(D_INFO, "got layout change request from client: "
-	       "opc:%u flags:%#x extent[%#llx,%#llx)\n",
+	       "opc:%u flags:%#x extent "DEXT"\n",
 	       layout->li_opc, layout->li_flags,
-	       layout->li_start, layout->li_end);
-	if (layout->li_start >= layout->li_end) {
-		CERROR("Recieved an invalid layout change range [%llu, %llu) "
-		       "for "DFID"\n", layout->li_start, layout->li_end,
-		       PFID(mdt_object_fid(obj)));
+	       PEXT(&layout->li_extent));
+
+	if (layout->li_extent.e_start >= layout->li_extent.e_end) {
+		CERROR("Recieved an invalid layout change range "DEXT
+		       "for "DFID"\n",
+		       PEXT(&layout->li_extent), PFID(mdt_object_fid(obj)));
 		RETURN(-EINVAL);
 	}
 

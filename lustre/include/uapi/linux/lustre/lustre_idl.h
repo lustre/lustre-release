@@ -3218,8 +3218,7 @@ enum {
 struct layout_intent {
 	__u32 li_opc;	/* intent operation for enqueue, read, write etc */
 	__u32 li_flags;
-	__u64 li_start;
-	__u64 li_end;
+	struct lu_extent li_extent;
 } __attribute__((packed));
 
 /**

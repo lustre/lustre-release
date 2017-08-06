@@ -2161,12 +2161,11 @@ check_hsm_copy(void)
 
 static void check_layout_intent(void)
 {
-        BLANK_LINE();
-        CHECK_STRUCT(layout_intent);
-        CHECK_MEMBER(layout_intent, li_opc);
-        CHECK_MEMBER(layout_intent, li_flags);
-        CHECK_MEMBER(layout_intent, li_start);
-        CHECK_MEMBER(layout_intent, li_end);
+	BLANK_LINE();
+	CHECK_STRUCT(layout_intent);
+	CHECK_MEMBER(layout_intent, li_opc);
+	CHECK_MEMBER(layout_intent, li_flags);
+	CHECK_MEMBER(layout_intent, li_extent);
 
 	CHECK_VALUE(LAYOUT_INTENT_ACCESS);
 	CHECK_VALUE(LAYOUT_INTENT_READ);

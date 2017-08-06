@@ -4514,14 +4514,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct layout_intent, li_flags));
 	LASSERTF((int)sizeof(((struct layout_intent *)0)->li_flags) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct layout_intent *)0)->li_flags));
-	LASSERTF((int)offsetof(struct layout_intent, li_start) == 8, "found %lld\n",
-		 (long long)(int)offsetof(struct layout_intent, li_start));
-	LASSERTF((int)sizeof(((struct layout_intent *)0)->li_start) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct layout_intent *)0)->li_start));
-	LASSERTF((int)offsetof(struct layout_intent, li_end) == 16, "found %lld\n",
-		 (long long)(int)offsetof(struct layout_intent, li_end));
-	LASSERTF((int)sizeof(((struct layout_intent *)0)->li_end) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct layout_intent *)0)->li_end));
+	LASSERTF((int)offsetof(struct layout_intent, li_extent) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct layout_intent, li_extent));
+	LASSERTF((int)sizeof(((struct layout_intent *)0)->li_extent) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct layout_intent *)0)->li_extent));
 	LASSERTF(LAYOUT_INTENT_ACCESS == 0, "found %lld\n",
 		 (long long)LAYOUT_INTENT_ACCESS);
 	LASSERTF(LAYOUT_INTENT_READ == 1, "found %lld\n",
