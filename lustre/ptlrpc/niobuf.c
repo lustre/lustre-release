@@ -944,7 +944,10 @@ EXPORT_SYMBOL(ptl_send_rpc);
 int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 {
 	struct ptlrpc_service *service = rqbd->rqbd_svcpt->scp_service;
-	static struct lnet_process_id match_id = {LNET_NID_ANY, LNET_PID_ANY};
+	static struct lnet_process_id match_id = {
+		.nid = LNET_NID_ANY,
+		.pid = LNET_PID_ANY
+	};
 	int rc;
 	struct lnet_md md;
 	struct lnet_handle_me me_h;
