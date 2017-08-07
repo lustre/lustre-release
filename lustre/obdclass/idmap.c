@@ -47,15 +47,6 @@
 #include <md_object.h>
 #include <obd_support.h>
 
-#define lustre_get_group_info(group_info) do {		\
-	atomic_inc(&(group_info)->usage);		\
-} while (0)
-
-#define lustre_put_group_info(group_info) do {		\
-	if (atomic_dec_and_test(&(group_info)->usage))	\
-		groups_free(group_info);		\
-} while (0)
-
 /*
  * groups_search() is copied from linux kernel!
  * A simple bsearch.
@@ -162,9 +153,10 @@ int lustre_in_group_p(struct lu_ucred *mu, gid_t grp)
 		if (!group_info)
 			return 0;
 
-		lustre_get_group_info(group_info);
+		atomic_inc(&group_info->usage);
 		rc = lustre_groups_search(group_info, grp);
-		lustre_put_group_info(group_info);
+		if (atomic_dec_and_test(&group_info->usage))
+			groups_free(group_info);
 	}
 	return rc;
 }

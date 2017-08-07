@@ -595,17 +595,20 @@ struct cl_env {
         void             *ce_debug;
 };
 
+static void cl_env_inc(enum cache_stats_item item)
+{
 #ifdef CONFIG_DEBUG_PAGESTATE_TRACKING
-#define CL_ENV_INC(counter) atomic_inc(&cl_env_stats.cs_stats[CS_##counter])
-
-#define CL_ENV_DEC(counter) do {                                              \
-	LASSERT(atomic_read(&cl_env_stats.cs_stats[CS_##counter]) > 0);   \
-	atomic_dec(&cl_env_stats.cs_stats[CS_##counter]);                 \
-} while (0)
-#else
-#define CL_ENV_INC(counter)
-#define CL_ENV_DEC(counter)
+	atomic_inc(&cl_env_stats.cs_stats[item]);
 #endif
+}
+
+static void cl_env_dec(enum cache_stats_item item)
+{
+#ifdef CONFIG_DEBUG_PAGESTATE_TRACKING
+	LASSERT(atomic_read(&cl_env_stats.cs_stats[item]) > 0);
+	atomic_dec(&cl_env_stats.cs_stats[item]);
+#endif
+}
 
 static void cl_env_init0(struct cl_env *cle, void *debug)
 {
@@ -615,7 +618,7 @@ static void cl_env_init0(struct cl_env *cle, void *debug)
 
 	cle->ce_ref = 1;
 	cle->ce_debug = debug;
-	CL_ENV_INC(busy);
+	cl_env_inc(CS_busy);
 }
 
 static struct lu_env *cl_env_new(__u32 ctx_tags, __u32 ses_tags, void *debug)
@@ -645,8 +648,8 @@ static struct lu_env *cl_env_new(__u32 ctx_tags, __u32 ses_tags, void *debug)
 			OBD_SLAB_FREE_PTR(cle, cl_env_kmem);
 			env = ERR_PTR(rc);
 		} else {
-			CL_ENV_INC(create);
-			CL_ENV_INC(total);
+			cl_env_inc(CS_create);
+			cl_env_inc(CS_total);
 		}
 	} else
 		env = ERR_PTR(-ENOMEM);
@@ -655,10 +658,10 @@ static struct lu_env *cl_env_new(__u32 ctx_tags, __u32 ses_tags, void *debug)
 
 static void cl_env_fini(struct cl_env *cle)
 {
-        CL_ENV_DEC(total);
-        lu_context_fini(&cle->ce_lu.le_ctx);
-        lu_context_fini(&cle->ce_ses);
-        OBD_SLAB_FREE_PTR(cle, cl_env_kmem);
+	cl_env_dec(CS_total);
+	lu_context_fini(&cle->ce_lu.le_ctx);
+	lu_context_fini(&cle->ce_ses);
+	OBD_SLAB_FREE_PTR(cle, cl_env_kmem);
 }
 
 static struct lu_env *cl_env_obtain(void *debug)
@@ -814,15 +817,15 @@ void cl_env_put(struct lu_env *env, __u16 *refcheck)
         if (--cle->ce_ref == 0) {
 		int cpu = get_cpu();
 
-                CL_ENV_DEC(busy);
-                cle->ce_debug = NULL;
-                cl_env_exit(cle);
-                /*
-                 * Don't bother to take a lock here.
-                 *
-                 * Return environment to the cache only when it was allocated
-                 * with the standard tags.
-                 */
+		cl_env_dec(CS_busy);
+		cle->ce_debug = NULL;
+		cl_env_exit(cle);
+		/*
+		 * Don't bother to take a lock here.
+		 *
+		 * Return environment to the cache only when it was allocated
+		 * with the standard tags.
+		 */
 		if (cl_envs[cpu].cec_count < cl_envs_cached_max &&
 		    (env->le_ctx.lc_tags & ~LCT_HAS_EXIT) == LCT_CL_THREAD &&
 		    (env->le_ses->lc_tags & ~LCT_HAS_EXIT) == LCT_SESSION) {
@@ -951,7 +954,7 @@ void cl_env_percpu_put(struct lu_env *env)
 	cle->ce_ref--;
 	LASSERT(cle->ce_ref == 0);
 
-	CL_ENV_DEC(busy);
+	cl_env_dec(CS_busy);
 	cle->ce_debug = NULL;
 
 	put_cpu();

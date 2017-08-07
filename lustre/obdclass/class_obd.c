@@ -347,8 +347,6 @@ out:
 	RETURN(err);
 } /* class_handle_ioctl */
 
-#define OBD_INIT_CHECK
-#ifdef OBD_INIT_CHECK
 static int obd_init_checks(void)
 {
         __u64 u64val, div64val;
@@ -414,9 +412,6 @@ static int obd_init_checks(void)
 
         return ret;
 }
-#else
-#define obd_init_checks() do {} while(0)
-#endif
 
 static int __init obdclass_init(void)
 {

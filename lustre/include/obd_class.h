@@ -573,18 +573,14 @@ static inline int obd_set_info_async(const struct lu_env *env,
  * functionality of ->o_precleanup() and ->o_cleanup() they override. Hence,
  * obd_precleanup() and obd_cleanup() call both lu_device and obd operations.
  */
-
-#define DECLARE_LU_VARS(ldt, d)                 \
-        struct lu_device_type *ldt;       \
-        struct lu_device *d
-
 static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 {
         int rc;
-        DECLARE_LU_VARS(ldt, d);
+	struct lu_device_type *ldt = obd->obd_type->typ_lu;
+	struct lu_device *d;
+
         ENTRY;
 
-        ldt = obd->obd_type->typ_lu;
         if (ldt != NULL) {
                 struct lu_context  session_ctx;
                 struct lu_env env;
@@ -618,12 +614,11 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 static inline int obd_precleanup(struct obd_device *obd)
 {
 	int rc;
-	DECLARE_LU_VARS(ldt, d);
+	struct lu_device_type *ldt = obd->obd_type->typ_lu;
+	struct lu_device *d = obd->obd_lu_dev;
+
 	ENTRY;
 
-	OBD_CHECK_DEV(obd);
-	ldt = obd->obd_type->typ_lu;
-	d = obd->obd_lu_dev;
 	if (ldt != NULL && d != NULL) {
 		struct lu_env env;
 
@@ -643,13 +638,10 @@ static inline int obd_precleanup(struct obd_device *obd)
 static inline int obd_cleanup(struct obd_device *obd)
 {
         int rc;
-        DECLARE_LU_VARS(ldt, d);
-        ENTRY;
+	struct lu_device_type *ldt = obd->obd_type->typ_lu;
+	struct lu_device *d = obd->obd_lu_dev;
 
-        OBD_CHECK_DEV(obd);
-
-        ldt = obd->obd_type->typ_lu;
-        d = obd->obd_lu_dev;
+	ENTRY;
         if (ldt != NULL && d != NULL) {
                 struct lu_env env;
 
@@ -692,14 +684,12 @@ static inline int
 obd_process_config(struct obd_device *obd, int datalen, void *data)
 {
         int rc;
-        DECLARE_LU_VARS(ldt, d);
-        ENTRY;
+	struct lu_device_type *ldt = obd->obd_type->typ_lu;
+	struct lu_device *d = obd->obd_lu_dev;
 
-        OBD_CHECK_DEV(obd);
+	ENTRY;
 
         obd->obd_process_conf = 1;
-        ldt = obd->obd_type->typ_lu;
-        d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
                 struct lu_env env;
 
@@ -1698,9 +1688,14 @@ int lustre_check_exclusion(struct super_block *sb, char *svname);
 extern int obd_sysctl_init(void);
 extern void obd_sysctl_clean(void);
 
-/* uuid.c  */
 typedef __u8 class_uuid_t[16];
-void class_uuid_unparse(class_uuid_t in, struct obd_uuid *out);
+static inline void class_uuid_unparse(class_uuid_t uu, struct obd_uuid *out)
+{
+	snprintf(out->uuid, sizeof(out->uuid), "%02x%02x%02x%02x-%02x%02x-"
+		 "%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+		 uu[14], uu[15], uu[12], uu[13], uu[10], uu[11], uu[8], uu[9],
+		 uu[6], uu[7], uu[4], uu[5], uu[2], uu[3], uu[0], uu[1]);
+}
 
 /* lustre_peer.c    */
 int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index);
