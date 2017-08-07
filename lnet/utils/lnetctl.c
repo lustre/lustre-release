@@ -1260,20 +1260,19 @@ static int jt_add_peer_nid(int argc, char **argv)
 	int rc = LUSTRE_CFG_RC_NO_ERR, opt, i;
 	bool non_mr = false;
 
-	const char *const short_options = "k:n:m";
-	const struct option long_options[] = {
-		{ "prim_nid", 1, NULL, 'k' },
-		{ "nid", 1, NULL, 'n' },
-		{ "non_mr", 0, NULL, 'm'},
-		{ NULL, 0, NULL, 0 },
-	};
+	const char *const short_opts = "k:mn:";
+	const struct option long_opts[] = {
+	{ .name = "prim_nid",	.has_arg = required_argument,	.val = 'k' },
+	{ .name = "non_mr",	.has_arg = no_argument,		.val = 'm' },
+	{ .name = "nid",	.has_arg = required_argument,	.val = 'n' },
+	{ .name = NULL } };
 
 	rc = check_cmd(peer_cmds, "peer", "add", 2, argc, argv);
 	if (rc)
 		return rc;
 
-	while ((opt = getopt_long(argc, argv, short_options,
-				  long_options, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, short_opts,
+				  long_opts, NULL)) != -1) {
 		switch (opt) {
 		case 'k':
 			prim_nid = optarg;
@@ -1320,19 +1319,18 @@ static int jt_del_peer_nid(int argc, char **argv)
 	struct cYAML *err_rc = NULL;
 	int rc = LUSTRE_CFG_RC_NO_ERR, opt, i, size = 0;
 
-	const char *const short_options = "k:n:";
-	const struct option long_options[] = {
-		{ "prim_nid", 1, NULL, 'k' },
-		{ "nid", 1, NULL, 'n' },
-		{ NULL, 0, NULL, 0 },
-	};
+	const char *const short_opts = "k:n:";
+	const struct option long_opts[] = {
+	{ .name = "prim_nid",	.has_arg = required_argument,	.val = 'k' },
+	{ .name = "nid",	.has_arg = required_argument,	.val = 'n' },
+	{ .name = NULL } };
 
 	rc = check_cmd(peer_cmds, "peer", "del", 2, argc, argv);
 	if (rc)
 		return rc;
 
-	while ((opt = getopt_long(argc, argv, short_options,
-				  long_options, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, short_opts,
+				  long_opts, NULL)) != -1) {
 		switch (opt) {
 		case 'k':
 			prim_nid = optarg;
@@ -1374,20 +1372,19 @@ static int jt_show_peer(int argc, char **argv)
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
 	long int detail = 0;
 
-	const char *const short_options = "n:v::h";
-	const struct option long_options[] = {
-		{ "nid", 1, NULL, 'n' },
-		{ "verbose", 2, NULL, 'v' },
-		{ "help", 0, NULL, 'h' },
-		{ NULL, 0, NULL, 0 },
-	};
+	const char *const short_opts = "hn:v::";
+	const struct option long_opts[] = {
+	{ .name = "help",	.has_arg = no_argument,		.val = 'h' },
+	{ .name = "nid",	.has_arg = required_argument,	.val = 'n' },
+	{ .name = "verbose",	.has_arg = optional_argument,	.val = 'v' },
+	{ .name = NULL } };
 
 	rc = check_cmd(peer_cmds, "peer", "show", 1, argc, argv);
 	if (rc)
 		return rc;
 
-	while ((opt = getopt_long(argc, argv, short_options,
-				  long_options, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, short_opts,
+				  long_opts, NULL)) != -1) {
 		switch (opt) {
 		case 'n':
 			nid = optarg;
@@ -1448,12 +1445,11 @@ static int jt_ping(int argc, char **argv)
 	int timeout = 1000;
 	int rc = 0, opt;
 
-	const char *const short_options = "t:h";
+	const char *const short_options = "ht:";
 	const struct option long_options[] = {
-		{ "timeout", 1, NULL, 't' },
-		{ "help", 0, NULL, 'h' },
-		{ NULL, 0, NULL, 0 },
-	};
+	{ .name = "help",	.has_arg = no_argument,		.val = 'h' },
+	{ .name = "timeout",	.has_arg = required_argument,	.val = 't' },
+	{ .name = NULL } };
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, NULL)) != -1) {
@@ -1495,10 +1491,9 @@ static int jt_discover(int argc, char **argv)
 
 	const char *const short_options = "fh";
 	const struct option long_options[] = {
-		{ "force", 0, NULL, 'f' },
-		{ "help", 0, NULL, 'h' },
-		{ NULL, 0, NULL, 0 },
-	};
+		{ .name = "force",	.has_arg = no_argument,	.val = 'f' },
+		{ .name = "help",	.has_arg = no_argument,	.val = 'h' },
+		{ .name = NULL } };
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, NULL)) != -1) {
