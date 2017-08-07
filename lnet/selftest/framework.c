@@ -1605,42 +1605,13 @@ sfw_post_rpc(struct srpc_client_rpc *rpc)
 }
 
 static struct srpc_service sfw_services[] = {
-        {
-                /* sv_id */    SRPC_SERVICE_DEBUG,
-                /* sv_name */  "debug",
-                0
-        },
-        {
-                /* sv_id */    SRPC_SERVICE_QUERY_STAT,
-                /* sv_name */  "query stats",
-                0
-        },
-        {
-                /* sv_id */    SRPC_SERVICE_MAKE_SESSION,
-                /* sv_name */  "make session",
-                0
-        },
-        {
-                /* sv_id */    SRPC_SERVICE_REMOVE_SESSION,
-                /* sv_name */  "remove session",
-                0
-        },
-        {
-                /* sv_id */    SRPC_SERVICE_BATCH,
-                /* sv_name */  "batch service",
-                0
-        },
-        {
-                /* sv_id */    SRPC_SERVICE_TEST,
-                /* sv_name */  "test service",
-                0
-        },
-        {
-                /* sv_id */    0,
-                /* sv_name */  NULL,
-                0
-        }
-};
+	{ .sv_id = SRPC_SERVICE_DEBUG,		.sv_name = "debug", },
+	{ .sv_id = SRPC_SERVICE_QUERY_STAT,	.sv_name = "query stats", },
+	{ .sv_id = SRPC_SERVICE_MAKE_SESSION,	.sv_name = "make session", },
+	{ .sv_id = SRPC_SERVICE_REMOVE_SESSION,	.sv_name = "remove session", },
+	{ .sv_id = SRPC_SERVICE_BATCH,		.sv_name = "batch service", },
+	{ .sv_id = SRPC_SERVICE_TEST,		.sv_name = "test service", },
+	{ .sv_id = 0, } };
 
 int
 sfw_startup (void)
