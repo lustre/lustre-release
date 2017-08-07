@@ -12,7 +12,7 @@ set -x
 MGS=$($LCTL dl | awk '/mgs/ { print $4 }')
 [ -z "$MGS" ] && echo "$0: SKIP: no MGS available, skipping llog test" && exit 0
 
-load_module obdclass/llog_test || exit 0
+load_module obdclass/llog_test || exit 1
 $LCTL modules > $TMP/ogdb-$(hostname)
 echo "NOW reload debugging syms.."
 
