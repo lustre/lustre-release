@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 19430 19967 19967
-ALWAYS_EXCEPT="                2     5     6    $SANITY_SEC_EXCEPT"
+# bug number for skipped test:
+ALWAYS_EXCEPT="              $SANITY_SEC_EXCEPT"
 if $SHARED_KEY; then
 # bug number for skipped test: 9145 9145 9671 9145 9145 9145 9145 9245
 	ALWAYS_EXCEPT="        17   18   19   20   21   22   23   27 $ALWAYS_EXCEPT"
