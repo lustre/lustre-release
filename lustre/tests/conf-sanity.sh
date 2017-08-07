@@ -68,8 +68,8 @@ OSTDEV1_2=$fs2ost_DEV
 OSTDEV2_2=$fs3ost_DEV
 
 if ! combined_mgs_mds; then
-    # bug number for skipped test:    23954
-    ALWAYS_EXCEPT="$ALWAYS_EXCEPT       24b"
+	# bug number for skipped test:    23954
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT       24b"
 fi
 
 # pass "-E lazy_itable_init" to mke2fs to speed up the formatting time
@@ -78,8 +78,8 @@ if [[ "$LDISKFS_MKFS_OPTS" != *lazy_itable_init* ]]; then
 fi
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT"
+# bug number for skipped test:        LU-9826
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 32b"
 
 init_logging
 
