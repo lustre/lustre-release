@@ -57,8 +57,7 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#include <lustre/lustre_errno.h>
-
+#include <lustre_errno.h>
 #include <lustre_dlm.h>
 #include <obd_class.h>
 #include <obd.h>

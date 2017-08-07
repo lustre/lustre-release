@@ -40,8 +40,8 @@
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>
-#include <lustre/lustre_lfsck_user.h>
 #include <lustre_disk.h>
+#include <uapi/linux/lustre/lustre_lfsck_user.h>
 
 void lustre_assert_wire_constants(void)
 {

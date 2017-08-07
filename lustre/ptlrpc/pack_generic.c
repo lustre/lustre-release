@@ -42,8 +42,6 @@
 
 #include <libcfs/libcfs.h>
 
-#include <lustre/ll_fiemap.h>
-
 #include <llog_swab.h>
 #include <lustre_net.h>
 #include <lustre_swab.h>

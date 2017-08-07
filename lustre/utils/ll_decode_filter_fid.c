@@ -43,7 +43,7 @@
 #include <sys/types.h>
 #include <sys/xattr.h>
 #include <asm/byteorder.h>
-#include <lustre/lustre_user.h>
+#include <linux/lustre/lustre_user.h>
 
 #define PFID_STRIPE_IDX_BITS	16
 #define PFID_STRIPE_COUNT_MASK	((1 << PFID_STRIPE_IDX_BITS) - 1)

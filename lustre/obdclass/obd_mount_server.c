@@ -50,14 +50,11 @@
 #include <linux/smp_lock.h>
 #endif
 
-#include <lustre/lustre_idl.h>
-#include <lustre/lustre_user.h>
-
 #include <llog_swab.h>
 #include <lustre_disk.h>
-#include <uapi/linux/lustre_ioctl.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_log.h>
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 #include <obd.h>
 #include <obd_class.h>
 

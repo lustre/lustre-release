@@ -51,7 +51,7 @@
 #include <linux/string.h>
 #include <linux/types.h>
 #include <uapi/linux/lnet/lnet-types.h>
-#include <lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_idl.h>
 #include <dt_object.h>
 #include <lu_object.h>
 #include <lustre_net.h>

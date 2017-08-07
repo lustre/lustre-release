@@ -28,7 +28,7 @@
 #include <stdint.h>
 
 #include <libcfs/util/param.h>
-#include <lustre/lustre_user.h>
+#include <linux/lustre/lustre_user.h>
 #include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"
 

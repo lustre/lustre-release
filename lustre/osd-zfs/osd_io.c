@@ -37,7 +37,6 @@
 
 #define DEBUG_SUBSYSTEM S_OSD
 
-#include <lustre_ver.h>
 #include <libcfs/libcfs.h>
 #include <obd_support.h>
 #include <lustre_net.h>
@@ -45,7 +44,6 @@
 #include <obd_class.h>
 #include <lustre_disk.h>
 #include <lustre_fid.h>
-#include <lustre/lustre_idl.h>	/* LLOG_MIN_CHUNK_SIZE definition */
 
 #include "osd_internal.h"
 

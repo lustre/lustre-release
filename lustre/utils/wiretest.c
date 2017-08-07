@@ -35,9 +35,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <lustre/lustre_idl.h>
-#include <lustre/lustre_lfsck_user.h>
-#include <linux/lustre_disk.h>
+#include <linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_lfsck_user.h>
+#include <linux/lustre/lustre_disk.h>
 
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
 #define LASSERTF(cond, fmt, ...) if (!(cond)) { printf("failed '" #cond "'" fmt, ## __VA_ARGS__);ret = 1;}

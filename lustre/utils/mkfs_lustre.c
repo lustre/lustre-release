@@ -62,8 +62,8 @@
 #include <ctype.h>
 #include <linux/lnet/nidstr.h>
 #include <linux/lnet/lnetctl.h>
-#include <linux/lustre_param.h>
-#include <lustre_ver.h>
+#include <linux/lustre/lustre_param.h>
+#include <linux/lustre/lustre_ver.h>
 
 #include "mount_utils.h"
 

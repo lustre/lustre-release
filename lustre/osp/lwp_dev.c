@@ -40,7 +40,7 @@
 #define DEBUG_SUBSYSTEM S_OST
 
 #include <obd_class.h>
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_log.h>
 #include <linux/kthread.h>
 

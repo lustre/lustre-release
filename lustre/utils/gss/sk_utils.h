@@ -30,7 +30,7 @@
 
 #include <gssapi/gssapi.h>
 #include <keyutils.h>
-#include <lustre/lustre_idl.h>
+#include <linux/lustre/lustre_idl.h>
 #include <openssl/dh.h>
 #include <openssl/evp.h>
 #include <sys/types.h>

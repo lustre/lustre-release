@@ -39,7 +39,6 @@
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
-#include <lustre/lustre_user.h>
 
 #include "gss_err.h"
 #include "gss_crypto.h"

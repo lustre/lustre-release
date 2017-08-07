@@ -69,14 +69,14 @@
 
 #include <linux/lnet/nidstr.h>
 #include <linux/lnet/lnetctl.h>
-#include <linux/lustre_ostid.h>
-#include <linux/lustre_cfg.h>
-#include <linux/lustre_ioctl.h>
-#include <lustre_ver.h>
+#include <linux/lustre/lustre_barrier_user.h>
+#include <linux/lustre/lustre_cfg.h>
+#include <linux/lustre/lustre_ioctl.h>
+#include <linux/lustre/lustre_ostid.h>
+#include <linux/lustre/lustre_param.h>
+#include <linux/lustre/lustre_ver.h>
 
 #include <lustre/lustreapi.h>
-#include <linux/lustre_param.h>
-#include <lustre/lustre_barrier_user.h>
 
 #define MAX_STRING_SIZE 128
 
@@ -1010,8 +1010,8 @@ int jt_obd_list_ioctl(int argc, char **argv)
                 memset(buf, 0, sizeof(rawbuf));
                 data->ioc_version = OBD_IOCTL_VERSION;
                 data->ioc_inllen1 =
-                        sizeof(rawbuf) - cfs_size_round(sizeof(*data));
-                data->ioc_inlbuf1 = buf + cfs_size_round(sizeof(*data));
+			sizeof(rawbuf) - __ALIGN_KERNEL(sizeof(*data), 8);
+		data->ioc_inlbuf1 = buf + __ALIGN_KERNEL(sizeof(*data), 8);
                 data->ioc_len = obd_ioctl_packlen(data);
                 data->ioc_count = index;
 
@@ -2221,7 +2221,7 @@ int jt_obd_lov_getconfig(int argc, char **argv)
 
         memset(&desc, 0, sizeof(desc));
         obd_str2uuid(&desc.ld_uuid, argv[1]);
-        desc.ld_tgt_count = ((OBD_MAX_IOCTL_BUFFER-sizeof(data)-sizeof(desc)) /
+	desc.ld_tgt_count = ((MAX_IOC_BUFLEN-sizeof(data)-sizeof(desc)) /
                              (sizeof(*uuidarray) + sizeof(*obdgens)));
 
 repeat:

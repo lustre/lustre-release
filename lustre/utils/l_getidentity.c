@@ -48,8 +48,8 @@
 #include <libcfs/util/param.h>
 #include <libcfs/util/string.h>
 #include <linux/lnet/nidstr.h>
-#include <lustre/lustre_user.h>
-#include <lustre/lustre_idl.h>
+#include <linux/lustre/lustre_user.h>
+#include <linux/lustre/lustre_idl.h>
 
 #define PERM_PATHNAME "/etc/lustre/perm.conf"
 

@@ -35,7 +35,7 @@
 #ifndef __LP_UTILS_H__
 #define __LP_UTILS_H__
 
-#include "lustre/lustre_user.h"
+#include <linux/lustre/lustre_user.h>
 
 #define FAIL(msg) \
  \

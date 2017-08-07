@@ -140,7 +140,6 @@
 
 #define DEBUG_SUBSYSTEM S_LFSCK
 
-#include <lustre/lustre_idl.h>
 #include <lu_object.h>
 #include <dt_object.h>
 #include <md_object.h>
@@ -148,7 +147,6 @@
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre_lmv.h>
-#include <lustre/lustre_user.h>
 
 #include "lfsck_internal.h"
 

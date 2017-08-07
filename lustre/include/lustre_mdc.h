@@ -53,7 +53,7 @@
 #include <lustre_intent.h>
 #include <libcfs/libcfs.h>
 #include <obd_class.h>
-#include <lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_lib.h>
 #include <lustre_dlm.h>
 #include <lustre_export.h>

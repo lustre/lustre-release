@@ -49,7 +49,7 @@
 #include <string.h>
 #include <sys/mount.h>
 #include <sys/param.h>
-#include <lustre_ver.h>
+#include <linux/lustre/lustre_ver.h>
 #include <ctype.h>
 #include <limits.h>
 #include <linux/lnet/nidstr.h>

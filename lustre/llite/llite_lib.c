@@ -48,12 +48,12 @@
 #endif
 #include <linux/security.h>
 
-#include <uapi/linux/lustre_ioctl.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_ha.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
 #include <lustre_disk.h>
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_log.h>
 #include <cl_object.h>
 #include <obd_cksum.h>

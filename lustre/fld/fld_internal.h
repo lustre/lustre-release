@@ -56,7 +56,6 @@
 #define __FLD_INTERNAL_H
 
 #include <obd.h>
-#include <lustre/lustre_idl.h>
 #include <libcfs/libcfs.h>
 #include <lustre_fld.h>
 

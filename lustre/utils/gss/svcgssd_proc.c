@@ -57,7 +57,6 @@
 #include "lsupport.h"
 #include "gss_oids.h"
 #include "sk_utils.h"
-#include <lustre/lustre_idl.h>
 
 #define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.sptlrpc.context/channel"
 #define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.sptlrpc.init/channel"

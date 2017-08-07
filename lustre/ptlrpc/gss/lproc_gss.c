@@ -41,7 +41,6 @@
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
-#include <lustre/lustre_idl.h>
 #include <lustre_net.h>
 #include <lustre_import.h>
 #include <lprocfs_status.h>

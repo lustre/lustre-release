@@ -42,8 +42,10 @@
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
 
-#include <linux/lustre_ioctl.h>
-#include <uapi_kernelcomm.h>
+#include <linux/lustre/lustre_ioctl.h>
+#include <linux/lustre/lustre_kernelcomm.h>
+
+#define MAX_IOC_BUFLEN	8192
 
 #define WANT_PATH   0x1
 #define WANT_FSNAME 0x2

@@ -40,8 +40,6 @@
 
 #include <linux/module.h>
 
-/* LUSTRE_VERSION_CODE */
-#include <lustre_ver.h>
 /*
  * struct OBD_{ALLOC,FREE}*()
  * OBD_FAIL_CHECK

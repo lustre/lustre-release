@@ -33,7 +33,6 @@
 #ifndef _LMV_INTERNAL_H_
 #define _LMV_INTERNAL_H_
 
-#include <lustre/lustre_idl.h>
 #include <obd.h>
 #include <lustre_lmv.h>
 

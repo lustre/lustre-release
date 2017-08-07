@@ -34,7 +34,7 @@
  * Author: Bobi Jam <bobijam.xu@intel.com>
  */
 #include "range_lock.h"
-#include <lustre/lustre_user.h>
+#include <uapi/linux/lustre/lustre_user.h>
 
 /**
  * Initialize a range lock tree

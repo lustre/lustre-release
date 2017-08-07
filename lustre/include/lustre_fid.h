@@ -149,9 +149,9 @@
  */
 
 #include <libcfs/libcfs.h>
-#include <uapi/linux/lustre_fid.h>
-#include <lustre/lustre_idl.h>
-#include <uapi/linux/lustre_ostid.h>
+#include <uapi/linux/lustre/lustre_fid.h>
+#include <uapi/linux/lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_ostid.h>
 
 struct lu_env;
 struct lu_site;

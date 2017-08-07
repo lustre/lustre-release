@@ -15987,7 +15987,6 @@ test_400a() { # LU-1606, was conf-sanity test_74
 
 	if ! [[ -d $prefix ]]; then
 		# Assume we're running in tree and fixup the include path.
-		extra_flags+=" -I$LUSTRE/../libcfs/include"
 		extra_flags+=" -I$LUSTRE/include"
 		extra_flags+=" -L$LUSTRE/utils"
 	fi
@@ -16003,7 +16002,7 @@ run_test 400a "Lustre client api program can compile and link"
 test_400b() { # LU-1606, LU-5011
 	local header
 	local out=$TMP/$tfile
-	local prefix=/usr/include/lustre
+	local prefix=/usr/include/linux/lustre
 
 	# We use a hard coded prefix so that this test will not fail
 	# when run in tree. There are headers in lustre/include/lustre/
@@ -16022,8 +16021,8 @@ test_400b() { # LU-1606, LU-5011
 			continue
 		fi
 
-		if [[ "$(basename $header)" == liblustreapi.h ]]; then
-			continue # liblustreapi.h is deprecated.
+		if [[ "$(basename $header)" == lustre_ioctl.h ]]; then
+			continue # lustre_ioctl.h is internal header
 		fi
 
 		$CC -Wall -Werror -include $header -c -x c /dev/null -o $out ||

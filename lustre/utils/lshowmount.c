@@ -49,7 +49,7 @@
 #include <errno.h>
 #include <libgen.h>
 
-#include <lustre/lustre_user.h>
+#include <linux/lustre/lustre_user.h>
 #include "nidlist.h"
 #include "lustreapi_internal.h"
 

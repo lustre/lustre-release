@@ -41,7 +41,6 @@
 
 #include <obd.h>
 #include <obd_class.h>
-#include <lustre_ver.h>
 #include <obd_support.h>
 #include <lustre_fid.h>
 #include "mdd_internal.h"

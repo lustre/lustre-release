@@ -26,7 +26,7 @@
  */
 
 #include <libcfs/libcfs.h>
-#include <lustre/lustre_errno.h>
+#include <lustre_errno.h>
 
 #ifdef LUSTRE_TRANSLATE_ERRNOS
 

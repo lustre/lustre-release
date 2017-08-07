@@ -38,8 +38,6 @@
  *
  */
 
-/* LUSTRE_VERSION_CODE */
-#include <lustre_ver.h>
 /* prerequisite for linux/xattr.h */
 #include <linux/types.h>
 /* prerequisite for linux/xattr.h */

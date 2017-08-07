@@ -54,11 +54,11 @@
 #include <errno.h>
 #include <time.h>
 #include <linux/lnet/nidstr.h>
-#include <linux/lustre_fid.h>
-#include <linux/lustre_ostid.h>
+#include <linux/lustre/lustre_cfg.h>
+#include <linux/lustre/lustre_fid.h>
+#include <linux/lustre/lustre_ostid.h>
+#include <linux/lustre/lustre_log_user.h>
 #include <lustre/lustreapi.h>
-#include <lustre_log_user.h>
-#include <linux/lustre_cfg.h>
 
 static inline int ext2_test_bit(int nr, const void *addr)
 {

@@ -40,16 +40,14 @@
 #define DEBUG_SUBSYSTEM S_LOV
 #include <libcfs/libcfs.h>
 
-#include <lustre/lustre_idl.h>
-
 #include <cl_object.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
-#include <uapi/linux/lustre_ioctl.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_lib.h>
 #include <lustre_mds.h>
 #include <lustre_net.h>
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_swab.h>
 #include <lprocfs_status.h>
 #include <obd_class.h>

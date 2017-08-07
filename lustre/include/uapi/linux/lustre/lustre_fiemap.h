@@ -38,12 +38,38 @@
  * Author: Andreas Dilger <adilger@sun.com>
  */
 
-/*
- * NOTE: This file is DEPRECATED! Please include linux/lustre/lustre_fiemap.h
- * directly instead of this file. This file will be removed from a
- * future version of lustre!
- */
+#ifndef _LUSTRE_FIEMAP_H
+#define _LUSTRE_FIEMAP_H
 
-#include <linux/lustre/lustre_fiemap.h>
+#ifndef __KERNEL__
+#include <stddef.h>
+#include <linux/fiemap.h>
+#endif
 
-#warning "Including ll_fiemap.h is deprecated. Include linux/lustre/lustre_fiemap.h directly."
+/* XXX: We use fiemap_extent::fe_reserved[0] */
+#define fe_device	fe_reserved[0]
+
+static inline size_t fiemap_count_to_size(size_t extent_count)
+{
+	return sizeof(struct fiemap) + extent_count *
+				       sizeof(struct fiemap_extent);
+}
+
+static inline unsigned fiemap_size_to_count(size_t array_size)
+{
+	return (array_size - sizeof(struct fiemap)) /
+	       sizeof(struct fiemap_extent);
+}
+
+#define FIEMAP_FLAG_DEVICE_ORDER 0x40000000 /* return device ordered mapping */
+
+#ifdef FIEMAP_FLAGS_COMPAT
+#undef FIEMAP_FLAGS_COMPAT
+#endif
+
+/* Lustre specific flags - use a high bit, don't conflict with upstream flag */
+#define FIEMAP_EXTENT_NO_DIRECT 0x40000000 /* Data mapping undefined */
+#define FIEMAP_EXTENT_NET       0x80000000 /* Data stored remotely.
+					    * Sets NO_DIRECT flag */
+
+#endif /* _LUSTRE_FIEMAP_H */

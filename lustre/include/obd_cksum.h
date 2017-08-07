@@ -34,9 +34,9 @@
 #define __OBD_CKSUM
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_crypto.h>
-#include <lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_idl.h>
 
-static inline unsigned char cksum_obd2cfs(cksum_type_t cksum_type)
+static inline unsigned char cksum_obd2cfs(enum cksum_types cksum_type)
 {
 	switch (cksum_type) {
 	case OBD_CKSUM_CRC32:
@@ -63,7 +63,7 @@ static inline unsigned char cksum_obd2cfs(cksum_type_t cksum_type)
  * because that is supported by all clients since 1.8
  *
  * In case multiple algorithms are supported the best one is used. */
-static inline u32 cksum_type_pack(cksum_type_t cksum_type)
+static inline u32 cksum_type_pack(enum cksum_types cksum_type)
 {
 	unsigned int    performance = 0, tmp;
 	u32		flag = OBD_FL_CKSUM_ADLER;
@@ -97,7 +97,7 @@ static inline u32 cksum_type_pack(cksum_type_t cksum_type)
 	return flag;
 }
 
-static inline cksum_type_t cksum_type_unpack(u32 o_flags)
+static inline enum cksum_types cksum_type_unpack(u32 o_flags)
 {
 	switch (o_flags & OBD_FL_CKSUM_ALL) {
 	case OBD_FL_CKSUM_CRC32C:
@@ -115,9 +115,9 @@ static inline cksum_type_t cksum_type_unpack(u32 o_flags)
  * 1.8 supported ADLER it is base and not depend on hw
  * Client uses all available local algos
  */
-static inline cksum_type_t cksum_types_supported_client(void)
+static inline enum cksum_types cksum_types_supported_client(void)
 {
-	cksum_type_t ret = OBD_CKSUM_ADLER;
+	enum cksum_types ret = OBD_CKSUM_ADLER;
 
 	CDEBUG(D_INFO, "Crypto hash speed: crc %d, crc32c %d, adler %d\n",
 	       cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_CRC32)),
@@ -163,7 +163,7 @@ static inline enum cksum_types cksum_types_supported_server(void)
  * checksum type due to its benchmarking at libcfs module load.
  * Caution is advised, however, since what is fastest on a single client may
  * not be the fastest or most efficient algorithm on the server.  */
-static inline cksum_type_t cksum_type_select(cksum_type_t cksum_types)
+static inline enum cksum_types cksum_type_select(enum cksum_types cksum_types)
 {
 	return cksum_type_unpack(cksum_type_pack(cksum_types));
 }

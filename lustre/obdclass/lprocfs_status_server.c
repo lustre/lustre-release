@@ -39,7 +39,6 @@
 
 #include <obd_class.h>
 #include <lprocfs_status.h>
-#include <lustre/lustre_idl.h>
 #include <lustre_nodemap.h>
 
 static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,

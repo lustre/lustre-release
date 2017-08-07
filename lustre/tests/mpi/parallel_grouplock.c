@@ -45,7 +45,6 @@
 #include <unistd.h>
 #include <time.h>
 #include <errno.h>
-#include <lustre/lustre_user.h>
 #include "lp_utils.h"
 
 #define LPGL_BUF_LEN 8192

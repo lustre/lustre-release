@@ -40,7 +40,6 @@
 #include <obd.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
-#include <lustre/lustre_idl.h>
 
 #include "osd_internal.h"
 

@@ -39,7 +39,7 @@
 
 #include <asm/div64.h>
 #include <libcfs/libcfs.h>
-#include <lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_swab.h>
 #include <obd_class.h>
 

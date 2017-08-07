@@ -44,8 +44,8 @@
 
 #include <libcfs/util/list.h>
 #include <libcfs/util/ioctl.h>
-#include <linux/lustre_ioctl.h>
-#include <lustre/lustre_barrier_user.h>
+#include <linux/lustre/lustre_ioctl.h>
+#include <linux/lustre/lustre_barrier_user.h>
 
 #include "obdctl.h"
 

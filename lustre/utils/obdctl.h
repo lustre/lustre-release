@@ -33,9 +33,7 @@
 #ifndef _OBDCTL_H_
 #define _OBDCTL_H_
 
-#include <lustre/lustre_barrier_user.h>
-
-#define MAX_IOC_BUFLEN 8192
+#include <linux/lustre/lustre_barrier_user.h>
 
 /* ptlctl.a */
 int ptl_initialize(int argc, char **argv);

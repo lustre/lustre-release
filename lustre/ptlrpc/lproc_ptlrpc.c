@@ -35,7 +35,6 @@
 #include <obd_support.h>
 #include <obd.h>
 #include <lprocfs_status.h>
-#include <lustre/lustre_idl.h>
 #include <lustre_net.h>
 #include <obd_class.h>
 #include "ptlrpc_internal.h"

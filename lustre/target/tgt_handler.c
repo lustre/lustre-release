@@ -1660,7 +1660,7 @@ void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
 
 static __u32 tgt_checksum_bulk(struct lu_target *tgt,
 			       struct ptlrpc_bulk_desc *desc, int opc,
-			       cksum_type_t cksum_type)
+			       enum cksum_types cksum_type)
 {
 	struct cfs_crypto_hash_desc	*hdesc;
 	unsigned int			bufsize;
@@ -1821,10 +1821,10 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 static int check_read_checksum(struct ptlrpc_bulk_desc *desc, struct obdo *oa,
 			       const lnet_process_id_t *peer,
 			       __u32 client_cksum, __u32 server_cksum,
-			       cksum_type_t server_cksum_type)
+			       enum cksum_types server_cksum_type)
 {
 	char *msg;
-	cksum_type_t cksum_type;
+	enum cksum_types cksum_type;
 
 	/* unlikely to happen and only if resend does not occur due to cksum
 	 * control failure on Client */
@@ -1991,7 +1991,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 		rc = -E2BIG;
 
 	if (body->oa.o_valid & OBD_MD_FLCKSUM) {
-		cksum_type_t cksum_type =
+		enum cksum_types cksum_type =
 			cksum_type_unpack(body->oa.o_valid & OBD_MD_FLFLAGS ?
 					  body->oa.o_flags : 0);
 
@@ -2129,7 +2129,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	__u32			*rcs;
 	int			 objcount, niocount, npages;
 	int			 rc, i, j;
-	cksum_type_t		 cksum_type = OBD_CKSUM_CRC32;
+	enum cksum_types cksum_type = OBD_CKSUM_CRC32;
 	bool			 no_reply = false, mmap;
 	struct tgt_thread_big_cache *tbc = req->rq_svc_thread->t_data;
 	bool wait_sync = false;

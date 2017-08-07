@@ -44,7 +44,7 @@
 #include <libcfs/util/parser.h>
 #include <linux/lnet/lnetctl.h>
 #include "obdctl.h"
-#include <lustre_ver.h>
+#include <linux/lustre/lustre_ver.h>
 
 static int lctl_list_commands(int argc, char **argv);
 

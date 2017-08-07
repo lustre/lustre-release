@@ -41,9 +41,6 @@
 #include <libcfs/libcfs.h>
 
 #include <obd_class.h>
-#include <lustre/lustre_idl.h>
-#include <lustre/lustre_user.h>
-
 #include "lov_internal.h"
 
 static inline void

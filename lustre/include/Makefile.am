@@ -32,9 +32,9 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-SUBDIRS = lustre uapi/linux
+SUBDIRS = lustre uapi/linux/lustre
 
-DIST_SUBDIRS = lustre uapi/linux
+DIST_SUBDIRS = lustre uapi/linux/lustre
 
 EXTRA_DIST = \
 	cl_object.h \
@@ -52,6 +52,7 @@ EXTRA_DIST = \
 	lustre_dlm_flags.h \
 	lustre_dlm.h \
 	lustre_eacl.h \
+	lustre_errno.h \
 	lustre_export.h \
 	lustre_fid.h \
 	lustre_fld.h \
@@ -65,7 +66,6 @@ EXTRA_DIST = \
 	lustre_linkea.h \
 	lustre_lmv.h \
 	lustre_log.h \
-	lustre_log_user.h \
 	lustre_mdc.h \
 	lustre_mds.h \
 	lustre_net.h \
@@ -84,7 +84,6 @@ EXTRA_DIST = \
 	lustre_sec.h \
 	lustre_swab.h \
 	lustre_update.h \
-	lustre_ver.h \
 	lu_target.h \
 	lvfs.h \
 	md_object.h \
@@ -97,5 +96,4 @@ EXTRA_DIST = \
 	obj_update.h \
 	upcall_cache.h \
 	lustre_kernelcomm.h \
-	seq_range.h \
-	uapi_kernelcomm.h
+	seq_range.h

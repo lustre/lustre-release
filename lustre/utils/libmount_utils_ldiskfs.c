@@ -69,7 +69,7 @@
 #include <linux/types.h>
 #include <linux/version.h>
 #include <linux/lnet/lnetctl.h>
-#include <lustre_ver.h>
+#include <linux/lustre/lustre_ver.h>
 
 #ifdef HAVE_SELINUX
 #include <selinux/selinux.h>

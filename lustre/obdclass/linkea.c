@@ -27,7 +27,6 @@
  * Author: Di Wang <di.wang@intel.com>
  */
 
-#include <lustre/lustre_idl.h>
 #include <obd.h>
 #include <lustre_linkea.h>
 

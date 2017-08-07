@@ -55,7 +55,7 @@
 #include <libcfs/libcfs.h>
 #include <lnet/api.h>
 #include <uapi/linux/lnet/nidstr.h>
-#include <lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_ha.h>
 #include <lustre_sec.h>
 #include <lustre_import.h>
@@ -63,7 +63,7 @@
 #include <lu_object.h>
 #include <lustre_req_layout.h>
 #include <obd_support.h>
-#include <lustre_ver.h>
+#include <uapi/linux/lustre/lustre_ver.h>
 
 /* MD flags we _always_ use */
 #define PTLRPC_MD_OPTIONS  0

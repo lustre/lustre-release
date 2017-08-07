@@ -33,7 +33,7 @@
 #ifndef _LUSTRE_LFSCK_H
 # define _LUSTRE_LFSCK_H
 
-#include <lustre/lustre_lfsck_user.h>
+#include <uapi/linux/lustre/lustre_lfsck_user.h>
 #include <lustre_dlm.h>
 #include <lu_object.h>
 #include <dt_object.h>

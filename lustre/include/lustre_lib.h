@@ -43,9 +43,9 @@
  */
 
 #include <libcfs/libcfs.h>
-#include <lustre/lustre_idl.h>
-#include <lustre_ver.h>
-#include <uapi/linux/lustre_cfg.h>
+#include <uapi/linux/lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_ver.h>
+#include <uapi/linux/lustre/lustre_cfg.h>
 
 /* target.c */
 struct ptlrpc_request;

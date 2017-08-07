@@ -48,7 +48,7 @@
 #ifndef _LUSTRE_SWAB_H_
 #define _LUSTRE_SWAB_H_
 
-#include <lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_idl.h>
 
 void lustre_swab_orphan_ent(struct lu_orphan_ent *ent);
 void lustre_swab_orphan_ent_v2(struct lu_orphan_ent_v2 *ent);

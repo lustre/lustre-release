@@ -40,7 +40,6 @@
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre_lfsck.h>
-#include <lustre/lustre_lfsck_user.h>
 
 #include "lfsck_internal.h"
 

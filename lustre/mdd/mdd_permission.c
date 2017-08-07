@@ -40,7 +40,6 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <obd_class.h>
-#include <lustre_ver.h>
 #include <lprocfs_status.h>
 #include <lustre_mds.h>
 #include <lustre_idmap.h>

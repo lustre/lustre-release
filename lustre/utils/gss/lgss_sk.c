@@ -40,7 +40,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <lustre/lustre_idl.h>
+#include <linux/lustre/lustre_user.h>
 
 #include "sk_utils.h"
 #include "err_util.h"

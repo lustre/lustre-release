@@ -40,7 +40,7 @@
 #include <getopt.h>
 #include <linux/types.h>
 #include <linux/fs.h>
-#include <lustre/lustre_user.h>
+#include <linux/lustre/lustre_user.h>
 
 #ifndef FS_IOC_FIEMAP
 # define FS_IOC_FIEMAP (_IOWR('f', 11, struct fiemap))

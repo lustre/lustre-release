@@ -43,7 +43,7 @@
 #include <linux/module.h>
 #include <uapi/linux/lnet/nidstr.h>
 /* LUSTRE_VERSION_CODE */
-#include <lustre_ver.h>
+#include <uapi/linux/lustre/lustre_ver.h>
 /*
  * struct OBD_{ALLOC,FREE}*()
  * MDT_FAIL_CHECK

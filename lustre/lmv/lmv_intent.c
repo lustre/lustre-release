@@ -42,7 +42,6 @@
 #include <lustre_intent.h>
 
 #include <obd_support.h>
-#include <lustre/lustre_idl.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre_dlm.h>

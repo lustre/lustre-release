@@ -47,23 +47,6 @@ esac
 ]) # LC_TARGET_SUPPORTED
 
 #
-# LC_CONFIG_OBD_BUFFER_SIZE
-#
-# the maximum buffer size of lctl ioctls
-#
-AC_DEFUN([LC_CONFIG_OBD_BUFFER_SIZE], [
-AC_MSG_CHECKING([for maximum OBD ioctl size])
-AC_ARG_WITH([obd-buffer-size],
-	AC_HELP_STRING([--with-obd-buffer-size=[size]],
-		[set lctl ioctl maximum bytes (default=8192)]),
-	[OBD_BUFFER_SIZE=$with_obd_buffer_size],
-	[OBD_BUFFER_SIZE=8192])
-AC_MSG_RESULT([$OBD_BUFFER_SIZE bytes])
-AC_DEFINE_UNQUOTED(CONFIG_LUSTRE_OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE,
-	[IOCTL Buffer Size])
-]) # LC_CONFIG_OBD_BUFFER_SIZE
-
-#
 # LC_GLIBC_SUPPORT_FHANDLES
 #
 AC_DEFUN([LC_GLIBC_SUPPORT_FHANDLES], [
@@ -3143,7 +3126,7 @@ lustre/contrib/Makefile
 lustre/doc/Makefile
 lustre/include/Makefile
 lustre/include/lustre/Makefile
-lustre/include/uapi/linux/Makefile
+lustre/include/uapi/linux/lustre/Makefile
 lustre/kernel_patches/targets/3.10-rhel7.target
 lustre/kernel_patches/targets/2.6-rhel6.9.target
 lustre/kernel_patches/targets/2.6-rhel6.8.target

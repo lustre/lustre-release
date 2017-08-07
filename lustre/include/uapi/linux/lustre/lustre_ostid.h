@@ -34,14 +34,15 @@
 #ifndef _UAPI_LUSTRE_OSTID_H_
 #define _UAPI_LUSTRE_OSTID_H_
 
+#include <linux/errno.h>
 /*
  * This is due to us being out of kernel and the way the OpenSFS branch
- * handles CFLAGS. Upstream will just have linux/lustre_fid.h
+ * handles CFLAGS.
  */
 #ifdef __KERNEL__
-#include <uapi/linux/lustre_fid.h>
+#include <uapi/linux/lustre/lustre_fid.h>
 #else
-#include <linux/lustre_fid.h>
+#include <linux/lustre/lustre_fid.h>
 #endif
 
 static inline __u64 lmm_oi_id(const struct ost_id *oi)

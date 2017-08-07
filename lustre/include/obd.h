@@ -35,7 +35,7 @@
 
 #include <linux/spinlock.h>
 
-#include <lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_lib.h>
 #include <libcfs/bitmap.h>
 #ifdef HAVE_SERVER_SUPPORT
@@ -314,7 +314,7 @@ struct client_obd {
         /* supported checksum types that are worked out at connect time */
         __u32                    cl_supp_cksum_types;
         /* checksum algorithm to be used */
-        cksum_type_t             cl_cksum_type;
+	enum cksum_types	 cl_cksum_type;
 
         /* also protected by the poorly named _loi_list_lock lock above */
         struct osc_async_rc      cl_ar;

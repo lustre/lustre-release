@@ -62,7 +62,7 @@ struct rpc_clnt; /* for rpc_pipefs */
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>
-#include <lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_sec.h>
 #include <lustre_net.h>
 #include <lustre_import.h>

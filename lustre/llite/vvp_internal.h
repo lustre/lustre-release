@@ -37,7 +37,6 @@
 #ifndef VVP_INTERNAL_H
 #define VVP_INTERNAL_H
 
-#include <lustre/lustre_idl.h>
 #include <cl_object.h>
 
 enum obd_notify_event;

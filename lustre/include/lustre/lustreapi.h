@@ -40,7 +40,7 @@
 
 #include <stdarg.h>
 #include <stdint.h>
-#include <lustre/lustre_user.h>
+#include <linux/lustre/lustre_user.h>
 
 #ifndef LL_MAXQUOTAS
 #define LL_MAXQUOTAS 3

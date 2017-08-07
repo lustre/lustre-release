@@ -46,9 +46,8 @@
 /* fid_be_cpu(), fid_cpu_to_be(). */
 #include <lustre_fid.h>
 #include <lustre_idmap.h>
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_mds.h>
-#include <lustre/lustre_idl.h>
 
 #include "mdd_internal.h"
 

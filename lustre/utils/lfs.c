@@ -65,8 +65,8 @@
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/parser.h>
 #include <lustre/lustreapi.h>
-#include <lustre_ver.h>
-#include <linux/lustre_param.h>
+#include <linux/lustre/lustre_ver.h>
+#include <linux/lustre/lustre_param.h>
 
 #ifndef ARRAY_SIZE
 # define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))

@@ -31,7 +31,7 @@
 #define DEBUG_SUBSYSTEM S_LQUOTA
 
 #include <obd_class.h>
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 
 #include "qsd_internal.h"
 

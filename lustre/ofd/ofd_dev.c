@@ -70,10 +70,9 @@
 
 #include <obd_class.h>
 #include <obd_cksum.h>
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_fid.h>
 #include <lustre_lfsck.h>
-#include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
 #include <lustre_quota.h>
 #include <lustre_nodemap.h>

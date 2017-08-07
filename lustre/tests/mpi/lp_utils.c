@@ -44,7 +44,6 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <errno.h>
-#include "lustre/lustre_user.h"
 #include "lp_utils.h"
 
 #define MAX_PROCESSES 8

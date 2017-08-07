@@ -50,7 +50,7 @@
 #include <libcfs/util/param.h>
 #include <libcfs/util/string.h>
 #include <lustre/lustreapi.h>
-#include <lustre/lustre_idl.h>
+#include <linux/lustre/lustre_idl.h>
 
 #define MAX_LOV_UUID_COUNT      1000
 

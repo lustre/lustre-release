@@ -36,7 +36,6 @@
 #ifndef __FID_INTERNAL_H
 #define __FID_INTERNAL_H
 
-#include <lustre/lustre_idl.h>
 #include <libcfs/libcfs.h>
 
 #ifdef HAVE_SERVER_SUPPORT

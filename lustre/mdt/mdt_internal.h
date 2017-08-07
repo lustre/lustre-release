@@ -47,7 +47,6 @@
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_hash.h>
 #include <upcall_cache.h>
-#include <lustre/lustre_idl.h>
 #include <obd_class.h>
 #include <lustre_disk.h>
 #include <lu_target.h>

@@ -36,7 +36,6 @@
 # include <linux/uidgid.h>
 #endif
 #include <lustre_net.h>
-#include <lustre/lustre_idl.h>
 #include <obd_class.h>
 #include <obd.h>
 #include <cl_object.h>

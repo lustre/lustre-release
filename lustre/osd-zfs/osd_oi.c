@@ -39,7 +39,6 @@
 
 #define DEBUG_SUBSYSTEM S_OSD
 
-#include <lustre_ver.h>
 #include <libcfs/libcfs.h>
 #include <obd_support.h>
 #include <lustre_net.h>

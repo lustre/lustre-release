@@ -33,7 +33,6 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 #include <lustre_debug.h>
-#include <lustre_ver.h>
 #include <lustre_disk.h>  /* for s2sbi */
 #include <lustre_eacl.h>
 #include <lustre_linkea.h>

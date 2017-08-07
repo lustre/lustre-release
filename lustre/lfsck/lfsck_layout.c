@@ -36,13 +36,11 @@
 #include <linux/bitops.h>
 #include <linux/rbtree.h>
 
-#include <lustre/lustre_idl.h>
 #include <lu_object.h>
 #include <dt_object.h>
 #include <lustre_fid.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
-#include <lustre/lustre_user.h>
 #include <md_object.h>
 #include <obd_class.h>
 

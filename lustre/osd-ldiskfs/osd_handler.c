@@ -45,8 +45,6 @@
 # include <linux/uidgid.h>
 #endif
 
-/* LUSTRE_VERSION_CODE */
-#include <lustre_ver.h>
 /* prerequisite for linux/xattr.h */
 #include <linux/types.h>
 /* prerequisite for linux/xattr.h */
@@ -67,7 +65,7 @@
 #include <lustre_net.h>
 #include <lustre_fid.h>
 /* process_config */
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 
 #include "osd_internal.h"
 #include "osd_dynlocks.h"

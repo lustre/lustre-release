@@ -56,9 +56,9 @@
 #include <libcfs/util/parser.h>
 #include <linux/lnet/nidstr.h>
 #include <linux/lnet/lnetctl.h>
-#include <linux/lustre_cfg.h>
-#include <linux/lustre_ioctl.h>
-#include <lustre_ver.h>
+#include <linux/lustre/lustre_cfg.h>
+#include <linux/lustre/lustre_ioctl.h>
+#include <linux/lustre/lustre_ver.h>
 
 #include <sys/un.h>
 #include <time.h>

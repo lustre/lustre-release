@@ -45,7 +45,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <lustre/lustre_user.h>
+#include <linux/lustre/lustre_user.h>
 
 typedef struct flag_mapping {
        const char *string;

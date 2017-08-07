@@ -39,7 +39,6 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
-#include <lustre_ver.h>
 #include "mdd_internal.h"
 
 void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj,

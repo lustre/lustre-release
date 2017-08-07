@@ -74,8 +74,8 @@
 #include <libcfs/util/string.h>
 #include <linux/lnet/lnetctl.h>
 #include <lustre/lustreapi.h>
-#include <linux/lustre_ostid.h>
-#include <linux/lustre_ioctl.h>
+#include <linux/lustre/lustre_ostid.h>
+#include <linux/lustre/lustre_ioctl.h>
 #include "lustreapi_internal.h"
 
 static int llapi_msg_level = LLAPI_MSG_MAX;
@@ -3957,7 +3957,7 @@ static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
 {
 	struct find_param	*param = (struct find_param *)param_data;
 	DIR			*tmp_parent = parent;
-	char			raw[OBD_MAX_IOCTL_BUFFER] = {'\0'};
+	char			raw[MAX_IOC_BUFLEN] = {'\0'};
 	char			*rawbuf = raw;
 	struct obd_ioctl_data	data = { 0 };
 	int			fd;
@@ -4271,7 +4271,7 @@ int llapi_getstripe(char *path, struct find_param *param)
 int llapi_obd_fstatfs(int fd, __u32 type, __u32 index,
 		      struct obd_statfs *stat_buf, struct obd_uuid *uuid_buf)
 {
-        char raw[OBD_MAX_IOCTL_BUFFER] = {'\0'};
+	char raw[MAX_IOC_BUFLEN] = {'\0'};
         char *rawbuf = raw;
         struct obd_ioctl_data data = { 0 };
         int rc = 0;

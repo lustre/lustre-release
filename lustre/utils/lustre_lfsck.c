@@ -42,9 +42,9 @@
 #include "obdctl.h"
 #include "lustreapi_internal.h"
 
-#include <lustre/lustre_lfsck_user.h>
 #include <linux/lnet/lnetctl.h>
-#include <linux/lustre_ioctl.h>
+#include <linux/lustre/lustre_ioctl.h>
+#include <linux/lustre/lustre_lfsck_user.h>
 /* Needs to be last to avoid clashes */
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>

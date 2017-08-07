@@ -33,8 +33,17 @@
 #ifndef _UAPI_LUSTRE_CFG_H
 #define _UAPI_LUSTRE_CFG_H
 
+#include <linux/errno.h>
 #include <linux/kernel.h>
-#include <lustre/lustre_user.h>
+/*
+ * This is due to us being out of kernel and the way the OpenSFS branch
+ * handles CFLAGS.
+ */
+#ifdef __KERNEL__
+# include <uapi/linux/lustre/lustre_user.h>
+#else
+# include <linux/lustre/lustre_user.h>
+#endif
 
 /* Handle older distros */
 #ifndef __ALIGN_KERNEL

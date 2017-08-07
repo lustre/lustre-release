@@ -70,11 +70,22 @@
 #define _LUSTRE_IDL_H_
 
 #include <asm/byteorder.h>
+#include <linux/errno.h>
 #include <linux/types.h>
 
-#include <uapi/linux/lnet/lnet-types.h>
-#include <lustre/lustre_user.h> /* Defn's shared with user-space. */
-#include <lustre_ver.h>
+/*
+ * This is due to us being out of kernel and the way the OpenSFS branch
+ * handles CFLAGS.
+ */
+#ifdef __KERNEL__
+# include <uapi/linux/lnet/lnet-types.h>
+# include <uapi/linux/lustre/lustre_user.h> /* Defn's shared with user-space. */
+# include <uapi/linux/lustre/lustre_ver.h>
+#else
+# include <linux/lnet/lnet-types.h>
+# include <linux/lustre/lustre_user.h>
+# include <linux/lustre/lustre_ver.h>
+#endif
 
 /*
  *  GENERAL STUFF

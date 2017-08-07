@@ -41,7 +41,6 @@
 
 #include <libcfs/libcfs.h>
 #include <linux/module.h>
-#include <lustre/lustre_idl.h>
 #include <lustre_fid.h>
 
 /**

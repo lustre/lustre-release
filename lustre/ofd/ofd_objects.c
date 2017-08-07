@@ -41,7 +41,6 @@
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <dt_object.h>
-#include <lustre/lustre_idl.h>
 #include <lustre_lfsck.h>
 
 #include "ofd_internal.h"

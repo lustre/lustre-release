@@ -42,18 +42,18 @@
 # include <linux/uidgid.h>
 #endif
 
-#include <lustre/lustre_errno.h>
+#include <lustre_errno.h>
 
 #include <cl_object.h>
 #include <llog_swab.h>
 #include <lprocfs_status.h>
 #include <lustre_acl.h>
 #include <lustre_fid.h>
-#include <uapi/linux/lustre_ioctl.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_kernelcomm.h>
 #include <lustre_lmv.h>
 #include <lustre_log.h>
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_swab.h>
 #include <obd_class.h>
 

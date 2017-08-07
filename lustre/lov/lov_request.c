@@ -35,8 +35,6 @@
 #include <libcfs/libcfs.h>
 
 #include <obd_class.h>
-#include <lustre/lustre_idl.h>
-
 #include "lov_internal.h"
 
 static void lov_init_set(struct lov_request_set *set)

@@ -46,12 +46,9 @@
 
 #include <linux/module.h>
 
-#include <lustre/lustre_idl.h>
-
 #include <llog_swab.h>
 #include <lustre_debug.h>
 #include <lustre_swab.h>
-#include <lustre_ver.h>
 #include <obd.h>
 #include <obd_support.h>
 

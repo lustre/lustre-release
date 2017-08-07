@@ -45,13 +45,12 @@
 #include <lustre_debug.h>
 #include <lustre_kernelcomm.h>
 #include <lprocfs_status.h>
-#include <lustre_ver.h>
 #include <cl_object.h>
 #ifdef HAVE_SERVER_SUPPORT
 # include <dt_object.h>
 # include <md_object.h>
 #endif /* HAVE_SERVER_SUPPORT */
-#include <uapi/linux/lustre_ioctl.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 #include "llog_internal.h"
 
 #ifdef CONFIG_PROC_FS

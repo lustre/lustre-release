@@ -38,7 +38,6 @@
 
 #include <libcfs/util/list.h>
 #include <lustre/lustreapi.h>
-#include <lustre/lustre_idl.h>
 #include "lustreapi_internal.h"
 
 /**

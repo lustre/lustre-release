@@ -38,7 +38,6 @@
 
 #include <obd_class.h>
 #include <lprocfs_status.h>
-#include <lustre/lustre_idl.h>
 
 #ifdef CONFIG_PROC_FS
 

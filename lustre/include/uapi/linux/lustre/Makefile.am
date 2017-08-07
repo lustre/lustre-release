@@ -29,10 +29,35 @@
 # Lustre is a trademark of Seagate, Inc.
 #
 
-EXTRA_DIST = \
+lustreincludedir = /usr/include/linux/lustre
+lustreinclude_HEADERS = \
+	lustre_barrier_user.h \
 	lustre_cfg.h \
 	lustre_disk.h \
 	lustre_fid.h \
+	lustre_fiemap.h \
+	lustre_idl.h \
 	lustre_ioctl.h \
+	lustre_kernelcomm.h \
+	lustre_lfsck_user.h \
+	lustre_log_user.h \
 	lustre_ostid.h \
-	lustre_param.h
+	lustre_param.h \
+	lustre_user.h \
+	lustre_ver.h
+
+EXTRA_DIST = \
+	lustre_barrier_user.h \
+	lustre_cfg.h \
+	lustre_disk.h \
+	lustre_fid.h \
+	lustre_fiemap.h \
+	lustre_idl.h \
+	lustre_ioctl.h \
+	lustre_kernelcomm.h \
+	lustre_lfsck_user.h \
+	lustre_log_user.h \
+	lustre_ostid.h \
+	lustre_param.h \
+	lustre_user.h \
+	lustre_ver.h

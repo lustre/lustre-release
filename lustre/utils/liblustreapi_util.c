@@ -42,7 +42,7 @@
 #include <sys/syscall.h>
 #include <lustre/lustreapi.h>
 #include <libcfs/util/string.h>	/* only needed for compat strlcpy() */
-#include <lustre_ver.h>		/* only until LUSTRE_VERSION_CODE is gone */
+#include <linux/lustre/lustre_ver.h>	/* only until LUSTRE_VERSION_CODE is gone */
 #include "lustreapi_internal.h"
 
 /*

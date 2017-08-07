@@ -40,7 +40,6 @@
 #include <obd.h>
 #include <obd_support.h>
 #include <lustre_export.h>
-#include <lustre/lustre_user.h>
 #include <lprocfs_status.h>
 #include <lustre_kernelcomm.h>
 #include "mdt_internal.h"

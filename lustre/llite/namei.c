@@ -47,7 +47,6 @@
 #include <obd_support.h>
 #include <lustre_fid.h>
 #include <lustre_dlm.h>
-#include <lustre_ver.h>
 #include "llite_internal.h"
 
 static int ll_create_it(struct inode *dir, struct dentry *dentry,

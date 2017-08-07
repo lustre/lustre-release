@@ -60,8 +60,8 @@
 #include <getopt.h>
 
 #include <asm/byteorder.h>
-#include <linux/lustre_disk.h>
-#include <lustre_ver.h>
+#include <linux/lustre/lustre_disk.h>
+#include <linux/lustre/lustre_ver.h>
 
 char *progname;
 static struct option const long_opts[] = {

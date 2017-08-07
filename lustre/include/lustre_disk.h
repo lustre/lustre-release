@@ -48,7 +48,7 @@
 #include <linux/backing-dev.h>
 #include <linux/list.h>
 #include <libcfs/libcfs.h>
-#include <uapi/linux/lustre_disk.h>
+#include <uapi/linux/lustre/lustre_disk.h>
 
 #define IS_MDT(data)		((data)->lsi_flags & LDD_F_SV_TYPE_MDT)
 #define IS_OST(data)		((data)->lsi_flags & LDD_F_SV_TYPE_OST)

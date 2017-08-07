@@ -50,12 +50,12 @@
 #include <dt_object.h>
 #include <lustre_acl.h>
 #include <lustre_export.h>
-#include <uapi/linux/lustre_ioctl.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_lfsck.h>
 #include <lustre_log.h>
 #include <lustre_nodemap.h>
 #include <lustre_mds.h>
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_quota.h>
 #include <lustre_swab.h>
 #include <obd.h>

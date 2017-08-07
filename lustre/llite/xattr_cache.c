@@ -37,7 +37,6 @@
 #include <linux/mm.h>
 #include <obd_support.h>
 #include <lustre_dlm.h>
-#include <lustre_ver.h>
 #include "llite_internal.h"
 
 /* If we ever have hundreds of extended attributes, we might want to consider

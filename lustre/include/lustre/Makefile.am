@@ -40,8 +40,6 @@ endif
 EXTRA_DIST = libiam.h \
 	liblustreapi.h \
 	ll_fiemap.h \
-	lustre_errno.h \
-	lustre_idl.h \
 	lustre_lfsck_user.h \
 	lustre_user.h \
 	lustreapi.h \

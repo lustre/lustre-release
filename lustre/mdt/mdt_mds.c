@@ -52,7 +52,7 @@
 #include "mdt_internal.h"
 #include <lustre_quota.h>
 #include <lustre_acl.h>
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 
 struct mds_device {
 	/* super-class */

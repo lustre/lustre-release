@@ -59,7 +59,6 @@
 #include <obd_class.h>
 #include <obd_support.h>
 #include <obd_cksum.h>
-#include <lustre/lustre_idl.h>
 #include <lustre_net.h>
 #include <lustre_import.h>
 #include <lustre_sec.h>

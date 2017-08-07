@@ -45,7 +45,6 @@
 #include <linux/seq_file.h>
 #include <linux/namei.h>
 
-#include <lustre/lustre_idl.h>
 #include <obd_support.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
@@ -54,7 +53,7 @@
 #include <lprocfs_status.h>
 #include <cl_object.h>
 #include <lustre_fid.h>
-#include <uapi/linux/lustre_ioctl.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_kernelcomm.h>
 #include "lmv_internal.h"
 

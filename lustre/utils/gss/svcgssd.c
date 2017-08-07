@@ -46,7 +46,6 @@
 #include <fcntl.h>
 #include <errno.h>
 
-
 #include <unistd.h>
 #include <err.h>
 #include <stdio.h>
@@ -58,7 +57,7 @@
 #include "gss_util.h"
 #include "err_util.h"
 #include "lsupport.h"
-#include "lustre_ver.h"
+#include <linux/lustre/lustre_ver.h>
 
 int null_enabled;
 int krb_enabled;

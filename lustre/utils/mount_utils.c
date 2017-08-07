@@ -42,7 +42,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <config.h>
-#include <lustre_ver.h>
+#include <linux/lustre/lustre_ver.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
@@ -50,8 +50,7 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <dlfcn.h>
-#include <lustre/lustre_idl.h>
-#include <linux/lustre_cfg.h>
+#include <linux/lustre/lustre_cfg.h>
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/xattr.h>

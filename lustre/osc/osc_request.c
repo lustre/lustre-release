@@ -34,17 +34,15 @@
 
 #include <libcfs/libcfs.h>
 
-#include <lustre/lustre_user.h>
-
 #include <lprocfs_status.h>
 #include <lustre_debug.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
 #include <lustre_ha.h>
-#include <uapi/linux/lustre_ioctl.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_net.h>
 #include <lustre_obdo.h>
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 #include <obd.h>
 #include <obd_cksum.h>
 #include <obd_class.h>
@@ -1059,7 +1057,7 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
 
 static u32 osc_checksum_bulk(int nob, size_t pg_count,
 			     struct brw_page **pga, int opc,
-			     cksum_type_t cksum_type)
+			     enum cksum_types cksum_type)
 {
 	u32				cksum;
 	int				i = 0;
@@ -1255,7 +1253,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
                     !sptlrpc_flavor_has_bulk(&req->rq_flvr)) {
                         /* store cl_cksum_type in a local variable since
                          * it can be changed via lprocfs */
-                        cksum_type_t cksum_type = cli->cl_cksum_type;
+			enum cksum_types cksum_type = cli->cl_cksum_type;
 
                         if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0)
                                 body->oa.o_flags = 0;
@@ -1394,7 +1392,7 @@ check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
 {
         __u32 new_cksum;
         char *msg;
-        cksum_type_t cksum_type;
+	enum cksum_types cksum_type;
 
         if (server_cksum == client_cksum) {
                 CDEBUG(D_PAGE, "checksum %x confirmed\n", client_cksum);
@@ -1530,7 +1528,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		u32        server_cksum = body->oa.o_cksum;
 		char      *via = "";
 		char      *router = "";
-                cksum_type_t cksum_type;
+		enum cksum_types cksum_type;
 
                 cksum_type = cksum_type_unpack(body->oa.o_valid &OBD_MD_FLFLAGS?
                                                body->oa.o_flags : 0);

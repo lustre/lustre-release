@@ -31,7 +31,7 @@
 #ifndef _OBJ_UPDATE_H_
 #define _OBJ_UPDATE_H_
 
-#include <lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_idl.h>
 
 static inline size_t
 object_update_param_size(const struct object_update_param *param)

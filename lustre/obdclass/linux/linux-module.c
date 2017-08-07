@@ -68,8 +68,10 @@
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <uapi/linux/lnet/lnetctl.h>
-#include <uapi/linux/lustre_ioctl.h>
-#include <lustre_ver.h>
+#include <uapi/linux/lustre/lustre_ioctl.h>
+#include <uapi/linux/lustre/lustre_ver.h>
+
+#define OBD_MAX_IOCTL_BUFFER	8192
 
 static int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
 {

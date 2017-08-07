@@ -37,7 +37,15 @@
 #ifndef _UAPI_LUSTRE_FID_H_
 #define _UAPI_LUSTRE_FID_H_
 
-#include <lustre/lustre_idl.h>
+/*
+ * This is due to us being out of kernel and the way the OpenSFS branch
+ * handles CFLAGS.
+ */
+#ifdef __KERNEL__
+# include <uapi/linux/lustre/lustre_idl.h>
+#else
+# include <linux/lustre/lustre_idl.h>
+#endif
 
 /** returns fid object sequence */
 static inline __u64 fid_seq(const struct lu_fid *fid)

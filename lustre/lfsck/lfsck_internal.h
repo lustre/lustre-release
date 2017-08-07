@@ -33,9 +33,6 @@
 #ifndef _LFSCK_INTERNAL_H
 # define _LFSCK_INTERNAL_H
 
-#include <lustre/lustre_lfsck_user.h>
-#include <lustre/lustre_user.h>
-#include <lustre/lustre_idl.h>
 #include <lustre_lfsck.h>
 #include <obd.h>
 #include <lu_object.h>

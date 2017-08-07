@@ -41,7 +41,6 @@
 #include <linux/fs.h>
 #include <linux/module.h>
 #include <linux/pagemap.h> /* for PAGE_SIZE */
-#include <lustre/lustre_idl.h>
 #include <obd_class.h>
 
 /*FIXME: Just copy from obdo_from_inode*/

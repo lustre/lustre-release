@@ -35,7 +35,6 @@
 #define _TG_INTERNAL_H
 
 #include <lustre_net.h>
-#include <lustre/lustre_idl.h>
 #include <lu_target.h>
 #include <lustre_export.h>
 #include <lustre_fid.h>

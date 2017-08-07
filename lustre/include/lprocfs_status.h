@@ -46,7 +46,7 @@
 #include <linux/seq_file.h>
 
 #include <libcfs/libcfs.h>
-#include <lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_idl.h>
 
 struct lprocfs_vars {
 	const char			*name;

@@ -37,7 +37,6 @@
 #define DEBUG_SUBSYSTEM S_OSD
 
 #include <lprocfs_status.h>
-#include <lustre/lustre_idl.h>
 
 #include "osd_internal.h"
 

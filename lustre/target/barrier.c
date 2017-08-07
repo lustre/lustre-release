@@ -35,12 +35,11 @@
 
 #include <linux/percpu_counter.h>
 
-#include <lustre/lustre_idl.h>
 #include <dt_object.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_barrier.h>
-#include <lustre/lustre_barrier_user.h>
+#include <uapi/linux/lustre/lustre_barrier_user.h>
 
 static LIST_HEAD(barrier_instance_list);
 static DEFINE_SPINLOCK(barrier_instance_lock);

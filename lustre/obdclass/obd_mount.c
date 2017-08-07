@@ -43,11 +43,10 @@
 
 #include <obd.h>
 #include <obd_class.h>
-#include <lustre/lustre_user.h>
 #include <linux/version.h>
 #include <lustre_log.h>
 #include <lustre_disk.h>
-#include <uapi/linux/lustre_param.h>
+#include <uapi/linux/lustre/lustre_param.h>
 
 static int (*client_fill_super)(struct super_block *sb,
 				struct vfsmount *mnt);

@@ -35,7 +35,7 @@
 
 #include <stdarg.h>
 #include <libcfs/libcfs.h>
-#include <lustre/lustre_idl.h>
+#include <uapi/linux/lustre/lustre_idl.h>
 #include <lu_ref.h>
 #include <linux/percpu_counter.h>
 

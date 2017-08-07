@@ -34,7 +34,7 @@
 #define LOV_INTERNAL_H
 
 #include <obd_class.h>
-#include <lustre/lustre_user.h>
+#include <uapi/linux/lustre/lustre_user.h>
 
 /* If we are unable to get the maximum object size from the OST in
  * ocd_maxbytes using OBD_CONNECT_MAXBYTES, then we fall back to using

@@ -26,9 +26,6 @@
  *
  * Author: Johann Lombardi <johann.lombardi@intel.com>
  */
-
-#include <lustre/lustre_idl.h>
-
 #include <llog_swab.h>
 #include <lustre_swab.h>
 #include <obd.h>
