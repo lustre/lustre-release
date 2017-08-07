@@ -1418,18 +1418,18 @@ out:
 int jt_snapshot_create(int argc, char **argv)
 {
 	struct snapshot_instance *si;
-	struct option lopts_create[] = {
-		{ "barrier",	optional_argument,	0,	'b' },
-		{ "comment",	required_argument,	0,	'c' },
-		{ "fsname",	required_argument,	0,	'F' },
-		{ "help",	no_argument,		0,	'h' },
-		{ "name",	required_argument,	0,	'n' },
-		{ "rsh",	required_argument,	0,	'r' },
-		{ "timeout",	required_argument,	0,	't' },
-	};
+	struct option long_opts[] = {
+	{ .val = 'b',	.name = "barrier",	.has_arg = optional_argument },
+	{ .val = 'c',	.name = "comment",	.has_arg = required_argument },
+	{ .val = 'F',	.name = "fsname",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
+	{ .val = 'r',	.name = "rsh",		.has_arg = required_argument },
+	{ .val = 't',	.name = "timeout",	.has_arg = required_argument },
+	{ .name = NULL } };
 	int rc = 0;
 
-	si = snapshot_init(argc, argv, lopts_create, "b::c:F:hn:r:t:",
+	si = snapshot_init(argc, argv, long_opts, "b::c:F:hn:r:t:",
 			   snapshot_create_usage, LOCK_EX, &rc);
 	if (!si)
 		return rc;
@@ -1674,16 +1674,16 @@ static int snapshot_destroy(struct snapshot_instance *si)
 int jt_snapshot_destroy(int argc, char **argv)
 {
 	struct snapshot_instance *si;
-	struct option lopts_destroy[] = {
-		{ "force",	no_argument,		0,	'f' },
-		{ "fsname",	required_argument,	0,	'F' },
-		{ "help",	no_argument,		0,	'h' },
-		{ "name",	required_argument,	0,	'n' },
-		{ "rsh",	required_argument,	0,	'r' },
-	};
+	struct option long_opts[] = {
+	{ .val = 'f',	.name = "force",	.has_arg = no_argument },
+	{ .val = 'F',	.name = "fsname",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
+	{ .val = 'r',	.name = "rsh",		.has_arg = required_argument },
+	{ .name = NULL } };
 	int rc = 0;
 
-	si = snapshot_init(argc, argv, lopts_destroy, "fF:hn:r:",
+	si = snapshot_init(argc, argv, long_opts, "fF:hn:r:",
 			   snapshot_destroy_usage, LOCK_EX, &rc);
 	if (!si)
 		return rc;
@@ -1885,17 +1885,17 @@ static int snapshot_modify(struct snapshot_instance *si)
 int jt_snapshot_modify(int argc, char **argv)
 {
 	struct snapshot_instance *si;
-	struct option lopts_modify[] = {
-		{ "comment",	required_argument,	0,	'c' },
-		{ "fsname",	required_argument,	0,	'F' },
-		{ "help",	no_argument,		0,	'h' },
-		{ "name",	required_argument,	0,	'n' },
-		{ "new",	required_argument,	0,	'N' },
-		{ "rsh",	required_argument,	0,	'r' },
-	};
+	struct option long_opts[] = {
+	{ .val = 'c',	.name = "comment",	.has_arg = required_argument },
+	{ .val = 'F',	.name = "fsname",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
+	{ .val = 'N',	.name = "new",		.has_arg = required_argument },
+	{ .val = 'r',	.name = "rsh",		.has_arg = required_argument },
+	{ .name = NULL } };
 	int rc = 0;
 
-	si = snapshot_init(argc, argv, lopts_modify, "c:F:hn:N:r:",
+	si = snapshot_init(argc, argv, long_opts, "c:F:hn:N:r:",
 			   snapshot_modify_usage, LOCK_EX, &rc);
 	if (!si)
 		return rc;
@@ -2133,16 +2133,16 @@ static int snapshot_list_all(struct snapshot_instance *si)
 int jt_snapshot_list(int argc, char **argv)
 {
 	struct snapshot_instance *si;
-	struct option lopts_list[] = {
-		{ "detail",	no_argument,		0,	'd' },
-		{ "fsname",	required_argument,	0,	'F' },
-		{ "help",	no_argument,		0,	'h' },
-		{ "name",	required_argument,	0,	'n' },
-		{ "rsh",	required_argument,	0,	'r' },
-	};
+	struct option long_opts[] = {
+	{ .val = 'd',	.name = "detail",	.has_arg = no_argument },
+	{ .val = 'F',	.name = "fsname",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
+	{ .val = 'r',	.name = "rsh",		.has_arg = required_argument },
+	{ .name = NULL } };
 	int rc = 0;
 
-	si = snapshot_init(argc, argv, lopts_list, "dF:hn:r:",
+	si = snapshot_init(argc, argv, long_opts, "dF:hn:r:",
 			   snapshot_list_usage, LOCK_SH, &rc);
 	if (!si)
 		return rc;
@@ -2384,15 +2384,15 @@ cleanup:
 int jt_snapshot_mount(int argc, char **argv)
 {
 	struct snapshot_instance *si;
-	struct option lopts_mount[] = {
-		{ "fsname",	required_argument,	0,	'F' },
-		{ "help",	no_argument,		0,	'h' },
-		{ "name",	required_argument,	0,	'n' },
-		{ "rsh",	required_argument,	0,	'r' },
-	};
+	struct option long_opts[] = {
+	{ .val = 'F',	.name = "fsname",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
+	{ .val = 'r',	.name = "rsh",		.has_arg = required_argument },
+	{ .name = NULL } };
 	int rc = 0;
 
-	si = snapshot_init(argc, argv, lopts_mount, "F:hn:r:",
+	si = snapshot_init(argc, argv, long_opts, "F:hn:r:",
 			   snapshot_mount_usage, LOCK_EX, &rc);
 	if (!si)
 		return rc;
@@ -2534,15 +2534,15 @@ static int snapshot_umount(struct snapshot_instance *si)
 int jt_snapshot_umount(int argc, char **argv)
 {
 	struct snapshot_instance *si;
-	struct option lopts_umount[] = {
-		{ "fsname",	required_argument,	0,	'F' },
-		{ "help",	no_argument,		0,	'h' },
-		{ "name",	required_argument,	0,	'n' },
-		{ "rsh",	required_argument,	0,	'r' },
-	};
+	struct option long_opts[] = {
+	{ .val = 'F',	.name = "fsname",	.has_arg = required_argument },
+	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
+	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
+	{ .val = 'r',	.name = "rsh",		.has_arg = required_argument },
+	{ .name = NULL } };
 	int rc = 0;
 
-	si = snapshot_init(argc, argv, lopts_umount, "F:hn:r:",
+	si = snapshot_init(argc, argv, long_opts, "F:hn:r:",
 			   snapshot_umount_usage, LOCK_EX, &rc);
 	if (!si)
 		return rc;
