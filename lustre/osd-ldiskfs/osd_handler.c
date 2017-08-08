@@ -3817,7 +3817,8 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		struct filter_fid *ff;
 		struct ost_layout *ol;
 
-		LASSERT(osd_dev(dt->do_lu.lo_dev)->od_is_ost);
+		if (!osd_dev(dt->do_lu.lo_dev)->od_is_ost)
+			goto cache;
 
 		rc = osd_get_lma(info, inode, &info->oti_obj_dentry, loa);
 		if (rc)
