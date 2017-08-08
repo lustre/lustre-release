@@ -4,8 +4,8 @@
 
 set -e
 
-# bug number:  16356
-ALWAYS_EXCEPT="12a   $REPLAY_VBR_EXCEPT"
+# bug number:
+ALWAYS_EXCEPT=" $REPLAY_VBR_EXCEPT"
 
 SAVE_PWD=$PWD
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
