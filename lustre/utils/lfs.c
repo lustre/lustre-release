@@ -2749,20 +2749,19 @@ static int lfs_getdirstripe(int argc, char **argv)
 	struct find_param param = { 0 };
 	struct option long_opts[] = {
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-		{"mdt-count",	no_argument,		0, 'c'},
+	{ .val = 'c',	.name = "mdt-count",	.has_arg = no_argument },
 #endif
-		{"mdt-hash",	no_argument,		0, 'H'},
-		{"mdt-index",	no_argument,		0, 'i'},
-		{"recursive",	no_argument,		0, 'r'},
+	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
+	{ .val = 'H',	.name = "mdt-hash",	.has_arg = no_argument },
+	{ .val = 'i',	.name = "mdt-index",	.has_arg = no_argument },
+	{ .val = 'O',	.name = "obd",		.has_arg = required_argument },
+	{ .val = 'r',	.name = "recursive",	.has_arg = no_argument },
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-		{"mdt-hash",	no_argument,		0, 't'},
+	{ .val = 't',	.name = "mdt-hash",	.has_arg = no_argument },
 #endif
-		{"default",	no_argument,		0, 'D'},
-		{"obd",		required_argument,	0, 'O'},
-		{"mdt-count",	no_argument,		0, 'T'},
-		{"yaml",	no_argument,		0, 'y'},
-		{0, 0, 0, 0}
-	};
+	{ .val = 'T',	.name = "mdt-count",	.has_arg = no_argument },
+	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument },
+	{ .name = NULL } };
 	int c, rc;
 
 	param.fp_get_lmv = 1;
