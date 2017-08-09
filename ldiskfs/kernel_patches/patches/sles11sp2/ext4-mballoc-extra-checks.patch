@@ -150,7 +150,7 @@
  	for (i = 0; i <= 13; i++)
  		seq_printf(seq, " %-5u", i <= sb->s_blocksize_bits + 1 ?
  				sg.info.bb_counters[i] : 0);
-@@ -3417,23 +3434,68 @@ static void ext4_mb_generate_from_freeli
+@@ -3417,23 +3434,72 @@ static void ext4_mb_generate_from_freeli
  }
  
  /*
@@ -164,6 +164,10 @@
 +{
 +	unsigned short max = EXT4_BLOCKS_PER_GROUP(sb);
 +	unsigned short i, first, free = 0;
++	unsigned short free_in_gdp = ext4_free_blks_count(sb, gdp);
++
++	if (free_in_gdp == 0 && gdp->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT))
++		return 0;
 +
 +	i = mb_find_next_zero_bit(bitmap, max, 0);
 +
@@ -177,10 +181,10 @@
 +			i = mb_find_next_zero_bit(bitmap, max, i);
 +	}
 +
-+	if (free != ext4_free_blks_count(sb, gdp)) {
++	if (free != free_in_gdp) {
 +		ext4_error(sb, "on-disk bitmap for group %d"
 +			"corrupted: %u blocks free in bitmap, %u - in gd\n",
-+			group, free, ext4_free_blks_count(sb, gdp));
++			group, free, free_in_gdp);
 +		return -EIO;
 +	}
 +	return 0;
