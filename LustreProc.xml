@@ -799,13 +799,14 @@ getxattr               61169 samples [regs]
         <para>By default, statistics are not collected in the <literal>offset_stats</literal>,
             <literal>extents_stats</literal>, and <literal>extents_stats_per_process</literal> files
           to reduce monitoring overhead when this information is not needed.  The collection of
-          statistics in all three of these files is activated by writing anything into any one of
-          the files.</para>
+          statistics in all three of these files is activated by writing
+          anything, except for 0 (zero) and "disable", into any one of the
+          files.</para>
       </note>
       <para><emphasis role="italic"><emphasis role="bold">Example:</emphasis></emphasis></para>
       <screen># lctl get_param llite.testfs-f57dee0.offset_stats
 snapshot_time: 1155748884.591028 (secs.usecs)
-             RANGE   RANGE    SMALLEST   LARGEST   
+             RANGE   RANGE    SMALLEST   LARGEST
 R/W   PID    START   END      EXTENT     EXTENT    OFFSET
 R     8385   0       128      128        128       0
 R     8385   0       224      224        224       -128
@@ -902,20 +903,22 @@ R     8385   500     600      100        100       -610</screen>
         <para>By default, statistics are not collected in the <literal>offset_stats</literal>,
             <literal>extents_stats</literal>, and <literal>extents_stats_per_process</literal> files
           to reduce monitoring overhead when this information is not needed.  The collection of
-          statistics in all three of these files is activated by writing anything into any one of
-          the files.</para>
+          statistics in all three of these files is activated by writing
+          anything, except for 0 (zero) and "disable", into any one of the
+          files.</para>
       </note>
       <section remap="h3">
         <title>Client-Based I/O Extent Size Survey</title>
-        <para>The <literal>extent_stats</literal> histogram in the <literal>llite</literal>
-          directory shows the statistics for the sizes of the read/write I/O extents. This file does
-          not maintain the per-process statistics.</para>
+        <para>The <literal>extents_stats</literal> histogram in the
+          <literal>llite</literal> directory shows the statistics for the sizes
+          of the read/write I/O extents. This file does not maintain the per
+          process statistics.</para>
         <para><emphasis role="italic"><emphasis role="bold">Example:</emphasis></emphasis></para>
         <screen># lctl get_param llite.testfs-*.extents_stats
 snapshot_time:                     1213828728.348516 (secs.usecs)
                        read           |            write
 extents          calls  %      cum%   |     calls  %     cum%
- 
+
 0K - 4K :        0      0      0      |     2      2     2
 4K - 8K :        0      0      0      |     0      0     2
 8K - 16K :       0      0      0      |     0      0     2
@@ -930,10 +933,10 @@ extents          calls  %      cum%   |     calls  %     cum%
           was read. The table shows cumulative extents organized according to size with statistics
           provided separately for reads and writes. Each row in the table shows the number of RPCs
           for reads and writes respectively (<literal>calls</literal>), the relative percentage of
-          total calls (<literal>%</literal>), and the cumulative percentage to that point in the
-          table of calls (<literal>cum %</literal>). </para>
-        <para> The file can be cleared by issuing the following
-          command:<screen># lctl set_param llite.testfs-*.extents_stats=0</screen></para>
+          total calls (<literal>%</literal>), and the cumulative percentage to
+          that point in the table of calls (<literal>cum %</literal>). </para>
+        <para> The file can be cleared by issuing the following command:
+        <screen># lctl set_param llite.testfs-*.extents_stats=1</screen></para>
       </section>
       <section>
         <title>Per-Process Client I/O Statistics</title>
