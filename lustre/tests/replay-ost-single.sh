@@ -26,8 +26,6 @@ ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="5"
 
 if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
-# bug number for skipped test:      LU-2285
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 3"
 # bug number for slowed tests:                          LU-2887
 	#                                               32  12.5  (min)"
 	[ "$SLOW" = "no" ] && EXCEPT_SLOW="$EXCEPT_SLOW 8a  8b"
