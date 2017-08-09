@@ -934,8 +934,8 @@ build_lustre() {
     ./configure $configure_args $CONFIGURE_FLAGS 2>&1 ||
         fatal 1 "Error in configure."
 
-    if type -p apply_kmod_requires; then
-        apply_kmod_requires
+    if type -p apply_kmod_requires_conflicts; then
+        apply_kmod_requires_conflicts
     fi
 
     make rpms 2>&1 ||
