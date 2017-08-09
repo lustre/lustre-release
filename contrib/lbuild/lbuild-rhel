@@ -6,7 +6,8 @@
 # in build/lbuild)
 #BUILD_GEN+=".0"
 #BUILD_GEN+=".1"	# refactor both rhel5 and rhel6
-BUILD_GEN+=".0"	# TT-107: don't cache the BUILD dir (reset major to 5)
+#BUILD_GEN+=".0"	# TT-107: don't cache the BUILD dir (reset major to 5)
+BUILD_GEN+=".2"	# LU-9850
 
 DEVEL_KERNEL_TYPE="devel"
 RPM_HELPERS_DIR="/usr/lib/rpm/redhat"
@@ -21,7 +22,11 @@ get_rpmbuildopts() {
 # patching common to all releases
 patch_spec_common() {
 
-    sed -i -e '/find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer/a\
+    sed -i -e '/Provides: kernel-uname-r =/a\
+Provides: kernel-lustre = %{KVRA}%{?1:.%{1}}\\' \
+           -e '/Provides: kernel-devel-uname-r =/a\
+Provides: kernel-devel-lustre = %{KVRA}%{?1:.%{1}}\\' \
+           -e '/find $RPM_BUILD_ROOT\/lib\/modules\/$KernelVer/a\
     cp -a fs/ext3/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext3 \
     cp -a fs/ext4/* $RPM_BUILD_ROOT/lib/modules/$KernelVer/build/fs/ext4' \
           SPECS/$SPEC_NAME 2>&1 || \
