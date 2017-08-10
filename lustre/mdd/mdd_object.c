@@ -301,7 +301,9 @@ static int mdd_xattr_list(const struct lu_env *env, struct md_object *obj,
 	rc = mdo_xattr_list(env, mdd_obj, buf);
         mdd_read_unlock(env, mdd_obj);
 
-	if (rc < 0)
+	/* If the buffer is NULL then we are only here to get the
+	 * length of the xattr name list. */
+	if (rc < 0 || buf->lb_buf == NULL)
 		RETURN(rc);
 
 	/*
