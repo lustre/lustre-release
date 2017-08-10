@@ -64,7 +64,7 @@ if TESTS
 if MPITESTS
 SUBDIRS = mpi
 endif
-noinst_PROGRAMS = openunlink truncate directio writeme mlink utime it_test
+noinst_PROGRAMS = openunlink truncate directio writeme mlink utime
 noinst_PROGRAMS += tchmod fsx test_brw sendfile
 noinst_PROGRAMS += createmany chownmany statmany multifstat createtest
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany checkstat
@@ -99,7 +99,6 @@ sendfile_grouplock_LDADD=$(LIBLUSTREAPI)
 swap_lock_test_LDADD=$(LIBLUSTREAPI)
 statmany_LDADD=$(LIBLUSTREAPI)
 statone_LDADD=$(LIBLUSTREAPI)
-it_test_LDADD=$(LIBCFS)
 rwv_LDADD=$(LIBCFS)
 
 ll_dirstripe_verify_SOURCES = ll_dirstripe_verify.c

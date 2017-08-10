@@ -36,9 +36,8 @@
  * Author: Huang Wei <huangwei@clusterfs.com>
  * Author: Jay Xiong <jinshan.xiong@sun.com>
  */
-#ifdef __KERNEL__
-# include <lustre_dlm.h>
-#endif
+
+#include <lustre_dlm.h>
 #include <interval_tree.h>
 
 enum {
