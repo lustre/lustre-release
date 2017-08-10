@@ -502,13 +502,13 @@ static int get_mds_md_size(const char *path)
 
 	rc = llapi_getname(path, inst, sizeof(inst));
 	if (rc != 0)
-		return md_size;
+		return rc;
 
 	/* Get the max ea size from llite parameters. */
 	rc = get_lustre_param_value("llite", inst, FILTER_BY_EXACT,
 				    "max_easize", buf, sizeof(buf));
 	if (rc != 0)
-		return md_size;
+		return rc;
 
 	rc = atoi(buf);
 
@@ -1640,6 +1640,9 @@ static int common_param_init(struct find_param *param, char *path)
 {
 	int lum_size = get_mds_md_size(path);
 
+	if (lum_size < 0)
+		return lum_size;
+
 	if (lum_size < PATH_MAX + 1)
 		lum_size = PATH_MAX + 1;
 
@@ -1970,12 +1973,13 @@ out:
 
 int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_name)
 {
-        int rc = ioctl(fd, OBD_IOC_GETNAME, lov_name);
-        if (rc) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc, "error: can't get lov name.");
-        }
-        return rc;
+	int rc = ioctl(fd, OBD_IOC_GETNAME, lov_name);
+
+	if (rc) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get lov name");
+	}
+	return rc;
 }
 
 int llapi_file_fget_lmv_uuid(int fd, struct obd_uuid *lov_name)
@@ -1995,7 +1999,7 @@ int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid)
 	fd = open(path, O_RDONLY | O_NONBLOCK);
 	if (fd < 0) {
 		rc = -errno;
-		llapi_error(LLAPI_MSG_ERROR, rc, "error opening %s", path);
+		llapi_error(LLAPI_MSG_ERROR, rc, "cannot open '%s'", path);
 		return rc;
 	}
 
@@ -2260,9 +2264,9 @@ retry_get_uuids:
 			ret = -ENOMEM;
 		}
 
-                llapi_error(LLAPI_MSG_ERROR, ret, "get ost uuid failed");
-                goto out_free;
-        }
+		llapi_error(LLAPI_MSG_ERROR, ret, "cannot get ost uuid");
+		goto out_free;
+	}
 
         indexes = malloc(num_obds * sizeof(*obdindex));
         if (indexes == NULL) {
@@ -2288,14 +2292,14 @@ retry_get_uuids:
                                 }
                         }
                 }
-                if (i >= obdcount) {
-                        indexes[obdnum] = OBD_NOT_FOUND;
-                        llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                          "error: %s: unknown obduuid: %s",
-                                          __func__, obduuids[obdnum].uuid);
-                        ret = -EINVAL;
-                }
-        }
+		if (i >= obdcount) {
+			indexes[obdnum] = OBD_NOT_FOUND;
+			llapi_err_noerrno(LLAPI_MSG_ERROR,
+					  "invalid obduuid '%s'",
+					  obduuids[obdnum].uuid);
+			ret = -EINVAL;
+		}
+	}
 
         if (obd_valid == 0)
                 *obdindex = OBD_NOT_FOUND;
