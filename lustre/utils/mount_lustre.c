@@ -720,6 +720,7 @@ static void label_lustre(struct mount_opts *mop)
 		/* device label could be changed after journal recovery,
 		 * it should also be relabeled for mount has succeeded. */
 		memset(&ldd, 0, sizeof(ldd));
+		ldd.ldd_mount_type = mop->mo_ldd.ldd_mount_type;
 		rc = osd_read_ldd(mop->mo_source, &ldd);
 		if (rc == 0) {
 			rc = strlen(ldd.ldd_svname);
