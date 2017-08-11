@@ -64,8 +64,8 @@ OSTDEV1_2=$fs2ost_DEV
 OSTDEV2_2=$fs3ost_DEV
 
 if ! combined_mgs_mds; then
-	# bug number for skipped test: LU-9860 LU-9860 LU-9860 LU-9860
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  33a     43b     53b     54b"
+	# bug number for skipped test: LU-9860 LU-9860 LU-9860
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  43b     53b     54b"
 	# bug number for skipped test: LU-9875 LU-9879 LU-9879 LU-9879 LU-9879
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  70e     80      84      87      100"
 	# bug number for skipped test: LU-8110 LU-9400 LU-9879 LU-9879 LU-9879
@@ -2409,15 +2409,20 @@ test_33a() { # bug 12333, was test_33
 		mkfsoptions="--mkfsoptions=\\\"-J size=8\\\"" # See bug 17931.
 	fi
 
-	add fs2mds $(mkfs_opts mds1 ${fs2mdsdev}) --mgs --fsname=${FSNAME2} \
-		--reformat $mkfsoptions $fs2mdsdev $fs2mdsvdev || exit 10
+	if combined_mgs_mds; then
+		local mgs_flag="--mgs"
+	fi
+
+	add fs2mds $(mkfs_opts mds1 ${fs2mdsdev}) --fsname=${FSNAME2} \
+		--reformat $mgs_flag $mkfsoptions $fs2mdsdev $fs2mdsvdev ||
+		exit 10
 	add fs2ost $(mkfs_opts ost1 ${fs2ostdev}) --mgsnode=$MGSNID \
 		--fsname=${FSNAME2} --index=8191 --reformat $fs2ostdev \
 		$fs2ostvdev || exit 10
 
 	start fs2mds $fs2mdsdev $MDS_MOUNT_OPTS && trap cleanup_fs2 EXIT INT
 	start fs2ost $fs2ostdev $OST_MOUNT_OPTS
-	do_facet $SINGLEMDS "$LCTL conf_param $FSNAME2.sys.timeout=200" ||
+	do_facet mgs "$LCTL conf_param $FSNAME2.sys.timeout=200" ||
 		error "$LCTL conf_param $FSNAME2.sys.timeout=200 failed"
 	mkdir -p $MOUNT2 || error "mkdir $MOUNT2 failed"
 	$MOUNT_CMD $MGSNID:/${FSNAME2} $MOUNT2 || error "$MOUNT_CMD failed"
