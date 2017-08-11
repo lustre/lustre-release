@@ -9,6 +9,7 @@
 %bcond_without lustre_iokit
 %bcond_without lustre_modules
 %bcond_with lnet_dlc
+%bcond_with snmp
 %bcond_without manpages
 %bcond_without shared
 %bcond_without static
@@ -309,6 +310,7 @@ fi
 	%{!?with_servers:--disable-server} \
 	%{!?with_zfs:--without-zfs} \
 	%{!?with_lnet_dlc:--disable-dlc} \
+	%{!?with_snmp:--disable-snmp} \
 	%{!?with_manpages:--disable-manpages} \
 	%{!?with_systemd:--with-systemdsystemunitdir=no} \
 	%{?with_systemd:--with-systemdsystemunitdir=%{_unitdir}} \
@@ -399,13 +401,16 @@ echo '%attr(-, root, root) %{_libdir}/liblnetconfig.so.*' >>lustre.files
 echo '%{_libdir}/libiam.a' >>lustre.files
 %endif
 
-if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre/snmp ] ; then
-	echo '%{_libdir}/lustre/snmp' >>lustre.files
-fi
+%if %{with snmp}
+mkdir -p $RPM_BUILD_ROOT/%{_libdir}/lustre/snmp
+echo '%{_libdir}/lustre/snmp' >>lustre.files
+%endif
 
 %if %{with lustre_utils}
 mkdir -p $RPM_BUILD_ROOT/%{_datadir}/lustre
-find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@ -name \*.la -type f -exec rm -f {} \;
+if [ -d $RPM_BUILD_ROOT%{_libdir}/lustre ] ; then
+	find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@ -name \*.la -type f -exec rm -f {} \;
+fi
 %endif
 
 %if %{with lustre_modules}

@@ -509,6 +509,9 @@ fi
 if test x$USE_DLC = xyes ; then
 	RPMBINARGS="$RPMBINARGS --with lnet_dlc"
 fi
+if test x$enable_snmp != xyes ; then
+	RPMBINARGS="$RPMBINARGS --without snmp"
+fi
 if test x$enable_manpages != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without manpages"
 fi
