@@ -68,8 +68,12 @@ OSTDEV1_2=$fs2ost_DEV
 OSTDEV2_2=$fs3ost_DEV
 
 if ! combined_mgs_mds; then
-	# bug number for skipped test:    23954
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT       24b"
+	# bug number for skipped test: 23954 LU-9860 LU-9860 LU-9860 LU-9860
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  24b   33a     43b     53b     54b"
+	# bug number for skipped test: LU-9875 LU-9879 LU-9879 LU-9879 LU-9879
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  70e     80      84      87      100"
+	# bug number for skipped test: LU-8110 LU-9400 LU-9879 LU-9879 LU-9879
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  102     103     104     105     107"
 fi
 
 # pass "-E lazy_itable_init" to mke2fs to speed up the formatting time
