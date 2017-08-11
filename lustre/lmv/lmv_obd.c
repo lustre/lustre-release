@@ -683,8 +683,8 @@ repeat_fid2path:
 		char *ptr;
 
 		ori_gf = (struct getinfo_fid2path *)karg;
-		if (strlen(ori_gf->gf_u.gf_path) +
-		    strlen(gf->gf_u.gf_path) > ori_gf->gf_pathlen)
+		if (strlen(ori_gf->gf_u.gf_path) + 1 +
+		    strlen(gf->gf_u.gf_path) + 1 > ori_gf->gf_pathlen)
 			GOTO(out_fid2path, rc = -EOVERFLOW);
 
 		ptr = ori_gf->gf_u.gf_path;
