@@ -53,7 +53,6 @@
  */
 bool liblustreapi_initialized;
 
-
 /**
  * Initialize the library once at startup.
  *
