@@ -413,6 +413,8 @@ find $RPM_BUILD_ROOT%{_libdir}/@PACKAGE@ -name \*.la -type f -exec rm -f {} \;
 find $RPM_BUILD_ROOT/lib/modules -name \*.ko -type f -exec chmod u+x {} \;
 %endif
 
+rm -f $RPM_BUILD_ROOT%{_libdir}/liblustreapi.la
+
 %if %{with lustre_tests}
 :> lustre-tests.files
 echo '%{_libdir}/lustre/tests/*' >>lustre-tests.files
@@ -448,8 +450,13 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 /sbin/mount.lustre
 %{_libdir}/libptlctl.a
 %{_libdir}/libcfsutil.a
+%if %{with static}
 %{_libdir}/liblustreapi.a
+%endif
+%if %{with shared}
 %{_libdir}/liblustreapi.so
+%{_libdir}/liblustreapi.so.*
+%endif
 %if %{with manpages}
 %{_mandir}/man?/*
 %endif
