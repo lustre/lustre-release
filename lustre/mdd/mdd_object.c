@@ -141,7 +141,7 @@ static int mdd_object_init(const struct lu_env *env, struct lu_object *o,
         struct lu_device  *under;
         ENTRY;
 
-        mdd_obj->mod_cltime = 0;
+	mdd_obj->mod_cltime = ktime_set(0, 0);
         under = &d->mdd_child->dd_lu_dev;
         below = under->ld_ops->ldo_object_alloc(env, o->lo_header, under);
 	if (IS_ERR(below))
@@ -180,9 +180,9 @@ static int mdd_object_print(const struct lu_env *env, void *cookie,
 	struct mdd_object *mdd = lu2mdd_obj((struct lu_object *)o);
 
 	return (*p)(env, cookie,
-		    LUSTRE_MDD_NAME"-object@%p(open_count=%d, valid=%x, cltime=%llu, flags=%lx)",
+		    LUSTRE_MDD_NAME"-object@%p(open_count=%d, valid=%x, cltime=%lldns, flags=%lx)",
                     mdd, mdd->mod_count, mdd->mod_valid,
-                    mdd->mod_cltime, mdd->mod_flags);
+		    ktime_to_ns(mdd->mod_cltime), mdd->mod_flags);
 }
 
 static const struct lu_object_operations mdd_lu_obj_ops = {
@@ -692,7 +692,7 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 		RETURN(0);
 
 	if ((type >= CL_MTIME) && (type <= CL_ATIME) &&
-	    cfs_time_before_64(mdd->mdd_cl.mc_starttime, mdd_obj->mod_cltime)) {
+	    ktime_before(mdd->mdd_cl.mc_starttime, mdd_obj->mod_cltime)) {
 		/* Don't need multiple updates in this log */
 		/* Don't check under lock - no big deal if we get an extra
 		   entry */
@@ -702,7 +702,7 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 	rc = mdd_changelog_data_store_by_fid(env, mdd, type, flags,
 					     mdo2fid(mdd_obj), handle);
 	if (rc == 0)
-		mdd_obj->mod_cltime = cfs_time_current_64();
+		mdd_obj->mod_cltime = ktime_get();
 
 	RETURN(rc);
 }

@@ -66,7 +66,7 @@ struct mdd_changelog {
 	int			mc_flags;
 	int			mc_mask;
 	__u64			mc_index;
-	__u64			mc_starttime;
+	ktime_t			mc_starttime;
 	spinlock_t		mc_user_lock;
 	int			mc_lastuser;
 };
@@ -121,12 +121,12 @@ enum mod_flags {
 };
 
 struct mdd_object {
-        struct md_object   mod_obj;
-        /* open count */
-        __u32             mod_count;
-        __u32             mod_valid;
-        __u64             mod_cltime;
-        unsigned long     mod_flags;
+	struct md_object	mod_obj;
+	/* open count */
+	u32			mod_count;
+	u32			mod_valid;
+	ktime_t			mod_cltime;
+	unsigned long		mod_flags;
 };
 
 struct mdd_thread_info {

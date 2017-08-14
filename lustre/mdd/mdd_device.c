@@ -417,7 +417,7 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 
 	mdd->mdd_cl.mc_index = 0;
 	spin_lock_init(&mdd->mdd_cl.mc_lock);
-	mdd->mdd_cl.mc_starttime = cfs_time_current_64();
+	mdd->mdd_cl.mc_starttime = ktime_get();
 	spin_lock_init(&mdd->mdd_cl.mc_user_lock);
 	mdd->mdd_cl.mc_lastuser = 0;
 
@@ -494,7 +494,7 @@ mdd_changelog_llog_cancel(const struct lu_env *env, struct mdd_device *mdd,
         /* Some records were purged, so reset repeat-access time (so we
            record new mtime update records, so users can see a file has been
            changed since the last purge) */
-        mdd->mdd_cl.mc_starttime = cfs_time_current_64();
+	mdd->mdd_cl.mc_starttime = ktime_get();
 
 	rc = llog_cancel(env, ctxt, (struct llog_cookie *)&endrec, 0);
 out:
@@ -521,7 +521,7 @@ int mdd_changelog_write_header(const struct lu_env *env,
 	ENTRY;
 
 	if (mdd->mdd_cl.mc_mask & (1 << CL_MARK)) {
-		mdd->mdd_cl.mc_starttime = cfs_time_current_64();
+		mdd->mdd_cl.mc_starttime = ktime_get();
 		RETURN(0);
 	}
 
@@ -554,7 +554,7 @@ int mdd_changelog_write_header(const struct lu_env *env,
 	llog_ctxt_put(ctxt);
 
 	/* assume on or off event; reset repeat-access time */
-	mdd->mdd_cl.mc_starttime = cfs_time_current_64();
+	mdd->mdd_cl.mc_starttime = ktime_get();
 	RETURN(rc);
 }
 
