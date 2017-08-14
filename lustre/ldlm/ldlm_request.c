@@ -1692,6 +1692,10 @@ ldlm_cancel_lru_policy(struct ldlm_namespace *ns, enum ldlm_lru_flags lru_flags)
  *				(typically before replaying locks) w/o
  *				sending any RPCs or waiting for any
  *				outstanding RPC to complete.
+ *
+ * flags & LDLM_CANCEL_CLEANUP - when cancelling read locks, do not check for
+ * 				other read locks covering the same pages, just
+ * 				discard those pages.
  */
 static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 				 struct list_head *cancels, int count, int max,
@@ -1813,6 +1817,11 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 		 * already zero here, ldlm_lock_decref() won't see
 		 * this flag and call l_blocking_ast */
 		lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_CANCELING;
+
+		if ((lru_flags & LDLM_LRU_FLAG_CLEANUP) &&
+		    lock->l_resource->lr_type == LDLM_EXTENT &&
+		    lock->l_granted_mode == LCK_PR)
+			ldlm_set_discard_data(lock);
 
 		/* We can't re-add to l_lru as it confuses the
 		 * refcounting in ldlm_lock_remove_from_lru() if an AST

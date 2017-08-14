@@ -741,7 +741,7 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 int osc_extent_release(const struct lu_env *env, struct osc_extent *ext);
 
 int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
-			   pgoff_t start, pgoff_t end, enum cl_lock_mode mode);
+			   pgoff_t start, pgoff_t end, bool discard_pages);
 
 typedef int (*osc_page_gang_cbt)(const struct lu_env *, struct cl_io *,
 				 struct osc_page *, void *);

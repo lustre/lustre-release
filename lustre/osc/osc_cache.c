@@ -3288,7 +3288,7 @@ static int discard_cb(const struct lu_env *env, struct cl_io *io,
  * behind this being that lock cancellation cannot be delayed indefinitely).
  */
 int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
-			   pgoff_t start, pgoff_t end, enum cl_lock_mode mode)
+			   pgoff_t start, pgoff_t end, bool discard)
 {
 	struct osc_thread_info *info = osc_env_info(env);
 	struct cl_io *io = &info->oti_io;
@@ -3304,7 +3304,7 @@ int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 	if (result != 0)
 		GOTO(out, result);
 
-	cb = mode == CLM_READ ? check_and_discard_cb : discard_cb;
+	cb = discard ? discard_cb : check_and_discard_cb;
 	info->oti_fn_index = info->oti_next_index = start;
 	do {
 		res = osc_page_gang_lookup(env, io, osc,

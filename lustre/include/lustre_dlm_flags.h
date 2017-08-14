@@ -90,7 +90,7 @@
 #define ldlm_set_flock_deadlock(_l)     LDLM_SET_FLAG((  _l), 1ULL << 15)
 #define ldlm_clear_flock_deadlock(_l)   LDLM_CLEAR_FLAG((_l), 1ULL << 15)
 
-/** discard (no writeback) on cancel */
+/** discard (no writeback (PW locks) or page retention (PR locks)) on cancel */
 #define LDLM_FL_DISCARD_DATA            0x0000000000010000ULL // bit  16
 #define ldlm_is_discard_data(_l)        LDLM_TEST_FLAG(( _l), 1ULL << 16)
 #define ldlm_set_discard_data(_l)       LDLM_SET_FLAG((  _l), 1ULL << 16)
