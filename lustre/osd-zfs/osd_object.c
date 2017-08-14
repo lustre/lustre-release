@@ -1640,7 +1640,7 @@ int osd_find_new_dnode(const struct lu_env *env, dmu_tx_t *tx,
 		LASSERT(dn->dn_handle);
 		DB_DNODE_ENTER(db);
 		if (refcount_add(&db->db_holds, osd_obj_tag) == 1) {
-			refcount_add(&dn->dn_holds, tag);
+			refcount_add(&dn->dn_holds, osd_obj_tag);
 			atomic_inc_32(&dn->dn_dbufs_count);
 		}
 		*dnp = dn;
