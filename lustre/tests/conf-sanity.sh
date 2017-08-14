@@ -23,10 +23,6 @@ is_sles11()						# LU-2181
 	return 1
 }
 
-if is_sles11; then					# LU-2181
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 23a 34b"
-fi
-
 if [ "$FAILURE_MODE" = "HARD" ]; then
 	CONFIG_EXCEPTIONS="24a " &&
 	echo "Except the tests: $CONFIG_EXCEPTIONS for " \
