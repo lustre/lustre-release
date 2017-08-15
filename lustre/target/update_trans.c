@@ -201,7 +201,17 @@ static int sub_updates_write(const struct lu_env *env,
 		 "lrh_len %u record_size %zu\n", record->lur_hdr.lrh_len,
 		 llog_update_record_size(record));
 
-	if (likely(record->lur_hdr.lrh_len <= ctxt->loc_chunk_size)) {
+	/*
+	 * If its size > llog chunk_size, then write current chunk to the update
+	 * llog, NB the padding should >= LLOG_MIN_REC_SIZE.
+	 *
+	 * So check padding length is either >= LLOG_MIN_REC_SIZE or is 0
+	 * (record length just matches the chunk size).
+	 */
+
+	reclen = record->lur_hdr.lrh_len;
+	if (reclen + LLOG_MIN_REC_SIZE <= ctxt->loc_chunk_size ||
+	    reclen == ctxt->loc_chunk_size) {
 		OBD_ALLOC_PTR(stc);
 		if (stc == NULL)
 			GOTO(llog_put, rc = -ENOMEM);
@@ -245,13 +255,6 @@ static int sub_updates_write(const struct lu_env *env,
 		else
 			eof = true;
 
-		/*
-		 * If its size > llog chunk_size, then write current chunk to
-		 * the update llog, NB the padding should >= LLOG_MIN_REC_SIZE.
-		 *
-		 * So check padding length is either >= LLOG_MIN_REC_SIZE or is
-		 * 0 (record length just matches the chunk size).
-		 */
 		reclen = __llog_update_record_size(
 				__update_records_size(next - start));
 		if ((reclen + LLOG_MIN_REC_SIZE <= ctxt->loc_chunk_size ||
