@@ -1841,8 +1841,11 @@ int llapi_layout_comp_use(struct llapi_layout *layout,
 		return -1;
 
 	if (!layout->llot_is_composite) {
-		errno = EINVAL;
-		return -1;
+		if (pos == LLAPI_LAYOUT_COMP_USE_FIRST ||
+		    pos == LLAPI_LAYOUT_COMP_USE_LAST)
+			return 0;
+		errno = ENOENT;
+		return 1;
 	}
 
 	head = list_entry(layout->llot_comp_list.next, typeof(*head), llc_list);
