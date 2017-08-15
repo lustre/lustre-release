@@ -57,7 +57,7 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
  /*
   * The routine scans buddy structures (not bitmap!) from given order
   * to max order and tries to find big enough chunk to satisfy the req
-@@ -2263,6 +2282,91 @@ static const struct seq_operations ext4_
+@@ -2263,6 +2282,88 @@ static const struct seq_operations ext4_
  	.show   = ext4_mb_seq_groups_show,
  };
  
@@ -84,12 +84,9 @@ Index: linux-3.10.0-123.el7.x86_64/fs/ext4/mballoc.c
 +	cur = str;
 +	end = str + cnt;
 +	while (cur < end) {
-+		int rc;
 +		while ((cur < end) && (*cur == ' '))
 +			cur++;
-+		rc = kstrtol(cur, 0, &value);
-+		if (rc != 0)
-+			return -EINVAL;
++		value = simple_strtol(cur, &cur, 0);
 +		if (value == 0)
 +			break;
 +		if (value <= prev)
