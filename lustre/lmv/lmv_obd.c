@@ -2082,6 +2082,7 @@ static inline void put_stripe_dirent(struct stripe_dirent *stripe)
 		kunmap(stripe->sd_page);
 		put_page(stripe->sd_page);
 		stripe->sd_page = NULL;
+		stripe->sd_ent = NULL;
 	}
 }
 
@@ -2105,20 +2106,23 @@ static struct lu_dirent *stripe_dirent_next(struct lmv_dir_ctxt *ctxt,
 
 	LASSERT(stripe == &ctxt->ldc_stripes[stripe_index]);
 
+	if (stripe->sd_eof)
+		RETURN(NULL);
+
 	if (ent) {
 		ent = lu_dirent_next(ent);
 		if (!ent) {
 check_eof:
 			end = le64_to_cpu(stripe->sd_dp->ldp_hash_end);
-
-			put_stripe_dirent(stripe);
-
+			LASSERTF(hash <= end, "hash %llx end %llx\n",
+				 hash, end);
 			if (end == MDS_DIR_END_OFF) {
 				stripe->sd_ent = NULL;
 				stripe->sd_eof = true;
 				RETURN(NULL);
 			}
-			LASSERT(hash <= end);
+
+			put_stripe_dirent(stripe);
 			hash = end;
 		}
 	}
@@ -2170,10 +2174,8 @@ check_eof:
 			     le16_to_cpu(ent->lde_namelen)) == 0))
 			continue;
 
-		if (le64_to_cpu(ent->lde_hash) < hash)
-			continue;
-
-		break;
+		if (le64_to_cpu(ent->lde_hash) >= hash)
+			break;
 	}
 
 	if (!ent)
