@@ -2476,7 +2476,7 @@ test_31p() {
 
 	test_mkdir $DIR/$tdir
 	$LFS setdirstripe -i0 -c2 $DIR/$tdir/striped_dir
-	$LFS setdirstripe -D -c2 -t all_char $DIR/$tdir/striped_dir
+	$LFS setdirstripe -D -c2 -H all_char $DIR/$tdir/striped_dir
 
 	opendirunlink $DIR/$tdir/striped_dir/test1 ||
 		error "open unlink test1 failed"
@@ -12302,7 +12302,7 @@ test_162b() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
 	mkdir $DIR/$tdir
-	$LFS setdirstripe -i0 -c$MDSCOUNT -t all_char $DIR/$tdir/striped_dir ||
+	$LFS setdirstripe -i0 -c$MDSCOUNT -H all_char $DIR/$tdir/striped_dir ||
 				error "create striped dir failed"
 
 	local FID=$($LFS getdirstripe $DIR/$tdir/striped_dir |
@@ -16239,7 +16239,7 @@ test_striped_dir() {
 	SAVE_UMASK=$(umask)
 	trap cleanup_test_300 RETURN EXIT
 
-	$LFS setdirstripe -i $mdt_index -c 2 -t all_char -m 755 \
+	$LFS setdirstripe -i $mdt_index -c 2 -H all_char -o 755 \
 						$DIR/$tdir/striped_dir ||
 		error "set striped dir error"
 
@@ -16318,23 +16318,19 @@ test_300b() {
 	local mtime2
 	local mtime3
 
-	test_mkdir $DIR/$tdir
-	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir ||
+	test_mkdir $DIR/$tdir || error "mkdir fail"
+	$LFS setdirstripe -i 0 -c 2 -H all_char $DIR/$tdir/striped_dir ||
 		error "set striped dir error"
-	for ((i=0; i<10; i++)); do
+	for i in {0..9}; do
 		mtime1=$(stat -c %Y $DIR/$tdir/striped_dir)
 		sleep 1
-		touch $DIR/$tdir/striped_dir/file_$i ||
-					error "touch error $i"
+		touch $DIR/$tdir/striped_dir/file_$i || error "touch error $i"
 		mtime2=$(stat -c %Y $DIR/$tdir/striped_dir)
-		[ $mtime1 -eq $mtime2 ] &&
-			error "mtime not change after create"
+		[ $mtime1 -eq $mtime2 ] && error "mtime unchanged after create"
 		sleep 1
-		rm -f $DIR/$tdir/striped_dir/file_$i ||
-					error "unlink error $i"
+		rm -f $DIR/$tdir/striped_dir/file_$i || error "unlink error $i"
 		mtime3=$(stat -c %Y $DIR/$tdir/striped_dir)
-		[ $mtime2 -eq $mtime3 ] &&
-			error "mtime did not change after unlink"
+		[ $mtime2 -eq $mtime3 ] && error "mtime unchanged after unlink"
 	done
 	true
 }
@@ -16377,7 +16373,7 @@ test_300d() {
 	$SETSTRIPE -c 2 $DIR/$tdir
 
 	#local striped directory
-	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir ||
+	$LFS setdirstripe -i 0 -c 2 -H all_char $DIR/$tdir/striped_dir ||
 		error "set striped dir error"
 	createmany -o $DIR/$tdir/striped_dir/f 10 ||
 		error "create 10 files failed"
@@ -16408,7 +16404,7 @@ test_300e() {
 
 	mkdir -p $DIR/$tdir
 
-	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir ||
+	$LFS setdirstripe -i 0 -c 2 -H all_char $DIR/$tdir/striped_dir ||
 		error "set striped dir error"
 
 	touch $DIR/$tdir/striped_dir/a
@@ -16419,13 +16415,13 @@ test_300e() {
 	mkdir $DIR/$tdir/striped_dir/dir_b
 	mkdir $DIR/$tdir/striped_dir/dir_c
 
-	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir/stp_a ||
+	$LFS setdirstripe -i 0 -c 2 -H all_char $DIR/$tdir/striped_dir/stp_a ||
 		error "set striped adir under striped dir error"
 
 	$LFS setdirstripe -i 0 -c 2 -H all_char $DIR/$tdir/striped_dir/stp_b ||
 		error "set striped bdir under striped dir error"
 
-	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir/stp_c ||
+	$LFS setdirstripe -i 0 -c 2 -H all_char $DIR/$tdir/striped_dir/stp_c ||
 		error "set striped cdir under striped dir error"
 
 	mrename $DIR/$tdir/striped_dir/dir_a $DIR/$tdir/striped_dir/dir_b ||
@@ -16455,10 +16451,10 @@ test_300f() {
 	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
 
-	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir ||
+	$LFS setdirstripe -i 0 -c 2 -H all_char $DIR/$tdir/striped_dir ||
 		error "set striped dir error"
 
-	$LFS setdirstripe -i 0 -c 2 -t all_char $DIR/$tdir/striped_dir1 ||
+	$LFS setdirstripe -i 0 -c 2 -H all_char $DIR/$tdir/striped_dir1 ||
 		error "set striped dir error"
 
 	touch $DIR/$tdir/striped_dir/a
@@ -16592,8 +16588,7 @@ test_300h() {
 	local stripe_count
 
 	mkdir $DIR/$tdir
-	$LFS setdirstripe -i 0 -c $MDSCOUNT -t all_char \
-					$DIR/$tdir/striped_dir ||
+	$LFS setdirstripe -i 0 -c$MDSCOUNT -H all_char $DIR/$tdir/striped_dir ||
 		error "set striped dir error"
 
 	test_300_check_default_striped_dir striped_dir $MDSCOUNT 1
@@ -16624,7 +16619,7 @@ test_300i() {
 
 	mkdir $DIR/$tdir
 
-	$LFS setdirstripe -i 0 -c$MDSCOUNT -t all_char $DIR/$tdir/striped_dir ||
+	$LFS setdirstripe -i 0 -c$MDSCOUNT -H all_char $DIR/$tdir/striped_dir ||
 		error "set striped dir error"
 
 	createmany -o $DIR/$tdir/striped_dir/f- 10 ||
@@ -16680,7 +16675,7 @@ test_300j() {
 
 	#define OBD_FAIL_SPLIT_UPDATE_REC	0x1702
 	$LCTL set_param fail_loc=0x1702
-	$LFS setdirstripe -i 0 -c$MDSCOUNT -t all_char $DIR/$tdir/striped_dir ||
+	$LFS setdirstripe -i 0 -c$MDSCOUNT -H all_char $DIR/$tdir/striped_dir ||
 		error "set striped dir error"
 
 	createmany -o $DIR/$tdir/striped_dir/f- 10 ||

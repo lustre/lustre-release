@@ -5193,7 +5193,7 @@ test_406() {
 	$LFS hsm_release $DIR/$tdir/$tfile
 
 	# Should migrate $tdir but not $tfile.
-	$LFS mv -M1 $DIR/$tdir &&
+	$LFS migrate -m1 $DIR/$tdir &&
 		error "migrating HSM an archived file should fail"
 
 	$LFS hsm_restore $DIR/$tdir/$tfile
@@ -5205,7 +5205,7 @@ test_406() {
 	cat $DIR/$tdir/$tfile > /dev/null ||
 		error "cannot read $DIR/$tdir/$tfile"
 
-	$LFS mv -M1 $DIR/$tdir ||
+	$LFS migrate -m1 $DIR/$tdir ||
 		error "cannot complete migration after HSM remove"
 
 	mdt_index=$($LFS getstripe -M $DIR/$tdir)

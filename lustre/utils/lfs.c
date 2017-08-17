@@ -291,13 +291,13 @@ command_t cmdlist[] = {
 	 "\t             '^init' indicating all uninstantiated components\n"
 	 "\t-I and -F cannot be specified at the same time\n"},
 	{"getstripe", lfs_getstripe, 0,
-	 "To list the striping info for a given file or files in a\n"
+	 "To list the layout pattern for a given file or files in a\n"
 	 "directory or recursively for all files in a directory tree.\n"
 	 "usage: getstripe [--ost|-O <uuid>] [--quiet|-q] [--verbose|-v]\n"
-	 "		   [--stripe-count|-c] [--stripe-index|-i]\n"
+	 "		   [--stripe-count|-c] [--stripe-index|-i] [--fid|-F]\n"
 	 "		   [--pool|-p] [--stripe-size|-S] [--directory|-d]\n"
-	 "		   [--mdt|-m] [--recursive|-r] [--raw|-R] [--yaml|-y]\n"
-	 "		   [--layout|-L] [--fid|-F] [--generation|-g]\n"
+	 "		   [--mdt-index|-m] [--recursive|-r] [--raw|-R]\n"
+	 "		   [--layout|-L] [--generation|-g] [--yaml|-y]\n"
 	 "		   [--component-id[=comp_id]|-I[comp_id]]\n"
 	 "		   [--component-flags[=comp_flags]]\n"
 	 "		   [--component-count]\n"
@@ -310,10 +310,10 @@ command_t cmdlist[] = {
 	 "usage: setdirstripe [OPTION] <directory>\n"
 	 SETDIRSTRIPE_USAGE},
 	{"getdirstripe", lfs_getdirstripe, 0,
-	 "To list the striping info for a given directory\n"
+	 "To list the layout pattern info for a given directory\n"
 	 "or recursively for all directories in a directory tree.\n"
-	 "usage: getdirstripe [--obd|-O <uuid>] [--mdt-count|-c]\n"
-	 "		      [--mdt-index|-i] [--mdt-hash|-t]\n"
+	 "usage: getdirstripe [--mdt-count|-c] [--mdt-index|-m|-i]\n"
+	 "		      [--mdt-hash|-H] [--obd|-O <uuid>]\n"
 	 "		      [--recursive|-r] [--yaml|-y]\n"
 	 "		      [--default|-D] <dir> ..."},
 	{"mkdir", lfs_setdirstripe, 0,
@@ -489,7 +489,7 @@ command_t cmdlist[] = {
 	 "		[--stripe-index|-i] <start_ost_index>\n"
 	 "		[--stripe-size|-S] <stripe_size>\n"
 	 "		[--pool|-p] <pool_name>\n"
-	 "		[--ost-list|-o] <ost_indices>\n"
+	 "		[--ost|-o] <ost_indices>\n"
 	 "		[--block|-b]\n"
 	 "		[--non-block|-n]\n"
 	 "		<file|directory>\n"
@@ -503,7 +503,7 @@ command_t cmdlist[] = {
 	{"mv", lfs_mv, 0,
 	 "To move directories between MDTs. This command is deprecated, "
 	 "use \"migrate\" instead.\n"
-	 "usage: mv <directory|filename> [--mdt-index|-M] <mdt_index> "
+	 "usage: mv <directory|filename> [--mdt-index|-m] <mdt_index> "
 	 "[--verbose|-v]\n"},
 	{"ladvise", lfs_ladvise, 0,
 	 "Provide servers with advice about access patterns for a file.\n"
@@ -2112,25 +2112,24 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 	char				 cmd[PATH_MAX];
 
 	struct option long_opts[] = {
-		/* --block is only valid in migrate mode */
-	{ .val = 'b',	.name = "block",	.has_arg = no_argument},
+/* find	{ .val = 'A',	.name = "atime",	.has_arg = required_argument }*/
+	/* --block is only valid in migrate mode */
+	{ .val = 'b',	.name = "block",	.has_arg = no_argument },
 	{ .val = LFS_COMP_ADD_OPT,
-			.name = "comp-add",	.has_arg = no_argument},
+			.name = "comp-add",	.has_arg = no_argument },
 	{ .val = LFS_COMP_ADD_OPT,
-			.name = "component-add",
-						.has_arg = no_argument},
+			.name = "component-add", .has_arg = no_argument },
 	{ .val = LFS_COMP_DEL_OPT,
-			.name = "comp-del",	.has_arg = no_argument},
+			.name = "comp-del",	.has_arg = no_argument },
 	{ .val = LFS_COMP_DEL_OPT,
-			.name = "component-del",
-						.has_arg = no_argument},
+			.name = "component-del", .has_arg = no_argument },
 	{ .val = LFS_COMP_FLAGS_OPT,
-			.name = "comp-flags",	.has_arg = required_argument},
+			.name = "comp-flags",	.has_arg = required_argument },
 	{ .val = LFS_COMP_FLAGS_OPT,
 			.name = "component-flags",
-						.has_arg = required_argument},
+						.has_arg = required_argument },
 	{ .val = LFS_COMP_SET_OPT,
-			.name = "comp-set",	.has_arg = no_argument},
+			.name = "comp-set",	.has_arg = no_argument },
 	{ .val = LFS_COMP_SET_OPT,
 			.name = "component-set",
 						.has_arg = no_argument},
@@ -2142,12 +2141,16 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 			.name = "flags",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument},
+/* find	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument }*/
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
 	{ .val = 'E',	.name = "comp-end",	.has_arg = required_argument},
 	{ .val = 'E',	.name = "component-end",
 						.has_arg = required_argument},
 	{ .val = 'f',	.name = "file",		.has_arg = required_argument },
-	/* dirstripe {"mdt-hash",     required_argument, 0, 'H'}, */
+/* find	{ .val = 'F',	.name = "fid",		.has_arg = no_argument }, */
+/* find	{ .val = 'g',	.name = "gid",		.has_arg = no_argument }, */
+/* find	{ .val = 'G',	.name = "group",	.has_arg = required_argument }*/
+/* dirstripe { .val = 'H', .name = "mdt-hash",  .has_arg = required_argument }*/
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = required_argument},
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument},
 	{ .val = 'I',	.name = "comp-id",	.has_arg = required_argument},
@@ -2156,20 +2159,28 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt_index",	.has_arg = required_argument},
-	{ .val = 'N',	.name = "mirror-count",	.has_arg = optional_argument},
 	/* --non-block is only valid in migrate mode */
-	{ .val = 'n',	.name = "non-block",	.has_arg = no_argument},
-	{ .val = 'o',	.name = "ost",		.has_arg = required_argument},
+	{ .val = 'n',	.name = "non-block",	.has_arg = no_argument },
+	{ .val = 'N',	.name = "mirror-count",	.has_arg = optional_argument},
+	{ .val = 'o',	.name = "ost",		.has_arg = required_argument },
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	{ .val = 'o',	.name = "ost-list",	.has_arg = required_argument },
 	{ .val = 'o',	.name = "ost_list",	.has_arg = required_argument },
 #endif
 	{ .val = 'p',	.name = "pool",		.has_arg = required_argument },
+/* find	{ .val = 'P',	.name = "print",	.has_arg = no_argument }, */
+/* getstripe { .val = 'q', .name = "quiet",	.has_arg = no_argument }, */
+/* getstripe { .val = 'r', .name = "recursive",	.has_arg = no_argument }, */
+/* getstripe { .val = 'R', .name = "raw",	.has_arg = no_argument }, */
 	{ .val = 'S',	.name = "stripe-size",	.has_arg = required_argument },
 	{ .val = 'S',	.name = "stripe_size",	.has_arg = required_argument },
-	/* dirstripe {"mdt-count",    required_argument, 0, 'T'}, */
+/* find	{ .val = 't',	.name = "type",		.has_arg = required_argument }*/
+/* dirstripe { .val = 'T', .name = "mdt-count", .has_arg = required_argument }*/
+/* find	{ .val = 'u',	.name = "uid",		.has_arg = required_argument }*/
+/* find	{ .val = 'U',	.name = "user",		.has_arg = required_argument }*/
 	/* --verbose is only valid in migrate mode */
-	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument},
+/* getstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
 	{ .name = NULL } };
 
 	setstripe_args_init(&lsa);
@@ -2430,6 +2441,11 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 			lpp = &last_mirror->m_layout;
 			break;
 		case 'o':
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
+			if (strcmp(argv[optind - 1], "--ost-list") == 0)
+				fprintf(stderr, "warning: '--ost-list' is "
+					"deprecated, use '--ost' instead\n");
+#endif
 			lsa.lsa_nr_tgts = parse_targets(osts,
 						sizeof(osts) / sizeof(__u32),
 						lsa.lsa_nr_tgts, optarg);
@@ -2859,23 +2875,25 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument },
 	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument },
+/* getstripe { .val = 'd', .name = "directory",	.has_arg = no_argument }, */
 	{ .val = 'D',	.name = "maxdepth",	.has_arg = required_argument },
 	{ .val = 'E',	.name = "comp-end",	.has_arg = required_argument },
 	{ .val = 'E',	.name = "component-end",
 						.has_arg = required_argument },
+/* find	{ .val = 'F',	.name = "fid",		.has_arg = no_argument }, */
 	{ .val = 'g',	.name = "gid",		.has_arg = required_argument },
 	{ .val = 'G',	.name = "group",	.has_arg = required_argument },
 	{ .val = 'H',	.name = "mdt-hash",	.has_arg = required_argument },
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = required_argument },
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument },
-	/*{"component-id", required_argument, 0, 'I'},*/
+/* getstripe { .val = 'I', .name = "comp-id",	.has_arg = required_argument }*/
 	{ .val = 'L',	.name = "layout",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument },
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "mdt_index",	.has_arg = required_argument },
 	{ .val = 'M',	.name = "mtime",	.has_arg = required_argument },
 	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
-     /* reserve {"or",           no_argument,     , 0, 'o'}, to match find(1) */
+/* find	{ .val = 'o'	.name = "or", .has_arg = no_argument }, like find(1) */
 	{ .val = 'O',	.name = "obd",		.has_arg = required_argument },
 	{ .val = 'O',	.name = "ost",		.has_arg = required_argument },
 	/* no short option for pool, p/P already used */
@@ -2885,6 +2903,9 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'P',	.name = "print",	.has_arg = no_argument },
 	{ .val = LFS_PROJID_OPT,
 			.name = "projid",	.has_arg = required_argument },
+/* getstripe { .val = 'q', .name = "quiet",	.has_arg = no_argument }, */
+/* getstripe { .val = 'r', .name = "recursive",	.has_arg = no_argument }, */
+/* getstripe { .val = 'R', .name = "raw",	.has_arg = no_argument }, */
 	{ .val = 's',	.name = "size",		.has_arg = required_argument },
 	{ .val = 'S',	.name = "stripe-size",	.has_arg = required_argument },
 	{ .val = 'S',	.name = "stripe_size",	.has_arg = required_argument },
@@ -2892,6 +2913,8 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'T',	.name = "mdt-count",	.has_arg = required_argument },
 	{ .val = 'u',	.name = "uid",		.has_arg = required_argument },
 	{ .val = 'U',	.name = "user",		.has_arg = required_argument },
+/* getstripe { .val = 'v', .name = "verbose",	.has_arg = no_argument }, */
+/* getstripe { .val = 'y', .name = "yaml",	.has_arg = no_argument }, */
 	{ .name = NULL } };
         int pathstart = -1;
         int pathend = -1;
@@ -3359,6 +3382,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				  struct find_param *param)
 {
 	struct option long_opts[] = {
+/* find	{ .val = 'A',	.name = "atime",	.has_arg = required_argument }*/
 	{ .val = LFS_COMP_COUNT_OPT,
 			.name = "comp-count",	.has_arg = no_argument },
 	{ .val = LFS_COMP_COUNT_OPT,
@@ -3371,29 +3395,17 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			.name = "comp-start",	.has_arg = optional_argument },
 	{ .val = LFS_COMP_START_OPT,
 		.name = "component-start",	.has_arg = optional_argument },
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-	/* This formerly implied "stripe-count", but was explicitly
-	 * made "stripe-count" for consistency with other options,
-	 * and to separate it from "mdt-count" when DNE arrives. */
-	{ .val = 'c',	.name = "count",	.has_arg = no_argument },
-#endif
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = no_argument },
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = no_argument },
+/* find	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument }*/
 	{ .val = 'd',	.name = "directory",	.has_arg = no_argument },
 	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
 	{ .val = 'E',	.name = "comp-end",	.has_arg = optional_argument },
-	{ .val = 'E',	.name = "component-end",
-						.has_arg = optional_argument },
+	{ .val = 'E',	.name = "component-end", .has_arg = optional_argument },
 	{ .val = 'F',	.name = "fid",		.has_arg = no_argument },
 	{ .val = 'g',	.name = "generation",	.has_arg = no_argument },
-	/* dirstripe { .val = 'H',	.name =	"mdt-hash",
-	 *	       .has_arg = required_argument }, */
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-	/* This formerly implied "stripe-index", but was explicitly
-	 * made "stripe-index" for consistency with other options,
-	 * and to separate it from "mdt-index" when DNE arrives. */
-	{ .val = 'i',	.name = "index",	.has_arg = no_argument },
-#endif
+/* find	{ .val = 'G',	.name = "group",	.has_arg = required_argument }*/
+/* dirstripe { .val = 'H', .name = "mdt-hash",	.has_arg = required_argument }*/
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = no_argument },
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = no_argument },
 	{ .val = 'I',	.name = "comp-id",	.has_arg = optional_argument },
@@ -3402,32 +3414,21 @@ static int lfs_getstripe_internal(int argc, char **argv,
 	{ .val = 'm',	.name = "mdt",		.has_arg = no_argument },
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = no_argument },
 	{ .val = 'm',	.name = "mdt_index",	.has_arg = no_argument },
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-	{ .val = 'M',	.name = "mdt-index",	.has_arg = no_argument },
-	{ .val = 'M',	.name = "mdt_index",	.has_arg = no_argument },
-#endif
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-	/* This formerly implied "stripe-index", but was confusing
-	 * with "file offset" (which will eventually be needed for
-	 * with different layouts by offset), so deprecate it. */
-	{ .val = 'o',	.name = "offset",	.has_arg = no_argument },
-#endif
+/* find	{ .val = 'M',	.name = "mtime",	.has_arg = required_argument }*/
+/* find	{ .val = 'n',	.name = "name",		.has_arg = required_argument }*/
 	{ .val = 'O',	.name = "obd",		.has_arg = required_argument },
 	{ .val = 'O',	.name = "ost",		.has_arg = required_argument },
 	{ .val = 'p',	.name = "pool",		.has_arg = no_argument },
+/* find	{ .val = 'P',	.name = "print",	.has_arg = no_argument }, */
 	{ .val = 'q',	.name = "quiet",	.has_arg = no_argument },
 	{ .val = 'r',	.name = "recursive",	.has_arg = no_argument },
 	{ .val = 'R',	.name = "raw",		.has_arg = no_argument },
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-	/* This formerly implied "--stripe-size", but was confusing
-	 * with "lfs find --size|-s", which means "file size", so use
-	 * the consistent "--stripe-size|-S" for all commands. */
-	{ .val = 's',	.name = "size",		.has_arg = no_argument },
-#endif
 	{ .val = 'S',	.name = "stripe-size",	.has_arg = no_argument },
 	{ .val = 'S',	.name = "stripe_size",	.has_arg = no_argument },
-	/* dirstripe { .val = 'T',	.name = "mdt-count",
-	 *	       .has_arg = required_argument }, */
+/* find	{ .val = 't',	.name = "type",		.has_arg = required_argument }*/
+/* dirstripe { .val = 'T', .name = "mdt-count",	.has_arg = required_argument }*/
+/* find	{ .val = 'u',	.name = "uid",		.has_arg = required_argument }*/
+/* find	{ .val = 'U',	.name = "user",		.has_arg = required_argument }*/
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument },
 	{ .name = NULL } };
@@ -3438,9 +3439,6 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
-			if (strcmp(argv[optind - 1], "--count") == 0)
-				fprintf(stderr, "warning: '--count' deprecated,"
-					" use '--stripe-count' instead\n");
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
 				param->fp_verbose |= VERBOSE_COUNT;
 				param->fp_max_depth = 0;
@@ -3543,17 +3541,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 				param->fp_max_depth = 0;
 			}
 			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-		case 'o':
-			fprintf(stderr, "warning: '--offset|-o' deprecated, "
-				"use '--stripe-index|-i' instead\n");
-#endif
 		case 'i':
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 53, 0)
-			if (strcmp(argv[optind - 1], "--index") == 0)
-				fprintf(stderr, "warning: '--index' deprecated"
-					", use '--stripe-index' instead\n");
-#endif
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
 				param->fp_verbose |= VERBOSE_OFFSET;
 				param->fp_max_depth = 0;
@@ -3584,10 +3572,8 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 'M':
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 11, 53, 0)
 			fprintf(stderr, "warning: '-M' deprecated"
-				", use '-m' instead\n");
-#endif
+				", use '--mdt-index' or '-m' instead\n");
 #endif
 		case 'm':
 			if (!(param->fp_verbose & VERBOSE_DETAIL))
@@ -3618,11 +3604,6 @@ static int lfs_getstripe_internal(int argc, char **argv,
 		case 'R':
 			param->fp_raw = 1;
 			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0)
-		case 's':
-			fprintf(stderr, "warning: '--size|-s' deprecated, "
-				"use '--stripe-size|-S' instead\n");
-#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 59, 0) */
 		case 'S':
 			if (!(param->fp_verbose & VERBOSE_DETAIL)) {
 				param->fp_verbose |= VERBOSE_SIZE;
@@ -3714,17 +3695,13 @@ static int lfs_getdirstripe(int argc, char **argv)
 {
 	struct find_param param = { 0 };
 	struct option long_opts[] = {
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	{ .val = 'c',	.name = "mdt-count",	.has_arg = no_argument },
-#endif
 	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
 	{ .val = 'H',	.name = "mdt-hash",	.has_arg = no_argument },
 	{ .val = 'i',	.name = "mdt-index",	.has_arg = no_argument },
+	{ .val = 'm',	.name = "mdt-index",	.has_arg = no_argument },
 	{ .val = 'O',	.name = "obd",		.has_arg = required_argument },
 	{ .val = 'r',	.name = "recursive",	.has_arg = no_argument },
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-	{ .val = 't',	.name = "mdt-hash",	.has_arg = no_argument },
-#endif
 	{ .val = 'T',	.name = "mdt-count",	.has_arg = no_argument },
 	{ .val = 'y',	.name = "yaml",		.has_arg = no_argument },
 	{ .name = NULL } };
@@ -3733,9 +3710,28 @@ static int lfs_getdirstripe(int argc, char **argv)
 	param.fp_get_lmv = 1;
 
 	while ((c = getopt_long(argc, argv,
-				"cDHiO:rtTy", long_opts, NULL)) != -1)
+				"cDHimO:rtTy", long_opts, NULL)) != -1)
 	{
 		switch (c) {
+		case 'c':
+		case 'T':
+			param.fp_verbose |= VERBOSE_COUNT;
+			break;
+		case 'D':
+			param.fp_get_default_lmv = 1;
+			break;
+		case 'i':
+		case 'm':
+			param.fp_verbose |= VERBOSE_OFFSET;
+			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
+		case 't':
+			fprintf(stderr, "warning: '-t' deprecated, "
+				"use '--mdt-hash' or '-H' instead\n");
+#endif
+		case 'H':
+			param.fp_verbose |= VERBOSE_HASH_TYPE;
+			break;
 		case 'O':
 			if (param.fp_obd_uuid) {
 				fprintf(stderr,
@@ -3744,28 +3740,6 @@ static int lfs_getdirstripe(int argc, char **argv)
 				return CMD_HELP;
 			}
 			param.fp_obd_uuid = (struct obd_uuid *)optarg;
-			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-		case 'c':
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 10, 50, 0)
-			fprintf(stderr, "warning: '-c' deprecated"
-				", use '-T' instead\n");
-#endif
-#endif
-		case 'T':
-			param.fp_verbose |= VERBOSE_COUNT;
-			break;
-		case 'i':
-			param.fp_verbose |= VERBOSE_OFFSET;
-			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-		case 't':
-#endif
-		case 'H':
-			param.fp_verbose |= VERBOSE_HASH_TYPE;
-			break;
-		case 'D':
-			param.fp_get_default_lmv = 1;
 			break;
 		case 'r':
 			param.fp_recursive = 1;
@@ -3814,43 +3788,33 @@ static int lfs_setdirstripe(int argc, char **argv)
 	bool			delete = false;
 
 	struct option long_opts[] = {
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	{ .val = 'c',	.name = "count",	.has_arg = required_argument },
-#endif
 	{ .val = 'c',	.name = "mdt-count",	.has_arg = required_argument },
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument },
+	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
+	{ .val = 'D',	.name = "default_stripe", .has_arg = no_argument },
+	{ .val = 'H',	.name = "mdt-hash",	.has_arg = required_argument },
+	{ .val = 'i',	.name = "mdt-index",	.has_arg = required_argument },
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	{ .val = 'i',	.name = "index",	.has_arg = required_argument },
 #endif
-	{ .val = 'i',	.name = "mdt-index",	.has_arg = required_argument },
-	{ .val = 'm',	.name = "mode",		.has_arg = required_argument },
+	{ .val = 'o',	.name = "mode",		.has_arg = required_argument },
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	{ .val = 't',	.name = "hash-type",	.has_arg = required_argument },
-	{ .val = 't',	.name = "mdt-hash",	.has_arg = required_argument },
 #endif
-		{"mdt-hash",	required_argument, 0, 'H'},
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-	{ .val = 'D',	.name = "default_stripe",
-						.has_arg = no_argument },
-#endif
-	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
+	{ .val = 'T',	.name = "mdt-count",	.has_arg = required_argument },
 	{ .name = NULL } };
 
 	setstripe_args_init(&lsa);
 
-	while ((c = getopt_long(argc, argv, "c:dDi:H:m:t:", long_opts,
+	while ((c = getopt_long(argc, argv, "c:dDi:H:m:o:t:T:", long_opts,
 				NULL)) >= 0) {
 		switch (c) {
 		case 0:
 			/* Long options. */
 			break;
 		case 'c':
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 11, 53, 0)
-			if (strcmp(argv[optind - 1], "--count") == 0)
-				fprintf(stderr,
-					"%s %s: warning: '--count' deprecated, use '--mdt-count' instead\n",
-					progname, argv[0]);
-#endif
+		case 'T':
 			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
 			if (*end != '\0') {
 				fprintf(stderr,
@@ -3866,8 +3830,22 @@ static int lfs_setdirstripe(int argc, char **argv)
 		case 'D':
 			default_stripe = true;
 			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
+		case 't':
+			fprintf(stderr, "warning: '--hash-type' and '-t' "
+			      "deprecated, use '--mdt-hash' or '-H' instead\n");
+#endif
+		case 'H':
+			lsa.lsa_pattern = check_hashtype(optarg);
+			if (lsa.lsa_pattern == 0) {
+				fprintf(stderr,
+					"%s %s: bad stripe hash type '%s'\n",
+					progname, argv[0], optarg);
+				return CMD_HELP;
+			}
+			break;
 		case 'i':
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 11, 53, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 			if (strcmp(argv[optind - 1], "--index") == 0)
 				fprintf(stderr,
 					"%s %s: warning: '--index' deprecated, use '--mdt-index' instead\n",
@@ -3887,26 +3865,13 @@ static int lfs_setdirstripe(int argc, char **argv)
 			if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
 				lsa.lsa_stripe_off = mdts[0];
 			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 16, 53, 0)
 		case 'm':
+			fprintf(stderr, "warning: '-m' is deprecated, "
+				"use '--mode' or '-o' instead\n");
+#endif
+		case 'o':
 			mode_opt = optarg;
-			break;
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
-		case 't':
-#endif
-		case 'H':
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 11, 53, 0)
-			if (strcmp(argv[optind - 1], "--hash-type") == 0)
-				fprintf(stderr,
-					"%s %s: warning: '--hash-type' deprecated, use '--mdt-hash' instead\n",
-					progname, argv[0]);
-#endif
-			lsa.lsa_pattern = check_hashtype(optarg);
-			if (lsa.lsa_pattern == 0) {
-				fprintf(stderr,
-					"%s %s: bad stripe hash type '%s'\n",
-					progname, argv[0], optarg);
-				return CMD_HELP;
-			}
 			break;
 		default:
 			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
@@ -4046,13 +4011,18 @@ static int lfs_mv(int argc, char **argv)
 	int     c;
 	int     rc = 0;
 	struct option long_opts[] = {
-	{ .val = 'M',	.name = "mdt-index",	.has_arg = required_argument },
+	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .name = NULL } };
 
-	while ((c = getopt_long(argc, argv, "M:v", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "m:M:v", long_opts, NULL)) != -1) {
 		switch (c) {
-		case 'M': {
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
+		case 'M':
+			fprintf(stderr, "warning: '-M' deprecated"
+				", use '--mdt-index' or '-m' instead\n");
+#endif
+		case 'm':
 			param.fp_mdt_index = strtoul(optarg, &end, 0);
 			if (*end != '\0') {
 				fprintf(stderr, "%s: invalid MDT index'%s'\n",
@@ -4060,11 +4030,9 @@ static int lfs_mv(int argc, char **argv)
 				return CMD_HELP;
 			}
 			break;
-		}
-		case 'v': {
+		case 'v':
 			param.fp_verbose = VERBOSE_DETAIL;
 			break;
-		}
 		default:
 			fprintf(stderr, "error: %s: unrecognized option '%s'\n",
 				argv[0], argv[optind - 1]);

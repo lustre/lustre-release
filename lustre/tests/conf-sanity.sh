@@ -2240,7 +2240,7 @@ t32_test() {
 				mdt_index=$($LFS getdirstripe -i $dir)
 				stripe_cnt=$($LFS getdirstripe -c $dir)
 				if [ $mdt_index = 0 -a $stripe_cnt -le 1 ]; then
-					$LFS mv -M 1 $dir || {
+					$LFS migrate -m 1 $dir || {
 					popd
 					error_noexit "migrate MDT1 failed"
 					return 1
@@ -2252,7 +2252,7 @@ t32_test() {
 				mdt_index=$($LFS getdirstripe -i $dir)
 				stripe_cnt=$($LFS getdirstripe -c $dir)
 				if [ $mdt_index = 1 -a $stripe_cnt -le 1 ]; then
-					$LFS mv -M 0 $dir || {
+					$LFS migrate -m 0 $dir || {
 					popd
 					error_noexit "migrate MDT0 failed"
 					return 1

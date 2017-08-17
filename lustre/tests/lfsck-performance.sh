@@ -780,7 +780,7 @@ namespace_gen_one() {
 	echo "Creating $count 2-striped sub-dirs under $show_dir," \
 		"and 4 regular files under each striped sub-dir at: $(date)"
 	for ((m = 0; m < $count; m++)); do
-		$LFS setdirstripe -i ${idx1} -c 2 -t all_char \
+		$LFS setdirstripe -i ${idx1} -c 2 -H all_char \
 			$work_dir/d_s_${m} || {
 			error_noexit \
 			"(27) Fail to make striped-dir $work_dir/d_s_${m}"

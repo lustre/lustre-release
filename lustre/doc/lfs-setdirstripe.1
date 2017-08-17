@@ -1,30 +1,32 @@
-.TH LFS-SETDIRSTRIPE 1 2014-06-08 "Lustre" "Lustre Utilities"
+.TH LFS-SETDIRSTRIPE 1 2017-11-07 "Lustre" "Lustre Utilities"
 .SH NAME
 lfs setdirstripe, mkdir \- set striping pattern of a directory.
 .SH SYNOPSIS
-.B lfs setdirstripe
-[\fIOPTION\fR]... \fIDIR\fR...
+.B lfs setdirstripe [\fR-cdDHioT\fR] \fIDIR\fR...
 .br
 .SH DESCRIPTION
 Create a striped directory with specified striping pattern. This lfs utility
 is similar to
-.B lfs setstripe
+.BR lfs setstripe
 , but is used to create striped directory.
 .B lfs mkdir
 is an alias for this command.
 .SH OPTIONS
 .TP
-\fB\-c\fR, \fB\-\-count\fR=\fICOUNT\fR
-Stripe over
+.BR \-c ", " \-T ", " \-\-mdt\-count =\fICOUNT\fR
+Stripe the new directory over
 .I COUNT
 MDTs.
 .TP
-\fB\-i\fR, \fB\-\-index\fR=\fISTART_MDT_INDEX\fR
-Stripe from the MDT, whose index is
-.I START_MDT_INDEX.
+.BR \-i ", " \-\-mdt\-index =\fISTART_MDT_INDEX\fR
+Use the MDT whose index is
+.I START_MDT_INDEX
+as the master/starting MDT for the directory.
 .TP
-\fB\-t\fR, \fB\-\-hash\-type\fR=\fIHASH_TYPE\fR
-the hash_type of the striped directory.
+.BR \-H ", " \-\-mdt-hash =\fIHASH_TYPE\fR
+Use
+.I hash_type
+for the striped directory.
 .RS 1.2i
 .TP
 .B fnv_1a_64
@@ -39,25 +41,44 @@ for only testing or when the input is known to have
 perfectly uniform distribution (e.g. sequential numbers).
 .RE
 .TP
-.B \-D, \-\-default_stripe
-Set the default striping pattern of the directory. Newly created
+.BR \-d ", " \-\-delete
+Delete the default striping layout from the directory.  New subdirectories
+created in this directory will inherit the global default directory layout
+(by default they will not be striped).
+.TP
+.BR \-D ", " \-\-default
+Set the default striping pattern of subdirectories. Newly created
 sub-directories will use the new default striping pattern,
 but existing sub-directories will not be affected.  The newly
-created sub-directories will also inherit the current default
+created sub-directories will also inherit the specified default
 striping pattern. Only default stripe count is supported for now.
+
+Note that striping all directories across all MDTs by default is not
+recommended at this time, as the clients will have to do more RPCs to
+create and access each directory, hurting performance rather than
+improving it.  Default striped directories are preferred for cases
+where large subdirectories will be created (e.g. file-per-process
+job output directories).
 .TP
-\fB\-m\fR, \fB\-\-mode\fR=\fIMODE\fR
-Set the file access mode of the new directory to the specified
-numeric value (typically octal) as specified in
-.BR chmod (1),
-and is not affected by the current
+.BR \-o ", " \-\-mode =\fIMODE\fR
+Set the file access permissions of the new directory to the specified
+numeric
+.I MODE
+(typically octal), as with
+.BR chmod (1).
+It is not affected by the current
 .BR umask (1p).
 .SH NOTE
 .PP
-The "lfs setdirstripe" command is only executable by root unless
-"mdt.*.enable_remote_dir_gid" is set via "lctl set_param" to be either a
-non-zero GID to limit it to a single group (e.g. "operator" or "admin"),
-or "-1" to allow any group to create remote directories.
+The
+.B lfs setdirstripe
+command is only executable by root unless
+.B "mdt.*.enable_remote_dir_gid"
+is set on the MDS via
+.B lctl set_param
+to be either a non-zero GID to limit it to a single group
+(e.g. "operator" or "admin"), or "-1" to allow any group
+to create remote directories.
 
 The root of the file system is on MDT0000, and directories and files inherit the
 MDT of their parent directory unless a different MDT is specified with this
@@ -71,16 +92,17 @@ intermediate path components on a series different MDTs and become unavailable
 if any of the intermediate MDTs are offline.
 .SH EXAMPLES
 .TP
-.B $ lfs setdirstripe -c 2 -i 1 -t all_char /mnt/lustre/dir1
+.B $ lfs setdirstripe -c 2 -i 1 -H all_char /mnt/lustre/dir1
 This creates a directory striped on two MDTs, whose first stripe is on
 .B MDT0001
 (MDT index 1), and whose hash type is
 .BR all_char .
-.SH BUGS
-Default stripe cannot be deleted once it is set.
 .SH AVAILABILITY
-The lfs setdirstripe command is part of the Lustre filesystem.
+The
+.B lfs setdirstripe
+command is part of the Lustre filesystem.
 .SH SEE ALSO
+.BR lctl (8),
 .BR lfs (1),
 .BR lfs-getdirstripe (1),
 .BR lfs-setstripe (1),
