@@ -2938,6 +2938,8 @@ out_ladvise:
 		RETURN(ll_ioctl_fsgetxattr(inode, cmd, arg));
 	case LL_IOC_FSSETXATTR:
 		RETURN(ll_ioctl_fssetxattr(inode, cmd, arg));
+	case BLKSSZGET:
+		RETURN(put_user(PAGE_SIZE, (int __user *)arg));
 	default:
 		RETURN(obd_iocontrol(cmd, ll_i2dtexp(inode), 0, NULL,
 				     (void __user *)arg));
