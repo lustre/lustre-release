@@ -851,9 +851,10 @@ static int osd_objset_open(struct osd_device *o)
 	int		rc;
 	ENTRY;
 
-	rc = -dmu_objset_own(o->od_mntdev, DMU_OST_ZFS,
+	rc = -osd_dmu_objset_own(o->od_mntdev, DMU_OST_ZFS,
 			     o->od_dt_dev.dd_rdonly ? B_TRUE : B_FALSE,
-			     o, &o->od_os);
+			     B_FALSE, o, &o->od_os);
+
 	if (rc) {
 		CERROR("%s: can't open %s\n", o->od_svname, o->od_mntdev);
 		o->od_os = NULL;
@@ -917,7 +918,7 @@ static int osd_objset_open(struct osd_device *o)
 
 out:
 	if (rc != 0 && o->od_os != NULL) {
-		dmu_objset_disown(o->od_os, o);
+		osd_dmu_objset_disown(o->od_os, B_FALSE, o);
 		o->od_os = NULL;
 	}
 
@@ -1108,7 +1109,7 @@ static int osd_mount(const struct lu_env *env,
 	osd_unlinked_drain(env, o);
 err:
 	if (rc && o->od_os) {
-		dmu_objset_disown(o->od_os, o);
+		osd_dmu_objset_disown(o->od_os, B_FALSE, o);
 		o->od_os = NULL;
 	}
 
@@ -1148,8 +1149,7 @@ static void osd_umount(const struct lu_env *env, struct osd_device *o)
 			txg_wait_synced(dmu_objset_pool(o->od_os), 0ULL);
 
 		/* close the object set */
-		dmu_objset_disown(o->od_os, o);
-
+		osd_dmu_objset_disown(o->od_os, B_FALSE, o);
 		o->od_os = NULL;
 	}
 
