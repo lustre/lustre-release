@@ -880,4 +880,20 @@ static inline int osd_dmu_read(struct osd_device *osd, dnode_t *dn,
 #endif
 }
 
+#ifdef HAVE_DMU_OBJSET_OWN_6ARG
+#define osd_dmu_objset_own(name, type, ronly, decrypt, tag, os)	\
+	dmu_objset_own((name), (type), (ronly), (decrypt), (tag), (os))
+#else
+#define osd_dmu_objset_own(name, type, ronly, decrypt, tag, os)	\
+	dmu_objset_own((name), (type), (ronly), (tag), (os))
+#endif
+
+#ifdef HAVE_DMU_OBJSET_DISOWN_3ARG
+#define osd_dmu_objset_disown(os, decrypt, tag)	\
+	dmu_objset_disown((os), (decrypt), (tag))
+#else
+#define osd_dmu_objset_disown(os, decrypt, tag)	\
+	dmu_objset_disown((os), (tag))
+#endif
+
 #endif /* _OSD_INTERNAL_H */
