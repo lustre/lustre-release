@@ -20,33 +20,28 @@
      so that is can be included in this file. Currently, this file
 	 duplicates customerstyle_common.xsl with some minor differences. -->
 
-<!--  textdecoration_1 applies the style to the text to highlight an region
-		of the documentation refers to a lustre specific version.
-
-		template_{1,2,3} all use the 'condition="{l23,l24}" attributes and add
-		decoration to the rendered version of the manual to show lustre version
-		specific features. -->
-
-<!-- textdecoration_1: a template to highlight regions of text. -->
+<!-- textdecoration_1: a template to highlight regions of text.-->
 <xsl:template name='textdecoration_1'>
 	<xsl:param name='version'/>
-	<xsl:param name='chunkid'/>
-	<fo:block-container id="{$chunkid}"
-			padding='5pt'
-			border-color='gray'
-			border-style='solid'
-			border-width='1pt'>
+	<xsl:param name='content'/>
+	<xsl:param name='id'/>
+	<fo:block id="{id}">
+	<fo:block-container
+		padding='5pt'
+		border-color='gray'
+		border-style='solid'
+		border-width='1pt'>
 		<fo:block-container float='left' text-indent='3px' start-indent='-20px'>
 			<fo:block background-color="gray">
 				<xsl:value-of select='$version'/>
 			</fo:block>
 		</fo:block-container>
 		<fo:block text-indent='0px' start-indent='0px'>
-			<xsl:apply-templates/>
+			<xsl:copy-of select="$content"/>
 		</fo:block>
-	</fo:block-container>
+		</fo:block-container>
+	</fo:block>
 </xsl:template>
-
 
 <!-- mychapter definition This has been copied from xsl-ns-stylesheets/fo/component.xsl 
 	and modified to provide highlight regions of text for an entire chapter. 
@@ -143,6 +138,9 @@
 <!-- conditional matching template: this calls text decoration
           template with the correct variables. -->
 <xsl:template match="*[@condition]">
+        <xsl:param name="content">
+                <xsl:apply-imports/>
+        </xsl:param>
     <xsl:variable name="id">
         <xsl:call-template name="object.id"/>
     </xsl:variable>
@@ -170,6 +168,7 @@
 		<xsl:otherwise>
             <xsl:call-template name='textdecoration_1'>
                 <xsl:with-param name='version' select="$versionstr"/>
+				<xsl:with-param name='content' select="$content"/>
                 <xsl:with-param name='chunkid' select="$id"/>
             </xsl:call-template>
 		</xsl:otherwise>
