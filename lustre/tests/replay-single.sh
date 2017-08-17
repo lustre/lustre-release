@@ -22,16 +22,15 @@ require_dsh_mds || exit 0
 
 # Skip these tests
 # bug number for skipped tests:
-#                                    LU-472
-ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT 61d"
+ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT "
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 #                                  7.5  (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="44b"
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:        LU-1867	LU-3127
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 89	73b"
+# bug number for skipped test:
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT "
 
 build_test_filter
 
