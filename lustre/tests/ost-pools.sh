@@ -26,6 +26,12 @@ init_logging
 
 check_and_setup_lustre
 
+if ! combined_mgs_mds; then
+	do_facet mgs "mkdir -p $MOUNT"
+	zconf_mount $mgs_HOST $MOUNT $MOUNT_OPTS ||
+		error "unable to mount $MOUNT on the MGS"
+fi
+
 #                                  9  12.5 (min)"
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="18 23b"
 
@@ -1517,5 +1523,9 @@ cd $ORIG_PWD
 
 complete $SECONDS
 destroy_test_pools $FSNAME
+if ! combined_mgs_mds; then
+	zconf_umount $mgs_HOST $MOUNT
+	do_facet mgs "rm -rf $MOUNT"
+fi
 check_and_cleanup_lustre
 exit_status
