@@ -90,12 +90,14 @@ struct lfsck_type_name {
 	enum lfsck_type  ltn_type;
 };
 
+/* Note types must be in order of increasing value so we can iterate through
+ * this correctly.  See enum lfsck_type for values. LU-9894. */
 static struct lfsck_type_name lfsck_types_names[] = {
-	{ .ltn_name = "all",		.ltn_type = LFSCK_TYPES_SUPPORTED },
-	{ .ltn_name = "default",	.ltn_type = LFSCK_TYPES_DEF },
 	{ .ltn_name = "layout",		.ltn_type = LFSCK_TYPE_LAYOUT },
 	{ .ltn_name = "namespace",	.ltn_type = LFSCK_TYPE_NAMESPACE },
 	{ .ltn_name = "scrub",		.ltn_type = LFSCK_TYPE_SCRUB },
+	{ .ltn_name = "all",		.ltn_type = LFSCK_TYPES_SUPPORTED },
+	{ .ltn_name = "default",	.ltn_type = LFSCK_TYPES_DEF },
 	{ .ltn_name = NULL } };
 
 static enum lfsck_type lfsck_name2type(const char *name)
