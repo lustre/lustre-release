@@ -1712,10 +1712,10 @@ test_27w() { # bug 10997
 	$LFS setstripe -S 65536 $DIR/$tdir/f0 || error "setstripe failed"
 	[ $($LFS getstripe -S $DIR/$tdir/f0) -ne 65536 ] &&
 		error "stripe size $size != 65536" || true
-	[ $($LFS getstripe -d $DIR/$tdir | grep -c "stripe_count") -ne 1 ] &&
-		error "$LFS getstripe -d $DIR/$tdir failed" || true
+	[ $($LFS getstripe -d $DIR/$tdir | grep -c "stripe_count") -eq 0 ] &&
+		error "$LFS getstripe -d $DIR/$tdir no 'stripe_count'" || true
 }
-run_test 27w "check $LFS setstripe -S option"
+run_test 27w "check $LFS setstripe -S and getstrip -d options"
 
 test_27wa() {
 	[[ $OSTCOUNT -lt 2 ]] &&
