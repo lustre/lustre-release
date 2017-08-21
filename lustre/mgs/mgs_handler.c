@@ -762,7 +762,7 @@ static int mgs_extract_fs_pool(char *arg, char *fsname, char *poolname)
 		return -EINVAL;
 
 	/* or too long */
-	if (len > MTI_NAME_MAXLEN)
+	if (len > LUSTRE_MAXFSNAME)
 		return -ENAMETOOLONG;
 
 	strncpy(fsname, arg, len);

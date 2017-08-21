@@ -1009,23 +1009,6 @@ static int parse_targets(__u32 *osts, int size, int offset, char *arg)
 	return rc < 0 ? rc : nr;
 }
 
-static int verify_pool_name(char *prog_name, char *pool_name)
-{
-	char *ptr;
-
-	if (pool_name == NULL)
-		return 0;
-
-	ptr = strchr(pool_name, '.');
-	if (ptr != NULL && ptr == pool_name) {
-		fprintf(stderr, "error: %s: fsname is empty in pool name '%s'\n",
-			prog_name, pool_name);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 struct lfs_setstripe_args {
 	unsigned long long	 lsa_comp_end;
 	unsigned long long	 lsa_stripe_size;
@@ -1549,8 +1532,7 @@ static int lfs_setstripe(int argc, char **argv)
 				lsa.lsa_stripe_off = osts[0];
 			break;
 		case 'p':
-			result = verify_pool_name(argv[0], optarg);
-			if (result)
+			if (optarg == NULL)
 				goto error;
 			lsa.lsa_pool_name = optarg;
 			break;

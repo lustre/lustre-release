@@ -3149,8 +3149,24 @@ static int pool_cmd(enum lcfg_command_type cmd,
 out:
         if (rc)
                 rc = -errno;
+	switch (rc) {
+	case -ENAMETOOLONG:
+		fprintf(stderr, "error: %s: either the pool or file "
+			"system name is too long (max pool name len "
+			"is %d and file system name is %d)\n",
+			jt_cmdname(cmdname), LOV_MAXPOOLNAME,
+			LUSTRE_MAXFSNAME);
+		break;
+	case -EINVAL:
+		fprintf(stderr, "error: %s can contain only "
+			"alphanumeric characters, underscores, and "
+			"dashes besides the required '.'\n",
+			jt_cmdname(cmdname));
+	default:
+		break;
+	}
 	free(lcfg);
-        return rc;
+	return rc;
 }
 
 /**
