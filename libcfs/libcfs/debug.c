@@ -73,6 +73,10 @@ static int libcfs_param_debug_mb_set(const char *val,
 #endif
 	if (!*((unsigned int *)kp->arg)) {
 		*((unsigned int *)kp->arg) = num;
+
+#if !defined(HAVE_MODULE_PARAM_LOCKING) && !defined(HAVE_KERNEL_PARAM_LOCK)
+		kernel_param_unlock(THIS_MODULE);
+#endif
 		return 0;
 	}
 
