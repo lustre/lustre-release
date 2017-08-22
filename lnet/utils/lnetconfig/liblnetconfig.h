@@ -217,6 +217,53 @@ int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 				struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_config_max_intf
+ *   Sets the maximum number of interfaces per node. this tunable is
+ *   primarily useful for sanity checks prior to allocating memory.
+ *
+ *   max - maximum value to configure
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_max_intf(int max, int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_max_intf
+ *    show current maximum interface setting
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing NUMA range info
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
+			      struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_config_discovery
+ *   Enable or disable peer discovery. Peer discovery is enabled by default.
+ *
+ *   enable - non-0 enables, 0 disables
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_discovery(int enable, int seq_no, struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_discovery
+ *    show current peer discovery setting
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing NUMA range info
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_discovery(int seq_no, struct cYAML **show_rc,
+			       struct cYAML **err_rc);
+
+/*
  * lustre_lnet_config_buffers
  *   Send down an IOCTL to configure routing buffer sizes.  A value of 0 means
  *   default that particular buffer to default size. A value of -1 means
@@ -310,6 +357,44 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 			  struct cYAML **show_rc, struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_list_peer
+ *   List the known peers.
+ *
+ *     seq_no - sequence number of the command
+ *     show_rc - YAML structure of the resultant show
+ *     err_rc - YAML strucutre of the resultant return code.
+ *
+ */
+int lustre_lnet_list_peer(int seq_no,
+			  struct cYAML **show_rc, struct cYAML **err_rc);
+
+/* lustre_lnet_ping_nid
+ *   Ping the nid list, pnids.
+ *
+ *    pnids - NID list to ping.
+ *    timeout - timeout(seconds) for ping.
+ *    seq_no - sequence number of the command.
+ *    show_rc - YAML structure of the resultant show.
+ *    err_rc - YAML strucutre of the resultant return code.
+ *
+ */
+int lustre_lnet_ping_nid(char *pnid, int timeout, int seq_no,
+			struct cYAML **show_rc, struct cYAML **err_rc);
+
+/* lustre_lnet_discover_nid
+ *   Discover the nid list, pnids.
+ *
+ *    pnids - NID list to discover.
+ *    force - force discovery.
+ *    seq_no - sequence number of the command.
+ *    show_rc - YAML structure of the resultant show.
+ *    err_rc - YAML strucutre of the resultant return code.
+ *
+ */
+int lustre_lnet_discover_nid(char *pnid, int force, int seq_no,
+			     struct cYAML **show_rc, struct cYAML **err_rc);
+
+/*
  * lustre_yaml_config
  *   Parses the provided YAML file and then calls the specific APIs
  *   to configure the entities identified in the file
@@ -339,6 +424,18 @@ int lustre_yaml_del(char *f, struct cYAML **err_rc);
  *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
  */
 int lustre_yaml_show(char *f, struct cYAML **show_rc,
+		     struct cYAML **err_rc);
+
+/*
+ * lustre_yaml_exec
+ *   Parses the provided YAML file and then calls the specific APIs
+ *   to execute the entities identified in the file
+ *
+ *   f - YAML file
+ *   show_rc - [OUT] The show output in YAML.  Must be freed by caller.
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
+ */
+int lustre_yaml_exec(char *f, struct cYAML **show_rc,
 		     struct cYAML **err_rc);
 
 /*

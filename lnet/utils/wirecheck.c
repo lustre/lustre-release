@@ -154,7 +154,46 @@ check_lnet_hdr (void)
 }
 
 void
-system_string (char *cmdline, char *str, int len)
+check_lnet_ni_status(void)
+{
+	BLANK_LINE();
+	COMMENT("Checks for struct lnet_ni_status and related constants");
+
+	CHECK_DEFINE(LNET_NI_STATUS_INVALID);
+	CHECK_DEFINE(LNET_NI_STATUS_UP);
+	CHECK_DEFINE(LNET_NI_STATUS_DOWN);
+
+	CHECK_STRUCT(struct lnet_ni_status);
+	CHECK_MEMBER(struct lnet_ni_status, ns_nid);
+	CHECK_MEMBER(struct lnet_ni_status, ns_status);
+	CHECK_MEMBER(struct lnet_ni_status, ns_unused);
+}
+
+void
+check_lnet_ping_info(void)
+{
+	BLANK_LINE();
+	COMMENT("Checks for struct lnet_ping_info and related constants");
+
+	CHECK_DEFINE(LNET_PROTO_PING_MAGIC);
+	CHECK_VALUE(LNET_PING_FEAT_INVAL);
+	CHECK_VALUE(LNET_PING_FEAT_BASE);
+	CHECK_VALUE(LNET_PING_FEAT_NI_STATUS);
+	CHECK_VALUE(LNET_PING_FEAT_RTE_DISABLED);
+	CHECK_VALUE(LNET_PING_FEAT_MULTI_RAIL);
+	CHECK_VALUE(LNET_PING_FEAT_DISCOVERY);
+	CHECK_VALUE(LNET_PING_FEAT_BITS);
+
+	CHECK_STRUCT(struct lnet_ping_info);
+	CHECK_MEMBER(struct lnet_ping_info, pi_magic);
+	CHECK_MEMBER(struct lnet_ping_info, pi_features);
+	CHECK_MEMBER(struct lnet_ping_info, pi_pid);
+	CHECK_MEMBER(struct lnet_ping_info, pi_nnis);
+	CHECK_MEMBER(struct lnet_ping_info, pi_ni);
+}
+
+void
+system_string(char *cmdline, char *str, int len)
 {
         int   fds[2];
         int   rc;
@@ -237,9 +276,11 @@ main (int argc, char **argv)
         CHECK_VALUE (LNET_MSG_REPLY);
         CHECK_VALUE (LNET_MSG_HELLO);
 
-        check_lnet_handle_wire ();
-        check_lnet_magicversion ();
-        check_lnet_hdr ();
+	check_lnet_handle_wire();
+	check_lnet_magicversion();
+	check_lnet_hdr();
+	check_lnet_ni_status();
+	check_lnet_ping_info();
 
         printf ("}\n\n");
 

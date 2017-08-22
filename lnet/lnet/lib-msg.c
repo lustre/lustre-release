@@ -65,6 +65,7 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
 	LASSERT(!msg->msg_routing);
 
 	ev->type = ev_type;
+	ev->msg_type = msg->msg_type;
 
 	if (ev_type == LNET_EVENT_SEND) {
 		/* event for active message */
@@ -75,7 +76,6 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
 		ev->source.nid	  = LNET_NID_ANY;
 		ev->source.pid    = the_lnet.ln_pid;
 		ev->sender	  = LNET_NID_ANY;
-
 	} else {
 		/* event for passive message */
 		ev->target.pid	  = hdr->dest_pid;
@@ -219,9 +219,13 @@ lnet_msg_decommit_tx(struct lnet_msg *msg, int status)
 
 incr_stats:
 	if (msg->msg_txpeer)
-		atomic_inc(&msg->msg_txpeer->lpni_stats.send_count);
+		lnet_incr_stats(&msg->msg_txpeer->lpni_stats,
+				msg->msg_type,
+				LNET_STATS_TYPE_SEND);
 	if (msg->msg_txni)
-		atomic_inc(&msg->msg_txni->ni_stats.send_count);
+		lnet_incr_stats(&msg->msg_txni->ni_stats,
+				msg->msg_type,
+				LNET_STATS_TYPE_SEND);
  out:
 	lnet_return_tx_credits_locked(msg);
 	msg->msg_tx_committed = 0;
@@ -276,9 +280,13 @@ lnet_msg_decommit_rx(struct lnet_msg *msg, int status)
 
 incr_stats:
 	if (msg->msg_rxpeer)
-		atomic_inc(&msg->msg_rxpeer->lpni_stats.recv_count);
+		lnet_incr_stats(&msg->msg_rxpeer->lpni_stats,
+				msg->msg_type,
+				LNET_STATS_TYPE_RECV);
 	if (msg->msg_rxni)
-		atomic_inc(&msg->msg_rxni->ni_stats.recv_count);
+		lnet_incr_stats(&msg->msg_rxni->ni_stats,
+				msg->msg_type,
+				LNET_STATS_TYPE_RECV);
 	if (ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_REPLY)
 		counters->recv_length += msg->msg_wanted;
 

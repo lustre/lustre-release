@@ -241,13 +241,62 @@ typedef struct lnet_counters {
 #define LNET_NI_STATUS_DOWN	0xdeadface
 #define LNET_NI_STATUS_INVALID	0x00000000
 
+struct lnet_ni_status {
+	lnet_nid_t ns_nid;
+	__u32      ns_status;
+	__u32      ns_unused;
+} WIRE_ATTR;
+
+/*
+ * NB: value of these features equal to LNET_PROTO_PING_VERSION_x
+ * of old LNet, so there shouldn't be any compatibility issue
+ */
+#define LNET_PING_FEAT_INVAL		(0)		/* no feature */
+#define LNET_PING_FEAT_BASE		(1 << 0)	/* just a ping */
+#define LNET_PING_FEAT_NI_STATUS	(1 << 1)	/* return NI status */
+#define LNET_PING_FEAT_RTE_DISABLED	(1 << 2)        /* Routing enabled */
+#define LNET_PING_FEAT_MULTI_RAIL	(1 << 3)        /* Multi-Rail aware */
+#define LNET_PING_FEAT_DISCOVERY	(1 << 4)	/* Supports Discovery */
+
+/*
+ * All ping feature bits fit to hit the wire.
+ * In lnet_assert_wire_constants() this is compared against its open-coded
+ * value, and in lnet_ping_target_update() it is used to verify that no
+ * unknown bits have been set.
+ * New feature bits can be added, just be aware that this does change the
+ * over-the-wire protocol.
+ */
+#define LNET_PING_FEAT_BITS		(LNET_PING_FEAT_BASE | \
+					 LNET_PING_FEAT_NI_STATUS | \
+					 LNET_PING_FEAT_RTE_DISABLED | \
+					 LNET_PING_FEAT_MULTI_RAIL | \
+					 LNET_PING_FEAT_DISCOVERY)
+
+struct lnet_ping_info {
+	__u32			pi_magic;
+	__u32			pi_features;
+	lnet_pid_t		pi_pid;
+	__u32			pi_nnis;
+	struct lnet_ni_status	pi_ni[0];
+} WIRE_ATTR;
+
+#define LNET_PING_INFO_SIZE(NNIDS) \
+	offsetof(struct lnet_ping_info, pi_ni[NNIDS])
+#define LNET_PING_INFO_LONI(PINFO)	((PINFO)->pi_ni[0].ns_nid)
+#define LNET_PING_INFO_SEQNO(PINFO)	((PINFO)->pi_ni[0].ns_status)
+
 /*
  * This is a hard-coded limit on the number of interfaces supported by
  * the interface bonding implemented by the ksocknal LND. It must be
  * defined here because it is used in LNet data structures that are
  * common to all LNDs.
  */
-#define LNET_NUM_INTERFACES	16
+#define LNET_INTERFACES_NUM	16
+
+/* The minimum number of interfaces per node supported by LNet. */
+#define LNET_INTERFACES_MIN	16
+/* The default - arbitrary - value of the lnet_max_interfaces tunable. */
+#define LNET_INTERFACES_MAX_DEFAULT	200
 
 /**
  * Objects maintained by the LNet are accessed through handles. Handle types
@@ -608,6 +657,11 @@ typedef struct lnet_event {
 	 * \see LNetPut
 	 */
 	__u64               hdr_data;
+	/**
+	 * The message type, to ensure a handler for LNET_EVENT_SEND can
+	 * distinguish between LNET_MSG_GET and LNET_MSG_PUT.
+	 */
+	__u32               msg_type;
 	/**
 	 * Indicates the completion status of the operation. It's 0 for
 	 * successful operations, otherwise it's an error code.

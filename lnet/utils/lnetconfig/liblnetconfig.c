@@ -47,6 +47,8 @@
 #include <linux/lnet/lnetctl.h>
 #include "liblnd.h"
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <ifaddrs.h>
 #include "liblnetconfig.h"
 #include "cyaml.h"
@@ -57,6 +59,12 @@
 #define DEL_CMD			"del"
 #define SHOW_CMD		"show"
 #define DBG_CMD			"dbg"
+#define MANAGE_CMD              "manage"
+
+#define modparam_path "/sys/module/lnet/parameters/"
+
+const char *gmsg_stat_names[] = {"sent_stats", "received_stats",
+				 "dropped_stats"};
 
 /*
  * lustre_lnet_ip_range_descr
@@ -76,6 +84,62 @@ struct lustre_lnet_ip2nets {
 	struct lnet_dlc_network_descr ip2nets_net;
 	struct list_head ip2nets_ip_ranges;
 };
+
+int open_sysfs_file(const char *path, const char *attr, const int mode)
+{
+	int fd;
+	char filename[LNET_MAX_STR_LEN];
+
+	if (strlen(path) + strlen(attr) >= LNET_MAX_STR_LEN)
+		return -1;
+
+	snprintf(filename, sizeof(filename), "%s%s",
+		 path, attr);
+
+	fd = open(filename, mode);
+
+	return fd;
+}
+
+static int read_sysfs_file(const char *path, const char *attr,
+			   void *val, const size_t size, const int nelem)
+{
+	int fd;
+	int rc = LUSTRE_CFG_RC_GENERIC_ERR;
+
+	fd = open_sysfs_file(path, attr, O_RDONLY);
+	if (fd == -1)
+		return LUSTRE_CFG_RC_NO_MATCH;
+
+	if (read(fd, val, size * nelem) == -1)
+		goto close_fd;
+
+	rc = LUSTRE_CFG_RC_NO_ERR;
+
+close_fd:
+	close(fd);
+	return rc;
+}
+
+static int write_sysfs_file(const char *path, const char *attr,
+			    void *val, const size_t size, const int nelem)
+{
+	int fd;
+	int rc = LUSTRE_CFG_RC_GENERIC_ERR;
+
+	fd = open_sysfs_file(path, attr, O_WRONLY | O_TRUNC);
+	if (fd == -1)
+		return LUSTRE_CFG_RC_NO_MATCH;
+
+	if (write(fd, val, size * nelem) == -1)
+		goto close_fd;
+
+	rc = LUSTRE_CFG_RC_NO_ERR;
+
+close_fd:
+	close(fd);
+	return rc;
+}
 
 /*
  * free_intf_descr
@@ -176,6 +240,7 @@ int lustre_lnet_add_intf_descr(struct list_head *list, char *intf, int len)
 void lustre_lnet_init_nw_descr(struct lnet_dlc_network_descr *nw_descr)
 {
 	if (nw_descr != NULL) {
+		nw_descr->nw_id = 0;
 		INIT_LIST_HEAD(&nw_descr->network_on_rule);
 		INIT_LIST_HEAD(&nw_descr->nw_intflist);
 	}
@@ -423,6 +488,198 @@ static int dispatch_peer_ni_cmd(lnet_nid_t pnid, lnet_nid_t nid, __u32 cmd,
 			(cmd_str) ? cmd_str : "add", strerror(errno));
 	}
 
+	return rc;
+}
+
+static int infra_ping_nid(char *ping_nids, char *oper, int param, int ioc_call,
+			  int seq_no, struct cYAML **show_rc,
+			  struct cYAML **err_rc)
+{
+	void *data = NULL;
+	struct lnet_ioctl_ping_data ping;
+	struct cYAML *root = NULL, *ping_node = NULL, *item = NULL,
+		     *first_seq = NULL,	*tmp = NULL, *peer_ni = NULL;
+	lnet_process_id_t id;
+	char err_str[LNET_MAX_STR_LEN] = {0};
+	char *sep, *token, *end;
+	char buf[6];
+	size_t len;
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	int i;
+	bool flag = false;
+
+	len = (sizeof(lnet_process_id_t) * LNET_INTERFACES_MAX_DEFAULT);
+
+	data = calloc(1, len);
+	if (data == NULL)
+		goto out;
+
+	/* create struct cYAML root object */
+	root = cYAML_create_object(NULL, NULL);
+	if (root == NULL)
+		goto out;
+
+	ping_node = cYAML_create_seq(root, oper);
+	if (ping_node == NULL)
+		goto out;
+
+	/* tokenise each nid in string ping_nids */
+	token = strtok(ping_nids, ",");
+
+	do {
+		item = cYAML_create_seq_item(ping_node);
+		if (item == NULL)
+			goto out;
+
+		if (first_seq == NULL)
+			first_seq = item;
+
+		/* check if '-' is a part of NID, token */
+		sep = strchr(token, '-');
+		if (sep == NULL) {
+			id.pid = LNET_PID_ANY;
+			/* if no net is specified, libcfs_str2nid() will assume tcp */
+			id.nid = libcfs_str2nid(token);
+			if (id.nid == LNET_NID_ANY) {
+				snprintf(err_str, sizeof(err_str),
+					 "\"cannot parse NID '%s'\"",
+					 token);
+				rc = LUSTRE_CFG_RC_BAD_PARAM;
+				cYAML_build_error(rc, seq_no, MANAGE_CMD,
+						  oper, err_str, err_rc);
+				continue;
+			}
+		} else {
+			if (token[0] == 'u' || token[0] == 'U')
+				id.pid = (strtoul(&token[1], &end, 0) |
+					  (LNET_PID_USERFLAG));
+			else
+				id.pid = strtoul(token, &end, 0);
+
+			/* assuming '-' is part of hostname */
+			if (end != sep) {
+				id.pid = LNET_PID_ANY;
+				id.nid = libcfs_str2nid(token);
+				if (id.nid == LNET_NID_ANY) {
+					snprintf(err_str, sizeof(err_str),
+						 "\"cannot parse NID '%s'\"",
+						 token);
+					rc = LUSTRE_CFG_RC_BAD_PARAM;
+					cYAML_build_error(rc, seq_no, MANAGE_CMD,
+							  oper, err_str,
+							  err_rc);
+					continue;
+				}
+			} else {
+				id.nid = libcfs_str2nid(sep + 1);
+				if (id.nid == LNET_NID_ANY) {
+					snprintf(err_str, sizeof(err_str),
+						 "\"cannot parse NID '%s'\"",
+						 token);
+					rc = LUSTRE_CFG_RC_BAD_PARAM;
+					cYAML_build_error(rc, seq_no, MANAGE_CMD,
+							  oper, err_str,
+							  err_rc);
+					continue;
+				}
+			}
+		}
+		LIBCFS_IOC_INIT_V2(ping, ping_hdr);
+		ping.ping_hdr.ioc_len = sizeof(ping);
+		ping.ping_id          = id;
+		ping.op_param         = param;
+		ping.ping_count       = LNET_INTERFACES_MAX_DEFAULT;
+		ping.ping_buf         = data;
+
+		rc = l_ioctl(LNET_DEV_ID, ioc_call, &ping);
+		if (rc != 0) {
+			snprintf(err_str,
+				 sizeof(err_str), "failed to %s %s: %s\n", oper,
+				 id.pid == LNET_PID_ANY ?
+				 libcfs_nid2str(id.nid) :
+				 libcfs_id2str(id), strerror(errno));
+			rc = LUSTRE_CFG_RC_BAD_PARAM;
+			cYAML_build_error(rc, seq_no, MANAGE_CMD,
+					  oper, err_str, err_rc);
+			continue;
+		}
+
+		if (cYAML_create_string(item, "primary nid",
+					libcfs_nid2str(ping.ping_id.nid)) == NULL)
+			goto out;
+
+		if (cYAML_create_string(item, "Multi-Rail", ping.mr_info ?
+					"True" : "False") == NULL)
+			goto out;
+
+		tmp = cYAML_create_seq(item, "peer ni");
+		if (tmp == NULL)
+			goto out;
+
+		for (i = 0; i < ping.ping_count; i++) {
+			if (!strcmp(libcfs_nid2str(ping.ping_buf[i].nid),
+				    "0@lo"))
+				continue;
+			peer_ni = cYAML_create_seq_item(tmp);
+			if (peer_ni == NULL)
+				goto out;
+			memset(buf, 0, sizeof buf);
+			snprintf(buf, sizeof buf, "nid");
+			if (cYAML_create_string(peer_ni, buf,
+						libcfs_nid2str(ping.ping_buf[i].nid)) == NULL)
+				goto out;
+		}
+
+		flag = true;
+
+	} while ((token = strtok(NULL, ",")) != NULL);
+
+	if (flag)
+		rc = LUSTRE_CFG_RC_NO_ERR;
+
+out:
+	if (data)
+		free(data);
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_free_tree(root);
+	} else if (show_rc != NULL && *show_rc != NULL) {
+		struct cYAML *show_node;
+		show_node = cYAML_get_object_item(*show_rc, oper);
+		if (show_node != NULL && cYAML_is_sequence(show_node)) {
+			cYAML_insert_child(show_node, first_seq);
+			free(ping_node);
+			free(root);
+		} else if (show_node == NULL) {
+			cYAML_insert_sibling((*show_rc)->cy_child,
+					     ping_node);
+			free(root);
+		} else {
+			cYAML_free_tree(root);
+		}
+	} else {
+		*show_rc = root;
+	}
+
+	return rc;
+}
+
+int lustre_lnet_ping_nid(char *ping_nids, int timeout, int seq_no,
+			 struct cYAML **show_rc, struct cYAML **err_rc)
+{
+	int rc;
+
+	rc = infra_ping_nid(ping_nids, "ping", timeout, IOC_LIBCFS_PING_PEER,
+			    seq_no, show_rc, err_rc);
+	return rc;
+}
+
+int lustre_lnet_discover_nid(char *ping_nids, int force, int seq_no,
+			 struct cYAML **show_rc, struct cYAML **err_rc)
+{
+	int rc;
+
+	rc = infra_ping_nid(ping_nids, "discover", force, IOC_LIBCFS_DISCOVER,
+			    seq_no, show_rc, err_rc);
 	return rc;
 }
 
@@ -1287,10 +1544,11 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 
-	if (ip2net == NULL && nw_descr == NULL) {
+	if (ip2net == NULL && (nw_descr == NULL || nw_descr->nw_id == 0 ||
+	    list_empty(&nw_descr->nw_intflist))) {
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"mandatory parameters not specified.\"");
+			 "\"missing mandatory parameters\"");
 		rc = LUSTRE_CFG_RC_MISSING_PARAM;
 		goto out;
 	}
@@ -1424,7 +1682,8 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 
-	if (nw_descr == NULL) {
+	if (nw_descr == NULL || nw_descr->nw_id == 0 ||
+	    list_empty(&nw_descr->nw_intflist)) {
 		snprintf(err_str,
 			 sizeof(err_str),
 			 "\"missing mandatory parameter\"");
@@ -1495,6 +1754,47 @@ out:
 	return rc;
 }
 
+static bool
+add_msg_stats_to_yaml_blk(struct cYAML *yaml,
+			  struct lnet_ioctl_comm_count *counts)
+{
+	if (cYAML_create_number(yaml, "put",
+				counts->ico_put_count)
+					== NULL)
+		return false;
+	if (cYAML_create_number(yaml, "get",
+				counts->ico_get_count)
+					== NULL)
+		return false;
+	if (cYAML_create_number(yaml, "reply",
+				counts->ico_reply_count)
+					== NULL)
+		return false;
+	if (cYAML_create_number(yaml, "ack",
+				counts->ico_ack_count)
+					== NULL)
+		return false;
+	if (cYAML_create_number(yaml, "hello",
+				counts->ico_hello_count)
+					== NULL)
+		return false;
+
+	return true;
+}
+
+static struct lnet_ioctl_comm_count *
+get_counts(struct lnet_ioctl_element_msg_stats *msg_stats, int idx)
+{
+	if (idx == 0)
+		return &msg_stats->im_send_stats;
+	if (idx == 1)
+		return &msg_stats->im_recv_stats;
+	if (idx == 2)
+		return &msg_stats->im_drop_stats;
+
+	return NULL;
+}
+
 int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 			 struct cYAML **show_rc, struct cYAML **err_rc)
 {
@@ -1502,6 +1802,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	struct lnet_ioctl_config_ni *ni_data;
 	struct lnet_ioctl_config_lnd_tunables *lnd;
 	struct lnet_ioctl_element_stats *stats;
+	struct lnet_ioctl_element_msg_stats msg_stats;
 	__u32 net = LNET_NIDNET(LNET_NID_ANY);
 	__u32 prev_net = LNET_NIDNET(LNET_NID_ANY);
 	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, i, j;
@@ -1623,7 +1924,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 			if (interfaces == NULL)
 				goto out;
 
-			for (j = 0; j < LNET_NUM_INTERFACES; j++) {
+			for (j = 0; j < LNET_INTERFACES_NUM; j++) {
 				if (strlen(ni_data->lic_ni_intf[j]) > 0) {
 					snprintf(str_buf,
 						 sizeof(str_buf), "%d", j);
@@ -1638,6 +1939,7 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 
 		if (detail) {
 			char *limit;
+			int k;
 
 			statistics = cYAML_create_object(item, "statistics");
 			if (statistics == NULL)
@@ -1658,6 +1960,40 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 							== NULL)
 				goto out;
 
+			if (detail < 2)
+				goto continue_without_msg_stats;
+
+			LIBCFS_IOC_INIT_V2(msg_stats, im_hdr);
+			msg_stats.im_hdr.ioc_len = sizeof(msg_stats);
+			msg_stats.im_idx = i;
+
+			rc = l_ioctl(LNET_DEV_ID,
+				     IOC_LIBCFS_GET_LOCAL_NI_MSG_STATS,
+				     &msg_stats);
+			if (rc != 0) {
+				l_errno = errno;
+				goto continue_without_msg_stats;
+			}
+
+			for (k = 0; k < 3; k++) {
+				struct lnet_ioctl_comm_count *counts;
+				struct cYAML *msg_statistics = NULL;
+
+				msg_statistics = cYAML_create_object(item,
+						 (char *)gmsg_stat_names[k]);
+				if (msg_statistics == NULL)
+					goto out;
+
+				counts = get_counts(&msg_stats, k);
+				if (counts == NULL)
+					goto out;
+
+				if (!add_msg_stats_to_yaml_blk(msg_statistics,
+							       counts))
+					goto out;
+			}
+
+continue_without_msg_stats:
 			tunables = cYAML_create_object(item, "tunables");
 			if (!tunables)
 				goto out;
@@ -1777,38 +2113,81 @@ out:
 	return rc;
 }
 
-int lustre_lnet_config_numa_range(int range, int seq_no, struct cYAML **err_rc)
+int ioctl_set_value(__u32 val, int ioc, char *name,
+		    int seq_no, struct cYAML **err_rc)
 {
-	struct lnet_ioctl_numa_range data;
+	struct lnet_ioctl_set_value data;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
 	char err_str[LNET_MAX_STR_LEN];
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 
-	if (range < 0) {
-		snprintf(err_str,
-			 sizeof(err_str),
-			 "\"range must be >= 0\"");
-		rc = LUSTRE_CFG_RC_OUT_OF_RANGE_PARAM;
-		goto out;
-	}
+	LIBCFS_IOC_INIT_V2(data, sv_hdr);
+	data.sv_value = val;
 
-	LIBCFS_IOC_INIT_V2(data, nr_hdr);
-	data.nr_range = range;
-
-	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_SET_NUMA_RANGE, &data);
+	rc = l_ioctl(LNET_DEV_ID, ioc , &data);
 	if (rc != 0) {
 		rc = -errno;
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"cannot configure buffers: %s\"", strerror(errno));
-		goto out;
+			 "\"cannot configure %s to %d: %s\"", name,
+			 val, strerror(errno));
 	}
 
-out:
-	cYAML_build_error(rc, seq_no, ADD_CMD, "numa_range", err_str, err_rc);
+	cYAML_build_error(rc, seq_no, ADD_CMD, name, err_str, err_rc);
 
 	return rc;
+}
+
+int lustre_lnet_config_max_intf(int max, int seq_no, struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	char val[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	snprintf(val, sizeof(val), "%d", max);
+
+	rc = write_sysfs_file(modparam_path, "lnet_interfaces_max", val,
+			      1, strlen(val) + 1);
+	if (rc)
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot configure max interfaces: %s\"",
+			 strerror(errno));
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "max_interfaces", err_str, err_rc);
+
+	return rc;
+}
+
+int lustre_lnet_config_discovery(int enable, int seq_no, struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN];
+	char val[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"success\"");
+
+	snprintf(val, sizeof(val), "%u", (enable) ? 0 : 1);
+
+	rc = write_sysfs_file(modparam_path, "lnet_peer_discovery_disabled", val,
+			      1, strlen(val) + 1);
+	if (rc)
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot configure discovery: %s\"",
+			 strerror(errno));
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "discovery", err_str, err_rc);
+
+	return rc;
+
+}
+
+int lustre_lnet_config_numa_range(int range, int seq_no, struct cYAML **err_rc)
+{
+	return ioctl_set_value(range, IOC_LIBCFS_SET_NUMA_RANGE,
+			       "numa_range", seq_no, err_rc);
 }
 
 int lustre_lnet_config_buffers(int tiny, int small, int large, int seq_no,
@@ -2012,21 +2391,23 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	struct lnet_ioctl_peer_cfg peer_info;
 	struct lnet_peer_ni_credit_info *lpni_cri;
 	struct lnet_ioctl_element_stats *lpni_stats;
-	int rc = LUSTRE_CFG_RC_OUT_OF_MEM, ncpt = 0, i = 0, j = 0;
+	struct lnet_ioctl_element_msg_stats *msg_stats;
+	lnet_nid_t *nidp;
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	int i, j, k;
 	int l_errno = 0;
+	__u32 count;
+	__u32 size;
 	struct cYAML *root = NULL, *peer = NULL, *peer_ni = NULL,
-		     *first_seq = NULL, *peer_root = NULL, *tmp = NULL;
+		     *first_seq = NULL, *peer_root = NULL, *tmp = NULL,
+		     *msg_statistics = NULL, *statistics = NULL;
 	char err_str[LNET_MAX_STR_LEN];
-	lnet_nid_t prev_primary_nid = LNET_NID_ANY, primary_nid = LNET_NID_ANY;
-	int data_size = sizeof(*lpni_cri) + sizeof(*lpni_stats);
-	char *data = malloc(data_size);
-	bool new_peer = true;
+	lnet_process_id_t *list = NULL;
+	void *data = NULL;
+	void *lpni_data;
 
 	snprintf(err_str, sizeof(err_str),
 		 "\"out of memory\"");
-
-	if (data == NULL)
-		goto out;
 
 	/* create struct cYAML root object */
 	root = cYAML_create_object(NULL, NULL);
@@ -2037,69 +2418,132 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	if (peer_root == NULL)
 		goto out;
 
-	if (knid != NULL)
-		primary_nid = libcfs_str2nid(knid);
-
-	do {
-		for (i = 0;; i++) {
-			memset(data, 0, data_size);
+	count = 1000;
+	size = count * sizeof(lnet_process_id_t);
+	list = malloc(size);
+	if (list == NULL) {
+		l_errno = ENOMEM;
+		goto out;
+	}
+	if (knid != NULL) {
+		list[0].nid = libcfs_str2nid(knid);
+		count = 1;
+	} else {
+		for (;;) {
 			memset(&peer_info, 0, sizeof(peer_info));
 			LIBCFS_IOC_INIT_V2(peer_info, prcfg_hdr);
 			peer_info.prcfg_hdr.ioc_len = sizeof(peer_info);
-			peer_info.prcfg_count = i;
-			peer_info.prcfg_bulk = (void *)data;
-			peer_info.prcfg_size = data_size;
+			peer_info.prcfg_size = size;
+			peer_info.prcfg_bulk = list;
 
-			rc = l_ioctl(LNET_DEV_ID,
-				     IOC_LIBCFS_GET_PEER_NI, &peer_info);
-			if (rc != 0) {
-				l_errno = errno;
+			l_errno = 0;
+			rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_PEER_LIST,
+				     &peer_info);
+			count = peer_info.prcfg_count;
+			if (rc == 0)
 				break;
-			}
-
-			if (primary_nid != LNET_NID_ANY &&
-			    primary_nid != peer_info.prcfg_prim_nid)
-					continue;
-
-			lpni_cri = peer_info.prcfg_bulk;
-			lpni_stats = peer_info.prcfg_bulk + sizeof(*lpni_cri);
-
-			peer = cYAML_create_seq_item(peer_root);
-			if (peer == NULL)
+			l_errno = errno;
+			if (l_errno != E2BIG) {
+				snprintf(err_str,
+					sizeof(err_str),
+					"\"cannot get peer list: %s\"",
+					strerror(l_errno));
+				rc = -l_errno;
 				goto out;
-
-			if (peer_info.prcfg_prim_nid != prev_primary_nid) {
-				prev_primary_nid = peer_info.prcfg_prim_nid;
-				new_peer = true;
 			}
-
-			if (new_peer) {
-				lnet_nid_t pnid = peer_info.prcfg_prim_nid;
-				if (cYAML_create_string(peer, "primary nid",
-							libcfs_nid2str(pnid))
-				    == NULL)
-					goto out;
-				if (cYAML_create_string(peer, "Multi-Rail",
-							peer_info.prcfg_mr ?
-							"True" : "False")
-				    == NULL)
-					goto out;
-				tmp = cYAML_create_seq(peer, "peer ni");
-				if (tmp == NULL)
-					goto out;
-				new_peer = false;
+			free(list);
+			size = peer_info.prcfg_size;
+			list = malloc(size);
+			if (list == NULL) {
+				l_errno = ENOMEM;
+				goto out;
 			}
+		}
+	}
 
-			if (first_seq == NULL)
-				first_seq = peer;
+	size = 4096;
+	data = malloc(size);
+	if (data == NULL) {
+		l_errno = ENOMEM;
+		goto out;
+	}
+	for (i = 0; i < count; i++) {
+		for (;;) {
+			memset(&peer_info, 0, sizeof(peer_info));
+			LIBCFS_IOC_INIT_V2(peer_info, prcfg_hdr);
+			peer_info.prcfg_hdr.ioc_len = sizeof(peer_info);
+			peer_info.prcfg_prim_nid = list[i].nid;
+			peer_info.prcfg_size = size;
+			peer_info.prcfg_bulk = data;
+
+			l_errno = 0;
+			rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_PEER_NI,
+				     &peer_info);
+			if (rc == 0)
+				break;
+			l_errno = errno;
+			if (l_errno != E2BIG) {
+				snprintf(err_str,
+					sizeof(err_str),
+					"\"cannot get peer information: %s\"",
+					strerror(l_errno));
+				rc = -l_errno;
+				goto out;
+			}
+			free(data);
+			size = peer_info.prcfg_size;
+			data = malloc(size);
+			if (data == NULL) {
+				l_errno = ENOMEM;
+				goto out;
+			}
+		}
+
+		peer = cYAML_create_seq_item(peer_root);
+		if (peer == NULL)
+			goto out;
+
+		if (first_seq == NULL)
+			first_seq = peer;
+
+		lnet_nid_t pnid = peer_info.prcfg_prim_nid;
+		if (cYAML_create_string(peer, "primary nid",
+					libcfs_nid2str(pnid))
+		    == NULL)
+			goto out;
+		if (cYAML_create_string(peer, "Multi-Rail",
+					peer_info.prcfg_mr ? "True" : "False")
+		    == NULL)
+			goto out;
+		/*
+		 * print out the state of the peer only if details are
+		 * requested
+		 */
+		if (detail >= 3) {
+			if (cYAML_create_number(peer, "peer state",
+						peer_info.prcfg_state)
+				== NULL)
+				goto out;
+		}
+
+		tmp = cYAML_create_seq(peer, "peer ni");
+		if (tmp == NULL)
+			goto out;
+
+		lpni_data = data;
+		for (j = 0; j < peer_info.prcfg_count; j++) {
+			nidp = lpni_data;
+			lpni_cri = (void*)nidp + sizeof(nidp);
+			lpni_stats = (void *)lpni_cri + sizeof(*lpni_cri);
+			msg_stats = (void *)lpni_stats + sizeof(*lpni_stats);
+			lpni_data = (void *)msg_stats + sizeof(*msg_stats);
 
 			peer_ni = cYAML_create_seq_item(tmp);
 			if (peer_ni == NULL)
 				goto out;
 
 			if (cYAML_create_string(peer_ni, "nid",
-						libcfs_nid2str
-						 (peer_info.prcfg_cfg_nid))
+						libcfs_nid2str(*nidp))
 			    == NULL)
 				goto out;
 
@@ -2141,37 +2585,51 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 			    == NULL)
 				goto out;
 
-			if (cYAML_create_number(peer_ni, "send_count",
+			if (cYAML_create_number(peer_ni, "refcount",
+						lpni_cri->cr_refcount) == NULL)
+				goto out;
+
+			statistics = cYAML_create_object(peer_ni, "statistics");
+			if (statistics == NULL)
+				goto out;
+
+			if (cYAML_create_number(statistics, "send_count",
 						lpni_stats->iel_send_count)
 			    == NULL)
 				goto out;
 
-			if (cYAML_create_number(peer_ni, "recv_count",
+			if (cYAML_create_number(statistics, "recv_count",
 						lpni_stats->iel_recv_count)
 			    == NULL)
 				goto out;
 
-			if (cYAML_create_number(peer_ni, "drop_count",
+			if (cYAML_create_number(statistics, "drop_count",
 						lpni_stats->iel_drop_count)
 			    == NULL)
 				goto out;
 
-			if (cYAML_create_number(peer_ni, "refcount",
-						lpni_cri->cr_refcount) == NULL)
-				goto out;
-		}
+			if (detail < 2)
+				continue;
 
-		if (l_errno != ENOENT) {
-			snprintf(err_str,
-				sizeof(err_str),
-				"\"cannot get peer information: %s\"",
-				strerror(l_errno));
-			rc = -l_errno;
-			goto out;
-		}
+			for (k = 0; k < 3; k++) {
+				struct lnet_ioctl_comm_count *counts;
 
-		j++;
-	} while (j < ncpt);
+				msg_statistics = cYAML_create_object(peer_ni,
+						 (char *) gmsg_stat_names[k]);
+				if (msg_statistics == NULL)
+					goto out;
+
+				counts = get_counts(msg_stats, k);
+				if (counts == NULL)
+					goto out;
+
+				if (!add_msg_stats_to_yaml_blk(msg_statistics,
+							       counts))
+					goto out;
+			}
+
+		}
+	}
 
 	/* print output iff show_rc is not provided */
 	if (show_rc == NULL)
@@ -2181,6 +2639,8 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 	rc = LUSTRE_CFG_RC_NO_ERR;
 
 out:
+	free(list);
+	free(data);
 	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_free_tree(root);
 	} else if (show_rc != NULL && *show_rc != NULL) {
@@ -2211,63 +2671,264 @@ out:
 	return rc;
 }
 
-int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
-				struct cYAML **err_rc)
+int lustre_lnet_list_peer(int seq_no,
+			  struct cYAML **show_rc, struct cYAML **err_rc)
 {
-	struct lnet_ioctl_numa_range data;
-	int rc;
-	int l_errno;
+	struct lnet_ioctl_peer_cfg peer_info;
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	__u32 count;
+	__u32 size;
+	int i = 0;
+	int l_errno = 0;
+	struct cYAML *root = NULL, *list_root = NULL, *first_seq = NULL;
 	char err_str[LNET_MAX_STR_LEN];
-	struct cYAML *root = NULL, *range = NULL;
+	lnet_process_id_t *list = NULL;
 
-	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+	snprintf(err_str, sizeof(err_str),
+		 "\"out of memory\"");
 
-	LIBCFS_IOC_INIT_V2(data, nr_hdr);
+	memset(&peer_info, 0, sizeof(peer_info));
 
-	rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_NUMA_RANGE, &data);
-	if (rc != 0) {
-		l_errno = errno;
-		snprintf(err_str,
-			 sizeof(err_str),
-			 "\"cannot get numa range: %s\"",
-			 strerror(l_errno));
-		rc = -l_errno;
-		goto out;
-	}
-
-	rc = LUSTRE_CFG_RC_OUT_OF_MEM;
-
+	/* create struct cYAML root object */
 	root = cYAML_create_object(NULL, NULL);
 	if (root == NULL)
 		goto out;
 
-	range = cYAML_create_object(root, "numa");
-	if (range == NULL)
+	list_root = cYAML_create_seq(root, "peer list");
+	if (list_root == NULL)
 		goto out;
 
-	if (cYAML_create_number(range, "range",
-				data.nr_range) == NULL)
+	count = 1000;
+	size = count * sizeof(lnet_process_id_t);
+	list = malloc(size);
+	if (list == NULL) {
+		l_errno = ENOMEM;
 		goto out;
+	}
+	for (;;) {
+		LIBCFS_IOC_INIT_V2(peer_info, prcfg_hdr);
+		peer_info.prcfg_hdr.ioc_len = sizeof(peer_info);
+		peer_info.prcfg_size = size;
+		peer_info.prcfg_bulk = list;
 
+		l_errno = 0;
+		rc = l_ioctl(LNET_DEV_ID, IOC_LIBCFS_GET_PEER_LIST, &peer_info);
+		count = peer_info.prcfg_count;
+		if (rc == 0)
+			break;
+		l_errno = errno;
+		if (l_errno != E2BIG) {
+			snprintf(err_str,
+				sizeof(err_str),
+				"\"cannot get peer list: %s\"",
+				strerror(l_errno));
+			rc = -l_errno;
+			goto out;
+		}
+		free(list);
+		size = peer_info.prcfg_size;
+		list = malloc(size);
+		if (list == NULL) {
+			l_errno = ENOMEM;
+			goto out;
+		}
+	}
+
+	/* count is now the actual number of ids in the list. */
+	for (i = 0; i < count; i++) {
+		if (cYAML_create_string(list_root, "nid",
+					libcfs_nid2str(list[i].nid))
+		    == NULL)
+			goto out;
+	}
+
+	/* print output iff show_rc is not provided */
 	if (show_rc == NULL)
 		cYAML_print_tree(root);
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 	rc = LUSTRE_CFG_RC_NO_ERR;
+
 out:
+	if (list != NULL)
+		free(list);
 	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_free_tree(root);
 	} else if (show_rc != NULL && *show_rc != NULL) {
-		cYAML_insert_sibling((*show_rc)->cy_child,
-					root->cy_child);
-		free(root);
+		struct cYAML *show_node;
+		/* find the peer node, if one doesn't exist then
+		 * insert one.  Otherwise add to the one there
+		 */
+		show_node = cYAML_get_object_item(*show_rc,
+						  "peer");
+		if (show_node != NULL && cYAML_is_sequence(show_node)) {
+			cYAML_insert_child(show_node, first_seq);
+			free(list_root);
+			free(root);
+		} else if (show_node == NULL) {
+			cYAML_insert_sibling((*show_rc)->cy_child,
+					     list_root);
+			free(root);
+		} else {
+			cYAML_free_tree(root);
+		}
 	} else {
 		*show_rc = root;
 	}
 
-	cYAML_build_error(rc, seq_no, SHOW_CMD, "numa", err_str, err_rc);
+	cYAML_build_error(rc, seq_no, SHOW_CMD, "peer", err_str,
+			  err_rc);
 
 	return rc;
+}
+
+static void add_to_global(struct cYAML *show_rc, struct cYAML *node,
+			  struct cYAML *root)
+{
+	struct cYAML *show_node;
+
+	show_node = cYAML_get_object_item(show_rc, "global");
+	if (show_node != NULL)
+		cYAML_insert_sibling(show_node->cy_child,
+				     node->cy_child);
+	else
+		cYAML_insert_sibling(show_rc->cy_child,
+				     node);
+	free(root);
+}
+
+static int build_global_yaml_entry(char *err_str, int err_len, int seq_no,
+				   char *name, __u32 value,
+				   struct cYAML **show_rc,
+				   struct cYAML **err_rc, int err)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	struct cYAML *root = NULL, *global = NULL;
+
+	if (err) {
+		rc = err;
+		goto out;
+	}
+
+	root = cYAML_create_object(NULL, NULL);
+	if (root == NULL)
+		goto out;
+
+	global = cYAML_create_object(root, "global");
+	if (global == NULL)
+		goto out;
+
+	if (cYAML_create_number(global, name,
+				value) == NULL)
+		goto out;
+
+	if (show_rc == NULL)
+		cYAML_print_tree(root);
+
+	snprintf(err_str, err_len, "\"success\"");
+
+	rc = LUSTRE_CFG_RC_NO_ERR;
+
+out:
+	if (show_rc == NULL || rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_free_tree(root);
+	} else if (show_rc != NULL && *show_rc != NULL) {
+		add_to_global(*show_rc, global, root);
+	} else {
+		*show_rc = root;
+	}
+
+	cYAML_build_error(rc, seq_no, SHOW_CMD, "global", err_str, err_rc);
+
+	return rc;
+}
+
+static int ioctl_show_global_values(int ioc, int seq_no, char *name,
+				    struct cYAML **show_rc,
+				    struct cYAML **err_rc)
+{
+	struct lnet_ioctl_set_value data;
+	int rc;
+	int l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	LIBCFS_IOC_INIT_V2(data, sv_hdr);
+
+	rc = l_ioctl(LNET_DEV_ID, ioc, &data);
+	if (rc != 0) {
+		l_errno = -errno;
+		snprintf(err_str,
+			 sizeof(err_str),
+			 "\"cannot get %s: %s\"",
+			 name, strerror(l_errno));
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no, name,
+				       data.sv_value, show_rc, err_rc, l_errno);
+}
+
+int lustre_lnet_show_max_intf(int seq_no, struct cYAML **show_rc,
+			      struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int max_intf = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "lnet_interfaces_max", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get max interfaces: %d\"", rc);
+	} else {
+		max_intf = atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "max_intf", max_intf, show_rc,
+				       err_rc, l_errno);
+}
+
+int lustre_lnet_show_discovery(int seq_no, struct cYAML **show_rc,
+			       struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int discovery = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN];
+
+	snprintf(err_str, sizeof(err_str), "\"out of memory\"");
+
+	rc = read_sysfs_file(modparam_path, "lnet_peer_discovery_disabled", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get discovery setting: %d\"", rc);
+	} else {
+		/*
+		 * The kernel stores a discovery disabled value. User space
+		 * shows whether discovery is enabled. So the value must be
+		 * inverted.
+		 */
+		discovery = !atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "discovery", discovery, show_rc,
+				       err_rc, l_errno);
+}
+
+int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
+				struct cYAML **err_rc)
+{
+	return ioctl_show_global_values(IOC_LIBCFS_GET_NUMA_RANGE, seq_no,
+					"numa_range", show_rc, err_rc);
 }
 
 int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
@@ -3029,39 +3690,133 @@ static int handle_yaml_show_stats(struct cYAML *tree, struct cYAML **show_rc,
 				      show_rc, err_rc);
 }
 
-static int handle_yaml_config_numa(struct cYAML *tree, struct cYAML **show_rc,
-				  struct cYAML **err_rc)
+static int handle_yaml_config_global_settings(struct cYAML *tree,
+					      struct cYAML **show_rc,
+					      struct cYAML **err_rc)
 {
-	struct cYAML *seq_no, *range;
+	struct cYAML *max_intf, *numa, *discovery, *seq_no;
+	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
-	range = cYAML_get_object_item(tree, "range");
+	max_intf = cYAML_get_object_item(tree, "max_intf");
+	if (max_intf)
+		rc = lustre_lnet_config_max_intf(max_intf->cy_valueint,
+						 seq_no ? seq_no->cy_valueint
+							: -1,
+						 err_rc);
 
-	return lustre_lnet_config_numa_range(range ? range->cy_valueint : -1,
-					     seq_no ? seq_no->cy_valueint : -1,
-					     err_rc);
+	numa = cYAML_get_object_item(tree, "numa_range");
+	if (numa)
+		rc = lustre_lnet_config_numa_range(numa->cy_valueint,
+						   seq_no ? seq_no->cy_valueint
+							: -1,
+						   err_rc);
+
+	discovery = cYAML_get_object_item(tree, "discovery");
+	if (discovery)
+		rc = lustre_lnet_config_discovery(discovery->cy_valueint,
+						  seq_no ? seq_no->cy_valueint
+							: -1,
+						  err_rc);
+
+	return rc;
 }
 
-static int handle_yaml_del_numa(struct cYAML *tree, struct cYAML **show_rc,
-			       struct cYAML **err_rc)
+static int handle_yaml_del_global_settings(struct cYAML *tree,
+					   struct cYAML **show_rc,
+					   struct cYAML **err_rc)
 {
-	struct cYAML *seq_no;
+	struct cYAML *max_intf, *numa, *discovery, *seq_no;
+	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
+	max_intf = cYAML_get_object_item(tree, "max_intf");
+	if (max_intf)
+		rc = lustre_lnet_config_max_intf(LNET_INTERFACES_MAX_DEFAULT,
+						 seq_no ? seq_no->cy_valueint
+							: -1,
+						 err_rc);
 
-	return lustre_lnet_config_numa_range(0, seq_no ? seq_no->cy_valueint : -1,
-					     err_rc);
+	numa = cYAML_get_object_item(tree, "numa_range");
+	if (numa)
+		rc = lustre_lnet_config_numa_range(0,
+						   seq_no ? seq_no->cy_valueint
+							: -1,
+						   err_rc);
+
+	/* peer discovery is enabled by default */
+	discovery = cYAML_get_object_item(tree, "discovery");
+	if (discovery)
+		rc = lustre_lnet_config_discovery(1,
+						  seq_no ? seq_no->cy_valueint
+							: -1,
+						  err_rc);
+
+	return rc;
 }
 
-static int handle_yaml_show_numa(struct cYAML *tree, struct cYAML **show_rc,
+static int handle_yaml_show_global_settings(struct cYAML *tree,
+					    struct cYAML **show_rc,
+					    struct cYAML **err_rc)
+{
+	struct cYAML *max_intf, *numa, *discovery, *seq_no;
+	int rc = 0;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	max_intf = cYAML_get_object_item(tree, "max_intf");
+	if (max_intf)
+		rc = lustre_lnet_show_max_intf(seq_no ? seq_no->cy_valueint
+							: -1,
+						show_rc, err_rc);
+
+	numa = cYAML_get_object_item(tree, "numa_range");
+	if (numa)
+		rc = lustre_lnet_show_numa_range(seq_no ? seq_no->cy_valueint
+							: -1,
+						 show_rc, err_rc);
+
+	discovery = cYAML_get_object_item(tree, "discovery");
+	if (discovery)
+		rc = lustre_lnet_show_discovery(seq_no ? seq_no->cy_valueint
+							: -1,
+						show_rc, err_rc);
+
+	return rc;
+}
+
+static int handle_yaml_ping(struct cYAML *tree, struct cYAML **show_rc,
+			    struct cYAML **err_rc)
+{
+	struct cYAML *seq_no, *nid, *timeout;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	nid = cYAML_get_object_item(tree, "primary nid");
+	timeout = cYAML_get_object_item(tree, "timeout");
+
+	return lustre_lnet_ping_nid((nid) ? nid->cy_valuestring : NULL,
+				    (timeout) ? timeout->cy_valueint : 1000,
+				    (seq_no) ? seq_no->cy_valueint : -1,
+				    show_rc, err_rc);
+}
+
+static int handle_yaml_discover(struct cYAML *tree, struct cYAML **show_rc,
 				struct cYAML **err_rc)
 {
-	struct cYAML *seq_no;
+	struct cYAML *seq_no, *nid, *force;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
+	nid = cYAML_get_object_item(tree, "primary nid");
+	force = cYAML_get_object_item(tree, "force");
 
-	return lustre_lnet_show_numa_range(seq_no ? seq_no->cy_valueint : -1,
-					   show_rc, err_rc);
+	return lustre_lnet_discover_nid((nid) ? nid->cy_valuestring : NULL,
+					(force) ? force->cy_valueint : 0,
+					(seq_no) ? seq_no->cy_valueint : -1,
+					show_rc, err_rc);
+}
+
+static int handle_yaml_no_op()
+{
+	return LUSTRE_CFG_RC_NO_ERR;
 }
 
 struct lookup_cmd_hdlr_tbl {
@@ -3076,25 +3831,49 @@ static struct lookup_cmd_hdlr_tbl lookup_config_tbl[] = {
 	{ .name = "peer",	.cb = handle_yaml_config_peer },
 	{ .name = "routing",	.cb = handle_yaml_config_routing },
 	{ .name = "buffers",	.cb = handle_yaml_config_buffers },
-	{ .name = "numa",	.cb = handle_yaml_config_numa },
+	{ .name = "statistics", .cb = handle_yaml_no_op },
+	{ .name = "global",	.cb = handle_yaml_config_global_settings},
+	{ .name = "ping",	.cb = handle_yaml_no_op },
+	{ .name = "discover",	.cb = handle_yaml_no_op },
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
 	{ .name = "route",	.cb = handle_yaml_del_route },
 	{ .name = "net",	.cb = handle_yaml_del_ni },
+	{ .name = "ip2nets",	.cb = handle_yaml_no_op },
 	{ .name = "peer",	.cb = handle_yaml_del_peer },
 	{ .name = "routing",	.cb = handle_yaml_del_routing },
-	{ .name = "numa",	.cb = handle_yaml_del_numa },
+	{ .name = "buffers",	.cb = handle_yaml_no_op },
+	{ .name = "statistics", .cb = handle_yaml_no_op },
+	{ .name = "global",	.cb = handle_yaml_del_global_settings},
+	{ .name = "ping",	.cb = handle_yaml_no_op },
+	{ .name = "discover",	.cb = handle_yaml_no_op },
 	{ .name = NULL } };
 
 static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {
 	{ .name = "route",	.cb = handle_yaml_show_route },
 	{ .name = "net",	.cb = handle_yaml_show_net },
-	{ .name = "buffers",	.cb = handle_yaml_show_routing },
-	{ .name = "routing",	.cb = handle_yaml_show_routing },
 	{ .name = "peer",	.cb = handle_yaml_show_peers },
+	{ .name = "ip2nets",	.cb = handle_yaml_no_op },
+	{ .name = "routing",	.cb = handle_yaml_show_routing },
+	{ .name = "buffers",	.cb = handle_yaml_show_routing },
 	{ .name = "statistics",	.cb = handle_yaml_show_stats },
-	{ .name = "numa",	.cb = handle_yaml_show_numa },
+	{ .name = "global",	.cb = handle_yaml_show_global_settings},
+	{ .name = "ping",	.cb = handle_yaml_no_op },
+	{ .name = "discover",	.cb = handle_yaml_no_op },
+	{ .name = NULL } };
+
+static struct lookup_cmd_hdlr_tbl lookup_exec_tbl[] = {
+	{ .name = "route",	.cb = handle_yaml_no_op },
+	{ .name = "net",	.cb = handle_yaml_no_op },
+	{ .name = "peer",	.cb = handle_yaml_no_op },
+	{ .name = "ip2nets",	.cb = handle_yaml_no_op },
+	{ .name = "routing",	.cb = handle_yaml_no_op },
+	{ .name = "buffers",	.cb = handle_yaml_no_op },
+	{ .name = "statistics",	.cb = handle_yaml_no_op },
+	{ .name = "global",	.cb = handle_yaml_no_op },
+	{ .name = "ping",	.cb = handle_yaml_ping },
+	{ .name = "discover",	.cb = handle_yaml_discover },
 	{ .name = NULL } };
 
 static cmd_handler_t lookup_fn(char *key,
@@ -3176,3 +3955,8 @@ int lustre_yaml_show(char *f, struct cYAML **show_rc, struct cYAML **err_rc)
 				     show_rc, err_rc);
 }
 
+int lustre_yaml_exec(char *f, struct cYAML **show_rc, struct cYAML **err_rc)
+{
+	return lustre_yaml_cb_helper(f, lookup_exec_tbl,
+				     show_rc, err_rc);
+}

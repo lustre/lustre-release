@@ -186,6 +186,17 @@ static char *token_type_string[] = {
 	[YAML_SCALAR_TOKEN] = "YAML_SCALAR_TOKEN",
 };
 
+static char *state_string[] = {
+	[TREE_STATE_COMPLETE] = "COMPLETE",
+	[TREE_STATE_INITED] = "INITED",
+	[TREE_STATE_TREE_STARTED] = "TREE_STARTED",
+	[TREE_STATE_BLK_STARTED] = "BLK_STARTED",
+	[TREE_STATE_KEY] = "KEY",
+	[TREE_STATE_KEY_FILLED] = "KEY_FILLED",
+	[TREE_STATE_VALUE] = "VALUE",
+	[TREE_STATE_SEQ_START] = "SEQ_START",
+};
+
 static void cYAML_ll_free(struct list_head *ll)
 {
 	struct cYAML_ll *node, *tmp;
@@ -475,7 +486,8 @@ static enum cYAML_handler_error yaml_stream_end(yaml_token_t *token,
 						struct cYAML_tree_node *tree)
 {
 	if (tree->state != TREE_STATE_TREE_STARTED &&
-	    tree->state != TREE_STATE_COMPLETE)
+	    tree->state != TREE_STATE_COMPLETE &&
+	    tree->state != TREE_STATE_INITED)
 		return CYAML_ERROR_UNEXPECTED_STATE;
 
 	tree->state = TREE_STATE_INITED;
@@ -1171,13 +1183,15 @@ struct cYAML *cYAML_build_tree(char *yaml_file,
 	/* Read the event sequence. */
 	while (!done) {
 		/*
-		* Go through the parser and build a cYAML representation
-		* of the passed in YAML text
-		*/
+		 * Go through the parser and build a cYAML representation
+		 * of the passed in YAML text
+		 */
 		yaml_parser_scan(&parser, &token);
 
 		if (debug)
-			fprintf(stderr, "token.type = %s: %s\n",
+			fprintf(stderr, "tree.state(%p:%d) = %s, token.type ="
+					" %s: %s\n",
+				&tree, tree.state, state_string[tree.state],
 				token_type_string[token.type],
 				(token.type == YAML_SCALAR_TOKEN) ?
 				(char*)token.data.scalar.value : "");

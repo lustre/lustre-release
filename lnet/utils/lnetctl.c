@@ -48,15 +48,53 @@ static int jt_show_net(int argc, char **argv);
 static int jt_show_routing(int argc, char **argv);
 static int jt_show_stats(int argc, char **argv);
 static int jt_show_peer(int argc, char **argv);
-static int jt_show_numa(int argc, char **argv);
+static int jt_show_global(int argc, char **argv);
 static int jt_set_tiny(int argc, char **argv);
 static int jt_set_small(int argc, char **argv);
 static int jt_set_large(int argc, char **argv);
 static int jt_set_numa(int argc, char **argv);
 static int jt_add_peer_nid(int argc, char **argv);
 static int jt_del_peer_nid(int argc, char **argv);
+static int jt_set_max_intf(int argc, char **argv);
+static int jt_set_discovery(int argc, char **argv);
+static int jt_list_peer(int argc, char **argv);
 /*static int jt_show_peer(int argc, char **argv);*/
 static int lnetctl_list_commands(int argc, char **argv);
+static int jt_import(int argc, char **argv);
+static int jt_export(int argc, char **argv);
+static int jt_ping(int argc, char **argv);
+static int jt_discover(int argc, char **argv);
+static int jt_lnet(int argc, char **argv);
+static int jt_route(int argc, char **argv);
+static int jt_net(int argc, char **argv);
+static int jt_routing(int argc, char **argv);
+static int jt_set(int argc, char **argv);
+static int jt_stats(int argc, char **argv);
+static int jt_global(int argc, char **argv);
+static int jt_peers(int argc, char **argv);
+
+
+command_t cmd_list[] = {
+	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
+	{"route", jt_route, 0, "route {add | del | show | help}"},
+	{"net", jt_net, 0, "net {add | del | show | help}"},
+	{"routing", jt_routing, 0, "routing {show | help}"},
+	{"set", jt_set, 0, "set {tiny_buffers | small_buffers | large_buffers"
+			   " | routing | numa_range | max_interfaces"
+			   " | discovery}"},
+	{"import", jt_import, 0, "import FILE.yaml"},
+	{"export", jt_export, 0, "export FILE.yaml"},
+	{"stats", jt_stats, 0, "stats {show | help}"},
+	{"global", jt_global, 0, "global {show | help}"},
+	{"peer", jt_peers, 0, "peer {add | del | show | help}"},
+	{"ping", jt_ping, 0, "ping nid,[nid,...]"},
+	{"discover", jt_discover, 0, "discover nid[,nid,...]"},
+	{"help", Parser_help, 0, "help"},
+	{"exit", Parser_quit, 0, "quit"},
+	{"quit", Parser_quit, 0, "quit"},
+	{"--list-commands", lnetctl_list_commands, 0, "list commands"},
+	{ 0, 0, 0, NULL }
+};
 
 command_t lnet_cmds[] = {
 	{"configure", jt_config_lnet, 0, "configure lnet\n"
@@ -98,7 +136,8 @@ command_t net_cmds[] = {
 	 "\t--if: physical interface (e.g. eth0)\n"},
 	{"show", jt_show_net, 0, "show networks\n"
 	 "\t--net: net name (e.g. tcp0) to filter on\n"
-	 "\t--verbose: display detailed output per network\n"},
+	 "\t--verbose: display detailed output per network."
+		       " Optional argument of '2' outputs more stats\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -112,8 +151,8 @@ command_t stats_cmds[] = {
 	{ 0, 0, 0, NULL }
 };
 
-command_t numa_cmds[] = {
-	{"show", jt_show_numa, 0, "show NUMA range\n"},
+command_t global_cmds[] = {
+	{"show", jt_show_global, 0, "show global variables\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -129,6 +168,12 @@ command_t set_cmds[] = {
 	 "\t1 - enable routing\n"},
 	{"numa_range", jt_set_numa, 0, "set NUMA range for NI selection\n"
 	 "\tVALUE must be at least 0\n"},
+	{"max_interfaces", jt_set_max_intf, 0, "set the default value for "
+		"max interfaces\n"
+	 "\tValue must be greater than 16\n"},
+	{"discovery", jt_set_discovery, 0, "enable/disable peer discovery\n"
+	 "\t0 - disable peer discovery\n"
+	 "\t1 - enable peer discovery (default)\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -145,7 +190,9 @@ command_t peer_cmds[] = {
 	 "\t       peer is deleted\n"},
 	{"show", jt_show_peer, 0, "show peer information\n"
 	 "\t--nid: NID of peer to filter on.\n"
-	 "\t--verbose: Include  extended  statistics\n"},
+	 "\t--verbose: display detailed output per peer."
+		       " Optional argument of '2' outputs more stats\n"},
+	{"list", jt_list_peer, 0, "list all peers\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -171,6 +218,9 @@ static int parse_long(const char *number, long int *value)
 {
 	char *end;
 
+	if (!number)
+		return -1;
+
 	*value = strtol(number,  &end, 0);
 	if (end != NULL && *end != 0)
 		return -1;
@@ -178,11 +228,12 @@ static int parse_long(const char *number, long int *value)
 	return 0;
 }
 
-static int handle_help(const command_t *cmd_list, const char *cmd,
-		       const char *sub_cmd, int argc, char **argv)
+static int check_cmd(const command_t *cmd_list, const char *cmd,
+		     const char *sub_cmd, const int min_args,
+		     int argc, char **argv)
 {
 	int opt;
-	int rc = -1;
+	int rc = 0;
 	optind = 0;
 	opterr = 0;
 
@@ -192,21 +243,58 @@ static int handle_help(const command_t *cmd_list, const char *cmd,
 		{ .name = NULL }
 	};
 
+	if (argc < min_args) {
+		print_help(cmd_list, cmd, sub_cmd);
+		rc = -1;
+		goto out;
+	} else if (argc > 2) {
+		return 0;
+	}
+
 	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'h':
 			print_help(cmd_list, cmd, sub_cmd);
-			rc = 0;
+			rc = 1;
 			break;
 		default:
-			rc = -1;
+			rc = 0;
 			break;
 		}
 	}
 
+out:
 	opterr = 1;
 	optind = 0;
+	return rc;
+}
+
+static int jt_set_max_intf(int argc, char **argv)
+{
+	long int value;
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = check_cmd(set_cmds, "set", "max_interfaces", 2, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = parse_long(argv[1], &value);
+	if (rc != 0) {
+		cYAML_build_error(-1, -1, "parser", "set",
+				  "cannot parse max_interfaces value", &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		return -1;
+	}
+
+	rc = lustre_lnet_config_max_intf(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
 	return rc;
 }
 
@@ -216,8 +304,9 @@ static int jt_set_numa(int argc, char **argv)
 	int rc;
 	struct cYAML *err_rc = NULL;
 
-	if (handle_help(set_cmds, "set", "numa_range", argc, argv) == 0)
-		return 0;
+	rc = check_cmd(set_cmds, "set", "numa_range", 2, argc, argv);
+	if (rc)
+		return rc;
 
 	rc = parse_long(argv[1], &value);
 	if (rc != 0) {
@@ -237,14 +326,43 @@ static int jt_set_numa(int argc, char **argv)
 	return rc;
 }
 
+static int jt_set_discovery(int argc, char **argv)
+{
+	long int value;
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = check_cmd(set_cmds, "set", "discovery", 2, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = parse_long(argv[1], &value);
+	if (rc != 0) {
+		cYAML_build_error(-1, -1, "parser", "set",
+				  "cannot parse discovery value", &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		return -1;
+	}
+
+	rc = lustre_lnet_config_discovery(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
 static int jt_set_tiny(int argc, char **argv)
 {
 	long int value;
 	int rc;
 	struct cYAML *err_rc = NULL;
 
-	if (handle_help(set_cmds, "set", "tiny_buffers", argc, argv) == 0)
-		return 0;
+	rc = check_cmd(set_cmds, "set", "tiny_buffers", 2, argc, argv);
+	if (rc)
+		return rc;
 
 	rc = parse_long(argv[1], &value);
 	if (rc != 0) {
@@ -270,8 +388,9 @@ static int jt_set_small(int argc, char **argv)
 	int rc;
 	struct cYAML *err_rc = NULL;
 
-	if (handle_help(set_cmds, "set", "small_buffers", argc, argv) == 0)
-		return 0;
+	rc = check_cmd(set_cmds, "set", "small_buffers", 2, argc, argv);
+	if (rc)
+		return rc;
 
 	rc = parse_long(argv[1], &value);
 	if (rc != 0) {
@@ -297,8 +416,9 @@ static int jt_set_large(int argc, char **argv)
 	int rc;
 	struct cYAML *err_rc = NULL;
 
-	if (handle_help(set_cmds, "set", "large_buffers", argc, argv) == 0)
-		return 0;
+	rc = check_cmd(set_cmds, "set", "large_buffers", 2, argc, argv);
+	if (rc)
+		return rc;
 
 	rc = parse_long(argv[1], &value);
 	if (rc != 0) {
@@ -324,8 +444,9 @@ static int jt_set_routing(int argc, char **argv)
 	struct cYAML *err_rc = NULL;
 	int rc;
 
-	if (handle_help(set_cmds, "set", "routing", argc, argv) == 0)
-		return 0;
+	rc = check_cmd(set_cmds, "set", "routing", 2, argc, argv);
+	if (rc)
+		return rc;
 
 	rc = parse_long(argv[1], &value);
 	if (rc != 0 || (value != 0 && value != 1)) {
@@ -354,12 +475,15 @@ static int jt_config_lnet(int argc, char **argv)
 	bool load_mod_params = false;
 	int rc, opt;
 
-	const char *const short_options = "ah";
+	const char *const short_options = "a";
 	static const struct option long_options[] = {
 		{ .name = "all",  .has_arg = no_argument, .val = 'a' },
-		{ .name = "help", .has_arg = no_argument, .val = 'h' },
 		{ .name = NULL }
 	};
+
+	rc = check_cmd(lnet_cmds, "lnet", "configure", 0, argc, argv);
+	if (rc)
+		return rc;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
@@ -367,9 +491,6 @@ static int jt_config_lnet(int argc, char **argv)
 		case 'a':
 			load_mod_params = true;
 			break;
-		case 'h':
-			print_help(lnet_cmds, "lnet", "configure");
-			return 0;
 		default:
 			return 0;
 		}
@@ -391,8 +512,9 @@ static int jt_unconfig_lnet(int argc, char **argv)
 	struct cYAML *err_rc = NULL;
 	int rc;
 
-	if (handle_help(lnet_cmds, "lnet", "unconfigure", argc, argv) == 0)
-		return 0;
+	rc = check_cmd(lnet_cmds, "lnet", "unconfigure", 0, argc, argv);
+	if (rc)
+		return rc;
 
 	rc = lustre_lnet_config_ni_system(LNET_UNCONFIGURE, 0, -1, &err_rc);
 
@@ -410,14 +532,17 @@ static int jt_add_route(int argc, char **argv)
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
 
-	const char *const short_options = "n:g:c:p:h";
+	const char *const short_options = "n:g:c:p:";
 	static const struct option long_options[] = {
 	{ .name = "net",       .has_arg = required_argument, .val = 'n' },
 	{ .name = "gateway",   .has_arg = required_argument, .val = 'g' },
 	{ .name = "hop-count", .has_arg = required_argument, .val = 'c' },
 	{ .name = "priority",  .has_arg = required_argument, .val = 'p' },
-	{ .name = "help",      .has_arg = no_argument,	     .val = 'h' },
 	{ .name = NULL } };
+
+	rc = check_cmd(route_cmds, "route", "add", 0, argc, argv);
+	if (rc)
+		return rc;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
@@ -444,9 +569,6 @@ static int jt_add_route(int argc, char **argv)
 				continue;
 			}
 			break;
-		case 'h':
-			print_help(route_cmds, "route", "add");
-			return 0;
 		default:
 			return 0;
 		}
@@ -476,7 +598,7 @@ static int jt_add_ni(int argc, char **argv)
 	memset(&tunables, 0, sizeof(tunables));
 	lustre_lnet_init_nw_descr(&nw_descr);
 
-	const char *const short_options = "n:i:p:t:c:b:r:s:h";
+	const char *const short_options = "n:i:p:t:c:b:r:s:";
 	static const struct option long_options[] = {
 	{ .name = "net",	  .has_arg = required_argument, .val = 'n' },
 	{ .name = "if",		  .has_arg = required_argument, .val = 'i' },
@@ -487,8 +609,11 @@ static int jt_add_ni(int argc, char **argv)
 				  .has_arg = required_argument, .val = 'b' },
 	{ .name = "credits",	  .has_arg = required_argument, .val = 'r' },
 	{ .name = "cpt",	  .has_arg = required_argument, .val = 's' },
-	{ .name = "help",	  .has_arg = no_argument,	.val = 'h' },
 	{ .name = NULL } };
+
+	rc = check_cmd(net_cmds, "net", "add", 0, argc, argv);
+	if (rc)
+		return rc;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
@@ -545,9 +670,6 @@ static int jt_add_ni(int argc, char **argv)
 						     strlen(optarg), 0,
 						     UINT_MAX, &global_cpts);
 			break;
-		case 'h':
-			print_help(net_cmds, "net", "add");
-			return 0;
 		default:
 			return 0;
 		}
@@ -584,12 +706,15 @@ static int jt_del_route(int argc, char **argv)
 	struct cYAML *err_rc = NULL;
 	int rc, opt;
 
-	const char *const short_options = "n:g:h";
+	const char *const short_options = "n:g:";
 	static const struct option long_options[] = {
 		{ .name = "net",     .has_arg = required_argument, .val = 'n' },
 		{ .name = "gateway", .has_arg = required_argument, .val = 'g' },
-		{ .name = "help",    .has_arg = no_argument,	   .val = 'h' },
 		{ .name = NULL } };
+
+	rc = check_cmd(route_cmds, "route", "del", 0, argc, argv);
+	if (rc)
+		return rc;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
@@ -600,9 +725,6 @@ static int jt_del_route(int argc, char **argv)
 		case 'g':
 			gateway = optarg;
 			break;
-		case 'h':
-			print_help(route_cmds, "route", "del");
-			return 0;
 		default:
 			return 0;
 		}
@@ -626,12 +748,15 @@ static int jt_del_ni(int argc, char **argv)
 
 	lustre_lnet_init_nw_descr(&nw_descr);
 
-	const char *const short_options = "n:i:h";
+	const char *const short_options = "n:i:";
 	static const struct option long_options[] = {
 	{ .name = "net",	.has_arg = required_argument,	.val = 'n' },
 	{ .name = "if",		.has_arg = required_argument,	.val = 'i' },
-	{ .name = "help",	.has_arg = no_argument,		.val = 'h' },
 	{ .name = NULL } };
+
+	rc = check_cmd(net_cmds, "net", "del", 0, argc, argv);
+	if (rc)
+		return rc;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
@@ -648,9 +773,6 @@ static int jt_del_ni(int argc, char **argv)
 				goto out;
 			}
 			break;
-		case 'h':
-			print_help(net_cmds, "net", "del");
-			return 0;
 		default:
 			return 0;
 		}
@@ -674,15 +796,18 @@ static int jt_show_route(int argc, char **argv)
 	int detail = 0, rc, opt;
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
 
-	const char *const short_options = "n:g:h:p:vh";
+	const char *const short_options = "n:g:h:p:v";
 	static const struct option long_options[] = {
 	{ .name = "net",       .has_arg = required_argument, .val = 'n' },
 	{ .name = "gateway",   .has_arg = required_argument, .val = 'g' },
 	{ .name = "hop-count", .has_arg = required_argument, .val = 'c' },
 	{ .name = "priority",  .has_arg = required_argument, .val = 'p' },
 	{ .name = "verbose",   .has_arg = no_argument,	     .val = 'v' },
-	{ .name = "help",      .has_arg = no_argument,	     .val = 'h' },
 	{ .name = NULL } };
+
+	rc = check_cmd(route_cmds, "route", "show", 0, argc, argv);
+	if (rc)
+		return rc;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
@@ -712,9 +837,6 @@ static int jt_show_route(int argc, char **argv)
 		case 'v':
 			detail = 1;
 			break;
-		case 'h':
-			print_help(route_cmds, "route", "show");
-			return 0;
 		default:
 			return 0;
 		}
@@ -737,15 +859,19 @@ static int jt_show_route(int argc, char **argv)
 static int jt_show_net(int argc, char **argv)
 {
 	char *network = NULL;
-	int detail = 0, rc, opt;
+	int rc, opt;
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
+	long int detail = 0;
 
-	const char *const short_options = "n:vh";
+	const char *const short_options = "n:v";
 	static const struct option long_options[] = {
 		{ .name = "net",     .has_arg = required_argument, .val = 'n' },
-		{ .name = "verbose", .has_arg = no_argument,	   .val = 'v' },
-		{ .name = "help",    .has_arg = no_argument,	   .val = 'h' },
+		{ .name = "verbose", .has_arg = optional_argument, .val = 'v' },
 		{ .name = NULL } };
+
+	rc = check_cmd(net_cmds, "net", "show", 0, argc, argv);
+	if (rc)
+		return rc;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
@@ -754,17 +880,20 @@ static int jt_show_net(int argc, char **argv)
 			network = optarg;
 			break;
 		case 'v':
-			detail = 1;
+			if ((!optarg) && (argv[optind] != NULL) &&
+			    (argv[optind][0] != '-')) {
+				if (parse_long(argv[optind++], &detail) != 0)
+					detail = 1;
+			} else {
+				detail = 1;
+			}
 			break;
-		case 'h':
-			print_help(net_cmds, "net", "show");
-			return 0;
 		default:
 			return 0;
 		}
 	}
 
-	rc = lustre_lnet_show_net(network, detail, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_net(network, (int) detail, -1, &show_rc, &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
@@ -782,8 +911,9 @@ static int jt_show_routing(int argc, char **argv)
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
 	int rc;
 
-	if (handle_help(routing_cmds, "routing", "show", argc, argv) == 0)
-		return 0;
+	rc = check_cmd(routing_cmds, "routing", "show", 0, argc, argv);
+	if (rc)
+		return rc;
 
 	rc = lustre_lnet_show_routing(-1, &show_rc, &err_rc);
 
@@ -803,8 +933,9 @@ static int jt_show_stats(int argc, char **argv)
 	int rc;
 	struct cYAML *show_rc = NULL, *err_rc = NULL;
 
-	if (handle_help(stats_cmds, "stats", "show", argc, argv) == 0)
-		return 0;
+	rc = check_cmd(stats_cmds, "stats", "show", 0, argc, argv);
+	if (rc)
+		return rc;
 
 	rc = lustre_lnet_show_stats(-1, &show_rc, &err_rc);
 
@@ -819,119 +950,127 @@ static int jt_show_stats(int argc, char **argv)
 	return rc;
 }
 
-static int jt_show_numa(int argc, char **argv)
+static int jt_show_global(int argc, char **argv)
 {
 	int rc;
 	struct cYAML *show_rc = NULL, *err_rc = NULL;
 
-	if (handle_help(numa_cmds, "numa", "show", argc, argv) == 0)
-		return 0;
+	rc = check_cmd(global_cmds, "global", "show", 0, argc, argv);
+	if (rc)
+		return rc;
 
 	rc = lustre_lnet_show_numa_range(-1, &show_rc, &err_rc);
-
-	if (rc != LUSTRE_CFG_RC_NO_ERR)
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
-	else if (show_rc)
+		goto out;
+	}
+
+	rc = lustre_lnet_show_max_intf(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		goto out;
+	}
+
+	rc = lustre_lnet_show_discovery(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		goto out;
+	}
+
+	if (show_rc)
 		cYAML_print_tree(show_rc);
 
+out:
 	cYAML_free_tree(err_rc);
 	cYAML_free_tree(show_rc);
 
 	return rc;
 }
 
-static inline int jt_lnet(int argc, char **argv)
+static int jt_lnet(int argc, char **argv)
 {
-	if (argc < 2)
-		return CMD_HELP;
+	int rc;
 
-	if (argc == 2 &&
-	    handle_help(lnet_cmds, "lnet", NULL, argc, argv) == 0)
-		return 0;
+	rc = check_cmd(lnet_cmds, "lnet", NULL, 2, argc, argv);
+	if (rc)
+		return rc;
 
 	return Parser_execarg(argc - 1, &argv[1], lnet_cmds);
 }
 
-static inline int jt_route(int argc, char **argv)
+static int jt_route(int argc, char **argv)
 {
-	if (argc < 2)
-		return CMD_HELP;
+	int rc;
 
-	if (argc == 2 &&
-	    handle_help(route_cmds, "route", NULL, argc, argv) == 0)
-		return 0;
+	rc = check_cmd(route_cmds, "route", NULL, 2, argc, argv);
+	if (rc)
+		return rc;
 
 	return Parser_execarg(argc - 1, &argv[1], route_cmds);
 }
 
-static inline int jt_net(int argc, char **argv)
+static int jt_net(int argc, char **argv)
 {
-	if (argc < 2)
-		return CMD_HELP;
+	int rc;
 
-	if (argc == 2 &&
-	    handle_help(net_cmds, "net", NULL, argc, argv) == 0)
-		return 0;
+	rc = check_cmd(net_cmds, "net", NULL, 2, argc, argv);
+	if (rc)
+		return rc;
 
 	return Parser_execarg(argc - 1, &argv[1], net_cmds);
 }
 
-static inline int jt_routing(int argc, char **argv)
+static int jt_routing(int argc, char **argv)
 {
-	if (argc < 2)
-		return CMD_HELP;
+	int rc;
 
-	if (argc == 2 &&
-	    handle_help(routing_cmds, "routing", NULL, argc, argv) == 0)
-		return 0;
+	rc = check_cmd(routing_cmds, "routing", NULL, 2, argc, argv);
+	if (rc)
+		return rc;
 
 	return Parser_execarg(argc - 1, &argv[1], routing_cmds);
 }
 
-static inline int jt_stats(int argc, char **argv)
+static int jt_stats(int argc, char **argv)
 {
-	if (argc < 2)
-		return CMD_HELP;
+	int rc;
 
-	if (argc == 2 &&
-	    handle_help(stats_cmds, "stats", NULL, argc, argv) == 0)
-		return 0;
+	rc = check_cmd(stats_cmds, "stats", NULL, 2, argc, argv);
+	if (rc)
+		return rc;
 
 	return Parser_execarg(argc - 1, &argv[1], stats_cmds);
 }
 
-static inline int jt_numa(int argc, char **argv)
+static int jt_global(int argc, char **argv)
 {
-	if (argc < 2)
-		return CMD_HELP;
+	int rc;
 
-	if (argc == 2 &&
-	    handle_help(numa_cmds, "numa", NULL, argc, argv) == 0)
-		return 0;
+	rc = check_cmd(global_cmds, "global", NULL, 2, argc, argv);
+	if (rc)
+		return rc;
 
-	return Parser_execarg(argc - 1, &argv[1], numa_cmds);
+	return Parser_execarg(argc - 1, &argv[1], global_cmds);
 }
 
-static inline int jt_peers(int argc, char **argv)
+static int jt_peers(int argc, char **argv)
 {
-	if (argc < 2)
-		return CMD_HELP;
+	int rc;
 
-	if (argc == 2 &&
-	    handle_help(peer_cmds, "peer", NULL, argc, argv) == 0)
-		return 0;
+	rc = check_cmd(peer_cmds, "peer", NULL, 2, argc, argv);
+	if (rc)
+		return rc;
 
 	return Parser_execarg(argc - 1, &argv[1], peer_cmds);
 }
 
-static inline int jt_set(int argc, char **argv)
+static int jt_set(int argc, char **argv)
 {
-	if (argc < 2)
-		return CMD_HELP;
+	int rc;
 
-	if (argc == 2  &&
-	    handle_help(set_cmds, "set", NULL, argc, argv) == 0)
-		return 0;
+	rc = check_cmd(set_cmds, "set", NULL, 2, argc, argv);
+	if (rc)
+		return rc;
 
 	return Parser_execarg(argc - 1, &argv[1], set_cmds);
 }
@@ -941,14 +1080,15 @@ static int jt_import(int argc, char **argv)
 	char *file = NULL;
 	struct cYAML *err_rc = NULL;
 	struct cYAML *show_rc = NULL;
-	int rc = 0, opt, opt_found = 0;
+	int rc = 0, return_rc = 0, opt, opt_found = 0;
 	char cmd = 'a';
 
-	const char *const short_options = "adsh";
+	const char *const short_options = "adseh";
 	static const struct option long_options[] = {
 		{ .name = "add",  .has_arg = no_argument, .val = 'a' },
 		{ .name = "del",  .has_arg = no_argument, .val = 'd' },
 		{ .name = "show", .has_arg = no_argument, .val = 's' },
+		{ .name = "exec", .has_arg = no_argument, .val = 'e' },
 		{ .name = "help", .has_arg = no_argument, .val = 'h' },
 		{ .name = NULL } };
 
@@ -957,8 +1097,13 @@ static int jt_import(int argc, char **argv)
 		opt_found = 1;
 		switch (opt) {
 		case 'a':
+			cmd = opt;
+			break;
 		case 'd':
 		case 's':
+			cmd = opt;
+			break;
+		case 'e':
 			cmd = opt;
 			break;
 		case 'h':
@@ -967,6 +1112,7 @@ static int jt_import(int argc, char **argv)
 			       "\t--add: add configuration\n"
 			       "\t--del: delete configuration\n"
 			       "\t--show: show configuration\n"
+			       "\t--exec: execute command\n"
 			       "\t--help: display this help\n"
 			       "If no command option is given then --add"
 			       " is assumed by default\n");
@@ -985,6 +1131,9 @@ static int jt_import(int argc, char **argv)
 	switch (cmd) {
 	case 'a':
 		rc = lustre_yaml_config(file, &err_rc);
+		return_rc = lustre_yaml_exec(file, &show_rc, &err_rc);
+		cYAML_print_tree(show_rc);
+		cYAML_free_tree(show_rc);
 		break;
 	case 'd':
 		rc = lustre_yaml_del(file, &err_rc);
@@ -994,11 +1143,17 @@ static int jt_import(int argc, char **argv)
 		cYAML_print_tree(show_rc);
 		cYAML_free_tree(show_rc);
 		break;
+	case 'e':
+		rc = lustre_yaml_exec(file, &show_rc, &err_rc);
+		cYAML_print_tree(show_rc);
+		cYAML_free_tree(show_rc);
+		break;
 	}
 
-	cYAML_print_tree2file(stderr, err_rc);
-
-	cYAML_free_tree(err_rc);
+	if (rc || return_rc) {
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+	}
 
 	return rc;
 }
@@ -1007,8 +1162,9 @@ static int jt_export(int argc, char **argv)
 {
 	struct cYAML *show_rc = NULL;
 	struct cYAML *err_rc = NULL;
-	int rc, opt;
+	int rc;
 	FILE *f = NULL;
+	int opt;
 
 	const char *const short_options = "h";
 	static const struct option long_options[] = {
@@ -1019,8 +1175,7 @@ static int jt_export(int argc, char **argv)
 				   long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'h':
-			printf("export FILE\n"
-			       "export > FILE : export configuration\n"
+			printf("export > FILE.yaml : export configuration\n"
 			       "\t--help: display this help\n");
 			return 0;
 		default:
@@ -1035,10 +1190,11 @@ static int jt_export(int argc, char **argv)
 	} else
 		f = stdout;
 
-	rc = lustre_lnet_show_net(NULL, 1, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_net(NULL, 2, -1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
+		err_rc = NULL;
 	}
 
 	rc = lustre_lnet_show_route(NULL, NULL, -1, -1, 1, -1, &show_rc,
@@ -1046,24 +1202,42 @@ static int jt_export(int argc, char **argv)
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
+		err_rc = NULL;
 	}
 
 	rc = lustre_lnet_show_routing(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
+		err_rc = NULL;
 	}
 
-	rc = lustre_lnet_show_peer(NULL, 1, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_peer(NULL, 2, -1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
+		err_rc = NULL;
 	}
 
 	rc = lustre_lnet_show_numa_range(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_max_intf(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_discovery(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		err_rc = NULL;
 	}
 
 	if (show_rc != NULL) {
@@ -1086,14 +1260,17 @@ static int jt_add_peer_nid(int argc, char **argv)
 	int rc = LUSTRE_CFG_RC_NO_ERR, opt, i;
 	bool non_mr = false;
 
-	const char *const short_options = "k:n:mh";
+	const char *const short_options = "k:n:m";
 	const struct option long_options[] = {
 		{ "prim_nid", 1, NULL, 'k' },
 		{ "nid", 1, NULL, 'n' },
 		{ "non_mr", 0, NULL, 'm'},
-		{ "help", 0, NULL, 'h' },
 		{ NULL, 0, NULL, 0 },
 	};
+
+	rc = check_cmd(peer_cmds, "peer", "add", 2, argc, argv);
+	if (rc)
+		return rc;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, NULL)) != -1) {
@@ -1112,9 +1289,6 @@ static int jt_add_peer_nid(int argc, char **argv)
 		case 'm':
 			non_mr = true;
 			break;
-		case 'h':
-			print_help(peer_cmds, "peer", "add");
-			return 0;
 		default:
 			return 0;
 		}
@@ -1146,13 +1320,16 @@ static int jt_del_peer_nid(int argc, char **argv)
 	struct cYAML *err_rc = NULL;
 	int rc = LUSTRE_CFG_RC_NO_ERR, opt, i, size = 0;
 
-	const char *const short_options = "k:n:h";
+	const char *const short_options = "k:n:";
 	const struct option long_options[] = {
 		{ "prim_nid", 1, NULL, 'k' },
 		{ "nid", 1, NULL, 'n' },
-		{ "help", 0, NULL, 'h' },
 		{ NULL, 0, NULL, 0 },
 	};
+
+	rc = check_cmd(peer_cmds, "peer", "del", 2, argc, argv);
+	if (rc)
+		return rc;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, NULL)) != -1) {
@@ -1168,9 +1345,6 @@ static int jt_del_peer_nid(int argc, char **argv)
 			nids = nids2;
 			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 			break;
-		case 'h':
-			print_help(peer_cmds, "peer", "del");
-			return 0;
 		default:
 			return 0;
 		}
@@ -1198,15 +1372,19 @@ static int jt_show_peer(int argc, char **argv)
 	char *nid = NULL;
 	int rc, opt;
 	struct cYAML *err_rc = NULL, *show_rc = NULL;
-	int detail = 0;
+	long int detail = 0;
 
-	const char *const short_options = "n:vh";
+	const char *const short_options = "n:v::h";
 	const struct option long_options[] = {
 		{ "nid", 1, NULL, 'n' },
-		{ "verbose", 0, NULL, 'v' },
+		{ "verbose", 2, NULL, 'v' },
 		{ "help", 0, NULL, 'h' },
 		{ NULL, 0, NULL, 0 },
 	};
+
+	rc = check_cmd(peer_cmds, "peer", "show", 1, argc, argv);
+	if (rc)
+		return rc;
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				  long_options, NULL)) != -1) {
@@ -1215,17 +1393,20 @@ static int jt_show_peer(int argc, char **argv)
 			nid = optarg;
 			break;
 		case 'v':
-			detail = 1;
+			if ((!optarg) && (argv[optind] != NULL) &&
+			    (argv[optind][0] != '-')) {
+				if (parse_long(argv[optind++], &detail) != 0)
+					detail = 1;
+			} else {
+				detail = 1;
+			}
 			break;
-		case 'h':
-			print_help(peer_cmds, "peer", "show");
-			return 0;
 		default:
 			return 0;
 		}
 	}
 
-	rc = lustre_lnet_show_peer(nid, detail, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_peer(nid, (int) detail, -1, &show_rc, &err_rc);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
@@ -1238,31 +1419,124 @@ static int jt_show_peer(int argc, char **argv)
 	return rc;
 }
 
-command_t list[] = {
-	{"lnet", jt_lnet, 0, "lnet {configure | unconfigure} [--all]"},
-	{"route", jt_route, 0, "route {add | del | show | help}"},
-	{"net", jt_net, 0, "net {add | del | show | help}"},
-	{"routing", jt_routing, 0, "routing {show | help}"},
-	{"set", jt_set, 0, "set {tiny_buffers | small_buffers | large_buffers"
-			   " | routing}"},
-	{"import", jt_import, 0, "import {--add | --del | --show | "
-				 "--help} FILE.yaml"},
-	{"export", jt_export, 0, "export {--help} FILE.yaml"},
-	{"stats", jt_stats, 0, "stats {show | help}"},
-	{"numa", jt_numa, 0, "numa {show | help}"},
-	{"peer", jt_peers, 0, "peer {add | del | show | help}"},
-	{"help", Parser_help, 0, "help"},
-	{"exit", Parser_quit, 0, "quit"},
-	{"quit", Parser_quit, 0, "quit"},
-	{"--list-commands", lnetctl_list_commands, 0, "list commands"},
-	{ 0, 0, 0, NULL }
-};
+static int jt_list_peer(int argc, char **argv)
+{
+	int rc;
+	struct cYAML *err_rc = NULL, *list_rc = NULL;
+
+	rc = check_cmd(peer_cmds, "peer", "list", 0, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = lustre_lnet_list_peer(-1, &list_rc, &err_rc);
+
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+	else if (list_rc)
+		cYAML_print_tree(list_rc);
+
+	cYAML_free_tree(err_rc);
+	cYAML_free_tree(list_rc);
+
+	return rc;
+}
+
+static int jt_ping(int argc, char **argv)
+{
+	struct cYAML *err_rc = NULL;
+	struct cYAML *show_rc = NULL;
+	int timeout = 1000;
+	int rc = 0, opt;
+
+	const char *const short_options = "t:h";
+	const struct option long_options[] = {
+		{ "timeout", 1, NULL, 't' },
+		{ "help", 0, NULL, 'h' },
+		{ NULL, 0, NULL, 0 },
+	};
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				  long_options, NULL)) != -1) {
+		switch (opt) {
+		case 't':
+			timeout = 1000 * atol(optarg);
+			break;
+		case 'h':
+			printf("ping nid[,nid,...]\n"
+			       "\t --timeout: ping timeout\n"
+			       "\t --help: display this help\n");
+			return 0;
+		default:
+			return 0;
+		}
+	}
+
+	for (; optind < argc; optind++)
+		rc = lustre_lnet_ping_nid(argv[optind], timeout, -1, &show_rc, &err_rc);
+
+	if (show_rc)
+		cYAML_print_tree(show_rc);
+
+	if (err_rc)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+	cYAML_free_tree(show_rc);
+
+	return rc;
+}
+
+static int jt_discover(int argc, char **argv)
+{
+	struct cYAML *err_rc = NULL;
+	struct cYAML *show_rc = NULL;
+	int force = 0;
+	int rc = 0, opt;
+
+	const char *const short_options = "fh";
+	const struct option long_options[] = {
+		{ "force", 0, NULL, 'f' },
+		{ "help", 0, NULL, 'h' },
+		{ NULL, 0, NULL, 0 },
+	};
+
+	while ((opt = getopt_long(argc, argv, short_options,
+				  long_options, NULL)) != -1) {
+		switch (opt) {
+		case 'f':
+			force = 1;
+			break;
+		case 'h':
+			printf("discover nid[,nid,...]\n"
+			       "\t --force: force discovery\n"
+			       "\t --help: display this help\n");
+			return 0;
+		default:
+			return 0;
+		}
+	}
+
+	for (; optind < argc; optind++)
+		rc = lustre_lnet_discover_nid(argv[optind], force, -1, &show_rc,
+					      &err_rc);
+
+	if (show_rc)
+		cYAML_print_tree(show_rc);
+
+	if (err_rc)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+	cYAML_free_tree(show_rc);
+
+	return rc;
+}
 
 static int lnetctl_list_commands(int argc, char **argv)
 {
 	char buffer[81] = ""; /* 80 printable chars + terminating NUL */
 
-	Parser_list_commands(list, buffer, sizeof(buffer), NULL, 0, 4);
+	Parser_list_commands(cmd_list, buffer, sizeof(buffer), NULL, 0, 4);
 
 	return 0;
 }
@@ -1280,9 +1554,9 @@ int main(int argc, char **argv)
 		return rc;
 	}
 
-	Parser_init("lnetctl > ", list);
+	Parser_init("lnetctl > ", cmd_list);
 	if (argc > 1) {
-		rc = Parser_execarg(argc - 1, &argv[1], list);
+		rc = Parser_execarg(argc - 1, &argv[1], cmd_list);
 		goto errorout;
 	}
 
