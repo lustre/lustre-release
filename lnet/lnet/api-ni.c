@@ -2227,7 +2227,7 @@ LNetNIInit(lnet_pid_t requested_pid)
 		goto err_destroy_push_target;
 
 	lnet_fault_init();
-	lnet_proc_init();
+	lnet_router_debugfs_init();
 
 	mutex_unlock(&the_lnet.ln_api_mutex);
 
@@ -2285,7 +2285,7 @@ LNetNIFini()
 
 		lnet_fault_fini();
 
-		lnet_proc_fini();
+		lnet_router_debugfs_init();
 		lnet_peer_discovery_stop();
 		lnet_push_target_fini();
 		lnet_router_checker_stop();

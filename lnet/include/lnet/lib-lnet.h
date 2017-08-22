@@ -570,8 +570,8 @@ extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 extern int lnet_get_peer_list(__u32 *countp, __u32 *sizep,
 			      lnet_process_id_t __user *ids);
 
-void lnet_proc_init(void);
-void lnet_proc_fini(void);
+void lnet_router_debugfs_init(void);
+void lnet_router_debugfs_fini(void);
 int  lnet_rtrpools_alloc(int im_a_router);
 void lnet_destroy_rtrbuf(struct lnet_rtrbuf *rb, int npages);
 int  lnet_rtrpools_adjust(int tiny, int small, int large);

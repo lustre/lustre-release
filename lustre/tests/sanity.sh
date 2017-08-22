@@ -12616,16 +12616,12 @@ run_test 214 "hash-indexed directory test - bug 20133"
 
 # having "abc" as 1st arg, creates $TMP/lnet_abc.out and $TMP/lnet_abc.sys
 create_lnet_proc_files() {
-	lctl get_param -n $1 >$TMP/lnet_$1.out || error "cannot read lnet.$1"
-	sysctl lnet.$1 >$TMP/lnet_$1.sys_tmp || error "cannot read lnet.$1"
-
-	sed "s/^lnet.$1\ =\ //g" "$TMP/lnet_$1.sys_tmp" >$TMP/lnet_$1.sys
-	rm -f "$TMP/lnet_$1.sys_tmp"
+	lctl get_param -n $1 >$TMP/lnet_$1.sys || error "cannot read lnet.$1"
 }
 
 # counterpart of create_lnet_proc_files
 remove_lnet_proc_files() {
-	rm -f $TMP/lnet_$1.out $TMP/lnet_$1.sys
+	rm -f $TMP/lnet_$1.sys
 }
 
 # uses 1st arg as trailing part of filename, 2nd arg as description for reports,
@@ -12735,7 +12731,6 @@ test_215() { # for bugs 18102, 21079, 21517
 
 	# can we successfully write to lnet.stats?
 	lctl set_param -n stats=0 || error "cannot write to lnet.stats"
-	sysctl -w lnet.stats=0 || error "cannot write to lnet.stats"
 }
 run_test 215 "lnet exists and has proper content - bugs 18102, 21079, 21517"
 

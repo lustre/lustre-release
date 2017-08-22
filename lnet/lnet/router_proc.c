@@ -27,8 +27,6 @@
 /* This is really lnet_proc.c. You might need to update sanity test 215
  * if any file format is changed. */
 
-static struct ctl_table_header *lnet_table_header = NULL;
-
 #define LNET_LOFFT_BITS		(sizeof(loff_t) * 8)
 /*
  * NB: max allowed LNET_CPT_BITS is 8 on 64-bit system and 2 on 32-bit system
@@ -955,34 +953,7 @@ static struct ctl_table lnet_table[] = {
 	{ 0 }
 };
 
-static struct ctl_table top_table[] = {
-	{
-		INIT_CTL_NAME
-		.procname	= "lnet",
-		.mode		= 0555,
-		.data		= NULL,
-		.maxlen		= 0,
-		.child		= lnet_table,
-	},
-	{ 0 }
-};
-
-void
-lnet_proc_init(void)
+void lnet_router_debugfs_init(void)
 {
-#ifdef CONFIG_SYSCTL
-	if (lnet_table_header == NULL)
-		lnet_table_header = register_sysctl_table(top_table);
-#endif
-}
-
-void
-lnet_proc_fini(void)
-{
-#ifdef CONFIG_SYSCTL
-	if (lnet_table_header != NULL)
-		unregister_sysctl_table(lnet_table_header);
-
-	lnet_table_header = NULL;
-#endif
+	lnet_insert_debugfs(lnet_table, NULL);
 }
