@@ -172,11 +172,7 @@ EOF
         echo "%description -n %{-n*}%{!-n:%name}-kmp-_dummy_" \
         )}
 EOF
-        local targets
-        for arch in $BUILD_ARCHS; do
-            targets="--target $(resolve_arch $arch $PATCHLESS) $targets"
-        done
-        if ! rpmbuild --rebuild --nodeps $targets \
+        if ! rpmbuild --rebuild --nodeps --target ${TARGET_ARCH} \
                                 --define "symsetsdir ${TOPDIR}/reused/boot" \
                                 --define "kobjdir ${LINUXOBJ%/*/*}" \
                                 --define "_tmppath /var/tmp" \

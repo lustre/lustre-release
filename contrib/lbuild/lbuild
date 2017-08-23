@@ -29,12 +29,7 @@ push_exit_trap "kill -INT -$$ || true" kill_children
 
 # increment this if you have made a change that should force a new kernel
 # to build built
-#BUILD_GEN=1
-#BUILD_GEN=2	# bz19952: remove -lustre tag from kernel RPM names
-#BUILD_GEN=3	# bz19975: enable the building of src.rpms by default
-#BUILD_GEN=4	# bz22281: use the git hash in the kernel extra version
-#BUILD_GEN=5	# TT-107: don't cache the BUILD dir
-BUILD_GEN=6	# TT-1092: don't cache the BUILD dir, to rebuild external OFED
+BUILD_GEN=8
 
 TOPDIR="$PWD"
 
@@ -50,10 +45,6 @@ DOWNLOAD=true
 CANONICAL_TARGET=
 TARGET=
 TARGET_ARCH="$(uname -m)"
-# change default behavior to only build for the current arch
-TARGET_ARCHS="$TARGET_ARCH"
-TARGET_ARCHS_ALL="$TARGET_ARCH"
-[ "$TARGET_ARCH" = "i686" ] && TARGET_ARCHS_ALL="i686 i586 i386"
 CONFIGURE_FLAGS=
 EXTERNAL_PATCHES=
 EXTRA_VERSION=
@@ -72,6 +63,7 @@ OSDLDISKFSRPM=true
 OSDZFSRPM=false
 SMPTYPES="smp bigsmp default ''"
 PATCHLESS=false
+PATCHLESS_SERVER=false
 WITH_ZFS=""
 XEN=false
 LINUXOBJ=
@@ -151,6 +143,9 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
   --patchless
     Build lustre client only
 
+  --patchless-server
+    Build lustre server without patching the kernel
+
   --distro=DISTRO
     Which distro using. Autodetect by default
 
@@ -222,16 +217,6 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
     The name of the target to build.  The available targets are listed
     below.
 
-  --target-archs=TARGET_ARCHS
-    A (space delimited) list of architectures to build.  By default,
-    all of the archs supported by the TARGET will be built, in
-    addition to a .src.rpm.  This option can limit those, for machines
-    that can only build certain archs or if you only want a certain
-    arch built (for testing, or a one-off kernel).
-
-    Also note that by using a non-"base" arch (eg, i386) only kernels
-    will be built - there will be no lustre-lite-utils package.
-
   --xen
     Builds a Xen domX kernel.
 
@@ -281,6 +266,10 @@ check_options() {
     if [ -z "$LUSTRE" -o ! -r "$LUSTRE" ]; then
         usage 1 "Could not find Lustre source tarball '$LUSTRE'."
     fi
+
+	if $PATCHLESS && $PATCHLESS_SERVER; then
+		usage 1 "Can not use both --patchless and --patchless-server."
+	fi
 
 	if [ -n "${OFED_SRC}" ]; then
 		if [ -z "${OFED_VERSION}" ]; then
@@ -506,6 +495,26 @@ SRPM $srpm from $location."
 	fi
 }
 
+download_debuginfo_common() {
+	local rpm=$1
+	local force="${2:-false}"
+
+	# let the download_file handle the concurrency
+	if $DOWNLOAD; then
+		# get the location from a distro specific method if it exists
+		if type -p kernel_debuginfo_location; then
+		location=$(kernel_debuginfo_location)
+		fi
+		echo "Downloading $location/$rpm"
+		if ! download_file \
+			"$location/$rpm" "$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH/$rpm" "$force" 2>&1 ||
+			[ ! -s "$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH/$rpm" ]; then
+			rm -f $KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH/$rpm
+			fatal 1 "Could not download $rpm from $location."
+		fi
+	fi
+}
+
 download_file() {
     local from="$1"
     local to="$2"
@@ -725,18 +734,6 @@ load_target() {
         fi
     fi
     # EXTRA_VERSION=${EXTRA_VERSION//-/_}
-
-    ALL_ARCHS="$BASE_ARCHS $BIGMEM_ARCHS $BOOT_ARCHS $JENSEN_ARCHS $SMP_ARCHS $BIGSMP_ARCHS $PSERIES64_ARCHS $UP_ARCHS"
-
-    BUILD_ARCHS=
-    for arch in $(uniqify "$ALL_ARCHS"); do
-        if [ -z "$TARGET_ARCHS" ] ||
-           [[ \ $TARGET_ARCHS\  = *\ $arch\ * ]]; then
-            BUILD_ARCHS="$BUILD_ARCHS $arch"
-        fi
-    done
-    [ "$BUILD_ARCHS" ] || usage 1 "No available target archs to build."
-    echo "Building for: $BUILD_ARCHS"
 }
 
 tarflags() {
@@ -891,7 +888,7 @@ build_lustre() {
         return 255
     fi
 
-    echo "Building Lustre RPMs for: $BUILD_ARCHS..."
+    echo "Building Lustre RPMs for: $TARGET_ARCH"
 
     # If server we now build the spl and zfs modules against the lustre kernel.
     # These are required prior to the building of lustre server. Client does
@@ -939,12 +936,10 @@ build_lustre() {
     fi
 
     make rpms 2>&1 ||
-        fatal 1 "Error building rpms for $BUILD_ARCHS."
+        fatal 1 "Error building rpms for $TARGET_ARCH."
 
     # move RPMs into place where they are expected to be
-    for arch in $BUILD_ARCHS; do
-        mv -f *lustre*.${arch}.rpm $TOPDIR/RPMS/${arch}/
-    done
+    mv -f *lustre*.${TARGET_ARCH}.rpm $TOPDIR/RPMS/${TARGET_ARCH}/
     mv -f lustre-*.src.rpm $TOPDIR/SRPMS/
 
     popd >/dev/null
@@ -961,7 +956,7 @@ build_lustre_dkms() {
     local name_prefix="lustre"
     local ver=$(sed -n -e 's/^LUSTRE_VERSION = //p' LUSTRE-VERSION-FILE)
 
-    echo "Building Lustre DKMS RPMs for: $BUILD_ARCHS..."
+    echo "Building Lustre DKMS RPMs for: $TARGET_ARCH"
     ./configure --enable-dist || fatal 1 "Error in DKMS configure."
 
     if $PATCHLESS; then
@@ -970,10 +965,10 @@ build_lustre_dkms() {
     fi
 
     rpmbuild --define "_topdir $TOPDIR" $build_args -bs lustre-dkms.spec ||
-        fatal 1 "Error building DKMS .src.rpm for $BUILD_ARCHS."
+        fatal 1 "Error building DKMS .src.rpm for $TARGET_ARCH."
     rpmbuild --define "_topdir $TOPDIR" $build_args \
              --rebuild $TOPDIR/SRPMS/$name_prefix-dkms-$ver-*.src.rpm ||
-        fatal 1 "Error building DKMS .rpm for $BUILD_ARCHS."
+        fatal 1 "Error building DKMS .rpm for $TARGET_ARCH."
 
     return 0
 }
@@ -1121,13 +1116,11 @@ stage() {
 
     [ "$STAGEDIR" ] || return 0
 
-    for arch in $BUILD_ARCHS; do
-        rpmdir="${STAGEDIR}/${CANONICAL_TARGET}-${arch}"
-        echo "${0##*/}: Copying RPMs into ${rpmdir}"
-        mkdir -p "${rpmdir}"
-        for rpm in $(ls RPMS/${arch}/*.rpm RPMS/noarch/*.rpm); do
-            cp -v $rpm "${rpmdir}"
-        done
+    rpmdir="${STAGEDIR}/${CANONICAL_TARGET}-${TARGET_ARCH}"
+    echo "${0##*/}: Copying RPMs into ${rpmdir}"
+    mkdir -p "${rpmdir}"
+    for rpm in $(ls RPMS/${TARGET_ARCH}/*.rpm RPMS/noarch/*.rpm); do
+        cp -v $rpm "${rpmdir}"
     done
 
     cp -v "$LUSTRE" "$STAGEDIR"
@@ -1183,10 +1176,6 @@ _find_linux_release() {
 
 # unpack kernel(/source/devel) RPM
 #
-# This function and it's setting of $LINUX and $LINUXOBJ is a total hack that
-# needs to completely refactored.  It completely ingores that $BUILD_ARCHS may
-# contain a list of arches for which rpmbuild commands (including the one for
-# lustre itself)
 unpack_linux_devel_rpm() {
     local kernelrpm="${1}"
 
@@ -1471,8 +1460,6 @@ build_kernel_with_srpm() {
     do_patch_linux false >&${outfd}    # sets global $FULL_PATCH (yeah, yuck)
 
     # get an md5sum of the kernel patch + config for reuse check
-    # XXX really, there needs to be a signature and a CONFIG_FILE per arch
-    #     in BUILD_ARCHS
     local release_str
     if $RELEASE; then
         local release_str="RELEASE=$RELEASE\n"
@@ -1698,36 +1685,54 @@ build_ofed() {
 build_with_srpm() {
 	local ofed_type="$1"
 	local ofed_version="$2"
+	local kernelrpm
 
-    if ! $PATCHLESS; then
-        local kernel_extra_version
-        if ! kernel_extra_version=$(build_kernel_with_srpm ${STDOUT}); then
-            fatal 1 "Failed to build the kernel from it's SRPM"
-        fi
+	if ! $PATCHLESS; then
+		if $PATCHLESS_SERVER; then
+			# need to find and unpack the vendor's own kernel-devel
+			# for patchless server build
+			if ! kernelrpm=$(find_linux_rpm "-$DEVEL_KERNEL_TYPE"); then
+				fatal 1 "Could not find the kernel-$DEVEL_KERNEL_TYPE RPM in $KERNELRPMSBASE/$lnxmaj/$DISTROMAJ"
+			fi
+			if ! lnxrel="$lnxrel" unpack_linux_devel_rpm "$kernelrpm" "-"; then
+				fatal 1 "Could not find the Linux tree in $kernelrpm"
+			fi
+			# download and unpack kernel-debuginfo-common (only in EL)
+			if [[ $DISTROMAJ =~ rhel ]]; then
+				local KERNEL_DEBUGINFO="kernel-debuginfo-common-${TARGET_ARCH}-${lnxmaj}-${lnxrel}.${TARGET_ARCH}.rpm"
+				download_debuginfo_common "$KERNEL_DEBUGINFO"
+				if ! lnxrel="$lnxrel" unpack_linux_devel_rpm \
+					"$KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH/$KERNEL_DEBUGINFO"; then
+					fatal 1 "Could not find the Linux debuginfo common rpm in $KERNELRPMSBASE/$lnxmaj/$DISTROMAJ/$TARGET_ARCH/$KERNEL_DEBUGINFO"
+				fi
+			fi
+		else
+			local kernel_extra_version
+			if ! kernel_extra_version=$(build_kernel_with_srpm ${STDOUT}); then
+				fatal 1 "Failed to build the kernel from it's SRPM"
+			fi
 
-        for arch in $BUILD_ARCHS; do
-            local kernel_devel_rpm
-            if ! kernel_devel_rpm=$(find_rpm "$TOPDIR/RPMS/$arch/" provides "^$(devel_kernel_name $KERNEL_LUSTRE_NAMING) ="); then
-                fatal 1 "Failed to find a kernel development RPM in $TOPDIR/RPMS/$arch/"
-            fi
+			local kernel_devel_rpm
+			if ! kernel_devel_rpm=$(find_rpm "$TOPDIR/RPMS/${TARGET_ARCH}/" provides "^$(devel_kernel_name $KERNEL_LUSTRE_NAMING) ="); then
+				fatal 1 "Failed to find a kernel development RPM in $TOPDIR/RPMS/${TARGET_ARCH}/"
+			fi
 
-            # install the -devel RPM in preparation for modules builds
-            if ! lnxrel="$kernel_extra_version" unpack_linux_devel_rpm \
-                           "$TOPDIR/RPMS/$arch/$kernel_devel_rpm"; then
-                fatal 1 "Could not find the Linux tree in $TOPDIR/RPMS/$arch/$kernel_devel_rpm"
-            fi
-        done
-    else
-        # need to find and unpack the vendor's own kernel-devel for patchless
-        # client build
-        local kernelrpm
-        if ! kernelrpm=$(find_linux_rpm "-$DEVEL_KERNEL_TYPE"); then
-            fatal 1 "Could not find the kernel-$DEVEL_KERNEL_TYPE RPM in $KERNELRPMSBASE/$lnxmaj/$DISTROMAJ"
-        fi
-        if ! lnxrel="$lnxrel" unpack_linux_devel_rpm "$kernelrpm" "-"; then
-            fatal 1 "Could not find the Linux tree in $kernelrpm"
-        fi
-    fi
+			# install the -devel RPM in preparation for modules builds
+			if ! lnxrel="$kernel_extra_version" unpack_linux_devel_rpm \
+				"$TOPDIR/RPMS/${TARGET_ARCH}/$kernel_devel_rpm"; then
+				fatal 1 "Could not find the Linux tree in $TOPDIR/RPMS/${TARGET_ARCH}/$kernel_devel_rpm"
+			fi
+		fi
+	else
+		# need to find and unpack the vendor's own kernel-devel for patchless
+		# client build
+		if ! kernelrpm=$(find_linux_rpm "-$DEVEL_KERNEL_TYPE"); then
+			fatal 1 "Could not find the kernel-$DEVEL_KERNEL_TYPE RPM in $KERNELRPMSBASE/$lnxmaj/$DISTROMAJ"
+		fi
+		if ! lnxrel="$lnxrel" unpack_linux_devel_rpm "$kernelrpm" "-"; then
+			fatal 1 "Could not find the Linux tree in $kernelrpm"
+		fi
+	fi
 
     # ~sigh~  have to make copies of and modify some of the rpm
     # infrastructure files so that find-requires can find our unpacked
@@ -1808,20 +1813,13 @@ EOF
 
 create_rpmbuild_dirs() {
 
-    [ -d RPMS ] || mkdir RPMS
-    for arch in $BUILD_ARCHS; do
-        if [[ $arch = i?86 ]]; then
-            # some stupidity in the sles11 kernel spec requires an RPMS/i386
-            # even if the target arch is i686
-            [ -d RPMS/i386 ] || mkdir RPMS/i386
-        fi
-        [ -d RPMS/$arch ] || mkdir RPMS/$arch
-    done
-    [ -d RPMS/noarch ] || mkdir RPMS/noarch
-    [ -d BUILD ] || mkdir BUILD
-    [ -d SOURCES ] || mkdir SOURCES
-    [ -d SPECS ] || mkdir SPECS
-    [ -d SRPMS ] || mkdir SRPMS
+	[ -d RPMS ] || mkdir RPMS
+	[ -d RPMS/${TARGET_ARCH} ] || mkdir RPMS/${TARGET_ARCH}
+	[ -d RPMS/noarch ] || mkdir RPMS/noarch
+	[ -d BUILD ] || mkdir BUILD
+	[ -d SOURCES ] || mkdir SOURCES
+	[ -d SPECS ] || mkdir SPECS
+	[ -d SRPMS ] || mkdir SRPMS
 
 }
 
@@ -1923,7 +1921,11 @@ set -E
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,patchless,ccache,norpm,external-patches:,timestamp:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,noiokit,ofed-type:,ofed-version:,mlnx-version:,ofed-src:,publish,disable-zfs,release,set-value:,src,stage:,target:,target-archs:,with-linux:,xen -- "$@")
+options=$(getopt -o D:h -l kerneltree:,distro:,kernelrpm:,reusebuild:,\
+patchless,patchless-server,ccache,norpm,external-patches:,timestamp:,\
+extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,noiokit,ofed-type:,\
+ofed-version:,mlnx-version:,ofed-src:,publish,disable-zfs,release,set-value:,\
+src,stage:,target:,with-linux:,xen -- "$@")
 
 if [ $? != 0 ]; then
     usage 1
@@ -1992,6 +1994,10 @@ while [ "$1" ]; do
             PATCHLESS=true
             shift
             ;;
+	--patchless-server)
+		PATCHLESS_SERVER=true
+		shift
+		;;
         --kernelrpm)
             if ! KERNELRPMSBASE=$(canon_path "$2"); then
                 fatal 1 "Could not determine the canonical location of $2"
@@ -2049,10 +2055,6 @@ while [ "$1" ]; do
             ;;
         --target)
             TARGET=$2
-            shift 2
-            ;;
-        --target-archs)
-            TARGET_ARCHS=$2
             shift 2
             ;;
         --xen)

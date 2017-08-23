@@ -41,51 +41,29 @@ Provides: kernel-devel-lustre = %{KVRA}%{?1:.%{1}}\\' \
                 fatal 1 "Error while editing SPECS/$SPEC_NAME"
     fi
 
-
 }
 
 prepare_and_build_srpm() {
 
-    pushd $TOPDIR >/dev/null
+	pushd $TOPDIR >/dev/null
+	# create the buildid
+	local buildid="_lustre${EXTRA_VERSION##*_lustre}"
 
-    # create the buildid
-    local buildid="_lustre${EXTRA_VERSION##*_lustre}"
+	# edit the SPEC with our changes
+	patch_spec
+	popd >/dev/null
 
-    # edit the SPEC with our changes
-    patch_spec
+	# copy our .config into the RPM build tree
+	(echo "# $(basearch ${TARGET_ARCH})"; cat $CONFIG_FILE) > \
+		SOURCES/kernel-$lnxmaj-${TARGET_ARCH}.config
 
-    popd >/dev/null
-
-    # this concept of being able to build a list of targets with a single
-    # lbuild is a fine idea, but in reality I think it's (very) broken.  I
-    # don't even think the lustre.spec can handle being called with "--target
-    # <multiple arches>".  It certainly can't handle the issue where each
-    # arch has it's own kernel location.
-    # but we will do the best we can and put the plumbing in place so that
-    # this could work when the other broken bits are fixed.
-    # in reality, our current use of lbuild only ever has a single arch in
-    # $BUILD_ARCHS
-    local arch
-    local targets=""
-    for arch in $BUILD_ARCHS; do
-        # XXX - ok.  so here's a hack that needs to be fixed properly
-        #       ppc64 was merged to ppc some time ago pre 2.6.18
-        if [ $arch = ppc64 ]; then
-            arch=ppc
-        fi
-        targets="--target $arch $targets"
-        # copy our .config into the RPM build tree
-        (echo "# $(basearch $arch)"; cat $CONFIG_FILE) > \
-            SOURCES/kernel-$lnxmaj-$arch.config
-
-        # XXX - hackity hack -- until we get (or generate from the base
-        #                       config) configs for xen and debug
-        local f=""
-        for f in SOURCES/kernel-${lnxmaj}-*.config; do
-            grep -q "^CONFIG_SD_IOSTATS=y" $f || \
-                echo "CONFIG_SD_IOSTATS=y" >> $f
-        done
-    done
+	# XXX - hackity hack -- until we get (or generate from the base
+	#                       config) configs for xen and debug
+	local f=""
+	for f in SOURCES/kernel-${lnxmaj}-*.config; do
+		grep -q "^CONFIG_SD_IOSTATS=y" $f || \
+		echo "CONFIG_SD_IOSTATS=y" >> $f
+	done
 
     # do we need any special rpm build options
     local rpmbuildopt="-bb"
@@ -106,19 +84,19 @@ prepare_and_build_srpm() {
     # get any release specific build options
     rpmbuildopt="$rpmbuildopt $(get_rpmbuildopts)"
 
-    # now build it
-    if ! eval rpmbuild $rpmbuildopt $targets --with baseonly \
-                   --define \"_topdir $TOPDIR\" \
-                   --define \"buildid $buildid\" \
-                   --define \"_tmppath $TMPDIR\" \
-                   $TOPDIR/SPECS/$SPEC_NAME 2>&1; then
-        return 1
-    fi
+	# now build it
+	if ! eval rpmbuild $rpmbuildopt --target ${TARGET_ARCH} --with baseonly \
+		--define \"_topdir $TOPDIR\" \
+		${buildid:+--define \"buildid $buildid\"} \
+		--define \"_tmppath $TMPDIR\" \
+		$TOPDIR/SPECS/$SPEC_NAME 2>&1; then
+		return 1
+	fi
 
     # for informative purposes, display a diff between the .config that
     # was actually built and what we proposed as a .config
     echo "Diffs between $(basename $CONFIG_FILE) and the built kernel's .config:"
-    local rpmname="$TOPDIR/RPMS/${BUILD_ARCHS# }/kernel-${lnxmaj}-${lnxrel}${buildid}.${BUILD_ARCHS# }.rpm"
+    local rpmname="$TOPDIR/RPMS/${TARGET_ARCH}/kernel-${lnxmaj}-${lnxrel}${buildid}.${TARGET_ARCH}.rpm"
     rpmcfg=$(rpm -qpl $rpmname | grep '/boot/config-')
     rpm2cpio $rpmname | cpio -id .$rpmcfg
     diff -u $CONFIG_FILE .$rpmcfg
