@@ -1,6 +1,18 @@
---- l1/fs/ext4/inode.c	2016-08-23 23:38:23.238091149 +0800
-+++ l2/fs/ext4/inode.c	2017-01-24 04:04:45.100092653 +0800
-@@ -2683,6 +2683,9 @@ static int ext4_writepages(struct addres
+Index: linux-stage/fs/ext4/inode.c
+===================================================================
+--- linux-stage.orig/fs/ext4/inode.c
++++ linux-stage/fs/ext4/inode.c
+@@ -734,6 +734,9 @@ out_sem:
+ 		    !(flags & EXT4_GET_BLOCKS_ZERO) &&
+ 		    !IS_NOQUOTA(inode) &&
+ 		    ext4_should_order_data(inode)) {
++			ret = ext4_inode_attach_jinode(inode);
++			if (ret)
++				return ret;
+ 			ret = ext4_jbd2_file_inode(handle, inode);
+ 			if (ret)
+ 				return ret;
+@@ -2755,6 +2758,9 @@ static int ext4_writepages(struct addres
  		mpd.last_page = wbc->range_end >> PAGE_CACHE_SHIFT;
  	}
  
@@ -10,7 +22,7 @@
  	mpd.inode = inode;
  	mpd.wbc = wbc;
  	ext4_io_submit_init(&mpd.io_submit, wbc);
-@@ -4015,6 +4015,7 @@ int ext4_inode_attach_jinode(struct inod
+@@ -4116,6 +4122,7 @@ int ext4_inode_attach_jinode(struct inod
  		jbd2_free_inode(jinode);
  	return 0;
  }
@@ -18,9 +30,11 @@
  
  /*
   * ext4_truncate()
---- l1/fs/ext4/ext4.h	2017-01-24 04:21:28.989470587 +0800
-+++ l2/fs/ext4/ext4.h	2017-01-24 04:32:45.589800986 +0800
-@@ -2462,6 +2462,7 @@ extern int ext4_group_add_blocks(handle_
+Index: linux-stage/fs/ext4/ext4.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -2632,6 +2632,7 @@ extern int ext4_group_add_blocks(handle_
  extern int ext4_trim_fs(struct super_block *, struct fstrim_range *);
  
  /* inode.c */
