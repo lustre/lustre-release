@@ -137,7 +137,7 @@ test_1() {
 	fi
 
 	log "Run POSIX test against lustre filesystem"
-	run_posix $MOUNT compare || \
+	run_posix $MOUNT $MGSNID $FSNAME compare ||
 		error_noexit "Run POSIX testsuite on $MOUNT failed"
 
 	[[ -d "$MOUNT/TESTROOT" ]] && rm -fr $MOUNT/TESTROOT
