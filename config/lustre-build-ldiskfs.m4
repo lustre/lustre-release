@@ -322,11 +322,21 @@ AS_IF([test -e "$linux_src/fs/ext4/super.c"], [
 	EXT4_SRC_DIR="$linux_src/fs/ext4"
 ], [
 	# Kernel ext source provided by kernel-debuginfo-common package
-	linux_src=$(ls -1d /usr/src/debug/*/linux-${LINUXRELEASE%.*}* \
+	# that extracted to $LINUX
+	linux_src=$(ls -1d $linux_src/../../debug/*/linux-${LINUXRELEASE%.*}* \
 		2>/dev/null | tail -1)
-	AS_IF([test -e "$linux_src/fs/ext4/super.c"],
-		[EXT4_SRC_DIR="$linux_src/fs/ext4"],
-		[EXT4_SRC_DIR=""])
+	AS_IF([test -e "$linux_src/fs/ext4/super.c"], [
+		EXT4_SRC_DIR="$linux_src/fs/ext4"
+	], [
+		# Kernel ext source provided by kernel-debuginfo-common package
+		linux_src=$(ls -1d /usr/src/debug/*/linux-${LINUXRELEASE%.*}* \
+			2>/dev/null | tail -1)
+		AS_IF([test -e "$linux_src/fs/ext4/super.c"], [
+			EXT4_SRC_DIR="$linux_src/fs/ext4"
+		], [
+			EXT4_SRC_DIR=""
+		])
+	])
 ])
 AC_MSG_RESULT([$EXT4_SRC_DIR])
 AC_SUBST(EXT4_SRC_DIR)

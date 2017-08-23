@@ -16,19 +16,12 @@ prepare_and_build_srpm() {
     # generate our buildid
     local buildid="lustre${EXTRA_VERSION##*_lustre}"
 
-    # do release specific spec editing
-    edit_specs
-
-    # XXX - need to flesh this out per the rhel5 method
-    local targets
-    for arch in $BUILD_ARCHS; do
-        targets="--target $arch $targets"
-        mkdir -p config/$(basearch $arch)
-        cp $CONFIG_FILE config/$(basearch $arch)/$RPMSMPTYPE
-    done
-
-    tar cjf SOURCES/config.tar.bz2 config
-    rm -rf config
+	# do release specific spec editing
+	edit_specs
+	mkdir -p config/$(basearch $TARGET_ARCH)
+	cp $CONFIG_FILE config/$(basearch $TARGET_ARCH)/$RPMSMPTYPE
+	tar cjf SOURCES/config.tar.bz2 config
+	rm -rf config
 
     # do we need any special rpm build options
     local rpmbuildopt="-bb"
@@ -40,18 +33,12 @@ prepare_and_build_srpm() {
     #       all about.
     touch SOURCES/IGNORE-KABI-BADNESS
 
-
-# XXX testing speedup hack - never let an inspection pass without this
-#     commented out!  in fact it should be removed completely before a
-#     landing.
-#if false; then
-    # now build it
-    if ! rpmbuild $rpmbuildopt $targets \
-                   --define "_topdir $TOPDIR" \
-                   $TOPDIR/SOURCES/kernel-$RPMSMPTYPE.spec 2>&1; then
-        fatal 1 "Failed to build kernel RPM"
-    fi
-#fi
+	# now build it
+	if ! rpmbuild $rpmbuildopt --target ${TARGET_ARCH} \
+		--define "_topdir $TOPDIR" \
+		$TOPDIR/SOURCES/kernel-$RPMSMPTYPE.spec 2>&1; then
+		fatal 1 "Failed to build kernel RPM"
+	fi
 
     # for SLES, we also need to build the kernel-source rpm
     if ! rpmbuild $rpmbuildopt $targets \

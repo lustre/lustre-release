@@ -105,6 +105,12 @@ kernel_srpm_location() {
 
 }
 
+kernel_debuginfo_location() {
+
+	echo "http://debuginfo.centos.org/7/x86_64/"
+
+}
+
 cleanup_rpmmacros() {
 	sed -i "/^%kernel_module_package/,/^)}$/d" $RMAC
 }
