@@ -2012,7 +2012,6 @@ again:
 		if (lnet_peer_is_uptodate(lp))
 			break;
 		lnet_peer_queue_for_discovery(lp);
-		lnet_peer_addref_locked(lp);
 		/*
 		 * if caller requested a non-blocking operation then
 		 * return immediately. Once discovery is complete then the
@@ -2021,6 +2020,8 @@ again:
 		 */
 		if (!block)
 			break;
+
+		lnet_peer_addref_locked(lp);
 		lnet_net_unlock(LNET_LOCK_EX);
 		schedule();
 		finish_wait(&lp->lp_dc_waitq, &wait);
