@@ -382,6 +382,17 @@ int mdt_cdt_add_request(struct coordinator *cdt, struct cdt_agent_req *car)
 
 	mdt_hsm_agent_update_statistics(cdt, 0, 0, 1, &car->car_uuid);
 
+	switch (car->car_hai->hai_action) {
+	case HSMA_ARCHIVE:
+		atomic_inc(&cdt->cdt_archive_count);
+		break;
+	case HSMA_RESTORE:
+		atomic_inc(&cdt->cdt_restore_count);
+		break;
+	case HSMA_REMOVE:
+		atomic_inc(&cdt->cdt_remove_count);
+		break;
+	}
 	atomic_inc(&cdt->cdt_request_count);
 
 	RETURN(0);
@@ -426,6 +437,18 @@ int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie)
 
 	list_del(&car->car_request_list);
 	up_write(&cdt->cdt_request_lock);
+
+	switch (car->car_hai->hai_action) {
+	case HSMA_ARCHIVE:
+		atomic_dec(&cdt->cdt_archive_count);
+		break;
+	case HSMA_RESTORE:
+		atomic_dec(&cdt->cdt_restore_count);
+		break;
+	case HSMA_REMOVE:
+		atomic_dec(&cdt->cdt_remove_count);
+		break;
+	}
 
 	/* Drop reference from cdt_request_list. */
 	mdt_cdt_put_request(car);

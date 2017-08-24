@@ -1072,6 +1072,9 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	/* cdt_last_cookie is protected by cdt_llog_lock */
 	cdt->cdt_last_cookie = ktime_get_real_seconds();
 	atomic_set(&cdt->cdt_request_count, 0);
+	atomic_set(&cdt->cdt_archive_count, 0);
+	atomic_set(&cdt->cdt_restore_count, 0);
+	atomic_set(&cdt->cdt_remove_count, 0);
 	cdt->cdt_user_request_mask = (1UL << HSMA_RESTORE);
 	cdt->cdt_group_request_mask = (1UL << HSMA_RESTORE);
 	cdt->cdt_other_request_mask = (1UL << HSMA_RESTORE);

@@ -156,8 +156,12 @@ struct coordinator {
 						       * specified */
 	__u64			 cdt_max_requests;    /**< max count of started
 						       * requests */
-	atomic_t		 cdt_request_count;   /**< current count of
-						       * started requests */
+	/** Current count of active requests */
+	atomic_t		 cdt_request_count;   /** total */
+	atomic_t		 cdt_archive_count;
+	atomic_t		 cdt_restore_count;
+	atomic_t		 cdt_remove_count;
+
 	/* started requests (struct cdt_agent_req:car_cookie_hash)
 	 * indexed by cookie */
 	struct cfs_hash		*cdt_request_cookie_hash;
