@@ -167,8 +167,8 @@ intf_max_set(const char *val, struct kernel_param *kp)
 
 	if (value < LNET_INTERFACES_MIN) {
 		CWARN("max interfaces provided are too small, setting to %d\n",
-		      LNET_INTERFACES_MIN);
-		value = LNET_INTERFACES_MIN;
+		      LNET_INTERFACES_MAX_DEFAULT);
+		value = LNET_INTERFACES_MAX_DEFAULT;
 	}
 
 	*(int *)kp->arg = value;
@@ -3465,8 +3465,15 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 	sigset_t blocked;
 
 	/* n_ids limit is arbitrary */
-	if (n_ids <= 0 || n_ids > lnet_interfaces_max || id.nid == LNET_NID_ANY)
+	if (n_ids <= 0 || id.nid == LNET_NID_ANY)
 		return -EINVAL;
+
+	/*
+	 * if the user buffer has more space than the lnet_interfaces_max
+	 * then only fill it up to lnet_interfaces_max
+	 */
+	if (n_ids > lnet_interfaces_max)
+		n_ids = lnet_interfaces_max;
 
 	if (id.pid == LNET_PID_ANY)
 		id.pid = LNET_PID_LUSTRE;
@@ -3636,16 +3643,25 @@ lnet_discover(lnet_process_id_t id, __u32 force, lnet_process_id_t __user *ids,
 	int i;
 	int rc;
 	int max_intf = lnet_interfaces_max;
+	size_t buf_size;
 
 	if (n_ids <= 0 ||
-	    id.nid == LNET_NID_ANY ||
-	    n_ids > max_intf)
+	    id.nid == LNET_NID_ANY)
 		return -EINVAL;
 
 	if (id.pid == LNET_PID_ANY)
 		id.pid = LNET_PID_LUSTRE;
 
-	LIBCFS_ALLOC(buf, n_ids * sizeof(*buf));
+	/*
+	 * if the user buffer has more space than the max_intf
+	 * then only fill it up to max_intf
+	 */
+	if (n_ids > max_intf)
+		n_ids = max_intf;
+
+	buf_size = n_ids * sizeof(*buf);
+
+	LIBCFS_ALLOC(buf, buf_size);
 	if (!buf)
 		return -ENOMEM;
 
@@ -3697,6 +3713,8 @@ out_decref:
 	lnet_peer_ni_decref_locked(lpni);
 out:
 	lnet_net_unlock(cpt);
+
+	LIBCFS_FREE(buf, buf_size);
 
 	return rc;
 }
