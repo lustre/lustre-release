@@ -1926,12 +1926,6 @@ check_seq_oid()
 			ff_pstripe=$(cut -d: -f3 <<<$ff_parent | sed -e 's/]//')
 		fi
 
-		if grep -q 'stripe_count=' <<<$ff; then
-			local ff_scnt=$(sed -e 's/.*stripe_count=//' \
-					    -e 's/ .*//' <<<$ff)
-			[ $lmm_count = $ff_scnt ] ||
-				error "FF stripe count $lmm_count != $ff_scnt"
-		fi
 		# compare lmm_seq and filter_fid->ff_parent.f_seq
 		[ $ff_pseq = $lmm_seq ] ||
 			error "FF parent SEQ $ff_pseq != $lmm_seq"
@@ -1942,6 +1936,14 @@ check_seq_oid()
 			error "FF stripe $ff_pstripe != $stripe_nr"
 
 		stripe_nr=$((stripe_nr + 1))
+		[ $(lustre_version_code client) -lt $(version_code 2.9.55) ] &&
+			continue
+		if grep -q 'stripe_count=' <<<$ff; then
+			local ff_scnt=$(sed -e 's/.*stripe_count=//' \
+					    -e 's/ .*//' <<<$ff)
+			[ $lmm_count = $ff_scnt ] ||
+				error "FF stripe count $lmm_count != $ff_scnt"
+		fi
 	done
 }
 
@@ -2067,7 +2069,8 @@ test_27D() {
 	local skip27D
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.55) ] &&
 		skip27D += "-s 29"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.55) ] &&
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.55) -o \
+	  $(lustre_version_code client) -lt $(version_code 2.9.55) ] &&
 		skip27D += "-s 30,31"
 	llapi_layout_test -d$DIR/$tdir -p$POOL -o$OSTCOUNT $skip27D ||
 		error "llapi_layout_test failed"
@@ -6913,7 +6916,8 @@ test_101g() {
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile
 
 	local orig_mb=$(do_facet ost1 $LCTL get_param -n $brw_size | head -n 1)
-	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.52) ]; then
+	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.52) -a \
+	     $(lustre_version_code client) -ge $(version_code 2.8.52) ]; then
 		[ $(lustre_version_code ost1) -ge $(version_code 2.9.52) ] &&
 			suffix="M"
 		if [[ $orig_mb -lt 16 ]]; then
@@ -10667,7 +10671,8 @@ run_test 154f "get parent fids by reading link ea"
 
 test_154g()
 {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.92) ]] ||
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.92) && \
+	   $(lustre_version_code client) -gt $(version_code 2.6.99) ]] ||
 		{ skip "Need MDS version at least 2.6.92"; return 0; }
 	[ -n "$FILESET" ] && skip "SKIP due to FILESET set" && return
 
@@ -16195,7 +16200,8 @@ test_404() { # LU-6601
 run_test 404 "validate manual {de}activated works properly for OSPs"
 
 test_405() {
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.92) ] &&
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.92) -o \
+	[ $(lustre_version_code client) -lt $(version_code 2.6.99) ] &&
 		skip "Layout swap lock is not supported" && return
 
 	check_swap_layouts_support && return 0
@@ -16361,6 +16367,9 @@ run_test 409 "Large amount of cross-MDTs hard links on the same file"
 
 test_410()
 {
+	[[ $(lustre_version_code client) -lt $(version_code 2.9.59) ]] &&
+		skip "Need client version at least 2.9.59" && return
+
 	# Create a file, and stat it from the kernel
 	local testfile=$DIR/$tfile
 	touch $testfile
