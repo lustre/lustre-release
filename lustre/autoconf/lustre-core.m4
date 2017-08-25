@@ -2981,8 +2981,6 @@ AC_DEFUN([LC_CONFIGURE], [
 AC_MSG_NOTICE([Lustre core checks
 ==============================================================================])
 
-LC_CONFIG_OBD_BUFFER_SIZE
-
 AS_IF([test $target_cpu == "i686" -o $target_cpu == "x86_64"],
 	[CFLAGS="$CFLAGS -Wall -Werror"])
 
