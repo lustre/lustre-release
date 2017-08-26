@@ -5366,6 +5366,7 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 	struct lod_layout_component *lod_comp;
 	struct layout_intent *layout = mlc->mlc_intent;
 	struct lu_extent extent = layout->li_extent;
+	unsigned int seq = 0;
 	int picked;
 	int i;
 	int rc;
@@ -5378,6 +5379,11 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 	CDEBUG(D_LAYOUT, DFID": trying to write :"DEXT"\n",
 	       PFID(lod_object_fid(lo)), PEXT(&extent));
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_FLR_RANDOM_PICK_MIRROR)) {
+		get_random_bytes(&seq, sizeof(seq));
+		seq %= lo->ldo_mirror_count;
+	}
+
 	/**
 	 * Pick a mirror as the primary.
 	 * Now it only picks the first mirror, this algo can be
@@ -5385,8 +5391,10 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 	 * the availability of OSTs.
 	 */
 	for (picked = -1, i = 0; i < lo->ldo_mirror_count; i++) {
-		if (!lo->ldo_mirrors[i].lme_stale) {
-			picked = i;
+		int index = (i + seq) % lo->ldo_mirror_count;
+
+		if (!lo->ldo_mirrors[index].lme_stale) {
+			picked = index;
 			break;
 		}
 	}

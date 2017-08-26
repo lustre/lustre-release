@@ -776,6 +776,25 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		GOTO(out, result = -EINVAL);
 	}
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_FLR_RANDOM_PICK_MIRROR)) {
+		unsigned int seq;
+
+		get_random_bytes(&seq, sizeof(seq));
+		seq %= mirror_count;
+
+		i = 0;
+		lov_foreach_mirror_entry(lov, lre) {
+			i++;
+			if (lre->lre_stale)
+				continue;
+
+			if (!seq--) {
+				comp->lo_preferred_mirror = i - 1;
+				break;
+			}
+		}
+	}
+
 	LASSERT(comp->lo_preferred_mirror >= 0);
 
 	EXIT;

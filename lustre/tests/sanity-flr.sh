@@ -12,7 +12,7 @@ export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
 ONLY=${ONLY:-"$*"}
 # Bug number for skipped test:
-ALWAYS_EXCEPT="$SANITY_FLR_EXCEPT"
+ALWAYS_EXCEPT="$SANITY_FLR_EXCEPT 201"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] &&
@@ -724,6 +724,189 @@ test_38() {
 	verify_flr_state $tf "read_only"
 }
 run_test 38 "resync"
+
+ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
+lock_file=$(mktemp /var/lock/FLR.XXXXXX)
+
+write_file_200() {
+	local tf=$1
+
+	local fsize=$(stat --printf=%s $tf)
+
+	while [ -f $ctrl_file ]; do
+		local off=$((RANDOM << 8))
+		local len=$((RANDOM << 5 + 131072))
+
+		[ $((off + len)) -gt $fsize ] && {
+			fsize=$((off + len))
+			echo "Extending file size to $fsize .."
+		}
+
+		flock -s $lock_file -c \
+			"$MULTIOP $tf oO_WRONLY:z${off}w${len}c" ||
+				{ rm -f $ctrl_file;
+				  error "failed writing to $off:$len"; }
+		sleep 0.$((RANDOM % 2 + 1))
+	done
+}
+
+read_file_200() {
+	local tf=$1
+
+	while [ -f $ctrl_file ]; do
+		flock -s $lock_file -c "cat $tf &> /dev/null" ||
+			{ rm -f $ctrl_file; error "read failed"; }
+		sleep 0.$((RANDOM % 2 + 1))
+	done
+}
+
+resync_file_200() {
+	local tf=$1
+
+	options=("" "-e resync_start" "-e delay_before_copy -d 1" "" "")
+
+	exec 200<>$lock_file
+	while [ -f $ctrl_file ]; do
+		local index=$((RANDOM % ${#options[@]}))
+		local lock_taken=false
+
+		[ $((RANDOM % 4)) -eq 0 ] && {
+			index=0
+			lock_taken=true
+			echo -n "lock to "
+		}
+
+		echo -n "resync file $tf with '${options[$index]}' .."
+
+		$lock_taken && flock -x 200
+		mirror_io resync ${options[$index]} $tf &> /dev/null &&
+			echo "done" || echo "failed"
+
+		$lock_taken && flock -u 200
+
+		sleep 0.$((RANDOM % 8 + 1))
+	done
+}
+
+test_200() {
+	local tf=$DIR/$tfile
+	local tf2=$DIR2/$tfile
+	local tf3=$DIR3/$tfile
+
+	$LFS setstripe -E 1M -E 2M -c 2 -E 4M -E 16M -E eof $tf
+	$LFS setstripe -E 2M -E 6M -c 2 -E 8M -E 32M -E eof $tf-2
+	$LFS setstripe -E 4M -c 2 -E 8M -E 64M -E eof $tf-3
+
+	$LFS setstripe --component-add --mirror=$tf-2 $tf
+	$LFS setstripe --component-add --mirror=$tf-3 $tf
+
+	mkdir -p $MOUNT2 && mount_client $MOUNT2
+
+	mkdir -p $MOUNT3 && mount_client $MOUNT3
+
+	verify_flr_state $tf3 "read_only"
+
+	#define OBD_FAIL_FLR_RANDOM_PICK_MIRROR	0x1A03
+	$LCTL set_param fail_loc=0x1A03
+
+	local mds_idx=mds$(($($LFS getstripe -M $tf) + 1))
+	do_facet $mds_idx $LCTL set_param fail_loc=0x1A03
+
+	declare -a pids
+
+	write_file_200 $tf &
+	pids+=($!)
+
+	read_file_200 $tf &
+	pids+=($!)
+
+	write_file_200 $tf2 &
+	pids+=($!)
+
+	read_file_200 $tf2 &
+	pids+=($!)
+
+	resync_file_200 $tf3 &
+	pids+=($!)
+
+	local sleep_time=60
+	[ "$SLOW" = "yes" ] && sleep_time=360
+	while [ $sleep_time -gt 0 -a -f $ctrl_file ]; do
+		sleep 1
+		((--sleep_time))
+	done
+
+	rm -f $ctrl_file
+
+	echo "Waiting ${pids[@]}"
+	wait ${pids[@]}
+
+	umount_client $MOUNT2
+	umount_client $MOUNT3
+
+	rm -f $lock_file
+
+	# resync and verify mirrors
+	mirror_io resync $tf
+	get_mirror_ids $tf
+
+	local csum=$(mirror_io dump -i ${mirror_array[0]} $tf | md5sum)
+	for id in ${mirror_array[@]:1}; do
+		[ "$(mirror_io dump -i $id $tf | md5sum)" = "$csum" ] ||
+			error "checksum error for mirror $id"
+	done
+
+	true
+}
+run_test 200 "stress test"
+
+cleanup_test_201() {
+	trap 0
+	do_facet $SINGLEMDS $LCTL --device $MDT0 changelog_deregister $CL_USER
+
+	umount_client $MOUNT2
+}
+
+test_201() {
+	local delay=${RESYNC_DELAY:-5}
+
+	MDT0=$($LCTL get_param -n mdc.*.mds_server_uuid |
+	       awk '{ gsub(/_UUID/,""); print $1 }' | head -n1)
+
+	trap cleanup_test_201 EXIT
+
+	CL_USER=$(do_facet $SINGLEMDS $LCTL --device $MDT0 \
+			changelog_register -n)
+
+	mkdir -p $MOUNT2 && mount_client $MOUNT2
+
+	local index=0
+	while :; do
+		local log=$($LFS changelog $MDT0 $index | grep FLRW)
+		[ -z "$log" ] && { sleep 1; continue; }
+
+		index=$(echo $log | awk '{print $1}')
+		local ts=$(date -d "$(echo $log | awk '{print $3}')" "+%s" -u)
+		local fid=$(echo $log | awk '{print $6}' | sed -e 's/t=//')
+		local file=$($LFS fid2path $MOUNT2 $fid 2> /dev/null)
+
+		((++index))
+		[ -z "$file" ] && continue
+
+		local now=$(date +%s)
+
+		echo "file: $file $fid was modified at $ts, now: $now, " \
+		     "will be resynced at $((ts+delay))"
+
+		[ $now -lt $((ts + delay)) ] && sleep $((ts + delay - now))
+
+		mirror_io resync $file
+		echo "$file resync done"
+	done
+
+	cleanup_test_201
+}
+run_test 201 "FLR data mover"
 
 complete $SECONDS
 check_and_cleanup_lustre
