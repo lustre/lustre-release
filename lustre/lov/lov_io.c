@@ -1022,24 +1022,20 @@ static int lov_io_submit(const struct lu_env *env,
 	int rc = 0;
 	ENTRY;
 
-	if (lio->lis_nr_subios == 1) {
-		int idx = lio->lis_single_subio_index;
-
-		sub = lov_sub_get(env, lio, idx);
-		LASSERT(!IS_ERR(sub));
-		LASSERT(sub == &lio->lis_single_subio);
-		rc = cl_io_submit_rw(sub->sub_env, &sub->sub_io,
-				     crt, queue);
-		RETURN(rc);
-	}
-
 	cl_page_list_init(plist);
 	while (qin->pl_nr > 0) {
 		struct cl_2queue  *cl2q = &lov_env_info(env)->lti_cl2q;
 
-		cl_2queue_init(cl2q);
-
 		page = cl_page_list_first(qin);
+		if (lov_page_is_empty(page)) {
+			cl_page_list_move(&queue->c2_qout, qin, page);
+
+			cl_page_prep(env, ios->cis_io, page, crt);
+			cl_page_completion(env, page, crt, 0);
+			continue;
+		}
+
+		cl_2queue_init(cl2q);
 		cl_page_list_move(&cl2q->c2_qin, qin, page);
 
 		index = lov_page_index(page);
@@ -1088,6 +1084,8 @@ static int lov_io_commit_async(const struct lu_env *env,
 	if (lio->lis_nr_subios == 1) {
 		int idx = lio->lis_single_subio_index;
 
+		LASSERT(!lov_page_is_empty(cl_page_list_first(queue)));
+
 		sub = lov_sub_get(env, lio, idx);
 		LASSERT(!IS_ERR(sub));
 		LASSERT(sub == &lio->lis_single_subio);
@@ -1103,6 +1101,8 @@ static int lov_io_commit_async(const struct lu_env *env,
 
 		LASSERT(plist->pl_nr == 0);
 		page = cl_page_list_first(queue);
+		LASSERT(!lov_page_is_empty(page));
+
 		cl_page_list_move(plist, queue, page);
 
 		index = lov_page_index(page);

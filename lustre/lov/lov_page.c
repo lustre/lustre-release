@@ -137,12 +137,21 @@ int lov_page_init_empty(const struct lu_env *env, struct cl_object *obj,
 	void *addr;
 	ENTRY;
 
+	lpg->lps_index = ~0;
 	cl_page_slice_add(page, &lpg->lps_cl, obj, index, &lov_empty_page_ops);
 	addr = kmap(page->cp_vmpage);
 	memset(addr, 0, cl_page_size(obj));
 	kunmap(page->cp_vmpage);
 	cl_page_export(env, page, 1);
 	RETURN(0);
+}
+
+bool lov_page_is_empty(const struct cl_page *page)
+{
+	const struct cl_page_slice *slice = cl_page_at(page, &lov_device_type);
+
+	LASSERT(slice != NULL);
+	return slice->cpl_ops == &lov_empty_page_ops;
 }
 
 
