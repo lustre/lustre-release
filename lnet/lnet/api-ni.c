@@ -3325,11 +3325,15 @@ LNetCtl(unsigned int cmd, void *arg)
 		if (rc < 0)
 			return rc;
 
+		mutex_lock(&the_lnet.ln_api_mutex);
 		lp = lnet_find_peer(ping->ping_id.nid);
 		if (lp) {
 			ping->ping_id.nid = lp->lp_primary_nid;
 			ping->mr_info = lnet_peer_is_multi_rail(lp);
+			lnet_peer_decref_locked(lp);
 		}
+		mutex_unlock(&the_lnet.ln_api_mutex);
+
 		ping->ping_count = rc;
 		return 0;
 	}
@@ -3343,11 +3347,15 @@ LNetCtl(unsigned int cmd, void *arg)
 				   discover->ping_count);
 		if (rc < 0)
 			return rc;
+
+		mutex_lock(&the_lnet.ln_api_mutex);
 		lp = lnet_find_peer(discover->ping_id.nid);
 		if (lp) {
 			discover->ping_id.nid = lp->lp_primary_nid;
 			discover->mr_info = lnet_peer_is_multi_rail(lp);
+			lnet_peer_decref_locked(lp);
 		}
+		mutex_unlock(&the_lnet.ln_api_mutex);
 
 		discover->ping_count = rc;
 		return 0;
