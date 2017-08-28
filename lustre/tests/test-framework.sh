@@ -3969,7 +3969,7 @@ format_ost() {
 }
 
 formatall() {
-	stopall
+	stopall -f
 	# Set hostid for ZFS/SPL zpool import protection
 	# (Assumes MDS version is also OSS version)
 	if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.8.54) ];
