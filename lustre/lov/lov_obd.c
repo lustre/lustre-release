@@ -799,9 +799,10 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	 * (lod) are on the same node. The lod layer if loaded
 	 * first will register the lov proc directory. In that
 	 * case obd->obd_type->typ_procroot will be not set.
-	 * Instead we use type->typ_procsym as the parent. */
+	 * Instead we use type->typ_procsym as the parent.
+	 */
 	type = class_search_type(LUSTRE_LOD_NAME);
-	if (type != NULL && type->typ_procsym != NULL) {
+	if (type && type->typ_procsym) {
 		obd->obd_proc_entry = lprocfs_register(obd->obd_name,
 						       type->typ_procsym,
 						       obd->obd_vars, obd);
@@ -811,11 +812,10 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			       obd->obd_name);
 			obd->obd_proc_entry = NULL;
 		}
-	} else {
-		rc = lprocfs_obd_setup(obd, false);
 	}
 
-	if (rc == 0) {
+	rc = lprocfs_obd_setup(obd, false);
+	if (!rc) {
 		rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd",
 					0444, &lov_proc_target_fops, obd);
 		if (rc)

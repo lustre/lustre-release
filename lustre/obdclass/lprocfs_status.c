@@ -1258,7 +1258,6 @@ lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 
 	LASSERT(obd != NULL);
 	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-	LASSERT(obd->obd_type->typ_procroot != NULL);
 
 	if (uuid_only)
 		obd_ktype.default_attrs = obd_def_uuid_attrs;
@@ -1280,6 +1279,11 @@ lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 		}
 	}
 
+	if (obd->obd_proc_entry)
+		GOTO(already_registered, rc);
+
+	LASSERT(obd->obd_type->typ_procroot != NULL);
+
 	obd->obd_proc_entry = lprocfs_register(obd->obd_name,
 					       obd->obd_type->typ_procroot,
 					       obd->obd_vars, obd);
@@ -1289,7 +1293,7 @@ lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 		CERROR("error %d setting up lprocfs for %s\n",rc,obd->obd_name);
 		obd->obd_proc_entry = NULL;
 	}
-
+already_registered:
 	return rc;
 }
 EXPORT_SYMBOL(lprocfs_obd_setup);

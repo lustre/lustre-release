@@ -2859,7 +2859,8 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	/* If this is true then both client (osc) and server (osp) are on the
 	 * same node. The osp layer if loaded first will register the osc proc
 	 * directory. In that case this obd_device will be attached its proc
-	 * tree to type->typ_procsym instead of obd->obd_type->typ_procroot. */
+	 * tree to type->typ_procsym instead of obd->obd_type->typ_procroot.
+	 */
 	type = class_search_type(LUSTRE_OSP_NAME);
 	if (type && type->typ_procsym) {
 		obd->obd_proc_entry = lprocfs_register(obd->obd_name,
@@ -2871,13 +2872,13 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			       obd->obd_name);
 			obd->obd_proc_entry = NULL;
 		}
-	} else {
-		rc = lprocfs_obd_setup(obd, false);
 	}
 
-	/* If the basic OSC proc tree construction succeeded then
-	 * lets do the rest. */
-	if (rc == 0) {
+	rc = lprocfs_obd_setup(obd, false);
+	if (!rc) {
+		/* If the basic OSC proc tree construction succeeded then
+		 * lets do the rest.
+		 */
 		lproc_osc_attach_seqstat(obd);
 		sptlrpc_lprocfs_cliobd_attach(obd);
 		ptlrpc_lprocfs_register_obd(obd);
