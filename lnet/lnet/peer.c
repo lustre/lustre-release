@@ -2035,6 +2035,14 @@ again:
 	lnet_net_unlock(LNET_LOCK_EX);
 	lnet_net_lock(cpt);
 
+	/*
+	 * If the peer has changed after we've discovered the older peer,
+	 * then we need to discovery the new peer to make sure the
+	 * interface information is up to date
+	 */
+	if (lp != lpni->lpni_peer_net->lpn_peer)
+		goto again;
+
 	if (signal_pending(current))
 		rc = -EINTR;
 	else if (the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING)
