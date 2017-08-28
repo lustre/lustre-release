@@ -1599,11 +1599,10 @@ again:
 		msg->msg_rtr_nid_param = rtr_nid;
 		msg->msg_sending = 0;
 		list_add_tail(&msg->msg_list, &peer->lp_dc_pendq);
-		lnet_peer_ni_decref_locked(lpni);
-		lnet_net_unlock(cpt);
-
 		CDEBUG(D_NET, "%s pending discovery\n",
 		       libcfs_nid2str(peer->lp_primary_nid));
+		lnet_peer_ni_decref_locked(lpni);
+		lnet_net_unlock(cpt);
 
 		return LNET_DC_WAIT;
 	}
@@ -1738,10 +1737,10 @@ again:
 				best_lpni->lpni_net->net_id, cpt);
 			/* If there is no best_ni we don't have a route */
 			if (!best_ni) {
-				lnet_net_unlock(cpt);
 				CERROR("no path to %s from net %s\n",
 					libcfs_nid2str(best_lpni->lpni_nid),
 					libcfs_net2str(best_lpni->lpni_net->net_id));
+				lnet_net_unlock(cpt);
 				return -EHOSTUNREACH;
 			}
 			lpni = list_entry(peer_net->lpn_peer_nis.next,
@@ -1896,9 +1895,9 @@ pick_peer:
 		 * move onto the next peer_ni in the peer
 		 */
 		if (!best_gw) {
-			lnet_net_unlock(cpt);
 			LCONSOLE_WARN("No route to peer from %s\n",
 				libcfs_nid2str(best_ni->ni_nid));
+			lnet_net_unlock(cpt);
 			return -EHOSTUNREACH;
 		}
 
