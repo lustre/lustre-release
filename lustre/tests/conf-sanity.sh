@@ -255,7 +255,9 @@ cleanup_nocli() {
 }
 
 cleanup() {
-	umount_client $MOUNT || return 200
+	local force=""
+	[ "x$1" != "x" ] && force='-f'
+	umount_client $MOUNT $force|| return 200
 	cleanup_nocli || return $?
 }
 
@@ -2890,7 +2892,7 @@ test_41b() {
 	echo "blah blah" > $MOUNT/$tfile
 	cat $MOUNT/$tfile || error "cat $MOUNT/$tfile failed"
 
-	umount_client $MOUNT || error "umount_client $MOUNT failed"
+	umount_client $MOUNT -f || error "umount_client $MOUNT failed"
 	stop_ost || error "Unable to stop OST1"
 	stop_mds || error "Unable to stop MDS"
 	stop_mds || error "Unable to stop MDS on second try"
@@ -5022,6 +5024,7 @@ test_70e() {
 	soc=$(do_facet mds1 "$LCTL get_param -n \
 		mdt.*MDT0000.sync_lock_cancel")
 	[ $soc == "never" ] || error "SoC enabled on single MDS"
+	umount_client $MOUNT -f > /dev/null
 
 	cleanup || error "cleanup failed with $?"
 }
@@ -7431,7 +7434,7 @@ error_and_umount() {
 }
 
 test_105() {
-	cleanup
+	cleanup -f
 	reformat
 	setup
 	mkdir -p $TMP/$tdir
