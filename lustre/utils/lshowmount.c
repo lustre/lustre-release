@@ -51,8 +51,7 @@
 
 #include <linux/lustre/lustre_user.h>
 #include "nidlist.h"
-#include <lustre/lustreapi.h>
-#include <libcfs/util/param.h>
+#include "lustreapi_internal.h"
 
 #define PROC_UUID_TMPL		"%s/%s/uuid"
 
@@ -156,9 +155,10 @@ static int lshowmount(int lookup, int enumerate, int verbose)
 	glob_t exp_list;
 	int i;
 
-	i = cfs_get_param_paths(&exp_list, "{mgs,mdt,obdfilter}/*/exports");
+	i = get_lustre_param_path("{mgs,mdt,obdfilter}", "*",
+				   FILTER_BY_EXACT, "exports", &exp_list);
 	if (i < 0)
-		return -errno;
+		return i;
 	if (!verbose)
 		nidlist = nl_create();
 	for (i = 0; i < exp_list.gl_pathc; i++) {

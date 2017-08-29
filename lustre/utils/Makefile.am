@@ -70,8 +70,7 @@ lustre_rsync_LDADD :=  liblustreapi.la $(LIBPTLCTL) $(LIBREADLINE) $(PTHREAD_LIB
 lustre_rsync_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.la
 
 lshowmount_SOURCES = lshowmount.c nidlist.c nidlist.h
-lshowmount_LDADD :=  liblustreapi.la $(LIBPTLCTL)
-lshowmount_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.la
+lshowmount_LDADD :=  liblustreapi.la
 
 if EXT2FS_DEVEL
 EXT2FSLIB = -lext2fs
@@ -99,7 +98,7 @@ liblustreapi_la_SOURCES = liblustreapi.c liblustreapi_hsm.c \
 			  $(top_builddir)/libcfs/libcfs/util/string.c \
 			  $(top_builddir)/libcfs/libcfs/util/param.c \
 			  liblustreapi_ladvise.c liblustreapi_chlg.c
-liblustreapi_la_LDFLAGS = -version-info 1:0:0 -Wl,--version-script=liblustreapi.map
+liblustreapi_la_LDFLAGS = -version-info 1:0:0
 
 if UTILS
 LIB_TARGETS =
@@ -204,7 +203,7 @@ wiretest_SOURCES = wiretest.c
 
 endif # UTILS
 
-EXTRA_DIST = llstat llobdstat plot-llstat ldlm_debug_upcall liblustreapi.map
+EXTRA_DIST = llstat llobdstat plot-llstat ldlm_debug_upcall
 
 # NOTE: this should only be run on i386.
 newwiretest: wirehdr.c wirecheck

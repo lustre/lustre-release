@@ -50,11 +50,8 @@
 #define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
 #endif
 
-/* Currently external applications can access this but in the
- * future this will no longer be exposed for the user. Instead
- * if you want to know if the library is initialized just call
- * llapi_liblustreapi_initialized() which is now available. */
 extern bool liblustreapi_initialized;
+
 
 typedef void (*llapi_cb_t)(char *obd_type_name, char *obd_name, char *obd_uuid,
 			   void *args);
@@ -74,10 +71,6 @@ enum llapi_message_level {
 typedef void (*llapi_log_callback_t)(enum llapi_message_level level, int err,
 				     const char *fmt, va_list ap);
 
-static inline bool llapi_liblustreapi_initialized(void)
-{
-	return liblustreapi_initialized;
-}
 
 /* the bottom three bits reserved for llapi_message_level */
 #define LLAPI_MSG_MASK          0x00000007

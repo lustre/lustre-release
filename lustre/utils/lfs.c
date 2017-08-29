@@ -5404,7 +5404,7 @@ int main(int argc, char **argv)
         int rc;
 
 	/* Ensure that liblustreapi constructor has run */
-	if (!llapi_liblustreapi_initialized())
+	if (!liblustreapi_initialized)
 		fprintf(stderr, "liblustreapi was not properly initialized\n");
 
         setlinebuf(stdout);

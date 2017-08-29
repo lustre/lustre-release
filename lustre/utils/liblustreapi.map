@@ -1,8 +1,0 @@
-{
-    global:
-	llapi_*;
-	liblustreapi_initialized;
-	mdt_hash_name;
-    local:
-	*;
-};
