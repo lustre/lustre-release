@@ -233,8 +233,8 @@ static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
 #define OBD_IOC_LCFG_ERASE	_IOWR('f', 209, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_GET_OBJ_VERSION	_IOR('f', 210, OBD_IOC_DATA_TYPE)
 
-/*	lustre/lustre_user.h	212-217 */
-#define OBD_IOC_GET_MNTOPT	_IOW('f', 220, mntopt_t)
+/*	lustre/lustre_user.h	211-220 */
+/* was #define OBD_IOC_GET_MNTOPT	_IOW('f', 220, mntopt_t) until 2.11 */
 #define OBD_IOC_ECHO_MD		_IOR('f', 221, struct obd_ioctl_data)
 #define OBD_IOC_ECHO_ALLOC_SEQ	_IOWR('f', 222, struct obd_ioctl_data)
 #define OBD_IOC_START_LFSCK	_IOWR('f', 230, OBD_IOC_DATA_TYPE)

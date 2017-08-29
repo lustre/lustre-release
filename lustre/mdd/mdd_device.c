@@ -1150,15 +1150,12 @@ static int mdd_statfs(const struct lu_env *env, struct md_device *m,
 	RETURN(rc);
 }
 
-static int mdd_maxeasize_get(const struct lu_env *env, struct md_device *m,
-				int *easize)
+static const struct dt_device_param *mdd_dtconf_get(const struct lu_env *env,
+						    struct md_device *m)
 {
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
-	ENTRY;
 
-	*easize = mdd->mdd_dt_conf.ddp_max_ea_size;
-
-	RETURN(0);
+	return &mdd->mdd_dt_conf;
 }
 
 static int mdd_llog_ctxt_get(const struct lu_env *env, struct md_device *m,
@@ -1629,11 +1626,6 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 		barrier_exit(mdd->mdd_bottom);
 		RETURN(rc);
 	}
-	case OBD_IOC_GET_MNTOPT: {
-		mntopt_t *mntopts = (mntopt_t *)karg;
-		*mntopts = mdd->mdd_dt_conf.ddp_mntopts;
-		RETURN(0);
-	}
 	case OBD_IOC_START_LFSCK: {
 		rc = lfsck_start(env, mdd->mdd_bottom,
 				 (struct lfsck_start_param *)karg);
@@ -1692,7 +1684,7 @@ static const struct md_device_operations mdd_ops = {
 	.mdo_root_get	    = mdd_root_get,
 	.mdo_llog_ctxt_get  = mdd_llog_ctxt_get,
 	.mdo_iocontrol      = mdd_iocontrol,
-	.mdo_maxeasize_get  = mdd_maxeasize_get,
+	.mdo_dtconf_get     = mdd_dtconf_get,
 };
 
 static struct lu_device_type_operations mdd_device_type_ops = {

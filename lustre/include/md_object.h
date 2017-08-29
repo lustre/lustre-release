@@ -286,8 +286,8 @@ struct md_device_operations {
 	int (*mdo_root_get)(const struct lu_env *env, struct md_device *m,
 			    struct lu_fid *f);
 
-	int (*mdo_maxeasize_get)(const struct lu_env *env, struct md_device *m,
-				int *easize);
+	const struct dt_device_param *(*mdo_dtconf_get)(const struct lu_env *e,
+							struct md_device *m);
 
         int (*mdo_statfs)(const struct lu_env *env, struct md_device *m,
                           struct obd_statfs *sfs);

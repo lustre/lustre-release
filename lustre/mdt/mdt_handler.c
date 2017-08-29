@@ -4816,55 +4816,56 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 static int mdt_postrecov(const struct lu_env *, struct mdt_device *);
 
 static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
-                     struct lu_device_type *ldt, struct lustre_cfg *cfg)
+		     struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
-        struct mdt_thread_info    *info;
-        struct obd_device         *obd;
-        const char                *dev = lustre_cfg_string(cfg, 0);
-        const char                *num = lustre_cfg_string(cfg, 2);
-        struct lustre_mount_info  *lmi = NULL;
-        struct lustre_sb_info     *lsi;
-        struct lu_site            *s;
-	struct seq_server_site	  *ss_site;
-        const char                *identity_upcall = "NONE";
-        struct md_device          *next;
-        int                        rc;
-	long                       node_id;
-        mntopt_t                   mntopts;
-        ENTRY;
+	const struct dt_device_param *dt_conf;
+	struct mdt_thread_info *info;
+	struct obd_device *obd;
+	const char *dev = lustre_cfg_string(cfg, 0);
+	const char *num = lustre_cfg_string(cfg, 2);
+	struct lustre_mount_info *lmi = NULL;
+	struct lustre_sb_info *lsi;
+	struct lu_site *s;
+	struct seq_server_site *ss_site;
+	const char *identity_upcall = "NONE";
+	struct md_device *next;
+	int rc;
+	long node_id;
+	mntopt_t mntopts;
+	ENTRY;
 
 	lu_device_init(&m->mdt_lu_dev, ldt);
-        /*
-         * Environment (env) might be missing mdt_thread_key values at that
-         * point, if device is allocated when mdt_thread_key is in QUIESCENT
-         * mode.
-         *
-         * Usually device allocation path doesn't use module key values, but
-         * mdt has to do a lot of work here, so allocate key value.
-         */
-        rc = lu_env_refill((struct lu_env *)env);
-        if (rc != 0)
-                RETURN(rc);
+	/*
+	 * Environment (env) might be missing mdt_thread_key values at that
+	 * point, if device is allocated when mdt_thread_key is in QUIESCENT
+	 * mode.
+	 *
+	 * Usually device allocation path doesn't use module key values, but
+	 * mdt has to do a lot of work here, so allocate key value.
+	 */
+	rc = lu_env_refill((struct lu_env *)env);
+	if (rc != 0)
+		RETURN(rc);
 
-        info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        LASSERT(info != NULL);
+	info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+	LASSERT(info != NULL);
 
-        obd = class_name2obd(dev);
-        LASSERT(obd != NULL);
+	obd = class_name2obd(dev);
+	LASSERT(obd != NULL);
 
-        m->mdt_max_mdsize = MAX_MD_SIZE; /* 4 stripes */
+	m->mdt_max_mdsize = MAX_MD_SIZE; /* 4 stripes */
 	m->mdt_opts.mo_evict_tgt_nids = 1;
-        m->mdt_opts.mo_cos = MDT_COS_DEFAULT;
+	m->mdt_opts.mo_cos = MDT_COS_DEFAULT;
 
 	lmi = server_get_mount(dev);
-        if (lmi == NULL) {
-                CERROR("Cannot get mount info for %s!\n", dev);
-                RETURN(-EFAULT);
-        } else {
-                lsi = s2lsi(lmi->lmi_sb);
-                /* CMD is supported only in IAM mode */
-                LASSERT(num);
-                node_id = simple_strtol(num, NULL, 10);
+	if (lmi == NULL) {
+		CERROR("Cannot get mount info for %s!\n", dev);
+		RETURN(-EFAULT);
+	} else {
+		lsi = s2lsi(lmi->lmi_sb);
+		/* CMD is supported only in IAM mode */
+		LASSERT(num);
+		node_id = simple_strtol(num, NULL, 10);
 		obd->u.obt.obt_magic = OBT_MAGIC;
 		if (lsi->lsi_lmd != NULL &&
 		    lsi->lsi_lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
@@ -4901,16 +4902,16 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	s->ld_seq_site = ss_site;
 	ss_site->ss_lu = s;
 
-        /* set server index */
+	/* set server index */
 	ss_site->ss_node_id = node_id;
 
 	/* failover is the default
 	 * FIXME: we do not failout mds0/mgs, which may cause some problems.
 	 * assumed whose ss_node_id == 0 XXX
 	 * */
-        obd->obd_replayable = 1;
-        /* No connection accepted until configurations will finish */
-        obd->obd_no_conn = 1;
+	obd->obd_replayable = 1;
+	/* No connection accepted until configurations will finish */
+	obd->obd_no_conn = 1;
 
 	if (cfg->lcfg_bufcount > 4 && LUSTRE_CFG_BUFLEN(cfg, 4) > 0) {
 		char *str = lustre_cfg_string(cfg, 4);
@@ -4930,25 +4931,25 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
 	snprintf(info->mti_u.ns_name, sizeof(info->mti_u.ns_name), "%s-%s",
 		 LUSTRE_MDT_NAME, obd->obd_uuid.uuid);
-        m->mdt_namespace = ldlm_namespace_new(obd, info->mti_u.ns_name,
-                                              LDLM_NAMESPACE_SERVER,
-                                              LDLM_NAMESPACE_GREEDY,
-                                              LDLM_NS_TYPE_MDT);
-        if (m->mdt_namespace == NULL)
-                GOTO(err_fini_seq, rc = -ENOMEM);
+	m->mdt_namespace = ldlm_namespace_new(obd, info->mti_u.ns_name,
+					      LDLM_NAMESPACE_SERVER,
+					      LDLM_NAMESPACE_GREEDY,
+					      LDLM_NS_TYPE_MDT);
+	if (m->mdt_namespace == NULL)
+		GOTO(err_fini_seq, rc = -ENOMEM);
 
 	m->mdt_namespace->ns_lvbp = m;
 	m->mdt_namespace->ns_lvbo = &mdt_lvbo;
 
-        ldlm_register_intent(m->mdt_namespace, mdt_intent_policy);
-        /* set obd_namespace for compatibility with old code */
-        obd->obd_namespace = m->mdt_namespace;
+	ldlm_register_intent(m->mdt_namespace, mdt_intent_policy);
+	/* set obd_namespace for compatibility with old code */
+	obd->obd_namespace = m->mdt_namespace;
 
 	rc = mdt_hsm_cdt_init(m);
 	if (rc != 0) {
 		CERROR("%s: error initializing coordinator, rc %d\n",
 		       mdt_obd_name(m), rc);
-                GOTO(err_free_ns, rc);
+		GOTO(err_free_ns, rc);
 	}
 
 	rc = tgt_init(env, &m->mdt_lut, obd, m->mdt_bottom, mdt_common_slice,
@@ -4963,25 +4964,22 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
 	tgt_adapt_sptlrpc_conf(&m->mdt_lut);
 
-        next = m->mdt_child;
-        rc = next->md_ops->mdo_iocontrol(env, next, OBD_IOC_GET_MNTOPT, 0,
-                                         &mntopts);
-        if (rc)
-		GOTO(err_fs_cleanup, rc);
+	next = m->mdt_child;
+	dt_conf = next->md_ops->mdo_dtconf_get(env, next);
 
-        if (mntopts & MNTOPT_USERXATTR)
-                m->mdt_opts.mo_user_xattr = 1;
-        else
-                m->mdt_opts.mo_user_xattr = 0;
+	mntopts = dt_conf->ddp_mntopts;
 
-	rc = next->md_ops->mdo_maxeasize_get(env, next, &m->mdt_max_ea_size);
-	if (rc)
-		GOTO(err_fs_cleanup, rc);
+	if (mntopts & MNTOPT_USERXATTR)
+		m->mdt_opts.mo_user_xattr = 1;
+	else
+		m->mdt_opts.mo_user_xattr = 0;
 
-        if (mntopts & MNTOPT_ACL)
-                m->mdt_opts.mo_acl = 1;
-        else
-                m->mdt_opts.mo_acl = 0;
+	m->mdt_max_ea_size = dt_conf->ddp_max_ea_size;
+
+	if (mntopts & MNTOPT_ACL)
+		m->mdt_opts.mo_acl = 1;
+	else
+		m->mdt_opts.mo_acl = 0;
 
 	/* XXX: to support suppgid for ACL, we enable identity_upcall
 	 * by default, otherwise, maybe got unexpected -EACCESS. */
@@ -4997,11 +4995,11 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		GOTO(err_fs_cleanup, rc);
 	}
 
-        rc = mdt_procfs_init(m, dev);
-        if (rc) {
-                CERROR("Can't init MDT lprocfs, rc %d\n", rc);
-                GOTO(err_recovery, rc);
-        }
+	rc = mdt_procfs_init(m, dev);
+	if (rc) {
+		CERROR("Can't init MDT lprocfs, rc %d\n", rc);
+		GOTO(err_recovery, rc);
+	}
 
 	rc = mdt_quota_init(env, m, cfg);
 	if (rc)
@@ -5017,13 +5015,13 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	 * when the whole stack is complete and ready
 	 * to serve the requests */
 
-        /* Reduce the initial timeout on an MDS because it doesn't need such
-         * a long timeout as an OST does. Adaptive timeouts will adjust this
-         * value appropriately. */
-        if (ldlm_timeout == LDLM_TIMEOUT_DEFAULT)
-                ldlm_timeout = MDS_LDLM_TIMEOUT_DEFAULT;
+	/* Reduce the initial timeout on an MDS because it doesn't need such
+	 * a long timeout as an OST does. Adaptive timeouts will adjust this
+	 * value appropriately. */
+	if (ldlm_timeout == LDLM_TIMEOUT_DEFAULT)
+		ldlm_timeout = MDS_LDLM_TIMEOUT_DEFAULT;
 
-        RETURN(0);
+	RETURN(0);
 err_procfs:
 	mdt_procfs_fini(m);
 err_recovery:
