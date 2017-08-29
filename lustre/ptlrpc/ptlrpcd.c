@@ -413,7 +413,7 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 		}
 	}
 
-	RETURN(rc);
+	RETURN(rc || test_bit(LIOD_STOP, &pc->pc_flags));
 }
 
 /**
@@ -479,8 +479,8 @@ static int ptlrpcd(void *arg)
                 int timeout;
 
                 timeout = ptlrpc_set_next_timeout(set);
-                lwi = LWI_TIMEOUT(cfs_time_seconds(timeout ? timeout : 1),
-                                  ptlrpc_expired_set, set);
+		lwi = LWI_TIMEOUT(cfs_time_seconds(timeout),
+				ptlrpc_expired_set, set);
 
 		lu_context_enter(&env.le_ctx);
 		lu_context_enter(env.le_ses);
