@@ -2702,11 +2702,12 @@ struct llog_size_change_rec {
 /** default \a changelog_rec_type mask. Allow all of them, except
  * CL_ATIME since it can really be time consuming, and not necessary
  * under normal use.
- * Remove also CL_OPEN and CL_GETXATTR from default list as it can be costly and
- * only necessary for audit purpose.
+ * Remove also CL_OPEN, CL_GETXATTR and CL_DN_OPEN from default list as it can
+ * be costly and only necessary for audit purpose.
  */
 #define CHANGELOG_DEFMASK (CHANGELOG_ALLMASK & \
-			   ~(1 << CL_ATIME | 1 << CL_OPEN | 1 << CL_GETXATTR))
+			   ~(1 << CL_ATIME | 1 << CL_OPEN | 1 << CL_GETXATTR | \
+			     1 << CL_DN_OPEN))
 
 /* changelog llog name, needed by client replicators */
 #define CHANGELOG_CATALOG "changelog_catalog"

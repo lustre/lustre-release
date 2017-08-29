@@ -58,6 +58,9 @@ struct mdd_object_user {
 	int			mou_flags;	/**< open mode by client */
 	__u64			mou_uidgid;	/**< uid_gid on client */
 	int			mou_opencount;	/**< # opened */
+	ktime_t			mou_deniednext; /**< time of next access denied
+						 * notfication
+						 */
 };
 
 static int mdd_xattr_get(const struct lu_env *env,
@@ -112,6 +115,7 @@ static struct mdd_object_user *mdd_obj_user_alloc(int flags,
 	mou->mou_flags = flags;
 	mou->mou_uidgid = ((__u64)uid << 32) | gid;
 	mou->mou_opencount = 0;
+	mou->mou_deniednext = ktime_set(0, 0);
 
 	RETURN(mou);
 }
@@ -163,8 +167,10 @@ struct mdd_object_user *mdd_obj_user_find(struct mdd_object *mdd_obj,
  * \retval -ve failure
  */
 static int mdd_obj_user_add(struct mdd_object *mdd_obj,
-			    struct mdd_object_user *mou)
+			    struct mdd_object_user *mou,
+			    bool denied)
 {
+	struct mdd_device *mdd = mdd_obj2mdd_dev(mdd_obj);
 	struct mdd_object_user *tmp;
 	__u32 uid = mou->mou_uidgid >> 32;
 	__u32 gid = mou->mou_uidgid & ((1UL << 32) - 1);
@@ -178,7 +184,15 @@ static int mdd_obj_user_add(struct mdd_object *mdd_obj,
 
 	list_add_tail(&mou->mou_list, &mdd_obj->mod_users);
 
-	mou->mou_opencount++;
+	if (denied)
+		/* next 'access denied' notification cannot happen before
+		 * mou_deniednext
+		 */
+		mou->mou_deniednext =
+			ktime_add(ktime_get(),
+				  ktime_set(mdd->mdd_cl.mc_deniednext, 0));
+	else
+		mou->mou_opencount++;
 
 	RETURN(0);
 }
@@ -850,7 +864,7 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 		xflags |= CLFE_UIDGID;
 		xflags |= CLFE_NID;
 	}
-	if (type == CL_OPEN)
+	if (type == CL_OPEN || type == CL_DN_OPEN)
 		xflags |= CLFE_OPEN;
 	if (type == CL_SETXATTR || type == CL_GETXATTR)
 		xflags |= CLFE_XATTR;
@@ -2869,6 +2883,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 	struct mdd_object_user *mou = NULL;
 	const struct lu_ucred *uc = lu_ucred(env);
 	struct mdd_device *mdd = mdo2mdd(obj);
+	int type = CL_OPEN;
 	int rc = 0;
 
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
@@ -2878,15 +2893,17 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 		GOTO(out, rc);
 
 	rc = mdd_open_sanity_check(env, mdd_obj, attr, flags);
-	if (rc != 0)
+	if ((rc == -EACCES) && (mdd->mdd_cl.mc_mask & (1 << CL_DN_OPEN)))
+		type = CL_DN_OPEN;
+	else if (rc != 0)
 		GOTO(out, rc);
-
-	mdd_obj->mod_count++;
+	else
+		mdd_obj->mod_count++;
 
 	/* Not recording */
 	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
 		GOTO(out, rc);
-	if (!(mdd->mdd_cl.mc_mask & (1 << CL_OPEN)))
+	if (!(mdd->mdd_cl.mc_mask & (1 << type)))
 		GOTO(out, rc);
 
 find:
@@ -2894,23 +2911,47 @@ find:
 	mou = mdd_obj_user_find(mdd_obj, uc->uc_uid, uc->uc_gid, flags);
 
 	if (!mou) {
+		int rc2;
+
 		/* add user to list */
 		mou = mdd_obj_user_alloc(flags, uc->uc_uid, uc->uc_gid);
-		if (IS_ERR(mou))
-			GOTO(out, rc = PTR_ERR(mou));
-		rc = mdd_obj_user_add(mdd_obj, mou);
-		if (rc != 0) {
+		if (IS_ERR(mou)) {
+			if (rc == 0)
+				rc = PTR_ERR(mou);
+			GOTO(out, rc);
+		}
+		rc2 = mdd_obj_user_add(mdd_obj, mou, type == CL_DN_OPEN);
+		if (rc2 != 0) {
 			mdd_obj_user_free(mou);
-			if (rc == -EEXIST)
-				GOTO(find, rc);
+			if (rc2 == -EEXIST)
+				GOTO(find, rc2);
 		}
 	} else {
-		mou->mou_opencount++;
-		/* same user opening file again with same flags: don't record */
-		GOTO(out, rc);
+		if (type == CL_DN_OPEN) {
+			if (ktime_before(ktime_get(), mou->mou_deniednext))
+				/* same user denied again same access within
+				 * time interval: do not record
+				 */
+				GOTO(out, rc);
+
+			/* this user already denied, but some time ago:
+			 * update denied time
+			 */
+			mou->mou_deniednext =
+				ktime_add(ktime_get(),
+					  ktime_set(mdd->mdd_cl.mc_deniednext,
+						    0));
+		} else {
+			mou->mou_opencount++;
+			/* same user opening file again with same flags:
+			 * don't record
+			 */
+			GOTO(out, rc);
+		}
 	}
 
-	mdd_changelog(env, CL_OPEN, flags, md_dev, mdo2fid(mdd_obj));
+	mdd_changelog(env, type, flags, md_dev, mdo2fid(mdd_obj));
+
 	EXIT;
 out:
 	mdd_write_unlock(env, mdd_obj);

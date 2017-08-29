@@ -1065,6 +1065,7 @@ enum changelog_rec_type {
 	CL_FLRW     = 21, /* FLR: file was firstly written */
 	CL_RESYNC   = 22, /* FLR: file was resync-ed */
 	CL_GETXATTR = 23,
+	CL_DN_OPEN  = 24, /* denied open */
 	CL_LAST
 };
 
@@ -1073,7 +1074,7 @@ static inline const char *changelog_type2str(int type) {
 		"MARK",  "CREAT", "MKDIR", "HLINK", "SLINK", "MKNOD", "UNLNK",
 		"RMDIR", "RENME", "RNMTO", "OPEN",  "CLOSE", "LYOUT", "TRUNC",
 		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME", "MIGRT",
-		"FLRW",  "RESYNC","GXATR",
+		"FLRW",  "RESYNC","GXATR", "NOPEN",
 	};
 
 	if (type >= 0 && type < CL_LAST)

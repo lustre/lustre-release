@@ -125,6 +125,7 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 	/* LU-8040 Set defaults here, before values configs */
 	mdd->mdd_cl.mc_flags = 0; /* off by default */
 	mdd->mdd_cl.mc_mask = CHANGELOG_DEFMASK;
+	mdd->mdd_cl.mc_deniednext = 60; /* 60 secs by default */
 
 	dev = lustre_cfg_string(lcfg, 0);
 	if (dev == NULL)

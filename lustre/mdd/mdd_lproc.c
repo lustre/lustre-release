@@ -394,6 +394,41 @@ mdd_changelog_min_free_cat_entries_seq_write(struct file *file,
 }
 LPROC_SEQ_FOPS(mdd_changelog_min_free_cat_entries);
 
+static int mdd_changelog_deniednext_seq_show(struct seq_file *m, void *data)
+{
+	struct mdd_device *mdd = m->private;
+
+	seq_printf(m, "%u\n", mdd->mdd_cl.mc_deniednext);
+	return 0;
+}
+
+static ssize_t
+mdd_changelog_deniednext_seq_write(struct file *file, const char __user *buffer,
+				   size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct mdd_device *mdd = m->private;
+	char kernbuf[11];
+	unsigned int time = 0;
+	int rc;
+
+	if (count > (sizeof(kernbuf) - 1))
+		return -EINVAL;
+
+	if (copy_from_user(kernbuf, buffer, count))
+		return -EFAULT;
+
+	kernbuf[count] = '\0';
+
+	rc = kstrtoul(kernbuf, 0, (unsigned long int *)&time);
+	if (rc)
+		return rc;
+
+	mdd->mdd_cl.mc_deniednext = time;
+	return count;
+}
+LPROC_SEQ_FOPS(mdd_changelog_deniednext);
+
 static int mdd_sync_perm_seq_show(struct seq_file *m, void *data)
 {
 	struct mdd_device *mdd = m->private;
@@ -521,6 +556,8 @@ static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
 	  .fops =	&mdd_changelog_min_gc_interval_fops	},
 	{ .name =	"changelog_min_free_cat_entries",
 	  .fops =	&mdd_changelog_min_free_cat_entries_fops	},
+	{ .name =	"changelog_deniednext",
+	  .fops =	&mdd_changelog_deniednext_fops	},
 	{ .name =	"sync_permission",
 	  .fops =	&mdd_sync_perm_fops		},
 	{ .name =	"lfsck_speed_limit",

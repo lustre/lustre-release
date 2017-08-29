@@ -94,6 +94,9 @@ struct mdd_changelog {
 	int			mc_lastuser;
 	struct task_struct	*mc_gc_task;
 	time64_t		mc_gc_time;
+	unsigned int		mc_deniednext; /* interval for recording denied
+						* accesses
+						*/
 };
 
 static inline __u64 cl_time(void)
