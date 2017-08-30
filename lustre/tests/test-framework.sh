@@ -441,15 +441,13 @@ export LINUX_VERSION_CODE=$(version_code ${LINUX_VERSION//\./ })
 # output: prints version string to stdout in (up to 4) dotted-decimal values
 lustre_build_version() {
 	local facet=${1:-client}
-	local ver
-
 	local ver=$(do_facet $facet "$LCTL get_param -n version 2>/dev/null ||
 				$LCTL lustre_build_version 2>/dev/null ||
 				$LCTL --version 2>/dev/null | cut -d' ' -f2")
-	local lver=$(egrep -i "lustre: |version: " <<<$ver | head -n 1)
+	local lver=$(egrep -i "lustre: |version: " <<<"$ver" | head -n 1)
 	[ -n "$lver" ] && ver="$lver"
 
-	sed -e 's/.*: //' -e 's/^v//' -e 's/-.*//' -e 's/_/./g' <<<$ver |
+	sed -e 's/[^:]*: //' -e 's/^v//' -e 's/[ -].*//' -e 's/_/./g' <<<$ver |
 		cut -d. -f1-4
 }
 
