@@ -2432,7 +2432,7 @@ static void ofd_prolong_extent_locks(struct tgt_session_info *tsi,
 				LDLM_LOCK_PUT(lock);
 				RETURN_EXIT;
 			}
-			lock->l_last_used = cfs_time_current();
+			lock->l_last_used = ktime_get();
 			LDLM_LOCK_PUT(lock);
 		}
 	}

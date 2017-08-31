@@ -255,7 +255,7 @@ int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock)
  *           otherwise, the lock hasn't been in the LRU list.
  * \retval 1 the lock was in LRU list and removed.
  */
-int ldlm_lock_remove_from_lru_check(struct ldlm_lock *lock, cfs_time_t last_use)
+int ldlm_lock_remove_from_lru_check(struct ldlm_lock *lock, ktime_t last_use)
 {
 	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 	int rc = 0;
@@ -267,7 +267,8 @@ int ldlm_lock_remove_from_lru_check(struct ldlm_lock *lock, cfs_time_t last_use)
 	}
 
 	spin_lock(&ns->ns_lock);
-	if (last_use == 0 || last_use == lock->l_last_used)
+	if (!ktime_compare(last_use, ktime_set(0, 0)) ||
+	    !ktime_compare(last_use, lock->l_last_used))
 		rc = ldlm_lock_remove_from_lru_nolock(lock);
 	spin_unlock(&ns->ns_lock);
 
@@ -281,7 +282,7 @@ void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock)
 {
 	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 
-	lock->l_last_used = cfs_time_current();
+	lock->l_last_used = ktime_get();
 	LASSERT(list_empty(&lock->l_lru));
 	LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
 	list_add_tail(&lock->l_lru, &ns->ns_unused_list);
