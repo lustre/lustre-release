@@ -9042,7 +9042,7 @@ test_124c() {
 	echo "unused=$unused, max_age=$max_age, recalc_p=$recalc_p"
 
 	# set lru_max_age to 1 sec
-	$LCTL set_param $nsdir.lru_max_age=1000 # jiffies
+	$LCTL set_param $nsdir.lru_max_age=1000 # milliseconds
 	echo "sleep $((recalc_p * 2)) seconds..."
 	sleep $((recalc_p * 2))
 

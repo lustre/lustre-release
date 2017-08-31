@@ -63,8 +63,8 @@ __u64 ldlm_lock_limit_mb;
 
 struct percpu_counter		ldlm_granted_total;
 static atomic_t			ldlm_nr_reclaimer;
-static cfs_duration_t		ldlm_last_reclaim_age;
-static cfs_time_t		ldlm_last_reclaim_time;
+static s64			ldlm_last_reclaim_age_ns;
+static ktime_t			ldlm_last_reclaim_time;
 
 struct ldlm_reclaim_cb_data {
 	struct list_head	 rcd_rpc_list;
@@ -73,7 +73,7 @@ struct ldlm_reclaim_cb_data {
 	int			 rcd_cursor;
 	int			 rcd_start;
 	bool			 rcd_skip;
-	cfs_duration_t		 rcd_age;
+	s64			 rcd_age_ns;
 	struct cfs_hash_bd	*rcd_prev_bd;
 };
 
@@ -143,9 +143,9 @@ static int ldlm_reclaim_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 			continue;
 
 		if (!OBD_FAIL_CHECK(OBD_FAIL_LDLM_WATERMARK_LOW) &&
-		    cfs_time_before(cfs_time_current(),
-				    cfs_time_add(lock->l_last_used,
-						 data->rcd_age)))
+		    ktime_before(ktime_get(),
+				 ktime_add_ns(lock->l_last_used,
+					      data->rcd_age_ns)))
 			continue;
 
 		if (!ldlm_is_ast_sent(lock)) {
@@ -177,7 +177,7 @@ static int ldlm_reclaim_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
  * \param[out] count	count of lock still to be revoked
  */
 static void ldlm_reclaim_res(struct ldlm_namespace *ns, int *count,
-			     cfs_duration_t age, bool skip)
+			     s64 age_ns, bool skip)
 {
 	struct ldlm_reclaim_cb_data	data;
 	int				idx, type, start;
@@ -201,7 +201,7 @@ static void ldlm_reclaim_res(struct ldlm_namespace *ns, int *count,
 	INIT_LIST_HEAD(&data.rcd_rpc_list);
 	data.rcd_added = 0;
 	data.rcd_total = *count;
-	data.rcd_age = age;
+	data.rcd_age_ns = age_ns;
 	data.rcd_skip = skip;
 	data.rcd_prev_bd = NULL;
 	start = ns->ns_reclaim_start % CFS_HASH_NBKT(ns->ns_rs_hash);
@@ -222,20 +222,22 @@ static void ldlm_reclaim_res(struct ldlm_namespace *ns, int *count,
 }
 
 #define LDLM_RECLAIM_BATCH	512
-#define LDLM_RECLAIM_AGE_MIN	cfs_time_seconds(300)
-#define LDLM_RECLAIM_AGE_MAX	(LDLM_DEFAULT_MAX_ALIVE * 3 / 4)
+#define LDLM_RECLAIM_AGE_MIN	(300 * NSEC_PER_SEC)
+#define LDLM_RECLAIM_AGE_MAX	(LDLM_DEFAULT_MAX_ALIVE * NSEC_PER_SEC * 3 / 4)
 
-static inline cfs_duration_t ldlm_reclaim_age(void)
+static inline s64 ldlm_reclaim_age(void)
 {
-	cfs_duration_t	age;
+	s64 age_ns = ldlm_last_reclaim_age_ns;
+	ktime_t now = ktime_get();
+	ktime_t diff;
 
-	age = ldlm_last_reclaim_age +
-		cfs_time_sub(cfs_time_current(), ldlm_last_reclaim_time);
-	if (age > LDLM_RECLAIM_AGE_MAX)
-		age = LDLM_RECLAIM_AGE_MAX;
-	else if (age < (LDLM_RECLAIM_AGE_MIN * 2))
-		age = LDLM_RECLAIM_AGE_MIN;
-	return age;
+	diff = ktime_sub(now, ldlm_last_reclaim_time);
+	age_ns += ktime_to_ns(diff);
+	if (age_ns > LDLM_RECLAIM_AGE_MAX)
+		age_ns = LDLM_RECLAIM_AGE_MAX;
+	else if (age_ns < (LDLM_RECLAIM_AGE_MIN * 2))
+		age_ns = LDLM_RECLAIM_AGE_MIN;
+	return age_ns;
 }
 
 /**
@@ -249,7 +251,7 @@ static void ldlm_reclaim_ns(void)
 	int			 count = LDLM_RECLAIM_BATCH;
 	int			 ns_nr, nr_processed;
 	enum ldlm_side		 ns_cli = LDLM_NAMESPACE_SERVER;
-	cfs_duration_t		 age;
+	s64 age_ns;
 	bool			 skip = true;
 	ENTRY;
 
@@ -258,7 +260,7 @@ static void ldlm_reclaim_ns(void)
 		return;
 	}
 
-	age = ldlm_reclaim_age();
+	age_ns = ldlm_reclaim_age();
 again:
 	nr_processed = 0;
 	ns_nr = ldlm_namespace_nr_read(ns_cli);
@@ -274,21 +276,21 @@ again:
 		ldlm_namespace_move_to_active_locked(ns, ns_cli);
 		mutex_unlock(ldlm_namespace_lock(ns_cli));
 
-		ldlm_reclaim_res(ns, &count, age, skip);
+		ldlm_reclaim_res(ns, &count, age_ns, skip);
 		ldlm_namespace_put(ns);
 		nr_processed++;
 	}
 
-	if (count > 0 && age > LDLM_RECLAIM_AGE_MIN) {
-		age >>= 1;
-		if (age < (LDLM_RECLAIM_AGE_MIN * 2))
-			age = LDLM_RECLAIM_AGE_MIN;
+	if (count > 0 && age_ns > LDLM_RECLAIM_AGE_MIN) {
+		age_ns >>= 1;
+		if (age_ns < (LDLM_RECLAIM_AGE_MIN * 2))
+			age_ns = LDLM_RECLAIM_AGE_MIN;
 		skip = false;
 		goto again;
 	}
 
-	ldlm_last_reclaim_age = age;
-	ldlm_last_reclaim_time = cfs_time_current();
+	ldlm_last_reclaim_age_ns = age_ns;
+	ldlm_last_reclaim_time = ktime_get();
 out:
 	atomic_add_unless(&ldlm_nr_reclaimer, -1, 0);
 	EXIT;
@@ -299,7 +301,7 @@ void ldlm_reclaim_add(struct ldlm_lock *lock)
 	if (!ldlm_lock_reclaimable(lock))
 		return;
 	percpu_counter_add(&ldlm_granted_total, 1);
-	lock->l_last_used = cfs_time_current();
+	lock->l_last_used = ktime_get();
 }
 
 void ldlm_reclaim_del(struct ldlm_lock *lock)
@@ -367,8 +369,8 @@ int ldlm_reclaim_setup(void)
 	ldlm_lock_limit = ldlm_ratio2locknr(LDLM_WM_RATIO_HIGH_DEFAULT);
 	ldlm_lock_limit_mb = ldlm_locknr2mb(ldlm_lock_limit);
 
-	ldlm_last_reclaim_age = LDLM_RECLAIM_AGE_MAX;
-	ldlm_last_reclaim_time = cfs_time_current();
+	ldlm_last_reclaim_age_ns = LDLM_RECLAIM_AGE_MAX;
+	ldlm_last_reclaim_time = ktime_get();
 
 #ifdef HAVE_PERCPU_COUNTER_INIT_GFP_FLAG
 	return percpu_counter_init(&ldlm_granted_total, 0, GFP_KERNEL);

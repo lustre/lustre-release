@@ -62,7 +62,7 @@ extern struct kset *ldlm_svc_kset;
 #define OBD_LDLM_DEVICENAME  "ldlm"
 
 #define LDLM_DEFAULT_LRU_SIZE (100 * num_online_cpus())
-#define LDLM_DEFAULT_MAX_ALIVE (cfs_time_seconds(3900)) /* 65 min */
+#define LDLM_DEFAULT_MAX_ALIVE		3900	/* 3900 seconds ~65 min */
 #define LDLM_CTIME_AGE_LIMIT (10)
 #define LDLM_DEFAULT_PARALLEL_AST_LIMIT 1024
 
@@ -423,8 +423,10 @@ struct ldlm_namespace {
 	 * controlled by available memory on this client and on server.
 	 */
 	unsigned int		ns_max_unused;
+
 	/** Maximum allowed age (last used time) for locks in the LRU */
-	unsigned int		ns_max_age;
+	ktime_t			ns_max_age;
+
 	/**
 	 * Server only: number of times we evicted clients due to lack of reply
 	 * to ASTs.
@@ -819,10 +821,9 @@ struct ldlm_lock {
 	time64_t		l_last_activity;
 
 	/**
-	 * Time last used by e.g. being matched by lock match.
-	 * Jiffies. Should be converted to time if needed.
+	 * Time, in nanoseconds, last used by e.g. being matched by lock match.
 	 */
-	cfs_time_t		l_last_used;
+	ktime_t			l_last_used;
 
 	/** Originally requested extent for the extent lock. */
 	struct ldlm_extent	l_req_extent;

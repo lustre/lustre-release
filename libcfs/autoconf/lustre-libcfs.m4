@@ -332,6 +332,25 @@ ktime_after, [
 ]) # LIBCFS_KTIME_AFTER
 
 #
+# Kernel version 3.12 introduced ktime_before
+# See linux commit 67cb9366ff5f99868100198efba5ca88aaa6ad25
+#
+AC_DEFUN([LIBCFS_KTIME_BEFORE],[
+LB_CHECK_COMPILE([does function 'ktime_before' exist],
+ktime_before, [
+	#include <linux/ktime.h>
+],[
+	ktime_t start = ktime_set(0, 0);
+	ktime_t end = start;
+
+	ktime_before(start, end);
+],[
+	AC_DEFINE(HAVE_KTIME_BEFORE, 1,
+		[ktime_before is available])
+])
+]) # LIBCFS_KTIME_BEFORE
+
+#
 # FC19 3.12 kernel struct shrinker change
 #
 AC_DEFUN([LIBCFS_SHRINKER_COUNT],[
@@ -709,6 +728,7 @@ LIBCFS_KTIME_GET_TS64
 # 3.12
 LIBCFS_KTIME_ADD
 LIBCFS_KTIME_AFTER
+LIBCFS_KTIME_BEFORE
 LIBCFS_SHRINKER_COUNT
 # 3.17
 LIBCFS_HLIST_ADD_AFTER
