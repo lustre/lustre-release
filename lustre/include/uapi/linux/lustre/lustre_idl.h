@@ -3237,7 +3237,7 @@ struct getparent {
 	char		gp_name[0];     /**< zero-terminated link name */
 } __attribute__((packed));
 
-enum {
+enum layout_intent_opc {
 	LAYOUT_INTENT_ACCESS	= 0,	/** generic access */
 	LAYOUT_INTENT_READ	= 1,	/** not used */
 	LAYOUT_INTENT_WRITE	= 2,	/** write file, for comp layout */

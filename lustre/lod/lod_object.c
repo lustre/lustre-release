@@ -5248,6 +5248,15 @@ static int lod_declare_update_plain(const struct lu_env *env,
 			GOTO(out, rc);
 	}
 
+	if (layout->li_opc == LAYOUT_INTENT_TRUNC) {
+		/**
+		 * trunc transfers [size, eof) in the intent extent, while
+		 * we'd instantiated components covers [0, size).
+		 */
+		layout->li_extent.e_end = layout->li_extent.e_start;
+		layout->li_extent.e_start = 0;
+	}
+
 	/* Make sure defined layout covers the requested write range. */
 	lod_comp = &lo->ldo_comp_entries[lo->ldo_comp_cnt - 1];
 	if (lo->ldo_comp_cnt > 1 &&
@@ -5415,7 +5424,16 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 	lod_stale_components(lo, picked, &extent);
 
 	/* instantiate components for the picked mirror, start from 0 */
-	extent = (struct lu_extent) { 0, layout->li_extent.e_end };
+	if (layout->li_opc == LAYOUT_INTENT_TRUNC) {
+		/**
+		 * trunc transfers [size, eof) in the intent extent, we'd
+		 * stale components overlapping [size, eof), while we'd
+		 * instantiated components covers [0, size).
+		 */
+		extent.e_end = extent.e_start;
+	}
+	extent.e_start = 0;
+
 	lod_foreach_mirror_comp(lod_comp, lo, picked) {
 		if (!lu_extent_is_overlapped(&extent,
 					     &lod_comp->llc_extent))
@@ -5522,7 +5540,16 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 
 		/* 2. find out the components need instantiating.
 		 * instantiate [0, mlc->mlc_intent->e_end) */
+		if (mlc->mlc_intent->li_opc == LAYOUT_INTENT_TRUNC) {
+			/**
+			 * trunc transfers [size, eof) in the intent extent,
+			 * we'd stale components overlapping [size, eof),
+			 * while we'd instantiated components covers [0, size).
+			 */
+			extent.e_end = extent.e_start;
+		}
 		extent.e_start = 0;
+
 		lod_foreach_mirror_comp(lod_comp, lo, primary) {
 			if (!lu_extent_is_overlapped(&extent,
 						     &lod_comp->llc_extent))

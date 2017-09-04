@@ -1982,6 +1982,10 @@ ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 		struct cl_layout cl = {
 			.cl_is_composite = false,
 		};
+		struct lu_extent ext = {
+			.e_start = 0,
+			.e_end = OBD_OBJECT_EOF,
+		};
 
 		env = cl_env_get(&refcheck);
 		if (IS_ERR(env))
@@ -1989,7 +1993,8 @@ ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 
 		rc = cl_object_layout_get(env, obj, &cl);
 		if (!rc && cl.cl_is_composite)
-			rc = ll_layout_write_intent(inode, 0, OBD_OBJECT_EOF);
+			rc = ll_layout_write_intent(inode, LAYOUT_INTENT_WRITE,
+						    &ext);
 
 		cl_env_put(env, &refcheck);
 		if (rc)
@@ -4891,19 +4896,20 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
  * Issue layout intent RPC indicating where in a file an IO is about to write.
  *
  * \param[in] inode	file inode.
- * \param[in] start	start offset of fille in bytes where an IO is about to
- *			write.
- * \param[in] end	exclusive end offset in bytes of the write range.
+ * \param[in] ext	write range with start offset of fille in bytes where
+ *			an IO is about to write, and exclusive end offset in
+ *			bytes.
  *
  * \retval 0	on success
  * \retval < 0	error code
  */
-int ll_layout_write_intent(struct inode *inode, __u64 start, __u64 end)
+int ll_layout_write_intent(struct inode *inode, enum layout_intent_opc opc,
+			   struct lu_extent *ext)
 {
 	struct layout_intent intent = {
-		.li_opc = LAYOUT_INTENT_WRITE,
-		.li_extent.e_start = start,
-		.li_extent.e_end = end,
+		.li_opc = opc,
+		.li_extent.e_start = ext->e_start,
+		.li_extent.e_end = ext->e_end,
 	};
 	int rc;
 	ENTRY;

@@ -363,6 +363,8 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	 * RPC.
 	 */
 	if (io->ci_need_write_intent) {
+		enum layout_intent_opc opc = LAYOUT_INTENT_WRITE;
+
 		io->ci_need_write_intent = 0;
 
 		LASSERT(io->ci_type == CIT_WRITE ||
@@ -372,8 +374,10 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 		       PFID(lu_object_fid(&obj->co_lu)), io->ci_type,
 		       PEXT(&io->ci_write_intent));
 
-		rc = ll_layout_write_intent(inode, io->ci_write_intent.e_start,
-					    io->ci_write_intent.e_end);
+		if (cl_io_is_trunc(io))
+			opc = LAYOUT_INTENT_TRUNC;
+
+		rc = ll_layout_write_intent(inode, opc, &io->ci_write_intent);
 		io->ci_result = rc;
 		if (!rc)
 			io->ci_need_restart = 1;

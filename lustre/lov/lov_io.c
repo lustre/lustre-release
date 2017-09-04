@@ -539,9 +539,10 @@ static int lov_io_slice_init(struct lov_io *lio,
 	      (cl_io_is_trunc(io) && io->u.ci_setattr.sa_attr.lvb_size > 0)))
 		GOTO(out, result = 0);
 
-	ext.e_start = lio->lis_pos;
-	ext.e_end = lio->lis_endpos;
+	io->ci_write_intent.e_start = lio->lis_pos;
+	io->ci_write_intent.e_end = lio->lis_endpos;
 
+	ext = io->ci_write_intent;
 	/* for truncate, it only needs to instantiate the components
 	 * before the truncated size. */
 	if (cl_io_is_trunc(io)) {
@@ -553,7 +554,6 @@ static int lov_io_slice_init(struct lov_io *lio,
 	lov_foreach_io_layout(index, lio, &ext) {
 		if (!lsm_entry_inited(obj->lo_lsm, index)) {
 			io->ci_need_write_intent = 1;
-			io->ci_write_intent = ext;
 			break;
 		}
 	}
