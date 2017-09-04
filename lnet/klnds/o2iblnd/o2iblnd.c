@@ -1656,14 +1656,14 @@ kiblnd_create_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t **pp_fpo)
 
 	/* Check for FMR or FastReg support */
 	fpo->fpo_is_fmr = 0;
-	if (fpo->fpo_hdev->ibh_ibdev->alloc_fmr &&
+	if (dev_attr->device_cap_flags & IB_DEVICE_MEM_MGT_EXTENSIONS) {
+		LCONSOLE_INFO("Using FastReg for registration\n");
+	} else if (fpo->fpo_hdev->ibh_ibdev->alloc_fmr &&
 	    fpo->fpo_hdev->ibh_ibdev->dealloc_fmr &&
 	    fpo->fpo_hdev->ibh_ibdev->map_phys_fmr &&
 	    fpo->fpo_hdev->ibh_ibdev->unmap_fmr) {
 		LCONSOLE_INFO("Using FMR for registration\n");
 		fpo->fpo_is_fmr = 1;
-	} else if (dev_attr->device_cap_flags & IB_DEVICE_MEM_MGT_EXTENSIONS) {
-		LCONSOLE_INFO("Using FastReg for registration\n");
 	} else {
 		rc = -ENOSYS;
 		LCONSOLE_ERROR_MSG(rc, "IB device does not support FMRs nor FastRegs, can't register memory\n");
