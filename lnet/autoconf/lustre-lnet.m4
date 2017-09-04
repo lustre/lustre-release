@@ -252,7 +252,7 @@ AS_IF([test $ENABLEO2IB = "no"], [
 
 		O2IBLND=""
 		O2IBPATH=$(readlink --canonicalize $O2IBPATH)
-		EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -I$O2IBPATH/include"
+		EXTRA_OFED_INCLUDE="$EXTRA_OFED_INCLUDE -I$O2IBPATH/include -I$O2IBPATH/include/uapi"
 		EXTRA_CHECK_INCLUDE="$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE"
 		LB_CHECK_COMPILE([whether to enable OpenIB gen2 support],
 		openib_gen2_support, [
