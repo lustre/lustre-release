@@ -947,10 +947,7 @@ int nodemap_set_fileset(const char *name, const char *fileset)
 		GOTO(out, rc = PTR_ERR(nodemap));
 	}
 
-	if (is_default_nodemap(nodemap))
-		rc = -EINVAL;
-	else
-		rc = nodemap_set_fileset_helper(active_config, nodemap,
+	rc = nodemap_set_fileset_helper(active_config, nodemap,
 						fileset);
 	mutex_unlock(&active_config_lock);
 
@@ -969,10 +966,10 @@ EXPORT_SYMBOL(nodemap_set_fileset);
  */
 char *nodemap_get_fileset(const struct lu_nodemap *nodemap)
 {
-	if (!nodemap_active || is_default_nodemap(nodemap))
+	if (!nodemap_active)
 		return NULL;
-	else
-		return (char *)nodemap->nm_fileset;
+
+	return (char *)nodemap->nm_fileset;
 }
 EXPORT_SYMBOL(nodemap_get_fileset);
 
@@ -1061,6 +1058,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 
 		nodemap->nm_squash_uid = NODEMAP_NOBODY_UID;
 		nodemap->nm_squash_gid = NODEMAP_NOBODY_GID;
+		nodemap->nm_fileset[0] = '\0';
 		if (!is_default)
 			CWARN("adding nodemap '%s' to config without"
 			      " default nodemap\n", nodemap->nm_name);
@@ -1078,7 +1076,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 
 		nodemap->nm_squash_uid = default_nodemap->nm_squash_uid;
 		nodemap->nm_squash_gid = default_nodemap->nm_squash_gid;
-		nodemap->nm_fileset[0] = 0;
+		nodemap->nm_fileset[0] = '\0';
 	}
 
 	return nodemap;

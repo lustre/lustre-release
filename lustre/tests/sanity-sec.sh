@@ -1104,15 +1104,18 @@ fops_test_setup() {
 
 # fileset test directory needs to be initialized on a privileged client
 fileset_test_setup() {
-	local admin=$(do_facet mgs $LCTL get_param -n nodemap.c0.admin_nodemap)
+	local nm=$1
+	local admin=$(do_facet mgs $LCTL get_param -n \
+		nodemap.${nm}.admin_nodemap)
 	local trust=$(do_facet mgs $LCTL get_param -n \
-		nodemap.c0.trusted_nodemap)
+		nodemap.${nm}.trusted_nodemap)
 
-	do_facet mgs $LCTL nodemap_modify --name c0 --property admin --value 1
-	do_facet mgs $LCTL nodemap_modify --name c0 --property trusted --value 1
+	do_facet mgs $LCTL nodemap_modify --name $nm --property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name $nm --property trusted \
+		--value 1
 
-	wait_nm_sync c0 admin_nodemap
-	wait_nm_sync c0 trusted_nodemap
+	wait_nm_sync $nm admin_nodemap
+	wait_nm_sync $nm trusted_nodemap
 
 	# create directory and populate it for subdir mount
 	do_node ${clients_arr[0]} mkdir $MOUNT/$subdir ||
@@ -1126,46 +1129,49 @@ fileset_test_setup() {
 		error "unable to create file \
 			$MOUNT/$subdir/$subsubdir/this_is_$subsubdir"
 
-	do_facet mgs $LCTL nodemap_modify --name c0 \
+	do_facet mgs $LCTL nodemap_modify --name $nm \
 		--property admin --value $admin
-	do_facet mgs $LCTL nodemap_modify --name c0 \
+	do_facet mgs $LCTL nodemap_modify --name $nm \
 		--property trusted --value $trust
 
 	# flush MDT locks to make sure they are reacquired before test
 	do_node ${clients_arr[0]} $LCTL set_param \
 		ldlm.namespaces.$FSNAME-MDT*.lru_size=clear
 
-	wait_nm_sync c0 admin_nodemap
-	wait_nm_sync c0 trusted_nodemap
+	wait_nm_sync $nm admin_nodemap
+	wait_nm_sync $nm trusted_nodemap
 }
 
 # fileset test directory needs to be initialized on a privileged client
 fileset_test_cleanup() {
-	local admin=$(do_facet mgs $LCTL get_param -n nodemap.c0.admin_nodemap)
+	local nm=$1
+	local admin=$(do_facet mgs $LCTL get_param -n \
+		nodemap.${nm}.admin_nodemap)
 	local trust=$(do_facet mgs $LCTL get_param -n \
-		nodemap.c0.trusted_nodemap)
+		nodemap.${nm}.trusted_nodemap)
 
-	do_facet mgs $LCTL nodemap_modify --name c0 --property admin --value 1
-	do_facet mgs $LCTL nodemap_modify --name c0 --property trusted --value 1
+	do_facet mgs $LCTL nodemap_modify --name $nm --property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name $nm --property trusted \
+		--value 1
 
-	wait_nm_sync c0 admin_nodemap
-	wait_nm_sync c0 trusted_nodemap
+	wait_nm_sync $nm admin_nodemap
+	wait_nm_sync $nm trusted_nodemap
 
 	# cleanup directory created for subdir mount
 	do_node ${clients_arr[0]} rm -rf $MOUNT/$subdir ||
 		error "unable to remove dir $MOUNT/$subdir"
 
-	do_facet mgs $LCTL nodemap_modify --name c0 \
+	do_facet mgs $LCTL nodemap_modify --name $nm \
 		--property admin --value $admin
-	do_facet mgs $LCTL nodemap_modify --name c0 \
+	do_facet mgs $LCTL nodemap_modify --name $nm \
 		--property trusted --value $trust
 
 	# flush MDT locks to make sure they are reacquired before test
 	do_node ${clients_arr[0]} $LCTL set_param \
 		ldlm.namespaces.$FSNAME-MDT*.lru_size=clear
 
-	wait_nm_sync c0 admin_nodemap
-	wait_nm_sync c0 trusted_nodemap
+	wait_nm_sync $nm admin_nodemap
+	wait_nm_sync $nm trusted_nodemap
 }
 
 do_create_delete() {
@@ -1571,7 +1577,8 @@ run_test 22 "test nodemap mapped_trusted_admin fileops"
 
 # acl test directory needs to be initialized on a privileged client
 nodemap_acl_test_setup() {
-	local admin=$(do_facet mgs $LCTL get_param -n nodemap.c0.admin_nodemap)
+	local admin=$(do_facet mgs $LCTL get_param -n \
+		      nodemap.c0.admin_nodemap)
 	local trust=$(do_facet mgs $LCTL get_param -n \
 		      nodemap.c0.trusted_nodemap)
 
@@ -1829,26 +1836,32 @@ test_26() {
 }
 run_test 26 "test transferring very large nodemap"
 
-test_27() {
-	local subdir=c0dir
-	local subsubdir=c0subdir
+nodemap_exercise_fileset() {
+	local nm="$1"
 	local fileset_on_mgs=""
 	local loop=0
 
-	nodemap_test_setup
+	# setup
+	if [ "$nm" == "default" ]; then
+		do_facet mgs $LCTL nodemap_activate 1
+		wait_nm_sync active
+	else
+		nodemap_test_setup
+	fi
 	if $SHARED_KEY; then
 		export SK_UNIQUE_NM=true
 	else
 		# will conflict with SK's nodemaps
-		trap nodemap_test_cleanup EXIT
+		trap "fileset_test_cleanup $nm" EXIT
 	fi
+	fileset_test_setup "$nm"
 
-	fileset_test_setup
-
-	# add fileset info to nodemap
-	do_facet mgs $LCTL set_param -P nodemap.c0.fileset=/$subdir ||
-		error "unable to add fileset info to nodemap c0"
-	wait_nm_sync c0 fileset "nodemap.c0.fileset=/$subdir"
+	# add fileset info to $nm nodemap
+	do_facet mgs $LCTL set_param nodemap.${nm}.fileset=/$subdir ||
+		error "unable to add fileset info to $nm nodemap on MGS"
+	do_facet mgs $LCTL set_param -P nodemap.${nm}.fileset=/$subdir ||
+	       error "unable to add fileset info to $nm nodemap for servers"
+	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=/$subdir"
 
 	# re-mount client
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
@@ -1876,23 +1889,13 @@ test_27() {
 		error "subdir of fileset not taken into account"
 
 	# remove fileset info from nodemap
-	do_facet mgs $LCTL nodemap_set_fileset --name c0 --fileset \'\' ||
-		error "unable to delete fileset info on nodemap c0"
-	fileset_on_mgs=$(do_facet mgs $LCTL get_param nodemap.c0.fileset)
-	while [ "${fileset_on_mgs}" != "nodemap.c0.fileset=" ]; do
-	    if [ $loop -eq 10 ]; then
-		error "On MGS, fileset cannnot be cleared"
-		break;
-	    else
-		loop=$((loop+1))
-		echo "On MGS, fileset is still ${fileset_on_mgs}, waiting..."
-		sleep 20;
-	    fi
-	    fileset_on_mgs=$(do_facet mgs $LCTL get_param nodemap.c0.fileset)
-	done
-	do_facet mgs $LCTL set_param -P nodemap.c0.fileset=\'\' ||
-		error "unable to reset fileset info on nodemap c0"
-	wait_nm_sync c0 fileset
+	do_facet mgs $LCTL nodemap_set_fileset --name $nm --fileset \'\' ||
+		error "unable to delete fileset info on $nm nodemap"
+	wait_update_facet mgs "$LCTL get_param nodemap.${nm}.fileset" \
+			  "nodemap.${nm}.fileset="
+	do_facet mgs $LCTL set_param -P nodemap.${nm}.fileset=\'\' ||
+		error "unable to reset fileset info on $nm nodemap"
+	wait_nm_sync $nm fileset
 
 	# re-mount client
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
@@ -1902,7 +1905,7 @@ test_27() {
 
 	# test mount point content
 	do_node ${clients_arr[0]} test -d $MOUNT/$subdir ||
-		(ls $MOUNT ; error "fileset not cleared on nodemap c0")
+		(ls $MOUNT ; error "fileset not cleared on $nm nodemap")
 
 	# back to non-nodemap setup
 	if $SHARED_KEY; then
@@ -1910,14 +1913,31 @@ test_27() {
 		zconf_umount_clients ${clients_arr[0]} $MOUNT ||
 			error "unable to umount client ${clients_arr[0]}"
 	fi
-	fileset_test_cleanup
-	nodemap_test_cleanup
+	fileset_test_cleanup "$nm"
+	if [ "$nm" == "default" ]; then
+		do_facet mgs $LCTL nodemap_activate 0
+		wait_nm_sync active 0
+		trap 0
+		export SK_UNIQUE_NM=false
+	else
+		nodemap_test_cleanup
+	fi
 	if $SHARED_KEY; then
 		zconf_mount_clients ${clients_arr[0]} $MOUNT $MOUNT_OPTS ||
 			error "unable to remount client ${clients_arr[0]}"
 	fi
 }
-run_test 27 "test fileset in nodemap"
+
+test_27() {
+	for nm in "default" "c0"; do
+		local subdir="subdir_${nm}"
+		local subsubdir="subsubdir_${nm}"
+
+		echo "Exercising fileset for nodemap $nm"
+		nodemap_exercise_fileset "$nm"
+	done
+}
+run_test 27 "test fileset in various nodemaps"
 
 test_28() {
 	if ! $SHARED_KEY; then

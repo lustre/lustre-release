@@ -1241,6 +1241,10 @@ static struct lprocfs_vars lprocfs_default_nodemap_vars[] = {
 		.fops		= &nodemap_squash_gid_fops,
 	},
 	{
+		.name		= "fileset",
+		.fops		= &nodemap_fileset_fops,
+	},
+	{
 		.name		= "exports",
 		.fops		= &nodemap_exports_fops,
 	},
