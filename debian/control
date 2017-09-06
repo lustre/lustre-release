@@ -44,7 +44,7 @@ Description: source for Lustre filesystem client kernel modules
 
 Package: lustre-utils
 Section: utils
-Architecture: i386 powerpc ppc64el amd64 ia64
+Architecture: i386 powerpc ppc64el amd64 ia64 arm64
 Priority: optional
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Userspace utilities for the Lustre filesystem
@@ -57,7 +57,7 @@ Description: Userspace utilities for the Lustre filesystem
 
 Package: lustre-tests
 Section: utils
-Architecture: i386 powerpc ppc64el amd64 ia64
+Architecture: i386 powerpc ppc64el amd64 ia64 arm64
 Priority: optional
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Test suite for the Lustre filesystem
@@ -70,7 +70,7 @@ Description: Test suite for the Lustre filesystem
 Package: lustre-dev
 Section: libdevel
 Priority: optional
-Architecture: i386 powerpc ppc64el amd64 ia64
+Architecture: i386 powerpc ppc64el amd64 ia64 arm64
 Depends: lustre-utils (= ${binary:Version})
 Description: Development files for the Lustre filesystem
  Lustre is a scalable, secure, robust, highly-available cluster file system.
