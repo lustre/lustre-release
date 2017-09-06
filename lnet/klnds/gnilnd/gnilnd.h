@@ -763,7 +763,7 @@ typedef struct kgn_conn {
 	kgn_fma_memblock_t *gnc_fma_blk;        /* pointer to fma block for our mailbox */
 	gni_smsg_attr_t     gnpr_smsg_attr;     /* my short msg. attributes */
 	spinlock_t          gnc_tx_lock;        /* protect tx alloc/free */
-	__u8                gnc_tx_bits[GNILND_MAX_MSG_ID/8]; /* bit table for tx id */
+	unsigned long       gnc_tx_bits[(GNILND_MAX_MSG_ID/8)/sizeof(unsigned long)]; /* bit table for tx id */
 	int                 gnc_next_tx;        /* next tx to use in tx_ref_table */
 	kgn_tx_t          **gnc_tx_ref_table;   /* table of TX descriptors for this conn */
 	int                 gnc_mbox_id;        /* id of mbox in fma_blk                 */
