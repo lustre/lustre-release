@@ -1736,6 +1736,60 @@ have_bi_cnt, [
 ]) # LC_HAVE_BI_CNT
 
 #
+# LC_HAVE_BI_RW
+#
+# 4.4 redefined bi_rw as bi_opf
+#
+AC_DEFUN([LC_HAVE_BI_RW], [
+LB_CHECK_COMPILE([if Linux kernel has bi_rw in struct bio],
+have_bi_rw, [
+	#include <linux/bio.h>
+],[
+	struct bio bio;
+	bio.bi_rw;
+], [
+	AC_DEFINE(HAVE_BI_RW, 1,
+		[struct bio has bi_rw])
+])
+]) # LC_HAVE_BI_RW
+
+#
+# LC_HAVE_SUBMIT_BIO_2ARGS
+#
+# 4.4 removed an argument from submit_bio
+#
+AC_DEFUN([LC_HAVE_SUBMIT_BIO_2ARGS], [
+LB_CHECK_COMPILE([if submit_bio takes two arguments],
+have_submit_bio_2args, [
+	#include <linux/bio.h>
+],[
+	struct bio bio;
+	submit_bio(READ, &bio);
+], [
+	AC_DEFINE(HAVE_SUBMIT_BIO_2ARGS, 1,
+		[submit_bio takes two arguments])
+])
+]) # LC_HAVE_SUBMIT_BIO_2_ARGS
+
+#
+# LC_HAVE_CLEAN_BDEV_ALIASES
+#
+# 4.4 unmap_underlying_metadata was replaced by clean_bdev_aliases
+#
+AC_DEFUN([LC_HAVE_CLEAN_BDEV_ALIASES], [
+LB_CHECK_COMPILE([if kernel has clean_bdev_aliases],
+have_clean_bdev_aliases, [
+	#include <linux/buffer_head.h>
+],[
+	struct block_device bdev;
+	clean_bdev_aliases(&bdev,1,1);
+], [
+	AC_DEFINE(HAVE_CLEAN_BDEV_ALIASES, 1,
+		[kernel has clean_bdev_aliases])
+])
+]) # LC_HAVE_CLEAN_BDEV_ALIASES
+
+#
 # LC_HAVE_TRUNCATE_IPAGE_FINAL
 #
 # 3.14 bring truncate_inode_pages_final for evict_inode
@@ -2779,6 +2833,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_LOCKS_LOCK_FILE_WAIT
 	LC_HAVE_KEY_PAYLOAD_DATA_ARRAY
 	LC_HAVE_BI_CNT
+	LC_HAVE_BI_RW
+	LC_HAVE_SUBMIT_BIO_2ARGS
+	LC_HAVE_CLEAN_BDEV_ALIASES
 
 	# 4.5
 	LC_HAVE_FILE_DENTRY
@@ -3138,6 +3195,7 @@ lustre/kernel_patches/targets/3.0-sles11sp3.target
 lustre/kernel_patches/targets/3.0-sles11sp4.target
 lustre/kernel_patches/targets/3.12-sles12.target
 lustre/kernel_patches/targets/4.4-sles12.target
+lustre/kernel_patches/targets/4.4-sles12sp3.target
 lustre/kernel_patches/targets/2.6-fc11.target
 lustre/kernel_patches/targets/2.6-fc12.target
 lustre/kernel_patches/targets/2.6-fc15.target
