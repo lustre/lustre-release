@@ -202,7 +202,8 @@ autodetect_target() {
         sles11.4) target="$(uname -r | cut -d . -f 1,2)-sles11sp4";;
         sles11.3) target="$(uname -r | cut -d . -f 1,2)-sles11sp3";;
         sles11*)  target="$(uname -r | cut -d . -f 1,2)-sles11";;
-	sles12*)  target="$(uname -r | cut -d . -f 1,2)-sles12";;
+        sles12.3) target="$(uname -r | cut -d . -f 1,2)-sles12sp3";;
+        sles12*)  target="$(uname -r | cut -d . -f 1,2)-sles12";;
           fc15)   target="2.6-fc15";;
           fc18)   target="3.x-fc18";;
              *)   fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;

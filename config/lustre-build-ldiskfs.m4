@@ -26,6 +26,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	6[0-3])	LDISKFS_SERIES="2.6-rhel6.series"	;;
 	esac
 ], [test x$SUSE_KERNEL = xyes], [
+	AS_VERSION_COMPARE([$LINUXRELEASE],[4.4.82],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[4.4.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[3.12.0],[
 	AS_VERSION_COMPARE([$LINUXRELEASE],[3.0.0],[
@@ -50,7 +51,9 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 			;;
 		esac
 	])],[LDISKFS_SERIES="4.4-sles12sp2.series"],
-	    [LDISKFS_SERIES="4.4-sles12sp2.series"])
+	    [LDISKFS_SERIES="4.4-sles12sp2.series"]
+	)], [LDISKFS_SERIES="4.4-sles12sp3.series"],
+            [LDISKFS_SERIES="4.4-sles12sp3.series"])
 ])
 ])
 AS_IF([test -z "$LDISKFS_SERIES"],

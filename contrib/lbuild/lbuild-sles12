@@ -20,6 +20,10 @@ kernel_srpm_location() {
 	;;
     4.4)
 	site="http://mgmt/cobbler/repo_mirror/updates-sles12.2-src"
+	if [ ${lnxmin##.} -gt 80 ]
+	then
+		site="http://mgmt/cobbler/repo_mirror/updates-sles12.3-src"
+	fi
 	;;
     esac
     echo "$site/src/"
@@ -143,6 +147,10 @@ find_linux_rpm-sles12() {
 	;;
     4.4)
 	site="http://mgmt/cobbler/repo_mirror/updates-sles12.2-x86_64"
+	if [ ${lnxmin##.} -gt 80 ]
+	then
+		site="http://mgmt/cobbler/repo_mirror/updates-sles12.3-x86_64"
+	fi
 	;;
     esac
     if [ ! -f $pathtorpms/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm ]; then
