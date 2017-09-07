@@ -178,23 +178,8 @@ xml:id="upgradinglustre">
         </caution>
       </listitem>
       <listitem>
-        <para>Shut down the file system by unmounting all clients and servers
-        in the order shown below (unmounting a block device causes the Lustre
-        software to be shut down on that node):</para>
-        <orderedlist numeration="loweralpha">
-          <listitem>
-            <para>Unmount the clients. On each client node, run:</para>
-            <screen>umount -a -t lustre</screen>
-          </listitem>
-          <listitem>
-            <para>Unmount the MDT. On the MDS node, run:</para>
-            <screen>umount -a -t lustre</screen>
-          </listitem>
-          <listitem>
-            <para>Unmount all the OSTs. On each OSS node, run:</para>
-            <screen>umount -a -t lustre</screen>
-          </listitem>
-        </orderedlist>
+        <para>Shut down the entire filesystem by following
+        <xref linkend="dbdoclet.shutdownLustre"/></para>
       </listitem>
       <listitem>
         <para>Upgrade the Linux operating system on all servers to a compatible

@@ -134,22 +134,87 @@ LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0
       environment.</para>
     </caution>
   </section>
-  <section xml:id="dbdoclet.50438194_69255">
+  <section xml:id="dbdoclet.shutdownLustre">
+      <title>
+          <indexterm>
+              <primary>operations</primary>
+              <secondary>shutdownLustre</secondary>
+          </indexterm>Stopping the Filesystem</title>
+      <para>A complete Lustre filesystem shutdown occurs by unmounting all
+      clients and servers in the order shown below.  Please note that unmounting
+      a block device causes the Lustre software to be shut down on that node.
+      </para>
+      <note><para>Please note that the <literal>-a -t lustre</literal> in the
+          commands below is not the name of a filesystem, but rather is
+          specifying to unmount all entries in /etc/mtab that are of type
+          <literal>lustre</literal></para></note>
+      <orderedlist>
+          <listitem><para>Unmount the clients</para>
+              <para>On each client node, unmount the filesystem on that client
+              using the <literal>umount</literal> command:</para>
+              <para><literal>umount -a -t lustre</literal></para>
+              <para>The example below shows the unmount of the
+              <literal>testfs</literal> filesystem on a client node:</para>
+              <para><screen>[root@client1 ~]# mount |grep testfs
+XXX.XXX.0.11@tcp:/testfs on /mnt/testfs type lustre (rw,lazystatfs)
+
+[root@client1 ~]# umount -a -t lustre
+[154523.177714] Lustre: Unmounted testfs-client</screen></para>
+          </listitem>
+          <listitem><para>Unmount the MDT and MGT</para>
+	      <para>On the MGS and MDS node(s), use the <literal>umount</literal>
+              command:</para>
+              <para><literal>umount -a -t lustre</literal></para>
+              <para>The example below shows the unmount of the MDT and MGT for
+	      the <literal>testfs</literal> filesystem on a combined MGS/MDS:
+	      </para>
+              <para><screen>[root@mds1 ~]# mount |grep lustre
+/dev/sda on /mnt/mgt type lustre (ro)
+/dev/sdb on /mnt/mdt type lustre (ro)
+
+[root@mds1 ~]# umount -a -t lustre
+[155263.566230] Lustre: Failing over testfs-MDT0000
+[155263.775355] Lustre: server umount testfs-MDT0000 complete
+[155269.843862] Lustre: server umount MGS complete</screen></para>
+	  <para>For a seperate MGS and MDS, the same command is used, first on
+          the MDS and then followed by the MGS.</para>
+          </listitem>
+          <listitem><para>Unmount all the OSTs</para>
+              <para>On each OSS node, use the <literal>umount</literal> command:
+              </para>
+              <para><literal>umount -a -t lustre</literal></para>
+              <para>The example below shows the unmount of all OSTs for the
+	      <literal>testfs</literal> filesystem on server
+	      <literal>OSS1</literal>:
+              </para>
+              <para><screen>[root@oss1 ~]# mount |grep lustre
+/dev/sda on /mnt/ost0 type lustre (ro)
+/dev/sdb on /mnt/ost1 type lustre (ro)
+/dev/sdc on /mnt/ost2 type lustre (ro)
+
+[root@oss1 ~]# umount -a -t lustre
+[155336.491445] Lustre: Failing over testfs-OST0002
+[155336.556752] Lustre: server umount testfs-OST0002 complete</screen></para>
+          </listitem>
+      </orderedlist>
+      <para>For unmount command syntax for a single OST, MDT, or MGT target
+      please refer to <xref linkend="dbdoclet.umountTarget"/></para>
+  </section>
+  <section xml:id="dbdoclet.umountTarget">
     <title>
     <indexterm>
       <primary>operations</primary>
       <secondary>unmounting</secondary>
-    </indexterm>Unmounting a Server</title>
-    <para>To stop a Lustre server, use the 
+    </indexterm>Unmounting a Specific Target on a Server</title>
+    <para>To stop a Lustre OST, MDT, or MGT , use the
     <literal>umount 
-    <replaceable>/mount</replaceable>
-    <replaceable>point</replaceable></literal> command.</para>
-    <para>For example, to stop 
-    <literal>ost0</literal> on mount point 
-    <literal>/mnt/test</literal>, run:</para>
-    <screen>
-$ umount /mnt/test
-</screen>
+    <replaceable>/mount_point</replaceable></literal> command.</para>
+    <para>The example below stops an OST, <literal>ost0</literal>, on mount
+    point <literal>/mnt/ost0</literal> for the <literal>testfs</literal>
+    filesystem:</para>
+    <screen>[root@oss1 ~]# umount /mnt/ost0
+[  385.142264] Lustre: Failing over testfs-OST0000
+[  385.210810] Lustre: server umount testfs-OST0000 complete</screen>
     <para>Gracefully stopping a server with the 
     <literal>umount</literal> command preserves the state of the connected
     clients. The next time the server is started, it waits for clients to
