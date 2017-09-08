@@ -51,22 +51,31 @@
 # define UNLOCK_FS_STRUCT(fs)	spin_unlock(&(fs)->lock)
 #endif
 
+#ifdef HAVE_FS_STRUCT_SEQCOUNT
+# define WRITE_FS_SEQ_BEGIN(fs)	write_seqcount_begin(&(fs)->seq)
+# define WRITE_FS_SEQ_END(fs)	write_seqcount_end(&(fs)->seq)
+#else
+# define WRITE_FS_SEQ_BEGIN(fs)
+# define WRITE_FS_SEQ_END(fs)
+#endif
 static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                                  struct dentry *dentry)
 {
-        struct path path;
-        struct path old_pwd;
+	struct path path;
+	struct path old_pwd;
 
-        path.mnt = mnt;
-        path.dentry = dentry;
-        LOCK_FS_STRUCT(fs);
-        old_pwd = fs->pwd;
-        path_get(&path);
-        fs->pwd = path;
-        UNLOCK_FS_STRUCT(fs);
+	path.mnt = mnt;
+	path.dentry = dentry;
+	path_get(&path);
+	LOCK_FS_STRUCT(fs);
+	WRITE_FS_SEQ_BEGIN(fs);
+	old_pwd = fs->pwd;
+	fs->pwd = path;
+	WRITE_FS_SEQ_END(fs);
+	UNLOCK_FS_STRUCT(fs);
 
-        if (old_pwd.dentry)
-                path_put(&old_pwd);
+	if (old_pwd.dentry)
+		path_put(&old_pwd);
 }
 
 /*
