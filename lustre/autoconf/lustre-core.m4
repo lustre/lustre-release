@@ -595,6 +595,22 @@ kernel_locked, [
 ]) # LC_KERNEL_LOCKED
 
 #
+# LC_FS_STRUCT_SEQCOUNT
+#
+# 2.6.37 uses seqlock in fs_struct
+#
+AC_DEFUN([LC_FS_STRUCT_SEQCOUNT], [
+LB_CHECK_COMPILE([if fs_struct use seqcount],
+fs_struct_seqcount, [
+	#include <linux/fs_struct.h>
+],[
+	((struct fs_struct *)0)->seq = (struct seqcount){ 0 };
+],[
+	AC_DEFINE(HAVE_FS_STRUCT_SEQCOUNT, 1, [fs_struct use seqcount])
+])
+]) # LC_FS_STRUCT_SEQCOUNT
+
+#
 # LC_D_COMPARE_7ARGS
 #
 # 2.6.38 dentry_operations.d_compare() taken 7 arguments.
@@ -2729,6 +2745,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 2.6.37
 	LC_KERNEL_LOCKED
+	LC_FS_STRUCT_SEQCOUNT
 
 	# 2.6.38
 	LC_BLKDEV_GET_BY_DEV
