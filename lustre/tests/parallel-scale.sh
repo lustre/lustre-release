@@ -8,8 +8,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-#              bug 20670
-ALWAYS_EXCEPT="$PARALLEL_SCALE_EXCEPT"
+# bug number for skipped test:  LU-9429
+     ALWAYS_EXCEPT="            parallel_grouplock  $PARALLEL_SCALE_EXCEPT "
 
 if [ $(facet_fstype $SINGLEMDS) = zfs -o $(facet_fstype "ost1") = zfs ]; then
 	ZFSSLOW=$SLOW
