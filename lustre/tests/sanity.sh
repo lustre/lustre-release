@@ -16396,7 +16396,9 @@ cleanup_test411_cgroup() {
 
 test_411() {
 	local cg_basedir=/sys/fs/cgroup/memory
-	test -d "$cg_basedir" || { skip "no setup for cgroup"; return; }
+	# LU-9966
+	test -f "$cg_basedir/memory.kmem.limit_in_bytes" ||
+		{ skip "no setup for cgroup"; return; }
 
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=100 conv=fsync ||
 		error "test file creation failed"
