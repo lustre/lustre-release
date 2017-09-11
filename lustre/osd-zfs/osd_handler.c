@@ -1100,6 +1100,13 @@ static int osd_mount(const struct lu_env *env,
 		GOTO(err, rc);
 	}
 
+#ifdef HAVE_DMU_USEROBJ_ACCOUNTING
+	if (!osd_dmu_userobj_accounting_available(o))
+		CWARN("%s: dnode accounting not enabled: "
+		      "enable feature@userobj_accounting in pool\n",
+		      o->od_mntdev);
+#endif
+
 	/* parse mount option "noacl", and enable ACL by default */
 	opts = lustre_cfg_string(cfg, 3);
 	if (opts == NULL || strstr(opts, "noacl") == NULL)

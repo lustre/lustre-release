@@ -1411,10 +1411,13 @@ test_7e() {
 	# LU-2435: skip this quota test if underlying zfs version has not
 	# supported native dnode accounting
 	[ "$(facet_fstype mds1)" == "zfs" ] && {
-		local zfs_version=$(do_facet mds1 cat /sys/module/zfs/version)
+		local F="feature@userobj_accounting"
+		local pool=$(zpool_name mds1)
+		local feature=$(do_facet mds1 $ZPOOL get -H $F $pool)
 
-		[ $(version_code $zfs_version) -lt $(version_code 0.7.0) ] &&
-			skip "requires zfs version at least 0.7.0" && return
+		[[ "$feature" != *" active "* ]] &&
+			skip "requires zpool with active userobj_accounting" &&
+			return
 	}
 
 	local ilimit=$((1024 * 2)) # 2k inodes

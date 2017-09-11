@@ -775,9 +775,6 @@ static inline void osd_dnode_rele(dnode_t *dn)
 
 static inline bool osd_dmu_userobj_accounting_available(struct osd_device *osd)
 {
-	if (unlikely(dmu_objset_userobjspace_upgradable(osd->od_os)))
-		dmu_objset_userobjspace_upgrade(osd->od_os);
-
 	return dmu_objset_userobjspace_present(osd->od_os);
 }
 #else
