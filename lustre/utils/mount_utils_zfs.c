@@ -665,6 +665,7 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 	php = zpool_open(g_zfs, pool);
 	if (php) {
 		pool_exists = 1;
+		zpool_set_prop(php, "canmount", "off");
 		zpool_close(php);
 	}
 
@@ -699,15 +700,14 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 	/*
 	 * Set Options on ZPOOL
 	 *
-	 * ALL   - canmount=off
+	 * ALL   - canmount=off (set above)
 	 * 0.7.0 - multihost=on
+	 * 0.7.0 - feature@userobj_accounting=enabled
 	 */
 	php = zpool_open(g_zfs, pool);
 	if (php) {
-		if (pool_exists)
-			zpool_set_prop(php, "canmount", "off");
-
 		zpool_set_prop(php, "multihost", "on");
+		zpool_set_prop(php, "feature@userobj_accounting", "enabled");
 
 		zpool_close(php);
 	}
