@@ -15311,17 +15311,17 @@ test_300g() {
 	$LFS setdirstripe -D -i1 $DIR/$tdir/striped_dir ||
 		error "create striped_dir failed"
 
+	$LFS setdirstripe -i0 $DIR/$tdir/striped_dir/dir0 ||
+		error "create dir0 fails"
+	stripe_index=$($LFS getdirstripe -i $DIR/$tdir/striped_dir/dir0)
+	[ $stripe_index -eq 0 ] ||
+		error "dir0 expect index 0 got $stripe_index"
+
 	mkdir $DIR/$tdir/striped_dir/dir1 ||
 		error "create dir1 fails"
 	stripe_index=$($LFS getdirstripe -i $DIR/$tdir/striped_dir/dir1)
 	[ $stripe_index -eq 1 ] ||
-		error "dir1 expect 1 got $stripe_index"
-
-	$LFS setdirstripe -i2 $DIR/$tdir/striped_dir/dir2 ||
-		error "create dir2 fails"
-	stripe_index=$($LFS getdirstripe -i $DIR/$tdir/striped_dir/dir2)
-	[ $stripe_index -eq 2 ] ||
-		error "dir2 expect 2 got $stripe_index"
+		error "dir1 expect index 1 got $stripe_index"
 
 	#check default stripe count/stripe index
 	test_300_check_default_striped_dir normal_dir $MDSCOUNT 1
