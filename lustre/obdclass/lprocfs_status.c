@@ -185,7 +185,7 @@ EXPORT_SYMBOL(lprocfs_add_vars);
 
 void ldebugfs_remove(struct dentry **entryp)
 {
-	debugfs_remove(*entryp);
+	debugfs_remove_recursive(*entryp);
 	*entryp = NULL;
 }
 EXPORT_SYMBOL_GPL(ldebugfs_remove);
