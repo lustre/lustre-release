@@ -2047,6 +2047,7 @@ lnet_discover_peer_locked(struct lnet_peer_ni *lpni, int cpt, bool block)
 	DEFINE_WAIT(wait);
 	struct lnet_peer *lp;
 	int rc = 0;
+	int count = 0;
 
 again:
 	lnet_net_unlock(cpt);
@@ -2059,27 +2060,38 @@ again:
 	 * zombie if we race with DLC, so we must check for that.
 	 */
 	for (;;) {
+		/* Keep lp alive when the lnet_net_lock is unlocked */
+		lnet_peer_addref_locked(lp);
 		prepare_to_wait(&lp->lp_dc_waitq, &wait, TASK_INTERRUPTIBLE);
 		if (signal_pending(current))
 			break;
 		if (the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING)
+			break;
+		/*
+		 * Don't repeat discovery if discovery is disabled. This is
+		 * done to ensure we can use discovery as a standard ping as
+		 * well for backwards compatibility with routers which do not
+		 * have discovery or have discovery disabled
+		 */
+		if (lnet_is_discovery_disabled(lp) && count > 0)
 			break;
 		if (lp->lp_dc_error)
 			break;
 		if (lnet_peer_is_uptodate(lp))
 			break;
 		lnet_peer_queue_for_discovery(lp);
+		count++;
+		CDEBUG(D_NET, "Discovery attempt # %d\n", count);
 
 		/*
-		 * if caller requested a non-blocking operation then
-		 * return immediately. Once discovery is complete then the
-		 * peer ref will be decremented and any pending messages
-		 * that were stopped due to discovery will be transmitted.
+		 * If caller requested a non-blocking operation then
+		 * return immediately. Once discovery is complete any
+		 * pending messages that were stopped due to discovery
+		 * will be transmitted.
 		 */
 		if (!block)
 			break;
 
-		lnet_peer_addref_locked(lp);
 		lnet_net_unlock(LNET_LOCK_EX);
 		schedule();
 		finish_wait(&lp->lp_dc_waitq, &wait);
@@ -2087,26 +2099,18 @@ again:
 		lnet_peer_decref_locked(lp);
 		/* Peer may have changed */
 		lp = lpni->lpni_peer_net->lpn_peer;
-
-		/*
-		 * Wait for discovery to complete, but don't repeat if
-		 * discovery is disabled. This is done to ensure we can
-		 * use discovery as a standard ping as well for backwards
-		 * compatibility with routers which do not have discovery
-		 * or have discovery disabled
-		 */
-		if (lnet_is_discovery_disabled(lp))
-			break;
 	}
 	finish_wait(&lp->lp_dc_waitq, &wait);
 
 	lnet_net_unlock(LNET_LOCK_EX);
 	lnet_net_lock(cpt);
-
+	lnet_peer_decref_locked(lp);
 	/*
-	 * If the peer has changed after we've discovered the older peer,
-	 * then we need to discovery the new peer to make sure the
-	 * interface information is up to date
+	 * The peer may have changed, so re-check and rediscover if that turns
+	 * out to have been the case. The reference count on lp ensured that
+	 * even if it was unlinked from lpni the memory could not be recycled.
+	 * Thus the check below is sufficient to determine whether the peer
+	 * changed. If the peer changed, then lp must not be dereferenced.
 	 */
 	if (lp != lpni->lpni_peer_net->lpn_peer)
 		goto again;
