@@ -160,9 +160,9 @@ quota_scan() {
 	fi
 
 	if [ "$local_ugp" == "a" -o "$local_ugp" == "p" ]; then
-		$LFS quota -v -p $local_id $DIR
-		log "Files for project ($local_id):"
-		($LFS find --projid $local_id $DIR | head -n 4 |
+		$LFS quota -v -p $TSTPRJID $DIR
+		log "Files for project ($TSTPRJID):"
+		($LFS find --projid $TSTPRJID $DIR | head -n 4 |
 			xargs stat 2>/dev/null)
 	fi
 }
