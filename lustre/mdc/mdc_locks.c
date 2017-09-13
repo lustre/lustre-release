@@ -840,8 +840,10 @@ resend:
 	mdc_put_mod_rpc_slot(req, it);
 
 	if (rc < 0) {
-		CDEBUG(D_INFO, "%s: ldlm_cli_enqueue failed: rc = %d\n",
-		       obddev->obd_name, rc);
+		CDEBUG(D_INFO,
+		      "%s: ldlm_cli_enqueue "DFID":"DFID"=%s failed: rc = %d\n",
+		      obddev->obd_name, PFID(&op_data->op_fid1),
+		      PFID(&op_data->op_fid2), op_data->op_name ?: "", rc);
 
 		mdc_clear_replay_flag(req, rc);
 		ptlrpc_req_finished(req);
