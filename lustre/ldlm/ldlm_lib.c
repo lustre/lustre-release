@@ -1233,11 +1233,11 @@ no_export:
                 GOTO(out, rc);
         }
 
-	CDEBUG(D_HA, "%s: connection from %s@%s %st%llu exp %p cur %ld last %ld\n",
-               target->obd_name, cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
-              target->obd_recovering ? "recovering/" : "", data->ocd_transno,
-              export, (long)cfs_time_current_sec(),
-              export ? (long)export->exp_last_request_time : 0);
+	CDEBUG(D_HA, "%s: connection from %s@%s %st%llu exp %p cur %lld last %lld\n",
+	       target->obd_name, cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
+	       target->obd_recovering ? "recovering/" : "", data->ocd_transno,
+	       export, ktime_get_real_seconds(),
+	       export ? export->exp_last_request_time : 0);
 
 	/* If this is the first time a client connects, reset the recovery
 	 * timer. Discard lightweight connections which might be local. */

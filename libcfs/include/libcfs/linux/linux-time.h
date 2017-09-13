@@ -62,26 +62,9 @@
  *  cfs_time_t     cfs_time_current(void);
  *  cfs_time_t     cfs_time_add    (cfs_time_t, cfs_duration_t);
  *  cfs_duration_t cfs_time_sub    (cfs_time_t, cfs_time_t);
- *  int            cfs_impl_time_before (cfs_time_t, cfs_time_t);
- *  int            cfs_impl_time_before_eq(cfs_time_t, cfs_time_t);
- *
- *  cfs_duration_t cfs_duration_build(int64_t);
  *
  *  time_t         cfs_duration_sec (cfs_duration_t);
- *  void           cfs_duration_usec(cfs_duration_t, struct timeval *);
- *  void           cfs_duration_nsec(cfs_duration_t, struct timespec *);
- *
- *  CFS_TIME_FORMAT
- *  CFS_DURATION_FORMAT
- *
  */
-
-#define ONE_BILLION ((u_int64_t)1000000000)
-#define ONE_MILLION 1000000
-
-#ifndef __KERNEL__
-#error This include is only for kernel use.
-#endif
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -264,10 +247,5 @@ static inline int cfs_time_beforeq_64(__u64 t1, __u64 t2)
 {
         return (__s64)t2 - (__s64)t1 >= 0;
 }
-
-/*
- * One jiffy
- */
-#define CFS_DURATION_T          "%ld"
 
 #endif /* __LIBCFS_LINUX_LINUX_TIME_H__ */

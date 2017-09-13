@@ -877,7 +877,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
 	INIT_LIST_HEAD(&export->exp_hp_rpcs);
 	INIT_LIST_HEAD(&export->exp_reg_rpcs);
 	class_handle_hash(&export->exp_handle, &export_handle_ops);
-	export->exp_last_request_time = cfs_time_current_sec();
+	export->exp_last_request_time = ktime_get_real_seconds();
 	spin_lock_init(&export->exp_lock);
 	spin_lock_init(&export->exp_rpc_lock);
 	INIT_HLIST_NODE(&export->exp_uuid_hash);
@@ -1326,7 +1326,7 @@ static void class_disconnect_export_list(struct list_head *list,
 
                 class_export_get(exp);
                 CDEBUG(D_HA, "%s: disconnecting export at %s (%p), "
-		       "last request at %ld\n",
+		       "last request at %lld\n",
                        exp->exp_obd->obd_name, obd_export_nid2str(exp),
                        exp, exp->exp_last_request_time);
                 /* release one export reference anyway */

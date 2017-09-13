@@ -114,20 +114,21 @@ static int ptlrpc_ping(struct obd_import *imp)
 static void ptlrpc_update_next_ping(struct obd_import *imp, int soon)
 {
 #ifdef ENABLE_PINGER
-        int time = soon ? PING_INTERVAL_SHORT : PING_INTERVAL;
-        if (imp->imp_state == LUSTRE_IMP_DISCON) {
-                int dtime = max_t(int, CONNECTION_SWITCH_MIN,
-                                  AT_OFF ? 0 :
-                                  at_get(&imp->imp_at.iat_net_latency));
-                time = min(time, dtime);
-        }
-        imp->imp_next_ping = cfs_time_shift(time);
+	time64_t time = soon ? PING_INTERVAL_SHORT : PING_INTERVAL;
+
+	if (imp->imp_state == LUSTRE_IMP_DISCON) {
+		time64_t dtime = max_t(time64_t, CONNECTION_SWITCH_MIN,
+				       AT_OFF ? 0 :
+				       at_get(&imp->imp_at.iat_net_latency));
+		time = min(time, dtime);
+	}
+	imp->imp_next_ping = ktime_get_seconds() + time;
 #endif /* ENABLE_PINGER */
 }
 
 void ptlrpc_ping_import_soon(struct obd_import *imp)
 {
-        imp->imp_next_ping = cfs_time_current();
+	imp->imp_next_ping = ktime_get_seconds();
 }
 
 static inline int imp_is_deactive(struct obd_import *imp)
@@ -136,33 +137,32 @@ static inline int imp_is_deactive(struct obd_import *imp)
                 OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_IMP_DEACTIVE));
 }
 
-static inline int ptlrpc_next_reconnect(struct obd_import *imp)
+static inline time64_t ptlrpc_next_reconnect(struct obd_import *imp)
 {
-        if (imp->imp_server_timeout)
-                return cfs_time_shift(obd_timeout / 2);
-        else
-                return cfs_time_shift(obd_timeout);
+	if (imp->imp_server_timeout)
+		return ktime_get_seconds() + (obd_timeout >> 1);
+	else
+		return ktime_get_seconds() + obd_timeout;
 }
 
-static cfs_duration_t pinger_check_timeout(cfs_time_t time)
+static time64_t pinger_check_timeout(time64_t time)
 {
         struct timeout_item *item;
-        cfs_time_t timeout = PING_INTERVAL;
+	time64_t timeout = PING_INTERVAL;
 
 	/* This list is sorted in increasing timeout order */
 	mutex_lock(&pinger_mutex);
 	list_for_each_entry(item, &timeout_list, ti_chain) {
-		int ti_timeout = item->ti_timeout;
+		time64_t ti_timeout = item->ti_timeout;
+
 		if (timeout > ti_timeout)
 			timeout = ti_timeout;
 		break;
 	}
 	mutex_unlock(&pinger_mutex);
 
-        return cfs_time_sub(cfs_time_add(time, cfs_time_seconds(timeout)),
-                                         cfs_time_current());
+	return time + timeout - ktime_get_seconds();
 }
-
 
 static bool ir_up;
 
@@ -181,7 +181,7 @@ void ptlrpc_pinger_ir_down(void)
 EXPORT_SYMBOL(ptlrpc_pinger_ir_down);
 
 static void ptlrpc_pinger_process_import(struct obd_import *imp,
-                                         unsigned long this_ping)
+					 time64_t this_ping)
 {
 	int level;
 	int force;
@@ -200,8 +200,7 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 
 	imp->imp_force_verify = 0;
 
-	if (cfs_time_aftereq(imp->imp_next_ping - 5 * CFS_TICK, this_ping) &&
-	    !force) {
+	if (imp->imp_next_ping - 5 >= this_ping && !force) {
 		spin_unlock(&imp->imp_lock);
 		return;
 	}
@@ -249,9 +248,9 @@ static int ptlrpc_pinger_main(void *arg)
 
 	/* And now, loop forever, pinging as needed. */
 	while (1) {
-		cfs_time_t this_ping = cfs_time_current();
+		time64_t this_ping = ktime_get_seconds();
 		struct l_wait_info lwi;
-		cfs_duration_t time_to_next_wake;
+		time64_t time_to_next_wake;
 		struct timeout_item *item;
 		struct list_head *iter;
 
@@ -264,17 +263,15 @@ static int ptlrpc_pinger_main(void *arg)
 							    struct obd_import,
 							    imp_pinger_chain);
 
-                        ptlrpc_pinger_process_import(imp, this_ping);
-                        /* obd_timeout might have changed */
-                        if (imp->imp_pingable && imp->imp_next_ping &&
-                            cfs_time_after(imp->imp_next_ping,
-                                           cfs_time_add(this_ping,
-                                                        cfs_time_seconds(PING_INTERVAL))))
-                                ptlrpc_update_next_ping(imp, 0);
-                }
+			ptlrpc_pinger_process_import(imp, this_ping);
+			/* obd_timeout might have changed */
+			if (imp->imp_pingable && imp->imp_next_ping &&
+			    imp->imp_next_ping > this_ping + PING_INTERVAL)
+				ptlrpc_update_next_ping(imp, 0);
+		}
 		mutex_unlock(&pinger_mutex);
-                /* update memory usage info */
-                obd_update_maxusage();
+		/* update memory usage info */
+		obd_update_maxusage();
 
                 /* Wait until the next ping time, or until we're stopped. */
                 time_to_next_wake = pinger_check_timeout(this_ping);
@@ -284,13 +281,12 @@ static int ptlrpc_pinger_main(void *arg)
                    next ping time to next_ping + .01 sec, which means
                    we will SKIP the next ping at next_ping, and the
                    ping will get sent 2 timeouts from now!  Beware. */
-		CDEBUG(D_INFO, "next wakeup in "CFS_DURATION_T" (%ld)\n",
-		       time_to_next_wake,
-                       cfs_time_add(this_ping,cfs_time_seconds(PING_INTERVAL)));
+		CDEBUG(D_INFO, "next wakeup in %lld (%lld)\n",
+		       time_to_next_wake, this_ping + PING_INTERVAL);
                 if (time_to_next_wake > 0) {
-                        lwi = LWI_TIMEOUT(max_t(cfs_duration_t,
-                                                time_to_next_wake,
-                                                cfs_time_seconds(1)),
+			time64_t time_max = max(time_to_next_wake, 1LL);
+
+			lwi = LWI_TIMEOUT(cfs_time_seconds(time_max),
                                           NULL, NULL);
                         l_wait_event(thread->t_ctl_waitq,
                                      thread_is_stopping(thread) ||
@@ -444,7 +440,7 @@ EXPORT_SYMBOL(ptlrpc_pinger_del_import);
  * Register a timeout callback to the pinger list, and the callback will
  * be called when timeout happens.
  */
-static struct timeout_item *ptlrpc_new_timeout(int time,
+static struct timeout_item *ptlrpc_new_timeout(time64_t time,
 					       enum timeout_event event,
 					       timeout_cb_t cb, void *data)
 {
@@ -469,7 +465,7 @@ static struct timeout_item *ptlrpc_new_timeout(int time,
  * Note: the timeout list is an sorted list with increased timeout value.
  */
 static struct timeout_item*
-ptlrpc_pinger_register_timeout(int time, enum timeout_event event,
+ptlrpc_pinger_register_timeout(time64_t time, enum timeout_event event,
                                timeout_cb_t cb, void *data)
 {
 	struct timeout_item *item, *tmp;
@@ -497,7 +493,7 @@ out:
 /* Add a client_obd to the timeout event list, when timeout(@time)
  * happens, the callback(@cb) will be called.
  */
-int ptlrpc_add_timeout_client(int time, enum timeout_event event,
+int ptlrpc_add_timeout_client(time64_t time, enum timeout_event event,
                               timeout_cb_t cb, void *data,
 			      struct list_head *obd_list)
 {
@@ -600,12 +596,12 @@ int ping_evictor_wake(struct obd_export *exp)
 
 static int ping_evictor_main(void *arg)
 {
-        struct obd_device *obd;
-        struct obd_export *exp;
-        struct l_wait_info lwi = { 0 };
-        time_t expire_time;
-        ENTRY;
+	struct obd_device *obd;
+	struct obd_export *exp;
+	struct l_wait_info lwi = { 0 };
+	time64_t expire_time;
 
+	ENTRY;
 	unshare_fs_struct();
 
 	CDEBUG(D_HA, "Starting Ping Evictor\n");
@@ -626,9 +622,9 @@ static int ping_evictor_main(void *arg)
 				 obd_evict_list);
 		spin_unlock(&pet_lock);
 
-		expire_time = cfs_time_current_sec() - PING_EVICT_TIMEOUT;
+		expire_time = ktime_get_real_seconds() - PING_EVICT_TIMEOUT;
 
-		CDEBUG(D_HA, "evicting all exports of obd %s older than %ld\n",
+		CDEBUG(D_HA, "evicting all exports of obd %s older than %lld\n",
 		       obd->obd_name, expire_time);
 
 		/* Exports can't be deleted out of the list while we hold
@@ -644,19 +640,19 @@ static int ping_evictor_main(void *arg)
 				class_export_get(exp);
 				spin_unlock(&obd->obd_dev_lock);
 				LCONSOLE_WARN("%s: haven't heard from client %s"
-                                              " (at %s) in %ld seconds. I think"
+					      " (at %s) in %lld seconds. I think"
                                               " it's dead, and I am evicting"
-                                              " it. exp %p, cur %ld expire %ld"
-                                              " last %ld\n",
+					      " it. exp %p, cur %lld expire %lld"
+					      " last %lld\n",
                                               obd->obd_name,
                                               obd_uuid2str(&exp->exp_client_uuid),
                                               obd_export_nid2str(exp),
-                                              (long)(cfs_time_current_sec() -
-                                                     exp->exp_last_request_time),
-                                              exp, (long)cfs_time_current_sec(),
-                                              (long)expire_time,
-                                              (long)exp->exp_last_request_time);
-                                CDEBUG(D_HA, "Last request was at %ld\n",
+					      ktime_get_real_seconds() -
+					      exp->exp_last_request_time,
+					      exp, ktime_get_real_seconds(),
+					      expire_time,
+					      exp->exp_last_request_time);
+				CDEBUG(D_HA, "Last request was at %lld\n",
                                        exp->exp_last_request_time);
                                 class_fail_export(exp);
                                 class_export_put(exp);

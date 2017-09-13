@@ -239,7 +239,7 @@ struct obd_export {
 	/** Last committed transno for this export */
 	__u64			exp_last_committed;
 	/** When was last request received */
-	cfs_time_t		exp_last_request_time;
+	time64_t		exp_last_request_time;
 	/** On replay all requests waiting for replay are linked here */
 	struct list_head	exp_req_replay_queue;
 	/**
@@ -340,13 +340,6 @@ static inline int exp_max_brw_size(struct obd_export *exp)
 static inline int exp_connect_multibulk(struct obd_export *exp)
 {
 	return exp_max_brw_size(exp) > ONE_MB_BRW_SIZE;
-}
-
-static inline int exp_expired(struct obd_export *exp, cfs_duration_t age)
-{
-        LASSERT(exp->exp_delayed);
-        return cfs_time_before(cfs_time_add(exp->exp_last_request_time, age),
-                               cfs_time_current_sec());
 }
 
 static inline int exp_connect_cancelset(struct obd_export *exp)

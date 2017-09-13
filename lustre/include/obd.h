@@ -117,7 +117,7 @@ struct brw_page {
 
 struct timeout_item {
 	enum timeout_event ti_event;
-	cfs_time_t         ti_timeout;
+	time64_t	   ti_timeout;
 	timeout_cb_t       ti_cb;
 	void              *ti_cb_data;
 	struct list_head   ti_obd_list;
@@ -201,9 +201,9 @@ struct client_obd {
 	 * See osc_{reserve|unreserve}_grant for details. */
 	long			cl_reserved_grant;
 	struct list_head	cl_cache_waiters; /* waiting for cache/grant */
-	cfs_time_t		cl_next_shrink_grant;   /* jiffies */
+	time64_t		cl_next_shrink_grant;	/* seconds */
 	struct list_head	cl_grant_shrink_list;  /* Timeout event list */
-	int			cl_grant_shrink_interval; /* seconds */
+	time64_t		cl_grant_shrink_interval; /* seconds */
 
 	/* A chunk is an optimal size used by osc_extent to determine
 	 * the extent size. A chunk is max(PAGE_SIZE, OST block size) */
@@ -637,7 +637,7 @@ struct obd_device {
 	struct obd_export	*obd_lwp_export;
 	/* list of exports in LRU order, for ping evictor, with obd_dev_lock */
 	struct list_head	obd_exports_timed;
-	time_t			obd_eviction_timer;	/* for ping evictor */
+	time64_t		obd_eviction_timer;	/* for ping evictor */
 
 	int                     obd_max_recoverable_clients;
 	atomic_t                obd_connected_clients;

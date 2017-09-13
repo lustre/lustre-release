@@ -326,7 +326,7 @@ static int osc_grant_shrink_interval_seq_show(struct seq_file *m, void *v)
 
 	if (obd == NULL)
 		return 0;
-	seq_printf(m, "%d\n",
+	seq_printf(m, "%lld\n",
 		   obd->u.cli.cl_grant_shrink_interval);
 	return 0;
 }

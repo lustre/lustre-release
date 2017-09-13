@@ -1049,10 +1049,10 @@ static void ptlrpc_server_finish_active_request(
  * This function is only called when some export receives a message (i.e.,
  * the network is up.)
  */
-void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
+void ptlrpc_update_export_timer(struct obd_export *exp, time64_t extra_delay)
 {
-        struct obd_export *oldest_exp;
-        time_t oldest_time, new_time;
+	struct obd_export *oldest_exp;
+	time64_t oldest_time, new_time;
 
         ENTRY;
 
@@ -1065,7 +1065,7 @@ void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
            will make it to the top of the list. */
 
         /* Do not pay attention on 1sec or smaller renewals. */
-        new_time = cfs_time_current_sec() + extra_delay;
+	new_time = ktime_get_real_seconds() + extra_delay;
         if (exp->exp_last_request_time + 1 /*second */ >= new_time)
                 RETURN_EXIT;
 
@@ -1096,33 +1096,35 @@ void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
                 return;
         }
 
-        /* Note - racing to start/reset the obd_eviction timer is safe */
-        if (exp->exp_obd->obd_eviction_timer == 0) {
-                /* Check if the oldest entry is expired. */
-                if (cfs_time_current_sec() > (oldest_time + PING_EVICT_TIMEOUT +
-                                              extra_delay)) {
-                        /* We need a second timer, in case the net was down and
-                         * it just came back. Since the pinger may skip every
-                         * other PING_INTERVAL (see note in ptlrpc_pinger_main),
-                         * we better wait for 3. */
-                        exp->exp_obd->obd_eviction_timer =
-                                cfs_time_current_sec() + 3 * PING_INTERVAL;
-			CDEBUG(D_HA, "%s: Think about evicting %s from %ld\n",
-                               exp->exp_obd->obd_name,
-                               obd_export_nid2str(oldest_exp), oldest_time);
-                }
-        } else {
-                if (cfs_time_current_sec() >
-                    (exp->exp_obd->obd_eviction_timer + extra_delay)) {
-                        /* The evictor won't evict anyone who we've heard from
-                         * recently, so we don't have to check before we start
-                         * it. */
-                        if (!ping_evictor_wake(exp))
-                                exp->exp_obd->obd_eviction_timer = 0;
-                }
-        }
+	/* Note - racing to start/reset the obd_eviction timer is safe */
+	if (exp->exp_obd->obd_eviction_timer == 0) {
+		/* Check if the oldest entry is expired. */
+		if (ktime_get_real_seconds() >
+		    oldest_time + PING_EVICT_TIMEOUT + extra_delay) {
+			/* We need a second timer, in case the net was down and
+			 * it just came back. Since the pinger may skip every
+			 * other PING_INTERVAL (see note in ptlrpc_pinger_main),
+			 * we better wait for 3.
+			 */
+			exp->exp_obd->obd_eviction_timer =
+				ktime_get_real_seconds() + 3 * PING_INTERVAL;
+			CDEBUG(D_HA, "%s: Think about evicting %s from %lld\n",
+			       exp->exp_obd->obd_name,
+			       obd_export_nid2str(oldest_exp), oldest_time);
+		}
+	} else {
+		if (ktime_get_real_seconds() >
+		    (exp->exp_obd->obd_eviction_timer + extra_delay)) {
+			/* The evictor won't evict anyone who we've heard from
+			 * recently, so we don't have to check before we start
+			 * it.
+			 */
+			if (!ping_evictor_wake(exp))
+				exp->exp_obd->obd_eviction_timer = 0;
+		}
+	}
 
-        EXIT;
+	EXIT;
 }
 
 /**
@@ -2072,7 +2074,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 		if (unlikely(ptlrpc_check_req(request)))
 			goto put_conn;
 		ptlrpc_update_export_timer(request->rq_export,
-					   timediff_usecs >> 19);
+					   timediff_usecs / (USEC_PER_SEC / 2));
         }
 
         /* Discard requests queued for longer than the deadline.

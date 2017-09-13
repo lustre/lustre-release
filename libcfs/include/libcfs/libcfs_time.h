@@ -67,15 +67,4 @@ static inline cfs_time_t cfs_time_shift(int seconds)
 
 #define CFS_TICK	1
 
-/*
- * return valid time-out based on user supplied one. Currently we only check
- * that time-out is not shorted than allowed.
- */
-static inline cfs_duration_t cfs_timeout_cap(cfs_duration_t timeout)
-{
-	if (timeout < CFS_TICK)
-		timeout = CFS_TICK;
-	return timeout;
-}
-
 #endif

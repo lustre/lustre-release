@@ -233,10 +233,10 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
 }
 EXPORT_SYMBOL(ptlrpc_deactivate_import);
 
-static unsigned int
-ptlrpc_inflight_deadline(struct ptlrpc_request *req, time64_t now)
+static time64_t ptlrpc_inflight_deadline(struct ptlrpc_request *req,
+					 time64_t now)
 {
-        long dl;
+	time64_t dl;
 
         if (!(((req->rq_phase == RQ_PHASE_RPC) && !req->rq_waiting) ||
               (req->rq_phase == RQ_PHASE_BULK) ||
@@ -262,7 +262,7 @@ static unsigned int ptlrpc_inflight_timeout(struct obd_import *imp)
 	time64_t now = ktime_get_real_seconds();
 	struct list_head *tmp, *n;
 	struct ptlrpc_request *req;
-	unsigned int timeout = 0;
+	time64_t timeout = 0;
 
 	spin_lock(&imp->imp_lock);
 	list_for_each_safe(tmp, n, &imp->imp_sending_list) {
@@ -284,7 +284,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 	struct list_head *tmp, *n;
 	struct ptlrpc_request *req;
 	struct l_wait_info lwi;
-	unsigned int timeout;
+	time64_t timeout;
 	int rc;
 
 	atomic_inc(&imp->imp_inval_count);
@@ -300,9 +300,12 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
          * unlink. We can't do anything before that because there is really
          * no guarantee that some rdma transfer is not in progress right now. */
         do {
+		long timeout_jiffies;
+
                 /* Calculate max timeout for waiting on rpcs to error
                  * out. Use obd_timeout if calculated value is smaller
-                 * than it. */
+		 * than it.
+		 */
                 if (!OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK)) {
                         timeout = ptlrpc_inflight_timeout(imp);
                         timeout += timeout / 3;
@@ -314,16 +317,18 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                         timeout = 1;
                 }
 
-                CDEBUG(D_RPCTRACE,"Sleeping %d sec for inflight to error out\n",
-                       timeout);
+		CDEBUG(D_RPCTRACE, "Sleeping %llds for inflight to error out\n",
+		       timeout);
 
 		/* Wait for all requests to error out and call completion
 		 * callbacks. Cap it at obd_timeout -- these should all
-		 * have been locally cancelled by ptlrpc_abort_inflight. */
-		lwi = LWI_TIMEOUT_INTERVAL(
-			cfs_timeout_cap(cfs_time_seconds(timeout)),
-			(timeout > 1)?cfs_time_seconds(1):cfs_time_seconds(1)/2,
-			NULL, NULL);
+		 * have been locally cancelled by ptlrpc_abort_inflight.
+		 */
+		timeout_jiffies = max_t(long, cfs_time_seconds(timeout), 1);
+		lwi = LWI_TIMEOUT_INTERVAL(timeout_jiffies,
+					   (timeout > 1) ? cfs_time_seconds(1) :
+							   cfs_time_seconds(1) / 2,
+							   NULL, NULL);
 		rc = l_wait_event(imp->imp_recovery_waitq,
 				  (atomic_read(&imp->imp_inflight) == 0),
 				  &lwi);
@@ -445,16 +450,16 @@ void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt)
 int ptlrpc_reconnect_import(struct obd_import *imp)
 {
 #ifdef ENABLE_PINGER
+	long timeout_jiffies = cfs_time_seconds(obd_timeout);
 	struct l_wait_info lwi;
-	int secs = cfs_time_seconds(obd_timeout);
 	int rc;
 
 	ptlrpc_pinger_force(imp);
 
 	CDEBUG(D_HA, "%s: recovery started, waiting %u seconds\n",
-	       obd2cli_tgt(imp->imp_obd), secs);
+	       obd2cli_tgt(imp->imp_obd), obd_timeout);
 
-	lwi = LWI_TIMEOUT(secs, NULL, NULL);
+	lwi = LWI_TIMEOUT(timeout_jiffies, NULL, NULL);
 	rc = l_wait_event(imp->imp_recovery_waitq,
 			  !ptlrpc_import_in_recovery(imp), &lwi);
 	CDEBUG(D_HA, "%s: recovery finished s:%s\n", obd2cli_tgt(imp->imp_obd),
@@ -1579,23 +1584,27 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 		RETURN(rc);
 	}
 
-        if (ptlrpc_import_in_recovery(imp)) {
-                struct l_wait_info lwi;
-                cfs_duration_t timeout;
+	if (ptlrpc_import_in_recovery(imp)) {
+		struct l_wait_info lwi;
+		long timeout_jiffies;
+		time64_t timeout;
 
-                if (AT_OFF) {
-                        if (imp->imp_server_timeout)
-                                timeout = cfs_time_seconds(obd_timeout / 2);
-                        else
-                                timeout = cfs_time_seconds(obd_timeout);
-                } else {
-                        int idx = import_at_get_index(imp,
-                                imp->imp_client->cli_request_portal);
-                        timeout = cfs_time_seconds(
-                                at_get(&imp->imp_at.iat_service_estimate[idx]));
+		if (AT_OFF) {
+			if (imp->imp_server_timeout)
+				timeout = obd_timeout >> 1;
+			else
+				timeout = obd_timeout;
+		} else {
+			u32 req_portal;
+			int idx;
+
+			req_portal = imp->imp_client->cli_request_portal;
+			idx = import_at_get_index(imp, req_portal);
+			timeout = at_get(&imp->imp_at.iat_service_estimate[idx]);
                 }
 
-                lwi = LWI_TIMEOUT_INTR(cfs_timeout_cap(timeout),
+		timeout_jiffies = cfs_time_seconds(timeout);
+		lwi = LWI_TIMEOUT_INTR(max_t(long, timeout_jiffies, 1),
                                        back_to_sleep, LWI_ON_SIGNAL_NOOP, NULL);
                 rc = l_wait_event(imp->imp_recovery_waitq,
                                   !ptlrpc_import_in_recovery(imp), &lwi);

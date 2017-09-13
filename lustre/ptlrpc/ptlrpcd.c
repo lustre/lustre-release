@@ -476,7 +476,7 @@ static int ptlrpcd(void *arg)
          */
         do {
                 struct l_wait_info lwi;
-                int timeout;
+		time64_t timeout;
 
                 timeout = ptlrpc_set_next_timeout(set);
                 lwi = LWI_TIMEOUT(cfs_time_seconds(timeout ? timeout : 1),

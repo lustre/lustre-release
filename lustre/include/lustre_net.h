@@ -2303,7 +2303,8 @@ int ptlrpc_service_health_check(struct ptlrpc_service *);
 void ptlrpc_server_drop_request(struct ptlrpc_request *req);
 void ptlrpc_request_change_export(struct ptlrpc_request *req,
 				  struct obd_export *export);
-void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay);
+void ptlrpc_update_export_timer(struct obd_export *exp,
+				time64_t extra_delay);
 
 int ptlrpc_hr_init(void);
 void ptlrpc_hr_fini(void);
@@ -2664,7 +2665,7 @@ struct timeout_item;
 typedef int (*timeout_cb_t)(struct timeout_item *, void *);
 int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
-int ptlrpc_add_timeout_client(int time, enum timeout_event event,
+int ptlrpc_add_timeout_client(time64_t time, enum timeout_event event,
 			      timeout_cb_t cb, void *data,
 			      struct list_head *obd_list);
 int ptlrpc_del_timeout_client(struct list_head *obd_list,

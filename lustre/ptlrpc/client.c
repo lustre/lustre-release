@@ -2250,7 +2250,7 @@ static void ptlrpc_interrupted_set(void *data)
 /**
  * Get the smallest timeout in the set; this does NOT set a timeout.
  */
-int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
+time64_t ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
 {
 	struct list_head *tmp;
 	time64_t now = ktime_get_real_seconds();
@@ -2308,8 +2308,9 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 	struct list_head            *tmp;
         struct ptlrpc_request *req;
         struct l_wait_info     lwi;
-        int                    rc, timeout;
-        ENTRY;
+	time64_t timeout;
+	int rc;
+	ENTRY;
 
 	if (set->set_producer)
 		(void)ptlrpc_set_producer(set);
@@ -2329,7 +2330,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
 
                 /* wait until all complete, interrupted, or an in-flight
                  * req times out */
-                CDEBUG(D_RPCTRACE, "set %p going to sleep for %d seconds\n",
+		CDEBUG(D_RPCTRACE, "set %p going to sleep for %lld seconds\n",
                        set, timeout);
 
 		if ((timeout == 0 && !signal_pending(current)) ||
