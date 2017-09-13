@@ -2592,10 +2592,12 @@ __must_hold(&lp->lp_lock)
 	 *
 	 * The peer for the loopback interface is a special case: this
 	 * is the peer for the local node, and we want to set its
-	 * primary NID to the correct value here.
+	 * primary NID to the correct value here. Moreover, this peer
+	 * can show up with only the loopback NID in the ping buffer.
 	 */
-	if (pbuf->pb_info.pi_nnis > 1)
-		nid = pbuf->pb_info.pi_ni[1].ns_nid;
+	if (pbuf->pb_info.pi_nnis <= 1)
+		goto out;
+	nid = pbuf->pb_info.pi_ni[1].ns_nid;
 	if (LNET_NETTYP(LNET_NIDNET(lp->lp_primary_nid)) == LOLND) {
 		rc = lnet_peer_set_primary_nid(lp, nid, flags);
 		if (!rc)
