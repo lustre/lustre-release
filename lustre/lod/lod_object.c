@@ -1897,6 +1897,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 		stripe[i] = dto;
 	}
 
+	lo->ldo_dir_stripe_loaded = 1;
 	lo->ldo_dir_striped = 1;
 	lo->ldo_stripe = stripe;
 	lo->ldo_dir_stripe_count = i;
@@ -5193,6 +5194,7 @@ void lod_object_free_striping(const struct lu_env *env, struct lod_object *lo)
 		OBD_FREE(lo->ldo_stripe, j);
 		lo->ldo_stripe = NULL;
 		lo->ldo_dir_stripes_allocated = 0;
+		lo->ldo_dir_stripe_loaded = 0;
 		lo->ldo_dir_stripe_count = 0;
 	} else if (lo->ldo_comp_entries != NULL) {
 		for (i = 0; i < lo->ldo_comp_cnt; i++) {

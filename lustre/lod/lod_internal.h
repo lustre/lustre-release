@@ -285,7 +285,9 @@ struct lod_object {
 			__u32		ldo_dir_hash_type;
 			/* Is a slave stripe of striped directory? */
 			__u32		ldo_dir_slave_stripe:1,
-					ldo_dir_striped:1;
+					ldo_dir_striped:1,
+					/* the stripe has been loaded */
+					ldo_dir_stripe_loaded:1;
 			/*
 			 * default striping is not cached, so this field is
 			 * invalid after create, make sure it's used by

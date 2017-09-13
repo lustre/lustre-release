@@ -1346,7 +1346,7 @@ static bool lod_striping_loaded(struct lod_object *lo)
 		return true;
 
 	if (S_ISDIR(lod2lu_obj(lo)->lo_header->loh_attr)) {
-		if (lo->ldo_stripe != NULL)
+		if (lo->ldo_stripe != NULL || lo->ldo_dir_stripe_loaded)
 			return true;
 
 		/* Never load LMV stripe for slaves of striped dir */
@@ -1400,9 +1400,15 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 			lo->ldo_comp_cached = 1;
 	} else if (S_ISDIR(lod2lu_obj(lo)->lo_header->loh_attr)) {
 		rc = lod_get_lmv_ea(env, lo);
-		if (rc < (typeof(rc))sizeof(struct lmv_mds_md_v1))
+		if (rc < (typeof(rc))sizeof(struct lmv_mds_md_v1)) {
+			/* Let's set stripe_loaded to avoid further
+			 * stripe loading especially for non-stripe directory,
+			 * which can hurt performance. (See LU-9840)
+			 */
+			if (rc == 0)
+				lo->ldo_dir_stripe_loaded = 1;
 			GOTO(out, rc = rc > 0 ? -EINVAL : rc);
-
+		}
 		buf->lb_buf = info->lti_ea_store;
 		buf->lb_len = info->lti_ea_store_size;
 		if (rc == sizeof(struct lmv_mds_md_v1)) {
@@ -1423,6 +1429,8 @@ int lod_load_striping_locked(const struct lu_env *env, struct lod_object *lo)
 		 * let's parse it and create in-core objects for the stripes
 		 */
 		rc = lod_parse_dir_striping(env, lo, buf);
+		if (rc == 0)
+			lo->ldo_dir_stripe_loaded = 1;
 	}
 out:
 	RETURN(rc);
