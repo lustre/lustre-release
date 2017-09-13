@@ -92,8 +92,8 @@ int __llog_ctxt_put(const struct lu_env *env, struct llog_ctxt *ctxt)
                  !!obd->obd_stopping, !!obd->obd_set_up);
 
         /* cleanup the llog ctxt here */
-        if (CTXTP(ctxt, cleanup))
-		rc = CTXTP(ctxt, cleanup)(env, ctxt);
+	if (ctxt->loc_logops->lop_cleanup)
+		rc = ctxt->loc_logops->lop_cleanup(env, ctxt);
 
 	llog_ctxt_destroy(ctxt);
 	wake_up(&olg->olg_waitq);
@@ -217,16 +217,13 @@ EXPORT_SYMBOL(llog_setup);
 
 int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp, int flags)
 {
-        int rc = 0;
-        ENTRY;
+	int rc = 0;
 
-        if (!ctxt)
-                RETURN(0);
+	ENTRY;
+	if (ctxt && ctxt->loc_logops->lop_sync)
+		rc = ctxt->loc_logops->lop_sync(ctxt, exp, flags);
 
-        if (CTXTP(ctxt, sync))
-		rc = CTXTP(ctxt, sync)(ctxt, exp, flags);
-
-        RETURN(rc);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_sync);
 
@@ -241,8 +238,13 @@ int llog_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
                 RETURN(-ENODEV);
         }
 
-        CTXT_CHECK_OP(ctxt, cancel, -EOPNOTSUPP);
-	rc = CTXTP(ctxt, cancel)(env, ctxt, cookies, flags);
+	if (!ctxt->loc_obd->obd_type || !(ctxt)->loc_logops->lop_cancel) {
+		CERROR("%s: no lop_cancel operation\n",
+		       ctxt->loc_obd->obd_name);
+		RETURN(-EOPNOTSUPP);
+	}
+
+	rc = ctxt->loc_logops->lop_cancel(env, ctxt, cookies, flags);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cancel);

@@ -1573,12 +1573,13 @@ static void target_finish_recovery(struct lu_target *lut)
 	obd->obd_recovery_end = ktime_get_real_seconds();
 
 	/* When recovery finished, cleanup orphans on MDS and OST. */
-        if (OBT(obd) && OBP(obd, postrecov)) {
-                int rc = OBP(obd, postrecov)(obd);
-                if (rc < 0)
-                        LCONSOLE_WARN("%s: Post recovery failed, rc %d\n",
-                                      obd->obd_name, rc);
-        }
+	if (obd->obd_type && OBP(obd, postrecov)) {
+		int rc = OBP(obd, postrecov)(obd);
+
+		if (rc < 0)
+			LCONSOLE_WARN("%s: Post recovery failed, rc %d\n",
+				      obd->obd_name, rc);
+	}
         EXIT;
 }
 
