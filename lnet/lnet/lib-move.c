@@ -1567,6 +1567,18 @@ again:
 		lnet_net_unlock(cpt);
 		return PTR_ERR(lpni);
 	}
+
+	/*
+	 * If we're being asked to send to the loopback interface, there
+	 * is no need to go through any selection. We can just shortcut
+	 * the entire process and send over lolnd
+	 */
+	if (LNET_NETTYP(LNET_NIDNET(dst_nid)) == LOLND) {
+		lnet_peer_ni_decref_locked(lpni);
+		best_ni = the_lnet.ln_loni;
+		goto send;
+	}
+
 	/*
 	 * Now that we have a peer_ni, check if we want to discover
 	 * the peer. Traffic to the LNET_RESERVED_PORTAL should not

@@ -247,6 +247,15 @@ lnet_peer_alloc(lnet_nid_t nid)
 	init_waitqueue_head(&lp->lp_dc_waitq);
 	spin_lock_init(&lp->lp_lock);
 	lp->lp_primary_nid = nid;
+	/*
+	 * Turn off discovery for loopback peer. If you're creating a peer
+	 * for the loopback interface then that was initiated when we
+	 * attempted to send a message over the loopback. There is no need
+	 * to ever use a different interface when sending messages to
+	 * myself.
+	 */
+	if (LNET_NETTYP(LNET_NIDNET(nid)) == LOLND)
+		lp->lp_state = LNET_PEER_NO_DISCOVERY;
 	lp->lp_cpt = lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
 
 	CDEBUG(D_NET, "%p nid %s\n", lp, libcfs_nid2str(lp->lp_primary_nid));
