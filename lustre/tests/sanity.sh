@@ -14837,6 +14837,87 @@ test_255b() {
 }
 run_test 255b "check 'lfs ladvise -a dontneed'"
 
+test_255c() {
+	local count
+	local new_count
+	local difference
+	local i
+	local rc
+	test_mkdir -p $DIR/$tdir
+	$SETSTRIPE -i 0 $DIR/$tdir
+
+	#test 10 returns only success/failure
+	i=10
+	lockahead_test -d $DIR/$tdir -t $i
+	rc=$?
+	if [ $rc -eq 255 ]; then
+		error "Ladvise test${i} failed, ${rc}"
+	fi
+
+	#test 11 counts lock enqueue requests, all others count new locks
+	i=11
+	count=$(do_facet ost1 \
+		$LCTL get_param -n ost.OSS.ost.stats)
+	count=$(echo "$count" | grep ldlm_extent_enqueue | awk '{ print $2 }')
+
+	lockahead_test -d $DIR/$tdir -t $i
+	rc=$?
+	if [ $rc -eq 255 ]; then
+		error "Ladvise test${i} failed, ${rc}"
+	fi
+
+	new_count=$(do_facet ost1 \
+		$LCTL get_param -n ost.OSS.ost.stats)
+	new_count=$(echo "$new_count" | grep ldlm_extent_enqueue | \
+		   awk '{ print $2 }')
+
+	difference="$((new_count - count))"
+	if [ $difference -ne $rc ]; then
+		error "Ladvise test${i}, bad enqueue count, returned " \
+		      "${rc}, actual ${difference}"
+	fi
+
+	for i in $(seq 12 21); do
+		# If we do not do this, we run the risk of having too many
+		# locks and starting lock cancellation while we are checking
+		# lock counts.
+		cancel_lru_locks osc
+
+		count=$($LCTL get_param -n \
+		       ldlm.namespaces.$FSNAME-OST0000*osc-f*.lock_unused_count)
+
+		lockahead_test -d $DIR/$tdir -t $i
+		rc=$?
+		if [ $rc -eq 255 ]; then
+			error "Ladvise test ${i} failed, ${rc}"
+		fi
+
+		new_count=$($LCTL get_param -n \
+		       ldlm.namespaces.$FSNAME-OST0000*osc-f*.lock_unused_count)
+		difference="$((new_count - count))"
+
+		# Test 15 output is divided by 1000 to map down to valid return
+		if [ $i -eq 15 ]; then
+			rc="$((rc * 1000))"
+		fi
+
+		if [ $difference -ne $rc ]; then
+			error "Ladvise test ${i}, bad lock count, returned " \
+			      "${rc}, actual ${difference}"
+		fi
+	done
+
+	#test 22 returns only success/failure
+	i=22
+	lockahead_test -d $DIR/$tdir -t $i
+	rc=$?
+	if [ $rc -eq 255 ]; then
+		error "Ladvise test${i} failed, ${rc}"
+	fi
+
+}
+run_test 255c "suite of ladvise lockahead tests"
+
 test_256() {
 	local cl_user
 	local cat_sl

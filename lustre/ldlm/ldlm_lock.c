@@ -44,6 +44,9 @@
 
 #include "ldlm_internal.h"
 
+struct kmem_cache *ldlm_glimpse_work_kmem;
+EXPORT_SYMBOL(ldlm_glimpse_work_kmem);
+
 /* lock types */
 char *ldlm_lockname[] = {
 	[0] = "--",
@@ -2138,8 +2141,9 @@ int ldlm_work_gl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 		rc = 1;
 
 	LDLM_LOCK_RELEASE(lock);
-
-	if ((gl_work->gl_flags & LDLM_GL_WORK_NOFREE) == 0)
+	if (gl_work->gl_flags & LDLM_GL_WORK_SLAB_ALLOCATED)
+		OBD_SLAB_FREE_PTR(gl_work, ldlm_glimpse_work_kmem);
+	else
 		OBD_FREE_PTR(gl_work);
 
 	RETURN(rc);

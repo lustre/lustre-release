@@ -642,6 +642,7 @@ struct ll_file_data {
 	 * true: failure is known, not report again.
 	 * false: unknown failure, should report. */
 	bool fd_write_failed;
+	bool ll_lock_no_expand;
 	rwlock_t fd_lock; /* protect lcc list */
 	struct list_head fd_lccs; /* list of ll_cl_context */
 };
@@ -1222,10 +1223,17 @@ static inline int cl_glimpse_size(struct inode *inode)
 	return cl_glimpse_size0(inode, 0);
 }
 
+/* AGL is 'asychronous glimpse lock', which is a speculative lock taken as
+ * part of statahead */
 static inline int cl_agl(struct inode *inode)
 {
 	return cl_glimpse_size0(inode, 1);
 }
+
+int ll_file_lock_ahead(struct file *file, struct llapi_lu_ladvise *ladvise);
+
+int cl_io_get(struct inode *inode, struct lu_env **envout,
+	      struct cl_io **ioout, __u16 *refcheck);
 
 static inline int ll_glimpse_size(struct inode *inode)
 {

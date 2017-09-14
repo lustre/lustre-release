@@ -52,8 +52,9 @@
 int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
 		  struct llapi_lu_ladvise *ladvise)
 {
-	int rc;
 	struct llapi_ladvise_hdr *ladvise_hdr;
+	int rc;
+	int i;
 
 	if (num_advise < 1 || num_advise >= LAH_COUNT_MAX) {
 		errno = EINVAL;
@@ -79,6 +80,18 @@ int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
 		llapi_error(LLAPI_MSG_ERROR, -errno, "cannot give advice");
 		return -1;
 	}
+
+	/* Copy results back in to caller provided structs */
+	for (i = 0; i < num_advise; i++) {
+		struct llapi_lu_ladvise *ladvise_iter;
+
+		ladvise_iter = &ladvise_hdr->lah_advise[i];
+
+		if (ladvise_iter->lla_advice == LU_LADVISE_LOCKAHEAD)
+			ladvise[i].lla_lockahead_result =
+					ladvise_iter->lla_lockahead_result;
+	}
+
 	return 0;
 }
 

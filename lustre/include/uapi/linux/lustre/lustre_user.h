@@ -1551,11 +1551,16 @@ enum lu_ladvise_type {
 	LU_LADVISE_INVALID	= 0,
 	LU_LADVISE_WILLREAD	= 1,
 	LU_LADVISE_DONTNEED	= 2,
+	LU_LADVISE_LOCKNOEXPAND = 3,
+	LU_LADVISE_LOCKAHEAD	= 4,
+	LU_LADVISE_MAX
 };
 
 #define LU_LADVISE_NAMES {						\
-	[LU_LADVISE_WILLREAD]	= "willread",				\
-	[LU_LADVISE_DONTNEED]	= "dontneed",				\
+	[LU_LADVISE_WILLREAD]		= "willread",			\
+	[LU_LADVISE_DONTNEED]		= "dontneed",			\
+	[LU_LADVISE_LOCKNOEXPAND]	= "locknoexpand",		\
+	[LU_LADVISE_LOCKAHEAD]		= "lockahead",			\
 }
 
 /* This is the userspace argument for ladvise.  It is currently the same as
@@ -1573,10 +1578,20 @@ struct llapi_lu_ladvise {
 
 enum ladvise_flag {
 	LF_ASYNC	= 0x00000001,
+	LF_UNSET        = 0x00000002,
 };
 
 #define LADVISE_MAGIC 0x1ADF1CE0
-#define LF_MASK LF_ASYNC
+/* Masks of valid flags for each advice */
+#define LF_LOCKNOEXPAND_MASK LF_UNSET
+/* Flags valid for all advices not explicitly specified */
+#define LF_DEFAULT_MASK LF_ASYNC
+/* All flags */
+#define LF_MASK (LF_ASYNC | LF_UNSET)
+
+#define lla_lockahead_mode   lla_value1
+#define lla_peradvice_flags    lla_value2
+#define lla_lockahead_result lla_value3
 
 /* This is the userspace argument for ladvise, corresponds to ladvise_hdr which
  * is used on the wire.  It is defined separately as we may need info which is
@@ -1619,5 +1634,23 @@ struct sk_hmac_type {
 	size_t   sht_bytes;
 };
 
+enum lock_mode_user {
+	MODE_READ_USER = 1,
+	MODE_WRITE_USER,
+	MODE_MAX_USER,
+};
+
+#define LOCK_MODE_NAMES { \
+	[MODE_READ_USER]  = "READ",\
+	[MODE_WRITE_USER] = "WRITE"\
+}
+
+enum lockahead_results {
+	LLA_RESULT_SENT = 0,
+	LLA_RESULT_DIFFERENT,
+	LLA_RESULT_SAME,
+};
+
 /** @} lustreuser */
+
 #endif /* _LUSTRE_USER_H */

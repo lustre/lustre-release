@@ -390,7 +390,16 @@ struct osc_lock {
 	/**
 	 * For async glimpse lock.
 	 */
-				ols_agl:1;
+				ols_agl:1,
+	/**
+	 * for speculative locks - asynchronous glimpse locks and ladvise
+	 * lockahead manual lock requests
+	 *
+	 * Used to tell osc layer to not wait for the ldlm reply from the
+	 * server, so the osc lock will be short lived - It only exists to
+	 * create the ldlm request and is not updated on request completion.
+	 */
+				ols_speculative:1;
 };
 
 

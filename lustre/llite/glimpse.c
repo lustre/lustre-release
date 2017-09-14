@@ -92,7 +92,7 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
 	CDEBUG(D_DLMTRACE, "Glimpsing inode "DFID"\n", PFID(fid));
 
 	/* NOTE: this looks like DLM lock request, but it may
-	 *       not be one. Due to CEF_ASYNC flag (translated
+	 *       not be one. Due to CEF_GLIMPSE flag (translated
 	 *       to LDLM_FL_HAS_INTENT by osc), this is
 	 *       glimpse request, that won't revoke any
 	 *       conflicting DLM locks held. Instead,
@@ -107,14 +107,10 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
 	*descr = whole_file;
 	descr->cld_obj = clob;
 	descr->cld_mode = CLM_READ;
-	descr->cld_enq_flags = CEF_ASYNC | CEF_MUST;
+	descr->cld_enq_flags = CEF_GLIMPSE | CEF_MUST;
 	if (agl)
-		descr->cld_enq_flags |= CEF_AGL;
+		descr->cld_enq_flags |= CEF_SPECULATIVE | CEF_NONBLOCK;
 	/*
-	 * CEF_ASYNC is used because glimpse sub-locks cannot
-	 * deadlock (because they never conflict with other
-	 * locks) and, hence, can be enqueued out-of-order.
-	 *
 	 * CEF_MUST protects glimpse lock from conversion into
 	 * a lockless mode.
 	 */
@@ -140,7 +136,20 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
 	RETURN(result);
 }
 
-static int cl_io_get(struct inode *inode, struct lu_env **envout,
+/**
+ * Get an IO environment for special operations such as glimpse locks and
+ * manually requested locks (ladvise lockahead)
+ *
+ * \param[in]  inode	inode the operation is being performed on
+ * \param[out] envout	thread specific execution environment
+ * \param[out] ioout	client io description
+ * \param[out] refcheck	reference check
+ *
+ * \retval 1		on success
+ * \retval 0		not a regular file, cannot get environment
+ * \retval negative	negative errno on error
+ */
+int cl_io_get(struct inode *inode, struct lu_env **envout,
 		     struct cl_io **ioout, __u16 *refcheck)
 {
 	struct lu_env		*env;

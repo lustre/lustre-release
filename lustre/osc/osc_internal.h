@@ -55,7 +55,8 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 		     struct ost_lvb *lvb, int kms_valid,
 		     osc_enqueue_upcall_f upcall,
 		     void *cookie, struct ldlm_enqueue_info *einfo,
-		     struct ptlrpc_request_set *rqset, int async, int agl);
+		     struct ptlrpc_request_set *rqset, int async,
+		     bool speculative);
 
 int osc_match_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 		   enum ldlm_type type, union ldlm_policy_data *policy,

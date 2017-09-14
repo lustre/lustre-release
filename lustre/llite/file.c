@@ -1083,12 +1083,15 @@ static int ll_file_io_ptask(struct cfs_ptask *ptask);
 static void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot)
 {
 	struct inode *inode = file_inode(file);
+	struct ll_file_data *fd  = LUSTRE_FPRIVATE(file);
 
 	memset(&io->u.ci_rw.rw_iter, 0, sizeof(io->u.ci_rw.rw_iter));
 	init_sync_kiocb(&io->u.ci_rw.rw_iocb, file);
 	io->u.ci_rw.rw_file = file;
 	io->u.ci_rw.rw_ptask = ll_file_io_ptask;
 	io->u.ci_rw.rw_nonblock = !!(file->f_flags & O_NONBLOCK);
+	io->ci_lock_no_expand = fd->ll_lock_no_expand;
+
 	if (iot == CIT_WRITE) {
 		io->u.ci_rw.rw_append = !!(file->f_flags & O_APPEND);
 		io->u.ci_rw.rw_sync   = !!(file->f_flags & O_SYNC ||
@@ -2435,6 +2438,189 @@ static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
 	RETURN(rc);
 }
 
+static enum cl_lock_mode cl_mode_user_to_kernel(enum lock_mode_user mode)
+{
+	switch (mode) {
+	case MODE_READ_USER:
+		return CLM_READ;
+	case MODE_WRITE_USER:
+		return CLM_WRITE;
+	default:
+		return -EINVAL;
+	}
+}
+
+static const char *const user_lockname[] = LOCK_MODE_NAMES;
+
+/* Used to allow the upper layers of the client to request an LDLM lock
+ * without doing an actual read or write.
+ *
+ * Used for ladvise lockahead to manually request specific locks.
+ *
+ * \param[in] file	file this ladvise lock request is on
+ * \param[in] ladvise	ladvise struct describing this lock request
+ *
+ * \retval 0		success, no detailed result available (sync requests
+ *			and requests sent to the server [not handled locally]
+ *			cannot return detailed results)
+ * \retval LLA_RESULT_{SAME,DIFFERENT} - detailed result of the lock request,
+ *					 see definitions for details.
+ * \retval negative	negative errno on error
+ */
+int ll_file_lock_ahead(struct file *file, struct llapi_lu_ladvise *ladvise)
+{
+	struct lu_env *env = NULL;
+	struct cl_io *io  = NULL;
+	struct cl_lock *lock = NULL;
+	struct cl_lock_descr *descr = NULL;
+	struct dentry *dentry = file->f_path.dentry;
+	struct inode *inode = dentry->d_inode;
+	enum cl_lock_mode cl_mode;
+	off_t start = ladvise->lla_start;
+	off_t end = ladvise->lla_end;
+	int result;
+	__u16 refcheck;
+
+	ENTRY;
+
+	CDEBUG(D_VFSTRACE, "Lock request: file=%.*s, inode=%p, mode=%s "
+	       "start=%llu, end=%llu\n", dentry->d_name.len,
+	       dentry->d_name.name, dentry->d_inode,
+	       user_lockname[ladvise->lla_lockahead_mode], (__u64) start,
+	       (__u64) end);
+
+	cl_mode = cl_mode_user_to_kernel(ladvise->lla_lockahead_mode);
+	if (cl_mode < 0)
+		GOTO(out, result = cl_mode);
+
+	/* Get IO environment */
+	result = cl_io_get(inode, &env, &io, &refcheck);
+	if (result <= 0)
+		GOTO(out, result);
+
+	result = cl_io_init(env, io, CIT_MISC, io->ci_obj);
+	if (result > 0) {
+		/*
+		 * nothing to do for this io. This currently happens when
+		 * stripe sub-object's are not yet created.
+		 */
+		result = io->ci_result;
+	} else if (result == 0) {
+		lock = vvp_env_lock(env);
+		descr = &lock->cll_descr;
+
+		descr->cld_obj   = io->ci_obj;
+		/* Convert byte offsets to pages */
+		descr->cld_start = cl_index(io->ci_obj, start);
+		descr->cld_end   = cl_index(io->ci_obj, end);
+		descr->cld_mode  = cl_mode;
+		/* CEF_MUST is used because we do not want to convert a
+		 * lockahead request to a lockless lock */
+		descr->cld_enq_flags = CEF_MUST | CEF_LOCK_NO_EXPAND |
+				       CEF_NONBLOCK;
+
+		if (ladvise->lla_peradvice_flags & LF_ASYNC)
+			descr->cld_enq_flags |= CEF_SPECULATIVE;
+
+		result = cl_lock_request(env, io, lock);
+
+		/* On success, we need to release the lock */
+		if (result >= 0)
+			cl_lock_release(env, lock);
+	}
+	cl_io_fini(env, io);
+	cl_env_put(env, &refcheck);
+
+	/* -ECANCELED indicates a matching lock with a different extent
+	 * was already present, and -EEXIST indicates a matching lock
+	 * on exactly the same extent was already present.
+	 * We convert them to positive values for userspace to make
+	 * recognizing true errors easier.
+	 * Note we can only return these detailed results on async requests,
+	 * as sync requests look the same as i/o requests for locking. */
+	if (result == -ECANCELED)
+		result = LLA_RESULT_DIFFERENT;
+	else if (result == -EEXIST)
+		result = LLA_RESULT_SAME;
+
+out:
+	RETURN(result);
+}
+static const char *const ladvise_names[] = LU_LADVISE_NAMES;
+
+static int ll_ladvise_sanity(struct inode *inode,
+			     struct llapi_lu_ladvise *ladvise)
+{
+	enum lu_ladvise_type advice = ladvise->lla_advice;
+	/* Note the peradvice flags is a 32 bit field, so per advice flags must
+	 * be in the first 32 bits of enum ladvise_flags */
+	__u32 flags = ladvise->lla_peradvice_flags;
+	/* 3 lines at 80 characters per line, should be plenty */
+	int rc = 0;
+
+	if (advice > LU_LADVISE_MAX || advice == LU_LADVISE_INVALID) {
+		rc = -EINVAL;
+		CDEBUG(D_VFSTRACE, "%s: advice with value '%d' not recognized,"
+		       "last supported advice is %s (value '%d'): rc = %d\n",
+		       ll_get_fsname(inode->i_sb, NULL, 0), advice,
+		       ladvise_names[LU_LADVISE_MAX-1], LU_LADVISE_MAX-1, rc);
+		GOTO(out, rc);
+	}
+
+	/* Per-advice checks */
+	switch (advice) {
+	case LU_LADVISE_LOCKNOEXPAND:
+		if (flags & ~LF_LOCKNOEXPAND_MASK) {
+			rc = -EINVAL;
+			CDEBUG(D_VFSTRACE, "%s: Invalid flags (%x) for %s: "
+			       "rc = %d\n",
+			       ll_get_fsname(inode->i_sb, NULL, 0), flags,
+			       ladvise_names[advice], rc);
+			GOTO(out, rc);
+		}
+		break;
+	case LU_LADVISE_LOCKAHEAD:
+		/* Currently only READ and WRITE modes can be requested */
+		if (ladvise->lla_lockahead_mode >= MODE_MAX_USER ||
+		    ladvise->lla_lockahead_mode == 0) {
+			rc = -EINVAL;
+			CDEBUG(D_VFSTRACE, "%s: Invalid mode (%d) for %s: "
+			       "rc = %d\n",
+			       ll_get_fsname(inode->i_sb, NULL, 0),
+			       ladvise->lla_lockahead_mode,
+			       ladvise_names[advice], rc);
+			GOTO(out, rc);
+		}
+	case LU_LADVISE_WILLREAD:
+	case LU_LADVISE_DONTNEED:
+	default:
+		/* Note fall through above - These checks apply to all advices
+		 * except LOCKNOEXPAND */
+		if (flags & ~LF_DEFAULT_MASK) {
+			rc = -EINVAL;
+			CDEBUG(D_VFSTRACE, "%s: Invalid flags (%x) for %s: "
+			       "rc = %d\n",
+			       ll_get_fsname(inode->i_sb, NULL, 0), flags,
+			       ladvise_names[advice], rc);
+			GOTO(out, rc);
+		}
+		if (ladvise->lla_start >= ladvise->lla_end) {
+			rc = -EINVAL;
+			CDEBUG(D_VFSTRACE, "%s: Invalid range (%llu to %llu) "
+			       "for %s: rc = %d\n",
+			       ll_get_fsname(inode->i_sb, NULL, 0),
+			       ladvise->lla_start, ladvise->lla_end,
+			       ladvise_names[advice], rc);
+			GOTO(out, rc);
+		}
+		break;
+	}
+
+out:
+	return rc;
+}
+#undef ERRSIZE
+
 /*
  * Give file access advices
  *
@@ -2482,6 +2668,15 @@ static int ll_ladvise(struct inode *inode, struct file *file, __u64 flags,
 	cl_io_fini(env, io);
 	cl_env_put(env, &refcheck);
 	RETURN(rc);
+}
+
+static int ll_lock_noexpand(struct file *file, int flags)
+{
+	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+
+	fd->ll_lock_no_expand = !(flags & LF_UNSET);
+
+	return 0;
 }
 
 int ll_ioctl_fsgetxattr(struct inode *inode, unsigned int cmd,
@@ -2885,53 +3080,81 @@ out:
 		RETURN(ll_file_futimes_3(file, &lfu));
 	}
 	case LL_IOC_LADVISE: {
-		struct llapi_ladvise_hdr *ladvise_hdr;
+		struct llapi_ladvise_hdr *k_ladvise_hdr;
+		struct llapi_ladvise_hdr __user *u_ladvise_hdr;
 		int i;
 		int num_advise;
-		int alloc_size = sizeof(*ladvise_hdr);
+		int alloc_size = sizeof(*k_ladvise_hdr);
 
 		rc = 0;
-		OBD_ALLOC_PTR(ladvise_hdr);
-		if (ladvise_hdr == NULL)
+		u_ladvise_hdr = (void __user *)arg;
+		OBD_ALLOC_PTR(k_ladvise_hdr);
+		if (k_ladvise_hdr == NULL)
 			RETURN(-ENOMEM);
 
-		if (copy_from_user(ladvise_hdr,
-				   (const struct llapi_ladvise_hdr __user *)arg,
-				   alloc_size))
+		if (copy_from_user(k_ladvise_hdr, u_ladvise_hdr, alloc_size))
 			GOTO(out_ladvise, rc = -EFAULT);
 
-		if (ladvise_hdr->lah_magic != LADVISE_MAGIC ||
-		    ladvise_hdr->lah_count < 1)
+		if (k_ladvise_hdr->lah_magic != LADVISE_MAGIC ||
+		    k_ladvise_hdr->lah_count < 1)
 			GOTO(out_ladvise, rc = -EINVAL);
 
-		num_advise = ladvise_hdr->lah_count;
+		num_advise = k_ladvise_hdr->lah_count;
 		if (num_advise >= LAH_COUNT_MAX)
 			GOTO(out_ladvise, rc = -EFBIG);
 
-		OBD_FREE_PTR(ladvise_hdr);
-		alloc_size = offsetof(typeof(*ladvise_hdr),
+		OBD_FREE_PTR(k_ladvise_hdr);
+		alloc_size = offsetof(typeof(*k_ladvise_hdr),
 				      lah_advise[num_advise]);
-		OBD_ALLOC(ladvise_hdr, alloc_size);
-		if (ladvise_hdr == NULL)
+		OBD_ALLOC(k_ladvise_hdr, alloc_size);
+		if (k_ladvise_hdr == NULL)
 			RETURN(-ENOMEM);
 
 		/*
 		 * TODO: submit multiple advices to one server in a single RPC
 		 */
-		if (copy_from_user(ladvise_hdr,
-				   (const struct llapi_ladvise_hdr __user *)arg,
-				   alloc_size))
+		if (copy_from_user(k_ladvise_hdr, u_ladvise_hdr, alloc_size))
 			GOTO(out_ladvise, rc = -EFAULT);
 
 		for (i = 0; i < num_advise; i++) {
-			rc = ll_ladvise(inode, file, ladvise_hdr->lah_flags,
-					&ladvise_hdr->lah_advise[i]);
+			struct llapi_lu_ladvise *k_ladvise =
+					&k_ladvise_hdr->lah_advise[i];
+			struct llapi_lu_ladvise __user *u_ladvise =
+					&u_ladvise_hdr->lah_advise[i];
+
+			rc = ll_ladvise_sanity(inode, k_ladvise);
 			if (rc)
+				GOTO(out_ladvise, rc);
+
+			switch (k_ladvise->lla_advice) {
+			case LU_LADVISE_LOCKNOEXPAND:
+				rc = ll_lock_noexpand(file,
+					       k_ladvise->lla_peradvice_flags);
+				GOTO(out_ladvise, rc);
+			case LU_LADVISE_LOCKAHEAD:
+
+				rc = ll_file_lock_ahead(file, k_ladvise);
+
+				if (rc < 0)
+					GOTO(out_ladvise, rc);
+
+				if (put_user(rc,
+					     &u_ladvise->lla_lockahead_result))
+					GOTO(out_ladvise, rc = -EFAULT);
 				break;
+			default:
+				rc = ll_ladvise(inode, file,
+						k_ladvise_hdr->lah_flags,
+						k_ladvise);
+				if (rc)
+					GOTO(out_ladvise, rc);
+				break;
+			}
+
 		}
 
 out_ladvise:
-		OBD_FREE(ladvise_hdr, alloc_size);
+		OBD_FREE(k_ladvise_hdr, alloc_size);
 		RETURN(rc);
 	}
 	case LL_IOC_FSGETXATTR:

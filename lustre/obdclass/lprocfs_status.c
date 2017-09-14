@@ -841,12 +841,13 @@ static const char *obd_connect_names[] = {
 	"multi_mod_rpcs",
 	"dir_stripe",
 	"subtree",
-	"lock_ahead",
+	"lockahead",
 	"bulk_mbits",
 	"compact_obdo",
 	"second_flags",
 	/* flags2 names */
 	"file_secctx",
+	"lockaheadv2",
 	NULL
 };
 

@@ -6,6 +6,7 @@ lfs ladvise \- give file access advices or hints to server.
 .B lfs ladvise [--advice|-a ADVICE ] [--background|-b]
         \fB[--start|-s START[kMGT]]
         \fB{[--end|-e END[kMGT]] | [--length|-l LENGTH[kMGT]]}
+        \fB{[--mode|-m MODE] | [--unset|-u]}
         \fB<FILE> ...\fR
 .br
 .SH DESCRIPTION
@@ -24,6 +25,9 @@ Give advice or hint of type \fIADVICE\fR. Advice types are:
 \fBwillread\fR to prefetch data into server cache
 .TP
 \fBdontneed\fR to cleanup data cache on server
+.TP
+\fBlockahead\fR to request a lock on a specified extent of a file
+\fBlocknoexpand\fR to disable server side lock expansion for a file
 .RE
 .TP
 \fB\-b\fR, \fB\-\-background
@@ -39,6 +43,13 @@ This option may not be specified at the same time as the -l option.
 \fB\-l\fR, \fB\-\-length\fR=\fILENGTH\fR
 File range has length of \fILENGTH\fR. This option may not be specified at the
 same time as the -e option.
+.TP
+\fB\-m\fR, \fB\-\-mode\fR=\fIMODE\fR
+Specify the lock \fIMODE\fR. This option is only valid with lockahead
+advice.  Valid modes are: READ, WRITE
+.TP
+\fB\-u\fR, \fB\-\-unset\fR=\fIUNSET\fR
+Unset the previous advice.  Currently only valid with locknoexpand advice.
 .SH NOTE
 .PP
 Typically,
@@ -70,6 +81,14 @@ that the first 1GB of that file will be read soon.
 This gives the OST(s) holding the first 1GB of \fB/mnt/lustre/file1\fR a hint
 that the first 1GB of file will not be read in the near future, thus the OST(s)
 could clear the cache of that file in the memory.
+.B $ lfs ladvise -a lockahead -s 0 -e 1048576 -m READ /mnt/lustre/file1
+Request a read lock on the first 1 MiB of /mnt/lustre/file1.
+.B $ $ lfs ladvise -a lockahead -s 0 -e 4096 -m WRITE ./file1
+Request a write lock on the first 4KiB of /mnt/lustre/file1.
+.B $ $ lfs ladvise -a locknoexpand ./file1
+Set disable lock expansion on ./file1
+.B $ $ lfs ladvise -a locknoexpand -u ./file1
+Unset disable lock expansion on ./file1
 .SH AVAILABILITY
 The lfs ladvise command is part of the Lustre filesystem.
 .SH SEE ALSO

@@ -11,6 +11,7 @@ static int hf_lustre_ldlm_fl_lock_changed        = -1;
 static int hf_lustre_ldlm_fl_block_granted       = -1;
 static int hf_lustre_ldlm_fl_block_conv          = -1;
 static int hf_lustre_ldlm_fl_block_wait          = -1;
+static int hf_lustre_ldlm_fl_speculative         = -1;
 static int hf_lustre_ldlm_fl_ast_sent            = -1;
 static int hf_lustre_ldlm_fl_replay              = -1;
 static int hf_lustre_ldlm_fl_intent_only         = -1;
@@ -22,6 +23,7 @@ static int hf_lustre_ldlm_fl_block_nowait        = -1;
 static int hf_lustre_ldlm_fl_test_lock           = -1;
 static int hf_lustre_ldlm_fl_cancel_on_block     = -1;
 static int hf_lustre_ldlm_fl_cos_incompat        = -1;
+static int hf_lustre_ldlm_fl_no_expansion        = -1;
 static int hf_lustre_ldlm_fl_deny_on_contention  = -1;
 static int hf_lustre_ldlm_fl_ast_discard_data    = -1;
 
@@ -30,6 +32,7 @@ const value_string lustre_ldlm_flags_vals[] = {
   {LDLM_FL_BLOCK_GRANTED,       "LDLM_FL_BLOCK_GRANTED"},
   {LDLM_FL_BLOCK_CONV,          "LDLM_FL_BLOCK_CONV"},
   {LDLM_FL_BLOCK_WAIT,          "LDLM_FL_BLOCK_WAIT"},
+  {LDLM_FL_SPECULATIVE,         "LDLM_FL_SPECULATIVE"},
   {LDLM_FL_AST_SENT,            "LDLM_FL_AST_SENT"},
   {LDLM_FL_REPLAY,              "LDLM_FL_REPLAY"},
   {LDLM_FL_INTENT_ONLY,         "LDLM_FL_INTENT_ONLY"},
@@ -41,6 +44,7 @@ const value_string lustre_ldlm_flags_vals[] = {
   {LDLM_FL_TEST_LOCK,           "LDLM_FL_TEST_LOCK"},
   {LDLM_FL_CANCEL_ON_BLOCK,     "LDLM_FL_CANCEL_ON_BLOCK"},
   {LDLM_FL_COS_INCOMPAT,        "LDLM_FL_COS_INCOMPAT"},
+  {LDLM_FL_NO_EXPANSION,        "LDLM_FL_NO_EXPANSION"},
   {LDLM_FL_DENY_ON_CONTENTION,  "LDLM_FL_DENY_ON_CONTENTION"},
   {LDLM_FL_AST_DISCARD_DATA,    "LDLM_FL_AST_DISCARD_DATA"},
   { 0, NULL }
@@ -73,6 +77,7 @@ lustre_dissect_element_ldlm_lock_flags(
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_block_granted);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_block_conv);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_block_wait);
+  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_speculative);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_ast_sent);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_replay);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_intent_only);
@@ -84,6 +89,7 @@ lustre_dissect_element_ldlm_lock_flags(
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_test_lock);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_cancel_on_block);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_cos_incompat);
+  dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_no_expansion);
   dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_deny_on_contention);
   return
     dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_ldlm_fl_ast_discard_data);
@@ -143,6 +149,21 @@ lustre_dissect_element_ldlm_lock_flags(
       /* bitmask */ LDLM_FL_BLOCK_WAIT,
       /* blurb   */ "Server placed lock on wait list, or a recovering client wants\n"
        "the lock added to the wait list, no questions asked.",
+      /* id      */ HFILL
+    }
+  },
+  {
+    /* p_id    */ &hf_lustre_ldlm_fl_speculative,
+    /* hfinfo  */ {
+      /* name    */ "LDLM_FL_SPECULATIVE",
+      /* abbrev  */ "lustre.ldlm_fl_speculative",
+      /* type    */ FT_BOOLEAN,
+      /* display */ 32,
+      /* strings */ TFS(&lnet_flags_set_truth),
+      /* bitmask */ LDLM_FL_SPECULATIVE,
+      /* blurb   */ "Lock request is speculative/asynchronous, and cannot\n"
+	"wait for any reason.  Fail the lock request if any blocking locks\n"
+	"encountered."
       /* id      */ HFILL
     }
   },
@@ -294,6 +315,21 @@ lustre_dissect_element_ldlm_lock_flags(
 	"requesting lock mode is PW/EX, if so, it will check compatibility with COS\n"
 	"locks, and different from original COS semantic, transactions from the same\n"
 	"client is also treated as lock conflict.",
+      /* id      */ HFILL
+    }
+  },
+  {
+    /* p_id    */ &hf_lustre_ldlm_fl_no_expansion,
+    /* hfinfo  */ {
+      /* name    */ "LDLM_FL_NO_EXPANSION",
+      /* abbrev  */ "lustre.ldlm_fl_NO_EXPANSION",
+      /* type    */ FT_BOOLEAN,
+      /* display */ 32,
+      /* strings */ TFS(&lnet_flags_set_truth),
+      /* bitmask */ LDLM_FL_NO_EXPANSION,
+      /* blurb   */ "Do not expand this lock.  Grant it only on the extent\n"
+	"requested. Used for manually requested locks from the client\n"
+	"(LU_LADVISE_LOCKAHEAD)."
       /* id      */ HFILL
     }
   },
