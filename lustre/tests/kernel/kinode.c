@@ -33,6 +33,7 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/completion.h>
 #include <linux/kthread.h>
 #include <linux/fs.h>
 #include <linux/version.h>
