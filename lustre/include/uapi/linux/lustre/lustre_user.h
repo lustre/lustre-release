@@ -1242,11 +1242,15 @@ enum changelog_message_type {
 /********* Misc **********/
 
 struct ioc_data_version {
-	__u64 idv_version;
-	__u64 idv_flags;     /* See LL_DV_xxx */
+	__u64	idv_version;
+	__u32	idv_layout_version; /* FLR: layout version for OST objects */
+	__u32	idv_flags;	/* enum ioc_data_version_flags */
 };
-#define LL_DV_RD_FLUSH (1 << 0) /* Flush dirty pages from clients */
-#define LL_DV_WR_FLUSH (1 << 1) /* Flush all caching pages from clients */
+
+enum ioc_data_version_flags {
+	LL_DV_RD_FLUSH	= (1 << 0), /* Flush dirty pages from clients */
+	LL_DV_WR_FLUSH	= (1 << 1), /* Flush all caching pages from clients */
+};
 
 #ifndef offsetof
 #define offsetof(typ, memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))

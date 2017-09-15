@@ -868,14 +868,18 @@ lov_io_data_version_end(const struct lu_env *env, const struct cl_io_slice *ios)
 {
 	struct lov_io *lio = cl2lov_io(env, ios);
 	struct cl_io *parent = lio->lis_cl.cis_io;
+	struct cl_data_version_io *pdv = &parent->u.ci_data_version;
 	struct lov_io_sub *sub;
 
 	ENTRY;
 	list_for_each_entry(sub, &lio->lis_active, sub_linkage) {
+		struct cl_data_version_io *sdv = &sub->sub_io.u.ci_data_version;
+
 		lov_io_end_wrapper(env, &sub->sub_io);
 
-		parent->u.ci_data_version.dv_data_version +=
-			sub->sub_io.u.ci_data_version.dv_data_version;
+		pdv->dv_data_version += sdv->dv_data_version;
+		if (pdv->dv_layout_version > sdv->dv_layout_version)
+			pdv->dv_layout_version = sdv->dv_layout_version;
 
 		if (parent->ci_result == 0)
 			parent->ci_result = sub->sub_io.ci_result;

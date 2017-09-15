@@ -1819,6 +1819,7 @@ struct cl_io {
 		} ci_setattr;
 		struct cl_data_version_io {
 			u64 dv_data_version;
+			u32 dv_layout_version;
 			int dv_flags;
 		} ci_data_version;
                 struct cl_fault_io {

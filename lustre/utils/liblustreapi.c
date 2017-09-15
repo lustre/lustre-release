@@ -4750,18 +4750,39 @@ int llapi_get_connect_flags(const char *mnt, __u64 *flags)
  */
 int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags)
 {
-        int rc;
-        struct ioc_data_version idv;
+	int rc;
+	struct ioc_data_version idv;
 
-        idv.idv_flags = flags;
+	idv.idv_flags = (__u32)flags;
 
-        rc = ioctl(fd, LL_IOC_DATA_VERSION, &idv);
-        if (rc)
-                rc = -errno;
-        else
-                *data_version = idv.idv_version;
+	rc = ioctl(fd, LL_IOC_DATA_VERSION, &idv);
+	if (rc)
+		rc = -errno;
+	else
+		*data_version = idv.idv_version;
 
-        return rc;
+	return rc;
+}
+
+/*
+ * Fetch layout version from OST objects. Layout version on OST objects are
+ * only set when the file is a mirrored file AND after the file has been
+ * written at least once.
+ *
+ * It actually fetches the least layout version from the objects.
+ */
+int llapi_get_ost_layout_version(int fd, __u32 *layout_version)
+{
+	int rc;
+	struct ioc_data_version idv = { 0 };
+
+	rc = ioctl(fd, LL_IOC_DATA_VERSION, &idv);
+	if (rc)
+		rc = -errno;
+	else
+		*layout_version = idv.idv_layout_version;
+
+	return rc;
 }
 
 /*

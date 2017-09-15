@@ -344,6 +344,7 @@ int llapi_get_version_string(char *version, unsigned int version_size);
 int llapi_get_version(char *buffer, int buffer_size, char **version)
 	__attribute__((deprecated));
 int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags);
+extern int llapi_get_ost_layout_version(int fd, __u32 *layout_version);
 int llapi_hsm_state_get_fd(int fd, struct hsm_user_state *hus);
 int llapi_hsm_state_get(const char *path, struct hsm_user_state *hus);
 int llapi_hsm_state_set_fd(int fd, __u64 setmask, __u64 clearmask,

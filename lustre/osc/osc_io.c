@@ -715,11 +715,16 @@ static void osc_io_data_version_end(const struct lu_env *env,
 
 	if (cbargs->opc_rc != 0) {
 		slice->cis_io->ci_result = cbargs->opc_rc;
-	} else if (!(oio->oi_oa.o_valid & OBD_MD_FLDATAVERSION)) {
-		slice->cis_io->ci_result = -EOPNOTSUPP;
 	} else {
-		dv->dv_data_version = oio->oi_oa.o_data_version;
 		slice->cis_io->ci_result = 0;
+		if (!(oio->oi_oa.o_valid &
+		      (OBD_MD_LAYOUT_VERSION | OBD_MD_FLDATAVERSION)))
+			slice->cis_io->ci_result = -ENOTSUPP;
+
+		if (oio->oi_oa.o_valid & OBD_MD_LAYOUT_VERSION)
+			dv->dv_layout_version = oio->oi_oa.o_layout_version;
+		if (oio->oi_oa.o_valid & OBD_MD_FLDATAVERSION)
+			dv->dv_data_version = oio->oi_oa.o_data_version;
 	}
 
 	EXIT;

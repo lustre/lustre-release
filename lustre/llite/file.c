@@ -2105,6 +2105,53 @@ gf_free:
 	RETURN(rc);
 }
 
+static int
+ll_ioc_data_version(struct inode *inode, struct ioc_data_version *ioc)
+{
+	struct cl_object *obj = ll_i2info(inode)->lli_clob;
+	struct lu_env *env;
+	struct cl_io *io;
+	__u16  refcheck;
+	int result;
+
+	ENTRY;
+
+	ioc->idv_version = 0;
+	ioc->idv_layout_version = UINT_MAX;
+
+	/* If no file object initialized, we consider its version is 0. */
+	if (obj == NULL)
+		RETURN(0);
+
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
+
+	io = vvp_env_thread_io(env);
+	io->ci_obj = obj;
+	io->u.ci_data_version.dv_data_version = 0;
+	io->u.ci_data_version.dv_layout_version = UINT_MAX;
+	io->u.ci_data_version.dv_flags = ioc->idv_flags;
+
+restart:
+	if (cl_io_init(env, io, CIT_DATA_VERSION, io->ci_obj) == 0)
+		result = cl_io_loop(env, io);
+	else
+		result = io->ci_result;
+
+	ioc->idv_version = io->u.ci_data_version.dv_data_version;
+	ioc->idv_layout_version = io->u.ci_data_version.dv_layout_version;
+
+	cl_io_fini(env, io);
+
+	if (unlikely(io->ci_need_restart))
+		goto restart;
+
+	cl_env_put(env, &refcheck);
+
+	RETURN(result);
+}
+
 /*
  * Read the data_version for inode.
  *
@@ -2118,45 +2165,14 @@ gf_free:
  */
 int ll_data_version(struct inode *inode, __u64 *data_version, int flags)
 {
-	struct cl_object *obj = ll_i2info(inode)->lli_clob;
-	struct lu_env *env;
-	struct cl_io *io;
-	__u16  refcheck;
-	int result;
+	struct ioc_data_version ioc = { .idv_flags = flags };
+	int rc;
 
-	ENTRY;
+	rc = ll_ioc_data_version(inode, &ioc);
+	if (!rc)
+		*data_version = ioc.idv_version;
 
-	/* If no file object initialized, we consider its version is 0. */
-	if (obj == NULL) {
-		*data_version = 0;
-		RETURN(0);
-	}
-
-	env = cl_env_get(&refcheck);
-	if (IS_ERR(env))
-		RETURN(PTR_ERR(env));
-
-	io = vvp_env_thread_io(env);
-	io->ci_obj = obj;
-	io->u.ci_data_version.dv_data_version = 0;
-	io->u.ci_data_version.dv_flags = flags;
-
-restart:
-	if (cl_io_init(env, io, CIT_DATA_VERSION, io->ci_obj) == 0)
-		result = cl_io_loop(env, io);
-	else
-		result = io->ci_result;
-
-	*data_version = io->u.ci_data_version.dv_data_version;
-
-	cl_io_fini(env, io);
-
-	if (unlikely(io->ci_need_restart))
-		goto restart;
-
-	cl_env_put(env, &refcheck);
-
-	RETURN(result);
+	return rc;
 }
 
 /*
@@ -2887,7 +2903,7 @@ out:
 			RETURN(-EFAULT);
 
 		idv.idv_flags &= LL_DV_RD_FLUSH | LL_DV_WR_FLUSH;
-		rc = ll_data_version(inode, &idv.idv_version, idv.idv_flags);
+		rc = ll_ioc_data_version(inode, &idv);
 
 		if (rc == 0 &&
 		    copy_to_user((char __user *)arg, &idv, sizeof(idv)))

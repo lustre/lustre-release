@@ -1332,6 +1332,16 @@ static int ofd_getattr_hdl(struct tgt_session_info *tsi)
 			repbody->oa.o_valid |= OBD_MD_FLDATAVERSION;
 			repbody->oa.o_data_version = curr_version;
 		}
+
+		if (fo->ofo_ff.ff_layout_version > 0) {
+			repbody->oa.o_valid |= OBD_MD_LAYOUT_VERSION;
+			repbody->oa.o_layout_version =
+			     fo->ofo_ff.ff_layout_version + fo->ofo_ff.ff_range;
+
+			CDEBUG(D_INODE, DFID": get layout version: %u\n",
+			       PFID(&tsi->tsi_fid),
+			       repbody->oa.o_layout_version);
+		}
 	}
 
 	ofd_object_put(tsi->tsi_env, fo);
