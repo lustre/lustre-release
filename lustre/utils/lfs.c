@@ -73,7 +73,6 @@
 #endif /* !ARRAY_SIZE */
 
 /* all functions */
-static int lfs_setstripe(int argc, char **argv);
 static int lfs_find(int argc, char **argv);
 static int lfs_getstripe(int argc, char **argv);
 static int lfs_getdirstripe(int argc, char **argv);
@@ -109,7 +108,34 @@ static int lfs_hsm_cancel(int argc, char **argv);
 static int lfs_swap_layouts(int argc, char **argv);
 static int lfs_mv(int argc, char **argv);
 static int lfs_ladvise(int argc, char **argv);
+static int lfs_mirror(int argc, char **argv);
+static int lfs_mirror_list_commands(int argc, char **argv);
 static int lfs_list_commands(int argc, char **argv);
+
+enum setstripe_origin {
+	SO_SETSTRIPE,
+	SO_MIGRATE,
+	SO_MIRROR_CREATE,
+	SO_MIRROR_EXTEND
+};
+static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc);
+
+static inline int lfs_setstripe(int argc, char **argv)
+{
+	return lfs_setstripe0(argc, argv, SO_SETSTRIPE);
+}
+static inline int lfs_setstripe_migrate(int argc, char **argv)
+{
+	return lfs_setstripe0(argc, argv, SO_MIGRATE);
+}
+static inline int lfs_mirror_create(int argc, char **argv)
+{
+	return lfs_setstripe0(argc, argv, SO_MIRROR_CREATE);
+}
+static inline int lfs_mirror_extend(int argc, char **argv)
+{
+	return lfs_setstripe0(argc, argv, SO_MIRROR_EXTEND);
+}
 
 /* Setstripe and migrate share mostly the same parameters */
 #define SSM_CMD_COMMON(cmd) \
@@ -141,6 +167,39 @@ static int lfs_list_commands(int argc, char **argv);
 	"\t              respectively, -1 for EOF). Must be a multiple of\n"\
 	"\t              stripe_size.\n"
 
+#define MIRROR_CREATE_HELP						       \
+	"\tmirror_count: Number of mirrors to be created with the upcoming\n"  \
+	"\t              setstripe layout options\n"			       \
+	"\t              It defaults to 1 if not specified; if specified,\n"   \
+	"\t              it must follow the option without a space.\n"	       \
+	"\t              The option can also be repeated multiple times to\n"  \
+	"\t              separate mirrors that have different layouts.\n"      \
+	"\tsetstripe options: Mirror layout\n"				       \
+	"\t              It can be a plain layout or a composite layout.\n"    \
+	"\t              If not specified, the stripe options inherited\n"     \
+	"\t              from the previous component will be used.\n"          \
+	"\tparent:       Use default stripe options from parent directory\n"
+
+#define MIRROR_EXTEND_HELP						       \
+	MIRROR_CREATE_HELP						       \
+	"\tvictim_file:  The layout of victim_file will be split and used\n"   \
+	"\t              as a mirror added to the mirrored file.\n"	       \
+	"\tno-verify:    This option indicates not to verify the mirror(s)\n"  \
+	"\t              from victim file(s) in case the victim file(s)\n"     \
+	"\t              contains the same data as the original mirrored\n"    \
+	"\t              file.\n"
+
+#define MIRROR_EXTEND_USAGE						       \
+	"                 <--mirror-count|-N[mirror_count]>\n"		       \
+	"                 [setstripe options|--parent|-f <victim_file>]\n"     \
+	"                 [--no-verify]\n"
+
+#define SETSTRIPE_USAGE							\
+	SSM_CMD_COMMON("setstripe")					\
+	MIRROR_EXTEND_USAGE						\
+	"                 <directory|filename>\n"			\
+	SSM_HELP_COMMON							\
+	MIRROR_EXTEND_HELP
 
 #define MIGRATE_USAGE							\
 	SSM_CMD_COMMON("migrate  ")					\
@@ -166,6 +225,30 @@ static int lfs_list_commands(int argc, char **argv);
 	"\tmode: the mode of the directory\n"
 
 static const char	*progname;
+
+/**
+ * command_t mirror_cmdlist - lfs mirror commands.
+ */
+command_t mirror_cmdlist[] = {
+	{ .pc_name = "create", .pc_func = lfs_mirror_create,
+	  .pc_help = "Create a mirrored file.\n"
+	  "usage: lfs mirror create "
+	  "<--mirror-count|-N[mirror_count]> "
+	  "[setstripe options|--parent] ... <filename|directory>\n"
+	  MIRROR_CREATE_HELP },
+	{ .pc_name = "extend", .pc_func = lfs_mirror_extend,
+	  .pc_help = "Extend a mirrored file.\n"
+	  "usage: lfs mirror extend "
+	  "<--mirror-count|-N[mirror_count]> [--no-verify] "
+	  "[setstripe options|--parent|-f <victim_file>] ... <filename>\n"
+	  MIRROR_EXTEND_HELP },
+	{ .pc_name = "--list-commands", .pc_func = lfs_mirror_list_commands,
+	  .pc_help = "list commands supported by lfs mirror"},
+	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
+	{ .pc_name = "exit", .pc_func = Parser_quit, .pc_help = "quit" },
+	{ .pc_name = "quit", .pc_func = Parser_quit, .pc_help = "quit" },
+	{ .pc_help = NULL }
+};
 
 /* all available commands */
 command_t cmdlist[] = {
@@ -363,7 +446,7 @@ command_t cmdlist[] = {
 	 "usage: hsm_cancel [--filelist FILELIST] [--data DATA] <file> ..."},
 	{"swap_layouts", lfs_swap_layouts, 0, "Swap layouts between 2 files.\n"
 	 "usage: swap_layouts <path1> <path2>"},
-	{"migrate", lfs_setstripe, 0,
+	{"migrate", lfs_setstripe_migrate, 0,
 	 "migrate a directory between MDTs.\n"
 	 "usage: migrate --mdt-index <mdt_idx> [--verbose|-v] "
 	 "<directory>\n"
@@ -399,6 +482,13 @@ command_t cmdlist[] = {
 	 "               {[--end|-e END[kMGT]] | [--length|-l LENGTH[kMGT]]}\n"
 	 "               {[--mode|-m [READ,WRITE]}\n"
 	 "               <file> ...\n"},
+	{"mirror", lfs_mirror, mirror_cmdlist,
+	 "lfs commands used to manage files with mirrored components:\n"
+	 "lfs mirror create - create a mirrored file or directory\n"
+	 "lfs mirror extend - add mirror(s) to an existing file\n"
+	 "lfs mirror split  - split a mirror from an existing mirrored file\n"
+	 "lfs mirror resync - resynchronize an out-of-sync mirrored file\n"
+	 "lfs mirror verify - verify a mirrored file\n"},
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},
@@ -892,8 +982,209 @@ out:
 	return rc;
 }
 
-static int lfs_create_mirror(char *fname, struct llapi_layout *layout,
-			     const char *mirror_file)
+/**
+ * struct mirror_args - Command-line arguments for mirror(s).
+ * @m_count:  Number of mirrors to be created with this layout.
+ * @m_layout: Mirror layout.
+ * @m_file:   A victim file. Its layout will be split and used as a mirror.
+ * @m_next:   Point to the next node of the list.
+ *
+ * Command-line arguments for mirror(s) will be parsed and stored in
+ * a linked list that consists of this structure.
+ */
+struct mirror_args {
+	__u32			m_count;
+	struct llapi_layout	*m_layout;
+	const char		*m_file;
+	struct mirror_args	*m_next;
+};
+
+/**
+ * enum mirror_flags - Flags for extending a mirrored file.
+ * @NO_VERIFY: Indicates not to verify the mirror(s) from victim file(s)
+ *	       in case the victim file(s) contains the same data as the
+ *	       original mirrored file.
+ *
+ * Flags for extending a mirrored file.
+ */
+enum mirror_flags {
+	NO_VERIFY	= 0x1,
+};
+
+/**
+ * mirror_create_sanity_check() - Check mirror list.
+ * @list:  A linked list that stores the mirror arguments.
+ *
+ * This function does a sanity check on @list for creating
+ * a mirrored file.
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+static int mirror_create_sanity_check(struct mirror_args *list)
+{
+	int rc = 0;
+	bool has_m_file = false;
+	bool has_m_layout = false;
+
+	if (list == NULL)
+		return -EINVAL;
+
+	while (list != NULL) {
+		uint64_t start, end;
+
+		if (list->m_file != NULL) {
+			has_m_file = true;
+			llapi_layout_free(list->m_layout);
+
+			list->m_layout =
+				llapi_layout_get_by_path(list->m_file, 0);
+			if (list->m_layout == NULL) {
+				fprintf(stderr,
+					"error: %s: file '%s' has no layout\n",
+					progname, list->m_file);
+				return -ENODATA;
+			}
+		} else {
+			if (list->m_layout != NULL)
+				has_m_layout = true;
+			else {
+				fprintf(stderr, "error: %s: no mirror layout\n",
+					progname);
+				return -EINVAL;
+			}
+		}
+
+		rc = llapi_layout_comp_use(list->m_layout,
+					   LLAPI_LAYOUT_COMP_USE_LAST);
+		if (rc)
+			return -errno;
+
+		rc = llapi_layout_comp_extent_get(list->m_layout, &start, &end);
+		if (rc)
+			return -errno;
+
+		if (end != LUSTRE_EOF) {
+			fprintf(stderr,
+				"error: %s: mirror layout doesn't reach eof\n",
+				progname);
+			return -EINVAL;
+		}
+
+		list = list->m_next;
+	}
+
+	if (has_m_file && has_m_layout) {
+		fprintf(stderr, "error: %s: -f <victim_file> option should not "
+			"be specified with setstripe options or "
+			"--parent option\n", progname);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+/**
+ * mirror_create() - Create a mirrored file.
+ * @fname:        The file to be created.
+ * @mirror_list:  A linked list that stores the mirror arguments.
+ *
+ * This function creates a mirrored file @fname with the mirror(s)
+ * from @mirror_list.
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+static int mirror_create(char *fname, struct mirror_args *mirror_list)
+{
+	struct llapi_layout *layout = NULL;
+	struct mirror_args *cur_mirror = NULL;
+	uint16_t mirror_count = 0;
+	int i = 0;
+	int rc = 0;
+
+	rc = mirror_create_sanity_check(mirror_list);
+	if (rc)
+		return rc;
+
+	cur_mirror = mirror_list;
+	while (cur_mirror != NULL) {
+		for (i = 0; i < cur_mirror->m_count; i++) {
+			rc = llapi_layout_merge(&layout, cur_mirror->m_layout);
+			if (rc) {
+				rc = -errno;
+				fprintf(stderr, "error: %s: "
+					"merge layout failed: %s\n",
+					progname, strerror(errno));
+				goto error;
+			}
+		}
+		mirror_count += cur_mirror->m_count;
+		cur_mirror = cur_mirror->m_next;
+	}
+
+	rc = llapi_layout_mirror_count_set(layout, mirror_count);
+	if (rc) {
+		rc = -errno;
+		fprintf(stderr, "error: %s: set mirror count failed: %s\n",
+			progname, strerror(errno));
+		goto error;
+	}
+
+	rc = lfs_component_create(fname, O_CREAT | O_WRONLY | O_EXCL, 0644,
+				  layout);
+	if (rc >= 0) {
+		close(rc);
+		rc = 0;
+	}
+
+error:
+	llapi_layout_free(layout);
+	return rc;
+}
+
+/**
+ * Compare files and check lease on @fd.
+ *
+ * \retval bytes number of bytes are the same
+ */
+static ssize_t mirror_file_compare(int fd, int fdv)
+{
+	const size_t buflen = 4 * 1024 * 1024; /* 4M */
+	void *buf;
+	ssize_t bytes_done = 0;
+	ssize_t bytes_read = 0;
+
+	buf = malloc(buflen * 2);
+	if (!buf)
+		return -ENOMEM;
+
+	while (1) {
+		if (!llapi_lease_check(fd)) {
+			bytes_done = -EBUSY;
+			break;
+		}
+
+		bytes_read = read(fd, buf, buflen);
+		if (bytes_read <= 0)
+			break;
+
+		if (bytes_read != read(fdv, buf + buflen, buflen))
+			break;
+
+		/* XXX: should compute the checksum on each buffer and then
+		 * compare checksum to avoid cache collision */
+		if (memcmp(buf, buf + buflen, bytes_read))
+			break;
+
+		bytes_done += bytes_read;
+	}
+
+	free(buf);
+
+	return bytes_done;
+}
+
+static int mirror_extend_file(const char *fname, const char *victim_file,
+			      enum mirror_flags mirror_flags)
 {
 	int fd = -1;
 	int fdv = -1;
@@ -902,10 +1193,6 @@ static int lfs_create_mirror(char *fname, struct llapi_layout *layout,
 	__u64 dv;
 	int rc;
 
-	if (mirror_file == NULL)
-		return lfs_migrate(fname, MIGRATION_NONBLOCK | MIGRATION_MIRROR,
-				   NULL, layout);
-
 	fd = open(fname, O_RDWR);
 	if (fd < 0) {
 		error_loc = "open source file";
@@ -913,24 +1200,11 @@ static int lfs_create_mirror(char *fname, struct llapi_layout *layout,
 		goto out;
 	}
 
-	/* Get rid of caching pages from clients */
-	rc = llapi_get_data_version(fd, &dv, LL_DV_WR_FLUSH);
-	if (rc < 0) {
-		error_loc = "cannot get data version";
-		return rc;
-	}
-
-	fdv = open(mirror_file, O_WRONLY);
+	fdv = open(victim_file, O_RDWR);
 	if (fdv < 0) {
 		error_loc = "open target file";
 		rc = -errno;
 		goto out;
-	}
-
-	rc = llapi_get_data_version(fdv, &dv, LL_DV_WR_FLUSH);
-	if (rc < 0) {
-		error_loc = "cannot get data version";
-		return rc;
 	}
 
 	if (fstat(fd, &stbuf) || fstat(fdv, &stbuf_v)) {
@@ -941,7 +1215,7 @@ static int lfs_create_mirror(char *fname, struct llapi_layout *layout,
 
 	if (stbuf.st_dev != stbuf_v.st_dev) {
 		error_loc = "stat source and target file";
-		rc = EXDEV;
+		rc = -EXDEV;
 		goto out;
 	}
 
@@ -956,6 +1230,31 @@ static int lfs_create_mirror(char *fname, struct llapi_layout *layout,
 	if (rc < 0) {
 		error_loc = "cannot get lease";
 		goto out;
+	}
+
+	if (!(mirror_flags & NO_VERIFY)) {
+		ssize_t ret;
+		/* mirrors should have the same contents */
+		ret = mirror_file_compare(fd, fdv);
+		if (ret != stbuf.st_size) {
+			error_loc = "file busy or contents don't match";
+			rc = ret < 0 ? ret : -EINVAL;
+			goto out;
+		}
+	}
+
+	/* Get rid of caching pages from clients */
+	rc = llapi_get_data_version(fd, &dv, LL_DV_WR_FLUSH);
+	if (rc < 0) {
+		error_loc = "cannot get data version";
+		return rc;
+	}
+
+	rc = llapi_get_data_version(fdv, &dv, LL_DV_WR_FLUSH);
+	if (rc < 0) {
+		error_loc = "cannot get data version";
+		return rc;
+
 	}
 
 	/* Make sure we keep original atime/mtime values */
@@ -977,9 +1276,47 @@ out:
 	if (fdv >= 0)
 		close(fdv);
 
+	if (!rc)
+		(void) unlink(victim_file);
+
 	if (rc < 0)
 		fprintf(stderr, "error: %s: %s: %s: %s\n",
 			progname, fname, error_loc, strerror(-rc));
+	return rc;
+}
+
+static int mirror_extend(char *fname, struct mirror_args *mirror_list,
+			 enum mirror_flags mirror_flags)
+{
+	int rc;
+
+	rc = mirror_create_sanity_check(mirror_list);
+	if (rc)
+		return rc;
+
+	while (mirror_list) {
+		if (mirror_list->m_file != NULL) {
+			rc = mirror_extend_file(fname, mirror_list->m_file,
+						mirror_flags);
+		} else {
+			__u32 mirror_count = mirror_list->m_count;
+
+			while (mirror_count > 0) {
+				rc = lfs_migrate(fname,
+					MIGRATION_NONBLOCK | MIGRATION_MIRROR,
+					NULL, mirror_list->m_layout);
+				if (rc)
+					break;
+
+				--mirror_count;
+			}
+		}
+		if (rc)
+			break;
+
+		mirror_list = mirror_list->m_next;
+	}
+
 	return rc;
 }
 
@@ -1070,11 +1407,11 @@ static int parse_targets(__u32 *osts, int size, int offset, char *arg)
 struct lfs_setstripe_args {
 	unsigned long long	 lsa_comp_end;
 	unsigned long long	 lsa_stripe_size;
-	int			 lsa_stripe_count;
-	int			 lsa_stripe_off;
+	long long		 lsa_stripe_count;
+	long long		 lsa_stripe_off;
 	__u32			 lsa_comp_flags;
 	int			 lsa_nr_osts;
-	int			 lsa_pattern;
+	unsigned long long	 lsa_pattern;
 	__u32			*lsa_osts;
 	char			*lsa_pool_name;
 };
@@ -1082,16 +1419,60 @@ struct lfs_setstripe_args {
 static inline void setstripe_args_init(struct lfs_setstripe_args *lsa)
 {
 	memset(lsa, 0, sizeof(*lsa));
-	lsa->lsa_stripe_off = -1;
+
+	lsa->lsa_stripe_size = LLAPI_LAYOUT_DEFAULT;
+	lsa->lsa_stripe_count = LLAPI_LAYOUT_DEFAULT;
+	lsa->lsa_stripe_off = LLAPI_LAYOUT_DEFAULT;
+	lsa->lsa_pattern = LLAPI_LAYOUT_RAID0;
+	lsa->lsa_pool_name = NULL;
+}
+
+/**
+ * setstripe_args_init_inherit() - Initialize and inherit stripe options.
+ * @lsa: Stripe options to be initialized and inherited.
+ *
+ * This function initializes stripe options in @lsa and inherit
+ * stripe_size, stripe_count and OST pool_name options.
+ *
+ * Return: void.
+ */
+static inline void setstripe_args_init_inherit(struct lfs_setstripe_args *lsa)
+{
+	unsigned long long stripe_size;
+	long long stripe_count;
+	char *pool_name = NULL;
+
+	stripe_size = lsa->lsa_stripe_size;
+	stripe_count = lsa->lsa_stripe_count;
+	pool_name = lsa->lsa_pool_name;
+
+	setstripe_args_init(lsa);
+
+	lsa->lsa_stripe_size = stripe_size;
+	lsa->lsa_stripe_count = stripe_count;
+	lsa->lsa_pool_name = pool_name;
 }
 
 static inline bool setstripe_args_specified(struct lfs_setstripe_args *lsa)
 {
-	return (lsa->lsa_stripe_size != 0 || lsa->lsa_stripe_count != 0 ||
-		lsa->lsa_stripe_off != -1 || lsa->lsa_pool_name != NULL ||
-		lsa->lsa_comp_end != 0 || lsa->lsa_pattern != 0);
+	return (lsa->lsa_stripe_size != LLAPI_LAYOUT_DEFAULT ||
+		lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT ||
+		lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT ||
+		lsa->lsa_pattern != LLAPI_LAYOUT_RAID0 ||
+		lsa->lsa_pool_name != NULL ||
+		lsa->lsa_comp_end != 0);
 }
 
+/**
+ * comp_args_to_layout() - Create or extend a composite layout.
+ * @composite:       Pointer to the composite layout.
+ * @lsa:             Stripe options for the new component.
+ *
+ * This function creates or extends a composite layout by adding a new
+ * component with stripe options from @lsa.
+ *
+ * Return: 0 on success or an error code on failure.
+ */
 static int comp_args_to_layout(struct llapi_layout **composite,
 			       struct lfs_setstripe_args *lsa)
 {
@@ -1138,13 +1519,13 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 	if (lsa->lsa_pattern == LLAPI_LAYOUT_MDT) {
 		/* In case of Data-on-MDT patterns the only extra option
 		 * applicable is stripe size option. */
-		if (lsa->lsa_stripe_count) {
+		if (lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT) {
 			fprintf(stderr, "Option 'stripe-count' can't be "
-				"specified with Data-on-MDT component: %i\n",
+				"specified with Data-on-MDT component: %lld\n",
 				lsa->lsa_stripe_count);
 			return -EINVAL;
 		}
-		if (lsa->lsa_stripe_size) {
+		if (lsa->lsa_stripe_size != LLAPI_LAYOUT_DEFAULT) {
 			fprintf(stderr, "Option 'stripe-size' can't be "
 				"specified with Data-on-MDT component: %llu\n",
 				lsa->lsa_stripe_size);
@@ -1156,9 +1537,9 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 				lsa->lsa_nr_osts);
 			return -EINVAL;
 		}
-		if (lsa->lsa_stripe_off != -1) {
+		if (lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT) {
 			fprintf(stderr, "Option 'stripe-offset' can't be "
-				"specified with Data-on-MDT component: %i\n",
+				"specified with Data-on-MDT component: %lld\n",
 				lsa->lsa_stripe_off);
 			return -EINVAL;
 		}
@@ -1171,7 +1552,7 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 
 		rc = llapi_layout_pattern_set(layout, lsa->lsa_pattern);
 		if (rc) {
-			fprintf(stderr, "Set stripe pattern %#x failed. %s\n",
+			fprintf(stderr, "Set stripe pattern %#llx failed. %s\n",
 				lsa->lsa_pattern, strerror(errno));
 			return rc;
 		}
@@ -1179,26 +1560,18 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 		lsa->lsa_stripe_size = lsa->lsa_comp_end;
 	}
 
-	if (lsa->lsa_stripe_size != 0) {
-		rc = llapi_layout_stripe_size_set(layout,
-						  lsa->lsa_stripe_size);
-		if (rc) {
-			fprintf(stderr, "Set stripe size %llu failed. %s\n",
-				lsa->lsa_stripe_size, strerror(errno));
-			return rc;
-		}
+	rc = llapi_layout_stripe_size_set(layout, lsa->lsa_stripe_size);
+	if (rc) {
+		fprintf(stderr, "Set stripe size %llu failed: %s\n",
+			lsa->lsa_stripe_size, strerror(errno));
+		return rc;
 	}
 
-	if (lsa->lsa_stripe_count != 0) {
-		rc = llapi_layout_stripe_count_set(layout,
-						   lsa->lsa_stripe_count == -1 ?
-						   LLAPI_LAYOUT_WIDE :
-						   lsa->lsa_stripe_count);
-		if (rc) {
-			fprintf(stderr, "Set stripe count %d failed. %s\n",
-				lsa->lsa_stripe_count, strerror(errno));
-			return rc;
-		}
+	rc = llapi_layout_stripe_count_set(layout, lsa->lsa_stripe_count);
+	if (rc) {
+		fprintf(stderr, "Set stripe count %lld failed: %s\n",
+			lsa->lsa_stripe_count, strerror(errno));
+		return rc;
 	}
 
 	if (lsa->lsa_pool_name != NULL) {
@@ -1208,12 +1581,21 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 				lsa->lsa_pool_name, strerror(errno));
 			return rc;
 		}
+	} else {
+		rc = llapi_layout_pool_name_set(layout, "");
+		if (rc) {
+			fprintf(stderr, "Clear pool name failed: %s\n",
+				strerror(errno));
+			return rc;
+		}
 	}
 
 	if (lsa->lsa_nr_osts > 0) {
 		if (lsa->lsa_stripe_count > 0 &&
+		    lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
+		    lsa->lsa_stripe_count != LLAPI_LAYOUT_WIDE &&
 		    lsa->lsa_nr_osts != lsa->lsa_stripe_count) {
-			fprintf(stderr, "stripe_count(%d) != nr_osts(%d)\n",
+			fprintf(stderr, "stripe_count(%lld) != nr_osts(%d)\n",
 				lsa->lsa_stripe_count, lsa->lsa_nr_osts);
 			return -EINVAL;
 		}
@@ -1223,7 +1605,7 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 			if (rc)
 				break;
 		}
-	} else if (lsa->lsa_stripe_off != -1) {
+	} else if (lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT) {
 		rc = llapi_layout_ost_index_set(layout, 0, lsa->lsa_stripe_off);
 	}
 	if (rc) {
@@ -1390,6 +1772,63 @@ static inline bool arg_is_eof(char *arg)
 	       !strncmp(arg, "eof", strlen("eof"));
 }
 
+/**
+ * lfs_mirror_alloc() - Allocate a mirror argument structure.
+ *
+ * Return: Valid mirror_args pointer on success and
+ *         NULL if memory allocation fails.
+ */
+static struct mirror_args *lfs_mirror_alloc(void)
+{
+	struct mirror_args *mirror = NULL;
+
+	while (1) {
+		mirror = calloc(1, sizeof(*mirror));
+		if (mirror != NULL)
+			break;
+
+		sleep(1);
+	}
+
+	return mirror;
+}
+
+/**
+ * lfs_mirror_free() - Free memory allocated for a mirror argument
+ *                     structure.
+ * @mirror: Previously allocated mirror argument structure by
+ *	    lfs_mirror_alloc().
+ *
+ * Free memory allocated for @mirror.
+ *
+ * Return: void.
+ */
+static void lfs_mirror_free(struct mirror_args *mirror)
+{
+	if (mirror->m_layout != NULL)
+		llapi_layout_free(mirror->m_layout);
+	free(mirror);
+}
+
+/**
+ * lfs_mirror_list_free() - Free memory allocated for a mirror list.
+ * @mirror_list: Previously allocated mirror list.
+ *
+ * Free memory allocated for @mirror_list.
+ *
+ * Return: void.
+ */
+static void lfs_mirror_list_free(struct mirror_args *mirror_list)
+{
+	struct mirror_args *next_mirror = NULL;
+
+	while (mirror_list != NULL) {
+		next_mirror = mirror_list->m_next;
+		lfs_mirror_free(mirror_list);
+		mirror_list = next_mirror;
+	}
+}
+
 enum {
 	LFS_POOL_OPT = 3,
 	LFS_COMP_COUNT_OPT,
@@ -1398,11 +1837,13 @@ enum {
 	LFS_COMP_DEL_OPT,
 	LFS_COMP_SET_OPT,
 	LFS_COMP_ADD_OPT,
+	LFS_COMP_USE_PARENT_OPT,
+	LFS_COMP_NO_VERIFY_OPT,
 	LFS_PROJID_OPT,
 };
 
 /* functions */
-static int lfs_setstripe(int argc, char **argv)
+static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 {
 	struct lfs_setstripe_args	 lsa;
 	struct llapi_stripe_param	*param = NULL;
@@ -1426,8 +1867,15 @@ static int lfs_setstripe(int argc, char **argv)
 	int				 comp_add = 0;
 	__u32				 comp_id = 0;
 	struct llapi_layout		*layout = NULL;
-	bool				 create_mirror = false;
-	const char			*mirror_file = NULL;
+	struct llapi_layout		**lpp = &layout;
+	bool				 mirror_mode = false;
+	bool				 has_m_file = false;
+	__u32				 mirror_count = 0;
+	enum mirror_flags		 mirror_flags = 0;
+	struct mirror_args		*mirror_list = NULL;
+	struct mirror_args		*new_mirror = NULL;
+	struct mirror_args		*last_mirror = NULL;
+	char				 cmd[PATH_MAX];
 
 	struct option long_opts[] = {
 		/* --block is only valid in migrate mode */
@@ -1452,12 +1900,17 @@ static int lfs_setstripe(int argc, char **argv)
 	{ .val = LFS_COMP_SET_OPT,
 			.name = "component-set",
 						.has_arg = no_argument},
+	{ .val = LFS_COMP_USE_PARENT_OPT,
+			.name = "parent",	.has_arg = no_argument},
+	{ .val = LFS_COMP_NO_VERIFY_OPT,
+			.name = "no-verify",	.has_arg = no_argument},
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument},
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
 	{ .val = 'E',	.name = "comp-end",	.has_arg = required_argument},
 	{ .val = 'E',	.name = "component-end",
 						.has_arg = required_argument},
+	{ .val = 'f',	.name = "file",		.has_arg = required_argument },
 	/* dirstripe {"mdt-hash",     required_argument, 0, 'H'}, */
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = required_argument},
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument},
@@ -1467,7 +1920,7 @@ static int lfs_setstripe(int argc, char **argv)
 	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt_index",	.has_arg = required_argument},
-	{ .val = 'M',	.name = "mirror",	.has_arg = optional_argument},
+	{ .val = 'N',	.name = "mirror-count",	.has_arg = optional_argument},
 	/* --non-block is only valid in migrate mode */
 	{ .val = 'n',	.name = "non-block",	.has_arg = no_argument},
 	{ .val = 'o',	.name = "ost",		.has_arg = required_argument},
@@ -1481,26 +1934,16 @@ static int lfs_setstripe(int argc, char **argv)
 	/* dirstripe {"mdt-count",    required_argument, 0, 'T'}, */
 	/* --verbose is only valid in migrate mode */
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
-	{ .val = LFS_COMP_ADD_OPT,
-			.name = "component-add",
-						.has_arg = no_argument },
-	{ .val = LFS_COMP_DEL_OPT,
-			.name = "component-del",
-						.has_arg = no_argument },
-	{ .val = LFS_COMP_FLAGS_OPT,
-			.name = "component-flags",
-						.has_arg = required_argument },
-	{ .val = LFS_COMP_SET_OPT,
-			.name = "component-set",
-						.has_arg = no_argument },
 	{ .name = NULL } };
 
 	setstripe_args_init(&lsa);
 
-	if (strcmp(argv[0], "migrate") == 0)
-		migrate_mode = true;
+	migrate_mode = (opc == SO_MIGRATE);
+	mirror_mode = (opc == SO_MIRROR_CREATE || opc == SO_MIRROR_EXTEND);
 
-	while ((c = getopt_long(argc, argv, "bc:dE:i:I:m:no:p:L:s:S:v",
+	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
+	progname = cmd;
+	while ((c = getopt_long(argc, argv, "bc:dE:f:i:I:m:N::no:p:L:s:S:v",
 				long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
@@ -1520,6 +1963,18 @@ static int lfs_setstripe(int argc, char **argv)
 		case LFS_COMP_SET_OPT:
 			comp_set = 1;
 			break;
+		case LFS_COMP_USE_PARENT_OPT:
+			if (!mirror_mode) {
+				fprintf(stderr, "error: %s: --parent must be "
+					"specified with --mirror-count|-N "
+					"option\n", progname);
+				goto usage_error;
+			}
+			setstripe_args_init(&lsa);
+			break;
+		case LFS_COMP_NO_VERIFY_OPT:
+			mirror_flags |= NO_VERIFY;
+			break;
 		case 'b':
 			if (!migrate_mode) {
 				fprintf(stderr,
@@ -1537,23 +1992,17 @@ static int lfs_setstripe(int argc, char **argv)
 					progname, argv[0], optarg);
 				goto usage_error;
 			}
+
+			if (lsa.lsa_stripe_count == -1)
+				lsa.lsa_stripe_count = LLAPI_LAYOUT_WIDE;
 			break;
 		case 'd':
 			/* delete the default striping pattern */
 			delete = 1;
 			break;
-		case 'M':
-			if (create_mirror) {
-				fprintf(stderr, "error: %s: --mirror can only "
-					"be specfied once", argv[0]);
-				goto error;
-			}
-			create_mirror = true;
-			mirror_file = optarg;
-			break;
 		case 'E':
 			if (lsa.lsa_comp_end != 0) {
-				result = comp_args_to_layout(&layout, &lsa);
+				result = comp_args_to_layout(lpp, &lsa);
 				if (result) {
 					fprintf(stderr,
 						"%s %s: invalid layout\n",
@@ -1561,7 +2010,7 @@ static int lfs_setstripe(int argc, char **argv)
 					goto usage_error;
 				}
 
-				setstripe_args_init(&lsa);
+				setstripe_args_init_inherit(&lsa);
 			}
 
 			if (arg_is_eof(optarg)) {
@@ -1586,6 +2035,8 @@ static int lfs_setstripe(int argc, char **argv)
 					progname, argv[0], optarg);
 				goto usage_error;
 			}
+			if (lsa.lsa_stripe_off == -1)
+				lsa.lsa_stripe_off = LLAPI_LAYOUT_DEFAULT;
 			break;
 		case 'I':
 			comp_id = strtoul(optarg, &end, 0);
@@ -1596,6 +2047,24 @@ static int lfs_setstripe(int argc, char **argv)
 					progname, argv[0], optarg);
 				goto usage_error;
 			}
+			break;
+		case 'f':
+			if (opc != SO_MIRROR_EXTEND) {
+				fprintf(stderr,
+					"error: %s: invalid option: %s\n",
+					progname, argv[optopt + 1]);
+				goto usage_error;
+			}
+			if (last_mirror == NULL) {
+				fprintf(stderr, "error: %s: '-N' must exist "
+					"in front of '%s'\n",
+					progname, argv[optopt + 1]);
+				goto usage_error;
+			}
+
+			last_mirror->m_file = optarg;
+			last_mirror->m_count = 1;
+			has_m_file = true;
 			break;
 		case 'L':
 			if (strcmp(argv[optind - 1], "mdt") == 0) {
@@ -1639,6 +2108,48 @@ static int lfs_setstripe(int argc, char **argv)
 			}
 			migration_flags |= MIGRATION_NONBLOCK;
 			break;
+		case 'N':
+			if (opc == SO_SETSTRIPE) {
+				opc = SO_MIRROR_CREATE;
+				mirror_mode = true;
+			}
+			mirror_count = 1;
+			if (optarg != NULL) {
+				mirror_count = strtoul(optarg, &end, 0);
+				if (*end != '\0' || mirror_count == 0) {
+					fprintf(stderr,
+						"error: %s: bad mirror count: %s\n",
+						progname, optarg);
+					result = -EINVAL;
+					goto error;
+				}
+			}
+
+			new_mirror = lfs_mirror_alloc();
+			new_mirror->m_count = mirror_count;
+
+			if (mirror_list == NULL)
+				mirror_list = new_mirror;
+
+			if (last_mirror != NULL) {
+				/* wrap up last mirror */
+				if (lsa.lsa_comp_end == 0)
+					lsa.lsa_comp_end = LUSTRE_EOF;
+
+				result = comp_args_to_layout(lpp, &lsa);
+				if (result) {
+					lfs_mirror_free(new_mirror);
+					goto error;
+				}
+
+				setstripe_args_init_inherit(&lsa);
+
+				last_mirror->m_next = new_mirror;
+			}
+
+			last_mirror = new_mirror;
+			lpp = &last_mirror->m_layout;
+			break;
 		case 'o':
 			lsa.lsa_nr_osts = parse_targets(osts,
 						sizeof(osts) / sizeof(__u32),
@@ -1651,7 +2162,7 @@ static int lfs_setstripe(int argc, char **argv)
 			}
 
 			lsa.lsa_osts = osts;
-			if (lsa.lsa_stripe_off == -1)
+			if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
 				lsa.lsa_stripe_off = osts[0];
 			break;
 		case 'p':
@@ -1693,26 +2204,39 @@ static int lfs_setstripe(int argc, char **argv)
 		goto usage_error;
 	}
 
-	if (create_mirror) {
-		if (!comp_add) {
-			fprintf(stderr, "error: %s: --component-add must be "
-				"specified with --mirror option\n", argv[0]);
-			goto error;
-		}
+	if (mirror_mode && mirror_count == 0) {
+		fprintf(stderr,
+			"error: %s: --mirror-count|-N option is required\n",
+			progname);
+		result = -EINVAL;
+		goto error;
+	}
+
+	if (mirror_mode) {
 		if (lsa.lsa_comp_end == 0)
 			lsa.lsa_comp_end = LUSTRE_EOF;
-		if (lsa.lsa_comp_end != LUSTRE_EOF) {
-			fprintf(stderr,
-				"error: %s: creating non-eof ending mirror\n",
-				argv[0]);
-			goto error;
-		}
 	}
 
 	if (lsa.lsa_comp_end != 0) {
-		result = comp_args_to_layout(&layout, &lsa);
+		result = comp_args_to_layout(lpp, &lsa);
 		if (result)
 			goto error;
+	}
+
+	if (mirror_flags & NO_VERIFY) {
+		if (opc != SO_MIRROR_EXTEND) {
+			fprintf(stderr,
+				"error: %s: --no-verify is valid only for lfs mirror extend command\n",
+				progname);
+			result = -EINVAL;
+			goto error;
+		} else if (!has_m_file) {
+			fprintf(stderr,
+				"error: %s: --no-verify must be specified with -f <victim_file> option\n",
+				progname);
+			result = -EINVAL;
+			goto error;
+		}
 	}
 
 	/* Only LCME_FL_INIT flags is used in PFL, and it shouldn't be
@@ -1764,6 +2288,13 @@ static int lfs_setstripe(int argc, char **argv)
 				progname);
 			goto usage_error;
 		}
+
+		if (mirror_mode) {
+			fprintf(stderr, "error: %s: can't use --component-add "
+				"or --component-del for mirror operation\n",
+				progname);
+			goto usage_error;
+		}
 	}
 
 	if (comp_add) {
@@ -1773,13 +2304,12 @@ static int lfs_setstripe(int argc, char **argv)
 				progname, argv[0]);
 			goto usage_error;
 		}
-		if (!create_mirror) {
-			result = adjust_first_extent(fname, layout);
-			if (result == -ENODATA)
-				comp_add = 0;
-			else if (result != 0)
-				goto error;
-		}
+
+		result = adjust_first_extent(fname, layout);
+		if (result == -ENODATA)
+			comp_add = 0;
+		else if (result != 0)
+			goto error;
 	}
 
 	if (mdt_idx_arg != NULL && optind > 3) {
@@ -1824,17 +2354,28 @@ static int lfs_setstripe(int argc, char **argv)
 			goto error;
 		}
 
-		param->lsp_stripe_size = lsa.lsa_stripe_size;
-		param->lsp_stripe_offset = lsa.lsa_stripe_off;
-		param->lsp_stripe_count = lsa.lsa_stripe_count;
+		if (lsa.lsa_stripe_size != LLAPI_LAYOUT_DEFAULT)
+			param->lsp_stripe_size = lsa.lsa_stripe_size;
+		if (lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT) {
+			if (lsa.lsa_stripe_count == LLAPI_LAYOUT_WIDE)
+				param->lsp_stripe_count = -1;
+			else
+				param->lsp_stripe_count = lsa.lsa_stripe_count;
+		}
+		if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
+			param->lsp_stripe_offset = -1;
+		else
+			param->lsp_stripe_offset = lsa.lsa_stripe_off;
 		param->lsp_pool = lsa.lsa_pool_name;
 		param->lsp_is_specific = false;
 		if (lsa.lsa_nr_osts > 0) {
 			if (lsa.lsa_stripe_count > 0 &&
+			    lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
+			    lsa.lsa_stripe_count != LLAPI_LAYOUT_WIDE &&
 			    lsa.lsa_nr_osts != lsa.lsa_stripe_count) {
-				fprintf(stderr,
-					"%s %s: stripe count '%d' does not match number of OSTs: %d\n",
-					progname, argv[0], lsa.lsa_stripe_count,
+				fprintf(stderr, "error: %s: stripe count %lld "
+					"doesn't match the number of OSTs: %d\n"
+					, argv[0], lsa.lsa_stripe_count,
 					lsa.lsa_nr_osts);
 				free(param);
 				goto usage_error;
@@ -1860,11 +2401,12 @@ static int lfs_setstripe(int argc, char **argv)
 			result = lfs_component_del(fname, comp_id,
 						   lsa.lsa_comp_flags);
 		} else if (comp_add != 0) {
-			if (create_mirror)
-				result = lfs_create_mirror(fname, layout,
-							   mirror_file);
-			else
-				result = lfs_component_add(fname, layout);
+			result = lfs_component_add(fname, layout);
+		} else if (opc == SO_MIRROR_CREATE) {
+			result = mirror_create(fname, mirror_list);
+		} else if (opc == SO_MIRROR_EXTEND) {
+			result = mirror_extend(fname, mirror_list,
+					       mirror_flags);
 		} else if (layout != NULL) {
 			result = lfs_component_create(fname, O_CREAT | O_WRONLY,
 						      0644, layout);
@@ -1891,11 +2433,13 @@ static int lfs_setstripe(int argc, char **argv)
 
 	free(param);
 	llapi_layout_free(layout);
+	lfs_mirror_list_free(mirror_list);
 	return result2;
 usage_error:
 	result = CMD_HELP;
 error:
 	llapi_layout_free(layout);
+	lfs_mirror_list_free(mirror_list);
 	return result;
 }
 
@@ -5592,6 +6136,55 @@ next:
 			rc = rc2;
 	}
 	return rc;
+}
+
+/**
+ * lfs_mirror() - Parse and execute lfs mirror commands.
+ * @argc: The count of lfs mirror command line arguments.
+ * @argv: Array of strings for lfs mirror command line arguments.
+ *
+ * This function parses lfs mirror commands and performs the
+ * corresponding functions specified in mirror_cmdlist[].
+ *
+ * Return: 0 on success or an error code on failure.
+ */
+static int lfs_mirror(int argc, char **argv)
+{
+	char cmd[PATH_MAX];
+	int rc = 0;
+
+	setlinebuf(stdout);
+
+	Parser_init("lfs-mirror > ", mirror_cmdlist);
+
+	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
+	progname = cmd;
+	program_invocation_short_name = cmd;
+	if (argc > 1)
+		rc = Parser_execarg(argc - 1, argv + 1, mirror_cmdlist);
+	else
+		rc = Parser_commands();
+
+	return rc < 0 ? -rc : rc;
+}
+
+/**
+ * lfs_mirror_list_commands() - List lfs mirror commands.
+ * @argc: The count of command line arguments.
+ * @argv: Array of strings for command line arguments.
+ *
+ * This function lists lfs mirror commands defined in mirror_cmdlist[].
+ *
+ * Return: 0 on success.
+ */
+static int lfs_mirror_list_commands(int argc, char **argv)
+{
+	char buffer[81] = "";
+
+	Parser_list_commands(mirror_cmdlist, buffer, sizeof(buffer),
+			     NULL, 0, 4);
+
+	return 0;
 }
 
 static int lfs_list_commands(int argc, char **argv)

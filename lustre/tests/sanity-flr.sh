@@ -2,8 +2,6 @@
 #
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
-#
-# Run test by setting NOSETUP=true when ltest has setup env for us
 set -e
 set +o posix
 
@@ -15,34 +13,25 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="$SANITY_FLR_EXCEPT 201"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$ALWAYS_EXCEPT$EXCEPT" ] &&
-	echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
-
-TMP=${TMP:-/tmp}
-CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
-LFS=${LFS:-lfs}
-LCTL=${LCTL:-lctl}
-MULTIOP=${MULTIOP:-multiop}
-
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-check_and_setup_lustre
-DIR=${DIR:-$MOUNT}
-assert_DIR
-
-if [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ]]; then
-	skip_env "Need MDS version at least 2.7.64" && exit
+if [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.53) ]]; then
+	skip_env "Need MDS version at least 2.10.53" && exit
 fi
-
-build_test_filter
 
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] &&
 	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
+
+check_and_setup_lustre
+DIR=${DIR:-$MOUNT}
+assert_DIR
+
+build_test_filter
 
 # global array to store mirror IDs
 declare -a mirror_array
@@ -94,24 +83,25 @@ start_osts() {
 test_1() {
 	local tf=$DIR/$tfile
 	local mirror_count=16 # LUSTRE_MIRROR_COUNT_MAX
-
-	$LFS setstripe -E EOF -c -1 $tf
-
+	local mirror_create_cmd="$LFS mirror create"
 	local stripes[0]=$OSTCOUNT
 
+	mirror_create_cmd+=" -N -c ${stripes[0]}"
 	for ((i = 1; i < $mirror_count; i++)); do
 		# add mirrors with different stripes to the file
 		stripes[$i]=$((RANDOM % OSTCOUNT))
 		[ ${stripes[$i]} -eq 0 ] && stripes[$i]=1
 
-		$LFS setstripe --component-add --mirror -c ${stripes[$i]} $tf
+		mirror_create_cmd+=" -N -c ${stripes[$i]}"
 	done
+
+	eval $mirror_create_cmd $tf || error "creating mirrored file $tf failed"
 
 	[ $(get_mirror_ids $tf) -ne $mirror_count ] &&
 		error "mirror count error"
 
 	# can't create mirrors exceeding LUSTRE_MIRROR_COUNT_MAX
-	$LFS setstripe --component-add --mirror $tf &&
+	$LFS mirror extend -N $tf &&
 		error "Creating the $((mirror_count+1))th mirror succeeded"
 
 	local ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' |
@@ -148,11 +138,11 @@ test_2() {
 
 	local layout=$($LFS getstripe $tf2 | grep -A 4 lmm_objects)
 
-	$LFS setstripe --component-add --mirror=$tf2 $tf
+	$LFS mirror extend -N -f $tf2 $tf ||
+		error "merging $tf2 into $tf failed"
 
 	[ $(get_mirror_ids $tf) -ne 2 ] && error "mirror count should be 2"
-	$LFS getstripe $tf2 | grep -q 'no stripe info' ||
-		error "$tf2 still has stripe info"
+	[[ ! -e $tf2 ]] || error "$tf2 was not unlinked"
 }
 run_test 2 "create components from existing files"
 
@@ -164,7 +154,7 @@ test_3() {
 		$LFS setstripe -E -1 $DIR/$tdir-$i/$tfile
 	done
 
-	$LFS setstripe --component-add --mirror=$DIR/$tdir-1/$tfile \
+	$LFS mirror extend -N -f $DIR/$tdir-1/$tfile \
 		$DIR/$tdir-0/$tfile || error "creating mirrors"
 
 	# mdt doesn't support to cancel layout lock for remote objects, do
@@ -198,7 +188,8 @@ test_21() {
 	local blocks=$(du -kc $tf $tf2 | awk '/total/{print $1}')
 
 	# add component
-	$LFS setstripe --component-add --mirror=$tf2 $tf
+	$LFS mirror extend -N -f $tf2 $tf ||
+		error "merging $tf2 into $tf failed"
 
 	# cancel layout lock
 	cancel_lru_locks mdc
@@ -230,7 +221,8 @@ test_22() {
 	dd if=/dev/zero of=$tf bs=1M count=$((RANDOM % 20 + 1))
 
 	# add component, two mirrors located on the same OST ;-)
-	$LFS setstripe --component-add --mirror -o 0 $tf
+	$LFS mirror extend -N -o 0 $tf ||
+		error "extending mirrored file $tf failed"
 
 	size_blocks=$(stat --format="%b %s" $tf)
 
@@ -252,8 +244,8 @@ run_test 22 "no glimpse to OSTs for READ_ONLY files"
 test_31() {
 	local tf=$DIR/$tfile
 
-	$LFS setstripe -E EOF -o 0 $tf
-	$LFS setstripe --component-add --mirror -o 1 $tf
+	$LFS mirror create -N -o 0 -N -o 1 $tf ||
+		error "creating mirrored file $tf failed"
 
 	#define OBD_FAIL_GLIMPSE_IMMUTABLE 0x1A00
 	$LCTL set_param fail_loc=0x1A00
@@ -298,7 +290,8 @@ test_32() {
 	local cksum=$(md5sum $DIR/$tfile)
 
 	# create a new mirror in sync mode
-	$LFS setstripe --component-add --mirror -o 1 $DIR/$tfile
+	$LFS mirror extend -N -o 1 $DIR/$tfile ||
+		error "extending mirrored file $DIR/$tfile failed"
 
 	# make sure the mirrored file was created successfully
 	[ $(get_mirror_ids $DIR/$tfile) -eq 2 ] ||
@@ -342,13 +335,18 @@ test_33() {
 	done
 
 	# create a mirrored file
-	$LFS setstripe --component-add --mirror=$DIR/$tfile-2 $DIR/$tfile
+	$LFS mirror extend -N -f $DIR/$tfile-2 $DIR/$tfile &&
+		error "merging $DIR/$tfile-2 into $DIR/$tfile" \
+		      "with verification should fail"
+	$LFS mirror extend --no-verify -N -f $DIR/$tfile-2 $DIR/$tfile ||
+		error "merging $DIR/$tfile-2 into $DIR/$tfile" \
+		      "without verification failed"
 
-	# make sure that $tfile has two mirrors and $tfile-2 has no stripe
+	# make sure that $tfile has two mirrors and $tfile-2 does not exist
 	[ $(get_mirror_ids $DIR/$tfile) -eq 2 ] ||
 		{ $LFS getstripe $DIR/$tfile; error "expected count 2"; }
-	$LFS getstripe $DIR/$tfile-2 | grep -q "no stripe info" ||
-		{ $LFS getstripe $DIR/$tfile; error "expected no stripe"; }
+
+	[[ ! -e $DIR/$tfile-2 ]] || error "$DIR/$tfile-2 was not unlinked"
 
 	# execpted file size
 	local fsize=$((5 * max_count))
@@ -412,7 +410,8 @@ test_34a() {
 		error "mirrored file size is not 3M"
 
 	# merge a mirrored file
-	$LFS setstripe --component-add --mirror=$DIR/$tfile-2 $DIR/$tfile
+	$LFS mirror extend -N -f $DIR/$tfile-2 $DIR/$tfile ||
+		error "merging $DIR/$tfile-2 into $DIR/$tfile failed"
 
 	cancel_lru_locks osc
 
@@ -450,7 +449,8 @@ test_34b() {
 		error "mirrored file size is not 3M"
 
 	# merge a mirrored file
-	$LFS setstripe --component-add --mirror=$DIR/$tfile-2 $DIR/$tfile
+	$LFS mirror extend -N -f $DIR/$tfile-2 $DIR/$tfile ||
+		error "merging $DIR/$tfile-2 into $DIR/$tfile failed"
 
 	cancel_lru_locks osc
 
@@ -475,7 +475,8 @@ test_35() {
 	$LFS setstripe -E eof $tf
 
 	# add an out-of-sync mirror to the file
-	$LFS setstripe --component-add --mirror -c 2 $tf
+	$LFS mirror extend -N -c 2 $tf ||
+		error "extending mirrored file $tf failed"
 
 	$MULTIOP $tf oO_WRONLY:c ||
 		error "write open a mirrored file failed"
@@ -504,8 +505,8 @@ create_file_36() {
 		$LFS setstripe -E 1M -E 2M -E 4M -E eof -c -1 $tf
 		$LFS setstripe -E 3M -E 6M -E eof -c -1 $tf-tmp
 
-		$LFS setstripe --component-add --mirror=$tf-tmp $tf
-		rm -f $tf-tmp
+		$LFS mirror extend -N -f $tf-tmp $tf ||
+			error "merging $tf-tmp into $tf failed"
 	done
 }
 
@@ -596,8 +597,10 @@ test_37()
 	printf '%s\n' "${checksums[@]}"
 
 	# merge these files into a mirrored file
-	$LFS setstripe --component-add --mirror=$tf2 $tf
-	$LFS setstripe --component-add --mirror=$tf3 $tf
+	$LFS mirror extend --no-verify -N -f $tf2 $tf ||
+		error "merging $tf2 into $tf failed"
+	$LFS mirror extend --no-verify -N -f $tf3 $tf ||
+		error "merging $tf3 into $tf failed"
 
 	get_mirror_ids $tf
 
@@ -634,7 +637,7 @@ test_37()
 			error "$i: mismatch checksum after copy"
 	done
 
-	rm -f $tf $tf2 $tf3
+	rm -f $tf
 }
 run_test 37 "mirror I/O API verification"
 
@@ -660,9 +663,12 @@ test_38() {
 	$LFS setstripe -E 4M -c 1 -E 8M -c 2 -E eof -c -1 $tf-3
 
 	# instantiate all components
-	$LFS setstripe --component-add --mirror=$tf-2 $tf
-	$LFS setstripe --component-add --mirror=$tf-3 $tf
-	$LFS setstripe --component-add --mirror -c 1 $tf
+	$LFS mirror extend -N -f $tf-2 $tf ||
+		error "merging $tf-2 into $tf failed"
+	$LFS mirror extend -N -f $tf-3 $tf ||
+		error "merging $tf-3 into $tf failed"
+	$LFS mirror extend -N -c 1 $tf ||
+		error "extending mirrored file $tf failed"
 
 	verify_flr_state $tf "read_only"
 
@@ -797,8 +803,10 @@ test_200() {
 	$LFS setstripe -E 2M -E 6M -c 2 -E 8M -E 32M -E eof $tf-2
 	$LFS setstripe -E 4M -c 2 -E 8M -E 64M -E eof $tf-3
 
-	$LFS setstripe --component-add --mirror=$tf-2 $tf
-	$LFS setstripe --component-add --mirror=$tf-3 $tf
+	$LFS mirror extend -N -f $tf-2 $tf ||
+		error "merging $tf-2 into $tf failed"
+	$LFS mirror extend -N -f $tf-3 $tf ||
+		error "merging $tf-3 into $tf failed"
 
 	mkdir -p $MOUNT2 && mount_client $MOUNT2
 

@@ -502,6 +502,19 @@ struct llapi_layout *llapi_layout_alloc(void);
  */
 void llapi_layout_free(struct llapi_layout *layout);
 
+/**
+ * llapi_layout_merge() - Merge a composite layout into another one.
+ * @dst_layout: Destination composite layout.
+ * @src_layout: Source composite layout.
+ *
+ * This function copies all of the components from @src_layout and
+ * appends them to @dst_layout.
+ *
+ * Return: 0 on success or -1 on failure.
+ */
+int llapi_layout_merge(struct llapi_layout **dst_layout,
+		       const struct llapi_layout *src_layout);
+
 /** Not a valid stripe size, offset, or RAID pattern. */
 #define LLAPI_LAYOUT_INVALID	0x1000000000000001ULL
 
@@ -729,6 +742,31 @@ int llapi_layout_file_create(const char *path, int open_flags, int mode,
  */
 int llapi_layout_flags_set(struct llapi_layout *layout, uint32_t flags);
 int llapi_layout_flags_get(struct llapi_layout *layout, uint32_t *flags);
+
+/**
+ * llapi_layout_mirror_count_get() - Get mirror count from the header of
+ *				     a layout.
+ * @layout: Layout to get mirror count from.
+ * @count:  Returned mirror count value.
+ *
+ * This function gets mirror count from the header of a layout.
+ *
+ * Return: 0 on success or -1 on failure.
+ */
+int llapi_layout_mirror_count_get(struct llapi_layout *layout,
+				  uint16_t *count);
+
+/**
+ * llapi_layout_mirror_count_set() - Set mirror count to the header of a layout.
+ * @layout: Layout to set mirror count in.
+ * @count:  Mirror count value to be set.
+ *
+ * This function sets mirror count to the header of a layout.
+ *
+ * Return: 0 on success or -1 on failure.
+ */
+int llapi_layout_mirror_count_set(struct llapi_layout *layout,
+				  uint16_t count);
 
 /**
  * Fetch the start and end offset of the current layout component.
