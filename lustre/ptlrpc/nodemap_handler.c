@@ -828,7 +828,7 @@ EXPORT_SYMBOL(nodemap_add_range);
 /**
  * delete a range
  * \param	name		nodemap name
- * \param	range_str	string containing range
+ * \param	nid		nid range
  * \retval	0 on success
  *
  * Delete range from global range tree, and remove it
@@ -853,6 +853,10 @@ int nodemap_del_range(const char *name, const lnet_nid_t nid[2])
 	down_write(&active_config->nmc_range_tree_lock);
 	range = range_find(&active_config->nmc_range_tree, nid[0], nid[1]);
 	if (range == NULL) {
+		up_write(&active_config->nmc_range_tree_lock);
+		GOTO(out_putref, rc = -EINVAL);
+	}
+	if (range->rn_nodemap != nodemap) {
 		up_write(&active_config->nmc_range_tree_lock);
 		GOTO(out_putref, rc = -EINVAL);
 	}

@@ -556,7 +556,7 @@ test_7() {
 
 	delete_nodemaps
 	rc=$?
-	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 2
+	[[ $rc != 0 ]] && error "nodemap_del failed with $rc" && return 2
 
 	return 0
 }
@@ -586,7 +586,7 @@ test_8() {
 	# Clean up
 	delete_nodemaps
 	rc=$?
-	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 3
+	[[ $rc != 0 ]] && error "nodemap_del failed with $rc" && return 3
 
 	return 0
 }
@@ -625,13 +625,13 @@ test_9() {
 	rc=0
 	delete_nodemaps
 	rc=$?
-	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 4
+	[[ $rc != 0 ]] && error "nodemap_del failed with $rc" && return 4
 
 	return 0
 }
 run_test 9 "nodemap range add"
 
-test_10() {
+test_10a() {
 	local rc
 
 	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
@@ -672,11 +672,39 @@ test_10() {
 
 	delete_nodemaps
 	rc=$?
-	[[ $rc != 0 ]] && error "nodemap_add failed with $rc" && return 5
+	[[ $rc != 0 ]] && error "nodemap_del failed with $rc" && return 5
 
 	return 0
 }
-run_test 10 "nodemap reject duplicate ranges"
+run_test 10a "nodemap reject duplicate ranges"
+
+test_10b() {
+	[ $(lustre_version_code mgs) -lt $(version_code 2.10.53) ] &&
+		skip "Need MGS >= 2.10.53" && return
+
+	local nm1="nodemap1"
+	local nm2="nodemap2"
+	local nids="192.168.19.[0-255]@o2ib20"
+
+	do_facet mgs $LCTL nodemap_del $nm1 2>/dev/null
+	do_facet mgs $LCTL nodemap_del $nm2 2>/dev/null
+
+	do_facet mgs $LCTL nodemap_add $nm1 || error "Add $nm1 failed"
+	do_facet mgs $LCTL nodemap_add $nm2 || error "Add $nm2 failed"
+	do_facet mgs $LCTL nodemap_add_range --name $nm1 --range $nids ||
+		error "Add range $nids to $nm1 failed"
+	[ -n "$(do_facet mgs $LCTL get_param nodemap.$nm1.* |
+		grep start_nid)" ] || error "No range was found"
+	do_facet mgs $LCTL nodemap_del_range --name $nm2 --range $nids &&
+		error "Deleting range $nids from $nm2 should fail"
+	[ -n "$(do_facet mgs $LCTL get_param nodemap.$nm1.* |
+		grep start_nid)" ] || error "Range $nids should be there"
+
+	do_facet mgs $LCTL nodemap_del $nm1 || error "Delete $nm1 failed"
+	do_facet mgs $LCTL nodemap_del $nm2 || error "Delete $nm2 failed"
+	return 0
+}
+run_test 10b "delete range from the correct nodemap"
 
 test_11() {
 	local rc
