@@ -1,0 +1,21 @@
+--- linux-3.10.0-685.el7.x86_64/drivers/md/raid5.c.orig	2017-06-28 14:06:00.627299582 -0700
++++ linux-3.10.0-685.el7.x86_64/drivers/md/raid5.c	2017-06-28 14:08:01.564618793 -0700
+@@ -3090,6 +3090,8 @@ static int add_stripe_bio(struct stripe_
+ 		bi->bi_next = *bip;
+ 	*bip = bi;
+ 	raid5_inc_bi_active_stripes(bi);
++	if ((bi->bi_rw & REQ_SYNC) && !forwrite)
++		clear_bit(R5_UPTODATE, &sh->dev[dd_idx].flags);	/* force to read from disk. */
+ 
+ 	if (forwrite) {
+ 		/* check if page is covered */
+@@ -5538,6 +5540,9 @@ static bool raid5_make_request(struct md
+ 					 bi, 0);
+ 		bio_endio(bi, 0);
+ 	}
++
++	if (bi->bi_rw & REQ_SYNC)
++		md_wakeup_thread(mddev->thread);
+ 	return true;
+ }
+ 

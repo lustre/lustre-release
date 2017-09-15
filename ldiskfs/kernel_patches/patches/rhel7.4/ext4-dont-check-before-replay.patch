@@ -1,0 +1,33 @@
+Index: linux-stage/fs/ext4/super.c
+When ldiskfs run in failover mode whith read-only disk.
+Part of allocation updates are lost and ldiskfs may fail
+while mounting this is due to inconsistent state of
+group-descriptor. Group-descriptor check is added after
+journal replay.
+===================================================================
+--- linux-stage/fs/ext4/super.c	2016-11-06 15:15:30.892386878 +0530
++++ linux-stage.orig.1/fs/ext4/super.c	2016-11-08 10:56:45.579892189 +0530
+@@ -3980,10 +3980,6 @@
+			goto failed_mount2;
+		}
+	}
+-	if (!ext4_check_descriptors(sb, logical_sb_block, &first_not_zeroed)) {
+-		ext4_msg(sb, KERN_ERR, "group descriptors corrupted!");
+-		goto failed_mount2;
+-	}
+
+	sbi->s_gdb_count = db_count;
+	get_random_bytes(&sbi->s_next_generation, sizeof(u32));
+@@ -4104,6 +4100,12 @@
+	sbi->s_journal->j_commit_callback = ext4_journal_commit_callback;
+
+ no_journal:
++
++	if (!ext4_check_descriptors(sb, logical_sb_block, &first_not_zeroed)) {
++		ext4_msg(sb, KERN_ERR, "group descriptors corrupted!");
++		goto failed_mount_wq;
++	}
++
+	/*
+	 * Get the # of file system overhead blocks from the
+	 * superblock if present.
