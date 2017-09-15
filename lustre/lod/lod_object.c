@@ -4241,7 +4241,6 @@ out:
 	 * in config log, use them.
 	 */
 	if (lod_need_inherit_more(lc, false)) {
-
 		if (lc->ldo_comp_cnt == 0) {
 			rc = lod_alloc_comp_entries(lc, 0, 1);
 			if (rc)
@@ -4292,6 +4291,7 @@ static int lod_declare_init_size(const struct lu_env *env,
 	struct lu_attr	*attr = &lod_env_info(env)->lti_attr;
 	uint64_t	size, offs;
 	int	i, rc, stripe, stripe_count = 0, stripe_size = 0;
+	struct lu_extent size_ext;
 	ENTRY;
 
 	if (!lod_obj_is_striped(dt))
@@ -4306,6 +4306,7 @@ static int lod_declare_init_size(const struct lu_env *env,
 	if (size == 0)
 		RETURN(0);
 
+	size_ext = (typeof(size_ext)){ .e_start = size - 1, .e_end = size };
 	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		struct lod_layout_component *lod_comp;
 		struct lu_extent *extent;
@@ -4316,35 +4317,34 @@ static int lod_declare_init_size(const struct lu_env *env,
 			continue;
 
 		extent = &lod_comp->llc_extent;
-		CDEBUG(D_INFO, "%lld [%lld, %lld)\n",
-		       size, extent->e_start, extent->e_end);
+		CDEBUG(D_INFO, "%lld "DEXT"\n", size, PEXT(extent));
 		if (!lo->ldo_is_composite ||
-		    (size >= extent->e_start && size < extent->e_end)) {
+		    lu_extent_is_overlapped(extent, &size_ext)) {
 			objects = lod_comp->llc_stripe;
 			stripe_count = lod_comp->llc_stripe_count;
 			stripe_size = lod_comp->llc_stripe_size;
-			break;
+
+			/* next mirror */
+			if (stripe_count == 0)
+				continue;
+
+			LASSERT(objects != NULL && stripe_size != 0);
+			/* ll_do_div64(a, b) returns a % b, and a = a / b */
+			ll_do_div64(size, (__u64)stripe_size);
+			stripe = ll_do_div64(size, (__u64)stripe_count);
+			LASSERT(objects[stripe] != NULL);
+
+			size = size * stripe_size;
+			offs = attr->la_size;
+			size += ll_do_div64(offs, stripe_size);
+
+			attr->la_valid = LA_SIZE;
+			attr->la_size = size;
+
+			rc = lod_sub_declare_attr_set(env, objects[stripe],
+						      attr, th);
 		}
 	}
-
-	if (stripe_count == 0)
-		RETURN(0);
-
-	LASSERT(objects != NULL && stripe_size != 0);
-
-	/* ll_do_div64(a, b) returns a % b, and a = a / b */
-	ll_do_div64(size, (__u64)stripe_size);
-	stripe = ll_do_div64(size, (__u64)stripe_count);
-	LASSERT(objects[stripe] != NULL);
-
-	size = size * stripe_size;
-	offs = attr->la_size;
-	size += ll_do_div64(offs, stripe_size);
-
-	attr->la_valid = LA_SIZE;
-	attr->la_size = size;
-
-	rc = lod_sub_declare_attr_set(env, objects[stripe], attr, th);
 
 	RETURN(rc);
 }
@@ -4601,17 +4601,24 @@ int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 {
 	struct lod_layout_component	*lod_comp;
 	struct lod_object	*lo = lod_dt_obj(dt);
+	__u16	mirror_id;
 	int	rc = 0, i, j;
 	ENTRY;
 
 	LASSERT(lo->ldo_comp_cnt != 0 && lo->ldo_comp_entries != NULL);
 
+	mirror_id = lo->ldo_mirror_count > 1 ? 1 : 0;
+
 	/* create all underlying objects */
 	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		lod_comp = &lo->ldo_comp_entries[i];
 
+		if (lod_comp->llc_extent.e_start == 0 && i > 0) /* new mirror */
+			++mirror_id;
+
 		if (lod_comp->llc_id == LCME_ID_INVAL) {
-			lod_comp->llc_id = lod_gen_component_id(lo, 0, i);
+			lod_comp->llc_id = lod_gen_component_id(lo,
+								mirror_id, i);
 			if (lod_comp->llc_id == LCME_ID_INVAL)
 				GOTO(out, rc = -ERANGE);
 		}

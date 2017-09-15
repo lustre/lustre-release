@@ -1742,6 +1742,8 @@ int lod_use_defined_striping(const struct lu_env *env,
 		if (comp_cnt == 0)
 			RETURN(-EINVAL);
 		mirror_cnt = le16_to_cpu(comp_v1->lcm_mirror_count) + 1;
+		mo->ldo_flr_state = le16_to_cpu(comp_v1->lcm_flags) &
+					LCM_FL_FLR_MASK;
 		mo->ldo_is_composite = 1;
 	} else {
 		mo->ldo_is_composite = 0;
@@ -1856,11 +1858,12 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	if (buf == NULL || buf->lb_buf == NULL || buf->lb_len == 0)
 		RETURN(0);
 
+	/* free default striping info */
+	lod_free_comp_entries(lo);
+
 	rc = lod_verify_striping(d, lo, buf, false);
 	if (rc)
 		RETURN(-EINVAL);
-
-	lod_free_comp_entries(lo);
 
 	v3 = buf->lb_buf;
 	v1 = buf->lb_buf;
@@ -1913,6 +1916,8 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		if (comp_cnt == 0)
 			RETURN(-EINVAL);
 		mirror_cnt =  comp_v1->lcm_mirror_count + 1;
+		if (mirror_cnt > 1)
+			lo->ldo_flr_state = LCM_FL_RDONLY;
 		lo->ldo_is_composite = 1;
 	} else {
 		comp_cnt = 1;

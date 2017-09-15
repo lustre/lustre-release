@@ -1652,10 +1652,18 @@ out:
 int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
 			const struct lu_buf *buf, bool is_from_disk)
 {
-	struct lov_user_md_v1	*lum;
-	struct lov_comp_md_v1	*comp_v1;
-	__u32	magic;
-	int	rc = 0, i;
+	struct lov_desc *desc = &d->lod_desc;
+	struct lov_user_md_v1   *lum;
+	struct lov_comp_md_v1   *comp_v1;
+	struct lov_comp_md_entry_v1     *ent;
+	struct lu_extent        *ext;
+	struct lu_buf   tmp;
+	__u64   prev_end = 0;
+	__u32   stripe_size = 0;
+	__u16   prev_mid = -1, mirror_id = -1;
+	__u32   mirror_count = 0;
+	__u32   magic;
+	int     rc = 0, i;
 	ENTRY;
 
 	lum = buf->lb_buf;
@@ -1676,125 +1684,142 @@ int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
 		RETURN(-EINVAL);
 	}
 
-	if (magic == LOV_USER_MAGIC_COMP_V1) {
-		struct lov_comp_md_entry_v1	*ent;
-		struct lu_extent	*ext;
-		struct lov_desc	*desc = &d->lod_desc;
-		struct lu_buf	tmp;
-		__u64	prev_end = 0;
-		__u32	stripe_size = 0;
+	if (magic != LOV_USER_MAGIC_COMP_V1)
+		RETURN(lod_verify_v1v3(d, buf, is_from_disk));
 
-		comp_v1 = buf->lb_buf;
-		if (buf->lb_len < le32_to_cpu(comp_v1->lcm_size)) {
-			CDEBUG(D_LAYOUT, "buf len %zu is less than %u\n",
-			       buf->lb_len, le32_to_cpu(comp_v1->lcm_size));
+	/* magic == LOV_USER_MAGIC_COMP_V1 */
+	comp_v1 = buf->lb_buf;
+	if (buf->lb_len < le32_to_cpu(comp_v1->lcm_size)) {
+		CDEBUG(D_LAYOUT, "buf len %zu is less than %u\n",
+		       buf->lb_len, le32_to_cpu(comp_v1->lcm_size));
+		RETURN(-EINVAL);
+	}
+
+	if (le16_to_cpu(comp_v1->lcm_entry_count) == 0) {
+		CDEBUG(D_LAYOUT, "entry count is zero\n");
+		RETURN(-EINVAL);
+	}
+
+	if (S_ISREG(lod2lu_obj(lo)->lo_header->loh_attr) &&
+	    lo->ldo_comp_cnt > 0) {
+		/* could be called from lustre.lov.add */
+		__u32 cnt = lo->ldo_comp_cnt;
+
+		ext = &lo->ldo_comp_entries[cnt - 1].llc_extent;
+		prev_end = ext->e_end;
+
+		++mirror_count;
+	}
+
+	for (i = 0; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
+		ent = &comp_v1->lcm_entries[i];
+		ext = &ent->lcme_extent;
+
+		if (le64_to_cpu(ext->e_start) >= le64_to_cpu(ext->e_end)) {
+			CDEBUG(D_LAYOUT, "invalid extent "DEXT"\n",
+			       le64_to_cpu(ext->e_start),
+			       le64_to_cpu(ext->e_end));
 			RETURN(-EINVAL);
 		}
 
-		if (le16_to_cpu(comp_v1->lcm_entry_count) == 0) {
-			CDEBUG(D_LAYOUT, "entry count is zero\n");
-			RETURN(-EINVAL);
-		}
-
-		if (S_ISREG(lod2lu_obj(lo)->lo_header->loh_attr) &&
-		    lo->ldo_comp_cnt > 0) {
-			__u32 cnt = lo->ldo_comp_cnt;
-
-			ext = &lo->ldo_comp_entries[cnt - 1].llc_extent;
-			prev_end = ext->e_end;
-		}
-
-		for (i = 0; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
-			ent = &comp_v1->lcm_entries[i];
-			ext = &ent->lcme_extent;
-
-			if (is_from_disk &&
-			    (le32_to_cpu(ent->lcme_id) == 0 ||
-			     le32_to_cpu(ent->lcme_id) > LCME_ID_MAX)) {
+		if (is_from_disk) {
+			/* lcme_id contains valid value */
+			if (le32_to_cpu(ent->lcme_id) == 0 ||
+			    le32_to_cpu(ent->lcme_id) > LCME_ID_MAX) {
 				CDEBUG(D_LAYOUT, "invalid id %u\n",
 				       le32_to_cpu(ent->lcme_id));
 				RETURN(-EINVAL);
 			}
 
-			if (le64_to_cpu(ext->e_start) >=
-			    le64_to_cpu(ext->e_end)) {
-				CDEBUG(D_LAYOUT, "invalid extent "
-				       "[%llu, %llu)\n",
-				       le64_to_cpu(ext->e_start),
-				       le64_to_cpu(ext->e_end));
+			if (le16_to_cpu(comp_v1->lcm_mirror_count) > 0) {
+				mirror_id = mirror_id_of(
+						le32_to_cpu(ent->lcme_id));
+
+				/* first component must start with 0 */
+				if (mirror_id != prev_mid &&
+				    le64_to_cpu(ext->e_start) != 0) {
+					CDEBUG(D_LAYOUT,
+					       "invalid start:%llu, expect:0\n",
+					       le64_to_cpu(ext->e_start));
+					RETURN(-EINVAL);
+				}
+
+				prev_mid = mirror_id;
+			}
+		}
+
+		if (le64_to_cpu(ext->e_start) == 0) {
+			++mirror_count;
+			prev_end = 0;
+		}
+
+		/* the next must be adjacent with the previous one */
+		if (le64_to_cpu(ext->e_start) != prev_end) {
+			CDEBUG(D_LAYOUT,
+			       "invalid start actual:%llu, expect:%llu\n",
+			       le64_to_cpu(ext->e_start), prev_end);
+			RETURN(-EINVAL);
+		}
+
+		prev_end = le64_to_cpu(ext->e_end);
+
+		tmp.lb_buf = (char *)comp_v1 + le32_to_cpu(ent->lcme_offset);
+		tmp.lb_len = le32_to_cpu(ent->lcme_size);
+
+		/* Check DoM entry is always the first one */
+		lum = tmp.lb_buf;
+		if (lov_pattern(le32_to_cpu(lum->lmm_pattern)) ==
+		    LOV_PATTERN_MDT) {
+			/* DoM component can be only the first entry */
+			if (i > 0) {
+				CDEBUG(D_LAYOUT, "invalid DoM layout "
+				       "entry found at %i index\n", i);
 				RETURN(-EINVAL);
 			}
-
-			/* first component must start with 0, and the next
-			 * must be adjacent with the previous one */
-			if (le64_to_cpu(ext->e_start) != prev_end) {
-				CDEBUG(D_LAYOUT, "invalid start "
-				       "actual:%llu, expect:%llu\n",
-				       le64_to_cpu(ext->e_start), prev_end);
-				RETURN(-EINVAL);
-			}
-
-			prev_end = le64_to_cpu(ext->e_end);
-
-			tmp.lb_buf = (char *)comp_v1 +
-				     le32_to_cpu(ent->lcme_offset);
-			tmp.lb_len = le32_to_cpu(ent->lcme_size);
-
-			/* Checks for DoM entry in composite layout. */
-			lum = tmp.lb_buf;
-			if (lov_pattern(le32_to_cpu(lum->lmm_pattern)) ==
-			    LOV_PATTERN_MDT) {
-				/* DoM component can be only the first entry */
-				if (i > 0) {
-					CDEBUG(D_LAYOUT, "invalid DoM layout "
-					       "entry found at %i index\n", i);
-					RETURN(-EINVAL);
-				}
-				stripe_size = le32_to_cpu(lum->lmm_stripe_size);
-				/* There is just one stripe on MDT and it must
-				 * cover whole component size. */
-				if (stripe_size != prev_end) {
-					CDEBUG(D_LAYOUT, "invalid DoM layout "
-					       "stripe size %u != %llu "
-					       "(component size)\n",
-					       stripe_size, prev_end);
-					RETURN(-EINVAL);
-				}
-				/* Check stripe size againts per-MDT limit */
-				if (stripe_size > d->lod_dom_max_stripesize) {
-					CDEBUG(D_LAYOUT, "DoM component size "
-					       "%u is bigger than MDT limit "
-					       "%u, check dom_max_stripesize"
-					       " parameter\n",
-					       stripe_size,
-					       d->lod_dom_max_stripesize);
-					RETURN(-EINVAL);
-				}
-			}
-			rc = lod_verify_v1v3(d, &tmp, is_from_disk);
-			if (rc)
-				break;
-
-			lum = tmp.lb_buf;
-
-			/* extent end must be aligned with the stripe_size */
 			stripe_size = le32_to_cpu(lum->lmm_stripe_size);
-			if (stripe_size == 0)
-				stripe_size = desc->ld_default_stripe_size;
-			if (stripe_size == 0 ||
-			    (prev_end != LUSTRE_EOF &&
-			     (prev_end & (stripe_size - 1)))) {
-				CDEBUG(D_LAYOUT, "stripe size isn't aligned. "
-				       " stripe_sz: %u, [%llu, %llu)\n",
-				       stripe_size, ext->e_start, prev_end);
+			/* There is just one stripe on MDT and it must
+			 * cover whole component size. */
+			if (stripe_size != prev_end) {
+				CDEBUG(D_LAYOUT, "invalid DoM layout "
+				       "stripe size %u != %llu "
+				       "(component size)\n",
+				       stripe_size, prev_end);
+				RETURN(-EINVAL);
+			}
+			/* Check stripe size againts per-MDT limit */
+			if (stripe_size > d->lod_dom_max_stripesize) {
+				CDEBUG(D_LAYOUT, "DoM component size "
+				       "%u is bigger than MDT limit %u, check "
+				       "dom_max_stripesize parameter\n",
+				       stripe_size, d->lod_dom_max_stripesize);
 				RETURN(-EINVAL);
 			}
 		}
-	} else {
-		rc = lod_verify_v1v3(d, buf, is_from_disk);
+
+		rc = lod_verify_v1v3(d, &tmp, is_from_disk);
+		if (rc)
+			RETURN(rc);
+
+		if (prev_end == LUSTRE_EOF)
+			continue;
+
+		/* extent end must be aligned with the stripe_size */
+		stripe_size = le32_to_cpu(lum->lmm_stripe_size);
+		if (stripe_size == 0)
+			stripe_size = desc->ld_default_stripe_size;
+		if (stripe_size == 0 || (prev_end & (stripe_size - 1))) {
+			CDEBUG(D_LAYOUT, "stripe size isn't aligned, "
+			       "stripe_sz: %u, [%llu, %llu)\n",
+			       stripe_size, ext->e_start, prev_end);
+			RETURN(-EINVAL);
+		}
 	}
 
-	RETURN(rc);
+	/* make sure that the mirror_count is telling the truth */
+	if (mirror_count != le16_to_cpu(comp_v1->lcm_mirror_count) + 1)
+		RETURN(-EINVAL);
+
+	RETURN(0);
 }
 
 /**
