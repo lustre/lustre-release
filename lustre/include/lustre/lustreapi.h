@@ -771,6 +771,10 @@ int llapi_layout_comp_flags_clear(struct llapi_layout *layout, uint32_t flags);
  */
 int llapi_layout_comp_id_get(const struct llapi_layout *layout, uint32_t *id);
 /**
+ * Fetches the mirror ID of the current layout component.
+ */
+int llapi_layout_mirror_id_get(const struct llapi_layout *layout, uint32_t *id);
+/**
  * Adds one component to the existing composite or plain layout.
  */
 int llapi_layout_comp_add(struct llapi_layout *layout);
@@ -817,6 +821,17 @@ int llapi_layout_file_comp_set(const char *path,
  * Check if the file layout is composite.
  */
 bool llapi_layout_is_composite(struct llapi_layout *layout);
+
+/**
+ * FLR: mirror operation APIs
+ */
+int llapi_mirror_set(int fd, unsigned int id);
+int llapi_mirror_clear(int fd);
+ssize_t llapi_mirror_read(int fd, unsigned int id,
+			   void *buf, size_t count, off_t pos);
+ssize_t llapi_mirror_copy_many(int fd, unsigned int src,
+				unsigned int *dst, size_t count);
+int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst);
 
 /** @} llapi */
 

@@ -1708,6 +1708,33 @@ int llapi_layout_comp_id_get(const struct llapi_layout *layout, uint32_t *id)
 }
 
 /**
+ * Return the mirror id of the current layout component.
+ *
+ * \param[in] layout	the layout component
+ * \param[out] id	stored the returned mirror ID
+ *
+ * \retval	0 on success
+ * \retval	<0 if error occurs
+ */
+int llapi_layout_mirror_id_get(const struct llapi_layout *layout, uint32_t *id)
+{
+	struct llapi_layout_comp *comp;
+
+	comp = __llapi_layout_cur_comp(layout);
+	if (comp == NULL)
+		return -1;
+
+	if (id == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	*id = mirror_id_of(comp->llc_id);
+
+	return 0;
+}
+
+/**
  * Adds a component to \a layout, the new component will be added to
  * the tail of components list and it'll inherit attributes of existing
  * ones. The \a layout will change it's current component pointer to

@@ -643,6 +643,9 @@ struct ll_file_data {
 	 * false: unknown failure, should report. */
 	bool fd_write_failed;
 	bool ll_lock_no_expand;
+	/* Used by mirrored file to lead IOs to a specific mirror, usually
+	 * for mirror resync. 0 means default. */
+	__u32 fd_designated_mirror;
 	rwlock_t fd_lock; /* protect lcc list */
 	struct list_head fd_lccs; /* list of ll_cl_context */
 };
@@ -878,6 +881,7 @@ int ll_fid2path(struct inode *inode, void __user *arg);
 int ll_data_version(struct inode *inode, __u64 *data_version, int flags);
 int ll_hsm_release(struct inode *inode);
 int ll_hsm_state_set(struct inode *inode, struct hsm_state_set *hss);
+void ll_io_set_mirror(struct cl_io *io, const struct file *file);
 
 /* llite/dcache.c */
 

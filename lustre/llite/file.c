@@ -1066,6 +1066,29 @@ out_size_unlock:
 	RETURN(rc);
 }
 
+/**
+ * Set designated mirror for I/O.
+ *
+ * So far only read, write, and truncated can support to issue I/O to
+ * designated mirror.
+ */
+void ll_io_set_mirror(struct cl_io *io, const struct file *file)
+{
+	struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
+
+	/* FLR: disable non-delay for designated mirror I/O because obviously
+	 * only one mirror is available */
+	if (fd->fd_designated_mirror > 0) {
+		io->ci_ndelay = 0;
+		io->ci_designated_mirror = fd->fd_designated_mirror;
+		io->ci_pio = 0; /* doesn't have a mechanism to pass mirror
+				 * io to ptasks */
+	}
+
+	CDEBUG(D_VFSTRACE, "%s: desiginated mirror: %d\n",
+	       file->f_path.dentry->d_name.name, io->ci_designated_mirror);
+}
+
 static bool file_is_noatime(const struct file *file)
 {
 	const struct vfsmount *mnt = file->f_path.mnt;
@@ -1130,6 +1153,8 @@ static void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot)
 	/* FLR: only use non-delay I/O for read as there is only one
 	 * avaliable mirror for write. */
 	io->ci_ndelay = !(iot == CIT_WRITE);
+
+	ll_io_set_mirror(io, file);
 }
 
 static int ll_file_io_ptask(struct cfs_ptask *ptask)
@@ -3190,6 +3215,15 @@ out:
 out_ladvise:
 		OBD_FREE(k_ladvise_hdr, alloc_size);
 		RETURN(rc);
+	}
+	case LL_IOC_FLR_SET_MIRROR: {
+		/* mirror I/O must be direct to avoid polluting page cache
+		 * by stale data. */
+		if (!(file->f_flags & O_DIRECT))
+			RETURN(-EINVAL);
+
+		fd->fd_designated_mirror = (__u32)arg;
+		RETURN(0);
 	}
 	case LL_IOC_FSGETXATTR:
 		RETURN(ll_ioctl_fsgetxattr(inode, cmd, arg));

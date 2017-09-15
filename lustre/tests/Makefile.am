@@ -78,7 +78,7 @@ noinst_PROGRAMS += write_time_limit rwv lgetxattr_size_check checkfiemap
 noinst_PROGRAMS += listxattr_size_check check_fhandle_syscalls badarea_io
 noinst_PROGRAMS += llapi_layout_test orphan_linkea_check llapi_hsm_test
 noinst_PROGRAMS += group_lock_test llapi_fid_test sendfile_grouplock mmap_cat
-noinst_PROGRAMS += swap_lock_test lockahead_test
+noinst_PROGRAMS += swap_lock_test lockahead_test mirror_io
 
 bin_PROGRAMS = mcreate munlink
 testdir = $(libdir)/lustre/tests
@@ -102,6 +102,7 @@ statmany_LDADD=$(LIBLUSTREAPI)
 statone_LDADD=$(LIBLUSTREAPI)
 rwv_LDADD=$(LIBCFS)
 lockahead_test_LDADD=$(LIBLUSTREAPI)
+mirror_io_LDADD=$(LIBLUSTREAPI)
 
 ll_dirstripe_verify_SOURCES = ll_dirstripe_verify.c
 ll_dirstripe_verify_LDADD = $(LIBLUSTREAPI) $(LIBCFS) $(PTHREAD_LIBS)

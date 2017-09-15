@@ -443,6 +443,9 @@ int ofd_verify_layout_version(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
+	if (unlikely(OBD_FAIL_CHECK(OBD_FAIL_OST_SKIP_LV_CHECK)))
+		GOTO(out, rc = 0);
+
 	rc = ofd_object_ff_load(env, fo);
 	if (rc < 0) {
 		if (rc == -ENODATA)

@@ -308,6 +308,27 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 		RETURN(0);
 	}
 
+	/* find the corresponding mirror for designated mirror IO */
+	if (io->ci_designated_mirror > 0) {
+		struct lov_mirror_entry *entry;
+
+		LASSERT(!io->ci_ndelay);
+
+		index = 0;
+		lio->lis_mirror_index = -1;
+		lov_foreach_mirror_entry(obj, entry) {
+			if (entry->lre_mirror_id ==
+			    io->ci_designated_mirror) {
+				lio->lis_mirror_index = index;
+				break;
+			}
+
+			index++;
+		}
+
+		return (lio->lis_mirror_index < 0) ? -EINVAL : 0;
+	}
+
 	result = lov_io_mirror_write_intent(lio, obj, io);
 	if (result)
 		RETURN(result);
@@ -1030,7 +1051,10 @@ static int lov_io_submit(const struct lu_env *env,
 		if (lov_page_is_empty(page)) {
 			cl_page_list_move(&queue->c2_qout, qin, page);
 
-			cl_page_prep(env, ios->cis_io, page, crt);
+			/* it could only be mirror read to get here therefore
+			 * the pages will be transient. We don't care about
+			 * the return code of cl_page_prep() at all. */
+			(void) cl_page_prep(env, ios->cis_io, page, crt);
 			cl_page_completion(env, page, crt, 0);
 			continue;
 		}

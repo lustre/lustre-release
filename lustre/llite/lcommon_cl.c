@@ -93,6 +93,9 @@ int cl_setattr_ost(struct cl_object *obj, const struct iattr *attr,
 	io->u.ci_setattr.sa_valid = attr->ia_valid;
 	io->u.ci_setattr.sa_parent_fid = lu_object_fid(&obj->co_lu);
 
+	if (attr->ia_valid & ATTR_FILE)
+		ll_io_set_mirror(io, attr->ia_file);
+
 again:
         if (cl_io_init(env, io, CIT_SETATTR, io->ci_obj) == 0) {
 		struct vvp_io *vio = vvp_env_io(env);

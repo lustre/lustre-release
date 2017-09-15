@@ -564,6 +564,80 @@ test_36() {
 }
 run_test 36 "write to mirrored files"
 
+create_files_37() {
+	local tf
+	local fsize=$1
+
+	echo "create test files with size $fsize .."
+
+	shift
+	for tf in "$@"; do
+		$LFS setstripe -E 1M -c 1 -E eof -c -1 $tf
+
+		dd if=/dev/urandom of=$tf bs=1M count=16 &> /dev/null
+		$TRUNCATE $tf $fsize
+	done
+}
+
+test_37()
+{
+	local tf=$DIR/$tfile
+	local tf2=$DIR/$tfile-2
+	local tf3=$DIR/$tfile-3
+
+	create_files_37 $((RANDOM + 15 * 1048576)) $tf $tf2 $tf3
+
+	# assume the mirror id will be 1, 2, and 3
+	declare -A checksums
+	checksums[1]=$(md5sum $tf | cut -f 1 -d' ')
+	checksums[2]=$(md5sum $tf2 | cut -f 1 -d' ')
+	checksums[3]=$(md5sum $tf3 | cut -f 1 -d' ')
+
+	printf '%s\n' "${checksums[@]}"
+
+	# merge these files into a mirrored file
+	$LFS setstripe --component-add --mirror=$tf2 $tf
+	$LFS setstripe --component-add --mirror=$tf3 $tf
+
+	get_mirror_ids $tf
+
+	# verify mirror read, checksums should equal to the original files'
+	echo "Verifying mirror read .."
+
+	local sum
+	for i in ${mirror_array[@]}; do
+		sum=$(mirror_io dump -i $i $tf | md5sum | cut -f 1 -d' ')
+		[ "$sum" = "${checksums[$i]}" ] ||
+			error "$i: mismatch: \'${checksums[$i]}\' vs. \'$sum\'"
+	done
+
+	# verify mirror copy, write to this mirrored file will invalidate
+	# the other two mirrors
+	echo "Verifying mirror copy .."
+
+	local osts=$(comma_list $(osts_nodes))
+
+	# define OBD_FAIL_OST_SKIP_LV_CHECK	0x241
+	do_nodes $osts lctl set_param fail_loc=0x241
+
+	mirror_io copy -i ${mirror_array[0]} \
+		-t $(echo ${mirror_array[@]:1} | tr ' ' ',') $tf ||
+			error "mirror copy error"
+
+	do_nodes $osts lctl set_param fail_loc=0
+
+	# verify copying is successful by checking checksums
+	remount_client $MOUNT
+	for i in ${mirror_array[@]}; do
+		sum=$(mirror_io dump -i $i $tf | md5sum | cut -f 1 -d' ')
+		[ "$sum" = "${checksums[1]}" ] ||
+			error "$i: mismatch checksum after copy"
+	done
+
+	rm -f $tf $tf2 $tf3
+}
+run_test 37 "mirror I/O API verification"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
