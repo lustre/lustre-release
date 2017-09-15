@@ -148,13 +148,14 @@ int llapi_file_lookup(int dirfd, const char *name);
 #define VERBOSE_COMP_ID		0x2000
 #define VERBOSE_DFID		0x4000
 #define VERBOSE_HASH_TYPE	0x8000
+#define VERBOSE_MIRROR_COUNT	0x10000
 #define VERBOSE_DEFAULT		(VERBOSE_COUNT | VERBOSE_SIZE | \
 				 VERBOSE_OFFSET | VERBOSE_POOL | \
 				 VERBOSE_OBJID | VERBOSE_GENERATION | \
 				 VERBOSE_LAYOUT | VERBOSE_HASH_TYPE | \
 				 VERBOSE_COMP_COUNT | VERBOSE_COMP_FLAGS | \
 				 VERBOSE_COMP_START | VERBOSE_COMP_END | \
-				 VERBOSE_COMP_ID)
+				 VERBOSE_COMP_ID | VERBOSE_MIRROR_COUNT)
 
 struct find_param {
 	unsigned int		 fp_max_depth;
@@ -720,6 +721,11 @@ int llapi_layout_file_open(const char *path, int open_flags, mode_t mode,
  */
 int llapi_layout_file_create(const char *path, int open_flags, int mode,
 			     const struct llapi_layout *layout);
+
+/**
+ * Set flags to the header of component layout.
+ */
+int llapi_layout_flags_set(struct llapi_layout *layout, uint32_t flags);
 
 /**
  * Fetch the start and end offset of the current layout component.

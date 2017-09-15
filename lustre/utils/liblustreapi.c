@@ -2591,24 +2591,33 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 
 	if (verbose & VERBOSE_DETAIL) {
 		llapi_printf(LLAPI_MSG_NORMAL, "composite_header:\n");
-		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_magic:       0x%08X\n",
+		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_magic:         0x%08X\n",
 			     " ", comp_v1->lcm_magic);
-		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_size:        %u\n",
+		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_size:          %u\n",
 			     " ", comp_v1->lcm_size);
-		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_flags:       %u\n",
+		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_flags:         %u\n",
 			     " ", comp_v1->lcm_flags);
 	}
 
 	if (verbose & VERBOSE_GENERATION) {
 		if (verbose & ~VERBOSE_GENERATION)
-			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_layout_gen:  ",
+			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_layout_gen:    ",
 				     " ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%u\n", comp_v1->lcm_layout_gen);
 	}
 
+	if (verbose & VERBOSE_MIRROR_COUNT) {
+		if (verbose & ~VERBOSE_MIRROR_COUNT)
+			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_mirror_count: ",
+				     " ");
+		llapi_printf(LLAPI_MSG_NORMAL, "%u\n",
+			     comp_v1->lcm_magic == LOV_USER_MAGIC_COMP_V1 ?
+			     comp_v1->lcm_mirror_count + 1 : 1);
+	}
+
 	if (verbose & VERBOSE_COMP_COUNT) {
 		if (verbose & ~VERBOSE_COMP_COUNT)
-			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_entry_count: ",
+			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_entry_count:   ",
 				     " ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%u\n",
 			     comp_v1->lcm_magic == LOV_USER_MAGIC_COMP_V1 ?

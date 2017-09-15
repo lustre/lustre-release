@@ -515,8 +515,9 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 		comp_v1->lcm_magic = LOV_USER_MAGIC_COMP_V1;
 		comp_v1->lcm_size = lum_size;
 		comp_v1->lcm_layout_gen = 0;
-		comp_v1->lcm_flags = 0;
+		comp_v1->lcm_flags = layout->llot_flags;
 		comp_v1->lcm_entry_count = comp_cnt;
+		comp_v1->lcm_mirror_count = 0;
 		offset += lum_size;
 	}
 
@@ -1508,6 +1509,20 @@ int llapi_layout_file_create(const char *path, int open_flags, int mode,
 {
 	return llapi_layout_file_open(path, open_flags|O_CREAT|O_EXCL, mode,
 				      layout);
+}
+
+/**
+ * Set flags to the header of a component layout.
+ */
+int llapi_layout_flags_set(struct llapi_layout *layout, uint32_t flags)
+{
+	if (layout->llot_magic != LLAPI_LAYOUT_MAGIC) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	layout->llot_flags = flags;
+	return 0;
 }
 
 /**

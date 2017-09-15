@@ -943,6 +943,8 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 	lcm = (struct lov_comp_md_v1 *)lmm;
 	lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
 	lcm->lcm_entry_count = cpu_to_le16(comp_cnt);
+	lcm->lcm_mirror_count = cpu_to_le16(lo->ldo_mirror_count);
+	lcm->lcm_flags = cpu_to_le16(lo->ldo_flr_state);
 
 	offset = sizeof(*lcm) + sizeof(*lcme) * comp_cnt;
 	LASSERT(offset % sizeof(__u64) == 0);
@@ -1221,6 +1223,9 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 			GOTO(out, rc = -EINVAL);
 		lo->ldo_layout_gen = le32_to_cpu(comp_v1->lcm_layout_gen);
 		lo->ldo_is_composite = 1;
+		lo->ldo_flr_state = le16_to_cpu(comp_v1->lcm_flags) &
+					LCM_FL_FLR_MASK;
+		lo->ldo_mirror_count = le16_to_cpu(comp_v1->lcm_mirror_count);
 	} else {
 		comp_cnt = 1;
 		lo->ldo_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);
@@ -1268,9 +1273,10 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 
 		if (magic == LOV_MAGIC_V3) {
 			struct lov_mds_md_v3 *v3 = (struct lov_mds_md_v3 *)lmm;
+			lod_set_pool(&lod_comp->llc_pool, v3->lmm_pool_name);
 			objs = &v3->lmm_objects[0];
-			/* no need to set pool, which is used in create only */
 		} else {
+			lod_set_pool(&lod_comp->llc_pool, NULL);
 			objs = &lmm->lmm_objects[0];
 		}
 
@@ -1623,8 +1629,8 @@ out:
  * \retval			0 if the striping is valid
  * \retval			-EINVAL if striping is invalid
  */
-int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
-			bool is_from_disk, __u64 start)
+int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
+			const struct lu_buf *buf, bool is_from_disk)
 {
 	struct lov_user_md_v1	*lum;
 	struct lov_comp_md_v1	*comp_v1;
@@ -1655,8 +1661,8 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 		struct lu_extent	*ext;
 		struct lov_desc	*desc = &d->lod_desc;
 		struct lu_buf	tmp;
+		__u64	prev_end = 0;
 		__u32	stripe_size = 0;
-		__u64	prev_end = start;
 
 		comp_v1 = buf->lb_buf;
 		if (buf->lb_len < le32_to_cpu(comp_v1->lcm_size)) {
@@ -1668,6 +1674,14 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 		if (le16_to_cpu(comp_v1->lcm_entry_count) == 0) {
 			CDEBUG(D_LAYOUT, "entry count is zero\n");
 			RETURN(-EINVAL);
+		}
+
+		if (S_ISREG(lod2lu_obj(lo)->lo_header->loh_attr) &&
+		    lo->ldo_comp_cnt > 0) {
+			__u32 cnt = lo->ldo_comp_cnt;
+
+			ext = &lo->ldo_comp_entries[cnt - 1].llc_extent;
+			prev_end = ext->e_end;
 		}
 
 		for (i = 0; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
@@ -1699,6 +1713,7 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 				       le64_to_cpu(ext->e_start), prev_end);
 				RETURN(-EINVAL);
 			}
+
 			prev_end = le64_to_cpu(ext->e_end);
 
 			tmp.lb_buf = (char *)comp_v1 +

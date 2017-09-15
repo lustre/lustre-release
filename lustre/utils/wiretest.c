@@ -1724,6 +1724,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_padding));
 	LASSERTF(LCME_FL_INIT == 0x00000010UL, "found 0x%.8xUL\n",
 		(unsigned)LCME_FL_INIT);
+	LASSERTF(LCME_FL_NEG == 0x80000000UL, "found 0x%.8xUL\n",
+		(unsigned)LCME_FL_NEG);
 
 	/* Checks for struct lov_comp_md_v1 */
 	LASSERTF((int)sizeof(struct lov_comp_md_v1) == 32, "found %lld\n",
@@ -1748,9 +1750,13 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lov_comp_md_v1, lcm_entry_count));
 	LASSERTF((int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_entry_count) == 2, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_entry_count));
-	LASSERTF((int)offsetof(struct lov_comp_md_v1, lcm_padding1) == 16, "found %lld\n",
+	LASSERTF((int)offsetof(struct lov_comp_md_v1, lcm_mirror_count) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lov_comp_md_v1, lcm_mirror_count));
+	LASSERTF((int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_mirror_count) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_mirror_count));
+	LASSERTF((int)offsetof(struct lov_comp_md_v1, lcm_padding1) == 18, "found %lld\n",
 		 (long long)(int)offsetof(struct lov_comp_md_v1, lcm_padding1));
-	LASSERTF((int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_padding1) == 8, "found %lld\n",
+	LASSERTF((int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_padding1) == 6, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_padding1));
 	LASSERTF((int)offsetof(struct lov_comp_md_v1, lcm_padding2) == 24, "found %lld\n",
 		 (long long)(int)offsetof(struct lov_comp_md_v1, lcm_padding2));
@@ -1761,6 +1767,14 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_entries[0]) == 48, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_entries[0]));
 	CLASSERT(LOV_MAGIC_COMP_V1 == (0x0BD60000 | 0x0BD0));
+	LASSERTF(LCM_FL_NOT_FLR == 0, "found %lld\n",
+		 (long long)LCM_FL_NOT_FLR);
+	LASSERTF(LCM_FL_RDONLY == 1, "found %lld\n",
+		 (long long)LCM_FL_RDONLY);
+	LASSERTF(LCM_FL_WRITE_PENDING == 2, "found %lld\n",
+		 (long long)LCM_FL_WRITE_PENDING);
+	LASSERTF(LCM_FL_SYNC_PENDING == 3, "found %lld\n",
+		 (long long)LCM_FL_SYNC_PENDING);
 
 	/* Checks for struct lmv_mds_md_v1 */
 	LASSERTF((int)sizeof(struct lmv_mds_md_v1) == 56, "found %lld\n",

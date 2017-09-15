@@ -776,7 +776,8 @@ static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 			/* save the errcode and proceed to close */
 			saved_rc = rc;
 		}
-	} else if (op_data->op_bias & MDS_CLOSE_LAYOUT_SWAP) {
+	} else if (op_data->op_bias & (MDS_CLOSE_LAYOUT_SWAP |
+				       MDS_CLOSE_LAYOUT_MERGE)) {
 		req_fmt = &RQF_MDS_INTENT_CLOSE;
 	} else {
 		req_fmt = &RQF_MDS_CLOSE;

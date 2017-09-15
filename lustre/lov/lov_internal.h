@@ -82,7 +82,8 @@ struct lov_stripe_md {
 	u32		lsm_layout_gen;
 	u16		lsm_flags;
 	bool		lsm_is_released;
-	u32		lsm_entry_count;
+	u16		lsm_mirror_count;
+	u16		lsm_entry_count;
 	struct lov_stripe_md_entry *lsm_entries[];
 };
 

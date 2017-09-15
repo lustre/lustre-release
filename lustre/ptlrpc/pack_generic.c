@@ -2185,6 +2185,7 @@ void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
 	CDEBUG(lvl, "\tlcm_layout_gen: %#x\n", comp_v1->lcm_layout_gen);
 	CDEBUG(lvl, "\tlcm_flags: %#x\n", comp_v1->lcm_flags);
 	CDEBUG(lvl, "\tlcm_entry_count: %#x\n\n", comp_v1->lcm_entry_count);
+	CDEBUG(lvl, "\tlcm_mirror_count: %#x\n\n", comp_v1->lcm_mirror_count);
 
 	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
 		struct lov_comp_md_entry_v1 *ent = &comp_v1->lcm_entries[i];
@@ -2266,6 +2267,7 @@ void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
 	__swab32s(&lum->lcm_layout_gen);
 	__swab16s(&lum->lcm_flags);
 	__swab16s(&lum->lcm_entry_count);
+	__swab16s(&lum->lcm_mirror_count);
 	CLASSERT(offsetof(typeof(*lum), lcm_padding1) != 0);
 	CLASSERT(offsetof(typeof(*lum), lcm_padding2) != 0);
 

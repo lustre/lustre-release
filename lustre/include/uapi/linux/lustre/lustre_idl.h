@@ -1875,7 +1875,11 @@ enum mds_op_bias {
 	MDS_HSM_RELEASE		= 1 << 12,
 	MDS_RENAME_MIGRATE	= 1 << 13,
 	MDS_CLOSE_LAYOUT_SWAP	= 1 << 14,
+	MDS_CLOSE_LAYOUT_MERGE	= 1 << 15,
 };
+
+#define MDS_CLOSE_INTENT (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP |	\
+			  MDS_CLOSE_LAYOUT_MERGE)
 
 /* instance of mdt_reint_rec */
 struct mdt_rec_create {

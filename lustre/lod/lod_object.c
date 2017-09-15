@@ -2017,7 +2017,7 @@ static int lod_dir_declare_xattr_set(const struct lu_env *env,
 		if (rc != 0)
 			RETURN(rc);
 	} else if (strcmp(name, XATTR_NAME_LOV) == 0) {
-		rc = lod_verify_striping(d, buf, false, 0);
+		rc = lod_verify_striping(d, lo, buf, false);
 		if (rc != 0)
 			RETURN(rc);
 	}
@@ -2226,14 +2226,12 @@ static int lod_declare_layout_add(const struct lu_env *env,
 	struct lov_user_md_v3	*v3;
 	struct lov_comp_md_v1	*comp_v1 = buf->lb_buf;
 	__u32	magic;
-	__u64	prev_end;
 	int	i, rc, array_cnt;
 	ENTRY;
 
 	LASSERT(lo->ldo_is_composite);
 
-	prev_end = lo->ldo_comp_entries[lo->ldo_comp_cnt - 1].llc_extent.e_end;
-	rc = lod_verify_striping(d, buf, false, prev_end);
+	rc = lod_verify_striping(d, lo, buf, false);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -2266,6 +2264,7 @@ static int lod_declare_layout_add(const struct lu_env *env,
 		lod_comp->llc_extent.e_start = ext->e_start;
 		lod_comp->llc_extent.e_end = ext->e_end;
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
+		lod_comp->llc_flags = comp_v1->lcm_entries[i].lcme_flags;
 
 		lod_comp->llc_stripe_count = v1->lmm_stripe_count;
 		if (!lod_comp->llc_stripe_count ||
@@ -2291,6 +2290,7 @@ static int lod_declare_layout_add(const struct lu_env *env,
 	OBD_FREE(lo->ldo_comp_entries, sizeof(*lod_comp) * lo->ldo_comp_cnt);
 	lo->ldo_comp_entries = comp_array;
 	lo->ldo_comp_cnt = array_cnt;
+
 	/* No need to increase layout generation here, it will be increased
 	 * later when generating component ID for the new components */
 
@@ -2421,10 +2421,6 @@ static int lod_declare_layout_del(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(lo->ldo_is_composite);
-
-	rc = lod_verify_striping(d, buf, false, 0);
-	if (rc != 0)
-		RETURN(rc);
 
 	magic = comp_v1->lcm_magic;
 	if (magic == __swab32(LOV_USER_MAGIC_COMP_V1)) {
@@ -2592,6 +2588,139 @@ unlock:
 }
 
 /**
+ * Merge layouts to form a mirrored file.
+ */
+static int lod_declare_layout_merge(const struct lu_env *env,
+		struct dt_object *dt, const struct lu_buf *mbuf,
+		struct thandle *th)
+{
+	struct lod_thread_info	*info = lod_env_info(env);
+	struct lu_buf		*buf = &info->lti_buf;
+	struct lod_object	*lo = lod_dt_obj(dt);
+	struct lov_comp_md_v1	*lcm;
+	struct lov_comp_md_v1	*cur_lcm;
+	struct lov_comp_md_v1	*merge_lcm;
+	struct lov_comp_md_entry_v1	*lcme;
+	size_t size = 0;
+	size_t offset;
+	__u16 cur_entry_count;
+	__u16 merge_entry_count;
+	__u32 id = 0;
+	__u16 mirror_id = 0;
+	__u32 mirror_count;
+	int	rc, i;
+	ENTRY;
+
+	merge_lcm = mbuf->lb_buf;
+	if (mbuf->lb_len < sizeof(*merge_lcm))
+		RETURN(-EINVAL);
+
+	/* must be an existing layout from disk */
+	if (le32_to_cpu(merge_lcm->lcm_magic) != LOV_MAGIC_COMP_V1)
+		RETURN(-EINVAL);
+
+	merge_entry_count = le16_to_cpu(merge_lcm->lcm_entry_count);
+
+	/* do not allow to merge two mirrored files */
+	if (le16_to_cpu(merge_lcm->lcm_mirror_count))
+		RETURN(-EBUSY);
+
+	/* verify the target buffer */
+	rc = lod_get_lov_ea(env, lo);
+	if (rc <= 0)
+		RETURN(rc ? : -ENODATA);
+
+	cur_lcm = info->lti_ea_store;
+	if (le32_to_cpu(cur_lcm->lcm_magic) != LOV_MAGIC_COMP_V1)
+		RETURN(-EINVAL);
+
+	cur_entry_count = le16_to_cpu(cur_lcm->lcm_entry_count);
+
+	/* 'lcm_mirror_count + 1' is the current # of mirrors the file has */
+	mirror_count = le16_to_cpu(cur_lcm->lcm_mirror_count) + 1;
+	if (mirror_count + 1 > LUSTRE_MIRROR_COUNT_MAX)
+		RETURN(-ERANGE);
+
+	/* size of new layout */
+	size = le32_to_cpu(cur_lcm->lcm_size) +
+	       le32_to_cpu(merge_lcm->lcm_size) - sizeof(*cur_lcm);
+
+	memset(buf, 0, sizeof(*buf));
+	lu_buf_alloc(buf, size);
+	if (buf->lb_buf == NULL)
+		RETURN(-ENOMEM);
+
+	lcm = buf->lb_buf;
+	memcpy(lcm, cur_lcm, sizeof(*lcm) + cur_entry_count * sizeof(*lcme));
+
+	offset = sizeof(*lcm) +
+		 sizeof(*lcme) * (cur_entry_count + merge_entry_count);
+	for (i = 0; i < cur_entry_count; i++) {
+		struct lov_comp_md_entry_v1 *cur_lcme;
+
+		lcme = &lcm->lcm_entries[i];
+		cur_lcme = &cur_lcm->lcm_entries[i];
+
+		lcme->lcme_offset = cpu_to_le32(offset);
+		memcpy((char *)lcm + offset,
+		       (char *)cur_lcm + le32_to_cpu(cur_lcme->lcme_offset),
+		       le32_to_cpu(lcme->lcme_size));
+
+		offset += le32_to_cpu(lcme->lcme_size);
+
+		if (mirror_count == 1) {
+			/* new mirrored file, create new mirror ID */
+			id = pflr_id(1, i + 1);
+			lcme->lcme_id = cpu_to_le32(id);
+		}
+
+		id = MAX(le32_to_cpu(lcme->lcme_id), id);
+	}
+
+	mirror_id = mirror_id_of(id) + 1;
+	for (i = 0; i < merge_entry_count; i++) {
+		struct lov_comp_md_entry_v1 *merge_lcme;
+
+		merge_lcme = &merge_lcm->lcm_entries[i];
+		lcme = &lcm->lcm_entries[cur_entry_count + i];
+
+		*lcme = *merge_lcme;
+		lcme->lcme_offset = cpu_to_le32(offset);
+
+		id = pflr_id(mirror_id, i + 1);
+		lcme->lcme_id = cpu_to_le32(id);
+
+		memcpy((char *)lcm + offset,
+		       (char *)merge_lcm + le32_to_cpu(merge_lcme->lcme_offset),
+		       le32_to_cpu(lcme->lcme_size));
+
+		offset += le32_to_cpu(lcme->lcme_size);
+	}
+
+	/* fixup layout information */
+	lod_obj_inc_layout_gen(lo);
+	lcm->lcm_layout_gen = cpu_to_le32(lo->ldo_layout_gen);
+	lcm->lcm_size = cpu_to_le32(size);
+	lcm->lcm_entry_count = cpu_to_le16(cur_entry_count + merge_entry_count);
+	lcm->lcm_mirror_count = cpu_to_le16(mirror_count);
+	if ((le16_to_cpu(lcm->lcm_flags) & LCM_FL_FLR_MASK) == LCM_FL_NOT_FLR)
+		lcm->lcm_flags = cpu_to_le32(LCM_FL_RDONLY);
+
+	LASSERT(dt_write_locked(env, dt_object_child(dt)));
+	lod_object_free_striping(env, lo);
+	rc = lod_parse_striping(env, lo, buf);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = lod_sub_declare_xattr_set(env, dt_object_child(dt), buf,
+					XATTR_NAME_LOV, LU_XATTR_REPLACE, th);
+
+out:
+	lu_buf_free(buf);
+	RETURN(rc);
+}
+
+/**
  * Implementation of dt_object_operations::do_declare_xattr_set.
  *
  * \see dt_object_operations::do_declare_xattr_set() in the API description
@@ -2614,7 +2743,8 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 	ENTRY;
 
 	mode = dt->do_lu.lo_header->loh_attr & S_IFMT;
-	if ((S_ISREG(mode) || mode == 0) && !(fl & LU_XATTR_REPLACE) &&
+	if ((S_ISREG(mode) || mode == 0) &&
+	    !(fl & (LU_XATTR_REPLACE | LU_XATTR_MERGE)) &&
 	    (strcmp(name, XATTR_NAME_LOV) == 0 ||
 	     strcmp(name, XATTR_LUSTRE_LOV) == 0)) {
 		/*
@@ -2636,6 +2766,10 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 			attr->la_mode = S_IFREG;
 		}
 		rc = lod_declare_striped_create(env, dt, attr, buf, th);
+	} else if (fl & LU_XATTR_MERGE) {
+		LASSERT(strcmp(name, XATTR_NAME_LOV) == 0 ||
+			strcmp(name, XATTR_LUSTRE_LOV) == 0);
+		rc = lod_declare_layout_merge(env, dt, buf, th);
 	} else if (S_ISREG(mode) &&
 		   strlen(name) > strlen(XATTR_LUSTRE_LOV) + 1 &&
 		   strncmp(name, XATTR_LUSTRE_LOV,

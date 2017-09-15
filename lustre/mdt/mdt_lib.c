@@ -1058,7 +1058,10 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 		ma->ma_attr_flags |= MDS_CLOSE_LAYOUT_SWAP;
 	else
 		ma->ma_attr_flags &= ~MDS_CLOSE_LAYOUT_SWAP;
-
+	if (rec->sa_bias & MDS_CLOSE_LAYOUT_MERGE)
+		ma->ma_attr_flags |= MDS_CLOSE_LAYOUT_MERGE;
+	else
+		ma->ma_attr_flags &= ~MDS_CLOSE_LAYOUT_MERGE;
 	RETURN(0);
 }
 
@@ -1137,7 +1140,7 @@ static int mdt_intent_close_unpack(struct mdt_thread_info *info)
 	struct req_capsule	*pill = info->mti_pill;
 	ENTRY;
 
-	if (!(ma->ma_attr_flags & (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP)))
+	if (!(ma->ma_attr_flags & MDS_CLOSE_INTENT))
 		RETURN(0);
 
 	req_capsule_extend(pill, &RQF_MDS_INTENT_CLOSE);

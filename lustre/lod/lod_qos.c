@@ -1847,7 +1847,7 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	if (buf == NULL || buf->lb_buf == NULL || buf->lb_len == 0)
 		RETURN(0);
 
-	rc = lod_verify_striping(d, buf, false, 0);
+	rc = lod_verify_striping(d, lo, buf, false);
 	if (rc)
 		RETURN(-EINVAL);
 

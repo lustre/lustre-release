@@ -522,6 +522,11 @@ static inline bool lu_extent_is_overlapped(struct lu_extent *e1,
 	return e1->e_start < e2->e_end && e2->e_start < e1->e_end;
 }
 
+static inline bool lu_extent_is_whole(struct lu_extent *e)
+{
+	return e->e_start == 0 && e->e_end == LUSTRE_EOF;
+}
+
 enum lov_comp_md_entry_flags {
 	LCME_FL_PRIMARY	= 0x00000001,	/* Not used */
 	LCME_FL_STALE	= 0x00000002,	/* Not used */
@@ -557,7 +562,33 @@ struct lov_comp_md_entry_v1 {
 	__u64			lcme_padding[2];
 } __attribute__((packed));
 
-enum lov_comp_md_flags;
+#define SEQ_ID_MAX		0x0000FFFF
+#define SEQ_ID_MASK		SEQ_ID_MAX
+/* bit 30:16 of lcme_id is used to store mirror id */
+#define MIRROR_ID_MASK		0x7FFF0000
+#define MIRROR_ID_SHIFT		16
+
+static inline __u32 pflr_id(__u16 mirror_id, __u16 seqid)
+{
+	return ((mirror_id << MIRROR_ID_SHIFT) & MIRROR_ID_MASK) | seqid;
+}
+
+static inline __u16 mirror_id_of(__u32 id)
+{
+	return (id & MIRROR_ID_MASK) >> MIRROR_ID_SHIFT;
+}
+
+/**
+ * on-disk data for lcm_flags. Valid if lcm_magic is LOV_MAGIC_COMP_V1.
+ */
+enum lov_comp_md_flags {
+	/* the least 2 bits are used by FLR to record file state */
+	LCM_FL_NOT_FLR          = 0,
+	LCM_FL_RDONLY           = 1,
+	LCM_FL_WRITE_PENDING    = 2,
+	LCM_FL_SYNC_PENDING     = 3,
+	LCM_FL_FLR_MASK         = 0x3,
+};
 
 struct lov_comp_md_v1 {
 	__u32	lcm_magic;      /* LOV_USER_MAGIC_COMP_V1 */
@@ -565,10 +596,18 @@ struct lov_comp_md_v1 {
 	__u32	lcm_layout_gen;
 	__u16	lcm_flags;
 	__u16	lcm_entry_count;
-	__u64	lcm_padding1;
+	/* lcm_mirror_count stores the number of actual mirrors minus 1,
+	 * so that non-flr files will have value 0 meaning 1 mirror. */
+	__u16	lcm_mirror_count;
+	__u16	lcm_padding1[3];
 	__u64	lcm_padding2;
 	struct lov_comp_md_entry_v1 lcm_entries[0];
 } __attribute__((packed));
+
+/*
+ * Maximum number of mirrors Lustre can support.
+ */
+#define LUSTRE_MIRROR_COUNT_MAX		16
 
 static inline __u32 lov_user_md_size(__u16 stripes, __u32 lmm_magic)
 {
@@ -857,6 +896,8 @@ struct if_quotactl {
 #define SWAP_LAYOUTS_KEEP_MTIME		(1 << 2)
 #define SWAP_LAYOUTS_KEEP_ATIME		(1 << 3)
 #define SWAP_LAYOUTS_CLOSE		(1 << 4)
+#define MERGE_LAYOUTS_CLOSE		(1 << 5)
+#define INTENT_LAYOUTS_CLOSE	(SWAP_LAYOUTS_CLOSE | MERGE_LAYOUTS_CLOSE)
 
 /* Swap XATTR_NAME_HSM as well, only on the MDT so far */
 #define SWAP_LAYOUTS_MDS_HSM		(1 << 31)

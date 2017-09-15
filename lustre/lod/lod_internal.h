@@ -274,7 +274,9 @@ struct lod_object {
 			/* Layout component count for a regular file.
 			 * It equals to 1 for non-composite layout. */
 			__u16		ldo_comp_cnt;
+			__u16		ldo_mirror_count;
 			__u32		ldo_is_composite:1,
+					ldo_flr_state:2,
 					ldo_comp_cached:1;
 		};
 		/* directory stripe (LMV) */
@@ -598,8 +600,8 @@ int lod_parse_dir_striping(const struct lu_env *env, struct lod_object *lo,
 			   const struct lu_buf *buf);
 int lod_initialize_objects(const struct lu_env *env, struct lod_object *mo,
 			   struct lov_ost_data_v1 *objs, int index);
-int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
-			bool is_from_disk, __u64 start);
+int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
+			const struct lu_buf *buf, bool is_from_disk);
 int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		       struct lov_mds_md *lmm, int *lmm_size, bool is_dir);
 int lod_ea_store_resize(struct lod_thread_info *info, size_t size);

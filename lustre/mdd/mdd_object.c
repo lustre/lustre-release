@@ -1071,8 +1071,125 @@ free:
 	return rc;
 }
 
+static int mdd_declare_xattr_del(const struct lu_env *env,
+				 struct mdd_device *mdd,
+				 struct mdd_object *obj,
+				 const char *name,
+				 struct thandle *handle);
+
 static int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
 			 const char *name);
+
+static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
+			   struct md_object *md_vic)
+{
+	struct mdd_device *mdd = mdo2mdd(md_obj);
+	struct mdd_object *obj = md2mdd_obj(md_obj);
+	struct mdd_object *vic = md2mdd_obj(md_vic);
+	struct lu_buf *buf = &mdd_env_info(env)->mti_buf[0];
+	struct lu_buf *buf_vic = &mdd_env_info(env)->mti_buf[1];
+	struct lov_mds_md *lmm;
+	struct thandle *handle;
+	int rc;
+	ENTRY;
+
+	rc = lu_fid_cmp(mdo2fid(obj), mdo2fid(vic));
+	if (rc == 0) /* same fid */
+		RETURN(-EPERM);
+
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		RETURN(PTR_ERR(handle));
+
+	if (rc > 0) {
+		mdd_write_lock(env, obj, MOR_TGT_CHILD);
+		mdd_write_lock(env, vic, MOR_TGT_CHILD);
+	} else {
+		mdd_write_lock(env, vic, MOR_TGT_CHILD);
+		mdd_write_lock(env, obj, MOR_TGT_CHILD);
+	}
+
+	/* get EA of victim file */
+	memset(buf_vic, 0, sizeof(*buf_vic));
+	rc = mdd_get_lov_ea(env, vic, buf_vic);
+	if (rc < 0) {
+		if (rc == -ENODATA)
+			rc = 0;
+		GOTO(out, rc);
+	}
+
+	/* parse the layout of victim file */
+	lmm = buf_vic->lb_buf;
+	if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC_COMP_V1)
+		GOTO(out, rc = -EINVAL);
+
+	/* save EA of target file for restore */
+	memset(buf, 0, sizeof(*buf));
+	rc = mdd_get_lov_ea(env, obj, buf);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	/* Get rid of the layout from victim object */
+	rc = mdd_declare_xattr_del(env, mdd, vic, XATTR_NAME_LOV, handle);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = mdd_declare_xattr_set(env, mdd, obj, buf_vic, XATTR_LUSTRE_LOV,
+				   LU_XATTR_MERGE, handle);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	rc = mdo_xattr_set(env, obj, buf_vic, XATTR_LUSTRE_LOV, LU_XATTR_MERGE,
+			   handle);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = mdo_xattr_del(env, vic, XATTR_NAME_LOV, handle);
+	if (rc) { /* wtf? */
+		int rc2;
+
+		rc2 = mdo_xattr_set(env, obj, buf, XATTR_NAME_LOV,
+				    LU_XATTR_REPLACE, handle);
+		if (rc2)
+			CERROR("%s: failed to rollback of layout of: "DFID
+			       ": %d, file state unknown\n",
+			       mdd_obj_dev_name(obj), PFID(mdo2fid(obj)), rc2);
+		GOTO(out, rc);
+	}
+
+	(void)mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, obj, handle);
+	(void)mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, vic, handle);
+	EXIT;
+
+out:
+	mdd_trans_stop(env, mdd, rc, handle);
+	mdd_write_unlock(env, obj);
+	mdd_write_unlock(env, vic);
+	lu_buf_free(buf);
+	lu_buf_free(buf_vic);
+
+	return rc;
+}
+
+static int mdd_layout_merge_allowed(const struct lu_env *env,
+				    struct md_object *target,
+				    struct md_object *victim)
+{
+	struct mdd_object *o1 = md2mdd_obj(target);
+
+	/* cannot extend directory's LOVEA */
+	if (S_ISDIR(mdd_object_type(o1))) {
+		CERROR("%s: Don't extend directory's LOVEA, just set it.\n",
+		       mdd_obj_dev_name(o1));
+		RETURN(-EISDIR);
+	}
+
+	RETURN(0);
+}
 
 /**
  * The caller should guarantee to update the object ctime
@@ -1098,6 +1215,21 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 	rc = mdd_xattr_sanity_check(env, mdd_obj, attr, name);
 	if (rc)
 		RETURN(rc);
+
+	if (strcmp(name, XATTR_LUSTRE_LOV) == 0 && fl == LU_XATTR_MERGE) {
+		struct md_object *victim = buf->lb_buf;
+
+		if (buf->lb_len != sizeof(victim))
+			RETURN(-EINVAL);
+
+		rc = mdd_layout_merge_allowed(env, obj, victim);
+		if (rc)
+			RETURN(rc);
+
+		/* merge layout of victim as a mirror of obj's. */
+		rc = mdd_xattr_merge(env, obj, victim);
+		RETURN(rc);
+	}
 
 	if (strcmp(name, XATTR_NAME_ACL_ACCESS) == 0 ||
 	    strcmp(name, XATTR_NAME_ACL_DEFAULT) == 0) {

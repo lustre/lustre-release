@@ -166,7 +166,6 @@ static int lfs_list_commands(int argc, char **argv);
 	"\tmode: the mode of the directory\n"
 
 static const char	*progname;
-static bool		 file_lease_supported = true;
 
 /* all available commands */
 command_t cmdlist[] = {
@@ -411,8 +410,6 @@ command_t cmdlist[] = {
 };
 
 
-#define MIGRATION_NONBLOCK	1
-
 static int check_hashtype(const char *hashtype)
 {
 	int i;
@@ -424,47 +421,148 @@ static int check_hashtype(const char *hashtype)
 	return 0;
 }
 
-/**
- * Internal helper for migrate_copy_data(). Check lease and report error if
- * need be.
- *
- * \param[in]  fd           File descriptor on which to check the lease.
- * \param[out] lease_broken Set to true if the lease was broken.
- * \param[in]  group_locked Whether a group lock was taken or not.
- * \param[in]  path         Name of the file being processed, for error
- *			    reporting
- *
- * \retval 0       Migration can keep on going.
- * \retval -errno  Error occurred, abort migration.
- */
-static int check_lease(int fd, bool *lease_broken, bool group_locked,
-		       const char *path)
+
+static const char *error_loc = "syserror";
+
+enum {
+	MIGRATION_NONBLOCK	= 1 << 0,
+	MIGRATION_MIRROR	= 1 << 1,
+};
+
+static int lfs_component_create(char *fname, int open_flags, mode_t open_mode,
+				struct llapi_layout *layout);
+
+static int
+migrate_open_files(const char *name, const struct llapi_stripe_param *param,
+		   struct llapi_layout *layout, int *fd_src, int *fd_tgt)
 {
-	int rc;
+	int			 fd = -1;
+	int			 fdv = -1;
+	int			 mdt_index;
+	int                      random_value;
+	char			 parent[PATH_MAX];
+	char			 volatile_file[PATH_MAX];
+	char			*ptr;
+	int			 rc;
+	struct stat		 st;
+	struct stat		 stv;
 
-	if (!file_lease_supported)
-		return 0;
-
-	rc = llapi_lease_check(fd);
-	if (rc > 0)
-		return 0; /* llapi_check_lease returns > 0 on success. */
-
-	if (!group_locked) {
-		fprintf(stderr, "%s: cannot migrate '%s': file busy\n",
-			progname, path);
-		rc = rc ? rc : -EAGAIN;
-	} else {
-		fprintf(stderr, "%s: external attempt to access file '%s' "
-			"blocked until migration ends.\n", progname, path);
-		rc = 0;
+	if (param == NULL && layout == NULL) {
+		error_loc = "layout information";
+		return -EINVAL;
 	}
-	*lease_broken = true;
+
+	/* search for file directory pathname */
+	if (strlen(name) > sizeof(parent) - 1) {
+		error_loc = "source file name";
+		return -ERANGE;
+	}
+
+	strncpy(parent, name, sizeof(parent));
+	ptr = strrchr(parent, '/');
+	if (ptr == NULL) {
+		if (getcwd(parent, sizeof(parent)) == NULL) {
+			error_loc = "getcwd";
+			return -errno;
+		}
+	} else {
+		if (ptr == parent) /* leading '/' */
+			ptr = parent + 1;
+		*ptr = '\0';
+	}
+
+	/* open file, direct io */
+	/* even if the file is only read, WR mode is nedeed to allow
+	 * layout swap on fd */
+	fd = open(name, O_RDWR | O_DIRECT);
+	if (fd < 0) {
+		rc = -errno;
+		error_loc = "cannot open source file";
+		return rc;
+	}
+
+	rc = llapi_file_fget_mdtidx(fd, &mdt_index);
+	if (rc < 0) {
+		error_loc = "cannot get MDT index";
+		goto out;
+	}
+
+	do {
+		int open_flags = O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW;
+		mode_t open_mode = S_IRUSR | S_IWUSR;
+
+		random_value = random();
+		rc = snprintf(volatile_file, sizeof(volatile_file),
+			      "%s/%s:%.4X:%.4X", parent, LUSTRE_VOLATILE_HDR,
+			      mdt_index, random_value);
+		if (rc >= sizeof(volatile_file)) {
+			rc = -ENAMETOOLONG;
+			break;
+		}
+
+		/* create, open a volatile file, use caching (ie no directio) */
+		if (param != NULL)
+			fdv = llapi_file_open_param(volatile_file, open_flags,
+						    open_mode, param);
+		else
+			fdv = lfs_component_create(volatile_file, open_flags,
+						   open_mode, layout);
+	} while (fdv < 0 && (rc = fdv) == -EEXIST);
+
+	if (rc < 0) {
+		error_loc = "cannot create volatile file";
+		goto out;
+	}
+
+	/* In case the MDT does not support creation of volatile files
+	 * we should try to unlink it. */
+	(void)unlink(volatile_file);
+
+	/* Not-owner (root?) special case.
+	 * Need to set owner/group of volatile file like original.
+	 * This will allow to pass related check during layout_swap.
+	 */
+	rc = fstat(fd, &st);
+	if (rc != 0) {
+		rc = -errno;
+		error_loc = "cannot stat source file";
+		goto out;
+	}
+
+	rc = fstat(fdv, &stv);
+	if (rc != 0) {
+		rc = -errno;
+		error_loc = "cannot stat volatile";
+		goto out;
+	}
+
+	if (st.st_uid != stv.st_uid || st.st_gid != stv.st_gid) {
+		rc = fchown(fdv, st.st_uid, st.st_gid);
+		if (rc != 0) {
+			rc = -errno;
+			error_loc = "cannot change ownwership of volatile";
+			goto out;
+		}
+	}
+
+out:
+	if (rc < 0) {
+		if (fd > 0)
+			close(fd);
+		if (fdv > 0)
+			close(fdv);
+	} else {
+		*fd_src = fd;
+		*fd_tgt = fdv;
+		error_loc = NULL;
+	}
 	return rc;
 }
 
-static int migrate_copy_data(int fd_src, int fd_dst, size_t buf_size,
-			     bool group_locked, const char *fname)
+static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int))
 {
+	struct llapi_layout *layout;
+	size_t	 buf_size = 4 * 1024 * 1024;
 	void	*buf = NULL;
 	ssize_t	 rsize = -1;
 	ssize_t	 wsize = 0;
@@ -472,7 +570,17 @@ static int migrate_copy_data(int fd_src, int fd_dst, size_t buf_size,
 	size_t	 wpos = 0;
 	off_t	 bufoff = 0;
 	int	 rc;
-	bool	 lease_broken = false;
+
+	layout = llapi_layout_get_by_fd(fd_src, 0);
+	if (layout != NULL) {
+		uint64_t stripe_size;
+
+		rc = llapi_layout_stripe_size_get(layout, &stripe_size);
+		if (rc == 0)
+			buf_size = stripe_size;
+
+		llapi_layout_free(layout);
+	}
 
 	/* Use a page-aligned buffer for direct I/O */
 	rc = posix_memalign(&buf, getpagesize(), buf_size);
@@ -483,18 +591,16 @@ static int migrate_copy_data(int fd_src, int fd_dst, size_t buf_size,
 		/* read new data only if we have written all
 		 * previously read data */
 		if (wpos == rpos) {
-			if (!lease_broken) {
-				rc = check_lease(fd_src, &lease_broken,
-						 group_locked, fname);
+			if (check_file) {
+				rc = check_file(fd_src);
 				if (rc < 0)
-					goto out;
+					break;
 			}
+
 			rsize = read(fd_src, buf, buf_size);
 			if (rsize < 0) {
 				rc = -errno;
-				fprintf(stderr, "%s: %s: read failed: %s\n",
-					progname, fname, strerror(-rc));
-				goto out;
+				break;
 			}
 			rpos += rsize;
 			bufoff = 0;
@@ -506,39 +612,39 @@ static int migrate_copy_data(int fd_src, int fd_dst, size_t buf_size,
 		wsize = write(fd_dst, buf + bufoff, rpos - wpos);
 		if (wsize < 0) {
 			rc = -errno;
-			fprintf(stderr,
-				"%s: %s: write failed on volatile: %s\n",
-				progname, fname, strerror(-rc));
-			goto out;
+			break;
 		}
 		wpos += wsize;
 		bufoff += wsize;
 	}
 
-	rc = fsync(fd_dst);
-	if (rc < 0) {
-		rc = -errno;
-		fprintf(stderr, "%s: %s: fsync failed: %s\n",
-			progname, fname, strerror(-rc));
+	if (rc == 0) {
+		rc = fsync(fd_dst);
+		if (rc < 0)
+			rc = -errno;
 	}
 
-out:
 	free(buf);
 	return rc;
 }
 
-static int migrate_copy_timestamps(int fdv, const struct stat *st)
+static int migrate_copy_timestamps(int fd, int fdv)
 {
-	struct timeval	tv[2] = {
-		{.tv_sec = st->st_atime},
-		{.tv_sec = st->st_mtime}
-	};
+	struct stat st;
 
-	return futimes(fdv, tv);
+	if (fstat(fd, &st) == 0) {
+		struct timeval tv[2] = {
+			{.tv_sec = st.st_atime},
+			{.tv_sec = st.st_mtime}
+		};
+
+		return futimes(fdv, tv);
+	}
+
+	return -errno;
 }
 
-static int migrate_block(int fd, int fdv, const struct stat *st,
-			 size_t buf_size, const char *name)
+static int migrate_block(int fd, int fdv)
 {
 	__u64	dv1;
 	int	gid;
@@ -547,8 +653,7 @@ static int migrate_block(int fd, int fdv, const struct stat *st,
 
 	rc = llapi_get_data_version(fd, &dv1, LL_DV_RD_FLUSH);
 	if (rc < 0) {
-		fprintf(stderr, "%s: %s: cannot get dataversion: %s\n",
-			progname, name, strerror(-rc));
+		error_loc = "cannot get dataversion";
 		return rc;
 	}
 
@@ -561,22 +666,20 @@ static int migrate_block(int fd, int fdv, const struct stat *st,
 	 * block it too. */
 	rc = llapi_group_lock(fd, gid);
 	if (rc < 0) {
-		fprintf(stderr, "%s: %s: cannot get group lock: %s\n",
-			progname, name, strerror(-rc));
+		error_loc = "cannot get group lock";
 		return rc;
 	}
 
-	rc = migrate_copy_data(fd, fdv, buf_size, true, name);
+	rc = migrate_copy_data(fd, fdv, NULL);
 	if (rc < 0) {
-		fprintf(stderr, "%s: %s: data copy failed\n", progname, name);
+		error_loc = "data copy failed";
 		goto out_unlock;
 	}
 
 	/* Make sure we keep original atime/mtime values */
-	rc = migrate_copy_timestamps(fdv, st);
+	rc = migrate_copy_timestamps(fd, fdv);
 	if (rc < 0) {
-		fprintf(stderr, "%s: %s: timestamp copy failed\n",
-			progname, name);
+		error_loc = "timestamp copy failed";
 		goto out_unlock;
 	}
 
@@ -588,28 +691,44 @@ static int migrate_block(int fd, int fdv, const struct stat *st,
 	rc = llapi_fswap_layouts_grouplock(fd, fdv, dv1, 0, 0,
 					   SWAP_LAYOUTS_CHECK_DV1);
 	if (rc == -EAGAIN) {
-		fprintf(stderr, "%s: %s: dataversion changed during copy, "
-			"migration aborted\n", progname, name);
+		error_loc = "file changed";
 		goto out_unlock;
 	} else if (rc < 0) {
-		fprintf(stderr, "%s: %s: cannot swap layouts: %s\n", progname,
-			name, strerror(-rc));
+		error_loc = "cannot swap layout";
 		goto out_unlock;
 	}
 
 out_unlock:
 	rc2 = llapi_group_unlock(fd, gid);
 	if (rc2 < 0 && rc == 0) {
-		fprintf(stderr, "%s: %s: putting group lock failed: %s\n",
-			progname, name, strerror(-rc2));
+		error_loc = "unlock group lock";
 		rc = rc2;
 	}
 
 	return rc;
 }
 
-static int migrate_nonblock(int fd, int fdv, const struct stat *st,
-			    size_t buf_size, const char *name)
+/**
+ * Internal helper for migrate_copy_data(). Check lease and report error if
+ * need be.
+ *
+ * \param[in]  fd           File descriptor on which to check the lease.
+ *
+ * \retval 0       Migration can keep on going.
+ * \retval -errno  Error occurred, abort migration.
+ */
+static int check_lease(int fd)
+{
+	int rc;
+
+	rc = llapi_lease_check(fd);
+	if (rc > 0)
+		return 0; /* llapi_check_lease returns > 0 on success. */
+
+	return -EBUSY;
+}
+
+static int migrate_nonblock(int fd, int fdv)
 {
 	__u64	dv1;
 	__u64	dv2;
@@ -617,47 +736,32 @@ static int migrate_nonblock(int fd, int fdv, const struct stat *st,
 
 	rc = llapi_get_data_version(fd, &dv1, LL_DV_RD_FLUSH);
 	if (rc < 0) {
-		fprintf(stderr, "%s: %s: cannot get data version: %s\n",
-			progname, name, strerror(-rc));
+		error_loc = "cannot get data version";
 		return rc;
 	}
 
-	rc = migrate_copy_data(fd, fdv, buf_size, false, name);
+	rc = migrate_copy_data(fd, fdv, check_lease);
 	if (rc < 0) {
-		fprintf(stderr, "%s: %s: data copy failed\n", progname, name);
+		error_loc = "data copy failed";
 		return rc;
 	}
 
 	rc = llapi_get_data_version(fd, &dv2, LL_DV_RD_FLUSH);
 	if (rc != 0) {
-		fprintf(stderr, "%s: %s: cannot get data version: %s\n",
-			progname, name, strerror(-rc));
+		error_loc = "cannot get data version";
 		return rc;
 	}
 
 	if (dv1 != dv2) {
 		rc = -EAGAIN;
-		fprintf(stderr, "%s: %s: data version changed during "
-				"migration\n",
-			progname, name);
+		error_loc = "source file changed";
 		return rc;
 	}
 
 	/* Make sure we keep original atime/mtime values */
-	rc = migrate_copy_timestamps(fdv, st);
+	rc = migrate_copy_timestamps(fd, fdv);
 	if (rc < 0) {
-		fprintf(stderr, "%s: %s: timestamp copy failed\n",
-			progname, name);
-		return rc;
-	}
-
-	/* Atomically put lease, swap layouts and close.
-	 * for a migration we need to check data version on file did
-	 * not change. */
-	rc = llapi_fswap_layouts(fd, fdv, 0, 0, SWAP_LAYOUTS_CLOSE);
-	if (rc < 0) {
-		fprintf(stderr, "%s: %s: cannot swap layouts: %s\n",
-			progname, name, strerror(-rc));
+		error_loc = "timestamp copy failed";
 		return rc;
 	}
 
@@ -735,190 +839,147 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		       struct llapi_stripe_param *param,
 		       struct llapi_layout *layout)
 {
-	int			 fd = -1;
-	int			 fdv = -1;
-	char			 parent[PATH_MAX];
-	int			 mdt_index;
-	int                      random_value;
-	char			 volatile_file[sizeof(parent) +
-					       LUSTRE_VOLATILE_HDR_LEN +
-					       2 * sizeof(mdt_index) +
-					       2 * sizeof(random_value) + 4];
-	char			*ptr;
-	int			 rc;
-	struct lov_user_md	*lum = NULL;
-	int			 lum_size;
-	int			 buf_size = 1024 * 1024 * 4;
-	bool			 have_lease_rdlck = false;
-	struct stat		 st;
-	struct stat		 stv;
+	int fd = -1;
+	int fdv = -1;
+	int rc;
 
-	/* find the right size for the IO and allocate the buffer */
-	lum_size = lov_user_md_size(LOV_MAX_STRIPE_COUNT, LOV_USER_MAGIC_V3);
-	lum = malloc(lum_size);
-	if (lum == NULL) {
-		rc = -ENOMEM;
-		goto free;
-	}
+	rc = migrate_open_files(name, param, layout, &fd, &fdv);
+	if (rc < 0)
+		goto out;
 
-	rc = llapi_file_get_stripe(name, lum);
-	/* failure can happen for many reasons and some may be not real errors
-	 * (eg: no stripe)
-	 * in case of a real error, a later call will fail with better
-	 * error management */
-	if (rc == 0) {
-		if ((lum->lmm_magic == LOV_USER_MAGIC_V1 ||
-		     lum->lmm_magic == LOV_USER_MAGIC_V3) &&
-		    lum->lmm_stripe_size != 0)
-			buf_size = lum->lmm_stripe_size;
-	}
-
-	/* open file, direct io */
-	/* even if the file is only read, WR mode is nedeed to allow
-	 * layout swap on fd */
-	fd = open(name, O_RDWR | O_DIRECT);
-	if (fd == -1) {
-		rc = -errno;
-		fprintf(stderr, "%s: cannot open '%s': %s\n", progname, name,
-			strerror(-rc));
-		goto free;
-	}
-
-	if (file_lease_supported) {
-		rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
-		if (rc == -EOPNOTSUPP) {
-			/* Older servers do not support file lease.
-			 * Disable related checks. This opens race conditions
-			 * as explained in LU-4840 */
-			file_lease_supported = false;
-		} else if (rc < 0) {
-			fprintf(stderr, "%s: %s: cannot get open lease: %s\n",
-				progname, name, strerror(-rc));
-			goto error;
-		} else {
-			have_lease_rdlck = true;
-		}
-	}
-
-	/* search for file directory pathname */
-	if (strlen(name) > sizeof(parent)-1) {
-		rc = -E2BIG;
-		goto error;
-	}
-	strncpy(parent, name, sizeof(parent));
-	ptr = strrchr(parent, '/');
-	if (ptr == NULL) {
-		if (getcwd(parent, sizeof(parent)) == NULL) {
-			rc = -errno;
-			goto error;
-		}
-	} else {
-		if (ptr == parent)
-			strcpy(parent, "/");
-		else
-			*ptr = '\0';
-	}
-
-	rc = llapi_file_fget_mdtidx(fd, &mdt_index);
-	if (rc < 0) {
-		fprintf(stderr, "%s: %s: cannot get MDT index: %s\n",
-			progname, name, strerror(-rc));
-		goto error;
-	}
-
-	do {
-		int open_flags = O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW;
-		mode_t open_mode = S_IRUSR | S_IWUSR;
-
-		random_value = random();
-		rc = snprintf(volatile_file, sizeof(volatile_file),
-			      "%s/%s:%.4X:%.4X", parent, LUSTRE_VOLATILE_HDR,
-			      mdt_index, random_value);
-		if (rc >= sizeof(volatile_file)) {
-			rc = -E2BIG;
-			goto error;
-		}
-
-		/* create, open a volatile file, use caching (ie no directio) */
-		if (param != NULL)
-			fdv = llapi_file_open_param(volatile_file, open_flags,
-						    open_mode, param);
-		else if (layout != NULL)
-			fdv = lfs_component_create(volatile_file, open_flags,
-						   open_mode, layout);
-		else
-			fdv = -EINVAL;
-	} while (fdv == -EEXIST);
-
-	if (fdv < 0) {
-		rc = fdv;
-		fprintf(stderr, "%s: %s: cannot create volatile file in"
-				" directory: %s\n",
-			progname, parent, strerror(-rc));
-		goto error;
-	}
-
-	/* In case the MDT does not support creation of volatile files
-	 * we should try to unlink it. */
-	(void)unlink(volatile_file);
-
-	/* Not-owner (root?) special case.
-	 * Need to set owner/group of volatile file like original.
-	 * This will allow to pass related check during layout_swap.
-	 */
-	rc = fstat(fd, &st);
-	if (rc != 0) {
-		rc = -errno;
-		fprintf(stderr, "%s: %s: cannot stat: %s\n", progname, name,
-			strerror(errno));
-		goto error;
-	}
-	rc = fstat(fdv, &stv);
-	if (rc != 0) {
-		rc = -errno;
-		fprintf(stderr, "%s: %s: cannot stat: %s\n", progname,
-			volatile_file, strerror(errno));
-		goto error;
-	}
-	if (st.st_uid != stv.st_uid || st.st_gid != stv.st_gid) {
-		rc = fchown(fdv, st.st_uid, st.st_gid);
-		if (rc != 0) {
-			rc = -errno;
-			fprintf(stderr, "%s: %s: cannot chown: %s\n", progname,
-				name, strerror(errno));
-			goto error;
-		}
-	}
-
-	if (migration_flags & MIGRATION_NONBLOCK && file_lease_supported) {
-		rc = migrate_nonblock(fd, fdv, &st, buf_size, name);
-		if (rc == 0) {
-			have_lease_rdlck = false;
-			fdv = -1; /* The volatile file is closed as we put the
-				   * lease in non-blocking mode. */
-		}
-	} else {
+	if (!(migration_flags & MIGRATION_NONBLOCK)) {
 		/* Blocking mode (forced if servers do not support file lease).
 		 * It is also the default mode, since we cannot distinguish
 		 * between a broken lease and a server that does not support
 		 * atomic swap/close (LU-6785) */
-		rc = migrate_block(fd, fdv, &st, buf_size, name);
+		rc = migrate_block(fd, fdv);
+		goto out;
 	}
 
-error:
-	if (have_lease_rdlck)
-		llapi_lease_put(fd);
+	rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
+	if (rc < 0) {
+		error_loc = "cannot get lease";
+		goto out;
+	}
 
+	rc = migrate_nonblock(fd, fdv);
+	if (rc < 0) {
+		llapi_lease_put(fd);
+		goto out;
+	}
+
+	/* Atomically put lease, swap layouts and close.
+	 * for a migration we need to check data version on file did
+	 * not change. */
+	rc = llapi_fswap_layouts(fd, fdv, 0, 0,
+				 migration_flags & MIGRATION_MIRROR ?
+				 MERGE_LAYOUTS_CLOSE : SWAP_LAYOUTS_CLOSE);
+	if (rc < 0) {
+		error_loc = "cannot swap layout";
+		goto out;
+	}
+
+out:
 	if (fd >= 0)
 		close(fd);
 
 	if (fdv >= 0)
 		close(fdv);
 
-free:
-	if (lum)
-		free(lum);
+	if (rc < 0)
+		fprintf(stderr, "error: %s: %s: %s: %s\n",
+			progname, name, error_loc, strerror(-rc));
+	return rc;
+}
 
+static int lfs_create_mirror(char *fname, struct llapi_layout *layout,
+			     const char *mirror_file)
+{
+	int fd = -1;
+	int fdv = -1;
+	struct stat stbuf;
+	struct stat stbuf_v;
+	__u64 dv;
+	int rc;
+
+	if (mirror_file == NULL)
+		return lfs_migrate(fname, MIGRATION_NONBLOCK | MIGRATION_MIRROR,
+				   NULL, layout);
+
+	fd = open(fname, O_RDWR);
+	if (fd < 0) {
+		error_loc = "open source file";
+		rc = -errno;
+		goto out;
+	}
+
+	/* Get rid of caching pages from clients */
+	rc = llapi_get_data_version(fd, &dv, LL_DV_WR_FLUSH);
+	if (rc < 0) {
+		error_loc = "cannot get data version";
+		return rc;
+	}
+
+	fdv = open(mirror_file, O_WRONLY);
+	if (fdv < 0) {
+		error_loc = "open target file";
+		rc = -errno;
+		goto out;
+	}
+
+	rc = llapi_get_data_version(fdv, &dv, LL_DV_WR_FLUSH);
+	if (rc < 0) {
+		error_loc = "cannot get data version";
+		return rc;
+	}
+
+	if (fstat(fd, &stbuf) || fstat(fdv, &stbuf_v)) {
+		error_loc = "stat source or target file";
+		rc = -errno;
+		goto out;
+	}
+
+	if (stbuf.st_dev != stbuf_v.st_dev) {
+		error_loc = "stat source and target file";
+		rc = EXDEV;
+		goto out;
+	}
+
+	/* mirrors should be of the same size */
+	if (stbuf.st_size != stbuf_v.st_size) {
+		error_loc = "file sizes don't match";
+		rc = -EINVAL;
+		goto out;
+	}
+
+	rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
+	if (rc < 0) {
+		error_loc = "cannot get lease";
+		goto out;
+	}
+
+	/* Make sure we keep original atime/mtime values */
+	rc = migrate_copy_timestamps(fd, fdv);
+
+	/* Atomically put lease, swap layouts and close.
+	 * for a migration we need to check data version on file did
+	 * not change. */
+	rc = llapi_fswap_layouts(fd, fdv, 0, 0, MERGE_LAYOUTS_CLOSE);
+	if (rc < 0) {
+		error_loc = "cannot swap layout";
+		goto out;
+	}
+
+out:
+	if (fd >= 0)
+		close(fd);
+
+	if (fdv >= 0)
+		close(fdv);
+
+	if (rc < 0)
+		fprintf(stderr, "error: %s: %s: %s: %s\n",
+			progname, fname, error_loc, strerror(-rc));
 	return rc;
 }
 
@@ -1365,6 +1426,8 @@ static int lfs_setstripe(int argc, char **argv)
 	int				 comp_add = 0;
 	__u32				 comp_id = 0;
 	struct llapi_layout		*layout = NULL;
+	bool				 create_mirror = false;
+	const char			*mirror_file = NULL;
 
 	struct option long_opts[] = {
 		/* --block is only valid in migrate mode */
@@ -1404,6 +1467,7 @@ static int lfs_setstripe(int argc, char **argv)
 	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt_index",	.has_arg = required_argument},
+	{ .val = 'M',	.name = "mirror",	.has_arg = optional_argument},
 	/* --non-block is only valid in migrate mode */
 	{ .val = 'n',	.name = "non-block",	.has_arg = no_argument},
 	{ .val = 'o',	.name = "ost",		.has_arg = required_argument},
@@ -1477,6 +1541,15 @@ static int lfs_setstripe(int argc, char **argv)
 		case 'd':
 			/* delete the default striping pattern */
 			delete = 1;
+			break;
+		case 'M':
+			if (create_mirror) {
+				fprintf(stderr, "error: %s: --mirror can only "
+					"be specfied once", argv[0]);
+				goto error;
+			}
+			create_mirror = true;
+			mirror_file = optarg;
 			break;
 		case 'E':
 			if (lsa.lsa_comp_end != 0) {
@@ -1614,19 +1687,32 @@ static int lfs_setstripe(int argc, char **argv)
 
 	fname = argv[optind];
 
-	if (lsa.lsa_comp_end != 0) {
-		result = comp_args_to_layout(&layout, &lsa);
-		if (result) {
-			fprintf(stderr, "%s %s: invalid component layout\n",
-				progname, argv[0]);
-			goto usage_error;
-		}
-	}
-
 	if (optind == argc) {
 		fprintf(stderr, "%s %s: FILE must be specified\n",
 			progname, argv[0]);
 		goto usage_error;
+	}
+
+	if (create_mirror) {
+		if (!comp_add) {
+			fprintf(stderr, "error: %s: --component-add must be "
+				"specified with --mirror option\n", argv[0]);
+			goto error;
+		}
+		if (lsa.lsa_comp_end == 0)
+			lsa.lsa_comp_end = LUSTRE_EOF;
+		if (lsa.lsa_comp_end != LUSTRE_EOF) {
+			fprintf(stderr,
+				"error: %s: creating non-eof ending mirror\n",
+				argv[0]);
+			goto error;
+		}
+	}
+
+	if (lsa.lsa_comp_end != 0) {
+		result = comp_args_to_layout(&layout, &lsa);
+		if (result)
+			goto error;
 	}
 
 	/* Only LCME_FL_INIT flags is used in PFL, and it shouldn't be
@@ -1687,11 +1773,13 @@ static int lfs_setstripe(int argc, char **argv)
 				progname, argv[0]);
 			goto usage_error;
 		}
-		result = adjust_first_extent(fname, layout);
-		if (result == -ENODATA)
-			comp_add = 0;
-		else if (result != 0)
-			goto error;
+		if (!create_mirror) {
+			result = adjust_first_extent(fname, layout);
+			if (result == -ENODATA)
+				comp_add = 0;
+			else if (result != 0)
+				goto error;
+		}
 	}
 
 	if (mdt_idx_arg != NULL && optind > 3) {
@@ -1772,7 +1860,11 @@ static int lfs_setstripe(int argc, char **argv)
 			result = lfs_component_del(fname, comp_id,
 						   lsa.lsa_comp_flags);
 		} else if (comp_add != 0) {
-			result = lfs_component_add(fname, layout);
+			if (create_mirror)
+				result = lfs_create_mirror(fname, layout,
+							   mirror_file);
+			else
+				result = lfs_component_add(fname, layout);
 		} else if (layout != NULL) {
 			result = lfs_component_create(fname, O_CREAT | O_WRONLY,
 						      0644, layout);

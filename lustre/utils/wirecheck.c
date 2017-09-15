@@ -782,6 +782,7 @@ check_lov_comp_md_entry_v1(void)
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_padding);
 
 	CHECK_VALUE_X(LCME_FL_INIT);
+	CHECK_VALUE_X(LCME_FL_NEG);
 }
 
 static void
@@ -794,11 +795,17 @@ check_lov_comp_md_v1(void)
 	CHECK_MEMBER(lov_comp_md_v1, lcm_layout_gen);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_flags);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_entry_count);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_mirror_count);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_padding1);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_padding2);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_entries[0]);
 
 	CHECK_CDEFINE(LOV_MAGIC_COMP_V1);
+
+	CHECK_VALUE(LCM_FL_NOT_FLR);
+	CHECK_VALUE(LCM_FL_RDONLY);
+	CHECK_VALUE(LCM_FL_WRITE_PENDING);
+	CHECK_VALUE(LCM_FL_SYNC_PENDING);
 }
 
 static void

@@ -1911,8 +1911,8 @@ out_reprocess:
 	return rc;
 }
 
-int mdt_close_swap_layouts(struct mdt_thread_info *info,
-			   struct mdt_object *o, struct md_attr *ma)
+int mdt_close_handle_layouts(struct mdt_thread_info *info,
+			     struct mdt_object *o, struct md_attr *ma)
 {
 	struct mdt_lock_handle	*lh1 = &info->mti_lh[MDT_LH_NEW];
 	struct mdt_lock_handle	*lh2 = &info->mti_lh[MDT_LH_OLD];
@@ -2005,8 +2005,17 @@ int mdt_close_swap_layouts(struct mdt_thread_info *info,
 		GOTO(out_unlock1, rc);
 
 	/* Swap layout with orphan object */
-	rc = mo_swap_layouts(info->mti_env, mdt_object_child(o1),
-			     mdt_object_child(o2), 0);
+	if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SWAP) {
+		rc = mo_swap_layouts(info->mti_env, mdt_object_child(o1),
+				     mdt_object_child(o2), 0);
+	} else if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_MERGE) {
+		struct lu_buf *buf = &info->mti_buf;
+
+		buf->lb_len = sizeof(void *);
+		buf->lb_buf = mdt_object_child(o == o1 ? o2 : o1);
+		rc = mo_xattr_set(info->mti_env, mdt_object_child(o), buf,
+				  XATTR_LUSTRE_LOV, LU_XATTR_MERGE);
+	}
 	if (rc < 0)
 		GOTO(out_unlock2, rc);
 
@@ -2060,11 +2069,14 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
         struct md_attr *ma = &info->mti_attr;
         int rc = 0;
 	__u64 mode;
+	__u64 intent;
         ENTRY;
 
         mode = mfd->mfd_mode;
 
-	if (ma->ma_attr_flags & MDS_HSM_RELEASE) {
+	intent = ma->ma_attr_flags & MDS_CLOSE_INTENT;
+	switch (intent) {
+	case MDS_HSM_RELEASE: {
 		rc = mdt_hsm_release(info, o, ma);
 		if (rc < 0) {
 			CDEBUG(D_HSM, "%s: File " DFID " release failed: %d\n",
@@ -2072,10 +2084,11 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 			       PFID(mdt_object_fid(o)), rc);
 			/* continue to close even error occurred. */
 		}
+		break;
 	}
-
-	if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SWAP) {
-		rc = mdt_close_swap_layouts(info, o, ma);
+	case MDS_CLOSE_LAYOUT_MERGE:
+	case MDS_CLOSE_LAYOUT_SWAP: {
+		rc = mdt_close_handle_layouts(info, o, ma);
 		if (rc < 0) {
 			CDEBUG(D_INODE,
 			       "%s: cannot swap layout of "DFID": rc=%d\n",
@@ -2083,6 +2096,11 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 			       PFID(mdt_object_fid(o)), rc);
 			/* continue to close even if error occurred. */
 		}
+		break;
+	}
+	default:
+		/* nothing */
+		break;
 	}
 
 	if (mode & FMODE_WRITE)
