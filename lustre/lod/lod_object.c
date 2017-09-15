@@ -1146,6 +1146,12 @@ lod_obj_stripe_attr_set_cb(const struct lu_env *env, struct lod_object *lo,
 	if (data->locd_declare)
 		return lod_sub_declare_attr_set(env, dt, data->locd_attr, th);
 
+	if (data->locd_attr->la_valid & LA_LAYOUT_VERSION) {
+		CDEBUG(D_LAYOUT, DFID": set layout version: %u, comp_idx: %d\n",
+		       PFID(lu_object_fid(&dt->do_lu)),
+		       data->locd_attr->la_layout_version, comp_idx);
+	}
+
 	return lod_sub_attr_set(env, dt, data->locd_attr, th);
 }
 
@@ -5453,7 +5459,8 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 	ENTRY;
 
 	LASSERT(lo->ldo_flr_state == LCM_FL_WRITE_PENDING);
-	LASSERT(mlc->mlc_opc == MD_LAYOUT_WRITE);
+	LASSERT(mlc->mlc_opc == MD_LAYOUT_WRITE ||
+		mlc->mlc_opc == MD_LAYOUT_RESYNC);
 
 	/* look for the primary mirror */
 	for (i = 0; i < lo->ldo_mirror_count; i++) {
@@ -5481,7 +5488,11 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 	/* for LAYOUT_WRITE opc, it has to do the following operations:
 	 * 1. stale overlapping componets from stale mirrors;
 	 * 2. instantiate components of the primary mirror;
-	 * 3. transfter layout version to all objects of the primary; */
+	 * 3. transfter layout version to all objects of the primary;
+	 *
+	 * for LAYOUT_RESYNC opc, it will do:
+	 * 1. instantiate components of all stale mirrors;
+	 * 2. transfer layout version to all objects to close write era. */
 
 	if (mlc->mlc_opc == MD_LAYOUT_WRITE) {
 		LASSERT(mlc->mlc_intent != NULL);
@@ -5510,19 +5521,157 @@ static int lod_declare_update_write_pending(const struct lu_env *env,
 			info->lti_comp_idx[info->lti_count++] =
 						lod_comp_index(lo, lod_comp);
 		}
+	} else { /* MD_LAYOUT_RESYNC */
+		/* figure out the components that have been instantiated in
+		 * in primary to decide what components should be instantiated
+		 * in stale mirrors */
+		lod_foreach_mirror_comp(lod_comp, lo, primary) {
+			if (!lod_comp_inited(lod_comp))
+				break;
+
+			extent.e_end = lod_comp->llc_extent.e_end;
+		}
+
+		CDEBUG(D_LAYOUT,
+		       DFID": instantiate all stale components in "DEXT"\n",
+		       PFID(lod_object_fid(lo)), PEXT(&extent));
+
+		/* 1. instantiate all components within this extent, even
+		 * non-stale components so that it won't need to instantiate
+		 * those components for mirror truncate later. */
+		for (i = 0; i < lo->ldo_mirror_count; i++) {
+			if (primary == i)
+				continue;
+
+			LASSERTF(lo->ldo_mirrors[i].lme_stale,
+				 "both %d and %d are primary\n", i, primary);
+
+			lod_foreach_mirror_comp(lod_comp, lo, i) {
+				if (!lu_extent_is_overlapped(&extent,
+							&lod_comp->llc_extent))
+					break;
+
+				if (lod_comp_inited(lod_comp))
+					continue;
+
+				CDEBUG(D_LAYOUT, "resync instantiate %d / %d\n",
+				       i, lod_comp_index(lo, lod_comp));
+
+				info->lti_comp_idx[info->lti_count++] =
+						lod_comp_index(lo, lod_comp);
+			}
+		}
+
+		/* change the file state to SYNC_PENDING */
+		lo->ldo_flr_state = LCM_FL_SYNC_PENDING;
 	}
 
 	rc = lod_declare_instantiate_components(env, lo, th);
 	if (rc)
 		GOTO(out, rc);
 
+	/* 3. transfer layout version to OST objects.
+	 * transfer new layout version to OST objects so that stale writes
+	 * can be denied. It also ends an era of writing by setting
+	 * LU_LAYOUT_RESYNC. Normal client can never use this bit to
+	 * send write RPC; only resync RPCs could do it. */
 	layout_attr->la_valid = LA_LAYOUT_VERSION;
 	layout_attr->la_layout_version = 0; /* set current version */
+	if (mlc->mlc_opc == MD_LAYOUT_RESYNC)
+		layout_attr->la_layout_version = LU_LAYOUT_RESYNC;
 	rc = lod_declare_attr_set(env, &lo->ldo_obj, layout_attr, th);
 	if (rc)
 		GOTO(out, rc);
 
 	lod_obj_inc_layout_gen(lo);
+out:
+	if (rc)
+		lod_object_free_striping(env, lo);
+	RETURN(rc);
+}
+
+static int lod_declare_update_sync_pending(const struct lu_env *env,
+		struct lod_object *lo, struct md_layout_change *mlc,
+		struct thandle *th)
+{
+	struct lod_thread_info  *info = lod_env_info(env);
+	unsigned sync_components = 0;
+	unsigned resync_components = 0;
+	int i;
+	int rc;
+	ENTRY;
+
+	LASSERT(lo->ldo_flr_state == LCM_FL_SYNC_PENDING);
+	LASSERT(mlc->mlc_opc == MD_LAYOUT_RESYNC_DONE ||
+		mlc->mlc_opc == MD_LAYOUT_WRITE);
+
+	CDEBUG(D_LAYOUT, DFID ": received op %d in sync pending\n",
+	       PFID(lod_object_fid(lo)), mlc->mlc_opc);
+
+	if (mlc->mlc_opc == MD_LAYOUT_WRITE) {
+		CDEBUG(D_LAYOUT, DFID": cocurrent write to sync pending\n",
+		       PFID(lod_object_fid(lo)));
+
+		lo->ldo_flr_state = LCM_FL_WRITE_PENDING;
+		return lod_declare_update_write_pending(env, lo, mlc, th);
+	}
+
+	/* MD_LAYOUT_RESYNC_DONE */
+
+	for (i = 0; i < lo->ldo_comp_cnt; i++) {
+		struct lod_layout_component *lod_comp;
+		int j;
+
+		lod_comp = &lo->ldo_comp_entries[i];
+
+		if (!(lod_comp->llc_flags & LCME_FL_STALE)) {
+			sync_components++;
+			continue;
+		}
+
+		for (j = 0; j < mlc->mlc_resync_count; j++) {
+			if (lod_comp->llc_id != mlc->mlc_resync_ids[j])
+				continue;
+
+			mlc->mlc_resync_ids[j] = LCME_ID_INVAL;
+			lod_comp->llc_flags &= ~LCME_FL_STALE;
+			resync_components++;
+			break;
+		}
+	}
+
+	/* valid check */
+	for (i = 0; i < mlc->mlc_resync_count; i++) {
+		if (mlc->mlc_resync_ids[i] == LCME_ID_INVAL)
+			continue;
+
+		CDEBUG(D_LAYOUT, DFID": lcme id %u (%d / %zd) not exist "
+		       "or already synced\n", PFID(lod_object_fid(lo)),
+		       mlc->mlc_resync_ids[i], i, mlc->mlc_resync_count);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	if (!sync_components || !resync_components) {
+		CDEBUG(D_LAYOUT, DFID": no mirror in sync or resync\n",
+		       PFID(lod_object_fid(lo)));
+
+		/* tend to return an error code here to prevent
+		 * the MDT from setting SoM attribute */
+		GOTO(out, rc = -EINVAL);
+	}
+
+	CDEBUG(D_LAYOUT, DFID": resynced %u/%zu components\n",
+	       PFID(lod_object_fid(lo)),
+	       resync_components, mlc->mlc_resync_count);
+
+	lo->ldo_flr_state = LCM_FL_RDONLY;
+	lod_obj_inc_layout_gen(lo);
+
+	info->lti_buf.lb_len = lod_comp_md_size(lo, false);
+	rc = lod_sub_declare_xattr_set(env, lod_object_child(lo),
+				       &info->lti_buf, XATTR_NAME_LOV, 0, th);
+	EXIT;
+
 out:
 	if (rc)
 		lod_object_free_striping(env, lo);
@@ -5565,6 +5714,8 @@ static int lod_declare_layout_change(const struct lu_env *env,
 		rc = lod_declare_update_write_pending(env, lo, mlc, th);
 		break;
 	case LCM_FL_SYNC_PENDING:
+		rc = lod_declare_update_sync_pending(env, lo, mlc, th);
+		break;
 	default:
 		rc = -ENOTSUPP;
 		break;

@@ -1581,7 +1581,8 @@ enum mds_reint_op {
 	REINT_SETXATTR = 7,
 	REINT_RMENTRY  = 8,
 	REINT_MIGRATE  = 9,
-        REINT_MAX
+	REINT_RESYNC   = 10,
+	REINT_MAX
 };
 
 /* the disposition of the intent outlines what was executed */
@@ -1858,11 +1859,13 @@ struct mdt_rec_setattr {
 					      */
 #define MDS_OPEN_RELEASE   02000000000000ULL /* Open the file for HSM release */
 
+#define MDS_OPEN_RESYNC    04000000000000ULL /* FLR: file resync */
+
 /* lustre internal open flags, which should not be set from user space */
 #define MDS_OPEN_FL_INTERNAL (MDS_OPEN_HAS_EA | MDS_OPEN_HAS_OBJS |	\
 			      MDS_OPEN_OWNEROVERRIDE | MDS_OPEN_LOCK |	\
 			      MDS_OPEN_BY_FID | MDS_OPEN_LEASE |	\
-			      MDS_OPEN_RELEASE)
+			      MDS_OPEN_RELEASE | MDS_OPEN_RESYNC)
 
 enum mds_op_bias {
 	MDS_CHECK_SPLIT		= 1 << 0,
@@ -1881,10 +1884,11 @@ enum mds_op_bias {
 	MDS_RENAME_MIGRATE	= 1 << 13,
 	MDS_CLOSE_LAYOUT_SWAP	= 1 << 14,
 	MDS_CLOSE_LAYOUT_MERGE	= 1 << 15,
+	MDS_CLOSE_RESYNC_DONE	= 1 << 16,
 };
 
 #define MDS_CLOSE_INTENT (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP |	\
-			  MDS_CLOSE_LAYOUT_MERGE)
+			  MDS_CLOSE_LAYOUT_MERGE | MDS_CLOSE_RESYNC_DONE)
 
 /* instance of mdt_reint_rec */
 struct mdt_rec_create {
@@ -2024,6 +2028,34 @@ struct mdt_rec_setxattr {
         __u32           sx_padding_9;   /* rr_padding_2 */
         __u32           sx_padding_10;  /* rr_padding_3 */
         __u32           sx_padding_11;  /* rr_padding_4 */
+};
+
+/* instance of mdt_reint_rec
+ * FLR: for file resync MDS_REINT_RESYNC RPC. */
+struct mdt_rec_resync {
+	__u32           rs_opcode;
+	__u32           rs_cap;
+	__u32           rs_fsuid;
+	__u32           rs_fsuid_h;
+	__u32           rs_fsgid;
+	__u32           rs_fsgid_h;
+	__u32           rs_suppgid1;
+	__u32           rs_suppgid1_h;
+	__u32           rs_suppgid2;
+	__u32           rs_suppgid2_h;
+	struct lu_fid   rs_fid;
+	__u8		rs_padding0[sizeof(struct lu_fid)];
+	struct lustre_handle rs_handle;	/* rr_mtime */
+	__s64		rs_padding1;	/* rr_atime */
+	__s64		rs_padding2;	/* rr_ctime */
+	__u64           rs_padding3;	/* rr_size */
+	__u64           rs_padding4;	/* rr_blocks */
+	__u32           rs_bias;
+	__u32           rs_padding5;	/* rr_mode */
+	__u32           rs_padding6;	/* rr_flags */
+	__u32           rs_padding7;	/* rr_flags_h */
+	__u32           rs_padding8;	/* rr_umask */
+	__u32           rs_padding9;	/* rr_padding_4 */
 };
 
 /*
@@ -3384,11 +3416,20 @@ struct mdc_swap_layouts {
 	__u64           msl_flags;
 } __attribute__((packed));
 
+#define INLINE_RESYNC_ARRAY_SIZE	15
+struct close_data_resync_done {
+	__u32	resync_count;
+	__u32	resync_ids_inline[INLINE_RESYNC_ARRAY_SIZE];
+};
+
 struct close_data {
 	struct lustre_handle	cd_handle;
 	struct lu_fid		cd_fid;
 	__u64			cd_data_version;
-	__u64			cd_reserved[8];
+	union {
+		__u64				cd_reserved[8];
+		struct close_data_resync_done	cd_resync;
+	};
 };
 
 /* Update llog format */

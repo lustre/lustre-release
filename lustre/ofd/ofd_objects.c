@@ -536,11 +536,20 @@ int ofd_object_ff_update(const struct lu_env *env, struct ofd_object *fo,
 			RETURN(-EPERM);
 		}
 
+		if (ff->ff_layout_version & LU_LAYOUT_RESYNC) {
+			/* this opens a new era of writing */
+			ff->ff_layout_version = 0;
+			ff->ff_range = 0;
+		}
+
 		/* it's not allowed to change it to a smaller value */
 		if (oa->o_layout_version < ff->ff_layout_version)
 			RETURN(-EINVAL);
 
-		if (ff->ff_layout_version == 0) {
+		if (ff->ff_layout_version == 0 ||
+		    oa->o_layout_version & LU_LAYOUT_RESYNC) {
+			/* if LU_LAYOUT_RESYNC is set, it closes the era of
+			 * writing. Only mirror I/O can write this object. */
 			ff->ff_layout_version = oa->o_layout_version;
 			ff->ff_range = 0;
 		} else if (oa->o_layout_version > ff->ff_layout_version) {

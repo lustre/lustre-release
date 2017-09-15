@@ -40,6 +40,7 @@
 #include <sys/types.h>
 #include <sys/xattr.h>
 #include <assert.h>
+#include <sys/param.h>
 
 #include <libcfs/util/ioctl.h>
 #include <lustre/lustreapi.h>
@@ -194,6 +195,8 @@ static int llapi_mirror_truncate(int fd, unsigned int id, off_t length)
 		return rc;
 
 	rc = ftruncate(fd, length);
+	if (rc < 0)
+		rc = -errno;
 
 	(void) llapi_mirror_clear(fd);
 
@@ -292,10 +295,84 @@ ssize_t llapi_mirror_copy_many(int fd, unsigned int src, unsigned int *dst,
 	return nr > 0 ? nr : result;
 }
 
-int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst)
+/**
+ * Copy data contents from source mirror @src to target mirror @dst.
+ *
+ * \param fd	file descriptor, should be opened with O_DIRECT
+ * \param src	source mirror id, usually a valid mirror
+ * \param dst	mirror id of copy destination
+ * \param pos   start file pos
+ * \param count	number of bytes to be copied
+ *
+ * \result > 0	Number of mirrors successfully copied
+ * \result < 0	The last seen error
+ */
+int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst, off_t pos,
+		      size_t count)
 {
-	ssize_t rc;
+	const size_t buflen = 4 * 1024 * 1024; /* 4M */
+	void *buf;
+	size_t page_size = sysconf(_SC_PAGESIZE);
+	ssize_t result = 0;
+	int rc;
 
-	rc = llapi_mirror_copy_many(fd, src, &dst, 1);
-	return rc > 0 ? 0 : rc;
+	if (!count)
+		return 0;
+
+	if (pos & (page_size - 1) || !dst)
+		return -EINVAL;
+
+	if (count != OBD_OBJECT_EOF && count & (page_size - 1))
+		return -EINVAL;
+
+	rc = posix_memalign(&buf, page_size, buflen);
+	if (rc) /* error code is returned directly */
+		return -rc;
+
+	while (result < count) {
+		ssize_t bytes_read, bytes_written;
+		size_t to_read, to_write;
+
+		to_read = MIN(buflen, count - result);
+		if (src == 0)
+			bytes_read = pread(fd, buf, to_read, pos);
+		else
+			bytes_read = llapi_mirror_read(fd, src, buf, to_read,
+							pos);
+		if (!bytes_read) { /* end of file */
+			break;
+		} else if (bytes_read < 0) {
+			result = bytes_read;
+			break;
+		}
+
+		/* round up to page align to make direct IO happy.
+		 * this implies the last segment to write. */
+		to_write = (bytes_read + page_size - 1) & ~(page_size - 1);
+
+		bytes_written = llapi_mirror_write(fd, dst, buf, to_write,
+						    pos);
+		if (bytes_written < 0) {
+			result = bytes_written;
+			break;
+		}
+
+		assert(bytes_written == to_write);
+
+		pos += bytes_read;
+		result += bytes_read;
+
+		if (bytes_read < to_read) /* short read occurred */
+			break;
+	}
+
+	free(buf);
+
+	if (result > 0 && pos & (page_size - 1)) {
+		rc = llapi_mirror_truncate(fd, dst, pos);
+		if (rc < 0)
+			result = rc;
+	}
+
+	return result;
 }

@@ -80,8 +80,9 @@ int mdt_set_som(struct mdt_thread_info *info, struct mdt_object *obj,
 	som = buf->lb_buf;
 
 	CDEBUG(D_INODE,
-	       DFID": Set som attrs: " "size: %lld, blocks: %lld, rc: %d\n",
-	       PFID(mdt_object_fid(obj)), som->lsa_size, som->lsa_blocks, rc);
+	       DFID": Set som attrs: S/B: %lld/%lld to %lld/%lld, rc: %d\n",
+	       PFID(mdt_object_fid(obj)), som->lsa_size, som->lsa_blocks,
+	       attr->la_size, attr->la_blocks, rc);
 
 	if (rc == -ENODATA)
 		memset(som, 0, sizeof(*som));

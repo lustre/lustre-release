@@ -139,20 +139,21 @@ static struct ll_eopcode {
      __u32       opcode;
      const char *opname;
 } ll_eopcode_table[EXTRA_LAST_OPC] = {
-        { LDLM_GLIMPSE_ENQUEUE, "ldlm_glimpse_enqueue" },
-        { LDLM_PLAIN_ENQUEUE,   "ldlm_plain_enqueue" },
-        { LDLM_EXTENT_ENQUEUE,  "ldlm_extent_enqueue" },
-        { LDLM_FLOCK_ENQUEUE,   "ldlm_flock_enqueue" },
-        { LDLM_IBITS_ENQUEUE,   "ldlm_ibits_enqueue" },
-        { MDS_REINT_SETATTR,    "mds_reint_setattr" },
-        { MDS_REINT_CREATE,     "mds_reint_create" },
-        { MDS_REINT_LINK,       "mds_reint_link" },
-        { MDS_REINT_UNLINK,     "mds_reint_unlink" },
-        { MDS_REINT_RENAME,     "mds_reint_rename" },
-        { MDS_REINT_OPEN,       "mds_reint_open" },
-        { MDS_REINT_SETXATTR,   "mds_reint_setxattr" },
-        { BRW_READ_BYTES,       "read_bytes" },
-        { BRW_WRITE_BYTES,      "write_bytes" },
+	{ LDLM_GLIMPSE_ENQUEUE, "ldlm_glimpse_enqueue" },
+	{ LDLM_PLAIN_ENQUEUE,   "ldlm_plain_enqueue" },
+	{ LDLM_EXTENT_ENQUEUE,  "ldlm_extent_enqueue" },
+	{ LDLM_FLOCK_ENQUEUE,   "ldlm_flock_enqueue" },
+	{ LDLM_IBITS_ENQUEUE,   "ldlm_ibits_enqueue" },
+	{ MDS_REINT_SETATTR,    "mds_reint_setattr" },
+	{ MDS_REINT_CREATE,     "mds_reint_create" },
+	{ MDS_REINT_LINK,       "mds_reint_link" },
+	{ MDS_REINT_UNLINK,     "mds_reint_unlink" },
+	{ MDS_REINT_RENAME,     "mds_reint_rename" },
+	{ MDS_REINT_OPEN,       "mds_reint_open" },
+	{ MDS_REINT_SETXATTR,   "mds_reint_setxattr" },
+	{ MDS_REINT_RESYNC,	"mds_reint_resync" },
+	{ BRW_READ_BYTES,       "read_bytes" },
+	{ BRW_WRITE_BYTES,      "write_bytes" },
 };
 
 const char *ll_opcode2str(__u32 opcode)

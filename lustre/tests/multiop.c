@@ -310,21 +310,19 @@ int main(int argc, char **argv)
 			commands++;
 			switch (*commands) {
 			case 'U':
-				flags = LL_LEASE_UNLCK;
+				rc = llapi_lease_put(fd);
 				break;
 			case 'R':
-				flags = LL_LEASE_RDLCK;
+				rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
 				break;
 			case 'W':
-				flags = LL_LEASE_WRLCK;
+				rc = llapi_lease_get(fd, LL_LEASE_WRLCK);
 				break;
 			default:
 				errx(-1, "unknown mode: %c", *commands);
 			}
-
-			rc = ioctl(fd, LL_IOC_SET_LEASE, flags);
 			if (rc < 0)
-				err(errno, "apply lease error");
+				err(errno, "apply/unlock lease error");
 
 			if (flags != LL_LEASE_UNLCK)
 				break;
@@ -347,7 +345,7 @@ int main(int argc, char **argv)
 			if (*commands != '-' && *commands != '+')
 				errx(-1, "unknown mode: %c\n", *commands);
 
-			rc = ioctl(fd, LL_IOC_GET_LEASE);
+			rc = llapi_lease_check(fd);
 			if (rc > 0) {
 				const char *str = "unknown";
 

@@ -1511,6 +1511,17 @@ int llapi_layout_file_create(const char *path, int open_flags, int mode,
 				      layout);
 }
 
+int llapi_layout_flags_get(struct llapi_layout *layout, uint32_t *flags)
+{
+	if (layout->llot_magic != LLAPI_LAYOUT_MAGIC) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	*flags = layout->llot_flags;
+	return 0;
+}
+
 /**
  * Set flags to the header of a component layout.
  */

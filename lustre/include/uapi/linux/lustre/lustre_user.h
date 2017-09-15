@@ -315,6 +315,31 @@ struct ll_futimes_3 {
 };
 
 /*
+ * Maximum number of mirrors currently implemented.
+ */
+#define LUSTRE_MIRROR_COUNT_MAX		16
+
+/* Lease types for use as arg and return of LL_IOC_{GET,SET}_LEASE ioctl. */
+enum ll_lease_mode {
+	LL_LEASE_RDLCK	= 0x01,
+	LL_LEASE_WRLCK	= 0x02,
+	LL_LEASE_UNLCK	= 0x04,
+};
+
+enum ll_lease_flags {
+	LL_LEASE_RESYNC		= 0x1,
+	LL_LEASE_RESYNC_DONE	= 0x2,
+};
+
+#define IOC_IDS_MAX	4096
+struct ll_ioc_lease {
+	__u32		lil_mode;
+	__u32		lil_flags;
+	__u32		lil_count;
+	__u32		lil_ids[0];
+};
+
+/*
  * The ioctl naming rules:
  * LL_*     - works on the currently opened filehandle instead of parent dir
  * *_OBD_*  - gets data for both OSC or MDC (LOV, LMV indirectly)
@@ -371,7 +396,8 @@ struct ll_futimes_3 {
 #define LL_IOC_LMV_SETSTRIPE		_IOWR('f', 240, struct lmv_user_md)
 #define LL_IOC_LMV_GETSTRIPE		_IOWR('f', 241, struct lmv_user_md)
 #define LL_IOC_REMOVE_ENTRY		_IOWR('f', 242, __u64)
-#define LL_IOC_SET_LEASE		_IOWR('f', 243, long)
+#define LL_IOC_SET_LEASE		_IOWR('f', 243, struct ll_ioc_lease)
+#define LL_IOC_SET_LEASE_OLD		_IOWR('f', 243, long)
 #define LL_IOC_GET_LEASE		_IO('f', 244)
 #define LL_IOC_HSM_IMPORT		_IOWR('f', 245, struct hsm_user_import)
 #define LL_IOC_LMV_SET_DEFAULT_STRIPE	_IOWR('f', 246, struct lmv_user_md)
@@ -397,13 +423,6 @@ struct fsxattr {
 #define LL_IOC_FSGETXATTR		FS_IOC_FSGETXATTR
 #define LL_IOC_FSSETXATTR		FS_IOC_FSSETXATTR
 
-
-/* Lease types for use as arg and return of LL_IOC_{GET,SET}_LEASE ioctl. */
-enum ll_lease_type {
-	LL_LEASE_RDLCK	= 0x1,
-	LL_LEASE_WRLCK	= 0x2,
-	LL_LEASE_UNLCK	= 0x4,
-};
 
 #define LL_STATFS_LMV		1
 #define LL_STATFS_LOV		2

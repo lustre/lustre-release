@@ -294,6 +294,9 @@ int osc_io_commit_async(const struct lu_env *env,
 		opg = osc_cl_page_osc(page, osc);
 		oap = &opg->ops_oap;
 
+		LASSERTF(osc == oap->oap_obj,
+			 "obj mismatch: %p / %p\n", osc, oap->oap_obj);
+
 		if (!list_empty(&oap->oap_rpc_item)) {
 			CDEBUG(D_CACHE, "Busy oap %p page %p for submit.\n",
 			       oap, opg);

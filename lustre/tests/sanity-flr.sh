@@ -638,6 +638,93 @@ test_37()
 }
 run_test 37 "mirror I/O API verification"
 
+verify_flr_state()
+{
+	local tf=$1
+	local expected_state=$2
+	local state_strings=("not_flr" "read_only" "write_pending" \
+		"sync_pending")
+
+	local state=$($LFS getstripe -v $tf | awk '/lcm_flags/{ print $2 }')
+	[ $expected_state = ${state_strings[$state]} ] ||
+		error "expected: $expected_state, " \
+			"actual ${state_strings[$state]}($state)"
+}
+
+test_38() {
+	local tf=$DIR/$tfile
+	local ref=$DIR/${tfile}-ref
+
+	$LFS setstripe -E 1M -c 1 -E 4M -c 2 -E eof -c -1 $tf
+	$LFS setstripe -E 2M -c 1 -E 6M -c 2 -E 8M -c -1 -E eof -c -1 $tf-2
+	$LFS setstripe -E 4M -c 1 -E 8M -c 2 -E eof -c -1 $tf-3
+
+	# instantiate all components
+	$LFS setstripe --component-add --mirror=$tf-2 $tf
+	$LFS setstripe --component-add --mirror=$tf-3 $tf
+	$LFS setstripe --component-add --mirror -c 1 $tf
+
+	verify_flr_state $tf "read_only"
+
+	dd if=/dev/urandom of=$ref  bs=1M count=16 &> /dev/null
+
+	local fsize=$((RANDOM << 8 + 1048576))
+	$TRUNCATE $ref $fsize
+
+	local ref_cksum=$(md5sum $ref | cut -f 1 -d' ')
+
+	# case 1: verify write to mirrored file & resync work
+	cp $ref $tf || error "copy from $ref to $f error"
+	verify_flr_state $tf "write_pending"
+
+	local file_cksum=$(md5sum $tf | cut -f 1 -d' ')
+	[ "$file_cksum" = "$ref_cksum" ] || error "write failed, cksum mismatch"
+
+	get_mirror_ids $tf
+	echo "mirror IDs: ${mirror_array[@]}"
+
+	local valid_mirror stale_mirror id mirror_cksum
+	for id in "${mirror_array[@]}"; do
+		mirror_cksum=$(mirror_io dump -i $id $tf |
+				md5sum | cut -f 1 -d' ')
+		[ "$ref_cksum" == "$mirror_cksum" ] &&
+			{ valid_mirror=$id; continue; }
+
+		stale_mirror=$id
+	done
+
+	[ -z "$stale_mirror" ] && error "stale mirror doesn't exist"
+	[ -z "$valid_mirror" ] && error "valid mirror doesn't exist"
+
+	mirror_io resync $tf || error "resync failed"
+	verify_flr_state $tf "read_only"
+
+	mirror_cksum=$(mirror_io dump -i $stale_mirror $tf |
+			md5sum | cut -f 1 -d' ')
+	[ "$file_cksum" = "$ref_cksum" ] || error "resync failed"
+
+	# case 2: inject an error to make mirror_io exit after changing
+	# the file state to sync_pending so that we can start a concurrent
+	# write.
+	$MULTIOP $tf oO_WRONLY:w$((RANDOM % 1048576 + 1024))c
+	verify_flr_state $tf "write_pending"
+
+	mirror_io resync -e resync_start $tf && error "resync succeeded"
+	verify_flr_state $tf "sync_pending"
+
+	# from sync_pending to write_pending
+	$MULTIOP $tf oO_WRONLY:w$((RANDOM % 1048576 + 1024))c
+	verify_flr_state $tf "write_pending"
+
+	mirror_io resync -e resync_start $tf && error "resync succeeded"
+	verify_flr_state $tf "sync_pending"
+
+	# from sync_pending to read_only
+	mirror_io resync $tf || error "resync failed"
+	verify_flr_state $tf "read_only"
+}
+run_test 38 "resync"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -455,6 +455,22 @@ static void mdc_intent_close_pack(struct ptlrpc_request *req,
 
 	data->cd_data_version = op_data->op_data_version;
 	data->cd_fid = op_data->op_fid2;
+
+	if (bias & MDS_CLOSE_RESYNC_DONE) {
+		struct close_data_resync_done *sync = &data->cd_resync;
+
+		CLASSERT(sizeof(data->cd_resync) <= sizeof(data->cd_reserved));
+		sync->resync_count = op_data->op_data_size / sizeof(__u32);
+		if (sync->resync_count <= INLINE_RESYNC_ARRAY_SIZE) {
+			memcpy(sync->resync_ids_inline, op_data->op_data,
+			       op_data->op_data_size);
+		} else {
+			size_t count = sync->resync_count;
+
+			memcpy(req_capsule_client_get(&req->rq_pill, &RMF_U32),
+				op_data->op_data, count * sizeof(__u32));
+		}
+	}
 }
 
 void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,

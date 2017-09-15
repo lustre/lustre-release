@@ -1346,24 +1346,12 @@ out:
  * \retval 0	on success
  * \retval < 0	error code
  */
-static int mdt_layout_change(struct mdt_thread_info *info,
-			     struct mdt_object *obj,
-			     struct md_layout_change *layout)
+int mdt_layout_change(struct mdt_thread_info *info, struct mdt_object *obj,
+		      struct md_layout_change *layout)
 {
 	struct mdt_lock_handle *lh = &info->mti_lh[MDT_LH_LOCAL];
-	struct layout_intent *intent = layout->mlc_intent;
 	int rc;
 	ENTRY;
-
-	CDEBUG(D_INFO, "got layout change request from client: "
-	       "opc:%u flags:%#x extent "DEXT"\n",
-	       intent->li_opc, intent->li_flags, PEXT(&intent->li_extent));
-
-	if (intent->li_extent.e_start >= intent->li_extent.e_end) {
-		CERROR(DFID ":invalid range of layout change "DEXT"\n",
-		       PFID(mdt_object_fid(obj)), PEXT(&intent->li_extent));
-		RETURN(-EINVAL);
-	}
 
 	if (!mdt_object_exists(obj))
 		GOTO(out, rc = -ENOENT);
@@ -2134,7 +2122,8 @@ static int mdt_reint(struct tgt_session_info *tsi)
 		[REINT_OPEN]     = &RQF_MDS_REINT_OPEN,
 		[REINT_SETXATTR] = &RQF_MDS_REINT_SETXATTR,
 		[REINT_RMENTRY]  = &RQF_MDS_REINT_UNLINK,
-		[REINT_MIGRATE]  = &RQF_MDS_REINT_RENAME
+		[REINT_MIGRATE]  = &RQF_MDS_REINT_RENAME,
+		[REINT_RESYNC]   = &RQF_MDS_REINT_RESYNC,
 	};
 
 	ENTRY;
@@ -3745,7 +3734,7 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_LAYOUT];
 	struct md_layout_change layout = { .mlc_opc = MD_LAYOUT_NOP };
 	struct layout_intent *intent;
-	struct lu_fid *fid;
+	struct lu_fid *fid = &info->mti_tmp_fid2;
 	struct mdt_object *obj = NULL;
 	int layout_size = 0;
 	int rc = 0;
@@ -3757,9 +3746,16 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 		RETURN(-EINVAL);
 	}
 
+	fid_extract_from_res_name(fid, &(*lockp)->l_resource->lr_name);
+
 	intent = req_capsule_client_get(info->mti_pill, &RMF_LAYOUT_INTENT);
 	if (intent == NULL)
 		RETURN(-EPROTO);
+
+	CDEBUG(D_INFO, DFID "got layout change request from client: "
+	       "opc:%u flags:%#x extent "DEXT"\n",
+	       PFID(fid), intent->li_opc, intent->li_flags,
+	       PEXT(&intent->li_extent));
 
 	switch (intent->li_opc) {
 	case LAYOUT_INTENT_TRUNC:
@@ -3785,9 +3781,6 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	}
 	if (rc < 0)
 		RETURN(rc);
-
-	fid = &info->mti_tmp_fid2;
-	fid_extract_from_res_name(fid, &(*lockp)->l_resource->lr_name);
 
 	/* Get lock from request for possible resent case. */
 	mdt_intent_fixup_resent(info, *lockp, lhc, flags);

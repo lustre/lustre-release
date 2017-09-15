@@ -471,6 +471,9 @@ struct mdt_thread_info {
 	struct tg_reply_data	  *mti_reply_data;
 
 	struct lustre_som_attrs	   mti_som;
+
+	/* FLR: layout change API */
+	struct md_layout_change	   mti_layout;
 };
 
 extern struct lu_context_key mdt_thread_key;
@@ -789,6 +792,8 @@ int mdt_fix_reply(struct mdt_thread_info *info);
 int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
 			   struct md_attr *);
 void mdt_reconstruct_open(struct mdt_thread_info *, struct mdt_lock_handle *);
+int mdt_layout_change(struct mdt_thread_info *info, struct mdt_object *obj,
+		      struct md_layout_change *spec);
 
 struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len);
 const struct lu_buf *mdt_buf_const(const struct lu_env *env,

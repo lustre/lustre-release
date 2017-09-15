@@ -643,11 +643,14 @@ struct ll_file_data {
 	 * false: unknown failure, should report. */
 	bool fd_write_failed;
 	bool ll_lock_no_expand;
+	rwlock_t fd_lock; /* protect lcc list */
+	struct list_head fd_lccs; /* list of ll_cl_context */
 	/* Used by mirrored file to lead IOs to a specific mirror, usually
 	 * for mirror resync. 0 means default. */
 	__u32 fd_designated_mirror;
-	rwlock_t fd_lock; /* protect lcc list */
-	struct list_head fd_lccs; /* list of ll_cl_context */
+	/* The layout version when resync starts. Resync I/O should carry this
+	 * layout version for verification to OST objects */
+	__u32 fd_layout_version;
 };
 
 extern struct proc_dir_entry *proc_lustre_fs_root;

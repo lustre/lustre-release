@@ -213,7 +213,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)REINT_RMENTRY);
 	LASSERTF(REINT_MIGRATE == 9, "found %lld\n",
 		 (long long)REINT_MIGRATE);
-	LASSERTF(REINT_MAX == 10, "found %lld\n",
+	LASSERTF(REINT_MAX == 11, "found %lld\n",
 		 (long long)REINT_MAX);
 	LASSERTF(DISP_IT_EXECD == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)DISP_IT_EXECD);
@@ -3049,6 +3049,98 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_rec_setxattr, sx_padding_11));
 	LASSERTF((int)sizeof(((struct mdt_rec_setxattr *)0)->sx_padding_11) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_rec_setxattr *)0)->sx_padding_11));
+
+	/* Checks for struct mdt_rec_resync */
+	LASSERTF((int)sizeof(struct mdt_rec_resync) == 136, "found %lld\n",
+		 (long long)(int)sizeof(struct mdt_rec_resync));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_opcode) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_opcode));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_opcode) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_opcode));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_cap) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_cap));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_cap) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_cap));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_fsuid) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_fsuid));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_fsuid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_fsuid));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_fsuid_h) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_fsuid_h));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_fsuid_h) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_fsuid_h));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_fsgid) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_fsgid));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_fsgid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_fsgid));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_fsgid_h) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_fsgid_h));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_fsgid_h) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_fsgid_h));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_suppgid1) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_suppgid1));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_suppgid1) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_suppgid1));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_suppgid1_h) == 28, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_suppgid1_h));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_suppgid1_h) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_suppgid1_h));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_suppgid2) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_suppgid2));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_suppgid2) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_suppgid2));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_suppgid2_h) == 36, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_suppgid2_h));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_suppgid2_h) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_suppgid2_h));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_fid) == 40, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_fid));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_fid) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_fid));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding0) == 56, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding0));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding0) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding0));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding1) == 80, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding1));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding1) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding1));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding2) == 88, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding2));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding2) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding2));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding3) == 96, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding3));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding3) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding3));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding4) == 104, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding4));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding4) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding4));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_bias) == 112, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_bias));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_bias) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_bias));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding5) == 116, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding5));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding5) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding5));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding6) == 120, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding6));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding6) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding6));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding7) == 124, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding7));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding7) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding7));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding8) == 128, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding8));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding8) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding8));
+	LASSERTF((int)offsetof(struct mdt_rec_resync, rs_padding9) == 132, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_resync, rs_padding9));
+	LASSERTF((int)sizeof(((struct mdt_rec_resync *)0)->rs_padding9) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_resync *)0)->rs_padding9));
 
 	/* Checks for struct mdt_rec_reint */
 	LASSERTF((int)sizeof(struct mdt_rec_reint) == 136, "found %lld\n",

@@ -440,6 +440,7 @@ int ofd_verify_ff(const struct lu_env *env, struct ofd_object *fo,
 int ofd_verify_layout_version(const struct lu_env *env,
 			      struct ofd_object *fo, const struct obdo *oa)
 {
+	__u32 layout_version;
 	int rc;
 	ENTRY;
 
@@ -453,21 +454,29 @@ int ofd_verify_layout_version(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
+	layout_version = fo->ofo_ff.ff_layout_version;
+	if (oa->o_layout_version >= layout_version &&
+	    oa->o_layout_version <= layout_version + fo->ofo_ff.ff_range)
+		GOTO(out, rc = 0);
+
+	/* normal traffic, decide if to return ESTALE or EINPROGRESS */
+	layout_version &= ~LU_LAYOUT_RESYNC;
+
 	/* this update is not legitimate */
-	if (oa->o_layout_version < fo->ofo_ff.ff_layout_version)
+	if ((oa->o_layout_version & ~LU_LAYOUT_RESYNC) <= layout_version)
 		GOTO(out, rc = -ESTALE);
 
-	/* layout version is not transmitted yet */
-	if (oa->o_layout_version >
-	    fo->ofo_ff.ff_layout_version + fo->ofo_ff.ff_range)
+	/* layout version may not be transmitted yet */
+	if ((oa->o_layout_version & ~LU_LAYOUT_RESYNC) > layout_version)
 		GOTO(out, rc = -EINPROGRESS);
 
 	EXIT;
 
 out:
-	CDEBUG(D_INODE, DFID " verify layout version: %u vs. %u, rc: %d\n",
+	CDEBUG(D_INODE, DFID " verify layout version: %u vs. %u/%u, rc: %d\n",
 	       PFID(lu_object_fid(&fo->ofo_obj.do_lu)),
-	       fo->ofo_ff.ff_layout_version, oa->o_layout_version, rc);
+	       oa->o_layout_version, fo->ofo_ff.ff_layout_version,
+	       fo->ofo_ff.ff_range, rc);
 	return rc;
 
 }

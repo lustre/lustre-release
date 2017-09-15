@@ -2752,6 +2752,19 @@ void lustre_swab_close_data(struct close_data *cd)
 	__swab64s(&cd->cd_data_version);
 }
 
+void lustre_swab_close_data_resync_done(struct close_data_resync_done *resync)
+{
+	int i;
+
+	__swab32s(&resync->resync_count);
+	/* after swab, resync_count must in CPU endian */
+	if (resync->resync_count <= INLINE_RESYNC_ARRAY_SIZE) {
+		for (i = 0; i < resync->resync_count; i++)
+			__swab32s(&resync->resync_ids_inline[i]);
+	}
+}
+EXPORT_SYMBOL(lustre_swab_close_data_resync_done);
+
 void lustre_swab_lfsck_request(struct lfsck_request *lr)
 {
 	__swab32s(&lr->lr_event);

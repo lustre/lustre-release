@@ -437,6 +437,7 @@ int llapi_json_write_list(struct llapi_json_item_list **item_list, FILE *fp);
 int llapi_lease_get(int fd, int mode);
 int llapi_lease_check(int fd);
 int llapi_lease_put(int fd);
+extern int llapi_lease_get_ext(int fd, struct ll_ioc_lease *data);
 
 /* Group lock */
 int llapi_group_lock(int fd, int gid);
@@ -727,6 +728,7 @@ int llapi_layout_file_create(const char *path, int open_flags, int mode,
  * Set flags to the header of component layout.
  */
 int llapi_layout_flags_set(struct llapi_layout *layout, uint32_t flags);
+int llapi_layout_flags_get(struct llapi_layout *layout, uint32_t *flags);
 
 /**
  * Fetch the start and end offset of the current layout component.
@@ -831,7 +833,8 @@ ssize_t llapi_mirror_read(int fd, unsigned int id,
 			   void *buf, size_t count, off_t pos);
 ssize_t llapi_mirror_copy_many(int fd, unsigned int src,
 				unsigned int *dst, size_t count);
-int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst);
+int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst,
+		       off_t pos, size_t count);
 
 /** @} llapi */
 

@@ -1290,6 +1290,35 @@ check_mdt_rec_setxattr(void)
 }
 
 static void
+check_mdt_rec_resync(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(mdt_rec_resync);
+	CHECK_MEMBER(mdt_rec_resync, rs_opcode);
+	CHECK_MEMBER(mdt_rec_resync, rs_cap);
+	CHECK_MEMBER(mdt_rec_resync, rs_fsuid);
+	CHECK_MEMBER(mdt_rec_resync, rs_fsuid_h);
+	CHECK_MEMBER(mdt_rec_resync, rs_fsgid);
+	CHECK_MEMBER(mdt_rec_resync, rs_fsgid_h);
+	CHECK_MEMBER(mdt_rec_resync, rs_suppgid1);
+	CHECK_MEMBER(mdt_rec_resync, rs_suppgid1_h);
+	CHECK_MEMBER(mdt_rec_resync, rs_suppgid2);
+	CHECK_MEMBER(mdt_rec_resync, rs_suppgid2_h);
+	CHECK_MEMBER(mdt_rec_resync, rs_fid);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding0);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding1);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding2);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding3);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding4);
+	CHECK_MEMBER(mdt_rec_resync, rs_bias);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding5);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding6);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding7);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding8);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding9);
+}
+
+static void
 check_mdt_rec_reint(void)
 {
 	BLANK_LINE();
@@ -2728,6 +2757,7 @@ main(int argc, char **argv)
 	check_mdt_rec_unlink();
 	check_mdt_rec_rename();
 	check_mdt_rec_setxattr();
+	check_mdt_rec_resync();
 	check_mdt_rec_reint();
 	check_lmv_desc();
 	check_lov_desc();

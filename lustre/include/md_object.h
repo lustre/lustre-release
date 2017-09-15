@@ -159,15 +159,20 @@ struct md_op_spec {
 enum md_layout_opc {
 	MD_LAYOUT_NOP	= 0,
 	MD_LAYOUT_WRITE,	/* FLR: write the file */
+	MD_LAYOUT_RESYNC,	/* FLR: resync starts */
+	MD_LAYOUT_RESYNC_DONE,	/* FLR: resync done */
 };
 
 /**
  * Parameters for layout change API.
  */
 struct md_layout_change {
-	enum md_layout_opc	mlc_opc;
-	struct layout_intent	*mlc_intent;
-	struct lu_buf		mlc_buf;
+	enum md_layout_opc		mlc_opc;
+	struct layout_intent		*mlc_intent;
+	struct lu_buf			mlc_buf;
+	struct lustre_som_attrs		mlc_som;
+	size_t				mlc_resync_count;
+	__u32				*mlc_resync_ids;
 };
 
 union ldlm_policy_data;
