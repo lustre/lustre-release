@@ -360,6 +360,19 @@ static inline int is_granted_or_cancelled(struct ldlm_lock *lock)
         return ret;
 }
 
+static inline bool is_bl_done(struct ldlm_lock *lock)
+{
+	bool bl_done = true;
+
+	if (!ldlm_is_bl_done(lock)) {
+		lock_res_and_lock(lock);
+		bl_done = ldlm_is_bl_done(lock);
+		unlock_res_and_lock(lock);
+	}
+
+	return bl_done;
+}
+
 typedef void (*ldlm_policy_wire_to_local_t)(const union ldlm_wire_policy_data *,
 					    union ldlm_policy_data *);
 typedef void (*ldlm_policy_local_to_wire_t)(const union ldlm_policy_data *,
