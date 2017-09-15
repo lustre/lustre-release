@@ -5057,8 +5057,7 @@ static int lod_invalidate(const struct lu_env *env, struct dt_object *dt)
 
 static int lod_declare_layout_change(const struct lu_env *env,
 				     struct dt_object *dt,
-				     struct layout_intent *layout,
-				     const struct lu_buf *buf,
+				     struct md_layout_change *mlc,
 				     struct thandle *th)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
@@ -5066,6 +5065,8 @@ static int lod_declare_layout_change(const struct lu_env *env,
 	struct lod_device *d = lu2lod_dev(dt->do_lu.lo_dev);
 	struct dt_object *next = dt_object_child(dt);
 	struct ost_pool *inuse = &info->lti_inuse_osts;
+	struct layout_intent *layout = mlc->mlc_intent;
+	struct lu_buf *buf = &mlc->mlc_buf;
 	struct lod_layout_component *lod_comp;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
 	bool replay = false;
@@ -5200,8 +5201,7 @@ unlock:
  * Instantiate layout component objects which covers the intent write offset.
  */
 static int lod_layout_change(const struct lu_env *env, struct dt_object *dt,
-			     struct layout_intent *layout,
-			     const struct lu_buf *buf, struct thandle *th)
+			     struct md_layout_change *mlc, struct thandle *th)
 {
 	struct lu_attr *attr = &lod_env_info(env)->lti_attr;
 

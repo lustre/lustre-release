@@ -1852,13 +1852,12 @@ stop:
 static int mdd_declare_layout_change(const struct lu_env *env,
 				     struct mdd_device *mdd,
 				     struct mdd_object *obj,
-				     struct layout_intent *layout,
-				     const struct lu_buf *buf,
+				     struct md_layout_change *mlc,
 				     struct thandle *handle)
 {
 	int rc;
 
-	rc = mdo_declare_layout_change(env, obj, layout, buf, handle);
+	rc = mdo_declare_layout_change(env, obj, mlc, handle);
 	if (rc)
 		return rc;
 
@@ -1867,7 +1866,7 @@ static int mdd_declare_layout_change(const struct lu_env *env,
 
 /* For PFL, this is used to instantiate necessary component objects. */
 int mdd_layout_change(const struct lu_env *env, struct md_object *obj,
-		      struct layout_intent *layout, const struct lu_buf *buf)
+		      struct md_layout_change *mlc)
 {
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
 	struct mdd_device *mdd = mdo2mdd(obj);
@@ -1879,7 +1878,7 @@ int mdd_layout_change(const struct lu_env *env, struct md_object *obj,
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
 
-	rc = mdd_declare_layout_change(env, mdd, mdd_obj, layout, buf, handle);
+	rc = mdd_declare_layout_change(env, mdd, mdd_obj, mlc, handle);
 	/**
 	 * It's possible that another layout write intent has already
 	 * instantiated our objects, so a -EALREADY returned, and we need to
@@ -1893,7 +1892,7 @@ int mdd_layout_change(const struct lu_env *env, struct md_object *obj,
 		GOTO(stop, rc);
 
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-	rc = mdo_layout_change(env, mdd_obj, layout, buf, handle);
+	rc = mdo_layout_change(env, mdd_obj, mlc, handle);
 	mdd_write_unlock(env, mdd_obj);
 	if (rc)
 		GOTO(stop, rc);
