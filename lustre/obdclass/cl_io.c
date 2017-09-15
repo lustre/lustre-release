@@ -122,6 +122,7 @@ void cl_io_fini(const struct lu_env *env, struct cl_io *io)
 		/* Check ignore layout change conf */
 		LASSERT(ergo(io->ci_ignore_layout || !io->ci_verify_layout,
 				!io->ci_need_restart));
+	case CIT_GLIMPSE:
 		break;
 	case CIT_LADVISE:
 		break;

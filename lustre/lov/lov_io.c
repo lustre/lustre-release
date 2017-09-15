@@ -262,6 +262,7 @@ static int lov_io_slice_init(struct lov_io *lio,
 		break;
 	}
 
+	case CIT_GLIMPSE:
         case CIT_MISC:
                 lio->lis_pos = 0;
                 lio->lis_endpos = OBD_OBJECT_EOF;
@@ -377,6 +378,8 @@ static void lov_io_sub_inherit(struct lov_io_sub *sub, struct lov_io *lio,
 		io->u.ci_ladvise.li_flags = parent->u.ci_ladvise.li_flags;
 		break;
 	}
+	case CIT_GLIMPSE:
+	case CIT_MISC:
 	default:
 		break;
 	}
@@ -1023,6 +1026,9 @@ static const struct cl_io_operations lov_io_ops = {
 			.cio_start     = lov_io_start,
 			.cio_end       = lov_io_end
 		},
+		[CIT_GLIMPSE] = {
+			.cio_fini      = lov_io_fini,
+		},
 		[CIT_MISC] = {
 			.cio_fini      = lov_io_fini
 		}
@@ -1105,6 +1111,9 @@ static const struct cl_io_operations lov_empty_io_ops = {
 		[CIT_LADVISE] = {
 			.cio_fini   = lov_empty_io_fini
 		},
+		[CIT_GLIMPSE] = {
+			.cio_fini      = lov_empty_io_fini
+		},
 		[CIT_MISC] = {
 			.cio_fini      = lov_empty_io_fini
 		}
@@ -1148,6 +1157,7 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
 	default:
 		LBUG();
 	case CIT_MISC:
+	case CIT_GLIMPSE:
 	case CIT_READ:
 		result = 0;
 		break;
@@ -1192,6 +1202,7 @@ int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 		result = -EOPNOTSUPP;
 		break;
 	case CIT_MISC:
+	case CIT_GLIMPSE:
 	case CIT_FSYNC:
 	case CIT_LADVISE:
 	case CIT_DATA_VERSION:

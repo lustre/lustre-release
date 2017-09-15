@@ -186,16 +186,19 @@ int cl_glimpse_size0(struct inode *inode, int agl)
          */
         struct lu_env          *env = NULL;
         struct cl_io           *io  = NULL;
-	__u16                   refcheck;
+	__u16			refcheck;
         int                     result;
 
         ENTRY;
 
-        result = cl_io_get(inode, &env, &io, &refcheck);
-        if (result > 0) {
-	again:
+	result = cl_io_get(inode, &env, &io, &refcheck);
+	if (result <= 0)
+		RETURN(result);
+
+	do {
+		io->ci_need_restart = 0;
 		io->ci_verify_layout = 1;
-                result = cl_io_init(env, io, CIT_MISC, io->ci_obj);
+		result = cl_io_init(env, io, CIT_GLIMPSE, io->ci_obj);
                 if (result > 0)
                         /*
                          * nothing to do for this io. This currently happens
@@ -204,13 +207,12 @@ int cl_glimpse_size0(struct inode *inode, int agl)
                         result = io->ci_result;
                 else if (result == 0)
                         result = cl_glimpse_lock(env, io, inode, io->ci_obj,
-                                                 agl);
+						 agl);
 
 		OBD_FAIL_TIMEOUT(OBD_FAIL_GLIMPSE_DELAY, 2);
-                cl_io_fini(env, io);
-		if (unlikely(io->ci_need_restart))
-			goto again;
-		cl_env_put(env, &refcheck);
-	}
+		cl_io_fini(env, io);
+	} while (unlikely(io->ci_need_restart));
+
+	cl_env_put(env, &refcheck);
 	RETURN(result);
 }

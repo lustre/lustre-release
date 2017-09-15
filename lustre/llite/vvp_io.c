@@ -1408,6 +1408,9 @@ static const struct cl_io_operations vvp_io_ops = {
 			.cio_start	= vvp_io_fsync_start,
 			.cio_fini	= vvp_io_fini
 		},
+		[CIT_GLIMPSE] = {
+			.cio_fini	= vvp_io_fini
+		},
 		[CIT_MISC] = {
 			.cio_fini	= vvp_io_fini
 		},
@@ -1476,5 +1479,6 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 				PFID(lu_object_fid(&obj->co_lu)), result);
 	}
 
+	io->ci_result = result < 0 ? result : 0;
 	RETURN(result);
 }
