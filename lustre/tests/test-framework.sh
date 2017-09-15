@@ -6319,7 +6319,7 @@ convert_facet2label() {
 }
 
 get_clientosc_proc_path() {
-	echo "${1}-osc-*"
+	echo "${1}-osc-ffff*"
 }
 
 # If the 2.0 MDS was mounted on 1.8 device, then the OSC and LOV names

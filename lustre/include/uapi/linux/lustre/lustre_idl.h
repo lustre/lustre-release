@@ -1255,6 +1255,9 @@ struct hsm_state_set {
 #define OBD_BRW_READ            0x01
 #define OBD_BRW_WRITE           0x02
 #define OBD_BRW_RWMASK          (OBD_BRW_READ | OBD_BRW_WRITE)
+#define OBD_BRW_NDELAY		0x04 /* Non-delay RPC should be issued for
+				      * this page. Non-delay RPCs have bit
+				      * rq_no_delay set. */
 #define OBD_BRW_SYNC            0x08 /* this page is a part of synchronous
                                       * transfer and is not accounted in
                                       * the grant. */

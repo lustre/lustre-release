@@ -1126,6 +1126,10 @@ static void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot)
 		io->ci_pio = !io->u.ci_rw.rw_append;
 	else
 		io->ci_pio = 0;
+
+	/* FLR: only use non-delay I/O for read as there is only one
+	 * avaliable mirror for write. */
+	io->ci_ndelay = !(iot == CIT_WRITE);
 }
 
 static int ll_file_io_ptask(struct cfs_ptask *ptask)
@@ -1139,16 +1143,15 @@ static int ll_file_io_ptask(struct cfs_ptask *ptask)
 	__u16 refcheck;
 	ENTRY;
 
-	env = cl_env_get(&refcheck);
-	if (IS_ERR(env))
-		RETURN(PTR_ERR(env));
-
 	CDEBUG(D_VFSTRACE, "%s: %s range: [%llu, %llu)\n",
 		file_dentry(file)->d_name.name,
 		pt->cip_iot == CIT_READ ? "read" : "write",
 		pos, pos + pt->cip_count);
 
-restart:
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
+
 	io = vvp_env_thread_io(env);
 	ll_io_init(io, file, pt->cip_iot);
 	io->u.ci_rw.rw_iter = pt->cip_iter;
@@ -1190,25 +1193,15 @@ restart:
 	}
 
 	cl_io_fini(env, io);
+	cl_env_put(env, &refcheck);
 
-	if ((rc == 0 || rc == -ENODATA) &&
-	    pt->cip_result < pt->cip_count &&
-	    io->ci_need_restart) {
-		CDEBUG(D_VFSTRACE,
-			"%s: restart %s range: [%llu, %llu) ret: %zd, rc: %d\n",
-			file_dentry(file)->d_name.name,
-			pt->cip_iot == CIT_READ ? "read" : "write",
-			pos, pos + pt->cip_count - pt->cip_result,
-			pt->cip_result, rc);
-		goto restart;
-	}
+	pt->cip_need_restart = io->ci_need_restart;
 
 	CDEBUG(D_VFSTRACE, "%s: %s ret: %zd, rc: %d\n",
 		file_dentry(file)->d_name.name,
 		pt->cip_iot == CIT_READ ? "read" : "write",
 		pt->cip_result, rc);
 
-	cl_env_put(env, &refcheck);
 	RETURN(pt->cip_result > 0 ? 0 : rc);
 }
 
@@ -1226,6 +1219,8 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	loff_t			pos = *ppos;
 	ssize_t			result = 0;
 	int			rc = 0;
+	unsigned		retried = 0;
+	bool			restarted = false;
 
 	ENTRY;
 
@@ -1239,9 +1234,10 @@ restart:
 	if (args->via_io_subtype == IO_NORMAL) {
 		io->u.ci_rw.rw_iter = *args->u.normal.via_iter;
 		io->u.ci_rw.rw_iocb = *args->u.normal.via_iocb;
-	} else {
-		io->ci_pio = 0;
 	}
+	if (args->via_io_subtype != IO_NORMAL || restarted)
+		io->ci_pio = 0;
+	io->ci_ndelay_tried = retried;
 
 	if (cl_io_rw_init(env, io, iot, pos, count) == 0) {
 		bool range_locked = false;
@@ -1324,12 +1320,20 @@ restart:
 out:
 	cl_io_fini(env, io);
 
+	CDEBUG(D_VFSTRACE,
+	       "%s: %d io complete with rc: %d, result: %zd, restart: %d\n",
+	       file->f_path.dentry->d_name.name,
+	       iot, rc, result, io->ci_need_restart);
+
 	if ((rc == 0 || rc == -ENODATA) && count > 0 && io->ci_need_restart) {
 		CDEBUG(D_VFSTRACE,
 			"%s: restart %s range: [%llu, %llu) ret: %zd, rc: %d\n",
 			file_dentry(file)->d_name.name,
 			iot == CIT_READ ? "read" : "write",
 			pos, pos + count, result, rc);
+		/* preserve the tried count for FLR */
+		retried = io->ci_ndelay_tried;
+		restarted = true;
 		goto restart;
 	}
 

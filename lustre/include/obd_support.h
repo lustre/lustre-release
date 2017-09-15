@@ -608,6 +608,9 @@ extern char obd_jobid_var[];
 /* LMV */
 #define OBD_FAIL_UNKNOWN_LMV_STRIPE		0x1901
 
+/* FLR */
+#define OBD_FAIL_FLR_GLIMPSE_IMMUTABLE		0x1A00
+
 /* DT */
 #define OBD_FAIL_DT_DECLARE_ATTR_GET		0x2000
 #define OBD_FAIL_DT_ATTR_GET			0x2001

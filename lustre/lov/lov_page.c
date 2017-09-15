@@ -82,7 +82,7 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 	ENTRY;
 
 	offset = cl_offset(obj, index);
-	entry = lov_lsm_entry(loo->lo_lsm, offset);
+	entry = lov_io_layout_at(lio, offset);
 	if (entry < 0 || !lsm_entry_inited(loo->lo_lsm, entry)) {
 		/* non-existing layout component */
 		lov_page_init_empty(env, obj, page, index);

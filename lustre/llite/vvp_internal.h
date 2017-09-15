@@ -131,6 +131,7 @@ struct vvp_thread_info {
 	struct cl_lock_descr	vti_descr;
 	struct cl_io		vti_io;
 	struct cl_attr		vti_attr;
+	struct cl_sync_io	vti_anchor;
 };
 
 static inline struct vvp_thread_info *vvp_env_info(const struct lu_env *env)

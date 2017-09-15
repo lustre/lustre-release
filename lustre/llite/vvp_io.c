@@ -298,7 +298,9 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	struct cl_object *obj = io->ci_obj;
 	struct vvp_io    *vio = cl2vvp_io(env, ios);
 	struct inode     *inode = vvp_object_inode(obj);
+	__u32		  gen = 0;
 	int rc;
+	ENTRY;
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
@@ -320,18 +322,40 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 		 * block on layout lock held by the MDT
 		 * as MDT will not send new layout in lvb (see LU-3124)
 		 * we have to explicitly fetch it, all this will be done
-		 * by ll_layout_refresh()
+		 * by ll_layout_refresh().
+		 * Even if ll_layout_restore() returns zero, it doesn't mean
+		 * that restore has been successful. Therefore it sets
+		 * ci_verify_layout so that it will check layout at the end
+		 * of this function.
 		 */
-		if (rc == 0) {
-			io->ci_restore_needed = 0;
-			io->ci_need_restart = 1;
-			io->ci_verify_layout = 1;
-		} else {
+		if (rc) {
 			io->ci_restore_needed = 1;
 			io->ci_need_restart = 0;
 			io->ci_verify_layout = 0;
 			io->ci_result = rc;
+			GOTO(out, rc);
 		}
+
+		io->ci_restore_needed = 0;
+
+		/* Even if ll_layout_restore() returns zero, it doesn't mean
+		 * that restore has been successful. Therefore it should verify
+		 * if there was layout change and restart I/O correspondingly.
+		 */
+		ll_layout_refresh(inode, &gen);
+		io->ci_need_restart = vio->vui_layout_gen != gen;
+		if (io->ci_need_restart) {
+			CDEBUG(D_VFSTRACE,
+			       DFID" layout changed from %d to %d.\n",
+			       PFID(lu_object_fid(&obj->co_lu)),
+			       vio->vui_layout_gen, gen);
+			/* today successful restore is the only possible
+			 * case */
+			/* restore was done, clear restoring state */
+			ll_file_clear_flag(ll_i2info(vvp_object_inode(obj)),
+					   LLIF_FILE_RESTORING);
+		}
+		GOTO(out, 0);
 	}
 
 	/**
@@ -368,11 +392,11 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 		io->ci_result = rc;
 		if (!rc)
 			io->ci_need_restart = 1;
+		GOTO(out, rc);
 	}
 
-	if (!io->ci_ignore_layout && io->ci_verify_layout) {
-		__u32 gen = 0;
-
+	if (!io->ci_need_restart &&
+	    !io->ci_ignore_layout && io->ci_verify_layout) {
 		/* check layout version */
 		ll_layout_refresh(inode, &gen);
 		io->ci_need_restart = vio->vui_layout_gen != gen;
@@ -381,13 +405,11 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 			       DFID" layout changed from %d to %d.\n",
 			       PFID(lu_object_fid(&obj->co_lu)),
 			       vio->vui_layout_gen, gen);
-			/* today successful restore is the only possible
-			 * case */
-			/* restore was done, clear restoring state */
-			ll_file_clear_flag(ll_i2info(vvp_object_inode(obj)),
-					   LLIF_FILE_RESTORING);
 		}
+		GOTO(out, 0);
 	}
+out:
+	EXIT;
 }
 
 static void vvp_io_fault_fini(const struct lu_env *env,
@@ -755,6 +777,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 	size_t tot = vio->vui_tot_count;
 	int exceed = 0;
 	int result;
+	ENTRY;
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
@@ -766,13 +789,16 @@ static int vvp_io_read_start(const struct lu_env *env,
 		down_read(&lli->lli_trunc_sem);
 
 	if (!can_populate_pages(env, io, inode))
-		return 0;
+		RETURN(0);
 
-	result = vvp_prep_size(env, obj, io, range->cir_pos, tot, &exceed);
+	/* Unless this is reading a sparse file, otherwise the lock has already
+	 * been acquired so vvp_prep_size() is an empty op. */
+	result = vvp_prep_size(env, obj, io, range->cir_pos, range->cir_count,
+				&exceed);
 	if (result != 0)
-		return result;
+		RETURN(result);
 	else if (exceed != 0)
-		goto out;
+		GOTO(out, result);
 
 	LU_OBJECT_HEADER(D_INODE, env, &obj->co_lu,
 			 "Read ino %lu, %lu bytes, offset %lld, size %llu\n",
@@ -815,6 +841,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 		CERROR("Wrong IO type %u\n", vio->vui_io_subtype);
 		LBUG();
 	}
+	GOTO(out, result);
 
 out:
 	if (result >= 0) {

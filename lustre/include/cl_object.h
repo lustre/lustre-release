@@ -1299,7 +1299,7 @@ struct cl_page_list {
 	struct task_struct	*pl_owner;
 };
 
-/** 
+/**
  * A 2-queue of pages. A convenience data-type for common use case, 2-queue
  * contains an incoming page list and an outgoing page list.
  */
@@ -1763,6 +1763,7 @@ struct cl_io_pt {
 	struct iov_iter		 cip_iter;
 	struct file		*cip_file;
 	enum cl_io_type		 cip_iot;
+	unsigned int		 cip_need_restart:1;
 	loff_t			 cip_pos;
 	size_t			 cip_count;
 	ssize_t			 cip_result;
@@ -1893,7 +1894,20 @@ struct cl_io {
 	/** Set to 1 if parallel execution is allowed for current I/O? */
 			     ci_pio:1,
 	/* Tell sublayers not to expand LDLM locks requested for this IO */
-			     ci_lock_no_expand:1;
+			     ci_lock_no_expand:1,
+	/**
+	 * Set if non-delay RPC should be used for this IO.
+	 *
+	 * If this file has multiple mirrors, and if the OSTs of the current
+	 * mirror is inaccessible, non-delay RPC would error out quickly so
+	 * that the upper layer can try to access the next mirror.
+	 */
+			     ci_ndelay:1;
+	/**
+	 * How many times the read has retried before this one.
+	 * Set by the top level and consumed by the LOV.
+	 */
+	unsigned             ci_ndelay_tried;
 	/**
 	 * Number of pages owned by this IO. For invariant checking.
 	 */
@@ -2355,13 +2369,12 @@ struct cl_io *cl_io_top(struct cl_io *io);
 void cl_io_print(const struct lu_env *env, void *cookie,
                  lu_printer_t printer, const struct cl_io *io);
 
-#define CL_IO_SLICE_CLEAN(foo_io, base)                                 \
-do {                                                                    \
-        typeof(foo_io) __foo_io = (foo_io);                             \
-                                                                        \
-        CLASSERT(offsetof(typeof(*__foo_io), base) == 0);               \
-        memset(&__foo_io->base + 1, 0,                                  \
-               (sizeof *__foo_io) - sizeof __foo_io->base);             \
+#define CL_IO_SLICE_CLEAN(foo_io, base)					\
+do {									\
+	typeof(foo_io) __foo_io = (foo_io);				\
+									\
+	memset(&__foo_io->base, 0,					\
+	       sizeof(*__foo_io) - offsetof(typeof(*__foo_io), base));	\
 } while (0)
 
 /** @} cl_io */

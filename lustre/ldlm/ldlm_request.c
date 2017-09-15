@@ -970,6 +970,14 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 			 DLM_LOCKREQ_OFF, len, (int)sizeof(*body));
 	}
 
+	if (*flags & LDLM_FL_NDELAY) {
+		DEBUG_REQ(D_DLMTRACE, req, "enque lock with no delay\n");
+		req->rq_no_resend = req->rq_no_delay = 1;
+		/* probably set a shorter timeout value and handle ETIMEDOUT
+		 * in osc_lock_upcall() correctly */
+		/* lustre_msg_set_timeout(req, req->rq_timeout / 2); */
+	}
+
 	/* Dump lock data into the request buffer */
 	body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
 	ldlm_lock2desc(lock, &body->lock_desc);

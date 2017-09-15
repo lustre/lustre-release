@@ -119,7 +119,6 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 	struct cl_page_list *qout     = &queue->c2_qout;
 	unsigned int queued = 0;
 	int result = 0;
-	int cmd;
 	int brw_flags;
 	unsigned int max_pages;
 
@@ -131,8 +130,10 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 	cli = osc_cli(osc);
 	max_pages = cli->cl_max_pages_per_rpc;
 
-	cmd = crt == CRT_WRITE ? OBD_BRW_WRITE : OBD_BRW_READ;
 	brw_flags = osc_io_srvlock(cl2osc_io(env, ios)) ? OBD_BRW_SRVLOCK : 0;
+	brw_flags |= crt == CRT_WRITE ? OBD_BRW_WRITE : OBD_BRW_READ;
+	if (crt == CRT_READ && ios->cis_io->ci_ndelay)
+		brw_flags |= OBD_BRW_NDELAY;
 
         /*
          * NOTE: here @page is a top-level page. This is done to avoid
@@ -186,7 +187,7 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 
 		if (++queued == max_pages) {
 			queued = 0;
-			result = osc_queue_sync_pages(env, osc, &list, cmd,
+			result = osc_queue_sync_pages(env, osc, &list,
 						      brw_flags);
 			if (result < 0)
 				break;
@@ -194,7 +195,7 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 	}
 
 	if (queued > 0)
-		result = osc_queue_sync_pages(env, osc, &list, cmd, brw_flags);
+		result = osc_queue_sync_pages(env, osc, &list, brw_flags);
 
 	/* Update c/mtime for sync write. LU-7310 */
 	if (crt == CRT_WRITE && qout->pl_nr > 0 && result == 0) {

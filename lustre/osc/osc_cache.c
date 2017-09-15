@@ -1970,6 +1970,7 @@ static int try_to_add_extent_for_io(struct client_obd *cli,
 
 		if (tmp->oe_srvlock != ext->oe_srvlock ||
 		    !tmp->oe_grants != !ext->oe_grants ||
+		    tmp->oe_ndelay != ext->oe_ndelay ||
 		    tmp->oe_no_merge || ext->oe_no_merge)
 			RETURN(0);
 
@@ -2720,7 +2721,7 @@ int osc_cancel_async_page(const struct lu_env *env, struct osc_page *ops)
 }
 
 int osc_queue_sync_pages(const struct lu_env *env, struct osc_object *obj,
-			 struct list_head *list, int cmd, int brw_flags)
+			 struct list_head *list, int brw_flags)
 {
 	struct client_obd     *cli = osc_cli(obj);
 	struct osc_extent     *ext;
@@ -2758,7 +2759,7 @@ int osc_queue_sync_pages(const struct lu_env *env, struct osc_object *obj,
 		RETURN(-ENOMEM);
 	}
 
-	ext->oe_rw = !!(cmd & OBD_BRW_READ);
+	ext->oe_rw = !!(brw_flags & OBD_BRW_READ);
 	ext->oe_sync = 1;
 	ext->oe_no_merge = !can_merge;
 	ext->oe_urgent = 1;
@@ -2766,6 +2767,7 @@ int osc_queue_sync_pages(const struct lu_env *env, struct osc_object *obj,
 	ext->oe_end = ext->oe_max_end = end;
 	ext->oe_obj = obj;
 	ext->oe_srvlock = !!(brw_flags & OBD_BRW_SRVLOCK);
+	ext->oe_ndelay = !!(brw_flags & OBD_BRW_NDELAY);
 	ext->oe_nr_pages = page_count;
 	ext->oe_mppr = mppr;
 	list_splice_init(list, &ext->oe_pages);
@@ -2773,7 +2775,7 @@ int osc_queue_sync_pages(const struct lu_env *env, struct osc_object *obj,
 	osc_object_lock(obj);
 	/* Reuse the initial refcount for RPC, don't drop it */
 	osc_extent_state_set(ext, OES_LOCK_DONE);
-	if (cmd & OBD_BRW_WRITE) {
+	if (!ext->oe_rw) { /* write */
 		list_add_tail(&ext->oe_link, &obj->oo_urgent_exts);
 		osc_update_pending(obj, OBD_BRW_WRITE, page_count);
 	} else {
