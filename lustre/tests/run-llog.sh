@@ -20,9 +20,9 @@ RC=0
 # Using ignore_errors will allow lctl to cleanup even if the test fails.
 eval "$LCTL <<-EOF || RC=2
 	attach llog_test llt_name llt_uuid
+	ignore_errors
 	setup $MGS
 	device llt_name
-	ignore_errors
 	cleanup
 	detach
 EOF"
