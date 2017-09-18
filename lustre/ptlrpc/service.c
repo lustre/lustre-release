@@ -140,7 +140,10 @@ ptlrpc_grow_req_bufs(struct ptlrpc_service_part *svcpt, int post)
         for (i = 0; i < svc->srv_nbuf_per_group; i++) {
                 /* NB: another thread might have recycled enough rqbds, we
 		 * need to make sure it wouldn't over-allocate, see LU-1212. */
-		if (svcpt->scp_nrqbds_posted >= svc->srv_nbuf_per_group)
+		if (test_req_buffer_pressure ||
+		    svcpt->scp_nrqbds_posted >= svc->srv_nbuf_per_group ||
+		    (svc->srv_nrqbds_max != 0 &&
+		     svcpt->scp_nrqbds_total > svc->srv_nrqbds_max))
 			break;
 
 		rqbd = ptlrpc_alloc_rqbd(svcpt);
@@ -760,6 +763,9 @@ ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 	/* buffer configuration */
 	service->srv_nbuf_per_group	= test_req_buffer_pressure ?
 					  1 : conf->psc_buf.bc_nbufs;
+	/* do not limit max number of rqbds by default */
+	service->srv_nrqbds_max		= 0;
+
 	service->srv_max_req_size	= conf->psc_buf.bc_req_max_size +
 					  SPTLRPC_MAX_PAYLOAD;
 	service->srv_buf_size		= conf->psc_buf.bc_buf_size;
@@ -947,8 +953,10 @@ void ptlrpc_server_drop_request(struct ptlrpc_request *req)
 			 */
 			LASSERT(atomic_read(&rqbd->rqbd_req.rq_refcount) == 0);
 			if (svcpt->scp_nrqbds_posted >=
-			    svc->srv_nbuf_per_group &&
-			    !test_req_buffer_pressure) {
+			    svc->srv_nbuf_per_group ||
+			    (svc->srv_nrqbds_max != 0 &&
+			     svcpt->scp_nrqbds_total > svc->srv_nrqbds_max) ||
+			    test_req_buffer_pressure) {
 				/* like in ptlrpc_free_rqbd() */
 				svcpt->scp_nrqbds_total--;
 				OBD_FREE_LARGE(rqbd->rqbd_buffer,

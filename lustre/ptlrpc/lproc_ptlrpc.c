@@ -318,10 +318,14 @@ ptlrpc_lprocfs_req_history_max_seq_write(struct file *file,
 
 	/* This sanity check is more of an insanity check; we can still
 	 * hose a kernel by allowing the request history to grow too
-	 * far. */
-	bufpages = (svc->srv_buf_size + PAGE_SIZE - 1) >>
+	 * far. The roundup to the next power of two is an empirical way
+	 * to take care that request buffer is allocated in Slab and thus
+	 * will be upgraded */
+	bufpages = (roundup_pow_of_two(svc->srv_buf_size) + PAGE_SIZE - 1) >>
 							PAGE_SHIFT;
-	if (val > totalram_pages/(2 * bufpages))
+	/* do not allow history to consume more than half max number of rqbds */
+	if ((svc->srv_nrqbds_max == 0 && val > totalram_pages/(2 * bufpages)) ||
+	    val > svc->srv_nrqbds_max/2)
 		return -ERANGE;
 
 	spin_lock(&svc->srv_lock);
@@ -337,6 +341,45 @@ ptlrpc_lprocfs_req_history_max_seq_write(struct file *file,
 	return count;
 }
 LPROC_SEQ_FOPS(ptlrpc_lprocfs_req_history_max);
+
+static int
+ptlrpc_lprocfs_req_buffers_max_seq_show(struct seq_file *m, void *n)
+{
+	struct ptlrpc_service *svc = m->private;
+
+	seq_printf(m, "%d\n", svc->srv_nrqbds_max);
+	return 0;
+}
+
+static ssize_t
+ptlrpc_lprocfs_req_buffers_max_seq_write(struct file *file,
+					 const char __user *buffer,
+					 size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct ptlrpc_service *svc = m->private;
+	__s64 val;
+	int rc;
+
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc < 0)
+		return rc;
+
+	if (val < 0 || val > INT_MAX)
+		return -ERANGE;
+
+	if (val < svc->srv_nbuf_per_group)
+		return -ERANGE;
+
+	spin_lock(&svc->srv_lock);
+
+	svc->srv_nrqbds_max = (uint)val;
+
+	spin_unlock(&svc->srv_lock);
+
+	return count;
+}
+LPROC_SEQ_FOPS(ptlrpc_lprocfs_req_buffers_max);
 
 static ssize_t threads_min_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)

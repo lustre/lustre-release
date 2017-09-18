@@ -1710,6 +1710,8 @@ struct ptlrpc_service {
         /** under unregister_service */
         unsigned                        srv_is_stopping:1;
 
+	/** max # request buffers */
+	int				srv_nrqbds_max;
 	/** max # request buffers in history per partition */
 	int				srv_hist_nrqbds_cpt_max;
 	/** number of CPTs this service bound on */
