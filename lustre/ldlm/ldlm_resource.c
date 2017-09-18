@@ -327,19 +327,10 @@ static ssize_t lru_size_store(struct kobject *kobj, struct attribute *attr,
                        "dropping all unused locks from namespace %s\n",
                        ldlm_ns_name(ns));
                 if (ns_connect_lru_resize(ns)) {
-                        int canceled, unused  = ns->ns_nr_unused;
-
 			/* Try to cancel all @ns_nr_unused locks. */
-			canceled = ldlm_cancel_lru(ns, unused, 0,
-						   LDLM_LRU_FLAG_PASSED |
-						   LDLM_LRU_FLAG_CLEANUP);
-			if (canceled < unused) {
-				CDEBUG(D_DLMTRACE,
-				       "not all requested locks are canceled, requested: %d, canceled: %d\n",
-				       unused,
-				       canceled);
-				return -EINVAL;
-			}
+			ldlm_cancel_lru(ns, ns->ns_nr_unused, 0,
+					LDLM_LRU_FLAG_PASSED |
+					LDLM_LRU_FLAG_CLEANUP);
 		} else {
 			tmp = ns->ns_max_unused;
 			ns->ns_max_unused = 0;
