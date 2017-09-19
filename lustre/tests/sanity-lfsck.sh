@@ -1050,7 +1050,7 @@ test_9a() {
 	[ $SPEED -lt $MAX_SPEED ] || {
 		$SHOW_LAYOUT
 		log "speed1: $BASE_SPEED1 time1: $RUN_TIME1"
-		error_ignore LU-9887 "(4) Speed $SPEED, expected < $MAX_SPEED"
+		error "(4) Speed $SPEED, expected < $MAX_SPEED"
 	}
 
 	# adjust speed limit
@@ -1083,7 +1083,7 @@ test_9a() {
 		$SHOW_LAYOUT
 		log "speed1: $BASE_SPEED1 time1: $RUN_TIME1"
 		log "speed2: $BASE_SPEED2 time2: $RUN_TIME2"
-		error_ignore LU-9887 "(6) Speed $SPEED, expected < $MAX_SPEED"
+		error "(6) Speed $SPEED, expected < $MAX_SPEED"
 	}
 
 	do_facet $SINGLEMDS \
@@ -1149,7 +1149,7 @@ test_9b() {
 	[ $SPEED -lt $MAX_SPEED ] || {
 		$SHOW_NAMESPACE
 		log "speed1: $BASE_SPEED1 time1: $RUN_TIME1"
-		error_ignore LU-9887 "(8) Speed $SPEED, expected < $MAX_SPEED"
+		error "(8) Speed $SPEED, expected < $MAX_SPEED"
 	}
 
 	# adjust speed limit
@@ -1182,7 +1182,7 @@ test_9b() {
 		$SHOW_NAMESPACE
 		log "speed1: $BASE_SPEED1 time1: $RUN_TIME1"
 		log "speed2: $BASE_SPEED2 time2: $RUN_TIME2"
-		error_ignore LU-9887 "(10) Speed $SPEED, expected < $MAX_SPEED"
+		error "(10) Speed $SPEED, expected < $MAX_SPEED"
 	}
 
 	do_facet $SINGLEMDS \

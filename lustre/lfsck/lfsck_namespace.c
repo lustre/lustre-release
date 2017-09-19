@@ -4436,10 +4436,10 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 			      cfs_duration_sec(duration + HALF_SEC);
 
 		if (duration != 0)
-			do_div(new_checked, duration);
+			new_checked = div64_s64(new_checked, duration);
 
 		if (rtime != 0)
-			do_div(speed, rtime);
+			speed = div64_s64(speed, rtime);
 
 		lfsck_namespace_dump_statistics(m, ns, checked, 0, rtime, 0,
 						bk->lb_param & LPF_DRYRUN);
@@ -4499,20 +4499,20 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 		__u32 time0 = ns->ln_run_time_phase1 + rtime;
 
 		if (duration != 0)
-			do_div(new_checked, duration);
+			new_checked = div64_s64(new_checked, duration);
 
 		if (ns->ln_run_time_phase1 != 0)
-			do_div(speed1, ns->ln_run_time_phase1);
+			speed1 = div64_s64(speed1, ns->ln_run_time_phase1);
 		else if (ns->ln_items_checked != 0)
 			time0++;
 
 		if (rtime != 0)
-			do_div(speed2, rtime);
+			speed2 = div64_s64(speed2, rtime);
 		else if (checked != 0)
 			time0++;
 
 		if (time0 != 0)
-			do_div(speed0, time0);
+			speed0 = div64_s64(speed0, time0);
 
 		lfsck_namespace_dump_statistics(m, ns, ns->ln_items_checked,
 						checked,
@@ -4536,17 +4536,17 @@ lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 		__u32 time0 = ns->ln_run_time_phase1 + ns->ln_run_time_phase2;
 
 		if (ns->ln_run_time_phase1 != 0)
-			do_div(speed1, ns->ln_run_time_phase1);
+			speed1 = div64_s64(speed1, ns->ln_run_time_phase1);
 		else if (ns->ln_items_checked != 0)
 			time0++;
 
 		if (ns->ln_run_time_phase2 != 0)
-			do_div(speed2, ns->ln_run_time_phase2);
+			speed2 = div64_s64(speed2, ns->ln_run_time_phase2);
 		else if (ns->ln_objs_checked_phase2 != 0)
 			time0++;
 
 		if (time0 != 0)
-			do_div(speed0, time0);
+			speed0 = div64_s64(speed0, time0);
 
 		lfsck_namespace_dump_statistics(m, ns, ns->ln_items_checked,
 						ns->ln_objs_checked_phase2,

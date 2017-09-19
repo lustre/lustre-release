@@ -5889,9 +5889,9 @@ static void lfsck_layout_dump(const struct lu_env *env,
 			      cfs_duration_sec(duration + HALF_SEC);
 
 		if (duration != 0)
-			do_div(new_checked, duration);
+			new_checked = div64_s64(new_checked, duration);
 		if (rtime != 0)
-			do_div(speed, rtime);
+			speed = div64_s64(speed, rtime);
 		seq_printf(m, "checked_phase1: %llu\n"
 			   "checked_phase2: %llu\n"
 			   "run_time_phase1: %u seconds\n"
@@ -5936,11 +5936,11 @@ static void lfsck_layout_dump(const struct lu_env *env,
 			      cfs_duration_sec(duration + HALF_SEC);
 
 		if (duration != 0)
-			do_div(new_checked, duration);
+			new_checked = div64_s64(new_checked, duration);
 		if (lo->ll_run_time_phase1 != 0)
-			do_div(speed1, lo->ll_run_time_phase1);
+			speed1 = div64_s64(speed1, lo->ll_run_time_phase1);
 		if (rtime != 0)
-			do_div(speed2, rtime);
+			speed2 = div64_s64(speed2, rtime);
 		seq_printf(m, "checked_phase1: %llu\n"
 			   "checked_phase2: %llu\n"
 			   "run_time_phase1: %u seconds\n"
@@ -5963,9 +5963,9 @@ static void lfsck_layout_dump(const struct lu_env *env,
 		__u64 speed2 = lo->ll_objs_checked_phase2;
 
 		if (lo->ll_run_time_phase1 != 0)
-			do_div(speed1, lo->ll_run_time_phase1);
+			speed1 = div64_s64(speed1, lo->ll_run_time_phase1);
 		if (lo->ll_run_time_phase2 != 0)
-			do_div(speed2, lo->ll_run_time_phase2);
+			speed2 = div64_s64(speed2, lo->ll_run_time_phase2);
 		seq_printf(m, "checked_phase1: %llu\n"
 			   "checked_phase2: %llu\n"
 			   "run_time_phase1: %u seconds\n"
