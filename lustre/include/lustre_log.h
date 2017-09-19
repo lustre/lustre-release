@@ -272,8 +272,7 @@ struct llog_handle {
 	 * case, after it will have reached LLOG_HDR_BITMAP_SIZE, llh_cat_idx
 	 * will become its upper limit */
 	int			 lgh_last_idx;
-	int			 lgh_cur_idx; /* used during llog_process */
-	__u64			 lgh_cur_offset; /* used during llog_process */
+	__u64			 lgh_cur_offset; /* used for test only */
 	struct llog_ctxt	*lgh_ctxt;
 	union {
 		struct plain_handle_data	 phd;

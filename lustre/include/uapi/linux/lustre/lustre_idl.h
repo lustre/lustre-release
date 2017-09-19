@@ -2887,9 +2887,13 @@ struct llog_log_hdr {
 						 llh->llh_hdr.lrh_len -	\
 						 sizeof(llh->llh_tail)))
 
-/** log cookies are used to reference a specific log file and a record therein */
+/** log cookies are used to reference a specific log file and a record therein,
+    and pass record offset from llog_process_thread to llog_write */
 struct llog_cookie {
-        struct llog_logid       lgc_lgl;
+	union {
+		struct llog_logid	lgc_lgl;
+		__u64			lgc_offset;
+	};
         __u32                   lgc_subsys;
         __u32                   lgc_index;
         __u32                   lgc_padding;
