@@ -4157,7 +4157,8 @@ all_output:
 			break;
 		default:
 			rc = -ENOTSUP;
-			break;
+			pass++;
+			goto out;
 		}
 		if (rc)
 			name = "<unknown>";
