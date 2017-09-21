@@ -1296,11 +1296,6 @@ kiblnd_connect_peer (kib_peer_ni_t *peer_ni)
                 goto failed2;
         }
 
-        LASSERT (cmid->device != NULL);
-	CDEBUG(D_NET, "%s: connection bound to %s:%pI4h:%s\n",
-               libcfs_nid2str(peer_ni->ibp_nid), dev->ibd_ifname,
-	       &dev->ibd_ifip, cmid->device->name);
-
 	return;
 
  failed2:
@@ -2997,8 +2992,19 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
                 } else {
                         rc = rdma_resolve_route(
                                 cmid, *kiblnd_tunables.kib_timeout * 1000);
-                        if (rc == 0)
-                                return 0;
+			if (rc == 0) {
+				kib_net_t *net = peer_ni->ibp_ni->ni_data;
+				kib_dev_t *dev = net->ibn_dev;
+
+				CDEBUG(D_NET, "%s: connection bound to "\
+				       "%s:%pI4h:%s\n",
+				       libcfs_nid2str(peer_ni->ibp_nid),
+				       dev->ibd_ifname,
+				       &dev->ibd_ifip, cmid->device->name);
+
+				return 0;
+			}
+
                         /* Can't initiate route resolution */
                         CERROR("Can't resolve route for %s: %d\n",
                                libcfs_nid2str(peer_ni->ibp_nid), rc);
