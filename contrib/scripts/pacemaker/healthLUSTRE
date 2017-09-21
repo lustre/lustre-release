@@ -123,6 +123,11 @@ END
 }
 
 lustre_start() {
+	modprobe lustre
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		return $OCF_ERR_INSTALLED
+	fi
 	lustre_monitor
 	if [ $? =  $OCF_SUCCESS ]; then
 		return $OCF_SUCCESS
@@ -153,12 +158,12 @@ lustre_check() {
 	active=0
 
 	# added head -1 due the LU-7486
-	l_out=`cat /proc/fs/lustre/health_check | head -1 |grep -w healthy 2>&1`; rc=$?
+	l_out=`lctl get_param -n health_check | head -1 |grep -w healthy 2>&1`; rc=$?
 
 	case $rc in
 	    0) active=`expr $active + 1`;;
 	    1) lustre_conditional_log warn "Lustre is not healthy: $l_out";;
-	    *) ocf_log err "Unexpected result for '/proc/fs/lustre/health_check' $rc: $l_out";;
+	    *) ocf_log err "Unexpected result for 'lctl get_param health_check' $rc: $l_out";;
 	esac
 	return $active
 }
@@ -178,13 +183,6 @@ lustre_update() {
 	fi
 	return 0
 }
-
-
-if [ ! -f /proc/fs/lustre/health_check ]; then
-	ocf_log warn "Attention Health_Check file doesn't exist. Lustre will be loaded"
-	modprobe lustre
-fi
-
 
 if [ ${OCF_RESKEY_CRM_meta_globally_unique} = "false" ]; then
 	: ${OCF_RESKEY_pidfile:="$HA_VARRUN/healthLUSTRE-${OCF_RESKEY_name}"}

@@ -187,16 +187,20 @@ END
 }
 
 ping_start() {
-    ping_monitor
-    if [ $? =  $OCF_SUCCESS ]; then
-	return $OCF_SUCCESS
-    fi
-    touch ${OCF_RESKEY_pidfile}
-    ping_update
+	modprobe lustre
+	rc=$?
+	if [ $rc -ne 0 ]; then
+		return $OCF_ERR_INSTALLED
+	fi
+	ping_monitor
+	if [ $? =  $OCF_SUCCESS ]; then
+		return $OCF_SUCCESS
+	fi
+	touch ${OCF_RESKEY_pidfile}
+	ping_update
 }
 
 ping_stop() {
-
 	rm -f ${OCF_RESKEY_pidfile}
 	attrd_updater -D -n $OCF_RESKEY_name -d $OCF_RESKEY_dampen $attrd_options
 	return $OCF_SUCCESS
