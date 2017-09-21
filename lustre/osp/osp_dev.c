@@ -603,6 +603,8 @@ static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 
 	rc = osp_disconnect(d);
 
+	osp_statfs_fini(d);
+
 	if (!d->opd_connect_mdt) {
 		/* stop sync thread */
 		osp_sync_fini(d);
@@ -743,11 +745,11 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 	if (unlikely(d->opd_imp_active == 0))
 		RETURN(-ENOTCONN);
 
-	if (d->opd_pre == NULL)
-		RETURN(0);
-
 	/* return recently updated data */
 	*sfs = d->opd_statfs;
+
+	if (d->opd_pre == NULL)
+		RETURN(0);
 
 	/*
 	 * layer above osp (usually lod) can use ffree to estimate
@@ -1194,10 +1196,15 @@ static int osp_init0(const struct lu_env *env, struct osp_device *osp,
 		if (rc < 0)
 			GOTO(out_precreat, rc);
 	} else {
+		osp->opd_got_disconnected = 1;
 		rc = osp_update_init(osp);
 		if (rc != 0)
 			GOTO(out_fid, rc);
 	}
+
+	rc = osp_init_statfs(osp);
+	if (rc)
+		GOTO(out_precreat, rc);
 
 	ns_register_cancel(obd->obd_namespace, osp_cancel_weight);
 
@@ -1622,11 +1629,9 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		d->opd_imp_connected = 1;
 		d->opd_imp_seen_connected = 1;
 		d->opd_obd->obd_inactive = 0;
+		wake_up(&d->opd_pre_waitq);
 		if (d->opd_connect_mdt)
 			break;
-
-		if (d->opd_pre != NULL)
-			wake_up(&d->opd_pre_waitq);
 
 		osp_sync_check_for_work(d);
 		CDEBUG(D_HA, "got connected\n");

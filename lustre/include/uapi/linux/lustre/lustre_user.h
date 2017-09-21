@@ -122,6 +122,7 @@ enum obd_statfs_state {
 	OS_STATE_NOPRECREATE    = 0x00000004, /**< no object precreation */
 	OS_STATE_ENOSPC		= 0x00000020, /**< not enough free space */
 	OS_STATE_ENOINO		= 0x00000040, /**< not enough inodes */
+	OS_STATE_SUM		= 0x00000100, /**< aggregated for all tagrets */
 };
 
 /** filesystem statistics/attributes for target device */
@@ -140,14 +141,14 @@ struct obd_statfs {
 	__u32		os_fprecreated;	/* objs available now to the caller */
 					/* used in QoS code to find preferred
 					 * OSTs */
-	__u32		os_spare2;	/* Unused padding fields.  Remember */
-	__u32		os_spare3;	/* to fix lustre_swab_obd_statfs() */
-	__u32		os_spare4;
-	__u32		os_spare5;
-	__u32		os_spare6;
-	__u32		os_spare7;
-	__u32		os_spare8;
-	__u32		os_spare9;
+	__u32           os_granted;	/* space granted for MDS */
+	__u32           os_spare3;	/* Unused padding fields.  Remember */
+	__u32           os_spare4;	/* to fix lustre_swab_obd_statfs() */
+	__u32           os_spare5;
+	__u32           os_spare6;
+	__u32           os_spare7;
+	__u32           os_spare8;
+	__u32           os_spare9;
 };
 
 /**

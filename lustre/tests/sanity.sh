@@ -10756,13 +10756,19 @@ test_133b() {
 		ls -l ${testdir}/${tfile} > /dev/null|| error "ls failed"
 		check_stats $SINGLEMDS "getattr" 1
 	fi
+	rm -rf $DIR/${tdir}
+
+	# when DNE is enabled, MDT uses STATFS RPC to ping other targets
+	# so the check below is not reliable
+	[ $MDSCOUNT -eq 1 ] || return 0
+
 	# Sleep to avoid a cached response.
 	#define OBD_STATFS_CACHE_SECONDS 1
 	sleep 2
 	$LFS df || error "lfs failed"
 	check_stats $SINGLEMDS "statfs" 1
 
-	rm -rf $DIR/${tdir}
+	return 0
 }
 run_test 133b "Verifying extra MDT stats =================================="
 

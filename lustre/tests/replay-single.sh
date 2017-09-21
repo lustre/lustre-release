@@ -1027,7 +1027,7 @@ test_44a() { # was test_44
 		do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000701"
 		# lctl below may fail, it is valid case
 		$LCTL --device $mdcdev recover
-		df $MOUNT
+		$LFS df $MOUNT
 	done
 	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
 	[ $at_max_saved -ne 0 ] && at_max_set $at_max_saved mds
@@ -3283,13 +3283,19 @@ test_88() { #bug 17485
 }
 run_test 88 "MDS should not assign same objid to different files "
 
+function calc_osc_kbytes_used() {
+	local kbtotal=$(calc_osc_kbytes kbytestotal)
+	local kbfree=$(calc_osc_kbytes kbytesfree)
+	echo $((kbtotal-kbfree))
+}
+
 test_89() {
 	cancel_lru_locks osc
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	rm -f $DIR/$tdir/$tfile
 	wait_mds_ost_sync || error "initial MDS-OST sync timed out"
 	wait_delete_completed || error "initial wait delete timed out"
-	local blocks1=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
+	local blocks1=$(calc_osc_kbytes_used)
 	local write_size=$(fs_log_size)
 
 	$SETSTRIPE -i 0 -c 1 $DIR/$tdir/$tfile
@@ -3311,7 +3317,7 @@ test_89() {
 
 	wait_mds_ost_sync || error "MDS-OST sync timed out"
 	wait_delete_completed || error "wait delete timed out"
-	local blocks2=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
+	local blocks2=$(calc_osc_kbytes_used)
 
 	[ $((blocks2 - blocks1)) -le $(fs_log_size)  ] ||
 		error $((blocks2 - blocks1)) blocks leaked

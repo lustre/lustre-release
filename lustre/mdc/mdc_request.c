@@ -1488,7 +1488,7 @@ static int mdc_statfs(const struct lu_env *env,
         struct ptlrpc_request *req;
         struct obd_statfs     *msfs;
         struct obd_import     *imp = NULL;
-        int                    rc;
+	int		       rc;
         ENTRY;
 
         /*
@@ -1502,10 +1502,21 @@ static int mdc_statfs(const struct lu_env *env,
         if (!imp)
                 RETURN(-ENODEV);
 
-        req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_STATFS,
-                                        LUSTRE_MDS_VERSION, MDS_STATFS);
-        if (req == NULL)
-                GOTO(output, rc = -ENOMEM);
+	req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_STATFS,
+					LUSTRE_MDS_VERSION, MDS_STATFS);
+	if (req == NULL)
+		GOTO(output, rc = -ENOMEM);
+
+	if ((flags & OBD_STATFS_SUM) &&
+	    (exp_connect_flags2(exp) & OBD_CONNECT2_SUM_STATFS)) {
+		/* request aggregated states */
+		struct mdt_body *body;
+
+		body = req_capsule_client_get(&req->rq_pill, &RMF_MDT_BODY);
+		if (body == NULL)
+			GOTO(out, rc = -EPROTO);
+		body->mbo_valid = OBD_MD_FLAGSTATFS;
+	}
 
         ptlrpc_request_set_replen(req);
 

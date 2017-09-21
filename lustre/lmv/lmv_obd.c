@@ -1335,6 +1335,32 @@ out:
 	RETURN(rc);
 }
 
+static int lmv_select_statfs_mdt(struct lmv_obd *lmv, __u32 flags)
+{
+	int i;
+
+	if (flags & OBD_STATFS_FOR_MDT0)
+		return 0;
+
+	if (lmv->lmv_statfs_start || lmv->desc.ld_tgt_count == 1)
+		return lmv->lmv_statfs_start;
+
+	/* choose initial MDT for this client */
+	for (i = 0;; i++) {
+		struct lnet_process_id lnet_id;
+		if (LNetGetId(i, &lnet_id) == -ENOENT)
+			break;
+
+		if (LNET_NETTYP(LNET_NIDNET(lnet_id.nid)) != LOLND) {
+			lmv->lmv_statfs_start =
+				lnet_id.nid % lmv->desc.ld_tgt_count;
+			break;
+		}
+	}
+
+	return lmv->lmv_statfs_start;
+}
+
 static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 		      struct obd_statfs *osfs, time64_t max_age, __u32 flags)
 {
@@ -1342,42 +1368,52 @@ static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
 	struct lmv_obd		*lmv = &obd->u.lmv;
 	struct obd_statfs	*temp;
 	int			 rc = 0;
-	__u32			 i;
+	__u32			 i, idx;
 	ENTRY;
 
         OBD_ALLOC(temp, sizeof(*temp));
         if (temp == NULL)
                 RETURN(-ENOMEM);
 
-        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
-		if (lmv->tgts[i] == NULL || lmv->tgts[i]->ltd_exp == NULL)
+	/* distribute statfs among MDTs */
+	idx = lmv_select_statfs_mdt(lmv, flags);
+
+	for (i = 0; i < lmv->desc.ld_tgt_count; i++, idx++) {
+		idx = idx % lmv->desc.ld_tgt_count;
+		if (lmv->tgts[idx] == NULL || lmv->tgts[idx]->ltd_exp == NULL)
 			continue;
 
-		rc = obd_statfs(env, lmv->tgts[i]->ltd_exp, temp,
+		rc = obd_statfs(env, lmv->tgts[idx]->ltd_exp, temp,
 				max_age, flags);
 		if (rc) {
 			CERROR("can't stat MDS #%d (%s), error %d\n", i,
-			       lmv->tgts[i]->ltd_exp->exp_obd->obd_name,
+			       lmv->tgts[idx]->ltd_exp->exp_obd->obd_name,
 			       rc);
 			GOTO(out_free_temp, rc);
 		}
 
+		if (temp->os_state & OS_STATE_SUM ||
+		    flags == OBD_STATFS_FOR_MDT0) {
+			/* reset to the last aggregated values
+			 * and don't sum with non-aggrated data */
+			/* If the statfs is from mount, it needs to retrieve
+			 * necessary information from MDT0. i.e. mount does
+			 * not need the merged osfs from all of MDT. Also
+			 * clients can be mounted as long as MDT0 is in
+			 * service */
+			*osfs = *temp;
+			break;
+		}
+
 		if (i == 0) {
 			*osfs = *temp;
-			/* If the statfs is from mount, it will needs
-			 * retrieve necessary information from MDT0.
-			 * i.e. mount does not need the merged osfs
-			 * from all of MDT.
-			 * And also clients can be mounted as long as
-			 * MDT0 is in service*/
-			if (flags & OBD_STATFS_FOR_MDT0)
-				GOTO(out_free_temp, rc);
-                } else {
-                        osfs->os_bavail += temp->os_bavail;
-                        osfs->os_blocks += temp->os_blocks;
-                        osfs->os_ffree += temp->os_ffree;
-                        osfs->os_files += temp->os_files;
-                }
+		} else {
+			osfs->os_bavail += temp->os_bavail;
+			osfs->os_blocks += temp->os_blocks;
+			osfs->os_ffree += temp->os_ffree;
+			osfs->os_files += temp->os_files;
+			osfs->os_granted += temp->os_granted;
+		}
         }
 
         EXIT;

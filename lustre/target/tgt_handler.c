@@ -991,6 +991,9 @@ int tgt_connect(struct tgt_session_info *tsi)
 	reply = req_capsule_server_get(tsi->tsi_pill, &RMF_CONNECT_DATA);
 	spin_lock(&tsi->tsi_exp->exp_lock);
 	*exp_connect_flags_ptr(tsi->tsi_exp) = reply->ocd_connect_flags;
+	if (reply->ocd_connect_flags & OBD_CONNECT_FLAGS2)
+		*exp_connect_flags2_ptr(tsi->tsi_exp) =
+			reply->ocd_connect_flags2;
 	tsi->tsi_exp->exp_connect_data.ocd_brw_size = reply->ocd_brw_size;
 	spin_unlock(&tsi->tsi_exp->exp_lock);
 

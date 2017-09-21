@@ -179,7 +179,9 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_MDS_GET_ROOT_NET	 0x11b
 #define OBD_FAIL_MDS_GET_ROOT_PACK	 0x11c
 #define OBD_FAIL_MDS_STATFS_PACK         0x11d
+#define OBD_FAIL_MDS_STATFS_SUM_PACK     0x11d
 #define OBD_FAIL_MDS_STATFS_NET          0x11e
+#define OBD_FAIL_MDS_STATFS_SUM_NET      0x11e
 #define OBD_FAIL_MDS_GETATTR_NAME_NET    0x11f
 #define OBD_FAIL_MDS_PIN_NET             0x120
 #define OBD_FAIL_MDS_UNPIN_NET           0x121

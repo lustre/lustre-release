@@ -68,7 +68,6 @@ struct osp_precreate {
 	/*
 	 * Precreation pool
 	 */
-	spinlock_t			 osp_pre_lock;
 
 	/* last fid to assign in creation */
 	struct lu_fid			 osp_pre_used_fid;
@@ -188,6 +187,7 @@ struct osp_device {
 	struct osp_precreate		*opd_pre;
 	/* dedicate precreate thread */
 	struct ptlrpc_thread		 opd_pre_thread;
+	spinlock_t			 opd_pre_lock;
 	/* thread waits for signals about pool going empty */
 	wait_queue_head_t		 opd_pre_waitq;
 
@@ -268,7 +268,6 @@ struct osp_device {
 	int				opd_reserved_mb_low;
 };
 
-#define opd_pre_lock			opd_pre->osp_pre_lock
 #define opd_pre_used_fid		opd_pre->osp_pre_used_fid
 #define opd_pre_last_created_fid	opd_pre->osp_pre_last_created_fid
 #define opd_pre_reserved		opd_pre->osp_pre_reserved
@@ -799,6 +798,9 @@ int osp_reset_last_used(const struct lu_env *env, struct osp_device *osp);
 int osp_write_last_oid_seq_files(struct lu_env *env, struct osp_device *osp,
 				 struct lu_fid *fid, int sync);
 int osp_init_pre_fid(struct osp_device *osp);
+int osp_init_statfs(struct osp_device *osp);
+void osp_fini_statfs(struct osp_device *osp);
+void osp_statfs_fini(struct osp_device *d);
 
 /* lproc_osp.c */
 void osp_tunables_init(struct osp_device *osp);

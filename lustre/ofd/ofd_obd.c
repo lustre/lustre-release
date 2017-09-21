@@ -827,8 +827,9 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 		struct tg_export_data *ted;
 
 		ted = &obd->obd_self_export->exp_target_data;
-		osfs->os_bavail -= min_t(u64, osfs->os_bavail,
-					 ted->ted_grant >> tgd->tgd_blockbits);
+		osfs->os_granted = min_t(u64, osfs->os_bavail,
+					  ted->ted_grant >> tgd->tgd_blockbits);
+		osfs->os_bavail -= osfs->os_granted;
 	}
 
 	tgt_grant_sanity_check(obd, __func__);
@@ -858,6 +859,7 @@ int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 		osfs->os_blocks <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
 		osfs->os_bfree  <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
 		osfs->os_bavail <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_granted <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
 		osfs->os_bsize    = 1 << COMPAT_BSIZE_SHIFT;
 	}
 

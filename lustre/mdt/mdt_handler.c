@@ -412,13 +412,16 @@ out:
 
 static int mdt_statfs(struct tgt_session_info *tsi)
 {
-	struct ptlrpc_request		*req = tgt_ses_req(tsi);
-	struct mdt_thread_info		*info = tsi2mdt_info(tsi);
-	struct mdt_device		*mdt = info->mti_mdt;
-	struct tg_grants_data		*tgd = &mdt->mdt_lut.lut_tgd;
-	struct ptlrpc_service_part	*svcpt;
-	struct obd_statfs		*osfs;
-	int				rc;
+	struct ptlrpc_request *req = tgt_ses_req(tsi);
+	struct mdt_thread_info *info = tsi2mdt_info(tsi);
+	struct mdt_device *mdt = info->mti_mdt;
+	struct tg_grants_data *tgd = &mdt->mdt_lut.lut_tgd;
+	struct md_device *next = mdt->mdt_child;
+	struct ptlrpc_service_part *svcpt;
+	struct obd_statfs *osfs;
+	struct mdt_body *reqbody = NULL;
+	struct mdt_statfs_cache *msf;
+	int rc;
 
 	ENTRY;
 
@@ -440,11 +443,34 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 	if (!osfs)
 		GOTO(out, rc = -EPROTO);
 
-	rc = tgt_statfs_internal(tsi->tsi_env, &mdt->mdt_lut, osfs,
-				 ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
-				 NULL);
-	if (unlikely(rc))
-		GOTO(out, rc);
+	if (mdt_is_sum_statfs_client(req->rq_export))
+		reqbody = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
+
+	if (reqbody && reqbody->mbo_valid & OBD_MD_FLAGSTATFS)
+		msf = &mdt->mdt_sum_osfs;
+	else
+		msf = &mdt->mdt_osfs;
+
+	if (msf->msf_age + OBD_STATFS_CACHE_SECONDS <= ktime_get_seconds()) {
+			/** statfs data is too old, get up-to-date one */
+			if (reqbody && reqbody->mbo_valid & OBD_MD_FLAGSTATFS)
+				rc = next->md_ops->mdo_statfs(info->mti_env,
+							      next, osfs);
+			else
+				rc = dt_statfs(info->mti_env, mdt->mdt_bottom,
+					       osfs);
+			if (rc)
+				GOTO(out, rc);
+			spin_lock(&mdt->mdt_lock);
+			msf->msf_osfs = *osfs;
+			msf->msf_age = ktime_get_seconds();
+			spin_unlock(&mdt->mdt_lock);
+	} else {
+			/** use cached statfs data */
+			spin_lock(&mdt->mdt_lock);
+			*osfs = msf->msf_osfs;
+			spin_unlock(&mdt->mdt_lock);
+	}
 
 	/* at least try to account for cached pages.  its still racy and
 	 * might be under-reporting if clients haven't announced their

@@ -196,6 +196,11 @@ enum {
 	NUM_DOM_LOCK_ON_OPEN_MODES
 };
 
+struct mdt_statfs_cache {
+	struct obd_statfs msf_osfs;
+	__u64 msf_age;
+};
+
 struct mdt_device {
 	/* super-class */
 	struct lu_device	   mdt_lu_dev;
@@ -249,6 +254,10 @@ struct mdt_device {
 
 	/* lock for osfs and md_root */
 	spinlock_t		   mdt_lock;
+
+	/* statfs optimization: we cache a bit  */
+	struct mdt_statfs_cache	   mdt_sum_osfs;
+	struct mdt_statfs_cache	   mdt_osfs;
 
         /* root squash */
 	struct root_squash_info    mdt_squash;
@@ -687,6 +696,12 @@ static inline bool mdt_lmm_is_flr(struct lov_mds_md *lmm)
 
 	return le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_COMP_V1 &&
 	       le16_to_cpu(lcm->lcm_mirror_count) > 0;
+}
+
+static inline bool mdt_is_sum_statfs_client(struct obd_export *exp)
+{
+	return exp_connect_flags(exp) & OBD_CONNECT_FLAGS2 &&
+	       exp_connect_flags2(exp) & OBD_CONNECT2_SUM_STATFS;
 }
 
 __u64 mdt_get_disposition(struct ldlm_reply *rep, __u64 op_flag);

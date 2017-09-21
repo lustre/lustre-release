@@ -93,7 +93,7 @@ static void osp_statfs_timer_cb(cfs_timer_cb_arg_t data)
 	struct osp_device *d = cfs_from_timer(d, data, opd_statfs_timer);
 
 	LASSERT(d);
-	if (d->opd_pre != NULL && osp_precreate_running(d))
+	if (osp_precreate_running(d))
 		wake_up(&d->opd_pre_waitq);
 }
 
@@ -137,7 +137,8 @@ static int osp_statfs_interpret(const struct lu_env *env,
 
 	d->opd_statfs = *msfs;
 
-	osp_pre_update_status(d, rc);
+	if (d->opd_pre)
+		osp_pre_update_status(d, rc);
 
 	/* schedule next update */
 	maxage_ns = d->opd_statfs_maxage * NSEC_PER_SEC;
@@ -187,17 +188,21 @@ static int osp_statfs_update(const struct lu_env *env, struct osp_device *d)
 	imp = d->opd_obd->u.cli.cl_import;
 	LASSERT(imp);
 
-	req = ptlrpc_request_alloc(imp, &RQF_OST_STATFS);
+	req = ptlrpc_request_alloc(imp,
+			   d->opd_pre ? &RQF_OST_STATFS : &RQF_MDS_STATFS);
 	if (req == NULL)
 		RETURN(-ENOMEM);
 
-	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_STATFS);
+	rc = ptlrpc_request_pack(req,
+			 d->opd_pre ? LUSTRE_OST_VERSION : LUSTRE_MDS_VERSION,
+			 d->opd_pre ? OST_STATFS : MDS_STATFS);
 	if (rc) {
 		ptlrpc_request_free(req);
 		RETURN(rc);
 	}
 	ptlrpc_request_set_replen(req);
-	req->rq_request_portal = OST_CREATE_PORTAL;
+	if (d->opd_pre)
+		req->rq_request_portal = OST_CREATE_PORTAL;
 	ptlrpc_at_set_req_timeout(req);
 
 	req->rq_interpret_reply = (ptlrpc_interpterer_t)osp_statfs_interpret;
@@ -323,6 +328,9 @@ static inline int osp_precreate_near_empty(const struct lu_env *env,
 					   struct osp_device *d)
 {
 	int rc;
+
+	if (d->opd_pre == NULL)
+		return 0;
 
 	/* XXX: do we really need locking here? */
 	spin_lock(&d->opd_pre_lock);
@@ -1193,7 +1201,7 @@ static int osp_precreate_thread(void *_arg)
 		 * need to be connected to OST
 		 */
 		while (osp_precreate_running(d)) {
-			if (d->opd_pre_recovering &&
+			if ((d->opd_pre == NULL || d->opd_pre_recovering) &&
 			    d->opd_imp_connected &&
 			    !d->opd_got_disconnected)
 				break;
@@ -1213,19 +1221,21 @@ static int osp_precreate_thread(void *_arg)
 		if (!osp_precreate_running(d))
 			break;
 
-		LASSERT(d->opd_obd->u.cli.cl_seq != NULL);
-		/* Sigh, fid client is not ready yet */
-		if (d->opd_obd->u.cli.cl_seq->lcs_exp == NULL)
-			continue;
+		if (d->opd_pre) {
+			LASSERT(d->opd_obd->u.cli.cl_seq != NULL);
+			/* Sigh, fid client is not ready yet */
+			if (d->opd_obd->u.cli.cl_seq->lcs_exp == NULL)
+				continue;
 
-		/* Init fid for osp_precreate if necessary */
-		rc = osp_init_pre_fid(d);
-		if (rc != 0) {
-			class_export_put(d->opd_exp);
-			d->opd_obd->u.cli.cl_seq->lcs_exp = NULL;
-			CERROR("%s: init pre fid error: rc = %d\n",
-			       d->opd_obd->obd_name, rc);
-			continue;
+			/* Init fid for osp_precreate if necessary */
+			rc = osp_init_pre_fid(d);
+			if (rc != 0) {
+				class_export_put(d->opd_exp);
+				d->opd_obd->u.cli.cl_seq->lcs_exp = NULL;
+				CERROR("%s: init pre fid error: rc = %d\n",
+						d->opd_obd->obd_name, rc);
+				continue;
+			}
 		}
 
 		if (osp_statfs_update(&env, d)) {
@@ -1234,14 +1244,18 @@ static int osp_precreate_thread(void *_arg)
 			continue;
 		}
 
-		/*
-		 * Clean up orphans or recreate missing objects.
-		 */
-		rc = osp_precreate_cleanup_orphans(&env, d);
-		if (rc != 0) {
-			schedule_timeout_interruptible(cfs_time_seconds(1));
-			continue;
+		if (d->opd_pre) {
+			/*
+			 * Clean up orphans or recreate missing objects.
+			 */
+			rc = osp_precreate_cleanup_orphans(&env, d);
+			if (rc != 0) {
+				schedule_timeout_interruptible(
+					msecs_to_jiffies(MSEC_PER_SEC));
+				continue;
+			}
 		}
+
 		/*
 		 * connected, can handle precreates now
 		 */
@@ -1263,6 +1277,9 @@ static int osp_precreate_thread(void *_arg)
 			if (osp_statfs_need_update(d))
 				if (osp_statfs_update(&env, d))
 					break;
+
+			if (d->opd_pre == NULL)
+				continue;
 
 			/* To avoid handling different seq in precreate/orphan
 			 * cleanup, it will hold precreate until current seq is
@@ -1675,9 +1692,6 @@ out:
  */
 int osp_init_precreate(struct osp_device *d)
 {
-	struct l_wait_info	 lwi = { 0 };
-	struct task_struct		*task;
-
 	ENTRY;
 
 	OBD_ALLOC_PTR(d->opd_pre);
@@ -1685,6 +1699,7 @@ int osp_init_precreate(struct osp_device *d)
 		RETURN(-ENOMEM);
 
 	/* initially precreation isn't ready */
+	init_waitqueue_head(&d->opd_pre_user_waitq);
 	d->opd_pre_status = -EAGAIN;
 	fid_zero(&d->opd_pre_used_fid);
 	d->opd_pre_used_fid.f_oid = 1;
@@ -1699,9 +1714,40 @@ int osp_init_precreate(struct osp_device *d)
 	d->opd_reserved_mb_high = 0;
 	d->opd_reserved_mb_low = 0;
 
+	RETURN(0);
+}
+
+/**
+ * Finish precreate functionality of OSP
+ *
+ *
+ * Asks all the activity (the thread, update timer) to stop, then
+ * wait till that is done.
+ *
+ * \param[in] d		OSP device
+ */
+void osp_precreate_fini(struct osp_device *d)
+{
+	ENTRY;
+
+	if (d->opd_pre == NULL)
+		RETURN_EXIT;
+
+	OBD_FREE_PTR(d->opd_pre);
+	d->opd_pre = NULL;
+
+	EXIT;
+}
+
+int osp_init_statfs(struct osp_device *d)
+{
+	struct l_wait_info	 lwi = { 0 };
+	struct task_struct		*task;
+
+	ENTRY;
+
 	spin_lock_init(&d->opd_pre_lock);
 	init_waitqueue_head(&d->opd_pre_waitq);
-	init_waitqueue_head(&d->opd_pre_user_waitq);
 	thread_set_flags(&d->opd_pre_thread, SVC_INIT);
 	init_waitqueue_head(&d->opd_pre_thread.t_ctl_waitq);
 
@@ -1737,24 +1783,12 @@ int osp_init_precreate(struct osp_device *d)
 	RETURN(0);
 }
 
-/**
- * Finish precreate functionality of OSP
- *
- *
- * Asks all the activity (the thread, update timer) to stop, then
- * wait till that is done.
- *
- * \param[in] d		OSP device
- */
-void osp_precreate_fini(struct osp_device *d)
+void osp_statfs_fini(struct osp_device *d)
 {
 	struct ptlrpc_thread *thread = &d->opd_pre_thread;
 	ENTRY;
 
 	del_timer(&d->opd_statfs_timer);
-
-	if (d->opd_pre == NULL)
-		RETURN_EXIT;
 
 	if (!thread_is_init(thread) && !thread_is_stopped(thread)) {
 		thread->t_flags = SVC_STOPPING;
@@ -1762,9 +1796,5 @@ void osp_precreate_fini(struct osp_device *d)
 		wait_event(thread->t_ctl_waitq, thread_is_stopped(thread));
 	}
 
-	OBD_FREE_PTR(d->opd_pre);
-	d->opd_pre = NULL;
-
 	EXIT;
 }
-

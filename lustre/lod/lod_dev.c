@@ -1263,6 +1263,30 @@ static int lod_root_get(const struct lu_env *env,
 	return dt_root_get(env, dt2lod_dev(dev)->lod_child, f);
 }
 
+static void lod_statfs_sum(struct obd_statfs *sfs,
+			     struct obd_statfs *ost_sfs, int *bs)
+{
+	while (ost_sfs->os_bsize < *bs) {
+		*bs >>= 1;
+		sfs->os_bsize >>= 1;
+		sfs->os_bavail <<= 1;
+		sfs->os_blocks <<= 1;
+		sfs->os_bfree <<= 1;
+		sfs->os_granted <<= 1;
+	}
+	while (ost_sfs->os_bsize > *bs) {
+		ost_sfs->os_bsize >>= 1;
+		ost_sfs->os_bavail <<= 1;
+		ost_sfs->os_blocks <<= 1;
+		ost_sfs->os_bfree <<= 1;
+		ost_sfs->os_granted <<= 1;
+	}
+	sfs->os_bavail += ost_sfs->os_bavail;
+	sfs->os_blocks += ost_sfs->os_blocks;
+	sfs->os_bfree += ost_sfs->os_bfree;
+	sfs->os_granted += ost_sfs->os_granted;
+}
+
 /**
  * Implementation of dt_device_operations::dt_statfs() for LOD
  *
@@ -1271,7 +1295,73 @@ static int lod_root_get(const struct lu_env *env,
 static int lod_statfs(const struct lu_env *env,
 		      struct dt_device *dev, struct obd_statfs *sfs)
 {
-	return dt_statfs(env, dt2lod_dev(dev)->lod_child, sfs);
+	struct lod_device   *lod = dt2lod_dev(dev);
+	struct lod_ost_desc *ost;
+	struct lod_mdt_desc *mdt;
+	struct obd_statfs    ost_sfs;
+	int i, rc, bs;
+	bool mdtonly;
+
+	rc = dt_statfs(env, dt2lod_dev(dev)->lod_child, sfs);
+	if (rc)
+		GOTO(out, rc);
+
+	bs = sfs->os_bsize;
+
+	sfs->os_bavail = 0;
+	sfs->os_blocks = 0;
+	sfs->os_bfree = 0;
+	sfs->os_granted = 0;
+
+	lod_getref(&lod->lod_mdt_descs);
+	lod_foreach_mdt(lod, i) {
+		mdt = MDT_TGT(lod, i);
+		LASSERT(mdt && mdt->ltd_mdt);
+		rc = dt_statfs(env, mdt->ltd_mdt, &ost_sfs);
+		/* ignore errors */
+		if (rc)
+			continue;
+		sfs->os_files += ost_sfs.os_files;
+		sfs->os_ffree += ost_sfs.os_ffree;
+		lod_statfs_sum(sfs, &ost_sfs, &bs);
+	}
+	lod_putref(lod, &lod->lod_mdt_descs);
+
+	/* at some point we can check whether DoM is enabled and
+	 * decide how to account MDT space. for simplicity let's
+	 * just fallback to pre-DoM policy if any OST is alive */
+	mdtonly = true;
+
+	lod_getref(&lod->lod_ost_descs);
+	lod_foreach_ost(lod, i) {
+		ost = OST_TGT(lod, i);
+		LASSERT(ost && ost->ltd_ost);
+		rc = dt_statfs(env, ost->ltd_ost, &ost_sfs);
+		/* ignore errors */
+		if (rc || ost_sfs.os_bsize == 0)
+			continue;
+		if (mdtonly) {
+			/* if only MDTs and DoM report MDT space,
+			 * otherwise only OST space */
+			sfs->os_bavail = 0;
+			sfs->os_blocks = 0;
+			sfs->os_bfree = 0;
+			sfs->os_granted = 0;
+			mdtonly = false;
+		}
+		ost_sfs.os_bavail += ost_sfs.os_granted;
+		lod_statfs_sum(sfs, &ost_sfs, &bs);
+		LASSERTF(bs == ost_sfs.os_bsize, "%d != %d\n",
+			(int)sfs->os_bsize, (int)ost_sfs.os_bsize);
+	}
+	lod_putref(lod, &lod->lod_ost_descs);
+	sfs->os_state |= OS_STATE_SUM;
+
+	/* a single successful statfs should be enough */
+	rc = 0;
+
+out:
+	RETURN(rc);
 }
 
 /**

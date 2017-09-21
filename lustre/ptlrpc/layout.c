@@ -1363,7 +1363,7 @@ struct req_format RQF_MDS_GET_ROOT =
 EXPORT_SYMBOL(RQF_MDS_GET_ROOT);
 
 struct req_format RQF_MDS_STATFS =
-        DEFINE_REQ_FMT0("MDS_STATFS", empty, obd_statfs_server);
+	DEFINE_REQ_FMT0("MDS_STATFS", mdt_body_only, obd_statfs_server);
 EXPORT_SYMBOL(RQF_MDS_STATFS);
 
 struct req_format RQF_MDS_SYNC =

@@ -917,6 +917,9 @@ static void osp_sync_process_record(const struct lu_env *env,
 		/* cancel any generation record */
 		rc = llog_cat_cancel_records(env, cathandle, 1, &cookie);
 
+		/* flush all pending records ASAP */
+		osp_sync_force(env, d);
+
 		RETURN_EXIT;
 	}
 

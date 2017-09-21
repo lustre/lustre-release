@@ -1877,6 +1877,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 				      struct dt_object_format *dof,
 				      struct thandle *th)
 {
+	struct lod_thread_info  *info = lod_env_info(env);
 	struct lod_device	*lod = lu2lod_dev(dt->do_lu.lo_dev);
 	struct lod_tgt_descs	*ltd = &lod->lod_mdt_descs;
 	struct lod_object	*lo = lod_dt_obj(dt);
@@ -1969,7 +1970,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 				continue;
 
 			tgt_dt = tgt->ltd_tgt;
-			rc = dt_statfs(env, tgt_dt, NULL);
+			rc = dt_statfs(env, tgt_dt, &info->lti_osfs);
 			if (rc) {
 				/* this OSP doesn't feel well */
 				rc = 0;
