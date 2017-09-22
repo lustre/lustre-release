@@ -117,7 +117,11 @@ static void mdc_pack_name(struct ptlrpc_request *req,
 
 	cpy_len = strlcpy(buf, name, buf_size);
 
-	LASSERT(cpy_len == name_len && lu_name_is_valid_2(buf, cpy_len));
+	LASSERT(lu_name_is_valid_2(buf, cpy_len));
+	if (cpy_len != name_len)
+		CDEBUG(D_DENTRY, "%s: %s len %zd != %zd, concurrent rename?\n",
+		       req->rq_export->exp_obd->obd_name, buf, name_len,
+		       cpy_len);
 }
 
 void mdc_file_secctx_pack(struct ptlrpc_request *req, const char *secctx_name,
