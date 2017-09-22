@@ -401,7 +401,7 @@ out_xattr:
 	}
 out:
         ptlrpc_req_finished(req);
-        return rc;
+	RETURN(rc);
 }
 
 static int ll_xattr_get_common(const struct xattr_handler *handler,
@@ -412,6 +412,8 @@ static int ll_xattr_get_common(const struct xattr_handler *handler,
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	char *fullname;
 	int rc;
+
+	ENTRY;
 
 	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_GETXATTR, 1);
 
@@ -455,7 +457,7 @@ static int ll_xattr_get_common(const struct xattr_handler *handler,
 	rc = ll_xattr_list(inode, fullname, handler->flags, buffer, size,
 			   OBD_MD_FLXATTR);
 	kfree(fullname);
-	return rc;
+	RETURN(rc);
 }
 
 static ssize_t ll_getxattr_lov(struct inode *inode, void *buf, size_t buf_size)
@@ -528,7 +530,7 @@ out_req:
 		if (req)
 			ptlrpc_req_finished(req);
 
-		return rc;
+		RETURN(rc);
 	} else {
 		RETURN(-ENODATA);
 	}

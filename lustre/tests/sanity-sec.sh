@@ -1554,7 +1554,7 @@ nodemap_acl_test() {
 	return 1
 }
 
-test_23() {
+test_23a() {
 	nodemap_version_check || return 0
 	nodemap_test_setup
 
@@ -1606,7 +1606,57 @@ test_23() {
 
 	nodemap_test_cleanup
 }
-run_test 23 "test mapped ACLs"
+run_test 23a "test mapped regular ACLs"
+
+test_23b() { #LU-9929
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	[ $(lustre_version_code mgs) -lt $(version_code 2.10.53) ] &&
+		skip "Need MGS >= 2.10.53" && return
+
+	nodemap_test_setup
+	trap nodemap_test_cleanup EXIT
+
+	local testdir=$DIR/$tdir
+	local fs_id=$((IDBASE+10))
+	local unmapped_id
+	local mapped_id
+	local fs_user
+
+	do_facet mgs $LCTL nodemap_modify --name c0 --property admin --value 1
+	wait_nm_sync c0 admin_nodemap
+
+	# Add idmap $ID0:$fs_id (500:60010)
+	do_facet mgs $LCTL nodemap_add_idmap --name c0 --idtype gid \
+		--idmap $ID0:$fs_id ||
+		error "add idmap $ID0:$fs_id to nodemap c0 failed"
+
+	# set/getfacl default acl on client0 (unmapped gid=500)
+	rm -rf $testdir
+	mkdir -p $testdir
+	# Here, USER0=$(getent passwd | grep :$ID0:$ID0: | cut -d: -f1)
+	setfacl -R -d -m group:$USER0:rwx $testdir ||
+		error "setfacl $testdir on ${clients_arr[0]} failed"
+	unmapped_id=$(getfacl $testdir | grep -E "default:group:.*:rwx" |
+			awk -F: '{print $3}')
+	[ "$unmapped_id" = "$USER0" ] ||
+		error "gid=$ID0 was not unmapped correctly on ${clients_arr[0]}"
+
+	# getfacl default acl on MGS (mapped gid=60010)
+	zconf_mount $mgs_HOST $MOUNT
+	do_rpc_nodes $mgs_HOST is_mounted $MOUNT ||
+		error "mount lustre on MGS failed"
+	mapped_id=$(do_node $mgs_HOST getfacl $testdir |
+			grep -E "default:group:.*:rwx" | awk -F: '{print $3}')
+	fs_user=$(do_facet mgs getent passwd |
+			grep :$fs_id:$fs_id: | cut -d: -f1)
+	[ $mapped_id -eq $fs_id -o "$mapped_id" = "$fs_user" ] ||
+		error "Should return gid=$fs_id or $fs_user on MGS"
+
+	rm -rf $testdir
+	do_facet mgs umount $MOUNT
+	nodemap_test_cleanup
+}
+run_test 23b "test mapped default ACLs"
 
 test_24() {
 	nodemap_test_setup

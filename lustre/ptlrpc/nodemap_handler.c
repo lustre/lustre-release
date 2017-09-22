@@ -701,17 +701,19 @@ ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 	posix_acl_xattr_entry	*end;
 	int			 count;
 
+	ENTRY;
+
 	if (!nodemap_active)
-		return size;
+		RETURN(size);
 
 	if (unlikely(nodemap == NULL))
-		return size;
+		RETURN(size);
 
 	count = posix_acl_xattr_count(size);
 	if (count < 0)
-		return -EINVAL;
+		RETURN(-EINVAL);
 	if (count == 0)
-		return 0;
+		RETURN(0);
 
 	for (end = entry + count; entry != end; entry++) {
 		__u16 tag = le16_to_cpu(entry->e_tag);
@@ -741,7 +743,7 @@ ssize_t nodemap_map_acl(struct lu_nodemap *nodemap, void *buf, size_t size,
 		new_entry++;
 	}
 
-	return (void *)new_entry - (void *)header;
+	RETURN((void *)new_entry - (void *)header);
 }
 EXPORT_SYMBOL(nodemap_map_acl);
 
