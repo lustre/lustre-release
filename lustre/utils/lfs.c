@@ -4073,19 +4073,83 @@ out:
 	return rc ? : rc1;
 }
 
+static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
+			   int verbose, int quiet, bool human_readable)
+{
+	int rc1 = 0, rc2 = 0, rc3 = 0;
+	char *obd_type = (char *)qctl->obd_type;
+	char *obd_uuid = (char *)qctl->obd_uuid.uuid;
+	__u64 total_ialloc = 0, total_balloc = 0;
+	int inacc;
+
+	rc1 = llapi_quotactl(mnt, qctl);
+	if (rc1 < 0) {
+		switch (rc1) {
+		case -ESRCH:
+			fprintf(stderr, "%s quotas are not enabled.\n",
+				qtype_name(qctl->qc_type));
+			goto out;
+		case -EPERM:
+			fprintf(stderr, "Permission denied.\n");
+		case -ENODEV:
+		case -ENOENT:
+			/* We already got error message. */
+			goto out;
+		default:
+			fprintf(stderr, "Unexpected quotactl error: %s\n",
+				strerror(-rc1));
+		}
+	}
+
+	if (qctl->qc_cmd == LUSTRE_Q_GETQUOTA && !quiet)
+		print_quota_title(name, qctl, human_readable);
+
+	if (rc1 && *obd_type)
+		fprintf(stderr, "%s %s ", obd_type, obd_uuid);
+
+	if (qctl->qc_valid != QC_GENERAL)
+		mnt = "";
+
+	inacc = (qctl->qc_cmd == LUSTRE_Q_GETQUOTA) &&
+		((qctl->qc_dqblk.dqb_valid & (QIF_LIMITS|QIF_USAGE)) !=
+		 (QIF_LIMITS|QIF_USAGE));
+
+	print_quota(mnt, qctl, QC_GENERAL, rc1, human_readable);
+
+	if (qctl->qc_valid == QC_GENERAL && qctl->qc_cmd != LUSTRE_Q_GETINFO &&
+	    verbose) {
+		char strbuf[STRBUF_LEN];
+
+		rc2 = print_obd_quota(mnt, qctl, 1, human_readable,
+				      &total_ialloc);
+		rc3 = print_obd_quota(mnt, qctl, 0, human_readable,
+				      &total_balloc);
+		kbytes2str(total_balloc, strbuf, sizeof(strbuf),
+			   human_readable);
+		printf("Total allocated inode limit: %ju, total "
+		       "allocated block limit: %s\n", (uintmax_t)total_ialloc,
+		       strbuf);
+	}
+
+	if (rc1 || rc2 || rc3 || inacc)
+		printf("Some errors happened when getting quota info. "
+		       "Some devices may be not working or deactivated. "
+		       "The data in \"[]\" is inaccurate.\n");
+out:
+	return rc1;
+
+}
+
 static int lfs_quota(int argc, char **argv)
 {
 	int c;
 	char *mnt, *name = NULL;
 	struct if_quotactl qctl = { .qc_cmd = LUSTRE_Q_GETQUOTA,
 				    .qc_type = ALLQUOTA };
-	char *obd_type = (char *)qctl.obd_type;
 	char *obd_uuid = (char *)qctl.obd_uuid.uuid;
-	int rc = 0, rc1 = 0, rc2 = 0, rc3 = 0,
-	    verbose = 0, pass = 0, quiet = 0, inacc;
+	int rc = 0, rc1 = 0, verbose = 0, quiet = 0;
 	char *endptr;
 	__u32 valid = QC_GENERAL, idx = 0;
-	__u64 total_ialloc = 0, total_balloc = 0;
 	bool human_readable = false;
 	int qtype;
 
@@ -4140,29 +4204,28 @@ quota_type:
         /* current uid/gid info for "lfs quota /path/to/lustre/mount" */
 	if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA && qctl.qc_type == ALLQUOTA &&
 	    optind == argc - 1) {
-all_output:
-		memset(&qctl, 0, sizeof(qctl)); /* spoiled by print_*_quota */
+
 		qctl.qc_cmd = LUSTRE_Q_GETQUOTA;
 		qctl.qc_valid = valid;
 		qctl.qc_idx = idx;
-		qctl.qc_type = pass;
-		switch (qctl.qc_type) {
-		case USRQUOTA:
-			qctl.qc_id = geteuid();
-			rc = uid2name(&name, qctl.qc_id);
-			break;
-		case GRPQUOTA:
-			qctl.qc_id = getegid();
-			rc = gid2name(&name, qctl.qc_id);
-			break;
-		default:
-			rc = -ENOTSUP;
-			pass++;
-			goto out;
+
+		for (qtype = USRQUOTA; qtype <= GRPQUOTA; qtype++) {
+			qctl.qc_type = qtype;
+			if (qtype == USRQUOTA) {
+				qctl.qc_id = geteuid();
+				rc = uid2name(&name, qctl.qc_id);
+			} else {
+				qctl.qc_id = getegid();
+				rc = gid2name(&name, qctl.qc_id);
+			}
+			if (rc)
+				name = "<unknown>";
+			mnt = argv[optind];
+			rc1 = get_print_quota(mnt, name, &qctl, verbose, quiet,
+					      human_readable);
+			if (rc1 && !rc)
+				rc = rc1;
 		}
-		if (rc)
-			name = "<unknown>";
-		pass++;
 	/* lfs quota -u username /path/to/lustre/mount */
 	} else if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) {
 		/* options should be followed by u/g-name and mntpoint */
@@ -4194,71 +4257,15 @@ all_output:
 				return CMD_HELP;
 			}
 		}
+		mnt = argv[optind];
+		rc = get_print_quota(mnt, name, &qctl, verbose, quiet,
+				     human_readable);
 	} else if (optind + 1 != argc || qctl.qc_type == ALLQUOTA) {
 		fprintf(stderr, "error: missing quota info argument(s)\n");
 		return CMD_HELP;
 	}
 
-	mnt = argv[optind];
-	rc1 = llapi_quotactl(mnt, &qctl);
-	if (rc1 < 0) {
-		switch (rc1) {
-		case -ESRCH:
-			fprintf(stderr, "%s quotas are not enabled.\n",
-				qtype_name(qctl.qc_type));
-			goto out;
-		case -EPERM:
-			fprintf(stderr, "Permission denied.\n");
-		case -ENODEV:
-		case -ENOENT:
-			/* We already got error message. */
-			goto out;
-		default:
-			fprintf(stderr, "Unexpected quotactl error: %s\n",
-				strerror(-rc1));
-		}
-	}
-
-	if (qctl.qc_cmd == LUSTRE_Q_GETQUOTA && !quiet)
-		print_quota_title(name, &qctl, human_readable);
-
-        if (rc1 && *obd_type)
-                fprintf(stderr, "%s %s ", obd_type, obd_uuid);
-
-        if (qctl.qc_valid != QC_GENERAL)
-                mnt = "";
-
-	inacc = (qctl.qc_cmd == LUSTRE_Q_GETQUOTA) &&
-		((qctl.qc_dqblk.dqb_valid & (QIF_LIMITS|QIF_USAGE)) !=
-		 (QIF_LIMITS|QIF_USAGE));
-
-	print_quota(mnt, &qctl, QC_GENERAL, rc1, human_readable);
-
-	if (qctl.qc_valid == QC_GENERAL && qctl.qc_cmd != LUSTRE_Q_GETINFO &&
-	    verbose) {
-		char strbuf[STRBUF_LEN];
-
-		rc2 = print_obd_quota(mnt, &qctl, 1, human_readable,
-				      &total_ialloc);
-		rc3 = print_obd_quota(mnt, &qctl, 0, human_readable,
-				      &total_balloc);
-		kbytes2str(total_balloc, strbuf, sizeof(strbuf),
-			   human_readable);
-		printf("Total allocated inode limit: %ju, total "
-		       "allocated block limit: %s\n", (uintmax_t)total_ialloc,
-		       strbuf);
-	}
-
-	if (rc1 || rc2 || rc3 || inacc)
-		printf("Some errors happened when getting quota info. "
-		       "Some devices may be not working or deactivated. "
-		       "The data in \"[]\" is inaccurate.\n");
-
-out:
-	if (pass > 0 && pass < LL_MAXQUOTAS)
-		goto all_output;
-
-	return rc1;
+	return rc;
 }
 #endif /* HAVE_SYS_QUOTA_H! */
 
