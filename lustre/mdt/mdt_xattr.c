@@ -117,6 +117,36 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         RETURN(size);
 }
 
+static int mdt_nodemap_map_acl(struct mdt_thread_info *info, void *buf,
+			       size_t size, const char *name,
+			       enum nodemap_tree_type tree_type)
+{
+	struct lu_nodemap      *nodemap;
+	struct obd_export      *exp = info->mti_exp;
+	int			rc = size;
+
+	ENTRY;
+
+	if (strcmp(name, XATTR_NAME_ACL_ACCESS) == 0 ||
+	    strcmp(name, XATTR_NAME_ACL_DEFAULT) == 0) {
+		if (size > info->mti_mdt->mdt_max_ea_size ||
+		     (!exp_connect_large_acl(exp) &&
+		      size > LUSTRE_POSIX_ACL_MAX_SIZE_OLD))
+			GOTO(out, rc = -ERANGE);
+
+		nodemap = nodemap_get_from_exp(exp);
+		if (IS_ERR(nodemap))
+			GOTO(out, rc = PTR_ERR(nodemap));
+
+		rc = nodemap_map_acl(nodemap, buf, size, tree_type);
+		nodemap_putref(nodemap);
+		if (rc < 0)
+			GOTO(out, rc);
+	}
+out:
+	RETURN(rc);
+}
+
 static int mdt_getxattr_all(struct mdt_thread_info *info,
 			    struct mdt_body *reqbody, struct mdt_body *repbody,
 			    struct lu_buf *buf, struct md_object *next)
@@ -155,7 +185,10 @@ static int mdt_getxattr_all(struct mdt_thread_info *info,
 		rc = mo_xattr_get(env, next, buf, b);
 		if (rc < 0)
 			GOTO(out_shrink, rc);
-
+		rc = mdt_nodemap_map_acl(info, buf->lb_buf, rc, b,
+					 NODEMAP_FS_TO_CLIENT);
+		if (rc < 0)
+			GOTO(out_shrink, rc);
 		sizes[eavallens] = rc;
 		eavallens++;
 		eavallen += rc;
@@ -223,9 +256,11 @@ int mdt_getxattr(struct mdt_thread_info *info)
 	valid = info->mti_body->mbo_valid & (OBD_MD_FLXATTR | OBD_MD_FLXATTRLS);
 
 	if (valid == OBD_MD_FLXATTR) {
-		char *xattr_name = req_capsule_client_get(info->mti_pill,
-							  &RMF_NAME);
+		const char *xattr_name = req_capsule_client_get(info->mti_pill,
+								&RMF_NAME);
 		rc = mo_xattr_get(info->mti_env, next, buf, xattr_name);
+		rc = mdt_nodemap_map_acl(info, buf->lb_buf, rc, xattr_name,
+					 NODEMAP_FS_TO_CLIENT);
 	} else if (valid == OBD_MD_FLXATTRLS) {
 		CDEBUG(D_INODE, "listxattr\n");
 
@@ -261,7 +296,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	struct lu_attr		*attr = &info->mti_attr.ma_attr;
 	struct mdt_object	*obj;
 	struct md_object	*child;
-	struct obd_export	*exp = info->mti_exp;
 	__u64			 valid = attr->la_valid;
 	const char		*xattr_name = rr->rr_name.ln_name;
 	int			 xattr_len = rr->rr_eadatalen;
@@ -305,23 +339,10 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 	} else if ((valid & OBD_MD_FLXATTR) &&
 		   (strcmp(xattr_name, XATTR_NAME_ACL_ACCESS) == 0 ||
 		    strcmp(xattr_name, XATTR_NAME_ACL_DEFAULT) == 0)) {
-		struct lu_nodemap *nodemap;
-
-		if ((xattr_len > info->mti_mdt->mdt_max_ea_size) ||
-		     (!exp_connect_large_acl(exp) &&
-		      xattr_len > LUSTRE_POSIX_ACL_MAX_SIZE_OLD))
-			GOTO(out, rc = -ERANGE);
-
-		nodemap = nodemap_get_from_exp(exp);
-		if (IS_ERR(nodemap))
-			GOTO(out, rc = PTR_ERR(nodemap));
-
-		rc = nodemap_map_acl(nodemap, rr->rr_eadata, xattr_len,
-				     NODEMAP_CLIENT_TO_FS);
-		nodemap_putref(nodemap);
+		rc = mdt_nodemap_map_acl(info, rr->rr_eadata, xattr_len,
+					 xattr_name, NODEMAP_CLIENT_TO_FS);
 		if (rc < 0)
 			GOTO(out, rc);
-
 		/* ACLs were mapped out, return an error so the user knows */
 		if (rc != xattr_len)
 			GOTO(out, rc = -EPERM);

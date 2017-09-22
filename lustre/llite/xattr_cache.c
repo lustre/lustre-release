@@ -483,7 +483,7 @@ err_req:
 		rc = -EAGAIN;
 
 	ptlrpc_req_finished(req);
-	return rc;
+	RETURN(rc);
 }
 
 /**
@@ -548,6 +548,6 @@ int ll_xattr_cache_get(struct inode *inode,
 out:
 	up_read(&lli->lli_xattrs_list_rwsem);
 
-	return rc;
+	RETURN(rc);
 }
 
