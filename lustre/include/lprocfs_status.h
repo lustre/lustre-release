@@ -614,6 +614,8 @@ extern int lprocfs_str_to_s64(const char __user *buffer, unsigned long count,
 extern int lprocfs_str_with_units_to_s64(const char __user *buffer,
 					 unsigned long count, __s64 *val,
 					 char defunit);
+
+char *lprocfs_strnstr(const char *s1, const char *s2, size_t len);
 char *lprocfs_find_named_value(const char *buffer, const char *name,
 				size_t *count);
 void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value);

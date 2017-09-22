@@ -815,8 +815,7 @@ static int
 nrs_tbf_jobid_list_add(struct cfs_lstr *id, struct list_head *jobid_list)
 {
 	struct nrs_tbf_jobid *jobid;
-	struct cfs_lstr res;
-	int rc;
+	char *ptr;
 
 	OBD_ALLOC(jobid, sizeof(struct nrs_tbf_jobid));
 	if (jobid == NULL)
@@ -829,8 +828,8 @@ nrs_tbf_jobid_list_add(struct cfs_lstr *id, struct list_head *jobid_list)
 	}
 
 	memcpy(jobid->tj_id, id->ls_str, id->ls_len);
-	rc = cfs_gettok(id, '*', &res);
-	if (rc == 0)
+	ptr = lprocfs_strnstr(id->ls_str, "*", id->ls_len);
+	if (ptr == NULL)
 		jobid->tj_match_flag = NRS_TBF_MATCH_FULL;
 	else
 		jobid->tj_match_flag = NRS_TBF_MATCH_WILDCARD;

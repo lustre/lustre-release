@@ -2129,7 +2129,7 @@ int lprocfs_str_with_units_to_s64(const char __user *buffer,
 }
 EXPORT_SYMBOL(lprocfs_str_with_units_to_s64);
 
-static char *lprocfs_strnstr(const char *s1, const char *s2, size_t len)
+char *lprocfs_strnstr(const char *s1, const char *s2, size_t len)
 {
 	size_t l2;
 
@@ -2144,6 +2144,7 @@ static char *lprocfs_strnstr(const char *s1, const char *s2, size_t len)
 	}
 	return NULL;
 }
+EXPORT_SYMBOL(lprocfs_strnstr);
 
 /**
  * Find the string \a name in the input \a buffer, and return a pointer to the

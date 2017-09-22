@@ -3588,6 +3588,50 @@ test_77m() {
 }
 run_test 77m "check NRS Delay slows write RPC processing"
 
+test_77n() { #LU-10802
+	if [ $(lustre_version_code ost1) -lt $(version_code 2.10.58) ]; then
+		skip "Need OST version at least 2.10.58"
+		return 0
+	fi
+
+	# Configure jobid_var
+	local saved_jobid_var=$($LCTL get_param -n jobid_var)
+	if [ $saved_jobid_var != procname_uid ]; then
+		set_conf_param_and_check client			\
+			"$LCTL get_param -n jobid_var"		\
+			"$FSNAME.sys.jobid_var" procname_uid
+	fi
+
+	do_nodes $(comma_list $(osts_nodes)) \
+		lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ jobid" \
+			ost.OSS.ost_io.nrs_tbf_rule="stop\ dd_runas" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ dd_runas\ jobid={*.$RUNAS_ID}\ rate=20"
+
+	nrs_write_read
+	tbf_verify 20 20 "$RUNAS"
+
+	do_nodes $(comma_list $(osts_nodes)) \
+		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ dd_runas" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ dd_runas\ jobid={dd.*}\ rate=20"
+
+	nrs_write_read
+	tbf_verify 20 20
+
+	do_nodes $(comma_list $(osts_nodes)) \
+		lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop\ dd_runas" \
+			ost.OSS.ost_io.nrs_policies="fifo"
+
+	sleep 3
+
+	local current_jobid_var=$($LCTL get_param -n jobid_var)
+	if [ $saved_jobid_var != $current_jobid_var ]; then
+		set_conf_param_and_check client			\
+			"$LCTL get_param -n jobid_var"		\
+			"$FSNAME.sys.jobid_var" $saved_jobid_var
+	fi
+}
+run_test 77n "check wildcard support for TBF JobID NRS policy"
+
 test_78() { #LU-6673
 	local server_version=$(lustre_version_code ost1)
 	[[ $server_version -ge $(version_code 2.7.58) ]] ||
