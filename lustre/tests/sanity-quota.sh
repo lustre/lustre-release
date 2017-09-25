@@ -2892,6 +2892,22 @@ test_52() {
 }
 run_test 52 "Rename across different project ID"
 
+test_53() {
+	! is_project_quota_supported &&
+		skip "Project quota is not supported" && return 0
+	setup_quota_test || error "setup quota failed with $?"
+	local dir="$DIR/$tdir/dir"
+	mkdir $dir && change_project +P $dir
+	lsattr -pd $dir | grep P || error "inherit attribute should be set"
+
+	change_project -Pd $dir
+	lsattr -pd $dir | grep P && error "inherit attribute should be cleared"
+
+	rm -rf $dir
+	cleanup_quota_test
+}
+run_test 53 "Project inherit attribute could be cleared"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"

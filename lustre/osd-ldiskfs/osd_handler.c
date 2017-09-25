@@ -2598,6 +2598,8 @@ static int osd_inode_setattr(const struct lu_env *env,
 		 */
 		if (attr->la_flags & LUSTRE_PROJINHERIT_FL)
 			LDISKFS_I(inode)->i_flags |= LUSTRE_PROJINHERIT_FL;
+		else
+			LDISKFS_I(inode)->i_flags &= ~LUSTRE_PROJINHERIT_FL;
 	}
 	return 0;
 }
