@@ -8577,11 +8577,11 @@ test_120f() {
 	$LCTL get_param -n mdc.*.connect_flags | grep -q early_lock_cancel ||
 		{ skip "no early lock cancel on server"; return 0; }
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	test_mkdir $DIR/$tdir
+	test_mkdir -c1 $DIR/$tdir
 	lru_resize_disable mdc
 	lru_resize_disable osc
-	test_mkdir $DIR/$tdir/d1
-	test_mkdir $DIR/$tdir/d2
+	test_mkdir -c1 $DIR/$tdir/d1
+	test_mkdir -c1 $DIR/$tdir/d2
 	dd if=/dev/zero of=$DIR/$tdir/d1/f1 count=1
 	dd if=/dev/zero of=$DIR/$tdir/d2/f2 count=1
 	cancel_lru_locks mdc
