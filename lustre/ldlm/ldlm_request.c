@@ -1611,9 +1611,6 @@ ldlm_cancel_no_wait_policy(struct ldlm_namespace *ns, struct ldlm_lock *lock,
 				break;
 		default:
 			result = LDLM_POLICY_SKIP_LOCK;
-			lock_res_and_lock(lock);
-			ldlm_set_skipped(lock);
-			unlock_res_and_lock(lock);
 			break;
 	}
 
@@ -1834,54 +1831,48 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 				 enum ldlm_lru_flags lru_flags)
 {
 	ldlm_cancel_lru_policy_t pf;
-	struct ldlm_lock *lock, *next;
-	int added = 0, unused, remained;
+	int added = 0;
 	int no_wait = lru_flags & LDLM_LRU_FLAG_NO_WAIT;
+
 	ENTRY;
 
-	spin_lock(&ns->ns_lock);
-	unused = ns->ns_nr_unused;
-	remained = unused;
-
 	if (!ns_connect_lru_resize(ns))
-		count += unused - ns->ns_max_unused;
+		count += ns->ns_nr_unused - ns->ns_max_unused;
 
 	pf = ldlm_cancel_lru_policy(ns, lru_flags);
 	LASSERT(pf != NULL);
 
-	while (!list_empty(&ns->ns_unused_list)) {
+	/* For any flags, stop scanning if @max is reached. */
+	while (!list_empty(&ns->ns_unused_list) && (max == 0 || added < max)) {
+		struct ldlm_lock *lock;
+		struct list_head *item, *next;
 		enum ldlm_policy_res result;
 		ktime_t last_use = ktime_set(0, 0);
 
-		/* all unused locks */
-		if (remained-- <= 0)
-			break;
+		spin_lock(&ns->ns_lock);
+		item = no_wait ? ns->ns_last_pos : &ns->ns_unused_list;
+		for (item = item->next, next = item->next;
+		     item != &ns->ns_unused_list;
+		     item = next, next = item->next) {
+			lock = list_entry(item, struct ldlm_lock, l_lru);
 
-		/* For any flags, stop scanning if @max is reached. */
-		if (max && added >= max)
-			break;
-
-		list_for_each_entry_safe(lock, next, &ns->ns_unused_list,
-					 l_lru) {
 			/* No locks which got blocking requests. */
 			LASSERT(!ldlm_is_bl_ast(lock));
 
-			if (no_wait && ldlm_is_skipped(lock))
-				/* already processed */
-				continue;
-
-			last_use = lock->l_last_used;
-
-			/* Somebody is already doing CANCEL. No need for this
-			 * lock in LRU, do not traverse it again. */
 			if (!ldlm_is_canceling(lock) ||
 			    !ldlm_is_converting(lock))
 				break;
 
+			/* Somebody is already doing CANCEL. No need for this
+			 * lock in LRU, do not traverse it again. */
 			ldlm_lock_remove_from_lru_nolock(lock);
 		}
-		if (&lock->l_lru == &ns->ns_unused_list)
+		if (item == &ns->ns_unused_list) {
+			spin_unlock(&ns->ns_lock);
 			break;
+		}
+
+		last_use = lock->l_last_used;
 
 		LDLM_LOCK_GET(lock);
 		spin_unlock(&ns->ns_lock);
@@ -1900,19 +1891,23 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 		 * old locks, but additionally choose them by
 		 * their weight. Big extent locks will stay in
 		 * the cache. */
-		result = pf(ns, lock, unused, added, count);
+		result = pf(ns, lock, ns->ns_nr_unused, added, count);
 		if (result == LDLM_POLICY_KEEP_LOCK) {
-			lu_ref_del(&lock->l_reference,
-				   __FUNCTION__, current);
+			lu_ref_del(&lock->l_reference, __func__, current);
 			LDLM_LOCK_RELEASE(lock);
-			spin_lock(&ns->ns_lock);
 			break;
 		}
+
 		if (result == LDLM_POLICY_SKIP_LOCK) {
-			lu_ref_del(&lock->l_reference,
-				   __func__, current);
+			lu_ref_del(&lock->l_reference, __func__, current);
 			LDLM_LOCK_RELEASE(lock);
-			spin_lock(&ns->ns_lock);
+			if (no_wait) {
+				spin_lock(&ns->ns_lock);
+				if (!list_empty(&lock->l_lru) &&
+				    lock->l_lru.prev == ns->ns_last_pos)
+					ns->ns_last_pos = &lock->l_lru;
+				spin_unlock(&ns->ns_lock);
+			}
 			continue;
 		}
 
@@ -1929,7 +1924,6 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 			unlock_res_and_lock(lock);
 			lu_ref_del(&lock->l_reference, __FUNCTION__, current);
 			LDLM_LOCK_RELEASE(lock);
-			spin_lock(&ns->ns_lock);
 			continue;
 		}
 		LASSERT(!lock->l_readers && !lock->l_writers);
@@ -1964,11 +1958,8 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 		list_add(&lock->l_bl_ast, cancels);
 		unlock_res_and_lock(lock);
 		lu_ref_del(&lock->l_reference, __FUNCTION__, current);
-		spin_lock(&ns->ns_lock);
 		added++;
-		unused--;
 	}
-	spin_unlock(&ns->ns_lock);
 	RETURN(added);
 }
 

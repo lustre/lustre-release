@@ -236,6 +236,8 @@ int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock)
 		struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 
 		LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
+		if (ns->ns_last_pos == &lock->l_lru)
+			ns->ns_last_pos = lock->l_lru.prev;
 		list_del_init(&lock->l_lru);
 		LASSERT(ns->ns_nr_unused > 0);
 		ns->ns_nr_unused--;
@@ -286,7 +288,6 @@ void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock)
 	LASSERT(list_empty(&lock->l_lru));
 	LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
 	list_add_tail(&lock->l_lru, &ns->ns_unused_list);
-	ldlm_clear_skipped(lock);
 	LASSERT(ns->ns_nr_unused >= 0);
 	ns->ns_nr_unused++;
 }
