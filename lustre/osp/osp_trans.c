@@ -97,20 +97,6 @@ struct osp_update_callback {
 	osp_update_interpreter_t	ouc_interpreter;
 };
 
-static struct object_update_request *object_update_request_alloc(size_t size)
-{
-	struct object_update_request *ourq;
-
-	OBD_ALLOC_LARGE(ourq, size);
-	if (ourq == NULL)
-		return ERR_PTR(-ENOMEM);
-
-	ourq->ourq_magic = UPDATE_REQUEST_MAGIC;
-	ourq->ourq_count = 0;
-
-	return ourq;
-}
-
 /**
  * Allocate new update request
  *
@@ -126,21 +112,28 @@ int osp_object_update_request_create(struct osp_update_request *our,
 				     size_t size)
 {
 	struct osp_update_request_sub *ours;
+	struct object_update_request *ourq;
 
 	OBD_ALLOC_PTR(ours);
 	if (ours == NULL)
 		return -ENOMEM;
 
-	if (size < OUT_UPDATE_INIT_BUFFER_SIZE)
-		size = OUT_UPDATE_INIT_BUFFER_SIZE;
-
-	ours->ours_req = object_update_request_alloc(size);
-
-	if (IS_ERR(ours->ours_req)) {
+	/* The object update request will be added to an SG list for
+	 * bulk transfer. Some IB HW cannot handle partial pages in SG
+	 * lists (since they create gaps in memory regions) so we
+	 * round the size up to the next multiple of PAGE_SIZE. See
+	 * LU-9983. */
+	LASSERT(size > 0);
+	size = round_up(size, PAGE_SIZE);
+	OBD_ALLOC_LARGE(ourq, size);
+	if (ourq == NULL) {
 		OBD_FREE_PTR(ours);
 		return -ENOMEM;
 	}
 
+	ourq->ourq_magic = UPDATE_REQUEST_MAGIC;
+	ourq->ourq_count = 0;
+	ours->ours_req = ourq;
 	ours->ours_req_size = size;
 	INIT_LIST_HEAD(&ours->ours_list);
 	list_add_tail(&ours->ours_list, &our->our_req_list);
@@ -199,7 +192,7 @@ struct osp_update_request *osp_update_request_create(struct dt_device *dt)
 	INIT_LIST_HEAD(&our->our_invalidate_cb_list);
 	spin_lock_init(&our->our_list_lock);
 
-	rc = osp_object_update_request_create(our, OUT_UPDATE_INIT_BUFFER_SIZE);
+	rc = osp_object_update_request_create(our, PAGE_SIZE);
 	if (rc != 0) {
 		OBD_FREE_PTR(our);
 		return ERR_PTR(rc);
