@@ -1726,6 +1726,7 @@ int lod_use_defined_striping(const struct lu_env *env,
 	struct lov_ost_data_v1 *objs;
 	__u32	magic;
 	__u16	comp_cnt;
+	__u16	mirror_cnt;
 	int	rc = 0, i;
 	ENTRY;
 
@@ -1740,13 +1741,16 @@ int lod_use_defined_striping(const struct lu_env *env,
 		comp_cnt = le16_to_cpu(comp_v1->lcm_entry_count);
 		if (comp_cnt == 0)
 			RETURN(-EINVAL);
+		mirror_cnt = le16_to_cpu(comp_v1->lcm_mirror_count) + 1;
 		mo->ldo_is_composite = 1;
 	} else {
 		mo->ldo_is_composite = 0;
 		comp_cnt = 1;
+		mirror_cnt = 0;
 	}
+	mo->ldo_layout_gen = le16_to_cpu(v1->lmm_layout_gen);
 
-	rc = lod_alloc_comp_entries(mo, comp_cnt);
+	rc = lod_alloc_comp_entries(mo, mirror_cnt, comp_cnt);
 	if (rc)
 		RETURN(rc);
 
@@ -1806,6 +1810,10 @@ int lod_use_defined_striping(const struct lu_env *env,
 				GOTO(out, rc);
 		}
 	}
+
+	rc = lod_fill_mirrors(mo);
+	if (rc)
+		GOTO(out, rc);
 out:
 	if (rc)
 		lod_object_free_striping(env, mo);
@@ -1841,6 +1849,7 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	struct lov_comp_md_v1	*comp_v1 = NULL;
 	__u32	magic;
 	__u16	comp_cnt;
+	__u16	mirror_cnt;
 	int	i, rc;
 	ENTRY;
 
@@ -1903,13 +1912,15 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		comp_cnt = comp_v1->lcm_entry_count;
 		if (comp_cnt == 0)
 			RETURN(-EINVAL);
+		mirror_cnt =  comp_v1->lcm_mirror_count + 1;
 		lo->ldo_is_composite = 1;
 	} else {
 		comp_cnt = 1;
+		mirror_cnt = 0;
 		lo->ldo_is_composite = 0;
 	}
 
-	rc = lod_alloc_comp_entries(lo, comp_cnt);
+	rc = lod_alloc_comp_entries(lo, mirror_cnt, comp_cnt);
 	if (rc)
 		RETURN(rc);
 

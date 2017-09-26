@@ -694,6 +694,12 @@ int lod_def_striping_comp_resize(struct lod_default_striping *lds, __u16 count)
 
 void lod_free_comp_entries(struct lod_object *lo)
 {
+	if (lo->ldo_mirrors) {
+		OBD_FREE(lo->ldo_mirrors,
+			 sizeof(*lo->ldo_mirrors) * lo->ldo_mirror_count);
+		lo->ldo_mirrors = NULL;
+		lo->ldo_mirror_count = 0;
+	}
 	lod_free_comp_buffer(lo->ldo_comp_entries,
 			     lo->ldo_comp_cnt,
 			     sizeof(*lo->ldo_comp_entries) * lo->ldo_comp_cnt);
@@ -702,17 +708,73 @@ void lod_free_comp_entries(struct lod_object *lo)
 	lo->ldo_is_composite = 0;
 }
 
-int lod_alloc_comp_entries(struct lod_object *lo, int cnt)
+int lod_alloc_comp_entries(struct lod_object *lo,
+			   int mirror_count, int comp_count)
 {
-	LASSERT(cnt != 0);
+	LASSERT(comp_count != 0);
 	LASSERT(lo->ldo_comp_cnt == 0 && lo->ldo_comp_entries == NULL);
 
+	if (mirror_count > 0) {
+		OBD_ALLOC(lo->ldo_mirrors,
+			  sizeof(*lo->ldo_mirrors) * mirror_count);
+		if (!lo->ldo_mirrors)
+			return -ENOMEM;
+
+		lo->ldo_mirror_count = mirror_count;
+	}
+
 	OBD_ALLOC_LARGE(lo->ldo_comp_entries,
-			sizeof(*lo->ldo_comp_entries) * cnt);
-	if (lo->ldo_comp_entries == NULL)
+			sizeof(*lo->ldo_comp_entries) * comp_count);
+	if (lo->ldo_comp_entries == NULL) {
+		OBD_FREE(lo->ldo_mirrors,
+			 sizeof(*lo->ldo_mirrors) * mirror_count);
+		lo->ldo_mirror_count = 0;
 		return -ENOMEM;
-	lo->ldo_comp_cnt = cnt;
+	}
+
+	lo->ldo_comp_cnt = comp_count;
 	return 0;
+}
+
+int lod_fill_mirrors(struct lod_object *lo)
+{
+	struct lod_layout_component *lod_comp;
+	int mirror_idx = -1;
+	__u16 mirror_id = 0xffff;
+	int i;
+	ENTRY;
+
+	LASSERT(equi(!lo->ldo_is_composite, lo->ldo_mirror_count == 0));
+
+	if (!lo->ldo_is_composite)
+		RETURN(0);
+
+	lod_comp = &lo->ldo_comp_entries[0];
+	for (i = 0; i < lo->ldo_comp_cnt; i++, lod_comp++) {
+		int stale = !!(lod_comp->llc_flags & LCME_FL_STALE);
+
+		if (mirror_id_of(lod_comp->llc_id) == mirror_id) {
+			lo->ldo_mirrors[mirror_idx].lme_stale |= stale;
+			lo->ldo_mirrors[mirror_idx].lme_end = i;
+			continue;
+		}
+
+		/* new mirror */
+		++mirror_idx;
+		if (mirror_idx >= lo->ldo_mirror_count)
+			RETURN(-EINVAL);
+
+		mirror_id = mirror_id_of(lod_comp->llc_id);
+
+		lo->ldo_mirrors[mirror_idx].lme_id = mirror_id;
+		lo->ldo_mirrors[mirror_idx].lme_stale = stale;
+		lo->ldo_mirrors[mirror_idx].lme_start = i;
+		lo->ldo_mirrors[mirror_idx].lme_end = i;
+	}
+	if (mirror_idx != lo->ldo_mirror_count - 1)
+		RETURN(-EINVAL);
+
+	RETURN(0);
 }
 
 /**
@@ -848,52 +910,6 @@ done:
 }
 
 /**
- * Generate component ID for new created component.
- *
- * \param[in] lo		LOD object
- * \param[in] comp_idx		index of ldo_comp_entries
- *
- * \retval			component ID on success
- * \retval			LCME_ID_INVAL on failure
- */
-static __u32 lod_gen_component_id(struct lod_object *lo, int comp_idx)
-{
-	struct lod_layout_component *lod_comp;
-	__u32	id, start, end;
-	int	i;
-
-	LASSERT(lo->ldo_comp_entries[comp_idx].llc_id == LCME_ID_INVAL);
-
-	lod_obj_inc_layout_gen(lo);
-	id = lo->ldo_layout_gen;
-	if (likely(id <= LCME_ID_MAX))
-		return id;
-
-	/* Layout generation wraps, need to check collisions. */
-	start = id & LCME_ID_MASK;
-	end = LCME_ID_MAX;
-again:
-	for (id = start; id <= end; id++) {
-		for (i = 0; i < lo->ldo_comp_cnt; i++) {
-			lod_comp = &lo->ldo_comp_entries[i];
-			if (id == lod_comp->llc_id)
-				break;
-		}
-		/* Found the ununsed ID */
-		if (i == lo->ldo_comp_cnt)
-			return id;
-	}
-	if (end == LCME_ID_MAX) {
-		start = 1;
-		end = min(lo->ldo_layout_gen & LCME_ID_MASK,
-			  (__u32)(LCME_ID_MAX - 1));
-		goto again;
-	}
-
-	return LCME_ID_INVAL;
-}
-
-/**
  * Generate on-disk lov_mds_md structure based on the information in
  * the lod_object->ldo_comp_entries.
  *
@@ -916,18 +932,20 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 	struct lov_comp_md_entry_v1 *lcme;
 	struct lov_comp_md_v1 *lcm;
 	struct lod_layout_component *comp_entries;
-	__u16 comp_cnt;
+	__u16 comp_cnt, mirror_cnt;
 	bool is_composite;
 	int i, rc = 0, offset;
 	ENTRY;
 
 	if (is_dir) {
 		comp_cnt = lo->ldo_def_striping->lds_def_comp_cnt;
+		mirror_cnt = lo->ldo_def_striping->lds_def_mirror_cnt;
 		comp_entries = lo->ldo_def_striping->lds_def_comp_entries;
 		is_composite =
 			lo->ldo_def_striping->lds_def_striping_is_composite;
 	} else {
 		comp_cnt = lo->ldo_comp_cnt;
+		mirror_cnt = lo->ldo_mirror_count;
 		comp_entries = lo->ldo_comp_entries;
 		is_composite = lo->ldo_is_composite;
 	}
@@ -943,7 +961,7 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 	lcm = (struct lov_comp_md_v1 *)lmm;
 	lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
 	lcm->lcm_entry_count = cpu_to_le16(comp_cnt);
-	lcm->lcm_mirror_count = cpu_to_le16(lo->ldo_mirror_count);
+	lcm->lcm_mirror_count = cpu_to_le16(mirror_cnt - 1);
 	lcm->lcm_flags = cpu_to_le16(lo->ldo_flr_state);
 
 	offset = sizeof(*lcm) + sizeof(*lcme) * comp_cnt;
@@ -957,11 +975,7 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		lod_comp = &comp_entries[i];
 		lcme = &lcm->lcm_entries[i];
 
-		if (lod_comp->llc_id == LCME_ID_INVAL && !is_dir) {
-			lod_comp->llc_id = lod_gen_component_id(lo, i);
-			if (lod_comp->llc_id == LCME_ID_INVAL)
-				GOTO(out, rc = -ERANGE);
-		}
+		LASSERT(ergo(!is_dir, lod_comp->llc_id != LCME_ID_INVAL));
 		lcme->lcme_id = cpu_to_le32(lod_comp->llc_id);
 
 		/* component could be un-inistantiated */
@@ -1201,6 +1215,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 	__u32	magic, pattern;
 	int	i, j, rc = 0;
 	__u16	comp_cnt;
+	__u16	mirror_cnt = 0;
 	ENTRY;
 
 	LASSERT(buf);
@@ -1225,14 +1240,14 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		lo->ldo_is_composite = 1;
 		lo->ldo_flr_state = le16_to_cpu(comp_v1->lcm_flags) &
 					LCM_FL_FLR_MASK;
-		lo->ldo_mirror_count = le16_to_cpu(comp_v1->lcm_mirror_count);
+		mirror_cnt = le16_to_cpu(comp_v1->lcm_mirror_count) + 1;
 	} else {
 		comp_cnt = 1;
 		lo->ldo_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);
 		lo->ldo_is_composite = 0;
 	}
 
-	rc = lod_alloc_comp_entries(lo, comp_cnt);
+	rc = lod_alloc_comp_entries(lo, mirror_cnt, comp_cnt);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1332,6 +1347,11 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 				GOTO(out, rc);
 		}
 	}
+
+	rc = lod_fill_mirrors(lo);
+	if (rc)
+		GOTO(out, rc);
+
 out:
 	if (rc)
 		lod_object_free_striping(env, lo);

@@ -250,6 +250,7 @@ struct lod_default_striping {
 	/* default LOV */
 	/* current layout component count */
 	__u16				lds_def_comp_cnt;
+	__u16				lds_def_mirror_cnt;
 	/* the largest comp count ever used */
 	__u32				lds_def_comp_size_cnt;
 	struct lod_layout_component	*lds_def_comp_entries;
@@ -264,6 +265,15 @@ struct lod_default_striping {
 					lds_dir_def_striping_set:1;
 };
 
+struct lod_mirror_entry {
+	__u16	lme_stale:1;
+	/* mirror id */
+	__u16	lme_id;
+	/* start,end index of this mirror in ldo_comp_entries */
+	__u16	lme_start;
+	__u16	lme_end;
+};
+
 struct lod_object {
 	/* common fields for both files and directories */
 	struct dt_object		ldo_obj;
@@ -274,7 +284,10 @@ struct lod_object {
 			/* Layout component count for a regular file.
 			 * It equals to 1 for non-composite layout. */
 			__u16		ldo_comp_cnt;
+			/* Layout mirror count for a PFLR file.
+			 * It's 0 for files with non-composite layout. */
 			__u16		ldo_mirror_count;
+			struct lod_mirror_entry	*ldo_mirrors;
 			__u32		ldo_is_composite:1,
 					ldo_flr_state:2,
 					ldo_comp_cached:1;
@@ -331,15 +344,13 @@ static inline int lod_set_pool(char **pool, const char *new_pool)
 static inline int lod_set_def_pool(struct lod_default_striping *lds,
 				   int i, const char *new_pool)
 {
-	return lod_set_pool(&lds->lds_def_comp_entries[i].llc_pool,
-			    new_pool);
+	return lod_set_pool(&lds->lds_def_comp_entries[i].llc_pool, new_pool);
 }
 
 static inline int lod_obj_set_pool(struct lod_object *lo, int i,
 				   const char *new_pool)
 {
-	return lod_set_pool(&lo->ldo_comp_entries[i].llc_pool,
-			    new_pool);
+	return lod_set_pool(&lo->ldo_comp_entries[i].llc_pool, new_pool);
 }
 
 /**
@@ -608,7 +619,8 @@ int lod_ea_store_resize(struct lod_thread_info *info, size_t size);
 int lod_def_striping_comp_resize(struct lod_default_striping *lds, __u16 count);
 void lod_free_def_comp_entries(struct lod_default_striping *lds);
 void lod_free_comp_entries(struct lod_object *lo);
-int lod_alloc_comp_entries(struct lod_object *lo, int cnt);
+int lod_alloc_comp_entries(struct lod_object *lo, int mirror_cnt, int comp_cnt);
+int lod_fill_mirrors(struct lod_object *lo);
 
 /* lod_pool.c */
 int lod_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count);
