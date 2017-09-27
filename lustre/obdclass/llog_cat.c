@@ -754,16 +754,38 @@ int llog_cat_cancel_records(const struct lu_env *env,
 			continue;
 		}
 
+		if ((cathandle->lgh_ctxt->loc_flags &
+		     LLOG_CTXT_FLAG_NORMAL_FID) && !llog_exist(loghandle)) {
+			/* For update log, some of loghandles of cathandle
+			 * might not exist because remote llog creation might
+			 * be failed, so let's skip the record cancellation
+			 * for these non-exist llogs.
+			 */
+			lrc = -ENOENT;
+			CDEBUG(D_HA, "%s: llog "DFID":%x does not exist"
+			       ": rc = %d\n",
+			       cathandle->lgh_ctxt->loc_obd->obd_name,
+			       PFID(&lgl->lgl_oi.oi_fid), lgl->lgl_ogen, lrc);
+			failed++;
+			if (rc == 0)
+				rc = lrc;
+			continue;
+		}
+
 		lrc = llog_cancel_rec(env, loghandle, cookies->lgc_index);
 		if (lrc == LLOG_DEL_PLAIN) { /* log has been destroyed */
 			index = loghandle->u.phd.phd_cookie.lgc_index;
-			rc = llog_cat_cleanup(env, cathandle, loghandle, index);
+			lrc = llog_cat_cleanup(env, cathandle, loghandle,
+					       index);
+			if (rc == 0)
+				rc = lrc;
 		} else if (lrc == -ENOENT) {
 			if (rc == 0) /* ENOENT shouldn't rewrite any error */
 				rc = lrc;
 		} else if (lrc < 0) {
 			failed++;
-			rc = lrc;
+			if (rc == 0)
+				rc = lrc;
 		}
 		llog_handle_put(loghandle);
 	}
