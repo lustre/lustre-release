@@ -290,6 +290,7 @@ struct osd_device {
 				 od_xattr_in_sa:1,
 				 od_is_ost:1,
 				 od_posix_acl:1;
+	unsigned int		 od_dnsize;
 
 	char			 od_mntdev[128];
 	char			 od_svname[128];
@@ -502,7 +503,7 @@ int osd_object_sa_update(struct osd_object *obj, sa_attr_type_t type,
 			 void *buf, uint32_t buflen, struct osd_thandle *oh);
 int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 		     dnode_t **zap_dnp, dmu_tx_t *tx, struct lu_attr *la,
-		     zap_flags_t flags);
+		     unsigned dnsize, zap_flags_t flags);
 int __osd_object_create(const struct lu_env *env, struct osd_object *obj,
 			dnode_t **dnp, dmu_tx_t *tx, struct lu_attr *la);
 int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
