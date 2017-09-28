@@ -1309,6 +1309,43 @@ static int osd_find_new_dnode(const struct lu_env *env, dmu_tx_t *tx,
 	return rc;
 }
 
+#ifdef HAVE_DMU_OBJECT_ALLOC_DNSIZE
+static int osd_find_dnsize(struct osd_object *obj)
+{
+	struct osd_device *osd = osd_obj2dev(obj);
+	int dnsize;
+
+	if (osd->od_dnsize == ZFS_DNSIZE_AUTO) {
+		dnsize = DNODE_MIN_SIZE;
+		do {
+			if (DN_BONUS_SIZE(dnsize) >= obj->oo_ea_in_bonus + 32)
+				break;
+			dnsize <<= 1;
+		} while (dnsize < DNODE_MAX_SIZE);
+		if (dnsize > DNODE_MAX_SIZE)
+			dnsize = DNODE_MAX_SIZE;
+	} else if (osd->od_dnsize == ZFS_DNSIZE_1K) {
+		dnsize = 1024;
+	} else if (osd->od_dnsize == ZFS_DNSIZE_2K) {
+		dnsize = 2048;
+	} else if (osd->od_dnsize == ZFS_DNSIZE_4K) {
+		dnsize = 4096;
+	} else if (osd->od_dnsize == ZFS_DNSIZE_8K) {
+		dnsize = 8192;
+	} else if (osd->od_dnsize == ZFS_DNSIZE_16K) {
+		dnsize = 16384;
+	} else {
+		dnsize = DNODE_MIN_SIZE;
+	}
+	return dnsize;
+}
+#else
+static int inline osd_find_dnsize(struct osd_object *obj)
+{
+	return DN_MAX_BONUSLEN;
+}
+#endif
+
 /*
  * The transaction passed to this routine must have
  * dmu_tx_hold_bonus(tx, DMU_NEW_OBJECT) called and then assigned
@@ -1329,7 +1366,8 @@ int __osd_object_create(const struct lu_env *env, struct osd_object *obj,
 		type = DMU_OTN_UINT8_METADATA;
 
 	/* Create a new DMU object using the default dnode size. */
-	oid = osd_dmu_object_alloc(osd->od_os, type, 0, 0, tx);
+	oid = osd_dmu_object_alloc(osd->od_os, type, 0,
+				   osd_find_dnsize(obj), tx);
 
 	LASSERT(la->la_valid & LA_MODE);
 	la->la_size = 0;
@@ -1350,7 +1388,7 @@ int __osd_object_create(const struct lu_env *env, struct osd_object *obj,
  * a conversion from the different internal ZAP hash formats being used. */
 int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 		     dnode_t **dnp, dmu_tx_t *tx, struct lu_attr *la,
-		     zap_flags_t flags)
+		     unsigned dnsize, zap_flags_t flags)
 {
 	uint64_t oid;
 
@@ -1363,7 +1401,7 @@ int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 				   DMU_OT_DIRECTORY_CONTENTS,
 				   14, /* == ZFS fzap_default_blockshift */
 				   DN_MAX_INDBLKSHIFT, /* indirect blockshift */
-				   0, tx);
+				   dnsize, tx);
 
 	la->la_size = 2;
 	la->la_nlink = 1;
@@ -1383,7 +1421,7 @@ static dnode_t *osd_mkidx(const struct lu_env *env, struct osd_object *obj,
 	 * binary keys */
 	LASSERT(S_ISREG(la->la_mode));
 	rc = __osd_zap_create(env, osd_obj2dev(obj), &dn, oh->ot_tx, la,
-			      ZAP_FLAG_UINT64_KEY);
+			      osd_find_dnsize(obj), ZAP_FLAG_UINT64_KEY);
 	if (rc)
 		return ERR_PTR(rc);
 	return dn;
@@ -1396,7 +1434,8 @@ static dnode_t *osd_mkdir(const struct lu_env *env, struct osd_object *obj,
 	int rc;
 
 	LASSERT(S_ISDIR(la->la_mode));
-	rc = __osd_zap_create(env, osd_obj2dev(obj), &dn, oh->ot_tx, la, 0);
+	rc = __osd_zap_create(env, osd_obj2dev(obj), &dn, oh->ot_tx, la,
+			      osd_find_dnsize(obj), 0);
 	if (rc)
 		return ERR_PTR(rc);
 	return dn;

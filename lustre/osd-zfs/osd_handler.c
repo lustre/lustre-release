@@ -783,6 +783,13 @@ static void osd_readonly_changed_cb(void *arg, uint64_t newval)
 	osd->od_prop_rdonly = !!newval;
 }
 
+static void osd_dnodesize_changed_cb(void *arg, uint64_t newval)
+{
+	struct osd_device *osd = arg;
+
+	osd->od_dnsize = newval;
+}
+
 /*
  * This function unregisters all registered callbacks.  It's harmless to
  * unregister callbacks that were never registered so it is used to safely
@@ -797,6 +804,8 @@ static void osd_objset_unregister_callbacks(struct osd_device *o)
 	(void) dsl_prop_unregister(ds, zfs_prop_to_name(ZFS_PROP_RECORDSIZE),
 				   osd_recordsize_changed_cb, o);
 	(void) dsl_prop_unregister(ds, zfs_prop_to_name(ZFS_PROP_READONLY),
+				   osd_readonly_changed_cb, o);
+	(void) dsl_prop_unregister(ds, zfs_prop_to_name(ZFS_PROP_DNODESIZE),
 				   osd_readonly_changed_cb, o);
 
 	if (o->arc_prune_cb != NULL) {
@@ -831,6 +840,11 @@ static int osd_objset_register_callbacks(struct osd_device *o)
 
 	rc = -dsl_prop_register(ds, zfs_prop_to_name(ZFS_PROP_READONLY),
 				osd_readonly_changed_cb, o);
+	if (rc)
+		GOTO(err, rc);
+
+	rc = -dsl_prop_register(ds, zfs_prop_to_name(ZFS_PROP_DNODESIZE),
+				osd_dnodesize_changed_cb, o);
 	if (rc)
 		GOTO(err, rc);
 

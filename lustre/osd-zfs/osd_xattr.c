@@ -579,7 +579,7 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 
 		la->la_valid = LA_MODE;
 		la->la_mode = S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO;
-		rc = __osd_zap_create(env, osd, &xa_zap_dn, tx, la, 0);
+		rc = __osd_zap_create(env, osd, &xa_zap_dn, tx, la, 0, 0);
 		if (rc)
 			return rc;
 
