@@ -4153,11 +4153,13 @@ test_51b() {
 	[[ $numfree -lt $nrdirs ]] && skip "not enough blocks ($numfree)" &&
 		return
 
-	trap cleanup_print_lfsdf EXIT
+	trap cleanup_print_lfs_df EXIT
 
 	# create files
-	createmany -d $dir/d $nrdirs ||
+	createmany -d $dir/d $nrdirs || {
+		unlinkmany $dir/d $nrdirs
 		error "failed to create $nrdirs subdirs in MDT$mdtidx:$dir"
+	}
 
 	# really created :
 	nrdirs=$(ls -U $dir | wc -l)
@@ -4266,8 +4268,10 @@ test_51f() {
 		echo "left ulimit at $ulimit_old"
 	fi
 
-	createmany -o -k -t 120 $DIR/$tdir/f $numfree ||
+	createmany -o -k -t 120 $DIR/$tdir/f $numfree || {
+		unlinkmany $DIR/$tdir/f $numfree
 		error "create+open $numfree files in $DIR/$tdir failed"
+	}
 	ulimit -n $ulimit_old
 
 	# if createmany exits at 120s there will be fewer than $numfree files
