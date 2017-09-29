@@ -3079,14 +3079,15 @@ static int ptlrpc_replay_interpret(const struct lu_env *env,
  */
 int ptlrpc_replay_req(struct ptlrpc_request *req)
 {
-        struct ptlrpc_replay_async_args *aa;
-        ENTRY;
+	struct ptlrpc_replay_async_args *aa;
 
-        LASSERT(req->rq_import->imp_state == LUSTRE_IMP_REPLAY);
+	ENTRY;
 
-        LASSERT (sizeof (*aa) <= sizeof (req->rq_async_args));
-        aa = ptlrpc_req_async_args(req);
-        memset(aa, 0, sizeof *aa);
+	LASSERT(req->rq_import->imp_state == LUSTRE_IMP_REPLAY);
+
+	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
+	aa = ptlrpc_req_async_args(req);
+	memset(aa, 0, sizeof(*aa));
 
         /* Prepare request to be resent with ptlrpcd */
         aa->praa_old_state = req->rq_send_state;
@@ -3440,7 +3441,7 @@ void *ptlrpcd_alloc_work(struct obd_import *imp,
 	req->rq_no_delay = req->rq_no_resend = 1;
 	req->rq_pill.rc_fmt = (void *)&worker_format;
 
-	CLASSERT (sizeof(*args) <= sizeof(req->rq_async_args));
+	CLASSERT(sizeof(*args) <= sizeof(req->rq_async_args));
 	args = ptlrpc_req_async_args(req);
 	args->cb     = cb;
 	args->cbdata = cbdata;

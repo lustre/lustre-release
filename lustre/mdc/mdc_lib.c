@@ -161,9 +161,9 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 		     const void *data, size_t datalen, umode_t mode,
 		     uid_t uid, gid_t gid, cfs_cap_t cap_effective, __u64 rdev)
 {
-	struct mdt_rec_create	*rec;
-	char			*tmp;
-	__u64			 flags;
+	struct mdt_rec_create *rec;
+	char *tmp;
+	__u64 flags;
 
 	CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_create));
 	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
@@ -462,12 +462,12 @@ void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 		     const char *old, size_t oldlen,
 		     const char *new, size_t newlen)
 {
-        struct mdt_rec_rename *rec;
+	struct mdt_rec_rename *rec;
 
-        CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_rename));
-        rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
+	CLASSERT(sizeof(struct mdt_rec_reint) == sizeof(struct mdt_rec_rename));
+	rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
 
-        /* XXX do something about time, uid, gid */
+	/* XXX do something about time, uid, gid */
 	rec->rn_opcode  = op_data->op_cli_flags & CLI_MIGRATE ?
 					REINT_MIGRATE : REINT_RENAME;
         rec->rn_fsuid    = op_data->op_fsuid;

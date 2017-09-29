@@ -47,9 +47,9 @@ void lustre_lma_init(struct lustre_mdt_attrs *lma, const struct lu_fid *fid,
 
 	/* If a field is added in struct lustre_mdt_attrs, zero it explicitly
 	 * and change the test below. */
-	LASSERT(sizeof(*lma) ==
-		(offsetof(struct lustre_mdt_attrs, lma_self_fid) +
-		 sizeof(lma->lma_self_fid)));
+	CLASSERT(sizeof(*lma) ==
+		 (offsetof(struct lustre_mdt_attrs, lma_self_fid) +
+		  sizeof(lma->lma_self_fid)));
 }
 EXPORT_SYMBOL(lustre_lma_init);
 

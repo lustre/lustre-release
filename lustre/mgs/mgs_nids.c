@@ -421,7 +421,7 @@ static int mgs_ir_notify(void *arg)
 	struct ldlm_res_id resid;
 	char name[sizeof(fsdb->fsdb_name) + 16];
 
-	LASSERTF(sizeof(name) < 40, "name is too large to be in stack.\n");
+	CLASSERT(sizeof(name) < 40); /* name is too large to be on stack */
 
 	snprintf(name, sizeof(name) - 1, "mgs_%s_notify", fsdb->fsdb_name);
 	complete(&fsdb->fsdb_notify_comp);

@@ -59,10 +59,10 @@
 int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
 		     const struct md_hsm *mh)
 {
-	struct md_object	*next = mdt_object_child(obj);
-	struct lu_buf		*buf = &info->mti_buf;
-	struct hsm_attrs	*attrs;
-	int			 rc;
+	struct md_object *next = mdt_object_child(obj);
+	struct lu_buf *buf = &info->mti_buf;
+	struct hsm_attrs *attrs;
+	int rc;
 	ENTRY;
 
 	attrs = (struct hsm_attrs *)info->mti_xattr_buf;

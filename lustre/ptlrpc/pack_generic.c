@@ -1903,38 +1903,39 @@ void lustre_swab_mdt_ioepoch(struct mdt_ioepoch *b)
 
 void lustre_swab_mgs_target_info(struct mgs_target_info *mti)
 {
-        int i;
-        __swab32s(&mti->mti_lustre_ver);
-        __swab32s(&mti->mti_stripe_index);
-        __swab32s(&mti->mti_config_ver);
-        __swab32s(&mti->mti_flags);
-        __swab32s(&mti->mti_instance);
-        __swab32s(&mti->mti_nid_count);
-        CLASSERT(sizeof(lnet_nid_t) == sizeof(__u64));
-        for (i = 0; i < MTI_NIDS_MAX; i++)
-                __swab64s(&mti->mti_nids[i]);
+	int i;
+
+	__swab32s(&mti->mti_lustre_ver);
+	__swab32s(&mti->mti_stripe_index);
+	__swab32s(&mti->mti_config_ver);
+	__swab32s(&mti->mti_flags);
+	__swab32s(&mti->mti_instance);
+	__swab32s(&mti->mti_nid_count);
+	CLASSERT(sizeof(lnet_nid_t) == sizeof(__u64));
+	for (i = 0; i < MTI_NIDS_MAX; i++)
+		__swab64s(&mti->mti_nids[i]);
 }
 
 void lustre_swab_mgs_nidtbl_entry(struct mgs_nidtbl_entry *entry)
 {
 	__u8 i;
 
-        __swab64s(&entry->mne_version);
-        __swab32s(&entry->mne_instance);
-        __swab32s(&entry->mne_index);
-        __swab32s(&entry->mne_length);
+	__swab64s(&entry->mne_version);
+	__swab32s(&entry->mne_instance);
+	__swab32s(&entry->mne_index);
+	__swab32s(&entry->mne_length);
 
-        /* mne_nid_(count|type) must be one byte size because we're gonna
-         * access it w/o swapping. */
-        CLASSERT(sizeof(entry->mne_nid_count) == sizeof(__u8));
-        CLASSERT(sizeof(entry->mne_nid_type) == sizeof(__u8));
+	/* mne_nid_(count|type) must be one byte size because we're gonna
+	 * access it w/o swapping. */
+	CLASSERT(sizeof(entry->mne_nid_count) == sizeof(__u8));
+	CLASSERT(sizeof(entry->mne_nid_type) == sizeof(__u8));
 
-        /* remove this assertion if ipv6 is supported. */
-        LASSERT(entry->mne_nid_type == 0);
-        for (i = 0; i < entry->mne_nid_count; i++) {
-                CLASSERT(sizeof(lnet_nid_t) == sizeof(__u64));
-                __swab64s(&entry->u.nids[i]);
-        }
+	/* remove this assertion if ipv6 is supported. */
+	LASSERT(entry->mne_nid_type == 0);
+	for (i = 0; i < entry->mne_nid_count; i++) {
+		CLASSERT(sizeof(lnet_nid_t) == sizeof(__u64));
+		__swab64s(&entry->u.nids[i]);
+	}
 }
 EXPORT_SYMBOL(lustre_swab_mgs_nidtbl_entry);
 

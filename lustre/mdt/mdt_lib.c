@@ -999,19 +999,20 @@ static int mdt_file_secctx_unpack(struct req_capsule *pill,
 
 static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 {
-	struct lu_ucred		*uc = mdt_ucred(info);
-	struct md_attr		*ma = &info->mti_attr;
-	struct lu_attr		*la = &ma->ma_attr;
-	struct req_capsule	*pill = info->mti_pill;
-	struct mdt_reint_record	*rr = &info->mti_rr;
-	struct mdt_rec_setattr	*rec;
-	struct lu_nodemap	*nodemap;
-        ENTRY;
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct md_attr *ma = &info->mti_attr;
+	struct lu_attr *la = &ma->ma_attr;
+	struct req_capsule *pill = info->mti_pill;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct mdt_rec_setattr *rec;
+	struct lu_nodemap *nodemap;
 
-        CLASSERT(sizeof(struct mdt_rec_setattr)== sizeof(struct mdt_rec_reint));
-        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
-        if (rec == NULL)
-                RETURN(-EFAULT);
+	ENTRY;
+
+	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
+	if (rec == NULL)
+		RETURN(-EFAULT);
 
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->sa_fsuid;
@@ -1170,19 +1171,20 @@ int mdt_close_unpack(struct mdt_thread_info *info)
 
 static int mdt_create_unpack(struct mdt_thread_info *info)
 {
-	struct lu_ucred         *uc  = mdt_ucred(info);
-        struct mdt_rec_create   *rec;
-        struct lu_attr          *attr = &info->mti_attr.ma_attr;
-        struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule      *pill = info->mti_pill;
-        struct md_op_spec       *sp = &info->mti_spec;
-        int rc;
-        ENTRY;
+	struct lu_ucred *uc  = mdt_ucred(info);
+	struct mdt_rec_create *rec;
+	struct lu_attr *attr = &info->mti_attr.ma_attr;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct req_capsule *pill = info->mti_pill;
+	struct md_op_spec *sp = &info->mti_spec;
+	int rc;
 
-        CLASSERT(sizeof(struct mdt_rec_create) == sizeof(struct mdt_rec_reint));
-        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
-        if (rec == NULL)
-                RETURN(-EFAULT);
+	ENTRY;
+
+	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
+	if (rec == NULL)
+		RETURN(-EFAULT);
 
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->cr_fsuid;
@@ -1245,18 +1247,19 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 
 static int mdt_link_unpack(struct mdt_thread_info *info)
 {
-	struct lu_ucred         *uc  = mdt_ucred(info);
-        struct mdt_rec_link     *rec;
-        struct lu_attr          *attr = &info->mti_attr.ma_attr;
-        struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule      *pill = info->mti_pill;
-        int rc;
-        ENTRY;
+	struct lu_ucred *uc  = mdt_ucred(info);
+	struct mdt_rec_link *rec;
+	struct lu_attr *attr = &info->mti_attr.ma_attr;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct req_capsule *pill = info->mti_pill;
+	int rc;
 
-        CLASSERT(sizeof(struct mdt_rec_link) == sizeof(struct mdt_rec_reint));
-        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
-        if (rec == NULL)
-                RETURN(-EFAULT);
+	ENTRY;
+
+	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
+	if (rec == NULL)
+		RETURN(-EFAULT);
 
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->lk_fsuid;
@@ -1284,19 +1287,20 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 
 static int mdt_unlink_unpack(struct mdt_thread_info *info)
 {
-	struct lu_ucred         *uc  = mdt_ucred(info);
-        struct mdt_rec_unlink   *rec;
-        struct md_attr          *ma = &info->mti_attr;
-        struct lu_attr          *attr = &info->mti_attr.ma_attr;
-        struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule      *pill = info->mti_pill;
-        int rc;
-        ENTRY;
+	struct lu_ucred *uc  = mdt_ucred(info);
+	struct mdt_rec_unlink *rec;
+	struct md_attr *ma = &info->mti_attr;
+	struct lu_attr *attr = &info->mti_attr.ma_attr;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct req_capsule *pill = info->mti_pill;
+	int rc;
 
-        CLASSERT(sizeof(struct mdt_rec_unlink) == sizeof(struct mdt_rec_reint));
-        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
-        if (rec == NULL)
-                RETURN(-EFAULT);
+	ENTRY;
+
+	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
+	if (rec == NULL)
+		RETURN(-EFAULT);
 
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->ul_fsuid;
@@ -1337,19 +1341,20 @@ static int mdt_rmentry_unpack(struct mdt_thread_info *info)
 
 static int mdt_rename_unpack(struct mdt_thread_info *info)
 {
-	struct lu_ucred         *uc = mdt_ucred(info);
-        struct mdt_rec_rename   *rec;
-        struct md_attr          *ma = &info->mti_attr;
-        struct lu_attr          *attr = &info->mti_attr.ma_attr;
-        struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule      *pill = info->mti_pill;
-        int rc;
-        ENTRY;
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct mdt_rec_rename *rec;
+	struct md_attr *ma = &info->mti_attr;
+	struct lu_attr *attr = &info->mti_attr.ma_attr;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct req_capsule *pill = info->mti_pill;
+	int rc;
 
-        CLASSERT(sizeof(struct mdt_rec_rename) == sizeof(struct mdt_rec_reint));
-        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
-        if (rec == NULL)
-                RETURN(-EFAULT);
+	ENTRY;
+
+	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
+	if (rec == NULL)
+		RETURN(-EFAULT);
 
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->rn_fsuid;
@@ -1417,20 +1422,20 @@ void mdt_fix_lov_magic(struct mdt_thread_info *info, void *eadata)
 
 static int mdt_open_unpack(struct mdt_thread_info *info)
 {
-	struct lu_ucred         *uc = mdt_ucred(info);
-        struct mdt_rec_create   *rec;
-        struct lu_attr          *attr = &info->mti_attr.ma_attr;
-        struct req_capsule      *pill = info->mti_pill;
-        struct mdt_reint_record *rr   = &info->mti_rr;
-        struct ptlrpc_request   *req  = mdt_info_req(info);
-        struct md_op_spec       *sp   = &info->mti_spec;
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct mdt_rec_create *rec;
+	struct lu_attr *attr = &info->mti_attr.ma_attr;
+	struct req_capsule *pill = info->mti_pill;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct md_op_spec *sp = &info->mti_spec;
 	int rc;
-        ENTRY;
+	ENTRY;
 
-        CLASSERT(sizeof(struct mdt_rec_create) == sizeof(struct mdt_rec_reint));
-        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
-        if (rec == NULL)
-                RETURN(-EFAULT);
+	CLASSERT(sizeof(struct mdt_rec_create) == sizeof(struct mdt_rec_reint));
+	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
+	if (rec == NULL)
+		RETURN(-EFAULT);
 
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid = rec->cr_fsuid;
@@ -1493,21 +1498,21 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 
 static int mdt_setxattr_unpack(struct mdt_thread_info *info)
 {
-	struct mdt_reint_record	*rr	= &info->mti_rr;
-	struct lu_ucred		*uc	= mdt_ucred(info);
-	struct lu_attr		*attr	= &info->mti_attr.ma_attr;
-	struct req_capsule	*pill	= info->mti_pill;
-	struct mdt_rec_setxattr	*rec;
-	int			 rc;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct lu_attr *attr = &info->mti_attr.ma_attr;
+	struct req_capsule *pill = info->mti_pill;
+	struct mdt_rec_setxattr *rec;
+	int rc;
 	ENTRY;
 
 
-        CLASSERT(sizeof(struct mdt_rec_setxattr) ==
-                         sizeof(struct mdt_rec_reint));
+	CLASSERT(sizeof(struct mdt_rec_setxattr) ==
+		 sizeof(struct mdt_rec_reint));
 
-        rec = req_capsule_client_get(pill, &RMF_REC_REINT);
-        if (rec == NULL)
-                RETURN(-EFAULT);
+	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
+	if (rec == NULL)
+		RETURN(-EFAULT);
 
 	/* This prior initialization is needed for old_init_ucred_reint() */
 	uc->uc_fsuid  = rec->sx_fsuid;

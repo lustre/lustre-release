@@ -1294,12 +1294,12 @@ lmv_out_free:
 
 		CLASSERT(sizeof(struct lov_user_md_v3) >
 			 sizeof(struct lov_comp_md_v1));
-		LASSERT(sizeof(lumv3) == sizeof(*lumv3p));
-		LASSERT(sizeof(lumv3.lmm_objects[0]) ==
-				sizeof(lumv3p->lmm_objects[0]));
+		CLASSERT(sizeof(lumv3) == sizeof(*lumv3p));
+		CLASSERT(sizeof(lumv3.lmm_objects[0]) ==
+			 sizeof(lumv3p->lmm_objects[0]));
 		/* first try with v1 which is smaller than v3 */
 		if (copy_from_user(lumv1, lumv1p, sizeof(*lumv1)))
-                        RETURN(-EFAULT);
+			RETURN(-EFAULT);
 
 		if (lumv1->lmm_magic == LOV_USER_MAGIC_V3)
 			if (copy_from_user(&lumv3, lumv3p, sizeof(lumv3)))

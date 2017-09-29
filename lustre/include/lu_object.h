@@ -1133,20 +1133,20 @@ struct lu_context_key {
 };
 
 #define LU_KEY_INIT(mod, type)                                    \
-        static void* mod##_key_init(const struct lu_context *ctx, \
-                                    struct lu_context_key *key)   \
-        {                                                         \
-                type *value;                                      \
+	static void *mod##_key_init(const struct lu_context *ctx, \
+				    struct lu_context_key *key)   \
+	{                                                         \
+		type *value;                                      \
                                                                   \
 		CLASSERT(PAGE_SIZE >= sizeof(*value));		  \
                                                                   \
-                OBD_ALLOC_PTR(value);                             \
-                if (value == NULL)                                \
-                        value = ERR_PTR(-ENOMEM);                 \
-                                                                  \
-                return value;                                     \
-        }                                                         \
-        struct __##mod##__dummy_init {;} /* semicolon catcher */
+		OBD_ALLOC_PTR(value);                             \
+		if (value == NULL)                                \
+			value = ERR_PTR(-ENOMEM);                 \
+								  \
+		return value;                                     \
+	}                                                         \
+	struct __##mod##__dummy_init { ; } /* semicolon catcher */
 
 #define LU_KEY_FINI(mod, type)                                              \
         static void mod##_key_fini(const struct lu_context *ctx,            \

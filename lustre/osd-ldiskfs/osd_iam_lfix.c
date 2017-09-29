@@ -754,11 +754,11 @@ struct lfix_leaf {
         } ll_entry[LFIX_LEAF_RECNO];
 };
 
-#define STORE_UNALIGNED(val, dst)                       \
-({                                                      \
-        typeof(val) __val = (val);                      \
-        CLASSERT(sizeof(val) == sizeof(*(dst)));        \
-        memcpy(dst, &__val, sizeof(*(dst)));            \
+#define STORE_UNALIGNED(val, dst)			\
+({							\
+	typeof(val) __val = (val);			\
+	CLASSERT(sizeof(val) == sizeof(*(dst)));	\
+	memcpy(dst, &__val, sizeof(*(dst)));		\
 })
 
 static void lfix_root(void *buf,

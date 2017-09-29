@@ -242,9 +242,9 @@ static int nodemap_idx_insert(const struct lu_env *env,
 			      const struct nodemap_key *nk,
 			      const union nodemap_rec *nr)
 {
-	struct thandle		*th;
-	struct dt_device	*dev = lu2dt_dev(idx->do_lu.lo_dev);
-	int			 rc;
+	struct thandle *th;
+	struct dt_device *dev = lu2dt_dev(idx->do_lu.lo_dev);
+	int rc;
 
 	CLASSERT(sizeof(union nodemap_rec) == 32);
 
@@ -657,14 +657,14 @@ static int nodemap_process_keyrec(struct nodemap_config *config,
 				  const union nodemap_rec *rec,
 				  struct lu_nodemap **recent_nodemap)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	enum nodemap_idx_type	 type;
-	enum nodemap_id_type	 id_type;
-	u8			 flags;
-	u32			 nodemap_id;
-	lnet_nid_t		 nid[2];
-	u32			 map[2];
-	int			 rc;
+	struct lu_nodemap *nodemap = NULL;
+	enum nodemap_idx_type type;
+	enum nodemap_id_type id_type;
+	u8 flags;
+	u32 nodemap_id;
+	lnet_nid_t nid[2];
+	u32 map[2];
+	int rc;
 
 	ENTRY;
 

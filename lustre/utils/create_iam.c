@@ -111,12 +111,12 @@ enum {
  * memcpy(). This macro is needed to avoid dependency of user level tools on
  * the kernel headers.
  */
-#define STORE_UNALIGNED(val, dst)                       \
-({                                                      \
-        typeof(val) __val = (val);                      \
-                                                        \
-        CLASSERT(sizeof(val) == sizeof(*(dst)));        \
-        memcpy(dst, &__val, sizeof(*(dst)));            \
+#define STORE_UNALIGNED(val, dst)			\
+({							\
+	typeof(val) __val = (val);			\
+							\
+	CLASSERT(sizeof(val) == sizeof(*(dst)));	\
+	memcpy(dst, &__val, sizeof(*(dst)));		\
 })
 
 static void lfix_root(void *buf,

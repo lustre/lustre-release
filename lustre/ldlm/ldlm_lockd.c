@@ -867,18 +867,18 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
         ldlm_lock_reorder_req(lock);
 
-        req = ptlrpc_request_alloc_pack(lock->l_export->exp_imp_reverse,
-                                        &RQF_LDLM_BL_CALLBACK,
-                                        LUSTRE_DLM_VERSION, LDLM_BL_CALLBACK);
-        if (req == NULL)
-                RETURN(-ENOMEM);
+	req = ptlrpc_request_alloc_pack(lock->l_export->exp_imp_reverse,
+					&RQF_LDLM_BL_CALLBACK,
+					LUSTRE_DLM_VERSION, LDLM_BL_CALLBACK);
+	if (req == NULL)
+		RETURN(-ENOMEM);
 
-        CLASSERT(sizeof(*ca) <= sizeof(req->rq_async_args));
-        ca = ptlrpc_req_async_args(req);
-        ca->ca_set_arg = arg;
-        ca->ca_lock = lock;
+	CLASSERT(sizeof(*ca) <= sizeof(req->rq_async_args));
+	ca = ptlrpc_req_async_args(req);
+	ca->ca_set_arg = arg;
+	ca->ca_lock = lock;
 
-        req->rq_interpret_reply = ldlm_cb_interpret;
+	req->rq_interpret_reply = ldlm_cb_interpret;
 
 	lock_res_and_lock(lock);
 	if (ldlm_is_destroyed(lock)) {
@@ -985,21 +985,21 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 		lvb_len = 0;
 
 	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_CLIENT, lvb_len);
-        rc = ptlrpc_request_pack(req, LUSTRE_DLM_VERSION, LDLM_CP_CALLBACK);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
+	rc = ptlrpc_request_pack(req, LUSTRE_DLM_VERSION, LDLM_CP_CALLBACK);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
 
-        CLASSERT(sizeof(*ca) <= sizeof(req->rq_async_args));
-        ca = ptlrpc_req_async_args(req);
-        ca->ca_set_arg = arg;
-        ca->ca_lock = lock;
+	CLASSERT(sizeof(*ca) <= sizeof(req->rq_async_args));
+	ca = ptlrpc_req_async_args(req);
+	ca->ca_set_arg = arg;
+	ca->ca_lock = lock;
 
-        req->rq_interpret_reply = ldlm_cb_interpret;
-        body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
+	req->rq_interpret_reply = ldlm_cb_interpret;
+	body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
 
-        body->lock_handle[0] = lock->l_remote_handle;
+	body->lock_handle[0] = lock->l_remote_handle;
 	body->lock_flags = ldlm_flags_to_wire(flags);
         ldlm_lock2desc(lock, &body->lock_desc);
 	if (lvb_len > 0) {
@@ -1113,9 +1113,9 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 		*desc = *arg->gl_desc;
 	}
 
-        body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
-        body->lock_handle[0] = lock->l_remote_handle;
-        ldlm_lock2desc(lock, &body->lock_desc);
+	body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
+	body->lock_handle[0] = lock->l_remote_handle;
+	ldlm_lock2desc(lock, &body->lock_desc);
 
 	CLASSERT(sizeof(*ca) <= sizeof(req->rq_async_args));
 	ca = ptlrpc_req_async_args(req);

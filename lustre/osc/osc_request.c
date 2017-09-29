@@ -1292,17 +1292,17 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 		 * resent due to cksum error, this will allow Server to
 		 * check+dump pages on its side */
 	}
-        ptlrpc_request_set_replen(req);
+	ptlrpc_request_set_replen(req);
 
-        CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = ptlrpc_req_async_args(req);
-        aa->aa_oa = oa;
-        aa->aa_requested_nob = requested_nob;
-        aa->aa_nio_count = niocount;
-        aa->aa_page_count = page_count;
-        aa->aa_resends = 0;
-        aa->aa_ppga = pga;
-        aa->aa_cli = cli;
+	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
+	aa = ptlrpc_req_async_args(req);
+	aa->aa_oa = oa;
+	aa->aa_requested_nob = requested_nob;
+	aa->aa_nio_count = niocount;
+	aa->aa_page_count = page_count;
+	aa->aa_resends = 0;
+	aa->aa_ppga = pga;
+	aa->aa_cli = cli;
 	INIT_LIST_HEAD(&aa->aa_oaps);
 
 	*reqp = req;
@@ -2405,13 +2405,13 @@ static int osc_statfs_async(struct obd_export *exp,
                 req->rq_no_delay = 1;
         }
 
-        req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_statfs_interpret;
-        CLASSERT (sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = ptlrpc_req_async_args(req);
-        aa->aa_oi = oinfo;
+	req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_statfs_interpret;
+	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
+	aa = ptlrpc_req_async_args(req);
+	aa->aa_oi = oinfo;
 
-        ptlrpc_set_add_req(rqset, req);
-        RETURN(0);
+	ptlrpc_set_add_req(rqset, req);
+	RETURN(0);
 }
 
 static int osc_statfs(const struct lu_env *env, struct obd_export *exp,
@@ -2605,23 +2605,23 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 	tmp = req_capsule_client_get(&req->rq_pill, KEY_IS(KEY_GRANT_SHRINK) ?
 							&RMF_OST_BODY :
 							&RMF_SETINFO_VAL);
-        memcpy(tmp, val, vallen);
+	memcpy(tmp, val, vallen);
 
 	if (KEY_IS(KEY_GRANT_SHRINK)) {
-                struct osc_grant_args *aa;
-                struct obdo *oa;
+		struct osc_grant_args *aa;
+		struct obdo *oa;
 
-                CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-                aa = ptlrpc_req_async_args(req);
-                OBDO_ALLOC(oa);
-                if (!oa) {
-                        ptlrpc_req_finished(req);
-                        RETURN(-ENOMEM);
-                }
-                *oa = ((struct ost_body *)val)->oa;
-                aa->aa_oa = oa;
-                req->rq_interpret_reply = osc_shrink_grant_interpret;
-        }
+		CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
+		aa = ptlrpc_req_async_args(req);
+		OBDO_ALLOC(oa);
+		if (!oa) {
+			ptlrpc_req_finished(req);
+			RETURN(-ENOMEM);
+		}
+		*oa = ((struct ost_body *)val)->oa;
+		aa->aa_oa = oa;
+		req->rq_interpret_reply = osc_shrink_grant_interpret;
+	}
 
 	ptlrpc_request_set_replen(req);
 	if (!KEY_IS(KEY_GRANT_SHRINK)) {
