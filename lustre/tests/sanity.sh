@@ -6924,7 +6924,7 @@ test_101g() {
 run_test 101g "Big bulk(4/16 MiB) readahead"
 
 setup_test102() {
-	test_mkdir -p $DIR/$tdir
+	test_mkdir $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	STRIPE_SIZE=65536
 	STRIPE_OFFSET=1
@@ -6946,7 +6946,7 @@ setup_test102() {
 	done
 
 	cd $DIR
-	$1 $TAR cf $TMP/f102.tar $tdir --xattrs
+	$1 tar cf $TMP/f102.tar $tdir --xattrs
 }
 
 cleanup_test102() {
@@ -7055,7 +7055,7 @@ test_102c() {
 	# b10930: get/set/list lustre.lov xattr
 	echo "get/set/list lustre.lov xattr ..."
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
-	test_mkdir -p $DIR/$tdir
+	test_mkdir $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
 	$RUNAS $SETSTRIPE -S 65536 -i 1 -c $OSTCOUNT $testfile ||
@@ -7105,36 +7105,32 @@ compare_stripe_info1() {
 	return 0
 }
 
-find_lustre_tar() {
-	[ -n "$(which tar 2>/dev/null)" ] &&
-		strings $(which tar) | grep -q "lustre" && echo tar
+have_xattrs_include() {
+	tar --help | grep -q xattrs-include &&
+		echo --xattrs-include="lustre.*"
 }
 
 test_102d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	# b10930: tar test for trusted.lov xattr
-	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	local xinc=$(have_xattrs_include)
 	setup_test102
-	test_mkdir -p $DIR/d102d
-	$TAR xf $TMP/f102.tar -C $DIR/d102d --xattrs
-	cd $DIR/d102d/$tdir
+	tar xf $TMP/f102.tar -C $DIR/$tdir --xattrs $xinc
+	cd $DIR/$tdir/$tdir
 	compare_stripe_info1
 }
 run_test 102d "tar restore stripe info from tarfile,not keep osts ==========="
 
 test_102f() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	# b10930: tar test for trusted.lov xattr
-	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	local xinc=$(have_xattrs_include)
 	setup_test102
-	test_mkdir -p $DIR/d102f
+	test_mkdir $DIR/$tdir.restore
 	cd $DIR
-	$TAR cf - --xattrs $tdir | $TAR xf - --xattrs -C $DIR/d102f
-	cd $DIR/d102f/$tdir
+	tar cf - --xattrs $tdir | tar xf - \
+		-C $DIR/$tdir.restore --xattrs $xinc
+	cd $DIR/$tdir.restore/$tdir
 	compare_stripe_info1
 }
 run_test 102f "tar copy files, not keep osts ==========="
@@ -7207,14 +7203,12 @@ run_test 102i "lgetxattr test on symbolic link ============"
 
 test_102j() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	local xinc=$(have_xattrs_include)
 	setup_test102 "$RUNAS"
-	test_mkdir -p $DIR/d102j
-	chown $RUNAS_ID $DIR/d102j
-	$RUNAS $TAR xf $TMP/f102.tar -C $DIR/d102j --xattrs
-	cd $DIR/d102j/$tdir
+	chown $RUNAS_ID $DIR/$tdir
+	$RUNAS tar xf $TMP/f102.tar -C $DIR/$tdir --xattrs $xinc
+	cd $DIR/$tdir/$tdir
 	compare_stripe_info1 "$RUNAS"
 }
 run_test 102j "non-root tar restore stripe info from tarfile, not keep osts ==="
@@ -7226,7 +7220,7 @@ test_102k() {
         # b22187 just check that does not crash for regular file.
         setfattr -n trusted.lov $DIR/$tfile
         # b22187 'setfattr -n trusted.lov' should work as remove LOV EA for directories
-        local test_kdir=$DIR/d102k
+        local test_kdir=$DIR/$tdir
         test_mkdir $test_kdir
         local default_size=`$GETSTRIPE -S $test_kdir`
         local default_count=`$GETSTRIPE -c $test_kdir`
@@ -7422,7 +7416,7 @@ test_102r() {
 	rmdir $DIR/$tdir || error "rmdir"
 
 	#striped directory
-	test_mkdir -p $DIR/$tdir || error "make striped dir"
+	test_mkdir $DIR/$tdir || error "make striped dir"
 	setfattr -n user.$(basename $tdir) $DIR/$tdir || error "setfattr dir"
 	getfattr -n user.$(basename $tdir) $DIR/$tdir || error "getfattr dir"
 	setfattr -x user.$(basename $tdir) $DIR/$tdir ||
