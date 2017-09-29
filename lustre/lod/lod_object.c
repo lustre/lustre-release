@@ -5106,7 +5106,7 @@ static int lod_declare_layout_change(const struct lu_env *env,
 		if (rc <= 0)
 			GOTO(out, rc);
 		/* old on-disk EA is stored in info->lti_buf */
-		comp_v1 = (struct lov_comp_md_v1 *)&info->lti_buf.lb_buf;
+		comp_v1 = (struct lov_comp_md_v1 *)info->lti_buf.lb_buf;
 		replay = true;
 	} else {
 		/* non replay path */
