@@ -7044,7 +7044,7 @@ static int osd_mount(const struct lu_env *env,
 	if (LDISKFS_HAS_INCOMPAT_FEATURE(o->od_mnt->mnt_sb,
 					 LDISKFS_FEATURE_INCOMPAT_DIRDATA))
 		LDISKFS_SB(osd_sb(o))->s_mount_opt |= LDISKFS_MOUNT_DIRDATA;
-	else if (!o->od_is_ost)
+	else if (strstr(name, "MDT")) /* don't complain for MGT or OSTs */
 		CWARN("%s: device %s was upgraded from Lustre-1.x without "
 		      "enabling the dirdata feature. If you do not want to "
 		      "downgrade to Lustre-1.x again, you can enable it via "
