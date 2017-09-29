@@ -6932,7 +6932,7 @@ setup_test102() {
 	done
 
 	cd $DIR
-	$1 $TAR cf $TMP/f102.tar $tdir --xattrs
+	$1 tar cf $TMP/f102.tar $tdir --xattrs
 }
 
 cleanup_test102() {
@@ -7091,20 +7091,17 @@ compare_stripe_info1() {
 	return 0
 }
 
-find_lustre_tar() {
-	[ -n "$(which tar 2>/dev/null)" ] &&
-		strings $(which tar) | grep -q "lustre" && echo tar
+have_xattrs_include() {
+	tar --help | grep -q xattrs-include &&
+		echo --xattrs-include="lustre.*"
 }
 
 test_102d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	# b10930: tar test for trusted.lov xattr
-	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	XINC=$(have_xattrs_include)
 	setup_test102
-	test_mkdir $DIR/$tdir
-	$TAR xf $TMP/$tfile.tar -C $DIR/$tdir --xattrs
+	tar xf $TMP/f102.tar -C $DIR/$tdir --xattrs $XINC
 	cd $DIR/$tdir/$tdir
 	compare_stripe_info1
 }
@@ -7112,14 +7109,13 @@ run_test 102d "tar restore stripe info from tarfile,not keep osts"
 
 test_102f() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	# b10930: tar test for trusted.lov xattr
-	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	XINC=$(have_xattrs_include)
 	setup_test102
 	test_mkdir $DIR/$tdir.restore
 	cd $DIR
-	$TAR cf - --xattrs $tdir | $TAR xf - --xattrs -C $DIR/$tdir.restore
+	tar cf - --xattrs $tdir | tar xf - \
+		-C $DIR/$tdir.restore --xattrs $XINC
 	cd $DIR/$tdir.restore/$tdir
 	compare_stripe_info1
 }
@@ -7193,13 +7189,11 @@ run_test 102i "lgetxattr test on symbolic link ============"
 
 test_102j() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	TAR=$(find_lustre_tar)
-	[ -z "$TAR" ] && skip_env "lustre-aware tar is not installed" && return
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	XINC=$(have_xattrs_include)
 	setup_test102 "$RUNAS"
-	test_mkdir $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
-	$RUNAS $TAR xf $TMP/f102.tar -C $DIR/$tdir --xattrs
+	$RUNAS tar xf $TMP/f102.tar -C $DIR/$tdir --xattrs $XINC
 	cd $DIR/$tdir/$tdir
 	compare_stripe_info1 "$RUNAS"
 }
