@@ -614,41 +614,50 @@ static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
                 CERROR("NOENT? set rsc entry negative\n");
 		set_bit(CACHE_NEGATIVE, &rsci.h.flags);
         } else {
-                rawobj_t tmp_buf;
-                unsigned long ctx_expiry;
+		rawobj_t tmp_buf;
+		time64_t ctx_expiry;
 
-                /* gid */
-                if (get_int(&mesg, (int *) &rsci.ctx.gsc_gid))
-                        goto out;
+		/* gid */
+		if (get_int(&mesg, (int *) &rsci.ctx.gsc_gid))
+			goto out;
 
-                /* mech name */
-                len = qword_get(&mesg, buf, mlen);
-                if (len < 0)
-                        goto out;
-                gm = lgss_name_to_mech(buf);
-                status = -EOPNOTSUPP;
-                if (!gm)
-                        goto out;
+		/* mech name */
+		len = qword_get(&mesg, buf, mlen);
+		if (len < 0)
+			goto out;
+		gm = lgss_name_to_mech(buf);
+		status = -EOPNOTSUPP;
+		if (!gm)
+			goto out;
 
-                status = -EINVAL;
-                /* mech-specific data: */
-                len = qword_get(&mesg, buf, mlen);
-                if (len < 0)
-                        goto out;
+		status = -EINVAL;
+		/* mech-specific data: */
+		len = qword_get(&mesg, buf, mlen);
+		if (len < 0)
+			goto out;
 
-                tmp_buf.len = len;
-                tmp_buf.data = (unsigned char *)buf;
-                if (lgss_import_sec_context(&tmp_buf, gm,
-                                            &rsci.ctx.gsc_mechctx))
-                        goto out;
+		tmp_buf.len = len;
+		tmp_buf.data = (unsigned char *)buf;
+		if (lgss_import_sec_context(&tmp_buf, gm,
+					    &rsci.ctx.gsc_mechctx))
+			goto out;
 
-                /* currently the expiry time passed down from user-space
-                 * is invalid, here we retrive it from mech. */
-                if (lgss_inquire_context(rsci.ctx.gsc_mechctx, &ctx_expiry)) {
-                        CERROR("unable to get expire time, drop it\n");
-                        goto out;
-                }
-                expiry = (time_t) ctx_expiry;
+		/* set to seconds since machine booted */
+		expiry = ktime_get_seconds();
+
+		/* currently the expiry time passed down from user-space
+		 * is invalid, here we retrive it from mech.
+		 */
+		if (lgss_inquire_context(rsci.ctx.gsc_mechctx,
+					 (unsigned long *)&ctx_expiry)) {
+			CERROR("unable to get expire time, drop it\n");
+			goto out;
+		}
+
+		/* ctx_expiry is the number of seconds since Jan 1 1970.
+		 * We want just the  number of seconds into the future.
+		 */
+		expiry += ctx_expiry - ktime_get_real_seconds();
         }
 
         rsci.h.expiry_time = expiry;
