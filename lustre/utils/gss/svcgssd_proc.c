@@ -115,7 +115,7 @@ do_svc_downcall(gss_buffer_desc *out_handle, struct svc_cred *cred,
 	}
 	qword_printhex(f, out_handle->value, out_handle->length);
 	/* XXX are types OK for the rest of this? */
-	qword_printint(f, 3600); /* an hour should be sufficient */
+	qword_printint(f, time(NULL) + 3600);   /* 1 hour should be ok */
 	qword_printint(f, cred->cr_remote);
 	qword_printint(f, cred->cr_usr_root);
 	qword_printint(f, cred->cr_usr_mds);
@@ -154,7 +154,7 @@ send_response(FILE *f, gss_buffer_desc *in_handle, gss_buffer_desc *in_token,
 	printerr(2, "sending reply\n");
 	qword_addhex(&bp, &blen, in_handle->value, in_handle->length);
 	qword_addhex(&bp, &blen, in_token->value, in_token->length);
-	qword_addint(&bp, &blen, 3600);	/* an hour should be sufficient */
+	qword_addint(&bp, &blen, time(NULL) + 3600);   /* 1 hour should be ok */
 	qword_adduint(&bp, &blen, maj_stat);
 	qword_adduint(&bp, &blen, min_stat);
 	qword_addhex(&bp, &blen, out_handle->value, out_handle->length);
