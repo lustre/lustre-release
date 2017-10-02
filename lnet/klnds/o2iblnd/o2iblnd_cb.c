@@ -546,7 +546,8 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 	kib_fmr_poolset_t	*fps;
 	int			cpt;
 	int			rc;
-	bool			is_fastreg = 0;
+	int i;
+	bool is_fastreg = 0;
 
 	LASSERT(tx->tx_pool != NULL);
 	LASSERT(tx->tx_pool->tpo_pool.po_owner != NULL);
@@ -564,10 +565,15 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 	/* If rd is not tx_rd, it's going to get sent to a peer_ni, who will need
 	 * the rkey */
 	rd->rd_key = tx->fmr.fmr_key;
-	if (!is_fastreg)
-		rd->rd_frags[0].rf_addr &= ~hdev->ibh_page_mask;
-	rd->rd_frags[0].rf_nob   = nob;
-	rd->rd_nfrags = 1;
+	if (!is_fastreg) {
+		for (i = 0; i < rd->rd_nfrags; i++) {
+			rd->rd_frags[i].rf_addr &= ~hdev->ibh_page_mask;
+			rd->rd_frags[i].rf_addr += i << hdev->ibh_page_shift;
+		}
+	} else {
+		rd->rd_frags[0].rf_nob = nob;
+		rd->rd_nfrags = 1;
+	}
 
 	return 0;
 }
