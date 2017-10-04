@@ -45,9 +45,12 @@
     required if you are using Infiniband or multiple Ethernet
     interfaces.</para>
     <para condition='l27'>The <literal>lnetctl</literal> utility can be used
-    to initialize LNet without bringing up any network interfaces.  This
-    gives flexibility to the user to add interfaces after LNet has been
-    loaded.</para>
+    to initialize LNet without bringing up any network interfaces. Network
+    interfaces can be added after configuring LNet via <literal>lnetctl</literal>. 
+    <literal>lnetctl</literal> can also be used to manage an operational LNet.
+    However, if it wasn't initialized by <literal>lnetctl</literal> then 
+    <literal>lnetctl lnet configure</literal> must be invoked before 
+    <literal>lnetctl</literal> can be used to manage LNet.</para>
     <para condition='l27'>DLC also introduces a C-API to enable
     configuring LNet programatically.  See <xref
     linkend="lnetconfigurationapi"/></para>
