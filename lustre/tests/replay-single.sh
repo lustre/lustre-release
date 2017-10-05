@@ -3079,6 +3079,10 @@ run_test 85a "check the cancellation of unused locks during recovery(IBITS)"
 test_85b() { #bug 16774
 	lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
 
+	if ! combined_mgs_mds ; then
+		mount_mgs_client
+	fi
+
 	create_pool $FSNAME.$TESTNAME ||
 		error "unable to create pool $TESTNAME"
 	do_facet mgs $LCTL pool_add $FSNAME.$TESTNAME $FSNAME-OST0000 ||
@@ -3115,6 +3119,10 @@ test_85b() { #bug 16774
 		error "unable to remove pool $TESTNAME"
 	do_facet mgs $LCTL pool_destroy $FSNAME.$TESTNAME ||
 		error "unable to destroy the pool $TESTNAME"
+
+	if ! combined_mgs_mds ; then
+		umount_mgs_client
+	fi
 
 	if [ $count2 -ge $count ]; then
 		error "unused locks are not canceled"

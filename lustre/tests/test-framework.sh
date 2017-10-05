@@ -1866,6 +1866,19 @@ zconf_umount() {
     fi
 }
 
+# Mount the file system on the MGS
+mount_mgs_client() {
+	do_facet mgs "mkdir -p $MOUNT"
+	zconf_mount $mgs_HOST $MOUNT $MOUNT_OPTS ||
+		error "unable to mount $MOUNT on MGS"
+}
+
+# Unmount the file system on the MGS
+umount_mgs_client() {
+	zconf_umount $mgs_HOST $MOUNT
+	do_facet mgs "rm -rf $MOUNT"
+}
+
 # nodes is comma list
 sanity_mount_check_nodes () {
     local nodes=$1
