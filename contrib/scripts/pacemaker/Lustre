@@ -95,8 +95,10 @@ END
 #
 
 lustre_is_mounted () {
-    # Verify if this is consistent
-    grep -q $(realpath "$OCF_RESKEY_mountpoint") /proc/mounts
+    # Verify if this is consistent, check pointpoint and filesystem
+    # against source (i.e. device)
+    local dev=$(findmnt -t lustre -ln -o SOURCE -T $(realpath "$OCF_RESKEY_mountpoint"))
+    [ "$dev" == "$OCF_RESKEY_target" ]
 }
 
 lustre_monitor () {
