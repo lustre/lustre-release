@@ -1482,7 +1482,7 @@ test_7e() {
 
 	# hardlimit should be cleared on slave during reintegration
 	$RUNAS createmany -m $TESTFILE $((ilimit + 1)) ||
-		quota_error -u $TSTUSR "create failed, expect success"
+		quota_error u $TSTUSR "create failed, expect success"
 
 	$RUNAS unlinkmany $TESTFILE $((ilimit + 1)) || error "unlink failed"
 	rmdir $DIR/${tdir}-1 || error "unlink remote dir failed"
