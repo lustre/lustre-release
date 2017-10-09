@@ -163,6 +163,19 @@ void class_put_type(struct obd_type *type)
 	spin_unlock(&type->obd_type_lock);
 }
 
+static void class_sysfs_release(struct kobject *kobj)
+{
+	struct obd_type *type = container_of(kobj, struct obd_type,
+					     typ_kobj);
+
+	complete(&type->typ_kobj_unregister);
+}
+
+static struct kobj_type class_ktype = {
+	.sysfs_ops      = &lustre_sysfs_ops,
+	.release        = class_sysfs_release,
+};
+
 #define CLASS_MAX_NAME 1024
 
 int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
@@ -214,28 +227,29 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 		}
 	}
 #endif
-	type->typ_kobj = kobject_create_and_add(type->typ_name, lustre_kobj);
-	if (!type->typ_kobj) {
-		rc = -ENOMEM;
+	type->typ_kobj.kset = lustre_kset;
+	init_completion(&type->typ_kobj_unregister);
+	rc = kobject_init_and_add(&type->typ_kobj, &class_ktype,
+				  &lustre_kset->kobj, "%s", type->typ_name);
+	if (rc)
 		GOTO(failed, rc);
-	}
 
-        if (ldt != NULL) {
-                type->typ_lu = ldt;
-                rc = lu_device_type_init(ldt);
-                if (rc != 0)
-                        GOTO (failed, rc);
-        }
+	if (ldt) {
+		type->typ_lu = ldt;
+		rc = lu_device_type_init(ldt);
+		if (rc) {
+			kobject_put(&type->typ_kobj);
+			GOTO(failed, rc);
+		}
+	}
 
 	spin_lock(&obd_types_lock);
 	list_add(&type->typ_chain, &obd_types);
 	spin_unlock(&obd_types_lock);
 
-        RETURN (0);
+	RETURN(0);
 
 failed:
-	if (type->typ_kobj)
-		kobject_put(type->typ_kobj);
 	if (type->typ_name != NULL) {
 #ifdef CONFIG_PROC_FS
 		if (type->typ_procroot != NULL)
@@ -271,8 +285,8 @@ int class_unregister_type(const char *name)
                 RETURN(-EBUSY);
         }
 
-	if (type->typ_kobj)
-		kobject_put(type->typ_kobj);
+	kobject_put(&type->typ_kobj);
+	wait_for_completion(&type->typ_kobj_unregister);
 
 	/* we do not use type->typ_procroot as for compatibility purposes
 	 * other modules can share names (i.e. lod can use lov entry). so

@@ -447,7 +447,7 @@ static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,
 			 char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kobj);
+					      obd_kset.kobj);
 
 	return sprintf(buf, "%s\n", obd->obd_uuid.uuid);
 }
@@ -467,7 +467,7 @@ static ssize_t blocksize_show(struct kobject *kobj, struct attribute *attr,
 			      char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kobj);
+					      obd_kset.kobj);
 	struct obd_statfs osfs;
 	int rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
@@ -483,7 +483,7 @@ static ssize_t kbytestotal_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kobj);
+					      obd_kset.kobj);
 	struct obd_statfs osfs;
 	int rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
@@ -506,7 +506,7 @@ static ssize_t kbytesfree_show(struct kobject *kobj, struct attribute *attr,
 			       char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kobj);
+					      obd_kset.kobj);
 	struct obd_statfs osfs;
 	int rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
@@ -529,7 +529,7 @@ static ssize_t kbytesavail_show(struct kobject *kobj, struct attribute *attr,
 				char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kobj);
+					      obd_kset.kobj);
 	struct obd_statfs osfs;
 	int rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
@@ -552,7 +552,7 @@ static ssize_t filestotal_show(struct kobject *kobj, struct attribute *attr,
 			       char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kobj);
+					      obd_kset.kobj);
 	struct obd_statfs osfs;
 	int rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
@@ -568,7 +568,7 @@ static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
 			      char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kobj);
+					      obd_kset.kobj);
 	struct obd_statfs osfs;
 	int rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
 			    cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
@@ -1242,42 +1242,43 @@ static struct attribute *obd_def_attrs[] = {
 static void obd_sysfs_release(struct kobject *kobj)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kobj);
+					      obd_kset.kobj);
 
 	complete(&obd->obd_kobj_unregister);
 }
 
-static struct kobj_type obd_ktype = {
-	.sysfs_ops	= &lustre_sysfs_ops,
-	.release	= obd_sysfs_release,
-};
-
-int
-lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
+int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 {
-	int rc = 0;
+	int rc;
 
-	LASSERT(obd != NULL);
-	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+	if (!obd || obd->obd_magic != OBD_DEVICE_MAGIC)
+		return -ENODEV;
 
-	if (uuid_only)
-		obd_ktype.default_attrs = obd_def_uuid_attrs;
-	else
-		obd_ktype.default_attrs = obd_def_attrs;
-
-	init_completion(&obd->obd_kobj_unregister);
-	rc = kobject_init_and_add(&obd->obd_kobj, &obd_ktype,
-				  obd->obd_type->typ_kobj,
-				  "%s", obd->obd_name);
+	rc = kobject_set_name(&obd->obd_kset.kobj, "%s", obd->obd_name);
 	if (rc)
 		return rc;
 
-	if (obd->obd_attrs) {
-		rc = sysfs_create_group(&obd->obd_kobj, obd->obd_attrs);
-		if (rc) {
-			kobject_put(&obd->obd_kobj);
-			return rc;
-		}
+	obd->obd_ktype.sysfs_ops = &lustre_sysfs_ops;
+	obd->obd_ktype.release = obd_sysfs_release;
+	if (obd->obd_attrs)
+		obd->obd_ktype.default_attrs = obd->obd_attrs;
+
+	obd->obd_kset.kobj.parent = &obd->obd_type->typ_kobj;
+	obd->obd_kset.kobj.ktype = &obd->obd_ktype;
+	init_completion(&obd->obd_kobj_unregister);
+	rc = kset_register(&obd->obd_kset);
+	if (rc)
+		return rc;
+
+	if (uuid_only)
+		obd->obd_attrs_group.attrs = obd_def_uuid_attrs;
+	else
+		obd->obd_attrs_group.attrs = obd_def_attrs;
+
+	rc = sysfs_create_group(&obd->obd_kset.kobj, &obd->obd_attrs_group);
+	if (rc) {
+		kset_unregister(&obd->obd_kset);
+		return rc;
 	}
 
 	if (obd->obd_proc_entry)
@@ -1289,10 +1290,10 @@ lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 					       obd->obd_type->typ_procroot,
 					       obd->obd_vars, obd);
 	if (IS_ERR(obd->obd_proc_entry)) {
-		kobject_put(&obd->obd_kobj);
 		rc = PTR_ERR(obd->obd_proc_entry);
 		CERROR("error %d setting up lprocfs for %s\n",rc,obd->obd_name);
 		obd->obd_proc_entry = NULL;
+		lprocfs_obd_cleanup(obd);
 	}
 already_registered:
 	return rc;
@@ -1315,8 +1316,10 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
 		obd->obd_proc_entry = NULL;
 	}
 
-	kobject_put(&obd->obd_kobj);
+	sysfs_remove_group(&obd->obd_kset.kobj, &obd->obd_attrs_group);
+	kset_unregister(&obd->obd_kset);
 	wait_for_completion(&obd->obd_kobj_unregister);
+
 	return 0;
 }
 EXPORT_SYMBOL(lprocfs_obd_cleanup);

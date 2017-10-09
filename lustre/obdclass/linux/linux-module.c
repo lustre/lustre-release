@@ -512,8 +512,8 @@ static const struct file_operations obd_device_list_fops = {
         .release = seq_release,
 };
 
-struct kobject *lustre_kobj;
-EXPORT_SYMBOL_GPL(lustre_kobj);
+struct kset *lustre_kset;
+EXPORT_SYMBOL_GPL(lustre_kset);
 
 static struct attribute_group lustre_attr_group = {
 	.attrs = lustre_attrs,
@@ -526,26 +526,26 @@ int class_procfs_init(void)
 	int rc = -ENOMEM;
 	ENTRY;
 
-	lustre_kobj = kobject_create_and_add("lustre", fs_kobj);
-	if (lustre_kobj == NULL)
+	lustre_kset = kset_create_and_add("lustre", NULL, fs_kobj);
+	if (!lustre_kset)
 		goto out;
 
 	/* Create the files associated with this kobject */
-	rc = sysfs_create_group(lustre_kobj, &lustre_attr_group);
+	rc = sysfs_create_group(&lustre_kset->kobj, &lustre_attr_group);
 	if (rc) {
-		kobject_put(lustre_kobj);
+		kset_unregister(lustre_kset);
 		goto out;
 	}
 
 	rc = obd_sysctl_init();
 	if (rc) {
-		kobject_put(lustre_kobj);
+		kset_unregister(lustre_kset);
 		goto out;
 	}
 
 	rc = jobid_cache_init();
 	if (rc) {
-		kobject_put(lustre_kobj);
+		kset_unregister(lustre_kset);
 		goto out;
 	}
 
@@ -554,7 +554,7 @@ int class_procfs_init(void)
 		rc = debugfs_lustre_root ? PTR_ERR(debugfs_lustre_root)
 					 : -ENOMEM;
 		debugfs_lustre_root = NULL;
-		kobject_put(lustre_kobj);
+		kset_unregister(lustre_kset);
 		goto out;
 	}
 
@@ -562,7 +562,8 @@ int class_procfs_init(void)
 				   &obd_device_list_fops);
 	if (IS_ERR_OR_NULL(file)) {
 		rc = file ? PTR_ERR(file) : -ENOMEM;
-		kobject_put(lustre_kobj);
+		debugfs_remove(debugfs_lustre_root);
+		kset_unregister(lustre_kset);
 		goto out;
 	}
 
@@ -570,7 +571,8 @@ int class_procfs_init(void)
 	if (IS_ERR(entry)) {
 		rc = PTR_ERR(entry);
 		CERROR("cannot create '/proc/fs/lustre': rc = %d\n", rc);
-		kobject_put(lustre_kobj);
+		debugfs_remove_recursive(debugfs_lustre_root);
+		kset_unregister(lustre_kset);
 		goto out;
 	}
 
@@ -591,7 +593,9 @@ int class_procfs_clean(void)
 	if (proc_lustre_root)
 		lprocfs_remove(&proc_lustre_root);
 
-	kobject_put(lustre_kobj);
+	sysfs_remove_group(&lustre_kset->kobj, &lustre_attr_group);
+
+	kset_unregister(lustre_kset);
 
 	RETURN(0);
 }

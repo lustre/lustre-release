@@ -358,7 +358,7 @@ enum lprocfs_extra_opc {
 /* class_obd.c */
 extern struct proc_dir_entry *proc_lustre_root;
 extern struct dentry *debugfs_lustre_root;
-extern struct kobject *lustre_kobj;
+extern struct kset *lustre_kset;
 
 struct obd_device;
 struct obd_histogram;
@@ -470,8 +470,6 @@ struct nid_stat;
 extern int lprocfs_add_clear_entry(struct obd_device * obd,
 				   struct proc_dir_entry *entry);
 #ifdef HAVE_SERVER_SUPPORT
-void lprocfs_kset_unregister(struct obd_device *obj, struct kset *kset);
-int lprocfs_kset_register(struct obd_device *obd, struct kset **kset);
 extern int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *peer_nid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
 #else
@@ -736,6 +734,7 @@ struct lustre_attr {
 #define LUSTRE_ATTR(name, mode, show, store) \
 static struct lustre_attr lustre_attr_##name = __ATTR(name, mode, show, store)
 
+#define LUSTRE_WO_ATTR(name) LUSTRE_ATTR(name, 0200, NULL, name##_store)
 #define LUSTRE_RO_ATTR(name) LUSTRE_ATTR(name, 0444, name##_show, NULL)
 #define LUSTRE_RW_ATTR(name) LUSTRE_ATTR(name, 0644, name##_show, name##_store)
 

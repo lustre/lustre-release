@@ -96,6 +96,28 @@ time64_t ktime_get_seconds(void)
 EXPORT_SYMBOL(ktime_get_seconds);
 #endif /* HAVE_KTIME_GET_SECONDS */
 
+#ifndef HAVE_KSET_FIND_OBJ
+struct kobject *kset_find_obj(struct kset *kset, const char *name)
+{
+	struct kobject *ret = NULL;
+	struct kobject *k;
+
+	spin_lock(&kset->list_lock);
+
+	list_for_each_entry(k, &kset->list, entry) {
+		if (kobject_name(k) && !strcmp(kobject_name(k), name)) {
+			if (kref_get_unless_zero(&k->kref))
+				ret = k;
+			break;
+		}
+	}
+
+	spin_unlock(&kset->list_lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(kset_find_obj);
+#endif
+
 sigset_t
 cfs_block_allsigs(void)
 {

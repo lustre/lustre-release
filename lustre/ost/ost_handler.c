@@ -67,8 +67,6 @@ MODULE_PARM_DESC(oss_io_cpts, "CPU partitions OSS IO threads should run on");
 
 static struct cfs_cpt_table	*ost_io_cptable;
 
-static struct kset *oss_kset;
-
 /* Sigh - really, this is an OSS, the _server_, not the _target_ */
 static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 {
@@ -78,7 +76,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 	int rc;
 	ENTRY;
 
-	rc = lprocfs_kset_register(obd, &oss_kset);
+	rc = lprocfs_obd_setup(obd, true);
 	if (rc)
 		return rc;
 
@@ -114,7 +112,8 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.so_hpreq_handler	= ptlrpc_hpreq_handler,
 		},
 	};
-	ost->ost_service = ptlrpc_register_service(&svc_conf, oss_kset,
+	ost->ost_service = ptlrpc_register_service(&svc_conf,
+						   &obd->obd_kset,
 						   obd->obd_proc_entry);
 	if (IS_ERR(ost->ost_service)) {
 		rc = PTR_ERR(ost->ost_service);
@@ -152,7 +151,8 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.so_req_printer		= target_print_req,
 		},
 	};
-	ost->ost_create_service = ptlrpc_register_service(&svc_conf, oss_kset,
+	ost->ost_create_service = ptlrpc_register_service(&svc_conf,
+							  &obd->obd_kset,
 							  obd->obd_proc_entry);
 	if (IS_ERR(ost->ost_create_service)) {
 		rc = PTR_ERR(ost->ost_create_service);
@@ -220,7 +220,8 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.so_req_printer		= target_print_req,
 		},
 	};
-	ost->ost_io_service = ptlrpc_register_service(&svc_conf, oss_kset,
+	ost->ost_io_service = ptlrpc_register_service(&svc_conf,
+						      &obd->obd_kset,
 						      obd->obd_proc_entry);
 	if (IS_ERR(ost->ost_io_service)) {
 		rc = PTR_ERR(ost->ost_io_service);
@@ -261,8 +262,9 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.so_hpreq_handler	= NULL,
 		},
 	};
-	ost->ost_seq_service = ptlrpc_register_service(&svc_conf, oss_kset,
-						      obd->obd_proc_entry);
+	ost->ost_seq_service = ptlrpc_register_service(&svc_conf,
+						       &obd->obd_kset,
+						       obd->obd_proc_entry);
 	if (IS_ERR(ost->ost_seq_service)) {
 		rc = PTR_ERR(ost->ost_seq_service);
 		CERROR("failed to start OST seq service: %d\n", rc);
@@ -307,7 +309,8 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.so_hpreq_handler	= NULL,
 		},
 	};
-	ost->ost_out_service = ptlrpc_register_service(&svc_conf, oss_kset,
+	ost->ost_out_service = ptlrpc_register_service(&svc_conf,
+						       &obd->obd_kset,
 						       obd->obd_proc_entry);
 	if (IS_ERR(ost->ost_out_service)) {
 		rc = PTR_ERR(ost->ost_out_service);
@@ -333,7 +336,7 @@ out_service:
         ptlrpc_unregister_service(ost->ost_service);
         ost->ost_service = NULL;
 out_lprocfs:
-	lprocfs_kset_unregister(obd, oss_kset);
+	lprocfs_obd_cleanup(obd);
         RETURN(rc);
 }
 
@@ -363,7 +366,7 @@ static int ost_cleanup(struct obd_device *obd)
 
 	mutex_unlock(&ost->ost_health_mutex);
 
-	lprocfs_kset_unregister(obd, oss_kset);
+	lprocfs_obd_cleanup(obd);
 
 	if (ost_io_cptable != NULL) {
 		cfs_cpt_table_free(ost_io_cptable);

@@ -642,6 +642,16 @@ crypto_hash_helpers, [
 ]) # LIBCFS_CRYPTO_HASH_HELPERS
 
 #
+# Kernerl version 4.5-rc3 commit 2fe829aca9d7bed5fd6b49c6a1452e5e486b6cc3dd
+# made kset_find_obj() exportable to modules
+#
+AC_DEFUN([LIBCFS_EXPORT_KSET_FIND_OBJ], [
+LB_CHECK_EXPORT([kset_find_obj], [lib/kobject.c],
+	[AC_DEFINE(HAVE_KSET_FIND_OBJ, 1,
+		[kset_find_obj is exported by the kernel])])
+]) # LIBCFS_EXPORT_KSET_FIND_OBJ
+
+#
 # LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
 #
 # linux 4.6 kernel changed stacktrace_ops address to return an int
@@ -806,6 +816,7 @@ LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 LIBCFS_FPU_API
 # 4.5
 LIBCFS_CRYPTO_HASH_HELPERS
+LIBCFS_EXPORT_KSET_FIND_OBJ
 # 4.6
 LIBCFS_STACKTRACE_OPS_ADDRESS_RETURN_INT
 LIBCFS_GET_USER_PAGES_6ARG

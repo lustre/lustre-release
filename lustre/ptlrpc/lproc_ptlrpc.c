@@ -1130,14 +1130,10 @@ void ptlrpc_sysfs_unregister_service(struct ptlrpc_service *svc)
 int ptlrpc_sysfs_register_service(struct kset *parent,
 				  struct ptlrpc_service *svc)
 {
-	int rc;
-
 	svc->srv_kobj.kset = parent;
 	init_completion(&svc->srv_kobj_unregister);
-	rc = kobject_init_and_add(&svc->srv_kobj, &ptlrpc_svc_ktype, NULL,
-				  "%s", svc->srv_name);
-
-	return rc;
+	return kobject_init_and_add(&svc->srv_kobj, &ptlrpc_svc_ktype,
+				    &parent->kobj, "%s", svc->srv_name);
 }
 
 void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,

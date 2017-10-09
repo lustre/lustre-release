@@ -65,7 +65,6 @@ struct mds_device {
 	struct ptlrpc_service	*mds_mdss_service;
 	struct ptlrpc_service	*mds_fld_service;
 	struct mutex		 mds_health_mutex;
-	struct kset		*mds_kset;
 };
 
 /*
@@ -184,7 +183,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.so_hpreq_handler	= ptlrpc_hpreq_handler,
 		},
 	};
-	m->mds_regular_service = ptlrpc_register_service(&conf, m->mds_kset,
+	m->mds_regular_service = ptlrpc_register_service(&conf, &obd->obd_kset,
 							 procfs_entry);
 	if (IS_ERR(m->mds_regular_service)) {
 		rc = PTR_ERR(m->mds_regular_service);
@@ -228,7 +227,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.so_req_printer		= target_print_req,
 		},
 	};
-	m->mds_readpage_service = ptlrpc_register_service(&conf, m->mds_kset,
+	m->mds_readpage_service = ptlrpc_register_service(&conf, &obd->obd_kset,
 							  procfs_entry);
 	if (IS_ERR(m->mds_readpage_service)) {
 		rc = PTR_ERR(m->mds_readpage_service);
@@ -276,7 +275,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.so_hpreq_handler	= NULL,
 		},
 	};
-	m->mds_setattr_service = ptlrpc_register_service(&conf, m->mds_kset,
+	m->mds_setattr_service = ptlrpc_register_service(&conf, &obd->obd_kset,
 							 procfs_entry);
 	if (IS_ERR(m->mds_setattr_service)) {
 		rc = PTR_ERR(m->mds_setattr_service);
@@ -322,7 +321,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.so_hpreq_handler	= NULL,
 		},
 	};
-	m->mds_out_service = ptlrpc_register_service(&conf, m->mds_kset,
+	m->mds_out_service = ptlrpc_register_service(&conf, &obd->obd_kset,
 						     procfs_entry);
 	if (IS_ERR(m->mds_out_service)) {
 		rc = PTR_ERR(m->mds_out_service);
@@ -358,7 +357,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.so_hpreq_handler	= NULL,
 		},
 	};
-	m->mds_mdsc_service = ptlrpc_register_service(&conf, m->mds_kset,
+	m->mds_mdsc_service = ptlrpc_register_service(&conf, &obd->obd_kset,
 						      procfs_entry);
 	if (IS_ERR(m->mds_mdsc_service)) {
 		rc = PTR_ERR(m->mds_mdsc_service);
@@ -395,7 +394,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.so_hpreq_handler	= NULL,
 		},
 	};
-	m->mds_mdss_service = ptlrpc_register_service(&conf, m->mds_kset,
+	m->mds_mdss_service = ptlrpc_register_service(&conf, &obd->obd_kset,
 						      procfs_entry);
 	if (IS_ERR(m->mds_mdss_service)) {
 		rc = PTR_ERR(m->mds_mdss_service);
@@ -430,7 +429,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.so_hpreq_handler	= NULL,
 		},
 	};
-	m->mds_fld_service = ptlrpc_register_service(&conf, m->mds_kset,
+	m->mds_fld_service = ptlrpc_register_service(&conf, &obd->obd_kset,
 						     procfs_entry);
 	if (IS_ERR(m->mds_fld_service)) {
 		rc = PTR_ERR(m->mds_fld_service);
@@ -461,7 +460,7 @@ static struct lu_device *mds_device_fini(const struct lu_env *env,
 	ENTRY;
 
 	mds_stop_ptlrpc_service(m);
-	lprocfs_kset_unregister(obd, m->mds_kset);
+	lprocfs_obd_cleanup(obd);
 	RETURN(NULL);
 }
 
@@ -499,7 +498,7 @@ static struct lu_device *mds_device_alloc(const struct lu_env *env,
 	/* set this lu_device to obd, because error handling need it */
 	obd->obd_lu_dev = l;
 
-	rc = lprocfs_kset_register(obd, &m->mds_kset);
+	rc = lprocfs_obd_setup(obd, true);
 	if (rc != 0) {
 		mds_device_free(env, l);
 		l = ERR_PTR(rc);
@@ -510,7 +509,7 @@ static struct lu_device *mds_device_alloc(const struct lu_env *env,
 
 	rc = mds_start_ptlrpc_service(m);
 	if (rc != 0) {
-		lprocfs_kset_unregister(obd, m->mds_kset);
+		lprocfs_obd_cleanup(obd);
 		mds_device_free(env, l);
 		l = ERR_PTR(rc);
 		return l;

@@ -2944,7 +2944,7 @@ static int ldlm_setup(void)
         if (ldlm_state == NULL)
                 RETURN(-ENOMEM);
 
-	ldlm_kobj = kobject_create_and_add("ldlm", lustre_kobj);
+	ldlm_kobj = kobject_create_and_add("ldlm", &lustre_kset->kobj);
 	if (!ldlm_kobj)
 		GOTO(out, -ENOMEM);
 
@@ -3152,8 +3152,10 @@ static int ldlm_cleanup(void)
 		kset_unregister(ldlm_ns_kset);
 	if (ldlm_svc_kset)
 		kset_unregister(ldlm_svc_kset);
-	if (ldlm_kobj)
+	if (ldlm_kobj) {
+		sysfs_remove_group(ldlm_kobj, &ldlm_attr_group);
 		kobject_put(ldlm_kobj);
+	}
 
 	ldlm_proc_cleanup();
 
