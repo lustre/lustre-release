@@ -28,7 +28,7 @@
 
 #include <linux/lnet/socklnd.h>
 #include <linux/lnet/lnet-dlc.h>
-#include "cyaml.h"
+#include <cyaml.h>
 
 int
 lustre_net_show_tunables(struct cYAML *tunables,

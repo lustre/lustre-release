@@ -31,8 +31,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <libcfs/util/ioctl.h>
+#include "liblnd.h"
 #include "liblnetconfig.h"
-#include "cyaml.h"
 
 static int
 lustre_o2iblnd_show_tun(struct cYAML *lndparams,

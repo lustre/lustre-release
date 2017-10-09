@@ -120,7 +120,9 @@
 #include <time.h>
 #include <sys/xattr.h>
 #include <linux/types.h>
+#include <linux/lustre/lustre_ioctl.h>
 
+#include <libcfs/util/ioctl.h>
 #include <libcfs/util/string.h>
 #include <libcfs/util/parser.h>
 #include <linux/lnet/libcfs_debug.h>
@@ -144,7 +146,6 @@
 
 /* Not used; declared for fulfilling obd.c's dependency. */
 command_t cmdlist[0];
-extern int obd_initialize(int argc, char **argv);
 
 /* Information for processing a changelog record. This structure is
    allocated on the heap instead of allocating large variables on the
@@ -1792,10 +1793,8 @@ int main(int argc, char *argv[])
 
         /* This plumbing is needed for some of the ioctls behind
            llapi calls to work. */
-        if (obd_initialize(argc, argv) < 0) {
-                fprintf(stderr, "obd_initialize failed.\n");
-                exit(-1);
-        }
+	register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH,
+			 OBD_DEV_MAJOR, OBD_DEV_MINOR);
 
         rc = lr_locate_rsync();
         if (use_rsync && rc != 0) {

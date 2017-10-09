@@ -51,7 +51,6 @@
 #include <fcntl.h>
 #include <ifaddrs.h>
 #include "liblnetconfig.h"
-#include "cyaml.h"
 
 #define CONFIG_CMD		"configure"
 #define UNCONFIG_CMD		"unconfigure"

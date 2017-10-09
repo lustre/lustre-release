@@ -451,8 +451,6 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %{_bindir}/lfs
 %{_bindir}/lfs_migrate
 /sbin/mount.lustre
-%{_libdir}/libptlctl.a
-%{_libdir}/libcfsutil.a
 %{_libdir}/liblustreapi.a
 %{_libdir}/liblustreapi.so
 %if %{with manpages}

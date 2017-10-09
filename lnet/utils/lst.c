@@ -51,7 +51,9 @@
 #include <linux/lnet/lnetctl.h>
 #include <linux/lnet/lnetst.h>
 #include <linux/lnet/nidstr.h>
-#include <utils/obdctl.h>
+#ifdef USE_DLC
+#include "lnetconfig/liblnetconfig.h"
+#endif
 
 struct lst_sid LST_INVALID_SID = { .ses_nid = LNET_NID_ANY, .ses_stamp = -1 };
 static struct lst_sid session_id;
@@ -3331,10 +3333,14 @@ main(int argc, char **argv)
         rc = lst_initialize();
         if (rc < 0)
                 goto errorout;
-
-        rc = ptl_initialize(argc, argv);
-        if (rc < 0)
-                goto errorout;
+#ifdef USE_DLC
+	rc = lustre_lnet_config_lib_init();
+#else
+	rc = register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH,
+			      LNET_DEV_MAJOR, LNET_DEV_MINOR);
+#endif
+	if (rc < 0)
+		goto errorout;
 
         Parser_init("lst > ", lst_cmdlist);
 
