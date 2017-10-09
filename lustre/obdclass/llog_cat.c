@@ -806,9 +806,8 @@ static int llog_cat_process_common(const struct lu_env *env,
 		 * deletion are not atomic. So we end up with an index but no
 		 * actual record. Destroy the index and move on. */
 		if (rc == -ENOENT || rc == -ESTALE)
-			rc = llog_cat_cleanup(env, cat_llh, NULL,
-					      rec->lrh_index);
-		if (rc)
+			rc = LLOG_DEL_RECORD;
+		else if (rc)
 			CWARN("%s: can't find llog handle "DFID":%x: rc = %d\n",
 			      cat_llh->lgh_ctxt->loc_obd->obd_name,
 			      PFID(&lir->lid_id.lgl_oi.oi_fid),
@@ -866,9 +865,14 @@ static int llog_cat_process_cb(const struct lu_env *env,
 
 out:
 	/* The empty plain log was destroyed while processing */
-	if (rc == LLOG_DEL_PLAIN)
+	if (rc == LLOG_DEL_PLAIN) {
 		rc = llog_cat_cleanup(env, cat_llh, llh,
 				      llh->u.phd.phd_cookie.lgc_index);
+	} else if (rc == LLOG_DEL_RECORD) {
+		/* clear wrong catalog entry */
+		rc = llog_cat_cleanup(env, cat_llh, NULL, rec->lrh_index);
+	}
+
 	if (llh)
 		llog_handle_put(llh);
 
@@ -938,13 +942,14 @@ static int llog_cat_size_cb(const struct lu_env *env,
 
 	ENTRY;
 	rc = llog_cat_process_common(env, cat_llh, rec, &llh);
-	if (llh == NULL)
-		RETURN(0);
 
 	if (rc == LLOG_DEL_PLAIN) {
 		/* empty log was deleted, don't count it */
 		rc = llog_cat_cleanup(env, cat_llh, llh,
 				      llh->u.phd.phd_cookie.lgc_index);
+	} else if (rc == LLOG_DEL_RECORD) {
+		/* clear wrong catalog entry */
+		rc = llog_cat_cleanup(env, cat_llh, NULL, rec->lrh_index);
 	} else {
 		size = llog_size(env, llh);
 		*cum_size += size;
@@ -953,7 +958,8 @@ static int llog_cat_size_cb(const struct lu_env *env,
 		       PFID(&llh->lgh_id.lgl_oi.oi_fid), size, *cum_size);
 	}
 
-	llog_handle_put(llh);
+	if (llh != NULL)
+		llog_handle_put(llh);
 
 	RETURN(0);
 }
@@ -979,6 +985,15 @@ static int llog_cat_reverse_process_cb(const struct lu_env *env,
 
 	ENTRY;
 	rc = llog_cat_process_common(env, cat_llh, rec, &llh);
+
+	/* The empty plain log was destroyed while processing */
+	if (rc == LLOG_DEL_PLAIN) {
+		rc = llog_cat_cleanup(env, cat_llh, llh,
+				      llh->u.phd.phd_cookie.lgc_index);
+	} else if (rc == LLOG_DEL_RECORD) {
+		/* clear wrong catalog entry */
+		rc = llog_cat_cleanup(env, cat_llh, NULL, rec->lrh_index);
+	}
 	if (rc)
 		RETURN(rc);
 
