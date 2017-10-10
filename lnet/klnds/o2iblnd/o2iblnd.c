@@ -1543,7 +1543,8 @@ static int kiblnd_alloc_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo)
 	return rc;
 }
 
-static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo)
+static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo,
+				  struct ib_device_attr *dev_attr)
 {
 	struct kib_fast_reg_descriptor *frd, *tmp;
 	int i, rc;
@@ -1576,8 +1577,20 @@ static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo)
 		frd->frd_mr = ib_alloc_fast_reg_mr(fpo->fpo_hdev->ibh_pd,
 						   LNET_MAX_PAYLOAD/PAGE_SIZE);
 #else
+		/*
+		 * it is expected to get here if this is an MLX-5 card.
+		 * MLX-4 cards will always use FMR and MLX-5 cards will
+		 * always use fast_reg. MLX-5 cards should support
+		 * IB_DEVICE_SG_GAPS_REG. If for whatever reason, that's
+		 * not the case, we can't handle communication with
+		 * cards lacking that support.
+		 */
+		if (!(dev_attr->device_cap_flags & IB_DEVICE_SG_GAPS_REG)) {
+			rc = -EPROTONOSUPPORT;
+			goto out_middle;
+		}
 		frd->frd_mr = ib_alloc_mr(fpo->fpo_hdev->ibh_pd,
-					  IB_MR_TYPE_MEM_REG,
+					  IB_MR_TYPE_SG_GAPS,
 					  LNET_MAX_PAYLOAD/PAGE_SIZE);
 #endif
 		if (IS_ERR(frd->frd_mr)) {
@@ -1673,7 +1686,7 @@ kiblnd_create_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t **pp_fpo)
 	if (fpo->fpo_is_fmr)
 		rc = kiblnd_alloc_fmr_pool(fps, fpo);
 	else
-		rc = kiblnd_alloc_freg_pool(fps, fpo);
+		rc = kiblnd_alloc_freg_pool(fps, fpo, dev_attr);
 	if (rc)
 		goto out_fpo;
 
