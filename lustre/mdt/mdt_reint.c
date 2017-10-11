@@ -1452,6 +1452,7 @@ again:
 				GOTO(out, rc = -EBUSY);
 			}
 
+			mdt_lock_pdo_init(&mll->mll_lh, LCK_PW, &name);
 			rc = mdt_object_lock(info, mdt_pobj, &mll->mll_lh,
 					     MDS_INODELOCK_UPDATE);
 			if (rc != 0) {
