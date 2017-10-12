@@ -3690,6 +3690,41 @@ static int handle_yaml_show_stats(struct cYAML *tree, struct cYAML **show_rc,
 				      show_rc, err_rc);
 }
 
+static int handle_yaml_config_numa(struct cYAML *tree, struct cYAML **show_rc,
+				  struct cYAML **err_rc)
+{
+	struct cYAML *seq_no, *range;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	range = cYAML_get_object_item(tree, "range");
+
+	return lustre_lnet_config_numa_range(range ? range->cy_valueint : -1,
+					     seq_no ? seq_no->cy_valueint : -1,
+					     err_rc);
+}
+
+static int handle_yaml_del_numa(struct cYAML *tree, struct cYAML **show_rc,
+			       struct cYAML **err_rc)
+{
+	struct cYAML *seq_no;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+
+	return lustre_lnet_config_numa_range(0, seq_no ? seq_no->cy_valueint : -1,
+					     err_rc);
+}
+
+static int handle_yaml_show_numa(struct cYAML *tree, struct cYAML **show_rc,
+				struct cYAML **err_rc)
+{
+	struct cYAML *seq_no;
+
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+
+	return lustre_lnet_show_numa_range(seq_no ? seq_no->cy_valueint : -1,
+					   show_rc, err_rc);
+}
+
 static int handle_yaml_config_global_settings(struct cYAML *tree,
 					      struct cYAML **show_rc,
 					      struct cYAML **err_rc)
@@ -3833,6 +3868,7 @@ static struct lookup_cmd_hdlr_tbl lookup_config_tbl[] = {
 	{ .name = "buffers",	.cb = handle_yaml_config_buffers },
 	{ .name = "statistics", .cb = handle_yaml_no_op },
 	{ .name = "global",	.cb = handle_yaml_config_global_settings},
+	{ .name = "numa",	.cb = handle_yaml_config_numa },
 	{ .name = "ping",	.cb = handle_yaml_no_op },
 	{ .name = "discover",	.cb = handle_yaml_no_op },
 	{ .name = NULL } };
@@ -3846,6 +3882,7 @@ static struct lookup_cmd_hdlr_tbl lookup_del_tbl[] = {
 	{ .name = "buffers",	.cb = handle_yaml_no_op },
 	{ .name = "statistics", .cb = handle_yaml_no_op },
 	{ .name = "global",	.cb = handle_yaml_del_global_settings},
+	{ .name = "numa",	.cb = handle_yaml_del_numa },
 	{ .name = "ping",	.cb = handle_yaml_no_op },
 	{ .name = "discover",	.cb = handle_yaml_no_op },
 	{ .name = NULL } };
@@ -3859,6 +3896,7 @@ static struct lookup_cmd_hdlr_tbl lookup_show_tbl[] = {
 	{ .name = "buffers",	.cb = handle_yaml_show_routing },
 	{ .name = "statistics",	.cb = handle_yaml_show_stats },
 	{ .name = "global",	.cb = handle_yaml_show_global_settings},
+	{ .name = "numa",	.cb = handle_yaml_show_numa },
 	{ .name = "ping",	.cb = handle_yaml_no_op },
 	{ .name = "discover",	.cb = handle_yaml_no_op },
 	{ .name = NULL } };
@@ -3872,6 +3910,7 @@ static struct lookup_cmd_hdlr_tbl lookup_exec_tbl[] = {
 	{ .name = "buffers",	.cb = handle_yaml_no_op },
 	{ .name = "statistics",	.cb = handle_yaml_no_op },
 	{ .name = "global",	.cb = handle_yaml_no_op },
+	{ .name = "numa",	.cb = handle_yaml_no_op },
 	{ .name = "ping",	.cb = handle_yaml_ping },
 	{ .name = "discover",	.cb = handle_yaml_discover },
 	{ .name = NULL } };
