@@ -337,11 +337,11 @@ enum resync_errors {
 	OPEN_TEST_FILE		= 1 << 4,
 };
 
-static enum resync_errors resync_parse_error(const char *arg)
+static enum resync_errors resync_parse_error(const char *err)
 {
 	struct {
 		const char *loc;
-		enum resync_errors  error;
+		enum resync_errors error;
 	} cmds[] = {
 		{ "resync_start", AFTER_RESYNC_START },
 		{ "invalid_ids", INVALID_IDS },
@@ -352,165 +352,11 @@ static enum resync_errors resync_parse_error(const char *arg)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(cmds); i++)
-		if (strcmp(arg, cmds[i].loc) == 0)
+		if (strcmp(err, cmds[i].loc) == 0)
 			return cmds[i].error;
 
-	syserr(1, "unknown error string: %s", arg);
-	return 0;
-}
-
-struct resync_comp {
-	uint64_t start;
-	uint64_t end;
-	uint32_t mirror_id;
-	uint32_t id;	/* component id */
-	bool synced;
-};
-
-/* find all stale components */
-static size_t mirror_find_stale(struct llapi_layout *layout,
-		struct resync_comp *comp, size_t max_count)
-{
-	int idx = 0;
-	int rc;
-
-	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
-	syserr(rc < 0, "llapi_layout_comp_move");
-
-	while (rc == 0) {
-		uint32_t id;
-		uint32_t mirror_id;
-		uint32_t flags;
-		uint64_t start, end;
-
-		rc = llapi_layout_mirror_id_get(layout, &mirror_id);
-		syserr(rc < 0, "llapi_layout_comp_id_get");
-
-		rc = llapi_layout_comp_id_get(layout, &id);
-		syserr(rc < 0, "llapi_layout_comp_id_get");
-
-		rc = llapi_layout_comp_flags_get(layout, &flags);
-		syserr(rc < 0, "llapi_layout_comp_flags_get");
-
-		rc = llapi_layout_comp_extent_get(layout, &start, &end);
-		syserr(rc < 0, "llapi_layout_comp_flags_get");
-
-		if (flags & LCME_FL_STALE) {
-			comp[idx].id = id;
-			comp[idx].mirror_id = mirror_id;
-			comp[idx].start = start;
-			comp[idx].end = end;
-			idx++;
-
-			syserr(idx >= max_count, "array too small");
-		}
-
-		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
-		syserr(rc < 0, "llapi_layout_comp_move");
-	}
-
-	return idx;
-}
-
-/* locate @layout to a valid component covering file [file_start, file_end) */
-static uint32_t mirror_find(struct llapi_layout *layout,
-		uint64_t file_start, uint64_t file_end, uint64_t *endp)
-{
-	uint32_t mirror_id = 0;
-	int rc;
-
-	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
-	syserr(rc < 0, "llapi_layout_comp_move");
-
-	*endp = 0;
-	while (rc == 0) {
-		uint64_t start, end;
-		uint32_t flags, id, rid;
-
-		llapi_layout_mirror_id_get(layout, &rid);
-		syserr(rc < 0, "llapi_layout_mirror_id_get");
-
-		rc = llapi_layout_comp_id_get(layout, &id);
-		syserr(rc < 0, "llapi_layout_comp_id_get");
-
-		rc = llapi_layout_comp_flags_get(layout, &flags);
-		syserr(rc < 0, "llapi_layout_comp_flags_get");
-
-		rc = llapi_layout_comp_extent_get(layout, &start, &end);
-		syserr(rc < 0, "llapi_layout_comp_extent_get");
-
-		if (!(flags & LCME_FL_STALE)) {
-			if (file_start >= start && file_start < end) {
-				if (mirror_id == 0)
-					mirror_id = rid;
-				else if (mirror_id != rid || *endp != start)
-					break;
-
-				file_start = *endp = end;
-				if (end >= file_end)
-					break;
-			}
-		}
-
-		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
-		syserr(rc < 0, "llapi_layout_comp_move");
-	}
-
-	return mirror_id;
-}
-
-static char *endstr(uint64_t end)
-{
-	static char buf[32];
-
-	if (end == (uint64_t)-1)
-		return "eof";
-
-	snprintf(buf, sizeof(buf), "%lx", end);
-	return buf;
-}
-
-static ssize_t mirror_resync_one(int fd, struct llapi_layout *layout,
-				uint32_t dst, uint64_t start, uint64_t end)
-{
-	uint64_t mirror_end;
-	ssize_t result = 0;
-	size_t count;
-
-	if (end == OBD_OBJECT_EOF)
-		count = OBD_OBJECT_EOF;
-	else
-		count = end - start;
-
-	while (count > 0) {
-		uint32_t src;
-		size_t to_copy;
-		ssize_t copied;
-
-		src = mirror_find(layout, start, end, &mirror_end);
-		syserr(!src, "could find component covering %lu\n", start);
-
-		if (mirror_end == OBD_OBJECT_EOF)
-			to_copy = count;
-		else
-			to_copy = MIN(count, mirror_end - start);
-
-		copied = llapi_mirror_copy(fd, src, dst, start, to_copy);
-		syserr(copied < 0, "llapi_mirror_copy returned %zd\n", copied);
-
-		printf("src (%u) [%lx -> %s) -> dst (%u), copied %zd bytes\n",
-			src, start, endstr(mirror_end), dst, copied);
-
-		result += copied;
-		if (copied < to_copy) /* end of file */
-			break;
-
-		if (count != OBD_OBJECT_EOF)
-			count -= copied;
-		start += copied;
-	}
-
-	return result;
+	fprintf(stderr, "unknown error string: %s\n", err);
+	return -1;
 }
 
 static void mirror_resync(int argc, char *argv[])
@@ -525,7 +371,7 @@ static void mirror_resync(int argc, char *argv[])
 
 	struct llapi_layout *layout;
 	struct ll_ioc_lease *ioc;
-	struct resync_comp comp_array[1024] = { { 0 } };
+	struct llapi_resync_comp comp_array[1024] = { { 0 } };
 	size_t comp_size = 0;
 	uint32_t flr_state;
 
@@ -558,27 +404,37 @@ static void mirror_resync(int argc, char *argv[])
 	ioc->lil_mode = LL_LEASE_WRLCK;
 	ioc->lil_flags = LL_LEASE_RESYNC;
 	rc = llapi_lease_get_ext(fd, ioc);
+	if (rc < 0)
+		free(ioc);
 	syserr(rc < 0, "llapi_lease_get_ext resync");
 
-	if (error_inject & AFTER_RESYNC_START)
+	if (error_inject & AFTER_RESYNC_START) {
+		free(ioc);
 		syserrx(1, "hit by error injection");
+	}
 
 	layout = llapi_layout_get_by_fd(fd, 0);
+	if (layout == NULL)
+		free(ioc);
 	syserr(layout == NULL, "llapi_layout_get_by_fd");
 
 	rc = llapi_layout_flags_get(layout, &flr_state);
+	if (rc)
+		free(ioc);
 	syserr(rc, "llapi_layout_flags_get");
 
 	flr_state &= LCM_FL_FLR_MASK;
-	syserrx(flr_state != LCM_FL_WRITE_PENDING &&
-		flr_state != LCM_FL_SYNC_PENDING,
-		"file state error: %d", flr_state);
+	if (flr_state != LCM_FL_WRITE_PENDING &&
+	    flr_state != LCM_FL_SYNC_PENDING) {
+		free(ioc);
+		syserrx(true, "file state error: %d", flr_state);
+	}
 
 	if (error_inject & DELAY_BEFORE_COPY)
 		sleep(delay);
 
-	comp_size = mirror_find_stale(layout, comp_array,
-					ARRAY_SIZE(comp_array));
+	comp_size = llapi_mirror_find_stale(layout, comp_array,
+					    ARRAY_SIZE(comp_array), NULL, 0);
 
 	printf("%s: found %zd stale components\n", fname, comp_size);
 
@@ -592,35 +448,37 @@ static void mirror_resync(int argc, char *argv[])
 		rc = llapi_lease_check(fd);
 		syserr(rc != LL_LEASE_WRLCK, "lost lease lock");
 
-		mirror_id = comp_array[idx].mirror_id;
-		end = comp_array[idx].end;
+		mirror_id = comp_array[idx].lrc_mirror_id;
+		end = comp_array[idx].lrc_end;
 
 		printf("%s: resyncing mirror: %u, components: %u ",
-			fname, mirror_id, comp_array[idx].id);
+			fname, mirror_id, comp_array[idx].lrc_id);
 
 		for (i = idx + 1; i < comp_size; i++) {
-			if (mirror_id != comp_array[i].mirror_id ||
-			    end != comp_array[i].start)
+			if (mirror_id != comp_array[i].lrc_mirror_id ||
+			    end != comp_array[i].lrc_start)
 				break;
 
-			printf("%u ", comp_array[i].id);
-			end = comp_array[i].end;
+			printf("%u ", comp_array[i].lrc_id);
+			end = comp_array[i].lrc_end;
 		}
 		printf("\b\n");
 
-		res = mirror_resync_one(fd, layout, mirror_id,
-					 comp_array[idx].start, end);
+		res = llapi_mirror_resync_one(fd, layout, mirror_id,
+					      comp_array[idx].lrc_start, end);
 		if (res > 0) {
 			int j;
 
 			printf("components synced: ");
 			for (j = idx; j < i; j++) {
-				comp_array[j].synced = true;
-				printf("%u ", comp_array[j].id);
+				comp_array[j].lrc_synced = true;
+				printf("%u ", comp_array[j].lrc_id);
 			}
 			printf("\n");
 		}
 
+		if (res < 0)
+			free(ioc);
 		syserrx(res < 0, "llapi_mirror_copy_many");
 
 		idx = i;
@@ -631,8 +489,8 @@ static void mirror_resync(int argc, char *argv[])
 	ioc->lil_flags = LL_LEASE_RESYNC_DONE;
 	ioc->lil_count = 0;
 	for (idx = 0; idx < comp_size; idx++) {
-		if (comp_array[idx].synced) {
-			ioc->lil_ids[ioc->lil_count] = comp_array[idx].id;
+		if (comp_array[idx].lrc_synced) {
+			ioc->lil_ids[ioc->lil_count] = comp_array[idx].lrc_id;
 			ioc->lil_count++;
 		}
 	}
@@ -649,10 +507,9 @@ static void mirror_resync(int argc, char *argv[])
 		close(open(argv[optind], O_RDONLY));
 
 	rc = llapi_lease_get_ext(fd, ioc);
-	syserr(rc < 0, "llapi_lease_get_ext resync done");
+	syserr(rc <= 0, "llapi_lease_get_ext resync failed");
 
-	syserr(rc == 0, "file busy");
-
+	free(ioc);
 	close(fd);
 }
 

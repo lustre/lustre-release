@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <sys/xattr.h>
+#include <sys/param.h>
 
 #include <libcfs/util/list.h>
 #include <lustre/lustreapi.h>
@@ -2213,4 +2214,214 @@ int llapi_layout_merge(struct llapi_layout **dst_layout,
 error:
 	llapi_layout_free(new_layout);
 	return -1;
+}
+
+/**
+ * Find all stale components.
+ *
+ * \param[in] layout		component layout list.
+ * \param[out] comp		array of stale component info.
+ * \param[in] comp_size		array size of @comp.
+ * \param[in] mirror_ids	array of mirror id that only components
+ *				belonging to these mirror will be collected.
+ * \param[in] ids_nr		number of mirror ids array.
+ *
+ * \retval		number of component info collected on sucess or
+ *			an error code on failure.
+ */
+int llapi_mirror_find_stale(struct llapi_layout *layout,
+		struct llapi_resync_comp *comp, size_t comp_size,
+		__u16 *mirror_ids, int ids_nr)
+{
+	int idx = 0;
+	int rc;
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc < 0) {
+		fprintf(stderr, "%s: move to the first layout component: %s.\n",
+			__func__, strerror(errno));
+		goto error;
+	}
+
+	while (rc == 0) {
+		uint32_t id;
+		uint32_t mirror_id;
+		uint32_t flags;
+		uint64_t start, end;
+
+		rc = llapi_layout_comp_flags_get(layout, &flags);
+		if (rc < 0) {
+			fprintf(stderr, "llapi_layout_comp_flags_get: %s.\n",
+				strerror(errno));
+			goto error;
+		}
+
+		if (!(flags & LCME_FL_STALE))
+			goto next;
+
+		rc = llapi_layout_mirror_id_get(layout, &mirror_id);
+		if (rc < 0) {
+			fprintf(stderr, "llapi_layout_mirror_id_get: %s.\n",
+				strerror(errno));
+			goto error;
+		}
+
+		/* the caller only wants stale components from specific
+		 * mirrors */
+		if (ids_nr > 0) {
+			int j;
+
+			for (j = 0; j < ids_nr; j++) {
+				if (mirror_ids[j] == mirror_id)
+					break;
+			}
+
+			/* not in the specified mirror */
+			if (j == ids_nr)
+				goto next;
+		}
+
+		rc = llapi_layout_comp_id_get(layout, &id);
+		if (rc < 0) {
+			fprintf(stderr, "llapi_layout_comp_id_get: %s.\n",
+				strerror(errno));
+			goto error;
+		}
+
+		rc = llapi_layout_comp_extent_get(layout, &start, &end);
+		if (rc < 0) {
+			fprintf(stderr, "llapi_layout_comp_extent_get: %s.\n",
+				strerror(errno));
+			goto error;
+		}
+
+		/* pack this component into @comp array */
+		comp[idx].lrc_id = id;
+		comp[idx].lrc_mirror_id = mirror_id;
+		comp[idx].lrc_start = start;
+		comp[idx].lrc_end = end;
+		idx++;
+
+		if (idx >= comp_size) {
+			fprintf(stderr, "%s: resync_comp array too small.\n",
+				__func__);
+			rc = -EINVAL;
+			goto error;
+		}
+
+	next:
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+		if (rc < 0) {
+			fprintf(stderr, "%s: move to the next layout "
+				"component: %s.\n", __func__, strerror(errno));
+			rc = -EINVAL;
+			goto error;
+		}
+	}
+error:
+	return rc < 0 ? rc : idx;
+}
+
+/* locate @layout to a valid component covering file [file_start, file_end) */
+static uint32_t llapi_mirror_find(struct llapi_layout *layout,
+				  uint64_t file_start, uint64_t file_end,
+				  uint64_t *endp)
+{
+	uint32_t mirror_id = 0;
+	int rc;
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc < 0)
+		return rc;
+
+	*endp = 0;
+	while (rc == 0) {
+		uint64_t start, end;
+		uint32_t flags, id, rid;
+
+		rc = llapi_layout_comp_flags_get(layout, &flags);
+		if (rc < 0)
+			return rc;
+
+		if (flags & LCME_FL_STALE)
+			goto next;
+
+		rc = llapi_layout_mirror_id_get(layout, &rid);
+		if (rc < 0)
+			return rc;
+
+		rc = llapi_layout_comp_id_get(layout, &id);
+		if (rc < 0)
+			return rc;
+
+		rc = llapi_layout_comp_extent_get(layout, &start, &end);
+		if (rc < 0)
+			return rc;
+
+		if (file_start >= start && file_start < end) {
+			if (!mirror_id)
+				mirror_id = rid;
+			else if (mirror_id != rid || *endp != start)
+				break;
+
+			file_start = *endp = end;
+			if (end >= file_end)
+				break;
+		}
+
+	next:
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+		if (rc < 0)
+			return rc;
+	}
+
+	return mirror_id;
+}
+
+ssize_t llapi_mirror_resync_one(int fd, struct llapi_layout *layout,
+				uint32_t dst, uint64_t start, uint64_t end)
+{
+	uint64_t mirror_end = 0;
+	ssize_t result = 0;
+	size_t count;
+
+	if (end == OBD_OBJECT_EOF)
+		count = OBD_OBJECT_EOF;
+	else
+		count = end - start;
+
+	while (count > 0) {
+		uint32_t src;
+		size_t to_copy;
+		ssize_t copied;
+
+		src = llapi_mirror_find(layout, start, end, &mirror_end);
+		if (src == 0) {
+			fprintf(stderr, "llapi_mirror_find cannot find "
+				"component covering %lu.\n", start);
+			return -ENOENT;
+		}
+
+		if (mirror_end == OBD_OBJECT_EOF)
+			to_copy = count;
+		else
+			to_copy = MIN(count, mirror_end - start);
+
+		copied = llapi_mirror_copy(fd, src, dst, start, to_copy);
+		if (copied < 0) {
+			fprintf(stderr, "llapi_mirror_copy returned %zd.\n",
+				copied);
+			return copied;
+		}
+
+		result += copied;
+		if (copied < to_copy) /* end of file */
+			break;
+
+		if (count != OBD_OBJECT_EOF)
+			count -= copied;
+		start += copied;
+	}
+
+	return result;
 }

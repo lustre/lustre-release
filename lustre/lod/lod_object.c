@@ -5347,9 +5347,14 @@ static void lod_stale_components(struct lod_object *lo, int primary,
 
 	/* The writing extent decides which components in the primary
 	 * are affected... */
+	CDEBUG(D_LAYOUT, "primary mirror %d, "DEXT"\n", primary, PEXT(extent));
 	lod_foreach_mirror_comp(pri_comp, lo, primary) {
 		if (!lu_extent_is_overlapped(extent, &pri_comp->llc_extent))
 			continue;
+
+		CDEBUG(D_LAYOUT, "primary comp %u "DEXT"\n",
+		       lod_comp_index(lo, pri_comp),
+		       PEXT(&pri_comp->llc_extent));
 
 		for (i = 0; i < lo->ldo_mirror_count; i++) {
 			if (i == primary)

@@ -50,7 +50,10 @@ static inline const char *lease_mode2str(int mode)
  * \param fd	File to get lease on.
  * \param data	ll_ioc_lease data.
  *
- * \retval 0 on success.
+ * For getting lease lock, it will return zero for success. For unlock, it will
+ * return the lock type it owned for succuess.
+ *
+ * \retval >= 0 on success.
  * \retval -errno on error.
  */
 int llapi_lease_get_ext(int fd, struct ll_ioc_lease *data)
@@ -78,7 +81,9 @@ int llapi_lease_get_ext(int fd, struct ll_ioc_lease *data)
  * \param fd    File to get the lease on.
  * \param mode  Lease mode, either LL_LEASE_RDLCK or LL_LEASE_WRLCK.
  *
- * \retval 0 on success.
+ * \see llapi_lease_get_ext().
+ *
+ * \retval >= 0 on success.
  * \retval -errno on error.
  */
 int llapi_lease_get(int fd, int mode)

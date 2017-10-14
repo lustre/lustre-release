@@ -1232,6 +1232,38 @@ test_40() {
 }
 run_test 40 "PFLR rdonly state instantiation check"
 
+test_41() {
+	local tf=$DIR/$tfile
+
+	rm -f $tf
+	$LFS mirror create -N -E2m -E4m -E-1 -N -E1m -E2m -E3m -E-1 $tf ||
+		error "create PFLR file $tf failed"
+
+	# file should be in ro status
+	verify_flr_state $tf "ro"
+
+	# write data in [0, 2M)
+	dd if=/dev/zero of=$tf bs=1M count=2 conv=notrunc ||
+		error "writing $tf failed"
+
+	verify_flr_state $tf "wp"
+
+	# file should have stale component
+	$LFS getstripe $tf | grep lcme_flags | grep stale > /dev/null ||
+		error "after writing $tf, it does not contain stale component"
+
+	$LFS mirror resync $tf || error "mirror resync $tf failed"
+
+	verify_flr_state $tf "ro"
+
+	# file should not have stale component
+	$LFS getstripe $tf | grep lcme_flags | grep stale &&
+		error "after resyncing $tf, it contains stale component"
+
+	return 0
+}
+run_test 41 "lfs mirror resync check"
+
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)
 
@@ -1274,8 +1306,11 @@ resync_file_200() {
 
 	exec 200<>$lock_file
 	while [ -f $ctrl_file ]; do
-		local index=$((RANDOM % ${#options[@]}))
 		local lock_taken=false
+		local index=$((RANDOM % ${#options[@]}))
+		local cmd="mirror_io resync ${options[$index]}"
+
+		[ "${options[$index]}" = "" ] && cmd="$LFS mirror resync"
 
 		[ $((RANDOM % 4)) -eq 0 ] && {
 			index=0
@@ -1283,12 +1318,10 @@ resync_file_200() {
 			echo -n "lock to "
 		}
 
-		echo -n "resync file $tf with '${options[$index]}' .."
+		echo -n "resync file $tf with '$cmd' .."
 
 		$lock_taken && flock -x 200
-		mirror_io resync ${options[$index]} $tf &> /dev/null &&
-			echo "done" || echo "failed"
-
+		$cmd $tf &> /dev/null && echo "done" || echo "failed"
 		$lock_taken && flock -u 200
 
 		sleep 0.$((RANDOM % 8 + 1))

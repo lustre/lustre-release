@@ -2593,7 +2593,7 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
-static char *lcm_flags_string(__u16 flags)
+char *lcm_flags_string(__u16 flags)
 {
 	switch (flags & LCM_FL_FLR_MASK) {
 	case LCM_FL_NOT_FLR:

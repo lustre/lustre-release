@@ -450,9 +450,28 @@ int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
 
 /* llapi_layout user interface */
 
+extern char *lcm_flags_string(__u16 flags);
+
+/**
+ * An array element storing component info to be resynced during mirror
+ * resynchronization.
+ */
+struct llapi_resync_comp {
+	uint64_t lrc_start;
+	uint64_t lrc_end;
+	uint32_t lrc_mirror_id;
+	uint32_t lrc_id;	/* component id */
+	bool lrc_synced;
+};
+
 /** Opaque data type abstracting the layout of a Lustre file. */
 struct llapi_layout;
 
+int llapi_mirror_find_stale(struct llapi_layout *layout,
+		struct llapi_resync_comp *comp, size_t comp_size,
+		__u16 *mirror_ids, int ids_nr);
+ssize_t llapi_mirror_resync_one(int fd, struct llapi_layout *layout,
+				uint32_t dst, uint64_t start, uint64_t end);
 /*
  * Flags to control how layouts are retrieved.
  */

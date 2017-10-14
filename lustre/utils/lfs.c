@@ -111,6 +111,7 @@ static int lfs_ladvise(int argc, char **argv);
 static int lfs_mirror(int argc, char **argv);
 static int lfs_mirror_list_commands(int argc, char **argv);
 static int lfs_list_commands(int argc, char **argv);
+static inline int lfs_mirror_resync(int argc, char **argv);
 
 enum setstripe_origin {
 	SO_SETSTRIPE,
@@ -232,16 +233,20 @@ static const char	*progname;
 command_t mirror_cmdlist[] = {
 	{ .pc_name = "create", .pc_func = lfs_mirror_create,
 	  .pc_help = "Create a mirrored file.\n"
-	  "usage: lfs mirror create "
-	  "<--mirror-count|-N[mirror_count]> "
-	  "[setstripe options|--parent] ... <filename|directory>\n"
+		"usage: lfs mirror create "
+		"<--mirror-count|-N[mirror_count]> "
+		"[setstripe options|--parent] ... <filename|directory>\n"
 	  MIRROR_CREATE_HELP },
 	{ .pc_name = "extend", .pc_func = lfs_mirror_extend,
 	  .pc_help = "Extend a mirrored file.\n"
-	  "usage: lfs mirror extend "
-	  "<--mirror-count|-N[mirror_count]> [--no-verify] "
-	  "[setstripe options|--parent|-f <victim_file>] ... <filename>\n"
+		"usage: lfs mirror extend "
+		"<--mirror-count|-N[mirror_count]> [--no-verify] "
+		"[setstripe options|--parent|-f <victim_file>] ... <filename>\n"
 	  MIRROR_EXTEND_HELP },
+	{ .pc_name = "resync", .pc_func = lfs_mirror_resync,
+	  .pc_help = "Resynchronizes an out-of-sync mirrored file.\n"
+		"usage: lfs mirror resync [--only <mirror_id[,...]>] "
+		"<mirrored file>\n"},
 	{ .pc_name = "--list-commands", .pc_func = lfs_mirror_list_commands,
 	  .pc_help = "list commands supported by lfs mirror"},
 	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
@@ -6135,6 +6140,277 @@ next:
 		if (rc == 0 && rc2 < 0)
 			rc = rc2;
 	}
+	return rc;
+}
+
+/** The input string contains a comma delimited list of component ids and
+ * ranges, for example "1,2-4,7".
+ */
+static int parse_mirror_ids(__u16 *ids, int size, char *arg)
+{
+	bool end_of_loop = false;
+	char *ptr = NULL;
+	int nr = 0;
+	int rc;
+
+	if (arg == NULL)
+		return -EINVAL;
+
+	while (!end_of_loop) {
+		int start_index;
+		int end_index;
+		int i;
+		char *endptr = NULL;
+
+		rc = -EINVAL;
+		ptr = strchrnul(arg, ',');
+		end_of_loop = *ptr == '\0';
+		*ptr = '\0';
+
+		start_index = strtol(arg, &endptr, 0);
+		if (endptr == arg) /* no data at all */
+			break;
+		if (*endptr != '-' && *endptr != '\0') /* has invalid data */
+			break;
+		if (start_index < 0)
+			break;
+
+		end_index = start_index;
+		if (*endptr == '-') {
+			end_index = strtol(endptr + 1, &endptr, 0);
+			if (*endptr != '\0')
+				break;
+			if (end_index < start_index)
+				break;
+		}
+
+		for (i = start_index; i <= end_index && size > 0; i++) {
+			int j;
+
+			/* remove duplicate */
+			for (j = 0; j < nr; j++) {
+				if (ids[j] == i)
+					break;
+			}
+			if (j == nr) { /* no duplicate */
+				ids[nr++] = i;
+				--size;
+			}
+		}
+
+		if (size == 0 && i < end_index)
+			break;
+
+		*ptr = ',';
+		arg = ++ptr;
+		rc = 0;
+	}
+	if (!end_of_loop && ptr != NULL)
+		*ptr = ',';
+
+	return rc < 0 ? rc : nr;
+}
+
+static inline int lfs_mirror_resync(int argc, char **argv)
+{
+	const char *fname;
+	struct stat stbuf;
+	int fd;
+	int c;
+	int rc;
+	int idx;
+
+	struct llapi_layout *layout;
+	struct ll_ioc_lease *ioc = NULL;
+	struct llapi_resync_comp comp_array[1024] = { { 0 } };
+	__u16 mirror_ids[128] = { 0 };
+	int ids_nr = 0;
+	int comp_size = 0;
+	uint32_t flr_state;
+
+	struct option long_opts[] = {
+	{ .val = 'o',	.name = "only",		.has_arg = required_argument },
+	{ .name = NULL } };
+
+	while ((c = getopt_long(argc, argv, "o:", long_opts, NULL)) >= 0) {
+		switch (c) {
+		case 'o':
+			rc = parse_mirror_ids(mirror_ids,
+					sizeof(mirror_ids) / sizeof(__u16),
+					optarg);
+			if (rc < 0) {
+				fprintf(stderr,
+					"%s: bad mirror ids '%s'.\n",
+					argv[0], optarg);
+				goto error;
+			}
+			ids_nr = rc;
+			break;
+		default:
+			fprintf(stderr, "%s: options '%s' unrecognized.\n",
+				argv[0], argv[optind - 1]);
+			rc = -EINVAL;
+			goto error;
+		}
+	}
+
+	if (argc > optind + 1) {
+		fprintf(stderr, "%s: too many files.\n", argv[0]);
+		rc = CMD_HELP;
+		goto error;
+	}
+	if (argc == optind) {
+		fprintf(stderr, "%s: no file name given.\n", argv[0]);
+		rc = CMD_HELP;
+		goto error;
+	}
+
+	fname = argv[optind];
+	if (stat(fname, &stbuf) < 0) {
+		fprintf(stderr, "%s: cannot stat file '%s': %s.\n",
+			argv[0], fname, strerror(errno));
+		rc = -errno;
+		goto error;
+	}
+	if (!S_ISREG(stbuf.st_mode)) {
+		fprintf(stderr, "%s: '%s' is not a regular file.\n",
+			argv[0], fname);
+		rc = -EINVAL;
+		goto error;
+	}
+
+	fd = open(fname, O_DIRECT | O_RDWR);
+	if (fd < 0) {
+		fprintf(stderr, "%s: cannot open '%s': %s.\n",
+			argv[0], fname, strerror(errno));
+		rc = -errno;
+		goto error;
+	}
+
+	/* set the lease on the file */
+	ioc = calloc(sizeof(*ioc) + sizeof(__u32) * 4096, 1);
+	if (ioc == NULL) {
+		fprintf(stderr, "%s: cannot alloc id array for ioc: %s.\n",
+			argv[0], strerror(errno));
+		rc = -errno;
+		goto close_fd;
+	}
+
+	ioc->lil_mode = LL_LEASE_WRLCK;
+	ioc->lil_flags = LL_LEASE_RESYNC;
+	rc = llapi_lease_get_ext(fd, ioc);
+	if (rc < 0) {
+		fprintf(stderr, "%s: llapi_lease_get_ext resync failed: %s.\n",
+			argv[0], strerror(errno));
+		goto free_ioc;
+	}
+
+	layout = llapi_layout_get_by_fd(fd, 0);
+	if (layout == NULL) {
+		fprintf(stderr, "%s: llapi_layout_get_by_fd failed: %s.\n",
+			argv[0], strerror(errno));
+		rc = -errno;
+		goto free_ioc;
+	}
+
+	rc = llapi_layout_flags_get(layout, &flr_state);
+	if (rc) {
+		fprintf(stderr, "%s: llapi_layout_flags_get failed: %s.\n",
+			argv[0], strerror(errno));
+		rc = -errno;
+		goto free_ioc;
+	}
+
+	flr_state &= LCM_FL_FLR_MASK;
+	if (flr_state != LCM_FL_WRITE_PENDING &&
+	    flr_state != LCM_FL_SYNC_PENDING) {
+		fprintf(stderr, "%s: file state error: %s.\n",
+			argv[0], lcm_flags_string(flr_state));
+		rc = 1;
+		goto free_ioc;
+	}
+
+	/* get stale component info */
+	comp_size = llapi_mirror_find_stale(layout, comp_array,
+					    ARRAY_SIZE(comp_array),
+					    mirror_ids, ids_nr);
+	if (comp_size < 0) {
+		rc = comp_size;
+		goto free_ioc;
+	}
+
+	idx = 0;
+	while (idx < comp_size) {
+		ssize_t result;
+		uint64_t end;
+		__u16 mirror_id;
+		int i;
+
+		rc = llapi_lease_check(fd);
+		if (rc != LL_LEASE_WRLCK) {
+			fprintf(stderr, "lost lease lock.\n");
+			goto free_ioc;
+		}
+
+		mirror_id = comp_array[idx].lrc_mirror_id;
+		end = comp_array[idx].lrc_end;
+
+		/* try to combine adjacent component */
+		for (i = idx + 1; i < comp_size; i++) {
+			if (mirror_id != comp_array[i].lrc_mirror_id ||
+			    end != comp_array[i].lrc_start)
+				break;
+			end = comp_array[i].lrc_end;
+		}
+
+		result = llapi_mirror_resync_one(fd, layout, mirror_id,
+						 comp_array[idx].lrc_start,
+						 end);
+		if (result < 0) {
+			fprintf(stderr, "llapi_mirror_resync_one: %ld.\n",
+				result);
+			rc = result;
+			goto free_ioc;
+		} else if (result > 0) {
+			int j;
+
+			/* mark synced components */
+			for (j = idx; j < i; j++)
+				comp_array[j].lrc_synced = true;
+		}
+
+		idx = i;
+	}
+
+	/* prepare ioc for lease put */
+	ioc->lil_mode = LL_LEASE_UNLCK;
+	ioc->lil_flags = LL_LEASE_RESYNC_DONE;
+	ioc->lil_count = 0;
+	for (idx = 0; idx < comp_size; idx++) {
+		if (comp_array[idx].lrc_synced) {
+			ioc->lil_ids[ioc->lil_count] = comp_array[idx].lrc_id;
+			ioc->lil_count++;
+		}
+	}
+
+	llapi_layout_free(layout);
+
+	rc = llapi_lease_get_ext(fd, ioc);
+	if (rc <= 0) {
+		if (rc == 0) /* lost lease lock */
+			rc = -EBUSY;
+		fprintf(stderr, "%s: resync file '%s' failed: %s.\n",
+			argv[0], fname, strerror(errno));
+		goto free_ioc;
+	}
+	rc = 0;
+
+free_ioc:
+	if (ioc)
+		free(ioc);
+close_fd:
+	close(fd);
+error:
 	return rc;
 }
 
