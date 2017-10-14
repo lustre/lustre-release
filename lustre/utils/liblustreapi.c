@@ -2190,6 +2190,18 @@ int sattr_cache_get_defaults(const char *const fsname,
         return 0;
 }
 
+static char *layout2name(__u32 layout_pattern)
+{
+	if (layout_pattern == LOV_PATTERN_MDT)
+		return "mdt";
+	else if (layout_pattern == LOV_PATTERN_RAID0)
+		return "raid0";
+	else if (layout_pattern == (LOV_PATTERN_RAID0 | LOV_PATTERN_F_RELEASED))
+		return "released";
+	else
+		return "unknown";
+}
+
 enum lov_dump_flags {
 	LDF_IS_DIR	= 0x0001,
 	LDF_IS_RAW	= 0x0002,
@@ -2335,7 +2347,11 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		if (verbose & ~VERBOSE_LAYOUT)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%spattern:       ",
 				     space, prefix);
-		llapi_printf(LLAPI_MSG_NORMAL, "%.x", lum->lmm_pattern);
+		if (lov_pattern_supported(lum->lmm_pattern))
+			llapi_printf(LLAPI_MSG_NORMAL, "%s",
+				     layout2name(lum->lmm_pattern));
+		else
+			llapi_printf(LLAPI_MSG_NORMAL, "%.x", lum->lmm_pattern);
 		separator = is_dir ? " " : "\n";
 	}
 
@@ -2459,8 +2475,8 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 					     obdindex == idx ? " *" : "");
 			}
 		}
-		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 	}
+	llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
 void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
@@ -2577,6 +2593,22 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
+static char *lcm_flags_string(__u16 flags)
+{
+	switch (flags & LCM_FL_FLR_MASK) {
+	case LCM_FL_NOT_FLR:
+		return "not_flr";
+	case LCM_FL_RDONLY:
+		return "ro";
+	case LCM_FL_WRITE_PENDING:
+		return "wp";
+	case LCM_FL_SYNC_PENDING:
+		return "sp";
+	default:
+		return "";
+	}
+}
+
 static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 				    enum lov_dump_flags flags)
 {
@@ -2595,8 +2627,8 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 			     " ", comp_v1->lcm_magic);
 		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_size:          %u\n",
 			     " ", comp_v1->lcm_size);
-		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_flags:         %u\n",
-			     " ", comp_v1->lcm_flags);
+		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_flags:         %s\n",
+			     " ", lcm_flags_string(comp_v1->lcm_flags));
 	}
 
 	if (verbose & VERBOSE_GENERATION) {
@@ -2608,7 +2640,7 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 
 	if (verbose & VERBOSE_MIRROR_COUNT) {
 		if (verbose & ~VERBOSE_MIRROR_COUNT)
-			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_mirror_count: ",
+			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_mirror_count:  ",
 				     " ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%u\n",
 			     comp_v1->lcm_magic == LOV_USER_MAGIC_COMP_V1 ?
@@ -2628,7 +2660,7 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 		llapi_printf(LLAPI_MSG_NORMAL, "components:\n");
 }
 
-static void comp_flags2str(__u32 comp_flags)
+static void lcme_flags2str(__u32 comp_flags)
 {
 	bool found = false;
 	int i = 0;
@@ -2687,7 +2719,7 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 		if (verbose & ~VERBOSE_COMP_FLAGS)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "%4slcme_flags:          ", " ");
-		comp_flags2str(entry->lcme_flags);
+		lcme_flags2str(entry->lcme_flags);
 		separator = "\n";
 	}
 
@@ -2862,7 +2894,7 @@ static int find_comp_end_cmp(unsigned long long end, struct find_param *param)
  *     lmm_fid:           [0x200000401:0x1:0x0]
  *     lmm_stripe_count:  1
  *     lmm_stripe_size:   1048576
- *     lmm_pattern:       1
+ *     lmm_pattern:       raid0
  *     lmm_layout_gen:    0
  *     lmm_stripe_offset: 0
  *     lmm_objects:
@@ -2881,7 +2913,7 @@ static int find_comp_end_cmp(unsigned long long end, struct find_param *param)
  *     lmm_fid:           [0x200000401:0x1:0x0]
  *     lmm_stripe_count:  2
  *     lmm_stripe_size:   1048576
- *     lmm_pattern:       1
+ *     lmm_pattern:       raid0
  *     lmm_layout_gen:    0
  *     lmm_stripe_offset: 1
  *     lmm_objects:

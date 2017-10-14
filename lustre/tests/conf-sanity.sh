@@ -2083,7 +2083,7 @@ t32_test() {
 				error_noexit "Verify DoM creation"
 				return 1
 			}
-			[ $($LFS getstripe -L $tmp/mnt/lustre/dom) == 100 ] || {
+			[ $($LFS getstripe -L $tmp/mnt/lustre/dom) == "mdt" ] || {
 				error_noexit "Verify a DoM file"
 				return 1
 			}

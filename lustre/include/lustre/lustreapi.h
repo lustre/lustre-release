@@ -785,12 +785,10 @@ static const struct comp_flag_name {
 	const char *cfn_name;
 } comp_flags_table[] = {
 	{ LCME_FL_INIT,		"init" },
-	/* For now, only "init" is supported
 	{ LCME_FL_PRIMARY,	"primary" },
 	{ LCME_FL_STALE,	"stale" },
 	{ LCME_FL_OFFLINE,	"offline" },
 	{ LCME_FL_PREFERRED,	"preferred" }
-	*/
 };
 
 /**

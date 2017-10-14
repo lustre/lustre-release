@@ -19,10 +19,6 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-if [[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.53) ]]; then
-	skip_env "Need MDS version at least 2.10.53" && exit
-fi
-
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] &&
 	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
@@ -79,7 +75,473 @@ start_osts() {
 	done
 }
 
+#
+# Verify mirror count with an expected value for a given file.
+#
+verify_mirror_count() {
+	local tf=$1
+	local expected=$2
+	local mirror_count=$(get_mirror_ids $tf)
+
+	[[ $mirror_count = $expected ]] || {
+		$LFS getstripe -v $tf
+		error "verify mirror count failed on $tf:" \
+		      "$mirror_count != $expected"
+	}
+}
+
+#
+# Verify component count with an expected value for a given file.
+#	$1 coposited layout file
+#	$2 expected component number
+#
+verify_comp_count() {
+	local tf=$1
+	local expected=$2
+	local comp_count=$($LFS getstripe --component-count $tf)
+
+	[[ $comp_count = $expected ]] || {
+		$LFS getstripe -v $tf
+		error "verify component count failed on $tf:" \
+		      "$comp_count != $expected"
+	}
+}
+
+#
+# Verify component attribute with an expected value for a given file
+# and component ID.
+#
+verify_comp_attr() {
+	local attr=$1
+	local tf=$2
+	local comp_id=$3
+	local expected=$4
+	local cmd="$LFS getstripe -I$comp_id"
+	local getstripe_cmd="$cmd -v"
+	local value
+
+	case $attr in
+		stripe-size) cmd+=" -S $tf" ;;
+		stripe-count) cmd+=" -c $tf" ;;
+		stripe-index) cmd+=" -i $tf" ;;
+		pool) cmd+=" -p $tf" ;;
+		comp-start) cmd+=" --component-start $tf" ;;
+		comp-end) cmd+=" --component-end $tf" ;;
+		lcme_flags) cmd+=" $tf | awk '/lcme_flags:/ { print \$2 }'" ;;
+		*) error "invalid attribute $attr";;
+	esac
+
+	value=$(eval $cmd)
+
+	[[ $value = $expected ]] || {
+		$getstripe_cmd $tf
+		error "verify $attr failed on $tf: $value != $expected"
+	}
+}
+
+#
+# Verify component extent with expected start and end extent values
+# for a given file and component ID.
+#
+verify_comp_extent() {
+	local tf=$1
+	local comp_id=$2
+	local expected_start=$3
+	local expected_end=$4
+
+	verify_comp_attr comp-start $tf $comp_id $expected_start
+	verify_comp_attr comp-end $tf $comp_id $expected_end
+}
+
+#
+# Verify component attribute with parent directory for a given file
+# and component ID.
+#
+verify_comp_attr_with_parent() {
+	local attr=$1
+	local tf=$2
+	local comp_id=$3
+	local td=$(cd $(dirname $tf); echo $PWD)
+	local tf_cmd="$LFS getstripe -I$comp_id"
+	local td_cmd="$LFS getstripe"
+	local opt
+	local expected
+	local value
+
+	case $attr in
+		stripe-size) opt="-S" ;;
+		stripe-count) opt="-c" ;;
+		pool) opt="-p" ;;
+		*) error "invalid attribute $attr";;
+	esac
+
+	expected=$($td_cmd $opt $td)
+	[[ $expected = -1 ]] && expected=$OSTCOUNT
+
+	value=$($tf_cmd $opt $tf)
+	[[ $value = -1 ]] && value=$OSTCOUNT
+
+	[[ $value = $expected ]] || {
+		$td_cmd -d $td
+		$tf_cmd -v $tf
+		error "verify $attr failed with parent on $tf:" \
+		      "$value != $expected"
+	}
+}
+
+#
+# Verify component attributes with parent directory for a given file
+# and component ID.
+#
+# This will only verify the inherited attributes:
+# stripe size, stripe count and OST pool name
+#
+verify_comp_attrs_with_parent() {
+	local tf=$1
+	local comp_id=$2
+
+	verify_comp_attr_with_parent stripe-size $tf $comp_id
+	verify_comp_attr_with_parent stripe-count $tf $comp_id
+	verify_comp_attr_with_parent pool $tf $comp_id
+}
+
 # command line test cases
+test_0a() {
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+	local mirror_count=16 # LUSTRE_MIRROR_COUNT_MAX
+	local mirror_cmd="$LFS mirror create"
+	local id
+	local ids
+	local i
+
+	# create parent directory
+	mkdir $td || error "mkdir $td failed"
+
+	$mirror_cmd $tf &> /dev/null && error "miss -N option"
+
+	$mirror_cmd -N $tf || error "create mirrored file $tf failed"
+	verify_mirror_count $tf 1
+	id=$($LFS getstripe -I $tf)
+	verify_comp_attrs_with_parent $tf $id
+	verify_comp_extent $tf $id 0 EOF
+
+	$mirror_cmd -N $tf &> /dev/null &&
+		error "mirrored file $tf already exists"
+	$mirror_cmd -N0 $tf-1 &> /dev/null && error "invalid mirror count 0"
+	$mirror_cmd -N$((mirror_count + 1)) $tf-1 &> /dev/null &&
+		error "invalid mirror count $((mirror_count + 1))"
+
+	$mirror_cmd -N$mirror_count $tf-1 ||
+		error "create mirrored file $tf-1 failed"
+	verify_mirror_count $tf-1 $mirror_count
+	ids=($($LFS getstripe $tf-1 | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+	for ((i = 0; i < $mirror_count; i++)); do
+		verify_comp_attrs_with_parent $tf-1 ${ids[$i]}
+		verify_comp_extent $tf-1 ${ids[$i]} 0 EOF
+	done
+
+	$mirror_cmd -N -N2 -N3 -N4 $tf-2 ||
+		error "create mirrored file $tf-2 failed"
+	verify_mirror_count $tf-2 10
+	ids=($($LFS getstripe $tf-2 | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+	for ((i = 0; i < 10; i++)); do
+		verify_comp_attrs_with_parent $tf-2 ${ids[$i]}
+		verify_comp_extent $tf-2 ${ids[$i]} 0 EOF
+	done
+}
+run_test 0a "lfs mirror create with -N option"
+
+test_0b() {
+	[[ $OSTCOUNT -lt 4 ]] && skip "need >= 4 OSTs" && return
+
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+	local mirror_cmd="$LFS mirror create"
+	local ids
+	local i
+
+	# create parent directory
+	mkdir $td || error "mkdir $td failed"
+
+	# create a mirrored file with plain layout mirrors
+	$mirror_cmd -N -S 4M -c 2 -p flash -i 2 -o 2,3 \
+		    -N -S 16M -N -c -1 -N -p archive -N --parent $tf ||
+		error "create mirrored file $tf failed"
+	verify_mirror_count $tf 5
+	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+	for ((i = 0; i < 5; i++)); do
+		verify_comp_extent $tf ${ids[$i]} 0 EOF
+	done
+
+	# verify component ${ids[0]}
+	verify_comp_attr stripe-size $tf ${ids[0]} 4194304
+	verify_comp_attr stripe-count $tf ${ids[0]} 2
+	verify_comp_attr stripe-index $tf ${ids[0]} 2
+	verify_comp_attr pool $tf ${ids[0]} flash
+
+	# verify component ${ids[1]}
+	verify_comp_attr stripe-size $tf ${ids[1]} 16777216
+	verify_comp_attr stripe-count $tf ${ids[1]} 2
+	verify_comp_attr pool $tf ${ids[1]} flash
+
+	# verify component ${ids[2]}
+	verify_comp_attr stripe-size $tf ${ids[2]} 16777216
+	verify_comp_attr stripe-count $tf ${ids[2]} $OSTCOUNT
+	verify_comp_attr pool $tf ${ids[2]} flash
+
+	# verify component ${ids[3]}
+	verify_comp_attr stripe-size $tf ${ids[3]} 16777216
+	verify_comp_attr stripe-count $tf ${ids[3]} $OSTCOUNT
+	verify_comp_attr pool $tf ${ids[3]} archive
+
+	# verify component ${ids[4]}
+	verify_comp_attrs_with_parent $tf ${ids[4]}
+}
+run_test 0b "lfs mirror create plain layout mirrors"
+
+test_0c() {
+	[[ $OSTCOUNT -lt 4 ]] && skip "need >= 4 OSTs" && return
+
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+	local mirror_cmd="$LFS mirror create"
+	local ids
+	local i
+
+	# create parent directory
+	mkdir $td || error "mkdir $td failed"
+
+	# create a mirrored file with composite layout mirrors
+	$mirror_cmd -N2 -E 4M -c 2 -p flash -i 1 -o 1,3 -E eof -S 4M \
+		    -N --parent \
+		    -N3 -E 512M -S 16M -p archive -E -1 -i -1 -c -1 $tf ||
+		error "create mirrored file $tf failed"
+	verify_mirror_count $tf 6
+	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+
+	# verify components ${ids[0]} and ${ids[2]}
+	for i in 0 2; do
+		verify_comp_attr_with_parent stripe-size $tf ${ids[$i]}
+		verify_comp_attr stripe-count $tf ${ids[$i]} 2
+		verify_comp_attr stripe-index $tf ${ids[$i]} 1
+		verify_comp_attr pool $tf ${ids[$i]} flash
+		verify_comp_extent $tf ${ids[$i]} 0 4194304
+	done
+
+	# verify components ${ids[1]} and ${ids[3]}
+	for i in 1 3; do
+		verify_comp_attr stripe-size $tf ${ids[$i]} 4194304
+		verify_comp_attr stripe-count $tf ${ids[$i]} 2
+		verify_comp_attr pool $tf ${ids[$i]} flash
+		verify_comp_extent $tf ${ids[$i]} 4194304 EOF
+	done
+
+	# verify component ${ids[4]}
+	verify_comp_attrs_with_parent $tf ${ids[4]}
+	verify_comp_extent $tf ${ids[4]} 0 EOF
+
+	# verify components ${ids[5]}, ${ids[7]} and ${ids[9]}
+	for i in 5 7 9; do
+		verify_comp_attr stripe-size $tf ${ids[$i]} 16777216
+		verify_comp_attr_with_parent stripe-count $tf ${ids[$i]}
+		verify_comp_attr pool $tf ${ids[$i]} archive
+		verify_comp_extent $tf ${ids[$i]} 0 536870912
+	done
+
+	# verify components ${ids[6]}, ${ids[8]} and ${ids[10]}
+	for i in 6 8 10; do
+		verify_comp_attr stripe-size $tf ${ids[$i]} 16777216
+		verify_comp_attr stripe-count $tf ${ids[$i]} -1
+		verify_comp_attr pool $tf ${ids[$i]} archive
+		verify_comp_extent $tf ${ids[$i]} 536870912 EOF
+	done
+}
+run_test 0c "lfs mirror create composite layout mirrors"
+
+test_0d() {
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+	local mirror_count=16 # LUSTRE_MIRROR_COUNT_MAX
+	local mirror_cmd="$LFS mirror extend"
+	local ids
+	local i
+
+	# create parent directory
+	mkdir $td || error "mkdir $td failed"
+
+	$mirror_cmd $tf &> /dev/null && error "miss -N option"
+	$mirror_cmd -N $tf &> /dev/null && error "$tf does not exist"
+
+	# create a non-mirrored file, convert it to a mirrored file and extend
+	if false; then
+	touch $tf || error "touch $tf failed"
+	$mirror_cmd -N $tf || error "convert and extend $tf failed"
+	verify_mirror_count $tf 2
+	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+	for ((i = 0; i < 2; i++)); do
+		verify_comp_attrs_with_parent $tf ${ids[$i]}
+		verify_comp_extent $tf ${ids[$i]} 0 EOF
+	done
+	fi
+
+	# create a mirrored file and extend it
+	$LFS mirror create -N $tf-1 || error "create mirrored file $tf-1 failed"
+	$LFS mirror create -N $tf-2 || error "create mirrored file $tf-2 failed"
+
+	$mirror_cmd -N -S 4M -N -f $tf-2 $tf-1 &> /dev/null &&
+		error "setstripe options should not be specified with -f option"
+
+	$mirror_cmd -N -f $tf-2 -N --parent $tf-1 &> /dev/null &&
+		error "--parent option should not be specified with -f option"
+
+	$mirror_cmd -N$((mirror_count - 1)) $tf-1 ||
+		error "extend mirrored file $tf-1 failed"
+	verify_mirror_count $tf-1 $mirror_count
+	ids=($($LFS getstripe $tf-1 | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+	for ((i = 0; i < $mirror_count; i++)); do
+		verify_comp_attrs_with_parent $tf-1 ${ids[$i]}
+		verify_comp_extent $tf-1 ${ids[$i]} 0 EOF
+	done
+
+	$mirror_cmd -N $tf-1 &> /dev/null &&
+		error "exceeded maximum mirror count $mirror_count" || true
+}
+run_test 0d "lfs mirror extend with -N option"
+
+test_0e() {
+	[[ $OSTCOUNT -lt 4 ]] && skip "need >= 4 OSTs" && return
+
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+	local mirror_cmd="$LFS mirror extend"
+	local ids
+	local i
+
+	# create parent directory
+	mkdir $td || error "mkdir $td failed"
+
+	# create a mirrored file with plain layout mirrors
+	$LFS mirror create -N -S 32M -c 3 -p ssd -i 1 -o 1,2,3 $tf ||
+		error "create mirrored file $tf failed"
+
+	# extend the mirrored file with plain layout mirrors
+	$mirror_cmd -N -S 4M -c 2 -p flash -i 2 -o 2,3 \
+		    -N -S 16M -N -c -1 -N -p archive -N --parent $tf ||
+		error "extend mirrored file $tf failed"
+	verify_mirror_count $tf 6
+	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+	for ((i = 0; i < 6; i++)); do
+		verify_comp_extent $tf ${ids[$i]} 0 EOF
+	done
+
+	# verify component ${ids[0]}
+	verify_comp_attr stripe-size $tf ${ids[0]} 33554432
+	verify_comp_attr stripe-count $tf ${ids[0]} 3
+	verify_comp_attr stripe-index $tf ${ids[0]} 1
+	verify_comp_attr pool $tf ${ids[0]} ssd
+
+	# verify component ${ids[1]}
+	verify_comp_attr stripe-size $tf ${ids[1]} 4194304
+	verify_comp_attr stripe-count $tf ${ids[1]} 2
+	verify_comp_attr stripe-index $tf ${ids[1]} 2
+	verify_comp_attr pool $tf ${ids[1]} flash
+
+	# verify component ${ids[2]}
+	verify_comp_attr stripe-size $tf ${ids[2]} 16777216
+	verify_comp_attr stripe-count $tf ${ids[2]} 2
+	verify_comp_attr pool $tf ${ids[2]} flash
+
+	# verify component ${ids[3]}
+	verify_comp_attr stripe-size $tf ${ids[3]} 16777216
+	verify_comp_attr stripe-count $tf ${ids[3]} $OSTCOUNT
+	verify_comp_attr pool $tf ${ids[3]} flash
+
+	# verify component ${ids[4]}
+	verify_comp_attr stripe-size $tf ${ids[4]} 16777216
+	verify_comp_attr stripe-count $tf ${ids[4]} $OSTCOUNT
+	verify_comp_attr pool $tf ${ids[4]} archive
+
+	# verify component ${ids[5]}
+	verify_comp_attrs_with_parent $tf ${ids[5]}
+}
+run_test 0e "lfs mirror extend plain layout mirrors"
+
+test_0f() {
+	[[ $OSTCOUNT -lt 4 ]] && skip "need >= 4 OSTs" && return
+
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+	local mirror_cmd="$LFS mirror extend"
+	local ids
+	local i
+
+	# create parent directory
+	mkdir $td || error "mkdir $td failed"
+
+	# create a mirrored file with composite layout mirror
+	$LFS mirror create -N -E 32M -S 16M -p ssd -E eof -S 32M $tf ||
+		error "create mirrored file $tf failed"
+
+	# extend the mirrored file with composite layout mirrors
+	$mirror_cmd -N2 -E 4M -c 2 -p flash -i 1 -o 1,3 -E eof -S 4M \
+		    -N --parent \
+		    -N3 -E 512M -S 16M -p archive -E -1 -i -1 -c -1 $tf ||
+		error "extend mirrored file $tf failed"
+	verify_mirror_count $tf 7
+	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+
+	# verify component ${ids[0]}
+	verify_comp_attr stripe-size $tf ${ids[0]} 16777216
+	verify_comp_attr_with_parent stripe-count $tf ${ids[0]}
+	verify_comp_attr pool $tf ${ids[0]} ssd
+	verify_comp_extent $tf ${ids[0]} 0 33554432
+
+	# verify component ${ids[1]}
+	verify_comp_attr stripe-size $tf ${ids[1]} 33554432
+	verify_comp_attr_with_parent stripe-count $tf ${ids[1]}
+	verify_comp_attr pool $tf ${ids[1]} ssd
+	verify_comp_extent $tf ${ids[1]} 33554432 EOF
+
+	# verify components ${ids[2]} and ${ids[4]}
+	for i in 2 4; do
+		verify_comp_attr_with_parent stripe-size $tf ${ids[$i]}
+		verify_comp_attr stripe-count $tf ${ids[$i]} 2
+		verify_comp_attr stripe-index $tf ${ids[$i]} 1
+		verify_comp_attr pool $tf ${ids[$i]} flash
+		verify_comp_extent $tf ${ids[$i]} 0 4194304
+	done
+
+	# verify components ${ids[3]} and ${ids[5]}
+	for i in 3 5; do
+		verify_comp_attr stripe-size $tf ${ids[$i]} 4194304
+		verify_comp_attr stripe-count $tf ${ids[$i]} 2
+		verify_comp_attr pool $tf ${ids[$i]} flash
+		verify_comp_extent $tf ${ids[$i]} 4194304 EOF
+	done
+
+	# verify component ${ids[6]}
+	verify_comp_attrs_with_parent $tf ${ids[6]}
+	verify_comp_extent $tf ${ids[6]} 0 EOF
+
+	# verify components ${ids[7]}, ${ids[9]} and ${ids[11]}
+	for i in 7 9 11; do
+		verify_comp_attr stripe-size $tf ${ids[$i]} 16777216
+		verify_comp_attr_with_parent stripe-count $tf ${ids[$i]}
+		verify_comp_attr pool $tf ${ids[$i]} archive
+		verify_comp_extent $tf ${ids[$i]} 0 536870912
+	done
+
+	# verify components ${ids[8]}, ${ids[10]} and ${ids[12]}
+	for i in 8 10 12; do
+		verify_comp_attr stripe-size $tf ${ids[$i]} 16777216
+		verify_comp_attr stripe-count $tf ${ids[$i]} -1
+		verify_comp_attr pool $tf ${ids[$i]} archive
+		verify_comp_extent $tf ${ids[$i]} 536870912 EOF
+	done
+}
+run_test 0f "lfs mirror extend composite layout mirrors"
+
 test_1() {
 	local tf=$DIR/$tfile
 	local mirror_count=16 # LUSTRE_MIRROR_COUNT_MAX
@@ -95,10 +557,8 @@ test_1() {
 		mirror_create_cmd+=" -N -c ${stripes[$i]}"
 	done
 
-	eval $mirror_create_cmd $tf || error "creating mirrored file $tf failed"
-
-	[ $(get_mirror_ids $tf) -ne $mirror_count ] &&
-		error "mirror count error"
+	$mirror_create_cmd $tf || error "create mirrored file $tf failed"
+	verify_mirror_count $tf $mirror_count
 
 	# can't create mirrors exceeding LUSTRE_MIRROR_COUNT_MAX
 	$LFS mirror extend -N $tf &&
@@ -109,22 +569,8 @@ test_1() {
 
 	# verify the range of components and stripe counts
 	for ((i = 0; i < $mirror_count; i++)); do
-		local sc=$($LFS getstripe -I${ids[$i]} -c $tf)
-		local start=$($LFS getstripe -I${ids[$i]} --component-start $tf)
-		local end=$($LFS getstripe -I${ids[$i]} --component-end $tf)
-
-		[[ ${stripes[$i]} = $sc ]] || {
-			$LFS getstripe -v $tf;
-			error "$i: sc error: id: ${ids[$i]}, ${stripes[$i]}";
-		}
-		[ $start -eq 0 ] || {
-			$LFS getstripe -v $tf;
-			error "$i: start error id: ${ids[$i]}";
-		}
-		[ $end = "EOF" ] || {
-			$LFS getstripe -v $tf;
-			error "$i: end error id: ${ids[$i]}";
-		}
+		verify_comp_attr stripe-count $tf ${ids[$i]} ${stripes[$i]}
+		verify_comp_extent $tf ${ids[$i]} 0 EOF
 	done
 }
 run_test 1 "create components with setstripe options"
@@ -141,7 +587,7 @@ test_2() {
 	$LFS mirror extend -N -f $tf2 $tf ||
 		error "merging $tf2 into $tf failed"
 
-	[ $(get_mirror_ids $tf) -ne 2 ] && error "mirror count should be 2"
+	verify_mirror_count $tf 2
 	[[ ! -e $tf2 ]] || error "$tf2 was not unlinked"
 }
 run_test 2 "create components from existing files"
@@ -645,13 +1091,10 @@ verify_flr_state()
 {
 	local tf=$1
 	local expected_state=$2
-	local state_strings=("not_flr" "read_only" "write_pending" \
-		"sync_pending")
 
 	local state=$($LFS getstripe -v $tf | awk '/lcm_flags/{ print $2 }')
-	[ $expected_state = ${state_strings[$state]} ] ||
-		error "expected: $expected_state, " \
-			"actual ${state_strings[$state]}($state)"
+	[ $expected_state = $state ] ||
+		error "expected: $expected_state, actual $state"
 }
 
 test_38() {
@@ -670,7 +1113,7 @@ test_38() {
 	$LFS mirror extend -N -c 1 $tf ||
 		error "extending mirrored file $tf failed"
 
-	verify_flr_state $tf "read_only"
+	verify_flr_state $tf "ro"
 
 	dd if=/dev/urandom of=$ref  bs=1M count=16 &> /dev/null
 
@@ -681,7 +1124,7 @@ test_38() {
 
 	# case 1: verify write to mirrored file & resync work
 	cp $ref $tf || error "copy from $ref to $f error"
-	verify_flr_state $tf "write_pending"
+	verify_flr_state $tf "wp"
 
 	local file_cksum=$(md5sum $tf | cut -f 1 -d' ')
 	[ "$file_cksum" = "$ref_cksum" ] || error "write failed, cksum mismatch"
@@ -703,7 +1146,7 @@ test_38() {
 	[ -z "$valid_mirror" ] && error "valid mirror doesn't exist"
 
 	mirror_io resync $tf || error "resync failed"
-	verify_flr_state $tf "read_only"
+	verify_flr_state $tf "ro"
 
 	mirror_cksum=$(mirror_io dump -i $stale_mirror $tf |
 			md5sum | cut -f 1 -d' ')
@@ -713,23 +1156,81 @@ test_38() {
 	# the file state to sync_pending so that we can start a concurrent
 	# write.
 	$MULTIOP $tf oO_WRONLY:w$((RANDOM % 1048576 + 1024))c
-	verify_flr_state $tf "write_pending"
+	verify_flr_state $tf "wp"
 
 	mirror_io resync -e resync_start $tf && error "resync succeeded"
-	verify_flr_state $tf "sync_pending"
+	verify_flr_state $tf "sp"
 
 	# from sync_pending to write_pending
 	$MULTIOP $tf oO_WRONLY:w$((RANDOM % 1048576 + 1024))c
-	verify_flr_state $tf "write_pending"
+	verify_flr_state $tf "wp"
 
 	mirror_io resync -e resync_start $tf && error "resync succeeded"
-	verify_flr_state $tf "sync_pending"
+	verify_flr_state $tf "sp"
 
 	# from sync_pending to read_only
 	mirror_io resync $tf || error "resync failed"
-	verify_flr_state $tf "read_only"
+	verify_flr_state $tf "ro"
 }
 run_test 38 "resync"
+
+test_39() {
+	local tf=$DIR/$tfile
+
+	rm -f $tf
+	$LFS mirror create -N2 -E1m -c1 -S1M -E-1 $tf ||
+	error "create PFL file $tf failed"
+
+	verify_mirror_count $tf 2
+	verify_comp_count $tf 4
+
+	rm -f $tf || error "delete $tf failed"
+}
+run_test 39 "check FLR+PFL (a.k.a. PFLR) creation"
+
+test_40() {
+	local tf=$DIR/$tfile
+	local ops
+
+	for ops in "conv=notrunc" ""; do
+		rm -f $tf
+
+		$LFS mirror create -N -E2m -E4m -E-1 -N -E1m -E2m -E4m -E-1 \
+			$tf || error "create PFLR file $tf failed"
+		dd if=/dev/zero of=$tf $ops bs=1M seek=2 count=1 ||
+			error "write PFLR file $tf failed"
+
+		lfs getstripe -vy $tf
+
+		local flags
+
+		# file mirror state should be write_pending
+		flags=$($LFS getstripe -v $tf | awk '/lcm_flags:/ { print $2 }')
+		[ $flags = wp ] ||
+		error "file mirror state $flags"
+		# the 1st component (in mirror 1) should be inited
+		verify_comp_attr lcme_flags $tf 0x10001 init
+		# the 2nd component (in mirror 1) should be inited
+		verify_comp_attr lcme_flags $tf 0x10002 init
+		# the 3rd component (in mirror 1) should be uninited
+		verify_comp_attr lcme_flags $tf 0x10003 0
+		# the 4th component (in mirror 2) should be inited
+		verify_comp_attr lcme_flags $tf 0x20004 init
+		# the 5th component (in mirror 2) should be uninited
+		verify_comp_attr lcme_flags $tf 0x20005 0
+		# the 6th component (in mirror 2) should be stale
+		verify_comp_attr lcme_flags $tf 0x20006 stale
+		# the 7th component (in mirror 2) should be uninited
+		if [[ x$ops = "xconv=notrunc" ]]; then
+			verify_comp_attr lcme_flags $tf 0x20007 0
+		elif [[ x$ops = "x" ]]; then
+			verify_comp_attr lcme_flags $tf 0x20007 stale
+		fi
+	done
+
+	rm -f $tf || error "delete $tf failed"
+}
+run_test 40 "PFLR rdonly state instantiation check"
 
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)
@@ -812,7 +1313,7 @@ test_200() {
 
 	mkdir -p $MOUNT3 && mount_client $MOUNT3
 
-	verify_flr_state $tf3 "read_only"
+	verify_flr_state $tf3 "ro"
 
 	#define OBD_FAIL_FLR_RANDOM_PICK_MIRROR	0x1A03
 	$LCTL set_param fail_loc=0x1A03
