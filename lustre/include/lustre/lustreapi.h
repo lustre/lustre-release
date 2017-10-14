@@ -450,7 +450,21 @@ int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
 
 /* llapi_layout user interface */
 
-extern char *lcm_flags_string(__u16 flags);
+static inline const char *lcm_flags_string(__u16 flags)
+{
+	switch (flags & LCM_FL_FLR_MASK) {
+	case LCM_FL_NOT_FLR:
+		return "not_flr";
+	case LCM_FL_RDONLY:
+		return "ro";
+	case LCM_FL_WRITE_PENDING:
+		return "wp";
+	case LCM_FL_SYNC_PENDING:
+		return "sp";
+	default:
+		return "";
+	}
+}
 
 /**
  * An array element storing component info to be resynced during mirror

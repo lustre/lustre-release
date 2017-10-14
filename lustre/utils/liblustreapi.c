@@ -2593,22 +2593,6 @@ void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
 		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
-char *lcm_flags_string(__u16 flags)
-{
-	switch (flags & LCM_FL_FLR_MASK) {
-	case LCM_FL_NOT_FLR:
-		return "not_flr";
-	case LCM_FL_RDONLY:
-		return "ro";
-	case LCM_FL_WRITE_PENDING:
-		return "wp";
-	case LCM_FL_SYNC_PENDING:
-		return "sp";
-	default:
-		return "";
-	}
-}
-
 static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 				    enum lov_dump_flags flags)
 {
@@ -2627,8 +2611,15 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 			     " ", comp_v1->lcm_magic);
 		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_size:          %u\n",
 			     " ", comp_v1->lcm_size);
-		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_flags:         %s\n",
-			     " ", lcm_flags_string(comp_v1->lcm_flags));
+		if (flags & LDF_IS_DIR)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%2slcm_flags:         %s\n", " ",
+				     comp_v1->lcm_mirror_count > 0 ?
+							"mirrored" : "");
+		else
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%2slcm_flags:         %s\n",
+				     " ", lcm_flags_string(comp_v1->lcm_flags));
 	}
 
 	if (verbose & VERBOSE_GENERATION) {

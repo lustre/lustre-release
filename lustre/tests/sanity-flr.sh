@@ -617,6 +617,38 @@ test_3() {
 }
 run_test 3 "create components from files located on different MDTs"
 
+test_4() {
+	local tf=$DIR/$tdir/$tfile
+	local ids=()
+
+	test_mkdir $DIR/$tdir
+
+	# set mirror with setstripe options to directory
+	$LFS mirror create -N2 -E 1M -E eof $DIR/$tdir ||
+		error "set mirror to directory error"
+
+	[ x$($LFS getstripe -v $DIR/$tdir | awk '/lcm_flags/{print $2}') = \
+		x"mirrored" ] || error "failed to create mirrored dir"
+
+	touch $tf
+	verify_mirror_count $tf 2
+
+	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+	verify_comp_extent $tf ${ids[0]} 0 1048576
+	verify_comp_extent $tf ${ids[1]} 1048576 EOF
+
+	# sub directory should inherit mirror setting from parent
+	test_mkdir $DIR/$tdir/td
+	[ x$($LFS getstripe -v $DIR/$tdir/td | awk '/lcm_flags/{print $2}') = \
+		x"mirrored" ] || error "failed to inherit mirror from parent"
+
+	# mirror extend won't be applied to directory
+	$LFS mirror extend -N2 $DIR/$tdir &&
+		error "expecting mirror extend failure"
+	true
+}
+run_test 4 "Make sure mirror attributes can be inhertied from directory"
+
 test_21() {
 	local tf=$DIR/$tfile
 	local tf2=$DIR/$tfile-2

@@ -3987,6 +3987,8 @@ static void lod_striping_from_default(struct lod_object *lo,
 			return;
 
 		lo->ldo_is_composite = lds->lds_def_striping_is_composite;
+		if (lds->lds_def_mirror_cnt > 1)
+			lo->ldo_flr_state = LCM_FL_RDONLY;
 
 		for (i = 0; i < lo->ldo_comp_cnt; i++) {
 			struct lod_layout_component *obj_comp =
