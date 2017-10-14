@@ -226,8 +226,6 @@ test_0a() {
 	verify_comp_attrs_with_parent $tf $id
 	verify_comp_extent $tf $id 0 EOF
 
-	$mirror_cmd -N $tf &> /dev/null &&
-		error "mirrored file $tf already exists"
 	$mirror_cmd -N0 $tf-1 &> /dev/null && error "invalid mirror count 0"
 	$mirror_cmd -N$((mirror_count + 1)) $tf-1 &> /dev/null &&
 		error "invalid mirror count $((mirror_count + 1))"
@@ -648,6 +646,22 @@ test_4() {
 	true
 }
 run_test 4 "Make sure mirror attributes can be inhertied from directory"
+
+test_5() {
+	local tf=$DIR/$tfile
+	local ids=()
+
+	$MULTIOP $tf oO_RDWR:O_CREAT:O_LOV_DELAY_CREATE:T12345c ||
+		error "failed to create file with non-empty layout"
+	$CHECKSTAT -t file -s 12345 $tf || error "size error: expecting 12345"
+
+	$LFS mirror create -N3 $tf || error "failed to attach mirror layout"
+	verify_mirror_count $tf 3
+
+	$CHECKSTAT -t file -s 12345 $tf ||
+		error "size error after attaching layout "
+}
+run_test 5 "Make sure init size work for mirrored layout"
 
 test_21() {
 	local tf=$DIR/$tfile

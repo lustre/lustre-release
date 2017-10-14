@@ -1134,7 +1134,7 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 		goto error;
 	}
 
-	rc = lfs_component_create(fname, O_CREAT | O_WRONLY | O_EXCL, 0644,
+	rc = lfs_component_create(fname, O_CREAT | O_WRONLY, 0644,
 				  layout);
 	if (rc >= 0) {
 		close(rc);
