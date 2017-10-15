@@ -1062,8 +1062,13 @@ int lov_io_init(const struct lu_env *env, struct cl_object *obj,
 	       PFID(lu_object_fid(&obj->co_lu)), io, io->ci_type,
 	       io->ci_ignore_layout, io->ci_verify_layout);
 
+	/* IO type CIT_MISC with ci_ignore_layout set are usually invoked from
+	 * the OSC layer. It shouldn't take lov layout conf lock in that case,
+	 * because as long as the OSC object exists, the layout can't be
+	 * reconfigured. */
 	return LOV_2DISPATCH_MAYLOCK(cl2lov(obj), llo_io_init,
-				     !io->ci_ignore_layout, env, obj, io);
+			!(io->ci_ignore_layout && io->ci_type == CIT_MISC),
+			env, obj, io);
 }
 
 /**
