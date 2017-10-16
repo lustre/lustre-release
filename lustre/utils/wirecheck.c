@@ -38,9 +38,9 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <lustre/lustre_idl.h>
-#include <lustre/lustre_lfsck_user.h>
-#include <linux/lustre_disk.h>
+#include <linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_lfsck_user.h>
+#include <linux/lustre/lustre_disk.h>
 
 #define BLANK_LINE()						\
 do {								\
@@ -1039,8 +1039,8 @@ check_mdt_body(void)
 	CHECK_MEMBER(mdt_body, mbo_uid_h);
 	CHECK_MEMBER(mdt_body, mbo_gid_h);
 	CHECK_MEMBER(mdt_body, mbo_projid);
-	CHECK_MEMBER(mdt_body, mbo_padding_6);
-	CHECK_MEMBER(mdt_body, mbo_padding_7);
+	CHECK_MEMBER(mdt_body, mbo_dom_size);
+	CHECK_MEMBER(mdt_body, mbo_dom_blocks);
 	CHECK_MEMBER(mdt_body, mbo_padding_8);
 	CHECK_MEMBER(mdt_body, mbo_padding_9);
 	CHECK_MEMBER(mdt_body, mbo_padding_10);

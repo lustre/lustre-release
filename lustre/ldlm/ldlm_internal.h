@@ -136,6 +136,7 @@ typedef enum {
 	LDLM_WORK_GL_AST
 } ldlm_desc_ast_t;
 
+void ldlm_grant_lock_with_skiplist(struct ldlm_lock *lock);
 void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list);
 int ldlm_fill_lvb(struct ldlm_lock *lock, struct req_capsule *pill,
 		  enum req_location loc, void *data, int size);

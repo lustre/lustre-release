@@ -775,11 +775,15 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 {
 	struct md_attr *ma = &info->mti_attr;
 	__u64 open_flags = info->mti_spec.sp_cr_flags;
+	__u64 trybits = 0;
 	enum ldlm_mode lm = LCK_CR;
 	bool acq_lease = !!(open_flags & MDS_OPEN_LEASE);
 	bool try_layout = false;
 	bool create_layout = false;
 	int rc = 0;
+	int dom_stripes = LMM_NO_DOM;
+	bool dom_lock = false;
+
 	ENTRY;
 
 	*ibits = 0;
@@ -795,6 +799,24 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		if (exp_connect_layout(info->mti_exp) && !create_layout &&
 		    ma->ma_need & MA_LOV)
 			try_layout = true;
+
+		/* DoM files can have just MDT stripe or combined MDT + OST
+		 * stripes.
+		 * - In the first case the open for read/write will do IO to
+		 *   the MDT stripe and it makes sense to take IO lock in
+		 *   advance along with OPEN even if it is blocking lock.
+		 * - In the second case it is just size of MDT stripe and it
+		 *   is quite unlikely that client will write into it, though
+		 *   it may read it. So IO lock will be taken optionally if it
+		 *   is non-blocking one.
+		 */
+		if (ma->ma_valid & MA_LOV && ma->ma_lmm != NULL)
+			dom_stripes = mdt_lmm_dom_entry(ma->ma_lmm);
+
+		if (dom_stripes == LMM_DOM_ONLY &&
+		    info->mti_mdt->mdt_opts.mo_dom_lock != 0 &&
+		    !mdt_dom_client_has_lock(info, mdt_object_fid(obj)))
+			dom_lock = true;
 	}
 
 	if (acq_lease) {
@@ -847,7 +869,12 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 			try_layout = false;
 
 			lhc = &info->mti_lh[MDT_LH_LOCAL];
+		} else if (dom_lock) {
+			lm = (open_flags & FMODE_WRITE) ? LCK_PW : LCK_PR;
+			*ibits = MDS_INODELOCK_DOM;
+			try_layout = false;
 		}
+
 		CDEBUG(D_INODE, "normal open:"DFID" lease count: %d, lm: %d\n",
 			PFID(mdt_object_fid(obj)),
 			atomic_read(&obj->mot_open_count), lm);
@@ -863,17 +890,18 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		 * lock for each open.
 		 * However this is a double-edged sword because changing
 		 * permission will revoke huge # of LOOKUP locks. */
-		rc = mdt_object_lock_try(info, obj, lhc, ibits,
-					 MDS_INODELOCK_LAYOUT |
-					 MDS_INODELOCK_LOOKUP, false);
-	} else if (*ibits != 0) {
-		rc = mdt_object_lock(info, obj, lhc, *ibits);
+		trybits |= MDS_INODELOCK_LAYOUT | MDS_INODELOCK_LOOKUP;
 	}
 
-	CDEBUG(D_INODE, "%s: Requested bits lock:"DFID ", ibits = %#llx"
+	if (trybits != 0)
+		rc = mdt_object_lock_try(info, obj, lhc, ibits, trybits, false);
+	else if (*ibits != 0)
+		rc = mdt_object_lock(info, obj, lhc, *ibits);
+
+	CDEBUG(D_INODE, "%s: Requested bits lock:"DFID ", ibits = %#llx/%#llx"
 	       ", open_flags = %#llo, try_layout = %d : rc = %d\n",
 	       mdt_obd_name(info->mti_mdt), PFID(mdt_object_fid(obj)),
-	       *ibits, open_flags, try_layout, rc);
+	       *ibits, trybits, open_flags, try_layout, rc);
 
 	/* will change layout, revoke layout locks by enqueuing EX lock. */
 	if (rc == 0 && create_layout) {
@@ -974,7 +1002,8 @@ static void mdt_object_open_unlock(struct mdt_thread_info *info,
 	if (ibits == 0 || rc == -MDT_EREMOTE_OPEN)
 		RETURN_EXIT;
 
-	if (!(open_flags & MDS_OPEN_LOCK) && !(ibits & MDS_INODELOCK_LAYOUT)) {
+	if (!(open_flags & MDS_OPEN_LOCK) && !(ibits & MDS_INODELOCK_LAYOUT) &&
+	    !(ibits & MDS_INODELOCK_DOM)) {
 		/* for the open request, the lock will only return to client
 		 * if open or layout lock is granted. */
 		rc = 1;
@@ -1111,6 +1140,12 @@ out_unlock:
 		mdt_object_open_unlock(info, o, lhc, ibits, rc);
 out:
 	mdt_object_put(env, o);
+	if (rc == 0) {
+		rc = mdt_pack_size2body(info, rr->rr_fid2,
+					ibits & MDS_INODELOCK_DOM);
+		LASSERT(ergo(ibits & MDS_INODELOCK_DOM, !rc));
+		rc = 0;
+	}
 out_parent_put:
 	if (parent != NULL)
 		mdt_object_put(env, parent);
@@ -1572,6 +1607,12 @@ out_child_unlock:
 		mdt_object_open_unlock(info, child, lhc, ibits, result);
 out_child:
 	mdt_object_put(info->mti_env, child);
+	if (result == 0) {
+		rc = mdt_pack_size2body(info, child_fid,
+					ibits & MDS_INODELOCK_DOM);
+		LASSERT(ergo(ibits & MDS_INODELOCK_DOM, !rc));
+		rc = 0;
+	}
 out_parent:
 	mdt_object_unlock_put(info, parent, lh, result || !created);
 out:

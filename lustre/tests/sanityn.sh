@@ -4012,6 +4012,143 @@ test_93() {
 }
 run_test 93 "alloc_rr should not allocate on same ost"
 
+# Data-on-MDT tests
+test_100a() {
+	skip "Reserved for glimpse-ahead" && return
+	mkdir -p $DIR/$tdir
+
+	$SETSTRIPE -E 1024K -L mdt -E EOF $DIR/$tdir/dom
+
+	lctl set_param -n mdc.*.stats=clear
+	dd if=/dev/zero of=$DIR2/$tdir/dom bs=4096 count=1 || return 1
+
+	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #1"
+	# first stat from server should return size data and save glimpse
+	local reads=$(lctl get_param -n mdc.*.stats | \
+		awk '/ldlm_glimpse/ {print $2}')
+	[ -z $reads ] || error "Unexpected $reads glimpse RPCs"
+	# second stat to check size is NOT cached on client without IO lock
+	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #2"
+
+	local reads=$(lctl get_param -n mdc.*.stats | \
+		awk '/ldlm_glimpse/ {print $2}')
+	[ "1" == "$reads" ] || error "Expect 1 glimpse RPCs but got $reads"
+	rm -f $dom
+}
+run_test 100a "DoM: glimpse RPCs for stat without IO lock (DoM only file)"
+
+test_100b() {
+	mkdir -p $DIR/$tdir
+
+	$SETSTRIPE -E 1024K -L mdt -E EOF $DIR/$tdir/dom
+
+	lctl set_param -n mdc.*.stats=clear
+	dd if=/dev/zero of=$DIR2/$tdir/dom bs=4096 count=1 || return 1
+	cancel_lru_locks mdc
+	# first stat data from server should have size
+	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #1"
+	# second stat to check size is cached on client
+	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #2"
+
+	local reads=$(lctl get_param -n mdc.*.stats | \
+		awk '/ldlm_glimpse/ {print $2}')
+	# both stats should cause no glimpse requests
+	[ -z $reads ] || error "Unexpected $reads glimpse RPCs"
+	rm -f $dom
+}
+run_test 100b "DoM: no glimpse RPC for stat with IO lock (DoM only file)"
+
+test_100c() {
+	mkdir -p $DIR/$tdir
+
+	$SETSTRIPE -E 1024K -L mdt -E EOF $DIR/$tdir/dom
+
+	lctl set_param -n mdc.*.stats=clear
+	lctl set_param -n osc.*.stats=clear
+	dd if=/dev/zero of=$DIR2/$tdir/dom bs=2048K count=1 || return 1
+
+	# check that size is merged from MDT and OST correctly
+	$CHECKSTAT -t file -s 2097152 $DIR/$tdir/dom ||
+		error "Wrong size from stat #1"
+
+	local reads=$(lctl get_param -n osc.*.stats | grep ldlm_glimpse | wc -l)
+	[ $reads -eq 0 ] && error "Expect OST glimpse RPCs but got none"
+
+	rm -f $dom
+}
+run_test 100c "DoM: write vs stat without IO lock (combined file)"
+
+test_100d() {
+	mkdir -p $DIR/$tdir
+
+	$SETSTRIPE -E 1024K -L mdt -E EOF $DIR/$tdir/dom
+
+
+	dd if=/dev/zero of=$DIR2/$tdir/dom bs=2048K count=1 || return 1
+	lctl set_param -n mdc.*.stats=clear
+	$TRUNCATE $DIR2/$tdir/dom 4096
+
+	# check that reported size is valid after file grows to OST and
+	# is truncated back to MDT stripe size
+	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom ||
+		error "Wrong size from stat #1"
+
+	local reads=$(lctl get_param -n osc.*.stats | grep ldlm_glimpse | wc -l)
+	[ $reads -eq 0 ] && error "Expect OST glimpse but got none"
+
+	rm -f $dom
+}
+run_test 100d "DoM: write+truncate vs stat without IO lock (combined file)"
+
+
+test_101a() {
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
+	lctl set_param -n mdc.*.stats=clear
+	# to get layout
+	$CHECKSTAT -t file $DIR1/$tfile
+	# open + IO lock
+	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 || error "Write fails"
+	# must discard pages
+	rm $DIR2/$tfile || error "Unlink fails"
+	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
+	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
+}
+run_test 101a "Discard DoM data on unlink"
+
+test_101b() {
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
+	touch $DIR1/${tfile}_2
+	lctl set_param -n mdc.*.stats=clear
+	# to get layout
+	$CHECKSTAT -t file $DIR1/$tfile
+	# open + IO lock
+	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 || error "Write fails"
+	# must discard pages
+	mv $DIR2/${tfile}_2 $DIR2/$tfile || error "Rename fails"
+	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
+	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
+}
+run_test 101b "Discard DoM data on rename"
+
+test_101c() {
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
+	lctl set_param -n mdc.*.stats=clear
+	# to get layout
+	$CHECKSTAT -t file $DIR1/$tfile
+	# open + IO lock
+	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 || error "Write fails"
+
+	$MULTIOP $DIR1/$tfile O_c &
+	MULTIOP_PID=$!
+	sleep 2
+	rm $DIR2/$tfile > /dev/null || error "Unlink fails"
+	kill -USR1 $MULTIOP_PID || return 2
+	wait $MULTIOP_PID || return 3
+	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
+	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
+}
+run_test 101c "Discard DoM data on close-unlink"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script

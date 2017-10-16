@@ -2333,14 +2333,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_body, mbo_projid));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_projid) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_projid));
-	LASSERTF((int)offsetof(struct mdt_body, mbo_padding_6) == 176, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_body, mbo_padding_6));
-	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_padding_6) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_padding_6));
-	LASSERTF((int)offsetof(struct mdt_body, mbo_padding_7) == 184, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_body, mbo_padding_7));
-	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_padding_7) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_padding_7));
+	LASSERTF((int)offsetof(struct mdt_body, mbo_dom_size) == 176, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_body, mbo_dom_size));
+	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_dom_size) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_dom_size));
+	LASSERTF((int)offsetof(struct mdt_body, mbo_dom_blocks) == 184, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_body, mbo_dom_blocks));
+	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_dom_blocks) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_dom_blocks));
 	LASSERTF((int)offsetof(struct mdt_body, mbo_padding_8) == 192, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_body, mbo_padding_8));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_padding_8) == 8, "found %lld\n",
@@ -3797,14 +3797,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct llog_setattr64_rec, lsr_valid));
 	LASSERTF((int)sizeof(((struct llog_setattr64_rec *)0)->lsr_valid) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_setattr64_rec *)0)->lsr_valid));
+	LASSERTF((int)offsetof(struct llog_setattr64_rec, lsr_tail) == 56, "found %lld\n",
+		 (long long)(int)offsetof(struct llog_setattr64_rec, lsr_tail));
+	LASSERTF((int)sizeof(((struct llog_setattr64_rec *)0)->lsr_tail) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct llog_setattr64_rec *)0)->lsr_tail));
 	LASSERTF((int)offsetof(struct llog_setattr64_rec_v2, lsr_projid) == 56, "found %lld\n",
 		 (long long)(int)offsetof(struct llog_setattr64_rec_v2, lsr_projid));
 	LASSERTF((int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_projid) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_projid));
-	LASSERTF((int)offsetof(struct llog_setattr64_rec_v2, lsr_tail) == 80, "found %lld\n",
-		 (long long)(int)offsetof(struct llog_setattr64_rec_v2, lsr_tail));
-	LASSERTF((int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_tail) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_tail));
 
 	/* Checks for struct llog_size_change_rec */
 	LASSERTF((int)sizeof(struct llog_size_change_rec) == 64, "found %lld\n",

@@ -664,8 +664,8 @@ static void mdt_lvb2body(struct ldlm_resource *res, struct mdt_body *mb)
 
 	lock_res(res);
 	res_lvb = res->lr_lvb_data;
-	mb->mbo_size = res_lvb->lvb_size;
-	mb->mbo_blocks = res_lvb->lvb_blocks;
+	mb->mbo_dom_size = res_lvb->lvb_size;
+	mb->mbo_dom_blocks = res_lvb->lvb_blocks;
 	mb->mbo_mtime = res_lvb->lvb_mtime;
 	mb->mbo_ctime = res_lvb->lvb_ctime;
 	mb->mbo_atime = res_lvb->lvb_atime;
@@ -673,7 +673,7 @@ static void mdt_lvb2body(struct ldlm_resource *res, struct mdt_body *mb)
 	CDEBUG(D_DLMTRACE, "size %llu\n", res_lvb->lvb_size);
 
 	mb->mbo_valid |= OBD_MD_FLATIME | OBD_MD_FLCTIME | OBD_MD_FLMTIME |
-			 OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+			 OBD_MD_DOM_SIZE;
 	unlock_res(res);
 }
 
@@ -697,23 +697,14 @@ int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,
 	fid_build_reg_res_name(fid, &resid);
 	res = ldlm_resource_get(mdt->mdt_namespace, NULL, &resid,
 				LDLM_IBITS, 1);
-	if (IS_ERR(res) || res->lr_lvb_data == NULL)
+	if (IS_ERR(res))
 		RETURN(-ENOENT);
-
-	/* if there is no DOM bit in the lock then glimpse is needed
-	 * to return valid size */
-	if (!dom_lock) {
-		rc = mdt_do_glimpse(env, mdt->mdt_namespace, res);
-		if (rc < 0)
-			GOTO(out, rc);
-	}
 
 	/* Update lvbo data if DoM lock returned or if LVB is not yet valid. */
 	if (dom_lock || !mdt_dom_lvb_is_valid(res))
 		mdt_dom_lvbo_update(res, NULL, NULL, false);
 
 	mdt_lvb2body(res, mb);
-out:
 	ldlm_resource_putref(res);
 	RETURN(rc);
 }
@@ -775,7 +766,7 @@ int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 		__u64 tmpflags = 0;
 		enum ldlm_error err;
 
-		rc = policy(lock, &tmpflags, 0, &err, NULL);
+		rc = policy(lock, &tmpflags, LDLM_PROCESS_RESCAN, &err, NULL);
 		check_res_locked(res);
 	}
 	unlock_res(res);
@@ -902,7 +893,7 @@ void mdt_dom_discard_data(struct mdt_thread_info *info,
 	struct ldlm_res_id *res_id = &info->mti_res_id;
 	struct lustre_handle dom_lh;
 	__u64 flags = LDLM_FL_AST_DISCARD_DATA;
-	__u64 rc = 0;
+	int rc = 0;
 
 	policy->l_inodebits.bits = MDS_INODELOCK_DOM;
 	policy->l_inodebits.try_bits = 0;
@@ -918,5 +909,39 @@ void mdt_dom_discard_data(struct mdt_thread_info *info,
 	/* We only care about the side-effects, just drop the lock. */
 	if (rc == ELDLM_OK)
 		ldlm_lock_decref(&dom_lh, LCK_PW);
+}
+
+/* check if client has already DoM lock for given resource */
+bool mdt_dom_client_has_lock(struct mdt_thread_info *info,
+			     const struct lu_fid *fid)
+{
+	struct mdt_device *mdt = info->mti_mdt;
+	union ldlm_policy_data *policy = &info->mti_policy;
+	struct ldlm_res_id *res_id = &info->mti_res_id;
+	struct lustre_handle lockh;
+	enum ldlm_mode mode;
+	struct ldlm_lock *lock;
+	bool rc;
+
+	policy->l_inodebits.bits = MDS_INODELOCK_DOM;
+	fid_build_reg_res_name(fid, res_id);
+
+	mode = ldlm_lock_match(mdt->mdt_namespace, LDLM_FL_BLOCK_GRANTED |
+			       LDLM_FL_TEST_LOCK, res_id, LDLM_IBITS, policy,
+			       LCK_PW, &lockh, 0);
+
+	/* There is no other PW lock on this object; finished. */
+	if (mode == 0)
+		return false;
+
+	lock = ldlm_handle2lock(&lockh);
+	if (lock == 0)
+		return false;
+
+	/* check if lock from the same client */
+	rc = (lock->l_export->exp_handle.h_cookie ==
+	      info->mti_exp->exp_handle.h_cookie);
+	LDLM_LOCK_PUT(lock);
+	return rc;
 }
 

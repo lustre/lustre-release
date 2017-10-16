@@ -15261,18 +15261,105 @@ test_271a() {
 
 	mkdir -p $DIR/$tdir
 
-	$SETSTRIPE -E 1024K -L mdt $dom
+	$LFS setstripe -E 1024K -L mdt $dom
 
 	lctl set_param -n mdc.*.stats=clear
 	dd if=/dev/zero of=$dom bs=4096 count=1 || return 1
 	cat $dom > /dev/null
-	local reads=$(lctl get_param -n mdc.*.stats | \
-		awk '/ost_read/ {print $2}')
+	local reads=$(lctl get_param -n mdc.*.stats |
+			awk '/ost_read/ {print $2}')
 	[ -z $reads ] || error "Unexpected $reads READ RPCs"
 	ls $dom
 	rm -f $dom
 }
 run_test 271a "DoM: data is cached for read after write"
+
+test_271b() {
+	local dom=$DIR/$tdir/dom
+
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1024K -L mdt -E EOF $dom
+
+	lctl set_param -n mdc.*.stats=clear
+	dd if=/dev/zero of=$dom bs=4096 count=1 || return 1
+	cancel_lru_locks mdc
+	$CHECKSTAT -t file -s 4096 $dom || error "stat #1 fails"
+	# second stat to check size is cached on client
+	$CHECKSTAT -t file -s 4096 $dom || error "stat #2 fails"
+	local gls=$(lctl get_param -n mdc.*.stats |
+			awk '/ldlm_glimpse/ {print $2}')
+	[ -z $gls ] || error "Unexpected $gls glimpse RPCs"
+	rm -f $dom
+}
+run_test 271b "DoM: no glimpse RPC for stat (DoM only file)"
+
+test_271ba() {
+	local dom=$DIR/$tdir/dom
+
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1024K -L mdt -E EOF $dom
+
+	lctl set_param -n mdc.*.stats=clear
+	lctl set_param -n osc.*.stats=clear
+	dd if=/dev/zero of=$dom bs=2048K count=1 || return 1
+	cancel_lru_locks mdc
+	$CHECKSTAT -t file -s 2097152 $dom || error "stat"
+	# second stat to check size is cached on client
+	$CHECKSTAT -t file -s 2097152 $dom || error "stat"
+	local gls=$(lctl get_param -n mdc.*.stats |
+			awk '/ldlm_glimpse/ {print $2}')
+	[ -z $gls ] || error "Unexpected $gls glimpse RPCs"
+	local gls=$(lctl get_param -n osc.*.stats |
+			awk '/ldlm_glimpse/ {print $2}')
+	[ -z $gls ] || error "Unexpected $gls OSC glimpse RPCs"
+	rm -f $dom
+}
+run_test 271ba "DoM: no glimpse RPC for stat (combined file)"
+
+test_271c() {
+	# test to be enabled with lock_convert
+	skip "skipped until lock convert will be implemented" && return
+
+	local dom=$DIR/$tdir/dom
+
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
+
+	local mdtidx=$($LFS getstripe -M $DIR/$tdir)
+	local facet=mds$((mdtidx + 1))
+
+	cancel_lru_locks mdc
+	do_facet $facet lctl set_param -n mdt.*.dom_lock=0
+	createmany -o $dom 1000
+	lctl set_param -n mdc.*.stats=clear
+	smalliomany -w $dom 1000 200
+	lctl get_param -n mdc.*.stats
+	local enq=$(lctl get_param -n mdc.*.stats |
+			awk '/ldlm_ibits_enqueue/ {print $2}')
+	# Each file has 1 open, 1 IO enqueues, total 2000
+	# but now we have also +1 getxattr for security.capability, total 3000
+	[ $enq -ge 2000 ] || error "Too few enqueues $enq, expected > 2000"
+	unlinkmany $dom 1000
+
+	cancel_lru_locks mdc
+	do_facet $facet lctl set_param -n mdt.*.dom_lock=1
+	createmany -o $dom 1000
+	lctl set_param -n mdc.*.stats=clear
+	smalliomany -w $dom 1000 200
+	lctl get_param -n mdc.*.stats
+	local enq_2=$(lctl get_param -n mdc.*.stats |
+			awk '/ldlm_ibits_enqueue/ {print $2}')
+	# Expect to see reduced amount of RPCs by 1000 due to single enqueue
+	# for OPEN and IO lock.
+	[ $((enq - enq_2)) -ge 1000 ] ||
+		error "Too many enqueues $enq_2, expected about $((enq - 1000))"
+	unlinkmany $dom 1000
+	return 0
+}
+run_test 271c "DoM: IO lock at open saves enqueue RPCs"
 
 cleanup_test_300() {
 	trap 0

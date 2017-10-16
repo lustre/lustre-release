@@ -281,6 +281,11 @@ run_smallfile() {
 test_smallio() {
 	OSC="mdc"
 	run_smalliomany $DOM
+	echo "### Data-on-MDT files, no IO lock on open ###"
+	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=0
+	OSC="mdc"
+	run_smalliomany $DOM
+	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=1
 	OSC="osc"
 	run_smalliomany $NORM
 }
@@ -289,6 +294,12 @@ run_test smallio "Performance comparision: smallio"
 test_mdtest() {
 	OSC="mdc"
 	run_MDtest $DOM
+	echo "### Data-on-MDT files, NO IO lock on open ###"
+	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=0
+	OSC="mdc"
+	run_MDtest $DOM
+	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=1
+	echo "### Normal files, $OSTCOUNT OSTs ###"
 	OSC="osc"
 	run_MDtest $NORM
 }
@@ -297,6 +308,11 @@ run_test mdtest "Performance comparision: mdtest"
 test_IOR() {
 	OSC="mdc"
 	run_IOR $DOM
+	echo "### Data-on-MDT files, no IO lock on open ###"
+	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=0
+	OSC="mdc"
+	run_IOR $DOM
+	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=1
 	OSC="osc"
 	run_IOR $NORM
 }
@@ -305,6 +321,11 @@ run_test IOR "Performance comparision: IOR"
 test_dbench() {
 	OSC="mdc"
 	run_dbench $DOM
+	echo "### Data-on-MDT files, no IO lock on open ###"
+	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=0
+	OSC="mdc"
+	run_dbench $DOM
+	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=1
 	OSC="osc"
 	run_dbench $NORM
 }
@@ -313,6 +334,11 @@ run_test dbench "Performance comparision: dbench"
 test_smf() {
 	OSC="mdc"
 	run_smallfile $DOM
+	echo "### Data-on-MDT files, no IO lock on open ###"
+	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=0
+	OSC="mdc"
+	run_smallfile $DOM
+	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=1
 	OSC="osc"
 	run_smallfile $NORM
 

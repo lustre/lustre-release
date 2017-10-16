@@ -1072,16 +1072,14 @@ static void ldlm_granted_list_add_lock(struct ldlm_lock *lock,
  * Add a lock to granted list on a resource maintaining skiplist
  * correctness.
  */
-static void ldlm_grant_lock_with_skiplist(struct ldlm_lock *lock)
+void ldlm_grant_lock_with_skiplist(struct ldlm_lock *lock)
 {
-        struct sl_insert_point prev;
-        ENTRY;
+	struct sl_insert_point prev;
 
-        LASSERT(lock->l_req_mode == lock->l_granted_mode);
+	LASSERT(lock->l_req_mode == lock->l_granted_mode);
 
-        search_granted_lock(&lock->l_resource->lr_granted, lock, &prev);
-        ldlm_granted_list_add_lock(lock, &prev);
-        EXIT;
+	search_granted_lock(&lock->l_resource->lr_granted, lock, &prev);
+	ldlm_granted_list_add_lock(lock, &prev);
 }
 
 /**

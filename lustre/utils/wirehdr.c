@@ -35,17 +35,17 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <lustre/lustre_idl.h>
-#include <lustre/lustre_lfsck_user.h>
-#include <linux/lustre_disk.h>
+#include <linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_lfsck_user.h>
+#include <linux/lustre/lustre_disk.h>
 
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
 #define LASSERTF(cond, fmt, ...) if (!(cond)) { printf("failed '" #cond "'" fmt, ## __VA_ARGS__);ret = 1;}
 /*
  * Compile-time LASSERT, which verifies correctness at compile-time rather
  * than runtime. If "cond" is true, then there are two different cases
- * ("(non-zero)" and "0"). If "cond" is false, then there are two identical cases
- * ("0" and "0"), which is an error that causes the compiler to complain.
+ * ("(non-zero)" and "0"). If "cond" is false, then there are two identical
+ * cases ("0" and "0"), which is an error that causes the compiler to complain.
  */
 #define CLASSERT(cond) do {switch (1) {case (cond): case 0: break; } } while (0)
 

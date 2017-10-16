@@ -169,5 +169,6 @@ static inline unsigned long hash_x_index(__u64 hash, int hash64)
 extern struct lu_device_type mdc_device_type;
 int mdc_ldlm_blocking_ast(struct ldlm_lock *dlmlock,
 			  struct ldlm_lock_desc *new, void *data, int flag);
-
+int mdc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data);
+int mdc_fill_lvb(struct ptlrpc_request *req, struct ost_lvb *lvb);
 #endif

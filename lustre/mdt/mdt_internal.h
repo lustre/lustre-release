@@ -207,7 +207,8 @@ struct mdt_device {
 		unsigned int       mo_user_xattr:1,
 				   mo_acl:1,
 				   mo_cos:1,
-				   mo_evict_tgt_nids:1;
+				   mo_evict_tgt_nids:1,
+				   mo_dom_lock:1;
 	} mdt_opts;
         /* mdt state flags */
         unsigned long              mdt_state;
@@ -614,6 +615,44 @@ static inline bool mdt_is_striped_client(struct obd_export *exp)
 	return exp_connect_flags(exp) & OBD_CONNECT_DIR_STRIPE;
 }
 
+enum {
+	LMM_NO_DOM,
+	LMM_DOM_ONLY,
+	LMM_DOM_OST
+};
+
+/* XXX Look into layout in MDT layer. This must be done in LOD. */
+static inline int mdt_lmm_dom_entry(struct lov_mds_md *lmm)
+{
+	struct lov_comp_md_v1 *comp_v1;
+	struct lov_mds_md *v1;
+	int i;
+
+	if (lmm->lmm_magic == LOV_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)lmm;
+		v1 = (struct lov_mds_md *)((char *)comp_v1 +
+			comp_v1->lcm_entries[0].lcme_offset);
+		/* DoM entry is the first entry always */
+		if (lov_pattern(v1->lmm_pattern) != LOV_PATTERN_MDT)
+			return LMM_NO_DOM;
+
+		for (i = 1; i < comp_v1->lcm_entry_count; i++) {
+			int j;
+
+			v1 = (struct lov_mds_md *)((char *)comp_v1 +
+				comp_v1->lcm_entries[i].lcme_offset);
+			for (j = 0; j < v1->lmm_stripe_count; j++) {
+				/* if there is any object on OST */
+				if (v1->lmm_objects[j].l_ost_idx !=
+				    (__u32)-1UL)
+					return LMM_DOM_OST;
+			}
+		}
+		return LMM_DOM_ONLY;
+	}
+	return LMM_NO_DOM;
+}
+
 __u64 mdt_get_disposition(struct ldlm_reply *rep, __u64 op_flag);
 void mdt_set_disposition(struct mdt_thread_info *info,
 			 struct ldlm_reply *rep, __u64 op_flag);
@@ -686,8 +725,9 @@ int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
 		      struct mdt_object *o, struct lu_nodemap *nodemap);
 #endif
 void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
-                        const struct lu_attr *attr, const struct lu_fid *fid);
-
+			const struct lu_attr *attr, const struct lu_fid *fid);
+int mdt_pack_size2body(struct mdt_thread_info *info,
+			const struct lu_fid *fid, bool dom_lock);
 int mdt_getxattr(struct mdt_thread_info *info);
 int mdt_reint_setxattr(struct mdt_thread_info *info,
                        struct mdt_lock_handle *lh);
@@ -1175,6 +1215,11 @@ static inline void mdt_dom_check_and_discard(struct mdt_thread_info *mti,
 		mdt_dom_discard_data(mti, mdt_object_fid(mo));
 }
 
+int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,
+			const struct lu_fid *fid, struct mdt_body *mb,
+			bool dom_lock);
+bool mdt_dom_client_has_lock(struct mdt_thread_info *info,
+			     const struct lu_fid *fid);
 /* grants */
 long mdt_grant_connect(const struct lu_env *env, struct obd_export *exp,
 		       u64 want, bool conservative);

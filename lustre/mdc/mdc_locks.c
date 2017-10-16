@@ -544,8 +544,10 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 	struct ldlm_request *lockreq;
 	struct ldlm_reply   *lockrep;
 	struct ldlm_lock    *lock;
+	struct mdt_body     *body = NULL;
 	void                *lvb_data = NULL;
 	__u32                lvb_len = 0;
+
         ENTRY;
 
         LASSERT(rc >= 0);
@@ -604,8 +606,6 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 
         /* We know what to expect, so we do any byte flipping required here */
 	if (it_has_reply_body(it)) {
-                struct mdt_body *body;
-
                 body = req_capsule_server_get(pill, &RMF_MDT_BODY);
                 if (body == NULL) {
                         CERROR ("Can't swab mdt_body\n");
@@ -688,7 +688,10 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 	 * client still does this checking in case it's talking with an old
 	 * server. - Jinshan */
 	lock = ldlm_handle2lock(lockh);
-	if (lock != NULL && ldlm_has_layout(lock) && lvb_data != NULL &&
+	if (lock == NULL)
+		RETURN(rc);
+
+	if (ldlm_has_layout(lock) && lvb_data != NULL &&
 	    !(lockrep->lock_flags & LDLM_FL_BLOCKED_MASK)) {
 		void *lmm;
 
@@ -696,10 +699,9 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 			ldlm_it2str(it->it_op), lvb_len);
 
 		OBD_ALLOC_LARGE(lmm, lvb_len);
-		if (lmm == NULL) {
-			LDLM_LOCK_PUT(lock);
-			RETURN(-ENOMEM);
-		}
+		if (lmm == NULL)
+			GOTO(out_lock, rc = -ENOMEM);
+
 		memcpy(lmm, lvb_data, lvb_len);
 
 		/* install lvb_data */
@@ -714,8 +716,24 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 		if (lmm != NULL)
 			OBD_FREE_LARGE(lmm, lvb_len);
 	}
-	if (lock != NULL)
-		LDLM_LOCK_PUT(lock);
+
+	if (ldlm_has_dom(lock)) {
+		LASSERT(lock->l_glimpse_ast == mdc_ldlm_glimpse_ast);
+
+		body = req_capsule_server_get(pill, &RMF_MDT_BODY);
+		if (!(body->mbo_valid & OBD_MD_DOM_SIZE)) {
+			LDLM_ERROR(lock, "%s: DoM lock without size.\n",
+				   exp->exp_obd->obd_name);
+			GOTO(out_lock, rc = -EPROTO);
+		}
+
+		LDLM_DEBUG(lock, "DoM lock is returned by: %s, size: %llu",
+			   ldlm_it2str(it->it_op), body->mbo_dom_size);
+
+		rc = mdc_fill_lvb(req, &lock->l_ost_lvb);
+	}
+out_lock:
+	LDLM_LOCK_PUT(lock);
 
 	RETURN(rc);
 }
@@ -812,18 +830,25 @@ resend:
 		rc = obd_get_request_slot(&obddev->u.cli);
 		if (rc != 0) {
 			mdc_put_mod_rpc_slot(req, it);
-                        mdc_clear_replay_flag(req, 0);
-                        ptlrpc_req_finished(req);
-                        RETURN(rc);
-                }
-        }
+			mdc_clear_replay_flag(req, 0);
+			ptlrpc_req_finished(req);
+			RETURN(rc);
+		}
+	}
 
-        rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, policy, &flags, NULL,
+	/* With Data-on-MDT the glimpse callback is needed too.
+	 * It is set here in advance but not in mdc_finish_enqueue()
+	 * to avoid possible races. It is safe to have glimpse handler
+	 * for non-DOM locks and costs nothing.*/
+	if (einfo->ei_cb_gl == NULL)
+		einfo->ei_cb_gl = mdc_ldlm_glimpse_ast;
+
+	rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, policy, &flags, NULL,
 			      0, lvb_type, lockh, 0);
-        if (!it) {
-                /* For flock requests we immediatelly return without further
-                   delay and let caller deal with the rest, since rest of
-                   this function metadata processing makes no sense for flock
+	if (!it) {
+		/* For flock requests we immediatelly return without further
+		   delay and let caller deal with the rest, since rest of
+		   this function metadata processing makes no sense for flock
 		   requests anyway. But in case of problem during comms with
 		   Server (ETIMEDOUT) or any signal/kill attempt (EINTR), we
 		   can not rely on caller and this mainly for F_UNLCKs
@@ -1114,6 +1139,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 		.ei_mode	= it_to_lock_mode(it),
 		.ei_cb_bl	= cb_blocking,
 		.ei_cb_cp	= ldlm_completion_ast,
+		.ei_cb_gl	= mdc_ldlm_glimpse_ast,
 	};
 	struct lustre_handle lockh;
 	int rc = 0;
@@ -1239,6 +1265,13 @@ int mdc_intent_getattr_async(struct obd_export *exp,
 		ptlrpc_req_finished(req);
 		RETURN(rc);
 	}
+
+	/* With Data-on-MDT the glimpse callback is needed too.
+	 * It is set here in advance but not in mdc_finish_enqueue()
+	 * to avoid possible races. It is safe to have glimpse handler
+	 * for non-DOM locks and costs nothing.*/
+	if (minfo->mi_einfo.ei_cb_gl == NULL)
+		minfo->mi_einfo.ei_cb_gl = mdc_ldlm_glimpse_ast;
 
 	rc = ldlm_cli_enqueue(exp, &req, &minfo->mi_einfo, &res_id, &policy,
 			      &flags, NULL, 0, LVB_T_NONE, &minfo->mi_lockh, 1);

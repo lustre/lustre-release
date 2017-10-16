@@ -1170,6 +1170,7 @@ lov_mds_md_max_stripe_count(size_t buf_size, __u32 lmm_magic)
 #define OBD_MD_FLUID       (0x00000200ULL) /* user ID */
 #define OBD_MD_FLGID       (0x00000400ULL) /* group ID */
 #define OBD_MD_FLFLAGS     (0x00000800ULL) /* flags word */
+#define OBD_MD_DOM_SIZE    (0X00001000ULL) /* Data-on-MDT component size */
 #define OBD_MD_FLNLINK     (0x00002000ULL) /* link count */
 #define OBD_MD_FLGENER     (0x00004000ULL) /* generation number */
 /*#define OBD_MD_FLINLINE    (0x00008000ULL)  inline data. used until 1.6.5 */
@@ -1727,9 +1728,9 @@ struct mdt_body {
 	__u32	mbo_uid_h; /* high 32-bits of uid, for FUID */
 	__u32	mbo_gid_h; /* high 32-bits of gid, for FUID */
 	__u32	mbo_projid;
-	__u64	mbo_padding_6; /* also fix lustre_swab_mdt_body */
-	__u64	mbo_padding_7;
-	__u64	mbo_padding_8;
+	__u64	mbo_dom_size; /* size of DOM component */
+	__u64	mbo_dom_blocks; /* blocks consumed by DOM component */
+	__u64	mbo_padding_8; /* also fix lustre_swab_mdt_body */
 	__u64	mbo_padding_9;
 	__u64	mbo_padding_10;
 }; /* 216 */

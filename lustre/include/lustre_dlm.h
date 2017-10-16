@@ -1713,5 +1713,7 @@ static inline int ldlm_extent_contain(const struct ldlm_extent *ex1,
 	return ex1->start <= ex2->start && ex1->end >= ex2->end;
 }
 
+int ldlm_inodebits_drop(struct ldlm_lock *lock,  __u64 to_drop);
+
 #endif
 /** @} LDLM */

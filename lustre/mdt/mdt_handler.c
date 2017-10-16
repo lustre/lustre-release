@@ -486,6 +486,41 @@ out:
 	RETURN(rc);
 }
 
+/**
+ * Pack size attributes into the reply.
+ */
+int mdt_pack_size2body(struct mdt_thread_info *info,
+			const struct lu_fid *fid, bool dom_lock)
+{
+	struct mdt_body *b;
+	struct md_attr *ma = &info->mti_attr;
+	int dom_stripe;
+
+	ENTRY;
+
+	LASSERT(ma->ma_attr.la_valid & LA_MODE);
+
+	if (!S_ISREG(ma->ma_attr.la_mode) ||
+	    !(ma->ma_valid & MA_LOV && ma->ma_lmm != NULL))
+		RETURN(-ENODATA);
+
+	dom_stripe = mdt_lmm_dom_entry(ma->ma_lmm);
+	/* no DoM stripe, no size in reply */
+	if (dom_stripe == LMM_NO_DOM)
+		RETURN(-ENOENT);
+
+	/* no DoM lock, no size in reply */
+	if (!dom_lock)
+		RETURN(0);
+
+	/* Either DoM lock exists or LMM has only DoM stripe then
+	 * return size on body. */
+	b = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+
+	mdt_dom_object_size(info->mti_env, info->mti_mdt, fid, b, dom_lock);
+	RETURN(0);
+}
+
 #ifdef CONFIG_FS_POSIX_ACL
 /*
  * Pack ACL data into the reply. UIDs/GIDs are mapped and filtered by nodemap.
@@ -1705,12 +1740,16 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		/* layout lock must be granted in a best-effort way
 		 * for IT operations */
 		LASSERT(!(child_bits & MDS_INODELOCK_LAYOUT));
-		if (!OBD_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_GETATTR) &&
-		    exp_connect_layout(info->mti_exp) &&
-		    S_ISREG(lu_object_attr(&child->mot_obj)) &&
+		if (S_ISREG(lu_object_attr(&child->mot_obj)) &&
 		    !mdt_object_remote(child) && ldlm_rep != NULL) {
-			/* try to grant layout lock for regular file. */
-			try_bits = MDS_INODELOCK_LAYOUT;
+			if (!OBD_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_GETATTR) &&
+			    exp_connect_layout(info->mti_exp)) {
+				/* try to grant layout lock for regular file. */
+				try_bits = MDS_INODELOCK_LAYOUT;
+			}
+			/* Acquire DOM lock in advance for data-on-mdt file */
+			if (child != parent)
+				try_bits |= MDS_INODELOCK_DOM;
 		}
 
 		if (try_bits != 0) {
@@ -1745,6 +1784,27 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			 "Lock res_id: "DLDLMRES", fid: "DFID"\n",
 			 PLDLMRES(lock->l_resource),
 			 PFID(mdt_object_fid(child)));
+
+		if (S_ISREG(lu_object_attr(&child->mot_obj)) &&
+		    mdt_object_exists(child) && !mdt_object_remote(child) &&
+		    child != parent) {
+			LDLM_LOCK_PUT(lock);
+			mdt_object_put(info->mti_env, child);
+			/* NB: call the mdt_pack_size2body always after
+			 * mdt_object_put(), that is why this speacial
+			 * exit path is used. */
+			rc = mdt_pack_size2body(info, child_fid,
+						child_bits & MDS_INODELOCK_DOM);
+			if (rc != 0 && child_bits & MDS_INODELOCK_DOM) {
+				/* DOM lock was taken in advance but this is
+				 * not DoM file. Drop the lock. */
+				lock_res_and_lock(lock);
+				ldlm_inodebits_drop(lock, MDS_INODELOCK_DOM);
+				unlock_res_and_lock(lock);
+			}
+
+			GOTO(out_parent, rc = 0);
+		}
         }
         if (lock)
                 LDLM_LOCK_PUT(lock);
@@ -5005,6 +5065,9 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		    lsi->lsi_lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
 			m->mdt_skip_lfsck = 1;
 	}
+
+	/* DoM files get IO lock at open by default */
+	m->mdt_opts.mo_dom_lock = 1;
 
 	m->mdt_squash.rsi_uid = 0;
 	m->mdt_squash.rsi_gid = 0;
