@@ -574,6 +574,8 @@ LPROC_SEQ_FOPS_RO(osc_destroys_in_flight);
 
 LPROC_SEQ_FOPS_RW_TYPE(osc, obd_max_pages_per_rpc);
 
+LPROC_SEQ_FOPS_RW_TYPE(osc, obd_short_io_bytes);
+
 static int osc_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *dev = m->private;
@@ -616,6 +618,8 @@ struct lprocfs_vars lprocfs_osc_obd_vars[] = {
 	  .fops	=	&osc_active_fops		},
 	{ .name	=	"max_pages_per_rpc",
 	  .fops	=	&osc_obd_max_pages_per_rpc_fops	},
+	{ .name	=	"short_io_bytes",
+	  .fops	=	&osc_obd_short_io_bytes_fops	},
 	{ .name	=	"max_rpcs_in_flight",
 	  .fops	=	&osc_max_rpcs_in_flight_fops	},
 	{ .name	=	"destroys_in_flight",

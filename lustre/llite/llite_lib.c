@@ -399,7 +399,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 				  OBD_CONNECT_JOBSTATS | OBD_CONNECT_LVB_TYPE |
 				  OBD_CONNECT_LAYOUTLOCK |
 				  OBD_CONNECT_PINGLESS | OBD_CONNECT_LFSCK |
-				  OBD_CONNECT_BULK_MBITS |
+				  OBD_CONNECT_BULK_MBITS | OBD_CONNECT_SHORTIO |
 				  OBD_CONNECT_FLAGS2;
 
 /* The client currently advertises support for OBD_CONNECT_LOCKAHEAD_OLD so it

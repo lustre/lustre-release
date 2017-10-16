@@ -874,17 +874,27 @@ void osc_lru_unreserve(struct client_obd *cli, unsigned long npages)
  * are likely from the same page zone.
  */
 static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
+					    struct osc_brw_async_args *aa,
 					    int factor)
 {
-	int page_count = desc->bd_iov_count;
+	int page_count;
 	void *zone = NULL;
 	int count = 0;
 	int i;
 
-	LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
+	if (desc != NULL) {
+		LASSERT(ptlrpc_is_bulk_desc_kiov(desc->bd_type));
+		page_count = desc->bd_iov_count;
+	} else {
+		page_count = aa->aa_page_count;
+	}
 
 	for (i = 0; i < page_count; i++) {
-		void *pz = page_zone(BD_GET_KIOV(desc, i).kiov_page);
+		void *pz;
+		if (desc)
+			pz = page_zone(BD_GET_KIOV(desc, i).kiov_page);
+		else
+			pz = page_zone(aa->aa_ppga[i]->pg);
 
 		if (likely(pz == zone)) {
 			++count;
@@ -903,14 +913,16 @@ static inline void unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
 		mod_zone_page_state(zone, NR_UNSTABLE_NFS, factor * count);
 }
 
-static inline void add_unstable_page_accounting(struct ptlrpc_bulk_desc *desc)
+static inline void add_unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
+						struct osc_brw_async_args *aa)
 {
-	unstable_page_accounting(desc, 1);
+	unstable_page_accounting(desc, aa, 1);
 }
 
-static inline void dec_unstable_page_accounting(struct ptlrpc_bulk_desc *desc)
+static inline void dec_unstable_page_accounting(struct ptlrpc_bulk_desc *desc,
+						struct osc_brw_async_args *aa)
 {
-	unstable_page_accounting(desc, -1);
+	unstable_page_accounting(desc, aa, -1);
 }
 
 /**
@@ -927,12 +939,19 @@ static inline void dec_unstable_page_accounting(struct ptlrpc_bulk_desc *desc)
 void osc_dec_unstable_pages(struct ptlrpc_request *req)
 {
 	struct ptlrpc_bulk_desc *desc       = req->rq_bulk;
+	struct osc_brw_async_args *aa = (void *)&req->rq_async_args;
 	struct client_obd       *cli        = &req->rq_import->imp_obd->u.cli;
-	int			 page_count = desc->bd_iov_count;
+	int			 page_count;
 	long			 unstable_count;
 
+	if (desc)
+		page_count = desc->bd_iov_count;
+	else
+		page_count = aa->aa_page_count;
+
 	LASSERT(page_count >= 0);
-	dec_unstable_page_accounting(desc);
+
+	dec_unstable_page_accounting(desc, aa);
 
 	unstable_count = atomic_long_sub_return(page_count,
 						&cli->cl_unstable_count);
@@ -954,14 +973,20 @@ void osc_dec_unstable_pages(struct ptlrpc_request *req)
 void osc_inc_unstable_pages(struct ptlrpc_request *req)
 {
 	struct ptlrpc_bulk_desc *desc = req->rq_bulk;
+	struct osc_brw_async_args *aa = (void *)&req->rq_async_args;
 	struct client_obd       *cli  = &req->rq_import->imp_obd->u.cli;
-	long			 page_count = desc->bd_iov_count;
+	long			 page_count;
 
 	/* No unstable page tracking */
 	if (cli->cl_cache == NULL || !cli->cl_cache->ccc_unstable_check)
 		return;
 
-	add_unstable_page_accounting(desc);
+	if (desc)
+		page_count = desc->bd_iov_count;
+	else
+		page_count = aa->aa_page_count;
+
+	add_unstable_page_accounting(desc, aa);
 	atomic_long_add(page_count, &cli->cl_unstable_count);
 	atomic_long_add(page_count, &cli->cl_cache->ccc_unstable_nr);
 

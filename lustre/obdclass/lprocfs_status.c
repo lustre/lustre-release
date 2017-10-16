@@ -2432,6 +2432,56 @@ ssize_t lprocfs_obd_max_pages_per_rpc_seq_write(struct file *file,
 }
 EXPORT_SYMBOL(lprocfs_obd_max_pages_per_rpc_seq_write);
 
+int lprocfs_obd_short_io_bytes_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *dev = data;
+	struct client_obd *cli = &dev->u.cli;
+
+	spin_lock(&cli->cl_loi_list_lock);
+	seq_printf(m, "%d\n", cli->cl_short_io_bytes);
+	spin_unlock(&cli->cl_loi_list_lock);
+	return 0;
+}
+EXPORT_SYMBOL(lprocfs_obd_short_io_bytes_seq_show);
+
+
+/* Used to catch people who think they're specifying pages. */
+#define MIN_SHORT_IO_BYTES 64
+
+ssize_t lprocfs_obd_short_io_bytes_seq_write(struct file *file,
+					     const char __user *buffer,
+					     size_t count, loff_t *off)
+{
+	struct obd_device *dev = ((struct seq_file *)
+						file->private_data)->private;
+	struct client_obd *cli = &dev->u.cli;
+	int rc;
+	__u64 val;
+
+	LPROCFS_CLIMP_CHECK(dev);
+
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		GOTO(out, rc);
+
+	if (val > OBD_MAX_SHORT_IO_BYTES || val < MIN_SHORT_IO_BYTES)
+		GOTO(out, rc = -ERANGE);
+
+	rc = count;
+
+	spin_lock(&cli->cl_loi_list_lock);
+	if (val > (cli->cl_max_pages_per_rpc << PAGE_SHIFT))
+		rc = -ERANGE;
+	else
+		cli->cl_short_io_bytes = val;
+	spin_unlock(&cli->cl_loi_list_lock);
+
+out:
+	LPROCFS_CLIMP_EXIT(dev);
+	return rc;
+}
+EXPORT_SYMBOL(lprocfs_obd_short_io_bytes_seq_write);
+
 int lprocfs_wr_root_squash(const char __user *buffer, unsigned long count,
 			   struct root_squash_info *squash, char *name)
 {

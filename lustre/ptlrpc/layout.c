@@ -609,16 +609,18 @@ static const struct req_msg_field *ost_destroy_client[] = {
 
 
 static const struct req_msg_field *ost_brw_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_OST_BODY,
-        &RMF_OBD_IOOBJ,
-        &RMF_NIOBUF_REMOTE,
-        &RMF_CAPA1
+	&RMF_PTLRPC_BODY,
+	&RMF_OST_BODY,
+	&RMF_OBD_IOOBJ,
+	&RMF_NIOBUF_REMOTE,
+	&RMF_CAPA1,
+	&RMF_SHORT_IO
 };
 
 static const struct req_msg_field *ost_brw_read_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_OST_BODY
+	&RMF_PTLRPC_BODY,
+	&RMF_OST_BODY,
+	&RMF_SHORT_IO
 };
 
 static const struct req_msg_field *ost_brw_write_server[] = {
@@ -1168,6 +1170,9 @@ struct req_msg_field RMF_IDX_INFO =
 	DEFINE_MSGF("idx_info", 0, sizeof(struct idx_info),
 		    lustre_swab_idx_info, NULL);
 EXPORT_SYMBOL(RMF_IDX_INFO);
+struct req_msg_field RMF_SHORT_IO =
+	DEFINE_MSGF("short_io", 0, -1, NULL, NULL);
+EXPORT_SYMBOL(RMF_SHORT_IO);
 struct req_msg_field RMF_HSM_USER_STATE =
 	DEFINE_MSGF("hsm_user_state", 0, sizeof(struct hsm_user_state),
 		    lustre_swab_hsm_user_state, NULL);

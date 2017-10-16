@@ -776,6 +776,10 @@ int lprocfs_obd_max_pages_per_rpc_seq_show(struct seq_file *m, void *data);
 ssize_t lprocfs_obd_max_pages_per_rpc_seq_write(struct file *file,
 						const char __user *buffer,
 						size_t count, loff_t *off);
+int lprocfs_obd_short_io_bytes_seq_show(struct seq_file *m, void *data);
+ssize_t lprocfs_obd_short_io_bytes_seq_write(struct file *file,
+					     const char __user *buffer,
+					     size_t count, loff_t *off);
 
 struct root_squash_info;
 int lprocfs_wr_root_squash(const char __user *buffer, unsigned long count,

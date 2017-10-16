@@ -445,6 +445,18 @@ struct osc_page {
 	cfs_time_t		ops_submit_time;
 };
 
+struct osc_brw_async_args {
+	struct obdo		*aa_oa;
+	int			 aa_requested_nob;
+	int			 aa_nio_count;
+	u32			 aa_page_count;
+	int			 aa_resends;
+	struct brw_page		**aa_ppga;
+	struct client_obd	*aa_cli;
+	struct list_head	 aa_oaps;
+	struct list_head	 aa_exts;
+};
+
 extern struct kmem_cache *osc_lock_kmem;
 extern struct kmem_cache *osc_object_kmem;
 extern struct kmem_cache *osc_thread_kmem;
