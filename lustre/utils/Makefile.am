@@ -58,7 +58,7 @@ endif
 lctl_LDADD :=  liblustreapi.a $(LIBCFS) $(LIBREADLINE) $(PTHREAD_LIBS)
 lctl_DEPENDENCIES := $(LIBCFS) liblustreapi.a
 
-lfs_SOURCES = lfs.c
+lfs_SOURCES = lfs.c lfs_project.c lfs_project.h
 lfs_LDADD := liblustreapi.a $(LIBCFS) $(LIBREADLINE)
 lfs_DEPENDENCIES := $(LIBCFS) liblustreapi.a
 
