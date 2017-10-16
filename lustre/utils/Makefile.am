@@ -60,7 +60,7 @@ lctl_SOURCES = lustre_lfsck.c obd.c lustre_cfg.c lctl.c obdctl.h lsnapshot.c
 lctl_LDADD :=  liblustreapi.a $(LIBPTLCTL) $(LIBREADLINE) $(PTHREAD_LIBS)
 lctl_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 
-lfs_SOURCES = lfs.c
+lfs_SOURCES = lfs.c lfs_project.c lfs_project.h
 lfs_LDADD := liblustreapi.a $(LIBPTLCTL) $(LIBREADLINE)
 lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 

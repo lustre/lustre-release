@@ -72,11 +72,10 @@ export QUOTA_AUTO=0
 check_and_setup_lustre
 
 is_project_quota_supported() {
-	lsattr -dp > /dev/null 2>&1 || return 1
-
 	[ "$(facet_fstype $SINGLEMDS)" == "ldiskfs" ] &&
 		[ $(lustre_version_code $SINGLEMDS) -gt \
 		$(version_code 2.9.55) ] &&
+		lfs --help | grep project >&/dev/null &&
 		egrep -q "7." /etc/redhat-release && return 0
 
 	if [ "$(facet_fstype $SINGLEMDS)" == "zfs" ]; then
@@ -117,8 +116,8 @@ lustre_fail() {
 
 change_project()
 {
-	echo "chattr $*"
-	chattr $* || error "chattr $* failed"
+	echo "lfs project $*"
+	lfs project $* || error "lfs project $* failed"
 }
 
 RUNAS="runas -u $TSTID -g $TSTID"
@@ -696,16 +695,14 @@ test_2() {
 	[ $USED -ne 0 ] &&
 		error "Used inodes($USED) for project $TSTPRJID isn't 0"
 
-	change_project +P $DIR/$tdir/
-	change_project -p $TSTPRJID -d $DIR/$tdir
+	change_project -sp $TSTPRJID $DIR/$tdir
 	log "Create $LIMIT files ..."
 	$RUNAS createmany -m ${TESTFILE} $((LIMIT-1)) || quota_error p \
 		$TSTPRJID "project create fail, but expect success"
 	log "Create out of file quota ..."
 	$RUNAS touch ${TESTFILE}_xxx && quota_error p $TSTPRJID \
 		"project create success, but expect EDQUOT"
-	change_project -P $DIR/$tdir
-	change_project -p 0 -d $DIR/$tdir
+	change_project -C $DIR/$tdir
 
 	cleanup_quota_test
 	USED=$(getquota -p $TSTPRJID global curinodes)
@@ -846,7 +843,7 @@ test_3() {
 		# make sure the system is clean
 		USED=$(getquota -p $TSTPRJID global curspace)
 		[ $USED -ne 0 ] && error \
-			"Used space($USED) for project $TSTPROJID isn't 0."
+			"Used space($USED) for project $TSTPRJID isn't 0."
 
 		$LFS setquota -t -p --block-grace $GRACE --inode-grace \
 			$MAX_IQ_TIME $DIR ||
@@ -877,8 +874,7 @@ test_file_soft() {
 
 	setup_quota_test
 	trap cleanup_quota_test EXIT
-	is_project_quota_supported && change_project +P $DIR/$tdir/ &&
-		change_project -p $TSTPRJID -d $DIR/$tdir
+	is_project_quota_supported && change_project -sp $TSTPRJID $DIR/$tdir
 
 	echo "Create files to exceed soft limit"
 	$RUNAS createmany -m ${TESTFILE}_ $((LIMIT + 1)) ||
@@ -1528,8 +1524,7 @@ test_8() {
 	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR ||
 		error "set group quota failed"
 	if is_project_quota_supported; then
-		change_project +P $DIR/$tdir && change_project -p \
-			$TSTPRJID -d $DIR/$tdir
+		change_project -sp $TSTPRJID $DIR/$tdir
 		echo "Set enough high limit for project: $TSTPRJID"
 		$LFS setquota -p $TSTPRJID -b 0 \
 			-B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR ||
@@ -1541,8 +1536,7 @@ test_8() {
 	$RUNAS bash rundbench -D $DIR/$tdir 3 $duration ||
 		quota_error a $TSTUSR "dbench failed!"
 
-	is_project_quota_supported && change_project -P $DIR/$tdir &&
-	change_project -dp 0 $DIR/$tdir
+	is_project_quota_supported && change_project -C $DIR/$tdir
 	cleanup_quota_test
 	resetquota -u $TSTUSR
 	resetquota -g $TSTUSR
@@ -2763,18 +2757,18 @@ test_39() {
 	setup_quota_test || error "setup quota failed with $?"
 
 	touch $TESTFILE
-	projectid=$(lsattr -p $TESTFILE | awk '{print $1}')
+	projectid=$(lfs project $TESTFILE | awk '{print $1}')
 	[ $projectid -ne 0 ] &&
 		error "Project id should be 0 not $projectid"
 	change_project -p 1024 $TESTFILE
-	projectid=$(lsattr -p $TESTFILE | awk '{print $1}')
+	projectid=$(lfs project $TESTFILE | awk '{print $1}')
 	[ $projectid -ne 1024 ] &&
 		error "Project id should be 1024 not $projectid"
 
 	stopall || error "failed to stopall (1)"
 	mount
 	setupall
-	projectid=$(lsattr -p $TESTFILE | awk '{print $1}')
+	projectid=$(lfs project $TESTFILE | awk '{print $1}')
 	[ $projectid -ne 1024 ] &&
 		error "Project id should be 1024 not $projectid"
 
@@ -2791,8 +2785,8 @@ test_40a() {
 	setup_quota_test || error "setup quota failed with $?"
 
 	mkdir -p $dir1 $dir2
-	change_project +P $dir1 && change_project -p 1 -d $dir1 && touch $dir1/1
-	change_project +P $dir2 && change_project -p 2 -d $dir2
+	change_project -sp 1 $dir1 && touch $dir1/1
+	change_project -sp 2 $dir2
 
 	ln $dir1/1 $dir2/1_link &&
 		error "Hard link across different project quota should fail"
@@ -2810,11 +2804,11 @@ test_40b() {
 
 	setup_quota_test || error "setup quota failed with $?"
 	mkdir -p $dir1 $dir2
-	change_project +P $dir1 && change_project -p 1 -d $dir1 && touch $dir1/1
-	change_project +P $dir2 && change_project -p 2 -d $dir2
+	change_project -sp 1 $dir1 && touch $dir1/1
+	change_project -sp 2 $dir2
 
 	mv $dir1/1 $dir2/2 || error "mv failed $?"
-	local projid=$(lsattr -p $dir2/2 | awk '{print $1}')
+	local projid=$(lfs project $dir2/2 | awk '{print $1}')
 	if [ "$projid" != "2" ]; then
 		error "project id expected 2 not $projid"
 	fi
@@ -2831,13 +2825,13 @@ test_40c() {
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
 
-	mkdir -p $dir && change_project +P $dir && change_project -dp 1 $dir
+	mkdir -p $dir && change_project -sp 1 $dir
 	$LFS mkdir -i 1 $dir/remote_dir || error "create remote dir failed"
-	local projid=$(lsattr -dp $dir/remote_dir | awk '{print $1}')
+	local projid=$(lfs project -d $dir/remote_dir | awk '{print $1}')
 	[ "$projid" != "1" ] && error "projid id expected 1 not $projid"
 	touch $dir/remote_dir/file
 	#verify inherit works file for remote dir.
-	local projid=$(lsattr -dp $dir/remote_dir/file | awk '{print $1}')
+	local projid=$(lfs project -d $dir/remote_dir/file | awk '{print $1}')
 	[ "$projid" != "1" ] &&
 		error "file under remote dir expected 1 not $projid"
 
@@ -2859,7 +2853,7 @@ test_50() {
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
 
-	mkdir $dir && change_project -dp 1 $dir
+	mkdir $dir && change_project -p 1 $dir
 	count=$($LFS find --projid 1 $DIR | wc -l)
 	[ "$count" != 1 ] && error "expected 1 but got $count"
 
@@ -2874,7 +2868,7 @@ test_51() {
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
 
-	mkdir $dir && change_project -dp 1 $dir && change_project +P $dir
+	mkdir $dir && change_project -sp 1 $dir
 	local used=$(getquota -p 1 global curinodes)
 	[ $used != "1" ] && error "expected 1 got $used"
 
@@ -2905,7 +2899,7 @@ test_52() {
 		skip "Project quota is not supported" && return 0
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
-	mkdir $dir && change_project -dp 1 $dir && change_project +P $dir
+	mkdir $dir && change_project -sp 1 $dir
 
 	touch $DIR/$tdir/file
 	#Try renaming a file into the project.  This should fail.
@@ -2923,16 +2917,71 @@ test_53() {
 		skip "Project quota is not supported" && return 0
 	setup_quota_test || error "setup quota failed with $?"
 	local dir="$DIR/$tdir/dir"
-	mkdir $dir && change_project +P $dir
-	lsattr -pd $dir | grep P || error "inherit attribute should be set"
+	mkdir $dir && change_project -s $dir
+	lfs project -d $dir | grep P || error "inherit attribute should be set"
 
-	change_project -Pd $dir
-	lsattr -pd $dir | grep P && error "inherit attribute should be cleared"
+	change_project -C $dir
+	lfs project -d $dir | grep P &&
+		error "inherit attribute should be cleared"
 
 	rm -rf $dir
 	cleanup_quota_test
 }
 run_test 53 "Project inherit attribute could be cleared"
+
+test_54() {
+	! is_project_quota_supported &&
+		skip "Project quota is not supported" && return 0
+	setup_quota_test || error "setup quota failed with $?"
+	trap cleanup_quota_test EXIT
+	local testfile="$DIR/$tdir/$tfile-0"
+
+	#set project ID/inherit attribute
+	change_project -sp $TSTPRJID $DIR/$tdir
+	$RUNAS createmany -m ${testfile} 100 ||
+		error "create many files failed"
+
+	local proj_count=$(lfs project -r $DIR/$tdir | wc -l)
+	# one more count for directory itself */
+	((proj_count++))
+
+	#check project
+	local proj_count1=$(lfs project -rcp $TSTPRJID $DIR/$tdir | wc -l)
+	[ $proj_count1 -eq 0 ] || error "c1: expected 0 got $proj_count1"
+
+	proj_count1=$(lfs project -rcp $((TSTPRJID+1)) $DIR/$tdir | wc -l)
+	[ $proj_count1 -eq $proj_count ] ||
+			error "c2: expected $proj_count got $proj_count1"
+
+	#clear project but with kept projid
+	change_project -rCk $DIR/$tdir
+	proj_count1=$(lfs project -rcp $TSTPRJID $DIR/$tdir | wc -l)
+	[ $proj_count1 -eq $proj_count ] ||
+			error "c3: expected $proj_count got $proj_count1"
+
+	#verify projid untouched.
+	proj_count1=$(lfs project -r $DIR/$tdir | grep -c $TSTPRJID)
+	((proj_count1++))
+	[ $proj_count1 -eq $proj_count ] ||
+			error "c4: expected $proj_count got $proj_count1"
+
+	# test -0 option
+	lfs project $DIR/$tdir -cr -0 | xargs -0 lfs project -s
+	proj_count1=$(lfs project -rcp $TSTPRJID $DIR/$tdir | wc -l)
+	[ $proj_count1 -eq 0 ] || error "c5: expected 0 got $proj_count1"
+
+	#this time clear all
+	change_project -rC $DIR/$tdir
+	proj_count1=$(lfs project -r $DIR/$tdir | grep -c $TSTPRJID)
+	[ $proj_count1 -eq 0 ] ||
+			error "c6: expected 0 got $proj_count1"
+	#cleanup
+	unlinkmany ${testfile} 100 ||
+		error "unlink many files failed"
+
+	cleanup_quota_test
+}
+run_test 54 "basic lfs project interface test"
 
 test_56 () {
 	setup_quota_test || error "setup quota failed with $?"

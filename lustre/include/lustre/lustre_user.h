@@ -380,6 +380,7 @@ struct fsxattr {
 #endif
 #define LL_IOC_FSGETXATTR		FS_IOC_FSGETXATTR
 #define LL_IOC_FSSETXATTR		FS_IOC_FSSETXATTR
+#define LL_PROJINHERIT_FL		0x20000000
 
 
 /* Lease types for use as arg and return of LL_IOC_{GET,SET}_LEASE ioctl. */

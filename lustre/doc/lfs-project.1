@@ -1,0 +1,88 @@
+.TH LFS-PROJECT 1 2017-10-26 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs project \- Change or list project attribute for specified file or directory.
+.SH SYNOPSIS
+.BR "lfs project" " [" -d | -r ] " "< \fI file | directory...\fR>
+.br
+.BR "lfs project" " {" -p " "\fIID " |" -s } " "[ -r ] " "<\fI file | directory...\fR>
+.br
+.BR "lfs project" " -c" " [" -d | -r " [" -p " "\fIID ] " [" -0 ] ] " <" file | directory...>
+.br
+.BR "lfs project" " -C" " [" -r | -k ] " <" file | directory...>
+.br
+.SH DESCRIPTION
+.TP
+.BR "lfs project" " [" -d | -r ]
+.RI < file | directory...>
+.TP
+List project ID and flags on file(s) or directories.
+.TP
+.B -d
+Show the directory's own project ID and flags, override \fB-r\fR option.
+.TP
+.B -r
+Recursively list all descendants'(of the directory) project attribute.
+.TP
+.BR "lfs project" " {" -p " "\fIID " |" -s } " "[ -r ]
+.RI < file | directory...>
+.TP
+Set project ID and/or inherit flag for specified file(s) or directories.
+.TP
+.B -p <\fIID\fR>
+Set project \fIID\fR with given value for the specified file or directory
+.TP
+.B -s
+Set the
+.B PROJID_INHERIT
+attribute on directories, so that new files and subdirectories created
+therein will inherit the project ID and attribute from the parent.
+.TP
+.B -r
+Set project \fIID\fR with the directory's project ID for all
+its descendants (with \fB-p\fR specified). For descendant directories, also set
+inherit flag (if \fI-s\fR specified).
+.TP
+.BR "lfs project" " -c" " [" -d|-r " [" -p " "\fIID ] " [" -0 ] ]
+.RI < file | directory...>
+.TP
+Check project ID and flags on file(s) or directories, print outliers.
+.TP
+.B -c
+Check project ID and inherit flag on specified file(s) or directory. If
+.B -p
+is not given, then use the project ID on the top-level directory
+, otherwise use the ID specified with
+.BR -p .
+if checking a directory and or recursively, print only files that do not match.
+.TP
+.B -0
+Print pathnames found by -c with a trailing NUL for use by
+.BR \' xargs "(1) " -0 \'.
+.TP
+.BR "lfs project" " -C [" -r | -k ]
+.RI < file | directory...>
+.TP
+Clear the project inherit flag and ID on the file(s) or directories
+.TP
+.B -C
+Clear inherit attribute, project ID will be reset to be 0 in default
+.TP
+.B -k
+keep the project ID unchanged.
+.TP
+.SH EXAMPLES
+.TP
+.B $ lfs project -srp 1000 /mnt/lustre/dir1
+set directory quota on
+.BR /mnt/lustre/dir1,
+all descendants' project ID and inherit attribute are set.
+.TP
+.B $ lfs project -cr -p 1000 /mnt/lustre/dir1
+check directory
+.BR /mnt/lustre/dir1,
+whether all files and directories ID are 1000, inherit attribute
+is properly set for all directories, print mismatch
+if any are found.
+.SH SEE ALSO
+.BR lfs (1)
+.BR xargs (1)

@@ -60,6 +60,7 @@
 #include <dirent.h>
 #include <time.h>
 #include <ctype.h>
+#include "lfs_project.h"
 
 #include <libcfs/util/string.h>
 #include <libcfs/util/ioctl.h>
@@ -87,6 +88,7 @@ static int lfs_check(int argc, char **argv);
 #ifdef HAVE_SYS_QUOTA_H
 static int lfs_setquota(int argc, char **argv);
 static int lfs_quota(int argc, char **argv);
+static int lfs_project(int argc, char **argv);
 #endif
 static int lfs_flushctx(int argc, char **argv);
 static int lfs_cp(int argc, char **argv);
@@ -163,7 +165,6 @@ static int lfs_list_commands(int argc, char **argv);
 	"\tdefault_stripe: set default dirstripe of the directory\n"	\
 	"\tmode: the mode of the directory\n"
 
-static const char	*progname;
 static bool		 file_lease_supported = true;
 
 /* all available commands */
@@ -300,6 +301,17 @@ command_t cmdlist[] = {
 		       "<ost_idx>]\n"
 	 "             [<-u|-g|-p> <uname>|<uid>|<gname>|<gid>|<projid>] <filesystem>\n"
 	 "       quota [-o <obd_uuid>|-i <mdt_idx>|-I <ost_idx>] -t <-u|-g|-p> <filesystem>"},
+	{"project", lfs_project, 0,
+	 "Change or list project attribute for specified file or directory.\n"
+	 "usage: project [-d|-r] <file|directory...>\n"
+	 "         list project ID and flags on file(s) or directories\n"
+	 "       project [-p id] [-s] [-r] <file|directory...>\n"
+	 "         set project ID and/or inherit flag for specified file(s) or directories\n"
+	 "       project -c [-d|-r [-p id] [-0]] <file|directory...>\n"
+	 "         check project ID and flags on file(s) or directories, print outliers\n"
+	 "       project -C [-r] [-k] <file|directory...>\n"
+	 "         clear the project inherit flag and ID on the file or directory\n"
+	},
 #endif
         {"flushctx", lfs_flushctx, 0, "Flush security context for current user.\n"
          "usage: flushctx [-k] [mountpoint...]"},
@@ -4138,6 +4150,160 @@ static int get_print_quota(char *mnt, char *name, struct if_quotactl *qctl,
 out:
 	return rc1;
 
+}
+
+static int lfs_project(int argc, char **argv)
+{
+	int ret = 0, err = 0, c, i;
+	struct project_handle_control phc = { 0 };
+	enum lfs_project_ops_t op;
+
+	phc.newline = true;
+	phc.assign_projid = false;
+	/* default action */
+	op = LFS_PROJECT_LIST;
+
+	while ((c = getopt(argc, argv, "p:cCsdkr0")) != -1) {
+		switch (c) {
+		case 'c':
+			if (op != LFS_PROJECT_LIST) {
+				fprintf(stderr,
+					"%s: cannot specify '-c' '-C' '-s' together\n",
+					progname);
+				return CMD_HELP;
+			}
+
+			op = LFS_PROJECT_CHECK;
+			break;
+		case 'C':
+			if (op != LFS_PROJECT_LIST) {
+				fprintf(stderr,
+					"%s: cannot specify '-c' '-C' '-s' together\n",
+					progname);
+				return CMD_HELP;
+			}
+
+			op = LFS_PROJECT_CLEAR;
+			break;
+		case 's':
+			if (op != LFS_PROJECT_LIST) {
+				fprintf(stderr,
+					"%s: cannot specify '-c' '-C' '-s' together\n",
+					progname);
+				return CMD_HELP;
+			}
+
+			phc.set_inherit = true;
+			op = LFS_PROJECT_SET;
+			break;
+		case 'd':
+			phc.dironly = true;
+			break;
+		case 'k':
+			phc.keep_projid = true;
+			break;
+		case 'r':
+			phc.recursive = true;
+			break;
+		case 'p':
+			phc.projid = strtoul(optarg, NULL, 0);
+			phc.assign_projid = true;
+
+			break;
+		case '0':
+			phc.newline = false;
+			break;
+		default:
+			fprintf(stderr, "%s: invalid option '%c'\n",
+				progname, optopt);
+			return CMD_HELP;
+		}
+	}
+
+	if (phc.assign_projid && op == LFS_PROJECT_LIST) {
+		op = LFS_PROJECT_SET;
+		phc.set_projid = true;
+	} else if (phc.assign_projid && op == LFS_PROJECT_SET) {
+		phc.set_projid = true;
+	}
+
+	switch (op) {
+	case LFS_PROJECT_CHECK:
+		if (phc.keep_projid) {
+			fprintf(stderr,
+				"%s: '-k' is useless together with '-c'\n",
+				progname);
+			return CMD_HELP;
+		}
+		break;
+	case LFS_PROJECT_CLEAR:
+		if (!phc.newline) {
+			fprintf(stderr,
+				"%s: '-0' is useless together with '-C'\n",
+				progname);
+			return CMD_HELP;
+		}
+		if (phc.assign_projid) {
+			fprintf(stderr,
+				"%s: '-p' is useless together with '-C'\n",
+				progname);
+			return CMD_HELP;
+		}
+		break;
+	case LFS_PROJECT_SET:
+		if (!phc.newline) {
+			fprintf(stderr,
+				"%s: '-0' is useless together with '-s'\n",
+				progname);
+			return CMD_HELP;
+		}
+		if (phc.keep_projid) {
+			fprintf(stderr,
+				"%s: '-k' is useless together with '-s'\n",
+				progname);
+			return CMD_HELP;
+		}
+		break;
+	default:
+		if (!phc.newline) {
+			fprintf(stderr,
+				"%s: '-0' is useless for list operations\n",
+				progname);
+			return CMD_HELP;
+		}
+		break;
+	}
+
+	argv += optind;
+	argc -= optind;
+	if (argc == 0) {
+		fprintf(stderr, "%s: missing file or directory target(s)\n",
+			progname);
+		return CMD_HELP;
+	}
+
+	for (i = 0; i < argc; i++) {
+		switch (op) {
+		case LFS_PROJECT_CHECK:
+			err = lfs_project_check(argv[i], &phc);
+			break;
+		case LFS_PROJECT_LIST:
+			err = lfs_project_list(argv[i], &phc);
+			break;
+		case LFS_PROJECT_CLEAR:
+			err = lfs_project_clear(argv[i], &phc);
+			break;
+		case LFS_PROJECT_SET:
+			err = lfs_project_set(argv[i], &phc);
+			break;
+		default:
+			break;
+		}
+		if (err && !ret)
+			ret = err;
+	}
+
+	return ret;
 }
 
 static int lfs_quota(int argc, char **argv)

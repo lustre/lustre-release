@@ -47,6 +47,7 @@ MANFILES =					\
 	lfs-mkdir.1				\
 	lfs-setdirstripe.1			\
 	lfs-setstripe.1				\
+	lfs-project.1				\
 	l_getidentity.8				\
 	lgss_sk.8				\
 	lhbadm.8				\

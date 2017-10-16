@@ -397,19 +397,21 @@ Set quotas of user `bob': 1GB block quota hardlimit and 2 GB block quota softlim
 Set grace times for user quotas: 1000 seconds for block quotas, 1 week and 4 days for inode quotas
 .SH NOTES
 The usage of \fBlfs hsm_*\fR, \fBlfs setstripe\fR, \fBlfs migrate\fR, \fBlfs setdirstripe\fR,
-\fBlfs getdirstripe\fR and \fBlfs mkdir\fR are explained in separated man pages.
+\fBlfs getdirstripe\fR, \fBlfs mkdir\fR and \fBlfs project\fR are explained in separate
+man pages.
 .SH BUGS
 The \fBlfs find\fR command isn't as comprehensive as \fBfind\fR(1).
 .SH AUTHOR
 The lfs command is part of the Lustre filesystem.
 .SH SEE ALSO
-.BR lfs-df (1),
-.BR lfs-hsm (1),
-.BR lfs-setdirstripe (1),
-.BR lfs-getdirstripe (1),
-.BR lfs-mkdir (1),
-.BR lfs_migrate (1),
-.BR lfs-setstripe (1),
-.BR lfs-migrate (1),
 .BR lctl (8),
+.BR lfs-df (1),
+.BR lfs-getdirstripe (1),
+.BR lfs-hsm (1),
+.BR lfs-mkdir (1),
+.BR lfs-migrate (1),
+.BR lfs-project (1),
+.BR lfs-setdirstripe (1),
+.BR lfs-setquota (1),
+.BR lfs-setstripe (1),
 .BR lustre (7)
