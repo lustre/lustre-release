@@ -902,6 +902,10 @@ static struct cfs_cpt_table *cfs_cpt_table_create_pattern(const char *pattern)
 				if (!cpumask_empty(cpumask_of_node(i)))
 					ncpt++;
 			}
+			if (ncpt == 1) { /* single NUMA node */
+				kfree(pattern_dup);
+				return cfs_cpt_table_create(cpu_npartitions);
+			}
 		}
 	}
 
