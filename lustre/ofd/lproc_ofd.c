@@ -298,9 +298,6 @@ LPROC_SEQ_FOPS(ofd_fmd_max_num);
 /**
  * Show the maximum age of FMD data in seconds.
  *
- * Though it is shown in seconds, it is stored internally in units
- * of jiffies for efficiency.
- *
  * \param[in] m		seq_file handle
  * \param[in] data	unused for single entry
  *
@@ -312,8 +309,7 @@ static int ofd_fmd_max_age_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%ld\n", jiffies_to_msecs(ofd->ofd_fmd_max_age) /
-		   MSEC_PER_SEC);
+	seq_printf(m, "%lld\n", ofd->ofd_fmd_max_age);
 	return 0;
 }
 
@@ -321,7 +317,6 @@ static int ofd_fmd_max_age_seq_show(struct seq_file *m, void *data)
  * Set the maximum age of FMD data in seconds.
  *
  * This defines how long FMD data stays in the FMD list.
- * It is stored internally in units of jiffies for efficiency.
  *
  * \param[in] file	proc file
  * \param[in] buffer	string which represents maximum number
@@ -348,7 +343,7 @@ ofd_fmd_max_age_seq_write(struct file *file, const char __user *buffer,
 	if (val > 65536 || val < 1)
 		return -EINVAL;
 
-	ofd->ofd_fmd_max_age = msecs_to_jiffies(val * MSEC_PER_SEC);
+	ofd->ofd_fmd_max_age = val;
 	return count;
 }
 LPROC_SEQ_FOPS(ofd_fmd_max_age);

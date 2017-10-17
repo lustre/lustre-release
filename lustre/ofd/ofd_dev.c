@@ -1698,10 +1698,10 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		}
 	}
 	if (diff > 0) {
-		cfs_time_t	 enough_time = cfs_time_shift(DISK_TIMEOUT);
-		u64		 next_id;
-		int		 created = 0;
-		int		 count;
+		time64_t enough_time = ktime_get_seconds() + DISK_TIMEOUT;
+		u64 next_id;
+		int created = 0;
+		int count;
 
 		if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
 		    !(oa->o_flags & OBD_FL_DELORPHAN)) {
@@ -1749,7 +1749,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			       count, seq, next_id);
 
 			if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
-			    && cfs_time_after(jiffies, enough_time)) {
+			    && ktime_get_seconds() > enough_time) {
 				CDEBUG(D_HA, "%s: Slow creates, %d/%lld objects"
 				      " created at a rate of %d/s\n",
 				      ofd_name(ofd), created, diff + created,
