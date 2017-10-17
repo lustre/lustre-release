@@ -401,7 +401,7 @@ static int ll_xattr_cache_refill(struct inode *inode)
 	if (unlikely(req == NULL)) {
 		CDEBUG(D_CACHE, "cancelled by a parallel getxattr\n");
 		ll_intent_drop_lock(&oit);
-		GOTO(err_unlock, rc = -EIO);
+		GOTO(err_unlock, rc = -EAGAIN);
 	}
 
 	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
