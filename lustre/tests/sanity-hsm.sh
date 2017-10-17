@@ -286,14 +286,13 @@ copytool_setup() {
 	[[ -z "$TESTNAME" ]] || prefix=$prefix.$TESTNAME
 	local copytool_log=$prefix.copytool${arc_id}_log.$agent.log
 
+	stack_trap cleanup EXIT
 	do_facet $facet "$cmd < /dev/null > $copytool_log 2>&1"
 	if [[ $? !=  0 ]]; then
 		[[ $HSMTOOL_NOERROR == true ]] ||
 			error "start copytool $facet on $agent failed"
 		echo "start copytool $facet on $agent failed"
 	fi
-
-	trap cleanup EXIT
 }
 
 get_copytool_event_log() {
@@ -2174,7 +2173,6 @@ test_24c() {
 run_test 24c "check that user,group,other request masks work"
 
 cleanup_test_24d() {
-	trap 0
 	mount -o remount,rw $MOUNT2
 	zconf_umount $(facet_host $SINGLEAGT) "$MOUNT3"
 }
@@ -2201,7 +2199,6 @@ test_24d() {
 	mount -o remount,ro $MOUNT2
 
 	do_nodes $(comma_list $(nodes_list)) $LCTL clear
-	start_full_debug_logging
 
 	fid2=$(path2fid $file2)
 	[ "$fid1" == "$fid2" ] ||
@@ -2214,8 +2211,6 @@ test_24d() {
 	$LFS hsm_archive $file1 || error "Fail to archive $file1"
 	wait_request_state $fid1 ARCHIVE SUCCEED
 
-	stop_full_debug_logging
-
 	$LFS hsm_release $file1
 	$LFS hsm_restore $file2
 	wait_request_state $fid1 RESTORE SUCCEED
@@ -2226,8 +2221,7 @@ test_24d() {
 	$LFS hsm_release $file2 &&
 		error "release should fail on read-only mount"
 
-	copytool_cleanup
-	cleanup_test_24d
+	return 0
 }
 run_test 24d "check that read-only mounts are respected"
 

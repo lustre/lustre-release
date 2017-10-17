@@ -5275,6 +5275,29 @@ report_error() {
 # Test interface
 ##################################
 
+# usage: stack_trap arg sigspec
+#
+# stack_trap() behaves like bash's built-in trap, except that it "stacks" the
+# command ``arg`` on top of previously defined commands for ``sigspec`` instead
+# of overwriting them.
+# stacked traps are executed in reverse order of their registration
+#
+# arg and sigspec have the same meaning as in man (1) trap
+stack_trap()
+{
+	local arg="$1"
+	local sigspec="$2"
+
+	local cmd="$(trap -p $sigspec)"
+
+	cmd="${cmd#trap -- \'}"
+	cmd="${cmd%\'*}"
+	[ -n "$cmd" ] && cmd="; $cmd"
+	cmd="${arg}$cmd"
+
+	trap "$cmd" $sigspec
+}
+
 error_noexit() {
 	report_error "$@"
 }
