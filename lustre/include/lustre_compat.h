@@ -480,6 +480,30 @@ __vfs_setxattr(struct dentry *dentry, struct inode *inode, const char *name,
 #endif /* HAVE_XATTR_HANDLER_FLAGS */
 #endif /* HAVE_VFS_SETXATTR */
 
+#ifdef HAVE_IOP_SET_ACL
+#ifdef CONFIG_FS_POSIX_ACL
+#ifndef HAVE_POSIX_ACL_UPDATE_MODE
+static inline int posix_acl_update_mode(struct inode *inode, umode_t *mode_p,
+			  struct posix_acl **acl)
+{
+	umode_t mode = inode->i_mode;
+	int error;
+
+	error = posix_acl_equiv_mode(*acl, &mode);
+	if (error < 0)
+		return error;
+	if (error == 0)
+		*acl = NULL;
+	if (!in_group_p(inode->i_gid) &&
+	    !capable_wrt_inode_uidgid(inode, CAP_FSETID))
+		mode &= ~S_ISGID;
+	*mode_p = mode;
+	return 0;
+}
+#endif /* HAVE_POSIX_ACL_UPDATE_MODE */
+#endif
+#endif
+
 #ifndef HAVE_IOV_ITER_TRUNCATE
 static inline void iov_iter_truncate(struct iov_iter *i, u64 count)
 {

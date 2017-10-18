@@ -2572,6 +2572,25 @@ vfs_setxattr, [
 ]) # LC_VFS_SETXATTR
 
 #
+# LC_POSIX_ACL_UPDATE_MODE
+#
+# Kernel version 4.9 commit 073931017b49d9458aa351605b43a7e34598caef
+# posix_acl: Clear SGID bit when setting file permissions
+#
+AC_DEFUN([LC_POSIX_ACL_UPDATE_MODE], [
+LB_CHECK_COMPILE([if 'posix_acl_update_mode' exists],
+posix_acl_update_mode, [
+	#include <linux/fs.h>
+	#include <linux/posix_acl.h>
+],[
+	posix_acl_update_mode(NULL, NULL, NULL);
+],[
+	AC_DEFINE(HAVE_POSIX_ACL_UPDATE_MODE, 1,
+		['posix_acl_update_mode' is available])
+])
+]) # LC_POSIX_ACL_UPDATE_MODE
+
+#
 # LC_IOP_GENERIC_READLINK
 #
 # Kernel version 4.10 commit dfeef68862edd7d4bafe68ef7aeb5f658ef24bb5
@@ -2862,6 +2881,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	# 4.9
 	LC_GROUP_INFO_GID
 	LC_VFS_SETXATTR
+	LC_POSIX_ACL_UPDATE_MODE
 
 	# 4.10
 	LC_IOP_GENERIC_READLINK
