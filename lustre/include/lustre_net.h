@@ -784,9 +784,9 @@ struct ptlrpc_cli_req {
 	/** For bulk requests on client only: bulk descriptor */
 	struct ptlrpc_bulk_desc		*cr_bulk;
 	/** optional time limit for send attempts */
-	cfs_duration_t			 cr_delay_limit;
+	time64_t			 cr_delay_limit;
 	/** time request was first queued */
-	cfs_time_t			 cr_queued_time;
+	time64_t			 cr_queued_time;
 	/** request sent in nanoseconds */
 	ktime_t				 cr_sent_ns;
 	/** time for request really sent out */
@@ -1115,8 +1115,9 @@ struct ptlrpc_request {
 	/**
 	 * service time estimate (secs)
 	 * If the request is not served by this time, it is marked as timed out.
+	 * Do not change to time64_t since this is transmitted over the wire.
 	 */
-	int				 rq_timeout;
+	time_t				 rq_timeout;
 	/**
 	 * when request/reply sent (secs), or time when request should be sent
 	 */
@@ -2592,11 +2593,8 @@ static inline int ptlrpc_req_get_repsize(struct ptlrpc_request *req)
 static inline int ptlrpc_send_limit_expired(struct ptlrpc_request *req)
 {
         if (req->rq_delay_limit != 0 &&
-            cfs_time_before(cfs_time_add(req->rq_queued_time,
-                                         cfs_time_seconds(req->rq_delay_limit)),
-                            cfs_time_current())) {
+	    req->rq_queued_time + req->rq_delay_limit < ktime_get_seconds())
                 return 1;
-        }
         return 0;
 }
 

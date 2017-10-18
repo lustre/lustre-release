@@ -742,12 +742,12 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 {
 	struct obd_device *target;
 	struct lustre_handle *hdl;
-	cfs_time_t now;
-	cfs_time_t deadline;
-	int timeout;
+	time64_t deadline;
+	time64_t timeout;
+	time64_t now;
 	int rc = 0;
-	ENTRY;
 
+	ENTRY;
 	hdl = &exp->exp_imp_reverse->imp_remote_handle;
 	if (!exp->exp_connection || !lustre_handle_is_used(hdl)) {
 		conn->cookie = exp->exp_handle.h_cookie;
@@ -781,16 +781,16 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 		GOTO(out_already, rc);
 	}
 
-	now = cfs_time_current();
-	deadline = target->obd_recovery_timer.expires;
-	if (cfs_time_before(now, deadline)) {
-		struct target_distribute_txn_data *tdtd =
-					class_exp2tgt(exp)->lut_tdtd;
+	now = ktime_get_seconds();
+	deadline = cfs_duration_sec(target->obd_recovery_timer.expires);
+	if (now < deadline) {
+		struct target_distribute_txn_data *tdtd;
 		int size = 0;
 		int count = 0;
 		char *buf = NULL;
 
-		timeout = cfs_duration_sec(cfs_time_sub(deadline, now));
+		timeout = deadline - now;
+		tdtd = class_exp2tgt(exp)->lut_tdtd;
 		if (tdtd && tdtd->tdtd_show_update_logs_retrievers)
 			buf = tdtd->tdtd_show_update_logs_retrievers(
 				tdtd->tdtd_show_retrievers_cbdata,
@@ -798,7 +798,7 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 
 		if (count > 0)
 			LCONSOLE_WARN("%s: Recovery already passed deadline "
-				      "%d:%.02d. It is due to DNE recovery "
+				      "%lld:%.02lld. It is due to DNE recovery "
 				      "failed/stuck on the %d MDT(s):%s. "
 				      "Please wait until all MDTs recovered "
 				      "or abort the recovery by force.\n",
@@ -807,7 +807,7 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 				      buf ? buf : "unknown (not enough RAM)");
 		else
 			LCONSOLE_WARN("%s: Recovery already passed deadline "
-				      "%d:%.02d. If you do not want to wait "
+				      "%lld:%.02lld. If you do not want to wait "
 				      "more, please abort the recovery by "
 				      "force.\n", target->obd_name,
 				      timeout / 60, timeout % 60);
@@ -815,9 +815,9 @@ static int target_handle_reconnect(struct lustre_handle *conn,
 		if (buf != NULL)
 			OBD_FREE(buf, size);
 	} else {
-		timeout = cfs_duration_sec(cfs_time_sub(now, deadline));
+		timeout = now - deadline;
 		LCONSOLE_WARN("%s: Recovery already passed deadline"
-			" %d:%.02d, It is most likely due to DNE"
+			" %lld:%.02lld, It is most likely due to DNE"
 			" recovery is failed or stuck, please wait a"
 			" few more minutes or abort the recovery.\n",
 			target->obd_name, timeout / 60, timeout % 60);
@@ -1238,27 +1238,26 @@ no_export:
 		/* allow "new" MDT to be connected during recovery, since we
 		 * need retrieve recovery update records from it */
 		if (target->obd_recovering && !lw_client && !mds_mds_conn) {
-                        cfs_time_t t;
-			int	c; /* connected */
-			int	i; /* in progress */
-			int	k; /* known */
-			int	s; /* stale/evicted */
+			time64_t t;
+			int c; /* connected */
+			int i; /* in progress */
+			int k; /* known */
+			int s; /* stale/evicted */
 
 			c = atomic_read(&target->obd_connected_clients);
 			i = atomic_read(&target->obd_lock_replay_clients);
 			k = target->obd_max_recoverable_clients;
 			s = target->obd_stale_clients;
 			t = target->obd_recovery_timer.expires;
-			t = cfs_time_sub(t, cfs_time_current());
-			t = cfs_duration_sec(t);
+			t = cfs_duration_sec(target->obd_recovery_timer.expires);
+			t -= ktime_get_seconds();
 			LCONSOLE_WARN("%s: Denying connection for new client %s"
 				      "(at %s), waiting for %d known clients "
 				      "(%d recovered, %d in progress, and %d "
-				      "evicted) to recover in %d:%.02d\n",
+				      "evicted) to recover in %lld:%.02lld\n",
 				      target->obd_name, cluuid.uuid,
 				      libcfs_nid2str(req->rq_peer.nid), k,
-				      c - i, i, s, (int)t / 60,
-				      (int)t % 60);
+				      c - i, i, s, t / 60, t % 60);
 			rc = -EBUSY;
 		} else {
 dont_check_exports:
@@ -1697,7 +1696,7 @@ static void target_start_recovery_timer(struct obd_device *obd)
 	}
 
 	mod_timer(&obd->obd_recovery_timer,
-		  cfs_time_shift(obd->obd_recovery_timeout));
+		  jiffies + cfs_time_seconds(obd->obd_recovery_timeout));
 	obd->obd_recovery_start = ktime_get_real_seconds();
 	spin_unlock(&obd->obd_dev_lock);
 
@@ -1716,7 +1715,7 @@ static void target_start_recovery_timer(struct obd_device *obd)
  * if @extend is true, extend recovery window to have @drt remaining at least;
  * otherwise, make sure the recovery timeout value is not less than @drt.
  */
-static void extend_recovery_timer(struct obd_device *obd, int drt,
+static void extend_recovery_timer(struct obd_device *obd, time64_t drt,
 				  bool extend)
 {
 	time64_t now;
@@ -1752,7 +1751,7 @@ static void extend_recovery_timer(struct obd_device *obd, int drt,
                 obd->obd_recovery_timeout = to;
 		end = obd->obd_recovery_start + to;
 		mod_timer(&obd->obd_recovery_timer,
-			  cfs_time_shift(end - now));
+			  jiffies + cfs_time_seconds(end - now));
         }
 	spin_unlock(&obd->obd_dev_lock);
 
@@ -1776,7 +1775,7 @@ check_and_start_recovery_timer(struct obd_device *obd,
                                struct ptlrpc_request *req,
                                int new_client)
 {
-        int service_time = lustre_msg_get_service_time(req->rq_reqmsg);
+	time64_t service_time = lustre_msg_get_service_time(req->rq_reqmsg);
         struct obd_device_target *obt = &obd->u.obt;
 
         if (!new_client && service_time)
@@ -1788,7 +1787,8 @@ check_and_start_recovery_timer(struct obd_device *obd,
         target_start_recovery_timer(obd);
 
 	/* Convert the service time to RPC timeout,
-	 * and reuse service_time to limit stack usage. */
+	 * and reuse service_time to limit stack usage.
+	 */
 	service_time = at_est2timeout(service_time);
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_TGT_SLUGGISH_NET) &&
@@ -2131,7 +2131,7 @@ static void handle_recovery_req(struct ptlrpc_thread *thread,
 
         /* don't reset timer for final stage */
         if (!exp_finished(req->rq_export)) {
-                int to = obd_timeout;
+		time64_t to = obd_timeout;
 
                 /**
                  * Add request timeout to the recovery time so next request from
@@ -3123,10 +3123,10 @@ static inline const char *bulk2type(struct ptlrpc_request *req)
 int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
                    struct l_wait_info *lwi)
 {
-	struct ptlrpc_request	*req = desc->bd_req;
-	time_t			 start = cfs_time_current_sec();
-	time_t			 deadline;
-	int			 rc = 0;
+	struct ptlrpc_request *req = desc->bd_req;
+	time64_t start = ktime_get_real_seconds();
+	time64_t deadline;
+	int rc = 0;
 
 	ENTRY;
 
@@ -3173,12 +3173,13 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 		deadline = req->rq_deadline;
 
 	do {
-		long timeoutl = deadline - cfs_time_current_sec();
-		cfs_duration_t timeout = timeoutl <= 0 ?
-					 CFS_TICK : cfs_time_seconds(timeoutl);
-		time_t	rq_deadline;
+		time64_t timeoutl = deadline - ktime_get_real_seconds();
+		long timeout_jiffies = timeoutl <= 0 ?
+				       1 : cfs_time_seconds(timeoutl);
+		time64_t rq_deadline;
 
-		*lwi = LWI_TIMEOUT_INTERVAL(timeout, cfs_time_seconds(1),
+		*lwi = LWI_TIMEOUT_INTERVAL(timeout_jiffies,
+					    cfs_time_seconds(1),
 					    target_bulk_timeout, desc);
 		rc = l_wait_event(desc->bd_waitq,
 				  !ptlrpc_server_bulk_active(desc) ||
@@ -3192,13 +3193,13 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 		deadline = start + bulk_timeout;
 		if (deadline > rq_deadline)
 			deadline = rq_deadline;
-	} while ((rc == -ETIMEDOUT) &&
-		 (deadline > cfs_time_current_sec()));
+	} while (rc == -ETIMEDOUT &&
+		 deadline > ktime_get_real_seconds());
 
 	if (rc == -ETIMEDOUT) {
-		DEBUG_REQ(D_ERROR, req, "timeout on bulk %s after %ld%+lds",
+		DEBUG_REQ(D_ERROR, req, "timeout on bulk %s after %lld%+llds",
 			  bulk2type(req), deadline - start,
-			  cfs_time_current_sec() - deadline);
+			  ktime_get_real_seconds() - deadline);
 		ptlrpc_abort_bulk(desc);
 	} else if (exp->exp_failed) {
 		DEBUG_REQ(D_ERROR, req, "Eviction on bulk %s",

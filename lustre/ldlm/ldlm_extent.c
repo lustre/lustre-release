@@ -311,7 +311,7 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
 static int ldlm_check_contention(struct ldlm_lock *lock, int contended_locks)
 {
 	struct ldlm_resource *res = lock->l_resource;
-	cfs_time_t now = cfs_time_current();
+	time64_t now = ktime_get_seconds();
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_SET_CONTENTION))
 		return 1;
@@ -319,8 +319,9 @@ static int ldlm_check_contention(struct ldlm_lock *lock, int contended_locks)
 	CDEBUG(D_DLMTRACE, "contended locks = %d\n", contended_locks);
 	if (contended_locks > ldlm_res_to_ns(res)->ns_contended_locks)
 		res->lr_contention_time = now;
-	return cfs_time_before(now, cfs_time_add(res->lr_contention_time,
-		cfs_time_seconds(ldlm_res_to_ns(res)->ns_contention_time)));
+
+	return now < res->lr_contention_time +
+		     ldlm_res_to_ns(res)->ns_contention_time;
 }
 
 struct ldlm_extent_compat_args {
@@ -675,7 +676,7 @@ destroylock:
 void ldlm_lock_prolong_one(struct ldlm_lock *lock,
 			   struct ldlm_prolong_args *arg)
 {
-	int timeout;
+	time64_t timeout;
 
 	if (arg->lpa_export != lock->l_export ||
 	    lock->l_flags & LDLM_FL_DESTROYED)
@@ -693,7 +694,7 @@ void ldlm_lock_prolong_one(struct ldlm_lock *lock,
 	 */
 	timeout = arg->lpa_timeout + (ldlm_bl_timeout(lock) >> 1);
 
-	LDLM_DEBUG(lock, "refreshed to %ds.\n", timeout);
+	LDLM_DEBUG(lock, "refreshed to %llds.\n", timeout);
 
 	arg->lpa_blocks_cnt++;
 

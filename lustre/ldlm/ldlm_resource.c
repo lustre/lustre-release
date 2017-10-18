@@ -409,7 +409,6 @@ static ssize_t lru_max_age_store(struct kobject *kobj, struct attribute *attr,
 	int scale = NSEC_PER_MSEC;
 	unsigned long long tmp;
 	char *buf;
-	int err;
 
 	/* Did the user ask in seconds or milliseconds. Default is in ms */
 	buf = strstr(buffer, "ms");
@@ -422,8 +421,7 @@ static ssize_t lru_max_age_store(struct kobject *kobj, struct attribute *attr,
 	if (buf)
 		*buf = '\0';
 
-	err = kstrtoull(buffer, 10, &tmp);
-	if (err != 0)
+	if (kstrtoull(buffer, 10, &tmp))
 		return -EINVAL;
 
 	ns->ns_max_age = ktime_set(0, tmp * scale);
@@ -471,7 +469,7 @@ static ssize_t ctime_age_limit_show(struct kobject *kobj,
 	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
 						 ns_kobj);
 
-	return sprintf(buf, "%u\n", ns->ns_ctime_age_limit);
+	return sprintf(buf, "%llu\n", ns->ns_ctime_age_limit);
 }
 
 static ssize_t ctime_age_limit_store(struct kobject *kobj,
@@ -480,11 +478,9 @@ static ssize_t ctime_age_limit_store(struct kobject *kobj,
 {
 	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
 						 ns_kobj);
-	unsigned long tmp;
-	int err;
+	unsigned long long tmp;
 
-	err = kstrtoul(buffer, 10, &tmp);
-	if (err != 0)
+	if (kstrtoull(buffer, 10, &tmp))
 		return -EINVAL;
 
 	ns->ns_ctime_age_limit = tmp;
@@ -537,7 +533,7 @@ static ssize_t contention_seconds_show(struct kobject *kobj,
 	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
 						 ns_kobj);
 
-	return sprintf(buf, "%u\n", ns->ns_contention_time);
+	return sprintf(buf, "%llu\n", ns->ns_contention_time);
 }
 
 static ssize_t contention_seconds_store(struct kobject *kobj,
@@ -546,11 +542,9 @@ static ssize_t contention_seconds_store(struct kobject *kobj,
 {
 	struct ldlm_namespace *ns = container_of(kobj, struct ldlm_namespace,
 						 ns_kobj);
-	unsigned long tmp;
-	int err;
+	unsigned long long tmp;
 
-	err = kstrtoul(buffer, 10, &tmp);
-	if (err != 0)
+	if (kstrtoull(buffer, 10, &tmp))
 		return -EINVAL;
 
 	ns->ns_contention_time = tmp;
@@ -1654,14 +1648,14 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
 	       ldlm_ns_name(ns), atomic_read(&ns->ns_bref),
 	       ns_is_client(ns) ? "client" : "server");
 
-	if (cfs_time_before(cfs_time_current(), ns->ns_next_dump))
+	if (ktime_get_seconds() < ns->ns_next_dump)
 		return;
 
 	cfs_hash_for_each_nolock(ns->ns_rs_hash,
 				 ldlm_res_hash_dump,
 				 (void *)(unsigned long)level, 0);
 	spin_lock(&ns->ns_lock);
-	ns->ns_next_dump = cfs_time_shift(10);
+	ns->ns_next_dump = ktime_get_seconds() + 10;
 	spin_unlock(&ns->ns_lock);
 }
 

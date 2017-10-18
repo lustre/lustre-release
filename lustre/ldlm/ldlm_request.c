@@ -120,16 +120,16 @@ int ldlm_expired_completion_wait(void *data)
 
         ENTRY;
         if (lock->l_conn_export == NULL) {
-                static cfs_time_t next_dump = 0, last_dump = 0;
+		static time64_t next_dump, last_dump;
 
 		LDLM_ERROR(lock, "lock timed out (enqueued at %lld, %llds ago); "
 			   "not entering recovery in server code, just going back to sleep",
 			   (s64)lock->l_last_activity,
 			   (s64)(ktime_get_real_seconds() -
 				 lock->l_last_activity));
-                if (cfs_time_after(cfs_time_current(), next_dump)) {
+		if (ktime_get_seconds() > next_dump) {
                         last_dump = next_dump;
-                        next_dump = cfs_time_shift(300);
+			next_dump = ktime_get_seconds() + 300;
                         ldlm_namespace_dump(D_DLMTRACE,
                                             ldlm_lock_to_ns(lock));
                         if (last_dump == 0)
@@ -161,9 +161,9 @@ int ldlm_expired_completion_wait(void *data)
 
 /* We use the same basis for both server side and client side functions
    from a single node. */
-static unsigned int ldlm_cp_timeout(struct ldlm_lock *lock)
+static time64_t ldlm_cp_timeout(struct ldlm_lock *lock)
 {
-	unsigned int timeout;
+	time64_t timeout;
 
 	if (AT_OFF)
 		return obd_timeout;
@@ -172,7 +172,7 @@ static unsigned int ldlm_cp_timeout(struct ldlm_lock *lock)
 	 * lock from another client.  Server will evict the other client if it
 	 * doesn't respond reasonably, and then give us the lock. */
 	timeout = at_get(ldlm_lock_to_ns_at(lock));
-	return max(3 * timeout, ldlm_enqueue_min);
+	return max(3 * timeout, (time64_t) ldlm_enqueue_min);
 }
 
 /**
@@ -255,7 +255,7 @@ int ldlm_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
         struct obd_device *obd;
         struct obd_import *imp = NULL;
         struct l_wait_info lwi;
-        __u32 timeout;
+	time64_t timeout;
         int rc = 0;
         ENTRY;
 
@@ -284,7 +284,7 @@ noreproc:
 	timeout = ldlm_cp_timeout(lock);
 
 	lwd.lwd_lock = lock;
-	lock->l_last_activity = cfs_time_current_sec();
+	lock->l_last_activity = ktime_get_real_seconds();
 
 	if (ldlm_is_no_timeout(lock)) {
                 LDLM_DEBUG(lock, "waiting indefinitely because of NO_TIMEOUT");
@@ -946,7 +946,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 	lock->l_export = NULL;
 	lock->l_blocking_ast = einfo->ei_cb_bl;
 	lock->l_flags |= (*flags & (LDLM_FL_NO_LRU | LDLM_FL_EXCL));
-        lock->l_last_activity = cfs_time_current_sec();
+	lock->l_last_activity = ktime_get_real_seconds();
 
 	/* lock not sent to server yet */
 	if (reqp == NULL || *reqp == NULL) {

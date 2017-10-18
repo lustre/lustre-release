@@ -438,14 +438,14 @@ struct ldlm_namespace {
 	 * This allows the client to start caching negative dentries
 	 * for a directory and may save an RPC for a later stat.
 	 */
-	unsigned int		ns_ctime_age_limit;
+	time64_t		ns_ctime_age_limit;
 
 	/**
 	 * Used to rate-limit ldlm_namespace_dump calls.
 	 * \see ldlm_namespace_dump. Increased by 10 seconds every time
 	 * it is called.
 	 */
-	cfs_time_t		ns_next_dump;
+	time64_t		ns_next_dump;
 
 	/** "policy" function that does actual lock conflict determination */
 	ldlm_res_policy		ns_policy;
@@ -483,7 +483,7 @@ struct ldlm_namespace {
 	 * The resources in this namespace remember contended state during
 	 * \a ns_contention_time, in seconds.
 	 */
-	unsigned		ns_contention_time;
+	time64_t		ns_contention_time;
 
 	/**
 	 * Limit size of contended extent locks, in bytes.
@@ -871,7 +871,7 @@ struct ldlm_lock {
 	 * under this lock.
 	 * \see ost_rw_prolong_locks
 	 */
-	cfs_time_t		l_callback_timeout;
+	time64_t		l_callback_timeout;
 
 	/** Local PID of process which created this lock. */
 	__u32			l_pid;
@@ -980,8 +980,9 @@ struct ldlm_resource {
 	union {
 		/**
 		 * When the resource was considered as contended,
-		 * used only on server side. */
-		cfs_time_t	lr_contention_time;
+		 * used only on server side.
+		 */
+		time64_t	lr_contention_time;
 		/**
 		 * Associated inode, used only on client side.
 		 */
@@ -1263,7 +1264,7 @@ struct ldlm_prolong_args {
 	struct ldlm_res_id	lpa_resid;
 	struct ldlm_extent	lpa_extent;
 	enum ldlm_mode		lpa_mode;
-	int			lpa_timeout;
+	time64_t		lpa_timeout;
 	int			lpa_locks_cnt;
 	int			lpa_blocks_cnt;
 };
@@ -1312,10 +1313,10 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 /** @} ldlm_handlers */
 
 void ldlm_revoke_export_locks(struct obd_export *exp);
-unsigned int ldlm_bl_timeout(struct ldlm_lock *lock);
+time64_t ldlm_bl_timeout(struct ldlm_lock *lock);
 #endif
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
-int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, int timeout);
+int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, time64_t timeout);
 int ldlm_get_ref(void);
 void ldlm_put_ref(void);
 int ldlm_init_export(struct obd_export *exp);

@@ -764,7 +764,7 @@ int ptlrpc_connect_import(struct obd_import *imp)
 		lustre_msg_add_op_flags(request->rq_reqmsg,
 					MSG_CONNECT_TRANSNO);
 
-	DEBUG_REQ(D_RPCTRACE, request, "(re)connect request (timeout %d)",
+	DEBUG_REQ(D_RPCTRACE, request, "(re)connect request (timeout %ld)",
 		  request->rq_timeout);
 	ptlrpcd_add_req(request);
 	rc = 0;

@@ -2364,16 +2364,16 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
  *
  * \retval		amount of time to extend the timeout with
  */
-static inline int prolong_timeout(struct ptlrpc_request *req)
+static inline time64_t prolong_timeout(struct ptlrpc_request *req)
 {
 	struct ptlrpc_service_part *svcpt = req->rq_rqbd->rqbd_svcpt;
-	time_t req_timeout;
+	time64_t req_timeout;
 
 	if (AT_OFF)
 		return obd_timeout / 2;
 
 	req_timeout = req->rq_deadline - req->rq_arrival_time.tv_sec;
-	return max_t(time_t, at_est2timeout(at_get(&svcpt->scp_at_estimate)),
+	return max_t(time64_t, at_est2timeout(at_get(&svcpt->scp_at_estimate)),
 		     req_timeout);
 }
 
