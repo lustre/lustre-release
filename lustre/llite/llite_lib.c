@@ -930,14 +930,41 @@ void ll_lli_init(struct ll_inode_info *lli)
 	memset(lli->lli_jobid, 0, LUSTRE_JOBID_SIZE);
 }
 
-static inline int ll_bdi_register(struct backing_dev_info *bdi)
-{
-	static atomic_t ll_bdi_num = ATOMIC_INIT(0);
+#ifndef HAVE_SUPER_SETUP_BDI_NAME
 
-	bdi->name = "lustre";
-	return bdi_register(bdi, NULL, "lustre-%d",
-			    atomic_inc_return(&ll_bdi_num));
+#define LSI_BDI_INITIALIZED	0x00400000
+
+#ifndef HAVE_BDI_CAP_MAP_COPY
+# define BDI_CAP_MAP_COPY	0
+#endif
+
+#define MAX_STRING_SIZE 128
+
+static int super_setup_bdi_name(struct super_block *sb, char *fmt, ...)
+{
+	struct  lustre_sb_info *lsi = s2lsi(sb);
+	char buf[MAX_STRING_SIZE];
+	va_list args;
+	int err;
+
+	err = bdi_init(&lsi->lsi_bdi);
+	if (err)
+		return err;
+
+	lsi->lsi_flags |= LSI_BDI_INITIALIZED;
+	lsi->lsi_bdi.capabilities = BDI_CAP_MAP_COPY;
+	lsi->lsi_bdi.name = "lustre";
+	va_start(args, fmt);
+	vsnprintf(buf, MAX_STRING_SIZE, fmt, args);
+	va_end(args);
+	err = bdi_register(&lsi->lsi_bdi, NULL, "%s", buf);
+	va_end(args);
+	if (!err)
+		sb->s_bdi = &lsi->lsi_bdi;
+
+	return err;
 }
+#endif /* !HAVE_SUPER_SETUP_BDI_NAME */
 
 int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 {
@@ -974,20 +1001,10 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 	if (err)
 		GOTO(out_free, err);
 
-	err = bdi_init(&lsi->lsi_bdi);
-	if (err)
-		GOTO(out_free, err);
-	lsi->lsi_flags |= LSI_BDI_INITIALIZED;
-#ifdef HAVE_BDI_CAP_MAP_COPY
-	lsi->lsi_bdi.capabilities = BDI_CAP_MAP_COPY;
-#else
-	lsi->lsi_bdi.capabilities = 0;
-#endif
-	err = ll_bdi_register(&lsi->lsi_bdi);
+	err = super_setup_bdi_name(sb, "lustre-%p", sb);
 	if (err)
 		GOTO(out_free, err);
 
-	sb->s_bdi = &lsi->lsi_bdi;
 #ifndef HAVE_DCACHE_LOCK
 	/* kernel >= 2.6.38 store dentry operations in sb->s_d_op. */
 	sb->s_d_op = &ll_d_ops;
@@ -1129,10 +1146,12 @@ void ll_put_super(struct super_block *sb)
         if (profilenm)
                 class_del_profile(profilenm);
 
+#ifndef HAVE_SUPER_SETUP_BDI_NAME
 	if (lsi->lsi_flags & LSI_BDI_INITIALIZED) {
 		bdi_destroy(&lsi->lsi_bdi);
 		lsi->lsi_flags &= ~LSI_BDI_INITIALIZED;
 	}
+#endif
 
         ll_free_sbi(sb);
         lsi->lsi_llsbi = NULL;

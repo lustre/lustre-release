@@ -49,6 +49,7 @@
 #include <linux/list.h>
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lustre_disk.h>
+#include <lustre/lustre_idl.h>
 
 #define IS_MDT(data)		((data)->lsi_flags & LDD_F_SV_TYPE_MDT)
 #define IS_OST(data)		((data)->lsi_flags & LDD_F_SV_TYPE_OST)
@@ -132,7 +133,6 @@ struct lustre_sb_info {
 };
 
 #define LSI_UMOUNT_FAILOVER              0x00200000
-#define LSI_BDI_INITIALIZED              0x00400000
 
 #define     s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
 #define     s2lsi_nocast(sb) ((sb)->s_fs_info)
