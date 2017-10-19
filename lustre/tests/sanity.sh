@@ -15006,18 +15006,18 @@ test_270a() {
 	mkdir -p $DIR/$tdir
 
 	# basic checks for DoM component creation
-	$SETSTRIPE -E 1024K -E 1024K -L mdt $dom 2>/dev/null &&
+	$LFS setstripe -E 1024K -E 1024K -L mdt $dom 2>/dev/null &&
 		error "Can set MDT layout to non-first entry"
 
-	$SETSTRIPE -E 1024K -L mdt -E 1024K -L mdt $dom 2>/dev/null &&
+	$LFS setstripe -E 1024K -L mdt -E 1024K -L mdt $dom 2>/dev/null &&
 		error "Can define multiple entries as MDT layout"
 
-	$SETSTRIPE -E 1M -L mdt $dom ||
+	$LFS setstripe -E 1M -L mdt $dom ||
 		error "Can't create DoM layout"
 
-	[ $($GETSTRIPE -L $dom) == 100 ] || error "bad pattern"
-	[ $($GETSTRIPE -c $dom) == 0 ] || error "bad stripe count"
-	[ $($GETSTRIPE -S $dom) == 1048576 ] || error "bad stripe size"
+	[ $($LFS getstripe -L $dom) == 100 ] || error "bad pattern"
+	[ $($LFS getstripe -c $dom) == 0 ] || error "bad stripe count"
+	[ $($LFS getstripe -S $dom) == 1048576 ] || error "bad stripe size"
 
 	local mdtidx=$($GETSTRIPE -M $dom)
 	local mdtname=MDT$(printf %04x $mdtidx)
@@ -15077,7 +15077,7 @@ test_270a() {
 	fi
 
 	# combined striping
-	$SETSTRIPE -E 1024K -L mdt -E EOF $dom ||
+	$LFS setstripe -E 1024K -L mdt -E EOF $dom ||
 		error "Can't create DoM + OST striping"
 
 	dd if=/dev/urandom of=$tmp bs=1024 count=2000
@@ -15098,7 +15098,7 @@ test_270b() {
 	local max_size=1048576
 
 	mkdir -p $DIR/$tdir
-	$SETSTRIPE -E $max_size -L mdt $dom
+	$LFS setstripe -E $max_size -L mdt $dom
 
 	# truncate over the limit
 	$TRUNCATE $dom $(($max_size + 1)) &&
@@ -15117,25 +15117,25 @@ run_test 270b "DoM: maximum size overflow checks for DoM-only file"
 
 test_270c() {
 	mkdir -p $DIR/$tdir
-	$SETSTRIPE -E 1024K -L mdt $DIR/$tdir
+	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
 
 	# check files inherit DoM EA
 	touch $DIR/$tdir/first
 	[ $($GETSTRIPE -L $DIR/$tdir/first) == 100 ] ||
 		error "bad pattern"
-	[ $($GETSTRIPE -c $DIR/$tdir/first) == 0 ] ||
+	[ $($LFS getstripe -c $DIR/$tdir/first) == 0 ] ||
 		error "bad stripe count"
-	[ $($GETSTRIPE -S $DIR/$tdir/first) == 1048576 ] ||
+	[ $($LFS getstripe -S $DIR/$tdir/first) == 1048576 ] ||
 		error "bad stripe size"
 
 	# check directory inherits DoM EA and uses it as default
 	mkdir $DIR/$tdir/subdir
 	touch $DIR/$tdir/subdir/second
-	[ $($GETSTRIPE -L $DIR/$tdir/subdir/second) == 100 ] ||
+	[ $($LFS getstripe -L $DIR/$tdir/subdir/second) == 100 ] ||
 		error "bad pattern in sub-directory"
-	[ $($GETSTRIPE -c $DIR/$tdir/subdir/second) == 0 ] ||
+	[ $($LFS getstripe -c $DIR/$tdir/subdir/second) == 0 ] ||
 		error "bad stripe count in sub-directory"
-	[ $($GETSTRIPE -S $DIR/$tdir/subdir/second) == 1048576 ] ||
+	[ $($LFS getstripe -S $DIR/$tdir/subdir/second) == 1048576 ] ||
 		error "bad stripe size in sub-directory"
 	return 0
 }
@@ -15143,18 +15143,18 @@ run_test 270c "DoM: DoM EA inheritance tests"
 
 test_270d() {
 	mkdir -p $DIR/$tdir
-	$SETSTRIPE -E 1024K -L mdt $DIR/$tdir
+	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
 
 	# inherit default DoM striping
 	mkdir $DIR/$tdir/subdir
 	touch $DIR/$tdir/subdir/f1
 
 	# change default directory striping
-	$SETSTRIPE -c 1 $DIR/$tdir/subdir
+	$LFS setstripe -c 1 $DIR/$tdir/subdir
 	touch $DIR/$tdir/subdir/f2
-	[ $($GETSTRIPE -c $DIR/$tdir/subdir/f2) == 1 ] ||
+	[ $($LFS getstripe -c $DIR/$tdir/subdir/f2) == 1 ] ||
 		error "wrong default striping in file 2"
-	[ $($GETSTRIPE -L $DIR/$tdir/subdir/f2) == 1 ] ||
+	[ $($LFS getstripe -L $DIR/$tdir/subdir/f2) == 1 ] ||
 		error "bad pattern in file 2"
 	return 0
 }
@@ -15165,8 +15165,8 @@ test_270e() {
 	mkdir -p $DIR/$tdir/norm
 	DOMFILES=20
 	NORMFILES=10
-	$SETSTRIPE -E 1M -L mdt $DIR/$tdir/dom
-	$SETSTRIPE -i 0 -S 2M $DIR/$tdir/norm
+	$LFS setstripe -E 1M -L mdt $DIR/$tdir/dom
+	$LFS setstripe -i 0 -S 2M $DIR/$tdir/norm
 
 	createmany -o $DIR/$tdir/dom/dom- $DOMFILES
 	createmany -o $DIR/$tdir/norm/norm- $NORMFILES
@@ -15212,12 +15212,12 @@ test_270f() {
 		error "Cannot change per-MDT DoM stripe limit to $dom_limit"
 
 	$LFS mkdir -i 0 -c 1 $DIR/$tdir
-	$SETSTRIPE -d $DIR/$tdir
-	$SETSTRIPE -E $dom_limit -L mdt $DIR/$tdir ||
+	$LFS setstripe -d $DIR/$tdir
+	$LFS setstripe -E $dom_limit -L mdt $DIR/$tdir ||
 		error "Can't set directory default striping"
 
 	# exceed maximum stripe size
-	$SETSTRIPE -E $(($dom_limit * 2)) -L mdt $dom &&
+	$LFS setstripe -E $(($dom_limit * 2)) -L mdt $dom &&
 		error "Able to create DoM component size more than LOD limit"
 
 	do_facet mds1 $LCTL set_param -n lod.$mdtname.dom_stripesize=0
@@ -15242,11 +15242,11 @@ test_270f() {
 
 	do_facet mds1 $LCTL set_param -n \
 				lod.$mdtname.dom_stripesize=$((dom_limit * 2))
-	$SETSTRIPE -E $((dom_limit * 2)) -L mdt $dom ||
+	$LFS setstripe -E $((dom_limit * 2)) -L mdt $dom ||
 		error "Can't create DoM component size after limit change"
 	do_facet mds1 $LCTL set_param -n \
 				lod.$mdtname.dom_stripesize=$((dom_limit / 2))
-	$SETSTRIPE -E $dom_limit -L mdt ${dom}_big &&
+	$LFS setstripe -E $dom_limit -L mdt ${dom}_big &&
 		error "Can create big DoM component after limit decrease"
 	touch ${dom}_def ||
 		error "Can't create file with old default layout"

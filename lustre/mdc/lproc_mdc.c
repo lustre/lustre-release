@@ -420,14 +420,14 @@ LPROC_SEQ_FOPS(mdc_rpc_stats);
 
 static int mdc_stats_seq_show(struct seq_file *seq, void *v)
 {
-	struct timeval now;
+	struct timespec64 now;
 	struct obd_device *dev = seq->private;
 	struct osc_stats *stats = &obd2osc_dev(dev)->od_stats;
 
-	do_gettimeofday(&now);
+	ktime_get_real_ts64(&now);
 
-	seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
-		   now.tv_sec, now.tv_usec);
+	seq_printf(seq, "snapshot_time:         %lld.%09lu (secs.nsecs)\n",
+		   (s64)now.tv_sec, now.tv_nsec);
 	seq_printf(seq, "lockless_write_bytes\t\t%llu\n",
 		   stats->os_lockless_writes);
 	seq_printf(seq, "lockless_read_bytes\t\t%llu\n",

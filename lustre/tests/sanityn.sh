@@ -4017,22 +4017,21 @@ test_100a() {
 	skip "Reserved for glimpse-ahead" && return
 	mkdir -p $DIR/$tdir
 
-	$SETSTRIPE -E 1024K -L mdt -E EOF $DIR/$tdir/dom
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR/$tdir/dom
 
 	lctl set_param -n mdc.*.stats=clear
 	dd if=/dev/zero of=$DIR2/$tdir/dom bs=4096 count=1 || return 1
 
 	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #1"
 	# first stat from server should return size data and save glimpse
-	local reads=$(lctl get_param -n mdc.*.stats | \
+	local gls=$(lctl get_param -n mdc.*.stats | \
 		awk '/ldlm_glimpse/ {print $2}')
-	[ -z $reads ] || error "Unexpected $reads glimpse RPCs"
+	[ -z $gls ] || error "Unexpected $gls glimpse RPCs"
 	# second stat to check size is NOT cached on client without IO lock
 	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #2"
 
-	local reads=$(lctl get_param -n mdc.*.stats | \
-		awk '/ldlm_glimpse/ {print $2}')
-	[ "1" == "$reads" ] || error "Expect 1 glimpse RPCs but got $reads"
+	local gls=$(lctl get_param -n mdc.*.stats | grep ldlm_glimpse | wc -l)
+	[ "1" == "$gls" ] || error "Expect 1 glimpse RPCs but got $gls"
 	rm -f $dom
 }
 run_test 100a "DoM: glimpse RPCs for stat without IO lock (DoM only file)"
@@ -4040,7 +4039,7 @@ run_test 100a "DoM: glimpse RPCs for stat without IO lock (DoM only file)"
 test_100b() {
 	mkdir -p $DIR/$tdir
 
-	$SETSTRIPE -E 1024K -L mdt -E EOF $DIR/$tdir/dom
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR/$tdir/dom
 
 	lctl set_param -n mdc.*.stats=clear
 	dd if=/dev/zero of=$DIR2/$tdir/dom bs=4096 count=1 || return 1
@@ -4050,10 +4049,10 @@ test_100b() {
 	# second stat to check size is cached on client
 	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #2"
 
-	local reads=$(lctl get_param -n mdc.*.stats | \
-		awk '/ldlm_glimpse/ {print $2}')
+	local gls=$(lctl get_param -n mdc.*.stats |
+			awk '/ldlm_glimpse/ {print $2}')
 	# both stats should cause no glimpse requests
-	[ -z $reads ] || error "Unexpected $reads glimpse RPCs"
+	[ -z $gls ] || error "Unexpected $gls glimpse RPCs"
 	rm -f $dom
 }
 run_test 100b "DoM: no glimpse RPC for stat with IO lock (DoM only file)"
@@ -4061,7 +4060,7 @@ run_test 100b "DoM: no glimpse RPC for stat with IO lock (DoM only file)"
 test_100c() {
 	mkdir -p $DIR/$tdir
 
-	$SETSTRIPE -E 1024K -L mdt -E EOF $DIR/$tdir/dom
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR/$tdir/dom
 
 	lctl set_param -n mdc.*.stats=clear
 	lctl set_param -n osc.*.stats=clear
@@ -4071,8 +4070,8 @@ test_100c() {
 	$CHECKSTAT -t file -s 2097152 $DIR/$tdir/dom ||
 		error "Wrong size from stat #1"
 
-	local reads=$(lctl get_param -n osc.*.stats | grep ldlm_glimpse | wc -l)
-	[ $reads -eq 0 ] && error "Expect OST glimpse RPCs but got none"
+	local gls=$(lctl get_param -n osc.*.stats | grep ldlm_glimpse | wc -l)
+	[ $gls -eq 0 ] && error "Expect OST glimpse RPCs but got none"
 
 	rm -f $dom
 }
@@ -4081,7 +4080,7 @@ run_test 100c "DoM: write vs stat without IO lock (combined file)"
 test_100d() {
 	mkdir -p $DIR/$tdir
 
-	$SETSTRIPE -E 1024K -L mdt -E EOF $DIR/$tdir/dom
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR/$tdir/dom
 
 
 	dd if=/dev/zero of=$DIR2/$tdir/dom bs=2048K count=1 || return 1
@@ -4093,8 +4092,8 @@ test_100d() {
 	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom ||
 		error "Wrong size from stat #1"
 
-	local reads=$(lctl get_param -n osc.*.stats | grep ldlm_glimpse | wc -l)
-	[ $reads -eq 0 ] && error "Expect OST glimpse but got none"
+	local gls=$(lctl get_param -n osc.*.stats | grep ldlm_glimpse | wc -l)
+	[ $gls -eq 0 ] && error "Expect OST glimpse but got none"
 
 	rm -f $dom
 }

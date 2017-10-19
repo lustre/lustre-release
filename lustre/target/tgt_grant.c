@@ -1505,7 +1505,6 @@ int tgt_grant_commit_cb_add(struct thandle *th, struct obd_export *exp,
 }
 EXPORT_SYMBOL(tgt_grant_commit_cb_add);
 
-
 /**
  * Show estimate of total amount of dirty data on clients.
  *
@@ -1632,4 +1631,3 @@ ssize_t tgt_grant_compat_disable_seq_write(struct file *file,
 	return count;
 }
 EXPORT_SYMBOL(tgt_grant_compat_disable_seq_write);
-

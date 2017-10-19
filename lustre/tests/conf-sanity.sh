@@ -2077,11 +2077,11 @@ t32_test() {
 
 		if [ "$dom_upgrade" != "no" ]; then
 			echo "Check DoM file can be created"
-			$SETSTRIPE -E 1M -L mdt -E EOF $tmp/mnt/lustre/dom || {
+			$LFS setstripe -E 1M -L mdt -E EOF $tmp/mnt/lustre/dom || {
 				error_noexit "Verify DoM creation"
 				return 1
 			}
-			[ $($GETSTRIPE -L $tmp/mnt/lustre/dom) == 100 ] || {
+			[ $($LFS getstripe -L $tmp/mnt/lustre/dom) == 100 ] || {
 				error_noexit "Verify a DoM file"
 				return 1
 			}

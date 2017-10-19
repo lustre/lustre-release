@@ -84,17 +84,14 @@ test_3() {
 }
 run_test 3 "Truncate over DoM size on different nodes"
 
-# TODO: tests below are from sanityn but their adapted version should be
-# put here: 31 32 34 71 75
-
-test_sn16() {
+test_fsx() {
 	local file1=$DIR1/$tfile
 	local file2=$DIR2/$tfile
 
 	touch $file1
-	fsx -c 50 -p 1 -N 1000 -l $(($DOM_SIZE*2)) -S 0 -d -d $file1 $file2
+	fsx -c 50 -p 100 -N 1000 -l $((DOM_SIZE*2)) -S 0 -d -d $file1 $file2
 }
-run_test sn16 "$FSXNUM iterations of dual-mount fsx"
+run_test fsx "Dual-mount fsx with DoM files"
 
 test_sanity()
 {

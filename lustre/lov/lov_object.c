@@ -451,7 +451,7 @@ static int lov_attr_get_dom(const struct lu_env *env, struct lov_object *lov,
 	cl_lvb2attr(attr, &loi->loi_lvb);
 
 	/* DoM component size can be bigger than stripe size after
-	 * client's setattr RPC, so do not count anything beyound
+	 * client's setattr RPC, so do not count anything beyond
 	 * component end. Alternatively, check that limit on server
 	 * and do not allow size overflow there. */
 	if (attr->cat_size > lle->lle_extent.e_end)

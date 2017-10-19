@@ -550,9 +550,18 @@ int mdt_punch_hdl(struct tgt_session_info *tsi)
 	if (IS_ERR(mo))
 		GOTO(out_unlock, rc = PTR_ERR(mo));
 
+	/* Shouldn't happen on dirs */
+	if (S_ISDIR(lu_object_attr(&mo->mot_obj))) {
+		rc = -EPERM;
+		CERROR("%s: Truncate on dir "DFID": rc = %d\n",
+		       exp->exp_obd->obd_name, PFID(&tsi->tsi_fid), rc);
+		GOTO(out_put, rc);
+	}
+
 	mdt_dom_write_lock(mo);
 	if (!mdt_object_exists(mo))
 		GOTO(out_put, rc = -ENOENT);
+
 	dob = mdt_obj2dt(mo);
 
 	la_from_obdo(la, oa, OBD_MD_FLMTIME | OBD_MD_FLATIME | OBD_MD_FLCTIME);
