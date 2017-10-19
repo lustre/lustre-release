@@ -117,8 +117,10 @@ int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
 	}
 
 	if (startrec != 0) {
-		rc = lseek(cp->clp_fd, startrec, SEEK_SET);
-		if (rc < 0) {
+		off_t res;
+
+		res = lseek(cp->clp_fd, startrec, SEEK_SET);
+		if (res == (off_t)-1) {
 			rc = -errno;
 			goto out_close;
 		}
