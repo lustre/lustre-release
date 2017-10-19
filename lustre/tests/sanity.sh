@@ -5162,6 +5162,222 @@ test_56w() {
 }
 run_test 56w "check lfs_migrate -c stripe_count works"
 
+test_56wb() {
+	local file1=$DIR/$tdir/file1
+	local create_pool=false
+	local initial_pool=$($LFS getstripe -p $DIR)
+	local pool_list=()
+	local pool=""
+
+	echo -n "Creating test dir..."
+	test_mkdir $DIR/$tdir &> /dev/null || error "cannot create dir"
+	echo "done."
+
+	echo -n "Creating test file..."
+	touch $file1 || error "cannot create file"
+	echo "done."
+
+	echo -n "Detecting existing pools..."
+	while IFS='' read thispool; do
+		pool_list+=("$thispool")
+	done < <($LFS pool_list $MOUNT | awk -F '.' 'NR>=2 { print $2 }')
+
+	if [ ${#pool_list[@]} -gt 0 ]; then
+		echo "${pool_list[@]}"
+		for thispool in "${pool_list[@]}"; do
+			if [[ -z "$initial_pool" ||
+			      "$initial_pool" != "$thispool" ]]; then
+				pool="$thispool"
+				echo "Using existing pool '$pool'"
+				break
+			fi
+		done
+	else
+		echo "none detected."
+	fi
+	if [ -z "$pool" ]; then
+		pool=${POOL:-testpool}
+		[ "$initial_pool" = "$pool" ] && pool="testpool2"
+		echo -n "Creating pool '$pool'..."
+		create_pool=true
+		pool_add $pool &> /dev/null ||
+			error "pool_add failed"
+		echo "done."
+
+		echo -n "Adding target to pool..."
+		pool_add_targets $pool 0 0 1 &> /dev/null ||
+			error "pool_add_targets failed"
+		echo "done."
+	fi
+
+	echo -n "Setting pool using -p option..."
+	$LFS_MIGRATE -y -q --no-rsync -p $pool $file1 &> /dev/null ||
+		error "migrate failed rc = $?"
+	echo "done."
+
+	echo -n "Verifying test file is in pool after migrating..."
+	[ "$($LFS getstripe -p $file1)" = $pool ] ||
+		error "file was not migrated to pool $pool"
+	echo "done."
+
+	echo -n "Removing test file from pool '$pool'..."
+	$LFS migrate $file1 &> /dev/null ||
+		error "cannot remove from pool"
+	[ "$($LFS getstripe -p $file1)" ] &&
+		error "pool still set"
+	echo "done."
+
+	echo -n "Setting pool using --pool option..."
+	$LFS_MIGRATE -y -q --no-rsync --pool $pool $file1 &> /dev/null ||
+		error "migrate failed rc = $?"
+	echo "done."
+
+	# Clean up
+	rm -f $file1
+	if $create_pool; then
+		destroy_test_pools 2> /dev/null ||
+			error "destroy test pools failed"
+	fi
+}
+run_test 56wb "check lfs_migrate pool support"
+
+test_56wc() {
+	local file1="$DIR/$tdir/file 1"
+
+	echo -n "Creating test dir..."
+	test_mkdir $DIR/$tdir &> /dev/null || error "cannot create dir"
+	$LFS setstripe -S 1M -c 1 "$DIR/$tdir" &> /dev/null ||
+		error "cannot set stripe"
+	echo "done"
+
+	echo -n "Setting initial stripe for test file..."
+	$LFS setstripe -S 512K -c 1 "$file1" &> /dev/null ||
+		error "cannot set stripe"
+	[ $($LFS getstripe -S "$file1") -eq 524288 ] ||
+		error "stripe size not set"
+	echo "done."
+
+	# File currently set to -S 512K -c 1
+
+	# Ensure -c and -S options are rejected when -R is set
+	echo -n "Verifying incompatible options are detected..."
+	$LFS_MIGRATE -y -R -c 1 "$file1" &> /dev/null &&
+		error "incompatible -c and -R options not detected"
+	$LFS_MIGRATE -y -R -S 1M "$file1" &> /dev/null &&
+		error "incompatible -S and -R options not detected"
+	echo "done."
+
+	# Ensure unrecognized options are passed through to 'lfs migrate'
+	echo -n "Verifying -S option is passed through to lfs migrate..."
+	$LFS_MIGRATE -y -S 1M "$file1" &> /dev/null ||
+		error "migration failed"
+	[ $($LFS getstripe -S "$file1") -eq 1048576 ] ||
+		error "file was not restriped"
+	echo "done."
+
+	# File currently set to -S 1M -c 1
+
+	# Ensure long options are supported
+	echo -n "Verifying long options supported..."
+	$LFS_MIGRATE -y --non-block "$file1" &> /dev/null ||
+		error "long option without argument not supported"
+	$LFS_MIGRATE -y --stripe-size 512K "$file1" &> /dev/null ||
+		error "long option with argument not supported"
+	[ $($LFS getstripe -S "$file1") -eq 524288 ] ||
+		error "file not restriped with --stripe-size option"
+	echo "done."
+
+	# File currently set to -S 512K -c 1
+
+	if [ "$OSTCOUNT" -gt 1 ]; then
+		echo -n "Verifying explicit stripe count can be set..."
+		$LFS_MIGRATE -y -c 2 "$file1" &> /dev/null ||
+			error "migrate failed"
+		[ $($LFS getstripe -c "$file1") -eq 2 ] ||
+			error "file not restriped to explicit count"
+		echo "done."
+	fi
+
+	# File currently set to -S 512K -c 1 or -S 512K -c 2
+
+	# Ensure parent striping is used if -R is set, and no stripe
+	# count or size is specified
+	echo -n "Setting stripe for parent directory..."
+	$LFS setstripe -S 1M -c 1 "$DIR/$tdir" &> /dev/null ||
+		error "cannot set stripe"
+	echo "done."
+
+	echo -n "Verifying restripe option uses parent stripe settings..."
+	$LFS_MIGRATE -y -R "$file1" &> /dev/null ||
+		error "migrate failed"
+	[ $($LFS getstripe -S "$file1") -eq 1048576 ] ||
+		error "file not restriped to parent settings"
+	[ $($LFS getstripe -c "$file1") -eq 1 ] ||
+		error "file not restriped to parent settings"
+	echo "done."
+
+	# File currently set to -S 1M -c 1
+
+	# Ensure striping is preserved if -R is not set, and no stripe
+	# count or size is specified
+	echo -n "Verifying striping size preserved when not specified..."
+	$LFS setstripe -S 2M -c 1 "$DIR/$tdir" &> /dev/null ||
+		error "cannot set stripe on parent directory"
+	$LFS_MIGRATE -y "$file1" &> /dev/null ||
+		error "migrate failed"
+	[ $($LFS getstripe -S "$file1") -eq 1048576 ] ||
+		error "file was restriped"
+	echo "done."
+
+	# Ensure file name properly detected when final option has no argument
+	echo -n "Verifying file name properly detected..."
+	$LFS_MIGRATE -y "$file1" &> /dev/null ||
+		error "file name interpreted as option argument"
+	echo "done."
+
+	# Clean up
+	rm -f "$file1"
+}
+run_test 56wc "check unrecognized options for lfs_migrate are passed through"
+
+test_56wd() {
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	local file1=$DIR/$tdir/file1
+
+	echo -n "Creating test dir..."
+	test_mkdir $DIR/$tdir || error "cannot create dir"
+	echo "done."
+
+	echo -n "Creating test file..."
+	touch $file1
+	echo "done."
+
+	# Ensure 'lfs migrate' will fail by using a non-existent option,
+	# and make sure rsync is not called to recover
+	echo -n "Make sure --no-rsync option works..."
+	$LFS_MIGRATE -y --no-rsync --invalid-opt $file1 2>&1 |
+		grep -q 'refusing to fall back to rsync' ||
+		error "rsync was called with --no-rsync set"
+	echo "done."
+
+	# Ensure rsync is called without trying 'lfs migrate' first
+	echo -n "Make sure --rsync option works..."
+	$LFS_MIGRATE -y --rsync --invalid-opt $file1 2>&1 |
+		grep -q 'falling back to rsync' &&
+		error "lfs migrate was called with --rsync set"
+	echo "done."
+
+	echo -n "Make sure --rsync and --no-rsync options are exclusive..."
+	$LFS_MIGRATE -y --rsync --no-rsync $file1 2>&1 |
+		grep -q 'at the same time' ||
+		error "--rsync and --no-rsync accepted concurrently"
+	echo "done."
+
+	# Clean up
+	rm -f $file1
+}
+run_test 56wd "check lfs_migrate --rsync and --no-rsync work"
+
 test_56x() {
 	check_swap_layouts_support && return 0
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return

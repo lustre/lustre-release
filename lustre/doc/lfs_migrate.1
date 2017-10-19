@@ -1,19 +1,19 @@
-.TH lfs_migrate 1 "Jun 16, 2017" Lustre "utilities"
+.TH lfs_migrate 1 "Dec 19, 2017" Lustre "utilities"
 .SH NAME
 .B lfs_migrate
 \- simple tool to migrate files between Lustre OSTs
 .SH SYNOPSIS
 .B lfs_migrate
-.RB [ -c <stripe_count> ]
+.RB [ --dry-run ]
 .RB [ -h ]
-.RB [ -n ]
+.RB [ --no-rsync | --rsync ]
 .RB [ -q ]
 .RB [ -R ]
 .RB [ -s ]
-.RB [ -S <stripe_size> ]
+.RB [ -v ]
 .RB [ -y ]
 .RB [ -0 ]
-.RI [ file | "directory ..." ]
+.RI [ FILE | DIR ]...
 .br
 .SH DESCRIPTION
 .B lfs_migrate
@@ -47,6 +47,17 @@ suitable for use with
 .BR lfs (1) " find"
 to locate files on specific OSTs and/or matching other file attributes.
 .PP
+Any options and arguments not explicitly recognized by the script are passed
+through to the
+.B lfs migrate
+command, see
+.BR lfs-migrate (1).
+To maintain backward compatibility, the \fI-n \fRoption is used by the script
+for a dry-run, and is not passed to
+.B lfs migrate
+as the non-block option.  To specify non-block, use the long option
+.IR --non-block .
+.PP
 The current file allocation policies on MDS dictate where the new files
 are placed, taking into account whether specific OSTs have been disabled
 on the MDS via
@@ -58,30 +69,38 @@ directory (potentially changing the stripe count, stripe size, OST pool,
 or OST index of a new file).
 .SH OPTIONS
 .TP
-.B \\-c <stripe_count>
-Restripe file using the specified stripe count. This option may not be
-specified at the same time as the -R option.
+.B \\--dry-run
+Only print the names of files to be migrated.
 .TP
 .B \\-h
 Display help information.
 .TP
-.B \\-n
-Only print the names of files to be migrated.
+.B \\--no-rsync
+Do not fall back to using rsync if
+.BR lfs (1) " migrate" " fails."
+Cannot be used at the same time as \fI--rsync\fR.
 .TP
 .B \\-q
 Run quietly (don't print filenames or status).
 .TP
+.B \\--rsync
+Force rsync to be used instead of
+.BR lfs (1) " migrate" .
+May not be used at the same time as \fI--no-rsync\fR.
+.TP
 .B \\-R
 Restripe file using default directory striping instead of keeping striping.
-This option may not be specified at the same time as the -c or -S options.
+This option may not be specified at the same time as the -c or -S options
+(these options are passed through to
+.BR "lfs migrate" ,
+and are therefore not listed here).
 .TP
 .B \\-s
 Skip file data comparison after migrate.  Default is to compare migrated file
 against original to verify correctness.
 .TP
-.B \\-S <stripe_size>
-Restripe file using the specified stripe size. This option may not be
-specified at the same time as the -R option.
+.B \\-v
+Show verbose debug messages.
 .TP
 .B \\-y
 Answer 'y' to usage warning without prompting (for scripts, use with caution).
