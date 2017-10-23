@@ -1884,9 +1884,6 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
-	/* reset OI cache for safety */
-	oti->oti_ins_cache_used = 0;
-
 	remove_agents = oh->ot_remove_agents;
 
 	qtrans = oh->ot_quota_trans;
@@ -1948,6 +1945,9 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 
 	if (unlikely(remove_agents != 0))
 		osd_process_scheduled_agent_removals(env, osd);
+
+	/* reset OI cache for safety */
+	oti->oti_ins_cache_used = 0;
 
 	sb_end_write(osd_sb(osd));
 
@@ -3701,6 +3701,8 @@ static int osd_declare_ref_add(const struct lu_env *env, struct dt_object *dt,
 	osd_trans_declare_op(env, oh, OSD_OT_REF_ADD,
 			     osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
 
+	osd_idc_find_and_init(env, osd_dev(dt->do_lu.lo_dev), osd_dt_obj(dt));
+
 	return 0;
 }
 
@@ -4721,6 +4723,34 @@ static int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
 	RETURN(1);
 }
 
+static void osd_take_care_of_agent(const struct lu_env *env,
+				   struct osd_device *osd,
+				   struct osd_thandle *oh,
+				   struct ldiskfs_dir_entry_2 *de)
+{
+	struct lu_fid *fid = &osd_oti_get(env)->oti_fid;
+	struct osd_idmap_cache *idc;
+	int rc, schedule = 0;
+
+	LASSERT(de != NULL);
+
+	rc = osd_get_fid_from_dentry(de, (struct dt_rec *)fid);
+	if (likely(rc == 0)) {
+		idc = osd_idc_find_or_init(env, osd, fid);
+		if (IS_ERR(idc) || idc->oic_remote)
+			schedule = 1;
+	} else if (rc == -ENODATA) {
+		/* can't get FID, postpone to the end of the
+		 * transaction when iget() is safe */
+		schedule = 1;
+	} else {
+		CERROR("%s: can't get FID: rc = %d\n", osd_name(osd), rc);
+	}
+	if (schedule)
+		osd_schedule_agent_inode_removal(env, oh,
+						 le32_to_cpu(de->inode));
+}
+
 /**
  * Index delete function for interoperability mode (b11826).
  * It will remove the directory entry added by osd_index_ea_insert().
@@ -4741,7 +4771,6 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 	struct ldiskfs_dir_entry_2 *de = NULL;
 	struct buffer_head	   *bh;
 	struct htree_lock	   *hlock = NULL;
-	struct lu_fid		   *fid = &osd_oti_get(env)->oti_fid;
 	struct osd_device	   *osd = osd_dev(dt->do_lu.lo_dev);
 	int			   rc;
 	ENTRY;
@@ -4787,20 +4816,8 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
 		 * reverse would need filesystem abort in case of error deleting
 		 * the entry after the agent had been removed, or leave a
 		 * dangling entry pointing at a random inode. */
-		if (strcmp((char *)key, dotdot) != 0) {
-			LASSERT(de != NULL);
-			rc = osd_get_fid_from_dentry(de, (struct dt_rec *)fid);
-			if (rc == -ENODATA) {
-				/* can't get FID, postpone to the end of the
-				 * transaction when iget() is safe */
-				osd_schedule_agent_inode_removal(env, oh,
-						le32_to_cpu(de->inode));
-			} else if (rc == 0 &&
-				   unlikely(osd_remote_fid(env, osd, fid))) {
-				osd_schedule_agent_inode_removal(env, oh,
-						le32_to_cpu(de->inode));
-			}
-		}
+		if (strcmp((char *)key, dotdot) != 0)
+			osd_take_care_of_agent(env, osd, oh, de);
 		rc = ldiskfs_delete_entry(oh->ot_handle, dir, de, bh);
 		brelse(bh);
 	} else {
