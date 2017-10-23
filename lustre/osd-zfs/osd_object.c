@@ -1759,6 +1759,7 @@ out:
 static int osd_declare_ref_add(const struct lu_env *env, struct dt_object *dt,
 			       struct thandle *th)
 {
+	osd_idc_find_and_init(env, osd_dev(dt->do_lu.lo_dev), osd_dt_obj(dt));
 	return osd_declare_attr_set(env, dt, NULL, th);
 }
 
@@ -1799,6 +1800,7 @@ out:
 static int osd_declare_ref_del(const struct lu_env *env, struct dt_object *dt,
 			       struct thandle *handle)
 {
+	osd_idc_find_and_init(env, osd_dev(dt->do_lu.lo_dev), osd_dt_obj(dt));
 	return osd_declare_attr_set(env, dt, NULL, handle);
 }
 
