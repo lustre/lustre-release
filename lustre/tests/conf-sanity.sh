@@ -7162,7 +7162,7 @@ test_99()
 	do_facet ost1 $DEBUGFS -c -R stats `ostdevname 1` | grep "meta_bg" ||
 		error "meta_bg is not set"
 
-	return 0
+	reformat
 }
 run_test 99 "Adding meta_bg option"
 
