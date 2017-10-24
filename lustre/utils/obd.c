@@ -2864,8 +2864,7 @@ int obd_initialize(int argc, char **argv)
 	if (shmem_setup() != 0)
 		return -1;
 
-	register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH,
-			 OBD_DEV_MAJOR, OBD_DEV_MINOR);
+	register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH);
 
 	return 0;
 }

@@ -38,24 +38,11 @@
 #include <linux/lnet/lnetctl.h>
 
 struct ioc_dev {
-        const char * dev_name;
-        int dev_fd;
-        int dev_major;
-        int dev_minor;
+	const char *dev_name;
+	int dev_fd;
 };
 
 static struct ioc_dev ioc_dev_list[10];
-
-struct dump_hdr {
-        int magic;
-        int dev_id;
-        unsigned int opc;
-};
-
-/* Catamount has no <linux/kdev_t.h>, so just define it here */
-#ifndef MKDEV
-# define MKDEV(a,b) (((a) << 8) | (b))
-#endif
 
 static int
 open_ioc_dev(int dev_id)
@@ -74,17 +61,6 @@ open_ioc_dev(int dev_id)
 
         if (ioc_dev_list[dev_id].dev_fd < 0) {
 		int fd = open(dev_name, O_RDWR);
-
-		/* Make the /dev/ node if we need to */
-		if (fd < 0 && errno == ENOENT) {
-			if (mknod(dev_name, S_IFCHR|S_IWUSR|S_IRUSR,
-				  MKDEV(ioc_dev_list[dev_id].dev_major,
-					ioc_dev_list[dev_id].dev_minor)) == 0)
-				fd = open(dev_name, O_RDWR);
-                        else
-                                fprintf(stderr, "mknod %s failed: %s\n",
-                                        dev_name, strerror(errno));
-                }
 
                 if (fd < 0) {
                         fprintf(stderr, "opening %s failed: %s\n"
@@ -114,9 +90,8 @@ int l_ioctl(int dev_id, unsigned int opc, void *buf)
 
 /* register a device to send ioctls to.  */
 int
-register_ioc_dev(int dev_id, const char *dev_name, int major, int minor)
+register_ioc_dev(int dev_id, const char *dev_name)
 {
-
 	if (dev_id < 0 ||
             dev_id >= sizeof(ioc_dev_list) / sizeof(ioc_dev_list[0]))
                 return -EINVAL;
@@ -125,8 +100,6 @@ register_ioc_dev(int dev_id, const char *dev_name, int major, int minor)
 
         ioc_dev_list[dev_id].dev_name = dev_name;
         ioc_dev_list[dev_id].dev_fd = -1;
-        ioc_dev_list[dev_id].dev_major = major;
-        ioc_dev_list[dev_id].dev_minor = minor;
 
         return dev_id;
 }

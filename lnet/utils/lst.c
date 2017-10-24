@@ -3336,8 +3336,7 @@ main(int argc, char **argv)
 #ifdef USE_DLC
 	rc = lustre_lnet_config_lib_init();
 #else
-	rc = register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH,
-			      LNET_DEV_MAJOR, LNET_DEV_MINOR);
+	rc = register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH);
 #endif
 	if (rc < 0)
 		goto errorout;

@@ -41,7 +41,6 @@
 #include <linux/module.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
-#include <linux/major.h>
 #include <linux/sched.h>
 #include <linux/lp.h>
 #include <linux/slab.h>
@@ -269,9 +268,9 @@ static struct file_operations obd_psdev_fops = {
 
 /* modules setup */
 struct miscdevice obd_psdev = {
-        .minor = OBD_DEV_MINOR,
-        .name  = OBD_DEV_NAME,
-        .fops  = &obd_psdev_fops,
+	.minor	= MISC_DYNAMIC_MINOR,
+	.name	= OBD_DEV_NAME,
+	.fops	= &obd_psdev_fops,
 };
 
 static ssize_t version_show(struct kobject *kobj, struct attribute *attr,

@@ -396,8 +396,7 @@ failed:
 
 int lustre_lnet_config_lib_init(void)
 {
-	return register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH,
-				LNET_DEV_MAJOR, LNET_DEV_MINOR);
+	return register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH);
 }
 
 void lustre_lnet_config_lib_uninit(void)

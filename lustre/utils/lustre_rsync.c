@@ -1793,8 +1793,7 @@ int main(int argc, char *argv[])
 
         /* This plumbing is needed for some of the ioctls behind
            llapi calls to work. */
-	register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH,
-			 OBD_DEV_MAJOR, OBD_DEV_MINOR);
+	register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH);
 
         rc = lr_locate_rsync();
         if (use_rsync && rc != 0) {
