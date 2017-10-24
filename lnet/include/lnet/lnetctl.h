@@ -126,7 +126,5 @@ struct lnet_fault_stat {
 
 #define LNET_DEV_ID	0
 #define LNET_DEV_PATH	"/dev/lnet"
-#define LNET_DEV_MAJOR	10
-#define LNET_DEV_MINOR	240
 
 #endif

@@ -32,6 +32,7 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/miscdevice.h>
 #include <linux/user_namespace.h>
 #ifdef HAVE_UIDGID_HEADER
 # include <linux/uidgid.h>
@@ -532,7 +533,7 @@ static int __init obdclass_init(void)
 
 	err = misc_register(&obd_psdev);
 	if (err) {
-		CERROR("cannot register %d err %d\n", OBD_DEV_MINOR, err);
+		CERROR("cannot register OBD miscdevice: err = %d\n", err);
 		goto cleanup_class_handle;
 	}
 

@@ -3336,6 +3336,10 @@ main(int argc, char **argv)
         if (rc < 0)
                 goto errorout;
 
+	rc = register_ioc_dev(LNET_DEV_ID, LNET_DEV_PATH);
+	if (rc < 0)
+		goto errorout;
+
         Parser_init("lst > ", lst_cmdlist);
 
         if (argc != 1)  {

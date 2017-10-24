@@ -33,6 +33,10 @@
 #include <linux/types.h>
 #include <lustre/lustre_idl.h>
 
+#ifndef __KERNEL__
+# define __user
+#endif
+
 #if !defined(__KERNEL__) && !defined(LUSTRE_UTILS)
 # error This file is for Lustre internal use only.
 #endif
@@ -57,8 +61,6 @@ enum md_echo_cmd {
 #define OBD_DEV_ID 1
 #define OBD_DEV_NAME "obd"
 #define OBD_DEV_PATH "/dev/" OBD_DEV_NAME
-#define OBD_DEV_MAJOR 10
-#define OBD_DEV_MINOR 241
 
 #define OBD_IOCTL_VERSION	0x00010004
 #define OBD_DEV_BY_DEVNAME	0xffffd0de

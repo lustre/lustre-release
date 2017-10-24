@@ -32,9 +32,8 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
+#include <linux/miscdevice.h>
 #include <libcfs/libcfs.h>
-
-#define LNET_MINOR 240
 
 static inline size_t libcfs_ioctl_packlen(struct libcfs_ioctl_data *data)
 {
@@ -168,7 +167,7 @@ static struct file_operations libcfs_fops = {
 };
 
 struct miscdevice libcfs_dev = {
-	.minor	= LNET_MINOR,
+	.minor	= MISC_DYNAMIC_MINOR,
 	.name	= "lnet",
 	.fops	= &libcfs_fops
 };

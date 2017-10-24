@@ -120,8 +120,10 @@
 #include <time.h>
 #include <sys/xattr.h>
 #include <linux/types.h>
+#include <linux/lustre_ioctl.h>
 
 #include <libcfs/libcfs_debug.h>
+#include <libcfs/util/ioctl.h>
 #include <libcfs/util/string.h>
 #include <libcfs/util/parser.h>
 #include <lustre/lustreapi.h>
@@ -1792,10 +1794,7 @@ int main(int argc, char *argv[])
 
         /* This plumbing is needed for some of the ioctls behind
            llapi calls to work. */
-        if (obd_initialize(argc, argv) < 0) {
-                fprintf(stderr, "obd_initialize failed.\n");
-                exit(-1);
-        }
+	register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH);
 
         rc = lr_locate_rsync();
         if (use_rsync && rc != 0) {
