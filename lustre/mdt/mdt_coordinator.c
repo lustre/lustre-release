@@ -548,9 +548,11 @@ static int mdt_coordinator(void *data)
 		 * repeatedly locking/unlocking the catalog for each request
 		 * and preventing other HSM operations from happening */
 		wait_event_interruptible_timeout(cdt->cdt_waitq,
-						 kthread_should_stop(),
+						 kthread_should_stop() ||
+						 cdt->cdt_wakeup_coordinator,
 						 wait_event_time);
 
+		cdt->cdt_wakeup_coordinator = false;
 		CDEBUG(D_HSM, "coordinator resumes\n");
 
 		if (kthread_should_stop()) {

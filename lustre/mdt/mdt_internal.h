@@ -180,6 +180,8 @@ struct coordinator {
 
 	/* Remove archive on last unlink policy */
 	bool			 cdt_remove_archive_on_last_unlink;
+
+	bool			 cdt_wakeup_coordinator;
 };
 
 /* mdt state flag bits */

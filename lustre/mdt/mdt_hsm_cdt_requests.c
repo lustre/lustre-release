@@ -432,7 +432,11 @@ int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie)
 	mdt_cdt_put_request(car);
 
 	LASSERT(atomic_read(&cdt->cdt_request_count) >= 1);
-	atomic_dec(&cdt->cdt_request_count);
+	if (atomic_dec_and_test(&cdt->cdt_request_count)) {
+		/* request count is empty, nudge coordinator for more work */
+		cdt->cdt_wakeup_coordinator = true;
+		wake_up_interruptible(&cdt->cdt_waitq);
+	}
 
 	RETURN(0);
 }
