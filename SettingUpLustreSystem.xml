@@ -239,21 +239,21 @@
       <note>
         <para>If the average file size is very small, 4 KB for example, the
         MDT will use as much space for each file as the space used on the OST.
-	However, this is an uncommon usage for a Lustre filesystem.</para>
+        However, this is an uncommon usage for a Lustre filesystem.</para>
       </note>
       <note>
         <para>If the MDT has too few inodes, this can cause the space on the
-	OSTs to be inaccessible since no new files can be created. Be sure to
+        OSTs to be inaccessible since no new files can be created. Be sure to
         determine the appropriate size of the MDT needed to support the file
         system before formatting the file system. It is possible to increase the
         number of inodes after the file system is formatted, depending on the
         storage.  For ldiskfs MDT filesystems the <literal>resize2fs</literal>
         tool can be used if the underlying block device is on a LVM logical
         volume and the underlying logical volume size can be increased.
-	For ZFS new (mirrored) VDEVs can be added to the MDT pool to increase
-	the total space available for inode storage.
+        For ZFS new (mirrored) VDEVs can be added to the MDT pool to increase
+        the total space available for inode storage.
         Inodes will be added approximately in proportion to space added.
-	</para>
+        </para>
       </note>
       <note condition='l24'>
         <para>Note that the number of total and free inodes reported by
@@ -261,10 +261,10 @@
         on the current average space used per inode.  When a ZFS filesystem is
         first formatted, this free inode estimate will be very conservative
         (low) due to the high ratio of directories to regular files created for
-	internal Lustre metadata storage, but this estimate will improve as
-	more files are created by regular users and the average file size will
-	better reflect actual site usage.
-	</para>
+        internal Lustre metadata storage, but this estimate will improve as
+        more files are created by regular users and the average file size will
+        better reflect actual site usage.
+        </para>
       </note>
       <note condition='l24'>
         <para>Starting in release 2.4, using the DNE remote directory feature
@@ -287,11 +287,12 @@
       <para>For the OST, the amount of space taken by each object depends on
       the usage pattern of the users/applications running on the system. The
       Lustre software defaults to a conservative estimate for the average
-      object size (between 64KB per object for 10GB OSTs, and 1MB per object
-      for 16TB and larger OSTs). If you are confident that the average file
-      size for your applications will be larger than this, you can specify a
-      larger average file size (fewer total inodes for a given OST size) to
-      reduce file system overhead and minimize file system check time.
+      object size (between 64 KiB per object for 10 GiB OSTs, and 1 MiB per
+      object for 16 TiB and larger OSTs). If you are confident that the average
+      file size for your applications will be different than this, you can
+      specify a different average file size (number of total inodes for a given
+      OST size) to reduce file system overhead and minimize file system check
+      time.
       See <xref linkend="dbdoclet.ldiskfs_ost_mkfs"/> for more details.</para>
     </section>
   </section>
@@ -299,11 +300,11 @@
     <title>
       <indexterm>
         <primary>ldiskfs</primary>
-	<secondary>formatting options</secondary>
+        <secondary>formatting options</secondary>
       </indexterm>
       <indexterm>
         <primary>setup</primary>
-	<secondary>ldiskfs</secondary>
+        <secondary>ldiskfs</secondary>
       </indexterm>
       Setting ldiskfs File System Formatting Options
     </title>
@@ -313,23 +314,28 @@
     options include:</para>
         <itemizedlist>
             <listitem>
-              <para><literal>flex_bg</literal> - When the flag is set to enable this
-          flexible-block-groups feature, block and inode bitmaps for multiple groups are aggregated
-          to minimize seeking when bitmaps are read or written and to reduce read/modify/write
-          operations on typical RAID storage (with 1 MB RAID stripe widths). This flag is enabled on
-          both OST and MDT file systems. On MDT file systems the <literal>flex_bg</literal> factor
-          is left at the default value of 16. On OSTs, the <literal>flex_bg</literal> factor is set
-          to 256 to allow all of the block or inode bitmaps in a single <literal>flex_bg</literal>
-          to be read or written in a single I/O on typical RAID storage.</para>
+              <para><literal>flex_bg</literal> - When the flag is set to enable
+              this flexible-block-groups feature, block and inode bitmaps for
+              multiple groups are aggregated to minimize seeking when bitmaps
+              are read or written and to reduce read/modify/write operations
+              on typical RAID storage (with 1 MiB RAID stripe widths). This flag
+              is enabled on both OST and MDT file systems. On MDT file systems
+              the <literal>flex_bg</literal> factor is left at the default value
+              of 16. On OSTs, the <literal>flex_bg</literal> factor is set
+              to 256 to allow all of the block or inode bitmaps in a single
+              <literal>flex_bg</literal> to be read or written in a single
+              1MiB I/O typical for RAID storage.</para>
             </listitem>
             <listitem>
-              <para><literal>huge_file</literal> - Setting this flag allows files on OSTs to be
-          larger than 2 TB in size.</para>
+              <para><literal>huge_file</literal> - Setting this flag allows
+              files on OSTs to be larger than 2 TiB in size.</para>
             </listitem>
             <listitem>
-              <para><literal>lazy_journal_init</literal> - This extended option is enabled to
-          prevent a full overwrite of the 400 MB journal that is allocated by default in a Lustre
-          file system, which reduces the file system format time.</para>
+              <para><literal>lazy_journal_init</literal> - This extended option
+              is enabled to prevent a full overwrite to zero out the large
+              journal that is allocated by default in a Lustre file system
+              (up to 400 MiB for OSTs, up to 4GiB for MDTs), to reduce the
+              formatting time.</para>
             </listitem>
         </itemizedlist>
     <para>To override the default formatting options, use arguments to
@@ -357,7 +363,7 @@
       to maintain cluster consistency.  There is additional per-file metadata
       such as file layout for files with a large number of stripes, Access
       Control Lists (ACLs), and user extended attributes.</para>
-      <para> It is possible to reserve less than the recommended 2048 bytes
+      <para>It is possible to reserve less than the recommended 2048 bytes
       per inode for an ldiskfs MDT when it is first formatted by adding the
       <literal>--mkfsoptions="-i bytes-per-inode"</literal> option to
       <literal>mkfs.lustre</literal>.  Decreasing the inode ratio tunable
@@ -417,46 +423,46 @@
             <tbody>
               <row>
                 <entry>
-                  <para> over 10GB </para>
+                  <para>under 10GiB </para>
                 </entry>
                 <entry>
-                  <para> 1 inode/16KB </para>
+                  <para>1 inode/16KiB </para>
                 </entry>
                 <entry>
-                  <para> 640 - 655k </para>
-                </entry>
-              </row>
-              <row>
-                <entry>
-                  <para> 10GB - 1TB </para>
-                </entry>
-                <entry>
-                  <para> 1 inode/68kiB </para>
-                </entry>
-                <entry>
-                  <para> 153k - 15.7M </para>
+                  <para>640 - 655k </para>
                 </entry>
               </row>
               <row>
                 <entry>
-                  <para> 1TB - 8TB </para>
+                  <para>10GiB - 1TiB </para>
                 </entry>
                 <entry>
-                  <para> 1 inode/256kB </para>
+                  <para>1 inode/68KiB </para>
                 </entry>
                 <entry>
-                  <para> 4.2M - 33.6M </para>
+                  <para>153k - 15.7M </para>
                 </entry>
               </row>
               <row>
                 <entry>
-                  <para> over 8TB </para>
+                  <para>1TiB - 8TiB </para>
                 </entry>
                 <entry>
-                  <para> 1 inode/1MB </para>
+                  <para>1 inode/256KiB </para>
                 </entry>
                 <entry>
-                  <para> 8.4M - 134M </para>
+                  <para>4.2M - 33.6M </para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>over 8TiB </para>
+                </entry>
+                <entry>
+                  <para>1 inode/1MiB </para>
+                </entry>
+                <entry>
+                  <para>8.4M - 268M </para>
                 </entry>
               </row>
             </tbody>
@@ -470,50 +476,51 @@
       ratio, use the <literal>--mkfsoptions="-i <replaceable>bytes-per-inode</replaceable>"</literal>
       argument to <literal>mkfs.lustre</literal> to specify the expected
       average (mean) size of OST objects.  For example, to create an OST
-      with an expected average object size of 8MB run:
+      with an expected average object size of 8 MiB run:
       <screen>[oss#] mkfs.lustre --ost --mkfsoptions=&quot;-i $((8192 * 1024))&quot; ...</screen>
       </para>
       <note>
         <para>OSTs formatted with ldiskfs are limited to a maximum of
-	320 million to 1 billion objects.  Specifying a very small
-	bytes-per-inode ratio for a large OST that causes this limit to be
-	exceeded can cause either premature out-of-space errors and prevent
-	the full OST space from being used, or will waste space and slow down
-	e2fsck more than necessary.  The default inode ratios are chosen to
-	ensure that the total number of inodes remain below this limit.
-	</para>
+        320 million to 1 billion objects.  Specifying a very small
+        bytes-per-inode ratio for a large OST that causes this limit to be
+        exceeded can cause either premature out-of-space errors and prevent
+        the full OST space from being used, or will waste space and slow down
+        e2fsck more than necessary.  The default inode ratios are chosen to
+        ensure that the total number of inodes remain below this limit.
+        </para>
       </note>
       <note>
         <para>File system check time on OSTs is affected by a number of
-	variables in addition to the number of inodes, including the size of
-	the file system, the number of allocated blocks, the distribution of
-	allocated blocks on the disk, disk speed, CPU speed, and the amount
-	of RAM on the server. Reasonable file system check times for valid
-	filesystems are 5-30 minutes per TB, but may increase significantly
-	if substantial errors are detected and need to be required.</para>
+        variables in addition to the number of inodes, including the size of
+        the file system, the number of allocated blocks, the distribution of
+        allocated blocks on the disk, disk speed, CPU speed, and the amount
+        of RAM on the server. Reasonable file system check times for valid
+        filesystems are 5-30 minutes per TiB, but may increase significantly
+        if substantial errors are detected and need to be required.</para>
       </note>
       <para>For more details about formatting MDT and OST file systems,
       see <xref linkend="dbdoclet.ldiskfs_raid_opts"/>.</para>
     </section>
-    <section remap="h3">
-      <title><indexterm>
-          <primary>setup</primary>
-          <secondary>limits</secondary>
-        </indexterm><indexterm xmlns:xi="http://www.w3.org/2001/XInclude">
-          <primary>wide striping</primary>
-        </indexterm><indexterm xmlns:xi="http://www.w3.org/2001/XInclude">
-          <primary>xattr</primary>
-          <secondary><emphasis role="italic">See</emphasis> wide striping</secondary>
-        </indexterm><indexterm>
-          <primary>large_xattr</primary>
-          <secondary>ea_inode</secondary>
-        </indexterm><indexterm>
-          <primary>wide striping</primary>
-          <secondary>large_xattr</secondary>
-          <tertiary>ea_inode</tertiary>
-        </indexterm>File and File System Limits</title>
+  </section>
+  <section remap="h3">
+    <title><indexterm>
+        <primary>setup</primary>
+        <secondary>limits</secondary>
+      </indexterm><indexterm xmlns:xi="http://www.w3.org/2001/XInclude">
+        <primary>wide striping</primary>
+      </indexterm><indexterm xmlns:xi="http://www.w3.org/2001/XInclude">
+        <primary>xattr</primary>
+        <secondary><emphasis role="italic">See</emphasis> wide striping</secondary>
+      </indexterm><indexterm>
+        <primary>large_xattr</primary>
+        <secondary>ea_inode</secondary>
+      </indexterm><indexterm>
+        <primary>wide striping</primary>
+        <secondary>large_xattr</secondary>
+        <tertiary>ea_inode</tertiary>
+      </indexterm>File and File System Limits</title>
 
-	 <para><xref linkend="settinguplustresystem.tab2"/> describes
+      <para><xref linkend="settinguplustresystem.tab2"/> describes
      current known limits of Lustre.  These limits are imposed by either
      the Lustre architecture or the Linux virtual file system (VFS) and
      virtual memory subsystems. In a few cases, a limit is defined within
@@ -522,279 +529,280 @@
      document, and can be found elsewhere online. In these cases, the
      indicated limit was used for testing of the Lustre software. </para>
 
-      <table frame="all" xml:id="settinguplustresystem.tab2">
-        <title>File and file system limits</title>
-        <tgroup cols="3">
-          <colspec colname="c1" colwidth="3*"/>
-          <colspec colname="c2" colwidth="2*"/>
-          <colspec colname="c3" colwidth="4*"/>
-          <thead>
-            <row>
-              <entry>
-                <para><emphasis role="bold">Limit</emphasis></para>
-              </entry>
-              <entry>
-                <para><emphasis role="bold">Value</emphasis></para>
-              </entry>
-              <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
-              </entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry>
-                <para> Maximum number of MDTs</para>
-              </entry>
-              <entry>
-                <para condition='l24'>256</para>
-              </entry>
-              <entry>
-                <para>The Lustre software release 2.3 and earlier allows a
-		maximum of 1 MDT per file system, but a single MDS can host
-		multiple MDTs, each one for a separate file system.</para>
-                <para condition="l24">The Lustre software release 2.4 and later
-		requires one MDT for the filesystem root. At least 255 more
-		MDTs can be added to the filesystem and attached into
-		the namespace with DNE remote or striped directories.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum number of OSTs</para>
-              </entry>
-              <entry>
-                <para> 8150</para>
-              </entry>
-              <entry>
-                <para>The maximum number of OSTs is a constant that can be
-		changed at compile time.  Lustre file systems with up to
-		4000 OSTs have been tested.  Multiple OST file systems can
-		be configured on a single OSS node.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum OST size</para>
-              </entry>
-              <entry>
-                <para> 128TB (ldiskfs), 256TB (ZFS)</para>
-              </entry>
-              <entry>
-                <para>This is not a <emphasis>hard</emphasis> limit. Larger
-		OSTs are possible but today typical production systems do not
-		typically go beyond the stated limit per OST because Lustre
-		can add capacity and performance with additional OSTs, and
-		having more OSTs improves aggregate I/O performance and
-		minimizes contention.
-		</para>
-		<para>
-		With 32-bit kernels, due to page cache limits, 16TB is the
-		maximum block device size, which in turn applies to the
-		size of OST.  It is strongly recommended to run Lustre
-		clients and servers with 64-bit kernels.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum number of clients</para>
-              </entry>
-              <entry>
-                <para> 131072</para>
-              </entry>
-              <entry>
-                <para>The maximum number of clients is a constant that can
-		be changed at compile time. Up to 30000 clients have been
-		used in production.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum size of a file system</para>
-              </entry>
-              <entry>
-                <para> 512 PB (ldiskfs), 1EB (ZFS)</para>
-              </entry>
-              <entry>
-                <para>Each OST can have a file system up to the
-		Maximum OST size limit, and the Maximum number of OSTs
-		can be combined into a single filesystem.
-		</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum stripe count</para>
-              </entry>
-              <entry>
-                <para> 2000</para>
-              </entry>
-              <entry>
-                <para>This limit is imposed by the size of the layout that
-		needs to be stored on disk and sent in RPC requests, but is
-		not a hard limit of the protocol. The number of OSTs in the
-		filesystem can exceed the stripe count, but this limits the
-		number of OSTs across which a single file can be striped.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum stripe size</para>
-              </entry>
-              <entry>
-                <para> &lt; 4 GB</para>
-              </entry>
-              <entry>
-                <para>The amount of data written to each object before moving
-		on to next object.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Minimum stripe size</para>
-              </entry>
-              <entry>
-                <para> 64 KB</para>
-              </entry>
-              <entry>
-                <para>Due to the 64 KB PAGE_SIZE on some 64-bit machines,
-		the minimum stripe size is set to 64 KB.</para>
-              </entry>
-            </row>
-            <row>
-	      <entry>
-                <para> Maximum object size</para>
-	      </entry>
-              <entry>
-                <para> 16TB (ldiskfs), 256TB (ZFS)</para>
-              </entry>
-              <entry>
-                <para>The amount of data that can be stored in a single object.
-		An object corresponds to a stripe. The ldiskfs limit of 16 TB
-		for a single object applies.  For ZFS the limit is the size of
-		the underlying OST.  Files can consist of up to 2000 stripes,
-		each stripe can be up to the maximum object size. </para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum <anchor xml:id="dbdoclet.50438256_marker-1290761" xreflabel=""/>file size</para>
-              </entry>
-              <entry>
-                <para> 16 TB on 32-bit systems</para>
-                <para>&#160;</para>
-                <para> 31.25 PB on 64-bit ldiskfs systems, 8EB on 64-bit ZFS systems</para>
-              </entry>
-              <entry>
-                <para>Individual files have a hard limit of nearly 16 TB on
-		32-bit systems imposed by the kernel memory subsystem. On
-		64-bit systems this limit does not exist.  Hence, files can
-		be 2^63 bits (8EB) in size if the backing filesystem can
-		support large enough objects.</para>
-                <para>A single file can have a maximum of 2000 stripes, which
-		gives an upper single file limit of 31.25 PB for 64-bit
-		ldiskfs systems. The actual amount of data that can be stored
-		in a file depends upon the amount of free space in each OST
-		on which the file is striped.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum number of files or subdirectories in a single directory</para>
-              </entry>
-              <entry>
-                <para> 10 million files (ldiskfs), 2^48 (ZFS)</para>
-              </entry>
-              <entry>
-                <para>The Lustre software uses the ldiskfs hashed directory
-                code, which has a limit of about 10 million files, depending
-                on the length of the file name. The limit on subdirectories
-                is the same as the limit on regular files.</para>
-                <note condition='l28'><para>Starting in the 2.8 release it is
-                possible to exceed this limit by striping a single directory
-                over multiple MDTs with the <literal>lfs mkdir -c</literal>
-                command, which increases the single directory limit by a
-                factor of the number of directory stripes used.</para></note>
-                <para>Lustre file systems are tested with ten million files
-                in a single directory.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum number of files in the file system</para>
-              </entry>
-              <entry>
-                <para> 4 billion (ldiskfs), 256 trillion (ZFS)</para>
-                <para condition='l24'>up to 256 times the per-MDT limit</para>
-              </entry>
-              <entry>
-                <para>The ldiskfs filesystem imposes an upper limit of
-                4 billion inodes per filesystem. By default, the MDT
-                filesystem is formatted with one inode per 2KB of space,
-                meaning 512 million inodes per TB of MDT space. This can be
-                increased initially at the time of MDT filesystem creation.
-                For more information, see
-                <xref linkend="settinguplustresystem"/>.</para>
-                <para condition="l24">The ZFS filesystem
-                dynamically allocates inodes and does not have a fixed ratio
-                of inodes per unit of MDT space, but consumes approximately
-                4KB of space per inode, depending on the configuration.</para>
-                <para condition="l24">Each additional MDT can hold up to the
-                above maximum number of additional files, depending on
-                available space and the distribution directories and files
-                in the filesystem.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum length of a filename</para>
-              </entry>
-              <entry>
-                <para> 255 bytes (filename)</para>
-              </entry>
-              <entry>
-                <para>This limit is 255 bytes for a single filename, the
-                same as the limit in the underlying filesystems.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum length of a pathname</para>
-              </entry>
-              <entry>
-                <para> 4096 bytes (pathname)</para>
-              </entry>
-              <entry>
-                <para>The Linux VFS imposes a full pathname length of 4096 bytes.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum number of open files for a Lustre file system</para>
-              </entry>
-              <entry>
-                <para> No limit</para>
-              </entry>
-              <entry>
-                <para>The Lustre software does not impose a maximum for the number of open files,
-                  but the practical limit depends on the amount of RAM on the MDS. No
-                  &quot;tables&quot; for open files exist on the MDS, as they are only linked in a
-                  list to a given client&apos;s export. Each client process probably has a limit of
-                  several thousands of open files which depends on the ulimit.</para>
-              </entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </table>
-      <para>&#160;</para>
-      <note><para>By default for ldiskfs MDTs the maximum stripe count for a
-      <emphasis>single file</emphasis> is limited to 160 OSTs.  In order to
-      increase the maximum file stripe count, use
-      <literal>--mkfsoptions="-O ea_inode"</literal> when formatting the MDT,
-      or use <literal>tune2fs -O ea_inode</literal> to enable it after the
-      MDT has been formatted.</para>
-      </note>
-    </section>
+    <table frame="all" xml:id="settinguplustresystem.tab2">
+      <title>File and file system limits</title>
+      <tgroup cols="3">
+        <colspec colname="c1" colwidth="3*"/>
+        <colspec colname="c2" colwidth="2*"/>
+        <colspec colname="c3" colwidth="4*"/>
+        <thead>
+          <row>
+            <entry>
+              <para><emphasis role="bold">Limit</emphasis></para>
+            </entry>
+            <entry>
+              <para><emphasis role="bold">Value</emphasis></para>
+            </entry>
+            <entry>
+              <para><emphasis role="bold">Description</emphasis></para>
+            </entry>
+          </row>
+        </thead>
+        <tbody>
+          <row>
+            <entry>
+              <para>Maximum number of MDTs</para>
+            </entry>
+            <entry>
+              <para condition='l24'>256</para>
+            </entry>
+            <entry>
+              <para>The Lustre software release 2.3 and earlier allows a
+              maximum of 1 MDT per file system, but a single MDS can host
+              multiple MDTs, each one for a separate file system.</para>
+              <para condition="l24">The Lustre software release 2.4 and later
+              requires one MDT for the filesystem root. At least 255 more
+              MDTs can be added to the filesystem and attached into
+              the namespace with DNE remote or striped directories.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum number of OSTs</para>
+            </entry>
+            <entry>
+              <para>8150</para>
+            </entry>
+            <entry>
+              <para>The maximum number of OSTs is a constant that can be
+              changed at compile time.  Lustre file systems with up to
+              4000 OSTs have been tested.  Multiple OST file systems can
+              be configured on a single OSS node.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum OST size</para>
+            </entry>
+            <entry>
+              <para>256TiB (ldiskfs), 256TiB (ZFS)</para>
+            </entry>
+            <entry>
+              <para>This is not a <emphasis>hard</emphasis> limit. Larger
+              OSTs are possible but most production systems do not
+              typically go beyond the stated limit per OST because Lustre
+              can add capacity and performance with additional OSTs, and
+              having more OSTs improves aggregate I/O performance,
+              minimizes contention, and allows parallel recovery (e2fsck).
+              </para>
+              <para>
+              With 32-bit kernels, due to page cache limits, 16TB is the
+              maximum block device size, which in turn applies to the
+              size of OST.  It is strongly recommended to run Lustre
+              clients and servers with 64-bit kernels.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum number of clients</para>
+            </entry>
+            <entry>
+              <para>131072</para>
+            </entry>
+            <entry>
+              <para>The maximum number of clients is a constant that can
+              be changed at compile time. Up to 30000 clients have been
+              used in production.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum size of a single file system</para>
+            </entry>
+            <entry>
+              <para>at least 1EiB</para>
+            </entry>
+            <entry>
+              <para>Each OST can have a file system up to the
+              Maximum OST size limit, and the Maximum number of OSTs
+              can be combined into a single filesystem.
+              </para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum stripe count</para>
+            </entry>
+            <entry>
+              <para>2000</para>
+            </entry>
+            <entry>
+              <para>This limit is imposed by the size of the layout that
+              needs to be stored on disk and sent in RPC requests, but is
+              not a hard limit of the protocol. The number of OSTs in the
+              filesystem can exceed the stripe count, but this limits the
+              number of OSTs across which a single file can be striped.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum stripe size</para>
+            </entry>
+            <entry>
+              <para>&lt; 4 GiB</para>
+            </entry>
+            <entry>
+              <para>The amount of data written to each object before moving
+              on to next object.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Minimum stripe size</para>
+            </entry>
+            <entry>
+              <para>64 KiB</para>
+            </entry>
+            <entry>
+              <para>Due to the 64 KiB PAGE_SIZE on some 64-bit machines,
+              the minimum stripe size is set to 64 KiB.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum object size</para>
+            </entry>
+            <entry>
+              <para>16TiB (ldiskfs), 256TiB (ZFS)</para>
+            </entry>
+            <entry>
+              <para>The amount of data that can be stored in a single object.
+              An object corresponds to a stripe. The ldiskfs limit of 16 TB
+              for a single object applies.  For ZFS the limit is the size of
+              the underlying OST.  Files can consist of up to 2000 stripes,
+              each stripe can be up to the maximum object size. </para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum <anchor xml:id="dbdoclet.50438256_marker-1290761" xreflabel=""/>file size</para>
+            </entry>
+            <entry>
+              <para>16 TiB on 32-bit systems</para>
+              <para>&#160;</para>
+              <para>31.25 PiB on 64-bit ldiskfs systems,
+              8EiB on 64-bit ZFS systems</para>
+            </entry>
+            <entry>
+              <para>Individual files have a hard limit of nearly 16 TiB on
+              32-bit systems imposed by the kernel memory subsystem. On
+              64-bit systems this limit does not exist.  Hence, files can
+              be 2^63 bits (8EiB) in size if the backing filesystem can
+              support large enough objects.</para>
+              <para>A single file can have a maximum of 2000 stripes, which
+              gives an upper single file limit of 31.25 PiB for 64-bit
+              ldiskfs systems. The actual amount of data that can be stored
+              in a file depends upon the amount of free space in each OST
+              on which the file is striped.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum number of files or subdirectories in a single directory</para>
+            </entry>
+            <entry>
+              <para>10 million files (ldiskfs), 2^48 (ZFS)</para>
+            </entry>
+            <entry>
+              <para>The Lustre software uses the ldiskfs hashed directory
+              code, which has a limit of about 10 million files, depending
+              on the length of the file name. The limit on subdirectories
+              is the same as the limit on regular files.</para>
+              <note condition='l28'><para>Starting in the 2.8 release it is
+              possible to exceed this limit by striping a single directory
+              over multiple MDTs with the <literal>lfs mkdir -c</literal>
+              command, which increases the single directory limit by a
+              factor of the number of directory stripes used.</para></note>
+              <para>Lustre file systems are tested with ten million files
+              in a single directory.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum number of files in the file system</para>
+            </entry>
+            <entry>
+              <para>4 billion (ldiskfs), 256 trillion (ZFS)</para>
+              <para condition='l24'>up to 256 times the per-MDT limit</para>
+            </entry>
+            <entry>
+              <para>The ldiskfs filesystem imposes an upper limit of
+              4 billion inodes per filesystem. By default, the MDT
+              filesystem is formatted with one inode per 2KB of space,
+              meaning 512 million inodes per TiB of MDT space. This can be
+              increased initially at the time of MDT filesystem creation.
+              For more information, see
+              <xref linkend="settinguplustresystem"/>.</para>
+              <para condition="l24">The ZFS filesystem dynamically allocates
+              inodes and does not have a fixed ratio of inodes per unit of MDT
+              space, but consumes approximately 4KiB of mirrored space per
+              inode, depending on the configuration.</para>
+              <para condition="l24">Each additional MDT can hold up to the
+              above maximum number of additional files, depending on
+              available space and the distribution directories and files
+              in the filesystem.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum length of a filename</para>
+            </entry>
+            <entry>
+              <para>255 bytes (filename)</para>
+            </entry>
+            <entry>
+              <para>This limit is 255 bytes for a single filename, the
+              same as the limit in the underlying filesystems.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum length of a pathname</para>
+            </entry>
+            <entry>
+              <para>4096 bytes (pathname)</para>
+            </entry>
+            <entry>
+              <para>The Linux VFS imposes a full pathname length of 4096 bytes.</para>
+            </entry>
+          </row>
+          <row>
+            <entry>
+              <para>Maximum number of open files for a Lustre file system</para>
+            </entry>
+            <entry>
+              <para>No limit</para>
+            </entry>
+            <entry>
+              <para>The Lustre software does not impose a maximum for the number
+              of open files, but the practical limit depends on the amount of
+              RAM on the MDS. No &quot;tables&quot; for open files exist on the
+              MDS, as they are only linked in a list to a given client&apos;s
+              export. Each client process probably has a limit of several
+              thousands of open files which depends on the ulimit.</para>
+            </entry>
+          </row>
+        </tbody>
+      </tgroup>
+    </table>
+    <para>&#160;</para>
+    <note><para>By default for ldiskfs MDTs the maximum stripe count for a
+    <emphasis>single file</emphasis> is limited to 160 OSTs.  In order to
+    increase the maximum file stripe count, use
+    <literal>--mkfsoptions="-O ea_inode"</literal> when formatting the MDT,
+    or use <literal>tune2fs -O ea_inode</literal> to enable it after the
+    MDT has been formatted.</para>
+    </note>
   </section>
   <section xml:id="dbdoclet.50438256_26456">
     <title><indexterm><primary>setup</primary><secondary>memory</secondary></indexterm>Determining Memory Requirements</title>
