@@ -8,8 +8,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: LU-9693 LU-6493 LU-9693 3561 5188
-ALWAYS_EXCEPT="                42a    42b      42c     45   68b $SANITY_EXCEPT"
+# bug number for skipped test: LU-9693 LU-6493 LU-9693
+ALWAYS_EXCEPT="$SANITY_EXCEPT  42a     42b     42c"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # skipped tests: LU-8411 LU-9096 LU-9054
