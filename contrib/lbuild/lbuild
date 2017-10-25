@@ -1342,13 +1342,9 @@ store_for_reuse() {
         linkflag="l"
     fi
 
-    local default_iface=$(/sbin/ip route get 192.1.1.1 | sed -ne 's/.* dev \(.*\)  * src .*/\1/p')
-    if [ -z "$default_iface" ]; then
-        fatal 1 "Failed to determine the default route interface"
-    fi
-    local unique_id=$(/sbin/ip addr show dev $default_iface | sed -ne '/ inet /s/ *inet \(.*\)\/.*/\1/p' | head -1)
+    local unique_id=$(hostname -s)
     if [ -z "$unique_id" ]; then
-        fatal 1 "Failed to determine a unique id from interface $default_interface"
+        fatal 1 "Failed to determine hostname."
     fi
 
     local finallocation="$location"/"$signature"/"$module"
