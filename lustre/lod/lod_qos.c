@@ -1799,7 +1799,8 @@ int lod_use_defined_striping(const struct lu_env *env,
 		lod_obj_set_pool(mo, i, pool_name);
 
 		if ((!mo->ldo_is_composite || lod_comp_inited(lod_comp)) &&
-		    !(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)) {
+		    !(lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED) &&
+		    !(lod_comp->llc_pattern & LOV_PATTERN_MDT)) {
 			rc = lod_initialize_objects(env, mo, objs, i);
 			if (rc)
 				GOTO(out, rc);
