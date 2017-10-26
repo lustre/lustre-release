@@ -127,8 +127,8 @@ static int lfs_list_commands(int argc, char **argv);
 	"\t              respectively)\n"				\
 	"\tstart_ost_idx: OST index of first stripe (-1 default)\n"	\
 	"\tstripe_count: Number of OSTs to stripe over (0 default, -1 all)\n" \
-	"\tlayout:       stripe pattern type: raid0, mdt (default raid0)\n"\
 	"\tpool_name:    Name of OST pool to use (default none)\n"	\
+	"\tlayout:       stripe pattern type: raid0, mdt (default raid0)\n"\
 	"\tost_indices:  List of OST indices, can be repeated multiple times\n"\
 	"\t              Indices be specified in a format of:\n"	\
 	"\t                -o <ost_1>,<ost_i>-<ost_j>,<ost_n>\n"	\
@@ -1417,6 +1417,7 @@ static int lfs_setstripe(int argc, char **argv)
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument},
 	{ .val = 'I',	.name = "comp-id",	.has_arg = required_argument},
 	{ .val = 'I',	.name = "component-id",	.has_arg = required_argument},
+	{ .val = 'L',	.name = "layout",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt_index",	.has_arg = required_argument},
@@ -1434,7 +1435,6 @@ static int lfs_setstripe(int argc, char **argv)
 	 * the consistent "--stripe-size|-S" for all commands. */
 	{ .val = 's',	.name = "size",		.has_arg = required_argument },
 #endif
-	{ .val = 'L',	.name = "layout",	.has_arg = required_argument },
 	{ .val = 'S',	.name = "stripe-size",	.has_arg = required_argument },
 	{ .val = 'S',	.name = "stripe_size",	.has_arg = required_argument },
 	/* dirstripe {"mdt-count",    required_argument, 0, 'T'}, */
@@ -1530,27 +1530,6 @@ static int lfs_setstripe(int argc, char **argv)
 				}
 			}
 			break;
-		case 'L':
-			if (strcmp(argv[optind - 1], "mdt") == 0) {
-				/* Can be only the first component */
-				if (layout != NULL) {
-					fprintf(stderr, "error: 'mdt' layout "
-						"can be only the first one\n");
-					goto error;
-				}
-				if (lsa.lsa_comp_end > (1ULL << 30)) { /* 1Gb */
-					fprintf(stderr, "error: 'mdt' layout "
-						"size is too big\n");
-					goto error;
-				}
-				lsa.lsa_pattern = LLAPI_LAYOUT_MDT;
-			} else if (strcmp(argv[optind - 1], "raid0") != 0) {
-				fprintf(stderr, "error: layout '%s' is "
-					"unknown, supported layouts are: "
-					"'mdt', 'raid0'\n", argv[optind]);
-				goto error;
-			}
-			break;
 		case 'i':
 			if (strcmp(argv[optind - 1], "--index") == 0)
 				fprintf(stderr, "warning: '--index' deprecated"
@@ -1568,6 +1547,30 @@ static int lfs_setstripe(int argc, char **argv)
 			    comp_id > LCME_ID_MAX) {
 				fprintf(stderr, "error: %s: bad comp ID "
 					"'%s'\n", argv[0], optarg);
+				goto error;
+			}
+			break;
+		case 'L':
+			if (strcmp(argv[optind - 1], "mdt") == 0) {
+				/* Can be only the first component */
+				if (layout != NULL) {
+					result = -EINVAL;
+					fprintf(stderr, "error: 'mdt' layout "
+						"can be only the first one\n");
+					goto error;
+				}
+				if (lsa.lsa_comp_end > (1ULL << 30)) { /* 1Gb */
+					result = -EFBIG;
+					fprintf(stderr, "error: 'mdt' layout "
+						"size is too big\n");
+					goto error;
+				}
+				lsa.lsa_pattern = LLAPI_LAYOUT_MDT;
+			} else if (strcmp(argv[optind - 1], "raid0") != 0) {
+				result = -EINVAL;
+				fprintf(stderr, "error: layout '%s' is "
+					"unknown, supported layouts are: "
+					"'mdt', 'raid0'\n", argv[optind]);
 				goto error;
 			}
 			break;
