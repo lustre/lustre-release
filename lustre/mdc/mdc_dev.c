@@ -1068,6 +1068,44 @@ static int mdc_io_read_ahead(const struct lu_env *env,
 	RETURN(0);
 }
 
+int mdc_io_fsync_start(const struct lu_env *env,
+		       const struct cl_io_slice *slice)
+{
+	struct cl_io *io = slice->cis_io;
+	struct cl_fsync_io *fio = &io->u.ci_fsync;
+	struct cl_object *obj = slice->cis_obj;
+	struct osc_object *osc = cl2osc(obj);
+	int result = 0;
+
+	ENTRY;
+
+	/* a MDC lock always covers whole object, do sync for whole
+	 * possible range despite of supplied start/end values.
+	 */
+	result = osc_cache_writeback_range(env, osc, 0, CL_PAGE_EOF, 0,
+					   fio->fi_mode == CL_FSYNC_DISCARD);
+	if (result > 0) {
+		fio->fi_nr_written += result;
+		result = 0;
+	}
+	if (fio->fi_mode == CL_FSYNC_ALL) {
+		int rc;
+
+		rc = osc_cache_wait_range(env, osc, 0, CL_PAGE_EOF);
+		if (result == 0)
+			result = rc;
+		/* Use OSC sync code because it is asynchronous.
+		 * It is to be added into MDC and avoid the using of
+		 * OST_SYNC at both MDC and MDT.
+		 */
+		rc = osc_fsync_ost(env, osc, fio);
+		if (result == 0)
+			result = rc;
+	}
+
+	RETURN(result);
+}
+
 static struct cl_io_operations mdc_io_ops = {
 	.op = {
 		[CIT_READ] = {
@@ -1099,7 +1137,7 @@ static struct cl_io_operations mdc_io_ops = {
 			.cio_end       = osc_io_end,
 		},
 		[CIT_FSYNC] = {
-			.cio_start = osc_io_fsync_start,
+			.cio_start = mdc_io_fsync_start,
 			.cio_end   = osc_io_fsync_end,
 		},
 	},

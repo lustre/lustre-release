@@ -684,8 +684,8 @@ int osc_io_read_start(const struct lu_env *env,
 int osc_io_write_start(const struct lu_env *env,
 		       const struct cl_io_slice *slice);
 void osc_io_end(const struct lu_env *env, const struct cl_io_slice *slice);
-int osc_io_fsync_start(const struct lu_env *env,
-		       const struct cl_io_slice *slice);
+int osc_fsync_ost(const struct lu_env *env, struct osc_object *obj,
+		  struct cl_fsync_io *fio);
 void osc_io_fsync_end(const struct lu_env *env,
 		      const struct cl_io_slice *slice);
 void osc_read_ahead_release(const struct lu_env *env, void *cbdata);
