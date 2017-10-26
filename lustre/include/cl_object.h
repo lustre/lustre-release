@@ -290,7 +290,7 @@ struct cl_layout {
 	/** size of layout in lov_mds_md format. */
 	size_t		cl_size;
 	/** size of DoM component if exists or zero otherwise */
-	u32		cl_dom_comp_size;
+	u64		cl_dom_comp_size;
 	/** Layout generation. */
 	u32		cl_layout_gen;
 	/** whether layout is a composite one */

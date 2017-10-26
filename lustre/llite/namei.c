@@ -207,10 +207,9 @@ int ll_dom_lock_cancel(struct inode *inode, struct ldlm_lock *lock)
 		CDEBUG(D_INODE, "Cannot get layout for "DFID"\n",
 		       PFID(ll_inode2fid(inode)));
 		rc = -ENODATA;
-	} else if (clt.cl_dom_comp_size == 0) {
+	} else if (clt.cl_size == 0 || clt.cl_dom_comp_size == 0) {
 		CDEBUG(D_INODE, "DOM lock without DOM layout for "DFID"\n",
 		       PFID(ll_inode2fid(inode)));
-		rc = -EINVAL;
 	} else {
 		enum cl_fsync_mode mode;
 		loff_t end = clt.cl_dom_comp_size - 1;
