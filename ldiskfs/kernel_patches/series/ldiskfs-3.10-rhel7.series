@@ -27,3 +27,5 @@ rhel7/ext4-projid-feature-support.patch
 rhel7/ext4-projid-quotas.patch
 rhel7/ext4-projid-xfs-ioctls.patch
 rhel7/ext4-fix-xattr-shifting-when-expanding-inodes.patch
+rhel7/ext4-cleanup-goto-next-group.patch
+rhel7/ext4-reduce-lock-contention-in-__ext4_new_inode.patch
