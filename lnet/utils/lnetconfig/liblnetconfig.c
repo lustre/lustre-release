@@ -822,7 +822,7 @@ int lustre_lnet_config_route(char *nw, char *gw, int hops, int prio,
 	if (nw == NULL || gw == NULL) {
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"missing mandatory parameter(s): '%s'\"",
+			 "\"missing mandatory parameter in route config:'%s'\"",
 			 (nw == NULL && gw == NULL) ? "network, gateway" :
 			 (nw == NULL) ? "network" : "gateway");
 		rc = LUSTRE_CFG_RC_MISSING_PARAM;
@@ -905,7 +905,7 @@ int lustre_lnet_del_route(char *nw, char *gw,
 	if (nw == NULL || gw == NULL) {
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"missing mandatory parameter(s): '%s'\"",
+			 "\"missing mandatory parameter in route delete: '%s'\"",
 			 (nw == NULL && gw == NULL) ? "network, gateway" :
 			 (nw == NULL) ? "network" : "gateway");
 		rc = LUSTRE_CFG_RC_MISSING_PARAM;
@@ -1546,7 +1546,9 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 	    list_empty(&nw_descr->nw_intflist))) {
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"missing mandatory parameters\"");
+			 "\"missing mandatory parameters in NI config: '%s'\"",
+			 (nw_descr == NULL) ? "network , interface" :
+			 (nw_descr->nw_id == 0) ? "network" : "interface");
 		rc = LUSTRE_CFG_RC_MISSING_PARAM;
 		goto out;
 	}
@@ -1684,7 +1686,9 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 	    list_empty(&nw_descr->nw_intflist)) {
 		snprintf(err_str,
 			 sizeof(err_str),
-			 "\"missing mandatory parameter\"");
+			 "\"missing mandatory parameter in deleting NI: '%s'\"",
+			 (nw_descr == NULL) ? "network , interface" :
+			 (nw_descr->nw_id == 0) ? "network" : "interface");
 		rc = LUSTRE_CFG_RC_MISSING_PARAM;
 		goto out;
 	}
