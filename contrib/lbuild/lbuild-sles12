@@ -20,7 +20,7 @@ kernel_srpm_location() {
 	;;
     4.4)
 	site="http://mgmt/cobbler/repo_mirror/updates-sles12.2-src"
-	if [ ${lnxmin##.} -gt 80 ]
+	if [ ${lnxmin##.} -eq 82 -o ${lnxmin##.} -gt 91 ]
 	then
 		site="http://mgmt/cobbler/repo_mirror/updates-sles12.3-src"
 	fi
@@ -147,7 +147,7 @@ find_linux_rpm-sles12() {
 	;;
     4.4)
 	site="http://mgmt/cobbler/repo_mirror/updates-sles12.2-x86_64"
-	if [ ${lnxmin##.} -gt 80 ]
+	if [ ${lnxmin##.} -eq 82 -o ${lnxmin##.} -gt 91 ]
 	then
 		site="http://mgmt/cobbler/repo_mirror/updates-sles12.3-x86_64"
 	fi
