@@ -1318,6 +1318,7 @@ int lfsck_namespace_notify_lmv_master_local(const struct lu_env *env,
 		lfsck_lmv_put(env, llmv);
 	} else {
 		ns->ln_striped_dirs_repaired++;
+		llmv->ll_counted = 1;
 		spin_lock(&lfsck->li_lock);
 		list_add_tail(&llu->llu_link, &lfsck->li_list_lmv);
 		spin_unlock(&lfsck->li_lock);
@@ -1901,7 +1902,8 @@ int lfsck_namespace_striped_dir_rescan(const struct lu_env *env,
 			RETURN(rc);
 
 		ns->ln_striped_dirs_scanned++;
-		ns->ln_striped_dirs_repaired++;
+		if (!llmv->ll_counted)
+			ns->ln_striped_dirs_repaired++;
 	}
 
 	fld_range_set_mdt(range);
