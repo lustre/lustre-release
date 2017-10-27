@@ -1040,6 +1040,17 @@ unlock:
 
 	rc = object_update_result_data_get(reply, rbuf, 0);
 	if (rc < 0 || rbuf->lb_len == 0) {
+		if (oxe == NULL && rc == -ENODATA) {
+			oxe = osp_oac_xattr_find_or_add(obj, name, buf->lb_len);
+			if (oxe == NULL) {
+				rc = -ENOMEM;
+				CWARN("%s: Fail to add xattr (%s) to cache for "
+				      DFID" (1): rc = %d\n", dname, name,
+				      PFID(lu_object_fid(&dt->do_lu)), rc);
+				GOTO(out, rc);
+			}
+		}
+
 		if (oxe) {
 			spin_lock(&obj->opo_lock);
 			if (unlikely(rc == -ENODATA)) {

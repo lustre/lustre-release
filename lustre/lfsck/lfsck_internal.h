@@ -617,7 +617,8 @@ struct lfsck_lmv {
 					 ll_lmv_updated:1,
 					 ll_inline:1,
 					 ll_failed:1,
-					 ll_ignore:1;
+					 ll_ignore:1,
+					 ll_counted:1;
 	struct lfsck_slave_lmv_rec	*ll_lslr; /* may be vmalloc'd */
 };
 
