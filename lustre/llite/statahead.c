@@ -1588,6 +1588,9 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry)
 			   lli->lli_opendir_pid);
 	thread = &sai->sai_thread;
 	if (IS_ERR(task)) {
+		spin_lock(&lli->lli_sa_lock);
+		lli->lli_sai = NULL;
+		spin_unlock(&lli->lli_sa_lock);
 		rc = PTR_ERR(task);
 		CERROR("can't start ll_sa thread, rc: %d\n", rc);
 		GOTO(out, rc);
@@ -1608,10 +1611,8 @@ out:
 	/* once we start statahead thread failed, disable statahead so that
 	 * subsequent stat won't waste time to try it. */
 	spin_lock(&lli->lli_sa_lock);
-	if (sai != NULL && lli->lli_sai == sai) {
+	if (lli->lli_opendir_pid == current->pid)
 		lli->lli_sa_enabled = 0;
-		lli->lli_sai = NULL;
-	}
 	spin_unlock(&lli->lli_sa_lock);
 
 	if (sai != NULL)
