@@ -1511,7 +1511,7 @@ static int lod_verify_v1v3(struct lod_device *d, const struct lu_buf *buf,
 		GOTO(out, rc = -EINVAL);
 	}
 
-	magic = le32_to_cpu(lum->lmm_magic) & ~LOV_MAGIC_DEF;
+	magic = le32_to_cpu(lum->lmm_magic) & ~LOV_MAGIC_DEFINED;
 	if (magic != LOV_USER_MAGIC_V1 &&
 	    magic != LOV_USER_MAGIC_V3 &&
 	    magic != LOV_USER_MAGIC_SPECIFIC) {
@@ -1637,7 +1637,7 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 		RETURN(-EINVAL);
 	}
 
-	magic = le32_to_cpu(lum->lmm_magic) & ~LOV_MAGIC_DEF;
+	magic = le32_to_cpu(lum->lmm_magic) & ~LOV_MAGIC_DEFINED;
 	if (magic != LOV_USER_MAGIC_V1 &&
 	    magic != LOV_USER_MAGIC_V3 &&
 	    magic != LOV_USER_MAGIC_SPECIFIC &&

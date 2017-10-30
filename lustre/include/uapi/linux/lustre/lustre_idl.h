@@ -1049,10 +1049,10 @@ enum obdo_flags {
  * those *_DEF magics are only used on server side internally, they
  * won't be put on wire or disk.
  */
-#define LOV_MAGIC_DEF		0x10000000
-#define LOV_MAGIC_V1_DEF	(LOV_MAGIC_DEF | LOV_MAGIC_V1)
-#define LOV_MAGIC_V3_DEF	(LOV_MAGIC_DEF | LOV_MAGIC_V3)
-#define LOV_MAGIC_COMP_V1_DEF	(LOV_MAGIC_DEF | LOV_MAGIC_COMP_V1)
+#define LOV_MAGIC_DEFINED		0x10000000
+#define LOV_MAGIC_V1_DEFINED		(LOV_MAGIC_DEFINED | LOV_MAGIC_V1)
+#define LOV_MAGIC_V3_DEFINED		(LOV_MAGIC_DEFINED | LOV_MAGIC_V3)
+#define LOV_MAGIC_COMP_V1_DEFINED	(LOV_MAGIC_DEFINED | LOV_MAGIC_COMP_V1)
 
 #define lov_pattern(pattern)		(pattern & ~LOV_PATTERN_F_MASK)
 #define lov_pattern_flags(pattern)	(pattern & LOV_PATTERN_F_MASK)

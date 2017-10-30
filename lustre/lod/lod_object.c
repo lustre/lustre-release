@@ -4863,9 +4863,9 @@ static int lod_declare_layout_change(const struct lu_env *env,
 	if (buf && buf->lb_len)  {
 		struct lov_user_md_v1 *v1 = buf->lb_buf;
 
-		if (v1->lmm_magic != (LOV_MAGIC_DEF | LOV_MAGIC_COMP_V1) &&
-		    v1->lmm_magic !=
-				__swab32(LOV_MAGIC_DEF | LOV_MAGIC_COMP_V1)) {
+		if (v1->lmm_magic != (LOV_MAGIC_DEFINED | LOV_MAGIC_COMP_V1) &&
+		    v1->lmm_magic != __swab32(LOV_MAGIC_DEFINED |
+					      LOV_MAGIC_COMP_V1)) {
 			CERROR("%s: the replay buffer of layout extend "
 			       "(magic %#x) does not contain expected "
 			       "composite layout.\n",

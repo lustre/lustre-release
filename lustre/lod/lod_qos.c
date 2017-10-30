@@ -1729,7 +1729,7 @@ int lod_use_defined_striping(const struct lu_env *env,
 	int	rc = 0, i;
 	ENTRY;
 
-	magic = le32_to_cpu(v1->lmm_magic) & ~LOV_MAGIC_DEF;
+	magic = le32_to_cpu(v1->lmm_magic) & ~LOV_MAGIC_DEFINED;
 
 	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3 &&
 	    magic != LOV_MAGIC_COMP_V1)
@@ -1857,7 +1857,7 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	comp_v1 = buf->lb_buf;
 	magic = v1->lmm_magic;
 
-	if (unlikely(le32_to_cpu(magic) & LOV_MAGIC_DEF)) {
+	if (unlikely(le32_to_cpu(magic) & LOV_MAGIC_DEFINED)) {
 		/* try to use as fully defined striping */
 		rc = lod_use_defined_striping(env, lo, buf);
 		RETURN(rc);

@@ -1403,7 +1403,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 }
 
 /*
- * please see comment above LOV_MAGIC_V1_DEF
+ * please see comment above LOV_MAGIC_V1_DEFINED
  */
 void mdt_fix_lov_magic(struct mdt_thread_info *info, void *eadata)
 {
@@ -1413,10 +1413,10 @@ void mdt_fix_lov_magic(struct mdt_thread_info *info, void *eadata)
 
 	if (unlikely(req_is_replay(mdt_info_req(info)))) {
 		if ((v1->lmm_magic & LOV_MAGIC_MASK) == LOV_MAGIC_MAGIC)
-			v1->lmm_magic |= LOV_MAGIC_DEF;
+			v1->lmm_magic |= LOV_MAGIC_DEFINED;
 		else if ((v1->lmm_magic & __swab32(LOV_MAGIC_MAGIC)) ==
 			 __swab32(LOV_MAGIC_MAGIC))
-			v1->lmm_magic |= __swab32(LOV_MAGIC_DEF);
+			v1->lmm_magic |= __swab32(LOV_MAGIC_DEFINED);
 	}
 }
 
