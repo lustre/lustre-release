@@ -323,7 +323,7 @@ enum {
 #define MDT_EREMOTE_OPEN (EREMOTE + 1024)
 
 struct mdt_reint_record {
-	mdt_reint_t			 rr_opcode;
+	enum mds_reint_op		 rr_opcode;
 	const struct lustre_handle	*rr_handle;
 	const struct lu_fid		*rr_fid1;
 	const struct lu_fid		*rr_fid2;

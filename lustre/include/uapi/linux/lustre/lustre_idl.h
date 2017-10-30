@@ -1562,7 +1562,7 @@ typedef enum {
  * Do not exceed 63
  */
 
-typedef enum {
+enum mds_reint_op {
 	REINT_SETATTR  = 1,
 	REINT_CREATE   = 2,
 	REINT_LINK     = 3,
@@ -1573,7 +1573,7 @@ typedef enum {
 	REINT_RMENTRY  = 8,
 	REINT_MIGRATE  = 9,
         REINT_MAX
-} mds_reint_t, mdt_reint_t;
+};
 
 /* the disposition of the intent outlines what was executed */
 #define DISP_IT_EXECD        0x00000001

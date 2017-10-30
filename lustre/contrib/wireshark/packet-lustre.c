@@ -272,8 +272,8 @@ static const value_string lustre_layout_intent_opc_values[] = {
 #define IT_QUOTA_CONN	0x1000
 #define IT_SETXATTR	0x2000
 
-/* lustre/include/lustre/lustre_idl.h */
-typedef enum {
+/* lustre/include/uapi/linux/lustre/lustre_idl.h */
+enum mds_reint_op {
   REINT_SETATTR  = 1,
   REINT_CREATE   = 2,
   REINT_LINK     = 3,
@@ -284,7 +284,7 @@ typedef enum {
   REINT_RMENTRY  = 8,
   REINT_MIGRATE  = 9,
   REINT_MAX
-} mds_reint_t;
+};
 
 enum ldlm_cmd {
   LDLM_ENQUEUE     = 101,
@@ -1294,7 +1294,7 @@ const value_string lustre_LMTypes[] = {
   { 0, NULL }
 };
 
-const value_string lustre_mds_reint_t_vals[] = {
+const value_string lustre_mds_reint_op_vals[] = {
   { REINT_SETATTR, "REINT_SETATTR" },
   { REINT_CREATE, "REINT_CREATE" },
   { REINT_LINK, "REINT_LINK" },
@@ -3695,7 +3695,7 @@ lustre_dissect_struct_mdt_rec_setattr(tvbuff_t *tvb _U_, int offset _U_, packet_
     tree = proto_item_add_subtree(item, ett_lustre_mdt_rec_setattr);
   }
   sa_opcode=tvb_get_letohl(tvb,offset);
-  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(sa_opcode, lustre_mds_reint_t_vals, "Unknown sa_opc"));
+  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(sa_opcode, lustre_mds_reint_op_vals, "Unknown sa_opc"));
 
   offset=lustre_dissect_element_mdt_rec_setattr_sa_opcode(tvb, offset, pinfo, tree);
 
@@ -3986,7 +3986,7 @@ lustre_dissect_struct_mdt_rec_create(tvbuff_t *tvb _U_, int offset _U_,
     tree = proto_item_add_subtree(item, ett_lustre_mdt_rec_create);
   }
   cr_opcode=tvb_get_letohl(tvb,offset);
-  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(cr_opcode, lustre_mds_reint_t_vals, "Unknown cr_opc"));
+  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(cr_opcode, lustre_mds_reint_op_vals, "Unknown cr_opc"));
 
   offset=lustre_dissect_element_mdt_rec_create_cr_opcode(tvb, offset, pinfo, tree);
 
@@ -4271,7 +4271,7 @@ lustre_dissect_struct_mdt_rec_link(tvbuff_t *tvb _U_, int offset _U_, packet_inf
     tree = proto_item_add_subtree(item, ett_lustre_mdt_rec_link);
   }
   lk_opcode=tvb_get_letohl(tvb,offset);
-  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(lk_opcode, lustre_mds_reint_t_vals, "Unknown lk_opc"));
+  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(lk_opcode, lustre_mds_reint_op_vals, "Unknown lk_opc"));
 
   offset=lustre_dissect_element_mdt_rec_link_lk_opcode(tvb, offset, pinfo, tree);
 
@@ -4557,7 +4557,7 @@ lustre_dissect_struct_mdt_rec_unlink(tvbuff_t *tvb _U_, int offset _U_, packet_i
   }
 
   ul_opcode=tvb_get_letohl(tvb,offset);
-  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(ul_opcode, lustre_mds_reint_t_vals, "Unknown ul_opc"));
+  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(ul_opcode, lustre_mds_reint_op_vals, "Unknown ul_opc"));
 
   offset=lustre_dissect_element_mdt_rec_unlink_ul_opcode(tvb, offset, pinfo, tree);
 
@@ -4833,7 +4833,7 @@ lustre_dissect_struct_mdt_rec_rename(tvbuff_t *tvb _U_, int offset _U_, packet_i
   }
 
   rn_opcode=tvb_get_letohl(tvb,offset);
-  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(rn_opcode, lustre_mds_reint_t_vals, "Unknown rn_opc"));
+  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(rn_opcode, lustre_mds_reint_op_vals, "Unknown rn_opc"));
 
   offset=lustre_dissect_element_mdt_rec_rename_rn_opcode(tvb, offset, pinfo, tree);
 
@@ -5139,7 +5139,7 @@ int
     tree = proto_item_add_subtree(item, ett_lustre_mdt_rec_setxattr);
   }
   sx_opcode=tvb_get_letohl(tvb,offset);
-  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(sx_opcode, lustre_mds_reint_t_vals, "Unknown sx_opc"));
+  display_info_fstr(parent_tree->parent, pinfo->cinfo, COL_INFO, "[%s]", val_to_str(sx_opcode, lustre_mds_reint_op_vals, "Unknown sx_opc"));
 
   offset=lustre_dissect_element_mdt_rec_setxattr_sx_opcode(tvb, offset, pinfo, tree);
 
@@ -10769,7 +10769,7 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_setattr,
       { "mdt rec setattr", "lustre.mdt_rec_setattr", FT_NONE, BASE_NONE, NULL , 0 , "", HFILL}},
     { &hf_lustre_mdt_rec_setattr_sa_opcode,
-      { "Sa Opcode", "lustre.mdt_rec_setattr.sa_opcode", FT_UINT32, BASE_DEC, VALS(lustre_mds_reint_t_vals), 0, "", HFILL }},
+      { "Sa Opcode", "lustre.mdt_rec_setattr.sa_opcode", FT_UINT32, BASE_DEC, VALS(lustre_mds_reint_op_vals), 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setattr_sa_cap,
       { "Sa Cap", "lustre.mdt_rec_setattr.sa_cap", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setattr_sa_fsuid,
@@ -10823,7 +10823,7 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_create,
       { "mdt rec create", "lustre.mdt_rec_create", FT_NONE, BASE_NONE, NULL , 0 , "", HFILL}},
     { &hf_lustre_mdt_rec_create_cr_opcode,
-      { "Cr Opcode", "lustre.mdt_rec_create.cr_opcode", FT_UINT32, BASE_DEC, VALS(lustre_mds_reint_t_vals), 0, "", HFILL }},
+      { "Cr Opcode", "lustre.mdt_rec_create.cr_opcode", FT_UINT32, BASE_DEC, VALS(lustre_mds_reint_op_vals), 0, "", HFILL }},
     { &hf_lustre_mdt_rec_create_cr_cap,
       { "Cr Cap", "lustre.mdt_rec_create.cr_cap", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_create_cr_fsuid,
@@ -10872,7 +10872,7 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_link,
       { "mdt rec link", "lustre.mdt_rec_link", FT_NONE, BASE_NONE, NULL , 0 , "", HFILL}},
     { &hf_lustre_mdt_rec_link_lk_opcode,
-      { "Lk Opcode", "lustre.mdt_rec_link.lk_opcode", FT_UINT32, BASE_DEC, VALS(lustre_mds_reint_t_vals) , 0, "", HFILL }},
+      { "Lk Opcode", "lustre.mdt_rec_link.lk_opcode", FT_UINT32, BASE_DEC, VALS(lustre_mds_reint_op_vals) , 0, "", HFILL }},
     { &hf_lustre_mdt_rec_link_lk_cap,
       { "Lk Cap", "lustre.mdt_rec_link.lk_cap", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_link_lk_fsuid,
@@ -10924,7 +10924,7 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_unlink,
       { "mdt rec unlink", "lustre.mdt_rec_unlink", FT_NONE, BASE_NONE, NULL , 0 , "", HFILL}},
     { &hf_lustre_mdt_rec_unlink_ul_opcode,
-      { "Ul Opcode", "lustre.mdt_rec_unlink.ul_opcode", FT_UINT32, BASE_DEC, VALS(lustre_mds_reint_t_vals) , 0, "", HFILL }},
+      { "Ul Opcode", "lustre.mdt_rec_unlink.ul_opcode", FT_UINT32, BASE_DEC, VALS(lustre_mds_reint_op_vals) , 0, "", HFILL }},
     { &hf_lustre_mdt_rec_unlink_ul_cap,
       { "Ul Cap", "lustre.mdt_rec_unlink.ul_cap", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_unlink_ul_fsuid,
@@ -10975,7 +10975,7 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_rename,
       { "mdt rec rename", "lustre.mdt_rec_rename", FT_NONE, BASE_NONE, NULL , 0 , "", HFILL}},
     { &hf_lustre_mdt_rec_rename_rn_opcode,
-      { "Rn Opcode", "lustre.mdt_rec_rename.rn_opcode", FT_UINT32, BASE_DEC, VALS(lustre_mds_reint_t_vals) , 0, "", HFILL }},
+      { "Rn Opcode", "lustre.mdt_rec_rename.rn_opcode", FT_UINT32, BASE_DEC, VALS(lustre_mds_reint_op_vals) , 0, "", HFILL }},
     { &hf_lustre_mdt_rec_rename_rn_cap,
       { "Rn Cap", "lustre.mdt_rec_rename.rn_cap", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_rename_rn_fsuid,
@@ -11026,7 +11026,7 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_setxattr,
       { "mdt rec setxattr", "lustre.mdt_rec_setxattr", FT_NONE, BASE_NONE, NULL , 0 , "", HFILL}},
     { &hf_lustre_mdt_rec_setxattr_sx_opcode,
-      { "Sx Opcode", "lustre.mdt_rec_setxattr.sx_opcode", FT_UINT32, BASE_DEC, VALS(lustre_mds_reint_t_vals), 0, "", HFILL }},
+      { "Sx Opcode", "lustre.mdt_rec_setxattr.sx_opcode", FT_UINT32, BASE_DEC, VALS(lustre_mds_reint_op_vals), 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setxattr_sx_cap,
       { "Sx Cap", "lustre.mdt_rec_setxattr.sx_cap", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setxattr_sx_fsuid,
