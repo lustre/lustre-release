@@ -384,11 +384,22 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock, void *lvb, int lvblen)
 	if (rc > 0) {
 		struct lu_buf *lmm = NULL;
 		if (lvblen < rc) {
-			CERROR("%s: expected %d actual %d.\n",
-			       mdt_obd_name(mdt), rc, lvblen);
-			/* if layout size is bigger then update max_mdsize */
-			if (rc > info->mti_mdt->mdt_max_mdsize)
+			int level;
+
+			/* The layout EA may be larger than mdt_max_mdsize
+			 * and in that case mdt_max_mdsize is just updated
+			 * but if EA size is less than mdt_max_mdsize then
+			 * it is an error in lvblen value provided. */
+			if (rc > info->mti_mdt->mdt_max_mdsize) {
 				info->mti_mdt->mdt_max_mdsize = rc;
+				level = D_INFO;
+			} else {
+				level = D_ERROR;
+			}
+			CDEBUG_LIMIT(level, "%s: small buffer size %d for EA "
+				     "%d (max_mdsize %d): rc = %d\n",
+				     mdt_obd_name(mdt), lvblen, rc,
+				     info->mti_mdt->mdt_max_mdsize, -ERANGE);
 			GOTO(out, rc = -ERANGE);
 		}
 		lmm = &info->mti_buf;

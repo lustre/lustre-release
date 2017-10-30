@@ -3796,13 +3796,22 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 
-	if (mdt_object_exists(obj) && !mdt_object_remote(obj)) {
-		layout_size = mdt_attr_get_eabuf_size(info, obj);
-		if (layout_size < 0)
-			GOTO(out_obj, rc = layout_size);
 
-		if (layout_size > info->mti_mdt->mdt_max_mdsize)
-			info->mti_mdt->mdt_max_mdsize = layout_size;
+	if (mdt_object_exists(obj) && !mdt_object_remote(obj)) {
+		/* if layout is going to be changed don't use the current EA
+		 * size but the maximum one. That buffer will be shrinked
+		 * to the actual size in req_capsule_shrink() before reply.
+		 */
+		if (layout.mlc_opc == MD_LAYOUT_WRITE) {
+			layout_size = info->mti_mdt->mdt_max_mdsize;
+		} else {
+			layout_size = mdt_attr_get_eabuf_size(info, obj);
+			if (layout_size < 0)
+				GOTO(out_obj, rc = layout_size);
+
+			if (layout_size > info->mti_mdt->mdt_max_mdsize)
+				info->mti_mdt->mdt_max_mdsize = layout_size;
+		}
 	}
 
 	/*
@@ -3856,7 +3865,6 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 			if (buf->lb_len > 0)
 				mdt_fix_lov_magic(info, buf->lb_buf);
 		}
-
 		/*
 		 * Instantiate some layout components, if @buf contains
 		 * lovea, then it's a replay of the layout intent write
