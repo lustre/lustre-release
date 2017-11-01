@@ -4491,7 +4491,7 @@ static int get_mdtname(char *name, char *format, char *buf)
                 } else {
                         /* Not enough room to add suffix */
                         llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                          "MDT name too long |%s|", name);
+					  "Invalid MDT name |%s|", name);
                         return -EINVAL;
                 }
         }
