@@ -628,13 +628,6 @@ struct osd_thread_info {
 	unsigned int		oti_declare_ops_used[OSD_OT_MAX];
 };
 
-/* flags for inode/block quota accounting */
-enum osd_qid_declare_flags {
-	OSD_QID_INODE	= 1 << 0,
-	OSD_QID_BLK	= 1 << 1,
-	OSD_QID_FORCE	= 1 << 2,
-};
-
 extern int ldiskfs_pdo;
 
 static inline int __osd_xattr_get(struct inode *inode, struct dentry *dentry,

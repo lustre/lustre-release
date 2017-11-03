@@ -72,10 +72,21 @@ export QUOTA_AUTO=0
 check_and_setup_lustre
 
 is_project_quota_supported() {
+	lsattr -dp > /dev/null 2>&1 || return 1
+
 	[ "$(facet_fstype $SINGLEMDS)" == "ldiskfs" ] &&
-		[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.9.55) ] &&
-			egrep -q "7." /etc/redhat-release &&
-				man chattr | grep project >&/dev/null
+		[ $(lustre_version_code $SINGLEMDS) -gt \
+		$(version_code 2.9.55) ] &&
+		egrep -q "7." /etc/redhat-release && return 0
+
+	if [ "$(facet_fstype $SINGLEMDS)" == "zfs" ]; then
+		[ $(lustre_version_code $SINGLEMDS) -le \
+			$(version_code 2.10.53) ] && return 1
+
+		$ZPOOL upgrade -v | grep project_quota && return 0
+	fi
+
+	return 1
 }
 
 SHOW_QUOTA_USER="$LFS quota -v -u $TSTUSR $DIR"
@@ -185,6 +196,8 @@ quota_log() {
 getquota() {
 	local spec
 	local uuid
+
+	sync_all_data > /dev/null 2>&1 || true
 
 	[ "$#" != 4 ] && error "getquota: wrong number of arguments: $#"
 	[ "$1" != "-u" -a "$1" != "-g" -a "$1" != "-p" ] &&
@@ -330,6 +343,7 @@ wait_ost_reint() {
 
 disable_project_quota() {
 	is_project_quota_supported || return 0
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] && return 0
 	stopall || error "failed to stopall (1)"
 
 	for num in $(seq $MDSCOUNT); do
@@ -397,7 +411,8 @@ quota_show_check() {
 }
 
 enable_project_quota() {
-	is_project_quota_supported ||  return 0
+	is_project_quota_supported || return 0
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] && return 0
 	stopall || error "failed to stopall (1)"
 
 	for num in $(seq $MDSCOUNT); do
@@ -563,7 +578,7 @@ test_1() {
 
 	# test for Project
 	log "--------------------------------------"
-	log "project quota (block hardlimit:$LIMIT mb)"
+	log "Project quota (block hardlimit:$LIMIT mb)"
 	$LFS setquota -p $TSTPRJID -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
 		error "set project quota failed"
 
@@ -580,7 +595,7 @@ test_1() {
 	cancel_lru_locks osc
 	sync; sync_all_data || true
 	$RUNAS $DD of=$TESTFILE count=10 seek=$LIMIT && quota_error p \
-		$TSTPRJID "project write success, but expect edquot"
+		$TSTPRJID "project write success, but expect EDQUOT"
 
 	# cleanup
 	cleanup_quota_test
@@ -1054,6 +1069,9 @@ test_5() {
 	USED=$(getquota -g $TSTUSR global curspace)
 	[ $USED -ne 0 ] && error "Used block($USED) for group $TSTUSR isn't 0."
 	if is_project_quota_supported; then
+		USED=$(getquota -p $TSTPRJID global curinodes)
+		[ $USED -ne 0 ] &&
+			error "Used inode($USED) for project $TSTPRJID isn't 0."
 		USED=$(getquota -p $TSTPRJID global curspace)
 		[ $USED -ne 0 ] &&
 			error "Used block($USED) for project $TSTPRJID isn't 0."
@@ -2447,6 +2465,9 @@ test_33() {
 	USED=$(getquota -g $TSTID global curinodes)
 	[ $USED -eq 0 ] || error "Used inodes for group $TSTID isn't 0. $USED"
 	if is_project_quota_supported; then
+		USED=$(getquota -p $TSTPRJID global curspace)
+		[ $USED -eq 0 ] ||
+			error "Used space for project $TSTPRJID isn't 0. $USED"
 		USED=$(getquota -p $TSTPRJID global curinodes)
 		[ $USED -eq 0 ] ||
 			error "Used inodes for project $TSTPRJID isn't 0. $USED"
@@ -2850,24 +2871,24 @@ test_51() {
 
 	mkdir $dir && change_project -dp 1 $dir && change_project +P $dir
 	local used=$(getquota -p 1 global curinodes)
-	[ $used != "1" ] &&  error "expected 1 got $used"
+	[ $used != "1" ] && error "expected 1 got $used"
 
 	touch $dir/1
 	touch $dir/2
 	cp $dir/2 $dir/3
 	used=$(getquota -p 1 global curinodes)
-	[ $used != "4" ] &&  error "expected 4 got $used"
+	[ $used != "4" ] && error "expected 4 got $used"
 
 	$DD if=/dev/zero of=$DIR/$tdir/6 bs=1M count=1
 	#try cp to dir
 	cp $DIR/$tdir/6 $dir/6
 	used=$(getquota -p 1 global curinodes)
-	[ $used != "5" ] &&  error "expected 5 got $used"
+	[ $used != "5" ] && error "expected 5 got $used"
 
 	#try mv to dir
 	mv $DIR/$tdir/6 $dir/7
 	used=$(getquota -p 1 global curinodes)
-	[ $used != "6" ] &&  error "expected 6 got $used"
+	[ $used != "6" ] && error "expected 6 got $used"
 
 	rm -rf $dir
 	cleanup_quota_test

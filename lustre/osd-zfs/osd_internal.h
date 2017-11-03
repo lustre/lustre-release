@@ -155,6 +155,9 @@ struct osa_attr {
 	uint64_t	mode;
 	uint64_t	gid;
 	uint64_t	uid;
+#ifdef ZFS_PROJINHERIT
+	uint64_t	projid;
+#endif
 	uint64_t	nlink;
 	uint64_t	rdev;
 	uint64_t	flags;
@@ -176,8 +179,8 @@ struct osd_idmap_cache {
 				oic_remote:1;      /* FID isn't local */
 };
 
-/* max.number of regular attrubites the callers may ask for */
-#define OSD_MAX_IN_BULK		13
+/* max.number of regular attributes the callers may ask for */
+# define OSD_MAX_IN_BULK (sizeof(struct osa_attr)/sizeof(uint64_t))
 
 struct osd_thread_info {
 	const struct lu_env	*oti_env;
@@ -298,8 +301,11 @@ struct osd_device {
 	int			 od_connects;
 	struct lu_site		 od_site;
 
-	dnode_t	*od_groupused_dn;
-	dnode_t *od_userused_dn;
+	dnode_t			*od_groupused_dn;
+	dnode_t			*od_userused_dn;
+#ifdef ZFS_PROJINHERIT
+	dnode_t			*od_projectused_dn;
+#endif
 
 	/* quota slave instance */
 	struct qsd_instance	*od_quota_slave;
@@ -361,6 +367,9 @@ struct osd_object {
 
 	__u32			 oo_destroyed:1,
 				 oo_late_xattr:1,
+#ifdef ZFS_PROJINHERIT
+				 oo_with_projid:1,
+#endif
 				 oo_late_attr_set:1;
 
 	/* the i_flags in LMA */
@@ -382,9 +391,9 @@ extern const struct dt_index_operations osd_acct_index_ops;
 extern struct lu_device_operations  osd_lu_ops;
 extern struct dt_index_operations osd_dir_ops;
 int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
-		      qid_t uid, qid_t gid, long long space,
-		      struct osd_thandle *oh, bool is_blk, int *flags,
-		      bool force);
+		      qid_t uid, qid_t gid, qid_t projid, long long space,
+		      struct osd_thandle *oh, int *flags,
+		      enum osd_qid_declare_flags osd_qid_declare_flags);
 uint64_t osd_objs_count_estimate(uint64_t refdbytes, uint64_t usedobjs,
 				 uint64_t nrblocks, uint64_t est_maxblockshift);
 int osd_unlinked_object_free(const struct lu_env *env, struct osd_device *osd,
@@ -507,7 +516,7 @@ int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 int __osd_object_create(const struct lu_env *env, struct osd_object *obj,
 			dnode_t **dnp, dmu_tx_t *tx, struct lu_attr *la);
 int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
-		    sa_handle_t *sa_hdl, dmu_tx_t *tx,
+		    struct osd_object *obj, sa_handle_t *sa_hdl, dmu_tx_t *tx,
 		    struct lu_attr *la, uint64_t parent, nvlist_t *);
 
 /* osd_oi.c */
@@ -612,6 +621,9 @@ static inline uint64_t attrs_fs2zfs(const uint32_t flags)
 {
 	return (flags & LUSTRE_APPEND_FL	? ZFS_APPENDONLY	: 0) |
 		(flags & LUSTRE_NODUMP_FL	? ZFS_NODUMP		: 0) |
+#ifdef ZFS_PROJINHERIT
+		(flags & LUSTRE_PROJINHERIT_FL	? ZFS_PROJINHERIT	: 0) |
+#endif
 		(flags & LUSTRE_IMMUTABLE_FL	? ZFS_IMMUTABLE		: 0);
 }
 
@@ -619,6 +631,9 @@ static inline uint32_t attrs_zfs2fs(const uint64_t flags)
 {
 	return (flags & ZFS_APPENDONLY	? LUSTRE_APPEND_FL	: 0) |
 		(flags & ZFS_NODUMP	? LUSTRE_NODUMP_FL	: 0) |
+#ifdef ZFS_PROJINHERIT
+		(flags & ZFS_PROJINHERIT ? LUSTRE_PROJINHERIT_FL : 0) |
+#endif
 		(flags & ZFS_IMMUTABLE	? LUSTRE_IMMUTABLE_FL	: 0);
 }
 

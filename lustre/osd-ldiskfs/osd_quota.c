@@ -625,8 +625,8 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 {
 	struct osd_thread_info  *info = osd_oti_get(env);
 	struct lquota_id_info   *qi = &info->oti_qi;
-	int rcu, rcg, rcp; /* user & group & project rc */
-	int force = osd_qid_declare_flags & OSD_QID_FORCE;
+	int rcu, rcg, rcp = 0; /* user & group & project rc */
+	bool force = !!(osd_qid_declare_flags & OSD_QID_FORCE);
 	ENTRY;
 
 	/* let's start with user quota */
@@ -655,24 +655,20 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 	if (force && (rcg == -EDQUOT || rcg == -EINPROGRESS))
 		/* as before, ignore EDQUOT & EINPROGRESS for root */
 		rcg = 0;
+
+#ifdef HAVE_PROJECT_QUOTA
 	if (rcg && (rcg != -EDQUOT || flags == NULL))
 		RETURN(rcg);
 
 	/* and now project quota */
-	qi->lqi_id.qid_gid = projid;
-	qi->lqi_type       = PRJQUOTA;
+	qi->lqi_id.qid_projid = projid;
+	qi->lqi_type = PRJQUOTA;
 	rcp = osd_declare_qid(env, oh, qi, obj, true, flags);
 
 	if (force && (rcp == -EDQUOT || rcp == -EINPROGRESS))
 		/* as before, ignore EDQUOT & EINPROGRESS for root */
 		rcp = 0;
+#endif
 
-	if (rcu)
-		RETURN(rcu);
-	if (rcg)
-		RETURN(rcg);
-	if (rcp)
-		RETURN(rcp);
-
-	RETURN(0);
+	RETURN(rcu ? rcu : (rcg ? rcg : rcp));
 }

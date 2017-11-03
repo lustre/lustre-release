@@ -33,7 +33,7 @@
 
 /**
  * Helper function to estimate the number of inodes in use for the given
- * uid/gid from the block usage
+ * uid/gid/projid from the block usage
  */
 static uint64_t osd_objset_user_iused(struct osd_device *osd, uint64_t uidbytes)
 {
@@ -60,7 +60,7 @@ static uint64_t osd_objset_user_iused(struct osd_device *osd, uint64_t uidbytes)
  */
 
 /**
- * Return space usage consumed by a given uid or gid.
+ * Return space usage consumed by a given uid or gid or projid.
  * Block usage is accurrate since it is maintained by DMU itself.
  * However, DMU does not provide inode accounting, so the #inodes in use
  * is estimated from the block usage and statfs information.
@@ -91,7 +91,7 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 
 	rec->bspace = rec->ispace = 0;
 
-	/* convert the 64-bit uid/gid into a string */
+	/* convert the 64-bit uid/gid/projid into a string */
 	snprintf(buf, buflen, "%llx", *((__u64 *)dtkey));
 	if (unlikely(!dn)) {
 		CDEBUG(D_QUOTA, "%s: miss accounting obj for %s\n",
@@ -106,7 +106,7 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 	rc = osd_zap_lookup(osd, dn->dn_object, dn, buf, sizeof(uint64_t), 1,
 			    &rec->bspace);
 	if (rc == -ENOENT) {
-		/* user/group has not created anything yet */
+		/* user/group/project has not created anything yet */
 		CDEBUG(D_QUOTA, "%s: id %s not found in DMU accounting ZAP\n",
 		       osd->od_svname, buf);
 		/* -ENOENT is normal case, convert it as 1. */
@@ -446,7 +446,7 @@ static int osd_it_acct_load(const struct lu_env *env,
  * move to the first valid record.
  *
  * \param  di   - osd iterator
- * \param  key  - uid or gid
+ * \param  key  - uid or gid or projid
  *
  * \retval +ve  - di points to exact matched key
  * \retval 0    - di points to the first valid record
@@ -502,26 +502,27 @@ const struct dt_index_operations osd_acct_index_ops = {
  * \param osd    - is the osd_device
  * \param uid    - user id of the inode
  * \param gid    - group id of the inode
+ * \param projid - project id of the inode
  * \param space  - how many blocks/inodes will be consumed/released
  * \param oh     - osd transaction handle
- * \param is_blk - block quota or inode quota?
  * \param flags  - if the operation is write, return no user quota, no
  *                  group quota, or sync commit flags to the caller
- * \param force  - set to 1 when changes are performed by root user and thus
- *                  can't failed with EDQUOT
+ * \param osd_qid_declare_flags - indicate this is a inode/block accounting
+ *		    and whether changes are performed by root user
  *
  * \retval 0      - success
  * \retval -ve    - failure
  */
 int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
-		      qid_t uid, qid_t gid, long long space,
-		      struct osd_thandle *oh, bool is_blk, int *flags,
-		      bool force)
+		      qid_t uid, qid_t gid, qid_t projid, long long space,
+		      struct osd_thandle *oh, int *flags,
+		      enum osd_qid_declare_flags osd_qid_declare_flags)
 {
-	struct osd_thread_info	*info = osd_oti_get(env);
-	struct lquota_id_info	*qi = &info->oti_qi;
-	struct qsd_instance     *qsd = osd->od_quota_slave;
-	int			 rcu, rcg; /* user & group rc */
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lquota_id_info *qi = &info->oti_qi;
+	struct qsd_instance *qsd = osd->od_quota_slave;
+	int rcu, rcg, rcp = 0; /* user & group & project rc */
+	bool force = !!(osd_qid_declare_flags & OSD_QID_FORCE);
 	ENTRY;
 
 	if (unlikely(qsd == NULL))
@@ -532,9 +533,8 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 	qi->lqi_id.qid_uid = uid;
 	qi->lqi_type       = USRQUOTA;
 	qi->lqi_space      = space;
-	qi->lqi_is_blk     = is_blk;
+	qi->lqi_is_blk     = !!(osd_qid_declare_flags & OSD_QID_BLK);
 	rcu = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi, flags);
-
 	if (force && (rcu == -EDQUOT || rcu == -EINPROGRESS))
 		/* ignore EDQUOT & EINPROGRESS when changes are done by root */
 		rcu = 0;
@@ -550,10 +550,23 @@ int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
 	qi->lqi_id.qid_gid = gid;
 	qi->lqi_type       = GRPQUOTA;
 	rcg = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi, flags);
-
 	if (force && (rcg == -EDQUOT || rcg == -EINPROGRESS))
 		/* as before, ignore EDQUOT & EINPROGRESS for root */
 		rcg = 0;
 
-	RETURN(rcu ? rcu : rcg);
+#ifdef ZFS_PROJINHERIT
+	if (rcg && (rcg != -EDQUOT || flags == NULL))
+		RETURN(rcg);
+
+	/* for project quota */
+	if (osd->od_projectused_dn) {
+		qi->lqi_id.qid_projid = projid;
+		qi->lqi_type = PRJQUOTA;
+		rcp = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi, flags);
+		if (force && (rcp == -EDQUOT || rcp == -EINPROGRESS))
+			rcp = 0;
+	}
+#endif
+
+	RETURN(rcu ? rcu : (rcg ? rcg : rcp));
 }

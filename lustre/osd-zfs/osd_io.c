@@ -44,6 +44,7 @@
 #include <obd_class.h>
 #include <lustre_disk.h>
 #include <lustre_fid.h>
+#include <lustre_quota.h>
 
 #include "osd_internal.h"
 
@@ -180,8 +181,8 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 	 * as llog or last_rcvd files. We needn't enforce quota on those
 	 * objects, so always set the lqi_space as 0. */
 	RETURN(osd_declare_quota(env, osd, obj->oo_attr.la_uid,
-				 obj->oo_attr.la_gid, 0, oh, true, NULL,
-				 false));
+				 obj->oo_attr.la_gid, obj->oo_attr.la_projid,
+				 0, oh, NULL, OSD_QID_BLK));
 }
 
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
@@ -578,10 +579,11 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	uint32_t            size = 0;
 	uint32_t blksz = obj->oo_dn->dn_datablksz;
 	int		    i, rc, flags = 0;
-	bool		    ignore_quota = false, synced = false;
+	bool synced = false;
 	long long	    space = 0;
 	struct page	   *last_page = NULL;
 	unsigned long	    discont_pages = 0;
+	enum osd_qid_declare_flags declare_flags = OSD_QID_BLK;
 	ENTRY;
 
 	LASSERT(dt_object_exists(dt));
@@ -614,7 +616,8 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		if ((lnb[i].lnb_flags & OBD_BRW_NOQUOTA) ||
 		    (lnb[i].lnb_flags & (OBD_BRW_FROM_GRANT | OBD_BRW_SYNC)) ==
 		    OBD_BRW_FROM_GRANT)
-			ignore_quota = true;
+			declare_flags |= OSD_QID_FORCE;
+
 		if (size == 0) {
 			/* first valid lnb */
 			offset = lnb[i].lnb_file_offset;
@@ -660,8 +663,8 @@ static int osd_declare_write_commit(const struct lu_env *env,
 retry:
 	/* acquire quota space if needed */
 	rc = osd_declare_quota(env, osd, obj->oo_attr.la_uid,
-			       obj->oo_attr.la_gid, space, oh, true, &flags,
-			       ignore_quota);
+			       obj->oo_attr.la_gid, obj->oo_attr.la_projid,
+			       space, oh, &flags, declare_flags);
 
 	if (!synced && rc == -EDQUOT && (flags & QUOTA_FL_SYNC) != 0) {
 		dt_sync(env, th->th_dev);
@@ -678,6 +681,10 @@ retry:
 		lnb[0].lnb_flags |= OBD_BRW_OVER_USRQUOTA;
 	if (flags & QUOTA_FL_OVER_GRPQUOTA)
 		lnb[0].lnb_flags |= OBD_BRW_OVER_GRPQUOTA;
+#ifdef ZFS_PROJINHERIT
+	if (flags & QUOTA_FL_OVER_PRJQUOTA)
+		lnb[0].lnb_flags |= OBD_BRW_OVER_PRJQUOTA;
+#endif
 
 	RETURN(rc);
 }
@@ -1002,8 +1009,8 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	RETURN(osd_declare_quota(env, osd, obj->oo_attr.la_uid,
-				 obj->oo_attr.la_gid, 0, oh, true, NULL,
-				 false));
+				 obj->oo_attr.la_gid, obj->oo_attr.la_projid,
+				 0, oh, NULL, OSD_QID_BLK));
 }
 
 static int osd_ladvise(const struct lu_env *env, struct dt_object *dt,
