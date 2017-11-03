@@ -1055,7 +1055,7 @@ int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
 	if (flags & LDLM_FL_RESENT) {
 		rc = LDLM_ITER_CONTINUE;
 	} else {
-		__u64 tmpflags = 0;
+		__u64 tmpflags = LDLM_FL_BLOCK_NOWAIT;
 		enum ldlm_error err;
 
 		rc = policy(lock, &tmpflags, LDLM_PROCESS_RESCAN, &err, NULL);

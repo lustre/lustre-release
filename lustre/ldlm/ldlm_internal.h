@@ -175,6 +175,7 @@ void ldlm_lock_destroy_nolock(struct ldlm_lock *lock);
 
 int ldlm_export_cancel_blocked_locks(struct obd_export *exp);
 int ldlm_export_cancel_locks(struct obd_export *exp);
+void ldlm_grant_lock_with_skiplist(struct ldlm_lock *lock);
 
 /* ldlm_lockd.c */
 int ldlm_bl_to_thread_lock(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,

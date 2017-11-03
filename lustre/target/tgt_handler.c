@@ -1371,7 +1371,7 @@ int tgt_cp_callback(struct tgt_session_info *tsi)
 /* generic LDLM target handler */
 struct tgt_handler tgt_dlm_handlers[] = {
 TGT_DLM_HDL    (HABEO_CLAVIS,	LDLM_ENQUEUE,		tgt_enqueue),
-TGT_DLM_HDL_VAR(HABEO_CLAVIS,	LDLM_CONVERT,		tgt_convert),
+TGT_DLM_HDL    (HABEO_CLAVIS,	LDLM_CONVERT,		tgt_convert),
 TGT_DLM_HDL_VAR(0,		LDLM_BL_CALLBACK,	tgt_bl_callback),
 TGT_DLM_HDL_VAR(0,		LDLM_CP_CALLBACK,	tgt_cp_callback)
 };

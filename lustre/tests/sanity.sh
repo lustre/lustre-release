@@ -16558,9 +16558,6 @@ test_271ba() {
 run_test 271ba "DoM: no glimpse RPC for stat (combined file)"
 
 test_271c() {
-	# test to be enabled with lock_convert
-	skip "skipped until lock convert will be implemented"
-
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 

@@ -213,11 +213,39 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 	check_res_locked(res);
 
 	if (intention == LDLM_PROCESS_RESCAN) {
-		*err = ELDLM_LOCK_ABORTED;
+		struct list_head *bl_list;
+
+		if (*flags & LDLM_FL_BLOCK_NOWAIT) {
+			bl_list = NULL;
+			*err = ELDLM_LOCK_WOULDBLOCK;
+		} else {
+			bl_list = work_list;
+			*err = ELDLM_LOCK_ABORTED;
+		}
 
 		LASSERT(lock->l_policy_data.l_inodebits.bits != 0);
 
-		rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, NULL);
+		/* It is possible that some of granted locks was not canceled
+		 * but converted and is kept in granted queue. So there is
+		 * a window where lock with 'ast_sent' might become granted
+		 * again. Meanwhile a new lock may appear in that window and
+		 * conflicts with the converted lock so the following scenario
+		 * is possible:
+		 *
+		 * 1) lock1 conflicts with lock2
+		 * 2) bl_ast was sent for lock2
+		 * 3) lock3 comes and conflicts with lock2 too
+		 * 4) no bl_ast sent because lock2->l_bl_ast_sent is 1
+		 * 5) lock2 was converted for lock1 but not for lock3
+		 * 6) lock1 granted, lock3 still is waiting for lock2, but
+		 *    there will never be another bl_ast for that
+		 *
+		 * To avoid this scenario the work_list is used below to collect
+		 * any blocked locks from granted queue during every reprocess
+		 * and bl_ast will be sent if needed.
+		 */
+		rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock,
+						 bl_list);
 		if (!rc)
 			RETURN(LDLM_ITER_STOP);
 		rc = ldlm_inodebits_compat_queue(&res->lr_waiting, lock, NULL);
@@ -282,7 +310,14 @@ void ldlm_ibits_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 	wpolicy->l_inodebits.try_bits = lpolicy->l_inodebits.try_bits;
 }
 
-int ldlm_inodebits_drop(struct ldlm_lock *lock,  __u64 to_drop)
+/**
+ * Attempt to convert already granted IBITS lock with several bits set to
+ * a lock with less bits (downgrade).
+ *
+ * Such lock conversion is used to keep lock with non-blocking bits instead of
+ * cancelling it, introduced for better support of DoM files.
+ */
+int ldlm_inodebits_drop(struct ldlm_lock *lock, __u64 to_drop)
 {
 	ENTRY;
 
@@ -304,3 +339,84 @@ int ldlm_inodebits_drop(struct ldlm_lock *lock,  __u64 to_drop)
 	RETURN(0);
 }
 EXPORT_SYMBOL(ldlm_inodebits_drop);
+
+/* convert single lock */
+int ldlm_cli_dropbits(struct ldlm_lock *lock, __u64 drop_bits)
+{
+	struct lustre_handle lockh;
+	__u32 flags = 0;
+	int rc;
+
+	ENTRY;
+
+	LASSERT(drop_bits);
+	LASSERT(!lock->l_readers && !lock->l_writers);
+
+	LDLM_DEBUG(lock, "client lock convert START");
+
+	ldlm_lock2handle(lock, &lockh);
+	lock_res_and_lock(lock);
+	/* check if all bits are cancelled */
+	if (!(lock->l_policy_data.l_inodebits.bits & ~drop_bits)) {
+		unlock_res_and_lock(lock);
+		/* return error to continue with cancel */
+		GOTO(exit, rc = -EINVAL);
+	}
+
+	/* check if there is race with cancel */
+	if (ldlm_is_canceling(lock) || ldlm_is_cancel(lock)) {
+		unlock_res_and_lock(lock);
+		GOTO(exit, rc = -EINVAL);
+	}
+
+	/* clear cbpending flag early, it is safe to match lock right after
+	 * client convert because it is downgrade always.
+	 */
+	ldlm_clear_cbpending(lock);
+	ldlm_clear_bl_ast(lock);
+
+	/* If lock is being converted already, check drop bits first */
+	if (ldlm_is_converting(lock)) {
+		/* raced lock convert, lock inodebits are remaining bits
+		 * so check if they are conflicting with new convert or not.
+		 */
+		if (!(lock->l_policy_data.l_inodebits.bits & drop_bits)) {
+			unlock_res_and_lock(lock);
+			GOTO(exit, rc = 0);
+		}
+		/* Otherwise drop new conflicting bits in new convert */
+	}
+	ldlm_set_converting(lock);
+	/* from all bits of blocking lock leave only conflicting */
+	drop_bits &= lock->l_policy_data.l_inodebits.bits;
+	/* save them in cancel_bits, so l_blocking_ast will know
+	 * which bits from the current lock were dropped. */
+	lock->l_policy_data.l_inodebits.cancel_bits = drop_bits;
+	/* Finally clear these bits in lock ibits */
+	ldlm_inodebits_drop(lock, drop_bits);
+	unlock_res_and_lock(lock);
+	/* Finally call cancel callback for remaining bits only.
+	 * It is important to have converting flag during that
+	 * so blocking_ast callback can distinguish convert from
+	 * cancels.
+	 */
+	if (lock->l_blocking_ast)
+		lock->l_blocking_ast(lock, NULL, lock->l_ast_data,
+				     LDLM_CB_CANCELING);
+
+	/* now notify server about convert */
+	rc = ldlm_cli_convert(lock, &flags);
+	if (rc) {
+		lock_res_and_lock(lock);
+		ldlm_clear_converting(lock);
+		ldlm_set_cbpending(lock);
+		ldlm_set_bl_ast(lock);
+		unlock_res_and_lock(lock);
+		LASSERT(list_empty(&lock->l_lru));
+		GOTO(exit, rc);
+	}
+	EXIT;
+exit:
+	LDLM_DEBUG(lock, "client lock convert END");
+	return rc;
+}

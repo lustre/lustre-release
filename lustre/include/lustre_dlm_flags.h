@@ -26,7 +26,7 @@
 #ifndef LDLM_ALL_FLAGS_MASK
 
 /** l_flags bits marked as "all_flags" bits */
-#define LDLM_FL_ALL_FLAGS_MASK          0x00FFFFFFC08F932FULL
+#define LDLM_FL_ALL_FLAGS_MASK          0x00FFFFFFC28F932FULL
 
 /** extent, mode, or resource changed */
 #define LDLM_FL_LOCK_CHANGED            0x0000000000000001ULL // bit   0
@@ -146,6 +146,16 @@
 #define ldlm_is_cos_incompat(_l)	LDLM_TEST_FLAG((_l), 1ULL << 24)
 #define ldlm_set_cos_incompat(_l)	LDLM_SET_FLAG((_l), 1ULL << 24)
 #define ldlm_clear_cos_incompat(_l)	LDLM_CLEAR_FLAG((_l), 1ULL << 24)
+
+/*
+ * Flag indicates that lock is being converted (downgraded) during the blocking
+ * AST instead of cancelling. Used for IBITS locks now and drops conflicting
+ * bits only keepeing other.
+ */
+#define LDLM_FL_CONVERTING              0x0000000002000000ULL /* bit  25 */
+#define ldlm_is_converting(_l)          LDLM_TEST_FLAG((_l), 1ULL << 25)
+#define ldlm_set_converting(_l)         LDLM_SET_FLAG((_l), 1ULL << 25)
+#define ldlm_clear_converting(_l)       LDLM_CLEAR_FLAG((_l), 1ULL << 25)
 
 /**
  * Part of original lockahead implementation, OBD_CONNECT_LOCKAHEAD_OLD.

@@ -868,7 +868,8 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, enum ldlm_mode mode)
         } else if (ns_is_client(ns) &&
                    !lock->l_readers && !lock->l_writers &&
 		   !ldlm_is_no_lru(lock) &&
-		   !ldlm_is_bl_ast(lock)) {
+		   !ldlm_is_bl_ast(lock) &&
+		   !ldlm_is_converting(lock)) {
 
                 LDLM_DEBUG(lock, "add lock into lru list");
 
@@ -1923,8 +1924,6 @@ restart:
 	if (!list_empty(&bl_ast_list)) {
 		unlock_res(res);
 
-		LASSERT(intention == LDLM_PROCESS_RECOVERY);
-
 		rc = ldlm_run_ast_work(ldlm_res_to_ns(res), &bl_ast_list,
 				       LDLM_WORK_BL_AST);
 
@@ -2065,6 +2064,13 @@ ldlm_work_bl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	unlock_res_and_lock(lock);
 
 	ldlm_lock2desc(lock->l_blocking_lock, &d);
+	/* copy blocking lock ibits in cancel_bits as well,
+	 * new client may use them for lock convert and it is
+	 * important to use new field to convert locks from
+	 * new servers only
+	 */
+	d.l_policy_data.l_inodebits.cancel_bits =
+		lock->l_blocking_lock->l_policy_data.l_inodebits.bits;
 
 	rc = lock->l_blocking_ast(lock, &d, (void *)arg, LDLM_CB_BLOCKING);
 	LDLM_LOCK_RELEASE(lock->l_blocking_lock);
@@ -2398,6 +2404,7 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
          * talking to me first. -phik */
         if (lock->l_readers || lock->l_writers) {
                 LDLM_ERROR(lock, "lock still has references");
+		unlock_res_and_lock(lock);
                 LBUG();
         }
 

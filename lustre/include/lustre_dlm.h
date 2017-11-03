@@ -649,6 +649,7 @@ enum ldlm_cancel_flags {
 	LCF_ASYNC	= 0x1, /* Cancel locks asynchronously. */
 	LCF_LOCAL	= 0x2, /* Cancel locks locally, not notifing server */
 	LCF_BL_AST	= 0x4, /* Cancel LDLM_FL_BL_AST locks in the same RPC */
+	LCF_CONVERT	= 0x8, /* Try to convert IBITS lock before cancel */
 };
 
 struct ldlm_flock {
@@ -1603,6 +1604,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
 			   void *data, __u32 lvb_len, enum lvb_type lvb_type,
 			   const __u64 *client_cookie,
 			   struct lustre_handle *lockh);
+int ldlm_cli_convert(struct ldlm_lock *lock, __u32 *flags);
 int ldlm_cli_update_pool(struct ptlrpc_request *req);
 int ldlm_cli_cancel(const struct lustre_handle *lockh,
 		    enum ldlm_cancel_flags cancel_flags);
@@ -1626,6 +1628,11 @@ int ldlm_cli_cancel_list_local(struct list_head *cancels, int count,
 int ldlm_cli_cancel_list(struct list_head *head, int count,
 			 struct ptlrpc_request *req,
 			 enum ldlm_cancel_flags flags);
+
+int ldlm_inodebits_drop(struct ldlm_lock *lock, __u64 to_drop);
+int ldlm_cli_dropbits(struct ldlm_lock *lock, __u64 drop_bits);
+int ldlm_cli_dropbits_list(struct list_head *converts, __u64 drop_bits);
+
 /** @} ldlm_cli_api */
 
 /* mds/handler.c */
