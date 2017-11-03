@@ -4371,19 +4371,19 @@ test_101a() {
 	# to get layout
 	$CHECKSTAT -t file $DIR1/$tfile
 
-	OLD_VAL=$(cat /proc/sys/vm/dirty_writeback_centisecs)
-	echo 0 > /proc/sys/vm/dirty_writeback_centisecs
-	echo $OLD_VAL
+	local old_wb=$(sysctl -n vm.dirty_writeback_centisecs)
+	sysctl -wq vm.dirty_writeback_centisecs=0
+
+	trap "sysctl -wq vm.dirty_writeback_centisecs=$old_wb" EXIT
 
 	# open + IO lock
 	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 ||
 		error_noexit "Write fails"
 	# must discard pages
 	lctl set_param -n mdc.*.stats=clear
-	rm $DIR2/$tfile || error_noexit "Unlink fails"
-	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
-	echo $OLD_VAL > /proc/sys/vm/dirty_writeback_centisecs
+	rm $DIR2/$tfile || error "Unlink fails"
 
+	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
 	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
 }
 run_test 101a "Discard DoM data on unlink"
@@ -4397,18 +4397,18 @@ test_101b() {
 	# to get layout
 	$CHECKSTAT -t file $DIR1/$tfile
 
-	OLD_VAL=$(cat /proc/sys/vm/dirty_writeback_centisecs)
-	echo 0 > /proc/sys/vm/dirty_writeback_centisecs
-	echo $OLD_VAL
+	local old_wb=$(sysctl -n vm.dirty_writeback_centisecs)
+	sysctl -wq vm.dirty_writeback_centisecs=0
+
+	trap "sysctl -wq vm.dirty_writeback_centisecs=$old_wb" EXIT
 
 	# open + IO lock
-	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 ||
-		error_noexit "Write fails"
+	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 || error "Write fails"
 	# must discard pages
 	lctl set_param -n mdc.*.stats=clear
-	mv $DIR2/${tfile}_2 $DIR2/$tfile || error_noexit "Rename fails"
+	mv $DIR2/${tfile}_2 $DIR2/$tfile || error "Rename fails"
+
 	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
-	echo $OLD_VAL > /proc/sys/vm/dirty_writeback_centisecs
 	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
 }
 run_test 101b "Discard DoM data on rename"
@@ -4421,22 +4421,21 @@ test_101c() {
 	# to get layout
 	$CHECKSTAT -t file $DIR1/$tfile
 
-	OLD_VAL=$(cat /proc/sys/vm/dirty_writeback_centisecs)
-	echo 0 > /proc/sys/vm/dirty_writeback_centisecs
-	echo $OLD_VAL
+	local old_wb=$(sysctl -n vm.dirty_writeback_centisecs)
+	sysctl -wq vm.dirty_writeback_centisecs=0
+
+	trap "sysctl -wq vm.dirty_writeback_centisecs=$old_wb" EXIT
 
 	# open + IO lock
-	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 ||
-		error_noexit "Write fails"
+	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 || error "Write fails"
 	$MULTIOP $DIR1/$tfile O_c &
 	MULTIOP_PID=$!
 	sleep 1
 	lctl set_param -n mdc.*.stats=clear
-	rm $DIR2/$tfile > /dev/null || error_noexit "Unlink fails"
-	kill -USR1 $MULTIOP_PID && wait $MULTIOP_PID ||
-		error_noexit "multiop failure"
+	rm $DIR2/$tfile > /dev/null || error "Unlink fails for opened file"
+	kill -USR1 $MULTIOP_PID && wait $MULTIOP_PID || error "multiop failure"
+
 	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
-	echo $OLD_VAL > /proc/sys/vm/dirty_writeback_centisecs
 	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
 }
 run_test 101c "Discard DoM data on close-unlink"

@@ -1840,7 +1840,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			LDLM_LOCK_PUT(lock);
 			mdt_object_put(info->mti_env, child);
 			/* NB: call the mdt_pack_size2body always after
-			 * mdt_object_put(), that is why this speacial
+			 * mdt_object_put(), that is why this special
 			 * exit path is used. */
 			rc = mdt_pack_size2body(info, child_fid,
 						&lhc->mlh_reg_lh);
@@ -1854,17 +1854,17 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
 			GOTO(out_parent, rc = 0);
 		}
-        }
-        if (lock)
-                LDLM_LOCK_PUT(lock);
+	}
+	if (lock)
+		LDLM_LOCK_PUT(lock);
 
-        EXIT;
+	EXIT;
 out_child:
-        mdt_object_put(info->mti_env, child);
+	mdt_object_put(info->mti_env, child);
 out_parent:
-        if (lhp)
-                mdt_object_unlock(info, parent, lhp, 1);
-        return rc;
+	if (lhp)
+		mdt_object_unlock(info, parent, lhp, 1);
+	return rc;
 }
 
 /* normal handler: should release the child lock */

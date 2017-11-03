@@ -847,7 +847,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	struct mdt_lock_handle *child_lh;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
 	__u64 lock_ibits;
-	bool cos_incompat = false;
+	bool cos_incompat = false, discard = false;
 	int no_name = 0;
 	int rc;
 
@@ -1029,7 +1029,7 @@ relock:
 		if (rc)
 			GOTO(out_stat, rc);
 	} else {
-		mdt_dom_check_and_discard(info, mc);
+		discard = true;
 	}
 	mdt_handle_last_unlink(info, mc, ma);
 
@@ -1058,6 +1058,8 @@ out_stat:
 unlock_child:
 	mdt_reint_striped_unlock(info, mc, child_lh, einfo, rc);
 put_child:
+	if (discard)
+		mdt_dom_check_and_discard(info, mc);
 	mdt_object_put(info->mti_env, mc);
 unlock_parent:
 	mdt_object_unlock(info, mp, parent_lh, rc);
@@ -1881,7 +1883,7 @@ static int mdt_reint_rename_internal(struct mdt_thread_info *info,
 	struct lu_fid *new_fid = &info->mti_tmp_fid2;
 	__u64 lock_ibits;
 	bool reverse = false;
-	bool cos_incompat;
+	bool cos_incompat, discard = false;
 	int rc;
 	ENTRY;
 
@@ -2150,7 +2152,7 @@ relock:
 		mdt_counter_incr(req, LPROC_MDT_RENAME);
 		if (mnew) {
 			mdt_handle_last_unlink(info, mnew, ma);
-			mdt_dom_check_and_discard(info, mnew);
+			discard = true;
 		}
 
 		mdt_rename_counter_tally(info, info->mti_mdt, req,
@@ -2163,8 +2165,11 @@ relock:
 out_unlock_old:
 	mdt_object_unlock(info, mold, lh_oldp, rc);
 out_put_new:
-	if (mnew != NULL)
+	if (mnew != NULL) {
+		if (discard)
+			mdt_dom_check_and_discard(info, mnew);
 		mdt_object_put(info->mti_env, mnew);
+	}
 out_put_old:
 	mdt_object_put(info->mti_env, mold);
 out_unlock_parents:
