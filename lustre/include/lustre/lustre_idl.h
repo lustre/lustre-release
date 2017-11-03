@@ -1352,6 +1352,7 @@ union lquota_id {
 	struct lu_fid	qid_fid; /* FID for per-directory quota */
 	__u64		qid_uid; /* user identifier */
 	__u64		qid_gid; /* group identifier */
+	__u64		qid_projid; /* project identifier */
 };
 
 /* quotactl management */

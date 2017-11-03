@@ -215,6 +215,25 @@ int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
 	if (rc)
 		GOTO(out_sa, rc);
 
+#ifdef ZFS_PROJINHERIT
+	if (o->od_projectused_dn && osa->flags & ZFS_PROJID) {
+		rc = -sa_lookup(obj->oo_sa_hdl, SA_ZPL_PROJID(o),
+				&osa->projid, 8);
+		if (rc)
+			GOTO(out_sa, rc);
+
+		la->la_projid = osa->projid;
+		la->la_valid |= LA_PROJID;
+		obj->oo_with_projid = 1;
+	} else {
+		la->la_projid = ZFS_DEFAULT_PROJID;
+		la->la_valid &= ~LA_PROJID;
+	}
+#else
+	la->la_projid = 0;
+	la->la_valid &= ~LA_PROJID;
+#endif
+
 	la->la_atime = osa->atime[0];
 	la->la_mtime = osa->mtime[0];
 	la->la_ctime = osa->ctime[0];
@@ -396,6 +415,11 @@ static dnode_t *osd_quota_fid2dmu(const struct osd_device *osd,
 	case ACCT_GROUP_OID:
 		dn = osd->od_groupused_dn;
 		break;
+#ifdef ZFS_PROJINHERIT
+	case ACCT_PROJECT_OID:
+		dn = osd->od_projectused_dn;
+		break;
+#endif
 	default:
 		break;
 	}
@@ -549,13 +573,15 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 
 	/* one less inode */
 	rc = osd_declare_quota(env, osd, obj->oo_attr.la_uid,
-			       obj->oo_attr.la_gid, -1, oh, false, NULL, false);
+			       obj->oo_attr.la_gid, obj->oo_attr.la_projid,
+			       -1, oh, NULL, OSD_QID_INODE);
 	if (rc)
 		RETURN(rc);
 
 	/* data to be truncated */
 	rc = osd_declare_quota(env, osd, obj->oo_attr.la_uid,
-			       obj->oo_attr.la_gid, 0, oh, true, NULL, false);
+			       obj->oo_attr.la_gid, obj->oo_attr.la_projid,
+			       0, oh, NULL, OSD_QID_BLK);
 	if (rc)
 		RETURN(rc);
 
@@ -906,7 +932,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 		 * anything else */
 	}
 
-	if (attr && (attr->la_valid & (LA_UID | LA_GID))) {
+	if (attr && (attr->la_valid & (LA_UID | LA_GID | LA_PROJID))) {
 		sa_object_size(obj->oo_sa_hdl, &blksize, &bspace);
 		bspace = toqb(bspace * blksize);
 	}
@@ -933,7 +959,38 @@ static int osd_declare_attr_set(const struct lu_env *env,
 				GOTO(out, rc);
 		}
 	}
+#ifdef ZFS_PROJINHERIT
+	if (attr && attr->la_valid & LA_PROJID) {
+		if (!osd->od_projectused_dn)
+			GOTO(out, rc = -EOPNOTSUPP);
 
+		/* Usually, if project quota is upgradable for the device,
+		 * then the upgrade will be done before or when mount the
+		 * device. So when we come here, this project should have
+		 * project ID attribute already (that is zero by default).
+		 * Otherwise, there was something wrong during the former
+		 * upgrade, let's return failure to report that.
+		 *
+		 * Please note that, different from other attributes, you
+		 * can NOT simply set the project ID attribute under such
+		 * case, because adding (NOT change) project ID attribute
+		 * needs to change the object's attribute layout to match
+		 * zfs backend quota accounting requirement. */
+		if (unlikely(!obj->oo_with_projid))
+			GOTO(out, rc = -ENXIO);
+
+		/* quota enforcement for project */
+		if (attr->la_projid != obj->oo_attr.la_projid) {
+			rc = qsd_transfer(env, osd->od_quota_slave,
+					  &oh->ot_quota_trans, PRJQUOTA,
+					  obj->oo_attr.la_projid,
+					  attr->la_projid, bspace,
+					  &info->oti_qi);
+			if (rc)
+				GOTO(out, rc);
+		}
+	}
+#endif
 out:
 	up_read(&obj->oo_guard);
 	RETURN(rc);
@@ -1018,13 +1075,30 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 			if (rc < 0) {
 				CWARN("%s: failed to set LMA flags: rc = %d\n",
 				       osd->od_svname, rc);
-				RETURN(rc);
+				GOTO(out, rc);
 			}
 		}
 	}
 
 	write_lock(&obj->oo_attr_lock);
 	cnt = 0;
+
+	if (valid & LA_PROJID) {
+#ifdef ZFS_PROJINHERIT
+		/* osd_declare_attr_set() must be called firstly.
+		 * If osd::od_projectused_dn is not set, then we
+		 * can not arrive at here. */
+		LASSERT(osd->od_projectused_dn);
+		LASSERT(obj->oo_with_projid);
+
+		osa->projid = obj->oo_attr.la_projid = la->la_projid;
+		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_PROJID(osd), NULL,
+				 &osa->projid, 8);
+#else
+		valid &= ~LA_PROJID;
+#endif
+	}
+
 	if (valid & LA_ATIME) {
 		osa->atime[0] = obj->oo_attr.la_atime = la->la_atime;
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_ATIME(osd), NULL,
@@ -1068,6 +1142,10 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 		/* many flags are not supported by zfs, so ensure a good cached
 		 * copy */
 		obj->oo_attr.la_flags = attrs_zfs2fs(osa->flags);
+#ifdef ZFS_PROJINHERIT
+		if (obj->oo_with_projid)
+			osa->flags |= ZFS_PROJID;
+#endif
 		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_FLAGS(osd), NULL,
 				 &osa->flags, 8);
 	}
@@ -1181,14 +1259,14 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 	/* will help to find FID->ino mapping at dt_insert() */
 	osd_idc_find_and_init(env, osd, obj);
 
-	rc = osd_declare_quota(env, osd, attr->la_uid, attr->la_gid, 1, oh,
-			       false, NULL, false);
+	rc = osd_declare_quota(env, osd, attr->la_uid, attr->la_gid,
+			       attr->la_projid, 1, oh, NULL, OSD_QID_INODE);
 
 	RETURN(rc);
 }
 
 int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
-		    sa_handle_t *sa_hdl, dmu_tx_t *tx,
+		    struct osd_object *obj, sa_handle_t *sa_hdl, dmu_tx_t *tx,
 		    struct lu_attr *la, uint64_t parent,
 		    nvlist_t *xattr)
 {
@@ -1217,16 +1295,32 @@ int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 	osa->gid = la->la_gid;
 	osa->rdev = la->la_rdev;
 	osa->nlink = la->la_nlink;
-	osa->flags = attrs_fs2zfs(la->la_flags);
+	if (la->la_valid & LA_FLAGS)
+		osa->flags = attrs_fs2zfs(la->la_flags);
+	else
+		osa->flags = 0;
 	osa->size  = la->la_size;
+#ifdef ZFS_PROJINHERIT
+	if (osd->od_projectused_dn) {
+		if (la->la_valid & LA_PROJID)
+			osa->projid = la->la_projid;
+		else
+			osa->projid = ZFS_DEFAULT_PROJID;
+		osa->flags |= ZFS_PROJID;
+		if (obj)
+			obj->oo_with_projid = 1;
+	} else {
+		osa->flags &= ~ZFS_PROJID;
+	}
+#endif
 
 	/*
 	 * we need to create all SA below upon object create.
 	 *
 	 * XXX The attribute order matters since the accounting callback relies
 	 * on static offsets (i.e. SA_*_OFFSET, see zfs_space_delta_cb()) to
-	 * look up the UID/GID attributes. Moreover, the callback does not seem
-	 * to support the spill block.
+	 * look up the UID/GID/PROJID attributes. Moreover, the callback does
+	 * not seem to support the spill block.
 	 * We define attributes in the same order as SA_*_OFFSET in order to
 	 * work around the problem. See ORI-610.
 	 */
@@ -1243,6 +1337,11 @@ int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_CTIME(osd), NULL, osa->ctime, 16);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_CRTIME(osd), NULL, crtime, 16);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_LINKS(osd), NULL, &osa->nlink, 8);
+#ifdef ZFS_PROJINHERIT
+	if (osd->od_projectused_dn)
+		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_PROJID(osd), NULL,
+				 &osa->projid, 8);
+#endif
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_RDEV(osd), NULL, &osa->rdev, 8);
 	LASSERT(cnt <= ARRAY_SIZE(osd_oti_get(env)->oti_attr_bulk));
 
@@ -1581,6 +1680,14 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 	/* we may fix some attributes, better do not change the source */
 	obj->oo_attr = *attr;
 	obj->oo_attr.la_valid |= LA_SIZE | LA_NLINK | LA_TYPE;
+
+#ifdef ZFS_PROJINHERIT
+	if (osd->od_projectused_dn) {
+		if (!(obj->oo_attr.la_valid & LA_PROJID))
+			obj->oo_attr.la_projid = ZFS_DEFAULT_PROJID;
+		obj->oo_with_projid = 1;
+	}
+#endif
 
 	dn = osd_create_type_f(dof->dof_type)(env, obj, &obj->oo_attr, oh);
 	if (IS_ERR(dn)) {

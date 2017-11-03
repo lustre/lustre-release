@@ -59,6 +59,13 @@ union lquota_rec {
 	struct lquota_acct_rec	lqr_acct_rec;
 };
 
+/* flags for inode/block quota accounting */
+enum osd_qid_declare_flags {
+	OSD_QID_INODE	= 1 << 0,
+	OSD_QID_BLK	= 1 << 1,
+	OSD_QID_FORCE	= 1 << 2,
+};
+
 /* Index features supported by the global index objects
  * Only used for migration purpose and should be removed once on-disk migration
  * is no longer needed */

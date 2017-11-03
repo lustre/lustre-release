@@ -376,6 +376,16 @@ int __osd_sa_attr_init(const struct lu_env *env, struct osd_object *obj,
 	osa->nlink = obj->oo_attr.la_nlink;
 	osa->flags = attrs_fs2zfs(obj->oo_attr.la_flags);
 	osa->size  = obj->oo_attr.la_size;
+#ifdef ZFS_PROJINHERIT
+	if (osd->od_projectused_dn) {
+		if (obj->oo_attr.la_valid & LA_PROJID)
+			osa->projid = obj->oo_attr.la_projid;
+		else
+			osa->projid = ZFS_DEFAULT_PROJID;
+		osa->flags |= ZFS_PROJID;
+		obj->oo_with_projid = 1;
+	}
+#endif
 
 	cnt = 0;
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_MODE(osd), NULL, &osa->mode, 8);
@@ -383,15 +393,20 @@ int __osd_sa_attr_init(const struct lu_env *env, struct osd_object *obj,
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_GEN(osd), NULL, &gen, 8);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_UID(osd), NULL, &osa->uid, 8);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_GID(osd), NULL, &osa->gid, 8);
+	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_PARENT(osd), NULL,
+			 &obj->oo_parent, 8);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_FLAGS(osd), NULL, &osa->flags, 8);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_ATIME(osd), NULL, osa->atime, 16);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_MTIME(osd), NULL, osa->mtime, 16);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_CTIME(osd), NULL, osa->ctime, 16);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_CRTIME(osd), NULL, crtime, 16);
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_LINKS(osd), NULL, &osa->nlink, 8);
+#ifdef ZFS_PROJINHERIT
+	if (osd->od_projectused_dn)
+		SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_PROJID(osd), NULL,
+				 &osa->projid, 8);
+#endif
 	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_RDEV(osd), NULL, &osa->rdev, 8);
-	SA_ADD_BULK_ATTR(bulk, cnt, SA_ZPL_PARENT(osd), NULL,
-			 &obj->oo_parent, 8);
 	LASSERT(cnt <= ARRAY_SIZE(osd_oti_get(env)->oti_attr_bulk));
 
 	/* Update the SA for additions, modifications, and removals. */

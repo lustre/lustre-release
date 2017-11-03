@@ -1084,6 +1084,15 @@ static int osd_mount(const struct lu_env *env,
 	if (rc)
 		GOTO(err, rc);
 
+#ifdef ZFS_PROJINHERIT
+	if (dmu_objset_projectquota_enabled(o->od_os)) {
+		rc = __osd_obj2dnode(o->od_os, DMU_PROJECTUSED_OBJECT,
+				     &o->od_projectused_dn);
+		if (rc && rc != -ENOENT)
+			GOTO(err, rc);
+	}
+#endif
+
 	/* 1. initialize oi before any file create or file open */
 	rc = osd_oi_init(env, o);
 	if (rc)
@@ -1163,6 +1172,13 @@ static void osd_umount(const struct lu_env *env, struct osd_device *o)
 		osd_dnode_rele(o->od_groupused_dn);
 		o->od_groupused_dn = NULL;
 	}
+
+#ifdef ZFS_PROJINHERIT
+	if (o->od_projectused_dn) {
+		osd_dnode_rele(o->od_projectused_dn);
+		o->od_projectused_dn = NULL;
+	}
+#endif
 
 	if (o->od_os != NULL) {
 		if (!o->od_dt_dev.dd_rdonly)
