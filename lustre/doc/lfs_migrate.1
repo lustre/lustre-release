@@ -24,20 +24,6 @@ original filename.  This allows balancing space usage between OSTs, moving
 files off OSTs that are starting to show hardware problems (though are still
 functional), or OSTs that will be removed from the filesystem.
 .PP
-Because
-.B lfs_migrate
-is
-.B not
-yet closely integrated with the MDS, it cannot determine whether a file
-is currently open and/or in-use by other applications or nodes.  That makes
-it
-.B
-UNSAFE
-for use on files that might be modified by other applications, since the
-migrated file is only a copy of the current file, and this will result in
-the old file becoming an open-unlinked file and any modifications to that
-file will be lost.
-.PP
 Files to be migrated can be specified as command-line arguments.  If a
 directory is specified on the command-line then all files within that
 directory are migrated.  If no files are specified on the command-line,
@@ -123,6 +109,20 @@ a guarantee the files are not being modified, that is workload specific):
 .IP
 lfs find /testfs -obd test-OST0004 -size +4G -mtime +2d |
     lfs_migrate -y
+.SH NOTES
+In versions prior to 2.5,
+.B lfs_migrate
+is
+.B not
+closely integrated with the MDS, and cannot determine whether a file
+is currently open and/or in-use by other applications or nodes.  That makes
+it
+.B
+UNSAFE
+for use on files that might be modified by other applications, since the
+migrated file is only a copy of the current file. This will result in the
+old file becoming an open-unlinked file, and any modifications to that file
+will be lost.
 .SH KNOWN BUGS
 Eventually, this functionality will be integrated into
 .BR lfs (1)
