@@ -8,21 +8,6 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT 101"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-is_sles11()						# LU-2181
-{
-	if [ -r /etc/SuSE-release ]
-	then
-		local vers=$(grep VERSION /etc/SuSE-release | awk '{print $3}')
-		local patchlev=$(grep PATCHLEVEL /etc/SuSE-release |
-			awk '{ print $3 }')
-		if [ $vers -eq 11 ] && [ $patchlev -eq 2 ]
-		then
-			return 0
-		fi
-	fi
-	return 1
-}
-
 if [ "$FAILURE_MODE" = "HARD" ]; then
 	CONFIG_EXCEPTIONS="24a " &&
 	echo "Except the tests: $CONFIG_EXCEPTIONS for " \

@@ -18,24 +18,6 @@ ALWAYS_EXCEPT="  407     253     312     $ALWAYS_EXCEPT"
 # Check Grants after these tests
 GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c"
 
-is_sles11()						# LU-4341
-{
-	if [ -r /etc/SuSE-release ]
-	then
-		local vers=$(grep VERSION /etc/SuSE-release | awk '{print $3}')
-		local patchlev=$(grep PATCHLEVEL /etc/SuSE-release |
-			awk '{ print $3 }')
-		if [ $vers -eq 11 ] && [ $patchlev -ge 3 ]; then
-			return 0
-		fi
-	fi
-	return 1
-}
-
-if is_sles11; then					# LU-4341
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 170"
-fi
-
 SRCDIR=$(cd $(dirname $0); echo $PWD)
 export PATH=$PATH:/sbin
 
@@ -85,6 +67,30 @@ if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT  180"
 	#                                               13    (min)"
 	[ "$SLOW" = "no" ] && EXCEPT_SLOW="$EXCEPT_SLOW 51b"
+fi
+
+# Get the SLES version so we can make decisions on if a test should be run
+#
+# Returns a version string that should only be used in comparing
+# strings returned by version_code()
+
+sles_version_code()
+{
+	local version=$(grep VERSION_ID /etc/os-release | cut -d'"' -f2)
+
+	# All SuSE Linux versions have one decimal. version_code expects two
+	local sles_version=$version.0
+	version_code $sles_version
+}
+
+if [ -r /etc/SuSE-release ]; then
+	sles_version=$(sles_version_code)
+	[ $sles_version -lt $(version_code 11.4.0) ] &&
+		# bug number for skipped test: LU-4341
+		ALWAYS_EXCEPT="$ALWAYS_EXCEPT  170"
+	[ $sles_version -lt $(version_code 12.0.0) ] &&
+		# bug number for skipped test: LU-3703
+		ALWAYS_EXCEPT="$ALWAYS_EXCEPT  234"
 fi
 
 FAIL_ON_ERROR=false
@@ -12313,16 +12319,17 @@ run_test 169 "parallel read and truncate should not deadlock"
 
 test_170() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        $LCTL clear	# bug 18514
-        $LCTL debug_daemon start $TMP/${tfile}_log_good
-        touch $DIR/$tfile
-        $LCTL debug_daemon stop
-        sed -e "s/^...../a/g" $TMP/${tfile}_log_good > $TMP/${tfile}_log_bad ||
-               error "sed failed to read log_good"
 
-        $LCTL debug_daemon start $TMP/${tfile}_log_good
-        rm -rf $DIR/$tfile
-        $LCTL debug_daemon stop
+	$LCTL clear	# bug 18514
+	$LCTL debug_daemon start $TMP/${tfile}_log_good
+	touch $DIR/$tfile
+	$LCTL debug_daemon stop
+	sed -e "s/^...../a/g" $TMP/${tfile}_log_good > $TMP/${tfile}_log_bad ||
+		error "sed failed to read log_good"
+
+	$LCTL debug_daemon start $TMP/${tfile}_log_good
+	rm -rf $DIR/$tfile
+	$LCTL debug_daemon stop
 
         $LCTL df $TMP/${tfile}_log_bad > $TMP/${tfile}_log_bad.out 2>&1 ||
                error "lctl df log_bad failed"
@@ -14616,17 +14623,8 @@ test_234() {
 	touch $DIR/$tdir/$tfile || error "touch failed"
 	# OBD_FAIL_LLITE_XATTR_ENOMEM
 	$LCTL set_param fail_loc=0x1405
-	# output of the form: attr 2 4 44 3 fc13 x86_64
-	V=($(IFS=".-" rpm -q attr))
-	if [[ ${V[1]} > 2 || ${V[2]} > 4 || ${V[3]} > 44 ||
-	      ${V[1]} = 2 && ${V[2]} = 4 && ${V[3]} = 44 && ${V[4]} > 6 ]]; then
-		# attr pre-2.4.44-7 had a bug with rc
-		# LU-3703 - SLES 11 and FC13 clients have older attr
-		getfattr -n user.attr $DIR/$tdir/$tfile &&
-			error "getfattr should have failed with ENOMEM"
-	else
-		skip "LU-3703: attr version $(getfattr --version) too old"
-	fi
+	getfattr -n user.attr $DIR/$tdir/$tfile &&
+		error "getfattr should have failed with ENOMEM"
 	$LCTL set_param fail_loc=0x0
 	rm -rf $DIR/$tdir
 
