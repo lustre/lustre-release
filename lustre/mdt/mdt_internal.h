@@ -1251,6 +1251,9 @@ int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,
 			bool dom_lock);
 bool mdt_dom_client_has_lock(struct mdt_thread_info *info,
 			     const struct lu_fid *fid);
+void mdt_hp_brw(struct tgt_session_info *tsi);
+void mdt_hp_punch(struct tgt_session_info *tsi);
+
 /* grants */
 long mdt_grant_connect(const struct lu_env *env, struct obd_export *exp,
 		       u64 want, bool conservative);

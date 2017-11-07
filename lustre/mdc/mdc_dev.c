@@ -959,6 +959,33 @@ static int mdc_async_upcall(void *a, int rc)
 	return 0;
 }
 
+static int mdc_get_lock_handle(const struct lu_env *env, struct osc_object *osc,
+			       pgoff_t index, struct lustre_handle *lh)
+{
+	struct ldlm_lock *lock;
+
+	/* find DOM lock protecting object */
+	lock = mdc_dlmlock_at_pgoff(env, osc, index,
+				    OSC_DAP_FL_TEST_LOCK |
+				    OSC_DAP_FL_CANCELING);
+	if (lock == NULL) {
+		struct ldlm_resource *res;
+		struct ldlm_res_id *resname;
+
+		resname = &osc_env_info(env)->oti_resname;
+		fid_build_reg_res_name(lu_object_fid(osc2lu(osc)), resname);
+		res = ldlm_resource_get(osc_export(osc)->exp_obd->obd_namespace,
+					NULL, resname, LDLM_IBITS, 0);
+		ldlm_resource_dump(D_ERROR, res);
+		libcfs_debug_dumpstack(NULL);
+		return -ENOENT;
+	} else {
+		*lh = lock->l_remote_handle;
+		LDLM_LOCK_PUT(lock);
+	}
+	return 0;
+}
+
 static int mdc_io_setattr_start(const struct lu_env *env,
 				const struct cl_io_slice *slice)
 {
@@ -1029,6 +1056,11 @@ static int mdc_io_setattr_start(const struct lu_env *env,
 	if (oio->oi_lockless) {
 		oa->o_flags = OBD_FL_SRVLOCK;
 		oa->o_valid |= OBD_MD_FLFLAGS;
+	} else {
+		rc = mdc_get_lock_handle(env, cl2osc(obj), CL_PAGE_EOF,
+					 &oa->o_handle);
+		if (!rc)
+			oa->o_valid |= OBD_MD_FLHANDLE;
 	}
 
 	init_completion(&cbargs->opc_sync);
@@ -1182,35 +1214,22 @@ static void mdc_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 		attr->cra_oa->o_valid |= OBD_MD_FLID;
 
 	if (flags & OBD_MD_FLHANDLE) {
-		struct ldlm_lock *lock;  /* _some_ lock protecting @apage */
 		struct osc_page *opg;
 
 		opg = osc_cl_page_osc(attr->cra_page, cl2osc(obj));
-		lock = mdc_dlmlock_at_pgoff(env, cl2osc(obj), osc_index(opg),
-				OSC_DAP_FL_TEST_LOCK | OSC_DAP_FL_CANCELING);
-		if (lock == NULL && !opg->ops_srvlock) {
-			struct ldlm_resource *res;
-			struct ldlm_res_id *resname;
+		if (!opg->ops_srvlock) {
+			int rc;
 
-			CL_PAGE_DEBUG(D_ERROR, env, attr->cra_page,
-				      "uncovered page!\n");
-
-			resname = &osc_env_info(env)->oti_resname;
-			mdc_build_res_name(cl2osc(obj), resname);
-			res = ldlm_resource_get(
-				osc_export(cl2osc(obj))->exp_obd->obd_namespace,
-				NULL, resname, LDLM_IBITS, 0);
-			ldlm_resource_dump(D_ERROR, res);
-
-			libcfs_debug_dumpstack(NULL);
-			LBUG();
-		}
-
-		/* check for lockless io. */
-		if (lock != NULL) {
-			attr->cra_oa->o_handle = lock->l_remote_handle;
-			attr->cra_oa->o_valid |= OBD_MD_FLHANDLE;
-			LDLM_LOCK_PUT(lock);
+			rc = mdc_get_lock_handle(env, cl2osc(obj),
+						 osc_index(opg),
+						 &attr->cra_oa->o_handle);
+			if (rc) {
+				CL_PAGE_DEBUG(D_ERROR, env, attr->cra_page,
+					      "uncovered page!\n");
+				LBUG();
+			} else {
+				attr->cra_oa->o_valid |= OBD_MD_FLHANDLE;
+			}
 		}
 	}
 }

@@ -4900,10 +4900,13 @@ TGT_MDT_HDL(HABEO_CLAVIS | HABEO_CORPUS | HABEO_REFERO | MUTABOR,
 };
 
 static struct tgt_handler mdt_io_ops[] = {
-TGT_OST_HDL(HABEO_CORPUS | HABEO_REFERO, OST_BRW_READ,	tgt_brw_read),
-TGT_OST_HDL(HABEO_CORPUS | MUTABOR,	 OST_BRW_WRITE,	tgt_brw_write),
-TGT_OST_HDL(HABEO_CORPUS | HABEO_REFERO | MUTABOR,
-					 OST_PUNCH,	mdt_punch_hdl),
+TGT_OST_HDL_HP(HABEO_CORPUS | HABEO_REFERO, OST_BRW_READ, tgt_brw_read,
+							mdt_hp_brw),
+TGT_OST_HDL_HP(HABEO_CORPUS | MUTABOR,	 OST_BRW_WRITE,	tgt_brw_write,
+							mdt_hp_brw),
+TGT_OST_HDL_HP(HABEO_CORPUS | HABEO_REFERO | MUTABOR,
+					 OST_PUNCH,	mdt_punch_hdl,
+					 		mdt_hp_punch),
 TGT_OST_HDL(HABEO_CORPUS | HABEO_REFERO, OST_SYNC,	mdt_data_sync),
 };
 

@@ -474,6 +474,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 			.so_thr_done		= tgt_io_thread_done,
 			.so_req_handler		= tgt_request_handle,
 			.so_req_printer		= target_print_req,
+			.so_hpreq_handler	= tgt_hpreq_handler,
 		},
 	};
 	m->mds_io_service = ptlrpc_register_service(&conf, &obd->obd_kset,
