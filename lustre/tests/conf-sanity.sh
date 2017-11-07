@@ -730,7 +730,7 @@ test_20() {
 	[ -e $DIR/$tfile ] && error "$DIR/$tfile exists incorrectly"
 	remount_client rw $MOUNT || error "remount_client with rw failed"
 	touch $DIR/$tfile || error "touch $DIR/$tfile failed"
-	MCNT=$(grep -c $MOUNT /etc/mtab)
+	MCNT=$(grep -c $MOUNT' ' /etc/mtab)
 	[ "$MCNT" -ne 1 ] && error "$MOUNT in /etc/mtab $MCNT times"
 	umount_client $MOUNT
 	stop_mds || error "Unable to stop MDS"
