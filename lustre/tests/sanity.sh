@@ -14795,7 +14795,7 @@ ladvise_willread_performance()
 
 	local lowest_speedup=20
 	if [ ${average_cache%.*} -lt $lowest_speedup ]; then
-		echo "Speedup with OSS cached read less than $lowest_speedup%, "
+		echo "Speedup with OSS cached read less than $lowest_speedup%," \
 			"got $average_cache%. Skipping ladvise willread check."
 		return 0
 	fi
