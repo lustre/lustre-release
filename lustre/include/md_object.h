@@ -74,6 +74,7 @@ enum ma_valid {
 	MA_HSM       = 1 << 6,
 	MA_PFID      = 1 << 7,
 	MA_LMV_DEF   = 1 << 8,
+	MA_SOM	     = 1 << 9,
 };
 
 typedef enum {
@@ -108,19 +109,31 @@ struct md_hsm {
 	__u64	mh_arch_ver;
 };
 
+
+/* memory structure for SOM attributes
+ * for fields description see the on disk structure som_attrs
+ * which is defined in lustre_idl.h
+ */
+struct md_som {
+	__u16	ms_valid;
+	__u64	ms_size;
+	__u64	ms_blocks;
+};
+
 struct md_attr {
-        __u64                   ma_valid;
-        __u64                   ma_need;
-        __u64                   ma_attr_flags;
-        struct lu_attr          ma_attr;
-        struct lu_fid           ma_pfid;
-        struct md_hsm           ma_hsm;
-        struct lov_mds_md      *ma_lmm;
-	union lmv_mds_md       *ma_lmv;
-        void                   *ma_acl;
-        int                     ma_lmm_size;
-        int                     ma_lmv_size;
-        int                     ma_acl_size;
+	__u64			 ma_valid;
+	__u64			 ma_need;
+	__u64			 ma_attr_flags;
+	struct lu_attr		 ma_attr;
+	struct lu_fid		 ma_pfid;
+	struct md_hsm		 ma_hsm;
+	struct md_som		 ma_som;
+	struct lov_mds_md	*ma_lmm;
+	union lmv_mds_md	*ma_lmv;
+	void			*ma_acl;
+	int			 ma_lmm_size;
+	int			 ma_lmv_size;
+	int			 ma_acl_size;
 };
 
 /** Additional parameters for create */
@@ -167,12 +180,12 @@ enum md_layout_opc {
  * Parameters for layout change API.
  */
 struct md_layout_change {
-	enum md_layout_opc		mlc_opc;
-	struct layout_intent		*mlc_intent;
-	struct lu_buf			mlc_buf;
-	struct lustre_som_attrs		mlc_som;
-	size_t				mlc_resync_count;
-	__u32				*mlc_resync_ids;
+	enum md_layout_opc	 mlc_opc;
+	struct layout_intent	*mlc_intent;
+	struct lu_buf		 mlc_buf;
+	struct lustre_som_attrs	 mlc_som;
+	size_t			 mlc_resync_count;
+	__u32			*mlc_resync_ids;
 };
 
 union ldlm_policy_data;
@@ -649,6 +662,7 @@ enum mdd_object_role {
 
 struct dt_device;
 
+void lustre_som_swab(struct lustre_som_attrs *attrs);
 int lustre_buf2hsm(void *buf, int rc, struct md_hsm *mh);
 void lustre_hsm2buf(void *buf, const struct md_hsm *mh);
 

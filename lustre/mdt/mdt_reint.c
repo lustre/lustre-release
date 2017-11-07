@@ -707,6 +707,15 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 			if (rc > 0 && mdt_lmm_is_flr(info->mti_big_lmm))
 				GOTO(out_put, rc = -EOPNOTSUPP);
 		}
+
+		/* For truncate, the file size sent from client
+		 * is believable, but the blocks are incorrect,
+		 * which makes the block size in LSOM attribute
+		 * inconsisent with the real block size.
+		 */
+		rc = mdt_lsom_update(info, mo, true);
+		if (rc)
+			GOTO(out_put, rc);
 	}
 
 	if ((ma->ma_valid & MA_INODE) && ma->ma_attr.la_valid) {

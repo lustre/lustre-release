@@ -1240,10 +1240,10 @@ static int mdd_xattr_sanity_check(const struct lu_env *env,
 		    (uc->uc_fsuid != attr->la_uid) &&
 		    !md_capable(uc, CFS_CAP_FOWNER))
 			RETURN(-EPERM);
-	} else {
-		if ((uc->uc_fsuid != attr->la_uid) &&
-		    !md_capable(uc, CFS_CAP_FOWNER))
-			RETURN(-EPERM);
+	} else if (strcmp(name, XATTR_NAME_SOM) != 0 &&
+		   (uc->uc_fsuid != attr->la_uid) &&
+		   !md_capable(uc, CFS_CAP_FOWNER)) {
+		RETURN(-EPERM);
 	}
 
 	RETURN(0);
@@ -2536,6 +2536,9 @@ mdd_layout_update_rdonly(const struct lu_env *env, struct mdd_object *obj,
 			 struct md_layout_change *mlc, struct thandle *handle)
 {
 	struct mdd_device *mdd = mdd_obj2mdd_dev(obj);
+	struct lu_buf *som_buf = &mdd_env_info(env)->mti_buf[1];
+	struct lustre_som_attrs *som = &mlc->mlc_som;
+	int fl = 0;
 	int rc;
 	ENTRY;
 
@@ -2551,13 +2554,28 @@ mdd_layout_update_rdonly(const struct lu_env *env, struct mdd_object *obj,
 		RETURN(0);
 	}
 
+	som_buf->lb_buf = som;
+	som_buf->lb_len = sizeof(*som);
+	rc = mdo_xattr_get(env, obj, som_buf, XATTR_NAME_SOM);
+	if (rc < 0 && rc != -ENODATA)
+		RETURN(rc);
+
+	if (rc > 0) {
+		lustre_som_swab(som);
+		if (som->lsa_valid & SOM_FL_STRICT)
+			fl = LU_XATTR_REPLACE;
+	}
+
 	rc = mdd_declare_layout_change(env, mdd, obj, mlc, handle);
 	if (rc)
 		GOTO(out, rc);
 
-	rc = mdd_declare_xattr_del(env, mdd, obj, XATTR_NAME_SOM, handle);
-	if (rc)
-		GOTO(out, rc);
+	if (fl) {
+		rc = mdd_declare_xattr_set(env, mdd, obj, som_buf,
+					   XATTR_NAME_SOM, fl, handle);
+		if (rc)
+			GOTO(out, rc);
+	}
 
 	/* record a changelog for data mover to consume */
 	rc = mdd_declare_changelog_store(env, mdd, CL_FLRW, NULL, NULL, handle);
@@ -2573,10 +2591,12 @@ mdd_layout_update_rdonly(const struct lu_env *env, struct mdd_object *obj,
 
 	mdd_write_lock(env, obj, MOR_TGT_CHILD);
 	rc = mdo_layout_change(env, obj, mlc, handle);
-	if (!rc) {
-		rc = mdo_xattr_del(env, obj, XATTR_NAME_SOM, handle);
-		if (rc == -ENODATA)
-			rc = 0;
+	if (!rc && fl) {
+		/* SOM state transition from STRICT to STALE */
+		som->lsa_valid = SOM_FL_STALE;
+		lustre_som_swab(som);
+		rc = mdo_xattr_set(env, obj, som_buf, XATTR_NAME_SOM,
+				   fl, handle);
 	}
 	mdd_write_unlock(env, obj);
 	if (rc)
@@ -2685,12 +2705,13 @@ mdd_object_update_sync_pending(const struct lu_env *env, struct mdd_object *obj,
 		RETURN(-EBUSY);
 	}
 
-	if (mlc->mlc_som.lsa_valid & LSOM_FL_VALID) {
+	if (mlc->mlc_som.lsa_valid & SOM_FL_STRICT) {
 		rc = mdo_xattr_get(env, obj, &LU_BUF_NULL, XATTR_NAME_SOM);
-		if (rc && rc != -ENODATA)
+		if (rc < 0 && rc != -ENODATA)
 			RETURN(rc);
 
 		fl = rc == -ENODATA ? LU_XATTR_CREATE : LU_XATTR_REPLACE;
+		lustre_som_swab(&mlc->mlc_som);
 		som_buf->lb_buf = &mlc->mlc_som;
 		som_buf->lb_len = sizeof(mlc->mlc_som);
 	}

@@ -287,8 +287,17 @@ struct lustre_ost_attrs {
  */
 #define LMA_OLD_SIZE (sizeof(struct lustre_mdt_attrs) + 5 * sizeof(__u64))
 
-enum {
-	LSOM_FL_VALID = 1 << 0,
+enum lustre_som_flags {
+	/* Unknow or no SoM data, must get size from OSTs. */
+	SOM_FL_UNKNOWN	= 0x0000,
+	/* Known strictly correct, FLR or DoM file (SoM guaranteed). */
+	SOM_FL_STRICT	= 0x0001,
+	/* Known stale - was right at some point in the past, but it is
+	 * known (or likely) to be incorrect now (e.g. opened for write). */
+	SOM_FL_STALE	= 0x0002,
+	/* Approximate, may never have been strictly correct,
+	 * need to sync SOM data to achieve eventual consistency. */
+	SOM_FL_LAZY	= 0x0004,
 };
 
 struct lustre_som_attrs {
@@ -998,6 +1007,8 @@ enum la_valid {
 	LA_KILL_SGID = 1 << 14,
 	LA_PROJID    = 1 << 15,
 	LA_LAYOUT_VERSION = 1 << 16,
+	LA_LSIZE = 1 << 17,
+	LA_LBLOCKS = 1 << 18,
 	/**
 	 * Attributes must be transmitted to OST objects
 	 */

@@ -233,6 +233,18 @@ check_lustre_ost_attrs(void)
 	CHECK_MEMBER(lustre_ost_attrs, loa_comp_end);
 }
 
+
+static void
+check_som_attrs(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lustre_som_attrs);
+	CHECK_MEMBER(lustre_som_attrs, lsa_valid);
+	CHECK_MEMBER(lustre_som_attrs, lsa_reserved;
+	CHECK_MEMBER(lustre_som_attrs, lsa_size);
+	CHECK_MEMBER(lustre_som_attrs, lsa_blocks);
+}
+
 static void
 check_hsm_attrs(void)
 {
@@ -2636,6 +2648,8 @@ main(int argc, char **argv)
 	CHECK_VALUE_64X(MDS_ATTR_FROM_OPEN);
 	CHECK_VALUE_64X(MDS_ATTR_BLOCKS);
 	CHECK_VALUE_64X(MDS_ATTR_PROJID);
+	CHECK_VALUE_64X(MDS_ATTR_LSIZE);
+	CHECK_VALUE_64X(MDS_ATTR_LBLOCKS);
 
 	CHECK_VALUE(FLD_QUERY);
 	CHECK_VALUE(FLD_READ);
@@ -2745,6 +2759,7 @@ main(int argc, char **argv)
 	CHECK_VALUE(OUT_NOOP);
 	CHECK_VALUE(OUT_XATTR_LIST);
 
+	check_som_attrs();
 	check_hsm_attrs();
 	check_ost_id();
 	check_lu_dirent();

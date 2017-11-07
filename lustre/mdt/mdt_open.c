@@ -1797,6 +1797,17 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	if (rc < 0)
 		GOTO(out_unlock, rc);
 
+	mutex_lock(&o->mot_som_mutex);
+	rc2 = mdt_set_som(info, o, SOM_FL_STRICT, ma->ma_attr.la_size,
+			   ma->ma_attr.la_blocks);
+	mutex_unlock(&o->mot_som_mutex);
+	if (rc2 < 0)
+		CDEBUG(D_INODE,
+		       "%s: File "DFID" SOM update failed: rc = %d\n",
+		       mdt_obd_name(info->mti_mdt),
+		       PFID(mdt_object_fid(o)), rc2);
+
+
 	ma->ma_need = MA_INODE | MA_LOV;
 	rc = mdt_attr_get_complex(info, o, ma);
 	if (rc < 0)
@@ -2026,7 +2037,11 @@ int mdt_close_handle_layouts(struct mdt_thread_info *info,
 		if (rc == 0 && ma->ma_attr.la_valid & (LA_SIZE | LA_BLOCKS)) {
 			int rc2;
 
-			rc2 = mdt_set_som(info, o, &ma->ma_attr);
+			mutex_lock(&o->mot_som_mutex);
+			rc2 = mdt_set_som(info, o, SOM_FL_STRICT,
+					  ma->ma_attr.la_size,
+					  ma->ma_attr.la_blocks);
+			mutex_unlock(&o->mot_som_mutex);
 			if (rc2 < 0)
 				CERROR(DFID": Setting i_blocks error: %d, "
 				       "i_blocks will be reported wrongly and "
@@ -2152,7 +2167,7 @@ static int mdt_close_resync_done(struct mdt_thread_info *info,
 	layout.mlc_opc = MD_LAYOUT_RESYNC_DONE;
 	layout.mlc_resync_count = resync_count;
 	if (ma->ma_attr.la_valid & (LA_SIZE | LA_BLOCKS)) {
-		layout.mlc_som.lsa_valid = LSOM_FL_VALID;
+		layout.mlc_som.lsa_valid = SOM_FL_STRICT;
 		layout.mlc_som.lsa_size = ma->ma_attr.la_size;
 		layout.mlc_som.lsa_blocks = ma->ma_attr.la_blocks;
 	}
@@ -2195,16 +2210,16 @@ static int mdt_mfd_closed(struct mdt_file_data *mfd)
 
 int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 {
-        struct mdt_object *o = mfd->mfd_object;
-        struct md_object *next = mdt_object_child(o);
-        struct md_attr *ma = &info->mti_attr;
-        int rc = 0;
+	struct mdt_object *o = mfd->mfd_object;
+	struct md_object *next = mdt_object_child(o);
+	struct md_attr *ma = &info->mti_attr;
+	int rc = 0;
 	__u64 mode;
 	__u64 intent;
-        ENTRY;
 
-        mode = mfd->mfd_mode;
+	ENTRY;
 
+	mode = mfd->mfd_mode;
 	intent = ma->ma_attr_flags & MDS_CLOSE_INTENT;
 
 	CDEBUG(D_INODE, "%s: close file "DFID" with intent: %llx\n",
@@ -2227,7 +2242,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 		rc = mdt_close_handle_layouts(info, o, ma);
 		if (rc < 0) {
 			CDEBUG(D_INODE,
-			       "%s: cannot swap layout of "DFID": rc=%d\n",
+			       "%s: cannot swap layout of "DFID": rc = %d\n",
 			       mdt_obd_name(info->mti_mdt),
 			       PFID(mdt_object_fid(o)), rc);
 			/* continue to close even if error occurred. */
@@ -2242,6 +2257,19 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 		break;
 	}
 
+	if (S_ISREG(lu_object_attr(&o->mot_obj)) &&
+	    ma->ma_attr.la_valid & (LA_LSIZE | LA_LBLOCKS)) {
+		int rc2;
+
+		rc2 = mdt_lsom_update(info, o, false);
+		if (rc2 < 0)
+			CDEBUG(D_INODE,
+			       "%s: File " DFID " LSOM failed: rc = %d\n",
+			       mdt_obd_name(info->mti_mdt),
+			       PFID(mdt_object_fid(o)), rc2);
+			/* continue to close even if error occured. */
+	}
+
 	if (mode & MDS_FMODE_WRITE)
 		mdt_write_put(o);
 	else if (mode & MDS_FMODE_EXEC)
@@ -2249,8 +2277,8 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 
         /* Update atime on close only. */
 	if ((mode & MDS_FMODE_EXEC || mode & MDS_FMODE_READ ||
-	     mode & MDS_FMODE_WRITE)
-            && (ma->ma_valid & MA_INODE) && (ma->ma_attr.la_valid & LA_ATIME)) {
+	     mode & MDS_FMODE_WRITE) && (ma->ma_valid & MA_INODE) &&
+	    (ma->ma_attr.la_valid & LA_ATIME)) {
                 /* Set the atime only. */
                 ma->ma_valid = MA_INODE;
                 ma->ma_attr.la_valid = LA_ATIME;

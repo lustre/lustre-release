@@ -3949,6 +3949,10 @@ test_52() {
 	done
 	echo
 
+	# sync all the data and make sure no pending data on the client,
+	# thus the SOM xattr would not be changed any more.
+	cancel_lru_locks osc
+
 	# backup files
 	echo backup files to $TMP/$tdir
 	local files=$(find $DIR/$tdir -type f -newer $TMP/modified_first)

@@ -276,6 +276,8 @@ struct mdt_object {
 						     * attribute cache */
 	int			mot_write_count;
 	spinlock_t		mot_write_lock;
+	/* Lock to protect object's SOM update. */
+	struct mutex		mot_som_mutex;
         /* Lock to protect create_data */
 	struct mutex		mot_lov_mutex;
 	/* lock to protect read/write stages for Data-on-MDT files */
@@ -455,7 +457,10 @@ struct mdt_thread_info {
 		struct {
 			struct md_attr attr;
 		} hsm;
-        } mti_u;
+		struct {
+			struct md_attr attr;
+		} som;
+	} mti_u;
 
 	struct lustre_handle	   mti_close_handle;
 	loff_t                     mti_off;
@@ -475,8 +480,6 @@ struct mdt_thread_info {
 	/* einfo used by mdt_remote_object_lock_try() */
 	struct ldlm_enqueue_info   mti_remote_einfo;
 	struct tg_reply_data	  *mti_reply_data;
-
-	struct lustre_som_attrs	   mti_som;
 
 	/* FLR: layout change API */
 	struct md_layout_change	   mti_layout;
@@ -1142,9 +1145,12 @@ static inline enum ldlm_mode mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
 
 /* mdt_som.c */
 int mdt_set_som(struct mdt_thread_info *info, struct mdt_object *obj,
-		struct lu_attr *attr);
+		enum lustre_som_flags flag, __u64 size, __u64 blocks);
 int mdt_get_som(struct mdt_thread_info *info, struct mdt_object *obj,
-		struct lu_attr *attr);
+		struct md_attr *ma);
+int mdt_lsom_downgrade(struct mdt_thread_info *info, struct mdt_object *obj);
+int mdt_lsom_update(struct mdt_thread_info *info, struct mdt_object *obj,
+		    bool truncate);
 
 /* mdt_lvb.c */
 extern struct ldlm_valblock_ops mdt_lvbo;

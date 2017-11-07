@@ -58,12 +58,14 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/param.h>
+#include <attr/xattr.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <time.h>
 #include <ctype.h>
 #include <zlib.h>
 #include <libgen.h>
+#include <asm/byteorder.h>
 #include "lfs_project.h"
 
 #include <libcfs/util/string.h>
@@ -116,6 +118,7 @@ static int lfs_hsm_cancel(int argc, char **argv);
 static int lfs_swap_layouts(int argc, char **argv);
 static int lfs_mv(int argc, char **argv);
 static int lfs_ladvise(int argc, char **argv);
+static int lfs_getsom(int argc, char **argv);
 static int lfs_mirror(int argc, char **argv);
 static int lfs_mirror_list_commands(int argc, char **argv);
 static int lfs_list_commands(int argc, char **argv);
@@ -570,6 +573,11 @@ command_t cmdlist[] = {
 	 "lfs mirror split  - split a mirror from an existing mirrored file\n"
 	 "lfs mirror resync - resynchronize out-of-sync mirrored file(s)\n"
 	 "lfs mirror verify - verify mirrored file(s)\n"},
+	{"getsom", lfs_getsom, 0, "To list the SOM info for a given file.\n"
+	 "usage: getsom [-s] [-b] [-f] <path>\n"
+	 "\t-s: Only show the size value of the SOM data for a given file\n"
+	 "\t-b: Only show the blocks value of the SOM data for a given file\n"
+	 "\t-f: Only show the flags value of the SOM data for a given file\n"},
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},
@@ -8853,6 +8861,93 @@ static int lfs_mirror(int argc, char **argv)
 		rc = Parser_commands();
 
 	return rc < 0 ? -rc : rc;
+}
+
+static void lustre_som_swab(struct lustre_som_attrs *attrs)
+{
+#if __BYTE_ORDER == __BIG_ENDIAN
+	__swab16s(&attrs->lsa_valid);
+	__swab64s(&attrs->lsa_size);
+	__swab64s(&attrs->lsa_blocks);
+#endif
+}
+
+enum lfs_som_type {
+	LFS_SOM_SIZE = 0x1,
+	LFS_SOM_BLOCKS = 0x2,
+	LFS_SOM_FLAGS = 0x4,
+	LFS_SOM_ATTR_ALL = LFS_SOM_SIZE | LFS_SOM_BLOCKS |
+			   LFS_SOM_FLAGS,
+};
+
+static int lfs_getsom(int argc, char **argv)
+{
+	const char *path;
+	struct lustre_som_attrs *attrs;
+	char buf[sizeof(*attrs) + 64];
+	enum lfs_som_type type = LFS_SOM_ATTR_ALL;
+	int rc = 0, c;
+
+	while ((c = getopt(argc, argv, "sbf")) != -1) {
+		switch (c) {
+		case 's':
+			type = LFS_SOM_SIZE;
+			break;
+		case 'b':
+			type = LFS_SOM_BLOCKS;
+			break;
+		case 'f':
+			type = LFS_SOM_FLAGS;
+			break;
+		default:
+			fprintf(stderr, "%s: invalid option '%c'\n",
+				progname, optopt);
+			return CMD_HELP;
+		}
+	}
+
+	argc -= optind;
+	argv += optind;
+
+	if (argc != 1) {
+		fprintf(stderr, "%s: %s\n",
+			progname, argc == 0 ? "miss file target" :
+			"input more than 2 files");
+		return CMD_HELP;
+	}
+
+	path = argv[0];
+	attrs = (void *)buf;
+	rc = lgetxattr(path, "trusted.som", attrs, sizeof(buf));
+	if (rc < 0) {
+		fprintf(stderr, "%s failed to get som xattr: %s\n", argv[0],
+			strerror(-rc));
+		return rc;
+	}
+
+	lustre_som_swab(attrs);
+
+	switch (type) {
+	case LFS_SOM_ATTR_ALL:
+		printf("file: %s size: %llu blocks: %llu flags: %x\n",
+		       path, attrs->lsa_size, attrs->lsa_blocks,
+		       attrs->lsa_valid);
+		break;
+	case LFS_SOM_SIZE:
+		printf("%llu\n", attrs->lsa_size);
+		break;
+	case LFS_SOM_BLOCKS:
+		printf("%llu\n", attrs->lsa_blocks);
+		break;
+	case LFS_SOM_FLAGS:
+		printf("%x\n", attrs->lsa_valid);
+		break;
+	default:
+		fprintf(stderr, "%s: unknown option\n", progname);
+		return CMD_HELP;
+	}
+
+	return rc;
 }
 
 /**

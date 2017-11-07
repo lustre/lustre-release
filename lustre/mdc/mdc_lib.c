@@ -326,6 +326,10 @@ static inline __u64 attr_pack(unsigned int ia_valid) {
                 sa_valid |= MDS_OPEN_OWNEROVERRIDE;
 	if (ia_valid & MDS_ATTR_PROJID)
 		sa_valid |= MDS_ATTR_PROJID;
+	if (ia_valid & MDS_ATTR_LSIZE)
+		sa_valid |= MDS_ATTR_LSIZE;
+	if (ia_valid & MDS_ATTR_LBLOCKS)
+		sa_valid |= MDS_ATTR_LBLOCKS;
         return sa_valid;
 }
 

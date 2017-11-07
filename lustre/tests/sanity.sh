@@ -19087,6 +19087,126 @@ test_805() {
 }
 run_test 805 "ZFS can remove from full fs"
 
+# Size-on-MDS test
+check_lsom_data()
+{
+	local file=$1
+	local size=$($LFS getsom -s $file)
+	local expect=$(stat -c %s $file)
+
+	[[ $size == $expect ]] ||
+		error "$file expected size: $expect, got: $size"
+
+	local blocks=$($LFS getsom -b $file)
+	expect=$(stat -c %b $file)
+	[[ $blocks == $expect ]] ||
+		error "$file expected blocks: $expect, got: $blocks"
+}
+
+check_lsom_size()
+{
+	local size=$($LFS getsom -s $1)
+	local expect=$2
+
+	[[ $size == $expect ]] ||
+		error "$file expected size: $expect, got: $size"
+}
+
+test_806() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52" && return
+
+	local bs=1048576
+
+	touch $DIR/$tfile || error "touch $tfile failed"
+
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_lustre_params client "llite.*.xattr_cache" > $save
+	lctl set_param llite.*.xattr_cache=0
+	stack_trap "restore_lustre_params < $save" EXIT
+
+	# single-threaded write
+	echo "Test SOM for single-threaded write"
+	dd if=/dev/zero of=$DIR/$tfile bs=$bs count=1 ||
+		error "write $tfile failed"
+	check_lsom_size $DIR/$tfile $bs
+
+	local num=32
+	local size=$(($num * $bs))
+	local offset=0
+	local i
+
+	echo "Test SOM for single client muti-threaded($num) write"
+	$TRUNCATE $DIR/$tfile 0
+	for ((i = 0; i < $num; i++)); do
+		$MULTIOP $DIR/$tfile Oz${offset}w${bs}c &
+		local pids[$i]=$!
+		offset=$((offset + $bs))
+	done
+	for (( i=0; i < $num; i++ )); do
+		wait ${pids[$i]}
+	done
+	check_lsom_size $DIR/$tfile $size
+
+	$TRUNCATE $DIR/$tfile 0
+	for ((i = 0; i < $num; i++)); do
+		offset=$((offset - $bs))
+		$MULTIOP $DIR/$tfile Oz${offset}w${bs}c &
+		local pids[$i]=$!
+	done
+	for (( i=0; i < $num; i++ )); do
+		wait ${pids[$i]}
+	done
+	check_lsom_size $DIR/$tfile $size
+
+	# multi-client wirtes
+	num=$(get_node_count ${CLIENTS//,/ })
+	size=$(($num * $bs))
+	offset=0
+	i=0
+
+	echo "Test SOM for muti-client ($num) writes"
+	$TRUNCATE $DIR/$tfile 0
+	for client in ${CLIENTS//,/ }; do
+		do_node $client $MULTIOP $DIR/$tfile Oz${offset}w${bs}c &
+		local pids[$i]=$!
+		i=$((i + 1))
+		offset=$((offset + $bs))
+	done
+	for (( i=0; i < $num; i++ )); do
+		wait ${pids[$i]}
+	done
+	check_lsom_size $DIR/$tfile $offset
+
+	i=0
+	$TRUNCATE $DIR/$tfile 0
+	for client in ${CLIENTS//,/ }; do
+		offset=$((offset - $bs))
+		do_node $client $MULTIOP $DIR/$tfile Oz${offset}w${bs}c &
+		local pids[$i]=$!
+		i=$((i + 1))
+	done
+	for (( i=0; i < $num; i++ )); do
+		wait ${pids[$i]}
+	done
+	check_lsom_size $DIR/$tfile $size
+
+	# verify truncate
+	echo "Test SOM for truncate"
+	$TRUNCATE $DIR/$tfile 1048576
+	check_lsom_size $DIR/$tfile 1048576
+	$TRUNCATE $DIR/$tfile 1234
+	check_lsom_size $DIR/$tfile 1234
+
+	# verify SOM blocks count
+	echo "Verify SOM block count"
+	$TRUNCATE $DIR/$tfile 0
+	$MULTIOP $DIR/$tfile oO_TRUNC:O_RDWR:w1048576YSc ||
+		error "failed to write file $tfile"
+	check_lsom_data $DIR/$tfile
+}
+run_test 806 "Verify Lazy Size on MDS"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

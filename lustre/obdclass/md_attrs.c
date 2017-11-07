@@ -112,6 +112,22 @@ void lustre_loa_swab(struct lustre_ost_attrs *loa, bool to_cpu)
 EXPORT_SYMBOL(lustre_loa_swab);
 
 /**
+ * Swab, if needed, SOM structure which is stored on-disk in little-endian
+ * order.
+ *
+ * \param attrs - is a pointer to the SOM structure to be swabbed.
+ */
+void lustre_som_swab(struct lustre_som_attrs *attrs)
+{
+#ifdef __BIG_ENDIAN
+	__swab16s(&attrs->lsa_valid);
+	__swab64s(&attrs->lsa_size);
+	__swab64s(&attrs->lsa_blocks);
+#endif
+}
+EXPORT_SYMBOL(lustre_som_swab);
+
+/**
  * Swab, if needed, HSM structure which is stored on-disk in little-endian
  * order.
  *

@@ -1027,7 +1027,7 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 			GOTO(out, rc);
 
 		if (S_ISREG(mode))
-			(void) mdt_get_som(info, o, &ma->ma_attr);
+			(void) mdt_get_som(info, o, ma);
 		ma->ma_valid |= MA_INODE;
 	}
 
@@ -1053,6 +1053,15 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 
 	if (need & MA_LMV_DEF && S_ISDIR(mode)) {
 		rc = mdt_stripe_get(info, o, ma, XATTR_NAME_DEFAULT_LMV);
+		if (rc != 0)
+			GOTO(out, rc);
+	}
+
+	/*
+	 * In the handle of MA_INODE, we may already get the SOM attr.
+	 */
+	if (need & MA_SOM && S_ISREG(mode) && !(ma->ma_valid & MA_SOM)) {
+		rc = mdt_get_som(info, o, ma);
 		if (rc != 0)
 			GOTO(out, rc);
 	}
@@ -1406,8 +1415,9 @@ int mdt_layout_change(struct mdt_thread_info *info, struct mdt_object *obj,
 	if (rc)
 		GOTO(out, rc);
 
+	mutex_lock(&obj->mot_som_mutex);
 	rc = mo_layout_change(info->mti_env, mdt_object_child(obj), layout);
-
+	mutex_unlock(&obj->mot_som_mutex);
 	mdt_object_unlock(info, obj, lh, 1);
 out:
 	RETURN(rc);
@@ -5286,6 +5296,7 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
 		lu_object_add_top(h, o);
 		o->lo_ops = &mdt_obj_ops;
 		spin_lock_init(&mo->mot_write_lock);
+		mutex_init(&mo->mot_som_mutex);
 		mutex_init(&mo->mot_lov_mutex);
 		init_rwsem(&mo->mot_dom_sem);
 		init_rwsem(&mo->mot_open_sem);

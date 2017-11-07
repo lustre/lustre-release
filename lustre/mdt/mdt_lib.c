@@ -975,6 +975,10 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
 		out |= LA_KILL_SGID;
 	if (in & MDS_ATTR_PROJID)
 		out |= LA_PROJID;
+	if (in & MDS_ATTR_LSIZE)
+		out |= LA_LSIZE;
+	if (in & MDS_ATTR_LBLOCKS)
+		out |= LA_LBLOCKS;
 
 	if (in & MDS_ATTR_FROM_OPEN)
 		rr->rr_flags |= MRF_OPEN_TRUNC;
@@ -988,7 +992,8 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
 		MDS_ATTR_ATIME_SET | MDS_ATTR_CTIME_SET | MDS_ATTR_MTIME_SET |
 		MDS_ATTR_SIZE | MDS_ATTR_BLOCKS | MDS_ATTR_ATTR_FLAG |
 		MDS_ATTR_FORCE | MDS_ATTR_KILL_SUID | MDS_ATTR_KILL_SGID |
-		MDS_ATTR_FROM_OPEN | MDS_OPEN_OWNEROVERRIDE);
+		MDS_ATTR_FROM_OPEN | MDS_ATTR_LSIZE | MDS_ATTR_LBLOCKS |
+		MDS_OPEN_OWNEROVERRIDE);
 	if (in != 0)
 		CERROR("Unknown attr bits: %#llx\n", in);
 	return out;

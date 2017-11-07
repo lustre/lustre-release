@@ -199,6 +199,11 @@ static int ll_close_inode_openhandle(struct inode *inode,
 		break;
 	}
 
+	if (!(op_data->op_attr.ia_valid & ATTR_SIZE))
+		op_data->op_attr.ia_valid |= MDS_ATTR_LSIZE;
+	if (!(op_data->op_attr.ia_valid & ATTR_BLOCKS))
+		op_data->op_attr.ia_valid |= MDS_ATTR_LBLOCKS;
+
 	rc = md_close(md_exp, op_data, och->och_mod, &req);
 	if (rc != 0 && rc != -EINTR)
 		CERROR("%s: inode "DFID" mdc close failed: rc = %d\n",

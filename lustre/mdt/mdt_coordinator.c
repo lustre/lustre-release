@@ -1320,7 +1320,15 @@ static int hsm_swap_layouts(struct mdt_thread_info *mti,
 				     mdt_object_child(obj),
 				     mdt_object_child(dobj),
 				     SWAP_LAYOUTS_MDS_HSM);
-
+	if (rc == 0) {
+		rc = mdt_lsom_downgrade(mti, obj);
+		if (rc)
+			CDEBUG(D_INODE,
+			       "%s: File fid="DFID" SOM "
+			       "downgrade failed, rc = %d\n",
+			       mdt_obd_name(mti->mti_mdt),
+			       PFID(mdt_object_fid(obj)), rc);
+	}
 out_dobj:
 	mdt_object_unlock_put(mti, dobj, dlh, 1);
 out:

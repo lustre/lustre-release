@@ -275,6 +275,10 @@ void lustre_assert_wire_constants(void)
 			(long long)MDS_ATTR_BLOCKS);
 	LASSERTF(MDS_ATTR_PROJID == 0x0000000000010000ULL, "found 0x%.16llxULL\n",
 			(long long)MDS_ATTR_PROJID);
+	LASSERTF(MDS_ATTR_LSIZE == 0x0000000000020000ULL, "found 0x%.16llxULL\n",
+			(long long)MDS_ATTR_LSIZE);
+	LASSERTF(MDS_ATTR_LBLOCKS == 0x0000000000040000ULL, "found 0x%.16llxULL\n",
+			(long long)MDS_ATTR_BLOCKS);
 	LASSERTF(FLD_QUERY == 900, "found %lld\n",
 		 (long long)FLD_QUERY);
 	LASSERTF(FLD_READ == 901, "found %lld\n",
@@ -522,6 +526,26 @@ void lustre_assert_wire_constants(void)
 		 (long long)OUT_NOOP);
 	LASSERTF(OUT_XATTR_LIST == 17, "found %lld\n",
 		 (long long)OUT_XATTR_LIST);
+
+	/* Checks for struct lustre_som_attrs */
+	LASSERTF((int)sizeof(struct lustre_som_attrs) == 24, "found %lld\n",
+		 (long long)(int)sizeof(struct lustre_som_attrs));
+	LASSERTF((int)offsetof(struct lustre_som_attrs, lsa_valid) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_som_attrs, lsa_valid));
+	LASSERTF((int)sizeof(((struct lustre_som_attrs *)0)->lsa_valid) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_som_attrs *)0)->lsa_valid));
+	LASSERTF((int)offsetof(struct lustre_som_attrs, lsa_reserved) == 2, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_som_attrs, lsa_reserved));
+	LASSERTF((int)sizeof(((struct lustre_som_attrs *)0)->lsa_reserved) == 6, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_som_attrs *)0)->lsa_reserved));
+	LASSERTF((int)offsetof(struct lustre_som_attrs, lsa_size) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_som_attrs, lsa_size));
+	LASSERTF((int)sizeof(((struct lustre_som_attrs *)0)->lsa_size) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_som_attrs *)0)->lsa_size));
+	LASSERTF((int)offsetof(struct lustre_som_attrs, lsa_blocks) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_som_attrs, lsa_blocks));
+	LASSERTF((int)sizeof(((struct lustre_som_attrs *)0)->lsa_blocks) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_som_attrs *)0)->lsa_blocks));
 
 	/* Checks for struct hsm_attrs */
 	LASSERTF((int)sizeof(struct hsm_attrs) == 24, "found %lld\n",
