@@ -3861,95 +3861,60 @@ static int ll_inode_revalidate_fini(struct inode *inode, int rc)
 	return rc;
 }
 
-static int __ll_inode_revalidate(struct dentry *dentry, __u64 ibits)
+static int __ll_inode_revalidate(struct dentry *dentry,
+				 enum ldlm_intent_flags op)
 {
-        struct inode *inode = dentry->d_inode;
-        struct ptlrpc_request *req = NULL;
-        struct obd_export *exp;
-        int rc = 0;
-        ENTRY;
+	struct inode *inode = dentry->d_inode;
+	struct lookup_intent oit = {
+		.it_op = op,
+	};
+	struct ptlrpc_request *req = NULL;
+	struct md_op_data *op_data;
+	struct obd_export *exp;
+	int rc = 0;
+	ENTRY;
 
-        LASSERT(inode != NULL);
+	LASSERT(inode != NULL);
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p),name=%s\n",
 	       PFID(ll_inode2fid(inode)), inode, dentry->d_name.name);
 
-        exp = ll_i2mdexp(inode);
+	exp = ll_i2mdexp(inode);
 
-        /* XXX: Enable OBD_CONNECT_ATTRFID to reduce unnecessary getattr RPC.
-         *      But under CMD case, it caused some lock issues, should be fixed
-         *      with new CMD ibits lock. See bug 12718 */
-	if (exp_connect_flags(exp) & OBD_CONNECT_ATTRFID) {
-                struct lookup_intent oit = { .it_op = IT_GETATTR };
-                struct md_op_data *op_data;
+	/* Call getattr by fid, so do not provide name at all. */
+	op_data = ll_prep_md_op_data(NULL, dentry->d_inode, dentry->d_inode,
+				     NULL, 0, 0, LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data))
+		RETURN(PTR_ERR(op_data));
 
-                if (ibits == MDS_INODELOCK_LOOKUP)
-                        oit.it_op = IT_LOOKUP;
+	rc = md_intent_lock(exp, op_data, &oit, &req, &ll_md_blocking_ast, 0);
+	ll_finish_md_op_data(op_data);
+	if (rc < 0) {
+		rc = ll_inode_revalidate_fini(inode, rc);
+		GOTO(out, rc);
+	}
 
-                /* Call getattr by fid, so do not provide name at all. */
-                op_data = ll_prep_md_op_data(NULL, dentry->d_inode,
-                                             dentry->d_inode, NULL, 0, 0,
-                                             LUSTRE_OPC_ANY, NULL);
-                if (IS_ERR(op_data))
-                        RETURN(PTR_ERR(op_data));
+	rc = ll_revalidate_it_finish(req, &oit, dentry);
+	if (rc != 0) {
+		ll_intent_release(&oit);
+		GOTO(out, rc);
+	}
 
-		rc = md_intent_lock(exp, op_data, &oit, &req,
-				    &ll_md_blocking_ast, 0);
-                ll_finish_md_op_data(op_data);
-                if (rc < 0) {
-                        rc = ll_inode_revalidate_fini(inode, rc);
-                        GOTO (out, rc);
-                }
+	/* Unlinked? Unhash dentry, so it is not picked up later by
+	 * do_lookup() -> ll_revalidate_it(). We cannot use d_drop
+	 * here to preserve get_cwd functionality on 2.6.
+	 * Bug 10503 */
+	if (!dentry->d_inode->i_nlink) {
+		ll_lock_dcache(inode);
+		d_lustre_invalidate(dentry, 0);
+		ll_unlock_dcache(inode);
+	}
 
-                rc = ll_revalidate_it_finish(req, &oit, dentry);
-                if (rc != 0) {
-                        ll_intent_release(&oit);
-                        GOTO(out, rc);
-                }
-
-                /* Unlinked? Unhash dentry, so it is not picked up later by
-                   do_lookup() -> ll_revalidate_it(). We cannot use d_drop
-                   here to preserve get_cwd functionality on 2.6.
-                   Bug 10503 */
-		if (!dentry->d_inode->i_nlink) {
-			ll_lock_dcache(inode);
-			d_lustre_invalidate(dentry, 0);
-			ll_unlock_dcache(inode);
-		}
-
-                ll_lookup_finish_locks(&oit, dentry);
-        } else if (!ll_have_md_lock(dentry->d_inode, &ibits, LCK_MINMODE)) {
-		struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
-		u64 valid = OBD_MD_FLGETATTR;
-		struct md_op_data *op_data;
-		int ealen = 0;
-
-		if (S_ISREG(inode->i_mode)) {
-			rc = ll_get_default_mdsize(sbi, &ealen);
-			if (rc)
-				RETURN(rc);
-			valid |= OBD_MD_FLEASIZE | OBD_MD_FLMODEASIZE;
-		}
-
-                op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL,
-                                             0, ealen, LUSTRE_OPC_ANY,
-                                             NULL);
-                if (IS_ERR(op_data))
-                        RETURN(PTR_ERR(op_data));
-
-                op_data->op_valid = valid;
-                rc = md_getattr(sbi->ll_md_exp, op_data, &req);
-                ll_finish_md_op_data(op_data);
-                if (rc) {
-                        rc = ll_inode_revalidate_fini(inode, rc);
-                        RETURN(rc);
-                }
-
-                rc = ll_prep_inode(&inode, req, NULL, NULL);
-        }
+	ll_lookup_finish_locks(&oit, dentry);
 out:
-        ptlrpc_req_finished(req);
-        return rc;
+	ptlrpc_req_finished(req);
+
+	return rc;
 }
 
 static int ll_merge_md_attr(struct inode *inode)
@@ -3975,13 +3940,13 @@ static int ll_merge_md_attr(struct inode *inode)
 }
 
 static int
-ll_inode_revalidate(struct dentry *dentry, __u64 ibits)
+ll_inode_revalidate(struct dentry *dentry, enum ldlm_intent_flags op)
 {
 	struct inode	*inode = dentry->d_inode;
 	int		 rc;
 	ENTRY;
 
-	rc = __ll_inode_revalidate(dentry, ibits);
+	rc = __ll_inode_revalidate(dentry, op);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -4038,8 +4003,7 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
         struct ll_inode_info *lli = ll_i2info(inode);
         int res = 0;
 
-	res = ll_inode_revalidate(de, MDS_INODELOCK_UPDATE |
-				      MDS_INODELOCK_LOOKUP);
+	res = ll_inode_revalidate(de, IT_GETATTR);
         ll_stats_ops_tally(sbi, LPROC_LL_GETATTR, 1);
 
         if (res)
@@ -4240,8 +4204,7 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
         * need to do it before permission check. */
 
         if (inode == inode->i_sb->s_root->d_inode) {
-		rc = __ll_inode_revalidate(inode->i_sb->s_root,
-					   MDS_INODELOCK_LOOKUP);
+		rc = __ll_inode_revalidate(inode->i_sb->s_root, IT_LOOKUP);
                 if (rc)
                         RETURN(rc);
         }

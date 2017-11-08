@@ -891,6 +891,7 @@ struct ptlrpc_body_v2 {
 
 /* Features required for this version of the client to work with server */
 #define CLIENT_CONNECT_MDT_REQD (OBD_CONNECT_FID |	\
+				 OBD_CONNECT_ATTRFID |	\
 				 OBD_CONNECT_FULL20)
 
 /* This structure is used for both request and reply.
