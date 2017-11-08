@@ -737,7 +737,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT_LARGE_ACL		0x200ULL /* more than 32 ACL entries */
 #define OBD_CONNECT_TRUNCLOCK           0x400ULL /*locks on server for punch */
 #define OBD_CONNECT_TRANSNO             0x800ULL /*replay sends init transno */
-#define OBD_CONNECT_IBITS              0x1000ULL /*support for inodebits locks*/
+#define OBD_CONNECT_IBITS	       0x1000ULL /* not checked in 2.11+ */
 #define OBD_CONNECT_BARRIER	       0x2000ULL /* write barrier */
 #define OBD_CONNECT_ATTRFID            0x4000ULL /*Server can GetAttr By Fid*/
 #define OBD_CONNECT_NODEVOH            0x8000ULL /*No open hndl on specl nodes*/
@@ -890,8 +890,8 @@ struct ptlrpc_body_v2 {
 #define MGS_CONNECT_SUPPORTED2 0
 
 /* Features required for this version of the client to work with server */
-#define CLIENT_CONNECT_MDT_REQD (OBD_CONNECT_IBITS | OBD_CONNECT_FID | \
-                                 OBD_CONNECT_FULL20)
+#define CLIENT_CONNECT_MDT_REQD (OBD_CONNECT_FID |	\
+				 OBD_CONNECT_FULL20)
 
 /* This structure is used for both request and reply.
  *
