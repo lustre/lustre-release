@@ -7291,7 +7291,7 @@ test_102() {
 	fi
 
 	# unload all and only load libcfs to allow fail_loc setting
-	do_facet mds1 lustre_rmmod || error "unable to unload modules"
+	do_facet mds1 $LUSTRE_RMMOD || error "unable to unload modules"
 	do_facet mds1 modprobe libcfs || error "libcfs not loaded"
 	do_facet mds1 lsmod \| grep libcfs || error "libcfs not loaded"
 
