@@ -354,7 +354,7 @@ typedef struct
 	cfs_time_t		fpo_deadline;	/* deadline of this pool */
 	int			fpo_failed;	/* fmr pool is failed */
 	int			fpo_map_count;	/* # of mapped FMR */
-	int			fpo_is_fmr;
+	bool			fpo_is_fmr; /* True if FMR pools allocated */
 } kib_fmr_pool_t;
 
 typedef struct {
@@ -640,8 +640,10 @@ typedef struct kib_tx                           /* transmit message */
 	struct scatterlist	*tx_frags;
 	/* rdma phys page addrs */
 	__u64			*tx_pages;
+	/* gaps in fragments */
+	bool			tx_gaps;
 	/* FMR */
-	kib_fmr_t		fmr;
+	kib_fmr_t		tx_fmr;
 				/* dma direction */
 	int			tx_dmadir;
 } kib_tx_t;
@@ -793,26 +795,6 @@ extern kib_data_t      kiblnd_data;
 extern void kiblnd_hdev_destroy(kib_hca_dev_t *hdev);
 
 int kiblnd_msg_queue_size(int version, struct lnet_ni *ni);
-
-/* max # of fragments configured by user */
-static inline int
-kiblnd_cfg_rdma_frags(struct lnet_ni *ni)
-{
-	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
-	int mod;
-
-	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
-	mod = tunables->lnd_map_on_demand;
-	return mod != 0 ? mod : IBLND_MAX_RDMA_FRAGS;
-}
-
-static inline int
-kiblnd_rdma_frags(int version, struct lnet_ni *ni)
-{
-	return version == IBLND_MSG_VERSION_1 ?
-	  IBLND_MAX_RDMA_FRAGS :
-	  kiblnd_cfg_rdma_frags(ni);
-}
 
 static inline int
 kiblnd_concurrent_sends(int version, struct lnet_ni *ni)
@@ -1180,10 +1162,6 @@ static inline unsigned int kiblnd_sg_dma_len(struct ib_device *dev,
 #define KIBLND_CONN_PARAM(e)            ((e)->param.conn.private_data)
 #define KIBLND_CONN_PARAM_LEN(e)        ((e)->param.conn.private_data_len)
 
-#ifdef HAVE_IB_GET_DMA_MR
-struct ib_mr *kiblnd_find_rd_dma_mr(struct lnet_ni *ni, kib_rdma_desc_t *rd,
-				    int negotiated_nfrags);
-#endif
 void kiblnd_map_rx_descs(kib_conn_t *conn);
 void kiblnd_unmap_rx_descs(kib_conn_t *conn);
 void kiblnd_pool_free_node(kib_pool_t *pool, struct list_head *node);
@@ -1191,7 +1169,7 @@ struct list_head *kiblnd_pool_alloc_node(kib_poolset_t *ps);
 
 int  kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, kib_tx_t *tx,
 			 kib_rdma_desc_t *rd, __u32 nob, __u64 iov,
-			 kib_fmr_t *fmr, bool *is_fastreg);
+			 kib_fmr_t *fmr);
 void kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status);
 
 int  kiblnd_tunables_setup(struct lnet_ni *ni);

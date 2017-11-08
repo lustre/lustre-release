@@ -333,7 +333,7 @@ kiblnd_create_peer(struct lnet_ni *ni, kib_peer_ni_t **peerp, lnet_nid_t nid)
 	peer_ni->ibp_nid = nid;
 	peer_ni->ibp_error = 0;
 	peer_ni->ibp_last_alive = 0;
-	peer_ni->ibp_max_frags = kiblnd_cfg_rdma_frags(peer_ni->ibp_ni);
+	peer_ni->ibp_max_frags = IBLND_MAX_RDMA_FRAGS;
 	peer_ni->ibp_queue_depth = ni->ni_net->net_tunables.lct_peer_tx_credits;
 	atomic_set(&peer_ni->ibp_refcount, 1);	/* 1 ref for caller */
 
@@ -866,6 +866,12 @@ kiblnd_create_conn(kib_peer_ni_t *peer_ni, struct rdma_cm_id *cmid,
 			  kiblnd_get_completion_vector(conn, cpt));
 #endif
 	if (IS_ERR(cq)) {
+		/*
+		 * on MLX-5 (possibly MLX-4 as well) this error could be
+		 * hit if the concurrent_sends and/or peer_tx_credits is set
+		 * too high. Or due to an MLX-5 bug which tries to
+		 * allocate 256kb via kmalloc for WR cookie array
+		 */
 		CERROR("Failed to create CQ with %d CQEs: %ld\n",
 			IBLND_CQ_ENTRIES(conn), PTR_ERR(cq));
 		goto failed_2;
@@ -1430,38 +1436,13 @@ kiblnd_map_tx_pool(kib_tx_pool_t *tpo)
 	}
 }
 
-#ifdef HAVE_IB_GET_DMA_MR
-struct ib_mr *
-kiblnd_find_rd_dma_mr(struct lnet_ni *ni, kib_rdma_desc_t *rd,
-		      int negotiated_nfrags)
-{
-	kib_net_t     *net   = ni->ni_data;
-	kib_hca_dev_t *hdev  = net->ibn_dev->ibd_hdev;
-	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
-	int	mod;
-	__u16	nfrags;
-
-	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
-	mod = tunables->lnd_map_on_demand;
-	nfrags = (negotiated_nfrags != -1) ? negotiated_nfrags : mod;
-
-	LASSERT(hdev->ibh_mrs != NULL);
-
-	if (mod > 0 && nfrags <= rd->rd_nfrags)
-		return NULL;
-
-	return hdev->ibh_mrs;
-}
-#endif
-
 static void
 kiblnd_destroy_fmr_pool(kib_fmr_pool_t *fpo)
 {
 	LASSERT(fpo->fpo_map_count == 0);
 
-	if (fpo->fpo_is_fmr) {
-		if (fpo->fmr.fpo_fmr_pool)
-			ib_destroy_fmr_pool(fpo->fmr.fpo_fmr_pool);
+	if (fpo->fpo_is_fmr && fpo->fmr.fpo_fmr_pool) {
+		ib_destroy_fmr_pool(fpo->fmr.fpo_fmr_pool);
 	} else {
 		struct kib_fast_reg_descriptor *frd, *tmp;
 		int i = 0;
@@ -1819,7 +1800,7 @@ kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status)
 
 int
 kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, kib_tx_t *tx, kib_rdma_desc_t *rd,
-		    __u32 nob, __u64 iov, kib_fmr_t *fmr, bool *is_fastreg)
+		    __u32 nob, __u64 iov, kib_fmr_t *fmr)
 {
 	kib_fmr_pool_t *fpo;
 	__u64 *pages = tx->tx_pages;
@@ -1839,7 +1820,6 @@ again:
 		if (fpo->fpo_is_fmr) {
 			struct ib_pool_fmr *pfmr;
 
-			*is_fastreg = 0;
 			spin_unlock(&fps->fps_lock);
 
 			if (!tx_pages_mapped) {
@@ -1859,7 +1839,6 @@ again:
 			}
 			rc = PTR_ERR(pfmr);
 		} else {
-			*is_fastreg = 1;
 			if (!list_empty(&fpo->fast_reg.fpo_pool_list)) {
 				struct kib_fast_reg_descriptor *frd;
 #ifdef HAVE_IB_MAP_MR_SG
@@ -2430,7 +2409,12 @@ kiblnd_net_init_pools(kib_net_t *net, struct lnet_ni *ni, __u32 *cpts,
 
 #ifdef HAVE_IB_GET_DMA_MR
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
-	if (tunables->lnd_map_on_demand == 0) {
+	/*
+	 * if lnd_map_on_demand is zero then we have effectively disabled
+	 * FMR or FastReg and we're using global memory regions
+	 * exclusively.
+	 */
+	if (!tunables->lnd_map_on_demand) {
 		read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
 					   flags);
 		goto create_tx_pool;

@@ -110,16 +110,42 @@ static int concurrent_sends;
 module_param(concurrent_sends, int, 0444);
 MODULE_PARM_DESC(concurrent_sends, "send work-queue sizing");
 
+/*
+ * map_on_demand is a flag used to determine if we can use FMR or FastReg.
+ * This is applicable for kernels which support global memory regions. For
+ * later kernels this flag is always enabled, since we will always either
+ * use FMR or FastReg
+ * For kernels which support global memory regions map_on_demand defaults
+ * to 0 which means we will be using global memory regions exclusively.
+ * If it is set to a value other than 0, then we will behave as follows:
+ *  1. Always default the number of fragments to IBLND_MAX_RDMA_FRAGS
+ *  2. Create FMR/FastReg pools
+ *  3. Negotiate the supported number of fragments per connection
+ *  4. Attempt to transmit using global memory regions only if
+ *     map-on-demand is not turned on, otherwise use FMR or FastReg
+ *  5. In case of transmitting tx with GAPS over FMR we will need to
+ *     transmit it with multiple fragments. Look at the comments in
+ *     kiblnd_fmr_map_tx() for an explanation of the behavior.
+ *
+ * For later kernels we default map_on_demand to 1 and not allow
+ * it to be set to 0, since there is no longer support for global memory
+ * regions. Behavior:
+ *  1. Default the number of fragments to IBLND_MAX_RDMA_FRAGS
+ *  2. Create FMR/FastReg pools
+ *  3. Negotiate the supported number of fragments per connection
+ *  4. Look at the comments in kiblnd_fmr_map_tx() for an explanation of
+ *     the behavior when transmit with GAPS verses contiguous.
+ */
 #ifdef HAVE_IB_GET_DMA_MR
 #define IBLND_DEFAULT_MAP_ON_DEMAND 0
-#define IBLND_MIN_MAP_ON_DEMAND 0
+#define MOD_STR "map on demand"
 #else
-#define IBLND_DEFAULT_MAP_ON_DEMAND IBLND_MAX_RDMA_FRAGS
-#define IBLND_MIN_MAP_ON_DEMAND 1
+#define IBLND_DEFAULT_MAP_ON_DEMAND 1
+#define MOD_STR "map on demand (obsolete)"
 #endif
 static int map_on_demand = IBLND_DEFAULT_MAP_ON_DEMAND;
 module_param(map_on_demand, int, 0444);
-MODULE_PARM_DESC(map_on_demand, "map on demand");
+MODULE_PARM_DESC(map_on_demand, MOD_STR);
 
 /* NB: this value is shared by all CPTs, it can grow at runtime */
 static int fmr_pool_size = 512;
@@ -236,6 +262,15 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 		net_tunables->lct_peer_tx_credits =
 			net_tunables->lct_max_tx_credits;
 
+#ifndef HAVE_IB_GET_DMA_MR
+	/*
+	 * For kernels which do not support global memory regions, always
+	 * enable map_on_demand
+	 */
+	if (tunables->lnd_map_on_demand == 0)
+		tunables->lnd_map_on_demand = 1;
+#endif
+
 	if (!tunables->lnd_peercredits_hiw)
 		tunables->lnd_peercredits_hiw = peer_credits_hiw;
 
@@ -245,30 +280,8 @@ kiblnd_tunables_setup(struct lnet_ni *ni)
 	if (tunables->lnd_peercredits_hiw >= net_tunables->lct_peer_tx_credits)
 		tunables->lnd_peercredits_hiw = net_tunables->lct_peer_tx_credits - 1;
 
-	if (tunables->lnd_map_on_demand < IBLND_MIN_MAP_ON_DEMAND ||
-	    tunables->lnd_map_on_demand > IBLND_MAX_RDMA_FRAGS) {
-		/* Use the default */
-		CWARN("Invalid map_on_demand (%d), expects %d - %d. Using default of %d\n",
-		      tunables->lnd_map_on_demand, IBLND_MIN_MAP_ON_DEMAND,
-		      IBLND_MAX_RDMA_FRAGS, IBLND_DEFAULT_MAP_ON_DEMAND);
-		tunables->lnd_map_on_demand = IBLND_DEFAULT_MAP_ON_DEMAND;
-	}
-
-	if (tunables->lnd_map_on_demand == 1) {
-		/* don't make sense to create map if only one fragment */
-		tunables->lnd_map_on_demand = 2;
-	}
-
-	if (tunables->lnd_concurrent_sends == 0) {
-		if (tunables->lnd_map_on_demand > 0 &&
-		    tunables->lnd_map_on_demand <= IBLND_MAX_RDMA_FRAGS / 8) {
-			tunables->lnd_concurrent_sends =
-					net_tunables->lct_peer_tx_credits * 2;
-		} else {
-			tunables->lnd_concurrent_sends =
-				net_tunables->lct_peer_tx_credits;
-		}
-	}
+	if (tunables->lnd_concurrent_sends == 0)
+			tunables->lnd_concurrent_sends = net_tunables->lct_peer_tx_credits;
 
 	if (tunables->lnd_concurrent_sends > net_tunables->lct_peer_tx_credits * 2)
 		tunables->lnd_concurrent_sends = net_tunables->lct_peer_tx_credits * 2;
@@ -303,7 +316,7 @@ int
 kiblnd_tunables_init(void)
 {
 	default_tunables.lnd_version = CURRENT_LND_VERSION;
-	default_tunables.lnd_peercredits_hiw = peer_credits_hiw,
+	default_tunables.lnd_peercredits_hiw = peer_credits_hiw;
 	default_tunables.lnd_map_on_demand = map_on_demand;
 	default_tunables.lnd_concurrent_sends = concurrent_sends;
 	default_tunables.lnd_fmr_pool_size = fmr_pool_size;

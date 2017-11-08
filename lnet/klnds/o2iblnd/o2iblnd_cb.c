@@ -129,6 +129,8 @@ kiblnd_get_idle_tx(struct lnet_ni *ni, lnet_nid_t target)
         LASSERT (tx->tx_lntmsg[1] == NULL);
         LASSERT (tx->tx_nfrags == 0);
 
+	tx->tx_gaps = false;
+
         return tx;
 }
 
@@ -543,36 +545,84 @@ static int
 kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 {
 	kib_hca_dev_t		*hdev;
+	kib_dev_t		*dev;
 	kib_fmr_poolset_t	*fps;
 	int			cpt;
 	int			rc;
 	int i;
-	bool is_fastreg = 0;
 
 	LASSERT(tx->tx_pool != NULL);
 	LASSERT(tx->tx_pool->tpo_pool.po_owner != NULL);
 
+	dev = net->ibn_dev;
 	hdev = tx->tx_pool->tpo_hdev;
 	cpt = tx->tx_pool->tpo_pool.po_owner->ps_cpt;
 
+	/*
+	 * If we're dealing with FastReg, but the device doesn't
+	 * support GAPS and the tx has GAPS, then there is no real point
+	 * in trying to map the memory, because it'll just fail. So
+	 * preemptively fail with an appropriate message
+	 */
+	if ((dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED) &&
+	    !(dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT) &&
+	    tx->tx_gaps) {
+		CERROR("Using FastReg with no GAPS support, but tx has gaps\n");
+		return -EPROTONOSUPPORT;
+	}
+
+	/*
+	 * FMR does not support gaps but the tx has gaps then
+	 * we should make sure that the number of fragments we'll be sending
+	 * over fits within the number of fragments negotiated on the
+	 * connection, otherwise, we won't be able to RDMA the data.
+	 * We need to maintain the number of fragments negotiation on the
+	 * connection for backwards compatibility.
+	 */
+	if (tx->tx_gaps && (dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED)) {
+		if (tx->tx_conn &&
+		    tx->tx_conn->ibc_max_frags <= rd->rd_nfrags) {
+			CERROR("TX number of frags (%d) is <= than connection"
+			       " number of frags (%d). Consider setting peer's"
+			       " map_on_demand to 256\n", tx->tx_nfrags,
+			       tx->tx_conn->ibc_max_frags);
+			return -EFBIG;
+		}
+	}
+
 	fps = net->ibn_fmr_ps[cpt];
-	rc = kiblnd_fmr_pool_map(fps, tx, rd, nob, 0, &tx->fmr, &is_fastreg);
+	rc = kiblnd_fmr_pool_map(fps, tx, rd, nob, 0, &tx->tx_fmr);
 	if (rc != 0) {
 		CERROR("Can't map %u pages: %d\n", nob, rc);
 		return rc;
 	}
 
-	/* If rd is not tx_rd, it's going to get sent to a peer_ni, who will need
-	 * the rkey */
-	rd->rd_key = tx->fmr.fmr_key;
-	if (!is_fastreg) {
+	/*
+	 * If rd is not tx_rd, it's going to get sent to a peer_ni, who will
+	 * need the rkey
+	 */
+	rd->rd_key = tx->tx_fmr.fmr_key;
+	/*
+	 * for FastReg or FMR with no gaps we can accumulate all
+	 * the fragments in one FastReg or FMR fragment.
+	 */
+	if (((dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED) && !tx->tx_gaps) ||
+	    (dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED)) {
+		/* FMR requires zero based address */
+		if (dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED)
+			rd->rd_frags[0].rf_addr &= ~hdev->ibh_page_mask;
+		rd->rd_frags[0].rf_nob = nob;
+		rd->rd_nfrags = 1;
+	} else {
+		/*
+		 * We're transmitting with gaps using FMR.
+		 * We'll need to use multiple fragments and identify the
+		 * zero based address of each fragment.
+		 */
 		for (i = 0; i < rd->rd_nfrags; i++) {
 			rd->rd_frags[i].rf_addr &= ~hdev->ibh_page_mask;
 			rd->rd_frags[i].rf_addr += i << hdev->ibh_page_shift;
 		}
-	} else {
-		rd->rd_frags[0].rf_nob = nob;
-		rd->rd_nfrags = 1;
 	}
 
 	return 0;
@@ -581,8 +631,8 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 static void
 kiblnd_unmap_tx(kib_tx_t *tx)
 {
-	if (tx->fmr.fmr_pfmr || tx->fmr.fmr_frd)
-		kiblnd_fmr_pool_unmap(&tx->fmr, tx->tx_status);
+	if (tx->tx_fmr.fmr_pfmr || tx->tx_fmr.fmr_frd)
+		kiblnd_fmr_pool_unmap(&tx->tx_fmr, tx->tx_status);
 
 	if (tx->tx_nfrags != 0) {
 		kiblnd_dma_unmap_sg(tx->tx_pool->tpo_hdev->ibh_ibdev,
@@ -590,6 +640,36 @@ kiblnd_unmap_tx(kib_tx_t *tx)
 		tx->tx_nfrags = 0;
 	}
 }
+
+#ifdef HAVE_IB_GET_DMA_MR
+static struct ib_mr *
+kiblnd_find_rd_dma_mr(struct lnet_ni *ni, kib_rdma_desc_t *rd)
+{
+	kib_net_t     *net   = ni->ni_data;
+	kib_hca_dev_t *hdev  = net->ibn_dev->ibd_hdev;
+	struct lnet_ioctl_config_o2iblnd_tunables *tunables;
+
+	tunables = &ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
+
+	/*
+	 * if map-on-demand is turned on and the device supports
+	 * either FMR or FastReg then use that. Otherwise use global
+	 * memory regions. If that's not available either, then you're
+	 * dead in the water and fail the operation.
+	 */
+	if (tunables->lnd_map_on_demand &&
+	    (net->ibn_dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED ||
+	     net->ibn_dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED))
+		return NULL;
+
+	/*
+	 * hdev->ibh_mrs can be NULL. This case is dealt with gracefully
+	 * in the call chain. The mapping will fail with appropriate error
+	 * message.
+	 */
+	return hdev->ibh_mrs;
+}
+#endif
 
 static int
 kiblnd_map_tx(struct lnet_ni *ni, kib_tx_t *tx, kib_rdma_desc_t *rd, int nfrags)
@@ -619,9 +699,7 @@ kiblnd_map_tx(struct lnet_ni *ni, kib_tx_t *tx, kib_rdma_desc_t *rd, int nfrags)
         }
 
 #ifdef HAVE_IB_GET_DMA_MR
-	mr = kiblnd_find_rd_dma_mr(ni, rd,
-				   (tx->tx_conn != NULL) ?
-				   tx->tx_conn->ibc_max_frags : -1);
+	mr = kiblnd_find_rd_dma_mr(ni, rd);
 	if (mr != NULL) {
 		/* found pre-mapping MR */
 		rd->rd_key = (rd != tx->tx_rd) ? mr->rkey : mr->lkey;
@@ -634,7 +712,6 @@ kiblnd_map_tx(struct lnet_ni *ni, kib_tx_t *tx, kib_rdma_desc_t *rd, int nfrags)
 
 	return -EINVAL;
 }
-
 
 static int
 kiblnd_setup_rd_iov(struct lnet_ni *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
@@ -673,6 +750,13 @@ kiblnd_setup_rd_iov(struct lnet_ni *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
 		fragnob = min((int)(iov->iov_len - offset), nob);
 		fragnob = min(fragnob, (int)PAGE_SIZE - page_offset);
 
+		if ((fragnob < (int)PAGE_SIZE - page_offset) && (niov > 1)) {
+			CDEBUG(D_NET, "fragnob %d < available page %d: with"
+				      " remaining %d iovs\n",
+			       fragnob, (int)PAGE_SIZE - page_offset, niov);
+			tx->tx_gaps = true;
+		}
+
 		sg_set_page(sg, page, fragnob, page_offset);
 		sg = sg_next(sg);
 		if (!sg) {
@@ -697,28 +781,35 @@ static int
 kiblnd_setup_rd_kiov(struct lnet_ni *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
 		     int nkiov, lnet_kiov_t *kiov, int offset, int nob)
 {
-        kib_net_t          *net = ni->ni_data;
-        struct scatterlist *sg;
-        int                 fragnob;
+	kib_net_t          *net = ni->ni_data;
+	struct scatterlist *sg;
+	int                 fragnob;
 
-        CDEBUG(D_NET, "niov %d offset %d nob %d\n", nkiov, offset, nob);
+	CDEBUG(D_NET, "niov %d offset %d nob %d\n", nkiov, offset, nob);
 
-        LASSERT (nob > 0);
-        LASSERT (nkiov > 0);
-        LASSERT (net != NULL);
+	LASSERT(nob > 0);
+	LASSERT(nkiov > 0);
+	LASSERT(net != NULL);
 
-        while (offset >= kiov->kiov_len) {
-                offset -= kiov->kiov_len;
-                nkiov--;
-                kiov++;
-                LASSERT (nkiov > 0);
-        }
+	while (offset >= kiov->kiov_len) {
+		offset -= kiov->kiov_len;
+		nkiov--;
+		kiov++;
+		LASSERT(nkiov > 0);
+	}
 
-        sg = tx->tx_frags;
-        do {
-                LASSERT (nkiov > 0);
+	sg = tx->tx_frags;
+	do {
+		LASSERT(nkiov > 0);
 
-                fragnob = min((int)(kiov->kiov_len - offset), nob);
+		fragnob = min((int)(kiov->kiov_len - offset), nob);
+
+		if ((fragnob < (int)(kiov->kiov_len - offset)) && nkiov > 1) {
+			CDEBUG(D_NET, "fragnob %d < available page %d: with"
+				      " remaining %d kiovs\n",
+			       fragnob, (int)(kiov->kiov_len - offset), nkiov);
+			tx->tx_gaps = true;
+		}
 
 		sg_set_page(sg, kiov->kiov_page, fragnob,
 			    kiov->kiov_offset + offset);
@@ -728,13 +819,13 @@ kiblnd_setup_rd_kiov(struct lnet_ni *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
 			return -EFAULT;
 		}
 
-                offset = 0;
-                kiov++;
-                nkiov--;
-                nob -= fragnob;
-        } while (nob > 0);
+		offset = 0;
+		kiov++;
+		nkiov--;
+		nob -= fragnob;
+	} while (nob > 0);
 
-        return kiblnd_map_tx(ni, tx, rd, sg - tx->tx_frags);
+	return kiblnd_map_tx(ni, tx, rd, sg - tx->tx_frags);
 }
 
 static int
@@ -827,7 +918,7 @@ __must_hold(&conn->ibc_lock)
                 /* close_conn will launch failover */
                 rc = -ENETDOWN;
         } else {
-		struct kib_fast_reg_descriptor *frd = tx->fmr.fmr_frd;
+		struct kib_fast_reg_descriptor *frd = tx->tx_fmr.fmr_frd;
 		struct ib_send_wr *bad = &tx->tx_wrq[tx->tx_nwrq - 1].wr;
 		struct ib_send_wr *wr  = &tx->tx_wrq[0].wr;
 
@@ -2339,26 +2430,26 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 	}
 
 	if (reqmsg->ibm_u.connparams.ibcp_max_frags >
-	    kiblnd_rdma_frags(version, ni)) {
+	    IBLND_MAX_RDMA_FRAGS) {
 		CWARN("Can't accept conn from %s (version %x): "
 		      "max_frags %d too large (%d wanted)\n",
 		      libcfs_nid2str(nid), version,
 		      reqmsg->ibm_u.connparams.ibcp_max_frags,
-		      kiblnd_rdma_frags(version, ni));
+		      IBLND_MAX_RDMA_FRAGS);
 
 		if (version >= IBLND_MSG_VERSION)
 			rej.ibr_why = IBLND_REJECT_RDMA_FRAGS;
 
 		goto failed;
 	} else if (reqmsg->ibm_u.connparams.ibcp_max_frags <
-		   kiblnd_rdma_frags(version, ni) &&
+		   IBLND_MAX_RDMA_FRAGS &&
 		   net->ibn_fmr_ps == NULL) {
 		CWARN("Can't accept conn from %s (version %x): "
 		      "max_frags %d incompatible without FMR pool "
 		      "(%d wanted)\n",
 		      libcfs_nid2str(nid), version,
 		      reqmsg->ibm_u.connparams.ibcp_max_frags,
-		      kiblnd_rdma_frags(version, ni));
+		      IBLND_MAX_RDMA_FRAGS);
 
 		if (version == IBLND_MSG_VERSION)
 			rej.ibr_why = IBLND_REJECT_RDMA_FRAGS;
@@ -2532,7 +2623,7 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 	if (ni != NULL) {
 		rej.ibr_cp.ibcp_queue_depth =
 			kiblnd_msg_queue_size(version, ni);
-		rej.ibr_cp.ibcp_max_frags   = kiblnd_rdma_frags(version, ni);
+		rej.ibr_cp.ibcp_max_frags   = IBLND_MAX_RDMA_FRAGS;
 		lnet_ni_decref(ni);
 	}
 
@@ -2592,10 +2683,16 @@ kiblnd_check_reconnect(kib_conn_t *conn, int version,
 			goto out;
 		}
 		tunables = &peer_ni->ibp_ni->ni_lnd_tunables.lnd_tun_u.lnd_o2ib;
+#ifdef HAVE_IB_GET_DMA_MR
+		/*
+		 * This check only makes sense if the kernel supports global
+		 * memory registration. Otherwise, map_on_demand will never == 0
+		 */
 		if (!tunables->lnd_map_on_demand) {
 			reason = "map_on_demand must be enabled";
 			goto out;
 		}
+#endif
 		if (conn->ibc_max_frags <= frag_num) {
 			reason = "unsupported max frags";
 			goto out;
