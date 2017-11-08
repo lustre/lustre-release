@@ -1,6 +1,6 @@
 #!/bin/bash
 trap 'kill $(jobs -p)' EXIT
-
+RACER_ENABLE_DOM=${RACER_ENABLE_DOM:-false}
 DIR=$1
 MAX=$2
 MAX_MB=${RACER_MAX_MB:-8}
@@ -16,8 +16,10 @@ layout=(raid0 raid0)
 	layout+=(pfl pfl pfl)
 
 # check if it supports DoM
-[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.53) ]] &&
-	layout+=(dom dom)
+if $RACER_ENABLE_DOM ; then
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.53) ]] &&
+		layout+=(dom dom dom)
+fi
 
 echo "layout: ${layout[*]}"
 
