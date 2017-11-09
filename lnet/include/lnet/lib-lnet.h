@@ -568,7 +568,7 @@ extern int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
 extern int libcfs_ioctl_getdata(struct libcfs_ioctl_hdr **hdr_pp,
 				struct libcfs_ioctl_hdr __user *uparam);
 extern int lnet_get_peer_list(__u32 *countp, __u32 *sizep,
-			      lnet_process_id_t __user *ids);
+			      struct lnet_process_id __user *ids);
 
 void lnet_router_debugfs_init(void);
 void lnet_router_debugfs_fini(void);
@@ -982,7 +982,8 @@ lnet_peer_needs_push(struct lnet_peer *lp)
 	return false;
 }
 
-void lnet_incr_stats(struct lnet_element_stats *stats, lnet_msg_type_t msg_type,
+void lnet_incr_stats(struct lnet_element_stats *stats,
+		     enum lnet_msg_type msg_type,
 		     enum lnet_stats_type stats_type);
 
 __u32 lnet_sum_stats(struct lnet_element_stats *stats,

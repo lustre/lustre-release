@@ -942,7 +942,7 @@ lnet_destroy_rc_data(struct lnet_rc_data *rcd)
 	LIBCFS_FREE(rcd, sizeof(*rcd));
 }
 
-static lnet_rc_data_t *
+static struct lnet_rc_data *
 lnet_update_rc_data_locked(struct lnet_peer_ni *gateway)
 {
 	struct lnet_handle_md mdh;

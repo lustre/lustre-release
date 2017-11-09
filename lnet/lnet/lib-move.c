@@ -62,7 +62,8 @@ get_stats_counts(struct lnet_element_stats *stats,
 	return NULL;
 }
 
-void lnet_incr_stats(struct lnet_element_stats *stats, lnet_msg_type_t msg_type,
+void lnet_incr_stats(struct lnet_element_stats *stats,
+		     enum lnet_msg_type msg_type,
 		     enum lnet_stats_type stats_type)
 {
 	struct lnet_comm_count *counts = get_stats_counts(stats, stats_type);

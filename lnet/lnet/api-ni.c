@@ -101,8 +101,8 @@ static atomic_t lnet_dlc_seq_no = ATOMIC_INIT(0);
 static int lnet_ping(struct lnet_process_id id, signed long timeout,
 		     struct lnet_process_id __user *ids, int n_ids);
 
-static int lnet_discover(lnet_process_id_t id, __u32 force,
-			 lnet_process_id_t __user *ids, int n_ids);
+static int lnet_discover(struct lnet_process_id id, __u32 force,
+			 struct lnet_process_id __user *ids, int n_ids);
 
 static int
 discovery_set(const char *val, struct kernel_param *kp)
@@ -1389,11 +1389,11 @@ lnet_ping_target_fini(void)
 /* Resize the push target. */
 int lnet_push_target_resize(void)
 {
-	lnet_process_id_t id = { LNET_NID_ANY, LNET_PID_ANY };
-	lnet_md_t md = { NULL };
-	lnet_handle_me_t meh;
-	lnet_handle_md_t mdh;
-	lnet_handle_md_t old_mdh;
+	struct lnet_process_id id = { LNET_NID_ANY, LNET_PID_ANY };
+	struct lnet_md md = { NULL };
+	struct lnet_handle_me meh;
+	struct lnet_handle_md mdh;
+	struct lnet_handle_md old_mdh;
 	struct lnet_ping_buffer *pbuf;
 	struct lnet_ping_buffer *old_pbuf;
 	int nnis = the_lnet.ln_push_target_nnis;
@@ -3267,7 +3267,7 @@ LNetCtl(unsigned int cmd, void *arg)
 
 		mutex_lock(&the_lnet.ln_api_mutex);
 		rc = lnet_get_peer_list(&cfg->prcfg_count, &cfg->prcfg_size,
-				(lnet_process_id_t __user *)cfg->prcfg_bulk);
+				(struct lnet_process_id __user *)cfg->prcfg_bulk);
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return rc;
 	}
@@ -3655,13 +3655,13 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 }
 
 static int
-lnet_discover(lnet_process_id_t id, __u32 force, lnet_process_id_t __user *ids,
-	      int n_ids)
+lnet_discover(struct lnet_process_id id, __u32 force,
+	      struct lnet_process_id __user *ids, int n_ids)
 {
 	struct lnet_peer_ni *lpni;
 	struct lnet_peer_ni *p;
 	struct lnet_peer *lp;
-	lnet_process_id_t *buf;
+	struct lnet_process_id *buf;
 	int cpt;
 	int i;
 	int rc;

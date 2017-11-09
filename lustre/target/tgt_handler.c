@@ -1865,7 +1865,7 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 
 static int check_read_checksum(struct niobuf_local *local_nb, int npages,
 			       struct obd_export *exp, struct obdo *oa,
-			       const lnet_process_id_t *peer,
+			       const struct lnet_process_id *peer,
 			       __u32 client_cksum, __u32 server_cksum,
 			       enum cksum_types server_cksum_type)
 {

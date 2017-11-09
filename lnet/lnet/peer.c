@@ -718,10 +718,9 @@ lnet_get_next_peer_ni_locked(struct lnet_peer *peer,
 }
 
 /* Call with the ln_api_mutex held */
-int
-lnet_get_peer_list(__u32 *countp, __u32 *sizep, lnet_process_id_t __user *ids)
+int lnet_get_peer_list(u32 *countp, u32 *sizep, struct lnet_process_id __user *ids)
 {
-	lnet_process_id_t id;
+	struct lnet_process_id id;
 	struct lnet_peer_table *ptable;
 	struct lnet_peer *lp;
 	__u32 count = 0;
@@ -2314,7 +2313,7 @@ lnet_discovery_event_unlink(struct lnet_peer *lp, struct lnet_event *ev)
  * Called with lnet_res_lock(cpt) held. The cpt is the
  * lnet_cpt_of_cookie() of the md handle cookie.
  */
-static void lnet_discovery_event_handler(lnet_event_t *event)
+static void lnet_discovery_event_handler(struct lnet_event *event)
 {
 	struct lnet_peer *lp = event->md.user_ptr;
 	struct lnet_ping_buffer *pbuf;
@@ -2489,7 +2488,7 @@ out:
 static int
 lnet_peer_set_primary_data(struct lnet_peer *lp, struct lnet_ping_buffer *pbuf)
 {
-	lnet_handle_md_t mdh;
+	struct lnet_handle_md mdh;
 
 	/* Queue lp for discovery, and force it on the request queue. */
 	lnet_net_lock(LNET_LOCK_EX);
@@ -2649,7 +2648,7 @@ out:
 static int lnet_peer_ping_failed(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
 {
-	lnet_handle_md_t mdh;
+	struct lnet_handle_md mdh;
 	int rc;
 
 	mdh = lp->lp_ping_mdh;
@@ -2708,8 +2707,8 @@ static lnet_nid_t lnet_peer_select_nid(struct lnet_peer *lp)
 static int lnet_peer_send_ping(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
 {
-	lnet_md_t md = { NULL };
-	lnet_process_id_t id;
+	struct lnet_md md = { NULL };
+	struct lnet_process_id id;
 	struct lnet_ping_buffer *pbuf;
 	int nnis;
 	int rc;
@@ -2789,7 +2788,7 @@ fail_error:
 static int lnet_peer_push_failed(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
 {
-	lnet_handle_md_t mdh;
+	struct lnet_handle_md mdh;
 	int rc;
 
 	mdh = lp->lp_push_mdh;
@@ -2812,8 +2811,8 @@ static int lnet_peer_send_push(struct lnet_peer *lp)
 __must_hold(&lp->lp_lock)
 {
 	struct lnet_ping_buffer *pbuf;
-	lnet_process_id_t id;
-	lnet_md_t md;
+	struct lnet_process_id id;
+	struct lnet_md md;
 	int cpt;
 	int rc;
 

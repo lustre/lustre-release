@@ -64,7 +64,7 @@
 /* forward refs */
 struct lnet_libmd;
 
-typedef struct lnet_msg {
+struct lnet_msg {
 	struct list_head	msg_activelist;
 	struct list_head	msg_list;	/* Q for credits/MD */
 
@@ -128,17 +128,17 @@ typedef struct lnet_msg {
 
 	struct lnet_event	msg_ev;
 	struct lnet_hdr		msg_hdr;
-} lnet_msg_t;
+};
 
-typedef struct lnet_libhandle {
+struct lnet_libhandle {
 	struct list_head	lh_hash_chain;
 	__u64			lh_cookie;
-} lnet_libhandle_t;
+};
 
 #define lh_entry(ptr, type, member) \
 	((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 
-typedef struct lnet_eq {
+struct lnet_eq {
 	struct list_head	eq_list;
 	struct lnet_libhandle	eq_lh;
 	unsigned long		eq_enq_seq;
@@ -147,9 +147,9 @@ typedef struct lnet_eq {
 	lnet_eq_handler_t	eq_callback;
 	struct lnet_event	*eq_events;
 	int			**eq_refs;	/* percpt refcount for EQ */
-} lnet_eq_t;
+};
 
-typedef struct lnet_me {
+struct lnet_me {
 	struct list_head	me_list;
 	struct lnet_libhandle	me_lh;
 	struct lnet_process_id	me_match_id;
@@ -159,9 +159,9 @@ typedef struct lnet_me {
 	__u64			me_ignore_bits;
 	enum lnet_unlink	me_unlink;
 	struct lnet_libmd      *me_md;
-} lnet_me_t;
+};
 
-typedef struct lnet_libmd {
+struct lnet_libmd {
 	struct list_head	md_list;
 	struct lnet_libhandle	md_lh;
 	struct lnet_me	       *md_me;
@@ -181,18 +181,18 @@ typedef struct lnet_libmd {
 		struct kvec	iov[LNET_MAX_IOV];
 		lnet_kiov_t	kiov[LNET_MAX_IOV];
 	} md_iov;
-} lnet_libmd_t;
+};
 
 #define LNET_MD_FLAG_ZOMBIE	 (1 << 0)
 #define LNET_MD_FLAG_AUTO_UNLINK (1 << 1)
 #define LNET_MD_FLAG_ABORTED	 (1 << 2)
 
-typedef struct lnet_test_peer {
+struct lnet_test_peer {
 	/* info about peers we are trying to fail */
 	struct list_head	tp_list;	/* ln_test_peers */
 	lnet_nid_t		tp_nid;		/* matching nid */
 	unsigned int		tp_threshold;	/* # failures to simulate */
-} lnet_test_peer_t;
+};
 
 #define LNET_COOKIE_TYPE_MD    1
 #define LNET_COOKIE_TYPE_ME    2
@@ -203,7 +203,7 @@ typedef struct lnet_test_peer {
 struct lnet_ni;					 /* forward ref */
 struct socket;
 
-typedef struct lnet_lnd {
+struct lnet_lnd {
 	/* fields managed by portals */
 	struct list_head	lnd_list;	/* stash in the LND table */
 	int			lnd_refcount;	/* # active instances */
@@ -261,7 +261,7 @@ typedef struct lnet_lnd {
 
 	/* accept a new connection */
 	int (*lnd_accept)(struct lnet_ni *ni, struct socket *sock);
-} lnd_t;
+};
 
 struct lnet_tx_queue {
 	int			tq_credits;	/* # tx credits free */
@@ -358,7 +358,7 @@ struct lnet_net {
 	enum lnet_net_state	net_state;
 };
 
-typedef struct lnet_ni {
+struct lnet_ni {
 	/* chain on the lnet_net structure */
 	struct list_head	ni_netlist;
 
@@ -421,7 +421,7 @@ typedef struct lnet_ni {
 	 */
 	char			*ni_interfaces[LNET_INTERFACES_NUM];
 	struct net		*ni_net_ns;     /* original net namespace */
-} lnet_ni_t;
+};
 
 #define LNET_PROTO_PING_MATCHBITS	0x8000000000000000LL
 
@@ -446,14 +446,14 @@ struct lnet_ping_buffer {
 	container_of((PINFO), struct lnet_ping_buffer, pb_info)
 
 /* router checker data, per router */
-typedef struct lnet_rc_data {
+struct lnet_rc_data {
 	/* chain on the_lnet.ln_zombie_rcd or ln_deathrow_rcd */
 	struct list_head	rcd_list;
 	struct lnet_handle_md	rcd_mdh;	/* ping buffer MD */
 	struct lnet_peer_ni	*rcd_gateway;	/* reference to gateway */
 	struct lnet_ping_buffer	*rcd_pingbuffer;/* ping buffer */
 	int			rcd_nnis;	/* desired size of buffer */
-} lnet_rc_data_t;
+};
 
 struct lnet_peer_ni {
 	/* chain on lpn_peer_nis */
@@ -574,10 +574,10 @@ struct lnet_peer {
 	struct lnet_ping_buffer	*lp_data;
 
 	/* MD handle for ping in progress */
-	lnet_handle_md_t	lp_ping_mdh;
+	struct lnet_handle_md	lp_ping_mdh;
 
 	/* MD handle for push in progress */
-	lnet_handle_md_t	lp_push_mdh;
+	struct lnet_handle_md	lp_push_mdh;
 
 	/* number of NIDs for sizing push data */
 	int			lp_data_nnis;
@@ -712,7 +712,7 @@ struct lnet_peer_table {
 					((lp)->lpni_net) && \
 					(lp)->lpni_net->net_tunables.lct_peer_timeout > 0)
 
-typedef struct lnet_route {
+struct lnet_route {
 	struct list_head	lr_list;	/* chain on net */
 	struct list_head	lr_gwlist;	/* chain on gateway */
 	struct lnet_peer_ni	*lr_gateway;	/* router node */
@@ -721,20 +721,20 @@ typedef struct lnet_route {
 	unsigned int		lr_downis;	/* number of down NIs */
 	__u32			lr_hops;	/* how far I am */
 	unsigned int		lr_priority;	/* route priority */
-} lnet_route_t;
+};
 
 #define LNET_REMOTE_NETS_HASH_DEFAULT	(1U << 7)
 #define LNET_REMOTE_NETS_HASH_MAX	(1U << 16)
 #define LNET_REMOTE_NETS_HASH_SIZE	(1 << the_lnet.ln_remote_nets_hbits)
 
-typedef struct lnet_remotenet {
+struct lnet_remotenet {
 	/* chain on ln_remote_nets_hash */
 	struct list_head	lrn_list;
 	/* routes to me */
 	struct list_head	lrn_routes;
 	/* my net number */
 	__u32			lrn_net;
-} lnet_remotenet_t;
+};
 
 /** lnet message has credit and can be submitted to lnd for send/receive */
 #define LNET_CREDIT_OK		0
@@ -743,7 +743,7 @@ typedef struct lnet_remotenet {
 /** lnet message is waiting for discovery */
 #define LNET_DC_WAIT		2
 
-typedef struct lnet_rtrbufpool {
+struct lnet_rtrbufpool {
 	/* my free buffer pool */
 	struct list_head	rbp_bufs;
 	/* messages blocking for a buffer */
@@ -758,13 +758,13 @@ typedef struct lnet_rtrbufpool {
 	int			rbp_credits;
 	/* low water mark */
 	int			rbp_mincredits;
-} lnet_rtrbufpool_t;
+};
 
-typedef struct lnet_rtrbuf {
+struct lnet_rtrbuf {
 	struct list_head	 rb_list;	/* chain on rbp_bufs */
 	struct lnet_rtrbufpool	*rb_pool;	/* owning pool */
 	lnet_kiov_t		 rb_kiov[0];	/* the buffer space */
-} lnet_rtrbuf_t;
+};
 
 #define LNET_PEER_HASHSIZE   503		/* prime! */
 
@@ -834,7 +834,7 @@ struct lnet_match_table {
 /* dispatch routed PUT message by hashing source NID for wildcard portals */
 #define	LNET_PTL_ROTOR_HASH_RT	3
 
-typedef struct lnet_portal {
+struct lnet_portal {
 	spinlock_t		ptl_lock;
 	unsigned int		ptl_index;	/* portal ID, reserved */
 	/* flags on this portal: lazy, unique... */
@@ -851,7 +851,7 @@ typedef struct lnet_portal {
 	int			ptl_mt_nmaps;
 	/* array of active entries' cpu-partition-id */
 	int			ptl_mt_maps[0];
-} lnet_portal_t;
+};
 
 #define LNET_LH_HASH_BITS	12
 #define LNET_LH_HASH_SIZE	(1ULL << LNET_LH_HASH_BITS)
@@ -892,7 +892,7 @@ struct lnet_msg_container {
 #define LNET_STATE_RUNNING		1	/* started up OK */
 #define LNET_STATE_STOPPING		2	/* telling thread to stop */
 
-typedef struct lnet {
+struct lnet {
 	/* CPU partition table of LNet */
 	struct cfs_cpt_table		*ln_cpt_table;
 	/* number of CPTs in ln_cpt_table */
@@ -971,13 +971,13 @@ typedef struct lnet {
 	 * buffer may linger a while after it has been unlinked, in
 	 * which case the event handler cleans up.
 	 */
-	lnet_handle_eq_t		ln_push_target_eq;
-	lnet_handle_md_t		ln_push_target_md;
+	struct lnet_handle_eq		ln_push_target_eq;
+	struct lnet_handle_md		ln_push_target_md;
 	struct lnet_ping_buffer		*ln_push_target;
 	int				ln_push_target_nnis;
 
 	/* discovery event queue handle */
-	lnet_handle_eq_t		ln_dc_eqh;
+	struct lnet_handle_eq		ln_dc_eqh;
 	/* discovery requests */
 	struct list_head		ln_dc_request;
 	/* discovery working list */
@@ -1030,6 +1030,6 @@ typedef struct lnet {
 	 * the list, the router checker will sleep on this queue.  when
 	 * routes are added the thread will wake up */
 	wait_queue_head_t		ln_rc_waitq;
-} lnet_t;
+};
 
 #endif

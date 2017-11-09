@@ -1411,7 +1411,7 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 }
 
 static int
-check_write_checksum(struct obdo *oa, const lnet_process_id_t *peer,
+check_write_checksum(struct obdo *oa, const struct lnet_process_id *peer,
 				__u32 client_cksum, __u32 server_cksum,
 				struct osc_brw_async_args *aa)
 {

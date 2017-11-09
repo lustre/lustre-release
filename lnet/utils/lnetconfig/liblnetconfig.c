@@ -497,7 +497,7 @@ static int infra_ping_nid(char *ping_nids, char *oper, int param, int ioc_call,
 	struct lnet_ioctl_ping_data ping;
 	struct cYAML *root = NULL, *ping_node = NULL, *item = NULL,
 		     *first_seq = NULL,	*tmp = NULL, *peer_ni = NULL;
-	lnet_process_id_t id;
+	struct lnet_process_id id;
 	char err_str[LNET_MAX_STR_LEN] = {0};
 	char *sep, *token, *end;
 	char buf[6];
@@ -506,7 +506,7 @@ static int infra_ping_nid(char *ping_nids, char *oper, int param, int ioc_call,
 	int i;
 	bool flag = false;
 
-	len = (sizeof(lnet_process_id_t) * LNET_INTERFACES_MAX_DEFAULT);
+	len = (sizeof(struct lnet_process_id) * LNET_INTERFACES_MAX_DEFAULT);
 
 	data = calloc(1, len);
 	if (data == NULL)
@@ -2404,7 +2404,7 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 		     *first_seq = NULL, *peer_root = NULL, *tmp = NULL,
 		     *msg_statistics = NULL, *statistics = NULL;
 	char err_str[LNET_MAX_STR_LEN];
-	lnet_process_id_t *list = NULL;
+	struct lnet_process_id *list = NULL;
 	void *data = NULL;
 	void *lpni_data;
 
@@ -2421,7 +2421,7 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 		goto out;
 
 	count = 1000;
-	size = count * sizeof(lnet_process_id_t);
+	size = count * sizeof(struct lnet_process_id);
 	list = malloc(size);
 	if (list == NULL) {
 		l_errno = ENOMEM;
@@ -2684,7 +2684,7 @@ int lustre_lnet_list_peer(int seq_no,
 	int l_errno = 0;
 	struct cYAML *root = NULL, *list_root = NULL, *first_seq = NULL;
 	char err_str[LNET_MAX_STR_LEN];
-	lnet_process_id_t *list = NULL;
+	struct lnet_process_id *list = NULL;
 
 	snprintf(err_str, sizeof(err_str),
 		 "\"out of memory\"");
@@ -2701,7 +2701,7 @@ int lustre_lnet_list_peer(int seq_no,
 		goto out;
 
 	count = 1000;
-	size = count * sizeof(lnet_process_id_t);
+	size = count * sizeof(struct lnet_process_id);
 	list = malloc(size);
 	if (list == NULL) {
 		l_errno = ENOMEM;

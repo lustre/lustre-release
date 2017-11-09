@@ -120,8 +120,8 @@ struct lnet_ioctl_ping_data {
 	__u32 ping_count;
 	__u32 ping_flags;
 	bool mr_info;
-	lnet_process_id_t ping_id;
-	lnet_process_id_t __user *ping_buf;
+	struct lnet_process_id ping_id;
+	struct lnet_process_id __user *ping_buf;
 };
 
 struct lnet_ioctl_config_data {
