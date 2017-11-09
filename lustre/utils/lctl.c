@@ -245,6 +245,7 @@ command_t cmdlist[] = {
 	 "list pools and pools members\n"
 	 "usage: pool_list  <fsname>[.<poolname>] | <pathname>"},
 
+#ifdef HAVE_SERVER_SUPPORT
 	/* Barrier commands */
 	{"===  Barrier ==", NULL, 0, "barrier management"},
 	{"barrier_freeze", jt_barrier_freeze, 0,
@@ -297,7 +298,7 @@ command_t cmdlist[] = {
 	 "usage: snapshot_umount <-F | --fsname fsname> [-h | --help]\n"
 	 "			 <-n | --name ssname>\n"
 	 "			 [-r | --rsh remote_shell]"},
-
+#endif /* HAVE_SERVER_SUPPORT */
 	/* Nodemap commands */
 	{"=== Nodemap ===", NULL, 0, "nodemap management"},
 	{"nodemap_activate", jt_nodemap_activate, 0,
@@ -451,7 +452,7 @@ command_t cmdlist[] = {
 	 "get the version of an object on servers\n"
 	 "usage: getobjversion <fid>\n"
 	 "	 getobjversion -i <id> -g <group>"},
-
+#ifdef HAVE_SERVER_SUPPORT
 	/* LFSCK commands */
 	{"==== LFSCK ====", NULL, 0, "LFSCK"},
 	{"lfsck_start", jt_lfsck_start, 0, "start LFSCK\n"
@@ -471,7 +472,7 @@ command_t cmdlist[] = {
 	 "usage: lfsck_query [-M | --device MDT_device] [-h | --help]\n"
 	 "		     [-t | --type lfsck_type[,lfsck_type...]]\n"
 	 "		     [-w | --wait]"},
-
+#endif /* HAVE_SERVER_SUPPORT */
 	{"==== obsolete (DANGEROUS) ====", NULL, 0, "obsolete (DANGEROUS)"},
 	/* some test scripts still use these */
 	{"cfg_device", jt_obd_device, 0,

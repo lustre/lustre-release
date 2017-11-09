@@ -4073,6 +4073,7 @@ out:
         return rc;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 static const char *barrier_status2name(enum barrier_status status)
 {
 	switch (status) {
@@ -4344,6 +4345,7 @@ int jt_barrier_rescan(int argc, char **argv)
 
 	return rc;
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 int jt_get_obj_version(int argc, char **argv)
 {

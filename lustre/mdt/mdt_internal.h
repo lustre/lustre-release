@@ -264,6 +264,8 @@ struct mdt_device {
 #define MDT_SERVICE_WATCHDOG_FACTOR	(2)
 #define MDT_COS_DEFAULT         (0)
 
+#define ENOENT_VERSION 1	/** 'virtual' version of non-existent object */
+
 struct mdt_object {
 	struct lu_object_header	mot_header;
 	struct lu_object	mot_obj;

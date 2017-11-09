@@ -51,7 +51,10 @@ endif
 noinst_LIBRARIES = liblustreapitmp.a
 endif # UTILS
 
-lctl_SOURCES = lustre_lfsck.c portals.c debug.c obd.c lustre_cfg.c lctl.c obdctl.h lsnapshot.c
+lctl_SOURCES = portals.c debug.c obd.c lustre_cfg.c lctl.c obdctl.h
+if SERVER
+lctl_SOURCES += lustre_lfsck.c lsnapshot.c
+endif
 lctl_LDADD :=  liblustreapi.a $(LIBCFS) $(LIBREADLINE) $(PTHREAD_LIBS)
 lctl_DEPENDENCIES := $(LIBCFS) liblustreapi.a
 

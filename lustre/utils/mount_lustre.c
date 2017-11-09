@@ -347,6 +347,7 @@ out_options:
 	return rc;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 /* Add mgsnids from ldd params */
 static int add_mgsnids(struct mount_opts *mop, char *options,
 		       const char *params, size_t options_len)
@@ -580,6 +581,7 @@ static int parse_ldd(char *source, struct mount_opts *mop,
 
 	return rc;
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 static void set_defaults(struct mount_opts *mop)
 {
@@ -701,6 +703,7 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 	return 0;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 /* change label from <fsname>:<index> to
  * <fsname>-<index> to indicate the device has
  * been registered. only if the label is
@@ -729,6 +732,7 @@ static void label_lustre(struct mount_opts *mop)
 		}
 	}
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 int main(int argc, char *const argv[])
 {
@@ -818,6 +822,7 @@ int main(int argc, char *const argv[])
 
 	client = (strstr(mop.mo_usource, ":/") != NULL);
 	if (!client) {
+#ifdef HAVE_SERVER_SUPPORT
 		rc = osd_init();
 		if (rc)
 			goto out_options;
@@ -825,6 +830,10 @@ int main(int argc, char *const argv[])
 		rc = parse_ldd(mop.mo_source, &mop, options, maxopt_len);
 		if (rc)
 			goto out_osd;
+#else
+		rc = -EINVAL;
+		goto out_options;
+#endif
 	}
 
 	/* In Linux 2.4, the target device doesn't get passed to any of our
@@ -837,13 +846,14 @@ int main(int argc, char *const argv[])
 		printf("mounting device %s at %s, flags=%#x options=%s\n",
 		       mop.mo_source, mop.mo_target, flags, options);
 
+#ifdef HAVE_SERVER_SUPPORT
 	if (!client && osd_tune_lustre(mop.mo_source, &mop)) {
 		if (verbose)
 			fprintf(stderr, "%s: unable to set tunables for %s"
 					" (may cause reduced IO performance)\n",
 					argv[0], mop.mo_source);
 	}
-
+#endif
 #ifdef HAVE_GSS
 	if (mop.mo_skpath[0] != '\0') {
 		/* Treat shared key failures as fatal */
@@ -864,10 +874,7 @@ int main(int argc, char *const argv[])
 		for (i = 0, rc = -EAGAIN; i <= mop.mo_retry && rc != 0; i++) {
 			rc = mount(mop.mo_source, mop.mo_target, "lustre",
 				   flags, (void *)options);
-			if (rc == 0) {
-				if (!client)
-					label_lustre(&mop);
-			} else {
+			if (rc != 0) {
                                 if (verbose) {
                                         fprintf(stderr, "%s: mount %s at %s "
                                                 "failed: %s retries left: "
@@ -884,6 +891,11 @@ int main(int argc, char *const argv[])
 				} else {
 					rc = errno;
 				}
+#ifdef HAVE_SERVER_SUPPORT
+			} else {
+				if (!client)
+					label_lustre(&mop);
+#endif
 			}
 		}
 	}
@@ -965,9 +977,10 @@ int main(int argc, char *const argv[])
 	}
 
 out_osd:
+#ifdef HAVE_SERVER_SUPPORT
 	if (!client)
 		osd_fini();
-
+#endif
 out_options:
 	free(options);
 

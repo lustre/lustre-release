@@ -33,7 +33,9 @@
 #ifndef _OBDCTL_H_
 #define _OBDCTL_H_
 
+#ifdef HAVE_SERVER_SUPPORT
 #include <linux/lustre/lustre_barrier_user.h>
+#endif
 
 /* ptlctl.a */
 int ptl_initialize(int argc, char **argv);
@@ -163,6 +165,7 @@ int jt_lcfg_setparam(int argc, char **argv);
 int jt_lcfg_listparam(int argc, char **argv);
 
 int jt_pool_cmd(int argc, char **argv);
+#ifdef HAVE_SERVER_SUPPORT
 int jt_barrier_freeze(int argc, char **argv);
 int jt_barrier_thaw(int argc, char **argv);
 int __jt_barrier_stat(const char *fsname, struct barrier_ctl *bc);
@@ -174,6 +177,7 @@ int jt_snapshot_modify(int argc, char **argv);
 int jt_snapshot_list(int argc, char **argv);
 int jt_snapshot_mount(int argc, char **argv);
 int jt_snapshot_umount(int argc, char **argv);
+#endif /* HAVE_SERVER_SUPPORT */
 int jt_nodemap_activate(int argc, char **argv);
 int jt_nodemap_add(int argc, char **argv);
 int jt_nodemap_del(int argc, char **argv);
@@ -189,9 +193,11 @@ int jt_nodemap_info(int argc, char **argv);
 int jt_changelog_register(int argc, char **argv);
 int jt_changelog_deregister(int argc, char **argv);
 
+#ifdef HAVE_SERVER_SUPPORT
 /* lustre_lfsck.c */
 int jt_lfsck_start(int argc, char **argv);
 int jt_lfsck_stop(int argc, char **argv);
 int jt_lfsck_query(int argc, char **argv);
+#endif /* HAVE_SERVER_SUPPORT */
 
 #endif

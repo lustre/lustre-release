@@ -36,8 +36,10 @@
 #include <string.h>
 
 #include <linux/lustre/lustre_idl.h>
+#ifdef HAVE_SERVER_SUPPORT
 #include <linux/lustre/lustre_lfsck_user.h>
 #include <linux/lustre/lustre_disk.h>
+#endif
 
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
 #define LASSERTF(cond, fmt, ...) if (!(cond)) { printf("failed '" #cond "'" fmt, ## __VA_ARGS__);ret = 1;}
@@ -5182,12 +5184,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lfsck_request, lr_padding_3));
 	LASSERTF((int)sizeof(((struct lfsck_request *)0)->lr_padding_3) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct lfsck_request *)0)->lr_padding_3));
+#ifdef HAVE_SERVER_SUPPORT
 	LASSERTF(LFSCK_TYPE_SCRUB == 0x00000000UL, "found 0x%.8xUL\n",
 		(unsigned)LFSCK_TYPE_SCRUB);
 	LASSERTF(LFSCK_TYPE_LAYOUT == 0x00000001UL, "found 0x%.8xUL\n",
 		(unsigned)LFSCK_TYPE_LAYOUT);
 	LASSERTF(LFSCK_TYPE_NAMESPACE == 0x00000004UL, "found 0x%.8xUL\n",
 		(unsigned)LFSCK_TYPE_NAMESPACE);
+#endif
 	LASSERTF(LE_LASTID_REBUILDING == 1, "found %lld\n",
 		 (long long)LE_LASTID_REBUILDING);
 	LASSERTF(LE_LASTID_REBUILT == 2, "found %lld\n",

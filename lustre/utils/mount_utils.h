@@ -55,8 +55,10 @@
 #include <sys/stat.h>
 
 #include <libcfs/util/list.h>
-#include <linux/lustre/lustre_disk.h>
 #include <linux/lustre/lustre_param.h>
+#ifdef HAVE_SERVER_SUPPORT
+#include <linux/lustre/lustre_disk.h>
+#endif
 
 extern char *progname;
 extern int verbose;
@@ -81,6 +83,32 @@ extern int failover;
 /* Maximum length of on-disk parameters in the form key=<value> */
 #define PARAM_MAX		4096
 
+#ifdef HAVE_SERVER_SUPPORT
+/* On-disk configuration file. In host-endian order. */
+struct lustre_disk_data {
+	__u32 ldd_magic;
+	__u32 ldd_feature_compat;	/* compatible feature flags */
+	__u32 ldd_feature_rocompat;	/* read-only compatible feature flags */
+	__u32 ldd_feature_incompat;	/* incompatible feature flags */
+
+	__u32 ldd_config_ver;		/* config rewrite count - not used */
+	__u32 ldd_flags;		/* LDD_SV_TYPE */
+	__u32 ldd_svindex;		/* server index (0001), must match
+					 * svname
+					 */
+	__u32 ldd_mount_type;		/* target fs type LDD_MT_* */
+	char  ldd_fsname[64];		/* filesystem this server is part of,
+					 * MTI_NAME_MAXLEN
+					 */
+	char  ldd_svname[64];		/* this server's name (lustre-mdt0001)*/
+	__u8  ldd_uuid[40];		/* server UUID (COMPAT_146) */
+
+	char  ldd_userdata[1024 - 200];	/* arbitrary user string '200' */
+	__u8  ldd_padding[4096 - 1024];	/* 1024 */
+	char  ldd_mount_opts[4096];	/* target fs mount opts '4096' */
+	char  ldd_params[4096];		/* key=value pairs '8192' */
+};
+
 /* used to describe the options to format the lustre disk, not persistent */
 struct mkfs_opts {
 	struct lustre_disk_data	mo_ldd; /* to be written in MOUNT_DATA_FILE */
@@ -94,10 +122,13 @@ struct mkfs_opts {
 	int	mo_flags;
 	int	mo_mgs_failnodes;
 };
+#endif
 
 /* used to describe the options to mount the lustre disk */
 struct mount_opts {
+#ifdef HAVE_SERVER_SUPPORT
 	struct lustre_disk_data	 mo_ldd;
+#endif
 	char	*mo_orig_options;
 	char	*mo_usource;		/* user-specified mount device */
 	char	*mo_source;		/* our mount device name */
@@ -115,6 +146,7 @@ struct mount_opts {
 	int	 mo_max_sectors_kb;
 };
 
+#ifdef HAVE_SERVER_SUPPORT
 int get_mountdata(char *, struct lustre_disk_data *);
 
 static inline char *mt_str(enum ldd_mount_type mt)
@@ -142,6 +174,7 @@ static inline char *mt_type(enum ldd_mount_type mt)
 	};
 	return mount_type_string[mt];
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
@@ -168,6 +201,7 @@ int update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 int update_utab_entry(struct mount_opts *mop);
 int check_mountfsoptions(char *mountopts, char *wanted_mountopts);
 void trim_mountfsoptions(char *s);
+#ifdef HAVE_SERVER_SUPPORT
 __u64 get_device_size(char* device);
 int lustre_rename_fsname(struct mkfs_opts *mop, const char *mntpt,
 			 const char *oldname);
@@ -220,6 +254,8 @@ struct module_backfs_ops ldiskfs_ops;
 
 struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type);
 void unload_backfs_ops(struct module_backfs_ops *ops);
+#endif
+
 #ifdef HAVE_OPENSSL_SSK
 int load_shared_keys(struct mount_opts *mop);
 #else

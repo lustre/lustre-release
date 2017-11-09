@@ -68,7 +68,9 @@ extern int verbose;
 #define vprint(fmt, arg...) if (verbose > 0) printf(fmt, ##arg)
 #define verrprint(fmt, arg...) if (verbose >= 0) fprintf(stderr, fmt, ##arg)
 
+#ifdef HAVE_SERVER_SUPPORT
 static struct module_backfs_ops *backfs_ops[LDD_MT_LAST];
+#endif
 
 void fatal(void)
 {
@@ -117,6 +119,7 @@ int run_command(char *cmd, int cmdsz)
         return rc;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 int add_param(char *buf, char *key, char *val)
 {
 	int end = sizeof(((struct lustre_disk_data *)0)->ldd_params);
@@ -193,6 +196,7 @@ int append_param(char *buf, char *key, char *val, char sep)
 
 	return add_param(buf, key, str);
 }
+#endif
 
 char *strscat(char *dst, char *src, int buflen)
 {
@@ -395,6 +399,7 @@ void trim_mountfsoptions(char *s)
 		*p-- = '\0';
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 /* Setup a file in the first unused loop_device */
 int loop_setup(struct mkfs_opts *mop)
 {
@@ -895,6 +900,7 @@ __u64 get_device_size(char* device)
 	/* return value in KB */
 	return size >> 10;
 }
+#endif
 
 int file_create(char *path, __u64 size)
 {
@@ -941,7 +947,7 @@ int file_create(char *path, __u64 size)
 	return 0;
 }
 
-
+#ifdef HAVE_SERVER_SUPPORT
 struct lustre_cfg_entry {
 	struct list_head lce_list;
 	char		 lce_name[0];
@@ -1130,6 +1136,7 @@ out:
 
 	return ret;
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 #ifdef HAVE_GSS
 #ifdef HAVE_OPENSSL_SSK
