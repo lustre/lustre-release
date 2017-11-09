@@ -1400,6 +1400,8 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 	s1 = options + strlen(options) - 1;
 	while (s1 >= options && (*s1 == ',' || *s1 == ' '))
 		*s1-- = 0;
+	while (*options && (*options == ',' || *options == ' '))
+		options++;
 	if (*options != 0) {
 		/* Freed in lustre_free_lsi */
 		OBD_ALLOC(lmd->lmd_opts, strlen(options) + 1);

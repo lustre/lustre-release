@@ -1661,6 +1661,63 @@ static int server_statfs(struct dentry *dentry, struct kstatfs *buf)
 	RETURN(0);
 }
 
+#ifdef HAVE_SUPEROPS_USE_DENTRY
+int server_show_options(struct seq_file *seq, struct dentry *dentry)
+#else
+int server_show_options(struct seq_file *seq, struct vfsmount *vfs)
+#endif
+{
+	struct lustre_sb_info *lsi;
+	struct lustre_mount_data *lmd;
+
+#ifdef HAVE_SUPEROPS_USE_DENTRY
+	LASSERT(seq != NULL && dentry != NULL);
+	lsi = s2lsi(dentry->d_sb);
+#else
+	LASSERT(seq != NULL && vfs != NULL);
+	lsi = s2lsi(vfs->mnt_sb);
+#endif
+
+	lmd = lsi->lsi_lmd;
+	seq_printf(seq, ",svname=%s", lmd->lmd_profile);
+
+	if  (lmd->lmd_flags & LMD_FLG_ABORT_RECOV)
+		seq_puts(seq, ",abort_recov");
+
+	if (lmd->lmd_flags & LMD_FLG_NOIR)
+		seq_puts(seq, ",noir");
+
+	if (lmd->lmd_flags & LMD_FLG_NOSVC)
+		seq_puts(seq, ",nosvc");
+
+	if (lmd->lmd_flags & LMD_FLG_NOMGS)
+		seq_puts(seq, ",nomgs");
+
+	if (lmd->lmd_flags & LMD_FLG_NOSCRUB)
+		seq_puts(seq, ",noscrub");
+	if (lmd->lmd_flags & LMD_FLG_SKIP_LFSCK)
+		seq_puts(seq, ",skip_lfsck");
+
+	if (lmd->lmd_flags & LMD_FLG_DEV_RDONLY)
+		seq_puts(seq, ",rdonly_dev");
+
+	if (lmd->lmd_flags & LMD_FLG_MGS)
+		seq_puts(seq, ",mgs");
+
+	if (lmd->lmd_mgs != NULL)
+		seq_printf(seq, ",mgsnode=%s", lmd->lmd_mgs);
+
+	if (lmd->lmd_osd_type != NULL)
+		seq_printf(seq, ",osd=%s", lmd->lmd_osd_type);
+
+	if (lmd->lmd_opts != NULL) {
+		seq_putc(seq, ',');
+		seq_puts(seq, lmd->lmd_opts);
+	}
+
+	RETURN(0);
+}
+
 /** The operations we support directly on the superblock:
  * mount, umount, and df.
  */
@@ -1668,6 +1725,7 @@ static struct super_operations server_ops = {
 	.put_super	= server_put_super,
 	.umount_begin	= server_umount_begin, /* umount -f */
 	.statfs		= server_statfs,
+	.show_options	= server_show_options,
 };
 
 /*
