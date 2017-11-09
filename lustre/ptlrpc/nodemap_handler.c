@@ -71,9 +71,9 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
 	nm_member_reclassify_nodemap(nodemap);
 	up_read(&active_config->nmc_range_tree_lock);
 
-	write_lock(&nodemap->nm_idmap_lock);
+	down_write(&nodemap->nm_idmap_lock);
 	idmap_delete_tree(nodemap);
-	write_unlock(&nodemap->nm_idmap_lock);
+	up_write(&nodemap->nm_idmap_lock);
 
 	mutex_unlock(&active_config_lock);
 
@@ -448,28 +448,56 @@ EXPORT_SYMBOL(nodemap_del_member);
 /**
  * add an idmap to the proper nodemap trees
  *
- * \param	name		name of nodemap
+ * \param	nodemap		nodemap to add idmap to
  * \param	id_type		NODEMAP_UID or NODEMAP_GID
  * \param	map		array[2] __u32 containing the map values
  *				map[0] is client id
  *				map[1] is the filesystem id
  *
- * \retval	0 on success
+ * \retval	0	on success
+ * \retval	< 0	if error occurs
  */
 int nodemap_add_idmap_helper(struct lu_nodemap *nodemap,
 			     enum nodemap_id_type id_type,
 			     const __u32 map[2])
 {
 	struct lu_idmap		*idmap;
+	struct lu_idmap		*temp;
 	int			rc = 0;
 
 	idmap = idmap_create(map[0], map[1]);
 	if (idmap == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	write_lock(&nodemap->nm_idmap_lock);
-	idmap_insert(id_type, idmap, nodemap);
-	write_unlock(&nodemap->nm_idmap_lock);
+	down_write(&nodemap->nm_idmap_lock);
+	temp = idmap_insert(id_type, idmap, nodemap);
+	/* If the new id_client or id_fs is matched, the old idmap and its
+	 * index should be deleted according to its id_client before the new
+	 * idmap is added again.
+	 */
+	if (IS_ERR(temp))
+		GOTO(out_insert, rc = PTR_ERR(temp));
+	if (temp) {
+		__u32 del_map[2];
+
+		del_map[0] = temp->id_client;
+		idmap_delete(id_type, temp, nodemap);
+		rc = nodemap_idx_idmap_del(nodemap, id_type, del_map);
+		/* In case there is any corrupted idmap */
+		if (!rc || unlikely(rc == -ENOENT)) {
+			temp = idmap_insert(id_type, idmap, nodemap);
+			if (IS_ERR(temp))
+				rc = PTR_ERR(temp);
+			else if (!temp)
+				rc = 0;
+			else
+				rc = -EPERM;
+		}
+	}
+out_insert:
+	if (rc)
+		OBD_FREE_PTR(idmap);
+	up_write(&nodemap->nm_idmap_lock);
 	nm_member_revoke_locks(nodemap);
 
 out:
@@ -481,6 +509,8 @@ int nodemap_add_idmap(const char *name, enum nodemap_id_type id_type,
 {
 	struct lu_nodemap	*nodemap = NULL;
 	int			 rc;
+
+	ENTRY;
 
 	mutex_lock(&active_config_lock);
 	nodemap = nodemap_lookup(name);
@@ -500,7 +530,7 @@ int nodemap_add_idmap(const char *name, enum nodemap_id_type id_type,
 	nodemap_putref(nodemap);
 
 out:
-	return rc;
+	RETURN(rc);
 }
 EXPORT_SYMBOL(nodemap_add_idmap);
 
@@ -522,6 +552,8 @@ int nodemap_del_idmap(const char *name, enum nodemap_id_type id_type,
 	struct lu_idmap		*idmap = NULL;
 	int			rc = 0;
 
+	ENTRY;
+
 	mutex_lock(&active_config_lock);
 	nodemap = nodemap_lookup(name);
 	if (IS_ERR(nodemap)) {
@@ -532,7 +564,7 @@ int nodemap_del_idmap(const char *name, enum nodemap_id_type id_type,
 	if (is_default_nodemap(nodemap))
 		GOTO(out_putref, rc = -EINVAL);
 
-	write_lock(&nodemap->nm_idmap_lock);
+	down_write(&nodemap->nm_idmap_lock);
 	idmap = idmap_search(nodemap, NODEMAP_CLIENT_TO_FS, id_type,
 			     map[0]);
 	if (idmap == NULL) {
@@ -541,7 +573,7 @@ int nodemap_del_idmap(const char *name, enum nodemap_id_type id_type,
 		idmap_delete(id_type, idmap, nodemap);
 		rc = nodemap_idx_idmap_del(nodemap, id_type, map);
 	}
-	write_unlock(&nodemap->nm_idmap_lock);
+	up_write(&nodemap->nm_idmap_lock);
 
 out_putref:
 	mutex_unlock(&active_config_lock);
@@ -550,7 +582,7 @@ out_putref:
 	nodemap_putref(nodemap);
 
 out:
-	return rc;
+	RETURN(rc);
 }
 EXPORT_SYMBOL(nodemap_del_idmap);
 
@@ -615,7 +647,7 @@ EXPORT_SYMBOL(nodemap_get_from_exp);
  * is, return 0. Otherwise, return the squash uid or gid.
  *
  * if the nodemap is configured to trusted the ids from the client system, just
- * return the passwd id without mapping.
+ * return the passed id without mapping.
  *
  * if by this point, we haven't returned and the nodemap in question is the
  * default nodemap, return the squash uid or gid.
@@ -657,10 +689,10 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 	if (is_default_nodemap(nodemap))
 		goto squash;
 
-	read_lock(&nodemap->nm_idmap_lock);
+	down_read(&nodemap->nm_idmap_lock);
 	idmap = idmap_search(nodemap, tree_type, id_type, id);
 	if (idmap == NULL) {
-		read_unlock(&nodemap->nm_idmap_lock);
+		up_read(&nodemap->nm_idmap_lock);
 		goto squash;
 	}
 
@@ -668,7 +700,7 @@ __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 		found_id = idmap->id_client;
 	else
 		found_id = idmap->id_fs;
-	read_unlock(&nodemap->nm_idmap_lock);
+	up_read(&nodemap->nm_idmap_lock);
 	RETURN(found_id);
 
 squash:
@@ -946,7 +978,7 @@ EXPORT_SYMBOL(nodemap_get_fileset);
  *
  * Creates an lu_nodemap structure and assigns sane default
  * member values. If this is the default nodemap, the defaults
- * are the most restictive in xterms of mapping behavior. Otherwise
+ * are the most restrictive in terms of mapping behavior. Otherwise
  * the default flags should be inherited from the default nodemap.
  * The adds nodemap to nodemap_hash.
  *
@@ -1003,7 +1035,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 	INIT_LIST_HEAD(&nodemap->nm_member_list);
 
 	mutex_init(&nodemap->nm_member_list_lock);
-	rwlock_init(&nodemap->nm_idmap_lock);
+	init_rwsem(&nodemap->nm_idmap_lock);
 	nodemap->nm_fs_to_client_uidmap = RB_ROOT;
 	nodemap->nm_client_to_fs_uidmap = RB_ROOT;
 	nodemap->nm_fs_to_client_gidmap = RB_ROOT;

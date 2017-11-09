@@ -65,27 +65,33 @@ static void idmap_destroy(struct lu_idmap *idmap)
 /**
  * Insert idmap into the proper trees
  *
- * \param	node_type		0 for UID
- *					1 for GID
- * \param	idmap			lu_idmap structure to insert
- * \param	nodemap			nodemap to associate with the map
+ * \param	id_type		NODEMAP_UID or NODEMAP_GID
+ * \param	idmap		lu_idmap structure to insert
+ * \param	nodemap		nodemap to associate with the map
  *
- * \retval	0 on success
- *
- * if the mapping exists, this function will delete it and replace
- * it with the new idmap structure
+ * \retval	NULL		 on success
+ * \retval	ERR_PTR(-EEXIST) if this idmap already exists
+ * \retval	struct lu_idmap	 if only id_client or id_fs of this idmap
+ *				 is matched, return the matched idmap.
+ *				 The caller will delete this old idmap and
+ *				 its index before insert the new idmap again.
  */
-void idmap_insert(enum nodemap_id_type id_type, struct lu_idmap *idmap,
-		 struct lu_nodemap *nodemap)
+struct lu_idmap *idmap_insert(enum nodemap_id_type id_type,
+			      struct lu_idmap *idmap,
+			      struct lu_nodemap *nodemap)
 {
-	struct lu_idmap		*cur = NULL;
+	struct lu_idmap		*fwd_cur = NULL;
+	struct lu_idmap		*bck_cur = NULL;
 	struct rb_node		*fwd_parent = NULL;
 	struct rb_node		*bck_parent = NULL;
 	struct rb_node		**fwd_node;
 	struct rb_node		**bck_node;
 	struct rb_root		*fwd_root;
 	struct rb_root		*bck_root;
-	bool			replace = false;
+	bool			fwd_found = false;
+	bool			bck_found = false;
+
+	ENTRY;
 
 	/* for purposes in idmap client to fs is forward
 	 * mapping, fs to client is backward mapping
@@ -106,51 +112,51 @@ void idmap_insert(enum nodemap_id_type id_type, struct lu_idmap *idmap,
 	 */
 	while (*fwd_node) {
 		fwd_parent = *fwd_node;
-		cur = rb_entry(*fwd_node, struct lu_idmap,
-			       id_client_to_fs);
+		fwd_cur = rb_entry(*fwd_node, struct lu_idmap,
+				   id_client_to_fs);
 
-		if (idmap->id_client < cur->id_client) {
+		if (idmap->id_client < fwd_cur->id_client) {
 			fwd_node = &((*fwd_node)->rb_left);
-		} else if (idmap->id_client > cur->id_client) {
+		} else if (idmap->id_client > fwd_cur->id_client) {
 			fwd_node = &((*fwd_node)->rb_right);
 		} else {
-			replace = true;
+			fwd_found = true;
 			break;
 		}
 	}
 
-	if (!replace) {
-		while (*bck_node) {
-			bck_parent = *bck_node;
-			cur = rb_entry(*bck_node, struct lu_idmap,
-				       id_fs_to_client);
+	while (*bck_node) {
+		bck_parent = *bck_node;
+		bck_cur = rb_entry(*bck_node, struct lu_idmap,
+				   id_fs_to_client);
 
-			if (idmap->id_fs < cur->id_fs) {
-				bck_node = &((*bck_node)->rb_left);
-			} else if (idmap->id_fs > cur->id_fs) {
-				bck_node = &((*bck_node)->rb_right);
-			} else {
-				replace = true;
-				break;
-			}
+		if (idmap->id_fs < bck_cur->id_fs) {
+			bck_node = &((*bck_node)->rb_left);
+		} else if (idmap->id_fs > bck_cur->id_fs) {
+			bck_node = &((*bck_node)->rb_right);
+		} else {
+			bck_found = true;
+			break;
 		}
 	}
 
-	if (!replace) {
+	/* Already exists */
+	if (fwd_found && bck_found)
+		RETURN(ERR_PTR(-EEXIST));
+
+	/* Insert a new idmap */
+	if (!fwd_found && !bck_found) {
+		CDEBUG(D_INFO, "Insert a new idmap %d:%d\n",
+		       idmap->id_client, idmap->id_fs);
 		rb_link_node(&idmap->id_client_to_fs, fwd_parent, fwd_node);
 		rb_insert_color(&idmap->id_client_to_fs, fwd_root);
 		rb_link_node(&idmap->id_fs_to_client, bck_parent, bck_node);
 		rb_insert_color(&idmap->id_fs_to_client, bck_root);
-	} else {
-		rb_replace_node(&cur->id_client_to_fs,
-				&idmap->id_client_to_fs,
-				fwd_root);
-		rb_replace_node(&cur->id_fs_to_client,
-				&idmap->id_fs_to_client,
-				bck_root);
-
-		idmap_destroy(cur);
+		RETURN(NULL);
 	}
+
+	/* Only id_client or id_fs is matched */
+	RETURN(fwd_found ? fwd_cur : bck_cur);
 }
 
 /**
@@ -202,6 +208,8 @@ struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
 	struct rb_root	*root = NULL;
 	struct lu_idmap	*idmap;
 
+	ENTRY;
+
 	if (id_type == NODEMAP_UID && tree_type == NODEMAP_FS_TO_CLIENT)
 		root = &nodemap->nm_fs_to_client_uidmap;
 	else if (id_type == NODEMAP_UID && tree_type == NODEMAP_CLIENT_TO_FS)
@@ -222,7 +230,7 @@ struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
 			else if (id > idmap->id_fs)
 				node = node->rb_right;
 			else
-				return idmap;
+				RETURN(idmap);
 		}
 	} else {
 		while (node) {
@@ -233,11 +241,11 @@ struct lu_idmap *idmap_search(struct lu_nodemap *nodemap,
 			else if (id > idmap->id_client)
 				node = node->rb_right;
 			else
-				return idmap;
+				RETURN(idmap);
 		}
 	}
 
-	return NULL;
+	RETURN(NULL);
 }
 
 /*

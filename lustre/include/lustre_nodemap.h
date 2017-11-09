@@ -85,7 +85,7 @@ struct lu_nodemap {
 	/* NID range list */
 	struct list_head	 nm_ranges;
 	/* lock for idmap red/black trees */
-	rwlock_t		 nm_idmap_lock;
+	struct rw_semaphore	 nm_idmap_lock;
 	/* UID map keyed by local UID */
 	struct rb_root		 nm_fs_to_client_uidmap;
 	/* UID map keyed by remote UID */
