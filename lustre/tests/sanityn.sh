@@ -4094,17 +4094,24 @@ test_100d() {
 }
 run_test 100d "DoM: write+truncate vs stat without IO lock (combined file)"
 
-
 test_101a() {
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
-	lctl set_param -n mdc.*.stats=clear
 	# to get layout
 	$CHECKSTAT -t file $DIR1/$tfile
+
+	OLD_VAL=$(cat /proc/sys/vm/dirty_writeback_centisecs)
+	echo 0 > /proc/sys/vm/dirty_writeback_centisecs
+	echo $OLD_VAL
+
 	# open + IO lock
-	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 || error "Write fails"
+	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 ||
+		error_noexit "Write fails"
 	# must discard pages
-	rm $DIR2/$tfile || error "Unlink fails"
+	lctl set_param -n mdc.*.stats=clear
+	rm $DIR2/$tfile || error_noexit "Unlink fails"
 	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
+	echo $OLD_VAL > /proc/sys/vm/dirty_writeback_centisecs
+
 	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
 }
 run_test 101a "Discard DoM data on unlink"
@@ -4112,33 +4119,46 @@ run_test 101a "Discard DoM data on unlink"
 test_101b() {
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
 	touch $DIR1/${tfile}_2
-	lctl set_param -n mdc.*.stats=clear
 	# to get layout
 	$CHECKSTAT -t file $DIR1/$tfile
+
+	OLD_VAL=$(cat /proc/sys/vm/dirty_writeback_centisecs)
+	echo 0 > /proc/sys/vm/dirty_writeback_centisecs
+	echo $OLD_VAL
+
 	# open + IO lock
-	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 || error "Write fails"
+	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 ||
+		error_noexit "Write fails"
 	# must discard pages
-	mv $DIR2/${tfile}_2 $DIR2/$tfile || error "Rename fails"
+	lctl set_param -n mdc.*.stats=clear
+	mv $DIR2/${tfile}_2 $DIR2/$tfile || error_noexit "Rename fails"
 	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
+	echo $OLD_VAL > /proc/sys/vm/dirty_writeback_centisecs
 	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
 }
 run_test 101b "Discard DoM data on rename"
 
 test_101c() {
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
-	lctl set_param -n mdc.*.stats=clear
 	# to get layout
 	$CHECKSTAT -t file $DIR1/$tfile
-	# open + IO lock
-	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 || error "Write fails"
 
+	OLD_VAL=$(cat /proc/sys/vm/dirty_writeback_centisecs)
+	echo 0 > /proc/sys/vm/dirty_writeback_centisecs
+	echo $OLD_VAL
+
+	# open + IO lock
+	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 ||
+		error_noexit "Write fails"
 	$MULTIOP $DIR1/$tfile O_c &
 	MULTIOP_PID=$!
-	sleep 2
-	rm $DIR2/$tfile > /dev/null || error "Unlink fails"
-	kill -USR1 $MULTIOP_PID || return 2
-	wait $MULTIOP_PID || return 3
+	sleep 1
+	lctl set_param -n mdc.*.stats=clear
+	rm $DIR2/$tfile > /dev/null || error_noexit "Unlink fails"
+	kill -USR1 $MULTIOP_PID && wait $MULTIOP_PID ||
+		error_noexit "multiop failure"
 	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
+	echo $OLD_VAL > /proc/sys/vm/dirty_writeback_centisecs
 	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
 }
 run_test 101c "Discard DoM data on close-unlink"
