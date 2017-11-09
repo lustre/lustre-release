@@ -1230,10 +1230,6 @@ static int mdc_object_ast_clear(struct ldlm_lock *lock, void *data)
 {
 	ENTRY;
 
-	CDEBUG(D_DLMTRACE, "obj: %p/%p, lock %p\n",
-		data, lock->l_ast_data, lock);
-
-	LASSERT(lock->l_granted_mode == lock->l_req_mode);
 	if ((lock->l_ast_data == NULL && !ldlm_is_kms_ignore(lock)) ||
 	    (lock->l_ast_data == data)) {
 		lock->l_ast_data = NULL;
