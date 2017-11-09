@@ -65,7 +65,7 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
 	}
 
 	seq_printf(m, "[\n");
-	read_lock(&nodemap->nm_idmap_lock);
+	down_read(&nodemap->nm_idmap_lock);
 	for (node = rb_first(&nodemap->nm_client_to_fs_uidmap); node;
 				node = rb_next(node)) {
 		if (cont)
@@ -87,7 +87,7 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
 				   "fs_id: %u }", idmap->id_client,
 				   idmap->id_fs);
 	}
-	read_unlock(&nodemap->nm_idmap_lock);
+	up_read(&nodemap->nm_idmap_lock);
 	seq_printf(m, "\n");
 	seq_printf(m, "]\n");
 

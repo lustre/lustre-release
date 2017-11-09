@@ -44,13 +44,8 @@ WTL=${WTL:-"$LUSTRE/tests/write_time_limit"}
 CONFDIR=/etc/lustre
 PERM_CONF=$CONFDIR/perm.conf
 FAIL_ON_ERROR=false
-
 HOSTNAME_CHECKSUM=$(hostname | sum | awk '{ print $1 }')
 SUBNET_CHECKSUM=$(expr $HOSTNAME_CHECKSUM % 250 + 1)
-NODEMAP_COUNT=16
-NODEMAP_RANGE_COUNT=3
-NODEMAP_IPADDR_LIST="1 10 64 128 200 250"
-NODEMAP_MAX_ID=128
 
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
@@ -63,6 +58,12 @@ ID0=${ID0:-500}
 ID1=${ID1:-501}
 USER0=$(getent passwd | grep :$ID0:$ID0: | cut -d: -f1)
 USER1=$(getent passwd | grep :$ID1:$ID1: | cut -d: -f1)
+
+NODEMAP_COUNT=16
+NODEMAP_RANGE_COUNT=3
+NODEMAP_IPADDR_LIST="1 10 64 128 200 250"
+NODEMAP_ID_COUNT=10
+NODEMAP_MAX_ID=$((ID0 + NODEMAP_ID_COUNT))
 
 [ -z "$USER0" ] &&
 	skip "need to add user0 ($ID0:$ID0)" && exit 0
@@ -271,7 +272,7 @@ delete_nodemaps() {
 			return 3
 		fi
 
-		out=$(do_facet mgs $LCTL get_param nodemap.$csum.id)
+		out=$(do_facet mgs $LCTL get_param nodemap.$csum.id 2>/dev/null)
 		[[ $(echo $out | grep -c $csum) != 0 ]] && return 1
 	done
 	return 0
@@ -313,10 +314,11 @@ add_idmaps() {
 	local cmd="$LCTL nodemap_add_idmap"
 	local rc=0
 
+	echo "Start to add idmaps ..."
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
 		local j
 
-		for ((j = 500; j < NODEMAP_MAX_ID; j++)); do
+		for ((j = $ID0; j < NODEMAP_MAX_ID; j++)); do
 			local csum=${HOSTNAME_CHECKSUM}_${i}
 			local client_id=$j
 			local fs_id=$((j + 1))
@@ -335,15 +337,84 @@ add_idmaps() {
 	return $rc
 }
 
+update_idmaps() { #LU-10040
+	[ $(lustre_version_code mgs) -lt $(version_code 2.10.55) ] &&
+		skip "Need MGS >= 2.10.55" &&
+		return
+	local csum=${HOSTNAME_CHECKSUM}_0
+	local old_id_client=$ID0
+	local old_id_fs=$((ID0 + 1))
+	local new_id=$((ID0 + 100))
+	local tmp_id
+	local cmd
+	local run
+	local idtype
+	local rc=0
+
+	echo "Start to update idmaps ..."
+
+	#Inserting an existed idmap should return error
+	cmd="$LCTL nodemap_add_idmap --name $csum --idtype uid"
+	if do_facet mgs \
+		$cmd --idmap $old_id_client:$old_id_fs 2>/dev/null; then
+		error "insert idmap {$old_id_client:$old_id_fs} " \
+			"should return error"
+		rc=$((rc + 1))
+		return rc
+	fi
+
+	#Update id_fs and check it
+	if ! do_facet mgs $cmd --idmap $old_id_client:$new_id; then
+		error "$cmd --idmap $old_id_client:$new_id failed"
+		rc=$((rc + 1))
+		return $rc
+	fi
+	tmp_id=$(do_facet mgs $LCTL get_param -n nodemap.$csum.idmap |
+		awk '{ print $7 }' | sed -n '2p')
+	[ $tmp_id != $new_id ] && { error "new id_fs $tmp_id != $new_id"; \
+		rc=$((rc + 1)); return $rc; }
+
+	#Update id_client and check it
+	if ! do_facet mgs $cmd --idmap $new_id:$new_id; then
+		error "$cmd --idmap $new_id:$new_id failed"
+		rc=$((rc + 1))
+		return $rc
+	fi
+	tmp_id=$(do_facet mgs $LCTL get_param -n nodemap.$csum.idmap |
+		awk '{ print $5 }' | sed -n "$((NODEMAP_ID_COUNT + 1)) p")
+	tmp_id=$(echo ${tmp_id%,*}) #e.g. "501,"->"501"
+	[ $tmp_id != $new_id ] && { error "new id_client $tmp_id != $new_id"; \
+		rc=$((rc + 1)); return $rc; }
+
+	#Delete above updated idmap
+	cmd="$LCTL nodemap_del_idmap --name $csum --idtype uid"
+	if ! do_facet mgs $cmd --idmap $new_id:$new_id; then
+		error "$cmd --idmap $new_id:$new_id failed"
+		rc=$((rc + 1))
+		return $rc
+	fi
+
+	#restore the idmaps to make delete_idmaps work well
+	cmd="$LCTL nodemap_add_idmap --name $csum --idtype uid"
+	if ! do_facet mgs $cmd --idmap $old_id_client:$old_id_fs; then
+		error "$cmd --idmap $old_id_client:$old_id_fs failed"
+		rc=$((rc + 1))
+		return $rc
+	fi
+
+	return $rc
+}
+
 delete_idmaps() {
 	local i
 	local cmd="$LCTL nodemap_del_idmap"
 	local rc=0
 
+	echo "Start to delete idmaps ..."
 	for ((i = 0; i < NODEMAP_COUNT; i++)); do
 		local j
 
-		for ((j = 500; j < NODEMAP_MAX_ID; j++)); do
+		for ((j = $ID0; j < NODEMAP_MAX_ID; j++)); do
 			local csum=${HOSTNAME_CHECKSUM}_${i}
 			local client_id=$j
 			local fs_id=$((j + 1))
@@ -426,11 +497,12 @@ test_idmap() {
 	local cmd="$LCTL nodemap_test_id"
 	local rc=0
 
+	echo "Start to test idmaps ..."
 	## nodemap deactivated
 	if ! do_facet mgs $LCTL nodemap_activate 0; then
 		return 1
 	fi
-	for ((id = 500; id < NODEMAP_MAX_ID; id++)); do
+	for ((id = $ID0; id < NODEMAP_MAX_ID; id++)); do
 		local j
 
 		for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
@@ -449,7 +521,7 @@ test_idmap() {
 		return 2
 	fi
 
-	for ((id = 500; id < NODEMAP_MAX_ID; id++)); do
+	for ((id = $ID0; id < NODEMAP_MAX_ID; id++)); do
 		for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
 			nid="$SUBNET_CHECKSUM.0.${j}.100@tcp"
 			fs_id=$(do_facet mgs $cmd --nid $nid	\
@@ -473,7 +545,7 @@ test_idmap() {
 		fi
 	done
 
-	for ((id = 500; id < NODEMAP_MAX_ID; id++)); do
+	for ((id = $ID0; id < NODEMAP_MAX_ID; id++)); do
 		for ((j = 0; j < NODEMAP_RANGE_COUNT; j++)); do
 			nid="$SUBNET_CHECKSUM.0.${j}.100@tcp"
 			fs_id=$(do_facet mgs $cmd --nid $nid	\
@@ -884,14 +956,19 @@ test_15() {
 	[[ $rc != 0 ]] && error "nodemap_test_id failed with $rc" && return 4
 
 	rc=0
+	update_idmaps
+	rc=$?
+	[[ $rc != 0 ]] && error "update_idmaps failed with $rc" && return 5
+
+	rc=0
 	delete_idmaps
 	rc=$?
-	[[ $rc != 0 ]] && error "nodemap_del_idmap failed with $rc" && return 5
+	[[ $rc != 0 ]] && error "nodemap_del_idmap failed with $rc" && return 6
 
 	rc=0
 	delete_nodemaps
 	rc=$?
-	[[ $rc != 0 ]] && error "nodemap_delete failed with $rc" && return 6
+	[[ $rc != 0 ]] && error "nodemap_delete failed with $rc" && return 7
 
 	return 0
 }

@@ -141,8 +141,9 @@ int range_parse_nidstring(char *range_string, lnet_nid_t *start_nid,
 			  lnet_nid_t *end_nid);
 void range_init_tree(void);
 struct lu_idmap *idmap_create(__u32 client_id, __u32 fs_id);
-void idmap_insert(enum nodemap_id_type id_type, struct lu_idmap *idmap,
-		 struct lu_nodemap *nodemap);
+struct lu_idmap *idmap_insert(enum nodemap_id_type id_type,
+			      struct lu_idmap *idmap,
+			      struct lu_nodemap *nodemap);
 void idmap_delete(enum nodemap_id_type id_type,  struct lu_idmap *idmap,
 		  struct lu_nodemap *nodemap);
 void idmap_delete_tree(struct lu_nodemap *nodemap);
