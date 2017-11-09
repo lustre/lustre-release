@@ -398,7 +398,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 		      "setxattr %s: [object "DFID"] [valid %llu]\n",
 		      mdt_obd_name(info->mti_mdt), xattr_name,
 		      PFID(rr->rr_fid1), valid);
-		attr->la_ctime = cfs_time_current_sec();
+		attr->la_ctime = ktime_get_real_seconds();
 	}
 	attr->la_valid = LA_CTIME;
 	child = mdt_object_child(obj);

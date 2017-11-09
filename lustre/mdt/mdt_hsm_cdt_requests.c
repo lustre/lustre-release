@@ -304,7 +304,7 @@ struct cdt_agent_req *mdt_cdt_alloc_request(__u64 compound_id, __u32 archive_id,
 	car->car_archive_id = archive_id;
 	car->car_flags = flags;
 	car->car_canceled = 0;
-	car->car_req_start = cfs_time_current_sec();
+	car->car_req_start = ktime_get_real_seconds();
 	car->car_req_update = car->car_req_start;
 	car->car_uuid = *uuid;
 	OBD_ALLOC(car->car_hai, hai->hai_len);
@@ -459,7 +459,7 @@ struct cdt_agent_req *mdt_cdt_update_request(struct coordinator *cdt,
 	if (car == NULL)
 		RETURN(ERR_PTR(-ENOENT));
 
-	car->car_req_update = cfs_time_current_sec();
+	car->car_req_update = ktime_get_real_seconds();
 
 	/* update data move progress done by copy tool */
 	if (car->car_hai->hai_action != HSMA_REMOVE && pgs->hpk_errval == 0 &&

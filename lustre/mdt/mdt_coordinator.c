@@ -299,8 +299,8 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 	case ARS_STARTED: {
 		struct hsm_progress_kernel pgs;
 		struct cdt_agent_req *car;
-		cfs_time_t now = cfs_time_current_sec();
-		cfs_time_t last;
+		time64_t now = ktime_get_real_seconds();
+		time64_t last;
 
 		if (!hsd->housekeeping)
 			break;
@@ -376,7 +376,7 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 			break;
 
 		if ((larr->arr_req_change + cdt->cdt_grace_delay) <
-		    cfs_time_current_sec()) {
+		    ktime_get_real_seconds()) {
 			cdt_agent_record_hash_del(cdt,
 						  larr->arr_hai.hai_cookie);
 			RETURN(LLOG_DEL_RECORD);
@@ -536,7 +536,6 @@ static int mdt_coordinator(void *data)
 	struct mdt_device	*mdt = mti->mti_mdt;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
 	struct hsm_scan_data	 hsd = { NULL };
-	time64_t		 wait_event_time = 1 * HZ;
 	time64_t		 last_housekeeping = 0;
 	int			 rc = 0;
 	int			 request_sz;
@@ -566,13 +565,14 @@ static int mdt_coordinator(void *data)
 		struct hsm_record_update *updates;
 
 		/* Limit execution of the expensive requests traversal
-		 * to at most every "wait_event_time" jiffies. This prevents
-		 * repeatedly locking/unlocking the catalog for each request
-		 * and preventing other HSM operations from happening */
+		 * to at most one second. This prevents repeatedly
+		 * locking/unlocking the catalog for each request
+		 * and preventing other HSM operations from happening
+		 */
 		wait_event_interruptible_timeout(cdt->cdt_waitq,
 						 kthread_should_stop() ||
 						 cdt->cdt_wakeup_coordinator,
-						 wait_event_time);
+						 cfs_time_seconds(1));
 
 		cdt->cdt_wakeup_coordinator = false;
 		CDEBUG(D_HSM, "coordinator resumes\n");
@@ -592,8 +592,8 @@ static int mdt_coordinator(void *data)
 		/* If no event, and no housekeeping to do, continue to
 		 * wait. */
 		if (last_housekeeping + cdt->cdt_loop_period <=
-		    get_seconds()) {
-			last_housekeeping = get_seconds();
+		    ktime_get_real_seconds()) {
+			last_housekeeping = ktime_get_real_seconds();
 			hsd.housekeeping = true;
 		} else if (cdt->cdt_event) {
 			hsd.housekeeping = false;
@@ -804,7 +804,7 @@ static int hsm_restore_cb(const struct lu_env *env,
 	 * when being re-started */
 	if (larr->arr_status == ARS_STARTED) {
 		larr->arr_status = ARS_WAITING;
-		larr->arr_req_change = cfs_time_current_sec();
+		larr->arr_req_change = ktime_get_real_seconds();
 		rc = llog_write(env, llh, hdr, hdr->lrh_index);
 		if (rc != 0)
 			GOTO(out, rc);
@@ -963,7 +963,7 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 
 	/* Initialize cdt_compound_id here to allow its usage for
 	 * delayed requests from RAoLU policy */
-	atomic_set(&cdt->cdt_compound_id, cfs_time_current_sec());
+	atomic_set(&cdt->cdt_compound_id, ktime_get_real_seconds());
 
 	/* by default do not remove archives on last unlink */
 	cdt->cdt_remove_archive_on_last_unlink = false;
@@ -1038,7 +1038,7 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 
 	/* just need to be larger than previous one */
 	/* cdt_last_cookie is protected by cdt_llog_lock */
-	cdt->cdt_last_cookie = cfs_time_current_sec();
+	cdt->cdt_last_cookie = ktime_get_real_seconds();
 	atomic_set(&cdt->cdt_request_count, 0);
 	cdt->cdt_user_request_mask = (1UL << HSMA_RESTORE);
 	cdt->cdt_group_request_mask = (1UL << HSMA_RESTORE);
@@ -1665,7 +1665,7 @@ static int mdt_cancel_all_cb(const struct lu_env *env,
 	if (larr->arr_status == ARS_WAITING ||
 	    larr->arr_status == ARS_STARTED) {
 		larr->arr_status = ARS_CANCELED;
-		larr->arr_req_change = cfs_time_current_sec();
+		larr->arr_req_change = ktime_get_real_seconds();
 		rc = llog_write(env, llh, hdr, hdr->lrh_index);
 	}
 

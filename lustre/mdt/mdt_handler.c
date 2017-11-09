@@ -1733,7 +1733,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                         if (ma->ma_valid & MA_INODE &&
                             ma->ma_attr.la_valid & LA_CTIME &&
                             info->mti_mdt->mdt_namespace->ns_ctime_age_limit +
-                                ma->ma_attr.la_ctime < cfs_time_current_sec())
+				ma->ma_attr.la_ctime < ktime_get_real_seconds())
                                 child_bits |= MDS_INODELOCK_UPDATE;
                 }
 

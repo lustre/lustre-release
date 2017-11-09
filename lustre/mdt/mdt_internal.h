@@ -147,10 +147,10 @@ struct coordinator {
 						       * list */
 	struct mutex		 cdt_restore_lock;    /**< protect restore
 						       * list */
-	cfs_time_t		 cdt_loop_period;     /**< llog scan period */
-	cfs_time_t		 cdt_grace_delay;     /**< request grace
+	time64_t		 cdt_loop_period;     /**< llog scan period */
+	time64_t		 cdt_grace_delay;     /**< request grace
 						       * delay */
-	cfs_time_t		 cdt_active_req_timeout; /**< request timeout */
+	time64_t		 cdt_active_req_timeout; /**< request timeout */
 	__u32			 cdt_default_archive_id; /**< archive id used
 						       * when none are
 						       * specified */
@@ -502,8 +502,8 @@ struct cdt_agent_req {
 	struct obd_uuid		 car_uuid;         /**< agent doing the req. */
 	__u32			 car_archive_id;   /**< archive id */
 	int			 car_canceled;     /**< request was canceled */
-	cfs_time_t		 car_req_start;    /**< start time */
-	cfs_time_t		 car_req_update;   /**< last update time */
+	time64_t		 car_req_start;    /**< start time */
+	time64_t		 car_req_update;   /**< last update time */
 	struct hsm_action_item	*car_hai;          /**< req. to the agent */
 	struct cdt_req_progress	 car_progress;     /**< track data mvt
 						    *   progress */
