@@ -61,6 +61,9 @@
 /** some changelog records purged */
 #define CLM_PURGE 0x40000
 
+#define LLOG_CHANGELOG_HDR_SZ (sizeof(struct llog_changelog_rec) - \
+			       sizeof(struct changelog_rec))
+
 struct mdd_changelog {
 	spinlock_t		mc_lock;	/* for index */
 	int			mc_flags;
