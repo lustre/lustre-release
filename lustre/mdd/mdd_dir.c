@@ -736,8 +736,6 @@ static int mdd_llog_record_calc_size(const struct lu_env *env,
 {
 	const struct lu_ucred	*uc = lu_ucred(env);
 	enum changelog_rec_flags crf = 0;
-	size_t			 hdr_size = sizeof(struct llog_changelog_rec) -
-					    sizeof(struct changelog_rec);
 
 	if (sname != NULL)
 		crf |= CLF_RENAME;
@@ -745,7 +743,7 @@ static int mdd_llog_record_calc_size(const struct lu_env *env,
 	if (uc != NULL && uc->uc_jobid[0] != '\0')
 		crf |= CLF_JOBID;
 
-	return llog_data_len(hdr_size + changelog_rec_offset(crf) +
+	return llog_data_len(LLOG_CHANGELOG_HDR_SZ + changelog_rec_offset(crf) +
 			     (tname != NULL ? tname->ln_namelen : 0) +
 			     (sname != NULL ? 1 + sname->ln_namelen : 0));
 }

@@ -640,22 +640,24 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 				    const struct lu_fid *fid,
 				    struct thandle *handle)
 {
-	const struct lu_ucred           *uc = lu_ucred(env);
-	struct llog_changelog_rec	*rec;
-	struct lu_buf			*buf;
-	int				 reclen;
-	int				 rc;
+	const struct lu_ucred *uc = lu_ucred(env);
+	struct llog_changelog_rec *rec;
+	struct lu_buf *buf;
+	int reclen;
+	int rc;
 
 	flags = (flags & CLF_FLAGMASK) | CLF_VERSION;
 	if (uc != NULL && uc->uc_jobid[0] != '\0')
 		flags |= CLF_JOBID;
 
-	reclen = llog_data_len(changelog_rec_offset(flags & CLF_SUPPORTED));
+	reclen = llog_data_len(LLOG_CHANGELOG_HDR_SZ +
+			       changelog_rec_offset(flags & CLF_SUPPORTED));
 	buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf, reclen);
 	if (buf->lb_buf == NULL)
 		RETURN(-ENOMEM);
 	rec = buf->lb_buf;
 
+	rec->cr_hdr.lrh_len = reclen;
 	rec->cr.cr_flags = flags;
 	rec->cr.cr_type = (__u32)type;
 	rec->cr.cr_tfid = *fid;
