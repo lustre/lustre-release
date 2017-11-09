@@ -14399,12 +14399,13 @@ test_248() {
 	# small read with fast read enabled
 	$LCTL set_param -n llite.*.fast_read=1
 	local t_fast=$(dd if=$DIR/$tfile of=/dev/null bs=4k 2>&1 |
-		awk '/copied/ { print $6 }')
-
+		egrep -o '([[:digit:]\.\,e-]+) s' | cut -d's' -f1 |
+		sed -e 's/,/./' -e 's/[eE]+*/\*10\^/')
 	# small read with fast read disabled
 	$LCTL set_param -n llite.*.fast_read=0
 	local t_slow=$(dd if=$DIR/$tfile of=/dev/null bs=4k 2>&1 |
-		awk '/copied/ { print $6 }')
+		egrep -o '([[:digit:]\.\,e-]+) s' | cut -d's' -f1 |
+		sed -e 's/,/./' -e 's/[eE]+*/\*10\^/')
 
 	# verify that fast read is 4 times faster for cache read
 	[ $(bc <<< "4 * $t_fast < $t_slow") -eq 1 ] ||
@@ -14417,12 +14418,14 @@ test_248() {
 	# 1k non-cache read
 	cancel_lru_locks osc
 	local t_1k=$(dd if=$DIR/$tfile of=/dev/null bs=1k 2>&1 |
-		awk '/copied/ { print $6 }')
+		egrep -o '([[:digit:]\.\,e-]+) s' | cut -d's' -f1 |
+		sed -e 's/,/./' -e 's/[eE]+*/\*10\^/')
 
 	# 1M non-cache read
 	cancel_lru_locks osc
 	local t_1m=$(dd if=$DIR/$tfile of=/dev/null bs=1k 2>&1 |
-		awk '/copied/ { print $6 }')
+		egrep -o '([[:digit:]\.\,e-]+) s' | cut -d's' -f1 |
+		sed -e 's/,/./' -e 's/[eE]+*/\*10\^/')
 
 	# verify that big IO is not 4 times faster than small IO
 	[ $(bc <<< "4 * $t_1k >= $t_1m") -eq 1 ] ||
