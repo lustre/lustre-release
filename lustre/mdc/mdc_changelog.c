@@ -72,7 +72,7 @@ struct chlg_reader_state {
 	/* Producer thread (if any) */
 	struct task_struct	*crs_prod_task;
 	/* An error occurred that prevents from reading further */
-	bool			 crs_err;
+	int			 crs_err;
 	/* EOF, no more records available */
 	bool			 crs_eof;
 	/* Desired start position */
@@ -122,7 +122,6 @@ static int chlg_read_cat_process_cb(const struct lu_env *env,
 	struct llog_changelog_rec *rec;
 	struct chlg_reader_state *crs = data;
 	struct chlg_rec_entry *enq;
-	struct l_wait_info lwi = { 0 };
 	size_t len;
 	int rc;
 	ENTRY;
@@ -152,9 +151,9 @@ static int chlg_read_cat_process_cb(const struct lu_env *env,
 	       PFID(&rec->cr.cr_tfid), PFID(&rec->cr.cr_pfid),
 	       rec->cr.cr_namelen, changelog_rec_name(&rec->cr));
 
-	l_wait_event(crs->crs_waitq_prod,
-		     (crs->crs_rec_count < CDEV_CHLG_MAX_PREFETCH ||
-		      kthread_should_stop()), &lwi);
+	wait_event_interruptible(crs->crs_waitq_prod,
+				 crs->crs_rec_count < CDEV_CHLG_MAX_PREFETCH ||
+				 kthread_should_stop());
 
 	if (kthread_should_stop())
 		RETURN(LLOG_PROC_BREAK);
@@ -200,7 +199,6 @@ static int chlg_load(void *args)
 	struct obd_device *obd = crs->crs_obd;
 	struct llog_ctxt *ctx = NULL;
 	struct llog_handle *llh = NULL;
-	struct l_wait_info lwi = { 0 };
 	int rc;
 	ENTRY;
 
@@ -233,7 +231,7 @@ static int chlg_load(void *args)
 
 err_out:
 	if (rc < 0)
-		crs->crs_err = true;
+		crs->crs_err = rc;
 
 	wake_up_all(&crs->crs_waitq_cons);
 
@@ -243,7 +241,7 @@ err_out:
 	if (ctx != NULL)
 		llog_ctxt_put(ctx);
 
-	l_wait_event(crs->crs_waitq_prod, kthread_should_stop(), &lwi);
+	wait_event_interruptible(crs->crs_waitq_prod, kthread_should_stop());
 
 	RETURN(rc);
 }
@@ -266,17 +264,22 @@ static ssize_t chlg_read(struct file *file, char __user *buff, size_t count,
 	struct chlg_reader_state *crs = file->private_data;
 	struct chlg_rec_entry *rec;
 	struct chlg_rec_entry *tmp;
-	struct l_wait_info lwi = { 0 };
-	ssize_t  written_total = 0;
+	size_t written_total = 0;
+	ssize_t rc;
 	LIST_HEAD(consumed);
 	ENTRY;
 
-	if (file->f_flags & O_NONBLOCK && crs->crs_rec_count == 0)
-		RETURN(-EAGAIN);
+	if (file->f_flags & O_NONBLOCK && crs->crs_rec_count == 0) {
+		if (crs->crs_err < 0)
+			RETURN(crs->crs_err);
+		else if (crs->crs_eof)
+			RETURN(0);
+		else
+			RETURN(-EAGAIN);
+	}
 
-	l_wait_event(crs->crs_waitq_cons,
-		     crs->crs_rec_count > 0 || crs->crs_eof || crs->crs_err,
-		     &lwi);
+	rc = wait_event_interruptible(crs->crs_waitq_cons,
+			crs->crs_rec_count > 0 || crs->crs_eof || crs->crs_err);
 
 	mutex_lock(&crs->crs_lock);
 	list_for_each_entry_safe(rec, tmp, &crs->crs_rec_queue, enq_linkage) {
@@ -284,8 +287,7 @@ static ssize_t chlg_read(struct file *file, char __user *buff, size_t count,
 			break;
 
 		if (copy_to_user(buff, rec->enq_record, rec->enq_length)) {
-			if (written_total == 0)
-				written_total = -EFAULT;
+			rc = -EFAULT;
 			break;
 		}
 
@@ -299,15 +301,19 @@ static ssize_t chlg_read(struct file *file, char __user *buff, size_t count,
 	}
 	mutex_unlock(&crs->crs_lock);
 
-	if (written_total > 0)
+	if (written_total > 0) {
+		rc = written_total;
 		wake_up_all(&crs->crs_waitq_prod);
+	} else if (rc == 0) {
+		rc = crs->crs_err;
+	}
 
 	list_for_each_entry_safe(rec, tmp, &consumed, enq_linkage)
 		enq_record_delete(rec);
 
 	*ppos = crs->crs_start_offset;
 
-	RETURN(written_total);
+	RETURN(rc);
 }
 
 /**
@@ -536,15 +542,17 @@ static int chlg_release(struct inode *inode, struct file *file)
 	struct chlg_reader_state *crs = file->private_data;
 	struct chlg_rec_entry *rec;
 	struct chlg_rec_entry *tmp;
+	int rc = 0;
 
 	if (crs->crs_prod_task)
-		kthread_stop(crs->crs_prod_task);
+		rc = kthread_stop(crs->crs_prod_task);
 
 	list_for_each_entry_safe(rec, tmp, &crs->crs_rec_queue, enq_linkage)
 		enq_record_delete(rec);
 
 	OBD_FREE_PTR(crs);
-	return 0;
+
+	return rc;
 }
 
 /**
