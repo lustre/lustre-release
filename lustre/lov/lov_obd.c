@@ -955,84 +955,50 @@ out:
         RETURN(rc);
 }
 
-static int
-lov_statfs_interpret(struct ptlrpc_request_set *rqset, void *data, int rc)
-{
-	struct lov_request_set *lovset = (struct lov_request_set *)data;
-	int err;
-	ENTRY;
-
-	if (rc)
-		atomic_set(&lovset->set_completes, 0);
-
-	err = lov_fini_statfs_set(lovset);
-	RETURN(rc ? rc : err);
-}
-
-static int lov_statfs_async(struct obd_export *exp, struct obd_info *oinfo,
-                            __u64 max_age, struct ptlrpc_request_set *rqset)
-{
-        struct obd_device      *obd = class_exp2obd(exp);
-        struct lov_request_set *set;
-        struct lov_request *req;
-	struct list_head *pos;
-        struct lov_obd *lov;
-        int rc = 0;
-        ENTRY;
-
-        LASSERT(oinfo != NULL);
-        LASSERT(oinfo->oi_osfs != NULL);
-
-        lov = &obd->u.lov;
-        rc = lov_prep_statfs_set(obd, oinfo, &set);
-        if (rc)
-                RETURN(rc);
-
-	list_for_each(pos, &set->set_list) {
-		req = list_entry(pos, struct lov_request, rq_link);
-                rc = obd_statfs_async(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                      &req->rq_oi, max_age, rqset);
-                if (rc)
-                        break;
-        }
-
-	if (rc || list_empty(&rqset->set_requests)) {
-		int err;
-		if (rc)
-			atomic_set(&set->set_completes, 0);
-		err = lov_fini_statfs_set(set);
-		RETURN(rc ? rc : err);
-	}
-
-	LASSERT(rqset->set_interpret == NULL);
-	rqset->set_interpret = lov_statfs_interpret;
-	rqset->set_arg = (void *)set;
-	RETURN(0);
-}
-
 static int lov_statfs(const struct lu_env *env, struct obd_export *exp,
 		      struct obd_statfs *osfs, __u64 max_age, __u32 flags)
 {
-	struct ptlrpc_request_set *set = NULL;
+	struct obd_device *obd = class_exp2obd(exp);
+	struct lov_obd *lov = &obd->u.lov;
 	struct obd_info oinfo = {
 		.oi_osfs = osfs,
 		.oi_flags = flags,
 	};
+	struct ptlrpc_request_set *rqset;
+	struct lov_request_set *set = NULL;
+	struct lov_request *req;
 	int rc = 0;
+	int rc2;
 
 	ENTRY;
 
-	/* for obdclass we forbid using obd_statfs_rqset, but prefer using async
-	 * statfs requests */
-	set = ptlrpc_prep_set();
-	if (set == NULL)
+	rqset = ptlrpc_prep_set();
+	if (rqset == NULL)
 		RETURN(-ENOMEM);
 
-	rc = lov_statfs_async(exp, &oinfo, max_age, set);
-	if (rc == 0)
-		rc = ptlrpc_set_wait(set);
+	rc = lov_prep_statfs_set(obd, &oinfo, &set);
+	if (rc < 0)
+		GOTO(out_rqset, rc);
 
-	ptlrpc_set_destroy(set);
+	list_for_each_entry(req, &set->set_list, rq_link) {
+		rc = obd_statfs_async(lov->lov_tgts[req->rq_idx]->ltd_exp,
+				      &req->rq_oi, max_age, rqset);
+		if (rc < 0)
+			GOTO(out_set, rc);
+	}
+
+	rc = ptlrpc_set_wait(rqset);
+
+out_set:
+	if (rc < 0)
+		atomic_set(&set->set_completes, 0);
+
+	rc2 = lov_fini_statfs_set(set);
+	if (rc == 0)
+		rc = rc2;
+
+out_rqset:
+	ptlrpc_set_destroy(rqset);
 
 	RETURN(rc);
 }
@@ -1417,7 +1383,6 @@ static struct obd_ops lov_obd_ops = {
 	.o_connect		= lov_connect,
 	.o_disconnect		= lov_disconnect,
 	.o_statfs		= lov_statfs,
-	.o_statfs_async		= lov_statfs_async,
 	.o_iocontrol		= lov_iocontrol,
 	.o_get_info		= lov_get_info,
 	.o_set_info_async	= lov_set_info_async,

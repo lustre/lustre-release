@@ -956,7 +956,6 @@ struct ptlrpc_request_set *ptlrpc_prep_set(void)
 	atomic_set(&set->set_remaining, 0);
 	spin_lock_init(&set->set_new_req_lock);
 	INIT_LIST_HEAD(&set->set_new_requests);
-	INIT_LIST_HEAD(&set->set_cblist);
 	set->set_max_inflight = UINT_MAX;
 	set->set_producer     = NULL;
 	set->set_producer_arg = NULL;
@@ -1050,27 +1049,6 @@ void ptlrpc_set_destroy(struct ptlrpc_request_set *set)
 	EXIT;
 }
 EXPORT_SYMBOL(ptlrpc_set_destroy);
-
-/**
- * Add a callback function \a fn to the set.
- * This function would be called when all requests on this set are completed.
- * The function will be passed \a data argument.
- */
-int ptlrpc_set_add_cb(struct ptlrpc_request_set *set,
-                      set_interpreter_func fn, void *data)
-{
-	struct ptlrpc_set_cbdata *cbdata;
-
-	OBD_ALLOC_PTR(cbdata);
-	if (cbdata == NULL)
-		RETURN(-ENOMEM);
-
-	cbdata->psc_interpret = fn;
-	cbdata->psc_data = data;
-	list_add_tail(&cbdata->psc_item, &set->set_cblist);
-
-	RETURN(0);
-}
 
 /**
  * Add a new request to the general purpose request set.
@@ -2411,25 +2389,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                         rc = req->rq_status;
         }
 
-        if (set->set_interpret != NULL) {
-                int (*interpreter)(struct ptlrpc_request_set *set,void *,int) =
-                        set->set_interpret;
-                rc = interpreter (set, set->set_arg, rc);
-        } else {
-                struct ptlrpc_set_cbdata *cbdata, *n;
-                int err;
-
-		list_for_each_entry_safe(cbdata, n,
-                                         &set->set_cblist, psc_item) {
-			list_del_init(&cbdata->psc_item);
-                        err = cbdata->psc_interpret(set, cbdata->psc_data, rc);
-                        if (err && !rc)
-                                rc = err;
-                        OBD_FREE_PTR(cbdata);
-                }
-        }
-
-        RETURN(rc);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(ptlrpc_set_wait);
 

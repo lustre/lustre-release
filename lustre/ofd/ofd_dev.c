@@ -1926,6 +1926,8 @@ static int ofd_statfs_hdl(struct tgt_session_info *tsi)
 
 	ENTRY;
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_OST_STATFS_DELAY, 10);
+
 	osfs = req_capsule_server_get(tsi->tsi_pill, &RMF_OBD_STATFS);
 
 	rc = ofd_statfs(tsi->tsi_env, tsi->tsi_exp, osfs,

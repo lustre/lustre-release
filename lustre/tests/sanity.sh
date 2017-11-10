@@ -8507,6 +8507,34 @@ run_test 118m "fdatasync dir ========="
 
 [ "$SLOW" = "no" ] && [ -n "$OLD_RESENDCOUNT" ] && set_resend_count $OLD_RESENDCOUNT
 
+test_118n()
+{
+	local begin
+	local end
+
+	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	remote_ost_nodsh && skip "remote OSTs with nodsh" && return
+
+	# Sleep to avoid a cached response.
+	#define OBD_STATFS_CACHE_SECONDS 1
+	sleep 2
+
+	# Inject a 10 second delay in the OST_STATFS handler.
+	#define OBD_FAIL_OST_STATFS_DELAY 0x242
+	set_nodes_failloc "$(osts_nodes)" 0x242
+
+	begin=$SECONDS
+	stat --file-system $MOUNT > /dev/null
+	end=$SECONDS
+
+	set_nodes_failloc "$(osts_nodes)" 0
+
+	if ((end - begin > 20)); then
+	    error "statfs took $((end - begin)) seconds, expected 10"
+	fi
+}
+run_test 118n "statfs() sends OST_STATFS requests in parallel"
+
 test_119a() # bug 11737
 {
         BSIZE=$((512 * 1024))

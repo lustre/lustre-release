@@ -1117,32 +1117,6 @@ static inline int obd_statfs_async(struct obd_export *exp,
 	RETURN(rc);
 }
 
-static inline int obd_statfs_rqset(struct obd_export *exp,
-                                   struct obd_statfs *osfs, __u64 max_age,
-                                   __u32 flags)
-{
-	struct ptlrpc_request_set *set = NULL;
-	struct obd_info oinfo = {
-		.oi_osfs = osfs,
-		.oi_flags = flags,
-	};
-	int rc = 0;
-
-	ENTRY;
-
-	set = ptlrpc_prep_set();
-	if (set == NULL)
-		RETURN(-ENOMEM);
-
-	rc = obd_statfs_async(exp, &oinfo, max_age, set);
-	if (rc == 0)
-		rc = ptlrpc_set_wait(set);
-
-	ptlrpc_set_destroy(set);
-
-	RETURN(rc);
-}
-
 /* @max_age is the oldest time in jiffies that we accept using a cached data.
  * If the cache is older than @max_age we will get a new value from the
  * target.  Use a value of "cfs_time_current() + HZ" to guarantee freshness. */
