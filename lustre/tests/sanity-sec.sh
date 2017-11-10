@@ -1892,10 +1892,11 @@ nodemap_exercise_fileset() {
 	do_facet mgs $LCTL nodemap_set_fileset --name $nm --fileset \'\' ||
 		error "unable to delete fileset info on $nm nodemap"
 	wait_update_facet mgs "$LCTL get_param nodemap.${nm}.fileset" \
-			  "nodemap.${nm}.fileset="
+			  "nodemap.${nm}.fileset=" ||
+		error "fileset info still not cleared on $nm nodemap"
 	do_facet mgs $LCTL set_param -P nodemap.${nm}.fileset=\'\' ||
 		error "unable to reset fileset info on $nm nodemap"
-	wait_nm_sync $nm fileset
+	wait_nm_sync $nm fileset "nodemap.${nm}.fileset="
 
 	# re-mount client
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||
@@ -1904,8 +1905,10 @@ nodemap_exercise_fileset() {
 		error "unable to remount client ${clients_arr[0]}"
 
 	# test mount point content
-	do_node ${clients_arr[0]} test -d $MOUNT/$subdir ||
-		(ls $MOUNT ; error "fileset not cleared on $nm nodemap")
+	if ! $(do_node ${clients_arr[0]} test -d $MOUNT/$subdir); then
+		ls $MOUNT
+		error "fileset not cleared on $nm nodemap"
+	fi
 
 	# back to non-nodemap setup
 	if $SHARED_KEY; then
