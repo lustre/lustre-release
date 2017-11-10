@@ -3861,29 +3861,24 @@ static int ll_inode_revalidate_fini(struct inode *inode, int rc)
 	return rc;
 }
 
-static int __ll_inode_revalidate(struct dentry *dentry,
-				 enum ldlm_intent_flags op)
+static int ll_inode_revalidate(struct dentry *dentry, enum ldlm_intent_flags op)
 {
 	struct inode *inode = dentry->d_inode;
+	struct obd_export *exp = ll_i2mdexp(inode);
 	struct lookup_intent oit = {
 		.it_op = op,
 	};
 	struct ptlrpc_request *req = NULL;
 	struct md_op_data *op_data;
-	struct obd_export *exp;
 	int rc = 0;
 	ENTRY;
-
-	LASSERT(inode != NULL);
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p),name=%s\n",
 	       PFID(ll_inode2fid(inode)), inode, dentry->d_name.name);
 
-	exp = ll_i2mdexp(inode);
-
 	/* Call getattr by fid, so do not provide name at all. */
-	op_data = ll_prep_md_op_data(NULL, dentry->d_inode, dentry->d_inode,
-				     NULL, 0, 0, LUSTRE_OPC_ANY, NULL);
+	op_data = ll_prep_md_op_data(NULL, inode, inode, NULL, 0, 0,
+				     LUSTRE_OPC_ANY, NULL);
 	if (IS_ERR(op_data))
 		RETURN(PTR_ERR(op_data));
 
@@ -3939,43 +3934,6 @@ static int ll_merge_md_attr(struct inode *inode)
 	RETURN(0);
 }
 
-static int
-ll_inode_revalidate(struct dentry *dentry, enum ldlm_intent_flags op)
-{
-	struct inode	*inode = dentry->d_inode;
-	int		 rc;
-	ENTRY;
-
-	rc = __ll_inode_revalidate(dentry, op);
-	if (rc != 0)
-		RETURN(rc);
-
-	/* if object isn't regular file, don't validate size */
-	if (!S_ISREG(inode->i_mode)) {
-		if (S_ISDIR(inode->i_mode) &&
-		    ll_i2info(inode)->lli_lsm_md != NULL) {
-			rc = ll_merge_md_attr(inode);
-			if (rc != 0)
-				RETURN(rc);
-		}
-
-		LTIME_S(inode->i_atime) = ll_i2info(inode)->lli_atime;
-		LTIME_S(inode->i_mtime) = ll_i2info(inode)->lli_mtime;
-		LTIME_S(inode->i_ctime) = ll_i2info(inode)->lli_ctime;
-	} else {
-		/* In case of restore, the MDT has the right size and has
-		 * already send it back without granting the layout lock,
-		 * inode is up-to-date so glimpse is useless.
-		 * Also to glimpse we need the layout, in case of a running
-		 * restore the MDT holds the layout lock so the glimpse will
-		 * block up to the end of restore (getattr will block)
-		 */
-		if (!ll_file_test_flag(ll_i2info(inode), LLIF_FILE_RESTORING))
-			rc = ll_glimpse_size(inode);
-	}
-	RETURN(rc);
-}
-
 static inline dev_t ll_compat_encode_dev(dev_t dev)
 {
 	/* The compat_sys_*stat*() syscalls will fail unless the
@@ -3991,23 +3949,49 @@ static inline dev_t ll_compat_encode_dev(dev_t dev)
 #ifdef HAVE_INODEOPS_ENHANCED_GETATTR
 int ll_getattr(const struct path *path, struct kstat *stat,
 	       u32 request_mask, unsigned int flags)
-
 {
 	struct dentry *de = path->dentry;
 #else
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
 {
 #endif
-        struct inode *inode = de->d_inode;
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ll_inode_info *lli = ll_i2info(inode);
-        int res = 0;
+	struct inode *inode = de->d_inode;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct ll_inode_info *lli = ll_i2info(inode);
+	int rc;
 
-	res = ll_inode_revalidate(de, IT_GETATTR);
-        ll_stats_ops_tally(sbi, LPROC_LL_GETATTR, 1);
+	ll_stats_ops_tally(sbi, LPROC_LL_GETATTR, 1);
 
-        if (res)
-                return res;
+	rc = ll_inode_revalidate(de, IT_GETATTR);
+	if (rc < 0)
+		RETURN(rc);
+
+	if (S_ISREG(inode->i_mode)) {
+		/* In case of restore, the MDT has the right size and has
+		 * already send it back without granting the layout lock,
+		 * inode is up-to-date so glimpse is useless.
+		 * Also to glimpse we need the layout, in case of a running
+		 * restore the MDT holds the layout lock so the glimpse will
+		 * block up to the end of restore (getattr will block)
+		 */
+		if (!ll_file_test_flag(lli, LLIF_FILE_RESTORING)) {
+			rc = ll_glimpse_size(inode);
+			if (rc < 0)
+				RETURN(rc);
+		}
+	} else {
+		/* If object isn't regular a file then don't validate size. */
+		if (S_ISDIR(inode->i_mode) &&
+		    lli->lli_lsm_md != NULL) {
+			rc = ll_merge_md_attr(inode);
+			if (rc < 0)
+				RETURN(rc);
+		}
+
+		LTIME_S(inode->i_atime) = lli->lli_atime;
+		LTIME_S(inode->i_mtime) = lli->lli_mtime;
+		LTIME_S(inode->i_ctime) = lli->lli_ctime;
+	}
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_GETATTR_DELAY, 30);
 
@@ -4204,7 +4188,7 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
         * need to do it before permission check. */
 
         if (inode == inode->i_sb->s_root->d_inode) {
-		rc = __ll_inode_revalidate(inode->i_sb->s_root, IT_LOOKUP);
+		rc = ll_inode_revalidate(inode->i_sb->s_root, IT_LOOKUP);
                 if (rc)
                         RETURN(rc);
         }
