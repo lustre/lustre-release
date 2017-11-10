@@ -1910,7 +1910,8 @@ static int mgs_steal_client_llog_handler(const struct lu_env *env,
         if (lcfg->lcfg_command == LCFG_SPTLRPC_CONF)
                 RETURN(rc);
 
-        if (lcfg->lcfg_command == LCFG_ADD_MDC) {
+	if (lcfg->lcfg_command == LCFG_ADD_MDC &&
+	    strstr(lustre_cfg_string(lcfg, 0), "-clilmv") != NULL) {
                 int index;
 
                 if (sscanf(lustre_cfg_buf(lcfg, 2), "%d", &index) != 1)
@@ -2546,17 +2547,14 @@ static int mgs_write_log_mdt(const struct lu_env *env,
 	if (rc)
 		GOTO(out_free, rc);
 
-	rc = record_marker(env, llh, fsdb, CM_START, cliname,
-			   "mount opts");
+	rc = record_marker(env, llh, fsdb, CM_START, cliname, "mount opts");
 	if (rc)
 		GOTO(out_end, rc);
 	rc = record_mount_opt(env, llh, cliname, fsdb->fsdb_clilov,
 			      fsdb->fsdb_clilmv);
 	if (rc)
 		GOTO(out_end, rc);
-	rc = record_marker(env, llh, fsdb, CM_END, cliname,
-			   "mount opts");
-
+	rc = record_marker(env, llh, fsdb, CM_END, cliname, "mount opts");
 	if (rc)
 		GOTO(out_end, rc);
 
@@ -3927,6 +3925,7 @@ active_err:
 
 	/* All mdd., ost. and osd. params in proc */
 	if ((class_match_param(ptr, PARAM_MDD, NULL) == 0) ||
+	    (class_match_param(ptr, PARAM_LOD, NULL) == 0) ||
 	    (class_match_param(ptr, PARAM_OST, NULL) == 0) ||
 	    (class_match_param(ptr, PARAM_OSD, NULL) == 0)) {
 		CDEBUG(D_MGS, "%.3s param %s\n", ptr, ptr + 4);

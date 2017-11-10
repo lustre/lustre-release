@@ -976,6 +976,28 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 	body->lock_flags = ldlm_flags_to_wire(*flags);
 	body->lock_handle[0] = *lockh;
 
+	/* extended LDLM opcodes in client stats */
+	if (exp->exp_obd->obd_svc_stats != NULL) {
+		bool glimpse = *flags & LDLM_FL_HAS_INTENT;
+
+		/* OST glimpse has no intent buffer */
+		if (req_capsule_has_field(&req->rq_pill, &RMF_LDLM_INTENT,
+					  RCL_CLIENT)) {
+			struct ldlm_intent *it;
+
+			it = req_capsule_client_get(&req->rq_pill,
+						    &RMF_LDLM_INTENT);
+			glimpse = (it && (it->opc == IT_GLIMPSE));
+		}
+
+		if (!glimpse)
+			ldlm_svc_get_eopc(body, exp->exp_obd->obd_svc_stats);
+		else
+			lprocfs_counter_incr(exp->exp_obd->obd_svc_stats,
+					     PTLRPC_LAST_CNTR +
+					     LDLM_GLIMPSE_ENQUEUE);
+	}
+
 	if (async) {
 		LASSERT(reqp != NULL);
 		RETURN(0);
@@ -1817,8 +1839,8 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 		lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_CANCELING;
 
 		if ((lru_flags & LDLM_LRU_FLAG_CLEANUP) &&
-		    lock->l_resource->lr_type == LDLM_EXTENT &&
-		    lock->l_granted_mode == LCK_PR)
+		    (lock->l_resource->lr_type == LDLM_EXTENT ||
+		     ldlm_has_dom(lock)) && lock->l_granted_mode == LCK_PR)
 			ldlm_set_discard_data(lock);
 
 		/* We can't re-add to l_lru as it confuses the

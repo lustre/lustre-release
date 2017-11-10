@@ -51,25 +51,6 @@ struct ofd_intent_args {
 	int			error;
 };
 
-int ofd_dlm_init(void)
-{
-	ldlm_glimpse_work_kmem = kmem_cache_create("ldlm_glimpse_work_kmem",
-					     sizeof(struct ldlm_glimpse_work),
-					     0, 0, NULL);
-	if (ldlm_glimpse_work_kmem == NULL)
-		return -ENOMEM;
-	else
-		return 0;
-}
-
-void ofd_dlm_exit(void)
-{
-	if (ldlm_glimpse_work_kmem) {
-		kmem_cache_destroy(ldlm_glimpse_work_kmem);
-		ldlm_glimpse_work_kmem = NULL;
-	}
-}
-
 /**
  * OFD interval callback.
  *
@@ -252,6 +233,11 @@ int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 	};
 	struct ldlm_glimpse_work *pos, *tmp;
 	ENTRY;
+
+	/* update stats for intent in intent policy */
+	if (ptlrpc_req2svc(req)->srv_stats != NULL)
+		lprocfs_counter_incr(ptlrpc_req2svc(req)->srv_stats,
+				     PTLRPC_LAST_CNTR + LDLM_GLIMPSE_ENQUEUE);
 
 	INIT_LIST_HEAD(&arg.gl_list);
 	arg.no_glimpse_ast = false;

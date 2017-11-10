@@ -418,7 +418,7 @@ static int lmv_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 	mutex_lock(&lmv->lmv_init_mutex);
 	if ((index < lmv->tgts_size) && (lmv->tgts[index] != NULL)) {
 		tgt = lmv->tgts[index];
-		CERROR("%s: UUID %s already assigned at LOV target index %d:"
+		CERROR("%s: UUID %s already assigned at LMV target index %d:"
 		       " rc = %d\n", obd->obd_name,
 		       obd_uuid2str(&tgt->ltd_uuid), index, -EEXIST);
 		mutex_unlock(&lmv->lmv_init_mutex);
@@ -1975,7 +1975,7 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
 			RETURN(rc);
 
 		rc = lmv_early_cancel(exp, NULL, op_data, src_tgt->ltd_idx,
-				      LCK_EX, MDS_INODELOCK_FULL,
+				      LCK_EX, MDS_INODELOCK_ELC,
 				      MF_MDC_CANCEL_FID3);
 		if (rc != 0)
 			RETURN(rc);
@@ -1989,7 +1989,7 @@ retry_rename:
 		struct lmv_tgt_desc *tgt;
 
 		rc = lmv_early_cancel(exp, NULL, op_data, src_tgt->ltd_idx,
-				      LCK_EX, MDS_INODELOCK_FULL,
+				      LCK_EX, MDS_INODELOCK_ELC,
 				      MF_MDC_CANCEL_FID4);
 		if (rc != 0)
 			RETURN(rc);
@@ -2532,7 +2532,7 @@ try_next_stripe:
 	}
 
 	rc = lmv_early_cancel(exp, NULL, op_data, tgt->ltd_idx, LCK_EX,
-			      MDS_INODELOCK_FULL, MF_MDC_CANCEL_FID3);
+			      MDS_INODELOCK_ELC, MF_MDC_CANCEL_FID3);
 	if (rc != 0)
 		RETURN(rc);
 

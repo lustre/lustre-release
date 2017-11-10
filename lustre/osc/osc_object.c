@@ -49,14 +49,24 @@
  * Object operations.
  *
  */
+static void osc_obj_build_res_name(struct osc_object *osc,
+				   struct ldlm_res_id *resname)
+{
+	ostid_build_res_name(&osc->oo_oinfo->loi_oi, resname);
+}
 
-static int osc_object_init(const struct lu_env *env, struct lu_object *obj,
-                           const struct lu_object_conf *conf)
+static const struct osc_object_operations osc_object_ops = {
+	.oto_build_res_name = osc_obj_build_res_name,
+	.oto_dlmlock_at_pgoff = osc_obj_dlmlock_at_pgoff,
+};
+
+int osc_object_init(const struct lu_env *env, struct lu_object *obj,
+		    const struct lu_object_conf *conf)
 {
         struct osc_object           *osc   = lu2osc(obj);
         const struct cl_object_conf *cconf = lu2cl_conf(conf);
 
-        osc->oo_oinfo = cconf->u.coc_oinfo;
+	osc->oo_oinfo = cconf->u.coc_oinfo;
 #ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
 	mutex_init(&osc->oo_debug_mutex);
 #endif
@@ -80,12 +90,15 @@ static int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 	atomic_set(&osc->oo_nr_ios, 0);
 	init_waitqueue_head(&osc->oo_io_waitq);
 
+	LASSERT(osc->oo_obj_ops != NULL);
+
 	cl_object_page_init(lu2cl(obj), sizeof(struct osc_page));
 
 	return 0;
 }
+EXPORT_SYMBOL(osc_object_init);
 
-static void osc_object_free(const struct lu_env *env, struct lu_object *obj)
+void osc_object_free(const struct lu_env *env, struct lu_object *obj)
 {
 	struct osc_object *osc = lu2osc(obj);
 
@@ -107,22 +120,24 @@ static void osc_object_free(const struct lu_env *env, struct lu_object *obj)
 	lu_object_fini(obj);
 	OBD_SLAB_FREE_PTR(osc, osc_object_kmem);
 }
+EXPORT_SYMBOL(osc_object_free);
 
 int osc_lvb_print(const struct lu_env *env, void *cookie,
-                  lu_printer_t p, const struct ost_lvb *lvb)
+		  lu_printer_t p, const struct ost_lvb *lvb)
 {
 	return (*p)(env, cookie, "size: %llu mtime: %llu atime: %llu "
 		    "ctime: %llu blocks: %llu",
                     lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_atime,
                     lvb->lvb_ctime, lvb->lvb_blocks);
 }
+EXPORT_SYMBOL(osc_lvb_print);
 
-static int osc_object_print(const struct lu_env *env, void *cookie,
-                            lu_printer_t p, const struct lu_object *obj)
+int osc_object_print(const struct lu_env *env, void *cookie,
+		     lu_printer_t p, const struct lu_object *obj)
 {
-	struct osc_object   *osc   = lu2osc(obj);
-	struct lov_oinfo    *oinfo = osc->oo_oinfo;
-	struct osc_async_rc *ar    = &oinfo->loi_ar;
+	struct osc_object *osc = lu2osc(obj);
+	struct lov_oinfo *oinfo = osc->oo_oinfo;
+	struct osc_async_rc *ar = &oinfo->loi_ar;
 
 	(*p)(env, cookie, "id: "DOSTID" "
 	     "idx: %d gen: %d kms_valid: %u kms %llu "
@@ -133,20 +148,22 @@ static int osc_object_print(const struct lu_env *env, void *cookie,
 	osc_lvb_print(env, cookie, p, &oinfo->loi_lvb);
 	return 0;
 }
+EXPORT_SYMBOL(osc_object_print);
 
 
-static int osc_attr_get(const struct lu_env *env, struct cl_object *obj,
-                        struct cl_attr *attr)
+int osc_attr_get(const struct lu_env *env, struct cl_object *obj,
+		 struct cl_attr *attr)
 {
-        struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
+	struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
 
-        cl_lvb2attr(attr, &oinfo->loi_lvb);
-        attr->cat_kms = oinfo->loi_kms_valid ? oinfo->loi_kms : 0;
-        return 0;
+	cl_lvb2attr(attr, &oinfo->loi_lvb);
+	attr->cat_kms = oinfo->loi_kms_valid ? oinfo->loi_kms : 0;
+	return 0;
 }
+EXPORT_SYMBOL(osc_attr_get);
 
-static int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
-			   const struct cl_attr *attr, unsigned valid)
+int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
+		    const struct cl_attr *attr, unsigned valid)
 {
 	struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
 	struct ost_lvb   *lvb   = &oinfo->loi_lvb;
@@ -168,17 +185,18 @@ static int osc_attr_update(const struct lu_env *env, struct cl_object *obj,
 	}
 	return 0;
 }
+EXPORT_SYMBOL(osc_attr_update);
 
-static int osc_object_glimpse(const struct lu_env *env,
-                              const struct cl_object *obj, struct ost_lvb *lvb)
+int osc_object_glimpse(const struct lu_env *env, const struct cl_object *obj,
+		       struct ost_lvb *lvb)
 {
-        struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
+	struct lov_oinfo *oinfo = cl2osc(obj)->oo_oinfo;
 
-        ENTRY;
-        lvb->lvb_size   = oinfo->loi_kms;
-        lvb->lvb_blocks = oinfo->loi_lvb.lvb_blocks;
-        RETURN(0);
+	lvb->lvb_size = oinfo->loi_kms;
+	lvb->lvb_blocks = oinfo->loi_lvb.lvb_blocks;
+	return 0;
 }
+EXPORT_SYMBOL(osc_object_glimpse);
 
 static int osc_object_ast_clear(struct ldlm_lock *lock, void *data)
 {
@@ -189,18 +207,19 @@ static int osc_object_ast_clear(struct ldlm_lock *lock, void *data)
 	RETURN(LDLM_ITER_CONTINUE);
 }
 
-static int osc_object_prune(const struct lu_env *env, struct cl_object *obj)
+int osc_object_prune(const struct lu_env *env, struct cl_object *obj)
 {
-	struct osc_object       *osc = cl2osc(obj);
-	struct ldlm_res_id      *resname = &osc_env_info(env)->oti_resname;
+	struct osc_object  *osc = cl2osc(obj);
+	struct ldlm_res_id *resname = &osc_env_info(env)->oti_resname;
 
 	/* DLM locks don't hold a reference of osc_object so we have to
 	 * clear it before the object is being destroyed. */
-	ostid_build_res_name(&osc->oo_oinfo->loi_oi, resname);
+	osc_build_res_name(osc, resname);
 	ldlm_resource_iterate(osc_export(osc)->exp_obd->obd_namespace, resname,
 			      osc_object_ast_clear, osc);
 	return 0;
 }
+EXPORT_SYMBOL(osc_object_prune);
 
 static int osc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 			     struct ll_fiemap_info_key *fmkey,
@@ -287,18 +306,6 @@ drop_lock:
 	RETURN(rc);
 }
 
-void osc_object_set_contended(struct osc_object *obj)
-{
-        obj->oo_contention_time = cfs_time_current();
-        /* mb(); */
-        obj->oo_contended = 1;
-}
-
-void osc_object_clear_contended(struct osc_object *obj)
-{
-        obj->oo_contended = 0;
-}
-
 int osc_object_is_contended(struct osc_object *obj)
 {
         struct osc_device *dev  = lu2osc_dev(obj->oo_cl.co_lu.lo_dev);
@@ -324,6 +331,7 @@ int osc_object_is_contended(struct osc_object *obj)
         }
         return 1;
 }
+EXPORT_SYMBOL(osc_object_is_contended);
 
 /**
  * Implementation of struct cl_object_operations::coo_req_attr_set() for osc
@@ -436,6 +444,7 @@ struct lu_object *osc_object_alloc(const struct lu_env *env,
 		lu_object_init(obj, NULL, dev);
 		osc->oo_cl.co_ops = &osc_ops;
 		obj->lo_ops = &osc_lu_obj_ops;
+		osc->oo_obj_ops = &osc_object_ops;
 	} else
 		obj = NULL;
 	return obj;
@@ -462,5 +471,5 @@ int osc_object_invalidate(const struct lu_env *env, struct osc_object *osc)
 
 	RETURN(0);
 }
-
+EXPORT_SYMBOL(osc_object_invalidate);
 /** @} osc */

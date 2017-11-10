@@ -520,7 +520,8 @@ void llapi_layout_free(struct llapi_layout *layout);
  * stored using RAID0.  That is, data will be split evenly and without
  * redundancy across all OSTs in the layout.
  */
-#define LLAPI_LAYOUT_RAID0	0
+#define LLAPI_LAYOUT_RAID0	0ULL
+#define LLAPI_LAYOUT_MDT	2ULL
 
 /**
 * The layout includes a specific set of OSTs on which to allocate.

@@ -77,7 +77,7 @@ static int ofd_lvbo_free(struct ldlm_resource *res)
  *
  * Called with res->lr_lvb_sem held.
  *
- * \param[in] res	LDLM resource
+ * \param[in] lock	LDLM lock on resource
  *
  * \retval		0 on successful setup
  * \retval		negative value on error
@@ -172,14 +172,14 @@ out_env:
  *  \a req != NULL : called by the DLM itself after a glimpse callback
  *  \a req == NULL : called by the OFD after a disk write
  *
- * \param[in] res		LDLM resource
+ * \param[in] lock		LDLM lock
  * \param[in] req		PTLRPC request
  * \param[in] increase_only	don't allow LVB values to decrease
  *
  * \retval		0 on successful setup
  * \retval		negative value on error
  */
-static int ofd_lvbo_update(struct ldlm_resource *res,
+static int ofd_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
 			   struct ptlrpc_request *req, int increase_only)
 {
 	struct ofd_device	*ofd;

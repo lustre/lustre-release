@@ -44,11 +44,14 @@ extern struct ptlrpc_request_pool *osc_rq_pool;
 void osc_wake_cache_waiters(struct client_obd *cli);
 int osc_shrink_grant_to_target(struct client_obd *cli, __u64 target_bytes);
 void osc_update_next_shrink(struct client_obd *cli);
+int lru_queue_work(const struct lu_env *env, void *data);
+int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
+		      int sent, int rc);
+int osc_extent_release(const struct lu_env *env, struct osc_extent *ext);
+int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
+			   pgoff_t start, pgoff_t end, bool discard);
 
 extern struct ptlrpc_request_set *PTLRPCD_SET;
-
-typedef int (*osc_enqueue_upcall_f)(void *cookie, struct lustre_handle *lockh,
-				    int rc);
 
 int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 		     __u64 *flags, union ldlm_policy_data *policy,
@@ -66,9 +69,6 @@ int osc_match_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 int osc_setattr_async(struct obd_export *exp, struct obdo *oa,
 		      obd_enqueue_update_f upcall, void *cookie,
 		      struct ptlrpc_request_set *rqset);
-int osc_punch_base(struct obd_export *exp, struct obdo *oa,
-                   obd_enqueue_update_f upcall, void *cookie,
-                   struct ptlrpc_request_set *rqset);
 int osc_sync_base(struct osc_object *obj, struct obdo *oa,
 		  obd_enqueue_update_f upcall, void *cookie,
 		  struct ptlrpc_request_set *rqset);
@@ -79,8 +79,6 @@ int osc_ladvise_base(struct obd_export *exp, struct obdo *oa,
 int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *cfg);
 int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		  struct list_head *ext_list, int cmd);
-long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
-		   long target, bool force);
 unsigned long osc_lru_reserve(struct client_obd *cli, unsigned long npages);
 void osc_lru_unreserve(struct client_obd *cli, unsigned long npages);
 
@@ -153,24 +151,12 @@ int osc_quotactl(struct obd_device *unused, struct obd_export *exp,
 void osc_inc_unstable_pages(struct ptlrpc_request *req);
 void osc_dec_unstable_pages(struct ptlrpc_request *req);
 bool osc_over_unstable_soft_limit(struct client_obd *cli);
-/**
- * Bit flags for osc_dlm_lock_at_pageoff().
- */
-enum osc_dap_flags {
-	/**
-	 * Just check if the desired lock exists, it won't hold reference
-	 * count on lock.
-	 */
-	OSC_DAP_FL_TEST_LOCK = 1 << 0,
-	/**
-	 * Return the lock even if it is being canceled.
-	 */
-	OSC_DAP_FL_CANCELING = 1 << 1
-};
-struct ldlm_lock *osc_dlmlock_at_pgoff(const struct lu_env *env,
-				       struct osc_object *obj, pgoff_t index,
-				       enum osc_dap_flags flags);
-void osc_pack_req_body(struct ptlrpc_request *req, struct obdo *oa);
+
+struct ldlm_lock *osc_obj_dlmlock_at_pgoff(const struct lu_env *env,
+					   struct osc_object *obj,
+					   pgoff_t index,
+					   enum osc_dap_flags flags);
+
 int osc_object_invalidate(const struct lu_env *env, struct osc_object *osc);
 
 /** osc shrink list to link all osc client obd */
@@ -182,4 +168,14 @@ extern unsigned long osc_cache_shrink_count(struct shrinker *sk,
 extern unsigned long osc_cache_shrink_scan(struct shrinker *sk,
 					   struct shrink_control *sc);
 
+static inline void osc_set_io_portal(struct ptlrpc_request *req)
+{
+	struct obd_import *imp = req->rq_import;
+
+	/* Distinguish OSC from MDC here to use OST or MDS portal */
+	if (OCD_HAS_FLAG(&imp->imp_connect_data, IBITS))
+		req->rq_request_portal = MDS_IO_PORTAL;
+	else
+		req->rq_request_portal = OST_IO_PORTAL;
+}
 #endif /* OSC_INTERNAL_H */

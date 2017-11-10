@@ -706,7 +706,7 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 			/* update lvbo to return proper attributes.
 			 * see bug 23174 */
 			ldlm_resource_getref(res);
-			ldlm_res_lvbo_update(res, NULL, 1);
+			ldlm_lvbo_update(res, lock, NULL, 1);
 			ldlm_resource_putref(res);
 		}
 		ldlm_lock_cancel(lock);
@@ -741,11 +741,11 @@ static int ldlm_cb_interpret(const struct lu_env *env,
 		} else if (rc == -ELDLM_NO_LOCK_DATA) {
 			LDLM_DEBUG(lock, "lost race - client has a lock but no "
 				   "inode");
-			ldlm_res_lvbo_update(lock->l_resource, NULL, 1);
+			ldlm_lvbo_update(lock->l_resource, lock, NULL, 1);
 		} else if (rc != 0) {
 			rc = ldlm_handle_ast_error(lock, req, rc, "glimpse");
 		} else {
-			rc = ldlm_res_lvbo_update(lock->l_resource, req, 1);
+			rc = ldlm_lvbo_update(lock->l_resource, lock, req, 1);
 		}
 		break;
 	case LDLM_BL_CALLBACK:
@@ -1145,6 +1145,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 
 	RETURN(rc);
 }
+EXPORT_SYMBOL(ldlm_server_glimpse_ast);
 
 int ldlm_glimpse_locks(struct ldlm_resource *res,
 		       struct list_head *gl_work_list)
@@ -1177,40 +1178,6 @@ struct ldlm_lock *ldlm_request_lock(struct ptlrpc_request *req)
 }
 EXPORT_SYMBOL(ldlm_request_lock);
 
-static void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
-                       struct lprocfs_stats *srv_stats)
-{
-        int lock_type = 0, op = 0;
-
-        lock_type = dlm_req->lock_desc.l_resource.lr_type;
-
-        switch (lock_type) {
-        case LDLM_PLAIN:
-                op = PTLRPC_LAST_CNTR + LDLM_PLAIN_ENQUEUE;
-                break;
-        case LDLM_EXTENT:
-                if (dlm_req->lock_flags & LDLM_FL_HAS_INTENT)
-                        op = PTLRPC_LAST_CNTR + LDLM_GLIMPSE_ENQUEUE;
-                else
-                        op = PTLRPC_LAST_CNTR + LDLM_EXTENT_ENQUEUE;
-                break;
-        case LDLM_FLOCK:
-                op = PTLRPC_LAST_CNTR + LDLM_FLOCK_ENQUEUE;
-                break;
-        case LDLM_IBITS:
-                op = PTLRPC_LAST_CNTR + LDLM_IBITS_ENQUEUE;
-                break;
-        default:
-                op = 0;
-                break;
-        }
-
-        if (op)
-                lprocfs_counter_incr(srv_stats, op);
-
-        return;
-}
-
 /**
  * Main server-side entry point into LDLM for enqueue. This is called by ptlrpc
  * service threads to carry out client lock enqueueing requests.
@@ -1236,7 +1203,9 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 
 	LASSERT(req->rq_export);
 
-	if (ptlrpc_req2svc(req)->srv_stats != NULL)
+	/* for intent enqueue the stat will be updated inside intent policy */
+	if (ptlrpc_req2svc(req)->srv_stats != NULL &&
+	    !(dlm_req->lock_flags & LDLM_FL_HAS_INTENT))
 		ldlm_svc_get_eopc(dlm_req, ptlrpc_req2svc(req)->srv_stats);
 
         if (req->rq_export && req->rq_export->exp_nid_stats &&
@@ -1356,7 +1325,6 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 		lock->l_req_extent = lock->l_policy_data.l_extent;
 
 existing_lock:
-
         if (flags & LDLM_FL_HAS_INTENT) {
                 /* In this case, the reply buffer is allocated deep in
                  * local_lock_enqueue by the policy function. */
@@ -1658,7 +1626,9 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
                         if (res != NULL) {
                                 ldlm_resource_getref(res);
                                 LDLM_RESOURCE_ADDREF(res);
-                                ldlm_res_lvbo_update(res, NULL, 1);
+
+				if (!ldlm_is_discard_data(lock))
+					ldlm_lvbo_update(res, lock, NULL, 1);
                         }
                         pres = res;
                 }
@@ -3201,11 +3171,22 @@ int ldlm_init(void)
 	if (ldlm_interval_tree_slab == NULL)
 		goto out_interval;
 
+#ifdef HAVE_SERVER_SUPPORT
+	ldlm_glimpse_work_kmem = kmem_cache_create("ldlm_glimpse_work_kmem",
+					sizeof(struct ldlm_glimpse_work),
+					0, 0, NULL);
+	if (ldlm_glimpse_work_kmem == NULL)
+		goto out_interval_tree;
+#endif
+
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
 	class_export_dump_hook = ldlm_dump_export_locks;
 #endif
 	return 0;
-
+#ifdef HAVE_SERVER_SUPPORT
+out_interval_tree:
+	kmem_cache_destroy(ldlm_interval_tree_slab);
+#endif
 out_interval:
 	kmem_cache_destroy(ldlm_interval_slab);
 out_lock:
@@ -3228,4 +3209,7 @@ void ldlm_exit(void)
 	kmem_cache_destroy(ldlm_lock_slab);
 	kmem_cache_destroy(ldlm_interval_slab);
 	kmem_cache_destroy(ldlm_interval_tree_slab);
+#ifdef HAVE_SERVER_SUPPORT
+	kmem_cache_destroy(ldlm_glimpse_work_kmem);
+#endif
 }

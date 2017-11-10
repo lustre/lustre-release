@@ -54,6 +54,11 @@ struct lov_stripe_md_entry {
 	struct lov_oinfo       *lsme_oinfo[];
 };
 
+static inline bool lsme_is_dom(struct lov_stripe_md_entry *lsme)
+{
+	return (lov_pattern(lsme->lsme_pattern) == LOV_PATTERN_MDT);
+}
+
 static inline void copy_lsm_entry(struct lov_stripe_md_entry *dst,
 				  struct lov_stripe_md_entry *src)
 {
@@ -305,6 +310,8 @@ extern struct lprocfs_vars lprocfs_lov_obd_vars[];
 
 /* lov_cl.c */
 extern struct lu_device_type lov_device_type;
+
+#define LOV_MDC_TGT_MAX 256
 
 /* pools */
 extern struct cfs_hash_ops pool_hash_operations;

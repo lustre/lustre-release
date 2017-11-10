@@ -289,11 +289,10 @@ typedef int (*ldlm_cancel_cbt)(struct ldlm_lock *lock);
  * of ldlm_[res_]lvbo_[init,update,fill]() functions.
  */
 struct ldlm_valblock_ops {
-        int (*lvbo_init)(struct ldlm_resource *res);
-        int (*lvbo_update)(struct ldlm_resource *res,
-                           struct ptlrpc_request *r,
-                           int increase);
-        int (*lvbo_free)(struct ldlm_resource *res);
+	int (*lvbo_init)(struct ldlm_resource *res);
+	int (*lvbo_update)(struct ldlm_resource *res, struct ldlm_lock *lock,
+			   struct ptlrpc_request *r,  int increase);
+	int (*lvbo_free)(struct ldlm_resource *res);
 	/* Return size of lvb data appropriate RPC size can be reserved */
 	int (*lvbo_size)(struct ldlm_lock *lock);
 	/* Called to fill in lvb data to RPC buffer @buf */
@@ -843,7 +842,9 @@ struct ldlm_lock {
 
 	/** Private storage for lock user. Opaque to LDLM. */
 	void			*l_ast_data;
-
+	/* separate ost_lvb used mostly by Data-on-MDT for now.
+	 * It is introduced to don't mix with layout lock data. */
+	struct ost_lvb		 l_ost_lvb;
 	/*
 	 * Server-side-only members.
 	 */
@@ -1011,6 +1012,12 @@ static inline bool ldlm_has_layout(struct ldlm_lock *lock)
 {
 	return lock->l_resource->lr_type == LDLM_IBITS &&
 		lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_LAYOUT;
+}
+
+static inline bool ldlm_has_dom(struct ldlm_lock *lock)
+{
+	return lock->l_resource->lr_type == LDLM_IBITS &&
+		lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_DOM;
 }
 
 static inline char *
@@ -1361,9 +1368,11 @@ ldlm_handle2lock_long(const struct lustre_handle *h, __u64 flags)
  * Update Lock Value Block Operations (LVBO) on a resource taking into account
  * data from request \a r
  */
-static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
-				       struct ptlrpc_request *req, int increase)
+static inline int ldlm_lvbo_update(struct ldlm_resource *res,
+				   struct ldlm_lock *lock,
+				   struct ptlrpc_request *req, int increase)
 {
+	struct ldlm_namespace *ns = ldlm_res_to_ns(res);
 	int rc;
 
 	/* delayed lvb init may be required */
@@ -1373,12 +1382,16 @@ static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
 		return rc;
 	}
 
-	if (ldlm_res_to_ns(res)->ns_lvbo &&
-	    ldlm_res_to_ns(res)->ns_lvbo->lvbo_update) {
-		return ldlm_res_to_ns(res)->ns_lvbo->lvbo_update(res, req,
-								 increase);
-	}
+	if (ns->ns_lvbo && ns->ns_lvbo->lvbo_update)
+		return ns->ns_lvbo->lvbo_update(res, lock, req, increase);
+
 	return 0;
+}
+
+static inline int ldlm_res_lvbo_update(struct ldlm_resource *res,
+				       struct ptlrpc_request *req, int increase)
+{
+	return ldlm_lvbo_update(res, NULL, req, increase);
 }
 
 int ldlm_error2errno(enum ldlm_error error);
@@ -1478,8 +1491,41 @@ void ldlm_namespace_put(struct ldlm_namespace *ns);
 int ldlm_proc_setup(void);
 #ifdef CONFIG_PROC_FS
 void ldlm_proc_cleanup(void);
+
+static inline void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
+				     struct lprocfs_stats *srv_stats)
+{
+	int lock_type = 0, op = 0;
+
+	lock_type = dlm_req->lock_desc.l_resource.lr_type;
+
+	switch (lock_type) {
+	case LDLM_PLAIN:
+		op = PTLRPC_LAST_CNTR + LDLM_PLAIN_ENQUEUE;
+		break;
+	case LDLM_EXTENT:
+		op = PTLRPC_LAST_CNTR + LDLM_EXTENT_ENQUEUE;
+		break;
+	case LDLM_FLOCK:
+		op = PTLRPC_LAST_CNTR + LDLM_FLOCK_ENQUEUE;
+		break;
+	case LDLM_IBITS:
+		op = PTLRPC_LAST_CNTR + LDLM_IBITS_ENQUEUE;
+		break;
+	default:
+		op = 0;
+		break;
+	}
+
+	if (op != 0)
+		lprocfs_counter_incr(srv_stats, op);
+
+	return;
+}
 #else
 static inline void ldlm_proc_cleanup(void) {}
+static inline void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
+				     struct lprocfs_stats *srv_stats) {}
 #endif
 
 /* resource.c - internal */
@@ -1667,6 +1713,8 @@ static inline int ldlm_extent_contain(const struct ldlm_extent *ex1,
 {
 	return ex1->start <= ex2->start && ex1->end >= ex2->end;
 }
+
+int ldlm_inodebits_drop(struct ldlm_lock *lock,  __u64 to_drop);
 
 #endif
 /** @} LDLM */

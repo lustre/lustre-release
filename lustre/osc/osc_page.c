@@ -301,6 +301,7 @@ int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 
 	return result;
 }
+EXPORT_SYMBOL(osc_page_init);
 
 /**
  * Helper function called by osc_io_submit() for every page in an immediate
@@ -684,6 +685,7 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 	}
 	RETURN(count > 0 ? count : rc);
 }
+EXPORT_SYMBOL(osc_lru_shrink);
 
 /**
  * Reclaim LRU pages by an IO thread. The caller wants to reclaim at least
@@ -776,6 +778,7 @@ static int osc_lru_alloc(const struct lu_env *env, struct client_obd *cli,
 	struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
 	struct osc_io *oio = osc_env_io(env);
 	int rc = 0;
+
 	ENTRY;
 
 	if (cli->cl_cache == NULL) /* shall not be in LRU */

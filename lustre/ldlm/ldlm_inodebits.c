@@ -278,3 +278,26 @@ void ldlm_ibits_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 	wpolicy->l_inodebits.bits = lpolicy->l_inodebits.bits;
 	wpolicy->l_inodebits.try_bits = lpolicy->l_inodebits.try_bits;
 }
+
+int ldlm_inodebits_drop(struct ldlm_lock *lock,  __u64 to_drop)
+{
+	ENTRY;
+
+	check_res_locked(lock->l_resource);
+
+	/* Just return if there are no conflicting bits */
+	if ((lock->l_policy_data.l_inodebits.bits & to_drop) == 0) {
+		LDLM_WARN(lock, "try to drop unset bits %#llx/%#llx\n",
+			  lock->l_policy_data.l_inodebits.bits, to_drop);
+		/* nothing to do */
+		RETURN(0);
+	}
+
+	/* remove lock from a skiplist and put in the new place
+	 * according with new inodebits */
+	ldlm_resource_unlink_lock(lock);
+	lock->l_policy_data.l_inodebits.bits &= ~to_drop;
+	ldlm_grant_lock_with_skiplist(lock);
+	RETURN(0);
+}
+EXPORT_SYMBOL(ldlm_inodebits_drop);

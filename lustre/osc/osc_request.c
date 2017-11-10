@@ -79,18 +79,6 @@ struct osc_ladvise_args {
 	void			*la_cookie;
 };
 
-struct osc_enqueue_args {
-	struct obd_export	*oa_exp;
-	enum ldlm_type		oa_type;
-	enum ldlm_mode		oa_mode;
-	__u64			*oa_flags;
-	osc_enqueue_upcall_f	oa_upcall;
-	void			*oa_cookie;
-	struct ost_lvb		*oa_lvb;
-	struct lustre_handle	oa_lockh;
-	bool			oa_speculative;
-};
-
 static void osc_release_ppga(struct brw_page **ppga, size_t count);
 static int brw_interpret(const struct lu_env *env, struct ptlrpc_request *req,
 			 void *data, int rc);
@@ -396,31 +384,34 @@ out:
 	RETURN(rc);
 }
 
-int osc_punch_base(struct obd_export *exp, struct obdo *oa,
-                   obd_enqueue_update_f upcall, void *cookie,
-                   struct ptlrpc_request_set *rqset)
+int osc_punch_send(struct obd_export *exp, struct obdo *oa,
+		   obd_enqueue_update_f upcall, void *cookie)
 {
-        struct ptlrpc_request   *req;
-        struct osc_setattr_args *sa;
-        struct ost_body         *body;
-        int                      rc;
-        ENTRY;
+	struct ptlrpc_request *req;
+	struct osc_setattr_args *sa;
+	struct obd_import *imp = class_exp2cliimp(exp);
+	struct ost_body *body;
+	int rc;
 
-        req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_OST_PUNCH);
-        if (req == NULL)
-                RETURN(-ENOMEM);
+	ENTRY;
 
-        rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_PUNCH);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
-        req->rq_request_portal = OST_IO_PORTAL; /* bug 7198 */
-        ptlrpc_at_set_req_timeout(req);
+	req = ptlrpc_request_alloc(imp, &RQF_OST_PUNCH);
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_PUNCH);
+	if (rc < 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
+	osc_set_io_portal(req);
+
+	ptlrpc_at_set_req_timeout(req);
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
-	LASSERT(body);
-	lustre_set_wire_obdo(&req->rq_import->imp_connect_data, &body->oa, oa);
+
+	lustre_set_wire_obdo(&imp->imp_connect_data, &body->oa, oa);
 
 	ptlrpc_request_set_replen(req);
 
@@ -430,13 +421,12 @@ int osc_punch_base(struct obd_export *exp, struct obdo *oa,
 	sa->sa_oa = oa;
 	sa->sa_upcall = upcall;
 	sa->sa_cookie = cookie;
-	if (rqset == PTLRPCD_SET)
-		ptlrpcd_add_req(req);
-	else
-		ptlrpc_set_add_req(rqset, req);
+
+	ptlrpcd_add_req(req);
 
 	RETURN(0);
 }
+EXPORT_SYMBOL(osc_punch_send);
 
 static int osc_sync_interpret(const struct lu_env *env,
                               struct ptlrpc_request *req,
@@ -731,11 +721,6 @@ static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
         }
 }
 
-static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
-			      u32 keylen, void *key,
-			      u32 vallen, void *val,
-			      struct ptlrpc_request_set *set);
-
 static int osc_shrink_grant_interpret(const struct lu_env *env,
                                       struct ptlrpc_request *req,
                                       void *aa, int rc)
@@ -890,7 +875,7 @@ static int osc_del_shrink_grant(struct client_obd *client)
                                          TIMEOUT_GRANT);
 }
 
-static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
+void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 {
 	/*
 	 * ocd_grant is the total grant amount we're expect to hold: if we've
@@ -947,6 +932,7 @@ static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
 	    list_empty(&cli->cl_grant_shrink_list))
 		osc_add_shrink_grant(cli);
 }
+EXPORT_SYMBOL(osc_init_grant);
 
 /* We assume that the reason this OSC got a short read is because it read
  * beyond the end of a stripe file; i.e. lustre is reading a sparse file
@@ -1161,9 +1147,9 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
                 ptlrpc_request_free(req);
                 RETURN(rc);
         }
-        req->rq_request_portal = OST_IO_PORTAL; /* bug 7198 */
-        ptlrpc_at_set_req_timeout(req);
+	osc_set_io_portal(req);
 
+	ptlrpc_at_set_req_timeout(req);
 	/* ask ptlrpc not to resend on EINPROGRESS since BRWs have their own
 	 * retry logic */
 	req->rq_no_retry_einprogress = 1;
@@ -2112,10 +2098,10 @@ static int osc_set_lock_data(struct ldlm_lock *lock, void *data)
 	return set;
 }
 
-static int osc_enqueue_fini(struct ptlrpc_request *req,
-			    osc_enqueue_upcall_f upcall, void *cookie,
-			    struct lustre_handle *lockh, enum ldlm_mode mode,
-			    __u64 *flags, bool speculative, int errcode)
+int osc_enqueue_fini(struct ptlrpc_request *req, osc_enqueue_upcall_f upcall,
+		     void *cookie, struct lustre_handle *lockh,
+		     enum ldlm_mode mode, __u64 *flags, bool speculative,
+		     int errcode)
 {
 	bool intent = *flags & LDLM_FL_HAS_INTENT;
 	int rc;
@@ -2147,12 +2133,11 @@ static int osc_enqueue_fini(struct ptlrpc_request *req,
 	if (errcode == ELDLM_OK && lustre_handle_is_used(lockh))
 		ldlm_lock_decref(lockh, mode);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
-static int osc_enqueue_interpret(const struct lu_env *env,
-				 struct ptlrpc_request *req,
-				 struct osc_enqueue_args *aa, int rc)
+int osc_enqueue_interpret(const struct lu_env *env, struct ptlrpc_request *req,
+			  struct osc_enqueue_args *aa, int rc)
 {
 	struct ldlm_lock *lock;
 	struct lustre_handle *lockh = &aa->oa_lockh;
@@ -2196,7 +2181,7 @@ static int osc_enqueue_interpret(const struct lu_env *env,
 	rc = osc_enqueue_fini(req, aa->oa_upcall, aa->oa_cookie, lockh, mode,
 			      aa->oa_flags, aa->oa_speculative, rc);
 
-        OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_CANCEL_RACE, 10);
+	OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_CANCEL_RACE, 10);
 
 	ldlm_lock_decref(lockh, mode);
 	LDLM_LOCK_PUT(lock);
@@ -2595,10 +2580,9 @@ out:
 	return err;
 }
 
-static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
-			      u32 keylen, void *key,
-			      u32 vallen, void *val,
-			      struct ptlrpc_request_set *set)
+int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
+		       u32 keylen, void *key, u32 vallen, void *val,
+		       struct ptlrpc_request_set *set)
 {
         struct ptlrpc_request *req;
         struct obd_device     *obd = exp->exp_obd;
@@ -2714,17 +2698,16 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 
 	RETURN(0);
 }
+EXPORT_SYMBOL(osc_set_info_async);
 
-static int osc_reconnect(const struct lu_env *env,
-                         struct obd_export *exp, struct obd_device *obd,
-                         struct obd_uuid *cluuid,
-                         struct obd_connect_data *data,
-                         void *localdata)
+int osc_reconnect(const struct lu_env *env, struct obd_export *exp,
+		  struct obd_device *obd, struct obd_uuid *cluuid,
+		  struct obd_connect_data *data, void *localdata)
 {
-        struct client_obd *cli = &obd->u.cli;
+	struct client_obd *cli = &obd->u.cli;
 
-        if (data != NULL && (data->ocd_connect_flags & OBD_CONNECT_GRANT)) {
-                long lost_grant;
+	if (data != NULL && (data->ocd_connect_flags & OBD_CONNECT_GRANT)) {
+		long lost_grant;
 		long grant;
 
 		spin_lock(&cli->cl_loi_list_lock);
@@ -2745,8 +2728,9 @@ static int osc_reconnect(const struct lu_env *env,
 
 	RETURN(0);
 }
+EXPORT_SYMBOL(osc_reconnect);
 
-static int osc_disconnect(struct obd_export *exp)
+int osc_disconnect(struct obd_export *exp)
 {
 	struct obd_device *obd = class_exp2obd(exp);
 	int rc;
@@ -2773,9 +2757,10 @@ static int osc_disconnect(struct obd_export *exp)
                 osc_del_shrink_grant(&obd->u.cli);
         return rc;
 }
+EXPORT_SYMBOL(osc_disconnect);
 
-static int osc_ldlm_resource_invalidate(struct cfs_hash *hs,
-	struct cfs_hash_bd *bd, struct hlist_node *hnode, void *arg)
+int osc_ldlm_resource_invalidate(struct cfs_hash *hs, struct cfs_hash_bd *bd,
+				 struct hlist_node *hnode, void *arg)
 {
 	struct lu_env *env = arg;
 	struct ldlm_resource *res = cfs_hash_object(hs, hnode);
@@ -2804,6 +2789,7 @@ static int osc_ldlm_resource_invalidate(struct cfs_hash *hs,
 
 	RETURN(0);
 }
+EXPORT_SYMBOL(osc_ldlm_resource_invalidate);
 
 static int osc_import_event(struct obd_device *obd,
                             struct obd_import *imp,
@@ -2911,15 +2897,12 @@ static int brw_queue_work(const struct lu_env *env, void *data)
 	RETURN(0);
 }
 
-int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+int osc_setup_common(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	struct client_obd *cli = &obd->u.cli;
-	struct obd_type	  *type;
-	void		  *handler;
-	int		   rc;
-	int		   adding;
-	int		   added;
-	int		   req_count;
+	void *handler;
+	int rc;
+
 	ENTRY;
 
 	rc = ptlrpcd_addref();
@@ -2930,9 +2913,10 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	if (rc)
 		GOTO(out_ptlrpcd, rc);
 
+
 	handler = ptlrpcd_alloc_work(cli->cl_import, brw_queue_work, cli);
 	if (IS_ERR(handler))
-		GOTO(out_client_setup, rc = PTR_ERR(handler));
+		GOTO(out_ptlrpcd_work, rc = PTR_ERR(handler));
 	cli->cl_writeback_work = handler;
 
 	handler = ptlrpcd_alloc_work(cli->cl_import, lru_queue_work, cli);
@@ -2945,6 +2929,40 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		GOTO(out_ptlrpcd_work, rc);
 
 	cli->cl_grant_shrink_interval = GRANT_SHRINK_INTERVAL;
+
+	INIT_LIST_HEAD(&cli->cl_grant_shrink_list);
+	RETURN(rc);
+
+out_ptlrpcd_work:
+	if (cli->cl_writeback_work != NULL) {
+		ptlrpcd_destroy_work(cli->cl_writeback_work);
+		cli->cl_writeback_work = NULL;
+	}
+	if (cli->cl_lru_work != NULL) {
+		ptlrpcd_destroy_work(cli->cl_lru_work);
+		cli->cl_lru_work = NULL;
+	}
+	client_obd_cleanup(obd);
+out_ptlrpcd:
+	ptlrpcd_decref();
+	RETURN(rc);
+}
+EXPORT_SYMBOL(osc_setup_common);
+
+int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
+{
+	struct client_obd *cli = &obd->u.cli;
+	struct obd_type	  *type;
+	int		   adding;
+	int		   added;
+	int		   req_count;
+	int		   rc;
+
+	ENTRY;
+
+	rc = osc_setup_common(obd, lcfg);
+	if (rc < 0)
+		RETURN(rc);
 
 #ifdef CONFIG_PROC_FS
 	obd->obd_vars = lprocfs_osc_obd_vars;
@@ -3000,24 +3018,9 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	spin_unlock(&osc_shrink_lock);
 
 	RETURN(0);
-
-out_ptlrpcd_work:
-	if (cli->cl_writeback_work != NULL) {
-		ptlrpcd_destroy_work(cli->cl_writeback_work);
-		cli->cl_writeback_work = NULL;
-	}
-	if (cli->cl_lru_work != NULL) {
-		ptlrpcd_destroy_work(cli->cl_lru_work);
-		cli->cl_lru_work = NULL;
-	}
-out_client_setup:
-	client_obd_cleanup(obd);
-out_ptlrpcd:
-	ptlrpcd_decref();
-	RETURN(rc);
 }
 
-static int osc_precleanup(struct obd_device *obd)
+int osc_precleanup_common(struct obd_device *obd)
 {
 	struct client_obd *cli = &obd->u.cli;
 	ENTRY;
@@ -3043,12 +3046,22 @@ static int osc_precleanup(struct obd_device *obd)
 	}
 
 	obd_cleanup_client_import(obd);
+	RETURN(0);
+}
+EXPORT_SYMBOL(osc_precleanup_common);
+
+static int osc_precleanup(struct obd_device *obd)
+{
+	ENTRY;
+
+	osc_precleanup_common(obd);
+
 	ptlrpc_lprocfs_unregister_obd(obd);
 	lprocfs_obd_cleanup(obd);
 	RETURN(0);
 }
 
-int osc_cleanup(struct obd_device *obd)
+int osc_cleanup_common(struct obd_device *obd)
 {
 	struct client_obd *cli = &obd->u.cli;
 	int rc;
@@ -3078,6 +3091,7 @@ int osc_cleanup(struct obd_device *obd)
 	ptlrpcd_decref();
 	RETURN(rc);
 }
+EXPORT_SYMBOL(osc_cleanup_common);
 
 int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
@@ -3094,7 +3108,7 @@ static struct obd_ops osc_obd_ops = {
         .o_owner                = THIS_MODULE,
         .o_setup                = osc_setup,
         .o_precleanup           = osc_precleanup,
-        .o_cleanup              = osc_cleanup,
+	.o_cleanup              = osc_cleanup_common,
         .o_add_conn             = client_import_add_conn,
         .o_del_conn             = client_import_del_conn,
         .o_connect              = client_connect_import,

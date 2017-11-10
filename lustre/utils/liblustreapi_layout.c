@@ -569,6 +569,8 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 			blob->lmm_pattern = 0;
 		else if (pattern == LLAPI_LAYOUT_RAID0)
 			blob->lmm_pattern = LOV_PATTERN_RAID0;
+		else if (pattern == LLAPI_LAYOUT_MDT)
+			blob->lmm_pattern = LOV_PATTERN_MDT;
 		else
 			blob->lmm_pattern = pattern;
 
@@ -1206,7 +1208,7 @@ int llapi_layout_pattern_get(const struct llapi_layout *layout,
 }
 
 /**
- * Set the RAID pattern of \a layout.
+ * Set the pattern of \a layout.
  *
  * \param[in] layout	layout to set pattern in
  * \param[in] pattern	value to be set
@@ -1224,7 +1226,8 @@ int llapi_layout_pattern_set(struct llapi_layout *layout, uint64_t pattern)
 		return -1;
 
 	if (pattern != LLAPI_LAYOUT_DEFAULT &&
-	    pattern != LLAPI_LAYOUT_RAID0) {
+	    pattern != LLAPI_LAYOUT_RAID0 &&
+	    pattern != LLAPI_LAYOUT_MDT) {
 		errno = EOPNOTSUPP;
 		return -1;
 	}

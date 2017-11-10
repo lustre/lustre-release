@@ -899,7 +899,10 @@ int lov_process_config_base(struct obd_device *obd, struct lustre_cfg *lcfg,
         ENTRY;
 
         switch(cmd = lcfg->lcfg_command) {
-        case LCFG_LOV_ADD_OBD:
+	case LCFG_ADD_MDC:
+	case LCFG_DEL_MDC:
+		break;
+	case LCFG_LOV_ADD_OBD:
         case LCFG_LOV_ADD_INA:
         case LCFG_LOV_DEL_OBD: {
                 __u32 index;
@@ -1264,58 +1267,71 @@ static int lov_set_info_async(const struct lu_env *env, struct obd_export *exp,
 	struct obd_device *obddev = class_exp2obd(exp);
 	struct lov_obd *lov = &obddev->u.lov;
 	struct lov_tgt_desc *tgt;
-	int do_inactive = 0;
-	int no_set = 0;
-	u32 count;
+	bool do_inactive = false, no_set = false;
 	u32 i;
 	int rc = 0;
 	int err;
-        ENTRY;
 
-        if (set == NULL) {
-                no_set = 1;
-                set = ptlrpc_prep_set();
-                if (!set)
-                        RETURN(-ENOMEM);
-        }
+	ENTRY;
 
-        obd_getref(obddev);
-        count = lov->desc.ld_tgt_count;
+	if (set == NULL) {
+		no_set = true;
+		set = ptlrpc_prep_set();
+		if (!set)
+			RETURN(-ENOMEM);
+	}
+
+	obd_getref(obddev);
 
 	if (KEY_IS(KEY_CHECKSUM)) {
-                do_inactive = 1;
+		do_inactive = true;
 	} else if (KEY_IS(KEY_CACHE_SET)) {
 		LASSERT(lov->lov_cache == NULL);
 		lov->lov_cache = val;
-		do_inactive = 1;
+		do_inactive = true;
 		cl_cache_incref(lov->lov_cache);
 	}
 
-	for (i = 0; i < count; i++) {
+	for (i = 0; i < lov->desc.ld_tgt_count; i++) {
 		tgt = lov->lov_tgts[i];
 
-                /* OST was disconnected */
-                if (!tgt || !tgt->ltd_exp)
-                        continue;
+		/* OST was disconnected */
+		if (tgt == NULL || tgt->ltd_exp == NULL)
+			continue;
 
-                /* OST is inactive and we don't want inactive OSCs */
-                if (!tgt->ltd_active && !do_inactive)
-                        continue;
+		/* OST is inactive and we don't want inactive OSCs */
+		if (!tgt->ltd_active && !do_inactive)
+			continue;
 
 		err = obd_set_info_async(env, tgt->ltd_exp, keylen, key,
 					 vallen, val, set);
-                if (!rc)
-                        rc = err;
-        }
 
-        obd_putref(obddev);
-        if (no_set) {
-                err = ptlrpc_set_wait(set);
-                if (!rc)
-                        rc = err;
-                ptlrpc_set_destroy(set);
-        }
-        RETURN(rc);
+		if (rc == 0)
+			rc = err;
+	}
+
+	/* cycle through MDC target for Data-on-MDT */
+	for (i = 0; i < LOV_MDC_TGT_MAX; i++) {
+		struct obd_device *mdc;
+
+		mdc = lov->lov_mdc_tgts[i].lmtd_mdc;
+		if (mdc == NULL)
+			continue;
+
+		err = obd_set_info_async(env, mdc->obd_self_export,
+					 keylen, key, vallen, val, set);
+		if (rc == 0)
+			rc = err;
+	}
+
+	obd_putref(obddev);
+	if (no_set) {
+		err = ptlrpc_set_wait(set);
+		if (rc == 0)
+			rc = err;
+		ptlrpc_set_destroy(set);
+	}
+	RETURN(rc);
 }
 
 void lov_stripe_lock(struct lov_stripe_md *md)

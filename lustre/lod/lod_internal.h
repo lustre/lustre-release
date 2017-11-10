@@ -192,6 +192,8 @@ struct lod_device {
 
 	/* maximum EA size underlied OSD may have */
 	unsigned int	      lod_osd_max_easize;
+	/* maximum size of MDT stripe for Data-on-MDT files. */
+	unsigned int          lod_dom_max_stripesize;
 
 	/*FIXME: When QOS and pool is implemented for MDT, probably these
 	 * structure should be moved to lod_tgt_descs as well.

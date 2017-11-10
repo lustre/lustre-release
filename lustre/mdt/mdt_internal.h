@@ -209,7 +209,8 @@ struct mdt_device {
 		unsigned int       mo_user_xattr:1,
 				   mo_acl:1,
 				   mo_cos:1,
-				   mo_evict_tgt_nids:1;
+				   mo_evict_tgt_nids:1,
+				   mo_dom_lock:1;
 	} mdt_opts;
         /* mdt state flags */
         unsigned long              mdt_state;
@@ -223,6 +224,9 @@ struct mdt_device {
 
 	int			   mdt_max_ea_size;
 
+	/* preferred BRW size, decided by storage type and capability */
+	__u32			   mdt_brw_size;
+
         struct upcall_cache        *mdt_identity_cache;
 
 	unsigned int               mdt_capa_conf:1,
@@ -234,10 +238,6 @@ struct mdt_device {
 
 	/* lock for osfs and md_root */
 	spinlock_t		   mdt_lock;
-
-	/* statfs optimization: we cache a bit  */
-	struct obd_statfs	   mdt_osfs;
-	__u64			   mdt_osfs_age;
 
         /* root squash */
 	struct root_squash_info    mdt_squash;
@@ -274,6 +274,8 @@ struct mdt_object {
 	spinlock_t		mot_write_lock;
         /* Lock to protect create_data */
 	struct mutex		mot_lov_mutex;
+	/* lock to protect read/write stages for Data-on-MDT files */
+	struct rw_semaphore	mot_dom_sem;
 	/* Lock to protect lease open.
 	 * Lease open acquires write lock; normal open acquires read lock */
 	struct rw_semaphore	mot_open_sem;
@@ -615,6 +617,44 @@ static inline bool mdt_is_striped_client(struct obd_export *exp)
 	return exp_connect_flags(exp) & OBD_CONNECT_DIR_STRIPE;
 }
 
+enum {
+	LMM_NO_DOM,
+	LMM_DOM_ONLY,
+	LMM_DOM_OST
+};
+
+/* XXX Look into layout in MDT layer. This must be done in LOD. */
+static inline int mdt_lmm_dom_entry(struct lov_mds_md *lmm)
+{
+	struct lov_comp_md_v1 *comp_v1;
+	struct lov_mds_md *v1;
+	int i;
+
+	if (lmm->lmm_magic == LOV_MAGIC_COMP_V1) {
+		comp_v1 = (struct lov_comp_md_v1 *)lmm;
+		v1 = (struct lov_mds_md *)((char *)comp_v1 +
+			comp_v1->lcm_entries[0].lcme_offset);
+		/* DoM entry is the first entry always */
+		if (lov_pattern(v1->lmm_pattern) != LOV_PATTERN_MDT)
+			return LMM_NO_DOM;
+
+		for (i = 1; i < comp_v1->lcm_entry_count; i++) {
+			int j;
+
+			v1 = (struct lov_mds_md *)((char *)comp_v1 +
+				comp_v1->lcm_entries[i].lcme_offset);
+			for (j = 0; j < v1->lmm_stripe_count; j++) {
+				/* if there is any object on OST */
+				if (v1->lmm_objects[j].l_ost_idx !=
+				    (__u32)-1UL)
+					return LMM_DOM_OST;
+			}
+		}
+		return LMM_DOM_ONLY;
+	}
+	return LMM_NO_DOM;
+}
+
 __u64 mdt_get_disposition(struct ldlm_reply *rep, __u64 op_flag);
 void mdt_set_disposition(struct mdt_thread_info *info,
 			 struct ldlm_reply *rep, __u64 op_flag);
@@ -645,6 +685,8 @@ int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *mo,
 
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *mo,
 		       struct mdt_lock_handle *lh, int decref);
+void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
+		   enum ldlm_mode mode, int decref);
 
 struct mdt_object *mdt_object_new(const struct lu_env *env,
 				  struct mdt_device *,
@@ -685,8 +727,9 @@ int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
 		      struct mdt_object *o, struct lu_nodemap *nodemap);
 #endif
 void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
-                        const struct lu_attr *attr, const struct lu_fid *fid);
-
+			const struct lu_attr *attr, const struct lu_fid *fid);
+int mdt_pack_size2body(struct mdt_thread_info *info,
+			const struct lu_fid *fid, bool dom_lock);
 int mdt_getxattr(struct mdt_thread_info *info);
 int mdt_reint_setxattr(struct mdt_thread_info *info,
                        struct mdt_lock_handle *lh);
@@ -765,6 +808,13 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
 			  struct mdt_thread_info *mti);
 void mdt_thread_info_fini(struct mdt_thread_info *mti);
 struct mdt_thread_info *tsi2mdt_info(struct tgt_session_info *tsi);
+void mdt_intent_fixup_resent(struct mdt_thread_info *info,
+			     struct ldlm_lock *new_lock,
+			     struct mdt_lock_handle *lh, __u64 flags);
+int mdt_intent_lock_replace(struct mdt_thread_info *info,
+			    struct ldlm_lock **lockp,
+			    struct mdt_lock_handle *lh,
+			    __u64 flags, int result);
 
 int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
 		     const struct md_hsm *mh);
@@ -1008,6 +1058,11 @@ static inline int is_identity_get_disabled(struct upcall_cache *cache)
 
 int mdt_blocking_ast(struct ldlm_lock*, struct ldlm_lock_desc*, void*, int);
 
+static int mdt_dom_glimpse_ast(struct ldlm_lock *lock, void *reqp)
+{
+	return -ELDLM_NO_LOCK_DATA;
+}
+
 /* Issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
 static inline int mdt_fid_lock(struct ldlm_namespace *ns,
 			       struct lustre_handle *lh, enum ldlm_mode mode,
@@ -1016,14 +1071,16 @@ static inline int mdt_fid_lock(struct ldlm_namespace *ns,
 			       __u64 flags, const __u64 *client_cookie)
 {
 	int rc;
+	bool glimpse = policy->l_inodebits.bits & MDS_INODELOCK_DOM;
 
 	LASSERT(ns != NULL);
 	LASSERT(lh != NULL);
 
 	rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
 				    mode, &flags, mdt_blocking_ast,
-				    ldlm_completion_ast, NULL, NULL, 0,
-				    LVB_T_NONE, client_cookie, lh);
+				    ldlm_completion_ast,
+				    glimpse ? mdt_dom_glimpse_ast : NULL,
+				    NULL, 0, LVB_T_NONE, client_cookie, lh);
 	return rc == ELDLM_OK ? 0 : -EIO;
 }
 
@@ -1056,6 +1113,9 @@ static inline enum ldlm_mode mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
 
 /* mdt_lvb.c */
 extern struct ldlm_valblock_ops mdt_lvbo;
+int mdt_dom_lvb_is_valid(struct ldlm_resource *res);
+int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
+			struct ptlrpc_request *req, bool increase_only);
 
 void mdt_enable_cos(struct mdt_device *, int);
 int mdt_cos_is_enabled(struct mdt_device *);
@@ -1076,9 +1136,12 @@ enum {
         LPROC_MDT_SETXATTR,
         LPROC_MDT_STATFS,
         LPROC_MDT_SYNC,
-        LPROC_MDT_SAMEDIR_RENAME,
-        LPROC_MDT_CROSSDIR_RENAME,
-        LPROC_MDT_LAST,
+	LPROC_MDT_SAMEDIR_RENAME,
+	LPROC_MDT_CROSSDIR_RENAME,
+	LPROC_MDT_IO_READ,
+	LPROC_MDT_IO_WRITE,
+	LPROC_MDT_IO_PUNCH,
+	LPROC_MDT_LAST,
 };
 void mdt_counter_incr(struct ptlrpc_request *req, int opcode);
 void mdt_stats_counter_init(struct lprocfs_stats *stats);
@@ -1118,5 +1181,50 @@ static inline char *mdt_req_get_jobid(struct ptlrpc_request *req)
 
 	return jobid;
 }
+
+/* MDT IO */
+
+#define VALID_FLAGS (LA_TYPE | LA_MODE | LA_SIZE | LA_BLOCKS | \
+		     LA_BLKSIZE | LA_ATIME | LA_MTIME | LA_CTIME)
+
+int mdt_obd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
+		   struct obdo *oa, int objcount, struct obd_ioobj *obj,
+		   struct niobuf_remote *rnb, int *nr_local,
+		   struct niobuf_local *lnb);
+
+int mdt_obd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
+		     struct obdo *oa, int objcount, struct obd_ioobj *obj,
+		     struct niobuf_remote *rnb, int npages,
+		     struct niobuf_local *lnb, int old_rc);
+int mdt_punch_hdl(struct tgt_session_info *tsi);
+int mdt_glimpse_enqueue(struct mdt_thread_info *mti, struct ldlm_namespace *ns,
+			struct ldlm_lock **lockp, __u64 flags);
+int mdt_brw_enqueue(struct mdt_thread_info *info, struct ldlm_namespace *ns,
+		    struct ldlm_lock **lockp, __u64 flags);
+void mdt_dom_discard_data(struct mdt_thread_info *info,
+			  const struct lu_fid *fid);
+int mdt_dom_disk_lvbo_update(const struct lu_env *env, struct mdt_object *mo,
+			     struct ldlm_resource *res, bool increase_only);
+void mdt_dom_obj_lvb_update(const struct lu_env *env, struct mdt_object *mo,
+			    bool increase_only);
+int mdt_dom_lvb_alloc(struct ldlm_resource *res);
+
+static inline void mdt_dom_check_and_discard(struct mdt_thread_info *mti,
+					     struct mdt_object *mo)
+{
+	if (lu_object_is_dying(&mo->mot_header) &&
+	    S_ISREG(lu_object_attr(&mo->mot_obj)))
+		mdt_dom_discard_data(mti, mdt_object_fid(mo));
+}
+
+int mdt_dom_object_size(const struct lu_env *env, struct mdt_device *mdt,
+			const struct lu_fid *fid, struct mdt_body *mb,
+			bool dom_lock);
+bool mdt_dom_client_has_lock(struct mdt_thread_info *info,
+			     const struct lu_fid *fid);
+/* grants */
+long mdt_grant_connect(const struct lu_env *env, struct obd_export *exp,
+		       u64 want, bool conservative);
+extern struct kmem_cache *ldlm_glimpse_work_kmem;
 
 #endif /* _MDT_INTERNAL_H */

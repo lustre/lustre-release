@@ -40,6 +40,7 @@ extern struct mutex ldlm_cli_namespace_lock;
 extern struct list_head ldlm_cli_active_namespace_list;
 extern struct list_head ldlm_cli_inactive_namespace_list;
 extern unsigned int ldlm_cancel_unused_locks_before_replay;
+extern struct kmem_cache *ldlm_glimpse_work_kmem;
 
 static inline int ldlm_namespace_nr_read(enum ldlm_side client)
 {
@@ -135,6 +136,7 @@ typedef enum {
 	LDLM_WORK_GL_AST
 } ldlm_desc_ast_t;
 
+void ldlm_grant_lock_with_skiplist(struct ldlm_lock *lock);
 void ldlm_grant_lock(struct ldlm_lock *lock, struct list_head *work_list);
 int ldlm_fill_lvb(struct ldlm_lock *lock, struct req_capsule *pill,
 		  enum req_location loc, void *data, int size);

@@ -70,69 +70,6 @@ static int ofd_seqs_seq_show(struct seq_file *m, void *data)
 LPROC_SEQ_FOPS_RO(ofd_seqs);
 
 /**
- * Show estimate of total amount of dirty data on clients.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static int ofd_tot_dirty_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct tg_grants_data *tgd;
-
-	LASSERT(obd != NULL);
-	tgd = &obd->u.obt.obt_lut->lut_tgd;
-	seq_printf(m, "%llu\n", tgd->tgd_tot_dirty);
-	return 0;
-}
-LPROC_SEQ_FOPS_RO(ofd_tot_dirty);
-
-/**
- * Show total amount of space granted to clients.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static int ofd_tot_granted_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct tg_grants_data *tgd;
-
-	LASSERT(obd != NULL);
-	tgd = &obd->u.obt.obt_lut->lut_tgd;
-	seq_printf(m, "%llu\n", tgd->tgd_tot_granted);
-	return 0;
-}
-LPROC_SEQ_FOPS_RO(ofd_tot_granted);
-
-/**
- * Show total amount of space used by IO in progress.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static int ofd_tot_pending_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct tg_grants_data *tgd;
-
-	LASSERT(obd != NULL);
-	tgd = &obd->u.obt.obt_lut->lut_tgd;
-	seq_printf(m, "%llu\n", tgd->tgd_tot_pending);
-	return 0;
-}
-LPROC_SEQ_FOPS_RO(ofd_tot_pending);
-
-/**
  * Show total number of grants for precreate.
  *
  * \param[in] m		seq_file handle
@@ -629,70 +566,6 @@ ofd_sync_lock_cancel_seq_write(struct file *file, const char __user *buffer,
 LPROC_SEQ_FOPS(ofd_sync_lock_cancel);
 
 /**
- * Show if grants compatibility mode is disabled.
- *
- * When tgd_grant_compat_disable is set, we don't grant any space to clients
- * not supporting OBD_CONNECT_GRANT_PARAM. Otherwise, space granted to such
- * a client is inflated since it consumes PAGE_SIZE of grant space per
- * block, (i.e. typically 4kB units), but underlaying file system might have
- * block size bigger than page size, e.g. ZFS. See LU-2049 for details.
- *
- * \param[in] m		seq_file handle
- * \param[in] data	unused for single entry
- *
- * \retval		0 on success
- * \retval		negative value on error
- */
-static int ofd_grant_compat_disable_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = m->private;
-	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
-
-	seq_printf(m, "%u\n", tgd->tgd_grant_compat_disable);
-	return 0;
-}
-
-/**
- * Change grant compatibility mode.
- *
- * Setting tgd_grant_compat_disable prohibit any space granting to clients
- * not supporting OBD_CONNECT_GRANT_PARAM. See details above.
- *
- * \param[in] file	proc file
- * \param[in] buffer	string which represents mode
- *			1: disable compatibility mode
- *			0: enable compatibility mode
- * \param[in] count	\a buffer length
- * \param[in] off	unused for single entry
- *
- * \retval		\a count on success
- * \retval		negative number on error
- */
-static ssize_t
-ofd_grant_compat_disable_seq_write(struct file *file,
-				   const char __user *buffer,
-				   size_t count, loff_t *off)
-{
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
-	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
-	__s64 val;
-	int rc;
-
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	if (val < 0)
-		return -EINVAL;
-
-	tgd->tgd_grant_compat_disable = !!val;
-
-	return count;
-}
-LPROC_SEQ_FOPS(ofd_grant_compat_disable);
-
-/**
  * Show the limit of soft sync RPCs.
  *
  * This value defines how many IO RPCs with OBD_BRW_SOFT_SYNC flag
@@ -893,6 +766,11 @@ LPROC_SEQ_FOPS_RW_TYPE(ofd, ir_factor);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, checksum_dump);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, job_interval);
 
+LPROC_SEQ_FOPS_RO(tgt_tot_dirty);
+LPROC_SEQ_FOPS_RO(tgt_tot_granted);
+LPROC_SEQ_FOPS_RO(tgt_tot_pending);
+LPROC_SEQ_FOPS(tgt_grant_compat_disable);
+
 struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ .name =	"seqs_allocated",
 	  .fops =	&ofd_seqs_fops			},
@@ -901,11 +779,11 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ .name =	"last_id",
 	  .fops =	&ofd_last_id_fops		},
 	{ .name =	"tot_dirty",
-	  .fops =	&ofd_tot_dirty_fops		},
+	  .fops =	&tgt_tot_dirty_fops		},
 	{ .name =	"tot_pending",
-	  .fops =	&ofd_tot_pending_fops		},
+	  .fops =	&tgt_tot_pending_fops		},
 	{ .name =	"tot_granted",
-	  .fops =	&ofd_tot_granted_fops		},
+	  .fops =	&tgt_tot_granted_fops		},
 	{ .name =	"grant_precreate",
 	  .fops =	&ofd_grant_precreate_fops	},
 	{ .name =	"precreate_batch",
@@ -935,7 +813,7 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ .name =	"checksum_dump",
 	  .fops =	&ofd_checksum_dump_fops		},
 	{ .name =	"grant_compat_disable",
-	  .fops =	&ofd_grant_compat_disable_fops	},
+	  .fops =	&tgt_grant_compat_disable_fops	},
 	{ .name =	"client_cache_count",
 	  .fops =	&ofd_fmd_max_num_fops		},
 	{ .name =	"client_cache_seconds",

@@ -54,6 +54,69 @@
  * \retval 0		on success
  * \retval negative	error code if failed
  */
+static int lod_dom_stripesize_seq_show(struct seq_file *m, void *v)
+{
+	struct obd_device *dev = m->private;
+	struct lod_device *lod;
+
+	LASSERT(dev != NULL);
+	lod  = lu2lod_dev(dev->obd_lu_dev);
+	seq_printf(m, "%u\n", lod->lod_dom_max_stripesize);
+	return 0;
+}
+
+/**
+ * Set default stripe size.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string containing the maximum number of bytes stored in
+ *			each object before moving to the next object in the
+ *			layout (if any)
+ * \param[in] count	@buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval @count	on success
+ * \retval negative	error code if failed
+ */
+static ssize_t
+lod_dom_stripesize_seq_write(struct file *file, const char __user *buffer,
+			      size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *dev = m->private;
+	struct lod_device *lod;
+	__s64 val;
+	int rc;
+
+	LASSERT(dev != NULL);
+	lod  = lu2lod_dev(dev->obd_lu_dev);
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
+	if (rc)
+		return rc;
+	if (val < 0)
+		return -ERANGE;
+
+	/* */
+	if (val > (1ULL << 30))
+		return -ERANGE;
+	else if (val > 0)
+		lod_fix_desc_stripe_size(&val);
+
+	lod->lod_dom_max_stripesize = val;
+
+	return count;
+}
+LPROC_SEQ_FOPS(lod_dom_stripesize);
+
+/**
+ * Show default stripe size.
+ *
+ * \param[in] m		seq file
+ * \param[in] v		unused for single entry
+ *
+ * \retval 0		on success
+ * \retval negative	error code if failed
+ */
 static int lod_stripesize_seq_show(struct seq_file *m, void *v)
 {
 	struct obd_device *dev = m->private;
@@ -757,6 +820,10 @@ static struct lprocfs_vars lprocfs_lod_obd_vars[] = {
 	  .fops	=	&lod_qos_maxage_fops	},
 	{ .name	=	"lmv_failout",
 	  .fops	=	&lod_lmv_failout_fops	},
+	{
+	  .name = "dom_stripesize",
+	  .fops = &lod_dom_stripesize_fops
+	},
 	{ NULL }
 };
 

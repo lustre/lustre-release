@@ -117,6 +117,7 @@ static int lfs_list_commands(int argc, char **argv);
 	"                 [--stripe-count|-c <stripe_count>]\n"		\
 	"                 [--stripe-index|-i <start_ost_idx>]\n"	\
 	"                 [--stripe-size|-S <stripe_size>]\n"		\
+	"                 [--layout|-L <pattern>]\n"		\
 	"                 [--pool|-p <pool_name>]\n"			\
 	"                 [--ost|-o <ost_indices>]\n"
 
@@ -127,6 +128,7 @@ static int lfs_list_commands(int argc, char **argv);
 	"\t              Can be specified with K, M or G (for KB, MB, GB\n" \
 	"\t              respectively)\n"				\
 	"\tpool_name:    Name of OST pool to use (default none)\n"	\
+	"\tlayout:       stripe pattern type: raid0, mdt (default raid0)\n"\
 	"\tost_indices:  List of OST indices, can be repeated multiple times\n"\
 	"\t              Indices be specified in a format of:\n"	\
 	"\t                -o <ost_1>,<ost_i>-<ost_j>,<ost_n>\n"	\
@@ -243,7 +245,7 @@ command_t cmdlist[] = {
          "     [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
          "     [[!] --uid|-u|--user|-U <uid>|<uname>] [[!] --pool <pool>]\n"
 	 "     [[!] --projid <projid>]\n"
-	 "     [[!] --layout|-L released,raid0]\n"
+	 "     [[!] --layout|-L released,raid0,mdt]\n"
 	 "     [[!] --component-count [+-]<comp_cnt>]\n"
 	 "     [[!] --component-start [+-]N[kMGTPE]]\n"
 	 "     [[!] --component-end|-E [+-]N[kMGTPE]]\n"
@@ -1011,6 +1013,7 @@ struct lfs_setstripe_args {
 	int			 lsa_stripe_off;
 	__u32			 lsa_comp_flags;
 	int			 lsa_nr_osts;
+	int			 lsa_pattern;
 	__u32			*lsa_osts;
 	char			*lsa_pool_name;
 };
@@ -1025,7 +1028,7 @@ static inline bool setstripe_args_specified(struct lfs_setstripe_args *lsa)
 {
 	return (lsa->lsa_stripe_size != 0 || lsa->lsa_stripe_count != 0 ||
 		lsa->lsa_stripe_off != -1 || lsa->lsa_pool_name != NULL ||
-		lsa->lsa_comp_end != 0);
+		lsa->lsa_comp_end != 0 || lsa->lsa_pattern != 0);
 }
 
 static int comp_args_to_layout(struct llapi_layout **composite,
@@ -1068,6 +1071,51 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 		fprintf(stderr, "Set extent [%lu, %llu) failed. %s\n",
 			prev_end, lsa->lsa_comp_end, strerror(errno));
 		return rc;
+	}
+
+	/* Data-on-MDT component setting */
+	if (lsa->lsa_pattern == LLAPI_LAYOUT_MDT) {
+		/* In case of Data-on-MDT patterns the only extra option
+		 * applicable is stripe size option. */
+		if (lsa->lsa_stripe_count) {
+			fprintf(stderr, "Option 'stripe-count' can't be "
+				"specified with Data-on-MDT component: %i\n",
+				lsa->lsa_stripe_count);
+			return -EINVAL;
+		}
+		if (lsa->lsa_stripe_size) {
+			fprintf(stderr, "Option 'stripe-size' can't be "
+				"specified with Data-on-MDT component: %llu\n",
+				lsa->lsa_stripe_size);
+			return -EINVAL;
+		}
+		if (lsa->lsa_nr_osts != 0) {
+			fprintf(stderr, "Option 'ost-list' can't be specified "
+				"with Data-on-MDT component: '%i'\n",
+				lsa->lsa_nr_osts);
+			return -EINVAL;
+		}
+		if (lsa->lsa_stripe_off != -1) {
+			fprintf(stderr, "Option 'stripe-offset' can't be "
+				"specified with Data-on-MDT component: %i\n",
+				lsa->lsa_stripe_off);
+			return -EINVAL;
+		}
+		if (lsa->lsa_pool_name != 0) {
+			fprintf(stderr, "Option 'pool' can't be specified "
+				"with Data-on-MDT component: '%s'\n",
+				lsa->lsa_pool_name);
+			return -EINVAL;
+		}
+
+		rc = llapi_layout_pattern_set(layout, lsa->lsa_pattern);
+		if (rc) {
+			fprintf(stderr, "Set stripe pattern %#x failed. %s\n",
+				lsa->lsa_pattern, strerror(errno));
+			return rc;
+		}
+		/* Data-on-MDT component has always single stripe up to end */
+		lsa->lsa_stripe_size = lsa->lsa_comp_end;
 	}
 
 	if (lsa->lsa_stripe_size != 0) {
@@ -1352,6 +1400,7 @@ static int lfs_setstripe(int argc, char **argv)
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument},
 	{ .val = 'I',	.name = "comp-id",	.has_arg = required_argument},
 	{ .val = 'I',	.name = "component-id",	.has_arg = required_argument},
+	{ .val = 'L',	.name = "layout",	.has_arg = required_argument },
 	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument},
 	{ .val = 'm',	.name = "mdt_index",	.has_arg = required_argument},
@@ -1387,7 +1436,7 @@ static int lfs_setstripe(int argc, char **argv)
 	if (strcmp(argv[0], "migrate") == 0)
 		migrate_mode = true;
 
-	while ((c = getopt_long(argc, argv, "bc:dE:i:I:m:no:p:s:S:v",
+	while ((c = getopt_long(argc, argv, "bc:dE:i:I:m:no:p:L:s:S:v",
 				long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
@@ -1473,6 +1522,30 @@ static int lfs_setstripe(int argc, char **argv)
 					"%s %s: invalid component ID '%s'\n",
 					progname, argv[0], optarg);
 				goto usage_error;
+			}
+			break;
+		case 'L':
+			if (strcmp(argv[optind - 1], "mdt") == 0) {
+				/* Can be only the first component */
+				if (layout != NULL) {
+					result = -EINVAL;
+					fprintf(stderr, "error: 'mdt' layout "
+						"can be only the first one\n");
+					goto error;
+				}
+				if (lsa.lsa_comp_end > (1ULL << 30)) { /* 1Gb */
+					result = -EFBIG;
+					fprintf(stderr, "error: 'mdt' layout "
+						"size is too big\n");
+					goto error;
+				}
+				lsa.lsa_pattern = LLAPI_LAYOUT_MDT;
+			} else if (strcmp(argv[optind - 1], "raid0") != 0) {
+				result = -EINVAL;
+				fprintf(stderr, "error: layout '%s' is "
+					"unknown, supported layouts are: "
+					"'mdt', 'raid0'\n", argv[optind]);
+				goto error;
 			}
 			break;
 		case 'm':
@@ -1666,7 +1739,6 @@ static int lfs_setstripe(int argc, char **argv)
 		param->lsp_stripe_size = lsa.lsa_stripe_size;
 		param->lsp_stripe_offset = lsa.lsa_stripe_off;
 		param->lsp_stripe_count = lsa.lsa_stripe_count;
-		param->lsp_stripe_pattern = 0;
 		param->lsp_pool = lsa.lsa_pool_name;
 		param->lsp_is_specific = false;
 		if (lsa.lsa_nr_osts > 0) {
@@ -1822,17 +1894,19 @@ static inline int gid2name(char **name, unsigned int id)
 
 static int name2layout(__u32 *layout, char *name)
 {
-	char *ptr, *lyt;
+	char *ptr, *layout_name;
 
 	*layout = 0;
 	for (ptr = name; ; ptr = NULL) {
-		lyt = strtok(ptr, ",");
-		if (lyt == NULL)
+		layout_name = strtok(ptr, ",");
+		if (layout_name == NULL)
 			break;
-		if (strcmp(lyt, "released") == 0)
+		if (strcmp(layout_name, "released") == 0)
 			*layout |= LOV_PATTERN_F_RELEASED;
-		else if (strcmp(lyt, "raid0") == 0)
+		else if (strcmp(layout_name, "raid0") == 0)
 			*layout |= LOV_PATTERN_RAID0;
+		else if (strcmp(layout_name, "mdt") == 0)
+			*layout |= LOV_PATTERN_MDT;
 		else
 			return -1;
 	}

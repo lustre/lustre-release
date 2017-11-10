@@ -313,6 +313,8 @@ int tgt_statfs_internal(const struct lu_env *env, struct lu_target *lut,
 		if (unlikely(rc))
 			GOTO(out, rc);
 
+		osfs->os_namelen = min_t(__u32, osfs->os_namelen, NAME_MAX);
+
 		spin_lock(&tgd->tgd_grant_lock);
 		spin_lock(&tgd->tgd_osfs_lock);
 		/* calculate how much space was written while we released the
@@ -433,6 +435,7 @@ static u64 tgt_grant_space_left(struct obd_export *exp)
 	u64			 left;
 	u64			 avail;
 	u64			 unstable;
+	u64			 reserved;
 
 	ENTRY;
 	assert_spin_locked(&tgd->tgd_grant_lock);
@@ -443,7 +446,8 @@ static u64 tgt_grant_space_left(struct obd_export *exp)
 	unstable = tgd->tgd_osfs_unstable; /* those might be accounted twice */
 	spin_unlock(&tgd->tgd_osfs_lock);
 
-	tot_granted = tgd->tgd_tot_granted;
+	reserved = left * tgd->tgd_reserved_pcnt / 100;
+	tot_granted = tgd->tgd_tot_granted + reserved;
 
 	if (left < tot_granted) {
 		int mask = (left + unstable <
@@ -1505,3 +1509,130 @@ int tgt_grant_commit_cb_add(struct thandle *th, struct obd_export *exp,
 	RETURN(rc);
 }
 EXPORT_SYMBOL(tgt_grant_commit_cb_add);
+
+/**
+ * Show estimate of total amount of dirty data on clients.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
+int tgt_tot_dirty_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct tg_grants_data *tgd;
+
+	LASSERT(obd != NULL);
+	tgd = &obd->u.obt.obt_lut->lut_tgd;
+	seq_printf(m, "%llu\n", tgd->tgd_tot_dirty);
+	return 0;
+}
+EXPORT_SYMBOL(tgt_tot_dirty_seq_show);
+
+/**
+ * Show total amount of space granted to clients.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
+int tgt_tot_granted_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct tg_grants_data *tgd;
+
+	LASSERT(obd != NULL);
+	tgd = &obd->u.obt.obt_lut->lut_tgd;
+	seq_printf(m, "%llu\n", tgd->tgd_tot_granted);
+	return 0;
+}
+EXPORT_SYMBOL(tgt_tot_granted_seq_show);
+
+/**
+ * Show total amount of space used by IO in progress.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
+int tgt_tot_pending_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct tg_grants_data *tgd;
+
+	LASSERT(obd != NULL);
+	tgd = &obd->u.obt.obt_lut->lut_tgd;
+	seq_printf(m, "%llu\n", tgd->tgd_tot_pending);
+	return 0;
+}
+EXPORT_SYMBOL(tgt_tot_pending_seq_show);
+
+/**
+ * Show if grants compatibility mode is disabled.
+ *
+ * When tgd_grant_compat_disable is set, we don't grant any space to clients
+ * not supporting OBD_CONNECT_GRANT_PARAM. Otherwise, space granted to such
+ * a client is inflated since it consumes PAGE_SIZE of grant space per
+ * block, (i.e. typically 4kB units), but underlaying file system might have
+ * block size bigger than page size, e.g. ZFS. See LU-2049 for details.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
+int tgt_grant_compat_disable_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
+
+	seq_printf(m, "%u\n", tgd->tgd_grant_compat_disable);
+	return 0;
+}
+EXPORT_SYMBOL(tgt_grant_compat_disable_seq_show);
+
+/**
+ * Change grant compatibility mode.
+ *
+ * Setting tgd_grant_compat_disable prohibit any space granting to clients
+ * not supporting OBD_CONNECT_GRANT_PARAM. See details above.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents mode
+ *			1: disable compatibility mode
+ *			0: enable compatibility mode
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
+ssize_t tgt_grant_compat_disable_seq_write(struct file *file,
+					   const char __user *buffer,
+					   size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
+	__s64 val;
+	int rc;
+
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	if (val < 0)
+		return -EINVAL;
+
+	tgd->tgd_grant_compat_disable = !!val;
+
+	return count;
+}
+EXPORT_SYMBOL(tgt_grant_compat_disable_seq_write);

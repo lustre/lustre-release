@@ -184,6 +184,45 @@ int ll_test_inode_by_fid(struct inode *inode, void *opaque)
 	return lu_fid_eq(&ll_i2info(inode)->lli_fid, opaque);
 }
 
+int ll_dom_lock_cancel(struct inode *inode, struct ldlm_lock *lock)
+{
+	struct lu_env *env;
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct cl_layout clt = { .cl_layout_gen = 0, };
+	int rc;
+	__u16 refcheck;
+
+
+	ENTRY;
+
+	if (!lli->lli_clob)
+		RETURN(0);
+
+	env = cl_env_get(&refcheck);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
+
+	rc = cl_object_layout_get(env, lli->lli_clob, &clt);
+	if (rc) {
+		CDEBUG(D_INODE, "Cannot get layout for "DFID"\n",
+		       PFID(ll_inode2fid(inode)));
+		rc = -ENODATA;
+	} else if (clt.cl_size == 0 || clt.cl_dom_comp_size == 0) {
+		CDEBUG(D_INODE, "DOM lock without DOM layout for "DFID"\n",
+		       PFID(ll_inode2fid(inode)));
+	} else {
+		enum cl_fsync_mode mode;
+		loff_t end = clt.cl_dom_comp_size - 1;
+
+		mode = ldlm_is_discard_data(lock) ?
+					CL_FSYNC_DISCARD : CL_FSYNC_LOCAL;
+		rc = cl_sync_file_range(inode, 0, end, mode, 1);
+		truncate_inode_pages_range(inode->i_mapping, 0, end);
+	}
+	cl_env_put(env, &refcheck);
+	RETURN(rc);
+}
+
 int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		       void *data, int flag)
 {
@@ -203,10 +242,6 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 	case LDLM_CB_CANCELING: {
 		struct inode *inode = ll_inode_from_resource_lock(lock);
 		__u64 bits = lock->l_policy_data.l_inodebits.bits;
-
-		/* Inode is set to lock->l_resource->lr_lvb_inode
-		 * for mdc - bug 24555 */
-		LASSERT(lock->l_ast_data == NULL);
 
 		if (inode == NULL)
 			break;
@@ -257,8 +292,21 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		}
 
 		if (bits & (MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE |
-			    MDS_INODELOCK_LAYOUT | MDS_INODELOCK_PERM))
+			    MDS_INODELOCK_LAYOUT | MDS_INODELOCK_PERM |
+			    MDS_INODELOCK_DOM))
 			ll_have_md_lock(inode, &bits, LCK_MINMODE);
+
+		if (bits & MDS_INODELOCK_DOM) {
+			rc =  ll_dom_lock_cancel(inode, lock);
+			if (rc < 0)
+				CDEBUG(D_INODE, "cannot flush DoM data "
+				       DFID": rc = %d\n",
+				       PFID(ll_inode2fid(inode)), rc);
+			lock_res_and_lock(lock);
+			ldlm_set_kms_ignore(lock);
+			unlock_res_and_lock(lock);
+			bits &= ~MDS_INODELOCK_DOM;
+		}
 
 		if (bits & MDS_INODELOCK_LAYOUT) {
 			struct cl_object_conf conf = {

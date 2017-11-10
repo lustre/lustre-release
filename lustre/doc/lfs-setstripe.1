@@ -133,6 +133,27 @@ will be used as well; the
 .I start_ost_index
 must be part of the pool or an error will be returned.
 .TP
+.B -L, --layout <\fIlayout type\fB>\fR
+The type of stripe layout, can be
+.BR raid0 ", " released " or " mdt ".
+It is
+.BR raid0
+by default. The
+.BR mdt
+type allows place the first component of the file on the MDT where the inode
+is located. This is used with composite file layouts and can be defined as
+first component only. The
+.IR stripe_size
+of MDT part is always equal to the component size. There is also per-MDT
+parameter
+.IR lod.dom_stripesize
+to limit maximum size of DoM stripe which can be changed with
+.BR lctl\ set_param
+command, (e.g.
+.IR lctl\ set_param\ lod.*.dom_stripesize=0
+, see
+.BR lctl (8))
+.TP
 There are two options available only for \fBlfs migrate\fR:
 .TP
 .BR -b , --block
@@ -189,6 +210,10 @@ the end of file.
 .TP
 .B $ lfs setstripe --component-del -I 1 /mnt/lustre/file1
 This deletes the component with ID equals 1 from an existing file.
+.TP
+.B $ lfs setstripe -E 1M -L mdt -E -1 /mnt/lustre/file1
+This created file with Data-on-MDT layout. The first 1M is placed on MDT and \
+rest of file is placed on OST with default striping.
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-migrate (1),

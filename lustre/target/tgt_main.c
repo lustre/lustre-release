@@ -152,6 +152,8 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	struct lu_attr		 attr;
 	struct lu_fid		 fid;
 	struct dt_object	*o;
+	struct tg_grants_data	*tgd = &lut->lut_tgd;
+	struct obd_statfs	*osfs;
 	int i, rc = 0;
 
 	ENTRY;
@@ -187,6 +189,38 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	/* last_rcvd initialization is needed by replayable targets only */
 	if (!obd->obd_replayable)
 		RETURN(0);
+
+	/* initialize grant and statfs data in target */
+	dt_conf_get(env, lut->lut_bottom, &lut->lut_dt_conf);
+
+	/* statfs data */
+	spin_lock_init(&tgd->tgd_osfs_lock);
+	tgd->tgd_osfs_age = cfs_time_shift_64(-1000);
+	tgd->tgd_osfs_unstable = 0;
+	tgd->tgd_statfs_inflight = 0;
+	tgd->tgd_osfs_inflight = 0;
+
+	/* grant data */
+	spin_lock_init(&tgd->tgd_grant_lock);
+	tgd->tgd_tot_dirty = 0;
+	tgd->tgd_tot_granted = 0;
+	tgd->tgd_tot_pending = 0;
+	tgd->tgd_grant_compat_disable = 0;
+
+	/* populate cached statfs data */
+	osfs = &tgt_th_info(env)->tti_u.osfs;
+	rc = tgt_statfs_internal(env, lut, osfs, 0, NULL);
+	if (rc != 0) {
+		CERROR("%s: can't get statfs data, rc %d\n", tgt_name(lut),
+			rc);
+		GOTO(out, rc);
+	}
+	if (!is_power_of_2(osfs->os_bsize)) {
+		CERROR("%s: blocksize (%d) is not a power of 2\n",
+			tgt_name(lut), osfs->os_bsize);
+		GOTO(out, rc = -EPROTO);
+	}
+	tgd->tgd_blockbits = fls(osfs->os_bsize) - 1;
 
 	spin_lock_init(&lut->lut_translock);
 	spin_lock_init(&lut->lut_client_bitmap_lock);

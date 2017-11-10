@@ -762,6 +762,34 @@ mdt_sync_count_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_sync_count);
 
+static int mdt_dom_lock_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	seq_printf(m, "%u\n",  (mdt->mdt_opts.mo_dom_lock != 0));
+	return 0;
+}
+
+static ssize_t
+mdt_dom_lock_seq_write(struct file *file, const char __user *buffer,
+		       size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	__s64 val;
+	int rc;
+
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_opts.mo_dom_lock = !!val;
+	return count;
+}
+LPROC_SEQ_FOPS(mdt_dom_lock);
+
 LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, num_exports);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, target_instance);
@@ -775,7 +803,20 @@ LPROC_SEQ_FOPS(mdt_hsm_cdt_control);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, recovery_time_hard);
 LPROC_SEQ_FOPS_RW_TYPE(mdt, recovery_time_soft);
 
+LPROC_SEQ_FOPS_RO(tgt_tot_dirty);
+LPROC_SEQ_FOPS_RO(tgt_tot_granted);
+LPROC_SEQ_FOPS_RO(tgt_tot_pending);
+LPROC_SEQ_FOPS(tgt_grant_compat_disable);
+
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
+	{ .name =	"tot_dirty",
+	  .fops =	&tgt_tot_dirty_fops		},
+	{ .name =	"tot_pending",
+	  .fops =	&tgt_tot_pending_fops		},
+	{ .name =	"tot_granted",
+	  .fops =	&tgt_tot_granted_fops		},
+	{ .name =	"grant_compat_disable",
+	  .fops =	&tgt_grant_compat_disable_fops	},
 	{ .name =	"recovery_status",
 	  .fops =	&mdt_recovery_status_fops		},
 	{ .name =	"num_exports",
@@ -826,6 +867,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_async_commit_count_fops		},
 	{ .name =	"sync_count",
 	  .fops =	&mdt_sync_count_fops			},
+	{ .name =	"dom_lock",
+	  .fops =	&mdt_dom_lock_fops			},
 	{ NULL }
 };
 
@@ -894,6 +937,8 @@ void mdt_counter_incr(struct ptlrpc_request *req, int opcode)
 
 void mdt_stats_counter_init(struct lprocfs_stats *stats)
 {
+	LASSERT(stats && stats->ls_num >= LPROC_MDT_LAST);
+
         lprocfs_counter_init(stats, LPROC_MDT_OPEN, 0, "open", "reqs");
         lprocfs_counter_init(stats, LPROC_MDT_CLOSE, 0, "close", "reqs");
         lprocfs_counter_init(stats, LPROC_MDT_MKNOD, 0, "mknod", "reqs");
@@ -912,6 +957,11 @@ void mdt_stats_counter_init(struct lprocfs_stats *stats)
                              "samedir_rename", "reqs");
         lprocfs_counter_init(stats, LPROC_MDT_CROSSDIR_RENAME, 0,
                              "crossdir_rename", "reqs");
+	lprocfs_counter_init(stats, LPROC_MDT_IO_READ,
+			     LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
+	lprocfs_counter_init(stats, LPROC_MDT_IO_WRITE,
+			     LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
+	lprocfs_counter_init(stats, LPROC_MDT_IO_PUNCH, 0, "punch", "reqs");
 }
 
 int mdt_procfs_init(struct mdt_device *mdt, const char *name)

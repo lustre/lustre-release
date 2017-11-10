@@ -61,7 +61,7 @@
 #include <obd.h>
 #include <obd_support.h>
 #include <lustre_barrier.h>
-
+#include <obd_cksum.h>
 #include <llog_swab.h>
 
 #include "mdt_internal.h"
@@ -415,7 +415,8 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 {
 	struct ptlrpc_request		*req = tgt_ses_req(tsi);
 	struct mdt_thread_info		*info = tsi2mdt_info(tsi);
-	struct md_device		*next = info->mti_mdt->mdt_child;
+	struct mdt_device		*mdt = info->mti_mdt;
+	struct tg_grants_data		*tgd = &mdt->mdt_lut.lut_tgd;
 	struct ptlrpc_service_part	*svcpt;
 	struct obd_statfs		*osfs;
 	int				rc;
@@ -440,29 +441,84 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 	if (!osfs)
 		GOTO(out, rc = -EPROTO);
 
-	/** statfs information are cached in the mdt_device */
-	if (cfs_time_before_64(info->mti_mdt->mdt_osfs_age,
-			       cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS))) {
-		/** statfs data is too old, get up-to-date one */
-		rc = next->md_ops->mdo_statfs(info->mti_env, next, osfs);
-		if (rc)
-			GOTO(out, rc);
-		spin_lock(&info->mti_mdt->mdt_lock);
-		info->mti_mdt->mdt_osfs = *osfs;
-		info->mti_mdt->mdt_osfs_age = cfs_time_current_64();
-		spin_unlock(&info->mti_mdt->mdt_lock);
-	} else {
-		/** use cached statfs data */
-		spin_lock(&info->mti_mdt->mdt_lock);
-		*osfs = info->mti_mdt->mdt_osfs;
-		spin_unlock(&info->mti_mdt->mdt_lock);
-	}
+	rc = tgt_statfs_internal(tsi->tsi_env, &mdt->mdt_lut, osfs,
+				 cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				 NULL);
+	if (unlikely(rc))
+		GOTO(out, rc);
 
+	/* at least try to account for cached pages.  its still racy and
+	 * might be under-reporting if clients haven't announced their
+	 * caches with brw recently */
+	CDEBUG(D_SUPER | D_CACHE, "blocks cached %llu granted %llu"
+	       " pending %llu free %llu avail %llu\n",
+	       tgd->tgd_tot_dirty, tgd->tgd_tot_granted,
+	       tgd->tgd_tot_pending,
+	       osfs->os_bfree << tgd->tgd_blockbits,
+	       osfs->os_bavail << tgd->tgd_blockbits);
+
+	osfs->os_bavail -= min_t(u64, osfs->os_bavail,
+				 ((tgd->tgd_tot_dirty + tgd->tgd_tot_pending +
+				   osfs->os_bsize - 1) >> tgd->tgd_blockbits));
+
+	tgt_grant_sanity_check(mdt->mdt_lu_dev.ld_obd, __func__);
+	CDEBUG(D_CACHE, "%llu blocks: %llu free, %llu avail; "
+	       "%llu objects: %llu free; state %x\n",
+	       osfs->os_blocks, osfs->os_bfree, osfs->os_bavail,
+	       osfs->os_files, osfs->os_ffree, osfs->os_state);
+
+	if (!exp_grant_param_supp(tsi->tsi_exp) &&
+	    tgd->tgd_blockbits > COMPAT_BSIZE_SHIFT) {
+		/* clients which don't support OBD_CONNECT_GRANT_PARAM
+		 * should not see a block size > page size, otherwise
+		 * cl_lost_grant goes mad. Therefore, we emulate a 4KB (=2^12)
+		 * block size which is the biggest block size known to work
+		 * with all client's page size. */
+		osfs->os_blocks <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_bfree  <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_bavail <<= tgd->tgd_blockbits - COMPAT_BSIZE_SHIFT;
+		osfs->os_bsize = 1 << COMPAT_BSIZE_SHIFT;
+	}
 	if (rc == 0)
 		mdt_counter_incr(req, LPROC_MDT_STATFS);
 out:
 	mdt_thread_info_fini(info);
 	RETURN(rc);
+}
+
+/**
+ * Pack size attributes into the reply.
+ */
+int mdt_pack_size2body(struct mdt_thread_info *info,
+			const struct lu_fid *fid, bool dom_lock)
+{
+	struct mdt_body *b;
+	struct md_attr *ma = &info->mti_attr;
+	int dom_stripe;
+
+	ENTRY;
+
+	LASSERT(ma->ma_attr.la_valid & LA_MODE);
+
+	if (!S_ISREG(ma->ma_attr.la_mode) ||
+	    !(ma->ma_valid & MA_LOV && ma->ma_lmm != NULL))
+		RETURN(-ENODATA);
+
+	dom_stripe = mdt_lmm_dom_entry(ma->ma_lmm);
+	/* no DoM stripe, no size in reply */
+	if (dom_stripe == LMM_NO_DOM)
+		RETURN(-ENOENT);
+
+	/* no DoM lock, no size in reply */
+	if (!dom_lock)
+		RETURN(0);
+
+	/* Either DoM lock exists or LMM has only DoM stripe then
+	 * return size on body. */
+	b = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+
+	mdt_dom_object_size(info->mti_env, info->mti_mdt, fid, b, dom_lock);
+	RETURN(0);
 }
 
 #ifdef CONFIG_FS_POSIX_ACL
@@ -665,17 +721,18 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 		/* if no object is allocated on osts, the size on mds is valid.
 		 * b=22272 */
 		b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
-	} else if ((ma->ma_valid & MA_LOV) && ma->ma_lmm != NULL &&
-		   mdt_hsm_is_released(ma->ma_lmm)) {
-		/* A released file stores its size on MDS. */
-		/* But return 1 block for released file, unless tools like tar
-		 * will consider it fully sparse. (LU-3864)
-		 */
-		if (unlikely(b->mbo_size == 0))
-			b->mbo_blocks = 0;
-		else
-			b->mbo_blocks = 1;
-		b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+	} else if ((ma->ma_valid & MA_LOV) && ma->ma_lmm != NULL) {
+		if (mdt_hsm_is_released(ma->ma_lmm)) {
+			/* A released file stores its size on MDS. */
+			/* But return 1 block for released file, unless tools
+			 * like tar will consider it fully sparse. (LU-3864)
+			 */
+			if (unlikely(b->mbo_size == 0))
+				b->mbo_blocks = 0;
+			else
+				b->mbo_blocks = 1;
+			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+		}
 	}
 
 	if (fid != NULL && (b->mbo_valid & OBD_MD_FLSIZE))
@@ -1683,12 +1740,16 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 		/* layout lock must be granted in a best-effort way
 		 * for IT operations */
 		LASSERT(!(child_bits & MDS_INODELOCK_LAYOUT));
-		if (!OBD_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_GETATTR) &&
-		    exp_connect_layout(info->mti_exp) &&
-		    S_ISREG(lu_object_attr(&child->mot_obj)) &&
+		if (S_ISREG(lu_object_attr(&child->mot_obj)) &&
 		    !mdt_object_remote(child) && ldlm_rep != NULL) {
-			/* try to grant layout lock for regular file. */
-			try_bits = MDS_INODELOCK_LAYOUT;
+			if (!OBD_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_GETATTR) &&
+			    exp_connect_layout(info->mti_exp)) {
+				/* try to grant layout lock for regular file. */
+				try_bits = MDS_INODELOCK_LAYOUT;
+			}
+			/* Acquire DOM lock in advance for data-on-mdt file */
+			if (child != parent)
+				try_bits |= MDS_INODELOCK_DOM;
 		}
 
 		if (try_bits != 0) {
@@ -1723,6 +1784,27 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 			 "Lock res_id: "DLDLMRES", fid: "DFID"\n",
 			 PLDLMRES(lock->l_resource),
 			 PFID(mdt_object_fid(child)));
+
+		if (S_ISREG(lu_object_attr(&child->mot_obj)) &&
+		    mdt_object_exists(child) && !mdt_object_remote(child) &&
+		    child != parent) {
+			LDLM_LOCK_PUT(lock);
+			mdt_object_put(info->mti_env, child);
+			/* NB: call the mdt_pack_size2body always after
+			 * mdt_object_put(), that is why this speacial
+			 * exit path is used. */
+			rc = mdt_pack_size2body(info, child_fid,
+						child_bits & MDS_INODELOCK_DOM);
+			if (rc != 0 && child_bits & MDS_INODELOCK_DOM) {
+				/* DOM lock was taken in advance but this is
+				 * not DoM file. Drop the lock. */
+				lock_res_and_lock(lock);
+				ldlm_inodebits_drop(lock, MDS_INODELOCK_DOM);
+				unlock_res_and_lock(lock);
+			}
+
+			GOTO(out_parent, rc = 0);
+		}
         }
         if (lock)
                 LDLM_LOCK_PUT(lock);
@@ -2082,20 +2164,21 @@ static int mdt_device_sync(const struct lu_env *env, struct mdt_device *mdt)
 }
 
 /* this should sync this object */
-static int mdt_object_sync(struct mdt_thread_info *info)
+static int mdt_object_sync(const struct lu_env *env, struct obd_export *exp,
+			   struct mdt_object *mo)
 {
-	struct md_object *next;
 	int rc;
+
 	ENTRY;
 
-	if (!mdt_object_exists(info->mti_object)) {
+	if (!mdt_object_exists(mo)) {
 		CWARN("%s: non existing object "DFID": rc = %d\n",
-		      mdt_obd_name(info->mti_mdt),
-		      PFID(mdt_object_fid(info->mti_object)), -ESTALE);
+		      exp->exp_obd->obd_name, PFID(mdt_object_fid(mo)),
+		      -ESTALE);
 		RETURN(-ESTALE);
 	}
-	next = mdt_object_child(info->mti_object);
-	rc = mo_object_sync(info->mti_env, next);
+
+	rc = mo_object_sync(env, mdt_object_child(mo));
 
 	RETURN(rc);
 }
@@ -2118,7 +2201,8 @@ static int mdt_sync(struct tgt_session_info *tsi)
 		struct mdt_thread_info *info = tsi2mdt_info(tsi);
 
 		/* sync an object */
-		rc = mdt_object_sync(info);
+		rc = mdt_object_sync(tsi->tsi_env, tsi->tsi_exp,
+				     info->mti_object);
 		if (rc == 0) {
 			const struct lu_fid *fid;
 			struct lu_attr *la = &info->mti_attr.ma_attr;
@@ -2140,6 +2224,54 @@ static int mdt_sync(struct tgt_session_info *tsi)
 		mdt_counter_incr(req, LPROC_MDT_SYNC);
 
 	RETURN(rc);
+}
+
+static int mdt_data_sync(struct tgt_session_info *tsi)
+{
+	struct mdt_thread_info *info;
+	struct mdt_device *mdt = mdt_exp2dev(tsi->tsi_exp);
+	struct ost_body *body = tsi->tsi_ost_body;
+	struct ost_body *repbody;
+	struct mdt_object *mo = NULL;
+	struct md_attr *ma;
+	int rc = 0;
+
+	ENTRY;
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_OST_BODY);
+
+	/* if no fid is specified then do nothing,
+	 * device sync is done via MDS_SYNC */
+	if (fid_is_zero(&tsi->tsi_fid))
+		RETURN(0);
+
+	mo = mdt_object_find(tsi->tsi_env, mdt, &tsi->tsi_fid);
+	if (IS_ERR(mo))
+		RETURN(PTR_ERR(mo));
+
+	rc = mdt_object_sync(tsi->tsi_env, tsi->tsi_exp, mo);
+	if (rc)
+		GOTO(put, rc);
+
+	repbody->oa.o_oi = body->oa.o_oi;
+	repbody->oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
+	info = tsi2mdt_info(tsi);
+	ma = &info->mti_attr;
+	ma->ma_need = MA_INODE;
+	ma->ma_valid = 0;
+	rc = mdt_attr_get_complex(info, mo, ma);
+	if (rc == 0)
+		obdo_from_la(&repbody->oa, &ma->ma_attr, VALID_FLAGS);
+	else
+		rc = 0;
+	mdt_thread_info_fini(info);
+
+	EXIT;
+put:
+	if (mo != NULL)
+		mdt_object_put(tsi->tsi_env, mo);
+	return rc;
 }
 
 /*
@@ -2865,8 +2997,8 @@ int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *o,
  * \param mode lock mode
  * \param decref force immediate lock releasing
  */
-static void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
-			  enum ldlm_mode mode, int decref)
+void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
+		   enum ldlm_mode mode, int decref)
 {
 	ENTRY;
 
@@ -3221,13 +3353,14 @@ enum mdt_it_code {
         MDT_IT_GETXATTR,
         MDT_IT_LAYOUT,
 	MDT_IT_QUOTA,
-        MDT_IT_NR
+	MDT_IT_GLIMPSE,
+	MDT_IT_BRW,
+	MDT_IT_NR
 };
 
 static int mdt_intent_getattr(enum mdt_it_code opcode,
-                              struct mdt_thread_info *info,
-                              struct ldlm_lock **,
-			      __u64);
+			      struct mdt_thread_info *info,
+			      struct ldlm_lock **, __u64);
 
 static int mdt_intent_getxattr(enum mdt_it_code opcode,
 				struct mdt_thread_info *info,
@@ -3242,6 +3375,20 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                             struct mdt_thread_info *info,
                             struct ldlm_lock **,
 			    __u64);
+static int mdt_intent_glimpse(enum mdt_it_code opcode,
+			      struct mdt_thread_info *info,
+			      struct ldlm_lock **lockp, __u64 flags)
+{
+	return mdt_glimpse_enqueue(info, info->mti_mdt->mdt_namespace,
+				   lockp, flags);
+}
+static int mdt_intent_brw(enum mdt_it_code opcode,
+			  struct mdt_thread_info *info,
+			  struct ldlm_lock **lockp, __u64 flags)
+{
+	return mdt_brw_enqueue(info, info->mti_mdt->mdt_namespace,
+			       lockp, flags);
+}
 
 static struct mdt_it_flavor {
         const struct req_format *it_fmt;
@@ -3313,14 +3460,24 @@ static struct mdt_it_flavor {
 		.it_fmt   = &RQF_LDLM_INTENT_LAYOUT,
 		.it_flags = 0,
 		.it_act   = mdt_intent_layout
-	}
+	},
+	[MDT_IT_GLIMPSE] = {
+		.it_fmt = &RQF_LDLM_INTENT,
+		.it_flags = 0,
+		.it_act = mdt_intent_glimpse,
+	},
+	[MDT_IT_BRW] = {
+		.it_fmt = &RQF_LDLM_INTENT,
+		.it_flags = 0,
+		.it_act = mdt_intent_brw,
+	},
+
 };
 
-static int
-mdt_intent_lock_replace(struct mdt_thread_info *info,
-			struct ldlm_lock **lockp,
-			struct mdt_lock_handle *lh,
-			__u64 flags, int result)
+int mdt_intent_lock_replace(struct mdt_thread_info *info,
+			    struct ldlm_lock **lockp,
+			    struct mdt_lock_handle *lh,
+			    __u64 flags, int result)
 {
         struct ptlrpc_request  *req = mdt_info_req(info);
         struct ldlm_lock       *lock = *lockp;
@@ -3396,6 +3553,8 @@ mdt_intent_lock_replace(struct mdt_thread_info *info,
         new_lock->l_export = class_export_lock_get(req->rq_export, new_lock);
         new_lock->l_blocking_ast = lock->l_blocking_ast;
         new_lock->l_completion_ast = lock->l_completion_ast;
+	if (ldlm_has_dom(new_lock))
+		new_lock->l_glimpse_ast = ldlm_server_glimpse_ast;
         new_lock->l_remote_handle = lock->l_remote_handle;
         new_lock->l_flags &= ~LDLM_FL_LOCAL;
 
@@ -3411,10 +3570,9 @@ mdt_intent_lock_replace(struct mdt_thread_info *info,
         RETURN(ELDLM_LOCK_REPLACED);
 }
 
-static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
-				    struct ldlm_lock *new_lock,
-				    struct mdt_lock_handle *lh,
-				    __u64 flags)
+void mdt_intent_fixup_resent(struct mdt_thread_info *info,
+			     struct ldlm_lock *new_lock,
+			     struct mdt_lock_handle *lh, __u64 flags)
 {
         struct ptlrpc_request  *req = mdt_info_req(info);
         struct ldlm_request    *dlmreq;
@@ -3829,6 +3987,12 @@ static int mdt_intent_code(enum ldlm_intent_flags itcode)
 	case IT_QUOTA_CONN:
 		rc = MDT_IT_QUOTA;
 		break;
+	case IT_GLIMPSE:
+		rc = MDT_IT_GLIMPSE;
+		break;
+	case IT_BRW:
+		rc = MDT_IT_BRW;
+		break;
 	default:
 		CERROR("Unknown intent opcode: 0x%08x\n", itcode);
 		rc = -EINVAL;
@@ -3900,6 +4064,18 @@ static int mdt_intent_opc(enum ldlm_intent_flags itopc,
 	RETURN(rc);
 }
 
+static void mdt_ptlrpc_stats_update(struct ptlrpc_request *req,
+				    enum ldlm_intent_flags it_opc)
+{
+	struct lprocfs_stats *srv_stats = ptlrpc_req2svc(req)->srv_stats;
+
+	/* update stats when IT code is known */
+	if (srv_stats != NULL)
+		lprocfs_counter_incr(srv_stats,
+				PTLRPC_LAST_CNTR + (it_opc == IT_GLIMPSE ?
+				LDLM_GLIMPSE_ENQUEUE : LDLM_IBITS_ENQUEUE));
+}
+
 static int mdt_intent_policy(struct ldlm_namespace *ns,
 			     struct ldlm_lock **lockp, void *req_cookie,
 			     enum ldlm_mode mode, __u64 flags, void *data)
@@ -3909,6 +4085,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 	struct ptlrpc_request	*req  =  req_cookie;
 	struct ldlm_intent	*it;
 	struct req_capsule	*pill;
+	const struct ldlm_lock_desc *ldesc;
 	int rc;
 
 	ENTRY;
@@ -3918,37 +4095,37 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
 	tsi = tgt_ses_info(req->rq_svc_thread->t_env);
 
 	info = tsi2mdt_info(tsi);
-        LASSERT(info != NULL);
-        pill = info->mti_pill;
-        LASSERT(pill->rc_req == req);
+	LASSERT(info != NULL);
+	pill = info->mti_pill;
+	LASSERT(pill->rc_req == req);
+	ldesc = &info->mti_dlm_req->lock_desc;
 
-        if (req->rq_reqmsg->lm_bufcount > DLM_INTENT_IT_OFF) {
+	if (req->rq_reqmsg->lm_bufcount > DLM_INTENT_IT_OFF) {
 		req_capsule_extend(pill, &RQF_LDLM_INTENT_BASIC);
-                it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
-                if (it != NULL) {
-                        rc = mdt_intent_opc(it->opc, info, lockp, flags);
-                        if (rc == 0)
-                                rc = ELDLM_OK;
+		it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
+		if (it != NULL) {
+			mdt_ptlrpc_stats_update(req, it->opc);
+			rc = mdt_intent_opc(it->opc, info, lockp, flags);
+			if (rc == 0)
+				rc = ELDLM_OK;
 
-                        /* Lock without inodebits makes no sense and will oops
-                         * later in ldlm. Let's check it now to see if we have
-                         * ibits corrupted somewhere in mdt_intent_opc().
-                         * The case for client miss to set ibits has been
-                         * processed by others. */
-                        LASSERT(ergo(info->mti_dlm_req->lock_desc.l_resource.\
-                                        lr_type == LDLM_IBITS,
-                                     info->mti_dlm_req->lock_desc.\
-                                        l_policy_data.l_inodebits.bits != 0));
-                } else
-                        rc = err_serious(-EFAULT);
-        } else {
-                /* No intent was provided */
-                LASSERT(pill->rc_fmt == &RQF_LDLM_ENQUEUE);
+			/* Lock without inodebits makes no sense and will oops
+			 * later in ldlm. Let's check it now to see if we have
+			 * ibits corrupted somewhere in mdt_intent_opc().
+			 * The case for client miss to set ibits has been
+			 * processed by others. */
+			LASSERT(ergo(ldesc->l_resource.lr_type == LDLM_IBITS,
+				ldesc->l_policy_data.l_inodebits.bits != 0));
+		} else {
+			rc = err_serious(-EFAULT);
+		}
+	} else {
+		/* No intent was provided */
 		req_capsule_set_size(pill, &RMF_DLM_LVB, RCL_SERVER, 0);
-                rc = req_capsule_server_pack(pill);
-                if (rc)
-                        rc = err_serious(rc);
-        }
+		rc = req_capsule_server_pack(pill);
+		if (rc)
+			rc = err_serious(rc);
+	}
 	mdt_thread_info_fini(info);
 	RETURN(rc);
 }
@@ -4631,6 +4808,11 @@ static int mdt_tgt_getxattr(struct tgt_session_info *tsi)
 	return rc;
 }
 
+#define OBD_FAIL_OST_READ_NET	OBD_FAIL_OST_BRW_NET
+#define OBD_FAIL_OST_WRITE_NET	OBD_FAIL_OST_BRW_NET
+#define OST_BRW_READ	OST_READ
+#define OST_BRW_WRITE	OST_WRITE
+
 static struct tgt_handler mdt_tgt_handlers[] = {
 TGT_RPC_HANDLER(MDS_FIRST_OPC,
 		0,			MDS_CONNECT,	mdt_tgt_connect,
@@ -4669,6 +4851,14 @@ TGT_MDT_HDL(HABEO_CORPUS| HABEO_REFERO, MDS_HSM_REQUEST,
 TGT_MDT_HDL(HABEO_CLAVIS | HABEO_CORPUS | HABEO_REFERO | MUTABOR,
 	    MDS_SWAP_LAYOUTS,
 	    mdt_swap_layouts),
+};
+
+static struct tgt_handler mdt_io_ops[] = {
+TGT_OST_HDL(HABEO_CORPUS | HABEO_REFERO, OST_BRW_READ,	tgt_brw_read),
+TGT_OST_HDL(HABEO_CORPUS | MUTABOR,	 OST_BRW_WRITE,	tgt_brw_write),
+TGT_OST_HDL(HABEO_CORPUS | HABEO_REFERO | MUTABOR,
+					 OST_PUNCH,	mdt_punch_hdl),
+TGT_OST_HDL(HABEO_CORPUS | HABEO_REFERO, OST_SYNC,	mdt_data_sync),
 };
 
 static struct tgt_handler mdt_sec_ctx_ops[] = {
@@ -4732,7 +4922,11 @@ static struct tgt_opc_slice mdt_common_slice[] = {
 		.tos_opc_end	= LFSCK_LAST_OPC,
 		.tos_hs		= tgt_lfsck_handlers
 	},
-
+	{
+		.tos_opc_start	= OST_FIRST_OPC,
+		.tos_opc_end	= OST_LAST_OPC,
+		.tos_hs		= mdt_io_ops
+	},
 	{
 		.tos_hs		= NULL
 	}
@@ -4823,6 +5017,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	struct obd_device *obd;
 	const char *dev = lustre_cfg_string(cfg, 0);
 	const char *num = lustre_cfg_string(cfg, 2);
+	struct tg_grants_data *tgd = &m->mdt_lut.lut_tgd;
 	struct lustre_mount_info *lmi = NULL;
 	struct lustre_sb_info *lsi;
 	struct lu_site *s;
@@ -4872,12 +5067,14 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 			m->mdt_skip_lfsck = 1;
 	}
 
+	/* DoM files get IO lock at open by default */
+	m->mdt_opts.mo_dom_lock = 1;
+
 	m->mdt_squash.rsi_uid = 0;
 	m->mdt_squash.rsi_gid = 0;
 	INIT_LIST_HEAD(&m->mdt_squash.rsi_nosquash_nids);
 	init_rwsem(&m->mdt_squash.rsi_sem);
 	spin_lock_init(&m->mdt_lock);
-	m->mdt_osfs_age = cfs_time_shift_64(-1000);
 	m->mdt_enable_remote_dir = 0;
 	m->mdt_enable_remote_dir_gid = 0;
 
@@ -4957,6 +5154,15 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		      OBD_FAIL_MDS_ALL_REPLY_NET);
 	if (rc)
 		GOTO(err_free_hsm, rc);
+
+	/* Amount of available space excluded from granting and reserved
+	 * for metadata. It is in percentage and 50% is default value. */
+	tgd->tgd_reserved_pcnt = 50;
+
+	if (ONE_MB_BRW_SIZE < (1U << tgd->tgd_blockbits))
+		m->mdt_brw_size = 1U << tgd->tgd_blockbits;
+	else
+		m->mdt_brw_size = ONE_MB_BRW_SIZE;
 
 	rc = mdt_fs_setup(env, m, obd, lsi);
 	if (rc)
@@ -5155,6 +5361,7 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
 		o->lo_ops = &mdt_obj_ops;
 		spin_lock_init(&mo->mot_write_lock);
 		mutex_init(&mo->mot_lov_mutex);
+		init_rwsem(&mo->mot_dom_sem);
 		init_rwsem(&mo->mot_open_sem);
 		atomic_set(&mo->mot_open_count, 0);
 		RETURN(o);
@@ -5323,9 +5530,10 @@ static int mdt_obd_set_info_async(const struct lu_env *env,
  * \retval -EPROTO \a data unexpectedly has zero obd_connect_data::ocd_brw_size
  * \retval -EBADE  client and server feature requirements are incompatible
  */
-static int mdt_connect_internal(struct obd_export *exp,
+static int mdt_connect_internal(const struct lu_env *env,
+				struct obd_export *exp,
 				struct mdt_device *mdt,
-				struct obd_connect_data *data)
+				struct obd_connect_data *data, bool reconnect)
 {
 	LASSERT(data != NULL);
 
@@ -5357,7 +5565,8 @@ static int mdt_connect_internal(struct obd_export *exp,
 		data->ocd_connect_flags &= ~OBD_CONNECT_XATTR;
 
 	if (OCD_HAS_FLAG(data, BRW_SIZE)) {
-		data->ocd_brw_size = min(data->ocd_brw_size, MD_MAX_BRW_SIZE);
+		data->ocd_brw_size = min(data->ocd_brw_size,
+					 mdt->mdt_brw_size);
 		if (data->ocd_brw_size == 0) {
 			CERROR("%s: cli %s/%p ocd_connect_flags: %#llx "
 			       "ocd_version: %x ocd_grant: %d ocd_index: %u "
@@ -5370,6 +5579,30 @@ static int mdt_connect_internal(struct obd_export *exp,
 			return -EPROTO;
 		}
 	}
+
+	if (OCD_HAS_FLAG(data, GRANT_PARAM)) {
+		struct dt_device_param *ddp = &mdt->mdt_lut.lut_dt_conf;
+
+		/* client is reporting its page size, for future use */
+		exp->exp_target_data.ted_pagebits = data->ocd_grant_blkbits;
+		data->ocd_grant_blkbits  = mdt->mdt_lut.lut_tgd.tgd_blockbits;
+		/* ddp_inodespace may not be power-of-two value, eg. for ldiskfs
+		 * it's LDISKFS_DIR_REC_LEN(20) = 28. */
+		data->ocd_grant_inobits = fls(ddp->ddp_inodespace - 1);
+		/* ocd_grant_tax_kb is in 1K byte blocks */
+		data->ocd_grant_tax_kb = ddp->ddp_extent_tax >> 10;
+		data->ocd_grant_max_blks = ddp->ddp_max_extent_blks;
+	}
+
+	if (OCD_HAS_FLAG(data, GRANT)) {
+		/* Save connect_data we have so far because tgt_grant_connect()
+		 * uses it to calculate grant. */
+		exp->exp_connect_data = *data;
+		tgt_grant_connect(env, exp, data, !reconnect);
+	}
+
+	if (OCD_HAS_FLAG(data, MAXBYTES))
+		data->ocd_maxbytes = mdt->mdt_lut.lut_dt_conf.ddp_maxbytes;
 
 	/* NB: Disregard the rule against updating
 	 * exp_connect_data.ocd_connect_flags in this case, since
@@ -5412,6 +5645,32 @@ static int mdt_connect_internal(struct obd_export *exp,
 		spin_lock(&exp->exp_lock);
 		*exp_connect_flags_ptr(exp) |= OBD_CONNECT_MULTIMODRPCS;
 		spin_unlock(&exp->exp_lock);
+	}
+
+	if (OCD_HAS_FLAG(data, CKSUM)) {
+		__u32 cksum_types = data->ocd_cksum_types;
+
+		/* The client set in ocd_cksum_types the checksum types it
+		 * supports. We have to mask off the algorithms that we don't
+		 * support */
+		data->ocd_cksum_types &= cksum_types_supported_server();
+
+		if (unlikely(data->ocd_cksum_types == 0)) {
+			CERROR("%s: Connect with checksum support but no "
+			       "ocd_cksum_types is set\n",
+			       exp->exp_obd->obd_name);
+			RETURN(-EPROTO);
+		}
+
+		CDEBUG(D_RPCTRACE, "%s: cli %s supports cksum type %x, return "
+		       "%x\n", exp->exp_obd->obd_name, obd_export_nid2str(exp),
+		       cksum_types, data->ocd_cksum_types);
+	} else {
+		/* This client does not support OBD_CONNECT_CKSUM
+		 * fall back to CRC32 */
+		CDEBUG(D_RPCTRACE, "%s: cli %s does not support "
+		       "OBD_CONNECT_CKSUM, CRC32 will be used\n",
+		       exp->exp_obd->obd_name, obd_export_nid2str(exp));
 	}
 
 	return 0;
@@ -5538,11 +5797,15 @@ static inline void mdt_disable_slc(struct mdt_device *mdt)
 
 static int mdt_obd_disconnect(struct obd_export *exp)
 {
-        int rc;
-        ENTRY;
+	int rc;
 
-        LASSERT(exp);
-        class_export_get(exp);
+	ENTRY;
+
+	LASSERT(exp);
+	class_export_get(exp);
+
+	if (!(exp->exp_flags & OBD_OPT_FORCE))
+		tgt_grant_sanity_check(exp->exp_obd, __func__);
 
 	if ((exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS) &&
 	    !(exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT)) {
@@ -5555,6 +5818,8 @@ static int mdt_obd_disconnect(struct obd_export *exp)
 	rc = server_disconnect_export(exp);
 	if (rc != 0)
 		CDEBUG(D_IOCTL, "server disconnect error: rc = %d\n", rc);
+
+	tgt_grant_discard(exp);
 
 	rc = mdt_export_cleanup(exp);
 	nodemap_del_member(exp);
@@ -5617,7 +5882,7 @@ static int mdt_obd_connect(const struct lu_env *env,
 	if (rc != 0 && rc != -EEXIST)
 		GOTO(out, rc);
 
-	rc = mdt_connect_internal(lexp, mdt, data);
+	rc = mdt_connect_internal(env, lexp, mdt, data, false);
 	if (rc == 0) {
 		struct lsd_client_data *lcd = lexp->exp_target_data.ted_lcd;
 
@@ -5663,7 +5928,8 @@ static int mdt_obd_reconnect(const struct lu_env *env,
 	if (rc != 0 && rc != -EEXIST)
 		RETURN(rc);
 
-	rc = mdt_connect_internal(exp, mdt_dev(obd->obd_lu_dev), data);
+	rc = mdt_connect_internal(env, exp, mdt_dev(obd->obd_lu_dev), data,
+				  true);
 	if (rc == 0)
 		mdt_export_stats_init(obd, exp, localdata);
 	else
@@ -5724,6 +5990,17 @@ static int mdt_destroy_export(struct obd_export *exp)
 
 	LASSERT(list_empty(&exp->exp_outstanding_replies));
 	LASSERT(list_empty(&exp->exp_mdt_data.med_open_head));
+
+	/*
+	 * discard grants once we're sure no more
+	 * interaction with the client is possible
+	 */
+	tgt_grant_discard(exp);
+	if (exp_connect_flags(exp) & OBD_CONNECT_GRANT)
+		exp->exp_obd->u.obt.obt_lut->lut_tgd.tgd_tot_granted_clients--;
+
+	if (!(exp->exp_flags & OBD_OPT_FORCE))
+		tgt_grant_sanity_check(exp->exp_obd, __func__);
 
 	RETURN(0);
 }
@@ -6290,6 +6567,9 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_destroy_export = mdt_destroy_export,
         .o_iocontrol      = mdt_iocontrol,
         .o_postrecov      = mdt_obd_postrecov,
+	/* Data-on-MDT IO methods */
+	.o_preprw	  = mdt_obd_preprw,
+	.o_commitrw	  = mdt_obd_commitrw,
 };
 
 static struct lu_device* mdt_device_fini(const struct lu_env *env,

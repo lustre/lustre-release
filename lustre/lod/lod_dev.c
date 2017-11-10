@@ -1031,11 +1031,17 @@ static int lod_process_config(const struct lu_env *env,
 			GOTO(out, rc);
 		}
 
+
 		obd = lod2obd(lod);
-		rc = class_process_proc_param(PARAM_LOV, obd->obd_vars,
+		if (strstr(param, PARAM_LOD) != NULL)
+			rc = class_process_proc_param(PARAM_LOD, obd->obd_vars,
+					      lcfg, obd);
+		else
+			rc = class_process_proc_param(PARAM_LOV, obd->obd_vars,
 					      lcfg, obd);
 		if (rc > 0)
 			rc = 0;
+
 		GOTO(out, rc);
 	}
 	case LCFG_PRE_CLEANUP: {
@@ -1639,6 +1645,7 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 
 	dt_conf_get(env, &lod->lod_dt_dev, &ddp);
 	lod->lod_osd_max_easize = ddp.ddp_max_ea_size;
+	lod->lod_dom_max_stripesize = (1ULL << 20); /* 1Mb as default value */
 
 	/* setup obd to be used with old lov code */
 	rc = lod_pools_init(lod, cfg);

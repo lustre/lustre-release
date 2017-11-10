@@ -48,22 +48,6 @@
  *  @{
  */
 
-/*****************************************************************************
- *
- * Type conversions.
- *
- */
-
-static const struct cl_lock_operations osc_lock_ops;
-static const struct cl_lock_operations osc_lock_lockless_ops;
-static void osc_lock_to_lockless(const struct lu_env *env,
-                                 struct osc_lock *ols, int force);
-
-int osc_lock_is_lockless(const struct osc_lock *olck)
-{
-        return (olck->ols_cl.cls_ops == &osc_lock_lockless_ops);
-}
-
 /**
  * Returns a weak pointer to the ldlm lock identified by a handle. Returned
  * pointer cannot be dereferenced, as lock is not protected from concurrent
@@ -135,8 +119,7 @@ static int osc_lock_invariant(struct osc_lock *ols)
  *
  */
 
-static void osc_lock_fini(const struct lu_env *env,
-                          struct cl_lock_slice *slice)
+void osc_lock_fini(const struct lu_env *env, struct cl_lock_slice *slice)
 {
 	struct osc_lock  *ols = cl2osc_lock(slice);
 
@@ -145,6 +128,7 @@ static void osc_lock_fini(const struct lu_env *env,
 
 	OBD_SLAB_FREE_PTR(ols, osc_lock_kmem);
 }
+EXPORT_SYMBOL(osc_lock_fini);
 
 static void osc_lock_build_policy(const struct lu_env *env,
 				  const struct cl_lock *lock,
@@ -154,31 +138,6 @@ static void osc_lock_build_policy(const struct lu_env *env,
 
 	osc_index2policy(policy, d->cld_obj, d->cld_start, d->cld_end);
 	policy->l_extent.gid = d->cld_gid;
-}
-
-static __u64 osc_enq2ldlm_flags(__u32 enqflags)
-{
-	__u64 result = 0;
-
-	CDEBUG(D_DLMTRACE, "flags: %x\n", enqflags);
-
-	LASSERT((enqflags & ~CEF_MASK) == 0);
-
-	if (enqflags & CEF_NONBLOCK)
-		result |= LDLM_FL_BLOCK_NOWAIT;
-	if (enqflags & CEF_GLIMPSE)
-		result |= LDLM_FL_HAS_INTENT;
-	if (enqflags & CEF_DISCARD_DATA)
-		result |= LDLM_FL_AST_DISCARD_DATA;
-	if (enqflags & CEF_PEEK)
-		result |= LDLM_FL_TEST_LOCK;
-	if (enqflags & CEF_LOCK_MATCH)
-		result |= LDLM_FL_MATCH_LOCK;
-	if (enqflags & CEF_LOCK_NO_EXPAND)
-		result |= LDLM_FL_NO_EXPANSION;
-	if (enqflags & CEF_SPECULATIVE)
-		result |= LDLM_FL_SPECULATIVE;
-	return result;
 }
 
 /**
@@ -335,7 +294,7 @@ static int osc_lock_upcall(void *cookie, struct lustre_handle *lockh,
 		 * lockless lock.
 		 */
 		osc_object_set_contended(cl2osc(slice->cls_obj));
-		LASSERT(slice->cls_ops == &osc_lock_ops);
+		LASSERT(slice->cls_ops != oscl->ols_lockless_ops);
 
 		/* Change this lock to ldlmlock-less lock. */
 		osc_lock_to_lockless(env, oscl, 1);
@@ -582,7 +541,7 @@ static int osc_ldlm_blocking_ast(struct ldlm_lock *dlmlock,
 	RETURN(result);
 }
 
-static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
+int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
 {
 	struct ptlrpc_request	*req  = data;
 	struct lu_env		*env;
@@ -644,6 +603,7 @@ out:
 	req->rq_status = result;
 	RETURN(result);
 }
+EXPORT_SYMBOL(osc_ldlm_glimpse_ast);
 
 static int weigh_cb(const struct lu_env *env, struct cl_io *io,
 		    struct osc_page *ops, void *cbdata)
@@ -777,46 +737,46 @@ static void osc_lock_build_einfo(const struct lu_env *env,
  *  Additional policy can be implemented here, e.g., never do lockless-io
  *  for large extents.
  */
-static void osc_lock_to_lockless(const struct lu_env *env,
-                                 struct osc_lock *ols, int force)
+void osc_lock_to_lockless(const struct lu_env *env,
+			  struct osc_lock *ols, int force)
 {
-        struct cl_lock_slice *slice = &ols->ols_cl;
+	struct cl_lock_slice *slice = &ols->ols_cl;
+	struct osc_io *oio = osc_env_io(env);
+	struct cl_io *io = oio->oi_cl.cis_io;
+	struct cl_object *obj = slice->cls_obj;
+	struct osc_object *oob = cl2osc(obj);
+	const struct osc_device *osd = lu2osc_dev(obj->co_lu.lo_dev);
+	struct obd_connect_data *ocd;
 
-        LASSERT(ols->ols_state == OLS_NEW ||
-                ols->ols_state == OLS_UPCALL_RECEIVED);
+	LASSERT(ols->ols_state == OLS_NEW ||
+		ols->ols_state == OLS_UPCALL_RECEIVED);
 
-        if (force) {
-                ols->ols_locklessable = 1;
-                slice->cls_ops = &osc_lock_lockless_ops;
-        } else {
-                struct osc_io *oio     = osc_env_io(env);
-                struct cl_io  *io      = oio->oi_cl.cis_io;
-                struct cl_object *obj  = slice->cls_obj;
-                struct osc_object *oob = cl2osc(obj);
-                const struct osc_device *osd = lu2osc_dev(obj->co_lu.lo_dev);
-                struct obd_connect_data *ocd;
+	if (force) {
+		ols->ols_locklessable = 1;
+		slice->cls_ops = ols->ols_lockless_ops;
+	} else {
+		LASSERT(io->ci_lockreq == CILR_MANDATORY ||
+			io->ci_lockreq == CILR_MAYBE ||
+			io->ci_lockreq == CILR_NEVER);
 
-                LASSERT(io->ci_lockreq == CILR_MANDATORY ||
-                        io->ci_lockreq == CILR_MAYBE ||
-                        io->ci_lockreq == CILR_NEVER);
-
-                ocd = &class_exp2cliimp(osc_export(oob))->imp_connect_data;
-                ols->ols_locklessable = (io->ci_type != CIT_SETATTR) &&
-                                (io->ci_lockreq == CILR_MAYBE) &&
-                                (ocd->ocd_connect_flags & OBD_CONNECT_SRVLOCK);
-                if (io->ci_lockreq == CILR_NEVER ||
-                        /* lockless IO */
-                    (ols->ols_locklessable && osc_object_is_contended(oob)) ||
-                        /* lockless truncate */
-                    (cl_io_is_trunc(io) &&
-                     (ocd->ocd_connect_flags & OBD_CONNECT_TRUNCLOCK) &&
-                      osd->od_lockless_truncate)) {
-                        ols->ols_locklessable = 1;
-                        slice->cls_ops = &osc_lock_lockless_ops;
-                }
-        }
-        LASSERT(ergo(ols->ols_glimpse, !osc_lock_is_lockless(ols)));
+		ocd = &class_exp2cliimp(osc_export(oob))->imp_connect_data;
+		ols->ols_locklessable = (io->ci_type != CIT_SETATTR) &&
+					(io->ci_lockreq == CILR_MAYBE) &&
+					(ocd->ocd_connect_flags &
+					 OBD_CONNECT_SRVLOCK);
+		if (io->ci_lockreq == CILR_NEVER ||
+		    /* lockless IO */
+		    (ols->ols_locklessable && osc_object_is_contended(oob)) ||
+		    /* lockless truncate */
+		    (cl_io_is_trunc(io) && osd->od_lockless_truncate &&
+		     (ocd->ocd_connect_flags & OBD_CONNECT_TRUNCLOCK))) {
+			ols->ols_locklessable = 1;
+			slice->cls_ops = ols->ols_lockless_ops;
+		}
+	}
+	LASSERT(ergo(ols->ols_glimpse, !osc_lock_is_lockless(ols)));
 }
+EXPORT_SYMBOL(osc_lock_to_lockless);
 
 static bool osc_lock_compatible(const struct osc_lock *qing,
 				const struct osc_lock *qed)
@@ -841,9 +801,8 @@ static bool osc_lock_compatible(const struct osc_lock *qing,
 	return false;
 }
 
-static void osc_lock_wake_waiters(const struct lu_env *env,
-				  struct osc_object *osc,
-				  struct osc_lock *oscl)
+void osc_lock_wake_waiters(const struct lu_env *env, struct osc_object *osc,
+			   struct osc_lock *oscl)
 {
 	spin_lock(&osc->oo_ol_spin);
 	list_del_init(&oscl->ols_nextlock_oscobj);
@@ -861,14 +820,16 @@ static void osc_lock_wake_waiters(const struct lu_env *env,
 	}
 	spin_unlock(&oscl->ols_lock);
 }
+EXPORT_SYMBOL(osc_lock_wake_waiters);
 
-static int osc_lock_enqueue_wait(const struct lu_env *env,
-		struct osc_object *obj, struct osc_lock *oscl)
+int osc_lock_enqueue_wait(const struct lu_env *env, struct osc_object *obj,
+			  struct osc_lock *oscl)
 {
 	struct osc_lock         *tmp_oscl;
 	struct cl_lock_descr    *need = &oscl->ols_cl.cls_lock->cll_descr;
 	struct cl_sync_io       *waiter = &osc_env_info(env)->oti_anchor;
 	int rc = 0;
+
 	ENTRY;
 
 	spin_lock(&obj->oo_ol_spin);
@@ -919,6 +880,7 @@ restart:
 
 	RETURN(rc);
 }
+EXPORT_SYMBOL(osc_lock_enqueue_wait);
 
 /**
  * Implementation of cl_lock_operations::clo_enqueue() method for osc
@@ -1096,8 +1058,8 @@ static void osc_lock_detach(const struct lu_env *env, struct osc_lock *olck)
  *
  *     - cancels ldlm lock (ldlm_cli_cancel()).
  */
-static void osc_lock_cancel(const struct lu_env *env,
-                            const struct cl_lock_slice *slice)
+void osc_lock_cancel(const struct lu_env *env,
+		     const struct cl_lock_slice *slice)
 {
 	struct osc_object *obj  = cl2osc(slice->cls_obj);
 	struct osc_lock	  *oscl = cl2osc_lock(slice);
@@ -1113,9 +1075,10 @@ static void osc_lock_cancel(const struct lu_env *env,
 	osc_lock_wake_waiters(env, obj, oscl);
 	EXIT;
 }
+EXPORT_SYMBOL(osc_lock_cancel);
 
-static int osc_lock_print(const struct lu_env *env, void *cookie,
-			  lu_printer_t p, const struct cl_lock_slice *slice)
+int osc_lock_print(const struct lu_env *env, void *cookie,
+		   lu_printer_t p, const struct cl_lock_slice *slice)
 {
 	struct osc_lock *lock = cl2osc_lock(slice);
 
@@ -1125,6 +1088,7 @@ static int osc_lock_print(const struct lu_env *env, void *cookie,
 	osc_lvb_print(env, cookie, p, &lock->ols_lvb);
 	return 0;
 }
+EXPORT_SYMBOL(osc_lock_print);
 
 static const struct cl_lock_operations osc_lock_ops = {
         .clo_fini    = osc_lock_fini,
@@ -1158,9 +1122,8 @@ static const struct cl_lock_operations osc_lock_lockless_ops = {
         .clo_print     = osc_lock_print
 };
 
-static void osc_lock_set_writer(const struct lu_env *env,
-				const struct cl_io *io,
-				struct cl_object *obj, struct osc_lock *oscl)
+void osc_lock_set_writer(const struct lu_env *env, const struct cl_io *io,
+			 struct cl_object *obj, struct osc_lock *oscl)
 {
 	struct cl_lock_descr *descr = &oscl->ols_cl.cls_lock->cll_descr;
 	pgoff_t io_start;
@@ -1188,6 +1151,7 @@ static void osc_lock_set_writer(const struct lu_env *env,
 		oio->oi_write_osclock = oscl;
 	}
 }
+EXPORT_SYMBOL(osc_lock_set_writer);
 
 int osc_lock_init(const struct lu_env *env,
 		  struct cl_object *obj, struct cl_lock *lock,
@@ -1205,6 +1169,7 @@ int osc_lock_init(const struct lu_env *env,
 	INIT_LIST_HEAD(&oscl->ols_waiting_list);
 	INIT_LIST_HEAD(&oscl->ols_wait_entry);
 	INIT_LIST_HEAD(&oscl->ols_nextlock_oscobj);
+	oscl->ols_lockless_ops = &osc_lock_lockless_ops;
 
 	/* Speculative lock requests must be either no_expand or glimpse
 	 * request (CEF_GLIMPSE).  non-glimpse no_expand speculative extent
@@ -1242,9 +1207,10 @@ int osc_lock_init(const struct lu_env *env,
  * Finds an existing lock covering given index and optionally different from a
  * given \a except lock.
  */
-struct ldlm_lock *osc_dlmlock_at_pgoff(const struct lu_env *env,
-				       struct osc_object *obj, pgoff_t index,
-				       enum osc_dap_flags dap_flags)
+struct ldlm_lock *osc_obj_dlmlock_at_pgoff(const struct lu_env *env,
+					   struct osc_object *obj,
+					   pgoff_t index,
+					   enum osc_dap_flags dap_flags)
 {
 	struct osc_thread_info *info = osc_env_info(env);
 	struct ldlm_res_id *resname = &info->oti_resname;

@@ -226,7 +226,9 @@ static int osc_extent_sanity_check0(struct osc_extent *ext,
 	if (ext->oe_sync && ext->oe_grants > 0)
 		GOTO(out, rc = 90);
 
-	if (ext->oe_dlmlock != NULL && !ldlm_is_failed(ext->oe_dlmlock)) {
+	if (ext->oe_dlmlock != NULL &&
+	    ext->oe_dlmlock->l_resource->lr_type == LDLM_EXTENT &&
+	    !ldlm_is_failed(ext->oe_dlmlock)) {
 		struct ldlm_extent *extent;
 
 		extent = &ext->oe_dlmlock->l_policy_data.l_extent;
@@ -1295,7 +1297,6 @@ static int osc_refresh_count(const struct lu_env *env,
 	pgoff_t index = osc_index(oap2osc(oap));
 	struct cl_object *obj;
 	struct cl_attr   *attr = &osc_env_info(env)->oti_attr;
-
 	int result;
 	loff_t kms;
 
@@ -1705,6 +1706,7 @@ wakeup:
 
 	EXIT;
 }
+EXPORT_SYMBOL(osc_wake_cache_waiters);
 
 static int osc_max_rpc_in_flight(struct client_obd *cli, struct osc_object *osc)
 {
@@ -2316,8 +2318,8 @@ __must_hold(&cli->cl_loi_list_lock)
 	}
 }
 
-static int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
-			  struct osc_object *osc, int async)
+int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
+		   struct osc_object *osc, int async)
 {
 	int rc = 0;
 
@@ -2335,18 +2337,7 @@ static int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
 	}
 	return rc;
 }
-
-static int osc_io_unplug_async(const struct lu_env *env,
-				struct client_obd *cli, struct osc_object *osc)
-{
-	return osc_io_unplug0(env, cli, osc, 1);
-}
-
-void osc_io_unplug(const struct lu_env *env, struct client_obd *cli,
-		   struct osc_object *osc)
-{
-	(void)osc_io_unplug0(env, cli, osc, 0);
-}
+EXPORT_SYMBOL(osc_io_unplug0);
 
 int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 			struct page *page, loff_t offset)
@@ -2377,6 +2368,7 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 	       oap, page, oap->oap_obj_off);
 	RETURN(0);
 }
+EXPORT_SYMBOL(osc_prep_async_page);
 
 int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		       struct osc_page *ops)
@@ -2541,6 +2533,7 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		list_add_tail(&oap->oap_pending_item, &ext->oe_pages);
 		osc_object_unlock(osc);
 	}
+
 	RETURN(rc);
 }
 
@@ -2919,6 +2912,7 @@ again:
 	}
 	RETURN(result);
 }
+EXPORT_SYMBOL(osc_cache_truncate_start);
 
 /**
  * Called after osc_io_setattr_end to add oio->oi_trunc back to cache.
@@ -3005,6 +2999,7 @@ again:
 	OSC_IO_DEBUG(obj, "sync file range.\n");
 	RETURN(result);
 }
+EXPORT_SYMBOL(osc_cache_wait_range);
 
 /**
  * Called to write out a range of osc object.
@@ -3121,6 +3116,7 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 	OSC_IO_DEBUG(obj, "pageout [%lu, %lu], %d.\n", start, end, result);
 	RETURN(result);
 }
+EXPORT_SYMBOL(osc_cache_writeback_range);
 
 /**
  * Returns a list of pages by a given [start, end] of \a obj.
@@ -3213,6 +3209,7 @@ int osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 		spin_unlock(&osc->oo_tree_lock);
 	RETURN(res);
 }
+EXPORT_SYMBOL(osc_page_gang_lookup);
 
 /**
  * Check if page @page is covered by an extra lock or discard it.
@@ -3255,8 +3252,8 @@ static int check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
 	return CLP_GANG_OKAY;
 }
 
-static int discard_cb(const struct lu_env *env, struct cl_io *io,
-		      struct osc_page *ops, void *cbdata)
+int osc_discard_cb(const struct lu_env *env, struct cl_io *io,
+		   struct osc_page *ops, void *cbdata)
 {
 	struct osc_thread_info *info = osc_env_info(env);
 	struct cl_page *page = ops->ops_cl.cpl_page;
@@ -3278,6 +3275,7 @@ static int discard_cb(const struct lu_env *env, struct cl_io *io,
 
 	return CLP_GANG_OKAY;
 }
+EXPORT_SYMBOL(osc_discard_cb);
 
 /**
  * Discard pages protected by the given lock. This function traverses radix
@@ -3304,7 +3302,7 @@ int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 	if (result != 0)
 		GOTO(out, result);
 
-	cb = discard ? discard_cb : check_and_discard_cb;
+	cb = discard ? osc_discard_cb : check_and_discard_cb;
 	info->oti_fn_index = info->oti_next_index = start;
 	do {
 		res = osc_page_gang_lookup(env, io, osc,

@@ -195,13 +195,18 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 RETURN(-ENOMEM);
         }
 
+	/* pass client page size via ocd_grant_blkbits, the server should report
+	 * back its backend blocksize for grant calculation purpose */
+	data->ocd_grant_blkbits = PAGE_SHIFT;
+
 	/* indicate MDT features supported by this client */
-        data->ocd_connect_flags = OBD_CONNECT_IBITS    | OBD_CONNECT_NODEVOH  |
-                                  OBD_CONNECT_ATTRFID  |
-                                  OBD_CONNECT_VERSION  | OBD_CONNECT_BRW_SIZE |
-                                  OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA |
-                                  OBD_CONNECT_CANCELSET | OBD_CONNECT_FID     |
-                                  OBD_CONNECT_AT       | OBD_CONNECT_LOV_V3   |
+	data->ocd_connect_flags = OBD_CONNECT_IBITS    | OBD_CONNECT_NODEVOH  |
+				  OBD_CONNECT_ATTRFID  | OBD_CONNECT_GRANT |
+				  OBD_CONNECT_VERSION  | OBD_CONNECT_BRW_SIZE |
+				  OBD_CONNECT_SRVLOCK  | OBD_CONNECT_TRUNCLOCK|
+				  OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA |
+				  OBD_CONNECT_CANCELSET | OBD_CONNECT_FID     |
+				  OBD_CONNECT_AT       | OBD_CONNECT_LOV_V3   |
 				  OBD_CONNECT_VBR | OBD_CONNECT_FULL20 |
 				  OBD_CONNECT_64BITHASH |
 				  OBD_CONNECT_EINPROGRESS |
@@ -212,9 +217,10 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 				  OBD_CONNECT_DISP_STRIPE | OBD_CONNECT_LFSCK |
 				  OBD_CONNECT_OPEN_BY_FID |
 				  OBD_CONNECT_DIR_STRIPE |
-				  OBD_CONNECT_BULK_MBITS |
+				  OBD_CONNECT_BULK_MBITS | OBD_CONNECT_CKSUM |
 				  OBD_CONNECT_SUBTREE |
-				  OBD_CONNECT_FLAGS2 | OBD_CONNECT_MULTIMODRPCS;
+				  OBD_CONNECT_MULTIMODRPCS |
+				  OBD_CONNECT_GRANT_PARAM | OBD_CONNECT_FLAGS2;
 
 	data->ocd_connect_flags2 = 0;
 
@@ -226,6 +232,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	data->ocd_connect_flags |= OBD_CONNECT_ACL | OBD_CONNECT_UMASK |
 				   OBD_CONNECT_LARGE_ACL;
 #endif
+
+	data->ocd_cksum_types = cksum_types_supported_client();
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDC_LIGHTWEIGHT))
 		/* flag mdc connection as lightweight, only used for test

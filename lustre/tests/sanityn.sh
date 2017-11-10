@@ -48,6 +48,8 @@ TRACE=${TRACE:-""}
 
 check_and_setup_lustre
 
+OSC=${OSC:-"osc"}
+
 assert_DIR
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk $DIR/[df].${TESTSUITE}*
 
@@ -432,6 +434,8 @@ run_test 18 "mmap sanity check ================================="
 test_19() { # bug3811
 	local node=$(facet_active_host ost1)
 
+	[ "x$DOM" = "xyes" ] && node=$(facet_active_host $SINGLEMDS)
+
 	# check whether obdfilter is cache capable at all
 	if ! get_osd_param $node '' read_cache_enable >/dev/null; then
 		echo "not cache-capable obdfilter"
@@ -446,7 +450,7 @@ test_19() { # bug3811
 	cp $TMP/$tfile $DIR1/$tfile
 	for i in `seq 1 20`; do
 		[ $((i % 5)) -eq 0 ] && log "$testname loop $i"
-		cancel_lru_locks osc > /dev/null
+		cancel_lru_locks $OSC > /dev/null
 		cksum $DIR1/$tfile | cut -d" " -f 1,2 > $TMP/sum1 & \
 		cksum $DIR2/$tfile | cut -d" " -f 1,2 > $TMP/sum2
 		wait
@@ -462,12 +466,12 @@ run_test 19 "test concurrent uncached read races ==============="
 
 test_20() {
 	test_mkdir $DIR1/d20
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 	CNT=$((`lctl get_param -n llite.*.dump_page_cache | wc -l`))
 	$MULTIOP $DIR1/f20 Ow8190c
 	$MULTIOP $DIR2/f20 Oz8194w8190c
 	$MULTIOP $DIR1/f20 Oz0r8190c
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 	CNTD=$((`lctl get_param -n llite.*.dump_page_cache | wc -l` - $CNT))
 	[ $CNTD -gt 0 ] && \
 	    error $CNTD" page left in cache after lock cancel" || true
@@ -498,7 +502,7 @@ test_23() { # Bug 5972
 	echo "atime should be updated while another read" > $DIR1/$tfile
 
 	# clear the lock(mode: LCK_PW) gotten from creating operation
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 	time1=$(date +%s)
 	echo "now is $time1"
 	sleep $((at_diff + 1))
@@ -530,9 +534,9 @@ test_24a() {
 
 	OSC=`lctl dl | awk '/-osc-|OSC.*MNT/ {print $4}' | head -n 1`
 #	OSC=`lctl dl | awk '/-osc-/ {print $4}' | head -n 1`
-	lctl --device %$OSC deactivate
+	lctl --device %osc deactivate
 	lfs df -i || error "lfs df -i with deactivated OSC failed"
-	lctl --device %$OSC activate
+	lctl --device %osc activate
 	lfs df || error "lfs df with reactivated OSC failed"
 }
 run_test 24a "lfs df [-ih] [path] test ========================="
@@ -622,7 +626,7 @@ test_26b() {
 run_test 26b "sync mtime between ost and mds"
 
 test_27() {
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 	lctl clear
 	dd if=/dev/zero of=$DIR2/$tfile bs=$((4096+4))k conv=notrunc count=4 seek=3 &
 	DD2_PID=$!
@@ -728,38 +732,39 @@ run_test 31b "voluntary OST cancel / blocking ast race=============="
 
 # enable/disable lockless truncate feature, depending on the arg 0/1
 enable_lockless_truncate() {
-        lctl set_param -n osc.*.lockless_truncate $1
+	lctl set_param -n $OSC.*.lockless_truncate $1
 }
 
 test_32a() { # bug 11270
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
-	save_lustre_params client "osc.*.lockless_truncate" > $p
-	cancel_lru_locks osc
+
+	save_lustre_params client "$OSC.*.lockless_truncate" > $p
+	cancel_lru_locks $OSC
 	enable_lockless_truncate 1
 	rm -f $DIR1/$tfile
 	lfs setstripe -c -1 $DIR1/$tfile
 	dd if=/dev/zero of=$DIR1/$tfile count=$OSTCOUNT bs=$STRIPE_BYTES > \
 		/dev/null 2>&1
-	clear_stats osc.*.osc_stats
+	clear_stats $OSC.*.${OSC}_stats
 
 	log "checking cached lockless truncate"
 	$TRUNCATE $DIR1/$tfile 8000000
 	$CHECKSTAT -s 8000000 $DIR2/$tfile || error "wrong file size"
-	[ $(calc_stats osc.*.osc_stats lockless_truncate) -ne 0 ] ||
+	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -ne 0 ] ||
 		error "cached truncate isn't lockless"
 
 	log "checking not cached lockless truncate"
 	$TRUNCATE $DIR2/$tfile 5000000
 	$CHECKSTAT -s 5000000 $DIR1/$tfile || error "wrong file size"
-	[ $(calc_stats osc.*.osc_stats lockless_truncate) -ne 0 ] ||
+	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -ne 0 ] ||
 		error "not cached truncate isn't lockless"
 
 	log "disabled lockless truncate"
 	enable_lockless_truncate 0
-	clear_stats osc.*.osc_stats
+	clear_stats $OSC.*.${OSC}_stats
 	$TRUNCATE $DIR2/$tfile 3000000
 	$CHECKSTAT -s 3000000 $DIR1/$tfile || error "wrong file size"
-	[ $(calc_stats osc.*.osc_stats lockless_truncate) -eq 0 ] ||
+	[ $(calc_stats $OSC.*.${OSC}_stats lockless_truncate) -eq 0 ] ||
 		error "lockless truncate disabling failed"
 	rm $DIR1/$tfile
 	# restore lockless_truncate default values
@@ -782,21 +787,21 @@ test_32b() { # bug 11270
 		"ldlm.namespaces.filter-*.contended_locks" >> $p
 	save_lustre_params $facets \
 		"ldlm.namespaces.filter-*.contention_seconds" >> $p
-	clear_stats osc.*.osc_stats
+	clear_stats $OSC.*.${OSC}_stats
 
 	# agressive lockless i/o settings
 	do_nodes $(comma_list $(osts_nodes)) \
 		"lctl set_param -n ldlm.namespaces.*.max_nolock_bytes=2000000 \
 			ldlm.namespaces.filter-*.contended_locks=0 \
 			ldlm.namespaces.filter-*.contention_seconds=60"
-	lctl set_param -n osc.*.contention_seconds=60
+	lctl set_param -n $OSC.*.contention_seconds=60
 	for i in {1..5}; do
 		dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > \
 			/dev/null 2>&1
 		dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > \
 			/dev/null 2>&1
 	done
-	[ $(calc_stats osc.*.osc_stats lockless_write_bytes) -ne 0 ] ||
+	[ $(calc_stats $OSC.*.${OSC}_stats lockless_write_bytes) -ne 0 ] ||
 		error "lockless i/o was not triggered"
 	# disable lockless i/o (it is disabled by default)
 	do_nodes $(comma_list $(osts_nodes)) \
@@ -805,15 +810,15 @@ test_32b() { # bug 11270
 			ldlm.namespaces.filter-*.contention_seconds=0"
 	# set contention_seconds to 0 at client too, otherwise Lustre still
 	# remembers lock contention
-	lctl set_param -n osc.*.contention_seconds=0
-	clear_stats osc.*.osc_stats
+	lctl set_param -n $OSC.*.contention_seconds=0
+	clear_stats $OSC.*.${OSC}_stats
 	for i in {1..1}; do
 		dd if=/dev/zero of=$DIR1/$tfile bs=4k count=1 conv=notrunc > \
 			/dev/null 2>&1
 		dd if=/dev/zero of=$DIR2/$tfile bs=4k count=1 conv=notrunc > \
 			/dev/null 2>&1
 	done
-	[ $(calc_stats osc.*.osc_stats lockless_write_bytes) -eq 0 ] ||
+	[ $(calc_stats $OSC.*.${OSC}_stats lockless_write_bytes) -eq 0 ] ||
 		error "lockless i/o works when disabled"
 	rm -f $DIR1/$tfile
 	restore_lustre_params <$p
@@ -1367,7 +1372,7 @@ test_39d() { # LU-7310
 
 	$LCTL set_param fail_loc=0
 
-	cancel_lru_locks osc
+	cancel_lru_locks $OSC
 
 	local mtime2=$(stat -c %Y $DIR2/$tfile)
 	[ "$mtime2" -ge "$d1" ] && [ "$mtime2" -le "$d2" ] ||
@@ -4001,6 +4006,142 @@ test_93() {
 		error "object allocate on same ost detected"
 }
 run_test 93 "alloc_rr should not allocate on same ost"
+
+# Data-on-MDT tests
+test_100a() {
+	skip "Reserved for glimpse-ahead" && return
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR/$tdir/dom
+
+	lctl set_param -n mdc.*.stats=clear
+	dd if=/dev/zero of=$DIR2/$tdir/dom bs=4096 count=1 || return 1
+
+	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #1"
+	# first stat from server should return size data and save glimpse
+	local gls=$(lctl get_param -n mdc.*.stats | \
+		awk '/ldlm_glimpse/ {print $2}')
+	[ -z $gls ] || error "Unexpected $gls glimpse RPCs"
+	# second stat to check size is NOT cached on client without IO lock
+	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #2"
+
+	local gls=$(lctl get_param -n mdc.*.stats | grep ldlm_glimpse | wc -l)
+	[ "1" == "$gls" ] || error "Expect 1 glimpse RPCs but got $gls"
+	rm -f $dom
+}
+run_test 100a "DoM: glimpse RPCs for stat without IO lock (DoM only file)"
+
+test_100b() {
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR/$tdir/dom
+
+	lctl set_param -n mdc.*.stats=clear
+	dd if=/dev/zero of=$DIR2/$tdir/dom bs=4096 count=1 || return 1
+	cancel_lru_locks mdc
+	# first stat data from server should have size
+	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #1"
+	# second stat to check size is cached on client
+	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom || error "stat #2"
+
+	local gls=$(lctl get_param -n mdc.*.stats |
+			awk '/ldlm_glimpse/ {print $2}')
+	# both stats should cause no glimpse requests
+	[ -z $gls ] || error "Unexpected $gls glimpse RPCs"
+	rm -f $dom
+}
+run_test 100b "DoM: no glimpse RPC for stat with IO lock (DoM only file)"
+
+test_100c() {
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR/$tdir/dom
+
+	lctl set_param -n mdc.*.stats=clear
+	lctl set_param -n osc.*.stats=clear
+	dd if=/dev/zero of=$DIR2/$tdir/dom bs=2048K count=1 || return 1
+
+	# check that size is merged from MDT and OST correctly
+	$CHECKSTAT -t file -s 2097152 $DIR/$tdir/dom ||
+		error "Wrong size from stat #1"
+
+	local gls=$(lctl get_param -n osc.*.stats | grep ldlm_glimpse | wc -l)
+	[ $gls -eq 0 ] && error "Expect OST glimpse RPCs but got none"
+
+	rm -f $dom
+}
+run_test 100c "DoM: write vs stat without IO lock (combined file)"
+
+test_100d() {
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR/$tdir/dom
+
+
+	dd if=/dev/zero of=$DIR2/$tdir/dom bs=2048K count=1 || return 1
+	lctl set_param -n mdc.*.stats=clear
+	$TRUNCATE $DIR2/$tdir/dom 4096
+
+	# check that reported size is valid after file grows to OST and
+	# is truncated back to MDT stripe size
+	$CHECKSTAT -t file -s 4096 $DIR/$tdir/dom ||
+		error "Wrong size from stat #1"
+
+	local gls=$(lctl get_param -n osc.*.stats | grep ldlm_glimpse | wc -l)
+	[ $gls -eq 0 ] && error "Expect OST glimpse but got none"
+
+	rm -f $dom
+}
+run_test 100d "DoM: write+truncate vs stat without IO lock (combined file)"
+
+
+test_101a() {
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
+	lctl set_param -n mdc.*.stats=clear
+	# to get layout
+	$CHECKSTAT -t file $DIR1/$tfile
+	# open + IO lock
+	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 || error "Write fails"
+	# must discard pages
+	rm $DIR2/$tfile || error "Unlink fails"
+	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
+	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
+}
+run_test 101a "Discard DoM data on unlink"
+
+test_101b() {
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
+	touch $DIR1/${tfile}_2
+	lctl set_param -n mdc.*.stats=clear
+	# to get layout
+	$CHECKSTAT -t file $DIR1/$tfile
+	# open + IO lock
+	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 || error "Write fails"
+	# must discard pages
+	mv $DIR2/${tfile}_2 $DIR2/$tfile || error "Rename fails"
+	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
+	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
+}
+run_test 101b "Discard DoM data on rename"
+
+test_101c() {
+	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
+	lctl set_param -n mdc.*.stats=clear
+	# to get layout
+	$CHECKSTAT -t file $DIR1/$tfile
+	# open + IO lock
+	dd if=/dev/zero of=$DIR1/$tfile bs=4096 count=1 || error "Write fails"
+
+	$MULTIOP $DIR1/$tfile O_c &
+	MULTIOP_PID=$!
+	sleep 2
+	rm $DIR2/$tfile > /dev/null || error "Unlink fails"
+	kill -USR1 $MULTIOP_PID || return 2
+	wait $MULTIOP_PID || return 3
+	local writes=$(lctl get_param -n mdc.*.stats | grep ost_write | wc -l)
+	[ $writes -eq 0 ] || error "Found WRITE RPC but expect none"
+}
+run_test 101c "Discard DoM data on close-unlink"
 
 log "cleanup: ======================================================"
 

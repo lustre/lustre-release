@@ -69,6 +69,7 @@
 /setuid
 /sleeptest
 /small_write
+/smalliomany
 /stat
 /statmany
 /statone

@@ -1583,6 +1583,35 @@ void tgt_io_thread_done(struct ptlrpc_thread *thread)
 	EXIT;
 }
 EXPORT_SYMBOL(tgt_io_thread_done);
+
+/**
+ * Helper function for getting Data-on-MDT file server DLM lock
+ * if asked by client.
+ */
+int tgt_mdt_data_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
+		      struct lustre_handle *lh, int mode, __u64 *flags)
+{
+	union ldlm_policy_data policy;
+	int rc;
+
+	ENTRY;
+
+	LASSERT(lh != NULL);
+	LASSERT(ns != NULL);
+	LASSERT(!lustre_handle_is_used(lh));
+
+	policy.l_inodebits.bits = MDS_INODELOCK_DOM | MDS_INODELOCK_UPDATE;
+	policy.l_inodebits.try_bits = 0;
+
+	rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, &policy, mode,
+				    flags, ldlm_blocking_ast,
+				    ldlm_completion_ast, ldlm_glimpse_ast,
+				    NULL, 0, LVB_T_NONE, NULL, lh);
+
+	RETURN(rc == ELDLM_OK ? 0 : -EIO);
+}
+EXPORT_SYMBOL(tgt_mdt_data_lock);
+
 /**
  * Helper function for getting server side [start, start+count] DLM lock
  * if asked by client.
@@ -1627,13 +1656,15 @@ void tgt_extent_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
 }
 EXPORT_SYMBOL(tgt_extent_unlock);
 
-int tgt_brw_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
-		 struct obd_ioobj *obj, struct niobuf_remote *nb,
-		 struct lustre_handle *lh, enum ldlm_mode mode)
+static int tgt_brw_lock(struct obd_export *exp, struct ldlm_res_id *res_id,
+			struct obd_ioobj *obj, struct niobuf_remote *nb,
+			struct lustre_handle *lh, enum ldlm_mode mode)
 {
+	struct ldlm_namespace	*ns = exp->exp_obd->obd_namespace;
 	__u64			 flags = 0;
 	int			 nrbufs = obj->ioo_bufcnt;
 	int			 i;
+	int			 rc;
 
 	ENTRY;
 
@@ -1650,14 +1681,19 @@ int tgt_brw_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 		if (!(nb[i].rnb_flags & OBD_BRW_SRVLOCK))
 			RETURN(-EFAULT);
 
-	RETURN(tgt_extent_lock(ns, res_id, nb[0].rnb_offset,
-			       nb[nrbufs - 1].rnb_offset +
-			       nb[nrbufs - 1].rnb_len - 1,
-			       lh, mode, &flags));
+	/* MDT IO for data-on-mdt */
+	if (exp->exp_connect_data.ocd_connect_flags & OBD_CONNECT_IBITS)
+		rc = tgt_mdt_data_lock(ns, res_id, lh, mode, &flags);
+	else
+		rc = tgt_extent_lock(ns, res_id, nb[0].rnb_offset,
+				     nb[nrbufs - 1].rnb_offset +
+				     nb[nrbufs - 1].rnb_len - 1,
+				     lh, mode, &flags);
+	RETURN(rc);
 }
 
-void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
-		    struct lustre_handle *lh, enum ldlm_mode mode)
+static void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
+			   struct lustre_handle *lh, enum ldlm_mode mode)
 {
 	ENTRY;
 
@@ -1918,7 +1954,8 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 
 	ENTRY;
 
-	if (ptlrpc_req2svc(req)->srv_req_portal != OST_IO_PORTAL) {
+	if (ptlrpc_req2svc(req)->srv_req_portal != OST_IO_PORTAL &&
+	    ptlrpc_req2svc(req)->srv_req_portal != MDS_IO_PORTAL) {
 		CERROR("%s: deny read request from %s to portal %u\n",
 		       tgt_name(tsi->tsi_tgt),
 		       obd_export_nid2str(req->rq_export),
@@ -1961,8 +1998,8 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 
 	local_nb = tbc->local;
 
-	rc = tgt_brw_lock(exp->exp_obd->obd_namespace, &tsi->tsi_resid, ioo,
-			  remote_nb, &lockh, LCK_PR);
+	rc = tgt_brw_lock(exp, &tsi->tsi_resid, ioo, remote_nb, &lockh,
+			  LCK_PR);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -2229,7 +2266,8 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 
 	ENTRY;
 
-	if (ptlrpc_req2svc(req)->srv_req_portal != OST_IO_PORTAL) {
+	if (ptlrpc_req2svc(req)->srv_req_portal != OST_IO_PORTAL &&
+	    ptlrpc_req2svc(req)->srv_req_portal != MDS_IO_PORTAL) {
 		CERROR("%s: deny write request from %s to portal %u\n",
 		       tgt_name(tsi->tsi_tgt),
 		       obd_export_nid2str(req->rq_export),
@@ -2293,8 +2331,8 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 
 	local_nb = tbc->local;
 
-	rc = tgt_brw_lock(exp->exp_obd->obd_namespace, &tsi->tsi_resid, ioo,
-			  remote_nb, &lockh, LCK_PW);
+	rc = tgt_brw_lock(exp, &tsi->tsi_resid, ioo, remote_nb, &lockh,
+			  LCK_PW);
 	if (rc != 0)
 		GOTO(out, rc);
 
