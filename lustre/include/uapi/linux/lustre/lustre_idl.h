@@ -570,15 +570,20 @@ struct lustre_handle_array {
 };
 
 /* lustre_msg struct magic.  DON'T use swabbed values of MAGIC as magic! */
-#define LUSTRE_MSG_MAGIC_V2		0x0BD00BD3
-#define LUSTRE_MSG_MAGIC_V2_SWABBED	0xD30BD00B
-#define LUSTRE_MSG_MAGIC		LUSTRE_MSG_MAGIC_V2
+enum lustre_msg_magic {
+	LUSTRE_MSG_MAGIC_V2		= 0x0BD00BD3,
+	LUSTRE_MSG_MAGIC_V2_SWABBED	= 0xD30BD00B,
+	LUSTRE_MSG_MAGIC		= LUSTRE_MSG_MAGIC_V2
+};
 
 /* flags for lm_flags */
-#define MSGHDR_AT_SUPPORT	0x1	/* adaptive timeouts, lm_cksum valid
+enum lustre_msghdr {
+	MSGHDR_AT_SUPPORT	= 0x1,	/* adaptive timeouts, lm_cksum valid
 					 * in early reply messages */
-#define MSGHDR_CKSUM_INCOMPAT18	0x2	/* compat for 1.8, needs to be set well
+	MSGHDR_CKSUM_INCOMPAT18	= 0x2,	/* compat for 1.8, needs to be set well
 					 * beyond 2.8.0 for compatibility */
+};
+
 #define lustre_msg lustre_msg_v2
 /* we depend on this structure to be 8-byte aligned */
 /* this type is only endian-adjusted in lustre_unpack_msg() */
@@ -588,7 +593,7 @@ struct lustre_msg_v2 {
 	__u32 lm_magic;		/* RPC version magic = LUSTRE_MSG_MAGIC_V2 */
 	__u32 lm_repsize;	/* size of preallocated reply buffer */
 	__u32 lm_cksum;		/* CRC32 of ptlrpc_body early reply messages */
-	__u32 lm_flags;		/* MSGHDR_* flags */
+	__u32 lm_flags;		/* enum lustre_msghdr MSGHDR_* flags */
 	__u32 lm_padding_2;	/* unused */
 	__u32 lm_padding_3;	/* unused */
 	__u32 lm_buflens[0];	/* length of additional buffers in bytes,
@@ -605,14 +610,16 @@ struct lustre_msg_v2 {
 #define PTL_RPC_MSG_REPLY	4713	/* normal RPC reply message */
 
 /* ptlrpc_body pb_version ((target_version << 16) | rpc_version) */
-#define PTLRPC_MSG_VERSION	0x00000003
-#define LUSTRE_VERSION_MASK	0xffff0000
-#define LUSTRE_OBD_VERSION	0x00010000
-#define LUSTRE_MDS_VERSION	0x00020000
-#define LUSTRE_OST_VERSION	0x00030000
-#define LUSTRE_DLM_VERSION	0x00040000
-#define LUSTRE_LOG_VERSION	0x00050000
-#define LUSTRE_MGS_VERSION	0x00060000
+enum lustre_msg_version {
+	PTLRPC_MSG_VERSION	= 0x00000003,
+	LUSTRE_VERSION_MASK	= 0xffff0000,
+	LUSTRE_OBD_VERSION	= 0x00010000,
+	LUSTRE_MDS_VERSION	= 0x00020000,
+	LUSTRE_OST_VERSION	= 0x00030000,
+	LUSTRE_DLM_VERSION	= 0x00040000,
+	LUSTRE_LOG_VERSION	= 0x00050000,
+	LUSTRE_MGS_VERSION	= 0x00060000,
+};
 
 /* pb_flags that apply to all request messages */
 /* #define MSG_LAST_REPLAY	0x0001 obsolete 2.0 => {REQ,LOCK}_REPLAY_DONE */

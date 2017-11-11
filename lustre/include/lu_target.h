@@ -359,7 +359,7 @@ struct tgt_handler {
 	/* Flags in enum tgt_handler_flags */
 	__u32			 th_flags;
 	/* Request version for this opcode */
-	int			 th_version;
+	enum lustre_msg_version	 th_version;
 	/* Handler function */
 	int			(*th_act)(struct tgt_session_info *tsi);
 	/* Handler function for high priority requests */

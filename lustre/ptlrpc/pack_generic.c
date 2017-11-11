@@ -90,13 +90,15 @@ int ptlrpc_buf_need_swab(struct ptlrpc_request *req, const int inout,
 }
 
 static inline int lustre_msg_check_version_v2(struct lustre_msg_v2 *msg,
-						__u32 version)
+					      enum lustre_msg_version version)
 {
-        __u32 ver = lustre_msg_get_version(msg);
-        return (ver & LUSTRE_VERSION_MASK) != version;
+	enum lustre_msg_version ver = lustre_msg_get_version(msg);
+
+	return (ver & LUSTRE_VERSION_MASK) != version;
 }
 
-int lustre_msg_check_version(struct lustre_msg *msg, __u32 version)
+int lustre_msg_check_version(struct lustre_msg *msg,
+			     enum lustre_msg_version version)
 {
 #define LUSTRE_MSG_MAGIC_V1 0x0BD00BD0
 	switch (msg->lm_magic) {
@@ -800,7 +802,7 @@ static inline struct ptlrpc_body *lustre_msg_ptlrpc_body(struct lustre_msg *msg)
 				 sizeof(struct ptlrpc_body_v2));
 }
 
-__u32 lustre_msghdr_get_flags(struct lustre_msg *msg)
+enum lustre_msghdr lustre_msghdr_get_flags(struct lustre_msg *msg)
 {
 	switch (msg->lm_magic) {
 	case LUSTRE_MSG_MAGIC_V2:
@@ -954,7 +956,7 @@ __u32 lustre_msg_get_type(struct lustre_msg *msg)
 }
 EXPORT_SYMBOL(lustre_msg_get_type);
 
-__u32 lustre_msg_get_version(struct lustre_msg *msg)
+enum lustre_msg_version lustre_msg_get_version(struct lustre_msg *msg)
 {
 	switch (msg->lm_magic) {
 	case LUSTRE_MSG_MAGIC_V2: {

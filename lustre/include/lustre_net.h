@@ -2364,7 +2364,7 @@ __u32 lustre_msg_get_op_flags(struct lustre_msg *msg);
 void lustre_msg_add_op_flags(struct lustre_msg *msg, __u32 flags);
 struct lustre_handle *lustre_msg_get_handle(struct lustre_msg *msg);
 __u32 lustre_msg_get_type(struct lustre_msg *msg);
-__u32 lustre_msg_get_version(struct lustre_msg *msg);
+enum lustre_msg_version lustre_msg_get_version(struct lustre_msg *msg);
 void lustre_msg_add_version(struct lustre_msg *msg, __u32 version);
 __u32 lustre_msg_get_opc(struct lustre_msg *msg);
 __u64 lustre_msg_get_last_xid(struct lustre_msg *msg);
