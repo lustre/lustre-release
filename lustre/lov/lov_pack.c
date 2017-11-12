@@ -419,7 +419,9 @@ int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
 
 			attr.cat_size = 0;
 			cl_obj = cl_object_top(&obj->lo_cl);
+			cl_object_attr_lock(cl_obj);
 			cl_object_attr_get(env, cl_obj, &attr);
+			cl_object_attr_unlock(cl_obj);
 
 			/* return the last instantiated component if file size
 			 * is non-zero, otherwise, return the last component.*/
