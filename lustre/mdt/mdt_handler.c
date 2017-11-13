@@ -2813,9 +2813,7 @@ static int mdt_object_local_lock(struct mdt_thread_info *info,
 	}
 
 	/* Only enqueue LOOKUP lock for remote object */
-	if (mdt_object_remote(o)) {
-		LASSERT(*ibits == MDS_INODELOCK_LOOKUP);
-	}
+	LASSERT(ergo(mdt_object_remote(o), *ibits == MDS_INODELOCK_LOOKUP));
 
 	if (lh->mlh_type == MDT_PDO_LOCK) {
                 /* check for exists after object is locked */
@@ -2973,8 +2971,17 @@ int mdt_object_lock_try(struct mdt_thread_info *info, struct mdt_object *o,
 			struct mdt_lock_handle *lh, __u64 *ibits,
 			__u64 trybits, bool cos_incompat)
 {
-	return mdt_object_lock_internal(info, o, lh, ibits, trybits,
-					cos_incompat);
+	bool trylock_only = *ibits == 0;
+	int rc;
+
+	LASSERT(!(*ibits & trybits));
+	rc = mdt_object_lock_internal(info, o, lh, ibits, trybits,
+				      cos_incompat);
+	if (rc && trylock_only) { /* clear error for try ibits lock only */
+		LASSERT(*ibits == 0);
+		rc = 0;
+	}
+	return rc;
 }
 
 /**

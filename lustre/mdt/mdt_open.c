@@ -873,7 +873,6 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		} else if (dom_lock) {
 			lm = (open_flags & FMODE_WRITE) ? LCK_PW : LCK_PR;
 			*ibits = MDS_INODELOCK_DOM;
-			try_layout = false;
 		}
 
 		CDEBUG(D_INODE, "normal open:"DFID" lease count: %d, lm: %d\n",
@@ -886,18 +885,11 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 	/* one problem to return layout lock on open is that it may result
 	 * in too many layout locks cached on the client side. */
 	if (!OBD_FAIL_CHECK(OBD_FAIL_MDS_NO_LL_OPEN) && try_layout) {
-		/* return lookup lock to validate inode at the client side,
-		 * this is pretty important otherwise mdt will return layout
-		 * lock for each open.
-		 * However this is a double-edged sword because changing
-		 * permission will revoke huge # of LOOKUP locks. */
-		trybits |= MDS_INODELOCK_LAYOUT | MDS_INODELOCK_LOOKUP;
+		trybits |= MDS_INODELOCK_LAYOUT;
 	}
 
-	if (trybits != 0)
+	if (*ibits | trybits)
 		rc = mdt_object_lock_try(info, obj, lhc, ibits, trybits, false);
-	else if (*ibits != 0)
-		rc = mdt_object_lock(info, obj, lhc, *ibits);
 
 	CDEBUG(D_INODE, "%s: Requested bits lock:"DFID ", ibits = %#llx/%#llx"
 	       ", open_flags = %#llo, try_layout = %d : rc = %d\n",

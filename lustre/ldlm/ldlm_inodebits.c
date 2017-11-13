@@ -133,8 +133,14 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 					  struct ldlm_lock,
 					  l_sl_policy)->l_res_link;
 
-			/* drop try_bits used by other locks */
-			*try_bits &= ~(lock->l_policy_data.l_inodebits.bits);
+			/* no locks with trybits in either queues */
+			LASSERT(lock->l_policy_data.l_inodebits.try_bits == 0);
+
+			/* New lock's try_bits are filtered out by ibits
+			 * of all locks in both granted and waiting queues.
+			 */
+			*try_bits &= ~lock->l_policy_data.l_inodebits.bits;
+
 			if ((req_bits | *try_bits) == 0)
 				RETURN(0);
 
@@ -148,6 +154,13 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 				    ldlm_is_cos_enabled(req) &&
 				    lock->l_client_cookie == req->l_client_cookie)
 					goto not_conflicting;
+
+				/* The conflicting lock will keep only mandatory
+				 * ibits and zero trybits in waiting queue.
+				 * All actual trybits are cleared.
+				 */
+				*try_bits = 0;
+
 				/* Found a conflicting policy group. */
 				if (!work_list)
 					RETURN(0);
@@ -217,6 +230,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 		if (lock->l_policy_data.l_inodebits.try_bits != 0) {
 			lock->l_policy_data.l_inodebits.bits |=
 				lock->l_policy_data.l_inodebits.try_bits;
+			lock->l_policy_data.l_inodebits.try_bits = 0;
 			*flags |= LDLM_FL_LOCK_CHANGED;
 		}
 		ldlm_resource_unlink_lock(lock);
@@ -249,6 +263,7 @@ restart:
 		if (lock->l_policy_data.l_inodebits.try_bits != 0) {
 			lock->l_policy_data.l_inodebits.bits |=
 				lock->l_policy_data.l_inodebits.try_bits;
+			lock->l_policy_data.l_inodebits.try_bits = 0;
 			*flags |= LDLM_FL_LOCK_CHANGED;
 		}
 		LASSERT(lock->l_policy_data.l_inodebits.bits);

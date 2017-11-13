@@ -1448,7 +1448,7 @@ again:
 		rc = mdt_object_lock_try(info, mdt_pobj, &mll->mll_lh, &ibits,
 					 MDS_INODELOCK_UPDATE, true);
 		if (!(ibits & MDS_INODELOCK_UPDATE)) {
-			mdt_unlock_list(info, lock_list, rc);
+			mdt_unlock_list(info, lock_list, 0);
 
 			CDEBUG(D_INFO, "%s: busy lock on "DFID" %s retry %d\n",
 			       mdt_obd_name(mdt), PFID(&fid), name.ln_name,
