@@ -1140,12 +1140,9 @@ out_unlock:
 		mdt_object_open_unlock(info, o, lhc, ibits, rc);
 out:
 	mdt_object_put(env, o);
-	if (rc == 0) {
-		rc = mdt_pack_size2body(info, rr->rr_fid2,
-					ibits & MDS_INODELOCK_DOM);
-		LASSERT(ergo(ibits & MDS_INODELOCK_DOM, !rc));
-		rc = 0;
-	}
+	if (rc == 0)
+		mdt_pack_size2body(info, rr->rr_fid2,
+				   ibits & MDS_INODELOCK_DOM);
 out_parent_put:
 	if (parent != NULL)
 		mdt_object_put(env, parent);
@@ -1602,12 +1599,8 @@ out_child_unlock:
 		mdt_object_open_unlock(info, child, lhc, ibits, result);
 out_child:
 	mdt_object_put(info->mti_env, child);
-	if (result == 0) {
-		rc = mdt_pack_size2body(info, child_fid,
-					ibits & MDS_INODELOCK_DOM);
-		LASSERT(ergo(ibits & MDS_INODELOCK_DOM, !rc));
-		rc = 0;
-	}
+	if (result == 0)
+		mdt_pack_size2body(info, child_fid, ibits & MDS_INODELOCK_DOM);
 out_parent:
 	mdt_object_unlock_put(info, parent, lh, result || !created);
 out:
