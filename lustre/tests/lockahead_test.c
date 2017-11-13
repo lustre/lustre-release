@@ -427,7 +427,7 @@ static int test15(void)
 
 	advice = malloc(sizeof(struct llapi_lu_ladvise)*count);
 
-	for (i = 0; i < 5000; i++) {
+	for (i = 0; i < 500; i++) {
 		/* The 'UL' designators are required to avoid undefined
 		 * behavior which GCC turns in to an infinite loop */
 		__u64 start = i * 1024UL * 1024UL * 10UL;
@@ -477,7 +477,7 @@ static int test15(void)
 
 	/* We have to map our expected return in to the range of valid return
 	 * codes, 0-255. */
-	expected_lock_count = expected_lock_count/1000;
+	expected_lock_count = expected_lock_count/100;
 
 	return expected_lock_count;
 }

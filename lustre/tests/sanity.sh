@@ -14967,6 +14967,10 @@ test_255c() {
 	local difference
 	local i
 	local rc
+
+	[ $(lustre_version_code ost1) -lt $(version_code 2.10.50) ] &&
+		skip "lustre < 2.10.53 does not support lockahead" && return
+
 	test_mkdir -p $DIR/$tdir
 	$SETSTRIPE -i 0 $DIR/$tdir
 
@@ -15020,9 +15024,9 @@ test_255c() {
 		       ldlm.namespaces.$FSNAME-OST0000*osc-f*.lock_unused_count)
 		difference="$((new_count - count))"
 
-		# Test 15 output is divided by 1000 to map down to valid return
+		# Test 15 output is divided by 100 to map down to valid return
 		if [ $i -eq 15 ]; then
-			rc="$((rc * 1000))"
+			rc="$((rc * 100))"
 		fi
 
 		if [ $difference -ne $rc ]; then
