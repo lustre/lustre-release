@@ -7,74 +7,79 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT=""
-[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$DOM_PERFORMANCE_EXCEPT"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+[ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 
 . $LUSTRE/tests/test-framework.sh
-CLEANUP=${CLEANUP:-:}
-SETUP=${SETUP:-:}
+
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
+SAVED_FAIL_ON_ERROR=$FAIL_ON_ERROR
 FAIL_ON_ERROR=false
+
+SAVED_DEBUG=$($LCTL get_param -n debug 2> /dev/null)
 
 check_and_setup_lustre
 
-# $RUNAS_ID may get set incorrectly somewhere else
-if [[ $UID -eq 0 && $RUNAS_ID -eq 0 ]]; then
-	skip_env "\$RUNAS_ID set to 0, but \$UID is also 0!" && exit
-fi
-check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
-
 build_test_filter
 
-DOM="yes"
+DP_DNE=${DP_DNE:-"no"}
+DP_DIO=${DP_DIO:-"no"}
+
 DOM_SIZE=${DOM_SIZE:-"1M"}
-OSC="mdc"
+DP_OSC="mdc"
 
 rm -rf $DIR/*
 
-NORM=$DIR/norm
-DOM=$DIR/dom
-STATS=${STATS:-"yes"}
-
-# 1 stripe for normal files
-mkdir -p $NORM
-lfs setstripe -c 1 $NORM
-
-if [ "x$DNE" == "xyes" ] ; then
-	lfs setdirstripe -i 0 -c 2 $DOM
-else
-	mkdir -p $DOM
-fi
-
-lfs setstripe -E ${DOM_SIZE} -L mdt -E EOF $DOM
+DP_NORM=$DIR/dp_norm
+DP_DOM=$DIR/dp_dom
+DP_STATS=${DP_STATS:-"no"}
 
 # total number of files
-FNUM=16384
+DP_FNUM=${DP_FNUM:-16384}
 # number of threads
-NUM=4
+DP_NUM=${DP_NUM:-4}
 
-clear_stats() {
+# 1 stripe for normal files
+mkdir -p $DP_NORM
+$LFS setstripe -c 1 $DP_NORM ||
+	error "Cannot create test directory for ordinary files"
+
+if [ "x$DP_DNE" == "xyes" ] ; then
+	$LFS setdirstripe -i 0 -c 2 $DP_DOM ||
+		error "Cannot create striped directory"
+else
+	mkdir -p $DP_DOM
+fi
+
+$LFS setstripe -E ${DOM_SIZE} -L mdt -E EOF $DP_DOM ||
+	error "Cannot create test directory for dom files"
+
+dp_clear_stats() {
 	local cli=$1
 
+	$LCTL set_param -n osc.*.stats=0
+	$LCTL set_param -n mdc.*.stats=0
 	$LCTL set_param -n ${cli}.*.${cli}_stats=0
 	$LCTL set_param -n ${cli}.*.rpc_stats=0
-	$LCTL set_param -n ${cli}.*.stats=0
 	$LCTL set_param -n llite.*.read_ahead_stats=0
 	$LCTL set_param -n llite.*.unstable_stats=0
 }
 
-collect_stats() {
+dp_collect_stats() {
 	local cli=$1
 
 	sync;sync
+	echo ----- MDC RPCs: $(calc_stats mdc.*.stats req_active)
+	echo ----- OSC RPCs: $(calc_stats osc.*.stats req_active)
 
-	if [ "x$STATS" != "xyes" ] ; then
+	if [ "x$DP_STATS" != "xyes" ] ; then
 		return 0
 	fi
 
@@ -90,32 +95,39 @@ collect_stats() {
 	$LCTL get_param llite.*.read_ahead_stats
 }
 
-setup_test() {
+dp_setup_test() {
 	local cli=$1
 
 	cancel_lru_locks $cli
 	### drop all debug
 	$LCTL set_param -n debug=0
-	clear_stats $cli
+	dp_clear_stats $cli
 }
 
-run_cmd() {
+dp_run_cmd() {
 	local cmd=$1
+	local cmdlog=$TMP/dp_cmd.log
+	local rc
 
-	setup_test $OSC
+	dp_setup_test $DP_OSC
 	if ! grep -qw "$MOUNT" /proc/mounts ; then
 		echo "!!!!! Lustre is not mounted !!!!!, aborting"
 		return 0
 	fi
 
-	echo "##### $cmd #####"
-	echo "##### $(date +'%F %H:%M:%S'): START"
-	eval $cmd
-	echo "##### $(date +'%F %H:%M:%S'): GETSTATS"
-	collect_stats $OSC
-	echo "##### $(date +'%F %H:%M:%S'): STOP"
-	remount_client $DIR
+	echo "## $cmd" | awk '{ if (NR==1) {gsub(/[ \t\r\n]+/, " "); \
+				gsub(/\|.*$/, ""); print }}'
+	echo "## $(date +'%F %H:%M:%S'): START"
+	eval $cmd 2>&1 | tee $cmdlog || true
 
+	rc=${PIPESTATUS[0]}
+	if [ $rc -eq 0 ] && grep -q "p4_error:" $cmdlog ; then
+		rc=1
+	fi
+
+	dp_collect_stats $DP_OSC
+	remount_client $DIR > /dev/null
+	return $rc
 }
 
 run_MDtest() {
@@ -127,17 +139,24 @@ run_MDtest() {
 	local mdtest=$(which mdtest)
 
 	local TDIR=${1:-$MOUNT}
-	local th_num=$((FNUM * 2 / NUM))
+	local th_num=$((DP_FNUM * 2 / DP_NUM))
+	local bsizes="8192"
 
-	for bsize in 4096 ; do
-		run_cmd "mpirun -np $NUM $mdtest \
-			 -i 3 -I $th_num -F -z 1 -b 1 -L -u -w $bsize -d $TDIR"
+	[ "$SLOW" = "yes" ] && bsizes="4096 16384"
+
+	for bsize in $bsizes ; do
+		dp_run_cmd "mpirun -np $DP_NUM $mdtest -i 3 -I $th_num -F \
+			-z 1 -b 1 -L -u -w $bsize -R -d $TDIR"
+		if [ ${PIPESTATUS[0]} != 0 ]; then
+			error "MDtest failed, aborting"
+		fi
 	done
+
 	rm -rf $TDIR/*
 	return 0
 }
 
-run_smalliomany() {
+run_SmallIO() {
 	if [ ! -f createmany ] ; then
 		echo "Createmany is not installed, skipping"
 		return 0
@@ -149,24 +168,39 @@ run_smalliomany() {
 	fi
 
 	local TDIR=${1:-$DIR}
-	local count=$FNUM
+	local count=$DP_FNUM
 
 	local MIN=$((count * 16))
 	[ $MDSSIZE -le $MIN ] && count=$((MDSSIZE / 16))
 
-	run_cmd "./createmany -o $TDIR/file- $count | grep 'total'"
+	dp_run_cmd "./createmany -o $TDIR/file- $count | grep 'total:'"
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		error "File creation failed, aborting"
+	fi
 
 	if [ -f statmany ]; then
-		run_cmd "./statmany -s $TDIR/file- $count $((count * 5)) | \
-			grep 'total'"
+		dp_run_cmd "./statmany -s $TDIR/file- $count $((count * 5)) |
+			grep 'total:'"
+		if [ ${PIPESTATUS[0]} != 0 ]; then
+			error "File stat failed, aborting"
+		fi
+
 	fi
 
 	for opc in w a r ; do
-		run_cmd "./smalliomany -${opc} $TDIR/file- $count 300 | \
-			grep 'total'"
+		dp_run_cmd "./smalliomany -${opc} $TDIR/file- $count 300 |
+			grep 'total:'"
+		if [ ${PIPESTATUS[0]} != 0 ]; then
+			error "SmallIO -${opc} failed, aborting"
+		fi
+
 	done
 
-	run_cmd "./unlinkmany $TDIR/file- $count | grep 'total'"
+	dp_run_cmd "./unlinkmany $TDIR/file- $count | grep 'total:'"
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		error "SmallIO failed, aborting"
+	fi
+
 	return 0
 }
 
@@ -177,173 +211,180 @@ run_IOR() {
 	fi
 
 	local IOR=$(which IOR)
-	local iter=$((FNUM / NUM))
+	local iter=$((DP_FNUM / DP_NUM))
+	local direct=""
 
-	if [ "x$DIO" == "xyes" ] ; then
+	if [ "x$DP_DIO" == "xyes" ] ; then
 		direct="-B"
-	else
-		direct=""
 	fi
 
 	local TDIR=${1:-$MOUNT}
+	local bsizes="8"
+	[ "$SLOW" = "yes" ] && bsizes="4 16"
 
-	for bsize in 4 ; do
+	for bsize in $bsizes ; do
 		segments=$((128 / bsize))
 
-		run_cmd "mpirun -np $NUM $IOR \
+		dp_run_cmd "mpirun -np $DP_NUM $IOR \
 			-a POSIX -b ${bsize}K -t ${bsize}K -o $TDIR/ -k \
 			-s $segments -w -r -i $iter -F -E -z -m -Z $direct"
+		if [ ${PIPESTATUS[0]} != 0 ]; then
+			error "IOR write test for ${bsize}K failed, aborting"
+		fi
+
 		# check READ performance only (no cache)
-		run_cmd "mpirun -np $NUM $IOR \
+		dp_run_cmd "mpirun -np $DP_NUM $IOR \
 			-a POSIX -b ${bsize}K -t ${bsize}K -o $TDIR/ -X 42\
 			-s $segments -r -i $iter -F -E -z -m -Z $direct"
+		if [ ${PIPESTATUS[0]} != 0 ]; then
+			error "IOR read test for ${bsize}K failed, aborting"
+		fi
+
 	done
 	rm -rf $TDIR/*
 	return 0
 }
 
-run_dbench() {
+run_Dbench() {
 	if ! which dbench > /dev/null 2>&1 ; then
 		echo "Dbench is not installed, skipping"
 		return 0
 	fi
 
-	if [ "x$DNE" == "xyes" ] ; then
+	if [ "x$DP_DNE" == "xyes" ] ; then
 		echo "dbench uses subdirs, skipping for DNE setup"
 		return 0
 	fi
 
 	local TDIR=${1:-$MOUNT}
 
-	run_cmd "dbench -D $TDIR $NUM | egrep -v 'warmup|execute'"
+	dp_run_cmd "dbench -D $TDIR $DP_NUM | egrep -v 'warmup|execute'"
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		error "Dbench failed, aborting"
+	fi
+
 	rm -rf $TDIR/*
 	return 0
 }
 
-run_smallfile() {
-	if ! which unzip > /dev/null 2>&1 ; then
-		echo "No unzip is installed, skipping"
-		return 0;
-	fi
-
-	if [ "x$DIO" == "xyes" ] ; then
-		echo "smallfile has no DIRECT IO mode, skipping"
+run_FIO() {
+	# https://github.com/axboe/fio/archive/fio-2.8.zip
+	if ! which fio > /dev/null 2>&1 ; then
+		echo "No FIO installed, skipping"
 		return 0
 	fi
 
-	if [ "x$DNE" == "xyes" ] ; then
-		echo "smallfile uses subdirs, skipping for DNE setup"
-		return 0
+	local fnum=128 # per thread
+	local total=$((fnum * DP_NUM)) # files in all threads
+	local loops=$((DP_FNUM / total)) # number of loops
+	local direct=""
+	local output=""
+
+	if [ $loops -eq 0 ] ; then
+		loops=1
 	fi
 
-	local host_set=$(hostname)
+	if [ "x$DP_DIO" == "xyes" ] ; then
+		direct="--direct=1"
+	else
+		direct="--buffered=1 --bs_unaligned=1"
+	fi
 
-	### since smallfile is not installed system wide, get it right now
-	[ -f master.zip ] || \
-		wget https://github.com/bengland2/smallfile/archive/master.zip
-	unzip -uo master.zip
-	cd ./smallfile-master
-
-	if ! ls ./smallfile_cli.py > /dev/null 2>&1 ; then
-		echo "No smallfile test found, skipping"
-		cd ..
-		return 0
+	if [ "x$DP_STATS" != "xyes" ] ; then
+		output="--minimal"
 	fi
 
 	local TDIR=${1:-$MOUNT}
-	local thrds=$NUM
-	local fsize=64 # in Kbytes
-	local total=$FNUM # files in test
-	local fnum=$((total / NUM))
+	base_cmd="fio --name=smallio --ioengine=posixaio $output \
+		  --iodepth=$((DP_NUM * 4)) --directory=$TDIR \
+		  --nrfiles=$fnum --openfiles=10000 \
+		  --numjobs=$DP_NUM --filesize=64k --lockfile=readwrite"
 
-	SYNC_DIR=${MOUNT}/sync
-	mkdir -p $SYNC_DIR
+	dp_run_cmd "$base_cmd --create_only=1" > /dev/null
+	if [ ${PIPESTATUS[0]} != 0 ]; then
+		error "FIO file creation failed, aborting"
+	fi
 
-	SMF="./smallfile_cli.py --pause 10 --host-set $host_set \
-	     --response-times Y --threads $thrds --file-size $fsize \
-	     --files $fnum --top $TDIR --network-sync-dir $SYNC_DIR \
-	     --file-size-distribution exponential"
+	local bsizes="8"
+	[ "$SLOW" = "yes" ] && bsizes="4 16"
 
-	run_cmd "$SMF --operation create"
+	for bsize in $bsizes ; do
+		dp_run_cmd "$base_cmd --bs=${bsize}k --rw=randwrite $direct \
+			 --file_service_type=random --randrepeat=1 \
+			 --norandommap --group_reporting=1 --loops=$loops |
+			awk -F\; '{printf \"WRITE: BW %dKiB/sec, IOPS %d, \
+					lat (%d/%d/%d)usec\n\",\
+					\$48, \$49, \$53, \$57, \$81}'"
+		if [ ${PIPESTATUS[0]} != 0 ]; then
+			error "FIO write test with ${bsize}k failed, aborting"
+		fi
 
-	for oper in read append overwrite ; do
-		for bsize in 8 ; do
-			run_cmd "$SMF --record-size $bsize --operation $oper"
-		done
+		dp_run_cmd "$base_cmd --bs=${bsize}k --rw=randread $direct \
+			 --file_service_type=random --randrepeat=1 \
+			 --norandommap --group_reporting=1 --loops=$loops |
+			awk -F\; '{printf \"READ : BW %dKiB/sec, IOPS %d, \
+					lat (%d/%d/%d)usec\n\",\
+					\$7, \$8, \$12, \$16, \$40}'"
+		if [ ${PIPESTATUS[0]} != 0 ]; then
+			error "FIO read test with ${bsize}k failed, aborting"
+		fi
 	done
-	run_cmd "$SMF --operation delete"
-
 	rm -rf $TDIR/*
-	cd ..
 	return 0
 }
 
+dp_test_run() {
+	local test=$1
+	local facets=$(get_facets MDS)
+	local nodes=$(comma_list $(mdts_nodes))
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	save_lustre_params $facets "mdt.*.dom_lock" >> $p
+
+	printf "\n##### $test: DoM files, IO lock on open\n"
+	do_nodes $nodes "lctl set_param -n mdt.*.dom_lock=1"
+	DP_OSC="mdc"
+	run_${test} $DP_DOM
+
+	printf "\n##### $test: DoM files, no IO lock on open\n"
+	do_nodes $nodes "lctl set_param -n mdt.*.dom_lock=0"
+	DP_OSC="mdc"
+	run_${test} $DP_DOM
+
+	printf "\n##### $test: OST files\n"
+	DP_OSC="osc"
+	run_${test} $DP_NORM
+
+	restore_lustre_params < $p
+}
+
 test_smallio() {
-	OSC="mdc"
-	run_smalliomany $DOM
-	echo "### Data-on-MDT files, no IO lock on open ###"
-	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=0
-	OSC="mdc"
-	run_smalliomany $DOM
-	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=1
-	OSC="osc"
-	run_smalliomany $NORM
+	dp_test_run SmallIO
 }
 run_test smallio "Performance comparision: smallio"
 
 test_mdtest() {
-	OSC="mdc"
-	run_MDtest $DOM
-	echo "### Data-on-MDT files, NO IO lock on open ###"
-	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=0
-	OSC="mdc"
-	run_MDtest $DOM
-	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=1
-	echo "### Normal files, $OSTCOUNT OSTs ###"
-	OSC="osc"
-	run_MDtest $NORM
+	dp_test_run MDtest
 }
 run_test mdtest "Performance comparision: mdtest"
 
 test_IOR() {
-	OSC="mdc"
-	run_IOR $DOM
-	echo "### Data-on-MDT files, no IO lock on open ###"
-	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=0
-	OSC="mdc"
-	run_IOR $DOM
-	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=1
-	OSC="osc"
-	run_IOR $NORM
+	dp_test_run IOR
 }
 run_test IOR "Performance comparision: IOR"
 
 test_dbench() {
-	OSC="mdc"
-	run_dbench $DOM
-	echo "### Data-on-MDT files, no IO lock on open ###"
-	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=0
-	OSC="mdc"
-	run_dbench $DOM
-	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=1
-	OSC="osc"
-	run_dbench $NORM
+	dp_test_run Dbench
 }
 run_test dbench "Performance comparision: dbench"
 
-test_smf() {
-	OSC="mdc"
-	run_smallfile $DOM
-	echo "### Data-on-MDT files, no IO lock on open ###"
-	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=0
-	OSC="mdc"
-	run_smallfile $DOM
-	do_facet $SINGLEMDS lctl set_param -n mdt.*.dom_lock=1
-	OSC="osc"
-	run_smallfile $NORM
-
+test_fio() {
+	dp_test_run FIO
 }
-run_test smf "Performance comparision: smallfile"
+run_test fio "Performance comparision: FIO"
+
+FAIL_ON_ERROR=$SAVED_FAIL_ON_ERROR
+$LCTL set_param -n debug="$SAVED_DEBUG"
 
 complete $SECONDS
 check_and_cleanup_lustre
