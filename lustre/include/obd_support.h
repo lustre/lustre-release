@@ -610,6 +610,8 @@ extern char obd_jobid_var[];
 
 /* FLR */
 #define OBD_FAIL_FLR_GLIMPSE_IMMUTABLE		0x1A00
+#define OBD_FAIL_FLR_LV_DELAY			0x1A01
+#define OBD_FAIL_FLR_LV_INC			0x1A02
 
 /* DT */
 #define OBD_FAIL_DT_DECLARE_ATTR_GET		0x2000

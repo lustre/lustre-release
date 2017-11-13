@@ -2155,7 +2155,7 @@ out:
 int lod_obj_stripe_set_inuse_cb(const struct lu_env *env,
 				struct lod_object *lo,
 				struct dt_object *dt, struct thandle *th,
-				int stripe_idx,
+				int comp_idx, int stripe_idx,
 				struct lod_obj_stripe_cb_data *data)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
@@ -2216,7 +2216,7 @@ int lod_prepare_inuse(const struct lu_env *env, struct lod_object *lo)
 	struct lod_thread_info *info = lod_env_info(env);
 	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
 	struct ost_pool *inuse = &info->lti_inuse_osts;
-	struct lod_obj_stripe_cb_data data;
+	struct lod_obj_stripe_cb_data data = { { 0 } };
 	__u32 stripe_count = 0;
 	int i;
 	int rc;
@@ -2229,8 +2229,8 @@ int lod_prepare_inuse(const struct lu_env *env, struct lod_object *lo)
 		return rc;
 
 	data.locd_inuse = inuse;
-	return lod_obj_for_each_stripe(env, lo, NULL,
-				       lod_obj_stripe_set_inuse_cb, &data);
+	data.locd_stripe_cb = lod_obj_stripe_set_inuse_cb;
+	return lod_obj_for_each_stripe(env, lo, NULL, &data);
 }
 
 int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,

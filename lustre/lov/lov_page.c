@@ -56,8 +56,8 @@ static int lov_comp_page_print(const struct lu_env *env,
 	struct lov_page *lp = cl2lov_page(slice);
 
 	return (*printer)(env, cookie,
-			  LUSTRE_LOV_NAME"-page@%p, comp index: %x\n",
-			  lp, lp->lps_index);
+			  LUSTRE_LOV_NAME"-page@%p, comp index: %x, gen: %u\n",
+			  lp, lp->lps_index, lp->lps_layout_gen);
 }
 
 static const struct cl_page_operations lov_comp_page_ops = {
@@ -96,6 +96,7 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 	LASSERT(rc == 0);
 
 	lpg->lps_index = lov_comp_index(entry, stripe);
+	lpg->lps_layout_gen = loo->lo_lsm->lsm_layout_gen;
 	cl_page_slice_add(page, &lpg->lps_cl, obj, index, &lov_comp_page_ops);
 
 	sub = lov_sub_get(env, lio, lpg->lps_index);

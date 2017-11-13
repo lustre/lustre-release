@@ -1932,6 +1932,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	int				i;
 	int				grant = 0;
 	int				rc;
+	__u32				layout_version = 0;
 	struct list_head		rpc_list = LIST_HEAD_INIT(rpc_list);
 	struct ost_body			*body;
 	ENTRY;
@@ -1943,6 +1944,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		mem_tight |= ext->oe_memalloc;
 		grant += ext->oe_grants;
 		page_count += ext->oe_nr_pages;
+		layout_version = MAX(layout_version, ext->oe_layout_version);
 		if (obj == NULL)
 			obj = ext->oe_obj;
 	}
@@ -2000,8 +2002,16 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	crattr->cra_oa = oa;
 	cl_req_attr_set(env, osc2cl(obj), crattr);
 
-	if (cmd == OBD_BRW_WRITE)
+	if (cmd == OBD_BRW_WRITE) {
 		oa->o_grant_used = grant;
+		if (layout_version > 0) {
+			CDEBUG(D_LAYOUT, DFID": write with layout version %u\n",
+			       PFID(&oa->o_oi.oi_fid), layout_version);
+
+			oa->o_layout_version = layout_version;
+			oa->o_valid |= OBD_MD_LAYOUT_VERSION;
+		}
+	}
 
 	sort_brw_pages(pga, page_count);
 	rc = osc_brw_prep_request(cmd, cli, oa, page_count, pga, &req, 0);

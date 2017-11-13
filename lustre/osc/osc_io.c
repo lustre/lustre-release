@@ -187,7 +187,7 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 
 		if (++queued == max_pages) {
 			queued = 0;
-			result = osc_queue_sync_pages(env, osc, &list,
+			result = osc_queue_sync_pages(env, io, osc, &list,
 						      brw_flags);
 			if (result < 0)
 				break;
@@ -195,7 +195,7 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 	}
 
 	if (queued > 0)
-		result = osc_queue_sync_pages(env, osc, &list, brw_flags);
+		result = osc_queue_sync_pages(env, io, osc, &list, brw_flags);
 
 	/* Update c/mtime for sync write. LU-7310 */
 	if (crt == CRT_WRITE && qout->pl_nr > 0 && result == 0) {
@@ -556,6 +556,12 @@ static int osc_io_setattr_start(const struct lu_env *env,
                                 oa->o_flags = OBD_FL_SRVLOCK;
                                 oa->o_valid |= OBD_MD_FLFLAGS;
                         }
+
+			if (io->ci_layout_version > 0) {
+				/* verify layout version */
+				oa->o_valid |= OBD_MD_LAYOUT_VERSION;
+				oa->o_layout_version = io->ci_layout_version;
+			}
                 } else {
                         LASSERT(oio->oi_lockless == 0);
                 }

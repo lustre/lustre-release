@@ -1796,6 +1796,8 @@ struct cl_io {
         struct cl_lockset              ci_lockset;
         /** lock requirements, this is just a help info for sublayers. */
         enum cl_io_lock_dmd            ci_lockreq;
+	/** layout version when this IO occurs */
+	__u32				ci_layout_version;
         union {
 		struct cl_rw_io {
 			struct iov_iter		 rw_iter;
@@ -1871,8 +1873,10 @@ struct cl_io {
 	 */
 			     ci_ignore_layout:1,
 	/**
-	 * Need MDS intervention to complete a write. This usually means the
-	 * corresponding component is not initialized for the writing extent.
+	 * Need MDS intervention to complete a write.
+	 * Write intent is required for the following cases:
+	 * 1. component being written is not initialized, or
+	 * 2. the mirrored files are NOT in WRITE_PENDING state.
 	 */
 			     ci_need_write_intent:1,
 	/**

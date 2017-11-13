@@ -699,6 +699,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		if (i > 0) {
 			if (mirror_id == lre->lre_mirror_id) {
 				lre->lre_valid |= lle->lle_valid;
+				lre->lre_stale |= !lle->lle_valid;
 				lre->lre_end = i;
 				continue;
 			}
@@ -719,6 +720,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		lre->lre_preferred = (lle->lle_lsme->lsme_flags &
 					LCME_FL_PREFERRED);
 		lre->lre_valid = lle->lle_valid;
+		lre->lre_stale = !lle->lle_valid;
 	}
 
 	/* sanity check for FLR */
@@ -758,7 +760,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 	mirror_count = 0, i = 0;
 	lov_foreach_mirror_entry(lov, lre) {
 		i++;
-		if (!lre->lre_valid)
+		if (lre->lre_stale)
 			continue;
 
 		mirror_count++; /* valid mirror */

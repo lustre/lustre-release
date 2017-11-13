@@ -193,6 +193,9 @@ struct filter_fid_old {
 struct filter_fid {
 	struct lu_fid		ff_parent;
 	struct ost_layout	ff_layout;
+	__u32			ff_layout_version;
+	__u32			ff_range; /* range of layout version that
+					   * write are allowed */
 } __attribute__((packed));
 
 /* Userspace should treat lu_fid as opaque, and only use the following methods
@@ -549,6 +552,10 @@ enum lov_comp_md_entry_flags {
 };
 
 #define LCME_KNOWN_FLAGS	(LCME_FL_NEG | LCME_FL_INIT)
+
+/* the highest bit in obdo::o_layout_version is used to mark if the file is
+ * being resynced. */
+#define LU_LAYOUT_RESYNC	LCME_FL_NEG
 
 /* lcme_id can be specified as certain flags, and the the first
  * bit of lcme_id is used to indicate that the ID is representing
@@ -945,6 +952,8 @@ enum changelog_rec_type {
 	CL_CTIME    = 18,
 	CL_ATIME    = 19,
 	CL_MIGRATE  = 20,
+	CL_FLRW     = 21, /* FLR: file was firstly written */
+	CL_RESYNC   = 22, /* FLR: file was resync-ed */
 	CL_LAST
 };
 
@@ -952,7 +961,8 @@ static inline const char *changelog_type2str(int type) {
 	static const char *changelog_str[] = {
 		"MARK",  "CREAT", "MKDIR", "HLINK", "SLINK", "MKNOD", "UNLNK",
 		"RMDIR", "RENME", "RNMTO", "OPEN",  "CLOSE", "LYOUT", "TRUNC",
-		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME", "MIGRT"
+		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME", "MIGRT",
+		"FLRW",  "RESYNC",
 	};
 
 	if (type >= 0 && type < CL_LAST)

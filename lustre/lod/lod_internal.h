@@ -408,6 +408,10 @@ struct lod_thread_info {
 	/* used to store parent default striping in create */
 	struct lod_default_striping	lti_def_striping;
 	struct filter_fid lti_ff;
+	__u32				*lti_comp_idx;
+	size_t				lti_comp_size;
+	size_t				lti_count;
+	struct lu_attr			lti_layout_attr;
 };
 
 extern const struct lu_device_operations lod_lu_ops;
@@ -448,6 +452,11 @@ static inline struct lod_object *lu2lod_obj(struct lu_object *o)
 static inline struct lu_object *lod2lu_obj(struct lod_object *obj)
 {
 	return &obj->ldo_obj.do_lu;
+}
+
+static inline const struct lu_fid *lod_object_fid(struct lod_object *obj)
+{
+	return lu_object_fid(lod2lu_obj(obj));
 }
 
 static inline struct lod_object *lod_obj(const struct lu_object *o)
@@ -637,18 +646,25 @@ int lod_pool_new(struct obd_device *obd, char *poolname);
 int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname);
 int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 
+struct lod_obj_stripe_cb_data;
+typedef int (*lod_obj_stripe_cb_t)(const struct lu_env *env,
+				   struct lod_object *lo, struct dt_object *dt,
+				   struct thandle *th,
+				   int comp_idx, int stripe_idx,
+				   struct lod_obj_stripe_cb_data *data);
+typedef bool (*lod_obj_comp_skip_cb_t)(const struct lu_env *env,
+					struct lod_object *lo, int comp_idx,
+					struct lod_obj_stripe_cb_data *data);
 struct lod_obj_stripe_cb_data {
 	union {
 		const struct lu_attr	*locd_attr;
 		struct ost_pool		*locd_inuse;
 	};
-	bool	locd_declare;
+	lod_obj_stripe_cb_t		locd_stripe_cb;
+	lod_obj_comp_skip_cb_t		locd_comp_skip_cb;
+	bool				locd_declare;
 };
 
-typedef int (*lod_obj_stripe_cb_t)(const struct lu_env *env,
-				   struct lod_object *lo, struct dt_object *dt,
-				   struct thandle *th, int stripe_idx,
-				   struct lod_obj_stripe_cb_data *data);
 /* lod_qos.c */
 int lod_prepare_inuse(const struct lu_env *env, struct lod_object *lo);
 int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
@@ -661,7 +677,7 @@ int lod_use_defined_striping(const struct lu_env *, struct lod_object *,
 			     const struct lu_buf *);
 int lod_obj_stripe_set_inuse_cb(const struct lu_env *env, struct lod_object *lo,
 				struct dt_object *dt, struct thandle *th,
-				int stripe_idx,
+				int comp_idx, int stripe_idx,
 				struct lod_obj_stripe_cb_data *data);
 int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 			 const struct lu_buf *buf);
@@ -693,7 +709,7 @@ int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 void lod_object_free_striping(const struct lu_env *env, struct lod_object *lo);
 
 int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
-			    struct thandle *th, lod_obj_stripe_cb_t cb,
+			    struct thandle *th,
 			    struct lod_obj_stripe_cb_data *data);
 
 /* lod_sub_object.c */

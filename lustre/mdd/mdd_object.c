@@ -1865,41 +1865,190 @@ static int mdd_declare_layout_change(const struct lu_env *env,
 }
 
 /* For PFL, this is used to instantiate necessary component objects. */
-int mdd_layout_change(const struct lu_env *env, struct md_object *obj,
-		      struct md_layout_change *mlc)
+static int
+mdd_layout_instantiate_component(const struct lu_env *env,
+		struct mdd_object *obj, struct md_layout_change *mlc,
+		struct thandle *handle)
 {
-	struct mdd_object *mdd_obj = md2mdd_obj(obj);
-	struct mdd_device *mdd = mdo2mdd(obj);
-	struct thandle *handle;
+	struct mdd_device *mdd = mdd_obj2mdd_dev(obj);
 	int rc;
 	ENTRY;
 
-	handle = mdd_trans_create(env, mdd);
-	if (IS_ERR(handle))
-		RETURN(PTR_ERR(handle));
-
-	rc = mdd_declare_layout_change(env, mdd, mdd_obj, mlc, handle);
+	rc = mdd_declare_layout_change(env, mdd, obj, mlc, handle);
 	/**
 	 * It's possible that another layout write intent has already
 	 * instantiated our objects, so a -EALREADY returned, and we need to
 	 * do nothing.
 	 */
 	if (rc)
-		GOTO(stop, rc = (rc == -EALREADY) ? 0 : rc);
+		RETURN(rc == -EALREADY ? 0 : rc);
 
 	rc = mdd_trans_start(env, mdd, handle);
 	if (rc)
-		GOTO(stop, rc);
+		RETURN(rc);
 
-	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-	rc = mdo_layout_change(env, mdd_obj, mlc, handle);
-	mdd_write_unlock(env, mdd_obj);
+	mdd_write_lock(env, obj, MOR_TGT_CHILD);
+	rc = mdo_layout_change(env, obj, mlc, handle);
+	mdd_write_unlock(env, obj);
 	if (rc)
-		GOTO(stop, rc);
+		RETURN(rc);
 
-	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, mdd_obj, handle);
-stop:
-	RETURN(mdd_trans_stop(env, mdd, rc, handle));
+	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, obj, handle);
+	RETURN(rc);
+}
+
+/**
+ * Change the FLR layout from RDONLY to WRITE_PENDING.
+ *
+ * It picks the primary mirror, and bumps the layout version, and set
+ * layout version xattr to OST objects in a sync tx. In order to facilitate
+ * the handling of phantom writers from evicted clients, the clients carry
+ * layout version of the file with write RPC, so that the OSTs can verify
+ * if the write RPCs are legitimate, meaning not from evicted clients.
+ */
+static int
+mdd_layout_update_rdonly(const struct lu_env *env, struct mdd_object *obj,
+			 struct md_layout_change *mlc, struct thandle *handle)
+{
+	struct mdd_device *mdd = mdd_obj2mdd_dev(obj);
+	int rc;
+	ENTRY;
+
+	rc = mdd_declare_layout_change(env, mdd, obj, mlc, handle);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = mdd_declare_xattr_del(env, mdd, obj, XATTR_NAME_SOM, handle);
+	if (rc)
+		GOTO(out, rc);
+
+	/* record a changelog for data mover to consume */
+	rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(out, rc);
+
+	/* it needs a sync tx to make FLR to work properly */
+	handle->th_sync = 1;
+
+	mdd_write_lock(env, obj, MOR_TGT_CHILD);
+	rc = mdo_layout_change(env, obj, mlc, handle);
+	if (!rc) {
+		rc = mdo_xattr_del(env, obj, XATTR_NAME_SOM, handle);
+		if (rc == -ENODATA)
+			rc = 0;
+	}
+	mdd_write_unlock(env, obj);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = mdd_changelog_data_store(env, mdd, CL_FLRW, 0, obj, handle);
+	if (rc)
+		GOTO(out, rc);
+
+	EXIT;
+
+out:
+	return rc;
+}
+
+static int
+mdd_layout_update_write_pending(const struct lu_env *env,
+		struct mdd_object *obj, struct md_layout_change *mlc,
+		struct thandle *handle)
+{
+	struct mdd_device *mdd = mdd_obj2mdd_dev(obj);
+	int rc;
+	ENTRY;
+
+	rc = mdd_declare_layout_change(env, mdd, obj, mlc, handle);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(out, rc);
+
+	/* it needs a sync tx to make FLR to work properly */
+	handle->th_sync = 1;
+
+	mdd_write_lock(env, obj, MOR_TGT_CHILD);
+	rc = mdo_layout_change(env, obj, mlc, handle);
+	mdd_write_unlock(env, obj);
+	if (rc)
+		GOTO(out, rc);
+
+	EXIT;
+
+out:
+	return rc;
+}
+
+/**
+ * Layout change callback for object.
+ *
+ * This is only used by FLR for now. In the future, it can be exteneded to
+ * handle all layout change.
+ */
+static int
+mdd_layout_change(const struct lu_env *env, struct md_object *o,
+		  struct md_layout_change *mlc)
+{
+	struct mdd_object       *obj = md2mdd_obj(o);
+	struct mdd_device	*mdd = mdd_obj2mdd_dev(obj);
+	struct lu_buf           *buf = mdd_buf_get(env, NULL, 0);
+	struct lov_comp_md_v1   *lcm;
+	struct thandle		*handle;
+	int flr_state;
+	int rc;
+	ENTRY;
+
+	if (mlc->mlc_opc != MD_LAYOUT_WRITE)
+		RETURN(-ENOTSUPP);
+
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		RETURN(PTR_ERR(handle));
+
+	rc = mdd_get_lov_ea(env, obj, buf);
+	if (rc < 0) {
+		if (rc == -ENODATA)
+			rc = -EINVAL;
+		GOTO(out, rc);
+	}
+
+	/* analyze the layout to make sure it's a FLR file */
+	lcm = buf->lb_buf;
+	if (le32_to_cpu(lcm->lcm_magic) != LOV_MAGIC_COMP_V1)
+		GOTO(out, rc = -EINVAL);
+
+	flr_state = le16_to_cpu(lcm->lcm_flags) & LCM_FL_FLR_MASK;
+
+	/* please refer to HLD of FLR for state transition */
+	switch (flr_state) {
+	case LCM_FL_NOT_FLR:
+		rc = mdd_layout_instantiate_component(env, obj, mlc, handle);
+		break;
+	case LCM_FL_WRITE_PENDING:
+		rc = mdd_layout_update_write_pending(env, obj, mlc, handle);
+		break;
+	case LCM_FL_RDONLY:
+		rc = mdd_layout_update_rdonly(env, obj, mlc, handle);
+		break;
+	case LCM_FL_SYNC_PENDING:
+	default:
+		rc = 0;
+		break;
+	}
+	EXIT;
+
+out:
+	mdd_trans_stop(env, mdd, rc, handle);
+	lu_buf_free(buf);
+	return rc;
 }
 
 void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,

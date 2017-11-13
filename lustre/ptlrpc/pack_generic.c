@@ -1728,7 +1728,7 @@ void lustre_swab_obdo (struct obdo  *o)
 	__swab32s(&o->o_stripe_idx);
 	__swab32s(&o->o_parent_ver);
 	lustre_swab_ost_layout(&o->o_layout);
-	CLASSERT(offsetof(typeof(*o), o_padding_3) != 0);
+	__swab32s(&o->o_layout_version);
 	__swab32s(&o->o_uid_h);
 	__swab32s(&o->o_gid_h);
 	__swab64s(&o->o_data_version);
