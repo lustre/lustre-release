@@ -15185,6 +15185,10 @@ run_test 260 "Check mdc_close fail"
 
 ### Data-on-MDT sanity tests ###
 test_270a() {
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	# create DoM file
 	local dom=$DIR/$tdir/dom_file
 	local tmp=$DIR/$tdir/tmp_file
@@ -15280,6 +15284,9 @@ test_270a() {
 run_test 270a "DoM: basic functionality tests"
 
 test_270b() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	local dom=$DIR/$tdir/dom_file
 	local max_size=1048576
 
@@ -15302,6 +15309,9 @@ test_270b() {
 run_test 270b "DoM: maximum size overflow checks for DoM-only file"
 
 test_270c() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
 
@@ -15328,6 +15338,9 @@ test_270c() {
 run_test 270c "DoM: DoM EA inheritance tests"
 
 test_270d() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
 
@@ -15347,6 +15360,9 @@ test_270d() {
 run_test 270d "DoM: change striping from DoM to RAID0"
 
 test_270e() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	mkdir -p $DIR/$tdir/dom
 	mkdir -p $DIR/$tdir/norm
 	DOMFILES=20
@@ -15385,6 +15401,9 @@ test_270e() {
 run_test 270e "DoM: lfs find with DoM files test"
 
 test_270f() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	local mdtname=${FSNAME}-MDT0000-mdtlov
 	local dom=$DIR/$tdir/dom_file
 	local dom_limit_saved=$(do_facet mds1 $LCTL get_param -n \
@@ -15443,6 +15462,9 @@ test_270f() {
 run_test 270f "DoM: maximum DoM stripe size checks"
 
 test_271a() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	local dom=$DIR/$tdir/dom
 
 	mkdir -p $DIR/$tdir
@@ -15461,6 +15483,9 @@ test_271a() {
 run_test 271a "DoM: data is cached for read after write"
 
 test_271b() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	local dom=$DIR/$tdir/dom
 
 	mkdir -p $DIR/$tdir
@@ -15481,6 +15506,9 @@ test_271b() {
 run_test 271b "DoM: no glimpse RPC for stat (DoM only file)"
 
 test_271ba() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	local dom=$DIR/$tdir/dom
 
 	mkdir -p $DIR/$tdir
@@ -15507,6 +15535,9 @@ run_test 271ba "DoM: no glimpse RPC for stat (combined file)"
 test_271c() {
 	# test to be enabled with lock_convert
 	skip "skipped until lock convert will be implemented" && return
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
 
 	local dom=$DIR/$tdir/dom
 

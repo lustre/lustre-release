@@ -4010,6 +4010,9 @@ run_test 93 "alloc_rr should not allocate on same ost"
 # Data-on-MDT tests
 test_100a() {
 	skip "Reserved for glimpse-ahead" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	mkdir -p $DIR/$tdir
 
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR/$tdir/dom
@@ -4032,6 +4035,9 @@ test_100a() {
 run_test 100a "DoM: glimpse RPCs for stat without IO lock (DoM only file)"
 
 test_100b() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	mkdir -p $DIR/$tdir
 
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR/$tdir/dom
@@ -4053,6 +4059,9 @@ test_100b() {
 run_test 100b "DoM: no glimpse RPC for stat with IO lock (DoM only file)"
 
 test_100c() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	mkdir -p $DIR/$tdir
 
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR/$tdir/dom
@@ -4073,6 +4082,9 @@ test_100c() {
 run_test 100c "DoM: write vs stat without IO lock (combined file)"
 
 test_100d() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	mkdir -p $DIR/$tdir
 
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR/$tdir/dom
@@ -4095,6 +4107,9 @@ test_100d() {
 run_test 100d "DoM: write+truncate vs stat without IO lock (combined file)"
 
 test_101a() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
 	# to get layout
 	$CHECKSTAT -t file $DIR1/$tfile
@@ -4117,6 +4132,9 @@ test_101a() {
 run_test 101a "Discard DoM data on unlink"
 
 test_101b() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
 	touch $DIR1/${tfile}_2
 	# to get layout
@@ -4139,6 +4157,9 @@ test_101b() {
 run_test 101b "Discard DoM data on rename"
 
 test_101c() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	$LFS setstripe -E 1024K -L mdt -E EOF $DIR1/$tfile
 	# to get layout
 	$CHECKSTAT -t file $DIR1/$tfile
