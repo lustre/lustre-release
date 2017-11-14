@@ -4550,6 +4550,8 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
 	const char *fidstr_orig = fidstr;
 	struct lu_fid fid;
 	struct getinfo_fid2path *gf;
+	char *a;
+	char *b;
 	int rc;
 
 	while (*fidstr == '[')
@@ -4578,11 +4580,21 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
 	if (rc)
 		goto out_free;
 
-	memcpy(buf, gf->gf_u.gf_path, gf->gf_pathlen);
+	b = buf;
+	/* strip out instances of // */
+	for (a = gf->gf_u.gf_path; *a != '\0'; a++) {
+		if ((*a == '/') && (*(a + 1) == '/'))
+			continue;
+		*b = *a;
+		b++;
+	}
+	*b = '\0';
+
 	if (buf[0] == '\0') { /* ROOT path */
 		buf[0] = '/';
 		buf[1] = '\0';
 	}
+
 	*recno = gf->gf_recno;
 	*linkno = gf->gf_linkno;
 
