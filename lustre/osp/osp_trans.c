@@ -1183,7 +1183,10 @@ static int osp_send_update_req(const struct lu_env *env,
 		rc = ptlrpc_queue_wait(req);
 		if (osp->opd_connect_mdt)
 			osp_put_rpc_lock(osp);
-		if ((rc == -ENOMEM && req->rq_set == NULL) ||
+
+		/* We use rq_queued_time to distinguish between local
+		 * and remote -ENOMEM. */
+		if ((rc == -ENOMEM && req->rq_queued_time == 0) ||
 		    (req->rq_transno == 0 && !req->rq_committed)) {
 			if (args->oaua_update != NULL) {
 				/* If osp_update_interpret is not being called,
