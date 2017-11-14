@@ -245,8 +245,104 @@ copytool_monitor_cleanup() {
 	# The pdsh should die on its own when the monitor dies. Just
 	# in case, though, try to clean up to avoid any cruft.
 	if [ -n "$HSMTOOL_MONITOR_PDSH" ]; then
-		kill $HSMTOOL_MONITOR_PDSH 2>/dev/null
+		kill $HSMTOOL_MONITOR_PDSH 2>/dev/null || true
 		export HSMTOOL_MONITOR_PDSH=
+	fi
+}
+
+copytool_logfile()
+{
+	local host="$(facet_host "$1")"
+	local prefix=$TESTLOG_PREFIX
+	[ -n "$TESTNAME" ] && prefix+=.$TESTNAME
+
+	printf "${prefix}.copytool${archive_id}_log.${host}.log"
+}
+
+__lhsmtool_setup()
+{
+	local cmd="$HSMTOOL $HSMTOOL_VERBOSE --daemon --hsm-root \"$hsm_root\""
+	[ -n "$bandwidth" ] && cmd+=" --bandwidth $bandwidth"
+	[ -n "$archive_id" ] && cmd+=" --archive $archive_id"
+	[ ${#misc_options[@]} -gt 0 ] &&
+		cmd+=" $(IFS=" " echo "$@")"
+	cmd+=" \"$mountpoint\""
+
+	echo "Starting copytool $facet on $(facet_host $facet)"
+	stack_trap "do_facet $facet \"pkill -x $HSMTOOL_BASE\" || true" EXIT
+	do_facet $facet "$cmd < /dev/null > \"$(copytool_logfile $facet)\" 2>&1"
+}
+
+hsm_root() {
+	local facet="${1:-$SINGLEAGT}"
+
+	printf "$(copytool_device "$facet")/${TESTSUITE}.${TESTNAME}/"
+}
+
+copytool()
+{
+	local action=$1
+	shift
+
+	# Parse arguments
+	local fail_on_error=true
+	local -a misc_options
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		-f|--facet)
+			shift
+			local facet="$1"
+			;;
+		-m|--mountpoint)
+			shift
+			local mountpoint="$1"
+			;;
+		-a|--archive-id)
+			shift
+			local archive_id="$1"
+			;;
+		-b|--bwlimit)
+			shift
+			local bandwidth="$1" # in MB/s
+			;;
+		-n|--no-fail)
+			local fail_on_error=false
+			;;
+		*)
+			# Uncommon(/copytool dependent) option
+			misc_options+=("$1")
+			;;
+		esac
+		shift
+	done
+
+	# Use default values if needed
+	local facet=${facet:-$SINGLEAGT}
+	local mountpoint="${mountpoint:-${MOUNT2:-$MOUNT}}"
+	local hsm_root="$(hsm_root "$facet")"
+
+	stack_trap "do_facet $facet \"rm -rf \\\"$hsm_root\\\"\"" EXIT
+	do_facet $facet "mkdir -p \"$hsm_root\"" ||
+		error "mkdir \"$hsm_root\" failed"
+
+	case "$HSMTOOL" in
+	lhsmtool_posix)
+		local copytool=lhsmtool
+		;;
+	esac
+
+	__${copytool}_${action} "${misc_options[@]}"
+	if [ $? -ne 0 ]; then
+		local error_msg
+
+		case $action in
+		setup)
+			local host="$(facet_host $facet)"
+			error_msg="Failed to start copytool $facet on '$host'"
+			;;
+		esac
+
+		$fail_on_error && error "$error_msg" || echo "$error_msg"
 	fi
 }
 
@@ -946,7 +1042,7 @@ test_1a() {
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_small_file $f)
 
-	copytool_setup
+	copytool setup
 
 	$LFS hsm_archive $f || error "could not archive file"
 	wait_request_state $fid ARCHIVE SUCCEED
@@ -957,8 +1053,6 @@ test_1a() {
 	check_hsm_flags $f "0x0000000d"
 
 	$MMAP_CAT $f > /dev/null || error "failed mmap & cat release file"
-
-	copytool_cleanup
 }
 run_test 1a "mmap & cat a HSM released file"
 
@@ -973,7 +1067,7 @@ test_1b() {
 		error "failed to create file"
 	local fid=$(path2fid $f)
 
-	copytool_setup
+	copytool setup
 
 	echo "archive $f"
 	$LFS hsm_archive $f || error "could not archive file"
@@ -989,8 +1083,6 @@ test_1b() {
 	wait_request_state $fid RESTORE SUCCEED
 	echo "verify restored state: "
 	check_hsm_flags $f "0x00000009" && echo "pass"
-
-	copytool_cleanup
 }
 run_test 1b "Archive, Release & Restore composite file"
 
@@ -1133,7 +1225,7 @@ run_test 4 "Useless cancel must not be registered"
 
 test_8() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -1142,16 +1234,13 @@ test_8() {
 	wait_request_state $fid ARCHIVE SUCCEED
 
 	check_hsm_flags $f "0x00000009"
-
-	copytool_cleanup
 }
 run_test 8 "Test default archive number"
 
 test_9() {
 	# we do not use the default one to be sure
-	local new_an=$((HSM_ARCHIVE_NUMBER + 1))
-	copytool_cleanup
-	copytool_setup $SINGLEAGT $MOUNT $new_an
+	local archive_id=$((HSM_ARCHIVE_NUMBER + 1))
+	copytool setup --archive-id $archive_id
 
 	# give time for CT to register with MDTs
 	sleep $(($MDSCOUNT*2))
@@ -1161,12 +1250,10 @@ test_9() {
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
-	$LFS hsm_archive --archive $new_an $f
+	$LFS hsm_archive --archive $archive_id $f
 	wait_request_state $fid ARCHIVE SUCCEED
 
 	check_hsm_flags $f "0x00000009"
-
-	copytool_cleanup
 }
 run_test 9 "Use of explicit archive number, with dedicated copytool"
 
@@ -1177,14 +1264,11 @@ test_9a() {
 	local file
 	local fid
 
-	copytool_cleanup $(comma_list $(agts_nodes))
-
 	# start all of the copytools
 	for n in $(seq $AGTCOUNT); do
-		copytool_setup agt$n
+		copytool setup --facet agt$n
 	done
 
-	trap "copytool_cleanup $(comma_list $(agts_nodes))" EXIT
 	# archive files
 	for n in $(seq $AGTCOUNT); do
 		file=$DIR/$tdir/$tfile.$n
@@ -1194,9 +1278,6 @@ test_9a() {
 		wait_request_state $fid ARCHIVE SUCCEED
 		check_hsm_flags $file "0x00000009"
 	done
-
-	trap - EXIT
-	copytool_cleanup $(comma_list $(agts_nodes))
 }
 run_test 9a "Multiple remote agents"
 
@@ -1224,13 +1305,12 @@ test_10a() {
 		error "Wrong archive number, $st != $HSM_ARCHIVE_NUMBER"
 
 	copytool_cleanup
-
 }
 run_test 10a "Archive a file"
 
 test_10b() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -1242,28 +1322,25 @@ test_10b() {
 	local cnt=$(get_request_count $fid ARCHIVE)
 	[[ "$cnt" == "1" ]] ||
 		error "archive of non dirty file must not make a request"
-
-	copytool_cleanup
 }
 run_test 10b "Archive of non dirty file must work without doing request"
 
 test_10c() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 	$LFS hsm_set --noarchive $f
 	$LFS hsm_archive $f && error "archive a noarchive file must fail"
-
-	copytool_cleanup
+	return 0
 }
 run_test 10c "Check forbidden archive"
 
 test_10d() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -1275,8 +1352,6 @@ test_10d() {
 	local dflt=$(get_hsm_param default_archive_id)
 	[[ $ar == $dflt ]] ||
 		error "archived file is not on default archive: $ar != $dflt"
-
-	copytool_cleanup
 }
 run_test 10d "Archive a file on the default archive id"
 
@@ -1387,7 +1462,7 @@ test_12c() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs" && return
 
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	mkdir -p $DIR/$tdir
@@ -1405,14 +1480,12 @@ test_12c() {
 	echo "$FILE_CRC" | md5sum -c
 
 	[[ $? -eq 0 ]] || error "Restored file differs"
-
-	copytool_cleanup
 }
 run_test 12c "Restore a file with stripe of 2"
 
 test_12d() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -1430,15 +1503,13 @@ test_12d() {
 	local cnt=$(get_request_count $fid RESTORE)
 	[[ "$cnt" == "0" ]] ||
 		error "restore a non dirty file must not make a request"
-
-	copytool_cleanup
 }
 run_test 12d "Restore of a non archived, non released file must work"\
 		" without doing request"
 
 test_12e() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir $HSM_ARCHIVE/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -1452,14 +1523,13 @@ test_12e() {
 	$LFS hsm_state $f
 
 	$LFS hsm_restore $f && error "restore a dirty file must fail"
-
-	copytool_cleanup
+	return 0
 }
 run_test 12e "Check forbidden restore"
 
 test_12f() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -1477,14 +1547,12 @@ test_12f() {
 	diff -q /etc/hosts $f
 
 	[[ $? -eq 0 ]] || error "Restored file differs"
-
-	copytool_cleanup
 }
 run_test 12f "Restore a released file explicitly"
 
 test_12g() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -1501,8 +1569,6 @@ test_12g() {
 	wait_request_state $fid RESTORE SUCCEED
 
 	[[ $st -eq 0 ]] || error "Restored file differs"
-
-	copytool_cleanup
 }
 run_test 12g "Restore a released file implicitly"
 
@@ -1510,7 +1576,7 @@ test_12h() {
 	needclients 2 || return 0
 
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -1527,14 +1593,12 @@ test_12h() {
 	wait_request_state $fid RESTORE SUCCEED
 
 	[[ $st -eq 0 ]] || error "Restored file differs"
-
-	copytool_cleanup
 }
 run_test 12h "Restore a released file implicitly from a second node"
 
 test_12m() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -1547,8 +1611,6 @@ test_12m() {
 	cmp /etc/passwd $f
 
 	[[ $? -eq 0 ]] || error "Restored file differs"
-
-	copytool_cleanup
 }
 run_test 12m "Archive/release/implicit restore"
 
@@ -1573,7 +1635,7 @@ run_test 12n "Import/implicit restore/release"
 
 test_12o() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -1617,14 +1679,12 @@ test_12o() {
 	wait_request_state $fid RESTORE SUCCEED
 
 	[[ $st -eq 0 ]] || error "Restored file differs"
-
-	copytool_cleanup
 }
 run_test 12o "Layout-swap failure during Restore leaves file released"
 
 test_12p() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -1637,14 +1697,10 @@ test_12p() {
 	do_facet $SINGLEAGT cat $f > /dev/null || error "cannot cat $f"
 	$LFS hsm_release $f || error "cannot release $f"
 	do_facet $SINGLEAGT cat $f > /dev/null || error "cannot cat $f"
-
-	copytool_cleanup
 }
 run_test 12p "implicit restore of a file on copytool mount point"
 
 cleanup_test_12q() {
-	trap 0
-	zconf_umount $(facet_host $SINGLEAGT) $MOUNT3 ||
 		error "cannot umount $MOUNT3 on $SINGLEAGT"
 }
 
@@ -1652,13 +1708,12 @@ test_12q() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.58) ] &&
 		skip "need MDS version at least 2.7.58" && return 0
 
+	stack_trap "zconf_umount \"$(facet_host $SINGLEAGT)\" \"$MOUNT3\"" EXIT
 	zconf_mount $(facet_host $SINGLEAGT) $MOUNT3 ||
 		error "cannot mount $MOUNT3 on $SINGLEAGT"
 
-	trap cleanup_test_12q EXIT
-
 	# test needs a running copytool
-	copytool_setup $SINGLEAGT $MOUNT3
+	copytool setup -m "$MOUNT3"
 
 	local f=$DIR/$tdir/$tfile
 	local f2=$DIR2/$tdir/$tfile
@@ -1684,7 +1739,7 @@ test_12q() {
 	[ $size -eq $orig_size ] ||
 		error "$f2: wrong size after archive: $size != $orig_size"
 
-	HSM_ARCHIVE_PURGE=false copytool_setup $SINGLEAGT /mnt/lustre3
+	copytool setup -m "$MOUNT3"
 
 	wait
 
@@ -1705,10 +1760,6 @@ test_12q() {
 	size=$(stat -c "%s" $f2)
 	[ $size -eq 0 ] ||
 		error "$f2: wrong size after overwrite: $size != 0"
-
-	copytool_cleanup
-	zconf_umount $(facet_host $SINGLEAGT) $MOUNT3 ||
-		error "cannot umount $MOUNT3 on $SINGLEAGT"
 }
 run_test 12q "file attributes are refreshed after restore"
 
@@ -1834,7 +1885,7 @@ run_test 15 "Rebind a list of files"
 
 test_16() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	local ref=/tmp/ref
 	# create a known size file so we can verify transfer speed
@@ -1855,8 +1906,6 @@ test_16() {
 
 	[[ $duration -ge $((goal - 1)) ]] ||
 		error "Transfer is too fast $duration < $goal"
-
-	copytool_cleanup
 }
 run_test 16 "Test CT bandwith control option"
 
@@ -1889,7 +1938,7 @@ run_test 20 "Release is not permitted"
 
 test_21() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/test_release
 
@@ -1950,14 +1999,12 @@ test_21() {
 	check_hsm_flags $f "0x0000000d"
 
 	stop_full_debug_logging
-
-	copytool_cleanup
 }
 run_test 21 "Simple release tests"
 
 test_22() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/test_release
 	local swap=$DIR/$tdir/test_swap
@@ -1976,14 +2023,13 @@ test_22() {
 	create_small_file $swap
 	$LFS swap_layouts $swap $f && error "swap_layouts should failed"
 
-	true
-	copytool_cleanup
+	return 0
 }
 run_test 22 "Could not swap a release file"
 
 test_23() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/test_mtime
 
@@ -2005,8 +2051,6 @@ test_23() {
 	local ATIME=$(stat -c "%X" $f)
 	[ $MTIME -eq "978261179" ] || fail "bad mtime: $MTIME"
 	[ $ATIME -eq "978261179" ] || fail "bad atime: $ATIME"
-
-	copytool_cleanup
 }
 run_test 23 "Release does not change a/mtime (utime)"
 
@@ -2021,7 +2065,7 @@ test_24a() {
 	local ctime1
 
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	fid=$(create_small_file $file)
 
@@ -2093,7 +2137,8 @@ test_24a() {
 	[ $ctime0 -eq $ctime1 ] ||
 		error "restore changed ctime from $ctime0 to $ctime1"
 
-	copytool_cleanup
+	kill_copytools
+	wait_copytools || error "Copytools failed to stop"
 
 	# Once more, after unmount and mount.
 	umount_client $MOUNT || error "cannot unmount '$MOUNT'"
@@ -2122,7 +2167,7 @@ test_24b() {
 	# LU-3811
 
 	# Test needs a running copytool.
-	copytool_setup
+	copytool setup
 
 	# Check that root can do HSM actions on a regular user's file.
 	fid=$(create_small_file $file)
@@ -2156,17 +2201,8 @@ test_24b() {
 
 	[ "$sum0" == "$sum1" ] ||
 		error "md5sum mismatch for '$file'"
-
-	copytool_cleanup
 }
 run_test 24b "root can archive, release, and restore user files"
-
-cleanup_test_24c() {
-	trap 0
-	set_hsm_param user_request_mask RESTORE
-	set_hsm_param group_request_mask RESTORE
-	set_hsm_param other_request_mask RESTORE
-}
 
 test_24c() {
 	local file=$DIR/$tdir/$tfile
@@ -2176,15 +2212,18 @@ test_24c() {
 	local other_save
 
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
 	# Save the default masks and check that cleanup_24c will
 	# restore the request masks correctly.
 	user_save=$(get_hsm_param user_request_mask)
+	stack_trap "set_hsm_param user_request_mask $user_save" EXIT
 	group_save=$(get_hsm_param group_request_mask)
+	stack_trap "set_hsm_param user_request_mask $group_save" EXIT
 	other_save=$(get_hsm_param other_request_mask)
+	stack_trap "set_hsm_param user_request_mask $other_save" EXIT
 
 	[ "$user_save" == RESTORE ] ||
 		error "user_request_mask is '$user_save' expected 'RESTORE'"
@@ -2192,8 +2231,6 @@ test_24c() {
 		error "group_request_mask is '$group_save' expected 'RESTORE'"
 	[ "$other_save" == RESTORE ] ||
 		error "other_request_mask is '$other_save' expected 'RESTORE'"
-
-	trap cleanup_test_24c EXIT
 
 	# User.
 	create_small_file $file
@@ -2230,16 +2267,8 @@ test_24c() {
 	set_hsm_param other_request_mask $action
 	$RUNAS $LFS hsm_$action $file ||
 		error "$action by other should succeed"
-
-	copytool_cleanup
-	cleanup_test_24c
 }
 run_test 24c "check that user,group,other request masks work"
-
-cleanup_test_24d() {
-	mount -o remount,rw $MOUNT2
-	zconf_umount $(facet_host $SINGLEAGT) "$MOUNT3"
-}
 
 test_24d() {
 	local file1=$DIR/$tdir/$tfile
@@ -2252,12 +2281,13 @@ test_24d() {
 	echo $fid1
 	$LFS getstripe $file1
 
-	trap cleanup_test_24d EXIT
-	zconf_mount $(facet_host $SINGLEAGT) "$MOUNT3" ||
+	stack_trap "zconf_umount \"$(facet_host $SINGLEAGT)\" \"$MOUNT3\"" EXIT
+	zconf_mount "$(facet_host $SINGLEAGT)" "$MOUNT3" ||
 		error "cannot mount '$MOUNT3' on '$SINGLEAGT'"
-	copytool_setup $SINGLEAGT "$MOUNT3" ||
-		error "unable to setup a copytool for the test"
 
+	copytool setup -m  "$MOUNT3"
+
+	stack_trap "mount -o remount,rw \"$MOUNT2\"" EXIT
 	mount -o remount,ro $MOUNT2
 
 	do_nodes $(comma_list $(nodes_list)) $LCTL clear
@@ -2288,7 +2318,7 @@ test_24d() {
 run_test 24d "check that read-only mounts are respected"
 
 test_24e() {
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -2302,22 +2332,19 @@ test_24e() {
 	done
 
 	tar -cf $TMP/$tfile.tar $DIR/$tdir || error "cannot tar $DIR/$tdir"
-
-	copytool_cleanup
 }
 run_test 24e "tar succeeds on HSM released files" # LU-6213
 
 test_24f() {
-
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir/d1
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 	sum0=$(md5sum $f)
 	echo $sum0
-	$LFS hsm_archive -a $HSM_ARCHIVE_NUMBER $f ||
+	$LFS hsm_archive $f ||
 		error "hsm_archive failed"
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f || error "cannot release $f"
@@ -2329,8 +2356,6 @@ test_24f() {
 	sum1=$(md5sum $f)
 	echo "Sum0 = $sum0, sum1 = $sum1"
 	[ "$sum0" == "$sum1" ] || error "md5sum mismatch for '$tfile'"
-
-	copytool_cleanup
 }
 run_test 24f "root can archive, release, and restore tar files"
 
@@ -2359,7 +2384,7 @@ run_test 25a "Restore lost file (HS_LOST flag) from import"\
 
 test_25b() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -2375,15 +2400,13 @@ test_25b() {
 	st=$?
 
 	[[ $st == 1 ]] || error "lost file access should failed (returns $st)"
-
-	copytool_cleanup
 }
 run_test 25b "Restore lost file (HS_LOST flag) after release"\
 	     " (Operation not permitted)"
 
 test_26() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -2397,25 +2420,15 @@ test_26() {
 	wait_request_state $fid REMOVE SUCCEED
 
 	check_hsm_flags $f "0x00000000"
-
-	copytool_cleanup
 }
 run_test 26 "Remove the archive of a valid file"
-
-cleanup_test_26a() {
-	trap 0
-	set_hsm_param remove_archive_on_last_unlink 0
-	set_hsm_param loop_period $orig_loop_period
-	set_hsm_param grace_delay $orig_grace_delay
-	copytool_cleanup
-}
 
 test_26a() {
 	local raolu=$(get_hsm_param remove_archive_on_last_unlink)
 	[[ $raolu -eq 0 ]] || error "RAoLU policy should be off"
 
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -2436,16 +2449,17 @@ test_26a() {
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f3
 	wait_request_state $fid3 ARCHIVE SUCCEED
 
-	trap cleanup_test_26a EXIT
-
 	# set a long grace_delay vs short loop_period
 	local orig_loop_period=$(get_hsm_param loop_period)
 	local orig_grace_delay=$(get_hsm_param grace_delay)
+	stack_trap "set_hsm_param loop_period $orig_loop_period" EXIT
 	set_hsm_param loop_period 10
+	stack_trap "set_hsm_param grace_delay $orig_grace_delay" EXIT
 	set_hsm_param grace_delay 100
 
 	rm -f $f
 
+	stack_trap "set_hsm_param remove_archive_on_last_unlink 0" EXIT
 	set_hsm_param remove_archive_on_last_unlink 1
 
 	ln "$f3" "$f3"_bis || error "Unable to create hard-link"
@@ -2461,21 +2475,12 @@ test_26a() {
 		"Unexpected archived data remove request for $f"
 	assert_request_count $fid3 REMOVE 0 \
 		"Unexpected archived data remove request for $f3"
-
-	cleanup_test_26a
 }
 run_test 26a "Remove Archive On Last Unlink (RAoLU) policy"
 
-cleanup_test_26b() {
-	trap 0
-	set_hsm_param remove_archive_on_last_unlink 0
-	copytool_cleanup
-}
-
 test_26b() {
-
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -2484,8 +2489,7 @@ test_26b() {
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 
-	trap cleanup_test_26b EXIT
-
+	stack_trap "set_hsm_param remove_archive_on_last_unlink 0" EXIT
 	set_hsm_param remove_archive_on_last_unlink 1
 
 	cdt_shutdown
@@ -2498,29 +2502,19 @@ test_26b() {
 	wait_request_state $fid REMOVE WAITING
 
 	cdt_enable
+
 	# copytool must re-register
 	kill_copytools
 	wait_copytools || error "copytool failed to stop"
-	HSM_ARCHIVE_PURGE=false copytool_setup
+	copytool setup
 
 	wait_request_state $fid REMOVE SUCCEED
-
-	cleanup_test_26b
 }
 run_test 26b "RAoLU policy when CDT off"
 
-cleanup_test_26c() {
-	trap 0
-	set_hsm_param remove_archive_on_last_unlink 0
-	set_hsm_param loop_period $orig_loop_period
-	set_hsm_param grace_delay $orig_grace_delay
-	copytool_cleanup
-}
-
 test_26c() {
-
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -2535,14 +2529,15 @@ test_26c() {
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f2
 	wait_request_state $fid2 ARCHIVE SUCCEED
 
-	trap cleanup_test_26c EXIT
-
 	# set a long grace_delay vs short loop_period
 	local orig_loop_period=$(get_hsm_param loop_period)
 	local orig_grace_delay=$(get_hsm_param grace_delay)
+	stack_trap "set_hsm_param loop_period $orig_loop_period" EXIT
 	set_hsm_param loop_period 10
+	stack_trap "set_hsm_param grace_delay $orig_grace_delay" EXIT
 	set_hsm_param grace_delay 100
 
+	stack_trap "set_hsm_param remove_archive_on_last_unlink 0" EXIT
 	set_hsm_param remove_archive_on_last_unlink 1
 
 	multiop_bg_pause $f O_c || error "open $f failed"
@@ -2563,23 +2558,12 @@ test_26c() {
 	set_hsm_param remove_archive_on_last_unlink 0
 
 	wait_request_state $fid REMOVE SUCCEED
-
-	cleanup_test_26c
 }
 run_test 26c "RAoLU effective when file closed"
 
-cleanup_test_26d() {
-	trap 0
-	set_hsm_param remove_archive_on_last_unlink 0
-	set_hsm_param loop_period $orig_loop_period
-	set_hsm_param grace_delay $orig_grace_delay
-	copytool_cleanup
-}
-
 test_26d() {
-
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -2588,14 +2572,15 @@ test_26d() {
 	$LFS hsm_archive $f || error "could not archive file"
 	wait_request_state $fid ARCHIVE SUCCEED
 
-	trap cleanup_test_26d EXIT
-
 	# set a long grace_delay vs short loop_period
 	local orig_loop_period=$(get_hsm_param loop_period)
 	local orig_grace_delay=$(get_hsm_param grace_delay)
+	stack_trap "set_hsm_param loop_period $orig_loop_period" EXIT
 	set_hsm_param loop_period 10
+	stack_trap "set_hsm_param grace_delay $orig_grace_delay" EXIT
 	set_hsm_param grace_delay 100
 
+	stack_trap "set_hsm_param remove_archive_on_last_unlink 0" EXIT
 	set_hsm_param remove_archive_on_last_unlink 1
 
 	multiop_bg_pause $f O_c || error "multiop failed"
@@ -2613,8 +2598,6 @@ test_26d() {
 
 	kill -USR1 $MULTIPID
 	wait $MULTIPID || error "multiop close failed"
-
-	cleanup_test_26d
 }
 run_test 26d "RAoLU when Client eviction"
 
@@ -2637,7 +2620,7 @@ run_test 27a "Remove the archive of an imported file (Operation not permitted)"
 
 test_27b() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -2651,14 +2634,12 @@ test_27b() {
 	$LFS hsm_remove $f
 
 	[[ $? != 0 ]] || error "Remove of a released file should fail"
-
-	copytool_cleanup
 }
 run_test 27b "Remove the archive of a relased file (Operation not permitted)"
 
 test_28() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -2676,8 +2657,6 @@ test_28() {
 	cdt_enable
 
 	wait_request_state $fid REMOVE SUCCEED
-
-	copytool_cleanup
 }
 run_test 28 "Concurrent archive/file remove"
 
@@ -2685,25 +2664,23 @@ test_29a() {
 	# Tests --mntpath and --archive options
 
 	local archive_id=7
-	copytool_setup $SINGLEAGT $MOUNT $archive_id
+	copytool setup -m "$MOUNT" -a $archive_id
 
 	# Bad archive number
-	$LFS hsm_remove -m $MOUNT -a 33 0x857765760:0x8:0x2 2>&1 |
+	$LFS hsm_remove -m "$MOUNT" -a 33 0x857765760:0x8:0x2 2>&1 |
 		grep "Invalid argument" ||
 		error "unexpected hsm_remove failure (1)"
 
 	# mntpath is present but file is given
-	$LFS hsm_remove --mntpath $MOUNT --archive 30 /qwerty/uyt 2>&1 |
+	$LFS hsm_remove --mntpath "$MOUNT" --archive 30 /qwerty/uyt 2>&1 |
 		grep "hsm: '/qwerty/uyt' is not a valid FID" ||
 		error "unexpected hsm_remove failure (2)"
-
-	copytool_cleanup
 }
 run_test 29a "Tests --mntpath and --archive options"
 
 test_29b() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_small_file $f)
@@ -2715,14 +2692,12 @@ test_29b() {
 
 	$LFS hsm_remove -m $MOUNT -a $HSM_ARCHIVE_NUMBER $fid
 	wait_request_state $fid REMOVE SUCCEED
-
-	copytool_cleanup
 }
 run_test 29b "Archive/delete/remove by FID from the archive."
 
 test_29c() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local fid1=$(create_small_file $DIR/$tdir/$tfile-1)
 	local fid2=$(create_small_file $DIR/$tdir/$tfile-2)
@@ -2744,8 +2719,6 @@ test_29c() {
 	wait_request_state $fid1 REMOVE SUCCEED
 	wait_request_state $fid2 REMOVE SUCCEED
 	wait_request_state $fid3 REMOVE SUCCEED
-
-	copytool_cleanup
 }
 run_test 29c "Archive/delete/remove by FID, using a file list."
 
@@ -2757,14 +2730,11 @@ test_29d() {
 	local file
 	local fid
 
-	copytool_cleanup $(comma_list $(agts_nodes))
-
 	# start all of the copytools
 	for n in $(seq $AGTCOUNT); do
-		copytool_setup agt$n $MOUNT2 $n
+		copytool setup -f agt$n -a $n
 	done
 
-	trap "copytool_cleanup $(comma_list $(agts_nodes))" EXIT
 	# archive files
 	file=$DIR/$tdir/$tfile
 	fid=$(create_small_file $file)
@@ -2807,15 +2777,11 @@ test_29d() {
 		fi
 	done
 
-	[[ $scnt -ne 1 ]] &&
+	[[ $scnt -eq 1 ]] ||
 		error "one and only CT should have removed successfully"
 
-	[[ $AGTCOUNT -ne $((scnt + fcnt)) ]] &&
+	[[ $AGTCOUNT -eq $((scnt + fcnt)) ]] ||
 		error "all but one CT should have failed to remove"
-
-	trap - EXIT
-	copytool_cleanup $(comma_list $(agts_nodes))
-
 }
 run_test 29d "hsm_remove by FID with archive_id 0 for unlinked file cause "\
 	     "request to be sent once for each registered archive_id"
@@ -2858,7 +2824,7 @@ test_30b() {
 	needclients 2 || return 0
 
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/true
@@ -2868,19 +2834,17 @@ test_30b() {
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f
 	$LFS hsm_state $f
+
+	stack_trap cdt_clear_no_retry EXIT
 	# set no retry action mode
 	cdt_set_no_retry
+
 	do_node $CLIENT2 $f
 	local st=$?
 
-	# cleanup
-	# remove no try action mode
-	cdt_clear_no_retry
 	$LFS hsm_state $f
 
 	[[ $st == 0 ]] || error "Failed to exec a released file"
-
-	copytool_cleanup
 }
 run_test 30b "Restore at exec (release case)"
 
@@ -2888,7 +2852,7 @@ test_30c() {
 	needclients 2 || return 0
 
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/SLEEP
@@ -2899,8 +2863,11 @@ test_30c() {
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f
 	check_hsm_flags $f "0x0000000d"
+
+	stack_trap cdt_clear_no_retry EXIT
 	# set no retry action mode
 	cdt_set_no_retry
+
 	do_node $CLIENT2 "$f 10" &
 	local pid=$!
 	sleep 3
@@ -2916,12 +2883,7 @@ test_30c() {
 			error "Binary overwritten during exec"
 	fi
 
-	# cleanup
-	# remove no try action mode
-	cdt_clear_no_retry
 	check_hsm_flags $f "0x00000009"
-
-	copytool_cleanup
 }
 run_test 30c "Update during exec of released file must fail"
 
@@ -2979,7 +2941,7 @@ run_test 31a "Import a large file and check size during restore"
 
 test_31b() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -2994,14 +2956,12 @@ test_31b() {
 	local err=$?
 
 	[[ $err -eq 0 ]] || error "File size changed during restore"
-
-	copytool_cleanup
 }
 run_test 31b "Restore a large unaligned file and check size during restore"
 
 test_31c() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -3016,14 +2976,12 @@ test_31c() {
 	local err=$?
 
 	[[ $err -eq 0 ]] || error "File size changed during restore"
-
-	copytool_cleanup
 }
 run_test 31c "Restore a large aligned file and check size during restore"
 
 test_33() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -3041,6 +2999,7 @@ test_33() {
 	# Also raise grace_delay significantly so the Canceled
 	# Restore action will stay enough long avail.
 	local old_grace=$(get_hsm_param grace_delay)
+	stack_trap "set_hsm_param grace_delay $old_grace" EXIT
 	set_hsm_param grace_delay 100
 
 	md5sum $f >/dev/null &
@@ -3062,9 +3021,6 @@ test_33() {
 	local rstate=$(get_request_state $fid RESTORE)
 	local cstate=$(get_request_state $fid CANCEL)
 
-	# restore orig grace_delay.
-	set_hsm_param grace_delay $old_grace
-
 	if [[ "$rstate" == "CANCELED" ]] ; then
 		[[ "$cstate" == "SUCCEED" ]] ||
 			error "Restore state is CANCELED and Cancel state " \
@@ -3081,14 +3037,12 @@ test_33() {
 
 	[ -z $killed ] ||
 		error "Cannot kill process waiting for restore ($killed)"
-
-	copytool_cleanup
 }
 run_test 33 "Kill a restore waiting process"
 
 test_34() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -3113,14 +3067,12 @@ test_34() {
 	[[ -z $there ]] || error "Restore initiator does not exit"
 
 	wait $pid || error "Restore initiator failed with $?"
-
-	copytool_cleanup
 }
 run_test 34 "Remove file during restore"
 
 test_35() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
 	local f1=$DIR/$tdir/$tfile-1
@@ -3150,14 +3102,12 @@ test_35() {
 
 	fid2=$(path2fid $f)
 	[[ $fid2 == $fid1 ]] || error "Wrong fid after mv $fid2 != $fid1"
-
-	copytool_cleanup
 }
 run_test 35 "Overwrite file during restore"
 
 test_36() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -3183,15 +3133,12 @@ test_36() {
 		error "Restore initiator does not exit"
 
 	wait $pid || error "Restore initiator failed with $?"
-
-	copytool_cleanup
 }
 run_test 36 "Move file during restore"
 
 test_37() {
 	# LU-5683: check that an archived dirty file can be rearchived.
-	copytool_cleanup
-	copytool_setup $SINGLEAGT $MOUNT2
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -3210,8 +3157,6 @@ test_37() {
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
-
-	copytool_cleanup
 }
 run_test 37 "re-archive a dirty file"
 
@@ -3226,12 +3171,6 @@ multi_archive() {
 	echo "$count archive requests submitted"
 }
 
-cleanup_test_40() {
-	trap 0
-	set_hsm_param max_requests $max_requests
-	copytool_cleanup
-}
-
 test_40() {
 	local stream_count=4
 	local file_count=100
@@ -3242,6 +3181,7 @@ test_40() {
 	local fid=""
 	local max_requests=$(get_hsm_param max_requests)
 
+	stack_trap "set_hsm_param max_requests $max_requests" EXIT
 	# Increase the number of HSM request that can be performed in
 	# parallel. With the coordinator running once per second, this
 	# also limits the number of requests per seconds that can be
@@ -3250,20 +3190,14 @@ test_40() {
 	# fail some requests if if gets too many at once.
 	set_hsm_param max_requests 300
 
-	trap cleanup_test_40 EXIT
-
 	for i in $(seq 1 $file_count); do
 		for p in $(seq 1 $stream_count); do
 			fid=$(copy_file /etc/hosts $f.$p.$i)
 		done
 	done
-	# force copytool to use a local/temp archive dir to ensure best
-	# performance vs remote/NFS mounts used in auto-tests
-	if do_facet $SINGLEAGT "df --local $HSM_ARCHIVE" >/dev/null 2>&1 ; then
-		copytool_setup
-	else
-		copytool_setup $SINGLEAGT $MOUNT $HSM_ARCHIVE_NUMBER $TMP/$tdir
-	fi
+
+	copytool setup
+
 	# to be sure wait_all_done will not be mislead by previous tests
 	cdt_purge
 	wait_for_grace_delay
@@ -3277,14 +3211,12 @@ test_40() {
 	wait ${pids[*]}
 	echo OK
 	wait_all_done 100
-
-	cleanup_test_40
 }
 run_test 40 "Parallel archive requests"
 
 test_52() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -3304,14 +3236,12 @@ test_52() {
 	wait $MULTIPID || error "multiop close failed"
 
 	check_hsm_flags $f "0x0000000b"
-
-	copytool_cleanup
 }
 run_test 52 "Opened for write file on an evicted client should be set dirty"
 
 test_53() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -3332,14 +3262,12 @@ test_53() {
 	wait $MULTIPID || error "multiop close failed"
 
 	check_hsm_flags $f "0x00000009"
-
-	copytool_cleanup
 }
 run_test 53 "Opened for read file on an evicted client should not be set dirty"
 
 test_54() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(make_custom_file_for_progress $f 39 1000000)
@@ -3350,6 +3278,7 @@ test_54() {
 
 	check_hsm_flags $f "0x00000001"
 
+	stack_trap "cdt_clear_no_retry" EXIT
 	# Avoid coordinator resending this request as soon it has failed.
 	cdt_set_no_retry
 
@@ -3358,15 +3287,12 @@ test_54() {
 	wait_request_state $fid ARCHIVE FAILED
 
 	check_hsm_flags $f "0x00000003"
-
-	cdt_clear_no_retry
-	copytool_cleanup
 }
 run_test 54 "Write during an archive cancels it"
 
 test_55() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
 	local fid=$(make_custom_file_for_progress $f 39 1000000)
@@ -3377,6 +3303,7 @@ test_55() {
 
 	check_hsm_flags $f "0x00000001"
 
+	stack_trap "cdt_clear_no_retry" EXIT
 	# Avoid coordinator resending this request as soon it has failed.
 	cdt_set_no_retry
 
@@ -3385,15 +3312,12 @@ test_55() {
 	wait_request_state $fid ARCHIVE FAILED
 
 	check_hsm_flags $f "0x00000003"
-
-	cdt_clear_no_retry
-	copytool_cleanup
 }
 run_test 55 "Truncate during an archive cancels it"
 
 test_56() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -3414,8 +3338,6 @@ test_56() {
 	wait_request_state $fid ARCHIVE SUCCEED
 
 	check_hsm_flags $f "0x00000009"
-
-	copytool_cleanup
 }
 run_test 56 "Setattr during an archive is ok"
 
@@ -3424,7 +3346,7 @@ test_57() {
 	needclients 2 || return 0
 
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/test_archive_remote
@@ -3445,8 +3367,6 @@ test_57() {
 		error "hsm_restore failed"
 
 	wait_request_state $fid RESTORE SUCCEED
-
-	copytool_cleanup
 }
 run_test 57 "Archive a file with dirty cache on another node"
 
@@ -3488,7 +3408,7 @@ truncate_released_file() {
 
 test_58() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -3502,8 +3422,6 @@ test_58() {
 
 	echo "truncate to 0"
 	truncate_released_file /etc/passwd 0
-
-	copytool_cleanup
 }
 run_test 58 "Truncate a released file will trigger restore"
 
@@ -3513,14 +3431,13 @@ test_59() {
 	[[ $server_version -lt $(version_code 2.7.63) ]] &&
 		skip "Need MDS version at least 2.7.63" && return
 
-	copytool_setup
+	copytool setup
 	$MCREATE $DIR/$tfile || error "mcreate failed"
 	$TRUNCATE $DIR/$tfile 42 || error "truncate failed"
 	$LFS hsm_archive $DIR/$tfile || error "archive request failed"
 	fid=$(path2fid $DIR/$tfile)
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $DIR/$tfile || error "release failed"
-	copytool_cleanup
 }
 run_test 59 "Release stripeless file with non-zero size"
 
@@ -3531,9 +3448,7 @@ test_60() {
 	local interval=5
 	local progress_timeout=$((interval * 4))
 
-	# test needs a new running copytool
-	copytool_cleanup
-	HSMTOOL_UPDATE_INTERVAL=$interval copytool_setup
+	copytool setup -b 1 --update-interval $interval
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -3554,13 +3469,10 @@ test_60() {
 		error "could not archive file"
 
 	local agent=$(facet_active_host $SINGLEAGT)
-	local prefix=$TESTLOG_PREFIX
-	[[ -z "$TESTNAME" ]] || prefix=$prefix.$TESTNAME
-	local copytool_log=$prefix.copytool_log.$agent.log
-
+	local logfile=$(copytool_logfile $SINGLEAGT)
 
 	wait_update $agent \
-	    "grep -o start.copy $copytool_log" "start copy" 100 ||
+	    "grep -o start.copy \"$logfile\"" "start copy" 100 ||
 		error "copytool failed to start"
 
 	local cmd="$LCTL get_param -n ${mdt}.hsm.active_requests"
@@ -3573,7 +3485,7 @@ test_60() {
 	echo -n "Expecting a progress update within $progress_timeout seconds... "
 	while [ true ]; do
 		RESULT=$(do_node $(facet_active_host $mds) "$cmd")
-		if [ $RESULT -gt 0 ]; then
+		if [ -n "$RESULT" ] && [ "$RESULT" -gt 0 ]; then
 			echo "$RESULT bytes copied in $WAIT seconds."
 			break
 		elif [ $WAIT -ge $progress_timeout ]; then
@@ -3593,17 +3505,14 @@ test_60() {
 	fi
 
 	echo "Wait for on going archive hsm action to complete"
-	wait_update $agent "grep -o copied $copytool_log" "copied" 10 ||
+	wait_update $agent "grep -o copied \"$logfile\"" "copied" 10 ||
 		echo "File archiving not completed even after 10 secs"
-
-	cdt_clear_no_retry
-	copytool_cleanup
 }
 run_test 60 "Changing progress update interval from default"
 
 test_61() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -3613,8 +3522,6 @@ test_61() {
 	rm -f $f
 	cdt_enable
 	wait_request_state $fid ARCHIVE FAILED
-
-	copytool_cleanup
 }
 run_test 61 "Waiting archive of a removed file should fail"
 
@@ -3661,12 +3568,9 @@ run_test 62 "Stopping a copytool should cancel its requests"
 
 test_70() {
 	# test needs a new running copytool
-	copytool_cleanup
+	stack_trap copytool_monitor_cleanup EXIT
 	copytool_monitor_setup
-	HSMTOOL_EVENT_FIFO=$HSMTOOL_MONITOR_DIR/fifo copytool_setup
-
-	# Just start and stop the copytool to generate events.
-	cdt_clear_no_retry
+	copytool setup --event-fifo "$HSMTOOL_MONITOR_DIR/fifo"
 
 	# Wait for the copytool to register.
 	wait_update --verbose $(facet_active_host mds1) \
@@ -3674,7 +3578,8 @@ test_70() {
 		uuid 100 ||
 		error "copytool failed to register with MDT0000"
 
-	copytool_cleanup
+	kill_copytools
+	wait_copytools || error "Copytools failed to stop"
 
 	local REGISTER_EVENT
 	local UNREGISTER_EVENT
@@ -3700,7 +3605,6 @@ test_70() {
 		error "Copytool failed to send unregister event to FIFO"
 	fi
 
-	copytool_monitor_cleanup
 	echo "Register/Unregister events look OK."
 }
 run_test 70 "Copytool logs JSON register/unregister events to FIFO"
@@ -3710,10 +3614,14 @@ test_71() {
 	local interval=5
 
 	# test needs a new running copytool
-	copytool_cleanup
+	stack_trap copytool_monitor_cleanup EXIT
 	copytool_monitor_setup
-	HSMTOOL_UPDATE_INTERVAL=$interval \
-	HSMTOOL_EVENT_FIFO=$HSMTOOL_MONITOR_DIR/fifo copytool_setup
+	copytool setup --update-interval $interval --event-fifo \
+		"$HSMTOOL_MONITOR_DIR/fifo"
+
+	stack_trap "cdt_clear_no_retry" EXIT
+	# Just start and stop the copytool to generate events.
+	cdt_clear_no_retry
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -3778,10 +3686,6 @@ test_71() {
 	fi
 
 	echo "Archive events look OK."
-
-	cdt_clear_no_retry
-	copytool_cleanup
-	copytool_monitor_cleanup
 }
 run_test 71 "Copytool logs JSON archive events to FIFO"
 
@@ -3900,14 +3804,8 @@ test_90() {
 		fid=$(copy_file /etc/hosts $f.$i)
 		echo $f.$i >> $FILELIST
 	done
-	# force copytool to use a local/temp archive dir to ensure best
-	# performance vs remote/NFS mounts used in auto-tests
-	if do_facet $SINGLEAGT "df --local $HSM_ARCHIVE" >/dev/null 2>&1 ; then
-		copytool_setup
-	else
-		local dai=$(get_hsm_param default_archive_id)
-		copytool_setup $SINGLEAGT $MOUNT $dai $TMP/$tdir
-	fi
+
+	copytool setup
 	# to be sure wait_all_done will not be mislead by previous tests
 	cdt_purge
 	wait_for_grace_delay
@@ -3919,7 +3817,6 @@ test_90() {
 	$LFS hsm_restore --filelist $FILELIST ||
 		error "cannot restore a file list"
 	wait_all_done 100
-	copytool_cleanup
 }
 run_test 90 "Archive/restore a file list"
 
@@ -3962,7 +3859,7 @@ run_test 102 "Verify coordinator control"
 
 test_103() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local i=""
 	local fid=""
@@ -3981,15 +3878,12 @@ test_103() {
 			grep -v CANCELED | grep -v SUCCEED | grep -v FAILED")
 
 	[[ -z "$res" ]] || error "Some request have not been canceled"
-
-	copytool_cleanup
 }
 run_test 103 "Purge all requests"
 
 DATA=CEA
 DATAHEX='[434541]'
 test_104() {
-
 	local f=$DIR/$tdir/$tfile
 	local fid
 	fid=$(make_custom_file_for_progress $f 39 1000000)
@@ -4004,28 +3898,19 @@ test_104() {
 		error "Data field in records is ($data1) and not ($DATAHEX)"
 
 	# archive the file
-	copytool_setup
+	copytool setup
 
 	wait_request_state $fid ARCHIVE SUCCEED
-
-	copytool_cleanup
 }
 run_test 104 "Copy tool data field"
-
-cleanup_test_105() {
-	trap 0
-	set_hsm_param max_requests $max_requests
-	copytool_cleanup
-}
 
 test_105() {
 	local max_requests=$(get_hsm_param max_requests)
 	mkdir -p $DIR/$tdir
 	local i=""
 
+	stack_trap "set_hsm_param max_requests $max_requests" EXIT
 	set_hsm_param max_requests 300
-
-	trap cleanup_test_105 EXIT
 
 	cdt_disable
 	for i in $(seq -w 1 10); do
@@ -4046,14 +3931,12 @@ test_105() {
 	[[ "$reqcnt1" == "$reqcnt2" ]] ||
 		error "Requests count after shutdown $reqcnt2 != "\
 		      "before shutdown $reqcnt1"
-
-	cleanup_test_105
 }
 run_test 105 "Restart of coordinator"
 
 test_106() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local uuid=$(get_agent_uuid $(facet_active_host $SINGLEAGT))
 
@@ -4061,20 +3944,20 @@ test_106() {
 
 	search_copytools || error "No copytool found"
 
-	copytool_cleanup
+	kill_copytools
+	wait_copytools || error "Copytool failed to stop"
+
 	check_agent_unregistered $uuid
 
-	copytool_setup
+	copytool setup
 	uuid=$(get_agent_uuid $(facet_active_host $SINGLEAGT))
 	check_agent_registered $uuid
-
-	copytool_cleanup
 }
 run_test 106 "Copytool register/unregister"
 
 test_107() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 	# create and archive file
 	mkdir -p $DIR/$tdir
 	local f1=$DIR/$tdir/$tfile
@@ -4089,7 +3972,6 @@ test_107() {
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f2
 	# main check of this sanity: this request MUST succeed
 	wait_request_state $fid ARCHIVE SUCCEED
-	copytool_cleanup
 }
 run_test 107 "Copytool re-register after MDS restart"
 
@@ -4152,14 +4034,12 @@ test_110a() {
 	[[ $st == 1 ]] ||
 		error "md5sum returns $st != 1, "\
 			"should also perror ENODATA (No data available)"
-
-	copytool_cleanup
 }
 run_test 110a "Non blocking restore policy (import case)"
 
 test_110b() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -4180,8 +4060,6 @@ test_110b() {
 	[[ $st == 1 ]] ||
 		error "md5sum returns $st != 1, "\
 			"should also perror ENODATA (No data available)"
-
-	copytool_cleanup
 }
 run_test 110b "Non blocking restore policy (release case)"
 
@@ -4247,7 +4125,7 @@ run_test 111b "No retry policy (release case), restore will error"\
 
 test_112() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -4258,20 +4136,17 @@ test_112() {
 	echo $l
 	local res=$(echo $l | cut -f 2- -d" " | grep ARCHIVE)
 
-	# cleanup
 	cdt_enable
 	wait_request_state $fid ARCHIVE SUCCEED
 
 	# Test result
 	[[ ! -z "$res" ]] || error "action is $l which is not an ARCHIVE"
-
-	copytool_cleanup
 }
 run_test 112 "State of recorded request"
 
 test_200() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -4287,8 +4162,6 @@ test_200() {
 	cdt_enable
 	wait_request_state $fid ARCHIVE CANCELED
 	wait_request_state $fid CANCEL SUCCEED
-
-	copytool_cleanup
 }
 run_test 200 "Register/Cancel archive"
 
@@ -4317,7 +4190,7 @@ run_test 201 "Register/Cancel restore"
 
 test_202() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -4334,14 +4207,12 @@ test_202() {
 	$LFS hsm_cancel $f
 	cdt_enable
 	wait_request_state $fid REMOVE CANCELED
-
-	copytool_cleanup
 }
 run_test 202 "Register/Cancel remove"
 
 test_220() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -4358,14 +4229,12 @@ test_220() {
 
 	local target=0x0
 	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
-
-	copytool_cleanup
 }
 run_test 220 "Changelog for archive"
 
 test_220a() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -4395,14 +4264,12 @@ test_220a() {
 	# HE_ARCHIVE|ENOENT
 	local target=0x2
 	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
-
-	copytool_cleanup
 }
 run_test 220a "Changelog for failed archive"
 
 test_221() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -4421,8 +4288,6 @@ test_221() {
 
 	local target=0x7d
 	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
-
-	cleanup
 }
 run_test 221 "Changelog for archive canceled"
 
@@ -4447,13 +4312,13 @@ test_222a() {
 	local target=0x80
 	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
 
-	cleanup
+	copytool_cleanup
 }
 run_test 222a "Changelog for explicit restore"
 
 test_222b() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -4472,8 +4337,6 @@ test_222b() {
 
 	local target=0x80
 	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
-
-	cleanup
 }
 run_test 222b "Changelog for implicit restore"
 
@@ -4511,7 +4374,7 @@ test_222c() {
 	local target=0x82
 	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
 
-	cleanup
+	copytool_cleanup
 }
 run_test 222c "Changelog for failed explicit restore"
 
@@ -4539,7 +4402,7 @@ test_222d() {
 	local target=0x82
 	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
 
-	cleanup
+	copytool_cleanup
 }
 run_test 222d "Changelog for failed implicit restore"
 
@@ -4573,7 +4436,7 @@ run_test 223a "Changelog for restore canceled (import case)"
 
 test_223b() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -4596,13 +4459,13 @@ test_223b() {
 	[[ $flags == $target ]] ||
 		error "Changelog flag is $flags not $target"
 
-	cleanup
+	copytool_cleanup
 }
 run_test 223b "Changelog for restore canceled (release case)"
 
 test_224() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -4621,8 +4484,6 @@ test_224() {
 	local target=0x200
 	[[ $flags == $target ]] ||
 		error "Changelog flag is $flags not $target"
-
-	cleanup
 }
 run_test 224 "Changelog for remove"
 
@@ -4669,7 +4530,7 @@ run_test 224a "Changelog for failed remove"
 
 test_225() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	# test is not usable because remove request is too fast
 	# so it is always finished before cancel can be done ...
@@ -4701,14 +4562,12 @@ test_225() {
 	local target=0x27d
 	[[ $flags == $target ]] ||
 		error "Changelog flag is $flags not $target"
-
-	cleanup
 }
 run_test 225 "Changelog for remove canceled"
 
 test_226() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -4741,8 +4600,6 @@ test_226() {
 	target=0x3
 	[[ $flags == $target ]] ||
 		error "Changelog flag is $flags not $target"
-
-	cleanup
 }
 run_test 226 "changelog for last rm/mv with exiting archive"
 
@@ -4780,7 +4637,7 @@ check_flags_changes() {
 
 test_227() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 	changelog_setup
 
 	mkdir -p $DIR/$tdir
@@ -4798,14 +4655,12 @@ test_227() {
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 	check_flags_changes $f $fid lost 3 1
-
-	cleanup
 }
 run_test 227 "changelog when explicit setting of HSM flags"
 
 test_228() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local fid=$(create_small_sync_file $DIR/$tfile)
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $DIR/$tfile
@@ -4835,13 +4690,12 @@ test_228() {
 
 	rm -f $DIR/$tfile $DIR/$tfile.2 ||
 		error "rm $DIR/$tfile or $DIR/$tfile.2 failed"
-	copytool_cleanup
 }
 run_test 228 "On released file, return extend to FIEMAP. For [cp,tar] --sparse"
 
 test_250() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local maxrequest=$(get_hsm_param max_requests)
@@ -4872,14 +4726,12 @@ test_250() {
 			grep WAITING | wc -l")
 		echo "max=$maxrequest started=$cnt waiting=$wt"
 	done
-
-	copytool_cleanup
 }
 run_test 250 "Coordinator max request"
 
 test_251() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -4907,14 +4759,12 @@ test_251() {
 
 	set_hsm_param active_request_timeout $old_to
 	set_hsm_param loop_period $old_loop
-
-	copytool_cleanup
 }
 run_test 251 "Coordinator request timeout"
 
 test_252() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -4922,11 +4772,13 @@ test_252() {
 
 	cdt_disable
 	# to have a short test
-	local old_to=$(get_hsm_param active_request_timeout)
+	local old_timeout=$(get_hsm_param active_request_timeout)
+	stack_trap "set_hsm_param active_request_timeout $old_timeout" EXIT
 	set_hsm_param active_request_timeout 20
 	# to be sure the cdt will wake up frequently so
 	# it will be able to cancel the "old" request
-	local old_loop=$(get_hsm_param loop_period)
+	local old_loop_period=$(get_hsm_param loop_period)
+	stack_trap "set_hsm_param loop_period $old_loop_period" EXIT
 	set_hsm_param loop_period 2
 	cdt_enable
 
@@ -4941,18 +4793,13 @@ test_252() {
 	# wait but less than active_request_timeout+grace_delay
 	sleep 25
 	wait_request_state $fid ARCHIVE CANCELED
-
-	set_hsm_param active_request_timeout $old_to
-	set_hsm_param loop_period $old_loop
-
-	copytool_cleanup
 }
 run_test 252 "Timeout'ed running archive of a removed file should be canceled"
 
 test_253() {
 	local rc
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -4980,7 +4827,6 @@ test_253() {
 	else
 		echo "could not release file"
 	fi
-	copytool_cleanup
 }
 run_test 253 "Check for wrong file size after release"
 
@@ -5055,7 +4901,7 @@ run_test 302 "HSM tunnable are persistent when CDT is off"
 test_400() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -5063,7 +4909,9 @@ test_400() {
 	local dir_mdt1=$DIR/$tdir/mdt1
 
 	# create 1 dir per MDT
+	stack_trap "rm -rf $dir_mdt0"
 	$LFS mkdir -i 0 $dir_mdt0 || error "lfs mkdir"
+	stack_trap "rm -rf $dir_mdt1"
 	$LFS mkdir -i 1 $dir_mdt1 || error "lfs mkdir"
 
 	# create 1 file in each MDT
@@ -5079,17 +4927,13 @@ test_400() {
 	$LFS hsm_archive $dir_mdt1/$tfile || error "lfs hsm_archive"
 	wait_request_state $fid2 ARCHIVE SUCCEED 1 &&
 		echo "archive successful on mdt1"
-
-	copytool_cleanup
-	# clean test files and directories
-	rm -rf $dir_mdt0 $dir_mdt1
 }
 run_test 400 "Single request is sent to the right MDT"
 
 test_401() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -5097,7 +4941,9 @@ test_401() {
 	local dir_mdt1=$DIR/$tdir/mdt1
 
 	# create 1 dir per MDT
+	stack_trap "rm -rf $dir_mdt0" EXIT
 	$LFS mkdir -i 0 $dir_mdt0 || error "lfs mkdir"
+	stack_trap "rm -rf $dir_mdt1" EXIT
 	$LFS mkdir -i 1 $dir_mdt1 || error "lfs mkdir"
 
 	# create 1 file in each MDT
@@ -5111,10 +4957,6 @@ test_401() {
 		echo "archive successful on mdt0"
 	wait_request_state $fid2 ARCHIVE SUCCEED 1 &&
 		echo "archive successful on mdt1"
-
-	copytool_cleanup
-	# clean test files and directories
-	rm -rf $dir_mdt0 $dir_mdt1
 }
 run_test 401 "Compound requests split and sent to their respective MDTs"
 
@@ -5133,13 +4975,10 @@ mdc_change_state() # facet, MDT_pattern, activate|deactivate
 }
 
 test_402a() {
-	# make sure there is no running copytool
-	copytool_cleanup
-
 	# deactivate all mdc on agent1
 	mdc_change_state $SINGLEAGT "$FSNAME-MDT000." "deactivate"
 
-	HSMTOOL_NOERROR=true copytool_setup $SINGLEAGT
+	copytool setup --no-fail
 
 	check_agent_unregistered "uuid" # match any agent
 
@@ -5152,7 +4991,7 @@ test_402a() {
 run_test 402a "Copytool start fails if all MDTs are inactive"
 
 test_402b() {
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -5173,23 +5012,18 @@ test_402b() {
 
 	# request should succeed now
 	wait_request_state $fid ARCHIVE SUCCEED
-
-	copytool_cleanup
 }
 run_test 402b "CDT must retry request upon slow start of CT"
 
 test_403() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
-	# make sure there is no running copytool
-	copytool_cleanup
-
         local agent=$(facet_active_host $SINGLEAGT)
 
 	# deactivate all mdc for MDT0001
 	mdc_change_state $SINGLEAGT "$FSNAME-MDT0001" "deactivate"
 
-	copytool_setup
+	copytool setup
 	local uuid=$(get_agent_uuid $agent)
 	# check the agent is registered on MDT0000, and not on MDT0001
 	check_agent_registered_by_mdt $uuid 0
@@ -5203,20 +5037,19 @@ test_403() {
 
 	# make sure the copytool is now registered to all MDTs
 	check_agent_registered $uuid
-
-	copytool_cleanup
 }
 run_test 403 "Copytool starts with inactive MDT and register on reconnect"
 
 test_404() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
-	copytool_setup
+	copytool setup
 
 	# create files on both MDT0000 and MDT0001
 	mkdir -p $DIR/$tdir
 
 	local dir_mdt0=$DIR/$tdir/mdt0
+	stack_trap "rm -rf $dir_mdt0" EXIT
 	$LFS mkdir -i 0 $dir_mdt0 || error "lfs mkdir"
 
 	# create 1 file on mdt0
@@ -5234,17 +5067,13 @@ test_404() {
 
 	# reactivate all mdc for MDT0001
 	mdc_change_state $SINGLEAGT "$FSNAME-MDT0001" "activate"
-
-	copytool_cleanup
-	# clean test files and directories
-	rm -rf $dir_mdt0
 }
 run_test 404 "Inactive MDT does not block requests for active MDTs"
 
 test_405() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -5286,8 +5115,6 @@ test_405() {
 	cat $striped_dir/${tfile}_1 > /dev/null || error "cat ${tfile}_1 failed"
 	cat $striped_dir/${tfile}_2 > /dev/null || error "cat ${tfile}_2 failed"
 	cat $striped_dir/${tfile}_3 > /dev/null || error "cat ${tfile}_3 failed"
-
-	copytool_cleanup
 }
 run_test 405 "archive and release under striped directory"
 
@@ -5300,9 +5127,10 @@ test_406() {
 	local fid
 	local mdt_index
 
-	copytool_setup
 	fid=$(create_small_file $DIR/$tdir/$tfile)
 	echo "old fid $fid"
+
+	copytool setup
 
 	$LFS hsm_archive $DIR/$tdir/$tfile
 	wait_request_state "$fid" ARCHIVE SUCCEED
@@ -5345,15 +5173,13 @@ test_406() {
 
 	cat $DIR/$tdir/$tfile > /dev/null ||
 		error "cannot read $DIR/$tdir/$tfile"
-
-	copytool_cleanup
 }
 run_test 406 "attempting to migrate HSM archived files is safe"
 
 test_407() {
 	needclients 2 || return 0
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -5385,7 +5211,6 @@ test_407() {
 	fail $SINGLEMDS
 
 	wait_request_state $fid RESTORE SUCCEED
-	copytool_cleanup
 }
 run_test 407 "Check for double RESTORE records in llog"
 
@@ -5393,9 +5218,6 @@ test_500()
 {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.92) ] &&
 		skip "HSM migrate is not supported" && return
-
-	# Stop the existing copytool
-	copytool_cleanup
 
 	test_mkdir -p $DIR/$tdir
 	llapi_hsm_test -d $DIR/$tdir || error "One llapi HSM test failed"
