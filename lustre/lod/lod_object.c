@@ -2681,6 +2681,67 @@ unlock:
 }
 
 /**
+ * Convert a plain file lov_mds_md to a composite layout.
+ *
+ * \param[in,out] info	the thread info::lti_ea_store buffer contains little
+ *			endian plain file layout
+ *
+ * \retval		0 on success, <0 on failure
+ */
+static int lod_layout_convert(struct lod_thread_info *info)
+{
+	struct lov_mds_md *lmm = info->lti_ea_store;
+	struct lov_mds_md *lmm_save;
+	struct lov_comp_md_v1 *lcm;
+	struct lov_comp_md_entry_v1 *lcme;
+	size_t size;
+	__u32 blob_size;
+	int rc = 0;
+	ENTRY;
+
+	/* realloc buffer to a composite layout which contains one component */
+	blob_size = lov_mds_md_size(le16_to_cpu(lmm->lmm_stripe_count),
+				    le32_to_cpu(lmm->lmm_magic));
+	size = sizeof(*lcm) + sizeof(*lcme) + blob_size;
+
+	OBD_ALLOC_LARGE(lmm_save, blob_size);
+	if (!lmm_save)
+		GOTO(out, rc = -ENOMEM);
+
+	memcpy(lmm_save, lmm, blob_size);
+
+	if (info->lti_ea_store_size < size) {
+		rc = lod_ea_store_resize(info, size);
+		if (rc)
+			GOTO(out, rc);
+	}
+
+	lcm = info->lti_ea_store;
+	lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
+	lcm->lcm_size = cpu_to_le32(size);
+	lcm->lcm_layout_gen = cpu_to_le32(le16_to_cpu(
+						lmm_save->lmm_layout_gen));
+	lcm->lcm_flags = cpu_to_le16(LCM_FL_NOT_FLR);
+	lcm->lcm_entry_count = cpu_to_le16(1);
+	lcm->lcm_mirror_count = 0;
+
+	lcme = &lcm->lcm_entries[0];
+	lcme->lcme_flags = cpu_to_le32(LCME_FL_INIT);
+	lcme->lcme_extent.e_start = 0;
+	lcme->lcme_extent.e_end = cpu_to_le64(OBD_OBJECT_EOF);
+	lcme->lcme_offset = cpu_to_le32(sizeof(*lcm) + sizeof(*lcme));
+	lcme->lcme_size = cpu_to_le32(blob_size);
+
+	memcpy((char *)lcm + lcme->lcme_offset, (char *)lmm_save, blob_size);
+
+	EXIT;
+out:
+	if (lmm_save)
+		OBD_FREE_LARGE(lmm_save, blob_size);
+	return rc;
+}
+
+/**
  * Merge layouts to form a mirrored file.
  */
 static int lod_declare_layout_merge(const struct lu_env *env,
@@ -2724,9 +2785,22 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 		RETURN(rc ? : -ENODATA);
 
 	cur_lcm = info->lti_ea_store;
-	if (le32_to_cpu(cur_lcm->lcm_magic) != LOV_MAGIC_COMP_V1)
-		RETURN(-EINVAL);
+	switch (le32_to_cpu(cur_lcm->lcm_magic)) {
+	case LOV_MAGIC_V1:
+	case LOV_MAGIC_V3:
+		rc = lod_layout_convert(info);
+		break;
+	case LOV_MAGIC_COMP_V1:
+		rc = 0;
+		break;
+	default:
+		rc = -EINVAL;
+	}
+	if (rc)
+		RETURN(rc);
 
+	/* info->lti_ea_store could be reallocated in lod_layout_convert() */
+	cur_lcm = info->lti_ea_store;
 	cur_entry_count = le16_to_cpu(cur_lcm->lcm_entry_count);
 
 	/* 'lcm_mirror_count + 1' is the current # of mirrors the file has */

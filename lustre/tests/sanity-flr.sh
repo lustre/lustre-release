@@ -372,7 +372,6 @@ test_0d() {
 	$mirror_cmd -N $tf &> /dev/null && error "$tf does not exist"
 
 	# create a non-mirrored file, convert it to a mirrored file and extend
-	if false; then
 	touch $tf || error "touch $tf failed"
 	$mirror_cmd -N $tf || error "convert and extend $tf failed"
 	verify_mirror_count $tf 2
@@ -381,7 +380,6 @@ test_0d() {
 		verify_comp_attrs_with_parent $tf ${ids[$i]}
 		verify_comp_extent $tf ${ids[$i]} 0 EOF
 	done
-	fi
 
 	# create a mirrored file and extend it
 	$LFS mirror create -N $tf-1 || error "create mirrored file $tf-1 failed"
