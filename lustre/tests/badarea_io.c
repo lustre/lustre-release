@@ -4,6 +4,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#undef perror
+#define perror(str) ((void)0)
+
 int main(int argc, char **argv)
 {
 	int rc;

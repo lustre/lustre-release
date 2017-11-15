@@ -10063,7 +10063,7 @@ test_133g() {
 		-type f \
 		-not -name force_lbug \
 		-not -name changelog_mask \
-		-exec badarea_io '{}' \; &> /dev/null ||
+		-exec badarea_io '{}' \; ||
 		error "find $proc_dirs failed"
 
 	local facet
@@ -10078,7 +10078,7 @@ test_133g() {
 			-type f \
 			-not -name force_lbug \
 			-not -name changelog_mask \
-			-exec badarea_io '{}' \\\; &> /dev/null ||
+			-exec badarea_io '{}' \\\; ||
 				error "$facet find $facet_proc_dirs failed"
 	done
 
