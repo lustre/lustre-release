@@ -110,15 +110,6 @@ init_agt_vars() {
 	export HSMTOOL_EVENT_FIFO=${HSMTOOL_EVENT_FIFO:=""}
 	export HSMTOOL_TESTDIR
 	export HSMTOOL_BASE=$(basename "$HSMTOOL" | cut -f1 -d" ")
-	# $hsm_root/$HSMTMP Makes $hsm_root dir path less generic to ensure
-	# rm -rf $hsm_root/* is safe even if $hsm_root becomes unset to avoid
-	# deleting everything in filesystem, independent of any copytool.
-	export HSMTMP=${HSMTMP:-"shsm"}
-
-	HSM_ARCHIVE=$(copytool_device $SINGLEAGT)
-
-	[ -z "${HSM_ARCHIVE// /}" ] && error "HSM_ARCHIVE is empty!"
-	HSM_ARCHIVE=$HSM_ARCHIVE/$HSMTMP
 
 	HSM_ARCHIVE_NUMBER=2
 
@@ -139,13 +130,6 @@ copytool_device() {
 	local dev=AGTDEV$(facet_number $facet)
 
 	echo -n ${!dev}
-}
-
-# Stop copytool and unregister an existing changelog user.
-cleanup() {
-	copytool_monitor_cleanup
-	copytool_cleanup
-	cdt_set_sanity_policy
 }
 
 get_mdt_devices() {
@@ -256,6 +240,17 @@ copytool_monitor_cleanup() {
 	fi
 }
 
+fid2archive()
+{
+	local fid="$1"
+
+	case "$HSMTOOL" in
+	lhsmtool_posix)
+		printf "%s" "$(hsm_root)/*/*/*/*/*/*/$fid"
+		;;
+	esac
+}
+
 copytool_logfile()
 {
 	local host="$(facet_host "$1")"
@@ -263,6 +258,18 @@ copytool_logfile()
 	[ -n "$TESTNAME" ] && prefix+=.$TESTNAME
 
 	printf "${prefix}.copytool${archive_id}_log.${host}.log"
+}
+
+__lhsmtool_rebind()
+{
+	do_facet $facet $HSMTOOL -p "$hsm_root" --rebind "$@" "$mountpoint"
+}
+
+__lhsmtool_import()
+{
+	mkdir -p "$(dirname "$2")" ||
+		error "cannot create directory '$(dirname "$2")'"
+	do_facet $facet $HSMTOOL -p "$hsm_root" --import "$@" "$mountpoint"
 }
 
 __lhsmtool_setup()
@@ -285,6 +292,18 @@ hsm_root() {
 	printf "$(copytool_device "$facet")/${TESTSUITE}.${TESTNAME}/"
 }
 
+# Main entry point to perform copytool related operations
+#
+# Sub-commands:
+#
+#	setup	setup a copytool to run in the background, that copytool will be
+#		killed on EXIT
+#	import	import a file from an HSM backend
+#	rebind	rebind an archived file to a new fid
+#
+# Although the semantics might suggest otherwise, one does not need to 'setup'
+# a copytool before a call to 'copytool import' or 'copytool rebind'.
+#
 copytool()
 {
 	local action=$1
@@ -327,9 +346,9 @@ copytool()
 	local mountpoint="${mountpoint:-${MOUNT2:-$MOUNT}}"
 	local hsm_root="$(hsm_root "$facet")"
 
-	stack_trap "do_facet $facet \"rm -rf \\\"$hsm_root\\\"\"" EXIT
-	do_facet $facet "mkdir -p \"$hsm_root\"" ||
-		error "mkdir \"$hsm_root\" failed"
+	stack_trap "do_facet $facet rm -rf '$hsm_root'" EXIT
+	do_facet $facet mkdir -p "$hsm_root" ||
+		error "mkdir '$hsm_root' failed"
 
 	case "$HSMTOOL" in
 	lhsmtool_posix)
@@ -346,54 +365,17 @@ copytool()
 			local host="$(facet_host $facet)"
 			error_msg="Failed to start copytool $facet on '$host'"
 			;;
+		import)
+			local src="${misc_options[0]}"
+			local dest="${misc_options[1]}"
+			error_msg="Failed to import '$src' to '$dest'"
+			;;
+		rebind)
+			error_msg="could not rebind file"
+			;;
 		esac
 
 		$fail_on_error && error "$error_msg" || echo "$error_msg"
-	fi
-}
-
-copytool_setup() {
-	local facet=${1:-$SINGLEAGT}
-	# Use MOUNT2 by default if defined
-	local lustre_mntpnt=${2:-${MOUNT2:-$MOUNT}}
-	local arc_id=$3
-	local hsm_root=${4:-$(copytool_device $facet)}
-
-	[ -z "${hsm_root// /}" ] && error "copytool_setup: hsm_root empty!"
-
-	local agent=$(facet_active_host $facet)
-
-	if $HSM_ARCHIVE_PURGE; then
-		echo "Purging archive on $agent"
-		do_facet $facet "rm -rf $hsm_root/$HSMTMP/*"
-	fi
-
-	echo "Starting copytool $facet on $agent"
-	do_facet $facet "mkdir -p $hsm_root/$HSMTMP/" ||
-			error "mkdir '$hsm_root/$HSMTMP' failed"
-	# bandwidth is limited to 1MB/s so the copy time is known and
-	# independent of hardware
-	local cmd="$HSMTOOL $HSMTOOL_VERBOSE --daemon"
-	cmd+=" --hsm-root $hsm_root/$HSMTMP"
-	[[ -z "$arc_id" ]] || cmd+=" --archive $arc_id"
-	[[ -z "$HSMTOOL_UPDATE_INTERVAL" ]] ||
-		cmd+=" --update-interval $HSMTOOL_UPDATE_INTERVAL"
-	[[ -z "$HSMTOOL_EVENT_FIFO" ]] ||
-		cmd+=" --event-fifo $HSMTOOL_EVENT_FIFO"
-	cmd+=" --bandwidth 1 $lustre_mntpnt"
-
-	# Redirect the standard output and error to a log file which
-	# can be uploaded to Maloo.
-	local prefix=$TESTLOG_PREFIX
-	[[ -z "$TESTNAME" ]] || prefix=$prefix.$TESTNAME
-	local copytool_log=$prefix.copytool${arc_id}_log.$agent.log
-
-	stack_trap cleanup EXIT
-	do_facet $facet "$cmd < /dev/null > $copytool_log 2>&1"
-	if [[ $? !=  0 ]]; then
-		[[ $HSMTOOL_NOERROR == true ]] ||
-			error "start copytool $facet on $agent failed"
-		echo "start copytool $facet on $agent failed"
 	fi
 }
 
@@ -406,66 +388,6 @@ get_copytool_event_log() {
 
 	do_node $agent "cat $HSMTOOL_MONITOR_DIR/events" ||
 		error "Could not collect event log from $agent"
-}
-
-copytool_cleanup() {
-	trap - EXIT
-	local agt_facet=$SINGLEAGT
-	local agt_hosts=${1:-$(facet_active_host $agt_facet)}
-	local hsm_root=$(copytool_device $agt_facet)
-
-	[ -z "${hsm_root// /}" ] && error "copytool_cleanup: hsm_root empty!"
-
-	local i
-	local facet
-	local param
-	local -a state
-
-	kill_copytools $agt_hosts
-	wait_copytools $agt_hosts || error "copytools failed to stop"
-
-	# Clean all CDTs orphans requests from previous tests that
-	# would otherwise need to timeout to clear.
-	for ((i = 0; i < MDSCOUNT; i++)); do
-		facet=mds$((i + 1))
-		param=$(printf 'mdt.%s-MDT%04x.hsm_control' $FSNAME $i)
-		state[$i]=$(do_facet $facet "$LCTL get_param -n $param")
-
-		# Skip already stopping or stopped CDTs.
-		[[ "${state[$i]}" =~ ^stop ]] && continue
-
-		do_facet $facet "$LCTL set_param $param=shutdown"
-	done
-
-	for ((i = 0; i < MDSCOUNT; i++)); do
-		# Only check and restore CDTs that we stopped in the first loop.
-		[[ "${state[$i]}" =~ ^stop ]] && continue
-
-		facet=mds$((i + 1))
-		param=$(printf 'mdt.%s-MDT%04x.hsm_control' $FSNAME $i)
-
-		wait_result $facet "$LCTL get_param -n $param" stopped 20 ||
-			error "$facet CDT state is not stopped"
-
-		# Restore old CDT state.
-		do_facet $facet "$LCTL set_param $param=${state[$i]}"
-	done
-
-	for ((i = 0; i < MDSCOUNT; i++)); do
-		# Only check CDTs that we stopped in the first loop.
-		[[ "${state[$i]}" =~ ^stop ]] && continue
-
-		facet=mds$((i + 1))
-		param=$(printf 'mdt.%s-MDT%04x.hsm_control' $FSNAME $i)
-
-		# Check that the old CDT state was restored.
-		wait_result $facet "$LCTL get_param -n $param" "${state[$i]}" \
-			20 || error "$facet CDT state is not '${state[$i]}'"
-	done
-
-	if do_facet $agt_facet "df $hsm_root" >/dev/null 2>&1 ; then
-		do_facet $agt_facet "rm -rf $hsm_root/$HSMTMP/*"
-	fi
 }
 
 copytool_suspend() {
@@ -484,19 +406,9 @@ copytool_continue() {
 
 copytool_remove_backend() {
 	local fid=$1
-	local be=$(do_facet $SINGLEAGT find $HSM_ARCHIVE -name $fid)
+	local be=$(do_facet $SINGLEAGT find "$(hsm_root)" -name $fid)
 	echo "Remove from backend: $fid = $be"
 	do_facet $SINGLEAGT rm -f $be
-}
-
-import_file() {
-	mkdir -p "$(dirname "$2")" ||
-		error "cannot create directory '$(dirname "$2")'"
-
-	do_facet $SINGLEAGT \
-		"$HSMTOOL --archive $HSM_ARCHIVE_NUMBER --hsm-root $HSM_ARCHIVE\
-		--import $1 $2 $MOUNT" ||
-		error "import of $1 to $2 failed"
 }
 
 file_creation_failure() {
@@ -564,7 +476,7 @@ create_small_sync_file() {
 }
 
 create_archive_file() {
-	local file="$HSM_ARCHIVE/$1"
+	local file="$(hsm_root)/$1"
 	local count=${2:-39}
 	local source=/dev/urandom
 
@@ -577,9 +489,14 @@ create_archive_file() {
 }
 
 copy2archive() {
-	local file=$HSM_ARCHIVE/$2
-	do_facet $SINGLEAGT mkdir -p $(dirname $file)
-	do_facet $SINGLEAGT cp -p $1 $file || error "cannot copy $1 to $file"
+	local hsm_root="$(hsm_root)"
+	local file="$hsm_root/$2"
+
+	stack_trap "do_facet $SINGLEAGT rm -rf '$hsm_root'" EXIT
+	do_facet $SINGLEAGT mkdir -p "$(dirname "$file")" ||
+	    error "mkdir '$(dirname "$file")' failed"
+	do_facet $SINGLEAGT cp -p "$1" "$file" ||
+		error "cannot copy '$1' to '$file'"
 }
 
 mdts_set_param() {
@@ -1286,7 +1203,7 @@ run_test 9a "Multiple remote agents"
 
 test_10a() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir/d1
 	local f=$DIR/$tdir/$tfile
@@ -1295,10 +1212,13 @@ test_10a() {
 		error "hsm_archive failed"
 	wait_request_state $fid ARCHIVE SUCCEED
 
-	local AFILE=$(do_facet $SINGLEAGT ls $HSM_ARCHIVE'/*/*/*/*/*/*/'$fid) ||
-		error "fid $fid not in archive $HSM_ARCHIVE"
+	local hsm_root="$(copytool_device $SINGLEAGT)"
+	local archive="$(do_facet $SINGLEAGT \
+			 find "$hsm_root" -name "$fid" -print0)"
+	[ -n "$archive" ] || error "fid '$fid' not in archive '$hsm_root'"
+
 	echo "Verifying content"
-	do_facet $SINGLEAGT diff $f $AFILE || error "archived file differs"
+	do_facet $SINGLEAGT diff $f $archive || error "archived file differs"
 	echo "Verifying hsm state "
 	check_hsm_flags $f "0x00000009"
 
@@ -1306,8 +1226,6 @@ test_10a() {
 	local st=$(get_hsm_archive_id $f)
 	[[ $st == $HSM_ARCHIVE_NUMBER ]] ||
 		error "Wrong archive number, $st != $HSM_ARCHIVE_NUMBER"
-
-	copytool_cleanup
 }
 run_test 10a "Archive a file"
 
@@ -1363,12 +1281,12 @@ test_11a() {
 	copy2archive /etc/hosts $tdir/$tfile
 	local f=$DIR/$tdir/$tfile
 
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 	echo -n "Verifying released state: "
 	check_hsm_flags $f "0x0000000d"
 
 	local LSZ=$(stat -c "%s" $f)
-	local ASZ=$(do_facet $SINGLEAGT stat -c "%s" $HSM_ARCHIVE/$tdir/$tfile)
+	local ASZ=$(do_facet $SINGLEAGT stat -c "%s" "$(hsm_root)/$tdir/$tfile")
 
 	echo "Verifying imported size $LSZ=$ASZ"
 	[[ $LSZ -eq $ASZ ]] || error "Incorrect size $LSZ != $ASZ"
@@ -1379,14 +1297,14 @@ test_11a() {
 	local fid=$(path2fid $f)
 	echo "Verifying new fid $fid in archive"
 
-	local AFILE=$(do_facet $SINGLEAGT ls $HSM_ARCHIVE'/*/*/*/*/*/*/'$fid) ||
-		error "fid $fid not in archive $HSM_ARCHIVE"
+	do_facet $SINGLEAGT "[ -f \"$(fid2archive "$fid")\" ]" ||
+		error "No archive for fid $fid"
 }
 run_test 11a "Import a file"
 
 test_11b() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -1398,25 +1316,23 @@ test_11b() {
 	local FILE_HASH=$(md5sum $f)
 	rm -f $f
 
-	import_file $fid $f
+	copytool import $fid $f
 
 	echo "$FILE_HASH" | md5sum -c
 
 	[[ $? -eq 0 ]] || error "Restored file differs"
-
-	copytool_cleanup
 }
 run_test 11b "Import a deleted file using its FID"
 
 test_12a() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	copy2archive /etc/hosts $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 	local f2=$DIR2/$tdir/$tfile
 	echo "Verifying released state: "
 	check_hsm_flags $f2 "0x0000000d"
@@ -1428,23 +1344,21 @@ test_12a() {
 	echo "Verifying file state: "
 	check_hsm_flags $f2 "0x00000009"
 
-	do_facet $SINGLEAGT diff -q $HSM_ARCHIVE/$tdir/$tfile $f
+	do_facet $SINGLEAGT diff -q $(hsm_root)/$tdir/$tfile $f
 
 	[[ $? -eq 0 ]] || error "Restored file differs"
-
-	copytool_cleanup
 }
 run_test 12a "Restore an imported file explicitly"
 
 test_12b() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	copy2archive /etc/hosts $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 	echo "Verifying released state: "
 	check_hsm_flags $f "0x0000000d"
 
@@ -1453,11 +1367,9 @@ test_12b() {
 	echo "Verifying file state after restore: "
 	check_hsm_flags $f "0x00000009"
 
-	do_facet $SINGLEAGT diff -q $HSM_ARCHIVE/$tdir/$tfile $f
+	do_facet $SINGLEAGT diff -q $(hsm_root)/$tdir/$tfile $f
 
 	[[ $? -eq 0 ]] || error "Restored file differs"
-
-	copytool_cleanup
 }
 run_test 12b "Restore an imported file implicitly"
 
@@ -1514,7 +1426,7 @@ test_12e() {
 	# test needs a running copytool
 	copytool setup
 
-	mkdir -p $DIR/$tdir $HSM_ARCHIVE/$tdir
+	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/hosts $f)
 	$LFS hsm_archive $f || error "archive request failed"
@@ -1619,20 +1531,18 @@ run_test 12m "Archive/release/implicit restore"
 
 test_12n() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	copy2archive /etc/hosts $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 
 	do_facet $SINGLEAGT cmp /etc/hosts $f ||
 		error "Restored file differs"
 
 	$LFS hsm_release $f || error "release of $f failed"
-
-	copytool_cleanup
 }
 run_test 12n "Import/implicit restore/release"
 
@@ -1703,10 +1613,6 @@ test_12p() {
 }
 run_test 12p "implicit restore of a file on copytool mount point"
 
-cleanup_test_12q() {
-		error "cannot umount $MOUNT3 on $SINGLEAGT"
-}
-
 test_12q() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.58) ] &&
 		skip "need MDS version at least 2.7.58" && return 0
@@ -1767,46 +1673,40 @@ test_12q() {
 run_test 12q "file attributes are refreshed after restore"
 
 test_13() {
-	# test needs a running copytool
-	copytool_setup
+	local -i i j k=0
+	for i in {1..10}; do
+		local archive_dir="$(hsm_root)"/subdir/dir.$i
 
-	local ARC_SUBDIR="import.orig"
-	local d=""
-	local f=""
+		do_facet $SINGLEAGT mkdir -p "$archive_dir"
+		for j in {1..10}; do
+			local archive_file="$archive_dir"/file.$j
 
-	# populate directory to be imported
-	for d in $(seq 1 10); do
-		local CURR_DIR="$HSM_ARCHIVE/$ARC_SUBDIR/dir.$d"
-		do_facet $SINGLEAGT mkdir -p "$CURR_DIR"
-		for f in $(seq 1 10); do
-			CURR_FILE="$CURR_DIR/$tfile.$f"
-			# write file-specific data
-			do_facet $SINGLEAGT \
-				"echo d=$d, f=$f, dir=$CURR_DIR, "\
-					"file=$CURR_FILE > $CURR_FILE"
+			do_facet $SINGLEAGT "echo $k > \"$archive_dir\"/file.$j"
+			k+=1
 		done
 	done
+
 	# import to Lustre
-	import_file "$ARC_SUBDIR" $DIR/$tdir
-	# diff lustre content and origin (triggers file restoration)
-	# there must be 10x10 identical files, and no difference
-	local cnt_ok=$(do_facet $SINGLEAGT diff -rs $HSM_ARCHIVE/$ARC_SUBDIR \
-		       $DIR/$tdir/$ARC_SUBDIR | grep identical | wc -l)
-	local cnt_diff=$(do_facet $SINGLEAGT diff -r $HSM_ARCHIVE/$ARC_SUBDIR \
-			 $DIR/$tdir/$ARC_SUBDIR | wc -l)
+	copytool import "subdir" "$DIR/$tdir"
 
-	[ $cnt_diff -eq 0 ] ||
-		error "$cnt_diff imported files differ from read data"
-	[ $cnt_ok -eq 100 ] ||
-		error "not enough identical files ($cnt_ok != 100)"
+	# To check the import, the test uses diff with the -r flag
+	# This is nice, but diff only checks files one by one, and triggering
+	# an implicit restore for one file at a time will consume as many
+	# seconds as there are files to compare. To speed this up, a restore
+	# operation is triggered manually first.
+	copytool setup
+	find "$DIR/$tdir"/subdir -type f -exec $LFS hsm_restore {} \;
 
-	copytool_cleanup
+	# Compare the imported data
+	do_facet $SINGLEAGT \
+		diff -r "$(hsm_root)"/subdir "$DIR/$tdir"/subdir ||
+		error "imported files differ from archived data"
 }
 run_test 13 "Recursively import and restore a directory"
 
 test_14() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	# archive a file
 	local f=$DIR/$tdir/$tfile
@@ -1823,22 +1723,18 @@ test_14() {
 	# rebind the archive to the newly created file
 	echo "rebind $fid to $fid2"
 
-	do_facet $SINGLEAGT \
-		"$HSMTOOL --archive $HSM_ARCHIVE_NUMBER --hsm-root $HSM_ARCHIVE\
-		 --rebind $fid $fid2 $DIR" || error "could not rebind file"
+	copytool rebind $fid $fid2
 
 	# restore file and compare md5sum
 	local sum2=$(md5sum $f | awk '{print $1}')
 
 	[[ $sum == $sum2 ]] || error "md5sum mismatch after restore"
-
-	copytool_cleanup
 }
 run_test 14 "Rebind archived file to a new fid"
 
 test_15() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	# archive files
 	local f=$DIR/$tdir/$tfile
@@ -1854,6 +1750,7 @@ test_15() {
 	done
 	wait_all_done $(($count*60))
 
+	stack_trap "rm -f $tmpfile" EXIT
 	:>$tmpfile
 	# delete the files
 	for i in $(seq 1 $count); do
@@ -1870,9 +1767,7 @@ test_15() {
 	[[ $nl == $count ]] || error "$nl files in list, $count expected"
 
 	echo "rebind list of files"
-	do_facet $SINGLEAGT \
-		"$HSMTOOL --archive $HSM_ARCHIVE_NUMBER --hsm-root $HSM_ARCHIVE\
-		 --rebind $tmpfile $DIR" || error "could not rebind file list"
+	copytool rebind "$tmpfile"
 
 	# restore files and compare md5sum
 	for i in $(seq 1 $count); do
@@ -1880,9 +1775,6 @@ test_15() {
 		[[ $sum2 == ${sums[$i]} ]] ||
 		    error "md5sum mismatch after restore ($sum2 != ${sums[$i]})"
 	done
-
-	rm -f $tmpfile
-	copytool_cleanup
 }
 run_test 15 "Rebind a list of files"
 
@@ -2364,14 +2256,14 @@ run_test 24f "root can archive, release, and restore tar files"
 
 test_25a() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	copy2archive /etc/hosts $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
 
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 
 	$LFS hsm_set --lost $f
 
@@ -2379,8 +2271,6 @@ test_25a() {
 	local st=$?
 
 	[[ $st == 1 ]] || error "lost file access should failed (returns $st)"
-
-	copytool_cleanup
 }
 run_test 25a "Restore lost file (HS_LOST flag) from import"\
 	     " (Operation not permitted)"
@@ -2598,18 +2488,16 @@ run_test 26d "RAoLU when Client eviction"
 
 test_27a() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	create_archive_file $tdir/$tfile
 	local f=$DIR/$tdir/$tfile
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 	local fid=$(path2fid $f)
 
 	$LFS hsm_remove $f
 
 	[[ $? != 0 ]] || error "Remove of a released file should fail"
-
-	copytool_cleanup
 }
 run_test 27a "Remove the archive of an imported file (Operation not permitted)"
 
@@ -2787,29 +2675,25 @@ test_30a() {
 	needclients 2 || return 0
 
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	copy2archive /bin/true $tdir/$tfile
 
 	local f=$DIR/$tdir/true
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 
 	local fid=$(path2fid $f)
 
+	stack_trap "cdt_clear_no_retry" EXIT
 	# set no retry action mode
 	cdt_set_no_retry
 	do_node $CLIENT2 $f
 	local st=$?
 
-	# cleanup
-	# remove no try action mode
-	cdt_clear_no_retry
 	$LFS hsm_state $f
 
 	[[ $st == 0 ]] || error "Failed to exec a released file"
-
-	copytool_cleanup
 }
 run_test 30a "Restore at exec (import case)"
 
@@ -2916,20 +2800,18 @@ restore_and_check_size() {
 
 test_31a() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	create_archive_file $tdir/$tfile
 	local f=$DIR/$tdir/$tfile
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 	local fid=$($LFS path2fid $f)
-	HSM_ARCHIVE_PURGE=false copytool_setup
+	copytool setup
 
 	restore_and_check_size $f $fid
 	local err=$?
 
 	[[ $err -eq 0 ]] || error "File size changed during restore"
-
-	copytool_cleanup
 }
 run_test 31a "Import a large file and check size during restore"
 
@@ -3648,10 +3530,10 @@ test_72() {
 	local interval=5
 
 	# test needs a new running copytool
-	copytool_cleanup
+	stack_trap copytool_monitor_cleanup EXIT
 	copytool_monitor_setup
-	HSMTOOL_UPDATE_INTERVAL=$interval \
-	HSMTOOL_EVENT_FIFO=$HSMTOOL_MONITOR_DIR/fifo copytool_setup
+	copytool setup --update-interval $interval --event-fifo \
+		"$HSMTOOL_MONITOR_DIR/fifo"
 	local test_file=$HSMTOOL_MONITOR_DIR/file
 
 	local cmd="dd if=/dev/urandom of=$test_file count=16 bs=1000000 "
@@ -3662,7 +3544,7 @@ test_72() {
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 	f=$DIR2/$tdir/$tfile
 	echo "Verifying released state: "
 	check_hsm_flags $f "0x0000000d"
@@ -3737,12 +3619,6 @@ test_72() {
 	fi
 
 	echo "Restore events look OK."
-
-	cdt_clear_no_retry
-	copytool_cleanup
-	copytool_monitor_cleanup
-
-	rm -rf $test_dir
 }
 run_test 72 "Copytool logs JSON restore events to FIFO"
 
@@ -3968,14 +3844,14 @@ run_test 109 "Policy display/change"
 
 test_110a() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
 	copy2archive /etc/passwd $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 	local fid=$(path2fid $f)
 
 	cdt_set_non_blocking_restore
@@ -4021,14 +3897,14 @@ run_test 110b "Non blocking restore policy (release case)"
 
 test_111a() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	copy2archive /etc/passwd $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
 
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 	local fid=$(path2fid $f)
 
 	cdt_set_no_retry
@@ -4044,19 +3920,18 @@ test_111a() {
 
 	# Test result
 	[[ $st == 0 ]] || error "Restore does not failed"
-
-	copytool_cleanup
 }
 run_test 111a "No retry policy (import case), restore will error"\
 	      " (No such file or directory)"
 
 test_111b() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(copy_file /etc/passwd $f)
+	stack_trap cdt_clear_no_retry EXIT
 	cdt_set_no_retry
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
@@ -4068,13 +3943,8 @@ test_111b() {
 	wait_request_state $fid RESTORE FAILED
 	local st=$?
 
-	# cleanup
-	cdt_clear_no_retry
-
 	# Test result
 	[[ $st == 0 ]] || error "Restore does not failed"
-
-	copytool_cleanup
 }
 run_test 111b "No retry policy (release case), restore will error"\
 	      " (No such file or directory)"
@@ -4123,11 +3993,11 @@ run_test 200 "Register/Cancel archive"
 
 test_201() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	create_archive_file $tdir/$tfile
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 	local fid=$(path2fid $f)
 
 	# test with cdt on is made in test_222
@@ -4139,8 +4009,6 @@ test_201() {
 	cdt_enable
 	wait_request_state $fid RESTORE CANCELED
 	wait_request_state $fid CANCEL SUCCEED
-
-	copytool_cleanup
 }
 run_test 201 "Register/Cancel restore"
 
@@ -4241,13 +4109,13 @@ run_test 221 "Changelog for archive canceled"
 
 test_222a() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	copy2archive /etc/passwd $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 	local fid=$(path2fid $f)
 
 	changelog_register
@@ -4284,13 +4152,13 @@ run_test 222b "Changelog for implicit restore"
 
 test_222c() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	copy2archive /etc/passwd $tdir/$tfile
 
 	local f=$DIR/$tdir/$tfile
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 	local fid=$(path2fid $f)
 
 	changelog_register
@@ -4318,7 +4186,7 @@ run_test 222c "Changelog for failed explicit restore"
 
 test_222d() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
@@ -4342,14 +4210,14 @@ run_test 222d "Changelog for failed implicit restore"
 
 test_223a() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
 	create_archive_file $tdir/$tfile
 
 	changelog_register
 
-	import_file $tdir/$tfile $f
+	copytool import $tdir/$tfile $f
 	local fid=$(path2fid $f)
 
 	$LFS hsm_restore $f
@@ -4410,7 +4278,7 @@ run_test 224A "Changelog for remove"
 
 test_224a() {
 	# test needs a running copytool
-	copytool_setup
+	copytool setup
 
 	mkdir -p $DIR/$tdir
 
@@ -4445,14 +4313,13 @@ test_224a() {
 run_test 224a "Changelog for failed remove"
 
 test_225() {
-	# test needs a running copytool
-	copytool setup
-
 	# test is not usable because remove request is too fast
 	# so it is always finished before cancel can be done ...
 	echo "Test disabled"
-	copytool_cleanup
 	return 0
+
+	# test needs a running copytool
+	copytool setup
 
 	local f=$DIR/$tdir/$tfile
 	local fid
@@ -4665,7 +4532,7 @@ test_252() {
 	stack_trap "set_hsm_param loop_period $(get_hsm_param loop_period)" EXIT
 	set_hsm_param loop_period 1
 
-	copytool_setup
+	copytool setup
 	copytool_suspend
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
@@ -4743,7 +4610,7 @@ test_254b()
 	printf "Will launch %i requests of each type\n" "$request_count"
 
 	# Launch a copytool to process requests
-	copytool_setup
+	copytool setup
 
 	# Set hsm.max_requests to allow starting all requests at the same time
 	stack_trap \
@@ -4890,9 +4757,9 @@ test_400() {
 	local dir_mdt1=$DIR/$tdir/mdt1
 
 	# create 1 dir per MDT
-	stack_trap "rm -rf $dir_mdt0"
+	stack_trap "rm -rf $dir_mdt0" EXIT
 	$LFS mkdir -i 0 $dir_mdt0 || error "lfs mkdir"
-	stack_trap "rm -rf $dir_mdt1"
+	stack_trap "rm -rf $dir_mdt1" EXIT
 	$LFS mkdir -i 1 $dir_mdt1 || error "lfs mkdir"
 
 	# create 1 file in each MDT
@@ -5549,8 +5416,6 @@ test_606() {
 		error "nid '$nid' does not match any NID ${CLIENT_NIDS[@]}"
 }
 run_test 606 "llog_reader groks changelog fields"
-
-copytool_cleanup
 
 complete $SECONDS
 check_and_cleanup_lustre
