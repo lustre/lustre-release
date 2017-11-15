@@ -196,12 +196,17 @@ static void osc_page_delete(const struct lu_env *env,
 	osc_lru_del(osc_cli(obj), opg);
 
 	if (slice->cpl_page->cp_type == CPT_CACHEABLE) {
-		void *value;
+		void *value = NULL;
 
 		spin_lock(&obj->oo_tree_lock);
-		value = radix_tree_delete(&obj->oo_tree, osc_index(opg));
-		if (value != NULL)
-			--obj->oo_npages;
+		if (opg->ops_intree) {
+			value = radix_tree_delete(&obj->oo_tree,
+						  osc_index(opg));
+			if (value != NULL) {
+				--obj->oo_npages;
+				opg->ops_intree = 0;
+			}
+		}
 		spin_unlock(&obj->oo_tree_lock);
 
 		LASSERT(ergo(value != NULL, value == opg));
@@ -300,8 +305,10 @@ int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 				spin_lock(&osc->oo_tree_lock);
 				result = radix_tree_insert(&osc->oo_tree,
 							   index, opg);
-				if (result == 0)
+				if (result == 0) {
 					++osc->oo_npages;
+					opg->ops_intree = 1;
+				}
 				spin_unlock(&osc->oo_tree_lock);
 
 				radix_tree_preload_end();

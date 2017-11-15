@@ -533,7 +533,11 @@ struct osc_page {
 	/**
 	 * Set if the page must be transferred with OBD_BRW_SRVLOCK.
 	 */
-				ops_srvlock:1;
+				ops_srvlock:1,
+	/**
+	 * If the page is in osc_object::oo_tree.
+	 */
+				ops_intree:1;
 	/**
 	 * lru page list. See osc_lru_{del|use}() in osc_page.c for usage.
 	 */
