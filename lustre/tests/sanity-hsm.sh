@@ -3069,8 +3069,7 @@ test_34() {
 	local there=$(ps -o pid,comm hp $pid >/dev/null)
 	[[ -z $there ]] || error "Restore initiator does not exit"
 
-	local rc=$(wait $pid)
-	[[ $rc -eq 0 ]] || error "Restore initiator failed with $rc"
+	wait $pid || error "Restore initiator failed with $?"
 
 	copytool_cleanup
 }
@@ -3106,8 +3105,7 @@ test_35() {
 	local there=$(ps -o pid,comm hp $pid >/dev/null)
 	[[ -z $there ]] || error "Restore initiator does not exit"
 
-	local rc=$(wait $pid)
-	[[ $rc -eq 0 ]] || error "Restore initiator failed with $rc"
+	wait $pid || error "Restore initiator failed with $?"
 
 	fid2=$(path2fid $f)
 	[[ $fid2 == $fid1 ]] || error "Wrong fid after mv $fid2 != $fid1"
@@ -3145,9 +3143,7 @@ test_36() {
 	[[ -z $there ]] ||
 		error "Restore initiator does not exit"
 
-	local rc=$(wait $pid)
-	[[ $rc -eq 0 ]] ||
-		error "Restore initiator failed with $rc"
+	wait $pid || error "Restore initiator failed with $?"
 
 	copytool_cleanup
 }
