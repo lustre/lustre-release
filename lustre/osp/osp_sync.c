@@ -548,7 +548,6 @@ static int osp_sync_interpret(const struct lu_env *env,
 	CDEBUG(D_HA, "reply req %p/%d, rc %d, transno %u\n", req,
 	       atomic_read(&req->rq_refcount),
 	       rc, (unsigned) req->rq_transno);
-	LASSERT(rc || req->rq_transno);
 
 	if (rc == -ENOENT) {
 		/*
@@ -571,7 +570,7 @@ static int osp_sync_interpret(const struct lu_env *env,
 		/*
 		 * error happened, we'll try to repeat on next boot ?
 		 */
-		LASSERTF(req->rq_transno == 0 ||
+		LASSERTF(req->rq_transno == 0 || rc == -EIO ||
 			 req->rq_import_generation < imp->imp_generation,
 			 "transno %llu, rc %d, gen: req %d, imp %d\n",
 			 req->rq_transno, rc, req->rq_import_generation,
