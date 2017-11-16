@@ -8420,3 +8420,27 @@ get_layout_param()
 	local param=$($LFS getstripe -d $1 | parse_layout_param)
 	echo "$param"
 }
+
+lfsck_verify_pfid()
+{
+	local f
+	local rc=0
+
+	# Cancel locks before setting lfsck_verify_pfid so that errors are more
+        # controllable
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+        
+	# make sure PFID is set correctly for files
+	do_nodes $(comma_list $(osts_nodes)) \
+	       "$LCTL set_param -n obdfilter.${FSNAME}-OST*.lfsck_verify_pfid=1"
+
+	for f in "$@"; do
+		cat $f &> /dev/nullA ||
+			{ rc=$?; echo "verify $f failed"; break; }
+	done
+
+	do_nodes $(comma_list $(osts_nodes)) \
+	       "$LCTL set_param -n obdfilter.${FSNAME}-OST*.lfsck_verify_pfid=0"
+	return $rc
+}

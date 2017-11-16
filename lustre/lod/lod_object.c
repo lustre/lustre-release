@@ -2133,6 +2133,7 @@ lod_obj_stripe_replace_parent_fid_cb(const struct lu_env *env,
 				     struct lod_obj_stripe_cb_data *data)
 {
 	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_layout_component *comp = &lo->ldo_comp_entries[comp_idx];
 	struct filter_fid *ff = &info->lti_ff;
 	struct lu_buf *buf = &info->lti_buf;
 	int rc;
@@ -2140,15 +2141,28 @@ lod_obj_stripe_replace_parent_fid_cb(const struct lu_env *env,
 	buf->lb_buf = ff;
 	buf->lb_len = sizeof(*ff);
 	rc = dt_xattr_get(env, dt, buf, XATTR_NAME_FID);
-	if (rc == -ENODATA)
+	if (rc < 0) {
+		if (rc == -ENODATA)
+			return 0;
+		return rc;
+	}
+
+	filter_fid_le_to_cpu(ff, ff, sizeof(*ff));
+	if (lu_fid_eq(lu_object_fid(&lo->ldo_obj.do_lu), &ff->ff_parent) &&
+	    ff->ff_layout.ol_comp_id == comp->llc_id)
 		return 0;
 
-	if (rc < 0)
-		return rc;
-
+	/* rewrite filter_fid */
+	memset(ff, 0, sizeof(*ff));
 	ff->ff_parent = *lu_object_fid(&lo->ldo_obj.do_lu);
 	ff->ff_parent.f_ver = stripe_idx;
-	fid_cpu_to_le(&ff->ff_parent, &ff->ff_parent);
+	ff->ff_layout.ol_stripe_size = comp->llc_stripe_size;
+	ff->ff_layout.ol_stripe_count = comp->llc_stripe_count;
+	ff->ff_layout.ol_comp_id = comp->llc_id;
+	ff->ff_layout.ol_comp_start = comp->llc_extent.e_start;
+	ff->ff_layout.ol_comp_end = comp->llc_extent.e_end;
+	filter_fid_cpu_to_le(ff, ff, sizeof(*ff));
+
 	if (data->locd_declare)
 		rc = lod_sub_declare_xattr_set(env, dt, buf, XATTR_NAME_FID,
 					       LU_XATTR_REPLACE, th);

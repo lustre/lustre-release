@@ -1084,6 +1084,40 @@ free:
 	return rc;
 }
 
+static int mdd_object_pfid_replace(const struct lu_env *env,
+				   struct mdd_object *o)
+{
+	struct mdd_device *mdd = mdo2mdd(&o->mod_obj);
+	struct thandle *handle;
+	int rc;
+
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		RETURN(PTR_ERR(handle));
+
+	handle->th_complex = 1;
+
+	/* it doesn't need to track the PFID update via llog, because LFSCK
+	 * will repair it even it goes wrong */
+	rc = mdd_declare_xattr_set(env, mdd, o, NULL, XATTR_NAME_FID,
+				   0, handle);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	rc = mdo_xattr_set(env, o, NULL, XATTR_NAME_FID, 0, handle);
+	if (rc)
+		GOTO(out, rc);
+
+out:
+	mdd_trans_stop(env, mdd, rc, handle);
+	return rc;
+}
+
+
 static int mdd_declare_xattr_del(const struct lu_env *env,
 				 struct mdd_device *mdd,
 				 struct mdd_object *obj,
@@ -1162,21 +1196,22 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 		GOTO(out, rc);
 
 	rc = mdo_xattr_del(env, vic, XATTR_NAME_LOV, handle);
-	if (rc) { /* wtf? */
-		int rc2;
-
-		rc2 = mdo_xattr_set(env, obj, buf, XATTR_NAME_LOV,
-				    LU_XATTR_REPLACE, handle);
-		if (rc2)
-			CERROR("%s: failed to rollback of layout of: "DFID
-			       ": %d, file state unknown\n",
-			       mdd_obj_dev_name(obj), PFID(mdo2fid(obj)), rc2);
-		GOTO(out, rc);
-	}
+	if (rc) /* wtf? */
+		GOTO(out_restore, rc);
 
 	(void)mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, obj, handle);
 	(void)mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, vic, handle);
 	EXIT;
+
+out_restore:
+	if (rc) {
+		int rc2 = mdo_xattr_set(env, obj, buf, XATTR_NAME_LOV,
+					LU_XATTR_REPLACE, handle);
+		if (rc2)
+			CERROR("%s: failed to rollback of layout of: "DFID
+			       ": %d, file state unknown\n",
+			       mdd_obj_dev_name(obj), PFID(mdo2fid(obj)), rc2);
+	}
 
 out:
 	mdd_trans_stop(env, mdd, rc, handle);
@@ -1184,6 +1219,9 @@ out:
 	mdd_write_unlock(env, vic);
 	lu_buf_free(buf);
 	lu_buf_free(buf_vic);
+
+	if (!rc)
+		(void) mdd_object_pfid_replace(env, obj);
 
 	return rc;
 }
@@ -1797,7 +1835,20 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 		else
 			rc = mdo_xattr_del(env, snd_o, XATTR_NAME_LOV, handle);
 	}
+	if (rc != 0)
+		GOTO(out_restore, rc);
 
+	/* Issue one changelog record per file */
+	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, fst_o, handle);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, snd_o, handle);
+	if (rc)
+		GOTO(stop, rc);
+	EXIT;
+
+out_restore:
 	if (rc != 0) {
 		int steps = 0;
 
@@ -1836,18 +1887,7 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 			 */
 			LBUG();
 		}
-		GOTO(stop, rc);
 	}
-
-	/* Issue one changelog record per file */
-	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, fst_o, handle);
-	if (rc)
-		GOTO(stop, rc);
-
-	rc = mdd_changelog_data_store(env, mdd, CL_LAYOUT, 0, snd_o, handle);
-	if (rc)
-		GOTO(stop, rc);
-	EXIT;
 
 stop:
 	rc = mdd_trans_stop(env, mdd, rc, handle);
@@ -1859,6 +1899,11 @@ stop:
 	lu_buf_free(snd_buf);
 	lu_buf_free(fst_hsm_buf);
 	lu_buf_free(snd_hsm_buf);
+
+	if (!rc) {
+		(void) mdd_object_pfid_replace(env, fst_o);
+		(void) mdd_object_pfid_replace(env, snd_o);
+	}
 	return rc;
 }
 

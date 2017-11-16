@@ -12266,6 +12266,8 @@ test_184a() {
 
 	cmp $ref1 $file2 || error "content compare failed ($ref1 != $file2)"
 	cmp $ref2 $file1 || error "content compare failed ($ref2 != $file1)"
+
+	lfsck_verify_pfid $file1 $file2 || error "PFID are not transferred"
 }
 run_test 184a "Basic layout swap"
 

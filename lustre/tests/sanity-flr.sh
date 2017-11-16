@@ -381,6 +381,8 @@ test_0d() {
 		verify_comp_extent $tf ${ids[$i]} 0 EOF
 	done
 
+	lfsck_verify_pfid $tf || error "PFID is not set"
+
 	# create a mirrored file and extend it
 	$LFS mirror create -N $tf-1 || error "create mirrored file $tf-1 failed"
 	$LFS mirror create -N $tf-2 || error "create mirrored file $tf-2 failed"
