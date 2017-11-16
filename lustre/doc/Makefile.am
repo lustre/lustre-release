@@ -123,6 +123,7 @@ MANFILES =					\
 	lustre_routes_config.8			\
 	lustre_routes_conversion.8		\
 	lustre_rsync.8				\
+	llsom_sync.8				\
 	mount.lustre.8				\
 	nids.5					\
 	plot-llstat.8				\

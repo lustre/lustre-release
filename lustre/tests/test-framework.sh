@@ -304,6 +304,10 @@ init_test_env() {
 	[ ! -f "$LR_READER" ] &&
 		export LR_READER=$(which lr_reader 2> /dev/null)
 	[ -z "$LR_READER" ] && export LR_READER="/usr/sbin/lr_reader"
+	export LSOM_SYNC=${LSOM_SYNC:-"$LUSTRE/utils/llsom_sync"}
+	[ ! -f "$LSOM_SYNC" ] &&
+		export LSOM_SYNC=$(which llsom_sync 2> /dev/null)
+	[ -z "$LSOM_SYNC" ] && export LSOM_SYNC="/usr/sbin/llsom_sync"
 	export NAME=${NAME:-local}
 	export LGSSD=${LGSSD:-"$LUSTRE/utils/gss/lgssd"}
 	[ "$GSS_PIPEFS" = "true" ] && [ ! -f "$LGSSD" ] &&

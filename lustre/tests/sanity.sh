@@ -19443,6 +19443,62 @@ test_806() {
 }
 run_test 806 "Verify Lazy Size on MDS"
 
+test_807() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52" && return
+
+	# Registration step
+	changelog_register || error "changelog_register failed"
+	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
+	changelog_users $SINGLEMDS | grep -q $cl_user ||
+		error "User $cl_user not found in changelog_users"
+
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_lustre_params client "llite.*.xattr_cache" > $save
+	lctl set_param llite.*.xattr_cache=0
+	stack_trap "restore_lustre_params < $save" EXIT
+
+	rm -rf $DIR/$tdir || error "rm $tdir failed"
+	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
+	touch $DIR/$tdir/trunc || error "touch $tdir/trunc failed"
+	$TRUNCATE $DIR/$tdir/trunc 1024 || error "truncate $tdir/trunc failed"
+	$TRUNCATE $DIR/$tdir/trunc 1048576 ||
+		error "truncate $tdir/trunc failed"
+
+	local bs=1048576
+	dd if=/dev/zero of=$DIR/$tdir/single_dd bs=$bs count=1 ||
+		error "write $tfile failed"
+
+	# multi-client wirtes
+	local num=$(get_node_count ${CLIENTS//,/ })
+	local offset=0
+	local i=0
+
+	echo "Test SOM for muti-client ($num) writes"
+	touch $DIR/$tfile || error "touch $tfile failed"
+	$TRUNCATE $DIR/$tfile 0
+	for client in ${CLIENTS//,/ }; do
+		do_node $client $MULTIOP $DIR/$tfile Oz${offset}w${bs}c &
+		local pids[$i]=$!
+		i=$((i + 1))
+		offset=$((offset + $bs))
+	done
+	for (( i=0; i < $num; i++ )); do
+		wait ${pids[$i]}
+	done
+
+	sleep 5
+	$LSOM_SYNC -u $cl_user -m $FSNAME-MDT0000 $MOUNT
+	check_lsom_data $DIR/$tdir/trunc
+	check_lsom_data $DIR/$tdir/single_dd
+	check_lsom_data $DIR/$tfile
+
+	rm -rf $DIR/$tdir
+	# Deregistration step
+	changelog_deregister || error "changelog_deregister failed"
+}
+run_test 807 "verify LSOM syncing tool"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

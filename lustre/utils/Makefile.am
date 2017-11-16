@@ -27,7 +27,8 @@ rootsbin_PROGRAMS = mount.lustre
 bin_SCRIPTS   = llstat llobdstat plot-llstat
 bin_PROGRAMS  = lfs
 sbin_SCRIPTS  = ldlm_debug_upcall
-sbin_PROGRAMS = lctl l_getidentity llverfs lustre_rsync ll_decode_linkea
+sbin_PROGRAMS = lctl l_getidentity llverfs lustre_rsync ll_decode_linkea \
+		llsom_sync
 
 if TESTS
 sbin_PROGRAMS += wiretest
@@ -67,6 +68,9 @@ lfs_DEPENDENCIES := liblustreapi.la
 lustre_rsync_SOURCES = lustre_rsync.c lustre_rsync.h callvpe.c callvpe.h
 lustre_rsync_LDADD :=  liblustreapi.la $(PTHREAD_LIBS)
 lustre_rsync_DEPENDENCIES := liblustreapi.la
+
+llsom_sync_LDADD := liblustreapi.la
+llsom_sync_DEPENDENCIES := liblustreapi.la
 
 lshowmount_SOURCES = lshowmount.c nidlist.c nidlist.h
 lshowmount_LDADD :=  liblustreapi.la
