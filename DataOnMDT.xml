@@ -1,0 +1,454 @@
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="dataonmdt"
+    condition="l2B">
+  <title xml:id="dataonmdt.title">Data on MDT (DoM)</title>
+  <para>This chapter describes Data on MDT (DoM).</para>
+  <section xml:id="dbdoclet.domintro">
+      <title>
+      <indexterm>
+        <primary>dom</primary>
+      </indexterm>
+      <indexterm>
+        <primary>dom</primary>
+        <secondary>intro</secondary>
+      </indexterm>Introduction to Data on MDT (DoM)</title>
+      <para>The Lustre Data on MDT (DoM) feature improves small file IO by
+      placing small files directly on the MDT, and also improves large file IO
+      by avoiding the OST being affected by small random IO that can cause
+      device seeking and hurt the streaming IO performance.  Therefore, users
+      can expect more consistent performance for both small file IO and mixed IO
+      patterns.</para>
+      <para>The layout of a DoM file is stored on disk as a composite layout
+      and is a special case of Progressive File Layout (PFL). Please see
+      <xref linkend="pfl" /> for more information on PFL. For DoM files, the
+      file layout is composed of the component of the file, which is placed on
+      an MDT, and the rest of components are placed on OSTs, if needed. The
+      first component is placed on the MDT in the MDT object data blocks.
+      This component always has one stripe with size equal to the component
+      size. Such a component with an MDT layout can be only the first component
+      in composite layout. The rest of components are placed over OSTs as usual
+      with a RAID0 layout. The OST components are not instantiated until
+      a client writes or truncates the file beyond the size of the MDT
+      component.</para>
+  </section>
+  <section xml:id="dbdoclet.usercommands">
+      <title>
+          <indexterm>
+              <primary>dom</primary>
+          </indexterm>
+          <indexterm>
+              <primary>dom</primary>
+              <secondary>usercommands</secondary>
+          </indexterm>User Commands</title>
+      <para>Lustre provides the <literal>lfs setstripe</literal> command for
+      users to create DoM files. Also, as usual,
+      <literal>lfs getstripe</literal> command can be used to list the
+      striping/component information for a given file, while
+      <literal>lfs find</literal> command can be used to search the directory
+      tree rooted at the given directory or file name for the files that match
+      the given DoM component parameters, e.g. layout type.</para>
+      <section xml:id="dbdoclet.lfssetstripe">
+          <title>
+              <indexterm>
+                  <primary>dom</primary>
+                  <secondary>lfssetstripe</secondary>
+              </indexterm>lfs setstripe for DoM files</title>
+          <para>The <literal>lfs setstripe</literal> command is used to create
+          DoM files.</para>
+          <section><title>Command</title>
+              <para><screen>lfs setstripe --component-end|-E end1 --layout|-L \
+mdt [--component-end|-E end2 [STRIPE_OPTIONS] ...] &lt;filename&gt;
+              </screen>
+              The command above creates a file with the special composite
+              layout, which defines the first component as an MDT component. The
+              MDT component must start from offset 0 and ends at
+              <replaceable>end1</replaceable>. The
+              <replaceable>end1</replaceable> is also the stripe size of this
+              component, and is limited by the
+              <literal>lod.*.dom_stripesize</literal> of the MDT the file is
+              created on. No other options are required. The rest of the
+              components use the normal syntax for composite files creation.
+              </para>
+              <note><para>If the next component doesn't specify striping, such
+              as:
+              <screen>lfs setstripe -E 1M -L mdt -E EOF &lt;filename&gt;</screen>
+              Then that component get its settings from the default filesystem
+              striping.</para></note>
+          </section>
+          <section><title>Example</title>
+          <para>The command below creates a file with a DoM layout. The first
+          component has an <literal>mdt</literal> layout and is placed on the
+          MDT, covering [0, 1M). The second component covers [1M, EOF) and is
+          striped over all available OSTs.</para>
+          <para><screen>client$ lfs setstripe -E 1M -L mdt -E -1 -S 4M -c -1 \
+          /mnt/lustre/domfile</screen></para>
+          <para>The resulting layout is illustrated by
+          <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+          linkend="dataonmdt.fig.layout1" />.</para>
+          <figure xml:id="dataonmdt.fig.layout1">
+              <title>Resulting file layout</title>
+              <mediaobject>
+                  <imageobject>
+                      <imagedata scalefit="1" width="50%"
+                      fileref="./figures/DoM_Layout1.png" />
+                  </imageobject>
+                  <textobject>
+                      <phrase>Resulting file layout</phrase>
+                  </textobject>
+              </mediaobject>
+          </figure>
+          <para>The resulting can also be checked with
+          <literal>lfs getstripe</literal> as shown below:</para>
+          <screen>client$ lfs getstripe /mnt/lustre/domfile
+/mnt/lustre/domfile
+  lcm_layout_gen:   2
+  lcm_mirror_count: 1
+  lcm_entry_count:  2
+    lcme_id:             1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   1048576
+      lmm_stripe_count:  0
+      lmm_stripe_size:   1048576
+      lmm_pattern:       mdt
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      
+    lcme_id:             2
+    lcme_flags:          0
+    lcme_extent.e_start: 1048576
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  -1
+      lmm_stripe_size:   4194304
+      lmm_pattern:       raid0
+      lmm_layout_gen:    65535
+      lmm_stripe_offset: -1</screen>
+          <para>The output above shows that the first component has size 1MB and
+          pattern is 'mdt'. The second component is not instantiated yet, which
+          is seen by <literal>lcme_flags: 0</literal>.</para>
+          <para>If more than 1MB of data is written to the file, then
+          <literal>lfs getstripe</literal> output is changed accordingly:</para>
+          <screen>client$ lfs getstripe /mnt/lustre/domfile
+/mnt/lustre/domfile
+  lcm_layout_gen:   3
+  lcm_mirror_count: 1
+  lcm_entry_count:  2
+    lcme_id:             1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   1048576
+      lmm_stripe_count:  0
+      lmm_stripe_size:   1048576
+      lmm_pattern:       mdt
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 2
+      lmm_objects:
+      
+    lcme_id:             2
+    lcme_flags:          init
+    lcme_extent.e_start: 1048576
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  2
+      lmm_stripe_size:   4194304
+      lmm_pattern:       raid0
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 0
+      lmm_objects:
+      - 0: { l_ost_idx: 0, l_fid: [0x100000000:0x2:0x0] }
+      - 1: { l_ost_idx: 1, l_fid: [0x100010000:0x2:0x0] }</screen>
+          <para>The output above shows that the second component now has objects
+          on OSTs with a 4MB stripe.</para>
+          </section>
+      </section>
+      <section><title>Setting a default DoM layout to an existing directory
+      </title>
+      <para>A DoM layout can be set on an existing directory as well. When
+          set, all the files created after that will inherit this layout by
+          default.</para>
+          <section><title>Command</title>
+              <screen>lfs setstripe --component-end|-E end1 --layout|-L mdt \
+[--component-end|-E end2 [STRIPE_OPTIONS] ...] &lt;dirname&gt;</screen>
+          </section>
+          <section><title>Example</title>
+              <screen>client$ mkdir /mnt/lustre/domdir
+client$ touch /mnt/lustre/domdir/normfile
+client$ lfs setstripe -E 1M -L mdt -E -1 /mnt/lustre/domdir/
+client$ lfs getstripe -d /mnt/lustre/domdir
+  lcm_layout_gen:   0
+  lcm_mirror_count: 1
+  lcm_entry_count:  2
+    lcme_id:             N/A
+    lcme_flags:          0
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   1048576
+      stripe_count:  0    stripe_size:   1048576    \
+      pattern:  mdt    stripe_offset:  -1
+    
+    lcme_id:             N/A
+    lcme_flags:          0
+    lcme_extent.e_start: 1048576
+    lcme_extent.e_end:   EOF
+      stripe_count:  1    stripe_size:   1048576    \
+      pattern:  raid0    stripe_offset:  -1
+              </screen>
+              <para>In the output above, it can be seen that the directory has
+              a default layout with a DoM component.</para>
+              <para>The following example will check layouts of files in that
+              directory:</para>
+              <screen>client$ touch /mnt/lustre/domdir/domfile
+client$ lfs getstripe /mnt/lustre/domdir/normfile
+/mnt/lustre/domdir/normfile
+lmm_stripe_count:  2
+lmm_stripe_size:   1048576
+lmm_pattern:       raid0
+lmm_layout_gen:    0
+lmm_stripe_offset: 1
+  obdidx   objid   objid   group
+       1              3           0x3              0
+       0              3           0x3              0
+
+client$ lfs getstripe /mnt/lustre/domdir/domfile
+/mnt/lustre/domdir/domfile
+  lcm_layout_gen:   2
+  lcm_mirror_count: 1
+  lcm_entry_count:  2
+    lcme_id:             1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   1048576
+      lmm_stripe_count:  0
+      lmm_stripe_size:   1048576
+      lmm_pattern:       mdt
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 2
+      lmm_objects:
+      
+    lcme_id:             2
+    lcme_flags:          0
+    lcme_extent.e_start: 1048576
+    lcme_extent.e_end:   EOF
+      lmm_stripe_count:  1
+      lmm_stripe_size:   1048576
+      lmm_pattern:       raid0
+      lmm_layout_gen:    65535
+      lmm_stripe_offset: -1</screen>
+              <para>We can see that first file
+              <emphasis role="bold">normfile</emphasis> in that directory has an
+              ordinary layout, whereas the file <emphasis role="bold">domfile
+              </emphasis> inherits the directory default layout and is a DoM
+              file.</para>
+              <note><para>The directory default layout setting will be inherited
+              by new files even if the server DoM size limit will be set to a
+              lower value.</para></note>
+          </section>
+      </section>
+      <section xml:id="dbdoclet.domstripesize">
+          <title>
+              <indexterm>
+                  <primary>dom</primary>
+              </indexterm>
+              <indexterm>
+                  <primary>dom</primary>
+                  <secondary>domstripesize</secondary>
+              </indexterm>DoM Stripe Size Restrictions</title>
+          <para>The maximum size of a DoM component is restricted in several
+          ways to protect the MDT from being eventually filled with large files.
+          </para>
+          <section><title>LFS limits for DoM component size</title>
+              <para><literal>lfs setstripe</literal> allows for setting the
+              component size for MDT layouts up to 1GB, however, the size must
+              be also aligned by 64KB. This is the maximum possible size on MDT.
+              Meanwhile, there is another limit which is checked by
+              <literal>lfs setstripe</literal> is provided by MDT server itself.
+              </para>
+          </section>
+          <section><title>MDT Server Limits</title>
+              <para>The LOD parameter <literal>dom_stripesize</literal> is used
+              to control the per-server maximum size for a DoM component. It is
+              1MB by default and can be changed with the
+              <literal>lctl</literal> tool.  For more information on setting
+              <literal>dom_stripesize</literal> please see
+              <xref linkend="dbdoclet.dom_stripesize" />.</para>
+          </section>
+      </section>
+      <section xml:id="dbdoclet.domlfsgetstripe">
+          <title>
+              <indexterm>
+                  <primary>dom</primary>
+              </indexterm>
+              <indexterm>
+                  <primary>dom</primary>
+                  <secondary>lfsgetstripe</secondary>
+              </indexterm>lfs getstripe for DoM files</title>
+          <para>The <literal>lfs getstripe</literal> command is used to list
+          the striping/component information for a given file. For DoM files, it
+          can be used to check its layout and size.</para>
+          <section><title>Command</title>
+              <para><screen>lfs getstripe [--component-id|-I [comp_id]] [--layout|-L] \
+              [--stripe-size|-S] &lt;dirname|filename&gt;</screen></para>
+          </section>
+          <section><title>Examples</title>
+              <screen>client$ lfs getstripe -I1 /mnt/lustre/domfile
+/mnt/lustre/domfile
+  lcm_layout_gen:   3
+  lcm_mirror_count: 1
+  lcm_entry_count:  2
+    lcme_id:             1
+    lcme_flags:          init
+    lcme_extent.e_start: 0
+    lcme_extent.e_end:   1048576
+      lmm_stripe_count:  0
+      lmm_stripe_size:   1048576
+      lmm_pattern:       mdt
+      lmm_layout_gen:    0
+      lmm_stripe_offset: 2
+      lmm_objects:</screen>
+              <para>Short info about the layout and size of DoM component can
+              be obtained with the use of the <literal>-L</literal> option
+              along with <literal>-S</literal> or <literal>-E</literal> options:
+              <screen>client$ lfs getstripe -I1 -L -S /mnt/lustre/domfile
+      lmm_stripe_size:   1048576
+      lmm_pattern:       mdt
+client$ lfs getstripe -I1 -L -E /mnt/lustre/domfile
+    lcme_extent.e_end:   1048576
+      lmm_pattern:       mdt</screen>
+              Both commands return layout type and its size. The stripe size is
+              equal to the extent size of component in case of DoM files, so
+              both can be used to get size on the MDT.</para>
+          </section>
+      </section>
+      <section xml:id="dbdoclet.domlfsfind">
+          <title>
+              <indexterm>
+                  <primary>dom</primary>
+              </indexterm>
+              <indexterm>
+                  <primary>dom</primary>
+                  <secondary>lfsfind</secondary>
+              </indexterm>lfs find for DoM files</title>
+          <para>The <literal>lfs find</literal> command can be used to search
+          the directory tree rooted at the given directory or file name for the
+          files that match the given parameters. The command below shows the new
+          parameters for DoM files and their usages are similar to the
+          <literal>lfs getstripe</literal> command.</para>
+          <section><title>Command</title>
+              <para><screen>lfs find &lt;directory|filename&gt; [--layout|-L] [...]
+              </screen></para>
+          </section>
+          <section><title>Examples</title>
+              <para>Find all files with DoM layout under directory
+              <literal>/mnt/lustre</literal>:
+              <screen>client$ lfs find -L mdt /mnt/lustre
+/mnt/lustre/domfile
+/mnt/lustre/domdir
+/mnt/lustre/domdir/domfile
+                          
+client$ lfs find -L mdt -type f /mnt/lustre
+/mnt/lustre/domfile
+/mnt/lustre/domdir/domfile
+                          
+client$ lfs find -L mdt -type d /mnt/lustre
+/mnt/lustre/domdir</screen>
+              By using this command you can find all DoM objects, only DoM
+              files, or only directories with default DoM layout.</para>
+              <para>Find the DoM files/dirs with a particular stripe size:
+              <screen>client$ lfs find -L mdt -S -1200K -type f /mnt/lustre
+/mnt/lustre/domfile
+/mnt/lustre/domdir/domfile
+                          
+client$ lfs find -L mdt -S +200K -type f /mnt/lustre
+/mnt/lustre/domfile
+/mnt/lustre/domdir/domfile</screen>
+              The first command finds all DoM files with stripe size less
+              than 1200KB.  The second command above does the same for files
+              with a stripe size greater than 200KB. In both cases, all DoM
+              files are found because their DoM size is 1MB.</para>
+          </section>
+      </section>
+      <section xml:id="dbdoclet.dom_stripesize">
+          <title>
+              <indexterm>
+                  <primary>dom</primary>
+              </indexterm>
+              <indexterm>
+                  <primary>dom</primary>
+                  <secondary>dom_stripesize</secondary>
+              </indexterm>The dom_stripesize parameter</title>
+          <para>The MDT controls the default maximum DoM size on the server via
+          the parameter <literal>dom_stripesize</literal> in the LOD device.
+          The <literal>dom_stripesize</literal> can be set differently for each
+          MDT, if necessary. The default value of the parameter is 1MB and can
+          be changed with <literal>lclt</literal> tool.</para>
+          <section><title>Get Command</title>
+              <para><screen>lctl get_param lod.*MDT&lt;index&gt;*.dom_stripesize
+              </screen></para>
+          </section>
+          <section><title>Get Examples</title>
+              <para>The commands below get the maximum allowed DoM size on the
+              server. The final command is an attempt to create a file with a
+              larger size than the parameter setting and correctly fails.
+              <screen>mds# lctl get_param lod.*MDT0000*.dom_stripesize
+lod.lustre-MDT0000-mdtlov.dom_stripesize=1048576
+
+mds# lctl get_param -n lod.*MDT0000*.dom_stripesize
+1048576
+
+client$ lfs setstripe -E 2M -L mdt /mnt/lustre/dom2mb
+Create composite file /mnt/lustre/dom2mb failed. Invalid argument
+error: setstripe: create composite file '/mnt/lustre/dom2mb' failed:
+Invalid argument</screen></para>
+          </section>
+          <section><title>Temporary Set Command</title>
+              <para>To temporarily set the value of the parameter, the
+              <literal>lctl set_param</literal> is used:
+              <screen>lctl set_param lod.*MDT&lt;index&gt;*.dom_stripesize=&lt;value&gt;
+              </screen></para>
+          </section>
+          <section><title>Temporary Set Examples</title>
+              <para>The example below shows a change to the default DoM limit on
+              the server to 32KB and try to create a file with 1MB DoM size
+              after that.
+              <screen>mds# lctl set_param -n lod.*MDT0000*.dom_stripesize=32K
+mds# lctl get_param -n lod.*MDT0000*.dom_stripesize
+32768
+
+client$ lfs setstripe -E 1M -L mdt /mnt/lustre/dom
+Create composite file /mnt/lustre/dom failed. Invalid argument
+error: setstripe: create composite file '/mnt/lustre/dom' failed:
+Invalid argument</screen></para>
+          </section>
+          <section><title>Persistent Set Command</title>
+              <para>To persistently set the value of the parameter, the
+                  <literal>lctl conf_param</literal> command is used:
+                  <screen>lctl conf_param &lt;fsname&gt;-MDT&lt;index&gt;.lod.dom_stripesize=&lt;value&gt;
+                  </screen></para>
+          </section>
+          <section><title>Persistent Set Examples</title>
+              <para>The new value of the parameter is saved in config log
+              permanently:
+                  <screen>mgs# lctl conf_param lustre-MDT0000.lod.dom_stripesize=512K
+mds# lctl get_param -n lod.*MDT0000*.dom_stripesize
+524288</screen>
+              New settings are applied in few seconds and saved persistently in
+              server config.
+              </para>
+          </section>
+      </section>
+      <section xml:id="dbdoclet.disabledom">
+          <title>
+              <indexterm>
+                  <primary>dom</primary>
+              </indexterm>
+              <indexterm>
+                  <primary>dom</primary>
+                  <secondary>disabledom</secondary>
+              </indexterm>Disable DoM</title>
+          <para>When <literal>lclt set_param</literal> or
+          <literal>lctl conf_param</literal> sets
+          <literal>dom_stripesize</literal> to <literal>0</literal>, DoM
+          file creation will be prohibited on the selected server.</para>
+          <note><para>DoM files can still be created in existing directories
+          with the default DoM layout</para></note>
+      </section>
+  </section>
+</chapter>
