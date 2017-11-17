@@ -2732,7 +2732,8 @@ test_38() {
 	echo "Create $file_cnt files..."
 	for i in `seq $file_cnt`; do
 		touch $TESTFILE-$i
-		chown $((file_cnt - i)):$((file_cnt - i)) $TESTFILE-$i
+		chown $((file_cnt - i)):$((file_cnt - i)) $TESTFILE-$i ||
+			error "failed to chown $TESTFILE-$i"
 	done
 	cancel_lru_locks osc
 	sync; sync_all_data || true
@@ -2744,7 +2745,10 @@ test_38() {
 	acct_cnt=$(do_facet mds1 $LCTL get_param $procf | grep "id:" | wc -l)
 	echo "Found $acct_cnt id entries"
 
-	[ $file_cnt -eq $acct_cnt ] || error "skipped id entries"
+	[ $file_cnt -eq $acct_cnt ] || {
+		do_facet mds1 $LCTL get_param $procf
+		error "skipped id entries"
+	}
 
 	cleanup_quota_test
 }
