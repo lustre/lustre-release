@@ -224,7 +224,6 @@ static void vvp_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 
 static const struct cl_object_operations vvp_ops = {
 	.coo_page_init    = vvp_page_init,
-	.coo_lock_init    = vvp_lock_init,
 	.coo_io_init      = vvp_io_init,
 	.coo_attr_get     = vvp_attr_get,
 	.coo_attr_update  = vvp_attr_update,

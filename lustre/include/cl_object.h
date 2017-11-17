@@ -1073,15 +1073,13 @@ static inline bool __page_in_use(const struct cl_page *page, int refc)
  * (struct cl_lock) and a list of layers (struct cl_lock_slice), linked to
  * cl_lock::cll_layers list through cl_lock_slice::cls_linkage.
  *
- * Typical cl_lock consists of the two layers:
+ * Typical cl_lock consists of one layer:
  *
- *     - vvp_lock (vvp specific data), and
  *     - lov_lock (lov specific data).
  *
  * lov_lock contains an array of sub-locks. Each of these sub-locks is a
  * normal cl_lock: it has a header (struct cl_lock) and a list of layers:
  *
- *     - lovsub_lock, and
  *     - osc_lock
  *
  * Each sub-lock is associated with a cl_object (representing stripe
@@ -1201,7 +1199,7 @@ struct cl_lock {
 /**
  * Per-layer part of cl_lock
  *
- * \see vvp_lock, lov_lock, lovsub_lock, osc_lock
+ * \see lov_lock, osc_lock
  */
 struct cl_lock_slice {
         struct cl_lock                  *cls_lock;
@@ -1215,7 +1213,7 @@ struct cl_lock_slice {
 
 /**
  *
- * \see vvp_lock_ops, lov_lock_ops, lovsub_lock_ops, osc_lock_ops
+ * \see lov_lock_ops, osc_lock_ops
  */
 struct cl_lock_operations {
 	/** @{ */
@@ -1227,8 +1225,7 @@ struct cl_lock_operations {
 	 *		@anchor for resources
 	 * \retval -ve	failure
 	 *
-	 * \see vvp_lock_enqueue(), lov_lock_enqueue(), lovsub_lock_enqueue(),
-	 * \see osc_lock_enqueue()
+	 * \see lov_lock_enqueue(), osc_lock_enqueue()
 	 */
 	int  (*clo_enqueue)(const struct lu_env *env,
 			    const struct cl_lock_slice *slice,
@@ -1243,8 +1240,7 @@ struct cl_lock_operations {
 	/**
 	 * Destructor. Frees resources and the slice.
 	 *
-	 * \see vvp_lock_fini(), lov_lock_fini(), lovsub_lock_fini(),
-	 * \see osc_lock_fini()
+	 * \see lov_lock_fini(), osc_lock_fini()
 	 */
         void (*clo_fini)(const struct lu_env *env, struct cl_lock_slice *slice);
         /**

@@ -111,7 +111,10 @@ int cl_lock_init(const struct lu_env *env, struct cl_lock *lock,
 	INIT_LIST_HEAD(&lock->cll_layers);
 	list_for_each_entry(scan, &obj->co_lu.lo_header->loh_layers,
 			    co_lu.lo_linkage) {
-		result = scan->co_ops->coo_lock_init(env, scan, lock, io);
+		if (scan->co_ops->coo_lock_init != NULL)
+			result = scan->co_ops->coo_lock_init(env, scan, lock,
+							     io);
+
 		if (result != 0) {
 			cl_lock_fini(env, lock);
 			break;
@@ -167,8 +170,8 @@ EXPORT_SYMBOL(cl_lock_cancel);
 int cl_lock_enqueue(const struct lu_env *env, struct cl_io *io,
 		    struct cl_lock *lock, struct cl_sync_io *anchor)
 {
-	const struct cl_lock_slice	*slice;
-	int				rc = -ENOSYS;
+	const struct cl_lock_slice *slice;
+	int rc = 0;
 
 	ENTRY;
 

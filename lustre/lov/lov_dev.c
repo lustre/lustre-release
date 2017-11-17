@@ -46,7 +46,6 @@ struct kmem_cache *lov_object_kmem;
 struct kmem_cache *lov_thread_kmem;
 struct kmem_cache *lov_session_kmem;
 
-struct kmem_cache *lovsub_lock_kmem;
 struct kmem_cache *lovsub_object_kmem;
 
 struct lu_kmem_descr lov_caches[] = {
@@ -69,11 +68,6 @@ struct lu_kmem_descr lov_caches[] = {
                 .ckd_cache = &lov_session_kmem,
                 .ckd_name  = "lov_session_kmem",
                 .ckd_size  = sizeof (struct lov_session)
-        },
-        {
-                .ckd_cache = &lovsub_lock_kmem,
-                .ckd_name  = "lovsub_lock_kmem",
-                .ckd_size  = sizeof (struct lovsub_lock)
         },
         {
                 .ckd_cache = &lovsub_object_kmem,

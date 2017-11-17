@@ -62,7 +62,7 @@ int lovsub_object_init(const struct lu_env *env, struct lu_object *obj,
         below = under->ld_ops->ldo_object_alloc(env, obj->lo_header, under);
         if (below != NULL) {
                 lu_object_add(obj, below);
-		cl_object_page_init(lu2cl(obj), sizeof(struct lovsub_page));
+		cl_object_page_init(lu2cl(obj), 0);
                 result = 0;
         } else
                 result = -ENOMEM;
@@ -151,8 +151,6 @@ static void lovsub_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 }
 
 static const struct cl_object_operations lovsub_ops = {
-	.coo_page_init    = lovsub_page_init,
-	.coo_lock_init    = lovsub_lock_init,
 	.coo_attr_update  = lovsub_attr_update,
 	.coo_glimpse      = lovsub_object_glimpse,
 	.coo_req_attr_set = lovsub_req_attr_set

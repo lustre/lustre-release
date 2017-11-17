@@ -53,7 +53,6 @@
  */
 
 static struct kmem_cache *ll_thread_kmem;
-struct kmem_cache *vvp_lock_kmem;
 struct kmem_cache *vvp_object_kmem;
 static struct kmem_cache *vvp_session_kmem;
 static struct kmem_cache *vvp_thread_kmem;
@@ -63,11 +62,6 @@ static struct lu_kmem_descr vvp_caches[] = {
 		.ckd_cache = &ll_thread_kmem,
 		.ckd_name  = "ll_thread_kmem",
 		.ckd_size  = sizeof(struct ll_thread_info),
-	},
-	{
-		.ckd_cache = &vvp_lock_kmem,
-		.ckd_name  = "vvp_lock_kmem",
-		.ckd_size  = sizeof(struct vvp_lock),
 	},
 	{
 		.ckd_cache = &vvp_object_kmem,

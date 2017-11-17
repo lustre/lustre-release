@@ -8,7 +8,7 @@ lustre-objs += rw26.o super25.o statahead.o xattr_security.o
 lustre-objs += glimpse.o
 lustre-objs += lcommon_cl.o
 lustre-objs += lcommon_misc.o
-lustre-objs += vvp_dev.o vvp_page.o vvp_lock.o vvp_io.o vvp_object.o
+lustre-objs += vvp_dev.o vvp_page.o vvp_io.o vvp_object.o
 lustre-objs += range_lock.o
 
 EXTRA_DIST := $(lustre-objs:.o=.c) llite_internal.h rw26.c super25.c

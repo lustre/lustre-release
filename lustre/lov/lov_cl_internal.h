@@ -81,7 +81,6 @@
 
 struct lovsub_device;
 struct lovsub_object;
-struct lovsub_lock;
 
 enum lov_device_flags {
         LOV_DEV_INITIALIZED = 1 << 0
@@ -457,13 +456,6 @@ struct lovsub_object {
 };
 
 /**
- * Lock state at lovsub layer.
- */
-struct lovsub_lock {
-        struct cl_lock_slice  lss_cl;
-};
-
-/**
  * Describe the environment settings for sublocks.
  */
 struct lov_sublock_env {
@@ -605,7 +597,6 @@ extern struct kmem_cache *lov_object_kmem;
 extern struct kmem_cache *lov_thread_kmem;
 extern struct kmem_cache *lov_session_kmem;
 
-extern struct kmem_cache *lovsub_lock_kmem;
 extern struct kmem_cache *lovsub_object_kmem;
 
 int   lov_object_init     (const struct lu_env *env, struct lu_object *obj,
@@ -616,8 +607,6 @@ int   lov_lock_init       (const struct lu_env *env, struct cl_object *obj,
                            struct cl_lock *lock, const struct cl_io *io);
 int   lov_io_init         (const struct lu_env *env, struct cl_object *obj,
                            struct cl_io *io);
-int   lovsub_lock_init    (const struct lu_env *env, struct cl_object *obj,
-                           struct cl_lock *lock, const struct cl_io *io);
 
 int   lov_lock_init_composite(const struct lu_env *env, struct cl_object *obj,
                            struct cl_lock *lock, const struct cl_io *io);
@@ -778,22 +767,6 @@ static inline struct lovsub_object *lu2lovsub(const struct lu_object *obj)
 {
         LINVRNT(lovsub_is_object(obj));
         return container_of0(obj, struct lovsub_object, lso_cl.co_lu);
-}
-
-static inline struct lovsub_lock *
-cl2lovsub_lock(const struct cl_lock_slice *slice)
-{
-        LINVRNT(lovsub_is_object(&slice->cls_obj->co_lu));
-        return container_of(slice, struct lovsub_lock, lss_cl);
-}
-
-static inline struct lovsub_lock *cl2sub_lock(const struct cl_lock *lock)
-{
-        const struct cl_lock_slice *slice;
-
-        slice = cl_lock_at(lock, &lovsub_device_type);
-        LASSERT(slice != NULL);
-        return cl2lovsub_lock(slice);
 }
 
 static inline struct lov_lock *cl2lov_lock(const struct cl_lock_slice *slice)
