@@ -663,6 +663,28 @@ test_5() {
 }
 run_test 5 "Make sure init size work for mirrored layout"
 
+# LU=10112: disable dom+flr for phase 1
+test_6() {
+	local tf=$DIR/$tfile
+
+	$LFS mirror create -N -E 1M -L mdt -E eof -N -E eof $tf &&
+		error "expect failure to create mirrored file with DoM"
+
+	$LFS mirror create -N -E 1M -E eof -N -E 1M -L mdt -E eof $tf &&
+		error "expect failure to create mirrored file with DoM"
+
+	$LFS setstripe -E 1M -L mdt -E eof $tf
+	$LFS mirror extend -N2 $tf &&
+		error "expect failure to extend mirror with DoM"
+
+	$LFS mirror create -N2 -E 1M -E eof $tf-2
+	$LFS mirror extend -N -f $tf $tf-2 &&
+		error "expect failure to extend mirrored file with DoM extent"
+
+	true
+}
+run_test 6 "DoM and FLR won't co-exist for phase 1"
+
 test_21() {
 	local tf=$DIR/$tfile
 	local tf2=$DIR/$tfile-2

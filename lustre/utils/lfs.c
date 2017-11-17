@@ -1004,6 +1004,44 @@ struct mirror_args {
 	struct mirror_args	*m_next;
 };
 
+static inline int mirror_sanity_check_one(struct llapi_layout *layout)
+{
+	uint64_t start, end;
+	uint64_t pattern;
+	int rc;
+
+	/* LU-10112: do not support dom+flr in phase 1 */
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc)
+		return -errno;
+
+	rc = llapi_layout_pattern_get(layout, &pattern);
+	if (rc)
+		return -errno;
+
+	if (pattern == LOV_PATTERN_MDT || pattern == LLAPI_LAYOUT_MDT) {
+		fprintf(stderr, "error: %s: doesn't support dom+flr for now\n",
+			progname);
+		return -ENOTSUP;
+	}
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_LAST);
+	if (rc)
+		return -errno;
+
+	rc = llapi_layout_comp_extent_get(layout, &start, &end);
+	if (rc)
+		return -errno;
+
+	if (end != LUSTRE_EOF) {
+		fprintf(stderr, "error: %s: mirror layout doesn't reach eof\n",
+			progname);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 /**
  * enum mirror_flags - Flags for extending a mirrored file.
  * @NO_VERIFY: Indicates not to verify the mirror(s) from victim file(s)
@@ -1025,7 +1063,8 @@ enum mirror_flags {
  *
  * Return: 0 on success or a negative error code on failure.
  */
-static int mirror_create_sanity_check(struct mirror_args *list)
+static int mirror_create_sanity_check(const char *fname,
+				      struct mirror_args *list)
 {
 	int rc = 0;
 	bool has_m_file = false;
@@ -1034,9 +1073,25 @@ static int mirror_create_sanity_check(struct mirror_args *list)
 	if (list == NULL)
 		return -EINVAL;
 
-	while (list != NULL) {
-		uint64_t start, end;
+	if (fname) {
+		struct llapi_layout *layout;
 
+		layout = llapi_layout_get_by_path(fname, 0);
+		if (!layout) {
+			fprintf(stderr,
+				"error: %s: file '%s' couldn't get layout\n",
+				progname, fname);
+			return -ENODATA;
+		}
+
+		rc = mirror_sanity_check_one(layout);
+		llapi_layout_free(layout);
+
+		if (rc)
+			return rc;
+	}
+
+	while (list != NULL) {
 		if (list->m_file != NULL) {
 			has_m_file = true;
 			llapi_layout_free(list->m_layout);
@@ -1059,21 +1114,9 @@ static int mirror_create_sanity_check(struct mirror_args *list)
 			}
 		}
 
-		rc = llapi_layout_comp_use(list->m_layout,
-					   LLAPI_LAYOUT_COMP_USE_LAST);
+		rc = mirror_sanity_check_one(list->m_layout);
 		if (rc)
-			return -errno;
-
-		rc = llapi_layout_comp_extent_get(list->m_layout, &start, &end);
-		if (rc)
-			return -errno;
-
-		if (end != LUSTRE_EOF) {
-			fprintf(stderr,
-				"error: %s: mirror layout doesn't reach eof\n",
-				progname);
-			return -EINVAL;
-		}
+			return rc;
 
 		list = list->m_next;
 	}
@@ -1106,7 +1149,7 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 	int i = 0;
 	int rc = 0;
 
-	rc = mirror_create_sanity_check(mirror_list);
+	rc = mirror_create_sanity_check(NULL, mirror_list);
 	if (rc)
 		return rc;
 
@@ -1295,7 +1338,7 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 {
 	int rc;
 
-	rc = mirror_create_sanity_check(mirror_list);
+	rc = mirror_create_sanity_check(fname, mirror_list);
 	if (rc)
 		return rc;
 
