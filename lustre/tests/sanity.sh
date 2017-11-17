@@ -9225,7 +9225,7 @@ test_129() {
 			check_mds_dmesg '"has reached"' ||
 				error_exit "reached message should be output"
 
-			[ $has_warning -eq 0 ] &&
+			[ $has_warning = "false" ] &&
 				error_exit "warning message should be output"
 
 			dirsize=$(stat -c%s "$DIR/$tdir")
