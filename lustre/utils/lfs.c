@@ -334,7 +334,7 @@ command_t cmdlist[] = {
 	 "undergoing actions) for given files.\n usage: hsm_state <file> ..."},
 	{"hsm_set", lfs_hsm_set, 0, "Set HSM user flag on specified files.\n"
 	 "usage: hsm_set [--norelease] [--noarchive] [--dirty] [--exists] "
-	 "[--archived] [--lost] <file> ..."},
+	 "[--archived] [--lost] [--archive-id NUM] <file> ..."},
 	{"hsm_clear", lfs_hsm_clear, 0, "Clear HSM user flag on specified "
 	 "files.\n"
 	 "usage: hsm_clear [--norelease] [--noarchive] [--dirty] [--exists] "
@@ -4858,11 +4858,14 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 	{ .val = 'e',	.name = "exists",	.has_arg = no_argument },
 	{ .val = 'l',	.name = "lost",		.has_arg = no_argument },
 	{ .val = 'r',	.name = "norelease",	.has_arg = no_argument },
+	{ .val = 'i',	.name = "archive-id",	.has_arg = required_argument },
 	{ .name = NULL } };
-	char short_opts[] = "lraAde";
+	char short_opts[] = "lraAdei:";
 	__u64 mask = 0;
 	int c, rc;
 	char *path;
+	__u32 archive_id = 0;
+	char *end = NULL;
 
 	if (argc < 3)
 		return CMD_HELP;
@@ -4888,6 +4891,14 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 		case 'e':
 			mask |= HS_EXISTS;
 			break;
+		case 'i':
+			archive_id = strtol(optarg, &end, 10);
+			if (*end != '\0') {
+				fprintf(stderr, "invalid archive_id: '%s'\n",
+					end);
+				return CMD_HELP;
+			}
+			break;
 		case '?':
 			return CMD_HELP;
 		default:
@@ -4907,7 +4918,7 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 
 		/* If mode == 0, this means we apply the mask. */
 		if (mode == LFS_HSM_SET)
-			rc = llapi_hsm_state_set(path, mask, 0, 0);
+			rc = llapi_hsm_state_set(path, mask, 0, archive_id);
 		else
 			rc = llapi_hsm_state_set(path, 0, mask, 0);
 

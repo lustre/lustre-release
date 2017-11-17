@@ -678,8 +678,7 @@ get_hsm_archive_id() {
 	st=$($LFS hsm_state $f)
 	[[ $? == 0 ]] || error "$LFS hsm_state $f failed"
 
-	local ar=$(echo $st | grep "archive_id" | cut -f5 -d" " |
-		   cut -f2 -d:)
+	local ar=$(echo $st | grep -oP '(?<=archive_id:).*')
 	echo $ar
 }
 
@@ -992,6 +991,50 @@ test_1b() {
 	copytool_cleanup
 }
 run_test 1b "Archive, Release & Restore composite file"
+
+test_1c() {
+	mkdir -p $DIR/$tdir
+	chmod 777 $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+	$RUNAS touch $f
+
+	# Test whether we can set the maximum archive number.
+	local LOCAL_HSM_ARCHIVE_NUMBER=32
+	$LFS hsm_set --exists --archive-id $LOCAL_HSM_ARCHIVE_NUMBER $f ||
+		error "root could not change hsm flags"
+	check_hsm_flags_user $f "0x00000001"
+	echo "verifying archive number is $LOCAL_HSM_ARCHIVE_NUMBER"
+	local st=$(get_hsm_archive_id $f)
+	[[ $st == $LOCAL_HSM_ARCHIVE_NUMBER ]] ||
+		error "wrong archive number, $st != $LOCAL_HSM_ARCHIVE_NUMBER"
+
+	# Test whether setting archive number 0 results in no change.
+	$LFS hsm_set --exists --archive-id 0 $f ||
+		error "root could not change hsm flags"
+	check_hsm_flags_user $f "0x00000001"
+	echo "verifying archive number is still $LOCAL_HSM_ARCHIVE_NUMBER"
+	st=$(get_hsm_archive_id $f)
+	[[ $st == $LOCAL_HSM_ARCHIVE_NUMBER ]] ||
+		error "wrong archive number, $st != $LOCAL_HSM_ARCHIVE_NUMBER"
+
+	# Test whether setting archive number > 32 results in error.
+	$LFS hsm_set --exists --archive-id 33 $f &&
+		error "archive number is larger than 32"
+	check_hsm_flags_user $f "0x00000001"
+
+	# Test whether setting archive number 16 and archived flag.
+	LOCAL_HSM_ARCHIVE_NUMBER=16
+	$LFS hsm_set --exists --archived \
+	     --archive-id $LOCAL_HSM_ARCHIVE_NUMBER $f ||
+	    error "root could not change hsm flags"
+	check_hsm_flags_user $f "0x00000009"
+	echo "verifying archive number is $LOCAL_HSM_ARCHIVE_NUMBER"
+	st=$(get_hsm_archive_id $f)
+	[[ $st == $LOCAL_HSM_ARCHIVE_NUMBER ]] ||
+		error "wrong archive number, $st != $LOCAL_HSM_ARCHIVE_NUMBER"
+}
+run_test 1c "Check setting archive-id in lfs hsm_set"
 
 test_2() {
 	local f=$DIR/$tdir/$tfile

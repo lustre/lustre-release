@@ -1,4 +1,4 @@
-.TH lfs-hsm 1 "November 9, 2012" Lustre "Lustre/HSM binding utility"
+.TH lfs-hsm 1 "November 20, 2017" Lustre "Lustre/HSM binding utility"
 .SH NAME
 .Blfs hsm_command
 lfs commands used to interact with HSM features
@@ -16,6 +16,7 @@ lfs commands used to interact with HSM features
 .RB [ --exists ]
 .RB [ --archived ]
 .RB [ --lost ]
+.RB [ --archive-id ]
 .RB <FILE> ...
 .br
 .SH DESCRIPTION
@@ -59,6 +60,9 @@ An up-to-date file copy exists in HSM backend. Useful mostly for debugging. (roo
 .TP
 .B \\--lost
 File copy in HSM backend is not usable anymore and file could not be restored. It should be archived again. (root only)
+.TP
+.B \\--archive-id
+Set archive number identifier in hsm_set command. If archive-id is 0 or option is not provided, then default identifier 0 is used and means no identifier change.
 .SH EXAMPLES
 .TP
 .B Display current HSM flag for foo:
