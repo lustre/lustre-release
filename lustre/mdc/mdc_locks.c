@@ -885,21 +885,23 @@ resend:
 	 * intent operation, when server returns -EINPROGRESS for acquiring
 	 * intent lock, we'll retry in after_reply(). */
 	if (it && (int)lockrep->lock_policy_res2 == -EINPROGRESS) {
-                mdc_clear_replay_flag(req, rc);
-                ptlrpc_req_finished(req);
-                resends++;
+		mdc_clear_replay_flag(req, rc);
+		ptlrpc_req_finished(req);
+		if (generation == obddev->u.cli.cl_import->imp_generation) {
+			if (signal_pending(current))
+				RETURN(-EINTR);
 
-                CDEBUG(D_HA, "%s: resend:%d op:%d "DFID"/"DFID"\n",
-                       obddev->obd_name, resends, it->it_op,
-                       PFID(&op_data->op_fid1), PFID(&op_data->op_fid2));
-
-                if (generation == obddev->u.cli.cl_import->imp_generation) {
-                        goto resend;
-                } else {
+			resends++;
+			CDEBUG(D_HA, "%s: resend:%d op:%d "DFID"/"DFID"\n",
+			       obddev->obd_name, resends, it->it_op,
+			       PFID(&op_data->op_fid1),
+			       PFID(&op_data->op_fid2));
+			goto resend;
+		} else {
 			CDEBUG(D_HA, "resend cross eviction\n");
-                        RETURN(-EIO);
-                }
-        }
+			RETURN(-EIO);
+		}
+	}
 
 	rc = mdc_finish_enqueue(exp, req, einfo, it, lockh, rc);
 	if (rc < 0) {
