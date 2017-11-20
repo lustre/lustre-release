@@ -4604,7 +4604,7 @@ out_free:
 	return rc;
 }
 
-static int fid_from_lma(const char *path, int fd, lustre_fid *fid)
+static int fid_from_lma(const char *path, int fd, struct lu_fid *fid)
 {
 	char			 buf[512];
 	struct lustre_mdt_attrs	*lma;
@@ -4621,7 +4621,7 @@ static int fid_from_lma(const char *path, int fd, lustre_fid *fid)
 	return 0;
 }
 
-int llapi_get_mdt_index_by_fid(int fd, const lustre_fid *fid,
+int llapi_get_mdt_index_by_fid(int fd, const struct lu_fid *fid,
 			       int *mdt_index)
 {
 	int	rc;
@@ -4635,7 +4635,7 @@ int llapi_get_mdt_index_by_fid(int fd, const lustre_fid *fid,
 	return rc;
 }
 
-int llapi_fd2fid(int fd, lustre_fid *fid)
+int llapi_fd2fid(int fd, struct lu_fid *fid)
 {
 	int rc;
 
@@ -4648,7 +4648,7 @@ int llapi_fd2fid(int fd, lustre_fid *fid)
 	return rc;
 }
 
-int llapi_path2fid(const char *path, lustre_fid *fid)
+int llapi_path2fid(const char *path, struct lu_fid *fid)
 {
 	int fd, rc;
 
@@ -4668,7 +4668,7 @@ int llapi_path2fid(const char *path, lustre_fid *fid)
 	return rc;
 }
 
-int llapi_fd2parent(int fd, unsigned int linkno, lustre_fid *parent_fid,
+int llapi_fd2parent(int fd, unsigned int linkno, struct lu_fid *parent_fid,
 		    char *name, size_t name_size)
 {
 	struct getparent	*gp;
@@ -4698,7 +4698,7 @@ err_free:
 }
 
 int llapi_path2parent(const char *path, unsigned int linkno,
-		      lustre_fid *parent_fid, char *name, size_t name_size)
+		      struct lu_fid *parent_fid, char *name, size_t name_size)
 {
 	int	fd;
 	int	rc;
@@ -4969,7 +4969,8 @@ out:
  * \retval			non-negative file descriptor on successful open
  * \retval			-1 if an error occurred
  */
-int llapi_open_by_fid(const char *lustre_dir, const lustre_fid *fid, int flags)
+int llapi_open_by_fid(const char *lustre_dir, const struct lu_fid *fid,
+		      int flags)
 {
 	char mntdir[PATH_MAX];
 	char path[PATH_MAX];

@@ -462,7 +462,7 @@ out:
 }
 
 /* Return true if a FID is present in an action list. */
-static bool is_fid_in_hal(struct hsm_action_list *hal, const lustre_fid *fid)
+static bool is_fid_in_hal(struct hsm_action_list *hal, const struct lu_fid *fid)
 {
 	struct hsm_action_item *hai;
 	int i;

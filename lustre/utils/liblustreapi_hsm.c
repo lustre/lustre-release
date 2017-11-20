@@ -933,7 +933,7 @@ out_err:
  * \param parent_len Destination buffer size.
  * \return 0 on success.
  */
-static int fid_parent(const char *mnt, const lustre_fid *fid, char *parent,
+static int fid_parent(const char *mnt, const struct lu_fid *fid, char *parent,
 		      size_t parent_len)
 {
 	int		 rc;
@@ -1280,7 +1280,7 @@ int llapi_hsm_action_progress(struct hsm_copyaction_private *hcp,
  * @return error code if the action is not a copy operation.
  */
 int llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *hcp,
-			      lustre_fid *fid)
+			      struct lu_fid *fid)
 {
 	const struct hsm_action_item	*hai = &hcp->copy.hc_hai;
 
@@ -1337,7 +1337,7 @@ int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp)
 int llapi_hsm_import(const char *dst, int archive, const struct stat *st,
 		     unsigned long long stripe_size, int stripe_offset,
 		     int stripe_count, int stripe_pattern, char *pool_name,
-		     lustre_fid *newfid)
+		     struct lu_fid *newfid)
 {
 	struct hsm_user_import	 hui;
 	int			 fd;

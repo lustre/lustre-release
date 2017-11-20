@@ -9,7 +9,7 @@ obtain the layout of a Lustre file
 .BI "struct llapi_layout *llapi_layout_get_by_fd(int "fd ", uint32_t " flags );
 .PP
 .BI "struct llapi_layout *llapi_layout_get_by_fid(const char *"lustre_path ,
-.BI "                                             const lustre_fid *"fid ,
+.BI "                                             const struct lu_fid *"fid ,
 .BI "                                             uint32_t " flags );
 .PP
 .BI "struct llapi_layout *llapi_layout_get_by_path(const char *"path ,
@@ -55,7 +55,7 @@ It is typically the filesystem root, but may also be any path beneath
 the root.  Use the function
 .BR llapi_path2fid (3)
 to obtain a
-.B lustre_fid
+.B struct lu_fid
 associated with a given path.
 .PP
 The function

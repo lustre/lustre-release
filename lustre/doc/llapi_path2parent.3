@@ -7,11 +7,11 @@ in Lustre.
 .B #include <lustre/lustreapi.h>
 .PP
 .BI "int llapi_path2parent(const char *" path ", unsigned int " linkno ","
-.BI "                      lustre_fid *" parent_fid ", char *" name ","
+.BI "                      struct lu_fid *" parent_fid ", char *" name ","
 .BI "                      size_t " name_size );
 
 .BI "int llapi_fd2parent(int " fd ", unsigned int " linkno ","
-.BI "                    lustre_fid *" parent_fid ", char *" name ","
+.BI "                    struct lu_fid *" parent_fid ", char *" name ","
 .BI "                    size_t " name_size );
 .sp
 .fi

@@ -200,7 +200,7 @@ void test3(void)
 {
 	int rc;
 	struct llapi_layout *layout;
-	lustre_fid fid;
+	struct lu_fid fid;
 	char fidstr[4096];
 	char path[PATH_MAX];
 

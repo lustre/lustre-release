@@ -216,7 +216,7 @@ int main(int argc, char **argv)
 	int			 save_errno;
 	int			 verbose = 0;
 	int			 gid = 0;
-	lustre_fid		 fid;
+	struct lu_fid		 fid;
 	struct timespec		 ts;
 	struct lov_user_md_v3	 lum;
 	__u64			 dv;

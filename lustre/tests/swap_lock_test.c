@@ -548,7 +548,7 @@ static void test16(void)
 	int rc;
 	char *filename;
 	int fd;
-	lustre_fid fid;
+	struct lu_fid fid;
 
 	rc = mkdir(mainpath, 0);
 	ASSERTF(rc == 0, "mkdir failed for '%s': %s",

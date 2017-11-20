@@ -794,14 +794,14 @@ static int ct_copy_xattr(const char *src, const char *dst, int src_fd,
 }
 
 static int ct_path_lustre(char *buf, int sz, const char *mnt,
-			  const lustre_fid *fid)
+			  const struct lu_fid *fid)
 {
 	return snprintf(buf, sz, "%s/%s/fid/"DFID_NOBRACE, mnt,
 			dot_lustre_name, PFID(fid));
 }
 
 static int ct_path_archive(char *buf, int sz, const char *archive_dir,
-			   const lustre_fid *fid)
+			   const struct lu_fid *fid)
 {
 	return snprintf(buf, sz, "%s/%04x/%04x/%04x/%04x/%04x/%04x/"
 			DFID_NOBRACE, archive_dir,
@@ -1396,7 +1396,7 @@ static int ct_process_item_async(const struct hsm_action_item *hai,
 static int ct_import_one(const char *src, const char *dst)
 {
 	char		newarc[PATH_MAX];
-	lustre_fid	fid;
+	struct lu_fid	fid;
 	struct stat	st;
 	int		rc;
 
@@ -1454,7 +1454,7 @@ static char *path_concat(const char *dirname, const char *basename)
 	return result;
 }
 
-static int ct_import_fid(const lustre_fid *import_fid)
+static int ct_import_fid(const struct lu_fid *import_fid)
 {
 	char	fid_path[PATH_MAX];
 	int	rc;
@@ -1480,7 +1480,7 @@ static int ct_import_recurse(const char *relpath)
 	DIR		*dir;
 	struct dirent	*ent;
 	char		*srcpath, *newpath;
-	lustre_fid	 import_fid;
+	struct lu_fid	 import_fid;
 	int		 rc;
 
 	if (relpath == NULL)
@@ -1563,7 +1563,8 @@ out:
 	return rc;
 }
 
-static int ct_rebind_one(const lustre_fid *old_fid, const lustre_fid *new_fid)
+static int ct_rebind_one(const struct lu_fid *old_fid,
+			 const struct lu_fid *new_fid)
 {
 	char	src[PATH_MAX];
 	char	dst[PATH_MAX];
@@ -1591,7 +1592,7 @@ static int ct_rebind_one(const lustre_fid *old_fid, const lustre_fid *new_fid)
 	return 0;
 }
 
-static bool fid_is_file(lustre_fid *fid)
+static bool fid_is_file(struct lu_fid *fid)
 {
 	return fid_is_norm(fid) || fid_is_igif(fid);
 }
@@ -1631,8 +1632,8 @@ static int ct_rebind_list(const char *list)
 
 	/* each line consists of 2 FID */
 	while ((r = getline(&line, &line_size, filp)) != -1) {
-		lustre_fid	old_fid;
-		lustre_fid	new_fid;
+		struct lu_fid	old_fid;
+		struct lu_fid	new_fid;
 
 		/* Ignore empty and commented out ('#...') lines. */
 		if (should_ignore_line(line))
@@ -1672,8 +1673,8 @@ static int ct_rebind(void)
 	int	rc;
 
 	if (opt.o_dst) {
-		lustre_fid	old_fid;
-		lustre_fid	new_fid;
+		struct lu_fid old_fid;
+		struct lu_fid new_fid;
 
 		if (sscanf(opt.o_src, SFID, RFID(&old_fid)) != 3 ||
 		    !fid_is_file(&old_fid)) {

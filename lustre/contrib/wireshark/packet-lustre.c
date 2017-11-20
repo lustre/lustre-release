@@ -8771,7 +8771,7 @@ lustre_dissect_struct_hsm_extent(tvbuff_t *tvb _U_, int offset _U_, packet_info 
 }
 
 /* struct hsm_user_item { */
-/*        lustre_fid        hui_fid; */
+/*        struct lu_fid        hui_fid; */
 /*        struct hsm_extent hui_extent; */
 /* } __attribute__((packed)); */
 static int
@@ -8804,7 +8804,7 @@ lustre_dissect_struct_hsm_user_item(tvbuff_t *tvb _U_, int offset _U_, packet_in
 }
 
 /* struct hsm_progress_kernel { */
-/* 	lustre_fid		hpk_fid; */
+/* 	struct lu_fid		hpk_fid; */
 /* 	__u64			hpk_cookie; */
 /* 	struct hsm_extent	hpk_extent; */
 /* 	__u16			hpk_flags; */

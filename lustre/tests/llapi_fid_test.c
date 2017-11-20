@@ -99,9 +99,9 @@ static void cleanup(void)
  * file/directory */
 static void helper_fid2path(const char *filename, int fd)
 {
-	lustre_fid fid;
-	lustre_fid fid2;
-	lustre_fid fid3;
+	struct lu_fid fid;
+	struct lu_fid fid2;
+	struct lu_fid fid3;
 	char fidstr[FID_LEN + 1];
 	char path1[PATH_MAX];
 	char path2[PATH_MAX];
@@ -237,7 +237,7 @@ static void test11(void)
 {
 	int rc;
 	int fd;
-	lustre_fid fid;
+	struct lu_fid fid;
 	char fidstr[FID_LEN + 1];
 	char path[PATH_MAX];
 	long long recno;
@@ -273,7 +273,7 @@ static void test12(void)
 	int fd;
 	int fd2;
 	int fd3;
-	lustre_fid fid;
+	struct lu_fid fid;
 
 	/* Against a volatile file */
 	rc = mkdir(mainpath, 0);
@@ -367,7 +367,7 @@ static void test30(void)
 	} links[num_links];
 	char buf[PATH_MAX];
 	char buf2[PATH_MAX];
-	lustre_fid fid;
+	struct lu_fid fid;
 	char fidstr[FID_LEN + 1];
 	int rc;
 	int i;
@@ -473,8 +473,8 @@ static void test30(void)
  * type). mainpath must exist. */
 static void help_test40(void)
 {
-	lustre_fid parent_fid;
-	lustre_fid fid2;
+	struct lu_fid parent_fid;
+	struct lu_fid fid2;
 	char buf[PATH_MAX];
 	int rc;
 
@@ -571,7 +571,7 @@ static void test42(void)
 	const int num_links = 100;
 	struct {
 		char subdir[PATH_MAX];
-		lustre_fid subdir_fid;
+		struct lu_fid subdir_fid;
 		char filename[PATH_MAX];
 		bool seen;
 	} links[num_links];
@@ -581,7 +581,7 @@ static void test42(void)
 	int i;
 	int fd;
 	int linkno;
-	lustre_fid parent_fid;
+	struct lu_fid parent_fid;
 
 	/* Create the containing directory. */
 	rc = mkdir(mainpath, 0);

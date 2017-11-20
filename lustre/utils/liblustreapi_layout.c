@@ -1012,7 +1012,7 @@ struct llapi_layout *llapi_layout_get_by_path(const char *path, uint32_t flags)
  * \retval	NULL if an error occurs
  */
 struct llapi_layout *llapi_layout_get_by_fid(const char *lustre_dir,
-					     const lustre_fid *fid,
+					     const struct lu_fid *fid,
 					     uint32_t flags)
 {
 	int fd;

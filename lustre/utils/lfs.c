@@ -4670,7 +4670,7 @@ static int lfs_path2fid(int argc, char **argv)
 	char		**path;
 	const char	  short_opts[] = "p";
 	const char	 *sep = "";
-	lustre_fid	  fid;
+	struct lu_fid	  fid;
 	int		  rc = 0;
 	bool		  show_parents = false;
 

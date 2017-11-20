@@ -42,6 +42,10 @@
 #include <stdint.h>
 #include <linux/lustre/lustre_user.h>
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 #ifndef LL_MAXQUOTAS
 #define LL_MAXQUOTAS 3
 #endif
@@ -49,6 +53,8 @@
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
 #endif
+
+#define lustre_fid struct lu_fid
 
 extern bool liblustreapi_initialized;
 
@@ -317,6 +323,7 @@ int llapi_migrate_mdt(char *path, struct find_param *param);
 int llapi_mv(char *path, struct find_param *param);
 
 struct mntent;
+
 #define HAVE_LLAPI_IS_LUSTRE_MNT
 int llapi_is_lustre_mnt(struct mntent *mnt);
 int llapi_quotactl(char *mnt, struct if_quotactl *qctl);
@@ -327,17 +334,18 @@ int llapi_cp(int argc, char *argv[]);
 int llapi_ls(int argc, char *argv[]);
 int llapi_fid2path(const char *device, const char *fidstr, char *path,
 		   int pathlen, long long *recno, int *linkno);
-int llapi_path2fid(const char *path, lustre_fid *fid);
-int llapi_get_mdt_index_by_fid(int fd, const lustre_fid *fid, int *mdt_index);
-int llapi_fd2fid(int fd, lustre_fid *fid);
+int llapi_path2fid(const char *path, struct lu_fid *fid);
+int llapi_get_mdt_index_by_fid(int fd, const struct lu_fid *fid,
+			       int *mdt_index);
+int llapi_fd2fid(int fd, struct lu_fid *fid);
 /* get FID of parent dir + the related name of entry in this parent dir */
 int llapi_path2parent(const char *path, unsigned int linkno,
-		      lustre_fid *parent_fid, char *name, size_t name_size);
-int llapi_fd2parent(int fd, unsigned int linkno, lustre_fid *parent_fid,
+		      struct lu_fid *parent_fid, char *name, size_t name_size);
+int llapi_fd2parent(int fd, unsigned int linkno, struct lu_fid *parent_fid,
 		    char *name, size_t name_size);
 int llapi_chomp_string(char *buf);
-int llapi_open_by_fid(const char *dir, const lustre_fid *fid, int open_flags);
-
+int llapi_open_by_fid(const char *dir, const struct lu_fid *fid,
+		      int open_flags);
 int llapi_get_version_string(char *version, unsigned int version_size);
 /* llapi_get_version() is deprecated, use llapi_get_version_string() instead */
 int llapi_get_version(char *buffer, int buffer_size, char **version)
@@ -411,12 +419,12 @@ int llapi_hsm_action_progress(struct hsm_copyaction_private *hcp,
 			      const struct hsm_extent *he, __u64 total,
 			      int hp_flags);
 int llapi_hsm_action_get_dfid(const struct hsm_copyaction_private *hcp,
-			      lustre_fid *fid);
+			      struct lu_fid *fid);
 int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp);
 int llapi_hsm_import(const char *dst, int archive, const struct stat *st,
 		     unsigned long long stripe_size, int stripe_offset,
 		     int stripe_count, int stripe_pattern, char *pool_name,
-		     lustre_fid *newfid);
+		     struct lu_fid *newfid);
 
 /* HSM user interface */
 struct hsm_user_request *llapi_hsm_user_request_alloc(int itemcount,
@@ -485,7 +493,7 @@ struct llapi_layout *llapi_layout_get_by_fd(int fd, uint32_t flags);
  * stored in errno.
  */
 struct llapi_layout *llapi_layout_get_by_fid(const char *path,
-					     const lustre_fid *fid,
+					     const struct lu_fid *fid,
 					     uint32_t flags);
 
 /**
@@ -812,5 +820,9 @@ int llapi_layout_file_comp_set(const char *path,
 bool llapi_layout_is_composite(struct llapi_layout *layout);
 
 /** @} llapi */
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif

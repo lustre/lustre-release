@@ -87,6 +87,10 @@
 # include <linux/lustre/lustre_ver.h>
 #endif
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 /*
  *  GENERAL STUFF
  */
@@ -3221,7 +3225,7 @@ struct layout_intent {
  */
 struct hsm_progress_kernel {
 	/* Field taken from struct hsm_progress */
-	lustre_fid		hpk_fid;
+	struct lu_fid		hpk_fid;
 	__u64			hpk_cookie;
 	struct hsm_extent	hpk_extent;
 	__u16			hpk_flags;
@@ -3509,6 +3513,10 @@ struct ladvise_hdr {
 	__u64			lah_value3;	/* unused */
 	struct lu_ladvise	lah_advise[0];	/* advices in this header */
 };
+
+#if defined(__cplusplus)
+}
+#endif
 
 #endif
 /** @} lustreidl */
