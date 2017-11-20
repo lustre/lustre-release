@@ -1,6 +1,4 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:shiftwidth=4:softtabstop=4:tabstop=4:
 
 # Simple function used by run_*.sh scripts
 
@@ -285,24 +283,22 @@ print_opts () {
 }
 
 run_compilebench() {
+	local dir=${1:-$DIR}
+	local cbench_DIR=${cbench_DIR:-""}
+	local cbench_IDIRS=${cbench_IDIRS:-2}
+	local cbench_RUNS=${cbench_RUNS:-2}
+
+	print_opts cbench_DIR cbench_IDIRS cbench_RUNS
+
+	[ x$cbench_DIR = x ] &&
+		{ skip_env "compilebench not found" && return; }
+
+	[ -e $cbench_DIR/compilebench ] ||
+		{ skip_env "No compilebench build" && return; }
+
 	# Space estimation:
 	# compile dir kernel-0	~1GB
 	# required space	~1GB * cbench_IDIRS
-
-	local dir=${1:-$DIR}
-
-    cbench_DIR=${cbench_DIR:-""}
-    cbench_IDIRS=${cbench_IDIRS:-2}
-    cbench_RUNS=${cbench_RUNS:-2}
-
-    print_opts cbench_DIR cbench_IDIRS cbench_RUNS
-
-    [ x$cbench_DIR = x ] &&
-        { skip_env "compilebench not found" && return; }
-
-    [ -e $cbench_DIR/compilebench ] || \
-        { skip_env "No compilebench build" && return; }
-
 	local space=$(df -P $dir | tail -n 1 | awk '{ print $4 }')
 	if [[ $space -le $((1024 * 1024 * cbench_IDIRS)) ]]; then
 		cbench_IDIRS=$((space / 1024 / 1024))
@@ -310,15 +306,16 @@ run_compilebench() {
 			skip_env "Need free space at least 1GB, have $space" &&
 			return
 
-		echo "free space=$space, reducing initial dirs to $cbench_IDIRS"
+		echo "reducing initial dirs to $cbench_IDIRS"
 	fi
+	echo "free space = $space KB"
 
-    # FIXME:
-    # t-f _base needs to be modifyed to set properly tdir
-    # for new "test_foo" functions names
-    # local testdir=$DIR/$tdir
-    local testdir=$dir/d0.compilebench.$$
-    mkdir -p $testdir
+	# FIXME:
+	# t-f _base needs to be modifyed to set properly tdir
+	# for new "test_foo" functions names
+	# local testdir=$DIR/$tdir
+	local testdir=$dir/d0.compilebench.$$
+	mkdir -p $testdir
 
     local savePWD=$PWD
     cd $cbench_DIR
@@ -338,6 +335,7 @@ run_compilebench() {
 
 run_metabench() {
 	local dir=${1:-$DIR}
+	local mntpt=${2:-$MOUNT}
 	METABENCH=${METABENCH:-$(which metabench 2> /dev/null || true)}
 	mbench_NFILES=${mbench_NFILES:-30400}
 	# threads per client
@@ -348,9 +346,6 @@ run_metabench() {
 	[ x$METABENCH = x ] &&
 		{ skip_env "metabench not found" && return; }
 
-	# FIXME
-	# Need space estimation here.
-
 	print_opts METABENCH clients mbench_NFILES mbench_THREADS
 
 	local testdir=$dir/d0.metabench
@@ -358,11 +353,11 @@ run_metabench() {
 	# mpi_run uses mpiuser
 	chmod 0777 $testdir
 
-	# -C             Run the file creation tests.
+	# -C             Run the file creation tests. Creates zero byte files.
 	# -S             Run the file stat tests.
 	# -c nfile       Number of files to be used in each test.
-	# -k             => dont cleanup files when finished.
-	local cmd="$METABENCH -w $testdir -c $mbench_NFILES -C -S -k $mbench_OPTIONS"
+	# -k             Cleanup files when finished.
+	local cmd="$METABENCH -w $testdir -c $mbench_NFILES -C -S $mbench_OPTIONS"
 	echo "+ $cmd"
 
 	# find out if we need to use srun by checking $SRUN_PARTITION
@@ -375,15 +370,15 @@ run_metabench() {
 			-np $((num_clients * $mbench_THREADS)) $cmd
 	fi
 
-    local rc=$?
-    if [ $rc != 0 ] ; then
-        error "metabench failed! $rc"
-    fi
+	local rc=$?
+	if [ $rc != 0 ] ; then
+		error "metabench failed! $rc"
+	fi
 
 	if $mbench_CLEANUP; then
 		rm -rf $testdir
 	else
-		mv $dir/d0.metabench $dir/_xxx.$(date +%s).d0.metabench
+		mv $dir/d0.metabench $mntpt/_xxx.$(date +%s).d0.metabench
 	fi
 }
 
@@ -504,52 +499,63 @@ run_connectathon() {
 	[ x$cnt_DIR = x ] &&
 		{ skip_env "connectathon dir not found" && return; }
 
-	[ -e $cnt_DIR/runtests ] || \
+	[ -e $cnt_DIR/runtests ] ||
 		{ skip_env "No connectathon runtests found" && return; }
+
+	# Space estimation:
+	# "special" tests create a 30 MB file + misc. small files
+	# required space ~40 MB
+	local space=$(df -P $dir | tail -n 1 | awk '{ print $4 }')
+	if [[ $space -le $((1024 * 40)) ]]; then
+		skip_env "Need free space at least 40MB, have $space KB" &&
+		return
+	fi
+	echo "free space = $space KB"
 
 	local testdir=$dir/d0.connectathon
 	mkdir -p $testdir
 
-    local savePWD=$PWD
-    cd $cnt_DIR
+	local savePWD=$PWD
+	cd $cnt_DIR
 
-    #
-    # cthon options (must be in this order)
-    #
-    # -N numpasses - will be passed to the runtests script.  This argument
-    #         is optional.  It specifies the number of times to run
-    #         through the tests.
-    #
-    # One of these test types
-    #    -b  basic
-    #    -g  general
-    #    -s  special
-    #    -l  lock
-    #    -a  all of the above
-    #
-    # -f      a quick functionality test
-    #
+	#
+	# To run connectathon:
+	# runtests [-a|-b|-g|-s|-l] [-f|-n|-t] [-N numpasses] [test-directory]
+	#
+	# One of the following test types
+	#    -b  basic
+	#    -g  general
+	#    -s  special
+	#    -l  lock
+	#    -a  all of the above
+	#
+	# -f  a quick functional test
+	# -n  suppress directory operations (mkdir and rmdir)
+	# -t  run with time statistics (default for basic tests)
+	#
+	# -N numpasses - specifies the number of times to run
+	#                the tests. Optional.
 
-    tests="-b -g -s"
-    # Include lock tests unless we're running on nfsv4
-    local fstype=$(df -TP $testdir | awk 'NR==2  {print $2}')
-    echo "$testdir: $fstype"
-    if [[ $fstype != "nfs4" ]]; then
-        tests="$tests -l"
-    fi
-    echo "tests: $tests"
-    for test in $tests; do
-        local cmd="./runtests -N $cnt_NRUN $test -f $testdir"
-        local rc=0
+	tests="-b -g -s"
+	# Include lock tests unless we're running on nfsv4
+	local fstype=$(df -TP $testdir | awk 'NR==2  {print $2}')
+	echo "$testdir: $fstype"
+	if [[ $fstype != "nfs4" ]]; then
+		tests="$tests -l"
+	fi
+	echo "tests: $tests"
+	for test in $tests; do
+		local cmd="./runtests -N $cnt_NRUN $test -f $testdir"
+		local rc=0
 
-        log "$cmd"
-        eval $cmd
-        rc=$?
-        [ $rc = 0 ] || error "connectathon failed: $rc"
-    done
+		log "$cmd"
+		eval $cmd
+		rc=$?
+		[ $rc = 0 ] || error "connectathon failed: $rc"
+	done
 
-    cd $savePWD
-    rm -rf $testdir
+	cd $savePWD
+	rm -rf $testdir
 }
 
 run_ior() {
@@ -607,18 +613,16 @@ run_ior() {
 		     ${ior_blockUnit} bytes)"
 	fi
 
-    print_opts IOR ior_THREADS ior_DURATION MACHINEFILE
+	print_opts IOR ior_THREADS ior_DURATION MACHINEFILE
 
-    mkdir -p $testdir
-    # mpi_run uses mpiuser
-    chmod 0777 $testdir
-	if [ "$NFSCLIENT" ]; then
-		setstripe_nfsserver $testdir $nfs_srvmntpt -c -1 ||
-			{ error "setstripe on nfsserver failed" && return 1; }
-	else
+	mkdir -p $testdir
+	# mpi_run uses mpiuser
+	chmod 0777 $testdir
+	if [ -z "$NFSCLIENT" ]; then
 		$LFS setstripe $testdir -c -1 ||
 			{ error "setstripe failed" && return 2; }
 	fi
+
 	#
 	# -b N  blockSize --
 	#       contiguous bytes to write per task (e.g.: 8, 4K, 2M, 1G)"

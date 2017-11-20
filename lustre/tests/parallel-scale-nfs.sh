@@ -7,7 +7,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 # only call init_test_env if this script is called directly
 if [[ -z "$TESTSUITE" || "$TESTSUITE" = "$(basename $0 .sh)" ]]; then
-    init_test_env $@
+	init_test_env $@
 fi
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
@@ -15,10 +15,6 @@ init_logging
 racer=$LUSTRE/tests/racer/racer.sh
 . $LUSTRE/tests/setup-nfs.sh
 
-check_and_setup_lustre
-
-# first unmount all the lustre clients
-cleanup_mount $MOUNT
 # lustre client used as nfs server (default is mds node)
 LUSTRE_CLIENT_NFSSRV=${LUSTRE_CLIENT_NFSSRV:-$(facet_active_host $SINGLEMDS)}
 NFS_SRVMNTPT=${NFS_SRVMNTPT:-$MOUNT}
@@ -30,7 +26,16 @@ NFS_CLIMNTPT=${NFS_CLIMNTPT:-$MOUNT}
 	skip_env "need at least two nodes: nfs server and nfs client" && exit 0
 
 [ "$NFSVERSION" = "4" ] && cl_mnt_opt="${MOUNT_OPTS:+$MOUNT_OPTS,}32bitapi" ||
-    cl_mnt_opt=""
+	cl_mnt_opt=""
+
+check_and_setup_lustre
+$LFS df
+TESTDIR=$NFS_CLIMNTPT/d0.$(basename $0 .sh)
+mkdir -p $TESTDIR
+$LFS setstripe -c -1 $TESTDIR
+
+# first unmount all the lustre clients
+cleanup_mount $MOUNT
 
 cleanup_exit () {
 	trap 0
@@ -53,7 +58,7 @@ cleanup () {
 trap cleanup_exit EXIT SIGHUP SIGINT
 
 zconf_mount $LUSTRE_CLIENT_NFSSRV $NFS_SRVMNTPT "$cl_mnt_opt" ||
-    error "mount lustre on $LUSTRE_CLIENT_NFSSRV failed"
+	error "mount lustre on $LUSTRE_CLIENT_NFSSRV failed"
 
 # setup the nfs
 setup_nfs "$NFSVERSION" "$NFS_SRVMNTPT" "$LUSTRE_CLIENT_NFSSRV" \
@@ -66,8 +71,8 @@ FAIL_ON_ERROR=false
 # common setup
 MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 clients=${NFS_CLIENTS:-$HOSTNAME}
-generate_machine_file $clients $MACHINEFILE || \
-    error "Failed to generate machine file"
+generate_machine_file $clients $MACHINEFILE ||
+	error "Failed to generate machine file"
 num_clients=$(get_node_count ${clients//,/ })
 
 # compilbench
@@ -95,27 +100,27 @@ MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}
 $GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
 
 test_compilebench() {
-	run_compilebench $NFS_CLIMNTPT
+	run_compilebench $TESTDIR
 }
 run_test compilebench "compilebench"
 
 test_metabench() {
-	run_metabench $NFS_CLIMNTPT
+	run_metabench $TESTDIR $NFS_CLIMNTPT
 }
 run_test metabench "metabench"
 
 test_connectathon() {
-	run_connectathon $NFS_CLIMNTPT
+	run_connectathon $TESTDIR
 }
 run_test connectathon "connectathon"
 
 test_iorssf() {
-	run_ior "ssf" $NFS_CLIMNTPT $NFS_SRVMNTPT
+	run_ior "ssf" $TESTDIR $NFS_SRVMNTPT
 }
 run_test iorssf "iorssf"
 
 test_iorfpp() {
-	run_ior "fpp" $NFS_CLIMNTPT $NFS_SRVMNTPT
+	run_ior "fpp" $TESTDIR $NFS_SRVMNTPT
 }
 run_test iorfpp "iorfpp"
 
