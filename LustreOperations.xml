@@ -923,7 +923,7 @@ tune2fs [-m reserved_blocks_percent] /dev/
     <para>To copy the contents of an existing OST to a new OST (or an old MDT
     to a new MDT), follow the process for either OST/MDT backups in 
     <xref linkend='dbdoclet.backup_device' />or 
-    <xref linkend='dbdoclet.backup_target_filesystem' />.
+    <xref linkend='backup_fs_level' />.
     For more information on removing a MDT, see 
     <xref linkend='dbdoclet.rmremotedir' />.</para>
   </section>

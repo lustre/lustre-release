@@ -1,4 +1,4 @@
-﻿<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustremaintenance">
+<?xml version='1.0' encoding='UTF-8'?><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="lustremaintenance">
   <title xml:id="lustremaintenance.title">Lustre Maintenance</title>
   <para>Once you have the Lustre file system up and running, you can use the procedures in this section to perform these basic Lustre maintenance tasks:</para>
   <itemizedlist>
@@ -15,7 +15,7 @@
       <para><xref linkend="dbdoclet.50438199_54623"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_31353"/></para>
+      <para><xref linkend="dbdoclet.changingservernid"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.adding_new_mdt"/></para>
@@ -215,7 +215,7 @@ Regenerating Lustre Configuration Logs</title>
       </orderedlist>
       <para>After the <literal>writeconf</literal> command is run, the configuration logs are re-generated as servers restart.</para>
     </section>
-    <section xml:id="dbdoclet.50438199_31353">
+    <section xml:id="dbdoclet.changingservernid">
       <title><indexterm><primary>maintenance</primary><secondary>changing a NID</secondary></indexterm>
 Changing a Server NID</title>
       <para>In Lustre software release 2.3 or earlier, the <literal>tunefs.lustre
@@ -609,8 +609,8 @@ oss# mount -t ldiskfs <replaceable>/dev/ost_device</replaceable> /mnt/ost</scree
       <para>If the original OST is still available, it is best to follow the
         OST backup and restore procedure given in either
         <xref linkend="dbdoclet.backup_device"/>, or
-        <xref linkend="dbdoclet.backup_target_filesystem"/> and
-        <xref linkend="dbdoclet.restore_target_filesystem"/>.</para>
+        <xref linkend="backup_fs_level"/> and
+        <xref linkend="backup_fs_level.restore"/>.</para>
       <para>To replace an OST that was removed from service due to corruption
       or hardware failure, the replacement OST needs to be formatted using
       <literal>mkfs.lustre</literal>, and the Lustre file system configuration
@@ -727,10 +727,14 @@ Changing the Address of a Failover Node</title>
         linkend="configuringfailover"/>.</para>
     </section>
     <section xml:id="dbdoclet.50438199_62545">
-      <title><indexterm><primary>maintenance</primary><secondary>separate a combined MGS/MDT</secondary></indexterm>
-Separate a combined MGS/MDT</title>
-      <para>These instructions assume the MGS node will be the same as the MDS node. For instructions on how to move MGS to a different node, see <xref linkend="dbdoclet.50438199_31353"/>.</para>
-      <para>These instructions are for doing the split without shutting down other servers and clients.</para>
+      <title><indexterm><primary>maintenance</primary><secondary>separate a
+        combined MGS/MDT</secondary></indexterm>
+        Separate a combined MGS/MDT</title>
+      <para>These instructions assume the MGS node will be the same as the MDS
+        node. For instructions on how to move MGS to a different node, see
+        <xref linkend="dbdoclet.changingservernid"/>.</para>
+      <para>These instructions are for doing the split without shutting down
+        other servers and clients.</para>
       <orderedlist>
         <listitem>
           <para>Stop the MDS.</para>

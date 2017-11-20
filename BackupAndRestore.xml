@@ -20,12 +20,12 @@ xml:id="backupandrestore">
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.backup_target_filesystem"/>
+        <xref linkend="backup_fs_level"/>
       </para>
     </listitem>
     <listitem>
       <para>
-        <xref linkend="dbdoclet.restore_target_filesystem"/>
+        <xref linkend="backup_fs_level.restore"/>
       </para>
     </listitem>
     <listitem>
@@ -437,7 +437,7 @@ Changelog records consumed: 42</screen>
       restore is detected (see 
       <link xl:href="http://jira.hpdd.intel.com/browse/LU-957">LU-957</link>),
       and file-level backup is supported (see 
-      <xref linkend="dbdoclet.backup_target_filesystem"/>).</para>
+      <xref linkend="backup_fs_level"/>).</para>
     </warning>
     <para>If hardware replacement is the reason for the backup or if a spare
     storage device is available, it is possible to do a raw copy of the MDT or
@@ -474,7 +474,7 @@ Changelog records consumed: 42</screen>
     backup device, and is still much better than not having any backup at all.
     </para>
   </section>
-  <section xml:id="dbdoclet.backup_target_filesystem">
+  <section xml:id="backup_fs_level">
     <title>
     <indexterm>
       <primary>backup</primary>
@@ -483,10 +483,10 @@ Changelog records consumed: 42</screen>
     <indexterm>
       <primary>backup</primary>
       <secondary>MDT file system</secondary>
-    </indexterm>Backing Up an OST or MDT (ldiskfs File System Level)</title>
+    </indexterm>Backing Up an OST or MDT (Backend File System Level)</title>
     <para>This procedure provides an alternative to backup or migrate the data
     of an OST or MDT at the file level. At the file-level, unused space is
-    omitted from the backed up and the process may be completed quicker with
+    omitted from the backup and the process may be completed quicker with a
     smaller total backup size. Backing up a single OST device is not
     necessarily the best way to perform backups of the Lustre file system,
     since the files stored in the backup are not usable without metadata stored
@@ -494,37 +494,85 @@ Changelog records consumed: 42</screen>
     it is the preferred method for migration of OST devices, especially when it
     is desirable to reformat the underlying file system with different
     configuration options or to reduce fragmentation.</para>
-    <note>
-      <para>Prior to Lustre software release 2.3, the only successful way to
-      perform an MDT backup and restore is to do a device-level backup as is
-      described in 
+    <note><para>
+      <emphasis role="bold">Prior to Lustre software release 2.3</emphasis>, the
+      only successful way to perform an MDT backup and restore was to do a
+      device-level backup as described in
       <xref linkend="dbdoclet.backup_device" />. The ability to do MDT
       file-level backups is not available for Lustre software release 2.0
       through 2.2, because restoration of the Object Index (OI) file does not
-      return the MDT to a functioning state. 
-      <emphasis role="bold">Since Lustre software release 2.3</emphasis>,
+      return the MDT to a functioning state.</para>
+      <para><emphasis role="bold">Since Lustre software release 2.3</emphasis>,
       Object Index files are automatically rebuilt at first mount after a
       restore is detected (see 
       <link xl:href="http://jira.hpdd.intel.com/browse/LU-957">LU-957</link>),
-      so file-level MDT restore is supported.</para>
-    </note>
-    <para>For Lustre software release 2.3 and newer with MDT file-level backup
-    support, substitute 
-    <literal>mdt</literal> for 
-    <literal>ost</literal> in the instructions below.</para>
-    <orderedlist>
-      <listitem>
-        <para>
-          <emphasis role="bold">Make a mountpoint for the file
-          system.</emphasis>
-        </para>
-        <screen>[oss]# mkdir -p /mnt/ost</screen>
-      </listitem>
-      <listitem>
-        <para>
-          <emphasis role="bold">Mount the file system.</emphasis>
-        </para>
+      so file-level MDT restore is supported.</para></note>
+    <section xml:id="backup_fs_level.index_objects" condition="l2B">
+      <title>
+        <indexterm>
+          <primary>backup</primary>
+          <secondary>index objects</secondary>
+        </indexterm>Backing Up an OST or MDT (Backend File System Level)</title>
+      <para>Prior to Lustre software release 2.11.0, we can only do the backend
+        file system level backup and restore process for ldiskfs-based systems.
+        The ability to perform a zfs-based MDT/OST file system level backup and
+        restore is introduced beginning in Lustre software release 2.11.0.
+        Differing from an ldiskfs-based system, index objects must be backed up
+        before the unmount of the target (MDT or OST) in order to be able to
+        restore the file system successfully.  To enable index backup on the
+        target, execute the following command on the target server:</para>
+      <screen># lctl set_param osd-zfs.${fsname}-${target}.index_backup=1</screen>
+      <para><replaceable>${target}</replaceable> is composed of the target type
+        (MDT or  OST) plus the target index, such as <literal>MDT0000</literal>,
+        <literal>OST0001</literal>, and so on.</para>
+      <note><para>The index_backup is also valid for an ldiskfs-based system,
+        that will be used when migrating data between ldiskfs-based and
+        zfs-based systems as described in <xref linkend="migrate_backends"/>.
+      </para></note>
+    </section>
+    <section xml:id="backup_fs_level.ost_mdt">
+      <title>
+        <indexterm>
+          <primary>backup</primary>
+          <secondary>OST and MDT</secondary>
+        </indexterm>Backing Up an OST or MDT</title>
+      <para>For Lustre software release 2.3 and newer with MDT file-level backup
+        support, substitute <literal>mdt</literal> for <literal>ost</literal>
+        in the instructions below.</para>
+      <orderedlist>
+        <listitem>
+          <para><emphasis role="bold">Umount the target</emphasis></para>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">Make a mountpoint for the file system.
+          </emphasis></para>
+          <screen>[oss]# mkdir -p /mnt/ost</screen>
+        </listitem>
+        <listitem>
+          <para><emphasis role="bold">Mount the file system.</emphasis></para>
+        <para>For ldiskfs-based systems:</para>
         <screen>[oss]# mount -t ldiskfs /dev/<emphasis>{ostdev}</emphasis> /mnt/ost</screen>
+        <para>For zfs-based systems:</para>
+        <orderedlist>
+          <listitem>
+            <para>Import the pool for the target if it is exported. For example:
+              <screen>[oss]# zpool import lustre-ost [-d ${ostdev_dir}]</screen>
+            </para>
+          </listitem>
+          <listitem>
+            <para>Enable the <literal>canmount</literal> property on the target
+              filesystem. For example:
+              <screen>[oss]# zfs set canmount=on ${fsname}-ost/ost</screen>
+              You also can specify the mountpoint property. By default, it will
+              be: <literal>/${fsname}-ost/ost</literal>
+            </para>
+          </listitem>
+          <listitem>
+            <para>Mount the target as 'zfs'. For example:
+              <screen>[oss]# zfs mount ${fsname}-ost/ost</screen>
+            </para>
+          </listitem>
+        </orderedlist>
       </listitem>
       <listitem>
         <para>
@@ -614,8 +662,9 @@ trusted.fid= \
         </note>
       </listitem>
     </orderedlist>
+    </section>
   </section>
-  <section xml:id="dbdoclet.restore_target_filesystem">
+  <section xml:id="backup_fs_level.restore">
     <title>
     <indexterm>
       <primary>backup</primary>
@@ -626,15 +675,38 @@ trusted.fid= \
     <orderedlist>
       <listitem>
         <para>Format the new device.</para>
-        <screen>[oss]# mkfs.lustre --ost --index {<emphasis>OST index</emphasis>} {<emphasis>other options</emphasis>} /dev/<emphasis>{newdev}</emphasis></screen>
+        <screen>[oss]# mkfs.lustre --ost --index {<emphasis>OST index</emphasis>}
+--replace --fstype=${fstype} {<emphasis>other options</emphasis>} /dev/<emphasis>{newdev}</emphasis></screen>
       </listitem>
       <listitem>
-        <para>Set the file system label.</para>
+        <para>Set the file system label (<emphasis role="bold">ldiskfs-based
+          systems only</emphasis>).</para>
         <screen>[oss]# e2label {fsname}-OST{index in hex} /mnt/ost</screen>
       </listitem>
       <listitem>
         <para>Mount the file system.</para>
+        <para>For ldiskfs-based systems:</para>
         <screen>[oss]# mount -t ldiskfs /dev/<emphasis>{newdev}</emphasis> /mnt/ost</screen>
+        <para>For zfs-based systems:</para>
+        <orderedlist>
+          <listitem>
+            <para>Import the pool for the target if it is exported. For example:
+            </para>
+            <screen>[oss]# zpool import lustre-ost [-d ${ostdev_dir}]</screen>
+          </listitem>
+          <listitem>
+            <para>Enable the canmount property on the target filesystem. For
+              example:</para>
+            <screen>[oss]# zfs set canmount=on ${fsname}-ost/ost</screen>
+            <para>You also can specify the <literal>mountpoint</literal>
+              property. By default, it will be:
+              <literal>/${fsname}-ost/ost</literal></para>
+          </listitem>
+          <listitem>
+            <para>Mount the target as 'zfs'. For example:</para>
+            <screen>[oss]# zfs mount ${fsname}-ost/ost</screen>
+          </listitem>
+        </orderedlist>
       </listitem>
       <listitem>
         <para>Change to the new file system mount point.</para>
@@ -669,8 +741,8 @@ trusted.fid= \
 0x0d822200000000004a8a73e500000000808a0100000000000000000000000000</screen>
       </listitem>
       <listitem>
-        <para>Remove old OI files.</para>
-        <screen>[oss]# rm -f oi.16*</screen>
+        <para>Remove old OI and LFSCK files.</para>
+        <screen>[oss]# rm -rf oi.16* lfsck_* LFSCK</screen>
       </listitem>
       <listitem>
         <para>Remove old CATALOGS.</para>
@@ -696,6 +768,23 @@ trusted.fid= \
       <listitem>
         <para>Unmount the new file system.</para>
         <screen>[oss]# umount /mnt/ost</screen>
+        <note><para>If the restored system has a different NID from the backup
+          system, please change the NID. For detail, please refer to
+          <xref linkend="dbdoclet.changingservernid" />.  For example:</para>
+          <screen>[oss]# mount -t lustre -o nosvc ${fsname}-ost/ost /mnt/ost
+[oss]# lctl replace_nids ${fsname}-OSTxxxx $new_nids
+[oss]# umount /mnt/ost</screen></note>
+      </listitem>
+      <listitem>
+        <para>Mount the target as <literal>lustre</literal>.</para>
+        <para>Usually, we will use the <literal>-o abort_recov</literal> option
+          to skip unnecessary recovery. For example:</para>
+        <screen>[oss]# mount -t lustre -o abort_recov #{fsname}-ost/ost /mnt/ost</screen>
+        <para>Lustre can detect the restore automatically when mounting the
+          target, and then trigger OI scrub to rebuild the OIs and index objects
+          asynchronously in the background. You can check the OI scrub status
+          with the following command:</para>
+        <screen>[oss]# lctl get_param -n osd-${fstype}.${fsname}-${target}.oi_scrub</screen>
       </listitem>
     </orderedlist>
     <para condition='l23'>If the file system was used between the time the
@@ -986,5 +1075,47 @@ fstab  passwds
         working in LVM v2.02.01.</para>
       </note>
     </section>
+  </section>
+  <section xml:id="migrate_backends" condition="l2B">
+      <title>
+          <indexterm>
+              <primary>backup</primary>
+              <secondary>ZFS ZPL</secondary>
+          </indexterm>Migration Between ZFS and ldiskfs Target Filesystems
+      </title>
+      <para>Beginning with Lustre 2.11.0, it is possible to migrate between
+        ZFS and ldiskfs backends.  For migrating OSTs, it is best to use
+        <literal>lfs find</literal>/<literal>lfs_migrate</literal> to empty out
+        an OST while the filesystem is in use and then reformat it with the new
+        fstype. For instructions on removing the OST, please see
+        <xref linkend="section_remove_ost"/>.</para>
+      <section remap="h3" xml:id="migrate_backends.zfs2ldiskfs">
+        <title>
+          <indexterm>
+            <primary>backup</primary>
+            <secondary>ZFS to ldiskfs</secondary>
+          </indexterm>Migrate from a ZFS to an ldiskfs based filesystem</title>
+        <para>The first step of the process is to make a ZFS backend backup
+          using <literal>tar</literal> as described in
+          <xref linkend="backup_fs_level"/>.</para>
+        <para>Next, restore the backup to an ldiskfs-based system as described
+          in <xref linkend="backup_fs_level.restore"/>.</para>
+      </section>
+      <section remap="h3" xml:id="migrate_backends.ldiskfs2zfs">
+        <title>
+          <indexterm>
+            <primary>backup</primary>
+            <secondary>ZFS to ldiskfs</secondary>
+          </indexterm>Migrate from an ldiskfs to a ZFS based filesystem</title>
+        <para>The first step of the process is to make an ldiskfs backend backup
+          using <literal>tar</literal> as described in
+          <xref linkend="backup_fs_level"/>.</para>
+        <para><emphasis role="strong">Caution:</emphasis>For a migration from
+          ldiskfs to zfs, it is required to enable index_backup before the
+          unmount of the target.  This is an additional step for a regular
+          ldiskfs-based backup/restore and easy to be missed.</para>
+        <para>Next, restore the backup to an ldiskfs-based system as described
+          in <xref linkend="backup_fs_level.restore"/>.</para>
+      </section>
   </section>
 </chapter>
