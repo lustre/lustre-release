@@ -1286,7 +1286,7 @@ static int osc_make_ready(const struct lu_env *env, struct osc_async_page *oap,
 	ENTRY;
 	result = cl_page_make_ready(env, page, CRT_WRITE);
 	if (result == 0)
-		opg->ops_submit_time = cfs_time_current();
+		opg->ops_submit_time = ktime_get_seconds();
 	RETURN(result);
 }
 

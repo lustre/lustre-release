@@ -308,10 +308,9 @@ drop_lock:
 
 int osc_object_is_contended(struct osc_object *obj)
 {
-        struct osc_device *dev  = lu2osc_dev(obj->oo_cl.co_lu.lo_dev);
-        int osc_contention_time = dev->od_contention_time;
-        cfs_time_t cur_time     = cfs_time_current();
-        cfs_time_t retry_time;
+	struct osc_device *dev = lu2osc_dev(obj->oo_cl.co_lu.lo_dev);
+	time64_t osc_contention_time = dev->od_contention_time;
+	time64_t retry_time;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OSC_OBJECT_CONTENTION))
                 return 1;
@@ -319,17 +318,16 @@ int osc_object_is_contended(struct osc_object *obj)
         if (!obj->oo_contended)
                 return 0;
 
-        /*
-         * I like copy-paste. the code is copied from
-         * ll_file_is_contended.
-         */
-        retry_time = cfs_time_add(obj->oo_contention_time,
-                                  cfs_time_seconds(osc_contention_time));
-        if (cfs_time_after(cur_time, retry_time)) {
-                osc_object_clear_contended(obj);
-                return 0;
-        }
-        return 1;
+	/*
+	 * I like copy-paste. the code is copied from
+	 * ll_file_is_contended.
+	 */
+	retry_time = obj->oo_contention_time + osc_contention_time;
+	if (ktime_get_seconds() > retry_time) {
+		osc_object_clear_contended(obj);
+		return 0;
+	}
+	return 1;
 }
 EXPORT_SYMBOL(osc_object_is_contended);
 

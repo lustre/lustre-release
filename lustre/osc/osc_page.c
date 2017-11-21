@@ -119,12 +119,12 @@ static const char *osc_list(struct list_head *head)
 	return list_empty(head) ? "-" : "+";
 }
 
-static inline cfs_time_t osc_submit_duration(struct osc_page *opg)
+static inline time64_t osc_submit_duration(struct osc_page *opg)
 {
-        if (opg->ops_submit_time == 0)
-                return 0;
+	if (opg->ops_submit_time == 0)
+		return 0;
 
-        return (cfs_time_current() - opg->ops_submit_time);
+	return ktime_get_seconds() - opg->ops_submit_time;
 }
 
 static int osc_page_print(const struct lu_env *env,
@@ -139,7 +139,7 @@ static int osc_page_print(const struct lu_env *env,
 	return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p %lu: "
 			  "1< %#x %d %u %s %s > "
 			  "2< %lld %u %u %#x %#x | %p %p %p > "
-			  "3< %d %lu %d > "
+			  "3< %d %lld %d > "
 			  "4< %d %d %d %lu %s | %s %s %s %s > "
 			  "5< %s %s %s %s | %d %s | %d %s %s>\n",
 			  opg, osc_index(opg),
@@ -327,7 +327,7 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 		oap->oap_cmd |= OBD_BRW_NOQUOTA;
 	}
 
-	opg->ops_submit_time = cfs_time_current();
+	opg->ops_submit_time = ktime_get_seconds();
 	osc_page_transfer_get(opg, "transfer\0imm");
 	osc_page_transfer_add(env, opg, crt);
 }

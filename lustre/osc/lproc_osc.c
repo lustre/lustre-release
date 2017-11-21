@@ -508,7 +508,7 @@ static int osc_contention_seconds_seq_show(struct seq_file *m, void *v)
 	struct obd_device *obd = m->private;
 	struct osc_device *od  = obd2osc_dev(obd);
 
-	seq_printf(m, "%u\n", od->od_contention_time);
+	seq_printf(m, "%lld\n", od->od_contention_time);
 	return 0;
 }
 
