@@ -3991,7 +3991,9 @@ static void lfsck_namespace_close_dir(const struct lu_env *env,
 	lnr->lnr_size = size;
 
 	spin_lock(&lad->lad_lock);
-	if (lad->lad_assistant_status < 0) {
+	if (lad->lad_assistant_status < 0 ||
+	    unlikely(!thread_is_running(&lfsck->li_thread) ||
+		     !thread_is_running(&lad->lad_thread))) {
 		spin_unlock(&lad->lad_lock);
 		lfsck_namespace_assistant_req_fini(env, &lnr->lnr_lar);
 		ns->ln_striped_dirs_skipped++;
@@ -4285,11 +4287,11 @@ static int lfsck_namespace_exec_dir(const struct lu_env *env,
 	l_wait_event(mthread->t_ctl_waitq,
 		     lad->lad_prefetched < bk->lb_async_windows ||
 		     !thread_is_running(mthread) ||
-		     thread_is_stopped(athread),
+		     !thread_is_running(athread),
 		     &lwi);
 
-	if (unlikely(!thread_is_running(mthread)) ||
-		     thread_is_stopped(athread))
+	if (unlikely(!thread_is_running(mthread) ||
+		     !thread_is_running(athread)))
 		return 0;
 
 	if (unlikely(lfsck_is_dead_obj(lfsck->li_obj_dir)))
@@ -4304,7 +4306,9 @@ static int lfsck_namespace_exec_dir(const struct lu_env *env,
 	}
 
 	spin_lock(&lad->lad_lock);
-	if (lad->lad_assistant_status < 0) {
+	if (lad->lad_assistant_status < 0 ||
+	    unlikely(!thread_is_running(mthread) ||
+		     !thread_is_running(athread))) {
 		spin_unlock(&lad->lad_lock);
 		lfsck_namespace_assistant_req_fini(env, &lnr->lnr_lar);
 		return lad->lad_assistant_status;
