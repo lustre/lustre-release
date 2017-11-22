@@ -35,27 +35,19 @@
 AM_CFLAGS  := -fPIC -D_GNU_SOURCE
 AM_LDFLAGS := -L.
 
-if BUILD_DLC
 SUBDIRS = lnetconfig
-endif # BUILD_DLC
 
 LIBCFS= $(top_builddir)/libcfs/libcfs/libcfs.a
 
 if UTILS
-sbin_PROGRAMS = routerstat lst
-
-if BUILD_DLC
-sbin_PROGRAMS += lnetctl
-endif # BUILD_DLC
+sbin_PROGRAMS = routerstat lst lnetctl
 
 routerstat_SOURCES = routerstat.c
 routerstat_LDADD = $(LIBCFS)
 
 lst_SOURCES = lst.c
 lst_LDADD = $(LIBCFS) $(LIBREADLINE) $(LIBEFENCE)
-if BUILD_DLC
 lst_LDADD += $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la
-endif
 
 if TESTS
 sbin_PROGRAMS += wirecheck

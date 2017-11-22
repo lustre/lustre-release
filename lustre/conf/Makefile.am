@@ -55,9 +55,7 @@ sysconfig_DATA = lustre lsvcgss
 endif
 endif
 
-if BUILD_DLC
 sysconf_DATA += lnet.conf
-endif
 
 modprobedir = $(sysconfdir)/modprobe.d
 modprobe_DATA = ko2iblnd.conf

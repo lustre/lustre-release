@@ -83,15 +83,6 @@ EXTRA_DIST = license-status lustre_rmmod ldev lc_mon lhbadm \
 CLEANFILES = $(genscripts)
 
 $(genscripts): %: %.in
-if BUILD_DLC
 	sed -e 's,@sysconfdir\@,$(sysconfdir),g' \
-	    -e 's,@scriptlibdir\@,$(scriptlibdir),g' \
-	    -e 's,@BUILD_DLC_TRUE\@,,g' \
-	    -e 's,@BUILD_DLC_FALSE\@,\#,g' $< > $@
-else
-	sed -e 's,@sysconfdir\@,$(sysconfdir),g' \
-	    -e 's,@scriptlibdir\@,$(scriptlibdir),g' \
-	    -e 's,@BUILD_DLC_TRUE\@,\#,g' \
-	    -e 's,@BUILD_DLC_FALSE\@,,g' $< > $@
-endif
+	    -e 's,@scriptlibdir\@,$(scriptlibdir),g' $< > $@
 	chmod +x $@

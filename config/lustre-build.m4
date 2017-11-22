@@ -507,9 +507,6 @@ fi
 if test x$enable_iokit != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_iokit"
 fi
-if test x$USE_DLC = xyes ; then
-	RPMBINARGS="$RPMBINARGS --with lnet_dlc"
-fi
 if test x$enable_snmp != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without snmp"
 fi

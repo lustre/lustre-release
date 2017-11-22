@@ -101,33 +101,15 @@ AS_IF([test "x$enable_backoff" = xyes], [
 #
 # LN_CONFIG_DLC
 #
-# Configure dlc if enabled
+# Configure dlc
 #
-# if libyaml is set (IE libyaml installed) and enable_dlc = yes then build
-# dlc other wise (IE if libyaml is not set or enable_dlc = no) then don't
-# build dlc.
+# fail to build if libyaml is not installed
 #
 AC_DEFUN([LN_CONFIG_DLC], [
-	AC_CHECK_LIB([yaml],  [yaml_parser_initialize],[
-		LIBYAML="libyaml"],[
-		LIBYAML=""],[-lm])
-	AC_MSG_CHECKING([whether to enable dlc])
-	AC_ARG_ENABLE([dlc],
-		AC_HELP_STRING([--disable-dlc],
-			[disable building dlc]),
-			[], [enable_dlc="yes"])
-	USE_DLC=""
-	AS_IF([test "x$enable_dlc" = xyes],
-		[AS_IF([test "x$LIBYAML" = xlibyaml], [
-			USE_DLC="yes"
-			AC_MSG_RESULT([yes])
-		], [
-			AC_MSG_RESULT([no (libyaml not present)])
-		])
-	], [
-		AC_MSG_RESULT([no])
-	])
-	AC_SUBST(USE_DLC)
+	AC_CHECK_LIB([yaml], [yaml_parser_initialize],
+		     [LIBYAML="libyaml"],
+		     [AC_MSG_ERROR([YAML development libraries not not installed])],
+		     [-lm])
 ])
 
 #
@@ -835,7 +817,6 @@ LN_CONFIG_DLC
 AC_DEFUN([LN_CONDITIONALS], [
 AM_CONDITIONAL(BUILD_O2IBLND,    test x$O2IBLND = "xo2iblnd")
 AM_CONDITIONAL(BUILD_GNILND,     test x$GNILND  = "xgnilnd")
-AM_CONDITIONAL(BUILD_DLC,        test x$USE_DLC = "xyes")
 ]) # LN_CONDITIONALS
 
 #

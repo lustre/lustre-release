@@ -101,17 +101,14 @@ case "$1" in
 	run_preexec_check "start"
 	touch /var/lock/subsys/lnet
 	modprobe lnet || exit 1
-	@BUILD_DLC_TRUE@lnetctl lnet configure || exit 1
-	@BUILD_DLC_TRUE@lnetctl import < "@sysconfdir@/lnet.conf"
-	@BUILD_DLC_FALSE@lctl network up || exit 1
-	@BUILD_DLC_FALSE@lustre_routes_config "@sysconfdir@/lnet_routes.conf"
+	lnetctl lnet configure || exit 1
+	lnetctl import < "@sysconfdir@/lnet.conf"
 	run_postexec_check "start"
 	;;
   stop)
 	run_preexec_check "stop"
 	lustre_rmmod ptlrpc || exit 1
-	@BUILD_DLC_TRUE@lnetctl lnet unconfigure || exit 1
-	@BUILD_DLC_FALSE@lctl network down || exit 1
+	lnetctl lnet unconfigure || exit 1
 	lustre_rmmod libcfs ldiskfs || exit 1
 	rm -f /var/lock/subsys/lnet
 	run_postexec_check "stop"

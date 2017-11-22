@@ -8,7 +8,6 @@
 %bcond_without lustre_utils
 %bcond_without lustre_iokit
 %bcond_without lustre_modules
-%bcond_with lnet_dlc
 %bcond_with snmp
 %bcond_without manpages
 %bcond_without shared
@@ -309,7 +308,6 @@ fi
 	%{!?with_ldiskfs:--disable-ldiskfs} \
 	%{!?with_servers:--disable-server} \
 	%{!?with_zfs:--without-zfs} \
-	%{!?with_lnet_dlc:--disable-dlc} \
 	%{!?with_snmp:--disable-snmp} \
 	%{!?with_manpages:--disable-manpages} \
 	%{!?with_systemd:--with-systemdsystemunitdir=no} \
@@ -386,7 +384,6 @@ install -m 0755 contrib/scripts/pacemaker/* $RPM_BUILD_ROOT%{_prefix}/lib/ocf/re
 # fc18 needs 'x' permission for library files
 find $RPM_BUILD_ROOT -name \*.so -type f -exec chmod +x {} \;
 
-%if %{with lnet_dlc}
 rm -f $RPM_BUILD_ROOT%{_libdir}/liblnetconfig.la
 %if %{with static}
 echo '%attr(-, root, root) %{_libdir}/liblnetconfig.a' >>lustre.files
@@ -394,7 +391,6 @@ echo '%attr(-, root, root) %{_libdir}/liblnetconfig.a' >>lustre.files
 %if %{with shared}
 echo '%attr(-, root, root) %{_libdir}/liblnetconfig.so' >>lustre.files
 echo '%attr(-, root, root) %{_libdir}/liblnetconfig.so.*' >>lustre.files
-%endif
 %endif
 
 %if %{with ldiskfs}
@@ -463,9 +459,7 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %endif
 %{_sysconfdir}/udev/rules.d/99-lustre.rules
 %config(noreplace) %{_sysconfdir}/ldev.conf
-%if %{with lnet_dlc}
 %config(noreplace) %{_sysconfdir}/lnet.conf
-%endif
 %config(noreplace) %{_sysconfdir}/modprobe.d/ko2iblnd.conf
 %if %{with lustre_utils}
 %config(noreplace) %{_sysconfdir}/lnet_routes.conf
