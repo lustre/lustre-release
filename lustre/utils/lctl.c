@@ -165,7 +165,7 @@ command_t cmdlist[] = {
 	{"conf_param", jt_lcfg_mgsparam, 0,"set a permanent config parameter.\n"
 	 "This command must be run on the MGS node\n"
 	 "usage: conf_param [-d] <target.keyword=val>\n"
-	 "  -d  Remove the permanent setting."},
+	 "  -d  Delete the permanent setting from the configuration."},
 #endif
 	{"local_param", jt_lcfg_param, 0, "set a temporary, local param\n"
 	 "usage: local_param <target.keyword=val>\n"},

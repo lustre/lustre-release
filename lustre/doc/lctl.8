@@ -234,7 +234,9 @@ Set a permanent configuration parameter for any device via the MGS.  This
 command must be run on the MGS node.
 .br
 .B -d <device|fsname>.<parameter>
-Delete a parameter setting (use the default value at the next restart).  A null value for <value> also deletes the parameter setting.
+Delete a parameter setting (use the default value at the next restart).
+A null value for <value> also deletes the parameter setting.  This is
+useful if an incorrect or obsolete parameter is in the configuration.
 .br
 .B Parameters:
 .br
@@ -263,6 +265,8 @@ Additionally, failover nodes may be added (or removed), and some system-wide par
 # lctl conf_param testfs-OST0000.ost.client_cache_seconds=15
 .br
 # lctl conf_param testfs-OST0000.failover.node=1.2.3.4@tcp1
+.br
+# lctl conf_param -d testfs-OST0000.bad_param
 .TP
 .BI activate
 Reactivate an import after deactivating, below.  This setting is only effective until the next restart (see
