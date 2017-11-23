@@ -703,8 +703,6 @@ typedef struct kib_conn
 	ktime_t			ibc_last_send;
 	/** link chain for kiblnd_check_conns only */
 	struct list_head	ibc_connd_list;
-	/** rxs completed before ESTABLISHED */
-	struct list_head	ibc_early_rxs;
 	/** IBLND_MSG_NOOPs for IBLND_MSG_VERSION_1 */
 	struct list_head	ibc_tx_noops;
 	/* sends that need a credit */
