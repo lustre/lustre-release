@@ -1021,9 +1021,6 @@ test_9a() {
 		return 0
 	fi
 
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.50) ]] ||
-		{ skip "Need MDS version >= 2.7.50"; return; }
-
 	check_mount_and_prep
 	$LFS mkdir -i 0 $DIR/$tdir/lfsck || error "(1) Fail to mkdir lfsck"
 	$LFS setstripe -c 1 -i -1 $DIR/$tdir/lfsck
@@ -1044,9 +1041,9 @@ test_9a() {
 	# There may be time error, normally it should be less than 2 seconds.
 	# We allow another 20% schedule error.
 	local TIME_DIFF=2
-	# MAX_MARGIN = 1.2 = 12 / 10
+	# MAX_MARGIN = 1.3 = 13 / 10
 	local MAX_SPEED=$((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) / \
-			   RUN_TIME1 * 12 / 10))
+			   RUN_TIME1 * 13 / 10))
 	[ $SPEED -lt $MAX_SPEED ] || {
 		$SHOW_LAYOUT
 		log "speed1: $BASE_SPEED1 time1: $RUN_TIME1"
@@ -1061,10 +1058,10 @@ test_9a() {
 	sleep $RUN_TIME2
 
 	SPEED=$($SHOW_LAYOUT | awk '/^average_speed_phase1/ { print $2 }')
-	# MIN_MARGIN = 0.8 = 8 / 10
+	# MIN_MARGIN = 0.7 = 7 / 10
 	local MIN_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) + \
 			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
-			   (RUN_TIME1 + RUN_TIME2) * 8 / 10))
+			   (RUN_TIME1 + RUN_TIME2) * 7 / 10))
 	[ $SPEED -gt $MIN_SPEED ] || {
 		if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 			error_ignore LU-5624 \
@@ -1075,10 +1072,10 @@ test_9a() {
 		fi
 	}
 
-	# MAX_MARGIN = 1.2 = 12 / 10
+	# MAX_MARGIN = 1.3 = 13 / 10
 	MAX_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) + \
 		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) / \
-		     (RUN_TIME1 + RUN_TIME2) * 12 / 10))
+		     (RUN_TIME1 + RUN_TIME2) * 13 / 10))
 	[ $SPEED -lt $MAX_SPEED ] || {
 		$SHOW_LAYOUT
 		log "speed1: $BASE_SPEED1 time1: $RUN_TIME1"
@@ -1101,9 +1098,6 @@ test_9b() {
 		skip "Testing on UP system, the speed may be inaccurate."
 		return 0
 	fi
-
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.50) ]] ||
-		{ skip "Need MDS version >= 2.7.50"; return; }
 
 	lfsck_prep 0 0
 
@@ -1143,9 +1137,9 @@ test_9b() {
 	# There may be time error, normally it should be less than 2 seconds.
 	# We allow another 20% schedule error.
 	local TIME_DIFF=2
-	# MAX_MARGIN = 1.2 = 12 / 10
+	# MAX_MARGIN = 1.3 = 13 / 10
 	local MAX_SPEED=$((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) / \
-			  RUN_TIME1 * 12 / 10))
+			  RUN_TIME1 * 13 / 10))
 	[ $SPEED -lt $MAX_SPEED ] || {
 		$SHOW_NAMESPACE
 		log "speed1: $BASE_SPEED1 time1: $RUN_TIME1"
@@ -1160,10 +1154,10 @@ test_9b() {
 	sleep $RUN_TIME2
 
 	SPEED=$($SHOW_NAMESPACE | awk '/^average_speed_phase2/ { print $2 }')
-	# MIN_MARGIN = 0.8 = 8 / 10
+	# MIN_MARGIN = 0.7 = 7 / 10
 	local MIN_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 - TIME_DIFF) + \
 			    BASE_SPEED2 * (RUN_TIME2 - TIME_DIFF)) / \
-			   (RUN_TIME1 + RUN_TIME2) * 8 / 10))
+			   (RUN_TIME1 + RUN_TIME2) * 7 / 10))
 	[ $SPEED -gt $MIN_SPEED ] || {
 		if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
 			error_ignore LU-5624 \
@@ -1174,10 +1168,10 @@ test_9b() {
 		fi
 	}
 
-	# MAX_MARGIN = 1.2 = 12 / 10
+	# MAX_MARGIN = 1.3 = 13 / 10
 	MAX_SPEED=$(((BASE_SPEED1 * (RUN_TIME1 + TIME_DIFF) + \
 		      BASE_SPEED2 * (RUN_TIME2 + TIME_DIFF)) / \
-		     (RUN_TIME1 + RUN_TIME2) * 12 / 10))
+		     (RUN_TIME1 + RUN_TIME2) * 13 / 10))
 	[ $SPEED -lt $MAX_SPEED ] || {
 		$SHOW_NAMESPACE
 		log "speed1: $BASE_SPEED1 time1: $RUN_TIME1"
