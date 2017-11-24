@@ -1301,29 +1301,40 @@ run_test 40 "PFLR rdonly state instantiation check"
 test_41() {
 	local tf=$DIR/$tfile
 
-	rm -f $tf
+	rm -f $tf $tf-1
 	$LFS mirror create -N -E2m -E4m -E-1 -N -E1m -E2m -E3m -E-1 $tf ||
 		error "create PFLR file $tf failed"
+	$LFS mirror create -N -E4m -E-1 -N -E2m -E3m -E-1 $tf-1 ||
+		error "create PFLR file $tf-1 failed"
 
 	# file should be in ro status
 	verify_flr_state $tf "ro"
+	verify_flr_state $tf-1 "ro"
 
 	# write data in [0, 2M)
 	dd if=/dev/zero of=$tf bs=1M count=2 conv=notrunc ||
 		error "writing $tf failed"
+	dd if=/dev/zero of=$tf-1 bs=1M count=4 conv=notrunc ||
+		error "writing $tf-1 failed"
 
 	verify_flr_state $tf "wp"
+	verify_flr_state $tf-1 "wp"
 
 	# file should have stale component
 	$LFS getstripe $tf | grep lcme_flags | grep stale > /dev/null ||
 		error "after writing $tf, it does not contain stale component"
+	$LFS getstripe $tf-1 | grep lcme_flags | grep stale > /dev/null ||
+		error "after writing $tf-1, it does not contain stale component"
 
-	$LFS mirror resync $tf || error "mirror resync $tf failed"
+	$LFS mirror resync $tf $tf-1 || error "mirror resync $tf $tf-1 failed"
 
 	verify_flr_state $tf "ro"
+	verify_flr_state $tf-1 "ro"
 
 	# file should not have stale component
 	$LFS getstripe $tf | grep lcme_flags | grep stale &&
+		error "after resyncing $tf, it contains stale component"
+	$LFS getstripe $tf-1 | grep lcme_flags | grep stale &&
 		error "after resyncing $tf, it contains stale component"
 
 	return 0

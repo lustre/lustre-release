@@ -244,9 +244,9 @@ command_t mirror_cmdlist[] = {
 		"[setstripe options|--parent|-f <victim_file>] ... <filename>\n"
 	  MIRROR_EXTEND_HELP },
 	{ .pc_name = "resync", .pc_func = lfs_mirror_resync,
-	  .pc_help = "Resynchronizes an out-of-sync mirrored file.\n"
+	  .pc_help = "Resynchronizes out-of-sync mirrored file(s).\n"
 		"usage: lfs mirror resync [--only <mirror_id[,...]>] "
-		"<mirrored file>\n"},
+		"<mirrored file> [<mirrored file2>...]\n"},
 	{ .pc_name = "--list-commands", .pc_func = lfs_mirror_list_commands,
 	  .pc_help = "list commands supported by lfs mirror"},
 	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
@@ -6254,70 +6254,29 @@ static int parse_mirror_ids(__u16 *ids, int size, char *arg)
 	return rc < 0 ? rc : nr;
 }
 
-static inline int lfs_mirror_resync(int argc, char **argv)
+static inline
+int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
+			   __u16 *mirror_ids, int ids_nr)
 {
-	const char *fname;
-	struct stat stbuf;
-	int fd;
-	int c;
-	int rc;
-	int idx;
-
-	struct llapi_layout *layout;
-	struct ll_ioc_lease *ioc = NULL;
+	const char *progname = "lfs mirror resync";
 	struct llapi_resync_comp comp_array[1024] = { { 0 } };
-	__u16 mirror_ids[128] = { 0 };
-	int ids_nr = 0;
-	int comp_size = 0;
+	struct llapi_layout *layout;
+	struct stat stbuf;
 	uint32_t flr_state;
+	int comp_size = 0;
+	int idx;
+	int fd;
+	int rc;
 
-	struct option long_opts[] = {
-	{ .val = 'o',	.name = "only",		.has_arg = required_argument },
-	{ .name = NULL } };
-
-	while ((c = getopt_long(argc, argv, "o:", long_opts, NULL)) >= 0) {
-		switch (c) {
-		case 'o':
-			rc = parse_mirror_ids(mirror_ids,
-					sizeof(mirror_ids) / sizeof(__u16),
-					optarg);
-			if (rc < 0) {
-				fprintf(stderr,
-					"%s: bad mirror ids '%s'.\n",
-					argv[0], optarg);
-				goto error;
-			}
-			ids_nr = rc;
-			break;
-		default:
-			fprintf(stderr, "%s: options '%s' unrecognized.\n",
-				argv[0], argv[optind - 1]);
-			rc = -EINVAL;
-			goto error;
-		}
-	}
-
-	if (argc > optind + 1) {
-		fprintf(stderr, "%s: too many files.\n", argv[0]);
-		rc = CMD_HELP;
-		goto error;
-	}
-	if (argc == optind) {
-		fprintf(stderr, "%s: no file name given.\n", argv[0]);
-		rc = CMD_HELP;
-		goto error;
-	}
-
-	fname = argv[optind];
 	if (stat(fname, &stbuf) < 0) {
 		fprintf(stderr, "%s: cannot stat file '%s': %s.\n",
-			argv[0], fname, strerror(errno));
+			progname, fname, strerror(errno));
 		rc = -errno;
 		goto error;
 	}
 	if (!S_ISREG(stbuf.st_mode)) {
 		fprintf(stderr, "%s: '%s' is not a regular file.\n",
-			argv[0], fname);
+			progname, fname);
 		rc = -EINVAL;
 		goto error;
 	}
@@ -6325,52 +6284,46 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 	fd = open(fname, O_DIRECT | O_RDWR);
 	if (fd < 0) {
 		fprintf(stderr, "%s: cannot open '%s': %s.\n",
-			argv[0], fname, strerror(errno));
+			progname, fname, strerror(errno));
 		rc = -errno;
 		goto error;
-	}
-
-	/* set the lease on the file */
-	ioc = calloc(sizeof(*ioc) + sizeof(__u32) * 4096, 1);
-	if (ioc == NULL) {
-		fprintf(stderr, "%s: cannot alloc id array for ioc: %s.\n",
-			argv[0], strerror(errno));
-		rc = -errno;
-		goto close_fd;
 	}
 
 	ioc->lil_mode = LL_LEASE_WRLCK;
 	ioc->lil_flags = LL_LEASE_RESYNC;
 	rc = llapi_lease_get_ext(fd, ioc);
 	if (rc < 0) {
-		fprintf(stderr, "%s: llapi_lease_get_ext resync failed: %s.\n",
-			argv[0], strerror(errno));
-		goto free_ioc;
+		fprintf(stderr, "%s: '%s' llapi_lease_get_ext resync failed: "
+			"%s.\n", progname, fname, strerror(errno));
+		goto close_fd;
 	}
 
 	layout = llapi_layout_get_by_fd(fd, 0);
 	if (layout == NULL) {
-		fprintf(stderr, "%s: llapi_layout_get_by_fd failed: %s.\n",
-			argv[0], strerror(errno));
+		fprintf(stderr, "%s: '%s' llapi_layout_get_by_fd failed: %s.\n",
+			progname, fname, strerror(errno));
 		rc = -errno;
-		goto free_ioc;
+		goto close_fd;
 	}
 
 	rc = llapi_layout_flags_get(layout, &flr_state);
 	if (rc) {
-		fprintf(stderr, "%s: llapi_layout_flags_get failed: %s.\n",
-			argv[0], strerror(errno));
+		fprintf(stderr, "%s: '%s' llapi_layout_flags_get failed: %s.\n",
+			progname, fname, strerror(errno));
 		rc = -errno;
-		goto free_ioc;
+		goto close_fd;
 	}
 
 	flr_state &= LCM_FL_FLR_MASK;
-	if (flr_state != LCM_FL_WRITE_PENDING &&
-	    flr_state != LCM_FL_SYNC_PENDING) {
-		fprintf(stderr, "%s: file state error: %s.\n",
-			argv[0], lcm_flags_string(flr_state));
-		rc = 1;
-		goto free_ioc;
+	switch (flr_state) {
+	case LCM_FL_NOT_FLR:
+		rc = -EINVAL;
+	case LCM_FL_RDONLY:
+		fprintf(stderr, "%s: '%s' file state error: %s.\n",
+			progname, fname, lcm_flags_string(flr_state));
+		goto close_fd;
+	default:
+		break;
 	}
 
 	/* get stale component info */
@@ -6379,7 +6332,7 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 					    mirror_ids, ids_nr);
 	if (comp_size < 0) {
 		rc = comp_size;
-		goto free_ioc;
+		goto close_fd;
 	}
 
 	idx = 0;
@@ -6391,8 +6344,9 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 
 		rc = llapi_lease_check(fd);
 		if (rc != LL_LEASE_WRLCK) {
-			fprintf(stderr, "lost lease lock.\n");
-			goto free_ioc;
+			fprintf(stderr, "%s: '%s' lost lease lock.\n",
+				progname, fname);
+			goto close_fd;
 		}
 
 		mirror_id = comp_array[idx].lrc_mirror_id;
@@ -6410,10 +6364,10 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 						 comp_array[idx].lrc_start,
 						 end);
 		if (result < 0) {
-			fprintf(stderr, "llapi_mirror_resync_one: %ld.\n",
-				result);
+			fprintf(stderr, "%s: '%s' llapi_mirror_resync_one: "
+				"%ld.\n", progname, fname, result);
 			rc = result;
-			goto free_ioc;
+			goto close_fd;
 		} else if (result > 0) {
 			int j;
 
@@ -6443,16 +6397,91 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 		if (rc == 0) /* lost lease lock */
 			rc = -EBUSY;
 		fprintf(stderr, "%s: resync file '%s' failed: %s.\n",
-			argv[0], fname, strerror(errno));
-		goto free_ioc;
+			progname, fname, strerror(errno));
+		goto close_fd;
 	}
+	/**
+	 * llapi_lease_get_ext returns lease mode when it request to unlock
+	 * the lease lock
+	 */
 	rc = 0;
 
-free_ioc:
-	if (ioc)
-		free(ioc);
 close_fd:
 	close(fd);
+error:
+	return rc;
+}
+
+static inline int lfs_mirror_resync(int argc, char **argv)
+{
+	struct ll_ioc_lease *ioc = NULL;
+	__u16 mirror_ids[128] = { 0 };
+	int ids_nr = 0;
+	int c;
+	int rc = 0;
+
+	struct option long_opts[] = {
+	{ .val = 'o',	.name = "only",		.has_arg = required_argument },
+	{ .name = NULL } };
+
+	while ((c = getopt_long(argc, argv, "o:", long_opts, NULL)) >= 0) {
+		switch (c) {
+		case 'o':
+			rc = parse_mirror_ids(mirror_ids,
+					sizeof(mirror_ids) / sizeof(__u16),
+					optarg);
+			if (rc < 0) {
+				fprintf(stderr,
+					"%s: bad mirror ids '%s'.\n",
+					argv[0], optarg);
+				goto error;
+			}
+			ids_nr = rc;
+			break;
+		default:
+			fprintf(stderr, "%s: options '%s' unrecognized.\n",
+				argv[0], argv[optind - 1]);
+			rc = -EINVAL;
+			goto error;
+		}
+	}
+
+	if (argc == optind) {
+		fprintf(stderr, "%s: no file name given.\n", argv[0]);
+		rc = CMD_HELP;
+		goto error;
+	}
+
+	if (ids_nr > 0 && argc > optind + 1) {
+		fprintf(stderr, "%s: option '--only' cannot be used upon "
+			"multiple files.\n", argv[0]);
+		rc = CMD_HELP;
+		goto error;
+
+	}
+
+	/* set the lease on the file */
+	ioc = calloc(sizeof(*ioc) + sizeof(__u32) * 4096, 1);
+	if (ioc == NULL) {
+		fprintf(stderr, "%s: cannot alloc id array for ioc: %s.\n",
+			argv[0], strerror(errno));
+		rc = -errno;
+		goto error;
+	}
+
+	for (; optind < argc; optind++) {
+		rc = lfs_mirror_resync_file(argv[optind], ioc,
+					    mirror_ids, ids_nr);
+		if (rc)
+			fprintf(stderr, "%s: resync file '%s' failed: %d\n",
+				argv[0], argv[optind], rc);
+		/* ignore previous file's error, continue with next file */
+
+		/* reset ioc */
+		memset(ioc, 0, sizeof(__u32) * 4096);
+	}
+
+	free(ioc);
 error:
 	return rc;
 }
