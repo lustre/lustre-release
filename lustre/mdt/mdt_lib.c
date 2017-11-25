@@ -576,18 +576,23 @@ int mdt_init_ucred_reint(struct mdt_thread_info *info)
 /* copied from lov/lov_ea.c, just for debugging, will be removed later */
 void mdt_dump_lmm(int level, const struct lov_mds_md *lmm, __u64 valid)
 {
-	const struct lov_ost_data_v1	*lod;
-	int				 i;
-	__u16				 count;
+	const struct lov_ost_data_v1 *lod;
+	__u32 lmm_magic = le32_to_cpu(lmm->lmm_magic);
+	__u16 count;
+	int i;
 
 	if (likely(!cfs_cdebug_show(level, DEBUG_SUBSYSTEM)))
 		return;
 
-	count = le16_to_cpu(((struct lov_user_md *)lmm)->lmm_stripe_count);
-
 	CDEBUG(level, "objid "DOSTID", magic 0x%08X, pattern %#X\n",
-	       POSTID(&lmm->lmm_oi), le32_to_cpu(lmm->lmm_magic),
+	       POSTID(&lmm->lmm_oi), lmm_magic,
 	       le32_to_cpu(lmm->lmm_pattern));
+
+	/* No support for compount layouts yet */
+	if (lmm_magic != LOV_MAGIC_V1 && lmm_magic != LOV_MAGIC_V3)
+		return;
+
+	count = le16_to_cpu(((struct lov_user_md *)lmm)->lmm_stripe_count);
 	CDEBUG(level, "stripe_size=0x%x, stripe_count=0x%x\n",
 	       le32_to_cpu(lmm->lmm_stripe_size), count);
 
