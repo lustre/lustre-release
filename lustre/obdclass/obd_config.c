@@ -396,15 +396,12 @@ int class_attach(struct lustre_cfg *lcfg)
 	}
 
 	obd = class_newdev(typename, name, uuid);
-        if (IS_ERR(obd)) {
-                /* Already exists or out of obds */
-                rc = PTR_ERR(obd);
+	if (IS_ERR(obd)) { /* Already exists or out of obds */
+		rc = PTR_ERR(obd);
                 CERROR("Cannot create device %s of type %s : %d\n",
                        name, typename, rc);
 		RETURN(rc);
         }
-        LASSERTF(obd != NULL, "Cannot get obd device %s of type %s\n",
-                 name, typename);
         LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC,
                  "obd %p obd_magic %08X != %08X\n",
                  obd, obd->obd_magic, OBD_DEVICE_MAGIC);
@@ -413,9 +410,9 @@ int class_attach(struct lustre_cfg *lcfg)
 
 	exp = class_new_export_self(obd, &obd->obd_uuid);
 	if (IS_ERR(exp)) {
-		/* force free */
-		GOTO(out, rc = PTR_ERR(exp));
-		RETURN(PTR_ERR(exp));
+		rc = PTR_ERR(exp);
+		class_free_dev(obd);
+		RETURN(rc);
 	}
 
 	obd->obd_self_export = exp;
@@ -423,18 +420,16 @@ int class_attach(struct lustre_cfg *lcfg)
 	class_export_put(exp);
 
 	rc = class_register_device(obd);
-	if (rc != 0)
-		GOTO(out, rc);
+	if (rc != 0) {
+		class_decref(obd, "newdev", obd);
+		RETURN(rc);
+	}
 
 	obd->obd_attached = 1;
 	CDEBUG(D_IOCTL, "OBD: dev %d attached type %s with refcount %d\n",
 	       obd->obd_minor, typename, atomic_read(&obd->obd_refcount));
-	RETURN(0);
-out:
-	class_decref(obd, "newdev", obd);
-	class_free_dev(obd);
 
-	RETURN(rc);
+	RETURN(0);
 }
 EXPORT_SYMBOL(class_attach);
 
@@ -733,10 +728,6 @@ void class_decref(struct obd_device *obd, const char *scope, const void *source)
 
 		if (exp) {
 			exp->exp_flags |= exp_flags_from_obd(obd);
-			/*
-			 * note that we'll recurse into class_decref again
-			 * but it's not a problem because we was last user
-			 */
 			class_unlink_export(exp);
                 }
         }
