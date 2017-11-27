@@ -539,13 +539,12 @@ Changelog records consumed: 42</screen>
         </para>
         <screen>[oss]# getfattr -R -d -m '.*' -e hex -P . &gt; ea-$(date +%Y%m%d).bak</screen>
         <note>
-          <para>If the 
-          <literal>tar(1)</literal> command supports the 
-          <literal>--xattr</literal> option, the 
+          <para>If the <literal>tar(1)</literal> command supports the 
+          <literal>--xattr</literal> option (see below), the 
           <literal>getfattr</literal> step may be unnecessary as long as tar
-          does a backup of the 
-          <literal>trusted.*</literal> attributes. However, completing this step
-          is not harmful and can serve as an added safety measure.</para>
+          correctly backs up the <literal>trusted.*</literal> attributes.
+	  However, completing this step is not harmful and can serve as an
+	  added safety measure.</para>
         </note>
         <note>
           <para>In most distributions, the 
@@ -562,10 +561,12 @@ Changelog records consumed: 42</screen>
           <literal>ea-$date.bak</literal> file has properly backed up the EA
           data on the OST.</emphasis>
         </para>
-        <para>Without this attribute data, the restore process may be missing
-        extra data that can be very useful in case of later file system
-        corruption. Look at this file with more or a text editor. Each object
-        file should have a corresponding item similar to this:</para>
+        <para>Without this attribute data, the MDT restore process will fail
+        and result in an unusable filesystem.  The OST restore process may be
+        missing extra data that can be very useful in case of later file system
+        corruption. Look at this file with <literal>more</literal> or a text
+        editor. Each object file should have a corresponding item similar to
+        this:</para>
         <screen>[oss]# file: O/0/d0/100992
 trusted.fid= \
 0x0d822200000000004a8a73e500000000808a0100000000000000000000000000</screen>
@@ -574,24 +575,22 @@ trusted.fid= \
         <para>
           <emphasis role="bold">Back up all file system data.</emphasis>
         </para>
-        <screen>[oss]# tar czvf {backup file}.tgz [--xattrs] --sparse .</screen>
+        <screen>[oss]# tar czvf {backup file}.tgz [--xattrs] [--xattrs-include="trusted.*" --sparse .</screen>
         <note>
           <para>The tar 
-          <literal>--sparse</literal> option is vital for backing up an MDT. In
-          order to have 
-          <literal>--sparse</literal> behave correctly, and complete the backup
-          of and MDT in finite time, the version of tar must be specified.
-          Correctly functioning versions of tar include the Lustre software
-          enhanced version of tar at 
-          <link xmlns:xlink="http://www.w3.org/1999/xlink"
-          xlink:href="https://wiki.hpdd.intel.com/display/PUB/Lustre+Tools#LustreTools-lustre-tar" />,
-          the tar from a Red Hat Enterprise Linux distribution (version 6.3 or
-          more recent) and the GNU tar version 1.25 or more recent.</para>
+          <literal>--sparse</literal> option is vital for backing up an MDT.
+          Very old versions of tar may not support the
+          <literal>--sparse</literal> option correctly, which may cause the
+          MDT backup to take a long time.  Known-working versions include
+          the tar from Red Hat Enterprise Linux distribution (RHEL version
+	  6.3 or newer) or GNU tar version 1.25 and newer.</para>
         </note>
         <warning>
-          <para>The tar 
-          <literal>--xattrs</literal> option is only available in GNU tar
-          distributions from Red Hat or Intel.</para>
+          <para>The tar <literal>--xattrs</literal> option is only available
+          in GNU tar version 1.27 or later or in RHEL 6.3 or newer.  The
+          <literal>--xattrs-include="trusted.*"</literal> option is
+          <emphasis>required</emphasis> for correct restoration of the xattrs
+          when using GNU tar 1.27 or RHEL 7 and newer.</para>
         </warning>
       </listitem>
       <listitem>
@@ -643,10 +642,20 @@ trusted.fid= \
       </listitem>
       <listitem>
         <para>Restore the file system backup.</para>
-        <screen>[oss]# tar xzvpf <emphasis>{backup file}</emphasis> [--xattrs] --sparse</screen>
+        <screen>[oss]# tar xzvpf <emphasis>{backup file}</emphasis> [--xattrs] [--xattrs-include="trusted.*"] --sparse</screen>
+        <warning>
+          <para>The tar <literal>--xattrs</literal> option is only available
+	  in GNU tar version 1.27 or later or in RHEL 6.3 or newer.  The
+	  <literal>--xattrs-include="trusted.*"</literal> option is
+	  <emphasis>required</emphasis> for correct restoration of the
+	  MDT xattrs when using GNU tar 1.27 or RHEL 7 and newer.  Otherwise,
+	  the <literal>setfattr</literal> step below should be used.
+	  </para>
+        </warning>
       </listitem>
       <listitem>
-        <para>Restore the file system extended attributes.</para>
+        <para>If not using a version of tar that supports direct xattr
+	backups, restore the file system extended attributes.</para>
         <screen>[oss]# setfattr --restore=ea-${date}.bak</screen>
         <note>
           <para>If 
@@ -668,15 +677,16 @@ trusted.fid= \
         <screen>[oss]# rm -f CATALOGS</screen>
         <note>
         <para>This is optional for the MDT side only. The CATALOGS record the
-    llog file handlers that are used for recovering cross-server updates. Before
-	OI scrub rebuilds the OI mappings for the llog files, the related recovery
-	will get a failure if it runs faster than the background OI scrub.  This will
-    result in a failure of the whole mount process. OI scrub is an online tool,
-    therefore, a mount failure means that the OI scrub will be stopped.
-    Removing the old CATALOGS will avoid this potential trouble.  The
-	side-effect of removing old CATALOGS is that the recovery for related
-	cross-server updates will be aborted. However, this can be handled by LFSCK
-	after the system mount is up.</para>
+	llog file handlers that are used for recovering cross-server updates.
+	Before OI scrub rebuilds the OI mappings for the llog files, the
+	related recovery will get a failure if it runs faster than the
+	background OI scrub.  This will result in a failure of the whole mount
+	process. OI scrub is an online tool, therefore, a mount failure means
+	that the OI scrub will be stopped.  Removing the old CATALOGS will
+	avoid this potential trouble.  The side-effect of removing old
+	CATALOGS is that the recovery for related cross-server updates will
+	be aborted. However, this can be handled by LFSCK after the system
+	mount is up.</para>
         </note>
       </listitem>
       <listitem>
@@ -688,8 +698,8 @@ trusted.fid= \
         <screen>[oss]# umount /mnt/ost</screen>
       </listitem>
     </orderedlist>
-    <para condition='l23'>If the file system was used between the time the backup was made and
-    when it was restored, then the online 
+    <para condition='l23'>If the file system was used between the time the
+    backup was made and when it was restored, then the online 
     <literal>LFSCK</literal> tool (part of Lustre code after version 2.3) 
     will automatically be
     run to ensure the file system is coherent. If all of the device file
