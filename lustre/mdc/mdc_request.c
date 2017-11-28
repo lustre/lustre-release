@@ -2523,7 +2523,6 @@ err_mdc_cleanup:
 err_ptlrpcd_decref:
 	if (rc)
 	        ptlrpcd_decref();
-
         return rc;
 }
 
@@ -2559,7 +2558,6 @@ static int mdc_precleanup(struct obd_device *obd)
 
 	obd_cleanup_client_import(obd);
 	ptlrpc_lprocfs_unregister_obd(obd);
-	lprocfs_obd_cleanup(obd);
 	lprocfs_free_md_stats(obd);
 	mdc_llog_finish(obd);
 	RETURN(0);

@@ -375,7 +375,6 @@ static struct lu_device *lwp_device_fini(const struct lu_env *env,
 
 	LASSERT(m->lpd_obd);
 	ptlrpc_lprocfs_unregister_obd(m->lpd_obd);
-	lprocfs_obd_cleanup(m->lpd_obd);
 
 	rc = client_obd_cleanup(m->lpd_obd);
 	LASSERTF(rc == 0, "error %d\n", rc);

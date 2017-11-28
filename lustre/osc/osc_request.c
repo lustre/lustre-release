@@ -2952,7 +2952,6 @@ static int osc_precleanup(struct obd_device *obd)
 
 	obd_cleanup_client_import(obd);
 	ptlrpc_lprocfs_unregister_obd(obd);
-	lprocfs_obd_cleanup(obd);
 	RETURN(0);
 }
 
