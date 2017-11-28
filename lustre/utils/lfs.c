@@ -221,11 +221,13 @@ static inline int lfs_mirror_split(int argc, char **argv)
 	SSM_CMD_COMMON("migrate  ")					\
 	"                 [--block|-b]\n"				\
 	"                 [--non-block|-n]\n"				\
+	"                 [--non-direct|-D]\n"				\
 	"                 <filename>\n"					\
 	SSM_HELP_COMMON							\
 	"\n"								\
 	"\tblock:        Block file access during data migration (default)\n" \
 	"\tnon-block:    Abort migrations if concurrent access is detected\n" \
+	"\tnon-direct:   Do not use direct I/O to copy file contents\n" \
 
 #define SETDIRSTRIPE_USAGE					\
 	"		[--mdt-count|-c stripe_count>\n"	\
@@ -510,6 +512,7 @@ command_t cmdlist[] = {
 	 "		[--ost|-o] <ost_indices>\n"
 	 "		[--block|-b]\n"
 	 "		[--non-block|-n]\n"
+	 "		[--non-direct|-D]\n"
 	 "		<file|directory>\n"
 	 "\tstripe_count:     number of OSTs to stripe a file over\n"
 	 "\tstripe_ost_index: index of the first OST to stripe a file over\n"
@@ -517,7 +520,8 @@ command_t cmdlist[] = {
 	 "\tpool_name:        name of the predefined pool of OSTs\n"
 	 "\tost_indices:      OSTs to stripe over, in order\n"
 	 "\tblock:            wait for the operation to return before continuing\n"
-	 "\tnon-block:        do not wait for the operation to return.\n"},
+	 "\tnon-block:        do not wait for the operation to return\n"
+	 "\tnon-direct:       do not use direct I/O to copy file contents.\n"},
 	{"mv", lfs_mv, 0,
 	 "To move directories between MDTs. This command is deprecated, "
 	 "use \"migrate\" instead.\n"
@@ -565,17 +569,20 @@ static const char *error_loc = "syserror";
 enum {
 	MIGRATION_NONBLOCK	= 1 << 0,
 	MIGRATION_MIRROR	= 1 << 1,
+	MIGRATION_NONDIRECT	= 1 << 2,
 };
 
 static int lfs_component_create(char *fname, int open_flags, mode_t open_mode,
 				struct llapi_layout *layout);
 
 static int
-migrate_open_files(const char *name, const struct llapi_stripe_param *param,
+migrate_open_files(const char *name, __u64 migration_flags,
+		   const struct llapi_stripe_param *param,
 		   struct llapi_layout *layout, int *fd_src, int *fd_tgt)
 {
 	int			 fd = -1;
 	int			 fdv = -1;
+	int			 rflags;
 	int			 mdt_index;
 	int                      random_value;
 	char			 parent[PATH_MAX];
@@ -612,7 +619,10 @@ migrate_open_files(const char *name, const struct llapi_stripe_param *param,
 	/* open file, direct io */
 	/* even if the file is only read, WR mode is nedeed to allow
 	 * layout swap on fd */
-	fd = open(name, O_RDWR | O_DIRECT);
+	rflags = O_RDWR;
+	if (!(migration_flags & MIGRATION_NONDIRECT))
+		rflags |= O_DIRECT;
+	fd = open(name, rflags);
 	if (fd < 0) {
 		rc = -errno;
 		error_loc = "cannot open source file";
@@ -1016,7 +1026,8 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 	int fdv = -1;
 	int rc;
 
-	rc = migrate_open_files(name, param, layout, &fd, &fdv);
+	rc = migrate_open_files(name, migration_flags, param, layout,
+				&fd, &fdv);
 	if (rc < 0)
 		goto out;
 
@@ -1561,7 +1572,7 @@ static int mirror_extend_layout(char *name, struct llapi_layout *layout)
 	int fdv = -1;
 	int rc;
 
-	rc = migrate_open_files(name, NULL, layout, &fd, &fdv);
+	rc = migrate_open_files(name, 0, NULL, layout, &fd, &fdv);
 	if (rc < 0)
 		goto out;
 
@@ -2363,6 +2374,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 /* find	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument }*/
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
 	{ .val = 'd',	.name = "destroy",	.has_arg = no_argument},
+	/* --non-direct is only valid in migrate mode */
+	{ .val = 'D',	.name = "non-direct",	.has_arg = no_argument },
 	{ .val = 'E',	.name = "comp-end",	.has_arg = required_argument},
 	{ .val = 'E',	.name = "component-end",
 						.has_arg = required_argument},
@@ -2410,7 +2423,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
-	while ((c = getopt_long(argc, argv, "bc:dE:f:i:I:m:N::no:p:L:s:S:v",
+	while ((c = getopt_long(argc, argv, "bc:dDE:f:i:I:m:N::no:p:L:s:S:v",
 				long_opts, NULL)) >= 0) {
 		switch (c) {
 		case 0:
@@ -2527,6 +2540,16 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				}
 				mirror_flags |= MF_DESTROY;
 			}
+			break;
+		case 'D':
+			if (!migrate_mode) {
+				fprintf(stderr,
+					"%s %s: -D|--non-direct is valid "
+					"only for migrate command\n",
+					progname, argv[0]);
+				goto usage_error;
+			}
+			migration_flags |= MIGRATION_NONDIRECT;
 			break;
 		case 'E':
 			if (lsa.lsa_comp_end != 0) {

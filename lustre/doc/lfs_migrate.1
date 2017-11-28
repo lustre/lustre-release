@@ -5,6 +5,7 @@
 .SH SYNOPSIS
 .B lfs_migrate
 .RB [ --dry-run ]
+.RB [ -D ]
 .RB [ -h ]
 .RB [ --no-rsync | --rsync ]
 .RB [ -q ]
@@ -57,6 +58,9 @@ or OST index of a new file).
 .TP
 .B \\--dry-run
 Only print the names of files to be migrated.
+.TP
+.B \\-D
+Do not use direct I/O to copy file contents.
 .TP
 .B \\-h
 Display help information.

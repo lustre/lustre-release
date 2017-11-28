@@ -44,9 +44,10 @@ old_fid_in_set() {
 
 usage() {
     cat -- <<USAGE 1>&2
-usage: lfs_migrate [--dry-run] [-h] [--no-rsync|--rsync] [-q] [-R] [-s]
-		   [-v] [-y] [-0] [FILE|DIR...]
+usage: lfs_migrate [--dry-run] [-D] [-h] [--no-rsync|--rsync] [-q] [-R]
+		   [-s] [-v] [-y] [-0] [FILE|DIR...]
 	--dry-run only print the names of files to be migrated
+	-D do not use direct I/O to copy file contents
 	-h show this usage message
 	--no-rsync do not fall back to rsync mode even if lfs migrate fails
 	-q run quietly (don't print filenames or status)
@@ -94,6 +95,7 @@ OPT_PASSTHROUGH=()
 STRIPE_COUNT=""
 STRIPE_SIZE=""
 POOL=""
+LFS_OPT_DIRECTIO=""
 
 # Examine any long options and arguments.  getopts does not support long
 # options, so they must be stripped out and classified as either options
@@ -165,8 +167,9 @@ done
 # Reset the argument list to include only the short options and file names
 set -- "${OPTS[@]}"
 
-while getopts ":hlnqRsvy0" opt $*; do
+while getopts ":DhlnqRsvy0" opt $*; do
     case $opt in
+	D) LFS_OPT_DIRECTIO="-D";;
 	h) usage;;
 	l) ;; # maintained for backward compatibility
 	n) OPT_DRYRUN=true
@@ -375,8 +378,8 @@ lfs_migrate() {
 		# first try to migrate via Lustre tools, then fall back to rsync
 		if ! $LFS_MIGRATE_RSYNC_MODE; then
 			if $LFS migrate "${OPT_PASSTHROUGH[@]}" ${BLOCK} \
-			   ${stripe_count} ${stripe_size} "$OLDNAME" &> \
-			   /dev/null; then
+			   $LFS_OPT_DIRECTIO ${stripe_count} ${stripe_size} \
+			    "$OLDNAME" &> /dev/null; then
 				$ECHO "done migrate"
 				for link in ${hlinks[*]}; do
 					add_to_set "$fid" "$link"
