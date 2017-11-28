@@ -89,6 +89,10 @@
 #define IBLND_N_SCHED			2
 #define IBLND_N_SCHED_HIGH		4
 
+#define IBLND_DEV_CAPS_FASTREG_ENABLED		0x1
+#define IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT	0x2
+#define IBLND_DEV_CAPS_FMR_ENABLED		0x4
+
 typedef struct
 {
 	int              *kib_dev_failover;     /* HCA failover */
@@ -192,6 +196,7 @@ typedef struct
 	unsigned int		ibd_can_failover;
 	struct list_head	ibd_nets;
 	struct kib_hca_dev	*ibd_hdev;
+	__u32			ibd_dev_caps;
 } kib_dev_t;
 
 typedef struct kib_hca_dev

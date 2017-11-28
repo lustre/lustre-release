@@ -1539,15 +1539,18 @@ static int kiblnd_alloc_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo)
 		else
 			CERROR("FMRs are not supported\n");
 	}
+	fpo->fpo_is_fmr = true;
 
 	return rc;
 }
 
 static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo,
-				  struct ib_device_attr *dev_attr)
+				  __u32 dev_caps)
 {
 	struct kib_fast_reg_descriptor *frd, *tmp;
 	int i, rc;
+
+	fpo->fpo_is_fmr = false;
 
 	INIT_LIST_HEAD(&fpo->fast_reg.fpo_pool_list);
 	fpo->fast_reg.fpo_pool_size = 0;
@@ -1580,17 +1583,15 @@ static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo,
 		/*
 		 * it is expected to get here if this is an MLX-5 card.
 		 * MLX-4 cards will always use FMR and MLX-5 cards will
-		 * always use fast_reg. MLX-5 cards should support
-		 * IB_DEVICE_SG_GAPS_REG. If for whatever reason, that's
-		 * not the case, we can't handle communication with
-		 * cards lacking that support.
+		 * always use fast_reg. It turns out that some MLX-5 cards
+		 * (possibly due to older FW versions) do not natively support
+		 * gaps. So we will need to track them here.
 		 */
-		if (!(dev_attr->device_cap_flags & IB_DEVICE_SG_GAPS_REG)) {
-			rc = -EPROTONOSUPPORT;
-			goto out_middle;
-		}
 		frd->frd_mr = ib_alloc_mr(fpo->fpo_hdev->ibh_pd,
-					  IB_MR_TYPE_SG_GAPS,
+					  (dev_caps &
+						IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT) ?
+						IB_MR_TYPE_SG_GAPS :
+						IB_MR_TYPE_MEM_REG,
 					  LNET_MAX_PAYLOAD/PAGE_SIZE);
 #endif
 		if (IS_ERR(frd->frd_mr)) {
@@ -1637,62 +1638,25 @@ out:
 static int
 kiblnd_create_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t **pp_fpo)
 {
-	struct ib_device_attr *dev_attr;
 	kib_dev_t *dev = fps->fps_net->ibn_dev;
 	kib_fmr_pool_t *fpo;
 	int rc;
 
-#ifndef HAVE_IB_DEVICE_ATTRS
-	dev_attr = kmalloc(sizeof(*dev_attr), GFP_KERNEL);
-	if (!dev_attr)
-		return -ENOMEM;
-#endif
-
 	LIBCFS_CPT_ALLOC(fpo, lnet_cpt_table(), fps->fps_cpt, sizeof(*fpo));
 	if (!fpo) {
-		rc = -ENOMEM;
-		goto out_dev_attr;
+		return -ENOMEM;
 	}
+	memset(fpo, 0, sizeof(*fpo));
 
 	fpo->fpo_hdev = kiblnd_current_hdev(dev);
 
-#ifdef HAVE_IB_DEVICE_ATTRS
-	dev_attr = &fpo->fpo_hdev->ibh_ibdev->attrs;
-#else
-	rc = ib_query_device(fpo->fpo_hdev->ibh_ibdev, dev_attr);
-	if (rc) {
-		CERROR("Query device failed for %s: %d\n",
-			fpo->fpo_hdev->ibh_ibdev->name, rc);
-		goto out_dev_attr;
-	}
-#endif
-
-	/* Check for FMR or FastReg support */
-	fpo->fpo_is_fmr = 0;
-	if (fpo->fpo_hdev->ibh_ibdev->alloc_fmr &&
-	    fpo->fpo_hdev->ibh_ibdev->dealloc_fmr &&
-	    fpo->fpo_hdev->ibh_ibdev->map_phys_fmr &&
-	    fpo->fpo_hdev->ibh_ibdev->unmap_fmr) {
-		LCONSOLE_INFO("Using FMR for registration\n");
-		fpo->fpo_is_fmr = 1;
-	} else if (dev_attr->device_cap_flags & IB_DEVICE_MEM_MGT_EXTENSIONS) {
-		LCONSOLE_INFO("Using FastReg for registration\n");
-	} else {
-		rc = -ENOSYS;
-		LCONSOLE_ERROR_MSG(rc, "IB device does not support FMRs nor FastRegs, can't register memory\n");
-		goto out_dev_attr;
-	}
-
-	if (fpo->fpo_is_fmr)
+	if (dev->ibd_dev_caps & IBLND_DEV_CAPS_FMR_ENABLED)
 		rc = kiblnd_alloc_fmr_pool(fps, fpo);
 	else
-		rc = kiblnd_alloc_freg_pool(fps, fpo, dev_attr);
+		rc = kiblnd_alloc_freg_pool(fps, fpo, dev->ibd_dev_caps);
 	if (rc)
 		goto out_fpo;
 
-#ifndef HAVE_IB_DEVICE_ATTRS
-	kfree(dev_attr);
-#endif
 	fpo->fpo_deadline = cfs_time_shift(IBLND_POOL_DEADLINE);
 	fpo->fpo_owner    = fps;
 	*pp_fpo = fpo;
@@ -1702,12 +1666,6 @@ kiblnd_create_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t **pp_fpo)
 out_fpo:
 	kiblnd_hdev_decref(fpo->fpo_hdev);
 	LIBCFS_FREE(fpo, sizeof(*fpo));
-
-out_dev_attr:
-#ifndef HAVE_IB_DEVICE_ATTRS
-	kfree(dev_attr);
-#endif
-
 	return rc;
 }
 
@@ -2554,45 +2512,67 @@ kiblnd_net_init_pools(kib_net_t *net, struct lnet_ni *ni, __u32 *cpts,
 static int
 kiblnd_hdev_get_attr(kib_hca_dev_t *hdev)
 {
+	struct ib_device_attr *dev_attr;
+	int rc = 0;
+
+	/* It's safe to assume a HCA can handle a page size
+	 * matching that of the native system */
+	hdev->ibh_page_shift = PAGE_SHIFT;
+	hdev->ibh_page_size  = 1 << PAGE_SHIFT;
+	hdev->ibh_page_mask  = ~((__u64)hdev->ibh_page_size - 1);
+
 #ifndef HAVE_IB_DEVICE_ATTRS
-	struct ib_device_attr *attr;
-	int                    rc;
-#endif
+	LIBCFS_ALLOC(dev_attr, sizeof(*dev_attr));
+	if (dev_attr == NULL) {
+		CERROR("Out of memory\n");
+		return -ENOMEM;
+	}
 
-        /* It's safe to assume a HCA can handle a page size
-         * matching that of the native system */
-        hdev->ibh_page_shift = PAGE_SHIFT;
-        hdev->ibh_page_size  = 1 << PAGE_SHIFT;
-        hdev->ibh_page_mask  = ~((__u64)hdev->ibh_page_size - 1);
-
-#ifdef HAVE_IB_DEVICE_ATTRS
-	hdev->ibh_mr_size = hdev->ibh_ibdev->attrs.max_mr_size;
+	rc = ib_query_device(hdev->ibh_ibdev, dev_attr);
+	if (rc != 0) {
+		CERROR("Failed to query IB device: %d\n", rc);
+		goto out_clean_attr;
+	}
 #else
-        LIBCFS_ALLOC(attr, sizeof(*attr));
-        if (attr == NULL) {
-                CERROR("Out of memory\n");
-                return -ENOMEM;
-        }
-
-        rc = ib_query_device(hdev->ibh_ibdev, attr);
-        if (rc == 0)
-                hdev->ibh_mr_size = attr->max_mr_size;
-
-        LIBCFS_FREE(attr, sizeof(*attr));
-
-        if (rc != 0) {
-                CERROR("Failed to query IB device: %d\n", rc);
-                return rc;
-        }
+	dev_attr = &hdev->ibh_ibdev->attrs;
 #endif
 
-        if (hdev->ibh_mr_size == ~0ULL) {
-                hdev->ibh_mr_shift = 64;
-                return 0;
-        }
+	hdev->ibh_mr_size = dev_attr->max_mr_size;
 
-	CERROR("Invalid mr size: %#llx\n", hdev->ibh_mr_size);
-        return -EINVAL;
+	/* Setup device Memory Registration capabilities */
+	if (hdev->ibh_ibdev->alloc_fmr &&
+	    hdev->ibh_ibdev->dealloc_fmr &&
+	    hdev->ibh_ibdev->map_phys_fmr &&
+	    hdev->ibh_ibdev->unmap_fmr) {
+		LCONSOLE_INFO("Using FMR for registration\n");
+		hdev->ibh_dev->ibd_dev_caps |= IBLND_DEV_CAPS_FMR_ENABLED;
+	} else if (dev_attr->device_cap_flags & IB_DEVICE_MEM_MGT_EXTENSIONS) {
+		LCONSOLE_INFO("Using FastReg for registration\n");
+		hdev->ibh_dev->ibd_dev_caps |= IBLND_DEV_CAPS_FASTREG_ENABLED;
+#ifndef HAVE_IB_ALLOC_FAST_REG_MR
+		if (dev_attr->device_cap_flags & IB_DEVICE_SG_GAPS_REG)
+			hdev->ibh_dev->ibd_dev_caps |= IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT;
+#endif
+	} else {
+		rc = -ENOSYS;
+	}
+
+	if (rc == 0 && hdev->ibh_mr_size == ~0ULL)
+		hdev->ibh_mr_shift = 64;
+	else if (rc != 0)
+		rc = -EINVAL;
+
+#ifndef HAVE_IB_DEVICE_ATTRS
+out_clean_attr:
+	LIBCFS_FREE(dev_attr, sizeof(*dev_attr));
+#endif
+
+	if (rc == -ENOSYS)
+		CERROR("IB device does not support FMRs nor FastRegs, can't "
+		       "register memory: %d\n", rc);
+	else if (rc == -EINVAL)
+		CERROR("Invalid mr size: %#llx\n", hdev->ibh_mr_size);
+	return rc;
 }
 
 #ifdef HAVE_IB_GET_DMA_MR
@@ -2629,13 +2609,8 @@ static int
 kiblnd_hdev_setup_mrs(kib_hca_dev_t *hdev)
 {
 	struct ib_mr *mr;
-	int           rc;
 	int           acflags = IB_ACCESS_LOCAL_WRITE |
 				IB_ACCESS_REMOTE_WRITE;
-
-	rc = kiblnd_hdev_get_attr(hdev);
-	if (rc != 0)
-		return rc;
 
 	mr = ib_get_dma_mr(hdev->ibh_pd, acflags);
 	if (IS_ERR(mr)) {
@@ -2804,16 +2779,16 @@ kiblnd_dev_failover(kib_dev_t *dev)
                 goto out;
         }
 
+	rc = kiblnd_hdev_get_attr(hdev);
+	if (rc != 0) {
+		CERROR("Can't get device attributes: %d\n", rc);
+		goto out;
+	}
+
 #ifdef HAVE_IB_GET_DMA_MR
 	rc = kiblnd_hdev_setup_mrs(hdev);
 	if (rc != 0) {
 		CERROR("Can't setup device: %d\n", rc);
-		goto out;
-	}
-#else
-	rc = kiblnd_hdev_get_attr(hdev);
-	if (rc != 0) {
-		CERROR("Can't get device attributes: %d\n", rc);
 		goto out;
 	}
 #endif
