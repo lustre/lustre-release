@@ -186,31 +186,37 @@ int cl_glimpse_size0(struct inode *inode, int agl)
          */
         struct lu_env          *env = NULL;
         struct cl_io           *io  = NULL;
-	__u16                   refcheck;
-        int                     result;
+	__u16			refcheck;
+	int			retried = 0;
+	int                     result;
 
-        ENTRY;
+	ENTRY;
 
-        result = cl_io_get(inode, &env, &io, &refcheck);
-        if (result > 0) {
-	again:
-		io->ci_verify_layout = 1;
-                result = cl_io_init(env, io, CIT_MISC, io->ci_obj);
-                if (result > 0)
-                        /*
-                         * nothing to do for this io. This currently happens
-                         * when stripe sub-object's are not yet created.
-                         */
-                        result = io->ci_result;
-                else if (result == 0)
-                        result = cl_glimpse_lock(env, io, inode, io->ci_obj,
-                                                 agl);
+	result = cl_io_get(inode, &env, &io, &refcheck);
+	if (result <= 0)
+		RETURN(result);
+
+	do {
+		io->ci_ndelay_tried = retried++;
+		io->ci_ndelay = io->ci_verify_layout = 1;
+		result = cl_io_init(env, io, CIT_GLIMPSE, io->ci_obj);
+		if (result > 0) {
+			/*
+			 * nothing to do for this io. This currently happens
+			 * when stripe sub-object's are not yet created.
+			 */
+			result = io->ci_result;
+		} else if (result == 0) {
+			result = cl_glimpse_lock(env, io, inode, io->ci_obj,
+						 agl);
+			if (!agl && result == -EWOULDBLOCK)
+				io->ci_need_restart = 1;
+		}
 
 		OBD_FAIL_TIMEOUT(OBD_FAIL_GLIMPSE_DELAY, 2);
-                cl_io_fini(env, io);
-		if (unlikely(io->ci_need_restart))
-			goto again;
-		cl_env_put(env, &refcheck);
-	}
+		cl_io_fini(env, io);
+	} while (unlikely(io->ci_need_restart));
+
+	cl_env_put(env, &refcheck);
 	RETURN(result);
 }

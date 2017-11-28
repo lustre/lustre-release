@@ -732,6 +732,8 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 			else
 				b->mbo_blocks = 1;
 			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+		} else if (info->mti_som_valid) { /* som is valid */
+			b->mbo_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 		}
 	}
 
@@ -992,6 +994,9 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 		rc = mo_attr_get(env, next, ma);
 		if (rc)
 			GOTO(out, rc);
+
+		if (S_ISREG(mode))
+			(void) mdt_get_som(info, o, &ma->ma_attr);
 		ma->ma_valid |= MA_INODE;
 	}
 
@@ -1336,31 +1341,20 @@ out:
  *
  * \param[in] info	thread environment
  * \param[in] obj	object
- * \param[in] layout	layout intent
- * \param[in] buf	buffer containing client's lovea, could be empty
+ * \param[in] layout	layout change descriptor
  *
  * \retval 0	on success
  * \retval < 0	error code
  */
-static int mdt_layout_change(struct mdt_thread_info *info,
-			     struct mdt_object *obj,
-			     struct layout_intent *layout,
-			     const struct lu_buf *buf)
+int mdt_layout_change(struct mdt_thread_info *info, struct mdt_object *obj,
+		      struct md_layout_change *layout)
 {
 	struct mdt_lock_handle *lh = &info->mti_lh[MDT_LH_LOCAL];
 	int rc;
 	ENTRY;
 
-	CDEBUG(D_INFO, "got layout change request from client: "
-	       "opc:%u flags:%#x extent[%#llx,%#llx)\n",
-	       layout->li_opc, layout->li_flags,
-	       layout->li_start, layout->li_end);
-	if (layout->li_start >= layout->li_end) {
-		CERROR("Recieved an invalid layout change range [%llu, %llu) "
-		       "for "DFID"\n", layout->li_start, layout->li_end,
-		       PFID(mdt_object_fid(obj)));
-		RETURN(-EINVAL);
-	}
+	if (!mdt_object_exists(obj))
+		GOTO(out, rc = -ENOENT);
 
 	if (!S_ISREG(lu_object_attr(&obj->mot_obj)))
 		GOTO(out, rc = -EINVAL);
@@ -1372,13 +1366,11 @@ static int mdt_layout_change(struct mdt_thread_info *info,
 
 	/* take layout lock to prepare layout change */
 	mdt_lock_reg_init(lh, LCK_EX);
-	rc = mdt_object_lock(info, obj, lh,
-			     MDS_INODELOCK_LAYOUT | MDS_INODELOCK_XATTR);
+	rc = mdt_object_lock(info, obj, lh, MDS_INODELOCK_LAYOUT);
 	if (rc)
 		GOTO(out, rc);
 
-	rc = mo_layout_change(info->mti_env, mdt_object_child(obj), layout,
-			      buf);
+	rc = mo_layout_change(info->mti_env, mdt_object_child(obj), layout);
 
 	mdt_object_unlock(info, obj, lh, 1);
 out:
@@ -2130,7 +2122,8 @@ static int mdt_reint(struct tgt_session_info *tsi)
 		[REINT_OPEN]     = &RQF_MDS_REINT_OPEN,
 		[REINT_SETXATTR] = &RQF_MDS_REINT_SETXATTR,
 		[REINT_RMENTRY]  = &RQF_MDS_REINT_UNLINK,
-		[REINT_MIGRATE]  = &RQF_MDS_REINT_RENAME
+		[REINT_MIGRATE]  = &RQF_MDS_REINT_RENAME,
+		[REINT_RESYNC]   = &RQF_MDS_REINT_RESYNC,
 	};
 
 	ENTRY;
@@ -3282,6 +3275,7 @@ void mdt_thread_info_init(struct ptlrpc_request *req,
         info->mti_opdata = 0;
 	info->mti_big_lmm_used = 0;
 	info->mti_big_acl_used = 0;
+	info->mti_som_valid = 0;
 
         info->mti_spec.no_create = 0;
 	info->mti_spec.sp_rm_entry = 0;
@@ -3738,10 +3732,10 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 			     __u64 flags)
 {
 	struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_LAYOUT];
-	struct layout_intent *layout;
-	struct lu_fid *fid;
+	struct md_layout_change layout = { .mlc_opc = MD_LAYOUT_NOP };
+	struct layout_intent *intent;
+	struct lu_fid *fid = &info->mti_tmp_fid2;
 	struct mdt_object *obj = NULL;
-	bool layout_change = false;
 	int layout_size = 0;
 	int rc = 0;
 	ENTRY;
@@ -3752,14 +3746,22 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 		RETURN(-EINVAL);
 	}
 
-	layout = req_capsule_client_get(info->mti_pill, &RMF_LAYOUT_INTENT);
-	if (layout == NULL)
+	fid_extract_from_res_name(fid, &(*lockp)->l_resource->lr_name);
+
+	intent = req_capsule_client_get(info->mti_pill, &RMF_LAYOUT_INTENT);
+	if (intent == NULL)
 		RETURN(-EPROTO);
 
-	switch (layout->li_opc) {
+	CDEBUG(D_INFO, DFID "got layout change request from client: "
+	       "opc:%u flags:%#x extent "DEXT"\n",
+	       PFID(fid), intent->li_opc, intent->li_flags,
+	       PEXT(&intent->li_extent));
+
+	switch (intent->li_opc) {
 	case LAYOUT_INTENT_TRUNC:
 	case LAYOUT_INTENT_WRITE:
-		layout_change = true;
+		layout.mlc_opc = MD_LAYOUT_WRITE;
+		layout.mlc_intent = intent;
 		break;
 	case LAYOUT_INTENT_ACCESS:
 		break;
@@ -3768,20 +3770,17 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	case LAYOUT_INTENT_RELEASE:
 	case LAYOUT_INTENT_RESTORE:
 		CERROR("%s: Unsupported layout intent opc %d\n",
-		       mdt_obd_name(info->mti_mdt), layout->li_opc);
+		       mdt_obd_name(info->mti_mdt), intent->li_opc);
 		rc = -ENOTSUPP;
 		break;
 	default:
 		CERROR("%s: Unknown layout intent opc %d\n",
-		       mdt_obd_name(info->mti_mdt), layout->li_opc);
+		       mdt_obd_name(info->mti_mdt), intent->li_opc);
 		rc = -EINVAL;
 		break;
 	}
 	if (rc < 0)
 		RETURN(rc);
-
-	fid = &info->mti_tmp_fid2;
-	fid_extract_from_res_name(fid, &(*lockp)->l_resource->lr_name);
 
 	/* Get lock from request for possible resent case. */
 	mdt_intent_fixup_resent(info, *lockp, lhc, flags);
@@ -3811,8 +3810,8 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 		GOTO(out_obj, rc);
 
 
-	if (layout_change) {
-		struct lu_buf *buf = &info->mti_buf;
+	if (layout.mlc_opc != MD_LAYOUT_NOP) {
+		struct lu_buf *buf = &layout.mlc_buf;
 
 		/**
 		 * mdt_layout_change is a reint operation, when the request
@@ -3856,7 +3855,7 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 		 * lovea, then it's a replay of the layout intent write
 		 * RPC.
 		 */
-		rc = mdt_layout_change(info, obj, layout, buf);
+		rc = mdt_layout_change(info, obj, &layout);
 		if (rc)
 			GOTO(out_obj, rc);
 	}

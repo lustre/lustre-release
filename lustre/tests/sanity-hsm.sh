@@ -1211,7 +1211,7 @@ test_11a() {
 	echo -n "Verifying released pattern: "
 	local PTRN=$($GETSTRIPE -L $f)
 	echo $PTRN
-	[[ $PTRN == 80000001 ]] || error "Is not released"
+	[[ $PTRN == released ]] || error "Is not released"
 	local fid=$(path2fid $f)
 	echo "Verifying new fid $fid in archive"
 

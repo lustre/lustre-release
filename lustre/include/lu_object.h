@@ -426,6 +426,8 @@ struct lu_attr {
         __u32          la_rdev;
 	/** project id */
 	__u32	       la_projid;
+	/** set layout version to OST objects. */
+	__u32		la_layout_version;
 };
 
 /** Bit-mask of valid attributes */
@@ -446,6 +448,11 @@ enum la_valid {
         LA_KILL_SUID = 1 << 13,
         LA_KILL_SGID = 1 << 14,
 	LA_PROJID    = 1 << 15,
+	LA_LAYOUT_VERSION = 1 << 16,
+	/**
+	 * Attributes must be transmitted to OST objects
+	 */
+	LA_REMOTE_ATTR_SET = (LA_UID | LA_GID | LA_PROJID | LA_LAYOUT_VERSION)
 };
 
 /**
@@ -907,7 +914,8 @@ struct lu_rdpg {
 
 enum lu_xattr_flags {
 	LU_XATTR_REPLACE = (1 << 0),
-	LU_XATTR_CREATE  = (1 << 1)
+	LU_XATTR_CREATE  = (1 << 1),
+	LU_XATTR_MERGE   = (1 << 2),
 };
 
 /** @} helpers */

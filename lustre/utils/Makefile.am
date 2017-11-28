@@ -92,6 +92,7 @@ liblustreapitmp_a_SOURCES = liblustreapi.c liblustreapi_hsm.c \
 			    liblustreapi_json.c liblustreapi_layout.c \
 			    liblustreapi_lease.c liblustreapi_util.c \
 			    liblustreapi_kernelconn.c liblustreapi_param.c \
+			    liblustreapi_mirror.c \
 			    $(top_builddir)/libcfs/libcfs/util/string.c \
 			    $(top_builddir)/libcfs/libcfs/util/param.c \
 			    liblustreapi_ladvise.c liblustreapi_chlg.c

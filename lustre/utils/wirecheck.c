@@ -640,7 +640,7 @@ check_obdo(void)
 	CHECK_MEMBER(obdo, o_parent_ver);
 	CHECK_MEMBER(obdo, o_handle);
 	CHECK_MEMBER(obdo, o_layout);
-	CHECK_MEMBER(obdo, o_padding_3);
+	CHECK_MEMBER(obdo, o_layout_version);
 	CHECK_MEMBER(obdo, o_uid_h);
 	CHECK_MEMBER(obdo, o_gid_h);
 	CHECK_MEMBER(obdo, o_data_version);
@@ -782,6 +782,7 @@ check_lov_comp_md_entry_v1(void)
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_padding);
 
 	CHECK_VALUE_X(LCME_FL_INIT);
+	CHECK_VALUE_X(LCME_FL_NEG);
 }
 
 static void
@@ -794,11 +795,17 @@ check_lov_comp_md_v1(void)
 	CHECK_MEMBER(lov_comp_md_v1, lcm_layout_gen);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_flags);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_entry_count);
+	CHECK_MEMBER(lov_comp_md_v1, lcm_mirror_count);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_padding1);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_padding2);
 	CHECK_MEMBER(lov_comp_md_v1, lcm_entries[0]);
 
 	CHECK_CDEFINE(LOV_MAGIC_COMP_V1);
+
+	CHECK_VALUE(LCM_FL_NOT_FLR);
+	CHECK_VALUE(LCM_FL_RDONLY);
+	CHECK_VALUE(LCM_FL_WRITE_PENDING);
+	CHECK_VALUE(LCM_FL_SYNC_PENDING);
 }
 
 static void
@@ -1280,6 +1287,35 @@ check_mdt_rec_setxattr(void)
 	CHECK_MEMBER(mdt_rec_setxattr, sx_padding_9);
 	CHECK_MEMBER(mdt_rec_setxattr, sx_padding_10);
 	CHECK_MEMBER(mdt_rec_setxattr, sx_padding_11);
+}
+
+static void
+check_mdt_rec_resync(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(mdt_rec_resync);
+	CHECK_MEMBER(mdt_rec_resync, rs_opcode);
+	CHECK_MEMBER(mdt_rec_resync, rs_cap);
+	CHECK_MEMBER(mdt_rec_resync, rs_fsuid);
+	CHECK_MEMBER(mdt_rec_resync, rs_fsuid_h);
+	CHECK_MEMBER(mdt_rec_resync, rs_fsgid);
+	CHECK_MEMBER(mdt_rec_resync, rs_fsgid_h);
+	CHECK_MEMBER(mdt_rec_resync, rs_suppgid1);
+	CHECK_MEMBER(mdt_rec_resync, rs_suppgid1_h);
+	CHECK_MEMBER(mdt_rec_resync, rs_suppgid2);
+	CHECK_MEMBER(mdt_rec_resync, rs_suppgid2_h);
+	CHECK_MEMBER(mdt_rec_resync, rs_fid);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding0);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding1);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding2);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding3);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding4);
+	CHECK_MEMBER(mdt_rec_resync, rs_bias);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding5);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding6);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding7);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding8);
+	CHECK_MEMBER(mdt_rec_resync, rs_padding9);
 }
 
 static void
@@ -2154,12 +2190,11 @@ check_hsm_copy(void)
 
 static void check_layout_intent(void)
 {
-        BLANK_LINE();
-        CHECK_STRUCT(layout_intent);
-        CHECK_MEMBER(layout_intent, li_opc);
-        CHECK_MEMBER(layout_intent, li_flags);
-        CHECK_MEMBER(layout_intent, li_start);
-        CHECK_MEMBER(layout_intent, li_end);
+	BLANK_LINE();
+	CHECK_STRUCT(layout_intent);
+	CHECK_MEMBER(layout_intent, li_opc);
+	CHECK_MEMBER(layout_intent, li_flags);
+	CHECK_MEMBER(layout_intent, li_extent);
 
 	CHECK_VALUE(LAYOUT_INTENT_ACCESS);
 	CHECK_VALUE(LAYOUT_INTENT_READ);
@@ -2722,6 +2757,7 @@ main(int argc, char **argv)
 	check_mdt_rec_unlink();
 	check_mdt_rec_rename();
 	check_mdt_rec_setxattr();
+	check_mdt_rec_resync();
 	check_mdt_rec_reint();
 	check_lmv_desc();
 	check_lov_desc();

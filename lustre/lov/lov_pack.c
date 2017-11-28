@@ -206,6 +206,8 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 	lcmv1->lcm_magic = cpu_to_le32(lsm->lsm_magic);
 	lcmv1->lcm_size = cpu_to_le32(lmm_size);
 	lcmv1->lcm_layout_gen = cpu_to_le32(lsm->lsm_layout_gen);
+	lcmv1->lcm_flags = cpu_to_le16(lsm->lsm_flags);
+	lcmv1->lcm_mirror_count = cpu_to_le16(lsm->lsm_mirror_count);
 	lcmv1->lcm_entry_count = cpu_to_le16(lsm->lsm_entry_count);
 
 	offset = sizeof(*lcmv1) + sizeof(*lcme) * lsm->lsm_entry_count;

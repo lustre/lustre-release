@@ -1332,6 +1332,16 @@ static int ofd_getattr_hdl(struct tgt_session_info *tsi)
 			repbody->oa.o_valid |= OBD_MD_FLDATAVERSION;
 			repbody->oa.o_data_version = curr_version;
 		}
+
+		if (fo->ofo_ff.ff_layout_version > 0) {
+			repbody->oa.o_valid |= OBD_MD_LAYOUT_VERSION;
+			repbody->oa.o_layout_version =
+			     fo->ofo_ff.ff_layout_version + fo->ofo_ff.ff_range;
+
+			CDEBUG(D_INODE, DFID": get layout version: %u\n",
+			       PFID(&tsi->tsi_fid),
+			       repbody->oa.o_layout_version);
+		}
 	}
 
 	ofd_object_put(tsi->tsi_env, fo);
@@ -1367,7 +1377,6 @@ static int ofd_setattr_hdl(struct tgt_session_info *tsi)
 	struct ost_body		*repbody;
 	struct ldlm_resource	*res;
 	struct ofd_object	*fo;
-	struct filter_fid	*ff = NULL;
 	int			 rc = 0;
 
 	ENTRY;
@@ -1407,13 +1416,8 @@ static int ofd_setattr_hdl(struct tgt_session_info *tsi)
 	la_from_obdo(&fti->fti_attr, &body->oa, body->oa.o_valid);
 	fti->fti_attr.la_valid &= ~LA_TYPE;
 
-	if (body->oa.o_valid & OBD_MD_FLFID) {
-		ff = &fti->fti_mds_fid;
-		ofd_prepare_fidea(ff, &body->oa);
-	}
-
 	/* setting objects attributes (including owner/group) */
-	rc = ofd_attr_set(tsi->tsi_env, fo, &fti->fti_attr, ff);
+	rc = ofd_attr_set(tsi->tsi_env, fo, &fti->fti_attr, &body->oa);
 	if (rc != 0)
 		GOTO(out_put, rc);
 
@@ -2017,7 +2021,6 @@ static int ofd_punch_hdl(struct tgt_session_info *tsi)
 	struct ldlm_namespace	*ns = tsi->tsi_tgt->lut_obd->obd_namespace;
 	struct ldlm_resource	*res;
 	struct ofd_object	*fo;
-	struct filter_fid	*ff = NULL;
 	__u64			 flags = 0;
 	struct lustre_handle	 lh = { 0, };
 	int			 rc;
@@ -2078,13 +2081,8 @@ static int ofd_punch_hdl(struct tgt_session_info *tsi)
 	info->fti_attr.la_size = start;
 	info->fti_attr.la_valid |= LA_SIZE;
 
-	if (oa->o_valid & OBD_MD_FLFID) {
-		ff = &info->fti_mds_fid;
-		ofd_prepare_fidea(ff, oa);
-	}
-
 	rc = ofd_object_punch(tsi->tsi_env, fo, start, end, &info->fti_attr,
-			      ff, (struct obdo *)oa);
+			      (struct obdo *)oa);
 	if (rc)
 		GOTO(out_put, rc);
 

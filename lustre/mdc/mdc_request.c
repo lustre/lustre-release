@@ -761,23 +761,35 @@ static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 	struct obd_device     *obd = class_exp2obd(exp);
 	struct ptlrpc_request *req;
 	struct req_format     *req_fmt;
+	size_t		       u32_count = 0;
 	int                    rc;
 	int		       saved_rc = 0;
 	ENTRY;
 
-	if (op_data->op_bias & MDS_HSM_RELEASE) {
-		req_fmt = &RQF_MDS_INTENT_CLOSE;
+	CDEBUG(D_INODE, "%s: "DFID" file closed with intent: %x\n",
+	       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),
+	       op_data->op_bias);
 
-		/* allocate a FID for volatile file */
-		rc = mdc_fid_alloc(NULL, exp, &op_data->op_fid2, op_data);
-		if (rc < 0) {
-			CERROR("%s: "DFID" failed to allocate FID: %d\n",
-			       obd->obd_name, PFID(&op_data->op_fid1), rc);
-			/* save the errcode and proceed to close */
-			saved_rc = rc;
-		}
-	} else if (op_data->op_bias & MDS_CLOSE_LAYOUT_SWAP) {
+	if (op_data->op_bias & MDS_CLOSE_INTENT) {
 		req_fmt = &RQF_MDS_INTENT_CLOSE;
+		if (op_data->op_bias & MDS_HSM_RELEASE) {
+			/* allocate a FID for volatile file */
+			rc = mdc_fid_alloc(NULL, exp, &op_data->op_fid2,
+					   op_data);
+			if (rc < 0) {
+				CERROR("%s: "DFID" allocating FID: rc = %d\n",
+				       obd->obd_name, PFID(&op_data->op_fid1),
+				       rc);
+				/* save the errcode and proceed to close */
+				saved_rc = rc;
+			}
+		}
+		if (op_data->op_bias & MDS_CLOSE_RESYNC_DONE) {
+			size_t count = op_data->op_data_size / sizeof(__u32);
+
+			if (count > INLINE_RESYNC_ARRAY_SIZE)
+				u32_count = count;
+		}
 	} else {
 		req_fmt = &RQF_MDS_CLOSE;
 	}
@@ -814,6 +826,10 @@ static int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 		      obd->obd_name, PFID(&op_data->op_fid1));
 		GOTO(out, rc = -ENOMEM);
 	}
+
+	if (u32_count > 0)
+		req_capsule_set_size(&req->rq_pill, &RMF_U32, RCL_CLIENT,
+				     u32_count * sizeof(__u32));
 
 	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_CLOSE);
 	if (rc) {
@@ -2642,6 +2658,7 @@ static struct md_ops mdc_md_ops = {
         .m_setxattr         = mdc_setxattr,
         .m_getxattr         = mdc_getxattr,
 	.m_fsync		= mdc_fsync,
+	.m_file_resync		= mdc_file_resync,
 	.m_read_page		= mdc_read_page,
         .m_unlink           = mdc_unlink,
         .m_cancel_unused    = mdc_cancel_unused,

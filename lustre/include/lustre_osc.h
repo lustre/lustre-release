@@ -594,8 +594,9 @@ int osc_teardown_async_page(const struct lu_env *env, struct osc_object *obj,
 			    struct osc_page *ops);
 int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
 			 struct osc_page *ops);
-int osc_queue_sync_pages(const struct lu_env *env, struct osc_object *obj,
-			 struct list_head *list, int cmd, int brw_flags);
+int osc_queue_sync_pages(const struct lu_env *env, const struct cl_io *io,
+			 struct osc_object *obj, struct list_head *list,
+			 int brw_flags);
 int osc_cache_truncate_start(const struct lu_env *env, struct osc_object *obj,
 			     __u64 size, struct osc_extent **extp);
 void osc_cache_truncate_end(const struct lu_env *env, struct osc_extent *ext);
@@ -929,7 +930,9 @@ struct osc_extent {
 				oe_hp:1,
 	/** this extent should be written back asap. set if one of pages is
 	 * called by page WB daemon, or sync write or reading requests. */
-				oe_urgent:1;
+				oe_urgent:1,
+	/** Non-delay RPC should be used for this extent. */
+				oe_ndelay:1;
 	/** how many grants allocated for this extent.
 	 *  Grant allocated for this extent. There is no grant allocated
 	 *  for reading extents and sync write extents. */
@@ -963,6 +966,8 @@ struct osc_extent {
 	int			oe_rc;
 	/** max pages per rpc when this extent was created */
 	unsigned int		oe_mppr;
+	/** FLR: layout version when this osc_extent is publised */
+	__u32			oe_layout_version;
 };
 
 /** @} osc */

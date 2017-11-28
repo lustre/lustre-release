@@ -21,6 +21,9 @@ if $RACER_ENABLE_DOM ; then
 		layout+=(dom dom dom)
 fi
 
+[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.55) ]] &&
+	layout+=(flr flr flr)
+
 echo "layout: ${layout[*]}"
 
 while /bin/true; do
@@ -34,12 +37,13 @@ while /bin/true; do
 		pattern=${layout[$RANDOM % ${#layout[*]}]}
 
 		case $pattern in
-		dom) opt="-E $stripesize -L mdt -E eof -c $stripecount -S 1M" ;;
-		pfl) opt="-E 1M -S $stripesize -E eof -c $stripecount -S 2M" ;;
-		raid0) opt="-S $stripesize -c $stripecount" ;;
+		dom) opt="setstripe -E $stripesize -L mdt -E eof -c $stripecount -S 1M" ;;
+		pfl) opt="setstripe -E 1M -S $stripesize -E eof -c $stripecount -S 2M" ;;
+		flr) opt="mirror create -N2 -E 1M -S $stripesize -E eof -c $stripecount -S 2M" ;;
+		raid0) opt="setstripe -S $stripesize -c $stripecount" ;;
 		esac
 
-		$LFS setstripe $opt $DIR/$file 2> /dev/null || true
+		$LFS $opt $DIR/$file 2> /dev/null || true
 	}
 
 	# offset between 0 and 16MB (256 64k chunks), with 1/2 at offset 0

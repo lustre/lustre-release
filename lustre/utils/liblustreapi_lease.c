@@ -34,7 +34,6 @@
 #include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"
 
-
 static inline const char *lease_mode2str(int mode)
 {
 	switch (mode) {
@@ -46,27 +45,63 @@ static inline const char *lease_mode2str(int mode)
 }
 
 /**
+ * Extend lease get support.
+ *
+ * \param fd	File to get lease on.
+ * \param data	ll_ioc_lease data.
+ *
+ * For getting lease lock, it will return zero for success. For unlock, it will
+ * return the lock type it owned for succuess.
+ *
+ * \retval >= 0 on success.
+ * \retval -errno on error.
+ */
+int llapi_lease_get_ext(int fd, struct ll_ioc_lease *data)
+{
+	int rc;
+
+	rc = ioctl(fd, LL_IOC_SET_LEASE, data);
+	if (rc < 0) {
+		rc = -errno;
+
+		/* exclude ENOTTY in case this is an old kernel that only
+		 * supports LL_IOC_SET_LEASE_OLD */
+		if (rc != -ENOTTY)
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "cannot get %s lease, ext %x",
+				    lease_mode2str(data->lil_mode),
+				    data->lil_flags);
+	}
+	return rc;
+}
+
+/**
  * Get a lease on an open file.
  *
  * \param fd    File to get the lease on.
  * \param mode  Lease mode, either LL_LEASE_RDLCK or LL_LEASE_WRLCK.
  *
- * \retval 0 on success.
+ * \see llapi_lease_get_ext().
+ *
+ * \retval >= 0 on success.
  * \retval -errno on error.
  */
 int llapi_lease_get(int fd, int mode)
 {
+	struct ll_ioc_lease data = { 0 };
 	int rc;
 
 	if (mode != LL_LEASE_RDLCK && mode != LL_LEASE_WRLCK)
 		return -EINVAL;
 
-	rc = ioctl(fd, LL_IOC_SET_LEASE, mode);
-	if (rc < 0) {
-		rc = -errno;
-		llapi_error(LLAPI_MSG_ERROR, rc, "cannot get %s lease",
-			    lease_mode2str(mode));
+	data.lil_mode = mode;
+	rc = llapi_lease_get_ext(fd, &data);
+	if (rc == -ENOTTY) {
+		rc = ioctl(fd, LL_IOC_SET_LEASE_OLD, mode);
+		if (rc < 0)
+			rc = -errno;
 	}
+
 	return rc;
 }
 
@@ -102,12 +137,7 @@ int llapi_lease_check(int fd)
  */
 int llapi_lease_put(int fd)
 {
-	int rc;
+	struct ll_ioc_lease data = { .lil_mode = LL_LEASE_UNLCK };
 
-	rc = ioctl(fd, LL_IOC_SET_LEASE, LL_LEASE_UNLCK);
-	if (rc < 0) {
-		rc = -errno;
-		llapi_error(LLAPI_MSG_ERROR, rc, "cannot put lease");
-	}
-	return rc;
+	return llapi_lease_get_ext(fd, &data);
 }

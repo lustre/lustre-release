@@ -583,7 +583,7 @@ long osc_lru_shrink(const struct lu_env *env, struct client_obd *cli,
 	}
 
 	pvec = (struct cl_page **)osc_env_info(env)->oti_pvec;
-	io = &osc_env_info(env)->oti_io;
+	io = osc_env_thread_io(env);
 
 	spin_lock(&cli->cl_lru_list_lock);
 	if (force)

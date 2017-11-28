@@ -156,6 +156,25 @@ struct md_op_spec {
         const struct dt_index_features *sp_feat;
 };
 
+enum md_layout_opc {
+	MD_LAYOUT_NOP	= 0,
+	MD_LAYOUT_WRITE,	/* FLR: write the file */
+	MD_LAYOUT_RESYNC,	/* FLR: resync starts */
+	MD_LAYOUT_RESYNC_DONE,	/* FLR: resync done */
+};
+
+/**
+ * Parameters for layout change API.
+ */
+struct md_layout_change {
+	enum md_layout_opc		mlc_opc;
+	struct layout_intent		*mlc_intent;
+	struct lu_buf			mlc_buf;
+	struct lustre_som_attrs		mlc_som;
+	size_t				mlc_resync_count;
+	__u32				*mlc_resync_ids;
+};
+
 union ldlm_policy_data;
 /**
  * Operations implemented for each md object (both directory and leaf).
@@ -222,19 +241,26 @@ struct md_object_operations {
 	 *
 	 * The caller should have held layout lock.
 	 *
+	 * This API can be extended to support every other layout changing
+	 * operations, such as component {add,del,change}, layout swap,
+	 * layout merge, etc. One of the benefits by doing this is that the MDT
+	 * no longer needs to understand layout.
+	 *
+	 * However, layout creation, removal, and fetch should still use
+	 * xattr_{get,set}() because they don't interpret layout on the
+	 * MDT layer.
+	 *
 	 * \param[in] env	execution environment
 	 * \param[in] obj	MD object
 	 * \param[in] layout	data structure to describe the changes to
 	 *			the MD object's layout
-	 * \param[in] buf	buffer containing the client's lovea
 	 *
 	 * \retval 0		success
 	 * \retval -ne		error code
 	 */
 	int (*moo_layout_change)(const struct lu_env *env,
 				 struct md_object *obj,
-				 struct layout_intent *layout,
-				 const struct lu_buf *buf);
+				 struct md_layout_change *layout);
 };
 
 /**
@@ -448,12 +474,11 @@ static inline int mo_invalidate(const struct lu_env *env, struct md_object *m)
 
 static inline int mo_layout_change(const struct lu_env *env,
 				   struct md_object *m,
-				   struct layout_intent *layout,
-				   const struct lu_buf *buf)
+				   struct md_layout_change *layout)
 {
 	/* need instantiate objects which in the access range */
 	LASSERT(m->mo_ops->moo_layout_change);
-	return m->mo_ops->moo_layout_change(env, m, layout, buf);
+	return m->mo_ops->moo_layout_change(env, m, layout);
 }
 
 static inline int mo_swap_layouts(const struct lu_env *env,

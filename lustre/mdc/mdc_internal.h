@@ -129,6 +129,7 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 		void *ea, size_t ealen, struct ptlrpc_request **request);
 int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 	       struct ptlrpc_request **request);
+int mdc_file_resync(struct obd_export *exp, struct md_op_data *data);
 int mdc_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
 		      union ldlm_policy_data *policy, enum ldlm_mode mode,
 		      enum ldlm_cancel_flags flags, void *opaque);
