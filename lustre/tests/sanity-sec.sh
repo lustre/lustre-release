@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: LU-10229
-ALWAYS_EXCEPT="                27 $SANITY_SEC_EXCEPT"
+# bug number for skipped test:
+ALWAYS_EXCEPT="              $SANITY_SEC_EXCEPT"
 if $SHARED_KEY; then
 # bug number for skipped test: 9145 9145 9671 9145 9145 9145 9145 9245
 	ALWAYS_EXCEPT="        17   18   19   20   21   22   23   27 $ALWAYS_EXCEPT"
@@ -1857,8 +1857,10 @@ nodemap_exercise_fileset() {
 	fileset_test_setup "$nm"
 
 	# add fileset info to $nm nodemap
-	do_facet mgs $LCTL set_param nodemap.${nm}.fileset=/$subdir ||
+	if ! combined_mgs_mds; then
+	    do_facet mgs $LCTL set_param nodemap.${nm}.fileset=/$subdir ||
 		error "unable to add fileset info to $nm nodemap on MGS"
+	fi
 	do_facet mgs $LCTL set_param -P nodemap.${nm}.fileset=/$subdir ||
 	       error "unable to add fileset info to $nm nodemap for servers"
 	wait_nm_sync $nm fileset "nodemap.${nm}.fileset=/$subdir"
