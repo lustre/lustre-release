@@ -1237,7 +1237,6 @@ out_fid:
 	obd_fid_fini(osp->opd_obd);
 out_proc:
 	ptlrpc_lprocfs_unregister_obd(obd);
-	lprocfs_obd_cleanup(obd);
 	if (osp->opd_symlink)
 		lprocfs_remove(&osp->opd_symlink);
 	client_obd_cleanup(obd);
@@ -1358,7 +1357,6 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 
 	LASSERT(osp->opd_obd);
 	ptlrpc_lprocfs_unregister_obd(osp->opd_obd);
-	lprocfs_obd_cleanup(osp->opd_obd);
 
 	if (osp->opd_connect_mdt) {
 		struct client_obd *cli = &osp->opd_obd->u.cli;

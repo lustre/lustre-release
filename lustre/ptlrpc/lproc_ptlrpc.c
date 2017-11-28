@@ -1240,6 +1240,11 @@ void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
 
 void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
 {
+	/* cleanup first to allow concurrent access to device's
+	 * stats via debugfs to complete safely
+	 */
+	lprocfs_obd_cleanup(obd);
+
         if (obd->obd_svc_procroot)
                 lprocfs_remove(&obd->obd_svc_procroot);
 
