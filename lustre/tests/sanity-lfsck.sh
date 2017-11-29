@@ -5107,6 +5107,50 @@ test_34()
 }
 run_test 34 "LFSCK can rebuild the lost agent object"
 
+test_35()
+{
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	lfsck_prep 1 1
+
+	#define OBD_FAIL_LFSCK_NO_AGENTENT	0x1631
+	do_facet mds2 $LCTL set_param fail_loc=0x1631
+	$LFS mkdir -i 1 $DIR/$tdir/dummy ||
+		error "(1) Fail to create $DIR/$tdir/dummy"
+
+	sync; sleep 3
+	do_facet mds2 $LCTL set_param fail_loc=0
+	$START_NAMESPACE -A -r || error "(2) Fail to start LFSCK for namespace!"
+	wait_update_facet mds2 "$LCTL get_param -n \
+		mdd.$(facet_svc mds2).lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" $LTIME ||
+		error "(3) MDS${k} is not the expected 'completed'"
+
+	local repaired=$(do_facet mds2 $LCTL get_param -n \
+			 mdd.$(facet_svc mds2).lfsck_namespace |
+			 awk '/^agent_entries_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(4) Fail to repair the lost agent entry: $repaired"
+
+	echo "stopall to cleanup object cache"
+	stopall > /dev/null
+	echo "setupall"
+	setupall > /dev/null
+
+	$START_NAMESPACE -A -r || error "(5) Fail to start LFSCK for namespace!"
+	wait_update_facet mds2 "$LCTL get_param -n \
+		mdd.$(facet_svc mds2).lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" $LTIME ||
+		error "(6) MDS${k} is not the expected 'completed'"
+
+	repaired=$(do_facet mds2 $LCTL get_param -n \
+		   mdd.$(facet_svc mds2).lfsck_namespace |
+		   awk '/^agent_entries_repaired/ { print $2 }')
+	[ $repaired -eq 0 ] ||
+		error "(7) Unexpected repairing: $repaired"
+}
+run_test 35 "LFSCK can rebuild the lost agent entry"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

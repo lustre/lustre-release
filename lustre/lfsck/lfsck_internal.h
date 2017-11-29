@@ -110,6 +110,7 @@ enum lfsck_namespace_trace_flags {
 	LNTF_CHECK_ORPHAN	= 0x08,
 	LNTF_UNCERTAIN_LMV	= 0x10,
 	LNTF_RECHECK_NAME_HASH	= 0x20,
+	LNTF_CHECK_AGENT_ENTRY	= 0x40,
 	LNTF_ALL		= 0xff
 };
 
@@ -278,8 +279,11 @@ struct lfsck_namespace {
 	/* How many linkEA overflow timestamp have been cleared. */
 	__u64	ln_linkea_overflow_cleared;
 
+	/* How many agent entries have been repaired. */
+	__u64	ln_agent_entries_repaired;
+
 	/* For further using. 256-bytes aligned now. */
-	__u64   ln_reserved[12];
+	__u64   ln_reserved[11];
 };
 
 enum lfsck_layout_inconsistency_type {

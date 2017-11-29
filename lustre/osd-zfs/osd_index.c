@@ -549,6 +549,9 @@ int osd_add_to_remote_parent(const struct lu_env *env,
 	int rc;
 	ENTRY;
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AGENTENT))
+		RETURN(0);
+
 	rc = osd_xattr_get_internal(env, obj, &buf, XATTR_NAME_LMA, &size);
 	if (rc) {
 		CWARN("%s: fail to load LMA for adding "

@@ -223,6 +223,9 @@ int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 	struct dentry		*parent;
 	int			rc;
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AGENTENT))
+		RETURN(0);
+
 	/* Set REMOTE_PARENT in lma, so other process like unlink or lfsck
 	 * can identify this object quickly */
 	rc = osd_get_lma(oti, obj->oo_inode, &oti->oti_obj_dentry,

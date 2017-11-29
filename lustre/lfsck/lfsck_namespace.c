@@ -166,6 +166,8 @@ static void lfsck_namespace_le_to_cpu(struct lfsck_namespace *dst,
 	dst->ln_time_latest_reset = le64_to_cpu(src->ln_time_latest_reset);
 	dst->ln_linkea_overflow_cleared =
 				le64_to_cpu(src->ln_linkea_overflow_cleared);
+	dst->ln_agent_entries_repaired =
+				le64_to_cpu(src->ln_agent_entries_repaired);
 }
 
 static void lfsck_namespace_cpu_to_le(struct lfsck_namespace *dst,
@@ -238,6 +240,8 @@ static void lfsck_namespace_cpu_to_le(struct lfsck_namespace *dst,
 	dst->ln_time_latest_reset = cpu_to_le64(src->ln_time_latest_reset);
 	dst->ln_linkea_overflow_cleared =
 				cpu_to_le64(src->ln_linkea_overflow_cleared);
+	dst->ln_agent_entries_repaired =
+				cpu_to_le64(src->ln_agent_entries_repaired);
 }
 
 static void lfsck_namespace_record_failure(const struct lu_env *env,
@@ -3328,6 +3332,147 @@ log:
 }
 
 /**
+ * Verify the object's agent entry.
+ *
+ * If the object claims to have agent entry but the linkEA does not contain
+ * remote parent, then remove the agent entry. Otherwise, if the object has
+ * no agent entry but its linkEA contains remote parent, then will generate
+ * agent entry for it.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] com	pointer to the lfsck component
+ * \param[in] obj	pointer to the dt_object to be handled
+ *
+ * \retval		positive number for repaired cases
+ * \retval		0 if nothing to be repaired
+ * \retval		negative error number on failure
+ */
+static int lfsck_namespace_check_agent_entry(const struct lu_env *env,
+					     struct lfsck_component *com,
+					     struct dt_object *obj)
+{
+	struct linkea_data ldata = { NULL };
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lfsck_namespace *ns = com->lc_file_ram;
+	struct lfsck_instance *lfsck = com->lc_lfsck;
+	struct lu_fid *pfid = &info->lti_fid2;
+	struct lu_name *cname = &info->lti_name;
+	struct lu_seq_range *range = &info->lti_range;
+	struct seq_server_site *ss = lfsck_dev_site(lfsck);
+	__u32 idx = lfsck_dev_idx(lfsck);
+	int rc;
+	bool remote = false;
+	ENTRY;
+
+	if (!(lfsck->li_bookmark_ram.lb_param & LPF_ALL_TGT))
+		RETURN(0);
+
+	rc = lfsck_links_read_with_rec(env, obj, &ldata);
+	if (rc == -ENOENT || rc == -ENODATA)
+		RETURN(0);
+
+	if (rc && rc != -EINVAL)
+		GOTO(out, rc);
+
+	/* We check the agent entry again after verifying the linkEA
+	 * successfully. So invalid linkEA should be dryrun mode. */
+	if (rc == -EINVAL || unlikely(!ldata.ld_leh->leh_reccount))
+		RETURN(0);
+
+	linkea_first_entry(&ldata);
+	while (ldata.ld_lee != NULL && !remote) {
+		linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen,
+				    cname, pfid);
+		/* If parent FID is unknown, not verify agent entry. */
+		if (!fid_is_sane(pfid))
+			GOTO(out, rc = 0);
+
+		fld_range_set_mdt(range);
+		rc = fld_server_lookup(env, ss->ss_server_fld,
+				       fid_seq(pfid), range);
+		if (rc)
+			GOTO(out, rc = (rc == -ENOENT ? 0 : rc));
+
+		if (range->lsr_index != idx)
+			remote = true;
+		else
+			linkea_next_entry(&ldata);
+	}
+
+	if ((lu_object_has_agent_entry(&obj->do_lu) && !remote) ||
+	    (!lu_object_has_agent_entry(&obj->do_lu) && remote)) {
+		struct dt_device *dev = lfsck_obj2dev(obj);
+		struct linkea_data ldata2 = { NULL };
+		struct lustre_handle lh	= { 0 };
+		struct lu_buf linkea_buf;
+		struct thandle *handle;
+
+		if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
+			GOTO(out, rc = 1);
+
+		rc = lfsck_ibits_lock(env, lfsck, obj, &lh,
+				      MDS_INODELOCK_UPDATE |
+				      MDS_INODELOCK_XATTR, LCK_EX);
+		if (rc)
+			GOTO(out, rc);
+
+		handle = dt_trans_create(env, dev);
+		if (IS_ERR(handle))
+			GOTO(unlock, rc = PTR_ERR(handle));
+
+		lfsck_buf_init(&linkea_buf, ldata.ld_buf->lb_buf,
+			       ldata.ld_leh->leh_len);
+		rc = dt_declare_xattr_set(env, obj, &linkea_buf,
+				XATTR_NAME_LINK, LU_XATTR_REPLACE, handle);
+		if (rc)
+			GOTO(stop, rc);
+
+		rc = dt_trans_start_local(env, dev, handle);
+		if (rc)
+			GOTO(stop, rc);
+
+		dt_write_lock(env, obj, 0);
+		rc = lfsck_links_read2_with_rec(env, obj, &ldata2);
+		if (rc) {
+			if (rc == -ENOENT || rc == -ENODATA)
+				rc = 0;
+			GOTO(unlock2, rc);
+		}
+
+		/* If someone changed linkEA by race, then the agent
+		 * entry will be updated by lower layer automatically. */
+		if (ldata.ld_leh->leh_len != ldata2.ld_leh->leh_len ||
+		    memcmp(ldata.ld_buf->lb_buf, ldata2.ld_buf->lb_buf,
+			   ldata.ld_leh->leh_len) != 0)
+			GOTO(unlock2, rc = 0);
+
+		rc = dt_xattr_set(env, obj, &linkea_buf, XATTR_NAME_LINK,
+				  LU_XATTR_REPLACE, handle);
+		if (!rc)
+			rc = 1;
+
+		GOTO(unlock2, rc);
+
+unlock2:
+		dt_write_unlock(env, obj);
+stop:
+		dt_trans_stop(env, dev, handle);
+unlock:
+		lfsck_ibits_unlock(&lh, LCK_EX);
+	}
+
+	GOTO(out, rc);
+
+out:
+	if (rc > 0)
+		ns->ln_agent_entries_repaired++;
+	if (rc)
+		CDEBUG(D_LFSCK, "%s: repair agent entry for "DFID": rc = %d\n",
+		       lfsck_lfsck2name(lfsck), PFID(lfsck_dto2fid(obj)), rc);
+	return rc;
+}
+
+/**
  * Double scan the MDT-object for namespace LFSCK.
  *
  * If the MDT-object contains invalid or repeated linkEA entries, then drop
@@ -3374,6 +3519,8 @@ static int lfsck_namespace_double_scan_one(const struct lu_env *env,
 	if (S_ISDIR(lfsck_object_type(child))) {
 		dt_read_unlock(env, child);
 		rc = lfsck_namespace_double_scan_dir(env, com, child, flags);
+		if (!rc && flags & LNTF_CHECK_AGENT_ENTRY)
+			rc = lfsck_namespace_check_agent_entry(env, com, child);
 
 		RETURN(rc);
 	}
@@ -3733,6 +3880,9 @@ out:
 			rc = 1;
 	}
 
+	if (!rc && flags & LNTF_CHECK_AGENT_ENTRY)
+		rc = lfsck_namespace_check_agent_entry(env, com, child);
+
 	return rc;
 }
 
@@ -3778,6 +3928,7 @@ static void lfsck_namespace_dump_statistics(struct seq_file *m,
 		   "striped_shards_skipped: %llu\n"
 		   "name_hash_%s: %llu\n"
 		   "linkea_overflow_%s: %llu\n"
+		   "agent_entries_%s: %llu\n"
 		   "success_count: %u\n"
 		   "run_time_phase1: %lld seconds\n"
 		   "run_time_phase2: %lld seconds\n",
@@ -3817,6 +3968,7 @@ static void lfsck_namespace_dump_statistics(struct seq_file *m,
 		   postfix, ns->ln_name_hash_repaired,
 		   dryrun ? "inconsistent" : "cleared",
 		   ns->ln_linkea_overflow_cleared,
+		   postfix, ns->ln_agent_entries_repaired,
 		   ns->ln_success_count,
 		   time_phase1,
 		   time_phase2);
@@ -4196,6 +4348,7 @@ static int lfsck_namespace_exec_oit(const struct lu_env *env,
 	struct linkea_data	  ldata	= { NULL };
 	__u32			  idx	= lfsck_dev_idx(lfsck);
 	int			  rc;
+	bool remote = false;
 	ENTRY;
 
 	rc = lfsck_links_read(env, obj, &ldata);
@@ -4222,14 +4375,45 @@ static int lfsck_namespace_exec_oit(const struct lu_env *env,
 		GOTO(out, rc = (rc == -ENOENT ? 0 : rc));
 	}
 
+	if (rc && rc != -ENODATA)
+		GOTO(out, rc);
+
 	if (rc == -ENODATA || unlikely(!ldata.ld_leh->leh_reccount)) {
 		rc = lfsck_namespace_check_for_double_scan(env, com, obj);
 
 		GOTO(out, rc);
 	}
 
-	if (rc != 0)
-		GOTO(out, rc);
+	linkea_first_entry(&ldata);
+	while (ldata.ld_lee != NULL) {
+		linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen,
+				    cname, pfid);
+		if (!fid_is_sane(pfid)) {
+			rc = lfsck_namespace_trace_update(env, com, fid,
+						  LNTF_CHECK_PARENT, true);
+		} else {
+			fld_range_set_mdt(range);
+			rc = fld_server_lookup(env, ss->ss_server_fld,
+					       fid_seq(pfid), range);
+			if ((rc == -ENOENT) ||
+			    (!rc && range->lsr_index != idx)) {
+				remote = true;
+				break;
+			}
+		}
+		if (rc)
+			GOTO(out, rc);
+
+		linkea_next_entry(&ldata);
+	}
+
+	if ((lu_object_has_agent_entry(&obj->do_lu) && !remote) ||
+	    (!lu_object_has_agent_entry(&obj->do_lu) && remote)) {
+		rc = lfsck_namespace_trace_update(env, com, fid,
+						  LNTF_CHECK_AGENT_ENTRY, true);
+		if (rc)
+			GOTO(out, rc);
+	}
 
 	/* Record multiple-linked object. */
 	if (ldata.ld_leh->leh_reccount > 1) {
@@ -4239,23 +4423,11 @@ static int lfsck_namespace_exec_oit(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	linkea_first_entry(&ldata);
-	linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen, cname, pfid);
-	if (!fid_is_sane(pfid)) {
+	if (remote)
 		rc = lfsck_namespace_trace_update(env, com, fid,
-						  LNTF_CHECK_PARENT, true);
-	} else {
-		fld_range_set_mdt(range);
-		rc = fld_local_lookup(env, ss->ss_server_fld,
-				      fid_seq(pfid), range);
-		if ((rc == -ENOENT) ||
-		    (rc == 0 && range->lsr_index != idx))
-			rc = lfsck_namespace_trace_update(env, com, fid,
-						LNTF_CHECK_LINKEA, true);
-		else
-			rc = lfsck_namespace_check_for_double_scan(env, com,
-								   obj);
-	}
+						  LNTF_CHECK_LINKEA, true);
+	else
+		rc = lfsck_namespace_check_for_double_scan(env, com, obj);
 
 	GOTO(out, rc);
 
