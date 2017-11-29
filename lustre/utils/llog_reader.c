@@ -654,11 +654,103 @@ static void print_hsm_action(struct llog_agent_req_rec *larr)
 
 void print_changelog_rec(struct llog_changelog_rec *rec)
 {
-	printf("changelog record id:0x%x cr_flags:0x%x cr_type:%s(0x%x)\n",
+	time_t secs;
+	struct tm ts;
+
+	secs = __le64_to_cpu(rec->cr.cr_time) >> 30;
+	gmtime_r(&secs, &ts);
+	printf("changelog record id:0x%x cr_flags:0x%x cr_type:%s(0x%x) "
+	       "date:'%02d:%02d:%02d.%09d %04d.%02d.%02d' target:"DFID,
 	       __le32_to_cpu(rec->cr_hdr.lrh_id),
 	       __le32_to_cpu(rec->cr.cr_flags),
 	       changelog_type2str(__le32_to_cpu(rec->cr.cr_type)),
-	       __le32_to_cpu(rec->cr.cr_type));
+	       __le32_to_cpu(rec->cr.cr_type),
+	       ts.tm_hour, ts.tm_min, ts.tm_sec,
+	       (int)(__le64_to_cpu(rec->cr.cr_time) & ((1 << 30) - 1)),
+	       ts.tm_year + 1900, ts.tm_mon + 1, ts.tm_mday,
+	       PFID(&rec->cr.cr_tfid));
+
+	if (rec->cr.cr_flags & CLF_JOBID) {
+		struct changelog_ext_jobid *jid =
+			changelog_rec_jobid(&rec->cr);
+
+		if (jid->cr_jobid[0] != '\0')
+			printf(" jobid:%s", jid->cr_jobid);
+	}
+
+	if (rec->cr.cr_flags & CLF_EXTRA_FLAGS) {
+		struct changelog_ext_extra_flags *ef =
+			changelog_rec_extra_flags(&rec->cr);
+
+		printf(" cr_extra_flags:0x%llx",
+		       __le64_to_cpu(ef->cr_extra_flags));
+
+		if (ef->cr_extra_flags & CLFE_UIDGID) {
+			struct changelog_ext_uidgid *uidgid =
+				changelog_rec_uidgid(&rec->cr);
+
+			printf(" user:%u:%u",
+			       __le32_to_cpu(uidgid->cr_uid),
+			       __le32_to_cpu(uidgid->cr_gid));
+		}
+		if (ef->cr_extra_flags & CLFE_NID) {
+			struct changelog_ext_nid *nid =
+				changelog_rec_nid(&rec->cr);
+
+			printf(" nid:%s",
+			       libcfs_nid2str(nid->cr_nid));
+		}
+
+		if (ef->cr_extra_flags & CLFE_OPEN) {
+			struct changelog_ext_openmode *omd =
+				changelog_rec_openmode(&rec->cr);
+			char mode[] = "---";
+
+			/* exec mode must be exclusive */
+			if (__le32_to_cpu(omd->cr_openflags) & MDS_FMODE_EXEC) {
+				mode[2] = 'x';
+			} else {
+				if (__le32_to_cpu(omd->cr_openflags) &
+				    FMODE_READ)
+					mode[0] = 'r';
+				if (__le32_to_cpu(omd->cr_openflags) &
+			       (FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
+					mode[1] = 'w';
+			}
+
+			if (strcmp(mode, "---") != 0)
+				printf(" mode:%s", mode);
+
+		}
+
+		if (ef->cr_extra_flags & CLFE_XATTR) {
+			struct changelog_ext_xattr *xattr =
+				changelog_rec_xattr(&rec->cr);
+
+			if (xattr->cr_xattr[0] != '\0')
+				printf(" xattr:%s", xattr->cr_xattr);
+		}
+	}
+
+	if (rec->cr.cr_namelen)
+		printf(" parent:"DFID" name:%.*s", PFID(&rec->cr.cr_pfid),
+		       __le32_to_cpu(rec->cr.cr_namelen),
+		       changelog_rec_name(&rec->cr));
+
+	if (rec->cr.cr_flags & CLF_RENAME) {
+		struct changelog_ext_rename *rnm =
+			changelog_rec_rename(&rec->cr);
+
+		if (!fid_is_zero(&rnm->cr_sfid))
+			printf(" source_fid:"DFID" source_parent_fid:"DFID
+			       " %.*s",
+			       PFID(&rnm->cr_sfid),
+			       PFID(&rnm->cr_spfid),
+			       (int)__le32_to_cpu(
+				       changelog_rec_snamelen(&rec->cr)),
+			       changelog_rec_sname(&rec->cr));
+	}
+	printf("\n");
 }
 
 static void print_records(struct llog_rec_hdr **recs,
