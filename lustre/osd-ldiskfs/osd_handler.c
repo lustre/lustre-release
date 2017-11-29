@@ -1121,7 +1121,7 @@ trigger:
 		goto found;
 	}
 
-	if (dev->od_noscrub) {
+	if (dev->od_auto_scrub_interval == AS_NEVER) {
 		if (!remote)
 			GOTO(out, result = -EREMCHG);
 
@@ -5011,10 +5011,14 @@ osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 	if (!fid_is_norm(fid) && !fid_is_igif(fid))
 		RETURN(0);
 
-	if (dev->od_noscrub && !thread_is_running(&scrub->os_thread))
+	if (thread_is_running(&scrub->os_thread) &&
+	    scrub->os_pos_current > id->oii_ino)
 		RETURN(0);
 
-	if (scrub->os_pos_current > id->oii_ino)
+	if (dev->od_auto_scrub_interval == AS_NEVER ||
+	    cfs_time_before(ktime_get_real_seconds(),
+			    scrub->os_file.sf_time_last_complete +
+			    dev->od_auto_scrub_interval))
 		RETURN(0);
 
 again:
@@ -5075,7 +5079,7 @@ trigger:
 		GOTO(out, rc);
 	}
 
-	if (!dev->od_noscrub && ++once == 1) {
+	if (dev->od_auto_scrub_interval != AS_NEVER && ++once == 1) {
 		rc = osd_scrub_start(oti->oti_env, dev, SS_AUTO_PARTIAL |
 				     SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT);
 		CDEBUG(D_LFSCK | D_CONSOLE | D_WARNING,
@@ -7061,7 +7065,7 @@ static int osd_mount(const struct lu_env *env,
 	}
 
 	if (lmd_flags & LMD_FLG_NOSCRUB)
-		o->od_noscrub = 1;
+		o->od_auto_scrub_interval = AS_NEVER;
 
 	GOTO(out, rc = 0);
 
@@ -7116,6 +7120,7 @@ static int osd_device_init0(const struct lu_env *env,
 	o->od_read_cache = 1;
 	o->od_writethrough_cache = 1;
 	o->od_readcache_max_filesize = OSD_MAX_CACHE_SIZE;
+	o->od_auto_scrub_interval = AS_DEFAULT;
 
 	cplen = strlcpy(o->od_svname, lustre_cfg_string(cfg, 4),
 			sizeof(o->od_svname));

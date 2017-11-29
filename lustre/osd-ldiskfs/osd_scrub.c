@@ -509,7 +509,7 @@ static int osd_scrub_prep(const struct lu_env *env, struct osd_device *dev)
 
 	scrub->os_pos_current = sf->sf_pos_latest_start;
 	sf->sf_status = SS_SCANNING;
-	sf->sf_time_latest_start = cfs_time_current_sec();
+	sf->sf_time_latest_start = ktime_get_real_seconds();
 	sf->sf_time_last_checkpoint = sf->sf_time_latest_start;
 	sf->sf_pos_last_checkpoint = sf->sf_pos_latest_start - 1;
 	rc = scrub_file_store(env, scrub);
@@ -544,7 +544,7 @@ static int osd_scrub_post(const struct lu_env *env, struct osd_device *dev,
 		scrub->os_new_checked = 0;
 		sf->sf_pos_last_checkpoint = scrub->os_pos_current;
 	}
-	sf->sf_time_last_checkpoint = cfs_time_current_sec();
+	sf->sf_time_last_checkpoint = ktime_get_real_seconds();
 	if (result > 0) {
 		dev->od_igif_inoi = 1;
 		dev->od_check_ff = 0;
@@ -1003,7 +1003,7 @@ static void osd_scrub_join(const struct lu_env *env, struct osd_device *dev,
 		sf->sf_pos_latest_start = LDISKFS_FIRST_INO(osd_sb(dev)) + 1;
 
 	scrub->os_pos_current = sf->sf_pos_latest_start;
-	sf->sf_time_latest_start = cfs_time_current_sec();
+	sf->sf_time_latest_start = ktime_get_real_seconds();
 	sf->sf_time_last_checkpoint = sf->sf_time_latest_start;
 	sf->sf_pos_last_checkpoint = sf->sf_pos_latest_start - 1;
 	rc = scrub_file_store(env, scrub);
@@ -2545,7 +2545,8 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 		 * later if found that the system is upgrading. */
 		dev->od_igif_inoi = 1;
 
-	if (!dev->od_dt_dev.dd_rdonly && !dev->od_noscrub &&
+	if (!dev->od_dt_dev.dd_rdonly &&
+	    dev->od_auto_scrub_interval != AS_NEVER &&
 	    ((sf->sf_status == SS_PAUSED) ||
 	     (sf->sf_status == SS_CRASHED &&
 	      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT |
@@ -2885,7 +2886,7 @@ int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 	oii->oii_insert = insert;
 
 	if (lscrub->os_partial_scan) {
-		__u64 now = cfs_time_current_sec();
+		__u64 now = ktime_get_real_seconds();
 
 		/* If there haven't been errors in a long time,
 		 * decay old count until either the errors are

@@ -255,12 +255,12 @@ struct osd_device {
          */
 	unsigned int              od_fl_capa:1,
 				  od_maybe_new:1,
-				  od_noscrub:1,
 				  od_igif_inoi:1,
 				  od_check_ff:1,
 				  od_is_ost:1,
 				  od_index_in_idif:1;
 
+	__s64			  od_auto_scrub_interval;
 	__u32			  od_dirent_journal;
 	int			  od_index;
 	struct proc_dir_entry	 *od_proc_entry;

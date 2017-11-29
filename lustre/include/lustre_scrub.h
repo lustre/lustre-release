@@ -163,6 +163,25 @@ enum osd_lf_flags {
 	OLF_IDX_IN_FID		= 0x0010,
 };
 
+/* There are some overhead to detect OI inconsistency automatically
+ * during normal RPC handling. We do not want to always auto detect
+ * OI inconsistency especailly when OI scrub just done recently.
+ *
+ * The 'auto_scrub' defines the time (united as second) interval to
+ * enable auto detect OI inconsistency since last OI scurb done. */
+enum auto_scrub {
+	/* Disable auto scrub. */
+	AS_NEVER	= 0,
+
+	/* 1 second is too short interval, it is almost equal to always auto
+	 * detect inconsistent OI, usually used for test. */
+	AS_ALWAYS	= 1,
+
+	/* Enable auto detect OI inconsistency one month (60 * 60 * 24 * 30)
+	 * after last OI scrub. */
+	AS_DEFAULT	= 2592000LL,
+};
+
 struct scrub_file {
 	/* 128-bit uuid for volume. */
 	__u8    sf_uuid[16];

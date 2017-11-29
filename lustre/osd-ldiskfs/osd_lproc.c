@@ -383,7 +383,7 @@ static int ldiskfs_osd_auto_scrub_seq_show(struct seq_file *m, void *data)
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	seq_printf(m, "%d\n", !dev->od_noscrub);
+	seq_printf(m, "%lld\n", dev->od_auto_scrub_interval);
 	return 0;
 }
 
@@ -405,7 +405,7 @@ ldiskfs_osd_auto_scrub_seq_write(struct file *file, const char __user *buffer,
 	if (rc)
 		return rc;
 
-	dev->od_noscrub = !val;
+	dev->od_auto_scrub_interval = val;
 	return count;
 }
 LPROC_SEQ_FOPS(ldiskfs_osd_auto_scrub);
