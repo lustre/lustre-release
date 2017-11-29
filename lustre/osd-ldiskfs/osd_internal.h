@@ -189,8 +189,8 @@ int osd_ldiskfs_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 #define OSD_OTABLE_IT_CACHE_MASK	(~(OSD_OTABLE_IT_CACHE_SIZE - 1))
 
 struct osd_inconsistent_item {
-	/* link into osd_scrub::os_inconsistent_items,
-	 * protected by osd_scrub::os_lock. */
+	/* link into lustre_scrub::os_inconsistent_items,
+	 * protected by lustre_scrub::os_lock. */
 	struct list_head       oii_list;
 
 	/* The right FID <=> ino#/gen mapping. */
@@ -209,10 +209,10 @@ struct osd_otable_cache {
 	int		       ooc_consumer_idx;
 
 	/* How many items in ooc_cache. */
-	int		       ooc_cached_items;
+	__u64		       ooc_cached_items;
 
 	/* Position for up layer LFSCK iteration pre-loading. */
-	__u32		       ooc_pos_preload;
+	__u64		       ooc_pos_preload;
 };
 
 struct osd_otable_it {
@@ -702,17 +702,16 @@ int osd_obj_spec_update(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, const struct osd_inode_id *id,
 			handle_t *th);
 
-void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags);
-int osd_scrub_file_store(struct osd_scrub *scrub);
 char *osd_lf_fid2name(const struct lu_fid *fid);
-int osd_scrub_start(struct osd_device *dev, __u32 flags);
+int osd_scrub_start(const struct lu_env *env, struct osd_device *dev,
+		    __u32 flags);
 int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev);
 void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev);
 int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 		   int insert);
 int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 		   struct osd_inode_id *id);
-int osd_scrub_dump(struct seq_file *m, struct osd_device *dev);
+void osd_scrub_dump(struct seq_file *m, struct osd_device *dev);
 
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 		   u64 seq, struct lu_seq_range *range);

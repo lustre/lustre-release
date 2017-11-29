@@ -50,18 +50,15 @@
 /* fid_cpu_to_be() */
 #include <lustre_fid.h>
 #include <dt_object.h>
+#include <lustre_scrub.h>
 
 #include "osd_oi.h"
 /* osd_lookup(), struct osd_thread_info */
 #include "osd_internal.h"
-#include "osd_scrub.h"
 
-static unsigned int osd_oi_count = OSD_OI_FID_NR;
+unsigned int osd_oi_count = OSD_OI_FID_NR;
 module_param(osd_oi_count, int, 0444);
 MODULE_PARM_DESC(osd_oi_count, "Number of Object Index containers to be created, it's only valid for new filesystem.");
-
-/** to serialize concurrent OI index initialization */
-static struct mutex oi_init_lock;
 
 static struct dt_index_features oi_feat = {
         .dif_flags       = DT_IND_UPDATE,
@@ -121,6 +118,9 @@ static int osd_oi_index_create_one(struct osd_thread_info *info,
 		}
 		return PTR_ERR(inode);
 	}
+
+	if (osd->od_dt_dev.dd_rdonly)
+		RETURN(-EROFS);
 
 	jh = osd_journal_start_sb(sb, LDISKFS_HT_MISC, 100);
 	if (IS_ERR(jh))
@@ -224,12 +224,16 @@ static int osd_oi_open(struct osd_thread_info *info, struct osd_device *osd,
         if (IS_ERR(inode))
                 RETURN(PTR_ERR(inode));
 
-	/* 'What the @fid is' is not imporatant, because these objects
-	 * have no OI mappings, and only are visible inside the OSD.*/
-	lu_igif_build(&info->oti_fid, inode->i_ino, inode->i_generation);
-	rc = osd_ea_fid_set(info, inode, &info->oti_fid, LMAC_NOT_IN_OI, 0);
-	if (rc != 0)
-		GOTO(out_inode, rc);
+	if (!osd->od_dt_dev.dd_rdonly) {
+		/* 'What the @fid is' is not imporatant, because these objects
+		 * have no OI mappings, and only are visible inside the OSD.*/
+		lu_igif_build(&info->oti_fid, inode->i_ino,
+			      inode->i_generation);
+		rc = osd_ea_fid_set(info, inode, &info->oti_fid,
+				    LMAC_NOT_IN_OI, 0);
+		if (rc)
+			GOTO(out_inode, rc);
+	}
 
         OBD_ALLOC_PTR(oi);
         if (oi == NULL)
@@ -280,7 +284,7 @@ static int
 osd_oi_table_open(struct osd_thread_info *info, struct osd_device *osd,
 		  struct osd_oi **oi_table, unsigned oi_count, bool create)
 {
-	struct scrub_file *sf = &osd->od_scrub.os_file;
+	struct scrub_file *sf = &osd->od_scrub.os_scrub.os_file;
 	int		   count = 0;
 	int		   rc = 0;
 	int		   i;
@@ -354,7 +358,10 @@ static int osd_remove_ois(struct osd_thread_info *info, struct osd_device *osd)
 	int rc;
 	int i;
 
-	for (i = 0; i < osd->od_scrub.os_file.sf_oi_count; i++) {
+	if (osd->od_dt_dev.dd_rdonly)
+		RETURN(-EROFS);
+
+	for (i = 0; i < OSD_OI_FID_NR_MAX; i++) {
 		namelen = snprintf(name, sizeof(name), "%s.%d",
 				   OSD_OI_NAME_BASE, i);
 		rc = osd_remove_oi_one(osd_sb(osd)->s_root, name, namelen);
@@ -377,42 +384,63 @@ static int osd_remove_ois(struct osd_thread_info *info, struct osd_device *osd)
 int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 		bool restored)
 {
-	struct osd_scrub  *scrub = &osd->od_scrub;
+	struct lustre_scrub *scrub = &osd->od_scrub.os_scrub;
 	struct scrub_file *sf = &scrub->os_file;
-	struct osd_oi    **oi;
-	int		   rc;
+	struct osd_oi **oi;
+	int count;
+	int rc;
 	ENTRY;
+
+	if (unlikely(sf->sf_oi_count & (sf->sf_oi_count - 1)) != 0) {
+		LCONSOLE_WARN("%s: Invalid OI count in scrub file %d\n",
+			      osd_dev2name(osd), sf->sf_oi_count);
+		sf->sf_oi_count = 0;
+	}
 
 	if (restored) {
 		rc = osd_remove_ois(info, osd);
-		if (rc != 0)
-			return rc;
+		if (rc)
+			RETURN(rc);
 	}
 
 	OBD_ALLOC(oi, sizeof(*oi) * OSD_OI_FID_NR_MAX);
 	if (oi == NULL)
 		RETURN(-ENOMEM);
 
-	mutex_lock(&oi_init_lock);
 	/* try to open existing multiple OIs first */
-	rc = osd_oi_table_open(info, osd, oi, sf->sf_oi_count, false);
-	if (rc < 0)
-		GOTO(out, rc);
+	count = osd_oi_table_open(info, osd, oi, sf->sf_oi_count, false);
+	if (count < 0)
+		GOTO(out, rc = count);
 
-	if (rc > 0) {
-		if (rc == sf->sf_oi_count || sf->sf_oi_count == 0)
-			GOTO(out, rc);
+	if (count > 0) {
+		if (count == sf->sf_oi_count)
+			GOTO(out, rc = count);
 
-		osd_scrub_file_reset(scrub,
-				     LDISKFS_SB(osd_sb(osd))->s_es->s_uuid,
-				     SF_RECREATED);
-		osd_oi_count = sf->sf_oi_count;
+		if (sf->sf_oi_count == 0) {
+			if (likely((count & (count - 1)) == 0))
+				GOTO(out, rc = count);
+
+			LCONSOLE_WARN("%s: invalid oi count %d, remove them, "
+				      "then set it to %d\n", osd_dev2name(osd),
+				      count, osd_oi_count);
+			osd_oi_table_put(info, oi, count);
+			rc = osd_remove_ois(info, osd);
+			if (rc)
+				GOTO(out, rc);
+
+			sf->sf_oi_count = osd_oi_count;
+		}
+
+		scrub_file_reset(scrub, LDISKFS_SB(osd_sb(osd))->s_es->s_uuid,
+				 SF_RECREATED);
+		count = sf->sf_oi_count;
 		goto create;
 	}
 
 	/* if previous failed then try found single OI from old filesystem */
 	rc = osd_oi_open(info, osd, OSD_OI_NAME_BASE, &oi[0], false);
 	if (rc == 0) { /* found single OI from old filesystem */
+		count = 1;
 		ldiskfs_clear_bit(0, sf->sf_oi_bitmap);
 		if (sf->sf_success_count == 0)
 			/* XXX: There is one corner case that if the OI_scrub
@@ -425,9 +453,9 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 			 *	and restored after former upgrading from 1.8
 			 *	to 2.x. Fortunately, the osd_fid_lookup()can
 			 *	verify the inode to decrease the risk. */
-			osd_scrub_file_reset(scrub,
-					LDISKFS_SB(osd_sb(osd))->s_es->s_uuid,
-					SF_UPGRADE);
+			scrub_file_reset(scrub,
+					 LDISKFS_SB(osd_sb(osd))->s_es->s_uuid,
+					 SF_UPGRADE);
 		GOTO(out, rc = 1);
 	} else if (rc != -ENOENT) {
 		CERROR("%s: can't open %s: rc = %d\n",
@@ -438,25 +466,26 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 	if (sf->sf_oi_count > 0) {
 		int i;
 
+		count = sf->sf_oi_count;
 		memset(sf->sf_oi_bitmap, 0, SCRUB_OI_BITMAP_SIZE);
-		for (i = 0; i < osd_oi_count; i++)
+		for (i = 0; i < count; i++)
 			ldiskfs_set_bit(i, sf->sf_oi_bitmap);
-		osd_scrub_file_reset(scrub,
-				     LDISKFS_SB(osd_sb(osd))->s_es->s_uuid,
-				     SF_RECREATED);
+		scrub_file_reset(scrub, LDISKFS_SB(osd_sb(osd))->s_es->s_uuid,
+				 SF_RECREATED);
+	} else {
+		count = sf->sf_oi_count = osd_oi_count;
 	}
-	sf->sf_oi_count = osd_oi_count;
 
 create:
-	rc = osd_scrub_file_store(scrub);
+	rc = scrub_file_store(info->oti_env, scrub);
 	if (rc < 0) {
-		osd_oi_table_put(info, oi, sf->sf_oi_count);
+		osd_oi_table_put(info, oi, count);
 		GOTO(out, rc);
 	}
 
 	/* No OIs exist, new filesystem, create OI objects */
-	rc = osd_oi_table_open(info, osd, oi, osd_oi_count, true);
-	LASSERT(ergo(rc >= 0, rc == osd_oi_count));
+	rc = osd_oi_table_open(info, osd, oi, count, true);
+	LASSERT(ergo(rc >= 0, rc == count));
 
 	GOTO(out, rc);
 
@@ -464,14 +493,15 @@ out:
 	if (rc < 0) {
 		OBD_FREE(oi, sizeof(*oi) * OSD_OI_FID_NR_MAX);
 	} else {
-		LASSERT((rc & (rc - 1)) == 0);
+		LASSERTF((rc & (rc - 1)) == 0, "Invalid OI count %d\n", rc);
+
 		osd->od_oi_table = oi;
 		osd->od_oi_count = rc;
 		if (sf->sf_oi_count != rc) {
 			sf->sf_oi_count = rc;
-			rc = osd_scrub_file_store(scrub);
+			rc = scrub_file_store(info->oti_env, scrub);
 			if (rc < 0) {
-				osd_oi_table_put(info, oi, sf->sf_oi_count);
+				osd_oi_table_put(info, oi, count);
 				OBD_FREE(oi, sizeof(*oi) * OSD_OI_FID_NR_MAX);
 			}
 		} else {
@@ -479,20 +509,19 @@ out:
 		}
 	}
 
-	mutex_unlock(&oi_init_lock);
 	return rc;
 }
 
 void osd_oi_fini(struct osd_thread_info *info, struct osd_device *osd)
 {
-	if (unlikely(osd->od_oi_table == NULL))
+	if (unlikely(!osd->od_oi_table))
 		return;
 
-        osd_oi_table_put(info, osd->od_oi_table, osd->od_oi_count);
+	osd_oi_table_put(info, osd->od_oi_table, osd->od_oi_count);
 
-        OBD_FREE(osd->od_oi_table,
-                 sizeof(*(osd->od_oi_table)) * OSD_OI_FID_NR_MAX);
-        osd->od_oi_table = NULL;
+	OBD_FREE(osd->od_oi_table,
+		 sizeof(*(osd->od_oi_table)) * OSD_OI_FID_NR_MAX);
+	osd->od_oi_table = NULL;
 }
 
 static inline int fid_is_fs_root(const struct lu_fid *fid)
@@ -826,15 +855,14 @@ int osd_oi_update(struct osd_thread_info *info, struct osd_device *osd,
 
 int osd_oi_mod_init(void)
 {
-        if (osd_oi_count == 0 || osd_oi_count > OSD_OI_FID_NR_MAX)
-                osd_oi_count = OSD_OI_FID_NR;
+	if (osd_oi_count == 0 || osd_oi_count > OSD_OI_FID_NR_MAX)
+		osd_oi_count = OSD_OI_FID_NR;
 
-        if ((osd_oi_count & (osd_oi_count - 1)) != 0) {
-                LCONSOLE_WARN("Round up oi_count %d to power2 %d\n",
-                              osd_oi_count, size_roundup_power2(osd_oi_count));
-                osd_oi_count = size_roundup_power2(osd_oi_count);
-        }
+	if ((osd_oi_count & (osd_oi_count - 1)) != 0) {
+		LCONSOLE_WARN("Round up oi_count %d to power2 %d\n",
+			      osd_oi_count, size_roundup_power2(osd_oi_count));
+		osd_oi_count = size_roundup_power2(osd_oi_count);
+	}
 
-	mutex_init(&oi_init_lock);
-        return 0;
+	return 0;
 }

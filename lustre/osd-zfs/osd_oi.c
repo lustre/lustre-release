@@ -61,9 +61,9 @@
 #include <sys/dsl_prop.h>
 #include <sys/sa_impl.h>
 #include <sys/txg.h>
+#include <lustre_scrub.h>
 
 #define OSD_OI_FID_NR         (1UL << 7)
-#define OSD_OI_FID_NR_MAX     (1UL << OSD_OI_FID_OID_BITS_MAX)
 unsigned int osd_oi_count = OSD_OI_FID_NR;
 
 

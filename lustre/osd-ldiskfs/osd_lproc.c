@@ -523,7 +523,8 @@ static int ldiskfs_osd_oi_scrub_seq_show(struct seq_file *m, void *data)
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	return osd_scrub_dump(m, dev);
+	osd_scrub_dump(m, dev);
+	return 0;
 }
 LPROC_SEQ_FOPS_RO(ldiskfs_osd_oi_scrub);
 

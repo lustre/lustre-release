@@ -233,13 +233,20 @@ scrub_check_params() {
 scrub_check_repaired() {
 	local error_id=$1
 	local expected=$2
+	local dryrun=$3
 	local actual
 	local n
 
 	for n in $(seq $MDSCOUNT); do
-		actual=$(do_facet mds$n $LCTL get_param -n \
-			osd-ldiskfs.$(facet_svc mds$n).oi_scrub |
-			awk '/^updated/ { print $2 }')
+		if [ $dryrun -eq 1 ]; then
+			actual=$(do_facet mds$n $LCTL get_param -n \
+				osd-ldiskfs.$(facet_svc mds$n).oi_scrub |
+				awk '/^inconsistent:/ { print $2 }')
+		else
+			actual=$(do_facet mds$n $LCTL get_param -n \
+				osd-ldiskfs.$(facet_svc mds$n).oi_scrub |
+				awk '/^updated:/ { print $2 }')
+		fi
 
 		if [ $expected -eq 0 -a $actual -ne 0 ]; then
 			error "($error_id) Expected no repaired on mds$n, but" \
@@ -1149,7 +1156,7 @@ test_15() {
 	scrub_check_status 6 completed
 	scrub_check_flags 7 recreated,inconsistent
 	scrub_check_params 8 dryrun
-	scrub_check_repaired 9 20
+	scrub_check_repaired 9 20 1
 
 	# run under dryrun mode again
 	if [ $server_version -lt $(version_code 2.5.58) ]; then
@@ -1160,7 +1167,7 @@ test_15() {
 	scrub_check_status 11 completed
 	scrub_check_flags 12 recreated,inconsistent
 	scrub_check_params 13 dryrun
-	scrub_check_repaired 14 20
+	scrub_check_repaired 14 20 1
 
 	# run under normal mode
 	#
@@ -1175,7 +1182,7 @@ test_15() {
 	scrub_check_status 16 completed
 	scrub_check_flags 17 ""
 	scrub_check_params 18 ""
-	scrub_check_repaired 19 20
+	scrub_check_repaired 19 20 0
 
 	# run under normal mode again
 	if [ $server_version -lt $(version_code 2.5.58) ]; then
@@ -1186,7 +1193,7 @@ test_15() {
 	scrub_check_status 21 completed
 	scrub_check_flags 22 ""
 	scrub_check_params 23 ""
-	scrub_check_repaired 24 0
+	scrub_check_repaired 24 0 0
 }
 run_test 15 "Dryrun mode OI scrub"
 

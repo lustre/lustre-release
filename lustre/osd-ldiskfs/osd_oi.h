@@ -53,10 +53,9 @@
 #include <lu_object.h>
 #include <md_object.h>
 
-#define OSD_OI_FID_NR         (1UL << OSD_OI_FID_OID_BITS)
-#define OSD_OI_FID_NR_MAX     (1UL << OSD_OI_FID_OID_BITS_MAX)
-
-#define OSD_OII_NOGEN (0)
+#define OSD_OI_FID_OID_BITS	6
+#define OSD_OI_FID_NR		(1UL << OSD_OI_FID_OID_BITS)
+#define OSD_OII_NOGEN		(0)
 
 struct lu_fid;
 struct osd_thread_info;
@@ -133,6 +132,8 @@ enum oi_check_flags {
 	OI_CHECK_FLD	= 0x00000001,
 	OI_KNOWN_ON_OST	= 0x00000002,
 };
+
+extern unsigned int osd_oi_count;
 
 int osd_oi_mod_init(void);
 int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,

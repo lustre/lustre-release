@@ -23,6 +23,7 @@ obdclass-all-objs += kernelcomm.o jobid.o
 @SERVER_TRUE@obdclass-all-objs += lu_ucred.o
 @SERVER_TRUE@obdclass-all-objs += md_attrs.o
 @SERVER_TRUE@obdclass-all-objs += obd_mount_server.o
+@SERVER_TRUE@obdclass-all-objs += scrub.o
 
 obdclass-objs := $(obdclass-linux-objs) $(obdclass-all-objs)
 
@@ -39,5 +40,6 @@ EXTRA_DIST += cl_internal.h local_storage.h
 @SERVER_FALSE@EXTRA_DIST += lu_ucred.c
 @SERVER_FALSE@EXTRA_DIST += md_attrs.c
 @SERVER_FALSE@EXTRA_DIST += obd_mount_server.c
+@SERVER_FALSE@EXTRA_DIST += scrub.c
 
 @INCLUDE_RULES@

@@ -81,6 +81,7 @@ EXTRA_DIST = \
 	lustre_patchless_compat.h \
 	lustre_quota.h \
 	lustre_req_layout.h \
+	lustre_scrub.h \
 	lustre_sec.h \
 	lustre_swab.h \
 	lustre_update.h \

@@ -196,13 +196,6 @@ enum {
 	LUSTRE_SEQ_SUPER_WIDTH = ((1ULL << 30ULL) * LUSTRE_SEQ_META_WIDTH)
 };
 
-enum {
-        /** 2^6 FIDs for OI containers */
-        OSD_OI_FID_OID_BITS     = 6,
-        /** reserve enough FIDs in case we want more in the future */
-        OSD_OI_FID_OID_BITS_MAX = 10,
-};
-
 /** special OID for local objects */
 enum local_oid {
 	/** \see fld_mod_init */

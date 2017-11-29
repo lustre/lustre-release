@@ -330,11 +330,20 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
         OBD_ALLOC_PTR(mo);
         if (mo != NULL) {
                 struct lu_object *l;
+		struct lu_object_header *h;
 
-                l = &mo->oo_dt.do_lu;
-                dt_object_init(&mo->oo_dt, NULL, d);
+		l = &mo->oo_dt.do_lu;
+		h = &osd_dev(d)->od_scrub.os_scrub.os_obj_header;
+		if (unlikely(fid_is_zero(&h->loh_fid))) {
+			/* For the OI_scrub object during OSD device init. */
+			lu_object_header_init(h);
+			lu_object_init(l, h, d);
+			lu_object_add_top(h, l);
+		} else {
+			dt_object_init(&mo->oo_dt, NULL, d);
+		}
 		mo->oo_dt.do_ops = &osd_obj_ops;
-                l->lo_ops = &osd_lu_obj_ops;
+		l->lo_ops = &osd_lu_obj_ops;
 		init_rwsem(&mo->oo_sem);
 		init_rwsem(&mo->oo_ext_idx_sem);
 		spin_lock_init(&mo->oo_guard);
@@ -612,7 +621,8 @@ check_oi:
 		}
 
 		if (IS_ERR(inode)) {
-			if (dev->od_scrub.os_file.sf_flags & SF_INCONSISTENT)
+			if (dev->od_scrub.os_scrub.os_file.sf_flags &
+			    SF_INCONSISTENT)
 				/* It still can be the case 2, but we cannot
 				 * distinguish it from the case 1. So return
 				 * -EREMCHG to block current operation until
@@ -979,7 +989,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	struct osd_idmap_cache *oic;
 	struct osd_inode_id *id;
 	struct inode *inode = NULL;
-	struct osd_scrub *scrub;
+	struct lustre_scrub *scrub;
 	struct scrub_file *sf;
 	__u32 flags = SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT | SS_AUTO_FULL;
 	__u32 saved_ino;
@@ -996,7 +1006,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	LASSERTF(fid_is_sane(fid) || fid_is_idif(fid), DFID"\n", PFID(fid));
 
 	dev = osd_dev(ldev);
-	scrub = &dev->od_scrub;
+	scrub = &dev->od_scrub.os_scrub;
 	sf = &scrub->os_file;
 	info = osd_oti_get(env);
 	LASSERT(info);
@@ -1123,7 +1133,7 @@ trigger:
 	}
 
 join:
-	rc1 = osd_scrub_start(dev, flags);
+	rc1 = osd_scrub_start(env, dev, flags);
 	LCONSOLE_WARN("%s: trigger OI scrub by RPC for the " DFID" with flags "
 		      "0x%x, rc = %d\n", osd_name(dev), PFID(fid), flags, rc1);
 	if (rc1 && rc1 != -EALREADY)
@@ -1279,7 +1289,14 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 	}
 
 	result = osd_fid_lookup(env, obj, lu_object_fid(l), conf);
-	obj->oo_dt.do_body_ops = &osd_body_ops_new;
+	if (unlikely(l->lo_header ==
+		     &osd_obj2dev(obj)->od_scrub.os_scrub.os_obj_header)) {
+		/* For the OI_scrub object during OSD device init. */
+		l->lo_header->loh_attr |= LOHA_EXISTS;
+		obj->oo_dt.do_body_ops = &osd_body_ops;
+	} else {
+		obj->oo_dt.do_body_ops = &osd_body_ops_new;
+	}
 	if (result == 0 && obj->oo_inode != NULL) {
 		struct osd_thread_info *oti = osd_oti_get(env);
 		struct lustre_ost_attrs *loa = &oti->oti_ost_attrs;
@@ -1438,15 +1455,22 @@ static void osd_oxc_fini(struct osd_object *obj)
  */
 static void osd_object_free(const struct lu_env *env, struct lu_object *l)
 {
-        struct osd_object *obj = osd_obj(l);
+	struct osd_object *obj = osd_obj(l);
+	struct lu_object_header *h = NULL;
 
-        LINVRNT(osd_invariant(obj));
+	LINVRNT(osd_invariant(obj));
+
+	if (unlikely(l->lo_header ==
+		     &osd_obj2dev(obj)->od_scrub.os_scrub.os_obj_header))
+		h = l->lo_header;
 
 	osd_oxc_fini(obj);
-        dt_object_fini(&obj->oo_dt);
-        if (obj->oo_hl_head != NULL)
-                ldiskfs_htree_lock_head_free(obj->oo_hl_head);
-        OBD_FREE_PTR(obj);
+	dt_object_fini(&obj->oo_dt);
+	if (obj->oo_hl_head != NULL)
+		ldiskfs_htree_lock_head_free(obj->oo_hl_head);
+	OBD_FREE_PTR(obj);
+	if (unlikely(h))
+		lu_object_header_fini(h);
 }
 
 /*
@@ -2659,7 +2683,8 @@ static int osd_attr_set(const struct lu_env *env,
 
 	osd_trans_exec_op(env, handle, OSD_OT_ATTR_SET);
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_FID_MAPPING)) {
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_FID_MAPPING) &&
+	    !osd_obj2dev(obj)->od_is_ost) {
 		struct osd_thread_info	*oti  = osd_oti_get(env);
 		const struct lu_fid	*fid0 = lu_object_fid(&dt->do_lu);
 		struct lu_fid		*fid1 = &oti->oti_fid;
@@ -4974,16 +4999,19 @@ static int
 osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 		      struct osd_idmap_cache *oic)
 {
-	struct osd_scrub *scrub = &dev->od_scrub;
+	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	struct lu_fid *fid = &oic->oic_fid;
 	struct osd_inode_id *id = &oic->oic_lid;
 	struct inode *inode = NULL;
-	int once  = 0;
+	int once = 0;
 	bool insert;
 	int rc;
 	ENTRY;
 
 	if (!fid_is_norm(fid) && !fid_is_igif(fid))
+		RETURN(0);
+
+	if (dev->od_noscrub && !thread_is_running(&scrub->os_thread))
 		RETURN(0);
 
 	if (scrub->os_pos_current > id->oii_ino)
@@ -5048,8 +5076,8 @@ trigger:
 	}
 
 	if (!dev->od_noscrub && ++once == 1) {
-		rc = osd_scrub_start(dev, SS_AUTO_PARTIAL | SS_CLEAR_DRYRUN |
-				     SS_CLEAR_FAILOUT);
+		rc = osd_scrub_start(oti->oti_env, dev, SS_AUTO_PARTIAL |
+				     SS_CLEAR_DRYRUN | SS_CLEAR_FAILOUT);
 		CDEBUG(D_LFSCK | D_CONSOLE | D_WARNING,
 		       "%s: trigger partial OI scrub for RPC inconsistency "
 		       "checking FID "DFID": rc = %d\n",
@@ -5300,8 +5328,11 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 
 		osd_add_oi_cache(osd_oti_get(env), osd_obj2dev(obj), id, fid);
 		rc = osd_consistency_check(oti, dev, oic);
-		if (rc != 0)
+		if (rc == -ENOENT)
 			fid_zero(&oic->oic_fid);
+		else
+			/* Other error should not affect lookup result. */
+			rc = 0;
 	} else {
 		rc = PTR_ERR(bh);
 	}
@@ -6339,7 +6370,7 @@ again:
 					      ent->oied_namelen);
 		if (rc == -ENOENT ||
 		    (rc == -ENODATA &&
-		     !(dev->od_scrub.os_file.sf_flags & SF_UPGRADE))) {
+		     !(dev->od_scrub.os_scrub.os_file.sf_flags & SF_UPGRADE))) {
 			/* linkEA does not recognize the dirent entry,
 			 * it may because the dirent entry corruption
 			 * and points to other's inode. */
@@ -6832,6 +6863,7 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 	}
 
 	osd_fid_fini(env, o);
+	osd_scrub_cleanup(env, o);
 
 	RETURN(0);
 }
@@ -7052,7 +7084,6 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 
 	osd_shutdown(env, o);
 	osd_procfs_fini(o);
-	osd_scrub_cleanup(env, o);
 	osd_obj_map_fini(o);
 	osd_umount(env, o);
 
