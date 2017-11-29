@@ -251,6 +251,7 @@ struct osd_oi {
 };
 
 struct osd_seq {
+	uint64_t	 os_oid;
 	uint64_t	 *os_compat_dirs;
 	int		 os_subdir_count; /* subdir count for each seq */
 	u64		 os_seq;	  /* seq number */

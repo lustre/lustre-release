@@ -88,8 +88,22 @@ static const struct named_oid oids[] = {
 	{ .oid = MDD_LOV_OBJ_OID,      .name = LOV_OBJID },
 	{ .oid = OFD_HEALTH_CHECK_OID, .name = HEALTH_CHECK },
 	{ .oid = REPLY_DATA_OID,       .name = REPLY_DATA },
+	{ .oid = MDD_LOV_OBJ_OSEQ,     .name = LOV_OBJSEQ },
+	{ .oid = BATCHID_COMMITTED_OID, .name = "BATCHID" },
 	{ .oid = 0 }
 };
+
+static inline bool fid_is_objseq(const struct lu_fid *fid)
+{
+	return fid->f_seq == FID_SEQ_LOCAL_FILE &&
+		fid->f_oid == MDD_LOV_OBJ_OSEQ;
+}
+
+static inline bool fid_is_batchid(const struct lu_fid *fid)
+{
+	return fid->f_seq == FID_SEQ_LOCAL_FILE &&
+		fid->f_oid == BATCHID_COMMITTED_OID;
+}
 
 static char *oid2name(const unsigned long oid)
 {
@@ -354,6 +368,7 @@ static struct osd_seq *osd_find_or_add_seq(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
+	osd_seq->os_oid = odb;
 	for (i = 0; i < OSD_OST_MAP_SIZE; i++) {
 		sprintf(key, "d%d", i);
 		rc = osd_oi_find_or_create(env, osd, odb, key, &sdb);
@@ -378,6 +393,39 @@ out:
 	RETURN(osd_seq);
 }
 
+static uint64_t
+osd_get_idx_for_ost_obj_compat(const struct lu_env *env, struct osd_device *osd,
+			       const struct lu_fid *fid, char *buf, int bufsize)
+{
+	struct osd_seq	*osd_seq;
+	unsigned long	b;
+	u64		id;
+	int		rc;
+
+	osd_seq = osd_find_or_add_seq(env, osd, fid_seq(fid));
+	if (IS_ERR(osd_seq)) {
+		CERROR("%s: Can not find seq group "DFID"\n", osd_name(osd),
+		       PFID(fid));
+		return PTR_ERR(osd_seq);
+	}
+
+	if (fid_is_last_id(fid)) {
+		id = 0;
+	} else {
+		rc = fid_to_ostid(fid, &osd_oti_get(env)->oti_ostid);
+		LASSERT(rc == 0); /* we should not get here with IGIF */
+		id = ostid_id(&osd_oti_get(env)->oti_ostid);
+	}
+
+	b = id % OSD_OST_MAP_SIZE;
+	LASSERT(osd_seq->os_compat_dirs[b]);
+
+	if (buf)
+		snprintf(buf, bufsize, "%llu", id);
+
+	return osd_seq->os_compat_dirs[b];
+}
+
 /*
  * objects w/o a natural reference (unlike a file on a MDS)
  * are put under a special hierarchy /O/<seq>/d0..dXX
@@ -400,13 +448,16 @@ osd_get_idx_for_ost_obj(const struct lu_env *env, struct osd_device *osd,
 	}
 
 	if (fid_is_last_id(fid)) {
-		id = 0;
-	} else {
-		rc = fid_to_ostid(fid, &osd_oti_get(env)->oti_ostid);
-		LASSERT(rc == 0); /* we should not get here with IGIF */
-		id = ostid_id(&osd_oti_get(env)->oti_ostid);
+		if (buf)
+			snprintf(buf, bufsize, "LAST_ID");
+
+		return osd_seq->os_oid;
 	}
 
+	rc = fid_to_ostid(fid, &osd_oti_get(env)->oti_ostid);
+	LASSERT(rc == 0); /* we should not get here with IGIF */
+
+	id = ostid_id(&osd_oti_get(env)->oti_ostid);
 	b = id % OSD_OST_MAP_SIZE;
 	LASSERT(osd_seq->os_compat_dirs[b]);
 
@@ -444,6 +495,40 @@ osd_get_idx_for_fid(struct osd_device *osd, const struct lu_fid *fid,
 	return oi->oi_zapid;
 }
 
+uint64_t
+osd_get_name_n_idx_compat(const struct lu_env *env, struct osd_device *osd,
+			  const struct lu_fid *fid, char *buf, int bufsize,
+			  dnode_t **zdn)
+{
+	uint64_t zapid;
+
+	LASSERT(fid);
+	LASSERT(!fid_is_acct(fid));
+
+	if (zdn != NULL)
+		*zdn = NULL;
+
+	if (fid_is_on_ost(env, osd, fid) == 1 || fid_seq(fid) == FID_SEQ_ECHO) {
+		zapid = osd_get_idx_for_ost_obj_compat(env, osd, fid,
+						       buf, bufsize);
+	} else if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
+		/* special objects with fixed known fids get their name */
+		char *name = oid2name(fid_oid(fid));
+
+		if (name) {
+			zapid = osd->od_root;
+			if (buf)
+				strncpy(buf, name, bufsize);
+		} else {
+			zapid = osd_get_idx_for_fid(osd, fid, buf, NULL);
+		}
+	} else {
+		zapid = osd_get_idx_for_fid(osd, fid, buf, zdn);
+	}
+
+	return zapid;
+}
+
 uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 			    const struct lu_fid *fid, char *buf, int bufsize,
 			    dnode_t **zdn)
@@ -456,7 +541,8 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 	if (zdn != NULL)
 		*zdn = NULL;
 
-	if (fid_is_on_ost(env, osd, fid) == 1 || fid_seq(fid) == FID_SEQ_ECHO) {
+	if (fid_is_on_ost(env, osd, fid) == 1 || fid_seq(fid) == FID_SEQ_ECHO ||
+	    fid_is_last_id(fid)) {
 		zapid = osd_get_idx_for_ost_obj(env, osd, fid, buf, bufsize);
 	} else if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
 		/* special objects with fixed known fids get their name */
@@ -505,6 +591,20 @@ int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 					   sizeof(info->oti_buf), &zdn);
 		rc = osd_zap_lookup(dev, zapid, zdn, buf,
 				    8, 1, &info->oti_zde);
+		if (rc == -ENOENT) {
+			if (unlikely(fid_is_last_id(fid))) {
+				zapid = osd_get_name_n_idx_compat(env, dev, fid,
+					buf, sizeof(info->oti_buf), &zdn);
+				rc = osd_zap_lookup(dev, zapid, zdn, buf,
+						    8, 1, &info->oti_zde);
+			} else if (fid_is_objseq(fid) || fid_is_batchid(fid)) {
+				zapid = osd_get_idx_for_fid(dev, fid,
+							    buf, NULL);
+				rc = osd_zap_lookup(dev, zapid, zdn, buf,
+						    8, 1, &info->oti_zde);
+			}
+		}
+
 		if (rc)
 			RETURN(rc);
 		*oid = info->oti_zde.lzd_reg.zde_dnode;
