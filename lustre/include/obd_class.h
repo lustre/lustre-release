@@ -639,7 +639,7 @@ static inline int obd_cleanup(struct obd_device *obd)
                 }
         }
 	if (!obd->obd_type->typ_dt_ops->o_cleanup)
-		RETURN(-EOPNOTSUPP);
+		RETURN(0);
 
         OBD_COUNTER_INCREMENT(obd, cleanup);
 
