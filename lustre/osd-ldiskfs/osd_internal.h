@@ -135,7 +135,8 @@ struct osd_object {
 	/** protects inode attributes. */
 	spinlock_t		oo_guard;
 
-	__u32			oo_destroyed:1;
+	__u32			oo_destroyed:1,
+				oo_pfid_in_lma:1;
 
 	/* the i_flags in LMA */
 	__u32			oo_lma_flags;

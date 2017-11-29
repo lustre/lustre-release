@@ -454,6 +454,10 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
 			      PFID(lu_object_fid(&obj->oo_dt.do_lu)));
 			rc = -EOPNOTSUPP;
+		} else {
+			if (lma->lma_compat & LMAC_STRIPE_INFO &&
+			    osd_obj2dev(obj)->od_is_ost)
+				obj->oo_pfid_in_lma = 1;
 		}
 	} else if (rc == -ENODATA) {
 		/* haven't initialize LMA xattr */
@@ -1116,6 +1120,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 		struct lu_buf buf;
 
 		if (la->la_flags & LUSTRE_LMA_FL_MASKS) {
+			LASSERT(!obj->oo_pfid_in_lma);
 			CLASSERT(sizeof(info->oti_buf) >= sizeof(*lma));
 			lma = (struct lustre_mdt_attrs *)&info->oti_buf;
 			buf.lb_buf = lma;

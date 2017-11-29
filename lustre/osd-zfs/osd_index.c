@@ -326,7 +326,7 @@ out:
 
 /*
  * As we don't know FID, we can't use LU object, so this function
- * partially duplicate __osd_xattr_get() which is built around
+ * partially duplicate osd_xattr_get_internal() which is built around
  * LU-object and uses it to cache data like regular EA dnode, etc
  */
 static int osd_find_parent_by_dnode(const struct lu_env *env,

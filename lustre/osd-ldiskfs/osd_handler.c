@@ -76,9 +76,6 @@
 
 #include <lustre_linkea.h>
 
-#define PFID_STRIPE_IDX_BITS	16
-#define PFID_STRIPE_COUNT_MASK	((1 << PFID_STRIPE_IDX_BITS) - 1)
-
 int ldiskfs_pdo = 1;
 module_param(ldiskfs_pdo, int, 0644);
 MODULE_PARM_DESC(ldiskfs_pdo, "ldiskfs with parallel directory operations");
@@ -768,6 +765,9 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 			rc = -EOPNOTSUPP;
 		} else {
 			fid = &lma->lma_self_fid;
+			if (lma->lma_compat & LMAC_STRIPE_INFO &&
+			    osd->od_is_ost)
+				obj->oo_pfid_in_lma = 1;
 		}
 	}
 
@@ -999,6 +999,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	bool remote = false;
 	bool trusted = true;
 	bool updated = false;
+	bool checked = false;
 	ENTRY;
 
 	LINVRNT(osd_invariant(obj));
@@ -1151,6 +1152,7 @@ join:
 
 check_lma:
 	result = osd_check_lma(env, obj);
+	checked = true;
 	if (!result)
 		goto found;
 
@@ -1226,6 +1228,20 @@ check_lma:
 	goto iget;
 
 found:
+	if (!checked) {
+		struct lustre_ost_attrs *loa = &info->oti_ost_attrs;
+		struct lustre_mdt_attrs *lma = &info->oti_ost_attrs.loa_lma;
+
+		result = osd_get_lma(info, inode, &info->oti_obj_dentry, loa);
+		if (!result) {
+			if (lma->lma_compat & LMAC_STRIPE_INFO &&
+			    dev->od_is_ost)
+				obj->oo_pfid_in_lma = 1;
+		} else if (result != -ENODATA) {
+			GOTO(out, result);
+		}
+	}
+
 	obj->oo_compat_dot_created = 1;
 	obj->oo_compat_dotdot_created = 1;
 
@@ -2731,6 +2747,8 @@ static int osd_attr_set(const struct lu_env *env,
 		struct osd_thread_info *info = osd_oti_get(env);
 		struct lustre_mdt_attrs *lma = &info->oti_ost_attrs.loa_lma;
 
+		LASSERT(!obj->oo_pfid_in_lma);
+
 		rc = osd_get_lma(info, inode, &info->oti_obj_dentry,
 				 &info->oti_ost_attrs);
 		if (rc)
@@ -3833,24 +3851,17 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 			return rc;
 	}
 
-	rc = __osd_xattr_get(inode, dentry, name, buf->lb_buf, buf->lb_len);
-	if (rc == -ENODATA && strcmp(name, XATTR_NAME_FID) == 0) {
+	if (strcmp(name, XATTR_NAME_FID) == 0 && obj->oo_pfid_in_lma) {
 		struct lustre_ost_attrs *loa = &info->oti_ost_attrs;
 		struct lustre_mdt_attrs *lma = &loa->loa_lma;
 		struct filter_fid *ff;
 		struct ost_layout *ol;
 
-		if (!osd_dev(dt->do_lu.lo_dev)->od_is_ost)
-			goto cache;
-
 		rc = osd_get_lma(info, inode, &info->oti_obj_dentry, loa);
 		if (rc)
 			return rc;
 
-		if (!(lma->lma_compat & LMAC_STRIPE_INFO)) {
-			rc = -ENODATA;
-			goto cache;
-		}
+		LASSERT(lma->lma_compat & LMAC_STRIPE_INFO);
 
 		rc = sizeof(*ff);
 		if (buf->lb_len == 0 || !buf->lb_buf)
@@ -3875,9 +3886,11 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 			ol->ol_comp_end = 0;
 			ol->ol_comp_id = 0;
 		}
+	} else {
+		rc = __osd_xattr_get(inode, dentry, name,
+				     buf->lb_buf, buf->lb_len);
 	}
 
-cache:
 	if (cache_xattr) {
 		if (rc == -ENOENT || rc == -ENODATA)
 			osd_oxc_add(obj, name, NULL, 0);
@@ -3961,6 +3974,97 @@ upgrade:
 	return 0;
 }
 
+static int osd_xattr_set_pfid(const struct lu_env *env, struct osd_object *obj,
+			      const struct lu_buf *buf, int fl,
+			      struct thandle *handle)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct dentry *dentry = &info->oti_obj_dentry;
+	struct lustre_ost_attrs *loa = &info->oti_ost_attrs;
+	struct lustre_mdt_attrs *lma = &loa->loa_lma;
+	struct inode *inode = obj->oo_inode;
+	struct filter_fid *ff = buf->lb_buf;
+	struct ost_layout *ol = &ff->ff_layout;
+	int flags = XATTR_REPLACE;
+	int rc;
+	ENTRY;
+
+	if (buf->lb_len != sizeof(*ff) && buf->lb_len != sizeof(struct lu_fid))
+		RETURN(-EINVAL);
+
+	rc = osd_get_lma(info, inode, dentry, loa);
+	if (rc == -ENODATA) {
+		/* Usually for upgarding from old device */
+		lustre_loa_init(loa, lu_object_fid(&obj->oo_dt.do_lu),
+				LMAC_FID_ON_OST, 0);
+		flags = XATTR_CREATE;
+	} else if (rc) {
+		RETURN(rc);
+	}
+
+	if (!rc && lma->lma_compat & LMAC_STRIPE_INFO) {
+		if ((fl & LU_XATTR_CREATE) && !(fl & LU_XATTR_REPLACE))
+			RETURN(-EEXIST);
+
+		if (LDISKFS_INODE_SIZE(inode->i_sb) > 256) {
+			/* Separate PFID EA from LMA */
+			lma->lma_compat &= ~(LMAC_STRIPE_INFO | LMAC_COMP_INFO);
+			lustre_lma_swab(lma);
+			rc = __osd_xattr_set(info, inode, XATTR_NAME_LMA, lma,
+					     sizeof(*lma), XATTR_REPLACE);
+			if (!rc) {
+				obj->oo_pfid_in_lma = 0;
+				rc = LU_XATTR_CREATE;
+			}
+
+			RETURN(rc);
+		}
+	} else {
+		if (LDISKFS_INODE_SIZE(inode->i_sb) > 256)
+			RETURN(fl);
+
+		/* Old client does not send stripe information,
+		 * then store the PFID EA on disk separatedly. */
+		if (unlikely(buf->lb_len == sizeof(struct lu_fid) ||
+			     ol->ol_stripe_size == 0))
+			RETURN(fl);
+
+		/* Remove old PFID EA entry firstly. */
+		ll_vfs_dq_init(inode);
+		rc = inode->i_op->removexattr(dentry, XATTR_NAME_FID);
+		if (rc == -ENODATA) {
+			if ((fl & LU_XATTR_REPLACE) && !(fl & LU_XATTR_CREATE))
+				RETURN(rc);
+		} else if (rc) {
+			RETURN(rc);
+		}
+	}
+
+	fid_le_to_cpu(&loa->loa_parent_fid, &ff->ff_parent);
+	if (likely(ol->ol_stripe_size != 0)) {
+		loa->loa_parent_fid.f_ver |= le32_to_cpu(ol->ol_stripe_count) <<
+					     PFID_STRIPE_IDX_BITS;
+		loa->loa_stripe_size = le32_to_cpu(ol->ol_stripe_size);
+		lma->lma_compat |= LMAC_STRIPE_INFO;
+		if (ol->ol_comp_id != 0) {
+			loa->loa_comp_id = le32_to_cpu(ol->ol_comp_id);
+			loa->loa_comp_start = le64_to_cpu(ol->ol_comp_start);
+			loa->loa_comp_end = le64_to_cpu(ol->ol_comp_end);
+			lma->lma_compat |= LMAC_COMP_INFO;
+		}
+	}
+
+	lustre_loa_swab(loa, false);
+
+	/* Store the PFID EA inside LMA. */
+	rc = __osd_xattr_set(info, inode, XATTR_NAME_LMA, loa, sizeof(*loa),
+			     flags);
+	if (!rc)
+		obj->oo_pfid_in_lma = 1;
+
+	RETURN(rc);
+}
+
 /*
  * Concurrency: @dt is write locked.
  */
@@ -3969,10 +4073,9 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 			 struct thandle *handle)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
 	struct inode *inode = obj->oo_inode;
 	struct osd_thread_info *info = osd_oti_get(env);
-	struct lustre_ost_attrs *loa = &info->oti_ost_attrs;
-	struct lustre_mdt_attrs *lma = &loa->loa_lma;
 	int fs_flags = 0;
 	int len;
 	int rc;
@@ -4005,76 +4108,22 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 
 	len = buf->lb_len;
 	osd_trans_exec_op(env, handle, OSD_OT_XATTR_SET);
-	if (fl & LU_XATTR_REPLACE)
-		fs_flags |= XATTR_REPLACE;
-
-	if (fl & LU_XATTR_CREATE)
-		fs_flags |= XATTR_CREATE;
 
 	/* For the OST device with 256 bytes inode size by default,
 	 * the PFID EA will be stored together with LMA EA to avoid
 	 * performance trouble. Otherwise the PFID EA can be stored
 	 * independently. LU-8998 */
-	if (strcmp(name, XATTR_NAME_FID) == 0 &&
-	    LDISKFS_INODE_SIZE(inode->i_sb) <= 256) {
-		struct dentry *dentry = &info->oti_obj_dentry;
-		struct filter_fid *ff;
-		struct ost_layout *ol;
-		int fl;
+	if (strcmp(name, XATTR_NAME_FID) == 0 && osd->od_is_ost &&
+	    (LDISKFS_INODE_SIZE(inode->i_sb) <= 256 || obj->oo_pfid_in_lma)) {
+		LASSERT(buf->lb_buf);
 
-		LASSERT(osd_dev(dt->do_lu.lo_dev)->od_is_ost);
-
-		ff = buf->lb_buf;
-		ol = &ff->ff_layout;
-		/* Old client does not send stripe information, store
-		 * the PFID EA on disk directly. */
-		if (buf->lb_len == sizeof(struct lu_fid) ||
-		    ol->ol_stripe_size == 0) {
-			len = sizeof(struct lu_fid);
-			goto set;
-		}
-
-		if (buf->lb_len != sizeof(*ff))
-			RETURN(-EINVAL);
-
-		rc = osd_get_lma(info, inode, dentry, loa);
-		if (unlikely(rc == -ENODATA)) {
-			/* Usually for upgarding from old device */
-			lustre_loa_init(loa, lu_object_fid(&dt->do_lu),
-					LMAC_FID_ON_OST, 0);
-			fl = XATTR_CREATE;
-		} else if (rc) {
-			RETURN(rc);
-		} else {
-			fl = XATTR_REPLACE;
-		}
-
-		fid_le_to_cpu(&loa->loa_parent_fid, &ff->ff_parent);
-		loa->loa_parent_fid.f_ver |= le32_to_cpu(ol->ol_stripe_count) <<
-					     PFID_STRIPE_IDX_BITS;
-		loa->loa_stripe_size = le32_to_cpu(ol->ol_stripe_size);
-		lma->lma_compat |= LMAC_STRIPE_INFO;
-		if (ol->ol_comp_id != 0) {
-			loa->loa_comp_id = le32_to_cpu(ol->ol_comp_id);
-			loa->loa_comp_start = le64_to_cpu(ol->ol_comp_start);
-			loa->loa_comp_end = le64_to_cpu(ol->ol_comp_end);
-			lma->lma_compat |= LMAC_COMP_INFO;
-		}
-
-		lustre_loa_swab(loa, false);
-
-		/* Remove old PFID EA entry firstly. */
-		ll_vfs_dq_init(inode);
-		rc = inode->i_op->removexattr(dentry, name);
-		if (rc && rc != -ENODATA)
-			RETURN(rc);
-
-		/* Store the PFID EA inside the LMA EA. */
-		rc = __osd_xattr_set(info, inode, XATTR_NAME_LMA, loa,
-				     sizeof(*loa), fl);
-
-		RETURN(rc);
+		fl = osd_xattr_set_pfid(env, obj, buf, fl, handle);
+		if (fl <= 0)
+			RETURN(fl);
 	} else if (strcmp(name, XATTR_NAME_LMV) == 0) {
+		struct lustre_ost_attrs *loa = &info->oti_ost_attrs;
+		struct lustre_mdt_attrs *lma = &loa->loa_lma;
+
 		rc = osd_get_lma(info, inode, &info->oti_obj_dentry, loa);
 		if (rc)
 			RETURN(rc);
@@ -4087,7 +4136,12 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 			RETURN(rc);
 	}
 
-set:
+	if (fl & LU_XATTR_REPLACE)
+		fs_flags |= XATTR_REPLACE;
+
+	if (fl & LU_XATTR_CREATE)
+		fs_flags |= XATTR_CREATE;
+
 	rc = __osd_xattr_set(info, inode, name, buf->lb_buf, len, fs_flags);
 	osd_trans_exec_check(env, handle, OSD_OT_XATTR_SET);
 
@@ -4168,31 +4222,28 @@ static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 
 	osd_trans_exec_op(env, handle, OSD_OT_XATTR_SET);
 
-	ll_vfs_dq_init(inode);
-	dentry->d_inode = inode;
-	dentry->d_sb = inode->i_sb;
-	rc = inode->i_op->removexattr(dentry, name);
-	if (rc == -ENODATA && strcmp(name, XATTR_NAME_FID) == 0) {
+	if (strcmp(name, XATTR_NAME_FID) == 0 && obj->oo_pfid_in_lma) {
 		struct lustre_mdt_attrs *lma = &info->oti_ost_attrs.loa_lma;
-
-		LASSERT(osd_dev(dt->do_lu.lo_dev)->od_is_ost);
 
 		rc = osd_get_lma(info, inode, &info->oti_obj_dentry,
 				 &info->oti_ost_attrs);
 		if (!rc) {
-			if (!(lma->lma_compat & LMAC_STRIPE_INFO)) {
-				rc = -ENODATA;
-				goto out;
-			}
+			LASSERT(lma->lma_compat & LMAC_STRIPE_INFO);
 
 			lma->lma_compat &= ~(LMAC_STRIPE_INFO | LMAC_COMP_INFO);
 			lustre_lma_swab(lma);
 			rc = __osd_xattr_set(info, inode, XATTR_NAME_LMA, lma,
 					     sizeof(*lma), XATTR_REPLACE);
+			if (!rc)
+				obj->oo_pfid_in_lma = 0;
 		}
+	} else {
+		ll_vfs_dq_init(inode);
+		dentry->d_inode = inode;
+		dentry->d_sb = inode->i_sb;
+		rc = inode->i_op->removexattr(dentry, name);
 	}
 
-out:
 	osd_trans_exec_check(env, handle, OSD_OT_XATTR_SET);
 
 	if (rc == 0 &&

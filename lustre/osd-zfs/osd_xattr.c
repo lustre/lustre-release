@@ -62,7 +62,7 @@
 #include <sys/txg.h>
 
 #include <linux/posix_acl_xattr.h>
-
+#include <lustre_scrub.h>
 
 int __osd_xattr_load(struct osd_device *osd, sa_handle_t *hdl, nvlist_t **sa)
 {
@@ -205,8 +205,8 @@ out_rele:
  * \retval 0           on success
  * \retval negative    negated errno on failure
  */
-int __osd_xattr_get(const struct lu_env *env, struct osd_object *obj,
-		    struct lu_buf *buf, const char *name, int *sizep)
+int osd_xattr_get_internal(const struct lu_env *env, struct osd_object *obj,
+			   struct lu_buf *buf, const char *name, int *sizep)
 {
 	int rc;
 
@@ -220,6 +220,59 @@ int __osd_xattr_get(const struct lu_env *env, struct osd_object *obj,
 
 	return __osd_xattr_get_large(env, osd_obj2dev(obj), obj->oo_xattr,
 				     buf, name, sizep);
+}
+
+static int osd_get_pfid_from_lma(const struct lu_env *env,
+				 struct osd_object *obj,
+				 struct lu_buf *buf, int *sizep)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lustre_ost_attrs *loa =
+		(struct lustre_ost_attrs *)&info->oti_buf;
+	struct lustre_mdt_attrs *lma = &loa->loa_lma;
+	struct filter_fid *ff;
+	struct ost_layout *ol;
+	struct lu_buf tbuf = {
+		.lb_buf = loa,
+		.lb_len = sizeof(info->oti_buf),
+	};
+	int rc;
+	ENTRY;
+
+	CLASSERT(sizeof(info->oti_buf) >= sizeof(*loa));
+	rc = osd_xattr_get_internal(env, obj, &tbuf,
+				    XATTR_NAME_LMA, sizep);
+	if (rc)
+		RETURN(rc);
+
+	lustre_loa_swab(loa, true);
+	LASSERT(lma->lma_compat & LMAC_STRIPE_INFO);
+
+	*sizep = sizeof(*ff);
+	if (buf->lb_len == 0 || !buf->lb_buf)
+		RETURN(0);
+
+	if (buf->lb_len < *sizep)
+		RETURN(-ERANGE);
+
+	ff = buf->lb_buf;
+	ol = &ff->ff_layout;
+	ol->ol_stripe_count = cpu_to_le32(loa->loa_parent_fid.f_ver >>
+					  PFID_STRIPE_IDX_BITS);
+	ol->ol_stripe_size = cpu_to_le32(loa->loa_stripe_size);
+	loa->loa_parent_fid.f_ver &= PFID_STRIPE_COUNT_MASK;
+	fid_cpu_to_le(&ff->ff_parent, &loa->loa_parent_fid);
+	if (lma->lma_compat & LMAC_COMP_INFO) {
+		ol->ol_comp_start = cpu_to_le64(loa->loa_comp_start);
+		ol->ol_comp_end = cpu_to_le64(loa->loa_comp_end);
+		ol->ol_comp_id = cpu_to_le32(loa->loa_comp_id);
+	} else {
+		ol->ol_comp_start = 0;
+		ol->ol_comp_end = 0;
+		ol->ol_comp_id = 0;
+	}
+
+	RETURN(0);
 }
 
 int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
@@ -238,7 +291,12 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		RETURN(-EOPNOTSUPP);
 
 	down_read(&obj->oo_guard);
-	rc = __osd_xattr_get(env, obj, buf, name, &size);
+	/* For the OST migrated from ldiskfs, the PFID EA may
+	 * be stored in LMA because of ldiskfs inode size. */
+	if (strcmp(name, XATTR_NAME_FID) == 0 && obj->oo_pfid_in_lma)
+		rc = osd_get_pfid_from_lma(env, obj, buf, &size);
+	else
+		rc = osd_xattr_get_internal(env, obj, buf, name, &size);
 	up_read(&obj->oo_guard);
 
 	if (rc == -ENOENT)
@@ -684,6 +742,41 @@ out:
 	return rc;
 }
 
+static int osd_xattr_split_pfid(const struct lu_env *env,
+				struct osd_object *obj, struct osd_thandle *oh)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lustre_ost_attrs *loa =
+		(struct lustre_ost_attrs *)&info->oti_buf;
+	struct lustre_mdt_attrs *lma = &loa->loa_lma;
+	struct lu_buf buf = {
+		.lb_buf = loa,
+		.lb_len = sizeof(info->oti_buf),
+	};
+	int size;
+	int rc;
+	ENTRY;
+
+	CLASSERT(sizeof(info->oti_buf) >= sizeof(*loa));
+	rc = osd_xattr_get_internal(env, obj, &buf, XATTR_NAME_LMA, &size);
+	if (rc)
+		RETURN(rc);
+
+	lustre_loa_swab(loa, true);
+	LASSERT(lma->lma_compat & LMAC_STRIPE_INFO);
+
+	lma->lma_compat &= ~(LMAC_STRIPE_INFO | LMAC_COMP_INFO);
+	lustre_lma_swab(lma);
+	buf.lb_buf = lma;
+	buf.lb_len = sizeof(*lma);
+	rc = osd_xattr_set_internal(env, obj, &buf, XATTR_NAME_LMA,
+				    LU_XATTR_REPLACE, oh);
+	if (!rc)
+		obj->oo_pfid_in_lma = 0;
+
+	RETURN(rc);
+}
+
 int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		  const struct lu_buf *buf, const char *name, int fl,
 		  struct thandle *handle)
@@ -706,7 +799,17 @@ int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	down_write(&obj->oo_guard);
 	CDEBUG(D_INODE, "Setting xattr %s with size %d\n",
 		name, (int)buf->lb_len);
-	rc = osd_xattr_set_internal(env, obj, buf, name, fl, oh);
+	/* For the OST migrated from ldiskfs, the PFID EA may
+	 * be stored in LMA because of ldiskfs inode size. */
+	if (unlikely(strcmp(name, XATTR_NAME_FID) == 0 &&
+		     obj->oo_pfid_in_lma)) {
+		rc = osd_xattr_split_pfid(env, obj, oh);
+		if (!rc)
+			fl = LU_XATTR_CREATE;
+	}
+
+	if (!rc)
+		rc = osd_xattr_set_internal(env, obj, buf, name, fl, oh);
 	up_write(&obj->oo_guard);
 
 	RETURN(rc);
@@ -843,7 +946,12 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		RETURN(-EOPNOTSUPP);
 
 	down_write(&obj->oo_guard);
-	rc = __osd_xattr_del(env, obj, name, oh);
+	/* For the OST migrated from ldiskfs, the PFID EA may
+	 * be stored in LMA because of ldiskfs inode size. */
+	if (unlikely(strcmp(name, XATTR_NAME_FID) == 0 && obj->oo_pfid_in_lma))
+		rc = osd_xattr_split_pfid(env, obj, oh);
+	else
+		rc = __osd_xattr_del(env, obj, name, oh);
 	up_write(&obj->oo_guard);
 
 	RETURN(rc);
