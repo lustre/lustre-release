@@ -16090,6 +16090,24 @@ test_313() {
 }
 run_test 313 "io should fail after last_rcvd update fail"
 
+test_315() { # LU-618
+	local file=$DIR/$tfile
+	rm -f $file
+
+	$MULTIOP $file oO_CREAT:O_DIRECT:O_RDWR:w4096000c
+	$MULTIOP $file oO_RDONLY:r4096000_c &
+	PID=$!
+
+	sleep 2
+
+	local rbytes=$(awk '/read_bytes/ { print $2 }' /proc/$PID/io)
+	kill -USR1 $PID
+
+	[ $rbytes -gt 4000000 ] || error "read is not accounted ($rbytes)"
+	rm -f $file
+}
+run_test 315 "read should be accounted"
+
 test_fake_rw() {
 	local read_write=$1
 	if [ "$read_write" = "write" ]; then
