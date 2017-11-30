@@ -77,13 +77,27 @@ static int cfs_crypto_hash_alloc(enum cfs_crypto_hash_alg hash_alg,
 	int err = 0;
 
 	*type = cfs_crypto_hash_type(hash_alg);
-
-	if (*type == NULL) {
+	if (!*type) {
 		CWARN("Unsupported hash algorithm id = %d, max id is %d\n",
 		      hash_alg, CFS_HASH_ALG_MAX);
 		return -EINVAL;
 	}
-	tfm = crypto_alloc_ahash((*type)->cht_name, 0, CRYPTO_ALG_ASYNC);
+
+	/* Keys are only supported for the hmac version */
+	if (key && key_len > 0) {
+		char *algo_name;
+
+		algo_name = kasprintf(GFP_KERNEL, "hmac(%s)",
+				      (*type)->cht_name);
+		if (!algo_name)
+			return -ENOMEM;
+
+		tfm = crypto_alloc_ahash(algo_name, 0, CRYPTO_ALG_ASYNC);
+		kfree(algo_name);
+	} else {
+		tfm = crypto_alloc_ahash((*type)->cht_name, 0,
+					 CRYPTO_ALG_ASYNC);
+	}
 	if (IS_ERR(tfm)) {
 		CDEBUG(D_INFO, "Failed to alloc crypto hash %s\n",
 		       (*type)->cht_name);
@@ -94,8 +108,7 @@ static int cfs_crypto_hash_alloc(enum cfs_crypto_hash_alg hash_alg,
 	if (!*req) {
 		CDEBUG(D_INFO, "Failed to alloc ahash_request for %s\n",
 		       (*type)->cht_name);
-		crypto_free_ahash(tfm);
-		return -ENOMEM;
+		GOTO(out_free_tfm, err = -ENOMEM);
 	}
 
 	ahash_request_set_callback(*req, 0, NULL, NULL);
@@ -106,12 +119,8 @@ static int cfs_crypto_hash_alloc(enum cfs_crypto_hash_alg hash_alg,
 		err = crypto_ahash_setkey(tfm,
 					 (unsigned char *)&((*type)->cht_key),
 					 (*type)->cht_size);
-
-	if (err != 0) {
-		ahash_request_free(*req);
-		crypto_free_ahash(tfm);
-		return err;
-	}
+	if (err)
+		GOTO(out_free_req, err);
 
 	CDEBUG(D_INFO, "Using crypto hash: %s (%s) speed %d MB/s\n",
 	       crypto_ahash_alg_name(tfm), crypto_ahash_driver_name(tfm),
@@ -119,7 +128,9 @@ static int cfs_crypto_hash_alloc(enum cfs_crypto_hash_alg hash_alg,
 
 	err = crypto_ahash_init(*req);
 	if (err) {
+out_free_req:
 		ahash_request_free(*req);
+out_free_tfm:
 		crypto_free_ahash(tfm);
 	}
 	return err;
