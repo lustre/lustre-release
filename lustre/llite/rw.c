@@ -50,6 +50,7 @@
 #include <linux/pagemap.h>
 /* current_is_kswapd() */
 #include <linux/swap.h>
+#include <linux/task_io_accounting_ops.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -1129,8 +1130,12 @@ static int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		       PFID(ll_inode2fid(inode)), rc2, vvp_index(vpg));
 	}
 
-	if (queue->c2_qin.pl_nr > 0)
+	if (queue->c2_qin.pl_nr > 0) {
+		int count = queue->c2_qin.pl_nr;
 		rc = cl_io_submit_rw(env, io, CRT_READ, queue);
+		if (rc == 0)
+			task_io_account_read(PAGE_SIZE * count);
+	}
 
 	if (anchor != NULL && !cl_page_is_owned(page, io)) { /* have sent */
 		rc = cl_sync_io_wait(env, anchor, 0);
