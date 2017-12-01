@@ -678,6 +678,11 @@ static inline struct timespec current_time(struct inode *inode)
  */
 #define time_after32(a, b)     ((s32)((u32)(b) - (u32)(a)) < 0)
 #define time_before32(b, a)    time_after32(a, b)
+
+#endif
+
+#ifndef __GFP_COLD
+#define __GFP_COLD 0
 #endif
 
 #endif /* _LUSTRE_COMPAT_H */
