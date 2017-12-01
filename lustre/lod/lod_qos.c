@@ -2220,8 +2220,7 @@ int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 {
 	struct lod_thread_info *info = lod_env_info(env);
 	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
-	struct ost_pool inuse_osts = { 0 };
-	struct ost_pool *inuse = &inuse_osts;
+	struct ost_pool *inuse = &info->lti_inuse_osts;
 	uint64_t size = 0;
 	int i;
 	int rc;
@@ -2250,13 +2249,10 @@ int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 	if (attr->la_valid & LA_SIZE)
 		size = attr->la_size;
 
-	/* only prepare inuse if multiple components to be created */
-	if (size && lo->ldo_is_composite) {
-		rc = lod_prepare_inuse(env, lo);
-		if (rc)
-			RETURN(rc);
-		inuse = &info->lti_inuse_osts;
-	}
+	/* prepare inuse */
+	rc = lod_prepare_inuse(env, lo);
+	if (rc)
+		RETURN(rc);
 
 	/**
 	 * prepare OST object creation for the component covering file's
