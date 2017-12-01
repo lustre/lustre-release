@@ -20,7 +20,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2016, Intel Corporation.
+ * Copyright (c) 2017, Intel Corporation.
  *
  * lustre/include/lustre_barrier.h
  *

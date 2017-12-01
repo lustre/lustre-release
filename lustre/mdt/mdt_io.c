@@ -20,7 +20,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2012, 2017 Intel Corporation.
+ * Copyright (c) 2017, Intel Corporation.
  */
 /*
  * lustre/mdt/mdt_io.c

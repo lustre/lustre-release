@@ -4,9 +4,9 @@
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * (C) Copyright 2012 Commissariat a l'energie atomique et aux energies
- *
- * Copyright (c) 2016, Intel Corporation.
  *     alternatives
+ *
+ * Copyright (c) 2016, 2017, Intel Corporation.
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the GNU Lesser General Public License
@@ -25,8 +25,6 @@
 /*
  *
  * lustre/utils/lustreapi_internal.h
- *
- * Copyright (c) 2016 Intel Corporation.
  *
  * Author: Aurelien Degremont <aurelien.degremont@cea.fr>
  * Author: JC Lafoucriere <jacques-charles.lafoucriere@cea.fr>

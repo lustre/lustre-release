@@ -21,6 +21,9 @@
  */
 /*
  * Copyright (C) 2013, Trustees of Indiana University
+ *
+ * Copyright (c) 2017, Intel Corporation.
+ *
  * Author: Joshua Walgenbach <jjw@iu.edu>
  */
 

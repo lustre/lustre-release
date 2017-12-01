@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  *
- * Copyright (c) 2013, 2015, Intel Corporation.
+ * Copyright (c) 2013, 2017, Intel Corporation.
  *
  *   This file is part of Lustre, https://wiki.hpdd.intel.com/
  *

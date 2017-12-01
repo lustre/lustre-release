@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2001 Cluster File Systems, Inc.
  *
- * Copyright (c) 2014, Intel Corporation.
+ * Copyright (c) 2014, 2017, Intel Corporation.
  *
  *   This file is part of Lustre, http://www.sf.net/projects/lustre/
  *

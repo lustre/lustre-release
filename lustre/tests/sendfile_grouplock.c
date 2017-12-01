@@ -22,6 +22,9 @@
 
 /*
  * Copyright 2015 Cray Inc, all rights reserved.
+ *
+ * Copyright (c) 2017, Intel Corporation.
+ *
  * Author: Frank Zago.
  *
  * A few portions are extracted from llapi_layout_test.c

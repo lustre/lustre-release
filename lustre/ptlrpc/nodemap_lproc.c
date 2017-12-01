@@ -22,7 +22,7 @@
 /*
  * Copyright (C) 2013, Trustees of Indiana University
  *
- * Copyright (c) 2014, 2015, Intel Corporation.
+ * Copyright (c) 2014, 2017, Intel Corporation.
  *
  * Author: Joshua Walgenbach <jjw@iu.edu>
  */

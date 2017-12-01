@@ -21,7 +21,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2013, 2016, Intel Corporation.
+ * Copyright (c) 2013, 2017, Intel Corporation.
  * Use is subject to license terms.
  *
  * Author: Di Wang <di.wang@intel.com>

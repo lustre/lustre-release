@@ -19,7 +19,7 @@
 # LGPL HEADER END
 
 #
-# Copyright (c) 2014, 2016, Intel Corporation.
+# Copyright (c) 2014, 2017, Intel Corporation.
 #
 
 # Author:

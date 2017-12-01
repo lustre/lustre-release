@@ -17,7 +17,7 @@
  * header for lnet ioctl
  */
 /*
- * Copyright (c) 2014, Intel Corporation.
+ * Copyright (c) 2014, 2017, Intel Corporation.
  */
 #ifndef __UAPI_LNETCTL_H_
 #define __UAPI_LNETCTL_H_

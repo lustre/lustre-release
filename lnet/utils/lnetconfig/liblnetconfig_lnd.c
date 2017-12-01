@@ -20,7 +20,7 @@
  *
  * Copyright (c) 2015, James Simmons
  *
- * Copyright (c) 2016, Intel Corporation.
+ * Copyright (c) 2016, 2017, Intel Corporation.
  *
  * Author:
  *   James Simmons <jsimmons@infradead.org>

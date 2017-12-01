@@ -9,6 +9,8 @@
  * Copyright (c) 2002 Marius Aamodt Eriksen <marius@UMICH.EDU>.
  * Copyright (c) 2002 J. Bruce Fields <bfields@UMICH.EDU>.
  *
+ * Copyright (c) 2016, Intel Corporation.
+ *
  * All rights reserved, all wrongs reversed.
  *
  * Redistribution and use in source and binary forms, with or without

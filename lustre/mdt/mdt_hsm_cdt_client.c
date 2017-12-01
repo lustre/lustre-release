@@ -23,7 +23,7 @@
  * (C) Copyright 2012 Commissariat a l'energie atomique et aux energies
  *     alternatives
  *
- * Copyright (c) 2013, 2014, Intel Corporation.
+ * Copyright (c) 2013, 2017, Intel Corporation.
  */
 /*
  * lustre/mdt/mdt_hsm_cdt_client.c

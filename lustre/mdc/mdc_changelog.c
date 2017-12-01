@@ -23,6 +23,8 @@
  * Copyright (c) 2017, Commissariat a l'Energie Atomique et aux Energies
  *                     Alternatives.
  *
+ * Copyright (c) 2017, Intel Corporation.
+ *
  * Author: Henri Doreau <henri.doreau@cea.fr>
  */
 

@@ -9,7 +9,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * Copyright (c) 2012, 2013, Intel Corporation.
+ * Copyright (c) 2013, 2017, Intel Corporation.
  */
 
 #include <wireshark/config.h>

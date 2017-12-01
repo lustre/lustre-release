@@ -23,7 +23,7 @@
  * Lustre files while hiding details of the internal data structures
  * from the user.
  *
- * Copyright (c) 2016, Intel Corporation.
+ * Copyright (c) 2016, 2017, Intel Corporation.
  *
  * Author: Ned Bass <bass6@llnl.gov>
  */

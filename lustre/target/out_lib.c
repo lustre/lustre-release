@@ -20,7 +20,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2014, 2015, Intel Corporation.
+ * Copyright (c) 2014, 2017, Intel Corporation.
  */
 /*
  * lustre/target/out_lib.c

@@ -22,7 +22,7 @@
 #
 
 #
-# Copyright (c) 2012, 2015, Intel Corporation.
+# Copyright (c) 2012, 2017, Intel Corporation.
 # Use is subject to license terms.
 #
 

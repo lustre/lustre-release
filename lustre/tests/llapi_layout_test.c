@@ -20,6 +20,9 @@
  * GPL HEADER END
  */
 /*
+ * Copyright (c) 2016, 2017, Intel Corporation.
+ */
+/*
  * These tests exercise the llapi_layout API which abstracts the layout
  * of a Lustre file behind an opaque data type.  They assume a Lustre
  * file system with at least 2 OSTs and a pool containing at least the
