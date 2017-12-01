@@ -4779,7 +4779,7 @@ test_67() { #LU-2950
 		lctl --net tcp4 add_route 10.3.3.4@tcp 1 3
 	VERIFY_LNET_CONFIG
 
-	lustre_routes_conversion $legacy $new > /dev/null
+	$LUSTRE_ROUTES_CONVERSION $legacy $new > /dev/null
 	if [ -f $new ]; then
 		# verify the conversion output
 		cmp -s $new $verify > /dev/null
