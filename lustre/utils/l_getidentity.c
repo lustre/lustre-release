@@ -87,15 +87,15 @@ static int compare_u32(const void *v1, const void *v2)
 
 static void errlog(const char *fmt, ...)
 {
-        va_list args;
+	va_list args;
 
-        openlog(progname, LOG_PERROR | LOG_PID, LOG_AUTHPRIV);
+	openlog(progname, LOG_PERROR | LOG_PID, LOG_AUTHPRIV);
 
-        va_start(args, fmt);
-        vsyslog(LOG_NOTICE, fmt, args);
-        va_end(args);
+	va_start(args, fmt);
+	vsyslog(LOG_WARNING, fmt, args);
+	va_end(args);
 
-        closelog();
+	closelog();
 }
 
 int get_groups_local(struct identity_downcall_data *data,
