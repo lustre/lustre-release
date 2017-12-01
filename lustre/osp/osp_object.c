@@ -667,10 +667,10 @@ static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 			RETURN(rc);
 	}
 
-	if (!(attr->la_valid & (LA_UID | LA_GID | LA_PROJID)))
+	if (!(attr->la_valid & LA_REMOTE_ATTR_SET))
 		RETURN(0);
 
-	/* track all UID/GID changes via llog */
+	/* track all UID/GID, projid, and layout version changes via llog */
 	rc = osp_sync_declare_add(env, o, MDS_SETATTR64_REC, th);
 
 	return 0;
@@ -704,8 +704,8 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 	int			 rc = 0;
 	ENTRY;
 
-	/* we're interested in uid/gid/projid changes only */
-	if (!(attr->la_valid & (LA_UID | LA_GID | LA_PROJID)))
+	/* we're interested in uid/gid/projid/layout version changes only */
+	if (!(attr->la_valid & LA_REMOTE_ATTR_SET))
 		RETURN(0);
 
 	if (!is_only_remote_trans(th)) {

@@ -298,7 +298,9 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	struct cl_object *obj = io->ci_obj;
 	struct vvp_io    *vio = cl2vvp_io(env, ios);
 	struct inode     *inode = vvp_object_inode(obj);
+	__u32		  gen = 0;
 	int rc;
+	ENTRY;
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
@@ -320,60 +322,26 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 		 * block on layout lock held by the MDT
 		 * as MDT will not send new layout in lvb (see LU-3124)
 		 * we have to explicitly fetch it, all this will be done
-		 * by ll_layout_refresh()
+		 * by ll_layout_refresh().
+		 * Even if ll_layout_restore() returns zero, it doesn't mean
+		 * that restore has been successful. Therefore it sets
+		 * ci_verify_layout so that it will check layout at the end
+		 * of this function.
 		 */
-		if (rc == 0) {
-			io->ci_restore_needed = 0;
-			io->ci_need_restart = 1;
-			io->ci_verify_layout = 1;
-		} else {
+		if (rc) {
 			io->ci_restore_needed = 1;
 			io->ci_need_restart = 0;
 			io->ci_verify_layout = 0;
 			io->ci_result = rc;
-		}
-	}
-
-	/**
-	 * dynamic layout change needed, send layout intent
-	 * RPC.
-	 */
-	if (io->ci_need_write_intent) {
-		loff_t start = 0;
-		loff_t end = OBD_OBJECT_EOF;
-
-		io->ci_need_write_intent = 0;
-
-		LASSERT(io->ci_type == CIT_WRITE ||
-			cl_io_is_trunc(io) || cl_io_is_mkwrite(io));
-
-		if (io->ci_type == CIT_WRITE) {
-			if (!cl_io_is_append(io)) {
-				start = io->u.ci_rw.rw_range.cir_pos;
-				end = start + io->u.ci_rw.rw_range.cir_count;
-			}
-		} else if (cl_io_is_trunc(io)) {
-			end = io->u.ci_setattr.sa_attr.lvb_size;
-		} else { /* mkwrite */
-			pgoff_t index = io->u.ci_fault.ft_index;
-
-			start = cl_offset(io->ci_obj, index);
-			end = cl_offset(io->ci_obj, index + 1);
+			GOTO(out, rc);
 		}
 
-		CDEBUG(D_VFSTRACE, DFID" write layout, type %u [%llu, %llu)\n",
-		       PFID(lu_object_fid(&obj->co_lu)), io->ci_type,
-		       start, end);
-		rc = ll_layout_write_intent(inode, start, end);
-		io->ci_result = rc;
-		if (!rc)
-			io->ci_need_restart = 1;
-	}
+		io->ci_restore_needed = 0;
 
-	if (!io->ci_ignore_layout && io->ci_verify_layout) {
-		__u32 gen = 0;
-
-		/* check layout version */
+		/* Even if ll_layout_restore() returns zero, it doesn't mean
+		 * that restore has been successful. Therefore it should verify
+		 * if there was layout change and restart I/O correspondingly.
+		 */
 		ll_layout_refresh(inode, &gen);
 		io->ci_need_restart = vio->vui_layout_gen != gen;
 		if (io->ci_need_restart) {
@@ -387,7 +355,50 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 			ll_file_clear_flag(ll_i2info(vvp_object_inode(obj)),
 					   LLIF_FILE_RESTORING);
 		}
+		GOTO(out, 0);
 	}
+
+	/**
+	 * dynamic layout change needed, send layout intent
+	 * RPC.
+	 */
+	if (io->ci_need_write_intent) {
+		enum layout_intent_opc opc = LAYOUT_INTENT_WRITE;
+
+		io->ci_need_write_intent = 0;
+
+		LASSERT(io->ci_type == CIT_WRITE ||
+			cl_io_is_trunc(io) || cl_io_is_mkwrite(io));
+
+		CDEBUG(D_VFSTRACE, DFID" write layout, type %u "DEXT"\n",
+		       PFID(lu_object_fid(&obj->co_lu)), io->ci_type,
+		       PEXT(&io->ci_write_intent));
+
+		if (cl_io_is_trunc(io))
+			opc = LAYOUT_INTENT_TRUNC;
+
+		rc = ll_layout_write_intent(inode, opc, &io->ci_write_intent);
+		io->ci_result = rc;
+		if (!rc)
+			io->ci_need_restart = 1;
+		GOTO(out, rc);
+	}
+
+	if (!io->ci_need_restart &&
+	    !io->ci_ignore_layout && io->ci_verify_layout) {
+		/* check layout version */
+		ll_layout_refresh(inode, &gen);
+		io->ci_need_restart = vio->vui_layout_gen != gen;
+		if (io->ci_need_restart) {
+			CDEBUG(D_VFSTRACE,
+			       DFID" layout changed from %d to %d.\n",
+			       PFID(lu_object_fid(&obj->co_lu)),
+			       vio->vui_layout_gen, gen);
+		}
+		GOTO(out, 0);
+	}
+out:
+	EXIT;
 }
 
 static void vvp_io_fault_fini(const struct lu_env *env,
@@ -755,6 +766,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 	size_t tot = vio->vui_tot_count;
 	int exceed = 0;
 	int result;
+	ENTRY;
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
@@ -766,13 +778,16 @@ static int vvp_io_read_start(const struct lu_env *env,
 		down_read(&lli->lli_trunc_sem);
 
 	if (!can_populate_pages(env, io, inode))
-		return 0;
+		RETURN(0);
 
-	result = vvp_prep_size(env, obj, io, range->cir_pos, tot, &exceed);
+	/* Unless this is reading a sparse file, otherwise the lock has already
+	 * been acquired so vvp_prep_size() is an empty op. */
+	result = vvp_prep_size(env, obj, io, range->cir_pos, range->cir_count,
+				&exceed);
 	if (result != 0)
-		return result;
+		RETURN(result);
 	else if (exceed != 0)
-		goto out;
+		GOTO(out, result);
 
 	LU_OBJECT_HEADER(D_INODE, env, &obj->co_lu,
 			 "Read ino %lu, %lu bytes, offset %lld, size %llu\n",
@@ -815,6 +830,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 		CERROR("Wrong IO type %u\n", vio->vui_io_subtype);
 		LBUG();
 	}
+	GOTO(out, result);
 
 out:
 	if (result >= 0) {
@@ -1408,6 +1424,9 @@ static const struct cl_io_operations vvp_io_ops = {
 			.cio_start	= vvp_io_fsync_start,
 			.cio_fini	= vvp_io_fini
 		},
+		[CIT_GLIMPSE] = {
+			.cio_fini	= vvp_io_fini
+		},
 		[CIT_MISC] = {
 			.cio_fini	= vvp_io_fini
 		},
@@ -1476,5 +1495,6 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 				PFID(lu_object_fid(&obj->co_lu)), result);
 	}
 
+	io->ci_result = result < 0 ? result : 0;
 	RETURN(result);
 }

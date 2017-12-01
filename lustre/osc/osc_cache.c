@@ -997,7 +997,7 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	io  = &osc_env_info(env)->oti_io;
+	io  = osc_env_thread_io(env);
 	io->ci_obj = cl_object_top(osc2cl(obj));
 	io->ci_ignore_layout = 1;
 	rc = cl_io_init(env, io, CIT_MISC, io->ci_obj);
@@ -1970,6 +1970,7 @@ static int try_to_add_extent_for_io(struct client_obd *cli,
 
 		if (tmp->oe_srvlock != ext->oe_srvlock ||
 		    !tmp->oe_grants != !ext->oe_grants ||
+		    tmp->oe_ndelay != ext->oe_ndelay ||
 		    tmp->oe_no_merge || ext->oe_no_merge)
 			RETURN(0);
 
@@ -2532,6 +2533,9 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		++ext->oe_nr_pages;
 		list_add_tail(&oap->oap_pending_item, &ext->oe_pages);
 		osc_object_unlock(osc);
+
+		if (!ext->oe_layout_version)
+			ext->oe_layout_version = io->ci_layout_version;
 	}
 
 	RETURN(rc);
@@ -2719,8 +2723,9 @@ int osc_cancel_async_page(const struct lu_env *env, struct osc_page *ops)
 	RETURN(rc);
 }
 
-int osc_queue_sync_pages(const struct lu_env *env, struct osc_object *obj,
-			 struct list_head *list, int cmd, int brw_flags)
+int osc_queue_sync_pages(const struct lu_env *env, const struct cl_io *io,
+			 struct osc_object *obj, struct list_head *list,
+			 int brw_flags)
 {
 	struct client_obd     *cli = osc_cli(obj);
 	struct osc_extent     *ext;
@@ -2758,7 +2763,7 @@ int osc_queue_sync_pages(const struct lu_env *env, struct osc_object *obj,
 		RETURN(-ENOMEM);
 	}
 
-	ext->oe_rw = !!(cmd & OBD_BRW_READ);
+	ext->oe_rw = !!(brw_flags & OBD_BRW_READ);
 	ext->oe_sync = 1;
 	ext->oe_no_merge = !can_merge;
 	ext->oe_urgent = 1;
@@ -2766,14 +2771,16 @@ int osc_queue_sync_pages(const struct lu_env *env, struct osc_object *obj,
 	ext->oe_end = ext->oe_max_end = end;
 	ext->oe_obj = obj;
 	ext->oe_srvlock = !!(brw_flags & OBD_BRW_SRVLOCK);
+	ext->oe_ndelay = !!(brw_flags & OBD_BRW_NDELAY);
 	ext->oe_nr_pages = page_count;
 	ext->oe_mppr = mppr;
 	list_splice_init(list, &ext->oe_pages);
+	ext->oe_layout_version = io->ci_layout_version;
 
 	osc_object_lock(obj);
 	/* Reuse the initial refcount for RPC, don't drop it */
 	osc_extent_state_set(ext, OES_LOCK_DONE);
-	if (cmd & OBD_BRW_WRITE) {
+	if (!ext->oe_rw) { /* write */
 		list_add_tail(&ext->oe_link, &obj->oo_urgent_exts);
 		osc_update_pending(obj, OBD_BRW_WRITE, page_count);
 	} else {
@@ -3289,7 +3296,7 @@ int osc_lock_discard_pages(const struct lu_env *env, struct osc_object *osc,
 			   pgoff_t start, pgoff_t end, bool discard)
 {
 	struct osc_thread_info *info = osc_env_info(env);
-	struct cl_io *io = &info->oti_io;
+	struct cl_io *io = osc_env_thread_io(env);
 	osc_page_gang_cbt cb;
 	int res;
 	int result;

@@ -98,6 +98,14 @@ static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {return 0;}
 
 extern struct lu_device_type osc_device_type;
 
+static inline struct cl_io *osc_env_thread_io(const struct lu_env *env)
+{
+	struct cl_io *io = &osc_env_info(env)->oti_io;
+
+	memset(io, 0, sizeof(*io));
+	return io;
+}
+
 static inline int osc_is_object(const struct lu_object *obj)
 {
 	return obj->lo_dev->ld_type == &osc_device_type;

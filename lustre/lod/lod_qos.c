@@ -1726,6 +1726,7 @@ int lod_use_defined_striping(const struct lu_env *env,
 	struct lov_ost_data_v1 *objs;
 	__u32	magic;
 	__u16	comp_cnt;
+	__u16	mirror_cnt;
 	int	rc = 0, i;
 	ENTRY;
 
@@ -1740,13 +1741,18 @@ int lod_use_defined_striping(const struct lu_env *env,
 		comp_cnt = le16_to_cpu(comp_v1->lcm_entry_count);
 		if (comp_cnt == 0)
 			RETURN(-EINVAL);
+		mirror_cnt = le16_to_cpu(comp_v1->lcm_mirror_count) + 1;
+		mo->ldo_flr_state = le16_to_cpu(comp_v1->lcm_flags) &
+					LCM_FL_FLR_MASK;
 		mo->ldo_is_composite = 1;
 	} else {
 		mo->ldo_is_composite = 0;
 		comp_cnt = 1;
+		mirror_cnt = 0;
 	}
+	mo->ldo_layout_gen = le16_to_cpu(v1->lmm_layout_gen);
 
-	rc = lod_alloc_comp_entries(mo, comp_cnt);
+	rc = lod_alloc_comp_entries(mo, mirror_cnt, comp_cnt);
 	if (rc)
 		RETURN(rc);
 
@@ -1806,6 +1812,10 @@ int lod_use_defined_striping(const struct lu_env *env,
 				GOTO(out, rc);
 		}
 	}
+
+	rc = lod_fill_mirrors(mo);
+	if (rc)
+		GOTO(out, rc);
 out:
 	if (rc)
 		lod_object_free_striping(env, mo);
@@ -1841,17 +1851,19 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	struct lov_comp_md_v1	*comp_v1 = NULL;
 	__u32	magic;
 	__u16	comp_cnt;
+	__u16	mirror_cnt;
 	int	i, rc;
 	ENTRY;
 
 	if (buf == NULL || buf->lb_buf == NULL || buf->lb_len == 0)
 		RETURN(0);
 
-	rc = lod_verify_striping(d, buf, false, 0);
+	/* free default striping info */
+	lod_free_comp_entries(lo);
+
+	rc = lod_verify_striping(d, lo, buf, false);
 	if (rc)
 		RETURN(-EINVAL);
-
-	lod_free_comp_entries(lo);
 
 	v3 = buf->lb_buf;
 	v1 = buf->lb_buf;
@@ -1903,13 +1915,17 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		comp_cnt = comp_v1->lcm_entry_count;
 		if (comp_cnt == 0)
 			RETURN(-EINVAL);
+		mirror_cnt =  comp_v1->lcm_mirror_count + 1;
+		if (mirror_cnt > 1)
+			lo->ldo_flr_state = LCM_FL_RDONLY;
 		lo->ldo_is_composite = 1;
 	} else {
 		comp_cnt = 1;
+		mirror_cnt = 0;
 		lo->ldo_is_composite = 0;
 	}
 
-	rc = lod_alloc_comp_entries(lo, comp_cnt);
+	rc = lod_alloc_comp_entries(lo, mirror_cnt, comp_cnt);
 	if (rc)
 		RETURN(rc);
 
@@ -2144,7 +2160,7 @@ out:
 int lod_obj_stripe_set_inuse_cb(const struct lu_env *env,
 				struct lod_object *lo,
 				struct dt_object *dt, struct thandle *th,
-				int stripe_idx,
+				int comp_idx, int stripe_idx,
 				struct lod_obj_stripe_cb_data *data)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
@@ -2205,7 +2221,7 @@ int lod_prepare_inuse(const struct lu_env *env, struct lod_object *lo)
 	struct lod_thread_info *info = lod_env_info(env);
 	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
 	struct ost_pool *inuse = &info->lti_inuse_osts;
-	struct lod_obj_stripe_cb_data data;
+	struct lod_obj_stripe_cb_data data = { { 0 } };
 	__u32 stripe_count = 0;
 	int i;
 	int rc;
@@ -2218,8 +2234,8 @@ int lod_prepare_inuse(const struct lu_env *env, struct lod_object *lo)
 		return rc;
 
 	data.locd_inuse = inuse;
-	return lod_obj_for_each_stripe(env, lo, NULL,
-				       lod_obj_stripe_set_inuse_cb, &data);
+	data.locd_stripe_cb = lod_obj_stripe_set_inuse_cb;
+	return lod_obj_for_each_stripe(env, lo, NULL, &data);
 }
 
 int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,

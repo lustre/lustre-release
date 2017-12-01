@@ -122,6 +122,7 @@ void cl_io_fini(const struct lu_env *env, struct cl_io *io)
 		/* Check ignore layout change conf */
 		LASSERT(ergo(io->ci_ignore_layout || !io->ci_verify_layout,
 				!io->ci_need_restart));
+	case CIT_GLIMPSE:
 		break;
 	case CIT_LADVISE:
 		break;
@@ -188,9 +189,12 @@ EXPORT_SYMBOL(cl_io_sub_init);
 int cl_io_init(const struct lu_env *env, struct cl_io *io,
                enum cl_io_type iot, struct cl_object *obj)
 {
-        LASSERT(obj == cl_object_top(obj));
+	LASSERT(obj == cl_object_top(obj));
 
-        return cl_io_init0(env, io, iot, obj);
+	/* clear I/O restart from previous instance */
+	io->ci_need_restart = 0;
+
+	return cl_io_init0(env, io, iot, obj);
 }
 EXPORT_SYMBOL(cl_io_init);
 
@@ -880,6 +884,11 @@ int cl_io_loop(const struct lu_env *env, struct cl_io *io)
 		cl_io_iter_fini(env, io);
 	} while (!rc && io->ci_continue);
 
+	if (rc == -EWOULDBLOCK && io->ci_ndelay) {
+		io->ci_need_restart = 1;
+		rc = 0;
+	}
+
 	CDEBUG(D_VFSTRACE, "loop type %u done: nob: %zu, rc: %d %s\n",
 		io->ci_type, io->ci_nob, rc,
 		io->ci_continue ? "continue" : "stop");
@@ -899,8 +908,11 @@ int cl_io_loop(const struct lu_env *env, struct cl_io *io)
 			pt->cip_iot == CIT_READ ? "read" : "write",
 			pt->cip_pos, pt->cip_pos + pt->cip_count,
 			pt->cip_result, rc2);
-		if (rc2)
-			rc = rc ? rc : rc2;
+
+		/* save the result of ptask */
+		rc = rc ? : rc2;
+		io->ci_need_restart |= pt->cip_need_restart;
+
 		if (!short_io) {
 			if (!rc2) /* IO is done by this task successfully */
 				io->ci_nob += pt->cip_result;
@@ -1145,6 +1157,7 @@ void cl_page_list_discard(const struct lu_env *env, struct cl_io *io,
 		cl_page_discard(env, io, page);
 	EXIT;
 }
+EXPORT_SYMBOL(cl_page_list_discard);
 
 /**
  * Initialize dual page queue.

@@ -1084,6 +1084,7 @@ static int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	struct ll_file_data       *fd     = LUSTRE_FPRIVATE(file);
 	struct ll_readahead_state *ras    = &fd->fd_ras;
 	struct cl_2queue          *queue  = &io->ci_queue;
+	struct cl_sync_io	  *anchor = NULL;
 	struct vvp_page           *vpg;
 	int			   rc = 0;
 	bool			   uptodate;
@@ -1111,6 +1112,10 @@ static int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		cl_page_export(env, page, 1);
 		cl_page_disown(env, io, page);
 	} else {
+		anchor = &vvp_env_info(env)->vti_anchor;
+		cl_sync_io_init(anchor, 1, &cl_sync_io_end);
+		page->cp_sync_io = anchor;
+
 		cl_2queue_add(queue, page);
 	}
 
@@ -1126,6 +1131,26 @@ static int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 
 	if (queue->c2_qin.pl_nr > 0)
 		rc = cl_io_submit_rw(env, io, CRT_READ, queue);
+
+	if (anchor != NULL && !cl_page_is_owned(page, io)) { /* have sent */
+		rc = cl_sync_io_wait(env, anchor, 0);
+
+		cl_page_assume(env, io, page);
+		cl_page_list_del(env, &queue->c2_qout, page);
+
+		if (!PageUptodate(cl_page_vmpage(page))) {
+			/* Failed to read a mirror, discard this page so that
+			 * new page can be created with new mirror.
+			 *
+			 * TODO: this is not needed after page reinit
+			 * route is implemented */
+			cl_page_discard(env, io, page);
+		}
+		cl_page_disown(env, io, page);
+	}
+
+	/* TODO: discard all pages until page reinit route is implemented */
+	cl_page_list_discard(env, io, &queue->c2_qin);
 
 	/*
 	 * Unlock unsent pages in case of error.

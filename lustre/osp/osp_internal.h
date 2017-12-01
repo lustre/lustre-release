@@ -816,8 +816,6 @@ int osp_sync_init(const struct lu_env *env, struct osp_device *d);
 int osp_sync_fini(struct osp_device *d);
 void osp_sync_check_for_work(struct osp_device *osp);
 void osp_sync_force(const struct lu_env *env, struct osp_device *d);
-int osp_sync_add_commit_cb(const struct lu_env *env, struct osp_device *d,
-			   struct thandle *th);
 int osp_sync_add_commit_cb_1s(const struct lu_env *env, struct osp_device *d,
 			      struct thandle *th);
 

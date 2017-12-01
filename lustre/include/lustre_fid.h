@@ -351,10 +351,13 @@ static inline void filter_fid_cpu_to_le(struct filter_fid *dst,
 {
 	fid_cpu_to_le(&dst->ff_parent, &src->ff_parent);
 
-	if (size < sizeof(struct filter_fid))
+	if (size < sizeof(struct filter_fid)) {
 		memset(&dst->ff_layout, 0, sizeof(dst->ff_layout));
-	else
+	} else {
 		ost_layout_cpu_to_le(&dst->ff_layout, &src->ff_layout);
+		dst->ff_layout_version = cpu_to_le32(src->ff_layout_version);
+		dst->ff_range = cpu_to_le32(src->ff_range);
+	}
 
 	/* XXX: Add more if filter_fid is enlarged in the future. */
 }
@@ -364,10 +367,13 @@ static inline void filter_fid_le_to_cpu(struct filter_fid *dst,
 {
 	fid_le_to_cpu(&dst->ff_parent, &src->ff_parent);
 
-	if (size < sizeof(struct filter_fid))
+	if (size < sizeof(struct filter_fid)) {
 		memset(&dst->ff_layout, 0, sizeof(dst->ff_layout));
-	else
+	} else {
 		ost_layout_le_to_cpu(&dst->ff_layout, &src->ff_layout);
+		dst->ff_layout_version = le32_to_cpu(src->ff_layout_version);
+		dst->ff_range = le32_to_cpu(src->ff_range);
+	}
 
 	/* XXX: Add more if filter_fid is enlarged in the future. */
 }

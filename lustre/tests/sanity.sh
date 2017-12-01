@@ -13486,7 +13486,7 @@ test_229() { # LU-2482, LU-3448
 	$GETSTRIPE -v $DIR/$tfile
 
 	local pattern=$($GETSTRIPE -L $DIR/$tfile)
-	[ X"$pattern" = X"80000001" ] || error "pattern error ($pattern)"
+	[ X"$pattern" = X"released" ] || error "pattern error ($pattern)"
 
 	local stripe_count=$($GETSTRIPE -c $DIR/$tfile) || error "getstripe"
 	[ $stripe_count -eq 2 ] || error "stripe count not 2 ($stripe_count)"
@@ -15205,7 +15205,7 @@ test_270a() {
 	$LFS setstripe -E 1M -L mdt $dom ||
 		error "Can't create DoM layout"
 
-	[ $($LFS getstripe -L $dom) == 100 ] || error "bad pattern"
+	[ $($LFS getstripe -L $dom) == "mdt" ] || error "bad pattern"
 	[ $($LFS getstripe -c $dom) == 0 ] || error "bad stripe count"
 	[ $($LFS getstripe -S $dom) == 1048576 ] || error "bad stripe size"
 
@@ -15317,7 +15317,7 @@ test_270c() {
 
 	# check files inherit DoM EA
 	touch $DIR/$tdir/first
-	[ $($GETSTRIPE -L $DIR/$tdir/first) == 100 ] ||
+	[ $($GETSTRIPE -L $DIR/$tdir/first) == "mdt" ] ||
 		error "bad pattern"
 	[ $($LFS getstripe -c $DIR/$tdir/first) == 0 ] ||
 		error "bad stripe count"
@@ -15327,7 +15327,7 @@ test_270c() {
 	# check directory inherits DoM EA and uses it as default
 	mkdir $DIR/$tdir/subdir
 	touch $DIR/$tdir/subdir/second
-	[ $($LFS getstripe -L $DIR/$tdir/subdir/second) == 100 ] ||
+	[ $($LFS getstripe -L $DIR/$tdir/subdir/second) == "mdt" ] ||
 		error "bad pattern in sub-directory"
 	[ $($LFS getstripe -c $DIR/$tdir/subdir/second) == 0 ] ||
 		error "bad stripe count in sub-directory"
@@ -15353,7 +15353,7 @@ test_270d() {
 	touch $DIR/$tdir/subdir/f2
 	[ $($LFS getstripe -c $DIR/$tdir/subdir/f2) == 1 ] ||
 		error "wrong default striping in file 2"
-	[ $($LFS getstripe -L $DIR/$tdir/subdir/f2) == 1 ] ||
+	[ $($LFS getstripe -L $DIR/$tdir/subdir/f2) == "raid0" ] ||
 		error "bad pattern in file 2"
 	return 0
 }

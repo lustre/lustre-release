@@ -250,6 +250,7 @@ init_test_env() {
 	export SGPDDSURVEY=${SGPDDSURVEY:-"$LUSTRE/../lustre-iokit/sgpdd-survey/sgpdd-survey")}
 	[ ! -f "$SGPDDSURVEY" ] && export SGPDDSURVEY=$(which sgpdd-survey)
 	export MCREATE=${MCREATE:-mcreate}
+	export MULTIOP=${MULTIOP:-multiop}
 	# Ubuntu, at least, has a truncate command in /usr/bin
 	# so fully path our truncate command.
 	export TRUNCATE=${TRUNCATE:-$LUSTRE/tests/truncate}
@@ -6357,7 +6358,7 @@ convert_facet2label() {
 }
 
 get_clientosc_proc_path() {
-	echo "${1}-osc-*"
+	echo "${1}-osc-ffff*"
 }
 
 # If the 2.0 MDS was mounted on 1.8 device, then the OSC and LOV names

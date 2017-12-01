@@ -40,6 +40,7 @@
 
 #include <lustre_acl.h>
 #include <lustre_mds.h>
+#include <lustre_swab.h>
 #include "mdt_internal.h"
 #include <lustre_nodemap.h>
 
@@ -1904,8 +1905,8 @@ out_reprocess:
 	return rc;
 }
 
-int mdt_close_swap_layouts(struct mdt_thread_info *info,
-			   struct mdt_object *o, struct md_attr *ma)
+int mdt_close_handle_layouts(struct mdt_thread_info *info,
+			     struct mdt_object *o, struct md_attr *ma)
 {
 	struct mdt_lock_handle	*lh1 = &info->mti_lh[MDT_LH_NEW];
 	struct mdt_lock_handle	*lh2 = &info->mti_lh[MDT_LH_OLD];
@@ -1998,8 +1999,27 @@ int mdt_close_swap_layouts(struct mdt_thread_info *info,
 		GOTO(out_unlock1, rc);
 
 	/* Swap layout with orphan object */
-	rc = mo_swap_layouts(info->mti_env, mdt_object_child(o1),
-			     mdt_object_child(o2), 0);
+	if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SWAP) {
+		rc = mo_swap_layouts(info->mti_env, mdt_object_child(o1),
+				     mdt_object_child(o2), 0);
+	} else if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_MERGE) {
+		struct lu_buf *buf = &info->mti_buf;
+
+		buf->lb_len = sizeof(void *);
+		buf->lb_buf = mdt_object_child(o == o1 ? o2 : o1);
+		rc = mo_xattr_set(info->mti_env, mdt_object_child(o), buf,
+				  XATTR_LUSTRE_LOV, LU_XATTR_MERGE);
+		if (rc == 0 && ma->ma_attr.la_valid & (LA_SIZE | LA_BLOCKS)) {
+			int rc2;
+
+			rc2 = mdt_set_som(info, o, &ma->ma_attr);
+			if (rc2 < 0)
+				CERROR(DFID": Setting i_blocks error: %d, "
+				       "i_blocks will be reported wrongly and "
+				       "can only be fixed in next resync\n",
+				       PFID(mdt_object_fid(o)), rc2);
+		}
+	}
 	if (rc < 0)
 		GOTO(out_unlock2, rc);
 
@@ -2040,6 +2060,121 @@ out_lease:
 	return rc;
 }
 
+static int mdt_close_resync_done(struct mdt_thread_info *info,
+				 struct mdt_object *o, struct md_attr *ma)
+{
+	struct close_data	*data;
+	struct ldlm_lock	*lease;
+	struct md_layout_change	 layout = { 0 };
+	__u32			*resync_ids = NULL;
+	size_t			 resync_count = 0;
+	bool			 lease_broken;
+	int			 rc;
+	ENTRY;
+
+	if (exp_connect_flags(info->mti_exp) & OBD_CONNECT_RDONLY)
+		RETURN(-EROFS);
+
+	if (!S_ISREG(lu_object_attr(&o->mot_obj)))
+		RETURN(-EINVAL);
+
+	data = req_capsule_client_get(info->mti_pill, &RMF_CLOSE_DATA);
+	if (data == NULL)
+		RETURN(-EPROTO);
+
+	if (ptlrpc_req_need_swab(mdt_info_req(info)))
+		lustre_swab_close_data_resync_done(&data->cd_resync);
+
+	if (!fid_is_zero(&data->cd_fid))
+		RETURN(-EPROTO);
+
+	lease = ldlm_handle2lock(&data->cd_handle);
+	if (lease == NULL)
+		RETURN(-ESTALE);
+
+	/* try to hold open_sem so that nobody else can open the file */
+	if (!down_write_trylock(&o->mot_open_sem)) {
+		ldlm_lock_cancel(lease);
+		GOTO(out_reprocess, rc = -EBUSY);
+	}
+
+	/* Check if the lease open lease has already canceled */
+	lock_res_and_lock(lease);
+	lease_broken = ldlm_is_cancel(lease);
+	unlock_res_and_lock(lease);
+
+	LDLM_DEBUG(lease, DFID " lease broken? %d\n",
+		   PFID(mdt_object_fid(o)), lease_broken);
+
+	/* Cancel server side lease. Client side counterpart should
+	 * have been cancelled. It's okay to cancel it now as we've
+	 * held mot_open_sem. */
+	ldlm_lock_cancel(lease);
+
+	if (lease_broken) /* don't perform release task */
+		GOTO(out_unlock, rc = -ESTALE);
+
+	resync_count = data->cd_resync.resync_count;
+	if (!resync_count)
+		GOTO(out_unlock, rc = 0);
+
+	if (resync_count > INLINE_RESYNC_ARRAY_SIZE) {
+		void *data;
+
+		if (!req_capsule_has_field(info->mti_pill, &RMF_U32,
+					   RCL_CLIENT))
+			GOTO(out_unlock, rc = -EPROTO);
+
+		OBD_ALLOC(resync_ids, resync_count * sizeof(__u32));
+		if (!resync_ids)
+			GOTO(out_unlock, rc = -ENOMEM);
+
+		data = req_capsule_client_get(info->mti_pill, &RMF_U32);
+		memcpy(resync_ids, data, resync_count * sizeof(__u32));
+
+		layout.mlc_resync_ids = resync_ids;
+	} else {
+		layout.mlc_resync_ids = data->cd_resync.resync_ids_inline;
+	}
+
+	layout.mlc_opc = MD_LAYOUT_RESYNC_DONE;
+	layout.mlc_resync_count = resync_count;
+	if (ma->ma_attr.la_valid & (LA_SIZE | LA_BLOCKS)) {
+		layout.mlc_som.lsa_valid = LSOM_FL_VALID;
+		layout.mlc_som.lsa_size = ma->ma_attr.la_size;
+		layout.mlc_som.lsa_blocks = ma->ma_attr.la_blocks;
+	}
+	rc = mdt_layout_change(info, o, &layout);
+	if (rc)
+		GOTO(out_unlock, rc);
+
+	EXIT;
+
+out_unlock:
+	up_write(&o->mot_open_sem);
+
+	/* already released */
+	if (rc == 0) {
+		struct mdt_body *repbody;
+
+		repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+		LASSERT(repbody != NULL);
+		repbody->mbo_valid |= OBD_MD_CLOSE_INTENT_EXECED;
+	}
+
+	if (resync_ids)
+		OBD_FREE(resync_ids, resync_count * sizeof(__u32));
+
+out_reprocess:
+	ldlm_reprocess_all(lease->l_resource);
+	LDLM_LOCK_PUT(lease);
+
+	ma->ma_valid = 0;
+	ma->ma_need = 0;
+
+	return rc;
+}
+
 #define MFD_CLOSED(mode) ((mode) == MDS_FMODE_CLOSED)
 static int mdt_mfd_closed(struct mdt_file_data *mfd)
 {
@@ -2053,11 +2188,18 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
         struct md_attr *ma = &info->mti_attr;
         int rc = 0;
 	__u64 mode;
+	__u64 intent;
         ENTRY;
 
         mode = mfd->mfd_mode;
 
-	if (ma->ma_attr_flags & MDS_HSM_RELEASE) {
+	intent = ma->ma_attr_flags & MDS_CLOSE_INTENT;
+
+	CDEBUG(D_INODE, "%s: close file "DFID" with intent: %llx\n",
+	       mdt_obd_name(info->mti_mdt), PFID(mdt_object_fid(o)), intent);
+
+	switch (intent) {
+	case MDS_HSM_RELEASE: {
 		rc = mdt_hsm_release(info, o, ma);
 		if (rc < 0) {
 			CDEBUG(D_HSM, "%s: File " DFID " release failed: %d\n",
@@ -2065,10 +2207,11 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 			       PFID(mdt_object_fid(o)), rc);
 			/* continue to close even error occurred. */
 		}
+		break;
 	}
-
-	if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SWAP) {
-		rc = mdt_close_swap_layouts(info, o, ma);
+	case MDS_CLOSE_LAYOUT_MERGE:
+	case MDS_CLOSE_LAYOUT_SWAP: {
+		rc = mdt_close_handle_layouts(info, o, ma);
 		if (rc < 0) {
 			CDEBUG(D_INODE,
 			       "%s: cannot swap layout of "DFID": rc=%d\n",
@@ -2076,6 +2219,14 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 			       PFID(mdt_object_fid(o)), rc);
 			/* continue to close even if error occurred. */
 		}
+		break;
+	}
+	case MDS_CLOSE_RESYNC_DONE:
+		rc = mdt_close_resync_done(info, o, ma);
+		break;
+	default:
+		/* nothing */
+		break;
 	}
 
 	if (mode & FMODE_WRITE)

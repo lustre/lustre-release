@@ -817,7 +817,6 @@ static int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
 	struct ldlm_resource	*res;
 	struct ofd_object	*fo;
 	struct lu_fid		*fid = &oa->o_oi.oi_fid;
-	struct filter_fid	*ff = NULL;
 	int			 rc = 0;
 
 	ENTRY;
@@ -854,13 +853,8 @@ static int ofd_echo_setattr(const struct lu_env *env, struct obd_export *exp,
 	la_from_obdo(&info->fti_attr, oa, oa->o_valid);
 	info->fti_attr.la_valid &= ~LA_TYPE;
 
-	if (oa->o_valid & OBD_MD_FLFID) {
-		ff = &info->fti_mds_fid;
-		ofd_prepare_fidea(ff, oa);
-	}
-
 	/* setting objects attributes (including owner/group) */
-	rc = ofd_attr_set(env, fo, &info->fti_attr, ff);
+	rc = ofd_attr_set(env, fo, &info->fti_attr, oa);
 	if (rc)
 		GOTO(out_unlock, rc);
 

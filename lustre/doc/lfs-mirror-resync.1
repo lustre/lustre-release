@@ -1,0 +1,41 @@
+.TH LFS-MIRROR-RESYNC 1 2017-07-25 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs mirror resync \- resynchronize an out-of-sync mirrored file
+.SH SYNOPSIS
+.B lfs mirror resync
+[\fB\-\-only\fR <\fImirror_id\fR[,...]>]
+<\fImirrored_file\fR> [<\fImirrored_file2\fR>...]
+.SH DESCRIPTION
+This command resynchronizes out-of-sync mirrored file(s) specified by the path
+name \fImirrored_file\fR.
+.br
+If there is no stale mirror for the \fImirrored_file(s)\fR, then the command does
+nothing. Otherwise, it will copy data from synced mirror to stale mirror(s), and
+mark all successfully copied mirror(s) as SYNC.
+If \fB\-\-only\fR <\fImirror_id\fR[,...]> option is specified, then the
+command will resynchronize the mirror(s) specified by the \fImirror_id\fR(s).
+This option cannot be used when multiple mirrored files are specified.
+.SH OPTIONS
+.TP
+.BR \-\-only\fR\ <\fImirror_id\fR[,...]>
+This option indicates which mirror(s) specified by \fImirror_id\fR(s) needs to
+be resynchronized. The \fImirror_id\fR is the numerical unique identifier for
+a mirror. Multiple \fImirror_id\fRs are separated by comma. This option cannot
+be used when multiple mirrored files are specified.
+.SH EXAMPLES
+.TP
+.B lfs mirror resync /mnt/lustre/file1 /mnt/lustre/file2
+Resynchronize all of the stale mirror(s) for /mnt/lustre/file1 and /mnt/lustre/file2.
+.TP
+.B lfs mirror resync --only 4,5 /mnt/lustre/file1
+Resynchronize mirrors with mirror ID 4 and 5 for /mnt/lustre/file1 even if they
+are not marked as STALE.
+.SH AUTHOR
+The \fBlfs mirror resync\fR command is part of the Lustre filesystem.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-setstripe (1),
+.BR lfs-mirror-create (1),
+.BR lfs-mirror-extend (1),
+.BR lfs-mirror-split (1),
+.BR lfs-mirror-verify (1)

@@ -1299,7 +1299,7 @@ struct cl_page_list {
 	struct task_struct	*pl_owner;
 };
 
-/** 
+/**
  * A 2-queue of pages. A convenience data-type for common use case, 2-queue
  * contains an incoming page list and an outgoing page list.
  */
@@ -1381,6 +1381,10 @@ enum cl_io_type {
 	 */
 	CIT_FSYNC,
 	/**
+	 * glimpse. An io context to acquire glimpse lock.
+	 */
+	CIT_GLIMPSE,
+	/**
          * Miscellaneous io. This is used for occasional io activity that
          * doesn't fit into other types. Currently this is used for:
          *
@@ -1390,8 +1394,6 @@ enum cl_io_type {
          *
          *     - VM induced page write-out. An io context for writing page out
          *     for memory cleansing;
-         *
-         *     - glimpse. An io context to acquire glimpse lock.
          *
          *     - grouplock. An io context to acquire group lock.
          *
@@ -1761,6 +1763,7 @@ struct cl_io_pt {
 	struct iov_iter		 cip_iter;
 	struct file		*cip_file;
 	enum cl_io_type		 cip_iot;
+	unsigned int		 cip_need_restart:1;
 	loff_t			 cip_pos;
 	size_t			 cip_count;
 	ssize_t			 cip_result;
@@ -1793,6 +1796,8 @@ struct cl_io {
         struct cl_lockset              ci_lockset;
         /** lock requirements, this is just a help info for sublayers. */
         enum cl_io_lock_dmd            ci_lockreq;
+	/** layout version when this IO occurs */
+	__u32				ci_layout_version;
         union {
 		struct cl_rw_io {
 			struct iov_iter		 rw_iter;
@@ -1814,6 +1819,7 @@ struct cl_io {
 		} ci_setattr;
 		struct cl_data_version_io {
 			u64 dv_data_version;
+			u32 dv_layout_version;
 			int dv_flags;
 		} ci_data_version;
                 struct cl_fault_io {
@@ -1868,8 +1874,10 @@ struct cl_io {
 	 */
 			     ci_ignore_layout:1,
 	/**
-	 * Need MDS intervention to complete a write. This usually means the
-	 * corresponding component is not initialized for the writing extent.
+	 * Need MDS intervention to complete a write.
+	 * Write intent is required for the following cases:
+	 * 1. component being written is not initialized, or
+	 * 2. the mirrored files are NOT in WRITE_PENDING state.
 	 */
 			     ci_need_write_intent:1,
 	/**
@@ -1891,11 +1899,32 @@ struct cl_io {
 	/** Set to 1 if parallel execution is allowed for current I/O? */
 			     ci_pio:1,
 	/* Tell sublayers not to expand LDLM locks requested for this IO */
-			     ci_lock_no_expand:1;
+			     ci_lock_no_expand:1,
+	/**
+	 * Set if non-delay RPC should be used for this IO.
+	 *
+	 * If this file has multiple mirrors, and if the OSTs of the current
+	 * mirror is inaccessible, non-delay RPC would error out quickly so
+	 * that the upper layer can try to access the next mirror.
+	 */
+			     ci_ndelay:1;
+	/**
+	 * How many times the read has retried before this one.
+	 * Set by the top level and consumed by the LOV.
+	 */
+	unsigned             ci_ndelay_tried;
+	/**
+	 * Designated mirror index for this I/O.
+	 */
+	unsigned	     ci_designated_mirror;
 	/**
 	 * Number of pages owned by this IO. For invariant checking.
 	 */
 	unsigned	     ci_owned_nr;
+	/**
+	 * Range of write intent. Valid if ci_need_write_intent is set.
+	 */
+	struct lu_extent	ci_write_intent;
 };
 
 /** @} cl_io */
@@ -2353,13 +2382,12 @@ struct cl_io *cl_io_top(struct cl_io *io);
 void cl_io_print(const struct lu_env *env, void *cookie,
                  lu_printer_t printer, const struct cl_io *io);
 
-#define CL_IO_SLICE_CLEAN(foo_io, base)                                 \
-do {                                                                    \
-        typeof(foo_io) __foo_io = (foo_io);                             \
-                                                                        \
-        CLASSERT(offsetof(typeof(*__foo_io), base) == 0);               \
-        memset(&__foo_io->base + 1, 0,                                  \
-               (sizeof *__foo_io) - sizeof __foo_io->base);             \
+#define CL_IO_SLICE_CLEAN(foo_io, base)					\
+do {									\
+	typeof(foo_io) __foo_io = (foo_io);				\
+									\
+	memset(&__foo_io->base, 0,					\
+	       sizeof(*__foo_io) - offsetof(typeof(*__foo_io), base));	\
 } while (0)
 
 /** @} cl_io */

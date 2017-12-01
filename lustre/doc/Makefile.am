@@ -44,6 +44,11 @@ MANFILES =					\
 	lfs-ladvise.1				\
 	lfs_migrate.1				\
 	lfs-migrate.1				\
+	lfs-mirror-create.1			\
+	lfs-mirror-extend.1			\
+	lfs-mirror-resync.1			\
+	lfs-mirror-split.1			\
+	lfs-mirror-verify.1			\
 	lfs-mkdir.1				\
 	lfs-setdirstripe.1			\
 	lfs-setstripe.1				\

@@ -645,6 +645,12 @@ struct ll_file_data {
 	bool ll_lock_no_expand;
 	rwlock_t fd_lock; /* protect lcc list */
 	struct list_head fd_lccs; /* list of ll_cl_context */
+	/* Used by mirrored file to lead IOs to a specific mirror, usually
+	 * for mirror resync. 0 means default. */
+	__u32 fd_designated_mirror;
+	/* The layout version when resync starts. Resync I/O should carry this
+	 * layout version for verification to OST objects */
+	__u32 fd_layout_version;
 };
 
 extern struct proc_dir_entry *proc_lustre_fs_root;
@@ -878,6 +884,7 @@ int ll_fid2path(struct inode *inode, void __user *arg);
 int ll_data_version(struct inode *inode, __u64 *data_version, int flags);
 int ll_hsm_release(struct inode *inode);
 int ll_hsm_state_set(struct inode *inode, struct hsm_state_set *hss);
+void ll_io_set_mirror(struct cl_io *io, const struct file *file);
 
 /* llite/dcache.c */
 
@@ -1412,7 +1419,8 @@ static inline void d_lustre_revalidate(struct dentry *dentry)
 int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf);
 int ll_layout_refresh(struct inode *inode, __u32 *gen);
 int ll_layout_restore(struct inode *inode, loff_t start, __u64 length);
-int ll_layout_write_intent(struct inode *inode, __u64 start, __u64 end);
+int ll_layout_write_intent(struct inode *inode, enum layout_intent_opc opc,
+			   struct lu_extent *ext);
 
 int ll_xattr_init(void);
 void ll_xattr_fini(void);

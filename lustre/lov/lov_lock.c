@@ -133,14 +133,8 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 		ext.e_end  = cl_offset(obj, lock->cll_descr.cld_end + 1);
 
 	nr = 0;
-	for (index = lov_lsm_entry(lov->lo_lsm, ext.e_start);
-	     index >= 0 && index < lov->lo_lsm->lsm_entry_count; index++) {
+	lov_foreach_io_layout(index, lov_env_io(env), &ext) {
 		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
-
-		/* assume lsm entries are sorted. */
-		if (!lu_extent_is_overlapped(&ext,
-					     &lov_lse(lov, index)->lsme_extent))
-			break;
 
 		for (i = 0; i < r0->lo_nr; i++) {
 			if (likely(r0->lo_sub[i] != NULL) && /* spare layout */
@@ -161,14 +155,9 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 
 	lovlck->lls_nr = nr;
 	nr = 0;
-	for (index = lov_lsm_entry(lov->lo_lsm, ext.e_start);
-	     index >= 0 && index < lov->lo_lsm->lsm_entry_count; index++) {
+	lov_foreach_io_layout(index, lov_env_io(env), &ext) {
 		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
 
-		/* assume lsm entries are sorted. */
-		if (!lu_extent_is_overlapped(&ext,
-					     &lov_lse(lov, index)->lsme_extent))
-			break;
 		for (i = 0; i < r0->lo_nr; ++i) {
 			struct lov_lock_sub *lls = &lovlck->lls_sub[nr];
 			struct cl_lock_descr *descr = &lls->sub_lock.cll_descr;

@@ -1049,16 +1049,8 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 	else
 		ma->ma_attr_flags &= ~MDS_DATA_MODIFIED;
 
-	if (rec->sa_bias & MDS_HSM_RELEASE)
-		ma->ma_attr_flags |= MDS_HSM_RELEASE;
-	else
-		ma->ma_attr_flags &= ~MDS_HSM_RELEASE;
-
-	if (rec->sa_bias & MDS_CLOSE_LAYOUT_SWAP)
-		ma->ma_attr_flags |= MDS_CLOSE_LAYOUT_SWAP;
-	else
-		ma->ma_attr_flags &= ~MDS_CLOSE_LAYOUT_SWAP;
-
+	ma->ma_attr_flags &= ~MDS_CLOSE_INTENT;
+	ma->ma_attr_flags |= rec->sa_bias & MDS_CLOSE_INTENT;
 	RETURN(0);
 }
 
@@ -1137,7 +1129,7 @@ static int mdt_intent_close_unpack(struct mdt_thread_info *info)
 	struct req_capsule	*pill = info->mti_pill;
 	ENTRY;
 
-	if (!(ma->ma_attr_flags & (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP)))
+	if (!(ma->ma_attr_flags & MDS_CLOSE_INTENT))
 		RETURN(0);
 
 	req_capsule_extend(pill, &RQF_MDS_INTENT_CLOSE);
@@ -1554,6 +1546,35 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
         RETURN(0);
 }
 
+static int mdt_resync_unpack(struct mdt_thread_info *info)
+{
+	struct req_capsule      *pill = info->mti_pill;
+	struct mdt_reint_record *rr   = &info->mti_rr;
+	struct lu_ucred		*uc	= mdt_ucred(info);
+	struct mdt_rec_resync	*rec;
+	ENTRY;
+
+	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
+	if (rec == NULL)
+		RETURN(-EFAULT);
+
+	/* This prior initialization is needed for old_init_ucred_reint() */
+	uc->uc_fsuid = rec->rs_fsuid;
+	uc->uc_fsgid = rec->rs_fsgid;
+	uc->uc_cap   = rec->rs_cap;
+
+	rr->rr_fid1   = &rec->rs_fid;
+
+	/* cookie doesn't need to be swapped but it has been swapped
+	 * in lustre_swab_mdt_rec_reint() as rr_mtime, so here it needs
+	 * restoring. */
+	if (ptlrpc_req_need_swab(mdt_info_req(info)))
+		__swab64s(&rec->rs_handle.cookie);
+	rr->rr_handle = &rec->rs_handle;
+
+	RETURN(mdt_dlmreq_unpack(info));
+}
 
 typedef int (*reint_unpacker)(struct mdt_thread_info *info);
 
@@ -1567,6 +1588,7 @@ static reint_unpacker mdt_reint_unpackers[REINT_MAX] = {
 	[REINT_SETXATTR] = mdt_setxattr_unpack,
 	[REINT_RMENTRY]  = mdt_rmentry_unpack,
 	[REINT_MIGRATE]  = mdt_rename_unpack,
+	[REINT_RESYNC]   = mdt_resync_unpack,
 };
 
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op)

@@ -1,0 +1,85 @@
+.TH LFS-MIRROR-CREATE 1 2017-07-25 "Lustre" "Lustre Utilities"
+.SH NAME
+lfs mirror create \- create a mirrored file or directory
+.SH SYNOPSIS
+.B lfs mirror create
+<\fB\-\-mirror\-count\fR|\fB\-N\fR[\fImirror_count\fR]>
+.RI [ setstripe_options | \fB--parent ] ...
+.RI < filename | directory >
+.SH DESCRIPTION
+This command creates a mirrored file or directory specified by the path name
+\fIfilename\fR or \fIdirectory\fR.
+.br
+The \fB\-\-mirror\-count\fR|\fB\-N\fR option is required and indicates how many
+mirrors that have the same layout will be created. It can be repeated multiple
+times to separate mirrors that have different layouts. The \fImirror_count\fR
+argument is optional and defaults to 1 if it's not specified; if specified, it
+must follow the option without a space.
+.br
+The \fIsetstripe_options\fR specify the specific layout for the mirror. It can
+be a plain layout with specific striping pattern or a composite layout like
+Progressive File Layout (PFL) (see \fBlfs-setstripe\fR(1)).
+If \fIsetstripe_options\fR are not specified,
+then the stripe options inherited from the previous component will be used. If
+there is no previous component or \fB\-\-parent\fR option is specified, then the
+default stripe options inherited from parent directory will be used. For stripe
+options, only \fIstripe_count\fR, \fIstripe_size\fR and OST \fIpool_name\fR can
+be inherited.
+.br
+If no option is specified, then the command will return an error.
+.SH OPTIONS
+.TP
+.BR \-\-mirror\-count\fR|\fB\-N\fR[\fImirror_count\fR]
+The number of mirrors that have the same layout to be created. The option can be
+repeated multiple times to separate mirrors that have different layouts. The
+\fImirror_count\fR argument is optional and defaults to 1 if it's not specified;
+if specified, it must follow the option without a space.
+.TP
+.I setstripe_options
+The layout of one mirror. The options are the same as those for
+\fBlfs-setstripe\fR(1) command.
+If \fIsetstripe_options\fR are not specified, then
+the stripe options inherited from the previous component will be used.
+.TP
+.B \-\-parent
+This option indicates that the default stripe options inherited from parent
+directory will be used.
+.SH EXAMPLES
+.TP
+.B lfs mirror create -N2 /mnt/lustre/file1
+Create a mirrored file with 2 mirrors. Each mirror has the same default striping
+pattern inherited from parent directory or filesystem-wide default.
+.TP
+.B lfs mirror create -N2 -E 1M -E eof -c -1 /mnt/lustre/dir1
+Create a mirrored directory with 2 PFL mirrors. Each mirror has the same
+specified PFL layout.
+.LP
+.B lfs mirror create -N3 -E 1M -c 1 -E 32M -c 4 -S 16M -E eof -c -1
+.B /mnt/lustre/file1
+.in
+Create a mirrored file with 3 PFL mirrors. Each mirror has the same specified
+PFL layout.
+.TP
+.B lfs mirror create -N -c 1 -S 4M -N -c 2 -o 2,3 -N --parent /mnt/lustre/file1
+Create a mirrored file with 3 plain layout mirrors. The first mirror has a
+single stripe and 4MB stripe size. The second mirror has two stripes and locates
+on OSTs with indices 2 and 3. It also has 4MB stripe size inherited from the
+first mirror. The third mirror has default striping pattern inherited from
+parent directory.
+.LP
+.B lfs mirror create -N2 -E 4M -c 2 --pool flash -E eof -c 4 -N3 -E 16M -c 4 -S
+.B 16M --pool archive -E eof -c -1 /mnt/lustre/file1
+.in
+Create a mirrored file with 5 PFL mirrors. The first and second mirrors have the
+same PFL layout, and both of the components are allocated from the \fBflash\fR
+OST pool. The last three mirrors have the same PFL layout, and each of these
+components have a stripe size of 16MB and use OSTs in the \fBarchive\fR pool.
+.SH AUTHOR
+The \fBlfs mirror create\fR command is part of the Lustre filesystem.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-setstripe (1),
+.BR lfs-mirror-extend (1),
+.BR lfs-mirror-split (1),
+.BR lfs-mirror-resync (1),
+.BR lfs-mirror-verify (1)

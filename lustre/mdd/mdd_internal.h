@@ -578,20 +578,17 @@ mdo_invalidate(const struct lu_env *env, struct mdd_object *obj)
 
 static inline int
 mdo_declare_layout_change(const struct lu_env *env, struct mdd_object *obj,
-			  struct layout_intent *layout,
-			  const struct lu_buf *buf, struct thandle *handle)
+			  struct md_layout_change *mlc, struct thandle *handle)
 {
 	return dt_declare_layout_change(env, mdd_object_child(obj),
-					layout, buf, handle);
+					mlc, handle);
 }
 
 static inline int
 mdo_layout_change(const struct lu_env *env, struct mdd_object *obj,
-		  struct layout_intent *layout, const struct lu_buf *buf,
-		  struct thandle *handle)
+		  struct md_layout_change *mlc, struct thandle *handle)
 {
-	return dt_layout_change(env, mdd_object_child(obj),
-				layout, buf, handle);
+	return dt_layout_change(env, mdd_object_child(obj), mlc, handle);
 }
 
 static inline

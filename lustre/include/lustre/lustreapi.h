@@ -154,13 +154,14 @@ int llapi_file_lookup(int dirfd, const char *name);
 #define VERBOSE_COMP_ID		0x2000
 #define VERBOSE_DFID		0x4000
 #define VERBOSE_HASH_TYPE	0x8000
+#define VERBOSE_MIRROR_COUNT	0x10000
 #define VERBOSE_DEFAULT		(VERBOSE_COUNT | VERBOSE_SIZE | \
 				 VERBOSE_OFFSET | VERBOSE_POOL | \
 				 VERBOSE_OBJID | VERBOSE_GENERATION | \
 				 VERBOSE_LAYOUT | VERBOSE_HASH_TYPE | \
 				 VERBOSE_COMP_COUNT | VERBOSE_COMP_FLAGS | \
 				 VERBOSE_COMP_START | VERBOSE_COMP_END | \
-				 VERBOSE_COMP_ID)
+				 VERBOSE_COMP_ID | VERBOSE_MIRROR_COUNT)
 
 struct find_param {
 	unsigned int		 fp_max_depth;
@@ -351,6 +352,7 @@ int llapi_get_version_string(char *version, unsigned int version_size);
 int llapi_get_version(char *buffer, int buffer_size, char **version)
 	__attribute__((deprecated));
 int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags);
+extern int llapi_get_ost_layout_version(int fd, __u32 *layout_version);
 int llapi_hsm_state_get_fd(int fd, struct hsm_user_state *hus);
 int llapi_hsm_state_get(const char *path, struct hsm_user_state *hus);
 int llapi_hsm_state_set_fd(int fd, __u64 setmask, __u64 clearmask,
@@ -443,6 +445,7 @@ int llapi_json_write_list(struct llapi_json_item_list **item_list, FILE *fp);
 int llapi_lease_get(int fd, int mode);
 int llapi_lease_check(int fd);
 int llapi_lease_put(int fd);
+extern int llapi_lease_get_ext(int fd, struct ll_ioc_lease *data);
 
 /* Group lock */
 int llapi_group_lock(int fd, int gid);
@@ -455,9 +458,42 @@ int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
 
 /* llapi_layout user interface */
 
+static inline const char *lcm_flags_string(__u16 flags)
+{
+	switch (flags & LCM_FL_FLR_MASK) {
+	case LCM_FL_NOT_FLR:
+		return "not_flr";
+	case LCM_FL_RDONLY:
+		return "ro";
+	case LCM_FL_WRITE_PENDING:
+		return "wp";
+	case LCM_FL_SYNC_PENDING:
+		return "sp";
+	default:
+		return "";
+	}
+}
+
+/**
+ * An array element storing component info to be resynced during mirror
+ * resynchronization.
+ */
+struct llapi_resync_comp {
+	uint64_t lrc_start;
+	uint64_t lrc_end;
+	uint32_t lrc_mirror_id;
+	uint32_t lrc_id;	/* component id */
+	bool lrc_synced;
+};
+
 /** Opaque data type abstracting the layout of a Lustre file. */
 struct llapi_layout;
 
+int llapi_mirror_find_stale(struct llapi_layout *layout,
+		struct llapi_resync_comp *comp, size_t comp_size,
+		__u16 *mirror_ids, int ids_nr);
+ssize_t llapi_mirror_resync_one(int fd, struct llapi_layout *layout,
+				uint32_t dst, uint64_t start, uint64_t end);
 /*
  * Flags to control how layouts are retrieved.
  */
@@ -506,6 +542,19 @@ struct llapi_layout *llapi_layout_alloc(void);
  * Free memory allocated for \a layout.
  */
 void llapi_layout_free(struct llapi_layout *layout);
+
+/**
+ * llapi_layout_merge() - Merge a composite layout into another one.
+ * @dst_layout: Destination composite layout.
+ * @src_layout: Source composite layout.
+ *
+ * This function copies all of the components from @src_layout and
+ * appends them to @dst_layout.
+ *
+ * Return: 0 on success or -1 on failure.
+ */
+int llapi_layout_merge(struct llapi_layout **dst_layout,
+		       const struct llapi_layout *src_layout);
 
 /** Not a valid stripe size, offset, or RAID pattern. */
 #define LLAPI_LAYOUT_INVALID	0x1000000000000001ULL
@@ -730,6 +779,37 @@ int llapi_layout_file_create(const char *path, int open_flags, int mode,
 			     const struct llapi_layout *layout);
 
 /**
+ * Set flags to the header of component layout.
+ */
+int llapi_layout_flags_set(struct llapi_layout *layout, uint32_t flags);
+int llapi_layout_flags_get(struct llapi_layout *layout, uint32_t *flags);
+
+/**
+ * llapi_layout_mirror_count_get() - Get mirror count from the header of
+ *				     a layout.
+ * @layout: Layout to get mirror count from.
+ * @count:  Returned mirror count value.
+ *
+ * This function gets mirror count from the header of a layout.
+ *
+ * Return: 0 on success or -1 on failure.
+ */
+int llapi_layout_mirror_count_get(struct llapi_layout *layout,
+				  uint16_t *count);
+
+/**
+ * llapi_layout_mirror_count_set() - Set mirror count to the header of a layout.
+ * @layout: Layout to set mirror count in.
+ * @count:  Mirror count value to be set.
+ *
+ * This function sets mirror count to the header of a layout.
+ *
+ * Return: 0 on success or -1 on failure.
+ */
+int llapi_layout_mirror_count_set(struct llapi_layout *layout,
+				  uint16_t count);
+
+/**
  * Fetch the start and end offset of the current layout component.
  */
 int llapi_layout_comp_extent_get(const struct llapi_layout *layout,
@@ -746,12 +826,10 @@ static const struct comp_flag_name {
 	const char *cfn_name;
 } comp_flags_table[] = {
 	{ LCME_FL_INIT,		"init" },
-	/* For now, only "init" is supported
 	{ LCME_FL_PRIMARY,	"primary" },
 	{ LCME_FL_STALE,	"stale" },
 	{ LCME_FL_OFFLINE,	"offline" },
 	{ LCME_FL_PREFERRED,	"preferred" }
-	*/
 };
 
 /**
@@ -771,6 +849,10 @@ int llapi_layout_comp_flags_clear(struct llapi_layout *layout, uint32_t flags);
  * Fetches the file-unique component ID of the current layout component.
  */
 int llapi_layout_comp_id_get(const struct llapi_layout *layout, uint32_t *id);
+/**
+ * Fetches the mirror ID of the current layout component.
+ */
+int llapi_layout_mirror_id_get(const struct llapi_layout *layout, uint32_t *id);
 /**
  * Adds one component to the existing composite or plain layout.
  */
@@ -818,6 +900,18 @@ int llapi_layout_file_comp_set(const char *path,
  * Check if the file layout is composite.
  */
 bool llapi_layout_is_composite(struct llapi_layout *layout);
+
+/**
+ * FLR: mirror operation APIs
+ */
+int llapi_mirror_set(int fd, unsigned int id);
+int llapi_mirror_clear(int fd);
+ssize_t llapi_mirror_read(int fd, unsigned int id,
+			   void *buf, size_t count, off_t pos);
+ssize_t llapi_mirror_copy_many(int fd, unsigned int src,
+				unsigned int *dst, size_t count);
+int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst,
+		       off_t pos, size_t count);
 
 /** @} llapi */
 

@@ -415,6 +415,8 @@ typedef __u64 dt_obj_version_t;
 
 union ldlm_policy_data;
 
+struct md_layout_change;
+
 /**
  * A dt_object provides common operations to create and destroy
  * objects and to manage regular and extended attributes.
@@ -1039,8 +1041,7 @@ struct dt_object_operations {
 	 */
 	int (*do_declare_layout_change)(const struct lu_env *env,
 					struct dt_object *dt,
-					struct layout_intent *layout,
-					const struct lu_buf *buf,
+					struct md_layout_change *mlc,
 					struct thandle *th);
 
 	/**
@@ -1056,8 +1057,8 @@ struct dt_object_operations {
 	 * \retval -ne		error code
 	 */
 	int (*do_layout_change)(const struct lu_env *env, struct dt_object *dt,
-				struct layout_intent *layout,
-				const struct lu_buf *buf, struct thandle *th);
+				struct md_layout_change *mlc,
+				struct thandle *th);
 };
 
 enum dt_bufs_type {
@@ -2748,26 +2749,24 @@ static inline int dt_lookup(const struct lu_env *env,
 
 static inline int dt_declare_layout_change(const struct lu_env *env,
 					   struct dt_object *o,
-					   struct layout_intent *layout,
-					   const struct lu_buf *buf,
+					   struct md_layout_change *mlc,
 					   struct thandle *th)
 {
 	LASSERT(o);
 	LASSERT(o->do_ops);
 	LASSERT(o->do_ops->do_declare_layout_change);
-	return o->do_ops->do_declare_layout_change(env, o, layout, buf, th);
+	return o->do_ops->do_declare_layout_change(env, o, mlc, th);
 }
 
 static inline int dt_layout_change(const struct lu_env *env,
 				   struct dt_object *o,
-				   struct layout_intent *layout,
-				   const struct lu_buf *buf,
+				   struct md_layout_change *mlc,
 				   struct thandle *th)
 {
 	LASSERT(o);
 	LASSERT(o->do_ops);
 	LASSERT(o->do_ops->do_layout_change);
-	return o->do_ops->do_layout_change(env, o, layout, buf, th);
+	return o->do_ops->do_layout_change(env, o, mlc, th);
 }
 
 struct dt_find_hint {

@@ -325,6 +325,8 @@ int ofd_start_inconsistency_verification_thread(struct ofd_device *ofd);
 int ofd_stop_inconsistency_verification_thread(struct ofd_device *ofd);
 int ofd_verify_ff(const struct lu_env *env, struct ofd_object *fo,
 		  struct obdo *oa);
+int ofd_verify_layout_version(const struct lu_env *env,
+			      struct ofd_object *fo, const struct obdo *oa);
 int ofd_preprw(const struct lu_env *env,int cmd, struct obd_export *exp,
 	       struct obdo *oa, int objcount, struct obd_ioobj *obj,
 	       struct niobuf_remote *rnb, int *nr_local,
@@ -358,6 +360,8 @@ struct ofd_object *ofd_object_find(const struct lu_env *env,
 				   struct ofd_device *ofd,
 				   const struct lu_fid *fid);
 int ofd_object_ff_load(const struct lu_env *env, struct ofd_object *fo);
+int ofd_object_ff_update(const struct lu_env *env, struct ofd_object *fo,
+			 const struct obdo *oa, struct filter_fid *ff);
 int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 			  u64 id, struct ofd_seq *oseq, int nr, int sync);
 
@@ -367,10 +371,10 @@ static inline void ofd_object_put(const struct lu_env *env,
 	dt_object_put(env, &fo->ofo_obj);
 }
 int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
-		 struct lu_attr *la, struct filter_fid *ff);
+		 struct lu_attr *la, struct obdo *oa);
 int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
 		     __u64 start, __u64 end, struct lu_attr *la,
-		     struct filter_fid *ff, struct obdo *oa);
+		     struct obdo *oa);
 int ofd_destroy(const struct lu_env *, struct ofd_object *, int);
 int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 		 struct lu_attr *la);
@@ -483,23 +487,6 @@ static inline void ofd_slc_set(struct ofd_device *ofd)
 		ofd->ofd_lut.lut_sync_lock_cancel = NEVER_SYNC_ON_CANCEL;
 	else if (ofd->ofd_lut.lut_sync_lock_cancel == NEVER_SYNC_ON_CANCEL)
 		ofd->ofd_lut.lut_sync_lock_cancel = ALWAYS_SYNC_ON_CANCEL;
-}
-
-static inline void ofd_prepare_fidea(struct filter_fid *ff,
-				     const struct obdo *oa)
-{
-	/* packing fid and converting it to LE for storing into EA.
-	 * Here ->o_stripe_idx should be filled by LOV and rest of
-	 * fields - by client. */
-	ff->ff_parent.f_seq = cpu_to_le64(oa->o_parent_seq);
-	ff->ff_parent.f_oid = cpu_to_le32(oa->o_parent_oid);
-	/* XXX: we are ignoring o_parent_ver here, since this should
-	 *      be the same for all objects in this fileset. */
-	ff->ff_parent.f_ver = cpu_to_le32(oa->o_stripe_idx);
-	if (oa->o_valid & OBD_MD_FLOSTLAYOUT)
-		ost_layout_cpu_to_le(&ff->ff_layout, &oa->o_layout);
-	else
-		memset(&ff->ff_layout, 0, sizeof(ff->ff_layout));
 }
 
 static inline int ofd_validate_seq(struct obd_export *exp, __u64 seq)

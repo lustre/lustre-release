@@ -197,6 +197,9 @@ struct filter_fid_old {
 struct filter_fid {
 	struct lu_fid		ff_parent;
 	struct ost_layout	ff_layout;
+	__u32			ff_layout_version;
+	__u32			ff_range; /* range of layout version that
+					   * write are allowed */
 } __attribute__((packed));
 
 /* Userspace should treat lu_fid as opaque, and only use the following methods
@@ -278,6 +281,17 @@ struct lustre_ost_attrs {
  */
 #define LMA_OLD_SIZE (sizeof(struct lustre_mdt_attrs) + 5 * sizeof(__u64))
 
+enum {
+	LSOM_FL_VALID = 1 << 0,
+};
+
+struct lustre_som_attrs {
+	__u16	lsa_valid;
+	__u16	lsa_reserved[3];
+	__u64	lsa_size;
+	__u64	lsa_blocks;
+};
+
 /**
  * OST object IDentifier.
  */
@@ -302,6 +316,31 @@ struct ll_futimes_3 {
 	__u64 lfu_mtime_nsec;
 	__u64 lfu_ctime_sec;
 	__u64 lfu_ctime_nsec;
+};
+
+/*
+ * Maximum number of mirrors currently implemented.
+ */
+#define LUSTRE_MIRROR_COUNT_MAX		16
+
+/* Lease types for use as arg and return of LL_IOC_{GET,SET}_LEASE ioctl. */
+enum ll_lease_mode {
+	LL_LEASE_RDLCK	= 0x01,
+	LL_LEASE_WRLCK	= 0x02,
+	LL_LEASE_UNLCK	= 0x04,
+};
+
+enum ll_lease_flags {
+	LL_LEASE_RESYNC		= 0x1,
+	LL_LEASE_RESYNC_DONE	= 0x2,
+};
+
+#define IOC_IDS_MAX	4096
+struct ll_ioc_lease {
+	__u32		lil_mode;
+	__u32		lil_flags;
+	__u32		lil_count;
+	__u32		lil_ids[0];
 };
 
 /*
@@ -343,6 +382,7 @@ struct ll_futimes_3 {
 #define LL_IOC_GET_CONNECT_FLAGS        _IOWR('f', 174, __u64 *)
 #define LL_IOC_GET_MDTIDX               _IOR ('f', 175, int)
 #define LL_IOC_FUTIMES_3		_IOWR('f', 176, struct ll_futimes_3)
+#define LL_IOC_FLR_SET_MIRROR		_IOW ('f', 177, long)
 /*	lustre_ioctl.h			177-210 */
 #define LL_IOC_HSM_STATE_GET		_IOR('f', 211, struct hsm_user_state)
 #define LL_IOC_HSM_STATE_SET		_IOW('f', 212, struct hsm_state_set)
@@ -360,7 +400,8 @@ struct ll_futimes_3 {
 #define LL_IOC_LMV_SETSTRIPE		_IOWR('f', 240, struct lmv_user_md)
 #define LL_IOC_LMV_GETSTRIPE		_IOWR('f', 241, struct lmv_user_md)
 #define LL_IOC_REMOVE_ENTRY		_IOWR('f', 242, __u64)
-#define LL_IOC_SET_LEASE		_IOWR('f', 243, long)
+#define LL_IOC_SET_LEASE		_IOWR('f', 243, struct ll_ioc_lease)
+#define LL_IOC_SET_LEASE_OLD		_IOWR('f', 243, long)
 #define LL_IOC_GET_LEASE		_IO('f', 244)
 #define LL_IOC_HSM_IMPORT		_IOWR('f', 245, struct hsm_user_import)
 #define LL_IOC_LMV_SET_DEFAULT_STRIPE	_IOWR('f', 246, struct lmv_user_md)
@@ -386,13 +427,6 @@ struct fsxattr {
 #define LL_IOC_FSGETXATTR		FS_IOC_FSGETXATTR
 #define LL_IOC_FSSETXATTR		FS_IOC_FSSETXATTR
 
-
-/* Lease types for use as arg and return of LL_IOC_{GET,SET}_LEASE ioctl. */
-enum ll_lease_type {
-	LL_LEASE_RDLCK	= 0x1,
-	LL_LEASE_WRLCK	= 0x2,
-	LL_LEASE_UNLCK	= 0x4,
-};
 
 #define LL_STATFS_LMV		1
 #define LL_STATFS_LOV		2
@@ -518,13 +552,18 @@ struct lu_extent {
 	__u64	e_end;
 };
 
-#define DEXT "[ %#llx , %#llx )"
+#define DEXT "[%#llx, %#llx)"
 #define PEXT(ext) (ext)->e_start, (ext)->e_end
 
 static inline bool lu_extent_is_overlapped(struct lu_extent *e1,
 					   struct lu_extent *e2)
 {
 	return e1->e_start < e2->e_end && e2->e_start < e1->e_end;
+}
+
+static inline bool lu_extent_is_whole(struct lu_extent *e)
+{
+	return e->e_start == 0 && e->e_end == LUSTRE_EOF;
 }
 
 enum lov_comp_md_entry_flags {
@@ -538,6 +577,10 @@ enum lov_comp_md_entry_flags {
 };
 
 #define LCME_KNOWN_FLAGS	(LCME_FL_NEG | LCME_FL_INIT)
+
+/* the highest bit in obdo::o_layout_version is used to mark if the file is
+ * being resynced. */
+#define LU_LAYOUT_RESYNC	LCME_FL_NEG
 
 /* lcme_id can be specified as certain flags, and the the first
  * bit of lcme_id is used to indicate that the ID is representing
@@ -562,7 +605,33 @@ struct lov_comp_md_entry_v1 {
 	__u64			lcme_padding[2];
 } __attribute__((packed));
 
-enum lov_comp_md_flags;
+#define SEQ_ID_MAX		0x0000FFFF
+#define SEQ_ID_MASK		SEQ_ID_MAX
+/* bit 30:16 of lcme_id is used to store mirror id */
+#define MIRROR_ID_MASK		0x7FFF0000
+#define MIRROR_ID_SHIFT		16
+
+static inline __u32 pflr_id(__u16 mirror_id, __u16 seqid)
+{
+	return ((mirror_id << MIRROR_ID_SHIFT) & MIRROR_ID_MASK) | seqid;
+}
+
+static inline __u16 mirror_id_of(__u32 id)
+{
+	return (id & MIRROR_ID_MASK) >> MIRROR_ID_SHIFT;
+}
+
+/**
+ * on-disk data for lcm_flags. Valid if lcm_magic is LOV_MAGIC_COMP_V1.
+ */
+enum lov_comp_md_flags {
+	/* the least 2 bits are used by FLR to record file state */
+	LCM_FL_NOT_FLR          = 0,
+	LCM_FL_RDONLY           = 1,
+	LCM_FL_WRITE_PENDING    = 2,
+	LCM_FL_SYNC_PENDING     = 3,
+	LCM_FL_FLR_MASK         = 0x3,
+};
 
 struct lov_comp_md_v1 {
 	__u32	lcm_magic;      /* LOV_USER_MAGIC_COMP_V1 */
@@ -570,10 +639,18 @@ struct lov_comp_md_v1 {
 	__u32	lcm_layout_gen;
 	__u16	lcm_flags;
 	__u16	lcm_entry_count;
-	__u64	lcm_padding1;
+	/* lcm_mirror_count stores the number of actual mirrors minus 1,
+	 * so that non-flr files will have value 0 meaning 1 mirror. */
+	__u16	lcm_mirror_count;
+	__u16	lcm_padding1[3];
 	__u64	lcm_padding2;
 	struct lov_comp_md_entry_v1 lcm_entries[0];
 } __attribute__((packed));
+
+/*
+ * Maximum number of mirrors Lustre can support.
+ */
+#define LUSTRE_MIRROR_COUNT_MAX		16
 
 static inline __u32 lov_user_md_size(__u16 stripes, __u32 lmm_magic)
 {
@@ -862,6 +939,8 @@ struct if_quotactl {
 #define SWAP_LAYOUTS_KEEP_MTIME		(1 << 2)
 #define SWAP_LAYOUTS_KEEP_ATIME		(1 << 3)
 #define SWAP_LAYOUTS_CLOSE		(1 << 4)
+#define MERGE_LAYOUTS_CLOSE		(1 << 5)
+#define INTENT_LAYOUTS_CLOSE	(SWAP_LAYOUTS_CLOSE | MERGE_LAYOUTS_CLOSE)
 
 /* Swap XATTR_NAME_HSM as well, only on the MDT so far */
 #define SWAP_LAYOUTS_MDS_HSM		(1 << 31)
@@ -898,6 +977,8 @@ enum changelog_rec_type {
 	CL_CTIME    = 18,
 	CL_ATIME    = 19,
 	CL_MIGRATE  = 20,
+	CL_FLRW     = 21, /* FLR: file was firstly written */
+	CL_RESYNC   = 22, /* FLR: file was resync-ed */
 	CL_LAST
 };
 
@@ -905,7 +986,8 @@ static inline const char *changelog_type2str(int type) {
 	static const char *changelog_str[] = {
 		"MARK",  "CREAT", "MKDIR", "HLINK", "SLINK", "MKNOD", "UNLNK",
 		"RMDIR", "RENME", "RNMTO", "OPEN",  "CLOSE", "LYOUT", "TRUNC",
-		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME", "MIGRT"
+		"SATTR", "XATTR", "HSM",   "MTIME", "CTIME", "ATIME", "MIGRT",
+		"FLRW",  "RESYNC",
 	};
 
 	if (type >= 0 && type < CL_LAST)
@@ -1266,11 +1348,15 @@ enum changelog_message_type {
 /********* Misc **********/
 
 struct ioc_data_version {
-	__u64 idv_version;
-	__u64 idv_flags;     /* See LL_DV_xxx */
+	__u64	idv_version;
+	__u32	idv_layout_version; /* FLR: layout version for OST objects */
+	__u32	idv_flags;	/* enum ioc_data_version_flags */
 };
-#define LL_DV_RD_FLUSH (1 << 0) /* Flush dirty pages from clients */
-#define LL_DV_WR_FLUSH (1 << 1) /* Flush all caching pages from clients */
+
+enum ioc_data_version_flags {
+	LL_DV_RD_FLUSH	= (1 << 0), /* Flush dirty pages from clients */
+	LL_DV_WR_FLUSH	= (1 << 1), /* Flush all caching pages from clients */
+};
 
 #ifndef offsetof
 #define offsetof(typ, memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))

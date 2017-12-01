@@ -2196,6 +2196,85 @@ static int mdt_reint_migrate(struct mdt_thread_info *info,
 	return mdt_reint_rename_or_migrate(info, lhc, false);
 }
 
+static int mdt_reint_resync(struct mdt_thread_info *info,
+			    struct mdt_lock_handle *lhc)
+{
+	struct mdt_reint_record	*rr = &info->mti_rr;
+	struct ptlrpc_request	*req = mdt_info_req(info);
+	struct md_attr		*ma = &info->mti_attr;
+	struct mdt_object       *mo;
+	struct ldlm_lock	*lease;
+	struct mdt_body         *repbody;
+	struct md_layout_change	 layout = { 0 };
+	bool			 lease_broken;
+	int			 rc, rc2;
+	ENTRY;
+
+	DEBUG_REQ(D_INODE, req, DFID": FLR file resync\n", PFID(rr->rr_fid1));
+
+	if (info->mti_dlm_req)
+		ldlm_request_cancel(req, info->mti_dlm_req, 0, LATF_SKIP);
+
+	mo = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
+	if (IS_ERR(mo))
+		GOTO(out, rc = PTR_ERR(mo));
+
+	if (!mdt_object_exists(mo))
+		GOTO(out_obj, rc = -ENOENT);
+
+	if (!S_ISREG(lu_object_attr(&mo->mot_obj)))
+		GOTO(out_obj, rc = -EINVAL);
+
+	if (mdt_object_remote(mo))
+		GOTO(out_obj, rc = -EREMOTE);
+
+	lease = ldlm_handle2lock(rr->rr_handle);
+	if (lease == NULL)
+		GOTO(out_obj, rc = -ESTALE);
+
+	/* It's really necessary to grab open_sem and check if the lease lock
+	 * has been lost. There would exist a concurrent writer coming in and
+	 * generating some dirty data in memory cache, the writeback would fail
+	 * after the layout version is increased by MDS_REINT_RESYNC RPC. */
+	if (!down_write_trylock(&mo->mot_open_sem))
+		GOTO(out_put_lease, rc = -EBUSY);
+
+	lock_res_and_lock(lease);
+	lease_broken = ldlm_is_cancel(lease);
+	unlock_res_and_lock(lease);
+	if (lease_broken)
+		GOTO(out_unlock, rc = -EBUSY);
+
+	/* the file has yet opened by anyone else after we took the lease. */
+	layout.mlc_opc = MD_LAYOUT_RESYNC;
+	rc = mdt_layout_change(info, mo, &layout);
+	if (rc)
+		GOTO(out_unlock, rc = -EBUSY);
+
+	ma->ma_need = MA_INODE;
+	ma->ma_valid = 0;
+	rc = mdt_attr_get_complex(info, mo, ma);
+	if (rc != 0)
+		GOTO(out_unlock, rc);
+
+	repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+	mdt_pack_attr2body(info, repbody, &ma->ma_attr, mdt_object_fid(mo));
+
+	EXIT;
+out_unlock:
+	up_write(&mo->mot_open_sem);
+out_put_lease:
+	LDLM_LOCK_PUT(lease);
+out_obj:
+	mdt_object_put(info->mti_env, mo);
+out:
+	mdt_client_compatibility(info);
+	rc2 = mdt_fix_reply(info);
+	if (rc == 0)
+		rc = rc2;
+	return rc;
+}
+
 struct mdt_reinter {
 	int (*mr_handler)(struct mdt_thread_info *, struct mdt_lock_handle *);
 	enum lprocfs_extra_opc mr_extra_opc;
@@ -2237,6 +2316,10 @@ static const struct mdt_reinter mdt_reinters[] = {
 	[REINT_MIGRATE] = {
 		.mr_handler = &mdt_reint_migrate,
 		.mr_extra_opc = MDS_REINT_RENAME,
+	},
+	[REINT_RESYNC] = {
+		.mr_handler = &mdt_reint_resync,
+		.mr_extra_opc = MDS_REINT_RESYNC,
 	},
 };
 

@@ -250,6 +250,7 @@ struct lod_default_striping {
 	/* default LOV */
 	/* current layout component count */
 	__u16				lds_def_comp_cnt;
+	__u16				lds_def_mirror_cnt;
 	/* the largest comp count ever used */
 	__u32				lds_def_comp_size_cnt;
 	struct lod_layout_component	*lds_def_comp_entries;
@@ -264,6 +265,15 @@ struct lod_default_striping {
 					lds_dir_def_striping_set:1;
 };
 
+struct lod_mirror_entry {
+	__u16	lme_stale:1;
+	/* mirror id */
+	__u16	lme_id;
+	/* start,end index of this mirror in ldo_comp_entries */
+	__u16	lme_start;
+	__u16	lme_end;
+};
+
 struct lod_object {
 	/* common fields for both files and directories */
 	struct dt_object		ldo_obj;
@@ -274,7 +284,12 @@ struct lod_object {
 			/* Layout component count for a regular file.
 			 * It equals to 1 for non-composite layout. */
 			__u16		ldo_comp_cnt;
+			/* Layout mirror count for a PFLR file.
+			 * It's 0 for files with non-composite layout. */
+			__u16		ldo_mirror_count;
+			struct lod_mirror_entry	*ldo_mirrors;
 			__u32		ldo_is_composite:1,
+					ldo_flr_state:2,
 					ldo_comp_cached:1;
 		};
 		/* directory stripe (LMV) */
@@ -329,15 +344,13 @@ static inline int lod_set_pool(char **pool, const char *new_pool)
 static inline int lod_set_def_pool(struct lod_default_striping *lds,
 				   int i, const char *new_pool)
 {
-	return lod_set_pool(&lds->lds_def_comp_entries[i].llc_pool,
-			    new_pool);
+	return lod_set_pool(&lds->lds_def_comp_entries[i].llc_pool, new_pool);
 }
 
 static inline int lod_obj_set_pool(struct lod_object *lo, int i,
 				   const char *new_pool)
 {
-	return lod_set_pool(&lo->ldo_comp_entries[i].llc_pool,
-			    new_pool);
+	return lod_set_pool(&lo->ldo_comp_entries[i].llc_pool, new_pool);
 }
 
 /**
@@ -395,6 +408,10 @@ struct lod_thread_info {
 	/* used to store parent default striping in create */
 	struct lod_default_striping	lti_def_striping;
 	struct filter_fid lti_ff;
+	__u32				*lti_comp_idx;
+	size_t				lti_comp_size;
+	size_t				lti_count;
+	struct lu_attr			lti_layout_attr;
 };
 
 extern const struct lu_device_operations lod_lu_ops;
@@ -435,6 +452,11 @@ static inline struct lod_object *lu2lod_obj(struct lu_object *o)
 static inline struct lu_object *lod2lu_obj(struct lod_object *obj)
 {
 	return &obj->ldo_obj.do_lu;
+}
+
+static inline const struct lu_fid *lod_object_fid(struct lod_object *obj)
+{
+	return lu_object_fid(lod2lu_obj(obj));
 }
 
 static inline struct lod_object *lod_obj(const struct lu_object *o)
@@ -598,15 +620,16 @@ int lod_parse_dir_striping(const struct lu_env *env, struct lod_object *lo,
 			   const struct lu_buf *buf);
 int lod_initialize_objects(const struct lu_env *env, struct lod_object *mo,
 			   struct lov_ost_data_v1 *objs, int index);
-int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
-			bool is_from_disk, __u64 start);
+int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
+			const struct lu_buf *buf, bool is_from_disk);
 int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		       struct lov_mds_md *lmm, int *lmm_size, bool is_dir);
 int lod_ea_store_resize(struct lod_thread_info *info, size_t size);
 int lod_def_striping_comp_resize(struct lod_default_striping *lds, __u16 count);
 void lod_free_def_comp_entries(struct lod_default_striping *lds);
 void lod_free_comp_entries(struct lod_object *lo);
-int lod_alloc_comp_entries(struct lod_object *lo, int cnt);
+int lod_alloc_comp_entries(struct lod_object *lo, int mirror_cnt, int comp_cnt);
+int lod_fill_mirrors(struct lod_object *lo);
 
 /* lod_pool.c */
 int lod_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count);
@@ -623,18 +646,25 @@ int lod_pool_new(struct obd_device *obd, char *poolname);
 int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname);
 int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 
+struct lod_obj_stripe_cb_data;
+typedef int (*lod_obj_stripe_cb_t)(const struct lu_env *env,
+				   struct lod_object *lo, struct dt_object *dt,
+				   struct thandle *th,
+				   int comp_idx, int stripe_idx,
+				   struct lod_obj_stripe_cb_data *data);
+typedef bool (*lod_obj_comp_skip_cb_t)(const struct lu_env *env,
+					struct lod_object *lo, int comp_idx,
+					struct lod_obj_stripe_cb_data *data);
 struct lod_obj_stripe_cb_data {
 	union {
 		const struct lu_attr	*locd_attr;
 		struct ost_pool		*locd_inuse;
 	};
-	bool	locd_declare;
+	lod_obj_stripe_cb_t		locd_stripe_cb;
+	lod_obj_comp_skip_cb_t		locd_comp_skip_cb;
+	bool				locd_declare;
 };
 
-typedef int (*lod_obj_stripe_cb_t)(const struct lu_env *env,
-				   struct lod_object *lo, struct dt_object *dt,
-				   struct thandle *th, int stripe_idx,
-				   struct lod_obj_stripe_cb_data *data);
 /* lod_qos.c */
 int lod_prepare_inuse(const struct lu_env *env, struct lod_object *lo);
 int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
@@ -647,7 +677,7 @@ int lod_use_defined_striping(const struct lu_env *, struct lod_object *,
 			     const struct lu_buf *);
 int lod_obj_stripe_set_inuse_cb(const struct lu_env *env, struct lod_object *lo,
 				struct dt_object *dt, struct thandle *th,
-				int stripe_idx,
+				int comp_idx, int stripe_idx,
 				struct lod_obj_stripe_cb_data *data);
 int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 			 const struct lu_buf *buf);
@@ -679,7 +709,7 @@ int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 void lod_object_free_striping(const struct lu_env *env, struct lod_object *lo);
 
 int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
-			    struct thandle *th, lod_obj_stripe_cb_t cb,
+			    struct thandle *th,
 			    struct lod_obj_stripe_cb_data *data);
 
 /* lod_sub_object.c */

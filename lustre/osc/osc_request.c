@@ -1778,7 +1778,7 @@ static int brw_interpret(const struct lu_env *env,
         CDEBUG(D_INODE, "request %p aa %p rc %d\n", req, aa, rc);
         /* When server return -EINPROGRESS, client should always retry
          * regardless of the number of times the bulk was resent already. */
-	if (osc_recoverable_error(rc)) {
+	if (osc_recoverable_error(rc) && !req->rq_no_delay) {
 		if (req->rq_import_generation !=
 		    req->rq_import->imp_generation) {
 			CDEBUG(D_HA, "%s: resend cross eviction for object: "
@@ -1859,7 +1859,8 @@ static int brw_interpret(const struct lu_env *env,
 
 	list_for_each_entry_safe(ext, tmp, &aa->aa_exts, oe_link) {
 		list_del_init(&ext->oe_link);
-		osc_extent_finish(env, ext, 1, rc);
+		osc_extent_finish(env, ext, 1,
+				  rc && req->rq_no_delay ? -EWOULDBLOCK : rc);
 	}
 	LASSERT(list_empty(&aa->aa_exts));
 	LASSERT(list_empty(&aa->aa_oaps));
@@ -1927,9 +1928,11 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	int				page_count = 0;
 	bool				soft_sync = false;
 	bool				interrupted = false;
+	bool				ndelay = false;
 	int				i;
 	int				grant = 0;
 	int				rc;
+	__u32				layout_version = 0;
 	struct list_head		rpc_list = LIST_HEAD_INIT(rpc_list);
 	struct ost_body			*body;
 	ENTRY;
@@ -1941,6 +1944,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		mem_tight |= ext->oe_memalloc;
 		grant += ext->oe_grants;
 		page_count += ext->oe_nr_pages;
+		layout_version = MAX(layout_version, ext->oe_layout_version);
 		if (obj == NULL)
 			obj = ext->oe_obj;
 	}
@@ -1983,6 +1987,8 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 			if (oap->oap_interrupted)
 				interrupted = true;
 		}
+		if (ext->oe_ndelay)
+			ndelay = true;
 	}
 
 	/* first page in the list */
@@ -1996,8 +2002,16 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	crattr->cra_oa = oa;
 	cl_req_attr_set(env, osc2cl(obj), crattr);
 
-	if (cmd == OBD_BRW_WRITE)
+	if (cmd == OBD_BRW_WRITE) {
 		oa->o_grant_used = grant;
+		if (layout_version > 0) {
+			CDEBUG(D_LAYOUT, DFID": write with layout version %u\n",
+			       PFID(&oa->o_oi.oi_fid), layout_version);
+
+			oa->o_layout_version = layout_version;
+			oa->o_valid |= OBD_MD_LAYOUT_VERSION;
+		}
+	}
 
 	sort_brw_pages(pga, page_count);
 	rc = osc_brw_prep_request(cmd, cli, oa, page_count, pga, &req, 0);
@@ -2012,6 +2026,12 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	oap->oap_request = ptlrpc_request_addref(req);
 	if (interrupted && !req->rq_intr)
 		ptlrpc_mark_interrupted(req);
+	if (ndelay) {
+		req->rq_no_resend = req->rq_no_delay = 1;
+		/* probably set a shorter timeout value.
+		 * to handle ETIMEDOUT in brw_interpret() correctly. */
+		/* lustre_msg_set_timeout(req, req->rq_timeout / 2); */
+	}
 
 	/* Need to update the timestamps after the request is built in case
 	 * we race with setattr (locally or in queue at OST).  If OST gets

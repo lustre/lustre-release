@@ -1728,7 +1728,7 @@ void lustre_swab_obdo (struct obdo  *o)
 	__swab32s(&o->o_stripe_idx);
 	__swab32s(&o->o_parent_ver);
 	lustre_swab_ost_layout(&o->o_layout);
-	CLASSERT(offsetof(typeof(*o), o_padding_3) != 0);
+	__swab32s(&o->o_layout_version);
 	__swab32s(&o->o_uid_h);
 	__swab32s(&o->o_gid_h);
 	__swab64s(&o->o_data_version);
@@ -2185,6 +2185,7 @@ void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
 	CDEBUG(lvl, "\tlcm_layout_gen: %#x\n", comp_v1->lcm_layout_gen);
 	CDEBUG(lvl, "\tlcm_flags: %#x\n", comp_v1->lcm_flags);
 	CDEBUG(lvl, "\tlcm_entry_count: %#x\n\n", comp_v1->lcm_entry_count);
+	CDEBUG(lvl, "\tlcm_mirror_count: %#x\n\n", comp_v1->lcm_mirror_count);
 
 	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
 		struct lov_comp_md_entry_v1 *ent = &comp_v1->lcm_entries[i];
@@ -2266,6 +2267,7 @@ void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
 	__swab32s(&lum->lcm_layout_gen);
 	__swab16s(&lum->lcm_flags);
 	__swab16s(&lum->lcm_entry_count);
+	__swab16s(&lum->lcm_mirror_count);
 	CLASSERT(offsetof(typeof(*lum), lcm_padding1) != 0);
 	CLASSERT(offsetof(typeof(*lum), lcm_padding2) != 0);
 
@@ -2628,12 +2630,17 @@ void lustre_swab_hsm_user_item(struct hsm_user_item *hui)
 	lustre_swab_hsm_extent(&hui->hui_extent);
 }
 
+void lustre_swab_lu_extent(struct lu_extent *le)
+{
+	__swab64s(&le->e_start);
+	__swab64s(&le->e_end);
+}
+
 void lustre_swab_layout_intent(struct layout_intent *li)
 {
 	__swab32s(&li->li_opc);
 	__swab32s(&li->li_flags);
-	__swab64s(&li->li_start);
-	__swab64s(&li->li_end);
+	lustre_swab_lu_extent(&li->li_extent);
 }
 
 void lustre_swab_hsm_progress_kernel(struct hsm_progress_kernel *hpk)
@@ -2744,6 +2751,19 @@ void lustre_swab_close_data(struct close_data *cd)
 	lustre_swab_lu_fid(&cd->cd_fid);
 	__swab64s(&cd->cd_data_version);
 }
+
+void lustre_swab_close_data_resync_done(struct close_data_resync_done *resync)
+{
+	int i;
+
+	__swab32s(&resync->resync_count);
+	/* after swab, resync_count must in CPU endian */
+	if (resync->resync_count <= INLINE_RESYNC_ARRAY_SIZE) {
+		for (i = 0; i < resync->resync_count; i++)
+			__swab32s(&resync->resync_ids_inline[i]);
+	}
+}
+EXPORT_SYMBOL(lustre_swab_close_data_resync_done);
 
 void lustre_swab_lfsck_request(struct lfsck_request *lr)
 {

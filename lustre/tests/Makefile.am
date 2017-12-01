@@ -38,7 +38,7 @@ noinst_SCRIPTS += setup-cifs.sh parallel-scale-cifs.sh
 noinst_SCRIPTS += posix.sh sanity-scrub.sh scrub-performance.sh ha.sh
 noinst_SCRIPTS += sanity-lfsck.sh lfsck-performance.sh
 noinst_SCRIPTS += resolveip
-noinst_SCRIPTS += sanity-hsm.sh sanity-lsnapshot.sh sanity-pfl.sh
+noinst_SCRIPTS += sanity-hsm.sh sanity-lsnapshot.sh sanity-pfl.sh sanity-flr.sh
 noinst_SCRIPTS += sanity-dom.sh dom-performance.sh
 nobase_noinst_SCRIPTS = cfg/local.sh
 nobase_noinst_SCRIPTS += test-groups/regression test-groups/regression-mpi
@@ -78,7 +78,7 @@ noinst_PROGRAMS += write_time_limit rwv lgetxattr_size_check checkfiemap
 noinst_PROGRAMS += listxattr_size_check check_fhandle_syscalls badarea_io
 noinst_PROGRAMS += llapi_layout_test orphan_linkea_check llapi_hsm_test
 noinst_PROGRAMS += group_lock_test llapi_fid_test sendfile_grouplock mmap_cat
-noinst_PROGRAMS += swap_lock_test lockahead_test
+noinst_PROGRAMS += swap_lock_test lockahead_test mirror_io
 
 bin_PROGRAMS = mcreate munlink
 testdir = $(libdir)/lustre/tests
@@ -102,6 +102,7 @@ statmany_LDADD=$(LIBLUSTREAPI)
 statone_LDADD=$(LIBLUSTREAPI)
 rwv_LDADD=$(LIBCFS)
 lockahead_test_LDADD=$(LIBLUSTREAPI)
+mirror_io_LDADD=$(LIBLUSTREAPI)
 
 ll_dirstripe_verify_SOURCES = ll_dirstripe_verify.c
 ll_dirstripe_verify_LDADD = $(LIBLUSTREAPI) $(LIBCFS) $(PTHREAD_LIBS)

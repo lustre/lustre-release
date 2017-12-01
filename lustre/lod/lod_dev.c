@@ -1865,6 +1865,10 @@ static void lod_key_fini(const struct lu_context *ctx,
 	if (inuse->op_size)
 		OBD_FREE(inuse->op_array, inuse->op_size);
 
+	if (info->lti_comp_size > 0)
+		OBD_FREE(info->lti_comp_idx,
+			 info->lti_comp_size * sizeof(__u32));
+
 	OBD_FREE_PTR(info);
 }
 

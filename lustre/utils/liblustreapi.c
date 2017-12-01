@@ -2190,6 +2190,18 @@ int sattr_cache_get_defaults(const char *const fsname,
         return 0;
 }
 
+static char *layout2name(__u32 layout_pattern)
+{
+	if (layout_pattern == LOV_PATTERN_MDT)
+		return "mdt";
+	else if (layout_pattern == LOV_PATTERN_RAID0)
+		return "raid0";
+	else if (layout_pattern == (LOV_PATTERN_RAID0 | LOV_PATTERN_F_RELEASED))
+		return "released";
+	else
+		return "unknown";
+}
+
 enum lov_dump_flags {
 	LDF_IS_DIR	= 0x0001,
 	LDF_IS_RAW	= 0x0002,
@@ -2335,7 +2347,11 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 		if (verbose & ~VERBOSE_LAYOUT)
 			llapi_printf(LLAPI_MSG_NORMAL, "%s%spattern:       ",
 				     space, prefix);
-		llapi_printf(LLAPI_MSG_NORMAL, "%.x", lum->lmm_pattern);
+		if (lov_pattern_supported(lum->lmm_pattern))
+			llapi_printf(LLAPI_MSG_NORMAL, "%s",
+				     layout2name(lum->lmm_pattern));
+		else
+			llapi_printf(LLAPI_MSG_NORMAL, "%.x", lum->lmm_pattern);
 		separator = is_dir ? " " : "\n";
 	}
 
@@ -2459,8 +2475,8 @@ void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
 					     obdindex == idx ? " *" : "");
 			}
 		}
-		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 	}
+	llapi_printf(LLAPI_MSG_NORMAL, "\n");
 }
 
 void lmv_dump_user_lmm(struct lmv_user_md *lum, char *pool_name,
@@ -2591,24 +2607,40 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 
 	if (verbose & VERBOSE_DETAIL) {
 		llapi_printf(LLAPI_MSG_NORMAL, "composite_header:\n");
-		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_magic:       0x%08X\n",
+		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_magic:         0x%08X\n",
 			     " ", comp_v1->lcm_magic);
-		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_size:        %u\n",
+		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_size:          %u\n",
 			     " ", comp_v1->lcm_size);
-		llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_flags:       %u\n",
-			     " ", comp_v1->lcm_flags);
+		if (flags & LDF_IS_DIR)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%2slcm_flags:         %s\n", " ",
+				     comp_v1->lcm_mirror_count > 0 ?
+							"mirrored" : "");
+		else
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%2slcm_flags:         %s\n",
+				     " ", lcm_flags_string(comp_v1->lcm_flags));
 	}
 
 	if (verbose & VERBOSE_GENERATION) {
 		if (verbose & ~VERBOSE_GENERATION)
-			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_layout_gen:  ",
+			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_layout_gen:    ",
 				     " ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%u\n", comp_v1->lcm_layout_gen);
 	}
 
+	if (verbose & VERBOSE_MIRROR_COUNT) {
+		if (verbose & ~VERBOSE_MIRROR_COUNT)
+			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_mirror_count:  ",
+				     " ");
+		llapi_printf(LLAPI_MSG_NORMAL, "%u\n",
+			     comp_v1->lcm_magic == LOV_USER_MAGIC_COMP_V1 ?
+			     comp_v1->lcm_mirror_count + 1 : 1);
+	}
+
 	if (verbose & VERBOSE_COMP_COUNT) {
 		if (verbose & ~VERBOSE_COMP_COUNT)
-			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_entry_count: ",
+			llapi_printf(LLAPI_MSG_NORMAL, "%2slcm_entry_count:   ",
 				     " ");
 		llapi_printf(LLAPI_MSG_NORMAL, "%u\n",
 			     comp_v1->lcm_magic == LOV_USER_MAGIC_COMP_V1 ?
@@ -2619,7 +2651,7 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 		llapi_printf(LLAPI_MSG_NORMAL, "components:\n");
 }
 
-static void comp_flags2str(__u32 comp_flags)
+static void lcme_flags2str(__u32 comp_flags)
 {
 	bool found = false;
 	int i = 0;
@@ -2678,7 +2710,7 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 		if (verbose & ~VERBOSE_COMP_FLAGS)
 			llapi_printf(LLAPI_MSG_NORMAL,
 				     "%4slcme_flags:          ", " ");
-		comp_flags2str(entry->lcme_flags);
+		lcme_flags2str(entry->lcme_flags);
 		separator = "\n";
 	}
 
@@ -2853,7 +2885,7 @@ static int find_comp_end_cmp(unsigned long long end, struct find_param *param)
  *     lmm_fid:           [0x200000401:0x1:0x0]
  *     lmm_stripe_count:  1
  *     lmm_stripe_size:   1048576
- *     lmm_pattern:       1
+ *     lmm_pattern:       raid0
  *     lmm_layout_gen:    0
  *     lmm_stripe_offset: 0
  *     lmm_objects:
@@ -2872,7 +2904,7 @@ static int find_comp_end_cmp(unsigned long long end, struct find_param *param)
  *     lmm_fid:           [0x200000401:0x1:0x0]
  *     lmm_stripe_count:  2
  *     lmm_stripe_size:   1048576
- *     lmm_pattern:       1
+ *     lmm_pattern:       raid0
  *     lmm_layout_gen:    0
  *     lmm_stripe_offset: 1
  *     lmm_objects:
@@ -4753,18 +4785,39 @@ int llapi_get_connect_flags(const char *mnt, __u64 *flags)
  */
 int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags)
 {
-        int rc;
-        struct ioc_data_version idv;
+	int rc;
+	struct ioc_data_version idv;
 
-        idv.idv_flags = flags;
+	idv.idv_flags = (__u32)flags;
 
-        rc = ioctl(fd, LL_IOC_DATA_VERSION, &idv);
-        if (rc)
-                rc = -errno;
-        else
-                *data_version = idv.idv_version;
+	rc = ioctl(fd, LL_IOC_DATA_VERSION, &idv);
+	if (rc)
+		rc = -errno;
+	else
+		*data_version = idv.idv_version;
 
-        return rc;
+	return rc;
+}
+
+/*
+ * Fetch layout version from OST objects. Layout version on OST objects are
+ * only set when the file is a mirrored file AND after the file has been
+ * written at least once.
+ *
+ * It actually fetches the least layout version from the objects.
+ */
+int llapi_get_ost_layout_version(int fd, __u32 *layout_version)
+{
+	int rc;
+	struct ioc_data_version idv = { 0 };
+
+	rc = ioctl(fd, LL_IOC_DATA_VERSION, &idv);
+	if (rc)
+		rc = -errno;
+	else
+		*layout_version = idv.idv_layout_version;
+
+	return rc;
 }
 
 /*

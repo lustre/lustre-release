@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <sys/xattr.h>
+#include <sys/param.h>
 
 #include <libcfs/util/list.h>
 #include <lustre/lustreapi.h>
@@ -70,6 +71,7 @@ struct llapi_layout {
 	uint32_t	llot_gen;
 	uint32_t	llot_flags;
 	bool		llot_is_composite;
+	uint16_t	llot_mirror_count;
 	/* Cursor pointing to one of the components in llot_comp_list */
 	struct llapi_layout_comp *llot_cur_comp;
 	struct list_head	  llot_comp_list;
@@ -317,6 +319,7 @@ static struct llapi_layout *__llapi_layout_alloc(void)
 	layout->llot_gen = 0;
 	layout->llot_flags = 0;
 	layout->llot_is_composite = false;
+	layout->llot_mirror_count = 1;
 	layout->llot_cur_comp = NULL;
 	INIT_LIST_HEAD(&layout->llot_comp_list);
 
@@ -377,7 +380,9 @@ llapi_layout_from_lum(const struct lov_user_md *lum, int lum_size)
 	if (lum->lmm_magic == LOV_MAGIC_COMP_V1) {
 		comp_v1 = (struct lov_comp_md_v1 *)lum;
 		ent_count = comp_v1->lcm_entry_count;
+		layout->llot_gen = comp_v1->lcm_layout_gen;
 		layout->llot_is_composite = true;
+		layout->llot_mirror_count = comp_v1->lcm_mirror_count + 1;
 		layout->llot_gen = comp_v1->lcm_layout_gen;
 		layout->llot_flags = comp_v1->lcm_flags;
 	} else if (lum->lmm_magic == LOV_MAGIC_V1 ||
@@ -506,7 +511,7 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 			comp_cnt++;
 
 		lum_size = sizeof(*comp_v1) + comp_cnt * sizeof(*ent);
-		lum = malloc(lum_size);
+		lum = calloc(lum_size, 1);
 		if (lum == NULL) {
 			errno = ENOMEM;
 			return NULL;
@@ -515,8 +520,9 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 		comp_v1->lcm_magic = LOV_USER_MAGIC_COMP_V1;
 		comp_v1->lcm_size = lum_size;
 		comp_v1->lcm_layout_gen = 0;
-		comp_v1->lcm_flags = 0;
+		comp_v1->lcm_flags = layout->llot_flags;
 		comp_v1->lcm_entry_count = comp_cnt;
+		comp_v1->lcm_mirror_count = layout->llot_mirror_count - 1;
 		offset += lum_size;
 	}
 
@@ -566,8 +572,6 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 
 		blob->lmm_magic = magic;
 		if (pattern == LLAPI_LAYOUT_DEFAULT)
-			blob->lmm_pattern = 0;
-		else if (pattern == LLAPI_LAYOUT_RAID0)
 			blob->lmm_pattern = LOV_PATTERN_RAID0;
 		else if (pattern == LLAPI_LAYOUT_MDT)
 			blob->lmm_pattern = LOV_PATTERN_MDT;
@@ -733,7 +737,7 @@ static bool is_any_specified(const struct llapi_layout *layout)
 	if (comp == NULL)
 		return false;
 
-	if (layout->llot_is_composite)
+	if (layout->llot_is_composite || layout->llot_mirror_count != 1)
 		return true;
 
 	return comp->llc_pattern != LLAPI_LAYOUT_DEFAULT ||
@@ -1226,8 +1230,7 @@ int llapi_layout_pattern_set(struct llapi_layout *layout, uint64_t pattern)
 		return -1;
 
 	if (pattern != LLAPI_LAYOUT_DEFAULT &&
-	    pattern != LLAPI_LAYOUT_RAID0 &&
-	    pattern != LLAPI_LAYOUT_MDT) {
+	    pattern != LLAPI_LAYOUT_RAID0 && pattern != LLAPI_LAYOUT_MDT) {
 		errno = EOPNOTSUPP;
 		return -1;
 	}
@@ -1510,6 +1513,92 @@ int llapi_layout_file_create(const char *path, int open_flags, int mode,
 				      layout);
 }
 
+int llapi_layout_flags_get(struct llapi_layout *layout, uint32_t *flags)
+{
+	if (layout->llot_magic != LLAPI_LAYOUT_MAGIC) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	*flags = layout->llot_flags;
+	return 0;
+}
+
+/**
+ * Set flags to the header of a component layout.
+ */
+int llapi_layout_flags_set(struct llapi_layout *layout, uint32_t flags)
+{
+	if (layout->llot_magic != LLAPI_LAYOUT_MAGIC) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	layout->llot_flags = flags;
+	return 0;
+}
+
+/**
+ * llapi_layout_mirror_count_is_valid() - Check the validity of mirror count.
+ * @count: Mirror count value to be checked.
+ *
+ * This function checks the validity of mirror count.
+ *
+ * Return: true on success or false on failure.
+ */
+static bool llapi_layout_mirror_count_is_valid(uint16_t count)
+{
+	return count >= 0 && count <= LUSTRE_MIRROR_COUNT_MAX;
+}
+
+/**
+ * llapi_layout_mirror_count_get() - Get mirror count from the header of
+ *				     a layout.
+ * @layout: Layout to get mirror count from.
+ * @count:  Returned mirror count value.
+ *
+ * This function gets mirror count from the header of a layout.
+ *
+ * Return: 0 on success or -1 on failure.
+ */
+int llapi_layout_mirror_count_get(struct llapi_layout *layout,
+				  uint16_t *count)
+{
+	if (layout->llot_magic != LLAPI_LAYOUT_MAGIC) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	*count = layout->llot_mirror_count;
+	return 0;
+}
+
+/**
+ * llapi_layout_mirror_count_set() - Set mirror count to the header of a layout.
+ * @layout: Layout to set mirror count in.
+ * @count:  Mirror count value to be set.
+ *
+ * This function sets mirror count to the header of a layout.
+ *
+ * Return: 0 on success or -1 on failure.
+ */
+int llapi_layout_mirror_count_set(struct llapi_layout *layout,
+				  uint16_t count)
+{
+	if (layout->llot_magic != LLAPI_LAYOUT_MAGIC) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	if (!llapi_layout_mirror_count_is_valid(count)) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	layout->llot_mirror_count = count;
+	return 0;
+}
+
 /**
  * Fetch the start and end offset of the current layout component.
  *
@@ -1693,6 +1782,33 @@ int llapi_layout_comp_id_get(const struct llapi_layout *layout, uint32_t *id)
 }
 
 /**
+ * Return the mirror id of the current layout component.
+ *
+ * \param[in] layout	the layout component
+ * \param[out] id	stored the returned mirror ID
+ *
+ * \retval	0 on success
+ * \retval	<0 if error occurs
+ */
+int llapi_layout_mirror_id_get(const struct llapi_layout *layout, uint32_t *id)
+{
+	struct llapi_layout_comp *comp;
+
+	comp = __llapi_layout_cur_comp(layout);
+	if (comp == NULL)
+		return -1;
+
+	if (id == NULL) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	*id = mirror_id_of(comp->llc_id);
+
+	return 0;
+}
+
+/**
  * Adds a component to \a layout, the new component will be added to
  * the tail of components list and it'll inherit attributes of existing
  * ones. The \a layout will change it's current component pointer to
@@ -1719,12 +1835,6 @@ int llapi_layout_comp_add(struct llapi_layout *layout)
 	last = list_entry(layout->llot_comp_list.prev, typeof(*last),
 			  llc_list);
 
-	/* Inherit some attributes from existing component */
-	new->llc_stripe_size = comp->llc_stripe_size;
-	new->llc_stripe_count = comp->llc_stripe_count;
-	if (comp->llc_pool_name[0] != '\0')
-		strncpy(new->llc_pool_name, comp->llc_pool_name,
-			sizeof(comp->llc_pool_name));
 	if (new->llc_extent.e_end <= last->llc_extent.e_end) {
 		__llapi_comp_free(new);
 		errno = EINVAL;
@@ -2029,4 +2139,289 @@ int llapi_layout_file_comp_set(const char *path,
 bool llapi_layout_is_composite(struct llapi_layout *layout)
 {
 	return layout->llot_is_composite;
+}
+
+/**
+ * llapi_layout_merge() - Merge a composite layout into another one.
+ * @dst_layout: Destination composite layout.
+ * @src_layout: Source composite layout.
+ *
+ * This function copies all of the components from @src_layout and
+ * appends them to @dst_layout.
+ *
+ * Return: 0 on success or -1 on failure.
+ */
+int llapi_layout_merge(struct llapi_layout **dst_layout,
+		       const struct llapi_layout *src_layout)
+{
+	struct llapi_layout *new_layout = *dst_layout;
+	struct llapi_layout_comp *new = NULL;
+	struct llapi_layout_comp *comp = NULL;
+	int i = 0;
+
+	if (src_layout == NULL ||
+	    list_empty((struct list_head *)&src_layout->llot_comp_list))
+		return 0;
+
+	if (new_layout == NULL) {
+		new_layout = __llapi_layout_alloc();
+		if (new_layout == NULL) {
+			errno = ENOMEM;
+			return -1;
+		}
+	}
+
+	list_for_each_entry(comp, &src_layout->llot_comp_list, llc_list) {
+		new = __llapi_comp_alloc(0);
+		if (new == NULL) {
+			errno = ENOMEM;
+			goto error;
+		}
+
+		new->llc_pattern = comp->llc_pattern;
+		new->llc_stripe_size = comp->llc_stripe_size;
+		new->llc_stripe_count = comp->llc_stripe_count;
+		new->llc_stripe_offset = comp->llc_stripe_offset;
+
+		if (comp->llc_pool_name[0] != '\0')
+			strncpy(new->llc_pool_name, comp->llc_pool_name,
+				sizeof(new->llc_pool_name));
+
+		for (i = 0; i < comp->llc_objects_count; i++) {
+			if (__llapi_comp_objects_realloc(new,
+			    stripe_number_roundup(i)) < 0) {
+				errno = EINVAL;
+				__llapi_comp_free(new);
+				goto error;
+			}
+			new->llc_objects[i].l_ost_idx = \
+				comp->llc_objects[i].l_ost_idx;
+		}
+
+		new->llc_objects_count = comp->llc_objects_count;
+		new->llc_extent.e_start = comp->llc_extent.e_start;
+		new->llc_extent.e_end = comp->llc_extent.e_end;
+		new->llc_id = comp->llc_id;
+		new->llc_flags = comp->llc_flags;
+
+		list_add_tail(&new->llc_list, &new_layout->llot_comp_list);
+		new_layout->llot_cur_comp = new;
+	}
+	new_layout->llot_is_composite = true;
+
+	*dst_layout = new_layout;
+	return 0;
+error:
+	llapi_layout_free(new_layout);
+	return -1;
+}
+
+/**
+ * Find all stale components.
+ *
+ * \param[in] layout		component layout list.
+ * \param[out] comp		array of stale component info.
+ * \param[in] comp_size		array size of @comp.
+ * \param[in] mirror_ids	array of mirror id that only components
+ *				belonging to these mirror will be collected.
+ * \param[in] ids_nr		number of mirror ids array.
+ *
+ * \retval		number of component info collected on sucess or
+ *			an error code on failure.
+ */
+int llapi_mirror_find_stale(struct llapi_layout *layout,
+		struct llapi_resync_comp *comp, size_t comp_size,
+		__u16 *mirror_ids, int ids_nr)
+{
+	int idx = 0;
+	int rc;
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc < 0) {
+		fprintf(stderr, "%s: move to the first layout component: %s.\n",
+			__func__, strerror(errno));
+		goto error;
+	}
+
+	while (rc == 0) {
+		uint32_t id;
+		uint32_t mirror_id;
+		uint32_t flags;
+		uint64_t start, end;
+
+		rc = llapi_layout_comp_flags_get(layout, &flags);
+		if (rc < 0) {
+			fprintf(stderr, "llapi_layout_comp_flags_get: %s.\n",
+				strerror(errno));
+			goto error;
+		}
+
+		if (!(flags & LCME_FL_STALE))
+			goto next;
+
+		rc = llapi_layout_mirror_id_get(layout, &mirror_id);
+		if (rc < 0) {
+			fprintf(stderr, "llapi_layout_mirror_id_get: %s.\n",
+				strerror(errno));
+			goto error;
+		}
+
+		/* the caller only wants stale components from specific
+		 * mirrors */
+		if (ids_nr > 0) {
+			int j;
+
+			for (j = 0; j < ids_nr; j++) {
+				if (mirror_ids[j] == mirror_id)
+					break;
+			}
+
+			/* not in the specified mirror */
+			if (j == ids_nr)
+				goto next;
+		}
+
+		rc = llapi_layout_comp_id_get(layout, &id);
+		if (rc < 0) {
+			fprintf(stderr, "llapi_layout_comp_id_get: %s.\n",
+				strerror(errno));
+			goto error;
+		}
+
+		rc = llapi_layout_comp_extent_get(layout, &start, &end);
+		if (rc < 0) {
+			fprintf(stderr, "llapi_layout_comp_extent_get: %s.\n",
+				strerror(errno));
+			goto error;
+		}
+
+		/* pack this component into @comp array */
+		comp[idx].lrc_id = id;
+		comp[idx].lrc_mirror_id = mirror_id;
+		comp[idx].lrc_start = start;
+		comp[idx].lrc_end = end;
+		idx++;
+
+		if (idx >= comp_size) {
+			fprintf(stderr, "%s: resync_comp array too small.\n",
+				__func__);
+			rc = -EINVAL;
+			goto error;
+		}
+
+	next:
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+		if (rc < 0) {
+			fprintf(stderr, "%s: move to the next layout "
+				"component: %s.\n", __func__, strerror(errno));
+			rc = -EINVAL;
+			goto error;
+		}
+	}
+error:
+	return rc < 0 ? rc : idx;
+}
+
+/* locate @layout to a valid component covering file [file_start, file_end) */
+static uint32_t llapi_mirror_find(struct llapi_layout *layout,
+				  uint64_t file_start, uint64_t file_end,
+				  uint64_t *endp)
+{
+	uint32_t mirror_id = 0;
+	int rc;
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc < 0)
+		return rc;
+
+	*endp = 0;
+	while (rc == 0) {
+		uint64_t start, end;
+		uint32_t flags, id, rid;
+
+		rc = llapi_layout_comp_flags_get(layout, &flags);
+		if (rc < 0)
+			return rc;
+
+		if (flags & LCME_FL_STALE)
+			goto next;
+
+		rc = llapi_layout_mirror_id_get(layout, &rid);
+		if (rc < 0)
+			return rc;
+
+		rc = llapi_layout_comp_id_get(layout, &id);
+		if (rc < 0)
+			return rc;
+
+		rc = llapi_layout_comp_extent_get(layout, &start, &end);
+		if (rc < 0)
+			return rc;
+
+		if (file_start >= start && file_start < end) {
+			if (!mirror_id)
+				mirror_id = rid;
+			else if (mirror_id != rid || *endp != start)
+				break;
+
+			file_start = *endp = end;
+			if (end >= file_end)
+				break;
+		}
+
+	next:
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+		if (rc < 0)
+			return rc;
+	}
+
+	return mirror_id;
+}
+
+ssize_t llapi_mirror_resync_one(int fd, struct llapi_layout *layout,
+				uint32_t dst, uint64_t start, uint64_t end)
+{
+	uint64_t mirror_end = 0;
+	ssize_t result = 0;
+	size_t count;
+
+	if (end == OBD_OBJECT_EOF)
+		count = OBD_OBJECT_EOF;
+	else
+		count = end - start;
+
+	while (count > 0) {
+		uint32_t src;
+		size_t to_copy;
+		ssize_t copied;
+
+		src = llapi_mirror_find(layout, start, end, &mirror_end);
+		if (src == 0) {
+			fprintf(stderr, "llapi_mirror_find cannot find "
+				"component covering %lu.\n", start);
+			return -ENOENT;
+		}
+
+		if (mirror_end == OBD_OBJECT_EOF)
+			to_copy = count;
+		else
+			to_copy = MIN(count, mirror_end - start);
+
+		copied = llapi_mirror_copy(fd, src, dst, start, to_copy);
+		if (copied < 0) {
+			fprintf(stderr, "llapi_mirror_copy returned %zd.\n",
+				copied);
+			return copied;
+		}
+
+		result += copied;
+		if (copied < to_copy) /* end of file */
+			break;
+
+		if (count != OBD_OBJECT_EOF)
+			count -= copied;
+		start += copied;
+	}
+
+	return result;
 }

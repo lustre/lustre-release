@@ -269,8 +269,14 @@ static void vvp_page_completion_read(const struct lu_env *env,
 	if (ioret == 0)  {
 		if (!vpg->vpg_defer_uptodate)
 			cl_page_export(env, page, 1);
-	} else {
+	} else if (vpg->vpg_defer_uptodate) {
 		vpg->vpg_defer_uptodate = 0;
+		if (ioret == -EWOULDBLOCK) {
+			/* mirror read failed, it needs to destroy the page
+			 * because subpage would be from wrong osc when trying
+			 * to read from a new mirror */
+			ll_invalidate_page(vmpage);
+		}
 	}
 
 	if (page->cp_sync_io == NULL)

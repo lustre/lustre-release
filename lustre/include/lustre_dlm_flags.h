@@ -390,6 +390,13 @@
 #define ldlm_is_cos_enabled(_l)          LDLM_TEST_FLAG((_l), 1ULL << 57)
 #define ldlm_set_cos_enabled(_l)         LDLM_SET_FLAG((_l), 1ULL << 57)
 
+/**
+ * This flags means to use non-delay RPC to send dlm request RPC.
+ */
+#define LDLM_FL_NDELAY			 0x0400000000000000ULL /* bit  58 */
+#define ldlm_is_ndelay(_l)		 LDLM_TEST_FLAG((_l), 1ULL << 58)
+#define ldlm_set_ndelay(_l)		 LDLM_SET_FLAG((_l), 1ULL << 58)
+
 /** l_flags bits marked as "ast" bits */
 #define LDLM_FL_AST_MASK                (LDLM_FL_FLOCK_DEADLOCK		|\
 					 LDLM_FL_DISCARD_DATA)

@@ -451,7 +451,7 @@ test_11() {
 	$TRUNCATE $comp_file $((1024*1024*1+1))
 
 	f2=$($LFS getstripe -I2 $comp_file | grep "l_fid")
-	[[ -z $f2 ]] && error "2: 2nd component uninstantiated"
+	[[ -z $f2 ]] && error "3: 2nd component uninstantiated"
 	f3=$($LFS getstripe -I3 $comp_file | grep "l_fid")
 	[[ -z $f3 ]] && error "3: 3rd component uninstantiated"
 	f4=$($LFS getstripe -I4 $comp_file | grep "l_fid")

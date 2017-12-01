@@ -1047,7 +1047,7 @@ static int lod_attr_get(const struct lu_env *env,
 }
 
 int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
-			    struct thandle *th, lod_obj_stripe_cb_t cb,
+			    struct thandle *th,
 			    struct lod_obj_stripe_cb_data *data)
 {
 	struct lod_layout_component *lod_comp;
@@ -1061,13 +1061,23 @@ int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
 		if (lod_comp->llc_stripe == NULL)
 			continue;
 
+		/* has stripe but not inited yet, this component has been
+		 * declared to be created, but hasn't created yet.
+		 */
+		if (!lod_comp_inited(lod_comp))
+			continue;
+
+		if (data->locd_comp_skip_cb &&
+		    data->locd_comp_skip_cb(env, lo, i, data))
+			continue;
+
 		LASSERT(lod_comp->llc_stripe_count > 0);
 		for (j = 0; j < lod_comp->llc_stripe_count; j++) {
 			struct dt_object *dt = lod_comp->llc_stripe[j];
 
 			if (dt == NULL)
 				continue;
-			rc = cb(env, lo, dt, th, j, data);
+			rc = data->locd_stripe_cb(env, lo, dt, th, i, j, data);
 			if (rc != 0)
 				RETURN(rc);
 		}
@@ -1075,13 +1085,72 @@ int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
 	RETURN(0);
 }
 
+static bool lod_obj_attr_set_comp_skip_cb(const struct lu_env *env,
+		struct lod_object *lo, int comp_idx,
+		struct lod_obj_stripe_cb_data *data)
+{
+	struct lod_layout_component *lod_comp = &lo->ldo_comp_entries[comp_idx];
+	bool skipped = false;
+
+	if (!(data->locd_attr->la_valid & LA_LAYOUT_VERSION))
+		return skipped;
+
+	switch (lo->ldo_flr_state) {
+	case LCM_FL_WRITE_PENDING: {
+		int i;
+
+		/* skip stale components */
+		if (lod_comp->llc_flags & LCME_FL_STALE) {
+			skipped = true;
+			break;
+		}
+
+		/* skip valid and overlapping components, therefore any
+		 * attempts to write overlapped components will never succeed
+		 * because client will get EINPROGRESS. */
+		for (i = 0; i < lo->ldo_comp_cnt; i++) {
+			if (i == comp_idx)
+				continue;
+
+			if (lo->ldo_comp_entries[i].llc_flags & LCME_FL_STALE)
+				continue;
+
+			if (lu_extent_is_overlapped(&lod_comp->llc_extent,
+					&lo->ldo_comp_entries[i].llc_extent)) {
+				skipped = true;
+				break;
+			}
+		}
+		break;
+	}
+	default:
+		LASSERTF(0, "impossible: %d\n", lo->ldo_flr_state);
+	case LCM_FL_SYNC_PENDING:
+		break;
+	}
+
+	CDEBUG(D_LAYOUT, DFID": %s to set component %x to version: %u\n",
+	       PFID(lu_object_fid(&lo->ldo_obj.do_lu)),
+	       skipped ? "skipped" : "chose", lod_comp->llc_id,
+	       data->locd_attr->la_layout_version);
+
+	return skipped;
+}
+
 static inline int
 lod_obj_stripe_attr_set_cb(const struct lu_env *env, struct lod_object *lo,
 			   struct dt_object *dt, struct thandle *th,
-			   int stripe_idx, struct lod_obj_stripe_cb_data *data)
+			   int comp_idx, int stripe_idx,
+			   struct lod_obj_stripe_cb_data *data)
 {
 	if (data->locd_declare)
 		return lod_sub_declare_attr_set(env, dt, data->locd_attr, th);
+
+	if (data->locd_attr->la_valid & LA_LAYOUT_VERSION) {
+		CDEBUG(D_LAYOUT, DFID": set layout version: %u, comp_idx: %d\n",
+		       PFID(lu_object_fid(&dt->do_lu)),
+		       data->locd_attr->la_layout_version, comp_idx);
+	}
 
 	return lod_sub_attr_set(env, dt, data->locd_attr, th);
 }
@@ -1120,7 +1189,7 @@ static int lod_declare_attr_set(const struct lu_env *env,
 	 * speed up rename().
 	 */
 	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
-		if (!(attr->la_valid & (LA_UID | LA_GID | LA_PROJID)))
+		if (!(attr->la_valid & LA_REMOTE_ATTR_SET))
 			RETURN(rc);
 
 		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_OWNER))
@@ -1157,12 +1226,12 @@ static int lod_declare_attr_set(const struct lu_env *env,
 				RETURN(rc);
 		}
 	} else {
-		struct lod_obj_stripe_cb_data data;
+		struct lod_obj_stripe_cb_data data = { { 0 } };
 
 		data.locd_attr = attr;
 		data.locd_declare = true;
-		rc = lod_obj_for_each_stripe(env, lo, th,
-				lod_obj_stripe_attr_set_cb, &data);
+		data.locd_stripe_cb = lod_obj_stripe_attr_set_cb;
+		rc = lod_obj_for_each_stripe(env, lo, th, &data);
 	}
 
 	if (rc)
@@ -1217,7 +1286,7 @@ static int lod_attr_set(const struct lu_env *env,
 		RETURN(rc);
 
 	if (!S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
-		if (!(attr->la_valid & (LA_UID | LA_GID | LA_PROJID)))
+		if (!(attr->la_valid & LA_REMOTE_ATTR_SET))
 			RETURN(rc);
 
 		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_BAD_OWNER))
@@ -1228,6 +1297,14 @@ static int lod_attr_set(const struct lu_env *env,
 					LA_FLAGS)))
 			RETURN(rc);
 	}
+
+	/* FIXME: a tricky case in the code path of mdd_layout_change():
+	 * the in-memory striping information has been freed in lod_xattr_set()
+	 * due to layout change. It has to load stripe here again. It only
+	 * changes flags of layout so declare_attr_set() is still accurate */
+	rc = lod_load_striping_locked(env, lo);
+	if (rc)
+		RETURN(rc);
 
 	if (!lod_obj_is_striped(dt))
 		RETURN(0);
@@ -1249,12 +1326,13 @@ static int lod_attr_set(const struct lu_env *env,
 				break;
 		}
 	} else {
-		struct lod_obj_stripe_cb_data data;
+		struct lod_obj_stripe_cb_data data = { { 0 } };
 
 		data.locd_attr = attr;
 		data.locd_declare = false;
-		rc = lod_obj_for_each_stripe(env, lo, th,
-				lod_obj_stripe_attr_set_cb, &data);
+		data.locd_comp_skip_cb = lod_obj_attr_set_comp_skip_cb;
+		data.locd_stripe_cb = lod_obj_stripe_attr_set_cb;
+		rc = lod_obj_for_each_stripe(env, lo, th, &data);
 	}
 
 	if (rc)
@@ -2011,7 +2089,7 @@ static int lod_dir_declare_xattr_set(const struct lu_env *env,
 		if (rc != 0)
 			RETURN(rc);
 	} else if (strcmp(name, XATTR_NAME_LOV) == 0) {
-		rc = lod_verify_striping(d, buf, false, 0);
+		rc = lod_verify_striping(d, lo, buf, false);
 		if (rc != 0)
 			RETURN(rc);
 	}
@@ -2051,7 +2129,7 @@ static int
 lod_obj_stripe_replace_parent_fid_cb(const struct lu_env *env,
 				     struct lod_object *lo,
 				     struct dt_object *dt, struct thandle *th,
-				     int stripe_idx,
+				     int comp_idx, int stripe_idx,
 				     struct lod_obj_stripe_cb_data *data)
 {
 	struct lod_thread_info *info = lod_env_info(env);
@@ -2104,7 +2182,7 @@ static int lod_replace_parent_fid(const struct lu_env *env,
 	struct lod_thread_info	*info = lod_env_info(env);
 	struct lu_buf *buf = &info->lti_buf;
 	struct filter_fid *ff;
-	struct lod_obj_stripe_cb_data data;
+	struct lod_obj_stripe_cb_data data = { { 0 } };
 	int rc;
 	ENTRY;
 
@@ -2128,9 +2206,8 @@ static int lod_replace_parent_fid(const struct lu_env *env,
 	buf->lb_len = info->lti_ea_store_size;
 
 	data.locd_declare = declare;
-	rc = lod_obj_for_each_stripe(env, lo, th,
-				     lod_obj_stripe_replace_parent_fid_cb,
-				     &data);
+	data.locd_stripe_cb = lod_obj_stripe_replace_parent_fid_cb;
+	rc = lod_obj_for_each_stripe(env, lo, th, &data);
 
 	RETURN(rc);
 }
@@ -2212,7 +2289,7 @@ static int lod_declare_layout_add(const struct lu_env *env,
 				  struct thandle *th)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
-	struct lod_layout_component *comp_array, *lod_comp;
+	struct lod_layout_component *comp_array, *lod_comp, *old_array;
 	struct lod_device	*d = lu2lod_dev(dt->do_lu.lo_dev);
 	struct dt_object *next = dt_object_child(dt);
 	struct lov_desc		*desc = &d->lod_desc;
@@ -2220,14 +2297,15 @@ static int lod_declare_layout_add(const struct lu_env *env,
 	struct lov_user_md_v3	*v3;
 	struct lov_comp_md_v1	*comp_v1 = buf->lb_buf;
 	__u32	magic;
-	__u64	prev_end;
-	int	i, rc, array_cnt;
+	int	i, rc, array_cnt, old_array_cnt;
 	ENTRY;
 
 	LASSERT(lo->ldo_is_composite);
 
-	prev_end = lo->ldo_comp_entries[lo->ldo_comp_cnt - 1].llc_extent.e_end;
-	rc = lod_verify_striping(d, buf, false, prev_end);
+	if (lo->ldo_flr_state != LCM_FL_NOT_FLR)
+		RETURN(-EBUSY);
+
+	rc = lod_verify_striping(d, lo, buf, false);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -2260,6 +2338,7 @@ static int lod_declare_layout_add(const struct lu_env *env,
 		lod_comp->llc_extent.e_start = ext->e_start;
 		lod_comp->llc_extent.e_end = ext->e_end;
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
+		lod_comp->llc_flags = comp_v1->lcm_entries[i].lcme_flags;
 
 		lod_comp->llc_stripe_count = v1->lmm_stripe_count;
 		if (!lod_comp->llc_stripe_count ||
@@ -2282,17 +2361,28 @@ static int lod_declare_layout_add(const struct lu_env *env,
 		}
 	}
 
-	OBD_FREE(lo->ldo_comp_entries, sizeof(*lod_comp) * lo->ldo_comp_cnt);
+	old_array = lo->ldo_comp_entries;
+	old_array_cnt = lo->ldo_comp_cnt;
+
 	lo->ldo_comp_entries = comp_array;
 	lo->ldo_comp_cnt = array_cnt;
+
 	/* No need to increase layout generation here, it will be increased
 	 * later when generating component ID for the new components */
 
 	info->lti_buf.lb_len = lod_comp_md_size(lo, false);
 	rc = lod_sub_declare_xattr_set(env, next, &info->lti_buf,
 					      XATTR_NAME_LOV, 0, th);
-	if (rc)
+	if (rc) {
+		lo->ldo_comp_entries = old_array;
+		lo->ldo_comp_cnt = old_array_cnt;
 		GOTO(error, rc);
+	}
+
+	OBD_FREE(old_array, sizeof(*lod_comp) * old_array_cnt);
+
+	LASSERT(lo->ldo_mirror_count == 1);
+	lo->ldo_mirrors[0].lme_end = array_cnt - 1;
 
 	RETURN(0);
 
@@ -2416,9 +2506,8 @@ static int lod_declare_layout_del(const struct lu_env *env,
 
 	LASSERT(lo->ldo_is_composite);
 
-	rc = lod_verify_striping(d, buf, false, 0);
-	if (rc != 0)
-		RETURN(rc);
+	if (lo->ldo_flr_state != LCM_FL_NOT_FLR)
+		RETURN(-EBUSY);
 
 	magic = comp_v1->lcm_magic;
 	if (magic == __swab32(LOV_USER_MAGIC_COMP_V1)) {
@@ -2586,6 +2675,213 @@ unlock:
 }
 
 /**
+ * Convert a plain file lov_mds_md to a composite layout.
+ *
+ * \param[in,out] info	the thread info::lti_ea_store buffer contains little
+ *			endian plain file layout
+ *
+ * \retval		0 on success, <0 on failure
+ */
+static int lod_layout_convert(struct lod_thread_info *info)
+{
+	struct lov_mds_md *lmm = info->lti_ea_store;
+	struct lov_mds_md *lmm_save;
+	struct lov_comp_md_v1 *lcm;
+	struct lov_comp_md_entry_v1 *lcme;
+	size_t size;
+	__u32 blob_size;
+	int rc = 0;
+	ENTRY;
+
+	/* realloc buffer to a composite layout which contains one component */
+	blob_size = lov_mds_md_size(le16_to_cpu(lmm->lmm_stripe_count),
+				    le32_to_cpu(lmm->lmm_magic));
+	size = sizeof(*lcm) + sizeof(*lcme) + blob_size;
+
+	OBD_ALLOC_LARGE(lmm_save, blob_size);
+	if (!lmm_save)
+		GOTO(out, rc = -ENOMEM);
+
+	memcpy(lmm_save, lmm, blob_size);
+
+	if (info->lti_ea_store_size < size) {
+		rc = lod_ea_store_resize(info, size);
+		if (rc)
+			GOTO(out, rc);
+	}
+
+	lcm = info->lti_ea_store;
+	lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
+	lcm->lcm_size = cpu_to_le32(size);
+	lcm->lcm_layout_gen = cpu_to_le32(le16_to_cpu(
+						lmm_save->lmm_layout_gen));
+	lcm->lcm_flags = cpu_to_le16(LCM_FL_NOT_FLR);
+	lcm->lcm_entry_count = cpu_to_le16(1);
+	lcm->lcm_mirror_count = 0;
+
+	lcme = &lcm->lcm_entries[0];
+	lcme->lcme_flags = cpu_to_le32(LCME_FL_INIT);
+	lcme->lcme_extent.e_start = 0;
+	lcme->lcme_extent.e_end = cpu_to_le64(OBD_OBJECT_EOF);
+	lcme->lcme_offset = cpu_to_le32(sizeof(*lcm) + sizeof(*lcme));
+	lcme->lcme_size = cpu_to_le32(blob_size);
+
+	memcpy((char *)lcm + lcme->lcme_offset, (char *)lmm_save, blob_size);
+
+	EXIT;
+out:
+	if (lmm_save)
+		OBD_FREE_LARGE(lmm_save, blob_size);
+	return rc;
+}
+
+/**
+ * Merge layouts to form a mirrored file.
+ */
+static int lod_declare_layout_merge(const struct lu_env *env,
+		struct dt_object *dt, const struct lu_buf *mbuf,
+		struct thandle *th)
+{
+	struct lod_thread_info	*info = lod_env_info(env);
+	struct lu_buf		*buf = &info->lti_buf;
+	struct lod_object	*lo = lod_dt_obj(dt);
+	struct lov_comp_md_v1	*lcm;
+	struct lov_comp_md_v1	*cur_lcm;
+	struct lov_comp_md_v1	*merge_lcm;
+	struct lov_comp_md_entry_v1	*lcme;
+	size_t size = 0;
+	size_t offset;
+	__u16 cur_entry_count;
+	__u16 merge_entry_count;
+	__u32 id = 0;
+	__u16 mirror_id = 0;
+	__u32 mirror_count;
+	int	rc, i;
+	ENTRY;
+
+	merge_lcm = mbuf->lb_buf;
+	if (mbuf->lb_len < sizeof(*merge_lcm))
+		RETURN(-EINVAL);
+
+	/* must be an existing layout from disk */
+	if (le32_to_cpu(merge_lcm->lcm_magic) != LOV_MAGIC_COMP_V1)
+		RETURN(-EINVAL);
+
+	merge_entry_count = le16_to_cpu(merge_lcm->lcm_entry_count);
+
+	/* do not allow to merge two mirrored files */
+	if (le16_to_cpu(merge_lcm->lcm_mirror_count))
+		RETURN(-EBUSY);
+
+	/* verify the target buffer */
+	rc = lod_get_lov_ea(env, lo);
+	if (rc <= 0)
+		RETURN(rc ? : -ENODATA);
+
+	cur_lcm = info->lti_ea_store;
+	switch (le32_to_cpu(cur_lcm->lcm_magic)) {
+	case LOV_MAGIC_V1:
+	case LOV_MAGIC_V3:
+		rc = lod_layout_convert(info);
+		break;
+	case LOV_MAGIC_COMP_V1:
+		rc = 0;
+		break;
+	default:
+		rc = -EINVAL;
+	}
+	if (rc)
+		RETURN(rc);
+
+	/* info->lti_ea_store could be reallocated in lod_layout_convert() */
+	cur_lcm = info->lti_ea_store;
+	cur_entry_count = le16_to_cpu(cur_lcm->lcm_entry_count);
+
+	/* 'lcm_mirror_count + 1' is the current # of mirrors the file has */
+	mirror_count = le16_to_cpu(cur_lcm->lcm_mirror_count) + 1;
+	if (mirror_count + 1 > LUSTRE_MIRROR_COUNT_MAX)
+		RETURN(-ERANGE);
+
+	/* size of new layout */
+	size = le32_to_cpu(cur_lcm->lcm_size) +
+	       le32_to_cpu(merge_lcm->lcm_size) - sizeof(*cur_lcm);
+
+	memset(buf, 0, sizeof(*buf));
+	lu_buf_alloc(buf, size);
+	if (buf->lb_buf == NULL)
+		RETURN(-ENOMEM);
+
+	lcm = buf->lb_buf;
+	memcpy(lcm, cur_lcm, sizeof(*lcm) + cur_entry_count * sizeof(*lcme));
+
+	offset = sizeof(*lcm) +
+		 sizeof(*lcme) * (cur_entry_count + merge_entry_count);
+	for (i = 0; i < cur_entry_count; i++) {
+		struct lov_comp_md_entry_v1 *cur_lcme;
+
+		lcme = &lcm->lcm_entries[i];
+		cur_lcme = &cur_lcm->lcm_entries[i];
+
+		lcme->lcme_offset = cpu_to_le32(offset);
+		memcpy((char *)lcm + offset,
+		       (char *)cur_lcm + le32_to_cpu(cur_lcme->lcme_offset),
+		       le32_to_cpu(lcme->lcme_size));
+
+		offset += le32_to_cpu(lcme->lcme_size);
+
+		if (mirror_count == 1) {
+			/* new mirrored file, create new mirror ID */
+			id = pflr_id(1, i + 1);
+			lcme->lcme_id = cpu_to_le32(id);
+		}
+
+		id = MAX(le32_to_cpu(lcme->lcme_id), id);
+	}
+
+	mirror_id = mirror_id_of(id) + 1;
+	for (i = 0; i < merge_entry_count; i++) {
+		struct lov_comp_md_entry_v1 *merge_lcme;
+
+		merge_lcme = &merge_lcm->lcm_entries[i];
+		lcme = &lcm->lcm_entries[cur_entry_count + i];
+
+		*lcme = *merge_lcme;
+		lcme->lcme_offset = cpu_to_le32(offset);
+
+		id = pflr_id(mirror_id, i + 1);
+		lcme->lcme_id = cpu_to_le32(id);
+
+		memcpy((char *)lcm + offset,
+		       (char *)merge_lcm + le32_to_cpu(merge_lcme->lcme_offset),
+		       le32_to_cpu(lcme->lcme_size));
+
+		offset += le32_to_cpu(lcme->lcme_size);
+	}
+
+	/* fixup layout information */
+	lod_obj_inc_layout_gen(lo);
+	lcm->lcm_layout_gen = cpu_to_le32(lo->ldo_layout_gen);
+	lcm->lcm_size = cpu_to_le32(size);
+	lcm->lcm_entry_count = cpu_to_le16(cur_entry_count + merge_entry_count);
+	lcm->lcm_mirror_count = cpu_to_le16(mirror_count);
+	if ((le16_to_cpu(lcm->lcm_flags) & LCM_FL_FLR_MASK) == LCM_FL_NOT_FLR)
+		lcm->lcm_flags = cpu_to_le32(LCM_FL_RDONLY);
+
+	LASSERT(dt_write_locked(env, dt_object_child(dt)));
+	lod_object_free_striping(env, lo);
+	rc = lod_parse_striping(env, lo, buf);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = lod_sub_declare_xattr_set(env, dt_object_child(dt), buf,
+					XATTR_NAME_LOV, LU_XATTR_REPLACE, th);
+
+out:
+	lu_buf_free(buf);
+	RETURN(rc);
+}
+
+/**
  * Implementation of dt_object_operations::do_declare_xattr_set.
  *
  * \see dt_object_operations::do_declare_xattr_set() in the API description
@@ -2608,7 +2904,8 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 	ENTRY;
 
 	mode = dt->do_lu.lo_header->loh_attr & S_IFMT;
-	if ((S_ISREG(mode) || mode == 0) && !(fl & LU_XATTR_REPLACE) &&
+	if ((S_ISREG(mode) || mode == 0) &&
+	    !(fl & (LU_XATTR_REPLACE | LU_XATTR_MERGE)) &&
 	    (strcmp(name, XATTR_NAME_LOV) == 0 ||
 	     strcmp(name, XATTR_LUSTRE_LOV) == 0)) {
 		/*
@@ -2630,6 +2927,10 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 			attr->la_mode = S_IFREG;
 		}
 		rc = lod_declare_striped_create(env, dt, attr, buf, th);
+	} else if (fl & LU_XATTR_MERGE) {
+		LASSERT(strcmp(name, XATTR_NAME_LOV) == 0 ||
+			strcmp(name, XATTR_LUSTRE_LOV) == 0);
+		rc = lod_declare_layout_merge(env, dt, buf, th);
 	} else if (S_ISREG(mode) &&
 		   strlen(name) > strlen(XATTR_LUSTRE_LOV) + 1 &&
 		   strncmp(name, XATTR_LUSTRE_LOV,
@@ -3313,6 +3614,9 @@ static int lod_layout_del(const struct lu_env *env, struct dt_object *dt,
 			 sizeof(*comp_array) * lo->ldo_comp_cnt);
 		lo->ldo_comp_entries = comp_array;
 		lo->ldo_comp_cnt = left;
+
+		LASSERT(lo->ldo_mirror_count == 1);
+		lo->ldo_mirrors[0].lme_end = left - 1;
 		lod_obj_inc_layout_gen(lo);
 	} else {
 		lod_free_comp_entries(lo);
@@ -3560,6 +3864,7 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 	struct lov_user_md_v3 *v3 = NULL;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
 	__u16	comp_cnt;
+	__u16	mirror_cnt;
 	bool	composite;
 	int	rc, i;
 	ENTRY;
@@ -3593,9 +3898,11 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 		comp_cnt = comp_v1->lcm_entry_count;
 		if (comp_cnt == 0)
 			RETURN(-EINVAL);
+		mirror_cnt = comp_v1->lcm_mirror_count + 1;
 		composite = true;
 	} else {
 		comp_cnt = 1;
+		mirror_cnt = 0;
 		composite = false;
 	}
 
@@ -3605,7 +3912,8 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 		RETURN(rc);
 
 	lds->lds_def_comp_cnt = comp_cnt;
-	lds->lds_def_striping_is_composite = composite ? 1 : 0;
+	lds->lds_def_striping_is_composite = composite;
+	lds->lds_def_mirror_cnt = mirror_cnt;
 
 	for (i = 0; i < comp_cnt; i++) {
 		struct lod_layout_component *lod_comp;
@@ -3741,11 +4049,14 @@ static void lod_striping_from_default(struct lod_object *lo,
 	int i, rc;
 
 	if (lds->lds_def_striping_set && S_ISREG(mode)) {
-		rc = lod_alloc_comp_entries(lo, lds->lds_def_comp_cnt);
+		rc = lod_alloc_comp_entries(lo, lds->lds_def_mirror_cnt,
+					    lds->lds_def_comp_cnt);
 		if (rc != 0)
 			return;
 
 		lo->ldo_is_composite = lds->lds_def_striping_is_composite;
+		if (lds->lds_def_mirror_cnt > 1)
+			lo->ldo_flr_state = LCM_FL_RDONLY;
 
 		for (i = 0; i < lo->ldo_comp_cnt; i++) {
 			struct lod_layout_component *obj_comp =
@@ -4004,9 +4315,8 @@ out:
 	 * in config log, use them.
 	 */
 	if (lod_need_inherit_more(lc, false)) {
-
 		if (lc->ldo_comp_cnt == 0) {
-			rc = lod_alloc_comp_entries(lc, 1);
+			rc = lod_alloc_comp_entries(lc, 0, 1);
 			if (rc)
 				/* fail to allocate memory, will create a
 				 * non-striped file. */
@@ -4055,6 +4365,7 @@ static int lod_declare_init_size(const struct lu_env *env,
 	struct lu_attr	*attr = &lod_env_info(env)->lti_attr;
 	uint64_t	size, offs;
 	int	i, rc, stripe, stripe_count = 0, stripe_size = 0;
+	struct lu_extent size_ext;
 	ENTRY;
 
 	if (!lod_obj_is_striped(dt))
@@ -4069,6 +4380,7 @@ static int lod_declare_init_size(const struct lu_env *env,
 	if (size == 0)
 		RETURN(0);
 
+	size_ext = (typeof(size_ext)){ .e_start = size - 1, .e_end = size };
 	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		struct lod_layout_component *lod_comp;
 		struct lu_extent *extent;
@@ -4079,35 +4391,34 @@ static int lod_declare_init_size(const struct lu_env *env,
 			continue;
 
 		extent = &lod_comp->llc_extent;
-		CDEBUG(D_INFO, "%lld [%lld, %lld)\n",
-		       size, extent->e_start, extent->e_end);
+		CDEBUG(D_INFO, "%lld "DEXT"\n", size, PEXT(extent));
 		if (!lo->ldo_is_composite ||
-		    (size >= extent->e_start && size < extent->e_end)) {
+		    lu_extent_is_overlapped(extent, &size_ext)) {
 			objects = lod_comp->llc_stripe;
 			stripe_count = lod_comp->llc_stripe_count;
 			stripe_size = lod_comp->llc_stripe_size;
-			break;
+
+			/* next mirror */
+			if (stripe_count == 0)
+				continue;
+
+			LASSERT(objects != NULL && stripe_size != 0);
+			/* ll_do_div64(a, b) returns a % b, and a = a / b */
+			ll_do_div64(size, (__u64)stripe_size);
+			stripe = ll_do_div64(size, (__u64)stripe_count);
+			LASSERT(objects[stripe] != NULL);
+
+			size = size * stripe_size;
+			offs = attr->la_size;
+			size += ll_do_div64(offs, stripe_size);
+
+			attr->la_valid = LA_SIZE;
+			attr->la_size = size;
+
+			rc = lod_sub_declare_attr_set(env, objects[stripe],
+						      attr, th);
 		}
 	}
-
-	if (stripe_count == 0)
-		RETURN(0);
-
-	LASSERT(objects != NULL && stripe_size != 0);
-
-	/* ll_do_div64(a, b) returns a % b, and a = a / b */
-	ll_do_div64(size, (__u64)stripe_size);
-	stripe = ll_do_div64(size, (__u64)stripe_count);
-	LASSERT(objects[stripe] != NULL);
-
-	size = size * stripe_size;
-	offs = attr->la_size;
-	size += ll_do_div64(offs, stripe_size);
-
-	attr->la_valid = LA_SIZE;
-	attr->la_size = size;
-
-	rc = lod_sub_declare_attr_set(env, objects[stripe], attr, th);
 
 	RETURN(rc);
 }
@@ -4293,6 +4604,53 @@ out:
 }
 
 /**
+ * Generate component ID for new created component.
+ *
+ * \param[in] lo		LOD object
+ * \param[in] comp_idx		index of ldo_comp_entries
+ *
+ * \retval			component ID on success
+ * \retval			LCME_ID_INVAL on failure
+ */
+static __u32 lod_gen_component_id(struct lod_object *lo,
+				  int mirror_id, int comp_idx)
+{
+	struct lod_layout_component *lod_comp;
+	__u32	id, start, end;
+	int	i;
+
+	LASSERT(lo->ldo_comp_entries[comp_idx].llc_id == LCME_ID_INVAL);
+
+	lod_obj_inc_layout_gen(lo);
+	id = lo->ldo_layout_gen;
+	if (likely(id <= SEQ_ID_MAX))
+		RETURN(pflr_id(mirror_id, id & SEQ_ID_MASK));
+
+	/* Layout generation wraps, need to check collisions. */
+	start = id & SEQ_ID_MASK;
+	end = SEQ_ID_MAX;
+again:
+	for (id = start; id <= end; id++) {
+		for (i = 0; i < lo->ldo_comp_cnt; i++) {
+			lod_comp = &lo->ldo_comp_entries[i];
+			if (pflr_id(mirror_id, id) == lod_comp->llc_id)
+				break;
+		}
+		/* Found the ununsed ID */
+		if (i == lo->ldo_comp_cnt)
+			RETURN(pflr_id(mirror_id, id));
+	}
+	if (end == LCME_ID_MAX) {
+		start = 1;
+		end = min(lo->ldo_layout_gen & LCME_ID_MASK,
+			  (__u32)(LCME_ID_MAX - 1));
+		goto again;
+	}
+
+	RETURN(LCME_ID_INVAL);
+}
+
+/**
  * Creation of a striped regular object.
  *
  * The function is called to create the stripe objects for a regular
@@ -4317,14 +4675,27 @@ int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 {
 	struct lod_layout_component	*lod_comp;
 	struct lod_object	*lo = lod_dt_obj(dt);
+	__u16	mirror_id;
 	int	rc = 0, i, j;
 	ENTRY;
 
 	LASSERT(lo->ldo_comp_cnt != 0 && lo->ldo_comp_entries != NULL);
 
+	mirror_id = lo->ldo_mirror_count > 1 ? 1 : 0;
+
 	/* create all underlying objects */
 	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		lod_comp = &lo->ldo_comp_entries[i];
+
+		if (lod_comp->llc_extent.e_start == 0 && i > 0) /* new mirror */
+			++mirror_id;
+
+		if (lod_comp->llc_id == LCME_ID_INVAL) {
+			lod_comp->llc_id = lod_gen_component_id(lo,
+								mirror_id, i);
+			if (lod_comp->llc_id == LCME_ID_INVAL)
+				GOTO(out, rc = -ERANGE);
+		}
 
 		if (lod_comp_inited(lod_comp))
 			continue;
@@ -4344,19 +4715,24 @@ int lod_striped_create(const struct lu_env *env, struct dt_object *dt,
 			LASSERT(object != NULL);
 			rc = lod_sub_create(env, object, attr, NULL, dof, th);
 			if (rc)
-				break;
+				GOTO(out, rc);
 		}
 		lod_comp_set_init(lod_comp);
 	}
 
-	if (rc == 0)
-		rc = lod_generate_and_set_lovea(env, lo, th);
+	rc = lod_fill_mirrors(lo);
+	if (rc)
+		GOTO(out, rc);
 
-	if (rc == 0)
-		lo->ldo_comp_cached = 1;
-	else
-		lod_object_free_striping(env, lo);
+	rc = lod_generate_and_set_lovea(env, lo, th);
+	if (rc)
+		GOTO(out, rc);
 
+	lo->ldo_comp_cached = 1;
+	RETURN(0);
+
+out:
+	lod_object_free_striping(env, lo);
 	RETURN(rc);
 }
 
@@ -4393,7 +4769,8 @@ static int lod_create(const struct lu_env *env, struct dt_object *dt,
 static inline int
 lod_obj_stripe_destroy_cb(const struct lu_env *env, struct lod_object *lo,
 			  struct dt_object *dt, struct thandle *th,
-			  int stripe_idx, struct lod_obj_stripe_cb_data *data)
+			  int comp_idx, int stripe_idx,
+			  struct lod_obj_stripe_cb_data *data)
 {
 	if (data->locd_declare)
 		return lod_sub_declare_destroy(env, dt, th);
@@ -4485,11 +4862,11 @@ static int lod_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 				break;
 		}
 	} else {
-		struct lod_obj_stripe_cb_data data;
+		struct lod_obj_stripe_cb_data data = { { 0 } };
 
 		data.locd_declare = true;
-		rc = lod_obj_for_each_stripe(env, lo, th,
-				lod_obj_stripe_destroy_cb, &data);
+		data.locd_stripe_cb = lod_obj_stripe_destroy_cb;
+		rc = lod_obj_for_each_stripe(env, lo, th, &data);
 	}
 
 	RETURN(rc);
@@ -4575,11 +4952,11 @@ static int lod_destroy(const struct lu_env *env, struct dt_object *dt,
 			}
 		}
 	} else {
-		struct lod_obj_stripe_cb_data data;
+		struct lod_obj_stripe_cb_data data = { { 0 } };
 
 		data.locd_declare = false;
-		rc = lod_obj_for_each_stripe(env, lo, th,
-				lod_obj_stripe_destroy_cb, &data);
+		data.locd_stripe_cb = lod_obj_stripe_destroy_cb;
+		rc = lod_obj_for_each_stripe(env, lo, th, &data);
 	}
 
 	RETURN(rc);
@@ -4837,29 +5214,78 @@ static int lod_invalidate(const struct lu_env *env, struct dt_object *dt)
 	return dt_invalidate(env, dt_object_child(dt));
 }
 
-static int lod_declare_layout_change(const struct lu_env *env,
-				     struct dt_object *dt,
-				     struct layout_intent *layout,
-				     const struct lu_buf *buf,
-				     struct thandle *th)
+static int lod_layout_data_init(struct lod_thread_info *info, __u32 comp_cnt)
 {
-	struct lod_thread_info	*info = lod_env_info(env);
-	struct lod_object *lo = lod_dt_obj(dt);
-	struct lod_device *d = lu2lod_dev(dt->do_lu.lo_dev);
-	struct dt_object *next = dt_object_child(dt);
+	ENTRY;
+
+	/* clear memory region that will be used for layout change */
+	memset(&info->lti_layout_attr, 0, sizeof(struct lu_attr));
+	info->lti_count = 0;
+
+	if (info->lti_comp_size >= comp_cnt)
+		RETURN(0);
+
+	if (info->lti_comp_size > 0) {
+		OBD_FREE(info->lti_comp_idx,
+			 info->lti_comp_size * sizeof(__u32));
+		info->lti_comp_size = 0;
+	}
+
+	OBD_ALLOC(info->lti_comp_idx, comp_cnt * sizeof(__u32));
+	if (!info->lti_comp_idx)
+		RETURN(-ENOMEM);
+
+	info->lti_comp_size = comp_cnt;
+	RETURN(0);
+}
+
+static int lod_declare_instantiate_components(const struct lu_env *env,
+		struct lod_object *lo, struct thandle *th)
+{
+	struct lod_thread_info *info = lod_env_info(env);
 	struct ost_pool *inuse = &info->lti_inuse_osts;
+	int i;
+	int rc = 0;
+	ENTRY;
+
+	LASSERT(info->lti_count < lo->ldo_comp_cnt);
+	if (info->lti_count > 0) {
+		/* Prepare inuse array for composite file */
+		rc = lod_prepare_inuse(env, lo);
+		if (rc)
+			RETURN(rc);
+	}
+
+	for (i = 0; i < info->lti_count; i++) {
+		rc = lod_qos_prep_create(env, lo, NULL, th,
+					 info->lti_comp_idx[i], inuse);
+		if (rc)
+			break;
+	}
+
+	if (!rc) {
+		info->lti_buf.lb_len = lod_comp_md_size(lo, false);
+		rc = lod_sub_declare_xattr_set(env, lod_object_child(lo),
+				&info->lti_buf, XATTR_NAME_LOV, 0, th);
+	}
+
+	RETURN(rc);
+}
+
+static int lod_declare_update_plain(const struct lu_env *env,
+		struct lod_object *lo, struct layout_intent *layout,
+		const struct lu_buf *buf, struct thandle *th)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lod_device *d = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lod_layout_component *lod_comp;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
 	bool replay = false;
-	bool need_create = false;
 	int i, rc;
 	ENTRY;
 
-	if (!S_ISREG(dt->do_lu.lo_header->loh_attr) || !dt_object_exists(dt) ||
-	    dt_object_remote(next))
-		RETURN(-EINVAL);
+	LASSERT(lo->ldo_flr_state == LCM_FL_NOT_FLR);
 
-	dt_write_lock(env, next, 0);
 	/*
 	 * In case the client is passing lovea, which only happens during
 	 * the replay of layout intent write RPC for now, we may need to
@@ -4887,32 +5313,40 @@ static int lod_declare_layout_change(const struct lu_env *env,
 		if (rc <= 0)
 			GOTO(out, rc);
 		/* old on-disk EA is stored in info->lti_buf */
-		comp_v1 = (struct lov_comp_md_v1 *)&info->lti_buf.lb_buf;
+		comp_v1 = (struct lov_comp_md_v1 *)info->lti_buf.lb_buf;
 		replay = true;
 	} else {
 		/* non replay path */
 		rc = lod_load_striping_locked(env, lo);
 		if (rc)
 			GOTO(out, rc);
+	}
 
-		/* Prepare inuse array for composite file */
-		rc = lod_prepare_inuse(env, lo);
-		if (rc)
-			GOTO(out, rc);
+	if (layout->li_opc == LAYOUT_INTENT_TRUNC) {
+		/**
+		 * trunc transfers [size, eof) in the intent extent, while
+		 * we'd instantiated components covers [0, size).
+		 */
+		layout->li_extent.e_end = layout->li_extent.e_start;
+		layout->li_extent.e_start = 0;
 	}
 
 	/* Make sure defined layout covers the requested write range. */
 	lod_comp = &lo->ldo_comp_entries[lo->ldo_comp_cnt - 1];
 	if (lo->ldo_comp_cnt > 1 &&
 	    lod_comp->llc_extent.e_end != OBD_OBJECT_EOF &&
-	    lod_comp->llc_extent.e_end < layout->li_end) {
+	    lod_comp->llc_extent.e_end < layout->li_extent.e_end) {
 		CDEBUG(replay ? D_ERROR : D_LAYOUT,
 		       "%s: the defined layout [0, %#llx) does not covers "
-		       "the write range [%#llx, %#llx).\n",
+		       "the write range "DEXT"\n",
 		       lod2obd(d)->obd_name, lod_comp->llc_extent.e_end,
-		       layout->li_start, layout->li_end);
+		       PEXT(&layout->li_extent));
 		GOTO(out, rc = -EINVAL);
 	}
+
+	CDEBUG(D_LAYOUT, "%s: "DFID": instantiate components "DEXT"\n",
+	       lod2obd(d)->obd_name, PFID(lod_object_fid(lo)),
+	       PEXT(&layout->li_extent));
 
 	/*
 	 * Iterate ld->ldo_comp_entries, find the component whose extent under
@@ -4921,7 +5355,7 @@ static int lod_declare_layout_change(const struct lu_env *env,
 	for (i = 0; i < lo->ldo_comp_cnt; i++) {
 		lod_comp = &lo->ldo_comp_entries[i];
 
-		if (lod_comp->llc_extent.e_start >= layout->li_end)
+		if (lod_comp->llc_extent.e_start >= layout->li_extent.e_end)
 			break;
 
 		if (!replay) {
@@ -4947,30 +5381,468 @@ static int lod_declare_layout_change(const struct lu_env *env,
 		if (lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)
 			GOTO(out, rc = -EINVAL);
 
-		need_create = true;
-
-		rc = lod_qos_prep_create(env, lo, NULL, th, i, inuse);
-		if (rc)
-			break;
+		LASSERT(info->lti_comp_idx != NULL);
+		info->lti_comp_idx[info->lti_count++] = i;
 	}
 
-	if (need_create)
-		lod_obj_inc_layout_gen(lo);
-	else
-		GOTO(unlock, rc = -EALREADY);
+	if (info->lti_count == 0)
+		RETURN(-EALREADY);
 
-	if (!rc) {
-		info->lti_buf.lb_len = lod_comp_md_size(lo, false);
-		rc = lod_sub_declare_xattr_set(env, next, &info->lti_buf,
-					       XATTR_NAME_LOV, 0, th);
-	}
+	lod_obj_inc_layout_gen(lo);
+	rc = lod_declare_instantiate_components(env, lo, th);
 out:
 	if (rc)
 		lod_object_free_striping(env, lo);
+	RETURN(rc);
+}
 
-unlock:
-	dt_write_unlock(env, next);
+#define lod_foreach_mirror_comp(comp, lo, mirror_idx)                      \
+for (comp = &lo->ldo_comp_entries[lo->ldo_mirrors[mirror_idx].lme_start];  \
+     comp <= &lo->ldo_comp_entries[lo->ldo_mirrors[mirror_idx].lme_end];   \
+     comp++)
 
+static inline int lod_comp_index(struct lod_object *lo,
+				 struct lod_layout_component *lod_comp)
+{
+	LASSERT(lod_comp >= lo->ldo_comp_entries &&
+		lod_comp <= &lo->ldo_comp_entries[lo->ldo_comp_cnt - 1]);
+
+	return lod_comp - lo->ldo_comp_entries;
+}
+
+/**
+ * Stale other mirrors by writing extent.
+ */
+static void lod_stale_components(struct lod_object *lo, int primary,
+				 struct lu_extent *extent)
+{
+	struct lod_layout_component *pri_comp, *lod_comp;
+	int i;
+
+	/* The writing extent decides which components in the primary
+	 * are affected... */
+	CDEBUG(D_LAYOUT, "primary mirror %d, "DEXT"\n", primary, PEXT(extent));
+	lod_foreach_mirror_comp(pri_comp, lo, primary) {
+		if (!lu_extent_is_overlapped(extent, &pri_comp->llc_extent))
+			continue;
+
+		CDEBUG(D_LAYOUT, "primary comp %u "DEXT"\n",
+		       lod_comp_index(lo, pri_comp),
+		       PEXT(&pri_comp->llc_extent));
+
+		for (i = 0; i < lo->ldo_mirror_count; i++) {
+			if (i == primary)
+				continue;
+
+			/* ... and then stale other components that are
+			 * overlapping with primary components */
+			lod_foreach_mirror_comp(lod_comp, lo, i) {
+				if (!lu_extent_is_overlapped(
+							&pri_comp->llc_extent,
+							&lod_comp->llc_extent))
+					continue;
+
+				CDEBUG(D_LAYOUT, "stale: %u / %u\n",
+				      i, lod_comp_index(lo, lod_comp));
+
+				lod_comp->llc_flags |= LCME_FL_STALE;
+				lo->ldo_mirrors[i].lme_stale = 1;
+			}
+		}
+	}
+}
+
+static int lod_declare_update_rdonly(const struct lu_env *env,
+		struct lod_object *lo, struct md_layout_change *mlc,
+		struct thandle *th)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lu_attr *layout_attr = &info->lti_layout_attr;
+	struct lod_layout_component *lod_comp;
+	struct layout_intent *layout = mlc->mlc_intent;
+	struct lu_extent extent = layout->li_extent;
+	unsigned int seq = 0;
+	int picked;
+	int i;
+	int rc;
+	ENTRY;
+
+	LASSERT(mlc->mlc_opc == MD_LAYOUT_WRITE);
+	LASSERT(lo->ldo_flr_state == LCM_FL_RDONLY);
+	LASSERT(lo->ldo_mirror_count > 0);
+
+	CDEBUG(D_LAYOUT, DFID": trying to write :"DEXT"\n",
+	       PFID(lod_object_fid(lo)), PEXT(&extent));
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_FLR_RANDOM_PICK_MIRROR)) {
+		get_random_bytes(&seq, sizeof(seq));
+		seq %= lo->ldo_mirror_count;
+	}
+
+	/**
+	 * Pick a mirror as the primary.
+	 * Now it only picks the first mirror, this algo can be
+	 * revised later after knowing the topology of cluster or
+	 * the availability of OSTs.
+	 */
+	for (picked = -1, i = 0; i < lo->ldo_mirror_count; i++) {
+		int index = (i + seq) % lo->ldo_mirror_count;
+
+		if (!lo->ldo_mirrors[index].lme_stale) {
+			picked = index;
+			break;
+		}
+	}
+	if (picked < 0) /* failed to pick a primary */
+		RETURN(-ENODATA);
+
+	CDEBUG(D_LAYOUT, DFID": picked mirror %u as primary\n",
+	       PFID(lod_object_fid(lo)), lo->ldo_mirrors[picked].lme_id);
+
+	/* stale overlapping components from other mirrors */
+	lod_stale_components(lo, picked, &extent);
+
+	/* instantiate components for the picked mirror, start from 0 */
+	if (layout->li_opc == LAYOUT_INTENT_TRUNC) {
+		/**
+		 * trunc transfers [size, eof) in the intent extent, we'd
+		 * stale components overlapping [size, eof), while we'd
+		 * instantiated components covers [0, size).
+		 */
+		extent.e_end = extent.e_start;
+	}
+	extent.e_start = 0;
+
+	lod_foreach_mirror_comp(lod_comp, lo, picked) {
+		if (!lu_extent_is_overlapped(&extent,
+					     &lod_comp->llc_extent))
+			break;
+
+		if (lod_comp_inited(lod_comp))
+			continue;
+
+		CDEBUG(D_LAYOUT, "instantiate: %u / %u\n",
+		       i, lod_comp_index(lo, lod_comp));
+
+		info->lti_comp_idx[info->lti_count++] =
+						lod_comp_index(lo, lod_comp);
+	}
+
+	lo->ldo_flr_state = LCM_FL_WRITE_PENDING;
+
+	/* Reset the layout version once it's becoming too large.
+	 * This way it can make sure that the layout version is
+	 * monotonously increased in this writing era. */
+	lod_obj_inc_layout_gen(lo);
+	if (lo->ldo_layout_gen > (LCME_ID_MAX >> 1)) {
+		__u32 layout_version;
+
+		cfs_get_random_bytes(&layout_version, sizeof(layout_version));
+		lo->ldo_layout_gen = layout_version & 0xffff;
+	}
+
+	rc = lod_declare_instantiate_components(env, lo, th);
+	if (rc)
+		GOTO(out, rc);
+
+	layout_attr->la_valid = LA_LAYOUT_VERSION;
+	layout_attr->la_layout_version = 0; /* set current version */
+	rc = lod_declare_attr_set(env, &lo->ldo_obj, layout_attr, th);
+	if (rc)
+		GOTO(out, rc);
+
+out:
+	if (rc)
+		lod_object_free_striping(env, lo);
+	RETURN(rc);
+}
+
+static int lod_declare_update_write_pending(const struct lu_env *env,
+		struct lod_object *lo, struct md_layout_change *mlc,
+		struct thandle *th)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct lu_attr *layout_attr = &info->lti_layout_attr;
+	struct lod_layout_component *lod_comp;
+	struct lu_extent extent = { 0 };
+	int primary = -1;
+	int i;
+	int rc;
+	ENTRY;
+
+	LASSERT(lo->ldo_flr_state == LCM_FL_WRITE_PENDING);
+	LASSERT(mlc->mlc_opc == MD_LAYOUT_WRITE ||
+		mlc->mlc_opc == MD_LAYOUT_RESYNC);
+
+	/* look for the primary mirror */
+	for (i = 0; i < lo->ldo_mirror_count; i++) {
+		if (lo->ldo_mirrors[i].lme_stale)
+			continue;
+
+		LASSERTF(primary < 0, DFID " has multiple primary: %u / %u",
+			 PFID(lod_object_fid(lo)),
+			 lo->ldo_mirrors[i].lme_id,
+			 lo->ldo_mirrors[primary].lme_id);
+
+		primary = i;
+	}
+	if (primary < 0) {
+		CERROR(DFID ": doesn't have a primary mirror\n",
+		       PFID(lod_object_fid(lo)));
+		GOTO(out, rc = -ENODATA);
+	}
+
+	CDEBUG(D_LAYOUT, DFID": found primary %u\n",
+	       PFID(lod_object_fid(lo)), lo->ldo_mirrors[primary].lme_id);
+
+	LASSERT(!lo->ldo_mirrors[primary].lme_stale);
+
+	/* for LAYOUT_WRITE opc, it has to do the following operations:
+	 * 1. stale overlapping componets from stale mirrors;
+	 * 2. instantiate components of the primary mirror;
+	 * 3. transfter layout version to all objects of the primary;
+	 *
+	 * for LAYOUT_RESYNC opc, it will do:
+	 * 1. instantiate components of all stale mirrors;
+	 * 2. transfer layout version to all objects to close write era. */
+
+	if (mlc->mlc_opc == MD_LAYOUT_WRITE) {
+		LASSERT(mlc->mlc_intent != NULL);
+
+		extent = mlc->mlc_intent->li_extent;
+
+		CDEBUG(D_LAYOUT, DFID": intent to write: "DEXT"\n",
+		       PFID(lod_object_fid(lo)), PEXT(&extent));
+
+		/* 1. stale overlapping components */
+		lod_stale_components(lo, primary, &extent);
+
+		/* 2. find out the components need instantiating.
+		 * instantiate [0, mlc->mlc_intent->e_end) */
+		if (mlc->mlc_intent->li_opc == LAYOUT_INTENT_TRUNC) {
+			/**
+			 * trunc transfers [size, eof) in the intent extent,
+			 * we'd stale components overlapping [size, eof),
+			 * while we'd instantiated components covers [0, size).
+			 */
+			extent.e_end = extent.e_start;
+		}
+		extent.e_start = 0;
+
+		lod_foreach_mirror_comp(lod_comp, lo, primary) {
+			if (!lu_extent_is_overlapped(&extent,
+						     &lod_comp->llc_extent))
+				break;
+
+			if (lod_comp_inited(lod_comp))
+				continue;
+
+			CDEBUG(D_LAYOUT, "write instantiate %d / %d\n",
+			       primary, lod_comp_index(lo, lod_comp));
+			info->lti_comp_idx[info->lti_count++] =
+						lod_comp_index(lo, lod_comp);
+		}
+	} else { /* MD_LAYOUT_RESYNC */
+		/* figure out the components that have been instantiated in
+		 * in primary to decide what components should be instantiated
+		 * in stale mirrors */
+		lod_foreach_mirror_comp(lod_comp, lo, primary) {
+			if (!lod_comp_inited(lod_comp))
+				break;
+
+			extent.e_end = lod_comp->llc_extent.e_end;
+		}
+
+		CDEBUG(D_LAYOUT,
+		       DFID": instantiate all stale components in "DEXT"\n",
+		       PFID(lod_object_fid(lo)), PEXT(&extent));
+
+		/* 1. instantiate all components within this extent, even
+		 * non-stale components so that it won't need to instantiate
+		 * those components for mirror truncate later. */
+		for (i = 0; i < lo->ldo_mirror_count; i++) {
+			if (primary == i)
+				continue;
+
+			LASSERTF(lo->ldo_mirrors[i].lme_stale,
+				 "both %d and %d are primary\n", i, primary);
+
+			lod_foreach_mirror_comp(lod_comp, lo, i) {
+				if (!lu_extent_is_overlapped(&extent,
+							&lod_comp->llc_extent))
+					break;
+
+				if (lod_comp_inited(lod_comp))
+					continue;
+
+				CDEBUG(D_LAYOUT, "resync instantiate %d / %d\n",
+				       i, lod_comp_index(lo, lod_comp));
+
+				info->lti_comp_idx[info->lti_count++] =
+						lod_comp_index(lo, lod_comp);
+			}
+		}
+
+		/* change the file state to SYNC_PENDING */
+		lo->ldo_flr_state = LCM_FL_SYNC_PENDING;
+	}
+
+	rc = lod_declare_instantiate_components(env, lo, th);
+	if (rc)
+		GOTO(out, rc);
+
+	/* 3. transfer layout version to OST objects.
+	 * transfer new layout version to OST objects so that stale writes
+	 * can be denied. It also ends an era of writing by setting
+	 * LU_LAYOUT_RESYNC. Normal client can never use this bit to
+	 * send write RPC; only resync RPCs could do it. */
+	layout_attr->la_valid = LA_LAYOUT_VERSION;
+	layout_attr->la_layout_version = 0; /* set current version */
+	if (mlc->mlc_opc == MD_LAYOUT_RESYNC)
+		layout_attr->la_layout_version = LU_LAYOUT_RESYNC;
+	rc = lod_declare_attr_set(env, &lo->ldo_obj, layout_attr, th);
+	if (rc)
+		GOTO(out, rc);
+
+	lod_obj_inc_layout_gen(lo);
+out:
+	if (rc)
+		lod_object_free_striping(env, lo);
+	RETURN(rc);
+}
+
+static int lod_declare_update_sync_pending(const struct lu_env *env,
+		struct lod_object *lo, struct md_layout_change *mlc,
+		struct thandle *th)
+{
+	struct lod_thread_info  *info = lod_env_info(env);
+	unsigned sync_components = 0;
+	unsigned resync_components = 0;
+	int i;
+	int rc;
+	ENTRY;
+
+	LASSERT(lo->ldo_flr_state == LCM_FL_SYNC_PENDING);
+	LASSERT(mlc->mlc_opc == MD_LAYOUT_RESYNC_DONE ||
+		mlc->mlc_opc == MD_LAYOUT_WRITE);
+
+	CDEBUG(D_LAYOUT, DFID ": received op %d in sync pending\n",
+	       PFID(lod_object_fid(lo)), mlc->mlc_opc);
+
+	if (mlc->mlc_opc == MD_LAYOUT_WRITE) {
+		CDEBUG(D_LAYOUT, DFID": cocurrent write to sync pending\n",
+		       PFID(lod_object_fid(lo)));
+
+		lo->ldo_flr_state = LCM_FL_WRITE_PENDING;
+		return lod_declare_update_write_pending(env, lo, mlc, th);
+	}
+
+	/* MD_LAYOUT_RESYNC_DONE */
+
+	for (i = 0; i < lo->ldo_comp_cnt; i++) {
+		struct lod_layout_component *lod_comp;
+		int j;
+
+		lod_comp = &lo->ldo_comp_entries[i];
+
+		if (!(lod_comp->llc_flags & LCME_FL_STALE)) {
+			sync_components++;
+			continue;
+		}
+
+		for (j = 0; j < mlc->mlc_resync_count; j++) {
+			if (lod_comp->llc_id != mlc->mlc_resync_ids[j])
+				continue;
+
+			mlc->mlc_resync_ids[j] = LCME_ID_INVAL;
+			lod_comp->llc_flags &= ~LCME_FL_STALE;
+			resync_components++;
+			break;
+		}
+	}
+
+	/* valid check */
+	for (i = 0; i < mlc->mlc_resync_count; i++) {
+		if (mlc->mlc_resync_ids[i] == LCME_ID_INVAL)
+			continue;
+
+		CDEBUG(D_LAYOUT, DFID": lcme id %u (%d / %zd) not exist "
+		       "or already synced\n", PFID(lod_object_fid(lo)),
+		       mlc->mlc_resync_ids[i], i, mlc->mlc_resync_count);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	if (!sync_components || !resync_components) {
+		CDEBUG(D_LAYOUT, DFID": no mirror in sync or resync\n",
+		       PFID(lod_object_fid(lo)));
+
+		/* tend to return an error code here to prevent
+		 * the MDT from setting SoM attribute */
+		GOTO(out, rc = -EINVAL);
+	}
+
+	CDEBUG(D_LAYOUT, DFID": resynced %u/%zu components\n",
+	       PFID(lod_object_fid(lo)),
+	       resync_components, mlc->mlc_resync_count);
+
+	lo->ldo_flr_state = LCM_FL_RDONLY;
+	lod_obj_inc_layout_gen(lo);
+
+	info->lti_buf.lb_len = lod_comp_md_size(lo, false);
+	rc = lod_sub_declare_xattr_set(env, lod_object_child(lo),
+				       &info->lti_buf, XATTR_NAME_LOV, 0, th);
+	EXIT;
+
+out:
+	if (rc)
+		lod_object_free_striping(env, lo);
+	RETURN(rc);
+}
+
+static int lod_declare_layout_change(const struct lu_env *env,
+		struct dt_object *dt, struct md_layout_change *mlc,
+		struct thandle *th)
+{
+	struct lod_thread_info	*info = lod_env_info(env);
+	struct lod_object *lo = lod_dt_obj(dt);
+	int rc;
+	ENTRY;
+
+	if (!S_ISREG(dt->do_lu.lo_header->loh_attr) || !dt_object_exists(dt) ||
+	    dt_object_remote(dt_object_child(dt)))
+		RETURN(-EINVAL);
+
+	lod_write_lock(env, dt, 0);
+	rc = lod_load_striping_locked(env, lo);
+	if (rc)
+		GOTO(out, rc);
+
+	LASSERT(lo->ldo_comp_cnt > 0);
+
+	rc = lod_layout_data_init(info, lo->ldo_comp_cnt);
+	if (rc)
+		GOTO(out, rc);
+
+	switch (lo->ldo_flr_state) {
+	case LCM_FL_NOT_FLR:
+		rc = lod_declare_update_plain(env, lo, mlc->mlc_intent,
+					      &mlc->mlc_buf, th);
+		break;
+	case LCM_FL_RDONLY:
+		rc = lod_declare_update_rdonly(env, lo, mlc, th);
+		break;
+	case LCM_FL_WRITE_PENDING:
+		rc = lod_declare_update_write_pending(env, lo, mlc, th);
+		break;
+	case LCM_FL_SYNC_PENDING:
+		rc = lod_declare_update_sync_pending(env, lo, mlc, th);
+		break;
+	default:
+		rc = -ENOTSUPP;
+		break;
+	}
+out:
+	dt_write_unlock(env, dt);
 	RETURN(rc);
 }
 
@@ -4978,12 +5850,20 @@ unlock:
  * Instantiate layout component objects which covers the intent write offset.
  */
 static int lod_layout_change(const struct lu_env *env, struct dt_object *dt,
-			     struct layout_intent *layout,
-			     const struct lu_buf *buf, struct thandle *th)
+			     struct md_layout_change *mlc, struct thandle *th)
 {
 	struct lu_attr *attr = &lod_env_info(env)->lti_attr;
+	struct lu_attr *layout_attr = &lod_env_info(env)->lti_layout_attr;
+	struct lod_object *lo = lod_dt_obj(dt);
+	int rc;
 
-	RETURN(lod_striped_create(env, dt, attr, NULL, th));
+	rc = lod_striped_create(env, dt, attr, NULL, th);
+	if (!rc && layout_attr->la_valid & LA_LAYOUT_VERSION) {
+		layout_attr->la_layout_version |= lo->ldo_layout_gen;
+		rc = lod_attr_set(env, dt, layout_attr, th);
+	}
+
+	return rc;
 }
 
 struct dt_object_operations lod_obj_ops = {

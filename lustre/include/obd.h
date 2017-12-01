@@ -771,9 +771,10 @@ static inline int it_to_lock_mode(struct lookup_intent *it)
 	/* CREAT needs to be tested before open (both could be set) */
 	if (it->it_op & IT_CREAT)
 		return LCK_CW;
-	else if (it->it_op & (IT_GETATTR | IT_OPEN | IT_LOOKUP |
-			      IT_LAYOUT))
+	else if (it->it_op & (IT_GETATTR | IT_OPEN | IT_LOOKUP))
 		return LCK_CR;
+	else if (it->it_op & IT_LAYOUT)
+		return (it->it_flags & FMODE_WRITE) ? LCK_EX : LCK_CR;
 	else if (it->it_op &  IT_READDIR)
 		return LCK_PR;
 	else if (it->it_op &  IT_GETXATTR)
@@ -1086,6 +1087,8 @@ struct md_ops {
                                  struct lu_fid *, __u64 *bits);
 
 #define MD_STATS_LAST_OP m_revalidate_lock
+
+	int (*m_file_resync)(struct obd_export *, struct md_op_data *);
 
 	int (*m_get_root)(struct obd_export *, const char *, struct lu_fid *);
 	int (*m_null_inode)(struct obd_export *, const struct lu_fid *);

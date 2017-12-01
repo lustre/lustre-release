@@ -441,6 +441,8 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 	lsm->lsm_magic = le32_to_cpu(lcm->lcm_magic);
 	lsm->lsm_layout_gen = le32_to_cpu(lcm->lcm_layout_gen);
 	lsm->lsm_entry_count = entry_count;
+	lsm->lsm_mirror_count = le16_to_cpu(lcm->lcm_mirror_count);
+	lsm->lsm_flags = le16_to_cpu(lcm->lcm_flags);
 	lsm->lsm_is_released = true;
 	lsm->lsm_maxbytes = LLONG_MIN;
 

@@ -51,18 +51,20 @@
 #define ACT_SEEK        4
 #define ACT_READHOLE    8
 #define ACT_VERIFY      16
+#define ACT_OUTPUT	32
 
 void usage()
 {
-	printf("usage: rwv -f filename <-r|-w> [-a] [-z] [-d] [-v]"
-                "[-s offset] -n iovcnt SIZE1 SIZE2 SIZE3...\n");
-        printf("-a  append IO (O_APPEND)\n");
-        printf("-r  file read (O_RDONLY)\n");
-        printf("-w  file write (O_WRONLY)\n");
-        printf("-s  set the start pos of the read/write test\n");
-        printf("-z  test for read hitting hole\n");
-        printf("-d  create flags (O_LOV_DELAY_CREATE)\n");
-        printf("-v  verify the data content of read\n");
+	printf("usage: rwv -f filename <-r|-w> [-a] [-z] [-d] [-v]");
+	printf(" [-s offset] [-o[outf]] -n iovcnt SIZE1 SIZE2 SIZE3...\n");
+	printf("-a  append IO (O_APPEND)\n");
+	printf("-r  file read (O_RDONLY)\n");
+	printf("-w  file write (O_WRONLY)\n");
+	printf("-s  set the start pos of the read/write test\n");
+	printf("-z  test for read hitting hole\n");
+	printf("-d  create flags (O_LOV_DELAY_CREATE)\n");
+	printf("-v  verify the data content of read\n");
+	printf("-o  write the file content of read to an optional file\n");
 }
 
 int data_verify(struct iovec *iov, int iovcnt, char c)
@@ -91,6 +93,7 @@ int main(int argc, char** argv)
         int flags = 0;
         int iovcnt = 0;
         int act = ACT_NONE;
+	int out_fd = -1;
         char pad = 0xba;
         char *end;
         char *fname = "FILE";
@@ -98,7 +101,7 @@ int main(int argc, char** argv)
         struct iovec *iov;
         off64_t offset = 0;
 
-        while ((c = getopt(argc, argv, "f:n:s:rwahvdz")) != -1) {
+	while ((c = getopt(argc, argv, "f:n:s:rwahvdzo::")) != -1) {
                 switch (c) {
                 case 'f':
                         fname = optarg;
@@ -122,12 +125,14 @@ int main(int argc, char** argv)
                                 return 1;
                         }
                         break;
-                case 'w':
-                        act |= ACT_WRITE;
-                        break;
-                case 'r':
-                        act |= ACT_READ;
-                        break;
+		case 'w':
+			act |= ACT_WRITE;
+			flags |= O_WRONLY | O_CREAT;
+			break;
+		case 'r':
+			act |= ACT_READ;
+			flags |= O_RDONLY;
+			break;
                 case 'a':
                         flags |= O_APPEND;
                         break;
@@ -141,6 +146,13 @@ int main(int argc, char** argv)
                 case 'v':
                         act |= ACT_VERIFY;
                         break;
+		case 'o':
+			act |= ACT_OUTPUT;
+			if (optarg != NULL)
+				out_fd = open(optarg, O_WRONLY|O_CREAT, 0644);
+			else
+				out_fd = fileno(stdout);
+			break;
                 case 'h':
                         usage();
                         break;
@@ -156,6 +168,11 @@ int main(int argc, char** argv)
                 printf("Read and write test should be exclusive\n");
                 return 1;
         }
+
+	if (act & ACT_OUTPUT && (!(act & ACT_READ) || out_fd < 0)) {
+		printf("-o not in read mode or cannot open the output file");
+		return 1;
+	}
 
         if (argc - optind < iovcnt) {
                 printf("Not enough parameters for iov size\n");
@@ -189,17 +206,17 @@ int main(int argc, char** argv)
                 len += iv->iov_len;
         }
 
-        fd = open(fname, O_LARGEFILE | O_RDWR | O_CREAT | flags, 0644);
-        if (fd == -1) {
-                printf("Cannot open %s:%s\n", fname, strerror(errno));
-                return 1;
-        }
+	fd = open(fname, O_LARGEFILE | flags, 0644);
+	if (fd == -1) {
+		printf("Cannot open %s:%s\n", fname, strerror(errno));
+		return 1;
+	}
 
-        if ((act & ACT_SEEK) && (lseek64(fd, offset, SEEK_SET) < 0)) {
-                printf("Cannot seek %s\n", strerror(errno));
+	if ((act & ACT_SEEK) && (lseek64(fd, offset, SEEK_SET) < 0)) {
+		printf("Cannot seek %s\n", strerror(errno));
 		rc = 1;
 		goto out;
-        }
+	}
 
         if (act & ACT_WRITE) {
                 rc = writev(fd, iov, iovcnt);
@@ -223,11 +240,23 @@ int main(int argc, char** argv)
 			rc = 1;
 			goto out;
 		}
+
+		if (act & ACT_OUTPUT) {
+			rc = writev(out_fd, iov, iovcnt);
+			if (rc != len) {
+				printf("write error: %s rc = %d\n",
+				       strerror(errno), rc);
+				rc = 1;
+				goto out;
+			}
+		}
         }
 
         rc = 0;
 out:
         if (iov)
                 free(iov);
+	if (out_fd >= 0)
+		close(out_fd);
 	return rc;
 }

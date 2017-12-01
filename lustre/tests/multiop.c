@@ -219,7 +219,6 @@ int main(int argc, char **argv)
 	struct lu_fid		 fid;
 	struct timespec		 ts;
 	struct lov_user_md_v3	 lum;
-	__u64			 dv;
 
         if (argc < 3) {
                 fprintf(stderr, usage, argv[0]);
@@ -311,21 +310,19 @@ int main(int argc, char **argv)
 			commands++;
 			switch (*commands) {
 			case 'U':
-				flags = LL_LEASE_UNLCK;
+				rc = llapi_lease_put(fd);
 				break;
 			case 'R':
-				flags = LL_LEASE_RDLCK;
+				rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
 				break;
 			case 'W':
-				flags = LL_LEASE_WRLCK;
+				rc = llapi_lease_get(fd, LL_LEASE_WRLCK);
 				break;
 			default:
 				errx(-1, "unknown mode: %c", *commands);
 			}
-
-			rc = ioctl(fd, LL_IOC_SET_LEASE, flags);
 			if (rc < 0)
-				err(errno, "apply lease error");
+				err(errno, "apply/unlock lease error");
 
 			if (flags != LL_LEASE_UNLCK)
 				break;
@@ -348,7 +345,7 @@ int main(int argc, char **argv)
 			if (*commands != '-' && *commands != '+')
 				errx(-1, "unknown mode: %c\n", *commands);
 
-			rc = ioctl(fd, LL_IOC_GET_LEASE);
+			rc = llapi_lease_check(fd);
 			if (rc > 0) {
 				const char *str = "unknown";
 
@@ -643,7 +640,9 @@ int main(int argc, char **argv)
 			for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
 				mmap_ptr[i] += junk++;
 			break;
-		case 'x':
+		case 'x': {
+			__u64 dv;
+
 			rc = llapi_get_data_version(fd, &dv, 0);
 			if (rc) {
 				fprintf(stderr, "cannot get file data version"
@@ -652,6 +651,19 @@ int main(int argc, char **argv)
 			}
 			printf("dataversion is %ju\n", (uintmax_t)dv);
 			break;
+		}
+		case 'X': {
+			__u32 layout_version;
+
+			rc = llapi_get_ost_layout_version(fd, &layout_version);
+			if (rc) {
+				fprintf(stderr, "cannot get ost layout version"
+					" %d\n", rc);
+				exit(-rc);
+			}
+			printf("ostlayoutversion: %u\n", layout_version);
+			break;
+		}
                 case 'y':
                         if (fsync(fd) == -1) {
                                 save_errno = errno;

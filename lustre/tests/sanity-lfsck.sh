@@ -2936,7 +2936,7 @@ test_19b() {
 run_test 19b "OST-object inconsistency self repair"
 
 PATTERN_WITH_HOLE="40000001"
-PATTERN_WITHOUT_HOLE="1"
+PATTERN_WITHOUT_HOLE="raid0"
 
 test_20a() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return

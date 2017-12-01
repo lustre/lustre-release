@@ -694,6 +694,12 @@ int lod_def_striping_comp_resize(struct lod_default_striping *lds, __u16 count)
 
 void lod_free_comp_entries(struct lod_object *lo)
 {
+	if (lo->ldo_mirrors) {
+		OBD_FREE(lo->ldo_mirrors,
+			 sizeof(*lo->ldo_mirrors) * lo->ldo_mirror_count);
+		lo->ldo_mirrors = NULL;
+		lo->ldo_mirror_count = 0;
+	}
 	lod_free_comp_buffer(lo->ldo_comp_entries,
 			     lo->ldo_comp_cnt,
 			     sizeof(*lo->ldo_comp_entries) * lo->ldo_comp_cnt);
@@ -702,17 +708,73 @@ void lod_free_comp_entries(struct lod_object *lo)
 	lo->ldo_is_composite = 0;
 }
 
-int lod_alloc_comp_entries(struct lod_object *lo, int cnt)
+int lod_alloc_comp_entries(struct lod_object *lo,
+			   int mirror_count, int comp_count)
 {
-	LASSERT(cnt != 0);
+	LASSERT(comp_count != 0);
 	LASSERT(lo->ldo_comp_cnt == 0 && lo->ldo_comp_entries == NULL);
 
+	if (mirror_count > 0) {
+		OBD_ALLOC(lo->ldo_mirrors,
+			  sizeof(*lo->ldo_mirrors) * mirror_count);
+		if (!lo->ldo_mirrors)
+			return -ENOMEM;
+
+		lo->ldo_mirror_count = mirror_count;
+	}
+
 	OBD_ALLOC_LARGE(lo->ldo_comp_entries,
-			sizeof(*lo->ldo_comp_entries) * cnt);
-	if (lo->ldo_comp_entries == NULL)
+			sizeof(*lo->ldo_comp_entries) * comp_count);
+	if (lo->ldo_comp_entries == NULL) {
+		OBD_FREE(lo->ldo_mirrors,
+			 sizeof(*lo->ldo_mirrors) * mirror_count);
+		lo->ldo_mirror_count = 0;
 		return -ENOMEM;
-	lo->ldo_comp_cnt = cnt;
+	}
+
+	lo->ldo_comp_cnt = comp_count;
 	return 0;
+}
+
+int lod_fill_mirrors(struct lod_object *lo)
+{
+	struct lod_layout_component *lod_comp;
+	int mirror_idx = -1;
+	__u16 mirror_id = 0xffff;
+	int i;
+	ENTRY;
+
+	LASSERT(equi(!lo->ldo_is_composite, lo->ldo_mirror_count == 0));
+
+	if (!lo->ldo_is_composite)
+		RETURN(0);
+
+	lod_comp = &lo->ldo_comp_entries[0];
+	for (i = 0; i < lo->ldo_comp_cnt; i++, lod_comp++) {
+		int stale = !!(lod_comp->llc_flags & LCME_FL_STALE);
+
+		if (mirror_id_of(lod_comp->llc_id) == mirror_id) {
+			lo->ldo_mirrors[mirror_idx].lme_stale |= stale;
+			lo->ldo_mirrors[mirror_idx].lme_end = i;
+			continue;
+		}
+
+		/* new mirror */
+		++mirror_idx;
+		if (mirror_idx >= lo->ldo_mirror_count)
+			RETURN(-EINVAL);
+
+		mirror_id = mirror_id_of(lod_comp->llc_id);
+
+		lo->ldo_mirrors[mirror_idx].lme_id = mirror_id;
+		lo->ldo_mirrors[mirror_idx].lme_stale = stale;
+		lo->ldo_mirrors[mirror_idx].lme_start = i;
+		lo->ldo_mirrors[mirror_idx].lme_end = i;
+	}
+	if (mirror_idx != lo->ldo_mirror_count - 1)
+		RETURN(-EINVAL);
+
+	RETURN(0);
 }
 
 /**
@@ -848,52 +910,6 @@ done:
 }
 
 /**
- * Generate component ID for new created component.
- *
- * \param[in] lo		LOD object
- * \param[in] comp_idx		index of ldo_comp_entries
- *
- * \retval			component ID on success
- * \retval			LCME_ID_INVAL on failure
- */
-static __u32 lod_gen_component_id(struct lod_object *lo, int comp_idx)
-{
-	struct lod_layout_component *lod_comp;
-	__u32	id, start, end;
-	int	i;
-
-	LASSERT(lo->ldo_comp_entries[comp_idx].llc_id == LCME_ID_INVAL);
-
-	lod_obj_inc_layout_gen(lo);
-	id = lo->ldo_layout_gen;
-	if (likely(id <= LCME_ID_MAX))
-		return id;
-
-	/* Layout generation wraps, need to check collisions. */
-	start = id & LCME_ID_MASK;
-	end = LCME_ID_MAX;
-again:
-	for (id = start; id <= end; id++) {
-		for (i = 0; i < lo->ldo_comp_cnt; i++) {
-			lod_comp = &lo->ldo_comp_entries[i];
-			if (id == lod_comp->llc_id)
-				break;
-		}
-		/* Found the ununsed ID */
-		if (i == lo->ldo_comp_cnt)
-			return id;
-	}
-	if (end == LCME_ID_MAX) {
-		start = 1;
-		end = min(lo->ldo_layout_gen & LCME_ID_MASK,
-			  (__u32)(LCME_ID_MAX - 1));
-		goto again;
-	}
-
-	return LCME_ID_INVAL;
-}
-
-/**
  * Generate on-disk lov_mds_md structure based on the information in
  * the lod_object->ldo_comp_entries.
  *
@@ -916,18 +932,20 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 	struct lov_comp_md_entry_v1 *lcme;
 	struct lov_comp_md_v1 *lcm;
 	struct lod_layout_component *comp_entries;
-	__u16 comp_cnt;
+	__u16 comp_cnt, mirror_cnt;
 	bool is_composite;
 	int i, rc = 0, offset;
 	ENTRY;
 
 	if (is_dir) {
 		comp_cnt = lo->ldo_def_striping->lds_def_comp_cnt;
+		mirror_cnt = lo->ldo_def_striping->lds_def_mirror_cnt;
 		comp_entries = lo->ldo_def_striping->lds_def_comp_entries;
 		is_composite =
 			lo->ldo_def_striping->lds_def_striping_is_composite;
 	} else {
 		comp_cnt = lo->ldo_comp_cnt;
+		mirror_cnt = lo->ldo_mirror_count;
 		comp_entries = lo->ldo_comp_entries;
 		is_composite = lo->ldo_is_composite;
 	}
@@ -943,6 +961,8 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 	lcm = (struct lov_comp_md_v1 *)lmm;
 	lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
 	lcm->lcm_entry_count = cpu_to_le16(comp_cnt);
+	lcm->lcm_mirror_count = cpu_to_le16(mirror_cnt - 1);
+	lcm->lcm_flags = cpu_to_le16(lo->ldo_flr_state);
 
 	offset = sizeof(*lcm) + sizeof(*lcme) * comp_cnt;
 	LASSERT(offset % sizeof(__u64) == 0);
@@ -955,11 +975,7 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		lod_comp = &comp_entries[i];
 		lcme = &lcm->lcm_entries[i];
 
-		if (lod_comp->llc_id == LCME_ID_INVAL && !is_dir) {
-			lod_comp->llc_id = lod_gen_component_id(lo, i);
-			if (lod_comp->llc_id == LCME_ID_INVAL)
-				GOTO(out, rc = -ERANGE);
-		}
+		LASSERT(ergo(!is_dir, lod_comp->llc_id != LCME_ID_INVAL));
 		lcme->lcme_id = cpu_to_le32(lod_comp->llc_id);
 
 		/* component could be un-inistantiated */
@@ -1199,6 +1215,7 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 	__u32	magic, pattern;
 	int	i, j, rc = 0;
 	__u16	comp_cnt;
+	__u16	mirror_cnt = 0;
 	ENTRY;
 
 	LASSERT(buf);
@@ -1221,13 +1238,16 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 			GOTO(out, rc = -EINVAL);
 		lo->ldo_layout_gen = le32_to_cpu(comp_v1->lcm_layout_gen);
 		lo->ldo_is_composite = 1;
+		lo->ldo_flr_state = le16_to_cpu(comp_v1->lcm_flags) &
+					LCM_FL_FLR_MASK;
+		mirror_cnt = le16_to_cpu(comp_v1->lcm_mirror_count) + 1;
 	} else {
 		comp_cnt = 1;
 		lo->ldo_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);
 		lo->ldo_is_composite = 0;
 	}
 
-	rc = lod_alloc_comp_entries(lo, comp_cnt);
+	rc = lod_alloc_comp_entries(lo, mirror_cnt, comp_cnt);
 	if (rc)
 		GOTO(out, rc);
 
@@ -1268,9 +1288,10 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 
 		if (magic == LOV_MAGIC_V3) {
 			struct lov_mds_md_v3 *v3 = (struct lov_mds_md_v3 *)lmm;
+			lod_set_pool(&lod_comp->llc_pool, v3->lmm_pool_name);
 			objs = &v3->lmm_objects[0];
-			/* no need to set pool, which is used in create only */
 		} else {
+			lod_set_pool(&lod_comp->llc_pool, NULL);
 			objs = &lmm->lmm_objects[0];
 		}
 
@@ -1326,6 +1347,11 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 				GOTO(out, rc);
 		}
 	}
+
+	rc = lod_fill_mirrors(lo);
+	if (rc)
+		GOTO(out, rc);
+
 out:
 	if (rc)
 		lod_object_free_striping(env, lo);
@@ -1623,13 +1649,21 @@ out:
  * \retval			0 if the striping is valid
  * \retval			-EINVAL if striping is invalid
  */
-int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
-			bool is_from_disk, __u64 start)
+int lod_verify_striping(struct lod_device *d, struct lod_object *lo,
+			const struct lu_buf *buf, bool is_from_disk)
 {
-	struct lov_user_md_v1	*lum;
-	struct lov_comp_md_v1	*comp_v1;
-	__u32	magic;
-	int	rc = 0, i;
+	struct lov_desc *desc = &d->lod_desc;
+	struct lov_user_md_v1   *lum;
+	struct lov_comp_md_v1   *comp_v1;
+	struct lov_comp_md_entry_v1     *ent;
+	struct lu_extent        *ext;
+	struct lu_buf   tmp;
+	__u64   prev_end = 0;
+	__u32   stripe_size = 0;
+	__u16   prev_mid = -1, mirror_id = -1;
+	__u32   mirror_count = 0;
+	__u32   magic;
+	int     rc = 0, i;
 	ENTRY;
 
 	lum = buf->lb_buf;
@@ -1650,116 +1684,142 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 		RETURN(-EINVAL);
 	}
 
-	if (magic == LOV_USER_MAGIC_COMP_V1) {
-		struct lov_comp_md_entry_v1	*ent;
-		struct lu_extent	*ext;
-		struct lov_desc	*desc = &d->lod_desc;
-		struct lu_buf	tmp;
-		__u32	stripe_size = 0;
-		__u64	prev_end = start;
+	if (magic != LOV_USER_MAGIC_COMP_V1)
+		RETURN(lod_verify_v1v3(d, buf, is_from_disk));
 
-		comp_v1 = buf->lb_buf;
-		if (buf->lb_len < le32_to_cpu(comp_v1->lcm_size)) {
-			CDEBUG(D_LAYOUT, "buf len %zu is less than %u\n",
-			       buf->lb_len, le32_to_cpu(comp_v1->lcm_size));
+	/* magic == LOV_USER_MAGIC_COMP_V1 */
+	comp_v1 = buf->lb_buf;
+	if (buf->lb_len < le32_to_cpu(comp_v1->lcm_size)) {
+		CDEBUG(D_LAYOUT, "buf len %zu is less than %u\n",
+		       buf->lb_len, le32_to_cpu(comp_v1->lcm_size));
+		RETURN(-EINVAL);
+	}
+
+	if (le16_to_cpu(comp_v1->lcm_entry_count) == 0) {
+		CDEBUG(D_LAYOUT, "entry count is zero\n");
+		RETURN(-EINVAL);
+	}
+
+	if (S_ISREG(lod2lu_obj(lo)->lo_header->loh_attr) &&
+	    lo->ldo_comp_cnt > 0) {
+		/* could be called from lustre.lov.add */
+		__u32 cnt = lo->ldo_comp_cnt;
+
+		ext = &lo->ldo_comp_entries[cnt - 1].llc_extent;
+		prev_end = ext->e_end;
+
+		++mirror_count;
+	}
+
+	for (i = 0; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
+		ent = &comp_v1->lcm_entries[i];
+		ext = &ent->lcme_extent;
+
+		if (le64_to_cpu(ext->e_start) >= le64_to_cpu(ext->e_end)) {
+			CDEBUG(D_LAYOUT, "invalid extent "DEXT"\n",
+			       le64_to_cpu(ext->e_start),
+			       le64_to_cpu(ext->e_end));
 			RETURN(-EINVAL);
 		}
 
-		if (le16_to_cpu(comp_v1->lcm_entry_count) == 0) {
-			CDEBUG(D_LAYOUT, "entry count is zero\n");
-			RETURN(-EINVAL);
-		}
-
-		for (i = 0; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
-			ent = &comp_v1->lcm_entries[i];
-			ext = &ent->lcme_extent;
-
-			if (is_from_disk &&
-			    (le32_to_cpu(ent->lcme_id) == 0 ||
-			     le32_to_cpu(ent->lcme_id) > LCME_ID_MAX)) {
+		if (is_from_disk) {
+			/* lcme_id contains valid value */
+			if (le32_to_cpu(ent->lcme_id) == 0 ||
+			    le32_to_cpu(ent->lcme_id) > LCME_ID_MAX) {
 				CDEBUG(D_LAYOUT, "invalid id %u\n",
 				       le32_to_cpu(ent->lcme_id));
 				RETURN(-EINVAL);
 			}
 
-			if (le64_to_cpu(ext->e_start) >=
-			    le64_to_cpu(ext->e_end)) {
-				CDEBUG(D_LAYOUT, "invalid extent "
-				       "[%llu, %llu)\n",
-				       le64_to_cpu(ext->e_start),
-				       le64_to_cpu(ext->e_end));
+			if (le16_to_cpu(comp_v1->lcm_mirror_count) > 0) {
+				mirror_id = mirror_id_of(
+						le32_to_cpu(ent->lcme_id));
+
+				/* first component must start with 0 */
+				if (mirror_id != prev_mid &&
+				    le64_to_cpu(ext->e_start) != 0) {
+					CDEBUG(D_LAYOUT,
+					       "invalid start:%llu, expect:0\n",
+					       le64_to_cpu(ext->e_start));
+					RETURN(-EINVAL);
+				}
+
+				prev_mid = mirror_id;
+			}
+		}
+
+		if (le64_to_cpu(ext->e_start) == 0) {
+			++mirror_count;
+			prev_end = 0;
+		}
+
+		/* the next must be adjacent with the previous one */
+		if (le64_to_cpu(ext->e_start) != prev_end) {
+			CDEBUG(D_LAYOUT,
+			       "invalid start actual:%llu, expect:%llu\n",
+			       le64_to_cpu(ext->e_start), prev_end);
+			RETURN(-EINVAL);
+		}
+
+		prev_end = le64_to_cpu(ext->e_end);
+
+		tmp.lb_buf = (char *)comp_v1 + le32_to_cpu(ent->lcme_offset);
+		tmp.lb_len = le32_to_cpu(ent->lcme_size);
+
+		/* Check DoM entry is always the first one */
+		lum = tmp.lb_buf;
+		if (lov_pattern(le32_to_cpu(lum->lmm_pattern)) ==
+		    LOV_PATTERN_MDT) {
+			/* DoM component can be only the first entry */
+			if (i > 0) {
+				CDEBUG(D_LAYOUT, "invalid DoM layout "
+				       "entry found at %i index\n", i);
 				RETURN(-EINVAL);
 			}
-
-			/* first component must start with 0, and the next
-			 * must be adjacent with the previous one */
-			if (le64_to_cpu(ext->e_start) != prev_end) {
-				CDEBUG(D_LAYOUT, "invalid start "
-				       "actual:%llu, expect:%llu\n",
-				       le64_to_cpu(ext->e_start), prev_end);
-				RETURN(-EINVAL);
-			}
-			prev_end = le64_to_cpu(ext->e_end);
-
-			tmp.lb_buf = (char *)comp_v1 +
-				     le32_to_cpu(ent->lcme_offset);
-			tmp.lb_len = le32_to_cpu(ent->lcme_size);
-
-			/* Checks for DoM entry in composite layout. */
-			lum = tmp.lb_buf;
-			if (lov_pattern(le32_to_cpu(lum->lmm_pattern)) ==
-			    LOV_PATTERN_MDT) {
-				/* DoM component can be only the first entry */
-				if (i > 0) {
-					CDEBUG(D_LAYOUT, "invalid DoM layout "
-					       "entry found at %i index\n", i);
-					RETURN(-EINVAL);
-				}
-				stripe_size = le32_to_cpu(lum->lmm_stripe_size);
-				/* There is just one stripe on MDT and it must
-				 * cover whole component size. */
-				if (stripe_size != prev_end) {
-					CDEBUG(D_LAYOUT, "invalid DoM layout "
-					       "stripe size %u != %llu "
-					       "(component size)\n",
-					       stripe_size, prev_end);
-					RETURN(-EINVAL);
-				}
-				/* Check stripe size againts per-MDT limit */
-				if (stripe_size > d->lod_dom_max_stripesize) {
-					CDEBUG(D_LAYOUT, "DoM component size "
-					       "%u is bigger than MDT limit "
-					       "%u, check dom_max_stripesize"
-					       " parameter\n",
-					       stripe_size,
-					       d->lod_dom_max_stripesize);
-					RETURN(-EINVAL);
-				}
-			}
-			rc = lod_verify_v1v3(d, &tmp, is_from_disk);
-			if (rc)
-				break;
-
-			lum = tmp.lb_buf;
-
-			/* extent end must be aligned with the stripe_size */
 			stripe_size = le32_to_cpu(lum->lmm_stripe_size);
-			if (stripe_size == 0)
-				stripe_size = desc->ld_default_stripe_size;
-			if (stripe_size == 0 ||
-			    (prev_end != LUSTRE_EOF &&
-			     (prev_end & (stripe_size - 1)))) {
-				CDEBUG(D_LAYOUT, "stripe size isn't aligned. "
-				       " stripe_sz: %u, [%llu, %llu)\n",
-				       stripe_size, ext->e_start, prev_end);
+			/* There is just one stripe on MDT and it must
+			 * cover whole component size. */
+			if (stripe_size != prev_end) {
+				CDEBUG(D_LAYOUT, "invalid DoM layout "
+				       "stripe size %u != %llu "
+				       "(component size)\n",
+				       stripe_size, prev_end);
+				RETURN(-EINVAL);
+			}
+			/* Check stripe size againts per-MDT limit */
+			if (stripe_size > d->lod_dom_max_stripesize) {
+				CDEBUG(D_LAYOUT, "DoM component size "
+				       "%u is bigger than MDT limit %u, check "
+				       "dom_max_stripesize parameter\n",
+				       stripe_size, d->lod_dom_max_stripesize);
 				RETURN(-EINVAL);
 			}
 		}
-	} else {
-		rc = lod_verify_v1v3(d, buf, is_from_disk);
+
+		rc = lod_verify_v1v3(d, &tmp, is_from_disk);
+		if (rc)
+			RETURN(rc);
+
+		if (prev_end == LUSTRE_EOF)
+			continue;
+
+		/* extent end must be aligned with the stripe_size */
+		stripe_size = le32_to_cpu(lum->lmm_stripe_size);
+		if (stripe_size == 0)
+			stripe_size = desc->ld_default_stripe_size;
+		if (stripe_size == 0 || (prev_end & (stripe_size - 1))) {
+			CDEBUG(D_LAYOUT, "stripe size isn't aligned, "
+			       "stripe_sz: %u, [%llu, %llu)\n",
+			       stripe_size, ext->e_start, prev_end);
+			RETURN(-EINVAL);
+		}
 	}
 
-	RETURN(rc);
+	/* make sure that the mirror_count is telling the truth */
+	if (mirror_count != le16_to_cpu(comp_v1->lcm_mirror_count) + 1)
+		RETURN(-EINVAL);
+
+	RETURN(0);
 }
 
 /**
