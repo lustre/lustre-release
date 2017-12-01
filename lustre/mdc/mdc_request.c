@@ -1215,7 +1215,8 @@ static int mdc_read_page_remote(void *data, struct page *page0)
 	}
 
 	for (npages = 1; npages < max_pages; npages++) {
-		page = page_cache_alloc_cold(inode->i_mapping);
+		page = __page_cache_alloc(mapping_gfp_mask(inode->i_mapping)
+					  | __GFP_COLD);
 		if (page == NULL)
 			break;
 		page_pool[npages] = page;
