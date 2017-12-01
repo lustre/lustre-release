@@ -2332,6 +2332,41 @@ LPROC_SEQ_FOPS(mdt_hsm_group_request_mask);
 LPROC_SEQ_FOPS(mdt_hsm_other_request_mask);
 LPROC_SEQ_FOPS(mdt_hsm_cdt_raolu);
 
+/* Read-only proc files for request counters */
+static int mdt_hsm_cdt_archive_count_seq_show(struct seq_file *m, void *data)
+{
+	struct mdt_device *mdt = m->private;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+	ENTRY;
+
+	seq_printf(m, "%d\n", atomic_read(&cdt->cdt_archive_count));
+	RETURN(0);
+}
+
+static int mdt_hsm_cdt_restore_count_seq_show(struct seq_file *m, void *data)
+{
+	struct mdt_device *mdt = m->private;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+	ENTRY;
+
+	seq_printf(m, "%d\n", atomic_read(&cdt->cdt_restore_count));
+	RETURN(0);
+}
+
+static int mdt_hsm_cdt_remove_count_seq_show(struct seq_file *m, void *data)
+{
+	struct mdt_device *mdt = m->private;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+	ENTRY;
+
+	seq_printf(m, "%d\n", atomic_read(&cdt->cdt_remove_count));
+	RETURN(0);
+}
+
+LPROC_SEQ_FOPS_RO(mdt_hsm_cdt_archive_count);
+LPROC_SEQ_FOPS_RO(mdt_hsm_cdt_restore_count);
+LPROC_SEQ_FOPS_RO(mdt_hsm_cdt_remove_count);
+
 static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
 	{ .name	=	"agents",
 	  .fops	=	&mdt_hsm_agent_fops			},
@@ -2360,5 +2395,11 @@ static struct lprocfs_vars lprocfs_mdt_hsm_vars[] = {
 	  .fops	=	&mdt_hsm_other_request_mask_fops,	},
 	{ .name	=	"remove_archive_on_last_unlink",
 	  .fops	=	&mdt_hsm_cdt_raolu_fops,		},
+	{ .name	=	"archive_count",
+	  .fops	=	&mdt_hsm_cdt_archive_count_fops,	},
+	{ .name	=	"restore_count",
+	  .fops	=	&mdt_hsm_cdt_restore_count_fops,	},
+	{ .name	=	"remove_count",
+	  .fops	=	&mdt_hsm_cdt_remove_count_fops,		},
 	{ 0 }
 };

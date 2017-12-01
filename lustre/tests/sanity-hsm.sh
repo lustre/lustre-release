@@ -4789,6 +4789,96 @@ test_253() {
 }
 run_test 253 "Check for wrong file size after release"
 
+test_254a()
+{
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.56) ] &&
+		skip "need MDS version at least 2.10.56" && return
+
+	# Check that the counters are initialized to 0
+	local count
+	for request_type in archive restore remove; do
+		count="$(get_hsm_param ${request_type}_count)" ||
+			error "Reading ${request_type}_count failed with $?"
+
+		[ "$count" -eq 0 ] ||
+			error "Expected ${request_type}_count to be " \
+			      "0 != '$count'"
+	done
+}
+run_test 254a "Request counters are initialized to zero"
+
+test_254b()
+{
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.56) ] &&
+		skip "need MDS version at least 2.10.56" && return
+
+	# The number of request to launch (at least 32)
+	local request_count=$((RANDOM % 32 + 32))
+	printf "Will launch %i requests of each type\n" "$request_count"
+
+	# Launch a copytool to process requests
+	copytool_setup
+
+	# Set hsm.max_requests to allow starting all requests at the same time
+	stack_trap \
+		"set_hsm_param max_requests $(get_hsm_param max_requests)" EXIT
+	set_hsm_param max_requests "$request_count"
+
+	local timeout
+	local count
+	for request_type in archive restore remove; do
+		printf "Checking %s requests\n" "${request_type}"
+		# Suspend the copytool to give us time to read the proc files
+		copytool_suspend
+
+		for ((i = 0; i < $request_count; i++)); do
+			case $request_type in
+			archive)
+				create_empty_file "$DIR/$tdir/$tfile-$i" \
+					>/dev/null 2>&1
+				;;
+			restore)
+				lfs hsm_release "$DIR/$tdir/$tfile-$i"
+				;;
+			esac
+			$LFS hsm_${request_type} "$DIR/$tdir/$tfile-$i"
+		done
+
+		# Give the coordinator 10 seconds to start every request
+		timeout=10
+		while get_hsm_param actions | grep -q WAITING; do
+			sleep 1
+			let timeout-=1
+			[ $timeout -gt 0 ] ||
+				error "${request_type^} requests took too " \
+				      "long to start"
+		done
+
+		count="$(get_hsm_param ${request_type}_count)"
+		[ "$count" -eq "$request_count" ] ||
+			error "Expected '$request_count' (!= '$count') " \
+			      "active $request_type requests"
+
+		# Let the copytool process the requests
+		copytool_continue
+		# Give it 10 seconds maximum
+		timeout=10
+		while get_hsm_param actions | grep -q STARTED; do
+			sleep 1
+			let timeout-=1
+			[ $timeout -gt 0 ] ||
+				error "${request_type^} requests took too " \
+				      "long to complete"
+		done
+
+		count="$(get_hsm_param ${request_type}_count)"
+		[ "$count" -eq 0 ] ||
+			error "Expected 0 (!= '$count') " \
+			      "active $request_type requests"
+	done
+}
+run_test 254b "Request counters are correctly incremented and decremented"
+
 test_300() {
 	# the only way to test ondisk conf is to restart MDS ...
 	echo "Stop coordinator and remove coordinator state at mount"
