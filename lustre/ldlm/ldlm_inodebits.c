@@ -133,16 +133,21 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 					  struct ldlm_lock,
 					  l_sl_policy)->l_res_link;
 
-			/* no locks with trybits in either queues */
-			LASSERT(lock->l_policy_data.l_inodebits.try_bits == 0);
-
 			/* New lock's try_bits are filtered out by ibits
 			 * of all locks in both granted and waiting queues.
 			 */
-			*try_bits &= ~lock->l_policy_data.l_inodebits.bits;
+			*try_bits &= ~(lock->l_policy_data.l_inodebits.bits |
+				lock->l_policy_data.l_inodebits.try_bits);
 
 			if ((req_bits | *try_bits) == 0)
 				RETURN(0);
+
+			/* The new lock ibits is more preferable than try_bits
+			 * of waiting locks so drop conflicting try_bits in
+			 * the waiting queue.
+			 * Notice that try_bits of granted locks must be zero.
+			 */
+			lock->l_policy_data.l_inodebits.try_bits &= ~req_bits;
 
 			/* Locks with overlapping bits conflict. */
 			if (lock->l_policy_data.l_inodebits.bits & req_bits) {
@@ -154,12 +159,6 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 				    ldlm_is_cos_enabled(req) &&
 				    lock->l_client_cookie == req->l_client_cookie)
 					goto not_conflicting;
-
-				/* The conflicting lock will keep only mandatory
-				 * ibits and zero trybits in waiting queue.
-				 * All actual trybits are cleared.
-				 */
-				*try_bits = 0;
 
 				/* Found a conflicting policy group. */
 				if (!work_list)
