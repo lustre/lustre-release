@@ -135,7 +135,7 @@ struct coordinator {
 	struct proc_dir_entry	*cdt_proc_dir;	     /**< cdt /proc directory */
 	__u64			 cdt_policy;	     /**< policy flags */
 	enum cdt_states		 cdt_state;	      /**< state */
-	spinlock_t		 cdt_state_lock;      /**< cdt_state lock */
+	struct mutex		 cdt_state_lock;      /**< cdt_state lock */
 	atomic_t		 cdt_compound_id;     /**< compound id
 						       * counter */
 	__u64			 cdt_last_cookie;     /**< last cookie

@@ -514,24 +514,18 @@ static bool cdt_transition[CDT_STATES_COUNT][CDT_STATES_COUNT] = {
  * Returns 0 on success, with old_state set if not NULL, or -EINVAL if
  * the transition was not possible.
  */
-static int set_cdt_state(struct coordinator *cdt, enum cdt_states new_state,
-			 enum cdt_states *old_state)
+static int set_cdt_state_locked(struct coordinator *cdt,
+				enum cdt_states new_state)
 {
 	int rc;
 	enum cdt_states state;
-
-	spin_lock(&cdt->cdt_state_lock);
 
 	state = cdt->cdt_state;
 
 	if (cdt_transition[state][new_state]) {
 		cdt->cdt_state = new_state;
-		spin_unlock(&cdt->cdt_state_lock);
-		if (old_state)
-			*old_state = state;
 		rc = 0;
 	} else {
-		spin_unlock(&cdt->cdt_state_lock);
 		CDEBUG(D_HSM,
 		       "unexpected coordinator transition, from=%s, to=%s\n",
 		       cdt_mdt_state2str(state), cdt_mdt_state2str(new_state));
@@ -540,6 +534,19 @@ static int set_cdt_state(struct coordinator *cdt, enum cdt_states new_state,
 
 	return rc;
 }
+
+static int set_cdt_state(struct coordinator *cdt, enum cdt_states new_state)
+{
+	int rc;
+
+	mutex_lock(&cdt->cdt_state_lock);
+	rc = set_cdt_state_locked(cdt, new_state);
+	mutex_unlock(&cdt->cdt_state_lock);
+
+	return rc;
+}
+
+
 
 /**
  * coordinator thread
@@ -570,7 +577,7 @@ static int mdt_coordinator(void *data)
 	hsd.mti = mti;
 	obd_uuid2fsname(hsd.fs_name, mdt_obd_name(mdt), MTI_NAME_MAXLEN);
 
-	set_cdt_state(cdt, CDT_RUNNING, NULL);
+	set_cdt_state(cdt, CDT_RUNNING);
 
 	/* Inform mdt_hsm_cdt_start(). */
 	wake_up_all(&cdt->cdt_waitq);
@@ -963,8 +970,8 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 	init_rwsem(&cdt->cdt_agent_lock);
 	init_rwsem(&cdt->cdt_request_lock);
 	mutex_init(&cdt->cdt_restore_lock);
-	spin_lock_init(&cdt->cdt_state_lock);
-	set_cdt_state(cdt, CDT_STOPPED, NULL);
+	mutex_init(&cdt->cdt_state_lock);
+	set_cdt_state(cdt, CDT_STOPPED);
 
 	INIT_LIST_HEAD(&cdt->cdt_request_list);
 	INIT_LIST_HEAD(&cdt->cdt_agents);
@@ -1088,7 +1095,7 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	 */
 	ptr = dump_requests;
 
-	rc = set_cdt_state(cdt, CDT_INIT, NULL);
+	rc = set_cdt_state(cdt, CDT_INIT);
 	if (rc) {
 		CERROR("%s: Coordinator already started or stopping\n",
 		       mdt_obd_name(mdt));
@@ -1128,14 +1135,14 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	request_sz = cdt->cdt_max_requests * sizeof(struct hsm_scan_request);
 	OBD_ALLOC_LARGE(thread_data.request, request_sz);
 	if (!thread_data.request) {
-		set_cdt_state(cdt, CDT_STOPPED, NULL);
+		set_cdt_state(cdt, CDT_STOPPED);
 		RETURN(-ENOMEM);
 	}
 
 	task = kthread_run(mdt_coordinator, &thread_data, "hsm_cdtr");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
-		set_cdt_state(cdt, CDT_STOPPED, NULL);
+		set_cdt_state(cdt, CDT_STOPPED);
 		OBD_FREE(thread_data.request, request_sz);
 		CERROR("%s: error starting coordinator thread: %d\n",
 		       mdt_obd_name(mdt), rc);
@@ -1162,11 +1169,11 @@ int mdt_hsm_cdt_stop(struct mdt_device *mdt)
 
 	ENTRY;
 	/* stop coordinator thread */
-	rc = set_cdt_state(cdt, CDT_STOPPING, NULL);
+	rc = set_cdt_state(cdt, CDT_STOPPING);
 	if (rc == 0) {
 		kthread_stop(cdt->cdt_task);
 		cdt->cdt_task = NULL;
-		set_cdt_state(cdt, CDT_STOPPED, NULL);
+		set_cdt_state(cdt, CDT_STOPPED);
 	}
 
 	RETURN(rc);
@@ -1752,10 +1759,13 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 
 	hsm_init_ucred(mdt_ucred(mti));
 
+	mutex_lock(&cdt->cdt_state_lock);
+	old_state = cdt->cdt_state;
+
 	/* disable coordinator */
-	rc = set_cdt_state(cdt, CDT_DISABLE, &old_state);
+	rc = set_cdt_state_locked(cdt, CDT_DISABLE);
 	if (rc)
-		RETURN(rc);
+		GOTO(out_cdt_state_unlock, rc);
 
 	/* send cancel to all running requests */
 	down_read(&cdt->cdt_request_lock);
@@ -1829,7 +1839,10 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 			      &hcad, 0, 0, WRITE);
 out_cdt_state:
 	/* Enable coordinator, unless the coordinator was stopping. */
-	set_cdt_state(cdt, old_state, NULL);
+	set_cdt_state_locked(cdt, old_state);
+out_cdt_state_unlock:
+	mutex_unlock(&cdt->cdt_state_lock);
+
 	lu_context_exit(&session);
 	lu_context_fini(&session);
 out_env:
@@ -2128,7 +2141,7 @@ mdt_hsm_cdt_control_seq_write(struct file *file, const char __user *buffer,
 	rc = 0;
 	if (strcmp(kernbuf, CDT_ENABLE_CMD) == 0) {
 		if (cdt->cdt_state == CDT_DISABLE) {
-			rc = set_cdt_state(cdt, CDT_RUNNING, NULL);
+			rc = set_cdt_state(cdt, CDT_RUNNING);
 			mdt_hsm_cdt_event(cdt);
 			wake_up(&cdt->cdt_waitq);
 		} else {
@@ -2150,7 +2163,7 @@ mdt_hsm_cdt_control_seq_write(struct file *file, const char __user *buffer,
 			       mdt_obd_name(mdt));
 			rc = -EINVAL;
 		} else {
-			rc = set_cdt_state(cdt, CDT_DISABLE, NULL);
+			rc = set_cdt_state(cdt, CDT_DISABLE);
 		}
 	} else if (strcmp(kernbuf, CDT_PURGE_CMD) == 0) {
 		rc = hsm_cancel_all_actions(mdt);
