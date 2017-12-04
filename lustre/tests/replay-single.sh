@@ -449,35 +449,33 @@ run_test 20a "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans
 
 test_20b() { # bug 10480
 	local wait_timeout=$((TIMEOUT * 4))
-	local BEFOREUSED
-	local AFTERUSED
+	local beforeused
+	local afterused
 
-	BEFOREUSED=$(df -P $DIR | tail -1 | awk '{ print $3 }')
+	beforeused=$(df -P $DIR | tail -1 | awk '{ print $3 }')
 	dd if=/dev/zero of=$DIR/$tfile bs=4k count=10000 &
 	while [ ! -e $DIR/$tfile ] ; do
-		usleep 60                      # give dd a chance to start
+		usleep 60			# give dd a chance to start
 	done
 
-	$GETSTRIPE $DIR/$tfile || error "$GETSTRIPE $DIR/$tfile failed"
+	$LFS getstripe $DIR/$tfile || error "$LFS getstripe $DIR/$tfile failed"
 	# make it an orphan
 	rm -f $DIR/$tfile || error "rm -f $DIR/$tfile failed"
 	mds_evict_client
-	client_up || client_up || true    # reconnect
+	client_up || client_up || true		# reconnect
 
-	do_facet $SINGLEMDS "lctl set_param -n osd*.*MDT*.force_sync 1"
+	do_facet $SINGLEMDS "lctl set_param -n osd*.*MDT*.force_sync=1"
 
-	fail $SINGLEMDS                            # start orphan recovery
+	fail $SINGLEMDS				# start orphan recovery
 	wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
-	wait_delete_completed_mds $wait_timeout ||
-		error "delete did not complete"
+	wait_delete_completed $wait_timeout || error "delete did not finish"
 
-	AFTERUSED=$(df -P $DIR | tail -1 | awk '{ print $3 }')
-	log "before $BEFOREUSED, after $AFTERUSED"
-	(( $AFTERUSED > $BEFOREUSED + $(fs_log_size) )) &&
-		error "after $AFTERUSED > before $BEFOREUSED"
-	return 0
+	afterused=$(df -P $DIR | tail -1 | awk '{ print $3 }')
+	(( $afterused > $beforeused + $(fs_log_size) )) &&
+		error "after $afterused > before $beforeused" ||
+		log "before $beforeused, after $afterused"
 }
-run_test 20b "write, unlink, eviction, replay, (test mds_cleanup_orphans)"
+run_test 20b "write, unlink, eviction, replay (test mds_cleanup_orphans)"
 
 test_20c() { # bug 10480
 	multiop_bg_pause $DIR/$tfile Ow_c ||
@@ -3283,17 +3281,17 @@ test_89() {
 	[ $((BLOCKS2 - BLOCKS1)) -le 4  ] ||
 		error $((BLOCKS2 - BLOCKS1)) blocks leaked
 }
-
 run_test 89 "no disk space leak on late ost connection"
 
 cleanup_90 () {
-    local facet=$1
-    trap 0
-    reboot_facet $facet
-    change_active $facet
-    wait_for_facet $facet
-    mount_facet $facet || error "Restart of $facet failed"
-    clients_up
+	local facet=$1
+
+	trap 0
+	reboot_facet $facet
+	change_active $facet
+	wait_for_facet $facet
+	mount_facet $facet || error "Restart of $facet failed"
+	clients_up
 }
 
 test_90() { # bug 19494
