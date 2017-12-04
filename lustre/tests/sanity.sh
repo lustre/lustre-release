@@ -2964,7 +2964,7 @@ test_33f() {
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.enable_remote_dir_gid=-1
 	trap cleanup_33f EXIT
 
-	$RUNAS lfs mkdir -c$MDSCOUNT $DIR/$tdir/striped_dir ||
+	$RUNAS lfs mkdir -i 0 -c$MDSCOUNT $DIR/$tdir/striped_dir ||
 		error "cannot create striped directory"
 
 	$RUNAS touch $DIR/$tdir/striped_dir/{0..16} ||
@@ -17036,8 +17036,8 @@ test_300p() {
 
 	#define OBD_FAIL_OUT_ENOSPC	0x1704
 	do_facet mds2 lctl set_param fail_loc=0x80001704
-	$LFS setdirstripe -c2 $DIR/$tdir/bad_striped_dir > /dev/null 2>&1 &&
-			error "create striped directory should fail"
+	$LFS setdirstripe -i 0 -c2 $DIR/$tdir/bad_striped_dir > /dev/null 2>&1 \
+		 && error "create striped directory should fail"
 
 	[ -e $DIR/$tdir/bad_striped_dir ] && error "striped dir exists"
 
@@ -17868,20 +17868,56 @@ test_412() {
 		skip "We need at least 2 MDTs for this test" && return
 
 	if [ $(lustre_version_code mds1) -lt $(version_code 2.10.55) ]; then
-		skip "Need server version at least 2.10.55" & exit 0
+		skip "Need server version at least 2.10.55" && exit 0
 	fi
 
 	$LFS mkdir -i $((MDSCOUNT - 1)),$((MDSCOUNT - 2)) $DIR/$tdir ||
 		error "mkdir failed"
 	$LFS getdirstripe $DIR/$tdir
-	stripe_index=$($LFS getdirstripe -i $DIR/$tdir)
+	local stripe_index=$($LFS getdirstripe -i $DIR/$tdir)
 	[ $stripe_index -eq $((MDSCOUNT - 1)) ] ||
 		error "expect $((MDSCOUT - 1)) get $stripe_index"
-	stripe_count=$($LFS getdirstripe -T $DIR/$tdir)
+	local stripe_count=$($LFS getdirstripe -T $DIR/$tdir)
 	[ $stripe_count -eq 2 ] ||
 		error "expect 2 get $stripe_count"
 }
 run_test 412 "mkdir on specific MDTs"
+
+test_413() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDTs for this test" && return
+
+	if [ $(lustre_version_code mds1) -lt $(version_code 2.10.55) ]; then
+		skip "Need server version at least 2.10.55" && exit 0
+	fi
+
+	mkdir $DIR/$tdir || error "mkdir failed"
+
+	# find MDT that is the most full
+	local max=$($LFS df | grep MDT |
+		awk 'BEGIN { a=0 }
+			{ sub("%", "", $5)
+			  if (0+$5 >= a)
+			  {
+				a = $5
+				b = $6
+			  }
+			}
+		     END { split(b, c, ":")
+			   sub("]", "", c[2])
+			   print c[2]
+			 }')
+
+	for i in $(seq $((MDSCOUNT - 1))); do
+		$LFS mkdir -c $i $DIR/$tdir/d$i ||
+			error "mkdir d$i failed"
+		$LFS getdirstripe $DIR/$tdir/d$i
+		local stripe_index=$($LFS getdirstripe -i $DIR/$tdir/d$i)
+		[ $stripe_index -ne $max ] ||
+			error "don't expect $max"
+	done
+}
+run_test 413 "mkdir on less full MDTs"
 
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||

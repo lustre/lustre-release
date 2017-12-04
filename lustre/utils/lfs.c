@@ -63,6 +63,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <zlib.h>
+#include <libgen.h>
 #include "lfs_project.h"
 
 #include <libcfs/util/string.h>
@@ -4096,6 +4097,316 @@ static int lfs_getdirstripe(int argc, char **argv)
 	return rc;
 }
 
+enum mntdf_flags {
+	MNTDF_INODES	= 0x0001,
+	MNTDF_COOKED	= 0x0002,
+	MNTDF_LAZY	= 0x0004,
+	MNTDF_VERBOSE	= 0x0008,
+	MNTDF_SHOW	= 0x0010,
+};
+
+#define COOK(value)						\
+({								\
+	int radix = 0;						\
+	while (value > 1024) {					\
+		value /= 1024;					\
+		radix++;					\
+	}							\
+	radix;							\
+})
+#define UUF     "%-20s"
+#define CSF     "%11s"
+#define CDF     "%11llu"
+#define HDF     "%8.1f%c"
+#define RSF     "%4s"
+#define RDF     "%3d%%"
+
+static inline int obd_statfs_ratio(const struct obd_statfs *st)
+{
+	double avail, used, ratio = 0;
+
+	avail = st->os_bavail;
+	used  = st->os_blocks - st->os_bfree;
+	if (avail + used > 0)
+		ratio = used / (used + avail) * 100 + 0.5;
+
+	return (int)ratio;
+}
+
+static int showdf(char *mntdir, struct obd_statfs *stat,
+		  char *uuid, enum mntdf_flags flags,
+		  char *type, int index, int rc)
+{
+	long long avail, used, total;
+	int ratio = 0;
+	char *suffix = "KMGTPEZY";
+	/* Note if we have >2^64 bytes/fs these buffers will need to be grown */
+	char tbuf[3 * sizeof(__u64)];
+	char ubuf[3 * sizeof(__u64)];
+	char abuf[3 * sizeof(__u64)];
+	char rbuf[3 * sizeof(__u64)];
+
+	if (!uuid || !stat)
+		return -EINVAL;
+
+	switch (rc) {
+	case 0:
+		if (flags & MNTDF_INODES) {
+			avail = stat->os_ffree;
+			used = stat->os_files - stat->os_ffree;
+			total = stat->os_files;
+		} else {
+			int shift = flags & MNTDF_COOKED ? 0 : 10;
+
+			avail = (stat->os_bavail * stat->os_bsize) >> shift;
+			used  = ((stat->os_blocks - stat->os_bfree) *
+				 stat->os_bsize) >> shift;
+			total = (stat->os_blocks * stat->os_bsize) >> shift;
+		}
+
+		ratio = obd_statfs_ratio(stat);
+
+		if (flags & MNTDF_COOKED) {
+			int i;
+			double cook_val;
+
+			cook_val = (double)total;
+			i = COOK(cook_val);
+			if (i > 0)
+				snprintf(tbuf, sizeof(tbuf), HDF, cook_val,
+					 suffix[i - 1]);
+			else
+				snprintf(tbuf, sizeof(tbuf), CDF, total);
+
+			cook_val = (double)used;
+			i = COOK(cook_val);
+			if (i > 0)
+				snprintf(ubuf, sizeof(ubuf), HDF, cook_val,
+					 suffix[i - 1]);
+			else
+				snprintf(ubuf, sizeof(ubuf), CDF, used);
+
+			cook_val = (double)avail;
+			i = COOK(cook_val);
+			if (i > 0)
+				snprintf(abuf, sizeof(abuf), HDF, cook_val,
+					 suffix[i - 1]);
+			else
+				snprintf(abuf, sizeof(abuf), CDF, avail);
+		} else {
+			snprintf(tbuf, sizeof(tbuf), CDF, total);
+			snprintf(ubuf, sizeof(tbuf), CDF, used);
+			snprintf(abuf, sizeof(tbuf), CDF, avail);
+		}
+
+		sprintf(rbuf, RDF, ratio);
+		printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s",
+		       uuid, tbuf, ubuf, abuf, rbuf, mntdir);
+		if (type)
+			printf("[%s:%d]", type, index);
+
+		if (stat->os_state) {
+			/*
+			 * Each character represents the matching
+			 * OS_STATE_* bit.
+			 */
+			const char state_names[] = "DRSI";
+			__u32	   state;
+			__u32	   i;
+
+			printf(" ");
+			for (i = 0, state = stat->os_state;
+			     state && i < sizeof(state_names); i++) {
+				if (!(state & (1 << i)))
+					continue;
+				printf("%c", state_names[i]);
+				state ^= 1 << i;
+			}
+		}
+
+		printf("\n");
+		break;
+	case -ENODATA:
+		printf(UUF": inactive device\n", uuid);
+		break;
+	default:
+		printf(UUF": %s\n", uuid, strerror(-rc));
+		break;
+	}
+
+	return 0;
+}
+
+struct ll_stat_type {
+	int   st_op;
+	char *st_name;
+};
+
+#define LL_STATFS_MAX	LOV_MAX_STRIPE_COUNT
+
+struct ll_statfs_data {
+	int			sd_index;
+	struct obd_statfs	sd_st;
+};
+
+struct ll_statfs_buf {
+	int			sb_count;
+	struct ll_statfs_data	sb_buf[LL_STATFS_MAX];
+};
+
+static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
+		 int ops, struct ll_statfs_buf *lsb)
+{
+	struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
+	struct obd_uuid uuid_buf;
+	char *poolname = NULL;
+	struct ll_stat_type types[] = {
+		{ .st_op = LL_STATFS_LMV,	.st_name = "MDT" },
+		{ .st_op = LL_STATFS_LOV,	.st_name = "OST" },
+		{ .st_name = NULL } };
+	struct ll_stat_type *tp;
+	__u64 ost_ffree = 0;
+	__u32 index;
+	__u32 type;
+	int fd;
+	int rc = 0;
+	int rc2;
+
+	if (pool) {
+		poolname = strchr(pool, '.');
+		if (poolname != NULL) {
+			if (strncmp(fsname, pool, strlen(fsname))) {
+				fprintf(stderr, "filesystem name incorrect\n");
+				return -ENODEV;
+			}
+			poolname++;
+		} else
+			poolname = pool;
+	}
+
+	fd = open(mntdir, O_RDONLY);
+	if (fd < 0) {
+		rc = -errno;
+		fprintf(stderr, "%s: cannot open '%s': %s\n", progname, mntdir,
+			strerror(errno));
+		return rc;
+	}
+
+	if (flags & MNTDF_SHOW) {
+		if (flags & MNTDF_INODES)
+			printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
+			       "UUID", "Inodes", "IUsed", "IFree",
+			       "IUse%", "Mounted on");
+		else
+			printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
+			       "UUID",
+			       flags & MNTDF_COOKED ? "bytes" : "1K-blocks",
+			       "Used", "Available", "Use%", "Mounted on");
+	}
+
+	for (tp = types; tp->st_name != NULL; tp++) {
+		if (!(tp->st_op & ops))
+			continue;
+
+		for (index = 0; ; index++) {
+			memset(&stat_buf, 0, sizeof(struct obd_statfs));
+			memset(&uuid_buf, 0, sizeof(struct obd_uuid));
+			type = flags & MNTDF_LAZY ?
+				tp->st_op | LL_STATFS_NODELAY : tp->st_op;
+			rc2 = llapi_obd_fstatfs(fd, type, index,
+					       &stat_buf, &uuid_buf);
+			if (rc2 == -ENODEV)
+				break;
+			if (rc2 == -EAGAIN)
+				continue;
+			if (rc2 == -ENODATA) { /* Inactive device, OK. */
+				if (!(flags & MNTDF_VERBOSE))
+					continue;
+			} else if (rc2 < 0 && rc == 0) {
+				rc = rc2;
+			}
+
+			if (poolname && tp->st_op == LL_STATFS_LOV &&
+			    llapi_search_ost(fsname, poolname,
+					     obd_uuid2str(&uuid_buf)) != 1)
+				continue;
+
+			/* the llapi_obd_statfs() call may have returned with
+			 * an error, but if it filled in uuid_buf we will at
+			 * lease use that to print out a message for that OBD.
+			 * If we didn't get anything in the uuid_buf, then fill
+			 * it in so that we can print an error message. */
+			if (uuid_buf.uuid[0] == '\0')
+				snprintf(uuid_buf.uuid, sizeof(uuid_buf.uuid),
+					 "%s%04x", tp->st_name, index);
+			if (!rc && lsb) {
+				lsb->sb_buf[lsb->sb_count].sd_index = index;
+				lsb->sb_buf[lsb->sb_count].sd_st = stat_buf;
+				lsb->sb_count++;
+			}
+			if (flags & MNTDF_SHOW)
+				showdf(mntdir, &stat_buf,
+				       obd_uuid2str(&uuid_buf), flags,
+				       tp->st_name, index, rc2);
+
+			if (rc2 == 0) {
+				if (tp->st_op == LL_STATFS_LMV) {
+					sum.os_ffree += stat_buf.os_ffree;
+					sum.os_files += stat_buf.os_files;
+				} else /* if (tp->st_op == LL_STATFS_LOV) */ {
+					sum.os_blocks += stat_buf.os_blocks *
+						stat_buf.os_bsize;
+					sum.os_bfree  += stat_buf.os_bfree *
+						stat_buf.os_bsize;
+					sum.os_bavail += stat_buf.os_bavail *
+						stat_buf.os_bsize;
+					ost_ffree += stat_buf.os_ffree;
+				}
+			}
+		}
+	}
+
+	close(fd);
+
+	/* If we don't have as many objects free on the OST as inodes
+	 * on the MDS, we reduce the total number of inodes to
+	 * compensate, so that the "inodes in use" number is correct.
+	 * Matches ll_statfs_internal() so the results are consistent. */
+	if (ost_ffree < sum.os_ffree) {
+		sum.os_files = (sum.os_files - sum.os_ffree) + ost_ffree;
+		sum.os_ffree = ost_ffree;
+	}
+	if (flags & MNTDF_SHOW) {
+		printf("\n");
+		showdf(mntdir, &sum, "filesystem_summary:", flags, NULL, 0, 0);
+		printf("\n");
+	}
+
+	return rc;
+}
+
+static int ll_statfs_data_comp(const void *sd1, const void *sd2)
+{
+	const struct obd_statfs *st1 = &((const struct ll_statfs_data *)sd1)->
+						sd_st;
+	const struct obd_statfs *st2 = &((const struct ll_statfs_data *)sd2)->
+						sd_st;
+	int r1 = obd_statfs_ratio(st1);
+	int r2 = obd_statfs_ratio(st2);
+	int64_t result = r1 - r2;
+
+	/* if both space usage are above 90, compare free inodes */
+	if (r1 > 90 && r2 > 90)
+		result = st2->os_ffree - st1->os_ffree;
+
+	if (result < 0)
+		return -1;
+	else if (result == 0)
+		return 0;
+	else
+		return 1;
+}
+
 /* functions */
 static int lfs_setdirstripe(int argc, char **argv)
 {
@@ -4111,6 +4422,9 @@ static int lfs_setdirstripe(int argc, char **argv)
 	mode_t			mode = S_IRWXU | S_IRWXG | S_IRWXO;
 	mode_t			previous_mode = 0;
 	bool			delete = false;
+	struct ll_statfs_buf	*lsb = NULL;
+	char			mntdir[PATH_MAX] = "";
+	bool			auto_distributed = false;
 
 	struct option long_opts[] = {
 	{ .val = 'c',	.name = "count",	.has_arg = required_argument },
@@ -4239,8 +4553,13 @@ static int lfs_setdirstripe(int argc, char **argv)
 		previous_mode = umask(0);
 	}
 
-	/* initialize stripe parameters */
-	param = calloc(1, offsetof(typeof(*param), lsp_osts[lsa.lsa_nr_tgts]));
+	/*
+	 * initialize stripe parameters, in case param is converted to specific,
+	 * i.e, 'lfs mkdir -i -1 -c N', always allocate space for lsp_tgts.
+	 */
+	param = calloc(1, offsetof(typeof(*param),
+		       lsp_tgts[lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT ?
+				lsa.lsa_stripe_count : lsa.lsa_nr_tgts]));
 	if (param == NULL) {
 		fprintf(stderr,
 			"%s %s: cannot allocate memory for parameters: %s\n",
@@ -4278,10 +4597,102 @@ static int lfs_setdirstripe(int argc, char **argv)
 
 	dname = argv[optind];
 	do {
-		if (default_stripe)
+		if (default_stripe) {
 			result = llapi_dir_set_default_lmv(dname, param);
-		else
-			result = llapi_dir_create_param(dname, mode, param);
+		} else {
+			/* if current \a dname isn't under the same \a mntdir
+			 * as the last one, and the last one was
+			 * auto-distributed, restore \a param.
+			 */
+			if (mntdir[0] != '\0' &&
+			    strncmp(dname, mntdir, strlen(mntdir)) &&
+			    auto_distributed) {
+				param->lsp_is_specific = false;
+				param->lsp_stripe_offset = -1;
+				auto_distributed = false;
+			}
+
+			if (!param->lsp_is_specific &&
+			    param->lsp_stripe_offset == -1) {
+				char path[PATH_MAX] = "";
+
+				if (!lsb) {
+					lsb = malloc(sizeof(*lsb));
+					if (!lsb) {
+						result = -ENOMEM;
+						break;
+					}
+				}
+				lsb->sb_count = 0;
+
+				/* use mntdir for dirname() temporarily */
+				strncpy(mntdir, dname, sizeof(mntdir));
+				if (!realpath(dirname(mntdir), path)) {
+					result = -errno;
+					fprintf(stderr,
+						"error: invalid path '%s': %s\n",
+						argv[optind], strerror(errno));
+					break;
+				}
+				mntdir[0] = '\0';
+
+				result = llapi_search_mounts(path, 0, mntdir,
+							     NULL);
+				if (result < 0 || mntdir[0] == '\0') {
+					fprintf(stderr,
+						"No suitable Lustre mount found\n");
+					break;
+				}
+
+				result = mntdf(mntdir, NULL, NULL, 0,
+					       LL_STATFS_LMV, lsb);
+				if (result < 0)
+					break;
+
+				if (param->lsp_stripe_count > lsb->sb_count) {
+					fprintf(stderr,
+						"error: stripe count %d is too big\n",
+						param->lsp_stripe_count);
+					result = -ERANGE;
+					break;
+				}
+
+				qsort(lsb->sb_buf, lsb->sb_count,
+				      sizeof(struct ll_statfs_data),
+				      ll_statfs_data_comp);
+
+				auto_distributed = true;
+			}
+
+			if (auto_distributed) {
+				int r;
+				int nr = MAX(param->lsp_stripe_count,
+					     lsb->sb_count / 2);
+
+				/* don't use server whose usage is above 90% */
+				while (nr != param->lsp_stripe_count &&
+				       obd_statfs_ratio(&lsb->sb_buf[nr].sd_st)
+				       > 90)
+					nr = MAX(param->lsp_stripe_count,
+						 nr / 2);
+
+				/* get \a r between [0, nr) */
+				r = rand() % nr;
+
+				param->lsp_stripe_offset =
+					lsb->sb_buf[r].sd_index;
+				if (param->lsp_stripe_count > 1) {
+					int i = 0;
+
+					param->lsp_is_specific = true;
+					for (; i < param->lsp_stripe_count; i++)
+						param->lsp_tgts[(i + r) % nr] =
+							lsb->sb_buf[i].sd_index;
+				}
+			}
+
+			result = llapi_dir_create(dname, mode, param);
+		}
 
 		if (result) {
 			fprintf(stderr,
@@ -4295,6 +4706,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	if (mode_opt != NULL)
 		umask(previous_mode);
 
+	free(lsb);
 	free(param);
 	return result;
 }
@@ -4394,258 +4806,11 @@ static int lfs_mdts(int argc, char **argv)
         return lfs_tgts(argc, argv);
 }
 
-#define COOK(value)                                                     \
-({                                                                      \
-        int radix = 0;                                                  \
-        while (value > 1024) {                                          \
-                value /= 1024;                                          \
-                radix++;                                                \
-        }                                                               \
-        radix;                                                          \
-})
-#define UUF     "%-20s"
-#define CSF     "%11s"
-#define CDF     "%11llu"
-#define HDF     "%8.1f%c"
-#define RSF     "%4s"
-#define RDF     "%3d%%"
-
-enum mntdf_flags {
-	MNTDF_INODES	= 0x0001,
-	MNTDF_COOKED	= 0x0002,
-	MNTDF_LAZY	= 0x0004,
-	MNTDF_VERBOSE	= 0x0008,
-};
-
-static int showdf(char *mntdir, struct obd_statfs *stat,
-		  char *uuid, enum mntdf_flags flags,
-		  char *type, int index, int rc)
-{
-	long long avail, used, total;
-	double ratio = 0;
-	char *suffix = "KMGTPEZY";
-	/* Note if we have >2^64 bytes/fs these buffers will need to be grown */
-	char tbuf[3 * sizeof(__u64)];
-	char ubuf[3 * sizeof(__u64)];
-	char abuf[3 * sizeof(__u64)];
-	char rbuf[3 * sizeof(__u64)];
-
-	if (!uuid || !stat)
-		return -EINVAL;
-
-	switch (rc) {
-	case 0:
-		if (flags & MNTDF_INODES) {
-			avail = stat->os_ffree;
-			used = stat->os_files - stat->os_ffree;
-			total = stat->os_files;
-		} else {
-			int shift = flags & MNTDF_COOKED ? 0 : 10;
-
-			avail = (stat->os_bavail * stat->os_bsize) >> shift;
-			used  = ((stat->os_blocks - stat->os_bfree) *
-				 stat->os_bsize) >> shift;
-			total = (stat->os_blocks * stat->os_bsize) >> shift;
-		}
-
-		if ((used + avail) > 0)
-			ratio = (double)used / (double)(used + avail);
-
-		if (flags & MNTDF_COOKED) {
-			int i;
-			double cook_val;
-
-			cook_val = (double)total;
-			i = COOK(cook_val);
-			if (i > 0)
-				snprintf(tbuf, sizeof(tbuf), HDF, cook_val,
-					 suffix[i - 1]);
-			else
-				snprintf(tbuf, sizeof(tbuf), CDF, total);
-
-			cook_val = (double)used;
-			i = COOK(cook_val);
-			if (i > 0)
-				snprintf(ubuf, sizeof(ubuf), HDF, cook_val,
-					 suffix[i - 1]);
-			else
-				snprintf(ubuf, sizeof(ubuf), CDF, used);
-
-			cook_val = (double)avail;
-			i = COOK(cook_val);
-			if (i > 0)
-				snprintf(abuf, sizeof(abuf), HDF, cook_val,
-					 suffix[i - 1]);
-			else
-				snprintf(abuf, sizeof(abuf), CDF, avail);
-		} else {
-			snprintf(tbuf, sizeof(tbuf), CDF, total);
-			snprintf(ubuf, sizeof(tbuf), CDF, used);
-			snprintf(abuf, sizeof(tbuf), CDF, avail);
-		}
-
-		sprintf(rbuf, RDF, (int)(ratio * 100 + 0.5));
-		printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s",
-		       uuid, tbuf, ubuf, abuf, rbuf, mntdir);
-		if (type)
-			printf("[%s:%d]", type, index);
-
-		if (stat->os_state) {
-			/*
-			 * Each character represents the matching
-			 * OS_STATE_* bit.
-			 */
-			const char state_names[] = "DRSI";
-			__u32	   state;
-			__u32	   i;
-
-			printf(" ");
-			for (i = 0, state = stat->os_state;
-			     state && i < sizeof(state_names); i++) {
-				if (!(state & (1 << i)))
-					continue;
-				printf("%c", state_names[i]);
-				state ^= 1 << i;
-			}
-		}
-
-		printf("\n");
-		break;
-	case -ENODATA:
-		printf(UUF": inactive device\n", uuid);
-		break;
-	default:
-		printf(UUF": %s\n", uuid, strerror(-rc));
-		break;
-	}
-
-	return 0;
-}
-
-struct ll_stat_type {
-        int   st_op;
-        char *st_name;
-};
-
-static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags)
-{
-	struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
-	struct obd_uuid uuid_buf;
-	char *poolname = NULL;
-	struct ll_stat_type types[] = {
-		{ .st_op = LL_STATFS_LMV,	.st_name = "MDT" },
-		{ .st_op = LL_STATFS_LOV,	.st_name = "OST" },
-		{ .st_name = NULL } };
-	struct ll_stat_type *tp;
-	__u64 ost_ffree = 0;
-	__u32 index;
-	__u32 type;
-	int fd;
-	int rc = 0;
-	int rc2;
-
-	if (pool) {
-		poolname = strchr(pool, '.');
-		if (poolname != NULL) {
-			if (strncmp(fsname, pool, strlen(fsname))) {
-				fprintf(stderr, "filesystem name incorrect\n");
-				return -ENODEV;
-			}
-			poolname++;
-		} else
-			poolname = pool;
-	}
-
-	fd = open(mntdir, O_RDONLY);
-	if (fd < 0) {
-		rc = -errno;
-		fprintf(stderr, "%s: cannot open '%s': %s\n", progname, mntdir,
-			strerror(errno));
-		return rc;
-	}
-
-	if (flags & MNTDF_INODES)
-		printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
-		       "UUID", "Inodes", "IUsed", "IFree",
-		       "IUse%", "Mounted on");
-	else
-		printf(UUF" "CSF" "CSF" "CSF" "RSF" %-s\n",
-		       "UUID", flags & MNTDF_COOKED ? "bytes" : "1K-blocks",
-		       "Used", "Available", "Use%", "Mounted on");
-
-	for (tp = types; tp->st_name != NULL; tp++) {
-		for (index = 0; ; index++) {
-			memset(&stat_buf, 0, sizeof(struct obd_statfs));
-			memset(&uuid_buf, 0, sizeof(struct obd_uuid));
-			type = flags & MNTDF_LAZY ?
-				tp->st_op | LL_STATFS_NODELAY : tp->st_op;
-			rc2 = llapi_obd_fstatfs(fd, type, index,
-					       &stat_buf, &uuid_buf);
-			if (rc2 == -ENODEV)
-				break;
-			if (rc2 == -EAGAIN)
-				continue;
-			if (rc2 == -ENODATA) { /* Inactive device, OK. */
-				if (!(flags & MNTDF_VERBOSE))
-					continue;
-			} else if (rc2 < 0 && rc == 0) {
-				rc = rc2;
-			}
-
-			if (poolname && tp->st_op == LL_STATFS_LOV &&
-			    llapi_search_ost(fsname, poolname,
-					     obd_uuid2str(&uuid_buf)) != 1)
-				continue;
-
-			/* the llapi_obd_statfs() call may have returned with
-			 * an error, but if it filled in uuid_buf we will at
-			 * lease use that to print out a message for that OBD.
-			 * If we didn't get anything in the uuid_buf, then fill
-			 * it in so that we can print an error message. */
-			if (uuid_buf.uuid[0] == '\0')
-				snprintf(uuid_buf.uuid, sizeof(uuid_buf.uuid),
-					 "%s%04x", tp->st_name, index);
-			showdf(mntdir, &stat_buf, obd_uuid2str(&uuid_buf),
-			       flags, tp->st_name, index, rc2);
-
-			if (rc2 == 0) {
-				if (tp->st_op == LL_STATFS_LMV) {
-					sum.os_ffree += stat_buf.os_ffree;
-					sum.os_files += stat_buf.os_files;
-				} else /* if (tp->st_op == LL_STATFS_LOV) */ {
-					sum.os_blocks += stat_buf.os_blocks *
-						stat_buf.os_bsize;
-					sum.os_bfree  += stat_buf.os_bfree *
-						stat_buf.os_bsize;
-					sum.os_bavail += stat_buf.os_bavail *
-						stat_buf.os_bsize;
-					ost_ffree += stat_buf.os_ffree;
-				}
-			}
-		}
-	}
-
-	close(fd);
-
-	/* If we don't have as many objects free on the OST as inodes
-	 * on the MDS, we reduce the total number of inodes to
-	 * compensate, so that the "inodes in use" number is correct.
-	 * Matches ll_statfs_internal() so the results are consistent. */
-	if (ost_ffree < sum.os_ffree) {
-		sum.os_files = (sum.os_files - sum.os_ffree) + ost_ffree;
-		sum.os_ffree = ost_ffree;
-	}
-	printf("\n");
-	showdf(mntdir, &sum, "filesystem_summary:", flags, NULL, 0, 0);
-	printf("\n");
-
-	return rc;
-}
-
 static int lfs_df(int argc, char **argv)
 {
 	char mntdir[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
-	enum mntdf_flags flags = 0;
+	enum mntdf_flags flags = MNTDF_SHOW;
+	int ops = LL_STATFS_LMV | LL_STATFS_LOV;
 	int c, rc = 0, index = 0;
 	char fsname[PATH_MAX] = "", *pool_name = NULL;
 	struct option long_opts[] = {
@@ -4690,7 +4855,7 @@ static int lfs_df(int argc, char **argv)
 		if (mntdir[0] == '\0')
 			continue;
 
-		rc = mntdf(mntdir, fsname, pool_name, flags);
+		rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL);
 		if (rc || path[0] != '\0')
 			break;
 		fsname[0] = '\0'; /* avoid matching in next loop */

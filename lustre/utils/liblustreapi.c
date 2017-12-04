@@ -1000,8 +1000,8 @@ int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
  * \retval         0 on success
  * \retval         negative errno on failure
  */
-int llapi_dir_create_param(const char *name, mode_t mode,
-			   const struct llapi_stripe_param *param)
+int llapi_dir_create(const char *name, mode_t mode,
+		     const struct llapi_stripe_param *param)
 {
 	struct lmv_user_md *lmu = NULL;
 	size_t lmu_size = sizeof(*lmu);
@@ -1094,7 +1094,7 @@ int llapi_dir_create_pool(const char *name, int mode, int stripe_offset,
 		.lsp_pool = (char *)pool_name
 	};
 
-	return llapi_dir_create_param(name, mode, &param);
+	return llapi_dir_create(name, mode, &param);
 }
 
 int llapi_direntry_remove(char *dname)

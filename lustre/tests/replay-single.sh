@@ -4456,7 +4456,7 @@ test_116a() {
 
 	# OBD_FAIL_SPLIT_UPDATE_REC       0x1702
 	do_facet mds1 "lctl set_param fail_loc=0x80001702"
-	$LFS setdirstripe -c$MDSCOUNT $DIR/$tdir/striped_dir
+	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir
 
 	fail mds1
 	$CHECKSTAT -t dir $DIR/$tdir/striped_dir ||
@@ -4481,7 +4481,7 @@ test_116b() {
 
 	# OBD_FAIL_SPLIT_UPDATE_REC       0x1702
 	do_facet mds2 "lctl set_param fail_loc=0x80001702"
-	$LFS setdirstripe -c$MDSCOUNT $DIR/$tdir/striped_dir
+	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir
 
 	fail mds2
 	$CHECKSTAT -t dir $DIR/$tdir/striped_dir ||
@@ -4573,7 +4573,7 @@ test_119() {
 	replay_barrier mds1
 	mkdir $DIR/$tdir/dir_1
 	for ((i = 0; i < 20; i++)); do
-		$LFS setdirstripe -c2 $DIR/$tdir/stripe_dir-$i
+		$LFS setdirstripe -i0 -c2 $DIR/$tdir/stripe_dir-$i
 	done
 
 	stop mds1
@@ -4619,7 +4619,7 @@ test_120() {
 			error "create dir-$i fails"
 			break
 		}
-		$LFS setdirstripe -c2 $DIR/$tdir/stripe_dir-$i || {
+		$LFS setdirstripe -i0 -c2 $DIR/$tdir/stripe_dir-$i || {
 			error "create stripe_dir-$i fails"
 			break
 		}

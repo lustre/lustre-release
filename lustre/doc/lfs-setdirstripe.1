@@ -21,7 +21,9 @@ MDTs.
 .BR \-i ", " \-\-mdt\-index =\fISTART_MDT_INDEX\fR
 Use the MDT whose index is
 .I START_MDT_INDEX
-as the master/starting MDT for the directory.
+as the master/starting MDT for the directory. If -1 (default) is set, it will randomly pick
+.I COUNT
+less full MDTs.
 .TP
 .BR \-H ", " \-\-mdt-hash =\fIHASH_TYPE\fR
 Use
