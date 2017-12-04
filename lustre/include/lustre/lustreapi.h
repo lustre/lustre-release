@@ -224,7 +224,6 @@ struct find_param {
 				 fp_check_comp_count:1,
 				 fp_exclude_comp_count:1,
 				 fp_check_comp_flags:1,
-				 fp_exclude_comp_flags:1,
 				 fp_check_comp_start:1,
 				 fp_exclude_comp_start:1,
 				 fp_check_comp_end:1,
@@ -271,6 +270,7 @@ struct find_param {
 
 	__u32			 fp_comp_count;
 	__u32			 fp_comp_flags;
+	__u32			 fp_comp_neg_flags;
 	__u32			 fp_comp_id;
 	unsigned long long	 fp_comp_start;
 	unsigned long long	 fp_comp_start_units;
@@ -361,6 +361,7 @@ int llapi_get_version_string(char *version, unsigned int version_size);
 int llapi_get_version(char *buffer, int buffer_size, char **version)
 	__attribute__((deprecated));
 int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags);
+int llapi_file_flush(int fd);
 extern int llapi_get_ost_layout_version(int fd, __u32 *layout_version);
 int llapi_hsm_state_get_fd(int fd, struct hsm_user_state *hus);
 int llapi_hsm_state_get(const char *path, struct hsm_user_state *hus);
@@ -837,10 +838,9 @@ static const struct comp_flag_name {
 	const char *cfn_name;
 } comp_flags_table[] = {
 	{ LCME_FL_INIT,		"init" },
-	{ LCME_FL_PRIMARY,	"primary" },
 	{ LCME_FL_STALE,	"stale" },
+	{ LCME_FL_PREF_RW,	"prefer" },
 	{ LCME_FL_OFFLINE,	"offline" },
-	{ LCME_FL_PREFERRED,	"preferred" }
 };
 
 /**
@@ -904,13 +904,32 @@ int llapi_layout_file_comp_del(const char *path, uint32_t id, uint32_t flags);
  * attributes are passed in by @comp and @valid is used to specify which
  * attributes in the component are going to be changed.
  */
-int llapi_layout_file_comp_set(const char *path,
-			       const struct llapi_layout *comp,
-			       uint32_t valid);
+int llapi_layout_file_comp_set(const char *path, uint32_t *ids, uint32_t *flags,
+			       size_t count);
 /**
  * Check if the file layout is composite.
  */
 bool llapi_layout_is_composite(struct llapi_layout *layout);
+
+enum {
+	LLAPI_LAYOUT_ITER_CONT = 0,
+	LLAPI_LAYOUT_ITER_STOP = 1,
+};
+
+/**
+ * Iteration callback function.
+ *
+ * \retval LLAPI_LAYOUT_ITER_CONT	Iteration proceeds
+ * \retval LLAPI_LAYOUT_ITER_STOP	Stop iteration
+ * \retval < 0				error code
+ */
+typedef int (*llapi_layout_iter_cb)(struct llapi_layout *layout, void *cbdata);
+
+/**
+ * Iterate all components in the corresponding layout
+ */
+int llapi_layout_comp_iterate(struct llapi_layout *layout,
+			      llapi_layout_iter_cb cb, void *cbdata);
 
 /**
  * FLR: mirror operation APIs

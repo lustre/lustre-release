@@ -266,7 +266,8 @@ struct lod_default_striping {
 };
 
 struct lod_mirror_entry {
-	__u16	lme_stale:1;
+	__u16	lme_stale:1,
+		lme_primary:1;
 	/* mirror id */
 	__u16	lme_id;
 	/* start,end index of this mirror in ldo_comp_entries */

@@ -14,6 +14,9 @@ lfs setstripe \- set striping pattern of a file or directory default
 .B lfs setstripe --component-del \fR{\fB--component-id\fR|\fB-I \fIcomp_id\fR|
 .B --component-flags=\fIcomp_flags\fR} <\fIfilename\fR>
 .br
+.B lfs setstripe --component-set \fR{\fB--component-id\fR|\fB-I \fIcomp_id\fR|
+.B --component-flags=\fIcomp_flags\fR} <\fIfilename\fR>
+.br
 .B lfs setstripe -d \fR<\fIdirectory\fR>
 .br
 .SH DESCRIPTION
@@ -54,6 +57,8 @@ not possible to add components incrementally to the default directory layout,
 since the entire default layout can be replaced with one
 .B lfs setstripe
 call.
+.br
+Adding a component to FLR files is not allowed.
 .TP
 .B lfs setstripe --component-del \fR{\fB--component-id\fR|\fB-I \fIcomp_id\fR | \
 \fB--component-flags \fIcomp_flags\fR} <\fIfilename\fR>
@@ -69,7 +74,36 @@ layout, since the entire default layout can be replaced with one
 .B lfs setstripe
 call.
 The \fB--component-flags\fR option is used to specify certain type of
-components, such as all instantiated ones.
+components, such as all instantiated ones. Available component flags for
+deleting a component would be:
+.RS
+.TP
+.B init
+instantiated component.
+.LP
+A leading '^' in front of the \fIflags\fR means inverted flags.
+.br
+Deleting a component from FLR files is not allowed.
+.RE
+.TP
+.B lfs setstripe --component-set \fR{\fB--component-id\fR|\fB-I \fIcomp_id\fR | \
+\fB--component-flags \fIcomp_flags\fR} <\fIfilename\fR>
+Set or clear \fIflags\fR to the specified component. This command can be only
+be applied to FLR files. Available \fIflags\fR are:
+.RS
+.TP
+.B stale
+indicates the data in the corresponding component is not available for I/O.
+Once a component is set to stale, a \fBlfs-mirror-resync\fR(1) is required to
+clear the flag.
+.TP
+.B prefer
+set this flag to the corresponding component so that Lustre would prefer to
+choose the specified component for I/O.
+.LP
+A leading '^' means to clear the corresponding flag. It doesn't allow to clear
+\fBstale\fR flag.
+.RE
 .TP
 .B lfs setstripe -d \fR<\fIdirectory\fR>
 .br
@@ -180,8 +214,13 @@ Component flags. Available \fIflags\fR:
 .B init\fR: instantiated component.
 .RE
 .RS
-.B ^init\fR: uninstantiated component.
+.B prefer\fR: preferred component, for FLR only.
 .RE
+.RS
+.B stale\fR: stale component, for FLR only.
+.RE
+.LP
+A leading '^' means inverted flag. Multiple flags can be separated by comma(s).
 .RE
 .TP
 .B --component-add
@@ -210,6 +249,10 @@ the end of file.
 .TP
 .B $ lfs setstripe --component-del -I 1 /mnt/lustre/file1
 This deletes the component with ID equals 1 from an existing file.
+.TP
+.B $ lfs setstripe --component-set -I 1 --component-flags=^prefer,stale /mnt/lustre/file1
+This command will clear the \fBprefer\fR flag and set the \fBstale\fR to
+component with ID 1.
 .TP
 .B $ lfs setstripe -E 1M -L mdt -E -1 /mnt/lustre/file1
 This created file with Data-on-MDT layout. The first 1M is placed on MDT and \

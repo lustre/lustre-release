@@ -133,6 +133,18 @@ verify_comp_attr() {
 
 	value=$(eval $cmd)
 
+	[ $attr = lcme_flags ] && {
+		local fl
+		local expected_list=$(comma_list $expected)
+		for fl in ${expected_list//,/ }; do
+			echo $value | grep -q $fl || {
+				$getstripe_cmd $tf
+				error "expected flag $fl existing on $comp_id"
+			}
+		done
+		return
+	}
+
 	[[ $value = $expected ]] || {
 		$getstripe_cmd $tf
 		error "verify $attr failed on $tf: $value != $expected"
@@ -540,6 +552,64 @@ test_0f() {
 }
 run_test 0f "lfs mirror extend composite layout mirrors"
 
+test_0g() {
+	local tf=$DIR/$tfile
+
+	$LFS mirror create -N -E 1M -o0 --flags=prefer -E eof -o1 -N -o1 $tf ||
+		error "create mirrored file $tf failed"
+
+	verify_comp_attr lcme_flags $tf 0x10001 prefer
+	verify_comp_attr lcme_flags $tf 0x10002 prefer
+
+	# write to the mirrored file and check primary
+	cp /etc/hosts $tf || error "error writing file '$tf'"
+
+	verify_comp_attr lcme_flags $tf 0x20003 stale
+
+	# resync file and check prefer flag
+	$LFS mirror resync $tf || error "error resync-ing file '$tf'"
+
+	cancel_lru_locks osc
+	$LCTL set_param osc.*.stats=clear
+	cat $tf &> /dev/null || error "error reading file '$tf'"
+
+	# verify that the data was provided by OST1 where mirror 1 resides
+	local nr_read=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-ffff*.stats |
+			awk '/ost_read/{print $2}')
+	[ -n "$nr_read" ] || error "read was not provided by OST1"
+}
+run_test 0g "lfs mirror create flags support"
+
+test_0h() {
+	local tf=$DIR/$tfile
+
+	$LFS mirror create -N -E 1M --flags=prefer -E eof -N2 $tf ||
+		error "create mirrored file $tf failed"
+
+	verify_comp_attr lcme_flags $tf 0x10001 prefer
+	verify_comp_attr lcme_flags $tf 0x10002 prefer
+
+	# set flags to the first component
+	$LFS setstripe --comp-set -I 0x10001 --comp-flags=^prefer,stale $tf
+
+	verify_comp_attr lcme_flags $tf 0x10001 stale
+	verify_comp_attr lcme_flags $tf 0x10002 prefer
+
+	$LFS setstripe --comp-set -I0x10001 --comp-flags=^stale $tf &&
+		error "clearing 'stale' should fail"
+
+	# write and resync file. It can't resync the file directly because the
+	# file state is still 'ro'
+	cp /etc/hosts $tf || error "error writing file '$tf'"
+	$LFS mirror resync $tf || error "error resync-ing file '$tf'"
+
+	$LFS setstripe --comp-set -I 0x20003 --comp-flags=prefer $tf ||
+		error "error setting flag prefer"
+
+	verify_comp_attr lcme_flags $tf 0x20003 prefer
+}
+run_test 0h "set, clear and test flags for FLR files"
+
 test_1() {
 	local tf=$DIR/$tfile
 	local mirror_count=16 # LUSTRE_MIRROR_COUNT_MAX
@@ -872,10 +942,10 @@ test_33() {
 		error "mirrored file size is not $fsize"
 
 	# read file - all OSTs are available
-	echo "reading file (data should be provided by ost1)... "
+	echo "reading file (data can be provided by any ost)... "
 	local rs=$(cat $DIR/$tfile | head -1)
-	[[ "$rs" == "ost1" ]] ||
-		error "file content error: expected: \"ost1\", actual: \"$rs\""
+	[[ "$rs" == "ost1" || "$rs" == "ost2" ]] ||
+		error "file content error: expected: \"ost1\" or \"ost2\""
 
 	# read file again with ost1 failed
 	stop_osts 1

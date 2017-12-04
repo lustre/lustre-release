@@ -570,16 +570,20 @@ static inline bool lu_extent_is_whole(struct lu_extent *e)
 }
 
 enum lov_comp_md_entry_flags {
-	LCME_FL_PRIMARY	= 0x00000001,	/* Not used */
-	LCME_FL_STALE	= 0x00000002,	/* Not used */
-	LCME_FL_OFFLINE	= 0x00000004,	/* Not used */
-	LCME_FL_PREFERRED = 0x00000008, /* Not used */
+	LCME_FL_STALE	= 0x00000001,	/* FLR: stale data */
+	LCME_FL_PREF_RD	= 0x00000002,	/* FLR: preferred for reading */
+	LCME_FL_PREF_WR	= 0x00000004,	/* FLR: preferred for writing */
+	LCME_FL_PREF_RW	= LCME_FL_PREF_RD | LCME_FL_PREF_WR,
+	LCME_FL_OFFLINE	= 0x00000008,	/* Not used */
 	LCME_FL_INIT	= 0x00000010,	/* instantiated */
 	LCME_FL_NEG	= 0x80000000	/* used to indicate a negative flag,
 					   won't be stored on disk */
 };
 
-#define LCME_KNOWN_FLAGS	(LCME_FL_NEG | LCME_FL_INIT)
+#define LCME_KNOWN_FLAGS	(LCME_FL_NEG | LCME_FL_INIT | LCME_FL_STALE | \
+				 LCME_FL_PREF_RW)
+/* The flags can be set by users at mirror creation time. */
+#define LCME_USER_FLAGS		(LCME_FL_PREF_RW)
 
 /* the highest bit in obdo::o_layout_version is used to mark if the file is
  * being resynced. */
@@ -649,11 +653,6 @@ struct lov_comp_md_v1 {
 	__u64	lcm_padding2;
 	struct lov_comp_md_entry_v1 lcm_entries[0];
 } __attribute__((packed));
-
-/*
- * Maximum number of mirrors Lustre can support.
- */
-#define LUSTRE_MIRROR_COUNT_MAX		16
 
 static inline __u32 lov_user_md_size(__u16 stripes, __u32 lmm_magic)
 {

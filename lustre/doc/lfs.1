@@ -117,6 +117,32 @@ can be used to create a new file with a specific striping pattern, determine
 the default striping pattern, gather the extended attributes (object numbers
 and location) for a specific file. It can be invoked interactively without any
 arguments or in a non-interactive mode with one of the arguments supported.
+.TP
+.B Component Flags
+.br
+Component flags can be set by option \fB--component-flags\fR<=\fIflags\fR>.
+
+.br
+The following component flags are supported so far:
+.RS
+.TP
+.B init
+indicates the object(s) of this component has been instantiated.
+.TP
+.B stale
+means the data contained in this component is stale. Data in a stale component
+won't be returned by reading. Used only by FLR.
+.TP
+.B prefer
+is a hint to Lustre that means this components will likely be chosen for read
+and write. Used only by FLR.
+.LP
+The same set of flag can be set in \fBgetstripe\fR to list the component(s)
+that matches the \fIflags\fR, or doesn't match the \fIflags\fR if it has a caret '^'
+in front. It can also be applied to \fBfind\fR so that only the files that have
+the components described by \fBflags\fR will be listed.
+.RE
+.LP
 .SH OPTIONS
 The various options supported by lfs are listed and explained below:
 .TP
@@ -132,6 +158,16 @@ Changelog consumers must be registered on the MDT node using \fBlctl\fR.
 .B check
 Display the status of MDS or OSTs (as specified in the command) or all the servers (MDS and OSTs)
 .TP
+.B data_version [-n] <filename>
+Display current version of file data. If -n is specified, data version is read
+without taking lock. As a consequence, data version could be outdated if there
+is dirty caches on filesystem clients, but this will not force data flushes and
+has less impact on filesystem.
+
+Even without -n, race conditions are possible and data version should be
+checked before and after an operation to be confident the data did not change
+during it.
+.TP
 .B df
 See
 .BR lfs-df (1)
@@ -141,6 +177,10 @@ usage.
 .TP
 .B find
 To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST or OSTs), \fB--size\fR (file has size in bytes, or \fBk\fRilo-, \fBM\fRega-, \fBG\fRiga-, \fBT\fRera-, \fBP\fReta-, or \fBE\fRxabytes if a suffix is given), \fB--type\fR (file has the type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory, \fBp\fRipe, \fBf\fRile, sym\fBl\fRink, \fBs\fRocket, or \fBD\fRoor (Solaris)), \fB--uid\fR (file has specific numeric user ID), \fB--user\fR (file owned by specific user, numeric user ID allowed), \fB--gid\fR (file has specific group ID), \fB--group\fR (file belongs to specific group, numeric group ID allowed),\fB--projid\fR (file has specific numeric project ID), \fB--layout\fR (file has a raid0 layout or is released). The option \fB--maxdepth\fR limits find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline or NUL character correspondingly.  Using \fB!\fR before an option negates its meaning (\fIfiles NOT matching the parameter\fR).  Using \fB+\fR before a numeric value means 'more than n', while \fB-\fR before a numeric value means 'less than n'.
+
+.br
+\fBlfs find\fR command allows to use component flags to list files that have
+specified \fIflags\fR matched(See \fB Component Flags\fR).
 .TP
 .B getname [-h]|[path ...]
 Report all the Lustre mount points and the corresponding Lustre filesystem
@@ -222,6 +262,10 @@ You can limit the displayed content by specifing argument for
 .B --component-end|-E
 options. For example, "--component-id=2" or "-I2" will only display the layout
 attributes for the component with id equal to 2.
+
+.br
+\fBlfs getstripe\fR command allows to use component flags to list files that
+have specified \fIflags\fR matched(See \fB Component Flags\fR).
 .TP
 .B fid2path [--link <linkno>] <fsname|rootpath> <fid> ...
 Print out the pathname(s) for the specified \fIfid\fR(s) from the filesystem
@@ -269,16 +313,6 @@ reside on the same MDT and writable by the user.
 
 Swapping the layout of two directories is not permitted.
 .TP
-.B data_version [-n] <filename>
-Display current version of file data. If -n is specified, data version is read
-without taking lock. As a consequence, data version could be outdated if there
-is dirty caches on filesystem clients, but this will not force data flushes and
-has less impact on filesystem.
-
-Even without -n, race conditions are possible and data version should be
-checked before and after an operation to be confident the data did not change
-during it.
-.TP
 .B mkdir
 lfs mkdir is documented in the man page: lfs-mkdir(1). NOTE:
 .B lfs setdirstripe
@@ -318,6 +352,9 @@ Lists the detailed information of the component 2 in a given file
 .B $ lfs getstripe --component-flags=^init -I /mnt/lustre/file1
 Print only the component IDs for all the uninstantiated components
 .TP
+.B $ lfs getstripe --component-flags=init,^stale -I /mnt/lustre/file1
+Print only the component(s) that are instantiated but not stale
+.TP
 .B $ lfs getstripe -E-64M /mnt/lustre/file1
 Lists the information of the components in a file which has less than 64M extent end
 .TP
@@ -335,6 +372,10 @@ Recursively list all files in a given directory that have objects on OST2-UUID.
 .TP
 .B $ lfs find --component-count +3 /mnt/lustre
 Recursively list all files that have more than 3 components.
+.TP
+.B $ lfs find --component-flags=init,prefer,^stale /mnt/lustre
+Recursively list all files that have at least one component with both 'init' and
+\'prefer' flags set, and doesn't have flag 'stale' set.
 .TP
 .B $ lfs check servers
 Check the status of all servers (MDT, OST)

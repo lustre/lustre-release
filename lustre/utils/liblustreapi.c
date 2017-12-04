@@ -3177,10 +3177,9 @@ static void lov_dump_comp_v1(struct find_param *param, char *path,
 		entry = &comp_v1->lcm_entries[i];
 
 		if (param->fp_check_comp_flags) {
-			if ((param->fp_exclude_comp_flags &&
-			     (param->fp_comp_flags & entry->lcme_flags)) ||
-			    (!param->fp_exclude_comp_flags &&
-			     !(param->fp_comp_flags & entry->lcme_flags)))
+			if (((param->fp_comp_flags & entry->lcme_flags) !=
+			     param->fp_comp_flags) ||
+			    (param->fp_comp_neg_flags & entry->lcme_flags))
 				continue;
 		}
 
@@ -3798,16 +3797,13 @@ static int find_check_comp_options(struct find_param *param)
 		entry = &comp_v1->lcm_entries[i];
 
 		if (param->fp_check_comp_flags) {
-			if (((entry->lcme_flags & param->fp_comp_flags) &&
-			     param->fp_exclude_comp_flags) ||
-			    (!(entry->lcme_flags & param->fp_comp_flags) &&
-			     !param->fp_exclude_comp_flags))
+			ret = 1;
+			if (((param->fp_comp_flags & entry->lcme_flags) !=
+			     param->fp_comp_flags) ||
+			    (param->fp_comp_neg_flags & entry->lcme_flags)) {
 				ret = -1;
-			else
-				ret = 1;
-
-			if (ret == -1)
 				continue;
+			}
 		}
 
 		if (param->fp_check_comp_start) {
@@ -5036,6 +5032,20 @@ int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags)
 		*data_version = idv.idv_version;
 
 	return rc;
+}
+
+/**
+ * Flush cached pages from all clients.
+ *
+ * \param fd	File descriptor
+ * \retval 0	success
+ * \retval < 0	error
+ */
+int llapi_file_flush(int fd)
+{
+	__u64 dv;
+
+	return llapi_get_data_version(fd, &dv, LL_DV_WR_FLUSH);
 }
 
 /*

@@ -4,7 +4,7 @@ lfs mirror create \- create a mirrored file or directory
 .SH SYNOPSIS
 .B lfs mirror create
 <\fB\-\-mirror\-count\fR|\fB\-N\fR[\fImirror_count\fR]>
-.RI [ setstripe_options | \fB--parent ] ...
+[\fIsetstripe_options\fR|\fB--parent\fR|[\fB--flags\fR<=\fIflags\fR>]] ...
 .RI < filename | directory >
 .SH DESCRIPTION
 This command creates a mirrored file or directory specified by the path name
@@ -44,6 +44,27 @@ the stripe options inherited from the previous component will be used.
 .B \-\-parent
 This option indicates that the default stripe options inherited from parent
 directory will be used.
+.TP
+.B --flags<=\fIflags\fR>
+Where available \fIflags\fR are as follows:
+.RS
+.TP
+.BI prefer
+is supported in mirror creation. This flag will be set to all components that
+belong to ths corresponding mirror. The \fBprefer\fR flag gives hint to Lustre
+for which mirrors should be used to serve I/O. When a mirrored file is being
+read, the component(s) with \fBprefer\fR are likely to be picked to serve the
+read; and when a mirrored file is prepared to be written, the MDT will
+tend to choose the component with \fBprefer\fR flag set and stale the other
+components with overlapping extents. This flag just provides a hint to Lustre,
+which means Lustre may still choose mirrors without this flag set, for instance,
+if all preferred mirrors are unavailable when the I/O occurs. This flag could be
+set on multiple components.
+.LP
+Please note that this flag will be set to all components that belong to the
+corresponding mirror. There also exists option \fB--comp-flags\fR that can be
+set to individual components at mirror creation time.
+.RE
 .SH EXAMPLES
 .TP
 .B lfs mirror create -N2 /mnt/lustre/file1
@@ -67,13 +88,20 @@ on OSTs with indices 2 and 3. It also has 4MB stripe size inherited from the
 first mirror. The third mirror has default striping pattern inherited from
 parent directory.
 .LP
-.B lfs mirror create -N2 -E 4M -c 2 --pool flash -E eof -c 4 -N3 -E 16M -c 4 -S
-.B 16M --pool archive -E eof -c -1 /mnt/lustre/file1
+.B lfs mirror create -N2 -E 4M -c 2 --pool flash --flags prefer -E eof -c 4
+.B -N3 -E 16M -c 4 -S 16M --pool archive --comp-flags=prefer -E eof -c -1
+.B /mnt/lustre/file1
 .in
 Create a mirrored file with 5 PFL mirrors. The first and second mirrors have the
 same PFL layout, and both of the components are allocated from the \fBflash\fR
-OST pool. The last three mirrors have the same PFL layout, and each of these
+OST pool. Also, flag \fBprefer\fR is applied to all the components of the first
+two mirrors, which tells the client to read data from those components whenever
+they are available.
+.br
+The last three mirrors have the same PFL layout, and each of these
 components have a stripe size of 16MB and use OSTs in the \fBarchive\fR pool.
+However, the flag \fBprefer\fR is only applied to the first component of each
+mirror.
 .SH AUTHOR
 The \fBlfs mirror create\fR command is part of the Lustre filesystem.
 .SH SEE ALSO

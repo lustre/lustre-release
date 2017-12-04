@@ -182,7 +182,9 @@ static inline int lfs_mirror_extend(int argc, char **argv)
 	"\t              It can be a plain layout or a composite layout.\n"    \
 	"\t              If not specified, the stripe options inherited\n"     \
 	"\t              from the previous component will be used.\n"          \
-	"\tparent:       Use default stripe options from parent directory\n"
+	"\tparent:       Use default stripe options from parent directory\n"   \
+	"\tflags:        set flags to the component of the current mirror.\n"  \
+	"\t              Only \"prefer\" flag is supported so far.\n"
 
 #define MIRROR_EXTEND_HELP						       \
 	MIRROR_CREATE_HELP						       \
@@ -877,28 +879,59 @@ static int migrate_nonblock(int fd, int fdv)
 	return 0;
 }
 
-static int lfs_component_set(char *fname, int comp_id, __u32 flags)
+static int lfs_component_set(char *fname, int comp_id,
+			     __u32 flags, __u32 neg_flags)
 {
-	return -ENOTSUP;
+	__u32 ids[2];
+	__u32 flags_array[2];
+	size_t count = 0;
+	int rc;
+
+	if (flags) {
+		ids[count] = comp_id;
+		flags_array[count] = flags;
+		++count;
+	}
+
+	if (neg_flags) {
+		ids[count] = comp_id;
+		flags_array[count] = neg_flags | LCME_FL_NEG;
+		++count;
+	}
+
+	rc = llapi_layout_file_comp_set(fname, ids, flags_array, count);
+	if (rc)
+		fprintf(stderr,
+			"%s: cannot change the flags of component '%#x' of file '%s': %x / ^(%x)\n",
+			progname, comp_id, fname, flags, neg_flags);
+
+	return rc;
 }
 
-static int lfs_component_del(char *fname, __u32 comp_id, __u32 flags)
+static int lfs_component_del(char *fname, __u32 comp_id,
+			     __u32 flags, __u32 neg_flags)
 {
 	int	rc = 0;
 
-	if (flags != 0 && comp_id != 0)
+	if (flags && neg_flags)
+		return -EINVAL;
+
+	if (!flags && neg_flags)
+		flags = neg_flags | LCME_FL_NEG;
+
+	if ((flags && comp_id) || (!flags && !comp_id))
 		return -EINVAL;
 
 	/* LCME_FL_INIT is the only supported flag in PFL */
-	if (flags != 0) {
+	if (flags) {
 		if (flags & ~LCME_KNOWN_FLAGS) {
 			fprintf(stderr,
-				"%s setstripe: bad component flags %#x\n",
+				"%s setstripe: unknown flags %#x\n",
 				progname, flags);
 			return -EINVAL;
 		}
 	} else if (comp_id > LCME_ID_MAX) {
-		fprintf(stderr, "%s setstripe: bad component id %u\n",
+		fprintf(stderr, "%s setstripe: invalid component id %u\n",
 			progname, comp_id);
 		return -EINVAL;
 	}
@@ -1005,9 +1038,54 @@ out:
 	return rc;
 }
 
+static int comp_str2flags(char *string, __u32 *flags, __u32 *neg_flags)
+{
+	char *name;
+
+	if (string == NULL)
+		return -EINVAL;
+
+	*flags = 0;
+	*neg_flags = 0;
+	for (name = strtok(string, ","); name; name = strtok(NULL, ",")) {
+		bool found = false;
+		int i;
+
+		for (i = 0; i < ARRAY_SIZE(comp_flags_table); i++) {
+			__u32 comp_flag = comp_flags_table[i].cfn_flag;
+			const char *comp_name = comp_flags_table[i].cfn_name;
+
+			if (strcmp(name, comp_name) == 0) {
+				*flags |= comp_flag;
+				found = true;
+			} else if (strncmp(name, "^", 1) == 0 &&
+				   strcmp(name + 1, comp_name) == 0) {
+				*neg_flags |= comp_flag;
+				found = true;
+			}
+		}
+		if (!found) {
+			llapi_printf(LLAPI_MSG_ERROR,
+				     "%s: component flag '%s' not supported\n",
+				     progname, name);
+			return -EINVAL;
+		}
+	}
+
+	if (!*flags && !*neg_flags)
+		return -EINVAL;
+
+	/* don't allow to set and exclude the same flag */
+	if (*flags & *neg_flags)
+		return -EINVAL;
+
+	return 0;
+}
+
 /**
  * struct mirror_args - Command-line arguments for mirror(s).
  * @m_count:  Number of mirrors to be created with this layout.
+ * @m_flags:  Mirror level flags, only 'prefer' is supported.
  * @m_layout: Mirror layout.
  * @m_file:   A victim file. Its layout will be split and used as a mirror.
  * @m_next:   Point to the next node of the list.
@@ -1017,10 +1095,35 @@ out:
  */
 struct mirror_args {
 	__u32			m_count;
+	__u32			m_flags;
 	struct llapi_layout	*m_layout;
 	const char		*m_file;
 	struct mirror_args	*m_next;
 };
+
+static int mirror_sanity_check_flags(struct llapi_layout *layout, void *unused)
+{
+	uint32_t flags;
+	int rc;
+
+	rc = llapi_layout_comp_flags_get(layout, &flags);
+	if (rc)
+		return -errno;
+
+	if (flags & LCME_FL_NEG) {
+		fprintf(stderr, "error: %s: negative flags are not supported\n",
+			progname);
+		return -EINVAL;
+	}
+
+	if (flags & LCME_FL_STALE) {
+		fprintf(stderr, "error: %s: setting '%s' is not supported\n",
+			progname, comp_flags_table[LCME_FL_STALE].cfn_name);
+		return -EINVAL;
+	}
+
+	return LLAPI_LAYOUT_ITER_CONT;
+}
 
 static inline int mirror_sanity_check_one(struct llapi_layout *layout)
 {
@@ -1057,7 +1160,8 @@ static inline int mirror_sanity_check_one(struct llapi_layout *layout)
 		return -EINVAL;
 	}
 
-	return 0;
+	rc = llapi_layout_comp_iterate(layout, mirror_sanity_check_flags, NULL);
+	return rc;
 }
 
 /**
@@ -1123,9 +1227,8 @@ static int mirror_create_sanity_check(const char *fname,
 				return -ENODATA;
 			}
 		} else {
-			if (list->m_layout != NULL)
-				has_m_layout = true;
-			else {
+			has_m_layout = true;
+			if (list->m_layout == NULL) {
 				fprintf(stderr, "error: %s: no mirror layout\n",
 					progname);
 				return -EINVAL;
@@ -1147,6 +1250,25 @@ static int mirror_create_sanity_check(const char *fname,
 	}
 
 	return 0;
+}
+
+static int mirror_set_flags(struct llapi_layout *layout, void *cbdata)
+{
+	__u32 mirror_flags = *(__u32 *)cbdata;
+	uint32_t flags;
+	int rc;
+
+	rc = llapi_layout_comp_flags_get(layout, &flags);
+	if (rc < 0)
+		return rc;
+
+	if (!flags) {
+		rc = llapi_layout_comp_flags_set(layout, mirror_flags);
+		if (rc)
+			return rc;
+	}
+
+	return LLAPI_LAYOUT_ITER_CONT;
 }
 
 /**
@@ -1173,6 +1295,16 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 
 	cur_mirror = mirror_list;
 	while (cur_mirror != NULL) {
+		rc = llapi_layout_comp_iterate(cur_mirror->m_layout,
+					       mirror_set_flags,
+					       &cur_mirror->m_flags);
+		if (rc) {
+			rc = -errno;
+			fprintf(stderr, "%s: failed to set mirror flags\n",
+				progname);
+			goto error;
+		}
+
 		for (i = 0; i < cur_mirror->m_count; i++) {
 			rc = llapi_layout_merge(&layout, cur_mirror->m_layout);
 			if (rc) {
@@ -1256,7 +1388,6 @@ static int mirror_extend_file(const char *fname, const char *victim_file,
 	int fdv = -1;
 	struct stat stbuf;
 	struct stat stbuf_v;
-	__u64 dv;
 	int rc;
 
 	fd = open(fname, O_RDWR);
@@ -1310,13 +1441,13 @@ static int mirror_extend_file(const char *fname, const char *victim_file,
 	}
 
 	/* Get rid of caching pages from clients */
-	rc = llapi_get_data_version(fd, &dv, LL_DV_WR_FLUSH);
+	rc = llapi_file_flush(fd);
 	if (rc < 0) {
 		error_loc = "cannot get data version";
 		return rc;
 	}
 
-	rc = llapi_get_data_version(fdv, &dv, LL_DV_WR_FLUSH);
+	rc = llapi_file_flush(fdv);
 	if (rc < 0) {
 		error_loc = "cannot get data version";
 		return rc;
@@ -1474,8 +1605,9 @@ struct lfs_setstripe_args {
 	long long		 lsa_stripe_count;
 	long long		 lsa_stripe_off;
 	__u32			 lsa_comp_flags;
-	int			 lsa_nr_tgts;
+	__u32			 lsa_comp_neg_flags;
 	unsigned long long	 lsa_pattern;
+	int			 lsa_nr_tgts;
 	__u32			*lsa_tgts;
 	char			*lsa_pool_name;
 };
@@ -1638,6 +1770,13 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 		return rc;
 	}
 
+	rc = llapi_layout_comp_flags_set(layout, lsa->lsa_comp_flags);
+	if (rc) {
+		fprintf(stderr, "Set flags 0x%x failed: %s\n",
+			lsa->lsa_comp_flags, strerror(errno));
+		return rc;
+	}
+
 	if (lsa->lsa_pool_name != NULL) {
 		rc = llapi_layout_pool_name_set(layout, lsa->lsa_pool_name);
 		if (rc) {
@@ -1775,69 +1914,6 @@ static int adjust_first_extent(char *fname, struct llapi_layout *layout)
 	return 0;
 }
 
-static inline bool comp_flags_is_neg(__u32 flags)
-{
-	return flags & LCME_FL_NEG;
-}
-
-static inline void comp_flags_set_neg(__u32 *flags)
-{
-	*flags |= LCME_FL_NEG;
-}
-
-static inline void comp_flags_clear_neg(__u32 *flags)
-{
-	*flags &= ~LCME_FL_NEG;
-}
-
-static int comp_str2flags(__u32 *flags, char *string)
-{
-	char *name;
-	__u32 neg_flags = 0;
-
-	if (string == NULL)
-		return -EINVAL;
-
-	*flags = 0;
-	for (name = strtok(string, ","); name; name = strtok(NULL, ",")) {
-		bool found = false;
-		int i;
-
-		for (i = 0; i < ARRAY_SIZE(comp_flags_table); i++) {
-			__u32 comp_flag = comp_flags_table[i].cfn_flag;
-			const char *comp_name = comp_flags_table[i].cfn_name;
-
-			if (strcmp(name, comp_name) == 0) {
-				*flags |= comp_flag;
-				found = true;
-			} else if (strncmp(name, "^", 1) == 0 &&
-				   strcmp(name + 1, comp_name) == 0) {
-				neg_flags |= comp_flag;
-				found = true;
-			}
-		}
-		if (!found) {
-			llapi_printf(LLAPI_MSG_ERROR,
-				     "%s: component flag '%s' not supported\n",
-				     progname, name);
-			return -EINVAL;
-		}
-	}
-
-	if (*flags == 0 && neg_flags == 0)
-		return -EINVAL;
-	/* don't support mixed flags for now */
-	if (*flags && neg_flags)
-		return -EINVAL;
-
-	if (neg_flags) {
-		*flags = neg_flags;
-		comp_flags_set_neg(flags);
-	}
-
-	return 0;
-}
-
 static inline bool arg_is_eof(char *arg)
 {
 	return !strncmp(arg, "-1", strlen("-1")) ||
@@ -1913,6 +1989,7 @@ enum {
 	LFS_COMP_USE_PARENT_OPT,
 	LFS_COMP_NO_VERIFY_OPT,
 	LFS_PROJID_OPT,
+	LFS_MIRROR_FLAGS_OPT,
 };
 
 /* functions */
@@ -1977,6 +2054,8 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 			.name = "parent",	.has_arg = no_argument},
 	{ .val = LFS_COMP_NO_VERIFY_OPT,
 			.name = "no-verify",	.has_arg = no_argument},
+	{ .val = LFS_MIRROR_FLAGS_OPT,
+			.name = "flags",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument},
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
@@ -2029,9 +2108,23 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 			comp_del = 1;
 			break;
 		case LFS_COMP_FLAGS_OPT:
-			result = comp_str2flags(&lsa.lsa_comp_flags, optarg);
+			result = comp_str2flags(optarg, &lsa.lsa_comp_flags,
+						&lsa.lsa_comp_neg_flags);
 			if (result != 0)
 				goto usage_error;
+			if (mirror_mode && lsa.lsa_comp_neg_flags) {
+				fprintf(stderr, "%s: inverted flags are not supported\n",
+					progname);
+				goto usage_error;
+			}
+			if (lsa.lsa_comp_neg_flags & LCME_FL_STALE) {
+				fprintf(stderr,
+					"%s: cannot clear 'stale' flags from component. Please use lfs-mirror-resync(1) instead\n",
+					progname);
+				result = -EINVAL;
+				goto error;
+			}
+
 			break;
 		case LFS_COMP_SET_OPT:
 			comp_set = 1;
@@ -2048,6 +2141,35 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 		case LFS_COMP_NO_VERIFY_OPT:
 			mirror_flags |= NO_VERIFY;
 			break;
+		case LFS_MIRROR_FLAGS_OPT: {
+			__u32 flags;
+
+			if (!mirror_mode || !last_mirror) {
+				fprintf(stderr, "error: %s: --flags must be specified with --mirror-count|-N option\n",
+					progname);
+				goto usage_error;
+			}
+
+			result = comp_str2flags(optarg, &last_mirror->m_flags,
+						&flags);
+			if (result != 0)
+				goto usage_error;
+
+			if (flags) {
+				fprintf(stderr, "%s: inverted flags are not supported\n",
+					progname);
+				result = -EINVAL;
+				goto usage_error;
+			}
+			if (last_mirror->m_flags & ~LCME_USER_FLAGS) {
+				fprintf(stderr,
+					"%s: unsupported mirror flags: %s\n",
+					progname, optarg);
+				result = -EINVAL;
+				goto error;
+			}
+			break;
+		}
 		case 'b':
 			if (!migrate_mode) {
 				fprintf(stderr,
@@ -2315,8 +2437,8 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 	/* Only LCME_FL_INIT flags is used in PFL, and it shouldn't be
 	 * altered by user space tool, so we don't need to support the
 	 * --component-set for this moment. */
-	if (comp_set != 0) {
-		fprintf(stderr, "%s %s: --component-set not supported\n",
+	if (comp_set && !comp_id) {
+		fprintf(stderr, "%s %s: --component-set doesn't have component-id set\n",
 			progname, argv[0]);
 		goto usage_error;
 	}
@@ -2469,10 +2591,12 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 					     layout);
 		} else if (comp_set != 0) {
 			result = lfs_component_set(fname, comp_id,
-						   lsa.lsa_comp_flags);
+						   lsa.lsa_comp_flags,
+						   lsa.lsa_comp_neg_flags);
 		} else if (comp_del != 0) {
 			result = lfs_component_del(fname, comp_id,
-						   lsa.lsa_comp_flags);
+						   lsa.lsa_comp_flags,
+						   lsa.lsa_comp_neg_flags);
 		} else if (comp_add != 0) {
 			result = lfs_component_add(fname, layout);
 		} else if (opc == SO_MIRROR_CREATE) {
@@ -2778,14 +2902,19 @@ static int lfs_find(int argc, char **argv)
 			param.fp_exclude_comp_count = !!neg_opt;
 			break;
 		case LFS_COMP_FLAGS_OPT:
-			rc = comp_str2flags(&param.fp_comp_flags, optarg);
-			if (rc || comp_flags_is_neg(param.fp_comp_flags)) {
+			rc = comp_str2flags(optarg, &param.fp_comp_flags,
+					    &param.fp_comp_neg_flags);
+			if (rc) {
 				fprintf(stderr, "error: bad component flags "
 					"'%s'\n", optarg);
 				goto err;
 			}
 			param.fp_check_comp_flags = 1;
-			param.fp_exclude_comp_flags = !!neg_opt;
+			if (neg_opt) {
+				__u32 flags = param.fp_comp_neg_flags;
+				param.fp_comp_neg_flags = param.fp_comp_flags;
+				param.fp_comp_flags = flags;
+			}
 			break;
 		case LFS_COMP_START_OPT:
 			if (optarg[0] == '+') {
@@ -3239,19 +3368,16 @@ static int lfs_getstripe_internal(int argc, char **argv,
 			break;
 		case LFS_COMP_FLAGS_OPT:
 			if (optarg != NULL) {
-				__u32 *flags = &param->fp_comp_flags;
-				rc = comp_str2flags(flags, optarg);
+				rc = comp_str2flags(optarg,
+						    &param->fp_comp_flags,
+						    &param->fp_comp_neg_flags);
 				if (rc != 0) {
 					fprintf(stderr, "error: %s bad "
 						"component flags '%s'.\n",
 						argv[0], optarg);
 					return CMD_HELP;
-				} else {
-					param->fp_check_comp_flags = 1;
-					param->fp_exclude_comp_flags =
-						comp_flags_is_neg(*flags);
-					comp_flags_clear_neg(flags);
 				}
+				param->fp_check_comp_flags = 1;
 			} else {
 				param->fp_verbose |= VERBOSE_COMP_FLAGS;
 				param->fp_max_depth = 0;

@@ -637,6 +637,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 	unsigned int mirror_count;
 	int flr_state = lsm->lsm_flags & LCM_FL_FLR_MASK;
 	int result = 0;
+	unsigned int seq;
 	int i, j;
 
 	ENTRY;
@@ -719,8 +720,8 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		/* entries must be sorted by mirrors */
 		lre->lre_mirror_id = mirror_id;
 		lre->lre_start = lre->lre_end = i;
-		lre->lre_preferred = (lle->lle_lsme->lsme_flags &
-					LCME_FL_PREFERRED);
+		lre->lre_preferred = !!(lle->lle_lsme->lsme_flags &
+					LCME_FL_PREF_RD);
 		lre->lre_valid = lle->lle_valid;
 		lre->lre_stale = !lle->lle_valid;
 	}
@@ -758,43 +759,28 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 	if (psz > 0)
 		cl_object_header(&lov->lo_cl)->coh_page_bufsize += psz;
 
-	/* decide the preferred mirror */
-	mirror_count = 0, i = 0;
-	lov_foreach_mirror_entry(lov, lre) {
-		i++;
+	/* decide the preferred mirror. It uses the hash value of lov_object
+	 * so that different clients would use different mirrors for read. */
+	mirror_count = 0;
+	seq = hash_long((unsigned long)lov, 8);
+	for (i = 0; i < comp->lo_mirror_count; i++) {
+		unsigned int idx = (i + seq) % comp->lo_mirror_count;
+
+		lre = lov_mirror_entry(lov, idx);
 		if (lre->lre_stale)
 			continue;
 
 		mirror_count++; /* valid mirror */
 
 		if (lre->lre_preferred || comp->lo_preferred_mirror < 0)
-			comp->lo_preferred_mirror = i - 1;
+			comp->lo_preferred_mirror = idx;
 	}
-	if (mirror_count == 0) {
+	if (!mirror_count) {
 		CDEBUG(D_INODE, DFID
 		       " doesn't have any valid mirrors\n",
 		       PFID(lu_object_fid(lov2lu(lov))));
 
-		GOTO(out, result = -EINVAL);
-	}
-
-	if (OBD_FAIL_CHECK(OBD_FAIL_FLR_RANDOM_PICK_MIRROR)) {
-		unsigned int seq;
-
-		get_random_bytes(&seq, sizeof(seq));
-		seq %= mirror_count;
-
-		i = 0;
-		lov_foreach_mirror_entry(lov, lre) {
-			i++;
-			if (lre->lre_stale)
-				continue;
-
-			if (!seq--) {
-				comp->lo_preferred_mirror = i - 1;
-				break;
-			}
-		}
+		comp->lo_preferred_mirror = 0;
 	}
 
 	LASSERT(comp->lo_preferred_mirror >= 0);

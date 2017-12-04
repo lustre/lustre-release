@@ -2449,7 +2449,7 @@ static int lod_declare_layout_set(const struct lu_env *env,
 	struct lod_device	*d = lu2lod_dev(dt->do_lu.lo_dev);
 	struct lod_object	*lo = lod_dt_obj(dt);
 	struct lov_comp_md_v1	*comp_v1 = buf->lb_buf;
-	__u32	magic, id;
+	__u32	magic;
 	int	i, j, rc;
 	bool	changed = false;
 	ENTRY;
@@ -2476,15 +2476,27 @@ static int lod_declare_layout_set(const struct lu_env *env,
 	}
 
 	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
-		id = comp_v1->lcm_entries[i].lcme_id;
+		__u32 id = comp_v1->lcm_entries[i].lcme_id;
+		__u32 flags = comp_v1->lcm_entries[i].lcme_flags;
+
+		if (flags & LCME_FL_INIT) {
+			if (changed)
+				lod_object_free_striping(env, lo);
+			RETURN(-EINVAL);
+		}
 
 		for (j = 0; j < lo->ldo_comp_cnt; j++) {
 			lod_comp = &lo->ldo_comp_entries[j];
-			if (id == lod_comp->llc_id || id == LCME_ID_ALL) {
-				lod_comp->llc_flags =
-					comp_v1->lcm_entries[i].lcme_flags;
-				changed = true;
+			if (id != lod_comp->llc_id)
+				continue;
+
+			if (flags & LCME_FL_NEG) {
+				flags &= ~LCME_FL_NEG;
+				lod_comp->llc_flags &= ~flags;
+			} else {
+				lod_comp->llc_flags |= flags;
 			}
+			changed = true;
 		}
 	}
 
@@ -2497,8 +2509,8 @@ static int lod_declare_layout_set(const struct lu_env *env,
 	lod_obj_inc_layout_gen(lo);
 
 	info->lti_buf.lb_len = lod_comp_md_size(lo, false);
-	rc = lod_sub_declare_xattr_set(env, dt, &info->lti_buf,
-				       XATTR_NAME_LOV, 0, th);
+	rc = lod_sub_declare_xattr_set(env, dt_object_child(dt), &info->lti_buf,
+				       XATTR_NAME_LOV, LU_XATTR_REPLACE, th);
 	RETURN(rc);
 }
 
@@ -2554,6 +2566,12 @@ static int lod_declare_layout_del(const struct lu_env *env,
 
 	if (id != LCME_ID_INVAL && flags != 0) {
 		CDEBUG(D_LAYOUT, "%s: specified both id and flags.\n",
+		       lod2obd(d)->obd_name);
+		RETURN(-EINVAL);
+	}
+
+	if (id == LCME_ID_INVAL && !flags) {
+		CDEBUG(D_LAYOUT, "%s: no id or flags specified.\n",
 		       lod2obd(d)->obd_name);
 		RETURN(-EINVAL);
 	}
@@ -5522,16 +5540,22 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 
 	/**
 	 * Pick a mirror as the primary.
-	 * Now it only picks the first mirror, this algo can be
-	 * revised later after knowing the topology of cluster or
-	 * the availability of OSTs.
+	 * Now it only picks the first mirror that has primary flag set and
+	 * doesn't have any stale components. This algo should be revised
+	 * later after knowing the topology of cluster or the availability of
+	 * OSTs.
 	 */
 	for (picked = -1, i = 0; i < lo->ldo_mirror_count; i++) {
 		int index = (i + seq) % lo->ldo_mirror_count;
 
 		if (!lo->ldo_mirrors[index].lme_stale) {
-			picked = index;
-			break;
+			if (lo->ldo_mirrors[index].lme_primary) {
+				picked = index;
+				break;
+			}
+
+			if (picked < 0)
+				picked = index;
 		}
 	}
 	if (picked < 0) /* failed to pick a primary */

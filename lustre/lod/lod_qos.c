@@ -1941,6 +1941,9 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 					comp_v1->lcm_entries[i].lcme_offset);
 			ext = &comp_v1->lcm_entries[i].lcme_extent;
 			lod_comp->llc_extent = *ext;
+			lod_comp->llc_flags =
+				comp_v1->lcm_entries[i].lcme_flags &
+					LCME_USER_FLAGS;
 		}
 
 		pool_name = NULL;
