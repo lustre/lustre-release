@@ -5066,6 +5066,47 @@ test_33()
 }
 run_test 33 "check LFSCK paramters"
 
+test_34()
+{
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $(facet_fstype $SINGLEMDS) != zfs ] &&
+		skip "Only valid for ZFS backend" && return
+
+	lfsck_prep 1 1
+
+	#define OBD_FAIL_LFSCK_NO_AGENTOBJ	0x1630
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1630
+	$LFS mkdir -i 1 $DIR/$tdir/dummy ||
+		error "(1) Fail to create $DIR/$tdir/dummy"
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	$START_NAMESPACE -r || error "(2) Fail to start LFSCK for namespace!"
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(3) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^dirent_repaired/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(4) Fail to repair the lost agent object: $repaired"
+
+	$START_NAMESPACE -r || error "(5) Fail to start LFSCK for namespace!"
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(6) unexpected status"
+	}
+
+	repaired=$($SHOW_NAMESPACE | awk '/^dirent_repaired/ { print $2 }')
+	[ $repaired -eq 0 ] ||
+		error "(7) Unexpected repairing: $repaired"
+}
+run_test 34 "LFSCK can rebuild the lost agent object"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

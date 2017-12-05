@@ -706,7 +706,9 @@ __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 
 		la->la_valid = LA_MODE;
 		la->la_mode = S_IFREG | S_IRUGO | S_IWUSR;
-		rc = __osd_object_create(env, obj, &xa_data_dn, tx, la);
+		rc = __osd_object_create(env, osd, obj,
+					 lu_object_fid(&obj->oo_dt.do_lu),
+					 &xa_data_dn, tx, la);
 		if (rc)
 			goto out;
 		xa_data_obj = xa_data_dn->dn_object;

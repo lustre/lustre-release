@@ -17522,6 +17522,53 @@ test_802() {
 }
 run_test 802 "simulate readonly device"
 
+test_803() {
+	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.54) ] &&
+		skip "MDS needs to be newer than 2.10.54" && return
+
+	mkdir -p $DIR/$tdir
+	# Create some objects on all MDTs to trigger related logs objects
+	for idx in $(seq $MDSCOUNT); do
+		$LFS mkdir -c $MDSCOUNT -i $((idx % $MDSCOUNT)) \
+			$DIR/$tdir/dir${idx} ||
+			error "Fail to create $DIR/$tdir/dir${idx}"
+	done
+
+	sync; sleep 5
+	echo "before create:"
+	$LFS df -i $MOUNT
+	local before_used=$($LFS df -i | grep MDT0000_UUID | awk '{print $3}')
+
+	for ((i=0; i<10; i++)); do
+		$LFS mkdir -c 1 -i 1 $DIR/$tdir/foo$i ||
+			error "Fail to create $DIR/$tdir/foo$i"
+	done
+
+	sync; sleep 5
+	echo "after create:"
+	$LFS df -i $MOUNT
+	local after_used=$($LFS df -i | grep MDT0000_UUID | awk '{print $3}')
+
+	[ $after_used -ge $((before_used + 10)) ] ||
+		error "before ($before_used) + 10 > after ($after_used)"
+
+	for ((i=0; i<10; i++)); do
+		rm -rf $DIR/$tdir/foo$i ||
+			error "Fail to remove $DIR/$tdir/foo$i"
+	done
+
+	wait_delete_completed
+	echo "after unlink:"
+	$LFS df -i $MOUNT
+	before_used=$after_used
+	after_used=$($LFS df -i | grep MDT0000_UUID | awk '{print $3}')
+
+	[ $after_used -le $((before_used - 8)) ] ||
+		error "before ($before_used) - 8 < after ($after_used)"
+}
+run_test 803 "verify agent object for remote object"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

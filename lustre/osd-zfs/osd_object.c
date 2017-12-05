@@ -1295,9 +1295,7 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(oh->ot_tx != NULL);
 
 	/* this is the minimum set of EAs on every Lustre object */
-	obj->oo_ea_in_bonus = ZFS_SA_BASE_ATTR_SIZE +
-				sizeof(__u64) + /* VBR VERSION */
-				sizeof(struct lustre_mdt_attrs); /* LMA */
+	obj->oo_ea_in_bonus = OSD_BASE_EA_IN_BONUS;
 	/* reserve 32 bytes for extra stuff like ACLs */
 	dnode_size = size_roundup_power2(obj->oo_ea_in_bonus + 32);
 
@@ -1479,15 +1477,14 @@ static int osd_find_new_dnode(const struct lu_env *env, dmu_tx_t *tx,
 }
 
 #ifdef HAVE_DMU_OBJECT_ALLOC_DNSIZE
-static int osd_find_dnsize(struct osd_object *obj)
+int osd_find_dnsize(struct osd_device *osd, int ea_in_bonus)
 {
-	struct osd_device *osd = osd_obj2dev(obj);
 	int dnsize;
 
 	if (osd->od_dnsize == ZFS_DNSIZE_AUTO) {
 		dnsize = DNODE_MIN_SIZE;
 		do {
-			if (DN_BONUS_SIZE(dnsize) >= obj->oo_ea_in_bonus + 32)
+			if (DN_BONUS_SIZE(dnsize) >= ea_in_bonus + 32)
 				break;
 			dnsize <<= 1;
 		} while (dnsize < DNODE_MAX_SIZE);
@@ -1508,11 +1505,6 @@ static int osd_find_dnsize(struct osd_object *obj)
 	}
 	return dnsize;
 }
-#else
-static int inline osd_find_dnsize(struct osd_object *obj)
-{
-	return DN_MAX_BONUSLEN;
-}
 #endif
 
 /*
@@ -1520,13 +1512,13 @@ static int inline osd_find_dnsize(struct osd_object *obj)
  * dmu_tx_hold_bonus(tx, DMU_NEW_OBJECT) called and then assigned
  * to a transaction group.
  */
-int __osd_object_create(const struct lu_env *env, struct osd_object *obj,
+int __osd_object_create(const struct lu_env *env, struct osd_device *osd,
+			struct osd_object *obj, const struct lu_fid *fid,
 			dnode_t **dnp, dmu_tx_t *tx, struct lu_attr *la)
 {
-	struct osd_device   *osd = osd_obj2dev(obj);
-	const struct lu_fid *fid = lu_object_fid(&obj->oo_dt.do_lu);
-	dmu_object_type_t    type = DMU_OT_PLAIN_FILE_CONTENTS;
+	dmu_object_type_t type = DMU_OT_PLAIN_FILE_CONTENTS;
 	uint64_t oid;
+	int size;
 
 	/* Use DMU_OTN_UINT8_METADATA for local objects so their data blocks
 	 * would get an additional ditto copy */
@@ -1535,8 +1527,12 @@ int __osd_object_create(const struct lu_env *env, struct osd_object *obj,
 		type = DMU_OTN_UINT8_METADATA;
 
 	/* Create a new DMU object using the default dnode size. */
+	if (obj)
+		size = obj->oo_ea_in_bonus;
+	else
+		size = OSD_BASE_EA_IN_BONUS;
 	oid = osd_dmu_object_alloc(osd->od_os, type, 0,
-				   osd_find_dnsize(obj), tx);
+				   osd_find_dnsize(osd, size), tx);
 
 	LASSERT(la->la_valid & LA_MODE);
 	la->la_size = 0;
@@ -1581,6 +1577,7 @@ int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 static dnode_t *osd_mkidx(const struct lu_env *env, struct osd_object *obj,
 			  struct lu_attr *la, struct osd_thandle *oh)
 {
+	struct osd_device *osd = osd_obj2dev(obj);
 	dnode_t *dn;
 	int rc;
 
@@ -1589,8 +1586,8 @@ static dnode_t *osd_mkidx(const struct lu_env *env, struct osd_object *obj,
 	 * We set ZAP_FLAG_UINT64_KEY to let ZFS know than we are going to use
 	 * binary keys */
 	LASSERT(S_ISREG(la->la_mode));
-	rc = __osd_zap_create(env, osd_obj2dev(obj), &dn, oh->ot_tx, la,
-			      osd_find_dnsize(obj), ZAP_FLAG_UINT64_KEY);
+	rc = __osd_zap_create(env, osd, &dn, oh->ot_tx, la,
+		osd_find_dnsize(osd, obj->oo_ea_in_bonus), ZAP_FLAG_UINT64_KEY);
 	if (rc)
 		return ERR_PTR(rc);
 	return dn;
@@ -1599,12 +1596,13 @@ static dnode_t *osd_mkidx(const struct lu_env *env, struct osd_object *obj,
 static dnode_t *osd_mkdir(const struct lu_env *env, struct osd_object *obj,
 			  struct lu_attr *la, struct osd_thandle *oh)
 {
+	struct osd_device *osd = osd_obj2dev(obj);
 	dnode_t *dn;
 	int rc;
 
 	LASSERT(S_ISDIR(la->la_mode));
-	rc = __osd_zap_create(env, osd_obj2dev(obj), &dn, oh->ot_tx, la,
-			      osd_find_dnsize(obj), 0);
+	rc = __osd_zap_create(env, osd, &dn, oh->ot_tx, la,
+			      osd_find_dnsize(osd, obj->oo_ea_in_bonus), 0);
 	if (rc)
 		return ERR_PTR(rc);
 	return dn;
@@ -1619,7 +1617,7 @@ static dnode_t *osd_mkreg(const struct lu_env *env, struct osd_object *obj,
 	int rc;
 
 	LASSERT(S_ISREG(la->la_mode));
-	rc = __osd_object_create(env, obj, &dn, oh->ot_tx, la);
+	rc = __osd_object_create(env, osd, obj, fid, &dn, oh->ot_tx, la);
 	if (rc)
 		return ERR_PTR(rc);
 
@@ -1647,7 +1645,9 @@ static dnode_t *osd_mksym(const struct lu_env *env, struct osd_object *obj,
 	int rc;
 
 	LASSERT(S_ISLNK(la->la_mode));
-	rc = __osd_object_create(env, obj, &dn, oh->ot_tx, la);
+	rc = __osd_object_create(env, osd_obj2dev(obj), obj,
+				 lu_object_fid(&obj->oo_dt.do_lu),
+				 &dn, oh->ot_tx, la);
 	if (rc)
 		return ERR_PTR(rc);
 	return dn;
@@ -1662,7 +1662,9 @@ static dnode_t *osd_mknod(const struct lu_env *env, struct osd_object *obj,
 	if (S_ISCHR(la->la_mode) || S_ISBLK(la->la_mode))
 		la->la_valid |= LA_RDEV;
 
-	rc = __osd_object_create(env, obj, &dn, oh->ot_tx, la);
+	rc = __osd_object_create(env, osd_obj2dev(obj), obj,
+				 lu_object_fid(&obj->oo_dt.do_lu),
+				 &dn, oh->ot_tx, la);
 	if (rc)
 		return ERR_PTR(rc);
 	return dn;

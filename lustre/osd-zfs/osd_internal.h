@@ -516,7 +516,8 @@ int osd_object_sa_update(struct osd_object *obj, sa_attr_type_t type,
 int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 		     dnode_t **zap_dnp, dmu_tx_t *tx, struct lu_attr *la,
 		     unsigned dnsize, zap_flags_t flags);
-int __osd_object_create(const struct lu_env *env, struct osd_object *obj,
+int __osd_object_create(const struct lu_env *env, struct osd_device *osd,
+			struct osd_object *obj, const struct lu_fid *fid,
 			dnode_t **dnp, dmu_tx_t *tx, struct lu_attr *la);
 int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 		    struct osd_object *obj, sa_handle_t *sa_hdl, dmu_tx_t *tx,
@@ -598,6 +599,21 @@ int __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
 		    struct osd_thandle *oh);
 int __osd_sa_xattr_update(const struct lu_env *env, struct osd_object *obj,
 			  struct osd_thandle *oh);
+
+#define OSD_BASE_EA_IN_BONUS	(ZFS_SA_BASE_ATTR_SIZE + \
+				 sizeof(__u64) /* VBR VERSION */ + \
+				 sizeof(struct lustre_mdt_attrs) /* LMA */)
+
+#ifdef HAVE_DMU_OBJECT_ALLOC_DNSIZE
+int osd_find_dnsize(struct osd_device *osd, int ea_in_bonus);
+#else
+static inline int
+osd_find_dnsize(struct osd_device *osd, int ea_in_bonus)
+{
+	return DN_MAX_BONUSLEN;
+}
+#endif
+
 static inline int
 osd_xattr_set_internal(const struct lu_env *env, struct osd_object *obj,
 		       const struct lu_buf *buf, const char *name, int fl,
