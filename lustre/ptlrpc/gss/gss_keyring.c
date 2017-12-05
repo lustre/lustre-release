@@ -153,19 +153,17 @@ static void ctx_upcall_timeout_kr(unsigned long data)
         key_revoke_locked(key);
 }
 
-static void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, long timeout)
+static void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, time64_t timeout)
 {
 	struct gss_cli_ctx_keyring *gctx_kr = ctx2gctx_keyring(ctx);
-	struct timer_list          *timer = gctx_kr->gck_timer;
+	struct timer_list *timer = gctx_kr->gck_timer;
 
 	LASSERT(timer);
 
-	CDEBUG(D_SEC, "ctx %p: start timer %lds\n", ctx, timeout);
-	timeout = msecs_to_jiffies(timeout * MSEC_PER_SEC) +
-		  cfs_time_current();
+	CDEBUG(D_SEC, "ctx %p: start timer %llds\n", ctx, timeout);
 
 	init_timer(timer);
-	timer->expires = timeout;
+	timer->expires = cfs_time_seconds(timeout) + jiffies;
 	timer->data = (unsigned long ) ctx;
 	timer->function = ctx_upcall_timeout_kr;
 
@@ -219,7 +217,7 @@ struct ptlrpc_cli_ctx *ctx_create_kr(struct ptlrpc_sec *sec,
                 return NULL;
         }
 
-	ctx->cc_expire = cfs_time_current_sec() + KEYRING_UPCALL_TIMEOUT;
+	ctx->cc_expire = ktime_get_real_seconds() + KEYRING_UPCALL_TIMEOUT;
 	clear_bit(PTLRPC_CTX_NEW_BIT, &ctx->cc_flags);
 	atomic_inc(&ctx->cc_refcount); /* for the caller */
 
@@ -561,17 +559,17 @@ void rvs_sec_install_root_ctx_kr(struct ptlrpc_sec *sec,
                                  struct ptlrpc_cli_ctx *new_ctx,
                                  struct key *key)
 {
-	struct gss_sec_keyring	*gsec_kr = sec2gsec_keyring(sec);
-	struct hlist_node	__maybe_unused *hnode;
-	struct ptlrpc_cli_ctx	*ctx;
-	cfs_time_t		now;
-	ENTRY;
+	struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
+	struct hlist_node __maybe_unused *hnode;
+	struct ptlrpc_cli_ctx *ctx;
+	time64_t now;
 
-        LASSERT(sec_is_reverse(sec));
+	ENTRY;
+	LASSERT(sec_is_reverse(sec));
 
 	spin_lock(&sec->ps_lock);
 
-        now = cfs_time_current_sec();
+	now = ktime_get_real_seconds();
 
         /* set all existing ctxs short expiry */
         cfs_hlist_for_each_entry(ctx, hnode, &gsec_kr->gsk_clist, cc_cache) {
@@ -1067,13 +1065,13 @@ void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 static
 int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
 {
-	struct gss_sec_keyring	*gsec_kr = sec2gsec_keyring(sec);
-	struct hlist_node	__maybe_unused *pos, *next;
-	struct ptlrpc_cli_ctx	*ctx;
-	struct gss_cli_ctx	*gctx;
-	time_t			 now = cfs_time_current_sec();
-	ENTRY;
+	struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
+	struct hlist_node __maybe_unused *pos, *next;
+	struct ptlrpc_cli_ctx *ctx;
+	struct gss_cli_ctx *gctx;
+	time64_t now = ktime_get_real_seconds();
 
+	ENTRY;
 	spin_lock(&sec->ps_lock);
         cfs_hlist_for_each_entry_safe(ctx, pos, next,
 				      &gsec_kr->gsk_clist, cc_cache) {
@@ -1093,9 +1091,8 @@ int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
                         snprintf(mech, sizeof(mech), "N/A");
                 mech[sizeof(mech) - 1] = '\0';
 
-		seq_printf(seq, "%p: uid %u, ref %d, expire %lu(%+ld), fl %s, "
-			   "seq %d, win %u, key %08x(ref %d), "
-			   "hdl %#llx:%#llx, mech: %s\n",
+		seq_printf(seq,
+			   "%p: uid %u, ref %d, expire %lld(%+lld), fl %s, seq %d, win %u, key %08x(ref %d), hdl %#llx:%#llx, mech: %s\n",
 			   ctx, ctx->cc_vcred.vc_uid,
 			   atomic_read(&ctx->cc_refcount),
 			   ctx->cc_expire,

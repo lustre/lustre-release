@@ -160,6 +160,13 @@ time64_t ktime_get_real_seconds(void);
 time64_t ktime_get_seconds(void);
 #endif /* HAVE_KTIME_GET_SECONDS */
 
+#ifdef NEED_KTIME_GET_NS
+static inline u64 ktime_get_ns(void)
+{
+	return ktime_to_ns(ktime_get());
+}
+#endif /* NEED_KTIME_GET_NS */
+
 #ifdef NEED_KTIME_GET_REAL_NS
 static inline u64 ktime_get_real_ns(void)
 {

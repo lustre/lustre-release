@@ -92,10 +92,10 @@ __u32 gss_copy_reverse_context_null(struct gss_ctx *gss_context_old,
 
 static
 __u32 gss_inquire_context_null(struct gss_ctx *gss_context,
-			       unsigned long *endtime)
+			       time64_t *endtime)
 {
 	/* quick timeout for testing purposes */
-	*endtime = cfs_time_current_sec() + 60;
+	*endtime = ktime_get_real_seconds() + 60;
 	return GSS_S_COMPLETE;
 }
 

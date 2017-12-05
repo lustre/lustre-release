@@ -72,17 +72,16 @@ int buffer_extract_bytes(const void **buf, __u32 *buflen,
  */
 #define GSS_GC_INTERVAL                 (60 * 60) /* 60 minutes */
 
-static inline
-unsigned long gss_round_ctx_expiry(unsigned long expiry,
-                                   unsigned long sec_flags)
+static inline time64_t gss_round_ctx_expiry(time64_t expiry,
+					    unsigned long sec_flags)
 {
-        if (sec_flags & PTLRPC_SEC_FL_REVERSE)
-                return expiry;
+	if (sec_flags & PTLRPC_SEC_FL_REVERSE)
+		return expiry;
 
-        if (get_seconds() + __TIMEOUT_DELTA <= expiry)
-                return expiry - __TIMEOUT_DELTA;
+	if (ktime_get_real_seconds() + __TIMEOUT_DELTA <= expiry)
+		return expiry - __TIMEOUT_DELTA;
 
-        return expiry;
+	return expiry;
 }
 
 /*

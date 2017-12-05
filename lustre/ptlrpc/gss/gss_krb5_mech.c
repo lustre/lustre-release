@@ -196,8 +196,13 @@ __u32 import_context_rfc1964(struct krb5_ctx *kctx, char *p, char *end)
 	    gss_get_bytes(&p, end, &tmp_uint, sizeof(tmp_uint)))
 		goto out_err;
 
-	/* end time */
-	if (gss_get_bytes(&p, end, &kctx->kc_endtime, sizeof(kctx->kc_endtime)))
+	/* end time. While kc_endtime might be 64 bit the krb5 API
+	 * still uses 32 bits. To delay the 2038 bug see the incoming
+	 * value as a u32 which give us until 2106. See the link for details:
+	 *
+	 * http://web.mit.edu/kerberos/www/krb5-current/doc/appdev/y2038.html
+	 */
+	if (gss_get_bytes(&p, end, &kctx->kc_endtime, sizeof(u32)))
 		goto out_err;
 
 	/* seq send */
@@ -261,8 +266,13 @@ __u32 import_context_rfc4121(struct krb5_ctx *kctx, char *p, char *end)
 {
 	unsigned int    tmp_uint, keysize;
 
-	/* end time */
-	if (gss_get_bytes(&p, end, &kctx->kc_endtime, sizeof(kctx->kc_endtime)))
+	/* end time. While kc_endtime might be 64 bit the krb5 API
+	 * still uses 32 bits. To delay the 2038 bug see the incoming
+	 * value as a u32 which give us until 2106. See the link for details:
+	 *
+	 * http://web.mit.edu/kerberos/www/krb5-current/doc/appdev/y2038.html
+	 */
+	if (gss_get_bytes(&p, end, &kctx->kc_endtime, sizeof(u32)))
 		goto out_err;
 
 	/* flags */
@@ -410,11 +420,11 @@ out_err:
 
 static
 __u32 gss_inquire_context_kerberos(struct gss_ctx *gctx,
-                                   unsigned long  *endtime)
+				   time64_t *endtime)
 {
         struct krb5_ctx *kctx = gctx->internal_ctx_id;
 
-	*endtime = (unsigned long)((__u32) kctx->kc_endtime);
+	*endtime = kctx->kc_endtime;
         return GSS_S_COMPLETE;
 }
 

@@ -190,7 +190,7 @@ __u32 lgss_copy_reverse_context(struct gss_ctx *ctx_id,
  * this interface is much simplified, currently we only need endtime.
  */
 __u32 lgss_inquire_context(struct gss_ctx *context_handle,
-                           unsigned long  *endtime)
+			   time64_t *endtime)
 {
         LASSERT(context_handle);
         LASSERT(context_handle->mech_type);

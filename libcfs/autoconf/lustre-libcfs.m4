@@ -470,6 +470,23 @@ ktime_get_real_seconds, [
 ]) # LIBCFS_KTIME_GET_REAL_SECONDS
 
 #
+# Kernel version 3.17 created ktime_get_ns wrapper
+#
+AC_DEFUN([LIBCFS_KTIME_GET_NS],[
+LB_CHECK_COMPILE([does function 'ktime_get_ns' exist],
+ktime_get_ns, [
+	#include <linux/ktime.h>
+],[
+	u64 nanoseconds;
+
+	nanoseconds = ktime_get_ns();
+],[],[
+	AC_DEFINE(NEED_KTIME_GET_NS, 1,
+		['ktime_get_ns' is not available])
+])
+]) # LIBCFS_KTIME_GET_NS
+
+#
 # Kernel version 3.17 created ktime_get_real_ns wrapper
 #
 AC_DEFUN([LIBCFS_KTIME_GET_REAL_NS],[
@@ -800,6 +817,7 @@ LIBCFS_SHRINKER_COUNT
 # 3.17
 LIBCFS_HLIST_ADD_AFTER
 LIBCFS_TIMESPEC64
+LIBCFS_KTIME_GET_NS
 LIBCFS_KTIME_GET_REAL_TS64
 LIBCFS_KTIME_GET_REAL_SECONDS
 LIBCFS_KTIME_GET_REAL_NS

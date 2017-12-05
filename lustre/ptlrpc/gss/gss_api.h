@@ -44,7 +44,7 @@ __u32 lgss_copy_reverse_context(
                 struct gss_ctx         **ctx_new);
 __u32 lgss_inquire_context(
                 struct gss_ctx          *ctx,
-                unsigned long           *endtime);
+		time64_t *endtime);
 __u32 lgss_get_mic(
                 struct gss_ctx          *ctx,
                 int                      msgcnt,
@@ -119,7 +119,7 @@ struct gss_api_ops {
                         struct gss_ctx         *ctx_new);
         __u32 (*gss_inquire_context)(
                         struct gss_ctx         *ctx,
-                        unsigned long          *endtime);
+			time64_t *endtime);
         __u32 (*gss_get_mic)(
                         struct gss_ctx         *ctx,
                         int                     msgcnt,

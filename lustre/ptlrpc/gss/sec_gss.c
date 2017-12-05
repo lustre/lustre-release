@@ -308,11 +308,11 @@ int cli_ctx_expire(struct ptlrpc_cli_ctx *ctx)
 		if (!ctx->cc_early_expire)
 			clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
-		CWARN("ctx %p(%u->%s) get expired: %lu(%+lds)\n",
+		CWARN("ctx %p(%u->%s) get expired: %lld(%+llds)\n",
 		      ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
 		      ctx->cc_expire,
 		      ctx->cc_expire == 0 ? 0 :
-		      cfs_time_sub(ctx->cc_expire, cfs_time_current_sec()));
+		      ctx->cc_expire - ktime_get_real_seconds());
 
 		sptlrpc_cli_ctx_wakeup(ctx);
 		return 1;
@@ -335,7 +335,7 @@ int cli_ctx_check_death(struct ptlrpc_cli_ctx *ctx)
                 return 0;
 
         /* check real expiration */
-        if (cfs_time_after(ctx->cc_expire, cfs_time_current_sec()))
+	if (ctx->cc_expire > ktime_get_real_seconds())
                 return 0;
 
         cli_ctx_expire(ctx);
@@ -344,8 +344,8 @@ int cli_ctx_check_death(struct ptlrpc_cli_ctx *ctx)
 
 void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
 {
-        struct ptlrpc_cli_ctx  *ctx = &gctx->gc_base;
-        unsigned long           ctx_expiry;
+	struct ptlrpc_cli_ctx *ctx = &gctx->gc_base;
+	time64_t ctx_expiry;
 
         if (lgss_inquire_context(gctx->gc_mechctx, &ctx_expiry)) {
                 CERROR("ctx %p(%u): unable to inquire, expire it now\n",
@@ -364,17 +364,17 @@ void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
 
 	if (sec_is_reverse(ctx->cc_sec)) {
 		CWARN("server installed reverse ctx %p idx %#llx, "
-		      "expiry %lu(%+lds)\n", ctx,
+		      "expiry %lld(%+llds)\n", ctx,
 		      gss_handle_to_u64(&gctx->gc_handle),
 		      ctx->cc_expire,
-		      cfs_time_sub(ctx->cc_expire, cfs_time_current_sec()));
+		      ctx->cc_expire - ktime_get_real_seconds());
         } else {
 		CWARN("client refreshed ctx %p idx %#llx (%u->%s), "
-		      "expiry %lu(%+lds)\n", ctx,
+		      "expiry %lld(%+llds)\n", ctx,
 		      gss_handle_to_u64(&gctx->gc_handle),
 		      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
 		      ctx->cc_expire,
-		      cfs_time_sub(ctx->cc_expire, cfs_time_current_sec()));
+		      ctx->cc_expire - ktime_get_real_seconds());
 
 		/* install reverse svc ctx for root context */
 		if (ctx->cc_vcred.vc_uid == 0)

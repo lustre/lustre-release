@@ -648,8 +648,7 @@ static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
 		/* currently the expiry time passed down from user-space
 		 * is invalid, here we retrive it from mech.
 		 */
-		if (lgss_inquire_context(rsci.ctx.gsc_mechctx,
-					 (unsigned long *)&ctx_expiry)) {
+		if (lgss_inquire_context(rsci.ctx.gsc_mechctx, &ctx_expiry)) {
 			CERROR("unable to get expire time, drop it\n");
 			goto out;
 		}
@@ -821,7 +820,7 @@ int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
                                    struct gss_cli_ctx *gctx)
 {
         struct rsc      rsci, *rscp = NULL;
-        unsigned long   ctx_expiry;
+	time64_t ctx_expiry;
         __u32           major;
         int             rc;
         ENTRY;
@@ -883,15 +882,15 @@ out:
 
 int gss_svc_upcall_expire_rvs_ctx(rawobj_t *handle)
 {
-        const cfs_time_t        expire = 20;
-        struct rsc             *rscp;
+	const time64_t expire = 20;
+	struct rsc *rscp;
 
         rscp = gss_svc_searchbyctx(handle);
         if (rscp) {
                 CDEBUG(D_SEC, "reverse svcctx %p (rsc %p) expire soon\n",
                        &rscp->ctx, rscp);
 
-                rscp->h.expiry_time = cfs_time_current_sec() + expire;
+		rscp->h.expiry_time = ktime_get_real_seconds() + expire;
                 COMPAT_RSC_PUT(&rscp->h, &rsc_cache);
         }
         return 0;

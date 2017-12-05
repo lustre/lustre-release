@@ -195,7 +195,7 @@ static int sk_fill_context(rawobj_t *inbuf, struct sk_ctx *skc)
 		CERROR("Failed to read context expiration time");
 		return -1;
 	}
-	skc->sc_expire = tmp + cfs_time_current_sec();
+	skc->sc_expire = tmp + ktime_get_real_seconds();
 
 	/* 5. host random is used as nonce for encryption */
 	if (gss_get_bytes(&ptr, end, &skc->sc_host_random,
@@ -318,7 +318,7 @@ out_err:
 
 static
 __u32 gss_inquire_context_sk(struct gss_ctx *gss_context,
-			     unsigned long *endtime)
+			     time64_t *endtime)
 {
 	struct sk_ctx *skc = gss_context->internal_ctx_id;
 
