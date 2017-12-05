@@ -2567,7 +2567,7 @@ test_26d() {
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
-	local fid=$(copy_file /etc/motd $f 1)
+	local fid=$(create_small_file $f)
 
 	$LFS hsm_archive $f || error "could not archive file"
 	wait_request_state $fid ARCHIVE SUCCEED
@@ -3220,7 +3220,7 @@ test_52() {
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
-	local fid=$(copy_file /etc/motd $f 1)
+	local fid=$(create_small_file $f)
 
 	$LFS hsm_archive $f || error "could not archive file"
 	wait_request_state $fid ARCHIVE SUCCEED
@@ -3245,7 +3245,7 @@ test_53() {
 
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
-	local fid=$(copy_file /etc/motd $f 1)
+	local fid=$(create_small_file $f)
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
 		error "could not archive file"
