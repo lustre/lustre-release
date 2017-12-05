@@ -3379,7 +3379,7 @@ tbf_rule_check()
 }
 
 test_77i() {
-    [ $(lustre_version_code ost1) -ge $(version_code 2.8.55) ] ||
+	[ $(lustre_version_code ost1) -ge $(version_code 2.8.55) ] ||
 		{ skip "Need OST version at least 2.8.55"; return 0; }
 
 	for i in $(seq 1 $OSTCOUNT)
@@ -3434,7 +3434,11 @@ run_test 77i "Change rank of TBF rule"
 test_77j() {
 	local idis
 	local rateis
-	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.60) ]; then
+	local ost_version=$(lustre_version_code ost1)
+
+	[ $ost_version -ge $(version_code 2.9.53) ] ||
+		{ skip "Need OST version at least 2.9.53"; return 0; }
+	if [ $ost_version -ge $(version_code 2.8.60) ]; then
 		idis="opcode="
 		rateis="rate="
 	fi
