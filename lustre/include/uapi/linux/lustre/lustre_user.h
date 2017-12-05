@@ -490,9 +490,8 @@ struct fsxattr {
 
 static inline bool lov_pattern_supported(__u32 pattern)
 {
-	return pattern == LOV_PATTERN_RAID0 ||
-	       pattern == LOV_PATTERN_MDT ||
-	       pattern == (LOV_PATTERN_RAID0 | LOV_PATTERN_F_RELEASED);
+	return (pattern & ~LOV_PATTERN_F_RELEASED) == LOV_PATTERN_RAID0 ||
+	       (pattern & ~LOV_PATTERN_F_RELEASED) == LOV_PATTERN_MDT;
 }
 
 #define LOV_MAXPOOLNAME 15

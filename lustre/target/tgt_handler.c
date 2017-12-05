@@ -1591,7 +1591,9 @@ EXPORT_SYMBOL(tgt_io_thread_done);
 int tgt_mdt_data_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 		      struct lustre_handle *lh, int mode, __u64 *flags)
 {
-	union ldlm_policy_data policy;
+	union ldlm_policy_data policy = {
+		.l_inodebits.bits = MDS_INODELOCK_DOM,
+	};
 	int rc;
 
 	ENTRY;
@@ -1599,9 +1601,6 @@ int tgt_mdt_data_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 	LASSERT(lh != NULL);
 	LASSERT(ns != NULL);
 	LASSERT(!lustre_handle_is_used(lh));
-
-	policy.l_inodebits.bits = MDS_INODELOCK_DOM | MDS_INODELOCK_UPDATE;
-	policy.l_inodebits.try_bits = 0;
 
 	rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, &policy, mode,
 				    flags, ldlm_blocking_ast,
@@ -1611,6 +1610,13 @@ int tgt_mdt_data_lock(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
 	RETURN(rc == ELDLM_OK ? 0 : -EIO);
 }
 EXPORT_SYMBOL(tgt_mdt_data_lock);
+
+void tgt_mdt_data_unlock(struct lustre_handle *lh, enum ldlm_mode mode)
+{
+	LASSERT(lustre_handle_is_used(lh));
+	ldlm_lock_decref(lh, mode);
+}
+EXPORT_SYMBOL(tgt_mdt_data_unlock);
 
 /**
  * Helper function for getting server side [start, start+count] DLM lock

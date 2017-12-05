@@ -1871,7 +1871,7 @@ void lustre_swab_mdt_body (struct mdt_body *b)
 	__swab64s(&b->mbo_atime);
 	__swab64s(&b->mbo_ctime);
 	__swab64s(&b->mbo_blocks);
-	__swab64s(&b->mbo_ioepoch);
+	__swab64s(&b->mbo_version);
 	__swab64s(&b->mbo_t_state);
 	__swab32s(&b->mbo_fsuid);
 	__swab32s(&b->mbo_fsgid);
@@ -1882,7 +1882,7 @@ void lustre_swab_mdt_body (struct mdt_body *b)
 	__swab32s(&b->mbo_flags);
 	__swab32s(&b->mbo_rdev);
 	__swab32s(&b->mbo_nlink);
-	CLASSERT(offsetof(typeof(*b), mbo_unused2) != 0);
+	__swab32s(&b->mbo_layout_gen);
 	__swab32s(&b->mbo_suppgid);
 	__swab32s(&b->mbo_eadatasize);
 	__swab32s(&b->mbo_aclsize);

@@ -1138,6 +1138,124 @@ int mdc_io_fsync_start(const struct lu_env *env,
 	RETURN(result);
 }
 
+struct mdc_data_version_args {
+	struct osc_io *dva_oio;
+};
+
+static int
+mdc_data_version_interpret(const struct lu_env *env, struct ptlrpc_request *req,
+			   void *arg, int rc)
+{
+	struct mdc_data_version_args *dva = arg;
+	struct osc_io *oio = dva->dva_oio;
+	const struct mdt_body *body;
+
+	ENTRY;
+	if (rc < 0)
+		GOTO(out, rc);
+
+	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
+	if (body == NULL)
+		GOTO(out, rc = -EPROTO);
+
+	/* Prepare OBDO from mdt_body for CLIO */
+	oio->oi_oa.o_valid = body->mbo_valid;
+	oio->oi_oa.o_flags = body->mbo_flags;
+	oio->oi_oa.o_data_version = body->mbo_version;
+	oio->oi_oa.o_layout_version = body->mbo_layout_gen;
+	EXIT;
+out:
+	oio->oi_cbarg.opc_rc = rc;
+	complete(&oio->oi_cbarg.opc_sync);
+	return 0;
+}
+
+static int mdc_io_data_version_start(const struct lu_env *env,
+				     const struct cl_io_slice *slice)
+{
+	struct cl_data_version_io *dv = &slice->cis_io->u.ci_data_version;
+	struct osc_io *oio = cl2osc_io(env, slice);
+	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
+	struct osc_object *obj = cl2osc(slice->cis_obj);
+	struct obd_export *exp = osc_export(obj);
+	struct ptlrpc_request *req;
+	struct mdt_body *body;
+	struct mdc_data_version_args *dva;
+	int rc;
+
+	ENTRY;
+
+	memset(&oio->oi_oa, 0, sizeof(oio->oi_oa));
+	oio->oi_oa.o_oi.oi_fid = *lu_object_fid(osc2lu(obj));
+	oio->oi_oa.o_valid = OBD_MD_FLID;
+
+	init_completion(&cbargs->opc_sync);
+
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_MDS_GETATTR);
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GETATTR);
+	if (rc < 0) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
+	body = req_capsule_client_get(&req->rq_pill, &RMF_MDT_BODY);
+	body->mbo_fid1 = *lu_object_fid(osc2lu(obj));
+	body->mbo_valid = OBD_MD_FLID;
+	/* Indicate that data version is needed */
+	body->mbo_valid |= OBD_MD_FLDATAVERSION;
+	body->mbo_flags = 0;
+
+	if (dv->dv_flags & (LL_DV_RD_FLUSH | LL_DV_WR_FLUSH)) {
+		body->mbo_valid |= OBD_MD_FLFLAGS;
+		body->mbo_flags |= OBD_FL_SRVLOCK;
+		if (dv->dv_flags & LL_DV_WR_FLUSH)
+			body->mbo_flags |= OBD_FL_FLUSH;
+	}
+
+	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, 0);
+	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER, 0);
+	ptlrpc_request_set_replen(req);
+
+	req->rq_interpret_reply = mdc_data_version_interpret;
+	CLASSERT(sizeof(*dva) <= sizeof(req->rq_async_args));
+	dva = ptlrpc_req_async_args(req);
+	dva->dva_oio = oio;
+
+	ptlrpcd_add_req(req);
+
+	RETURN(0);
+}
+
+static void mdc_io_data_version_end(const struct lu_env *env,
+				    const struct cl_io_slice *slice)
+{
+	struct cl_data_version_io *dv = &slice->cis_io->u.ci_data_version;
+	struct osc_io *oio = cl2osc_io(env, slice);
+	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
+
+	ENTRY;
+	wait_for_completion(&cbargs->opc_sync);
+
+	if (cbargs->opc_rc != 0) {
+		slice->cis_io->ci_result = cbargs->opc_rc;
+	} else {
+		slice->cis_io->ci_result = 0;
+		if (!(oio->oi_oa.o_valid &
+		      (OBD_MD_LAYOUT_VERSION | OBD_MD_FLDATAVERSION)))
+			slice->cis_io->ci_result = -ENOTSUPP;
+
+		if (oio->oi_oa.o_valid & OBD_MD_LAYOUT_VERSION)
+			dv->dv_layout_version = oio->oi_oa.o_layout_version;
+		if (oio->oi_oa.o_valid & OBD_MD_FLDATAVERSION)
+			dv->dv_data_version = oio->oi_oa.o_data_version;
+	}
+
+	EXIT;
+}
+
 static struct cl_io_operations mdc_io_ops = {
 	.op = {
 		[CIT_READ] = {
@@ -1157,10 +1275,9 @@ static struct cl_io_operations mdc_io_ops = {
 			.cio_start     = mdc_io_setattr_start,
 			.cio_end       = osc_io_setattr_end,
 		},
-		/* no support for data version so far */
 		[CIT_DATA_VERSION] = {
-			.cio_start = NULL,
-			.cio_end   = NULL,
+			.cio_start = mdc_io_data_version_start,
+			.cio_end   = mdc_io_data_version_end,
 		},
 		[CIT_FAULT] = {
 			.cio_iter_init = osc_io_iter_init,

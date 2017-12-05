@@ -1731,7 +1731,7 @@ struct mdt_body {
 	__s64	mbo_atime;
 	__s64	mbo_ctime;
 	__u64	mbo_blocks; /* XID, in the case of MDS_READPAGE */
-	__u64	mbo_ioepoch;
+	__u64	mbo_version; /* was mbo_ioepoch before 2.11 */
 	__u64	mbo_t_state; /* transient file state defined in
 			      * enum md_transient_state
 			      * was "ino" until 2.4.0 */
@@ -1744,7 +1744,7 @@ struct mdt_body {
 	__u32	mbo_flags;   /* LUSTRE_*_FL file attributes */
 	__u32	mbo_rdev;
 	__u32	mbo_nlink; /* #bytes to read in the case of MDS_READPAGE */
-	__u32	mbo_unused2; /* was "generation" until 2.4.0 */
+	__u32	mbo_layout_gen; /* was "generation" until 2.4.0 */
 	__u32	mbo_suppgid;
 	__u32	mbo_eadatasize;
 	__u32	mbo_aclsize;

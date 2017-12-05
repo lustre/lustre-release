@@ -574,6 +574,7 @@ retry:
 			GOTO(out_stop, rc);
 	}
 
+	tgt_vbr_obj_set(env, dob);
 	rc = dt_trans_start(env, dt, th);
 	if (rc)
 		GOTO(out_stop, rc);
@@ -1236,3 +1237,98 @@ bool mdt_dom_client_has_lock(struct mdt_thread_info *info,
 	return rc;
 }
 
+/**
+ * MDT request handler for OST_GETATTR RPC.
+ *
+ * This is data-specific request to get object and layout versions under
+ * IO lock. It is reliable only for Data-on-MDT files.
+ *
+ * \param[in] tsi target session environment for this request
+ *
+ * \retval 0 if successful
+ * \retval negative value on error
+ */
+int mdt_data_version_get(struct tgt_session_info *tsi)
+{
+	struct mdt_thread_info *mti = mdt_th_info(tsi->tsi_env);
+	struct mdt_device *mdt = mti->mti_mdt;
+	struct mdt_body *repbody;
+	struct mdt_object *mo = mti->mti_object;
+	struct lov_comp_md_v1 *comp;
+	struct lustre_handle lh = { 0 };
+	__u64 flags = 0;
+	__s64 version;
+	enum ldlm_mode lock_mode = LCK_PR;
+	bool srvlock;
+	int rc;
+
+	ENTRY;
+
+	req_capsule_set_size(tsi->tsi_pill, &RMF_MDT_MD, RCL_SERVER, 0);
+	req_capsule_set_size(tsi->tsi_pill, &RMF_ACL, RCL_SERVER, 0);
+	rc = req_capsule_server_pack(tsi->tsi_pill);
+	if (unlikely(rc != 0))
+		RETURN(err_serious(rc));
+
+	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_MDT_BODY);
+	if (repbody == NULL)
+		RETURN(-ENOMEM);
+
+	srvlock = tsi->tsi_mdt_body->mbo_valid & OBD_MD_FLFLAGS &&
+		  tsi->tsi_mdt_body->mbo_flags & OBD_FL_SRVLOCK;
+
+	if (srvlock) {
+		if (unlikely(tsi->tsi_mdt_body->mbo_flags & OBD_FL_FLUSH))
+			lock_mode = LCK_PW;
+
+		fid_build_reg_res_name(&tsi->tsi_fid, &tsi->tsi_resid);
+		rc = tgt_mdt_data_lock(mdt->mdt_namespace, &tsi->tsi_resid,
+				       &lh, lock_mode, &flags);
+		if (rc != 0)
+			RETURN(rc);
+	}
+
+	if (!mdt_object_exists(mo))
+		GOTO(out, rc = -ENOENT);
+	if (mdt_object_remote(mo))
+		GOTO(out, rc = -EREMOTE);
+	if (!S_ISREG(lu_object_attr(&mo->mot_obj)))
+		GOTO(out, rc = -EBADF);
+
+	/* Get version first */
+	version = dt_version_get(tsi->tsi_env, mdt_obj2dt(mo));
+	if (version && version != -EOPNOTSUPP) {
+		repbody->mbo_valid |= OBD_MD_FLDATAVERSION;
+		/* re-use mbo_ioepoch to transfer version */
+		repbody->mbo_version = version;
+	}
+
+	/* Read layout to get its version */
+	rc = mdt_big_xattr_get(mti, mo, XATTR_NAME_LOV);
+	if (rc == -ENODATA) /* File has no layout yet */
+		GOTO(out, rc = 0);
+	else if (rc < 0)
+		GOTO(out, rc);
+
+	comp = mti->mti_buf.lb_buf;
+	if (le32_to_cpu(comp->lcm_magic) != LOV_MAGIC_COMP_V1) {
+		CDEBUG(D_INFO, DFID" has no composite layout",
+		       PFID(&tsi->tsi_fid));
+		GOTO(out, rc = -ESTALE);
+	}
+
+	CDEBUG(D_INODE, DFID": layout version: %u\n",
+	       PFID(&tsi->tsi_fid), le32_to_cpu(comp->lcm_layout_gen));
+
+	repbody->mbo_valid |= OBD_MD_LAYOUT_VERSION;
+	/* re-use mbo_rdev for that */
+	repbody->mbo_layout_gen = le32_to_cpu(comp->lcm_layout_gen);
+	rc = 0;
+out:
+	if (srvlock)
+		tgt_mdt_data_unlock(&lh, lock_mode);
+
+	repbody->mbo_valid |= OBD_MD_FLFLAGS;
+	repbody->mbo_flags = OBD_FL_FLUSH;
+	RETURN(rc);
+}

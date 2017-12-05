@@ -36,8 +36,10 @@
 #include <string.h>
 
 #include <linux/lustre/lustre_idl.h>
+#ifdef HAVE_SERVER_SUPPORT
 #include <linux/lustre/lustre_lfsck_user.h>
 #include <linux/lustre/lustre_disk.h>
+#endif
 
 #define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
 #define LASSERTF(cond, fmt, ...) if (!(cond)) { printf("failed '" #cond "'" fmt, ## __VA_ARGS__);ret = 1;}

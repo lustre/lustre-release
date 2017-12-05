@@ -1304,6 +1304,12 @@ static int mdt_getattr(struct tgt_session_info *tsi)
         LASSERT(obj != NULL);
 	LASSERT(lu_object_assert_exists(&obj->mot_obj));
 
+	/* Special case for Data-on-MDT files to get data version */
+	if (unlikely(reqbody->mbo_valid & OBD_MD_FLDATAVERSION)) {
+		rc = mdt_data_version_get(tsi);
+		GOTO(out, rc);
+	}
+
 	/* Unlike intent case where we need to pre-fill out buffers early on
 	 * in intent policy for ldlm reasons, here we can have a much better
 	 * guess at EA size by just reading it from disk.
@@ -1313,7 +1319,6 @@ static int mdt_getattr(struct tgt_session_info *tsi)
 		/* No easy way to know how long is the symlink, but it cannot
 		 * be more than PATH_MAX, so we allocate +1 */
 		rc = PATH_MAX + 1;
-
 	/* A special case for fs ROOT: getattr there might fetch
 	 * default EA for entire fs, not just for this dir!
 	 */
@@ -1357,12 +1362,12 @@ static int mdt_getattr(struct tgt_session_info *tsi)
 	info->mti_cross_ref = !!(reqbody->mbo_valid & OBD_MD_FLCROSSREF);
 
 	rc = mdt_getattr_internal(info, obj, 0);
-        EXIT;
+	EXIT;
 out_shrink:
-        mdt_client_compatibility(info);
-        rc2 = mdt_fix_reply(info);
-        if (rc == 0)
-                rc = rc2;
+	mdt_client_compatibility(info);
+	rc2 = mdt_fix_reply(info);
+	if (rc == 0)
+		rc = rc2;
 out:
 	mdt_thread_info_fini(info);
 	return rc;

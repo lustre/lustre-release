@@ -379,8 +379,8 @@ check_lustre_msg_v2(void)
 	CHECK_MEMBER(lustre_msg_v2, lm_padding_3);
 	CHECK_MEMBER(lustre_msg_v2, lm_buflens[0]);
 
-	CHECK_DEFINE_X(LUSTRE_MSG_MAGIC_V2);
-	CHECK_DEFINE_X(LUSTRE_MSG_MAGIC_V2_SWABBED);
+	CHECK_VALUE_X(LUSTRE_MSG_MAGIC_V2);
+	CHECK_VALUE_X(LUSTRE_MSG_MAGIC_V2_SWABBED);
 }
 
 static void
@@ -450,14 +450,14 @@ check_ptlrpc_body(void)
 	CHECK_VALUE(DLM_REPLY_REC_OFF);
 	CHECK_VALUE(MSG_PTLRPC_HEADER_OFF);
 
-	CHECK_DEFINE_X(PTLRPC_MSG_VERSION);
-	CHECK_DEFINE_X(LUSTRE_VERSION_MASK);
-	CHECK_DEFINE_X(LUSTRE_OBD_VERSION);
-	CHECK_DEFINE_X(LUSTRE_MDS_VERSION);
-	CHECK_DEFINE_X(LUSTRE_OST_VERSION);
-	CHECK_DEFINE_X(LUSTRE_DLM_VERSION);
-	CHECK_DEFINE_X(LUSTRE_LOG_VERSION);
-	CHECK_DEFINE_X(LUSTRE_MGS_VERSION);
+	CHECK_VALUE_X(PTLRPC_MSG_VERSION);
+	CHECK_VALUE_X(LUSTRE_VERSION_MASK);
+	CHECK_VALUE_X(LUSTRE_OBD_VERSION);
+	CHECK_VALUE_X(LUSTRE_MDS_VERSION);
+	CHECK_VALUE_X(LUSTRE_OST_VERSION);
+	CHECK_VALUE_X(LUSTRE_DLM_VERSION);
+	CHECK_VALUE_X(LUSTRE_LOG_VERSION);
+	CHECK_VALUE_X(LUSTRE_MGS_VERSION);
 
 	CHECK_VALUE(MSGHDR_AT_SUPPORT);
 	CHECK_VALUE(MSGHDR_CKSUM_INCOMPAT18);
@@ -1040,6 +1040,7 @@ check_mdt_body(void)
 	CHECK_MEMBER(mdt_body, mbo_atime);
 	CHECK_MEMBER(mdt_body, mbo_ctime);
 	CHECK_MEMBER(mdt_body, mbo_blocks);
+	CHECK_MEMBER(mdt_body, mbo_version);
 	CHECK_MEMBER(mdt_body, mbo_t_state);
 	CHECK_MEMBER(mdt_body, mbo_fsuid);
 	CHECK_MEMBER(mdt_body, mbo_fsgid);
@@ -1050,7 +1051,7 @@ check_mdt_body(void)
 	CHECK_MEMBER(mdt_body, mbo_flags);
 	CHECK_MEMBER(mdt_body, mbo_rdev);
 	CHECK_MEMBER(mdt_body, mbo_nlink);
-	CHECK_MEMBER(mdt_body, mbo_unused2);
+	CHECK_MEMBER(mdt_body, mbo_layout_gen);
 	CHECK_MEMBER(mdt_body, mbo_suppgid);
 	CHECK_MEMBER(mdt_body, mbo_eadatasize);
 	CHECK_MEMBER(mdt_body, mbo_aclsize);
@@ -2421,11 +2422,11 @@ static void check_lfsck_request(void)
 	CHECK_MEMBER(lfsck_request, lr_padding_1);
 	CHECK_MEMBER(lfsck_request, lr_padding_2);
 	CHECK_MEMBER(lfsck_request, lr_padding_3);
-
+	printf("#ifdef HAVE_SERVER_SUPPORT\n");
 	CHECK_VALUE_X(LFSCK_TYPE_SCRUB);
 	CHECK_VALUE_X(LFSCK_TYPE_LAYOUT);
 	CHECK_VALUE_X(LFSCK_TYPE_NAMESPACE);
-
+	printf("#endif\n");
 	CHECK_VALUE(LE_LASTID_REBUILDING);
 	CHECK_VALUE(LE_LASTID_REBUILT);
 	CHECK_VALUE(LE_PHASE1_DONE);

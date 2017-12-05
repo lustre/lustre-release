@@ -1093,7 +1093,7 @@ test_1b() {
 	echo "verify restored state: "
 	check_hsm_flags $f "0x00000009" && echo "pass"
 }
-run_test 1b "Archive, Release & Restore composite file"
+run_test 1b "Archive, Release and Restore composite file"
 
 test_1c() {
 	mkdir -p $DIR/$tdir
@@ -1138,6 +1138,36 @@ test_1c() {
 		error "wrong archive number, $st != $LOCAL_HSM_ARCHIVE_NUMBER"
 }
 run_test 1c "Check setting archive-id in lfs hsm_set"
+
+test_1d() {
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -E 1M -L mdt -E -1 -c 2 $DIR/$tdir ||
+		error "failed to set default stripe"
+	local f=$DIR/$tdir/$tfile
+	rm -f $f
+
+	dd if=/dev/urandom of=$f bs=1M count=1 conv=sync ||
+		error "failed to create file"
+	local fid=$(path2fid $f)
+
+	copytool setup
+
+	echo "archive $f"
+	$LFS hsm_archive $f || error "could not archive file"
+	wait_request_state $fid ARCHIVE SUCCEED
+
+	echo "release $f"
+	$LFS hsm_release $f || error "could not release file"
+	echo "verify released state: "
+	check_hsm_flags $f "0x0000000d" && echo "pass"
+
+	echo "restore $f"
+	$LFS hsm_restore $f || error "could not restore file"
+	wait_request_state $fid RESTORE SUCCEED
+	echo "verify restored state: "
+	check_hsm_flags $f "0x00000009" && echo "pass"
+}
+run_test 1d "Archive, Release and Restore DoM file"
 
 test_2() {
 	local f=$DIR/$tdir/$tfile

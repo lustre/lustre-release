@@ -795,10 +795,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lustre_msg_v2, lm_buflens[0]));
 	LASSERTF((int)sizeof(((struct lustre_msg_v2 *)0)->lm_buflens[0]) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lustre_msg_v2 *)0)->lm_buflens[0]));
-	LASSERTF(LUSTRE_MSG_MAGIC_V2 == 0x0BD00BD3, "found 0x%.8x\n",
-		LUSTRE_MSG_MAGIC_V2);
-	LASSERTF(LUSTRE_MSG_MAGIC_V2_SWABBED == 0xD30BD00B, "found 0x%.8x\n",
-		LUSTRE_MSG_MAGIC_V2_SWABBED);
+	LASSERTF(LUSTRE_MSG_MAGIC_V2 == 0x0bd00bd3UL, "found 0x%.8xUL\n",
+		(unsigned)LUSTRE_MSG_MAGIC_V2);
+	LASSERTF(LUSTRE_MSG_MAGIC_V2_SWABBED == 0xd30bd00bUL, "found 0x%.8xUL\n",
+		(unsigned)LUSTRE_MSG_MAGIC_V2_SWABBED);
 
 	/* Checks for struct ptlrpc_body */
 	LASSERTF((int)sizeof(struct ptlrpc_body_v3) == 184, "found %lld\n",
@@ -1013,22 +1013,22 @@ void lustre_assert_wire_constants(void)
 		 (long long)DLM_REPLY_REC_OFF);
 	LASSERTF(MSG_PTLRPC_HEADER_OFF == 31, "found %lld\n",
 		 (long long)MSG_PTLRPC_HEADER_OFF);
-	LASSERTF(PTLRPC_MSG_VERSION == 0x00000003, "found 0x%.8x\n",
-		PTLRPC_MSG_VERSION);
-	LASSERTF(LUSTRE_VERSION_MASK == 0xffff0000, "found 0x%.8x\n",
-		LUSTRE_VERSION_MASK);
-	LASSERTF(LUSTRE_OBD_VERSION == 0x00010000, "found 0x%.8x\n",
-		LUSTRE_OBD_VERSION);
-	LASSERTF(LUSTRE_MDS_VERSION == 0x00020000, "found 0x%.8x\n",
-		LUSTRE_MDS_VERSION);
-	LASSERTF(LUSTRE_OST_VERSION == 0x00030000, "found 0x%.8x\n",
-		LUSTRE_OST_VERSION);
-	LASSERTF(LUSTRE_DLM_VERSION == 0x00040000, "found 0x%.8x\n",
-		LUSTRE_DLM_VERSION);
-	LASSERTF(LUSTRE_LOG_VERSION == 0x00050000, "found 0x%.8x\n",
-		LUSTRE_LOG_VERSION);
-	LASSERTF(LUSTRE_MGS_VERSION == 0x00060000, "found 0x%.8x\n",
-		LUSTRE_MGS_VERSION);
+	LASSERTF(PTLRPC_MSG_VERSION == 0x00000003UL, "found 0x%.8xUL\n",
+		(unsigned)PTLRPC_MSG_VERSION);
+	LASSERTF(LUSTRE_VERSION_MASK == 0xffff0000UL, "found 0x%.8xUL\n",
+		(unsigned)LUSTRE_VERSION_MASK);
+	LASSERTF(LUSTRE_OBD_VERSION == 0x00010000UL, "found 0x%.8xUL\n",
+		(unsigned)LUSTRE_OBD_VERSION);
+	LASSERTF(LUSTRE_MDS_VERSION == 0x00020000UL, "found 0x%.8xUL\n",
+		(unsigned)LUSTRE_MDS_VERSION);
+	LASSERTF(LUSTRE_OST_VERSION == 0x00030000UL, "found 0x%.8xUL\n",
+		(unsigned)LUSTRE_OST_VERSION);
+	LASSERTF(LUSTRE_DLM_VERSION == 0x00040000UL, "found 0x%.8xUL\n",
+		(unsigned)LUSTRE_DLM_VERSION);
+	LASSERTF(LUSTRE_LOG_VERSION == 0x00050000UL, "found 0x%.8xUL\n",
+		(unsigned)LUSTRE_LOG_VERSION);
+	LASSERTF(LUSTRE_MGS_VERSION == 0x00060000UL, "found 0x%.8xUL\n",
+		(unsigned)LUSTRE_MGS_VERSION);
 	LASSERTF(MSGHDR_AT_SUPPORT == 1, "found %lld\n",
 		 (long long)MSGHDR_AT_SUPPORT);
 	LASSERTF(MSGHDR_CKSUM_INCOMPAT18 == 2, "found %lld\n",
@@ -2290,6 +2290,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_body, mbo_blocks));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_blocks) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_blocks));
+	LASSERTF((int)offsetof(struct mdt_body, mbo_version) == 88, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_body, mbo_version));
+	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_version) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_version));
 	LASSERTF((int)offsetof(struct mdt_body, mbo_t_state) == 96, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_body, mbo_t_state));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_t_state) == 8, "found %lld\n",
@@ -2330,10 +2334,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_body, mbo_nlink));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_nlink) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_nlink));
-	LASSERTF((int)offsetof(struct mdt_body, mbo_unused2) == 140, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_body, mbo_unused2));
-	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_unused2) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_unused2));
+	LASSERTF((int)offsetof(struct mdt_body, mbo_layout_gen) == 140, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_body, mbo_layout_gen));
+	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_layout_gen) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_layout_gen));
 	LASSERTF((int)offsetof(struct mdt_body, mbo_suppgid) == 144, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_body, mbo_suppgid));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_suppgid) == 4, "found %lld\n",

@@ -639,31 +639,34 @@ static inline int mdt_lmm_dom_entry(struct lov_mds_md *lmm)
 {
 	struct lov_comp_md_v1 *comp_v1;
 	struct lov_mds_md *v1;
+	__u32 off;
 	int i;
 
-	if (lmm->lmm_magic == LOV_MAGIC_COMP_V1) {
-		comp_v1 = (struct lov_comp_md_v1 *)lmm;
-		v1 = (struct lov_mds_md *)((char *)comp_v1 +
-			comp_v1->lcm_entries[0].lcme_offset);
-		/* DoM entry is the first entry always */
-		if (lov_pattern(v1->lmm_pattern) != LOV_PATTERN_MDT)
-			return LMM_NO_DOM;
+	if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC_COMP_V1)
+		return LMM_NO_DOM;
 
-		for (i = 1; i < comp_v1->lcm_entry_count; i++) {
-			int j;
+	comp_v1 = (struct lov_comp_md_v1 *)lmm;
+	off = le32_to_cpu(comp_v1->lcm_entries[0].lcme_offset);
+	v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
 
-			v1 = (struct lov_mds_md *)((char *)comp_v1 +
-				comp_v1->lcm_entries[i].lcme_offset);
-			for (j = 0; j < v1->lmm_stripe_count; j++) {
-				/* if there is any object on OST */
-				if (v1->lmm_objects[j].l_ost_idx !=
-				    (__u32)-1UL)
-					return LMM_DOM_OST;
-			}
+	/* DoM entry is the first entry always */
+	if (lov_pattern(le32_to_cpu(v1->lmm_pattern)) != LOV_PATTERN_MDT)
+		return LMM_NO_DOM;
+
+	for (i = 1; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
+		int j;
+
+		off = le32_to_cpu(comp_v1->lcm_entries[i].lcme_offset);
+		v1 = (struct lov_mds_md *)((char *)comp_v1 + off);
+
+		for (j = 0; j < le16_to_cpu(v1->lmm_stripe_count); j++) {
+			/* if there is any object on OST */
+			if (le32_to_cpu(v1->lmm_objects[j].l_ost_idx) !=
+			    (__u32)-1UL)
+				return LMM_DOM_OST;
 		}
-		return LMM_DOM_ONLY;
 	}
-	return LMM_NO_DOM;
+	return LMM_DOM_ONLY;
 }
 
 static inline bool mdt_lmm_is_flr(struct lov_mds_md *lmm)
@@ -1253,6 +1256,7 @@ bool mdt_dom_client_has_lock(struct mdt_thread_info *info,
 			     const struct lu_fid *fid);
 void mdt_hp_brw(struct tgt_session_info *tsi);
 void mdt_hp_punch(struct tgt_session_info *tsi);
+int mdt_data_version_get(struct tgt_session_info *tsi);
 
 /* grants */
 long mdt_grant_connect(const struct lu_env *env, struct obd_export *exp,
