@@ -213,9 +213,6 @@ test_0() {
 run_test 0 "Control LFSCK manually"
 
 test_1a() {
-	[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-		skip "OI Scrub not implemented for ZFS" && return
-
 	lfsck_prep 1 1
 
 	#define OBD_FAIL_FID_INDIR	0x1501
@@ -299,6 +296,45 @@ test_1b()
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 }
 run_test 1b "LFSCK can find out and repair the missing FID-in-LMA"
+
+test_1c() {
+	lfsck_prep 1 1
+
+	#define OBD_FAIL_FID_IGIF	0x1504
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1504
+	touch $DIR/$tdir/dummy
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	umount_client $MOUNT
+	$START_NAMESPACE -r || error "(3) Fail to start LFSCK for namespace!"
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(4) unexpected status"
+	}
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^dirent_repaired/ { print $2 }')
+	# for interop with old server
+	[ -z "$repaired" ] &&
+		repaired=$($SHOW_NAMESPACE |
+			 awk '/^updated_phase1/ { print $2 }')
+
+	[ $repaired -eq 1 ] ||
+		error "(5) Fail to repair lost FID-in-dirent: $repaired"
+
+	run_e2fsck_on_mdt0
+
+	mount_client $MOUNT || error "(6) Fail to start client!"
+
+	#define OBD_FAIL_FID_LOOKUP	0x1505
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1505
+	ls $DIR/$tdir/ > /dev/null || error "(7) no FID-in-dirent."
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+}
+run_test 1c "LFSCK can find out and repair lost FID-in-dirent"
 
 test_2a() {
 	lfsck_prep 1 1

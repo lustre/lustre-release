@@ -566,6 +566,7 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	struct osd_idmap_cache *idc;
 	char		    *name = (char *)key;
 	int                  rc;
+	int num = sizeof(oti->oti_zde) / 8;
 	ENTRY;
 
 	LASSERT(parent->oo_dn);
@@ -627,10 +628,13 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	}
 
 	oti->oti_zde.lzd_fid = *fid;
+	if (OBD_FAIL_CHECK(OBD_FAIL_FID_INDIR))
+		oti->oti_zde.lzd_fid.f_ver = ~0;
+	if (OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF))
+		num = 1;
 	/* Insert (key,oid) into ZAP */
 	rc = osd_zap_add(osd, parent->oo_dn->dn_object, parent->oo_dn,
-			 (char *)key, 8, sizeof(oti->oti_zde) / 8,
-			 (void *)&oti->oti_zde, oh->ot_tx);
+			 (char *)key, 8, num, (void *)&oti->oti_zde, oh->ot_tx);
 	if (unlikely(rc == -EEXIST &&
 		     name[0] == '.' && name[1] == '.' && name[2] == 0))
 		/* Update (key,oid) in ZAP */
@@ -904,81 +908,146 @@ static int osd_dir_it_key_size(const struct lu_env *env, const struct dt_it *di)
 	RETURN(rc);
 }
 
+static int
+osd_dirent_update(const struct lu_env *env, struct osd_device *dev,
+		  uint64_t zap, const char *key, struct luz_direntry *zde)
+{
+	dmu_tx_t *tx;
+	int rc;
+	ENTRY;
+
+	tx = dmu_tx_create(dev->od_os);
+	if (!tx)
+		RETURN(-ENOMEM);
+
+	dmu_tx_hold_zap(tx, zap, TRUE, NULL);
+	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	if (!rc)
+		rc = -zap_update(dev->od_os, zap, key, 8, sizeof(*zde) / 8,
+				 (const void *)zde, tx);
+	if (rc)
+		dmu_tx_abort(tx);
+	else
+		dmu_tx_commit(tx);
+
+	RETURN(rc);
+}
+
 static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 			  struct dt_rec *dtrec, __u32 attr)
 {
-	struct osd_zap_it   *it = (struct osd_zap_it *)di;
-	struct lu_dirent    *lde = (struct lu_dirent *)dtrec;
-	struct luz_direntry *zde = &osd_oti_get(env)->oti_zde;
-	zap_attribute_t     *za = &osd_oti_get(env)->oti_za;
-	int		     rc, namelen;
+	struct osd_zap_it *it = (struct osd_zap_it *)di;
+	struct lu_dirent *lde = (struct lu_dirent *)dtrec;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct luz_direntry *zde = &info->oti_zde;
+	zap_attribute_t *za = &info->oti_za;
+	struct lu_fid *fid = &info->oti_fid;
+	struct osd_device *osd = osd_obj2dev(it->ozi_obj);
+	int rc, namelen;
 	ENTRY;
 
+	lde->lde_attrs = 0;
 	if (it->ozi_pos <= 1) {
 		lde->lde_hash = cpu_to_le64(1);
 		strcpy(lde->lde_name, ".");
 		lde->lde_namelen = cpu_to_le16(1);
-		lde->lde_fid = *lu_object_fid(&it->ozi_obj->oo_dt.do_lu);
+		fid_cpu_to_le(&lde->lde_fid,
+			      lu_object_fid(&it->ozi_obj->oo_dt.do_lu));
 		lde->lde_attrs = LUDA_FID;
 		/* append lustre attributes */
 		osd_it_append_attrs(lde, attr, 1, IFTODT(S_IFDIR));
 		lde->lde_reclen = cpu_to_le16(lu_dirent_calc_size(1, attr));
 		it->ozi_pos = 1;
-		GOTO(out, rc = 0);
-
+		RETURN(0);
 	} else if (it->ozi_pos == 2) {
 		lde->lde_hash = cpu_to_le64(2);
 		strcpy(lde->lde_name, "..");
 		lde->lde_namelen = cpu_to_le16(2);
-		lde->lde_attrs = LUDA_FID;
+		rc = osd_find_parent_fid(env, &it->ozi_obj->oo_dt, fid);
+		if (!rc) {
+			fid_cpu_to_le(&lde->lde_fid, fid);
+			lde->lde_attrs = LUDA_FID;
+		} else if (rc != -ENOENT) {
+			/* ENOENT happens at the root of filesystem, ignore */
+			RETURN(rc);
+		}
+
 		/* append lustre attributes */
 		osd_it_append_attrs(lde, attr, 2, IFTODT(S_IFDIR));
 		lde->lde_reclen = cpu_to_le16(lu_dirent_calc_size(2, attr));
-		rc = osd_find_parent_fid(env, &it->ozi_obj->oo_dt, &lde->lde_fid);
-
-		/* ENOENT happens at the root of filesystem so ignore it */
-		if (rc == -ENOENT)
-			rc = 0;
-		GOTO(out, rc);
+		RETURN(0);
 	}
 
 	LASSERT(lde);
 
 	rc = -zap_cursor_retrieve(it->ozi_zc, za);
-	if (unlikely(rc != 0))
-		GOTO(out, rc);
+	if (unlikely(rc))
+		RETURN(rc);
 
 	lde->lde_hash = cpu_to_le64(osd_zap_cursor_serialize(it->ozi_zc));
 	namelen = strlen(za->za_name);
 	if (namelen > NAME_MAX)
-		GOTO(out, rc = -EOVERFLOW);
+		RETURN(-EOVERFLOW);
 	strcpy(lde->lde_name, za->za_name);
 	lde->lde_namelen = cpu_to_le16(namelen);
 
-	if (za->za_integer_length != 8 || za->za_num_integers < 3) {
+	if (za->za_integer_length != 8) {
 		CERROR("%s: unsupported direntry format: %d %d\n",
-		       osd_obj2dev(it->ozi_obj)->od_svname,
+		       osd->od_svname,
 		       za->za_integer_length, (int)za->za_num_integers);
-
-		GOTO(out, rc = -EIO);
+		RETURN(-EIO);
 	}
 
-	rc = osd_zap_lookup(osd_obj2dev(it->ozi_obj), it->ozi_zc->zc_zapobj,
-			    it->ozi_obj->oo_dn, za->za_name,
-			    za->za_integer_length, 3, zde);
+	rc = osd_zap_lookup(osd, it->ozi_zc->zc_zapobj, it->ozi_obj->oo_dn,
+			    za->za_name, za->za_integer_length, 3, zde);
 	if (rc)
-		GOTO(out, rc);
+		RETURN(rc);
 
-	lde->lde_fid = zde->lzd_fid;
+	if (za->za_num_integers >= 3 && fid_is_sane(&zde->lzd_fid)) {
+		lde->lde_attrs = LUDA_FID;
+		fid_cpu_to_le(&lde->lde_fid, &zde->lzd_fid);
+		GOTO(pack_attr, rc = 0);
+	}
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_FID_LOOKUP))
+		RETURN(-ENOENT);
+
+	rc = osd_get_fid_by_oid(env, osd, zde->lzd_reg.zde_dnode, fid);
+	if (rc) {
+		lde->lde_attrs = LUDA_UNKNOWN;
+		GOTO(pack_attr, rc = 0);
+	}
+
+	if (!(attr & LUDA_VERIFY)) {
+		fid_cpu_to_le(&lde->lde_fid, fid);
+		lde->lde_attrs = LUDA_FID;
+		GOTO(pack_attr, rc = 0);
+	}
+
+	if (attr & LUDA_VERIFY_DRYRUN) {
+		fid_cpu_to_le(&lde->lde_fid, fid);
+		lde->lde_attrs = LUDA_FID | LUDA_REPAIR;
+		GOTO(pack_attr, rc = 0);
+	}
+
+	fid_cpu_to_le(&lde->lde_fid, fid);
 	lde->lde_attrs = LUDA_FID;
+	zde->lzd_fid = *fid;
+	rc = osd_dirent_update(env, osd, it->ozi_zc->zc_zapobj,
+			       za->za_name, zde);
+	if (rc) {
+		lde->lde_attrs |= LUDA_UNKNOWN;
+		GOTO(pack_attr, rc = 0);
+	}
 
-	/* append lustre attributes */
+	lde->lde_attrs |= LUDA_REPAIR;
+
+	GOTO(pack_attr, rc = 0);
+
+pack_attr:
 	osd_it_append_attrs(lde, attr, namelen, zde->lzd_reg.zde_type);
-
 	lde->lde_reclen = cpu_to_le16(lu_dirent_calc_size(namelen, attr));
-
-out:
-	RETURN(rc);
+	return rc;
 }
 
 static int osd_dir_it_rec_size(const struct lu_env *env, const struct dt_it *di,
