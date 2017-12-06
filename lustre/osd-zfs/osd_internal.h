@@ -201,7 +201,8 @@ struct osd_thread_info {
 		__u64		 oti_key64[(MAXNAMELEN + 1)/sizeof(__u64)];
 		sa_bulk_attr_t	 oti_attr_bulk[OSD_MAX_IN_BULK];
 	};
-	struct lustre_mdt_attrs oti_mdt_attrs;
+	struct lustre_mdt_attrs  oti_mdt_attrs;
+	unsigned int		 oti_in_trans:1;
 
 	struct lu_attr		 oti_la;
 	struct osa_attr		 oti_osa;

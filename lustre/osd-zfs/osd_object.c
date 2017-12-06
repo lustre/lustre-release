@@ -325,6 +325,66 @@ struct lu_object *osd_object_alloc(const struct lu_env *env,
 	}
 }
 
+static void osd_obj_set_blksize(const struct lu_env *env,
+				struct osd_device *osd, struct osd_object *obj)
+{
+	const struct lu_fid *fid = lu_object_fid(&obj->oo_dt.do_lu);
+	dmu_tx_t *tx;
+	dnode_t *dn = obj->oo_dn;
+	uint32_t blksz;
+	int rc = 0;
+	ENTRY;
+
+	LASSERT(!osd_oti_get(env)->oti_in_trans);
+
+	tx = dmu_tx_create(osd->od_os);
+	if (!tx) {
+		CERROR("%s: fail to create tx to set blksize for "DFID"\n",
+		       osd->od_svname, PFID(fid));
+		RETURN_EXIT;
+	}
+
+	dmu_tx_hold_bonus(tx, dn->dn_object);
+	rc = -dmu_tx_assign(tx, TXG_WAIT);
+	if (rc) {
+		dmu_tx_abort(tx);
+		CERROR("%s: fail to assign tx to set blksize for "DFID
+		       ": rc = %d\n", osd->od_svname, PFID(fid), rc);
+		RETURN_EXIT;
+	}
+
+	down_write(&obj->oo_guard);
+	if (unlikely((1 << dn->dn_datablkshift) >= PAGE_SIZE))
+		GOTO(out, rc = 1);
+
+	blksz = dn->dn_datablksz;
+	if (!is_power_of_2(blksz))
+		blksz = size_roundup_power2(blksz);
+
+	if (blksz > osd->od_max_blksz)
+		blksz = osd->od_max_blksz;
+	else if (blksz < PAGE_SIZE)
+		blksz = PAGE_SIZE;
+	rc = -dmu_object_set_blocksize(osd->od_os, dn->dn_object, blksz, 0, tx);
+
+	GOTO(out, rc);
+
+out:
+	up_write(&obj->oo_guard);
+	if (rc) {
+		dmu_tx_abort(tx);
+		if (unlikely(obj->oo_dn->dn_maxblkid > 0))
+			rc = 1;
+		if (rc < 0)
+			CERROR("%s: fail to set blksize for "DFID": rc = %d\n",
+			       osd->od_svname, PFID(fid), rc);
+	} else {
+		dmu_tx_commit(tx);
+		CDEBUG(D_INODE, "%s: set blksize as %u for "DFID"\n",
+		       osd->od_svname, blksz, PFID(fid));
+	}
+}
+
 /*
  * Concurrency: shouldn't matter.
  */
@@ -335,10 +395,7 @@ int osd_object_init0(const struct lu_env *env, struct osd_object *obj)
 	int			 rc = 0;
 	ENTRY;
 
-	if (obj->oo_dn == NULL)
-		RETURN(0);
-
-	/* object exist */
+	LASSERT(obj->oo_dn);
 
 	rc = osd_object_sa_init(obj, osd);
 	if (rc)
@@ -349,9 +406,18 @@ int osd_object_init0(const struct lu_env *env, struct osd_object *obj)
 	if (rc)
 		RETURN(rc);
 
-	if (likely(!fid_is_acct(fid)))
+	if (likely(!fid_is_acct(fid))) {
 		/* no body operations for accounting objects */
 		obj->oo_dt.do_body_ops = &osd_body_ops;
+
+		if (S_ISREG(obj->oo_attr.la_mode) &&
+		    obj->oo_dn->dn_maxblkid == 0 &&
+		    (1 << obj->oo_dn->dn_datablkshift) < PAGE_SIZE &&
+		    (fid_is_idif(fid) || fid_is_norm(fid) ||
+		     fid_is_echo(fid)) &&
+		    osd->od_is_ost && !osd->od_dt_dev.dd_rdonly)
+			osd_obj_set_blksize(env, osd, obj);
+	}
 
 	/*
 	 * initialize object before marking it existing
@@ -475,7 +541,6 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 			       osd->od_svname, PFID(lu_object_fid(l)), oid, rc);
 			GOTO(out, rc);
 		}
-		LASSERT(obj->oo_dn);
 		rc = osd_object_init0(env, obj);
 		if (rc != 0)
 			GOTO(out, rc);

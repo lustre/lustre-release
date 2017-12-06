@@ -329,7 +329,13 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 	 * If we discover this is a vital for good performance we
 	 * can get own replacement for dmu_buf_hold_array_by_bonus().
 	 */
-	while (len > 0) {
+	while (len > 0 &&
+	       (obj->oo_dn->dn_datablkshift != 0 ||
+		off < obj->oo_dn->dn_datablksz)) {
+		if (obj->oo_dn->dn_datablkshift == 0 &&
+		    off + len > obj->oo_dn->dn_datablksz)
+			len = obj->oo_dn->dn_datablksz - off;
+
 		rc = -dmu_buf_hold_array_by_bonus(&obj->oo_dn->dn_bonus->db,
 						  off, len, TRUE, osd_0copy_tag,
 						  &numbufs, &dbp);

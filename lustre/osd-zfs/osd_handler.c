@@ -223,6 +223,7 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		/* add commit callback */
 		dmu_tx_callback_register(oh->ot_tx, osd_trans_commit_cb, oh);
 		oh->ot_assigned = 1;
+		osd_oti_get(env)->oti_in_trans = 1;
 		lu_device_get(&d->dd_lu_dev);
 	}
 
@@ -310,6 +311,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	/* XXX: Once dmu_tx_commit() called, oh/th could have been freed
 	 * by osd_trans_commit_cb already. */
 	dmu_tx_commit(oh->ot_tx);
+	osd_oti_get(env)->oti_in_trans = 0;
 
 	osd_unlinked_list_emptify(env, osd, &unlinked, true);
 
