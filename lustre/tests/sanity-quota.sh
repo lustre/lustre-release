@@ -2742,7 +2742,8 @@ test_38() {
 	procf=${procf}.quota_slave.acct_user
 	local accnt_cnt
 
-	acct_cnt=$(do_facet mds1 $LCTL get_param $procf | grep "id:" | wc -l)
+	acct_cnt=$(do_facet mds1 $LCTL get_param $procf | grep "id:" | \
+		   awk '{if ($3 < 10000) {print $3}}' | wc -l)
 	echo "Found $acct_cnt id entries"
 
 	[ $file_cnt -eq $acct_cnt ] || {
