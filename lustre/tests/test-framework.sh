@@ -4129,12 +4129,16 @@ mountcli() {
 		[ "$arg1" = "server_only" ] && return
 	fi
 	mount_client $MOUNT
-	[ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT
+	if [ -n "$CLIENTS" ]; then
+		zconf_mount_clients $CLIENTS $MOUNT
+	fi
 	clients_up
 
 	if [ "$MOUNT_2" ]; then
 		mount_client $MOUNT2
-		[ -n "$CLIENTS" ] && zconf_mount_clients $CLIENTS $MOUNT2
+		if [ -n "$CLIENTS" ]; then
+			zconf_mount_clients $CLIENTS $MOUNT2
+		fi
 	fi
 }
 
