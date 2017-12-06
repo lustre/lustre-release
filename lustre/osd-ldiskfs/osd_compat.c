@@ -152,7 +152,6 @@ out:
 	return count;
 }
 
-static const char remote_parent_dir[] = "REMOTE_PARENT_DIR";
 static int osd_mdt_init(const struct lu_env *env, struct osd_device *dev)
 {
 	struct lvfs_run_ctxt	new;
@@ -174,7 +173,7 @@ static int osd_mdt_init(const struct lu_env *env, struct osd_device *dev)
 	parent = osd_sb(dev)->s_root;
 	osd_push_ctxt(dev, &new, &save);
 
-	d = simple_mkdir(parent, dev->od_mnt, remote_parent_dir,
+	d = simple_mkdir(parent, dev->od_mnt, REMOTE_PARENT_DIR,
 			 0755, 1);
 	if (IS_ERR(d))
 		GOTO(cleanup, rc = PTR_ERR(d));
@@ -245,9 +244,14 @@ int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 	mutex_lock(&parent->d_inode->i_mutex);
 	rc = osd_ldiskfs_add_entry(info, osd, oh->ot_handle, dentry,
 				   obj->oo_inode, NULL);
-	CDEBUG(D_INODE, "%s: add %s:%lu to remote parent %lu.\n", osd_name(osd),
-	       name, obj->oo_inode->i_ino, parent->d_inode->i_ino);
-	ldiskfs_inc_count(oh->ot_handle, parent->d_inode);
+	if (!rc && S_ISDIR(obj->oo_inode->i_mode))
+		ldiskfs_inc_count(oh->ot_handle, parent->d_inode);
+	else if (unlikely(rc == -EEXIST))
+		rc = 0;
+	if (!rc)
+		lu_object_set_agent_entry(&obj->oo_dt.do_lu);
+	CDEBUG(D_INODE, "%s: create agent entry for %s: rc = %d\n",
+	       osd_name(osd), name, rc);
 	mark_inode_dirty(parent->d_inode);
 	mutex_unlock(&parent->d_inode->i_mutex);
 	RETURN(rc);
@@ -256,7 +260,7 @@ int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 int osd_delete_from_remote_parent(const struct lu_env *env,
 				  struct osd_device *osd,
 				  struct osd_object *obj,
-				  struct osd_thandle *oh)
+				  struct osd_thandle *oh, bool destroy)
 {
 	struct osd_mdobj_map	   *omm = osd->od_mdt_map;
 	struct osd_thread_info	   *oti = osd_oti_get(env);
@@ -268,19 +272,6 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 	struct buffer_head	   *bh;
 	int			   rc;
 
-	/* Check lma to see whether it is remote object */
-	rc = osd_get_lma(oti, obj->oo_inode, &oti->oti_obj_dentry,
-			 &oti->oti_ost_attrs);
-	if (rc != 0) {
-		/* No LMA if the directory is created before 2.0 */
-		if (rc == -ENODATA)
-			rc = 0;
-		RETURN(rc);
-	}
-
-	if (likely(!(lma->lma_incompat & LMAI_REMOTE_PARENT)))
-		RETURN(0);
-
 	parent = omm->omm_remote_parent;
 	sprintf(name, DFID_NOBRACE, PFID(lu_object_fid(&obj->oo_dt.do_lu)));
 	dentry = osd_child_dentry_by_inode(env, parent->d_inode,
@@ -290,21 +281,40 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 				    NULL, NULL);
 	if (IS_ERR(bh)) {
 		mutex_unlock(&parent->d_inode->i_mutex);
-		RETURN(PTR_ERR(bh));
+		rc = PTR_ERR(bh);
+		if (unlikely(rc == -ENOENT))
+			rc = 0;
+	} else {
+		rc = ldiskfs_delete_entry(oh->ot_handle, parent->d_inode,
+					  de, bh);
+		if (!rc && S_ISDIR(obj->oo_inode->i_mode))
+			ldiskfs_dec_count(oh->ot_handle, parent->d_inode);
+		mark_inode_dirty(parent->d_inode);
+		mutex_unlock(&parent->d_inode->i_mutex);
+		brelse(bh);
+		CDEBUG(D_INODE, "%s: remove agent entry for %s: rc = %d\n",
+		       osd_name(osd), name, rc);
 	}
-	CDEBUG(D_INODE, "%s: el %s:%lu to remote parent %lu.\n", osd_name(osd),
-	       name, obj->oo_inode->i_ino, parent->d_inode->i_ino);
-	rc = ldiskfs_delete_entry(oh->ot_handle, parent->d_inode, de, bh);
-	ldiskfs_dec_count(oh->ot_handle, parent->d_inode);
-	mark_inode_dirty(parent->d_inode);
-	mutex_unlock(&parent->d_inode->i_mutex);
-	brelse(bh);
+
+	if (destroy || rc) {
+		if (!rc)
+			lu_object_clear_agent_entry(&obj->oo_dt.do_lu);
+
+		RETURN(rc);
+	}
+
+	rc = osd_get_lma(oti, obj->oo_inode, &oti->oti_obj_dentry,
+			 &oti->oti_ost_attrs);
+	if (rc)
+		RETURN(rc);
 
 	/* Get rid of REMOTE_PARENT flag from incompat */
 	lma->lma_incompat &= ~LMAI_REMOTE_PARENT;
 	lustre_lma_swab(lma);
 	rc = __osd_xattr_set(oti, obj->oo_inode, XATTR_NAME_LMA, lma,
 			     sizeof(*lma), XATTR_REPLACE);
+	if (!rc)
+		lu_object_clear_agent_entry(&obj->oo_dt.do_lu);
 	RETURN(rc);
 }
 

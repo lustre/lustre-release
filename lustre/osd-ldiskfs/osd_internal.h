@@ -720,7 +720,7 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 int osd_delete_from_remote_parent(const struct lu_env *env,
 				  struct osd_device *osd,
 				  struct osd_object *obj,
-				  struct osd_thandle *oh);
+				  struct osd_thandle *oh, bool destroy);
 int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 			     struct osd_object *obj, struct osd_thandle *oh);
 int osd_lookup_in_remote_parent(struct osd_thread_info *oti,

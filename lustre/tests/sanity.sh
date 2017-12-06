@@ -17606,6 +17606,90 @@ test_803() {
 }
 run_test 803 "verify agent object for remote object"
 
+test_804() {
+	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.54) ] &&
+		skip "MDS needs to be newer than 2.10.54" && return
+
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
+		skip "ldiskfs only test" && return 0
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -c 1 -i 1 $DIR/$tdir/dir0 ||
+		error "Fail to create $DIR/$tdir/dir0"
+
+	local fid=$($LFS path2fid $DIR/$tdir/dir0)
+	local dev=$(mdsdevname 2)
+
+	do_facet mds2 "$DEBUGFS -c -R 'ls /REMOTE_PARENT_DIR' $dev" |
+		grep ${fid} || error "NOT found agent entry for dir0"
+
+	$LFS mkdir -c $MDSCOUNT -i 0 $DIR/$tdir/dir1 ||
+		error "Fail to create $DIR/$tdir/dir1"
+
+	touch $DIR/$tdir/dir1/foo0 ||
+		error "Fail to create $DIR/$tdir/dir1/foo0"
+	fid=$($LFS path2fid $DIR/$tdir/dir1/foo0)
+	local rc=0
+
+	for idx in $(seq $MDSCOUNT); do
+		dev=$(mdsdevname $idx)
+		do_facet mds${idx} \
+			"$DEBUGFS -c -R 'ls /REMOTE_PARENT_DIR' $dev" |
+			grep ${fid} && rc=$idx
+	done
+
+	mv $DIR/$tdir/dir1/foo0 $DIR/$tdir/dir1/foo1 ||
+		error "Fail to rename foo0 to foo1"
+	if [ $rc -eq 0 ]; then
+		for idx in $(seq $MDSCOUNT); do
+			dev=$(mdsdevname $idx)
+			do_facet mds${idx} \
+			"$DEBUGFS -c -R 'ls /REMOTE_PARENT_DIR' $dev" |
+			grep ${fid} && rc=$idx
+		done
+	fi
+
+	mv $DIR/$tdir/dir1/foo1 $DIR/$tdir/dir1/foo2 ||
+		error "Fail to rename foo1 to foo2"
+	if [ $rc -eq 0 ]; then
+		for idx in $(seq $MDSCOUNT); do
+			dev=$(mdsdevname $idx)
+			do_facet mds${idx} \
+			"$DEBUGFS -c -R 'ls /REMOTE_PARENT_DIR' $dev" |
+			grep ${fid} && rc=$idx
+		done
+	fi
+
+	[ $rc -ne 0 ] || error "NOT found agent entry for foo"
+
+	ln $DIR/$tdir/dir1/foo2 $DIR/$tdir/dir0/guard ||
+		error "Fail to link to $DIR/$tdir/dir1/foo2"
+	mv $DIR/$tdir/dir1/foo2 $DIR/$tdir/dir1/foo0 ||
+		error "Fail to rename foo2 to foo0"
+	unlink $DIR/$tdir/dir1/foo0 ||
+		error "Fail to unlink $DIR/$tdir/dir1/foo0"
+	rm -rf $DIR/$tdir/dir0 ||
+		error "Fail to rm $DIR/$tdir/dir0"
+
+	for idx in $(seq $MDSCOUNT); do
+		dev=$(mdsdevname $idx)
+		rc=0
+
+		stop mds${idx}
+		run_e2fsck $(facet_active_host mds$idx) $dev -n ||
+			rc=$?
+		start mds${idx} $dev $MDS_MOUNT_OPTS ||
+			error "mount mds$idx failed"
+		df $MOUNT > /dev/null 2>&1
+
+		# e2fsck should not return error
+		[ $rc -eq 0 ] ||
+			error "e2fsck detected error on MDT${idx}: rc=$rc"
+	done
+}
+run_test 804 "verify agent entry for remote entry"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

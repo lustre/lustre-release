@@ -768,6 +768,9 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 			if (lma->lma_compat & LMAC_STRIPE_INFO &&
 			    osd->od_is_ost)
 				obj->oo_pfid_in_lma = 1;
+			if (unlikely(lma->lma_incompat & LMAI_REMOTE_PARENT) &&
+			    !osd->od_is_ost)
+				lu_object_set_agent_entry(&obj->oo_dt.do_lu);
 		}
 	}
 
@@ -1237,6 +1240,9 @@ found:
 			if (lma->lma_compat & LMAC_STRIPE_INFO &&
 			    dev->od_is_ost)
 				obj->oo_pfid_in_lma = 1;
+			if (unlikely(lma->lma_incompat & LMAI_REMOTE_PARENT) &&
+			    !dev->od_is_ost)
+				lu_object_set_agent_entry(&obj->oo_dt.do_lu);
 		} else if (result != -ENODATA) {
 			GOTO(out, result);
 		}
@@ -3195,6 +3201,11 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 
 	osd_trans_declare_op(env, oh, OSD_OT_DESTROY,
 			     osd_dto_credits_noquota[DTO_OBJECT_DELETE]);
+
+	/* For removing agent entry */
+	if (lu_object_has_agent_entry(&obj->oo_dt.do_lu))
+		oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_DELETE];
+
 	/* Recycle idle OI leaf may cause additional three OI blocks
 	 * to be changed. */
 	if (!OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LOST_MDTOBJ2))
@@ -3239,15 +3250,16 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 	if (unlikely(fid_is_acct(fid)))
 		RETURN(-EPERM);
 
+	if (lu_object_has_agent_entry(&obj->oo_dt.do_lu)) {
+		result = osd_delete_from_remote_parent(env, osd, obj, oh, true);
+		if (result != 0)
+			CERROR("%s: remove agent entry "DFID": rc = %d\n",
+			       osd_name(osd), PFID(fid), result);
+	}
+
 	if (S_ISDIR(inode->i_mode)) {
 		LASSERT(osd_inode_unlinked(inode) || inode->i_nlink == 1 ||
 			inode->i_nlink == 2);
-		/* it will check/delete the inode from remote parent,
-		 * how to optimize it? unlink performance impaction XXX */
-		result = osd_delete_from_remote_parent(env, osd, obj, oh);
-		if (result != 0)
-			CERROR("%s: delete inode "DFID": rc = %d\n",
-			       osd_name(osd), PFID(fid), result);
 
 		spin_lock(&obj->oo_guard);
 		clear_nlink(inode);
@@ -3935,6 +3947,17 @@ static int osd_declare_xattr_set(const struct lu_env *env,
 		else
 			goto upgrade;
 	} else {
+		/* If some name entry resides on remote MDT, then will create
+		 * agent entry under remote parent. On the other hand, if the
+		 * remote entry will be removed, then related agent entry may
+		 * need to be removed from the remote parent. So there may be
+		 * kinds of cases, let's declare enough credits. The credits
+		 * for create agent entry is enough for remove case. */
+		if (strcmp(name, XATTR_NAME_LINK) == 0) {
+			credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
+			if (dt_object_exists(dt))
+				credits += 1; /* For updating LMA */
+		}
 
 upgrade:
 		credits += osd_dto_credits_noquota[DTO_XATTR_SET];
@@ -4066,6 +4089,86 @@ static int osd_xattr_set_pfid(const struct lu_env *env, struct osd_object *obj,
 }
 
 /*
+ * In DNE environment, the object (in spite of regular file or directory)
+ * and its name entry may reside on different MDTs. Under such case, we will
+ * create an agent entry on the MDT where the object resides. The agent entry
+ * references the object locally, that makes the object to be visible to the
+ * userspace when mounted as 'ldiskfs' directly. Then the userspace tools,
+ * such as 'tar' can handle the object properly.
+ *
+ * We handle the agent entry during set linkEA that is the common interface
+ * for both regular file and directroy, can handle kinds of cases, such as
+ * create/link/unlink/rename, and so on.
+ *
+ * NOTE: we can NOT do that when ea_{insert,delete} that is only for directory.
+ *
+ * XXX: There are two known issues:
+ * 1. For one object, we will create at most one agent entry even if there
+ *    may be more than one cross-MDTs hard links on the object. So the local
+ *    e2fsck may claim that the object's nlink is larger than the name entries
+ *    that reference such inode. And in further, the e2fsck will fix the nlink
+ *    attribute to match the local references. Then it will cause the object's
+ *    nlink attribute to be inconsistent with the global references. it is bad
+ *    but not fatal. The ref_del() can handle the zero-referenced case. On the
+ *    other hand, the global namespace LFSCK can repair the object's attribute
+ *    according to the linkEA.
+ * 2. There may be too many hard links on the object as to its linkEA overflow,
+ *    then the linkEA entry for cross-MDTs reference may be discarded. If such
+ *    case happened, then at this point, we do not know whether there are some
+ *    cross-MDTs reference. But there are local references, it guarantees that
+ *    object is visible to userspace when mounted as 'ldiskfs'. That is enough.
+ */
+static int osd_xattr_handle_linkea(const struct lu_env *env,
+				   struct osd_device *osd,
+				   struct osd_object *obj,
+				   const struct lu_buf *buf,
+				   struct thandle *handle)
+{
+	const struct lu_fid *fid = lu_object_fid(&obj->oo_dt.do_lu);
+	struct lu_fid *tfid = &osd_oti_get(env)->oti_fid3;
+	struct linkea_data ldata = { .ld_buf = (struct lu_buf *)buf };
+	struct lu_name tmpname;
+	struct osd_thandle *oh;
+	int rc;
+	bool remote = false;
+	ENTRY;
+
+	oh = container_of0(handle, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle != NULL);
+
+	rc = linkea_init_with_rec(&ldata);
+	if (!rc) {
+		linkea_first_entry(&ldata);
+		while (ldata.ld_lee != NULL && !remote) {
+			linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen,
+					    &tmpname, tfid);
+			if (osd_remote_fid(env, osd, tfid) > 0)
+				remote = true;
+			else
+				linkea_next_entry(&ldata);
+		}
+	} else if (rc == -ENODATA) {
+		rc = 0;
+	} else {
+		RETURN(rc);
+	}
+
+	if (lu_object_has_agent_entry(&obj->oo_dt.do_lu) && !remote) {
+		rc = osd_delete_from_remote_parent(env, osd, obj, oh, false);
+		if (rc)
+			CERROR("%s: failed to remove agent entry for "DFID
+			       ": rc = %d\n", osd_name(osd), PFID(fid), rc);
+	} else if (!lu_object_has_agent_entry(&obj->oo_dt.do_lu) && remote) {
+		rc = osd_add_to_remote_parent(env, osd, obj, oh);
+		if (rc)
+			CERROR("%s: failed to create agent entry for "DFID
+			       ": rc = %d\n", osd_name(osd), PFID(fid), rc);
+	}
+
+	RETURN(rc);
+}
+
+/*
  * Concurrency: @dt is write locked.
  */
 static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
@@ -4133,6 +4236,12 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		rc = __osd_xattr_set(info, inode, XATTR_NAME_LMA, lma,
 				     sizeof(*lma), XATTR_REPLACE);
 		if (rc != 0)
+			RETURN(rc);
+	} else if (strcmp(name, XATTR_NAME_LINK) == 0) {
+		LASSERT(!osd->od_is_ost);
+
+		rc = osd_xattr_handle_linkea(env, osd, obj, buf, handle);
+		if (rc)
 			RETURN(rc);
 	}
 
@@ -4542,12 +4651,6 @@ static int osd_index_declare_ea_delete(const struct lu_env *env,
 	LASSERT(oh->ot_handle == NULL);
 
 	credits = osd_dto_credits_noquota[DTO_INDEX_DELETE];
-	if (key != NULL && unlikely(strcmp((char *)key, dotdot) == 0)) {
-		/* '..' to a remote object has a local representative */
-		credits += osd_dto_credits_noquota[DTO_INDEX_DELETE];
-		/* to reset LMAI_REMOTE_PARENT */
-		credits += 1;
-	}
 	osd_trans_declare_op(env, oh, OSD_OT_DELETE, credits);
 
 	inode = osd_dt_obj(dt)->oo_inode;
@@ -4688,25 +4791,8 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
         else
 		up_write(&obj->oo_ext_idx_sem);
 
-	if (rc != 0)
-		GOTO(out, rc);
+	GOTO(out, rc);
 
-	/* For inode on the remote MDT, .. will point to
-	 * /Agent directory, Check whether it needs to delete
-	 * from agent directory */
-	if (unlikely(strcmp((char *)key, dotdot) == 0)) {
-		int ret;
-
-		ret = osd_delete_from_remote_parent(env, osd_obj2dev(obj),
-						    obj, oh);
-		if (ret != 0)
-			/* Sigh, the entry has been deleted, and
-			 * it is not easy to revert it back, so
-			 * let's keep this error private, and let
-			 * LFSCK fix it. XXX */
-			CERROR("%s: delete remote parent "DFID": rc = %d\n",
-			       osd_name(osd), PFID(fid), ret);
-	}
 out:
         LASSERT(osd_invariant(obj));
 	osd_trans_exec_check(env, handle, OSD_OT_DELETE);
@@ -5529,21 +5615,8 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 	if (idc->oic_remote) {
 		/* Insert remote entry */
 		if (strcmp(name, dotdot) == 0 && strlen(name) == 2) {
-			struct osd_mdobj_map	*omm = osd->od_mdt_map;
-			struct osd_thandle	*oh;
-
-			/* If parent on remote MDT, we need put this object
-			 * under AGENT */
-			oh = container_of(th, typeof(*oh), ot_super);
-			rc = osd_add_to_remote_parent(env, osd, obj, oh);
-			if (rc != 0) {
-				CERROR("%s: add "DFID" error: rc = %d\n",
-				       osd_name(osd),
-				       PFID(lu_object_fid(&dt->do_lu)), rc);
-				RETURN(rc);
-			}
-
-			child_inode = igrab(omm->omm_remote_parent->d_inode);
+			child_inode =
+			igrab(osd->od_mdt_map->omm_remote_parent->d_inode);
 		} else {
 			child_inode = osd_create_local_agent_inode(env, osd,
 					obj, fid, rec1->rec_type & S_IFMT, th);

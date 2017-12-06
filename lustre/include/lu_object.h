@@ -495,13 +495,14 @@ enum lu_object_header_flags {
 };
 
 enum lu_object_header_attr {
-        LOHA_EXISTS   = 1 << 0,
-        LOHA_REMOTE   = 1 << 1,
-        /**
-         * UNIX file type is stored in S_IFMT bits.
-         */
-        LOHA_FT_START = 001 << 12, /**< S_IFIFO */
-        LOHA_FT_END   = 017 << 12, /**< S_IFMT */
+	LOHA_EXISTS		= 1 << 0,
+	LOHA_REMOTE		= 1 << 1,
+	LOHA_HAS_AGENT_ENTRY	= 1 << 2,
+	/**
+	 * UNIX file type is stored in S_IFMT bits.
+	 */
+	LOHA_FT_START		= 001 << 12, /**< S_IFIFO */
+	LOHA_FT_END		= 017 << 12, /**< S_IFMT */
 };
 
 /**
@@ -851,6 +852,22 @@ int lu_object_invariant(const struct lu_object *o);
  */
 #define lu_object_remote(o) unlikely((o)->lo_header->loh_attr & LOHA_REMOTE)
 
+/**
+ * Check whether the object as agent entry on current target
+ */
+#define lu_object_has_agent_entry(o) \
+	unlikely((o)->lo_header->loh_attr & LOHA_HAS_AGENT_ENTRY)
+
+static inline void lu_object_set_agent_entry(struct lu_object *o)
+{
+	o->lo_header->loh_attr |= LOHA_HAS_AGENT_ENTRY;
+}
+
+static inline void lu_object_clear_agent_entry(struct lu_object *o)
+{
+	o->lo_header->loh_attr &= ~LOHA_HAS_AGENT_ENTRY;
+}
+
 static inline int lu_object_assert_exists(const struct lu_object *o)
 {
 	return lu_object_exists(o);
@@ -867,7 +884,8 @@ static inline int lu_object_assert_not_exists(const struct lu_object *o)
 static inline __u32 lu_object_attr(const struct lu_object *o)
 {
 	LASSERT(lu_object_exists(o) != 0);
-        return o->lo_header->loh_attr;
+
+	return o->lo_header->loh_attr & S_IFMT;
 }
 
 static inline void lu_object_ref_add(struct lu_object *o,
