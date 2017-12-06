@@ -6895,13 +6895,15 @@ test_101g() {
 	local list=$(comma_list $(osts_nodes))
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 	local brw_size="obdfilter.*.brw_size"
+	local ostver=$(lustre_version_code ost1)
 
 	$LFS setstripe -i 0 -c 1 $DIR/$tfile
 
 	local orig_mb=$(do_facet ost1 $LCTL get_param -n $brw_size | head -n 1)
-	if [ $(lustre_version_code ost1) -ge $(version_code 2.8.52) ]; then
-		[ $(lustre_version_code ost1) -ge $(version_code 2.9.52) ] &&
-			suffix="M"
+	if [ $ostver -ge $(version_code 2.8.52) ] ||
+	   [ $ostver -ge $(version_code 2.7.17) -a \
+	     $ostver -lt $(version_code 2.7.50) ]; then
+		[ $ostver -ge $(version_code 2.9.52) ] && suffix="M"
 		if [[ $orig_mb -lt 16 ]]; then
 			save_lustre_params $osts "$brw_size" > $p
 			do_nodes $list $LCTL set_param -n $brw_size=16$suffix ||
