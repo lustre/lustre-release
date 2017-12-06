@@ -45,6 +45,7 @@
 #include <obd_class.h>
 #include <lustre_disk.h>
 #include <lustre_fid.h>
+#include <lustre_linkea.h>
 
 #include "osd_internal.h"
 
@@ -352,11 +353,24 @@ void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
 			     int vallen, const char *name,
 			     struct osd_thandle *oh)
 {
+	struct osd_device *osd = osd_obj2dev(obj);
 	dmu_tx_t *tx = oh->ot_tx;
 	int bonuslen;
 
 	if (unlikely(obj->oo_destroyed))
 		return;
+
+	if (strcmp(name, XATTR_NAME_LINK) == 0 &&
+	    osd->od_remote_parent_dir != ZFS_NO_OBJECT) {
+		/* If some name entry resides on remote MDT, then will create
+		 * agent entry under remote parent. On the other hand, if the
+		 * remote entry will be removed, then related agent entry may
+		 * need to be removed from the remote parent. So there may be
+		 * kinds of cases, let's declare enough credits. The credits
+		 * for create agent entry is enough for remove case. */
+		osd_tx_hold_zap(tx, osd->od_remote_parent_dir,
+				NULL, TRUE, NULL);
+	}
 
 	if (unlikely(!osd_obj2dev(obj)->od_xattr_in_sa)) {
 		__osd_xattr_declare_legacy(env, obj, vallen, name, oh);
@@ -779,11 +793,73 @@ static int osd_xattr_split_pfid(const struct lu_env *env,
 	RETURN(rc);
 }
 
+/*
+ * In DNE environment, the object (in spite of regular file or directory)
+ * and its name entry may reside on different MDTs. Under such case, we will
+ * create an agent entry on the MDT where the object resides. The agent entry
+ * references the object locally, that makes the object to be visible to the
+ * userspace when mounted as 'zfs' directly. Then the userspace tools, such
+ * as 'tar' can handle the object properly.
+ *
+ * We handle the agent entry during set linkEA that is the common interface
+ * for both regular file and directroy, can handle kinds of cases, such as
+ * create/link/unlink/rename, and so on.
+ *
+ * NOTE: we need to do that for both directory and regular file, so we can NOT
+ *	 do that when ea_{insert,delete} that are directory based operations.
+ */
+static int osd_xattr_handle_linkea(const struct lu_env *env,
+				   struct osd_device *osd,
+				   struct osd_object *obj,
+				   const struct lu_buf *buf,
+				   struct osd_thandle *oh)
+{
+	const struct lu_fid *fid = lu_object_fid(&obj->oo_dt.do_lu);
+	struct lu_fid *tfid = &osd_oti_get(env)->oti_fid;
+	struct linkea_data ldata = { .ld_buf = (struct lu_buf *)buf };
+	struct lu_name tmpname;
+	int rc;
+	bool remote = false;
+	ENTRY;
+
+	rc = linkea_init_with_rec(&ldata);
+	if (!rc) {
+		linkea_first_entry(&ldata);
+		while (ldata.ld_lee != NULL && !remote) {
+			linkea_entry_unpack(ldata.ld_lee, &ldata.ld_reclen,
+					    &tmpname, tfid);
+			if (osd_remote_fid(env, osd, tfid) > 0)
+				remote = true;
+			else
+				linkea_next_entry(&ldata);
+		}
+	} else if (rc == -ENODATA) {
+		rc = 0;
+	} else {
+		RETURN(rc);
+	}
+
+	if (lu_object_has_agent_entry(&obj->oo_dt.do_lu) && !remote) {
+		rc = osd_delete_from_remote_parent(env, osd, obj, oh, false);
+		if (rc)
+			CERROR("%s: failed to remove agent entry for "DFID
+			       ": rc = %d\n", osd_name(osd), PFID(fid), rc);
+	} else if (!lu_object_has_agent_entry(&obj->oo_dt.do_lu) && remote) {
+		rc = osd_add_to_remote_parent(env, osd, obj, oh);
+		if (rc)
+			CWARN("%s: failed to create agent entry for "DFID
+			      ": rc = %d\n", osd_name(osd), PFID(fid), rc);
+	}
+
+	RETURN(rc);
+}
+
 int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		  const struct lu_buf *buf, const char *name, int fl,
 		  struct thandle *handle)
 {
-	struct osd_object  *obj = osd_dt_obj(dt);
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
 	struct osd_thandle *oh;
 	int rc = 0;
 	ENTRY;
@@ -808,6 +884,9 @@ int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		rc = osd_xattr_split_pfid(env, obj, oh);
 		if (!rc)
 			fl = LU_XATTR_CREATE;
+	} else if (strcmp(name, XATTR_NAME_LINK) == 0 &&
+		   osd->od_remote_parent_dir != ZFS_NO_OBJECT) {
+		rc = osd_xattr_handle_linkea(env, osd, obj, buf, oh);
 	}
 
 	if (!rc)

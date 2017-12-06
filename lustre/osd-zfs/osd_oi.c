@@ -467,12 +467,6 @@ osd_get_idx_for_ost_obj(const struct lu_env *env, struct osd_device *osd,
 	return osd_seq->os_compat_dirs[b];
 }
 
-/* XXX: f_ver is not counted, but may differ too */
-static void osd_fid2str(char *buf, const struct lu_fid *fid)
-{
-	sprintf(buf, DFID_NOBRACE, PFID(fid));
-}
-
 /*
  * Determine the zap object id which is being used as the OI for the
  * given fid.  The lowest N bits in the sequence ID are used as the
@@ -481,14 +475,14 @@ static void osd_fid2str(char *buf, const struct lu_fid *fid)
  */
 static uint64_t
 osd_get_idx_for_fid(struct osd_device *osd, const struct lu_fid *fid,
-		    char *buf, dnode_t **zdn)
+		    char *buf, dnode_t **zdn, int bufsize)
 {
 	struct osd_oi *oi;
 
 	LASSERT(osd->od_oi_table != NULL);
 	oi = osd->od_oi_table[fid_seq(fid) & (osd->od_oi_count - 1)];
 	if (buf)
-		osd_fid2str(buf, fid);
+		osd_fid2str(buf, fid, bufsize);
 	if (zdn)
 		*zdn = oi->oi_dn;
 
@@ -520,10 +514,11 @@ osd_get_name_n_idx_compat(const struct lu_env *env, struct osd_device *osd,
 			if (buf)
 				strncpy(buf, name, bufsize);
 		} else {
-			zapid = osd_get_idx_for_fid(osd, fid, buf, NULL);
+			zapid = osd_get_idx_for_fid(osd, fid, buf, NULL,
+						    bufsize);
 		}
 	} else {
-		zapid = osd_get_idx_for_fid(osd, fid, buf, zdn);
+		zapid = osd_get_idx_for_fid(osd, fid, buf, zdn, bufsize);
 	}
 
 	return zapid;
@@ -553,10 +548,11 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 			if (buf)
 				strncpy(buf, name, bufsize);
 		} else {
-			zapid = osd_get_idx_for_fid(osd, fid, buf, NULL);
+			zapid = osd_get_idx_for_fid(osd, fid, buf, NULL,
+						    bufsize);
 		}
 	} else {
-		zapid = osd_get_idx_for_fid(osd, fid, buf, zdn);
+		zapid = osd_get_idx_for_fid(osd, fid, buf, zdn, bufsize);
 	}
 
 	return zapid;
@@ -599,7 +595,7 @@ int osd_fid_lookup(const struct lu_env *env, struct osd_device *dev,
 						    8, 1, &info->oti_zde);
 			} else if (fid_is_objseq(fid) || fid_is_batchid(fid)) {
 				zapid = osd_get_idx_for_fid(dev, fid,
-							    buf, NULL);
+					buf, NULL, sizeof(info->oti_buf));
 				rc = osd_zap_lookup(dev, zapid, zdn, buf,
 						    8, 1, &info->oti_zde);
 			}
@@ -779,6 +775,28 @@ osd_oi_init_compat(const struct lu_env *env, struct osd_device *o)
 	RETURN(rc);
 }
 
+static void
+osd_oi_init_remote_parent(const struct lu_env *env, struct osd_device *o)
+{
+	uint64_t sdb;
+	int rc;
+	ENTRY;
+
+	if (o->od_is_ost) {
+		o->od_remote_parent_dir = ZFS_NO_OBJECT;
+	} else {
+		/* Remote parent only used for cross-MDT objects,
+		 * it is usless for single MDT case or under read
+		 * only mode. So ignore the failure. */
+		rc = osd_oi_find_or_create(env, o, o->od_root,
+					   REMOTE_PARENT_DIR, &sdb);
+		if (!rc)
+			o->od_remote_parent_dir = sdb;
+		else
+			o->od_remote_parent_dir = ZFS_NO_OBJECT;
+	}
+}
+
 /**
  * Initialize the OIs by either opening or creating them as needed.
  */
@@ -787,6 +805,8 @@ int osd_oi_init(const struct lu_env *env, struct osd_device *o)
 	char	*key = osd_oti_get(env)->oti_buf;
 	int	 i, rc, count = 0;
 	ENTRY;
+
+	osd_oi_init_remote_parent(env, o);
 
 	rc = osd_oi_probe(env, o, &count);
 	if (rc)

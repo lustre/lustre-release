@@ -239,13 +239,13 @@ struct osd_thandle {
 				 ot_assigned:1;
 };
 
-#define OSD_OI_NAME_SIZE        16
+#define OSD_OI_NAME_SIZE        24
 
 /*
  * Object Index (OI) instance.
  */
 struct osd_oi {
-	char			oi_name[OSD_OI_NAME_SIZE]; /* unused */
+	char			oi_name[OSD_OI_NAME_SIZE];
 	uint64_t		oi_zapid;
 	dnode_t *oi_dn;
 };
@@ -283,6 +283,7 @@ struct osd_device {
 	struct proc_dir_entry	*od_proc_entry;
 	struct lprocfs_stats	*od_stats;
 
+	uint64_t		 od_remote_parent_dir;
 	uint64_t		 od_max_blksz;
 	uint64_t		 od_root;
 	uint64_t		 od_O_id;
@@ -556,6 +557,14 @@ void osd_zap_cursor_fini(zap_cursor_t *zc);
 uint64_t osd_zap_cursor_serialize(zap_cursor_t *zc);
 int osd_remote_fid(const struct lu_env *env, struct osd_device *osd,
 		   const struct lu_fid *fid);
+int osd_add_to_remote_parent(const struct lu_env *env,
+			     struct osd_device *osd,
+			     struct osd_object *obj,
+			     struct osd_thandle *oh);
+int osd_delete_from_remote_parent(const struct lu_env *env,
+				  struct osd_device *osd,
+				  struct osd_object *obj,
+				  struct osd_thandle *oh, bool destroy);
 
 /* osd_xattr.c */
 int __osd_sa_xattr_schedule_update(const struct lu_env *env,
@@ -570,6 +579,8 @@ int __osd_xattr_load(struct osd_device *osd, sa_handle_t *hdl,
 int __osd_xattr_get_large(const struct lu_env *env, struct osd_device *osd,
 			  uint64_t xattr, struct lu_buf *buf,
 			  const char *name, int *sizep);
+int osd_xattr_get_internal(const struct lu_env *env, struct osd_object *obj,
+			   struct lu_buf *buf, const char *name, int *sizep);
 int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		  struct lu_buf *buf, const char *name);
 int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
@@ -613,6 +624,12 @@ osd_find_dnsize(struct osd_device *osd, int ea_in_bonus)
 	return DN_MAX_BONUSLEN;
 }
 #endif
+
+/* XXX: f_ver is not counted, but may differ too */
+static inline void osd_fid2str(char *buf, const struct lu_fid *fid, int len)
+{
+	snprintf(buf, len, DFID_NOBRACE, PFID(fid));
+}
 
 static inline int
 osd_xattr_set_internal(const struct lu_env *env, struct osd_object *obj,

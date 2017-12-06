@@ -455,9 +455,14 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 			      PFID(lu_object_fid(&obj->oo_dt.do_lu)));
 			rc = -EOPNOTSUPP;
 		} else {
+			struct osd_device *osd = osd_obj2dev(obj);
+
 			if (lma->lma_compat & LMAC_STRIPE_INFO &&
-			    osd_obj2dev(obj)->od_is_ost)
+			    osd->od_is_ost)
 				obj->oo_pfid_in_lma = 1;
+			if (unlikely(lma->lma_incompat & LMAI_REMOTE_PARENT) &&
+			    osd->od_remote_parent_dir != ZFS_NO_OBJECT)
+				lu_object_set_agent_entry(&obj->oo_dt.do_lu);
 		}
 	} else if (rc == -ENODATA) {
 		/* haven't initialize LMA xattr */
@@ -661,6 +666,11 @@ static int osd_declare_destroy(const struct lu_env *env, struct dt_object *dt,
 		osd_tx_hold_zap(oh->ot_tx, osd->od_unlinked->dn_object,
 				osd->od_unlinked, TRUE, NULL);
 
+	/* remove agent entry (if have) from remote parent */
+	if (lu_object_has_agent_entry(&obj->oo_dt.do_lu))
+		osd_tx_hold_zap(oh->ot_tx, osd->od_remote_parent_dir,
+				NULL, FALSE, NULL);
+
 	/* will help to find FID->ino when this object is being
 	 * added to PENDING/ */
 	osd_idc_find_and_init(env, osd, obj);
@@ -708,6 +718,12 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 		CERROR("%s: cannot destroy xattrs for %s: rc = %d\n",
 		       osd->od_svname, buf, rc);
 		GOTO(out, rc);
+	}
+
+	if (lu_object_has_agent_entry(&obj->oo_dt.do_lu)) {
+		rc = osd_delete_from_remote_parent(env, osd, obj, oh, true);
+		if (rc)
+			GOTO(out, rc);
 	}
 
 	oid = obj->oo_dn->dn_object;

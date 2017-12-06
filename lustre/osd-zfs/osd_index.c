@@ -531,6 +531,118 @@ out:
 	return rc;
 }
 
+int osd_add_to_remote_parent(const struct lu_env *env,
+			     struct osd_device *osd,
+			     struct osd_object *obj,
+			     struct osd_thandle *oh)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct luz_direntry *zde = &info->oti_zde;
+	char *name = info->oti_str;
+	const struct lu_fid *fid = lu_object_fid(&obj->oo_dt.do_lu);
+	struct lustre_mdt_attrs *lma = (struct lustre_mdt_attrs *)info->oti_buf;
+	struct lu_buf buf = {
+		.lb_buf = lma,
+		.lb_len = sizeof(info->oti_buf),
+	};
+	int size = 0;
+	int rc;
+	ENTRY;
+
+	rc = osd_xattr_get_internal(env, obj, &buf, XATTR_NAME_LMA, &size);
+	if (rc) {
+		CWARN("%s: fail to load LMA for adding "
+		      DFID" to remote parent: rc = %d\n",
+		      osd_name(osd), PFID(fid), rc);
+		RETURN(rc);
+	}
+
+	lustre_lma_swab(lma);
+	lma->lma_incompat |= LMAI_REMOTE_PARENT;
+	lustre_lma_swab(lma);
+	buf.lb_len = size;
+	rc = osd_xattr_set_internal(env, obj, &buf, XATTR_NAME_LMA,
+				    LU_XATTR_REPLACE, oh);
+	if (rc) {
+		CWARN("%s: fail to update LMA for adding "
+		      DFID" to remote parent: rc = %d\n",
+		      osd_name(osd), PFID(fid), rc);
+		RETURN(rc);
+	}
+
+	osd_fid2str(name, fid, sizeof(info->oti_str));
+	zde->lzd_reg.zde_dnode = obj->oo_dn->dn_object;
+	zde->lzd_reg.zde_type = IFTODT(S_IFDIR);
+	zde->lzd_fid = *fid;
+
+	rc = osd_zap_add(osd, osd->od_remote_parent_dir, NULL,
+			 name, 8, sizeof(*zde) / 8, zde, oh->ot_tx);
+	if (unlikely(rc == -EEXIST))
+		rc = 0;
+	if (rc)
+		CWARN("%s: fail to add name entry for "
+		      DFID" to remote parent: rc = %d\n",
+		      osd_name(osd), PFID(fid), rc);
+	else
+		lu_object_set_agent_entry(&obj->oo_dt.do_lu);
+
+	RETURN(rc);
+}
+
+int osd_delete_from_remote_parent(const struct lu_env *env,
+				  struct osd_device *osd,
+				  struct osd_object *obj,
+				  struct osd_thandle *oh, bool destroy)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	char *name = info->oti_str;
+	const struct lu_fid *fid = lu_object_fid(&obj->oo_dt.do_lu);
+	struct lustre_mdt_attrs *lma = (struct lustre_mdt_attrs *)info->oti_buf;
+	struct lu_buf buf = {
+		.lb_buf = lma,
+		.lb_len = sizeof(info->oti_buf),
+	};
+	int size = 0;
+	int rc;
+	ENTRY;
+
+	osd_fid2str(name, fid, sizeof(info->oti_str));
+	rc = osd_zap_remove(osd, osd->od_remote_parent_dir, NULL,
+			    name, oh->ot_tx);
+	if (unlikely(rc == -ENOENT))
+		rc = 0;
+	if (rc)
+		CERROR("%s: fail to remove entry under remote "
+		       "parent for "DFID": rc = %d\n",
+		       osd_name(osd), PFID(fid), rc);
+
+	if (destroy || rc)
+		RETURN(rc);
+
+	rc = osd_xattr_get_internal(env, obj, &buf, XATTR_NAME_LMA, &size);
+	if (rc) {
+		CERROR("%s: fail to load LMA for removing "
+		       DFID" from remote parent: rc = %d\n",
+		       osd_name(osd), PFID(fid), rc);
+		RETURN(rc);
+	}
+
+	lustre_lma_swab(lma);
+	lma->lma_incompat &= ~LMAI_REMOTE_PARENT;
+	lustre_lma_swab(lma);
+	buf.lb_len = size;
+	rc = osd_xattr_set_internal(env, obj, &buf, XATTR_NAME_LMA,
+				    LU_XATTR_REPLACE, oh);
+	if (rc)
+		CERROR("%s: fail to update LMA for removing "
+		       DFID" from remote parent: rc = %d\n",
+		       osd_name(osd), PFID(fid), rc);
+	else
+		lu_object_clear_agent_entry(&obj->oo_dt.do_lu);
+
+	RETURN(rc);
+}
+
 static int osd_declare_dir_insert(const struct lu_env *env,
 				  struct dt_object *dt,
 				  const struct dt_rec *rec,
@@ -737,8 +849,12 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_FID_INDIR))
 		zde->lzd_fid.f_ver = ~0;
+
+	/* The logic is not related with IGIF, just re-use the fail_loc value
+	 * to be consistent with ldiskfs case, then share the same test logic */
 	if (OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF))
 		num = 1;
+
 	/* Insert (key,oid) into ZAP */
 	rc = osd_zap_add(osd, parent->oo_dn->dn_object, parent->oo_dn,
 			 name, 8, num, (void *)zde, oh->ot_tx);
@@ -832,7 +948,7 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	 *	   the lookup conditionally.
 	 *	2) Enhance the ZFS logic to recognize the OSD lookup result
 	 *	   and delete the given entry directly without lookup again
-	 *	   internally. LU-10295 */
+	 *	   internally. LU-10190 */
 	memset(&zde->lzd_fid, 0, sizeof(zde->lzd_fid));
 	rc = osd_zap_lookup(osd, zap_dn->dn_object, zap_dn, name, 8, 3, zde);
 	if (unlikely(rc)) {
