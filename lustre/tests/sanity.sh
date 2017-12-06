@@ -6197,7 +6197,7 @@ test_77c() {
 	[[ "$orig_cksum" == "$dump_cksum" ]] ||
 		error "dump content does not match on Client"
 
-	$check_ost || skip "No need to check cksum dump on OSS"
+	$check_ost || { skip "No need to check cksum dump on OSS"; return 0; }
 
 	# check cksum dump on OSS
 	ost_file=$(do_facet ost1 ls ${ost_file_prefix}\*)
