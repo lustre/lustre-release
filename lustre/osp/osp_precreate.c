@@ -1544,7 +1544,8 @@ int osp_precreate_get_fid(const struct lu_env *env, struct osp_device *d,
 	 * all reservations are released, see comment in
 	 * osp_precreate_thread() just before orphan cleanup
 	 */
-	if (unlikely(d->opd_pre_reserved == 0 && d->opd_pre_status))
+	if (unlikely(d->opd_pre_reserved == 0 &&
+		     (d->opd_pre_recovering || d->opd_pre_status)))
 		wake_up(&d->opd_pre_waitq);
 
 	return 0;

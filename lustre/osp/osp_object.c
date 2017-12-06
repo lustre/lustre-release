@@ -2270,6 +2270,14 @@ static void osp_object_release(const struct lu_env *env, struct lu_object *o)
 		d->opd_pre_reserved--;
 		spin_unlock(&d->opd_pre_lock);
 
+		/*
+		 * Check that osp_precreate_cleanup_orphans is not blocked
+		 * due to opd_pre_reserved > 0.
+		 */
+		if (unlikely(d->opd_pre_reserved == 0 &&
+			     (d->opd_pre_recovering || d->opd_pre_status)))
+			wake_up(&d->opd_pre_waitq);
+
 		/* not needed in cache any more */
 		set_bit(LU_OBJECT_HEARD_BANSHEE, &o->lo_header->loh_flags);
 	}
