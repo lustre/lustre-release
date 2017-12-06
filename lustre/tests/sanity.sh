@@ -9415,7 +9415,7 @@ test_130a() {
 		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return
 	[ $RC != 0 ] && error "filefrag $fm_file failed"
 
-	filefrag_op=$(filefrag -ve $fm_file |
+	filefrag_op=$(filefrag -ve -k $fm_file |
 			sed -n '/ext:/,/found/{/ext:/d; /found/d; p}')
 	lun=$($GETSTRIPE -i $fm_file)
 
@@ -9465,7 +9465,7 @@ test_130b() {
 		error "dd failed on $fm_file"
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
-	filefrag_op=$(filefrag -ve $fm_file |
+	filefrag_op=$(filefrag -ve -k $fm_file |
 			sed -n '/ext:/,/found/{/ext:/d; /found/d; p}')
 
 	last_lun=$(echo $filefrag_op | cut -d: -f5 |
@@ -9524,7 +9524,7 @@ test_130c() {
 			error "dd failed on $fm_file"
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
-	filefrag_op=$(filefrag -ve $fm_file |
+	filefrag_op=$(filefrag -ve -k $fm_file |
 		sed -n '/ext:/,/found/{/ext:/d; /found/d; p}')
 
 	last_lun=$(echo $filefrag_op | cut -d: -f5 |
@@ -9592,7 +9592,7 @@ test_130d() {
 		error "dd failed on $fm_file"
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
-	filefrag_op=$(filefrag -ve $fm_file |
+	filefrag_op=$(filefrag -ve -k $fm_file |
 			sed -n '/ext:/,/found/{/ext:/d; /found/d; p}')
 
 	last_lun=$(echo $filefrag_op | cut -d: -f5 |
@@ -9654,7 +9654,7 @@ test_130e() {
 	done
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
-	filefrag_op=$(filefrag -ve $fm_file |
+	filefrag_op=$(filefrag -ve -k $fm_file |
 			sed -n '/ext:/,/found/{/ext:/d; /found/d; p}')
 
 	last_lun=$(echo $filefrag_op | cut -d: -f5 |
