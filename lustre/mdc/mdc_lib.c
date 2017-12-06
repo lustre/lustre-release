@@ -460,7 +460,9 @@ static void mdc_close_intent_pack(struct ptlrpc_request *req,
 	data->cd_data_version = op_data->op_data_version;
 	data->cd_fid = op_data->op_fid2;
 
-	if (bias & MDS_CLOSE_RESYNC_DONE) {
+	if (bias & MDS_CLOSE_LAYOUT_SPLIT) {
+		data->cd_mirror_id = op_data->op_mirror_id;
+	} else if (bias & MDS_CLOSE_RESYNC_DONE) {
 		struct close_data_resync_done *sync = &data->cd_resync;
 
 		CLASSERT(sizeof(data->cd_resync) <= sizeof(data->cd_reserved));

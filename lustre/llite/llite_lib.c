@@ -2522,11 +2522,10 @@ struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
 	op_data->op_fsuid = from_kuid(&init_user_ns, current_fsuid());
 	op_data->op_fsgid = from_kgid(&init_user_ns, current_fsgid());
 	op_data->op_cap = cfs_curproc_cap_pack();
+	op_data->op_mds = 0;
 	if ((opc == LUSTRE_OPC_CREATE) && (name != NULL) &&
 	     filename_is_volatile(name, namelen, &op_data->op_mds)) {
 		op_data->op_bias |= MDS_CREATE_VOLATILE;
-	} else {
-		op_data->op_mds = 0;
 	}
 	op_data->op_data = data;
 

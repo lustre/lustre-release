@@ -1994,13 +1994,21 @@ int mdt_close_handle_layouts(struct mdt_thread_info *info,
 	if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SWAP) {
 		rc = mo_swap_layouts(info->mti_env, mdt_object_child(o1),
 				     mdt_object_child(o2), 0);
-	} else if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_MERGE) {
+	} else if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_MERGE ||
+		   ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SPLIT) {
 		struct lu_buf *buf = &info->mti_buf;
+		struct md_rejig_data mrd;
 
-		buf->lb_len = sizeof(void *);
-		buf->lb_buf = mdt_object_child(o == o1 ? o2 : o1);
+		mrd.mrd_obj = mdt_object_child(o == o1 ? o2 : o1);
+		if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SPLIT)
+			mrd.mrd_mirror_id = data->cd_mirror_id;
+
+		buf->lb_len = sizeof(mrd);
+		buf->lb_buf = &mrd;
 		rc = mo_xattr_set(info->mti_env, mdt_object_child(o), buf,
-				  XATTR_LUSTRE_LOV, LU_XATTR_MERGE);
+				  XATTR_LUSTRE_LOV,
+				  ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SPLIT ?
+				  LU_XATTR_SPLIT : LU_XATTR_MERGE);
 		if (rc == 0 && ma->ma_attr.la_valid & (LA_SIZE | LA_BLOCKS)) {
 			int rc2;
 
@@ -2202,6 +2210,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 		break;
 	}
 	case MDS_CLOSE_LAYOUT_MERGE:
+	case MDS_CLOSE_LAYOUT_SPLIT:
 	case MDS_CLOSE_LAYOUT_SWAP: {
 		rc = mdt_close_handle_layouts(info, o, ma);
 		if (rc < 0) {

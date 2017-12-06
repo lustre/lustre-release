@@ -124,25 +124,31 @@ enum setstripe_origin {
 	SO_SETSTRIPE,
 	SO_MIGRATE,
 	SO_MIRROR_CREATE,
-	SO_MIRROR_EXTEND
+	SO_MIRROR_EXTEND,
+	SO_MIRROR_SPLIT,
 };
-static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc);
+static int lfs_setstripe_internal(int argc, char **argv,
+				  enum setstripe_origin opc);
 
 static inline int lfs_setstripe(int argc, char **argv)
 {
-	return lfs_setstripe0(argc, argv, SO_SETSTRIPE);
+	return lfs_setstripe_internal(argc, argv, SO_SETSTRIPE);
 }
 static inline int lfs_setstripe_migrate(int argc, char **argv)
 {
-	return lfs_setstripe0(argc, argv, SO_MIGRATE);
+	return lfs_setstripe_internal(argc, argv, SO_MIGRATE);
 }
 static inline int lfs_mirror_create(int argc, char **argv)
 {
-	return lfs_setstripe0(argc, argv, SO_MIRROR_CREATE);
+	return lfs_setstripe_internal(argc, argv, SO_MIRROR_CREATE);
 }
 static inline int lfs_mirror_extend(int argc, char **argv)
 {
-	return lfs_setstripe0(argc, argv, SO_MIRROR_EXTEND);
+	return lfs_setstripe_internal(argc, argv, SO_MIRROR_EXTEND);
+}
+static inline int lfs_mirror_split(int argc, char **argv)
+{
+	return lfs_setstripe_internal(argc, argv, SO_MIRROR_SPLIT);
 }
 
 /* Setstripe and migrate share mostly the same parameters */
@@ -250,6 +256,16 @@ command_t mirror_cmdlist[] = {
 		"<--mirror-count|-N[mirror_count]> [--no-verify] "
 		"[setstripe options|--parent|-f <victim_file>] ... <filename>\n"
 	  MIRROR_EXTEND_HELP },
+	{ .pc_name = "split", .pc_func = lfs_mirror_split,
+	  .pc_help = "Split a mirrored file.\n"
+	"usage: lfs mirror split <--mirror-id <mirror_id>> [--destroy|-d] "
+	"[-f <new_file>] <mirrored file>\n"
+	"\tmirror_id:    The numerical unique identifier for a mirror. It\n"
+	"\t              can be fetched by lfs getstripe command.\n"
+	"\tnew_file:     This option indicates the layout of the split\n"
+	"\t              mirror will be stored into. If not specified,\n"
+	"\t              a new file named <mirrored_file>.mirror~<mirror_id>\n"
+	"\t              will be used.\n" },
 	{ .pc_name = "resync", .pc_func = lfs_mirror_resync,
 	  .pc_help = "Resynchronizes out-of-sync mirrored file(s).\n"
 		"usage: lfs mirror resync [--only <mirror_id[,...]>] "
@@ -1173,14 +1189,16 @@ static inline int mirror_sanity_check_one(struct llapi_layout *layout)
 
 /**
  * enum mirror_flags - Flags for extending a mirrored file.
- * @NO_VERIFY: Indicates not to verify the mirror(s) from victim file(s)
+ * @MF_NO_VERIFY: Indicates not to verify the mirror(s) from victim file(s)
  *	       in case the victim file(s) contains the same data as the
  *	       original mirrored file.
+ * @MF_DESTROY: Indicates to delete the mirror from the mirrored file.
  *
  * Flags for extending a mirrored file.
  */
 enum mirror_flags {
-	NO_VERIFY	= 0x1,
+	MF_NO_VERIFY	= 0x1,
+	MF_DESTROY	= 0x2,
 };
 
 /**
@@ -1442,7 +1460,7 @@ static int mirror_extend_file(const char *fname, const char *victim_file,
 		goto out;
 	}
 
-	if (!(mirror_flags & NO_VERIFY)) {
+	if (!(mirror_flags & MF_NO_VERIFY)) {
 		ssize_t ret;
 		/* mirrors should have the same contents */
 		ret = mirror_file_compare(fd, fdv);
@@ -1598,6 +1616,175 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 		mirror_list = mirror_list->m_next;
 	}
 
+	return rc;
+}
+
+static int verify_id(struct llapi_layout *layout, void *cbdata)
+{
+	uint32_t id;
+	int rc;
+
+	rc = llapi_layout_mirror_id_get(layout, &id);
+	if (rc < 0)
+		return rc;
+
+	if ((__u16)id == *(__u16 *)cbdata)
+		return LLAPI_LAYOUT_ITER_STOP;
+
+	return LLAPI_LAYOUT_ITER_CONT;
+}
+
+static int mirror_split(const char *fname, __u16 mirror_id,
+			enum mirror_flags mflags, const char *victim_file)
+{
+	struct llapi_layout *layout;
+	char parent[PATH_MAX];
+	char victim[PATH_MAX];
+	int flags = O_CREAT | O_EXCL | O_LOV_DELAY_CREATE | O_NOFOLLOW;
+	char *ptr;
+	struct ll_ioc_lease *data;
+	uint16_t mirror_count;
+	int mdt_index;
+	int fd, fdv;
+	int rc;
+
+	/* check fname contains mirror with mirror_id */
+	layout = llapi_layout_get_by_path(fname, 0);
+	if (!layout) {
+		fprintf(stderr,
+			"error %s: file '%s' couldn't get layout\n",
+			progname, fname);
+		return -EINVAL;
+	}
+
+	rc = mirror_sanity_check_one(layout);
+	if (rc)
+		goto free_layout;
+
+	rc = llapi_layout_mirror_count_get(layout, &mirror_count);
+	if (rc) {
+		fprintf(stderr,
+			"error %s: file '%s' couldn't get mirror count\n",
+			progname, fname);
+		goto free_layout;
+	}
+	if (mirror_count < 2) {
+		fprintf(stderr,
+			"error %s: file '%s' has %d component, cannot split\n",
+			progname, fname, mirror_count);
+		goto free_layout;
+	}
+
+	rc = llapi_layout_comp_iterate(layout, verify_id, &mirror_id);
+	if (rc < 0) {
+		fprintf(stderr, "error %s: failed to iterate layout of '%s'\n",
+			progname, fname);
+		goto free_layout;
+	} else if (rc == LLAPI_LAYOUT_ITER_CONT) {
+		fprintf(stderr,
+		     "error %s: file '%s' does not contain mirror with id %u\n",
+			progname, fname, mirror_id);
+		goto free_layout;
+	}
+
+	fd = open(fname, O_RDWR);
+	if (fd < 0) {
+		fprintf(stderr,
+			"error %s: open file '%s' failed: %s\n",
+			progname, fname, strerror(errno));
+		goto free_layout;
+	}
+
+	/* get victim file directory pathname */
+	if (strlen(fname) > sizeof(parent) - 1) {
+		fprintf(stderr, "error %s: file name of '%s' too long\n",
+			progname, fname);
+		rc = -ERANGE;
+		goto free_layout;
+	}
+	strncpy(parent, fname, sizeof(parent));
+	ptr = strrchr(parent, '/');
+	if (ptr == NULL) {
+		if (getcwd(parent, sizeof(parent)) == NULL) {
+			fprintf(stderr, "error %s: getcwd failed: %s\n",
+				progname, strerror(errno));
+			rc = -errno;
+			goto free_layout;
+		}
+	} else {
+		if (ptr == parent)
+			ptr = parent + 1;
+		*ptr = '\0';
+	}
+
+	rc = llapi_file_fget_mdtidx(fd, &mdt_index);
+	if (rc < 0) {
+		fprintf(stderr, "%s: cannot get MDT index of '%s'\n",
+			progname, fname);
+		goto free_layout;
+	}
+
+	if (victim_file == NULL) {
+		/* use a temp file to store the splitted layout */
+		if (mflags & MF_DESTROY) {
+			fdv = llapi_create_volatile_idx(parent, mdt_index,
+							O_LOV_DELAY_CREATE);
+		} else {
+			snprintf(victim, sizeof(victim), "%s.mirror~%u",
+				 fname, mirror_id);
+			fdv = open(victim, flags, S_IRUSR | S_IWUSR);
+		}
+	} else {
+		/* user specified victim file */
+		fdv = open(victim_file, flags, S_IRUSR | S_IWUSR);
+	}
+
+	if (fdv < 0) {
+		fprintf(stderr,
+			"error %s: create victim file failed: %s\n",
+			progname, strerror(errno));
+		goto close_fd;
+	}
+
+	/* get lease lock of fname */
+	rc = llapi_lease_acquire(fd, LL_LEASE_WRLCK);
+	if (rc < 0) {
+		fprintf(stderr,
+			"error %s: cannot get lease of file '%s': %d\n",
+			progname, fname, rc);
+		goto close_victim;
+	}
+
+	/* Atomatically put lease, split layouts and close. */
+	data = malloc(offsetof(typeof(*data), lil_ids[2]));
+	if (!data) {
+		rc = -ENOMEM;
+		goto close_victim;
+	}
+
+	data->lil_mode = LL_LEASE_UNLCK;
+	data->lil_flags = LL_LEASE_LAYOUT_SPLIT;
+	data->lil_count = 2;
+	data->lil_ids[0] = fdv;
+	data->lil_ids[1] = mirror_id;
+	rc = llapi_lease_set(fd, data);
+	if (rc <= 0) {
+		if (rc == 0) /* lost lease lock */
+			rc = -EBUSY;
+		fprintf(stderr,
+			"error %s: cannot split '%s': %s\n",
+			progname, fname, strerror(-rc));
+	} else {
+		rc = 0;
+	}
+	free(data);
+
+close_victim:
+	close(fdv);
+close_fd:
+	close(fd);
+free_layout:
+	llapi_layout_free(layout);
 	return rc;
 }
 
@@ -2074,10 +2261,12 @@ enum {
 	LFS_COMP_NO_VERIFY_OPT,
 	LFS_PROJID_OPT,
 	LFS_MIRROR_FLAGS_OPT,
+	LFS_MIRROR_ID_OPT,
 };
 
 /* functions */
-static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
+static int lfs_setstripe_internal(int argc, char **argv,
+				  enum setstripe_origin opc)
 {
 	struct lfs_setstripe_args	 lsa;
 	struct llapi_stripe_param	*param = NULL;
@@ -2109,6 +2298,7 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 	struct mirror_args		*mirror_list = NULL;
 	struct mirror_args		*new_mirror = NULL;
 	struct mirror_args		*last_mirror = NULL;
+	__u16				 mirror_id = 0;
 	char				 cmd[PATH_MAX];
 
 	struct option long_opts[] = {
@@ -2139,10 +2329,13 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 			.name = "no-verify",	.has_arg = no_argument},
 	{ .val = LFS_MIRROR_FLAGS_OPT,
 			.name = "flags",	.has_arg = required_argument},
+	{ .val = LFS_MIRROR_ID_OPT,
+			.name = "mirror-id",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument},
 /* find	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument }*/
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
+	{ .val = 'd',	.name = "destroy",	.has_arg = no_argument},
 	{ .val = 'E',	.name = "comp-end",	.has_arg = required_argument},
 	{ .val = 'E',	.name = "component-end",
 						.has_arg = required_argument},
@@ -2234,7 +2427,16 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 			setstripe_args_init(&lsa);
 			break;
 		case LFS_COMP_NO_VERIFY_OPT:
-			mirror_flags |= NO_VERIFY;
+			mirror_flags |= MF_NO_VERIFY;
+			break;
+		case LFS_MIRROR_ID_OPT:
+			mirror_id = strtoul(optarg, &end, 0);
+			if (*end != '\0' || mirror_id == 0) {
+				fprintf(stderr,
+					"%s %s: invalid mirror ID '%s'\n",
+					progname, argv[0], optarg);
+				goto usage_error;
+			}
 			break;
 		case LFS_MIRROR_FLAGS_OPT: {
 			__u32 flags;
@@ -2289,6 +2491,15 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 		case 'd':
 			/* delete the default striping pattern */
 			delete = 1;
+			if (opc == SO_MIRROR_SPLIT) {
+				if (has_m_file) {
+					fprintf(stderr,
+					      "%s %s: -d cannot used with -f\n",
+						progname, argv[0]);
+					goto usage_error;
+				}
+				mirror_flags |= MF_DESTROY;
+			}
 			break;
 		case 'E':
 			if (lsa.lsa_comp_end != 0) {
@@ -2339,21 +2550,27 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 			}
 			break;
 		case 'f':
-			if (opc != SO_MIRROR_EXTEND) {
+			if (opc != SO_MIRROR_EXTEND && opc != SO_MIRROR_SPLIT) {
 				fprintf(stderr,
 					"error: %s: invalid option: %s\n",
 					progname, argv[optopt + 1]);
 				goto usage_error;
 			}
-			if (last_mirror == NULL) {
-				fprintf(stderr, "error: %s: '-N' must exist "
-					"in front of '%s'\n",
-					progname, argv[optopt + 1]);
-				goto usage_error;
+			if (opc == SO_MIRROR_EXTEND) {
+				if (last_mirror == NULL) {
+					fprintf(stderr,
+				"error: %s: '-N' must exist in front of '%s'\n",
+						progname, argv[optopt + 1]);
+					goto usage_error;
+				}
+				last_mirror->m_file = optarg;
+				last_mirror->m_count = 1;
+			} else {
+				/* mirror split */
+				if (mirror_list == NULL)
+					mirror_list = lfs_mirror_alloc();
+				mirror_list->m_file = optarg;
 			}
-
-			last_mirror->m_file = optarg;
-			last_mirror->m_count = 1;
 			has_m_file = true;
 			break;
 		case 'L':
@@ -2518,7 +2735,7 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 			goto error;
 	}
 
-	if (mirror_flags & NO_VERIFY) {
+	if (mirror_flags & MF_NO_VERIFY) {
 		if (opc != SO_MIRROR_EXTEND) {
 			fprintf(stderr,
 				"error: %s: --no-verify is valid only for lfs mirror extend command\n",
@@ -2704,6 +2921,16 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 		} else if (opc == SO_MIRROR_EXTEND) {
 			result = mirror_extend(fname, mirror_list,
 					       mirror_flags);
+		} else if (opc == SO_MIRROR_SPLIT) {
+			if (mirror_id == 0) {
+				fprintf(stderr,
+					"%s %s: no mirror id is specified\n",
+					progname, argv[0]);
+				goto usage_error;
+			}
+			result = mirror_split(fname, mirror_id, mirror_flags,
+					      has_m_file ? mirror_list->m_file :
+					      NULL);
 		} else if (layout != NULL) {
 			result = lfs_component_create(fname, O_CREAT | O_WRONLY,
 						      0644, layout);
@@ -6913,7 +7140,6 @@ static inline
 int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			   __u16 *mirror_ids, int ids_nr)
 {
-	const char *progname = "lfs mirror resync";
 	struct llapi_resync_comp comp_array[1024] = { { 0 } };
 	struct llapi_layout *layout;
 	struct stat stbuf;
@@ -6948,8 +7174,9 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 	ioc->lil_flags = LL_LEASE_RESYNC;
 	rc = llapi_lease_set(fd, ioc);
 	if (rc < 0) {
-		fprintf(stderr, "%s: '%s' llapi_lease_set resync failed: "
-			"%s.\n", progname, fname, strerror(errno));
+		fprintf(stderr,
+			"%s: '%s' llapi_lease_set resync failed: %s.\n",
+			progname, fname, strerror(errno));
 		goto close_fd;
 	}
 
@@ -7108,8 +7335,9 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 	}
 
 	if (ids_nr > 0 && argc > optind + 1) {
-		fprintf(stderr, "%s: option '--only' cannot be used upon "
-			"multiple files.\n", argv[0]);
+		fprintf(stderr,
+		    "%s: option '--only' cannot be used upon multiple files.\n",
+			argv[0]);
 		rc = CMD_HELP;
 		goto error;
 
@@ -7133,9 +7361,6 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 	for (; optind < argc; optind++) {
 		rc = lfs_mirror_resync_file(argv[optind], ioc,
 					    mirror_ids, ids_nr);
-		if (rc)
-			fprintf(stderr, "%s: resync file '%s' failed: %d\n",
-				argv[0], argv[optind], rc);
 		/* ignore previous file's error, continue with next file */
 
 		/* reset ioc */

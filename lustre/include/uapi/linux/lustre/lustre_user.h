@@ -336,6 +336,7 @@ enum ll_lease_flags {
 	LL_LEASE_RESYNC		= 0x1,
 	LL_LEASE_RESYNC_DONE	= 0x2,
 	LL_LEASE_LAYOUT_MERGE	= 0x4,
+	LL_LEASE_LAYOUT_SPLIT	= 0x8,
 };
 
 #define IOC_IDS_MAX	4096
@@ -886,7 +887,7 @@ struct identity_downcall_data {
 #endif /* !__KERNEL__ */
 
 /* lustre volatile file support
- * file name header: .^L^S^T^R:volatile"
+ * file name header: ".^L^S^T^R:volatile"
  */
 #define LUSTRE_VOLATILE_HDR	".\x0c\x13\x14\x12:VOLATILE"
 #define LUSTRE_VOLATILE_HDR_LEN	14

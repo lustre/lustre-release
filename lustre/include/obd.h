@@ -863,6 +863,7 @@ struct md_op_data {
 	/* Used by readdir */
 	unsigned int		op_max_pages;
 
+	__u16			op_mirror_id;
 };
 
 struct md_callback {

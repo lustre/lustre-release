@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <limits.h>
+#include <assert.h>
 #include <sys/xattr.h>
 #include <sys/param.h>
 
@@ -2231,7 +2232,13 @@ bool llapi_layout_is_composite(struct llapi_layout *layout)
 /**
  * Iterate every components in the @layout and call callback function @cb.
  *
- * \param[in]
+ * \param[in] layout	component layout list.
+ * \param[in] cb	callback for each component
+ * \param[in] cbdata	callback data
+ *
+ * \retval < 0				error happens during the iteration
+ * \retval LLAPI_LAYOUT_ITER_CONT	finished the iteration w/o error
+ * \retval LLAPI_LAYOUT_ITER_STOP	got something, stop the iteration
  */
 int llapi_layout_comp_iterate(struct llapi_layout *layout,
 			      llapi_layout_iter_cb cb, void *cbdata)
@@ -2242,7 +2249,13 @@ int llapi_layout_comp_iterate(struct llapi_layout *layout,
 	if (rc < 0)
 		return rc;
 
-	while (rc == 0) {
+	/**
+	 * make sure on success llapi_layout_comp_use() API returns 0 with
+	 * USE_FIRST.
+	 */
+	assert(rc == 0);
+
+	while (1) {
 		rc = cb(layout, cbdata);
 		if (rc != LLAPI_LAYOUT_ITER_CONT)
 			break;
@@ -2250,9 +2263,11 @@ int llapi_layout_comp_iterate(struct llapi_layout *layout,
 		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
 		if (rc < 0)
 			return rc;
+		else if (rc == 1)	/* reached the last comp */
+			return LLAPI_LAYOUT_ITER_CONT;
 	}
 
-	return rc >= 0 ? LLAPI_LAYOUT_ITER_CONT : rc;
+	return rc;
 }
 
 /**

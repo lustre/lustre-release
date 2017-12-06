@@ -2220,6 +2220,37 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct ll_fid *)0)->f_type) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct ll_fid *)0)->f_type));
 
+	LASSERTF(MDS_CHECK_SPLIT == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_CHECK_SPLIT);
+	LASSERTF(MDS_CROSS_REF == 0x00000002UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_CROSS_REF);
+	LASSERTF(MDS_VTX_BYPASS == 0x00000004UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_VTX_BYPASS);
+	LASSERTF(MDS_PERM_BYPASS == 0x00000008UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_PERM_BYPASS);
+	LASSERTF(MDS_QUOTA_IGNORE == 0x00000020UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_QUOTA_IGNORE);
+	LASSERTF(MDS_KEEP_ORPHAN == 0x00000080UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_KEEP_ORPHAN);
+	LASSERTF(MDS_RECOV_OPEN == 0x00000100UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_RECOV_OPEN);
+	LASSERTF(MDS_DATA_MODIFIED == 0x00000200UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_DATA_MODIFIED);
+	LASSERTF(MDS_CREATE_VOLATILE == 0x00000400UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_CREATE_VOLATILE);
+	LASSERTF(MDS_OWNEROVERRIDE == 0x00000800UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_OWNEROVERRIDE);
+	LASSERTF(MDS_HSM_RELEASE == 0x00001000UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_HSM_RELEASE);
+	LASSERTF(MDS_CLOSE_LAYOUT_SWAP == 0x00004000UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_CLOSE_LAYOUT_SWAP);
+	LASSERTF(MDS_CLOSE_LAYOUT_MERGE == 0x00008000UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_CLOSE_LAYOUT_MERGE);
+	LASSERTF(MDS_CLOSE_RESYNC_DONE == 0x00010000UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_CLOSE_RESYNC_DONE);
+	LASSERTF(MDS_CLOSE_LAYOUT_SPLIT == 0x00020000UL, "found 0x%.8xUL\n",
+		(unsigned)MDS_CLOSE_LAYOUT_SPLIT);
+
 	/* Checks for struct mdt_body */
 	LASSERTF((int)sizeof(struct mdt_body) == 216, "found %lld\n",
 		 (long long)(int)sizeof(struct mdt_body));

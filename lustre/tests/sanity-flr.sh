@@ -1517,6 +1517,67 @@ test_42() {
 }
 run_test 42 "lfs mirror verify"
 
+test_44() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	rm -rf $DIR/$tdir
+	rm -rf $DIR/$tdir-1
+	local tf=$DIR/$tdir/$tfile
+	local tf1=$DIR/$tdir-1/$tfile-1
+
+	$LFS setdirstripe -i 0 -c 1 $DIR/$tdir ||
+		error "create directory failed"
+	$LFS setdirstripe -i 1 -c 1 $DIR/$tdir-1 ||
+		error "create remote directory failed"
+	rm -f $tf $tf1 $tf.mirror~2
+	# create file with 4 mirrors
+	$LFS mirror create -N -E2m -E4m -E-1 -N -E1m -E2m -E3m -E-1 -N2 $tf ||
+		error "create PFLR file $tf failed"
+
+	# file should be in ro status
+	verify_flr_state $tf "ro"
+
+	# write data in [0, 3M)
+	dd if=/dev/urandom of=$tf bs=1M count=3 conv=notrunc ||
+		error "writing $tf failed"
+
+	verify_flr_state $tf "wp"
+
+	# synchronize all mirrors of the file
+	$LFS mirror resync $tf || error "mirror resync $tf failed"
+
+	verify_flr_state $tf "ro"
+
+	# split mirror 1
+	$LFS mirror split --mirror-id 1 -f $tf1 $tf ||
+		error "split to $tf1 failed"
+
+	local idx0=$($LFS getstripe -m $tf)
+	local idx1=$($LFS getstripe -m $tf1)
+
+	[[ x$idx0 == x0 ]] || error "$tf is not on MDT0"
+	[[ x$idx1 == x1 ]] || error "$tf1 is not on MDT1"
+
+	# verify mirror count
+	verify_mirror_count $tf 3
+	verify_mirror_count $tf1 1
+
+	$LFS mirror split --mirror-id 2 $tf ||
+		error "split mirror 2 failed"
+
+	verify_mirror_count $tf 2
+	verify_mirror_count $tf.mirror~2 1
+
+	$LFS mirror split --mirror-id 3 -d $tf ||
+		error "split and delte mirror 3 failed"
+	verify_mirror_count $tf 1
+
+	# verify splitted file contains the same content as the orig file does
+	diff $tf $tf1 || error "splited file $tf1 diffs from $tf"
+	diff $tf $tf.mirror~2 ||
+		error "splited file $tf.mirror~2 diffs from $tf"
+}
+run_test 44 "lfs mirror split check"
+
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)
 

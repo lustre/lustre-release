@@ -1843,10 +1843,12 @@ enum mds_op_bias {
 	MDS_CLOSE_LAYOUT_SWAP	= 1 << 14,
 	MDS_CLOSE_LAYOUT_MERGE	= 1 << 15,
 	MDS_CLOSE_RESYNC_DONE	= 1 << 16,
+	MDS_CLOSE_LAYOUT_SPLIT	= 1 << 17,
 };
 
-#define MDS_CLOSE_INTENT (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP |	\
-			  MDS_CLOSE_LAYOUT_MERGE | MDS_CLOSE_RESYNC_DONE)
+#define MDS_CLOSE_INTENT (MDS_HSM_RELEASE | MDS_CLOSE_LAYOUT_SWAP |         \
+			  MDS_CLOSE_LAYOUT_MERGE | MDS_CLOSE_LAYOUT_SPLIT | \
+			  MDS_CLOSE_RESYNC_DONE)
 
 /* instance of mdt_reint_rec */
 struct mdt_rec_create {
@@ -3402,6 +3404,8 @@ struct close_data {
 	union {
 		__u64				cd_reserved[8];
 		struct close_data_resync_done	cd_resync;
+		/* split close */
+		__u16				cd_mirror_id;
 	};
 };
 

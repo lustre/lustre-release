@@ -2571,7 +2571,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 			llapi_printf(LLAPI_MSG_NORMAL, "%s",
 				     layout2name(lum->lmm_pattern));
 		else
-			llapi_printf(LLAPI_MSG_NORMAL, "%.x", lum->lmm_pattern);
+			llapi_printf(LLAPI_MSG_NORMAL, "%x", lum->lmm_pattern);
 		separator = is_dir ? " " : "\n";
 	}
 
@@ -2922,6 +2922,19 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 				     "%4slcme_id:             ", " ");
 		if (entry->lcme_id != LCME_ID_INVAL)
 			llapi_printf(LLAPI_MSG_NORMAL, "%u", entry->lcme_id);
+		else
+			llapi_printf(LLAPI_MSG_NORMAL, "N/A");
+		separator = "\n";
+	}
+
+	if (verbose & VERBOSE_MIRROR_ID) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
+		if (verbose & ~VERBOSE_MIRROR_ID)
+			llapi_printf(LLAPI_MSG_NORMAL,
+				     "%4slcme_mirror_id:      ", " ");
+		if (entry->lcme_id != LCME_ID_INVAL)
+			llapi_printf(LLAPI_MSG_NORMAL, "%u",
+				     mirror_id_of(entry->lcme_id));
 		else
 			llapi_printf(LLAPI_MSG_NORMAL, "N/A");
 		separator = "\n";

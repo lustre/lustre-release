@@ -2931,6 +2931,31 @@ out:
 }
 
 /**
+ * Split layouts, just set the LOVEA with the layout from mbuf.
+ */
+static int lod_declare_layout_split(const struct lu_env *env,
+		struct dt_object *dt, const struct lu_buf *mbuf,
+		struct thandle *th)
+{
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct lov_comp_md_v1 *lcm = mbuf->lb_buf;
+	int rc;
+	ENTRY;
+
+	lod_obj_inc_layout_gen(lo);
+	lcm->lcm_layout_gen = cpu_to_le32(lo->ldo_layout_gen);
+
+	lod_object_free_striping(env, lo);
+	rc = lod_parse_striping(env, lo, mbuf);
+	if (rc)
+		RETURN(rc);
+
+	rc = lod_sub_declare_xattr_set(env, dt_object_child(dt), mbuf,
+				       XATTR_NAME_LOV, LU_XATTR_REPLACE, th);
+	RETURN(rc);
+}
+
+/**
  * Implementation of dt_object_operations::do_declare_xattr_set.
  *
  * \see dt_object_operations::do_declare_xattr_set() in the API description
@@ -2954,7 +2979,7 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 
 	mode = dt->do_lu.lo_header->loh_attr & S_IFMT;
 	if ((S_ISREG(mode) || mode == 0) &&
-	    !(fl & (LU_XATTR_REPLACE | LU_XATTR_MERGE)) &&
+	    !(fl & (LU_XATTR_REPLACE | LU_XATTR_MERGE | LU_XATTR_SPLIT)) &&
 	    (strcmp(name, XATTR_NAME_LOV) == 0 ||
 	     strcmp(name, XATTR_LUSTRE_LOV) == 0)) {
 		/*
@@ -2980,6 +3005,10 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 		LASSERT(strcmp(name, XATTR_NAME_LOV) == 0 ||
 			strcmp(name, XATTR_LUSTRE_LOV) == 0);
 		rc = lod_declare_layout_merge(env, dt, buf, th);
+	} else if (fl & LU_XATTR_SPLIT) {
+		LASSERT(strcmp(name, XATTR_NAME_LOV) == 0 ||
+			strcmp(name, XATTR_LUSTRE_LOV) == 0);
+		rc = lod_declare_layout_split(env, dt, buf, th);
 	} else if (S_ISREG(mode) &&
 		   strlen(name) > strlen(XATTR_LUSTRE_LOV) + 1 &&
 		   strncmp(name, XATTR_LUSTRE_LOV,

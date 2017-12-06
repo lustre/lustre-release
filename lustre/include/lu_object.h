@@ -909,6 +909,7 @@ enum lu_xattr_flags {
 	LU_XATTR_REPLACE = (1 << 0),
 	LU_XATTR_CREATE  = (1 << 1),
 	LU_XATTR_MERGE   = (1 << 2),
+	LU_XATTR_SPLIT   = (1 << 3),
 };
 
 /** @} helpers */

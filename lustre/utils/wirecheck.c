@@ -1006,6 +1006,27 @@ check_ll_fid(void)
 }
 
 static void
+check_mds_op_bias(void)
+{
+	BLANK_LINE();
+	CHECK_VALUE_X(MDS_CHECK_SPLIT);
+	CHECK_VALUE_X(MDS_CROSS_REF);
+	CHECK_VALUE_X(MDS_VTX_BYPASS);
+	CHECK_VALUE_X(MDS_PERM_BYPASS);
+	CHECK_VALUE_X(MDS_QUOTA_IGNORE);
+	CHECK_VALUE_X(MDS_KEEP_ORPHAN);
+	CHECK_VALUE_X(MDS_RECOV_OPEN);
+	CHECK_VALUE_X(MDS_DATA_MODIFIED);
+	CHECK_VALUE_X(MDS_CREATE_VOLATILE);
+	CHECK_VALUE_X(MDS_OWNEROVERRIDE);
+	CHECK_VALUE_X(MDS_HSM_RELEASE);
+	CHECK_VALUE_X(MDS_CLOSE_LAYOUT_SWAP);
+	CHECK_VALUE_X(MDS_CLOSE_LAYOUT_MERGE);
+	CHECK_VALUE_X(MDS_CLOSE_RESYNC_DONE);
+	CHECK_VALUE_X(MDS_CLOSE_LAYOUT_SPLIT);
+}
+
+static void
 check_mdt_body(void)
 {
 	BLANK_LINE();
@@ -2743,6 +2764,7 @@ main(int argc, char **argv)
 	check_niobuf_remote();
 	check_ost_body();
 	check_ll_fid();
+	check_mds_op_bias();
 	check_mdt_body();
 	check_mdt_ioepoch();
 	check_mdt_rec_setattr();
