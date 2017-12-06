@@ -378,7 +378,7 @@ static bool qsd_job_pending(struct qsd_instance *qsd, struct list_head *upd,
 		struct lquota_entry *lqe;
 		lqe = list_entry(qsd->qsd_adjust_list.next,
 				     struct lquota_entry, lqe_link);
-		if (ktime_get_seconds() > lqe->lqe_adjust_time)
+		if (ktime_get_seconds() >= lqe->lqe_adjust_time)
 			job_pending = true;
 	}
 	spin_unlock(&qsd->qsd_adjust_lock);
