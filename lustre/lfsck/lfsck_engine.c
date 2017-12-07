@@ -1060,6 +1060,11 @@ int lfsck_master_engine(void *args)
 	       current_pid());
 
 	spin_lock(&lfsck->li_lock);
+	if (unlikely(!thread_is_starting(thread))) {
+		spin_unlock(&lfsck->li_lock);
+		GOTO(fini_oit, rc = 0);
+	}
+
 	thread_set_flags(thread, SVC_RUNNING);
 	spin_unlock(&lfsck->li_lock);
 	wake_up_all(&thread->t_ctl_waitq);
