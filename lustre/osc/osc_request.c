@@ -1093,7 +1093,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
         struct ost_body         *body;
         struct obd_ioobj        *ioobj;
         struct niobuf_remote    *niobuf;
-	int niocount, i, requested_nob, opc, rc, short_io_size;
+	int niocount, i, requested_nob, opc, rc, short_io_size = 0;
         struct osc_brw_async_args *aa;
         struct req_capsule      *pill;
         struct brw_page *pg_prev;

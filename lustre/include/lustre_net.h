@@ -2071,11 +2071,12 @@ static inline int ptlrpc_client_bulk_active(struct ptlrpc_request *req)
 	LASSERT(req != NULL);
 	desc = req->rq_bulk;
 
+	if (!desc)
+		return 0;
+
 	if (req->rq_bulk_deadline > ktime_get_real_seconds())
 		return 1;
 
-	if (!desc)
-		return 0;
 
 	spin_lock(&desc->bd_lock);
 	rc = desc->bd_md_count;
