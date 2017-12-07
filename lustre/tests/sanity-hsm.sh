@@ -388,6 +388,9 @@ copytool_remove_backend() {
 }
 
 import_file() {
+	mkdir -p "$(dirname "$2")" ||
+		error "cannot create directory '$(dirname "$2")'"
+
 	do_facet $SINGLEAGT \
 		"$HSMTOOL --archive $HSM_ARCHIVE_NUMBER --hsm-root $HSM_ARCHIVE\
 		--import $1 $2 $MOUNT" ||
@@ -416,26 +419,24 @@ create_file() {
 	local bs=$2
 	local count=$3
 	local conv=$4
-	local if=${5:-/dev/zero}
-	local facet=$SINGLEAGT
+	local source=${5:-/dev/zero}
+	local args=""
+	local err
 
-	local cmd
-	printf -v cmd 'do_facet "%s" dd if="%s" of="%s" count=%s bs=%s' \
-		"$facet" "$if" "$file" "$count" "$bs"
-	[ -n "$conv" ] && cmd+=" conv=$conv"
+	if [ -n "$conv" ]; then
+		args+=" conv=$conv"
+	fi
 
 	# Create the directory in case it does not exist
-	do_facet "$facet" mkdir -p "$(dirname "$file")"
+	mkdir -p "$(dirname "$file")"
 	# Delete the file in case it already exist
-	do_facet "$facet" rm -f "$file"
+	rm -f "$file"
 
-	if eval "$cmd"; then
-		# print the FID if the file is not an archive
-		[[ "$file" =~ ^$HSM_ARCHIVE ]] || path2fid "$file" ||
-			error "cannot get fid on '$file'"
+	if dd if="$source" of="$file" count="$count" bs="$bs" $args; then
+		path2fid "$file" || error "cannot get FID of '$file'"
 	else
-		local err=$?
-		printf "$cmd failed with $err\n" >&2;
+		err=$?
+		echo "cannot create file '$file'" >&2;
 		# Let the caller decide what to do on error
 		return $err;
 	fi
@@ -461,15 +462,16 @@ create_small_sync_file() {
 }
 
 create_archive_file() {
-	local if=/dev/urandom
+	local file="$HSM_ARCHIVE/$1"
 	local count=${2:-39}
-	local bs=1M
-	local facet=$SINGLEAGT
+	local source=/dev/urandom
 
 	# Create the counterpart directory of the archive
-	do_facet "$facet" mkdir -p "$DIR2/$(dirname "$1")"
-	create_file "${HSM_ARCHIVE}/$1" $bs $count "" $if ||
-		file_creation_failure dd "${HSM_ARCHIVE}/$1" $?
+	do_facet "$SINGLEAGT" mkdir -p "$(dirname "$file")" ||
+		error "cannot create archive directory '$(dirname "$file")'"
+
+	do_facet "$SINGLEAGT" dd if=$source of="$file" bs=1M count=$count ||
+		error "cannot create archive file '$file'"
 }
 
 copy2archive() {
