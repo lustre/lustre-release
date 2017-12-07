@@ -2141,7 +2141,8 @@ static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
  * @param val KUC message (kuc_hdr + hsm_action_list)
  * @param len total length of message
  */
-static int mdc_hsm_copytool_send(size_t len, void *val)
+static int mdc_hsm_copytool_send(const struct obd_uuid *uuid,
+				 size_t len, void *val)
 {
 	struct kuc_hdr		*lh = (struct kuc_hdr *)val;
 	struct hsm_action_list	*hal = (struct hsm_action_list *)(lh + 1);
@@ -2167,7 +2168,7 @@ static int mdc_hsm_copytool_send(size_t len, void *val)
 	       lh->kuc_msglen, hal->hal_count, hal->hal_fsname);
 
 	/* Broadcast to HSM listeners */
-	rc = libcfs_kkuc_group_put(KUC_GRP_HSM, lh);
+	rc = libcfs_kkuc_group_put(uuid, KUC_GRP_HSM, lh);
 
 	RETURN(rc);
 }
@@ -2187,9 +2188,6 @@ static int mdc_hsm_ct_reregister(void *data, void *cb_arg)
 	if (kcd == NULL || kcd->kcd_magic != KKUC_CT_DATA_MAGIC)
 		return -EPROTO;
 
-	if (!obd_uuid_equals(&kcd->kcd_uuid, &imp->imp_obd->obd_uuid))
-		return 0;
-
 	CDEBUG(D_HA, "%s: recover copytool registration to MDT (archive=%#x)\n",
 	       imp->imp_obd->obd_name, kcd->kcd_archive);
 	rc = mdc_ioc_hsm_ct_register(imp, kcd->kcd_archive);
@@ -2205,8 +2203,8 @@ static int mdc_hsm_ct_reregister(void *data, void *cb_arg)
 static int mdc_kuc_reregister(struct obd_import *imp)
 {
 	/* re-register HSM agents */
-	return libcfs_kkuc_group_foreach(KUC_GRP_HSM, mdc_hsm_ct_reregister,
-					 (void *)imp);
+	return libcfs_kkuc_group_foreach(&imp->imp_obd->obd_uuid, KUC_GRP_HSM,
+					 mdc_hsm_ct_reregister, imp);
 }
 
 static int mdc_set_info_async(const struct lu_env *env,
@@ -2253,7 +2251,8 @@ static int mdc_set_info_async(const struct lu_env *env,
                 RETURN(rc);
         }
         if (KEY_IS(KEY_HSM_COPYTOOL_SEND)) {
-                rc = mdc_hsm_copytool_send(vallen, val);
+		rc = mdc_hsm_copytool_send(&imp->imp_obd->obd_uuid, vallen,
+					   val);
                 RETURN(rc);
         }
 
@@ -2554,10 +2553,6 @@ static int mdc_init_ea_size(struct obd_export *exp, __u32 easize,
 static int mdc_precleanup(struct obd_device *obd)
 {
 	ENTRY;
-
-	/* Failsafe, ok if racy */
-	if (obd->obd_type->typ_refcnt <= 1)
-		libcfs_kkuc_group_rem(0, KUC_GRP_HSM);
 
 	mdc_changelog_cdev_finish(obd);
 

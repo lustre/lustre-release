@@ -211,7 +211,6 @@ static int lmv_connect(const struct lu_env *env,
 	exp = class_conn2export(&conn);
 
 	lmv->connected = 0;
-	lmv->cluuid = *cluuid;
 	lmv->conn_data = *data;
 
 	if (lmv->targets_proc_entry == NULL) {
@@ -292,8 +291,6 @@ static int lmv_init_ea_size(struct obd_export *exp, __u32 easize,
 int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 {
         struct lmv_obd          *lmv = &obd->u.lmv;
-        struct obd_uuid         *cluuid = &lmv->cluuid;
-        struct obd_uuid          lmv_mdc_uuid = { "LMV_MDC_UUID" };
         struct obd_device       *mdc_obd;
         struct obd_export       *mdc_exp;
         struct lu_fld_target     target;
@@ -307,18 +304,17 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
                 RETURN(-EINVAL);
         }
 
-        CDEBUG(D_CONFIG, "connect to %s(%s) - %s, %s FOR %s\n",
-                mdc_obd->obd_name, mdc_obd->obd_uuid.uuid,
-                tgt->ltd_uuid.uuid, obd->obd_uuid.uuid,
-                cluuid->uuid);
+	CDEBUG(D_CONFIG, "connect to %s(%s) - %s, %s\n",
+	       mdc_obd->obd_name, mdc_obd->obd_uuid.uuid,
+	       tgt->ltd_uuid.uuid, obd->obd_uuid.uuid);
 
         if (!mdc_obd->obd_set_up) {
                 CERROR("target %s is not set up\n", tgt->ltd_uuid.uuid);
                 RETURN(-EINVAL);
         }
 
-        rc = obd_connect(NULL, &mdc_exp, mdc_obd, &lmv_mdc_uuid,
-                         &lmv->conn_data, NULL);
+	rc = obd_connect(NULL, &mdc_exp, mdc_obd, &obd->obd_uuid,
+			 &lmv->conn_data, NULL);
         if (rc) {
                 CERROR("target %s connect error %d\n", tgt->ltd_uuid.uuid, rc);
                 RETURN(rc);
@@ -531,7 +527,7 @@ static int lmv_check_connect(struct obd_device *obd)
 	}
 
 	CDEBUG(D_CONFIG, "Time to connect %s to %s\n",
-	       lmv->cluuid.uuid, obd->obd_name);
+	       obd->obd_uuid.uuid, obd->obd_name);
 
 	for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
 		tgt = lmv->tgts[i];
@@ -789,10 +785,11 @@ static int lmv_hsm_req_build(struct lmv_obd *lmv,
 	RETURN(0);
 }
 
-static int lmv_hsm_ct_unregister(struct lmv_obd *lmv, unsigned int cmd, int len,
-				 struct lustre_kernelcomm *lk,
+static int lmv_hsm_ct_unregister(struct obd_device *obd, unsigned int cmd,
+				 int len, struct lustre_kernelcomm *lk,
 				 void __user *uarg)
 {
+	struct lmv_obd *lmv = &obd->u.lmv;
 	__u32	i;
 	int	rc;
 	ENTRY;
@@ -812,22 +809,23 @@ static int lmv_hsm_ct_unregister(struct lmv_obd *lmv, unsigned int cmd, int len,
 	 * Unreached coordinators will get EPIPE on next requests
 	 * and will unregister automatically.
 	 */
-	rc = libcfs_kkuc_group_rem(lk->lk_uid, lk->lk_group);
+	rc = libcfs_kkuc_group_rem(&obd->obd_uuid, lk->lk_uid, lk->lk_group);
 
 	RETURN(rc);
 }
 
-static int lmv_hsm_ct_register(struct lmv_obd *lmv, unsigned int cmd, int len,
-			       struct lustre_kernelcomm *lk, __user void *uarg)
+static int lmv_hsm_ct_register(struct obd_device *obd, unsigned int cmd,
+			       int len, struct lustre_kernelcomm *lk,
+			       void __user *uarg)
 {
+	struct lmv_obd *lmv = &obd->u.lmv;
 	struct file		*filp;
 	__u32			 i, j;
 	int			 err;
 	bool			 any_set = false;
 	struct kkuc_ct_data	 kcd = {
 		.kcd_magic   = KKUC_CT_DATA_MAGIC,
-		.kcd_uuid    = lmv->cluuid,
-		.kcd_archive = lk->lk_data
+		.kcd_archive = lk->lk_data,
 	};
 	int			 rc = 0;
 	ENTRY;
@@ -836,8 +834,8 @@ static int lmv_hsm_ct_register(struct lmv_obd *lmv, unsigned int cmd, int len,
 	if (!filp)
 		RETURN(-EBADF);
 
-	rc = libcfs_kkuc_group_add(filp, lk->lk_uid, lk->lk_group,
-				   &kcd, sizeof(kcd));
+	rc = libcfs_kkuc_group_add(filp, &obd->obd_uuid, lk->lk_uid,
+				   lk->lk_group, &kcd, sizeof(kcd));
 	if (rc)
 		GOTO(err_fput, rc);
 
@@ -885,7 +883,7 @@ static int lmv_hsm_ct_register(struct lmv_obd *lmv, unsigned int cmd, int len,
 	RETURN(0);
 
 err_kkuc_rem:
-	libcfs_kkuc_group_rem(lk->lk_uid, lk->lk_group);
+	libcfs_kkuc_group_rem(&obd->obd_uuid, lk->lk_uid, lk->lk_group);
 
 err_fput:
 	fput(filp);
@@ -1119,9 +1117,9 @@ hsm_req_err:
 	case LL_IOC_HSM_CT_START: {
 		struct lustre_kernelcomm *lk = karg;
 		if (lk->lk_flags & LK_FLG_STOP)
-			rc = lmv_hsm_ct_unregister(lmv, cmd, len, lk, uarg);
+			rc = lmv_hsm_ct_unregister(obddev, cmd, len, lk, uarg);
 		else
-			rc = lmv_hsm_ct_register(lmv, cmd, len, lk, uarg);
+			rc = lmv_hsm_ct_register(obddev, cmd, len, lk, uarg);
 		break;
 	}
 	default:
@@ -2556,6 +2554,7 @@ try_next_stripe:
 static int lmv_precleanup(struct obd_device *obd)
 {
 	ENTRY;
+	libcfs_kkuc_group_rem(&obd->obd_uuid, 0, KUC_GRP_HSM);
 	fld_client_proc_fini(&obd->u.lmv.lmv_fld);
 	lprocfs_obd_cleanup(obd);
 	lprocfs_free_md_stats(obd);
