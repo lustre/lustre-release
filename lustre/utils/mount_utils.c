@@ -569,7 +569,7 @@ struct module_backfs_ops *load_backfs_module(enum ldd_mount_type mount_type)
 		dirname = getenv("LUSTRE");
 		if (dirname) {
 			snprintf(filename, sizeof(filename),
-				 "%s/utils/.libs/mount_%s.so",
+				 "%s/utils/mount_%s.so",
 				 dirname, fsname);
 			handle = dlopen(filename, RTLD_LAZY);
 		}
