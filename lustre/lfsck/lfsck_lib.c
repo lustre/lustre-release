@@ -2524,9 +2524,13 @@ int lfsck_start_assistant(const struct lu_env *env, struct lfsck_component *com,
 
 		l_wait_event(mthread->t_ctl_waitq,
 			     thread_is_running(athread) ||
-			     thread_is_stopped(athread),
+			     thread_is_stopped(athread) ||
+			     !thread_is_starting(mthread),
 			     &lwi);
-		if (unlikely(!thread_is_running(athread)))
+		if (unlikely(!thread_is_starting(mthread)))
+			/* stopped by race */
+			rc = -ESRCH;
+		else if (unlikely(!thread_is_running(athread)))
 			rc = lad->lad_assistant_status;
 		else
 			rc = 0;
@@ -3033,7 +3037,8 @@ again:
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(msecs_to_jiffies(MSEC_PER_SEC));
 		set_current_state(TASK_RUNNING);
-		if (!signal_pending(current))
+		if (!signal_pending(current) &&
+		    thread_is_running(&lfsck->li_thread))
 			goto again;
 
 		rc = -EINTR;
@@ -3088,15 +3093,27 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 		GOTO(put, rc = -EINPROGRESS);
 
 	/* start == NULL means auto trigger paused LFSCK. */
-	if ((start == NULL) &&
-	    (list_empty(&lfsck->li_list_scan) ||
-	     OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AUTO)))
-		GOTO(put, rc = 0);
+	if (!start) {
+		if (list_empty(&lfsck->li_list_scan) ||
+		    OBD_FAIL_CHECK(OBD_FAIL_LFSCK_NO_AUTO))
+			GOTO(put, rc = 0);
+	} else if (start->ls_flags & LPF_BROADCAST && !lfsck->li_master) {
+		CERROR("%s: only allow to specify '-A | -o' via MDS\n",
+		       lfsck_lfsck2name(lfsck));
+
+		GOTO(put, rc = -EPERM);
+	}
 
 	bk = &lfsck->li_bookmark_ram;
 	thread = &lfsck->li_thread;
 	mutex_lock(&lfsck->li_mutex);
 	spin_lock(&lfsck->li_lock);
+	if (unlikely(thread_is_stopping(thread))) {
+		/* Someone is stopping the LFSCK. */
+		spin_unlock(&lfsck->li_lock);
+		GOTO(out, rc = -EBUSY);
+	}
+
 	if (!thread_is_init(thread) && !thread_is_stopped(thread)) {
 		rc = -EALREADY;
 		if (unlikely(start == NULL)) {
@@ -3142,13 +3159,6 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 	/* For auto trigger. */
 	if (start == NULL)
 		goto trigger;
-
-	if (start->ls_flags & LPF_BROADCAST && !lfsck->li_master) {
-		CERROR("%s: only allow to specify '-A | -o' via MDS\n",
-		       lfsck_lfsck2name(lfsck));
-
-		GOTO(out, rc = -EPERM);
-	}
 
 	start->ls_version = bk->lb_version;
 
@@ -3272,12 +3282,14 @@ trigger:
 		flags |= DOIF_OUTUSED;
 
 	lfsck->li_args_oit = (flags << DT_OTABLE_IT_FLAGS_SHIFT) | valid;
-	thread_set_flags(thread, 0);
 	lta = lfsck_thread_args_init(lfsck, NULL, lsp);
 	if (IS_ERR(lta))
 		GOTO(out, rc = PTR_ERR(lta));
 
 	__lfsck_set_speed(lfsck, bk->lb_speed_limit);
+	spin_lock(&lfsck->li_lock);
+	thread_set_flags(thread, SVC_STARTING);
+	spin_unlock(&lfsck->li_lock);
 	task = kthread_run(lfsck_master_engine, lta, "lfsck");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
@@ -3350,27 +3362,22 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 		RETURN(-ENXIO);
 
 	thread = &lfsck->li_thread;
-	/* release lfsck::li_mutex to avoid deadlock. */
-	if (stop != NULL && stop->ls_flags & LPF_BROADCAST) {
-		if (!lfsck->li_master) {
-			CERROR("%s: only allow to specify '-A' via MDS\n",
-			       lfsck_lfsck2name(lfsck));
-
-			GOTO(out, rc = -EPERM);
-		}
-
-		rc1 = lfsck_stop_all(env, lfsck, stop);
+	if (stop && stop->ls_flags & LPF_BROADCAST && !lfsck->li_master) {
+		CERROR("%s: only allow to specify '-A' via MDS\n",
+		       lfsck_lfsck2name(lfsck));
+		GOTO(put, rc = -EPERM);
 	}
 
-	mutex_lock(&lfsck->li_mutex);
 	spin_lock(&lfsck->li_lock);
-	/* no error if LFSCK is already stopped, or was never started */
-	if (thread_is_init(thread) || thread_is_stopped(thread)) {
-		spin_unlock(&lfsck->li_lock);
-		GOTO(out, rc = 0);
-	}
+	if (thread_is_init(thread) || thread_is_stopped(thread))
+		/* no error if LFSCK stopped already, or not started */
+		GOTO(unlock, rc = 0);
 
-	if (stop != NULL) {
+	if (thread_is_stopping(thread))
+		/* Someone is stopping LFSCK. */
+		GOTO(unlock, rc = -EINPROGRESS);
+
+	if (stop) {
 		lfsck->li_status = stop->ls_status;
 		lfsck->li_flags = stop->ls_flags;
 	} else {
@@ -3401,17 +3408,22 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 		}
 	}
 
-	spin_unlock(&lfsck->li_lock);
-
 	wake_up_all(&thread->t_ctl_waitq);
+	spin_unlock(&lfsck->li_lock);
+	if (stop && stop->ls_flags & LPF_BROADCAST)
+		rc1 = lfsck_stop_all(env, lfsck, stop);
+
+	/* It was me set the status as 'stopping' just now, if it is not
+	 * 'stopping' now, then either stopped, or re-started by race. */
 	l_wait_event(thread->t_ctl_waitq,
-		     thread_is_stopped(thread),
+		     !thread_is_stopping(thread),
 		     &lwi);
 
-	GOTO(out, rc = 0);
+	GOTO(put, rc = 0);
 
-out:
-	mutex_unlock(&lfsck->li_mutex);
+unlock:
+	spin_unlock(&lfsck->li_lock);
+put:
 	lfsck_instance_put(env, lfsck);
 
 	return rc != 0 ? rc : rc1;
