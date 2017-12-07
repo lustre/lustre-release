@@ -473,6 +473,7 @@ struct lfsck_tgt_desc {
 	__u32		   ltd_layout_gen;
 	__u32		   ltd_namespace_gen;
 	unsigned int	   ltd_dead:1,
+			   ltd_retry_start:1,
 			   ltd_layout_done:1,
 			   ltd_namespace_done:1,
 			   ltd_synced_failures:1;

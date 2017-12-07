@@ -2036,6 +2036,11 @@ int lfsck_async_interpret_common(const struct lu_env *env,
 
 	switch (lr->lr_event) {
 	case LE_START:
+		if (unlikely(rc == -EINPROGRESS)) {
+			ltd->ltd_retry_start = 1;
+			break;
+		}
+
 		if (rc != 0) {
 			CDEBUG(D_LFSCK, "%s: fail to notify %s %x for %s "
 			       "start: rc = %d\n",
@@ -2956,13 +2961,10 @@ static int lfsck_start_all(const struct lu_env *env,
 	struct lfsck_bookmark		  *bk	  = &lfsck->li_bookmark_ram;
 	__u32				   idx;
 	int				   rc	  = 0;
+	bool retry = false;
 	ENTRY;
 
 	LASSERT(start->ls_flags & LPF_BROADCAST);
-
-	set = ptlrpc_prep_set();
-	if (unlikely(set == NULL))
-		RETURN(-ENOMEM);
 
 	memset(lr, 0, sizeof(*lr));
 	lr->lr_event = LE_START;
@@ -2981,12 +2983,23 @@ static int lfsck_start_all(const struct lu_env *env,
 	laia->laia_lr = lr;
 	laia->laia_shared = 1;
 
+again:
+	set = ptlrpc_prep_set();
+	if (unlikely(!set))
+		RETURN(-ENOMEM);
+
 	down_read(&ltds->ltd_rw_sem);
 	cfs_foreach_bit(ltds->ltd_tgts_bitmap, idx) {
 		ltd = lfsck_tgt_get(ltds, idx);
 		LASSERT(ltd != NULL);
 
+		if (retry && !ltd->ltd_retry_start) {
+			lfsck_tgt_put(ltd);
+			continue;
+		}
+
 		laia->laia_ltd = ltd;
+		ltd->ltd_retry_start = 0;
 		ltd->ltd_layout_done = 0;
 		ltd->ltd_namespace_done = 0;
 		ltd->ltd_synced_failures = 0;
@@ -3015,6 +3028,17 @@ static int lfsck_start_all(const struct lu_env *env,
 
 	if (rc == 0)
 		rc = laia->laia_result;
+
+	if (unlikely(rc == -EINPROGRESS)) {
+		retry = true;
+		set_current_state(TASK_INTERRUPTIBLE);
+		schedule_timeout(msecs_to_jiffies(MSEC_PER_SEC));
+		set_current_state(TASK_RUNNING);
+		if (!signal_pending(current))
+			goto again;
+
+		rc = -EINTR;
+	}
 
 	if (rc != 0) {
 		struct lfsck_stop *stop = &info->lti_stop;
@@ -3060,8 +3084,9 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 		RETURN(-ENXIO);
 
 	/* System is not ready, try again later. */
-	if (unlikely(lfsck->li_namespace == NULL))
-		GOTO(put, rc = -EAGAIN);
+	if (unlikely(lfsck->li_namespace == NULL ||
+		     lfsck_dev_site(lfsck)->ss_server_fld == NULL))
+		GOTO(put, rc = -EINPROGRESS);
 
 	/* start == NULL means auto trigger paused LFSCK. */
 	if ((start == NULL) &&
