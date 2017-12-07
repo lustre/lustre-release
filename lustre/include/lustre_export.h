@@ -445,7 +445,6 @@ extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
 #define KKUC_CT_DATA_MAGIC	0x092013cea
 struct kkuc_ct_data {
 	__u32		kcd_magic;
-	struct obd_uuid	kcd_uuid;
 	__u32		kcd_archive;
 };
 

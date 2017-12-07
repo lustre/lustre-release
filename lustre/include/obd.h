@@ -423,7 +423,6 @@ struct lmv_obd {
 	struct lu_client_fld	lmv_fld;
 	spinlock_t		lmv_lock;
 	struct lmv_desc		desc;
-	struct obd_uuid		cluuid;
 	struct proc_dir_entry	*targets_proc_entry;
 
 	struct mutex		lmv_init_mutex;
