@@ -964,7 +964,7 @@ int out_handle(struct tgt_session_info *tsi)
 			if (tmp->oub_size >= OUT_MAXREQSIZE)
 				GOTO(out_free, rc = err_serious(-EPROTO));
 
-			OBD_ALLOC(update_bufs[i], tmp->oub_size);
+			OBD_ALLOC_LARGE(update_bufs[i], tmp->oub_size);
 			if (update_bufs[i] == NULL)
 				GOTO(out_free, rc = err_serious(-ENOMEM));
 
@@ -1162,7 +1162,8 @@ out_free:
 		if (oub != NULL) {
 			for (i = 0; i < update_buf_count; i++, oub++) {
 				if (update_bufs[i] != NULL)
-					OBD_FREE(update_bufs[i], oub->oub_size);
+					OBD_FREE_LARGE(update_bufs[i],
+						       oub->oub_size);
 			}
 		}
 
