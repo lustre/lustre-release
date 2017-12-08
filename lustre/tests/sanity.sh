@@ -10096,6 +10096,7 @@ test_133g() {
 	echo "proc_dirs='$proc_dirs'"
 	[ -n "$proc_dirs" ] || error "no proc_dirs on $HOSTNAME"
 	find $proc_dirs \
+		-ignore_readdir_race \
 		-type f \
 		-not -name force_lbug \
 		-not -name changelog_mask \
@@ -10111,6 +10112,7 @@ test_133g() {
 		echo "${facet}_proc_dirs='$facet_proc_dirs'"
 		[ -z "$facet_proc_dirs" ] && error "no proc_dirs on $facet"
 		do_facet $facet find $facet_proc_dirs \
+			-ignore_readdir_race \
 			-type f \
 			-not -name force_lbug \
 			-not -name changelog_mask \
