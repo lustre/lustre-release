@@ -78,6 +78,7 @@ struct hsm_copytool_private {
 #define CP_PRIV_MAGIC 0x19880429
 struct hsm_copyaction_private {
 	__u32					 magic;
+	__u32					 source_fd;
 	__s32					 data_fd;
 	const struct hsm_copytool_private	*ct_priv;
 	struct hsm_copy				 copy;
@@ -1099,13 +1100,15 @@ int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
 			   int restore_mdt_index, int restore_open_flags,
 			   bool is_error)
 {
-	struct hsm_copyaction_private	*hcp;
-	int				 rc;
+	struct hsm_copyaction_private *hcp;
+	int fd;
+	int rc;
 
 	hcp = calloc(1, sizeof(*hcp));
 	if (hcp == NULL)
 		return -ENOMEM;
 
+	hcp->source_fd = -1;
 	hcp->data_fd = -1;
 	hcp->ct_priv = ct;
 	hcp->copy.hc_hai = *hai;
@@ -1114,7 +1117,16 @@ int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
 	if (is_error)
 		goto ok_out;
 
-	if (hai->hai_action == HSMA_RESTORE) {
+	if (hai->hai_action == HSMA_ARCHIVE) {
+		fd = ct_open_by_fid(hcp->ct_priv, &hai->hai_dfid,
+				O_RDONLY | O_NOATIME | O_NOFOLLOW | O_NONBLOCK);
+		if (fd < 0) {
+			rc = fd;
+			goto err_out;
+		}
+
+		hcp->source_fd = fd;
+	} else if (hai->hai_action == HSMA_RESTORE) {
 		rc = ct_md_getattr(hcp->ct_priv, &hai->hai_fid, &hcp->stat);
 		if (rc < 0)
 			goto err_out;
@@ -1123,12 +1135,11 @@ int llapi_hsm_action_begin(struct hsm_copyaction_private **phcp,
 					     restore_open_flags);
 		if (rc < 0)
 			goto err_out;
-	}
-
-	/* Since remove is atomic there is no need to send an initial
-	 * MDS_HSM_PROGRESS RPC. */
-	if (hai->hai_action == HSMA_REMOVE)
+	} else if (hai->hai_action == HSMA_REMOVE) {
+		/* Since remove is atomic there is no need to send an
+		 * initial MDS_HSM_PROGRESS RPC. */
 		goto out_log;
+	}
 
 	rc = ioctl(ct->mnt_fd, LL_IOC_HSM_COPY_START, &hcp->copy);
 	if (rc < 0) {
@@ -1145,6 +1156,9 @@ ok_out:
 	return 0;
 
 err_out:
+	if (!(hcp->source_fd < 0))
+		close(hcp->source_fd);
+
 	if (!(hcp->data_fd < 0))
 		close(hcp->data_fd);
 
@@ -1226,6 +1240,9 @@ end:
 	llapi_hsm_log_ct_progress(&hcp, hai, CT_FINISH, 0, 0);
 
 err_cleanup:
+	if (!(hcp->source_fd < 0))
+		close(hcp->source_fd);
+
 	if (!(hcp->data_fd < 0))
 		close(hcp->data_fd);
 
@@ -1311,8 +1328,8 @@ int llapi_hsm_action_get_fd(const struct hsm_copyaction_private *hcp)
 		return -EINVAL;
 
 	if (hai->hai_action == HSMA_ARCHIVE) {
-		return ct_open_by_fid(hcp->ct_priv, &hai->hai_dfid,
-				O_RDONLY | O_NOATIME | O_NOFOLLOW | O_NONBLOCK);
+		fd = dup(hcp->source_fd);
+		return fd < 0 ? -errno : fd;
 	} else if (hai->hai_action == HSMA_RESTORE) {
 		fd = dup(hcp->data_fd);
 		return fd < 0 ? -errno : fd;
