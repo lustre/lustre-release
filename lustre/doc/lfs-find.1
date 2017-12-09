@@ -1,0 +1,261 @@
+.TH lfs-find 1 "2018-01-24" Lustre "user utilities"
+.SH NAME
+lfs-find \- Lustre client utility to list files with specific attributes
+.SH SYNOPSIS
+.B lfs find \fR<\fIdirectory\fR|\fIfilename \fR...>
+      [[\fB!\fR] \fB--atime\fR|\fB-A\fR [\fB-+\fR]\fIn\fR]
+[[\fB!\fR] \fB--ctime\fR|\fB-C\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--component-count|\fB--comp-count\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--component-end|\fB--comp-end\fR|\fB-E\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
+      [[\fB!\fR] \fB--component-flags|\fB--comp-flags\fR <[^]\fIflag\fB,\fR...>]
+      [[\fB!\fR] \fB--component-start|\fB--comp-start\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
+      [[\fB!\fR] \fB--gid\fR|\fB-g\fR|\fB--group\fR|\fB-G\fR <\fIgname\fR>|<\fIgid\fR>]
+      [[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
+[\fB--maxdepth\fR|\fB-D\fI n\fR]
+      [[\fB!\fR] \fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR <\fIuuid\fR|\fIindex\fR,...>]
+      [[\fB!\fR] \fB--mdt-count\fR|\fB-T\fR [\fB+-\fR]\fIn\fR]
+[[\fB!\fR] \fB--mdt-hash\fR|\fB-H <\fIhashtype\fR>]
+      [[\fB!\fR] \fB--mtime\fR|\fB-M\fR [\fB-+\fR]\fIn\fR]
+[[\fB!\fR] \fB--name\fR|\fB-n <\fIpattern\fR>]
+      [[\fB!\fR] \fB--ost\fR|\fB-O\fR <\fIuuid\fR|\fIindex\fR,...>]
+[[\fB!\fR] \fB--pool\fR <\fIpool\fR>]
+[\fB--print\fR|\fB-P\fR]
+      [\fB--print0\fR|\fB-0\fR]
+[[\fB!\fR] \fB--projid\fR |<\fIprojid\fR>]
+      [[\fB!\fR] \fB--size|\fB-s\fR [\fB-+\fR]\fIn\fR[\fBKMGTPE\fR]]
+[[\fB!\fR] \fB--stripe-count|\fB-c\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--stripe-index|\fB-i\fR \fIn\fR,...]
+[[\fB!\fR] \fB--stripe-size|\fB-S\fR [\fB+-\fR]\fIn\fR[\fBKMG\fR]]
+      [[\fB!\fR] \fB--type\fR|\fB-t\fR {\fBbcdflps\fR}]
+[[\fB!\fR] \fB--uid\fR|\fB-u\fR|\fB--user\fR|\fB-U
+<\fIuname\fR>|<\fIuid>\fR]
+.SH DESCRIPTION
+.B lfs find
+is similar to the standard
+.BR find (1)
+utility and is used to list files and directories with specific attributes,
+both regular POSIX attributes such as ownership, timestamps, and size using
+the same options as
+.BR find (1),
+as well as Lustre-specific attributes such as stripe count and size,
+OST and MDT location, and composite layout attributes.
+.SH OPTIONS
+.TP
+.BR --atime | -A
+File was last accessed \fIn\fR*24 hours ago.
+.TP
+.BR --ctime | -C
+File's status was last changed \fIn\fR*24 hours ago.
+.TP
+.BR --component-count | --comp-count
+The file has \fIn\fR components in its layout.
+.TP
+.BR --component-end | --comp-end
+The file has component end offset \fIn\fR (in bytes) for any component.
+.TP
+.BR --component-flags | --comp-flags
+The file has components with the specified
+.I flag
+set.  If
+.BI ^ flag
+is used, print only components not matching
+.IR flag .
+Multiple flags can be specified, separated by commas.  Valid flag names are:
+.RS 1.2i
+.TP
+.B init
+Component has been initialized (has allocated OST objects).
+.TP
+.B stale
+Replicated (mirrored) components that do not have up-to-date data.  Stale
+components will not be used for read or write operations, and need to be
+resynched using
+.B lfs mirror resync
+before they can be accessed again.
+.TP
+.B prefer
+Replicated (mirrored) components that are preferred for read or write.
+For example, because they are located on SSD-based OSTs, or are more
+local on the network to clients.
+.TP
+.BR --component-start | --comp-start
+The file has component start offset \fIn\fR (in bytes) for any component.
+.TP
+.BR --gid | -g
+File has specified numeric group ID.
+.TP
+.BR --group | -G
+File belongs to specified group, numeric group ID allowed.
+.TP
+.BR --layout
+File has a layout of the given type, one of:
+.RS 1.2i
+.TP
+.B raid0
+Traditional Lustre RAID-0 striping format.
+.TP
+.B released
+HSM-archived files that are not resident in the filesystem.
+.TP
+.B mdt
+Files that have the first data component on an MDT.
+.RE
+.TP
+.BR --maxdepth
+Limits find to decend at most \fIn\fR levels of directory tree.
+.TP
+.BR --mdt | --mdt-index | -m
+File or directory inode is located on the specified MDT(s).
+.TP
+.BR --mdt-hash | -H
+DNE striped directory uses the given filename hashing function, one of:
+.RS 1.2i
+.TP
+.B fnv_1a_64
+The Fowler\-Noll\-Vo hash function, which is a simple and efficient hash.
+.TP
+.B all_char
+Simple hash function that sums all of the characters in the filename.
+This is mostly for testing, or if it is known that filenames will use
+sequential filenames.
+.RE
+.TP
+.BR --mdt-count | -T
+The DNE striped directory has the given number of MDT shards.
+.TP
+.BR --mtime | -M
+File's data was last modified \fIn\fR*24 hours ago.
+.TP
+.BR --name | -n
+Filename matches the given filename, or regular expression using
+standard
+.BR glob (7)
+file name regular expressions and wildcards.
+.TP
+.BR --ost | -O
+File has an object on the specified OST(s).  The OST names can be specified
+using the whole OST target name, or just the OST index number. If multiple
+OSTs are given in a comma-separated list, the file may have an object on
+any of the given OSTs.  Specifying multiple OSTs allows scanning the
+filesystem only once when migrating objects off the OSTs for evacuation
+and replacement using
+.BR lfs-migrate (1).
+.TP
+.BR --pool
+Layout was created with the specified
+.I pool
+name.  For composite files, this may match the pool of any component.
+.TP
+.BR --print | -P
+Prints the file or directory name to standard output if it matches
+all specified parameters, one file per line with a trailing linefeed.
+This is the default behaviour for any matching files.
+.TP
+.BR --print0 | -0
+Print full file name to standard output if it matches the specified
+parameters, followed by a NUL character.  This is for use together with
+.BR xargs (1)
+with the
+.B -0
+option to handle filenames with embedded spaces or other special characters.
+.TP
+.BR --projid
+File has specified numeric project ID.
+.TP
+.BR --size | -s
+File size is \fIn\fR bytes, or \fBK\fRibi-, \fBM\fRebi-,
+\fBG\fRibi-, \fBT\fRebi-, \fBP\fRebi-, or \fBE\fRbi-bytes if a
+suffix is given.
+.TP
+.BR --stripe-count | -c
+File has \fIn\fR stripes allocated.  For composite files, this
+matches the stripe count of the last initialized component.
+.TP
+.BR --stripe-index | -i
+File has stripe on OST index \fIn\fR.  Multiple OST indices can be
+specified in a comma-separated list, which indicates that the file
+has a stripe on \fIany\fR of the specified OSTs.  This allows a
+single namespace scan for files on multiple different OSTs, if there
+are multiple OSTs that are being replaced.
+.TP
+.BR --stripe-size | -S
+Stripe size is \fIn\fR bytes, or \fBK\fRibi-, \fBM\fRebi-,
+\fBG\fRibi-, \fBT\fRebi-, \fBP\fRebi-, or \fBE\fRbi-abytes if a
+suffix is given.  For composite files, this matches the stripe
+size of the last initialized component.
+.TP
+.BR --type | -t
+File has type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory,
+\fBf\fRile, \fBp\fRipe, sym\fBl\fRink, or \fBs\fRocket.
+.TP
+.BR --uid | -u
+File has specified numeric user ID.
+.TP
+.BR --user | -U
+File owned by specified user, numeric user ID also allowed.
+.SH NOTES
+Specifying \fB!\fR before an option negates its meaning (\fIfiles
+NOT matching the parameter\fR). Using \fB+\fR before a numeric
+value means 'more than \fIn\fR', while \fB-\fR before a numeric value
+means 'less than \fIn\fR'.  If neither is used, it means 'equal to
+\fIn\fR', within the bounds of the unit specified (if any).
+.PP
+Numeric suffixes are in binary SI (power-of-two) units.
+.PP
+For compatibility with
+.BR find (1)
+it is possible to specify long options with either a single or double
+leading dash.
+.PP
+The order of parameters does not affect how the files are matched.
+.B lfs find
+will first scan the directory for any specified filename, and then fetch
+MDT inode attributes for each matching filename.  If it can make a
+positive or negative decision for a file based only on the MDT attributes
+(e.g.  newer than specified time, user/group/project ID) it will not fetch
+the OST object attributes for that file.
+.SH EXAMPLES
+.TP
+.B $ lfs find /mnt/lustre
+Efficiently lists all files in a given directory and its subdirectories,
+without fetching any file attributes.
+.TP
+.B $ lfs find /mnt/lustre -mtime +30 -type f -print
+Recursively list all regular files in given directory more than 30 days old.
+.TP
+.B $ lfs find /mnt/lustre/test -o OST0002,OST0003 -print0 | lfs_migrate -y
+Recursively find all files in
+.B test
+that have objects on OST0002 or OST0003 and migrate them to other OSTs.  See
+.BR lfs_migrate (1)
+for more details.
+.TP
+.B $ lfs find -name "*.mpg" --component-count +3 /mnt/lustre
+Recursively list all files ending with
+.B .mpg
+that have more than 3 components.
+.TP
+.B $ lfs find --component-flags=init,prefer,^stale /mnt/lustre
+Recursively list all files that have at least one component with both 'init'
+and 'prefer' flags set, and doesn't have flag 'stale' set.
+.SH BUGS
+The
+.B lfs find
+command isn't as comprehensive as
+.BR find (1).
+In particular, it doesn't support complex boolean expressions with
+.B -o
+(logical OR), only logical AND of all expressions.  The order that parameters
+are specified does not affect how the files are matched.
+.SH AUTHOR
+The
+.B lfs
+command is part of the Lustre filesystem.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-getstripe (1),
+.BR lfs-getdirstripe (1),
+.BR lfs-migrate (1),
+.BR lfs_migrate (1),
+.BR lustre (7)
+.BR xargs (1)

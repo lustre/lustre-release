@@ -1,0 +1,223 @@
+.TH lfs-getstripe 1 "2018-01-24" Lustre "user utilities"
+.SH NAME
+lfs getstripe \- Lustre client command to print layout parameters of a file
+.SH SYNOPSIS
+.B lfs getstripe
+[\fB--component-count\fR|\fB--comp-count\fR]
+      [\fB--component-end\fR|\fB--comp-end\fR|\fB-E\fR[\fB=\fR[\fB+-\fR]\fIend\fR[\fBKMGTPE\fR]]
+      [\fB--component-flags\fR|\fB--comp-flags\fR[\fB=\fIflags\fR]]
+      [\fB--component-id\fR|\fB--comp-id\fR[=\fIid\fR]|\fB-I\fR[\fIid\fR]]
+      [\fB--component-start\fR[\fB=\fR[\fB+-\fR]\fIstart\fR[\fBKMGTPE\fR]]]
+      [\fB--directory\fR|\fB-d\fR]
+[\fB--fid\fR|\fB-F\fR]
+[\fB--generation\fR|\fB-g\fR]
+      [\fB--layout\fR|\fB-L\fR]
+[\fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR]
+[\fB--ost\fR|\fB-O\fR <\fIuuid\fR>]
+      [\fB--pool\fR|\fB-p\fR]
+[\fB--quiet\fR|\fB-q\fR]
+[\fB--recursive\fR|\fB-r\fR]
+      [\fB--raw\fR|\fB-R\fR]
+[\fB--stripe-count\fR|\fB-c\fR]
+[\fB--stripe-index\fR|\fB-i\fR]
+      [\fB--stripe-size\fR|\fB-S\fR]
+[\fB--verbose\fR|\fB-v\fR]
+[\fB--yaml\fR|\fB-y\fR]
+      <\fIdirname\fR|\fIfilename\fR> ...
+.SH DESCRIPTION
+.B lfs getstripe
+is used to list the layout/striping information for a given filename or
+directory tree.  By default the stripe_count, stripe_size, stripe_offset,
+and allocated OST objects for each file will be shown. If you only want
+specific layout information to be printed, then the
+.BR --stripe-count ,
+.BR --stripe-size ,
+.BR --stripe-index ,
+.BR --layout ,
+.BR --fid ,
+.BR --generation ,
+.BR --component-id ,
+.BR --component-flags ,
+.BR --component-count ,
+.BR --component-start ,
+.BR --component-end ,
+or
+.BR --pool
+options, or equivalent single-character options, can be used without an
+argument to return only the specified field(s).
+.PP
+You can limit the displayed content to one or more specific components of
+a composite file layout by specifying the matching parameter(s) for the
+.BR --component-id ,
+.BR --component-flags ,
+.BR --component-start ,
+and
+.BR --component-end ,
+or their single-character options. For single-character options, the
+argument must follow the option without a space, and for long options an
+.RB ' = '
+sign must be used.
+.br
+The default behavior when a directory is specified is to list the striping
+information for all files within the specified directory (like
+.RB ' "ls -l" ').
+.SH OPTIONS
+.TP
+.BR --component-count | --comp-count
+Print only the number of components in the file's layout.
+.TP
+.BR --component-end | --comp-end [ = [ +- ] \fIend [ KMGTPE ]]| -E [[ +- ] \fIend [ KMGTPE ]]
+Print only the component end offset (in bytes) for the component(s).
+If the component
+.I end
+offset is specified (with optional suffix for SI units), print only the
+attributes of the component(s) with the given end offset.  If
+.BI + end
+or
+.BI - end
+is used, print components with respectively a larger or smaller
+.I end
+offset.
+.TP
+.BR --component-flags | --comp-flags [ = [ ^ ] \fIflag ,...]]
+Print only the component flags.  If
+.I flag
+is specified, print only components matching the specified
+.I flag
+set.  If
+.BI ^ flag
+is used, print only components not matching
+.IR flag .
+Multiple flags may be specified, separated by commas.  Valid flag names are:
+.RS 1.2i
+.TP
+.B init
+Component has been initialized (has allocated OST objects).
+.TP
+.B stale
+Replicated (mirrored) components that do not have up-to-date data.  Stale
+components will not be used for read or write operations, and need to be
+resynched using
+.B lfs mirror resync
+before they can be accessed again.
+.TP
+.B prefer
+Replicated (mirrored) components that are preferred for read or write.
+For example, because they are located on SSD-based OSTs, or are more
+local on the network to clients.
+.RE
+.TP
+.BR --component-id | --comp-id [ =\fIid ]| -I [ \fIid ]
+Print only the component ID number for the component(s).  The file-unique
+component ID is assigned as each component is created, and is not re-used.
+The ID is
+.B not
+necessarily related to the offset of the component within the file, in
+particular since replicated file layouts may have overlapping extents.
+If
+.I id
+is specified, then print only the fields for the matching component.
+.TP
+.BR --component-start | --comp-start [ = [ +- ] \fIstart [ KMGTPE ]]
+Print only the component start offset (in bytes) for the component(s).
+If the component
+.I start
+offset is specified (with optional suffix for SI units), print only the
+attributes of the component(s) with the given starting offset.  If
+.BI + start
+or
+.BI - start
+is used, print components with respectively a larger or smaller
+.I start
+offset.
+.TP
+.BR --directory | -d
+Get striping information for only the specified directory, like
+.RB ' "ls -d" '.
+.TP
+.BR --fid | -F
+Show only the 128-bit unique Lustre File Identifier (FID).
+.TP
+.B --generation | -g
+Print only the layout generation number.
+.TP
+.BR --layout
+Show only the file layout, which is one of:
+.RS 1.2i
+.TP
+.B raid0
+Traditional Lustre RAID-0 striping format.
+.TP
+.B released
+HSM-archived files that are not resident in the filesystem.
+.TP
+.B mdt
+Files that have the first data component on an MDT.
+.RE
+.TP
+.BR --mdt | --mdt-index | -m
+Show the MDT index on which the file or directory inode is located.
+.TP
+.BR --ost | -O
+Print the starting OST index for the file layout.
+.TP
+.BR --pool | -p
+Print only the OST pool name on which the file was created.
+.TP
+.BR --quiet | -q
+Print only allocated objects for each file, not other layout parameters.
+.TP
+.BR --raw | -R
+Print layout information without substituting the filesystem's default values
+for unspecified fields. If the file layout is not set, 0, 0, and -1 will be
+printed for the stripe_count, stripe_size, and stripe_offset respectively.
+.TP
+.BR --recursive | -r
+Recurse into all subdirectories.
+.TP
+.BR --stripe-count | -c
+Print the number of stripes in the file.  For composite files this is
+the stripe count of the last initialized component.
+.TP
+.BR --stripe-index | -i
+Print the starting OST index for the file layout.
+.TP
+.BR --stripe-size | -S
+Print the stripe size in bytes.  For composite files this is the stripe
+size of the last initialized component.
+.TP
+.BR --verbose | -v
+Also print the layout magic, FID sequence, FID object ID, and FID, in
+addition to the normally-printed attributes.
+.TP
+.BR --yaml | -y
+Always print the layout in YAML format, rather than only using this
+format for composite files.
+.br
+.SH EXAMPLES
+.TP
+.B $ lfs getstripe -v /mnt/lustre/file1
+List the detailed object allocation of the given file.
+.TP
+.B $ lfs getstripe -v -I2 /mnt/lustre/file1
+List the detailed information of only component with ID 2 of the given file.
+.TP
+.B $ lfs getstripe --component-flags=^init -I /mnt/lustre/file1
+Print only the component IDs for all the uninitialized components.
+.TP
+.B $ lfs getstripe --component-flags=init,^stale -I /mnt/lustre/file1
+Print only the component(s) that are instantiated but not stale
+.TP
+.B $ lfs getstripe -E-64M /mnt/lustre/file1
+List information of components in a file with extent end less than 64MiB.
+.TP
+.B $ lfs getstripe -I3 --component-start /mnt/lustre/file1
+Print only the component start for the component with ID of 3
+.SH AUTHOR
+The lfs command is part of the Lustre filesystem.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-find (1),
+.BR lfs-getdirstripe (1),
+.BR lfs-setstripe (1),
+.BR lustre (7)

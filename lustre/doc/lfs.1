@@ -1,9 +1,7 @@
-.TH lfs 1 "2017 Jan 12" Lustre "user utilities"
+.TH lfs 1 "2018-01-24" Lustre "user utilities"
 .SH NAME
-lfs \- Lustre utility to create a file with specific striping pattern, find the striping pattern of existing files, do certain quota operations, and manage distributed namespace options for directories
+lfs \- client utility for Lustre-specific file layout and other attributes
 .SH SYNOPSIS
-.br
-.B lfs
 .br
 .B lfs changelog [--follow] <mdtname> [startrec [endrec]]
 .br
@@ -17,59 +15,80 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs fid2path [--link <linkno>] <fsname|rootpath> <fid> ...
 .br
-.B lfs find <directory|filename>
-        \fB[[!] --atime|-A [-+]N] [[!] --mtime|-M [-+]N] [[!] --ctime|-C [+-]N]
-        \fB[--maxdepth|-D N] [[!] --mdt|-m <uuid|index,...>] [--name|-n pattern]
-        \fB[[!] --ost|-O <uuid|index,...>] [--print|-p] [--print0|-P]
-        \fB[[!] --size|-s [-+]N[kMGTPE]]
-        \fB[[!] --stripe-count|-c [+-]<stripes>]
-        \fB[[!] --stripe-index|-i <index,...>]
-        \fB[[!] --stripe-size|-S [+-]N[kMG]]
-        \fB[[!] --layout|-L raid0,released]
-        \fB[[!] --component-count [+-]comp_cnt]
-        \fB[[!] --component-start [+-]N[kMGTPE]]
-        \fB[[!] --component-end|-E [+-]N[kMGTPE]]
-        \fB[[!] --component-flags <comp_flags>]
-        \fB[--type |-t {bcdflpsD}] [[!] --gid|-g|--group|-G <gname>|<gid>]
-        \fB[[!] --uid|-u|--user|-U|--projid <uname>|<uid>|<projid>] [[!] --pool <pool>]\fR
+.B lfs find \fR<\fIdirectory\fR|\fIfilename \fR...>
+      [[\fB!\fR] \fB--atime\fR|\fB-A\fR [\fB-+\fR]\fIn\fR]
+[[\fB!\fR] \fB--ctime\fR|\fB-C\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--mtime\fR|\fB-M\fR [\fB-+\fR]\fIn\fR]
+      [[\fB!\fR] \fB--component-count|\fB--comp-count\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--component-flags|\fB--comp-flags\fR <[\fB^\fR]\fIflag\fB,\fR...>]
+      [[\fB!\fR] \fB--component-end|\fB--comp-end\fR|\fB-E\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
+      [[\fB!\fR] \fB--component-start|\fB--comp-start\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
+      [[\fB!\fR] \fB--gid\fR|\fB-g\fR|\fB--group\fR|\fB-G\fR <\fIgname\fR>|<\fIgid\fR>]
+      [[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
+[\fB--maxdepth\fR|\fB-D\fI n\fR]
+      [[\fB!\fR] \fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR <\fIuuid\fR|\fIindex\fR,...>]
+      [[\fB!\fR] \fB--mdt-count\fR|\fB-T\fR [\fB+-\fR]\fIn\fR]
+[[\fB!\fR] \fB--mdt-hash\fR|\fB-H \fI<hashtype>\fR]
+      [[\fB!\fR] \fB--name\fR|\fB-n \fI<pattern>\fR]
+[[\fB!\fR] \fB--ost\fR|\fB-O\fR <\fIuuid\fR|\fIindex\fR,...>]
+      [[\fB!\fR] \fB--pool\fR <\fIpool\fR>]
+[\fB--print\fR|\fB-P\fR] [\fB--print0\fR|\fB-0\fR]
+      [[\fB!\fR] \fB--projid\fR |<\fIprojid\fR>]
+[[\fB!\fR] \fB--size|\fB-s\fR [\fB-+\fR]\fIn\fR[\fBKMGTPE\fR]]
+      [[\fB!\fR] \fB--stripe-count|\fB-c\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--stripe-index|\fB-i\fR \fIn\fR,...]
+      [[\fB!\fR] \fB--stripe-size|\fB-S\fR [\fB+-\fR]\fIn\fR[\fBKMG\fR]]
+[[\fB!\fR] \fB--type\fR|\fB-t\fR {\fBbcdflps\fR}]
+      [[\fB!\fR] \fB--uid\fR|\fB-u\fR|\fB--user\fR|\fB-U
+<\fIuname\fR>|<\fIuid>\fR]
 .br
 .B lfs getname [-h]|[path ...]
 .br
-.B lfs getstripe [\fB--obd\fR|\fB-O\fR <\fIuuid\fR>] [\fB--quiet\fR|\fB-q\fR]
-        [\fB--verbose\fR|\fB-v\fR] [\fB--stripe-count\fR|\fB-c\fR]
-        [\fB--stripe-index\fR|\fB-i\fR] [\fB--mdt-index\fR|\fB-m\fR]
-        [\fB--fid\fR|\fB-F\fR] [\fB--stripe-size\fR|\fB-S\fR]
-        [\fB--directory\fR|\fB-d\fR] [\fB--layout\fR|\fB-L\fR]
-        [\fB--generation\fR|\fB-g\fR]
-        [\fB--component-id\fR[=\fIcomp_id\fR]|\fB-I\fR[\fIcomp_id\fR]]
-        [\fB--component-flags\fR[=\fIcomp_flags\fR]] [\fB--component-count\fR]
-        [\fB--component-start\fR[=[+-]\fIN\fR[kMGTPE]]]
-        [\fB--component-end\fR[=[+-]\fIN\fR[kMGTPE]]|\fB-E\fR[[+-]\fIN\fR[kMGTPE]]]
-        [\fB--pool\fR|\fB-p\fR] [\fB--recursive\fR|\fB-r\fR] [\fB--raw\fR|\fB-R\fR]
+.B lfs getstripe
+[\fB--component-count\fR|\fB--comp-count\fR]
+        [\fB--component-end\fR[=[\fB+-\fR]\fIN\fR[kMGTPE]]|\fB-E\fR[[+-]\fIN\fR[kMGTPE]]]
+        [\fB--component-flags\fR[=[\fB^\fR]\fIflag\fB,\fR...]]
+        [\fB--component-id\fR[=\fIcomp_id\fR]|\fB-I\fR[<\fIcomp_id\fR>]]
+        [\fB--component-start\fR[=[\fB+-\fR]\fIN\fR[kMGTPE]]]
+        [\fB--directory\fR|\fB-d\fR]
+[\fB--fid\fR|\fB-F\fR]
+[\fB--generation\fR|\fB-g\fR]
+        [\fB--layout\fR|\fB-L\fR]
+[\fB--mdt\fR|\fB--mdt-index\fR|\fB-m\fR]
+[\fB--ost\fR|\fB-O\fR <\fIuuid\fR>]
+        [\fB--pool\fR|\fB-p\fR]
+[\fB--quiet\fR|\fB-q\fR]
+[\fB--recursive\fR|\fB-r\fR]
+        [\fB--raw\fR|\fB-R\fR]
+[\fB--stripe-count\fR|\fB-c\fR]
+[\fB--stripe-index\fR|\fB-i\fR]
+        [\fB--stripe-size\fR|\fB-S\fR]
+[\fB--verbose\fR|\fB-v\fR]
+[\fB--yaml\fR|\fB-y\fR]
         <\fIdirname\fR|\fIfilename\fR> ...
 .br
-.B lfs migrate \fB-m <mdt_index>\fR
+.B lfs migrate { --mdt-index | -m } \fI<mdt_index>\fR
 .IR directory
 .br
 .B lfs migrate [\fB-c | --stripe-count <stripe_count>\fR]
-               [\fB-i | --stripe-index <start_ost_idx>\fR]
-               [\fB-S | --stripe-size <stripe_size>\fR]
-               [\fB-p | --pool <pool_name>\fR]
-               [\fB-o | --ost-list <ost_indices>\fR]
-               [\fB-b | --block\fR]
-               [\fB-n | --non-block\fR]
+            [\fB-i | --stripe-index <start_ost_idx>\fR]
+            [\fB-S | --stripe-size <stripe_size>\fR]
+            [\fB-p | --pool <pool_name>\fR]
+            [\fB-o | --ost-list <ost_indices>\fR]
+            [\fB-b | --block\fR]
+            [\fB-n | --non-block\fR]
 .IR file|directory
 .br
 .B lfs migrate <\fB-E | --component-end comp_end1\fR> [\fBSTRIPE_OPTIONS\fR]
-               <\fB-E | --component-end comp_end2\fR> [\fBSTRIPE_OPTIONS\fR]
-               \fB...\fR
+            <\fB-E | --component-end comp_end2\fR> [\fBSTRIPE_OPTIONS\fR]
+            \fB...\fR
 .IR filename
 .br
 .B lfs mkdir [\fB-c | --count <stripe_count>\fR]
-             [\fB-i | --index <mdt_idx>\fR]
-             [\fB-h | --hash-type <hash_name>\fR]
-             [\fB-m | --mode <mode>\fR]
-             [\fB-D | --default\fR]
+           [\fB-i | --index <mdt_idx>\fR]
+           [\fB-h | --hash-type <hash_name>\fR]
+           [\fB-m | --mode <mode>\fR]
+           [\fB-D | --default\fR]
 .IR directory
 .br
 .B lfs osts
@@ -92,19 +111,20 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs quotaoff [-ug] <filesystem>
 .br
-.B lfs setstripe [--stripe-size|-S stripe_size] [--stripe-count|-c stripe_count]
-        \fB[--stripe-index|-i start_ost_index] [--pool|-p <poolname>]
+.B lfs setstripe [--stripe-size|-S <size>] [--stripe-count|-c <count>]
+        \fB[--stripe-index|-i <start_ost_index>] [--pool|-p <poolname>]
         \fB[--ost-list|-o <ost_indices>] <directory|filename>\fR
 .br
 .B lfs setstripe -d <dir>
 .br
-.B lfs setstripe <--component-end|-E end1> [STRIPE_OPTIONS]
-       \fB<--component-end|-E end2> [STRIPE_OPTIONS] ... <filename>\fR
+.B lfs setstripe --component-end|-E <end1> [STRIPE_OPTIONS]
+     [\fB--component-end|-E <end2> [STRIPE_OPTIONS]] ... <filename>\fR
 .br
-.B lfs setstripe --component-add <--component-end|-E end1> [STRIPE_OPTIONS]
-       \fB<--component-end|-E end2> [STRIPE_OPTIONS] ... <filename>\fR
+.B lfs setstripe --component-add --component-end|-E <end1> [STRIPE_OPTIONS]
+     \fB<--component-end|-E <end2>> [STRIPE_OPTIONS]] ... <filename>\fR
 .br
-.B lfs setstripe --component-del <--component-id|-I id | --component-flags flags> <filename>
+.B lfs setstripe --component-del {--component-id|-I id |
+     \fB--component-flags <flags>} <filename>
 .br
 .B lfs --version
 .br
@@ -117,32 +137,6 @@ can be used to create a new file with a specific striping pattern, determine
 the default striping pattern, gather the extended attributes (object numbers
 and location) for a specific file. It can be invoked interactively without any
 arguments or in a non-interactive mode with one of the arguments supported.
-.TP
-.B Component Flags
-.br
-Component flags can be set by option \fB--component-flags\fR<=\fIflags\fR>.
-
-.br
-The following component flags are supported so far:
-.RS
-.TP
-.B init
-indicates the object(s) of this component has been instantiated.
-.TP
-.B stale
-means the data contained in this component is stale. Data in a stale component
-won't be returned by reading. Used only by FLR.
-.TP
-.B prefer
-is a hint to Lustre that means this components will likely be chosen for read
-and write. Used only by FLR.
-.LP
-The same set of flag can be set in \fBgetstripe\fR to list the component(s)
-that matches the \fIflags\fR, or doesn't match the \fIflags\fR if it has a caret '^'
-in front. It can also be applied to \fBfind\fR so that only the files that have
-the components described by \fBflags\fR will be listed.
-.RE
-.LP
 .SH OPTIONS
 The various options supported by lfs are listed and explained below:
 .TP
@@ -168,20 +162,6 @@ Even without -n, race conditions are possible and data version should be
 checked before and after an operation to be confident the data did not change
 during it.
 .TP
-.B df
-See
-.BR lfs-df (1)
-for details of
-.B lfs df
-usage.
-.TP
-.B find
-To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST or OSTs), \fB--size\fR (file has size in bytes, or \fBk\fRilo-, \fBM\fRega-, \fBG\fRiga-, \fBT\fRera-, \fBP\fReta-, or \fBE\fRxabytes if a suffix is given), \fB--type\fR (file has the type: \fBb\fRlock, \fBc\fRharacter, \fBd\fRirectory, \fBp\fRipe, \fBf\fRile, sym\fBl\fRink, \fBs\fRocket, or \fBD\fRoor (Solaris)), \fB--uid\fR (file has specific numeric user ID), \fB--user\fR (file owned by specific user, numeric user ID allowed), \fB--gid\fR (file has specific group ID), \fB--group\fR (file belongs to specific group, numeric group ID allowed),\fB--projid\fR (file has specific numeric project ID), \fB--layout\fR (file has a raid0 layout or is released). The option \fB--maxdepth\fR limits find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline or NUL character correspondingly.  Using \fB!\fR before an option negates its meaning (\fIfiles NOT matching the parameter\fR).  Using \fB+\fR before a numeric value means 'more than n', while \fB-\fR before a numeric value means 'less than n'.
-
-.br
-\fBlfs find\fR command allows to use component flags to list files that have
-specified \fIflags\fR matched(See \fB Component Flags\fR).
-.TP
 .B getname [-h]|[path ...]
 Report all the Lustre mount points and the corresponding Lustre filesystem
 instance. If one or more \fBpath\fR entries are provided, then only the
@@ -193,79 +173,6 @@ a Lustre instance 'No such device' is reported.
 List all the OSTs for all mounted filesystems. If a \fBpath\fR is provided
 that is located on a lustre mounted file system then only the OSTs belonging
 to that filesystem are displayed.
-.TP
-.B getstripe [\fB--obd\fR|\fB-O\fR <\fIuuid\fR>] [\fB--quiet\fR|\fB-q\fR]
-        [\fB--verbose\fR|\fB-v\fR] [\fB--stripe-count\fR|\fB-c\fR]
-        [\fB--stripe-index\fR|\fB-i\fR] [\fB--mdt-index\fR|\fB-M\fR]
-        [\fB--fid\fR|\fB-F\fR] [\fB--stripe-size\fR|\fB-S\fR]
-        [\fB--directory\fR|\fB-d\fR] [\fB--layout\fR|\fB-L\fR]
-        [\fB--generation\fR|\fB-g\fR]
-        [\fB--component-id\fR[=\fIcomp_id\fR]|\fB-I\fR[\fIcomp_id\fR]]
-        [\fB--component-flags\fR[=\fIcomp_flags\fR]] [\fB--component-count\fR]
-        [\fB--component-start\fR[=[+-]\fIN\fR[kMGTPE]]]
-        [\fB--component-end\fR[=[+-]\fIN\fR[kMGTPE]]|\fB-E\fR[[+-]\fIN\fR[kMGTPE]]]
-        [\fB--pool\fR|\fB-p\fR] [\fB--recursive\fR|\fB-r\fR] [\fB--raw\fR|\fB-R\fR]
-        <\fIdirname\fR|\fIfilename\fR> ...
-.br
-List the striping information for a given filename or directory tree.
-By default the stripe count, size, and offset will be returned. If you
-only want specific striping information then the options of
-.BR --count ,
-.BR --size ,
-.BR --index ,
-.BR --offset ,
-.BR --layout ,
-.BR --fid ,
-.BR --generation ,
-.BR --component-id ,
-.BR --component-flags ,
-.BR --component-count ,
-.BR --component-start ,
-.BR --component-end ,
-or
-.B --pool
-can be used to return only the specific fields.
-.br
-If the
-.B --raw
-option is specified, the stripe information is printed without substituting the
-filesystem's default values for unspecified fields. If the striping EA is not
-set, 0, 0, and -1 will be printed for the stripe count, size, and offset
-respectively.
-In the case where you only want details about the files' object id
-information then the
-.B --quiet
-option is used. Additional information available about striping can be
-displayed with
-.BR --verbose .
-The default behavior when a directory is specified is to list the striping
-information for all files within the specified directory (like
-.RB ' "ls -l" ') .
-This can be expanded with
-.B --recursive
-which will recurse into all subdirectories.
-If you wish to get striping information for only the specified directory, then
-.B --directory
-can be used to limit the information, like
-.RB ' "ls -d" ').
-You can limit the returned files to those with objects on a specific OST with
-.BR --obd .
-To show only the FID use
-.BR --fid .
-The layout generation can be printed with the
-.B --generation
-option.
-You can limit the displayed content by specifing argument for
-.B --component-id|-I
-.B --component-flags
-.B --component-start
-.B --component-end|-E
-options. For example, "--component-id=2" or "-I2" will only display the layout
-attributes for the component with id equal to 2.
-
-.br
-\fBlfs getstripe\fR command allows to use component flags to list files that
-have specified \fIflags\fR matched(See \fB Component Flags\fR).
 .TP
 .B fid2path [--link <linkno>] <fsname|rootpath> <fid> ...
 Print out the pathname(s) for the specified \fIfid\fR(s) from the filesystem
@@ -343,40 +250,6 @@ Provides brief help on the various arguments
 Quit the interactive lfs session
 .SH EXAMPLES
 .TP
-.B $ lfs getstripe -v /mnt/lustre/file1
-Lists the detailed object allocation of a given file
-.TP
-.B $ lfs getstripe -v -I2 /mnt/lustre/file1
-Lists the detailed information of the component 2 in a given file
-.TP
-.B $ lfs getstripe --component-flags=^init -I /mnt/lustre/file1
-Print only the component IDs for all the uninstantiated components
-.TP
-.B $ lfs getstripe --component-flags=init,^stale -I /mnt/lustre/file1
-Print only the component(s) that are instantiated but not stale
-.TP
-.B $ lfs getstripe -E-64M /mnt/lustre/file1
-Lists the information of the components in a file which has less than 64M extent end
-.TP
-.B $ lfs getstripe -I3 --component-start /mnt/lustre/file1
-Print only the component start for the component with ID of 3
-.TP
-.B $ lfs find /mnt/lustre
-Efficiently lists all files in a given directory and its subdirectories
-.TP
-.B $ lfs find /mnt/lustre -mtime +30 -type f -print
-Recursively list all regular files in given directory more than 30 days old
-.TP
-.B $ lfs find --obd OST2-UUID /mnt/lustre/
-Recursively list all files in a given directory that have objects on OST2-UUID.
-.TP
-.B $ lfs find --component-count +3 /mnt/lustre
-Recursively list all files that have more than 3 components.
-.TP
-.B $ lfs find --component-flags=init,prefer,^stale /mnt/lustre
-Recursively list all files that have at least one component with both 'init' and
-\'prefer' flags set, and doesn't have flag 'stale' set.
-.TP
 .B $ lfs check servers
 Check the status of all servers (MDT, OST)
 .TP
@@ -404,20 +277,22 @@ Turn quotas of user and group on
 .B $ lfs quotaoff -ug /mnt/lustre
 Turn quotas of user and group off
 .SH NOTES
-The usage of \fBlfs hsm_*\fR, \fBlfs setstripe\fR, \fBlfs migrate\fR, \fBlfs setdirstripe\fR,
-\fBlfs getdirstripe\fR, \fBlfs mkdir\fR and \fBlfs project\fR are explained in separate
-man pages.
-.SH BUGS
-The \fBlfs find\fR command isn't as comprehensive as \fBfind\fR(1).
+The usage of \fBlfs find\fR, \fBlfs getstripe\fR, \fBlfs hsm_*\fR,
+\fBlfs setstripe\fR, \fBlfs migrate\fR, \fBlfs getdirstripe\fR,
+\fBlfs setdirstripe\fR, \fBlfs mkdir\fR, and \fBlfs project\fR are explained
+in separate man pages.
 .SH AUTHOR
 The lfs command is part of the Lustre filesystem.
 .SH SEE ALSO
 .BR lctl (8),
 .BR lfs-df (1),
+.BR lfs-find (1),
+.BR lfs-getstripe (1),
 .BR lfs-getdirstripe (1),
 .BR lfs-hsm (1),
 .BR lfs-mkdir (1),
 .BR lfs-migrate (1),
+.BR lfs_migrate (1),
 .BR lfs-project (1),
 .BR lfs-setdirstripe (1),
 .BR lfs-setquota (1),

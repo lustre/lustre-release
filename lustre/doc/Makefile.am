@@ -39,6 +39,8 @@ MANFILES =					\
 	ldev.conf.5				\
 	lfs.1					\
 	lfs-df.1				\
+	lfs-find.1				\
+	lfs-getstripe.1				\
 	lfs-getdirstripe.1			\
 	lfs-hsm.1				\
 	lfs-ladvise.1				\

@@ -327,22 +327,22 @@ command_t cmdlist[] = {
 	 "will become inaccessable after this command. This can only be done\n"
 	 "by the administrator\n"
 	 "usage: rm_entry <dir>\n"},
-        {"pool_list", lfs_poollist, 0,
-         "List pools or pool OSTs\n"
-         "usage: pool_list <fsname>[.<pool>] | <pathname>\n"},
-        {"find", lfs_find, 0,
-         "find files matching given attributes recursively in directory tree.\n"
-         "usage: find <directory|filename> ...\n"
-         "     [[!] --atime|-A [+-]N] [[!] --ctime|-C [+-]N]\n"
-         "     [[!] --mtime|-M [+-]N] [[!] --mdt|-m <uuid|index,...>]\n"
-         "     [--maxdepth|-D N] [[!] --name|-n <pattern>]\n"
-         "     [[!] --ost|-O <uuid|index,...>] [--print|-p] [--print0|-P]\n"
-         "     [[!] --size|-s [+-]N[bkMGTPE]]\n"
-         "     [[!] --stripe-count|-c [+-]<stripes>]\n"
-         "     [[!] --stripe-index|-i <index,...>]\n"
-         "     [[!] --stripe-size|-S [+-]N[kMGT]] [[!] --type|-t <filetype>]\n"
-         "     [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
-         "     [[!] --uid|-u|--user|-U <uid>|<uname>] [[!] --pool <pool>]\n"
+	{"pool_list", lfs_poollist, 0,
+	 "List pools or pool OSTs\n"
+	 "usage: pool_list <fsname>[.<pool>] | <pathname>\n"},
+	{"find", lfs_find, 0,
+	 "find files matching given attributes recursively in directory tree.\n"
+	 "usage: find <directory|filename> ...\n"
+	 "     [[!] --atime|-A [+-]N] [[!] --ctime|-C [+-]N]\n"
+	 "     [[!] --mtime|-M [+-]N] [--maxdepth|-D N]\n"
+	 "     [[!] --mdt-index|--mdt|-m <uuid|index,...>]\n"
+	 "     [[!] --name|-n <pattern>] [[!] --ost|-O <uuid|index,...>]\n"
+	 "     [--print|-P] [--print0|-0] [[!] --size|-s [+-]N[bkMGTPE]]\n"
+	 "     [[!] --stripe-count|-c [+-]<stripes>]\n"
+	 "     [[!] --stripe-index|-i <index,...>]\n"
+	 "     [[!] --stripe-size|-S [+-]N[kMGT]] [[!] --type|-t <filetype>]\n"
+	 "     [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
+	 "     [[!] --uid|-u|--user|-U <uid>|<uname>] [[!] --pool <pool>]\n"
 	 "     [[!] --projid <projid>]\n"
 	 "     [[!] --layout|-L released,raid0,mdt]\n"
 	 "     [[!] --component-count [+-]<comp_cnt>]\n"
@@ -354,7 +354,7 @@ command_t cmdlist[] = {
          "\t !: used before an option indicates 'NOT' requested attribute\n"
          "\t -: used before a value indicates less than requested value\n"
          "\t +: used before a value indicates more than requested value\n"
-	 "\tmdt-hash:	hash type of the striped directory.\n"
+	 "\thashtype:	hash type of the striped directory.\n"
 	 "\t		fnv_1a_64 FNV-1a hash algorithm\n"
 	 "\t		all_char  sum of characters % MDT_COUNT\n"},
         {"check", lfs_check, 0,
@@ -2896,10 +2896,10 @@ static int lfs_find(int argc, char **argv)
 /* find	{ .val = 'o'	.name = "or", .has_arg = no_argument }, like find(1) */
 	{ .val = 'O',	.name = "obd",		.has_arg = required_argument },
 	{ .val = 'O',	.name = "ost",		.has_arg = required_argument },
-	/* no short option for pool, p/P already used */
+	/* no short option for pool yet, can be 'p' after 2.18 */
 	{ .val = LFS_POOL_OPT,
 			.name = "pool",		.has_arg = required_argument },
-	{ .val = 'p',	.name = "print0",	.has_arg = no_argument },
+	{ .val = '0',	.name = "print0",	.has_arg = no_argument },
 	{ .val = 'P',	.name = "print",	.has_arg = no_argument },
 	{ .val = LFS_PROJID_OPT,
 			.name = "projid",	.has_arg = required_argument },
@@ -2928,7 +2928,7 @@ static int lfs_find(int argc, char **argv)
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
-			"-A:c:C:D:E:g:G:H:i:L:m:M:n:O:Ppqrs:S:t:T:u:U:v",
+			"-0A:c:C:D:E:g:G:H:i:L:m:M:n:O:Ppqrs:S:t:T:u:U:v",
 			long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
@@ -3138,22 +3138,6 @@ static int lfs_find(int argc, char **argv)
 			param.fp_exclude_uid = !!neg_opt;
 			param.fp_check_uid = 1;
                         break;
-		case LFS_POOL_OPT:
-                        if (strlen(optarg) > LOV_MAXPOOLNAME) {
-                                fprintf(stderr,
-                                        "Pool name %s is too long"
-                                        " (max is %d)\n", optarg,
-                                        LOV_MAXPOOLNAME);
-                                ret = -1;
-                                goto err;
-                        }
-                        /* we do check for empty pool because empty pool
-                         * is used to find V1 lov attributes */
-			strncpy(param.fp_poolname, optarg, LOV_MAXPOOLNAME);
-			param.fp_poolname[LOV_MAXPOOLNAME] = '\0';
-			param.fp_exclude_pool = !!neg_opt;
-			param.fp_check_pool = 1;
-                        break;
                 case 'n':
 			param.fp_pattern = (char *)optarg;
 			param.fp_exclude_pattern = !!neg_opt;
@@ -3235,10 +3219,35 @@ err_free:
 				free(buf);
 			break;
 		}
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 18, 53, 0)
 		case 'p':
+#endif
+		case LFS_POOL_OPT:
+			if (strlen(optarg) > LOV_MAXPOOLNAME) {
+				fprintf(stderr,
+					"Pool name %s is too long (max %d)\n",
+					optarg, LOV_MAXPOOLNAME);
+				ret = -1;
+				goto err;
+			}
+			/*
+			 * We do check for empty pool because empty pool
+			 * is used to find V1 LOV attributes
+			 */
+			strncpy(param.fp_poolname, optarg, LOV_MAXPOOLNAME);
+			param.fp_poolname[LOV_MAXPOOLNAME] = '\0';
+			param.fp_exclude_pool = !!neg_opt;
+			param.fp_check_pool = 1;
+			break;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 14, 53, 0)
+		case 'p': /* want this for --pool, to match getstripe/find */
+			fprintf(stderr,
+				"warning: -p deprecated, use --print0 or -0\n");
+#endif
+		case '0':
 			param.fp_zero_end = 1;
 			break;
-		case 'P':
+		case 'P': /* we always print, this option is a no-op */
 			break;
 		case LFS_PROJID_OPT:
 			rc = name2projid(&param.fp_projid, optarg);
