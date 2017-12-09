@@ -10974,6 +10974,8 @@ test_154a() {
 	dot_lustre_fid_permission_check "$fid" $DIR ||
 		error "dot lustre permission check $fid failed"
 
+	ls -a $MOUNT | grep "\.lustre" && error ".lustre should not be listed"
+
 	rm -rf $MOUNT/.lustre && error ".lustre is not allowed to be unlinked"
 
 	touch $MOUNT/.lustre/file &&

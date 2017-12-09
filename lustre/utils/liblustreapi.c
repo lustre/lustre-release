@@ -1830,24 +1830,20 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
 	while ((dent = readdir64(d)) != NULL) {
 		int rc;
 
-                if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
-                        continue;
+		if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
+			continue;
 
-                /* Don't traverse .lustre directory */
-                if (!(strcmp(dent->d_name, dot_lustre_name)))
-                        continue;
+		path[len] = 0;
+		if ((len + dent->d_reclen + 2) > size) {
+			llapi_err_noerrno(LLAPI_MSG_ERROR,
+					  "error: %s: string buffer too small",
+					  __func__);
+			break;
+		}
+		strcat(path, "/");
+		strcat(path, dent->d_name);
 
-                path[len] = 0;
-                if ((len + dent->d_reclen + 2) > size) {
-                        llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                          "error: %s: string buffer is too small",
-                                          __func__);
-                        break;
-                }
-                strcat(path, "/");
-                strcat(path, dent->d_name);
-
-                if (dent->d_type == DT_UNKNOWN) {
+		if (dent->d_type == DT_UNKNOWN) {
 			lstat_t *st = &param->fp_lmd->lmd_st;
 
 			rc = get_lmd_info(path, d, NULL, param->fp_lmd,
