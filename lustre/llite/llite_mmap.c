@@ -159,7 +159,7 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	int                      result;
 	__u16			 refcheck;
 	sigset_t		 set;
-	struct inode             *inode;
+	struct inode             *inode = NULL;
 	struct ll_inode_info     *lli;
 	ENTRY;
 
@@ -230,6 +230,16 @@ out:
 	cl_env_put(env, &refcheck);
 	CDEBUG(D_MMAP, "%s mkwrite with %d\n", current->comm, result);
 	LASSERT(ergo(result == 0, PageLocked(vmpage)));
+
+	/* if page has been unmapped, presumably due to lock reclaim for
+	 * concurrent usage, add some delay before retrying to prevent
+	 * entering live-lock situation with competitors
+	 */
+	if (result == -ENODATA && inode != NULL) {
+		CDEBUG(D_MMAP, "delaying new page-fault for inode %p to "
+			       "prevent live-lock\n", inode);
+		msleep(10);
+	}
 
 	return result;
 }
