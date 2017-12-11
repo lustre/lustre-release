@@ -386,6 +386,24 @@ ktime_before, [
 ]) # LIBCFS_KTIME_BEFORE
 
 #
+# Kernel version 3.12 introduced ktime_compare
+#
+AC_DEFUN([LIBCFS_KTIME_COMPARE],[
+LB_CHECK_COMPILE([does function 'ktime_compare' exist],
+ktime_compare, [
+	#include <linux/ktime.h>
+],[
+	ktime_t start = ktime_set(0, 0);
+	ktime_t end = start;
+
+	ktime_compare(start, end);
+],[
+	AC_DEFINE(HAVE_KTIME_COMPARE, 1,
+		[ktime_compare is available])
+])
+]) # LIBCFS_KTIME_COMPARE
+
+#
 # FC19 3.12 kernel struct shrinker change
 #
 AC_DEFUN([LIBCFS_SHRINKER_COUNT],[
@@ -813,6 +831,7 @@ LIBCFS_KERNEL_PARAM_OPS
 LIBCFS_KTIME_ADD
 LIBCFS_KTIME_AFTER
 LIBCFS_KTIME_BEFORE
+LIBCFS_KTIME_COMPARE
 LIBCFS_SHRINKER_COUNT
 # 3.17
 LIBCFS_HLIST_ADD_AFTER
