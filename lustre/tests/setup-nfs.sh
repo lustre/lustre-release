@@ -23,18 +23,19 @@ setup_nfs() {
         mount -t rpc_pipefs sunrpc /var/lib/nfs/rpc_pipefs; }" || return 1
     sleep 5
 
-	do_nodes $LUSTRE_CLIENT "chkconfig --list nfsserver > /dev/null 2>&1 &&
-				 service nfsserver restart ||
+	do_nodes $LUSTRE_CLIENT "echo $MNTPNT *\($export_opts_v\) \
+				 >> /etc/exports" || return 1
+
+	# restart nfs server according to distro
+	do_nodes $LUSTRE_CLIENT "{ [[ -e /etc/SuSE-release ]] &&
+				 service nfsserver restart; } ||
 				 service nfs restart" || return 1
 
 	do_nodes $NFS_CLIENTS "chkconfig --list rpcidmapd 2>/dev/null |
 			       grep -q rpcidmapd && service rpcidmapd restart ||
 			       true"
 
-    do_nodes $LUSTRE_CLIENT "exportfs -o $export_opts_v *:$MNTPNT \
-        && exportfs -v" || return 1
-
-    echo -e "\nMounting NFS clients (version $NFS_VER)..."
+	echo -e "\nMounting NFS clients (version $NFS_VER)..."
 
 	do_nodes $NFS_CLIENTS "mkdir -p $nfs_climntpt" || return 1
 	if [ "$NFS_VER" = "4" ]; then
@@ -62,11 +63,11 @@ cleanup_nfs() {
 			       grep -q rpcidmapd && service rpcidmapd stop ||
 			       true"
 
-	do_nodes $LUSTRE_CLIENT "chkconfig --list nfsserver > /dev/null 2>&1 &&
-				 service nfsserver stop || service nfs stop" ||
-				return 1
+	do_nodes $LUSTRE_CLIENT "{ [[ -e /etc/SuSE-release ]] &&
+				 service nfsserver stop; } ||
+				 service nfs stop" || return 1
 
-    do_nodes $LUSTRE_CLIENT "exportfs -u *:$MNTPNT"
+	do_nodes $LUSTRE_CLIENT "sed -i '/^${MNTPNT##*/}/d' /etc/exports" || return 1
 
-    do_nodes $LUSTRE_CLIENT "exportfs -v"
+	do_nodes $LUSTRE_CLIENT "exportfs -v"
 }
