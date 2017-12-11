@@ -466,6 +466,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
 	err = ldlm_lvbo_init(lock->l_resource);
 	if (err < 0) {
 		LDLM_ERROR(lock, "delayed lvb init failed (rc %d)", err);
+		ldlm_lock_destroy_nolock(lock);
 		GOTO(out, err);
 	}
 

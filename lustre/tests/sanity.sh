@@ -14202,19 +14202,44 @@ test_231b() {
 }
 run_test 231b "must not assert on fully utilized OST request buffer"
 
-test_232() {
+test_232a() {
 	mkdir -p $DIR/$tdir
+	$LFS setstripe -c1 -i0 $DIR/$tdir/$tfile
+
 	#define OBD_FAIL_LDLM_OST_LVB		 0x31c
-	$LCTL set_param fail_loc=0x31c
+	do_facet ost1 $LCTL set_param fail_loc=0x31c
 
 	# ignore dd failure
 	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1 || true
 
-	$LCTL set_param fail_loc=0
+	do_facet ost1 $LCTL set_param fail_loc=0
 	umount_client $MOUNT || error "umount failed"
 	mount_client $MOUNT || error "mount failed"
+	stop ost1 || error "cannot stop ost1"
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS || error "cannot start ost1"
 }
-run_test 232 "failed lock should not block umount"
+run_test 232a "failed lock should not block umount"
+
+test_232b() {
+	mkdir -p $DIR/$tdir
+	$LFS setstripe -c1 -i0 $DIR/$tdir/$tfile
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1
+	sync
+	cancel_lru_locks osc
+
+	#define OBD_FAIL_LDLM_OST_LVB		 0x31c
+	do_facet ost1 $LCTL set_param fail_loc=0x31c
+
+	# ignore failure
+	$LFS data_version $DIR/$tdir/$tfile || true
+
+	do_facet ost1 $LCTL set_param fail_loc=0
+	umount_client $MOUNT || error "umount failed"
+	mount_client $MOUNT || error "mount failed"
+	stop ost1 || error "cannot stop ost1"
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS || error "cannot start ost1"
+}
+run_test 232b "failed data version lock should not block umount"
 
 test_233a() {
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.64) ] ||
