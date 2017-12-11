@@ -14939,6 +14939,8 @@ facet_meminfo() {
 }
 
 test_255b() {
+	[ $(lustre_version_code ost1) -lt $(version_code 2.8.54) ] &&
+		skip "lustre < 2.8.54 does not support ladvise " && return
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
 	lfs setstripe -c 1 -i 0 $DIR/$tfile
