@@ -5310,14 +5310,21 @@ stack_trap()
 	local arg="$1"
 	local sigspec="$2"
 
-	local cmd="$(trap -p $sigspec)"
+	# Use "trap -p" to get the quoting right
+	local old_trap="$(trap -p "$sigspec")"
+	# Append ";" and remove the leading "trap -- '" added by "trap -p"
+	old_trap="${old_trap:+"; ${old_trap#trap -- \'}"}"
 
-	cmd="${cmd#trap -- \'}"
-	cmd="${cmd%\'*}"
-	[ -n "$cmd" ] && cmd="; $cmd"
-	cmd="${arg}$cmd"
+	# Once again, use "trap -p" to get the quoting right
+	local new_trap="$(trap -- "$arg" "$sigspec"
+			  trap -p "$sigspec"
+			  trap -- '' "$sigspec")"
 
-	trap "$cmd" $sigspec
+	# Remove the trailing "' $sigspec" part added by "trap -p" and merge
+	#
+	# The resulting string should be safe to "eval" as it is (supposedly
+	# correctly) quoted by "trap -p"
+	eval "${new_trap%\' $sigspec}${old_trap:-"' $sigspec"}"
 }
 
 error_noexit() {
