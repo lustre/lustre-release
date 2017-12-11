@@ -161,6 +161,17 @@ static inline bool ktime_before(const ktime_t cmp1, const ktime_t cmp2)
 }
 #endif /* !HAVE_KTIME_BEFORE */
 
+#ifndef HAVE_KTIME_COMPARE
+static inline int ktime_compare(const ktime_t cmp1, const ktime_t cmp2)
+{
+	if (cmp1.tv64 < cmp2.tv64)
+		return -1;
+	if (cmp1.tv64 > cmp2.tv64)
+		return 1;
+	return 0;
+}
+#endif /* !HAVE_KTIME_COMPARE */
+
 #ifndef HAVE_KTIME_GET_TS64
 void ktime_get_ts64(struct timespec64 *ts);
 #endif /* HAVE_KTIME_GET_TS */
