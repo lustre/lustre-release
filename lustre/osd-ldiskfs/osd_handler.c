@@ -77,6 +77,9 @@
 
 #include <lustre_linkea.h>
 
+/* Maximum EA size is limited by LNET_MTU for remote objects */
+#define OSD_MAX_EA_SIZE 1048364
+
 int ldiskfs_pdo = 1;
 module_param(ldiskfs_pdo, int, 0644);
 MODULE_PARM_DESC(ldiskfs_pdo, "ldiskfs with parallel directory operations");
@@ -2173,6 +2176,9 @@ static void osd_conf_get(const struct lu_env *env,
 	else
 #endif
 		param->ddp_max_ea_size = sb->s_blocksize - ea_overhead;
+
+	if (param->ddp_max_ea_size > OSD_MAX_EA_SIZE)
+		param->ddp_max_ea_size = OSD_MAX_EA_SIZE;
 
 	/* Preferred RPC size for efficient disk IO.  4MB shows good
 	 * all-around performance for ldiskfs, but use bigalloc chunk size

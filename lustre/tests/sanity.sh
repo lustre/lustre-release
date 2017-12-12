@@ -17230,6 +17230,19 @@ test_315() { # LU-618
 }
 run_test 315 "read should be accounted"
 
+test_316() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	large_xattr_enabled || { skip "large_xattr disabled" && return; }
+
+	rm -rf $DIR/$tdir/d
+	mkdir -p $DIR/$tdir/d
+	chown nobody $DIR/$tdir/d
+	touch $DIR/$tdir/d/file
+
+	$LFS mv -M1 $DIR/$tdir/d || error "lfs mv failed"
+}
+run_test 316 "lfs mv"
+
 test_fake_rw() {
 	local read_write=$1
 	if [ "$read_write" = "write" ]; then

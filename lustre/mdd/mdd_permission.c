@@ -62,8 +62,15 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
 	ENTRY;
 
 	lu_buf_check_and_alloc(&mdd_env_info(env)->mti_xattr_buf,
-			mdd_obj2mdd_dev(o)->mdd_dt_conf.ddp_max_ea_size);
+			MIN(mdd_obj2mdd_dev(o)->mdd_dt_conf.ddp_max_ea_size,
+			    XATTR_SIZE_MAX));
 	buf = mdd_env_info(env)->mti_xattr_buf;
+	if (buf.lb_buf == NULL)
+		RETURN(-ENOMEM);
+
+	if (buf.lb_len > XATTR_SIZE_MAX)
+		buf.lb_len  = XATTR_SIZE_MAX;
+
 	rc = mdo_xattr_get(env, o, &buf, XATTR_NAME_ACL_ACCESS);
 	if ((rc == -EOPNOTSUPP) || (rc == -ENODATA))
 		RETURN(0);
@@ -210,8 +217,15 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
 	ENTRY;
 
 	lu_buf_check_and_alloc(&mdd_env_info(env)->mti_xattr_buf,
-			mdd_obj2mdd_dev(obj)->mdd_dt_conf.ddp_max_ea_size);
+			MIN(mdd_obj2mdd_dev(obj)->mdd_dt_conf.ddp_max_ea_size,
+			    XATTR_SIZE_MAX));
 	buf = mdd_env_info(env)->mti_xattr_buf;
+	if (buf.lb_buf == NULL)
+		RETURN(-ENOMEM);
+
+	if (buf.lb_len > XATTR_SIZE_MAX)
+		buf.lb_len  = XATTR_SIZE_MAX;
+
 	rc = mdo_xattr_get(env, obj, &buf, XATTR_NAME_ACL_ACCESS);
 	if (rc <= 0)
 		RETURN(rc ? : -EACCES);

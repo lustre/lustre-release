@@ -376,8 +376,8 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 		buf_count++;
 	}
 	repsize += sizeof(*reply);
-	repsize = (repsize + OUT_UPDATE_REPLY_SIZE - 1) &
-			~(OUT_UPDATE_REPLY_SIZE - 1);
+	if (repsize < OUT_UPDATE_REPLY_SIZE)
+		repsize = OUT_UPDATE_REPLY_SIZE;
 	LASSERT(buf_count > 0);
 
 	req = ptlrpc_request_alloc(imp, &RQF_OUT_UPDATE);

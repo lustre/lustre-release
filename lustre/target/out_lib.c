@@ -102,7 +102,7 @@ int out_update_header_pack(const struct lu_env *env,
 	unsigned int			i;
 	size_t				update_size;
 
-	if (((reply_size + 7) >> 3) >= 1ULL << 16)
+	if (reply_size  >= LNET_MTU)
 		return -EINVAL;
 
 	/* Check whether the packing exceeding the maxima update length */
