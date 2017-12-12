@@ -4555,10 +4555,12 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(posix_acl_xattr_header, a_version));
 	LASSERTF((int)sizeof(((posix_acl_xattr_header *)0)->a_version) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((posix_acl_xattr_header *)0)->a_version));
+#ifndef HAVE_STRUCT_POSIX_ACL_XATTR
 	LASSERTF((int)offsetof(posix_acl_xattr_header, a_entries) == 4, "found %lld\n",
 		 (long long)(int)offsetof(posix_acl_xattr_header, a_entries));
 	LASSERTF((int)sizeof(((posix_acl_xattr_header *)0)->a_entries) == 0, "found %lld\n",
 		 (long long)(int)sizeof(((posix_acl_xattr_header *)0)->a_entries));
+#endif /* HAVE_STRUCT_POSIX_ACL_XATTR */
 #endif /* CONFIG_FS_POSIX_ACL */
 
 	/* Checks for struct link_ea_header */
