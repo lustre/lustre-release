@@ -4729,36 +4729,27 @@ test_251() {
 run_test 251 "Coordinator request timeout"
 
 test_252() {
-	# test needs a running copytool
-	copytool setup -b 1
-
 	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
-	local fid=$(make_custom_file_for_progress $f 103 1048576)
+	local fid=$(create_empty_file "$f")
 
-	cdt_disable
 	# to have a short test
-	local old_timeout=$(get_hsm_param active_request_timeout)
-	stack_trap "set_hsm_param active_request_timeout $old_timeout" EXIT
-	set_hsm_param active_request_timeout 20
-	# to be sure the cdt will wake up frequently so
-	# it will be able to cancel the "old" request
-	local old_loop_period=$(get_hsm_param loop_period)
-	stack_trap "set_hsm_param loop_period $old_loop_period" EXIT
-	set_hsm_param loop_period 2
-	cdt_enable
+	stack_trap "set_hsm_param loop_period $(get_hsm_param loop_period)" EXIT
+	set_hsm_param loop_period 1
 
-	# clear locks to avoid extra delay caused by flush/cancel
-	# and thus prevent early copytool death to timeout.
-	cancel_lru_locks osc
+	copytool_setup
+	copytool_suspend
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE STARTED
 	rm -f $f
 
-	# wait but less than active_request_timeout+grace_delay
-	sleep 25
+	stack_trap "set_hsm_param active_request_timeout \
+		    $(get_hsm_param active_request_timeout)" EXIT
+	set_hsm_param active_request_timeout 1
+
 	wait_request_state $fid ARCHIVE CANCELED
+	copytool_continue
 }
 run_test 252 "Timeout'ed running archive of a removed file should be canceled"
 
