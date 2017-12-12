@@ -790,7 +790,6 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 	ENTRY;
 
 	LASSERT(lock->l_granted_mode != lock->l_req_mode);
-	LASSERT(list_empty(&res->lr_converting));
 	LASSERT(!(*flags & LDLM_FL_DENY_ON_CONTENTION) ||
 		!ldlm_is_ast_discard_data(lock));
 	INIT_LIST_HEAD(&rpc_list);

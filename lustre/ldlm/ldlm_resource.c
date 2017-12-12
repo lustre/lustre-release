@@ -1072,14 +1072,13 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
 static int ldlm_resource_clean(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 			       struct hlist_node *hnode, void *arg)
 {
-        struct ldlm_resource *res = cfs_hash_object(hs, hnode);
+	struct ldlm_resource *res = cfs_hash_object(hs, hnode);
 	__u64 flags = *(__u64 *)arg;
 
-        cleanup_resource(res, &res->lr_granted, flags);
-        cleanup_resource(res, &res->lr_converting, flags);
-        cleanup_resource(res, &res->lr_waiting, flags);
+	cleanup_resource(res, &res->lr_granted, flags);
+	cleanup_resource(res, &res->lr_waiting, flags);
 
-        return 0;
+	return 0;
 }
 
 static int ldlm_resource_complain(struct cfs_hash *hs, struct cfs_hash_bd *bd,
@@ -1371,7 +1370,6 @@ static struct ldlm_resource *ldlm_resource_new(enum ldlm_type ldlm_type)
 	}
 
 	INIT_LIST_HEAD(&res->lr_granted);
-	INIT_LIST_HEAD(&res->lr_converting);
 	INIT_LIST_HEAD(&res->lr_waiting);
 
 	atomic_set(&res->lr_refcount, 1);
@@ -1484,28 +1482,23 @@ struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
 static void __ldlm_resource_putref_final(struct cfs_hash_bd *bd,
                                          struct ldlm_resource *res)
 {
-        struct ldlm_ns_bucket *nsb = res->lr_ns_bucket;
+	struct ldlm_ns_bucket *nsb = res->lr_ns_bucket;
 
 	if (!list_empty(&res->lr_granted)) {
-                ldlm_resource_dump(D_ERROR, res);
-                LBUG();
-        }
-
-	if (!list_empty(&res->lr_converting)) {
-                ldlm_resource_dump(D_ERROR, res);
-                LBUG();
-        }
+		ldlm_resource_dump(D_ERROR, res);
+		LBUG();
+	}
 
 	if (!list_empty(&res->lr_waiting)) {
-                ldlm_resource_dump(D_ERROR, res);
-                LBUG();
-        }
+		ldlm_resource_dump(D_ERROR, res);
+		LBUG();
+	}
 
-        cfs_hash_bd_del_locked(nsb->nsb_namespace->ns_rs_hash,
-                               bd, &res->lr_hash);
-        lu_ref_fini(&res->lr_reference);
-        if (cfs_hash_bd_count_get(bd) == 0)
-                ldlm_namespace_put(nsb->nsb_namespace);
+	cfs_hash_bd_del_locked(nsb->nsb_namespace->ns_rs_hash,
+			       bd, &res->lr_hash);
+	lu_ref_fini(&res->lr_reference);
+	if (cfs_hash_bd_count_get(bd) == 0)
+		ldlm_namespace_put(nsb->nsb_namespace);
 }
 
 /* Returns 1 if the resource was freed, 0 if it remains. */
@@ -1688,15 +1681,11 @@ void ldlm_resource_dump(int level, struct ldlm_resource *res)
                         }
                 }
         }
-	if (!list_empty(&res->lr_converting)) {
-                CDEBUG(level, "Converting locks:\n");
-		list_for_each_entry(lock, &res->lr_converting, l_res_link)
-                        LDLM_DEBUG_LIMIT(level, lock, "###");
-        }
+
 	if (!list_empty(&res->lr_waiting)) {
-                CDEBUG(level, "Waiting locks:\n");
+		CDEBUG(level, "Waiting locks:\n");
 		list_for_each_entry(lock, &res->lr_waiting, l_res_link)
-                        LDLM_DEBUG_LIMIT(level, lock, "###");
-        }
+			LDLM_DEBUG_LIMIT(level, lock, "###");
+	}
 }
 EXPORT_SYMBOL(ldlm_resource_dump);

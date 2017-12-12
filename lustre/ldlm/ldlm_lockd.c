@@ -1461,101 +1461,12 @@ existing_lock:
 }
 
 /**
- * Old-style LDLM main entry point for server code enqueue.
- */
-int ldlm_handle_enqueue(struct ptlrpc_request *req,
-                        ldlm_completion_callback completion_callback,
-                        ldlm_blocking_callback blocking_callback,
-                        ldlm_glimpse_callback glimpse_callback)
-{
-        struct ldlm_request *dlm_req;
-        struct ldlm_callback_suite cbs = {
-                .lcs_completion = completion_callback,
-                .lcs_blocking   = blocking_callback,
-                .lcs_glimpse    = glimpse_callback
-        };
-        int rc;
-
-        dlm_req = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
-        if (dlm_req != NULL) {
-                rc = ldlm_handle_enqueue0(req->rq_export->exp_obd->obd_namespace,
-                                          req, dlm_req, &cbs);
-        } else {
-                rc = -EFAULT;
-        }
-        return rc;
-}
-
-/**
  * Main LDLM entry point for server code to process lock conversion requests.
  */
 int ldlm_handle_convert0(struct ptlrpc_request *req,
                          const struct ldlm_request *dlm_req)
 {
-        struct ldlm_reply *dlm_rep;
-        struct ldlm_lock *lock;
-        int rc;
-        ENTRY;
-
-        if (req->rq_export && req->rq_export->exp_nid_stats &&
-            req->rq_export->exp_nid_stats->nid_ldlm_stats)
-                lprocfs_counter_incr(req->rq_export->exp_nid_stats->nid_ldlm_stats,
-                                     LDLM_CONVERT - LDLM_FIRST_OPC);
-
-        rc = req_capsule_server_pack(&req->rq_pill);
-        if (rc)
-                RETURN(rc);
-
-        dlm_rep = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
-        dlm_rep->lock_flags = dlm_req->lock_flags;
-
-        lock = ldlm_handle2lock(&dlm_req->lock_handle[0]);
-        if (!lock) {
-		req->rq_status = LUSTRE_EINVAL;
-        } else {
-                void *res = NULL;
-
-                LDLM_DEBUG(lock, "server-side convert handler START");
-
-                res = ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
-                                        &dlm_rep->lock_flags);
-                if (res) {
-                        if (ldlm_del_waiting_lock(lock))
-                                LDLM_DEBUG(lock, "converted waiting lock");
-                        req->rq_status = 0;
-                } else {
-			req->rq_status = LUSTRE_EDEADLK;
-                }
-        }
-
-        if (lock) {
-                if (!req->rq_status)
-                        ldlm_reprocess_all(lock->l_resource);
-                LDLM_DEBUG(lock, "server-side convert handler END");
-                LDLM_LOCK_PUT(lock);
-        } else
-                LDLM_DEBUG_NOLOCK("server-side convert handler END");
-
-        RETURN(0);
-}
-
-/**
- * Old-style main LDLM entry point for server code to process lock conversion
- * requests.
- */
-int ldlm_handle_convert(struct ptlrpc_request *req)
-{
-        int rc;
-        struct ldlm_request *dlm_req;
-
-        dlm_req = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
-        if (dlm_req != NULL) {
-                rc = ldlm_handle_convert0(req, dlm_req);
-        } else {
-                CERROR ("Can't unpack dlm_req\n");
-                rc = -EFAULT;
-        }
-        return rc;
+	RETURN(-ENOTSUPP);
 }
 
 /**

@@ -722,7 +722,7 @@ struct ldlm_lock {
 	struct list_head	l_lru;
 	/**
 	 * Linkage to resource's lock queues according to current lock state.
-	 * (could be granted, waiting or converting)
+	 * (could be granted or waiting)
 	 * Protected by lr_lock in struct ldlm_resource.
 	 */
 	struct list_head	l_res_link;
@@ -962,8 +962,6 @@ struct ldlm_resource {
 	 * @{ */
 	/** List of locks in granted state */
 	struct list_head	lr_granted;
-	/** List of locks waiting to change their granted mode (converted) */
-	struct list_head	lr_converting;
 	/**
 	 * List of locks that could not be granted due to conflicts and
 	 * that are waiting for conflicts to go away */
@@ -1205,21 +1203,21 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
  * LDLM_PROCESS_RESCAN:
  *
  * It's used when policy functions are called from ldlm_reprocess_queue() to
- * reprocess the wait & convert list and try to grant locks, blocking ASTs
+ * reprocess the wait list and try to grant locks, blocking ASTs
  * have already been sent in this situation, completion ASTs need be sent for
  * the locks being granted.
  *
  * LDLM_PROCESS_ENQUEUE:
  *
  * It's used when policy functions are called from ldlm_lock_enqueue() to
- * process the wait & convert list for handling an enqueue request, blocking
+ * process the wait list for handling an enqueue request, blocking
  * ASTs have not been sent yet, so list of conflicting locks would be
  * collected and ASTs sent.
  *
  * LDLM_PROCESS_RECOVERY:
  *
  * It's used when policy functions are called from ldlm_reprocess_queue() to
- * reprocess the wait & convert list when recovery done. In case of blocking
+ * reprocess the wait list when recovery done. In case of blocking
  * ASTs are lost before recovery, it needs not only to grant locks if
  * available, but also send blocking ASTs to the locks doesn't have AST sent
  * flag. Completion ASTs need be sent for the locks being granted.
@@ -1305,14 +1303,11 @@ int ldlm_glimpse_locks(struct ldlm_resource *res,
  * MDT or OST to pass through LDLM requests to LDLM for handling
  * @{
  */
-int ldlm_handle_enqueue(struct ptlrpc_request *req, ldlm_completion_callback,
-                        ldlm_blocking_callback, ldlm_glimpse_callback);
 int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
-                         const struct ldlm_request *dlm_req,
-                         const struct ldlm_callback_suite *cbs);
-int ldlm_handle_convert(struct ptlrpc_request *req);
+			 const struct ldlm_request *dlm_req,
+			 const struct ldlm_callback_suite *cbs);
 int ldlm_handle_convert0(struct ptlrpc_request *req,
-                         const struct ldlm_request *dlm_req);
+			 const struct ldlm_request *dlm_req);
 int ldlm_handle_cancel(struct ptlrpc_request *req);
 int ldlm_request_cancel(struct ptlrpc_request *req,
 			const struct ldlm_request *dlm_req,
@@ -1462,9 +1457,7 @@ enum ldlm_mode ldlm_lock_match(struct ldlm_namespace *ns, __u64 flags,
 			       struct lustre_handle *, int unref);
 enum ldlm_mode ldlm_revalidate_lock_handle(const struct lustre_handle *lockh,
 					   __u64 *bits);
-struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock,
-					enum ldlm_mode new_mode, __u32 *flags);
-void ldlm_lock_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode);
+void ldlm_lock_mode_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
 void ldlm_reprocess_all(struct ldlm_resource *res);
 void ldlm_reprocess_recovery_done(struct ldlm_namespace *ns);
@@ -1606,8 +1599,6 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
 			   void *data, __u32 lvb_len, enum lvb_type lvb_type,
 			   const __u64 *client_cookie,
 			   struct lustre_handle *lockh);
-int ldlm_cli_convert(const struct lustre_handle *lockh, int new_mode,
-		     __u32 *flags);
 int ldlm_cli_update_pool(struct ptlrpc_request *req);
 int ldlm_cli_cancel(const struct lustre_handle *lockh,
 		    enum ldlm_cancel_flags cancel_flags);

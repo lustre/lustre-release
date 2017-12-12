@@ -242,8 +242,6 @@ EXPORT_SYMBOL(ldlm_completion_ast_async);
  *
  *     - to force all locks when resource is destroyed (cleanup_resource());
  *
- *     - during lock conversion (not used currently).
- *
  * If lock is not granted in the first case, this function waits until second
  * or penultimate cases happen in some other thread.
  *
@@ -1037,105 +1035,6 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 	RETURN(rc);
 }
 EXPORT_SYMBOL(ldlm_cli_enqueue);
-
-static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
-                                  __u32 *flags)
-{
-        struct ldlm_resource *res;
-        int rc;
-        ENTRY;
-        if (ns_is_client(ldlm_lock_to_ns(lock))) {
-                CERROR("Trying to cancel local lock\n");
-                LBUG();
-        }
-        LDLM_DEBUG(lock, "client-side local convert");
-
-        res = ldlm_lock_convert(lock, new_mode, flags);
-        if (res) {
-                ldlm_reprocess_all(res);
-                rc = 0;
-        } else {
-		rc = LUSTRE_EDEADLK;
-        }
-        LDLM_DEBUG(lock, "client-side local convert handler END");
-        LDLM_LOCK_PUT(lock);
-        RETURN(rc);
-}
-
-/* FIXME: one of ldlm_cli_convert or the server side should reject attempted
- * conversion of locks which are on the waiting or converting queue */
-/* Caller of this code is supposed to take care of lock readers/writers
-   accounting */
-int ldlm_cli_convert(const struct lustre_handle *lockh, int new_mode,
-		     __u32 *flags)
-{
-        struct ldlm_request   *body;
-        struct ldlm_reply     *reply;
-        struct ldlm_lock      *lock;
-        struct ldlm_resource  *res;
-        struct ptlrpc_request *req;
-        int                    rc;
-        ENTRY;
-
-        lock = ldlm_handle2lock(lockh);
-        if (!lock) {
-                LBUG();
-                RETURN(-EINVAL);
-        }
-        *flags = 0;
-
-        if (lock->l_conn_export == NULL)
-                RETURN(ldlm_cli_convert_local(lock, new_mode, flags));
-
-        LDLM_DEBUG(lock, "client-side convert");
-
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(lock->l_conn_export),
-                                        &RQF_LDLM_CONVERT, LUSTRE_DLM_VERSION,
-                                        LDLM_CONVERT);
-        if (req == NULL) {
-                LDLM_LOCK_PUT(lock);
-                RETURN(-ENOMEM);
-        }
-
-        body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
-        body->lock_handle[0] = lock->l_remote_handle;
-
-        body->lock_desc.l_req_mode = new_mode;
-	body->lock_flags = ldlm_flags_to_wire(*flags);
-
-
-        ptlrpc_request_set_replen(req);
-        rc = ptlrpc_queue_wait(req);
-        if (rc != ELDLM_OK)
-                GOTO(out, rc);
-
-        reply = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
-        if (reply == NULL)
-                GOTO(out, rc = -EPROTO);
-
-        if (req->rq_status)
-                GOTO(out, rc = req->rq_status);
-
-        res = ldlm_lock_convert(lock, new_mode, &reply->lock_flags);
-        if (res != NULL) {
-                ldlm_reprocess_all(res);
-                /* Go to sleep until the lock is granted. */
-                /* FIXME: or cancelled. */
-                if (lock->l_completion_ast) {
-                        rc = lock->l_completion_ast(lock, LDLM_FL_WAIT_NOREPROC,
-                                                    NULL);
-                        if (rc)
-                                GOTO(out, rc);
-                }
-        } else {
-		rc = LUSTRE_EDEADLK;
-        }
-        EXIT;
- out:
-        LDLM_LOCK_PUT(lock);
-        ptlrpc_req_finished(req);
-        return rc;
-}
 
 /**
  * Cancel locks locally.
@@ -2126,41 +2025,34 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
 /* Lock iterators. */
 
 int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
-                          void *closure)
+			  void *closure)
 {
 	struct list_head *tmp, *next;
-        struct ldlm_lock *lock;
-        int rc = LDLM_ITER_CONTINUE;
+	struct ldlm_lock *lock;
+	int rc = LDLM_ITER_CONTINUE;
 
-        ENTRY;
+	ENTRY;
 
-        if (!res)
-                RETURN(LDLM_ITER_CONTINUE);
+	if (!res)
+		RETURN(LDLM_ITER_CONTINUE);
 
-        lock_res(res);
+	lock_res(res);
 	list_for_each_safe(tmp, next, &res->lr_granted) {
 		lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
-                if (iter(lock, closure) == LDLM_ITER_STOP)
-                        GOTO(out, rc = LDLM_ITER_STOP);
-        }
-
-	list_for_each_safe(tmp, next, &res->lr_converting) {
-		lock = list_entry(tmp, struct ldlm_lock, l_res_link);
-
-                if (iter(lock, closure) == LDLM_ITER_STOP)
-                        GOTO(out, rc = LDLM_ITER_STOP);
-        }
+		if (iter(lock, closure) == LDLM_ITER_STOP)
+			GOTO(out, rc = LDLM_ITER_STOP);
+	}
 
 	list_for_each_safe(tmp, next, &res->lr_waiting) {
 		lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
-                if (iter(lock, closure) == LDLM_ITER_STOP)
-                        GOTO(out, rc = LDLM_ITER_STOP);
-        }
- out:
-        unlock_res(res);
-        RETURN(rc);
+		if (iter(lock, closure) == LDLM_ITER_STOP)
+			GOTO(out, rc = LDLM_ITER_STOP);
+	}
+out:
+	unlock_res(res);
+	RETURN(rc);
 }
 
 struct iter_helper_data {
@@ -2319,28 +2211,23 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
                 RETURN(0);
         }
 
-        /*
-         * If granted mode matches the requested mode, this lock is granted.
-         *
-         * If they differ, but we have a granted mode, then we were granted
-         * one mode and now want another: ergo, converting.
-         *
-         * If we haven't been granted anything and are on a resource list,
-         * then we're blocked/waiting.
-         *
-         * If we haven't been granted anything and we're NOT on a resource list,
-         * then we haven't got a reply yet and don't have a known disposition.
-         * This happens whenever a lock enqueue is the request that triggers
-         * recovery.
-         */
-        if (lock->l_granted_mode == lock->l_req_mode)
-                flags = LDLM_FL_REPLAY | LDLM_FL_BLOCK_GRANTED;
-        else if (lock->l_granted_mode)
-                flags = LDLM_FL_REPLAY | LDLM_FL_BLOCK_CONV;
+	/*
+	 * If granted mode matches the requested mode, this lock is granted.
+	 *
+	 * If we haven't been granted anything and are on a resource list,
+	 * then we're blocked/waiting.
+	 *
+	 * If we haven't been granted anything and we're NOT on a resource list,
+	 * then we haven't got a reply yet and don't have a known disposition.
+	 * This happens whenever a lock enqueue is the request that triggers
+	 * recovery.
+	 */
+	if (lock->l_granted_mode == lock->l_req_mode)
+		flags = LDLM_FL_REPLAY | LDLM_FL_BLOCK_GRANTED;
 	else if (!list_empty(&lock->l_res_link))
-                flags = LDLM_FL_REPLAY | LDLM_FL_BLOCK_WAIT;
-        else
-                flags = LDLM_FL_REPLAY;
+		flags = LDLM_FL_REPLAY | LDLM_FL_BLOCK_WAIT;
+	else
+		flags = LDLM_FL_REPLAY;
 
         req = ptlrpc_request_alloc_pack(imp, &RQF_LDLM_ENQUEUE,
                                         LUSTRE_DLM_VERSION, LDLM_ENQUEUE);

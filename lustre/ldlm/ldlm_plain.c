@@ -135,7 +135,6 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
 
 	LASSERT(lock->l_granted_mode != lock->l_req_mode);
 	check_res_locked(res);
-	LASSERT(list_empty(&res->lr_converting));
 	INIT_LIST_HEAD(&rpc_list);
 
 	if (intention == LDLM_PROCESS_RESCAN) {

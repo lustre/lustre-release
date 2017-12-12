@@ -2249,7 +2249,7 @@ ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
 
 				while (nlocks-- > 0) {
 					lock = ack_locks[nlocks];
-					ldlm_lock_downgrade(lock, LCK_COS);
+					ldlm_lock_mode_downgrade(lock, LCK_COS);
 					LDLM_LOCK_PUT(lock);
 				}
 				RETURN(0);

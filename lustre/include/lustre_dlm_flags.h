@@ -44,7 +44,7 @@
 
 /**
  * Server placed lock on conv list, or a recovering client wants the lock
- * added to the conv list, no questions asked. */
+ * added to the conv list, no questions asked. (obsoleted) */
 #define LDLM_FL_BLOCK_CONV              0x0000000000000004ULL // bit   2
 #define ldlm_is_block_conv(_l)          LDLM_TEST_FLAG(( _l), 1ULL <<  2)
 #define ldlm_set_block_conv(_l)         LDLM_SET_FLAG((  _l), 1ULL <<  2)
@@ -403,7 +403,6 @@
 
 /** l_flags bits marked as "blocked" bits */
 #define LDLM_FL_BLOCKED_MASK            (LDLM_FL_BLOCK_GRANTED		|\
-					 LDLM_FL_BLOCK_CONV		|\
 					 LDLM_FL_BLOCK_WAIT)
 
 /** l_flags bits marked as "gone" bits */

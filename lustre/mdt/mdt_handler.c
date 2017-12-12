@@ -3023,7 +3023,7 @@ void mdt_save_lock(struct mdt_thread_info *info, struct lustre_handle *h,
 					"state %p transno %lld\n", req,
 					req->rq_reply_state, req->rq_transno);
 				if (cos) {
-					ldlm_lock_downgrade(lock, LCK_COS);
+					ldlm_lock_mode_downgrade(lock, LCK_COS);
 					mode = LCK_COS;
 				}
 				if (req->rq_export->exp_disconnected)
