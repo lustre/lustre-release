@@ -325,6 +325,7 @@ int server_name2fsname(const char *svname, char *fsname, const char **endptr);
 
 int server_name2svname(const char *label, char *svname, const char **endptr,
 		       size_t svsize);
+void obdname2fsname(const char *tgt, char *fsname, size_t buflen);
 
 #ifdef HAVE_SERVER_SUPPORT
 int server_name_is_ost(const char *svname);

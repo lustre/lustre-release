@@ -504,49 +504,6 @@ struct sptlrpc_conf {
 static struct mutex sptlrpc_conf_lock;
 static struct list_head sptlrpc_confs;
 
-/*
- * The goal of this function is to extract the file system name
- * from the obd name. This can come in two flavors. One is
- * fsname-MDTXXXX or fsname-XXXXXXX were X is a hexadecimal
- * number. In both cases we should be returned fsname. If it is
- * not a valid obd name it is assumed to be the file system
- * name itself.
- */
-static void obdname2fsname(const char *tgt, char *fsname, size_t buflen)
-{
-	const char *ptr;
-	size_t len;
-
-	ptr = strrchr(tgt, '-');
-	if (ptr) {
-		if ((!strncmp(ptr, "-MDT", 4) ||
-		     !strncmp(ptr, "-OST", 4)) &&
-		     (isxdigit(ptr[4]) && isxdigit(ptr[5]) &&
-		      isxdigit(ptr[6]) && isxdigit(ptr[7])))
-			goto valid_obd_name;
-
-		/* The length of the obdname can vary on different platforms */
-		len = strlen(ptr);
-		while (--len) {
-			if (!isxdigit(ptr[len])) {
-				ptr = NULL;
-				break;
-			}
-		}
-	}
-
-valid_obd_name:
-        /* if we didn't find the pattern, treat the whole string as fsname */
-        if (ptr == NULL)
-                len = strlen(tgt);
-        else
-                len = ptr - tgt;
-
-        len = min(len, buflen - 1);
-        memcpy(fsname, tgt, len);
-        fsname[len] = '\0';
-}
-
 static void sptlrpc_conf_free_rsets(struct sptlrpc_conf *conf)
 {
 	struct sptlrpc_conf_tgt *conf_tgt, *conf_tgt_next;
