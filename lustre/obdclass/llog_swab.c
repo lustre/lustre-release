@@ -355,13 +355,14 @@ void lustre_swab_llog_hdr (struct llog_log_hdr *h)
 }
 EXPORT_SYMBOL(lustre_swab_llog_hdr);
 
-static void print_lustre_cfg(struct lustre_cfg *lcfg)
+void print_lustre_cfg(struct lustre_cfg *lcfg)
 {
         int i;
         ENTRY;
 
         if (!(libcfs_debug & D_OTHER)) /* don't loop on nothing */
                 return;
+
         CDEBUG(D_OTHER, "lustre_cfg: %p\n", lcfg);
         CDEBUG(D_OTHER, "\tlcfg->lcfg_version: %#x\n", lcfg->lcfg_version);
 
@@ -370,13 +371,17 @@ static void print_lustre_cfg(struct lustre_cfg *lcfg)
         CDEBUG(D_OTHER, "\tlcfg->lcfg_flags: %#x\n", lcfg->lcfg_flags);
         CDEBUG(D_OTHER, "\tlcfg->lcfg_nid: %s\n", libcfs_nid2str(lcfg->lcfg_nid));
 
-        CDEBUG(D_OTHER, "\tlcfg->lcfg_bufcount: %d\n", lcfg->lcfg_bufcount);
-        if (lcfg->lcfg_bufcount < LUSTRE_CFG_MAX_BUFCOUNT)
-                for (i = 0; i < lcfg->lcfg_bufcount; i++)
-                        CDEBUG(D_OTHER, "\tlcfg->lcfg_buflens[%d]: %d\n",
-                               i, lcfg->lcfg_buflens[i]);
+	CDEBUG(D_OTHER, "\tlcfg->lcfg_bufcount: %d\n", lcfg->lcfg_bufcount);
+	if (lcfg->lcfg_bufcount < LUSTRE_CFG_MAX_BUFCOUNT)
+		for (i = 0; i < lcfg->lcfg_bufcount; i++) {
+			CDEBUG(D_OTHER, "\tlcfg->lcfg_buflens[%d]: %d %s\n",
+			       i, lcfg->lcfg_buflens[i],
+			       lustre_cfg_string(lcfg, i));
+		}
+
         EXIT;
 }
+EXPORT_SYMBOL(print_lustre_cfg);
 
 void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg)
 {

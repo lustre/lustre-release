@@ -215,8 +215,8 @@ int mgs_erase_log(const struct lu_env *env, struct mgs_device *mgs,
 		  char *name);
 int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs,
 		   const char *fsname);
-int mgs_setparam(const struct lu_env *env, struct mgs_device *mgs,
-		 struct lustre_cfg *lcfg, char *fsname);
+int mgs_set_param(const struct lu_env *env, struct mgs_device *mgs,
+		  struct lustre_cfg *lcfg);
 int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
 		  struct obd_ioctl_data *data);
 int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,

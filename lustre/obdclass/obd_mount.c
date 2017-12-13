@@ -674,6 +674,79 @@ int lustre_put_lsi(struct super_block *sb)
 	RETURN(0);
 }
 
+/*
+ * The goal of this function is to extract the file system name
+ * from the obd name. This can come in two flavors. One is
+ * fsname-MDTXXXX or fsname-XXXXXXX were X is a hexadecimal
+ * number. In both cases we should return fsname. If it is
+ * not a valid obd name it is assumed to be the file system
+ * name itself.
+ */
+void obdname2fsname(const char *tgt, char *fsname, size_t buflen)
+{
+	const char *ptr;
+	const char *tmp;
+	size_t len = 0;
+
+	/* First we have to see if the @tgt has '-' at all. It is
+	 * valid for the user to request something like
+	 * lctl set_param -P llite.lustre*.xattr_cache=0
+	 */
+	ptr = strrchr(tgt, '-');
+	if (!ptr) {
+		/* No '-' means it should end in '*' */
+		ptr = strchr(tgt, '*');
+		if (!ptr)
+			goto no_fsname;
+		len = ptr - tgt;
+		goto valid_obd_name;
+	}
+
+	/* tgt format fsname-MDT0000-* */
+	if ((!strncmp(ptr, "-MDT", 4) ||
+	     !strncmp(ptr, "-OST", 4)) &&
+	     (isxdigit(ptr[4]) && isxdigit(ptr[5]) &&
+	      isxdigit(ptr[6]) && isxdigit(ptr[7]))) {
+		len = ptr - tgt;
+		goto valid_obd_name;
+	}
+
+	/* tgt_format fsname-cli'dev'-'uuid' except for the llite case
+	 * which are named fsname-'uuid'. Examples:
+	 *
+	 * lustre-clilov-ffff88104db5b800
+	 * lustre-ffff88104db5b800  (for llite device)
+	 *
+	 * The length of the obd uuid can vary on different platforms.
+	 * This test if any invalid characters are in string. Allow
+	 * wildcards with '*' character.
+	 */
+	ptr++;
+	if (!strspn(ptr, "0123456789abcdefABCDEF*")) {
+		len = 0;
+		goto no_fsname;
+	}
+
+	/* Now that we validated the device name lets extract the
+	 * file system name. Most of the names in this class will
+	 * have '-cli' in its name which needs to be dropped. If
+	 * it doesn't have '-cli' then its a llite device which
+	 * ptr already points to the start of the uuid string.
+	 */
+	tmp = strstr(tgt, "-cli");
+	if (tmp)
+		ptr = tmp;
+	else
+		ptr--;
+	len = ptr - tgt;
+valid_obd_name:
+	len = min_t(size_t, len, LUSTRE_MAXFSNAME);
+	snprintf(fsname, buflen, "%.*s", (int)len, tgt);
+no_fsname:
+	fsname[len] = '\0';
+}
+EXPORT_SYMBOL(obdname2fsname);
+
 /*** SERVER NAME ***
  * <FSNAME><SEPARATOR><TYPE><INDEX>
  * FSNAME is between 1 and 8 characters (inclusive).

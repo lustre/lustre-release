@@ -130,7 +130,7 @@ static int mgs_set_info(struct tgt_session_info *tsi)
 	    !str_starts_with(s + 1, "lov.stripeoffset="))
 		RETURN(-EINVAL);
 
-	/* Construct lustre_cfg structure to pass to function mgs_setparam */
+	/* Construct lustre_cfg structure to pass to function mgs_set_param */
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
 	lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 1, msp->mgs_param);
 	OBD_ALLOC(lcfg, lustre_cfg_len(mgi->mgi_bufs.lcfg_bufcount,
@@ -139,12 +139,10 @@ static int mgs_set_info(struct tgt_session_info *tsi)
 		RETURN(-ENOMEM);
 	lustre_cfg_init(lcfg, LCFG_PARAM, &mgi->mgi_bufs);
 
-	rc = mgs_setparam(tsi->tsi_env, exp2mgs_dev(tsi->tsi_exp), lcfg,
-			  mgi->mgi_fsname);
+	rc = mgs_set_param(tsi->tsi_env, exp2mgs_dev(tsi->tsi_exp), lcfg);
 	if (rc) {
-		LCONSOLE_WARN("%s: Unable to set parameter %s for %s: %d\n",
-			      tgt_name(tsi->tsi_tgt), msp->mgs_param,
-			      mgi->mgi_fsname, rc);
+		LCONSOLE_WARN("%s: Unable to set parameter %s: %d\n",
+			      tgt_name(tsi->tsi_tgt), msp->mgs_param, rc);
 		GOTO(out_cfg, rc);
 	}
 
@@ -1018,9 +1016,8 @@ static int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         switch (cmd) {
 
-        case OBD_IOC_PARAM: {
-		struct mgs_thread_info *mgi = mgs_env_info(&env);
-                struct lustre_cfg *lcfg;
+	case OBD_IOC_PARAM: {
+		struct lustre_cfg *lcfg;
 
 		if (data->ioc_type != LUSTRE_CFG_TYPE) {
 			CERROR("%s: unknown cfg record type: %d\n",
@@ -1037,7 +1034,7 @@ static int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (lcfg->lcfg_bufcount < 1)
                         GOTO(out_free, rc = -EINVAL);
 
-		rc = mgs_setparam(&env, mgs, lcfg, mgi->mgi_fsname);
+		rc = mgs_set_param(&env, mgs, lcfg);
 		if (rc)
 			CERROR("%s: setparam err: rc = %d\n",
 			       exp->exp_obd->obd_name, rc);

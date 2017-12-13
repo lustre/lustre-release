@@ -1351,15 +1351,31 @@ out_put:
 /**
  * Parse device name and get file system name and/or device index
  *
- * \param[in]   devname device name (ex. lustre-MDT0000)
- * \param[out]  fsname  file system name(optional)
- * \param[out]  index   device index(optional)
+ * @devname	device name (ex. lustre-MDT0000)
+ * @fsname	file system name extracted from @devname and returned
+ *		to the caller (optional)
+ * @index	device index extracted from @devname and returned to
+ *		the caller (optional)
  *
- * \retval 0    success
+ * RETURN	0			success if we are only interested in
+ *					extracting fsname from devname.
+ *					i.e index is NULL
+ *
+ *		LDD_F_SV_TYPE_*		Besides extracting the fsname the
+ *					user also wants the index. Report to
+ *					the user the type of obd device the
+ *					returned index belongs too.
+ *
+ *		-EINVAL			The obd device name is improper so
+ *					fsname could not be extracted.
+ *
+ *		-ENXIO			Failed to extract the index out of
+ *					the obd device name. Most likely an
+ *					invalid obd device name
  */
-static int mgs_parse_devname(char *devname, char *fsname, __u32 *index)
+static int mgs_parse_devname(char *devname, char *fsname, u32 *index)
 {
-	int rc;
+	int rc = 0;
 	ENTRY;
 
 	/* Extract fsname */
@@ -1377,11 +1393,12 @@ static int mgs_parse_devname(char *devname, char *fsname, __u32 *index)
 		if (rc < 0) {
 			CDEBUG(D_MGS, "Device name %s with wrong index\n",
 			       devname);
-			RETURN(-EINVAL);
+			RETURN(-ENXIO);
 		}
 	}
 
-	RETURN(0);
+	/* server_name2index can return LDD_F_SV_TYPE_* so always return rc */
+	RETURN(rc);
 }
 
 /* This is only called during replace_nids */
@@ -1461,9 +1478,9 @@ int mgs_replace_nids(const struct lu_env *env,
 		GOTO(out, rc = -EINPROGRESS);
 	}
 
-	/* Get fsname and index*/
+	/* Get fsname and index */
 	rc = mgs_parse_devname(devname, fsname, &index);
-	if (rc)
+	if (rc < 0)
 		GOTO(out, rc);
 
 	rc = mgs_find_or_make_fsdb(env, mgs, fsname, &fsdb);
@@ -2904,7 +2921,8 @@ static int mgs_write_log_add_failnid(const struct lu_env *env,
 
         /* FIXME we currently can't erase the failnids
          * given when a target first registers, since they aren't part of
-         * an "add uuid" stanza */
+	 * an "add uuid" stanza
+	 */
 
         /* Verify that we know about this target */
 	if (mgs_log_is_empty(env, mgs, mti->mti_svname)) {
@@ -2924,12 +2942,14 @@ static int mgs_write_log_add_failnid(const struct lu_env *env,
         }
 	if (rc)
 		RETURN(rc);
+
         /* Add failover nids to the client log */
 	rc = name_create(&logname, mti->mti_fsname, "-client");
 	if (rc) {
 		name_destroy(&cliname);
 		RETURN(rc);
 	}
+
 	rc = mgs_write_log_failnid_internal(env, mgs, fsdb,mti,logname,cliname);
         name_destroy(&logname);
         name_destroy(&cliname);
@@ -3012,22 +3032,6 @@ static int mgs_wlp_lcfg(const struct lu_env *env,
 				  comment);
 	lustre_cfg_rec_free(lcr);
 	return rc;
-}
-
-static int mgs_write_log_param2(const struct lu_env *env,
-				struct mgs_device *mgs,
-				struct fs_db *fsdb,
-				struct mgs_target_info *mti, char *ptr)
-{
-	struct lustre_cfg_bufs	bufs;
-	int			rc = 0;
-	ENTRY;
-
-	CDEBUG(D_MGS, "next param '%s'\n", ptr);
-	rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, PARAMS_FILENAME, &bufs,
-			  mti->mti_svname, ptr);
-
-	RETURN(rc);
 }
 
 /* write global variable settings into log */
@@ -3508,6 +3512,79 @@ out:
         if (rc)
                 CERROR("failed to read sptlrpc config database: %d\n", rc);
         RETURN(rc);
+}
+
+static int mgs_write_log_param2(const struct lu_env *env,
+				struct mgs_device *mgs,
+				struct fs_db *fsdb,
+				struct mgs_target_info *mti, char *ptr)
+{
+	struct lustre_cfg_bufs bufs;
+	int rc;
+
+	ENTRY;
+	CDEBUG(D_MGS, "next param '%s'\n", ptr);
+
+	/* PARAM_MGSNODE and PARAM_NETWORK are set only when formating
+	 * or during the inital mount. It can never change after that.
+	 */
+	if (!class_match_param(ptr, PARAM_MGSNODE, NULL) ||
+	    !class_match_param(ptr, PARAM_NETWORK, NULL)) {
+		rc = 0;
+		goto end;
+	}
+
+	/* Processed in mgs_write_log_ost. Another value that can't
+	 * be changed by lctl set_param -P.
+	 */
+	if (!class_match_param(ptr, PARAM_FAILMODE, NULL)) {
+		LCONSOLE_ERROR_MSG(0x169,
+				   "%s can only be changed with tunefs.lustre and --writeconf\n",
+				   ptr);
+		rc = -EPERM;
+		goto end;
+	}
+
+	/* FIXME !!! Support for sptlrpc is incomplete. Currently the change
+	 * doesn't transmit to the client. See LU-7183.
+	 */
+	if (!class_match_param(ptr, PARAM_SRPC, NULL)) {
+		rc = mgs_srpc_set_param(env, mgs, fsdb, mti, ptr);
+		goto end;
+	}
+
+	/* Can't use class_match_param since ptr doesn't start with
+	 * PARAM_FAILNODE. So we look for PARAM_FAILNODE contained in ptr.
+	 */
+	if (strstr(ptr, PARAM_FAILNODE)) {
+		/* Add a failover nidlist. We already processed failovers
+		 * params for new targets in mgs_write_log_target.
+		 */
+		const char *param;
+
+		/* can't use wildcards with failover.node */
+		if (strchr(ptr, '*')) {
+			rc = -ENODEV;
+			goto end;
+		}
+
+		param = strstr(ptr, PARAM_FAILNODE);
+		if (strlcpy(mti->mti_params, param, sizeof(mti->mti_params)) >=
+		    sizeof(mti->mti_params)) {
+			rc = -E2BIG;
+			goto end;
+		}
+
+		CDEBUG(D_MGS, "Adding failnode with param %s\n",
+		       mti->mti_params);
+		rc = mgs_write_log_add_failnid(env, mgs, fsdb, mti);
+		goto end;
+	}
+
+	rc = mgs_wlp_lcfg(env, mgs, fsdb, mti, PARAMS_FILENAME, &bufs,
+			  mti->mti_svname, ptr);
+end:
+	RETURN(rc);
 }
 
 /* Permanent settings of all parameters by writing into the appropriate
@@ -4681,30 +4758,6 @@ next:
 	RETURN(rc);
 }
 
-/* from llog_swab */
-static void print_lustre_cfg(struct lustre_cfg *lcfg)
-{
-        int i;
-        ENTRY;
-
-        CDEBUG(D_MGS, "lustre_cfg: %p\n", lcfg);
-        CDEBUG(D_MGS, "\tlcfg->lcfg_version: %#x\n", lcfg->lcfg_version);
-
-        CDEBUG(D_MGS, "\tlcfg->lcfg_command: %#x\n", lcfg->lcfg_command);
-        CDEBUG(D_MGS, "\tlcfg->lcfg_num: %#x\n", lcfg->lcfg_num);
-        CDEBUG(D_MGS, "\tlcfg->lcfg_flags: %#x\n", lcfg->lcfg_flags);
-        CDEBUG(D_MGS, "\tlcfg->lcfg_nid: %s\n", libcfs_nid2str(lcfg->lcfg_nid));
-
-        CDEBUG(D_MGS, "\tlcfg->lcfg_bufcount: %d\n", lcfg->lcfg_bufcount);
-        if (lcfg->lcfg_bufcount < LUSTRE_CFG_MAX_BUFCOUNT)
-                for (i = 0; i < lcfg->lcfg_bufcount; i++) {
-                        CDEBUG(D_MGS, "\tlcfg->lcfg_buflens[%d]: %d %s\n",
-                               i, lcfg->lcfg_buflens[i],
-                               lustre_cfg_string(lcfg, i));
-                }
-        EXIT;
-}
-
 /* Setup _mgs fsdb and log
  */
 int mgs__mgs_fsdb_setup(const struct lu_env *env, struct mgs_device *mgs)
@@ -4752,123 +4805,251 @@ int mgs_params_fsdb_cleanup(const struct lu_env *env, struct mgs_device *mgs)
 	return rc == -ENOENT ? 0 : rc;
 }
 
-/* Set a permanent (config log) param for a target or fs
- * \param lcfg buf0 may contain the device (testfs-MDT0000) name
- *             buf1 contains the single parameter
- */
-int mgs_setparam(const struct lu_env *env, struct mgs_device *mgs,
-		 struct lustre_cfg *lcfg, char *fsname)
+/**
+ * Fill in the mgs_target_info based on data devname and param provide.
+ *
+ * @env		thread context
+ * @mgs		mgs device
+ * @mti		mgs target info. We want to set this based other paramters
+ *		passed to this function. Once setup we write it to the config
+ *		logs.
+ * @devname	optional OBD device name
+ * @param	string that contains both what tunable to set and the value to
+ *		set it to.
+ *
+ * RETURN	0 for success
+ *		negative error number on failure
+ **/
+static int mgs_set_conf_param(const struct lu_env *env, struct mgs_device *mgs,
+			      struct mgs_target_info *mti, const char *devname,
+			      const char *param)
 {
 	struct fs_db *fsdb = NULL;
-	struct mgs_target_info *mti = NULL;
-	char *devname, *param;
-	char *ptr;
-	const char *tmp;
-	__u32 index;
+	int dev_type;
 	int rc = 0;
-	bool free = false;
+
 	ENTRY;
+	/* lustre, lustre-mdtlov, lustre-client, lustre-MDT0000 */
+	if (!devname) {
+		size_t len;
 
-        print_lustre_cfg(lcfg);
+		/* We have two possible cases here:
+		 *
+		 * 1) the device name embedded in the param:
+		 *    lustre-OST0000.osc.max_dirty_mb=32
+		 *
+		 * 2) the file system name is embedded in
+		 *    the param: lustre.sys.at.min=0
+		 */
+		len = strcspn(param, ".=");
+		if (!len || param[len] == '=')
+			RETURN(-EINVAL);
 
-        /* lustre, lustre-mdtlov, lustre-client, lustre-MDT0000 */
-        devname = lustre_cfg_string(lcfg, 0);
-        param = lustre_cfg_string(lcfg, 1);
-        if (!devname) {
-                /* Assume device name embedded in param:
-                   lustre-OST0000.osc.max_dirty_mb=32 */
-                ptr = strchr(param, '.');
-                if (ptr) {
-                        devname = param;
-                        *ptr = 0;
-                        param = ptr + 1;
-                }
-        }
-        if (!devname) {
-                LCONSOLE_ERROR_MSG(0x14d, "No target specified: %s\n", param);
-                RETURN(-ENOSYS);
-        }
+		if (len >= sizeof(mti->mti_svname))
+			RETURN(-E2BIG);
 
-	rc = mgs_parse_devname(devname, fsname, NULL);
-	if (rc == 0 && !mgs_parse_devname(devname, NULL, &index)) {
-                /* param related to llite isn't allowed to set by OST or MDT */
-		if (rc == 0 && strncmp(param, PARAM_LLITE,
-				       sizeof(PARAM_LLITE) - 1) == 0)
-                        RETURN(-EINVAL);
-        } else {
-                /* assume devname is the fsname */
-		strlcpy(fsname, devname, MTI_NAME_MAXLEN);
-        }
-        CDEBUG(D_MGS, "setparam fs='%s' device='%s'\n", fsname, devname);
+		snprintf(mti->mti_svname, sizeof(mti->mti_svname),
+			 "%.*s", (int)len, param);
+		param += len + 1;
+	} else {
+		if (strlcpy(mti->mti_svname, devname, sizeof(mti->mti_svname)) >=
+		    sizeof(mti->mti_svname))
+			RETURN(-E2BIG);
+	}
 
-	rc = mgs_find_or_make_fsdb(env, mgs,
-				   lcfg->lcfg_command == LCFG_SET_PARAM ?
-				   PARAMS_FILENAME : fsname, &fsdb);
+	if (!strlen(mti->mti_svname)) {
+		LCONSOLE_ERROR_MSG(0x14d, "No target specified: %s\n", param);
+		RETURN(-ENOSYS);
+	}
+
+	dev_type = mgs_parse_devname(mti->mti_svname, mti->mti_fsname,
+				     &mti->mti_stripe_index);
+	switch (dev_type) {
+	/* For this case we have an invalid obd device name */
+	case -ENXIO:
+		CDEBUG(D_MGS, "%s don't contain an index\n", mti->mti_svname);
+		strlcpy(mti->mti_fsname, mti->mti_svname, MTI_NAME_MAXLEN);
+		dev_type = 0;
+		break;
+	/* Not an obd device, assume devname is the fsname.
+	 * User might of only provided fsname and not obd device
+	 */
+	case -EINVAL:
+		CDEBUG(D_MGS, "%s is seen as a file system name\n", mti->mti_svname);
+		strlcpy(mti->mti_fsname, mti->mti_svname, MTI_NAME_MAXLEN);
+		dev_type = 0;
+		break;
+	default:
+		if (dev_type < 0)
+			GOTO(out, rc = dev_type);
+
+		/* param related to llite isn't allowed to set by OST or MDT */
+		if (dev_type & LDD_F_SV_TYPE_OST ||
+		    dev_type & LDD_F_SV_TYPE_MDT) {
+			/* param related to llite isn't allowed to set by OST
+			 * or MDT
+			 */
+			if (!strncmp(param, PARAM_LLITE,
+				     sizeof(PARAM_LLITE) - 1))
+				GOTO(out, rc = -EINVAL);
+
+			/* Strip -osc or -mdc suffix from svname */
+			if (server_make_name(dev_type, mti->mti_stripe_index,
+					     mti->mti_fsname, mti->mti_svname,
+					     sizeof(mti->mti_svname)))
+				GOTO(out, rc = -EINVAL);
+		}
+		break;
+	}
+
+	if (strlcpy(mti->mti_params, param, sizeof(mti->mti_params)) >=
+	    sizeof(mti->mti_params))
+		GOTO(out, rc = -E2BIG);
+
+	CDEBUG(D_MGS, "set_conf_param fs='%s' device='%s' param='%s'\n",
+	       mti->mti_fsname, mti->mti_svname, mti->mti_params);
+
+	rc = mgs_find_or_make_fsdb(env, mgs, mti->mti_fsname, &fsdb);
 	if (rc)
-		RETURN(rc);
+		GOTO(out, rc);
 
-	if (lcfg->lcfg_command != LCFG_SET_PARAM &&
-	    !test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags) &&
+	if (!test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags) &&
 	    test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags)) {
 		CERROR("No filesystem targets for %s. cfg_device from lctl "
-		       "is '%s'\n", fsname, devname);
-		free = true;
+		       "is '%s'\n", mti->mti_fsname, mti->mti_svname);
+		mgs_unlink_fsdb(mgs, fsdb);
 		GOTO(out, rc = -EINVAL);
 	}
 
-	/* Create a fake mti to hold everything */
-	OBD_ALLOC_PTR(mti);
-	if (!mti)
-		GOTO(out, rc = -ENOMEM);
-	if (strlcpy(mti->mti_fsname, fsname, sizeof(mti->mti_fsname))
-	    >= sizeof(mti->mti_fsname))
-		GOTO(out, rc = -E2BIG);
-	if (strlcpy(mti->mti_svname, devname, sizeof(mti->mti_svname))
-	    >= sizeof(mti->mti_svname))
-		GOTO(out, rc = -E2BIG);
-	if (strlcpy(mti->mti_params, param, sizeof(mti->mti_params))
-	    >= sizeof(mti->mti_params))
-		GOTO(out, rc = -E2BIG);
-        rc = server_name2index(mti->mti_svname, &mti->mti_stripe_index, &tmp);
-        if (rc < 0)
-                /* Not a valid server; may be only fsname */
-                rc = 0;
-        else
-                /* Strip -osc or -mdc suffix from svname */
-                if (server_make_name(rc, mti->mti_stripe_index, mti->mti_fsname,
-				     mti->mti_svname, sizeof(mti->mti_svname)))
-                        GOTO(out, rc = -EINVAL);
 	/*
 	 * Revoke lock so everyone updates.  Should be alright if
 	 * someone was already reading while we were updating the logs,
 	 * so we don't really need to hold the lock while we're
 	 * writing (above).
 	 */
-	if (lcfg->lcfg_command == LCFG_SET_PARAM) {
-		mti->mti_flags = rc | LDD_F_PARAM2;
-		mutex_lock(&fsdb->fsdb_mutex);
-		rc = mgs_write_log_param2(env, mgs, fsdb, mti, mti->mti_params);
-		mutex_unlock(&fsdb->fsdb_mutex);
-		mgs_revoke_lock(mgs, fsdb, CONFIG_T_PARAMS);
-	} else {
-		mti->mti_flags = rc | LDD_F_PARAM;
-		mutex_lock(&fsdb->fsdb_mutex);
-		rc = mgs_write_log_param(env, mgs, fsdb, mti, mti->mti_params);
-		mutex_unlock(&fsdb->fsdb_mutex);
-		mgs_revoke_lock(mgs, fsdb, CONFIG_T_CONFIG);
-	}
+	mti->mti_flags = dev_type | LDD_F_PARAM;
+	mutex_lock(&fsdb->fsdb_mutex);
+	rc = mgs_write_log_param(env, mgs, fsdb, mti, mti->mti_params);
+	mutex_unlock(&fsdb->fsdb_mutex);
+	mgs_revoke_lock(mgs, fsdb, CONFIG_T_CONFIG);
 
 out:
-	if (mti)
-		OBD_FREE_PTR(mti);
-
-	if (fsdb) {
-		if (free)
-			mgs_unlink_fsdb(mgs, fsdb);
+	if (fsdb)
 		mgs_put_fsdb(mgs, fsdb);
-	}
 
 	RETURN(rc);
+}
+
+static int mgs_set_param2(const struct lu_env *env, struct mgs_device *mgs,
+			  struct mgs_target_info *mti, const char *param)
+{
+	struct fs_db *fsdb = NULL;
+	int dev_type;
+	size_t len;
+	int rc;
+
+	if (strlcpy(mti->mti_params, param, sizeof(mti->mti_params)) >=
+	    sizeof(mti->mti_params))
+		GOTO(out, rc = -E2BIG);
+
+	/* obdname2fsname reports devname as an obd device */
+	len = strcspn(param, ".=");
+	if (len && param[len] != '=') {
+		char *ptr;
+
+		param += len + 1;
+		ptr = strchr(param, '.');
+
+		len = strlen(param);
+		if (ptr)
+			len -= strlen(ptr);
+		if (len >= sizeof(mti->mti_svname))
+			GOTO(out, rc = -E2BIG);
+
+		snprintf(mti->mti_svname, sizeof(mti->mti_svname), "%.*s",
+			(int)len, param);
+
+		obdname2fsname(mti->mti_svname, mti->mti_fsname,
+			       sizeof(mti->mti_fsname));
+	} else {
+		snprintf(mti->mti_svname, sizeof(mti->mti_svname), "general");
+	}
+
+	CDEBUG(D_MGS, "set_param2 fs='%s' device='%s' param='%s'\n",
+	       mti->mti_fsname, mti->mti_svname, mti->mti_params);
+
+	/* The return value should be the device type i.e LDD_F_SV_TYPE_XXX.
+	 * A returned error tells us we don't have a target obd device.
+	 */
+	dev_type = server_name2index(mti->mti_svname, &mti->mti_stripe_index,
+				     NULL);
+	if (dev_type < 0)
+		dev_type = 0;
+
+	/* the return value should be the device type i.e LDD_F_SV_TYPE_XXX.
+	 * Strip -osc or -mdc suffix from svname
+	 */
+	if ((dev_type & LDD_F_SV_TYPE_OST || dev_type & LDD_F_SV_TYPE_MDT) &&
+	    server_make_name(dev_type, mti->mti_stripe_index,
+			     mti->mti_fsname, mti->mti_svname,
+			     sizeof(mti->mti_svname)))
+		GOTO(out, rc = -EINVAL);
+
+	rc = mgs_find_or_make_fsdb(env, mgs, PARAMS_FILENAME, &fsdb);
+	if (rc)
+		GOTO(out, rc);
+	/*
+	 * Revoke lock so everyone updates.  Should be alright if
+	 * someone was already reading while we were updating the logs,
+	 * so we don't really need to hold the lock while we're
+	 * writing (above).
+	 */
+	mti->mti_flags = dev_type | LDD_F_PARAM2;
+	mutex_lock(&fsdb->fsdb_mutex);
+	rc = mgs_write_log_param2(env, mgs, fsdb, mti, mti->mti_params);
+	mutex_unlock(&fsdb->fsdb_mutex);
+	mgs_revoke_lock(mgs, fsdb, CONFIG_T_PARAMS);
+	mgs_put_fsdb(mgs, fsdb);
+out:
+	RETURN(rc);
+}
+
+/* Set a permanent (config log) param for a target or fs
+ *
+ * @lcfg buf0 may contain the device (testfs-MDT0000) name
+ *       buf1 contains the single parameter
+ */
+int mgs_set_param(const struct lu_env *env, struct mgs_device *mgs,
+		  struct lustre_cfg *lcfg)
+{
+	const char *param = lustre_cfg_string(lcfg, 1);
+	struct mgs_target_info *mti;
+	int rc;
+
+	/* Create a fake mti to hold everything */
+	OBD_ALLOC_PTR(mti);
+	if (!mti)
+		return -ENOMEM;
+
+	print_lustre_cfg(lcfg);
+
+	if (lcfg->lcfg_command == LCFG_PARAM) {
+		/* For the case of lctl conf_param devname can be
+		 * lustre, lustre-mdtlov, lustre-client, lustre-MDT0000
+		 */
+		const char *devname = lustre_cfg_string(lcfg, 0);
+
+		rc = mgs_set_conf_param(env, mgs, mti, devname, param);
+	} else {
+		/* In the case of lctl set_param -P lcfg[0] will always
+		 * be 'general'. At least for now.
+		 */
+		rc = mgs_set_param2(env, mgs, mti, param);
+	}
+
+	OBD_FREE_PTR(mti);
+
+	return rc;
 }
 
 static int mgs_write_log_pool(const struct lu_env *env,
