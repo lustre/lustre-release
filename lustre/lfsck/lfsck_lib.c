@@ -3088,6 +3088,9 @@ int lfsck_start(const struct lu_env *env, struct dt_device *key,
 	if (unlikely(lfsck == NULL))
 		RETURN(-ENXIO);
 
+	if (unlikely(lfsck->li_stopping))
+		GOTO(put, rc = -ENXIO);
+
 	/* System is not ready, try again later. */
 	if (unlikely(lfsck->li_namespace == NULL ||
 		     lfsck_dev_site(lfsck)->ss_server_fld == NULL))
@@ -3370,6 +3373,10 @@ int lfsck_stop(const struct lu_env *env, struct dt_device *key,
 	}
 
 	spin_lock(&lfsck->li_lock);
+	/* The target is umounted */
+	if (stop && stop->ls_status == LS_PAUSED)
+		lfsck->li_stopping = 1;
+
 	if (thread_is_init(thread) || thread_is_stopped(thread))
 		/* no error if LFSCK stopped already, or not started */
 		GOTO(unlock, rc = 0);
