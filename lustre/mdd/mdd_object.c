@@ -2957,16 +2957,14 @@ out:
 	return rc;
 }
 
-static int mdd_declare_close(const struct lu_env *env,
-                             struct mdd_object *obj,
-                             struct md_attr *ma,
-                             struct thandle *handle)
+static int mdd_declare_close(const struct lu_env *env, struct mdd_object *obj,
+			     struct md_attr *ma, struct thandle *handle)
 {
-        int rc;
+	int rc;
 
-        rc = orph_declare_index_delete(env, obj, handle);
-        if (rc)
-                return rc;
+	rc = mdd_orphan_declare_delete(env, obj, handle);
+	if (rc)
+		return rc;
 
 	return mdo_declare_destroy(env, obj, handle);
 }
@@ -3094,7 +3092,7 @@ cont:
 	if ((mdd_obj->mod_flags & ORPHAN_OBJ) != 0) {
 		/* remove link to object from orphan index */
 		LASSERT(handle != NULL);
-		rc = __mdd_orphan_del(env, mdd_obj, handle);
+		rc = mdd_orphan_delete(env, mdd_obj, handle);
 		if (rc != 0) {
 			CERROR("%s: unable to delete "DFID" from orphan list: "
 			       "rc = %d\n", lu_dev_name(mdd2lu_dev(mdd)),

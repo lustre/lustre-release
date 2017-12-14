@@ -1620,7 +1620,7 @@ static int mdd_declare_finish_unlink(const struct lu_env *env,
 				     struct mdd_object *obj,
 				     struct thandle *handle)
 {
-	int	rc;
+	int rc;
 
 	/* Sigh, we do not know if the unlink object will become orphan in
 	 * declare phase, but fortunately the flags here does not matter
@@ -1633,7 +1633,7 @@ static int mdd_declare_finish_unlink(const struct lu_env *env,
 	if (rc != 0)
 		return rc;
 
-	rc = orph_declare_index_insert(env, obj, mdd_object_type(obj), handle);
+	rc = mdd_orphan_declare_insert(env, obj, mdd_object_type(obj), handle);
 	if (rc != 0)
 		return rc;
 
@@ -1658,7 +1658,7 @@ int mdd_finish_unlink(const struct lu_env *env,
 		 * will be deleted during mdd_close() */
 		obj->mod_flags |= DEAD_OBJ;
 		if (obj->mod_count) {
-			rc = __mdd_orphan_add(env, obj, th);
+			rc = mdd_orphan_insert(env, obj, th);
 			if (rc == 0)
 				CDEBUG(D_HA, "Object "DFID" is inserted into "
 					"orphan list, open count = %d\n",
@@ -1672,7 +1672,7 @@ int mdd_finish_unlink(const struct lu_env *env,
 					obj->mod_count);
 
 			/* mark object as an orphan here, not
-			 * before __mdd_orphan_add() as racing
+			 * before mdd_orphan_insert() as racing
 			 * mdd_la_get() may propagate ORPHAN_OBJ
 			 * causing the asserition */
 			rc = mdd_mark_orphan_object(env, obj, th, false);
@@ -2335,11 +2335,11 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 	}
 
 	if (unlikely(spec->sp_cr_flags & MDS_OPEN_VOLATILE)) {
-		rc = orph_declare_index_insert(env, c, attr->la_mode, handle);
+		rc = mdd_orphan_declare_insert(env, c, attr->la_mode, handle);
 		if (rc)
 			GOTO(out, rc);
 	} else {
-		struct lu_attr	*la = &mdd_env_info(env)->mti_la_for_fix;
+		struct lu_attr *la = &mdd_env_info(env)->mti_la_for_fix;
 
 		rc = mdo_declare_index_insert(env, p, mdo2fid(c), attr->la_mode,
 					      name->ln_name, handle);
@@ -2693,11 +2693,11 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	if (unlikely(spec->sp_cr_flags & MDS_OPEN_VOLATILE)) {
 		mdd_write_lock(env, son, MOR_TGT_CHILD);
 		son->mod_flags |= VOLATILE_OBJ;
-		rc = __mdd_orphan_add(env, son, handle);
+		rc = mdd_orphan_insert(env, son, handle);
 		GOTO(out_volatile, rc);
 	} else {
 		rc = __mdd_index_insert(env, mdd_pobj, mdo2fid(son),
-					attr->la_mode, name, handle);
+				      attr->la_mode, name, handle);
 		if (rc != 0)
 			GOTO(err_created, rc);
 
@@ -2716,7 +2716,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
 err_insert:
 	if (rc != 0) {
 		if (spec->sp_cr_flags & MDS_OPEN_VOLATILE)
-			rc2 = __mdd_orphan_del(env, son, handle);
+			rc2 = mdd_orphan_delete(env, son, handle);
 		else
 			rc2 = __mdd_index_delete(env, mdd_pobj, name,
 						 S_ISDIR(attr->la_mode),
@@ -4278,7 +4278,7 @@ static int mdd_migrate_update_name(const struct lu_env *env,
 	if (rc != 0)
 		GOTO(out_unlock, rc);
 
-	rc = __mdd_orphan_add(env, mdd_sobj, handle);
+	rc = mdd_orphan_insert(env, mdd_sobj, handle);
 	if (rc != 0)
 		GOTO(out_unlock, rc);
 

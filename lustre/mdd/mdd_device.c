@@ -890,7 +890,7 @@ static void mdd_device_shutdown(const struct lu_env *env, struct mdd_device *m,
 	lfsck_degister(env, m->mdd_bottom);
 	mdd_hsm_actions_llog_fini(env, m);
 	mdd_changelog_fini(env, m);
-	orph_index_fini(env, m);
+	mdd_orphan_index_fini(env, m);
 	mdd_dot_lustre_cleanup(env, m);
 	if (mdd2obd_dev(m)->u.obt.obt_nodemap_config_file) {
 		nm_config_file_deregister_tgt(env,
@@ -934,7 +934,7 @@ static int mdd_process_config(const struct lu_env *env,
                 break;
 	case LCFG_PRE_CLEANUP:
 		rc = next->ld_ops->ldo_process_config(env, next, cfg);
-		mdd_generic_thread_stop(&m->mdd_orph_cleanup_thread);
+		mdd_generic_thread_stop(&m->mdd_orphan_cleanup_thread);
 		break;
 	case LCFG_CLEANUP:
 		rc = next->ld_ops->ldo_process_config(env, next, cfg);
@@ -950,22 +950,21 @@ out:
 }
 
 static int mdd_recovery_complete(const struct lu_env *env,
-                                 struct lu_device *d)
+				 struct lu_device *d)
 {
-        struct mdd_device *mdd = lu2mdd_dev(d);
+	struct mdd_device *mdd = lu2mdd_dev(d);
 	struct lu_device *next;
-        int rc;
-        ENTRY;
+	int rc;
+	ENTRY;
 
-        LASSERT(mdd != NULL);
+	LASSERT(mdd != NULL);
 	next = &mdd->mdd_child->dd_lu_dev;
 
-        /* XXX: orphans handling. */
 	if (!mdd->mdd_bottom->dd_rdonly)
 		mdd_orphan_cleanup(env, mdd);
-        rc = next->ld_ops->ldo_recovery_complete(env, next);
+	rc = next->ld_ops->ldo_recovery_complete(env, next);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int mdd_local_file_create(const struct lu_env *env, struct mdd_device *mdd,
@@ -1062,7 +1061,7 @@ static int mdd_prepare(const struct lu_env *env,
 		mdd->mdd_root_fid = fid;
 	}
 
-	rc = orph_index_init(env, mdd);
+	rc = mdd_orphan_index_init(env, mdd);
 	if (rc < 0)
 		GOTO(out_dot, rc);
 
@@ -1115,7 +1114,7 @@ out_hsm:
 out_changelog:
 	mdd_changelog_fini(env, mdd);
 out_orph:
-	orph_index_fini(env, mdd);
+	mdd_orphan_index_fini(env, mdd);
 out_dot:
 	if (mdd_seq_site(mdd)->ss_node_id == 0)
 		mdd_dot_lustre_cleanup(env, mdd);

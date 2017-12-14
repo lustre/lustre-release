@@ -143,7 +143,7 @@ struct mdd_device {
 	unsigned int			 mdd_sync_permission;
 	int				 mdd_connects;
 	struct local_oid_storage	*mdd_los;
-	struct mdd_generic_thread	 mdd_orph_cleanup_thread;
+	struct mdd_generic_thread	 mdd_orphan_cleanup_thread;
 };
 
 enum mod_flags {
@@ -194,8 +194,6 @@ struct mdd_thread_info {
 	struct lfsck_req_local	  mti_lrl;
 	struct lu_seq_range	  mti_range;
 };
-
-extern const char orph_index_name[];
 
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
 	       struct lu_attr *la);
@@ -273,16 +271,16 @@ const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
                                        const void *area, ssize_t len);
 
 int mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d);
-int __mdd_orphan_add(const struct lu_env *, struct mdd_object *,
-                     struct thandle *);
-int __mdd_orphan_del(const struct lu_env *, struct mdd_object *,
-                     struct thandle *);
-int orph_index_init(const struct lu_env *env, struct mdd_device *mdd);
-void orph_index_fini(const struct lu_env *env, struct mdd_device *mdd);
-int orph_declare_index_insert(const struct lu_env *, struct mdd_object *,
-			      umode_t mode, struct thandle *);
-int orph_declare_index_delete(const struct lu_env *, struct mdd_object *,
-                              struct thandle *);
+int mdd_orphan_insert(const struct lu_env *env, struct mdd_object *obj,
+		      struct thandle *thandle);
+int mdd_orphan_delete(const struct lu_env *env, struct mdd_object *obj,
+		      struct thandle *thandle);
+int mdd_orphan_index_init(const struct lu_env *env, struct mdd_device *mdd);
+void mdd_orphan_index_fini(const struct lu_env *env, struct mdd_device *mdd);
+int mdd_orphan_declare_insert(const struct lu_env *env, struct mdd_object *obj,
+			      umode_t mode, struct thandle *thandle);
+int mdd_orphan_declare_delete(const struct lu_env *env, struct mdd_object *obj,
+			      struct thandle *thandle);
 
 /* mdd_lproc.c */
 int mdd_procfs_init(struct mdd_device *mdd, const char *name);
