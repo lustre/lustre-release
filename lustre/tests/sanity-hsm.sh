@@ -1063,7 +1063,7 @@ test_1b() {
 	local f=$DIR/$tdir/$tfile
 	rm -f $f
 
-	dd if=/dev/random of=$f bs=1M count=1 conv=sync ||
+	dd if=/dev/urandom of=$f bs=1M count=1 conv=sync ||
 		error "failed to create file"
 	local fid=$(path2fid $f)
 
