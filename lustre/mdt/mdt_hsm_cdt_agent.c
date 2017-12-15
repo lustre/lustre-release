@@ -528,22 +528,8 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 
 			/* if restore and record status updated, give
 			 * back granted layout lock */
-			if (hai->hai_action == HSMA_RESTORE) {
-				struct cdt_restore_handle *crh = NULL;
-
-				mutex_lock(&cdt->cdt_restore_lock);
-				crh = mdt_hsm_restore_hdl_find(cdt,
-							       &hai->hai_fid);
-				if (crh != NULL)
-					list_del(&crh->crh_list);
-				mutex_unlock(&cdt->cdt_restore_lock);
-				if (crh != NULL) {
-					mdt_object_unlock(mti, NULL,
-							  &crh->crh_lh, 1);
-					OBD_SLAB_FREE_PTR(crh,
-							  mdt_hsm_cdt_kmem);
-				}
-			}
+			if (hai->hai_action == HSMA_RESTORE)
+				cdt_restore_handle_del(mti, cdt, &hai->hai_fid);
 		}
 	}
 

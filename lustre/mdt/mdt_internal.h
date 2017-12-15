@@ -169,8 +169,7 @@ struct coordinator {
 	struct list_head	 cdt_request_list;
 	struct list_head	 cdt_agents;	      /**< list of register
 						       * agents */
-	struct list_head	 cdt_restore_hdl;     /**< list of restore lock
-						       * handles */
+	struct list_head	 cdt_restore_handle_list;
 
 	/* Hash of cookies to locations of record locations in agent
 	 * request log. */
@@ -958,8 +957,13 @@ int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie);
 /* mdt/mdt_coordinator.c */
 void mdt_hsm_dump_hal(int level, const char *prefix,
 		      struct hsm_action_list *hal);
-struct cdt_restore_handle *mdt_hsm_restore_hdl_find(struct coordinator *cdt,
-						const struct lu_fid *fid);
+int cdt_restore_handle_add(struct mdt_thread_info *mti, struct coordinator *cdt,
+			   const struct lu_fid *fid,
+			   const struct hsm_extent *he);
+struct cdt_restore_handle *cdt_restore_handle_find(struct coordinator *cdt,
+						   const struct lu_fid *fid);
+void cdt_restore_handle_del(struct mdt_thread_info *mti,
+			    struct coordinator *cdt, const struct lu_fid *fid);
 /* coordinator management */
 int mdt_hsm_cdt_init(struct mdt_device *mdt);
 int mdt_hsm_cdt_stop(struct mdt_device *mdt);
