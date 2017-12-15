@@ -5791,6 +5791,92 @@ test_64c() {
 }
 run_test 64c "verify grant shrink"
 
+# this does exactly what osc_request.c:osc_announce_cached() does in
+# order to calculate max amount of grants to ask from server
+want_grant() {
+	local tgt=$1
+
+	local page_size=$(get_page_size client)
+
+	local nrpages=$($LCTL get_param -n osc.${tgt}.max_pages_per_rpc)
+	local rpc_in_flight=$($LCTL get_param -n osc.${tgt}.max_rpcs_in_flight)
+
+	((rpc_in_flight ++));
+	nrpages=$((nrpages * rpc_in_flight))
+
+	local dirty_max_pages=$($LCTL get_param -n osc.${tgt}.max_dirty_mb)
+
+	dirty_max_pages=$((dirty_max_pages * 1024 * 1024 / page_size))
+
+	[[ $dirty_max_pages -gt $nrpages ]] && nrpages=$dirty_max_pages
+	local undirty=$((nrpages * page_size))
+
+	local max_extent_pages
+	max_extent_pages=$($LCTL get_param osc.${tgt}.import |
+	    grep grant_max_extent_size | awk '{print $2}')
+	max_extent_pages=$((max_extent_pages / page_size))
+	local nrextents=$(((nrpages + max_extent_pages - 1) / max_extent_pages))
+	local grant_extent_tax
+	grant_extent_tax=$($LCTL get_param osc.${tgt}.import |
+	    grep grant_extent_tax | awk '{print $2}')
+
+	undirty=$((undirty + nrextents * grant_extent_tax))
+
+	echo $undirty
+}
+
+# this is size of unit for grant allocation. It should be equal to
+# what tgt_grant.c:tgt_grant_chunk() calculates
+grant_chunk() {
+	local tgt=$1
+	local max_brw_size
+	local grant_extent_tax
+
+	max_brw_size=$($LCTL get_param osc.${tgt}.import |
+	    grep max_brw_size | awk '{print $2}')
+
+	grant_extent_tax=$($LCTL get_param osc.${tgt}.import |
+	    grep grant_extent_tax | awk '{print $2}')
+
+	echo $(((max_brw_size + grant_extent_tax) * 2))
+}
+
+test_64d() {
+	[ $(lustre_version_code ost1) -lt $(version_code 2.10.56) ] &&
+		skip "OST < 2.10.55 doesn't limit grants enough" && return 0
+
+	local tgt=$($LCTL dl | grep "0000-osc-[^mM]" | awk '{print $4}')
+
+	[[ $($LCTL get_param osc.${tgt}.import |
+		    grep "connect_flags:.*grant_param") ]] || \
+			{ skip "no grant_param connect flag"; return; }
+
+	local olddebug=$($LCTL get_param -n debug 2> /dev/null)
+
+	$LCTL set_param debug="$OLDDEBUG" 2> /dev/null || true
+
+	local max_cur_granted=$(($(want_grant $tgt) + $(grant_chunk $tgt)))
+
+	$SETSTRIPE $DIR/$tfile -i 0 -c 1
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1000 &
+	ddpid=$!
+
+	while true
+	do
+		local cur_grant=$($LCTL get_param -n osc.${tgt}.cur_grant_bytes)
+		if [[ $cur_grant -gt $max_cur_granted ]]
+		then
+			kill $ddpid
+			error "cur_grant $cur_grant > $max_cur_granted"
+		fi
+		kill -0 $ddpid
+		[[ $? -ne 0 ]] && break;
+		sleep 2
+	done
+	$LCTL set_param debug="$olddebug" 2> /dev/null || true
+}
+run_test 64d "check grant limit exceed"
+
 # bug 1414 - set/get directories' stripe info
 test_65a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
