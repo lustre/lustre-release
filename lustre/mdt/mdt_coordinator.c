@@ -152,6 +152,201 @@ struct hsm_thread_data {
 	struct mdt_thread_info	*cdt_mti;
 	struct hsm_scan_request	*request;
 };
+
+static int mdt_cdt_waiting_cb(const struct lu_env *env,
+			      struct mdt_device *mdt,
+			      struct llog_handle *llh,
+			      struct llog_agent_req_rec *larr,
+			      struct hsm_scan_data *hsd)
+{
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+	struct hsm_scan_request *request;
+	struct hsm_action_item *hai;
+	int i;
+
+	/* Are agents full? */
+	if (atomic_read(&cdt->cdt_request_count) >= cdt->cdt_max_requests)
+		RETURN(0);
+
+	/* first search whether the request is found in the list we
+	 * have built. */
+	request = NULL;
+	for (i = 0; i < hsd->request_cnt; i++) {
+		if (hsd->request[i].hal->hal_compound_id ==
+		    larr->arr_compound_id) {
+			request = &hsd->request[i];
+			break;
+		}
+	}
+
+	if (!request) {
+		struct hsm_action_list *hal;
+
+		if (hsd->request_cnt == hsd->max_requests) {
+			if (!hsd->housekeeping) {
+				/* The request array is full, stop
+				 * here. There might be more known
+				 * requests that could be merged, but
+				 * this avoid analyzing too many llogs
+				 * for minor gains. */
+				RETURN(LLOG_PROC_BREAK);
+			} else {
+				/* Unknown request and no more room
+				 * for a new request. Continue to scan
+				 * to find other entries for already
+				 * existing requests. */
+				RETURN(0);
+			}
+		}
+
+		request = &hsd->request[hsd->request_cnt];
+
+		/* allocates hai vector size just needs to be large
+		 * enough */
+		request->hal_sz = sizeof(*request->hal) +
+			cfs_size_round(MTI_NAME_MAXLEN + 1) +
+			2 * cfs_size_round(larr->arr_hai.hai_len);
+		OBD_ALLOC(hal, request->hal_sz);
+		if (!hal)
+			RETURN(-ENOMEM);
+
+		hal->hal_version = HAL_VERSION;
+		strlcpy(hal->hal_fsname, hsd->fs_name, MTI_NAME_MAXLEN + 1);
+		hal->hal_compound_id = larr->arr_compound_id;
+		hal->hal_archive_id = larr->arr_archive_id;
+		hal->hal_flags = larr->arr_flags;
+		hal->hal_count = 0;
+		request->hal_used_sz = hal_size(hal);
+		request->hal = hal;
+		hsd->request_cnt++;
+		hai = hai_first(hal);
+	} else {
+		/* request is known */
+		/* we check if record archive num is the same as the
+		 * known request, if not we will serve it in multiple
+		 * time because we do not know if the agent can serve
+		 * multiple backend a use case is a compound made of
+		 * multiple restore where the files are not archived
+		 * in the same backend */
+		if (larr->arr_archive_id != request->hal->hal_archive_id)
+			RETURN(0);
+
+		if (request->hal_sz < request->hal_used_sz +
+		    cfs_size_round(larr->arr_hai.hai_len)) {
+			/* Not enough room, need an extension */
+			void *hal_buffer;
+			int sz;
+
+			sz = 2 * request->hal_sz;
+			OBD_ALLOC(hal_buffer, sz);
+			if (!hal_buffer)
+				RETURN(-ENOMEM);
+			memcpy(hal_buffer, request->hal, request->hal_used_sz);
+			OBD_FREE(request->hal, request->hal_sz);
+			request->hal = hal_buffer;
+			request->hal_sz = sz;
+		}
+
+		hai = hai_first(request->hal);
+		for (i = 0; i < request->hal->hal_count; i++)
+			hai = hai_next(hai);
+	}
+
+	memcpy(hai, &larr->arr_hai, larr->arr_hai.hai_len);
+	hai->hai_cookie = larr->arr_hai.hai_cookie;
+	hai->hai_gid = larr->arr_hai.hai_gid;
+
+	request->hal_used_sz += cfs_size_round(hai->hai_len);
+	request->hal->hal_count++;
+
+	if (hai->hai_action != HSMA_CANCEL)
+		cdt_agent_record_hash_add(cdt, hai->hai_cookie,
+					  llh->lgh_hdr->llh_cat_idx,
+					  larr->arr_hdr.lrh_index);
+
+	RETURN(0);
+}
+
+static int mdt_cdt_started_cb(const struct lu_env *env,
+			      struct mdt_device *mdt,
+			      struct llog_handle *llh,
+			      struct llog_agent_req_rec *larr,
+			      struct hsm_scan_data *hsd)
+{
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+	struct hsm_progress_kernel pgs;
+	struct cdt_agent_req *car;
+	time64_t now = ktime_get_real_seconds();
+	time64_t last;
+	int rc;
+
+	if (!hsd->housekeeping)
+		RETURN(0);
+
+	/* we search for a running request
+	 * error may happen if coordinator crashes or stopped
+	 * with running request
+	 */
+	car = mdt_cdt_find_request(cdt, larr->arr_hai.hai_cookie);
+	if (car == NULL) {
+		last = larr->arr_req_change;
+	} else {
+		last = car->car_req_update;
+		mdt_cdt_put_request(car);
+	}
+
+	/* test if request too long, if yes cancel it
+	 * the same way the copy tool acknowledge a cancel request */
+	if (now <= last + cdt->cdt_active_req_timeout)
+		RETURN(0);
+
+	dump_llog_agent_req_rec("request timed out, start cleaning", larr);
+	/* a too old cancel request just needs to be removed
+	 * this can happen, if copy tool does not support
+	 * cancel for other requests, we have to remove the
+	 * running request and notify the copytool */
+	pgs.hpk_fid = larr->arr_hai.hai_fid;
+	pgs.hpk_cookie = larr->arr_hai.hai_cookie;
+	pgs.hpk_extent = larr->arr_hai.hai_extent;
+	pgs.hpk_flags = HP_FLAG_COMPLETED;
+	pgs.hpk_errval = ENOSYS;
+	pgs.hpk_data_version = 0;
+
+	/* update request state, but do not record in llog, to
+	 * avoid deadlock on cdt_llog_lock */
+	rc = mdt_hsm_update_request_state(hsd->mti, &pgs, 0);
+	if (rc)
+		CERROR("%s: cannot cleanup timed out request: "
+		       DFID" for cookie %#llx action=%s\n",
+		       mdt_obd_name(mdt),
+		       PFID(&pgs.hpk_fid), pgs.hpk_cookie,
+		       hsm_copytool_action2name(larr->arr_hai.hai_action));
+
+	if (rc == -ENOENT) {
+		/* The request no longer exists, forget
+		 * about it, and do not send a cancel request
+		 * to the client, for which an error will be
+		 * sent back, leading to an endless cycle of
+		 * cancellation. */
+		cdt_agent_record_hash_del(cdt, larr->arr_hai.hai_cookie);
+		RETURN(LLOG_DEL_RECORD);
+	}
+
+	/* XXX A cancel request cannot be cancelled. */
+	if (larr->arr_hai.hai_action == HSMA_CANCEL)
+		RETURN(0);
+
+	larr->arr_status = ARS_CANCELED;
+	larr->arr_req_change = now;
+	rc = llog_write(hsd->mti->mti_env, llh, &larr->arr_hdr,
+			larr->arr_hdr.lrh_index);
+	if (rc < 0)
+		CERROR("%s: cannot update agent log: rc = %d\n",
+		       mdt_obd_name(mdt), rc);
+
+	RETURN(0);
+}
+
 /**
  *  llog_cat_process() callback, used to:
  *  - find waiting request and start action
@@ -168,212 +363,22 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 			      struct llog_rec_hdr *hdr,
 			      void *data)
 {
-	struct llog_agent_req_rec	*larr;
-	struct hsm_scan_data		*hsd;
-	struct hsm_action_item		*hai;
-	struct mdt_device		*mdt;
-	struct coordinator		*cdt;
-	int				 rc;
+	struct llog_agent_req_rec *larr = (struct llog_agent_req_rec *)hdr;
+	struct hsm_scan_data *hsd = data;
+	struct mdt_device *mdt = hsd->mti->mti_mdt;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
 	ENTRY;
-
-	hsd = data;
-	mdt = hsd->mti->mti_mdt;
-	cdt = &mdt->mdt_coordinator;
 
 	larr = (struct llog_agent_req_rec *)hdr;
 	dump_llog_agent_req_rec("mdt_coordinator_cb(): ", larr);
 	switch (larr->arr_status) {
-	case ARS_WAITING: {
-		int i;
-		struct hsm_scan_request *request;
-
-		/* Are agents full? */
-		if (atomic_read(&cdt->cdt_request_count) >=
-		    cdt->cdt_max_requests)
-			break;
-
-		/* first search whether the request is found in the
-		 * list we have built. */
-		request = NULL;
-		for (i = 0; i < hsd->request_cnt; i++) {
-			if (hsd->request[i].hal->hal_compound_id ==
-			    larr->arr_compound_id) {
-				request = &hsd->request[i];
-				break;
-			}
-		}
-
-		if (!request) {
-			struct hsm_action_list *hal;
-
-			if (hsd->request_cnt == hsd->max_requests) {
-				if (!hsd->housekeeping) {
-					/* The request array is full,
-					 * stop here. There might be
-					 * more known requests that
-					 * could be merged, but this
-					 * avoid analyzing too many
-					 * llogs for minor gains.
-					 */
-					RETURN(LLOG_PROC_BREAK);
-				} else {
-					/* Unknown request and no more room
-					 * for a new request. Continue to scan
-					 * to find other entries for already
-					 * existing requests.
-					 */
-					RETURN(0);
-				}
-			}
-
-			request = &hsd->request[hsd->request_cnt];
-
-			/* allocates hai vector size just needs to be large
-			 * enough */
-			request->hal_sz =
-				sizeof(*request->hal) +
-				cfs_size_round(MTI_NAME_MAXLEN+1) +
-				2 * cfs_size_round(larr->arr_hai.hai_len);
-			OBD_ALLOC(hal, request->hal_sz);
-			if (!hal)
-				RETURN(-ENOMEM);
-			hal->hal_version = HAL_VERSION;
-			strlcpy(hal->hal_fsname, hsd->fs_name,
-				MTI_NAME_MAXLEN + 1);
-			hal->hal_compound_id = larr->arr_compound_id;
-			hal->hal_archive_id = larr->arr_archive_id;
-			hal->hal_flags = larr->arr_flags;
-			hal->hal_count = 0;
-			request->hal_used_sz = hal_size(hal);
-			request->hal = hal;
-			hsd->request_cnt++;
-			hai = hai_first(hal);
-		} else {
-			/* request is known */
-			/* we check if record archive num is the same as the
-			 * known request, if not we will serve it in multiple
-			 * time because we do not know if the agent can serve
-			 * multiple backend
-			 * a use case is a compound made of multiple restore
-			 * where the files are not archived in the same backend
-			 */
-			if (larr->arr_archive_id !=
-			    request->hal->hal_archive_id)
-				RETURN(0);
-
-			if (request->hal_sz <
-			    request->hal_used_sz +
-			    cfs_size_round(larr->arr_hai.hai_len)) {
-				/* Not enough room, need an extension */
-				void *hal_buffer;
-				int sz;
-
-				sz = 2 * request->hal_sz;
-				OBD_ALLOC(hal_buffer, sz);
-				if (!hal_buffer)
-					RETURN(-ENOMEM);
-				memcpy(hal_buffer, request->hal,
-				       request->hal_used_sz);
-				OBD_FREE(request->hal,
-					 request->hal_sz);
-				request->hal = hal_buffer;
-				request->hal_sz = sz;
-			}
-			hai = hai_first(request->hal);
-			for (i = 0; i < request->hal->hal_count; i++)
-				hai = hai_next(hai);
-		}
-		memcpy(hai, &larr->arr_hai, larr->arr_hai.hai_len);
-		hai->hai_cookie = larr->arr_hai.hai_cookie;
-		hai->hai_gid = larr->arr_hai.hai_gid;
-
-		request->hal_used_sz += cfs_size_round(hai->hai_len);
-		request->hal->hal_count++;
-
-		if (hai->hai_action != HSMA_CANCEL)
-			cdt_agent_record_hash_add(cdt, hai->hai_cookie,
-						  llh->lgh_hdr->llh_cat_idx,
-						  hdr->lrh_index);
-		break;
-	}
-	case ARS_STARTED: {
-		struct hsm_progress_kernel pgs;
-		struct cdt_agent_req *car;
-		time64_t now = ktime_get_real_seconds();
-		time64_t last;
-
+	case ARS_WAITING:
+		RETURN(mdt_cdt_waiting_cb(env, mdt, llh, larr, hsd));
+	case ARS_STARTED:
+		RETURN(mdt_cdt_started_cb(env, mdt, llh, larr, hsd));
+	default:
 		if (!hsd->housekeeping)
-			break;
-
-		/* we search for a running request
-		 * error may happen if coordinator crashes or stopped
-		 * with running request
-		 */
-		car = mdt_cdt_find_request(cdt, larr->arr_hai.hai_cookie);
-		if (car == NULL) {
-			last = larr->arr_req_change;
-		} else {
-			last = car->car_req_update;
-			mdt_cdt_put_request(car);
-		}
-
-		/* test if request too long, if yes cancel it
-		 * the same way the copy tool acknowledge a cancel request */
-		if (now <= last + cdt->cdt_active_req_timeout)
 			RETURN(0);
-
-		dump_llog_agent_req_rec("request timed out, start cleaning",
-					larr);
-		/* a too old cancel request just needs to be removed
-		 * this can happen, if copy tool does not support
-		 * cancel for other requests, we have to remove the
-		 * running request and notify the copytool */
-		pgs.hpk_fid = larr->arr_hai.hai_fid;
-		pgs.hpk_cookie = larr->arr_hai.hai_cookie;
-		pgs.hpk_extent = larr->arr_hai.hai_extent;
-		pgs.hpk_flags = HP_FLAG_COMPLETED;
-		pgs.hpk_errval = ENOSYS;
-		pgs.hpk_data_version = 0;
-
-		/* update request state, but do not record in llog, to
-		 * avoid deadlock on cdt_llog_lock */
-		rc = mdt_hsm_update_request_state(hsd->mti, &pgs, 0);
-		if (rc)
-			CERROR("%s: cannot cleanup timed out request: "
-			       DFID" for cookie %#llx action=%s\n",
-			       mdt_obd_name(mdt),
-			       PFID(&pgs.hpk_fid), pgs.hpk_cookie,
-			       hsm_copytool_action2name(
-				       larr->arr_hai.hai_action));
-
-		if (rc == -ENOENT) {
-			/* The request no longer exists, forget
-			 * about it, and do not send a cancel request
-			 * to the client, for which an error will be
-			 * sent back, leading to an endless cycle of
-			 * cancellation. */
-			cdt_agent_record_hash_del(cdt,
-						  larr->arr_hai.hai_cookie);
-			RETURN(LLOG_DEL_RECORD);
-		}
-
-		/* XXX A cancel request cannot be cancelled. */
-		if (larr->arr_hai.hai_action == HSMA_CANCEL)
-			RETURN(0);
-
-		larr->arr_status = ARS_CANCELED;
-		larr->arr_req_change = now;
-		rc = llog_write(hsd->mti->mti_env, llh, hdr, hdr->lrh_index);
-		if (rc < 0)
-			CERROR("%s: cannot update agent log: rc = %d\n",
-			       mdt_obd_name(mdt), rc);
-		break;
-	}
-	case ARS_FAILED:
-	case ARS_CANCELED:
-	case ARS_SUCCEED:
-		if (!hsd->housekeeping)
-			break;
 
 		if ((larr->arr_req_change + cdt->cdt_grace_delay) <
 		    ktime_get_real_seconds()) {
@@ -381,9 +386,9 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 						  larr->arr_hai.hai_cookie);
 			RETURN(LLOG_DEL_RECORD);
 		}
-		break;
+
+		RETURN(0);
 	}
-	RETURN(0);
 }
 
 /**
