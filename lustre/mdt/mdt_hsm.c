@@ -138,7 +138,7 @@ int mdt_hsm_progress(struct tgt_session_info *tsi)
 	if (!mdt_hsm_is_admin(info))
 		GOTO(out, rc = -EPERM);
 
-	rc = mdt_hsm_coordinator_update(info, hpk);
+	rc = mdt_hsm_update_request_state(info, hpk);
 out:
 	mdt_thread_info_fini(info);
 	RETURN(rc);

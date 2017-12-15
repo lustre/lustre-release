@@ -610,25 +610,6 @@ out_buf:
 }
 
 /**
- * update status of a request
- * \param mti [IN]
- * \param pgs [IN] progress of the copy tool
- * \retval 0 success
- * \retval -ve failure
- */
-int mdt_hsm_coordinator_update(struct mdt_thread_info *mti,
-			       struct hsm_progress_kernel *pgs)
-{
-	int      rc;
-
-	ENTRY;
-	/* ask to coordinator to update request state and
-	 * to record on disk the result */
-	rc = mdt_hsm_update_request_state(mti, pgs, 1);
-	RETURN(rc);
-}
-
-/**
  * seq_file method called to start access to /proc file
  */
 static void *mdt_hsm_agent_proc_start(struct seq_file *s, loff_t *off)

@@ -274,10 +274,11 @@ static int mdt_cdt_started_cb(const struct lu_env *env,
 			      struct hsm_scan_data *hsd)
 {
 	struct coordinator *cdt = &mdt->mdt_coordinator;
-	struct hsm_progress_kernel pgs;
+	struct hsm_action_item *hai = &larr->arr_hai;
 	struct cdt_agent_req *car;
 	time64_t now = ktime_get_real_seconds();
 	time64_t last;
+	int cl_flags;
 	int rc;
 
 	if (!hsd->housekeeping)
@@ -287,64 +288,75 @@ static int mdt_cdt_started_cb(const struct lu_env *env,
 	 * error may happen if coordinator crashes or stopped
 	 * with running request
 	 */
-	car = mdt_cdt_find_request(cdt, larr->arr_hai.hai_cookie);
+	car = mdt_cdt_find_request(cdt, hai->hai_cookie);
 	if (car == NULL) {
 		last = larr->arr_req_change;
 	} else {
 		last = car->car_req_update;
-		mdt_cdt_put_request(car);
 	}
 
 	/* test if request too long, if yes cancel it
 	 * the same way the copy tool acknowledge a cancel request */
 	if (now <= last + cdt->cdt_active_req_timeout)
-		RETURN(0);
+		GOTO(out_car, rc = 0);
 
 	dump_llog_agent_req_rec("request timed out, start cleaning", larr);
-	/* a too old cancel request just needs to be removed
-	 * this can happen, if copy tool does not support
-	 * cancel for other requests, we have to remove the
-	 * running request and notify the copytool */
-	pgs.hpk_fid = larr->arr_hai.hai_fid;
-	pgs.hpk_cookie = larr->arr_hai.hai_cookie;
-	pgs.hpk_extent = larr->arr_hai.hai_extent;
-	pgs.hpk_flags = HP_FLAG_COMPLETED;
-	pgs.hpk_errval = ENOSYS;
-	pgs.hpk_data_version = 0;
 
-	/* update request state, but do not record in llog, to
-	 * avoid deadlock on cdt_llog_lock */
-	rc = mdt_hsm_update_request_state(hsd->mti, &pgs, 0);
-	if (rc)
-		CERROR("%s: cannot cleanup timed out request: "
-		       DFID" for cookie %#llx action=%s\n",
-		       mdt_obd_name(mdt),
-		       PFID(&pgs.hpk_fid), pgs.hpk_cookie,
-		       hsm_copytool_action2name(larr->arr_hai.hai_action));
-
-	if (rc == -ENOENT) {
-		/* The request no longer exists, forget
-		 * about it, and do not send a cancel request
-		 * to the client, for which an error will be
-		 * sent back, leading to an endless cycle of
-		 * cancellation. */
-		cdt_agent_record_hash_del(cdt, larr->arr_hai.hai_cookie);
-		RETURN(LLOG_DEL_RECORD);
+	if (car != NULL) {
+		car->car_req_update = now;
+		mdt_hsm_agent_update_statistics(cdt, 0, 1, 0, &car->car_uuid);
+		/* Remove car from memory list (LU-9075) */
+		mdt_cdt_remove_request(cdt, hai->hai_cookie);
 	}
 
-	/* XXX A cancel request cannot be cancelled. */
-	if (larr->arr_hai.hai_action == HSMA_CANCEL)
-		RETURN(0);
+	/* Emit a changelog record for the failed action.*/
+	cl_flags = 0;
+	hsm_set_cl_error(&cl_flags, ECANCELED);
+
+	switch (hai->hai_action) {
+	case HSMA_ARCHIVE:
+		hsm_set_cl_event(&cl_flags, HE_ARCHIVE);
+		break;
+	case HSMA_RESTORE:
+		hsm_set_cl_event(&cl_flags, HE_RESTORE);
+		break;
+	case HSMA_REMOVE:
+		hsm_set_cl_event(&cl_flags, HE_REMOVE);
+		break;
+	case HSMA_CANCEL:
+		hsm_set_cl_event(&cl_flags, HE_CANCEL);
+		break;
+	default:
+		/* Unknown record type, skip changelog. */
+		cl_flags = 0;
+		break;
+	}
+
+	if (cl_flags != 0)
+		mo_changelog(env, CL_HSM, cl_flags, mdt->mdt_child,
+			     &hai->hai_fid);
+
+	if (hai->hai_action == HSMA_RESTORE)
+		cdt_restore_handle_del(hsd->mti, cdt, &hai->hai_fid);
 
 	larr->arr_status = ARS_CANCELED;
 	larr->arr_req_change = now;
 	rc = llog_write(hsd->mti->mti_env, llh, &larr->arr_hdr,
 			larr->arr_hdr.lrh_index);
-	if (rc < 0)
+	if (rc < 0) {
 		CERROR("%s: cannot update agent log: rc = %d\n",
 		       mdt_obd_name(mdt), rc);
+		rc = LLOG_DEL_RECORD;
+	}
 
-	RETURN(0);
+	/* ct has completed a request, so a slot is available,
+	 * signal the coordinator to find new work */
+	mdt_hsm_cdt_event(cdt);
+out_car:
+	if (car != NULL)
+		mdt_cdt_put_request(car);
+
+	RETURN(rc);
 }
 
 /**
@@ -1332,7 +1344,6 @@ out:
  * update status of a completed request
  * \param mti [IN] context
  * \param pgs [IN] progress of the copy tool
- * \param update_record [IN] update llog record
  * \retval 0 success
  * \retval -ve failure
  */
@@ -1541,13 +1552,11 @@ out:
  * update status of a request
  * \param mti [IN] context
  * \param pgs [IN] progress of the copy tool
- * \param update_record [IN] update llog record
  * \retval 0 success
  * \retval -ve failure
  */
 int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
-				 struct hsm_progress_kernel *pgs,
-				 const int update_record)
+				 struct hsm_progress_kernel *pgs)
 {
 	struct mdt_device	*mdt = mti->mti_mdt;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
@@ -1616,36 +1625,32 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 	hsm_init_ucred(mdt_ucred(mti));
 
 	if (pgs->hpk_flags & HP_FLAG_COMPLETED) {
-		enum agent_req_status	 status;
+		enum agent_req_status status;
+		struct hsm_record_update update;
+		int rc1;
 
 		rc = hsm_cdt_request_completed(mti, pgs, car, &status);
 
-		CDEBUG(D_HSM, "%s record: fid="DFID" cookie=%#llx action=%s "
+		CDEBUG(D_HSM, "updating record: fid="DFID" cookie=%#llx action=%s "
 			      "status=%s\n",
-		       update_record ? "Updating" : "Not updating",
 		       PFID(&pgs->hpk_fid), pgs->hpk_cookie,
 		       hsm_copytool_action2name(car->car_hai->hai_action),
 		       agent_req_status2name(status));
 
 		/* update record first (LU-9075) */
-		if (update_record) {
-			int rc1;
-			struct hsm_record_update update = {
-				.cookie = pgs->hpk_cookie,
-				.status = status,
-			};
+		update.cookie = pgs->hpk_cookie;
+		update.status = status;
 
-			rc1 = mdt_agent_record_update(mti->mti_env, mdt,
-						      &update, 1);
-			if (rc1)
-				CERROR("%s: mdt_agent_record_update() failed,"
-				       " rc=%d, cannot update status to %s"
-				       " for cookie %#llx\n",
-				       mdt_obd_name(mdt), rc1,
-				       agent_req_status2name(status),
-				       pgs->hpk_cookie);
-			rc = (rc != 0 ? rc : rc1);
-		}
+		rc1 = mdt_agent_record_update(mti->mti_env, mdt,
+					      &update, 1);
+		if (rc1)
+			CERROR("%s: mdt_agent_record_update() failed,"
+			       " rc=%d, cannot update status to %s"
+			       " for cookie %#llx\n",
+			       mdt_obd_name(mdt), rc1,
+			       agent_req_status2name(status),
+			       pgs->hpk_cookie);
+		rc = (rc != 0 ? rc : rc1);
 
 		/* then remove request from memory list (LU-9075) */
 		mdt_cdt_remove_request(cdt, pgs->hpk_cookie);

@@ -928,8 +928,6 @@ int mdt_hsm_find_best_agent(struct coordinator *cdt, __u32 archive,
 			    struct obd_uuid *uuid);
 int mdt_hsm_agent_send(struct mdt_thread_info *mti, struct hsm_action_list *hal,
 		       bool purge);
-int mdt_hsm_coordinator_update(struct mdt_thread_info *mti,
-			       struct hsm_progress_kernel *pgs);
 /* mdt/mdt_hsm_cdt_client.c */
 int mdt_hsm_add_actions(struct mdt_thread_info *info,
 			struct hsm_action_list *hal);
@@ -997,8 +995,7 @@ bool mdt_hsm_is_action_compat(const struct hsm_action_item *hai,
 			      u32 archive_id, u64 rq_flags,
 			      const struct md_hsm *hsm);
 int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
-				 struct hsm_progress_kernel *pgs,
-				 const int update_record);
+				 struct hsm_progress_kernel *pgs);
 
 int mdt_close_swap_layouts(struct mdt_thread_info *info,
 			   struct mdt_object *o, struct md_attr *ma);
