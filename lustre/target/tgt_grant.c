@@ -927,6 +927,14 @@ static long tgt_grant_alloc(struct obd_export *exp, u64 curgrant,
 	if ((grant > chunk) && conservative)
 		grant = chunk;
 
+	/*
+	 * Limit grant so that export' grant does not exceed what the
+	 * client would like to have by more than grants for 2 full
+	 * RPCs
+	 */
+	if (ted->ted_grant + grant > want + chunk)
+		grant = want + chunk - ted->ted_grant;
+
 	tgd->tgd_tot_granted += grant;
 	ted->ted_grant += grant;
 
