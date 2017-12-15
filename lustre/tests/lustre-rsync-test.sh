@@ -38,6 +38,13 @@ check_and_setup_lustre
 DIR=${DIR:-$MOUNT}
 assert_DIR
 
+if getent group nobody; then
+	GROUP=nobody
+elif getent group nogroup; then
+	GROUP=nogroup
+else
+	error "No generic nobody group"
+fi
 
 build_test_filter
 
@@ -196,7 +203,7 @@ test_1() {
 
     # Set attributes
     chmod 000 $DIR/$tdir/d2/file3
-    chown nobody:nobody $DIR/$tdir/d2/file3
+    chown nobody:$GROUP $DIR/$tdir/d2/file3
 
     # Set xattrs
     if [[ "$xattr" != "no" ]]; then

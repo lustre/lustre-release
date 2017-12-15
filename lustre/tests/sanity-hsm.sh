@@ -43,6 +43,13 @@ if [[ $UID -eq 0 && $RUNAS_ID -eq 0 ]]; then
 	skip_env "\$RUNAS_ID set to 0, but \$UID is also 0!" && exit
 fi
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
+if getent group nobody; then
+	GROUP=nobody
+elif getent group nogroup; then
+	GROUP=nogroup
+else
+	error "No generic nobody group"
+fi
 
 build_test_filter
 
@@ -2174,8 +2181,8 @@ test_24c() {
 	# User.
 	rm -f $file
 	make_small $file
-	chown $RUNAS_ID:nobody $file ||
-		error "cannot chown '$file' to '$RUNAS_ID:nobody'"
+	chown $RUNAS_ID:$GROUP $file ||
+		error "cannot chown '$file' to '$RUNAS_ID:$GROUP'"
 
 	$RUNAS $LFS hsm_$action $file &&
 		error "$action by user should fail"
@@ -2200,8 +2207,8 @@ test_24c() {
 	# Other.
 	rm -f $file
 	make_small $file
-	chown nobody:nobody $file ||
-		error "cannot chown '$file' to 'nobody:nobody'"
+	chown nobody:$GROUP $file ||
+		error "cannot chown '$file' to 'nobody:$GROUP'"
 
 	$RUNAS $LFS hsm_$action $file &&
 		error "$action by other should fail"
