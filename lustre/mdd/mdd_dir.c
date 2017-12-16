@@ -2137,7 +2137,8 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 	    spec->u.sp_ea.eadata != NULL && spec->u.sp_ea.eadatalen > 0) {
 		const struct lmv_user_md *lum = spec->u.sp_ea.eadata;
 
-		if (unlikely(le32_to_cpu(lum->lum_magic) != LMV_USER_MAGIC) &&
+		if (le32_to_cpu(lum->lum_magic) != LMV_USER_MAGIC &&
+		    le32_to_cpu(lum->lum_magic) != LMV_USER_MAGIC_SPECIFIC &&
 		    le32_to_cpu(lum->lum_magic) != LMV_USER_MAGIC_V0) {
 			rc = -EINVAL;
 			CERROR("%s: invalid lmv_user_md: magic = %x, "

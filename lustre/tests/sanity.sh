@@ -17402,6 +17402,26 @@ test_411() {
 }
 run_test 411 "Slab allocation error with cgroup does not LBUG"
 
+test_412() {
+	[ $MDSCOUNT -lt 2 ] &&
+		skip "We need at least 2 MDTs for this test" && return
+
+	if [ $(lustre_version_code mds1) -lt $(version_code 2.10.55) ]; then
+		skip "Need server version at least 2.10.55" & exit 0
+	fi
+
+	$LFS mkdir -i $((MDSCOUNT - 1)),$((MDSCOUNT - 2)) $DIR/$tdir ||
+		error "mkdir failed"
+	$LFS getdirstripe $DIR/$tdir
+	stripe_index=$($LFS getdirstripe -i $DIR/$tdir)
+	[ $stripe_index -eq $((MDSCOUNT - 1)) ] ||
+		error "expect $((MDSCOUT - 1)) get $stripe_index"
+	stripe_count=$($LFS getdirstripe -T $DIR/$tdir)
+	[ $stripe_count -eq 2 ] ||
+		error "expect 2 get $stripe_count"
+}
+run_test 412 "mkdir on specific MDTs"
+
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&

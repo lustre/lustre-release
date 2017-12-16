@@ -1387,21 +1387,21 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 }
 
 /**
- * Parse a string containing an OST index list into an array of integers.
+ * Parse a string containing an target index list into an array of integers.
  *
  * The input string contains a comma delimited list of individual
  * indices and ranges, for example "1,2-4,7". Add the indices into the
- * \a osts array and remove duplicates.
+ * \a tgts array and remove duplicates.
  *
- * \param[out] osts    array to store indices in
- * \param[in] size     size of \a osts array
- * \param[in] offset   starting index in \a osts
+ * \param[out] tgts    array to store indices in
+ * \param[in] size     size of \a tgts array
+ * \param[in] offset   starting index in \a tgts
  * \param[in] arg      string containing OST index list
  *
- * \retval positive    number of indices in \a osts
+ * \retval positive    number of indices in \a tgts
  * \retval -EINVAL     unable to parse \a arg
  */
-static int parse_targets(__u32 *osts, int size, int offset, char *arg)
+static int parse_targets(__u32 *tgts, int size, int offset, char *arg)
 {
 	int rc;
 	int nr = offset;
@@ -1431,8 +1431,6 @@ static int parse_targets(__u32 *osts, int size, int offset, char *arg)
 			break;
 		if (*endptr != '-' && *endptr != '\0') /* has invalid data */
 			break;
-		if (start_index < 0)
-			break;
 
 		end_index = start_index;
 		if (*endptr == '-') {
@@ -1448,11 +1446,11 @@ static int parse_targets(__u32 *osts, int size, int offset, char *arg)
 
 			/* remove duplicate */
 			for (j = 0; j < offset; j++) {
-				if (osts[j] == i)
+				if (tgts[j] == i)
 					break;
 			}
 			if (j == offset) { /* no duplicate */
-				osts[nr++] = i;
+				tgts[nr++] = i;
 				--slots;
 			}
 		}
@@ -1476,9 +1474,9 @@ struct lfs_setstripe_args {
 	long long		 lsa_stripe_count;
 	long long		 lsa_stripe_off;
 	__u32			 lsa_comp_flags;
-	int			 lsa_nr_osts;
+	int			 lsa_nr_tgts;
 	unsigned long long	 lsa_pattern;
-	__u32			*lsa_osts;
+	__u32			*lsa_tgts;
 	char			*lsa_pool_name;
 };
 
@@ -1597,10 +1595,10 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 				lsa->lsa_stripe_size);
 			return -EINVAL;
 		}
-		if (lsa->lsa_nr_osts != 0) {
+		if (lsa->lsa_nr_tgts != 0) {
 			fprintf(stderr, "Option 'ost-list' can't be specified "
 				"with Data-on-MDT component: '%i'\n",
-				lsa->lsa_nr_osts);
+				lsa->lsa_nr_tgts);
 			return -EINVAL;
 		}
 		if (lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT) {
@@ -1656,18 +1654,18 @@ static int comp_args_to_layout(struct llapi_layout **composite,
 		}
 	}
 
-	if (lsa->lsa_nr_osts > 0) {
+	if (lsa->lsa_nr_tgts > 0) {
 		if (lsa->lsa_stripe_count > 0 &&
 		    lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
 		    lsa->lsa_stripe_count != LLAPI_LAYOUT_WIDE &&
-		    lsa->lsa_nr_osts != lsa->lsa_stripe_count) {
+		    lsa->lsa_nr_tgts != lsa->lsa_stripe_count) {
 			fprintf(stderr, "stripe_count(%lld) != nr_osts(%d)\n",
-				lsa->lsa_stripe_count, lsa->lsa_nr_osts);
+				lsa->lsa_stripe_count, lsa->lsa_nr_tgts);
 			return -EINVAL;
 		}
-		for (i = 0; i < lsa->lsa_nr_osts; i++) {
+		for (i = 0; i < lsa->lsa_nr_tgts; i++) {
 			rc = llapi_layout_ost_index_set(layout, i,
-							lsa->lsa_osts[i]);
+							lsa->lsa_tgts[i]);
 			if (rc)
 				break;
 		}
@@ -2226,17 +2224,17 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 			lpp = &last_mirror->m_layout;
 			break;
 		case 'o':
-			lsa.lsa_nr_osts = parse_targets(osts,
+			lsa.lsa_nr_tgts = parse_targets(osts,
 						sizeof(osts) / sizeof(__u32),
-						lsa.lsa_nr_osts, optarg);
-			if (lsa.lsa_nr_osts < 0) {
+						lsa.lsa_nr_tgts, optarg);
+			if (lsa.lsa_nr_tgts < 0) {
 				fprintf(stderr,
 					"%s %s: invalid OST target(s) '%s'\n",
 					progname, argv[0], optarg);
 				goto usage_error;
 			}
 
-			lsa.lsa_osts = osts;
+			lsa.lsa_tgts = osts;
 			if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
 				lsa.lsa_stripe_off = osts[0];
 			break;
@@ -2420,7 +2418,7 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 	} else if (layout == NULL) {
 		/* initialize stripe parameters */
 		param = calloc(1, offsetof(typeof(*param),
-			       lsp_osts[lsa.lsa_nr_osts]));
+			       lsp_osts[lsa.lsa_nr_tgts]));
 		if (param == NULL) {
 			fprintf(stderr,
 				"%s %s: cannot allocate memory for parameters: %s\n",
@@ -2443,23 +2441,23 @@ static int lfs_setstripe0(int argc, char **argv, enum setstripe_origin opc)
 			param->lsp_stripe_offset = lsa.lsa_stripe_off;
 		param->lsp_pool = lsa.lsa_pool_name;
 		param->lsp_is_specific = false;
-		if (lsa.lsa_nr_osts > 0) {
+		if (lsa.lsa_nr_tgts > 0) {
 			if (lsa.lsa_stripe_count > 0 &&
 			    lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
 			    lsa.lsa_stripe_count != LLAPI_LAYOUT_WIDE &&
-			    lsa.lsa_nr_osts != lsa.lsa_stripe_count) {
+			    lsa.lsa_nr_tgts != lsa.lsa_stripe_count) {
 				fprintf(stderr, "error: %s: stripe count %lld "
 					"doesn't match the number of OSTs: %d\n"
 					, argv[0], lsa.lsa_stripe_count,
-					lsa.lsa_nr_osts);
+					lsa.lsa_nr_tgts);
 				free(param);
 				goto usage_error;
 			}
 
 			param->lsp_is_specific = true;
-			param->lsp_stripe_count = lsa.lsa_nr_osts;
+			param->lsp_stripe_count = lsa.lsa_nr_tgts;
 			memcpy(param->lsp_osts, osts,
-			       sizeof(*osts) * lsa.lsa_nr_osts);
+			       sizeof(*osts) * lsa.lsa_nr_tgts);
 		}
 	}
 
@@ -3594,14 +3592,11 @@ static int lfs_setdirstripe(int argc, char **argv)
 {
 	char			*dname;
 	int			result;
-	unsigned int		stripe_offset = -1;
-	unsigned int		stripe_count = 1;
-	enum lmv_hash_type	hash_type;
+	struct lfs_setstripe_args	 lsa;
+	struct llapi_stripe_param	*param = NULL;
+	__u32			mdts[LMV_MAX_STRIPE_COUNT] = { 0 };
 	char			*end;
 	int			c;
-	char			*stripe_offset_opt = NULL;
-	char			*stripe_count_opt = NULL;
-	char			*stripe_hash_opt = NULL;
 	char			*mode_opt = NULL;
 	bool			default_stripe = false;
 	mode_t			mode = S_IRWXU | S_IRWXG | S_IRWXO;
@@ -3631,6 +3626,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 	{ .val = 'D',	.name = "default",	.has_arg = no_argument },
 	{ .name = NULL } };
 
+	setstripe_args_init(&lsa);
+
 	while ((c = getopt_long(argc, argv, "c:dDi:H:m:t:", long_opts,
 				NULL)) >= 0) {
 		switch (c) {
@@ -3644,7 +3641,13 @@ static int lfs_setdirstripe(int argc, char **argv)
 					"%s %s: warning: '--count' deprecated, use '--mdt-count' instead\n",
 					progname, argv[0]);
 #endif
-			stripe_count_opt = optarg;
+			lsa.lsa_stripe_count = strtoul(optarg, &end, 0);
+			if (*end != '\0') {
+				fprintf(stderr,
+					"%s %s: invalid stripe count '%s'\n",
+					progname, argv[0], optarg);
+				return CMD_HELP;
+			}
 			break;
 		case 'd':
 			delete = true;
@@ -3660,7 +3663,19 @@ static int lfs_setdirstripe(int argc, char **argv)
 					"%s %s: warning: '--index' deprecated, use '--mdt-index' instead\n",
 					progname, argv[0]);
 #endif
-			stripe_offset_opt = optarg;
+			lsa.lsa_nr_tgts = parse_targets(mdts,
+						sizeof(mdts) / sizeof(__u32),
+						lsa.lsa_nr_tgts, optarg);
+			if (lsa.lsa_nr_tgts < 0) {
+				fprintf(stderr,
+					"%s %s: invalid MDT target(s) '%s'\n",
+					progname, argv[0], optarg);
+				return CMD_HELP;
+			}
+
+			lsa.lsa_tgts = mdts;
+			if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
+				lsa.lsa_stripe_off = mdts[0];
 			break;
 		case 'm':
 			mode_opt = optarg;
@@ -3675,7 +3690,13 @@ static int lfs_setdirstripe(int argc, char **argv)
 					"%s %s: warning: '--hash-type' deprecated, use '--mdt-hash' instead\n",
 					progname, argv[0]);
 #endif
-			stripe_hash_opt = optarg;
+			lsa.lsa_pattern = check_hashtype(optarg);
+			if (lsa.lsa_pattern == 0) {
+				fprintf(stderr,
+					"%s %s: bad stripe hash type '%s'\n",
+					progname, argv[0], optarg);
+				return CMD_HELP;
+			}
 			break;
 		default:
 			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
@@ -3690,35 +3711,22 @@ static int lfs_setdirstripe(int argc, char **argv)
 		return CMD_HELP;
 	}
 
-	if (!delete && stripe_offset_opt == NULL && stripe_count_opt == NULL) {
+	if (!delete && lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT &&
+	    lsa.lsa_stripe_count == LLAPI_LAYOUT_DEFAULT) {
 		fprintf(stderr,
 			"%s %s: stripe offset and count must be specified\n",
 			progname, argv[0]);
 		return CMD_HELP;
 	}
 
-	if (stripe_offset_opt != NULL) {
-		/* get the stripe offset */
-		stripe_offset = strtoul(stripe_offset_opt, &end, 0);
-		if (*end != '\0') {
-			fprintf(stderr,
-				"%s %s: bad stripe offset '%s'\n",
-				progname, argv[0], stripe_offset_opt);
-			return CMD_HELP;
-		}
+	if (delete &&
+	    (lsa.lsa_stripe_off != LLAPI_LAYOUT_DEFAULT ||
+	     lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT)) {
+		fprintf(stderr,
+			"%s %s: cannot specify -d with -c or -i options\n",
+			progname, argv[0]);
+		return CMD_HELP;
 	}
-
-	if (delete) {
-		if (stripe_offset_opt != NULL || stripe_count_opt != NULL) {
-			fprintf(stderr,
-				"%s %s: cannot specify -d with -c or -i options\n",
-				progname, argv[0]);
-			return CMD_HELP;
-		} else {
-			stripe_count = 0;
-		}
-	}
-
 
 	if (mode_opt != NULL) {
 		mode = strtoul(mode_opt, &end, 8);
@@ -3731,40 +3739,49 @@ static int lfs_setdirstripe(int argc, char **argv)
 		previous_mode = umask(0);
 	}
 
-	if (stripe_hash_opt == NULL) {
-		hash_type = LMV_HASH_TYPE_FNV_1A_64;
-	} else {
-		hash_type = check_hashtype(stripe_hash_opt);
-		if (hash_type == 0) {
-			fprintf(stderr, "%s %s: bad stripe hash type '%s'\n",
-				progname, argv[0], stripe_hash_opt);
-			return CMD_HELP;
-		}
+	/* initialize stripe parameters */
+	param = calloc(1, offsetof(typeof(*param), lsp_osts[lsa.lsa_nr_tgts]));
+	if (param == NULL) {
+		fprintf(stderr,
+			"%s %s: cannot allocate memory for parameters: %s\n",
+			progname, argv[0], strerror(ENOMEM));
+		return CMD_HELP;
 	}
 
-	/* get the stripe count */
-	if (stripe_count_opt != NULL) {
-		stripe_count = strtoul(stripe_count_opt, &end, 0);
-		if (*end != '\0') {
-			fprintf(stderr,
-				"%s %s: bad stripe count '%s'\n",
-				progname, argv[0], stripe_count_opt);
+	if (lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT)
+		param->lsp_stripe_count = lsa.lsa_stripe_count;
+	if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
+		param->lsp_stripe_offset = -1;
+	else
+		param->lsp_stripe_offset = lsa.lsa_stripe_off;
+	if (lsa.lsa_pattern != LLAPI_LAYOUT_RAID0)
+		param->lsp_stripe_pattern = lsa.lsa_pattern;
+	else
+		param->lsp_stripe_pattern = LMV_HASH_TYPE_FNV_1A_64;
+	param->lsp_pool = lsa.lsa_pool_name;
+	param->lsp_is_specific = false;
+	if (lsa.lsa_nr_tgts > 1) {
+		if (lsa.lsa_stripe_count > 0 &&
+		    lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
+		    lsa.lsa_stripe_count != lsa.lsa_nr_tgts) {
+			fprintf(stderr, "error: %s: stripe count %lld doesn't "
+				"match the number of MDTs: %d\n",
+				argv[0], lsa.lsa_stripe_count, lsa.lsa_nr_tgts);
+			free(param);
 			return CMD_HELP;
 		}
+
+		param->lsp_is_specific = true;
+		param->lsp_stripe_count = lsa.lsa_nr_tgts;
+		memcpy(param->lsp_tgts, mdts, sizeof(*mdts) * lsa.lsa_nr_tgts);
 	}
 
 	dname = argv[optind];
 	do {
-		if (default_stripe) {
-			result = llapi_dir_set_default_lmv_stripe(dname,
-						    stripe_offset, stripe_count,
-						    hash_type, NULL);
-		} else {
-			result = llapi_dir_create_pool(dname, mode,
-						       stripe_offset,
-						       stripe_count, hash_type,
-						       NULL);
-		}
+		if (default_stripe)
+			result = llapi_dir_set_default_lmv(dname, param);
+		else
+			result = llapi_dir_create_param(dname, mode, param);
 
 		if (result) {
 			fprintf(stderr,
@@ -3778,6 +3795,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	if (mode_opt != NULL)
 		umask(previous_mode);
 
+	free(param);
 	return result;
 }
 

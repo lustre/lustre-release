@@ -2120,14 +2120,36 @@ void lustre_swab_lmv_mds_md(union lmv_mds_md *lmm)
 }
 EXPORT_SYMBOL(lustre_swab_lmv_mds_md);
 
+void lustre_swab_lmv_user_md_objects(struct lmv_user_mds_data *lmd,
+				     int stripe_count)
+{
+	int i;
+
+	for (i = 0; i < stripe_count; i++)
+		__swab32s(&(lmd[i].lum_mds));
+}
+EXPORT_SYMBOL(lustre_swab_lmv_user_md_objects);
+
+
 void lustre_swab_lmv_user_md(struct lmv_user_md *lum)
 {
+	__u32 count = lum->lum_stripe_count;
+
 	__swab32s(&lum->lum_magic);
 	__swab32s(&lum->lum_stripe_count);
 	__swab32s(&lum->lum_stripe_offset);
 	__swab32s(&lum->lum_hash_type);
 	__swab32s(&lum->lum_type);
 	CLASSERT(offsetof(typeof(*lum), lum_padding1) != 0);
+	switch (lum->lum_magic) {
+	case LMV_USER_MAGIC_SPECIFIC:
+		count = lum->lum_stripe_count;
+	case __swab32(LMV_USER_MAGIC_SPECIFIC):
+		lustre_swab_lmv_user_md_objects(lum->lum_objects, count);
+		break;
+	default:
+		break;
+	}
 }
 EXPORT_SYMBOL(lustre_swab_lmv_user_md);
 

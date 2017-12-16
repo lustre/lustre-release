@@ -434,7 +434,7 @@ static int ll_send_mgc_param(struct obd_export *mgc, char *string)
  *                      <0 if the creation is failed.
  */
 static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
-			       const char *dirname, umode_t mode)
+			       size_t len, const char *dirname, umode_t mode)
 {
 	struct inode *parent = dparent->d_inode;
 	struct ptlrpc_request *request = NULL;
@@ -453,7 +453,8 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	int err;
 	ENTRY;
 
-	if (unlikely(lump->lum_magic != LMV_USER_MAGIC))
+	if (unlikely(lump->lum_magic != LMV_USER_MAGIC &&
+		     lump->lum_magic != LMV_USER_MAGIC_SPECIFIC))
 		RETURN(-EINVAL);
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p) name %s "
@@ -469,7 +470,8 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	    !OBD_FAIL_CHECK(OBD_FAIL_LLITE_NO_CHECK_DEAD))
 		RETURN(-ENOENT);
 
-	if (lump->lum_magic != cpu_to_le32(LMV_USER_MAGIC))
+	if (lump->lum_magic != cpu_to_le32(LMV_USER_MAGIC) &&
+	    lump->lum_magic != cpu_to_le32(LMV_USER_MAGIC_SPECIFIC))
 		lustre_swab_lmv_user_md(lump);
 
 	if (!IS_POSIXACL(parent) || !exp_connect_umask(ll_i2mdexp(parent)))
@@ -494,7 +496,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 	}
 
 	op_data->op_cli_flags |= CLI_SET_MEA;
-	err = md_create(sbi->ll_md_exp, op_data, lump, sizeof(*lump), mode,
+	err = md_create(sbi->ll_md_exp, op_data, lump, len, mode,
 			from_kuid(&init_user_ns, current_fsuid()),
 			from_kgid(&init_user_ns, current_fsgid()),
 			cfs_curproc_cap_pack(), 0, &request);
@@ -1247,8 +1249,9 @@ out_free:
 		lum = (struct lmv_user_md *)data->ioc_inlbuf2;
 		lumlen = data->ioc_inllen2;
 
-		if (lum->lum_magic != LMV_USER_MAGIC ||
-		    lumlen != sizeof(*lum)) {
+		if ((lum->lum_magic != LMV_USER_MAGIC &&
+		     lum->lum_magic != LMV_USER_MAGIC_SPECIFIC) ||
+		    lumlen < sizeof(*lum)) {
 			CERROR("%s: wrong lum magic %x or size %d: rc = %d\n",
 			       filename, lum->lum_magic, lumlen, -EFAULT);
 			GOTO(lmv_out_free, rc = -EINVAL);
@@ -1259,7 +1262,7 @@ out_free:
 #else
 		mode = data->ioc_type;
 #endif
-		rc = ll_dir_setdirstripe(dentry, lum, filename, mode);
+		rc = ll_dir_setdirstripe(dentry, lum, lumlen, filename, mode);
 lmv_out_free:
 		OBD_FREE_LARGE(buf, len);
 		RETURN(rc);

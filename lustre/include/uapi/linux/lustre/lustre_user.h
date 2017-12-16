@@ -469,6 +469,7 @@ struct fsxattr {
 
 #define LMV_USER_MAGIC		0x0CD30CD0    /* default lmv magic */
 #define LMV_USER_MAGIC_V0	0x0CD20CD0    /* old default lmv magic*/
+#define LMV_USER_MAGIC_SPECIFIC	0x0CD40CD0
 
 #define LOV_PATTERN_NONE	0x000
 #define LOV_PATTERN_RAID0	0x001

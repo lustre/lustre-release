@@ -390,6 +390,33 @@ int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
 	return 0;
 }
 
+int llapi_dir_stripe_limit_check(int stripe_offset, int stripe_count,
+				 int hash_type)
+{
+	int rc;
+
+	if (!llapi_dir_stripe_index_is_valid(stripe_offset)) {
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe offset %d",
+				stripe_offset);
+		return rc;
+	}
+	if (!llapi_dir_stripe_count_is_valid(stripe_count)) {
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe count %d",
+				stripe_count);
+		return rc;
+	}
+
+	if (!llapi_dir_hash_type_is_valid(hash_type)) {
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad hash type %d",
+				hash_type);
+		return rc;
+	}
+	return 0;
+}
+
 /*
  * Trim a trailing newline from a string, if it exists.
  */
@@ -469,13 +496,13 @@ int llapi_get_agent_uuid(char *path, char *buf, size_t bufsize)
 }
 
 /*
- * if pool is NULL, search ostname in target_obd
+ * if pool is NULL, search tgtname in target_obd
  * if pool is not NULL:
  *  if pool not found returns errno < 0
- *  if ostname is NULL, returns 1 if pool is not empty and 0 if pool empty
- *  if ostname is not NULL, returns 1 if OST is in pool and 0 if not
+ *  if tgtname is NULL, returns 1 if pool is not empty and 0 if pool empty
+ *  if tgtname is not NULL, returns 1 if OST is in pool and 0 if not
  */
-int llapi_search_ost(char *fsname, char *poolname, char *ostname)
+int llapi_search_tgt(char *fsname, char *poolname, char *tgtname, bool is_mdt)
 {
 	char buffer[PATH_MAX];
 	size_t len = 0;
@@ -487,8 +514,8 @@ int llapi_search_ost(char *fsname, char *poolname, char *ostname)
 	if (poolname == NULL && fsname == NULL)
 		return -EINVAL;
 
-	if (ostname != NULL)
-		len = strlen(ostname);
+	if (tgtname != NULL)
+		len = strlen(tgtname);
 
 	if (poolname == NULL && len == 0)
 		return -EINVAL;
@@ -501,7 +528,7 @@ int llapi_search_ost(char *fsname, char *poolname, char *ostname)
 				 param.gl_pathv[0], poolname);
 		}
 	} else if (fsname != NULL) {
-		rc = get_lustre_param_path("lov", fsname,
+		rc = get_lustre_param_path(is_mdt ? "lmv" : "lov", fsname,
 					   FILTER_BY_FS_NAME,
 					   "target_obd", &param);
 		if (rc == 0) {
@@ -515,33 +542,38 @@ int llapi_search_ost(char *fsname, char *poolname, char *ostname)
 	if (rc)
 		return rc;
 
-        fd = fopen(buffer, "r");
-        if (fd == NULL)
-                return -errno;
+	fd = fopen(buffer, "r");
+	if (fd == NULL)
+		return -errno;
 
-        while (fgets(buffer, sizeof(buffer), fd) != NULL) {
-                if (poolname == NULL) {
-                        char *ptr;
-                        /* Search for an ostname in the list of OSTs
-                         Line format is IDX: fsname-OSTxxxx_UUID STATUS */
-                        ptr = strchr(buffer, ' ');
-                        if ((ptr != NULL) &&
-                            (strncmp(ptr + 1, ostname, len) == 0)) {
-                                fclose(fd);
-                                return 1;
-                        }
-                } else {
-                        /* Search for an ostname in a pool,
-                         (or an existing non-empty pool if no ostname) */
-                        if ((ostname == NULL) ||
-                            (strncmp(buffer, ostname, len) == 0)) {
-                                fclose(fd);
-                                return 1;
-                        }
-                }
-        }
-        fclose(fd);
-        return 0;
+	while (fgets(buffer, sizeof(buffer), fd) != NULL) {
+		if (poolname == NULL) {
+			char *ptr;
+			/* Search for an tgtname in the list of targets
+			 * Line format is IDX: fsname-OST/MDTxxxx_UUID STATUS */
+			ptr = strchr(buffer, ' ');
+			if ((ptr != NULL) &&
+			    (strncmp(ptr + 1, tgtname, len) == 0)) {
+				fclose(fd);
+				return 1;
+			}
+		} else {
+			/* Search for an tgtname in a pool,
+			 * (or an existing non-empty pool if no tgtname) */
+			if ((tgtname == NULL) ||
+			    (strncmp(buffer, tgtname, len) == 0)) {
+				fclose(fd);
+				return 1;
+			}
+		}
+	}
+	fclose(fd);
+	return 0;
+}
+
+int llapi_search_ost(char *fsname, char *poolname, char *ostname)
+{
+	return llapi_search_tgt(fsname, poolname, ostname, false);
 }
 
 /**
@@ -772,28 +804,130 @@ int llapi_file_create_pool(const char *name, unsigned long long stripe_size,
         return 0;
 }
 
-int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
-				     int stripe_count, int stripe_pattern,
-				     const char *pool_name)
+static int verify_dir_param(const char *name,
+			    const struct llapi_stripe_param *param)
 {
-	struct lmv_user_md	lum = { 0 };
-	int			fd;
-	int			rc = 0;
+	char fsname[MAX_OBD_NAME + 1] = { 0 };
+	char *pool_name = param->lsp_pool;
+	int rc;
 
-	lum.lum_magic = LMV_USER_MAGIC;
-	lum.lum_stripe_offset = stripe_offset;
-	lum.lum_stripe_count = stripe_count;
-	lum.lum_hash_type = stripe_pattern;
-	if (pool_name != NULL) {
-		if (strlen(pool_name) >= sizeof(lum.lum_pool_name)) {
-			llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "error LL_IOC_LMV_SET_DEFAULT_STRIPE '%s'"
-				  ": too large pool name: %s", name, pool_name);
-			return -E2BIG;
-		}
-		strncpy(lum.lum_pool_name, pool_name,
-			sizeof(lum.lum_pool_name));
+	/* Make sure we are on a Lustre file system */
+	rc = llapi_search_fsname(name, fsname);
+	if (rc) {
+		llapi_error(LLAPI_MSG_ERROR, rc,
+			    "'%s' is not on a Lustre filesystem",
+			    name);
+		return rc;
 	}
+
+	/* Check if the stripe pattern is sane. */
+	rc = llapi_dir_stripe_limit_check(param->lsp_stripe_offset,
+					  param->lsp_stripe_count,
+					  param->lsp_stripe_pattern);
+	if (rc != 0)
+		return rc;
+
+	/* Make sure we have a good pool */
+	if (pool_name != NULL) {
+		/* in case user gives the full pool name <fsname>.<poolname>,
+		 * strip the fsname */
+		char *ptr = strchr(pool_name, '.');
+
+		if (ptr != NULL) {
+			*ptr = '\0';
+			if (strcmp(pool_name, fsname) != 0) {
+				*ptr = '.';
+				llapi_err_noerrno(LLAPI_MSG_ERROR,
+					"Pool '%s' is not on filesystem '%s'",
+					pool_name, fsname);
+				return -EINVAL;
+			}
+			pool_name = ptr + 1;
+		}
+
+		/* Make sure the pool exists and is non-empty */
+		rc = llapi_search_tgt(fsname, pool_name, NULL, true);
+		if (rc < 1) {
+			char *err = rc == 0 ? "has no OSTs" : "does not exist";
+
+			llapi_err_noerrno(LLAPI_MSG_ERROR, "pool '%s.%s' %s",
+					  fsname, pool_name, err);
+			return -EINVAL;
+		}
+	}
+
+	/* sanity check of target list */
+	if (param->lsp_is_specific) {
+		char mdtname[MAX_OBD_NAME + 1];
+		bool found = false;
+		int i;
+
+		for (i = 0; i < param->lsp_stripe_count; i++) {
+			snprintf(mdtname, sizeof(mdtname), "%s-MDT%04x_UUID",
+				 fsname, param->lsp_tgts[i]);
+			rc = llapi_search_tgt(fsname, pool_name, mdtname, true);
+			if (rc <= 0) {
+				if (rc == 0)
+					rc = -ENODEV;
+
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "%s: cannot find MDT %s in %s",
+					    __func__, mdtname,
+					    pool_name != NULL ?
+					    "pool" : "system");
+				return rc;
+			}
+
+			/* Make sure stripe offset is in MDT list. */
+			if (param->lsp_tgts[i] == param->lsp_stripe_offset)
+				found = true;
+		}
+		if (!found) {
+			llapi_error(LLAPI_MSG_ERROR, -EINVAL,
+				    "%s: stripe offset '%d' is not in the "
+				    "target list",
+				    __func__, param->lsp_stripe_offset);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+static inline void param2lmu(struct lmv_user_md *lmu,
+			     const struct llapi_stripe_param *param)
+{
+	lmu->lum_magic = param->lsp_is_specific ? LMV_USER_MAGIC_SPECIFIC :
+						  LMV_USER_MAGIC;
+	lmu->lum_stripe_count = param->lsp_stripe_count;
+	lmu->lum_stripe_offset = param->lsp_stripe_offset;
+	lmu->lum_hash_type = param->lsp_stripe_pattern;
+	if (param->lsp_pool != NULL)
+		strncpy(lmu->lum_pool_name, param->lsp_pool, LOV_MAXPOOLNAME);
+	if (param->lsp_is_specific) {
+		int i;
+
+		for (i = 0; i < param->lsp_stripe_count; i++)
+			lmu->lum_objects[i].lum_mds = param->lsp_tgts[i];
+	}
+}
+
+int llapi_dir_set_default_lmv(const char *name,
+			      const struct llapi_stripe_param *param)
+{
+	struct lmv_user_md lmu = { 0 };
+	int fd;
+	int rc = 0;
+
+	rc = verify_dir_param(name, param);
+	if (rc)
+		return rc;
+
+	/* TODO: default lmv doesn't support specific targets yet */
+	if (param->lsp_is_specific)
+		return -EINVAL;
+
+	param2lmu(&lmu, param);
 
 	fd = open(name, O_DIRECTORY | O_RDONLY);
 	if (fd < 0) {
@@ -802,7 +936,7 @@ int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
 		return rc;
 	}
 
-	rc = ioctl(fd, LL_IOC_LMV_SET_DEFAULT_STRIPE, &lum);
+	rc = ioctl(fd, LL_IOC_LMV_SET_DEFAULT_STRIPE, &lmu);
 	if (rc < 0) {
 		char *errmsg = "stripe already set";
 		rc = -errno;
@@ -817,11 +951,35 @@ int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
 	return rc;
 }
 
-int llapi_dir_create_pool(const char *name, int mode, int stripe_offset,
-			  int stripe_count, int stripe_pattern,
-			  const char *pool_name)
+int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
+				     int stripe_count, int stripe_pattern,
+				     const char *pool_name)
 {
-	struct lmv_user_md lmu = { 0 };
+	const struct llapi_stripe_param param = {
+		.lsp_stripe_count = stripe_count,
+		.lsp_stripe_offset = stripe_offset,
+		.lsp_stripe_pattern = stripe_pattern,
+		.lsp_pool = (char *)pool_name
+	};
+
+	return llapi_dir_set_default_lmv(name, &param);
+}
+
+/**
+ * Create a Lustre directory.
+ *
+ * \param name     the name of the directory to be created
+ * \param mode     permission of the file if it is created, see mode in open(2)
+ * \param param    stripe pattern of the newly created directory
+ *
+ * \retval         0 on success
+ * \retval         negative errno on failure
+ */
+int llapi_dir_create_param(const char *name, mode_t mode,
+			   const struct llapi_stripe_param *param)
+{
+	struct lmv_user_md *lmu = NULL;
+	size_t lmu_size = sizeof(*lmu);
 	struct obd_ioctl_data data = { 0 };
 	char rawbuf[8192];
 	char *buf = rawbuf;
@@ -829,36 +987,42 @@ int llapi_dir_create_pool(const char *name, int mode, int stripe_offset,
 	char *namepath = NULL;
 	char *dir;
 	char *filename;
-	int fd = -1;
-	int rc;
+	int fd, rc;
 
-	dirpath = strdup(name);
-	namepath = strdup(name);
-	if (!dirpath || !namepath)
+	rc = verify_dir_param(name, param);
+	if (rc)
+		return rc;
+
+	if (param->lsp_is_specific)
+		lmu_size = lmv_user_md_size(param->lsp_stripe_count,
+					    LMV_USER_MAGIC_SPECIFIC);
+
+	lmu = calloc(1, lmu_size);
+	if (lmu == NULL)
 		return -ENOMEM;
 
-	lmu.lum_magic = LMV_USER_MAGIC;
-	lmu.lum_stripe_offset = stripe_offset;
-	lmu.lum_stripe_count = stripe_count;
-	lmu.lum_hash_type = stripe_pattern;
-	if (pool_name != NULL) {
-		if (strlen(pool_name) > LOV_MAXPOOLNAME) {
-			llapi_err_noerrno(LLAPI_MSG_ERROR,
-				  "error LL_IOC_LMV_SETSTRIPE '%s' : too large"
-				  "pool name: %s", name, pool_name);
-			rc = -E2BIG;
-			goto out;
-		}
-		memcpy(lmu.lum_pool_name, pool_name, strlen(pool_name));
+	dirpath = strdup(name);
+	if (!dirpath) {
+		free(lmu);
+		return -ENOMEM;
 	}
+
+	namepath = strdup(name);
+	if (!namepath) {
+		free(namepath);
+		free(lmu);
+		return -ENOMEM;
+	}
+
+	param2lmu(lmu, param);
 
 	filename = basename(namepath);
 	dir = dirname(dirpath);
 
 	data.ioc_inlbuf1 = (char *)filename;
 	data.ioc_inllen1 = strlen(filename) + 1;
-	data.ioc_inlbuf2 = (char *)&lmu;
-	data.ioc_inllen2 = sizeof(struct lmv_user_md);
+	data.ioc_inlbuf2 = (char *)lmu;
+	data.ioc_inllen2 = lmu_size;
 	data.ioc_type = mode;
 	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
@@ -887,9 +1051,25 @@ int llapi_dir_create_pool(const char *name, int mode, int stripe_offset,
 	}
 	close(fd);
 out:
-	free(dirpath);
 	free(namepath);
+	free(dirpath);
+	free(lmu);
 	return rc;
+}
+
+
+int llapi_dir_create_pool(const char *name, int mode, int stripe_offset,
+			  int stripe_count, int stripe_pattern,
+			  const char *pool_name)
+{
+	const struct llapi_stripe_param param = {
+		.lsp_stripe_count = stripe_count,
+		.lsp_stripe_offset = stripe_offset,
+		.lsp_stripe_pattern = stripe_pattern,
+		.lsp_pool = (char *)pool_name
+	};
+
+	return llapi_dir_create_param(name, mode, &param);
 }
 
 int llapi_direntry_remove(char *dname)

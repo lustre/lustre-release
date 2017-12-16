@@ -1859,10 +1859,12 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 	int			rc = 0;
 	__u32			i;
 	__u32			j;
+	bool			is_specific = false;
 	ENTRY;
 
 	/* The lum has been verifed in lod_verify_md_striping */
-	LASSERT(le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC);
+	LASSERT(le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC ||
+		le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC);
 	LASSERT(le32_to_cpu(lum->lum_stripe_count) > 0);
 
 	stripe_count = le32_to_cpu(lum->lum_stripe_count);
@@ -1878,6 +1880,12 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 	/* Start index must be the master MDT */
 	master_index = lu_site2seq(lod2lu_dev(lod)->ld_site)->ss_node_id;
 	idx_array[0] = master_index;
+	if (le32_to_cpu(lum->lum_magic) == LMV_USER_MAGIC_SPECIFIC) {
+		is_specific = true;
+		for (i = 1; i < stripe_count; i++)
+			idx_array[i] = le32_to_cpu(lum->lum_objects[i].lum_mds);
+	}
+
 	for (i = 0; i < stripe_count; i++) {
 		struct lod_tgt_desc	*tgt = NULL;
 		struct dt_object	*dto;
@@ -1896,7 +1904,8 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 			CDEBUG(D_INFO, "try idx %d, mdt cnt %u, allocated %u\n",
 			       idx, lod->lod_remote_mdt_count + 1, i);
 
-			if (likely(!OBD_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE))) {
+			if (likely(!is_specific &&
+				   !OBD_FAIL_CHECK(OBD_FAIL_LARGE_STRIPE))) {
 				/* check whether the idx already exists
 				 * in current allocated array */
 				for (k = 0; k < i; k++) {
@@ -1959,7 +1968,7 @@ static int lod_prep_md_striped_create(const struct lu_env *env,
 		       idx, i, PFID(&fid));
 		idx_array[i] = idx;
 		/* Set the start index for next stripe allocation */
-		if (i < stripe_count - 1)
+		if (!is_specific && i < stripe_count - 1)
 			idx_array[i + 1] = (idx + 1) %
 					   (lod->lod_remote_mdt_count + 1);
 		/* tgt_dt and fid must be ready after search avaible OSP
@@ -2042,7 +2051,7 @@ static int lod_declare_xattr_set_lmv(const struct lu_env *env,
 	       le32_to_cpu(lum->lum_magic), le32_to_cpu(lum->lum_stripe_count),
 	       (int)le32_to_cpu(lum->lum_stripe_offset));
 
-	if (le32_to_cpu(lum->lum_stripe_count) == 0)
+	if (lo->ldo_dir_stripe_count == 0)
 		GOTO(out, rc = 0);
 
 	/* prepare dir striped objects */
@@ -3357,6 +3366,7 @@ out:
  * \param[in] env	execution environment
  * \param[in] dt	object
  * \param[in] attr	attributes the stripes will be created with
+ * \param[in] lmu	lmv_user_md if MDT indices are specified
  * \param[in] dof	format of stripes (see OSD API description)
  * \param[in] th	transaction handle
  * \param[in] declare	where to call "declare" or "execute" methods
@@ -3367,6 +3377,7 @@ out:
 static int lod_dir_striping_create_internal(const struct lu_env *env,
 					    struct dt_object *dt,
 					    struct lu_attr *attr,
+					    const struct lu_buf *lmu,
 					    struct dt_object_format *dof,
 					    struct thandle *th,
 					    bool declare)
@@ -3383,31 +3394,34 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 
 	if (!LMVEA_DELETE_VALUES(lo->ldo_dir_stripe_count,
 				 lo->ldo_dir_stripe_offset)) {
-		struct lmv_user_md_v1 *v1 = info->lti_ea_store;
-		int stripe_count = lo->ldo_dir_stripe_count;
+		if (!lmu) {
+			struct lmv_user_md_v1 *v1 = info->lti_ea_store;
+			int stripe_count = lo->ldo_dir_stripe_count;
 
-		if (info->lti_ea_store_size < sizeof(*v1)) {
-			rc = lod_ea_store_resize(info, sizeof(*v1));
-			if (rc != 0)
-				RETURN(rc);
-			v1 = info->lti_ea_store;
+			if (info->lti_ea_store_size < sizeof(*v1)) {
+				rc = lod_ea_store_resize(info, sizeof(*v1));
+				if (rc != 0)
+					RETURN(rc);
+				v1 = info->lti_ea_store;
+			}
+
+			memset(v1, 0, sizeof(*v1));
+			v1->lum_magic = cpu_to_le32(LMV_USER_MAGIC);
+			v1->lum_stripe_count = cpu_to_le32(stripe_count);
+			v1->lum_stripe_offset =
+					cpu_to_le32(lo->ldo_dir_stripe_offset);
+
+			info->lti_buf.lb_buf = v1;
+			info->lti_buf.lb_len = sizeof(*v1);
+			lmu = &info->lti_buf;
 		}
 
-		memset(v1, 0, sizeof(*v1));
-		v1->lum_magic = cpu_to_le32(LMV_USER_MAGIC);
-		v1->lum_stripe_count = cpu_to_le32(stripe_count);
-		v1->lum_stripe_offset =
-				cpu_to_le32(lo->ldo_dir_stripe_offset);
-
-		info->lti_buf.lb_buf = v1;
-		info->lti_buf.lb_len = sizeof(*v1);
-
 		if (declare)
-			rc = lod_declare_xattr_set_lmv(env, dt, attr,
-						       &info->lti_buf, dof, th);
+			rc = lod_declare_xattr_set_lmv(env, dt, attr, lmu, dof,
+						       th);
 		else
-			rc = lod_xattr_set_lmv(env, dt, &info->lti_buf,
-					       XATTR_NAME_LMV, 0, th);
+			rc = lod_xattr_set_lmv(env, dt, lmu, XATTR_NAME_LMV, 0,
+					       th);
 		if (rc != 0)
 			RETURN(rc);
 	}
@@ -3485,10 +3499,12 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 static int lod_declare_dir_striping_create(const struct lu_env *env,
 					   struct dt_object *dt,
 					   struct lu_attr *attr,
+					   struct lu_buf *lmu,
 					   struct dt_object_format *dof,
 					   struct thandle *th)
 {
-	return lod_dir_striping_create_internal(env, dt, attr, dof, th, true);
+	return lod_dir_striping_create_internal(env, dt, attr, lmu, dof, th,
+						true);
 }
 
 static int lod_dir_striping_create(const struct lu_env *env,
@@ -3497,7 +3513,8 @@ static int lod_dir_striping_create(const struct lu_env *env,
 				   struct dt_object_format *dof,
 				   struct thandle *th)
 {
-	return lod_dir_striping_create_internal(env, dt, attr, dof, th, false);
+	return lod_dir_striping_create_internal(env, dt, attr, NULL, dof, th,
+						false);
 }
 
 /**
@@ -4220,7 +4237,8 @@ static void lod_ah_init(const struct lu_env *env,
 		 * stripe count and try to create dir by default stripe.
 		 */
 		if (ah->dah_eadata != NULL && ah->dah_eadata_len != 0 &&
-		    le32_to_cpu(lum1->lum_magic) == LMV_USER_MAGIC) {
+		    (le32_to_cpu(lum1->lum_magic) == LMV_USER_MAGIC ||
+		     le32_to_cpu(lum1->lum_magic) == LMV_USER_MAGIC_SPECIFIC)) {
 			lc->ldo_dir_stripe_count =
 				le32_to_cpu(lum1->lum_stripe_count);
 			lc->ldo_dir_stripe_offset =
@@ -4556,6 +4574,8 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 							NULL, th);
 	} else if (dof->dof_type == DFT_DIR) {
 		struct seq_server_site *ss;
+		struct lu_buf buf = { NULL };
+		struct lu_buf *lmu = NULL;
 
 		ss = lu_site2seq(dt->do_lu.lo_dev->ld_site);
 
@@ -4605,9 +4625,14 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 				else
 					GOTO(out, rc = -EINVAL);
 			}
+		} else if (hint && hint->dah_eadata) {
+			lmu = &buf;
+			lmu->lb_buf = (void *)hint->dah_eadata;
+			lmu->lb_len = hint->dah_eadata_len;
 		}
 
-		rc = lod_declare_dir_striping_create(env, dt, attr, dof, th);
+		rc = lod_declare_dir_striping_create(env, dt, attr, lmu, dof,
+						     th);
 	}
 out:
 	/* failed to create striping or to set initial size, let's reset

@@ -134,6 +134,21 @@ static inline bool llapi_stripe_index_is_valid(int64_t index)
  * terminology instead of the preferred "index". */
 #define llapi_stripe_offset_is_valid(os) llapi_stripe_index_is_valid(os)
 
+static inline bool llapi_dir_stripe_count_is_valid(int64_t count)
+{
+	return count >= -1 && count <= LMV_MAX_STRIPE_COUNT;
+}
+
+static inline bool llapi_dir_stripe_index_is_valid(int64_t index)
+{
+	return index >= -1 && index < LMV_MAX_STRIPE_COUNT;
+}
+
+static inline bool llapi_dir_hash_type_is_valid(int64_t hash)
+{
+	return hash > LMV_HASH_TYPE_UNKNOWN && hash <  LMV_HASH_TYPE_MAX;
+}
+
 /*
  * Kernel communication for Changelogs and HSM requests.
  */

@@ -117,6 +117,8 @@ struct llapi_stripe_param {
 	__u32			lsp_osts[0];
 };
 
+#define lsp_tgts	lsp_osts
+
 int llapi_file_open_param(const char *name, int flags, mode_t mode,
 			  const struct llapi_stripe_param *param);
 int llapi_file_create(const char *name, unsigned long long stripe_size,
@@ -288,9 +290,13 @@ int llapi_getstripe(char *path, struct find_param *param);
 int llapi_find(char *path, struct find_param *param);
 
 int llapi_file_fget_mdtidx(int fd, int *mdtidx);
+int llapi_dir_set_default_lmv(const char *name,
+			      const struct llapi_stripe_param *param);
 int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
 				     int stripe_count, int stripe_pattern,
 				     const char *pool_name);
+int llapi_dir_create_param(const char *name, mode_t mode,
+			   const struct llapi_stripe_param *param);
 int llapi_dir_create_pool(const char *name, int flags, int stripe_offset,
 			  int stripe_count, int stripe_pattern,
 			  const char *poolname);
@@ -308,6 +314,7 @@ int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
 int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 int llapi_lmv_get_uuids(int fd, struct obd_uuid *uuidp, int *mdt_count);
 int llapi_is_lustre_mnttype(const char *type);
+int llapi_search_tgt(char *fsname, char *poolname, char *tgtname, bool is_mdt);
 int llapi_search_ost(char *fsname, char *poolname, char *ostname);
 int llapi_get_obd_count(char *mnt, int *count, int is_mdt);
 int llapi_parse_size(const char *optarg, unsigned long long *size,
