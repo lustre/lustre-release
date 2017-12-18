@@ -969,18 +969,23 @@ out_pop:
         RETURN(rc);
 }
 
+enum replace_state {
+	REPLACE_COPY = 0,
+	REPLACE_SKIP,
+	REPLACE_DONE,
+	REPLACE_UUID,
+	REPLACE_SETUP
+};
+
 /** This structure is passed to mgs_replace_handler */
 struct mgs_replace_data {
 	/* Nids are replaced for this target device */
 	struct mgs_target_info target;
 	/* Temporary modified llog */
 	struct llog_handle *temp_llh;
-	/* Flag is set if in target block*/
-	int in_target_device;
-	/* Nids already added. Just skip (multiple nids) */
-	int device_nids_added;
-	/* Flag is set if this block should not be copied */
-	int skip_it;
+	enum replace_state state;
+	char *failover;
+	char *nodeuuid;
 };
 
 /**
@@ -1006,13 +1011,13 @@ static int check_markers(struct lustre_cfg *lcfg,
 		   and can be restored if needed */
 		if ((marker->cm_flags & (CM_SKIP | CM_START)) ==
 		    (CM_SKIP | CM_START)) {
-			mrd->skip_it = 1;
+			mrd->state = REPLACE_SKIP;
 			return 1;
 		}
 
 		if ((marker->cm_flags & (CM_SKIP | CM_END)) ==
 		    (CM_SKIP | CM_END)) {
-			mrd->skip_it = 0;
+			mrd->state = REPLACE_COPY;
 			return 1;
 		}
 
@@ -1020,10 +1025,10 @@ static int check_markers(struct lustre_cfg *lcfg,
 			LASSERT(!(marker->cm_flags & CM_START) ||
 				!(marker->cm_flags & CM_END));
 			if (marker->cm_flags & CM_START) {
-				mrd->in_target_device = 1;
-				mrd->device_nids_added = 0;
+				mrd->state = REPLACE_UUID;
+				mrd->failover = NULL;
 			} else if (marker->cm_flags & CM_END)
-				mrd->in_target_device = 0;
+				mrd->state = REPLACE_COPY;
 		}
 	}
 
@@ -1109,38 +1114,56 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 	int nids_added = 0;
 	lnet_nid_t nid;
 	char *ptr;
-	int rc;
+	int rc = 0;
 
-	if (lcfg->lcfg_command == LCFG_ADD_UUID) {
+	if (mrd->state == REPLACE_UUID &&
+	    lcfg->lcfg_command == LCFG_ADD_UUID) {
 		/* LCFG_ADD_UUID command found. Let's skip original command
 		   and add passed nids */
 		ptr = mrd->target.mti_params;
 		while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+			if (!mrd->nodeuuid) {
+				rc = name_create(&mrd->nodeuuid,
+						 libcfs_nid2str(nid), "");
+				if (rc) {
+					CERROR("Can't create uuid for "
+						"nid  %s, device %s\n",
+						libcfs_nid2str(nid),
+						mrd->target.mti_svname);
+					return rc;
+				}
+			}
 			CDEBUG(D_MGS, "add nid %s with uuid %s, "
 			       "device %s\n", libcfs_nid2str(nid),
 				mrd->target.mti_params,
-				mrd->target.mti_svname);
+				mrd->nodeuuid);
 			rc = record_add_uuid(env,
 					     mrd->temp_llh, nid,
-					     mrd->target.mti_params);
+					     mrd->nodeuuid);
 			if (!rc)
 				nids_added++;
+
+			if (*ptr == ':') {
+				mrd->failover = ptr;
+				break;
+			}
 		}
 
 		if (nids_added == 0) {
 			CERROR("No new nids were added, nid %s with uuid %s, "
 			       "device %s\n", libcfs_nid2str(nid),
-			       mrd->target.mti_params,
+			       mrd->nodeuuid ? mrd->nodeuuid : "NULL",
 			       mrd->target.mti_svname);
-			RETURN(-ENXIO);
+			name_destroy(&mrd->nodeuuid);
+			return -ENXIO;
 		} else {
-			mrd->device_nids_added = 1;
+			mrd->state = REPLACE_SETUP;
 		}
 
 		return nids_added;
 	}
 
-	if (mrd->device_nids_added && lcfg->lcfg_command == LCFG_SETUP) {
+	if (mrd->state == REPLACE_SETUP && lcfg->lcfg_command == LCFG_SETUP) {
 		/* LCFG_SETUP command found. UUID should be changed */
 		rc = record_setup(env,
 				  mrd->temp_llh,
@@ -1148,13 +1171,55 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 				  lustre_cfg_string(lcfg, 0),
 				  /* s1 is not changed */
 				  lustre_cfg_string(lcfg, 1),
-				  /* new uuid should be
-				  the full nidlist */
-				  mrd->target.mti_params,
+				  mrd->nodeuuid,
 				  /* s3 is not changed */
 				  lustre_cfg_string(lcfg, 3),
 				  /* s4 is not changed */
 				  lustre_cfg_string(lcfg, 4));
+
+		name_destroy(&mrd->nodeuuid);
+		if (rc)
+			return rc;
+
+		if (mrd->failover) {
+			ptr = mrd->failover;
+			while (class_parse_nid(ptr, &nid, &ptr) == 0) {
+				if (mrd->nodeuuid == NULL) {
+					rc =  name_create(&mrd->nodeuuid,
+							  libcfs_nid2str(nid),
+							  "");
+					if (rc)
+						return rc;
+				}
+
+				CDEBUG(D_MGS, "add nid %s for failover %s\n",
+				       libcfs_nid2str(nid), mrd->nodeuuid);
+				rc = record_add_uuid(env, mrd->temp_llh, nid,
+						     mrd->nodeuuid);
+				if (rc) {
+					name_destroy(&mrd->nodeuuid);
+					return rc;
+				}
+				if (*ptr == ':') {
+					rc = record_add_conn(env,
+						mrd->temp_llh,
+						lustre_cfg_string(lcfg, 0),
+						mrd->nodeuuid);
+					name_destroy(&mrd->nodeuuid);
+					if (rc)
+						return rc;
+				}
+			}
+			if (mrd->nodeuuid) {
+				rc = record_add_conn(env, mrd->temp_llh,
+						     lustre_cfg_string(lcfg, 0),
+						     mrd->nodeuuid);
+				name_destroy(&mrd->nodeuuid);
+				if (rc)
+					return rc;
+			}
+		}
+		mrd->state = REPLACE_DONE;
 		return rc ? rc : 1;
 	}
 
@@ -1200,20 +1265,24 @@ static int mgs_replace_nids_handler(const struct lu_env *env,
 	}
 
 	rc = check_markers(lcfg, mrd);
-	if (rc || mrd->skip_it)
+	if (rc || mrd->state == REPLACE_SKIP)
 		GOTO(skip_out, rc = 0);
 
 	/* Write to new log all commands outside target device block */
-	if (!mrd->in_target_device)
+	if (mrd->state == REPLACE_COPY)
 		GOTO(copy_out, rc = 0);
 
-	/* Skip all other LCFG_ADD_UUID and LCFG_ADD_CONN records
-	   (failover nids) for this target, assuming that if then
-	   primary is changing then so is the failover */
-	if (mrd->device_nids_added &&
+	if (mrd->state == REPLACE_DONE &&
 	    (lcfg->lcfg_command == LCFG_ADD_UUID ||
-	     lcfg->lcfg_command == LCFG_ADD_CONN))
+	     lcfg->lcfg_command == LCFG_ADD_CONN)) {
+		if (!mrd->failover)
+			CWARN("Previous failover is deleted, but new one is "
+			      "not set. This means you configure system "
+			      "without failover or passed wrong replace_nids "
+			      "command parameters. Device %s, passed nids %s\n",
+			      mrd->target.mti_svname, mrd->target.mti_params);
 		GOTO(skip_out, rc = 0);
+	}
 
 	rc = process_command(env, lcfg, mrd);
 	if (rc < 0)
@@ -1597,9 +1666,9 @@ static int mgs_clear_config_handler(const struct lu_env *env,
 		marker = lustre_cfg_buf(lcfg, 1);
 		if (marker->cm_flags & CM_SKIP) {
 			if (marker->cm_flags & CM_START)
-				mrd->skip_it = 1;
+				mrd->state = REPLACE_SKIP;
 			if (marker->cm_flags & CM_END)
-				mrd->skip_it = 0;
+				mrd->state = REPLACE_COPY;
 			/* SKIP section started or finished */
 			CDEBUG(D_MGS, "Skip idx=%d, rc=%d, len=%d, "
 			       "cmd %x %s %s\n", rec->lrh_index, rc,
@@ -1609,7 +1678,7 @@ static int mgs_clear_config_handler(const struct lu_env *env,
 			RETURN(0);
 		}
 	} else {
-		if (mrd->skip_it) {
+		if (mrd->state == REPLACE_SKIP) {
 			/* record enclosed between SKIP markers, skip it */
 			CDEBUG(D_MGS, "Skip idx=%d, rc=%d, len=%d, "
 			       "cmd %x %s %s\n", rec->lrh_index, rc,
