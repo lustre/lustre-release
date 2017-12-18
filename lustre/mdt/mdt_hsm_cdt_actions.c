@@ -175,7 +175,7 @@ void dump_llog_agent_req_rec(const char *prefix,
 	sz = larr->arr_hai.hai_len - sizeof(larr->arr_hai);
 	CDEBUG(D_HSM, "%slrh=[type=%X len=%d idx=%d] fid="DFID
 	       " dfid="DFID
-	       " compound/cookie=%#llx/%#llx"
+	       " cookie=%#llx"
 	       " status=%s action=%s archive#=%d flags=%#llx"
 	       " create=%llu change=%llu"
 	       " extent=%#llx-%#llx gid=%#llx datalen=%d"
@@ -185,7 +185,7 @@ void dump_llog_agent_req_rec(const char *prefix,
 	       larr->arr_hdr.lrh_len, larr->arr_hdr.lrh_index,
 	       PFID(&larr->arr_hai.hai_fid),
 	       PFID(&larr->arr_hai.hai_dfid),
-	       larr->arr_compound_id, larr->arr_hai.hai_cookie,
+	       larr->arr_hai.hai_cookie,
 	       agent_req_status2name(larr->arr_status),
 	       hsm_copytool_action2name(larr->arr_hai.hai_action),
 	       larr->arr_archive_id,
@@ -250,16 +250,14 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
  * add an entry in agent llog
  * \param env [IN] environment
  * \param mdt [IN] PDT device
- * \param compound_id [IN] global id associated with the record
  * \param archive_id [IN] backend archive number
  * \param hai [IN] record to register
  * \retval 0 success
  * \retval -ve failure
  */
-int mdt_agent_record_add(const struct lu_env *env,
-			 struct mdt_device *mdt,
-			 __u64 compound_id, __u32 archive_id,
-			 __u64 flags, struct hsm_action_item *hai)
+int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
+			 __u32 archive_id, __u64 flags,
+			 struct hsm_action_item *hai)
 {
 	struct obd_device		*obd = mdt2obd_dev(mdt);
 	struct coordinator		*cdt = &mdt->mdt_coordinator;
@@ -276,7 +274,6 @@ int mdt_agent_record_add(const struct lu_env *env,
 	larr->arr_hdr.lrh_len = sz;
 	larr->arr_hdr.lrh_type = HSM_AGENT_REC;
 	larr->arr_status = ARS_WAITING;
-	larr->arr_compound_id = compound_id;
 	larr->arr_archive_id = archive_id;
 	larr->arr_flags = flags;
 	larr->arr_req_create = ktime_get_real_seconds();
@@ -559,7 +556,7 @@ static int hsm_actions_show_cb(const struct lu_env *env,
 		   llh->lgh_hdr->llh_cat_idx, hdr->lrh_index,
 		   PFID(&larr->arr_hai.hai_fid),
 		   PFID(&larr->arr_hai.hai_dfid),
-		   larr->arr_compound_id, larr->arr_hai.hai_cookie,
+		   0ULL /* compound_id */, larr->arr_hai.hai_cookie,
 		   hsm_copytool_action2name(larr->arr_hai.hai_action),
 		   larr->arr_archive_id,
 		   larr->arr_flags,

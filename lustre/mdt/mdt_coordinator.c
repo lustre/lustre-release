@@ -101,21 +101,21 @@ void mdt_hsm_dump_hal(int level, const char *prefix,
 	struct hsm_action_item	*hai;
 	char			 buf[12];
 
-	CDEBUG(level, "%s: HAL header: version %X count %d compound %#llx"
+	CDEBUG(level, "%s: HAL header: version %X count %d"
 		      " archive_id %d flags %#llx\n",
 	       prefix, hal->hal_version, hal->hal_count,
-	       hal->hal_compound_id, hal->hal_archive_id, hal->hal_flags);
+	       hal->hal_archive_id, hal->hal_flags);
 
 	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++) {
 		sz = hai->hai_len - sizeof(*hai);
 		CDEBUG(level, "%s %d: fid="DFID" dfid="DFID
-		       " compound/cookie=%#llx/%#llx"
+		       " cookie=%#llx"
 		       " action=%s extent=%#llx-%#llx gid=%#llx"
 		       " datalen=%d data=[%s]\n",
 		       prefix, i,
 		       PFID(&hai->hai_fid), PFID(&hai->hai_dfid),
-		       hal->hal_compound_id, hai->hai_cookie,
+		       hai->hai_cookie,
 		       hsm_copytool_action2name(hai->hai_action),
 		       hai->hai_extent.offset,
 		       hai->hai_extent.length,
@@ -157,6 +157,8 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 	struct coordinator *cdt = &mdt->mdt_coordinator;
 	struct hsm_scan_request *request;
 	struct hsm_action_item *hai;
+	size_t hai_size;
+	u32 archive_id;
 	int i;
 
 	/* Are agents full? */
@@ -177,12 +179,15 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 		}
 	}
 
-	/* first search whether the request is found in the list we
-	 * have built. */
+	hai_size = cfs_size_round(larr->arr_hai.hai_len);
+	archive_id = larr->arr_archive_id;
+
+	/* Can we add this action to one of the existing HALs in hsd. */
 	request = NULL;
 	for (i = 0; i < hsd->hsd_request_count; i++) {
-		if (hsd->hsd_request[i].hal->hal_compound_id ==
-		    larr->arr_compound_id) {
+		if (hsd->hsd_request[i].hal->hal_archive_id == archive_id &&
+		    hsd->hsd_request[i].hal_used_sz + hai_size <=
+		    LDLM_MAXREQSIZE) {
 			request = &hsd->hsd_request[i];
 			break;
 		}
@@ -204,57 +209,42 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 		/* allocates hai vector size just needs to be large
 		 * enough */
 		request->hal_sz = sizeof(*request->hal) +
-			cfs_size_round(MTI_NAME_MAXLEN + 1) +
-			2 * cfs_size_round(larr->arr_hai.hai_len);
-		OBD_ALLOC(hal, request->hal_sz);
+			cfs_size_round(MTI_NAME_MAXLEN + 1) + 2 * hai_size;
+		OBD_ALLOC_LARGE(hal, request->hal_sz);
 		if (!hal)
 			RETURN(-ENOMEM);
 
 		hal->hal_version = HAL_VERSION;
 		strlcpy(hal->hal_fsname, hsd->hsd_fsname, MTI_NAME_MAXLEN + 1);
-		hal->hal_compound_id = larr->arr_compound_id;
 		hal->hal_archive_id = larr->arr_archive_id;
 		hal->hal_flags = larr->arr_flags;
 		hal->hal_count = 0;
 		request->hal_used_sz = hal_size(hal);
 		request->hal = hal;
 		hsd->hsd_request_count++;
-		hai = hai_first(hal);
-	} else {
-		/* request is known */
-		/* we check if record archive num is the same as the
-		 * known request, if not we will serve it in multiple
-		 * time because we do not know if the agent can serve
-		 * multiple backend a use case is a compound made of
-		 * multiple restore where the files are not archived
-		 * in the same backend */
-		if (larr->arr_archive_id != request->hal->hal_archive_id)
-			RETURN(0);
+	} else if (request->hal_sz < request->hal_used_sz + hai_size) {
+		/* Not enough room, need an extension */
+		void *hal_buffer;
+		int sz;
 
-		if (request->hal_sz < request->hal_used_sz +
-		    cfs_size_round(larr->arr_hai.hai_len)) {
-			/* Not enough room, need an extension */
-			void *hal_buffer;
-			int sz;
+		sz = min_t(int, 2 * request->hal_sz, LDLM_MAXREQSIZE);
+		LASSERT(request->hal_used_sz + hai_size < sz);
 
-			sz = 2 * request->hal_sz;
-			OBD_ALLOC(hal_buffer, sz);
-			if (!hal_buffer)
-				RETURN(-ENOMEM);
-			memcpy(hal_buffer, request->hal, request->hal_used_sz);
-			OBD_FREE(request->hal, request->hal_sz);
-			request->hal = hal_buffer;
-			request->hal_sz = sz;
-		}
+		OBD_ALLOC_LARGE(hal_buffer, sz);
+		if (!hal_buffer)
+			RETURN(-ENOMEM);
 
-		hai = hai_first(request->hal);
-		for (i = 0; i < request->hal->hal_count; i++)
-			hai = hai_next(hai);
+		memcpy(hal_buffer, request->hal, request->hal_used_sz);
+		OBD_FREE_LARGE(request->hal, request->hal_sz);
+		request->hal = hal_buffer;
+		request->hal_sz = sz;
 	}
 
+	hai = hai_first(request->hal);
+	for (i = 0; i < request->hal->hal_count; i++)
+		hai = hai_next(hai);
+
 	memcpy(hai, &larr->arr_hai, larr->arr_hai.hai_len);
-	hai->hai_cookie = larr->arr_hai.hai_cookie;
-	hai->hai_gid = larr->arr_hai.hai_gid;
 
 	request->hal_used_sz += cfs_size_round(hai->hai_len);
 	request->hal->hal_count++;
@@ -680,7 +670,7 @@ static int mdt_coordinator(void *data)
 		/* Allocate a temporary array to store the cookies to
 		 * update, and their status. */
 		updates_sz = updates_cnt * sizeof(*updates);
-		OBD_ALLOC(updates, updates_sz);
+		OBD_ALLOC_LARGE(updates, updates_sz);
 		if (updates == NULL) {
 			CERROR("%s: Cannot allocate memory (%d o) "
 			       "for %d updates\n",
@@ -729,14 +719,14 @@ static int mdt_coordinator(void *data)
 				       mdt_obd_name(mdt), rc, update_idx);
 		}
 
-		OBD_FREE(updates, updates_sz);
+		OBD_FREE_LARGE(updates, updates_sz);
 
 clean_cb_alloc:
 		/* free hal allocated by callback */
 		for (i = 0; i < hsd.hsd_request_count; i++) {
 			struct hsm_scan_request *request = &hsd.hsd_request[i];
 
-			OBD_FREE(request->hal, request->hal_sz);
+			OBD_FREE_LARGE(request->hal, request->hal_sz);
 		}
 	}
 
@@ -1033,10 +1023,6 @@ int mdt_hsm_cdt_init(struct mdt_device *mdt)
 	cdt->cdt_policy = CDT_DEFAULT_POLICY;
 	cdt->cdt_active_req_timeout = 3600;
 
-	/* Initialize cdt_compound_id here to allow its usage for
-	 * delayed requests from RAoLU policy */
-	atomic_set(&cdt->cdt_compound_id, ktime_get_real_seconds());
-
 	/* by default do not remove archives on last unlink */
 	cdt->cdt_remove_archive_on_last_unlink = false;
 
@@ -1268,8 +1254,7 @@ int mdt_hsm_add_hal(struct mdt_thread_info *mti,
 				GOTO(out, rc);
 		}
 
-		car = mdt_cdt_alloc_request(hal->hal_compound_id,
-					    hal->hal_archive_id, hal->hal_flags,
+		car = mdt_cdt_alloc_request(hal->hal_archive_id, hal->hal_flags,
 					    uuid, hai);
 		if (IS_ERR(car))
 			GOTO(out, rc = PTR_ERR(car));
@@ -1797,7 +1782,6 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 		obd_uuid2fsname(hal->hal_fsname, mdt_obd_name(mdt),
 				MTI_NAME_MAXLEN);
 		hal->hal_fsname[MTI_NAME_MAXLEN] = '\0';
-		hal->hal_compound_id = car->car_compound_id;
 		hal->hal_archive_id = car->car_archive_id;
 		hal->hal_flags = car->car_flags;
 		hal->hal_count = 0;

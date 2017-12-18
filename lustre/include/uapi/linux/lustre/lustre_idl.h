@@ -2768,7 +2768,7 @@ struct llog_agent_req_rec {
 						 * agent_req_status */
 	__u32			arr_archive_id;	/**< backend archive number */
 	__u64			arr_flags;	/**< req flags */
-	__u64			arr_compound_id;	/**< compound cookie */
+	__u64			arr_compound_id; /**< compound cookie, ignored */
 	__u64			arr_req_create;	/**< req. creation time */
 	__u64			arr_req_change;	/**< req. status change time */
 	struct hsm_action_item	arr_hai;	/**< req. to the agent */

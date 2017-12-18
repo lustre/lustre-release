@@ -293,9 +293,6 @@ static int mdt_hsm_register_hal(struct mdt_thread_info *mti,
 	int			 rc, i;
 	struct md_hsm		 mh;
 	bool			 is_restore = false;
-	__u64			 compound_id;
-
-	compound_id = atomic_inc_return(&cdt->cdt_compound_id);
 
 	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
@@ -371,7 +368,7 @@ static int mdt_hsm_register_hal(struct mdt_thread_info *mti,
 		 * or we use the default if none found in lma
 		 * this works also for archive because the default value is 0
 		 * /!\ there is a side effect: in case of restore on multiple
-		 * files which are in different backend, the initial compound
+		 * files which are in different backend, the initial
 		 * request will be split in multiple requests because we cannot
 		 * warranty an agent can serve any combinaison of archive
 		 * backend
@@ -404,8 +401,8 @@ record:
 		 */
 		OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_HSM_CDT_DELAY, cfs_fail_val);
 		/* record request */
-		rc = mdt_agent_record_add(mti->mti_env, mdt, compound_id,
-					  archive_id, flags, hai);
+		rc = mdt_agent_record_add(mti->mti_env, mdt, archive_id, flags,
+					  hai);
 		if (rc)
 			GOTO(out, rc);
 	}

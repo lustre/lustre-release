@@ -310,7 +310,6 @@ int mdt_hsm_find_best_agent(struct coordinator *cdt, __u32 archive,
 int mdt_hsm_send_action_to_each_archive(struct mdt_thread_info *mti,
 				    struct hsm_action_item *hai)
 {
-	__u64 compound_id;
 	struct hsm_agent *ha;
 	__u32 archive_mask = 0;
 	struct coordinator *cdt = &mti->mti_mdt->mdt_coordinator;
@@ -328,13 +327,10 @@ int mdt_hsm_send_action_to_each_archive(struct mdt_thread_info *mti,
 				continue;
 			archive_mask |= (1 << ha->ha_archive_id[i]);
 
-			/* XXX: instead of creating one request record per
-			 * new action, it could make sense to gather
-			 * all for the same archive_id as one compound
-			 * request/id, like in mdt_hsm_add_actions() ?? */
-			compound_id = atomic_inc_return(&cdt->cdt_compound_id);
+			/* XXX: it could make sense to gather all
+			 * actions for the same archive_id like in
+			 * mdt_hsm_add_actions() ?? */
 			rc = mdt_agent_record_add(mti->mti_env, mti->mti_mdt,
-						  compound_id,
 						  ha->ha_archive_id[i], 0,
 						  hai);
 			if (rc) {
@@ -361,7 +357,7 @@ int mdt_hsm_send_action_to_each_archive(struct mdt_thread_info *mti,
 }
 
 /**
- * send a compound request to the agent
+ * send a HAL to the agent
  * \param mti [IN] context
  * \param hal [IN] request (can be a kuc payload)
  * \param purge [IN] purge mode (no record)
@@ -511,7 +507,7 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 
 			/* incompatible request, we abort the request */
 			/* next time coordinator will wake up, it will
-			 * make the same compound with valid only
+			 * make the same HAL with valid only
 			 * records */
 			fail_request = true;
 			rc = mdt_agent_record_update(mti->mti_env, mdt,
@@ -533,10 +529,10 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti,
 		}
 	}
 
-	/* we found incompatible requests, so the compound cannot be send
+	/* we found incompatible requests, so the HAL cannot be sent
 	 * as is. Bad records have been invalidated in llog.
 	 * Valid one will be reschedule next time coordinator will wake up
-	 * So no need the rebuild a full valid compound request now
+	 * So no need the rebuild a full valid HAL now
 	 */
 	if (fail_request)
 		GOTO(out_buf, rc = 0);

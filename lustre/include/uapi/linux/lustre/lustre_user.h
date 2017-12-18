@@ -1871,7 +1871,7 @@ static inline char *hai_dump_data_field(const struct hsm_action_item *hai,
 struct hsm_action_list {
 	__u32 hal_version;
 	__u32 hal_count;       /* number of hai's to follow */
-	__u64 hal_compound_id; /* returned by coordinator */
+	__u64 hal_compound_id; /* returned by coordinator, ignored */
 	__u64 hal_flags;
 	__u32 hal_archive_id; /* which archive backend */
 	__u32 padding1;

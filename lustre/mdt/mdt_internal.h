@@ -136,8 +136,6 @@ struct coordinator {
 	__u64			 cdt_policy;	     /**< policy flags */
 	enum cdt_states		 cdt_state;	      /**< state */
 	struct mutex		 cdt_state_lock;      /**< cdt_state lock */
-	atomic_t		 cdt_compound_id;     /**< compound id
-						       * counter */
 	__u64			 cdt_last_cookie;     /**< last cookie
 						       * allocated */
 	struct rw_semaphore	 cdt_llog_lock;       /**< protect llog
@@ -508,7 +506,6 @@ struct cdt_agent_req {
 	struct hlist_node	 car_cookie_hash;  /**< find req by cookie */
 	struct list_head	 car_request_list; /**< to chain all the req. */
 	atomic_t		 car_refcount;     /**< reference counter */
-	__u64			 car_compound_id;  /**< compound id */
 	__u64			 car_flags;        /**< request original flags */
 	struct obd_uuid		 car_uuid;         /**< agent doing the req. */
 	__u32			 car_archive_id;   /**< archive id */
@@ -911,8 +908,8 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 		     llog_cb_t cb, void *data, u32 start_cat_idx,
 		     u32 start_rec_idx, int rw);
 int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
-			 __u64 compound_id, __u32 archive_id,
-			 __u64 flags, struct hsm_action_item *hai);
+			 __u32 archive_id, __u64 flags,
+			 struct hsm_action_item *hai);
 int mdt_agent_record_update(const struct lu_env *env, struct mdt_device *mdt,
 			    struct hsm_record_update *updates,
 			    unsigned int updates_count);
@@ -951,8 +948,8 @@ extern struct cfs_hash_ops cdt_request_cookie_hash_ops;
 extern struct cfs_hash_ops cdt_agent_record_hash_ops;
 extern const struct file_operations mdt_hsm_active_requests_fops;
 void dump_requests(char *prefix, struct coordinator *cdt);
-struct cdt_agent_req *mdt_cdt_alloc_request(__u64 compound_id, __u32 archive_id,
-					    __u64 flags, struct obd_uuid *uuid,
+struct cdt_agent_req *mdt_cdt_alloc_request(__u32 archive_id, __u64 flags,
+					    struct obd_uuid *uuid,
 					    struct hsm_action_item *hai);
 void mdt_cdt_free_request(struct cdt_agent_req *car);
 int mdt_cdt_add_request(struct coordinator *cdt, struct cdt_agent_req *new_car);

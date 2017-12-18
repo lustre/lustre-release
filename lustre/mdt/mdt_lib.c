@@ -859,7 +859,6 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 		.hai_cookie = 0,
 		.hai_gid = 0,
 	};
-	__u64 compound_id;
 	int archive_id;
 
         ENTRY;
@@ -929,7 +928,6 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 	 * file is unlinked, file is archived, so create remove request
 	 * for copytool!
 	 * If CDT is not running, requests will be logged for later. */
-	compound_id = atomic_inc_return(&cdt->cdt_compound_id);
 	if (ma->ma_hsm.mh_arch_id != 0)
 		archive_id = ma->ma_hsm.mh_arch_id;
 	else
@@ -937,8 +935,8 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 
 	hai.hai_fid = *mdt_object_fid(mo);
 
-	rc = mdt_agent_record_add(info->mti_env, info->mti_mdt,
-				  compound_id, archive_id, 0, &hai);
+	rc = mdt_agent_record_add(info->mti_env, info->mti_mdt, archive_id, 0,
+				  &hai);
 	if (rc)
 		CERROR("%s: unable to add HSM remove request for "DFID
 		       ": rc=%d\n", mdt_obd_name(info->mti_mdt),

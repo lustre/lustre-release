@@ -103,13 +103,13 @@ void dump_requests(char *prefix, struct coordinator *cdt)
 	down_read(&cdt->cdt_request_lock);
 	list_for_each_entry(car, &cdt->cdt_request_list, car_request_list) {
 		CDEBUG(D_HSM, "%s fid="DFID" dfid="DFID
-		       " compound/cookie=%#llx/%#llx"
+		       " cookie=%#llx"
 		       " action=%s archive#=%d flags=%#llx"
 		       " extent=%#llx-%#llx"
 		       " gid=%#llx refcount=%d canceled=%d\n",
 		       prefix, PFID(&car->car_hai->hai_fid),
 		       PFID(&car->car_hai->hai_dfid),
-		       car->car_compound_id, car->car_hai->hai_cookie,
+		       car->car_hai->hai_cookie,
 		       hsm_copytool_action2name(car->car_hai->hai_action),
 		       car->car_archive_id, car->car_flags,
 		       car->car_hai->hai_extent.offset,
@@ -280,7 +280,6 @@ static void mdt_cdt_init_request_tree(struct cdt_req_progress *crp)
 
 /** Allocate/init an agent request and its sub-structures.
  *
- * \param compound_id [IN]
  * \param archive_id [IN]
  * \param flags [IN]
  * \param uuid [IN]
@@ -288,8 +287,8 @@ static void mdt_cdt_init_request_tree(struct cdt_req_progress *crp)
  * \retval car [OUT] success valid structure
  * \retval car [OUT]
  */
-struct cdt_agent_req *mdt_cdt_alloc_request(__u64 compound_id, __u32 archive_id,
-					    __u64 flags, struct obd_uuid *uuid,
+struct cdt_agent_req *mdt_cdt_alloc_request(__u32 archive_id, __u64 flags,
+					    struct obd_uuid *uuid,
 					    struct hsm_action_item *hai)
 {
 	struct cdt_agent_req *car;
@@ -300,7 +299,6 @@ struct cdt_agent_req *mdt_cdt_alloc_request(__u64 compound_id, __u32 archive_id,
 		RETURN(ERR_PTR(-ENOMEM));
 
 	atomic_set(&car->car_refcount, 1);
-	car->car_compound_id = compound_id;
 	car->car_archive_id = archive_id;
 	car->car_flags = flags;
 	car->car_canceled = 0;
@@ -581,7 +579,7 @@ static int mdt_hsm_active_requests_proc_show(struct seq_file *s, void *v)
 		   " data=[%s] canceled=%d uuid=%s done=%llu\n",
 		   PFID(&car->car_hai->hai_fid),
 		   PFID(&car->car_hai->hai_dfid),
-		   car->car_compound_id, car->car_hai->hai_cookie,
+		   0ULL /* compound_id */, car->car_hai->hai_cookie,
 		   hsm_copytool_action2name(car->car_hai->hai_action),
 		   car->car_archive_id, car->car_flags,
 		   car->car_hai->hai_extent.offset,
