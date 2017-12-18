@@ -120,7 +120,7 @@ struct osc_device {
 	} od_stats;
 
 	/* configuration item(s) */
-	time64_t		od_contention_time;
+	int			od_contention_time;
 	int			od_lockless_truncate;
 };
 
@@ -256,7 +256,7 @@ struct osc_object {
 	 * True if locking against this stripe got -EUSERS.
 	 */
 	int			oo_contended;
-	time64_t		oo_contention_time;
+	cfs_time_t		oo_contention_time;
 #ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
 	/**
 	 * IO context used for invariant checks in osc_lock_has_pages().
@@ -358,7 +358,7 @@ static inline int osc_object_is_locked(struct osc_object *obj)
 
 static inline void osc_object_set_contended(struct osc_object *obj)
 {
-	obj->oo_contention_time = ktime_get_seconds();
+	obj->oo_contention_time = cfs_time_current();
 	/* mb(); */
 	obj->oo_contended = 1;
 }
@@ -541,7 +541,7 @@ struct osc_page {
 	/**
 	 * Submit time - the time when the page is starting RPC. For debugging.
 	 */
-	time64_t		ops_submit_time;
+	cfs_time_t		ops_submit_time;
 };
 
 struct osc_brw_async_args {
