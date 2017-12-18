@@ -94,7 +94,7 @@ command_t cmdlist[] = {
 	 "usage: which_nid NID [NID...]"},
 	{"replace_nids", jt_replace_nids, 0,
 	 "replace primary NIDs for a device\n"
-	 "usage: replace_nids <device> <nid1>[,nid2,nid3]"},
+	 "usage: replace_nids <device> <nid1>[,nid2,nid3:nid4,nid5:nid6]"},
 	{"interface_list", jt_ptl_print_interfaces, 0,
 	 "print network interface entries\n"
 	 "usage: interface_list"},
