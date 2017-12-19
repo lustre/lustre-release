@@ -10039,6 +10039,27 @@ test_130e() {
 }
 run_test 130e "FIEMAP (test continuation FIEMAP calls)"
 
+test_130f() {
+	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
+	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" &&
+		return
+
+	local fm_file=$DIR/$tfile
+	$MULTIOP $fm_file oO_RDWR:O_CREAT:O_LOV_DELAY_CREATE:T33554432c ||
+		error "multiop create with lov_delay_create on $fm_file"
+
+	filefrag -ves $fm_file || error "filefrag $fm_file failed"
+	filefrag_extents=$(filefrag -vek $fm_file |
+			   awk '/extents? found/ { print $2 }')
+	if [[ "$filefrag_extents" != "0" ]]; then
+		error "FIEMAP on $fm_file failed; " \
+		      "returned $filefrag_extents expected 0"
+	fi
+
+	rm -f $fm_file
+}
+run_test 130f "FIEMAP (unstriped file)"
+
 # Test for writev/readv
 test_131a() {
 	rwv -f $DIR/$tfile -w -n 3 524288 1048576 1572864 ||

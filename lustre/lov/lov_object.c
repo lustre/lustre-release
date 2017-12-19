@@ -1805,8 +1805,11 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	ENTRY;
 
 	lsm = lov_lsm_addref(cl2lov(obj));
-	if (lsm == NULL)
-		RETURN(-ENODATA);
+	if (lsm == NULL) {
+		/* no extent: there is no object for mapping */
+		fiemap->fm_mapped_extents = 0;
+		return 0;
+	}
 
 	if (!(fiemap->fm_flags & FIEMAP_FLAG_DEVICE_ORDER)) {
 		/**
