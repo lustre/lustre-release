@@ -18088,6 +18088,14 @@ test_413() {
 }
 run_test 413 "mkdir on less full MDTs"
 
+test_414() {
+#define OBD_FAIL_PTLRPC_BULK_ATTACH      0x521
+	$LCTL set_param fail_loc=0x80000521
+	dd if=/dev/zero of=$DIR/$tfile bs=2M count=1 oflag=sync
+	rm -f $DIR/$tfile
+}
+run_test 414 "simulate ENOMEM in ptlrpc_register_bulk()"
+
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&
