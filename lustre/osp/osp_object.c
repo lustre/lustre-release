@@ -769,41 +769,35 @@ static int osp_xattr_get_interpterer(const struct lu_env *env,
 				     void *data, int index, int rc)
 {
 	struct osp_xattr_entry *oxe = data;
-	struct lu_buf *rbuf = &osp_env_info(env)->osi_lb2;
 
-	if (!rc) {
+	spin_lock(&obj->opo_lock);
+	if (rc >= 0) {
+		struct lu_buf *rbuf = &osp_env_info(env)->osi_lb2;
 		size_t len = sizeof(*oxe) + oxe->oxe_namelen + 1;
 
 		rc = object_update_result_data_get(reply, rbuf, index);
-		spin_lock(&obj->opo_lock);
-		if (rc < 0 || rbuf->lb_len == 0 ||
-		    rbuf->lb_len > (oxe->oxe_buflen - len)) {
-			if (unlikely(rc == -ENODATA)) {
-				oxe->oxe_exist = 0;
-				oxe->oxe_ready = 1;
-			} else {
-				oxe->oxe_ready = 0;
-			}
-			spin_unlock(&obj->opo_lock);
-			/* Put the reference obtained in the
-			 * osp_declare_xattr_get(). */
-			osp_oac_xattr_put(oxe);
+		if (rc == -ENOENT || rc == -ENODATA || rc == 0) {
+			oxe->oxe_exist = 0;
+			oxe->oxe_ready = 1;
+			goto unlock;
+		}
 
-			return rc < 0 ? rc : -ERANGE;
+		if (unlikely(rc < 0) ||
+		    rbuf->lb_len > (oxe->oxe_buflen - len)) {
+			oxe->oxe_ready = 0;
+			goto unlock;
 		}
 
 		__osp_oac_xattr_assignment(obj, oxe, rbuf);
-		spin_unlock(&obj->opo_lock);
 	} else if (rc == -ENOENT || rc == -ENODATA) {
-		spin_lock(&obj->opo_lock);
 		oxe->oxe_exist = 0;
 		oxe->oxe_ready = 1;
-		spin_unlock(&obj->opo_lock);
 	} else {
-		spin_lock(&obj->opo_lock);
 		oxe->oxe_ready = 0;
-		spin_unlock(&obj->opo_lock);
 	}
+
+unlock:
+	spin_unlock(&obj->opo_lock);
 
 	/* Put the reference obtained in the osp_declare_xattr_get(). */
 	osp_oac_xattr_put(oxe);
@@ -835,8 +829,8 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	struct osp_object	*obj	 = dt2osp_obj(dt);
 	struct osp_device	*osp	 = lu2osp_dev(dt->do_lu.lo_dev);
 	struct osp_xattr_entry	*oxe;
-	__u16 namelen;
 	int			 rc	 = 0;
+	__u16 len;
 
 	LASSERT(buf != NULL);
 	LASSERT(name != NULL);
@@ -848,10 +842,10 @@ static int osp_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	if (oxe == NULL)
 		return -ENOMEM;
 
-	namelen = strlen(name);
+	len = strlen(name) + 1;
 	mutex_lock(&osp->opd_async_requests_mutex);
 	rc = osp_insert_async_request(env, OUT_XATTR_GET, obj, 1,
-				      &namelen, (const void **)&name,
+				      &len, (const void **)&name,
 				      oxe, buf->lb_len,
 				      osp_xattr_get_interpterer);
 	if (rc != 0) {
