@@ -325,8 +325,17 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 
 	rc = seq_server_check_and_alloc_super(env, seq);
 	if (rc < 0) {
-		CERROR("%s: Allocated super-sequence failed: rc = %d\n",
-			seq->lss_name, rc);
+		if (rc == -EINPROGRESS) {
+			static int printed;
+
+			if (printed++ % 8 == 0)
+				LCONSOLE_INFO("%s: Waiting to contact MDT0000 "
+					      "to allocate super-sequence\n",
+					      seq->lss_name);
+		} else {
+			CERROR("%s: Allocated super-sequence failed: rc = %d\n",
+			       seq->lss_name, rc);
+		}
 		RETURN(rc);
 	}
 
