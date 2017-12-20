@@ -5736,7 +5736,6 @@ static int mdt_export_cleanup(struct obd_export *exp)
         info->mti_mdt = mdt;
         info->mti_exp = exp;
 
-	mdt_hsm_agent_unregister(info, &exp->exp_client_uuid);
 	if (!list_empty(&closing_list)) {
 		struct md_attr *ma = &info->mti_attr;
 

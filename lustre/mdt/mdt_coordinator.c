@@ -153,57 +153,6 @@ struct hsm_thread_data {
 	struct hsm_scan_request	*request;
 };
 /**
- * update status of a request
- * this function is to be called from llog_cat_process()
- * \param mti [IN] context
- * \param llh [IN] llog handle
- * \param hdr [IN] llog record
- * \retval 0 success
- * \retval -ve failure
- */
-static int mdt_hsm_complete_request(struct mdt_thread_info *mti,
-				    struct llog_handle *llh,
-				    struct llog_rec_hdr *hdr)
-{
-	struct llog_agent_req_rec *larr = (struct llog_agent_req_rec *)hdr;
-	time64_t now = ktime_get_real_seconds();
-	struct hsm_progress_kernel pgs = {
-		.hpk_fid = larr->arr_hai.hai_fid,
-		.hpk_cookie = larr->arr_hai.hai_cookie,
-		.hpk_extent = larr->arr_hai.hai_extent,
-		.hpk_flags = HP_FLAG_COMPLETED,
-		.hpk_errval = ENOSYS,
-		.hpk_data_version = 0
-	};
-	int rc = 0;
-	ENTRY;
-	/* update request state, but do not record in llog, to
-	 * avoid deadlock on cdt_llog_lock */
-	rc = mdt_hsm_update_request_state(mti, &pgs, 0);
-	if (rc) {
-		CERROR("%s: cannot update timed out/cancelled request: "
-		       DFID" for cookie %#llx action=%s\n",
-		       mdt_obd_name(mti->mti_mdt),
-		       PFID(&pgs.hpk_fid), pgs.hpk_cookie,
-		       hsm_copytool_action2name(larr->arr_hai.hai_action));
-		RETURN(rc);
-	}
-
-	/* XXX A cancel request cannot be cancelled. */
-	if (larr->arr_hai.hai_action == HSMA_CANCEL)
-		RETURN(0);
-
-	larr->arr_status = ARS_CANCELED;
-	larr->arr_req_change = now;
-	rc = llog_write(mti->mti_env, llh, hdr, hdr->lrh_index);
-	if (rc < 0)
-		CERROR("%s: cannot update agent log: rc = %d\n",
-		       mdt_obd_name(mti->mti_mdt), rc);
-
-	RETURN(rc);
-}
-
-/**
  *  llog_cat_process() callback, used to:
  *  - find waiting request and start action
  *  - purge canceled and done requests
@@ -348,6 +297,7 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 		break;
 	}
 	case ARS_STARTED: {
+		struct hsm_progress_kernel pgs;
 		struct cdt_agent_req *car;
 		time64_t now = ktime_get_real_seconds();
 		time64_t last;
@@ -378,7 +328,24 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 		 * this can happen, if copy tool does not support
 		 * cancel for other requests, we have to remove the
 		 * running request and notify the copytool */
-		rc = mdt_hsm_complete_request(hsd->mti, llh, hdr);
+		pgs.hpk_fid = larr->arr_hai.hai_fid;
+		pgs.hpk_cookie = larr->arr_hai.hai_cookie;
+		pgs.hpk_extent = larr->arr_hai.hai_extent;
+		pgs.hpk_flags = HP_FLAG_COMPLETED;
+		pgs.hpk_errval = ENOSYS;
+		pgs.hpk_data_version = 0;
+
+		/* update request state, but do not record in llog, to
+		 * avoid deadlock on cdt_llog_lock */
+		rc = mdt_hsm_update_request_state(hsd->mti, &pgs, 0);
+		if (rc)
+			CERROR("%s: cannot cleanup timed out request: "
+			       DFID" for cookie %#llx action=%s\n",
+			       mdt_obd_name(mdt),
+			       PFID(&pgs.hpk_fid), pgs.hpk_cookie,
+			       hsm_copytool_action2name(
+				       larr->arr_hai.hai_action));
+
 		if (rc == -ENOENT) {
 			/* The request no longer exists, forget
 			 * about it, and do not send a cancel request
@@ -389,20 +356,21 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 						  larr->arr_hai.hai_cookie);
 			RETURN(LLOG_DEL_RECORD);
 		}
+
+		/* XXX A cancel request cannot be cancelled. */
+		if (larr->arr_hai.hai_action == HSMA_CANCEL)
+			RETURN(0);
+
+		larr->arr_status = ARS_CANCELED;
+		larr->arr_req_change = now;
+		rc = llog_write(hsd->mti->mti_env, llh, hdr, hdr->lrh_index);
+		if (rc < 0)
+			CERROR("%s: cannot update agent log: rc = %d\n",
+			       mdt_obd_name(mdt), rc);
 		break;
 	}
-	case ARS_CANCELED:
-		if (!hsd->housekeeping)
-			break;
-		if (larr->arr_req_change + cdt->cdt_grace_delay <
-		    ktime_get_real_seconds()) {
-			rc = mdt_hsm_complete_request(hsd->mti, llh, hdr);
-			/* See ENOENT comment above */
-			if (rc == -ENOENT)
-				RETURN(LLOG_DEL_RECORD);
-		}
-		break;
 	case ARS_FAILED:
+	case ARS_CANCELED:
 	case ARS_SUCCEED:
 		if (!hsd->housekeeping)
 			break;
@@ -1218,7 +1186,6 @@ int mdt_hsm_add_hal(struct mdt_thread_info *mti,
 			car = mdt_cdt_find_request(cdt, hai->hai_cookie);
 			if (car != NULL) {
 				car->car_canceled = 1;
-				car->car_delay_update = 1;
 				/* uuid has to be changed to the one running the
 				* request to cancel */
 				*uuid = car->car_uuid;
@@ -1569,19 +1536,6 @@ int mdt_hsm_update_request_state(struct mdt_thread_info *mti,
 		RETURN(PTR_ERR(car));
 	}
 
-	/* wait for update request from copytool if hsm cancel is
-	 * initiated by user. If update request is as a result of
-	 * kill of copytool or eviction data mover node then skip
-	 * delaying and update the request as copytool is unavailable
-	 * to send the update request
-	 */
-	if (car->car_delay_update == 1) {
-		if (pgs->hpk_flags & HP_FLAG_COMPLETE_DELAYED)
-			car->car_delay_update = 0;
-		else
-			GOTO(out, rc = -ECANCELED);
-	}
-
 	CDEBUG(D_HSM, "Progress received for fid="DFID" cookie=%#llx"
 		      " action=%s flags=%d err=%d fid="DFID" dfid="DFID"\n",
 		      PFID(&pgs->hpk_fid), pgs->hpk_cookie,
@@ -1722,119 +1676,6 @@ static int mdt_cancel_all_cb(const struct lu_env *env,
 }
 
 /**
- * prepare cancel request
- * \param hal [IN] pointer to allocate memory
- * \param car [IN] coordinator agent request
- * \param mdt_obd_name [IN] mdt object device name
- * \param hal_sz [IN, OUT] old size of hal_sz buffer
- */
-static struct hsm_action_list *
-hsm_create_cancel_request(struct hsm_action_list *hal,
-			  struct cdt_agent_req *car,
-			  char *mdt_obd_name, int *hal_sz)
-{
-	struct hsm_action_item *hai;
-	int hal_sz_needed;
-
-	/* needed size */
-	hal_sz_needed = sizeof(*hal) + cfs_size_round(MTI_NAME_MAXLEN + 1) +
-		  cfs_size_round(car->car_hai->hai_len);
-
-	if (hal_sz_needed > *hal_sz) {
-		/* not enough room, free old buffer */
-		if (hal != NULL)
-			OBD_FREE(hal, *hal_sz);
-		*hal_sz = hal_sz_needed;
-		OBD_ALLOC(hal, *hal_sz);
-		if (hal == NULL) {
-			CERROR("Cannot allocate memory for hal\n");
-			RETURN(NULL);
-		}
-	}
-
-	hal->hal_version = HAL_VERSION;
-	obd_uuid2fsname(hal->hal_fsname, mdt_obd_name,
-			MTI_NAME_MAXLEN);
-	hal->hal_fsname[MTI_NAME_MAXLEN] = '\0';
-	hal->hal_compound_id = car->car_compound_id;
-	hal->hal_archive_id = car->car_archive_id;
-	hal->hal_flags = car->car_flags;
-	hal->hal_count = 0;
-
-	hai = hai_first(hal);
-	memcpy(hai, car->car_hai, car->car_hai->hai_len);
-	hai->hai_action = HSMA_CANCEL;
-	hal->hal_count = 1;
-
-	RETURN(hal);
-}
-
-/**
- * cancel actions running on a agent
- * \param mdt [IN] MDT device
- * \param uuid [IN] the obd_uuid of the agent whose requests are to be canceled
- */
-int hsm_cancel_agent_requests(struct mdt_device *mdt,
-			      const struct obd_uuid *uuid)
-{
-	struct mdt_thread_info *mti;
-	struct coordinator *cdt = &mdt->mdt_coordinator;
-	struct cdt_agent_req *car;
-	int rc = 0;
-	enum cdt_states save_state;
-	struct hsm_record_update update;
-	ENTRY;
-
-	/* retrieve coordinator context */
-	mti = lu_context_key_get(&cdt->cdt_env.le_ctx, &mdt_thread_key);
-
-	/* disable coordinator */
-	save_state = cdt->cdt_state;
-	cdt->cdt_state = CDT_DISABLE;
-
-	down_read(&cdt->cdt_request_lock);
-	list_for_each_entry(car, &cdt->cdt_request_list, car_request_list) {
-		mdt_cdt_get_request(car);
-		/* request is not yet removed from list, it will be done
-		 * when copytool will return progress
-		 */
-		if (!obd_uuid_equals(&car->car_uuid, uuid)) {
-			mdt_cdt_put_request(car);
-			continue;
-		}
-
-		if (car->car_hai->hai_action == HSMA_CANCEL) {
-			mdt_cdt_put_request(car);
-			continue;
-		}
-
-		update.cookie = car->car_hai->hai_cookie;
-		update.status = ARS_CANCELED;
-
-		rc = mdt_agent_record_update(mti->mti_env, mti->mti_mdt,
-					     &update, 1);
-
-		if (rc == 0)
-			car->car_canceled = 1;
-		else
-			CERROR("%s: mdt_agent_record_update() failed, "
-			       "rc=%d, cannot update status to %s "
-			       "for cookie %#llx\n",
-			       mdt_obd_name(mdt), rc,
-			       agent_req_status2name(ARS_CANCELED),
-			       car->car_hai->hai_cookie);
-
-		mdt_cdt_put_request(car);
-	}
-	up_read(&cdt->cdt_request_lock);
-
-	/* enable coordinator */
-	cdt->cdt_state = save_state;
-
-	RETURN(rc);
-}
-
-/**
  * cancel all actions
  * \param obd [IN] MDT device
  */
@@ -1846,8 +1687,9 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 	struct coordinator		*cdt = &mdt->mdt_coordinator;
 	struct cdt_agent_req		*car;
 	struct hsm_action_list		*hal = NULL;
+	struct hsm_action_item		*hai;
 	struct hsm_cancel_all_data	 hcad;
-	int				 hal_sz = 0, rc;
+	int				 hal_sz = 0, hal_len, rc;
 	enum cdt_states			 old_state;
 	ENTRY;
 
@@ -1889,14 +1731,40 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 			continue;
 		}
 
-		hal = hsm_create_cancel_request(hal, car,
-						mdt_obd_name(mdt),
-						&hal_sz);
-		if (hal == NULL) {
-			mdt_cdt_put_request(car);
-			up_read(&cdt->cdt_request_lock);
-			GOTO(out_cdt_state, rc = -ENOMEM);
+		/* needed size */
+		hal_len = sizeof(*hal) + cfs_size_round(MTI_NAME_MAXLEN + 1) +
+			  cfs_size_round(car->car_hai->hai_len);
+
+		if (hal_len > hal_sz && hal_sz > 0) {
+			/* not enough room, free old buffer */
+			OBD_FREE(hal, hal_sz);
+			hal = NULL;
 		}
+
+		/* empty buffer, allocate one */
+		if (hal == NULL) {
+			hal_sz = hal_len;
+			OBD_ALLOC(hal, hal_sz);
+			if (hal == NULL) {
+				mdt_cdt_put_request(car);
+				up_read(&cdt->cdt_request_lock);
+				GOTO(out_cdt_state, rc = -ENOMEM);
+			}
+		}
+
+		hal->hal_version = HAL_VERSION;
+		obd_uuid2fsname(hal->hal_fsname, mdt_obd_name(mdt),
+				MTI_NAME_MAXLEN);
+		hal->hal_fsname[MTI_NAME_MAXLEN] = '\0';
+		hal->hal_compound_id = car->car_compound_id;
+		hal->hal_archive_id = car->car_archive_id;
+		hal->hal_flags = car->car_flags;
+		hal->hal_count = 0;
+
+		hai = hai_first(hal);
+		memcpy(hai, car->car_hai, car->car_hai->hai_len);
+		hai->hai_action = HSMA_CANCEL;
+		hal->hal_count = 1;
 
 		/* it is possible to safely call mdt_hsm_agent_send()
 		 * (ie without a deadlock on cdt_request_lock), because the
@@ -1906,7 +1774,7 @@ static int hsm_cancel_all_actions(struct mdt_device *mdt)
 		 */
 		/* no conflict with cdt thread because cdt is disable and we
 		 * have the request lock */
-		mdt_hsm_agent_send(mti, hal, true);
+		mdt_hsm_agent_send(mti, hal, 1);
 
 		mdt_cdt_put_request(car);
 	}

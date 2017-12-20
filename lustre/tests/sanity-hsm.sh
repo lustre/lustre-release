@@ -3525,47 +3525,6 @@ test_61() {
 }
 run_test 61 "Waiting archive of a removed file should fail"
 
-test_62() {
-	local agent=$(facet_active_host $SINGLEAGT)
-
-	copytool_setup
-
-	mkdir -p $DIR/$tdir
-	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 20)
-	[ $? != 0 ] && skip "not enough free space" && return
-
-	local file_hash_before_archive=$(md5sum $f)
-	$LFS hsm_archive $f
-	wait_request_state $fid ARCHIVE SUCCEED
-	$LFS hsm_release $f
-
-	# Run md5sum in the back ground
-	md5sum $f &
-	wait_request_state $fid RESTORE STARTED
-
-	# Kill copytool while md5sum is running
-	kill_copytools $agent
-	wait_copytools $agent || error "copytools failed to stop"
-
-	echo "Copytool is stopped on $agent"
-
-	wait_request_state $fid RESTORE CANCELED
-
-	HSM_ARCHIVE_PURGE=false copytool_setup
-	# md5sum triggers hsm_restore action
-	local file_hash_after_archive=$(md5sum $f)
-	wait_request_state $fid RESTORE SUCCEED
-
-	[ "$file_hash_before_archive" = \
-		"$file_hash_after_archive" ] ||
-			error "Restore incomplete"
-
-	copytool_cleanup
-}
-run_test 62 "Stopping a copytool should cancel its requests"
-
 test_70() {
 	# test needs a new running copytool
 	stack_trap copytool_monitor_cleanup EXIT
