@@ -153,6 +153,7 @@ kill_copytools() {
 
 	echo "Killing existing copytools on $hosts"
 	do_nodesv $hosts "killall -q $HSMTOOL_BASE" || true
+	copytool_continue "$hosts"
 }
 
 wait_copytools() {
@@ -282,7 +283,7 @@ __lhsmtool_setup()
 	cmd+=" \"$mountpoint\""
 
 	echo "Starting copytool $facet on $(facet_host $facet)"
-	stack_trap "do_facet $facet \"pkill -x $HSMTOOL_BASE\" || true" EXIT
+	stack_trap "do_facet $facet pkill -x '$HSMTOOL_BASE' || true" EXIT
 	do_facet $facet "$cmd < /dev/null > \"$(copytool_logfile $facet)\" 2>&1"
 }
 
@@ -393,6 +394,8 @@ get_copytool_event_log() {
 copytool_suspend() {
 	local agents=${1:-$(facet_active_host $SINGLEAGT)}
 
+	stack_trap \
+		"do_nodesv $agents pkill -CONT -x '$HSMTOOL_BASE' || true" EXIT
 	do_nodesv $agents "pkill -STOP -x $HSMTOOL_BASE" || return 0
 	echo "Copytool is suspended on $agents"
 }
@@ -710,23 +713,6 @@ delete_large_files() {
 	printf "Deleting large files...\n" >&2
 	find $MOUNT -size +10M -delete
 	wait_delete_completed
-}
-
-make_custom_file_for_progress() {
-	local count=${2:-"39"}
-	local bs=$($LCTL get_param -n lov.*-clilov-*.stripesize | head -n1)
-	bs=${3:-$bs}
-
-	[[ $count -gt  0 ]] || error "Invalid file size"
-	[[ $bs -gt 0 ]] || error "Invalid stripe size"
-
-	if ! create_file "${1/$DIR/$DIR2}" $bs $count fsync; then
-		echo "The creation of '${1/$DIR/$DIR2}' failed" >&2
-		echo "It might be due to a lack of space in the filesystem" >&2
-		delete_large_files >&2
-		create_file "${1/$DIR/$DIR2}" $bs $count fsync ||
-			file_creation_failure dd "${1/$DIR/$DIR2}" $?
-	fi
 }
 
 wait_result() {
@@ -1382,9 +1368,7 @@ test_12c() {
 	local f=$DIR/$tdir/$tfile
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -c 2 "$f"
-	local fid
-	fid=$(make_custom_file_for_progress $f 5)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_file "$f" 1M 5)
 
 	local FILE_CRC=$(md5sum $f)
 
@@ -2302,9 +2286,7 @@ test_26A() { # was test_26
 	copytool setup
 
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_empty_file "$f")
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
@@ -2506,9 +2488,7 @@ test_27b() {
 	copytool setup
 
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_empty_file "$f")
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
@@ -2525,9 +2505,7 @@ test_28() {
 	copytool setup
 
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_empty_file "$f")
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
@@ -2821,9 +2799,7 @@ test_31b() {
 	copytool setup
 
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_file "$f" 1MB 39)
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
@@ -2841,9 +2817,7 @@ test_31c() {
 	copytool setup
 
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 33 1048576)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_file "$f" 1M 39)
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
@@ -2857,63 +2831,30 @@ test_31c() {
 run_test 31c "Restore a large aligned file and check size during restore"
 
 test_33() {
-	# test needs a running copytool
-	copytool setup -b 1
-
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_empty_file "$f")
+
+	copytool setup
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f
 
-	# to be sure wait_all_done will not be mislead by previous tests
-	# and ops.
-	cdt_purge
-	wait_for_grace_delay
-	# Also raise grace_delay significantly so the Canceled
-	# Restore action will stay enough long avail.
-	local old_grace=$(get_hsm_param grace_delay)
-	stack_trap "set_hsm_param grace_delay $old_grace" EXIT
-	set_hsm_param grace_delay 100
+	# Prevent restore from completing
+	copytool_suspend
 
+	# Implicit restore
 	md5sum $f >/dev/null &
 	local pid=$!
-	wait_request_state $fid RESTORE STARTED
 
+	wait_request_state $fid RESTORE STARTED
 	kill -15 $pid
-	sleep 1
+
+	copytool_continue
 
 	# Check restore trigger process was killed
-	local killed=$(ps -o pid,comm hp $pid >/dev/null)
-
-	$LFS hsm_cancel $f
-
-	# instead of waiting+checking both Restore and Cancel ops
-	# sequentially, wait for both to be finished and then check
-	# each results.
-	wait_all_done 100 $fid
-	local rstate=$(get_request_state $fid RESTORE)
-	local cstate=$(get_request_state $fid CANCEL)
-
-	if [[ "$rstate" == "CANCELED" ]] ; then
-		[[ "$cstate" == "SUCCEED" ]] ||
-			error "Restore state is CANCELED and Cancel state " \
-			       "is not SUCCEED but $cstate"
-		echo "Restore state is CANCELED, Cancel state is SUCCEED"
-	elif [[ "$rstate" == "SUCCEED" ]] ; then
-		[[ "$cstate" == "FAILED" ]] ||
-			error "Restore state is SUCCEED and Cancel state " \
-				"is not FAILED but $cstate"
-		echo "Restore state is SUCCEED, Cancel state is FAILED"
-	else
-		error "Restore state is $rstate and Cancel state is $cstate"
-	fi
-
-	[ -z $killed ] ||
-		error "Cannot kill process waiting for restore ($killed)"
+	wait $pid
+	[ $? -eq 143 ] || error "md5sum was not 'Terminated'"
 }
 run_test 33 "Kill a restore waiting process"
 
@@ -2922,28 +2863,32 @@ test_34() {
 	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_empty_file "$f")
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f
 
+	# Prevent restore from completing
+	copytool_suspend
+
 	md5sum $f >/dev/null &
 	local pid=$!
+
 	wait_request_state $fid RESTORE STARTED
 
-	rm $f || error "rm $f failed"
 	# rm must not block during restore
-	wait_request_state $fid RESTORE STARTED
+	timeout --signal=KILL 1 rm "$f" || error "rm $f failed"
 
+	copytool_continue
 	wait_request_state $fid RESTORE SUCCEED
-	# check md5sum pgm finished
-	local there=$(ps -o pid,comm hp $pid >/dev/null)
-	[[ -z $there ]] || error "Restore initiator does not exit"
 
+	# Check md5sum pgm finished
+	kill -0 $pid && error "Restore initiatior still running"
 	wait $pid || error "Restore initiator failed with $?"
+
+	# Check the file was actually deleted
+	[ ! -f "$f" ] || error "$f was not deleted"
 }
 run_test 34 "Remove file during restore"
 
@@ -2953,31 +2898,32 @@ test_35() {
 
 	local f=$DIR/$tdir/$tfile
 	local f1=$DIR/$tdir/$tfile-1
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
-
+	local fid=$(create_empty_file "$f")
 	local fid1=$(copy_file /etc/passwd $f1)
+
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f
 
+	# Prevent restore from completing
+	copytool_suspend
+
 	md5sum $f >/dev/null &
 	local pid=$!
+
 	wait_request_state $fid RESTORE STARTED
 
-	mv $f1 $f || error "mv $f1 $f failed"
 	# mv must not block during restore
-	wait_request_state $fid RESTORE STARTED
+	timeout --signal=KILL 1 mv "$f1" "$f" || error "mv $f1 $f failed"
 
+	copytool_continue
 	wait_request_state $fid RESTORE SUCCEED
-	# check md5sum pgm finished
-	local there=$(ps -o pid,comm hp $pid >/dev/null)
-	[[ -z $there ]] || error "Restore initiator does not exit"
 
+	# Check md5sum pgm finished
+	kill -0 $pid && error "Restore initiatior still running"
 	wait $pid || error "Restore initiator failed with $?"
 
-	fid2=$(path2fid $f)
+	local fid2=$(path2fid $f)
 	[[ $fid2 == $fid1 ]] || error "Wrong fid after mv $fid2 != $fid1"
 }
 run_test 35 "Overwrite file during restore"
@@ -2987,28 +2933,29 @@ test_36() {
 	copytool setup -b 1
 
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_empty_file "$f")
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f
 
+	# Prevent restore from completing
+	copytool_suspend
+
 	md5sum $f >/dev/null &
 	local pid=$!
+
 	wait_request_state $fid RESTORE STARTED
 
-	mv $f $f.new
-	# rm must not block during restore
-	wait_request_state $fid RESTORE STARTED
+	# mv must not block during restore
+	timeout --signal=KILL 10 mv "$f" "$f.new" ||
+		error "mv '$f' '$f.new' failed with rc=$?"
 
+	copytool_continue
 	wait_request_state $fid RESTORE SUCCEED
-	# check md5sum pgm finished
-	local there=$(ps -o pid,comm hp $pid >/dev/null)
-	[[ -z $there ]] ||
-		error "Restore initiator does not exit"
 
+	# Check md5sum pgm finished
+	kill -0 $pid && error "Restore initiator is still running"
 	wait $pid || error "Restore initiator failed with $?"
 }
 run_test 36 "Move file during restore"
@@ -3143,11 +3090,10 @@ test_53() {
 run_test 53 "Opened for read file on an evicted client should not be set dirty"
 
 test_54() {
-	# test needs a running copytool
-	copytool setup -b 1
-
 	local f=$DIR/$tdir/$tfile
-	local fid=$(make_custom_file_for_progress $f 39 1000000)
+	local fid=$(create_file "$f" 1MB 39)
+
+	copytool setup -b 1
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
 		error "could not archive file"
@@ -3168,11 +3114,10 @@ test_54() {
 run_test 54 "Write during an archive cancels it"
 
 test_55() {
-	# test needs a running copytool
-	copytool setup -b 1
-
 	local f=$DIR/$tdir/$tfile
-	local fid=$(make_custom_file_for_progress $f 39 1000000)
+	local fid=$(create_file "$f" 1MB 39)
+
+	copytool setup -b 1
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
 		error "could not archive file"
@@ -3193,13 +3138,10 @@ test_55() {
 run_test 55 "Truncate during an archive cancels it"
 
 test_56() {
-	# test needs a running copytool
-	copytool setup -b 1
-
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_file "$f" 1MB 39)
+
+	copytool setup -b 1
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
 		error "could not archive file"
@@ -3322,15 +3264,12 @@ test_60() {
 	# This test validates the fix for LU-4512. Ensure that the -u
 	# option changes the progress reporting interval from the
 	# default (30 seconds) to the user-specified interval.
+	local f=$DIR/$tdir/$tfile
+	local fid=$(create_file "$f" 1M 10)
+
 	local interval=5
 	local progress_timeout=$((interval * 4))
-
 	copytool setup -b 1 --update-interval $interval
-
-	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 10)
-	[ $? != 0 ] && skip "not enough free space" && return
 
 	local mdtidx=0
 	local mdt=${MDT_PREFIX}${mdtidx}
@@ -3460,9 +3399,7 @@ test_71() {
 	cdt_clear_no_retry
 
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_small_file "$f")
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
 		error "could not archive file"
@@ -3471,8 +3408,11 @@ test_71() {
 	local expected_fields="event_time data_fid source_fid"
 	expected_fields+=" total_bytes current_bytes"
 
-	local START_EVENT
-	local FINISH_EVENT
+	local -A events=(
+		[ARCHIVE_START]=false
+		[ARCHIVE_FINISH]=false
+		[ARCHIVE_RUNNING]=false
+		)
 	while read event; do
 		# Make sure we're not getting anything from previous events.
 		for field in $expected_fields; do
@@ -3485,15 +3425,9 @@ test_71() {
 		fi
 		eval $parsed
 
-		if [ $event_type == "ARCHIVE_START" ]; then
-			START_EVENT=$event
-			continue
-		elif [ $event_type == "ARCHIVE_FINISH" ]; then
-			FINISH_EVENT=$event
-			continue
-		elif [ $event_type != "ARCHIVE_RUNNING" ]; then
-			continue
-		fi
+		events["$event_type"]=true
+
+		[ "$event_type" != ARCHIVE_RUNNING ] && continue
 
 		# Do some simple checking of the progress update events.
 		for expected_field in $expected_fields; do
@@ -3502,24 +3436,18 @@ test_71() {
 			fi
 		done
 
-		if [ $total_bytes -eq 0 ]; then
-			error "Expected total_bytes to be > 0"
-		fi
+		[ $total_bytes -gt 0 ] || error "Expected total_bytes to be > 0"
 
-		# These should be identical throughout an archive
-		# operation.
-		if [ $source_fid != $data_fid ]; then
+		# These should be identical throughout an archive operation
+		[ $source_fid == $data_fid ] ||
 			error "Expected source_fid to equal data_fid"
-		fi
 	done < <(echo $"$(get_copytool_event_log)")
 
-	if [ -z "$START_EVENT" ]; then
-		error "Copytool failed to send archive start event to FIFO"
-	fi
-
-	if [ -z "$FINISH_EVENT" ]; then
-		error "Copytool failed to send archive finish event to FIFO"
-	fi
+	# Check we received every type of events we were expecting
+	for event in "${!events[@]}"; do
+		${events["$event"]} ||
+			error "Copytool failed to send '$event' event to FIFO"
+	done
 
 	echo "Archive events look OK."
 }
@@ -3715,9 +3643,7 @@ DATA=CEA
 DATAHEX='[434541]'
 test_104() {
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_empty_file "$f")
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER --data $DATA $f
 	local data1=$(do_facet $SINGLEMDS "$LCTL get_param -n\
@@ -3727,10 +3653,7 @@ test_104() {
 	[[ "$data1" == "$DATAHEX" ]] ||
 		error "Data field in records is ($data1) and not ($DATAHEX)"
 
-	# archive the file
-	copytool setup
-
-	wait_request_state $fid ARCHIVE SUCCEED
+	cdt_purge
 }
 run_test 104 "Copy tool data field"
 
@@ -3971,22 +3894,24 @@ test_112() {
 run_test 112 "State of recorded request"
 
 test_200() {
-	# test needs a running copytool
+	local f=$DIR/$tdir/$tfile
+	local fid=$(create_empty_file "$f")
+
 	copytool setup
 
-	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 103 1048576)
-	[ $? != 0 ] && skip "not enough free space" && return
+	# Prevent archive from completing
+	copytool_suspend
 
-	# test with cdt on is made in test_221
-	cdt_disable
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	# wait archive to register at CDT
-	wait_request_state $fid ARCHIVE WAITING
-	$LFS hsm_cancel $f
-	cdt_enable
+	wait_request_state $fid ARCHIVE STARTED
+
+	# Cancel the archive
+	$LFS hsm_cancel "$f"
+
 	wait_request_state $fid ARCHIVE CANCELED
+
+	copytool_continue
 	wait_request_state $fid CANCEL SUCCEED
 }
 run_test 200 "Register/Cancel archive"
@@ -4013,23 +3938,21 @@ test_201() {
 run_test 201 "Register/Cancel restore"
 
 test_202() {
+	local f=$DIR/$tdir/$tfile
+	local fid=$(create_empty_file "$f")
+
 	# test needs a running copytool
 	copytool setup
-
-	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 
-	cdt_disable
+	copytool_suspend
 	$LFS hsm_remove $f
 	# wait remove to register at CDT
-	wait_request_state $fid REMOVE WAITING
+	wait_request_state $fid REMOVE STARTED
 	$LFS hsm_cancel $f
-	cdt_enable
+
 	wait_request_state $fid REMOVE CANCELED
 }
 run_test 202 "Register/Cancel remove"
@@ -4086,20 +4009,21 @@ test_220a() {
 run_test 220a "Changelog for failed archive"
 
 test_221() {
-	# test needs a running copytool
-	copytool setup -b 1
-
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 103 1048576)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_empty_file "$f")
 
+	copytool setup -b 1
 	changelog_register
 
+	# Prevent archive from completing
+	copytool_suspend
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE STARTED
+
 	$LFS hsm_cancel $f
 	wait_request_state $fid ARCHIVE CANCELED
+
+	copytool_continue
 	wait_request_state $fid CANCEL SUCCEED
 
 	changelog_find -type HSM -target-fid $fid -flags 0x7d ||
@@ -4232,22 +4156,25 @@ test_223a() {
 run_test 223a "Changelog for restore canceled (import case)"
 
 test_223b() {
-	# test needs a running copytool
-	copytool setup -b 1
-
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_empty_file "$f")
 
+	copytool setup -b 1
 	changelog_register
+
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 	$LFS hsm_release $f
+
+	# Prevent restore from completing
+	copytool_suspend
 	$LFS hsm_restore $f
 	wait_request_state $fid RESTORE STARTED
+
 	$LFS hsm_cancel $f
 	wait_request_state $fid RESTORE CANCELED
+
+	copytool_continue
 	wait_request_state $fid CANCEL SUCCEED
 
 	changelog_find -type HSM -target-fid $fid -flags 0xfd ||
@@ -4322,20 +4249,20 @@ test_225() {
 	copytool setup
 
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_empty_file "$f")
 
 	changelog_register
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
 
-	# if cdt is on, it can serve too quickly the request
-	cdt_disable
+	# Prevent restore from completing
+	copytool_suspend
 	$LFS hsm_remove $f
+
 	$LFS hsm_cancel $f
-	cdt_enable
 	wait_request_state $fid REMOVE CANCELED
+
+	copytool_continue
 	wait_request_state $fid CANCEL SUCCEED
 
 	changelog_find -type HSM -target-fid $fid -flags 0x27d
@@ -4491,31 +4418,27 @@ test_250() {
 run_test 250 "Coordinator max request"
 
 test_251() {
-	# test needs a running copytool
-	copytool setup -b 1
-
 	local f=$DIR/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 103 1048576)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_empty_file "$f")
 
 	cdt_disable
 	# to have a short test
 	local old_to=$(get_hsm_param active_request_timeout)
-	set_hsm_param active_request_timeout 4
+	set_hsm_param active_request_timeout 1
 	# to be sure the cdt will wake up frequently so
 	# it will be able to cancel the "old" request
 	local old_loop=$(get_hsm_param loop_period)
-	set_hsm_param loop_period 2
+	set_hsm_param loop_period 1
 	cdt_enable
 
-	# clear locks to avoid extra delay caused by flush/cancel
-	# and thus prevent early copytool death to timeout.
-	cancel_lru_locks osc
+	copytool setup
 
+	# Prevent archive from completing
+	copytool_suspend
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE STARTED
-	sleep 5
+
+	# Let the request timeout
 	wait_request_state $fid ARCHIVE CANCELED
 
 	set_hsm_param active_request_timeout $old_to
@@ -4524,7 +4447,6 @@ test_251() {
 run_test 251 "Coordinator request timeout"
 
 test_252() {
-	mkdir -p $DIR/$tdir
 	local f=$DIR/$tdir/$tfile
 	local fid=$(create_empty_file "$f")
 
@@ -4533,11 +4455,12 @@ test_252() {
 	set_hsm_param loop_period 1
 
 	copytool setup
-	copytool_suspend
 
+	# Prevent archive from completing
+	copytool_suspend
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE STARTED
-	rm -f $f
+	rm -f "$f"
 
 	stack_trap "set_hsm_param active_request_timeout \
 		    $(get_hsm_param active_request_timeout)" EXIT
@@ -5025,17 +4948,11 @@ test_406() {
 run_test 406 "attempting to migrate HSM archived files is safe"
 
 test_407() {
-	needclients 2 || return 0
-	# test needs a running copytool
-	copytool setup
-
-	mkdir -p $DIR/$tdir
-
 	local f=$DIR/$tdir/$tfile
 	local f2=$DIR2/$tdir/$tfile
-	local fid
-	fid=$(make_custom_file_for_progress $f 39 1000000)
-	[ $? != 0 ] && skip "not enough free space" && return
+	local fid=$(create_empty_file "$f")
+
+	copytool setup
 
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f
 	wait_request_state $fid ARCHIVE SUCCEED
@@ -5043,6 +4960,9 @@ test_407() {
 
 #define OBD_FAIL_MDS_HSM_CDT_DELAY      0x164
 	do_facet $SINGLEMDS $LCTL set_param fail_val=5 fail_loc=0x164
+
+	# Prevent restore from completing
+	copytool_suspend
 
 	md5sum $f &
 	# 1st request holds layout lock while appropriate
@@ -5058,6 +4978,7 @@ test_407() {
 		do_facet $SINGLEMDS "$LCTL get_param $HSM_PARAM.actions"&
 	fail $SINGLEMDS
 
+	copytool_continue
 	wait_request_state $fid RESTORE SUCCEED
 }
 run_test 407 "Check for double RESTORE records in llog"
