@@ -223,8 +223,9 @@ static int seq_client_alloc_seq(const struct lu_env *env,
 	if (lu_seq_range_is_exhausted(&seq->lcs_space)) {
                 rc = seq_client_alloc_meta(env, seq);
                 if (rc) {
-                        CERROR("%s: Can't allocate new meta-sequence,"
-                               "rc %d\n", seq->lcs_name, rc);
+			if (rc != -EINPROGRESS)
+				CERROR("%s: Can't allocate new meta-sequence,"
+				       "rc = %d\n", seq->lcs_name, rc);
                         RETURN(rc);
                 } else {
                         CDEBUG(D_INFO, "%s: New range - "DRANGE"\n",
@@ -379,8 +380,9 @@ int seq_client_alloc_fid(const struct lu_env *env,
 		/* Re-take seq::lcs_mutex via seq_fid_alloc_fini(). */
 		seq_fid_alloc_fini(seq, rc ? 0 : seqnr, false);
 		if (rc) {
-			CERROR("%s: Can't allocate new sequence: rc = %d\n",
-			       seq->lcs_name, rc);
+			if (rc != -EINPROGRESS)
+				CERROR("%s: Can't allocate new sequence: "
+				       "rc = %d\n", seq->lcs_name, rc);
 			mutex_unlock(&seq->lcs_mutex);
 
 			RETURN(rc);
