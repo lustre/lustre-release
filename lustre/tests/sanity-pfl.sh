@@ -375,6 +375,7 @@ component_dump() {
 test_10() {
 	local parent=$DIR/$tdir
 	local root_layout=$(get_layout_param $MOUNT)
+	echo "$MOUNT layout: $root_layout"
 
 	rm -rf $parent
 	$LFS setstripe -d $MOUNT || error "clear root layout"
