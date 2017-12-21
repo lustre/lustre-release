@@ -8355,6 +8355,30 @@ lss_gen_conf()
 	do_facet mgs "cat $LSNAPSHOT_CONF"
 }
 
+# Parse 'lfs getstripe -d <path_with_dir_name>' for non-composite dir
+parse_plain_dir_param()
+{
+	local invalues=($1)
+	local param=""
+
+	if [[ ${invalues[0]} =~ "stripe_count:" ]]; then
+		param="-c ${invalues[1]}"
+	fi
+	if [[ ${invalues[2]} =~ "stripe_size:" ]]; then
+		param="$param -S ${invalues[3]}"
+	fi
+	if [[ ${invalues[4]} =~ "pattern:" ]]; then
+		if [[ ${invalues[5]} =~ "stripe_offset:" ]]; then
+			param="$param -i ${invalues[6]}"
+		else
+			param="$param -L ${invalues[5]} -i ${invalues[7]}"
+		fi
+	elif [[ ${invalues[4]} =~ "stripe_offset:" ]]; then
+		param="$param -i ${invalues[5]}"
+	fi
+	echo "$param"
+}
+
 parse_plain_param()
 {
 	local line=$1
@@ -8366,6 +8390,8 @@ parse_plain_param()
 		echo "-S $val"
 	elif [[ $line =~ ^"lmm_stripe_offset:" ]]; then
 		echo "-i $val"
+	elif [[ $line =~ ^"lmm_pattern:" ]]; then
+		echo "-L $val"
 	fi
 }
 
@@ -8376,39 +8402,39 @@ parse_layout_param()
 	local param=""
 
 	while read line; do
-		if [[ -z $mode ]]; then
-			if [[ $line =~ ^"stripe_count:" ]]; then
-				mode="plain_dir"
-			elif [[ $line =~ ^"lmm_stripe_count:" ]]; then
-				mode="plain_file"
-			elif [[ $line =~ ^"lcm_layout_gen:" ]]; then
-				mode="pfl"
-			fi
-		fi
-
-		if [[ $mode = "plain_dir" ]]; then
-			param=$(echo $line |
-				awk '{printf("-c %d -S %d -i %d",$2,$4,$6)}')
-		elif [[ $mode = "plain_file" ]]; then
-			val=$(parse_plain_param "$line")
-			[[ ! -z $val ]] && param="$param $val"
-		elif [[ $mode = "pfl" ]]; then
-			val=$(echo $line | awk '{print $2}')
-			if [[ $line =~ ^"lcme_extent.e_end:" ]]; then
-				if [[ $val = "EOF" ]]; then
-					param="$param -E -1"
-				else
-					param="$param -E $val"
+		if [[ ! -z $line ]]; then
+			if [[ -z $mode ]]; then
+				if [[ $line =~ ^"stripe_count:" ]]; then
+					mode="plain_dir"
+				elif [[ $line =~ ^"lmm_stripe_count:" ]]; then
+					mode="plain_file"
+				elif [[ $line =~ ^"lcm_layout_gen:" ]]; then
+					mode="pfl"
 				fi
-			elif [[ $line =~ ^"stripe_count:" ]]; then
-				# pfl dir
-				val=$(echo $line |
-				  awk '{printf("-c %d -S %d -i %d",$2,$4,$6)}')
-				param="$param $val"
-			else
-				#pfl file
+			fi
+
+			if [[ $mode = "plain_dir" ]]; then
+				param=$(parse_plain_dir_param "$line")
+			elif [[ $mode = "plain_file" ]]; then
 				val=$(parse_plain_param "$line")
 				[[ ! -z $val ]] && param="$param $val"
+			elif [[ $mode = "pfl" ]]; then
+				val=$(echo $line | awk '{print $2}')
+				if [[ $line =~ ^"lcme_extent.e_end:" ]]; then
+					if [[ $val = "EOF" ]]; then
+						param="$param -E -1"
+					else
+						param="$param -E $val"
+					fi
+				elif [[ $line =~ ^"stripe_count:" ]]; then
+					# pfl dir
+					val=$(parse_plain_dir_param "$line")
+					param="$param $val"
+				else
+					#pfl file
+					val=$(parse_plain_param "$line")
+					[[ ! -z $val ]] && param="$param $val"
+				fi
 			fi
 		fi
 	done
