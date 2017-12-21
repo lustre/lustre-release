@@ -266,7 +266,7 @@ static int out_xattr_get(struct tgt_session_info *tsi)
 		RETURN(PTR_ERR(name));
 	}
 
-	update_result = object_update_result_get(reply, 0, NULL);
+	update_result = object_update_result_get(reply, idx, NULL);
 	if (update_result == NULL) {
 		CERROR("%s: empty name for xattr get: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), -EPROTO);
@@ -294,7 +294,10 @@ static int out_xattr_get(struct tgt_session_info *tsi)
 	       tgt_name(tsi->tsi_tgt), PFID(lu_object_fid(&obj->do_lu)),
 	       name, (int)lbuf->lb_len, rc);
 
-	object_update_result_insert(reply, lbuf->lb_buf, lbuf->lb_len, idx, rc);
+	/* Since we directly use update_result->our_data as the lbuf->lb_buf,
+	 * then use NULL for result_insert to avoid unnecessary memory copy. */
+	object_update_result_insert(reply, NULL, lbuf->lb_len, idx, rc);
+
 	RETURN(0);
 }
 

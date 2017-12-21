@@ -241,20 +241,14 @@ object_update_result_insert(struct object_update_reply *reply,
 			    int rc)
 {
 	struct object_update_result *update_result;
-	char *ptr;
 
 	update_result = object_update_result_get(reply, index, NULL);
 	LASSERT(update_result);
 
 	update_result->our_rc = ptlrpc_status_hton(rc);
 	if (rc >= 0) {
-		if (data_len > 0) {
-			LASSERT(data);
-
-			ptr = (char *)update_result +
-			cfs_size_round(sizeof(struct object_update_reply));
-			memcpy(ptr, data, data_len);
-		}
+		if (data_len > 0 && data)
+			memcpy(update_result->our_data, data, data_len);
 		update_result->our_datalen = data_len;
 	}
 
