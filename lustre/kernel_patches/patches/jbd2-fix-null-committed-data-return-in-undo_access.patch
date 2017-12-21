@@ -1,0 +1,113 @@
+From 087ffd4eae9929afd06f6a709861df3c3508492a Mon Sep 17 00:00:00 2001
+From: Junxiao Bi <junxiao.bi@oracle.com>
+Date: Fri, 4 Dec 2015 12:29:28 -0500
+Subject: [PATCH] jbd2: fix null committed data return in undo_access
+
+introduced jbd2_write_access_granted() to improve write|undo_access
+speed, but missed to check the status of b_committed_data which caused
+a kernel panic on ocfs2.
+
+[ 6538.405938] ------------[ cut here ]------------
+[ 6538.406686] kernel BUG at fs/ocfs2/suballoc.c:2400!
+[ 6538.406686] invalid opcode: 0000 [#1] SMP
+[ 6538.406686] Modules linked in: ocfs2 nfsd lockd grace nfs_acl auth_rpcgss sunrpc autofs4 ocfs2_dlmfs ocfs2_stack_o2cb ocfs2_dlm ocfs2_nodemanager ocfs2_stackglue configfs sd_mod sg ip6t_REJECT nf_reject_ipv6 nf_conntrack_ipv6 nf_defrag_ipv6 xt_state nf_conntrack ip6table_filter ip6_tables be2iscsi iscsi_boot_sysfs bnx2i cnic uio cxgb4i cxgb4 cxgb3i libcxgbi cxgb3 mdio ib_iser rdma_cm ib_cm iw_cm ib_sa ib_mad ib_core ib_addr ipv6 iscsi_tcp libiscsi_tcp libiscsi scsi_transport_iscsi ppdev xen_kbdfront xen_netfront xen_fbfront parport_pc parport pcspkr i2c_piix4 acpi_cpufreq ext4 jbd2 mbcache xen_blkfront floppy pata_acpi ata_generic ata_piix cirrus ttm drm_kms_helper drm fb_sys_fops sysimgblt sysfillrect i2c_core syscopyarea dm_mirror dm_region_hash dm_log dm_mod
+[ 6538.406686] CPU: 1 PID: 16265 Comm: mmap_truncate Not tainted 4.3.0 #1
+[ 6538.406686] Hardware name: Xen HVM domU, BIOS 4.3.1OVM 05/14/2014
+[ 6538.406686] task: ffff88007c2bab00 ti: ffff880075b78000 task.ti: ffff880075b78000
+[ 6538.406686] RIP: 0010:[<ffffffffa06a286b>]  [<ffffffffa06a286b>] ocfs2_block_group_clear_bits+0x23b/0x250 [ocfs2]
+[ 6538.406686] RSP: 0018:ffff880075b7b7f8  EFLAGS: 00010246
+[ 6538.406686] RAX: ffff8800760c5b40 RBX: ffff88006c06a000 RCX: ffffffffa06e6df0
+[ 6538.406686] RDX: 0000000000000000 RSI: ffff88007a6f6ea0 RDI: ffff88007a760430
+[ 6538.406686] RBP: ffff880075b7b878 R08: 0000000000000002 R09: 0000000000000001
+[ 6538.406686] R10: ffffffffa06769be R11: 0000000000000000 R12: 0000000000000001
+[ 6538.406686] R13: ffffffffa06a1750 R14: 0000000000000001 R15: ffff88007a6f6ea0
+[ 6538.406686] FS:  00007f17fde30720(0000) GS:ffff88007f040000(0000) knlGS:0000000000000000
+[ 6538.406686] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+[ 6538.406686] CR2: 0000000000601730 CR3: 000000007aea0000 CR4: 00000000000406e0
+[ 6538.406686] Stack:
+[ 6538.406686]  ffff88007c2bb5b0 ffff880075b7b8e0 ffff88007a7604b0 ffff88006c640800
+[ 6538.406686]  ffff88007a7604b0 ffff880075d77390 0000000075b7b878 ffffffffa06a309d
+[ 6538.406686]  ffff880075d752d8 ffff880075b7b990 ffff880075b7b898 0000000000000000
+[ 6538.406686] Call Trace:
+[ 6538.406686]  [<ffffffffa06a309d>] ? ocfs2_read_group_descriptor+0x6d/0xa0 [ocfs2]
+[ 6538.406686]  [<ffffffffa06a3654>] _ocfs2_free_suballoc_bits+0xe4/0x320 [ocfs2]
+[ 6538.406686]  [<ffffffffa06a1750>] ? ocfs2_put_slot+0xf0/0xf0 [ocfs2]
+[ 6538.406686]  [<ffffffffa06a397e>] _ocfs2_free_clusters+0xee/0x210 [ocfs2]
+[ 6538.406686]  [<ffffffffa06a1750>] ? ocfs2_put_slot+0xf0/0xf0 [ocfs2]
+[ 6538.406686]  [<ffffffffa06a1750>] ? ocfs2_put_slot+0xf0/0xf0 [ocfs2]
+[ 6538.406686]  [<ffffffffa0682d50>] ? ocfs2_extend_trans+0x50/0x1a0 [ocfs2]
+[ 6538.406686]  [<ffffffffa06a3ad5>] ocfs2_free_clusters+0x15/0x20 [ocfs2]
+[ 6538.406686]  [<ffffffffa065072c>] ocfs2_replay_truncate_records+0xfc/0x290 [ocfs2]
+[ 6538.406686]  [<ffffffffa06843ac>] ? ocfs2_start_trans+0xec/0x1d0 [ocfs2]
+[ 6538.406686]  [<ffffffffa0654600>] __ocfs2_flush_truncate_log+0x140/0x2d0 [ocfs2]
+[ 6538.406686]  [<ffffffffa0654394>] ? ocfs2_reserve_blocks_for_rec_trunc.clone.0+0x44/0x170 [ocfs2]
+[ 6538.406686]  [<ffffffffa065acd4>] ocfs2_remove_btree_range+0x374/0x630 [ocfs2]
+[ 6538.406686]  [<ffffffffa017486b>] ? jbd2_journal_stop+0x25b/0x470 [jbd2]
+[ 6538.406686]  [<ffffffffa065d5b5>] ocfs2_commit_truncate+0x305/0x670 [ocfs2]
+[ 6538.406686]  [<ffffffffa0683430>] ? ocfs2_journal_access_eb+0x20/0x20 [ocfs2]
+[ 6538.406686]  [<ffffffffa067adb7>] ocfs2_truncate_file+0x297/0x380 [ocfs2]
+[ 6538.406686]  [<ffffffffa01759e4>] ? jbd2_journal_begin_ordered_truncate+0x64/0xc0 [jbd2]
+[ 6538.406686]  [<ffffffffa067c7a2>] ocfs2_setattr+0x572/0x860 [ocfs2]
+[ 6538.406686]  [<ffffffff810e4a3f>] ? current_fs_time+0x3f/0x50
+[ 6538.406686]  [<ffffffff812124b7>] notify_change+0x1d7/0x340
+[ 6538.406686]  [<ffffffff8121abf9>] ? generic_getxattr+0x79/0x80
+[ 6538.406686]  [<ffffffff811f5876>] do_truncate+0x66/0x90
+[ 6538.406686]  [<ffffffff81120e30>] ? __audit_syscall_entry+0xb0/0x110
+[ 6538.406686]  [<ffffffff811f5bb3>] do_sys_ftruncate.clone.0+0xf3/0x120
+[ 6538.406686]  [<ffffffff811f5bee>] SyS_ftruncate+0xe/0x10
+[ 6538.406686]  [<ffffffff816aa2ae>] entry_SYSCALL_64_fastpath+0x12/0x71
+[ 6538.406686] Code: 28 48 81 ee b0 04 00 00 48 8b 92 50 fb ff ff 48 8b 80 b0 03 00 00 48 39 90 88 00 00 00 0f 84 30 fe ff ff 0f 0b eb fe 0f 0b eb fe <0f> 0b 0f 1f 00 eb fb 66 66 66 66 66 2e 0f 1f 84 00 00 00 00 00
+[ 6538.406686] RIP  [<ffffffffa06a286b>] ocfs2_block_group_clear_bits+0x23b/0x250 [ocfs2]
+[ 6538.406686]  RSP <ffff880075b7b7f8>
+[ 6538.691128] ---[ end trace 31cd7011d6770d7e ]---
+[ 6538.694492] Kernel panic - not syncing: Fatal exception
+[ 6538.695484] Kernel Offset: disabled
+
+Fixes: de92c8caf16c("jbd2: speedup jbd2_journal_get_[write|undo]_access()")
+Cc: <stable@vger.kernel.org>
+Signed-off-by: Junxiao Bi <junxiao.bi@oracle.com>
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+---
+
+diff --git a/fs/jbd2/transaction.c b/fs/jbd2/transaction.c
+index 5fece02..cd61b7b 100644
+--- a/fs/jbd2/transaction.c
++++ b/fs/jbd2/transaction.c
+@@ -1031,7 +1031,8 @@ out:
+ }
+ 
+ /* Fast check whether buffer is already attached to the required transaction */
+-static bool jbd2_write_access_granted(handle_t *handle, struct buffer_head *bh)
++static bool jbd2_write_access_granted(handle_t *handle, struct buffer_head *bh,
++							bool undo)
+ {
+ 	struct journal_head *jh;
+ 	bool ret = false;
+@@ -1058,6 +1059,9 @@ static bool jbd2_write_access_granted(handle_t *handle, struct buffer_head *bh)
+ 	jh = READ_ONCE(bh->b_private);
+ 	if (!jh)
+ 		goto out;
++	/* For undo access buffer must have data copied */
++	if (undo && !jh->b_committed_data)
++		goto out;
+ 	if (jh->b_transaction != handle->h_transaction &&
+ 	    jh->b_next_transaction != handle->h_transaction)
+ 		goto out;
+@@ -1095,7 +1099,7 @@ int jbd2_journal_get_write_access(handle_t *handle, struct buffer_head *bh)
+ 	struct journal_head *jh;
+ 	int rc;
+ 
+-	if (jbd2_write_access_granted(handle, bh))
++	if (jbd2_write_access_granted(handle, bh, false))
+ 		return 0;
+ 
+ 	jh = jbd2_journal_add_journal_head(bh);
+@@ -1232,7 +1236,7 @@ int jbd2_journal_get_undo_access(handle_t *handle, struct buffer_head *bh)
+ 	char *committed_data = NULL;
+ 
+ 	JBUFFER_TRACE(jh, "entry");
+-	if (jbd2_write_access_granted(handle, bh))
++	if (jbd2_write_access_granted(handle, bh, true))
+ 		return 0;
+ 
+ 	jh = jbd2_journal_add_journal_head(bh);
