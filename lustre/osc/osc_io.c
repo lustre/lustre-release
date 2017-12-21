@@ -121,6 +121,9 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 	int result = 0;
 	int brw_flags;
 	unsigned int max_pages;
+	unsigned int ppc_bits; /* pages per chunk bits */
+	unsigned int ppc;
+	bool sync_queue = false;
 
 	LASSERT(qin->pl_nr > 0);
 
@@ -129,6 +132,8 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 	osc = cl2osc(ios->cis_obj);
 	cli = osc_cli(osc);
 	max_pages = cli->cl_max_pages_per_rpc;
+	ppc_bits = cli->cl_chunkbits - PAGE_SHIFT;
+	ppc = 1 << ppc_bits;
 
 	brw_flags = osc_io_srvlock(cl2osc_io(env, ios)) ? OBD_BRW_SRVLOCK : 0;
 	brw_flags |= crt == CRT_WRITE ? OBD_BRW_WRITE : OBD_BRW_READ;
@@ -185,12 +190,30 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 		else /* async IO */
 			cl_page_list_del(env, qin, page);
 
-		if (++queued == max_pages) {
-			queued = 0;
+		queued++;
+		if (queued == max_pages) {
+			sync_queue = true;
+		} else if (crt == CRT_WRITE) {
+			unsigned int chunks;
+			unsigned int next_chunks;
+
+			chunks = (queued + ppc - 1) >> ppc_bits;
+			/* chunk number if add another page */
+			next_chunks = (queued + ppc) >> ppc_bits;
+
+			/* next page will excceed write chunk limit */
+			if (chunks == osc_max_write_chunks(cli) &&
+			    next_chunks > chunks)
+				sync_queue = true;
+		}
+
+		if (sync_queue) {
 			result = osc_queue_sync_pages(env, io, osc, &list,
 						      brw_flags);
 			if (result < 0)
 				break;
+			queued = 0;
+			sync_queue = false;
 		}
 	}
 

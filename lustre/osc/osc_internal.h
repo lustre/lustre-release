@@ -173,6 +173,35 @@ extern unsigned long osc_cache_shrink_count(struct shrinker *sk,
 					    struct shrink_control *sc);
 extern unsigned long osc_cache_shrink_scan(struct shrinker *sk,
 					   struct shrink_control *sc);
+static inline unsigned int osc_max_write_chunks(const struct client_obd *cli)
+{
+	/*
+	 * LU-8135:
+	 *
+	 * The maximum size of a single transaction is about 64MB in ZFS.
+	 * #define DMU_MAX_ACCESS (64 * 1024 * 1024)
+	 *
+	 * Since ZFS is a copy-on-write file system, a single dirty page in
+	 * a chunk will result in the rewrite of the whole chunk, therefore
+	 * an RPC shouldn't be allowed to contain too many chunks otherwise
+	 * it will make transaction size much bigger than 64MB, especially
+	 * with big block size for ZFS.
+	 *
+	 * This piece of code is to make sure that OSC won't send write RPCs
+	 * with too many chunks. The maximum chunk size that an RPC can cover
+	 * is set to PTLRPC_MAX_BRW_SIZE, which is defined to 16MB. Ideally
+	 * OST should tell the client what the biggest transaction size is,
+	 * but it's good enough for now.
+	 *
+	 * This limitation doesn't apply to ldiskfs, which allows as many
+	 * chunks in one RPC as we want. However, it won't have any benefits
+	 * to have too many discontiguous pages in one RPC.
+	 *
+	 * An osc_extent won't cover over a RPC size, so the chunks in an
+	 * osc_extent won't bigger than PTLRPC_MAX_BRW_SIZE >> chunkbits.
+	 */
+	return PTLRPC_MAX_BRW_SIZE >> cli->cl_chunkbits;
+}
 
 static inline void osc_set_io_portal(struct ptlrpc_request *req)
 {
