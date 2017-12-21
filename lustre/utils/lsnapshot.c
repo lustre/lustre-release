@@ -268,7 +268,7 @@ static int snapshot_load_conf_ldev(struct snapshot_instance *si, char *buf,
 
 	/* Format of label:
 	 * fsname-<role><index> or <role><index> */
-	ptr = strchr(label, '-');
+	ptr = strrchr(label, '-');
 	if (ptr) {
 		if (strncmp(si->si_fsname, label, ptr - label) != 0) {
 			/* This line is NOT for current filesystem .*/
