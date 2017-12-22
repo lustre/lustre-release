@@ -792,7 +792,7 @@ kgnilnd_setup_rdma_buffer(kgn_tx_t *tx, unsigned int niov,
  *           transfer.
  */
 static void
-kgnilnd_parse_lnet_rdma(lnet_msg_t *lntmsg, unsigned int *niov,
+kgnilnd_parse_lnet_rdma(struct lnet_msg *lntmsg, unsigned int *niov,
 			unsigned int *offset, unsigned int *nob,
 			lnet_kiov_t **kiov, int put_len)
 {
@@ -819,7 +819,7 @@ kgnilnd_compute_rdma_cksum(kgn_tx_t *tx, int put_len)
 {
 	unsigned int     niov, offset, nob;
 	lnet_kiov_t     *kiov;
-	lnet_msg_t      *lntmsg = tx->tx_lntmsg[0];
+	struct lnet_msg      *lntmsg = tx->tx_lntmsg[0];
 	int              dump_cksum = (*kgnilnd_tunables.kgn_checksum_dump > 1);
 
 	GNITX_ASSERTF(tx, ((tx->tx_msg.gnm_type == GNILND_MSG_PUT_DONE) ||
@@ -871,7 +871,7 @@ kgnilnd_verify_rdma_cksum(kgn_tx_t *tx, __u16 rx_cksum, int put_len)
 	__u16            cksum;
 	unsigned int     niov, offset, nob;
 	lnet_kiov_t     *kiov;
-	lnet_msg_t      *lntmsg = tx->tx_lntmsg[0];
+	struct lnet_msg      *lntmsg = tx->tx_lntmsg[0];
 	int dump_on_err = *kgnilnd_tunables.kgn_checksum_dump;
 
 	/* we can only match certain requests */
@@ -1216,9 +1216,9 @@ kgnilnd_unmap_buffer(kgn_tx_t *tx, int error)
 void
 kgnilnd_tx_done(kgn_tx_t *tx, int completion)
 {
-	lnet_msg_t      *lntmsg0, *lntmsg1;
+	struct lnet_msg      *lntmsg0, *lntmsg1;
 	int             status0, status1;
-	lnet_ni_t       *ni = NULL;
+	struct lnet_ni       *ni = NULL;
 	kgn_conn_t      *conn = tx->tx_conn;
 
 	LASSERT(!in_interrupt());
@@ -1759,7 +1759,7 @@ kgnilnd_queue_tx(kgn_conn_t *conn, kgn_tx_t *tx)
 }
 
 void
-kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, lnet_process_id_t *target)
+kgnilnd_launch_tx(kgn_tx_t *tx, kgn_net_t *net, struct lnet_process_id *target)
 {
 	kgn_peer_t      *peer;
 	kgn_peer_t      *new_peer = NULL;
@@ -2100,11 +2100,11 @@ kgnilnd_consume_rx(kgn_rx_t *rx)
 }
 
 int
-kgnilnd_send(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg)
+kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 {
 	struct lnet_hdr  *hdr = &lntmsg->msg_hdr;
 	int               type = lntmsg->msg_type;
-	lnet_process_id_t target = lntmsg->msg_target;
+	struct lnet_process_id target = lntmsg->msg_target;
 	int               target_is_router = lntmsg->msg_target_is_router;
 	int               routing = lntmsg->msg_routing;
 	unsigned int      niov = lntmsg->msg_niov;
@@ -2272,7 +2272,7 @@ out:
 }
 
 void
-kgnilnd_setup_rdma(lnet_ni_t *ni, kgn_rx_t *rx, lnet_msg_t *lntmsg, int mlen)
+kgnilnd_setup_rdma(struct lnet_ni *ni, kgn_rx_t *rx, struct lnet_msg *lntmsg, int mlen)
 {
 	kgn_conn_t    *conn = rx->grx_conn;
 	kgn_msg_t     *rxmsg = rx->grx_msg;
@@ -2333,7 +2333,7 @@ kgnilnd_setup_rdma(lnet_ni_t *ni, kgn_rx_t *rx, lnet_msg_t *lntmsg, int mlen)
 }
 
 int
-kgnilnd_eager_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
+kgnilnd_eager_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		   void **new_private)
 {
 	kgn_rx_t        *rx = private;
@@ -2424,7 +2424,7 @@ kgnilnd_eager_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
 }
 
 int
-kgnilnd_recv(lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg,
+kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	     int delayed, unsigned int niov,
 	     struct kvec *iov, lnet_kiov_t *kiov,
 	     unsigned int offset, unsigned int mlen, unsigned int rlen)
@@ -3131,7 +3131,7 @@ int
 kgnilnd_recv_bte_get(kgn_tx_t *tx) {
 	unsigned niov, offset, nob;
 	lnet_kiov_t	*kiov;
-	lnet_msg_t *lntmsg = tx->tx_lntmsg[0];
+	struct lnet_msg *lntmsg = tx->tx_lntmsg[0];
 	kgnilnd_parse_lnet_rdma(lntmsg, &niov, &offset, &nob, &kiov, tx->tx_nob_rdma);
 
 	if (kiov != NULL) {

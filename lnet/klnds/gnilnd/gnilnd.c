@@ -25,7 +25,7 @@
 #include "gnilnd.h"
 
 /* Primary entry points from LNET.  There are no guarantees against reentrance. */
-lnd_t the_kgnilnd = {
+struct lnet_lnd the_kgnilnd = {
 	.lnd_type       = GNILND,
 	.lnd_startup    = kgnilnd_startup,
 	.lnd_shutdown   = kgnilnd_shutdown,
@@ -1800,7 +1800,7 @@ kgnilnd_report_node_state(lnet_nid_t nid, int down)
 }
 
 int
-kgnilnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
+kgnilnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 {
 	struct libcfs_ioctl_data *data = arg;
 	kgn_net_t                *net = ni->ni_data;
@@ -1920,13 +1920,13 @@ kgnilnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 }
 
 void
-kgnilnd_query(lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
+kgnilnd_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when)
 {
 	kgn_net_t               *net = ni->ni_data;
 	kgn_tx_t                *tx;
 	kgn_peer_t              *peer = NULL;
 	kgn_conn_t              *conn = NULL;
-	lnet_process_id_t       id = {
+	struct lnet_process_id       id = {
 		.nid = nid,
 		.pid = LNET_PID_LUSTRE,
 	};
@@ -2677,7 +2677,7 @@ kgnilnd_base_shutdown(void)
 }
 
 int
-kgnilnd_startup(lnet_ni_t *ni)
+kgnilnd_startup(struct lnet_ni *ni)
 {
 	int               rc, devno;
 	kgn_net_t        *net;
@@ -2775,7 +2775,7 @@ kgnilnd_startup(lnet_ni_t *ni)
 }
 
 void
-kgnilnd_shutdown(lnet_ni_t *ni)
+kgnilnd_shutdown(struct lnet_ni *ni)
 {
 	kgn_net_t     *net = ni->ni_data;
 	int           i;
