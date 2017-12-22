@@ -1324,7 +1324,7 @@ destroy_zpool() {
 import_zpool() {
 	local facet=$1
 	shift
-	local opts=${@:-"-o cachefile=none"}
+	local opts=${@:-"-o cachefile=none -o failmode=panic"}
 	local poolname
 
 	poolname=$(zpool_name $facet)
