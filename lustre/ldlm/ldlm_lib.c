@@ -1966,7 +1966,18 @@ static int target_recovery_overseer(struct lu_target *lut,
 {
 	struct obd_device	*obd = lut->lut_obd;
 	struct target_distribute_txn_data *tdtd;
+	time64_t last = 0;
+	time64_t now;
 repeat:
+	if (obd->obd_recovering && obd->obd_recovery_start == 0) {
+		now = ktime_get_seconds();
+		if (now - last > 600) {
+			LCONSOLE_INFO("%s: in recovery but waiting for "
+				      "the first client to connect\n",
+				      obd->obd_name);
+			last = now;
+		}
+	}
 	if (obd->obd_recovery_start != 0 && ktime_get_real_seconds() >=
 	      (obd->obd_recovery_start + obd->obd_recovery_time_hard)) {
 		__u64 next_update_transno = 0;

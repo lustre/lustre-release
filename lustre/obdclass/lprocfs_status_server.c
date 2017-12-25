@@ -624,7 +624,13 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 			OBD_FREE(buf, size);
 
 		if (likely(count > 0))
-			return 0;
+			goto out;
+	}
+
+	/* recovery won't start until the clients connect */
+	if (obd->obd_recovery_start == 0) {
+		seq_printf(m, "WAITING_FOR_CLIENTS\n");
+		goto out;
 	}
 
 	seq_printf(m, "RECOVERING\n");
