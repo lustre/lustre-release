@@ -2106,7 +2106,9 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 
 put_conn:
 	if (unlikely(ktime_get_real_seconds() > request->rq_deadline)) {
-		DEBUG_REQ(D_WARNING, request, "Request took longer than estimated (%lld:%llds); client may timeout.",
+		DEBUG_REQ(D_WARNING, request,
+			  "Request took longer than estimated (%lld:%llds); "
+			  "client may timeout.",
 			  request->rq_deadline -
 			  request->rq_arrival_time.tv_sec,
 			  ktime_get_real_seconds() - request->rq_deadline);
@@ -2115,40 +2117,42 @@ put_conn:
 	work_end = ktime_get_real();
 	timediff_usecs = ktime_us_delta(work_end, work_start);
 	arrived_usecs = ktime_us_delta(work_end, arrived);
-	CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc %s:%s+%d:%d:x%llu:%s:%d Request procesed in %lldus (%lldus total) trans %llu rc %d/%d\n",
-		current_comm(),
-		(request->rq_export ?
-		 (char *)request->rq_export->exp_client_uuid.uuid : "0"),
-                (request->rq_export ?
-		 atomic_read(&request->rq_export->exp_refcount) : -99),
-                lustre_msg_get_status(request->rq_reqmsg),
-                request->rq_xid,
-                libcfs_id2str(request->rq_peer),
-                lustre_msg_get_opc(request->rq_reqmsg),
-		timediff_usecs,
-		arrived_usecs,
-                (request->rq_repmsg ?
-                 lustre_msg_get_transno(request->rq_repmsg) :
-                 request->rq_transno),
-                request->rq_status,
-                (request->rq_repmsg ?
-                 lustre_msg_get_status(request->rq_repmsg) : -999));
-        if (likely(svc->srv_stats != NULL && request->rq_reqmsg != NULL)) {
-                __u32 op = lustre_msg_get_opc(request->rq_reqmsg);
-                int opc = opcode_offset(op);
-                if (opc > 0 && !(op == LDLM_ENQUEUE || op == MDS_REINT)) {
-                        LASSERT(opc < LUSTRE_MAX_OPCODES);
-                        lprocfs_counter_add(svc->srv_stats,
-                                            opc + EXTRA_MAX_OPCODES,
+	CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid+ref:pid:xid:nid:opc "
+	       "%s:%s+%d:%d:x%llu:%s:%d Request processed in %lldus "
+	       "(%lldus total) trans %llu rc %d/%d\n",
+	       current_comm(),
+	       (request->rq_export ?
+	       (char *)request->rq_export->exp_client_uuid.uuid : "0"),
+	       (request->rq_export ?
+	       atomic_read(&request->rq_export->exp_refcount) : -99),
+	       lustre_msg_get_status(request->rq_reqmsg),
+	       request->rq_xid,
+	       libcfs_id2str(request->rq_peer),
+	       lustre_msg_get_opc(request->rq_reqmsg),
+	       timediff_usecs,
+	       arrived_usecs,
+	       (request->rq_repmsg ?
+	       lustre_msg_get_transno(request->rq_repmsg) :
+	       request->rq_transno),
+	       request->rq_status,
+	       (request->rq_repmsg ?
+	       lustre_msg_get_status(request->rq_repmsg) : -999));
+	if (likely(svc->srv_stats != NULL && request->rq_reqmsg != NULL)) {
+		__u32 op = lustre_msg_get_opc(request->rq_reqmsg);
+		int opc = opcode_offset(op);
+		if (opc > 0 && !(op == LDLM_ENQUEUE || op == MDS_REINT)) {
+			LASSERT(opc < LUSTRE_MAX_OPCODES);
+			lprocfs_counter_add(svc->srv_stats,
+					    opc + EXTRA_MAX_OPCODES,
 					    timediff_usecs);
-                }
-        }
-        if (unlikely(request->rq_early_count)) {
-                DEBUG_REQ(D_ADAPTTO, request,
+		}
+	}
+	if (unlikely(request->rq_early_count)) {
+		DEBUG_REQ(D_ADAPTTO, request,
 			  "sent %d early replies before finishing in %llds",
-                          request->rq_early_count,
+			  request->rq_early_count,
 			  arrived_usecs / USEC_PER_SEC);
-        }
+	}
 
 	ptlrpc_server_finish_active_request(svcpt, request);
 
