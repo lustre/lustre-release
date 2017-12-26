@@ -876,8 +876,7 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 		/* page list is not contiguous now, commit it now */
 		unplug = true;
 	}
-	if (unplug ||
-	    file->f_flags & O_SYNC || IS_SYNC(file_inode(file)))
+	if (unplug || io->u.ci_rw.rw_sync)
 		result = vvp_io_write_commit(env, io);
 
 	if (result < 0)
