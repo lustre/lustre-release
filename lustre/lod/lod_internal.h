@@ -703,6 +703,7 @@ __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
 				  bool is_dir);
 __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
 			   __u16 stripe_count);
+void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod);
 
 /* lproc_lod.c */
 int lod_procfs_init(struct lod_device *lod);

@@ -5574,6 +5574,149 @@ static void lod_stale_components(struct lod_object *lo, int primary,
 	}
 }
 
+/**
+ * check an OST's availability
+ * \param[in] env	execution environment
+ * \param[in] lo	lod object
+ * \param[in] dt	dt object
+ * \param[in] index	mirror index
+ *
+ * \retval	negative if failed
+ * \retval	1 if \a dt is available
+ * \retval	0 if \a dt is not available
+ */
+static inline int lod_check_ost_avail(const struct lu_env *env,
+				      struct lod_object *lo,
+				      struct dt_object *dt, int index)
+{
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lod_tgt_desc *ost;
+	__u32 idx;
+	int type = LU_SEQ_RANGE_OST;
+	int rc;
+
+	rc = lod_fld_lookup(env, lod, lu_object_fid(&dt->do_lu), &idx, &type);
+	if (rc < 0) {
+		CERROR("%s: can't locate "DFID":rc = %d\n",
+		       lod2obd(lod)->obd_name, PFID(lu_object_fid(&dt->do_lu)),
+		       rc);
+		return rc;
+	}
+
+	ost = OST_TGT(lod, idx);
+	if (ost->ltd_statfs.os_state &
+		(OS_STATE_READONLY | OS_STATE_ENOSPC | OS_STATE_ENOINO) ||
+	    ost->ltd_active == 0) {
+		CDEBUG(D_LAYOUT, DFID ": mirror %d OST%d unavail, rc = %d\n",
+		       PFID(lod_object_fid(lo)), index, idx, rc);
+		return 0;
+	}
+
+	return 1;
+}
+
+/**
+ * Pick primary mirror for write
+ * \param[in] env	execution environment
+ * \param[in] lo	object
+ * \param[in] extent	write range
+ */
+static int lod_primary_pick(const struct lu_env *env, struct lod_object *lo,
+			    struct lu_extent *extent)
+{
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	unsigned int seq = 0;
+	struct lod_layout_component *lod_comp;
+	int i, j, rc;
+	int picked = -1, second_pick = -1, third_pick = -1;
+	ENTRY;
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_FLR_RANDOM_PICK_MIRROR)) {
+		get_random_bytes(&seq, sizeof(seq));
+		seq %= lo->ldo_mirror_count;
+	}
+
+	/**
+	 * Pick a mirror as the primary, and check the availability of OSTs.
+	 *
+	 * This algo can be revised later after knowing the topology of
+	 * cluster.
+	 */
+	lod_qos_statfs_update(env, lod);
+	for (i = 0; i < lo->ldo_mirror_count; i++) {
+		bool ost_avail = true;
+		int index = (i + seq) % lo->ldo_mirror_count;
+
+		if (lo->ldo_mirrors[index].lme_stale) {
+			CDEBUG(D_LAYOUT, DFID": mirror %d stale\n",
+			       PFID(lod_object_fid(lo)), index);
+			continue;
+		}
+
+		/* 2nd pick is for the primary mirror containing unavail OST */
+		if (lo->ldo_mirrors[index].lme_primary && second_pick < 0)
+			second_pick = index;
+
+		/* 3rd pick is for non-primary mirror containing unavail OST */
+		if (second_pick < 0 && third_pick < 0)
+			third_pick = index;
+
+		/**
+		 * we found a non-primary 1st pick, we'd like to find a
+		 * potential pirmary mirror.
+		 */
+		if (picked >= 0 && !lo->ldo_mirrors[index].lme_primary)
+			continue;
+
+		/* check the availability of OSTs */
+		lod_foreach_mirror_comp(lod_comp, lo, index) {
+			if (!lod_comp_inited(lod_comp) || !lod_comp->llc_stripe)
+				continue;
+
+			for (j = 0; j < lod_comp->llc_stripe_count; j++) {
+				struct dt_object *dt = lod_comp->llc_stripe[j];
+
+				rc = lod_check_ost_avail(env, lo, dt, index);
+				if (rc < 0)
+					RETURN(rc);
+
+				ost_avail = !!rc;
+				if (!ost_avail)
+					break;
+			} /* for all dt object in one component */
+			if (!ost_avail)
+				break;
+		} /* for all components in a mirror */
+
+		/**
+		 * the OSTs where allocated objects locates in the components
+		 * of the mirror are available.
+		 */
+		if (!ost_avail)
+			continue;
+
+		/* this mirror has all OSTs available */
+		picked = index;
+
+		/**
+		 * primary with all OSTs are available, this is the perfect
+		 * 1st pick.
+		 */
+		if (lo->ldo_mirrors[index].lme_primary)
+			break;
+	} /* for all mirrors */
+
+	/* failed to pick a sound mirror, lower our expectation */
+	if (picked < 0)
+		picked = second_pick;
+	if (picked < 0)
+		picked = third_pick;
+	if (picked < 0)
+		RETURN(-ENODATA);
+
+	RETURN(picked);
+}
+
 static int lod_declare_update_rdonly(const struct lu_env *env,
 		struct lod_object *lo, struct md_layout_change *mlc,
 		struct thandle *th)
@@ -5583,9 +5726,7 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 	struct lod_layout_component *lod_comp;
 	struct layout_intent *layout = mlc->mlc_intent;
 	struct lu_extent extent = layout->li_extent;
-	unsigned int seq = 0;
 	int picked;
-	int i;
 	int rc;
 	ENTRY;
 
@@ -5596,33 +5737,9 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 	CDEBUG(D_LAYOUT, DFID": trying to write :"DEXT"\n",
 	       PFID(lod_object_fid(lo)), PEXT(&extent));
 
-	if (OBD_FAIL_CHECK(OBD_FAIL_FLR_RANDOM_PICK_MIRROR)) {
-		get_random_bytes(&seq, sizeof(seq));
-		seq %= lo->ldo_mirror_count;
-	}
-
-	/**
-	 * Pick a mirror as the primary.
-	 * Now it only picks the first mirror that has primary flag set and
-	 * doesn't have any stale components. This algo should be revised
-	 * later after knowing the topology of cluster or the availability of
-	 * OSTs.
-	 */
-	for (picked = -1, i = 0; i < lo->ldo_mirror_count; i++) {
-		int index = (i + seq) % lo->ldo_mirror_count;
-
-		if (!lo->ldo_mirrors[index].lme_stale) {
-			if (lo->ldo_mirrors[index].lme_primary) {
-				picked = index;
-				break;
-			}
-
-			if (picked < 0)
-				picked = index;
-		}
-	}
-	if (picked < 0) /* failed to pick a primary */
-		RETURN(-ENODATA);
+	picked = lod_primary_pick(env, lo, &extent);
+	if (picked < 0)
+		RETURN(picked);
 
 	CDEBUG(D_LAYOUT, DFID": picked mirror %u as primary\n",
 	       PFID(lod_object_fid(lo)), lo->ldo_mirrors[picked].lme_id);
@@ -5653,9 +5770,6 @@ static int lod_declare_update_rdonly(const struct lu_env *env,
 
 		if (lod_comp_inited(lod_comp))
 			continue;
-
-		CDEBUG(D_LAYOUT, "instantiate: %u / %u\n",
-		       i, lod_comp_index(lo, lod_comp));
 
 		info->lti_comp_idx[info->lti_count++] =
 						lod_comp_index(lo, lod_comp);

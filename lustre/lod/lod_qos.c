@@ -259,8 +259,7 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
  * \param[in] env	execution environment for this thread
  * \param[in] lod	LOD device
  */
-static void lod_qos_statfs_update(const struct lu_env *env,
-				  struct lod_device *lod)
+void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod)
 {
 	struct obd_device *obd = lod2obd(lod);
 	struct ost_pool *osts = &(lod->lod_pool_info);

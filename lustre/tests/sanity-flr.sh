@@ -1340,8 +1340,9 @@ test_40() {
 	for ops in "conv=notrunc" ""; do
 		rm -f $tf
 
-		$LFS mirror create -N -E2m -E4m -E-1 -N -E1m -E2m -E4m -E-1 \
-			$tf || error "create PFLR file $tf failed"
+		$LFS mirror create -N -E2m -E4m -E-1  --flags=prefer \
+				-N -E1m -E2m -E4m -E-1 $tf ||
+			error "create PFLR file $tf failed"
 		dd if=/dev/zero of=$tf $ops bs=1M seek=2 count=1 ||
 			error "write PFLR file $tf failed"
 
@@ -1358,7 +1359,7 @@ test_40() {
 		# the 2nd component (in mirror 1) should be inited
 		verify_comp_attr lcme_flags $tf 0x10002 init
 		# the 3rd component (in mirror 1) should be uninited
-		verify_comp_attr lcme_flags $tf 0x10003 0
+		verify_comp_attr lcme_flags $tf 0x10003 prefer
 		# the 4th component (in mirror 2) should be inited
 		verify_comp_attr lcme_flags $tf 0x20004 init
 		# the 5th component (in mirror 2) should be uninited
@@ -1516,6 +1517,77 @@ test_42() {
 		      "${mirror_array[-1]} should succeed"
 }
 run_test 42 "lfs mirror verify"
+
+# inactivate one OST && write && restore the OST
+write_file_43() {
+	local file=$1
+	local ost=$2
+	local PARAM="osc.${FSNAME}-OST000${ost}-osc-M*.active"
+	local wait
+
+	wait=$(do_facet $SINGLEMDS \
+		"$LCTL get_param -n lod.*MDT0000-*.qos_maxage")
+	wait=${wait%%[^0-9]*}
+
+	echo "deactivate OST$ost, waiting for $((wait*2)) seconds"
+	$(do_facet $SINGLEMDS "$LCTL set_param -n $PARAM 0")
+	# lod_qos_statfs_update needs 2*$wait seconds to refresh targets statfs
+	sleep $(($wait * 2))
+	echo "write $file"
+	dd if=/dev/zero of=$file bs=1M count=1 || error "write $file failed"
+	echo "restore activating OST$ost, waiting for $((wait*2)) seconds"
+	$(do_facet $SINGLEMDS "$LCTL set_param -n $PARAM 1")
+	sleep $((wait * 2))
+
+	local flags=$($LFS getstripe -v $file | awk '/lcm_flags:/ { print $2 }')
+	[ $flags = wp ] || error "file mirror state $flags != wp"
+}
+
+test_43() {
+	[ $OSTCOUNT -lt 3 ] && skip "needs >= 3 OSTs" && return
+
+	local tf=$DIR/$tfile
+	local flags
+
+	rm -f $tf
+	##   mirror 0  ost (0, 1)
+	##   mirror 1  ost (1, 2)
+	##   mirror 2  ost (2, 0)
+	$LFS mirror create -N -Eeof -c2 -o0,1 -N -Eeof -c2 -o1,2 \
+		-N -Eeof -c2 -o2,0 $tf ||
+		error "create 3 mirrors file $tf failed"
+
+	################## OST0 ###########################################
+	write_file_43 $tf 0
+	verify_comp_attr lcme_flags $tf 0x10001 init,stale
+	verify_comp_attr lcme_flags $tf 0x20002 init
+	verify_comp_attr lcme_flags $tf 0x30003 init,stale
+
+	# resync
+	echo "resync $tf"
+	$LFS mirror resync $tf
+	flags=$($LFS getstripe -v $tf | awk '/lcm_flags:/ { print $2 }')
+	[ $flags = ro ] || error "file mirror state $flags != ro"
+
+	################## OST1 ###########################################
+	write_file_43 $tf 1
+	verify_comp_attr lcme_flags $tf 0x10001 init,stale
+	verify_comp_attr lcme_flags $tf 0x20002 init,stale
+	verify_comp_attr lcme_flags $tf 0x30003 init
+
+	# resync
+	echo "resync $tf"
+	$LFS mirror resync $tf
+	flags=$($LFS getstripe -v $tf | awk '/lcm_flags:/ { print $2 }')
+	[ $flags = ro ] || error "file mirror state $flags != ro"
+
+	################## OST2 ###########################################
+	write_file_43 $tf 2
+	verify_comp_attr lcme_flags $tf 0x10001 init
+	verify_comp_attr lcme_flags $tf 0x20002 init,stale
+	verify_comp_attr lcme_flags $tf 0x30003 init,stale
+}
+run_test 43 "mirror pick on write"
 
 test_44() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
