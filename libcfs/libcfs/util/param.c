@@ -38,6 +38,8 @@
 #include <unistd.h>
 #include <linux/limits.h>
 #include <libcfs/util/string.h>
+#include <sys/vfs.h>
+#include <linux/magic.h>
 
 /**
  * Get parameter path matching the pattern
@@ -67,12 +69,18 @@ cfs_get_param_paths(glob_t *paths, const char *pattern, ...)
 	static bool test_mounted = false;
 	size_t len = strlen(path);
 	char buf[PATH_MAX];
+	struct statfs statfsbuf;
 	va_list args;
 	int rc;
+
 
 	if (test_mounted)
 		goto skip_mounting;
 	test_mounted = true;
+
+	rc = statfs("/sys/kernel/debug/", &statfsbuf);
+	if (rc == 0 && statfsbuf.f_type == DEBUGFS_MAGIC)
+		goto skip_mounting;
 
 	if (mount("none", "/sys/kernel/debug", "debugfs", 0, "") == -1) {
 		/* Already mounted or don't have permission to mount is okay */
