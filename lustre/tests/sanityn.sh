@@ -3517,6 +3517,26 @@ test_77k() {
 run_test 77k "check the extended TBF policy with NID/JobID/OPCode expression"
 
 test_77l() {
+	[[ $(lustre_version_code ost1) -ge $(version_code 2.10.3) ]] ||
+		{ skip "Need OST version at least 2.10.3"; return 0; }
+
+	do_facet ost1 lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ nid"
+	do_facet ost1 lctl set_param ost.OSS.ost_io.nrs_policies="tbf"
+
+	local output=$(do_facet ost1 lctl get_param \
+			ost.OSS.ost_io.nrs_policies | \
+			awk '/name: tbf/ {print;exit}' | \
+			awk -F ': ' '{print $2}')
+
+	if [ "$output" != "tbf" ]; then
+		error "The generic TBF output is '$output', not 'tbf'"
+	fi
+
+	do_facet ost1 lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
+}
+run_test 77l "check the output of NRS policies for generic TBF"
+
+test_77m() {
 	if [ $(lustre_version_code ost1) -lt $(version_code 2.9.54) ]; then
 		skip "Need OST version at least 2.9.54"
 		return 0
@@ -3566,7 +3586,7 @@ test_77l() {
 
 	return 0
 }
-run_test 77l "check NRS Delay slows write RPC processing"
+run_test 77m "check NRS Delay slows write RPC processing"
 
 test_78() { #LU-6673
 	local server_version=$(lustre_version_code ost1)
