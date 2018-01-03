@@ -893,13 +893,9 @@ test_23a() {	# was test_23
 		"MOUNT_LUSTRE_PID $MOUNT_LUSTRE_PID still not killed in $WAIT secs"
 		ps -ef | grep mount
 	fi
-	stop_mds || error "stopping MDSes failed"
-	stop_ost || error "stopping OSSes failed"
+	cleanup || error "cleanup failed with rc $?"
 }
 run_test 23a "interrupt client during recovery mount delay"
-
-umount_client $MOUNT
-cleanup_nocli
 
 test_23b() {    # was test_23
 	start_mds || error "MDS start failed"
@@ -3264,11 +3260,9 @@ test_43b() { # LU-5690
 		--reformat $fs2mgsdev $fs2mgsvdev || error "add fs2mgs failed"
 	start $fs2mgs $fs2mgsdev $MGS_MOUNT_OPTS  || error "start fs2mgs failed"
 	stop $fs2mgs -f || error "stop fs2mgs failed"
+	cleanup || error "cleanup failed with $?"
 }
 run_test 43b "parse nosquash_nids with commas in expr_list"
-
-umount_client $MOUNT
-cleanup_nocli
 
 test_44() { # 16317
 	setup
