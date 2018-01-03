@@ -292,6 +292,8 @@ static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy, char *arg)
 			CERROR("NRS: arg '%s' is too long\n", arg);
 			GOTO(out, rc = -E2BIG);
 		}
+	} else {
+		policy->pol_arg[0] = '\0';
 	}
 
 	policy->pol_state = NRS_POL_STATE_STARTED;
