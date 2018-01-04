@@ -14,16 +14,26 @@ source ${LBUILD_DIR}/lbuild-sles
 kernel_srpm_location() {
 
     local site
+    local kminor
+    local kdir
     case $lnxmaj in
     3.12)
 	site="http://mgmt/cobbler/repo_mirror/updates-sles12.1-src"
 	;;
     4.4)
-	site="http://mgmt/cobbler/repo_mirror/updates-sles12.2-src"
-	if [ ${lnxmin##.} -eq 82 -o ${lnxmin##.} -gt 91 ]
+	kminor=${lnxmin##.}
+	kdir=updates-sles12.2-src
+	if [ $kminor -eq 103 ]
 	then
-		site="http://mgmt/cobbler/repo_mirror/updates-sles12.3-src"
+		if [ ${lnxrel%%.*} -lt 90 ]
+		then
+			kdir=updates-sles12.3-src
+		fi
+	elif [ $kminor -eq 82 -o $kminor -gt 91 ]
+	then
+		kdir=updates-sles12.3-src
 	fi
+	site="http://mgmt/cobbler/repo_mirror/$kdir"
 	;;
     esac
     echo "$site/src/"
@@ -141,16 +151,26 @@ find_linux_rpm-sles12() {
 		wanted_kernel="${lnxmaj}${lnxmin}-${lnxrel}${rpmfix_diff}"
 	fi
     local site
+    local kminor
+    local kdir
     case $lnxmaj in
     3.12)
 	site="http://mgmt/cobbler/repo_mirror/updates-sles12.1-x86_64"
 	;;
     4.4)
-	site="http://mgmt/cobbler/repo_mirror/updates-sles12.2-x86_64"
-	if [ ${lnxmin##.} -eq 82 -o ${lnxmin##.} -gt 91 ]
+	kminor=${lnxmin##.}
+	kdir=updates-sles12.2-x86_64
+	if [ $kminor -eq 103 ]
 	then
-		site="http://mgmt/cobbler/repo_mirror/updates-sles12.3-x86_64"
+		if [ ${lnxrel%%.*} -lt 90 ]
+		then
+			kdir=updates-sles12.3-x86_64
+		fi
+	elif [ $kminor -eq 82 -o $kminor -gt 91 ]
+	then
+		kdir=updates-sles12.3-x86_64
 	fi
+	site="http://mgmt/cobbler/repo_mirror/$kdir"
 	;;
     esac
     if [ ! -f $pathtorpms/kernel-default-devel-$wanted_kernel.$(resolve_arch $TARGET_ARCH).rpm ]; then
