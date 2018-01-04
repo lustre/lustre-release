@@ -119,6 +119,24 @@ test_2b() {
 }
 run_test 2b "touch"
 
+test_2c() {
+	replay_barrier $SINGLEMDS
+	$LFS setstripe -c $OSTCOUNT $DIR/$tfile
+	fail $SINGLEMDS
+	$CHECKSTAT -t file $DIR/$tfile ||
+		error "$CHECKSTAT $DIR/$tfile check failed"
+}
+run_test 2c "setstripe replay"
+
+test_2d() {
+	replay_barrier $SINGLEMDS
+	$LFS setdirstripe -i 0 -c $MDSCOUNT $DIR/$tdir
+	fail $SINGLEMDS
+	$CHECKSTAT -t dir $DIR/$tdir ||
+		error "$CHECKSTAT $DIR/$tdir check failed"
+}
+run_test 2d "setdirstripe replay"
+
 test_3a() {
 	local file=$DIR/$tfile
 	replay_barrier $SINGLEMDS

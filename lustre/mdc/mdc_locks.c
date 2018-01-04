@@ -300,8 +300,14 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 
         req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
                              op_data->op_namelen + 1);
-	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
+	if (cl_is_lov_delay_create(it->it_flags)) {
+		/* open(O_LOV_DELAY_CREATE) won't pack lmm */
+		LASSERT(lmmsize == 0);
+		req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT, 0);
+	} else {
+		req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
 			     max(lmmsize, obddev->u.cli.cl_default_mds_easize));
+	}
 
 	req_capsule_set_size(&req->rq_pill, &RMF_FILE_SECCTX_NAME,
 			     RCL_CLIENT, op_data->op_file_secctx_name != NULL ?

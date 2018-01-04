@@ -2249,7 +2249,7 @@ static int mdd_declare_create_object(const struct lu_env *env,
 		GOTO(out, rc);
 
 	/* replay case, create LOV EA from client data */
-	if (spec->no_create ||
+	if ((!(spec->sp_cr_flags & MDS_OPEN_DELAY_CREATE) && spec->no_create) ||
 	    (spec->sp_cr_flags & MDS_OPEN_HAS_EA && S_ISREG(attr->la_mode))) {
 		buf = mdd_buf_get_const(env, spec->u.sp_ea.eadata,
 					spec->u.sp_ea.eadatalen);
