@@ -70,6 +70,7 @@
 #include <linux/kernel.h>
 #include <linux/version.h>
 #include <linux/jiffies.h>
+#include <linux/hrtimer.h>
 #include <linux/types.h>
 #include <linux/time.h>
 #include <asm/div64.h>
@@ -184,6 +185,13 @@ static inline u64 ktime_get_real_ns(void)
 	return ktime_to_ns(ktime_get_real());
 }
 #endif /* NEED_KTIME_GET_REAL_NS */
+
+#ifndef HAVE_KTIME_MS_DELTA
+static inline s64 ktime_ms_delta(const ktime_t later, const ktime_t earlier)
+{
+	return ktime_to_ms(ktime_sub(later, earlier));
+}
+#endif /* HAVE_KTIME_MS_DELTA */
 
 #ifndef HAVE_KTIME_TO_TIMESPEC64
 static inline struct timespec64 ktime_to_timespec64(ktime_t kt)

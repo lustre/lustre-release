@@ -301,6 +301,7 @@ AS_IF([test "x$enable_crc32c_crypto" = xyes], [
 AC_DEFUN([LIBCFS_KTIME_GET_TS64],[
 LB_CHECK_COMPILE([does function 'ktime_get_ts64' exist],
 ktime_get_ts64, [
+	#include <linux/hrtimer.h>
 	#include <linux/ktime.h>
 ],[
 	struct timespec64 *ts = NULL;
@@ -335,6 +336,7 @@ kernel_param_ops, [
 AC_DEFUN([LIBCFS_KTIME_ADD],[
 LB_CHECK_COMPILE([does function 'ktime_add' exist],
 ktime_add, [
+	#include <linux/hrtimer.h>
 	#include <linux/ktime.h>
 ],[
 	ktime_t start = ktime_set(0, 0);
@@ -354,6 +356,7 @@ ktime_add, [
 AC_DEFUN([LIBCFS_KTIME_AFTER],[
 LB_CHECK_COMPILE([does function 'ktime_after' exist],
 ktime_after, [
+	#include <linux/hrtimer.h>
 	#include <linux/ktime.h>
 ],[
 	ktime_t start = ktime_set(0, 0);
@@ -373,6 +376,7 @@ ktime_after, [
 AC_DEFUN([LIBCFS_KTIME_BEFORE],[
 LB_CHECK_COMPILE([does function 'ktime_before' exist],
 ktime_before, [
+	#include <linux/hrtimer.h>
 	#include <linux/ktime.h>
 ],[
 	ktime_t start = ktime_set(0, 0);
@@ -391,6 +395,7 @@ ktime_before, [
 AC_DEFUN([LIBCFS_KTIME_COMPARE],[
 LB_CHECK_COMPILE([does function 'ktime_compare' exist],
 ktime_compare, [
+	#include <linux/hrtimer.h>
 	#include <linux/ktime.h>
 ],[
 	ktime_t start = ktime_set(0, 0);
@@ -476,6 +481,7 @@ ktime_get_real_ts64, [
 AC_DEFUN([LIBCFS_KTIME_GET_REAL_SECONDS],[
 LB_CHECK_COMPILE([does function 'ktime_get_real_seconds' exist],
 ktime_get_real_seconds, [
+	#include <linux/hrtimer.h>
 	#include <linux/ktime.h>
 ],[
 	time64_t now;
@@ -493,6 +499,7 @@ ktime_get_real_seconds, [
 AC_DEFUN([LIBCFS_KTIME_GET_NS],[
 LB_CHECK_COMPILE([does function 'ktime_get_ns' exist],
 ktime_get_ns, [
+	#include <linux/hrtimer.h>
 	#include <linux/ktime.h>
 ],[
 	u64 nanoseconds;
@@ -510,6 +517,7 @@ ktime_get_ns, [
 AC_DEFUN([LIBCFS_KTIME_GET_REAL_NS],[
 LB_CHECK_COMPILE([does function 'ktime_get_real_ns' exist],
 ktime_get_real_ns, [
+	#include <linux/hrtimer.h>
 	#include <linux/ktime.h>
 ],[
 	u64 nanoseconds;
@@ -527,6 +535,7 @@ ktime_get_real_ns, [
 AC_DEFUN([LIBCFS_KTIME_TO_TIMESPEC64],[
 LB_CHECK_COMPILE([does function 'ktime_to_timespec64' exist],
 ktime_to_timespec64, [
+	#include <linux/hrtimer.h>
 	#include <linux/ktime.h>
 ],[
 	struct timespec64 ts;
@@ -611,6 +620,25 @@ cpumap_print_to_pagebuf, [
 		[cpumap_print_to_pagebuf is available])
 ])
 ]) # LIBCFS_HAVE_CPUMASK_PRINT_TO_PAGEBUF
+
+#
+# Kernel version 4.0 commit 41fbf3b39d5eca01527338b4d0ee15ee1ae1023c
+# introduced the helper function ktime_ms_delta.
+#
+AC_DEFUN([LIBCFS_KTIME_MS_DELTA],[
+LB_CHECK_COMPILE([does function 'ktime_ms_delta' exist],
+ktime_ms_delta, [
+	#include <linux/ktime.h>
+],[
+	ktime_t start = ktime_set(0, 0);
+	ktime_t end = start;
+
+	ktime_ms_delta(start, end);
+],[
+	AC_DEFINE(HAVE_KTIME_MS_DELTA, 1,
+		['ktime_ms_delta' is available])
+])
+]) # LIBCFS_KTIME_MS_DELTA
 
 #
 # Kernel version 4.1 commit b51d23e4e9fea6f264d39535c2a62d1f51e7ccc3
@@ -846,6 +874,8 @@ LIBCFS_TIMESPEC64_TO_KTIME
 # 3.19
 LIBCFS_KTIME_GET_SECONDS
 LIBCFS_HAVE_CPUMASK_PRINT_TO_PAGEBUF
+# 4.0
+LIBCFS_KTIME_MS_DELTA
 # 4.1
 LIBCFS_KERNEL_PARAM_LOCK
 # 4.2
