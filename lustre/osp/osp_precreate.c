@@ -69,8 +69,7 @@
  */
 static inline int osp_statfs_need_update(struct osp_device *d)
 {
-	return !cfs_time_before(cfs_time_current(),
-				d->opd_statfs_fresh_till);
+	return !ktime_before(ktime_get(), d->opd_statfs_fresh_till);
 }
 
 /*
@@ -118,9 +117,10 @@ static int osp_statfs_interpret(const struct lu_env *env,
 				struct ptlrpc_request *req,
 				union ptlrpc_async_args *aa, int rc)
 {
-	struct obd_import	*imp = req->rq_import;
-	struct obd_statfs	*msfs;
-	struct osp_device	*d;
+	struct obd_import *imp = req->rq_import;
+	struct obd_statfs *msfs;
+	struct osp_device *d;
+	u64 maxage_ns;
 
 	ENTRY;
 
@@ -140,8 +140,10 @@ static int osp_statfs_interpret(const struct lu_env *env,
 	osp_pre_update_status(d, rc);
 
 	/* schedule next update */
-	d->opd_statfs_fresh_till = cfs_time_shift(d->opd_statfs_maxage);
-	mod_timer(&d->opd_statfs_timer, d->opd_statfs_fresh_till);
+	maxage_ns = d->opd_statfs_maxage * NSEC_PER_SEC;
+	d->opd_statfs_fresh_till = ktime_add_ns(ktime_get(), maxage_ns);
+	mod_timer(&d->opd_statfs_timer,
+		  jiffies + cfs_time_seconds(d->opd_statfs_maxage));
 	d->opd_statfs_update_in_progress = 0;
 
 	CDEBUG(D_CACHE, "updated statfs %p\n", d);
@@ -170,10 +172,11 @@ out:
  */
 static int osp_statfs_update(const struct lu_env *env, struct osp_device *d)
 {
+	u64 expire = obd_timeout * 1000 * NSEC_PER_SEC;
 	struct ptlrpc_request	*req;
 	struct obd_import	*imp;
 	union ptlrpc_async_args	*aa;
-	int			 rc;
+	int rc;
 
 	ENTRY;
 
@@ -203,13 +206,13 @@ static int osp_statfs_update(const struct lu_env *env, struct osp_device *d)
 	 * no updates till reply
 	 */
 	del_timer(&d->opd_statfs_timer);
-	d->opd_statfs_fresh_till = cfs_time_shift(obd_timeout * 1000);
+	d->opd_statfs_fresh_till = ktime_add_ns(ktime_get(), expire);
 	d->opd_statfs_update_in_progress = 1;
 
 	ptlrpcd_add_req(req);
 
 	/* we still want to sync changes if no new changes are coming */
-	if (cfs_time_before(cfs_time_current(), d->opd_sync_next_commit_cb))
+	if (ktime_before(ktime_get(), d->opd_sync_next_commit_cb))
 		GOTO(out, rc);
 
 	if (atomic_read(&d->opd_sync_changes)) {
@@ -255,7 +258,7 @@ void osp_statfs_need_now(struct osp_device *d)
 		 * then we should poll OST immediately once object destroy
 		 * is replied
 		 */
-		d->opd_statfs_fresh_till = cfs_time_shift(-1);
+		d->opd_statfs_fresh_till = ktime_sub_ns(ktime_get(), NSEC_PER_SEC);
 		del_timer(&d->opd_statfs_timer);
 		wake_up(&d->opd_pre_waitq);
 	}
@@ -1380,9 +1383,9 @@ static int osp_precreate_timeout_condition(void *data)
  */
 int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 {
-	struct l_wait_info	 lwi;
-	cfs_time_t		 expire = cfs_time_shift(obd_timeout);
-	int			 precreated, rc, synced = 0;
+	time64_t expire = ktime_get_seconds() + obd_timeout;
+	struct l_wait_info lwi;
+	int precreated, rc, synced = 0;
 
 	ENTRY;
 
@@ -1461,9 +1464,9 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 		/* XXX: don't wake up if precreation is in progress */
 		wake_up(&d->opd_pre_waitq);
 
-		lwi = LWI_TIMEOUT(expire - cfs_time_current(),
-				osp_precreate_timeout_condition, d);
-		if (cfs_time_aftereq(cfs_time_current(), expire)) {
+		lwi = LWI_TIMEOUT(cfs_time_seconds(obd_timeout),
+				  osp_precreate_timeout_condition, d);
+		if (ktime_get_seconds() >= expire) {
 			rc = -ETIMEDOUT;
 			break;
 		}
@@ -1695,11 +1698,12 @@ int osp_init_precreate(struct osp_device *d)
 	/*
 	 * Initialize statfs-related things
 	 */
-	d->opd_statfs_maxage = 5; /* default update interval */
-	d->opd_statfs_fresh_till = cfs_time_shift(-1000);
-	CDEBUG(D_OTHER, "current %llu, fresh till %llu\n",
-	       (unsigned long long)cfs_time_current(),
-	       (unsigned long long)d->opd_statfs_fresh_till);
+	d->opd_statfs_maxage = 5; /* defaultupdate interval */
+	d->opd_statfs_fresh_till = ktime_sub_ns(ktime_get(),
+						1000 * NSEC_PER_SEC);
+	CDEBUG(D_OTHER, "current %lldns, fresh till %lldns\n",
+	       ktime_get_ns(),
+	       ktime_to_ns(d->opd_statfs_fresh_till));
 	setup_timer(&d->opd_statfs_timer, osp_statfs_timer_cb,
 		    (unsigned long)d);
 

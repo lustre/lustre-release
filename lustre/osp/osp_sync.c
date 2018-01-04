@@ -1396,8 +1396,8 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 	 * put a mark in the llog till which we'll be processing
 	 * old records restless
 	 */
-	d->opd_sync_generation.mnt_cnt = cfs_time_current();
-	d->opd_sync_generation.conn_cnt = cfs_time_current();
+	d->opd_sync_generation.mnt_cnt = ktime_get_ns();
+	d->opd_sync_generation.conn_cnt = ktime_get_ns();
 
 	osi->osi_hdr.lrh_type = LLOG_GEN_REC;
 	osi->osi_hdr.lrh_len = sizeof(osi->osi_gen);
@@ -1575,9 +1575,9 @@ static int osp_sync_add_commit_cb(const struct lu_env *env,
 	spin_unlock(&d->opd_sync_lock);
 
 	rc = dt_trans_cb_add(th, dcb);
-	CDEBUG(D_HA, "%s: add commit cb at %llu, next at %llu, rc = %d\n",
-	       d->opd_obd->obd_name, (unsigned long long) cfs_time_current(),
-	       (unsigned long long) d->opd_sync_next_commit_cb, rc);
+	CDEBUG(D_HA, "%s: add commit cb at %lluns, next at %lluns, rc = %d\n",
+	       d->opd_obd->obd_name, ktime_get_ns(),
+	       ktime_to_ns(d->opd_sync_next_commit_cb), rc);
 
 	if (likely(rc == 0)) {
 		lu_device_get(osp2lu_dev(d));
@@ -1592,16 +1592,17 @@ static int osp_sync_add_commit_cb(const struct lu_env *env,
 int osp_sync_add_commit_cb_1s(const struct lu_env *env, struct osp_device *d,
 			      struct thandle *th)
 {
+	ktime_t now = ktime_get();
 	bool add = false;
 
 	/* fast path */
-	if (cfs_time_before(cfs_time_current(), d->opd_sync_next_commit_cb))
+	if (ktime_before(now, d->opd_sync_next_commit_cb))
 		return 0;
 
 	spin_lock(&d->opd_sync_lock);
-	if (cfs_time_aftereq(cfs_time_current(), d->opd_sync_next_commit_cb)) {
+	if (ktime_before(d->opd_sync_next_commit_cb, now)) {
 		add = true;
-		d->opd_sync_next_commit_cb = cfs_time_shift(1);
+		d->opd_sync_next_commit_cb = ktime_add_ns(now, NSEC_PER_SEC);
 	}
 	spin_unlock(&d->opd_sync_lock);
 

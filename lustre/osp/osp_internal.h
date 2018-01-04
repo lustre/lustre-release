@@ -236,18 +236,18 @@ struct osp_device {
 	atomic_t			 opd_sync_barrier;
 	wait_queue_head_t		 opd_sync_barrier_waitq;
 	/* last generated id */
-	cfs_time_t			 opd_sync_next_commit_cb;
+	ktime_t				 opd_sync_next_commit_cb;
 	atomic_t			 opd_commits_registered;
 
 	/*
 	 * statfs related fields: OSP maintains it on its own
 	 */
 	struct obd_statfs		 opd_statfs;
-	cfs_time_t			 opd_statfs_fresh_till;
-	struct timer_list			 opd_statfs_timer;
+	ktime_t				 opd_statfs_fresh_till;
+	struct timer_list		 opd_statfs_timer;
 	int				 opd_statfs_update_in_progress;
 	/* how often to update statfs data */
-	int				 opd_statfs_maxage;
+	time64_t			 opd_statfs_maxage;
 
 	struct proc_dir_entry		*opd_symlink;
 

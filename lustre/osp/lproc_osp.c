@@ -578,7 +578,7 @@ static int osp_maxage_seq_show(struct seq_file *m, void *data)
 	if (osp == NULL)
 		return -EINVAL;
 
-	seq_printf(m, "%u\n", osp->opd_statfs_maxage);
+	seq_printf(m, "%lld\n", osp->opd_statfs_maxage);
 	return 0;
 }
 

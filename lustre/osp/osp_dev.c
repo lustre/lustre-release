@@ -795,11 +795,10 @@ static int osp_sync_timeout(void *data)
 static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 {
 	struct osp_device *d = dt2osp_dev(dev);
-	cfs_time_t	   expire;
 	struct l_wait_info lwi = { 0 };
+	time64_t start = ktime_get_seconds();
 	int recs, rc = 0;
-	unsigned long start = cfs_time_current();
-	__u64 old;
+	u64 old;
 
 	ENTRY;
 
@@ -821,8 +820,7 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	       atomic_read(&d->opd_async_updates_count));
 
 	/* make sure the connection is fine */
-	expire = cfs_time_shift(obd_timeout);
-	lwi = LWI_TIMEOUT(expire - cfs_time_current(), osp_sync_timeout, d);
+	lwi = LWI_TIMEOUT(cfs_time_seconds(obd_timeout), osp_sync_timeout, d);
 	rc = l_wait_event(d->opd_sync_barrier_waitq,
 			  atomic_read(&d->opd_async_updates_count) == 0,
 			  &lwi);
@@ -836,8 +834,7 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	while (atomic64_read(&d->opd_sync_processed_recs) < old + recs) {
 		__u64 last = atomic64_read(&d->opd_sync_processed_recs);
 		/* make sure the connection is fine */
-		expire = cfs_time_shift(obd_timeout);
-		lwi = LWI_TIMEOUT(expire - cfs_time_current(),
+		lwi = LWI_TIMEOUT(cfs_time_seconds(obd_timeout),
 				  osp_sync_timeout, d);
 		l_wait_event(d->opd_sync_barrier_waitq,
 			     atomic64_read(&d->opd_sync_processed_recs)
@@ -869,8 +866,7 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 	while (atomic_read(&d->opd_sync_rpcs_in_flight) > 0) {
 		old = atomic_read(&d->opd_sync_rpcs_in_flight);
 
-		expire = cfs_time_shift(obd_timeout);
-		lwi = LWI_TIMEOUT(expire - cfs_time_current(),
+		lwi = LWI_TIMEOUT(cfs_time_seconds(obd_timeout),
 				  osp_sync_timeout, d);
 		l_wait_event(d->opd_sync_barrier_waitq,
 			     atomic_read(&d->opd_sync_rpcs_in_flight) == 0,
@@ -893,8 +889,8 @@ out:
 	atomic_dec(&d->opd_sync_barrier);
 	osp_sync_check_for_work(d);
 
-	CDEBUG(D_CACHE, "%s: done in %lu: rc = %d\n", d->opd_obd->obd_name,
-	       cfs_time_current() - start, rc);
+	CDEBUG(D_CACHE, "%s: done in %lld: rc = %d\n", d->opd_obd->obd_name,
+	       ktime_get_seconds() - start, rc);
 
 	RETURN(rc);
 }
