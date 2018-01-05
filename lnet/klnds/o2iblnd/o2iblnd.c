@@ -1592,14 +1592,17 @@ static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo,
 		 */
 		frd->frd_mr = ib_alloc_mr(fpo->fpo_hdev->ibh_pd,
 #ifdef IB_MR_TYPE_SG_GAPS
-					  (dev_caps &
-						IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT) ?
+					  ((*kiblnd_tunables.kib_use_fastreg_gaps == 1) &&
+					   (dev_caps & IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT)) ?
 						IB_MR_TYPE_SG_GAPS :
 						IB_MR_TYPE_MEM_REG,
 #else
 						IB_MR_TYPE_MEM_REG,
 #endif
 					  LNET_MAX_PAYLOAD/PAGE_SIZE);
+		if ((*kiblnd_tunables.kib_use_fastreg_gaps == 1) &&
+		    (dev_caps & IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT))
+			CWARN("using IB_MR_TYPE_SG_GAPS, expect a performance drop\n");
 #endif
 		if (IS_ERR(frd->frd_mr)) {
 			rc = PTR_ERR(frd->frd_mr);

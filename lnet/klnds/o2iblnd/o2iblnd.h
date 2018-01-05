@@ -112,6 +112,7 @@ typedef struct
 	/* # threads on each CPT */
 	int		 *kib_nscheds;
 	int		 *kib_wrq_sge;		/* # sg elements per wrq */
+	int		 *kib_use_fastreg_gaps; /* enable discontiguous fastreg fragment support */
 } kib_tunables_t;
 
 extern kib_tunables_t  kiblnd_tunables;

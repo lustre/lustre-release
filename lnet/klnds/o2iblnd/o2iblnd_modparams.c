@@ -110,6 +110,10 @@ static int concurrent_sends;
 module_param(concurrent_sends, int, 0444);
 MODULE_PARM_DESC(concurrent_sends, "send work-queue sizing (obsolete)");
 
+static int use_fastreg_gaps;
+module_param(use_fastreg_gaps, int, 0444);
+MODULE_PARM_DESC(use_fastreg_gaps, "Enable discontiguous fastreg fragment support. Expect performance drop");
+
 /*
  * map_on_demand is a flag used to determine if we can use FMR or FastReg.
  * This is applicable for kernels which support global memory regions. For
@@ -196,6 +200,7 @@ kib_tunables_t kiblnd_tunables = {
 	.kib_use_priv_port	    = &use_privileged_port,
 	.kib_nscheds		    = &nscheds,
 	.kib_wrq_sge		    = &wrq_sge,
+	.kib_use_fastreg_gaps       = &use_fastreg_gaps,
 };
 
 static struct lnet_ioctl_config_o2iblnd_tunables default_tunables;

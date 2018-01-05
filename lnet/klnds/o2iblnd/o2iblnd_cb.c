@@ -567,7 +567,8 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, __u32 nob)
 	if ((dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_ENABLED) &&
 	    !(dev->ibd_dev_caps & IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT) &&
 	    tx->tx_gaps) {
-		CERROR("Using FastReg with no GAPS support, but tx has gaps\n");
+		CERROR("Using FastReg with no GAPS support, but tx has gaps. "
+		       "Try setting use_fastreg_gaps to 1\n");
 		return -EPROTONOSUPPORT;
 	}
 
