@@ -299,6 +299,8 @@ int jt_ptl_network(int argc, char **argv)
 	__u32 net = LNET_NIDNET(LNET_NID_ANY);
 	int rc;
 
+	fprintf(stderr, "This command has been deprecated. Plesae use 'lnetctl net add'\n");
+
 	if (argc != 2) {
 		fprintf(stderr, "usage: %s <net>|up|down\n", argv[0]);
 		return -1;
@@ -356,6 +358,8 @@ jt_ptl_list_nids(int argc, char **argv)
         int                      all = 0, return_nid = 0;
         int                      count;
         int                      rc;
+
+	fprintf(stderr, "This command has been deprecated. Plesae use 'lnetctl net show'\n");
 
         all = (argc == 2) && (strcmp(argv[1], "all") == 0);
         /* Hack to pass back value */
@@ -918,6 +922,8 @@ int jt_ptl_ping(int argc, char **argv)
         char                    *sep;
         int                      i;
 
+	fprintf(stderr, "This command has been deprecated. Plesae use 'lnetctl ping'\n");
+
         if (argc < 2) {
                 fprintf(stderr, "usage: %s id [timeout (secs)]\n", argv[0]);
                 return 0;
@@ -1222,6 +1228,8 @@ jt_ptl_print_routes (int argc, char **argv)
 	unsigned int              hops;
 	int                       alive;
 	unsigned int		  pri;
+
+	fprintf(stderr, "This command has been deprecated. Plesae use 'lnetctl route show'\n");
 
 	for (index = 0; ; index++) {
 		LIBCFS_IOC_INIT_V2(data, cfg_hdr);
