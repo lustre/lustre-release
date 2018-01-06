@@ -612,6 +612,14 @@ static void osd_conf_get(const struct lu_env *env,
 	param->ddp_max_extent_blks =
 		(1 << (DN_MAX_INDBLKSHIFT - SPA_BLKPTRSHIFT));
 	param->ddp_extent_tax = osd_blk_insert_cost(osd);
+
+	/* Preferred RPC size for efficient disk IO.  1MB shows good
+	 * all-around performance for ZFS, but use blocksize (recordsize)
+	 * by default if larger to avoid read-modify-write. */
+	if (osd->od_max_blksz > ONE_MB_BRW_SIZE)
+		param->ddp_brw_size = osd->od_max_blksz;
+	else
+		param->ddp_brw_size = ONE_MB_BRW_SIZE;
 }
 
 /*

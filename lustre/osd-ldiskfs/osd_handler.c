@@ -2120,6 +2120,16 @@ static void osd_conf_get(const struct lu_env *env,
 	else
 #endif
 		param->ddp_max_ea_size = sb->s_blocksize - ea_overhead;
+
+	/* Preferred RPC size for efficient disk IO.  4MB shows good
+	 * all-around performance for ldiskfs, but use bigalloc chunk size
+	 * by default if larger. */
+#if defined(LDISKFS_CLUSTER_SIZE)
+	if (LDISKFS_CLUSTER_SIZE(sb) > DT_DEF_BRW_SIZE)
+		param->ddp_brw_size = LDISKFS_CLUSTER_SIZE(sb);
+	else
+#endif
+		param->ddp_brw_size = DT_DEF_BRW_SIZE;
 }
 
 /*

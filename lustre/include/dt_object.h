@@ -84,7 +84,8 @@ struct dt_device_param {
 	unsigned	   ddp_max_extent_blks;
 	/* per-extent insertion overhead to be used by client for grant
 	 * calculation */
-	unsigned	   ddp_extent_tax;
+	unsigned int	   ddp_extent_tax;
+	unsigned int	   ddp_brw_size;	/* optimal RPC size */
 };
 
 /**
