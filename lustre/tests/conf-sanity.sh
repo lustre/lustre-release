@@ -2419,6 +2419,9 @@ test_32d() {
 run_test 32d "convert ff test"
 
 test_32e() {
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
+		{ skip "Need MDS version at least 2.10.56"; return 0; }
+
 	local tarballs
 	local tarball
 	local rc=0
