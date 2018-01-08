@@ -275,28 +275,52 @@ static int can_be_merged(struct bio *bio, sector_t sector)
 	return bio_end_sector(bio) == sector ? 1 : 0;
 }
 
+/*
+ * This function will change the data written, thus it should only be
+ * used when checking data integrity feature
+ */
+static void bio_integrity_fault_inject(struct bio *bio)
+{
+	struct bio_vec *bvec;
+	int i;
+	void *kaddr;
+	char *addr;
+
+	bio_for_each_segment_all(bvec, bio, i) {
+		struct page *page = bvec->bv_page;
+
+		kaddr = kmap(page);
+		addr = kaddr;
+		*addr = ~(*addr);
+		kunmap(page);
+		break;
+	}
+}
+
 static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                       struct osd_iobuf *iobuf)
 {
-	int            blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
-	struct page  **pages = iobuf->dr_pages;
-	int            npages = iobuf->dr_npages;
-	sector_t      *blocks = iobuf->dr_blocks;
-	int            total_blocks = npages * blocks_per_page;
-	int            sector_bits = inode->i_sb->s_blocksize_bits - 9;
-	unsigned int   blocksize = inode->i_sb->s_blocksize;
-	struct bio    *bio = NULL;
-	struct page   *page;
-	unsigned int   page_offset;
-	sector_t       sector;
-	int            nblocks;
-	int            block_idx;
-	int            page_idx;
-	int            i;
-	int            rc = 0;
+	int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
+	struct page **pages = iobuf->dr_pages;
+	int npages = iobuf->dr_npages;
+	sector_t *blocks = iobuf->dr_blocks;
+	int total_blocks = npages * blocks_per_page;
+	int sector_bits = inode->i_sb->s_blocksize_bits - 9;
+	unsigned int blocksize = inode->i_sb->s_blocksize;
+	struct bio *bio = NULL;
+	struct page *page;
+	unsigned int page_offset;
+	sector_t sector;
+	int nblocks;
+	int block_idx;
+	int page_idx;
+	int i;
+	int rc = 0;
+	bool fault_inject;
 	DECLARE_PLUG(plug);
 	ENTRY;
 
+	fault_inject = OBD_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT);
         LASSERT(iobuf->dr_npages == npages);
 
 	osd_brw_stats_update(osd, iobuf);
@@ -353,6 +377,16 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                                        bio_phys_segments(q, bio),
                                        queue_max_phys_segments(q),
 				       0, queue_max_hw_segments(q));
+				if (bio_integrity_enabled(bio)) {
+					if (bio_integrity_prep(bio)) {
+						bio_put(bio);
+						rc = -EIO;
+						goto out;
+					}
+					if (unlikely(fault_inject))
+						bio_integrity_fault_inject(bio);
+				}
+
 				record_start_io(iobuf, bi_size);
 				osd_submit_bio(iobuf->dr_rw, bio);
 			}
@@ -386,6 +420,16 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 	}
 
 	if (bio != NULL) {
+		if (bio_integrity_enabled(bio)) {
+			if (bio_integrity_prep(bio)) {
+				bio_put(bio);
+				rc = -EIO;
+				goto out;
+			}
+			if (unlikely(fault_inject))
+				bio_integrity_fault_inject(bio);
+		}
+
 		record_start_io(iobuf, bio_sectors(bio) << 9);
 		osd_submit_bio(iobuf->dr_rw, bio);
 		rc = 0;
@@ -398,7 +442,7 @@ out:
 	 * completion here. instead we proceed with transaction commit in
 	 * parallel and wait for IO completion once transaction is stopped
 	 * see osd_trans_stop() for more details -bzzz */
-	if (iobuf->dr_rw == 0) {
+	if (iobuf->dr_rw == 0 || fault_inject) {
 		wait_event(iobuf->dr_wait,
 			   atomic_read(&iobuf->dr_numreqs) == 0);
 		osd_fini_iobuf(osd, iobuf);
