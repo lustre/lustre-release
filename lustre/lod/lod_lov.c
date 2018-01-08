@@ -941,6 +941,8 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 	}
 
 	lcm = (struct lov_comp_md_v1 *)lmm;
+	memset(lcm, 0, sizeof(*lcm));
+
 	lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
 	lcm->lcm_entry_count = cpu_to_le16(comp_cnt);
 
