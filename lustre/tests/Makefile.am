@@ -1,10 +1,8 @@
-LIBCFS = $(top_builddir)/libcfs/libcfs/libcfs.a
-LIBLUSTREAPI = $(top_builddir)/lustre/utils/liblustreapi.a
-
 # Lustre test Makefile
 AM_CFLAGS := -fPIC -D_GNU_SOURCE \
-	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1 \
-	     -I/opt/lam/include
+	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64
+
+LIBLUSTREAPI = $(top_builddir)/lustre/utils/liblustreapi.la
 
 DIST_SUBDIRS = mpi
 
@@ -61,51 +59,49 @@ nobase_noinst_DATA += clientapi/simple_test.c
 EXTRA_DIST = $(noinst_SCRIPTS) $(noinst_DATA) \
              $(nobase_noinst_SCRIPTS) $(nobase_noinst_DATA)
 
+THETESTS = openunlink truncate directio writeme mlink utime
+THETESTS += tchmod fsx test_brw sendfile
+THETESTS += createmany chownmany statmany multifstat createtest
+THETESTS += opendirunlink opendevunlink unlinkmany checkstat
+THETESTS += statone runas openfile rmdirmany smalliomany
+THETESTS += small_write multiop ll_sparseness_verify
+THETESTS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany
+THETESTS += openfilleddirunlink rename_many memhog
+THETESTS += mmap_sanity writemany reads flocks_test flock_deadlock
+THETESTS += write_time_limit rwv lgetxattr_size_check checkfiemap
+THETESTS += listxattr_size_check check_fhandle_syscalls badarea_io
+THETESTS += llapi_layout_test orphan_linkea_check llapi_hsm_test
+THETESTS += group_lock_test llapi_fid_test sendfile_grouplock mmap_cat
+THETESTS += swap_lock_test lockahead_test mirror_io
+
 if TESTS
 if MPITESTS
 SUBDIRS = mpi
 endif
-noinst_PROGRAMS = openunlink truncate directio writeme mlink utime
-noinst_PROGRAMS += tchmod fsx test_brw sendfile
-noinst_PROGRAMS += createmany chownmany statmany multifstat createtest
-noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany checkstat
-noinst_PROGRAMS += statone runas openfile rmdirmany smalliomany
-noinst_PROGRAMS += small_write multiop ll_sparseness_verify
-noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany
-noinst_PROGRAMS += openfilleddirunlink rename_many memhog
-noinst_PROGRAMS += mmap_sanity writemany reads flocks_test flock_deadlock
-noinst_PROGRAMS += write_time_limit rwv lgetxattr_size_check checkfiemap
-noinst_PROGRAMS += listxattr_size_check check_fhandle_syscalls badarea_io
-noinst_PROGRAMS += llapi_layout_test orphan_linkea_check llapi_hsm_test
-noinst_PROGRAMS += group_lock_test llapi_fid_test sendfile_grouplock mmap_cat
-noinst_PROGRAMS += swap_lock_test lockahead_test mirror_io
 
 bin_PROGRAMS = mcreate munlink
 testdir = $(libdir)/lustre/tests
-test_SCRIPTS = $(noinst_SCRIPTS) $(noinst_PROGRAMS)
+test_SCRIPTS = $(noinst_SCRIPTS)
+test_PROGRAMS = $(THETESTS)
 nobase_test_SCRIPTS = $(nobase_noinst_SCRIPTS)
 test_DATA = $(noinst_DATA)
 nobase_test_DATA = $(nobase_noinst_DATA)
+else # !TESTS
+noinst_PROGRAMS = $(THETESTS)
 endif # TESTS
 
-mmap_sanity_SOURCES= mmap_sanity.c
-mmap_sanity_LDADD=$(LIBCFS)
-
-multiop_LDADD=$(LIBLUSTREAPI) $(LIBCFS) $(PTHREAD_LIBS)
-llapi_layout_test_LDADD=$(LIBLUSTREAPI)
-llapi_hsm_test_LDADD=$(LIBLUSTREAPI)
-group_lock_test_LDADD=$(LIBLUSTREAPI)
-llapi_fid_test_LDADD=$(LIBLUSTREAPI)
-sendfile_grouplock_LDADD=$(LIBLUSTREAPI)
-swap_lock_test_LDADD=$(LIBLUSTREAPI)
-statmany_LDADD=$(LIBLUSTREAPI)
-statone_LDADD=$(LIBLUSTREAPI)
-rwv_LDADD=$(LIBCFS)
-lockahead_test_LDADD=$(LIBLUSTREAPI)
-mirror_io_LDADD=$(LIBLUSTREAPI)
-
-ll_dirstripe_verify_SOURCES = ll_dirstripe_verify.c
-ll_dirstripe_verify_LDADD = $(LIBLUSTREAPI) $(LIBCFS) $(PTHREAD_LIBS)
-
-flocks_test_SOURCES=flocks_test.c
-flocks_test_LDADD=$(PTHREAD_LIBS)
+mmap_sanity_LDADD = $(LIBLUSTREAPI)
+multiop_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
+llapi_layout_test_LDADD = $(LIBLUSTREAPI)
+llapi_hsm_test_LDADD = $(LIBLUSTREAPI)
+group_lock_test_LDADD = $(LIBLUSTREAPI)
+llapi_fid_test_LDADD = $(LIBLUSTREAPI)
+sendfile_grouplock_LDADD = $(LIBLUSTREAPI)
+swap_lock_test_LDADD = $(LIBLUSTREAPI)
+statmany_LDADD = $(LIBLUSTREAPI)
+statone_LDADD = $(LIBLUSTREAPI)
+rwv_LDADD = $(LIBLUSTREAPI)
+lockahead_test_LDADD = $(LIBLUSTREAPI)
+mirror_io_LDADD = $(LIBLUSTREAPI)
+ll_dirstripe_verify_LDADD = $(LIBLUSTREAPI)
+flocks_test_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)

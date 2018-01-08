@@ -4,8 +4,6 @@ AM_CFLAGS := -fPIC \
 	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1 \
 	     -D_GNU_SOURCE
 
-LIBCFS := $(top_builddir)/libcfs/libcfs/libcfs.a
-
 sbin_PROGRAMS = lsvcgssd l_idmap
 
 if GSS_KEYRING
@@ -68,9 +66,8 @@ lsvcgssd_SOURCES = \
         svcgssd.h
 
 lsvcgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS)
-lsvcgssd_LDADD = $(LIBCFS) $(GSSAPI_LIBS) $(KRBLIBS) -lcrypto -lssl -lkeyutils -lm
+lsvcgssd_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(GSSAPI_LIBS) $(KRBLIBS) -lcrypto -lssl -lkeyutils -lm
 lsvcgssd_LDFLAGS = $(KRBLDFLAGS)
-lsvcgssd_DEPENDENCIES = $(LIBCFS)
 
 l_idmap_SOURCES = \
 	l_idmap.c \
@@ -79,7 +76,7 @@ l_idmap_SOURCES = \
 	\
 	lsupport.h
 
-l_idmap_LDADD = $(LIBCFS)
+l_idmap_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la
 
 lgss_keyring_SOURCES = \
 	lgss_keyring.c \
@@ -98,9 +95,8 @@ lgss_keyring_SOURCES = \
 	lsupport.h
 
 lgss_keyring_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS) -D _NEW_BUILD_
-lgss_keyring_LDADD = $(LIBCFS) $(GSSAPI_LIBS) $(KRBLIBS) -lcrypto -lssl -lm -lkeyutils
+lgss_keyring_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(GSSAPI_LIBS) $(KRBLIBS) -lcrypto -lssl -lm -lkeyutils
 lgss_keyring_LDFLAGS = $(KRBLDFLAGS)
-lgss_keyring_DEPENDENCIES = $(LIBCFS)
 
 if GSS_SSK
 lgss_keyring_SOURCES += sk_utils.c sk_utils.h lgss_sk_utils.c
@@ -112,9 +108,8 @@ lgss_sk_SOURCES = \
 	sk_utils.h
 
 lgss_sk_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS)
-lgss_sk_LDADD = $(LIBCFS) $(GSSAPI_LIBS) $(KRBLIBS) -lcrypto -lssl -lm -lkeyutils
+lgss_sk_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(GSSAPI_LIBS) $(KRBLIBS) -lcrypto -lssl -lm -lkeyutils
 lgss_sk_LDFLAGS = $(KRBLDFLAGS)
-lgss_sk_DEPENDENCIES = $(LIBCFS)
 endif
 
 EXTRA_DIST =

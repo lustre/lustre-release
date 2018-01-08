@@ -37,7 +37,7 @@ EXTRA_DIST = lustre.dtd slapd-lustre.conf lustre2ldif.xsl top.ldif \
              lnet_routes.conf lnet.conf
 ldapconfdir = $(sysconfdir)/openldap
 
-sysconf_DATA = ldev.conf
+sysconf_DATA = lnet.conf
 
 if UTILS
 noinst_SCRIPTS = slapd-lustre.conf
@@ -48,14 +48,15 @@ endif
 udevrulesdir = $(sysconfdir)/udev/rules.d
 udevrules_DATA = 99-lustre.rules
 
-if RHEL
 if SERVER
+if ZFS_ENABLED
+sysconf_DATA += ldev.conf
+endif
+if RHEL
 sysconfigdir = $(sysconfdir)/sysconfig
 sysconfig_DATA = lustre lsvcgss
 endif
 endif
-
-sysconf_DATA += lnet.conf
 
 modprobedir = $(sysconfdir)/modprobe.d
 modprobe_DATA = ko2iblnd.conf

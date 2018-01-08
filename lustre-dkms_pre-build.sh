@@ -66,7 +66,7 @@ fi
 ./configure --prefix=/usr --enable-modules --disable-iokit --disable-snmp \
 	--disable-doc --disable-utils --disable-tests --disable-maintainer-mode \
 	$KERNEL_STUFF $GSS $SERVER $DKMS_CONFIG_OPTS \
-	--disable-manpages --disable-dlc
+	--disable-manpages
 
 if [ $? != 0 ] ; then
 	echo "configure error, check $7/$1/$2/build/config.log"

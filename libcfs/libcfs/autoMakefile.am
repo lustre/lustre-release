@@ -35,17 +35,17 @@
 SUBDIRS = linux util
 DIST_SUBDIRS = linux util
 
-noinst_LIBRARIES  = libcfs.a
-libcfs_a_SOURCES  := util/string.c util/nidstrings.c util/param.c
+noinst_LTLIBRARIES = libcfs.la
+libcfs_la_SOURCES  := util/string.c util/nidstrings.c util/param.c
 if UTILS
-libcfs_a_SOURCES  += util/parser.c util/l_ioctl.c
+libcfs_la_SOURCES  += util/parser.c util/l_ioctl.c
 endif # UTILS
-libcfs_a_CPPFLAGS := -D_GNU_SOURCE
-libcfs_a_CPPFLAGS += -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64
+libcfs_la_CPPFLAGS := -D_GNU_SOURCE
+libcfs_la_CPPFLAGS += -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64
 if UTILS
-libcfs_a_CPPFLAGS += -DLUSTRE_UTILS=1
+libcfs_la_CPPFLAGS += -DLUSTRE_UTILS=1
 endif
-libcfs_a_CFLAGS   := -fPIC
+libcfs_la_CFLAGS := -fPIC
 
 if MODULES
 

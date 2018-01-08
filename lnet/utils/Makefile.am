@@ -37,17 +37,15 @@ AM_LDFLAGS := -L.
 
 SUBDIRS = lnetconfig
 
-LIBCFS= $(top_builddir)/libcfs/libcfs/libcfs.a
-
 if UTILS
 sbin_PROGRAMS = routerstat lst lnetctl
 
 routerstat_SOURCES = routerstat.c
-routerstat_LDADD = $(LIBCFS)
+routerstat_LDADD = $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la
 
 lst_SOURCES = lst.c
-lst_LDADD = $(LIBCFS) $(LIBREADLINE) $(LIBEFENCE)
-lst_LDADD += $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la
+lst_LDADD = $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la \
+	    $(LIBEFENCE)
 
 if TESTS
 sbin_PROGRAMS += wirecheck
@@ -57,5 +55,5 @@ endif # TESTS
 
 lnetctl_SOURCES = lnetctl.c
 lnetctl_LDADD = $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la \
-		$(LIBCFS) $(LIBREADLINE) $(LIBEFENCE)
+		$(LIBEFENCE)
 endif # UTILS

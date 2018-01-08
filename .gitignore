@@ -13,6 +13,7 @@
 #
 # Normal rules
 #
+.dirstamp
 .deps
 .depend
 .DS_Store

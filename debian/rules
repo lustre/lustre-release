@@ -340,7 +340,6 @@ kdist_config: prep-deb-files patch-stamp
 		    --disable-quilt  \
 		    --disable-dependency-tracking \
 		    --disable-doc  \
-		    --disable-utils \
 		    --disable-iokit \
 		    --disable-snmp \
 		    --disable-tests \

@@ -9,7 +9,7 @@ LC_CONFIG_SRCDIR
 
 AC_CANONICAL_SYSTEM
 
-AM_INIT_AUTOMAKE([1.10 tar-ustar -Wno-portability])
+AM_INIT_AUTOMAKE([1.10 tar-ustar -Wno-portability subdir-objects])
 AM_MAINTAINER_MODE([enable])
 
 AC_PROG_CC

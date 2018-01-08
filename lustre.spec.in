@@ -414,6 +414,8 @@ fi
 find $RPM_BUILD_ROOT/lib/modules -name \*.ko -type f -exec chmod u+x {} \;
 %endif
 
+rm -f $RPM_BUILD_ROOT%{_libdir}/liblustreapi.la
+
 %if %{with lustre_tests}
 :> lustre-tests.files
 echo '%{_libdir}/lustre/tests/*' >>lustre-tests.files
@@ -447,8 +449,12 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %{_bindir}/lfs
 %{_bindir}/lfs_migrate
 /sbin/mount.lustre
+%if %{with static}
 %{_libdir}/liblustreapi.a
-%{_libdir}/liblustreapi.so
+%endif
+%if %{with shared}
+%{_libdir}/liblustreapi.so*
+%endif
 %if %{with manpages}
 %{_mandir}/man?/*
 %endif
@@ -458,7 +464,9 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %{_includedir}/linux/lustre
 %endif
 %{_sysconfdir}/udev/rules.d/99-lustre.rules
+%if %{with zfs}
 %config(noreplace) %{_sysconfdir}/ldev.conf
+%endif
 %config(noreplace) %{_sysconfdir}/lnet.conf
 %config(noreplace) %{_sysconfdir}/modprobe.d/ko2iblnd.conf
 %if %{with lustre_utils}

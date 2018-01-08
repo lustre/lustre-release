@@ -472,7 +472,6 @@ for arg; do
 		--enable-tests | --disable-tests ) ;;
 		--enable-utils | --disable-utils ) ;;
 		--enable-iokit | --disable-iokit ) ;;
-		--enable-dlc | --disable-dlc ) ;;
 		--enable-manpages | --disable-manpages ) ;;
 		* ) CONFIGURE_ARGS="$CONFIGURE_ARGS '$arg'" ;;
 	esac

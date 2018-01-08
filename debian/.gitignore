@@ -1,5 +1,6 @@
 /*.log
 /*.substvars
+/.debhelper
 /files
 /linux-patch-lustre
 /lustre-dev
