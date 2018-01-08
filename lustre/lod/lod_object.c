@@ -1048,6 +1048,18 @@ static int lod_attr_get(const struct lu_env *env,
 	return dt_attr_get(env, dt_object_child(dt), attr);
 }
 
+static inline void lod_adjust_stripe_info(struct lod_layout_component *comp,
+					  struct lov_desc *desc)
+{
+	if (comp->llc_pattern != LOV_PATTERN_MDT) {
+		if (!comp->llc_stripe_count)
+			comp->llc_stripe_count =
+				desc->ld_default_stripe_count;
+	}
+	if (comp->llc_stripe_size <= 0)
+		comp->llc_stripe_size = desc->ld_default_stripe_size;
+}
+
 int lod_obj_for_each_stripe(const struct lu_env *env, struct lod_object *lo,
 			    struct thandle *th,
 			    struct lod_obj_stripe_cb_data *data)
@@ -2366,14 +2378,8 @@ static int lod_declare_layout_add(const struct lu_env *env,
 		lod_comp->llc_flags = comp_v1->lcm_entries[i].lcme_flags;
 
 		lod_comp->llc_stripe_count = v1->lmm_stripe_count;
-		if (!lod_comp->llc_stripe_count ||
-		    lod_comp->llc_stripe_count == (__u16)-1)
-			lod_comp->llc_stripe_count =
-				desc->ld_default_stripe_count;
 		lod_comp->llc_stripe_size = v1->lmm_stripe_size;
-		if (!lod_comp->llc_stripe_size)
-			lod_comp->llc_stripe_size =
-				desc->ld_default_stripe_size;
+		lod_adjust_stripe_info(lod_comp, desc);
 
 		if (v1->lmm_magic == LOV_USER_MAGIC_V3) {
 			v3 = (struct lov_user_md_v3 *) v1;
@@ -4189,13 +4195,7 @@ static void lod_striping_from_default(struct lod_object *lo,
 			if (!lo->ldo_is_composite)
 				continue;
 
-			if (obj_comp->llc_stripe_count <= 0 &&
-			    obj_comp->llc_pattern != LOV_PATTERN_MDT)
-				obj_comp->llc_stripe_count =
-					desc->ld_default_stripe_count;
-			if (obj_comp->llc_stripe_size <= 0)
-				obj_comp->llc_stripe_size =
-					desc->ld_default_stripe_size;
+			lod_adjust_stripe_info(obj_comp, desc);
 		}
 	} else if (lds->lds_dir_def_striping_set && S_ISDIR(mode)) {
 		if (lo->ldo_dir_stripe_count == 0)
@@ -4428,12 +4428,7 @@ out:
 		LASSERT(!lc->ldo_is_composite);
 		lod_comp = &lc->ldo_comp_entries[0];
 		desc = &d->lod_desc;
-		if (lod_comp->llc_stripe_count <= 0)
-			lod_comp->llc_stripe_count =
-				desc->ld_default_stripe_count;
-		if (lod_comp->llc_stripe_size <= 0)
-			lod_comp->llc_stripe_size =
-				desc->ld_default_stripe_size;
+		lod_adjust_stripe_info(lod_comp, desc);
 	}
 
 	EXIT;
