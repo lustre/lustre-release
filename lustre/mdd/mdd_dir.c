@@ -1105,15 +1105,16 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	crf &= CLF_FLAGMASK;
 	crf |= CLF_EXTRA_FLAGS;
 
-	if (uc != NULL && uc->uc_jobid[0] != '\0')
-		crf |= CLF_JOBID;
+	if (uc) {
+		if (uc->uc_jobid[0] != '\0')
+			crf |= CLF_JOBID;
+		xflags |= CLFE_UIDGID;
+	}
 
 	if (sname != NULL)
 		crf |= CLF_RENAME;
 	else
 		crf |= CLF_VERSION;
-
-	xflags |= CLFE_UIDGID;
 
 	rec->cr.cr_flags = crf;
 

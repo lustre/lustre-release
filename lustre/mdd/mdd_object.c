@@ -647,10 +647,12 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 	int rc;
 
 	flags = (flags & CLF_FLAGMASK) | CLF_VERSION | CLF_EXTRA_FLAGS;
-	if (uc != NULL && uc->uc_jobid[0] != '\0')
-		flags |= CLF_JOBID;
 
-	xflags |= CLFE_UIDGID;
+	if (uc) {
+		if (uc->uc_jobid[0] != '\0')
+			flags |= CLF_JOBID;
+		xflags |= CLFE_UIDGID;
+	}
 
 	reclen = llog_data_len(LLOG_CHANGELOG_HDR_SZ +
 			       changelog_rec_offset(flags & CLF_SUPPORTED,
