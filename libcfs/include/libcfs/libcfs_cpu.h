@@ -76,6 +76,9 @@
 #ifndef __LIBCFS_CPU_H__
 #define __LIBCFS_CPU_H__
 
+#include <linux/slab.h>
+#include <libcfs/linux/linux-cpu.h>
+
 #ifndef HAVE_LIBCFS_CPT
 
 struct cfs_cpt_table {

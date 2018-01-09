@@ -37,8 +37,12 @@
  */
 
 #include <linux/sched.h>
+#ifdef HAVE_SCHED_HEADERS
+#include <linux/sched/signal.h>
+#include <linux/sched/mm.h>
+#endif
 #include <linux/fs_struct.h>
-
+#include <linux/pagemap.h>
 #include <linux/compat.h>
 #include <linux/thread_info.h>
 

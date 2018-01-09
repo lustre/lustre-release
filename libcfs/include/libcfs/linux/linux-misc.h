@@ -33,6 +33,9 @@
 #ifndef __LIBCFS_LINUX_MISC_H__
 #define __LIBCFS_LINUX_MISC_H__
 
+#include <linux/mutex.h>
+#include <linux/user_namespace.h>
+
 #ifdef HAVE_SYSCTL_CTLNAME
 #define INIT_CTL_NAME	.ctl_name = CTL_UNNUMBERED,
 #define INIT_STRATEGY	.strategy = &sysctl_intvec,

@@ -35,6 +35,7 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
+#include <libcfs/linux/linux-cpu.h>
 #include <libcfs/libcfs.h>
 
 /** Global CPU partition table */

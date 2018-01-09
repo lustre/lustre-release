@@ -37,14 +37,6 @@
 #ifndef __LIBCFS_LINUX_CFS_MEM_H__
 #define __LIBCFS_LINUX_CFS_MEM_H__
 
-#ifndef __LIBCFS_LIBCFS_H__
-#error Do not #include this file directly. #include <libcfs/libcfs.h> instead
-#endif
-
-#ifndef __KERNEL__
-#error This include is only for kernel use.
-#endif
-
 #include <linux/mm.h>
 #include <linux/vmalloc.h>
 #include <linux/pagemap.h>

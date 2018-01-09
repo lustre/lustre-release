@@ -31,6 +31,7 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/delay.h>
 #include <linux/mm.h>
 #include <linux/string.h>
 #include <linux/stat.h>

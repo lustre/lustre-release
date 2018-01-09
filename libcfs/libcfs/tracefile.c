@@ -40,7 +40,12 @@
 #define LUSTRE_TRACEFILE_PRIVATE
 #include "tracefile.h"
 
+#include <linux/ctype.h>
+#include <linux/fs.h>
 #include <linux/kthread.h>
+#include <linux/pagemap.h>
+#include <linux/uaccess.h>
+#include <libcfs/linux/linux-fs.h>
 #include <libcfs/libcfs.h>
 
 /* XXX move things up to the top, comment */

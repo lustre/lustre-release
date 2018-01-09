@@ -31,9 +31,12 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
+
+#include <linux/ctype.h>
 #include <linux/log2.h>
 #include <linux/ktime.h>
 #include <linux/moduleparam.h>
+#include <linux/uaccess.h>
 
 #include <lnet/lib-lnet.h>
 

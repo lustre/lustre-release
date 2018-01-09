@@ -37,6 +37,8 @@
 
 #define DEBUG_SUBSYSTEM S_LOV
 
+#include <linux/random.h>
+
 #include "lov_cl_internal.h"
 
 static inline struct lov_device *lov_object_dev(struct lov_object *obj)

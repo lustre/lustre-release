@@ -88,6 +88,9 @@
 /*
  * super-class definitions.
  */
+#include <linux/aio.h>
+#include <linux/fs.h>
+
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_ptask.h>
 #include <lu_object.h>

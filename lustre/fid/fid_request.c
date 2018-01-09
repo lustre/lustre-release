@@ -39,7 +39,6 @@
 #define DEBUG_SUBSYSTEM S_FID
 
 #include <linux/module.h>
-#include <libcfs/libcfs.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>

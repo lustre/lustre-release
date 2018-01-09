@@ -29,6 +29,7 @@
 
 #include <crypto/hash.h>
 #include <linux/scatterlist.h>
+#include <linux/pagemap.h>
 #include <libcfs/libcfs.h>
 #include <libcfs/libcfs_crypto.h>
 #include <libcfs/linux/linux-crypto.h>

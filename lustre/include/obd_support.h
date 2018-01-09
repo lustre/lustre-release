@@ -33,11 +33,8 @@
 #ifndef _OBD_SUPPORT
 #define _OBD_SUPPORT
 
-#ifndef __KERNEL__
-# error Userspace should not include obd_support.h.
-#endif /* !__KERNEL__ */
-
 #include <linux/atomic.h>
+#include <linux/ctype.h>
 #include <linux/highmem.h>
 #include <linux/slab.h>
 #include <linux/types.h>

@@ -39,6 +39,7 @@
 
 #define DEBUG_SUBSYSTEM S_OSD
 
+#include <linux/kallsyms.h>
 #include <linux/module.h>
 #include <linux/user_namespace.h>
 #ifdef HAVE_UIDGID_HEADER

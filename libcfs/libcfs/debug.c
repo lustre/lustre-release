@@ -37,7 +37,9 @@
 
 # define DEBUG_SUBSYSTEM S_LNET
 
+#include <linux/ctype.h>
 #include <linux/kthread.h>
+#include <libcfs/linux/linux-misc.h>
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
 

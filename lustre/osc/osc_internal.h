@@ -35,6 +35,7 @@
 
 #define OAP_MAGIC 8675309
 
+#include <libcfs/linux/linux-mem.h>
 #include <lustre_osc.h>
 
 extern atomic_t osc_pool_req_count;

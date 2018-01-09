@@ -33,6 +33,9 @@
  * Author: Prakash Surya <surya1@llnl.gov>
  * Author: Bobi Jam <bobijam.xu@intel.com>
  */
+#ifdef HAVE_SCHED_HEADERS
+#include <linux/sched/signal.h>
+#endif
 #include "range_lock.h"
 #include <uapi/linux/lustre/lustre_user.h>
 

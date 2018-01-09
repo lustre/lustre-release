@@ -32,6 +32,9 @@
 #ifndef _LIBCFS_BITMAP_H_
 #define _LIBCFS_BITMAP_H_
 
+#include <linux/interrupt.h>
+#include <libcfs/libcfs_private.h>
+
 struct cfs_bitmap {
 	unsigned int size;
 	unsigned long data[0];

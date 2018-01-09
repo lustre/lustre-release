@@ -40,6 +40,10 @@
 #include <libcfs/libcfs.h>
 #include "tracefile.h"
 
+#ifndef WITH_WATCHDOG
+#define WITH_WATCHDOG
+#endif
+
 struct lc_watchdog {
 	spinlock_t		lcw_lock;	/* check or change lcw_list */
 	int			lcw_refcount;	/* must hold lcw_pending_timers_lock */

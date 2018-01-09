@@ -39,14 +39,6 @@
 #ifndef __LIBCFS_LINUX_CPU_H__
 #define __LIBCFS_LINUX_CPU_H__
 
-#ifndef __LIBCFS_LIBCFS_H__
-#error Do not #include this file directly. #include <libcfs/libcfs.h> instead
-#endif
-
-#ifndef __KERNEL__
-#error This include is only for kernel use.
-#endif
-
 #include <linux/cpu.h>
 #include <linux/cpuset.h>
 #include <linux/topology.h>

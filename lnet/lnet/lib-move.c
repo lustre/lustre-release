@@ -36,6 +36,8 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
+#include <linux/pagemap.h>
+
 #include <lnet/lib-lnet.h>
 #include <linux/nsproxy.h>
 #include <net/net_namespace.h>

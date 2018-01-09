@@ -215,12 +215,6 @@ void libcfs_debug_dumpstack(struct task_struct *tsk)
 }
 EXPORT_SYMBOL(libcfs_debug_dumpstack);
 
-struct task_struct *libcfs_current(void)
-{
-        CWARN("current task struct is %p\n", current);
-        return current;
-}
-
 static int panic_notifier(struct notifier_block *self, unsigned long unused1,
                          void *unused2)
 {

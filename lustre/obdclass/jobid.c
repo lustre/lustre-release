@@ -37,6 +37,7 @@
 #include <linux/uidgid.h>
 #endif
 
+#include <libcfs/linux/linux-misc.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>

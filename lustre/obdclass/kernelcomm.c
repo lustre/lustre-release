@@ -36,6 +36,8 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/file.h>
+
 #include <obd_support.h>
 #include <lustre_kernelcomm.h>
 

@@ -41,6 +41,7 @@
 #include <linux/list.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/pagemap.h>
 #include <linux/stat.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>
@@ -50,7 +51,6 @@
 #include <net/sock.h>
 #include <net/tcp.h>
 
-#include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/socklnd.h>
 

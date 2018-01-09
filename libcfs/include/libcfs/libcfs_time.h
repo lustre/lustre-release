@@ -36,6 +36,8 @@
 #ifndef __LIBCFS_TIME_H__
 #define __LIBCFS_TIME_H__
 
+#include <libcfs/linux/linux-time.h>
+
 /*
  * generic time manipulation functions.
  */

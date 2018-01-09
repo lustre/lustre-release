@@ -33,13 +33,15 @@
 #ifndef _LUSTRE_COMPAT_H
 #define _LUSTRE_COMPAT_H
 
+#include <linux/aio.h>
+#include <linux/fs.h>
 #include <linux/fs_struct.h>
 #include <linux/namei.h>
 #include <linux/pagemap.h>
 #include <linux/bio.h>
 #include <linux/xattr.h>
 
-#include <libcfs/libcfs.h>
+#include <libcfs/linux/linux-fs.h>
 #include <lustre_patchless_compat.h>
 #include <obd_support.h>
 

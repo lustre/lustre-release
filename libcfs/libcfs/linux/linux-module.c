@@ -32,7 +32,9 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
+#include <linux/fs.h>
 #include <linux/miscdevice.h>
+#include <linux/uaccess.h>
 #include <libcfs/libcfs.h>
 
 static inline size_t libcfs_ioctl_packlen(struct libcfs_ioctl_data *data)

@@ -44,6 +44,7 @@
 
 #include <linux/kthread.h>
 #include <linux/uio.h>
+#include <linux/semaphore.h>
 #include <linux/types.h>
 
 #include <uapi/linux/lnet/lnet-dlc.h>

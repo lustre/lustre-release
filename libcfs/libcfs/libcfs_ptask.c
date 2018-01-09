@@ -35,6 +35,10 @@
 #include <linux/cpu.h>
 #include <linux/slab.h>
 #include <linux/sched.h>
+#ifdef HAVE_SCHED_HEADERS
+#include <linux/sched/signal.h>
+#include <linux/sched/mm.h>
+#endif
 #include <linux/moduleparam.h>
 #include <linux/mmu_context.h>
 

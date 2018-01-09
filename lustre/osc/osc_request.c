@@ -32,8 +32,6 @@
 
 #define DEBUG_SUBSYSTEM S_OSC
 
-#include <libcfs/libcfs.h>
-
 #include <lprocfs_status.h>
 #include <lustre_debug.h>
 #include <lustre_dlm.h>

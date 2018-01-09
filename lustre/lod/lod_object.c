@@ -40,6 +40,8 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <linux/random.h>
+
 #include <obd.h>
 #include <obd_class.h>
 #include <obd_support.h>

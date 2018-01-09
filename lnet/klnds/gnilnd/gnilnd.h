@@ -61,7 +61,6 @@
 
 #define DEBUG_SUBSYSTEM S_LND
 
-#include <libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 
 #include <gni_pub.h>

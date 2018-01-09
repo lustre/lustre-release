@@ -31,6 +31,8 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
+
+#include <linux/ctype.h>
 #include <linux/nsproxy.h>
 #include <net/net_namespace.h>
 #include <lnet/lib-lnet.h>

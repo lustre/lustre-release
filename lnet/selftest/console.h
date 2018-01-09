@@ -39,6 +39,7 @@
 #ifndef __LST_CONSOLE_H__
 #define __LST_CONSOLE_H__
 
+#include <linux/uaccess.h>
 
 #include <libcfs/libcfs.h>
 #include <lnet/lib-types.h>

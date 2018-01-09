@@ -26,6 +26,8 @@
 
 #define DEBUG_SUBSYSTEM S_LND
 
+#include <libcfs/linux/linux-misc.h>
+
 #include "gnilnd.h"
 
 #define GNILND_PEERSTATE_STRLEN 16

@@ -1,6 +1,8 @@
 #ifndef PTLRPC_GSS_CRYPTO_H
 #define PTLRPC_GSS_CRYPTO_H
 
+#include <linux/scatterlist.h>
+
 #include "gss_internal.h"
 
 struct gss_keyblock {

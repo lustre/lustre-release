@@ -34,7 +34,6 @@
 #define __LIBCFS_LIBCFS_H__
 
 #include <uapi/linux/lnet/libcfs_ioctl.h>
-#include <libcfs/linux/libcfs.h>
 #include <libcfs/libcfs_debug.h>
 #include <libcfs/libcfs_private.h>
 #include <libcfs/bitmap.h>
@@ -88,12 +87,6 @@ void lc_watchdog_delete(struct lc_watchdog *lcw);
 #define LNET_ACCEPTOR_MAX_RESERVED_PORT    1023
 
 /*
- * Drop into debugger, if possible. Implementation is provided by platform.
- */
-
-void cfs_enter_debugger(void);
-
-/*
  * Defined by platform
  */
 int unshare_fs_struct(void);
@@ -125,7 +118,7 @@ static inline void *__container_of(const void *ptr, unsigned long shift)
 		return (char *)ptr - shift;
 }
 
-#define container_of0(ptr, type, member)				\
+#define container_of0(ptr, type, member) \
 	((type *)__container_of((ptr), offsetof(type, member)))
 
 struct lnet_debugfs_symlink_def {
@@ -135,5 +128,11 @@ struct lnet_debugfs_symlink_def {
 
 void lnet_insert_debugfs(struct ctl_table *table,
 			 const struct lnet_debugfs_symlink_def *symlinks);
+
+/* helper for sysctl handlers */
+int lprocfs_call_handler(void *data, int write, loff_t *ppos,
+			 void __user *buffer, size_t *lenp,
+			 int (*handler)(void *data, int write, loff_t pos,
+					void __user *buffer, int len));
 
 #endif /* _LIBCFS_LIBCFS_H_ */

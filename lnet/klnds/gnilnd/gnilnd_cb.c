@@ -26,6 +26,7 @@
 
 #include <asm/page.h>
 #include <linux/nmi.h>
+#include <linux/pagemap.h>
 #include "gnilnd.h"
 
 /* this is useful when needed to debug wire corruption. */

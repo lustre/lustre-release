@@ -42,6 +42,9 @@
 # define DEBUG_SUBSYSTEM S_UNDEFINED
 #endif
 
+#include <linux/slab.h>
+#include <linux/vmalloc.h>
+
 #ifdef LIBCFS_DEBUG
 
 /*
