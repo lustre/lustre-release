@@ -20,6 +20,9 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
+[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
+	{ skip "Need MDS version at least 2.10.56"; exit 0; }
+
 MULTIOP=${MULTIOP:-multiop}
 OPENFILE=${OPENFILE:-openfile}
 MOUNT_2=${MOUNT_2:-"yes"}

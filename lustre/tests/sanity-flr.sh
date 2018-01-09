@@ -19,6 +19,9 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
+[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
+	{ skip "Need MDS version at least 2.10.56"; exit 0; }
+
 [ $UID -eq 0 -a $RUNAS_ID -eq 0 ] &&
 	error "\$RUNAS_ID set to 0, but \$UID is also 0!"
 check_runas_id $RUNAS_ID $RUNAS_GID $RUNAS
