@@ -73,7 +73,6 @@ GERRIT_CHANGE_NUMBER = os.getenv('GERRIT_CHANGE_NUMBER', None)
 CHECKPATCH_PATHS = _getenv_list('CHECKPATCH_PATHS', ['checkpatch.pl'])
 CHECKPATCH_ARGS = os.getenv('CHECKPATCH_ARGS','--show-types -').split(' ')
 CHECKPATCH_IGNORED_FILES = _getenv_list('CHECKPATCH_IGNORED_FILES', [
-        'lustre/contrib/wireshark/packet-lustre.c',
         'lustre/ptlrpc/wiretest.c',
         'lustre/utils/wiretest.c',
         '*.patch'])
