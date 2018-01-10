@@ -129,11 +129,15 @@ static void error_callback_default(enum llapi_message_level level, int err,
 static void info_callback_default(enum llapi_message_level level, int err,
 				  const char *fmt, va_list ap)
 {
-	if (liblustreapi_cmd != NULL)
-		fprintf(stderr, "%s %s: ", program_invocation_short_name,
-			liblustreapi_cmd);
-	else
-		fprintf(stderr, "%s: ", program_invocation_short_name);
+	if (err != 0) {
+		if (liblustreapi_cmd != NULL) {
+			fprintf(stdout, "%s %s: ",
+				program_invocation_short_name,
+				liblustreapi_cmd);
+		} else {
+			fprintf(stdout, "%s: ", program_invocation_short_name);
+		}
+	}
 	vfprintf(stdout, fmt, ap);
 }
 
