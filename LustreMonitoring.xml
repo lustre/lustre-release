@@ -25,19 +25,26 @@
 <indexterm><primary>monitoring</primary><secondary>change logs</secondary></indexterm>
 
 Lustre Changelogs</title>
-    <para>The changelogs feature records events that change the file system namespace or file metadata. Changes such as file creation, deletion, renaming, attribute changes, etc. are recorded with the target and parent file identifiers (FIDs), the name of the target, and a timestamp. These records can be used for a variety of purposes:</para>
+    <para>The changelogs feature records events that change the file system
+    namespace or file metadata. Changes such as file creation, deletion,
+    renaming, attribute changes, etc. are recorded with the target and parent
+    file identifiers (FIDs), the name of the target, a timestamp, and user
+    information. These records can be used for a variety of purposes:</para>
     <itemizedlist>
       <listitem>
         <para>Capture recent changes to feed into an archiving system.</para>
       </listitem>
       <listitem>
-        <para>Use changelog entries to exactly replicate changes in a file system mirror.</para>
+        <para>Use changelog entries to exactly replicate changes in a file
+	system mirror.</para>
       </listitem>
       <listitem>
-        <para>Set up &quot;watch scripts&quot; that take action on certain events or directories.</para>
+        <para>Set up &quot;watch scripts&quot; that take action on certain
+	events or directories.</para>
       </listitem>
       <listitem>
-        <para>Maintain a rough audit trail (file/directory changes with timestamps, but no user information).</para>
+        <para>Audit activity on Lustre, thanks to user information associated to
+	file/directory changes with timestamps.</para>
       </listitem>
     </itemizedlist>
     <para>Changelogs record types are:</para>
@@ -122,7 +129,7 @@ Lustre Changelogs</title>
           </row>
           <row>
             <entry>
-              <para> RNMFM</para>
+              <para> RENME</para>
             </entry>
             <entry>
               <para> Rename, original</para>
@@ -138,10 +145,26 @@ Lustre Changelogs</title>
           </row>
           <row>
             <entry>
-              <para> IOCTL</para>
+              <para> OPEN *</para>
             </entry>
             <entry>
-              <para> ioctl on file or directory</para>
+              <para> Open</para>
+            </entry>
+          </row>
+	  <row>
+            <entry>
+              <para> CLOSE</para>
+            </entry>
+            <entry>
+              <para> Close</para>
+            </entry>
+          </row>
+	  <row>
+            <entry>
+              <para> LYOUT</para>
+            </entry>
+            <entry>
+              <para> Layout change</para>
             </entry>
           </row>
           <row>
@@ -165,90 +188,180 @@ Lustre Changelogs</title>
               <para> XATTR</para>
             </entry>
             <entry>
-              <para> Extended attribute change</para>
+              <para> Extended attribute change (setxattr)</para>
+            </entry>
+          </row>
+	  <row>
+            <entry>
+              <para> HSM</para>
+            </entry>
+            <entry>
+              <para> HSM specific event</para>
+            </entry>
+          </row>
+	  <row>
+            <entry>
+              <para> MTIME</para>
+            </entry>
+            <entry>
+              <para> MTIME change</para>
+            </entry>
+          </row>
+	  <row>
+            <entry>
+              <para> CTIME</para>
+            </entry>
+            <entry>
+              <para> CTIME change</para>
+            </entry>
+          </row>
+	  <row>
+            <entry>
+              <para> ATIME *</para>
+            </entry>
+            <entry>
+              <para> ATIME change</para>
+            </entry>
+          </row>
+	  <row>
+            <entry>
+              <para> MIGRT</para>
+            </entry>
+            <entry>
+              <para> Migration event</para>
+            </entry>
+          </row>
+	  <row>
+            <entry>
+              <para> FLRW</para>
+            </entry>
+            <entry>
+              <para> File Level Replication: file initially written</para>
+            </entry>
+          </row>
+	  <row>
+            <entry>
+              <para> RESYNC</para>
+            </entry>
+            <entry>
+              <para> File Level Replication: file re-synced</para>
+            </entry>
+          </row>
+	  <row>
+            <entry>
+              <para> GXATR *</para>
+            </entry>
+            <entry>
+              <para> Extended attribute access (getxattr)</para>
             </entry>
           </row>
           <row>
             <entry>
-              <para> UNKNW</para>
+              <para> NOPEN *</para>
             </entry>
             <entry>
-              <para> Unknown operation</para>
+              <para> Denied open</para>
             </entry>
           </row>
         </tbody>
       </tgroup>
     </informaltable>
-    <para>FID-to-full-pathname and pathname-to-FID functions are also included to map target and parent FIDs into the file system namespace.</para>
+    <note><para>Event types marked with * are not recorded by default. Refer to
+    <xref linkend="dbdoclet.modifyChangelogMask" /> for instructions on
+    modifying the Changelogs mask.</para></note>
+    <para>FID-to-full-pathname and pathname-to-FID functions are also included
+    to map target and parent FIDs into the file system namespace.</para>
     <section remap="h3">
-      <title><indexterm><primary>monitoring</primary><secondary>change logs</secondary></indexterm>
+      <title><indexterm><primary>monitoring</primary><secondary>change logs
+    </secondary></indexterm>
 Working with Changelogs</title>
       <para>Several commands are available to work with changelogs.</para>
       <section remap="h5">
         <title>
           <literal>lctl changelog_register</literal>
         </title>
-        <para>Because changelog records take up space on the MDT, the system administration must register changelog users. The registrants specify which records they are &quot;done with&quot;, and the system purges up to the greatest common record.</para>
-        <para>To register a new changelog user, run:</para>
-        <screen>lctl --device <replaceable>fsname</replaceable>-<replaceable>MDTnumber</replaceable> changelog_register
+        <para>Because changelog records take up space on the MDT, the system
+	administration must register changelog users. As soon as a changelog
+	user is registered, the Changelogs feature is enabled. The registrants
+	specify which records they are &quot;done with&quot;, and the system
+	purges up to the greatest common record.</para>
+	<para>To register a new changelog user, run:</para>
+        <screen>mds# lctl --device <replaceable>fsname</replaceable>-<replaceable>MDTnumber</replaceable> changelog_register
 </screen>
-        <para>Changelog entries are not purged beyond a registered user&apos;s set point (see <literal>lfs changelog_clear</literal>).</para>
+        <para>Changelog entries are not purged beyond a registered user&apos;s
+	set point (see <literal>lfs changelog_clear</literal>).</para>
       </section>
       <section remap="h5">
         <title>
           <literal>lfs changelog</literal>
         </title>
-        <para>To display the metadata changes on an MDT (the changelog records), run:</para>
+        <para>To display the metadata changes on an MDT (the changelog records),
+	run:</para>
         <screen>lfs changelog <replaceable>fsname</replaceable>-<replaceable>MDTnumber</replaceable> [startrec [endrec]] </screen>
-        <para>It is optional whether to specify the start and end records.</para>
+        <para>It is optional whether to specify the start and end
+	records.</para>
         <para>These are sample changelog records:</para>
-        <screen>2 02MKDIR 4298396676 0x0 t=[0x200000405:0x15f9:0x0] p=[0x13:0x15e5a7a3:0x0]\
- pics 
-3 01CREAT 4298402264 0x0 t=[0x200000405:0x15fa:0x0] p=[0x200000405:0x15f9:0\
-x0] chloe.jpg 
-4 06UNLNK 4298404466 0x0 t=[0x200000405:0x15fa:0x0] p=[0x200000405:0x15f9:0\
-x0] chloe.jpg 
-5 07RMDIR 4298405394 0x0 t=[0x200000405:0x15f9:0x0] p=[0x13:0x15e5a7a3:0x0]\
- pics </screen>
+        <screen>1 02MKDIR 15:15:21.977666834 2018.01.09 0x0 t=[0x200000402:0x1:0x0] j=mkdir.500 ef=0xf \
+u=500:500 nid=10.128.11.159@tcp p=[0x200000007:0x1:0x0] pics
+2 01CREAT 15:15:36.687592024 2018.01.09 0x0 t=[0x200000402:0x2:0x0] j=cp.500 ef=0xf \
+u=500:500 nid=10.128.11.159@tcp p=[0x200000402:0x1:0x0] chloe.jpg
+3 06UNLNK 15:15:41.305116815 2018.01.09 0x1 t=[0x200000402:0x2:0x0] j=rm.500 ef=0xf \
+u=500:500 nid=10.128.11.159@tcp p=[0x200000402:0x1:0x0] chloe.jpg
+4 07RMDIR 15:15:46.468790091 2018.01.09 0x1 t=[0x200000402:0x1:0x0] j=rmdir.500 ef=0xf \
+u=500:500 nid=10.128.11.159@tcp p=[0x200000007:0x1:0x0] pics </screen>
       </section>
       <section remap="h5">
         <title>
           <literal>lfs changelog_clear</literal>
         </title>
-        <para>To clear old changelog records for a specific user (records that the user no longer needs), run:</para>
+        <para>To clear old changelog records for a specific user (records that
+	the user no longer needs), run:</para>
         <screen>lfs changelog_clear <replaceable>mdt_name</replaceable> <replaceable>userid</replaceable> <replaceable>endrec</replaceable></screen>
-        <para>The <literal>changelog_clear</literal> command indicates that changelog records previous to <replaceable>endrec</replaceable> are no longer of interest to a particular user <replaceable>userid</replaceable>, potentially allowing the MDT to free up disk space. An <literal><replaceable>endrec</replaceable></literal> value of 0 indicates the current last record. To run <literal>changelog_clear</literal>, the changelog user must be registered on the MDT node using <literal>lctl</literal>.</para>
-        <para>When all changelog users are done with records &lt; X, the records are deleted.</para>
+        <para>The <literal>changelog_clear</literal> command indicates that
+	changelog records previous to <replaceable>endrec</replaceable> are no
+	longer of interest to a particular user
+	<replaceable>userid</replaceable>, potentially allowing the MDT to free
+	up disk space. An <literal><replaceable>endrec</replaceable></literal>
+	value of 0 indicates the current last record. To run
+	<literal>changelog_clear</literal>, the changelog user must be
+	registered on the MDT node using <literal>lctl</literal>.</para>
+        <para>When all changelog users are done with records &lt; X, the records
+	are deleted.</para>
       </section>
       <section remap="h5">
         <title>
           <literal>lctl changelog_deregister</literal>
         </title>
         <para>To deregister (unregister) a changelog user, run:</para>
-        <screen>lctl --device <replaceable>mdt_device</replaceable> changelog_deregister <replaceable>userid</replaceable>       </screen>
-        <para> <literal>changelog_deregister cl1</literal> effectively does a <literal>changelog_clear cl1 0</literal> as it deregisters.</para>
+        <screen>mds# lctl --device <replaceable>mdt_device</replaceable> changelog_deregister <replaceable>userid</replaceable>       </screen>
+        <para> <literal>changelog_deregister cl1</literal> effectively does a
+	<literal>lfs changelog_clear cl1 0</literal> as it deregisters.</para>
       </section>
     </section>
     <section remap="h3">
       <title>Changelog Examples</title>
-      <para>This section provides examples of different changelog commands.</para>
+      <para>This section provides examples of different changelog
+      commands.</para>
       <section remap="h5">
         <title>Registering a Changelog User</title>
-        <para>To register a new changelog user for a device (<literal>lustre-MDT0000</literal>):</para>
-        <screen># lctl --device lustre-MDT0000 changelog_register
+        <para>To register a new changelog user for a device
+	(<literal>lustre-MDT0000</literal>):</para>
+        <screen>mds# lctl --device lustre-MDT0000 changelog_register
 lustre-MDT0000: Registered changelog userid &apos;cl1&apos;</screen>
       </section>
       <section remap="h5">
         <title>Displaying Changelog Records</title>
-        <para>To display changelog records on an MDT (<literal>lustre-MDT0000</literal>):</para>
+        <para>To display changelog records on an MDT
+	(<literal>lustre-MDT0000</literal>):</para>
         <screen>$ lfs changelog lustre-MDT0000
-1 00MARK  19:08:20.890432813 2010.03.24 0x0 t=[0x10001:0x0:0x0] p=[0:0x0:0x\
-0] mdd_obd-lustre-MDT0000-0 
-2 02MKDIR 19:10:21.509659173 2010.03.24 0x0 t=[0x200000420:0x3:0x0] p=[0x61\
-b4:0xca2c7dde:0x0] mydir 
-3 14SATTR 19:10:27.329356533 2010.03.24 0x0 t=[0x200000420:0x3:0x0] 
-4 01CREAT 19:10:37.113847713 2010.03.24 0x0 t=[0x200000420:0x4:0x0] p=[0x20\
-0000420:0x3:0x0] hosts </screen>
+1 02MKDIR 15:15:21.977666834 2018.01.09 0x0 t=[0x200000402:0x1:0x0] ef=0xf \
+u=500:500 nid=10.128.11.159@tcp p=[0x200000007:0x1:0x0] pics
+2 01CREAT 15:15:36.687592024 2018.01.09 0x0 t=[0x200000402:0x2:0x0] ef=0xf \
+u=500:500 nid=10.128.11.159@tcp p=[0x200000402:0x1:0x0] chloe.jpg
+3 06UNLNK 15:15:41.305116815 2018.01.09 0x1 t=[0x200000402:0x2:0x0] ef=0xf \
+u=500:500 nid=10.128.11.159@tcp p=[0x200000402:0x1:0x0] chloe.jpg
+4 07RMDIR 15:15:46.468790091 2018.01.09 0x1 t=[0x200000402:0x1:0x0] ef=0xf \
+u=500:500 nid=10.128.11.159@tcp p=[0x200000007:0x1:0x0] pics</screen>
         <para>Changelog records include this information:</para>
         <screen>rec# 
 operation_type(numerical/text) 
@@ -256,72 +369,222 @@ timestamp
 datestamp 
 flags 
 t=target_FID 
+ef=extended_flags
+u=uid:gid
+nid=client_NID
 p=parent_FID 
 target_name</screen>
         <para>Displayed in this format:</para>
         <screen>rec# operation_type(numerical/text) timestamp datestamp flags t=target_FID \
-p=parent_FID target_name</screen>
+ef=extended_flags u=uid:gid nid=client_NID p=parent_FID target_name</screen>
         <para>For example:</para>
-        <screen>4 01CREAT 19:10:37.113847713 2010.03.24 0x0 t=[0x200000420:0x4:0x0] p=[0x20\
-0000420:0x3:0x0] hosts</screen>
+        <screen>2 01CREAT 15:15:36.687592024 2018.01.09 0x0 t=[0x200000402:0x2:0x0] ef=0xf \
+u=500:500 nid=10.128.11.159@tcp p=[0x200000402:0x1:0x0] chloe.jpg</screen>
       </section>
       <section remap="h5">
         <title>Clearing Changelog Records</title>
-        <para>To notify a device that a specific user (<literal>cl1</literal>) no longer needs records (up to and including 3):</para>
+        <para>To notify a device that a specific user (<literal>cl1</literal>)
+	no longer needs records (up to and including 3):</para>
         <screen>$ lfs changelog_clear  lustre-MDT0000 cl1 3</screen>
-        <para>To confirm that the <literal>changelog_clear</literal> operation was successful, run <literal>lfs changelog</literal>; only records after id-3 are listed:</para>
+        <para>To confirm that the <literal>changelog_clear</literal> operation
+	was successful, run <literal>lfs changelog</literal>; only records after
+	id-3 are listed:</para>
         <screen>$ lfs changelog lustre-MDT0000
-4 01CREAT 19:10:37.113847713 2010.03.24 0x0 t=[0x200000420:0x4:0x0] p=[0x20\
-0000420:0x3:0x0] hosts</screen>
+4 07RMDIR 15:15:46.468790091 2018.01.09 0x1 t=[0x200000402:0x1:0x0] ef=0xf \
+u=500:500 nid=10.128.11.159@tcp p=[0x200000007:0x1:0x0] pics</screen>
       </section>
       <section remap="h5">
         <title>Deregistering a Changelog User</title>
-        <para>To deregister a changelog user (<literal>cl1</literal>) for a specific device (<literal>lustre-MDT0000</literal>):</para>
-        <screen># lctl --device lustre-MDT0000 changelog_deregister cl1
+        <para>To deregister a changelog user (<literal>cl1</literal>) for a
+	specific device (<literal>lustre-MDT0000</literal>):</para>
+        <screen>mds# lctl --device lustre-MDT0000 changelog_deregister cl1
 lustre-MDT0000: Deregistered changelog user &apos;cl1&apos;</screen>
-        <para>The deregistration operation clears all changelog records for the specified user (<literal>cl1</literal>).</para>
+        <para>The deregistration operation clears all changelog records for the
+	specified user (<literal>cl1</literal>).</para>
         <screen>$ lfs changelog lustre-MDT0000
-5 00MARK  19:13:40.858292517 2010.03.24 0x0 t=[0x40001:0x0:0x0] p=[0:0x0:0x\
-0] mdd_obd-lustre-MDT0000-0 
+5 00MARK  15:56:39.603643887 2018.01.09 0x0 t=[0x20001:0x0:0x0] ef=0xf \
+u=500:500 nid=0@&lt;0:0&gt; p=[0:0x50:0xb] mdd_obd-lustre-MDT0000-0
 </screen>
         <note>
-          <para>MARK records typically indicate changelog recording status changes.</para>
+          <para>MARK records typically indicate changelog recording status
+	  changes.</para>
         </note>
       </section>
       <section remap="h5">
         <title>Displaying the Changelog Index and Registered Users</title>
-        <para>To display the current, maximum changelog index and registered changelog users for a specific device (<literal>lustre-MDT0000</literal>):</para>
-        <screen># lctl get_param  mdd.lustre-MDT0000.changelog_users 
+        <para>To display the current, maximum changelog index and registered
+	changelog users for a specific device
+	(<literal>lustre-MDT0000</literal>):</para>
+        <screen>mds# lctl get_param  mdd.lustre-MDT0000.changelog_users 
 mdd.lustre-MDT0000.changelog_users=current index: 8 
-ID    index 
-cl2   8
+ID    index (idle seconds)
+cl2   8 (180)
 </screen>
       </section>
       <section remap="h5">
         <title>Displaying the Changelog Mask</title>
-        <para>To show the current changelog mask on a specific device (<literal>lustre-MDT0000</literal>):</para>
-        <screen># lctl get_param  mdd.lustre-MDT0000.changelog_mask 
+        <para>To show the current changelog mask on a specific device
+	(<literal>lustre-MDT0000</literal>):</para>
+        <screen>mds# lctl get_param  mdd.lustre-MDT0000.changelog_mask 
 
 mdd.lustre-MDT0000.changelog_mask= 
-MARK CREAT MKDIR HLINK SLINK MKNOD UNLNK RMDIR RNMFM RNMTO OPEN CLOSE IOCTL\
- TRUNC SATTR XATTR HSM 
+MARK CREAT MKDIR HLINK SLINK MKNOD UNLNK RMDIR RENME RNMTO CLOSE LYOUT \
+TRUNC SATTR XATTR HSM MTIME CTIME MIGRT
 </screen>
       </section>
-      <section remap="h5">
+      <section xml:id="dbdoclet.modifyChangelogMask" remap="h5">
         <title>Setting the Changelog Mask</title>
-        <para>To set the current changelog mask on a specific device (<literal>lustre-MDT0000</literal>):</para>
-        <screen># lctl set_param mdd.lustre-MDT0000.changelog_mask=HLINK 
+        <para>To set the current changelog mask on a specific device
+	(<literal>lustre-MDT0000</literal>):</para>
+        <screen>mds# lctl set_param mdd.lustre-MDT0000.changelog_mask=HLINK 
 mdd.lustre-MDT0000.changelog_mask=HLINK 
 $ lfs changelog_clear lustre-MDT0000 cl1 0 
 $ mkdir /mnt/lustre/mydir/foo
 $ cp /etc/hosts /mnt/lustre/mydir/foo/file
 $ ln /mnt/lustre/mydir/foo/file /mnt/lustre/mydir/myhardlink
 </screen>
-        <para>Only item types that are in the mask show up in the changelog.</para>
+        <para>Only item types that are in the mask show up in the
+	changelog.</para>
         <screen>$ lfs changelog lustre-MDT0000
-9 03HLINK 19:19:35.171867477 2010.03.24 0x0 t=[0x200000420:0x6:0x0] p=[0x20\
-0000420:0x3:0x0] myhardlink
+9 03HLINK 16:06:35.291636498 2018.01.09 0x0 t=[0x200000402:0x4:0x0] ef=0xf \
+u=500:500 nid=10.128.11.159@tcp p=[0x200000007:0x3:0x0] myhardlink
 </screen>
+        <para></para>
+      </section>
+    </section>
+    <section remap="h3" condition='l2B'>
+      <title><indexterm><primary>audit</primary>
+      <secondary>change logs</secondary></indexterm>
+Audit with Changelogs</title>
+      <para>A specific use case for Lustre Changelogs is audit. According to a
+      definition found on <link xmlns:xlink="http://www.w3.org/1999/xlink"
+      xlink:href="https://en.wikipedia.org/wiki/Information_technology_audit">
+      Wikipedia</link>, information technology audits are used to evaluate the
+      organization's ability to protect its information assets and to properly
+      dispense information to authorized parties. Basically, audit consists in
+      controlling that all data accesses made were done according to the access
+      control policy in place. And usually, this is done by analyzing access
+      logs.</para>
+      <para>Audit can be used as a proof of security in place. But Audit can
+      also be a requirement to comply with regulations.</para>
+      <para>Lustre Changelogs are a good mechanism for audit, because this is a
+      centralized facility, and it is designed to be transactional. Changelog
+      records contain all information necessary for auditing purposes:</para>
+      <itemizedlist>
+	<listitem>
+          <para>ability to identify object of action thanks to file identifiers
+	  (FIDs) and name of targets</para>
+	</listitem>
+	<listitem>
+	  <para>ability to identify subject of action thanks to UID/GID and NID
+	  information</para>
+	</listitem>
+	<listitem>
+	  <para>ability to identify time of action thanks to timestamp</para>
+	</listitem>
+      </itemizedlist>
+      <section remap="h5">
+        <title>Enabling Audit</title>
+	<para>To have a fully functional Changelogs-based audit facility, some
+	additional Changelog record types must be enabled, to be able to record
+	events such as OPEN, ATIME, GETXATTR and DENIED OPEN. Please note that
+	enabling these record types may have some performance impact. For
+	instance, recording OPEN and GETXATTR events generate writes in the
+	Changelog records for a read operation from a file-system
+	standpoint.</para>
+	<para>Being able to record events such as OPEN or DENIED OPEN is
+	important from an audit perspective. For instance, if Lustre file system
+	is used to store medical records on a system dedicated to Life Sciences,
+	data privacy is crucial. Administrators may need to know which doctors
+	accessed, or tried to access, a given medical record and when. And
+	conversely, they might need to know which medical records a given doctor
+	accessed.</para>
+	<para>To enable all changelog entry types, do:</para>
+        <screen>mds# lctl set_param mdd.lustre-MDT0000.changelog_mask=ALL
+mdd.seb-MDT0000.changelog_mask=ALL</screen>
+	<para>Once all required record types have been enabled, just register a
+	Changelogs user and the audit facility is operational.</para>
+	<para>Note that, however, it is possible to control which Lustre client
+	nodes can trigger the recording of file system access events to the
+	Changelogs, thanks to the <literal>audit_mode</literal> flag on nodemap
+	entries. The reason to disable audit on a per-nodemap basis is to
+	prevent some nodes (e.g. backup, HSM agent nodes) from flooding the
+	audit logs. When <literal>audit_mode</literal> flag is
+	set to 1 on a nodemap entry, a client pertaining to this nodemap will be
+	able to record file system access events to the Changelogs, if
+	Changelogs are otherwise activated. When set to 0, events are not logged
+	into the Changelogs, no matter if Changelogs are activated or not. By
+	default, <literal>audit_mode</literal> flag is set to 1 in newly created
+	nodemap entries. And it is also set to 1 in 'default' nodemap.</para>
+	<para>To prevent nodes pertaining to a nodemap to generate Changelog
+	entries, do:</para>
+	<screen>
+mgs# lctl nodemap_modify --name nm1 --property audit_mode --value 0</screen>
+      </section>
+      <section remap="h5">
+        <title>Audit examples</title>
+	<section remap="h5">
+          <title>
+	    <literal>OPEN</literal>
+	  </title>
+	  <para>An OPEN changelog entry is in the form:</para>
+	  <screen>
+7 10OPEN  13:38:51.510728296 2017.07.25 0x242 t=[0x200000401:0x2:0x0] \
+ef=0x7 u=500:500 nid=10.128.11.159@tcp m=-w-</screen>
+	  <para>It includes information about the open mode, in the form
+	  m=rwx.</para>
+	  <para>OPEN entries are recorded only once per UID/GID, for a given
+	  open mode, as long as the file is not closed by this UID/GID. It
+	  avoids flooding the Changelogs for instance if there is an MPI job
+	  opening the same file thousands of times from different threads. It
+	  reduces the ChangeLog load significantly, without significantly
+	  affecting the audit information. Similarly, only the last CLOSE per
+	  UID/GID is recorded.</para>
+	</section>
+	<section remap="h5">
+          <title>
+	    <literal>GETXATTR</literal>
+	  </title>
+	  <para>A GETXATTR changelog entry is in the form:</para>
+	  <screen>
+8 23GXATR 09:22:55.886793012 2017.07.27 0x0 t=[0x200000402:0x1:0x0] \
+ef=0xf u=500:500 nid=10.128.11.159@tcp x=user.name0</screen>
+	  <para>It includes information about the name of the extended attribute
+	  being accessed, in the form <literal>x=&lt;xattr name&gt;</literal>.
+	  </para>
+	</section>
+	<section remap="h5">
+          <title>
+	    <literal>SETXATTR</literal>
+	  </title>
+	  <para>A SETXATTR changelog entry is in the form:</para>
+	  <screen>
+4 15XATTR 09:41:36.157333594 2018.01.10 0x0 t=[0x200000402:0x1:0x0] \
+ef=0xf u=500:500 nid=10.128.11.159@tcp x=user.name0</screen>
+	  <para>It includes information about the name of the extended attribute
+	  being modified, in the form <literal>x=&lt;xattr name&gt;</literal>.
+	  </para>
+	</section>
+	<section remap="h5">
+          <title>
+	    <literal>DENIED OPEN</literal>
+	  </title>
+	  <para>A DENIED OPEN changelog entry is in the form:</para>
+	  <screen>
+4 24NOPEN 15:45:44.947406626 2017.08.31 0x2 t=[0x200000402:0x1:0x0] \
+ef=0xf u=500:500 nid=10.128.11.158@tcp m=-w-</screen>
+	  <para>It has the same information as a regular OPEN entry. In order to
+	  avoid flooding the Changelogs, DENIED OPEN entries are rate limited:
+	  no more than one entry per user per file per time interval, this time
+	  interval (in seconds) being configurable via
+	  <literal>mdd.&lt;mdtname&gt;.changelog_deniednext</literal>
+	  (default value is 60 seconds).</para>
+	  <screen>
+mds# lctl set_param mdd.lustre-MDT0000.changelog_deniednext=120
+mdd.seb-MDT0000.changelog_deniednext=120
+mds# lctl get_param mdd.lustre-MDT0000.changelog_deniednext
+mdd.seb-MDT0000.changelog_deniednext=120</screen>
+	</section>
       </section>
     </section>
   </section>
