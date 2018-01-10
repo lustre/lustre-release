@@ -2027,7 +2027,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	struct lfsck_thread_info	*info	= lfsck_env_info(env);
 	struct dt_insert_rec		*rec	= &info->lti_dt_rec;
 	const struct lu_fid		*pfid	= lfsck_dto2fid(parent);
-	const struct lu_fid		*cfid	= lfsck_dto2fid(child);
+	struct lu_fid			cfid	= {0};
 	struct lu_fid			 tfid;
 	struct lfsck_instance		*lfsck	= com->lc_lfsck;
 	struct dt_device		*dev	= lfsck->li_next;
@@ -2037,6 +2037,8 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 	int				 rc	= 0;
 	ENTRY;
 
+	if (child)
+		cfid = *lfsck_dto2fid(child);
 	parent = lfsck_object_locate(dev, parent);
 	if (IS_ERR(parent))
 		GOTO(log, rc = PTR_ERR(parent));
@@ -2063,7 +2065,8 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 
 	if (update) {
 		rec->rec_type = lfsck_object_type(child) & S_IFMT;
-		rec->rec_fid = cfid;
+		LASSERT(!fid_is_zero(&cfid));
+		rec->rec_fid = &cfid;
 		rc = dt_declare_insert(env, parent,
 				       (const struct dt_rec *)rec,
 				       (const struct dt_key *)name2, th);
@@ -2094,7 +2097,7 @@ int lfsck_namespace_repair_dirent(const struct lu_env *env,
 
 	/* Someone has removed the bad name entry and reused it for other
 	 * object by race. */
-	if (!lu_fid_eq(&tfid, cfid))
+	if (!lu_fid_eq(&tfid, &cfid))
 		GOTO(unlock2, rc = 0);
 
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
@@ -2129,8 +2132,8 @@ stop:
 	/* We are not sure whether the child will become orphan or not.
 	 * Record it in the LFSCK trace file for further checking in
 	 * the second-stage scanning. */
-	if (!update && !dec && rc == 0)
-		lfsck_namespace_trace_update(env, com, cfid,
+	if (!update && !dec && child && rc == 0)
+		lfsck_namespace_trace_update(env, com, &cfid,
 					     LNTF_CHECK_LINKEA, true);
 
 unlock1:
@@ -2143,7 +2146,7 @@ log:
 	       "entry for: parent "DFID", child "DFID", name %s, type "
 	       "in name entry %o, type claimed by child %o. repair it "
 	       "by %s with new name2 %s: rc = %d\n",
-	       lfsck_lfsck2name(lfsck), PFID(pfid), PFID(cfid),
+	       lfsck_lfsck2name(lfsck), PFID(pfid), PFID(&cfid),
 	       name, type, update ? lfsck_object_type(child) : 0,
 	       update ? "updating" : "removing", name2, rc);
 
