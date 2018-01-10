@@ -382,7 +382,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 		repbody->mbo_valid |= OBD_MD_FLDIREA | OBD_MD_MEA;
 	}
 
-	if (flags & FMODE_WRITE)
+	if (flags & MDS_FMODE_WRITE)
 		rc = mdt_write_get(o);
 	else if (flags & MDS_FMODE_EXEC)
 		rc = mdt_write_deny(o);
@@ -489,7 +489,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
         RETURN(rc);
 
 err_out:
-	if (flags & FMODE_WRITE)
+	if (flags & MDS_FMODE_WRITE)
 		mdt_write_put(o);
 	else if (flags & MDS_FMODE_EXEC)
 		mdt_write_allow(o);
@@ -584,7 +584,7 @@ static int mdt_finish_open(struct mdt_thread_info *info,
 
         /* This can't be done earlier, we need to return reply body */
         if (isdir) {
-                if (flags & (MDS_OPEN_CREAT | FMODE_WRITE)) {
+		if (flags & (MDS_OPEN_CREAT | MDS_FMODE_WRITE)) {
                         /* We are trying to create or write an existing dir. */
                         RETURN(-EISDIR);
                 }
@@ -866,7 +866,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		down_read(&obj->mot_open_sem);
 
 		if (open_flags & MDS_OPEN_LOCK) {
-			if (open_flags & FMODE_WRITE)
+			if (open_flags & MDS_FMODE_WRITE)
 				lm = LCK_CW;
 			else if (open_flags & MDS_FMODE_EXEC)
 				lm = LCK_PR;
@@ -875,7 +875,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 
 			*ibits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_OPEN;
 		} else if (atomic_read(&obj->mot_lease_count) > 0) {
-			if (open_flags & FMODE_WRITE)
+			if (open_flags & MDS_FMODE_WRITE)
 				lm = LCK_CW;
 			else
 				lm = LCK_CR;
@@ -886,7 +886,7 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 
 			lhc = &info->mti_lh[MDT_LH_LOCAL];
 		} else if (dom_lock) {
-			lm = (open_flags & FMODE_WRITE) ? LCK_PW : LCK_PR;
+			lm = (open_flags & MDS_FMODE_WRITE) ? LCK_PW : LCK_PR;
 			*ibits = MDS_INODELOCK_DOM;
 		}
 
@@ -1306,7 +1306,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
             info->mti_spec.u.sp_ea.eadata == NULL)
                 GOTO(out, result = err_serious(-EINVAL));
 
-	if (create_flags & FMODE_WRITE &&
+	if (create_flags & MDS_FMODE_WRITE &&
 	    exp_connect_flags(req->rq_export) & OBD_CONNECT_RDONLY)
 		GOTO(out, result = -EROFS);
 
@@ -1837,7 +1837,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	orp_ma->ma_lmm_size = ma->ma_lmm_size;
 	orp_ma->ma_valid = MA_INODE | MA_LOV;
 	orphan = mdt_orphan_open(info, info->mti_mdt, &data->cd_fid, orp_ma,
-				 FMODE_WRITE);
+				 MDS_FMODE_WRITE);
 	if (IS_ERR(orphan)) {
 		CERROR("%s: cannot open orphan file "DFID": rc = %ld\n",
 		       mdt_obd_name(info->mti_mdt), PFID(&data->cd_fid),
@@ -1882,7 +1882,7 @@ out_layout_lock:
 out_close:
 	/* Close orphan object anyway */
 	rc2 = mo_close(info->mti_env, mdt_object_child(orphan), orp_ma,
-		       FMODE_WRITE);
+		       MDS_FMODE_WRITE);
 	if (rc2 < 0)
 		CERROR("%s: error closing volatile file "DFID": rc = %d\n",
 		       mdt_obd_name(info->mti_mdt), PFID(&data->cd_fid), rc2);
@@ -2243,13 +2243,14 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 		break;
 	}
 
-	if (mode & FMODE_WRITE)
+	if (mode & MDS_FMODE_WRITE)
 		mdt_write_put(o);
 	else if (mode & MDS_FMODE_EXEC)
 		mdt_write_allow(o);
 
         /* Update atime on close only. */
-        if ((mode & MDS_FMODE_EXEC || mode & FMODE_READ || mode & FMODE_WRITE)
+	if ((mode & MDS_FMODE_EXEC || mode & MDS_FMODE_READ ||
+	     mode & MDS_FMODE_WRITE)
             && (ma->ma_valid & MA_INODE) && (ma->ma_attr.la_valid & LA_ATIME)) {
                 /* Set the atime only. */
                 ma->ma_valid = MA_INODE;

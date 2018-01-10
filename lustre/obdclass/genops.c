@@ -2517,7 +2517,7 @@ static inline bool obd_skip_mod_rpc_slot(const struct lookup_intent *it)
 	if (it != NULL &&
 	    (it->it_op == IT_GETATTR || it->it_op == IT_LOOKUP ||
 	     it->it_op == IT_READDIR ||
-	     (it->it_op == IT_LAYOUT && !(it->it_flags & FMODE_WRITE))))
+	     (it->it_op == IT_LAYOUT && !(it->it_flags & MDS_FMODE_WRITE))))
 			return true;
 	return false;
 }

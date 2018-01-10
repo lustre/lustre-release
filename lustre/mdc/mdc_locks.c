@@ -264,12 +264,12 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	/* If inode is known, cancel conflicting OPEN locks. */
 	if (fid_is_sane(&op_data->op_fid2)) {
 		if (it->it_flags & MDS_OPEN_LEASE) { /* try to get lease */
-			if (it->it_flags & FMODE_WRITE)
+			if (it->it_flags & MDS_FMODE_WRITE)
 				mode = LCK_EX;
 			else
 				mode = LCK_PR;
 		} else {
-			if (it->it_flags & (FMODE_WRITE|MDS_OPEN_TRUNC))
+			if (it->it_flags & (MDS_FMODE_WRITE | MDS_OPEN_TRUNC))
 				mode = LCK_CW;
 #ifdef FMODE_EXEC
 			else if (it->it_flags & FMODE_EXEC)

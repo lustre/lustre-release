@@ -77,17 +77,18 @@ static int mdd_changelog_data_store_by_fid(const struct lu_env *env,
 static inline bool has_prefix(const char *str, const char *prefix);
 
 
-static fmode_t flags_helper(int flags)
+static unsigned int flags_helper(int flags)
 {
-	fmode_t mflags = 0;
+	unsigned int mflags = 0;
 
 	if (flags & MDS_FMODE_EXEC) {
 		mflags = MDS_FMODE_EXEC;
 	} else {
-		if (flags & FMODE_READ)
-			mflags = FMODE_READ;
-		if (flags & (FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
-			mflags |= FMODE_WRITE;
+		if (flags & MDS_FMODE_READ)
+			mflags = MDS_FMODE_READ;
+		if (flags &
+		    (MDS_FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
+			mflags |= MDS_FMODE_WRITE;
 	}
 
 	return mflags;
@@ -2824,9 +2825,9 @@ int accmode(const struct lu_env *env, const struct lu_attr *la, int flags)
 			return 0;
 	}
 
-	if (flags & FMODE_READ)
+	if (flags & MDS_FMODE_READ)
 		res |= MAY_READ;
-	if (flags & (FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
+	if (flags & (MDS_FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
 		res |= MAY_WRITE;
 	if (flags & MDS_FMODE_EXEC)
 		res = MAY_EXEC;
@@ -2864,7 +2865,7 @@ static int mdd_open_sanity_check(const struct lu_env *env,
 
 	/* For writing append-only file must open it with append mode. */
 	if (attr->la_flags & LUSTRE_APPEND_FL) {
-		if ((flag & FMODE_WRITE) && !(flag & MDS_OPEN_APPEND))
+		if ((flag & MDS_FMODE_WRITE) && !(flag & MDS_OPEN_APPEND))
 			RETURN(-EPERM);
 		if (flag & MDS_OPEN_TRUNC)
 			RETURN(-EPERM);
@@ -3128,7 +3129,7 @@ out:
 	 */
 	if (!rc && !blocked &&
 	    ((!(mdd->mdd_cl.mc_mask & (1 << CL_OPEN)) &&
-	      (mode & (FMODE_WRITE | MDS_OPEN_APPEND | MDS_OPEN_TRUNC))) ||
+	      (mode & (MDS_FMODE_WRITE | MDS_OPEN_APPEND | MDS_OPEN_TRUNC))) ||
 	     ((mdd->mdd_cl.mc_mask & (1 << CL_OPEN)) && last_close_by_uid)) &&
 	    !(ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_RECOV_OPEN)) {
 		if (handle == NULL) {

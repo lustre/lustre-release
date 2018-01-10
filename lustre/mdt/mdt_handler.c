@@ -5807,7 +5807,7 @@ static int mdt_export_cleanup(struct obd_export *exp)
 			 * archive request into a noop if it's not actually
 			 * dirty.
 			 */
-			if (mfd->mfd_mode & FMODE_WRITE)
+			if (mfd->mfd_mode & MDS_FMODE_WRITE)
 				rc = mdt_ctxt_add_dirty_flag(&env, info, mfd);
 
 			/* Don't unlink orphan on failover umount, LU-184 */

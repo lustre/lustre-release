@@ -6337,10 +6337,10 @@ static int lfs_changelog(int argc, char **argv)
 				if (omd->cr_openflags & MDS_FMODE_EXEC) {
 					mode[2] = 'x';
 				} else {
-					if (omd->cr_openflags & FMODE_READ)
+					if (omd->cr_openflags & MDS_FMODE_READ)
 						mode[0] = 'r';
 					if (omd->cr_openflags &
-					    (FMODE_WRITE |
+					    (MDS_FMODE_WRITE |
 					     MDS_OPEN_TRUNC |
 					     MDS_OPEN_APPEND))
 						mode[1] = 'w';

@@ -1714,7 +1714,7 @@ static int echo_create_md_object(const struct lu_env *env,
 	memset(spec, 0, sizeof(*spec));
 	echo_set_lmm_size(env, ld, ma);
 	if (stripe_count != 0) {
-		spec->sp_cr_flags |= FMODE_WRITE;
+		spec->sp_cr_flags |= MDS_FMODE_WRITE;
 		if (stripe_count != -1) {
 			if (S_ISDIR(mode)) {
 				struct lmv_user_md *lmu;

@@ -993,10 +993,8 @@ enum la_valid {
 	LA_REMOTE_ATTR_SET = (LA_UID | LA_GID | LA_PROJID | LA_LAYOUT_VERSION)
 };
 
-#ifndef FMODE_READ
-#define FMODE_READ               00000001
-#define FMODE_WRITE              00000002
-#endif
+#define MDS_FMODE_READ           00000001
+#define MDS_FMODE_WRITE          00000002
 
 #define MDS_FMODE_CLOSED         00000000
 #define MDS_FMODE_EXEC           00000004

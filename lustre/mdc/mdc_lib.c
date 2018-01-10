@@ -204,9 +204,12 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 
 static inline __u64 mds_pack_open_flags(__u64 flags)
 {
-	__u64 cr_flags = (flags & (FMODE_READ | FMODE_WRITE |
-				   MDS_OPEN_FL_INTERNAL));
+	__u64 cr_flags = (flags & MDS_OPEN_FL_INTERNAL);
 
+	if (flags & FMODE_READ)
+		cr_flags |= MDS_FMODE_READ;
+	if (flags & FMODE_WRITE)
+		cr_flags |= MDS_FMODE_WRITE;
 	if (flags & O_CREAT)
 		cr_flags |= MDS_OPEN_CREAT;
 	if (flags & O_EXCL)

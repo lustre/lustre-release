@@ -70,7 +70,7 @@ struct md_rejig_data {
 
 static inline int md_should_create(__u64 flags)
 {
-	return !(flags & MDS_OPEN_DELAY_CREATE) && (flags & FMODE_WRITE) &&
+	return !(flags & MDS_OPEN_DELAY_CREATE) && (flags & MDS_FMODE_WRITE) &&
                !(flags & MDS_OPEN_LEASE);
 }
 

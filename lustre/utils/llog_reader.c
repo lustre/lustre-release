@@ -711,10 +711,10 @@ void print_changelog_rec(struct llog_changelog_rec *rec)
 				mode[2] = 'x';
 			} else {
 				if (__le32_to_cpu(omd->cr_openflags) &
-				    FMODE_READ)
+				    MDS_FMODE_READ)
 					mode[0] = 'r';
 				if (__le32_to_cpu(omd->cr_openflags) &
-			       (FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
+			   (MDS_FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
 					mode[1] = 'w';
 			}
 
