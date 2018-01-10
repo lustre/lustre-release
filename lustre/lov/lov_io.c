@@ -365,6 +365,16 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 		       PFID(lu_object_fid(lov2lu(obj))),
 		       lio->lis_pos, lio->lis_endpos);
 
+		if (cl_io_is_trunc(io)) {
+			/**
+			 * for truncate, we uses [size, EOF) to judge whether
+			 * a write intent needs to be send, but we need to
+			 * restore the write extent to [0, size).
+			 */
+			io->ci_write_intent.e_start = 0;
+			io->ci_write_intent.e_end =
+					io->u.ci_setattr.sa_attr.lvb_size;
+		}
 		/* stop cl_io_init() loop */
 		RETURN(1);
 	}
@@ -449,7 +459,6 @@ static int lov_io_mirror_init(struct lov_io *lio, struct lov_object *obj,
 static int lov_io_slice_init(struct lov_io *lio,
 			     struct lov_object *obj, struct cl_io *io)
 {
-	struct lu_extent ext;
 	int index;
 	int result = 0;
 	ENTRY;
@@ -539,19 +548,18 @@ static int lov_io_slice_init(struct lov_io *lio,
 	      (cl_io_is_trunc(io) && io->u.ci_setattr.sa_attr.lvb_size > 0)))
 		GOTO(out, result = 0);
 
-	io->ci_write_intent.e_start = lio->lis_pos;
-	io->ci_write_intent.e_end = lio->lis_endpos;
-
-	ext = io->ci_write_intent;
 	/* for truncate, it only needs to instantiate the components
 	 * before the truncated size. */
 	if (cl_io_is_trunc(io)) {
-		ext.e_start = 0;
-		ext.e_end = io->u.ci_setattr.sa_attr.lvb_size;
+		io->ci_write_intent.e_start = 0;
+		io->ci_write_intent.e_end = io->u.ci_setattr.sa_attr.lvb_size;
+	} else {
+		io->ci_write_intent.e_start = lio->lis_pos;
+		io->ci_write_intent.e_end = lio->lis_endpos;
 	}
 
 	index = 0;
-	lov_foreach_io_layout(index, lio, &ext) {
+	lov_foreach_io_layout(index, lio, &io->ci_write_intent) {
 		if (!lsm_entry_inited(obj->lo_lsm, index)) {
 			io->ci_need_write_intent = 1;
 			break;
