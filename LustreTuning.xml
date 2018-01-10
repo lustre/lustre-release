@@ -1628,119 +1628,246 @@ ost.OSS.ost_io.nrs_orr_supported=reg_supported:reads_and_writes
       knows its RPC token rate. A rule can be added to or removed from the list
       at run time. Whenever the list of rules is changed, the queues will
       update their matched rules.</para>
-      <itemizedlist>
-        <listitem>
-          <para>
-            <literal>ost.OSS.ost_io.nrs_tbf_rule</literal>
-          </para>
-          <para>The format of the rule start command of TBF policy is as
-          follows:</para>
-          <screen>
-$ lctl set_param x.x.x.nrs_tbf_rule=
-          "[reg|hp] start <replaceable>rule_name</replaceable> <replaceable>arguments</replaceable>..."
+      <section remap="h4">
+	<title>Enable TBF policy</title>
+	<para>Command:</para>
+	<screen>lctl set_param ost.OSS.ost_io.nrs_policies="tbf &lt;<replaceable>policy</replaceable>&gt;"
+	</screen>
+	<para>For now, the RPCs can be classified into the different types
+	according to their NID, JOBID and OPCode. (UID/GID will be supported
+	soon.) When enabling TBF policy, you can specify one of the types, or
+	just use "tbf" to enable all of them to do a fine-grained RPC requests
+	classification.</para>
+	<para>Example:</para>
+	<screen>$ lctl set_param ost.OSS.ost_io.nrs_policies="tbf"
+$ lctl set_param ost.OSS.ost_io.nrs_policies="tbf nid"
+$ lctl set_param ost.OSS.ost_io.nrs_policies="tbf jobid"
+$ lctl set_param ost.OSS.ost_io.nrs_policies="tbf opcode"</screen>
+      </section>
+      <section remap="h4">
+	<title>Start a TBF rule</title>
+	<para>The TBF rule is defined in the parameter
+	<literal>ost.OSS.ost_io.nrs_tbf_rule</literal>.</para>
+	<para>Command:</para>
+	<screen>lctl set_param x.x.x.nrs_tbf_rule=
+"[reg|hp] start <replaceable>rule_name</replaceable> <replaceable>arguments</replaceable>..."
+	</screen>
+	<para>'<replaceable>rule_name</replaceable>' is a string of the TBF
+	policy rule's name and '<replaceable>arguments</replaceable>' is a
+	string to specify the detailed rule according to the different types.
+	</para>
+	<itemizedlist>
+	<para>Next, the different types of TBF policies will be described.</para>
+	  <listitem>
+	    <para><emphasis role="bold">NID based TBF policy</emphasis></para>
+	    <para>Command:</para>
+            <screen>lctl set_param x.x.x.nrs_tbf_rule=
+"[reg|hp] start <replaceable>rule_name</replaceable> nid={<replaceable>nidlist</replaceable>} rate=<replaceable>rate</replaceable>"
+	    </screen>
+            <para>'<replaceable>nidlist</replaceable>' uses the same format
+	    as configuring LNET route. '<replaceable>rate</replaceable>' is
+	    the (upper limit) RPC rate of the rule.</para>
+            <para>Example:</para>
+	    <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start other_clients nid={192.168.*.*@tcp} rate=50"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start computes nid={192.168.1.[2-128]@tcp} rate=500"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start loginnode nid={192.168.1.1@tcp} rate=100"</screen>
+            <para>In this example, the rate of processing RPC requests from
+	    compute nodes is at most 5x as fast as those from login nodes.
+	    The output of <literal>ost.OSS.ost_io.nrs_tbf_rule</literal> is
+	    like:</para>
+	    <screen>lctl get_param ost.OSS.ost_io.nrs_tbf_rule
+ost.OSS.ost_io.nrs_tbf_rule=
+regular_requests:
+CPT 0:
+loginnode {192.168.1.1@tcp} 100, ref 0
+computes {192.168.1.[2-128]@tcp} 500, ref 0
+other_clients {192.168.*.*@tcp} 50, ref 0
+default {*} 10000, ref 0
+high_priority_requests:
+CPT 0:
+loginnode {192.168.1.1@tcp} 100, ref 0
+computes {192.168.1.[2-128]@tcp} 500, ref 0
+other_clients {192.168.*.*@tcp} 50, ref 0
+default {*} 10000, ref 0</screen>
+            <para>Also, the rule can be written in <literal>reg</literal> and
+	    <literal>hp</literal> formats:</para>
+	    <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"reg start loginnode nid={192.168.1.1@tcp} rate=100"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"hp start loginnode nid={192.168.1.1@tcp} rate=100"</screen>
+	  </listitem>
+	  <listitem>
+	    <para><emphasis role="bold">JobID based TBF policy</emphasis></para>
+            <para>For the JobID, please see
+            <xref xmlns:xlink="http://www.w3.org/1999/xlink"
+            linkend="dbdoclet.jobstats" /> for more details.</para>
+	    <para>Command:</para>
+            <screen>lctl set_param x.x.x.nrs_tbf_rule=
+"[reg|hp] start <replaceable>name</replaceable> jobid={<replaceable>jobid_list</replaceable>} rate=<replaceable>rate</replaceable>"
+	    </screen>
+	    <para>Wildcard is supported in
+	    {<replaceable>jobid_list</replaceable>}.</para>
+            <para>Example:</para>
+	    <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start iozone_user jobid={iozone.500} rate=100"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start dd_user jobid={dd.*} rate=50"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start user1 jobid={*.600} rate=10"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start user2 jobid={io*.10* *.500} rate=200"</screen>
+            <para>Also, the rule can be written in <literal>reg</literal> and
+	    <literal>hp</literal> formats:</para>
+	    <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"hp start iozone_user1 jobid={iozone.500} rate=100"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"reg start iozone_user1 jobid={iozone.500} rate=100"</screen>
+	  </listitem>
+	  <listitem>
+	    <para><emphasis role="bold">Opcode based TBF policy</emphasis></para>
+	    <para>Command:</para>
+            <screen>$ lctl set_param x.x.x.nrs_tbf_rule=
+"[reg|hp] start <replaceable>name</replaceable> opcode={<replaceable>opcode_list</replaceable>} rate=<replaceable>rate</replaceable>"
+	    </screen>
+            <para>Example:</para>
+	    <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start user1 opcode={ost_read} rate=100"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start iozone_user1 opcode={ost_read ost_write} rate=200"</screen>
+            <para>Also, the rule can be written in <literal>reg</literal> and
+	    <literal>hp</literal> formats:</para>
+	    <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"hp start iozone_user1 opcode={ost_read} rate=100"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"reg start iozone_user1 opcode={ost_read} rate=100"</screen>
+	  </listitem>
+	  <listitem>
+	    <para><emphasis role="bold">Policy combination</emphasis></para>
+	    <para>To support rules with complex expressions of NID/JOBID/OPCode
+	    conditions, TBF classifier is extented to classify RPC in a more
+	    fine-grained way. This feature supports logical conditional
+	    conjunction and disjunction operations among different types.
+	    In the rule:
+	    "&amp;" represents the conditional conjunction and
+	    "," represents the conditional disjunction.</para>
+	    <para>Example:</para>
+	    <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start comp_rule opcode={ost_write}&amp;jobid={dd.0},\
+nid={192.168.1.[1-128]@tcp 0@lo} rate=100"</screen>
+	    <para>In this example, those RPCs whose <literal>opcode</literal> is
+	    ost_write and <literal>jobid</literal> is dd.0, or
+	    <literal>nid</literal> satisfies the condition of
+	    {192.168.1.[1-128]@tcp 0@lo} will be processed at the rate of 100
+	    req/sec.
+	    The output of <literal>ost.OSS.ost_io.nrs_tbf_rule</literal>is like:
+	    </para>
+	    <screen>$ lctl get_param ost.OSS.ost_io.nrs_tbf_rule
+ost.OSS.ost_io.nrs_tbf_rule=
+regular_requests:
+CPT 0:
+comp_rule opcode={ost_write}&amp;jobid={dd.0},nid={192.168.1.[1-128]@tcp 0@lo} 100, ref 0
+default * 10000, ref 0
+CPT 1:
+comp_rule opcode={ost_write}&amp;jobid={dd.0},nid={192.168.1.[1-128]@tcp 0@lo} 100, ref 0
+default * 10000, ref 0
+high_priority_requests:
+CPT 0:
+comp_rule opcode={ost_write}&amp;jobid={dd.0},nid={192.168.1.[1-128]@tcp 0@lo} 100, ref 0
+default * 10000, ref 0
+CPT 1:
+comp_rule opcode={ost_write}&amp;jobid={dd.0},nid={192.168.1.[1-128]@tcp 0@lo} 100, ref 0
+default * 10000, ref 0</screen>
+	  </listitem>
+	</itemizedlist>
+      </section>
+      <section remap="h4">
+          <title>Change a TBF rule</title>
+          <para>Command:</para>
+          <screen>lctl set_param x.x.x.nrs_tbf_rule=
+"[reg|hp] change <replaceable>rule_name</replaceable> rate=<replaceable>rate</replaceable>"
+          </screen>
+          <para>Example:</para>
+          <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"change loginnode rate=200"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"reg change loginnode rate=200"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"hp change loginnode rate=200"
 </screen>
-          <para>The '
-          <replaceable>rule_name</replaceable>' argument is a string which
-          identifies a rule. The format of the '
-          <replaceable>arguments</replaceable>' is changing according to the
-          type of the TBF policy. For the NID based TBF policy, its format is
-          as follows:</para>
-          <screen>
-$ lctl set_param x.x.x.nrs_tbf_rule=
-          "[reg|hp] start <replaceable>rule_name</replaceable> {<replaceable>nidlist</replaceable>} <replaceable>rate</replaceable>"
-</screen>
-          <para>The format of '
-          <replaceable>nidlist</replaceable>' argument is the same as the
-          format when configuring LNet route. The '
-          <replaceable>rate</replaceable>' argument is the RPC rate of the
-          rule, means the upper limit number of requests per second.</para>
-          <para>Following commands are valid. Please note that a newly started
-          rule is prior to old rules, so the order of starting rules is
-          critical too.</para>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-          "start other_clients {192.168.*.*@tcp} 50"
-</screen>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-          "start loginnode {192.168.1.1@tcp} 100"
-</screen>
-          <para>General rule can be replaced by two rules (reg and hp) as
-          follows:</para>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-          "reg start loginnode {192.168.1.1@tcp} 100"
-</screen>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-          "hp start loginnode {192.168.1.1@tcp} 100"
-</screen>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-          "start computes {192.168.1.[2-128]@tcp} 500"
-</screen>
-          <para>The above rules will put an upper limit for servers to process
-          at most 5x as many RPCs from compute nodes as login nodes.</para>
-          <para>For the JobID (please see
-          <xref xmlns:xlink="http://www.w3.org/1999/xlink"
-                linkend="dbdoclet.jobstats" /> for more details) based TBF
-          policy, its format is as follows:</para>
-          <screen>
-$ lctl set_param x.x.x.nrs_tbf_rule=
-          "[reg|hp] start <replaceable>name</replaceable> {<replaceable>jobid_list</replaceable>} <replaceable>rate</replaceable>"
-</screen>
-          <para>Following commands are valid:</para>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-          "start user1 {iozone.500 dd.500} 100"
-</screen>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-          "start iozone_user1 {iozone.500} 100"
-</screen>
-          <para>Same as nid, could use reg and hp rules separately:</para>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-          "hp start iozone_user1 {iozone.500} 100"
-</screen>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
-          "reg start iozone_user1 {iozone.500} 100"
-</screen>
-          <para>The format of the rule change command of TBF policy is as
-          follows:</para>
-          <screen>
-$ lctl set_param x.x.x.nrs_tbf_rule=
-          "[reg|hp] change <replaceable>rule_name</replaceable> <replaceable>rate</replaceable>"
-</screen>
-          <para>Following commands are valid:</para>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="change loginnode 200"
-</screen>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="reg change loginnode 200"
-</screen>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp change loginnode 200"
-</screen>
-          <para>The format of the rule stop command of TBF policy is as
-          follows:</para>
-          <screen>
-$ lctl set_param x.x.x.nrs_tbf_rule="[reg|hp] stop 
-<replaceable>rule_name</replaceable>"
-</screen>
-          <para>Following commands are valid:</para>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop loginnode"
-</screen>
-          <screen>
+      </section>
+      <section remap="h4">
+          <title>Stop a TBF rule</title>
+          <para>Command:</para>
+          <screen>lctl set_param x.x.x.nrs_tbf_rule="[reg|hp] stop
+<replaceable>rule_name</replaceable>"</screen>
+          <para>Example:</para>
+          <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="stop loginnode"
 $ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="reg stop loginnode"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp stop loginnode"</screen>
+      </section>
+      <section remap="h4">
+        <title>Rule options</title>
+	<para>To support more flexible rule conditions, the following options
+	are added.</para>
+	<itemizedlist>
+	  <listitem>
+	    <para><emphasis role="bold">Reordering of TBF rules</emphasis></para>
+	    <para>By default, a newly started rule is prior to the old ones,
+	    but by specifying the argument '<literal>rank=</literal>' when
+	    inserting a new rule with "<literal>start</literal>" command,
+	    the rank of the rule can be changed. Also, it can be changed by
+	    "<literal>change</literal>" command.
+	    </para>
+	    <para>Command:</para>
+	    <screen>lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+"start <replaceable>rule_name</replaceable> <replaceable>arguments</replaceable>... rank=<replaceable>obj_rule_name</replaceable>"
+lctl set_param ost.OSS.ost_io.nrs_tbf_rule=
+"change <replaceable>rule_name</replaceable> rate=<replaceable>rate</replaceable> rank=<replaceable>obj_rule_name</replaceable>"
 </screen>
-          <screen>
-$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule="hp stop loginnode"
-</screen>
-        </listitem>
-      </itemizedlist>
+	    <para>By specifying the existing rule
+	    '<replaceable>obj_rule_name</replaceable>', the new rule
+	    '<replaceable>rule_name</replaceable>' will be moved to the front of
+	    '<replaceable>obj_rule_name</replaceable>'.</para>
+	    <para>Example:</para>
+	    <screen>$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start computes nid={192.168.1.[2-128]@tcp} rate=500"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start user1 jobid={iozone.500 dd.500} rate=100"
+$ lctl set_param ost.OSS.ost_io.nrs_tbf_rule=\
+"start iozone_user1 opcode={ost_read ost_write} rate=200 rank=computes"</screen>
+	    <para>In this example, rule "iozone_user1" is added to the front of
+	    rule "computes". We can see the order by the following command:
+	    </para>
+	    <screen>$ lctl get_param ost.OSS.ost_io.nrs_tbf_rule
+ost.OSS.ost_io.nrs_tbf_rule=
+regular_requests:
+CPT 0:
+user1 jobid={iozone.500 dd.500} 100, ref 0
+iozone_user1 opcode={ost_read ost_write} 200, ref 0
+computes nid={192.168.1.[2-128]@tcp} 500, ref 0
+default * 10000, ref 0
+CPT 1:
+user1 jobid={iozone.500 dd.500} 100, ref 0
+iozone_user1 opcode={ost_read ost_write} 200, ref 0
+computes nid={192.168.1.[2-128]@tcp} 500, ref 0
+default * 10000, ref 0
+high_priority_requests:
+CPT 0:
+user1 jobid={iozone.500 dd.500} 100, ref 0
+iozone_user1 opcode={ost_read ost_write} 200, ref 0
+computes nid={192.168.1.[2-128]@tcp} 500, ref 0
+default * 10000, ref 0
+CPT 1:
+user1 jobid={iozone.500 dd.500} 100, ref 0
+iozone_user1 opcode={ost_read ost_write} 200, ref 0
+computes nid={192.168.1.[2-128]@tcp} 500, ref 0
+default * 10000, ref 0</screen>
+	  </listitem>
+	</itemizedlist>
+      </section>
     </section>
     <section xml:id="dbdoclet.delaytuning" condition='l2A'>
       <title>
