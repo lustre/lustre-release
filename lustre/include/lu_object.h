@@ -430,31 +430,6 @@ struct lu_attr {
 	__u32		la_layout_version;
 };
 
-/** Bit-mask of valid attributes */
-enum la_valid {
-        LA_ATIME = 1 << 0,
-        LA_MTIME = 1 << 1,
-        LA_CTIME = 1 << 2,
-        LA_SIZE  = 1 << 3,
-        LA_MODE  = 1 << 4,
-        LA_UID   = 1 << 5,
-        LA_GID   = 1 << 6,
-        LA_BLOCKS = 1 << 7,
-        LA_TYPE   = 1 << 8,
-        LA_FLAGS  = 1 << 9,
-        LA_NLINK  = 1 << 10,
-        LA_RDEV   = 1 << 11,
-        LA_BLKSIZE = 1 << 12,
-        LA_KILL_SUID = 1 << 13,
-        LA_KILL_SGID = 1 << 14,
-	LA_PROJID    = 1 << 15,
-	LA_LAYOUT_VERSION = 1 << 16,
-	/**
-	 * Attributes must be transmitted to OST objects
-	 */
-	LA_REMOTE_ATTR_SET = (LA_UID | LA_GID | LA_PROJID | LA_LAYOUT_VERSION)
-};
-
 /**
  * Layer in the layered object.
  */
