@@ -1949,23 +1949,15 @@ test_42h() {
 }
 run_test 42h "pdirops: mkdir vs readdir =============="
 
-# test 43: unlink and blocking operations
+# test 43: rmdir,mkdir won't return -EEXIST
 test_43a() {
-	pdo_lru_clear
-	touch $DIR1/$tfile
-#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
-	rm $DIR1/$tfile &
-	PID1=$! ; pdo_sched
-	mkdir $DIR2/$tfile &
-	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
-	check_pdo_conflict $PID1 && { wait $PID1; error "mkdir isn't blocked"; }
-	wait $PID2 ; [ $? -eq 0 ] || error "mkdir must succeed"
-	rm -rf $DIR/$tfile*
+	for i in {1..1000}; do
+		mkdir $DIR1/$tdir || error "mkdir $tdir failed"
+		rmdir $DIR2/$tdir || error "rmdir $tdir failed"
+	done
 	return 0
 }
-run_test 43a "pdirops: unlink vs mkdir =============="
+run_test 43a "rmdir,mkdir doesn't return -EEXIST =============="
 
 test_43b() {
 	pdo_lru_clear
@@ -2106,6 +2098,26 @@ test_43i() {
 	return 0
 }
 run_test 43i "pdirops: unlink vs remote mkdir"
+
+test_43j() {
+	[[ $MDS1_VERSION -lt $(version_code 2.13.52) ]] &&
+		skip "Need MDS version newer than 2.13.52"
+
+	for i in {1..100}; do
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_CREATE_RACE         0x167
+		do_facet $SINGLEMDS lctl set_param fail_loc=0x80000167
+		OK=0
+		mkdir $DIR1/$tdir &
+		PID1=$!
+		mkdir $DIR2/$tdir && ((OK++))
+		wait $PID1 && ((OK++))
+		(( OK == 1 )) || error "exactly one mkdir should succeed"
+
+		rmdir $DIR1/$tdir || error "rmdir failed"
+	done
+	return 0
+}
+run_test 43j "racy mkdir return EEXIST =============="
 
 # test 44: rename tgt and blocking operations
 test_44a() {
@@ -2269,23 +2281,17 @@ test_44i() {
 }
 run_test 44i "pdirops: rename tgt vs remote mkdir"
 
-# test 45: rename src and blocking operations
+# test 45: rename,mkdir doesn't fail with -EEXIST
 test_45a() {
-	pdo_lru_clear
-	touch $DIR1/$tfile
-#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
-	mv $DIR1/$tfile $DIR1/$tfile-2 &
-	PID1=$! ; pdo_sched
-	mkdir $DIR2/$tfile &
-	PID2=$! ; pdo_sched
-	do_facet $SINGLEMDS lctl set_param fail_loc=0
-	check_pdo_conflict $PID1 && { wait $PID1; error "mkdir isn't blocked"; }
-	wait $PID2 ; [ $? -eq 0 ] || error "mkdir must succeed"
-	rm -rf $DIR/$tfile*
+	for i in {1..1000}; do
+		mkdir $DIR1/$tdir || error "mkdir $tdir failed"
+		mrename $DIR2/$tdir $DIR2/$tdir.$i > /dev/null ||
+			error "mrename to $tdir.$i failed"
+	done
+	rm -rf $DIR/$tdir*
 	return 0
 }
-run_test 45a "pdirops: rename src vs mkdir =============="
+run_test 45a "rename,mkdir doesn't return -EEXIST =============="
 
 test_45b() {
 	pdo_lru_clear

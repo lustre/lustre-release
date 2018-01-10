@@ -406,6 +406,24 @@ static int mdt_create(struct mdt_thread_info *info)
 	if (!mdt_object_exists(parent))
 		GOTO(put_parent, rc = -ENOENT);
 
+	/*
+	 * LU-10235: check if name exists locklessly first to avoid massive
+	 * lock recalls on existing directories.
+	 */
+	rc = mdt_lookup_version_check(info, parent, &rr->rr_name,
+				      &info->mti_tmp_fid1, 1);
+	if (rc == 0)
+		GOTO(put_parent, rc = -EEXIST);
+
+	/* -ENOENT is expected here */
+	if (rc != -ENOENT)
+		GOTO(put_parent, rc);
+
+	/* save version of file name for replay, it must be ENOENT here */
+	mdt_enoent_version_save(info, 1);
+
+	OBD_RACE(OBD_FAIL_MDS_CREATE_RACE);
+
 	lh = &info->mti_lh[MDT_LH_PARENT];
 	mdt_lock_pdo_init(lh, LCK_PW, &rr->rr_name);
 	rc = mdt_object_lock(info, parent, lh, MDS_INODELOCK_UPDATE);
@@ -417,22 +435,6 @@ static int mdt_create(struct mdt_thread_info *info)
 		if (rc)
 			GOTO(unlock_parent, rc);
 	}
-
-	/*
-	 * Check child name version during replay.
-	 * During create replay a file may exist with same name.
-	 */
-	rc = mdt_lookup_version_check(info, parent, &rr->rr_name,
-				      &info->mti_tmp_fid1, 1);
-	if (rc == 0)
-		GOTO(unlock_parent, rc = -EEXIST);
-
-	/* -ENOENT is expected here */
-	if (rc != -ENOENT)
-		GOTO(unlock_parent, rc);
-
-	/* save version of file name for replay, it must be ENOENT here */
-	mdt_enoent_version_save(info, 1);
 
 	child = mdt_object_new(info->mti_env, mdt, rr->rr_fid2);
 	if (unlikely(IS_ERR(child)))
