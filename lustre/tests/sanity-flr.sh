@@ -695,9 +695,13 @@ test_21() {
 	$LFS setstripe -E EOF -o 1 $tf2
 
 	local dd_count=$((RANDOM % 20 + 1))
-	dd if=/dev/zero of=$tf bs=1M count=$dd_count
-	dd if=/dev/zero of=$tf2 bs=1M count=1 seek=$((dd_count - 1))
-	cancel_lru_locks osc
+	dd if=/dev/zero of=$tf bs=1M count=$dd_count oflag=sync
+	dd if=/dev/zero of=$tf2 bs=1M count=1 seek=$((dd_count - 1)) oflag=sync
+
+	# for zfs - sync OST dataset so that du below will return
+	# accurate results
+	[ "$FSTYPE" = "zfs" ] &&
+		do_nodes $(comma_list $(osts_nodes)) "$ZPOOL sync"
 
 	local blocks=$(du -kc $tf $tf2 | awk '/total/{print $1}')
 
