@@ -1190,6 +1190,7 @@ static int server_register_target(struct lustre_sb_info *lsi)
 	struct mgs_target_info *mti = NULL;
 	bool writeconf;
 	int rc;
+	int tried = 0;
 	ENTRY;
 
 	LASSERT(mgc);
@@ -1214,6 +1215,7 @@ static int server_register_target(struct lustre_sb_info *lsi)
 	writeconf = !!(lsi->lsi_flags & (LDD_F_NEED_INDEX | LDD_F_UPDATE));
 	mti->mti_flags |= LDD_F_OPC_REG;
 
+again:
 	/* Register the target */
 	/* FIXME use mgc_process_config instead */
 	rc = obd_set_info_async(NULL, mgc->u.cli.cl_mgc_mgsexp,
@@ -1227,6 +1229,17 @@ static int server_register_target(struct lustre_sb_info *lsi)
 				"to start: rc = %d. Please see messages on "
 				"the MGS.\n", lsi->lsi_svname, rc);
 		} else if (writeconf) {
+			if ((rc == -ESHUTDOWN || rc == -EIO) && ++tried < 5) {
+				/* The connection with MGS is not established.
+				 * Try again after 2 seconds. Interruptable. */
+				set_current_state(TASK_INTERRUPTIBLE);
+				schedule_timeout(
+					msecs_to_jiffies(MSEC_PER_SEC) * 2);
+				set_current_state(TASK_RUNNING);
+				if (!signal_pending(current))
+					goto again;
+			}
+
 			LCONSOLE_ERROR_MSG(0x15f,
 				"%s: cannot register this server with the MGS: "
 				"rc = %d. Is the MGS running?\n",
