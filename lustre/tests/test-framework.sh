@@ -5719,7 +5719,7 @@ check_grant() {
 	server_grant=$(do_nodes $(comma_list $(osts_nodes)) \
 		"$LCTL get_param "\
 		"obdfilter.${FSNAME}-OST*.{tot_granted,tot_pending,grant_precreate}" |
-		sed 's/=/ /'| awk '/tot_granted/{ total += $2 }; 
+		sed 's/=/ /'| awk '/tot_granted/{ total += $2 };
 				/tot_pending/{ total -= $2 };
 				/grant_precreate/{ total -= $2 };
 				END { printf("%0.0f", total) }')
@@ -8437,7 +8437,7 @@ lfsck_verify_pfid()
         # controllable
 	cancel_lru_locks mdc
 	cancel_lru_locks osc
-        
+
 	# make sure PFID is set correctly for files
 	do_nodes $(comma_list $(osts_nodes)) \
 	       "$LCTL set_param -n obdfilter.${FSNAME}-OST*.lfsck_verify_pfid=1"
@@ -8488,4 +8488,21 @@ check_clients_full() {
 			"current_state: FULL" $timeout
 		[ $? -eq 0 ] || error "$osc state is not FULL"
 	done
+}
+
+restore_layout() {
+	local dir=$1
+	local layout=$2
+
+	[ -z "$layout" ] && return
+
+	setfattr -n trusted.lov -v $layout $dir ||
+		error "error restoring layout \"$layout\" to \"$dir\""
+}
+
+save_layout() {
+	local dir=$1
+	local str=$(getfattr -n trusted.lov --absolute-names -e hex $dir |
+			awk -F'=' '/trusted.lov/{print $2}')
+	echo "$str"
 }

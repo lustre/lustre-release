@@ -39,12 +39,17 @@ DOM="yes"
 DOM_SIZE=${DOM_SIZE:-"$((1024*1024))"}
 OSC="mdc"
 
-lfs setstripe -E $DOM_SIZE -L mdt -E EOF $DIR1
+trap restore_default_layout EXIT
+restore_default_layout() {
+	[ -n "$saved_layout" ] && restore_layout $DIR1 $saved_layout ||
+		$LFS setstripe -d $DIR1
+}
+
+saved_layout=$(save_layout $DIR1)
+$LFS setstripe -E $DOM_SIZE -L mdt -E EOF $DIR1
 
 mkdir -p $MOUNT2
 mount_client $MOUNT2
-
-lctl set_param debug=0xffffffff 2> /dev/null
 
 test_1() {
 	dd if=/dev/zero of=$DIR1/$tfile bs=7k count=1 || error "write 1"
