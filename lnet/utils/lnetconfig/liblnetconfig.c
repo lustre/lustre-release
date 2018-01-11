@@ -61,6 +61,7 @@
 #define MANAGE_CMD              "manage"
 
 #define modparam_path "/sys/module/lnet/parameters/"
+#define gni_nid_path "/proc/cray_xt/"
 
 const char *gmsg_stat_names[] = {"sent_stats", "received_stats",
 				 "dropped_stats"};
@@ -1146,51 +1147,102 @@ static int socket_intf_query(int request, char *intf,
 	return rc;
 }
 
+static int lustre_lnet_queryip(struct lnet_dlc_intf_descr *intf, __u32 *ip)
+{
+	struct ifreq ifr;
+	int rc;
+
+	memset(&ifr, 0, sizeof(ifr));
+	rc = socket_intf_query(SIOCGIFFLAGS, intf->intf_name, &ifr);
+	if (rc != 0)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	if ((ifr.ifr_flags & IFF_UP) == 0)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	memset(&ifr, 0, sizeof(ifr));
+	rc = socket_intf_query(SIOCGIFADDR, intf->intf_name, &ifr);
+	if (rc != 0)
+		return LUSTRE_CFG_RC_BAD_PARAM;
+
+	*ip = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr;
+	*ip = bswap_32(*ip);
+
+	return LUSTRE_CFG_RC_NO_ERR;
+}
+
 /*
  * for each interface in the array of interfaces find the IP address of
  * that interface, create its nid and add it to an array of NIDs.
  * Stop if any of the interfaces is down
  */
 static int lustre_lnet_intf2nids(struct lnet_dlc_network_descr *nw,
-				 lnet_nid_t **nids, __u32 *nnids)
+				 lnet_nid_t **nids, __u32 *nnids,
+				 char *err_str, size_t str_len)
 {
 	int i = 0, count = 0, rc;
-	struct ifreq ifr;
-	__u32 ip;
 	struct lnet_dlc_intf_descr *intf;
+	char val[LNET_MAX_STR_LEN];
+	__u32 ip;
+	int gni_num;
 
-	if (nw == NULL || nids == NULL)
+
+	if (nw == NULL || nids == NULL) {
+		snprintf(err_str, str_len,
+			 "\"unexpected parameters to lustre_lnet_intf2nids()\"");
+		err_str[str_len - 1] = '\0';
 		return LUSTRE_CFG_RC_BAD_PARAM;
+	}
 
-	list_for_each_entry(intf, &nw->nw_intflist, intf_on_network)
-		count++;
+	if (LNET_NETTYP(nw->nw_id) == GNILND) {
+		count = 1;
+	} else {
+		list_for_each_entry(intf, &nw->nw_intflist, intf_on_network)
+			count++;
+	}
 
 	*nids = calloc(count, sizeof(lnet_nid_t));
-	if (*nids == NULL)
+	if (*nids == NULL) {
+		snprintf(err_str, str_len,
+			 "\"out of memory\"");
+		err_str[str_len - 1] = '\0';
 		return LUSTRE_CFG_RC_OUT_OF_MEM;
-
-	list_for_each_entry(intf, &nw->nw_intflist, intf_on_network) {
-		memset(&ifr, 0, sizeof(ifr));
-		rc = socket_intf_query(SIOCGIFFLAGS, intf->intf_name, &ifr);
-		if (rc != 0)
-			goto failed;
-
-		if ((ifr.ifr_flags & IFF_UP) == 0) {
-			rc = LUSTRE_CFG_RC_BAD_PARAM;
+	}
+	/*
+	 * special case the GNI interface since it doesn't have an IP
+	 * address. The assumption is that there can only be one GNI
+	 * interface in the system. No interface name is provided.
+	 */
+	if (LNET_NETTYP(nw->nw_id) == GNILND) {
+		rc = read_sysfs_file(gni_nid_path, "nid", val,
+				1, sizeof(val));
+		if (rc) {
+			snprintf(err_str, str_len,
+				 "\"cannot read gni nid\"");
+			err_str[str_len - 1] = '\0';
 			goto failed;
 		}
+		gni_num = atoi(val);
 
-		memset(&ifr, 0, sizeof(ifr));
-		rc = socket_intf_query(SIOCGIFADDR, intf->intf_name, &ifr);
-		if (rc != 0)
+		(*nids)[i] = LNET_MKNID(nw->nw_id, gni_num);
+
+		goto out;
+	}
+
+	/* look at the other interfaces */
+	list_for_each_entry(intf, &nw->nw_intflist, intf_on_network) {
+		rc = lustre_lnet_queryip(intf, &ip);
+		if (rc != LUSTRE_CFG_RC_NO_ERR) {
+			snprintf(err_str, str_len,
+				 "\"couldn't query intf %s\"", intf->intf_name);
+			err_str[str_len - 1] = '\0';
 			goto failed;
-
-		ip = ((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr.s_addr;
-		ip = bswap_32(ip);
+		}
 		(*nids)[i] = LNET_MKNID(nw->nw_id, ip);
 		i++;
 	}
 
+out:
 	*nnids = count;
 
 	return 0;
@@ -1359,25 +1411,34 @@ int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 	return LUSTRE_CFG_RC_MATCH;
 }
 
-int lustre_lnet_resolve_ip2nets_rule(struct lustre_lnet_ip2nets *ip2nets,
-				     lnet_nid_t **nids, __u32 *nnids)
+static int lustre_lnet_resolve_ip2nets_rule(struct lustre_lnet_ip2nets *ip2nets,
+					    lnet_nid_t **nids, __u32 *nnids,
+					    char *err_str, size_t str_len)
 {
 	struct ifaddrs *ifa;
 	int rc = LUSTRE_CFG_RC_NO_ERR;
 
 	rc = getifaddrs(&ifa);
-	if (rc < 0)
+	if (rc < 0) {
+		snprintf(err_str, str_len,
+			 "\"failed to get interface addresses: %d\"", -errno);
+		err_str[str_len - 1] = '\0';
 		return -errno;
+	}
 
 	rc = lustre_lnet_match_ip_to_intf(ifa,
 					  &ip2nets->ip2nets_net.nw_intflist,
 					  &ip2nets->ip2nets_ip_ranges);
 	if (rc != LUSTRE_CFG_RC_MATCH) {
+		snprintf(err_str, str_len,
+			 "\"couldn't match ip to existing interfaces\"");
+		err_str[str_len - 1] = '\0';
 		freeifaddrs(ifa);
 		return rc;
 	}
 
-	rc = lustre_lnet_intf2nids(&ip2nets->ip2nets_net, nids, nnids);
+	rc = lustre_lnet_intf2nids(&ip2nets->ip2nets_net, nids, nnids,
+				   err_str, sizeof(err_str));
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		*nids = NULL;
 		*nnids = 0;
@@ -1495,13 +1556,10 @@ lustre_lnet_config_ip2nets(struct lustre_lnet_ip2nets *ip2nets,
 	 * The memory is allocated in that function then freed here when
 	 * it's no longer needed.
 	 */
-	rc = lustre_lnet_resolve_ip2nets_rule(ip2nets, &nids, &nnids);
-	if (rc != LUSTRE_CFG_RC_NO_ERR && rc != LUSTRE_CFG_RC_MATCH) {
-		snprintf(err_str,
-			 sizeof(err_str),
-			 "\"cannot resolve ip2nets rule\"");
+	rc = lustre_lnet_resolve_ip2nets_rule(ip2nets, &nids, &nnids, err_str,
+					      sizeof(err_str));
+	if (rc != LUSTRE_CFG_RC_NO_ERR && rc != LUSTRE_CFG_RC_MATCH)
 		goto out;
-	}
 
 	if (list_empty(&ip2nets->ip2nets_net.nw_intflist)) {
 		snprintf(err_str, sizeof(err_str),
@@ -1543,7 +1601,8 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 
 	if (ip2net == NULL && (nw_descr == NULL || nw_descr->nw_id == 0 ||
-	    list_empty(&nw_descr->nw_intflist))) {
+	    (list_empty(&nw_descr->nw_intflist) &&
+	     LNET_NETTYP(nw_descr->nw_id) != GNILND))) {
 		snprintf(err_str,
 			 sizeof(err_str),
 			 "\"missing mandatory parameters in NI config: '%s'\"",
@@ -1629,7 +1688,11 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 		goto out;
 	}
 
-	if (list_empty(&nw_descr->nw_intflist)) {
+	/*
+	 * special case the GNI since no interface name is expected
+	 */
+	if (list_empty(&nw_descr->nw_intflist) &&
+	    (LNET_NETTYP(nw_descr->nw_id) != GNILND)) {
 		snprintf(err_str,
 			sizeof(err_str),
 			"\"no interface name provided\"");
@@ -1637,10 +1700,9 @@ int lustre_lnet_config_ni(struct lnet_dlc_network_descr *nw_descr,
 		goto out;
 	}
 
-	rc = lustre_lnet_intf2nids(nw_descr, &nids, &nnids);
+	rc = lustre_lnet_intf2nids(nw_descr, &nids, &nnids,
+				   err_str, sizeof(err_str));
 	if (rc != 0) {
-		snprintf(err_str, sizeof(err_str),
-			 "\"bad parameter\"");
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
 	}
@@ -1682,8 +1744,7 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 
 	snprintf(err_str, sizeof(err_str), "\"success\"");
 
-	if (nw_descr == NULL || nw_descr->nw_id == 0 ||
-	    list_empty(&nw_descr->nw_intflist)) {
+	if (nw_descr == NULL || nw_descr->nw_id == 0) {
 		snprintf(err_str,
 			 sizeof(err_str),
 			 "\"missing mandatory parameter in deleting NI: '%s'\"",
@@ -1705,10 +1766,9 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw_descr,
 		goto out;
 	}
 
-	rc = lustre_lnet_intf2nids(nw_descr, &nids, &nnids);
+	rc = lustre_lnet_intf2nids(nw_descr, &nids, &nnids,
+				   err_str, sizeof(err_str));
 	if (rc != 0) {
-		snprintf(err_str, sizeof(err_str),
-			 "\"bad parameter\"");
 		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		goto out;
 	}
