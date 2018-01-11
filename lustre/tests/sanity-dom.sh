@@ -103,25 +103,19 @@ run_test fsx "Dual-mount fsx with DoM files"
 
 test_sanity()
 {
-	local SAVE_ONLY=$ONLY
-
-	[ ! -f sanity.sh ] && skip_env "No sanity.sh skipping" && return
+	[[ -f sanity.sh ]] || { skip "sanity.sh doesn't exist"; return 0; }
 	# XXX: to fix 45
 	ONLY="36 39 40 41 42 43 46 56r 101e 119a 131 150 155a 155b 155c \
-		155d 207 241 251" OSC="mdc" DOM="yes" sh sanity.sh
-	ONLY=$SAVE_ONLY
+		155d 207 241 251" OSC="mdc" DOM="yes" bash sanity.sh
 }
 run_test sanity "Run sanity with Data-on-MDT files"
 
 test_sanityn()
 {
-	local SAVE_ONLY=$ONLY
-
-	[ ! -f sanity.sh ] && skip_env "No sanity.sh skipping" && return
+	[[ -f sanityn.sh ]] || { skip "sanityn.sh doesn't exist"; return 0; }
 	# XXX: to fix 60
 	ONLY="1 2 4 5 6 7 8 9 10 11 12 14 17 19 20 23 27 39 51a 51c 51d" \
-		OSC="mdc" DOM="yes" sh sanityn.sh
-	ONLY=$SAVE_ONLY
+		OSC="mdc" DOM="yes" bash sanityn.sh
 }
 run_test sanityn "Run sanityn with Data-on-MDT files"
 
