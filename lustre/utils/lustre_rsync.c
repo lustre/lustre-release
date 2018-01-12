@@ -144,9 +144,6 @@
 #define DINFO 1
 #define DTRACE 2
 
-/* Not used; declared for fulfilling obd.c's dependency. */
-command_t cmdlist[0];
-
 /* Information for processing a changelog record. This structure is
    allocated on the heap instead of allocating large variables on the
    stack. */
@@ -161,13 +158,13 @@ struct lr_info {
 	char spfid[LR_FID_STR_LEN];
 	char sname[NAME_MAX + 1];
 	char name[NAME_MAX + 1];
-        char src[PATH_MAX + 1];
-        char dest[PATH_MAX + 1];
+	char src[3 * PATH_MAX + 1];
+	char dest[3 * PATH_MAX + 1];
         char path[PATH_MAX + 1];
         char savedpath[PATH_MAX + 1];
         char link[PATH_MAX + 1];
         char linktmp[PATH_MAX + 1];
-        char cmd[PATH_MAX];
+	char cmd[PATH_MAX * 10];
         int bufsize;
         char *buf;
 
@@ -283,9 +280,8 @@ void * lr_grow_buf(void *buf, int size)
 /* Use rsync to replicate file data */
 int lr_rsync_data(struct lr_info *info)
 {
-        int rc;
-        struct stat st_src, st_dest;
-        char cmd[PATH_MAX];
+	struct stat st_src, st_dest;
+	int rc;
 
         lr_debug(DTRACE, "Syncing data%s\n", info->tfid);
 
@@ -314,10 +310,14 @@ int lr_rsync_data(struct lr_info *info)
                  * replication is also to be considered.
                  */
                 int status;
-                snprintf(cmd, PATH_MAX, "%s --inplace %s %s", rsync, info->src,
-                        info->dest);
-                lr_debug(DTRACE, "\t%s %s\n", cmd, info->tfid);
-                status = system(cmd);
+
+		if (snprintf(info->cmd, sizeof(info->cmd), "%s --inplace %s %s",
+			     rsync, info->src, info->dest) >= sizeof(info->cmd)) {
+			rc = -E2BIG;
+			goto err;
+		}
+		lr_debug(DTRACE, "\t%s %s\n", info->cmd, info->tfid);
+		status = system(info->cmd);
                 if (status == -1) {
                         rc = -errno;
                 } else if (WIFEXITED(status)) {
@@ -340,7 +340,7 @@ int lr_rsync_data(struct lr_info *info)
                 lr_debug(DTRACE, "Not syncing %s and %s %s\n", info->src,
                          info->dest, info->tfid);
         }
-
+err:
         return rc;
 }
 
@@ -573,7 +573,7 @@ int lr_get_symlink(struct lr_info *info)
                     strlen(status->ls_source)) == 0) {
                 /* Strip source fs path and replace with target fs path. */
                 link = info->linktmp + strlen(status->ls_source);
-                snprintf(info->src, PATH_MAX, "%s%s",
+		snprintf(info->src, sizeof(info->src), "%s%s",
                          status->ls_targets[info->target_no], link);
                 link = info->src;
         } else {
@@ -670,18 +670,22 @@ out_err:
 void lr_cascade_move(const char *fid, const char *dest, struct lr_info *info)
 {
         struct lr_parent_child_list *curr, *prev;
-        char *d;
+	char d[4 * PATH_MAX + 1];
         int rc;
 
-        d = calloc(1, PATH_MAX + 1);
         prev = curr = parents;
         while (curr) {
                 if (strcmp(curr->pc_log.pcl_pfid, fid) == 0) {
-                        snprintf(d, PATH_MAX, "%s/%s", dest,
-                                 curr->pc_log.pcl_name);
-                        snprintf(info->src, PATH_MAX, "%s/%s/%s",
-                                status->ls_targets[info->target_no],
-                                SPECIAL_DIR, curr->pc_log.pcl_tfid);
+			if (snprintf(d, sizeof(d), "%s/%s", dest,
+				     curr->pc_log.pcl_name) >= sizeof(d)) {
+				fprintf(stderr, "Buffer truncated\n");
+				return;
+			}
+			if (snprintf(info->src, sizeof(info->src), "%s/%s/%s",
+				     status->ls_targets[info->target_no],
+				     SPECIAL_DIR, curr->pc_log.pcl_tfid) >=
+			    sizeof(info->src))
+				return;
                         rc = rename(info->src, d);
                         if (rc == -1) {
                                 fprintf(stderr, "Error renaming file "
@@ -702,8 +706,6 @@ void lr_cascade_move(const char *fid, const char *dest, struct lr_info *info)
                         curr = curr->pc_next;
                 }
         }
-
-        free(d);
 }
 
 /* remove [info->spfid, info->sfid] from parents */
@@ -730,7 +732,7 @@ int lr_mk_special(struct lr_info *info)
 {
         int rc;
 
-        snprintf(info->dest, PATH_MAX, "%s/%s/%s",
+	snprintf(info->dest, sizeof(info->dest), "%s/%s/%s",
                 status->ls_targets[info->target_no], SPECIAL_DIR,
                 info->tfid);
 
@@ -759,10 +761,11 @@ int lr_rmfile(struct lr_info *info)
 /* Recursively remove directory and its contents */
 int lr_rm_recursive(struct lr_info *info)
 {
-        int rc;
+	int rc;
 
-        snprintf(info->cmd, PATH_MAX, "rm -rf %s", info->dest);
-        rc = system(info->cmd);
+	snprintf(info->cmd, sizeof(info->cmd), "rm -rf %s",
+		 info->dest);
+	rc = system(info->cmd);
         if (rc == -1)
                 rc = -errno;
 
@@ -774,7 +777,7 @@ int lr_rm_special(struct lr_info *info)
 {
         int rc;
 
-        snprintf(info->dest, PATH_MAX, "%s/%s/%s",
+	snprintf(info->dest, sizeof(info->dest), "%s/%s/%s",
                  status->ls_targets[info->target_no], SPECIAL_DIR,
                  info->tfid);
         rc = lr_rmfile(info);
@@ -818,11 +821,13 @@ int lr_create(struct lr_info *info)
         /* Is f2p(pfid)+name != f2p(tfid)? If not the file has moved. */
         len = strlen(info->path);
 	if (len == 1 && info->path[0] == '/')
-		snprintf(info->dest, PATH_MAX, "%s", info->name);
+		snprintf(info->dest, sizeof(info->dest), "%s", info->name);
 	else if (len - 1 > 0 && info->path[len - 1] == '/')
-                snprintf(info->dest, PATH_MAX, "%s%s", info->path, info->name);
+		snprintf(info->dest, sizeof(info->dest), "%s%s", info->path,
+			 info->name);
         else
-                snprintf(info->dest, PATH_MAX, "%s/%s", info->path, info->name);
+		snprintf(info->dest, sizeof(info->dest), "%s/%s", info->path,
+			 info->name);
 
         lr_debug(DTRACE, "dest = %s; savedpath = %s\n", info->dest,
                  info->savedpath);
@@ -835,8 +840,8 @@ int lr_create(struct lr_info *info)
         /* Is f2p(pfid) present on the target? If not, the parent has
            moved */
         if (!mkspecial) {
-		snprintf(info->dest, PATH_MAX, "%s/%s", status->ls_targets[0],
-			info->path);
+		snprintf(info->dest, sizeof(info->dest), "%s/%s",
+			 status->ls_targets[0], info->path);
 		if (access(info->dest, F_OK) != 0) {
 			lr_debug(DTRACE, "create: parent %s not found\n",
 				info->dest);
@@ -845,10 +850,10 @@ int lr_create(struct lr_info *info)
         }
         for (info->target_no = 0; info->target_no < status->ls_num_targets;
              info->target_no++) {
-                snprintf(info->dest, PATH_MAX, "%s/%s",
+		snprintf(info->dest, sizeof(info->dest), "%s/%s",
                         status->ls_targets[info->target_no], info->savedpath);
                 lr_get_FID_PATH(status->ls_source, info->tfid, info->src,
-                                    PATH_MAX);
+				PATH_MAX);
 
                 if (!mkspecial)
                         rc1 = lr_mkfile(info);
@@ -884,7 +889,7 @@ int lr_remove(struct lr_info *info)
                         rc = rc1;
                         continue;
                 }
-                snprintf(info->dest, PATH_MAX, "%s/%s/%s",
+		snprintf(info->dest, sizeof(info->dest), "%s/%s/%s",
                         status->ls_targets[info->target_no], info->path,
                         info->name);
 
@@ -927,21 +932,22 @@ int lr_move(struct lr_info *info)
              info->target_no++) {
 
                 if (!rc_dest) {
-                        snprintf(info->dest, PATH_MAX, "%s/%s",
+			snprintf(info->dest, sizeof(info->dest), "%s/%s",
                                 status->ls_targets[info->target_no],
 				info->path);
                         if (access(info->dest, F_OK) != 0) {
                                 rc_dest = -errno;
                         } else {
-                                snprintf(info->dest, PATH_MAX, "%s/%s/%s",
-                                        status->ls_targets[info->target_no],
-					info->path, info->name);
+				snprintf(info->dest, sizeof(info->dest),
+					 "%s/%s/%s",
+					 status->ls_targets[info->target_no],
+					 info->path, info->name);
                         }
 			lr_debug(DINFO, "dest path %s rc_dest=%d\n", info->dest,
 				 rc_dest);
                 }
                 if (rc_dest == -ENOENT) {
-                        snprintf(info->dest, PATH_MAX, "%s/%s/%s",
+			snprintf(info->dest, sizeof(info->dest), "%s/%s/%s",
                                 status->ls_targets[info->target_no],
 				SPECIAL_DIR, info->sfid);
                         special_dest = 1;
@@ -949,7 +955,7 @@ int lr_move(struct lr_info *info)
                 }
 
 		if (!rc_src) {
-			snprintf(info->src, PATH_MAX, "%s/%s/%s",
+			snprintf(info->src, sizeof(info->src), "%s/%s/%s",
 				status->ls_targets[info->target_no],
 				srcpath, info->sname);
 			lr_debug(DINFO, "src path %s rc_src=%d\n", info->src,
@@ -957,7 +963,7 @@ int lr_move(struct lr_info *info)
 		}
                 if (rc_src == -ENOENT || (access(info->src, F_OK) != 0 &&
                                           errno == ENOENT)) {
-                        snprintf(info->src, PATH_MAX, "%s/%s/%s",
+			snprintf(info->src, sizeof(info->src), "%s/%s/%s",
                                 status->ls_targets[info->target_no],
 				SPECIAL_DIR, info->sfid);
                         special_src = 1;
@@ -1028,6 +1034,8 @@ int lr_link(struct lr_info *info)
 
 		/* Search through the hardlinks to get the src */
 		for (i = 0; i < st.st_nlink && info->src[0] == 0; i++) {
+			size_t len;
+
                         rc1 = lr_get_path_ln(info, info->tfid, i);
                         lr_debug(rc1 ? 0:DTRACE, "\tfid2path %s, %s, %d rc=%d\n",
                                  info->path, info->name, i, rc1);
@@ -1038,7 +1046,9 @@ int lr_link(struct lr_info *info)
 			 * Compare the path of target FID with info->dest
 			 * to find out info->src.
 			 */
-			char srcpath[PATH_MAX];
+			len = sizeof(status->ls_targets[info->target_no]) +
+			      sizeof(info->path);
+			char srcpath[len + 1];
 
 			snprintf(srcpath, sizeof(srcpath), "%s/%s",
 				 status->ls_targets[info->target_no],
@@ -1057,11 +1067,11 @@ int lr_link(struct lr_info *info)
                 }
 
                 if (info->src[0] == 0)
-                        snprintf(info->src, PATH_MAX, "%s/%s/%s",
+			snprintf(info->src, sizeof(info->src), "%s/%s/%s",
                                 status->ls_targets[info->target_no],
                                 SPECIAL_DIR, info->tfid);
                 else if (info->dest[0] == 0)
-                        snprintf(info->dest, PATH_MAX, "%s/%s/%s",
+			snprintf(info->dest, sizeof(info->dest), "%s/%s/%s",
                                 status->ls_targets[info->target_no],
                                 SPECIAL_DIR, info->tfid);
 
@@ -1094,7 +1104,7 @@ int lr_setattr(struct lr_info *info)
         for (info->target_no = 0; info->target_no < status->ls_num_targets;
              info->target_no++) {
 
-                snprintf(info->dest, PATH_MAX, "%s/%s",
+		snprintf(info->dest, sizeof(info->dest), "%s/%s",
                          status->ls_targets[info->target_no], info->path);
                 lr_debug(DINFO, "setattr: %s %s %s", info->src, info->dest,
                          info->tfid);
@@ -1125,7 +1135,7 @@ int lr_setxattr(struct lr_info *info)
         for (info->target_no = 0; info->target_no < status->ls_num_targets;
              info->target_no++) {
 
-                snprintf(info->dest, PATH_MAX, "%s/%s",
+		snprintf(info->dest, sizeof(info->dest), "%s/%s",
                         status->ls_targets[info->target_no], info->path);
                 lr_debug(DINFO, "setxattr: %s %s %s\n", info->src, info->dest,
                          info->tfid);
@@ -1212,7 +1222,7 @@ void lr_backup_log()
 
         if (logbackedup)
                 return;
-        snprintf(backupfile, PATH_MAX, "%s.old", statuslog);
+	snprintf(backupfile, sizeof(backupfile), "%s.old", statuslog);
         (void) rename(statuslog, backupfile);
         logbackedup = 1;
 
@@ -1415,12 +1425,12 @@ int lr_locate_rsync()
         int len;
 
         /* Locate rsync */
-        snprintf(rsync, PATH_MAX, "%s -p %s", TYPE, RSYNC);
+	snprintf(rsync, sizeof(rsync), "%s -p %s", TYPE, RSYNC);
         fp = popen(rsync, "r");
         if (fp == NULL)
                 return -1;
 
-        if (fgets(rsync, PATH_MAX, fp) == NULL) {
+	if (fgets(rsync, sizeof(rsync), fp) == NULL) {
                 fclose(fp);
                 return -1;
         }
@@ -1431,12 +1441,12 @@ int lr_locate_rsync()
         fclose(fp);
 
         /* Determine the version of rsync */
-        snprintf(rsync_ver, PATH_MAX, "%s --version", rsync);
+	snprintf(rsync_ver, sizeof(rsync_ver), "%s --version", rsync);
         fp = popen(rsync_ver, "r");
         if (fp == NULL)
                 return -1;
 
-        if (fgets(rsync_ver, PATH_MAX, fp) == NULL) {
+	if (fgets(rsync_ver, sizeof(rsync_ver), fp) == NULL) {
                 fclose(fp);
                 return -1;
         }
@@ -1506,9 +1516,18 @@ int lr_replicate()
                         "mountpoint.\n");
 		goto out;
         }
-        if (status->ls_mdt_device[0] == '\0')
-                snprintf(status->ls_mdt_device, LR_NAME_MAXLEN, "%s%s",
-                        status->ls_source_fs, DEFAULT_MDT);
+
+	if (status->ls_mdt_device[0] == '\0') {
+		int len;
+
+		len = snprintf(status->ls_mdt_device,
+			       sizeof(status->ls_mdt_device), "%s%s",
+			       status->ls_source_fs, DEFAULT_MDT);
+		if (len >= sizeof(status->ls_mdt_device)) {
+			rc = -E2BIG;
+			goto out;
+		}
+	}
 
         ext = calloc(1, sizeof(struct lr_info));
 	if (ext == NULL) {
@@ -1517,8 +1536,8 @@ int lr_replicate()
 	}
 
         for (i = 0, xattr_not_supp = 0; i < status->ls_num_targets; i++) {
-                snprintf(info->dest, PATH_MAX, "%s/%s", status->ls_targets[i],
-                        SPECIAL_DIR);
+		snprintf(info->dest, sizeof(info->dest), "%s/%s",
+			 status->ls_targets[i], SPECIAL_DIR);
                 rc = mkdir(info->dest, 0777);
                 if (rc == -1 && errno != EEXIST) {
                         fprintf(stderr, "Error writing to target path %s.\n",
