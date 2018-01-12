@@ -843,7 +843,7 @@ static int jt_show_route(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_show_route(network, gateway, hop, prio, detail, -1,
-				    &show_rc, &err_rc);
+				    &show_rc, &err_rc, false);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
@@ -893,7 +893,8 @@ static int jt_show_net(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_show_net(network, (int) detail, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_net(network, (int) detail, -1, &show_rc, &err_rc,
+				  false);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
@@ -915,7 +916,7 @@ static int jt_show_routing(int argc, char **argv)
 	if (rc)
 		return rc;
 
-	rc = lustre_lnet_show_routing(-1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_routing(-1, &show_rc, &err_rc, false);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
@@ -1165,32 +1166,43 @@ static int jt_export(int argc, char **argv)
 	int rc;
 	FILE *f = NULL;
 	int opt;
+	bool backup = false;
+	char *file = NULL;
 
-	const char *const short_options = "h";
+	const char *const short_options = "bh";
 	static const struct option long_options[] = {
+		{ .name = "backup", .has_arg = no_argument, .val = 'b' },
 		{ .name = "help", .has_arg = no_argument, .val = 'h' },
 		{ .name = NULL } };
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
 		switch (opt) {
+		case 'b':
+			backup = true;
+			break;
 		case 'h':
+		default:
 			printf("export > FILE.yaml : export configuration\n"
 			       "\t--help: display this help\n");
-			return 0;
-		default:
 			return 0;
 		}
 	}
 
-	if (argc >= 2) {
-		f = fopen(argv[1], "w");
-		if (f == NULL)
-			return -1;
-	} else
+	if (backup && argc >= 3)
+		file = argv[2];
+	else if (!backup && argc >= 2)
+		file = argv[1];
+	else
 		f = stdout;
 
-	rc = lustre_lnet_show_net(NULL, 2, -1, &show_rc, &err_rc);
+	if (file) {
+		f = fopen(file, "w");
+		if (f == NULL)
+			return -1;
+	}
+
+	rc = lustre_lnet_show_net(NULL, 2, -1, &show_rc, &err_rc, backup);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
@@ -1198,21 +1210,21 @@ static int jt_export(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_show_route(NULL, NULL, -1, -1, 1, -1, &show_rc,
-				    &err_rc);
+				    &err_rc, backup);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
 		err_rc = NULL;
 	}
 
-	rc = lustre_lnet_show_routing(-1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_routing(-1, &show_rc, &err_rc, backup);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
 		err_rc = NULL;
 	}
 
-	rc = lustre_lnet_show_peer(NULL, 2, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_peer(NULL, 2, -1, &show_rc, &err_rc, backup);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
 		cYAML_free_tree(err_rc);
@@ -1403,7 +1415,8 @@ static int jt_show_peer(int argc, char **argv)
 		}
 	}
 
-	rc = lustre_lnet_show_peer(nid, (int) detail, -1, &show_rc, &err_rc);
+	rc = lustre_lnet_show_peer(nid, (int) detail, -1, &show_rc, &err_rc,
+				   false);
 
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);

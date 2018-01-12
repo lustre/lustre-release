@@ -952,7 +952,7 @@ out:
 
 int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 			   int seq_no, struct cYAML **show_rc,
-			   struct cYAML **err_rc)
+			   struct cYAML **err_rc, bool backup)
 {
 	struct lnet_ioctl_config_data data;
 	lnet_nid_t gateway_nid;
@@ -1072,7 +1072,8 @@ int lustre_lnet_show_route(char *nw, char *gw, int hops, int prio, int detail,
 						cfg_route.rtr_priority) == NULL)
 				goto out;
 
-			if (cYAML_create_string(item, "state",
+			if (!backup &&
+			    cYAML_create_string(item, "state",
 						data.cfg_config_u.cfg_route.
 							rtr_flags ?
 						"up" : "down") == NULL)
@@ -1858,7 +1859,8 @@ get_counts(struct lnet_ioctl_element_msg_stats *msg_stats, int idx)
 }
 
 int lustre_lnet_show_net(char *nw, int detail, int seq_no,
-			 struct cYAML **show_rc, struct cYAML **err_rc)
+			 struct cYAML **show_rc, struct cYAML **err_rc,
+			 bool backup)
 {
 	char *buf;
 	struct lnet_ioctl_config_ni *ni_data;
@@ -1935,6 +1937,10 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 		    net != rc_net)
 			continue;
 
+		/* if we're backing up don't store lo */
+		if (backup && LNET_NETTYP(rc_net) == LOLND)
+			continue;
+
 		/* default rc to -1 in case we hit the goto */
 		rc = -1;
 		exist = true;
@@ -1968,11 +1974,13 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 		if (first_seq == NULL)
 			first_seq = item;
 
-		if (cYAML_create_string(item, "nid",
+		if (!backup &&
+		    cYAML_create_string(item, "nid",
 					libcfs_nid2str(ni_data->lic_nid)) == NULL)
 			goto out;
 
-		if (cYAML_create_string(item,
+		if (!backup &&
+		    cYAML_create_string(item,
 					"status",
 					(ni_data->lic_status ==
 					  LNET_NI_STATUS_UP) ?
@@ -2002,6 +2010,9 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 		if (detail) {
 			char *limit;
 			int k;
+
+			if (backup)
+				goto continue_without_msg_stats;
 
 			statistics = cYAML_create_object(item, "statistics");
 			if (statistics == NULL)
@@ -2064,22 +2075,28 @@ continue_without_msg_stats:
 			if (rc != LUSTRE_CFG_RC_NO_ERR)
 				goto out;
 
-			tunables = cYAML_create_object(item, "lnd tunables");
-			if (tunables == NULL)
-				goto out;
-
 			rc = lustre_ni_show_tunables(tunables, LNET_NETTYP(rc_net),
 						     &lnd->lt_tun);
-			if (rc != LUSTRE_CFG_RC_NO_ERR)
+			if (rc != LUSTRE_CFG_RC_NO_ERR &&
+			    rc != LUSTRE_CFG_RC_NO_MATCH)
 				goto out;
 
-			if (cYAML_create_number(item, "tcp bonding",
+			if (rc != LUSTRE_CFG_RC_NO_MATCH) {
+				tunables = cYAML_create_object(item,
+							       "lnd tunables");
+				if (tunables == NULL)
+					goto out;
+			}
+
+			if (!backup &&
+			    cYAML_create_number(item, "dev cpt",
+						ni_data->lic_dev_cpt) == NULL)
+				goto out;
+
+			if (!backup &&
+			    cYAML_create_number(item, "tcp bonding",
 						ni_data->lic_tcp_bonding)
 							== NULL)
-				goto out;
-
-			if (cYAML_create_number(item, "dev cpt",
-						ni_data->lic_dev_cpt) == NULL)
 				goto out;
 
 			/* out put the CPTs in the format: "[x,x,x,...]" */
@@ -2291,7 +2308,7 @@ out:
 }
 
 int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
-			     struct cYAML **err_rc)
+			     struct cYAML **err_rc, bool backup)
 {
 	struct lnet_ioctl_config_data *data;
 	struct lnet_ioctl_pool_cfg *pool_cfg = NULL;
@@ -2320,7 +2337,10 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 	if (root == NULL)
 		goto out;
 
-	pools_node = cYAML_create_seq(root, "routing");
+	if (backup)
+		pools_node = cYAML_create_object(root, "routing");
+	else
+		pools_node = cYAML_create_seq(root, "routing");
 	if (pools_node == NULL)
 		goto out;
 
@@ -2340,6 +2360,9 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 
 		pool_cfg = (struct lnet_ioctl_pool_cfg *)data->cfg_bulk;
 
+		if (backup)
+			goto calculate_buffers;
+
 		snprintf(node_name, sizeof(node_name), "cpt[%d]", i);
 		item = cYAML_create_seq_item(pools_node);
 		if (item == NULL)
@@ -2352,24 +2375,31 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 		if (cpt == NULL)
 			goto out;
 
+calculate_buffers:
 		/* create the tree  and print */
 		for (j = 0; j < LNET_NRBPOOLS; j++) {
-			type_node = cYAML_create_object(cpt, pools[j]);
-			if (type_node == NULL)
-				goto out;
-			if (cYAML_create_number(type_node, "npages",
+			if (!backup) {
+				type_node = cYAML_create_object(cpt, pools[j]);
+				if (type_node == NULL)
+					goto out;
+			}
+			if (!backup &&
+			    cYAML_create_number(type_node, "npages",
 						pool_cfg->pl_pools[j].pl_npages)
 			    == NULL)
 				goto out;
-			if (cYAML_create_number(type_node, "nbuffers",
+			if (!backup &&
+			    cYAML_create_number(type_node, "nbuffers",
 						pool_cfg->pl_pools[j].
 						  pl_nbuffers) == NULL)
 				goto out;
-			if (cYAML_create_number(type_node, "credits",
+			if (!backup &&
+			    cYAML_create_number(type_node, "credits",
 						pool_cfg->pl_pools[j].
 						   pl_credits) == NULL)
 				goto out;
-			if (cYAML_create_number(type_node, "mincredits",
+			if (!backup &&
+			    cYAML_create_number(type_node, "mincredits",
 						pool_cfg->pl_pools[j].
 						   pl_mincredits) == NULL)
 				goto out;
@@ -2380,6 +2410,15 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 	}
 
 	if (pool_cfg != NULL) {
+		if (backup) {
+			if (cYAML_create_number(pools_node, "enable",
+						pool_cfg->pl_routing) ==
+			NULL)
+				goto out;
+
+			goto add_buffer_section;
+		}
+
 		item = cYAML_create_seq_item(pools_node);
 		if (item == NULL)
 			goto out;
@@ -2389,6 +2428,7 @@ int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
 			goto out;
 	}
 
+add_buffer_section:
 	/* create a buffers entry in the show. This is necessary so that
 	 * if the YAML output is used to configure a node, the buffer
 	 * configuration takes hold */
@@ -2444,7 +2484,8 @@ out:
 }
 
 int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
-			  struct cYAML **show_rc, struct cYAML **err_rc)
+			  struct cYAML **show_rc, struct cYAML **err_rc,
+			  bool backup)
 {
 	/*
 	 * TODO: This function is changing in a future patch to accommodate
@@ -2582,7 +2623,8 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 		 * requested
 		 */
 		if (detail >= 3) {
-			if (cYAML_create_number(peer, "peer state",
+			if (!backup &&
+			    cYAML_create_number(peer, "peer state",
 						peer_info.prcfg_state)
 				== NULL)
 				goto out;
@@ -2608,6 +2650,9 @@ int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
 						libcfs_nid2str(*nidp))
 			    == NULL)
 				goto out;
+
+			if (backup)
+				continue;
 
 			if (cYAML_create_string(peer_ni, "state",
 						lpni_cri->cr_aliveness)
@@ -3695,8 +3740,7 @@ static int handle_yaml_show_route(struct cYAML *tree, struct cYAML **show_rc,
 				      (prio) ? prio->cy_valueint : -1,
 				      (detail) ? detail->cy_valueint : 0,
 				      (seq_no) ? seq_no->cy_valueint : -1,
-				      show_rc,
-				      err_rc);
+				      show_rc, err_rc, false);
 }
 
 static int handle_yaml_show_net(struct cYAML *tree, struct cYAML **show_rc,
@@ -3711,8 +3755,7 @@ static int handle_yaml_show_net(struct cYAML *tree, struct cYAML **show_rc,
 	return lustre_lnet_show_net((net) ? net->cy_valuestring : NULL,
 				    (detail) ? detail->cy_valueint : 0,
 				    (seq_no) ? seq_no->cy_valueint : -1,
-				    show_rc,
-				    err_rc);
+				    show_rc, err_rc, false);
 }
 
 static int handle_yaml_show_routing(struct cYAML *tree, struct cYAML **show_rc,
@@ -3723,7 +3766,7 @@ static int handle_yaml_show_routing(struct cYAML *tree, struct cYAML **show_rc,
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 
 	return lustre_lnet_show_routing((seq_no) ? seq_no->cy_valueint : -1,
-					show_rc, err_rc);
+					show_rc, err_rc, false);
 }
 
 static int handle_yaml_show_peers(struct cYAML *tree, struct cYAML **show_rc,
@@ -3738,7 +3781,7 @@ static int handle_yaml_show_peers(struct cYAML *tree, struct cYAML **show_rc,
 	return lustre_lnet_show_peer((nid) ? nid->cy_valuestring : NULL,
 				     (detail) ? detail->cy_valueint : 0,
 				     (seq_no) ? seq_no->cy_valueint : -1,
-				     show_rc, err_rc);
+				     show_rc, err_rc, false);
 }
 
 static int handle_yaml_show_stats(struct cYAML *tree, struct cYAML **show_rc,

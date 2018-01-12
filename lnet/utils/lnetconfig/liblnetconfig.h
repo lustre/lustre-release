@@ -123,11 +123,13 @@ int lustre_lnet_del_route(char *nw, char *gw, int seq_no,
  *   seq_no - sequence number of the request
  *   show_rc - [OUT] The show output in YAML.  Must be freed by caller.
  *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
+ *   backup - true to output only what's necessary for reconfiguring
+ *	      a node.
  */
 int lustre_lnet_show_route(char *nw, char *gw,
 			   int hops, int prio, int detail,
 			   int seq_no, struct cYAML **show_rc,
-			   struct cYAML **err_rc);
+			   struct cYAML **err_rc, bool backup);
 
 /*
  * lustre_lnet_config_ni
@@ -172,9 +174,12 @@ int lustre_lnet_del_ni(struct lnet_dlc_network_descr *nw,
  *   seq_no - sequence number of the request
  *   show_rc - [OUT] The show output in YAML.  Must be freed by caller.
  *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
+ *   backup - true to output only what's necessary for reconfiguring
+ *	      a node.
  */
 int lustre_lnet_show_net(char *nw, int detail, int seq_no,
-			 struct cYAML **show_rc, struct cYAML **err_rc);
+			 struct cYAML **show_rc, struct cYAML **err_rc,
+			 bool backup);
 
 /*
  * lustre_lnet_enable_routing
@@ -286,9 +291,11 @@ int lustre_lnet_config_buffers(int tiny, int small, int large,
  *   seq_no - sequence number of the request
  *   show_rc - [OUT] The show output in YAML.  Must be freed by caller.
  *   err_rc - [OUT] struct cYAML tree describing the error. Freed by caller
+ *   backup - true to output only what's necessary for reconfiguring
+ *	      a node.
  */
 int lustre_lnet_show_routing(int seq_no, struct cYAML **show_rc,
-			     struct cYAML **err_rc);
+			     struct cYAML **err_rc, bool backup);
 
 /*
  * lustre_lnet_show_stats
@@ -351,10 +358,13 @@ int lustre_lnet_del_peer_nid(char *pnid, char **nid, int num_nids,
  *     seq_no - sequence number of the command
  *     show_rc - YAML structure of the resultant show
  *     err_rc - YAML strucutre of the resultant return code.
+ *     backup - true to output only what's necessary for reconfiguring
+ *		a node.
  *
  */
 int lustre_lnet_show_peer(char *knid, int detail, int seq_no,
-			  struct cYAML **show_rc, struct cYAML **err_rc);
+			  struct cYAML **show_rc, struct cYAML **err_rc,
+			  bool backup);
 
 /*
  * lustre_lnet_list_peer

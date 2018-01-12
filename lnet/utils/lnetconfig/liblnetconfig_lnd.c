@@ -111,7 +111,7 @@ lustre_ni_show_tunables(struct cYAML *lnd_tunables,
 			__u32 net_type,
 			struct lnet_lnd_tunables *lnd)
 {
-	int rc = LUSTRE_CFG_RC_NO_ERR;
+	int rc = LUSTRE_CFG_RC_NO_MATCH;
 
 	if (net_type == O2IBLND)
 		rc = lustre_o2iblnd_show_tun(lnd_tunables,
