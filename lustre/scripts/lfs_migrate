@@ -122,6 +122,7 @@ for f in $(seq 1 $#); do
 		else
 			LONG_OPT=true
 			OPT_PASSTHROUGH+=("$arg")
+			PREV="$arg"
 		fi
 	elif [ "${arg:0:1}" = "-" ]; then
 		LONG_OPT=false
@@ -130,6 +131,7 @@ for f in $(seq 1 $#); do
 		else
 			SHORT_OPT=true
 			OPTS+=("$arg")
+			PREV="$arg"
 		fi
 	elif $LONG_OPT; then
 		LONG_OPT=false
@@ -138,20 +140,20 @@ for f in $(seq 1 $#); do
 		if [ -f "$arg" -o -d "$arg" ]; then
 			OPTS+=("$arg")
 		else
-			[ "${OPT_PASSTHROUGH[-1]}" = "--stripe-count" ] &&
+			[ "$PREV" = "--stripe-count" ] &&
 				STRIPE_COUNT="$arg"
-			[ "${OPT_PASSTHROUGH[-1]}" = "--stripe-size" ] &&
+			[ "$PREV" = "--stripe-size" ] &&
 				STRIPE_SIZE="$arg"
-			[ "${OPT_PASSTHROUGH[-1]}" = "--pool" ] &&
+			[ "$PREV" = "--pool" ] &&
 				POOL="$arg"
 			OPT_PASSTHROUGH+=("$arg")
 		fi
 	elif $SHORT_OPT; then
-		[ "${OPTS[-1]}" = "-c" ] &&
+		[ "$PREV" = "-c" ] &&
 			STRIPE_COUNT="$arg"
-		[ "${OPTS[-1]}" = "-S" ] &&
+		[ "$PREV" = "-S" ] &&
 			STRIPE_SIZE="$arg"
-		[ "${OPTS[-1]}" = "-p" ] &&
+		[ "$PREV" = "-p" ] &&
 			POOL="$arg"
 		SHORT_OPT=false
 		OPTS+=("$arg")
