@@ -99,9 +99,9 @@ lnet_peers_start_down(void)
 
 void
 lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
-		   cfs_time_t when)
+		   time64_t when)
 {
-	if (cfs_time_before(when, lp->lpni_timestamp)) { /* out of date information */
+	if (lp->lpni_timestamp > when) { /* out of date information */
 		CDEBUG(D_NET, "Out of date\n");
 		return;
 	}
@@ -114,7 +114,7 @@ lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
 	 */
 	spin_lock(&lp->lpni_lock);
 
-	lp->lpni_timestamp = when;                /* update timestamp */
+	lp->lpni_timestamp = when; /* update timestamp */
 	lp->lpni_ping_deadline = 0;               /* disable ping timeout */
 
 	if (lp->lpni_alive_count != 0 &&          /* got old news */
@@ -816,7 +816,7 @@ lnet_router_checker_event(struct lnet_event *event)
 	 * we ping alive routers to try to detect router death before
 	 * apps get burned). */
 
-	lnet_notify_locked(lp, 1, (event->status == 0), cfs_time_current());
+	lnet_notify_locked(lp, 1, !event->status, ktime_get_seconds());
 	/* The router checker will wake up very shortly and do the
 	 * actual notification.
 	 * XXX If 'lp' stops being a router before then, it will still
@@ -886,7 +886,7 @@ lnet_update_ni_status_locked(void)
 {
 	struct lnet_ni *ni = NULL;
 	time64_t now;
-	int timeout;
+	time64_t timeout;
 
 	LASSERT(the_lnet.ln_routing);
 
@@ -911,7 +911,7 @@ lnet_update_ni_status_locked(void)
 		LASSERT(ni->ni_status != NULL);
 
 		if (ni->ni_status->ns_status != LNET_NI_STATUS_DOWN) {
-			CDEBUG(D_NET, "NI(%s:%d) status changed to down\n",
+			CDEBUG(D_NET, "NI(%s:%lld) status changed to down\n",
 			       libcfs_nid2str(ni->ni_nid), timeout);
 			/* NB: so far, this is the only place to set
 			 * NI status to "down" */
@@ -1051,14 +1051,14 @@ static void
 lnet_ping_router_locked(struct lnet_peer_ni *rtr)
 {
 	struct lnet_rc_data *rcd = NULL;
-	cfs_time_t      now = cfs_time_current();
-	int             secs;
-	struct lnet_ni  *ni;
+	time64_t now = ktime_get_seconds();
+	time64_t secs;
+	struct lnet_ni *ni;
 
 	lnet_peer_ni_addref_locked(rtr);
 
 	if (rtr->lpni_ping_deadline != 0 && /* ping timed out? */
-	    cfs_time_after(now, rtr->lpni_ping_deadline))
+	    now >  rtr->lpni_ping_deadline)
 		lnet_notify_locked(rtr, 1, 0, now);
 
 	/* Run any outstanding notifications */
@@ -1081,15 +1081,14 @@ lnet_ping_router_locked(struct lnet_peer_ni *rtr)
 	secs = lnet_router_check_interval(rtr);
 
 	CDEBUG(D_NET,
-	       "rtr %s %d: deadline %lu ping_notsent %d alive %d "
-	       "alive_count %d lpni_ping_timestamp %lu\n",
+	       "rtr %s %lld: deadline %lld ping_notsent %d alive %d "
+	       "alive_count %d lpni_ping_timestamp %lld\n",
 	       libcfs_nid2str(rtr->lpni_nid), secs,
 	       rtr->lpni_ping_deadline, rtr->lpni_ping_notsent,
 	       rtr->lpni_alive, rtr->lpni_alive_count, rtr->lpni_ping_timestamp);
 
 	if (secs != 0 && !rtr->lpni_ping_notsent &&
-	    cfs_time_after(now, cfs_time_add(rtr->lpni_ping_timestamp,
-					     cfs_time_seconds(secs)))) {
+	    now > rtr->lpni_ping_timestamp + secs) {
 		int               rc;
 		struct lnet_process_id id;
 		struct lnet_handle_md mdh;
@@ -1104,8 +1103,8 @@ lnet_ping_router_locked(struct lnet_peer_ni *rtr)
 		mdh = rcd->rcd_mdh;
 
 		if (rtr->lpni_ping_deadline == 0) {
-			rtr->lpni_ping_deadline =
-				cfs_time_shift(router_ping_timeout);
+			rtr->lpni_ping_deadline = ktime_get_seconds() +
+						  router_ping_timeout;
 		}
 
 		lnet_net_unlock(rtr->lpni_cpt);
@@ -1794,10 +1793,10 @@ lnet_rtrpools_disable(void)
 }
 
 int
-lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, int alive, cfs_time_t when)
+lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, int alive, time64_t when)
 {
 	struct lnet_peer_ni *lp = NULL;
-	cfs_time_t now = cfs_time_current();
+	time64_t now = ktime_get_seconds();
 	int cpt = lnet_cpt_of_nid(nid, ni);
 
 	LASSERT (!in_interrupt ());
@@ -1816,12 +1815,11 @@ lnet_notify(struct lnet_ni *ni, lnet_nid_t nid, int alive, cfs_time_t when)
 	}
 
 	/* can't do predictions... */
-	if (cfs_time_after(when, now)) {
+	if (when > now) {
 		CWARN("Ignoring prediction from %s of %s %s "
-		      "%ld seconds in the future\n",
+		      "%lld seconds in the future\n",
 		      (ni == NULL) ? "userspace" : libcfs_nid2str(ni->ni_nid),
-		      libcfs_nid2str(nid), alive ? "up" : "down",
-		      cfs_duration_sec(cfs_time_sub(when, now)));
+		      libcfs_nid2str(nid), alive ? "up" : "down", when - now);
 		return -EINVAL;
 	}
 

@@ -332,15 +332,14 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 
 		if (peer != NULL) {
 			lnet_nid_t nid = peer->lpni_nid;
-			cfs_time_t now = cfs_time_current();
-			cfs_time_t deadline = peer->lpni_ping_deadline;
+			time64_t now = ktime_get_seconds();
+			time64_t deadline = peer->lpni_ping_deadline;
 			int nrefs     = atomic_read(&peer->lpni_refcount);
 			int nrtrrefs  = peer->lpni_rtr_refcount;
 			int alive_cnt = peer->lpni_alive_count;
 			int alive     = peer->lpni_alive;
 			int pingsent  = !peer->lpni_ping_notsent;
-			int last_ping = cfs_duration_sec(cfs_time_sub(now,
-						     peer->lpni_ping_timestamp));
+			time64_t last_ping = now - peer->lpni_ping_timestamp;
 			int down_ni   = 0;
 			struct lnet_route *rtr;
 
@@ -359,18 +358,18 @@ proc_lnet_routers(struct ctl_table *table, int write, void __user *buffer,
 
 			if (deadline == 0)
 				s += snprintf(s, tmpstr + tmpsiz - s,
-					      "%-4d %7d %9d %6s %12d %9d %8s %7d %s\n",
+					      "%-4d %7d %9d %6s %12llu %9d %8s %7d %s\n",
 					      nrefs, nrtrrefs, alive_cnt,
 					      alive ? "up" : "down", last_ping,
 					      pingsent, "NA", down_ni,
 					      libcfs_nid2str(nid));
 			else
 				s += snprintf(s, tmpstr + tmpsiz - s,
-					      "%-4d %7d %9d %6s %12d %9d %8lu %7d %s\n",
+					      "%-4d %7d %9d %6s %12llu %9d %8llu %7d %s\n",
 					      nrefs, nrtrrefs, alive_cnt,
 					      alive ? "up" : "down", last_ping,
 					      pingsent,
-					      cfs_duration_sec(cfs_time_sub(deadline, now)),
+					      deadline - now,
 					      down_ni, libcfs_nid2str(nid));
 			LASSERT(tmpstr + tmpsiz - s > 0);
 		}
@@ -523,7 +522,7 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 		if (peer != NULL) {
 			lnet_nid_t nid = peer->lpni_nid;
 			int nrefs = atomic_read(&peer->lpni_refcount);
-			int lastalive = -1;
+			time64_t lastalive = -1;
 			char *aliveness = "NA";
 			int maxcr = (peer->lpni_net) ?
 			  peer->lpni_net->net_tunables.lct_peer_tx_credits : 0;
@@ -538,11 +537,9 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 				aliveness = peer->lpni_alive ? "up" : "down";
 
 			if (lnet_peer_aliveness_enabled(peer)) {
-				cfs_time_t now = cfs_time_current();
-				cfs_duration_t delta;
+				time64_t now = ktime_get_seconds();
 
-				delta = cfs_time_sub(now, peer->lpni_last_alive);
-				lastalive = cfs_duration_sec(delta);
+				lastalive = now - peer->lpni_last_alive;
 
 				/* No need to mess up peers contents with
 				 * arbitrarily long integers - it suffices to
@@ -555,7 +552,7 @@ proc_lnet_peers(struct ctl_table *table, int write, void __user *buffer,
 			lnet_net_unlock(cpt);
 
 			s += snprintf(s, tmpstr + tmpsiz - s,
-				      "%-24s %4d %5s %5d %5d %5d %5d %5d %5d %d\n",
+				      "%-24s %4d %5s %5lld %5d %5d %5d %5d %5d %d\n",
 				      libcfs_nid2str(nid), nrefs, aliveness,
 				      lastalive, maxcr, rtrcr, minrtrcr, txcr,
 				      mintxcr, txqnob);
@@ -729,12 +726,12 @@ proc_lnet_nis(struct ctl_table *table, int write, void __user *buffer,
 		ni = lnet_get_ni_idx_locked(skip);
 
 		if (ni != NULL) {
-			struct lnet_tx_queue	*tq;
-			char	*stat;
+			struct lnet_tx_queue *tq;
+			char *stat;
 			time64_t now = ktime_get_real_seconds();
-			int	last_alive = -1;
-			int	i;
-			int	j;
+			time64_t last_alive = -1;
+			int i;
+			int j;
 
 			if (the_lnet.ln_routing)
 				last_alive = now - ni->ni_last_alive;
@@ -765,7 +762,7 @@ proc_lnet_nis(struct ctl_table *table, int write, void __user *buffer,
 					lnet_net_lock(i);
 
 				s += snprintf(s, tmpstr + tmpsiz - s,
-				      "%-24s %6s %5d %4d %4d %4d %5d %5d %5d\n",
+				      "%-24s %6s %5lld %4d %4d %4d %5d %5d %5d\n",
 				      libcfs_nid2str(ni->ni_nid), stat,
 				      last_alive, *ni->ni_refs[i],
 				      ni->ni_net->net_tunables.lct_peer_tx_credits,

@@ -786,7 +786,7 @@ lnet_ni_eager_recv(struct lnet_ni *ni, struct lnet_msg *msg)
 static void
 lnet_ni_query_locked(struct lnet_ni *ni, struct lnet_peer_ni *lp)
 {
-	cfs_time_t last_alive = 0;
+	time64_t last_alive = 0;
 	int cpt = lnet_cpt_of_nid_locked(lp->lpni_nid, ni);
 
 	LASSERT(lnet_peer_aliveness_enabled(lp));
@@ -796,7 +796,7 @@ lnet_ni_query_locked(struct lnet_ni *ni, struct lnet_peer_ni *lp)
 	(ni->ni_net->net_lnd->lnd_query)(ni, lp->lpni_nid, &last_alive);
 	lnet_net_lock(cpt);
 
-	lp->lpni_last_query = cfs_time_current();
+	lp->lpni_last_query = ktime_get_seconds();
 
 	if (last_alive != 0) /* NI has updated timestamp */
 		lp->lpni_last_alive = last_alive;
@@ -804,10 +804,10 @@ lnet_ni_query_locked(struct lnet_ni *ni, struct lnet_peer_ni *lp)
 
 /* NB: always called with lnet_net_lock held */
 static inline int
-lnet_peer_is_alive (struct lnet_peer_ni *lp, cfs_time_t now)
+lnet_peer_is_alive(struct lnet_peer_ni *lp, time64_t now)
 {
-	int        alive;
-	cfs_time_t deadline;
+	int alive;
+	time64_t deadline;
 
 	LASSERT (lnet_peer_aliveness_enabled(lp));
 
@@ -817,16 +817,14 @@ lnet_peer_is_alive (struct lnet_peer_ni *lp, cfs_time_t now)
 	 */
 	spin_lock(&lp->lpni_lock);
 	if (!lp->lpni_alive && lp->lpni_alive_count > 0 &&
-	    cfs_time_aftereq(lp->lpni_timestamp, lp->lpni_last_alive)) {
+	    lp->lpni_timestamp >= lp->lpni_last_alive) {
 		spin_unlock(&lp->lpni_lock);
 		return 0;
 	}
 
-	deadline =
-	  cfs_time_add(lp->lpni_last_alive,
-		       cfs_time_seconds(lp->lpni_net->net_tunables.
-					lct_peer_timeout));
-	alive = cfs_time_after(deadline, now);
+	deadline = lp->lpni_last_alive +
+		   lp->lpni_net->net_tunables.lct_peer_timeout;
+	alive = deadline > now;
 
 	/*
 	 * Update obsolete lp_alive except for routers assumed to be dead
@@ -848,9 +846,9 @@ lnet_peer_is_alive (struct lnet_peer_ni *lp, cfs_time_t now)
 /* NB: returns 1 when alive, 0 when dead, negative when error;
  *     may drop the lnet_net_lock */
 static int
-lnet_peer_alive_locked (struct lnet_ni *ni, struct lnet_peer_ni *lp)
+lnet_peer_alive_locked(struct lnet_ni *ni, struct lnet_peer_ni *lp)
 {
-	cfs_time_t now = cfs_time_current();
+	time64_t now = ktime_get_seconds();
 
 	if (!lnet_peer_aliveness_enabled(lp))
 		return -ENODEV;
@@ -864,17 +862,16 @@ lnet_peer_alive_locked (struct lnet_ni *ni, struct lnet_peer_ni *lp)
 	 */
 	if (lp->lpni_last_query != 0) {
 		static const int lnet_queryinterval = 1;
+		time64_t next_query;
 
-		cfs_time_t next_query =
-			   cfs_time_add(lp->lpni_last_query,
-					cfs_time_seconds(lnet_queryinterval));
+		next_query = lp->lpni_last_query + lnet_queryinterval;
 
-		if (cfs_time_before(now, next_query)) {
+		if (now < next_query) {
 			if (lp->lpni_alive)
 				CWARN("Unexpected aliveness of peer %s: "
-				      "%d < %d (%d/%d)\n",
+				      "%lld < %lld (%d/%d)\n",
 				      libcfs_nid2str(lp->lpni_nid),
-				      (int)now, (int)next_query,
+				      now, next_query,
 				      lnet_queryinterval,
 				      lp->lpni_net->net_tunables.lct_peer_timeout);
 			return 0;

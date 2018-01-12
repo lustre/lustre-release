@@ -1920,7 +1920,7 @@ kgnilnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 }
 
 void
-kgnilnd_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when)
+kgnilnd_query(struct lnet_ni *ni, lnet_nid_t nid, time64_t *when)
 {
 	kgn_net_t               *net = ni->ni_data;
 	kgn_tx_t                *tx;
@@ -1939,7 +1939,7 @@ kgnilnd_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when)
 		/* LIE if in a quiesce - we will update the timeouts after,
 		 * but we don't want sends failing during it */
 		if (kgnilnd_data.kgn_quiesce_trigger) {
-			*when = jiffies;
+			*when = ktime_get_seconds();
 			read_unlock(&kgnilnd_data.kgn_peer_conn_lock);
 			GOTO(out, 0);
 		}
@@ -1955,7 +1955,7 @@ kgnilnd_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when)
 			 * - if it was, we lie to LNet because we believe a TX would complete
 			 * on reconnect */
 			if (kgnilnd_conn_clean_errno(peer->gnp_last_errno)) {
-				*when = jiffies;
+				*when = ktime_get_seconds();
 			}
 			/* we still want to fire a TX and new conn in this case */
 		} else {
@@ -1985,7 +1985,7 @@ kgnilnd_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when)
 		kgnilnd_launch_tx(tx, net, &id);
 	}
 out:
-	CDEBUG(D_NETTRACE, "peer 0x%p->%s when %lu\n", peer,
+	CDEBUG(D_NETTRACE, "peer 0x%p->%s when %lld\n", peer,
 	       libcfs_nid2str(nid), *when);
 	EXIT;
 }

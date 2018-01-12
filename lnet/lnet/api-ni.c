@@ -3276,13 +3276,10 @@ LNetCtl(unsigned int cmd, void *arg)
 	}
 
 	case IOC_LIBCFS_NOTIFY_ROUTER: {
-		unsigned long jiffies_passed;
-
-		jiffies_passed = ktime_get_real_seconds() - data->ioc_u64[0];
-		jiffies_passed = cfs_time_seconds(jiffies_passed);
+		time64_t deadline = ktime_get_real_seconds() - data->ioc_u64[0];
 
 		return lnet_notify(NULL, data->ioc_nid, data->ioc_flags,
-				   jiffies - jiffies_passed);
+				   deadline);
 	}
 
 	case IOC_LIBCFS_LNET_DIST:

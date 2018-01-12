@@ -1216,13 +1216,13 @@ kiblnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg)
 }
 
 static void
-kiblnd_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when)
+kiblnd_query(struct lnet_ni *ni, lnet_nid_t nid, time64_t *when)
 {
-	cfs_time_t	last_alive = 0;
-	cfs_time_t	now = cfs_time_current();
-	rwlock_t	*glock = &kiblnd_data.kib_global_lock;
-	kib_peer_ni_t	*peer_ni;
-	unsigned long	flags;
+	time64_t last_alive = 0;
+	time64_t now = ktime_get_seconds();
+	rwlock_t *glock = &kiblnd_data.kib_global_lock;
+	kib_peer_ni_t *peer_ni;
+	unsigned long flags;
 
 	read_lock_irqsave(glock, flags);
 
@@ -1240,9 +1240,9 @@ kiblnd_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when)
 	if (peer_ni == NULL)
 		kiblnd_launch_tx(ni, NULL, nid);
 
-	CDEBUG(D_NET, "peer_ni %s %p, alive %ld secs ago\n",
+	CDEBUG(D_NET, "peer_ni %s %p, alive %lld secs ago\n",
 	       libcfs_nid2str(nid), peer_ni,
-	       last_alive ? cfs_duration_sec(now - last_alive) : -1);
+	       last_alive ? now - last_alive : -1);
 	return;
 }
 

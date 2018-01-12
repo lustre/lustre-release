@@ -537,9 +537,9 @@ extern unsigned int lnet_peer_discovery_disabled;
 extern int portal_rotor;
 
 int lnet_notify(struct lnet_ni *ni, lnet_nid_t peer, int alive,
-		cfs_time_t when);
+		time64_t when);
 void lnet_notify_locked(struct lnet_peer_ni *lp, int notifylnd, int alive,
-			cfs_time_t when);
+			time64_t when);
 int lnet_add_route(__u32 net, __u32 hops, lnet_nid_t gateway_nid,
 		   unsigned int priority);
 int lnet_check_routes(void);
@@ -939,7 +939,8 @@ lnet_is_peer_healthy_locked(struct lnet_peer *peer)
 static inline void
 lnet_peer_set_alive(struct lnet_peer_ni *lp)
 {
-	lp->lpni_last_alive = lp->lpni_last_query = cfs_time_current();
+	lp->lpni_last_alive = ktime_get_seconds();
+	lp->lpni_last_query = lp->lpni_last_alive;
 	if (!lp->lpni_alive)
 		lnet_notify_locked(lp, 0, 1, lp->lpni_last_alive);
 }

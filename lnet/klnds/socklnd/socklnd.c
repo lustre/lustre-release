@@ -558,7 +558,7 @@ ksocknal_del_peer_locked(struct ksock_peer_ni *peer_ni, __u32 ip)
 	}
 
 	ksocknal_peer_decref(peer_ni);
-		/* NB peer_ni unlinks itself when last conn/route is removed */
+	/* NB peer_ni unlinks itself when last conn/route is removed */
 }
 
 static int
@@ -1816,7 +1816,7 @@ ksocknal_notify(struct lnet_ni *ni, lnet_nid_t gw_nid, int alive)
 }
 
 void
-ksocknal_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when)
+ksocknal_query(struct lnet_ni *ni, lnet_nid_t nid, time64_t *when)
 {
 	int connect = 1;
 	time64_t last_alive = 0;
@@ -1857,7 +1857,7 @@ ksocknal_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when)
 	read_unlock(glock);
 
         if (last_alive != 0)
-		*when = cfs_time_seconds(last_alive);
+		*when = last_alive;
 
 	CDEBUG(D_NET, "peer_ni %s %p, alive %lld secs ago, connect %d\n",
                libcfs_nid2str(nid), peer_ni,

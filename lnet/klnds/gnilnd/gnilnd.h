@@ -1778,7 +1778,7 @@ void kgnilnd_unmap_fma_blocks(kgn_device_t *device);
 void kgnilnd_free_phys_fmablk(kgn_device_t *device);
 
 int kgnilnd_ctl(struct lnet_ni *ni, unsigned int cmd, void *arg);
-void kgnilnd_query(struct lnet_ni *ni, lnet_nid_t nid, cfs_time_t *when);
+void kgnilnd_query(struct lnet_ni *ni, lnet_nid_t nid, time64_t *when);
 int kgnilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg);
 int kgnilnd_eager_recv(struct lnet_ni *ni, void *private,
 			struct lnet_msg *lntmsg, void **new_private);

@@ -754,7 +754,7 @@ typedef struct kib_peer
 	/* incarnation of peer_ni */
 	__u64			ibp_incarnation;
 	/* when (in jiffies) I was last alive */
-	cfs_time_t		ibp_last_alive;
+	time64_t		ibp_last_alive;
 	/* # users */
 	atomic_t		ibp_refcount;
 	/* version of peer_ni */

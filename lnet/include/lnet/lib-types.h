@@ -258,7 +258,7 @@ struct lnet_lnd {
 	void (*lnd_notify)(struct lnet_ni *ni, lnet_nid_t peer, int alive);
 
 	/* query of peer aliveness */
-	void (*lnd_query)(struct lnet_ni *ni, lnet_nid_t peer, cfs_time_t *when);
+	void (*lnd_query)(struct lnet_ni *ni, lnet_nid_t peer, time64_t *when);
 
 	/* accept a new connection */
 	int (*lnd_accept)(struct lnet_ni *ni, struct socket *sock);
@@ -390,7 +390,7 @@ struct lnet_ni {
 	int			**ni_refs;
 
 	/* when I was last alive */
-	long			ni_last_alive;
+	time64_t		ni_last_alive;
 
 	/* pointer to parent network */
 	struct lnet_net		*ni_net;
@@ -498,15 +498,15 @@ struct lnet_peer_ni {
 	/* # times router went dead<->alive. Protected with lpni_lock */
 	int			lpni_alive_count;
 	/* time of last aliveness news */
-	cfs_time_t		lpni_timestamp;
+	time64_t		lpni_timestamp;
 	/* time of last ping attempt */
-	cfs_time_t		lpni_ping_timestamp;
+	time64_t		lpni_ping_timestamp;
 	/* != 0 if ping reply expected */
-	cfs_time_t		lpni_ping_deadline;
+	time64_t		lpni_ping_deadline;
 	/* when I was last alive */
-	cfs_time_t		lpni_last_alive;
+	time64_t		lpni_last_alive;
 	/* when lpni_ni was queried last time */
-	cfs_time_t		lpni_last_query;
+	time64_t		lpni_last_query;
 	/* network peer is on */
 	struct lnet_net		*lpni_net;
 	/* peer's NID */

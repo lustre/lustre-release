@@ -1941,8 +1941,8 @@ kiblnd_thread_fini (void)
 static void
 kiblnd_peer_alive (kib_peer_ni_t *peer_ni)
 {
-	/* This is racy, but everyone's only writing cfs_time_current() */
-	peer_ni->ibp_last_alive = cfs_time_current();
+	/* This is racy, but everyone's only writing ktime_get_seconds() */
+	peer_ni->ibp_last_alive = ktime_get_seconds();
 	smp_mb();
 }
 
@@ -1950,7 +1950,7 @@ static void
 kiblnd_peer_notify (kib_peer_ni_t *peer_ni)
 {
         int           error = 0;
-        cfs_time_t    last_alive = 0;
+	time64_t last_alive = 0;
         unsigned long flags;
 
 	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
@@ -3314,11 +3314,10 @@ kiblnd_check_conns (int idx)
 			}
 
 			if (timedout) {
-				CERROR("Timed out RDMA with %s (%lu): "
+				CERROR("Timed out RDMA with %s (%lld): "
 				       "c: %u, oc: %u, rc: %u\n",
 				       libcfs_nid2str(peer_ni->ibp_nid),
-				       cfs_duration_sec(cfs_time_current() -
-							peer_ni->ibp_last_alive),
+				       ktime_get_seconds() - peer_ni->ibp_last_alive,
 				       conn->ibc_credits,
 				       conn->ibc_outstanding_credits,
 				       conn->ibc_reserved_credits);
