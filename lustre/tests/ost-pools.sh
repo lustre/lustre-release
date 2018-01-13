@@ -607,9 +607,9 @@ test_6() {
 
 	# lfs setstripe should work as before if a pool name is not specified.
 	$SETSTRIPE -c -1 $POOL_DIR
-	[[ $? -eq 0 ]] || error "$SETSTRIPE -p $POOL_DIR failed."
+	[[ $? -eq 0 ]] || error "$SETSTRIPE -c -1 $POOL_DIR failed."
 	$SETSTRIPE -c -1 $POOL_FILE
-	[[ $? -eq 0 ]] || error "$SETSTRIPE -p $POOL_FILE failed."
+	[[ $? -eq 0 ]] || error "$SETSTRIPE -c -1 $POOL_FILE failed."
 
 	# lfs setstripe should fail if a start index that is outside the
 	# pool is specified.
@@ -629,15 +629,15 @@ helper_test_7a()
 	pool_add $pool || error "pool_add failed"
 	pool_add_targets $pool 0 1 || error "pool_add_targets failed"
 
-	$SETSTRIPE -c 1 $DIR/$tdir/testfile1 --pool "$pool" || \
+	$SETSTRIPE -c 1 $DIR/$tdir/testfile1 --pool "$pool" ||
 		error "setstripe failed"
-	$SETSTRIPE -c 1 $DIR/$tdir/testfile2 --pool "$FSNAME.$pool" || \
+	$SETSTRIPE -c 1 $DIR/$tdir/testfile2 --pool "$FSNAME.$pool" ||
 		error "setstripe failed"
 
 	mkdir $DIR/$tdir/testdir
-	$SETSTRIPE -c 1 $DIR/$tdir/testdir  -p "$pool" || \
+	$SETSTRIPE -c 1 $DIR/$tdir/testdir  -p "$pool" ||
 		error "setstripe failed"
-	$SETSTRIPE -c 1 $DIR/$tdir/testdir  -p "$FSNAME.$pool" || \
+	$SETSTRIPE -c 1 $DIR/$tdir/testdir  -p "$FSNAME.$pool" ||
 		error "setstripe failed"
 
 	rm -f $DIR/$tdir/testfile1
@@ -1131,25 +1131,28 @@ test_20() {
 	add_pool $POOL2 "$FSNAME-OST[$start-$TGT_MAX/2]" "$TGT"
 
 	create_dir $dir1 $POOL
-	create_file $dir1/file1 $POOL2
+	create_file $dir1/file1 $POOL2	# Should replace $dir1 pool with $POOL2
 	create_dir $dir2 $POOL2
-	touch $dir2/file2
-	mkdir $dir3
-	$SETSTRIPE -c 1 $dir3 # No pool assignment
-	touch $dir3/file3
-	$SETSTRIPE -c 1 $dir2/file4 # No pool assignment
+	touch $dir2/file2		# Should inherit $POOL2 from $dir2
+	mkdir $dir3			# Should inherit $POOL from $dir1
+	$SETSTRIPE -c 1 $dir3		# Should remain existing $POOL
+	touch $dir3/file3		# Should inherit $POOL from $dir3
+	$SETSTRIPE -c 1 $dir2/file4	# Should inherit $POOL2 from dir2
+	$SETSTRIPE -S 64K $dir1/file5	# Should inderit $POOL from $dir1
 
 	check_file_in_pool $dir1/file1 $POOL2
 	check_file_in_pool $dir2/file2 $POOL2
-
-	check_dir_not_in_pool $dir3 $POOL
 	check_dir_not_in_pool $dir3 $POOL2
-
-	check_file_not_in_pool $dir3/file3 $POOL
 	check_file_not_in_pool $dir3/file3 $POOL2
-
 	check_file_not_in_pool $dir2/file4 $POOL
-	check_file_not_in_pool $dir2/file4 $POOL2
+	check_file_not_in_pool $dir1/file5 $POOL2
+
+	if [ $(lustre_version_code mds1) -ge $(version_code 2.10.54) ]; then
+		check_dir_in_pool $dir3 $POOL
+		check_file_in_pool $dir3/file3 $POOL
+		check_file_in_pool $dir2/file4 $POOL2
+		check_file_in_pool $dir1/file5 $POOL
+	fi
 
 	rm -rf $dir1
 

@@ -1027,7 +1027,7 @@ static int mdt_open_by_fid_lock(struct mdt_thread_info *info,
 	__u64			 ibits = 0;
         ENTRY;
 
-	if (md_should_create(flags) && !(flags & MDS_OPEN_HAS_EA)) {
+	if (md_should_create(flags)) {
                 if (!lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
                         parent = mdt_object_find(env, mdt, rr->rr_fid1);
                         if (IS_ERR(parent)) {

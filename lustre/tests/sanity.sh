@@ -16458,7 +16458,7 @@ test_406() {
 		[ $size -eq $def_stripe_size ] ||
 			error "$f stripe size $size != $def_stripe_size"
 		local pool=$($GETSTRIPE -p $f)
-		[ "#$pool" == "#" ] || error "$f pool $pool is set"
+		[ $pool == $test_pool ] || error "$f pool $pool isn't set"
 
 	done
 
