@@ -1071,7 +1071,7 @@ $ lfs setstripe --pool my_pool /mnt/lustre/dir
       </para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438206_42260">
+  <section xml:id="dbdoclet.lfs_migrate">
     <title>
       <indexterm>
         <primary>lfs_migrate</primary>
@@ -1079,50 +1079,54 @@ $ lfs setstripe --pool my_pool /mnt/lustre/dir
       <literal>lfs_migrate</literal>
     </title>
     <para>The 
-    <literal>lfs_migrate</literal> utility is a simple tool to migrate files
-    between Lustre OSTs.</para>
+    <literal>lfs_migrate</literal> utility is a simple to migrate file
+    <emphasis>data</emphasis> between OSTs.</para>
     <section remap="h5">
       <title>Synopsis</title>
       <screen>
-lfs_migrate [-c <replaceable>stripecount</replaceable>] [-h] [-l] [-n] [-q] [-R] [-s] [-y]
-[file|directory ...]
+lfs_migrate [<replaceable>lfs_setstripe_options</replaceable>]
+	[-h] [-n] [-q] [-R] [-s] [-y] [file|directory ...]
 </screen>
     </section>
     <section remap="h5">
       <title>Description</title>
       <para>The 
-      <literal>lfs_migrate</literal> utility is a simple tool to assist
-      migration of files between Lustre OSTs. The utility copies each specified
-      file to a new file, verifies the file contents have not changed, and then
-      renames the new file to the original filename. This allows balanced space
-      usage between OSTs, moving files off OSTs that are starting to show
-      hardware problems (though are still functional) or OSTs that will be
-      discontinued.</para>
+      <literal>lfs_migrate</literal> utility is a tool to assist migration
+      of file data between Lustre OSTs. The utility copies each specified
+      file to a temporary file using supplied <literal>lfs setstripe</literal>
+      options, if any, optionally verifies the file contents have not changed,
+      and then swaps the layout (OST objects) from the temporary file and the
+      original file (for Lustre 2.5 and later), or renames the temporary file
+      to the original filename. This allows the user/administrator to balance
+      space usage between OSTs, or move files off OSTs that are starting to show
+      hardware problems (though are still functional) or will be removed.</para>
       <warning>
         <para>For versions of Lustre before 2.5, 
-        <literal>lfs_migrate</literal> is not closely integrated with the MDS,
-        it cannot determine whether a file is currently open and/or in-use by
-        other applications or nodes. This makes it UNSAFE for use on files that
-        might be modified by other applications, since the migrated file is
-        only a copy of the current file. This results in the old file becoming
-        an open-unlinked file and any modifications to that file are
-        lost.</para>
+        <literal>lfs_migrate</literal> was not integrated with the MDS at all.
+        That made it UNSAFE for use on files that were being modified by other
+	applications, since the file was migrated through a copy and rename of
+	the file.  With Lustre 2.5 and later, the new file layout is swapped
+	with the existing file layout, which ensures that the user-visible
+	inode number is kept, and open file handles and locks on the file are
+	kept.</para>
       </warning>
       <para>Files to be migrated can be specified as command-line arguments. If
       a directory is specified on the command-line then all files within the
       directory are migrated. If no files are specified on the command-line,
       then a list of files is read from the standard input, making 
       <literal>lfs_migrate</literal> suitable for use with 
-      <literal>lfs</literal> find to locate files on specific OSTs and/or
-      matching other file attributes.</para>
-      <para>The current file allocation policies on the MDS dictate where the
-      new files are placed, taking into account whether specific OSTs have been
-      disabled on the MDS via 
-      <literal>lctl</literal>(preventing new files from being allocated there),
-      whether some OSTs are overly full (reducing the number of files placed on
-      those OSTs), or if there is a specific default file striping for the
-      target directory (potentially changing the stripe count, stripe size, OST
-      pool, or OST index of a new file).</para>
+      <literal>lfs find</literal> to locate files on specific OSTs and/or
+      matching other file attributes, and other tools that generate a list
+      of files on standard output.</para>
+      <para>Unless otherwise specified through command-line options, the
+      file allocation policies on the MDS dictate where the new files
+      are placed, taking into account whether specific OSTs have been
+      disabled on the MDS via <literal>lctl</literal> (preventing new
+      files from being allocated there), whether some OSTs are overly full
+      (reducing the number of files placed on those OSTs), or if there is
+      a specific default file striping for the parent directory (potentially
+      changing the stripe count, stripe size, OST pool, or OST index of a
+      new file).</para>
       <note>
         <para>The 
         <literal>lfs_migrate</literal> utility can also be used in some cases to

@@ -169,79 +169,18 @@ $ for i in $(seq 3); do lfs getstripe -M ./testremote/${i}.txt; done <lineannota
 0
 0
 0</screen>
-      <para>For more information, see <literal>man lfs</literal></para>
+      <para>For more information, see <literal>man lfs-migrate</literal></para>
       <warning><para>Currently, only whole directories can be migrated
       between MDTs. During migration each file receives a new identifier
       (FID). As a consequence, the file receives a new inode number. Some
       system tools (for example, backup and archiving tools) may consider
       the migrated files to be new, even though the contents are unchanged.
       </para></warning>
-      <para>If there is a need to migrate the file data from the current
-      OST(s) to new OSTs, the data must be migrated (copied) to the new
-      location.  The simplest way to do this is to use the
-      <literal>lfs_migrate</literal> command (see
-      <xref linkend="dbdoclet.50438206_42260" />). However, the steps for
-      migrating a file by hand are also shown here for reference.</para>
-      <orderedlist>
-        <listitem>
-          <para>Identify the file(s) to be moved.</para>
-          <para>In the example below, the object information portion of the output from the
-          <literal>lfs getstripe</literal> command below shows that the
-          <literal>test_2</literal>file is located entirely on OST0002:</para>
-          <screen>
-client# lfs getstripe /mnt/testfs/test_2
-/mnt/testfs/test_2
-obdidx     objid   objid   group
-     2      8     0x8       0
-</screen>
-        </listitem>
-        <listitem>
-          <para>To move the data, create a copy and remove the original:</para>
-          <screen>
-client# cp -a /mnt/testfs/test_2 /mnt/testfs/test_2.tmp
-client# mv /mnt/testfs/test_2.tmp /mnt/testfs/test_2
-</screen>
-        </listitem>
-        <listitem>
-          <para>If the space usage of OSTs is severely imbalanced, it is
-          possible to find and migrate large files from their current location
-          onto OSTs that have more space, one could run:</para>
-          <screen>
-client# lfs find --ost 
-<replaceable>ost_name</replaceable> -size +1G | lfs_migrate -y
-</screen>
-        </listitem>
-        <listitem>
-          <para>Check the file system balance.</para>
-          <para>The 
-          <literal>lfs df</literal> output in the example below shows a more
-          balanced system compared to the 
-          <literal>lfs df</literal> output in the example in 
-          <xref linkend="dbdoclet.50438211_17536" />.</para>
-          <screen>
-client# lfs df -h
-UUID                 bytes         Used            Available       Use%    \
-        Mounted on
-testfs-MDT0000_UUID   4.4G         214.5M          3.9G            4%      \
-        /mnt/testfs[MDT:0]
-testfs-OST0000_UUID   2.0G         1.3G            598.1M          65%     \
-        /mnt/testfs[OST:0]
-testfs-OST0001_UUID   2.0G         1.3G            594.1M          65%     \
-        /mnt/testfs[OST:1]
-testfs-OST0002_UUID   2.0G         913.4M          1000.0M         45%     \
-        /mnt/testfs[OST:2]
-testfs-OST0003_UUID   2.0G         1.3G            602.1M          65%     \
-        /mnt/testfs[OST:3]
-testfs-OST0004_UUID   2.0G         1.3G            606.1M          64%     \
-        /mnt/testfs[OST:4]
-testfs-OST0005_UUID   2.0G         1.3G            610.1M          64%     \
-        /mnt/testfs[OST:5]
- 
-filesystem summary:  11.8G 7.3G            3.9G    61%                     \
-/mnt/testfs
-</screen>
-        </listitem>
-      </orderedlist>
+      <para>If there is a need to migrate the file <emphasis>data</emphasis>
+      from the current OST(s) to new OST(s), the data must be migrated (copied)
+      to the new location.  The simplest way to do this is to use the
+      <literal>lfs_migrate</literal> command, see
+      <xref linkend="dbdoclet.lfs_migrate" />.</para>
     </section>
     <section remap="h3">
       <title>

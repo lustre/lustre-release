@@ -89,7 +89,7 @@
       <para condition='l24'>If multiple MDTs are going to be present in the
       system, each MDT should be specified for the anticipated usage and load.
       For details on how to add additional MDTs to the filesystem, see
-      <xref linkend="dbdoclet.addingamdt"/>.</para>
+      <xref linkend="dbdoclet.adding_new_mdt"/>.</para>
       <warning condition='l24'><para>MDT0 contains the root of the Lustre file
       system. If MDT0 is unavailable for any reason, the file system cannot be
       used.</para></warning>
@@ -271,7 +271,7 @@
 	it is possible to increase the total number of inodes of a Lustre
 	filesystem, as well as increasing the aggregate metadata performance,
 	by configuring additional MDTs into the filesystem, see
-        <xref linkend="dbdoclet.addingamdt"/> for details.
+        <xref linkend="dbdoclet.adding_new_mdt"/> for details.
         </para>
       </note>
     </section>

@@ -414,7 +414,7 @@
       <para>For example, for a 2 stripe file, stripe size = 1M, the bad OST is at index 0, and you have holes in the file at: [(2*N + 0)*1M, (2*N + 0)*1M + 1M - 1], N = { 0, 1, 2, ...}</para>
       <para>If the file system cannot be mounted, currently there is no way that parses metadata directly from an MDS. If the bad OST does not start, options to mount the file system are to provide a loop device OST in its place or replace it with a newly-formatted OST. In that case, the missing objects are created and are read as zero-filled.</para>
     </section>
-    <section xml:id="dbdoclet.50438198_69657">
+    <section xml:id="dbdoclet.repair_ost_lastid">
       <title>Fixing a Bad LAST_ID on an OST</title>
       <para>Each OST contains a LAST_ID file, which holds the last object (pre-)created by the MDS  <footnote>
           <para>The contents of the LAST_ID file must be accurate regarding the actual objects that exist on the OST.</para>

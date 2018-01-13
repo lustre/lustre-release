@@ -18,28 +18,28 @@
       <para><xref linkend="dbdoclet.50438199_31353"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.addingamdt"/></para>
+      <para><xref linkend="dbdoclet.adding_new_mdt"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_22527"/></para>
+      <para><xref linkend="dbdoclet.adding_new_ost"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_14978"/></para>
+      <para><xref linkend="dbdoclet.deactivating_mdt_ost"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.rmremotedir"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.inactivemdt"/>\</para>
+      <para><xref linkend="dbdoclet.inactivemdt"/></para>
     </listitem>
     <listitem>
-      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_k3l_4gt_tl"/></para>
+      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_remove_ost"/></para>
     </listitem>
     <listitem>
       <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_ydg_pgt_tl"/></para>
     </listitem>
     <listitem>
-      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_kzs_pgt_tl"/></para>
+      <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_restore_ost"/></para>
     </listitem>
     <listitem>
       <para><xref xmlns:xlink="http://www.w3.org/1999/xlink" linkend="section_ucf_qgt_tl"/></para>
@@ -281,7 +281,7 @@ Changing a Server NID</title>
       <note><para>The previous configuration log is backed up on the MGS
       disk with the suffix <literal>'.bak'</literal>.</para></note>
     </section>
-    <section xml:id="dbdoclet.addingamdt" condition='l24'>
+    <section xml:id="dbdoclet.adding_new_mdt" condition='l24'>
       <title><indexterm>
         <primary>maintenance</primary>
         <secondary>adding an MDT</secondary>
@@ -334,144 +334,200 @@ client# lfs mkdir -c 4 /mnt/testfs/new_directory_striped_across_4_mdts
         </listitem>
       </orderedlist>
     </section>
-    <section xml:id="dbdoclet.50438199_22527">
+    <section xml:id="dbdoclet.adding_new_ost">
       <title><indexterm><primary>maintenance</primary><secondary>adding a OST</secondary></indexterm>
 Adding a New OST to a Lustre File System</title>
-      <para>To add an OST to existing Lustre file system:</para>
+      <para>A new OST can be added to existing Lustre file system on either
+      an existing OSS node or on a new OSS node.  In order to keep client IO
+      load balanced across OSS nodes for maximum aggregate performance, it is
+      not recommended to configure different numbers of OSTs to each OSS node.
+      </para>
       <orderedlist>
         <listitem>
-          <para> Add a new OST by passing on the following commands, run:</para>
-          <screen>oss# mkfs.lustre --fsname=spfs --mgsnode=mds16@tcp0 --ost --index=12 /dev/sda
-oss# mkdir -p /mnt/test/ost12
-oss# mount -t lustre /dev/sda /mnt/test/ost12</screen>
+          <para> Add a new OST by using <literal>mkfs.lustre</literal> as when
+	  the filesystem was first formatted, see
+	  <xref linkend="dbdoclet.format_ost" /> for details.  Each new OST
+	  must have a unique index number, use <literal>lctl dl</literal> to
+	  see a list of all OSTs. For example, to add a new OST at index 12
+	  to the <literal>testfs</literal> filesystem run following commands
+	  should be run on the OSS:</para>
+          <screen>oss# mkfs.lustre --fsname=testfs --mgsnode=mds16@tcp0 --ost --index=12 /dev/sda
+oss# mkdir -p /mnt/testfs/ost12
+oss# mount -t lustre /dev/sda /mnt/testfs/ost12</screen>
         </listitem>
         <listitem>
-          <para> Migrate the data (possibly).</para>
-          <para>The file system is quite unbalanced when new empty OSTs are added. New file creations are automatically balanced. If this is a scratch file system or files are pruned at a regular interval, then no further work may be needed.</para>
-          <para>New files being created will preferentially be placed on the empty OST. As old files are deleted, they will release space on the old OST.</para>
-          <para>Files existing prior to the expansion can optionally be rebalanced with an in-place copy, which can be done with a simple script. The basic method is to copy existing files to a temporary file, then move the temp file over the old one. This should not be attempted with files which are currently being written to by users or applications. This operation redistributes the stripes over the entire set of OSTs.</para>
-          <para>For example, to rebalance all files within <literal>/mnt/lustre/dir</literal>, enter:</para>
+          <para>Balance OST space usage (possibly).</para>
+          <para>The file system can be quite unbalanced when new empty OSTs
+	  are added to a relatively full filesystem. New file creations are
+	  automatically balanced to favour the new OSTs. If this is a scratch
+	  file system or files are pruned at regular intervals, then no further
+	  work may be needed to balance the OST space usage as new files being
+	  created will preferentially be placed on the less full OST(s). As old
+	  files are deleted, they will release space on the old OST(s).</para>
+          <para>Files existing prior to the expansion can optionally be
+	  rebalanced using the <literal>lfs_migrate</literal> utility.
+	  This redistributes file data over the entire set of OSTs.</para>
+          <para>For example, to rebalance all files within the directory
+	  <literal>/mnt/lustre/dir</literal>, enter:</para>
           <screen>client# lfs_migrate /mnt/lustre/file</screen>
-          <para>To migrate files within the <literal>/test</literal> file system on
-            <literal>OST0004</literal> that are larger than 4GB in size, enter:</para>
-          <screen>client# lfs find /test -obd test-OST0004 -size +4G | lfs_migrate -y</screen>
-          <para>See <xref linkend="dbdoclet.50438206_42260"/>  for more details.</para>
+          <para>To migrate files within the <literal>/test</literal> file
+	  system on <literal>OST0004</literal> that are larger than 4GB in
+	  size to other OSTs, enter:</para>
+          <screen>client# lfs find /test --ost test-OST0004 -size +4G | lfs_migrate -y</screen>
+          <para>See <xref linkend="dbdoclet.lfs_migrate"/> for details.</para>
         </listitem>
       </orderedlist>
     </section>
-    <section xml:id="dbdoclet.50438199_14978">
-      <title><indexterm><primary>maintenance</primary><secondary>restoring a OST</secondary></indexterm>
-      <indexterm><primary>maintenance</primary><secondary>removing a OST</secondary></indexterm>
-Removing and Restoring OSTs</title>
-      <para>OSTs can be removed from and restored to a Lustre file system. Removing a OST means the
-      OST is <emphasis role="italic">deactivated</emphasis> in the file system, not permanently
-      removed.</para>
-  	  	<note><para>A removed OST still appears in the file system; do not create a new OST with the same name.</para></note>
-      <para>You may want to remove (deactivate) an OST and prevent new files from being written to it in several situations:</para>
+    <section xml:id="dbdoclet.deactivating_mdt_ost">
+      <title><indexterm><primary>maintenance</primary><secondary>restoring an OST</secondary></indexterm>
+      <indexterm><primary>maintenance</primary><secondary>removing an OST</secondary></indexterm>
+Removing and Restoring MDTs and OSTs</title>
+      <para>OSTs and DNE MDTs can be removed from and restored to a Lustre
+      filesystem.  Deactivating an OST means that it is temporarily or
+      permanently marked unavailable.  Deactivating an OST on the MDS means
+      it will not try to allocate new objects there or perform OST recovery,
+      while deactivating an OST the client means it will not wait for OST
+      recovery if it cannot contact the OST and will instead return an IO
+      error to the application immediately if files on the OST are accessed.
+      An OST may be permanently deactivated from the file system,
+      depending on the situation and commands used.</para>
+      <note><para>A permanently deactivated MDT or OST still appears in the
+        filesystem configuration until the configuration is regenerated with
+        <literal>writeconf</literal> or it is replaced with a new MDT or OST
+        at the same index and permanently reactivated.  A deactivated OST
+	will not be listed by <literal>lfs df</literal>.
+      </para></note>
+      <para>You may want to temporarily deactivate an OST on the MDS to
+      prevent new files from being written to it in several situations:</para>
       <itemizedlist>
         <listitem>
-          <para>Hard drive has failed and a RAID resync/rebuild is underway</para>
+          <para>A hard drive has failed and a RAID resync/rebuild is underway,
+          though the OST can also be marked <emphasis>degraded</emphasis> by
+          the RAID system to avoid allocating new files on the slow OST which
+          can reduce performance, see <xref linkend='dbdoclet.degraded_ost' />
+          for more details.
+          </para>
         </listitem>
         <listitem>
-          <para>OST is nearing its space capacity</para>
+          <para>OST is nearing its space capacity, though the MDS will already
+          try to avoid allocating new files on overly-full OSTs if possible,
+          see <xref linkend='dbdoclet.balancing_free_space' /> for details.
+          </para>
         </listitem>
         <listitem>
-		  <para>OST storage has failed permanently</para>
-	    </listitem>
+          <para>MDT/OST storage or MDS/OSS node has failed, and will not
+          be available for some time (or forever), but there is still a
+          desire to continue using the filesystem before it is repaired.</para>
+        </listitem>
       </itemizedlist>
       <section condition="l24" xml:id="dbdoclet.rmremotedir">
-      <title><indexterm><primary>maintenance</primary><secondary>removing a MDT</secondary></indexterm>Removing a MDT from the File System</title>
-	<para>If the MDT is permanently inaccessible,
+      <title><indexterm><primary>maintenance</primary><secondary>removing an MDT</secondary></indexterm>Removing an MDT from the File System</title>
+        <para>If the MDT is permanently inaccessible,
     <literal>lfs rm_entry {directory}</literal> can be used to delete the
-    directory entry on the unavailable MDT. A normal <literal>rmdir</literal>
-    will report an IO error due to the remote MDT being inactive. Please note
-    that if the MDT is available, a standard <literal>rm -r</literal> should
-    be used to delete the remote directory.  After the remote directory has been
-    removed, the administrator should mark the MDT as permanently inactive
-    with:</para>
-<screen>lctl conf_param {MDT name}.mdc.active=0
-</screen>
+    directory entry for the unavailable MDT. Using <literal>rmdir</literal>
+    would otherwise report an IO error due to the remote MDT being inactive.
+    Please note that if the MDT <emphasis>is</emphasis> available, standard
+    <literal>rm -r</literal> should be used to delete the remote directory.
+    After the remote directory has been removed, the administrator should
+    mark the MDT as permanently inactive with:</para>
+<screen>lctl conf_param {MDT name}.mdc.active=0</screen>
 <para>A user can identify which MDT holds a remote sub-directory using
 the <literal>lfs</literal> utility. For example:</para>
-<screen>client$ lfs getstripe -M /mnt/lustre/remote_dir1
+<screen>client$ lfs getstripe --mdt-index /mnt/lustre/remote_dir1
 1
 client$ mkdir /mnt/lustre/local_dir0
-client$ lfs getstripe -M /mnt/lustre/local_dir0
+client$ lfs getstripe --mdt-index /mnt/lustre/local_dir0
 0
 </screen>
-	<para>The <literal>getstripe [--mdt-index|-M]</literal> parameters return
-        the index of the MDT that is serving the given directory.</para>
-	  </section>
-	  <section xml:id="dbdoclet.inactivemdt" condition='l24'>
+        <para>The <literal>lfs getstripe --mdt-index</literal> command
+        returns the index of the MDT that is serving the given directory.</para>
+          </section>
+          <section xml:id="dbdoclet.inactivemdt" condition='l24'>
       <title>
           <indexterm><primary>maintenance</primary></indexterm>
           <indexterm><primary>maintenance</primary><secondary>inactive MDTs</secondary></indexterm>Working with Inactive MDTs</title>
-    <para>Files located on or below an inactive MDT are inaccessible until the MDT is activated again. Clients accessing an inactive MDT will receive an EIO error.</para></section>
-      <section remap="h3" xml:id="section_k3l_4gt_tl">
+    <para>Files located on or below an inactive MDT are inaccessible until
+    the MDT is activated again. Clients accessing an inactive MDT will receive
+    an EIO error.</para>
+      </section>
+      <section remap="h3" xml:id="section_remove_ost">
       <title><indexterm>
           <primary>maintenance</primary>
-          <secondary>removing a OST</secondary>
-        </indexterm> Removing an OST from the File System</title>
-      <para>When removing an OST, remember that the MDT does not communicate directly with OSTs.
-        Rather, each OST has a corresponding OSC which communicates with the MDT. It is necessary to
-        determine the device number of the OSC that corresponds to the OST. Then, you use this
-        device number to deactivate the OSC on the MDT.</para>
-      <para>To remove an OST from the file system:</para>
+          <secondary>removing an OST</secondary>
+        </indexterm>Removing an OST from the File System</title>
+      <para>When deactivating an OST, note that the client and MDS each have
+      an OSC device that handles communication with the corresponding OST.
+      To remove an OST from the file system:</para>
       <orderedlist>
         <listitem>
-          <para>For the OST to be removed, determine the device number of the corresponding OSC on
-            the MDT.</para>
+          <para>If the OST is functional, and there are files located on
+          the OST that need to be migrated off of the OST, the file creation
+          for that OST should be temporarily deactivated on the MDS (each MDS
+	  if running with multiple MDS nodes in DNE mode).
+          </para>
           <orderedlist>
             <listitem>
-              <para>List all OSCs on the node, along with their device numbers. Run:</para>
-              <screen>lctl dl | grep osc</screen>
-              <para>For example: <literal>lctl dl | grep</literal></para>
-              <screen>11 UP osc testfs-OST-0000-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
-12 UP osc testfs-OST-0001-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
-13 IN osc testfs-OST-0000-osc testfs-MDT0000-mdtlov_UUID 5
-14 UP osc testfs-OST-0001-osc testfs-MDT0000-mdtlov_UUID 5</screen>
+              <para condition="l29">With Lustre 2.9 and later, the MDS should be
+              set to only disable file creation on that OST by setting
+              <literal>max_create_count</literal> to zero:
+              <screen>mds# lctl set_param osp.<replaceable>osc_name</replaceable>.max_create_count=0</screen>
+              This ensures that files deleted or migrated off of the OST
+              will have their corresponding OST objects destroyed, and the space
+              will be freed.  For example, to disable <literal>OST0000</literal>
+              in the filesystem <literal>testfs</literal>, run:
+              <screen>mds# lctl set_param osp.testfs-OST0000-osc-MDT*.max_create_count=0</screen>
+              on each MDS in the <literal>testfs</literal> filesystem.</para>
             </listitem>
             <listitem>
-              <para>Determine the device number of the OSC that corresponds to the OST to be
-                removed.</para>
+              <para>With older versions of Lustre, to deactivate the OSC on the
+              MDS node(s) use:
+              <screen>mds# lctl set_param osp.<replaceable>osc_name</replaceable>.active=0</screen>
+              This will prevent the MDS from attempting any communication with
+              that OST, including destroying objects located thereon.  This is
+              fine if the OST will be removed permanently, if the OST is not
+              stable in operation, or if it is in a read-only state.  Otherwise,
+              the free space and objects on the OST will not decrease when
+              files are deleted, and object destruction will be deferred until
+              the MDS reconnects to the OST.</para>
+              <para>For example, to deactivate <literal>OST0000</literal> in
+              the filesystem <literal>testfs</literal>, run:
+              <screen>mds# lctl set_param osp.testfs-OST0000-osc-MDT*.active=0</screen>
+              Deactivating the OST on the <emphasis>MDS</emphasis> does not
+              prevent use of existing objects for read/write by a client.</para>
+              <note>
+                <para>If migrating files from a working OST, do not deactivate
+                the OST on clients. This causes IO errors when accessing files
+                located there, and migrating files on the OST would fail.</para>
+              </note>
+              <caution>
+                <para>Do not use <literal>lctl conf_param</literal> to
+                deactivate the OST if it is still working, as this immediately
+                and permanently deactivates it in the file system configuration
+                on both the MDS and all clients.</para>
+              </caution>
             </listitem>
           </orderedlist>
         </listitem>
         <listitem>
-          <para>Temporarily deactivate the OSC on the MDT. On the MDT, run: </para>
-          <screen>mds# lctl --device <replaceable>lustre_devno</replaceable> deactivate</screen>
-          <para>For example, based on the command output in Step 1, to deactivate device 13 (the
-            MDT’s OSC for <literal>OST-0000</literal>), the command would be: </para>
-          <screen>mds# lctl --device 13 deactivate</screen>
-          <para>This marks the OST as inactive on the MDS, so no new objects are assigned to the
-            OST. This does not prevent use of existing objects for reads or writes. </para>
-          <note>
-            <para>Do not deactivate the OST on the clients. Do so causes errors (EIOs), and the copy
-              out to fail. </para>
-          </note>
-          <caution>
-            <para>Do not use <literal>lctl conf_param</literal> to deactivate the OST. It
-              permanently sets a parameter in the file system configuration.</para>
-          </caution>
-        </listitem>
-        <listitem>
-          <para>Discover all files that have objects residing on the deactivated OST. </para>
-          <para>Depending on whether the deactivated OST is available or not, the data from that OST
-            may be migrated to other OSTs, or may need to be restored from backup. </para>
+          <para>Discover all files that have objects residing on the
+          deactivated OST. Depending on whether the deactivated OST is
+          available or not, the data from that OST may be migrated to
+          other OSTs, or may need to be restored from backup.</para>
           <orderedlist>
             <listitem>
-              <para>If the OST is still online and available, find all files with objects on the
-                deactivated OST, and copy them to other OSTs in the file system to: </para>
-              <screen>client# lfs find --obd <replaceable>ost_name</replaceable> <replaceable>/mount/point</replaceable> | lfs_migrate -y</screen>
+              <para>If the OST is still online and available, find all
+              files with objects on the deactivated OST, and copy them
+              to other OSTs in the file system to: </para>
+              <screen>client# lfs find --ost <replaceable>ost_name</replaceable> <replaceable>/mount/point</replaceable> | lfs_migrate -y</screen>
             </listitem>
             <listitem>
-              <para>If the OST is no longer available, delete the files on that OST and restore them
-                from backup:
-                <screen>client# lfs find --obd <replaceable>ost_uuid</replaceable> -print0 <replaceable>/mount/point</replaceable> | \
-           tee /tmp/files_to_restore | xargs -0 -n 1 unlink</screen>
-                The list of files that need to be restored from backup is stored in
-                  <literal>/tmp/files_to_restore</literal>. Restoring these files is beyond the
-                scope of this document.</para>
+              <para>If the OST is no longer available, delete the files
+                on that OST and restore them from backup:
+                <screen>client# lfs find --ost <replaceable>ost_uuid</replaceable> -print0 <replaceable>/mount/point</replaceable> |
+        tee /tmp/files_to_restore | xargs -0 -n 1 unlink</screen>
+                The list of files that need to be restored from backup is
+                stored in <literal>/tmp/files_to_restore</literal>. Restoring
+                these files is beyond the scope of this document.</para>
             </listitem>
           </orderedlist>
         </listitem>
@@ -480,26 +536,28 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
           <orderedlist>
             <listitem>
               <para>
-		If there is expected to be a replacement OST in some short
-		time (a few days), the OST can temporarily be deactivated on
-		the clients using:
+                If there is expected to be a replacement OST in some short
+                time (a few days), the OST can temporarily be deactivated on
+                the clients using:
                 <screen>client# lctl set_param osc.<replaceable>fsname</replaceable>-OST<replaceable>number</replaceable>-*.active=0</screen>
-		<note><para>This setting is only temporary and will be reset
-		if the clients are remounted or rebooted. It needs to be run
-		on all clients.</para>
-                </note></para>
+                <note><para>This setting is only temporary and will be reset
+                if the clients are remounted or rebooted. It needs to be run
+                on all clients.</para>
+                </note>
+              </para>
+            </listitem>
+            <listitem>
+              <para>If there is not expected to be a replacement for this OST in
+              the near future, permanently deactivate it on all clients and
+	      the MDS by running the following command on the MGS:
+              <screen>mgs# lctl conf_param <replaceable>ost_name</replaceable>.osc.active=0</screen></para>
+              <note><para>A deactivated OST still appears in the file system
+                configuration, though a replacement OST can be created using the
+                <literal>mkfs.lustre --replace</literal> option, see
+                <xref linkend="section_restore_ost"/>.
+              </para></note>
             </listitem>
           </orderedlist>
-          <para>If there is not expected to be a replacement for this OST in
-	  the near future, permanently deactivate it on all clients and the MDS
-	  by running the following command on the MGS:
-            <screen>mgs# lctl conf_param <replaceable>ost_name</replaceable>.osc.active=0</screen></para>
-          <note>
-            <para>A deactivated OST still appears in the file system
-	    configuration, though a new OST with the same name can be
-	    created using the <literal>--replace</literal> option for
-	    <literal>mkfs.lustre</literal>.</para>
-          </note>
         </listitem>
       </orderedlist>
     </section>
@@ -512,17 +570,19 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
           <primary>backup</primary>
           <secondary>OST config</secondary>
         </indexterm> Backing Up OST Configuration Files</title>
-      <para>If the OST device is still accessible, then the Lustre configuration files on the OST
-        should be backed up and saved for future use in order to avoid difficulties when a
-        replacement OST is returned to service. These files rarely change, so they can and should be
-        backed up while the OST is functional and accessible. If the deactivated OST is still
-        available to mount (i.e. has not permanently failed or is unmountable due to severe
-        corruption), an effort should be made to preserve these files. </para>
+      <para>If the OST device is still accessible, then the Lustre
+      configuration files on the OST should be backed up and saved for
+      future use in order to avoid difficulties when a replacement OST is
+      returned to service. These files rarely change, so they can and
+      should be backed up while the OST is functional and accessible. If
+      the deactivated OST is still available to mount (i.e. has not
+      permanently failed or is unmountable due to severe corruption), an
+      effort should be made to preserve these files. </para>
       <orderedlist>
         <listitem>
           <para>Mount the OST file system.
             <screen>oss# mkdir -p /mnt/ost
-[oss]# mount -t ldiskfs <replaceable>/dev/ost_device</replaceable> /mnt/ost</screen>
+oss# mount -t ldiskfs <replaceable>/dev/ost_device</replaceable> /mnt/ost</screen>
           </para>
         </listitem>
         <listitem>
@@ -537,7 +597,7 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
         </listitem>
       </orderedlist>
     </section>
-      <section xml:id="section_kzs_pgt_tl">
+      <section xml:id="section_restore_ost">
       <title><indexterm>
           <primary>maintenance</primary>
           <secondary>restoring OST config</secondary>
@@ -546,22 +606,36 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
           <primary>backup</primary>
           <secondary>restoring OST config</secondary>
         </indexterm> Restoring OST Configuration Files</title>
-      <para>If the original OST is still available, it is best to follow the OST backup and restore
-        procedure given in either <xref linkend="dbdoclet.backup_device"/>, or
-	<xref linkend="dbdoclet.backup_target_filesystem"/> and
-	<xref linkend="dbdoclet.restore_target_filesystem"/>.</para>
-      <para>To replace an OST that was removed from service due to corruption or hardware failure,
-        the file system needs to be formatted using <literal>mkfs.lustre</literal>, and the Lustre
-        file system configuration should be restored, if available. </para>
-      <para>If the OST configuration files were not backed up, due to the OST file system being
-        completely inaccessible, it is still possible to replace the failed OST with a new one at
-        the same OST index. </para>
+      <para>If the original OST is still available, it is best to follow the
+        OST backup and restore procedure given in either
+        <xref linkend="dbdoclet.backup_device"/>, or
+        <xref linkend="dbdoclet.backup_target_filesystem"/> and
+        <xref linkend="dbdoclet.restore_target_filesystem"/>.</para>
+      <para>To replace an OST that was removed from service due to corruption
+      or hardware failure, the replacement OST needs to be formatted using
+      <literal>mkfs.lustre</literal>, and the Lustre file system configuration
+      should be restored, if available.  Any objects stored on the OST will
+      be permanently lost, and files using the OST should be deleted and/or
+      restored from backup.</para>
+      <para condition="l25">With Lustre 2.5 and later, it is possible to
+        replace an OST to the same index without restoring the configuration
+        files, using the <literal>--replace</literal> option at format time.
+        <screen>oss# mkfs.lustre --ost --reformat --replace --index=<replaceable>old_ost_index</replaceable> \
+        <replaceable>other_options</replaceable> <replaceable>/dev/new_ost_dev</replaceable></screen>
+        The MDS and OSS will negotiate the <literal>LAST_ID</literal> value
+        for the replacement OST.
+      </para>
+      <para>If the OST configuration files were not backed up, due to the
+      OST file system being completely inaccessible, it is still possible to
+      replace the failed OST with a new one at the same OST index. </para>
       <orderedlist>
         <listitem>
-          <para> Format the OST file system.
-            <screen>oss# mkfs.lustre --ost --index=<replaceable>old_ost_index</replaceable> <replaceable>other_options</replaceable> \
-           <replaceable>/dev/new_ost_dev</replaceable></screen>
-          </para>
+         <para>For older versions, format the OST file system without the
+           <literal>--replace</literal> option and restore the saved
+           configuration:
+           <screen>oss# mkfs.lustre --ost --reformat --index=<replaceable>old_ost_index</replaceable> \
+           <replaceable>other_options</replaceable> <replaceable>/dev/new_ost_dev</replaceable></screen>
+         </para>
         </listitem>
         <listitem>
           <para> Mount the OST file system.
@@ -575,19 +649,22 @@ oss# mount -t ldiskfs <replaceable>/dev/new_ost_dev</replaceable> <replaceable>/
         </listitem>
         <listitem>
           <para>Recreate the OST configuration files, if unavailable. </para>
-          <para>Follow the procedure in <xref linkend="dbdoclet.50438198_69657"/> to recreate the
-            LAST_ID file for this OST index. The <literal>last_rcvd</literal> file will be recreated
-            when the OST is first mounted using the default parameters, which are normally correct
-            for all file systems. The <literal>CONFIGS/mountdata</literal> file is created by
-              <literal>mkfs.lustre</literal> at format time, but has flags set that request it to
-            register itself with the MGS. It is possible to copy these flags from another working
-            OST (which should be the same):
-            <screen>oss1# debugfs -c -R &quot;dump CONFIGS/mountdata /tmp/ldd&quot; <replaceable>/dev/other_osdev</replaceable>
-oss1# scp /tmp/ldd oss0:/tmp/ldd
-oss0# dd if=/tmp/ldd of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 skip=5 conv=notrunc</screen></para>
+          <para>Follow the procedure in
+            <xref linkend="dbdoclet.repair_ost_lastid"/> to recreate the LAST_ID
+            file for this OST index. The <literal>last_rcvd</literal> file
+            will be recreated when the OST is first mounted using the default
+            parameters, which are normally correct for all file systems. The
+            <literal>CONFIGS/mountdata</literal> file is created by
+            <literal>mkfs.lustre</literal> at format time, but has flags set
+            that request it to register itself with the MGS. It is possible to
+            copy the flags from another working OST (which should be the same):
+            <screen>oss1# debugfs -c -R &quot;dump CONFIGS/mountdata /tmp&quot; <replaceable>/dev/other_osdev</replaceable>
+oss1# scp /tmp/mountdata oss0:/tmp/mountdata
+oss0# dd if=/tmp/mountdata of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 skip=5 conv=notrunc</screen></para>
         </listitem>
         <listitem>
-          <para> Unmount the OST file system. <screen>oss# umount /mnt/ost</screen>
+          <para> Unmount the OST file system.
+            <screen>oss# umount /mnt/ost</screen>
           </para>
         </listitem>
       </orderedlist>
@@ -600,9 +677,9 @@ oss0# dd if=/tmp/ldd of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 skip=5 co
       <para>If the OST was permanently deactivated, it needs to be
       reactivated in the MGS configuration.
         <screen>mgs# lctl conf_param <replaceable>ost_name</replaceable>.osc.active=1</screen>
-	If the OST was temporarily deactivated, it needs to be reactivated on
-	the MDS and clients.
-        <screen>mds# lctl --device <replaceable>lustre_devno</replaceable> activate
+        If the OST was temporarily deactivated, it needs to be reactivated on
+        the MDS and clients.
+        <screen>mds# lctl set_param osp.<replaceable>fsname</replaceable>-OST<replaceable>number</replaceable>-*.active=1
 client# lctl set_param osc.<replaceable>fsname</replaceable>-OST<replaceable>number</replaceable>-*.active=1</screen></para>
     </section>
     </section>

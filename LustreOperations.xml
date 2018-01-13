@@ -292,7 +292,7 @@ $ tunefs.lustre --param failover.mode=failout
       </para>
     </note>
   </section>
-  <section xml:id="dbdoclet.50438194_54138">
+  <section xml:id="dbdoclet.degraded_ost">
     <title>
     <indexterm>
       <primary>operations</primary>
@@ -324,7 +324,9 @@ lctl get_param obdfilter.*.degraded
     resets to 
     <literal>0</literal>.</para>
     <para>It is recommended that this be implemented by an automated script
-    that monitors the status of individual RAID devices.</para>
+    that monitors the status of individual RAID devices, such as MD-RAID's
+    <literal>mdadm(8)</literal> command with the <literal>--monitor</literal>
+    option to mark an affected device degraded or restored.</para>
   </section>
   <section xml:id="dbdoclet.50438194_88063">
     <title>
@@ -497,7 +499,7 @@ client# lfs mkdir –i
     <para>The Lustre 2.8 DNE feature enables individual files in a given
     directory to store their metadata on separate MDTs (a <emphasis>striped
     directory</emphasis>) once additional MDTs have been added to the
-    filesystem, see <xref linkend="dbdoclet.addingamdt"/>.
+    filesystem, see <xref linkend="dbdoclet.adding_new_mdt"/>.
     The result of this is that metadata requests for
     files in a striped directory are serviced by multiple MDTs and metadata
     service load is distributed over all the MDTs that service a given

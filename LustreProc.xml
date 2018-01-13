@@ -2153,36 +2153,40 @@ nid                    refs   peer    max   tx    min
         </listitem>
       </itemizedlist></para>
   </section>
-  <section remap="h3">
+  <section remap="h3" xml:id="dbdoclet.balancing_free_space">
     <title><indexterm>
         <primary>proc</primary>
         <secondary>free space</secondary>
       </indexterm>Allocating Free Space on OSTs</title>
-    <para>Free space is allocated using either a round-robin or a weighted algorithm. The allocation
-      method is determined by the maximum amount of free-space imbalance between the OSTs. When free
-      space is relatively balanced across OSTs, the faster round-robin allocator is used, which
-      maximizes network balancing. The weighted allocator is used when any two OSTs are out of
-      balance by more than a specified threshold.</para>
-    <para>Free space distribution can be tuned using these two <literal>/proc</literal>
-      tunables:</para>
+    <para>Free space is allocated using either a round-robin or a weighted
+    algorithm. The allocation method is determined by the maximum amount of
+    free-space imbalance between the OSTs. When free space is relatively
+    balanced across OSTs, the faster round-robin allocator is used, which
+    maximizes network balancing. The weighted allocator is used when any two
+    OSTs are out of balance by more than a specified threshold.</para>
+    <para>Free space distribution can be tuned using these two
+    <literal>/proc</literal> tunables:</para>
     <itemizedlist>
       <listitem>
-        <para><literal>qos_threshold_rr</literal> - The threshold at which the allocation method
-          switches from round-robin to weighted is set in this file. The default is to switch to the
-          weighted algorithm when any two OSTs are out of balance by more than 17 percent.</para>
+        <para><literal>qos_threshold_rr</literal> - The threshold at which
+        the allocation method switches from round-robin to weighted is set
+        in this file. The default is to switch to the weighted algorithm when
+        any two OSTs are out of balance by more than 17 percent.</para>
       </listitem>
       <listitem>
-        <para><literal>qos_prio_free</literal> - The weighting priority used by the weighted
-          allocator can be adjusted in this file. Increasing the value of
-            <literal>qos_prio_free</literal> puts more weighting on the amount of free space
-          available on each OST and less on how stripes are distributed across OSTs. The default
-          value is 91 percent. When the free space priority is set to 100, weighting is based
-          entirely on free space and location is no longer used by the striping algorithm.</para>
+        <para><literal>qos_prio_free</literal> - The weighting priority used
+        by the weighted allocator can be adjusted in this file. Increasing the
+        value of <literal>qos_prio_free</literal> puts more weighting on the
+        amount of free space available on each OST and less on how stripes are
+        distributed across OSTs. The default value is 91 percent weighting for
+        free space rebalancing and 9 percent for OST balancing. When the
+        free space priority is set to 100, weighting is based entirely on free
+        space and location is no longer used by the striping algorithm.</para>
       </listitem>
       <listitem>
-        <para condition="l29"><literal>reserved_mb_low</literal> - The low watermark used to stop
-          object allocation if available space is less than it. The default is 0.1 percent of total
-          OST size.</para>
+        <para condition="l29"><literal>reserved_mb_low</literal> - The low
+        watermark used to stop object allocation if available space is less
+        than it. The default is 0.1 percent of total OST size.</para>
       </listitem>
        <listitem>
         <para condition="l29"><literal>reserved_mb_high</literal> - The high watermark used to start

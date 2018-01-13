@@ -152,7 +152,7 @@ mount -t lustre
           devices, mount them both.</para>
         </note>
       </listitem>
-      <listitem xml:id="dbdoclet.50438267_pgfId-1290915">
+      <listitem xml:id="dbdoclet.format_ost">
         <para>Create the OST. On the OSS node, run:</para>
         <screen>
 mkfs.lustre --fsname=
@@ -191,7 +191,7 @@ mkfs.lustre --fsname=
           instead format the whole disk for the file system.</para>
         </note>
       </listitem>
-      <listitem xml:id="dbdoclet.50438267_pgfId-1293955">
+      <listitem xml:id="dbdoclet.mount_ost">
         <para>Mount the OST. On the OSS node where the OST was created,
         run:</para>
         <screen>
@@ -201,12 +201,12 @@ mount -t lustre
 </screen>
         <note>
           <para>To create additional OSTs, repeat Step 
-          <xref linkend="dbdoclet.50438267_pgfId-1290915" />and Step 
-          <xref linkend="dbdoclet.50438267_pgfId-1293955" />, specifying the
+          <xref linkend="dbdoclet.format_ost" />and Step 
+          <xref linkend="dbdoclet.mount_ost" />, specifying the
           next higher OST index number.</para>
         </note>
       </listitem>
-      <listitem xml:id="dbdoclet.50438267_pgfId-1290934">
+      <listitem xml:id="dbdoclet.mount_on_client">
         <para>Mount the Lustre file system on the client. On the client node,
         run:</para>
         <screen>
@@ -216,8 +216,8 @@ mount -t lustre
 <replaceable>/mount_point</replaceable> 
 </screen>
         <note>
-          <para>To create additional clients, repeat Step 
-          <xref linkend="dbdoclet.50438267_pgfId-1290934" />.</para>
+          <para>To mount the filesystem on additional clients, repeat Step 
+          <xref linkend="dbdoclet.mount_on_client" />.</para>
         </note>
         <note>
           <para>If you have a problem mounting the file system, check the
@@ -705,7 +705,7 @@ Lustre: temp-MDT0000.mdt: set parameter identity_upcall=/usr/sbin/l_getidentity
 Lustre: Server temp-MDT0000 on device /dev/sdb has started 
 </screen>
         </listitem>
-        <listitem xml:id="dbdoclet.50438267_pgfId-1291170">
+        <listitem xml:id="dbdoclet.create_and_mount_ost">
           <para>Create and mount 
           <literal>ost0</literal>.</para>
           <para>In this example, the OSTs (
@@ -938,10 +938,10 @@ total 8.0M
       </indexterm>Scaling the Lustre File System</title>
       <para>A Lustre file system can be scaled by adding OSTs or clients. For
       instructions on creating additional OSTs repeat Step 
-      <xref linkend="dbdoclet.50438267_pgfId-1291170" />and Step 
-      <xref linkend="dbdoclet.50438267_pgfId-1293955" />above. For mounting
+      <xref linkend="dbdoclet.create_and_mount_ost" />and Step 
+      <xref linkend="dbdoclet.mount_ost" />above. For mounting
       additional clients, repeat Step 
-      <xref linkend="dbdoclet.50438267_pgfId-1290934" />for each client.</para>
+      <xref linkend="dbdoclet.mount_on_client" />for each client.</para>
     </section>
     <section remap="h3">
       <title>
