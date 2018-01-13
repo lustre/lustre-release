@@ -3694,6 +3694,10 @@ out:
 	return rc;
 }
 
+
+static int lod_get_default_lov_striping(const struct lu_env *env,
+					struct lod_object *lo,
+					struct lod_default_striping *lds);
 /**
  * Implementation of dt_object_operations::do_xattr_set.
  *
@@ -3735,8 +3739,52 @@ static int lod_xattr_set(const struct lu_env *env,
 
 	if (S_ISDIR(dt->do_lu.lo_header->loh_attr) &&
 	    strcmp(name, XATTR_NAME_LOV) == 0) {
-		/* default LOVEA */
-		rc = lod_xattr_set_lov_on_dir(env, dt, buf, name, fl, th);
+		struct lod_thread_info *info = lod_env_info(env);
+		struct lod_default_striping *lds = &info->lti_def_striping;
+		struct lov_user_md_v1 *v1 = buf->lb_buf;
+		char pool[LOV_MAXPOOLNAME + 1];
+
+		/* get existing striping config */
+		rc = lod_get_default_lov_striping(env, lod_dt_obj(dt), lds);
+		if (rc)
+			RETURN(rc);
+
+		memset(pool, 0, sizeof(pool));
+		if (lds->lds_def_striping_set == 1)
+			lod_layout_get_pool(lds->lds_def_comp_entries,
+					    lds->lds_def_comp_cnt, pool,
+					    sizeof(pool));
+
+		/* Retain the pool name if it is not given */
+		if (v1->lmm_magic == LOV_USER_MAGIC_V1 && pool[0] != '\0') {
+			struct lod_thread_info *info = lod_env_info(env);
+			struct lov_user_md_v3 *v3  = info->lti_ea_store;
+
+			memset(v3, 0, sizeof(*v3));
+			v3->lmm_magic = cpu_to_le32(LOV_USER_MAGIC_V3);
+			v3->lmm_pattern = cpu_to_le32(v1->lmm_pattern);
+			v3->lmm_stripe_count =
+					cpu_to_le32(v1->lmm_stripe_count);
+			v3->lmm_stripe_offset =
+					cpu_to_le32(v1->lmm_stripe_offset);
+			v3->lmm_stripe_size = cpu_to_le32(v1->lmm_stripe_size);
+
+			strlcpy(v3->lmm_pool_name, pool,
+				sizeof(v3->lmm_pool_name));
+
+			info->lti_buf.lb_buf = v3;
+			info->lti_buf.lb_len = sizeof(*v3);
+			rc = lod_xattr_set_lov_on_dir(env, dt, &info->lti_buf,
+						      name, fl, th);
+		} else {
+			rc = lod_xattr_set_lov_on_dir(env, dt, buf, name,
+						      fl, th);
+		}
+
+		if (lds->lds_def_striping_set == 1 &&
+		    lds->lds_def_comp_entries != NULL)
+			lod_free_def_comp_entries(lds);
+
 		RETURN(rc);
 	} else if (S_ISDIR(dt->do_lu.lo_header->loh_attr) &&
 		   strcmp(name, XATTR_NAME_DEFAULT_LMV) == 0) {

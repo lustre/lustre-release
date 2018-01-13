@@ -1849,6 +1849,7 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	struct lov_user_md_v1	*v1 = NULL;
 	struct lov_user_md_v3	*v3 = NULL;
 	struct lov_comp_md_v1	*comp_v1 = NULL;
+	char	def_pool[LOV_MAXPOOLNAME + 1];
 	__u32	magic;
 	__u16	comp_cnt;
 	__u16	mirror_cnt;
@@ -1857,6 +1858,11 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 
 	if (buf == NULL || buf->lb_buf == NULL || buf->lb_len == 0)
 		RETURN(0);
+
+	memset(def_pool, 0, sizeof(def_pool));
+	if (lo->ldo_comp_entries != NULL)
+		lod_layout_get_pool(lo->ldo_comp_entries, lo->ldo_comp_cnt,
+				    def_pool, sizeof(def_pool));
 
 	/* free default striping info */
 	lod_free_comp_entries(lo);
@@ -1929,6 +1935,8 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	if (rc)
 		RETURN(rc);
 
+	LASSERT(lo->ldo_comp_entries);
+
 	for (i = 0; i < comp_cnt; i++) {
 		struct pool_desc	*pool;
 		struct lu_extent	*ext;
@@ -1975,6 +1983,9 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 						v3->lmm_objects[j].l_ost_idx;
 			}
 		}
+
+		if (pool_name == NULL && def_pool[0] != '\0')
+			pool_name = def_pool;
 
 		if (v1->lmm_pattern == 0)
 			v1->lmm_pattern = LOV_PATTERN_RAID0;

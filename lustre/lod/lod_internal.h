@@ -518,6 +518,19 @@ lod_name_get(const struct lu_env *env, const void *area, int len)
 	return lname;
 }
 
+static inline void lod_layout_get_pool(struct lod_layout_component *entries,
+				       int count, char *pool, int len)
+{
+	int i;
+
+	for (i = 0; i < count; i++) {
+		if (entries[i].llc_pool != NULL) {
+			strlcpy(pool, entries[i].llc_pool, len);
+			break;
+		}
+	}
+}
+
 #define lod_foreach_ost(__dev, index)	\
 	if ((__dev)->lod_osts_size > 0)	\
 		cfs_foreach_bit((__dev)->lod_ost_bitmap, (index))
