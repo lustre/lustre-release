@@ -1408,8 +1408,8 @@ void lu_context_key_degister(struct lu_context_key *key)
 
 	lu_context_key_quiesce(key);
 
-	++key_set_version;
 	write_lock(&lu_keys_guard);
+	++key_set_version;
 	key_fini(&lu_shrink_env.le_ctx, key->lct_index);
 
 	/**
@@ -1779,7 +1779,14 @@ EXPORT_SYMBOL(lu_context_exit);
  */
 int lu_context_refill(struct lu_context *ctx)
 {
-        return likely(ctx->lc_version == key_set_version) ? 0 : keys_fill(ctx);
+	read_lock(&lu_keys_guard);
+	if (likely(ctx->lc_version == key_set_version)) {
+		read_unlock(&lu_keys_guard);
+		return 0;
+	}
+
+	read_unlock(&lu_keys_guard);
+	return keys_fill(ctx);
 }
 
 /**
