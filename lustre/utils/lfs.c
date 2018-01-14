@@ -6946,7 +6946,7 @@ int main(int argc, char **argv)
 	int rc;
 
 	/* Ensure that liblustreapi constructor has run */
-	if (!liblustreapi_initialized)
+	if (!llapi_liblustreapi_initialized())
 		fprintf(stderr, "liblustreapi was not properly initialized\n");
 
 	setlinebuf(stdout);

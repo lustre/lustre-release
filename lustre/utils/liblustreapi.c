@@ -280,7 +280,7 @@ int llapi_parse_size(const char *optarg, unsigned long long *size,
 	return 0;
 }
 
-int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len)
+int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len)
 {
 	struct obd_ioctl_data *overlay;
 	char *ptr;
@@ -327,7 +327,7 @@ int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len)
 	return 0;
 }
 
-int obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
+int llapi_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 {
 	struct obd_ioctl_data *overlay;
 	char *ptr;
@@ -1049,7 +1049,7 @@ int llapi_dir_create_param(const char *name, mode_t mode,
 	data.ioc_inlbuf2 = (char *)lmu;
 	data.ioc_inllen2 = lmu_size;
 	data.ioc_type = mode;
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		llapi_error(LLAPI_MSG_ERROR, rc,
 			    "error: LL_IOC_LMV_SETSTRIPE pack failed '%s'.",
@@ -3469,7 +3469,7 @@ int llapi_file_lookup(int dirfd, const char *name)
         data.ioc_inlbuf1 = (char *)name;
         data.ioc_inllen1 = strlen(name) + 1;
 
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 llapi_error(LLAPI_MSG_ERROR, rc,
                             "error: IOC_MDC_LOOKUP pack failed for '%s': rc %d",
@@ -4262,7 +4262,7 @@ static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
 	data.ioc_inllen1 = strlen(filename) + 1;
 	data.ioc_inlbuf2 = (char *)&param->fp_mdt_index;
 	data.ioc_inllen2 = sizeof(param->fp_mdt_index);
-	ret = obd_ioctl_pack(&data, &rawbuf, sizeof(raw));
+	ret = llapi_ioctl_pack(&data, &rawbuf, sizeof(raw));
 	if (ret != 0) {
 		llapi_error(LLAPI_MSG_ERROR, ret,
 			    "llapi_obd_statfs: error packing ioctl data");
@@ -4556,7 +4556,7 @@ int llapi_obd_fstatfs(int fd, __u32 type, __u32 index,
         data.ioc_pbuf2 = (char *)uuid_buf;
         data.ioc_plen2 = sizeof(struct obd_uuid);
 
-        rc = obd_ioctl_pack(&data, &rawbuf, sizeof(raw));
+	rc = llapi_ioctl_pack(&data, &rawbuf, sizeof(raw));
         if (rc != 0) {
                 llapi_error(LLAPI_MSG_ERROR, rc,
                             "llapi_obd_statfs: error packing ioctl data");

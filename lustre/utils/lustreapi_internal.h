@@ -59,8 +59,8 @@
 int get_root_path(int want, char *fsname, int *outfd, char *path, int index);
 int root_ioctl(const char *mdtname, int opc, void *data, int *mdtidxp,
 	       int want_error);
-int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len);
-int obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len);
+int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len);
+int llapi_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len);
 int sattr_cache_get_defaults(const char *const fsname,
 			     const char *const pathname, unsigned int *scount,
 			     unsigned int *ssize, unsigned int *soffset);

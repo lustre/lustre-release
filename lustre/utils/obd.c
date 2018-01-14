@@ -134,7 +134,7 @@ int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg)
                                         lcfg->lcfg_buflens);
         data.ioc_pbuf1 = (void *)lcfg;
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(func));
@@ -184,7 +184,7 @@ int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
                                         lcfg->lcfg_buflens);
         data.ioc_pbuf1 = (void *)lcfg;
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(func));
@@ -235,7 +235,7 @@ static int do_name2dev(char *func, char *name)
         data.ioc_inlbuf1 = name;
 
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc < 0) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(func));
@@ -244,7 +244,7 @@ static int do_name2dev(char *func, char *name)
         rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_NAME2DEV, buf);
         if (rc < 0)
                 return errno;
-        rc = obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+	rc = llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid reply\n",
                         jt_cmdname(func));
@@ -858,7 +858,7 @@ int jt_obd_no_transno(int argc, char **argv)
                 return CMD_HELP;
 
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
@@ -885,7 +885,7 @@ int jt_obd_set_readonly(int argc, char **argv)
                 return CMD_HELP;
 
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
@@ -912,7 +912,7 @@ int jt_obd_abort_recovery(int argc, char **argv)
                 return CMD_HELP;
 
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
@@ -1097,7 +1097,7 @@ int jt_obd_alloc_fids(struct jt_fid_space *space, struct lu_fid *fid,
                 data.ioc_plen2 = sizeof(max_count);
 
                 memset(buf, 0, sizeof(rawbuf));
-                rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
                 if (rc) {
                         fprintf(stderr, "error: invalid ioctl rc = %d\n", rc);
                         return rc;
@@ -1378,7 +1378,7 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
                 count += data.ioc_count;
 
                 memset(buf, 0, sizeof(rawbuf));
-                rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
                 if (rc) {
                         fprintf(stderr, "error: %s: invalid ioctl %d\n",
                                 jt_cmdname(argv[0]), rc);
@@ -1514,14 +1514,14 @@ int jt_obd_create(int argc, char **argv)
 					 OBD_MD_FLPROJID;
 
                 memset(buf, 0, sizeof(rawbuf));
-                rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
                 if (rc) {
                         fprintf(stderr, "error: %s: invalid ioctl\n",
                                 jt_cmdname(argv[0]));
                         return rc;
                 }
                 rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CREATE, buf);
-                obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+		llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
                 shmem_bump(1);
                 if (rc < 0) {
                         fprintf(stderr, "error: %s: #%d - %s\n",
@@ -1584,7 +1584,7 @@ int jt_obd_setattr(int argc, char **argv)
 	data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
 
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
@@ -1661,7 +1661,7 @@ int jt_obd_test_setattr(int argc, char **argv)
                 data.ioc_obdo1.o_mode = S_IFREG;
                 data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
                 memset(buf, 0, sizeof(rawbuf));
-                rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
                 if (rc) {
                         fprintf(stderr, "error: %s: invalid ioctl\n",
                                 jt_cmdname(argv[0]));
@@ -1754,14 +1754,14 @@ int jt_obd_destroy(int argc, char **argv)
 		data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
 
                 memset(buf, 0, sizeof(rawbuf));
-                rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
                 if (rc) {
                         fprintf(stderr, "error: %s: invalid ioctl\n",
                                 jt_cmdname(argv[0]));
                         return rc;
                 }
                 rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_DESTROY, buf);
-                obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+		llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
                 shmem_bump(1);
                 if (rc < 0) {
 			fprintf(stderr, "error: %s: objid %#jx: %s\n",
@@ -1813,14 +1813,14 @@ int jt_obd_getattr(int argc, char **argv)
 	       (uintmax_t)ostid_id(&data.ioc_obdo1.o_oi));
 
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
                 return rc;
         }
         rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GETATTR, buf);
-        obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+	llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
                         strerror(rc = errno));
@@ -1895,7 +1895,7 @@ int jt_obd_test_getattr(int argc, char **argv)
 		data.ioc_obdo1.o_mode = S_IFREG;
 		data.ioc_obdo1.o_valid = 0xffffffff;
 		memset(buf, 0, sizeof(rawbuf));
-		rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 		if (rc) {
 			fprintf(stderr, "error: %s: invalid ioctl\n",
 				jt_cmdname(argv[0]));
@@ -2126,7 +2126,7 @@ int jt_obd_test_brw(int argc, char **argv)
         for (i = 1, next_count = verbose; i <= count && shmem_running(); i++) {
                 data.ioc_obdo1.o_valid &= ~(OBD_MD_FLBLOCKS|OBD_MD_FLGRANT);
                 memset(buf, 0, sizeof(rawbuf));
-                rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+		rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
                 if (rc) {
                         fprintf(stderr, "error: %s: invalid ioctl\n",
                                 jt_cmdname(argv[0]));
@@ -2248,7 +2248,7 @@ repeat:
         data.ioc_inllen3 = desc.ld_tgt_count * sizeof(*obdgens);
         data.ioc_inlbuf3 = (char *)obdgens;
 
-        if (obd_ioctl_pack(&data, &buf, sizeof(rawbuf))) {
+	if (llapi_ioctl_pack(&data, &buf, sizeof(rawbuf))) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
                 rc = -EINVAL;
@@ -2267,7 +2267,7 @@ repeat:
                 __u32 *genp;
                 int i;
 
-                if (obd_ioctl_unpack(&data, buf, sizeof(rawbuf))) {
+		if (llapi_ioctl_unpack(&data, buf, sizeof(rawbuf))) {
                         fprintf(stderr, "error: %s: invalid reply\n",
                                 jt_cmdname(argv[0]));
                         rc = -EINVAL;
@@ -2314,7 +2314,7 @@ static int do_activate(int argc, char **argv, int flag)
         data.ioc_offset = flag;
 
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
@@ -2362,7 +2362,7 @@ int jt_replace_nids(int argc, char **argv)
 	data.ioc_inllen2 = strlen(argv[2]) + 1;
 	data.ioc_inlbuf2 = argv[2];
 	memset(buf, 0, sizeof(rawbuf));
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		fprintf(stderr, "error: %s: invalid ioctl\n",
 			jt_cmdname(argv[0]));
@@ -2405,7 +2405,7 @@ int jt_obd_recover(int argc, char **argv)
         }
 
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
@@ -2442,7 +2442,7 @@ int jt_obd_mdc_lookup(int argc, char **argv)
         data.ioc_inlbuf1 = child;
 
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
@@ -2464,7 +2464,7 @@ int jt_obd_mdc_lookup(int argc, char **argv)
         close(fd);
 
         if (verbose) {
-                rc = obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+		rc = llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
                 if (rc) {
                         fprintf(stderr, "error: %s: invalid reply\n",
                                 jt_cmdname(argv[0]));
@@ -2495,7 +2495,7 @@ int jt_lcfg_fork(int argc, char **argv)
 	data.ioc_inlbuf2 = argv[2];
 
 	memset(buf, 0, sizeof(rawbuf));
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		fprintf(stderr, "error: %s: invalid ioctl\n",
 			jt_cmdname(argv[0]));
@@ -2530,7 +2530,7 @@ int jt_lcfg_erase(int argc, char **argv)
 	data.ioc_inlbuf1 = argv[1];
 
 	memset(buf, 0, sizeof(rawbuf));
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		fprintf(stderr, "error: %s: invalid ioctl\n",
 			jt_cmdname(argv[0]));
@@ -2558,7 +2558,7 @@ int jt_llog_catlist(int argc, char **argv)
         data.ioc_dev = cur_device;
         data.ioc_inllen1 = sizeof(rawbuf) - cfs_size_round(sizeof(data));
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
@@ -2590,7 +2590,7 @@ int jt_llog_info(int argc, char **argv)
         data.ioc_inllen2 = sizeof(rawbuf) - cfs_size_round(sizeof(data)) -
                 cfs_size_round(data.ioc_inllen1);
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
@@ -2637,7 +2637,7 @@ int jt_llog_print(int argc, char **argv)
                 cfs_size_round(data.ioc_inllen2) -
                 cfs_size_round(data.ioc_inllen3);
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
@@ -2747,7 +2747,7 @@ int jt_llog_cancel(int argc, char **argv)
 	}
 
 	memset(buf, 0, sizeof(rawbuf));
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		fprintf(stderr, "error: %s: invalid ioctl\n",
 			jt_cmdname(argv[0]));
@@ -2795,7 +2795,7 @@ int jt_llog_check(int argc, char **argv)
                 cfs_size_round(data.ioc_inllen2) -
                 cfs_size_round(data.ioc_inllen3);
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
@@ -2829,7 +2829,7 @@ int jt_llog_remove(int argc, char **argv)
                 data.ioc_inlbuf2 = argv[2];
         }
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
@@ -3137,7 +3137,7 @@ static int pool_cmd(enum lcfg_command_type cmd,
         data.ioc_pbuf1 = (void *)lcfg;
 
         memset(buf, 0, sizeof(rawbuf));
-        rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(cmdname));
@@ -3220,7 +3220,7 @@ static int nodemap_cmd(enum lcfg_command_type cmd, void *ret_data,
 	data.ioc_pbuf1 = (void *)lcfg;
 
 	memset(buf, 0, sizeof(rawbuf));
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc != 0) {
 		fprintf(stderr, "error: invalid ioctl: %08x errno: %d with "
 			       "rc=%d\n", cmd, errno, rc);
@@ -3235,7 +3235,7 @@ static int nodemap_cmd(enum lcfg_command_type cmd, void *ret_data,
 	}
 
 	if (ret_data != NULL) {
-		rc = obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+		rc = llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
 		if (rc != 0)
 			goto out;
 
@@ -4133,7 +4133,7 @@ int jt_barrier_freeze(int argc, char **argv)
 	data.ioc_inlbuf1 = (char *)&bc;
 	data.ioc_inllen1 = sizeof(bc);
 	memset(buf, 0, sizeof(rawbuf));
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		fprintf(stderr, "Fail to pack ioctl data: rc = %d.\n", rc);
 		return rc;
@@ -4176,7 +4176,7 @@ int jt_barrier_thaw(int argc, char **argv)
 	data.ioc_inlbuf1 = (char *)&bc;
 	data.ioc_inllen1 = sizeof(bc);
 	memset(buf, 0, sizeof(rawbuf));
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		fprintf(stderr, "Fail to pack ioctl data: rc = %d.\n", rc);
 		return rc;
@@ -4208,7 +4208,7 @@ int __jt_barrier_stat(const char *fsname, struct barrier_ctl *bc)
 	data.ioc_inlbuf1 = (char *)bc;
 	data.ioc_inllen1 = sizeof(*bc);
 	memset(buf, 0, sizeof(rawbuf));
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		fprintf(stderr, "Fail to pack ioctl data: rc = %d.\n", rc);
 		return rc;
@@ -4219,7 +4219,7 @@ int __jt_barrier_stat(const char *fsname, struct barrier_ctl *bc)
 		fprintf(stderr, "Fail to query barrier for %s: %s\n",
 			fsname, strerror(errno));
 	else
-		obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+		llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
 
 	return rc;
 }
@@ -4327,7 +4327,7 @@ int jt_barrier_rescan(int argc, char **argv)
 	data.ioc_inlbuf1 = (char *)&bc;
 	data.ioc_inllen1 = sizeof(bc);
 	memset(buf, 0, sizeof(rawbuf));
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
 		fprintf(stderr, "Fail to pack ioctl data: rc = %d.\n", rc);
 		return rc;
@@ -4338,7 +4338,7 @@ int jt_barrier_rescan(int argc, char **argv)
 		fprintf(stderr, "Fail to rescan barrier bitmap for %s: %s\n",
 			argv[1], strerror(errno));
 	} else {
-		obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+		llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
 		printf("%u of %u MDT(s) in the filesystem %s are inactive\n",
 		       bc.bc_absence, bc.bc_total, argv[1]);
 	}
@@ -4395,7 +4395,7 @@ int jt_get_obj_version(int argc, char **argv)
 	data.ioc_inllen2 = sizeof version;
 
         memset(buf, 0, sizeof *buf);
-        rc = obd_ioctl_pack(&data, &buf, sizeof rawbuf);
+	rc = llapi_ioctl_pack(&data, &buf, sizeof rawbuf);
         if (rc) {
                 fprintf(stderr, "error: %s: packing ioctl arguments: %s\n",
                         jt_cmdname(argv[0]), strerror(-rc));
@@ -4409,7 +4409,7 @@ int jt_get_obj_version(int argc, char **argv)
                 return -errno;
         }
 
-        obd_ioctl_unpack(&data, buf, sizeof rawbuf);
+	llapi_ioctl_unpack(&data, buf, sizeof rawbuf);
 	printf("%#jx\n", (uintmax_t)version);
         return 0;
 }
@@ -4443,7 +4443,7 @@ int jt_changelog_register(int argc, char **argv)
 
 	data.ioc_dev = cur_device;
 
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc < 0) {
 		fprintf(stderr, "error: %s: cannot pack ioctl: %s\n",
 			jt_cmdname(argv[0]), strerror(-rc));
@@ -4458,7 +4458,7 @@ int jt_changelog_register(int argc, char **argv)
 		return rc;
 	}
 
-	obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+	llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
 
 	if (data.ioc_u32_1 == 0) {
 		fprintf(stderr, "received invalid userid!\n");
@@ -4497,7 +4497,7 @@ int jt_changelog_deregister(int argc, char **argv)
 	data.ioc_dev = cur_device;
 	data.ioc_u32_1 = id;
 
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc < 0) {
 		fprintf(stderr, "error: %s: invalid ioctl\n",
 			jt_cmdname(argv[0]));
@@ -4511,7 +4511,7 @@ int jt_changelog_deregister(int argc, char **argv)
 		return rc;
 	}
 
-	obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+	llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
 	printf("%s: Deregistered changelog user '%s%u'\n",
 	       device, CHANGELOG_USER_PREFIX, data.ioc_u32_1);
 

@@ -95,7 +95,8 @@ liblustreapi_la_SOURCES = liblustreapi.c liblustreapi_hsm.c \
 			  liblustreapi_kernelconn.c liblustreapi_param.c \
 			  liblustreapi_mirror.c \
 			  liblustreapi_ladvise.c liblustreapi_chlg.c
-liblustreapi_la_LDFLAGS = $(LIBREADLINE) -version-info 1:0:0
+liblustreapi_la_LDFLAGS = $(LIBREADLINE) -version-info 1:0:0 \
+			  -Wl,--version-script=liblustreapi.map
 liblustreapi_la_LIBADD = $(top_builddir)/libcfs/libcfs/libcfs.la
 
 if UTILS
@@ -202,7 +203,7 @@ wiretest_SOURCES = wiretest.c
 
 endif # UTILS
 
-EXTRA_DIST = llstat llobdstat plot-llstat ldlm_debug_upcall
+EXTRA_DIST = llstat llobdstat plot-llstat ldlm_debug_upcall liblustreapi.map
 
 # NOTE: this should only be run on i386.
 newwiretest: wirehdr.c wirecheck

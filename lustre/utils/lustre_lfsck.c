@@ -436,7 +436,7 @@ bad_type:
 	data.ioc_inlbuf1 = (char *)&start;
 	data.ioc_inllen1 = sizeof(start);
 	memset(buf, 0, sizeof(rawbuf));
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc != 0) {
 		fprintf(stderr, "Fail to pack ioctl data: rc = %d.\n", rc);
 		return rc;
@@ -448,7 +448,7 @@ bad_type:
 		return rc;
 	}
 
-	obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+	llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
 	printf("Started LFSCK on the device %s: scrub", device);
 	for (i = 0; lfsck_types_names[i].ltn_name != NULL; i++) {
 		if (start.ls_active & lfsck_types_names[i].ltn_type) {
@@ -509,7 +509,7 @@ int jt_lfsck_stop(int argc, char **argv)
 	data.ioc_inlbuf1 = (char *)&stop;
 	data.ioc_inllen1 = sizeof(stop);
 	memset(buf, 0, sizeof(rawbuf));
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc != 0) {
 		fprintf(stderr, "Fail to pack ioctl data: rc = %d.\n", rc);
 		return rc;
@@ -586,7 +586,7 @@ bad_type:
 	data.ioc_inlbuf1 = (char *)&query;
 	data.ioc_inllen1 = sizeof(query);
 	memset(buf, 0, sizeof(rawbuf));
-	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc != 0) {
 		fprintf(stderr, "Fail to pack ioctl data: rc = %d.\n", rc);
 		return rc;
@@ -598,7 +598,7 @@ bad_type:
 		return rc;
 	}
 
-	obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
+	llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
 	for (i = 0, type = 1 << i; i < LFSCK_TYPE_BITS; i++, type = 1 << i) {
 		const char *name;
 		int j;
