@@ -285,9 +285,9 @@ osd_oi_table_open(struct osd_thread_info *info, struct osd_device *osd,
 		  struct osd_oi **oi_table, unsigned oi_count, bool create)
 {
 	struct scrub_file *sf = &osd->od_scrub.os_scrub.os_file;
-	int		   count = 0;
-	int		   rc = 0;
-	int		   i;
+	int count = 0;
+	int rc = 0;
+	int i;
 	ENTRY;
 
 	/* NB: oi_count != 0 means that we have already created/known all OIs
@@ -295,14 +295,14 @@ osd_oi_table_open(struct osd_thread_info *info, struct osd_device *osd,
 	LASSERT(oi_count <= OSD_OI_FID_NR_MAX);
 
 	for (i = 0; i < (oi_count != 0 ? oi_count : OSD_OI_FID_NR_MAX); i++) {
-		char name[12];
+		char name[sizeof(OSD_OI_NAME_BASE) + 3 * sizeof(i) + 1];
 
 		if (oi_table[i] != NULL) {
 			count++;
 			continue;
 		}
 
-		sprintf(name, "%s.%d", OSD_OI_NAME_BASE, i);
+		snprintf(name, sizeof(name), "%s.%d", OSD_OI_NAME_BASE, i);
 		rc = osd_oi_open(info, osd, name, &oi_table[i], create);
 		if (rc == 0) {
 			count++;

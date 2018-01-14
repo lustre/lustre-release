@@ -6355,12 +6355,6 @@ static const char *const ladvise_names[] = LU_LADVISE_NAMES;
 
 static const char *const lock_mode_names[] = LOCK_MODE_NAMES;
 
-static const char *const lockahead_results[] = {
-	[LLA_RESULT_SENT] = "Lock request sent",
-	[LLA_RESULT_DIFFERENT] = "Different matching lock found",
-	[LLA_RESULT_SAME] = "Matching lock on identical extent found",
-};
-
 int lfs_get_mode(const char *string)
 {
 	enum lock_mode_user mode;

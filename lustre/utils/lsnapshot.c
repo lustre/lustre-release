@@ -1325,8 +1325,7 @@ static int snapshot_create(struct snapshot_instance *si)
 		return rc;
 
 	srandom(tv.tv_usec);
-	snprintf(new_fsname, 8, "%08x", (__u32)random());
-	new_fsname[8] = '\0';
+	snprintf(new_fsname, sizeof(new_fsname), "%08x", (__u32)random());
 
 	rc = snapshot_get_mgsnode(si, buf, sizeof(buf));
 	if (rc)

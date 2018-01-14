@@ -1163,7 +1163,7 @@ static int ofd_ioc_get_obj_version(const struct lu_env *env,
 		   data->ioc_inllen3 == sizeof(__u64) &&
 		   data->ioc_inlbuf4 != NULL &&
 		   data->ioc_inllen4 == sizeof(__u64)) {
-		struct ost_id ostid;
+		struct ost_id ostid = { };
 
 		ostid_set_seq(&ostid, *(__u64 *)data->ioc_inlbuf4);
 		rc = ostid_set_id(&ostid, *(__u64 *)data->ioc_inlbuf3);

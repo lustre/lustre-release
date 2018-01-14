@@ -549,7 +549,6 @@ int Parser_list_commands(const command_t *cmdlist, char *buffer,
 	int col = col_start;
 	int char_max;
 	int len;
-	char fmt[6];
 	int count = 0;
 	int rc;
 
@@ -572,9 +571,9 @@ int Parser_list_commands(const command_t *cmdlist, char *buffer,
 
 		/* Add trailing spaces to pad the entry to the column size */
 		if (len < char_max) {
-			snprintf(fmt, 6, "%%-%2ds", char_max - len);
 			snprintf(&buffer[col * char_max] + len,
-				 char_max - len + 1, fmt, " ");
+				 char_max - len + 1, "%*s", char_max - len,
+				 " ");
 		} else {
 			buffer[(col + 1) * char_max - 1] = ' ';
 		}

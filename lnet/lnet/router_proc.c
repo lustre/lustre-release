@@ -951,7 +951,7 @@ static struct ctl_table lnet_table[] = {
 		.mode		= 0644,
 		.proc_handler	= &proc_lnet_portal_rotor,
 	},
-	{ 0 }
+	{ .procname = NULL }
 };
 
 void lnet_router_debugfs_init(void)
