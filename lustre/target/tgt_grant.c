@@ -280,14 +280,14 @@ EXPORT_SYMBOL(tgt_grant_sanity_check);
  * \retval		negative value on error
  */
 int tgt_statfs_internal(const struct lu_env *env, struct lu_target *lut,
-			struct obd_statfs *osfs, __u64 max_age, int *from_cache)
+			struct obd_statfs *osfs, time64_t max_age, int *from_cache)
 {
 	struct tg_grants_data *tgd = &lut->lut_tgd;
 	int rc = 0;
 	ENTRY;
 
 	spin_lock(&tgd->tgd_osfs_lock);
-	if (cfs_time_before_64(tgd->tgd_osfs_age, max_age) || max_age == 0) {
+	if (tgd->tgd_osfs_age < max_age || max_age == 0) {
 		u64 unstable;
 
 		/* statfs data are too old, get up-to-date one.
@@ -344,7 +344,7 @@ int tgt_statfs_internal(const struct lu_env *env, struct lu_target *lut,
 
 		/* finally udpate cached statfs data */
 		tgd->tgd_osfs = *osfs;
-		tgd->tgd_osfs_age = cfs_time_current_64();
+		tgd->tgd_osfs_age = ktime_get_seconds();
 
 		tgd->tgd_statfs_inflight--; /* stop tracking */
 		if (tgd->tgd_statfs_inflight == 0)
@@ -390,13 +390,13 @@ static void tgt_grant_statfs(const struct lu_env *env, struct obd_export *exp,
 	struct tg_grants_data	*tgd = &lut->lut_tgd;
 	struct tgt_thread_info	*tti;
 	struct obd_statfs	*osfs;
-	__u64			 max_age;
-	int			 rc;
+	time64_t max_age;
+	int rc;
 
 	if (force)
 		max_age = 0; /* get fresh statfs data */
 	else
-		max_age = cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS);
+		max_age = ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS;
 
 	tti = tgt_th_info(env);
 	osfs = &tti->tti_u.osfs;

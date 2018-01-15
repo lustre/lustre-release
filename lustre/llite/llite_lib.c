@@ -299,7 +299,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	 * can make sure the client can be mounted as long as MDT0 is
 	 * avaible */
 	err = obd_statfs(NULL, sbi->ll_md_exp, osfs,
-			cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+			ktime_get_seconds() -OBD_STATFS_CACHE_SECONDS,
 			OBD_STATFS_FOR_MDT0);
 	if (err)
 		GOTO(out_md_fid, err);
@@ -1773,7 +1773,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 }
 
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
-                       __u64 max_age, __u32 flags)
+		       time64_t max_age, __u32 flags)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_statfs obd_osfs;
@@ -1833,7 +1833,7 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 
         /* Some amount of caching on the client is allowed */
         rc = ll_statfs_internal(sb, &osfs,
-                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
                                 0);
         if (rc)
                 return rc;

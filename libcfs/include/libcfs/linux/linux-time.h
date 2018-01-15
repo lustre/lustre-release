@@ -244,27 +244,4 @@ static inline time_t cfs_duration_sec(cfs_duration_t d)
 	return d / msecs_to_jiffies(MSEC_PER_SEC);
 }
 
-#define cfs_time_current_64 get_jiffies_64
-
-static inline __u64 cfs_time_add_64(__u64 t, __u64 d)
-{
-        return t + d;
-}
-
-static inline __u64 cfs_time_shift_64(int seconds)
-{
-        return cfs_time_add_64(cfs_time_current_64(),
-                               cfs_time_seconds(seconds));
-}
-
-static inline int cfs_time_before_64(__u64 t1, __u64 t2)
-{
-        return (__s64)t2 - (__s64)t1 > 0;
-}
-
-static inline int cfs_time_beforeq_64(__u64 t1, __u64 t2)
-{
-        return (__s64)t2 - (__s64)t1 >= 0;
-}
-
 #endif /* __LIBCFS_LINUX_LINUX_TIME_H__ */

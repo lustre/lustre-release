@@ -1513,7 +1513,7 @@ static int osp_obd_disconnect(struct obd_export *exp)
  * \retval negative	negative errno if statfs failed.
  */
 static int osp_obd_statfs(const struct lu_env *env, struct obd_export *exp,
-			  struct obd_statfs *osfs, __u64 unused, __u32 flags)
+			  struct obd_statfs *osfs, time64_t unused, __u32 flags)
 {
 	struct obd_statfs	*msfs;
 	struct ptlrpc_request	*req;

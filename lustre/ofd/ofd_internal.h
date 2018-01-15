@@ -299,7 +299,7 @@ extern struct obd_ops ofd_obd_ops;
 int ofd_destroy_by_fid(const struct lu_env *env, struct ofd_device *ofd,
 		       const struct lu_fid *fid, int orphan);
 int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
-	       struct obd_statfs *osfs, __u64 max_age, __u32 flags);
+	       struct obd_statfs *osfs, time64_t max_age, __u32 flags);
 int ofd_obd_disconnect(struct obd_export *exp);
 
 /* ofd_fs.c */

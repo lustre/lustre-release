@@ -956,7 +956,7 @@ out:
 }
 
 static int lov_statfs(const struct lu_env *env, struct obd_export *exp,
-		      struct obd_statfs *osfs, __u64 max_age, __u32 flags)
+		      struct obd_statfs *osfs, time64_t max_age, __u32 flags)
 {
 	struct obd_device *obd = class_exp2obd(exp);
 	struct lov_obd *lov = &obd->u.lov;
@@ -1045,7 +1045,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
                 /* got statfs data */
                 rc = obd_statfs(NULL, lov->lov_tgts[index]->ltd_exp, &stat_buf,
-                                cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
                                 flags);
                 if (rc)
                         RETURN(rc);

@@ -934,7 +934,7 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 			RETURN(-EFAULT);
 
 		rc = obd_statfs(NULL, tgt->ltd_exp, &stat_buf,
-				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
 				0);
 		if (rc)
 			RETURN(rc);
@@ -1362,7 +1362,7 @@ out:
 }
 
 static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
-                      struct obd_statfs *osfs, __u64 max_age, __u32 flags)
+		      struct obd_statfs *osfs, time64_t max_age, __u32 flags)
 {
 	struct obd_device	*obd = class_exp2obd(exp);
 	struct lmv_obd		*lmv = &obd->u.lmv;

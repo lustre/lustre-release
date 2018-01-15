@@ -263,20 +263,21 @@ static void lod_qos_statfs_update(const struct lu_env *env,
 				  struct lod_device *lod)
 {
 	struct obd_device *obd = lod2obd(lod);
-	struct ost_pool   *osts = &(lod->lod_pool_info);
-	unsigned int	   i;
-	int		   idx;
-	__u64		   max_age, avail;
+	struct ost_pool *osts = &(lod->lod_pool_info);
+	time64_t max_age;
+	unsigned int i;
+	u64 avail;
+	int idx;
 	ENTRY;
 
-	max_age = cfs_time_shift_64(-2 * lod->lod_desc.ld_qos_maxage);
+	max_age = ktime_get_seconds() - 2 * lod->lod_desc.ld_qos_maxage;
 
-	if (cfs_time_beforeq_64(max_age, obd->obd_osfs_age))
+	if (obd->obd_osfs_age > max_age)
 		/* statfs data are quite recent, don't need to refresh it */
 		RETURN_EXIT;
 
 	down_write(&lod->lod_qos.lq_rw_sem);
-	if (cfs_time_beforeq_64(max_age, obd->obd_osfs_age))
+	if (max_age <= obd->obd_osfs_age)
 		goto out;
 
 	for (i = 0; i < osts->op_count; i++) {
@@ -289,7 +290,7 @@ static void lod_qos_statfs_update(const struct lu_env *env,
 			/* recalculate weigths */
 			lod->lod_qos.lq_dirty = 1;
 	}
-	obd->obd_osfs_age = cfs_time_current_64();
+	obd->obd_osfs_age = ktime_get_seconds();
 
 out:
 	up_write(&lod->lod_qos.lq_rw_sem);

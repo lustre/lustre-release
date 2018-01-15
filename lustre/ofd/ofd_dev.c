@@ -1878,7 +1878,7 @@ static int ofd_statfs_hdl(struct tgt_session_info *tsi)
 	osfs = req_capsule_server_get(tsi->tsi_pill, &RMF_OBD_STATFS);
 
 	rc = ofd_statfs(tsi->tsi_env, tsi->tsi_exp, osfs,
-			cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS), 0);
+			ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS, 0);
 	if (rc != 0)
 		CERROR("%s: statfs failed: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), rc);

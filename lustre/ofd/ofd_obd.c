@@ -714,7 +714,7 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
  * \retval		negative value on error
  */
 int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
-	       struct obd_statfs *osfs, __u64 max_age, __u32 flags)
+	       struct obd_statfs *osfs, time64_t max_age, __u32 flags)
 {
         struct obd_device	*obd = class_exp2obd(exp);
 	struct ofd_device	*ofd = ofd_exp(exp);

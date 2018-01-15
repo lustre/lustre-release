@@ -442,7 +442,7 @@ static int mdt_statfs(struct tgt_session_info *tsi)
 		GOTO(out, rc = -EPROTO);
 
 	rc = tgt_statfs_internal(tsi->tsi_env, &mdt->mdt_lut, osfs,
-				 cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				 ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
 				 NULL);
 	if (unlikely(rc))
 		GOTO(out, rc);

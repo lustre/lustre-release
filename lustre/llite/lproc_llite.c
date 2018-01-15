@@ -60,7 +60,7 @@ static int ll_blksize_seq_show(struct seq_file *m, void *v)
 
 	LASSERT(sb != NULL);
 	rc = ll_statfs_internal(sb, &osfs,
-				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
 				OBD_STATFS_NODELAY);
 	if (!rc)
 		seq_printf(m, "%u\n", osfs.os_bsize);
@@ -107,7 +107,7 @@ static int ll_kbytestotal_seq_show(struct seq_file *m, void *v)
 
 	LASSERT(sb != NULL);
 	rc = ll_statfs_internal(sb, &osfs,
-				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
 				OBD_STATFS_NODELAY);
 	if (!rc) {
 		__u32 blk_size = osfs.os_bsize >> 10;
@@ -130,7 +130,7 @@ static int ll_kbytesfree_seq_show(struct seq_file *m, void *v)
 
 	LASSERT(sb != NULL);
 	rc = ll_statfs_internal(sb, &osfs,
-				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
 				OBD_STATFS_NODELAY);
 	if (!rc) {
 		__u32 blk_size = osfs.os_bsize >> 10;
@@ -153,7 +153,7 @@ static int ll_kbytesavail_seq_show(struct seq_file *m, void *v)
 
 	LASSERT(sb != NULL);
 	rc = ll_statfs_internal(sb, &osfs,
-				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
 				OBD_STATFS_NODELAY);
 	if (!rc) {
 		__u32 blk_size = osfs.os_bsize >> 10;
@@ -176,7 +176,7 @@ static int ll_filestotal_seq_show(struct seq_file *m, void *v)
 
 	LASSERT(sb != NULL);
 	rc = ll_statfs_internal(sb, &osfs,
-				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
 				OBD_STATFS_NODELAY);
 	if (!rc)
 		seq_printf(m, "%llu\n", osfs.os_files);
@@ -192,7 +192,7 @@ static int ll_filesfree_seq_show(struct seq_file *m, void *v)
 
 	LASSERT(sb != NULL);
 	rc = ll_statfs_internal(sb, &osfs,
-				cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
+				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
 				OBD_STATFS_NODELAY);
 	if (!rc)
 		seq_printf(m, "%llu\n", osfs.os_ffree);

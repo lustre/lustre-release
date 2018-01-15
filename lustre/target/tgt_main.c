@@ -195,7 +195,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 
 	/* statfs data */
 	spin_lock_init(&tgd->tgd_osfs_lock);
-	tgd->tgd_osfs_age = cfs_time_shift_64(-1000);
+	tgd->tgd_osfs_age = ktime_get_seconds() - 1000;
 	tgd->tgd_osfs_unstable = 0;
 	tgd->tgd_statfs_inflight = 0;
 	tgd->tgd_osfs_inflight = 0;

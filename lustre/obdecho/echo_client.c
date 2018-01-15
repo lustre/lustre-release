@@ -1741,7 +1741,7 @@ static int echo_create_md_object(const struct lu_env *env,
 
 	ma->ma_attr.la_mode = mode;
 	ma->ma_attr.la_valid = LA_CTIME | LA_MODE;
-        ma->ma_attr.la_ctime = cfs_time_current_64();
+	ma->ma_attr.la_ctime = ktime_get_real_seconds();
 
 	if (name != NULL) {
 		lname->ln_name = name;
@@ -2084,7 +2084,7 @@ static int echo_destroy_object(const struct lu_env *env,
         memset(ma, 0, sizeof(*ma));
         ma->ma_attr.la_mode = mode;
         ma->ma_attr.la_valid = LA_CTIME;
-        ma->ma_attr.la_ctime = cfs_time_current_64();
+	ma->ma_attr.la_ctime = ktime_get_real_seconds();
         ma->ma_need = MA_INODE;
         ma->ma_valid = 0;
 

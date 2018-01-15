@@ -136,7 +136,7 @@ struct tg_grants_data {
 	int			 tgd_grant_compat_disable;
 	/* protect all statfs-related counters */
 	spinlock_t		 tgd_osfs_lock;
-	__u64			 tgd_osfs_age;
+	time64_t		 tgd_osfs_age;
 	int			 tgd_blockbits;
 	/* counters used during statfs update, protected by ofd_osfs_lock.
 	 * record when some statfs refresh are in progress */
@@ -521,7 +521,7 @@ int tgt_grant_commit_cb_add(struct thandle *th, struct obd_export *exp,
 long tgt_grant_create(const struct lu_env *env, struct obd_export *exp,
 		      s64 *nr);
 int tgt_statfs_internal(const struct lu_env *env, struct lu_target *lut,
-			struct obd_statfs *osfs, __u64 max_age,
+			struct obd_statfs *osfs, time64_t max_age,
 			int *from_cache);
 int tgt_tot_dirty_seq_show(struct seq_file *m, void *data);
 int tgt_tot_granted_seq_show(struct seq_file *m, void *data);
