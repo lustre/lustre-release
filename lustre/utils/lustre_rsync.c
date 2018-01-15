@@ -124,6 +124,7 @@
 #include <libcfs/util/string.h>
 #include <lustre/lustreapi.h>
 #include "lustre_rsync.h"
+#include "callvpe.h"
 
 #define REPLICATE_STATUS_VER 1
 #define CLEAR_INTERVAL 100
@@ -160,7 +161,6 @@ struct lr_info {
         char savedpath[PATH_MAX + 1];
         char link[PATH_MAX + 1];
         char linktmp[PATH_MAX + 1];
-	char cmd[PATH_MAX * 10];
         int bufsize;
         char *buf;
 
@@ -289,22 +289,28 @@ int lr_rsync_data(struct lr_info *info)
 
         if (st_src.st_mtime != st_dest.st_mtime ||
             st_src.st_size != st_dest.st_size) {
-                /* XXX spawning off an rsync for every data sync and
-                 * waiting synchronously is bad for performance.
-                 * librsync could possibly used here. But it does not
-                 * seem to be of production grade. Multi-threaded
-                 * replication is also to be considered.
-                 */
-                int status;
+		/* XXX spawning off an rsync for every data sync and
+		 * waiting synchronously is bad for performance.
+		 * librsync could possibly used here. But it does not
+		 * seem to be of production grade. Multi-threaded
+		 * replication is also to be considered.
+		 */
+		char *args[] = {
+			rsync,
+			"--inplace",
+			"--",
+			info->src,
+			info->dest,
+			NULL,
+		};
+		extern char **environ;
+		int status;
 
-		if (snprintf(info->cmd, sizeof(info->cmd), "%s --inplace %s %s",
-			     rsync, info->src, info->dest) >= sizeof(info->cmd)) {
-			rc = -E2BIG;
-			goto err;
-		}
-		lr_debug(DTRACE, "\t%s %s\n", info->cmd, info->tfid);
-		status = system(info->cmd);
-                if (status == -1) {
+		lr_debug(DTRACE, "\t%s %s %s %s %s %s\n", args[0], args[1],
+			 args[2], args[3], args[4], info->tfid);
+
+		status = callvpe(rsync, args, environ);
+		if (status < 0) {
                         rc = -errno;
                 } else if (WIFEXITED(status)) {
                         status = WEXITSTATUS(status);
@@ -326,7 +332,7 @@ int lr_rsync_data(struct lr_info *info)
                 lr_debug(DTRACE, "Not syncing %s and %s %s\n", info->src,
                          info->dest, info->tfid);
         }
-err:
+
         return rc;
 }
 
@@ -747,15 +753,26 @@ int lr_rmfile(struct lr_info *info)
 /* Recursively remove directory and its contents */
 int lr_rm_recursive(struct lr_info *info)
 {
+	char *args[] = {
+		"rm",
+		"-rf",
+		"--",
+		info->dest,
+		NULL,
+	};
+	extern char **environ;
+	int status;
 	int rc;
 
-	snprintf(info->cmd, sizeof(info->cmd), "rm -rf %s",
-		 info->dest);
-	rc = system(info->cmd);
-        if (rc == -1)
-                rc = -errno;
+	status = callvpe("/bin/rm", args, environ);
+	if (status < 0)
+		rc = -errno;
+	else if (WIFEXITED(status))
+		rc = WEXITSTATUS(status) == 0 ? 0 : -EINVAL;
+	else
+		rc = -EINTR;
 
-        return rc;
+	return rc;
 }
 
 /* Remove a file under SPECIAL_DIR with its tfid as its name. */

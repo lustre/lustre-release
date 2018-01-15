@@ -63,7 +63,7 @@ lfs_SOURCES = lfs.c lfs_project.c lfs_project.h
 lfs_LDADD := liblustreapi.la -lz
 lfs_DEPENDENCIES := liblustreapi.la
 
-lustre_rsync_SOURCES = lustre_rsync.c lustre_rsync.h
+lustre_rsync_SOURCES = lustre_rsync.c lustre_rsync.h callvpe.c callvpe.h
 lustre_rsync_LDADD :=  liblustreapi.la $(PTHREAD_LIBS)
 lustre_rsync_DEPENDENCIES := liblustreapi.la
 
