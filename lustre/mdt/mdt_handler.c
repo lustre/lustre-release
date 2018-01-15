@@ -539,13 +539,13 @@ int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
 	struct md_object	*next = mdt_object_child(o);
 	struct lu_buf		*buf = &info->mti_buf;
 	struct mdt_device	*mdt = info->mti_mdt;
+	struct req_capsule *pill = info->mti_pill;
 	int rc;
 
 	ENTRY;
 
-	buf->lb_buf = req_capsule_server_get(info->mti_pill, &RMF_ACL);
-	buf->lb_len = req_capsule_get_size(info->mti_pill, &RMF_ACL,
-					   RCL_SERVER);
+	buf->lb_buf = req_capsule_server_get(pill, &RMF_ACL);
+	buf->lb_len = req_capsule_get_size(pill, &RMF_ACL, RCL_SERVER);
 	if (buf->lb_len == 0)
 		RETURN(0);
 
@@ -593,6 +593,36 @@ again:
 			       mdt_obd_name(mdt), PFID(mdt_object_fid(o)), rc);
 		}
 	} else {
+		int client;
+		int server;
+		int acl_buflen;
+		int lmm_buflen = 0;
+		int lmmsize = 0;
+
+		acl_buflen = req_capsule_get_size(pill, &RMF_ACL, RCL_SERVER);
+		if (acl_buflen >= rc)
+			goto map;
+
+		/* If LOV/LMA EA is small, we can reuse part of their buffer */
+		client = ptlrpc_req_get_repsize(pill->rc_req);
+		server = lustre_packed_msg_size(pill->rc_req->rq_repmsg);
+		if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER)) {
+			lmm_buflen = req_capsule_get_size(pill, &RMF_MDT_MD,
+							  RCL_SERVER);
+			lmmsize = repbody->mbo_eadatasize;
+		}
+
+		if (client < server - acl_buflen - lmm_buflen + rc + lmmsize) {
+			CDEBUG(D_INODE, "%s: client prepared buffer size %d "
+			       "is not big enough with the ACL size %d (%d)\n",
+			       mdt_obd_name(mdt), client, rc,
+			       server - acl_buflen - lmm_buflen + rc + lmmsize);
+			repbody->mbo_aclsize = 0;
+			repbody->mbo_valid &= ~OBD_MD_FLACL;
+			RETURN(-ERANGE);
+		}
+
+map:
 		if (buf->lb_buf == info->mti_big_acl)
 			info->mti_big_acl_used = 1;
 
@@ -603,6 +633,8 @@ again:
 			CERROR("%s: nodemap_map_acl unable to parse "DFID
 			       " ACL: rc = %d\n", mdt_obd_name(mdt),
 			       PFID(mdt_object_fid(o)), rc);
+			repbody->mbo_aclsize = 0;
+			repbody->mbo_valid &= ~OBD_MD_FLACL;
 		} else {
 			repbody->mbo_aclsize = rc;
 			repbody->mbo_valid |= OBD_MD_FLACL;

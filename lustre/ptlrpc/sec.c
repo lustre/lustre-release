@@ -1726,6 +1726,7 @@ void sptlrpc_cli_free_repbuf(struct ptlrpc_request *req)
         req->rq_repmsg = NULL;
         EXIT;
 }
+EXPORT_SYMBOL(sptlrpc_cli_free_repbuf);
 
 int sptlrpc_cli_install_rvs_ctx(struct obd_import *imp,
                                 struct ptlrpc_cli_ctx *ctx)

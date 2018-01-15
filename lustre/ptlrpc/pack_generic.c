@@ -185,6 +185,7 @@ __u32 lustre_packed_msg_size(struct lustre_msg *msg)
                 return 0;
         }
 }
+EXPORT_SYMBOL(lustre_packed_msg_size);
 
 void lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, __u32 *lens,
                         char **bufs)
