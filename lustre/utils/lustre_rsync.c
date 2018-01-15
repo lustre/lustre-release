@@ -120,12 +120,8 @@
 #include <time.h>
 #include <sys/xattr.h>
 #include <linux/types.h>
-#include <linux/lustre/lustre_ioctl.h>
 
-#include <libcfs/util/ioctl.h>
 #include <libcfs/util/string.h>
-#include <libcfs/util/parser.h>
-#include <linux/lnet/libcfs_debug.h>
 #include <lustre/lustreapi.h>
 #include "lustre_rsync.h"
 
@@ -237,16 +233,6 @@ void lr_usage()
                 "\t--verbose\n"
                 "\t--dry-run        don't write anything\n");
 }
-
-#define DEBUG_ENTRY(info)						       \
-	lr_debug(D_TRACE, "***** Start %lld %s (%d) %s %s %s *****\n",         \
-		 (info)->recno, changelog_type2str((info)->type),	       \
-		 (info)->type, (info)->tfid, (info)->pfid, (info)->name);
-
-#define DEBUG_EXIT(info, rc)						       \
-	lr_debug(D_TRACE, "##### End %lld %s (%d) %s %s %s rc=%d #####\n",     \
-		 (info)->recno, changelog_type2str((info)->type),	       \
-		 (info)->type, (info)->tfid, (info)->pfid, (info)->name, rc);
 
 /* Print debug information. This is controlled by the value of the
    global variable 'debug' */
@@ -1599,7 +1585,9 @@ int lr_replicate()
                 if (dryrun)
                         continue;
 
-		DEBUG_ENTRY(info);
+		lr_debug(DTRACE, "***** Start %lld %s (%d) %s %s %s *****\n",
+			 info->recno, changelog_type2str(info->type),
+			 info->type, info->tfid, info->pfid, info->name);
 
                 switch(info->type) {
                 case CL_CREATE:
@@ -1635,7 +1623,11 @@ int lr_replicate()
 		default:
 			break;
 		}
-		DEBUG_EXIT(info, rc);
+
+		lr_debug(DTRACE, "##### End %lld %s (%d) %s %s %s rc=%d #####\n",
+			 info->recno, changelog_type2str(info->type),
+			 info->type, info->tfid, info->pfid, info->name, rc);
+
                 if (rc && rc != -ENOENT) {
                         lr_print_failure(info, rc);
                         errors++;
@@ -1819,10 +1811,6 @@ int main(int argc, char *argv[])
                 lr_usage();
                 return -1;
         }
-
-        /* This plumbing is needed for some of the ioctls behind
-           llapi calls to work. */
-	register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH);
 
         rc = lr_locate_rsync();
         if (use_rsync && rc != 0) {
