@@ -1718,6 +1718,7 @@ struct osd_ios_filldir_buf {
 	struct osd_thread_info	*oifb_info;
 	struct osd_device	*oifb_dev;
 	struct dentry		*oifb_dentry;
+	int			 oifb_items;
 };
 
 static inline struct dentry *
@@ -1878,6 +1879,8 @@ static int osd_ios_lf_fill(void *buf,
 	int			    rc;
 	ENTRY;
 
+	fill_buf->oifb_items++;
+
 	/* skip any '.' started names */
 	if (name[0] == '.')
 		RETURN(0);
@@ -1946,6 +1949,8 @@ static int osd_ios_varfid_fill(void *buf,
 	int			    rc;
 	ENTRY;
 
+	fill_buf->oifb_items++;
+
 	/* skip any '.' started names */
 	if (name[0] == '.')
 		RETURN(0);
@@ -1979,6 +1984,8 @@ static int osd_ios_dl_fill(void *buf,
 	struct dentry		   *child;
 	int			    rc       = 0;
 	ENTRY;
+
+	fill_buf->oifb_items++;
 
 	/* skip any '.' started names */
 	if (name[0] == '.')
@@ -2021,6 +2028,8 @@ static int osd_ios_uld_fill(void *buf,
 	int			    rc       = 0;
 	ENTRY;
 
+	fill_buf->oifb_items++;
+
 	/* skip any non-DFID format name */
 	if (name[0] != '[')
 		RETURN(0);
@@ -2056,6 +2065,8 @@ static int osd_ios_root_fill(void *buf,
 	struct dentry		   *child;
 	int			    rc       = 0;
 	ENTRY;
+
+	fill_buf->oifb_items++;
 
 	/* skip any '.' started names */
 	if (name[0] == '.')
@@ -2114,13 +2125,17 @@ osd_ios_general_scan(struct osd_thread_info *info, struct osd_device *dev,
 	filp->private_data = NULL;
 	set_file_inode(filp, inode);
 
+	do {
+		buf.oifb_items = 0;
 #ifdef HAVE_DIR_CONTEXT
-	buf.ctx.pos = filp->f_pos;
-	rc = fops->iterate(filp, &buf.ctx);
-	filp->f_pos = buf.ctx.pos;
+		buf.ctx.pos = filp->f_pos;
+		rc = fops->iterate(filp, &buf.ctx);
+		filp->f_pos = buf.ctx.pos;
 #else
-	rc = fops->readdir(filp, &buf, filldir);
+		rc = fops->readdir(filp, &buf, filldir);
 #endif
+	} while (rc >= 0 && buf.oifb_items > 0 &&
+		 filp->f_pos != LDISKFS_HTREE_EOF_64BIT);
 	fops->release(inode, filp);
 
 	RETURN(rc);
