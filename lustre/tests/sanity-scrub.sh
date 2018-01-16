@@ -1106,7 +1106,7 @@ test_14() {
 	do_facet ost1 $LCTL set_param fail_loc=0x196
 	local count=$(precreated_ost_obj_count 0 0)
 
-	createmany -o $DIR/$tdir/f $((count + 32))
+	createmany -o $DIR/$tdir/f $((count + 1000))
 	do_facet ost1 $LCTL set_param fail_loc=0
 
 	umount_client $MOUNT || error "(1) Fail to stop client!"
@@ -1124,7 +1124,7 @@ test_14() {
 
 	local LF_REPAIRED=$($SHOW_SCRUB_ON_OST |
 			    awk '/^lf_repa[ri]*ed/ { print $2 }')
-	[ $LF_REPAIRED -gt 0 ] ||
+	[ $LF_REPAIRED -ge 1000 ] ||
 		error "(6) Some entry under /lost+found should be repaired"
 
 	ls -ail $DIR/$tdir > /dev/null || error "(7) ls should succeed"

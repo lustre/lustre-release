@@ -801,6 +801,8 @@ struct osd_check_lmv_buf {
 	struct osd_thread_info	*oclb_info;
 	struct osd_device	*oclb_dev;
 	struct osd_idmap_cache	*oclb_oic;
+	int			 oclb_items;
+	bool			 oclb_found;
 };
 
 /**
@@ -826,7 +828,8 @@ static int osd_stripe_dir_filldir(void *buf,
 	struct osd_device *dev = oclb->oclb_dev;
 	struct osd_idmap_cache *oic = oclb->oclb_oic;
 	struct inode *inode;
-	int rc;
+
+	oclb->oclb_items++;
 
 	if (name[0] == '.')
 		return 0;
@@ -849,9 +852,10 @@ static int osd_stripe_dir_filldir(void *buf,
 	oic->oic_fid = *fid;
 	oic->oic_lid = *id;
 	oic->oic_dev = dev;
-	rc = osd_oii_insert(dev, oic, true);
+	osd_oii_insert(dev, oic, true);
+	oclb->oclb_found = true;
 
-	return rc == 0 ? 1 : rc;
+	return 1;
 }
 
 /* When lookup item under striped directory, we need to locate the master
@@ -902,7 +906,8 @@ static int osd_check_lmv(struct osd_thread_info *oti, struct osd_device *dev,
 #endif
 		.oclb_info = oti,
 		.oclb_dev = dev,
-		.oclb_oic = oic
+		.oclb_oic = oic,
+		.oclb_found = false,
 	};
 	int rc = 0;
 	ENTRY;
@@ -950,13 +955,17 @@ again:
 	filp->private_data = NULL;
 	set_file_inode(filp, inode);
 
+	do {
+		oclb.oclb_items = 0;
 #ifdef HAVE_DIR_CONTEXT
-	oclb.ctx.pos = filp->f_pos;
-	rc = fops->iterate(filp, &oclb.ctx);
-	filp->f_pos = oclb.ctx.pos;
+		oclb.ctx.pos = filp->f_pos;
+		rc = fops->iterate(filp, &oclb.ctx);
+		filp->f_pos = oclb.ctx.pos;
 #else
-	rc = fops->readdir(filp, &oclb, osd_stripe_dir_filldir);
+		rc = fops->readdir(filp, &oclb, osd_stripe_dir_filldir);
 #endif
+	} while (rc >= 0 && oclb.oclb_items > 0 && !oclb.oclb_found &&
+		 filp->f_pos != LDISKFS_HTREE_EOF_64BIT);
 	fops->release(inode, filp);
 
 out:
