@@ -188,8 +188,8 @@ tunefs_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
 tunefs_lustre_LDADD    := $(mkfs_lustre_LDADD)
 
 l_getidentity_SOURCES = l_getidentity.c
-l_getidentity_LDADD := liblustreapi.la
-l_getidentity_DEPENDENCIES := liblustreapi.la
+l_getidentity_LDADD := $(top_builddir)/libcfs/libcfs/libcfs.la
+l_getidentity_DEPENDENCIES := $(top_builddir)/libcfs/libcfs/libcfs.la
 
 lhsmtool_posix_SOURCES = lhsmtool_posix.c
 lhsmtool_posix_LDADD := liblustreapi.la $(PTHREAD_LIBS)
