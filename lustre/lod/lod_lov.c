@@ -1305,23 +1305,25 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		 * then user has specified ost list for this component.
 		 */
 		if (!lod_comp_inited(lod_comp)) {
+			__u16 stripe_count;
+
 			if (objs[0].l_ost_idx != (__u32)-1UL) {
+				stripe_count = lod_comp_entry_stripe_count(
+							lo, lod_comp, false);
 				/**
 				 * load the user specified ost list, when this
 				 * component is instantiated later, it will be
 				 * used in lod_alloc_ost_list().
 				 */
-				lod_comp->llc_ostlist.op_count =
-					lod_comp->llc_stripe_count;
+				lod_comp->llc_ostlist.op_count = stripe_count;
 				lod_comp->llc_ostlist.op_size =
-					lod_comp->llc_stripe_count *
-					sizeof(__u32);
+					stripe_count * sizeof(__u32);
 				OBD_ALLOC(lod_comp->llc_ostlist.op_array,
 					  lod_comp->llc_ostlist.op_size);
 				if (!lod_comp->llc_ostlist.op_array)
 					GOTO(out, rc = -ENOMEM);
 
-				for (j = 0; j < lod_comp->llc_stripe_count; j++)
+				for (j = 0; j < stripe_count; j++)
 					lod_comp->llc_ostlist.op_array[j] =
 						le32_to_cpu(objs[j].l_ost_idx);
 

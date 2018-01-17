@@ -854,8 +854,9 @@ static inline void lod_comp_ost_in_use(struct ost_pool *inuse, int ost)
 {
 	LASSERT(inuse != NULL);
 	if (inuse->op_size && !lod_comp_is_ost_used(inuse, ost)) {
-		LASSERT(inuse->op_count * sizeof(inuse->op_array[0]) <
-			inuse->op_size);
+		LASSERTF(inuse->op_count * sizeof(inuse->op_array[0]) <
+			 inuse->op_size,
+			 "count %d size %u", inuse->op_count, inuse->op_size);
 		inuse->op_array[inuse->op_count] = ost;
 		inuse->op_count++;
 	}
@@ -1438,7 +1439,8 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	struct pool_desc *pool = NULL;
 	struct ost_pool *osts;
 	unsigned int i;
-	__u32	nfound, good_osts, stripe_count, stripe_count_min;
+	__u32 nfound, good_osts, stripe_count, stripe_count_min;
+	__u32 inuse_old_count = inuse->op_count;
 	int rc = 0;
 	ENTRY;
 
@@ -1622,7 +1624,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		}
 		LASSERTF(nfound <= inuse->op_count,
 			 "nfound:%d, op_count:%u\n", nfound, inuse->op_count);
-		inuse->op_count -= nfound;
+		inuse->op_count = inuse_old_count;
 
 		/* makes sense to rebalance next time */
 		lod->lod_qos.lq_dirty = 1;
