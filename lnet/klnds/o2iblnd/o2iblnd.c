@@ -1591,10 +1591,14 @@ static int kiblnd_alloc_freg_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t *fpo,
 		 * gaps. So we will need to track them here.
 		 */
 		frd->frd_mr = ib_alloc_mr(fpo->fpo_hdev->ibh_pd,
+#ifdef IB_MR_TYPE_SG_GAPS
 					  (dev_caps &
 						IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT) ?
 						IB_MR_TYPE_SG_GAPS :
 						IB_MR_TYPE_MEM_REG,
+#else
+						IB_MR_TYPE_MEM_REG,
+#endif
 					  LNET_MAX_PAYLOAD/PAGE_SIZE);
 #endif
 		if (IS_ERR(frd->frd_mr)) {
@@ -2556,8 +2560,10 @@ kiblnd_hdev_get_attr(kib_hca_dev_t *hdev)
 		LCONSOLE_INFO("Using FastReg for registration\n");
 		hdev->ibh_dev->ibd_dev_caps |= IBLND_DEV_CAPS_FASTREG_ENABLED;
 #ifndef HAVE_IB_ALLOC_FAST_REG_MR
+#ifdef IB_DEVICE_SG_GAPS_REG
 		if (dev_attr->device_cap_flags & IB_DEVICE_SG_GAPS_REG)
 			hdev->ibh_dev->ibd_dev_caps |= IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT;
+#endif
 #endif
 	} else {
 		rc = -ENOSYS;
