@@ -386,8 +386,7 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
 
 		down_write_nested(&loghandle->lgh_lock, LLOGH_LOG);
 		llh = loghandle->lgh_hdr;
-		LASSERT(llh);
-		if (!llog_is_full(loghandle))
+		if (llh == NULL || !llog_is_full(loghandle))
 			GOTO(out_unlock, loghandle);
 		else
 			up_write(&loghandle->lgh_lock);
@@ -487,7 +486,12 @@ retry:
 			up_write(&loghandle->lgh_lock);
 			/* nobody should be trying to use this llog */
 			down_write(&cathandle->lgh_lock);
-			if (cathandle->u.chd.chd_current_log == loghandle)
+			/* only reset current log if still room in catalog, to
+			 * avoid unnecessarily and racy creation of new and
+			 * partially initialized llog_handle
+			 */
+			if ((cathandle->u.chd.chd_current_log == loghandle) &&
+			    rc != -ENOSPC)
 				cathandle->u.chd.chd_current_log = NULL;
 			up_write(&cathandle->lgh_lock);
 			RETURN(rc);
