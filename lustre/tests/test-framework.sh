@@ -744,11 +744,12 @@ unload_modules() {
 
 fs_log_size() {
 	local facet=${1:-$SINGLEMDS}
-	local fstype=$(facet_fstype $facet)
 	local size=0
-	case $fstype in
+
+	case $(facet_fstype $facet) in
 		ldiskfs) size=50;; # largest seen is 44, leave some headroom
-		zfs)     size=400;; # largest seen is 384
+		zfs)     size=$(lctl get_param osc.$FSNAME-OST*.import |
+			awk '/grant_block_size:/ { print $2 * 2; exit; }');;
 	esac
 
 	echo -n $size

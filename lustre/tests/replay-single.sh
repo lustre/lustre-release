@@ -449,10 +449,14 @@ run_test 20a "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans
 
 test_20b() { # bug 10480
 	local wait_timeout=$((TIMEOUT * 4))
-	local beforeused
-	local afterused
+	local extra=$(fs_log_size)
+	local n_attempts=1
 
-	beforeused=$(df -P $DIR | tail -1 | awk '{ print $3 }')
+	sync_all_data
+	$LFS setstripe -i 0 -c 1 $DIR
+
+	local beforeused=$(df -P $DIR | tail -1 | awk '{ print $3 }')
+
 	dd if=/dev/zero of=$DIR/$tfile bs=4k count=10000 &
 	while [ ! -e $DIR/$tfile ] ; do
 		usleep 60			# give dd a chance to start
@@ -469,12 +473,22 @@ test_20b() { # bug 10480
 	fail $SINGLEMDS				# start orphan recovery
 	wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
 	wait_delete_completed $wait_timeout || error "delete did not finish"
+	sync_all_data
 
-	afterused=$(df -P $DIR | tail -1 | awk '{ print $3 }')
-	(( $afterused > $beforeused + $(fs_log_size) )) &&
-		error "after $afterused > before $beforeused" ||
+	while true; do
+		local afterused=$(df -P $DIR | tail -1 | awk '{ print $3 }')
 		log "before $beforeused, after $afterused"
+
+		(( $beforeused + $extra >= $afterused )) && break
+		n_attempts=$((n_attempts + 1))
+		[ $n_attempts -gt 3 ] &&
+			error "after $afterused > before $beforeused"
+
+		wait_zfs_commit $SINGLEMDS 5
+		sync_all_data
+	done
 }
+
 run_test 20b "write, unlink, eviction, replay (test mds_cleanup_orphans)"
 
 test_20c() { # bug 10480
