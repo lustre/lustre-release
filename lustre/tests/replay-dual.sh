@@ -2,8 +2,8 @@
 
 set -e
 
-# bug number:  LU-2012 10124 LU-8333
-ALWAYS_EXCEPT="14b     15c   21b     $REPLAY_DUAL_EXCEPT"
+# bug number:  10124 LU-8333
+ALWAYS_EXCEPT="15c   21b     $REPLAY_DUAL_EXCEPT"
 
 SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
@@ -327,7 +327,7 @@ test_14b() {
 	wait_mds_ost_sync
 	wait_delete_completed
 
-	local BEFOREUSED=$(df -P $DIR | tail -1 | awk '{ print $3 }')
+	local beforeused=$(df -P $DIR | tail -1 | awk '{ print $3 }')
 
 	mkdir -p $MOUNT1/$tdir
 	$SETSTRIPE -i 0 $MOUNT1/$tdir
@@ -352,11 +352,11 @@ test_14b() {
 	wait_mds_ost_sync || error "wait_mds_ost_sync failed"
 	wait_delete_completed || error "wait_delete_complete failed"
 
-	local AFTERUSED=$(df -P $DIR | tail -1 | awk '{ print $3 }')
-	log "before $BEFOREUSED, after $AFTERUSED"
+	local afterused=$(df -P $DIR | tail -1 | awk '{ print $3 }')
+	log "before $beforeused, after $afterused"
 	# leave some margin for some files/dirs to be modified (OI, llog, etc)
-	[ $AFTERUSED -gt $((BEFOREUSED + 128)) ] &&
-		error "after $AFTERUSED > before $BEFOREUSED" || true
+	[ $afterused -le $((beforeused + $(fs_log_size))) ] ||
+		error "after $afterused > before $beforeused"
 }
 run_test 14b "delete ost orphans if gap occured in objids due to VBR"
 
