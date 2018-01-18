@@ -1444,18 +1444,22 @@ static int mirror_extend_file(const char *fname, const char *victim_file,
 	rc = llapi_file_flush(fd);
 	if (rc < 0) {
 		error_loc = "cannot get data version";
-		return rc;
+		goto out;
 	}
 
 	rc = llapi_file_flush(fdv);
 	if (rc < 0) {
 		error_loc = "cannot get data version";
-		return rc;
+		goto out;
 
 	}
 
 	/* Make sure we keep original atime/mtime values */
 	rc = migrate_copy_timestamps(fd, fdv);
+	if (rc < 0) {
+		error_loc = "cannot copy timestamp";
+		goto out;
+	}
 
 	/* Atomically put lease, swap layouts and close.
 	 * for a migration we need to check data version on file did
