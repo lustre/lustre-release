@@ -2419,6 +2419,7 @@ int lfsck_async_request(const struct lu_env *env, struct obd_export *exp,
 		lfsck_component_get(laia->laia_com);
 	req->rq_interpret_reply = interpreter;
 	req->rq_allow_intr = 1;
+	req->rq_no_delay = 1;
 	ptlrpc_set_add_req(set, req);
 
 	return 0;
