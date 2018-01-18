@@ -272,6 +272,7 @@ extern char obd_jobid_var[];
 #define OBD_FAIL_OSD_COMPAT_INVALID_ENTRY		0x195
 #define OBD_FAIL_OSD_COMPAT_NO_ENTRY			0x196
 #define OBD_FAIL_OSD_OST_EA_FID_SET			0x197
+#define OBD_FAIL_OSD_NO_OI_ENTRY			0x198
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201

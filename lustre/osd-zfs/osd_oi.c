@@ -140,75 +140,91 @@ osd_oi_lookup(const struct lu_env *env, struct osd_device *o,
 	return 0;
 }
 
-/**
- * Create a new OI with the given name.
- */
-static int
-osd_oi_create(const struct lu_env *env, struct osd_device *o,
-	      uint64_t parent, const char *name, uint64_t *child)
+static int osd_obj_create(const struct lu_env *env, struct osd_device *o,
+			  uint64_t parent, const char *name, uint64_t *child,
+			  const struct lu_fid *fid, bool isdir)
 {
-	struct zpl_direntry	*zde = &osd_oti_get(env)->oti_zde.lzd_reg;
-	struct lu_attr		*la = &osd_oti_get(env)->oti_la;
-	sa_handle_t		*sa_hdl = NULL;
-	dmu_tx_t		*tx;
-	uint64_t		 oid;
-	int			 rc;
-
-	/* verify it doesn't already exist */
-	rc = -zap_lookup(o->od_os, parent, name, 8, 1, (void *)zde);
-	if (rc == 0)
-		return -EEXIST;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct zpl_direntry *zde = &info->oti_zde.lzd_reg;
+	struct lustre_mdt_attrs *lma = &info->oti_mdt_attrs;
+	struct lu_attr *la = &info->oti_la;
+	sa_handle_t *sa_hdl = NULL;
+	nvlist_t *nvbuf = NULL;
+	dmu_tx_t *tx;
+	uint64_t oid;
+	__u32 compat = LMAC_NOT_IN_OI;
+	int rc;
+	ENTRY;
 
 	if (o->od_dt_dev.dd_rdonly)
-		return -EROFS;
+		RETURN(-EROFS);
+
+	memset(la, 0, sizeof(*la));
+	la->la_valid = LA_MODE | LA_UID | LA_GID;
+	la->la_mode = S_IRUGO | S_IWUSR | (isdir ? S_IXUGO | S_IFDIR : S_IFREG);
+
+	if (fid) {
+		rc = -nvlist_alloc(&nvbuf, NV_UNIQUE_NAME, KM_SLEEP);
+		if (rc)
+			RETURN(rc);
+
+		if (o->od_is_ost)
+			compat |= LMAC_FID_ON_OST;
+		lustre_lma_init(lma, fid, compat, 0);
+		lustre_lma_swab(lma);
+		rc = -nvlist_add_byte_array(nvbuf, XATTR_NAME_LMA,
+					    (uchar_t *)lma, sizeof(*lma));
+		if (rc)
+			GOTO(out, rc);
+	}
 
 	/* create fid-to-dnode index */
 	tx = dmu_tx_create(o->od_os);
-	if (tx == NULL)
-		return -ENOMEM;
+	if (!tx)
+		GOTO(out, rc = -ENOMEM);
 
-	dmu_tx_hold_zap(tx, DMU_NEW_OBJECT, 1, NULL);
+	dmu_tx_hold_zap(tx, DMU_NEW_OBJECT, FALSE, NULL);
 	dmu_tx_hold_bonus(tx, parent);
 	dmu_tx_hold_zap(tx, parent, TRUE, name);
 	dmu_tx_hold_sa_create(tx, ZFS_SA_BASE_ATTR_SIZE);
-
 	rc = -dmu_tx_assign(tx, TXG_WAIT);
 	if (rc) {
 		dmu_tx_abort(tx);
-		return rc;
+		GOTO(out, rc);
 	}
 
-	oid = osd_zap_create_flags(o->od_os, 0, ZAP_FLAG_HASH64,
-				   DMU_OT_DIRECTORY_CONTENTS,
-				   14, /* == ZFS fzap_default_block_shift */
-				   DN_MAX_INDBLKSHIFT,
-				   0, tx);
-
+	if (isdir)
+		oid = osd_zap_create_flags(o->od_os, 0, ZAP_FLAG_HASH64,
+					   DMU_OT_DIRECTORY_CONTENTS,
+					   14, DN_MAX_INDBLKSHIFT, 0, tx);
+	else
+		oid = osd_dmu_object_alloc(o->od_os, DMU_OTN_UINT8_METADATA,
+					   0, 0, tx);
 	rc = -sa_handle_get(o->od_os, oid, NULL, SA_HDL_PRIVATE, &sa_hdl);
 	if (rc)
-		goto commit;
-	memset(la, 0, sizeof(*la));
-	la->la_valid = LA_MODE | LA_UID | LA_GID;
-	la->la_mode = S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO;
-	rc = __osd_attr_init(env, o, NULL, sa_hdl, tx, la, parent, NULL);
+		GOTO(commit, rc);
+
+	rc = __osd_attr_init(env, o, NULL, sa_hdl, tx, la, parent, nvbuf);
 	sa_handle_destroy(sa_hdl);
 	if (rc)
-		goto commit;
+		GOTO(commit, rc);
 
 	zde->zde_dnode = oid;
 	zde->zde_pad = 0;
-	zde->zde_type = IFTODT(S_IFDIR);
-
+	zde->zde_type = IFTODT(isdir ? S_IFDIR : S_IFREG);
 	rc = -zap_add(o->od_os, parent, name, 8, 1, (void *)zde, tx);
+
+	GOTO(commit, rc);
 
 commit:
 	if (rc)
 		dmu_object_free(o->od_os, oid, tx);
-	dmu_tx_commit(tx);
-
-	if (rc == 0)
+	else
 		*child = oid;
-
+	dmu_tx_commit(tx);
+out:
+	if (nvbuf)
+		nvlist_free(nvbuf);
 	return rc;
 }
 
@@ -223,7 +239,23 @@ osd_oi_find_or_create(const struct lu_env *env, struct osd_device *o,
 	if (rc == 0)
 		*child = oi.oi_zapid;
 	else if (rc == -ENOENT)
-		rc = osd_oi_create(env, o, parent, name, child);
+		rc = osd_obj_create(env, o, parent, name, child, NULL, true);
+
+	return rc;
+}
+
+int osd_obj_find_or_create(const struct lu_env *env, struct osd_device *o,
+			   uint64_t parent, const char *name, uint64_t *child,
+			   const struct lu_fid *fid, bool isdir)
+{
+	struct osd_oi oi;
+	int rc;
+
+	rc = osd_oi_lookup(env, o, parent, name, &oi);
+	if (!rc)
+		*child = oi.oi_zapid;
+	else if (rc == -ENOENT)
+		rc = osd_obj_create(env, o, parent, name, child, fid, isdir);
 
 	return rc;
 }
@@ -252,7 +284,11 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 		return 0;
 	}
 
-	LASSERT(ss != NULL);
+	/* The seq_server_site may be NOT ready during initial OI scrub */
+	if (unlikely(!ss || !ss->ss_server_fld ||
+		     !ss->ss_server_fld->lsf_cache))
+		return -ENOENT;
+
 	fld_range_set_any(range);
 	/* OSD will only do local fld lookup */
 	return fld_local_lookup(env, ss->ss_server_fld, seq, range);
@@ -269,7 +305,8 @@ int fid_is_on_ost(const struct lu_env *env, struct osd_device *osd,
 		RETURN(1);
 
 	if (unlikely(fid_is_local_file(fid) || fid_is_llog(fid)) ||
-		     fid_is_name_llog(fid) || fid_is_quota(fid))
+		     fid_is_name_llog(fid) || fid_is_quota(fid) ||
+		     fid_is_igif(fid))
 		RETURN(0);
 
 	rc = osd_fld_lookup(env, osd, fid_seq(fid), range);
@@ -479,8 +516,7 @@ osd_get_idx_for_fid(struct osd_device *osd, const struct lu_fid *fid,
 {
 	struct osd_oi *oi;
 
-	LASSERT(osd->od_oi_table != NULL);
-	oi = osd->od_oi_table[fid_seq(fid) & (osd->od_oi_count - 1)];
+	oi = osd_fid2oi(osd, fid);
 	if (buf)
 		osd_fid2str(buf, fid, bufsize);
 	if (zdn)
@@ -698,13 +734,15 @@ osd_oi_open_table(const struct lu_env *env, struct osd_device *o, int count)
 /**
  * Determine if the type and number of OIs used by this file system.
  */
-static int
-osd_oi_probe(const struct lu_env *env, struct osd_device *o, int *count)
+static int osd_oi_probe(const struct lu_env *env, struct osd_device *o)
 {
-	uint64_t	root_oid = o->od_root;
-	struct osd_oi	oi;
-	char		name[16];
-	int		rc;
+	struct lustre_scrub *scrub = &o->od_scrub;
+	struct scrub_file *sf = &scrub->os_file;
+	struct osd_oi oi;
+	char name[16];
+	int max = sf->sf_oi_count > 0 ? sf->sf_oi_count : OSD_OI_FID_NR_MAX;
+	int count;
+	int rc;
 	ENTRY;
 
 	/*
@@ -713,31 +751,25 @@ osd_oi_probe(const struct lu_env *env, struct osd_device *o, int *count)
 	 * The only safeguard is that we know the number of OIs must be a
 	 * power of two and this is checked for basic sanity.
 	 */
-	for (*count = 0; *count < OSD_OI_FID_NR_MAX; (*count)++) {
-		sprintf(name, "%s.%d", DMU_OSD_OI_NAME_BASE, *count);
-		rc = osd_oi_lookup(env, o, root_oid, name, &oi);
-		if (rc == 0)
+	for (count = 0; count < max; count++) {
+		snprintf(name, 15, "%s.%d", DMU_OSD_OI_NAME_BASE, count);
+		rc = osd_oi_lookup(env, o, o->od_root, name, &oi);
+		if (!rc)
 			continue;
 
 		if (rc == -ENOENT) {
-			if (*count == 0)
-				break;
+			if (sf->sf_oi_count == 0)
+				RETURN(count);
 
-			if ((*count & (*count - 1)) != 0)
-				RETURN(-EDOM);
-
-			RETURN(0);
+			zfs_set_bit(count, sf->sf_oi_bitmap);
+			continue;
 		}
 
-		RETURN(rc);
+		if (rc)
+			RETURN(rc);
 	}
 
-	/*
-	 * No OIs exist, this must be a new filesystem.
-	 */
-	*count = 0;
-
-	RETURN(0);
+	RETURN(count);
 }
 
 static void osd_ost_seq_fini(const struct lu_env *env, struct osd_device *osd)
@@ -802,47 +834,97 @@ osd_oi_init_remote_parent(const struct lu_env *env, struct osd_device *o)
  */
 int osd_oi_init(const struct lu_env *env, struct osd_device *o)
 {
-	char	*key = osd_oti_get(env)->oti_buf;
-	int	 i, rc, count = 0;
+	struct lustre_scrub *scrub = &o->od_scrub;
+	struct scrub_file *sf = &scrub->os_file;
+	char *key = osd_oti_get(env)->oti_buf;
+	uint64_t sdb;
+	int i, rc, count;
 	ENTRY;
 
+	LASSERTF((sf->sf_oi_count & (sf->sf_oi_count - 1)) == 0,
+		 "Invalid OI count in scrub file %d\n", sf->sf_oi_count);
+
 	osd_oi_init_remote_parent(env, o);
-
-	rc = osd_oi_probe(env, o, &count);
-	if (rc)
-		RETURN(rc);
-
-	if (count == 0) {
-		uint64_t odb, sdb;
-
-		count = osd_oi_count;
-		odb = o->od_root;
-
-		for (i = 0; i < count; i++) {
-			sprintf(key, "%s.%d", DMU_OSD_OI_NAME_BASE, i);
-			rc = osd_oi_find_or_create(env, o, odb, key, &sdb);
-			if (rc)
-				RETURN(rc);
-		}
-	}
 
 	rc = osd_oi_init_compat(env, o);
 	if (rc)
 		RETURN(rc);
 
+	count = osd_oi_probe(env, o);
+	if (count < 0)
+		GOTO(out, rc = count);
+
+	if (count > 0) {
+		if (count == sf->sf_oi_count)
+			goto open;
+
+		if (sf->sf_oi_count == 0) {
+			if (likely((count & (count - 1)) == 0)) {
+				sf->sf_oi_count = count;
+				rc = scrub_file_store(env, scrub);
+				if (rc)
+					GOTO(out, rc);
+
+				goto open;
+			}
+
+			LCONSOLE_ERROR("%s: invalid oi count %d. You can "
+				       "remove all OIs, then remount it\n",
+				       osd_name(o), count);
+			GOTO(out, rc = -EDOM);
+		}
+
+		scrub_file_reset(scrub, o->od_uuid, SF_RECREATED);
+		count = sf->sf_oi_count;
+	} else {
+		if (sf->sf_oi_count > 0) {
+			count = sf->sf_oi_count;
+			memset(sf->sf_oi_bitmap, 0, SCRUB_OI_BITMAP_SIZE);
+			for (i = 0; i < count; i++)
+				zfs_set_bit(i, sf->sf_oi_bitmap);
+			scrub_file_reset(scrub, o->od_uuid, SF_RECREATED);
+		} else {
+			count = sf->sf_oi_count = osd_oi_count;
+		}
+	}
+
+	rc = scrub_file_store(env, scrub);
+	if (rc)
+		GOTO(out, rc);
+
+	for (i = 0; i < count; i++) {
+		LASSERT(sizeof(osd_oti_get(env)->oti_buf) >= 32);
+
+		snprintf(key, sizeof(osd_oti_get(env)->oti_buf) - 1,
+			 "%s.%d", DMU_OSD_OI_NAME_BASE, i);
+		rc = osd_oi_find_or_create(env, o, o->od_root, key, &sdb);
+		if (rc)
+			GOTO(out, rc);
+	}
+
+open:
 	LASSERT((count & (count - 1)) == 0);
 	o->od_oi_count = count;
 	OBD_ALLOC(o->od_oi_table, sizeof(struct osd_oi *) * count);
 	if (o->od_oi_table == NULL)
-		RETURN(-ENOMEM);
+		GOTO(out, rc = -ENOMEM);
 
 	rc = osd_oi_open_table(env, o, count);
+
+	GOTO(out, rc);
+
+out:
 	if (rc) {
-		OBD_FREE(o->od_oi_table, sizeof(struct osd_oi *) * count);
-		o->od_oi_table = NULL;
+		osd_ost_seq_fini(env, o);
+
+		if (o->od_oi_table) {
+			OBD_FREE(o->od_oi_table,
+				 sizeof(struct osd_oi *) * count);
+			o->od_oi_table = NULL;
+		}
 	}
 
-	RETURN(rc);
+	return rc;
 }
 
 void osd_oi_fini(const struct lu_env *env, struct osd_device *o)
@@ -1013,6 +1095,26 @@ int osd_idc_find_and_init(const struct lu_env *env, struct osd_device *osd,
 
 	if (obj->oo_dn)
 		idc->oic_dnode = obj->oo_dn->dn_object;
+
+	return 0;
+}
+
+int osd_idc_find_and_init_with_oid(const struct lu_env *env,
+				   struct osd_device *osd,
+				   const struct lu_fid *fid,
+				   uint64_t oid)
+{
+	struct osd_idmap_cache *idc;
+
+	idc = osd_idc_find(env, osd, fid);
+	if (!idc) {
+		idc = osd_idc_add(env, osd, fid);
+		if (IS_ERR(idc))
+			return PTR_ERR(idc);
+	}
+
+	idc->oic_dnode = oid;
+	idc->oic_remote = 0;
 
 	return 0;
 }

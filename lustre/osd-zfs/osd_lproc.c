@@ -40,6 +40,7 @@
 #include <obd.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
+#include <lustre_scrub.h>
 
 #include "osd_internal.h"
 
@@ -210,6 +211,54 @@ out:
 	RETURN(result);
 }
 
+static int zfs_osd_auto_scrub_seq_show(struct seq_file *m, void *data)
+{
+	struct osd_device *dev = osd_dt_dev((struct dt_device *)m->private);
+
+	LASSERT(dev != NULL);
+	if (unlikely(!dev->od_os))
+		return -EINPROGRESS;
+
+	seq_printf(m, "%lld\n", dev->od_auto_scrub_interval);
+	return 0;
+}
+
+static ssize_t
+zfs_osd_auto_scrub_seq_write(struct file *file, const char __user *buffer,
+			     size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct dt_device *dt = m->private;
+	struct osd_device *dev = osd_dt_dev(dt);
+	int rc;
+	__s64 val;
+
+	LASSERT(dev != NULL);
+	if (unlikely(!dev->od_os))
+		return -EINPROGRESS;
+
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	dev->od_auto_scrub_interval = val;
+	return count;
+}
+LPROC_SEQ_FOPS(zfs_osd_auto_scrub);
+
+static int zfs_osd_oi_scrub_seq_show(struct seq_file *m, void *data)
+{
+	struct osd_device *dev = osd_dt_dev((struct dt_device *)m->private);
+
+	LASSERT(dev != NULL);
+	if (unlikely(!dev->od_os))
+		return -EINPROGRESS;
+
+	scrub_dump(m, &dev->od_scrub);
+	return 0;
+}
+LPROC_SEQ_FOPS_RO(zfs_osd_oi_scrub);
+
 static int zfs_osd_fstype_seq_show(struct seq_file *m, void *data)
 {
 	seq_puts(m, "zfs\n");
@@ -266,6 +315,10 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
 	  .fops	=	&zfs_dt_filestotal_fops		},
 	{ .name	=	"filesfree",
 	  .fops	=	&zfs_dt_filesfree_fops		},
+	{ .name	=	"auto_scrub",
+	  .fops	=	&zfs_osd_auto_scrub_fops	},
+	{ .name	=	"oi_scrub",
+	  .fops	=	&zfs_osd_oi_scrub_fops		},
 	{ .name	=	"fstype",
 	  .fops	=	&zfs_osd_fstype_fops		},
 	{ .name	=	"mntdev",

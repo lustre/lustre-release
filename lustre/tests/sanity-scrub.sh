@@ -27,51 +27,24 @@ if ! check_versions; then
 	exit 0
 fi
 
-[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
-	skip "ldiskfs only test" && exit 0
-
-[ $(facet_fstype ost1) != "ldiskfs" ] &&
-	skip "ldiskfs only test" && exit 0
-
-[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.2.90) ]] &&
-	skip "Need MDS version at least 2.2.90" && exit 0
+stopall
 
 SAVED_MDSSIZE=${MDSSIZE}
 SAVED_OSTSIZE=${OSTSIZE}
 SAVED_OSTCOUNT=${OSTCOUNT}
+
 # use small MDS + OST size to speed formatting time
 # do not use too small MDSSIZE/OSTSIZE, which affect the default journal size
-# 200M MDT device can guarantee uninitialized groups during the OI scrub
-MDSSIZE=200000
-OSTSIZE=100000
-# no need too much OSTs, to reduce the format/start/stop overhead
-stopall
-[ $OSTCOUNT -gt 4 ] && OSTCOUNT=4
+# 400M MDT device can guarantee uninitialized groups during the OI scrub
+MDSSIZE=400000
+OSTSIZE=200000
 
-MOUNT_2=""
+# no need too many OSTs, to reduce the format/start/stop overhead
+[ $OSTCOUNT -gt 4 ] && OSTCOUNT=4
 
 # build up a clean test environment.
 formatall
 setupall
-
-[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.90) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 1a"
-
-[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.6.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 4"
-
-[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.4.1) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 15"
-
-[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.90) ]] &&
-[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.4.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 15"
-
-[[ $(lustre_version_code ost1) -lt $(version_code 2.4.50) ]] &&
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11 12 13 14"
-
-[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.5.59) ]] &&
-	SCRUB_ONLY="-t scrub"
 
 build_test_filter
 
@@ -86,7 +59,7 @@ scrub_start() {
 	# use "lfsck_start -A" when we no longer need testing interop
 	for n in $(seq $MDSCOUNT); do
 		do_facet mds$n $LCTL lfsck_start -M $(facet_svc mds$n) \
-			$SCRUB_ONLY "$@" ||
+			-t scrub "$@" ||
 			error "($error_id) Failed to start OI scrub on mds$n"
 	done
 }
@@ -105,22 +78,22 @@ scrub_stop() {
 scrub_status() {
 	local n=$1
 
-	do_facet mds$n $LCTL get_param -n \
-		osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+	do_facet mds$n $LCTL get_param -n osd-*.$(facet_svc mds$n).oi_scrub
 }
 
-START_SCRUB="do_facet $SINGLEMDS $LCTL lfsck_start -M ${MDT_DEV} $SCRUB_ONLY"
-START_SCRUB_ON_OST="do_facet ost1 $LCTL lfsck_start -M ${OST_DEV} $SCRUB_ONLY"
+START_SCRUB="do_facet $SINGLEMDS $LCTL lfsck_start -M ${MDT_DEV} -t scrub"
+START_SCRUB_ON_OST="do_facet ost1 $LCTL lfsck_start -M ${OST_DEV} -t scrub"
 STOP_SCRUB="do_facet $SINGLEMDS $LCTL lfsck_stop -M ${MDT_DEV}"
 SHOW_SCRUB="do_facet $SINGLEMDS \
-		$LCTL get_param -n osd-ldiskfs.${MDT_DEV}.oi_scrub"
+		$LCTL get_param -n osd-*.${MDT_DEV}.oi_scrub"
 SHOW_SCRUB_ON_OST="do_facet ost1 \
-		$LCTL get_param -n osd-ldiskfs.${OST_DEV}.oi_scrub"
+		$LCTL get_param -n osd-*.${OST_DEV}.oi_scrub"
 MOUNT_OPTS_SCRUB="-o user_xattr"
 MOUNT_OPTS_NOSCRUB="-o user_xattr,noscrub"
 
 scrub_prep() {
 	local nfiles=$1
+	local inject=$2
 	local n
 
 	check_mount_and_prep
@@ -142,6 +115,34 @@ scrub_prep() {
 		fi
 	done
 	echo "prepared $(date)."
+
+	[ ! -z $inject ] && [ $inject -eq 2 ] && {
+		#define OBD_FAIL_OSD_NO_OI_ENTRY	0x198
+		do_nodes $(comma_list $(mdts_nodes)) \
+				$LCTL set_param fail_loc=0x198
+
+		for n in $(seq $MDSCOUNT); do
+			cp $LUSTRE/tests/runas $DIR/$tdir/mds$n ||
+				error "Fail to copy runas to MDS$n"
+		done
+
+		do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0
+	}
+
+	[ ! -z $inject ] && [ $inject -eq 1 ] &&
+		[ $(facet_fstype $SINGLEMDS) = "zfs" ] && {
+		#define OBD_FAIL_OSD_FID_MAPPING	0x193
+		do_nodes $(comma_list $(mdts_nodes)) \
+			$LCTL set_param fail_loc=0x193
+
+		for n in $(seq $MDSCOUNT); do
+			chmod 0400 $DIR/$tdir/mds$n/test-framework.sh
+			chmod 0400 $DIR/$tdir/mds$n/sanity-scrub.sh
+		done
+
+		do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0
+	}
+
 	cleanup_mount $MOUNT > /dev/null || error "Fail to stop client!"
 
 	# sync local transactions on every MDT
@@ -159,6 +160,17 @@ scrub_prep() {
 		echo "stop mds$n"
 		stop mds$n > /dev/null || error "Fail to stop MDS$n!"
 	done
+
+	[ ! -z $inject ] && [ $(facet_fstype $SINGLEMDS) = "ldiskfs" ] && {
+		if [ $inject -eq 1 ]; then
+			for n in $(seq $MDSCOUNT); do
+				mds_backup_restore mds$n ||
+					error "Backup/restore on mds$n failed"
+			done
+		elif [ $inject -eq 2 ]; then
+			scrub_remove_ois 1
+		fi
+	}
 }
 
 scrub_start_mds() {
@@ -190,7 +202,7 @@ scrub_check_status() {
 
 	for n in $(seq $MDSCOUNT); do
 		wait_update_facet mds$n "$LCTL get_param -n \
-			osd-ldiskfs.$(facet_svc mds$n).oi_scrub |
+			osd-*.$(facet_svc mds$n).oi_scrub |
 			awk '/^status/ { print \\\$2 }'" "$expected" 6 ||
 			error "($error_id) Expected '$expected' on mds$n"
 	done
@@ -204,7 +216,7 @@ scrub_check_flags() {
 
 	for n in $(seq $MDSCOUNT); do
 		actual=$(do_facet mds$n $LCTL get_param -n \
-			osd-ldiskfs.$(facet_svc mds$n).oi_scrub |
+			osd-*.$(facet_svc mds$n).oi_scrub |
 			awk '/^flags/ { print $2 }')
 		if [ "$actual" != "$expected" ]; then
 			error "($error_id) Expected '$expected' on mds$n, but" \
@@ -221,7 +233,7 @@ scrub_check_params() {
 
 	for n in $(seq $MDSCOUNT); do
 		actual=$(do_facet mds$n $LCTL get_param -n \
-			osd-ldiskfs.$(facet_svc mds$n).oi_scrub |
+			osd-*.$(facet_svc mds$n).oi_scrub |
 			awk '/^param/ { print $2 }')
 		if [ "$actual" != "$expected" ]; then
 			error "($error_id) Expected '$expected' on mds$n, but" \
@@ -240,11 +252,11 @@ scrub_check_repaired() {
 	for n in $(seq $MDSCOUNT); do
 		if [ $dryrun -eq 1 ]; then
 			actual=$(do_facet mds$n $LCTL get_param -n \
-				osd-ldiskfs.$(facet_svc mds$n).oi_scrub |
+				osd-*.$(facet_svc mds$n).oi_scrub |
 				awk '/^inconsistent:/ { print $2 }')
 		else
 			actual=$(do_facet mds$n $LCTL get_param -n \
-				osd-ldiskfs.$(facet_svc mds$n).oi_scrub |
+				osd-*.$(facet_svc mds$n).oi_scrub |
 				awk '/^updated:/ { print $2 }')
 		fi
 
@@ -284,6 +296,8 @@ scrub_check_data2() {
 }
 
 scrub_remove_ois() {
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] && return
+
 	local error_id=$1
 	local index=$2
 	local n
@@ -294,40 +308,27 @@ scrub_remove_ois() {
 	done
 }
 
-scrub_backup_restore() {
-	local error_id=$1
-	local igif=$2
-	local n
-
-	for n in $(seq $MDSCOUNT); do
-		mds_backup_restore mds$n $igif ||
-			error "($error_id) Backup/restore on mds$n failed"
-	done
-}
-
 scrub_enable_auto() {
 	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param -n \
-		osd-ldiskfs.*.auto_scrub=1
+		osd-*.*.auto_scrub=1
 }
 
 full_scrub_ratio() {
-	[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.6.50) ]] &&
-		return
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] && return
 
 	local ratio=$1
 
 	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param -n \
-		osd-ldiskfs.*.full_scrub_ratio=$ratio
+		osd-*.*.full_scrub_ratio=$ratio
 }
 
 full_scrub_threshold_rate() {
-	[[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.6.50) ]] &&
-		return
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] && return
 
 	local rate=$1
 
 	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param -n \
-		osd-ldiskfs.*.full_scrub_threshold_rate=$rate
+		osd-*.*.full_scrub_threshold_rate=$rate
 }
 
 test_0() {
@@ -371,17 +372,21 @@ test_1a() {
 run_test 1a "Auto trigger initial OI scrub when server mounts"
 
 test_1b() {
-	scrub_prep 0
-	scrub_remove_ois 1
+	scrub_prep 0 2
 	echo "start MDTs without disabling OI scrub"
 	scrub_start_mds 2 "$MOUNT_OPTS_SCRUB"
-	scrub_check_status 3 completed
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+		scrub_check_status 3 completed
 	mount_client $MOUNT || error "(4) Fail to start client!"
-	scrub_check_data 5
+	scrub_check_data2 runas 5
+	scrub_check_status 6 completed
 }
 run_test 1b "Trigger OI scrub when MDT mounts for OI files remove/recreate case"
 
 test_1c() {
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
+		skip "ldiskfs special test" && return
+
 	local index
 
 	# OI files to be removed:
@@ -402,8 +407,10 @@ test_1c() {
 run_test 1c "Auto detect kinds of OI file(s) removed/recreated cases"
 
 test_2() {
-	scrub_prep 0
-	scrub_backup_restore 1
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
+		skip "ldiskfs special test" && return
+
+	scrub_prep 0 1
 	echo "starting MDTs without disabling OI scrub"
 	scrub_start_mds 2 "$MOUNT_OPTS_SCRUB"
 	scrub_check_status 3 completed
@@ -417,21 +424,21 @@ test_3() {
 	formatall > /dev/null
 	setupall > /dev/null
 
-	scrub_prep 0
-	scrub_backup_restore 1
+	scrub_prep 0 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 	scrub_check_status 3 init
-	scrub_check_flags 4 recreated,inconsistent
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+		scrub_check_flags 4 recreated,inconsistent
 }
 #run_test 3 "Do not trigger OI scrub when MDT mounts if 'noscrub' specified"
 
 test_4a() {
-	scrub_prep 0
-	scrub_backup_restore 1
+	scrub_prep 0 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
-	scrub_check_flags 4 recreated,inconsistent
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+		scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
 	full_scrub_ratio 0
@@ -461,8 +468,10 @@ test_4a() {
 run_test 4a "Auto trigger OI scrub if bad OI mapping was found (1)"
 
 test_4b() {
-	scrub_prep 5
-	scrub_backup_restore 1
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
+		skip "ldiskfs special test" && return
+
+	scrub_prep 5 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 	scrub_check_flags 4 recreated,inconsistent
@@ -483,7 +492,7 @@ test_4b() {
 
 		echo "OI scrub on MDS$n status for the 1st time:"
 		do_facet mds$n $LCTL get_param -n \
-			osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+			osd-*.$(facet_svc mds$n).oi_scrub
 	done
 
 	scrub_check_data2 sanity-scrub.sh 9
@@ -499,7 +508,7 @@ test_4b() {
 
 		echo "OI scrub on MDS$n status for the 2nd time:"
 		do_facet mds$n $LCTL get_param -n \
-			osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+			osd-*.$(facet_svc mds$n).oi_scrub
 
 		[ ${updated0[$n]} -lt ${updated1[$n]} ] ||
 			error "(12) Auto trigger full scrub unexpectedly"
@@ -520,7 +529,7 @@ test_4b() {
 
 		echo "OI scrub on MDS$n status for the 3rd time:"
 		do_facet mds$n $LCTL get_param -n \
-			osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+			osd-*.$(facet_svc mds$n).oi_scrub
 
 		[ ${updated0[$n]} -gt ${updated1[$n]} ] ||
 			error "(16) Auto trigger full scrub unexpectedly"
@@ -537,7 +546,7 @@ test_4b() {
 		[ ${updated0[$n]} -eq ${updated1[$n]} ] || {
 			echo "OI scrub on MDS$n status for the 4th time:"
 			do_facet mds$n $LCTL get_param -n \
-				osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+				osd-*.$(facet_svc mds$n).oi_scrub
 
 			error "(18) NOT auto trigger full scrub as expected"
 		}
@@ -546,8 +555,10 @@ test_4b() {
 run_test 4b "Auto trigger OI scrub if bad OI mapping was found (2)"
 
 test_4c() {
-	scrub_prep 500
-	scrub_backup_restore 1
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
+		skip "ldiskfs special test" && return
+
+	scrub_prep 500 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 	scrub_check_flags 4 recreated,inconsistent
@@ -568,7 +579,7 @@ test_4c() {
 
 		echo "OI scrub on MDS$n status for the 1st time:"
 		do_facet mds$n $LCTL get_param -n \
-			osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+			osd-*.$(facet_svc mds$n).oi_scrub
 	done
 
 	scrub_check_data2 sanity-scrub.sh 9
@@ -584,7 +595,7 @@ test_4c() {
 
 		echo "OI scrub on MDS$n status for the 2nd time:"
 		do_facet mds$n $LCTL get_param -n \
-			osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+			osd-*.$(facet_svc mds$n).oi_scrub
 
 		[ ${updated0[$n]} -lt ${updated1[$n]} ] ||
 			error "(12) Auto trigger full scrub unexpectedly"
@@ -605,7 +616,7 @@ test_4c() {
 
 		echo "OI scrub on MDS$n status for the 3rd time:"
 		do_facet mds$n $LCTL get_param -n \
-			osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+			osd-*.$(facet_svc mds$n).oi_scrub
 
 		[ ${updated0[$n]} -gt ${updated1[$n]} ] ||
 			error "(16) Auto trigger full scrub unexpectedly"
@@ -622,7 +633,7 @@ test_4c() {
 		[ ${updated0[$n]} -eq ${updated1[$n]} ] || {
 			echo "OI scrub on MDS$n status for the 4th time:"
 			do_facet mds$n $LCTL get_param -n \
-				osd-ldiskfs.$(facet_svc mds$n).oi_scrub
+				osd-*.$(facet_svc mds$n).oi_scrub
 
 			error "(18) NOT auto trigger full scrub as expected"
 		}
@@ -634,12 +645,12 @@ test_5() {
 	formatall > /dev/null
 	setupall > /dev/null
 
-	scrub_prep 1000
-	scrub_backup_restore 1
+	scrub_prep 100 1
 	echo "starting MDTs with OI scrub disabled (1)"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 	scrub_check_status 3 init
-	scrub_check_flags 4 recreated,inconsistent
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+		scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
 	full_scrub_ratio 0
@@ -688,12 +699,13 @@ test_5() {
 	declare -a pids
 
 	for n in $(seq $MDSCOUNT); do
-		stat $DIR/$tdir/mds$n/${tfile}800 &
+		stat $DIR/$tdir/mds$n/sanity-scrub.sh &
 		pids[$n]=$!
 	done
 
 	for n in $(seq $MDSCOUNT); do
-		wait ${pids[$n]} || error "(18) Fail to stat mds$n/${tfile}800"
+		wait ${pids[$n]} ||
+			error "(18) Fail to stat mds$n/sanity-scrub.sh"
 	done
 
 	scrub_check_status 19 completed
@@ -702,11 +714,11 @@ test_5() {
 run_test 5 "OI scrub state machine"
 
 test_6() {
-	scrub_prep 1000
-	scrub_backup_restore 1
+	scrub_prep 100 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
-	scrub_check_flags 4 recreated,inconsistent
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+		scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
 	full_scrub_ratio 0
@@ -732,8 +744,8 @@ test_6() {
 	local n
 	for n in $(seq $MDSCOUNT); do
 		# stat will re-trigger OI scrub
-		stat $DIR/$tdir/mds$n/${tfile}800 ||
-			error "(8) Failed to stat mds$n/${tfile}800"
+		stat $DIR/$tdir/mds$n/sanity-scrub.sh ||
+			error "(8) Failed to stat mds$n/sanity-scrub.sh"
 	done
 
 	umount_client $MOUNT || error "(9) Fail to stop client!"
@@ -780,11 +792,11 @@ test_6() {
 run_test 6 "OI scrub resumes from last checkpoint"
 
 test_7() {
-	scrub_prep 500
-	scrub_backup_restore 1
+	scrub_prep 500 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
-	scrub_check_flags 4 recreated,inconsistent
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+		scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
 	full_scrub_ratio 0
@@ -802,7 +814,11 @@ test_7() {
 	done
 
 	scrub_check_status 8 scanning
-	scrub_check_flags 9 recreated,inconsistent,auto
+	if [ $(facet_fstype $SINGLEMDS) != "ldiskfs" ]; then
+		scrub_check_flags 9 inconsistent,auto
+	else
+		scrub_check_flags 9 recreated,inconsistent,auto
+	fi
 
 	do_nodes $(comma_list $(mdts_nodes)) \
 		$LCTL set_param fail_loc=0 fail_val=0
@@ -813,11 +829,11 @@ test_7() {
 run_test 7 "System is available during OI scrub scanning"
 
 test_8() {
-	scrub_prep 128
-	scrub_backup_restore 1
+	scrub_prep 128 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
-	scrub_check_flags 4 recreated,inconsistent
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+		scrub_check_flags 4 recreated,inconsistent
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
 	do_nodes $(comma_list $(mdts_nodes)) \
@@ -839,13 +855,16 @@ test_8() {
 run_test 8 "Control OI scrub manually"
 
 test_9() {
+	# Skip scrub speed test for ZFS because of performance unstable
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
+		skip "test scrub speed only on ldiskfs" && return
+
 	if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
 		skip "Testing on UP system, the speed may be inaccurate."
 		return 0
 	fi
 
-	scrub_prep 6000
-	scrub_backup_restore 1
+	scrub_prep 6000 1
 
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
@@ -919,11 +938,11 @@ test_9() {
 run_test 9 "OI scrub speed control"
 
 test_10a() {
-	scrub_prep 0
-	scrub_backup_restore 1
+	scrub_prep 0 1
 	echo "starting mds$n with OI scrub disabled (1)"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
-	scrub_check_flags 4 recreated,inconsistent
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+		scrub_check_flags 4 recreated,inconsistent
 	mount_client $MOUNT || error "(5) Fail to start client!"
 	scrub_enable_auto
 	full_scrub_ratio 0
@@ -954,11 +973,11 @@ run_test 10a "non-stopped OI scrub should auto restarts after MDS remount (1)"
 
 # test_10b is obsolete, it will be coverded by related sanity-lfsck tests.
 test_10b() {
-	scrub_prep 0
-	scrub_backup_restore 1
+	scrub_prep 0 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
-	scrub_check_flags 4 recreated,inconsistent
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+		scrub_check_flags 4 recreated,inconsistent
 
 	#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
 	do_nodes $(comma_list $(mdts_nodes)) \
@@ -984,6 +1003,9 @@ test_10b() {
 #run_test 10b "non-stopped OI scrub should auto restarts after MDS remount (2)"
 
 test_11() {
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
+		skip "ldiskfs special test" && return
+
 	local CREATED=100
 	local n
 
@@ -1061,7 +1083,7 @@ test_12() {
 
 	do_facet ost1 $LCTL set_param fail_loc=0
 	wait_update_facet ost1 "$LCTL get_param -n \
-		osd-ldiskfs.$(facet_svc ost1).oi_scrub |
+		osd-*.$(facet_svc ost1).oi_scrub |
 		awk '/^status/ { print \\\$2 }'" "completed" 6 ||
 		error "(7) Expected '$expected' on ost1"
 
@@ -1097,7 +1119,7 @@ test_13() {
 	$START_SCRUB_ON_OST -r || error "(6) Fail to start OI scrub on OST!"
 
 	wait_update_facet ost1 "$LCTL get_param -n \
-		osd-ldiskfs.$(facet_svc ost1).oi_scrub |
+		osd-*.$(facet_svc ost1).oi_scrub |
 		awk '/^status/ { print \\\$2 }'" "completed" 6 ||
 		error "(7) Expected '$expected' on ost1"
 
@@ -1106,6 +1128,9 @@ test_13() {
 run_test 13 "OI scrub can rebuild missed /O entries"
 
 test_14() {
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
+		skip "ldiskfs special test" && return
+
 	check_mount_and_prep
 	$SETSTRIPE -c 1 -i 0 $DIR/$tdir
 
@@ -1139,57 +1164,51 @@ test_14() {
 run_test 14 "OI scrub can repair objects under lost+found"
 
 test_15() {
-	local server_version=$(lustre_version_code $SINGLEMDS)
-	scrub_prep 20
-	scrub_backup_restore 1
+	local repaired
+
+	formatall > /dev/null
+	setupall > /dev/null
+
+	scrub_prep 20 1
 	echo "starting MDTs with OI scrub disabled"
 	scrub_start_mds 2 "$MOUNT_OPTS_NOSCRUB"
 	scrub_check_status 3 init
-	scrub_check_flags 4 recreated,inconsistent
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] ||
+		scrub_check_flags 4 recreated,inconsistent
 
 	# run under dryrun mode
-	if [ $server_version -lt $(version_code 2.5.58) ]; then
-		scrub_start 5 --dryrun on
-	else
-		scrub_start 5 --dryrun
-	fi
+	scrub_start 5 --dryrun
 	scrub_check_status 6 completed
-	scrub_check_flags 7 recreated,inconsistent
+	if [ $(facet_fstype $SINGLEMDS) != "ldiskfs" ]; then
+		scrub_check_flags 7 inconsistent
+		repaired=2
+	else
+		scrub_check_flags 7 recreated,inconsistent
+		repaired=20
+	fi
 	scrub_check_params 8 dryrun
-	scrub_check_repaired 9 20 1
+	scrub_check_repaired 9 $repaired 1
 
 	# run under dryrun mode again
-	if [ $server_version -lt $(version_code 2.5.58) ]; then
-		scrub_start 10 --dryrun on
-	else
-		scrub_start 10 --dryrun
-	fi
+	scrub_start 10 --dryrun
 	scrub_check_status 11 completed
-	scrub_check_flags 12 recreated,inconsistent
+	if [ $(facet_fstype $SINGLEMDS) != "ldiskfs" ]; then
+		scrub_check_flags 12 inconsistent
+	else
+		scrub_check_flags 12 recreated,inconsistent
+	fi
 	scrub_check_params 13 dryrun
-	scrub_check_repaired 14 20 1
+	scrub_check_repaired 14 $repaired 1
 
 	# run under normal mode
-	#
-	# Lustre-2.x (x <= 5) used "-n off" to disable dryrun which does not
-	# work under Lustre-2.y (y >= 6), the test script should be fixed as
-	# "-noff" or "--dryrun=off" or nothing by default.
-	if [ $server_version -lt $(version_code 2.5.58) ]; then
-		scrub_start 15 --dryrun off
-	else
-		scrub_start 15
-	fi
+	scrub_start 15
 	scrub_check_status 16 completed
 	scrub_check_flags 17 ""
 	scrub_check_params 18 ""
-	scrub_check_repaired 19 20 0
+	scrub_check_repaired 19 $repaired 0
 
 	# run under normal mode again
-	if [ $server_version -lt $(version_code 2.5.58) ]; then
-		scrub_start 20 --dryrun off
-	else
-		scrub_start 20
-	fi
+	scrub_start 20
 	scrub_check_status 21 completed
 	scrub_check_flags 22 ""
 	scrub_check_params 23 ""

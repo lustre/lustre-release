@@ -1809,7 +1809,8 @@ void lfsck_pos_fill(const struct lu_env *env, struct lfsck_instance *lfsck,
 	if (!lfsck->li_current_oit_processed && !init)
 		pos->lp_oit_cookie--;
 
-	LASSERT(pos->lp_oit_cookie > 0);
+	if (unlikely(pos->lp_oit_cookie == 0))
+		pos->lp_oit_cookie = 1;
 
 	if (lfsck->li_di_dir != NULL) {
 		struct dt_object *dto = lfsck->li_obj_dir;

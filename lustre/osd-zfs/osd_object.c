@@ -309,9 +309,26 @@ struct lu_object *osd_object_alloc(const struct lu_env *env,
 	OBD_SLAB_ALLOC_PTR_GFP(mo, osd_object_kmem, GFP_NOFS);
 	if (mo != NULL) {
 		struct lu_object *l;
+		struct lu_object_header *h;
+		struct osd_device *o = osd_dev(d);
 
 		l = &mo->oo_dt.do_lu;
-		dt_object_init(&mo->oo_dt, NULL, d);
+		if (unlikely(o->od_in_init)) {
+			OBD_ALLOC_PTR(h);
+			if (!h) {
+				OBD_FREE_PTR(mo);
+				return NULL;
+			}
+
+			lu_object_header_init(h);
+			lu_object_init(l, h, d);
+			lu_object_add_top(h, l);
+			mo->oo_header = h;
+		} else {
+			dt_object_init(&mo->oo_dt, NULL, d);
+			mo->oo_header = NULL;
+		}
+
 		mo->oo_dt.do_ops = &osd_obj_ops;
 		l->lo_ops = &osd_lu_obj_ops;
 		INIT_LIST_HEAD(&mo->oo_sa_linkage);
@@ -437,6 +454,7 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 	struct lu_buf		buf;
 	int			rc;
 	struct lustre_mdt_attrs	*lma;
+	const struct lu_fid *rfid = lu_object_fid(&obj->oo_dt.do_lu);
 	ENTRY;
 
 	CLASSERT(sizeof(info->oti_buf) >= sizeof(*lma));
@@ -453,8 +471,14 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 			CWARN("%s: unsupported incompat LMA feature(s) %#x for "
 			      "fid = "DFID"\n", osd_obj2dev(obj)->od_svname,
 			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
-			      PFID(lu_object_fid(&obj->oo_dt.do_lu)));
+			      PFID(rfid));
 			rc = -EOPNOTSUPP;
+		} else if (unlikely(!lu_fid_eq(rfid, &lma->lma_self_fid))) {
+			CERROR("%s: FID-in-LMA "DFID" does not match the "
+			      "object self-fid "DFID"\n",
+			      osd_obj2dev(obj)->od_svname,
+			      PFID(&lma->lma_self_fid), PFID(rfid));
+			rc = -EREMCHG;
 		} else {
 			struct osd_device *osd = osd_obj2dev(obj);
 
@@ -512,8 +536,15 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 	struct osd_object *obj = osd_obj(l);
 	struct osd_device *osd = osd_obj2dev(obj);
 	const struct lu_fid *fid = lu_object_fid(l);
+	struct lustre_scrub *scrub = &osd->od_scrub;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct luz_direntry *zde = &info->oti_zde;
+	struct osd_idmap_cache *idc;
+	char *name = info->oti_str;
 	uint64_t oid;
 	int rc = 0;
+	int rc1;
+	bool remote = false;
 	ENTRY;
 
 	LASSERT(osd_invariant(obj));
@@ -521,10 +552,11 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 	if (fid_is_otable_it(&l->lo_header->loh_fid)) {
 		obj->oo_dt.do_ops = &osd_obj_otable_it_ops;
 		l->lo_header->loh_attr |= LOHA_EXISTS;
-		RETURN(0);
+
+		GOTO(out, rc = 0);
 	}
 
-	if (conf != NULL && conf->loc_flags & LOC_F_NEW)
+	if (conf && conf->loc_flags & LOC_F_NEW)
 		GOTO(out, rc = 0);
 
 	if (unlikely(fid_is_acct(fid))) {
@@ -537,31 +569,117 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 		GOTO(out, rc = 0);
 	}
 
-	rc = osd_fid_lookup(env, osd, fid, &oid);
-	if (rc == 0) {
-		LASSERT(obj->oo_dn == NULL);
-		rc = __osd_obj2dnode(osd->od_os, oid, &obj->oo_dn);
-		/* EEXIST will be returned if object is being deleted in ZFS */
-		if (rc == -EEXIST) {
-			rc = 0;
-			GOTO(out, rc);
-		}
-		if (rc != 0) {
-			CERROR("%s: lookup "DFID"/%#llx failed: rc = %d\n",
-			       osd->od_svname, PFID(lu_object_fid(l)), oid, rc);
-			GOTO(out, rc);
-		}
-		rc = osd_object_init0(env, obj);
-		if (rc != 0)
-			GOTO(out, rc);
-
-		rc = osd_check_lma(env, obj);
-		if (rc != 0)
-			GOTO(out, rc);
-	} else if (rc == -ENOENT) {
-		rc = 0;
+	idc = osd_idc_find(env, osd, fid);
+	if (idc && !idc->oic_remote && idc->oic_dnode != ZFS_NO_OBJECT) {
+		oid = idc->oic_dnode;
+		goto zget;
 	}
-	LASSERT(osd_invariant(obj));
+
+	rc = -ENOENT;
+	if (!list_empty(&osd->od_scrub.os_inconsistent_items))
+		rc = osd_oii_lookup(osd, fid, &oid);
+
+	if (rc)
+		rc = osd_fid_lookup(env, osd, fid, &oid);
+
+	if (rc == -ENOENT) {
+		if (likely(!(fid_is_norm(fid) || fid_is_igif(fid)) ||
+			   fid_is_on_ost(env, osd, fid) ||
+			   !zfs_test_bit(osd_oi_fid2idx(osd, fid),
+					 scrub->os_file.sf_oi_bitmap)))
+			GOTO(out, rc = 0);
+
+		rc = -EREMCHG;
+		goto trigger;
+	}
+
+	if (rc)
+		GOTO(out, rc);
+
+zget:
+	LASSERT(obj->oo_dn == NULL);
+
+	rc = __osd_obj2dnode(osd->od_os, oid, &obj->oo_dn);
+	/* EEXIST will be returned if object is being deleted in ZFS */
+	if (rc == -EEXIST)
+		GOTO(out, rc = 0);
+
+	if (rc) {
+		CERROR("%s: lookup "DFID"/%#llx failed: rc = %d\n",
+		       osd->od_svname, PFID(lu_object_fid(l)), oid, rc);
+		GOTO(out, rc);
+	}
+
+	rc = osd_object_init0(env, obj);
+	if (rc)
+		GOTO(out, rc);
+
+	if (unlikely(obj->oo_header))
+		GOTO(out, rc = 0);
+
+	rc = osd_check_lma(env, obj);
+	if ((!rc && !remote) || (rc != -EREMCHG))
+		GOTO(out, rc);
+
+trigger:
+	/* We still have chance to get the valid dnode: for the object that is
+	 * referenced by remote name entry, the object on the local MDT will be
+	 * linked under the dir /REMOTE_PARENT_DIR with its FID string as name.
+	 *
+	 * During the OI scrub, if we cannot find the OI mapping, we may still
+	 * have change to map the FID to local OID via lookup the dir
+	 * /REMOTE_PARENT_DIR. */
+	if (!remote && !fid_is_on_ost(env, osd, fid)) {
+		osd_fid2str(name, fid, sizeof(info->oti_str));
+		rc = osd_zap_lookup(osd, osd->od_remote_parent_dir,
+				    NULL, name, 8, 3, (void *)zde);
+		if (!rc) {
+			oid = zde->lzd_reg.zde_dnode;
+			osd_dnode_rele(obj->oo_dn);
+			obj->oo_dn = NULL;
+			remote = true;
+			goto zget;
+		}
+	}
+
+	/* The case someone triggered the OI scrub already. */
+	if (thread_is_running(&scrub->os_thread)) {
+		if (!rc) {
+			LASSERT(remote);
+
+			lu_object_set_agent_entry(l);
+			osd_oii_insert(env, osd, fid, oid, false);
+		} else {
+			rc = -EINPROGRESS;
+		}
+
+		GOTO(out, rc);
+	}
+
+	/* The case NOT allow to trigger OI scrub automatically. */
+	if (osd->od_auto_scrub_interval == AS_NEVER)
+		GOTO(out, rc);
+
+	/* It is me to trigger the OI scrub. */
+	rc1 = osd_scrub_start(env, osd, SS_CLEAR_DRYRUN |
+			      SS_CLEAR_FAILOUT | SS_AUTO_FULL);
+	LCONSOLE_WARN("%s: trigger OI scrub by RPC for the "DFID": rc = %d\n",
+		      osd_name(osd), PFID(fid), rc1);
+	if (!rc) {
+		LASSERT(remote);
+
+		lu_object_set_agent_entry(l);
+		if (!rc1)
+			osd_oii_insert(env, osd, fid, oid, false);
+	} else {
+		if (!rc1)
+			rc = -EINPROGRESS;
+		else
+			rc = -EREMCHG;
+	}
+
+	GOTO(out, rc);
+
 out:
 	RETURN(rc);
 }
@@ -573,11 +691,16 @@ out:
 static void osd_object_free(const struct lu_env *env, struct lu_object *l)
 {
 	struct osd_object *obj = osd_obj(l);
+	struct lu_object_header *h = obj->oo_header;
 
 	LASSERT(osd_invariant(obj));
 
 	dt_object_fini(&obj->oo_dt);
 	OBD_SLAB_FREE_PTR(obj, osd_object_kmem);
+	if (unlikely(h)) {
+		lu_object_header_fini(h);
+		OBD_FREE_PTR(h);
+	}
 }
 
 static int
@@ -707,13 +830,6 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 	/* remove obj ref from index dir (it depends) */
 	zapid = osd_get_name_n_idx(env, osd, fid, buf,
 				   sizeof(info->oti_str), &zdn);
-	rc = osd_zap_remove(osd, zapid, zdn, buf, oh->ot_tx);
-	if (rc) {
-		CERROR("%s: zap_remove(%s) failed: rc = %d\n",
-		       osd->od_svname, buf, rc);
-		GOTO(out, rc);
-	}
-
 	rc = osd_xattrs_destroy(env, obj, oh);
 	if (rc) {
 		CERROR("%s: cannot destroy xattrs for %s: rc = %d\n",
@@ -757,6 +873,17 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 			CERROR("%s: zap_add_int() failed %s %llu: rc = %d\n",
 			       osd->od_svname, buf, oid, rc);
 	}
+
+	/* Remove the OI mapping after the destroy to handle the race with
+	 * OI scrub that may insert missed OI mapping during the interval. */
+	rc = osd_zap_remove(osd, zapid, zdn, buf, oh->ot_tx);
+	if (unlikely(rc == -ENOENT))
+		rc = 0;
+	if (rc)
+		CERROR("%s: zap_remove(%s) failed: rc = %d\n",
+		       osd->od_svname, buf, rc);
+
+	GOTO(out, rc);
 
 out:
 	/* not needed in the cache anymore */
@@ -1116,6 +1243,26 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	   transaction group. */
 	LASSERT(oh->ot_tx->tx_txg != 0);
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_FID_MAPPING) && !osd->od_is_ost) {
+		struct zpl_direntry *zde = &info->oti_zde.lzd_reg;
+		char *buf = info->oti_str;
+		dnode_t *zdn = NULL;
+		uint64_t zapid;
+
+		zapid = osd_get_name_n_idx(env, osd, lu_object_fid(&dt->do_lu),
+					   buf, sizeof(info->oti_str), &zdn);
+		rc = osd_zap_lookup(osd, zapid, zdn, buf, 8,
+				    sizeof(*zde) / 8, zde);
+		if (!rc) {
+			zde->zde_dnode -= 1;
+			rc = -zap_update(osd->od_os, zapid, buf, 8,
+					 sizeof(*zde) / 8, zde, oh->ot_tx);
+		}
+		up_read(&obj->oo_guard);
+
+		RETURN(rc > 0 ? 0 : rc);
+	}
+
 	/* Only allow set size for regular file */
 	if (!S_ISREG(dt->do_lu.lo_header->loh_attr))
 		valid &= ~(LA_SIZE | LA_BLOCKS);
@@ -1451,8 +1598,8 @@ int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 	return rc;
 }
 
-static int osd_find_new_dnode(const struct lu_env *env, dmu_tx_t *tx,
-			      uint64_t oid, dnode_t **dnp)
+int osd_find_new_dnode(const struct lu_env *env, dmu_tx_t *tx,
+		       uint64_t oid, dnode_t **dnp)
 {
 	dmu_tx_hold_t *txh;
 	int rc = 0;
@@ -1737,6 +1884,7 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 	dnode_t *dn = NULL, *zdn = NULL;
 	uint64_t		 zapid, parent = 0;
 	int			 rc;
+	__u32 compat = 0;
 
 	ENTRY;
 
@@ -1789,9 +1937,20 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 
 	zapid = osd_get_name_n_idx(env, osd, fid, buf,
 				   sizeof(info->oti_str), &zdn);
-	rc = osd_zap_add(osd, zapid, zdn, buf, 8, 1, zde, oh->ot_tx);
-	if (rc)
-		GOTO(out, rc);
+	if (!CFS_FAIL_CHECK(OBD_FAIL_OSD_NO_OI_ENTRY)) {
+		if (osd->od_is_ost &&
+		    OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_INVALID_ENTRY))
+			zde->zde_dnode++;
+
+		if (!osd->od_is_ost ||
+		    !OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_NO_ENTRY)) {
+			rc = osd_zap_add(osd, zapid, zdn, buf, 8, 1,
+					 zde, oh->ot_tx);
+			if (rc)
+				GOTO(out, rc);
+		}
+	}
+
 	obj->oo_dn = dn;
 	/* Now add in all of the "SA" attributes */
 	rc = osd_sa_handle_get(obj);
@@ -1803,7 +1962,9 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc);
 
 	/* initialize LMA */
-	lustre_lma_init(lma, fid, 0, 0);
+	if (fid_is_idif(fid) || (fid_is_norm(fid) && osd->od_is_ost))
+		compat |= LMAC_FID_ON_OST;
+	lustre_lma_init(lma, fid, compat, 0);
 	lustre_lma_swab(lma);
 	rc = -nvlist_add_byte_array(obj->oo_sa_xattr, XATTR_NAME_LMA,
 				    (uchar_t *)lma, sizeof(*lma));

@@ -1400,7 +1400,7 @@ err_ns:
 err_ops:
 	lu_site_purge(env, mgs2lu_dev(mgs)->ld_site, ~0);
 	if (!cfs_hash_is_empty(mgs2lu_dev(mgs)->ld_site->ls_obj_hash)) {
-		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_OTHER, NULL);
 		lu_site_print(env, mgs2lu_dev(mgs)->ld_site, &msgdata,
 				lu_cdebug_printer);
 	}
@@ -1576,7 +1576,7 @@ static struct lu_device *mgs_device_fini(const struct lu_env *env,
 
 	lu_site_purge(env, d->ld_site, ~0);
 	if (!cfs_hash_is_empty(d->ld_site->ls_obj_hash)) {
-		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_OTHER, NULL);
 		lu_site_print(env, d->ld_site, &msgdata, lu_cdebug_printer);
 	}
 

@@ -1058,6 +1058,8 @@ static int osd_mount(const struct lu_env *env,
 	if (rc >= sizeof(o->od_svname))
 		RETURN(-E2BIG);
 
+	o->od_index = -1; /* -1 means index is invalid */
+	rc = server_name2index(o->od_svname, &o->od_index, NULL);
 	str = strstr(str, ":");
 	if (str) {
 		unsigned long flags;
@@ -1071,6 +1073,9 @@ static int osd_mount(const struct lu_env *env,
 			LCONSOLE_WARN("%s: set dev_rdonly on this device\n",
 				      svname);
 		}
+
+		if (flags & LMD_FLG_NOSCRUB)
+			o->od_auto_scrub_interval = AS_NEVER;
 	}
 
 	if (server_name_is_ost(o->od_svname))
@@ -1108,11 +1113,6 @@ static int osd_mount(const struct lu_env *env,
 	}
 #endif
 
-	/* 1. initialize oi before any file create or file open */
-	rc = osd_oi_init(env, o);
-	if (rc)
-		GOTO(err, rc);
-
 	rc = lu_site_init(&o->od_site, osd2lu_dev(o));
 	if (rc)
 		GOTO(err, rc);
@@ -1123,6 +1123,12 @@ static int osd_mount(const struct lu_env *env,
 		GOTO(err, rc);
 
 	rc = osd_objset_register_callbacks(o);
+	if (rc)
+		GOTO(err, rc);
+
+	o->od_in_init = 1;
+	rc = osd_scrub_setup(env, o);
+	o->od_in_init = 0;
 	if (rc)
 		GOTO(err, rc);
 
@@ -1222,6 +1228,9 @@ static int osd_device_init0(const struct lu_env *env,
 
 	l->ld_ops = &osd_lu_ops;
 	o->od_dt_dev.dd_ops = &osd_dt_ops;
+	sema_init(&o->od_otable_sem, 1);
+	INIT_LIST_HEAD(&o->od_ios_list);
+	o->od_auto_scrub_interval = AS_DEFAULT;
 
 out:
 	RETURN(rc);
@@ -1304,7 +1313,7 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 
 	/* now with all the callbacks completed we can cleanup the remainings */
 	osd_shutdown(env, o);
-	osd_oi_fini(env, o);
+	osd_scrub_cleanup(env, o);
 
 	rc = osd_procfs_fini(o);
 	if (rc) {
@@ -1552,7 +1561,6 @@ static void __exit osd_exit(void)
 	lu_kmem_fini(osd_caches);
 }
 
-extern unsigned int osd_oi_count;
 module_param(osd_oi_count, int, 0444);
 MODULE_PARM_DESC(osd_oi_count, "Number of Object Index containers to be created, it's only valid for new filesystem.");
 

@@ -1,6 +1,7 @@
 MODULES := osd_zfs
 osd_zfs-objs := osd_handler.o osd_lproc.o osd_quota.o
 osd_zfs-objs += osd_object.o osd_io.o osd_oi.o osd_xattr.o osd_index.o
+osd_zfs-objs += osd_scrub.o
 
 EXTRA_PRE_CFLAGS += -include @SPL_OBJ@/spl_config.h
 EXTRA_PRE_CFLAGS += -include @ZFS_OBJ@/zfs_config.h

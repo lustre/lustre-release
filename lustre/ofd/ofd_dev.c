@@ -247,7 +247,7 @@ static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
 
 	lu_site_purge(env, top->ld_site, ~0);
 	if (!cfs_hash_is_empty(top->ld_site->ls_obj_hash)) {
-		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_OTHER, NULL);
 		lu_site_print(env, top->ld_site, &msgdata, lu_cdebug_printer);
 	}
 

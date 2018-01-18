@@ -43,6 +43,8 @@
 #include <dt_object.h>
 #include <md_object.h>
 #include <lustre_quota.h>
+#include <lustre_scrub.h>
+#include <obd.h>
 #ifdef SHRINK_STOP
 #undef SHRINK_STOP
 #endif
@@ -179,6 +181,38 @@ struct osd_idmap_cache {
 				oic_remote:1;      /* FID isn't local */
 };
 
+struct osd_inconsistent_item {
+	/* link into lustre_scrub::os_inconsistent_items,
+	 * protected by lustr_scrub::os_lock. */
+	struct list_head       oii_list;
+
+	/* The right FID <=> oid mapping. */
+	struct osd_idmap_cache oii_cache;
+
+	unsigned int	       oii_insert:1; /* insert or update mapping. */
+};
+
+struct osd_otable_it {
+	struct osd_device       *ooi_dev;
+	struct lu_fid		 ooi_fid;
+	__u64			 ooi_pos;
+	__u64			 ooi_prefetched_dnode;
+	int			 ooi_prefetched;
+
+	/* The following bits can be updated/checked w/o lock protection.
+	 * If more bits will be introduced in the future and need lock to
+	 * protect, please add comment. */
+	unsigned int		 ooi_used_outside:1, /* Some user out of OSD
+						      * uses the iteration. */
+				 ooi_all_cached:1, /* No more entries can be
+						    * filled into cache. */
+				 ooi_user_ready:1, /* The user out of OSD is
+						    * ready to iterate. */
+				 ooi_waiting:1; /* it::next is waiting. */
+};
+
+extern const struct dt_index_operations osd_otable_ops;
+
 /* max.number of regular attributes the callers may ask for */
 # define OSD_MAX_IN_BULK (sizeof(struct osa_attr)/sizeof(uint64_t))
 
@@ -218,6 +252,7 @@ struct osd_thread_info {
 	int		       oti_ins_cache_size;
 	int		       oti_ins_cache_used;
 	struct lu_buf	       oti_xattr_lbuf;
+	zap_cursor_t	       oti_zc;
 };
 
 extern struct lu_context_key osd_key;
@@ -295,13 +330,17 @@ struct osd_device {
 				 od_prop_rdonly:1,  /**< ZFS property readonly */
 				 od_xattr_in_sa:1,
 				 od_is_ost:1,
+				 od_in_init:1,
 				 od_posix_acl:1;
 	unsigned int		 od_dnsize;
 
 	char			 od_mntdev[128];
 	char			 od_svname[128];
+	char			 od_uuid[16];
 
 	int			 od_connects;
+	int			 od_index;
+	__s64			 od_auto_scrub_interval;
 	struct lu_site		 od_site;
 
 	dnode_t			*od_groupused_dn;
@@ -328,6 +367,11 @@ struct osd_device {
 
 	/* osd seq instance */
 	struct lu_client_seq	*od_cl_seq;
+
+	struct semaphore	 od_otable_sem;
+	struct osd_otable_it	*od_otable_it;
+	struct lustre_scrub	 od_scrub;
+	struct list_head	 od_ios_list;
 };
 
 enum osd_destroy_type {
@@ -388,6 +432,7 @@ struct osd_object {
 		};
 		uint64_t	oo_parent; /* used only at object creation */
 	};
+	struct lu_object_header *oo_header;
 };
 
 int osd_statfs(const struct lu_env *, struct dt_device *, struct obd_statfs *);
@@ -477,7 +522,33 @@ static inline struct seq_server_site *osd_seq_site(struct osd_device *osd)
 
 static inline char *osd_name(struct osd_device *osd)
 {
-	return osd->od_dt_dev.dd_lu_dev.ld_obd->obd_name;
+	return osd->od_svname;
+}
+
+static inline void zfs_set_bit(int nr, __u8 *addr)
+{
+	set_bit(nr, (unsigned long *)addr);
+}
+
+static inline int zfs_test_bit(int nr, __u8 *addr)
+{
+	return test_bit(nr, (const unsigned long *)addr);
+}
+
+static inline int osd_oi_fid2idx(struct osd_device *dev,
+				 const struct lu_fid *fid)
+{
+	return fid->f_seq & (dev->od_oi_count - 1);
+}
+
+static inline struct osd_oi *osd_fid2oi(struct osd_device *osd,
+					const struct lu_fid *fid)
+{
+	LASSERTF(osd->od_oi_table && osd->od_oi_count >= 1,
+		 "%s: "DFID", oi_count %d\n",
+		 osd_name(osd), PFID(fid), osd->od_oi_count);
+
+	return osd->od_oi_table[osd_oi_fid2idx(osd, fid)];
 }
 
 #ifdef CONFIG_PROC_FS
@@ -523,6 +594,9 @@ int __osd_object_create(const struct lu_env *env, struct osd_device *osd,
 int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 		    struct osd_object *obj, sa_handle_t *sa_hdl, dmu_tx_t *tx,
 		    struct lu_attr *la, uint64_t parent, nvlist_t *);
+int osd_find_new_dnode(const struct lu_env *env, dmu_tx_t *tx,
+		       uint64_t oid, dnode_t **dnp);
+int osd_object_init0(const struct lu_env *env, struct osd_object *obj);
 
 /* osd_oi.c */
 int osd_oi_init(const struct lu_env *env, struct osd_device *o);
@@ -543,6 +617,17 @@ struct osd_idmap_cache *osd_idc_find_or_init(const struct lu_env *env,
 struct osd_idmap_cache *osd_idc_find(const struct lu_env *env,
 				     struct osd_device *osd,
 				     const struct lu_fid *fid);
+int osd_idc_find_and_init_with_oid(const struct lu_env *env,
+				   struct osd_device *osd,
+				   const struct lu_fid *fid,
+				   uint64_t oid);
+int fid_is_on_ost(const struct lu_env *env, struct osd_device *osd,
+		  const struct lu_fid *fid);
+int osd_obj_find_or_create(const struct lu_env *env, struct osd_device *o,
+			   uint64_t parent, const char *name, uint64_t *child,
+			   const struct lu_fid *fid, bool isdir);
+
+extern unsigned int osd_oi_count;
 
 /* osd_index.c */
 int osd_index_try(const struct lu_env *env, struct dt_object *dt,
@@ -565,6 +650,18 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 				  struct osd_device *osd,
 				  struct osd_object *obj,
 				  struct osd_thandle *oh, bool destroy);
+int __osd_xattr_load_by_oid(struct osd_device *osd, uint64_t oid,
+			    nvlist_t **sa);
+
+/* osd_scrub.c */
+int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev);
+void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev);
+int osd_scrub_start(const struct lu_env *env, struct osd_device *dev,
+		    __u32 flags);
+int osd_oii_insert(const struct lu_env *env, struct osd_device *dev,
+		   const struct lu_fid *fid, uint64_t oid, bool insert);
+int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
+		   uint64_t *oid);
 
 /* osd_xattr.c */
 int __osd_sa_xattr_schedule_update(const struct lu_env *env,

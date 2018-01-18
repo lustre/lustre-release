@@ -3669,7 +3669,7 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 			obj->oo_dt.do_body_ops = &osd_body_ops;
 	}
 
-	if (result == 0)
+	if (!result && !CFS_FAIL_CHECK(OBD_FAIL_OSD_NO_OI_ENTRY))
 		result = __osd_oi_insert(env, obj, fid, th);
 
 	/* a small optimization - dt_insert() isn't usually applied
