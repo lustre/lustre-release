@@ -1319,6 +1319,11 @@ static int mirror_create(char *fname, struct mirror_args *mirror_list)
 		cur_mirror = cur_mirror->m_next;
 	}
 
+	if (layout == NULL) {
+		fprintf(stderr, "error: %s: layout is NULL\n", progname);
+		return -EINVAL;
+	}
+
 	rc = llapi_layout_mirror_count_set(layout, mirror_count);
 	if (rc) {
 		rc = -errno;
