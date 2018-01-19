@@ -8951,8 +8951,12 @@ changelog_register() {
 	for M in $(seq $MDSCOUNT); do
 		local facet=mds$M
 		local mdt="$(facet_svc $facet)"
+		local cl_mask
+
+		cl_mask=$(do_facet $facet $LCTL get_param \
+			     mdd.${mdt}.changelog_mask -n)
 		stack_trap "do_facet $facet $LCTL \
-			set_param mdd.$mdt.changelog_mask=-hsm" EXIT
+			set_param mdd.$mdt.changelog_mask=\'$cl_mask\' -n" EXIT
 		do_facet $facet $LCTL set_param mdd.$mdt.changelog_mask=+hsm ||
 			error "$mdt: changelog_mask=+hsm failed: $?"
 
@@ -9144,6 +9148,12 @@ changelog2array()
 			;;
 		ef)
 			key=extra-flags
+			;;
+		m)
+			key=mode
+			;;
+		x)
+			key=xattr
 			;;
 		*)
 			;;

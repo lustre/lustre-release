@@ -974,6 +974,8 @@ cdt_set_sanity_policy
 # finished requests are quickly removed from list
 set_hsm_param grace_delay 10
 
+CLIENT_NIDS=( $($LCTL list_nids all) )
+
 test_1A() { # was test_1
 	mkdir -p $DIR/$tdir
 	chmod 777 $DIR/$tdir
@@ -4255,8 +4257,6 @@ test_222a() {
 
 	changelog_find -type HSM -target-fid $fid -flags 0x80 ||
 		error "The expected changelog was not emitted"
-
-	copytool_cleanup
 }
 run_test 222a "Changelog for explicit restore"
 
@@ -4313,8 +4313,6 @@ test_222c() {
 	# HE_RESTORE|ENOENT
 	changelog_find -type HSM -target-fid $fid -flags 0x82 ||
 		error "The expected changelog was not emitted"
-
-	copytool_cleanup
 }
 run_test 222c "Changelog for failed explicit restore"
 
@@ -4339,8 +4337,6 @@ test_222d() {
 	# HE_RESTORE|ENOENT
 	changelog_find -type HSM -target-fid $fid -flags 0x82 ||
 		error "The expected changelog was not emitted"
-
-	copytool_cleanup
 }
 run_test 222d "Changelog for failed implicit restore"
 
@@ -4364,8 +4360,6 @@ test_223a() {
 
 	changelog_find -type HSM -target-fid $fid -flags 0xfd ||
 		error "The expected changelog was not emitted"
-
-	cleanup
 }
 run_test 223a "Changelog for restore canceled (import case)"
 
@@ -4390,8 +4384,6 @@ test_223b() {
 
 	changelog_find -type HSM -target-fid $fid -flags 0xfd ||
 		error "The expected changelog was not emitted"
-
-	copytool_cleanup
 }
 run_test 223b "Changelog for restore canceled (release case)"
 
@@ -4449,8 +4441,6 @@ test_224a() {
 	# HE_REMOVE|ENOENT=0x202
 	changelog_find -type HSM -target-fid $fid -flags 0x202 ||
 		error "The expected changelog was not emitted"
-
-	cleanup
 }
 run_test 224a "Changelog for failed remove"
 
@@ -5214,6 +5204,351 @@ test_500()
 	llapi_hsm_test -d $DIR/$tdir || error "One llapi HSM test failed"
 }
 run_test 500 "various LLAPI HSM tests"
+
+test_600() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
+		skip "need MDS version at least 2.10.58" && return 0
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+
+	changelog_register
+	# set changelog_mask to ALL
+	changelog_chmask "ALL"
+
+	chmod 777 $DIR/$tdir
+	$RUNAS touch $f || error "touch $f failed as $RUNAS_ID"
+	local fid=$(path2fid $f)
+
+	local entry
+	entry=$(changelog_find -type CREAT -target-fid $fid -uid "$RUNAS_ID" \
+			       -gid "$RUNAS_GID") ||
+		error "No matching CREAT entry"
+
+	# Parse the changelog
+	eval local -A changelog=$(changelog2array $entry)
+	local nid="${changelog[nid]}"
+
+	# Check its NID
+	echo "Got NID '$nid'"
+	[ -n "$nid" ] && [[ "${CLIENT_NIDS[*]}" =~ $nid ]] ||
+		error "nid '$nid' does not match any client NID:" \
+		      "${CLIENT_NIDS[@]}"
+}
+run_test 600 "Changelog fields 'u=' and 'nid='"
+
+test_601() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
+		skip "need MDS version at least 2.10.58" && return 0
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+
+	changelog_register
+	# set changelog_mask to ALL
+	changelog_chmask "ALL"
+
+	touch $f || error "touch $f failed"
+	local fid=$(path2fid $f)
+
+	changelog_clear
+	cat $f || error "cat $f failed"
+
+	changelog_find -type OPEN -target-fid $fid -mode "r--" ||
+		error "No matching OPEN entry"
+}
+run_test 601 "OPEN Changelog entry"
+
+test_602() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
+		skip "need MDS version at least 2.10.58" && return 0
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+
+	changelog_register
+	# set changelog_mask to ALL
+	changelog_chmask "ALL"
+
+	touch $f || error "touch $f failed"
+	local fid=$(path2fid $f)
+
+	changelog_clear
+	cat $f || error "cat $f failed"
+
+	changelog_find -type CLOSE -target-fid $fid || error "No CLOSE entry"
+
+	changelog_clear
+	changelog_dump
+	echo f > $f || error "write $f failed"
+	changelog_dump
+
+	changelog_find -type CLOSE -target-fid $fid || error "No CLOSE entry"
+
+	# remove OPEN from changelog_mask
+	changelog_chmask "-OPEN"
+
+	changelog_clear
+	changelog_dump
+	cat $f || error "cat $f failed"
+	changelog_dump
+
+	changelog_find -type CLOSE -target-fid $fid &&
+		error "There should be no CLOSE entry"
+
+	changelog_clear
+	changelog_dump
+	echo f > $f || error "write $f failed"
+	changelog_dump
+
+	changelog_find -type CLOSE -target-fid $fid || error "No CLOSE entry"
+}
+run_test 602 "Changelog record CLOSE only if open+write or OPEN recorded"
+
+test_603() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
+		skip "need MDS version at least 2.10.58" && return 0
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+
+	changelog_register
+	# set changelog_mask to ALL
+	changelog_chmask "ALL"
+
+	touch $f || error "touch $f failed"
+	local fid=$(path2fid $f)
+
+	setfattr -n user.xattr1 -v "value1" $f || error "setfattr $f failed"
+
+	changelog_clear
+	getfattr -n user.xattr1 $f || error "getfattr $f failed"
+
+	changelog_find -type GXATR -target-fid $fid -xattr "user.xattr1" ||
+		error "No matching GXATR entry"
+}
+run_test 603 "GETXATTR Changelog entry"
+
+test_604() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
+		skip "need MDS version at least 2.10.58" && return 0
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+	local f2=$DIR2/$tdir/$tfile
+	local procname="mdd.$FSNAME-MDT0000.changelog_deniednext"
+	local timeout
+	timeout="$(do_facet mds1 "$LCTL" get_param -n "$procname")"
+	stack_trap "do_facet mds1 '$LCTL' set_param '$procname=$timeout'" EXIT
+	do_facet mds1 lctl set_param "$procname=20"
+
+
+	changelog_register
+	# set changelog_mask to ALL
+	changelog_chmask "ALL"
+
+	touch $f || error "touch $f failed"
+	local fid=$(path2fid $f)
+
+	chmod 600 $f
+
+	changelog_clear
+	changelog_dump
+	$RUNAS cat $f2 && error "cat $f2 by user $RUNAS_ID should have failed"
+	changelog_dump
+
+	local entry
+	entry=$(changelog_find -type NOPEN -target-fid $fid -uid "$RUNAS_ID" \
+			       -gid "$RUNAS_GID" -mode "r--") ||
+		error "No matching NOPEN entry"
+
+	# Parse the changelog
+	eval local -A changelog=$(changelog2array $entry)
+	local nid="${changelog[nid]}"
+
+	# Check its NID
+	echo "Got NID '$nid'"
+	[ -n "$nid" ] && [[ "${CLIENT_NIDS[*]}" =~ $nid ]] ||
+		error "nid '$nid' does not match any client NID:" \
+		      "${CLIENT_NIDS[@]}"
+
+	changelog_clear
+	changelog_dump
+	$RUNAS cat $f2 && error "cat $f2 by user $RUNAS_ID should have failed"
+	changelog_dump
+
+	changelog_find -type NOPEN -target-fid $fid &&
+		error "There should be no NOPEN entry"
+
+	# Sleep for `changelog_deniednext` seconds
+	sleep 20
+
+	changelog_clear
+	changelog_dump
+	$RUNAS cat $f2 && error "cat $f by user $RUNAS_ID should have failed"
+	changelog_dump
+
+	entry=$(changelog_find -type NOPEN -target-fid $fid -uid "$RUNAS_ID" \
+			       -gid "$RUNAS_GID" -mode "r--") ||
+		error "No matching NOPEN entry"
+
+	# Parse the changelog
+	eval local -A changelog=$(changelog2array $entry)
+	local nid="${changelog[nid]}"
+
+	# Check the NID
+	echo "Got NID '$nid'"
+	[ -n "$nid" ] && [[ "${CLIENT_NIDS[*]}" =~ $nid ]] ||
+		error "nid '$nid' does not match any client NID:" \
+		      "${CLIENT_NIDS[@]}"
+}
+run_test 604 "NOPEN Changelog entry"
+
+test_605() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
+		skip "need MDS version at least 2.10.58" && return 0
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+	local f2=$DIR2/$tdir/$tfile
+
+	changelog_register
+	# set changelog_mask to ALL
+	changelog_chmask "ALL"
+
+	touch $f || error "touch $f failed"
+	local fid=$(path2fid $f)
+
+	changelog_clear
+	changelog_dump
+	exec 3<> $f || error "open $f failed"
+	changelog_dump
+
+	local entry
+	changelog_find -type OPEN -target-fid $fid || error "No OPEN entry"
+
+	changelog_clear
+	changelog_dump
+	exec 4<> $f || error "open $f failed"
+	changelog_dump
+
+	changelog_find -type OPEN -target-fid $fid &&
+		error "There should be no OPEN entry"
+
+	exec 4>&- || error "close $f failed"
+	changelog_dump
+
+	changelog_find -type CLOSE -target-fid $fid &&
+		error "There should be no CLOSE entry"
+
+	changelog_clear
+	changelog_dump
+	# access in rw, so different access mode should generate entries
+	cat $f || error "cat $f failed"
+	changelog_dump
+
+	changelog_find -type OPEN -target-fid $fid || error "No OPEN entry"
+
+	changelog_find -type CLOSE -target-fid $fid || error "No CLOSE entry"
+
+	changelog_clear
+	changelog_dump
+	# same access as first one, should not generate new entries
+	exec 4<> $f || error "open $f failed"
+	changelog_dump
+
+	changelog_find -type OPEN -target-fid $fid &&
+		error "There should be no OPEN entry"
+
+	exec 4>&- || error "close $f failed"
+	changelog_dump
+
+	changelog_find -type CLOSE -target-fid $fid &&
+		error "There should be no CLOSE entry"
+
+	changelog_clear
+	changelog_dump
+	# access by different user should generate new entries
+	$RUNAS cat $f || error "cat $f by user $RUNAS_ID failed"
+	changelog_dump
+
+	changelog_find -type OPEN -target-fid $fid || error "No OPEN entry"
+
+	changelog_find -type CLOSE -target-fid $fid || error "No CLOSE entry"
+
+	changelog_clear
+	changelog_dump
+	exec 3>&- || error "close $f failed"
+	changelog_dump
+
+	changelog_find -type CLOSE -target-fid $fid || error "No CLOSE entry"
+}
+run_test 605 "Test OPEN and CLOSE rate limit in Changelogs"
+
+test_606() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
+		skip "need MDS version at least 2.10.58" && return 0
+
+	local llog_reader=$(do_facet mgs "which llog_reader 2> /dev/null")
+	llog_reader=${llog_reader:-$LUSTRE/utils/llog_reader}
+	[ -z $(do_facet mgs ls -d $llog_reader 2> /dev/null) ] &&
+			skip_env "missing llog_reader" && return
+	local fstype=$(facet_fstype mds1)
+
+	mkdir -p $DIR/$tdir
+
+	local f=$DIR/$tdir/$tfile
+
+	changelog_register
+	# set changelog_mask to ALL
+	changelog_chmask "ALL"
+
+	chmod 777 $DIR/$tdir
+	$RUNAS touch $f || error "touch $f failed as $RUNAS_ID"
+	local fid=$(path2fid $f)
+	rm $f || error "rm $f failed"
+
+	local mntpt=$(facet_mntpt mds1)
+	local pass=true
+	local entry
+
+	#remount mds1 as ldiskfs or zfs type
+	stack_trap "stop mds1; start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS" EXIT
+	stop mds1 || error "stop mds1 failed"
+	mount_fstype mds1 || error "remount mds1 failed"
+
+	for ((i = 0; i < 1; i++)); do
+		do_facet mds1 $llog_reader $mntpt/changelog_catalog
+		local cat_file=$(do_facet mds1 $llog_reader \
+				$mntpt/changelog_catalog | awk \
+				'{match($0,"path=([^ ]+)",a)}END{print a[1]}')
+		[ -n "$cat_file" ] || error "no catalog file"
+
+		entry=$(do_facet mds1 $llog_reader $mntpt/$cat_file |
+			awk "/CREAT/ && /target:\[$fid\]/ {print}")
+		[ -n "$entry" ] || error "no CREAT entry"
+	done
+
+	local uidgid=$(echo $entry |
+		sed 's+.*\ user:\([0-9][0-9]*:[0-9][0-9]*\)\ .*+\1+')
+	[ -n "$uidgid" ] || error "uidgid is empty"
+	echo "Got UID/GID $uidgid"
+	[ "$uidgid" = "$RUNAS_ID:$RUNAS_GID" ] ||
+		error "uidgid '$uidgid' != '$RUNAS_ID:$RUNAS_GID'"
+	local nid=$(echo $entry |
+		sed 's+.*\ nid:\(\S\S*@\S\S*\)\ .*+\1+')
+	[ -n "$nid" ] || error "nid is empty"
+	echo "Got NID $nid"
+	[ -n "$nid" ] && [[ "${CLIENT_NIDS[*]}" =~ $nid ]] ||
+		error "nid '$nid' does not match any NID ${CLIENT_NIDS[@]}"
+}
+run_test 606 "llog_reader groks changelog fields"
 
 copytool_cleanup
 
