@@ -695,10 +695,13 @@ void obdname2fsname(const char *tgt, char *fsname, size_t buflen)
 	 */
 	ptr = strrchr(tgt, '-');
 	if (!ptr) {
-		/* No '-' means it should end in '*' */
+		/* No '-' means it could end in '*' */
 		ptr = strchr(tgt, '*');
-		if (!ptr)
-			goto no_fsname;
+		if (!ptr) {
+			/* No '*' either. Assume tgt = fsname */
+			len = strlen(tgt);
+			goto valid_obd_name;
+		}
 		len = ptr - tgt;
 		goto valid_obd_name;
 	}

@@ -625,7 +625,9 @@ static int __sptlrpc_process_config(struct lustre_cfg *lcfg,
         char                    fsname[MTI_NAME_MAXLEN];
         struct sptlrpc_rule     rule;
         int                     rc;
-        ENTRY;
+
+	ENTRY;
+	print_lustre_cfg(lcfg);
 
         target = lustre_cfg_string(lcfg, 1);
         if (target == NULL) {
