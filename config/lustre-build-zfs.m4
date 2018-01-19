@@ -336,7 +336,7 @@ AC_DEFUN([LB_ZFS_USER], [
 	AC_MSG_RESULT([$zfsinc])
 
 	ZFS_LIBZFS_INCLUDE=${zfsinc}
-	ZFS_LIBZFS_LDFLAGS="-lzfs ${zfslib}"
+	ZFS_LIBZFS_LDFLAGS="-lzfs -lnvpair ${zfslib}"
 	AC_SUBST(ZFS_LIBZFS_INCLUDE)
 	AC_SUBST(ZFS_LIBZFS_LDFLAGS)
 ])
