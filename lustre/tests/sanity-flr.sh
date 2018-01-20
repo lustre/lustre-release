@@ -1420,6 +1420,103 @@ test_41() {
 }
 run_test 41 "lfs mirror resync check"
 
+test_42() {
+	[[ $OSTCOUNT -lt 4 ]] && skip "need >= 4 OSTs" && return
+
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+	local mirror_cmd="$LFS mirror verify"
+	local i
+
+	# create parent directory
+	mkdir $td || error "mkdir $td failed"
+
+	$mirror_cmd &> /dev/null && error "no file name given"
+	$mirror_cmd $tf &> /dev/null && error "cannot stat file $tf"
+	$mirror_cmd $td &> /dev/null && error "$td is not a regular file"
+
+	# create mirrored files
+	$LFS mirror create -N -E 4M -E 10M -E EOF $tf ||
+		error "create mirrored file $tf failed"
+	$LFS mirror create -N -E 2M -E EOF \
+			   -N -E 6M -E 8M -E EOF \
+			   -N -E 16M -E EOF $tf-1 ||
+		error "create mirrored file $tf-1 failed"
+	$LFS mirror create -N -c 2 -o 1,3 -N -S 4M -c -1 $tf-2 ||
+		error "create mirrored file $tf-2 failed"
+
+	# write data in [0, 10M)
+	for i in $tf $tf-1 $tf-2; do
+		yes | dd of=$i bs=1M count=10 iflag=fullblock conv=notrunc ||
+			error "write $i failed"
+	done
+
+	# resync the mirrored files
+	$LFS mirror resync $tf-1 $tf-2 ||
+		error "resync $tf-1 $tf-2 failed"
+
+	# verify the mirrored files
+	$mirror_cmd $tf-1 $tf-2 ||
+		error "verify $tf-1 $tf-2 failed"
+
+	get_mirror_ids $tf-1
+	$mirror_cmd --only ${mirror_array[0]} $tf-1 &> /dev/null &&
+		error "at least 2 mirror ids needed with '--only' option"
+	$mirror_cmd --only ${mirror_array[0]},${mirror_array[1]} $tf-1 $tf-2 \
+		&> /dev/null &&
+		error "'--only' option cannot be used upon multiple files"
+	$mirror_cmd --only 65534,${mirror_array[0]},65535 $tf-1 &&
+		error "invalid specified mirror ids"
+
+	# change the content of $tf and merge it into $tf-1
+	for i in 6 10; do
+		echo a | dd of=$tf bs=1M seek=$i conv=notrunc ||
+			error "change $tf with seek=$i failed"
+		echo b | dd of=$tf-1 bs=1M seek=$i conv=notrunc ||
+			error "change $tf-1 with seek=$i failed"
+	done
+
+	$LFS mirror resync $tf-1 || error "resync $tf-1 failed"
+	$LFS mirror extend --no-verify -N -f $tf $tf-1 ||
+		error "merge $tf into $tf-1 failed"
+
+	# verify the mirrored files
+	echo "Verify $tf-1 without -v option:"
+	$mirror_cmd $tf-1 &&
+		error "verify $tf-1 should fail" || echo "PASS"
+
+	echo "Verify $tf-1 with -v option:"
+	$mirror_cmd -v $tf-1 &&
+		error "verify $tf-1 should fail"
+
+	get_mirror_ids $tf-1
+	echo "Verify $tf-1 with --only option:"
+	$mirror_cmd -v --only ${mirror_array[1]},${mirror_array[-1]} $tf-1 &&
+		error "verify $tf-1 with mirror ${mirror_array[1]} and" \
+		      "${mirror_array[-1]} should fail"
+
+	$mirror_cmd --only ${mirror_array[0]},${mirror_array[1]} $tf-1 ||
+		error "verify $tf-1 with mirror ${mirror_array[0]} and" \
+		      "${mirror_array[1]} should succeed"
+
+	# set stale components in $tf-1
+	for i in 0x40002 0x40003; do
+		$LFS setstripe --comp-set -I$i --comp-flags=stale $tf-1 ||
+			error "set stale flag on component $i failed"
+	done
+
+	# verify the mirrored file
+	echo "Verify $tf-1 with stale components:"
+	$mirror_cmd -vvv $tf-1 ||
+		error "verify $tf-1 with stale components should succeed"
+
+	echo "Verify $tf-1 with stale components and --only option:"
+	$mirror_cmd -vvv --only ${mirror_array[1]},${mirror_array[-1]} $tf-1 ||
+		error "verify $tf-1 with mirror ${mirror_array[1]} and" \
+		      "${mirror_array[-1]} should succeed"
+}
+run_test 42 "lfs mirror verify"
+
 ctrl_file=$(mktemp /tmp/CTRL.XXXXXX)
 lock_file=$(mktemp /var/lock/FLR.XXXXXX)
 

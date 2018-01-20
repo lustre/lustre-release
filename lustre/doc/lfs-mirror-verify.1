@@ -1,37 +1,53 @@
 .TH LFS-MIRROR-VERIFY 1 2017-07-25 "Lustre" "Lustre Utilities"
 .SH NAME
-lfs mirror verify \- verify a mirrored file
+lfs mirror verify \- verify mirrored file(s)
 .SH SYNOPSIS
 .B lfs mirror verify
-[\fB\-\-only\fR <\fImirror_id\fR[,...]>]
-<\fImirrored_file\fR>
+[\fB\-\-only\fR <\fImirror_id\fR,\fImirror_id2\fR[,...]>]
+[\fB\-\-verbose\fR|\fB\-v\fR] <\fImirrored_file\fR> [<\fImirrored_file2\fR> ...]
 .SH DESCRIPTION
 This command verifies that each SYNC mirror of a mirrored file specified by the
-path name \fImirrored_file\fR contains exactly the same data.
+path name \fImirrored_file\fR contains exactly the same data. It supports
+specifying multiple mirrored files in one command line.
 .br
 This is a scrub tool that should be run in regular basis to make sure that
 mirrored files are not corrupted. The command won't repair the file if it turns
 out to be corrupted. Usually administrator should check the file content from
-each mirror and decide which one is correct and then invoke \fBlfs\ mirror
-\ resync\fR to repair it manually.
+each mirror and decide which one is correct and then invoke \fBlfs\ mirror\
+ resync\fR to repair it manually.
 .br
-If \fB\-\-only\fR <\fImirror_id\fR[,...]> option is specified, then the
-command will verify the mirror(s) specified by \fImirror_id\fR(s) contains
-exactly the same data as the other mirrors for the mirrored file.
+If \fB\-\-only\fR <\fImirror_id\fR,\fImirror_id2\fR[,...]> option is specified,
+then the command will only verify the mirrors specified by \fImirror_id\fRs
+contain exactly the same data. At least two \fImirror_id\fRs are required.
+This option cannot be used when multiple mirrored files are specified.
+.br
+If \fB\-\-verbose\fR|\fB\-v\fR option is specified, then the command will print
+where the differences are if the data do not match. Otherwise, the command will
+just return an error in that case. This option can be repeated for multiple
+times to print more information.
 .SH OPTIONS
 .TP
-.BR \-\-only\fR\ <\fImirror_id\fR[,...]>
-This option indicates which mirror(s) specified by \fImirror_id\fR(s) needs to
+.B \fB\-\-only\fR <\fImirror_id\fR,\fImirror_id2\fR[,...]>
+This option indicates which mirrors specified by \fImirror_id\fRs need to
 be verified. The \fImirror_id\fR is the numerical unique identifier for
 a mirror. Multiple \fImirror_id\fRs are separated by comma.
+.TP
+.B \fB\-\-verbose\fR|\fB\-v\fR
+This option indicates the command will print where the differences are if the
+data do not match.
 .SH EXAMPLES
 .TP
 .B lfs mirror verify /mnt/lustre/file1
 Verify that each mirror of /mnt/lustre/file1 contains exactly the same data.
 .TP
+.B lfs mirror verify -v /mnt/lustre/file1 /mnt/lustre/file2
+Separately verify that each mirror of /mnt/lustre/file1 and /mnt/lustre/file2
+contain exactly the same data. Print where the differences are if the data do
+not match.
+.TP
 .B lfs mirror verify --only 4,5 /mnt/lustre/file1
-Verify mirrors with mirror ID 4 and 5 contain exactly the same data as other
-mirrors for /mnt/lustre/file1.
+Verify mirrors with mirror ID 4 and 5 of /mnt/lustre/file1 contain exactly
+the same data.
 .SH AUTHOR
 The \fBlfs mirror verify\fR command is part of the Lustre filesystem.
 .SH SEE ALSO

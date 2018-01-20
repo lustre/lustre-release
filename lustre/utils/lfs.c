@@ -57,10 +57,12 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/param.h>
 #include <fcntl.h>
 #include <dirent.h>
 #include <time.h>
 #include <ctype.h>
+#include <zlib.h>
 #include "lfs_project.h"
 
 #include <libcfs/util/string.h>
@@ -115,6 +117,7 @@ static int lfs_mirror(int argc, char **argv);
 static int lfs_mirror_list_commands(int argc, char **argv);
 static int lfs_list_commands(int argc, char **argv);
 static inline int lfs_mirror_resync(int argc, char **argv);
+static inline int lfs_mirror_verify(int argc, char **argv);
 
 enum setstripe_origin {
 	SO_SETSTRIPE,
@@ -250,6 +253,11 @@ command_t mirror_cmdlist[] = {
 	  .pc_help = "Resynchronizes out-of-sync mirrored file(s).\n"
 		"usage: lfs mirror resync [--only <mirror_id[,...]>] "
 		"<mirrored file> [<mirrored file2>...]\n"},
+	{ .pc_name = "verify", .pc_func = lfs_mirror_verify,
+	  .pc_help = "Verify mirrored file(s).\n"
+		"usage: lfs mirror verify "
+		"[--only <mirror_id,mirror_id2[,...]>] "
+		"[--verbose|-v] <mirrored_file> [<mirrored_file2> ...]\n"},
 	{ .pc_name = "--list-commands", .pc_func = lfs_mirror_list_commands,
 	  .pc_help = "list commands supported by lfs mirror"},
 	{ .pc_name = "help", .pc_func = Parser_help, .pc_help = "help" },
@@ -508,8 +516,8 @@ command_t cmdlist[] = {
 	 "lfs mirror create - create a mirrored file or directory\n"
 	 "lfs mirror extend - add mirror(s) to an existing file\n"
 	 "lfs mirror split  - split a mirror from an existing mirrored file\n"
-	 "lfs mirror resync - resynchronize an out-of-sync mirrored file\n"
-	 "lfs mirror verify - verify a mirrored file\n"},
+	 "lfs mirror resync - resynchronize out-of-sync mirrored file(s)\n"
+	 "lfs mirror verify - verify mirrored file(s)\n"},
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},
@@ -6660,6 +6668,171 @@ static int parse_mirror_ids(__u16 *ids, int size, char *arg)
 	return rc < 0 ? rc : nr;
 }
 
+/**
+ * struct verify_mirror_id - Mirror id to be verified.
+ * @mirror_id:   A specified mirror id.
+ * @is_valid_id: @mirror_id is valid or not in the mirrored file.
+ */
+struct verify_mirror_id {
+	__u16 mirror_id;
+	bool is_valid_id;
+};
+
+/**
+ * compare_mirror_ids() - Compare mirror ids.
+ * @layout: Mirror component list.
+ * @cbdata: Callback data in verify_mirror_id structure.
+ *
+ * This is a callback function called by llapi_layout_comp_iterate()
+ * to compare the specified mirror id with the one in the current
+ * component of @layout. If they are the same, then the specified
+ * mirror id is valid.
+ *
+ * Return: a negative error code on failure or
+ *	   LLAPI_LAYOUT_ITER_CONT: Proceed iteration
+ *	   LLAPI_LAYOUT_ITER_STOP: Stop iteration
+ */
+static inline
+int compare_mirror_ids(struct llapi_layout *layout, void *cbdata)
+{
+	struct verify_mirror_id *mirror_id_cbdata =
+				 (struct verify_mirror_id *)cbdata;
+	uint32_t mirror_id;
+	int rc = 0;
+
+	rc = llapi_layout_mirror_id_get(layout, &mirror_id);
+	if (rc < 0) {
+		rc = -errno;
+		fprintf(stderr,
+			"%s: llapi_layout_mirror_id_get failed: %s.\n",
+			progname, strerror(errno));
+		return rc;
+	}
+
+	if (mirror_id_cbdata->mirror_id == mirror_id) {
+		mirror_id_cbdata->is_valid_id = true;
+		return LLAPI_LAYOUT_ITER_STOP;
+	}
+
+	return LLAPI_LAYOUT_ITER_CONT;
+}
+
+/**
+ * verify_mirror_ids() - Verify specified mirror ids.
+ * @fname:      Mirrored file name.
+ * @mirror_ids: Specified mirror ids to be verified.
+ * @ids_nr:     Number of specified mirror ids.
+ *
+ * This function verifies that specified @mirror_ids are valid
+ * in the mirrored file @fname.
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+static inline
+int verify_mirror_ids(const char *fname, __u16 *mirror_ids, int ids_nr)
+{
+	struct llapi_layout *layout = NULL;
+	struct verify_mirror_id mirror_id_cbdata = { 0 };
+	struct stat stbuf;
+	uint32_t flr_state;
+	int i;
+	int fd;
+	int rc = 0;
+	int rc2 = 0;
+
+	if (ids_nr <= 0)
+		return -EINVAL;
+
+	if (stat(fname, &stbuf) < 0) {
+		fprintf(stderr, "%s: cannot stat file '%s': %s.\n",
+			progname, fname, strerror(errno));
+		rc = -errno;
+		goto error;
+	}
+
+	if (!S_ISREG(stbuf.st_mode)) {
+		fprintf(stderr, "%s: '%s' is not a regular file.\n",
+			progname, fname);
+		rc = -EINVAL;
+		goto error;
+	}
+
+	fd = open(fname, O_DIRECT | O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "%s: cannot open '%s': %s.\n",
+			progname, fname, strerror(errno));
+		rc = -errno;
+		goto error;
+	}
+
+	rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
+	if (rc < 0) {
+		fprintf(stderr, "%s: '%s' llapi_lease_get failed: %s.\n",
+			progname, fname, strerror(errno));
+		goto close_fd;
+	}
+
+	layout = llapi_layout_get_by_fd(fd, 0);
+	if (layout == NULL) {
+		fprintf(stderr, "%s: '%s' llapi_layout_get_by_fd failed: %s.\n",
+			progname, fname, strerror(errno));
+		rc = -errno;
+		llapi_lease_put(fd);
+		goto close_fd;
+	}
+
+	rc = llapi_layout_flags_get(layout, &flr_state);
+	if (rc < 0) {
+		fprintf(stderr, "%s: '%s' llapi_layout_flags_get failed: %s.\n",
+			progname, fname, strerror(errno));
+		rc = -errno;
+		goto free_layout;
+	}
+
+	flr_state &= LCM_FL_FLR_MASK;
+	switch (flr_state) {
+	case LCM_FL_NOT_FLR:
+		rc = -EINVAL;
+		fprintf(stderr, "%s: '%s' file state error: %s.\n",
+			progname, fname, lcm_flags_string(flr_state));
+		goto free_layout;
+	default:
+		break;
+	}
+
+	rc2 = 0;
+	for (i = 0; i < ids_nr; i++) {
+		mirror_id_cbdata.mirror_id = mirror_ids[i];
+		mirror_id_cbdata.is_valid_id = false;
+
+		rc = llapi_layout_comp_iterate(layout, compare_mirror_ids,
+					       &mirror_id_cbdata);
+		if (rc < 0) {
+			rc = -errno;
+			fprintf(stderr,
+				"%s: '%s' failed to verify mirror id: %u.\n",
+				progname, fname, mirror_ids[i]);
+			goto free_layout;
+		}
+
+		if (!mirror_id_cbdata.is_valid_id) {
+			rc2 = -EINVAL;
+			fprintf(stderr,
+				"%s: '%s' invalid specified mirror id: %u.\n",
+				progname, fname, mirror_ids[i]);
+		}
+	}
+	rc = rc2;
+
+free_layout:
+	llapi_layout_free(layout);
+	llapi_lease_put(fd);
+close_fd:
+	close(fd);
+error:
+	return rc;
+}
+
 static inline
 int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			   __u16 *mirror_ids, int ids_nr)
@@ -6866,6 +7039,12 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 
 	}
 
+	if (ids_nr > 0) {
+		rc = verify_mirror_ids(argv[optind], mirror_ids, ids_nr);
+		if (rc < 0)
+			goto error;
+	}
+
 	/* set the lease on the file */
 	ioc = calloc(sizeof(*ioc) + sizeof(__u32) * 4096, 1);
 	if (ioc == NULL) {
@@ -6888,6 +7067,641 @@ static inline int lfs_mirror_resync(int argc, char **argv)
 	}
 
 	free(ioc);
+error:
+	return rc;
+}
+
+/**
+ * struct verify_chunk - Mirror chunk to be verified.
+ * @chunk:        [start, end) of the chunk.
+ * @mirror_count: Number of mirror ids in @mirror_id array.
+ * @mirror_id:    Array of valid mirror ids that cover the chunk.
+ */
+struct verify_chunk {
+	struct lu_extent chunk;
+	unsigned int mirror_count;
+	__u16 mirror_id[LUSTRE_MIRROR_COUNT_MAX];
+};
+
+/**
+ * print_chunks() - Print chunk information.
+ * @fname:       Mirrored file name.
+ * @chunks:      Array of chunks.
+ * @chunk_count: Number of chunks in @chunks array.
+ *
+ * This function prints [start, end) of each chunk in @chunks
+ * for mirrored file @fname, and also prints the valid mirror ids
+ * that cover the chunk.
+ *
+ * Return: void.
+ */
+static inline
+void print_chunks(const char *fname, struct verify_chunk *chunks,
+		  int chunk_count)
+{
+	int i;
+	int j;
+
+	fprintf(stdout, "Chunks to be verified in %s:\n", fname);
+	for (i = 0; i < chunk_count; i++) {
+		fprintf(stdout, DEXT, PEXT(&chunks[i].chunk));
+
+		if (chunks[i].mirror_count == 0)
+			fprintf(stdout, "\t[");
+		else {
+			fprintf(stdout, "\t[%u", chunks[i].mirror_id[0]);
+			for (j = 1; j < chunks[i].mirror_count; j++)
+				fprintf(stdout, ", %u", chunks[i].mirror_id[j]);
+		}
+		fprintf(stdout, "]\t%u\n", chunks[i].mirror_count);
+	}
+	fprintf(stdout, "\n");
+}
+
+/**
+ * print_checksums() - Print CRC-32 checksum values.
+ * @chunk: A chunk and its corresponding valid mirror ids.
+ * @crc:   CRC-32 checksum values on the chunk for each valid mirror.
+ *
+ * This function prints CRC-32 checksum values on @chunk for
+ * each valid mirror that covers it.
+ *
+ * Return: void.
+ */
+static inline
+void print_checksums(struct verify_chunk *chunk, unsigned long *crc)
+{
+	int i;
+
+	fprintf(stdout,
+		"CRC-32 checksum value for chunk "DEXT":\n",
+		PEXT(&chunk->chunk));
+	for (i = 0; i < chunk->mirror_count; i++)
+		fprintf(stdout, "Mirror %u:\t%#lx\n",
+			chunk->mirror_id[i], crc[i]);
+	fprintf(stdout, "\n");
+}
+
+/**
+ * filter_mirror_id() - Filter specified mirror ids.
+ * @chunks:      Array of chunks.
+ * @chunk_count: Number of chunks in @chunks array.
+ * @mirror_ids:  Specified mirror ids to be verified.
+ * @ids_nr:      Number of specified mirror ids.
+ *
+ * This function scans valid mirror ids that cover each chunk in @chunks
+ * and filters specified mirror ids.
+ *
+ * Return: void.
+ */
+static inline
+void filter_mirror_id(struct verify_chunk *chunks, int chunk_count,
+		      __u16 *mirror_ids, int ids_nr)
+{
+	int i;
+	int j;
+	int k;
+	__u16 valid_id[LUSTRE_MIRROR_COUNT_MAX] = { 0 };
+	unsigned int valid_count = 0;
+
+	for (i = 0; i < chunk_count; i++) {
+		if (chunks[i].mirror_count == 0)
+			continue;
+
+		valid_count = 0;
+		for (j = 0; j < ids_nr; j++) {
+			for (k = 0; k < chunks[i].mirror_count; k++) {
+				if (chunks[i].mirror_id[k] == mirror_ids[j]) {
+					valid_id[valid_count] = mirror_ids[j];
+					valid_count++;
+					break;
+				}
+			}
+		}
+
+		memcpy(chunks[i].mirror_id, valid_id,
+		       sizeof(__u16) * valid_count);
+		chunks[i].mirror_count = valid_count;
+	}
+}
+
+/**
+ * lfs_mirror_prepare_chunk() - Find mirror chunks to be verified.
+ * @layout:      Mirror component list.
+ * @chunks:      Array of chunks.
+ * @chunks_size: Array size of @chunks.
+ *
+ * This function scans the components in @layout from offset 0 to LUSTRE_EOF
+ * to find out chunk segments and store them in @chunks array.
+ *
+ * The @mirror_id array in each element of @chunks will store the valid
+ * mirror ids that cover the chunk. If a mirror component covering the
+ * chunk has LCME_FL_STALE or LCME_FL_OFFLINE flag, then the mirror id
+ * will not be stored into the @mirror_id array, and the chunk for that
+ * mirror will not be verified.
+ *
+ * The @mirror_count in each element of @chunks will store the number of
+ * mirror ids in @mirror_id array. If @mirror_count is 0, it indicates the
+ * chunk is invalid in all of the mirrors. And if @mirror_count is 1, it
+ * indicates the chunk is valid in only one mirror. In both cases, the
+ * chunk will not be verified.
+ *
+ * Here is an example:
+ *
+ *  0      1M     2M     3M     4M           EOF
+ *  +------+-------------+--------------------+
+ *  |      |             |      S             |       mirror1
+ *  +------+------+------+------+-------------+
+ *  |             |   S  |   S  |             |       mirror2
+ *  +-------------+------+------+-------------+
+ *
+ * prepared @chunks array will contain 5 elements:
+ * (([0, 1M), [1, 2], 2),
+ *  ([1M, 2M), [1, 2], 2),
+ *  ([2M, 3M), [1], 1),
+ *  ([3M, 4M], [], 0),
+ *  ([4M, EOF), [2], 1))
+ *
+ * Return: the actual array size of @chunks on success
+ *	   or a negative error code on failure.
+ */
+static inline
+int lfs_mirror_prepare_chunk(struct llapi_layout *layout,
+			     struct verify_chunk *chunks,
+			     size_t chunks_size)
+{
+	uint64_t start;
+	uint64_t end;
+	uint32_t mirror_id;
+	uint32_t flags;
+	int idx = 0;
+	int i = 0;
+	int rc = 0;
+
+	memset(chunks, 0, sizeof(*chunks) * chunks_size);
+
+	while (1) {
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+		if (rc < 0) {
+			fprintf(stderr,
+				"%s: move to the first layout component: %s.\n",
+				progname, strerror(errno));
+			goto error;
+		}
+
+		i = 0;
+		rc = 0;
+		chunks[idx].chunk.e_end = LUSTRE_EOF;
+		while (rc == 0) {
+			rc = llapi_layout_comp_extent_get(layout, &start, &end);
+			if (rc < 0) {
+				fprintf(stderr,
+					"%s: llapi_layout_comp_extent_get failed: %s.\n",
+					progname, strerror(errno));
+				goto error;
+			}
+
+			if (start > chunks[idx].chunk.e_start ||
+			    end <= chunks[idx].chunk.e_start)
+				goto next;
+
+			if (end < chunks[idx].chunk.e_end)
+				chunks[idx].chunk.e_end = end;
+
+			rc = llapi_layout_comp_flags_get(layout, &flags);
+			if (rc < 0) {
+				fprintf(stderr,
+					"%s: llapi_layout_comp_flags_get failed: %s.\n",
+					progname, strerror(errno));
+				goto error;
+			}
+
+			if (flags & LCME_FL_STALE || flags & LCME_FL_OFFLINE)
+				goto next;
+
+			rc = llapi_layout_mirror_id_get(layout, &mirror_id);
+			if (rc < 0) {
+				fprintf(stderr,
+					"%s: llapi_layout_mirror_id_get failed: %s.\n",
+					progname, strerror(errno));
+				goto error;
+			}
+
+			chunks[idx].mirror_id[i] = mirror_id;
+			i++;
+			if (i >= ARRAY_SIZE(chunks[idx].mirror_id)) {
+				fprintf(stderr,
+					"%s: mirror_id array is too small.\n",
+					progname);
+				rc = -EINVAL;
+				goto error;
+			}
+
+		next:
+			rc = llapi_layout_comp_use(layout,
+						   LLAPI_LAYOUT_COMP_USE_NEXT);
+			if (rc < 0) {
+				fprintf(stderr,
+					"%s: move to the next layout component: %s.\n",
+					progname, strerror(errno));
+				goto error;
+			}
+		} /* loop through all components */
+
+		chunks[idx].mirror_count = i;
+
+		if (chunks[idx].chunk.e_end == LUSTRE_EOF)
+			break;
+
+		idx++;
+		if (idx >= chunks_size) {
+			fprintf(stderr, "%s: chunks array is too small.\n",
+				progname);
+			rc = -EINVAL;
+			goto error;
+		}
+
+		chunks[idx].chunk.e_start = chunks[idx - 1].chunk.e_end;
+	}
+
+error:
+	return rc < 0 ? rc : idx + 1;
+}
+
+/**
+ * lfs_mirror_verify_chunk() - Verify a chunk.
+ * @fd:        File descriptor of the mirrored file.
+ * @file_size: Size of the mirrored file.
+ * @chunk:     A chunk and its corresponding valid mirror ids.
+ * @verbose:   Verbose mode.
+ *
+ * This function verifies a @chunk contains exactly the same data
+ * ammong the mirrors that cover it.
+ *
+ * If @verbose is specified, then the function will print where the
+ * differences are if the data do not match. Otherwise, it will
+ * just return an error in that case.
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+static inline
+int lfs_mirror_verify_chunk(int fd, size_t file_size,
+			    struct verify_chunk *chunk, int verbose)
+{
+	const size_t buflen = 4 * 1024 * 1024; /* 4M */
+	void *buf;
+	size_t page_size = sysconf(_SC_PAGESIZE);
+	ssize_t bytes_read;
+	ssize_t bytes_done;
+	size_t count;
+	off_t pos;
+	unsigned long crc;
+	unsigned long crc_array[LUSTRE_MIRROR_COUNT_MAX] = { 0 };
+	int i;
+	int rc = 0;
+
+	if (file_size == 0)
+		return 0;
+
+	rc = posix_memalign(&buf, page_size, buflen);
+	if (rc) /* error code is returned directly */
+		return -rc;
+
+	if (verbose > 1) {
+		fprintf(stdout, "Verifying chunk "DEXT" on mirror:",
+			PEXT(&chunk->chunk));
+		for (i = 0; i < chunk->mirror_count; i++)
+			fprintf(stdout, " %u", chunk->mirror_id[i]);
+		fprintf(stdout, "\n");
+	}
+
+	bytes_done = 0;
+	count = MIN(chunk->chunk.e_end, file_size) - chunk->chunk.e_start;
+	pos = chunk->chunk.e_start;
+	while (bytes_done < count) {
+		/* compute initial CRC-32 checksum */
+		crc = crc32(0L, Z_NULL, 0);
+		memset(crc_array, 0, sizeof(crc_array));
+
+		bytes_read = 0;
+		for (i = 0; i < chunk->mirror_count; i++) {
+			bytes_read = llapi_mirror_read(fd, chunk->mirror_id[i],
+						       buf, buflen, pos);
+			if (bytes_read < 0) {
+				rc = bytes_read;
+				fprintf(stderr,
+					"%s: failed to read data from mirror %u: %s.\n",
+					progname, chunk->mirror_id[i],
+					strerror(-rc));
+				goto error;
+			}
+
+			/* compute new CRC-32 checksum */
+			crc_array[i] = crc32(crc, buf, bytes_read);
+		}
+
+		if (verbose)
+			print_checksums(chunk, crc_array);
+
+		/* compare CRC-32 checksum values */
+		for (i = 1; i < chunk->mirror_count; i++) {
+			if (crc_array[i] != crc_array[0]) {
+				rc = -EINVAL;
+				if (!verbose)
+					goto error;
+
+				fprintf(stderr,
+					"%s: chunk "DEXT" has different checksum value on mirror %u and mirror %u.\n",
+					progname, PEXT(&chunk->chunk),
+					chunk->mirror_id[0],
+					chunk->mirror_id[i]);
+			}
+		}
+
+		pos += bytes_read;
+		bytes_done += bytes_read;
+	}
+
+	if (verbose > 1 && rc == 0) {
+		fprintf(stdout, "Verifying chunk "DEXT" on mirror:",
+			PEXT(&chunk->chunk));
+		for (i = 0; i < chunk->mirror_count; i++)
+			fprintf(stdout, " %u", chunk->mirror_id[i]);
+		fprintf(stdout, " PASS\n\n");
+	}
+
+error:
+	free(buf);
+	return rc;
+}
+
+/**
+ * lfs_mirror_verify_file() - Verify a mirrored file.
+ * @fname:      Mirrored file name.
+ * @mirror_ids: Specified mirror ids to be verified.
+ * @ids_nr:     Number of specified mirror ids.
+ * @verbose:    Verbose mode.
+ *
+ * This function verifies that each SYNC mirror of a mirrored file
+ * specified by @fname contains exactly the same data.
+ *
+ * If @mirror_ids is specified, then the function will verify the
+ * mirrors specified by @mirror_ids contain exactly the same data.
+ *
+ * If @verbose is specified, then the function will print where the
+ * differences are if the data do not match. Otherwise, it will
+ * just return an error in that case.
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+static inline
+int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
+			   int verbose)
+{
+	struct verify_chunk chunks_array[1024] = { };
+	struct llapi_layout *layout = NULL;
+	struct stat stbuf;
+	uint32_t flr_state;
+	int fd;
+	int chunk_count = 0;
+	int idx = 0;
+	int rc = 0;
+	int rc1 = 0;
+	int rc2 = 0;
+
+	if (stat(fname, &stbuf) < 0) {
+		fprintf(stderr, "%s: cannot stat file '%s': %s.\n",
+			progname, fname, strerror(errno));
+		rc = -errno;
+		goto error;
+	}
+
+	if (!S_ISREG(stbuf.st_mode)) {
+		fprintf(stderr, "%s: '%s' is not a regular file.\n",
+			progname, fname);
+		rc = -EINVAL;
+		goto error;
+	}
+
+	if (stbuf.st_size == 0) {
+		if (verbose)
+			fprintf(stdout, "%s: '%s' file size is 0.\n",
+				progname, fname);
+		rc = 0;
+		goto error;
+	}
+
+	fd = open(fname, O_DIRECT | O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "%s: cannot open '%s': %s.\n",
+			progname, fname, strerror(errno));
+		rc = -errno;
+		goto error;
+	}
+
+	rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
+	if (rc < 0) {
+		fprintf(stderr, "%s: '%s' llapi_lease_get failed: %s.\n",
+			progname, fname, strerror(errno));
+		goto close_fd;
+	}
+
+	layout = llapi_layout_get_by_fd(fd, 0);
+	if (layout == NULL) {
+		fprintf(stderr, "%s: '%s' llapi_layout_get_by_fd failed: %s.\n",
+			progname, fname, strerror(errno));
+		rc = -errno;
+		llapi_lease_put(fd);
+		goto close_fd;
+	}
+
+	rc = llapi_layout_flags_get(layout, &flr_state);
+	if (rc < 0) {
+		fprintf(stderr, "%s: '%s' llapi_layout_flags_get failed: %s.\n",
+			progname, fname, strerror(errno));
+		rc = -errno;
+		goto free_layout;
+	}
+
+	flr_state &= LCM_FL_FLR_MASK;
+	switch (flr_state) {
+	case LCM_FL_NOT_FLR:
+		rc = -EINVAL;
+		fprintf(stderr, "%s: '%s' file state error: %s.\n",
+			progname, fname, lcm_flags_string(flr_state));
+		goto free_layout;
+	default:
+		break;
+	}
+
+	/* find out mirror chunks to be verified */
+	chunk_count = lfs_mirror_prepare_chunk(layout, chunks_array,
+					       ARRAY_SIZE(chunks_array));
+	if (chunk_count < 0) {
+		rc = chunk_count;
+		goto free_layout;
+	}
+
+	if (ids_nr > 0)
+		/* filter specified mirror ids */
+		filter_mirror_id(chunks_array, chunk_count, mirror_ids, ids_nr);
+
+	if (verbose > 2)
+		print_chunks(fname, chunks_array, chunk_count);
+
+	for (idx = 0; idx < chunk_count; idx++) {
+		if (chunks_array[idx].chunk.e_start >= stbuf.st_size) {
+			if (verbose)
+				fprintf(stdout,
+					"%s: '%s' chunk "DEXT" exceeds file size %#llx: skipped\n",
+					progname, fname,
+					PEXT(&chunks_array[idx].chunk),
+					(unsigned long long)stbuf.st_size);
+			break;
+		}
+
+		if (chunks_array[idx].mirror_count == 0) {
+			fprintf(stderr,
+				"%s: '%s' chunk "DEXT" is invalid in all of the mirrors: ",
+				progname, fname,
+				PEXT(&chunks_array[idx].chunk));
+			if (verbose) {
+				fprintf(stderr, "skipped\n");
+				continue;
+			}
+			rc = -EINVAL;
+			fprintf(stderr, "failed\n");
+			goto free_layout;
+		}
+
+		if (chunks_array[idx].mirror_count == 1) {
+			if (verbose)
+				fprintf(stdout,
+					"%s: '%s' chunk "DEXT" is only valid in mirror %u: skipped\n",
+					progname, fname,
+					PEXT(&chunks_array[idx].chunk),
+					chunks_array[idx].mirror_id[0]);
+			continue;
+		}
+
+		rc = llapi_lease_check(fd);
+		if (rc != LL_LEASE_RDLCK) {
+			fprintf(stderr, "%s: '%s' lost lease lock.\n",
+				progname, fname);
+			goto free_layout;
+		}
+
+		/* verify one chunk */
+		rc1 = lfs_mirror_verify_chunk(fd, stbuf.st_size,
+					      &chunks_array[idx], verbose);
+		if (rc1 < 0) {
+			rc2 = rc1;
+			if (!verbose) {
+				rc = rc1;
+				goto free_layout;
+			}
+		}
+	}
+
+	if (rc2 < 0)
+		rc = rc2;
+
+free_layout:
+	llapi_layout_free(layout);
+	llapi_lease_put(fd);
+close_fd:
+	close(fd);
+error:
+	return rc;
+}
+
+/**
+ * lfs_mirror_verify() - Parse and execute lfs mirror verify command.
+ * @argc: The count of lfs mirror verify command line arguments.
+ * @argv: Array of strings for lfs mirror verify command line arguments.
+ *
+ * This function parses lfs mirror verify command and verifies the
+ * specified mirrored file(s).
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+static inline int lfs_mirror_verify(int argc, char **argv)
+{
+	__u16 mirror_ids[LUSTRE_MIRROR_COUNT_MAX] = { 0 };
+	int ids_nr = 0;
+	int c;
+	int verbose = 0;
+	int rc = 0;
+	int rc1 = 0;
+	char cmd[PATH_MAX];
+
+	struct option long_opts[] = {
+	{ .val = 'o',	.name = "only",		.has_arg = required_argument },
+	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
+	{ .name = NULL } };
+
+	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
+	progname = cmd;
+	while ((c = getopt_long(argc, argv, "o:v", long_opts, NULL)) >= 0) {
+		switch (c) {
+		case 'o':
+			rc = parse_mirror_ids(mirror_ids,
+					      ARRAY_SIZE(mirror_ids),
+					      optarg);
+			if (rc < 0) {
+				fprintf(stderr,
+					"%s: bad mirror ids '%s'.\n",
+					progname, optarg);
+				goto error;
+			}
+			ids_nr = rc;
+			if (ids_nr < 2) {
+				fprintf(stderr,
+					"%s: at least 2 mirror ids needed with '--only' option.\n",
+					progname);
+				rc = CMD_HELP;
+				goto error;
+			}
+			break;
+		case 'v':
+			verbose++;
+			break;
+		default:
+			fprintf(stderr, "%s: options '%s' unrecognized.\n",
+				progname, argv[optind - 1]);
+			rc = -EINVAL;
+			goto error;
+		}
+	}
+
+	if (argc == optind) {
+		fprintf(stderr, "%s: no file name given.\n", progname);
+		rc = CMD_HELP;
+		goto error;
+	}
+
+	if (ids_nr > 0 && argc > optind + 1) {
+		fprintf(stderr,
+			"%s: '--only' cannot be used upon multiple files.\n",
+			progname);
+		rc = CMD_HELP;
+		goto error;
+
+	}
+
+	if (ids_nr > 0) {
+		rc = verify_mirror_ids(argv[optind], mirror_ids, ids_nr);
+		if (rc < 0)
+			goto error;
+	}
+
+	rc = 0;
+	for (; optind < argc; optind++) {
+		rc1 = lfs_mirror_verify_file(argv[optind], mirror_ids, ids_nr,
+					     verbose);
+		if (rc1 < 0)
+			rc = rc1;
+	}
 error:
 	return rc;
 }
