@@ -13,11 +13,6 @@
  * General Public License version 2 for more details (a copy is included
  * in the LICENSE file that accompanied this code).
  *
- * You should have received a copy of the GNU General Public License
- * version 2 along with this program; if not, write to the
- * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
- * Boston, MA 021110-1307, USA
- *
  * GPL HEADER END
  */
 /*
@@ -39,14 +34,12 @@
 #include <libcfs/libcfs.h>
 
 /** Global CPU partition table */
-struct cfs_cpt_table *cfs_cpt_table __read_mostly = NULL;
+struct cfs_cpt_table *cfs_cpt_table __read_mostly;
 EXPORT_SYMBOL(cfs_cpt_table);
 
-#ifndef HAVE_LIBCFS_CPT
+#ifndef CONFIG_SMP
 
-#define CFS_CPU_VERSION_MAGIC           0xbabecafe
-
-#define CFS_CPT_DISTANCE		1	/* Arbitrary positive value */
+#define CFS_CPT_DISTANCE	1	/* Arbitrary positive value */
 
 struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 {
@@ -58,11 +51,9 @@ struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 	}
 
 	LIBCFS_ALLOC(cptab, sizeof(*cptab));
-	if (cptab != NULL) {
-		cptab->ctb_version = CFS_CPU_VERSION_MAGIC;
-		cpu_set(0, cptab->ctb_cpumask);
+	if (cptab) {
+		cpumask_set_cpu(0, cptab->ctb_cpumask);
 		node_set(0, cptab->ctb_nodemask);
-		cptab->ctb_nparts  = ncpt;
 	}
 
 	return cptab;
@@ -71,15 +62,13 @@ EXPORT_SYMBOL(cfs_cpt_table_alloc);
 
 void cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 {
-	LASSERT(cptab->ctb_version == CFS_CPU_VERSION_MAGIC);
-
 	LIBCFS_FREE(cptab, sizeof(*cptab));
 }
 EXPORT_SYMBOL(cfs_cpt_table_free);
 
 int cfs_cpt_table_print(struct cfs_cpt_table *cptab, char *buf, int len)
 {
-	int rc = 0;
+	int rc;
 
 	rc = snprintf(buf, len, "%d\t: %d\n", 0, 0);
 	len -= rc;
@@ -92,9 +81,9 @@ EXPORT_SYMBOL(cfs_cpt_table_print);
 
 int cfs_cpt_distance_print(struct cfs_cpt_table *cptab, char *buf, int len)
 {
-	int	rc = 0;
+	int rc;
 
-	rc = snprintf(buf, len, "%d\t: %d:%d\n", 0, CFS_CPT_DISTANCE);
+	rc = snprintf(buf, len, "0\t: 0:%d\n", CFS_CPT_DISTANCE);
 	len -= rc;
 	if (len <= 0)
 		return -EFBIG;
@@ -123,7 +112,7 @@ EXPORT_SYMBOL(cfs_cpt_online);
 
 cpumask_t *cfs_cpt_cpumask(struct cfs_cpt_table *cptab, int cpt)
 {
-	return &cptab->ctb_mask;
+	return &cptab->ctb_cpumask;
 }
 EXPORT_SYMBOL(cfs_cpt_cpumask);
 
@@ -133,7 +122,7 @@ nodemask_t *cfs_cpt_nodemask(struct cfs_cpt_table *cptab, int cpt)
 }
 EXPORT_SYMBOL(cfs_cpt_nodemask);
 
-unsigned cfs_cpt_distance(struct cfs_cpt_table *cptab, int cpt1, int cpt2)
+unsigned int cfs_cpt_distance(struct cfs_cpt_table *cptab, int cpt1, int cpt2)
 {
 	return CFS_CPT_DISTANCE;
 }
@@ -219,7 +208,7 @@ EXPORT_SYMBOL(cfs_cpt_bind);
 
 void cfs_cpu_fini(void)
 {
-	if (cfs_cpt_table != NULL) {
+	if (cfs_cpt_table) {
 		cfs_cpt_table_free(cfs_cpt_table);
 		cfs_cpt_table = NULL;
 	}
@@ -229,7 +218,7 @@ int cfs_cpu_init(void)
 {
 	cfs_cpt_table = cfs_cpt_table_alloc(1);
 
-	return cfs_cpt_table != NULL ? 0 : -1;
+	return cfs_cpt_table ? 0 : -1;
 }
 
-#endif /* HAVE_LIBCFS_CPT */
+#endif /* !CONFIG_SMP */
