@@ -4113,48 +4113,50 @@ out_req:
 	RETURN(rc);
 }
 
-int ll_migrate(struct inode *parent, struct file *file, int mdtidx,
-	       const char *name, int namelen)
+int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
+	       const char *name)
 {
-	struct dentry         *dchild = NULL;
-	struct inode          *child_inode = NULL;
-	struct md_op_data     *op_data;
+	struct dentry *dchild = NULL;
+	struct inode *child_inode = NULL;
+	struct md_op_data *op_data;
 	struct ptlrpc_request *request = NULL;
 	struct obd_client_handle *och = NULL;
-	struct qstr           qstr;
-	struct mdt_body		*body;
-	int                    rc;
-	__u64			data_version = 0;
+	struct qstr qstr;
+	struct mdt_body	*body;
+	__u64 data_version = 0;
+	size_t namelen = strlen(name);
+	int lumlen = lmv_user_md_size(lum->lum_stripe_count, lum->lum_magic);
+	int rc;
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "migrate %s under "DFID" to MDT%04x\n",
-	       name, PFID(ll_inode2fid(parent)), mdtidx);
+	CDEBUG(D_VFSTRACE, "migrate "DFID"/%s to MDT%04x stripe count %d\n",
+	       PFID(ll_inode2fid(parent)), name,
+	       lum->lum_stripe_offset, lum->lum_stripe_count);
 
-	op_data = ll_prep_md_op_data(NULL, parent, NULL, name, namelen,
-				     0, LUSTRE_OPC_ANY, NULL);
-	if (IS_ERR(op_data))
-		RETURN(PTR_ERR(op_data));
+	if (lum->lum_magic != cpu_to_le32(LMV_USER_MAGIC) &&
+	    lum->lum_magic != cpu_to_le32(LMV_USER_MAGIC_SPECIFIC))
+		lustre_swab_lmv_user_md(lum);
 
 	/* Get child FID first */
 	qstr.hash = ll_full_name_hash(file_dentry(file), name, namelen);
 	qstr.name = name;
 	qstr.len = namelen;
 	dchild = d_lookup(file_dentry(file), &qstr);
-	if (dchild != NULL) {
-		if (dchild->d_inode != NULL)
+	if (dchild) {
+		if (dchild->d_inode)
 			child_inode = igrab(dchild->d_inode);
 		dput(dchild);
 	}
 
-	if (child_inode == NULL) {
-		rc = ll_get_fid_by_name(parent, name, namelen,
-					&op_data->op_fid3, &child_inode);
-		if (rc != 0)
-			GOTO(out_free, rc);
+	if (!child_inode) {
+		rc = ll_get_fid_by_name(parent, name, namelen, NULL,
+					&child_inode);
+		if (rc)
+			RETURN(rc);
 	}
 
-	if (child_inode == NULL)
-		GOTO(out_free, rc = -EINVAL);
+	if (!child_inode)
+		RETURN(-ENOENT);
 
 	/*
 	 * lfs migrate command needs to be blocked on the client
@@ -4163,6 +4165,11 @@ int ll_migrate(struct inode *parent, struct file *file, int mdtidx,
 	 */
 	if (child_inode == parent->i_sb->s_root->d_inode)
 		GOTO(out_iput, rc = -EINVAL);
+
+	op_data = ll_prep_md_op_data(NULL, parent, NULL, name, namelen,
+				     child_inode->i_mode, LUSTRE_OPC_ANY, NULL);
+	if (IS_ERR(op_data))
+		GOTO(out_iput, rc = PTR_ERR(op_data));
 
 	inode_lock(child_inode);
 	op_data->op_fid3 = *ll_inode2fid(child_inode);
@@ -4173,15 +4180,10 @@ int ll_migrate(struct inode *parent, struct file *file, int mdtidx,
 		GOTO(out_unlock, rc = -EINVAL);
 	}
 
-	rc = ll_get_mdt_idx_by_fid(ll_i2sbi(parent), &op_data->op_fid3);
-	if (rc < 0)
-		GOTO(out_unlock, rc);
+	op_data->op_cli_flags |= CLI_MIGRATE | CLI_SET_MEA;
+	op_data->op_data = lum;
+	op_data->op_data_size = lumlen;
 
-	if (rc == mdtidx) {
-		CDEBUG(D_INFO, "%s: "DFID" is already on MDT%04x\n", name,
-		       PFID(&op_data->op_fid3), mdtidx);
-		GOTO(out_unlock, rc = 0);
-	}
 again:
 	if (S_ISREG(child_inode->i_mode)) {
 		och = ll_lease_open(child_inode, NULL, FMODE_WRITE, 0);
@@ -4197,16 +4199,17 @@ again:
 			GOTO(out_close, rc);
 
 		op_data->op_handle = och->och_fh;
-		op_data->op_data = och->och_mod;
 		op_data->op_data_version = data_version;
 		op_data->op_lease_handle = och->och_lease_handle;
-		op_data->op_bias |= MDS_RENAME_MIGRATE;
+		op_data->op_bias |= MDS_CLOSE_MIGRATE;
+
+		spin_lock(&och->och_mod->mod_open_req->rq_lock);
+		och->och_mod->mod_open_req->rq_replay = 0;
+		spin_unlock(&och->och_mod->mod_open_req->rq_lock);
 	}
 
-	op_data->op_mds = mdtidx;
-	op_data->op_cli_flags = CLI_MIGRATE;
-	rc = md_rename(ll_i2sbi(parent)->ll_md_exp, op_data, name,
-		       namelen, name, namelen, &request);
+	rc = md_rename(ll_i2sbi(parent)->ll_md_exp, op_data, name, namelen,
+		       name, namelen, &request);
 	if (rc == 0) {
 		LASSERT(request != NULL);
 		ll_update_times(request, parent);
@@ -4216,8 +4219,7 @@ again:
 
 		/* If the server does release layout lock, then we cleanup
 		 * the client och here, otherwise release it in out_close: */
-		if (och != NULL &&
-		    body->mbo_valid & OBD_MD_CLOSE_INTENT_EXECED) {
+		if (och && body->mbo_valid & OBD_MD_CLOSE_INTENT_EXECED) {
 			obd_mod_put(och->och_mod);
 			md_clear_open_replay_data(ll_i2sbi(parent)->ll_md_exp,
 						  och);
@@ -4237,16 +4239,15 @@ again:
 		goto again;
 
 out_close:
-	if (och != NULL) /* close the file */
+	if (och)
 		ll_lease_close(och, child_inode, NULL);
-	if (rc == 0)
+	if (!rc)
 		clear_nlink(child_inode);
 out_unlock:
 	inode_unlock(child_inode);
+	ll_finish_md_op_data(op_data);
 out_iput:
 	iput(child_inode);
-out_free:
-	ll_finish_md_op_data(op_data);
 	RETURN(rc);
 }
 

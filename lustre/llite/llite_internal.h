@@ -857,8 +857,8 @@ int ll_set_acl(struct inode *inode, struct posix_acl *acl, int type);
 #endif /* CONFIG_FS_POSIX_ACL */
 
 #endif
-int ll_migrate(struct inode *parent, struct file *file, int mdtidx,
-	       const char *name, int namelen);
+int ll_migrate(struct inode *parent, struct file *file,
+	       struct lmv_user_md *lum, const char *name);
 int ll_get_fid_by_name(struct inode *parent, const char *name,
 		       int namelen, struct lu_fid *fid, struct inode **inode);
 #ifdef HAVE_GENERIC_PERMISSION_4ARGS

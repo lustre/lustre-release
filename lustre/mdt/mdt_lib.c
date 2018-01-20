@@ -1398,6 +1398,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 	struct lu_attr *attr = &info->mti_attr.ma_attr;
 	struct mdt_reint_record *rr = &info->mti_rr;
 	struct req_capsule *pill = info->mti_pill;
+	struct md_op_spec *spec = &info->mti_spec;
 	int rc;
 
 	ENTRY;
@@ -1432,15 +1433,35 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 	if (rc < 0)
 		RETURN(rc);
 
-	if (rec->rn_bias & MDS_RENAME_MIGRATE) {
+	if (rec->rn_bias & MDS_CLOSE_MIGRATE) {
 		req_capsule_extend(info->mti_pill, &RQF_MDS_REINT_MIGRATE);
 		rc = mdt_close_handle_unpack(info);
-		if (rc < 0)
+		if (rc)
 			RETURN(rc);
-		info->mti_spec.sp_migrate_close = 1;
+
+		spec->sp_migrate_close = 1;
 	}
 
-	info->mti_spec.no_create = !!req_is_replay(mdt_info_req(info));
+	/* lustre version > 2.11 migration packs lum */
+	if (req_capsule_has_field(pill, &RMF_EADATA, RCL_CLIENT)) {
+		if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
+			rr->rr_eadatalen = req_capsule_get_size(pill,
+								&RMF_EADATA,
+								RCL_CLIENT);
+			if (rr->rr_eadatalen > 0) {
+				rr->rr_eadata = req_capsule_client_get(pill,
+								&RMF_EADATA);
+				spec->u.sp_ea.eadatalen = rr->rr_eadatalen;
+				spec->u.sp_ea.eadata = rr->rr_eadata;
+				spec->sp_cr_flags |= MDS_OPEN_HAS_EA;
+			}
+		} else {
+			/* old client doesn't provide lum. */
+			RETURN(-EOPNOTSUPP);
+		}
+	}
+
+	spec->no_create = !!req_is_replay(mdt_info_req(info));
 
 	rc = mdt_dlmreq_unpack(info);
 

@@ -14,6 +14,8 @@ ALWAYS_EXCEPT="$SANITY_EXCEPT  42a     42b     42c     77k"
 
 # skipped tests: LU-8411 LU-9096 LU-9054 ..
 ALWAYS_EXCEPT="  407     253     312     $ALWAYS_EXCEPT"
+# skipped tests: LU-4684
+ALWAYS_EXCEPT="  17n 160d 230 316	$ALWAYS_EXCEPT"
 
 # Check Grants after these tests
 GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c"

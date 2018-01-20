@@ -731,8 +731,12 @@ struct lmv_user_md_v1 {
 
 static inline int lmv_user_md_size(int stripes, int lmm_magic)
 {
-	return sizeof(struct lmv_user_md) +
-		      stripes * sizeof(struct lmv_user_mds_data);
+	int size = sizeof(struct lmv_user_md);
+
+	if (lmm_magic == LMV_USER_MAGIC_SPECIFIC)
+		size += stripes * sizeof(struct lmv_user_mds_data);
+
+	return size;
 }
 
 struct ll_recreate_obj {

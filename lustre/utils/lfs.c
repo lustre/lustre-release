@@ -128,6 +128,7 @@ static inline int lfs_mirror_verify(int argc, char **argv);
 enum setstripe_origin {
 	SO_SETSTRIPE,
 	SO_MIGRATE,
+	SO_MIGRATE_MDT,
 	SO_MIRROR_CREATE,
 	SO_MIRROR_EXTEND,
 	SO_MIRROR_SPLIT,
@@ -530,9 +531,17 @@ command_t cmdlist[] = {
 	 "usage: swap_layouts <path1> <path2>"},
 	{"migrate", lfs_setstripe_migrate, 0,
 	 "migrate a directory between MDTs.\n"
-	 "usage: migrate --mdt-index <mdt_idx> [--verbose|-v] "
-	 "<directory>\n"
-	 "\tmdt_idx:      index of the destination MDT\n"
+	 "usage: migrate [--mdt|-m] <start_mdt_index>\n"
+	 "               [--mdt-count|-c] <stripe_count>\n"
+	 "		 [--mdt-hash|-H] <hash_type>\n"
+	 "		 [--verbose|-v]\n"
+	 "		 <directory>\n"
+	 "\tmdt:	MDTs to stripe over, if only one MDT is specified\n"
+	 "			it's the MDT index of first stripe\n"
+	 "\tmdt_count:	number of MDTs to stripe a directory over\n"
+	 "\tmdt_hash:	hash type of the striped directory. mdt types:\n"
+	 "			fnv_1a_64 FNV-1a hash algorithm (default)\n"
+	 "			all_char  sum of characters % MDT_COUNT\n"
 	 "\n"
 	 "migrate file objects from one OST "
 	 "layout\nto another (may be not safe with concurent writes).\n"
@@ -2532,12 +2541,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	char				*end;
 	int				 c;
 	int				 delete = 0;
-	char				*mdt_idx_arg = NULL;
 	unsigned long long		 size_units = 1;
 	bool				 migrate_mode = false;
+	bool				 migrate_mdt_mode = false;
 	bool				 migration_block = false;
 	__u64				 migration_flags = 0;
-	__u32				 osts[LOV_MAX_STRIPE_COUNT] = { 0 };
+	__u32				 tgts[LOV_MAX_STRIPE_COUNT] = { 0 };
 	int				 comp_del = 0, comp_set = 0;
 	int				 comp_add = 0;
 	__u32				 comp_id = 0;
@@ -2588,6 +2597,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			.name = "copy",		.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument},
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument},
+	{ .val = 'c',	.name = "mdt-count",	.has_arg = required_argument},
 /* find	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument }*/
 	{ .val = 'd',	.name = "delete",	.has_arg = no_argument},
 	{ .val = 'd',	.name = "destroy",	.has_arg = no_argument},
@@ -2600,7 +2610,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 /* find	{ .val = 'F',	.name = "fid",		.has_arg = no_argument }, */
 /* find	{ .val = 'g',	.name = "gid",		.has_arg = no_argument }, */
 /* find	{ .val = 'G',	.name = "group",	.has_arg = required_argument }*/
-/* dirstripe { .val = 'H', .name = "mdt-hash",  .has_arg = required_argument }*/
+	{ .val = 'H',	.name = "mdt-hash",	.has_arg = required_argument},
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = required_argument},
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument},
 	{ .val = 'I',	.name = "comp-id",	.has_arg = required_argument},
@@ -2640,8 +2650,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 	snprintf(cmd, sizeof(cmd), "%s %s", progname, argv[0]);
 	progname = cmd;
-	while ((c = getopt_long(argc, argv, "bc:dDE:f:i:I:m:N::no:p:L:s:S:vy:",
-				long_opts, NULL)) >= 0) {
+	while ((c = getopt_long(argc, argv,
+				"bc:dDE:f:H:i:I:m:N::no:p:L:s:S:vy:", long_opts,
+				NULL)) >= 0) {
 		switch (c) {
 		case 0:
 			/* Long options. */
@@ -2790,6 +2801,20 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				}
 			}
 			break;
+		case 'H':
+			if (!migrate_mode) {
+				fprintf(stderr, "--mdt-hash is valid only for migrate command\n");
+				return CMD_HELP;
+			}
+
+			lsa.lsa_pattern = check_hashtype(optarg);
+			if (lsa.lsa_pattern == 0) {
+				fprintf(stderr,
+					"%s %s: bad stripe hash type '%s'\n",
+					progname, argv[0], optarg);
+				return CMD_HELP;
+			}
+			break;
 		case 'i':
 			lsa.lsa_stripe_off = strtol(optarg, &end, 0);
 			if (*end != '\0') {
@@ -2862,11 +2887,24 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case 'm':
 			if (!migrate_mode) {
 				fprintf(stderr,
-					"%s %s: -m|--mdt-index valid only for migrate command\n",
+					"%s %s: -m|--mdt is valid only for migrate command\n",
 					progname, argv[0]);
 				goto usage_error;
 			}
-			mdt_idx_arg = optarg;
+			migrate_mdt_mode = true;
+			lsa.lsa_nr_tgts = parse_targets(tgts,
+						sizeof(tgts) / sizeof(__u32),
+						lsa.lsa_nr_tgts, optarg);
+			if (lsa.lsa_nr_tgts < 0) {
+				fprintf(stderr,
+					"%s %s: invalid MDT target(s) '%s'\n",
+					progname, argv[0], optarg);
+				return CMD_HELP;
+			}
+
+			lsa.lsa_tgts = tgts;
+			if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
+				lsa.lsa_stripe_off = tgts[0];
 			break;
 		case 'n':
 			if (!migrate_mode) {
@@ -2925,8 +2963,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				fprintf(stderr, "warning: '--ost-list' is "
 					"deprecated, use '--ost' instead\n");
 #endif
-			lsa.lsa_nr_tgts = parse_targets(osts,
-						sizeof(osts) / sizeof(__u32),
+			lsa.lsa_nr_tgts = parse_targets(tgts,
+						sizeof(tgts) / sizeof(__u32),
 						lsa.lsa_nr_tgts, optarg);
 			if (lsa.lsa_nr_tgts < 0) {
 				fprintf(stderr,
@@ -2935,9 +2973,9 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				goto usage_error;
 			}
 
-			lsa.lsa_tgts = osts;
+			lsa.lsa_tgts = tgts;
 			if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT)
-				lsa.lsa_stripe_off = osts[0];
+				lsa.lsa_stripe_off = tgts[0];
 			break;
 		case 'p':
 			if (optarg == NULL)
@@ -3110,13 +3148,6 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		goto error;
 	}
 
-	if (mdt_idx_arg != NULL && optind > 3) {
-		fprintf(stderr,
-			"%s %s: option -m cannot be used with other options\n",
-			progname, argv[0]);
-		goto usage_error;
-	}
-
 	if ((migration_flags & MIGRATION_NONBLOCK) && migration_block) {
 		fprintf(stderr,
 			"%s %s: options --non-block and --block are mutually exclusive\n",
@@ -3132,14 +3163,59 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		goto usage_error;
 	}
 
-	if (mdt_idx_arg != NULL) {
+	if (migrate_mdt_mode) {
+		struct lmv_user_md *lmu;
+
 		/* initialize migrate mdt parameters */
-		migrate_mdt_param.fp_mdt_index = strtoul(mdt_idx_arg, &end, 0);
-		if (*end != '\0') {
-			fprintf(stderr, "%s %s: invalid MDT index '%s'\n",
-				progname, argv[0], mdt_idx_arg);
+		lmu = calloc(1, lmv_user_md_size(lsa.lsa_nr_tgts,
+						 LMV_USER_MAGIC_SPECIFIC));
+		if (!lmu) {
+			fprintf(stderr,
+				"%s %s: cannot allocate memory for lmv_user_md: %s\n",
+				progname, argv[0], strerror(ENOMEM));
+			result = -ENOMEM;
+			goto error;
+		}
+		if (lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT)
+			lmu->lum_stripe_count = lsa.lsa_stripe_count;
+		if (lsa.lsa_stripe_off == LLAPI_LAYOUT_DEFAULT) {
+			fprintf(stderr,
+				"%s %s: migrate should specify MDT index\n",
+				progname, argv[0]);
+			free(lmu);
 			goto usage_error;
 		}
+		lmu->lum_stripe_offset = lsa.lsa_stripe_off;
+		if (lsa.lsa_pattern != LLAPI_LAYOUT_RAID0)
+			lmu->lum_hash_type = lsa.lsa_pattern;
+		else
+			lmu->lum_hash_type = LMV_HASH_TYPE_FNV_1A_64;
+		if (lsa.lsa_pool_name)
+			strncpy(lmu->lum_pool_name, lsa.lsa_pool_name,
+				sizeof(lmu->lum_pool_name));
+		if (lsa.lsa_nr_tgts > 1) {
+			int i;
+
+			if (lsa.lsa_stripe_count > 0 &&
+			    lsa.lsa_stripe_count != LLAPI_LAYOUT_DEFAULT &&
+			    lsa.lsa_stripe_count != lsa.lsa_nr_tgts) {
+				fprintf(stderr,
+					"error: %s: stripe count %lld doesn't match the number of MDTs: %d\n",
+					progname, lsa.lsa_stripe_count,
+						lsa.lsa_nr_tgts);
+				free(lmu);
+				goto usage_error;
+			}
+
+			lmu->lum_magic = LMV_USER_MAGIC_SPECIFIC;
+			lmu->lum_stripe_count = lsa.lsa_nr_tgts;
+			for (i = 0; i < lsa.lsa_nr_tgts; i++)
+				lmu->lum_objects[i].lum_mds = lsa.lsa_tgts[i];
+		} else {
+			lmu->lum_magic = LMV_USER_MAGIC;
+		}
+
+		migrate_mdt_param.fp_lmv_md = lmu;
 		migrate_mdt_param.fp_migrate = 1;
 	} else if (layout == NULL) {
 		/* initialize stripe parameters */
@@ -3182,15 +3258,15 @@ static int lfs_setstripe_internal(int argc, char **argv,
 
 			param->lsp_is_specific = true;
 			param->lsp_stripe_count = lsa.lsa_nr_tgts;
-			memcpy(param->lsp_osts, osts,
-			       sizeof(*osts) * lsa.lsa_nr_tgts);
+			memcpy(param->lsp_osts, tgts,
+			       sizeof(*tgts) * lsa.lsa_nr_tgts);
 		}
 	}
 
 	if (from_yaml) {
 		/* generate a layout from a YAML template */
 		result = lfs_comp_create_from_yaml(template, &layout,
-						   &lsa, osts);
+						   &lsa, tgts);
 		if (result) {
 			fprintf(stderr, "error: %s: can't create composite "
 				"layout from template file %s\n",
@@ -3208,7 +3284,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	}
 
 	for (fname = argv[optind]; fname != NULL; fname = argv[++optind]) {
-		if (mdt_idx_arg != NULL) {
+		if (migrate_mdt_mode) {
 			result = llapi_migrate_mdt(fname, &migrate_mdt_param);
 		} else if (migrate_mode) {
 			result = lfs_migrate(fname, migration_flags, param,
@@ -3267,6 +3343,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	}
 
 	free(param);
+	free(migrate_mdt_param.fp_lmv_md);
 	llapi_layout_free(layout);
 	lfs_mirror_list_free(mirror_list);
 	return result2;
@@ -5123,13 +5200,14 @@ static int lfs_rmentry(int argc, char **argv)
 
 static int lfs_mv(int argc, char **argv)
 {
-	struct  find_param param = {
+	struct lmv_user_md lmu = { LMV_USER_MAGIC };
+	struct find_param param = {
 		.fp_max_depth = -1,
 		.fp_mdt_index = -1,
 	};
-	char   *end;
-	int     c;
-	int     rc = 0;
+	char *end;
+	int c;
+	int rc = 0;
 	struct option long_opts[] = {
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
@@ -5143,7 +5221,7 @@ static int lfs_mv(int argc, char **argv)
 				", use '--mdt-index' or '-m' instead\n");
 #endif
 		case 'm':
-			param.fp_mdt_index = strtoul(optarg, &end, 0);
+			lmu.lum_stripe_offset = strtoul(optarg, &end, 0);
 			if (*end != '\0') {
 				fprintf(stderr, "%s mv: bad MDT index '%s'\n",
 					progname, optarg);
@@ -5160,7 +5238,7 @@ static int lfs_mv(int argc, char **argv)
 		}
 	}
 
-	if (param.fp_mdt_index == -1) {
+	if (lmu.lum_stripe_offset == -1) {
 		fprintf(stderr, "%s mv: MDT index must be specified\n",
 			progname);
 		return CMD_HELP;
@@ -5171,6 +5249,9 @@ static int lfs_mv(int argc, char **argv)
 		return CMD_HELP;
 	}
 
+
+	/* initialize migrate mdt parameters */
+	param.fp_lmv_md = &lmu;
 	param.fp_migrate = 1;
 	rc = llapi_migrate_mdt(argv[optind], &param);
 	if (rc != 0)

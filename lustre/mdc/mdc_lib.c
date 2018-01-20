@@ -451,7 +451,7 @@ static void mdc_close_intent_pack(struct ptlrpc_request *req,
 	struct ldlm_lock	*lock;
 	enum mds_op_bias	 bias = op_data->op_bias;
 
-	if (!(bias & (MDS_CLOSE_INTENT | MDS_RENAME_MIGRATE)))
+	if (!(bias & (MDS_CLOSE_INTENT | MDS_CLOSE_MIGRATE)))
 		return;
 
 	data = req_capsule_client_get(&req->rq_pill, &RMF_CLOSE_DATA);
@@ -498,29 +498,36 @@ void mdc_rename_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
 	/* XXX do something about time, uid, gid */
 	rec->rn_opcode  = op_data->op_cli_flags & CLI_MIGRATE ?
 					REINT_MIGRATE : REINT_RENAME;
-        rec->rn_fsuid    = op_data->op_fsuid;
-        rec->rn_fsgid    = op_data->op_fsgid;
-        rec->rn_cap      = op_data->op_cap;
-        rec->rn_suppgid1 = op_data->op_suppgids[0];
-        rec->rn_suppgid2 = op_data->op_suppgids[1];
-        rec->rn_fid1     = op_data->op_fid1;
-        rec->rn_fid2     = op_data->op_fid2;
-        rec->rn_time     = op_data->op_mod_time;
-        rec->rn_mode     = op_data->op_mode;
-        rec->rn_bias     = op_data->op_bias;
+	rec->rn_fsuid    = op_data->op_fsuid;
+	rec->rn_fsgid    = op_data->op_fsgid;
+	rec->rn_cap      = op_data->op_cap;
+	rec->rn_suppgid1 = op_data->op_suppgids[0];
+	rec->rn_suppgid2 = op_data->op_suppgids[1];
+	rec->rn_fid1     = op_data->op_fid1;
+	rec->rn_fid2     = op_data->op_fid2;
+	rec->rn_time     = op_data->op_mod_time;
+	rec->rn_mode     = op_data->op_mode;
+	rec->rn_bias     = op_data->op_bias;
 
 	mdc_pack_name(req, &RMF_NAME, old, oldlen);
 
 	if (new != NULL)
 		mdc_pack_name(req, &RMF_SYMTGT, new, newlen);
 
-	if (op_data->op_cli_flags & CLI_MIGRATE &&
-	    op_data->op_bias & MDS_RENAME_MIGRATE) {
-		struct mdt_ioepoch *epoch;
+	if (op_data->op_cli_flags & CLI_MIGRATE) {
+		char *tmp;
 
-		mdc_close_intent_pack(req, op_data);
-		epoch = req_capsule_client_get(&req->rq_pill, &RMF_MDT_EPOCH);
-		mdc_ioepoch_pack(epoch, op_data);
+		if (op_data->op_bias & MDS_CLOSE_MIGRATE) {
+			struct mdt_ioepoch *epoch;
+
+			mdc_close_intent_pack(req, op_data);
+			epoch = req_capsule_client_get(&req->rq_pill,
+							&RMF_MDT_EPOCH);
+			mdc_ioepoch_pack(epoch, op_data);
+		}
+
+		tmp = req_capsule_client_get(&req->rq_pill, &RMF_EADATA);
+		memcpy(tmp, op_data->op_data, op_data->op_data_size);
 	}
 }
 

@@ -281,7 +281,8 @@ static const struct req_msg_field *mds_reint_migrate_client[] = {
 	&RMF_SYMTGT,
 	&RMF_DLM_REQ,
 	&RMF_MDT_EPOCH,
-	&RMF_CLOSE_DATA
+	&RMF_CLOSE_DATA,
+	&RMF_EADATA
 };
 
 static const struct req_msg_field *mds_last_unlink_server[] = {

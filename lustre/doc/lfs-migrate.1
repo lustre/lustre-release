@@ -5,8 +5,8 @@ lfs migrate \- migrate files or directories between MDTs or OSTs.
 .B lfs migrate
 .RI [ SETSTRIPE_OPTIONS " ... ] <" file "> ..."
 .br
-.B lfs migrate -m mdt_idx
-.RB [ -v | --verbose ]
+.B lfs migrate -m \fIstart_mdt_index
+.RB [ -cHv ]
 .RI < directory >
 .br
 .SH DESCRIPTION
@@ -75,18 +75,42 @@ data between OSTs and has a separate man page.  See
 for details.
 .SH MDT MIGRATE OPTIONS
 .TP
-.RB -m , --mdt-index
-Causes the file metadata (inode) to be migrated to the MDT with index
-.IR mdt_idx .
-This is useful if new MDTs have been added to a filesystem and existing
-user or project directories should be migrated off old MDTs to balance
-the space usage and future metadata workload.
+.BR -m , --mdt-index=\fIstart_mdt_index\fR
+Directory will be migrated to MDTs starting with
+.I start_mdt_index
+, or specific MDTs if multiple MDTs are specified in a comma-seperated list.
+This is useful if new MDTs have been added to a filesystem and existing user or
+project directories should be migrated off old MDTs to balance the space usage
+and future metadata workload.
+.TP
+.BR -c , --mdt-count=\fICOUNT\fR
+Directory will be migrated to
+.I COUNT
+MDTs.
+.TP
+.BR -H , --mdt-hash=\fIHASH_TYPE\fR
+Use
+.I HASH_TYPE
+for the new layout.
+.RS 1.2i
+.TP
+.B fnv_1a_64
+Fowler-Noll-Vo (FNV-1a) hash algorithm.  This provides
+reasonably uniform, but not cryptographically strong,
+hashing of the filename. (default)
+.TP
+.B all_char
+Sum of ASCII characters modulo number of MDTs. This
+provides weak hashing of the filename, and is suitable
+for only testing or when the input is known to have
+perfectly uniform distribution (e.g. sequential numbers).
+.RE
 .P
-Migration of striped directories or individual files between MDTs is not
-currently supported. Only the root user can migrate directories.  Files that
-have been archived by HSM or are currently open are skipped by MDT inode
-migration. Access to files within the directory is blocked until migration is
-complete.
+Only the root user can migrate directories.  Files that have been archived by
+HSM or are currently opened will fail to migrate, user can run the same migrate
+command again to finish migration when files are ready.  Both inode and
+directory entry will be migrated.  During migration directory and sub files can
+be accessed like normal ones.
 .TP
 \fIWARNING\fR
 A migrated file or directory will have a new FID, and hence a new inode
@@ -94,6 +118,7 @@ number.  As a consequence, files archived by Lustre HSM that depend on
 the FID as the identifier in the HSM archive cannot currently be migrated.
 Having a new inode number may also cause backup tools to consider the
 migrated file(s) to be a new, and cause them to be backed up again.
+.P
 .SH EXAMPLES
 .TP
 .B $ lfs migrate -c 2 /mnt/lustre/file1
@@ -102,9 +127,9 @@ This migrates the file into a new layout with 2 stripes.
 .B $ lfs migrate -E 64M -c 1 -E 256M -c 4 -E -1 -c -1 /mnt/lustre/file1
 This migrates the file into a three component composite layout.
 .TP
-.B $ lfs migrate -m 0 ./testremote
+.B $ lfs migrate -m 0,2 ./testremote
 Move the inodes contained in directory ./testremote from their current
-MDT to the MDT with index 0.
+MDT to the MDT with index 0 and 2.
 .SH AUTHOR
 The lfs command is part of the Lustre filesystem.
 .SH SEE ALSO

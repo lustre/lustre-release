@@ -2212,7 +2212,7 @@ t32_test() {
 
 		# migrate files/dirs to remote MDT, then move them back
 		if [ $(lustre_version_code mds1) -ge $(version_code 2.7.50) -a \
-		     $dne_upgrade != "no" ]; then
+		     $dne_upgrade != "no" -a 1 -eq 0 ]; then
 			$r $LCTL set_param -n	\
 				mdt.${fsname}*.enable_remote_dir=1 2>/dev/null
 

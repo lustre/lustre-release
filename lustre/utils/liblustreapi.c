@@ -1002,7 +1002,7 @@ int llapi_dir_create(const char *name, mode_t mode,
 		     const struct llapi_stripe_param *param)
 {
 	struct lmv_user_md *lmu = NULL;
-	size_t lmu_size = sizeof(*lmu);
+	size_t lmu_size;
 	struct obd_ioctl_data data = { 0 };
 	char rawbuf[8192];
 	char *buf = rawbuf;
@@ -1016,9 +1016,10 @@ int llapi_dir_create(const char *name, mode_t mode,
 	if (rc)
 		return rc;
 
-	if (param->lsp_is_specific)
-		lmu_size = lmv_user_md_size(param->lsp_stripe_count,
-					    LMV_USER_MAGIC_SPECIFIC);
+	lmu_size = lmv_user_md_size(param->lsp_stripe_count,
+				    param->lsp_is_specific ?
+					 LMV_USER_MAGIC_SPECIFIC :
+					 LMV_USER_MAGIC);
 
 	lmu = calloc(1, lmu_size);
 	if (lmu == NULL)
@@ -1641,6 +1642,10 @@ static int common_param_init(struct find_param *param, char *path)
 	if (lum_size < 0)
 		return lum_size;
 
+	/* migrate has fp_lmv_md initialized outside */
+	if (param->fp_migrate)
+		return 0;
+
 	if (lum_size < PATH_MAX + 1)
 		lum_size = PATH_MAX + 1;
 
@@ -1656,25 +1661,27 @@ static int common_param_init(struct find_param *param, char *path)
 	param->fp_lmv_stripe_count = 256;
 	param->fp_lmv_md = calloc(1,
 				  lmv_user_md_size(param->fp_lmv_stripe_count,
-						   LMV_MAGIC_V1));
+						   LMV_USER_MAGIC_SPECIFIC));
 	if (param->fp_lmv_md == NULL) {
 		llapi_error(LLAPI_MSG_ERROR, -ENOMEM,
 			    "error: allocation of %d bytes for ioctl",
 			    lmv_user_md_size(param->fp_lmv_stripe_count,
-					     LMV_MAGIC_V1));
+					     LMV_USER_MAGIC_SPECIFIC));
 		return -ENOMEM;
 	}
 
 	param->fp_got_uuids = 0;
 	param->fp_obd_indexes = NULL;
 	param->fp_obd_index = OBD_NOT_FOUND;
-	if (!param->fp_migrate)
-		param->fp_mdt_index = OBD_NOT_FOUND;
+	param->fp_mdt_index = OBD_NOT_FOUND;
 	return 0;
 }
 
 static void find_param_fini(struct find_param *param)
 {
+	if (param->fp_migrate)
+		return;
+
 	if (param->fp_obd_indexes)
 		free(param->fp_obd_indexes);
 
@@ -1734,13 +1741,14 @@ again:
 
 		free(param->fp_lmv_md);
 		param->fp_lmv_stripe_count = stripe_count;
-		lmv_size = lmv_user_md_size(stripe_count, LMV_MAGIC_V1);
+		lmv_size = lmv_user_md_size(stripe_count,
+					    LMV_USER_MAGIC_SPECIFIC);
 		param->fp_lmv_md = malloc(lmv_size);
 		if (param->fp_lmv_md == NULL) {
 			llapi_error(LLAPI_MSG_ERROR, -ENOMEM,
 				    "error: allocation of %d bytes for ioctl",
 				    lmv_user_md_size(param->fp_lmv_stripe_count,
-						     LMV_MAGIC_V1));
+						     LMV_USER_MAGIC_SPECIFIC));
 			return -ENOMEM;
 		}
 		goto again;
@@ -4364,18 +4372,22 @@ out:
 static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
 			       void *param_data, struct dirent64 *de)
 {
-	struct find_param	*param = (struct find_param *)param_data;
-	DIR			*tmp_parent = parent;
-	char			raw[MAX_IOC_BUFLEN] = {'\0'};
-	char			*rawbuf = raw;
-	struct obd_ioctl_data	data = { 0 };
-	int			fd;
-	int			ret;
-	char			*path_copy;
-	char			*filename;
-	bool			retry = false;
+	struct find_param *param = (struct find_param *)param_data;
+	struct lmv_user_md *lmu = param->fp_lmv_md;
+	DIR *tmp_parent = parent;
+	char raw[MAX_IOC_BUFLEN] = {'\0'};
+	char *rawbuf = raw;
+	struct obd_ioctl_data data = { 0 };
+	int fd;
+	int ret;
+	char *path_copy;
+	char *filename;
+	bool retry = false;
 
 	if (parent == NULL && dirp == NULL)
+		return -EINVAL;
+
+	if (!lmu)
 		return -EINVAL;
 
 	if (dirp != NULL)
@@ -4396,10 +4408,12 @@ static int cb_migrate_mdt_init(char *path, DIR *parent, DIR **dirp,
 
 	path_copy = strdup(path);
 	filename = basename(path_copy);
+
 	data.ioc_inlbuf1 = (char *)filename;
 	data.ioc_inllen1 = strlen(filename) + 1;
-	data.ioc_inlbuf2 = (char *)&param->fp_mdt_index;
-	data.ioc_inllen2 = sizeof(param->fp_mdt_index);
+	data.ioc_inlbuf2 = (char *)lmu;
+	data.ioc_inllen2 = lmv_user_md_size(lmu->lum_stripe_count,
+					    lmu->lum_magic);
 	ret = llapi_ioctl_pack(&data, &rawbuf, sizeof(raw));
 	if (ret != 0) {
 		llapi_error(LLAPI_MSG_ERROR, ret,
@@ -4425,8 +4439,8 @@ migrate:
 			path, strerror(-ret), ret);
 		goto out;
 	} else if (param->fp_verbose & VERBOSE_DETAIL) {
-		fprintf(stdout, "migrate %s to MDT%d\n",
-			path, param->fp_mdt_index);
+		fprintf(stdout, "migrate %s to MDT%d stripe count %d\n",
+			path, lmu->lum_stripe_offset, lmu->lum_stripe_count);
 	}
 
 out:

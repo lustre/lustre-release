@@ -359,26 +359,27 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 		struct ptlrpc_request **request)
 {
 	struct list_head cancels = LIST_HEAD_INIT(cancels);
-        struct obd_device *obd = exp->exp_obd;
-        struct ptlrpc_request *req;
-        int count = 0, rc;
-        ENTRY;
+	struct obd_device *obd = exp->exp_obd;
+	struct ptlrpc_request *req;
+	int count = 0, rc;
 
-        if ((op_data->op_flags & MF_MDC_CANCEL_FID1) &&
-            (fid_is_sane(&op_data->op_fid1)))
-                count = mdc_resource_get_unused(exp, &op_data->op_fid1,
-                                                &cancels, LCK_EX,
-                                                MDS_INODELOCK_UPDATE);
-        if ((op_data->op_flags & MF_MDC_CANCEL_FID2) &&
-            (fid_is_sane(&op_data->op_fid2)))
-                count += mdc_resource_get_unused(exp, &op_data->op_fid2,
-                                                 &cancels, LCK_EX,
-                                                 MDS_INODELOCK_UPDATE);
-        if ((op_data->op_flags & MF_MDC_CANCEL_FID3) &&
-            (fid_is_sane(&op_data->op_fid3)))
-                count += mdc_resource_get_unused(exp, &op_data->op_fid3,
-                                                 &cancels, LCK_EX,
-                                                 MDS_INODELOCK_LOOKUP);
+	ENTRY;
+
+	if ((op_data->op_flags & MF_MDC_CANCEL_FID1) &&
+	    (fid_is_sane(&op_data->op_fid1)))
+		count = mdc_resource_get_unused(exp, &op_data->op_fid1,
+						&cancels, LCK_EX,
+						MDS_INODELOCK_UPDATE);
+	if ((op_data->op_flags & MF_MDC_CANCEL_FID2) &&
+	    (fid_is_sane(&op_data->op_fid2)))
+		count += mdc_resource_get_unused(exp, &op_data->op_fid2,
+						 &cancels, LCK_EX,
+						 MDS_INODELOCK_UPDATE);
+	if ((op_data->op_flags & MF_MDC_CANCEL_FID3) &&
+	    (fid_is_sane(&op_data->op_fid3)))
+		count += mdc_resource_get_unused(exp, &op_data->op_fid3,
+						 &cancels, LCK_EX,
+						 MDS_INODELOCK_LOOKUP);
 	if ((op_data->op_flags & MF_MDC_CANCEL_FID4) &&
 	    (fid_is_sane(&op_data->op_fid4)))
 		count += mdc_resource_get_unused(exp, &op_data->op_fid4,
@@ -393,8 +394,11 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 		RETURN(-ENOMEM);
 	}
 
-        req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT, oldlen + 1);
-        req_capsule_set_size(&req->rq_pill, &RMF_SYMTGT, RCL_CLIENT, newlen+1);
+	req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT, oldlen + 1);
+	req_capsule_set_size(&req->rq_pill, &RMF_SYMTGT, RCL_CLIENT, newlen+1);
+	if (op_data->op_cli_flags & CLI_MIGRATE)
+		req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
+				     op_data->op_data_size);
 
 	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
 	if (rc) {
@@ -402,36 +406,21 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 		RETURN(rc);
 	}
 
-	if (op_data->op_cli_flags & CLI_MIGRATE && op_data->op_data != NULL) {
-		struct md_open_data *mod = op_data->op_data;
+	if (exp_connect_cancelset(exp) && req)
+		ldlm_cli_cancel_list(&cancels, count, req, 0);
 
-		LASSERTF(mod->mod_open_req != NULL &&
-			 mod->mod_open_req->rq_type != LI_POISON,
-			 "POISONED open %p!\n", mod->mod_open_req);
-
-		DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
-		/* We no longer want to preserve this open for replay even
-		 * though the open was committed. b=3632, b=3633 */
-		spin_lock(&mod->mod_open_req->rq_lock);
-		mod->mod_open_req->rq_replay = 0;
-		spin_unlock(&mod->mod_open_req->rq_lock);
-	}
-
-        if (exp_connect_cancelset(exp) && req)
-                ldlm_cli_cancel_list(&cancels, count, req, 0);
-
-        mdc_rename_pack(req, op_data, old, oldlen, new, newlen);
+	mdc_rename_pack(req, op_data, old, oldlen, new, newlen);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     obd->u.cli.cl_default_mds_easize);
 	ptlrpc_request_set_replen(req);
 
 	rc = mdc_reint(req, LUSTRE_IMP_FULL);
-        *request = req;
-        if (rc == -ERESTARTSYS)
-                rc = 0;
+	*request = req;
+	if (rc == -ERESTARTSYS)
+		rc = 0;
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int mdc_file_resync(struct obd_export *exp, struct md_op_data *op_data)

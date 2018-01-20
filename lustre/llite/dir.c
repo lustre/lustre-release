@@ -1372,7 +1372,8 @@ lmv_out_free:
 			GOTO(finish_req, rc = -E2BIG);
 		}
 
-		lum_size = lmv_user_md_size(stripe_count, LMV_MAGIC_V1);
+		lum_size = lmv_user_md_size(stripe_count,
+					    LMV_USER_MAGIC_SPECIFIC);
 		OBD_ALLOC(tmp, lum_size);
 		if (tmp == NULL)
 			GOTO(finish_req, rc = -ENOMEM);
@@ -1730,15 +1731,15 @@ out_hur:
 		RETURN(rc);
 	}
 	case LL_IOC_MIGRATE: {
-		char		*buf = NULL;
-		const char	*filename;
-		int		namelen = 0;
-		int		len;
-		int		rc;
-		int		mdtidx;
+		struct lmv_user_md *lum;
+		char *buf = NULL;
+		int len;
+		char *filename;
+		int namelen = 0;
+		int rc;
 
 		rc = obd_ioctl_getdata(&buf, &len, (void __user *)arg);
-		if (rc < 0)
+		if (rc)
 			RETURN(rc);
 
 		data = (struct obd_ioctl_data *)buf;
@@ -1748,15 +1749,22 @@ out_hur:
 
 		filename = data->ioc_inlbuf1;
 		namelen = data->ioc_inllen1;
-		/* \0 is packed at the end of filename */
-		if (namelen < 1 || namelen != strlen(filename) + 1)
-			GOTO(migrate_free, rc = -EINVAL);
 
-		if (data->ioc_inllen2 != sizeof(mdtidx))
+		if (namelen < 1 || namelen != strlen(filename) + 1) {
+			CDEBUG(D_INFO, "IOC_MDC_LOOKUP missing filename\n");
 			GOTO(migrate_free, rc = -EINVAL);
-		mdtidx = *(int *)data->ioc_inlbuf2;
+		}
 
-		rc = ll_migrate(inode, file, mdtidx, filename, namelen - 1);
+		lum = (struct lmv_user_md *)data->ioc_inlbuf2;
+		if (lum->lum_magic != LMV_USER_MAGIC &&
+		    lum->lum_magic != LMV_USER_MAGIC_SPECIFIC) {
+			rc = -EINVAL;
+			CERROR("%s: wrong lum magic %x: rc = %d\n",
+			       filename, lum->lum_magic, rc);
+			GOTO(migrate_free, rc);
+		}
+
+		rc = ll_migrate(inode, file, lum, filename);
 migrate_free:
 		OBD_FREE_LARGE(buf, len);
 
