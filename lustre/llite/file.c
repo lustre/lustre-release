@@ -933,12 +933,10 @@ static int ll_check_swap_layouts_validity(struct inode *inode1,
 }
 
 static int ll_swap_layouts_close(struct obd_client_handle *och,
-				 struct inode *inode, struct inode *inode2,
-				 int intent)
+				 struct inode *inode, struct inode *inode2)
 {
 	const struct lu_fid	*fid1 = ll_inode2fid(inode);
 	const struct lu_fid	*fid2;
-	enum mds_op_bias	 bias;
 	int			 rc;
 	ENTRY;
 
@@ -956,21 +954,11 @@ static int ll_swap_layouts_close(struct obd_client_handle *och,
 	if (rc == 0)
 		GOTO(out_free_och, rc = -EINVAL);
 
-	switch (intent) {
-	case SWAP_LAYOUTS_CLOSE:
-		bias = MDS_CLOSE_LAYOUT_SWAP;
-		break;
-	case MERGE_LAYOUTS_CLOSE:
-		bias = MDS_CLOSE_LAYOUT_MERGE;
-		break;
-	default:
-		GOTO(out_free_och, rc = -EOPNOTSUPP);
-	}
-
 	/* Close the file and {swap,merge} layouts between inode & inode2.
 	 * NB: lease lock handle is released in mdc_close_layout_swap_pack()
 	 * because we still need it to pack l_remote_handle to MDT. */
-	rc = ll_close_inode_openhandle(inode, och, bias, inode2);
+	rc = ll_close_inode_openhandle(inode, och, MDS_CLOSE_LAYOUT_SWAP,
+				       inode2);
 
 	och = NULL; /* freed in ll_close_inode_openhandle() */
 
@@ -2900,6 +2888,7 @@ static long ll_file_unlock_lease(struct file *file, struct ll_ioc_lease *ioc,
 	bool lease_broken;
 	fmode_t fmode = 0;
 	enum mds_op_bias bias = 0;
+	struct file *layout_file = NULL;
 	void *data = NULL;
 	size_t data_size = 0;
 	long rc;
@@ -2917,7 +2906,8 @@ static long ll_file_unlock_lease(struct file *file, struct ll_ioc_lease *ioc,
 
 	fmode = och->och_flags;
 
-	if (ioc->lil_flags & LL_LEASE_RESYNC_DONE) {
+	switch (ioc->lil_flags) {
+	case LL_LEASE_RESYNC_DONE:
 		if (ioc->lil_count > IOC_IDS_MAX)
 			GOTO(out, rc = -EINVAL);
 
@@ -2930,6 +2920,32 @@ static long ll_file_unlock_lease(struct file *file, struct ll_ioc_lease *ioc,
 			GOTO(out, rc = -EFAULT);
 
 		bias = MDS_CLOSE_RESYNC_DONE;
+		break;
+	case LL_LEASE_LAYOUT_MERGE: {
+		int fd;
+
+		if (ioc->lil_count != 1)
+			GOTO(out, rc = -EINVAL);
+
+		arg += sizeof(*ioc);
+		if (copy_from_user(&fd, (void __user *)arg, sizeof(__u32)))
+			GOTO(out, rc = -EFAULT);
+
+		layout_file = fget(fd);
+		if (!layout_file)
+			GOTO(out, rc = -EBADF);
+
+		if ((file->f_flags & O_ACCMODE) == O_RDONLY ||
+				(layout_file->f_flags & O_ACCMODE) == O_RDONLY)
+			GOTO(out, rc = -EPERM);
+
+		data = file_inode(layout_file);
+		bias = MDS_CLOSE_LAYOUT_MERGE;
+		break;
+	}
+	default:
+		/* without close intent */
+		break;
 	}
 
 	rc = ll_lease_close_intent(och, inode, &lease_broken, bias, data);
@@ -2945,8 +2961,17 @@ static long ll_file_unlock_lease(struct file *file, struct ll_ioc_lease *ioc,
 	EXIT;
 
 out:
-	if (data)
-		OBD_FREE(data, data_size);
+	switch (ioc->lil_flags) {
+	case LL_LEASE_RESYNC_DONE:
+		if (data)
+			OBD_FREE(data, data_size);
+		break;
+	case LL_LEASE_LAYOUT_MERGE:
+		if (layout_file)
+			fput(layout_file);
+		break;
+	}
+
 	if (!rc)
 		rc = ll_lease_type_from_fmode(fmode);
 	RETURN(rc);
@@ -3069,7 +3094,6 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case LL_IOC_LOV_SWAP_LAYOUTS: {
 		struct file *file2;
 		struct lustre_swap_layouts lsl;
-		__u64 intent;
 
 		if (copy_from_user(&lsl, (char __user *)arg,
 				   sizeof(struct lustre_swap_layouts)))
@@ -3086,8 +3110,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if ((file2->f_flags & O_ACCMODE) == O_RDONLY)
 			GOTO(out, rc = -EPERM);
 
-		intent = lsl.sl_flags & INTENT_LAYOUTS_CLOSE;
-		if (intent) {
+		if (lsl.sl_flags & SWAP_LAYOUTS_CLOSE) {
 			struct inode			*inode2;
 			struct ll_inode_info		*lli;
 			struct obd_client_handle	*och = NULL;
@@ -3102,7 +3125,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			if (och == NULL)
 				GOTO(out, rc = -ENOLCK);
 			inode2 = file_inode(file2);
-			rc = ll_swap_layouts_close(och, inode, inode2, intent);
+			rc = ll_swap_layouts_close(och, inode, inode2);
 		} else {
 			rc = ll_swap_layouts(file, file2, &lsl);
 		}

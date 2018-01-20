@@ -310,13 +310,13 @@ int main(int argc, char **argv)
 			commands++;
 			switch (*commands) {
 			case 'U':
-				rc = llapi_lease_put(fd);
+				rc = llapi_lease_release(fd);
 				break;
 			case 'R':
-				rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
+				rc = llapi_lease_acquire(fd, LL_LEASE_RDLCK);
 				break;
 			case 'W':
-				rc = llapi_lease_get(fd, LL_LEASE_WRLCK);
+				rc = llapi_lease_acquire(fd, LL_LEASE_WRLCK);
 				break;
 			default:
 				errx(-1, "unknown mode: %c", *commands);

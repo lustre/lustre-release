@@ -461,10 +461,12 @@ int llapi_json_add_item(struct llapi_json_item_list **item_list, char *key,
 int llapi_json_write_list(struct llapi_json_item_list **item_list, FILE *fp);
 
 /* File lease */
-int llapi_lease_get(int fd, int mode);
+int llapi_lease_acquire(int fd, enum ll_lease_mode mode);
+int llapi_lease_release(int fd);
+int llapi_lease_set(int fd, const struct ll_ioc_lease *data);
 int llapi_lease_check(int fd);
-int llapi_lease_put(int fd);
-extern int llapi_lease_get_ext(int fd, struct ll_ioc_lease *data);
+int llapi_lease_get(int fd, int mode); /* obsoleted */
+int llapi_lease_put(int fd); /* obsoleted */
 
 /* Group lock */
 int llapi_group_lock(int fd, int gid);

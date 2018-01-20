@@ -334,6 +334,7 @@ enum ll_lease_mode {
 enum ll_lease_flags {
 	LL_LEASE_RESYNC		= 0x1,
 	LL_LEASE_RESYNC_DONE	= 0x2,
+	LL_LEASE_LAYOUT_MERGE	= 0x4,
 };
 
 #define IOC_IDS_MAX	4096
@@ -941,8 +942,6 @@ struct if_quotactl {
 #define SWAP_LAYOUTS_KEEP_MTIME		(1 << 2)
 #define SWAP_LAYOUTS_KEEP_ATIME		(1 << 3)
 #define SWAP_LAYOUTS_CLOSE		(1 << 4)
-#define MERGE_LAYOUTS_CLOSE		(1 << 5)
-#define INTENT_LAYOUTS_CLOSE	(SWAP_LAYOUTS_CLOSE | MERGE_LAYOUTS_CLOSE)
 
 /* Swap XATTR_NAME_HSM as well, only on the MDT so far */
 #define SWAP_LAYOUTS_MDS_HSM		(1 << 31)

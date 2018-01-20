@@ -1010,7 +1010,7 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 		goto out;
 	}
 
-	rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
+	rc = llapi_lease_acquire(fd, LL_LEASE_RDLCK);
 	if (rc < 0) {
 		error_loc = "cannot get lease";
 		goto out;
@@ -1018,16 +1018,14 @@ static int lfs_migrate(char *name, __u64 migration_flags,
 
 	rc = migrate_nonblock(fd, fdv);
 	if (rc < 0) {
-		llapi_lease_put(fd);
+		llapi_lease_release(fd);
 		goto out;
 	}
 
 	/* Atomically put lease, swap layouts and close.
 	 * for a migration we need to check data version on file did
 	 * not change. */
-	rc = llapi_fswap_layouts(fd, fdv, 0, 0,
-				 migration_flags & MIGRATION_MIRROR ?
-				 MERGE_LAYOUTS_CLOSE : SWAP_LAYOUTS_CLOSE);
+	rc = llapi_fswap_layouts(fd, fdv, 0, 0, SWAP_LAYOUTS_CLOSE);
 	if (rc < 0) {
 		error_loc = "cannot swap layout";
 		goto out;
@@ -1401,6 +1399,7 @@ static int mirror_extend_file(const char *fname, const char *victim_file,
 	int fdv = -1;
 	struct stat stbuf;
 	struct stat stbuf_v;
+	struct ll_ioc_lease *data = NULL;
 	int rc;
 
 	fd = open(fname, O_RDWR);
@@ -1436,7 +1435,7 @@ static int mirror_extend_file(const char *fname, const char *victim_file,
 		goto out;
 	}
 
-	rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
+	rc = llapi_lease_acquire(fd, LL_LEASE_RDLCK);
 	if (rc < 0) {
 		error_loc = "cannot get lease";
 		goto out;
@@ -1474,28 +1473,96 @@ static int mirror_extend_file(const char *fname, const char *victim_file,
 		goto out;
 	}
 
-	/* Atomically put lease, swap layouts and close.
-	 * for a migration we need to check data version on file did
-	 * not change. */
-	rc = llapi_fswap_layouts(fd, fdv, 0, 0, MERGE_LAYOUTS_CLOSE);
-	if (rc < 0) {
-		error_loc = "cannot swap layout";
+	/* Atomically put lease, merge layouts and close. */
+	data = calloc(1, offsetof(typeof(*data), lil_ids[1]));
+	if (!data) {
+		error_loc = "memory allocation";
 		goto out;
 	}
+	data->lil_mode = LL_LEASE_UNLCK;
+	data->lil_flags = LL_LEASE_LAYOUT_MERGE;
+	data->lil_count = 1;
+	data->lil_ids[0] = fdv;
+	rc = llapi_lease_set(fd, data);
+	if (rc < 0) {
+		error_loc = "cannot merge layout";
+		goto out;
+	} else if (rc == 0) {
+		rc = -EBUSY;
+		error_loc = "lost lease lock";
+		goto out;
+	}
+	rc = 0;
 
 out:
+	if (data)
+		free(data);
 	if (fd >= 0)
 		close(fd);
-
 	if (fdv >= 0)
 		close(fdv);
-
 	if (!rc)
 		(void) unlink(victim_file);
-
 	if (rc < 0)
 		fprintf(stderr, "error: %s: %s: %s: %s\n",
 			progname, fname, error_loc, strerror(-rc));
+	return rc;
+}
+
+static int mirror_extend_layout(char *name, struct llapi_layout *layout)
+{
+	struct ll_ioc_lease *data = NULL;
+	int fd = -1;
+	int fdv = -1;
+	int rc;
+
+	rc = migrate_open_files(name, NULL, layout, &fd, &fdv);
+	if (rc < 0)
+		goto out;
+
+	rc = llapi_lease_acquire(fd, LL_LEASE_RDLCK);
+	if (rc < 0) {
+		error_loc = "cannot get lease";
+		goto out;
+	}
+
+	rc = migrate_nonblock(fd, fdv);
+	if (rc < 0) {
+		llapi_lease_release(fd);
+		goto out;
+	}
+
+	/* Atomically put lease, merge layouts and close. */
+	data = calloc(1, offsetof(typeof(*data), lil_ids[1]));
+	if (!data) {
+		error_loc = "memory allocation";
+		goto out;
+	}
+	data->lil_mode = LL_LEASE_UNLCK;
+	data->lil_flags = LL_LEASE_LAYOUT_MERGE;
+	data->lil_count = 1;
+	data->lil_ids[0] = fdv;
+	rc = llapi_lease_set(fd, data);
+	if (rc < 0) {
+		error_loc = "cannot merge layout";
+		goto out;
+	} else if (rc == 0) {
+		rc = -EBUSY;
+		error_loc = "lost lease lock";
+		goto out;
+	}
+	rc = 0;
+
+out:
+	if (data)
+		free(data);
+	if (fd >= 0)
+		close(fd);
+	if (fdv >= 0)
+		close(fdv);
+	if (rc < 0)
+		fprintf(stderr, "error: %s: %s: %s: %s\n",
+			progname, name, error_loc, strerror(-rc));
 	return rc;
 }
 
@@ -1516,9 +1583,8 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 			__u32 mirror_count = mirror_list->m_count;
 
 			while (mirror_count > 0) {
-				rc = lfs_migrate(fname,
-					MIGRATION_NONBLOCK | MIGRATION_MIRROR,
-					NULL, mirror_list->m_layout);
+				rc = mirror_extend_layout(fname,
+							mirror_list->m_layout);
 				if (rc)
 					break;
 
@@ -6870,9 +6936,9 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 
 	ioc->lil_mode = LL_LEASE_WRLCK;
 	ioc->lil_flags = LL_LEASE_RESYNC;
-	rc = llapi_lease_get_ext(fd, ioc);
+	rc = llapi_lease_set(fd, ioc);
 	if (rc < 0) {
-		fprintf(stderr, "%s: '%s' llapi_lease_get_ext resync failed: "
+		fprintf(stderr, "%s: '%s' llapi_lease_set resync failed: "
 			"%s.\n", progname, fname, strerror(errno));
 		goto close_fd;
 	}
@@ -6971,7 +7037,7 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 
 	llapi_layout_free(layout);
 
-	rc = llapi_lease_get_ext(fd, ioc);
+	rc = llapi_lease_set(fd, ioc);
 	if (rc <= 0) {
 		if (rc == 0) /* lost lease lock */
 			rc = -EBUSY;
@@ -6980,7 +7046,7 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		goto close_fd;
 	}
 	/**
-	 * llapi_lease_get_ext returns lease mode when it request to unlock
+	 * llapi_lease_set returns lease mode when it request to unlock
 	 * the lease lock
 	 */
 	rc = 0;

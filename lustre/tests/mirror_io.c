@@ -403,10 +403,10 @@ static void mirror_resync(int argc, char *argv[])
 
 	ioc->lil_mode = LL_LEASE_WRLCK;
 	ioc->lil_flags = LL_LEASE_RESYNC;
-	rc = llapi_lease_get_ext(fd, ioc);
+	rc = llapi_lease_set(fd, ioc);
 	if (rc < 0)
 		free(ioc);
-	syserr(rc < 0, "llapi_lease_get_ext resync");
+	syserr(rc < 0, "llapi_lease_set resync");
 
 	if (error_inject & AFTER_RESYNC_START) {
 		free(ioc);
@@ -506,8 +506,8 @@ static void mirror_resync(int argc, char *argv[])
 	if (error_inject & OPEN_TEST_FILE) /* break lease */
 		close(open(argv[optind], O_RDONLY));
 
-	rc = llapi_lease_get_ext(fd, ioc);
-	syserr(rc <= 0, "llapi_lease_get_ext resync failed");
+	rc = llapi_lease_set(fd, ioc);
+	syserr(rc <= 0, "llapi_lease_set resync failed");
 
 	free(ioc);
 	close(fd);
