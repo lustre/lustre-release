@@ -126,8 +126,7 @@ setup() {
 check_swap_layouts_support()
 {
 	$LCTL get_param -n llite.*.sbi_flags | grep -q layout ||
-		{ skip "Does not support layout lock."; return 0; }
-	return 1
+		skip "Does not support layout lock."
 }
 
 check_and_setup_lustre
@@ -186,7 +185,7 @@ run_test 0c "check import proc"
 
 test_0d() { # LU-3397
 	[ $(lustre_version_code mgs) -lt $(version_code 2.10.57) ] &&
-		skip "proc exports not supported before 2.10.57" && return
+		skip "proc exports not supported before 2.10.57"
 
 	local mgs_exp="mgs.MGS.exports"
 	local client_uuid=$($LCTL get_param -n mgc.*.uuid)
@@ -290,7 +289,8 @@ test_6a() {
 run_test 6a "touch f6a; chmod f6a; $RUNAS chmod f6a (should return error) =="
 
 test_6c() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID"
+
 	touch $DIR/$tfile
 	chown $RUNAS_ID $DIR/$tfile || error "chown $RUNAS_ID $file failed"
 	$CHECKSTAT -t file -u \#$RUNAS_ID $DIR/$tfile ||
@@ -302,7 +302,8 @@ test_6c() {
 run_test 6c "touch f6c; chown f6c; $RUNAS chown f6c (should return error) =="
 
 test_6e() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID"
+
 	touch $DIR/$tfile
 	chgrp $RUNAS_ID $DIR/$tfile || error "chgrp $RUNAS_ID $file failed"
 	$CHECKSTAT -t file -u \#$UID -g \#$RUNAS_ID $DIR/$tfile ||
@@ -314,7 +315,8 @@ test_6e() {
 run_test 6e "touch+chgrp $tfile; $RUNAS chgrp $tfile (should return error)"
 
 test_6g() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID"
+
 	test_mkdir $DIR/$tdir
 	chmod 777 $DIR/$tdir || error "chmod 0777 $tdir failed"
 	$RUNAS mkdir $DIR/$tdir/d || error "mkdir $tdir/d failed"
@@ -341,7 +343,8 @@ test_6g() {
 run_test 6g "verify new dir in sgid dir inherits group"
 
 test_6h() { # bug 7331
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID"
+
 	touch $DIR/$tfile || error "touch failed"
 	chown $RUNAS_ID:$RUNAS_GID $DIR/$tfile || error "initial chown failed"
 	$RUNAS -G$RUNAS_GID chown $RUNAS_ID:0 $DIR/$tfile &&
@@ -553,9 +556,11 @@ test_17g() {
 run_test 17g "symlinks: really long symlink name and inode boundaries"
 
 test_17h() { #bug 17378
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	local mdt_idx
+
 	test_mkdir $DIR/$tdir
 	mdt_idx=$($LFS getdirstripe -i $DIR/$tdir)
 	$LFS setstripe -c -1 $DIR/$tdir
@@ -566,11 +571,13 @@ test_17h() { #bug 17378
 run_test 17h "create objects: lov_free_memmd() doesn't lbug"
 
 test_17i() { #bug 20018
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	test_mkdir -c1 $DIR/$tdir
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	local foo=$DIR/$tdir/$tfile
 	local mdt_idx
+
+	test_mkdir -c1 $DIR/$tdir
 	mdt_idx=$($LFS getdirstripe -i $DIR/$tdir)
 	ln -s $foo $foo || error "create symlink failed"
 #define OBD_FAIL_MDS_READLINK_EPROTO     0x143
@@ -581,11 +588,11 @@ test_17i() { #bug 20018
 run_test 17i "don't panic on short symlink (should return error)"
 
 test_17k() { #bug 22301
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ -z "$(which rsync 2>/dev/null)" ]] &&
-		skip "no rsync command" && return 0
+		skip "no rsync command"
 	rsync --help | grep -q xattr ||
 		skip_env "$(rsync --version | head -n1) does not support xattrs"
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return 0
 	test_mkdir $DIR/$tdir
 	test_mkdir $DIR/$tdir.new
 	touch $DIR/$tdir/$tfile
@@ -597,7 +604,8 @@ run_test 17k "symlinks: rsync with xattrs enabled"
 
 test_17l() { # LU-279
 	[[ -z "$(which getfattr 2>/dev/null)" ]] &&
-		skip "no getfattr command" && return 0
+		skip "no getfattr command"
+
 	test_mkdir $DIR/$tdir
 	touch $DIR/$tdir/$tfile
 	ln -s $DIR/$tdir/$tfile $DIR/$tdir/$tfile.lnk
@@ -615,19 +623,17 @@ run_test 17l "Ensure lgetxattr's returned xattr size is consistent"
 
 # LU-1540
 test_17m() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
+		skip_env "ldiskfs only test"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] &&
+	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.2.93) ] &&
+		skip "MDS 2.2.0-2.2.93 do not NUL-terminate symlinks"
+
 	local short_sym="0123456789"
 	local wdir=$DIR/$tdir
 	local i
-
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] &&
-	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.2.93) ] &&
-		skip "MDS 2.2.0-2.2.93 do not NUL-terminate symlinks" && return
-
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "ldiskfs only test" && return 0
-
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 
 	test_mkdir $wdir
 	long_sym=$short_sym
@@ -693,19 +699,16 @@ check_fs_consistency_17n() {
 }
 
 test_17n() {
-	local i
-
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
+		skip_env "ldiskfs only test"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] &&
 	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.2.93) ] &&
-		skip "MDS 2.2.0-2.2.93 do not NUL-terminate symlinks" && return
+		skip "MDS 2.2.0-2.2.93 do not NUL-terminate symlinks"
 
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "ldiskfs only test" && return 0
-
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
-
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	local i
 
 	test_mkdir $DIR/$tdir
 	for ((i=0; i<10; i++)); do
@@ -727,7 +730,7 @@ test_17n() {
 		error "e2fsck report error after unlink files under remote dir"
 
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.50) ] &&
-		skip "lustre < 2.4.50 does not support migrate mv " && return
+		skip "lustre < 2.4.50 does not support migrate mv"
 
 	for ((i = 0; i < 10; i++)); do
 		mkdir -p $DIR/$tdir/remote_dir_${i}
@@ -748,9 +751,9 @@ test_17n() {
 run_test 17n "run e2fsck against master/slave MDT which contains remote dir"
 
 test_17o() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.64) ] &&
-		skip "Need MDS version at least 2.3.64" && return
+		skip "Need MDS version at least 2.3.64"
 
 	local wdir=$DIR/${tdir}o
 	local mdt_index
@@ -795,7 +798,8 @@ run_test 19b "ls -l .../f19 (should return error) =============="
 
 test_19c() {
 	[ $RUNAS_ID -eq $UID ] &&
-		skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+		skip_env "RUNAS_ID = UID = $UID -- skipping"
+
 	$RUNAS touch $DIR/$tfile && error "create non-root file failed" || true
 }
 run_test 19c "$RUNAS touch .../f19 (should return error) =="
@@ -1060,7 +1064,8 @@ cleanup_multiop_pause() {
 }
 
 test_24q() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/R13a
 	test_mkdir $DIR/R13b
 	local DIRINO=$(ls -lid $DIR/R13a | awk '{ print $1 }')
@@ -1137,12 +1142,14 @@ max_pages_per_rpc() {
 }
 
 test_24v() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local nrfiles=${COUNT:-100000}
+	local fname="$DIR/$tdir/$tfile"
+
 	# Performance issue on ZFS see LU-4072 (c.f. LU-2887)
 	[ $(facet_fstype $SINGLEMDS) = "zfs" ] && nrfiles=${COUNT:-10000}
 
-	local fname="$DIR/$tdir/$tfile"
 	test_mkdir "$(dirname $fname)"
 	# assume MDT0000 has the fewest inodes
 	local stripes=$($LFS getdirstripe -c $(dirname $fname))
@@ -1199,12 +1206,11 @@ test_24w() { # bug21506
 run_test 24w "Reading a file larger than 4Gb"
 
 test_24x() {
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
-
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.56) ]] &&
-		skip "Need MDS version at least 2.7.56" && return
+		skip "Need MDS version at least 2.7.56"
 
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
@@ -1232,14 +1238,15 @@ test_24x() {
 run_test 24x "cross MDT rename/link"
 
 test_24y() {
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local remote_dir=$DIR/$tdir/remote_dir
 	local mdtidx=1
 
 	test_mkdir $DIR/$tdir
 	$LFS mkdir -i $mdtidx $remote_dir ||
-	           error "create remote directory failed"
+		error "create remote directory failed"
 
 	test_mkdir $remote_dir/src_dir
 	touch $remote_dir/src_file
@@ -1278,7 +1285,8 @@ test_24A() { # LU-3182
 run_test 24A "readdir() returns correct number of entries."
 
 test_24B() { # LU-4805
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+
 	local count
 
 	test_mkdir $DIR/$tdir
@@ -1303,7 +1311,7 @@ test_24B() { # LU-4805
 run_test 24B "readdir for striped dir return correct number of entries"
 
 test_24C() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 
 	mkdir $DIR/$tdir
 	mkdir $DIR/$tdir/d0
@@ -1332,8 +1340,8 @@ test_24C() {
 run_test 24C "check .. in striped dir"
 
 test_24E() {
-	[[ $MDSCOUNT -lt 4 ]] && skip "needs >= 4 MDTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[[ $MDSCOUNT -lt 4 ]] && skip_env "needs >= 4 MDTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	mkdir -p $DIR/$tdir
 	mkdir $DIR/$tdir/src_dir
@@ -1444,7 +1452,8 @@ test_27a() {
 run_test 27a "one stripe file"
 
 test_27b() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -c 2 $DIR/$tdir/$tfile || error "setstripe failed"
 	$LFS getstripe -c $DIR/$tdir/$tfile
@@ -1467,7 +1476,8 @@ run_test 27d "create file with default settings"
 test_27e() {
 	# LU-5839 adds check for existed layout before setting it
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.56) ]] &&
-		skip "Need MDS version at least 2.7.56" && return
+		skip "Need MDS version at least 2.7.56"
+
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -c 2 $DIR/$tdir/$tfile || error "setstripe failed"
 	$LFS setstripe -c 2 $DIR/$tdir/$tfile && error "setstripe worked twice"
@@ -1530,13 +1540,12 @@ test_27l() {
 run_test 27l "check setstripe permissions (should return error)"
 
 test_27m() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 
 	ORIGFREE=$($LCTL get_param -n lov.$FSNAME-clilov-*.kbytesavail |
 		   head -n1)
 	if [[ $ORIGFREE -gt $MAXFREE ]]; then
 		skip "$ORIGFREE > $MAXFREE skipping out-of-space test on OST0"
-		return
 	fi
 	trap simple_cleanup_common EXIT
 	test_mkdir $DIR/$tdir
@@ -1623,10 +1632,10 @@ exhaust_all_precreations() {
 }
 
 test_27n() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	reset_enospc
 	rm -f $DIR/$tdir/$tfile
@@ -1639,10 +1648,10 @@ test_27n() {
 run_test 27n "create file with some full OSTs"
 
 test_27o() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	reset_enospc
 	rm -f $DIR/$tdir/$tfile
@@ -1656,10 +1665,10 @@ test_27o() {
 run_test 27o "create file with all full OSTs (should error)"
 
 test_27p() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	reset_enospc
 	rm -f $DIR/$tdir/$tfile
@@ -1679,10 +1688,10 @@ test_27p() {
 run_test 27p "append to a truncated file with some full OSTs"
 
 test_27q() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	reset_enospc
 	rm -f $DIR/$tdir/$tfile
@@ -1703,10 +1712,10 @@ test_27q() {
 run_test 27q "append to truncated file with all OSTs full (should error)"
 
 test_27r() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	reset_enospc
 	rm -f $DIR/$tdir/$tfile
@@ -1740,8 +1749,9 @@ test_27t() { # bug 10864
 run_test 27t "check that utils parse path correctly"
 
 test_27u() { # bug 4900
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	local index
 	local list=$(comma_list $(mdts_nodes))
 
@@ -1764,10 +1774,10 @@ test_27u() { # bug 4900
 run_test 27u "skip object creation on OSC w/o objects"
 
 test_27v() { # bug 4900
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	exhaust_all_precreations 0x215
 	reset_enospc
@@ -1805,7 +1815,7 @@ run_test 27w "check $LFS setstripe -S and getstrip -d options"
 
 test_27wa() {
 	[[ $OSTCOUNT -lt 2 ]] &&
-		skip_env "skipping multiple stripe count/offset test" && return
+		skip_env "skipping multiple stripe count/offset test"
 
 	test_mkdir $DIR/$tdir
 	for i in $(seq 1 $OSTCOUNT); do
@@ -1822,9 +1832,10 @@ test_27wa() {
 run_test 27wa "check $LFS setstripe -c -i options"
 
 test_27x() {
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	OFFSET=$(($OSTCOUNT - 1))
 	OSTIDX=0
 	local OST=$(ostname_from_index $OSTIDX)
@@ -1844,10 +1855,10 @@ test_27x() {
 run_test 27x "create files while OST0 is degraded"
 
 test_27y() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $FSNAME-OST0000)
 	local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
@@ -1855,7 +1866,7 @@ test_27y() {
 	local next_id=$(do_facet $SINGLEMDS lctl get_param -n \
 		osc.$mdtosc.prealloc_next_id)
 	local fcount=$((last_id - next_id))
-	[[ $fcount -eq 0 ]] && skip "not enough space on OST0" && return
+	[[ $fcount -eq 0 ]] && skip "not enough space on OST0"
 	[[ $fcount -gt $OSTCOUNT ]] && fcount=$OSTCOUNT
 
 	local MDS_OSCS=$(do_facet $SINGLEMDS lctl dl |
@@ -2030,10 +2041,10 @@ check_seq_oid()
 }
 
 test_27z() {
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	test_mkdir $DIR/$tdir
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
+	test_mkdir $DIR/$tdir
 	$LFS setstripe -c 1 -i 0 -S 64k $DIR/$tdir/$tfile-1 ||
 		{ error "setstripe -c -1 failed"; return 1; }
 	# We need to send a write to every object to get parent FID info set.
@@ -2055,20 +2066,20 @@ test_27z() {
 run_test 27z "check SEQ/OID on the MDT and OST filesystems"
 
 test_27A() { # b=19102
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	save_layout_restore_at_exit $MOUNT
-
-        $SETSTRIPE -c 0 -i -1 -S 0 $MOUNT
-        wait_update $HOSTNAME "$GETSTRIPE -c $MOUNT | sed 's/  *//g'" "1" 20 ||
-                error "stripe count $($GETSTRIPE -c $MOUNT) != 1"
-        local default_size=$($GETSTRIPE -S $MOUNT)
-        local default_offset=$($GETSTRIPE -i $MOUNT)
+	$LFS setstripe -c 0 -i -1 -S 0 $MOUNT
+	wait_update $HOSTNAME "$GETSTRIPE -c $MOUNT | sed 's/  *//g'" "1" 20 ||
+		error "stripe count $($GETSTRIPE -c $MOUNT) != 1"
+	local default_size=$($GETSTRIPE -S $MOUNT)
+	local default_offset=$($GETSTRIPE -i $MOUNT)
 	local dsize=$(do_facet $SINGLEMDS \
 		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
-        [ $default_size -eq $dsize ] ||
-                error "stripe size $default_size != $dsize"
-        [ $default_offset -eq -1 ] ||error "stripe offset $default_offset != -1"
+	[ $default_size -eq $dsize ] ||
+		error "stripe size $default_size != $dsize"
+	[ $default_offset -eq -1 ] ||
+		error "stripe offset $default_offset != -1"
 }
 run_test 27A "check filesystem-wide default LOV EA values"
 
@@ -2096,7 +2107,7 @@ test_27B() { # LU-2523
 run_test 27B "call setstripe on open unlinked file/rename victim"
 
 test_27C() { #LU-2871
-	[[ $OSTCOUNT -lt 2 ]] && skip "needs >= 2 OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 
 	declare -a ost_idx
 	local index
@@ -2134,9 +2145,10 @@ test_27C() { #LU-2871
 run_test 27C "check full striping across all OSTs"
 
 test_27D() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
+	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	local POOL=${POOL:-testpool}
 	local first_ost=0
 	local last_ost=$(($OSTCOUNT - 1))
@@ -2172,9 +2184,9 @@ run_test 27D "validate llapi_layout API"
 # Verify that default_easize is increased from its initial value after
 # accessing a widely striped file.
 test_27E() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
 	[ $(lustre_version_code client) -lt $(version_code 2.5.57) ] &&
-		skip "client does not have LU-3338 fix" && return
+		skip "client does not have LU-3338 fix"
 
 	# 72 bytes is the minimum space required to store striping
 	# information for a file striped across one OST:
@@ -2201,11 +2213,11 @@ test_27E() {
 run_test 27E "check that default extended attribute size properly increases"
 
 test_27F() { # LU-5346/LU-7975
-	[[ $OSTCOUNT -lt 2 ]] && skip "needs >= 2 OSTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $OSTCOUNT -lt 2 ]] && skip "needs >= 2 OSTs"
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.51) ]] &&
-		skip "Need MDS version at least 2.8.51" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+		skip "Need MDS version at least 2.8.51"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	test_mkdir $DIR/$tdir
 	rm -f $DIR/$tdir/f0
@@ -2249,7 +2261,8 @@ test_28() { # bug 2091
 run_test 28 "create/mknod/mkdir with bad file types ============"
 
 test_29() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return 0
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	sync; sleep 1; sync # flush out any dirty pages from previous tests
 	cancel_lru_locks
 	test_mkdir $DIR/d29
@@ -2314,7 +2327,8 @@ test_30b() {
 run_test 30b "execute binary from Lustre as non-root ==========="
 
 test_30c() { # b=22376
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	cp `which ls` $DIR || cp /bin/ls $DIR
 	chmod a-rw $DIR/ls
 	cancel_lru_locks mdc
@@ -2362,7 +2376,8 @@ test_31e() { # bug 2904
 run_test 31e "remove of open non-empty directory ==============="
 
 test_31f() { # bug 4554
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	set -vx
 	test_mkdir $DIR/d31f
 	$SETSTRIPE -S 1048576 -c 1 $DIR/d31f
@@ -2514,7 +2529,7 @@ test_31o() { # LU-2901
 run_test 31o "duplicate hard links with same filename"
 
 test_31p() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 
 	test_mkdir $DIR/$tdir
 	$LFS setdirstripe -i0 -c2 $DIR/$tdir/striped_dir
@@ -2543,7 +2558,8 @@ cleanup_test32_mount() {
 }
 
 test_32a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	echo "== more mountpoints and symlinks ================="
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
@@ -2557,7 +2573,8 @@ test_32a() {
 run_test 32a "stat d32a/ext2-mountpoint/.. ====================="
 
 test_32b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
@@ -2570,7 +2587,8 @@ test_32b() {
 run_test 32b "open d32b/ext2-mountpoint/.. ====================="
 
 test_32c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
@@ -2584,7 +2602,8 @@ test_32c() {
 run_test 32c "stat d32c/ext2-mountpoint/../d2/test_dir ========="
 
 test_32d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
@@ -2645,7 +2664,8 @@ test_32h() {
 run_test 32h "open d32h/symlink->tmp/symlink->lustre-subdir/${tdir}2"
 
 test_32i() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
@@ -2659,7 +2679,8 @@ test_32i() {
 run_test 32i "stat d32i/ext2-mountpoint/../test_file ==========="
 
 test_32j() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
@@ -2673,7 +2694,8 @@ test_32j() {
 run_test 32j "open d32j/ext2-mountpoint/../test_file ==========="
 
 test_32k() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
@@ -2688,7 +2710,8 @@ test_32k() {
 run_test 32k "stat d32k/ext2-mountpoint/../d2/test_file ========"
 
 test_32l() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
@@ -2767,7 +2790,8 @@ test_32p() {
 run_test 32p "open d32p/symlink->tmp/symlink->lustre-root/$tfile"
 
 test_32q() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
@@ -2780,7 +2804,8 @@ test_32q() {
 run_test 32q "stat follows mountpoints in Lustre (should return error)"
 
 test_32r() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
@@ -2823,13 +2848,14 @@ test_33b() {
 run_test 33b "test open file with malformed flags (No panic)"
 
 test_33c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+
 	local ostnum
 	local ostname
 	local write_bytes
 	local all_zeros
 
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	all_zeros=:
 	rm -fr $DIR/$tdir
 	test_mkdir $DIR/$tdir
@@ -2889,8 +2915,9 @@ test_33c() {
 run_test 33c "test llobdstat and write_bytes"
 
 test_33d() {
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
@@ -2914,7 +2941,7 @@ test_33d() {
 run_test 33d "openfile with 444 modes and malformed flags under remote dir"
 
 test_33e() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 
 	mkdir $DIR/$tdir
 
@@ -2965,8 +2992,8 @@ cleanup_33f() {
 }
 
 test_33f() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	mkdir $DIR/$tdir
 	chmod go+rwx $DIR/$tdir
@@ -3058,7 +3085,8 @@ test_34e() {
 run_test 34e "create objects, some with size and some without =="
 
 test_34f() { # bug 6242, 6243
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	SIZE34F=48000
 	rm -f $DIR/f34f
 	$MCREATE $DIR/f34f || error "mcreate failed"
@@ -3073,7 +3101,8 @@ test_34f() { # bug 6242, 6243
 run_test 34f "read from a file with no objects until EOF ======="
 
 test_34g() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	dd if=/dev/zero of=$DIR/$tfile bs=1 count=100 seek=$TEST_34_SIZE ||
 		error "dd failed"
 	$TRUNCATE $DIR/$tfile $((TEST_34_SIZE / 2))|| error "truncate failed"
@@ -3093,7 +3122,8 @@ test_34g() {
 run_test 34g "truncate long file ==============================="
 
 test_34h() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local gid=10
 	local sz=1000
 
@@ -3157,7 +3187,8 @@ test_36d() {
 run_test 36d "non-root OST utime check (open, utime)"
 
 test_36e() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping"
+
 	test_mkdir $DIR/$tdir
 	touch $DIR/$tdir/$tfile
 	$RUNAS utime $DIR/$tdir/$tfile &&
@@ -3193,15 +3224,17 @@ subr_36fh() {
 }
 
 test_36f() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	#define OBD_FAIL_OST_BRW_PAUSE_BULK 0x214
 	subr_36fh "0x80000214"
 }
 run_test 36f "utime on file racing with OST BRW write =========="
 
 test_36g() {
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local fmd_max_age
 	local fmd_before
 	local fmd_after
@@ -3227,14 +3260,15 @@ test_36g() {
 run_test 36g "filter mod data cache expiry ====================="
 
 test_36h() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	#define OBD_FAIL_OST_BRW_PAUSE_BULK2 0x227
 	subr_36fh "0x80000227"
 }
 run_test 36h "utime on file racing with OST BRW write =========="
 
 test_36i() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 
 	test_mkdir $DIR/$tdir
 	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir
@@ -3362,9 +3396,9 @@ run_test 39c "mtime change on rename ==========================="
 
 # bug 21114
 test_39d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	touch $DIR1/$tfile
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
+	touch $DIR1/$tfile
 	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
 
 	for (( i=0; i < 2; i++ )) ; do
@@ -3380,7 +3414,8 @@ run_test 39d "create, utime, stat =============================="
 
 # bug 21114
 test_39e() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	touch $DIR1/$tfile
 	local mtime1=`stat -c %Y $DIR1/$tfile`
 
@@ -3399,7 +3434,8 @@ run_test 39e "create, stat, utime, stat ========================"
 
 # bug 21114
 test_39f() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	touch $DIR1/$tfile
 	mtime1=`stat -c %Y $DIR1/$tfile`
 
@@ -3419,7 +3455,8 @@ run_test 39f "create, stat, sleep, utime, stat ================="
 
 # bug 11063
 test_39g() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	echo hello >> $DIR1/$tfile
 	local mtime1=`stat -c %Y $DIR1/$tfile`
 
@@ -3439,7 +3476,8 @@ run_test 39g "write, chmod, stat ==============================="
 
 # bug 11063
 test_39h() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	touch $DIR1/$tfile
 	sleep 1
 
@@ -3465,7 +3503,8 @@ test_39h() {
 run_test 39h "write, utime within one second, stat ============="
 
 test_39i() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	touch $DIR1/$tfile
 	sleep 1
 
@@ -3487,7 +3526,8 @@ test_39i() {
 run_test 39i "write, rename, stat =============================="
 
 test_39j() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	start_full_debug_logging
 	touch $DIR1/$tfile
 	sleep 1
@@ -3519,7 +3559,8 @@ test_39j() {
 run_test 39j "write, rename, close, stat ======================="
 
 test_39k() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	touch $DIR1/$tfile
 	sleep 1
 
@@ -3548,8 +3589,9 @@ run_test 39k "write, utime, close, stat ========================"
 TEST_39_ATIME=`date -d "1 year" +%s`
 
 test_39l() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	local atime_diff=$(do_facet $SINGLEMDS \
 				lctl get_param -n mdd.*MDT0000*.atime_diff)
 	rm -rf $DIR/$tdir
@@ -3597,7 +3639,8 @@ test_39l() {
 run_test 39l "directory atime update ==========================="
 
 test_39m() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	touch $DIR1/$tfile
 	sleep 2
 	local far_past_mtime=$(date -d "May 29 1953" +%s)
@@ -3618,7 +3661,8 @@ test_39m() {
 run_test 39m "test atime and mtime before 1970"
 
 test_39n() { # LU-3832
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	local atime_diff=$(do_facet $SINGLEMDS \
 		lctl get_param -n mdd.*MDT0000*.atime_diff)
 	local atime0
@@ -3670,7 +3714,8 @@ test_39o() {
 run_test 39o "directory cached attributes updated after create"
 
 test_39p() {
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
+
 	local MDTIDX=1
 	TESTDIR=$DIR/$tdir/$tdir
 	[ -e $TESTDIR ] && rm -rf $TESTDIR
@@ -3779,7 +3824,8 @@ setup_test42() {
 # Tests 42* verify that our behaviour is correct WRT caching, file closure,
 # file truncation, and file removal.
 test_42a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	setup_test42
 	cancel_lru_locks $OSC
 	stop_writeback
@@ -3795,7 +3841,8 @@ test_42a() {
 run_test 42a "ensure that we don't flush on close"
 
 test_42b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	setup_test42
 	cancel_lru_locks $OSC
 	stop_writeback
@@ -3852,25 +3899,28 @@ trunc_test() {
 }
 
 test_42c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        trunc_test 42c 1024
-        [ $BEFOREWRITES -eq $AFTERWRITES ] && \
-            error "beforewrites $BEFOREWRITES == afterwrites $AFTERWRITES on truncate"
-        rm $file
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	trunc_test 42c 1024
+	[ $BEFOREWRITES -eq $AFTERWRITES ] &&
+		error "beforewrites $BEFOREWRITES == afterwrites $AFTERWRITES on truncate"
+	rm $file
 }
 run_test 42c "test partial truncate of file with cached dirty data"
 
 test_42d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        trunc_test 42d 0
-        [ $BEFOREWRITES -eq $AFTERWRITES ] || \
-            error "beforewrites $BEFOREWRITES != afterwrites $AFTERWRITES on truncate"
-        rm $file
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	trunc_test 42d 0
+	[ $BEFOREWRITES -eq $AFTERWRITES ] ||
+		error "beforewrites $BEFOREWRITES != afterwrites $AFTERWRITES on truncate"
+	rm $file
 }
 run_test 42d "test complete truncate of file with cached dirty data"
 
 test_42e() { # bug22074
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local TDIR=$DIR/${tdir}e
 	local pagesz=$(page_size)
 	local pages=16 # hardcoded 16 pages, don't change it.
@@ -3973,7 +4023,8 @@ test_43a() {
 run_test 43a "open(RDWR) of file being executed should return -ETXTBSY"
 
 test_43b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/$tdir
 	cp -p $(which $MULTIOP) $DIR/$tdir/multiop ||
 		cp -p multiop $DIR/$tdir/multiop
@@ -3997,7 +4048,8 @@ test_43c() {
 run_test 43c "md5sum of copy into lustre"
 
 test_44A() { # was test_44
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
 	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=1023
 	dd if=$DIR/f1 bs=4k count=1 > /dev/null
 }
@@ -4006,10 +4058,10 @@ run_test 44A "zero length read from a sparse stripe"
 test_44a() {
 	local nstripe=$($LCTL lov_getconfig $DIR | grep default_stripe_count: |
 		awk '{ print $2 }')
-	[ -z "$nstripe" ] && skip "can't get stripe info" && return
+	[ -z "$nstripe" ] && skip "can't get stripe info"
 	[[ $nstripe -gt $OSTCOUNT ]] &&
-	    skip "Wrong default_stripe_count: $nstripe (OSTCOUNT: $OSTCOUNT)" &&
-	    return
+		skip "Wrong default_stripe_count: $nstripe OSTCOUNT: $OSTCOUNT"
+
 	local stride=$($LCTL lov_getconfig $DIR | grep default_stripe_size: |
 		awk '{ print $2 }')
 	if [[ $nstripe -eq 0 || $nstripe -eq -1 ]]; then
@@ -4061,7 +4113,8 @@ do_dirty_record() {
 	echo before $before, after $after
 }
 test_45() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	f="$DIR/f45"
 	# Obtain grants from OST if it supports it
 	echo blah > ${f}_grant
@@ -4089,7 +4142,8 @@ run_test 45 "osc io page accounting ============================"
 # objects offset and an assert hit when an rpc was built with 1023's mapped
 # offset 511 and 511's raw 511 offset. it also found general redirtying bugs.
 test_46() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	f="$DIR/f46"
 	stop_writeback
 	sync
@@ -4107,8 +4161,8 @@ run_test 46 "dirtying a previously written page ================"
 test_48a() { # bug 2399
 	[ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.63) ] &&
-		skip "MDS prior to 2.3.63 handle ZFS dir .. incorrectly" &&
-		return
+		skip "MDS prior to 2.3.63 handle ZFS dir .. incorrectly"
+
 	test_mkdir $DIR/$tdir
 	cd $DIR/$tdir
 	mv $DIR/$tdir $DIR/$tdir.new || error "move directory failed"
@@ -4205,8 +4259,9 @@ test_48e() { # bug 4134
 run_test 48e "Access to recreated parent subdir (should return errors)"
 
 test_49() { # LU-1030
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+
 	# get ost1 size - lustre-OST0000
 	ost1_size=$(do_facet ost1 $LFS df | grep ${ost1_svc} |
 		awk '{ print $4 }')
@@ -4265,9 +4320,9 @@ cleanup_print_lfs_df () {
 }
 
 test_51b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	local dir=$DIR/$tdir
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
+	local dir=$DIR/$tdir
 	local nrdirs=$((65536 + 100))
 
 	# cleanup the directory
@@ -4280,14 +4335,12 @@ test_51b() {
 	local mdtidx=$(printf "%04x" $($LFS getstripe -M $dir))
 	local numfree=$(lctl get_param -n mdc.$FSNAME-MDT$mdtidx*.filesfree)
 	[[ $numfree -lt $nrdirs ]] &&
-		skip "not enough free inodes ($numfree) on MDT$mdtidx" &&
-		return
+		skip "not enough free inodes ($numfree) on MDT$mdtidx"
 
 	# need to check free space for the directories as well
 	local blkfree=$(lctl get_param -n mdc.$FSNAME-MDT$mdtidx*.kbytesavail)
 	numfree=$(( blkfree / $(fs_inode_ksize) ))
-	[[ $numfree -lt $nrdirs ]] && skip "not enough blocks ($numfree)" &&
-		return
+	[[ $numfree -lt $nrdirs ]] && skip "not enough blocks ($numfree)"
 
 	trap cleanup_print_lfs_df EXIT
 
@@ -4331,8 +4384,9 @@ test_51b() {
 run_test 51b "exceed 64k subdirectory nlink limit on create, verify unlink"
 
 test_51d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs"
+
 	test_mkdir $DIR/$tdir
 	createmany -o $DIR/$tdir/t- 1000
 	$LFS getstripe $DIR/$tdir > $TMP/$tfile
@@ -4369,8 +4423,7 @@ run_test 51d "check object distribution"
 
 test_51e() {
 	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
-		skip "ldiskfs only test"
-		return
+		skip_env "ldiskfs only test"
 	fi
 
 	test_mkdir -c1 $DIR/$tdir
@@ -4458,9 +4511,9 @@ test_52b() {
 run_test 52b "immutable flag test (should return errors) ======="
 
 test_53() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	local param
 	local param_seq
@@ -4524,7 +4577,7 @@ test_53() {
 run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
 test_54a() {
-	perl -MSocket -e ';' || { skip "no Socket perl module installed" && return; }
+	perl -MSocket -e ';' || skip "no Socket perl module installed"
 
 	$SOCKETSERVER $DIR/socket ||
 		error "$SOCKETSERVER $DIR/socket failed: $?"
@@ -4568,11 +4621,12 @@ cleanup_54c() {
 }
 
 test_54c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	loopdev="$DIR/loop54c"
 
 	find_loop_dev
-	[ -z "$LOOPNUM" ] && echo "couldn't find empty loop device" && return
+	[ -z "$LOOPNUM" ] && skip_env "couldn't find empty loop device"
 	trap cleanup_54c EXIT
 	mknod $loopdev b 7 $LOOPNUM
 	echo "make a loop file system with $DIR/$tfile on $loopdev ($LOOPNUM)."
@@ -4672,9 +4726,7 @@ test_56a() {
 	$LFS getstripe --obd wrong_uuid $dir 2>&1 | grep -q "unknown obduuid" ||
 		error "$LFS getstripe --obd wrong_uuid: should return error"
 
-	[[ $OSTCOUNT -lt 2 ]] &&
-		skip_env "skip '$LFS getstripe --obd' tests: $OSTCOUNT < 2" &&
-		return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 
 	local ostidx=1
 	local obduuid=$(ostuuid_from_index $ostidx)
@@ -4720,14 +4772,14 @@ test_56b() {
 run_test 56b "check $LFS getdirstripe"
 
 test_56c() {
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	local ost_idx=0
 	local ost_name=$(ostname_from_index $ost_idx)
 	local old_status=$(ost_dev_status $ost_idx)
 
 	[[ -z "$old_status" ]] ||
-		{ skip_env "OST $ost_name is in $old_status status"; return 0; }
+		skip_env "OST $ost_name is in $old_status status"
 
 	do_facet ost1 $LCTL set_param -n obdfilter.$ost_name.degraded=1
 	sleep_maxage
@@ -4932,7 +4984,7 @@ run_test 56o "check lfs find -mtime for old files"
 
 test_56p() {
 	[ $RUNAS_ID -eq $UID ] &&
-		skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+		skip_env "RUNAS_ID = UID = $UID -- skipping"
 
 	local dir=$DIR/$tdir
 
@@ -4956,7 +5008,7 @@ run_test 56p "check lfs find -uid and ! -uid"
 
 test_56q() {
 	[ $RUNAS_ID -eq $UID ] &&
-		skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+		skip_env "RUNAS_ID = UID = $UID -- skipping"
 
 	local dir=$DIR/$tdir
 
@@ -5025,7 +5077,7 @@ test_56r() {
 run_test 56r "check lfs find -size works"
 
 test_56s() { # LU-611 #LU-9369
-	[[ $OSTCOUNT -lt 2 ]] && skip "need at least 2 OSTs" && return 0
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "need at least 2 OSTs"
 
 	local dir=$DIR/$tdir
 	local onestripe=$(((NUMDIRS + 1) * NUMFILES))
@@ -5205,8 +5257,9 @@ test_56v() {
 run_test 56v "check 'lfs find -mdt match with lfs getstripe -M' ======="
 
 test_56w() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local dir=$DIR/$tdir
 
 	setup_56 $dir $NUMFILES $NUMDIRS "-c $OSTCOUNT" "-c1"
@@ -5221,8 +5274,7 @@ test_56w() {
 	local free_space=$($LCTL get_param -n lov.$FSNAME-clilov-*.kbytesavail |
 			   head -n1)
 	[[ $free_space -le $((required_space / 1024)) ]] &&
-		skip_env "need $required_space, have $free_space kbytes" &&
-		return
+		skip_env "need $required_space, have $free_space kbytes"
 
 	local dd_bs=65536
 	local dd_count=$((file_size / dd_bs))
@@ -5495,7 +5547,8 @@ test_56wc() {
 run_test 56wc "check unrecognized options for lfs_migrate are passed through"
 
 test_56wd() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
 	local file1=$DIR/$tdir/file1
 
 	echo -n "Creating test dir..."
@@ -5533,8 +5586,8 @@ test_56wd() {
 run_test 56wd "check lfs_migrate --rsync and --no-rsync work"
 
 test_56x() {
-	check_swap_layouts_support && return 0
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	check_swap_layouts_support
 
 	local dir=$DIR/$tdir
 	local ref1=/etc/passwd
@@ -5554,8 +5607,8 @@ test_56x() {
 run_test 56x "lfs migration support"
 
 test_56xa() {
-	check_swap_layouts_support && return 0
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	check_swap_layouts_support
 
 	local dir=$DIR/$tdir/$testnum
 
@@ -5620,8 +5673,7 @@ check_migrate_links() {
 
 	echo "${#paths[*]}"
 	if [ ${#paths[*]} -lt $total_count -a "$begin" -eq 2  ]; then
-			echo "hard link list has unexpected size, skipping test"
-			return 0
+			skip "hard link list has unexpected size, skipping test"
 	fi
 	if [ ${#paths[*]} -ge $total_count -a "$begin" -ne 2  ]; then
 			error "link names should exceed xattrs size"
@@ -5665,7 +5717,7 @@ check_migrate_links() {
 
 test_56xb() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	local dir="$DIR/$tdir"
 
@@ -5690,8 +5742,7 @@ run_test 56xb "lfs migration hard link support"
 
 test_56y() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.53) ] &&
-		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53" &&
-		return
+		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53"
 
 	local res=""
 	local dir=$DIR/$tdir
@@ -5747,7 +5798,7 @@ test_56z() { # LU-4824
 run_test 56z "lfs find should continue after an error"
 
 test_56aa() { # LU-5937
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 
 	local dir=$DIR/$tdir
 
@@ -5848,7 +5899,7 @@ run_test 56ba "test lfs find --component-end, -start, -count, and -flags"
 
 test_56ca() {
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.57) ]] ||
-		{ skip "Need MDS version at least 2.10.57"; return 0; }
+		skip "Need MDS version at least 2.10.57"
 
 	local td=$DIR/$tdir
 	local tf=$td/$tfile
@@ -5921,14 +5972,13 @@ test_56ca() {
 run_test 56ca "check lfs find --mirror-count|-N and --mirror-state"
 
 test_57a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# note test will not do anything if MDS is not local
 	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
-		skip "ldiskfs only test"
-		return
+		skip_env "ldiskfs only test"
 	fi
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local MNTDEV="osd*.*MDT*.mntdev"
 	DEV=$(do_facet $SINGLEMDS lctl get_param -n $MNTDEV)
 	[ -z "$DEV" ] && error "can't access $MNTDEV"
@@ -5943,15 +5993,13 @@ test_57a() {
 run_test 57a "verify MDS filesystem created with large inodes =="
 
 test_57b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
-		skip "ldiskfs only test"
-		return
+		skip_env "ldiskfs only test"
 	fi
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local dir=$DIR/$tdir
-
 	local FILECOUNT=100
 	local FILE1=$dir/f1
 	local FILEN=$dir/f$FILECOUNT
@@ -6004,15 +6052,17 @@ test_57b() {
 run_test 57b "default LOV EAs are stored inside large inodes ==="
 
 test_58() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ -z "$(which wiretest 2>/dev/null)" ] &&
-			skip_env "could not find wiretest" && return
+			skip_env "could not find wiretest"
+
 	wiretest
 }
 run_test 58 "verify cross-platform wire constants =============="
 
 test_59() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	echo "touch 130 files"
 	createmany -o $DIR/f59- 130
 	echo "rm 130 files"
@@ -6025,11 +6075,11 @@ run_test 59 "verify cancellation of llog records async ========="
 
 TEST60_HEAD="test_60 run $RANDOM"
 test_60a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
 	do_facet mgs "! which run-llog.sh &> /dev/null" &&
 		do_facet mgs "! ls run-llog.sh &> /dev/null" &&
-			skip_env "missing subtest run-llog.sh" && return
+			skip_env "missing subtest run-llog.sh"
 
 	log "$TEST60_HEAD - from kernel mode"
 	do_facet mgs "$LCTL set_param debug=warning; $LCTL dk > /dev/null"
@@ -6040,10 +6090,10 @@ test_60a() {
 	local llog_reader=$(do_facet mgs "which llog_reader 2> /dev/null")
 	llog_reader=${llog_reader:-$LUSTRE/utils/llog_reader}
 	[ -z $(do_facet mgs ls -d $llog_reader 2> /dev/null) ] &&
-			skip_env "missing llog_reader" && return
+			skip_env "missing llog_reader"
 	local fstype=$(facet_fstype mgs)
 	[ $fstype != ldiskfs -a $fstype != zfs ] &&
-		skip_env "Only for ldiskfs or zfs type mgs" && return
+		skip_env "Only for ldiskfs or zfs type mgs"
 
 	local mntpt=$(facet_mntpt mgs)
 	local mgsdev=$(mgsdevname 1)
@@ -6113,7 +6163,7 @@ test_60a() {
 run_test 60a "llog_test run from kernel module and test llog_reader"
 
 test_60aa() {
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
 
 	# test old logid format
 	if [ $(lustre_version_code mgs) -le $(version_code 3.1.53) ]; then
@@ -6131,7 +6181,8 @@ test_60aa() {
 run_test 60aa "llog_print works with FIDs and simple names"
 
 test_60b() { # bug 6411
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	dmesg > $DIR/$tfile
 	LLOG_COUNT=$(dmesg | awk "/$TEST60_HEAD/ { marker = 1; from_marker = 0; }
 				/llog.test/ {
@@ -6151,7 +6202,8 @@ test_60b() { # bug 6411
 run_test 60b "limit repeated messages from CERROR/CWARN ========"
 
 test_60c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	echo "create 5000 files"
 	createmany -o $DIR/f60c- 5000
 #define OBD_FAIL_MDS_LLOG_CREATE_FAILED  0x137
@@ -6162,9 +6214,9 @@ test_60c() {
 run_test 60c "unlink file when mds full"
 
 test_60d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	SAVEPRINTK=$(lctl get_param -n printk)
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
+	SAVEPRINTK=$(lctl get_param -n printk)
 	# verify "lctl mark" is even working"
 	MESSAGE="test message ID $RANDOM $$"
 	$LCTL mark "$MESSAGE" || error "$LCTL mark failed"
@@ -6182,8 +6234,9 @@ test_60d() {
 run_test 60d "test printk console message masking"
 
 test_60e() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	touch $DIR/$tfile
 #define OBD_FAIL_MDS_LLOG_CREATE_FAILED2  0x15b
 	do_facet mds1 lctl set_param fail_loc=0x15b
@@ -6192,7 +6245,8 @@ test_60e() {
 run_test 60e "no space while new llog is being created"
 
 test_61() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	f="$DIR/f61"
 	dd if=/dev/zero of=$f bs=$(page_size) count=1 || error "dd $f failed"
 	cancel_lru_locks osc
@@ -6203,13 +6257,14 @@ run_test 61 "mmap() writes don't make sync hang ================"
 
 # bug 2330 - insufficient obd_match error checking causes LBUG
 test_62() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        f="$DIR/f62"
-        echo foo > $f
-        cancel_lru_locks osc
-        lctl set_param fail_loc=0x405
-        cat $f && error "cat succeeded, expect -EIO"
-        lctl set_param fail_loc=0
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	f="$DIR/f62"
+	echo foo > $f
+	cancel_lru_locks osc
+	lctl set_param fail_loc=0x405
+	cat $f && error "cat succeeded, expect -EIO"
+	lctl set_param fail_loc=0
 }
 # This test is now irrelevant (as of bug 10718 inclusion), we no longer
 # match every page all of the time.
@@ -6219,8 +6274,10 @@ test_62() {
 # Though this test is irrelevant anymore, it helped to reveal some
 # other grant bugs (LU-4482), let's keep it.
 test_63a() {   # was test_63
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	MAX_DIRTY_MB=`lctl get_param -n osc.*.max_dirty_mb | head -n 1`
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	MAX_DIRTY_MB=$(lctl get_param -n osc.*.max_dirty_mb | head -n 1)
+
 	for i in `seq 10` ; do
 		dd if=/dev/zero of=$DIR/f63 bs=8k &
 		sleep 5
@@ -6235,7 +6292,8 @@ run_test 63a "Verify oig_wait interruption does not crash ======="
 # bug 2248 - async write errors didn't return to application on sync
 # bug 3677 - async write errors left page locked
 test_63b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	debugsave
 	lctl set_param debug=-1
 
@@ -6257,14 +6315,16 @@ test_63b() {
 run_test 63b "async write errors should be returned to fsync ==="
 
 test_64a () {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	df $DIR
 	lctl get_param -n osc.*[oO][sS][cC][_-]*.cur* | grep "[0-9]"
 }
 run_test 64a "verify filter grant calculations (in kernel) ====="
 
 test_64b () {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	sh oos.sh $MOUNT || error "oos.sh failed: $?"
 }
 run_test 64b "check out-of-space detection on client"
@@ -6326,14 +6386,14 @@ grant_chunk() {
 
 test_64d() {
 	[ $(lustre_version_code ost1) -lt $(version_code 2.10.56) ] &&
-		skip "OST < 2.10.55 doesn't limit grants enough" && return 0
+		skip "OST < 2.10.55 doesn't limit grants enough"
 
 	local tgt=$($LCTL dl | grep "0000-osc-[^mM]" | awk '{print $4}')
 	local file=$DIR/$tfile
 
 	[[ $($LCTL get_param osc.${tgt}.import |
-		    grep "connect_flags:.*grant_param") ]] || \
-			{ skip "no grant_param connect flag"; return; }
+	     grep "connect_flags:.*grant_param") ]] ||
+		skip "no grant_param connect flag"
 
 	local olddebug=$($LCTL get_param -n debug 2> /dev/null)
 
@@ -6367,7 +6427,8 @@ run_test 64d "check grant limit exceed"
 
 # bug 1414 - set/get directories' stripe info
 test_65a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/$tdir
 	touch $DIR/$tdir/f1
 	$LVERIFY $DIR/$tdir $DIR/$tdir/f1 || error "lverify failed"
@@ -6375,7 +6436,8 @@ test_65a() {
 run_test 65a "directory with no stripe info"
 
 test_65b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/$tdir
 	local STRIPESIZE=$($GETSTRIPE -S $DIR/$tdir)
 
@@ -6387,8 +6449,9 @@ test_65b() {
 run_test 65b "directory setstripe -S stripe_size*2 -i 0 -c 1"
 
 test_65c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $OSTCOUNT -lt 2 ] && skip "need at least 2 OSTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $OSTCOUNT -lt 2 ] && skip_env "need at least 2 OSTs"
+
 	test_mkdir $DIR/$tdir
 	local stripesize=$($GETSTRIPE -S $DIR/$tdir)
 
@@ -6400,7 +6463,8 @@ test_65c() {
 run_test 65c "directory setstripe -S stripe_size*4 -i 1 -c $((OSTCOUNT-1))"
 
 test_65d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/$tdir
 	local STRIPECOUNT=$($GETSTRIPE -c $DIR/$tdir)
 	local STRIPESIZE=$($GETSTRIPE -S $DIR/$tdir)
@@ -6421,11 +6485,12 @@ test_65d() {
 run_test 65d "directory setstripe -S stripe_size -c stripe_count"
 
 test_65e() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/$tdir
 
 	$SETSTRIPE $DIR/$tdir || error "setstripe"
-        $GETSTRIPE -v $DIR/$tdir | grep "Default" ||
+	$GETSTRIPE -v $DIR/$tdir | grep "Default" ||
 					error "no stripe info failed"
 	touch $DIR/$tdir/f6
 	$LVERIFY $DIR/$tdir $DIR/$tdir/f6 || error "lverify failed"
@@ -6433,14 +6498,16 @@ test_65e() {
 run_test 65e "directory setstripe defaults"
 
 test_65f() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/${tdir}f
 	$RUNAS $SETSTRIPE $DIR/${tdir}f && error "setstripe succeeded" || true
 }
 run_test 65f "dir setstripe permission (should return error) ==="
 
 test_65g() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/$tdir
 	local STRIPESIZE=$($GETSTRIPE -S $DIR/$tdir)
 
@@ -6453,7 +6520,8 @@ test_65g() {
 run_test 65g "directory setstripe -d"
 
 test_65h() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/$tdir
 	local STRIPESIZE=$($GETSTRIPE -S $DIR/$tdir)
 
@@ -6466,7 +6534,7 @@ test_65h() {
 run_test 65h "directory stripe info inherit ===================="
 
 test_65i() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	save_layout_restore_at_exit $MOUNT
 
@@ -6485,7 +6553,7 @@ test_65i() {
 run_test 65i "various tests to set root directory striping"
 
 test_65j() { # bug6367
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	sync; sleep 1
 
@@ -6515,9 +6583,9 @@ cleaup_65k() {
 }
 
 test_65k() { # bug11679
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local disable_precreate=true
 	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.8.54) ] &&
@@ -6577,7 +6645,8 @@ test_65k() { # bug11679
 run_test 65k "validate manual striping works properly with deactivated OSCs"
 
 test_65l() { # bug 12836
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir -p $DIR/$tdir/test_dir
 	$SETSTRIPE -c -1 $DIR/$tdir/test_dir
 	$LFS find -mtime -1 $DIR/$tdir >/dev/null
@@ -6596,7 +6665,8 @@ run_test 65m "normal user can't set filesystem default stripe"
 
 # bug 2543 - update blocks count on client
 test_66() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	COUNT=${COUNT:-8}
 	dd if=/dev/zero of=$DIR/f66 bs=1k count=$COUNT
 	sync; sync_all_data; sync; sync_all_data
@@ -6617,8 +6687,8 @@ swap_used() {
 # bug5265, obdfilter oa2dentry return -ENOENT
 # #define OBD_FAIL_SRV_ENOENT 0x217
 test_69() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	f="$DIR/$tfile"
 	$SETSTRIPE -c 1 -i 0 $f
@@ -6651,15 +6721,13 @@ test_71() {
 run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
 test_72a() { # bug 5695 - Test that on 2.6 remove_suid works properly
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ "$RUNAS_ID" = "$UID" ] &&
-		skip_env "RUNAS_ID = UID = $UID -- skipping" && return
-
+		skip_env "RUNAS_ID = UID = $UID -- skipping"
 	# Check that testing environment is properly set up. Skip if not
-	FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS_GID $RUNAS || {
+	FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS_GID $RUNAS ||
 		skip_env "User $RUNAS_ID does not exist - skipping"
-		return 0
-	}
+
 	touch $DIR/$tfile
 	chmod 777 $DIR/$tfile
 	chmod ug+s $DIR/$tfile
@@ -6679,17 +6747,15 @@ run_test 72a "Test that remove suid works properly (bug5695) ===="
 test_72b() { # bug 24226 -- keep mode setting when size is not changing
 	local perm
 
-	[ "$RUNAS_ID" = "$UID" ] && \
-		skip_env "RUNAS_ID = UID = $UID -- skipping" && return
-	[ "$RUNAS_ID" -eq 0 ] && \
-		skip_env "RUNAS_ID = 0 -- skipping" && return
-
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ "$RUNAS_ID" = "$UID" ] &&
+		skip_env "RUNAS_ID = UID = $UID -- skipping"
+	[ "$RUNAS_ID" -eq 0 ] &&
+		skip_env "RUNAS_ID = 0 -- skipping"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# Check that testing environment is properly set up. Skip if not
-	FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS_ID $RUNAS || {
+	FAIL_ON_ERROR=false check_runas_id_ret $RUNAS_ID $RUNAS_ID $RUNAS ||
 		skip_env "User $RUNAS_ID does not exist - skipping"
-		return 0
-	}
+
 	touch $DIR/${tfile}-f{g,u}
 	test_mkdir $DIR/${tfile}-dg
 	test_mkdir $DIR/${tfile}-du
@@ -6708,7 +6774,8 @@ run_test 72b "Test that we keep mode setting if without file data changed (bug 2
 
 # bug 3462 - multiple simultaneous MDC requests
 test_73() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/d73-1
 	test_mkdir $DIR/d73-2
 	multiop_bg_pause $DIR/d73-1/f73-1 O_c || return 1
@@ -6736,12 +6803,13 @@ test_73() {
 run_test 73 "multiple MDC requests (should not deadlock)"
 
 test_74a() { # bug 6149, 6184
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	touch $DIR/f74a
 	#define OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT 0x30e
 	#
 	# very important to OR with OBD_FAIL_ONCE (0x80000000) -- otherwise it
 	# will spin in a tight reconnection loop
-	touch $DIR/f74a
 	$LCTL set_param fail_loc=0x8000030e
 	# get any lock that won't be difficult - lookup works.
 	ls $DIR/f74a
@@ -6752,7 +6820,8 @@ test_74a() { # bug 6149, 6184
 run_test 74a "ldlm_enqueue freed-export error path, ls (shouldn't LBUG)"
 
 test_74b() { # bug 13310
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	#define OBD_FAIL_LDLM_ENQUEUE_OLD_EXPORT 0x30e
 	#
 	# very important to OR with OBD_FAIL_ONCE (0x80000000) -- otherwise it
@@ -6767,7 +6836,8 @@ test_74b() { # bug 13310
 run_test 74b "ldlm_enqueue freed-export error path, touch (shouldn't LBUG)"
 
 test_74c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	#define OBD_FAIL_LDLM_NEW_LOCK
 	$LCTL set_param fail_loc=0x319
 	touch $DIR/$tfile && error "touch successful"
@@ -6781,8 +6851,10 @@ num_inodes() {
 }
 
 test_76() { # Now for bug 20433, added originally in bug 1443
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local CPUS=$(getconf _NPROCESSORS_ONLN 2>/dev/null)
+
 	cancel_lru_locks osc
 	BEFORE_INODES=$(num_inodes)
 	echo "before inodes: $BEFORE_INODES"
@@ -6842,8 +6914,9 @@ setup_f77() {
 }
 
 test_77a() { # bug 10889
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GSS && skip "could not run with gss" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	$GSS && skip_env "could not run with gss"
+
 	[ ! -f $F77_TMP ] && setup_f77
 	set_checksums 1
 	dd if=$F77_TMP of=$DIR/$tfile bs=1M count=$F77SZ || error "dd error"
@@ -6853,8 +6926,9 @@ test_77a() { # bug 10889
 run_test 77a "normal checksum read/write operation"
 
 test_77b() { # bug 10889
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GSS && skip "could not run with gss" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	$GSS && skip_env "could not run with gss"
+
 	[ ! -f $F77_TMP ] && setup_f77
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	$LCTL set_param fail_loc=0x80000409
@@ -6890,10 +6964,9 @@ cleanup_77c() {
 }
 
 test_77c() {
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GSS && skip "could not run with gss" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	$GSS && skip_env "could not run with gss"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	local bad1
 	local osc_file_prefix
@@ -6956,7 +7029,7 @@ test_77c() {
 	[[ "$orig_cksum" == "$dump_cksum" ]] ||
 		error "dump content does not match on Client"
 
-	$check_ost || { skip "No need to check cksum dump on OSS"; return 0; }
+	$check_ost || skip "No need to check cksum dump on OSS"
 
 	# check cksum dump on OSS
 	ost_file=$(do_facet ost1 ls ${ost_file_prefix}\*)
@@ -6971,8 +7044,9 @@ test_77c() {
 run_test 77c "checksum error on client read with debug"
 
 test_77d() { # bug 10889
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GSS && skip "could not run with gss" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	$GSS && skip_env "could not run with gss"
+
 	#define OBD_FAIL_OSC_CHECKSUM_SEND       0x409
 	$LCTL set_param fail_loc=0x80000409
 	set_checksums 1
@@ -6993,8 +7067,9 @@ test_77d() { # bug 10889
 run_test 77d "checksum error on OST direct write, read"
 
 test_77f() { # bug 10889
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GSS && skip "could not run with gss" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	$GSS && skip_env "could not run with gss"
+
 	set_checksums 1
 	for algo in $CKSUM_TYPES; do
 		cancel_lru_locks osc
@@ -7011,9 +7086,9 @@ test_77f() { # bug 10889
 run_test 77f "repeat checksum error on write (expect error)"
 
 test_77g() { # bug 10889
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GSS && skip "could not run with gss" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	$GSS && skip_env "could not run with gss"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	[ ! -f $F77_TMP ] && setup_f77
 
@@ -7040,8 +7115,9 @@ test_77g() { # bug 10889
 run_test 77g "checksum error on OST write, read"
 
 test_77j() { # bug 13805
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GSS && skip "could not run with gss" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	$GSS && skip_env "could not run with gss"
+
 	#define OBD_FAIL_OSC_CKSUM_ADLER_ONLY    0x40c
 	lctl set_param fail_loc=0x40c
 	remount_client $MOUNT
@@ -7071,8 +7147,8 @@ cleanup_test_78() {
 }
 
 test_78() { # bug 10901
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost || { skip_env "local OST" && return; }
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost || skip_env "local OST"
 
 	NSEQ=5
 	F78SIZE=$(($(awk '/MemFree:/ { print $2 }' /proc/meminfo) / 1024))
@@ -7097,7 +7173,7 @@ test_78() { # bug 10901
 		head -n1)
 	echo "Smallest OST: $SMALLESTOST"
 	[[ $SMALLESTOST -lt 10240 ]] &&
-		skip "too small OSTSIZE, useless to run large O_DIRECT test" && return 0
+		skip "too small OSTSIZE, useless to run large O_DIRECT test"
 
 	trap cleanup_test_78 EXIT
 
@@ -7118,12 +7194,13 @@ test_78() { # bug 10901
 run_test 78 "handle large O_DIRECT writes correctly ============"
 
 test_79() { # bug 12743
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	wait_delete_completed
 
-        BKTOTAL=$(calc_osc_kbytes kbytestotal)
-        BKFREE=$(calc_osc_kbytes kbytesfree)
-        BKAVAIL=$(calc_osc_kbytes kbytesavail)
+	BKTOTAL=$(calc_osc_kbytes kbytestotal)
+	BKFREE=$(calc_osc_kbytes kbytesfree)
+	BKAVAIL=$(calc_osc_kbytes kbytesavail)
 
         STRING=`df -P $MOUNT | tail -n 1 | awk '{print $2","$3","$4}'`
         DFTOTAL=`echo $STRING | cut -d, -f1`
@@ -7149,17 +7226,19 @@ test_79() { # bug 12743
 run_test 79 "df report consistency check ======================="
 
 test_80() { # bug 10718
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        # relax strong synchronous semantics for slow backends like ZFS
-        local soc="obdfilter.*.sync_on_lock_cancel"
-        local soc_old=$(do_facet ost1 lctl get_param -n $soc | head -n1)
-        local hosts=
-        if [ "$soc_old" != "never" -a "$(facet_fstype ost1)" != "ldiskfs" ]; then
-                hosts=$(for host in $(seq -f "ost%g" 1 $OSTCOUNT); do
-                          facet_active_host $host; done | sort -u)
-                do_nodes $hosts lctl set_param $soc=never
-        fi
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	# relax strong synchronous semantics for slow backends like ZFS
+	local soc="obdfilter.*.sync_on_lock_cancel"
+	local soc_old=$(do_facet ost1 lctl get_param -n $soc | head -n1)
+	local hosts=
+	if [ "$soc_old" != "never" ] &&
+		[ "$(facet_fstype ost1)" != "ldiskfs" ]; then
+			hosts=$(for host in $(seq -f "ost%g" 1 $OSTCOUNT); do
+				facet_active_host $host; done | sort -u)
+			do_nodes $hosts lctl set_param $soc=never
+	fi
 
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1M
         sync; sleep 1; sync
@@ -7178,37 +7257,39 @@ test_80() { # bug 10718
 run_test 80 "Page eviction is equally fast at high offsets too  ===="
 
 test_81a() { # LU-456
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        remote_ost_nodsh && skip "remote OST with nodsh" && return
-        # define OBD_FAIL_OST_MAPBLK_ENOSPC    0x228
-        # MUST OR with the OBD_FAIL_ONCE (0x80000000)
-        do_facet ost1 lctl set_param fail_loc=0x80000228
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
-        # write should trigger a retry and success
-        $SETSTRIPE -i 0 -c 1 $DIR/$tfile
-        $MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
-        RC=$?
-        if [ $RC -ne 0 ] ; then
-                error "write should success, but failed for $RC"
-        fi
+	# define OBD_FAIL_OST_MAPBLK_ENOSPC    0x228
+	# MUST OR with the OBD_FAIL_ONCE (0x80000000)
+	do_facet ost1 lctl set_param fail_loc=0x80000228
+
+	# write should trigger a retry and success
+	$SETSTRIPE -i 0 -c 1 $DIR/$tfile
+	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+	RC=$?
+	if [ $RC -ne 0 ] ; then
+		error "write should success, but failed for $RC"
+	fi
 }
 run_test 81a "OST should retry write when get -ENOSPC ==============="
 
 test_81b() { # LU-456
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        remote_ost_nodsh && skip "remote OST with nodsh" && return
-        # define OBD_FAIL_OST_MAPBLK_ENOSPC    0x228
-        # Don't OR with the OBD_FAIL_ONCE (0x80000000)
-        do_facet ost1 lctl set_param fail_loc=0x228
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
-        # write should retry several times and return -ENOSPC finally
-        $SETSTRIPE -i 0 -c 1 $DIR/$tfile
-        $MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
-        RC=$?
-        ENOSPC=28
-        if [ $RC -ne $ENOSPC ] ; then
-                error "dd should fail for -ENOSPC, but succeed."
-        fi
+	# define OBD_FAIL_OST_MAPBLK_ENOSPC    0x228
+	# Don't OR with the OBD_FAIL_ONCE (0x80000000)
+	do_facet ost1 lctl set_param fail_loc=0x228
+
+	# write should retry several times and return -ENOSPC finally
+	$SETSTRIPE -i 0 -c 1 $DIR/$tfile
+	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+	RC=$?
+	ENOSPC=28
+	if [ $RC -ne $ENOSPC ] ; then
+		error "dd should fail for -ENOSPC, but succeed."
+	fi
 }
 run_test 81b "OST should return -ENOSPC when retry still fails ======="
 
@@ -7236,7 +7317,7 @@ run_test 82 "Basic grouplock test"
 
 test_83() {
 	local sfile="/boot/System.map-$(uname -r)"
-	[ ! -f $sfile ] && skip "No $sfile found" && return
+	[ ! -f $sfile ] && skip "No $sfile found"
 	# define OBD_FAIL_LLITE_PTASK_IO_FAIL 0x140d
 	$LCTL set_param fail_loc=0x140d
 	cp $sfile $DIR/$tfile || error "write failed"
@@ -7247,8 +7328,8 @@ test_83() {
 run_test 83 "Short write in ptask ==============================="
 
 test_99() {
-	[ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" &&
-		return
+	[ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs"
+
 	test_mkdir $DIR/$tdir.cvsroot
 	chown $RUNAS_ID $DIR/$tdir.cvsroot
 
@@ -7278,15 +7359,13 @@ test_99() {
 run_test 99 "cvs strange file/directory operations"
 
 test_100() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ "$NETTYPE" =~ tcp ]] ||
-		{ skip "TCP secure port test, not useful for NETTYPE=$NETTYPE" &&
-			return ; }
-
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+		skip_env "TCP secure port test, not useful for NETTYPE=$NETTYPE"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	remote_servers ||
-		{ skip "useless for local single node setup" && return; }
+		skip "useless for local single node setup"
 
 	netstat -tna | ( rc=1; while read PROT SND RCV LOCAL REMOTE STAT; do
 		[ "$PROT" != "tcp" ] && continue
@@ -7330,8 +7409,9 @@ cleanup_101a() {
 }
 
 test_101a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -ge 2 ] && skip "needs < 2 MDTs" && return #LU-4322
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -ge 2 ] && skip_env "needs < 2 MDTs" #LU-4322
+
 	local s
 	local discard
 	local nreads=10000
@@ -7419,10 +7499,12 @@ ra_check_101() {
 }
 
 test_101b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
 	local STRIPE_SIZE=1048576
 	local STRIDE_SIZE=$((STRIPE_SIZE*OSTCOUNT))
+
 	if [ $SLOW == "yes" ]; then
 		local FILE_LENGTH=$((STRIDE_SIZE * 64))
 	else
@@ -7452,7 +7534,8 @@ test_101b() {
 run_test 101b "check stride-io mode read-ahead ================="
 
 test_101c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local STRIPE_SIZE=1048576
 	local FILE_LENGTH=$((STRIPE_SIZE*100))
 	local nreads=10000
@@ -7490,14 +7573,15 @@ set_read_ahead() {
 }
 
 test_101d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local file=$DIR/$tfile
 	local sz_MB=${FILESIZE_101d:-500}
 	local ra_MB=${READAHEAD_MB:-40}
 
 	local free_MB=$(($(df -P $DIR | tail -n 1 | awk '{ print $4 }') / 1024))
 	[ $free_MB -lt $sz_MB ] &&
-		skip "Need free space ${sz_MB}M, have ${free_MB}M" && return
+		skip "Need free space ${sz_MB}M, have ${free_MB}M"
 
 	echo "Create test file $file size ${sz_MB}M, ${free_MB}M free"
 	$SETSTRIPE -c -1 $file || error "setstripe failed"
@@ -7533,7 +7617,8 @@ test_101d() {
 run_test 101d "file read with and without read-ahead enabled"
 
 test_101e() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local file=$DIR/$tfile
 	local size_KB=500  #KB
 	local count=100
@@ -7542,7 +7627,7 @@ test_101e() {
 	local free_KB=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
 	local need_KB=$((count * size_KB))
 	[[ $free_KB -le $need_KB ]] &&
-		skip_env "Need free space $need_KB, have $free_KB" && return
+		skip_env "Need free space $need_KB, have $free_KB"
 
 	echo "Creating $count ${size_KB}K test files"
 	for ((i = 0; i < $count; i++)); do
@@ -7572,7 +7657,7 @@ test_101e() {
 run_test 101e "check read-ahead for small read(1k) for small files(500k)"
 
 test_101f() {
-	which iozone || { skip "no iozone installed" && return; }
+	which iozone || skip_env "no iozone installed"
 
 	local old_debug=$($LCTL get_param debug)
 	old_debug=${old_debug#*=}
@@ -7639,7 +7724,7 @@ test_101g_brw_size_test() {
 }
 
 test_101g() {
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	local rpcs
 	local osts=$(get_facets OST)
@@ -7717,17 +7802,16 @@ cleanup_test102() {
 }
 
 test_102a() {
+	[ "$UID" != 0 ] && skip "must run as root"
+	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep xattr)" ] &&
+		skip_env "must have user_xattr"
+
+	[ -z "$(which setfattr 2>/dev/null)" ] &&
+		skip_env "could not find setfattr"
+
 	local testfile=$DIR/$tfile
 
 	touch $testfile
-
-	[ "$UID" != 0 ] && skip_env "must run as root" && return
-	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep xattr)" ] &&
-		skip_env "must have user_xattr" && return
-
-	[ -z "$(which setfattr 2>/dev/null)" ] &&
-		skip_env "could not find setfattr" && return
-
 	echo "set/get xattr..."
 	setfattr -n trusted.name1 -v value1 $testfile ||
 		error "setfattr -n trusted.name1=value1 $testfile failed"
@@ -7780,11 +7864,11 @@ run_test 102a "user xattr test =================================="
 
 test_102b() {
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
-		skip_env "could not find setfattr" && return
+		skip_env "could not find setfattr"
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 
 	# b10930: get/set/list trusted.lov xattr
 	echo "get/set/list trusted.lov xattr ..."
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	local testfile=$DIR/$tfile
 	$SETSTRIPE -S 65536 -i 1 -c $OSTCOUNT $testfile ||
 		error "setstripe failed"
@@ -7811,11 +7895,11 @@ run_test 102b "getfattr/setfattr for trusted.lov EAs ============"
 
 test_102c() {
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
-		skip_env "could not find setfattr" && return
+		skip_env "could not find setfattr"
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 
 	# b10930: get/set/list lustre.lov xattr
 	echo "get/set/list lustre.lov xattr ..."
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
 	test_mkdir $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
@@ -7872,8 +7956,9 @@ have_xattrs_include() {
 }
 
 test_102d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
 	XINC=$(have_xattrs_include)
 	setup_test102
 	tar xf $TMP/f102.tar -C $DIR/$tdir --xattrs $XINC
@@ -7883,8 +7968,9 @@ test_102d() {
 run_test 102d "tar restore stripe info from tarfile,not keep osts"
 
 test_102f() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
 	XINC=$(have_xattrs_include)
 	setup_test102
 	test_mkdir $DIR/$tdir.restore
@@ -7897,21 +7983,19 @@ test_102f() {
 run_test 102f "tar copy files, not keep osts"
 
 grow_xattr() {
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep xattr)" ] &&
+		skip "must have user_xattr"
+	[ -z "$(which setfattr 2>/dev/null)" ] &&
+		skip_env "could not find setfattr"
+	[ -z "$(which getfattr 2>/dev/null)" ] &&
+		skip_env "could not find getfattr"
+
 	local xsize=${1:-1024}	# in bytes
 	local file=$DIR/$tfile
-
-	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep xattr)" ] &&
-		skip "must have user_xattr" && return 0
-	[ -z "$(which setfattr 2>/dev/null)" ] &&
-		skip_env "could not find setfattr" && return 0
-	[ -z "$(which getfattr 2>/dev/null)" ] &&
-		skip_env "could not find getfattr" && return 0
+	local value="$(generate_string $xsize)"
+	local xbig=trusted.big
 
 	touch $file
-
-	local value="$(generate_string $xsize)"
-
-	local xbig=trusted.big
 	log "save $xbig on $file"
 	setfattr -n $xbig -v $value $file ||
 		error "saving $xbig on $file failed"
@@ -7943,14 +8027,16 @@ test_102h() { # bug 15777
 run_test 102h "grow xattr from inside inode to external block"
 
 test_102ha() {
-	large_xattr_enabled || { skip "large_xattr disabled" && return; }
+	large_xattr_enabled || skip_env "large_xattr disabled"
+
 	grow_xattr $(max_xattr_size)
 }
 run_test 102ha "grow xattr from inside inode to external inode"
 
 test_102i() { # bug 17038
 	[ -z "$(which getfattr 2>/dev/null)" ] &&
-		skip "could not find getfattr" && return
+		skip "could not find getfattr"
+
 	touch $DIR/$tfile
 	ln -s $DIR/$tfile $DIR/${tfile}link
 	getfattr -n trusted.lov $DIR/$tfile ||
@@ -7963,8 +8049,9 @@ test_102i() { # bug 17038
 run_test 102i "lgetxattr test on symbolic link ============"
 
 test_102j() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+
 	XINC=$(have_xattrs_include)
 	setup_test102 "$RUNAS"
 	chown $RUNAS_ID $DIR/$tdir
@@ -7976,7 +8063,8 @@ run_test 102j "non-root tar restore stripe info from tarfile, not keep osts ==="
 
 test_102k() {
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
-		skip "could not find setfattr" && return
+		skip "could not find setfattr"
+
 	touch $DIR/$tfile
 	# b22187 just check that does not crash for regular file.
 	setfattr -n trusted.lov $DIR/$tfile
@@ -8004,7 +8092,7 @@ run_test 102k "setfattr without parameter of value shouldn't cause a crash"
 
 test_102l() {
 	[ -z "$(which getfattr 2>/dev/null)" ] &&
-		skip "could not find getfattr" && return
+		skip "could not find getfattr"
 
 	# LU-532 trusted. xattr is invisible to non-root
 	local testfile=$DIR/$tfile
@@ -8050,11 +8138,10 @@ getxattr() { # getxattr path name
 
 test_102n() { # LU-4101 mdt: protect internal xattrs
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
-		skip "could not find setfattr" && return
+		skip "could not find setfattr"
 	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.50) ]
 	then
 		skip "MDT < 2.5.50 allows setxattr on internal trusted xattrs"
-		return
 	fi
 
 	local file0=$DIR/$tfile.0
@@ -8132,10 +8219,10 @@ test_102n() { # LU-4101 mdt: protect internal xattrs
 run_test 102n "silently ignore setxattr on internal trusted xattrs"
 
 test_102p() { # LU-4703 setxattr did not check ownership
-	local testfile=$DIR/$tfile
-
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.56) ] &&
-		skip "MDS needs to be at least 2.5.56" && return
+		skip "MDS needs to be at least 2.5.56"
+
+	local testfile=$DIR/$tfile
 
 	touch $testfile
 
@@ -8152,14 +8239,16 @@ run_test 102p "check setxattr(2) correctly fails without permission"
 
 test_102q() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.92) ] &&
-		skip "MDS needs to be at least 2.6.92" && return
+		skip "MDS needs to be at least 2.6.92"
+
 	orphan_linkea_check $DIR/$tfile || error "orphan_linkea_check"
 }
 run_test 102q "flistxattr should not return trusted.link EAs for orphans"
 
 test_102r() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.93) ] &&
-		skip "MDS needs to be at least 2.6.93" && return
+		skip "MDS needs to be at least 2.6.93"
+
 	touch $DIR/$tfile || error "touch"
 	setfattr -n user.$(basename $tfile) $DIR/$tfile || error "setfattr"
 	getfattr -n user.$(basename $tfile) $DIR/$tfile || error "getfattr"
@@ -8196,13 +8285,13 @@ run_acl_subtest()
 }
 
 test_103a() {
-	[ "$UID" != 0 ] && skip_env "must run as root" && return
+	[ "$UID" != 0 ] && skip "must run as root"
+	$GSS && skip_env "could not run under gss"
 	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep acl)" ] &&
-		skip "must have acl enabled" && return
+		skip_env "must have acl enabled"
 	[ -z "$(which setfacl 2>/dev/null)" ] &&
-		skip_env "could not find setfacl" && return
-	$GSS && skip "could not run under gss" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+		skip_env "could not find setfacl"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	gpasswd -a daemon bin				# LU-5641
 	do_facet $SINGLEMDS gpasswd -a daemon bin	# LU-5641
@@ -8315,7 +8404,8 @@ test_103c() {
 run_test 103c "'cp -rp' won't set empty acl"
 
 test_104a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	touch $DIR/$tfile
 	lfs df || error "lfs df failed"
 	lfs df -ih || error "lfs df -ih failed"
@@ -8337,9 +8427,10 @@ test_104a() {
 run_test 104a "lfs df [-ih] [path] test ========================="
 
 test_104b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $RUNAS_ID -eq $UID ] &&
-		skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+		skip_env "RUNAS_ID = UID = $UID -- skipping"
+
 	chmod 666 /dev/obd
 	denied_cnt=$(($($RUNAS $LFS check servers 2>&1 |
 			grep "Permission denied" | wc -l)))
@@ -8384,9 +8475,10 @@ test_105c() {
 run_test 105c "lockf when mounted without -o flock test"
 
 test_105d() { # bug 15924
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/$tdir
-	flock_is_enabled || { skip "mount w/o flock enabled" && return; }
+	flock_is_enabled || skip_env "mount w/o flock enabled"
 	#define OBD_FAIL_LDLM_CP_CB_WAIT  0x315
 	$LCTL set_param fail_loc=0x80000315
 	flocks_test 2 $DIR/$tdir
@@ -8394,7 +8486,8 @@ test_105d() { # bug 15924
 run_test 105d "flock race (should not freeze) ========"
 
 test_105e() { # bug 22660 && 22040
-	flock_is_enabled || { skip "mount w/o flock enabled" && return; }
+	flock_is_enabled || skip_env "mount w/o flock enabled"
+
 	touch $DIR/$tfile
 	flocks_test 3 $DIR/$tfile
 }
@@ -8408,12 +8501,13 @@ test_106() { #bug 10921
 run_test 106 "attempt exec of dir followed by chown of that dir"
 
 test_107() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        CDIR=`pwd`
-        cd $DIR
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
-        local file=core
-        rm -f $file
+	CDIR=`pwd`
+	local file=core
+
+	cd $DIR
+	rm -f $file
 
         local save_pattern=$(sysctl -n kernel.core_pattern)
         local save_uses_pid=$(sysctl -n kernel.core_uses_pid)
@@ -8460,8 +8554,8 @@ run_test 110 "filename length checking"
 # Purpose: To verify dynamic thread (OSS) creation.
 #
 test_115() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	# Lustre does not stop service threads once they are started.
 	# Reset number of running threads to default.
@@ -8587,10 +8681,9 @@ free_min_max () {
 }
 
 test_116a() { # was previously test_116()
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	echo -n "Free space priority "
 	do_facet $SINGLEMDS lctl get_param -n lo*.*-mdtlov.qos_prio_free |
@@ -8598,11 +8691,9 @@ test_116a() { # was previously test_116()
 	declare -a AVAIL
 	free_min_max
 
-	[ $MINV -eq 0 ] && skip "no free space in OST$MINI, skip" && return
-	[ $MINV -gt 10000000 ] && skip "too much free space in OST$MINI, skip" \
-		&& return
+	[ $MINV -eq 0 ] && skip "no free space in OST$MINI, skip"
+	[ $MINV -gt 10000000 ] && skip "too much free space in OST$MINI, skip"
 	trap simple_cleanup_common EXIT
-
 
 	# Check if we need to generate uneven OSTs
 	test_mkdir -p $DIR/$tdir/OST${MINI}
@@ -8648,9 +8739,8 @@ test_116a() { # was previously test_116()
 		echo "ok"
 	else
 		echo "failed - QOS mode won't be used"
-		skip "QOS imbalance criteria not met"
 		simple_cleanup_common
-		return
+		skip "QOS imbalance criteria not met"
 	fi
 
 	MINI1=$MINI
@@ -8712,13 +8802,13 @@ test_116a() { # was previously test_116()
 run_test 116a "stripe QOS: free space balance ==================="
 
 test_116b() { # LU-2093
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 #define OBD_FAIL_MDS_OSC_CREATE_FAIL     0x147
 	local old_rr=$(do_facet $SINGLEMDS lctl get_param -n \
 		       lo*.$FSNAME-MDT0000-mdtlov.qos_threshold_rr | head -1)
-	[ -z "$old_rr" ] && skip "no QOS" && return 0
+	[ -z "$old_rr" ] && skip "no QOS"
 	do_facet $SINGLEMDS lctl set_param \
 		lo*.$FSNAME-MDT0000-mdtlov.qos_threshold_rr=0
 	mkdir -p $DIR/$tdir
@@ -8733,13 +8823,14 @@ run_test 116b "QoS shouldn't LBUG if not enough OSTs found on the 2nd pass"
 
 test_117() # bug 10891
 {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        dd if=/dev/zero of=$DIR/$tfile bs=1M count=1
-        #define OBD_FAIL_OST_SETATTR_CREDITS 0x21e
-        lctl set_param fail_loc=0x21e
-        > $DIR/$tfile || error "truncate failed"
-        lctl set_param fail_loc=0
-        echo "Truncate succeeded."
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1
+	#define OBD_FAIL_OST_SETATTR_CREDITS 0x21e
+	lctl set_param fail_loc=0x21e
+	> $DIR/$tfile || error "truncate failed"
+	lctl set_param fail_loc=0
+	echo "Truncate succeeded."
 	rm -f $DIR/$tfile
 }
 run_test 117 "verify osd extend =========="
@@ -8769,7 +8860,8 @@ reset_async() {
 
 test_118a() #bug 11710
 {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	reset_async
 
 	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
@@ -8786,8 +8878,8 @@ run_test 118a "verify O_SYNC works =========="
 
 test_118b()
 {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	reset_async
 
@@ -8823,12 +8915,12 @@ run_test 118b "Reclaim dirty pages on fatal error =========="
 
 test_118c()
 {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	# for 118c, restore the original resend count, LU-1940
 	[ "$SLOW" = "no" ] && [ -n "$OLD_RESENDCOUNT" ] &&
 				set_resend_count $OLD_RESENDCOUNT
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	reset_async
 
@@ -8875,8 +8967,8 @@ run_test 118c "Fsync blocks on EROFS until dirty pages are flushed =========="
 
 test_118d()
 {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	reset_async
 
@@ -8914,11 +9006,12 @@ test_118d()
 run_test 118d "Fsync validation inject a delay of the bulk =========="
 
 test_118f() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        reset_async
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
-        #define OBD_FAIL_OSC_BRW_PREP_REQ2        0x40a
-        lctl set_param fail_loc=0x8000040a
+	reset_async
+
+	#define OBD_FAIL_OSC_BRW_PREP_REQ2        0x40a
+	lctl set_param fail_loc=0x8000040a
 
 	# Should simulate EINVAL error which is fatal
         $MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
@@ -8950,7 +9043,8 @@ test_118f() {
 run_test 118f "Simulate unrecoverable OSC side error =========="
 
 test_118g() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	reset_async
 
 	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
@@ -8986,10 +9080,10 @@ test_118g() {
 run_test 118g "Don't stay in wait if we got local -ENOMEM  =========="
 
 test_118h() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
-        reset_async
+	reset_async
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
         set_nodes_failloc "$(osts_nodes)" 0x20e
@@ -9024,10 +9118,10 @@ run_test 118h "Verify timeout in handling recoverables errors  =========="
 [ "$SLOW" = "no" ] && [ -n "$OLD_RESENDCOUNT" ] && set_resend_count $OLD_RESENDCOUNT
 
 test_118i() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
-        reset_async
+	reset_async
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
         set_nodes_failloc "$(osts_nodes)" 0x20e
@@ -9065,10 +9159,10 @@ run_test 118i "Fix error before timeout in recoverable error  =========="
 [ "$SLOW" = "no" ] && set_resend_count 4
 
 test_118j() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
-        reset_async
+	reset_async
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK2     0x220
         set_nodes_failloc "$(osts_nodes)" 0x220
@@ -9102,8 +9196,8 @@ run_test 118j "Simulate unrecoverable OST side error =========="
 
 test_118k()
 {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OSTs with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OSTs with nodsh"
 
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
 	set_nodes_failloc "$(osts_nodes)" 0x20e
@@ -9123,10 +9217,10 @@ test_118k()
 }
 run_test 118k "bio alloc -ENOMEM and IO TERM handling ========="
 
-test_118l()
+test_118l() # LU-646
 {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	# LU-646
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/$tdir
 	$MULTIOP $DIR/$tdir Dy || error "fsync dir failed"
 	rm -rf $DIR/$tdir
@@ -9135,7 +9229,8 @@ run_test 118l "fsync dir"
 
 test_118m() # LU-3066
 {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/$tdir
 	$MULTIOP $DIR/$tdir DY || error "fdatasync dir failed"
 	rm -rf $DIR/$tdir
@@ -9149,8 +9244,8 @@ test_118n()
 	local begin
 	local end
 
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OSTs with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OSTs with nodsh"
 
 	# Sleep to avoid a cached response.
 	#define OBD_STATFS_CACHE_SECONDS 1
@@ -9190,14 +9285,14 @@ run_test 119a "Short directIO read must return actual read amount"
 
 test_119b() # bug 11737
 {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 
-        $SETSTRIPE -c 2 $DIR/$tfile || error "setstripe failed"
-        dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
-        sync
-        $MULTIOP $DIR/$tfile oO_RDONLY:O_DIRECT:r$((2048 * 1024)) || \
-                error "direct read failed"
-        rm -f $DIR/$tfile
+	$SETSTRIPE -c 2 $DIR/$tfile || error "setstripe failed"
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
+	sync
+	$MULTIOP $DIR/$tfile oO_RDONLY:O_DIRECT:r$((2048 * 1024)) ||
+		error "direct read failed"
+	rm -f $DIR/$tfile
 }
 run_test 119b "Sparse directIO read must return actual read amount"
 
@@ -9212,7 +9307,8 @@ run_test 119c "Testing for direct read hitting hole"
 
 test_119d() # bug 15950
 {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
         MAX_RPCS_IN_FLIGHT=`$LCTL get_param -n osc.*OST0000-osc-[^mM]*.max_rpcs_in_flight`
         $LCTL set_param -n osc.*OST0000-osc-[^mM]*.max_rpcs_in_flight 1
         BSIZE=1048576
@@ -9237,11 +9333,11 @@ test_119d() # bug 15950
 run_test 119d "The DIO path should try to send a new rpc once one is completed"
 
 test_120a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	test_mkdir $DIR/$tdir
 	$LCTL get_param -n mdc.*.connect_flags | grep -q early_lock_cancel ||
-		{ skip "no early lock cancel on server"; return 0; }
+		skip_env "no early lock cancel on server"
 
 	lru_resize_disable mdc
 	lru_resize_disable osc
@@ -9269,11 +9365,12 @@ test_120a() {
 run_test 120a "Early Lock Cancel: mkdir test"
 
 test_120b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	test_mkdir $DIR/$tdir
 	$LCTL get_param -n mdc.*.connect_flags | grep -q early_lock_cancel ||
-		{ skip "no early lock cancel on server"; return 0; }
+		skip_env "no early lock cancel on server"
+
 	lru_resize_disable mdc
 	lru_resize_disable osc
 	cancel_lru_locks mdc
@@ -9297,11 +9394,12 @@ test_120b() {
 run_test 120b "Early Lock Cancel: create test"
 
 test_120c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	test_mkdir -c1 $DIR/$tdir
 	$LCTL get_param -n mdc.*.connect_flags | grep -q early_lock_cancel ||
-		{ skip "no early lock cancel on server"; return 0; }
+		skip "no early lock cancel on server"
+
 	lru_resize_disable mdc
 	lru_resize_disable osc
 	test_mkdir -c1 $DIR/$tdir/d1
@@ -9328,11 +9426,12 @@ test_120c() {
 run_test 120c "Early Lock Cancel: link test"
 
 test_120d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	test_mkdir -c1 $DIR/$tdir
 	$LCTL get_param -n mdc.*.connect_flags | grep -q early_lock_cancel ||
-		{ skip "no early lock cancel on server"; return 0; }
+		skip_env "no early lock cancel on server"
+
 	lru_resize_disable mdc
 	lru_resize_disable osc
 	touch $DIR/$tdir
@@ -9357,10 +9456,11 @@ test_120d() {
 run_test 120d "Early Lock Cancel: setattr test"
 
 test_120e() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$LCTL get_param -n mdc.*.connect_flags | grep -q early_lock_cancel ||
-		{ skip "no early lock cancel on server"; return 0; }
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+		skip_env "no early lock cancel on server"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	local dlmtrace_set=false
 
 	test_mkdir -c1 $DIR/$tdir
@@ -9400,10 +9500,11 @@ test_120e() {
 run_test 120e "Early Lock Cancel: unlink test"
 
 test_120f() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$LCTL get_param -n mdc.*.connect_flags | grep -q early_lock_cancel ||
-		{ skip "no early lock cancel on server"; return 0; }
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+		skip_env "no early lock cancel on server"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	test_mkdir -c1 $DIR/$tdir
 	lru_resize_disable mdc
 	lru_resize_disable osc
@@ -9440,10 +9541,11 @@ test_120f() {
 run_test 120f "Early Lock Cancel: rename test"
 
 test_120g() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$LCTL get_param -n mdc.*.connect_flags | grep -q early_lock_cancel ||
-		{ skip "no early lock cancel on server"; return 0; }
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+		skip_env "no early lock cancel on server"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	lru_resize_disable mdc
 	lru_resize_disable osc
 	count=10000
@@ -9486,7 +9588,8 @@ test_120g() {
 run_test 120g "Early Lock Cancel: performance test"
 
 test_121() { #bug #10589
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	rm -rf $DIR/$tfile
 	writes=$(LANG=C dd if=/dev/zero of=$DIR/$tfile count=1 2>&1 | awk -F '+' '/out$/ {print $1}')
 #define OBD_FAIL_LDLM_CANCEL_RACE        0x310
@@ -9500,7 +9603,8 @@ test_121() { #bug #10589
 run_test 121 "read cancel race ========="
 
 test_123a() { # was test 123, statahead(bug 11401)
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	SLOWOK=0
 	if ! grep -q "processor.*: 1" /proc/cpuinfo; then
 		log "testing UP system. Performance may be lower than expected."
@@ -9583,7 +9687,8 @@ test_123a() { # was test 123, statahead(bug 11401)
 run_test 123a "verify statahead work"
 
 test_123b () { # statahead(bug 15027)
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/$tdir
 	createmany -o $DIR/$tdir/$tfile-%d 1000
 
@@ -9603,10 +9708,12 @@ test_123b () { # statahead(bug 15027)
 run_test 123b "not panic with network error in statahead enqueue (bug 15027)"
 
 test_124a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$LCTL get_param -n mdc.*.connect_flags | grep -q lru_resize ||
-		{ skip "no lru resize on server"; return 0; }
+		skip_env "no lru resize on server"
+
 	local NR=2000
+
 	test_mkdir $DIR/$tdir
 
 	log "create $NR files at $DIR/$tdir"
@@ -9630,21 +9737,19 @@ test_124a() {
         done
 
 	if [[ -z "$NSDIR" || $LRU_SIZE -lt $(default_lru_size) ]]; then
-                skip "Not enough cached locks created!"
-                return 0
-        fi
-        log "LRU=$LRU_SIZE"
+		skip "Not enough cached locks created!"
+	fi
+	log "LRU=$LRU_SIZE"
 
-        local SLEEP=30
+	local SLEEP=30
 
-        # We know that lru resize allows one client to hold $LIMIT locks
-        # for 10h. After that locks begin to be killed by client.
-        local MAX_HRS=10
+	# We know that lru resize allows one client to hold $LIMIT locks
+	# for 10h. After that locks begin to be killed by client.
+	local MAX_HRS=10
 	local LIMIT=$($LCTL get_param -n $NSDIR.pool.limit)
 	log "LIMIT=$LIMIT"
 	if [ $LIMIT -lt $LRU_SIZE ]; then
-	    skip "Limit is too small $LIMIT"
-	    return 0
+		skip "Limit is too small $LIMIT"
 	fi
 
         # Make LVF so higher that sleeping for $SLEEP is enough to _start_
@@ -9705,9 +9810,9 @@ get_max_pool_limit()
 }
 
 test_124b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$LCTL get_param -n mdc.*.connect_flags | grep -q lru_resize ||
-		{ skip "no lru resize on server"; return 0; }
+		skip_env "no lru resize on server"
 
 	LIMIT=$(get_max_pool_limit)
 
@@ -9780,9 +9885,9 @@ test_124b() {
 run_test 124b "lru resize (performance test) ======================="
 
 test_124c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	$LCTL get_param -n mdc.*.connect_flags | grep -q lru_resize ||
-		{ skip "no lru resize on server"; return 0; }
+		skip_env "no lru resize on server"
 
 	# cache ununsed locks on client
 	local nr=100
@@ -9813,10 +9918,11 @@ run_test 124c "LRUR cancel very aged locks"
 
 test_125() { # 13358
 	$LCTL get_param -n llite.*.client_type | grep -q local ||
-		{ skip "must run as local client"; return; }
+		skip "must run as local client"
 	$LCTL get_param -n mdc.*-mdc-*.connect_flags | grep -q acl ||
-		{ skip "must have acl enabled"; return; }
-	[ -z "$(which setfacl)" ] && skip "must have setfacl tool" && return
+		skip_env "must have acl enabled"
+	[ -z "$(which setfacl)" ] && skip_env "must have setfacl tool"
+
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -S 65536 -c -1 $DIR/$tdir || error "setstripe failed"
 	setfacl -R -m u:bin:rwx $DIR/$tdir || error "setfacl $DIR/$tdir failed"
@@ -9825,10 +9931,10 @@ test_125() { # 13358
 run_test 125 "don't return EPROTO when a dir has a non-default striping and ACLs"
 
 test_126() { # bug 12829/13455
+	$GSS && skip_env "must run as gss disabled"
 	$LCTL get_param -n llite.*.client_type | grep -q local ||
-		{ skip "must run as local client"; return; }
-	[ "$UID" != 0 ] && skip_env "$TESTNAME (must run as root)" && return
-	$GSS && skip "must run as gss disabled" && return
+		skip "must run as local client"
+	[ "$UID" != 0 ] && skip "must run as root, not UID $UID"
 
 	$RUNAS -u 0 -g 1 touch $DIR/$tfile || error "touch failed"
 	gid=`ls -n $DIR/$tfile | awk '{print $4}'`
@@ -9838,15 +9944,16 @@ test_126() { # bug 12829/13455
 run_test 126 "check that the fsgid provided by the client is taken into account"
 
 test_127a() { # bug 15521
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        $SETSTRIPE -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
-        $LCTL set_param osc.*.stats=0
-        FSIZE=$((2048 * 1024))
-        dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
-        cancel_lru_locks osc
-        dd if=$DIR/$tfile of=/dev/null bs=$FSIZE
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
-        $LCTL get_param osc.*0000-osc-*.stats | grep samples > $DIR/${tfile}.tmp
+	$SETSTRIPE -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
+	$LCTL set_param osc.*.stats=0
+	FSIZE=$((2048 * 1024))
+	dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
+	cancel_lru_locks osc
+	dd if=$DIR/$tfile of=/dev/null bs=$FSIZE
+
+	$LCTL get_param osc.*0000-osc-*.stats | grep samples > $DIR/${tfile}.tmp
         while read NAME COUNT SAMP UNIT MIN MAX SUM SUMSQ; do
                 echo "got $COUNT $NAME"
                 [ ! $MIN ] && error "Missing min value for $NAME proc entry"
@@ -9877,15 +9984,17 @@ test_127a() { # bug 15521
 run_test 127a "verify the client stats are sane"
 
 test_127b() { # bug LU-333
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        $LCTL set_param llite.*.stats=0
-        FSIZE=65536 # sized fixed to match PAGE_SIZE for most clients
-        # perform 2 reads and writes so MAX is different from SUM.
-        dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
-        dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
-        cancel_lru_locks osc
-        dd if=$DIR/$tfile of=/dev/null bs=$FSIZE count=1
-        dd if=$DIR/$tfile of=/dev/null bs=$FSIZE count=1
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	$LCTL set_param llite.*.stats=0
+	FSIZE=65536 # sized fixed to match PAGE_SIZE for most clients
+
+	# perform 2 reads and writes so MAX is different from SUM.
+	dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
+	dd if=/dev/zero of=$DIR/$tfile bs=$FSIZE count=1
+	cancel_lru_locks osc
+	dd if=$DIR/$tfile of=/dev/null bs=$FSIZE count=1
+	dd if=$DIR/$tfile of=/dev/null bs=$FSIZE count=1
 
         $LCTL get_param llite.*.stats | grep samples > $TMP/${tfile}.tmp
         while read NAME COUNT SAMP UNIT MIN MAX SUM SUMSQ; do
@@ -9960,15 +10069,14 @@ check_mds_dmesg() {
 }
 
 test_129() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.5.56) ]] ||
-		{ skip "Need MDS version with at least 2.5.56"; return 0; }
-
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+		skip "Need MDS version with at least 2.5.56"
 	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
-		skip "ldiskfs only test"
-		return
+		skip_env "ldiskfs only test"
 	fi
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	local ENOSPC=28
 	local EFBIG=27
 	local has_warning=false
@@ -10030,8 +10138,7 @@ cleanup_130() {
 
 test_130a() {
 	local filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip_env "filefrag does not support FIEMAP" &&
-		return
+	[ -n "$filefrag_op" ] && skip_env "filefrag does not support FIEMAP"
 
 	trap cleanup_130 EXIT RETURN
 
@@ -10044,7 +10151,7 @@ test_130a() {
 	filefrag -ves $fm_file
 	RC=$?
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $fm_file) + 1)))" = "zfs" ] &&
-		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return
+		skip_env "ORI-366/LU-1941: FIEMAP unimplemented on ZFS"
 	[ $RC != 0 ] && error "filefrag $fm_file failed"
 
 	filefrag_op=$(filefrag -ve -k $fm_file |
@@ -10079,11 +10186,10 @@ test_130a() {
 run_test 130a "FIEMAP (1-stripe file)"
 
 test_130b() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "needs >= 2 OSTs"
 
 	local filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip_env "filefrag does not support FIEMAP" &&
-		return
+	[ -n "$filefrag_op" ] && skip_env "filefrag does not support FIEMAP"
 
 	trap cleanup_130 EXIT RETURN
 
@@ -10091,7 +10197,7 @@ test_130b() {
 	$SETSTRIPE -S 65536 -c $OSTCOUNT $fm_file ||
 			error "setstripe on $fm_file"
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $fm_file) + 1)))" = "zfs" ] &&
-		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return
+		skip_env "ORI-366/LU-1941: FIEMAP unimplemented on ZFS"
 
 	dd if=/dev/zero of=$fm_file bs=1M count=$OSTCOUNT ||
 		error "dd failed on $fm_file"
@@ -10139,18 +10245,17 @@ test_130b() {
 run_test 130b "FIEMAP ($OSTCOUNT-stripe file)"
 
 test_130c() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" &&
-		return
+	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP"
 
 	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	$SETSTRIPE -S 65536 -c 2 $fm_file || error "setstripe on $fm_file"
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $fm_file) + 1)))" = "zfs" ] &&
-		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return
+		skip_env "ORI-366/LU-1941: FIEMAP unimplemented on ZFS"
 
 	dd if=/dev/zero of=$fm_file seek=1 bs=1M count=1 ||
 			error "dd failed on $fm_file"
@@ -10205,11 +10310,10 @@ test_130c() {
 run_test 130c "FIEMAP (2-stripe file with hole)"
 
 test_130d() {
-	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs" && return
+	[[ $OSTCOUNT -lt 3 ]] && skip_env "needs >= 3 OSTs"
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" &&
-		return
+	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP"
 
 	trap cleanup_130 EXIT RETURN
 
@@ -10217,7 +10321,7 @@ test_130d() {
 	$SETSTRIPE -S 65536 -c $OSTCOUNT $fm_file ||
 			error "setstripe on $fm_file"
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $fm_file) + 1)))" = "zfs" ] &&
-		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return
+		skip_env "ORI-366/LU-1941: FIEMAP unimplemented on ZFS"
 
 	local actual_stripe_count=$($GETSTRIPE -c $fm_file)
 	dd if=/dev/zero of=$fm_file bs=1M count=$actual_stripe_count ||
@@ -10266,17 +10370,17 @@ test_130d() {
 run_test 130d "FIEMAP (N-stripe file)"
 
 test_130e() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
+	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+	[ -n "$filefrag_op" ] && skip_env "filefrag does not support FIEMAP"
 
 	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	$SETSTRIPE -S 131072 -c 2 $fm_file || error "setstripe on $fm_file"
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $fm_file) + 1)))" = "zfs" ] &&
-		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return
+		skip_env "ORI-366/LU-1941: FIEMAP unimplemented on ZFS"
 
 	NUM_BLKS=512
 	EXPECTED_LEN=$(( (NUM_BLKS / 2) * 64 ))
@@ -10330,8 +10434,7 @@ run_test 130e "FIEMAP (test continuation FIEMAP calls)"
 
 test_130f() {
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" &&
-		return
+	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP"
 
 	local fm_file=$DIR/$tfile
 	$MULTIOP $fm_file oO_RDWR:O_CREAT:O_LOV_DELAY_CREATE:T33554432c ||
@@ -10423,13 +10526,14 @@ check_stats() {
 }
 
 test_133a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	do_facet $SINGLEMDS $LCTL list_param mdt.*.rename_stats ||
-		{ skip "MDS doesn't support rename stats"; return; }
+		skip_env "MDS doesn't support rename stats"
+
 	local testdir=$DIR/${tdir}/stats_testdir
+
 	mkdir -p $DIR/${tdir}
 
 	# clear stats.
@@ -10470,10 +10574,12 @@ test_133a() {
 run_test 133a "Verifying MDT stats ========================================"
 
 test_133b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	local testdir=$DIR/${tdir}/stats_testdir
+
 	mkdir -p ${testdir} || error "mkdir failed"
 	touch ${testdir}/${tfile} || error "touch failed"
 	cancel_lru_locks mdc
@@ -10499,10 +10605,12 @@ test_133b() {
 run_test 133b "Verifying extra MDT stats =================================="
 
 test_133c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	local testdir=$DIR/$tdir/stats_testdir
+
 	test_mkdir -p $testdir
 
 	# verify obdfilter stats.
@@ -10586,11 +10694,11 @@ get_rename_size() {
 }
 
 test_133d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	do_facet $SINGLEMDS $LCTL list_param mdt.*.rename_stats ||
-	{ skip "MDS doesn't support rename stats"; return; }
+		skip_env "MDS doesn't support rename stats"
 
 	local testdir1=$DIR/${tdir}/stats_testdir1
 	local testdir2=$DIR/${tdir}/stats_testdir2
@@ -10665,9 +10773,10 @@ test_133d() {
 run_test 133d "Verifying rename_stats ========================================"
 
 test_133e() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local testdir=$DIR/${tdir}/stats_testdir
 	local ctr f0 f1 bs=32768 count=42 sum
 
@@ -10734,15 +10843,15 @@ test_133f() {
 run_test 133f "Check reads/writes of client lustre proc files with bad area io"
 
 test_133g() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	# eventually, this can also be replaced with "lctl get_param -R",
 	# but not until that option is always available on the server
 	local facet
 	for facet in mds1 ost1; do
 		[ $(lustre_version_code $facet) -le $(version_code 2.5.54) ] &&
-			skip "Too old lustre on $facet" && continue
+			skip_noexit "Too old lustre on $facet"
 		local facet_proc_dirs=$(do_facet $facet \
 					\\\ls -d $proc_regexp 2>/dev/null)
 		echo "${facet}_proc_dirs='$facet_proc_dirs'"
@@ -10774,12 +10883,13 @@ test_133g() {
 run_test 133g "Check reads/writes of server lustre proc files with bad area io"
 
 test_133h() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.9.54) ]] &&
-		skip "Need MDS version at least 2.9.54" && return
+		skip "Need MDS version at least 2.9.54"
 
 	local facet
+
 	for facet in client mds1 ost1; do
 		local facet_proc_dirs=$(do_facet $facet \
 					\\\ls -d $proc_regexp 2> /dev/null)
@@ -10802,9 +10912,9 @@ test_133h() {
 run_test 133h "Proc files should end with newlines"
 
 test_134a() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.54) ]] &&
-		skip "Need MDS version at least 2.7.54" && return
+		skip "Need MDS version at least 2.7.54"
 
 	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
 	cancel_lru_locks mdc
@@ -10838,9 +10948,9 @@ test_134a() {
 run_test 134a "Server reclaims locks when reaching lock_reclaim_threshold"
 
 test_134b() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.54) ]] &&
-		skip "Need MDS version at least 2.7.54" && return
+		skip "Need MDS version at least 2.7.54"
 
 	mkdir -p $DIR/$tdir || error "failed to create $DIR/$tdir"
 	cancel_lru_locks mdc
@@ -10879,7 +10989,8 @@ test_134b() {
 run_test 134b "Server rejects lock request when reaching lock_limit_mb"
 
 test_140() { #bug-17379
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir $DIR/$tdir
 	cd $DIR/$tdir || error "Changing to $DIR/$tdir"
 	cp $(which stat) . || error "Copying stat to $DIR/$tdir"
@@ -10918,7 +11029,8 @@ test_140() { #bug-17379
 run_test 140 "Check reasonable stack depth (shouldn't LBUG) ===="
 
 test_150() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local TF="$TMP/$tfile"
 
 	dd if=/dev/urandom of=$TF bs=6096 count=1 || error "dd failed"
@@ -11006,30 +11118,27 @@ function set_cache() {
 }
 
 test_151() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	local CPAGES=3
 	local list=$(comma_list $(osts_nodes))
 
 	# check whether obdfilter is cache capable at all
 	if ! get_osd_param $list '' read_cache_enable >/dev/null; then
-		echo "not cache-capable obdfilter"
-		return 0
+		skip "not cache-capable obdfilter"
 	fi
 
 	# check cache is enabled on all obdfilters
 	if get_osd_param $list '' read_cache_enable | grep 0; then
-		echo "oss cache is disabled"
-		return 0
+		skip "oss cache is disabled"
 	fi
 
 	set_osd_param $list '' writethrough_cache_enable 1
 
 	# check write cache is enabled on all obdfilters
 	if get_osd_param $list '' writethrough_cache_enable | grep 0; then
-		echo "oss write cache is NOT enabled"
-		return 0
+		skip "oss write cache is NOT enabled"
 	fi
 
 	roc_hit_init
@@ -11072,10 +11181,11 @@ test_151() {
 run_test 151 "test cache on oss and controls ==============================="
 
 test_152() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        local TF="$TMP/$tfile"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
-        # simulate ENOMEM during write
+	local TF="$TMP/$tfile"
+
+	# simulate ENOMEM during write
 #define OBD_FAIL_OST_NOMEM      0x226
         lctl set_param fail_loc=0x80000226
         dd if=/dev/urandom of=$TF bs=6096 count=1 || error "dd failed"
@@ -11226,7 +11336,7 @@ dot_lustre_fid_permission_check() {
 
 test_154A() {
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.1) ]] &&
-		skip "Need MDS version at least 2.4.1" && return
+		skip "Need MDS version at least 2.4.1"
 
 	local tf=$DIR/$tfile
 	touch $tf
@@ -11244,7 +11354,7 @@ run_test 154A "lfs path2fid and fid2path basic checks"
 
 test_154B() {
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.1) ]] &&
-		skip "Need MDS version at least 2.4.1" && return
+		skip "Need MDS version at least 2.4.1"
 
 	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
 	touch $DIR/$tdir/$tfile || error "touch $DIR/$tdir/$tfile failed"
@@ -11266,11 +11376,11 @@ test_154B() {
 run_test 154B "verify the ll_decode_linkea tool"
 
 test_154a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ]] ||
-		{ skip "Need MDS version at least 2.2.51"; return 0; }
-	[ -z "$(which setfacl)" ] && skip "must have setfacl tool" && return
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set" && return
+		skip "Need MDS version at least 2.2.51"
+	[ -z "$(which setfacl)" ] && skip_env "must have setfacl tool"
 
 	cp /etc/hosts $DIR/$tfile
 
@@ -11296,12 +11406,11 @@ test_154a() {
 run_test 154a "Open-by-FID"
 
 test_154b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ]] ||
-		{ skip "Need MDS version at least 2.2.51"; return 0; }
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set" && return
-
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "Need MDS version at least 2.2.51"
 
 	local remote_dir=$DIR/$tdir/remote_dir
 	local MDTIDX=1
@@ -11325,7 +11434,7 @@ run_test 154b "Open-by-FID for remote directory"
 
 test_154c() {
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.1) ]] &&
-		skip "Need MDS version at least 2.4.1" && return
+		skip "Need MDS version at least 2.4.1"
 
 	touch $DIR/$tfile.1 $DIR/$tfile.2 $DIR/$tfile.3
 	local FID1=$($LFS path2fid $DIR/$tfile.1)
@@ -11352,9 +11461,9 @@ test_154c() {
 run_test 154c "lfs path2fid and fid2path multiple arguments"
 
 test_154d() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.53) ]] &&
-		skip "Need MDS version at least 2.5.53" && return
+		skip "Need MDS version at least 2.5.53"
 
 	if remote_mds; then
 		nid=$($LCTL list_nids | sed  "s/\./\\\./g")
@@ -11388,7 +11497,7 @@ run_test 154d "Verify open file fid"
 test_154e()
 {
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.50) ]] &&
-		skip "Need MDS version at least 2.6.50" && return
+		skip "Need MDS version at least 2.6.50"
 
 	if ls -a $MOUNT | grep -q '^\.lustre$'; then
 		error ".lustre returned by readdir"
@@ -11397,7 +11506,8 @@ test_154e()
 run_test 154e ".lustre is not returned by readdir"
 
 test_154f() {
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set" && return
+	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
+
 	# create parent directory on a single MDT to avoid cross-MDT hardlinks
 	test_mkdir -p -c1 $DIR/$tdir/d
 	# test dirs inherit from its stripe
@@ -11476,10 +11586,10 @@ run_test 154f "get parent fids by reading link ea"
 
 test_154g()
 {
+	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.92) && \
 	   $(lustre_version_code client) -gt $(version_code 2.6.99) ]] ||
-		{ skip "Need MDS version at least 2.6.92"; return 0; }
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set" && return
+		skip "Need MDS version at least 2.6.92"
 
 	mkdir -p $DIR/$tdir
 	llapi_fid_test -d $DIR/$tdir
@@ -11513,33 +11623,33 @@ test_155_small_load() {
 }
 
 test_155_big_load() {
-    remote_ost_nodsh && skip "remote OST with nodsh" && return
-    local temp=$TMP/$tfile
-    local file=$DIR/$tfile
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
-    free_min_max
-    local cache_size=$(do_facet ost$((MAXI+1)) \
-        "awk '/cache/ {sum+=\\\$4} END {print sum}' /proc/cpuinfo")
-    local large_file_size=$((cache_size * 2))
+	local temp=$TMP/$tfile
+	local file=$DIR/$tfile
 
-    echo "OSS cache size: $cache_size KB"
-    echo "Large file size: $large_file_size KB"
+	free_min_max
+	local cache_size=$(do_facet ost$((MAXI+1)) \
+		"awk '/cache/ {sum+=\\\$4} END {print sum}' /proc/cpuinfo")
+	local large_file_size=$((cache_size * 2))
 
-    [ $MAXV -le $large_file_size ] && \
-        skip_env "max available OST size needs > $large_file_size KB" && \
-        return 0
+	echo "OSS cache size: $cache_size KB"
+	echo "Large file size: $large_file_size KB"
 
-    $SETSTRIPE $file -c 1 -i $MAXI || error "$SETSTRIPE $file failed"
+	[ $MAXV -le $large_file_size ] &&
+		skip_env "max available OST size needs > $large_file_size KB"
 
-    dd if=/dev/urandom of=$temp bs=$large_file_size count=1k || \
-        error "dd of=$temp bs=$large_file_size count=1k failed"
-    cp $temp $file
-    ls -lh $temp $file
-    cancel_lru_locks osc
-    cmp $temp $file || error "$temp $file differ"
+	$SETSTRIPE $file -c 1 -i $MAXI || error "$SETSTRIPE $file failed"
 
-    rm -f $temp $file
-    true
+	dd if=/dev/urandom of=$temp bs=$large_file_size count=1k ||
+		error "dd of=$temp bs=$large_file_size count=1k failed"
+	cp $temp $file
+	ls -lh $temp $file
+	cancel_lru_locks osc
+	cmp $temp $file || error "$temp $file differ"
+
+	rm -f $temp $file
+	true
 }
 
 save_writethrough() {
@@ -11550,8 +11660,10 @@ save_writethrough() {
 }
 
 test_155a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
 	save_writethrough $p
 
 	set_cache read on
@@ -11563,8 +11675,10 @@ test_155a() {
 run_test 155a "Verify small file correctness: read cache:on write_cache:on"
 
 test_155b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
 	save_writethrough $p
 
 	set_cache read on
@@ -11576,8 +11690,10 @@ test_155b() {
 run_test 155b "Verify small file correctness: read cache:on write_cache:off"
 
 test_155c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
 	save_writethrough $p
 
 	set_cache read off
@@ -11589,8 +11705,10 @@ test_155c() {
 run_test 155c "Verify small file correctness: read cache:off write_cache:on"
 
 test_155d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
 	save_writethrough $p
 
 	set_cache read off
@@ -11602,8 +11720,10 @@ test_155d() {
 run_test 155d "Verify small file correctness: read cache:off write_cache:off"
 
 test_155e() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
 	save_writethrough $p
 
 	set_cache read on
@@ -11615,8 +11735,10 @@ test_155e() {
 run_test 155e "Verify big file correctness: read cache:on write_cache:on"
 
 test_155f() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
 	save_writethrough $p
 
 	set_cache read on
@@ -11628,8 +11750,10 @@ test_155f() {
 run_test 155f "Verify big file correctness: read cache:on write_cache:off"
 
 test_155g() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
 	save_writethrough $p
 
 	set_cache read off
@@ -11641,8 +11765,10 @@ test_155g() {
 run_test 155g "Verify big file correctness: read cache:off write_cache:on"
 
 test_155h() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
 	save_writethrough $p
 
 	set_cache read off
@@ -11654,18 +11780,17 @@ test_155h() {
 run_test 155h "Verify big file correctness: read cache:off write_cache:off"
 
 test_156() {
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	[ "$(facet_fstype ost1)" = "zfs" -a \
+	   $(lustre_version_code ost1 -lt $(version_code 2.6.93)) ] &&
+		skip "LU-1956/LU-2261: stats not implemented on OSD ZFS"
+
 	local CPAGES=3
 	local BEFORE
 	local AFTER
 	local file="$DIR/$tfile"
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
-
-	[ "$(facet_fstype ost1)" = "zfs" -a \
-	   $(lustre_version_code ost1 -lt $(version_code 2.6.93)) ] &&
-		skip "LU-1956/LU-2261: stats not implemented on OSD ZFS" &&
-		return
 
 	save_writethrough $p
 	roc_hit_init
@@ -11801,10 +11926,10 @@ test_156() {
 run_test 156 "Verification of tunables"
 
 test_160a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] ||
-		{ skip "Need MDS version at least 2.2.0"; return; }
+		skip "Need MDS version at least 2.2.0"
 
 	changelog_register || error "changelog_register failed"
 	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
@@ -11921,10 +12046,10 @@ test_160a() {
 run_test 160a "changelog sanity"
 
 test_160b() { # LU-3587
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] ||
-		{ skip "Need MDS version at least 2.2.0"; return; }
+		skip "Need MDS version at least 2.2.0"
 
 	changelog_register || error "changelog_register failed"
 	local cl_user="${CL_USERS[$SINGLEMDS]%% *}"
@@ -11946,7 +12071,8 @@ test_160b() { # LU-3587
 run_test 160b "Verify that very long rename doesn't crash in changelog"
 
 test_160c() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local rc=0
 	local server_version=$(lustre_version_code $SINGLEMDS)
@@ -11954,8 +12080,7 @@ test_160c() {
 	[[ $server_version -gt $(version_code 2.5.57) ]] ||
 		[[ $server_version -gt $(version_code 2.5.1) &&
 		   $server_version -lt $(version_code 2.5.50) ]] ||
-		{ skip "Need MDS version at least 2.5.58 or 2.5.2+"; return; }
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+		skip "Need MDS version at least 2.5.58 or 2.5.2+"
 
 	# Registration step
 	changelog_register || error "changelog_register failed"
@@ -11974,12 +12099,11 @@ test_160c() {
 run_test 160c "verify that changelog log catch the truncate event"
 
 test_160d() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.60) ]] ||
-		{ skip "Need MDS version at least 2.7.60+"; return; }
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+		skip "Need MDS version at least 2.7.60"
 
 	# Registration step
 	changelog_register || error "changelog_register failed"
@@ -11995,7 +12119,7 @@ test_160d() {
 run_test 160d "verify that changelog log catch the migrate event"
 
 test_160e() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	# Create a user
 	changelog_register || error "changelog_register failed"
@@ -12024,9 +12148,9 @@ test_160e() {
 run_test 160e "changelog negative testing (should return errors)"
 
 test_160f() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
-		{ skip "Need MDS version at least 2.10.56"; return 0; }
+		skip "Need MDS version at least 2.10.56"
 
 	local mdts=$(comma_list $(mdts_nodes))
 
@@ -12100,9 +12224,9 @@ test_160f() {
 run_test 160f "changelog garbage collect (timestamped users)"
 
 test_160g() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
-		{ skip "Need MDS version at least 2.10.56"; return 0; }
+		skip "Need MDS version at least 2.10.56"
 
 	local mdts=$(comma_list $(mdts_nodes))
 
@@ -12177,7 +12301,8 @@ test_160g() {
 run_test 160g "changelog garbage collect (old users)"
 
 test_161a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	test_mkdir -c1 $DIR/$tdir
 	cp /etc/hosts $DIR/$tdir/$tfile
 	test_mkdir -c1 $DIR/$tdir/foo1
@@ -12216,8 +12341,9 @@ test_161a() {
 run_test 161a "link ea sanity"
 
 test_161b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "skipping remote directory test" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "skipping remote directory test"
+
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
 
@@ -12268,10 +12394,10 @@ test_161b() {
 run_test 161b "link ea sanity under remote directory"
 
 test_161c() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.1.5) ]] &&
-		skip "Need MDS version at least 2.1.5" && return
+		skip "Need MDS version at least 2.1.5"
 
 	# define CLF_RENAME_LAST 0x0001
 	# rename overwrite a target having nlink = 1 (changelog flag 0x1)
@@ -12342,7 +12468,7 @@ test_161c() {
 run_test 161c "check CL_RENME[UNLINK] changelog record flags"
 
 test_161d() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local pid
 	local fid
@@ -12441,8 +12567,8 @@ test_162a() { # was test_162
 run_test 162a "path lookup sanity"
 
 test_162b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 
 	mkdir $DIR/$tdir
 	$LFS setdirstripe -i0 -c$MDSCOUNT -H all_char $DIR/$tdir/striped_dir ||
@@ -12473,11 +12599,13 @@ run_test 162b "striped directory path lookup sanity"
 # LU-4239: Verify fid2path works with paths 100 or more directories deep
 test_162c() {
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.51) ]] &&
-		skip "Need MDS version at least 2.7.51" && return
-	test_mkdir $DIR/$tdir.local
-	test_mkdir $DIR/$tdir.remote
+		skip "Need MDS version at least 2.7.51"
+
 	local lpath=$tdir.local
 	local rpath=$tdir.remote
+
+	test_mkdir $DIR/$lpath
+	test_mkdir $DIR/$rpath
 
 	for ((i = 0; i <= 101; i++)); do
 		lpath="$lpath/$i"
@@ -12515,7 +12643,7 @@ test_169() {
 run_test 169 "parallel read and truncate should not deadlock"
 
 test_170() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	$LCTL clear	# bug 18514
 	$LCTL debug_daemon start $TMP/${tfile}_log_good
@@ -12570,21 +12698,22 @@ test_170() {
 run_test 170 "test lctl df to handle corrupted log ====================="
 
 test_171() { # bug20592
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-#define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
-        $LCTL set_param fail_loc=0x50e
-        $LCTL set_param fail_val=3000
-        multiop_bg_pause $DIR/$tfile O_s || true
-        local MULTIPID=$!
-        kill -USR1 $MULTIPID
-        # cause log dump
-        sleep 3
-        wait $MULTIPID
-        if dmesg | grep "recursive fault"; then
-                error "caught a recursive fault"
-        fi
-        $LCTL set_param fail_loc=0
-        true
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	#define OBD_FAIL_PTLRPC_DUMP_LOG         0x50e
+	$LCTL set_param fail_loc=0x50e
+	$LCTL set_param fail_val=3000
+	multiop_bg_pause $DIR/$tfile O_s || true
+	local MULTIPID=$!
+	kill -USR1 $MULTIPID
+	# cause log dump
+	sleep 3
+	wait $MULTIPID
+	if dmesg | grep "recursive fault"; then
+		error "caught a recursive fault"
+	fi
+	$LCTL set_param fail_loc=0
+	true
 }
 run_test 171 "test libcfs_debug_dumplog_thread stuck in do_exit() ======"
 
@@ -12649,8 +12778,9 @@ obdecho_test() {
 }
 
 test_180a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+
 	local rc=0
 	local rmmod_local=0
 
@@ -12675,8 +12805,9 @@ test_180a() {
 run_test 180a "test obdecho on osc"
 
 test_180b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+
 	local rc=0
 	local rmmod_remote=0
 
@@ -12690,10 +12821,10 @@ test_180b() {
 run_test 180b "test obdecho directly on obdfilter"
 
 test_180c() { # LU-2598
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.0) ]] &&
-		skip "Need MDS version at least 2.4.0" && return
+		skip "Need MDS version at least 2.4.0"
 
 	local rc=0
 	local rmmod_remote=false
@@ -12763,11 +12894,11 @@ test_182() {
 run_test 182 "Test parallel modify metadata operations ================"
 
 test_183() { # LU-2275
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.56) ]] &&
-		skip "Need MDS version at least 2.3.56" && return
+		skip "Need MDS version at least 2.3.56"
 
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	mkdir -p $DIR/$tdir || error "creating dir $DIR/$tdir"
 	echo aaa > $DIR/$tdir/$tfile
 
@@ -12790,7 +12921,7 @@ run_test 183 "No crash or request leak in case of strange dispositions ========"
 
 # test suite 184 is for LU-2016, LU-2017
 test_184a() {
-	check_swap_layouts_support && return 0
+	check_swap_layouts_support
 
 	dir0=$DIR/$tdir/$testnum
 	test_mkdir -p -c1 $dir0
@@ -12821,7 +12952,7 @@ test_184a() {
 run_test 184a "Basic layout swap"
 
 test_184b() {
-	check_swap_layouts_support && return 0
+	check_swap_layouts_support
 
 	dir0=$DIR/$tdir/$testnum
 	mkdir -p $dir0 || error "creating dir $dir0"
@@ -12852,8 +12983,8 @@ run_test 184b "Forbidden layout swap (will generate errors)"
 
 test_184c() {
 	local cmpn_arg=$(cmp -n 2>&1 | grep "invalid option")
-	[ -n "$cmpn_arg" ] && skip_env "cmp does not support -n" && return
-	check_swap_layouts_support && return 0
+	[ -n "$cmpn_arg" ] && skip_env "cmp does not support -n"
+	check_swap_layouts_support
 
 	local dir0=$DIR/$tdir/$testnum
 	mkdir -p $dir0 || error "creating dir $dir0"
@@ -12900,9 +13031,9 @@ test_184c() {
 run_test 184c "Concurrent write and layout swap"
 
 test_184d() {
-	check_swap_layouts_support && return 0
+	check_swap_layouts_support
 	[ -z "$(which getfattr 2>/dev/null)" ] &&
-		skip "no getfattr command" && return 0
+		skip_env "no getfattr command"
 
 	local file1=$DIR/$tdir/$tfile-1
 	local file2=$DIR/$tdir/$tfile-2
@@ -12935,10 +13066,10 @@ run_test 184d "allow stripeless layouts swap"
 
 test_184e() {
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.94) ]] ||
-		{ skip "Need MDS version at least 2.6.94"; return 0; }
-	check_swap_layouts_support && return 0
+		skip "Need MDS version at least 2.6.94"
+	check_swap_layouts_support
 	[ -z "$(which getfattr 2>/dev/null)" ] &&
-		skip "no getfattr command" && return 0
+		skip_env "no getfattr command"
 
 	local file1=$DIR/$tdir/$tfile-1
 	local file2=$DIR/$tdir/$tfile-2
@@ -12972,7 +13103,7 @@ run_test 184e "Recreate layout after stripeless layout swaps"
 test_185() { # LU-2441
 	# LU-3553 - no volatile file support in old servers
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.60) ]] ||
-		{ skip "Need MDS version at least 2.3.60"; return 0; }
+		skip "Need MDS version at least 2.3.60"
 
 	mkdir -p $DIR/$tdir || error "creating dir $DIR/$tdir"
 	touch $DIR/$tdir/spoo
@@ -13007,9 +13138,9 @@ test_185() { # LU-2441
 run_test 185 "Volatile file support"
 
 test_187a() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.0) ] &&
-		skip "Need MDS version at least 2.3.0" && return
+		skip "Need MDS version at least 2.3.0"
 
 	local dir0=$DIR/$tdir/$testnum
 	mkdir -p $dir0 || error "creating dir $dir0"
@@ -13028,9 +13159,9 @@ test_187a() {
 run_test 187a "Test data version change"
 
 test_187b() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.0) ] &&
-		skip "Need MDS version at least 2.3.0" && return
+		skip "Need MDS version at least 2.3.0"
 
 	local dir0=$DIR/$tdir/$testnum
 	mkdir -p $dir0 || error "creating dir $dir0"
@@ -13046,9 +13177,9 @@ test_187b() {
 run_test 187b "Test data version change on volatile file"
 
 test_200() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
 
 	local POOL=${POOL:-cea1}
 	local POOL_ROOT=${POOL_ROOT:-$DIR/d200.pools}
@@ -13282,17 +13413,15 @@ jobstats_set() {
 }
 
 test_205() { # Job stats
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.7.1) ]] ||
-		{ skip "Need MDS version with at least 2.7.1"; return 0; }
-
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-
+		skip "Need MDS version with at least 2.7.1"
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep jobstats)" ] &&
-		skip "Server doesn't support jobstats" && return 0
-	[[ $JOBID_VAR = disable ]] && skip "jobstats is disabled" && return
+		skip "Server doesn't support jobstats"
+	[[ $JOBID_VAR = disable ]] && skip_env "jobstats is disabled"
 
 	local old_jobenv=$($LCTL get_param -n jobid_var)
 	[ $old_jobenv != $JOBENV ] && jobstats_set $JOBENV
@@ -13434,9 +13563,9 @@ test_208() {
 	# for now as only exclusive open is supported. After generic lease
 	# is done, this test suite should be revised. - Jinshan
 
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.4.52) ]] ||
-		{ skip "Need MDS version at least 2.4.52"; return 0; }
+		skip "Need MDS version at least 2.4.52"
 
 	echo "==== test 1: verify get lease work"
 	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:eRE+eU || error "get lease error"
@@ -13483,7 +13612,7 @@ run_test 208 "Exclusive open"
 
 test_209() {
 	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep disp_stripe)" ] &&
-		skip_env "must have disp_stripe" && return
+		skip_env "must have disp_stripe"
 
 	touch $DIR/$tfile
 	sync; sleep 5; sync;
@@ -13582,7 +13711,8 @@ check_lnet_proc_entry() {
 }
 
 test_215() { # for bugs 18102, 21079, 21517
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local N='(0|[1-9][0-9]*)'       # non-negative numeric
 	local P='[1-9][0-9]*'           # positive numeric
 	local I='(0|-?[1-9][0-9]*|NA)'  # any numeric (0 | >0 | <0) or NA if no value
@@ -13661,8 +13791,8 @@ test_215() { # for bugs 18102, 21079, 21517
 run_test 215 "lnet exists and has proper content - bugs 18102, 21079, 21517"
 
 test_216() { # bug 20317
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	local node
 	local facets=$(get_facets OST)
@@ -13705,7 +13835,8 @@ test_216() { # bug 20317
 run_test 216 "check lockless direct write updates file size and kms correctly"
 
 test_217() { # bug 22430
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local node
 	local nid
 
@@ -13736,21 +13867,22 @@ test_218() {
        log "removing the temporary file"
        rm -rf $DIR/$tfile || error "tmp file removal failed"
 }
-run_test 218 "parallel read and truncate should not deadlock ======================="
+run_test 218 "parallel read and truncate should not deadlock"
 
 test_219() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        # write one partial page
-        dd if=/dev/zero of=$DIR/$tfile bs=1024 count=1
-        # set no grant so vvp_io_commit_write will do sync write
-        $LCTL set_param fail_loc=0x411
-        # write a full page at the end of file
-        dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 seek=1 conv=notrunc
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
-        $LCTL set_param fail_loc=0
-        dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 seek=3
-        $LCTL set_param fail_loc=0x411
-        dd if=/dev/zero of=$DIR/$tfile bs=1024 count=1 seek=2 conv=notrunc
+	# write one partial page
+	dd if=/dev/zero of=$DIR/$tfile bs=1024 count=1
+	# set no grant so vvp_io_commit_write will do sync write
+	$LCTL set_param fail_loc=0x411
+	# write a full page at the end of file
+	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 seek=1 conv=notrunc
+
+	$LCTL set_param fail_loc=0
+	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 seek=3
+	$LCTL set_param fail_loc=0x411
+	dd if=/dev/zero of=$DIR/$tfile bs=1024 count=1 seek=2 conv=notrunc
 
 	# LU-4201
 	dd if=/dev/zero of=$DIR/$tfile-2 bs=1024 count=1
@@ -13759,10 +13891,11 @@ test_219() {
 run_test 219 "LU-394: Write partial won't cause uncontiguous pages vec at LND"
 
 test_220() { #LU-325
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+
 	local OSTIDX=0
 
 	# create on MDT0000 so the last_id and next_id are correct
@@ -13827,20 +13960,22 @@ test_220() { #LU-325
 run_test 220 "preallocated MDS objects still used if ENOSPC from OST"
 
 test_221() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        dd if=`which date` of=$MOUNT/date oflag=sync
-        chmod +x $MOUNT/date
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
-        #define OBD_FAIL_LLITE_FAULT_TRUNC_RACE  0x1401
-        $LCTL set_param fail_loc=0x80001401
+	dd if=`which date` of=$MOUNT/date oflag=sync
+	chmod +x $MOUNT/date
 
-        $MOUNT/date > /dev/null
-        rm -f $MOUNT/date
+	#define OBD_FAIL_LLITE_FAULT_TRUNC_RACE  0x1401
+	$LCTL set_param fail_loc=0x80001401
+
+	$MOUNT/date > /dev/null
+	rm -f $MOUNT/date
 }
 run_test 221 "make sure fault and truncate race to not cause OOM"
 
 test_222a () {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	rm -rf $DIR/$tdir
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
@@ -13856,7 +13991,8 @@ test_222a () {
 run_test 222a "AGL for ls should not trigger CLIO lock failure"
 
 test_222b () {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	rm -rf $DIR/$tdir
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
@@ -13871,7 +14007,8 @@ test_222b () {
 run_test 222b "AGL for rmdir should not trigger CLIO lock failure"
 
 test_223 () {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	rm -rf $DIR/$tdir
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -c 1 -i 0 $DIR/$tdir
@@ -13887,30 +14024,32 @@ test_223 () {
 run_test 223 "osc reenqueue if without AGL lock granted ======================="
 
 test_224a() { # LU-1039, MRP-303
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
-        $LCTL set_param fail_loc=0x508
-        dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 conv=fsync
-        $LCTL set_param fail_loc=0
-        df $DIR
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	#define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
+	$LCTL set_param fail_loc=0x508
+	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1 conv=fsync
+	$LCTL set_param fail_loc=0
+	df $DIR
 }
 run_test 224a "Don't panic on bulk IO failure"
 
 test_224b() { # LU-1039, MRP-303
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1
-        cancel_lru_locks osc
-        #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB2   0x515
-        $LCTL set_param fail_loc=0x515
-        dd of=/dev/null if=$DIR/$tfile bs=4096 count=1
-        $LCTL set_param fail_loc=0
-        df $DIR
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	dd if=/dev/zero of=$DIR/$tfile bs=4096 count=1
+	cancel_lru_locks osc
+	#define OBD_FAIL_PTLRPC_CLIENT_BULK_CB2   0x515
+	$LCTL set_param fail_loc=0x515
+	dd of=/dev/null if=$DIR/$tfile bs=4096 count=1
+	$LCTL set_param fail_loc=0
+	df $DIR
 }
 run_test 224b "Don't panic on bulk IO failure"
 
 test_224c() { # LU-6441
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
 	save_writethrough $p
@@ -13952,14 +14091,12 @@ run_test 224c "Don't hang if one of md lost during large bulk RPC"
 
 MDSSURVEY=${MDSSURVEY:-$(which mds-survey 2>/dev/null || true)}
 test_225a () {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	if [ -z ${MDSSURVEY} ]; then
-	      skip_env "mds-survey not found" && return
+		skip_env "mds-survey not found"
 	fi
-
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ] ||
-		{ skip "Need MDS version at least 2.2.51"; return; }
+		skip "Need MDS version at least 2.2.51"
 
 	local mds=$(facet_host $SINGLEMDS)
 	local target=$(do_nodes $mds 'lctl dl' |
@@ -13979,16 +14116,15 @@ test_225a () {
 run_test 225a "Metadata survey sanity with zero-stripe"
 
 test_225b () {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	if [ -z ${MDSSURVEY} ]; then
-	      skip_env "mds-survey not found" && return
+		skip_env "mds-survey not found"
 	fi
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.51) ] ||
-	    { skip "Need MDS version at least 2.2.51"; return; }
-
+		skip "Need MDS version at least 2.2.51"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	if [ $($LCTL dl | grep -c osc) -eq 0 ]; then
-	      skip_env "Need to mount OST to test" && return
+		skip_env "Need to mount OST to test"
 	fi
 
 	local mds=$(facet_host $SINGLEMDS)
@@ -14052,10 +14188,11 @@ test_226a () {
 run_test 226a "call path2fid and fid2path on files of all type"
 
 test_226b () {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	rm -rf $DIR/$tdir
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+
 	local MDTIDX=1
 
+	rm -rf $DIR/$tdir
 	mkdir -p $DIR/$tdir
 	$LFS setdirstripe -i $MDTIDX $DIR/$tdir/remote_dir ||
 		error "create remote directory failed"
@@ -14076,8 +14213,9 @@ run_test 226b "call path2fid and fid2path on files of all type under remote dir"
 # LU-1299 Executing or running ldd on a truncated executable does not
 # cause an out-of-memory condition.
 test_227() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ -z "$(which ldd)" ] && skip "should have ldd tool" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ -z "$(which ldd)" ] && skip_env "should have ldd tool"
+
 	dd if=$(which date) of=$MOUNT/date bs=1k count=1
 	chmod +x $MOUNT/date
 
@@ -14089,10 +14227,10 @@ run_test 227 "running truncated executable does not cause OOM"
 
 # LU-1512 try to reuse idle OI blocks
 test_228a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "ldiskfs only test" && return
+		skip_env "ldiskfs only test"
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local myDIR=$DIR/$tdir
@@ -14131,10 +14269,10 @@ test_228a() {
 run_test 228a "try to reuse idle OI blocks"
 
 test_228b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "ldiskfs only test" && return
+		skip_env "ldiskfs only test"
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local myDIR=$DIR/$tdir
@@ -14181,10 +14319,10 @@ run_test 228b "idle OI blocks can be reused after MDT restart"
 
 #LU-1881
 test_228c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "ldiskfs only test" && return
+		skip_env "ldiskfs only test"
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local myDIR=$DIR/$tdir
@@ -14227,11 +14365,10 @@ test_228c() {
 run_test 228c "NOT shrink the last entry in OI index node to recycle idle leaf"
 
 test_229() { # LU-2482, LU-3448
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.53) ] &&
-		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53" &&
-		return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+		skip "No HSM $(lustre_build_version $SINGLEMDS) MDS < 2.4.53"
 
 	rm -f $DIR/$tfile
 
@@ -14260,8 +14397,9 @@ test_229() { # LU-2482, LU-3448
 run_test 229 "getstripe/stat/rm/attr changes work on released files"
 
 test_230a() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+
 	local MDTIDX=1
 
 	test_mkdir $DIR/$tdir
@@ -14285,8 +14423,9 @@ test_230a() {
 run_test 230a "Create remote directory and files under the remote directory"
 
 test_230b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+
 	local MDTIDX=1
 	local mdt_index
 	local i
@@ -14449,9 +14588,10 @@ test_230b() {
 run_test 230b "migrate directory"
 
 test_230c() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	local MDTIDX=1
 	local mdt_index
 	local file
@@ -14503,8 +14643,9 @@ test_230c() {
 run_test 230c "check directory accessiblity if migration is failed"
 
 test_230d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+
 	local MDTIDX=1
 	local mdt_index
 	local migrate_dir=$DIR/$tdir/migrate_dir
@@ -14535,8 +14676,9 @@ test_230d() {
 run_test 230d "check migrate big directory"
 
 test_230e() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+
 	local i
 	local j
 	local a_fid
@@ -14580,8 +14722,9 @@ test_230e() {
 run_test 230e "migrate mulitple local link files"
 
 test_230f() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+
 	local a_fid
 	local ln_fid
 
@@ -14628,8 +14771,8 @@ test_230f() {
 run_test 230f "migrate mulitple remote link files"
 
 test_230g() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 
 	mkdir -p $DIR/$tdir/migrate_dir
 
@@ -14640,10 +14783,11 @@ test_230g() {
 run_test 230g "migrate dir to non-exist MDT"
 
 test_230h() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
-		skip "Need MDS version at least 2.7.64" && return
+		skip "Need MDS version at least 2.7.64"
+
 	local mdt_index
 
 	mkdir -p $DIR/$tdir/migrate_dir
@@ -14667,8 +14811,8 @@ test_230h() {
 run_test 230h "migrate .. and root"
 
 test_230i() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 
 	mkdir -p $DIR/$tdir/migrate_dir
 
@@ -14759,7 +14903,8 @@ run_test 232a "failed lock should not block umount"
 
 test_232b() {
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.58) ] ||
-		{ skip "Need MDS version at least 2.10.58"; return; }
+		skip "Need MDS version at least 2.10.58"
+
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -c1 -i0 $DIR/$tdir/$tfile
 	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1
@@ -14782,10 +14927,11 @@ run_test 232b "failed data version lock should not block umount"
 
 test_233a() {
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.64) ] ||
-	{ skip "Need MDS version at least 2.3.64"; return; }
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set" && return
+		skip "Need MDS version at least 2.3.64"
+	[ -n "$FILESET" ] && skip_env "SKIP due to FILESET set"
 
 	local fid=$($LFS path2fid $MOUNT)
+
 	stat $MOUNT/.lustre/fid/$fid > /dev/null ||
 		error "cannot access $MOUNT using its FID '$fid'"
 }
@@ -14793,10 +14939,11 @@ run_test 233a "checking that OBF of the FS root succeeds"
 
 test_233b() {
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.5.90) ] ||
-	{ skip "Need MDS version at least 2.5.90"; return; }
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set" && return
+		skip "Need MDS version at least 2.5.90"
+	[ -n "$FILESET" ] && skip_env "SKIP due to FILESET set"
 
 	local fid=$($LFS path2fid $MOUNT/.lustre)
+
 	stat $MOUNT/.lustre/fid/$fid > /dev/null ||
 		error "cannot access $MOUNT/.lustre using its FID '$fid'"
 
@@ -14810,7 +14957,7 @@ test_234() {
 	local p="$TMP/sanityN-$TESTNAME.parameters"
 	save_lustre_params client "llite.*.xattr_cache" > $p
 	lctl set_param llite.*.xattr_cache 1 ||
-		{ skip "xattr cache is not supported"; return 0; }
+		skip_env "xattr cache is not supported"
 
 	mkdir -p $DIR/$tdir || error "mkdir failed"
 	touch $DIR/$tdir/$tfile || error "touch failed"
@@ -14828,7 +14975,8 @@ run_test 234 "xattr cache should not crash on ENOMEM"
 
 test_235() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.4.52) ] &&
-		skip "Need MDS version at least 2.4.52" && return
+		skip "Need MDS version at least 2.4.52"
+
 	flock_deadlock $DIR/$tfile
 	local RC=$?
 	case $RC in
@@ -14844,14 +14992,14 @@ run_test 235 "LU-1715: flock deadlock detection does not work properly"
 
 #LU-2935
 test_236() {
-	check_swap_layouts_support && return 0
-	test_mkdir -c1 $DIR/$tdir
+	check_swap_layouts_support
 
 	local ref1=/etc/passwd
 	local ref2=/etc/group
 	local file1=$DIR/$tdir/f1
 	local file2=$DIR/$tdir/f2
 
+	test_mkdir -c1 $DIR/$tdir
 	$SETSTRIPE -c 1 $file1 || error "cannot setstripe on '$file1': rc = $?"
 	cp $ref1 $file1 || error "cp $ref1 $file1 failed: rc = $?"
 	$SETSTRIPE -c 2 $file2 || error "cannot setstripe on '$file2': rc = $?"
@@ -14890,7 +15038,7 @@ test_238() {
 	[[ $server_version -gt $(version_code 2.5.57) ]] ||
 		[[ $server_version -gt $(version_code 2.5.1) &&
 		   $server_version -lt $(version_code 2.5.50) ]] ||
-		{ skip "Need MDS version at least 2.5.58 or 2.5.2+"; return; }
+		skip "Need MDS version at least 2.5.58 or 2.5.2+"
 
 	touch $DIR/$tfile
 	ln $DIR/$tfile $DIR/$tfile.lnk
@@ -14909,7 +15057,8 @@ run_test 238 "Verify linkea consistency"
 
 test_239A() { # was test_239
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.60) ] &&
-		skip "Need MDS version at least 2.5.60" && return
+		skip "Need MDS version at least 2.5.60"
+
 	local list=$(comma_list $(mdts_nodes))
 
 	mkdir -p $DIR/$tdir
@@ -14924,7 +15073,8 @@ test_239A() { # was test_239
 run_test 239A "osp_sync test"
 
 test_239a() { #LU-5297
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	touch $DIR/$tfile
 	#define OBD_FAIL_OSP_CHECK_INVALID_REC     0x2100
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x2100
@@ -14934,7 +15084,8 @@ test_239a() { #LU-5297
 run_test 239a "process invalid osp sync record correctly"
 
 test_239b() { #LU-5297
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	touch $DIR/$tfile1
 	#define OBD_FAIL_OSP_CHECK_ENOMEM     0x2101
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x2101
@@ -14948,8 +15099,8 @@ test_239b() { #LU-5297
 run_test 239b "process osp sync record with ENOMEM error correctly"
 
 test_240() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	mkdir -p $DIR/$tdir
 
@@ -15004,7 +15155,8 @@ test_241b() {
 run_test 241b "dio vs dio"
 
 test_242() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/$tfile
 
@@ -15060,9 +15212,10 @@ test_245() {
 run_test 245 "check mdc connection flag/data: multiple modify RPCs"
 
 test_246() { # LU-7371
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh"
 	[ $(lustre_version_code ost1) -lt $(version_code 2.7.62) ] &&
-		skip "Need OST version >= 2.7.62" && return 0
+		skip "Need OST version >= 2.7.62"
+
 	do_facet ost1 $LCTL set_param fail_val=4095
 #define OBD_FAIL_OST_READ_SIZE		0x234
 	do_facet ost1 $LCTL set_param fail_loc=0x234
@@ -15084,7 +15237,7 @@ cleanup_247() {
 test_247a() {
 	lctl get_param -n mdc.$FSNAME-MDT0000*.import |
 		grep -q subtree ||
-		{ skip "Fileset feature is not supported"; return; }
+		skip_env "Fileset feature is not supported"
 
 	local submount=${MOUNT}_$tdir
 
@@ -15102,7 +15255,7 @@ run_test 247a "mount subdir as fileset"
 
 test_247b() {
 	lctl get_param -n mdc.$FSNAME-MDT0000*.import | grep -q subtree ||
-		{ skip "Fileset feature is not supported"; return; }
+		skip_env "Fileset feature is not supported"
 
 	local submount=${MOUNT}_$tdir
 
@@ -15117,7 +15270,7 @@ run_test 247b "mount subdir that dose not exist"
 
 test_247c() {
 	lctl get_param -n mdc.$FSNAME-MDT0000*.import | grep -q subtree ||
-		{ skip "Fileset feature is not supported"; return; }
+		skip_env "Fileset feature is not supported"
 
 	local submount=${MOUNT}_$tdir
 
@@ -15134,7 +15287,7 @@ run_test 247c "running fid2path outside root"
 
 test_247d() {
 	lctl get_param -n mdc.$FSNAME-MDT0000*.import | grep -q subtree ||
-		{ skip "Fileset feature is not supported"; return; }
+		skip "Fileset feature is not supported"
 
 	local submount=${MOUNT}_$tdir
 
@@ -15153,7 +15306,7 @@ run_test 247d "running fid2path inside root"
 test_247e() {
 	lctl get_param -n mdc.$FSNAME-MDT0000*.import |
 		grep -q subtree ||
-		{ skip "Fileset feature is not supported"; return; }
+		skip "Fileset feature is not supported"
 
 	local submount=${MOUNT}_$tdir
 
@@ -15167,14 +15320,14 @@ run_test 247e "mount .. as fileset"
 
 test_248() {
 	local fast_read_sav=$($LCTL get_param -n llite.*.fast_read 2>/dev/null)
-	[ -z "$fast_read_sav" ] && skip "no fast read support" && return
+	[ -z "$fast_read_sav" ] && skip "no fast read support"
 
 	# create a large file for fast read verification
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=128 > /dev/null 2>&1
 
 	# make sure the file is created correctly
 	$CHECKSTAT -s $((128*1024*1024)) $DIR/$tfile ||
-		{ rm -f $DIR/$tfile; skip "file creation error" && return; }
+		{ rm -f $DIR/$tfile; skip "file creation error"; }
 
 	echo "Test 1: verify that fast read is 4 times faster on cache read"
 
@@ -15219,12 +15372,11 @@ test_248() {
 run_test 248 "fast read verification"
 
 test_249() { # LU-7890
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.53) ] &&
+		skip "Need at least version 2.8.54"
+
 	rm -f $DIR/$tfile
 	$SETSTRIPE -c 1 $DIR/$tfile
-
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.53) ] &&
-	skip "Need at least version 2.8.54"
-
 	# Offset 2T == 4k * 512M
 	dd if=/dev/zero of=$DIR/$tfile bs=4k count=1 seek=512M ||
 		error "dd to 2T offset failed"
@@ -15233,7 +15385,7 @@ run_test 249 "Write above 2T file size"
 
 test_250() {
 	[ "$(facet_fstype ost$(($($GETSTRIPE -i $DIR/$tfile) + 1)))" = "zfs" ] \
-	 && skip "no 16TB file size limit on ZFS" && return
+	 && skip "no 16TB file size limit on ZFS"
 
 	$SETSTRIPE -c 1 $DIR/$tfile
 	# ldiskfs extent file size limit is (16TB - 4KB - 1) bytes
@@ -15263,20 +15415,19 @@ test_251() {
 run_test 251 "Handling short read and write correctly"
 
 test_252() {
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	if [ "$(facet_fstype ost1)" != "ldiskfs" -o \
+	     "$(facet_fstype mds1)" != "ldiskfs" ]; then
+		skip_env "ldiskfs only test"
+	fi
+
 	local tgt
 	local dev
 	local out
 	local uuid
 	local num
 	local gen
-
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	if [ "$(facet_fstype ost1)" != "ldiskfs" -o \
-	     "$(facet_fstype mds1)" != "ldiskfs" ]; then
-		skip "ldiskfs only test"
-		return
-	fi
 
 	# check lr_reader on OST0000
 	tgt=ost1
@@ -15293,8 +15444,7 @@ test_252() {
 	tgt=mds1
 	dev=$(facet_device $tgt)
 	if ! do_facet $tgt $LR_READER -h | grep -q OPTIONS; then
-		echo "$LR_READER does not support additional options"
-		return 0
+		skip "$LR_READER does not support additional options"
 	fi
 	out=$(do_facet $tgt $LR_READER -c $dev)
 	[ $? -eq 0 ] || error "$LR_READER failed on target $tgt device $dev"
@@ -15343,12 +15493,12 @@ test_253_fill_ost() {
 }
 
 test_253() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+
 	local ostidx=0
 	local rc=0
-
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
 
 	local ost_name=$($LFS osts |
 		sed -n 's/^'$ostidx': \(.*\)_UUID .*/\1/p')
@@ -15356,8 +15506,7 @@ test_253() {
 	local mdtosc_proc1=$(get_mdtosc_proc_path $SINGLEMDS $ost_name)
 	do_facet $SINGLEMDS $LCTL get_param -n \
 		osp.$mdtosc_proc1.reserved_mb_high ||
-		{ skip  "remote MDS does not support reserved_mb_high" &&
-		  return; }
+		skip  "remote MDS does not support reserved_mb_high"
 
 	rm -rf $DIR/$tdir
 	wait_mds_ost_sync
@@ -15445,15 +15594,13 @@ test_253() {
 run_test 253 "Check object allocation limit"
 
 test_254() {
-	local cl_user
-
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-
-	local MDT0=$(facet_svc $SINGLEMDS)
-
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	do_facet $SINGLEMDS $LCTL get_param -n mdd.$MDT0.changelog_size ||
-		{ skip "MDS does not support changelog_size" && return; }
+		skip "MDS does not support changelog_size"
+
+	local cl_user
+	local MDT0=$(facet_svc $SINGLEMDS)
 
 	changelog_register || error "changelog_register failed"
 
@@ -15598,16 +15745,16 @@ ladvise_willread_performance()
 
 test_255a() {
 	[ $(lustre_version_code ost1) -lt $(version_code 2.8.54) ] &&
-		skip "lustre < 2.8.54 does not support ladvise " && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+		skip "lustre < 2.8.54 does not support ladvise "
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	lfs setstripe -c -1 -i 0 $DIR/$tfile || error "$tfile failed"
 
 	ladvise_no_type willread $DIR/$tfile &&
-		skip "willread ladvise is not supported" && return
+		skip "willread ladvise is not supported"
 
 	ladvise_no_ioctl $DIR/$tfile &&
-		skip "ladvise ioctl is not supported" && return
+		skip "ladvise ioctl is not supported"
 
 	local size_mb=100
 	local size=$((size_mb * 1048576))
@@ -15685,23 +15832,20 @@ facet_meminfo() {
 
 test_255b() {
 	[ $(lustre_version_code ost1) -lt $(version_code 2.8.54) ] &&
-		skip "lustre < 2.8.54 does not support ladvise " && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+		skip "lustre < 2.8.54 does not support ladvise "
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	lfs setstripe -c 1 -i 0 $DIR/$tfile
 
 	ladvise_no_type dontneed $DIR/$tfile &&
-		skip "dontneed ladvise is not supported" && return
+		skip "dontneed ladvise is not supported"
 
 	ladvise_no_ioctl $DIR/$tfile &&
-		skip "ladvise ioctl is not supported" && return
-
-	[ $(lustre_version_code ost1) -lt $(version_code 2.8.54) ] &&
-		skip "lustre < 2.8.54 does not support ladvise" && return
+		skip "ladvise ioctl is not supported"
 
 	! $LFS ladvise -a dontneed $DIR/$tfile &&
 		[ "$(facet_fstype ost1)" = "zfs" ] &&
-		skip "zfs-osd does not support 'ladvise dontneed'" && return
+		skip "zfs-osd does not support 'ladvise dontneed'"
 
 	local size_mb=100
 	local size=$((size_mb * 1048576))
@@ -15747,14 +15891,14 @@ test_255b() {
 run_test 255b "check 'lfs ladvise -a dontneed'"
 
 test_255c() {
+	[ $(lustre_version_code ost1) -lt $(version_code 2.10.50) ] &&
+		skip "lustre < 2.10.53 does not support lockahead"
+
 	local count
 	local new_count
 	local difference
 	local i
 	local rc
-
-	[ $(lustre_version_code ost1) -lt $(version_code 2.10.50) ] &&
-		skip "lustre < 2.10.53 does not support lockahead" && return
 
 	test_mkdir -p $DIR/$tdir
 	$SETSTRIPE -i 0 $DIR/$tdir
@@ -15831,19 +15975,19 @@ test_255c() {
 run_test 255c "suite of ladvise lockahead tests"
 
 test_256() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
+		skip "ldiskfs only test"
+	changelog_users $SINGLEMDS | grep "^cl" &&
+		skip "active changelog user"
+
 	local cl_user
 	local cat_sl
 	local mdt_dev
 
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "ldiskfs only test" && return
-
 	mdt_dev=$(mdsdevname 1)
 	echo $mdt_dev
-	changelog_users $SINGLEMDS | grep "^cl" &&
-		skip "active changelog user" && return
 
 	changelog_register || error "changelog_register failed"
 
@@ -15887,9 +16031,9 @@ test_256() {
 run_test 256 "Check llog delete for empty and not full state"
 
 test_257() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.55) ]] &&
-		skip "Need MDS version at least 2.8.55" && return
+		skip "Need MDS version at least 2.8.55"
 
 	test_mkdir $DIR/$tdir
 
@@ -15952,9 +16096,8 @@ run_test 260 "Check mdc_close fail"
 
 ### Data-on-MDT sanity tests ###
 test_270a() {
-
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	# create DoM file
 	local dom=$DIR/$tdir/dom_file
@@ -16052,7 +16195,7 @@ run_test 270a "DoM: basic functionality tests"
 
 test_270b() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	local dom=$DIR/$tdir/dom_file
 	local max_size=1048576
@@ -16077,7 +16220,7 @@ run_test 270b "DoM: maximum size overflow checks for DoM-only file"
 
 test_270c() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
@@ -16106,7 +16249,7 @@ run_test 270c "DoM: DoM EA inheritance tests"
 
 test_270d() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -E 1024K -L mdt $DIR/$tdir
@@ -16128,7 +16271,7 @@ run_test 270d "DoM: change striping from DoM to RAID0"
 
 test_270e() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	mkdir -p $DIR/$tdir/dom
 	mkdir -p $DIR/$tdir/norm
@@ -16169,7 +16312,7 @@ run_test 270e "DoM: lfs find with DoM files test"
 
 test_270f() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	local mdtname=${FSNAME}-MDT0000-mdtlov
 	local dom=$DIR/$tdir/dom_file
@@ -16230,7 +16373,7 @@ run_test 270f "DoM: maximum DoM stripe size checks"
 
 test_271a() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	local dom=$DIR/$tdir/dom
 
@@ -16251,7 +16394,7 @@ run_test 271a "DoM: data is cached for read after write"
 
 test_271b() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	local dom=$DIR/$tdir/dom
 
@@ -16274,7 +16417,7 @@ run_test 271b "DoM: no glimpse RPC for stat (DoM only file)"
 
 test_271ba() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	local dom=$DIR/$tdir/dom
 
@@ -16301,10 +16444,10 @@ run_test 271ba "DoM: no glimpse RPC for stat (combined file)"
 
 test_271c() {
 	# test to be enabled with lock_convert
-	skip "skipped until lock convert will be implemented" && return
+	skip "skipped until lock convert will be implemented"
 
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55" && return
+		skip "Need MDS version at least 2.10.55"
 
 	local dom=$DIR/$tdir/dom
 
@@ -16346,9 +16489,9 @@ test_271c() {
 run_test 271c "DoM: IO lock at open saves enqueue RPCs"
 
 test_275() {
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh"
 	[ $(lustre_version_code ost1) -lt $(version_code 2.10.57) ] &&
-		skip "Need OST version >= 2.10.57" && return 0
+		skip "Need OST version >= 2.10.57"
 
 	local file=$DIR/$tfile
 	local oss
@@ -16379,7 +16522,7 @@ test_275() {
 run_test 275 "Read on a canceled duplicate lock"
 
 test_276() {
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh"
 	local pid
 
 	do_facet ost1 "(while true; do \
@@ -16471,9 +16614,9 @@ test_striped_dir() {
 
 test_300a() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.0) ] &&
-		skip "skipped for lustre < 2.7.0" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "skipped for lustre < 2.7.0"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 
 	test_striped_dir 0 || error "failed on striped dir on MDT0"
 	test_striped_dir 1 || error "failed on striped dir on MDT0"
@@ -16482,9 +16625,10 @@ run_test 300a "basic striped dir sanity test"
 
 test_300b() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.0) ] &&
-		skip "skipped for lustre < 2.7.0" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "skipped for lustre < 2.7.0"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+
 	local i
 	local mtime1
 	local mtime2
@@ -16510,9 +16654,10 @@ run_test 300b "check ctime/mtime for striped dir"
 
 test_300c() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.0) ] &&
-		skip "skipped for lustre < 2.7.0" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "skipped for lustre < 2.7.0"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+
 	local file_count
 
 	mkdir -p $DIR/$tdir
@@ -16535,9 +16680,10 @@ run_test 300c "chown && check ls under striped directory"
 
 test_300d() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.0) ] &&
-		skip "skipped for lustre < 2.7.0" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "skipped for lustre < 2.7.0"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+
 	local stripe_count
 	local file
 
@@ -16568,9 +16714,10 @@ run_test 300d "check default stripe under striped directory"
 
 test_300e() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "Need MDS version at least 2.7.55"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+
 	local stripe_count
 	local file
 
@@ -16613,10 +16760,11 @@ test_300e() {
 run_test 300e "check rename under striped directory"
 
 test_300f() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "Need MDS version at least 2.7.55"
+
 	local stripe_count
 	local file
 
@@ -16702,9 +16850,10 @@ test_300_check_default_striped_dir()
 }
 
 test_300g() {
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "Need MDS version at least 2.7.55"
+
 	local dir
 	local stripe_count
 	local stripe_index
@@ -16753,9 +16902,10 @@ test_300g() {
 run_test 300g "check default striped directory for normal directory"
 
 test_300h() {
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "Need MDS version at least 2.7.55"
+
 	local dir
 	local stripe_count
 
@@ -16782,10 +16932,11 @@ test_300h() {
 run_test 300h "check default striped directory for striped directory"
 
 test_300i() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "Need MDS version at least 2.7.55"
+
 	local stripe_count
 	local file
 
@@ -16836,10 +16987,11 @@ test_300i() {
 run_test 300i "client handle unknown hash type striped directory"
 
 test_300j() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "Need MDS version at least 2.7.55"
+
 	local stripe_count
 	local file
 
@@ -16862,10 +17014,11 @@ test_300j() {
 run_test 300j "test large update record"
 
 test_300k() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "Need MDS version at least 2.7.55"
+
 	local stripe_count
 	local file
 
@@ -16887,10 +17040,11 @@ test_300k() {
 run_test 300k "test large striped directory"
 
 test_300l() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "Need MDS version at least 2.7.55"
+
 	local stripe_index
 
 	test_mkdir -p $DIR/$tdir/striped_dir
@@ -16910,10 +17064,10 @@ test_300l() {
 run_test 300l "non-root user to create dir under striped dir with stale layout"
 
 test_300m() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -ge 2 ] && skip_env "Only for single MDT"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -ge 2 ] && skip "Only for single MDT" && return
+		skip "Need MDS version at least 2.7.55"
 
 	mkdir -p $DIR/$tdir/striped_dir
 	$LFS setdirstripe -D -c 1 $DIR/$tdir/striped_dir ||
@@ -16952,11 +17106,11 @@ cleanup_300n() {
 }
 
 test_300n() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+		skip "Need MDS version at least 2.7.55"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local stripe_index
 	local list=$(comma_list $(mdts_nodes))
@@ -16995,10 +17149,11 @@ test_300n() {
 run_test 300n "non-root user to create dir under striped dir with default EA"
 
 test_300o() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+		skip "Need MDS version at least 2.7.55"
+
 	local numfree1
 	local numfree2
 
@@ -17008,14 +17163,12 @@ test_300o() {
 	numfree2=$(lctl get_param -n mdc.*MDT0001*.filesfree)
 	if [ $numfree1 -lt 66000 -o $numfree2 -lt 66000 ]; then
 		skip "not enough free inodes $numfree1 $numfree2"
-		return
 	fi
 
 	numfree1=$(lctl get_param -n mdc.*MDT0000-mdc-*.kbytesfree)
 	numfree2=$(lctl get_param -n mdc.*MDT0001-mdc-*.kbytesfree)
 	if [ $numfree1 -lt 300000 -o $numfree2 -lt 300000 ]; then
 		skip "not enough free space $numfree1 $numfree2"
-		return
 	fi
 
 	$LFS setdirstripe -c2 $DIR/$tdir/striped_dir ||
@@ -17033,9 +17186,9 @@ test_300o() {
 run_test 300o "unlink big sub stripe(> 65000 subdirs)"
 
 test_300p() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	mkdir -p $DIR/$tdir
 
@@ -17052,8 +17205,8 @@ test_300p() {
 run_test 300p "create striped directory without space"
 
 test_300q() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 
 	local fd=$(free_fd)
 	local cmd="exec $fd<$tdir"
@@ -17098,8 +17251,9 @@ prepare_remote_file() {
 }
 
 test_310a() {
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 4 MDTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 4 MDTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local remote_file=$DIR/$tdir/tgt_dir/b
 
 	mkdir -p $DIR/$tdir
@@ -17114,8 +17268,9 @@ test_310a() {
 run_test 310a "open unlink remote file"
 
 test_310b() {
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 4 MDTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 4 MDTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
 	local remote_file=$DIR/$tdir/tgt_dir/b
 
 	mkdir -p $DIR/$tdir
@@ -17129,8 +17284,9 @@ test_310b() {
 run_test 310b "unlink remote file with multiple links while open"
 
 test_310c() {
-	[[ $MDSCOUNT -lt 4 ]] && skip "needs >= 4 MDTs" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $MDSCOUNT -lt 4 ]] && skip_env "needs >= 4 MDTs"
+
 	local remote_file=$DIR/$tdir/tgt_dir/b
 
 	mkdir -p $DIR/$tdir
@@ -17149,11 +17305,11 @@ run_test 310c "open-unlink remote file with multiple links"
 
 #LU-4825
 test_311() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.54) ] &&
-		skip "lustre < 2.8.54 does not contain LU-4825 fix" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+		skip "lustre < 2.8.54 does not contain LU-4825 fix"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local old_iused=$($LFS df -i | grep OST0000 | awk '{ print $3 }')
 
@@ -17236,10 +17392,9 @@ zfs_object_blksz() {
 }
 
 test_312() { # LU-4856
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-
+	remote_ost_nodsh && skip "remote OST with nodsh"
 	[ $(facet_fstype ost1) = "zfs" ] ||
-		{ skip "the test only applies to zfs" && return; }
+		skip_env "the test only applies to zfs"
 
 	local max_blksz=$(do_facet ost1 \
 			  $ZFS get -p recordsize $(facet_device ost1) |
@@ -17304,7 +17459,7 @@ test_312() { # LU-4856
 run_test 312 "make sure ZFS adjusts its block size by write pattern"
 
 test_313() {
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	local file=$DIR/$tfile
 	rm -f $file
@@ -17320,7 +17475,7 @@ test_313() {
 run_test 313 "io should fail after last_rcvd update fail"
 
 test_314() {
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 
 	$SETSTRIPE -c 2 -i 0 $DIR/$tfile || error "setstripe failed"
 	do_facet ost1 "$LCTL set_param fail_loc=0x720"
@@ -17349,8 +17504,8 @@ test_315() { # LU-618
 run_test 315 "read should be accounted"
 
 test_316() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	large_xattr_enabled || { skip "large_xattr disabled" && return; }
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs"
+	large_xattr_enabled || skip_env "large_xattr disabled"
 
 	rm -rf $DIR/$tdir/d
 	mkdir -p $DIR/$tdir/d
@@ -17420,32 +17575,31 @@ test_fake_rw() {
 	rm -f $DIR/$tfile
 }
 test_399a() { # LU-7655 for OST fake write
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh"
 
 	test_fake_rw write
 }
 run_test 399a "fake write should not be slower than normal write"
 
 test_399b() { # LU-8726 for OST fake read
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-
+	remote_ost_nodsh && skip "remote OST with nodsh"
 	if [ "$(facet_fstype ost1)" != "ldiskfs" ]; then
-		skip "ldiskfs only test" && return 0
+		skip_env "ldiskfs only test"
 	fi
+
 	test_fake_rw read
 }
 run_test 399b "fake read should not be slower than normal read"
 
 test_400a() { # LU-1606, was conf-sanity test_74
+	if ! which $CC > /dev/null 2>&1; then
+		skip_env "$CC is not installed"
+	fi
+
 	local extra_flags=''
 	local out=$TMP/$tfile
 	local prefix=/usr/include/lustre
 	local prog
-
-	if ! which $CC > /dev/null 2>&1; then
-		skip_env "$CC is not installed"
-		return 0
-	fi
 
 	if ! [[ -d $prefix ]]; then
 		# Assume we're running in tree and fixup the include path.
@@ -17475,7 +17629,6 @@ test_400b() { # LU-1606, LU-5011
 
 	if ! which $CC > /dev/null 2>&1; then
 		skip_env "$CC is not installed"
-		return 0
 	fi
 
 	for header in $prefix/*.h; do
@@ -17496,8 +17649,8 @@ run_test 400b "packaged headers can be compiled"
 
 test_401a() { #LU-7437
 	local printf_arg=$(find -printf 2>&1 | grep "unrecognized:")
-	[ -n "$printf_arg" ] && skip_env "find does not support -printf" &&
-		return
+	[ -n "$printf_arg" ] && skip_env "find does not support -printf"
+
 	#count the number of parameters by "list_param -R"
 	local params=$($LCTL list_param -R '*' 2>/dev/null | wc -l)
 	#count the number of parameters by listing proc files
@@ -17596,9 +17749,9 @@ test_402() {
 		$server_version -lt $(version_code 2.7.50) ]] ||
 	[[ $server_version -ge $(version_code 2.7.2) &&
 		$server_version -lt $(version_code 2.7.11) ]] ||
-		{ skip "Need MDS version 2.7.2+ or 2.7.18.4+ or 2.7.66+";
-			return; }
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+		skip "Need MDS version 2.7.2+ or 2.7.18.4+ or 2.7.66+"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
 	$LFS setdirstripe -i 0 $DIR/$tdir || error "setdirstripe -i 0 failed"
 #define OBD_FAIL_MDS_FLD_LOOKUP 0x15c
 	do_facet mds1 "lctl set_param fail_loc=0x8000015c"
@@ -17639,9 +17792,9 @@ run_test 403 "i_nlink should not drop to zero due to aliasing"
 test_404() { # LU-6601
 	local server_version=$(lustre_version_code $SINGLEMDS)
 	[[ $server_version -ge $(version_code 2.8.53) ]] ||
-		{ skip "Need server version newer than 2.8.52"; return 0; }
+		skip "Need server version newer than 2.8.52"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local mosps=$(do_facet $SINGLEMDS $LCTL dl |
 		awk '/osp .*-osc-MDT/ { print $4}')
 
@@ -17670,9 +17823,8 @@ run_test 404 "validate manual {de}activated works properly for OSPs"
 test_405() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.6.92) -o \
 	[ $(lustre_version_code client) -lt $(version_code 2.6.99) ] &&
-		skip "Layout swap lock is not supported" && return
-
-	check_swap_layouts_support && return 0
+		skip "Layout swap lock is not supported"
+	check_swap_layouts_support
 
 	test_mkdir $DIR/$tdir
 	swap_lock_test -d $DIR/$tdir ||
@@ -17681,12 +17833,12 @@ test_405() {
 run_test 405 "Various layout swap lock tests"
 
 test_406() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
-	[ -n "$FILESET" ] && skip "SKIP due to FILESET set" && return
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $OSTCOUNT -lt 2 ] && skip_env "needs >= 2 OSTs"
+	[ -n "$FILESET" ] && skip "SKIP due to FILESET set"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.50) ] &&
-		skip "Need MDS version at least 2.8.50" && return
+		skip "Need MDS version at least 2.8.50"
 
 	local def_stripe_size=$($LFS getstripe -S $MOUNT)
 	local test_pool=$TESTNAME
@@ -17754,10 +17906,10 @@ test_406() {
 run_test 406 "DNE support fs default striping"
 
 test_407() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.55) ]] &&
-		skip "Need MDS version at least 2.8.55" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+		skip "Need MDS version at least 2.8.55"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	$LFS mkdir -i 0 -c 1 $DIR/$tdir.0 ||
 		error "$LFS mkdir -i 0 -c 1 $tdir.0 failed"
@@ -17798,9 +17950,7 @@ run_test 408 "drop_caches should not hang due to page leaks"
 
 test_409()
 {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDTs for this test" && return
-
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	check_mount_and_prep
 
 	mkdir -p $DIR/$tdir || error "(0) Fail to mkdir"
@@ -17831,7 +17981,7 @@ run_test 409 "Large amount of cross-MDTs hard links on the same file"
 test_410()
 {
 	[[ $(lustre_version_code client) -lt $(version_code 2.9.59) ]] &&
-		skip "Need client version at least 2.9.59" && return
+		skip "Need client version at least 2.9.59"
 
 	# Create a file, and stat it from the kernel
 	local testfile=$DIR/$tfile
@@ -17861,7 +18011,7 @@ test_411() {
 	local cg_basedir=/sys/fs/cgroup/memory
 	# LU-9966
 	test -f "$cg_basedir/memory.kmem.limit_in_bytes" ||
-		{ skip "no setup for cgroup"; return; }
+		skip "no setup for cgroup"
 
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=100 conv=fsync ||
 		error "test file creation failed"
@@ -17885,11 +18035,9 @@ test_411() {
 run_test 411 "Slab allocation error with cgroup does not LBUG"
 
 test_412() {
-	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDTs for this test" && return
-
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	if [ $(lustre_version_code mds1) -lt $(version_code 2.10.55) ]; then
-		skip "Need server version at least 2.10.55" && exit 0
+		skip "Need server version at least 2.10.55"
 	fi
 
 	$LFS mkdir -i $((MDSCOUNT - 1)),$((MDSCOUNT - 2)) $DIR/$tdir ||
@@ -17906,10 +18054,10 @@ run_test 412 "mkdir on specific MDTs"
 
 test_413() {
 	[ $MDSCOUNT -lt 2 ] &&
-		skip "We need at least 2 MDTs for this test" && return
+		skip "We need at least 2 MDTs for this test"
 
 	if [ $(lustre_version_code mds1) -lt $(version_code 2.10.55) ]; then
-		skip "Need server version at least 2.10.55" && exit 0
+		skip "Need server version at least 2.10.55"
 	fi
 
 	mkdir $DIR/$tdir || error "mkdir failed"
@@ -17943,7 +18091,8 @@ run_test 413 "mkdir on less full MDTs"
 prep_801() {
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&
-		skip "Need server version at least 2.9.55" & exit 0
+		skip "Need server version at least 2.9.55"
+
 	start_full_debug_logging
 }
 
@@ -18111,7 +18260,7 @@ test_801b() {
 run_test 801b "modification will be blocked by write barrier"
 
 test_801c() {
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
 
 	prep_801
 
@@ -18168,7 +18317,7 @@ test_802() {
 
 	[[ $(lustre_version_code mds1) -lt $(version_code 2.9.55) ]] ||
 	[[ $(lustre_version_code ost1) -lt $(version_code 2.9.55) ]] &&
-		skip "Need server version at least 2.9.55" & exit 0
+		skip "Need server version at least 2.9.55"
 
 	mkdir $DIR/$tdir || error "(1) fail to mkdir"
 
@@ -18209,9 +18358,9 @@ test_802() {
 run_test 802 "simulate readonly device"
 
 test_803() {
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.54) ] &&
-		skip "MDS needs to be newer than 2.10.54" && return
+		skip "MDS needs to be newer than 2.10.54"
 
 	mkdir -p $DIR/$tdir
 	# Create some objects on all MDTs to trigger related logs objects
@@ -18257,12 +18406,11 @@ test_803() {
 run_test 803 "verify agent object for remote object"
 
 test_804() {
-	[[ $MDSCOUNT -lt 2 ]] && skip "needs >= 2 MDTs" && return
+	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.54) ] &&
-		skip "MDS needs to be newer than 2.10.54" && return
-
+		skip "MDS needs to be newer than 2.10.54"
 	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
-		skip "ldiskfs only test" && return 0
+		skip_env "ldiskfs only test"
 
 	mkdir -p $DIR/$tdir
 	$LFS mkdir -c 1 -i 1 $DIR/$tdir/dir0 ||
@@ -18349,11 +18497,11 @@ cleanup_805() {
 test_805() {
 	local zfs_version=$(do_node $SINGLEMDS cat /sys/module/zfs/version)
 	[ "$(facet_fstype mds1)" != "zfs" ] &&
-		skip "ZFS specific test" && return
+		skip "ZFS specific test"
 	[ $(version_code $zfs_version) -lt $(version_code 0.7.2) ] &&
-		skip "netfree not implemented before 0.7" && return
+		skip "netfree not implemented before 0.7"
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.57) ]] ||
-		{ skip "Need MDS version at least 2.10.57" && return 0; }
+		skip "Need MDS version at least 2.10.57"
 
 	local fsset
 	local freekb
@@ -18391,12 +18539,13 @@ run_test 805 "ZFS can remove from full fs"
 #
 
 test_900() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        local ls
-        #define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
-        $LCTL set_param fail_loc=0x903
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	local ls
 
-        cancel_lru_locks MGC
+	#define OBD_FAIL_MGC_PAUSE_PROCESS_LOG   0x903
+	$LCTL set_param fail_loc=0x903
+
+	cancel_lru_locks MGC
 
 	FAIL_ON_ERROR=true cleanup
 	FAIL_ON_ERROR=true setup
