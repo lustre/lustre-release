@@ -810,6 +810,7 @@ struct ptlrpc_body_v2 {
 /* ocd_connect_flags2 flags */
 #define OBD_CONNECT2_FILE_SECCTX	0x1ULL /* set file security context at create */
 #define OBD_CONNECT2_LOCKAHEAD	0x2ULL /* ladvise lockahead v2 */
+#define OBD_CONNECT2_FLR	0x20ULL /* FLR support */
 
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
@@ -860,7 +861,7 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT_GRANT_PARAM | \
 				OBD_CONNECT_SHORTIO | OBD_CONNECT_FLAGS2)
 
-#define MDT_CONNECT_SUPPORTED2 OBD_CONNECT2_FILE_SECCTX
+#define MDT_CONNECT_SUPPORTED2 (OBD_CONNECT2_FILE_SECCTX | OBD_CONNECT2_FLR)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
 				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \

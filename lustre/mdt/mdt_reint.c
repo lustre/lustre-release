@@ -731,11 +731,21 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	if (mdt_object_remote(mo))
 		GOTO(out_put, rc = -EREMOTE);
 
-	if ((ma->ma_attr.la_valid & LA_SIZE) ||
-	    (rr->rr_flags & MRF_OPEN_TRUNC)) {
+	if (ma->ma_attr.la_valid & LA_SIZE || rr->rr_flags & MRF_OPEN_TRUNC) {
 		/* Check write access for the O_TRUNC case */
 		if (mdt_write_read(mo) < 0)
 			GOTO(out_put, rc = -ETXTBSY);
+
+		/* LU-10286: compatibility check for FLR.
+		 * Please check the comment in mdt_finish_open() for details */
+		if (!exp_connect_flr(info->mti_exp)) {
+			rc = mdt_big_xattr_get(info, mo, XATTR_NAME_LOV);
+			if (rc < 0 && rc != -ENODATA)
+				GOTO(out_put, rc);
+
+			if (rc > 0 && mdt_lmm_is_flr(info->mti_big_lmm))
+				GOTO(out_put, rc = -EOPNOTSUPP);
+		}
 	}
 
 	if ((ma->ma_valid & MA_INODE) && ma->ma_attr.la_valid) {

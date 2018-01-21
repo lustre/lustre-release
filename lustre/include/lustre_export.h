@@ -324,7 +324,9 @@ static inline __u64 *exp_connect_flags2_ptr(struct obd_export *exp)
 
 static inline __u64 exp_connect_flags2(struct obd_export *exp)
 {
-	return *exp_connect_flags2_ptr(exp);
+	if (exp_connect_flags(exp) & OBD_CONNECT_FLAGS2)
+		return *exp_connect_flags2_ptr(exp);
+	return 0;
 }
 
 static inline int exp_max_brw_size(struct obd_export *exp)
@@ -437,6 +439,11 @@ static inline int exp_connect_lockahead_old(struct obd_export *exp)
 static inline int exp_connect_lockahead(struct obd_export *exp)
 {
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_LOCKAHEAD);
+}
+
+static inline int exp_connect_flr(struct obd_export *exp)
+{
+	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_FLR);
 }
 
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);

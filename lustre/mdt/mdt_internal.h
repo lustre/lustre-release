@@ -666,6 +666,14 @@ static inline int mdt_lmm_dom_entry(struct lov_mds_md *lmm)
 	return LMM_NO_DOM;
 }
 
+static inline bool mdt_lmm_is_flr(struct lov_mds_md *lmm)
+{
+	struct lov_comp_md_v1 *lcm = (typeof(lcm))lmm;
+
+	return le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_COMP_V1 &&
+	       le16_to_cpu(lcm->lcm_mirror_count) > 0;
+}
+
 __u64 mdt_get_disposition(struct ldlm_reply *rep, __u64 op_flag);
 void mdt_set_disposition(struct mdt_thread_info *info,
 			 struct ldlm_reply *rep, __u64 op_flag);

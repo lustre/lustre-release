@@ -522,6 +522,21 @@ static int mdt_finish_open(struct mdt_thread_info *info,
         islnk = S_ISLNK(la->la_mode);
         mdt_pack_attr2body(info, repbody, la, mdt_object_fid(o));
 
+	/* compatibility check for 2.10 clients when it tries to open mirrored
+	 * files. 2.10 clients don't verify overlapping components so they
+	 * would read and write mirrored files just as if they were normal
+	 * PFL files, which will cause the problem that sycned mirrors actually
+	 * contain different data.
+	 * Older clients are not a concern here because they don't even
+	 * understand PFL layout. */
+	if (isreg && !exp_connect_flr(exp) && ma->ma_valid & MA_LOV &&
+	    mdt_lmm_is_flr(ma->ma_lmm)) {
+		/* LU-10286: for simplicity clients who don't understand
+		 * mirrored layout(with connect flag OBD_CONNECT2_FLR) won't
+		 * be able to open mirrored files */
+		RETURN(-EOPNOTSUPP);
+	}
+
 	/* LU-2275, simulate broken behaviour (esp. prevalent in
 	 * pre-2.4 servers where a very strange reply is sent on error
 	 * that looks like it was actually almost successful and a
