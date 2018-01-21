@@ -48,8 +48,6 @@
 #include <lustre_fid.h>
 #include "fid_internal.h"
 
-static void seq_server_proc_fini(struct lu_server_seq *seq);
-
 /* Assigns client to sequence controller node. */
 int seq_server_set_cli(const struct lu_env *env, struct lu_server_seq *seq,
 		       struct lu_client_seq *cli)
@@ -458,35 +456,43 @@ LU_KEY_INIT_FINI(seq, struct seq_thread_info);
 /* context key: seq_thread_key */
 LU_CONTEXT_KEY_DEFINE(seq, LCT_MD_THREAD | LCT_DT_THREAD);
 
-extern const struct file_operations seq_fld_proc_seq_fops;
+extern const struct file_operations seq_fld_debugfs_seq_fops;
 
-static int seq_server_proc_init(struct lu_server_seq *seq)
+static void seq_server_debugfs_fini(struct lu_server_seq *seq)
 {
-#ifdef CONFIG_PROC_FS
+	if (!IS_ERR_OR_NULL(seq->lss_debugfs_entry))
+		ldebugfs_remove(&seq->lss_debugfs_entry);
+}
+
+static int seq_server_debugfs_init(struct lu_server_seq *seq)
+{
 	int rc;
 	ENTRY;
 
-	seq->lss_proc_dir = lprocfs_register(seq->lss_name,
-					     seq_type_proc_dir,
-					     NULL, NULL);
-	if (IS_ERR(seq->lss_proc_dir)) {
-		rc = PTR_ERR(seq->lss_proc_dir);
+	seq->lss_debugfs_entry = ldebugfs_register(seq->lss_name,
+						   seq_debugfs_dir,
+						   NULL, NULL);
+	if (IS_ERR_OR_NULL(seq->lss_debugfs_entry)) {
+		rc = seq->lss_debugfs_entry ? PTR_ERR(seq->lss_debugfs_entry)
+					    : -ENOMEM;
+		seq->lss_debugfs_entry = NULL;
 		RETURN(rc);
 	}
 
-	rc = lprocfs_add_vars(seq->lss_proc_dir, seq_server_proc_list, seq);
+	rc = ldebugfs_add_vars(seq->lss_debugfs_entry,
+			       seq_server_debugfs_list, seq);
 	if (rc) {
-		CERROR("%s: Can't init sequence manager "
-		       "proc, rc %d\n", seq->lss_name, rc);
+		CERROR("%s: Can't init sequence manager debugfs, rc %d\n",
+		       seq->lss_name, rc);
 		GOTO(out_cleanup, rc);
 	}
 
 	if (seq->lss_type == LUSTRE_SEQ_CONTROLLER) {
-		rc = lprocfs_seq_create(seq->lss_proc_dir, "fldb", 0644,
-					&seq_fld_proc_seq_fops, seq);
+		rc = ldebugfs_seq_create(seq->lss_debugfs_entry, "fldb", 0644,
+					 &seq_fld_debugfs_seq_fops, seq);
 		if (rc) {
-			CERROR("%s: Can't create fldb for sequence manager "
-			       "proc: rc = %d\n", seq->lss_name, rc);
+			CERROR("%s: Can't create fldb for sequence manager debugfs: rc = %d\n",
+			       seq->lss_name, rc);
 			GOTO(out_cleanup, rc);
 		}
 	}
@@ -494,24 +500,8 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
 	RETURN(0);
 
 out_cleanup:
-	seq_server_proc_fini(seq);
+	seq_server_debugfs_fini(seq);
 	return rc;
-#else /* !CONFIG_PROC_FS */
-	return 0;
-#endif /* CONFIG_PROC_FS */
-}
-
-static void seq_server_proc_fini(struct lu_server_seq *seq)
-{
-#ifdef CONFIG_PROC_FS
-        ENTRY;
-        if (seq->lss_proc_dir != NULL) {
-                if (!IS_ERR(seq->lss_proc_dir))
-                        lprocfs_remove(&seq->lss_proc_dir);
-                seq->lss_proc_dir = NULL;
-        }
-        EXIT;
-#endif /* CONFIG_PROC_FS */
 }
 
 int seq_server_init(const struct lu_env *env,
@@ -592,7 +582,7 @@ int seq_server_init(const struct lu_env *env,
 			lu_seq_range_is_sane(&seq->lss_space));
 	}
 
-        rc  = seq_server_proc_init(seq);
+	rc  = seq_server_debugfs_init(seq);
         if (rc)
                 GOTO(out, rc);
 
@@ -609,7 +599,7 @@ void seq_server_fini(struct lu_server_seq *seq,
 {
         ENTRY;
 
-        seq_server_proc_fini(seq);
+	seq_server_debugfs_fini(seq);
         seq_store_fini(seq, env);
 
         EXIT;

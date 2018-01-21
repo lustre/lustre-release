@@ -55,9 +55,7 @@ enum {
 
 extern struct lu_context_key seq_thread_key;
 
-# ifdef CONFIG_PROC_FS
-extern struct lprocfs_vars seq_server_proc_list[];
-# endif
+extern struct lprocfs_vars seq_server_debugfs_list[];
 
 /* Store API functions. */
 struct dt_device;
@@ -89,10 +87,8 @@ void fid_server_mod_exit(void);
 int seq_client_alloc_super(struct lu_client_seq *seq,
 			   const struct lu_env *env);
 
-# ifdef CONFIG_PROC_FS
-extern struct lprocfs_vars seq_client_proc_list[];
-# endif
+extern struct dentry *seq_debugfs_dir;
 
-extern struct proc_dir_entry *seq_type_proc_dir;
+extern struct lprocfs_vars seq_client_debugfs_list[];
 
 #endif /* __FID_INTERNAL_H */
