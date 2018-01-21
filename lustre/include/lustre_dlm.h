@@ -942,6 +942,15 @@ struct ldlm_lock {
  *  which is for server. */
 #define l_slc_link l_rk_ast
 
+#define HANDLE_MAP_SIZE  ((LMV_MAX_STRIPE_COUNT + 7) >> 3)
+
+struct lustre_handle_array {
+	unsigned int		ha_count;
+	/* ha_map is used as bit flag to indicate handle is remote or local */
+	char			ha_map[HANDLE_MAP_SIZE];
+	struct lustre_handle	ha_handles[0];
+};
+
 /**
  * LDLM resource description.
  * Basically, resource is a representation for a single object.
@@ -1141,6 +1150,7 @@ struct ldlm_enqueue_info {
 	void		*ei_cb_gl;	/** lock glimpse callback */
 	void		*ei_cbdata;	/** Data to be passed into callbacks. */
 	void		*ei_namespace;	/** lock namespace **/
+	u64		ei_inodebits;	/** lock inode bits **/
 	unsigned int	ei_enq_slave:1;	/** whether enqueue slave stripes */
 };
 

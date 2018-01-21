@@ -2766,7 +2766,7 @@ int mdt_remote_object_lock_try(struct mdt_thread_info *mti,
 			       struct lustre_handle *lh, enum ldlm_mode mode,
 			       __u64 *ibits, __u64 trybits, bool cache)
 {
-	struct ldlm_enqueue_info *einfo = &mti->mti_einfo;
+	struct ldlm_enqueue_info *einfo = &mti->mti_remote_einfo;
 	union ldlm_policy_data *policy = &mti->mti_policy;
 	struct ldlm_res_id *res_id = &mti->mti_res_id;
 	int rc = 0;
@@ -2793,17 +2793,14 @@ int mdt_remote_object_lock_try(struct mdt_thread_info *mti,
 		einfo->ei_cbdata = o;
 	}
 
-
 	memset(policy, 0, sizeof(*policy));
 	policy->l_inodebits.bits = *ibits;
 	policy->l_inodebits.try_bits = trybits;
 
 	rc = mo_object_lock(mti->mti_env, mdt_object_child(o), lh, einfo,
 			    policy);
-	if (rc < 0 && cache) {
+	if (rc < 0 && cache)
 		mdt_object_put(mti->mti_env, o);
-		einfo->ei_cbdata = NULL;
-	}
 
 	/* Return successfully acquired bits to a caller */
 	if (rc == 0) {

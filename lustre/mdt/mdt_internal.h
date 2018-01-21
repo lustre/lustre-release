@@ -472,6 +472,8 @@ struct mdt_thread_info {
 	/* should be enough to fit lustre_mdt_attrs */
 	char			   mti_xattr_buf[128];
 	struct ldlm_enqueue_info   mti_einfo;
+	/* einfo used by mdt_remote_object_lock_try() */
+	struct ldlm_enqueue_info   mti_remote_einfo;
 	struct tg_reply_data	  *mti_reply_data;
 
 	struct lustre_som_attrs	   mti_som;

@@ -564,11 +564,6 @@ static inline void lustre_handle_copy(struct lustre_handle *tgt,
 	tgt->cookie = src->cookie;
 }
 
-struct lustre_handle_array {
-	unsigned int		count;
-	struct lustre_handle	handles[0];
-};
-
 /* lustre_msg struct magic.  DON'T use swabbed values of MAGIC as magic! */
 enum lustre_msg_magic {
 	LUSTRE_MSG_MAGIC_V2		= 0x0BD00BD3,
