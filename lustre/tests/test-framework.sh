@@ -1465,7 +1465,8 @@ mount_facets () {
 		[ $RC -eq 0 ] && continue
 
 		if [ "$TESTSUITE.$TESTNAME" = "replay-dual.test_0a" ]; then
-			skip "Restart of $facet failed!." && touch $LU482_FAILED
+			skip_noexit "Restart of $facet failed!." &&
+				touch $LU482_FAILED
 		else
 			error "Restart of $facet failed!"
 		fi
@@ -4693,7 +4694,7 @@ run_e2fsck() {
 	if [ -n "$(grep "DNE mode isn't supported" $log)" ]; then
 		rm -f $log
 		if [ $MDSCOUNT -gt 1 ]; then
-			skip "DNE mode isn't supported!"
+			skip_noexit "DNE mode isn't supported!"
 			cleanupall
 			exit_status
 		else
@@ -5367,7 +5368,7 @@ skip_env () {
 	$FAIL_ON_SKIP_ENV && error false $@ || skip $@
 }
 
-skip() {
+skip_noexit() {
 	echo
 	log " SKIP: $TESTSUITE $TESTNAME $@"
 
@@ -5382,8 +5383,13 @@ skip() {
 		echo "$TESTSUITE: SKIP: $TESTNAME $@" >> $TESTSUITELOG || true
 }
 
+skip() {
+	skip_noexit
+	exit 0
+}
+
 build_test_filter() {
-    EXCEPT="$EXCEPT $(testslist_filter)"
+	EXCEPT="$EXCEPT $(testslist_filter)"
 
 	for O in $ONLY; do
 		if [[ $O = [0-9]*-[0-9]* ]]; then
@@ -5457,32 +5463,32 @@ run_test() {
 	ALWAYS_SKIPPED="y"
 	testname=EXCEPT_$1
 	if [ ${!testname}x != x ]; then
-		TESTNAME=test_$1 skip "skipping excluded test $1"
+		TESTNAME=test_$1 skip_noexit "skipping excluded test $1"
 		return 0
 	fi
 	testname=EXCEPT_$base
 	if [ ${!testname}x != x ]; then
-		TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
+		TESTNAME=test_$1 skip_noexit "skipping excluded test $1 (base $base)"
 		return 0
 	fi
 	testname=EXCEPT_ALWAYS_$1
 	if [ ${!testname}x != x ]; then
-		TESTNAME=test_$1 skip "skipping ALWAYS excluded test $1"
+		TESTNAME=test_$1 skip_noexit "skipping ALWAYS excluded test $1"
 		return 0
 	fi
 	testname=EXCEPT_ALWAYS_$base
 	if [ ${!testname}x != x ]; then
-		TESTNAME=test_$1 skip "skipping ALWAYS excluded test $1 (base $base)"
+		TESTNAME=test_$1 skip_noexit "skipping ALWAYS excluded test $1 (base $base)"
 		return 0
 	fi
 	testname=EXCEPT_SLOW_$1
 	if [ ${!testname}x != x ]; then
-		TESTNAME=test_$1 skip "skipping SLOW test $1"
+		TESTNAME=test_$1 skip_noexit "skipping SLOW test $1"
 		return 0
 	fi
 	testname=EXCEPT_SLOW_$base
 	if [ ${!testname}x != x ]; then
-		TESTNAME=test_$1 skip "skipping SLOW test $1 (base $base)"
+		TESTNAME=test_$1 skip_noexit "skipping SLOW test $1 (base $base)"
 		return 0
 	fi
 
@@ -8323,8 +8329,7 @@ lss_gen_conf()
 
 	if ! combined_mgs_mds ; then
 		[ $(facet_fstype mgs) != zfs ] &&
-			skip "Lustre snapshot 1 only works for ZFS backend" &&
-			exit 0
+			skip "Lustre snapshot 1 only works for ZFS backend"
 
 		local host=$(facet_active_host mgs)
 		local dir=$(dirname $(facet_vdevice mgs))
@@ -8338,8 +8343,7 @@ lss_gen_conf()
 
 	for num in `seq $MDSCOUNT`; do
 		[ $(facet_fstype mds$num) != zfs ] &&
-			skip "Lustre snapshot 1 only works for ZFS backend" &&
-			exit 0
+			skip "Lustre snapshot 1 only works for ZFS backend"
 
 		lss_gen_conf_one mds$num MDT $((num - 1)) ||
 			lss_err "generate lss conf (mds$num)"
@@ -8347,8 +8351,7 @@ lss_gen_conf()
 
 	for num in `seq $OSTCOUNT`; do
 		[ $(facet_fstype ost$num) != zfs ] &&
-			skip "Lustre snapshot 1 only works for ZFS backend" &&
-			exit 0
+			skip "Lustre snapshot 1 only works for ZFS backend"
 
 		lss_gen_conf_one ost$num OST $((num - 1)) ||
 			lss_err "generate lss conf (ost$num)"
