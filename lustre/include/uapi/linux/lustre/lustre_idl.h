@@ -3305,6 +3305,7 @@ enum update_type {
 	OUT_PUNCH		= 14,
 	OUT_READ		= 15,
 	OUT_NOOP		= 16,
+	OUT_XATTR_LIST		= 17,
 	OUT_LAST
 };
 

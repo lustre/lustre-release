@@ -520,6 +520,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)OUT_PUNCH);
 	LASSERTF(OUT_READ == 15, "found %lld\n",
 		 (long long)OUT_READ);
+	LASSERTF(OUT_NOOP == 16, "found %lld\n",
+		 (long long)OUT_NOOP);
+	LASSERTF(OUT_XATTR_LIST == 17, "found %lld\n",
+		 (long long)OUT_XATTR_LIST);
 
 	/* Checks for struct hsm_attrs */
 	LASSERTF((int)sizeof(struct hsm_attrs) == 24, "found %lld\n",

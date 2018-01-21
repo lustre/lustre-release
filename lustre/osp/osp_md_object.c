@@ -818,6 +818,95 @@ const struct dt_index_operations osp_md_index_ops = {
 };
 
 /**
+ * Implement OSP layer dt_object_operations::do_xattr_list() interface.
+ *
+ * List extended attribute from the specified MDT/OST object, result is not
+ * cached because this is called by directory migration only.
+ *
+ * \param[in] env	pointer to the thread context
+ * \param[in] dt	pointer to the OSP layer dt_object
+ * \param[out] buf	pointer to the lu_buf to hold the extended attribute
+ *
+ * \retval		positive bytes used/required in the buffer
+ * \retval		negative error number on failure
+ */
+static int osp_md_xattr_list(const struct lu_env *env, struct dt_object *dt,
+			     const struct lu_buf *buf)
+{
+	struct osp_device *osp = lu2osp_dev(dt->do_lu.lo_dev);
+	struct osp_object *obj = dt2osp_obj(dt);
+	struct dt_device *dev = &osp->opd_dt_dev;
+	struct lu_buf *rbuf = &osp_env_info(env)->osi_lb2;
+	struct osp_update_request *update = NULL;
+	struct ptlrpc_request *req = NULL;
+	struct object_update_reply *reply;
+	const char *dname  = dt->do_lu.lo_dev->ld_obd->obd_name;
+	int rc = 0;
+
+	ENTRY;
+
+	LASSERT(buf);
+
+	if (unlikely(obj->opo_non_exist))
+		RETURN(-ENOENT);
+
+	update = osp_update_request_create(dev);
+	if (IS_ERR(update))
+		RETURN(PTR_ERR(update));
+
+	rc = osp_update_rpc_pack(env, xattr_list, update, OUT_XATTR_LIST,
+				 lu_object_fid(&dt->do_lu), buf->lb_len);
+	if (rc) {
+		CERROR("%s: Insert update error "DFID": rc = %d\n",
+		       dname, PFID(lu_object_fid(&dt->do_lu)), rc);
+		GOTO(out, rc);
+	}
+
+	rc = osp_remote_sync(env, osp, update, &req);
+	if (rc < 0) {
+		if (rc == -ENOENT) {
+			dt->do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;
+			obj->opo_non_exist = 1;
+		}
+		GOTO(out, rc);
+	}
+
+	reply = req_capsule_server_sized_get(&req->rq_pill,
+					     &RMF_OUT_UPDATE_REPLY,
+					     OUT_UPDATE_REPLY_SIZE);
+	if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
+		DEBUG_REQ(D_ERROR, req,
+			  "%s: Wrong version %x expected %x "DFID": rc = %d\n",
+			  dname, reply->ourp_magic, UPDATE_REPLY_MAGIC,
+			  PFID(lu_object_fid(&dt->do_lu)), -EPROTO);
+
+		GOTO(out, rc = -EPROTO);
+	}
+
+	rc = object_update_result_data_get(reply, rbuf, 0);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	if (!buf->lb_buf)
+		GOTO(out, rc);
+
+	if (unlikely(buf->lb_len < rbuf->lb_len))
+		GOTO(out, rc = -ERANGE);
+
+	memcpy(buf->lb_buf, rbuf->lb_buf, rbuf->lb_len);
+	EXIT;
+
+out:
+	if (req)
+		ptlrpc_req_finished(req);
+
+	if (update && !IS_ERR(update))
+		osp_update_request_destroy(env, update);
+
+	return rc;
+}
+
+/**
  * Implementation of dt_object_operations::do_index_try
  *
  * Try to initialize the index API pointer for the given object. This
@@ -994,6 +1083,7 @@ struct dt_object_operations osp_md_obj_ops = {
 	.do_declare_attr_set  = osp_md_declare_attr_set,
 	.do_attr_set          = osp_md_attr_set,
 	.do_xattr_get         = osp_xattr_get,
+	.do_xattr_list	      = osp_md_xattr_list,
 	.do_declare_xattr_set = osp_declare_xattr_set,
 	.do_xattr_set         = osp_xattr_set,
 	.do_declare_xattr_del = osp_declare_xattr_del,

@@ -53,6 +53,7 @@ const char *update_op_str(__u16 opc)
 		[OUT_ATTR_GET] = "attr_get",
 		[OUT_XATTR_SET] = "xattr_set",
 		[OUT_XATTR_GET] = "xattr_get",
+		[OUT_XATTR_LIST] = "xattr_list",
 		[OUT_INDEX_LOOKUP] = "lookup",
 		[OUT_INDEX_INSERT] = "insert",
 		[OUT_INDEX_DELETE] = "delete",
@@ -403,6 +404,15 @@ int out_xattr_get_pack(const struct lu_env *env, struct object_update *update,
 			       fid, 1, &size, (const void **)&name, bufsize);
 }
 EXPORT_SYMBOL(out_xattr_get_pack);
+
+int out_xattr_list_pack(const struct lu_env *env, struct object_update *update,
+		       size_t *max_update_size, const struct lu_fid *fid,
+		       const int bufsize)
+{
+	return out_update_pack(env, update, max_update_size, OUT_XATTR_LIST,
+			       fid, 0, NULL, NULL, bufsize);
+}
+EXPORT_SYMBOL(out_xattr_list_pack);
 
 int out_read_pack(const struct lu_env *env, struct object_update *update,
 		  size_t *max_update_size, const struct lu_fid *fid,

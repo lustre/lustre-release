@@ -2737,6 +2737,8 @@ main(int argc, char **argv)
 	CHECK_VALUE(OUT_XATTR_DEL);
 	CHECK_VALUE(OUT_PUNCH);
 	CHECK_VALUE(OUT_READ);
+	CHECK_VALUE(OUT_NOOP);
+	CHECK_VALUE(OUT_XATTR_LIST);
 
 	check_hsm_attrs();
 	check_ost_id();

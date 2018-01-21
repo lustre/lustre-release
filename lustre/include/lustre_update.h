@@ -454,6 +454,9 @@ int out_xattr_get_pack(const struct lu_env *env,
 		       struct object_update *update, size_t *max_update_size,
 		       const struct lu_fid *fid, const char *name,
 		       const int bufsize);
+int out_xattr_list_pack(const struct lu_env *env, struct object_update *update,
+		       size_t *max_update_size, const struct lu_fid *fid,
+		       const int bufsize);
 int out_read_pack(const struct lu_env *env, struct object_update *update,
 		  size_t *max_update_length, const struct lu_fid *fid,
 		  size_t size, loff_t pos);

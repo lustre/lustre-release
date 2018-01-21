@@ -289,10 +289,62 @@ static int out_xattr_get(struct tgt_session_info *tsi)
 	} else if (lbuf->lb_buf) {
 		lbuf->lb_len = rc;
 	}
-
-	CDEBUG(D_INFO, "%s: "DFID" get xattr %s len %d: rc = %d\n",
+	CDEBUG(D_INFO, "%s: "DFID" get xattr %s len %d\n",
 	       tgt_name(tsi->tsi_tgt), PFID(lu_object_fid(&obj->do_lu)),
-	       name, (int)lbuf->lb_len, rc);
+	       name, rc);
+
+	GOTO(out, rc);
+
+out:
+	object_update_result_insert(reply, lbuf->lb_buf, lbuf->lb_len, idx, rc);
+	RETURN(0);
+}
+
+static int out_xattr_list(struct tgt_session_info *tsi)
+{
+	const struct lu_env *env = tsi->tsi_env;
+	struct tgt_thread_info *tti = tgt_th_info(env);
+	struct lu_buf *lbuf = &tti->tti_buf;
+	struct object_update_reply *reply = tti->tti_u.update.tti_update_reply;
+	struct dt_object *obj = tti->tti_u.update.tti_dt_object;
+	struct object_update_result *update_result;
+	int idx = tti->tti_u.update.tti_update_reply_index;
+	int rc;
+
+	ENTRY;
+
+	if (!lu_object_exists(&obj->do_lu)) {
+		set_bit(LU_OBJECT_HEARD_BANSHEE,
+			&obj->do_lu.lo_header->loh_flags);
+		RETURN(-ENOENT);
+	}
+
+	update_result = object_update_result_get(reply, 0, NULL);
+	if (!update_result) {
+		rc = -EPROTO;
+		CERROR("%s: empty buf for xattr list: rc = %d\n",
+		       tgt_name(tsi->tsi_tgt), rc);
+		RETURN(rc);
+	}
+
+	lbuf->lb_len = (int)tti->tti_u.update.tti_update->ou_result_size;
+	lbuf->lb_buf = update_result->our_data;
+	if (lbuf->lb_len == 0)
+		lbuf->lb_buf = 0;
+
+	dt_read_lock(env, obj, MOR_TGT_CHILD);
+	rc = dt_xattr_list(env, obj, lbuf);
+	dt_read_unlock(env, obj);
+	if (rc <= 0) {
+		lbuf->lb_len = 0;
+		if (unlikely(!rc))
+			rc = -ENODATA;
+	} else if (lbuf->lb_buf) {
+		lbuf->lb_len = rc;
+	}
+
+	CDEBUG(D_INFO, "%s: "DFID" list xattr len %d\n",
+	       tgt_name(tsi->tsi_tgt), PFID(lu_object_fid(&obj->do_lu)), rc);
 
 	/* Since we directly use update_result->our_data as the lbuf->lb_buf,
 	 * then use NULL for result_insert to avoid unnecessary memory copy. */
@@ -759,6 +811,8 @@ static struct tgt_handler out_update_ops[] = {
 	DEF_OUT_HNDL(OUT_WRITE, "out_write", MUTABOR | HABEO_REFERO, out_write),
 	DEF_OUT_HNDL(OUT_READ, "out_read", HABEO_REFERO, out_read),
 	DEF_OUT_HNDL(OUT_NOOP, "out_noop", HABEO_REFERO, out_noop),
+	DEF_OUT_HNDL(OUT_XATTR_LIST, "out_xattr_list", HABEO_REFERO,
+		     out_xattr_list),
 };
 
 static struct tgt_handler *out_handler_find(__u32 opc)
