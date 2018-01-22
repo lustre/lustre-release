@@ -1231,7 +1231,7 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	if (la_copy->la_valid & LA_SIZE) {
 		struct lu_buf *lov_buf = mdd_buf_get(env, NULL, 0);
 
-		rc = mdd_get_lov_ea(env, mdd_obj, lov_buf);
+		rc = mdd_stripe_get(env, mdd_obj, lov_buf, XATTR_NAME_LOV);
 		if (rc) {
 			rc = 0;
 		} else {
@@ -1488,7 +1488,7 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 
 	/* get EA of victim file */
 	memset(buf_vic, 0, sizeof(*buf_vic));
-	rc = mdd_get_lov_ea(env, vic, buf_vic);
+	rc = mdd_stripe_get(env, vic, buf_vic, XATTR_NAME_LOV);
 	if (rc < 0) {
 		if (rc == -ENODATA)
 			rc = 0;
@@ -1502,7 +1502,7 @@ static int mdd_xattr_merge(const struct lu_env *env, struct md_object *md_obj,
 
 	/* save EA of target file for restore */
 	memset(buf, 0, sizeof(*buf));
-	rc = mdd_get_lov_ea(env, obj, buf);
+	rc = mdd_stripe_get(env, obj, buf, XATTR_NAME_LOV);
 	if (rc < 0)
 		GOTO(out, rc);
 
@@ -1714,7 +1714,7 @@ static int mdd_xattr_split(const struct lu_env *env, struct md_object *md_obj,
 
 	/* get EA of mirrored file */
 	memset(buf_save, 0, sizeof(*buf));
-	rc = mdd_get_lov_ea(env, obj, buf_save);
+	rc = mdd_stripe_get(env, obj, buf_save, XATTR_NAME_LOV);
 	if (rc < 0)
 		GOTO(out, rc);
 
@@ -1982,58 +1982,50 @@ stop:
 }
 
 /*
- * read lov EA of an object
- * return the lov EA in an allocated lu_buf
+ * read lov/lmv EA of an object
+ * return the lov/lmv EA in an allocated lu_buf
  */
-int mdd_get_lov_ea(const struct lu_env *env, struct mdd_object *obj,
-		   struct lu_buf *lmm_buf)
+int mdd_stripe_get(const struct lu_env *env, struct mdd_object *obj,
+		   struct lu_buf *lmm_buf, const char *name)
 {
-	struct lu_buf	*buf = &mdd_env_info(env)->mti_big_buf;
-	int		 rc, bufsize;
+	struct lu_buf *buf = &mdd_env_info(env)->mti_big_buf;
+	int rc;
+
 	ENTRY;
 
-repeat:
-	rc = mdo_xattr_get(env, obj, buf, XATTR_NAME_LOV);
+	if (buf->lb_buf == NULL) {
+		buf = lu_buf_check_and_alloc(buf, 4096);
+		if (buf->lb_buf == NULL)
+			RETURN(-ENOMEM);
+	}
 
+repeat:
+	rc = mdo_xattr_get(env, obj, buf, name);
 	if (rc == -ERANGE) {
 		/* mti_big_buf is allocated but is too small
 		 * we need to increase it */
 		buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf,
 					     buf->lb_len * 2);
 		if (buf->lb_buf == NULL)
-			GOTO(out, rc = -ENOMEM);
+			RETURN(-ENOMEM);
 		goto repeat;
-	}
-
-	if (rc < 0)
+	} else if (rc < 0) {
 		RETURN(rc);
-
-	if (rc == 0)
+	} else if (rc == 0) {
 		RETURN(-ENODATA);
-
-	bufsize = rc;
-	if (memcmp(buf, &LU_BUF_NULL, sizeof(*buf)) == 0) {
-		/* mti_big_buf was not allocated, so we have to
-		 * allocate it based on the ea size */
-		buf = lu_buf_check_and_alloc(&mdd_env_info(env)->mti_big_buf,
-					     bufsize);
-		if (buf->lb_buf == NULL)
-			GOTO(out, rc = -ENOMEM);
-		goto repeat;
 	}
 
-	lu_buf_alloc(lmm_buf, bufsize);
+	lu_buf_alloc(lmm_buf, rc);
 	if (lmm_buf->lb_buf == NULL)
-		GOTO(out, rc = -ENOMEM);
+		RETURN(-ENOMEM);
 
-	memcpy(lmm_buf->lb_buf, buf->lb_buf, bufsize);
-	rc = 0;
-	EXIT;
+	/*
+	 * we don't use lmm_buf directly, because we don't know xattr size, so
+	 * by using mti_big_buf we can avoid calling mdo_xattr_get() twice.
+	 */
+	memcpy(lmm_buf->lb_buf, buf->lb_buf, rc);
 
-out:
-	if (rc < 0)
-		lu_buf_free(lmm_buf);
-	return rc;
+	RETURN(0);
 }
 
 static int mdd_xattr_hsm_replace(const struct lu_env *env,
@@ -2252,11 +2244,11 @@ static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
 	mdd_write_lock(env, fst_o, MOR_TGT_CHILD);
 	mdd_write_lock(env, snd_o, MOR_TGT_CHILD);
 
-	rc = mdd_get_lov_ea(env, fst_o, fst_buf);
+	rc = mdd_stripe_get(env, fst_o, fst_buf, XATTR_NAME_LOV);
 	if (rc < 0 && rc != -ENODATA)
 		GOTO(stop, rc);
 
-	rc = mdd_get_lov_ea(env, snd_o, snd_buf);
+	rc = mdd_stripe_get(env, snd_o, snd_buf, XATTR_NAME_LOV);
 	if (rc < 0 && rc != -ENODATA)
 		GOTO(stop, rc);
 
@@ -2812,7 +2804,7 @@ mdd_layout_change(const struct lu_env *env, struct md_object *o,
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
 
-	rc = mdd_get_lov_ea(env, obj, buf);
+	rc = mdd_stripe_get(env, obj, buf, XATTR_NAME_LOV);
 	if (rc < 0) {
 		if (rc == -ENODATA)
 			rc = -EINVAL;

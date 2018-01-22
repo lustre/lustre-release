@@ -46,6 +46,8 @@ struct lmv_stripe_md {
 	__u32	lsm_md_master_mdt_index;
 	__u32	lsm_md_hash_type;
 	__u32	lsm_md_layout_version;
+	__u32	lsm_md_migrate_offset;
+	__u32	lsm_md_migrate_hash;
 	__u32	lsm_md_default_count;
 	__u32	lsm_md_default_index;
 	char	lsm_md_pool_name[LOV_MAXPOOLNAME + 1];
@@ -64,6 +66,10 @@ lsm_md_eq(const struct lmv_stripe_md *lsm1, const struct lmv_stripe_md *lsm2)
 	    lsm1->lsm_md_hash_type != lsm2->lsm_md_hash_type ||
 	    lsm1->lsm_md_layout_version !=
 				lsm2->lsm_md_layout_version ||
+	    lsm1->lsm_md_migrate_offset !=
+				lsm2->lsm_md_migrate_offset ||
+	    lsm1->lsm_md_migrate_hash !=
+				lsm2->lsm_md_migrate_hash ||
 	    strcmp(lsm1->lsm_md_pool_name,
 		      lsm2->lsm_md_pool_name) != 0)
 		return false;
@@ -141,18 +147,14 @@ static inline int lmv_name_to_stripe_index(__u32 lmv_hash_type,
 					   unsigned int stripe_count,
 					   const char *name, int namelen)
 {
-	int	idx;
-	__u32	hash_type = lmv_hash_type & LMV_HASH_TYPE_MASK;
+	int idx;
 
 	LASSERT(namelen > 0);
+
 	if (stripe_count <= 1)
 		return 0;
 
-	/* for migrating object, always start from 0 stripe */
-	if (lmv_hash_type & LMV_HASH_FLAG_MIGRATION)
-		return 0;
-
-	switch (hash_type) {
+	switch (lmv_hash_type & LMV_HASH_TYPE_MASK) {
 	case LMV_HASH_TYPE_ALL_CHARS:
 		idx = lmv_hash_all_chars(stripe_count, name, namelen);
 		break;
@@ -164,8 +166,8 @@ static inline int lmv_name_to_stripe_index(__u32 lmv_hash_type,
 		break;
 	}
 
-	CDEBUG(D_INFO, "name %.*s hash_type %d idx %d\n", namelen, name,
-	       hash_type, idx);
+	CDEBUG(D_INFO, "name %.*s hash_type %#x idx %d/%u\n", namelen, name,
+	       lmv_hash_type, idx, stripe_count);
 
 	return idx;
 }

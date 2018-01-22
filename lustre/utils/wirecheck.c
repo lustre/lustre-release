@@ -837,7 +837,8 @@ check_lmv_mds_md_v1(void)
 	CHECK_MEMBER(lmv_mds_md_v1, lmv_master_mdt_index);
 	CHECK_MEMBER(lmv_mds_md_v1, lmv_hash_type);
 	CHECK_MEMBER(lmv_mds_md_v1, lmv_layout_version);
-	CHECK_MEMBER(lmv_mds_md_v1, lmv_padding1);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_migrate_offset);
+	CHECK_MEMBER(lmv_mds_md_v1, lmv_migrate_hash);
 	CHECK_MEMBER(lmv_mds_md_v1, lmv_padding2);
 	CHECK_MEMBER(lmv_mds_md_v1, lmv_padding3);
 	CHECK_MEMBER(lmv_mds_md_v1, lmv_pool_name[LOV_MAXPOOLNAME]);

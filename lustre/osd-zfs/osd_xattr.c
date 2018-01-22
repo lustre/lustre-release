@@ -969,7 +969,17 @@ static int __osd_sa_xattr_del(const struct lu_env *env, struct osd_object *obj,
 		return rc;
 
 	rc = -nvlist_remove(obj->oo_sa_xattr, name, DATA_TYPE_BYTE_ARRAY);
-	if (rc == 0)
+	if (rc)
+		return rc;
+
+	/*
+	 * only migrate delete LMV, and it needs to be done immediately, because
+	 * it's used in deleting sub stripes, and if this is delayed, later when
+	 * destroying the master object, it will delete sub stripes again.
+	 */
+	if (!strcmp(name, XATTR_NAME_LMV))
+		rc = __osd_sa_xattr_update(env, obj, oh);
+	else
 		rc = __osd_sa_xattr_schedule_update(env, obj, oh);
 	return rc;
 }

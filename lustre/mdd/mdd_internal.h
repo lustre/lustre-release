@@ -190,11 +190,13 @@ struct mdd_thread_info {
 	* then mti_ent::lde_name will be mti_key. */
 	struct lu_dirent	  mti_ent;
 	char			  mti_key[NAME_MAX + 16];
+	char			  mti_name[NAME_MAX + 1];
 	struct lu_buf             mti_buf[4];
 	struct lu_buf             mti_big_buf; /* biggish persistent buf */
 	struct lu_buf		  mti_link_buf; /* buf for link ea */
 	struct lu_buf		  mti_xattr_buf;
 	struct obdo               mti_oa;
+	struct lmv_user_md	  mti_lmu;
 	struct dt_allocation_hint mti_hint;
 	struct dt_object_format   mti_dof;
 	struct linkea_data	  mti_link_data;
@@ -347,8 +349,8 @@ int mdd_declare_create_object_internal(const struct lu_env *env,
 				       struct thandle *handle,
 				       const struct md_op_spec *spec,
 				       struct dt_allocation_hint *hint);
-int mdd_get_lov_ea(const struct lu_env *env, struct mdd_object *obj,
-		   struct lu_buf *lmm_buf);
+int mdd_stripe_get(const struct lu_env *env, struct mdd_object *obj,
+		   struct lu_buf *lmm_buf, const char *name);
 
 /* mdd_trans.c */
 void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,

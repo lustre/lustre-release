@@ -225,7 +225,8 @@ struct mdt_device {
 				   mo_acl:1,
 				   mo_cos:1,
 				   mo_evict_tgt_nids:1,
-				   mo_dom_read_open:1;
+				   mo_dom_read_open:1,
+				   mo_migrate_hsm_allowed:1;
 		unsigned int       mo_dom_lock;
 	} mdt_opts;
         /* mdt state flags */
@@ -487,6 +488,7 @@ struct mdt_thread_info {
 
         /* Ops object filename */
         struct lu_name             mti_name;
+	char			   mti_filename[NAME_MAX + 1];
 	/* per-thread values, can be re-used, may be vmalloc'd */
 	void			  *mti_big_lmm;
 	void			  *mti_big_acl;
@@ -494,7 +496,7 @@ struct mdt_thread_info {
 	int			   mti_big_aclsize;
 	/* should be enough to fit lustre_mdt_attrs */
 	char			   mti_xattr_buf[128];
-	struct ldlm_enqueue_info   mti_einfo;
+	struct ldlm_enqueue_info   mti_einfo[2];
 	/* einfo used by mdt_remote_object_lock_try() */
 	struct ldlm_enqueue_info   mti_remote_einfo;
 	struct tg_reply_data	  *mti_reply_data;
@@ -839,6 +841,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
 void mdt_reconstruct_open(struct mdt_thread_info *, struct mdt_lock_handle *);
 int mdt_layout_change(struct mdt_thread_info *info, struct mdt_object *obj,
 		      struct md_layout_change *spec);
+int mdt_device_sync(const struct lu_env *env, struct mdt_device *mdt);
 
 struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len);
 const struct lu_buf *mdt_buf_const(const struct lu_env *env,

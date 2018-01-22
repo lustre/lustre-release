@@ -1265,6 +1265,26 @@ struct lu_name {
         int            ln_namelen;
 };
 
+static inline bool name_is_dot_or_dotdot(const char *name, int namelen)
+{
+	return name[0] == '.' &&
+	       (namelen == 1 || (namelen == 2 && name[1] == '.'));
+}
+
+static inline bool lu_name_is_dot_or_dotdot(const struct lu_name *lname)
+{
+	return name_is_dot_or_dotdot(lname->ln_name, lname->ln_namelen);
+}
+
+static inline bool lu_name_is_valid_len(const char *name, size_t name_len)
+{
+	return name != NULL &&
+	       name_len > 0 &&
+	       name_len < INT_MAX &&
+	       strlen(name) == name_len &&
+	       memchr(name, '/', name_len) == NULL;
+}
+
 /**
  * Validate names (path components)
  *
@@ -1276,12 +1296,7 @@ struct lu_name {
  */
 static inline bool lu_name_is_valid_2(const char *name, size_t name_len)
 {
-	return name != NULL &&
-	       name_len > 0 &&
-	       name_len < INT_MAX &&
-	       name[name_len] == '\0' &&
-	       strlen(name) == name_len &&
-	       memchr(name, '/', name_len) == NULL;
+	return lu_name_is_valid_len(name, name_len) && name[name_len] == '\0';
 }
 
 static inline bool lu_name_is_valid(const struct lu_name *ln)

@@ -894,6 +894,34 @@ mdt_dom_read_open_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(mdt_dom_read_open);
 
+static int mdt_migrate_hsm_allowed_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+	seq_printf(m, "%u\n",  (mdt->mdt_opts.mo_migrate_hsm_allowed != 0));
+	return 0;
+}
+
+static ssize_t
+mdt_migrate_hsm_allowed_seq_write(struct file *file, const char __user *buffer,
+				  size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
+	int rc;
+
+	rc = kstrtobool_from_user(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	mdt->mdt_opts.mo_migrate_hsm_allowed = val;
+	return count;
+}
+LPROC_SEQ_FOPS(mdt_migrate_hsm_allowed);
+
 LPROC_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, num_exports);
 LPROC_SEQ_FOPS_RO_TYPE(mdt, target_instance);
@@ -973,8 +1001,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
 	  .fops =	&mdt_sync_count_fops			},
 	{ .name =	"dom_lock",
 	  .fops =	&mdt_dom_lock_fops			},
-	{ .name =	"dom_read_open",
-	  .fops =	&mdt_dom_read_open_fops			},
+	{ .name =	"migrate_hsm_allowed",
+	  .fops =	&mdt_migrate_hsm_allowed_fops		},
 	{ NULL }
 };
 

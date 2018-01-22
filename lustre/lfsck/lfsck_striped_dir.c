@@ -1419,6 +1419,7 @@ static int lfsck_namespace_set_lmv_master(const struct lu_env *env,
 
 	lmv3->lmv_magic = LMV_MAGIC;
 	lmv3->lmv_master_mdt_index = pidx;
+	lmv3->lmv_layout_version++;
 
 	if (flags & LEF_SET_LMV_ALL) {
 		rc = lfsck_allow_regenerate_master_lmv(env, com, obj,

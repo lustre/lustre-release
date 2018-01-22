@@ -1924,8 +1924,10 @@ static int llapi_semantic_traverse(char *path, int size, DIR *parent,
 			rc = 0;
 			if (sem_init) {
 				rc = sem_init(path, d, NULL, data, dent);
-				if (rc < 0 && ret == 0)
+				if (rc < 0 && ret == 0) {
 					ret = rc;
+					break;
+				}
 			}
 			if (sem_fini && rc == 0)
 				sem_fini(path, d, NULL, data, dent);
@@ -4434,11 +4436,18 @@ migrate:
 			sync();
 			retry = true;
 			goto migrate;
+		} else if (errno == EALREADY) {
+			if (param->fp_verbose & VERBOSE_DETAIL)
+				fprintf(stdout,
+					"%s was migrated to MDT%d already\n",
+					path, lmu->lum_stripe_offset);
+			ret = 0;
+		} else {
+			ret = -errno;
+			fprintf(stderr, "%s migrate failed: %s (%d)\n",
+				path, strerror(-ret), ret);
+			goto out;
 		}
-		ret = -errno;
-		fprintf(stderr, "%s migrate failed: %s (%d)\n",
-			path, strerror(-ret), ret);
-		goto out;
 	} else if (param->fp_verbose & VERBOSE_DETAIL) {
 		fprintf(stdout, "migrate %s to MDT%d stripe count %d\n",
 			path, lmu->lum_stripe_offset, lmu->lum_stripe_count);

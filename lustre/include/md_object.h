@@ -138,15 +138,15 @@ struct md_attr {
 
 /** Additional parameters for create */
 struct md_op_spec {
-        union {
-                /** symlink target */
-                const char               *sp_symname;
-                /** eadata for regular files */
-                struct md_spec_reg {
-                        const void *eadata;
-                        int  eadatalen;
-                } sp_ea;
-        } u;
+	union {
+		/** symlink target */
+		const char *sp_symname;
+		/** eadata for regular files */
+		struct md_spec_reg {
+			void *eadata;
+			int  eadatalen;
+		} sp_ea;
+	} u;
 
 	/** Create flag from client: such as MDS_OPEN_CREAT, and others. */
 	__u64      sp_cr_flags;
@@ -163,10 +163,10 @@ struct md_op_spec {
 		     sp_permitted:1, /* do not check permission */
 		     sp_migrate_close:1; /* close the file during migrate */
 	/** Current lock mode for parent dir where create is performing. */
-        mdl_mode_t sp_cr_mode;
+	mdl_mode_t sp_cr_mode;
 
-        /** to create directory */
-        const struct dt_index_features *sp_feat;
+	/** to create directory */
+	const struct dt_index_features *sp_feat;
 };
 
 enum md_layout_opc {
@@ -317,7 +317,8 @@ struct md_dir_operations {
 
 	int (*mdo_migrate)(const struct lu_env *env, struct md_object *pobj,
 			   struct md_object *sobj, const struct lu_name *lname,
-			   struct md_object *tobj, struct md_attr *ma);
+			   struct md_object *tobj, struct md_op_spec *spec,
+			   struct md_attr *ma);
 };
 
 struct md_device_operations {
@@ -614,10 +615,12 @@ static inline int mdo_migrate(const struct lu_env *env,
 			     struct md_object *sobj,
 			     const struct lu_name *lname,
 			     struct md_object *tobj,
+			     struct md_op_spec *spec,
 			     struct md_attr *ma)
 {
 	LASSERT(pobj->mo_dir_ops->mdo_migrate);
-	return pobj->mo_dir_ops->mdo_migrate(env, pobj, sobj, lname, tobj, ma);
+	return pobj->mo_dir_ops->mdo_migrate(env, pobj, sobj, lname, tobj, spec,
+					     ma);
 }
 
 static inline int mdo_is_subdir(const struct lu_env *env,

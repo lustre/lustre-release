@@ -409,7 +409,10 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 	if (exp_connect_cancelset(exp) && req)
 		ldlm_cli_cancel_list(&cancels, count, req, 0);
 
-	mdc_rename_pack(req, op_data, old, oldlen, new, newlen);
+	if (op_data->op_cli_flags & CLI_MIGRATE)
+		mdc_migrate_pack(req, op_data, old, oldlen);
+	else
+		mdc_rename_pack(req, op_data, old, oldlen, new, newlen);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
 			     obd->u.cli.cl_default_mds_easize);

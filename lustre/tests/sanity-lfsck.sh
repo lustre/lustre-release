@@ -4522,8 +4522,8 @@ test_29c()
 
 	cancel_lru_locks mdc
 	if [ $MDSCOUNT -ge 2 ]; then
-		$LFS migrate -m 1 $DIR/$tdir/guard 2>/dev/null ||
-			error "(3.1) Migrate failure"
+		$LFS migrate -m 1 $DIR/$tdir/guard 2>/dev/null &&
+			error "(3.1) Migrate should fail"
 
 		echo "The object with linkEA overflow should NOT be migrated"
 		local newfid=$($LFS path2fid $DIR/$tdir/guard/f0)
@@ -4537,8 +4537,8 @@ test_29c()
 	unlinkmany $DIR/$tdir/foo/ttttttttttt 100 || error "(4) Fail to unlink"
 
 	if [ $MDSCOUNT -ge 2 ]; then
-		$LFS migrate -m 1 $DIR/$tdir/guard 2>/dev/null ||
-			error "(5.1) Migrate failure"
+		$LFS migrate -m 1 $DIR/$tdir/guard 2>/dev/null &&
+			error "(5.1) Migrate should fail"
 
 		# The overflow timestamp is still there, so migration will fail.
 		local newfid=$($LFS path2fid $DIR/$tdir/guard/f0)

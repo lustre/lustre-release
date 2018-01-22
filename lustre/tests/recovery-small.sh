@@ -2109,27 +2109,27 @@ test_110f () {
 run_test 110f "remove remote directory: drop slave rep"
 
 test_110g () {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.6.57) ]] ||
-		{ skip "Need MDS version at least 2.6.57"; return 0; }
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.11.0) ]] ||
+		{ skip "Need MDS version at least 2.11.0"; return 0; }
 
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
-	local remote_dir=$DIR/$tdir/remote_dir
-	local mdtidx=1
 
-	mkdir -p $remote_dir
+	mkdir -p $DIR/$tdir
+	touch $DIR/$tdir/$tfile
 
-	createmany -o $remote_dir/f 100
+	# OBD_FAIL_MDS_REINT_NET_REP	0x119
+	do_facet mds1 $LCTL set_param fail_loc=0x119
+	$LFS migrate -m 1 $DIR/$tdir &
+	migrate_pid=$!
+	sleep 5
+	do_facet mds1 $LCTL set_param fail_loc=0
+	wait $migrate_pid
 
-	#define OBD_FAIL_MIGRATE_NET_REP		0x1800
-	do_facet mds$mdtidx lctl set_param fail_loc=0x1800
-	$LFS migrate -m $mdtidx $remote_dir || error "migrate failed"
-	do_facet mds$mdtidx lctl set_param fail_loc=0x0
-
-	for file in $(find $remote_dir); do
-		mdt_index=$($LFS getstripe -m $file)
-		[ $mdt_index == $mdtidx ] ||
-			error "$file is not on MDT${mdtidx}"
-	done
+	local mdt_index
+	mdt_index=$($LFS getstripe -m $DIR/$tdir)
+	[ $mdt_index == 1 ] || error "$tdir is not on MDT1"
+	mdt_index=$($LFS getstripe -m $DIR/$tdir/$tfile)
+	[ $mdt_index == 1 ] || error "$tfile is not on MDT1"
 
 	rm -rf $DIR/$tdir || error "rmdir failed"
 }

@@ -1428,8 +1428,52 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 	if (rc < 0)
 		RETURN(rc);
 
+	spec->no_create = !!req_is_replay(mdt_info_req(info));
+
+	rc = mdt_dlmreq_unpack(info);
+
+	RETURN(rc);
+}
+
+static int mdt_migrate_unpack(struct mdt_thread_info *info)
+{
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct mdt_rec_rename *rec;
+	struct lu_attr *attr = &info->mti_attr.ma_attr;
+	struct mdt_reint_record *rr = &info->mti_rr;
+	struct req_capsule *pill = info->mti_pill;
+	struct md_op_spec *spec = &info->mti_spec;
+	int rc;
+
+	ENTRY;
+
+	CLASSERT(sizeof(*rec) == sizeof(struct mdt_rec_reint));
+	rec = req_capsule_client_get(pill, &RMF_REC_REINT);
+	if (rec == NULL)
+		RETURN(-EFAULT);
+
+	/* This prior initialization is needed for old_init_ucred_reint() */
+	uc->uc_fsuid = rec->rn_fsuid;
+	uc->uc_fsgid = rec->rn_fsgid;
+	uc->uc_cap   = rec->rn_cap;
+	uc->uc_suppgids[0] = rec->rn_suppgid1;
+	uc->uc_suppgids[1] = rec->rn_suppgid2;
+
+	attr->la_uid = rec->rn_fsuid;
+	attr->la_gid = rec->rn_fsgid;
+	rr->rr_fid1 = &rec->rn_fid1;
+	rr->rr_fid2 = &rec->rn_fid2;
+	attr->la_ctime = rec->rn_time;
+	attr->la_mtime = rec->rn_time;
+	/* rename_tgt contains the mode already */
+	attr->la_mode = rec->rn_mode;
+	attr->la_valid = LA_UID | LA_GID | LA_CTIME | LA_MTIME | LA_MODE;
+
+	rc = mdt_name_unpack(pill, &RMF_NAME, &rr->rr_name, 0);
+	if (rc < 0)
+		RETURN(rc);
+
 	if (rec->rn_bias & MDS_CLOSE_MIGRATE) {
-		req_capsule_extend(info->mti_pill, &RQF_MDS_REINT_MIGRATE);
 		rc = mdt_close_handle_unpack(info);
 		if (rc)
 			RETURN(rc);
@@ -1656,7 +1700,7 @@ static reint_unpacker mdt_reint_unpackers[REINT_MAX] = {
 	[REINT_OPEN]     = mdt_open_unpack,
 	[REINT_SETXATTR] = mdt_setxattr_unpack,
 	[REINT_RMENTRY]  = mdt_rmentry_unpack,
-	[REINT_MIGRATE]  = mdt_rename_unpack,
+	[REINT_MIGRATE]  = mdt_migrate_unpack,
 	[REINT_RESYNC]   = mdt_resync_unpack,
 };
 

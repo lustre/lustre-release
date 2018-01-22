@@ -1095,12 +1095,6 @@ extern const char *lfsck_flags_names[];
 extern const char *lfsck_param_names[];
 extern struct lu_context_key lfsck_thread_key;
 
-static inline bool name_is_dot_or_dotdot(const char *name, int namelen)
-{
-	return name[0] == '.' &&
-	       (namelen == 1 || (namelen == 2 && name[1] == '.'));
-}
-
 static inline struct dt_device *lfsck_obj2dev(struct dt_object *obj)
 {
 	return container_of0(obj->do_lu.lo_dev, struct dt_device, dd_lu_dev);
@@ -1504,6 +1498,8 @@ static inline void lfsck_lmv_header_le_to_cpu(struct lmv_mds_md_v1 *dst,
 	dst->lmv_master_mdt_index = le32_to_cpu(src->lmv_master_mdt_index);
 	dst->lmv_hash_type = le32_to_cpu(src->lmv_hash_type);
 	dst->lmv_layout_version = le32_to_cpu(src->lmv_layout_version);
+	dst->lmv_migrate_offset = le32_to_cpu(src->lmv_migrate_offset);
+	dst->lmv_migrate_hash = le32_to_cpu(src->lmv_migrate_hash);
 }
 
 static inline void lfsck_lmv_header_cpu_to_le(struct lmv_mds_md_v1 *dst,
@@ -1514,6 +1510,8 @@ static inline void lfsck_lmv_header_cpu_to_le(struct lmv_mds_md_v1 *dst,
 	dst->lmv_master_mdt_index = cpu_to_le32(src->lmv_master_mdt_index);
 	dst->lmv_hash_type = cpu_to_le32(src->lmv_hash_type);
 	dst->lmv_layout_version = cpu_to_le32(src->lmv_layout_version);
+	dst->lmv_migrate_offset = cpu_to_le32(src->lmv_migrate_offset);
+	dst->lmv_migrate_hash = cpu_to_le32(src->lmv_migrate_hash);
 }
 
 static inline struct lfsck_assistant_object *

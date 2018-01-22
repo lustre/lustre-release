@@ -1823,13 +1823,17 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lmv_mds_md_v1, lmv_layout_version));
 	LASSERTF((int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_layout_version) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_layout_version));
-	LASSERTF((int)offsetof(struct lmv_mds_md_v1, lmv_padding1) == 20, "found %lld\n",
-		 (long long)(int)offsetof(struct lmv_mds_md_v1, lmv_padding1));
-	LASSERTF((int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_padding1) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_padding1));
-	LASSERTF((int)offsetof(struct lmv_mds_md_v1, lmv_padding2) == 24, "found %lld\n",
+	LASSERTF((int)offsetof(struct lmv_mds_md_v1, lmv_migrate_offset) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_mds_md_v1, lmv_migrate_offset));
+	LASSERTF((int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_migrate_offset) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_migrate_offset));
+	LASSERTF((int)offsetof(struct lmv_mds_md_v1, lmv_migrate_hash) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_mds_md_v1, lmv_migrate_hash));
+	LASSERTF((int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_migrate_hash) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_migrate_hash));
+	LASSERTF((int)offsetof(struct lmv_mds_md_v1, lmv_padding2) == 28, "found %lld\n",
 		 (long long)(int)offsetof(struct lmv_mds_md_v1, lmv_padding2));
-	LASSERTF((int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_padding2) == 8, "found %lld\n",
+	LASSERTF((int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_padding2) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lmv_mds_md_v1 *)0)->lmv_padding2));
 	LASSERTF((int)offsetof(struct lmv_mds_md_v1, lmv_padding3) == 32, "found %lld\n",
 		 (long long)(int)offsetof(struct lmv_mds_md_v1, lmv_padding3));

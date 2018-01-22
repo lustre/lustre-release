@@ -3418,6 +3418,12 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 	osd_trans_declare_op(env, oh, OSD_OT_INSERT,
 			     osd_dto_credits_noquota[DTO_INDEX_INSERT] + 1);
 
+	/* will help to find FID->ino mapping at dt_insert() */
+	rc = osd_idc_find_and_init(env, osd_obj2dev(osd_dt_obj(dt)),
+				   osd_dt_obj(dt));
+	if (rc != 0)
+		RETURN(rc);
+
 	if (!attr)
 		RETURN(0);
 
@@ -3426,10 +3432,6 @@ static int osd_declare_create(const struct lu_env *env, struct dt_object *dt,
 				   NULL, OSD_QID_INODE);
 	if (rc != 0)
 		RETURN(rc);
-
-	/* will help to find FID->ino mapping at dt_insert() */
-	rc = osd_idc_find_and_init(env, osd_obj2dev(osd_dt_obj(dt)),
-				   osd_dt_obj(dt));
 
 	RETURN(rc);
 }
@@ -5971,19 +5973,24 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 
 	idc = osd_idc_find(env, osd, fid);
 	if (unlikely(idc == NULL)) {
-		/*
-		 * this dt_insert() wasn't declared properly, so
-		 * FID is missing in OI cache. we better do not
-		 * lookup FID in FLDB/OI and don't risk to deadlock,
-		 * but in some special cases (lfsck testing, etc)
-		 * it's much simpler than fixing a caller
-		 */
-		CERROR("%s: "DFID" wasn't declared for insert\n",
-		       osd_name(osd), PFID(fid));
-		dump_stack();
 		idc = osd_idc_find_or_init(env, osd, fid);
-		if (IS_ERR(idc))
+		if (IS_ERR(idc)) {
+			/*
+			 * this dt_insert() wasn't declared properly, so
+			 * FID is missing in OI cache. we better do not
+			 * lookup FID in FLDB/OI and don't risk to deadlock,
+			 * but in some special cases (lfsck testing, etc)
+			 * it's much simpler than fixing a caller.
+			 *
+			 * normally this error should be placed after the first
+			 * find, but migrate may attach source stripes to
+			 * target, which doesn't create stripes.
+			 */
+			CERROR("%s: "DFID" wasn't declared for insert\n",
+			       osd_name(osd), PFID(fid));
+			dump_stack();
 			RETURN(PTR_ERR(idc));
+		}
 	}
 
 	if (idc->oic_remote) {

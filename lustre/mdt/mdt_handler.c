@@ -269,17 +269,12 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 {
 	struct mdt_device *mdt = info->mti_mdt;
 	struct lu_name *lname = &info->mti_name;
-	char *name = NULL;
+	char *filename = info->mti_filename;
 	struct mdt_object *parent;
 	u32 mode;
 	int rc = 0;
 
 	LASSERT(!info->mti_cross_ref);
-
-	OBD_ALLOC(name, NAME_MAX + 1);
-	if (name == NULL)
-		return -ENOMEM;
-	lname->ln_name = name;
 
 	/*
 	 * We may want to allow this to mount a completely separate
@@ -316,8 +311,9 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 			break;
 		}
 
-		strncpy(name, s1, lname->ln_namelen);
-		name[lname->ln_namelen] = '\0';
+		strncpy(filename, s1, lname->ln_namelen);
+		filename[lname->ln_namelen] = '\0';
+		lname->ln_name = filename;
 
 		parent = mdt_object_find(info->mti_env, mdt, fid);
 		if (IS_ERR(parent)) {
@@ -341,8 +337,6 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 				rc = -ENOTDIR;
 		}
 	}
-
-	OBD_FREE(name, NAME_MAX + 1);
 
 	return rc;
 }
@@ -940,6 +934,8 @@ int mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,
 	} else {
 		return -EINVAL;
 	}
+
+	LASSERT(buf->lb_buf);
 
 	rc = mo_xattr_get(info->mti_env, next, buf, name);
 	if (rc > 0) {
@@ -2242,7 +2238,7 @@ static int mdt_reint(struct tgt_session_info *tsi)
 }
 
 /* this should sync the whole device */
-static int mdt_device_sync(const struct lu_env *env, struct mdt_device *mdt)
+int mdt_device_sync(const struct lu_env *env, struct mdt_device *mdt)
 {
         struct dt_device *dt = mdt->mdt_bottom;
         int rc;

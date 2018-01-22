@@ -1022,11 +1022,12 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 		 * lookup FID in FLDB/OI and don't risk to deadlock,
 		 * but in some special cases (lfsck testing, etc)
 		 * it's much simpler than fixing a caller */
-		CERROR("%s: "DFID" wasn't declared for insert\n",
-		       osd_name(osd), PFID(fid));
 		idc = osd_idc_find_or_init(env, osd, fid);
-		if (IS_ERR(idc))
+		if (IS_ERR(idc)) {
+			CERROR("%s: "DFID" wasn't declared for insert\n",
+			       osd_name(osd), PFID(fid));
 			RETURN(PTR_ERR(idc));
+		}
 	}
 
 	CLASSERT(sizeof(zde->lzd_reg) == 8);

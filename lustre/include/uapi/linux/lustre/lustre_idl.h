@@ -880,7 +880,8 @@ struct ptlrpc_body_v2 {
 
 #define MDT_CONNECT_SUPPORTED2 (OBD_CONNECT2_FILE_SECCTX | OBD_CONNECT2_FLR | \
                                 OBD_CONNECT2_SUM_STATFS | \
-				OBD_CONNECT2_LOCK_CONVERT)
+				OBD_CONNECT2_LOCK_CONVERT | \
+				OBD_CONNECT2_DIR_MIGRATE)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
 				OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
@@ -2161,9 +2162,16 @@ struct lmv_mds_md_v1 {
 					 * used for now. Higher 16 bits will
 					 * be used to mark the object status,
 					 * for example migrating or dead. */
-	__u32 lmv_layout_version;	/* Used for directory restriping */
-	__u32 lmv_padding1;
-	__u64 lmv_padding2;
+	__u32 lmv_layout_version;	/* increased each time layout changed,
+					 * by directory migration, restripe
+					 * and LFSCK. */
+	__u32 lmv_migrate_offset;	/* once this is set, it means this
+					 * directory is been migrated, stripes
+					 * before this offset belong to target,
+					 * from this to source. */
+	__u32 lmv_migrate_hash;		/* hash type of source stripes of
+					 * migrating directory */
+	__u32 lmv_padding2;
 	__u64 lmv_padding3;
 	char lmv_pool_name[LOV_MAXPOOLNAME + 1];	/* pool name */
 	struct lu_fid lmv_stripe_fids[0];	/* FIDs for each stripe */

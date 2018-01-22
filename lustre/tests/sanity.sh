@@ -14886,6 +14886,8 @@ run_test 229 "getstripe/stat/rm/attr changes work on released files"
 test_230a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52"
 
 	local MDTIDX=1
 
@@ -14912,6 +14914,8 @@ run_test 230a "Create remote directory and files under the remote directory"
 test_230b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52"
 
 	local MDTIDX=1
 	local mdt_index
@@ -15075,9 +15079,11 @@ test_230b() {
 run_test 230b "migrate directory"
 
 test_230c() {
-	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52"
 
 	local MDTIDX=1
 	local mdt_index
@@ -15092,31 +15098,45 @@ test_230c() {
 	createmany -o $migrate_dir/f 10 ||
 		error "create files under ${migrate_dir} failed"
 
-	#failed after migrating 5 entries
+	# fail after migrating top dir, and this will fail only once, so one
+	# sub file migration will fail, others succeed.
 	#OBD_FAIL_MIGRATE_ENTRIES	0x1801
-	do_facet mds1 lctl set_param fail_loc=0x20001801
-	do_facet mds1 lctl  set_param fail_val=5
+	do_facet mds1 lctl set_param fail_loc=0x1801
 	local t=$(ls $migrate_dir | wc -l)
 	$LFS migrate --mdt-index $MDTIDX $migrate_dir &&
-		error "migrate should fail after 5 entries"
+		error "migrate should fail"
 
-	mkdir $migrate_dir/dir &&
-		error "mkdir succeeds under migrating directory"
-	touch $migrate_dir/file &&
-		error "touch file succeeds under migrating directory"
+	# add new dir/file should succeed
+	mkdir $migrate_dir/dir ||
+		error "mkdir failed under migrating directory"
+	touch $migrate_dir/file ||
+		error "touch file failed under migrating directory"
+	# add file with existing name should fail
+	$OPENFILE -f O_CREAT:O_EXCL $migrate_dir/f1 &&
+		error "open(O_CREAT|O_EXCL) f1 should fail"
+	$MULTIOP $migrate_dir/f1 m &&
+		error "create f1 should fail"
+	$MULTIOP $migrate_dir/f3 m &&
+		error "create f3 should fail"
 
 	local u=$(ls $migrate_dir | wc -l)
+	u=$((u - 2))
 	[ "$u" == "$t" ] || error "$u != $t during migration"
 
 	for file in $(find $migrate_dir); do
 		stat $file || error "stat $file failed"
 	done
 
-	do_facet mds1 lctl set_param fail_loc=0
-	do_facet mds1 lctl set_param fail_val=0
+	# resume migration with different options should fail
+	$LFS migrate -m 0 $migrate_dir &&
+		error "migrate -m 0 $migrate_dir should fail"
 
+	$LFS migrate -m $MDTIDX -c 2 $migrate_dir &&
+		error "migrate -c 2 $migrate_dir should fail"
+
+	# resume migration should succeed
 	$LFS migrate -m $MDTIDX $migrate_dir ||
-		error "migrate open files should failed with open files"
+		error "migrate $migrate_dir failed"
 
 	echo "Finish migration, then checking.."
 	for file in $(find $migrate_dir); do
@@ -15127,20 +15147,35 @@ test_230c() {
 
 	rm -rf $DIR/$tdir || error "rm dir failed after migration"
 }
-run_test 230c "check directory accessiblity if migration is failed"
+run_test 230c "check directory accessiblity if migration failed"
 
 test_230d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52"
 
-	local MDTIDX=1
-	local mdt_index
 	local migrate_dir=$DIR/$tdir/migrate_dir
+	local old_index
+	local new_index
+	local old_count
+	local new_count
+	local new_hash
+	local mdt_index
 	local i
 	local j
 
+	old_index=$((RANDOM % MDSCOUNT))
+	old_count=$((MDSCOUNT - old_index))
+	new_index=$((RANDOM % MDSCOUNT))
+	new_count=$((MDSCOUNT - new_index))
+	new_hash="all_char"
+
+	[ $old_count -gt 1 ] && old_count=$((old_count - RANDOM % old_count))
+	[ $new_count -gt 1 ] && new_count=$((new_count - RANDOM % new_count))
+
 	test_mkdir $DIR/$tdir
-	test_mkdir -i0 -c1 $migrate_dir
+	test_mkdir -i $old_index -c $old_count $migrate_dir
 
 	for ((i=0; i<100; i++)); do
 		test_mkdir -i0 -c1 $migrate_dir/dir_${i}
@@ -15148,14 +15183,23 @@ test_230d() {
 			error "create files under remote dir failed $i"
 	done
 
-	$LFS migrate -m $MDTIDX $migrate_dir ||
+	echo -n "Migrate from MDT$old_index "
+	[ $old_count -gt 1 ] && echo -n "... MDT$((old_index + old_count - 1)) "
+	echo -n "to MDT$new_index"
+	[ $new_count -gt 1 ] && echo -n " ... MDT$((new_index + new_count - 1))"
+	echo
+
+	echo "$LFS migrate -m$new_index -c$new_count -H $new_hash $migrate_dir"
+	$LFS migrate -m $new_index -c $new_count -H $new_hash $migrate_dir ||
 		error "migrate remote dir error"
 
 	echo "Finish migration, then checking.."
 	for file in $(find $migrate_dir); do
 		mdt_index=$($LFS getstripe -m $file)
-		[ $mdt_index == $MDTIDX ] ||
-			error "$file is not on MDT${MDTIDX}"
+		if [ $mdt_index -lt $new_index ] ||
+		   [ $mdt_index -gt $((new_index + new_count - 1)) ]; then
+			error "$file is on MDT$mdt_index"
+		fi
 	done
 
 	rm -rf $DIR/$tdir || error "rm dir failed after migration"
@@ -15165,6 +15209,8 @@ run_test 230d "check migrate big directory"
 test_230e() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52"
 
 	local i
 	local j
@@ -15211,6 +15257,8 @@ run_test 230e "migrate mulitple local link files"
 test_230f() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52"
 
 	local a_fid
 	local ln_fid
@@ -15260,6 +15308,8 @@ run_test 230f "migrate mulitple remote link files"
 test_230g() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52"
 
 	mkdir -p $DIR/$tdir/migrate_dir
 
@@ -15272,8 +15322,8 @@ run_test 230g "migrate dir to non-exist MDT"
 test_230h() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.7.64) ] &&
-		skip "Need MDS version at least 2.7.64"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52"
 
 	local mdt_index
 
@@ -15285,21 +15335,19 @@ test_230h() {
 	$LFS migrate -m1 $DIR/$tdir/.. &&
 		error "migrating mountpoint2 should fail"
 
-	$LFS migrate -m1 $DIR/$tdir/migrate_dir/.. ||
-		error "migrating $tdir fail"
+	# same as mv
+	$LFS migrate -m1 $DIR/$tdir/migrate_dir/.. &&
+		error "migrating $tdir/migrate_dir/.. should fail"
 
-	mdt_index=$($LFS getstripe -m $DIR/$tdir)
-	[ $mdt_index == 1 ] || error "$mdt_index != 1 after migration"
-
-	mdt_index=$($LFS getstripe -m $DIR/$tdir/migrate_dir)
-	[ $mdt_index == 1 ] || error "$mdt_index != 1 after migration"
-
+	true
 }
 run_test 230h "migrate .. and root"
 
 test_230i() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
+		skip "Need MDS version at least 2.11.52"
 
 	mkdir -p $DIR/$tdir/migrate_dir
 
@@ -17764,7 +17812,7 @@ test_300k() {
 
 	#define OBD_FAIL_LARGE_STRIPE	0x1703
 	$LCTL set_param fail_loc=0x1703
-	$LFS setdirstripe -i 0 -c512 $DIR/$tdir/striped_dir ||
+	$LFS setdirstripe -i 0 -c192 $DIR/$tdir/striped_dir ||
 		error "set striped dir error"
 	$LCTL set_param fail_loc=0
 

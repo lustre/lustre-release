@@ -1320,14 +1320,8 @@ static int ll_init_lsm_md(struct inode *inode, struct lustre_md *md)
 		 * where the initialization of slave inode is slightly
 		 * different, so it reset lsm_md to NULL to avoid
 		 * initializing lsm for slave inode. */
-		/* For migrating inode, master stripe and master object will
-		 * be same, so we only need assign this inode */
-		if (lsm->lsm_md_hash_type & LMV_HASH_FLAG_MIGRATION && i == 0)
-			lsm->lsm_md_oinfo[i].lmo_root = inode;
-		else
-			lsm->lsm_md_oinfo[i].lmo_root =
+		lsm->lsm_md_oinfo[i].lmo_root =
 				ll_iget_anon_dir(inode->i_sb, fid, md);
-
 		if (IS_ERR(lsm->lsm_md_oinfo[i].lmo_root)) {
 			int rc = PTR_ERR(lsm->lsm_md_oinfo[i].lmo_root);
 
@@ -1337,20 +1331,6 @@ static int ll_init_lsm_md(struct inode *inode, struct lustre_md *md)
 	}
 
 	return 0;
-}
-
-static inline int lli_lsm_md_eq(const struct lmv_stripe_md *lsm_md1,
-				const struct lmv_stripe_md *lsm_md2)
-{
-	return lsm_md1->lsm_md_magic == lsm_md2->lsm_md_magic &&
-	       lsm_md1->lsm_md_stripe_count == lsm_md2->lsm_md_stripe_count &&
-	       lsm_md1->lsm_md_master_mdt_index ==
-					lsm_md2->lsm_md_master_mdt_index &&
-	       lsm_md1->lsm_md_hash_type == lsm_md2->lsm_md_hash_type &&
-	       lsm_md1->lsm_md_layout_version ==
-					lsm_md2->lsm_md_layout_version &&
-	       strcmp(lsm_md1->lsm_md_pool_name,
-		      lsm_md2->lsm_md_pool_name) == 0;
 }
 
 static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
@@ -1364,28 +1344,61 @@ static int ll_update_lsm_md(struct inode *inode, struct lustre_md *md)
 	CDEBUG(D_INODE, "update lsm %p of "DFID"\n", lli->lli_lsm_md,
 	       PFID(ll_inode2fid(inode)));
 
-	/* no striped information from request. */
-	if (lsm == NULL) {
-		if (lli->lli_lsm_md == NULL) {
-			RETURN(0);
-		} else if (lli->lli_lsm_md->lsm_md_hash_type &
-						LMV_HASH_FLAG_MIGRATION) {
-			/* migration is done, the temporay MIGRATE layout has
-			 * been removed */
-			CDEBUG(D_INODE, DFID" finish migration.\n",
-			       PFID(ll_inode2fid(inode)));
-			lmv_free_memmd(lli->lli_lsm_md);
-			lli->lli_lsm_md = NULL;
-			RETURN(0);
-		} else {
-			/* The lustre_md from req does not include stripeEA,
-			 * see ll_md_setattr */
-			RETURN(0);
-		}
+	/*
+	 * no striped information from request, lustre_md from req does not
+	 * include stripeEA, see ll_md_setattr()
+	 */
+	if (!lsm)
+		RETURN(0);
+
+	/* Compare the old and new stripe information */
+	if (lli->lli_lsm_md && !lsm_md_eq(lli->lli_lsm_md, lsm)) {
+		struct lmv_stripe_md *old_lsm = lli->lli_lsm_md;
+		int idx;
+		bool layout_changed = lsm->lsm_md_layout_version >
+				      old_lsm->lsm_md_layout_version;
+
+		int mask = layout_changed ? D_INODE : D_ERROR;
+
+		CDEBUG(mask,
+			"%s: inode@%p "DFID" lmv layout %s magic %#x/%#x "
+			"stripe count %d/%d master_mdt %d/%d "
+			"hash_type %#x/%#x version %d/%d migrate offset %d/%d "
+			"migrate hash %#x/%#x pool %s/%s\n",
+		       ll_get_fsname(inode->i_sb, NULL, 0), inode,
+		       PFID(&lli->lli_fid),
+		       layout_changed ? "changed" : "mismatch",
+		       lsm->lsm_md_magic, old_lsm->lsm_md_magic,
+		       lsm->lsm_md_stripe_count,
+		       old_lsm->lsm_md_stripe_count,
+		       lsm->lsm_md_master_mdt_index,
+		       old_lsm->lsm_md_master_mdt_index,
+		       lsm->lsm_md_hash_type, old_lsm->lsm_md_hash_type,
+		       lsm->lsm_md_layout_version,
+		       old_lsm->lsm_md_layout_version,
+		       lsm->lsm_md_migrate_offset,
+		       old_lsm->lsm_md_migrate_offset,
+		       lsm->lsm_md_migrate_hash,
+		       old_lsm->lsm_md_migrate_hash,
+		       lsm->lsm_md_pool_name,
+		       old_lsm->lsm_md_pool_name);
+
+		for (idx = 0; idx < old_lsm->lsm_md_stripe_count; idx++)
+			CDEBUG(mask, "old stripe[%d] "DFID"\n",
+			       idx, PFID(&old_lsm->lsm_md_oinfo[idx].lmo_fid));
+
+		for (idx = 0; idx < lsm->lsm_md_stripe_count; idx++)
+			CDEBUG(mask, "new stripe[%d] "DFID"\n",
+			       idx, PFID(&lsm->lsm_md_oinfo[idx].lmo_fid));
+
+		if (!layout_changed)
+			RETURN(-EINVAL);
+
+		ll_dir_clear_lsm_md(inode);
 	}
 
 	/* set the directory layout */
-	if (lli->lli_lsm_md == NULL) {
+	if (!lli->lli_lsm_md) {
 		struct cl_attr	*attr;
 
 		rc = ll_init_lsm_md(inode, md);

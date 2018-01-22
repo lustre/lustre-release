@@ -317,6 +317,8 @@ struct lod_object {
 			__u16		ldo_dir_stripes_allocated;
 			__u32		ldo_dir_stripe_offset;
 			__u32		ldo_dir_hash_type;
+			__u32		ldo_dir_migrate_offset;
+			__u32		ldo_dir_migrate_hash;
 			/* Is a slave stripe of striped directory? */
 			__u32		ldo_dir_slave_stripe:1,
 					ldo_dir_striped:1,
