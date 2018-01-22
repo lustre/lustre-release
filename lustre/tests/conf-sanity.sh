@@ -7577,6 +7577,219 @@ test_107() {
 }
 run_test 107 "Unknown config param should not fail target mounting"
 
+t_108_prep() {
+	local facet
+
+	$rcmd rm -rf $tmp > /dev/null 2>&1
+	$rcmd mkdir -p $tmp/{mnt,images} || error "failed to mkdir remotely"
+
+	for facet in $facets; do
+		[ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
+			$rcmd $ZPOOL -f export lustre-$facet > /dev/null 2>&1
+		$rcmd mkdir $tmp/mnt/$facet ||
+			error "failed to mkdir $tmp/mnt/$facet"
+		$rcmd dd if=/dev/zero of=$tmp/images/$facet \
+			seek=199 bs=1M count=1 ||
+			error "failed to create $tmp/images/$facet"
+	done
+}
+
+t_108_mkfs() {
+	local role=$1
+	local idx=$2
+	local bkfs=$3
+	local mgs=$4
+	local facet=${role}$((idx + 1))
+	local pool=""
+	[ $# -eq 5 ] && pool=$5
+
+	do_facet $SINGLEMDS $MKFS --fsname=lustre --$mgs \
+		--$role --index=$idx --replace --backfstype=$bkfs \
+		--device-size=200000 --reformat $pool $tmp/images/$facet ||
+		error "failed to mkfs for $facet"
+}
+
+t_108_check() {
+	echo "mounting client..."
+	mount -t lustre ${nid}:/lustre $MOUNT ||
+		error "failed to mount lustre"
+
+	echo "check list"
+	ls -l $MOUNT/local_dir || error "failed to list"
+
+	echo "check truncate && write"
+	echo "dummmmmmmmmmmmm" > $MOUNT/remote_dir/fsx.c ||
+		error "failed to tuncate & write"
+
+	echo "check create"
+	touch $MOUNT/foooo ||
+		error "failed to create"
+
+	echo "check read && write && append"
+	sha1sum $MOUNT/conf-sanity.sh |
+		awk '{ print $1 }' > $MOUNT/checksum.new ||
+		error "failed to read(1)"
+	sha1sum $MOUNT/remote_dir/unlinkmany.c |
+		awk '{ print $1 }' >> $MOUNT/checksum.new ||
+		error "failed to read(2)"
+	sha1sum $MOUNT/striped_dir/lockahead_test.o |
+		awk '{ print $1 }' >> $MOUNT/checksum.new ||
+		error "failed to read(3)"
+
+	echo "verify data"
+	diff $MOUNT/checksum.new $MOUNT/checksum.src ||
+		error "failed to verify data"
+
+	echo "done."
+}
+
+t_108_cleanup() {
+	trap 0
+	local facet
+
+	echo "cleanup..."
+	umount -f $MOUNT || error "failed to umount client"
+	for facet in $facets; do
+		$rcmd umount -f $tmp/mnt/$facet ||
+			error "failed to umount $facet"
+		if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
+			$rcmd $ZPOOL export -f lustre-$facet ||
+				error "failed to export lustre-$facet"
+		fi
+	done
+
+	$rcmd rm -rf $tmp || error "failed to rm the dir $tmp"
+}
+
+test_108a() {
+	[ "$CLIENTONLY" ] && skip "Client-only testing" && return
+
+	[ $(facet_fstype $SINGLEMDS) != "zfs" ] &&
+		skip "zfs only test" && return
+
+	stopall
+	load_modules
+
+	local tmp=$TMP/$tdir
+	local rcmd="do_facet $SINGLEMDS"
+	local facets="mdt1 mdt2 ost1 ost2"
+	local nid=$($rcmd $LCTL list_nids | head -1)
+	local facet
+
+	trap t_108_cleanup EXIT ERR
+	t_108_prep
+
+	t_108_mkfs mdt 0 zfs mgs lustre-mdt1/mdt1
+	t_108_mkfs mdt 1 zfs mgsnode=$nid lustre-mdt2/mdt2
+	t_108_mkfs ost 0 zfs mgsnode=$nid lustre-ost1/ost1
+	t_108_mkfs ost 1 zfs mgsnode=$nid lustre-ost2/ost2
+
+	for facet in $facets; do
+		$rcmd zfs set mountpoint=$tmp/mnt/$facet canmount=on \
+			lustre-$facet/$facet ||
+			error "failed to zfs set for $facet (1)"
+		$rcmd zfs mount lustre-$facet/$facet ||
+			error "failed to local mount $facet"
+		$rcmd tar jxf $LUSTRE/tests/ldiskfs_${facet}_2_11.tar.bz2 \
+			--xattrs --xattrs-include="trusted.*" \
+			-C $tmp/mnt/$facet/ > /dev/null 2>&1 ||
+			error "failed to untar image for $facet"
+		$rcmd "cd $tmp/mnt/$facet && rm -rf oi.* OI_* lfsck_* LFSCK" ||
+			error "failed to cleanup for $facet"
+		$rcmd zfs umount lustre-$facet/$facet ||
+			error "failed to local umount $facet"
+		$rcmd zfs set canmount=off lustre-$facet/$facet ||
+			error "failed to zfs set $facet (2)"
+	done
+
+	echo "changing server nid..."
+	$rcmd mount -t lustre -o nosvc lustre-mdt1/mdt1 $tmp/mnt/mdt1
+	$rcmd lctl replace_nids lustre-MDT0000 $nid
+	$rcmd lctl replace_nids lustre-MDT0001 $nid
+	$rcmd lctl replace_nids lustre-OST0000 $nid
+	$rcmd lctl replace_nids lustre-OST0001 $nid
+	$rcmd umount $tmp/mnt/mdt1
+
+	for facet in $facets; do
+		echo "mounting $facet from backup..."
+		$rcmd mount -t lustre -o abort_recov lustre-$facet/$facet \
+			$tmp/mnt/$facet || error "failed to mount $facet"
+	done
+
+	# ZFS backend can detect migration and trigger OI scrub automatically
+	# sleep 3 seconds for scrub done
+	sleep 3
+
+	t_108_check
+	t_108_cleanup
+}
+run_test 108a "migrate from ldiskfs to ZFS"
+
+test_108b() {
+	[ "$CLIENTONLY" ] && skip "Client-only testing" && return
+
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
+		skip "ldiskfs only test" && return
+
+	stopall
+	load_modules
+
+	local tmp=$TMP/$tdir
+	local rcmd="do_facet $SINGLEMDS"
+	local facets="mdt1 mdt2 ost1 ost2"
+	local scrub_list="MDT0000 MDT0001 OST0000 OST0001"
+	local nid=$($rcmd $LCTL list_nids | head -1)
+	local facet
+
+	trap t_108_cleanup EXIT ERR
+	t_108_prep
+
+	t_108_mkfs mdt 0 ldiskfs mgs
+	t_108_mkfs mdt 1 ldiskfs mgsnode=$nid
+	t_108_mkfs ost 0 ldiskfs mgsnode=$nid
+	t_108_mkfs ost 1 ldiskfs mgsnode=$nid
+
+	for facet in $facets; do
+		$rcmd mount -t ldiskfs -o loop $tmp/images/$facet \
+			$tmp/mnt/$facet ||
+			error "failed to local mount $facet"
+		$rcmd tar jxf $LUSTRE/tests/zfs_${facet}_2_11.tar.bz2 \
+			--xattrs --xattrs-include="*.*" \
+			-C $tmp/mnt/$facet/ > /dev/null 2>&1 ||
+			error "failed to untar image for $facet"
+		$rcmd "cd $tmp/mnt/$facet && rm -rf oi.* OI_* lfsck_* LFSCK" ||
+			error "failed to cleanup for $facet"
+		$rcmd umount $tmp/mnt/$facet ||
+			error "failed to local umount $facet"
+	done
+
+	echo "changing server nid..."
+	$rcmd mount -t lustre -o nosvc,loop $tmp/images/mdt1 $tmp/mnt/mdt1
+	$rcmd lctl replace_nids lustre-MDT0000 $nid
+	$rcmd lctl replace_nids lustre-MDT0001 $nid
+	$rcmd lctl replace_nids lustre-OST0000 $nid
+	$rcmd lctl replace_nids lustre-OST0001 $nid
+	$rcmd umount $tmp/mnt/mdt1
+
+	for facet in $facets; do
+		echo "mounting $facet from backup..."
+		$rcmd mount -t lustre -o loop,abort_recov $tmp/images/$facet \
+			$tmp/mnt/$facet || error "failed to mount $facet"
+	done
+
+	for facet in $scrub_list; do
+		$rcmd $LCTL lfsck_start -M lustre-$facet -t scrub ||
+			error "failed to start OI scrub on $facet"
+	done
+
+	# sleep 3 seconds for scrub done
+	sleep 3
+
+	t_108_check
+	t_108_cleanup
+}
+run_test 108b "migrate from ZFS to ldiskfs"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
