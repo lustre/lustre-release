@@ -30,6 +30,41 @@ on some distros) to extract the file, e.g.
 debugfs -c -R 'dump CONFIGS/tfs-client /tmp/tfs-client' /dev/sda
 llog_reader /tmp/tfs-client
 .fi
+.LP
+To examine Changelog records on a stopped Lustre server, first mount its
+backing file system as ldiskfs, then use
+.B llog_reader
+to dump the log changelog's contents, e.g.
+.IP
+.nf
+# mount -t ldiskfs /dev/sda /mnt/mgs
+# llog_reader /mnt/mgs/changelog_catalog
+rec #1 type=1064553b len=64 offset 8192
+Header size : 8192
+Time : Mon Jan 22 23:28:24 2018
+Number of records: 1
+Target uuid :
+-----------------------
+.fi
+#01 (064)id=[0x5:0x1:0x0]:0 path=
+.B "O/1/d5/5"
+
+# llog_reader /mnt/mgs/
+.B O/1/d5/5
+.nf
+rec #1 type=10660000 len=136 offset 8192
+rec #2 type=10660000 len=136 offset 8328
+rec #3 type=10660000 len=128 offset 8464
+Header size : 8192
+Time : Mon Jan 22 23:30:01 2018
+Number of records: 3
+Target uuid :
+-----------------------
+#01 (136)changelog record id:0x0 cr_flags:0x9000 cr_type:CREAT(0x1)
+date:'14:30:01.370700741 2018.01.22' target:[0x200000402:0x1:0x0]
+cr_extra_flags:0x3 user:0:0 nid:10.128.11.159@tcp parent:[0x200000007:0x1:0x0]
+name:fileA
+.fi
 .SH CAVEATS
 Although they are stored in the CONFIGS directory, \fImountdata\fR
 files do not use the config log format and will confuse \fBllog_reader\fR.
