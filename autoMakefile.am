@@ -81,6 +81,8 @@ endif # LINUX
 
 endif # MODULES
 
+all: undef.h
+
 undef.h: config.h.in
 	grep -v config.h.in config.h.in > $@
 
