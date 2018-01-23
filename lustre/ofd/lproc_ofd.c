@@ -757,6 +757,67 @@ static int ofd_site_stats_seq_show(struct seq_file *m, void *data)
 }
 LPROC_SEQ_FOPS_RO(ofd_site_stats);
 
+/**
+ * Show if the OFD enforces T10PI checksum.
+ *
+ * \param[in] m		seq_file handle
+ * \param[in] data	unused for single entry
+ *
+ * \retval		0 on success
+ * \retval		negative value on error
+ */
+static int ofd_checksum_t10pi_enforce_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = m->private;
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	seq_printf(m, "%u\n", ofd->ofd_checksum_t10pi_enforce);
+	return 0;
+}
+
+/**
+ * Force specific T10PI checksum modes to be enabled
+ *
+ * If T10PI *is* supported in hardware, allow only the supported T10PI type
+ * to be used. If T10PI is *not* supported by the OSD, setting the enforce
+ * parameter forces all T10PI types to be enabled (even if slower) for
+ * testing.
+ *
+ * The final determination of which algorithm to be used depends whether
+ * the client supports T10PI or not, and is handled at client connect time.
+ *
+ * \param[in] file	proc file
+ * \param[in] buffer	string which represents mode
+ *			1: set T10PI checksums enforced
+ *			0: unset T10PI checksums enforced
+ * \param[in] count	\a buffer length
+ * \param[in] off	unused for single entry
+ *
+ * \retval		\a count on success
+ * \retval		negative number on error
+ */
+static ssize_t
+ofd_checksum_t10pi_enforce_seq_write(struct file *file,
+				     const char __user *buffer,
+				     size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	bool enforce;
+	int rc;
+
+	rc = kstrtobool_from_user(buffer, count, &enforce);
+	if (rc)
+		return rc;
+
+	spin_lock(&ofd->ofd_flags_lock);
+	ofd->ofd_checksum_t10pi_enforce = enforce;
+	spin_unlock(&ofd->ofd_flags_lock);
+	return count;
+}
+LPROC_SEQ_FOPS(ofd_checksum_t10pi_enforce);
+
 LPROC_SEQ_FOPS_RO_TYPE(ofd, recovery_status);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, recovery_time_soft);
 LPROC_SEQ_FOPS_RW_TYPE(ofd, recovery_time_hard);
@@ -831,6 +892,8 @@ struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	  .fops	=	&ofd_lfsck_verify_pfid_fops	},
 	{ .name =	"site_stats",
 	  .fops =	&ofd_site_stats_fops		},
+	{ .name =	"checksum_t10pi_enforce",
+	  .fops =	&ofd_checksum_t10pi_enforce_fops	},
 	{ NULL }
 };
 

@@ -1921,5 +1921,4 @@ extern struct miscdevice obd_psdev;
 int obd_ioctl_getdata(char **buf, int *len, void __user *arg);
 int class_procfs_init(void);
 int class_procfs_clean(void);
-
 #endif /* __LINUX_OBD_CLASS_H */

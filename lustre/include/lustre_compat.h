@@ -41,6 +41,7 @@
 #include <linux/bio.h>
 #include <linux/xattr.h>
 #include <linux/workqueue.h>
+#include <linux/blkdev.h>
 
 #include <libcfs/linux/linux-fs.h>
 #include <lustre_patchless_compat.h>
@@ -696,5 +697,25 @@ static inline struct timespec current_time(struct inode *inode)
 #ifndef READ_ONCE
 #define READ_ONCE ACCESS_ONCE
 #endif
+
+static inline unsigned short blk_integrity_interval(struct blk_integrity *bi)
+{
+#ifdef HAVE_INTERVAL_EXP_BLK_INTEGRITY
+	return bi->interval_exp ? 1 << bi->interval_exp : 0;
+#elif defined(HAVE_INTERVAL_BLK_INTEGRITY)
+	return bi->interval;
+#else
+	return bi->sector_size;
+#endif
+}
+
+static inline const char *blk_integrity_name(struct blk_integrity *bi)
+{
+#ifdef HAVE_INTERVAL_EXP_BLK_INTEGRITY
+	return bi->profile->name;
+#else
+	return bi->name;
+#endif
+}
 
 #endif /* _LUSTRE_COMPAT_H */

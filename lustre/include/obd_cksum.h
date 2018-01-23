@@ -36,6 +36,9 @@
 #include <libcfs/libcfs_crypto.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 
+int obd_t10_cksum_speed(const char *obd_name,
+			enum cksum_types cksum_type);
+
 static inline unsigned char cksum_obd2cfs(enum cksum_types cksum_type)
 {
 	switch (cksum_type) {
@@ -52,58 +55,23 @@ static inline unsigned char cksum_obd2cfs(enum cksum_types cksum_type)
 	return 0;
 }
 
-/* The OBD_FL_CKSUM_* flags is packed into 5 bits of o_flags, since there can
- * only be a single checksum type per RPC.
- *
- * The OBD_CHECKSUM_* type bits passed in ocd_cksum_types are a 32-bit bitmask
- * since they need to represent the full range of checksum algorithms that
- * both the client and server can understand.
- *
- * In case of an unsupported types/flags we fall back to ADLER
- * because that is supported by all clients since 1.8
- *
- * In case multiple algorithms are supported the best one is used. */
-static inline u32 cksum_type_pack(enum cksum_types cksum_type)
-{
-	unsigned int    performance = 0, tmp;
-	u32		flag = OBD_FL_CKSUM_ADLER;
+u32 obd_cksum_type_pack(const char *obd_name, enum cksum_types cksum_type);
 
-	if (cksum_type & OBD_CKSUM_CRC32) {
-		tmp = cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_CRC32));
-		if (tmp > performance) {
-			performance = tmp;
-			flag = OBD_FL_CKSUM_CRC32;
-		}
-	}
-	if (cksum_type & OBD_CKSUM_CRC32C) {
-		tmp = cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_CRC32C));
-		if (tmp > performance) {
-			performance = tmp;
-			flag = OBD_FL_CKSUM_CRC32C;
-		}
-	}
-	if (cksum_type & OBD_CKSUM_ADLER) {
-		tmp = cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_ADLER));
-		if (tmp > performance) {
-			performance = tmp;
-			flag = OBD_FL_CKSUM_ADLER;
-		}
-	}
-	if (unlikely(cksum_type && !(cksum_type & (OBD_CKSUM_CRC32C |
-						   OBD_CKSUM_CRC32 |
-						   OBD_CKSUM_ADLER))))
-		CWARN("unknown cksum type %x\n", cksum_type);
-
-	return flag;
-}
-
-static inline enum cksum_types cksum_type_unpack(u32 o_flags)
+static inline enum cksum_types obd_cksum_type_unpack(u32 o_flags)
 {
 	switch (o_flags & OBD_FL_CKSUM_ALL) {
 	case OBD_FL_CKSUM_CRC32C:
 		return OBD_CKSUM_CRC32C;
 	case OBD_FL_CKSUM_CRC32:
 		return OBD_CKSUM_CRC32;
+	case OBD_FL_CKSUM_T10IP512:
+		return OBD_CKSUM_T10IP512;
+	case OBD_FL_CKSUM_T10IP4K:
+		return OBD_CKSUM_T10IP4K;
+	case OBD_FL_CKSUM_T10CRC512:
+		return OBD_CKSUM_T10CRC512;
+	case OBD_FL_CKSUM_T10CRC4K:
+		return OBD_CKSUM_T10CRC4K;
 	default:
 		break;
 	}
@@ -115,7 +83,7 @@ static inline enum cksum_types cksum_type_unpack(u32 o_flags)
  * 1.8 supported ADLER it is base and not depend on hw
  * Client uses all available local algos
  */
-static inline enum cksum_types cksum_types_supported_client(void)
+static inline enum cksum_types obd_cksum_types_supported_client(void)
 {
 	enum cksum_types ret = OBD_CKSUM_ADLER;
 
@@ -129,32 +97,13 @@ static inline enum cksum_types cksum_types_supported_client(void)
 	if (cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_CRC32)) > 0)
 		ret |= OBD_CKSUM_CRC32;
 
-	return ret;
-}
-
-/* Server uses algos that perform at 50% or better of the Adler */
-static inline enum cksum_types cksum_types_supported_server(void)
-{
-	enum cksum_types ret = OBD_CKSUM_ADLER;
-	int base_speed;
-
-	CDEBUG(D_INFO, "Crypto hash speed: crc %d, crc32c %d, adler %d\n",
-	       cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_CRC32)),
-	       cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_CRC32C)),
-	       cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_ADLER)));
-
-	base_speed = cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_ADLER)) / 2;
-
-	if (cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_CRC32C)) >=
-	    base_speed)
-		ret |= OBD_CKSUM_CRC32C;
-	if (cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_CRC32)) >=
-	    base_speed)
-		ret |= OBD_CKSUM_CRC32;
+	/* Client support all kinds of T10 checksum */
+	ret |= OBD_CKSUM_T10_ALL;
 
 	return ret;
 }
 
+enum cksum_types obd_cksum_types_supported_server(const char *obd_name);
 
 /* Select the best checksum algorithm among those supplied in the cksum_types
  * input.
@@ -163,13 +112,67 @@ static inline enum cksum_types cksum_types_supported_server(void)
  * checksum type due to its benchmarking at libcfs module load.
  * Caution is advised, however, since what is fastest on a single client may
  * not be the fastest or most efficient algorithm on the server.  */
-static inline enum cksum_types cksum_type_select(enum cksum_types cksum_types)
+static inline enum cksum_types
+obd_cksum_type_select(const char *obd_name, enum cksum_types cksum_types)
 {
-	return cksum_type_unpack(cksum_type_pack(cksum_types));
+	u32 flag = obd_cksum_type_pack(obd_name, cksum_types);
+
+	return obd_cksum_type_unpack(flag);
 }
 
 /* Checksum algorithm names. Must be defined in the same order as the
  * OBD_CKSUM_* flags. */
-#define DECLARE_CKSUM_NAME char *cksum_name[] = {"crc32", "adler", "crc32c"}
+#define DECLARE_CKSUM_NAME const char *cksum_name[] = {"crc32", "adler", \
+	"crc32c", "reserved", "t10ip512", "t10ip4K", "t10crc512", "t10crc4K"}
+
+typedef __u16 (obd_dif_csum_fn) (void *, unsigned int);
+
+__u16 obd_dif_crc_fn(void *data, unsigned int len);
+__u16 obd_dif_ip_fn(void *data, unsigned int len);
+int obd_page_dif_generate_buffer(const char *obd_name, struct page *page,
+				 __u32 offset, __u32 length,
+				 __u16 *guard_start, int guard_number,
+				 int *used_number, int sector_size,
+				 obd_dif_csum_fn *fn);
+/*
+ * If checksum type is one T10 checksum types, init the csum_fn and sector
+ * size. Otherwise, init them to NULL/zero.
+ */
+static inline void obd_t10_cksum2dif(enum cksum_types cksum_type,
+				     obd_dif_csum_fn **fn, int *sector_size)
+{
+	*fn = NULL;
+	*sector_size = 0;
+
+	switch (cksum_type) {
+	case OBD_CKSUM_T10IP512:
+		*fn = obd_dif_ip_fn;
+		*sector_size = 512;
+		break;
+	case OBD_CKSUM_T10IP4K:
+		*fn = obd_dif_ip_fn;
+		*sector_size = 4096;
+		break;
+	case OBD_CKSUM_T10CRC512:
+		*fn = obd_dif_crc_fn;
+		*sector_size = 512;
+		break;
+	case OBD_CKSUM_T10CRC4K:
+		*fn = obd_dif_crc_fn;
+		*sector_size = 4096;
+		break;
+	default:
+		break;
+	}
+}
+
+enum obd_t10_cksum_type {
+	OBD_T10_CKSUM_UNKNOWN = 0,
+	OBD_T10_CKSUM_IP512,
+	OBD_T10_CKSUM_IP4K,
+	OBD_T10_CKSUM_CRC512,
+	OBD_T10_CKSUM_CRC4K,
+	OBD_T10_CKSUM_MAX
+};
 
 #endif /* __OBD_H */

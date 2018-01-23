@@ -2146,17 +2146,22 @@ out:
  * Concurrency: doesn't access mutable data.
  */
 static void osd_conf_get(const struct lu_env *env,
-                         const struct dt_device *dev,
-                         struct dt_device_param *param)
+			 const struct dt_device *dev,
+			 struct dt_device_param *param)
 {
-        struct super_block *sb = osd_sb(osd_dt_dev(dev));
-	int		   ea_overhead;
+	struct osd_device *d = osd_dt_dev(dev);
+	struct super_block *sb = osd_sb(d);
+	struct block_device *bdev = sb->s_bdev;
+	struct blk_integrity *bi = bdev_get_integrity(bdev);
+	unsigned short interval;
+	int ea_overhead;
+	const char *name;
 
-        /*
-         * XXX should be taken from not-yet-existing fs abstraction layer.
-         */
-        param->ddp_max_name_len = LDISKFS_NAME_LEN;
-        param->ddp_max_nlink    = LDISKFS_LINK_MAX;
+	/*
+	 * XXX should be taken from not-yet-existing fs abstraction layer.
+	 */
+	param->ddp_max_name_len = LDISKFS_NAME_LEN;
+	param->ddp_max_nlink    = LDISKFS_LINK_MAX;
 	param->ddp_symlink_max  = sb->s_blocksize;
 	param->ddp_mount_type     = LDD_MT_LDISKFS;
 	if (ldiskfs_has_feature_extents(sb))
@@ -2205,6 +2210,43 @@ static void osd_conf_get(const struct lu_env *env,
 	else
 #endif
 		param->ddp_brw_size = DT_DEF_BRW_SIZE;
+
+	param->ddp_t10_cksum_type = 0;
+	if (bi) {
+		interval = blk_integrity_interval(bi);
+		name = blk_integrity_name(bi);
+		/*
+		 * Expected values:
+		 * T10-DIF-TYPE1-CRC
+		 * T10-DIF-TYPE3-CRC
+		 * T10-DIF-TYPE1-IP
+		 * T10-DIF-TYPE3-IP
+		 */
+		if (strncmp(name, "T10-DIF-TYPE",
+			    sizeof("T10-DIF-TYPE") - 1) == 0) {
+			/* also skip "1/3-" at end */
+			const int type_off = sizeof("T10-DIF-TYPE.");
+
+			if (interval != 512 && interval != 4096)
+				CERROR("%s: unsupported T10PI sector size %u\n",
+				       d->od_svname, interval);
+			else if (strcmp(name + type_off, "CRC") == 0)
+				param->ddp_t10_cksum_type = interval == 512 ?
+					OBD_CKSUM_T10CRC512 :
+					OBD_CKSUM_T10CRC4K;
+			else if (strcmp(name + type_off, "IP") == 0)
+				param->ddp_t10_cksum_type = interval == 512 ?
+					OBD_CKSUM_T10IP512 :
+					OBD_CKSUM_T10IP4K;
+			else
+				CERROR("%s: unsupported checksum type of "
+				       "T10PI type '%s'",
+				       d->od_svname, name);
+		} else {
+			CERROR("%s: unsupported T10PI type '%s'",
+			       d->od_svname, name);
+		}
+	}
 }
 
 /*

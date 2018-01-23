@@ -1885,8 +1885,8 @@ static int check_read_checksum(struct niobuf_local *local_nb, int npages,
 		dump_all_bulk_pages(oa, npages, local_nb, server_cksum,
 				    client_cksum);
 
-	cksum_type = cksum_type_unpack(oa->o_valid & OBD_MD_FLFLAGS ?
-				       oa->o_flags : 0);
+	cksum_type = obd_cksum_type_unpack(oa->o_valid & OBD_MD_FLFLAGS ?
+					   oa->o_flags : 0);
 
 	if (cksum_type != server_cksum_type)
 		msg = "the server may have not used the checksum type specified"
@@ -1937,6 +1937,162 @@ static int tgt_pages2shortio(struct niobuf_local *local, int npages,
 	return copied - size;
 }
 
+static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
+				     struct niobuf_local *local_nb,
+				     int npages, int opc,
+				     obd_dif_csum_fn *fn,
+				     int sector_size,
+				     u32 *check_sum)
+{
+	unsigned char cfs_alg = cksum_obd2cfs(OBD_CKSUM_T10_TOP);
+	const char *obd_name = tgt->lut_obd->obd_name;
+	struct cfs_crypto_hash_desc *hdesc;
+	unsigned int bufsize;
+	unsigned char *buffer;
+	struct page *__page;
+	__u16 *guard_start;
+	int guard_number;
+	int used_number = 0;
+	__u32 cksum;
+	int rc = 0;
+	int used;
+	int i;
+
+	__page = alloc_page(GFP_KERNEL);
+	if (__page == NULL)
+		return -ENOMEM;
+
+	hdesc = cfs_crypto_hash_init(cfs_alg, NULL, 0);
+	if (IS_ERR(hdesc)) {
+		CERROR("%s: unable to initialize checksum hash %s\n",
+		       tgt_name(tgt), cfs_crypto_hash_name(cfs_alg));
+		return PTR_ERR(hdesc);
+	}
+
+	buffer = kmap(__page);
+	guard_start = (__u16 *)buffer;
+	guard_number = PAGE_SIZE / sizeof(*guard_start);
+	for (i = 0; i < npages; i++) {
+		/* corrupt the data before we compute the checksum, to
+		 * simulate a client->OST data error */
+		if (i == 0 && opc == OST_WRITE &&
+		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE)) {
+			int off = local_nb[i].lnb_page_offset & ~PAGE_MASK;
+			int len = local_nb[i].lnb_len;
+			struct page *np = tgt_page_to_corrupt;
+
+			if (np) {
+				char *ptr = ll_kmap_atomic(local_nb[i].lnb_page,
+							KM_USER0);
+				char *ptr2 = page_address(np);
+
+				memcpy(ptr2 + off, ptr + off, len);
+				memcpy(ptr2 + off, "bad3", min(4, len));
+				ll_kunmap_atomic(ptr, KM_USER0);
+
+				/* LU-8376 to preserve original index for
+				 * display in dump_all_bulk_pages() */
+				np->index = i;
+
+				cfs_crypto_hash_update_page(hdesc, np, off,
+							    len);
+				continue;
+			} else {
+				CERROR("%s: can't alloc page for corruption\n",
+				       tgt_name(tgt));
+			}
+		}
+
+		/*
+		 * The left guard number should be able to hold checksums of a
+		 * whole page
+		 */
+		rc = obd_page_dif_generate_buffer(obd_name,
+			local_nb[i].lnb_page,
+			local_nb[i].lnb_page_offset & ~PAGE_MASK,
+			local_nb[i].lnb_len, guard_start + used_number,
+			guard_number - used_number, &used, sector_size,
+			fn);
+		if (rc)
+			break;
+
+		used_number += used;
+		if (used_number == guard_number) {
+			cfs_crypto_hash_update_page(hdesc, __page, 0,
+				used_number * sizeof(*guard_start));
+			used_number = 0;
+		}
+
+		 /* corrupt the data after we compute the checksum, to
+		 * simulate an OST->client data error */
+		if (unlikely(i == 0 && opc == OST_READ &&
+			     OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND))) {
+			int off = local_nb[i].lnb_page_offset & ~PAGE_MASK;
+			int len = local_nb[i].lnb_len;
+			struct page *np = tgt_page_to_corrupt;
+
+			if (np) {
+				char *ptr = ll_kmap_atomic(local_nb[i].lnb_page,
+							KM_USER0);
+				char *ptr2 = page_address(np);
+
+				memcpy(ptr2 + off, ptr + off, len);
+				memcpy(ptr2 + off, "bad4", min(4, len));
+				ll_kunmap_atomic(ptr, KM_USER0);
+
+				/* LU-8376 to preserve original index for
+				 * display in dump_all_bulk_pages() */
+				np->index = i;
+
+				cfs_crypto_hash_update_page(hdesc, np, off,
+							    len);
+				continue;
+			} else {
+				CERROR("%s: can't alloc page for corruption\n",
+				       tgt_name(tgt));
+			}
+		}
+	}
+	kunmap(__page);
+	if (rc)
+		GOTO(out, rc);
+
+	if (used_number != 0)
+		cfs_crypto_hash_update_page(hdesc, __page, 0,
+			used_number * sizeof(*guard_start));
+
+	bufsize = sizeof(cksum);
+	rc = cfs_crypto_hash_final(hdesc, (unsigned char *)&cksum, &bufsize);
+
+	if (rc == 0)
+		*check_sum = cksum;
+out:
+	__free_page(__page);
+	return rc;
+}
+
+static int tgt_checksum_niobuf_rw(struct lu_target *tgt,
+				  enum cksum_types cksum_type,
+				  struct niobuf_local *local_nb,
+				  int npages, int opc, u32 *check_sum)
+{
+	obd_dif_csum_fn *fn = NULL;
+	int sector_size = 0;
+	int rc;
+
+	ENTRY;
+	obd_t10_cksum2dif(cksum_type, &fn, &sector_size);
+
+	if (fn)
+		rc = tgt_checksum_niobuf_t10pi(tgt, local_nb, npages,
+					       opc, fn, sector_size,
+					       check_sum);
+	else
+		rc = tgt_checksum_niobuf(tgt, local_nb, npages, opc,
+					 cksum_type, check_sum);
+	RETURN(rc);
+}
+
 int tgt_brw_read(struct tgt_session_info *tsi)
 {
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
@@ -1951,6 +2107,7 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	int			 npages, nob = 0, rc, i, no_reply = 0,
 				 npages_read;
 	struct tgt_thread_big_cache *tbc = req->rq_svc_thread->t_data;
+	const char *obd_name = exp->exp_obd->obd_name;
 
 	ENTRY;
 
@@ -2072,18 +2229,19 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 		rc = -E2BIG;
 
 	if (body->oa.o_valid & OBD_MD_FLCKSUM) {
-		enum cksum_types cksum_type =
-			cksum_type_unpack(body->oa.o_valid & OBD_MD_FLFLAGS ?
-					  body->oa.o_flags : 0);
+		u32 flag = body->oa.o_valid & OBD_MD_FLFLAGS ?
+			   body->oa.o_flags : 0;
+		enum cksum_types cksum_type = obd_cksum_type_unpack(flag);
 
-		repbody->oa.o_flags = cksum_type_pack(cksum_type);
+		repbody->oa.o_flags = obd_cksum_type_pack(obd_name,
+							  cksum_type);
 		repbody->oa.o_valid = OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
-		rc = tgt_checksum_niobuf(tsi->tsi_tgt, local_nb,
-					 npages_read, OST_READ, cksum_type,
-					 &repbody->oa.o_cksum);
+
+		rc = tgt_checksum_niobuf_rw(tsi->tsi_tgt, cksum_type,
+					    local_nb, npages_read, OST_READ,
+					    &repbody->oa.o_cksum);
 		if (rc < 0)
 			GOTO(out_commitrw, rc);
-
 		CDEBUG(D_PAGE, "checksum at read origin: %x\n",
 		       repbody->oa.o_cksum);
 
@@ -2150,7 +2308,7 @@ out_lock:
 		ptlrpc_req_drop_rs(req);
 		LCONSOLE_WARN("%s: Bulk IO read error with %s (at %s), "
 			      "client will retry: rc %d\n",
-			      exp->exp_obd->obd_name,
+			      obd_name,
 			      obd_uuid2str(&exp->exp_client_uuid),
 			      obd_export_nid2str(exp), rc);
 	}
@@ -2266,6 +2424,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 	bool			 no_reply = false, mmap;
 	struct tgt_thread_big_cache *tbc = req->rq_svc_thread->t_data;
 	bool wait_sync = false;
+	const char *obd_name = exp->exp_obd->obd_name;
 
 	ENTRY;
 
@@ -2418,14 +2577,16 @@ skip_transfer:
 		static int cksum_counter;
 
 		if (body->oa.o_valid & OBD_MD_FLFLAGS)
-			cksum_type = cksum_type_unpack(body->oa.o_flags);
+			cksum_type = obd_cksum_type_unpack(body->oa.o_flags);
 
 		repbody->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
 		repbody->oa.o_flags &= ~OBD_FL_CKSUM_ALL;
-		repbody->oa.o_flags |= cksum_type_pack(cksum_type);
-		rc = tgt_checksum_niobuf(tsi->tsi_tgt, local_nb,
-					 npages, OST_WRITE, cksum_type,
-					 &repbody->oa.o_cksum);
+		repbody->oa.o_flags |= obd_cksum_type_pack(obd_name,
+							   cksum_type);
+
+		rc = tgt_checksum_niobuf_rw(tsi->tsi_tgt, cksum_type,
+					    local_nb, npages, OST_WRITE,
+					    &repbody->oa.o_cksum);
 		if (rc < 0)
 			GOTO(out_commitrw, rc);
 
@@ -2503,7 +2664,7 @@ out:
 		if (!exp->exp_obd->obd_no_transno)
 			LCONSOLE_WARN("%s: Bulk IO write error with %s (at %s),"
 				      " client will retry: rc = %d\n",
-				      exp->exp_obd->obd_name,
+				      obd_name,
 				      obd_uuid2str(&exp->exp_client_uuid),
 				      obd_export_nid2str(exp), rc);
 	}

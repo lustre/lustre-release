@@ -6947,8 +6947,8 @@ set_checksums()
 
 export ORIG_CSUM_TYPE="`lctl get_param -n osc.*osc-[^mM]*.checksum_type |
                         sed 's/.*\[\(.*\)\].*/\1/g' | head -n1`"
-CKSUM_TYPES=${CKSUM_TYPES:-"crc32 adler"}
-[ "$ORIG_CSUM_TYPE" = "crc32c" ] && CKSUM_TYPES="$CKSUM_TYPES crc32c"
+CKSUM_TYPES=${CKSUM_TYPES:-$(lctl get_param -n osc.*osc-[^mM]*.checksum_type |
+			     tr -d [] | head -n1)}
 set_checksum_type()
 {
 	lctl set_param -n osc.*osc-[^mM]*.checksum_type $1

@@ -2907,6 +2907,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	spin_lock_init(&m->ofd_flags_lock);
 	m->ofd_raid_degraded = 0;
+	m->ofd_checksum_t10pi_enforce = 0;
 	m->ofd_syncjournal = 0;
 	ofd_slc_set(m);
 	m->ofd_soft_sync_limit = OFD_SOFT_SYNC_LIMIT_DEFAULT;
@@ -2982,7 +2983,8 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	tgd->tgd_reserved_pcnt = 0;
 
 	m->ofd_brw_size = m->ofd_lut.lut_dt_conf.ddp_brw_size;
-	m->ofd_cksum_types_supported = cksum_types_supported_server();
+	m->ofd_cksum_types_supported =
+		obd_cksum_types_supported_server(obd->obd_name);
 	m->ofd_precreate_batch = OFD_PRECREATE_BATCH_DEFAULT;
 	if (tgd->tgd_osfs.os_bsize * tgd->tgd_osfs.os_blocks <
 	    OFD_PRECREATE_SMALL_FS)

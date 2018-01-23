@@ -5584,6 +5584,7 @@ static int mdt_connect_internal(const struct lu_env *env,
 				struct mdt_device *mdt,
 				struct obd_connect_data *data, bool reconnect)
 {
+	const char *obd_name = mdt_obd_name(mdt);
 	LASSERT(data != NULL);
 
 	data->ocd_connect_flags &= MDT_CONNECT_SUPPORTED;
@@ -5612,8 +5613,7 @@ static int mdt_connect_internal(const struct lu_env *env,
 			       "ocd_version: %x ocd_grant: %d ocd_index: %u "
 			       "ocd_brw_size unexpectedly zero, network data "
 			       "corruption? Refusing to connect this client\n",
-			       mdt_obd_name(mdt),
-			       exp->exp_client_uuid.uuid,
+			       obd_name, exp->exp_client_uuid.uuid,
 			       exp, data->ocd_connect_flags, data->ocd_version,
 			       data->ocd_grant, data->ocd_index);
 			return -EPROTO;
@@ -5659,7 +5659,7 @@ static int mdt_connect_internal(const struct lu_env *env,
 
 	if ((data->ocd_connect_flags & OBD_CONNECT_FID) == 0) {
 		CWARN("%s: MDS requires FID support, but client not\n",
-		      mdt_obd_name(mdt));
+		      obd_name);
 		return -EBADE;
 	}
 
@@ -5693,7 +5693,8 @@ static int mdt_connect_internal(const struct lu_env *env,
 		/* The client set in ocd_cksum_types the checksum types it
 		 * supports. We have to mask off the algorithms that we don't
 		 * support */
-		data->ocd_cksum_types &= cksum_types_supported_server();
+		data->ocd_cksum_types &=
+			obd_cksum_types_supported_server(obd_name);
 
 		if (unlikely(data->ocd_cksum_types == 0)) {
 			CERROR("%s: Connect with checksum support but no "

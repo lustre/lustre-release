@@ -791,9 +791,9 @@ static int ptlrpc_busy_reconnect(int rc)
 }
 
 static int ptlrpc_connect_set_flags(struct obd_import *imp,
-				     struct obd_connect_data *ocd,
-				     __u64 old_connect_flags,
-				     struct obd_export *exp, int init_connect)
+				    struct obd_connect_data *ocd,
+				    __u64 old_connect_flags,
+				    struct obd_export *exp, int init_connect)
 {
 	static bool warned;
 	struct client_obd *cli = &imp->imp_obd->u.cli;
@@ -836,13 +836,13 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 		 * for algorithms we understand. The server masked off
 		 * the checksum types it doesn't support */
 		if ((ocd->ocd_cksum_types &
-		     cksum_types_supported_client()) == 0) {
+		     obd_cksum_types_supported_client()) == 0) {
 			LCONSOLE_ERROR("The negotiation of the checksum "
 				       "alogrithm to use with server %s "
 				       "failed (%x/%x)\n",
 				       obd2cli_tgt(imp->imp_obd),
 				       ocd->ocd_cksum_types,
-				       cksum_types_supported_client());
+				       obd_cksum_types_supported_client());
 			return -EPROTO;
 		} else {
 			cli->cl_supp_cksum_types = ocd->ocd_cksum_types;
@@ -852,7 +852,8 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 		 * Enforce ADLER for backward compatibility*/
 		cli->cl_supp_cksum_types = OBD_CKSUM_ADLER;
 	}
-	cli->cl_cksum_type = cksum_type_select(cli->cl_supp_cksum_types);
+	cli->cl_cksum_type = obd_cksum_type_select(imp->imp_obd->obd_name,
+						   cli->cl_supp_cksum_types);
 
 	if (ocd->ocd_connect_flags & OBD_CONNECT_BRW_SIZE)
 		cli->cl_max_pages_per_rpc =

@@ -1033,6 +1033,103 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
         return (p1->off + p1->count == p2->off);
 }
 
+static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
+				   size_t pg_count, struct brw_page **pga,
+				   int opc, obd_dif_csum_fn *fn,
+				   int sector_size,
+				   u32 *check_sum)
+{
+	struct cfs_crypto_hash_desc *hdesc;
+	/* Used Adler as the default checksum type on top of DIF tags */
+	unsigned char cfs_alg = cksum_obd2cfs(OBD_CKSUM_T10_TOP);
+	struct page *__page;
+	unsigned char *buffer;
+	__u16 *guard_start;
+	unsigned int bufsize;
+	int guard_number;
+	int used_number = 0;
+	int used;
+	u32 cksum;
+	int rc = 0;
+	int i = 0;
+
+	LASSERT(pg_count > 0);
+
+	__page = alloc_page(GFP_KERNEL);
+	if (__page == NULL)
+		return -ENOMEM;
+
+	hdesc = cfs_crypto_hash_init(cfs_alg, NULL, 0);
+	if (IS_ERR(hdesc)) {
+		rc = PTR_ERR(hdesc);
+		CERROR("%s: unable to initialize checksum hash %s: rc = %d\n",
+		       obd_name, cfs_crypto_hash_name(cfs_alg), rc);
+		GOTO(out, rc);
+	}
+
+	buffer = kmap(__page);
+	guard_start = (__u16 *)buffer;
+	guard_number = PAGE_SIZE / sizeof(*guard_start);
+	while (nob > 0 && pg_count > 0) {
+		unsigned int count = pga[i]->count > nob ? nob : pga[i]->count;
+
+		/* corrupt the data before we compute the checksum, to
+		 * simulate an OST->client data error */
+		if (unlikely(i == 0 && opc == OST_READ &&
+			     OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE))) {
+			unsigned char *ptr = kmap(pga[i]->pg);
+			int off = pga[i]->off & ~PAGE_MASK;
+
+			memcpy(ptr + off, "bad1", min_t(typeof(nob), 4, nob));
+			kunmap(pga[i]->pg);
+		}
+
+		/*
+		 * The left guard number should be able to hold checksums of a
+		 * whole page
+		 */
+		rc = obd_page_dif_generate_buffer(obd_name, pga[i]->pg, 0,
+						  count,
+						  guard_start + used_number,
+						  guard_number - used_number,
+						  &used, sector_size,
+						  fn);
+		if (rc)
+			break;
+
+		used_number += used;
+		if (used_number == guard_number) {
+			cfs_crypto_hash_update_page(hdesc, __page, 0,
+				used_number * sizeof(*guard_start));
+			used_number = 0;
+		}
+
+		nob -= pga[i]->count;
+		pg_count--;
+		i++;
+	}
+	kunmap(__page);
+	if (rc)
+		GOTO(out, rc);
+
+	if (used_number != 0)
+		cfs_crypto_hash_update_page(hdesc, __page, 0,
+			used_number * sizeof(*guard_start));
+
+	bufsize = sizeof(cksum);
+	cfs_crypto_hash_final(hdesc, (unsigned char *)&cksum, &bufsize);
+
+	/* For sending we only compute the wrong checksum instead
+	 * of corrupting the data so it is still correct on a redo */
+	if (opc == OST_WRITE && OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND))
+		cksum++;
+
+	*check_sum = cksum;
+out:
+	__free_page(__page);
+	return rc;
+}
+
 static int osc_checksum_bulk(int nob, size_t pg_count,
 			     struct brw_page **pga, int opc,
 			     enum cksum_types cksum_type,
@@ -1087,6 +1184,29 @@ static int osc_checksum_bulk(int nob, size_t pg_count,
 	return 0;
 }
 
+static int osc_checksum_bulk_rw(const char *obd_name,
+				enum cksum_types cksum_type,
+				int nob, size_t pg_count,
+				struct brw_page **pga, int opc,
+				u32 *check_sum)
+{
+	obd_dif_csum_fn *fn = NULL;
+	int sector_size = 0;
+	int rc;
+
+	ENTRY;
+	obd_t10_cksum2dif(cksum_type, &fn, &sector_size);
+
+	if (fn)
+		rc = osc_checksum_bulk_t10pi(obd_name, nob, pg_count, pga,
+					     opc, fn, sector_size, check_sum);
+	else
+		rc = osc_checksum_bulk(nob, pg_count, pga, opc, cksum_type,
+				       check_sum);
+
+	RETURN(rc);
+}
+
 static int
 osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 		     u32 page_count, struct brw_page **pga,
@@ -1102,6 +1222,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
         struct req_capsule      *pill;
         struct brw_page *pg_prev;
 	void *short_io_buf;
+	const char *obd_name = cli->cl_import->imp_obd->obd_name;
 
         ENTRY;
         if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_PREP_REQ))
@@ -1296,12 +1417,14 @@ no_bulk:
                         if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0)
                                 body->oa.o_flags = 0;
 
-                        body->oa.o_flags |= cksum_type_pack(cksum_type);
+			body->oa.o_flags |= obd_cksum_type_pack(obd_name,
+								cksum_type);
                         body->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
 
-			rc = osc_checksum_bulk(requested_nob, page_count,
-					       pga, OST_WRITE, cksum_type,
-					       &body->oa.o_cksum);
+			rc = osc_checksum_bulk_rw(obd_name, cksum_type,
+						  requested_nob, page_count,
+						  pga, OST_WRITE,
+						  &body->oa.o_cksum);
 			if (rc < 0) {
 				CDEBUG(D_PAGE, "failed to checksum, rc = %d\n",
 				       rc);
@@ -1312,7 +1435,8 @@ no_bulk:
 
                         /* save this in 'oa', too, for later checking */
                         oa->o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
-                        oa->o_flags |= cksum_type_pack(cksum_type);
+			oa->o_flags |= obd_cksum_type_pack(obd_name,
+							   cksum_type);
                 } else {
                         /* clear out the checksum flag, in case this is a
                          * resend but cl_checksum is no longer set. b=11238 */
@@ -1327,9 +1451,10 @@ no_bulk:
                     !sptlrpc_flavor_has_bulk(&req->rq_flvr)) {
                         if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0)
                                 body->oa.o_flags = 0;
-                        body->oa.o_flags |= cksum_type_pack(cli->cl_cksum_type);
+			body->oa.o_flags |= obd_cksum_type_pack(obd_name,
+				cli->cl_cksum_type);
                         body->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
-                }
+		}
 
 		/* Client cksum has been already copied to wire obdo in previous
 		 * lustre_set_wire_obdo(), and in the case a bulk-read is being
@@ -1426,12 +1551,16 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 
 static int
 check_write_checksum(struct obdo *oa, const struct lnet_process_id *peer,
-				__u32 client_cksum, __u32 server_cksum,
-				struct osc_brw_async_args *aa)
+		     __u32 client_cksum, __u32 server_cksum,
+		     struct osc_brw_async_args *aa)
 {
-        __u32 new_cksum;
-        char *msg;
+	const char *obd_name = aa->aa_cli->cl_import->imp_obd->obd_name;
 	enum cksum_types cksum_type;
+	obd_dif_csum_fn *fn = NULL;
+	int sector_size = 0;
+	bool t10pi = false;
+	__u32 new_cksum;
+	char *msg;
 	int rc;
 
         if (server_cksum == client_cksum) {
@@ -1443,15 +1572,50 @@ check_write_checksum(struct obdo *oa, const struct lnet_process_id *peer,
 		dump_all_bulk_pages(oa, aa->aa_page_count, aa->aa_ppga,
 				    server_cksum, client_cksum);
 
-	cksum_type = cksum_type_unpack(oa->o_valid & OBD_MD_FLFLAGS ?
-				       oa->o_flags : 0);
-	rc = osc_checksum_bulk(aa->aa_requested_nob, aa->aa_page_count,
-			       aa->aa_ppga, OST_WRITE, cksum_type,
-			       &new_cksum);
+	cksum_type = obd_cksum_type_unpack(oa->o_valid & OBD_MD_FLFLAGS ?
+					   oa->o_flags : 0);
+
+	switch (cksum_type) {
+	case OBD_CKSUM_T10IP512:
+		t10pi = true;
+		fn = obd_dif_ip_fn;
+		sector_size = 512;
+		break;
+	case OBD_CKSUM_T10IP4K:
+		t10pi = true;
+		fn = obd_dif_ip_fn;
+		sector_size = 4096;
+		break;
+	case OBD_CKSUM_T10CRC512:
+		t10pi = true;
+		fn = obd_dif_crc_fn;
+		sector_size = 512;
+		break;
+	case OBD_CKSUM_T10CRC4K:
+		t10pi = true;
+		fn = obd_dif_crc_fn;
+		sector_size = 4096;
+		break;
+	default:
+		break;
+	}
+
+	if (t10pi)
+		rc = osc_checksum_bulk_t10pi(obd_name, aa->aa_requested_nob,
+					     aa->aa_page_count,
+					     aa->aa_ppga,
+					     OST_WRITE,
+					     fn,
+					     sector_size,
+					     &new_cksum);
+	else
+		rc = osc_checksum_bulk(aa->aa_requested_nob, aa->aa_page_count,
+				       aa->aa_ppga, OST_WRITE, cksum_type,
+				       &new_cksum);
 
 	if (rc < 0)
 		msg = "failed to calculate the client write checksum";
-	else if (cksum_type != cksum_type_unpack(aa->aa_oa->o_flags))
+	else if (cksum_type != obd_cksum_type_unpack(aa->aa_oa->o_flags))
                 msg = "the server did not use the checksum type specified in "
                       "the original request - likely a protocol problem";
         else if (new_cksum == server_cksum)
@@ -1467,15 +1631,15 @@ check_write_checksum(struct obdo *oa, const struct lnet_process_id *peer,
 			   DFID " object "DOSTID" extent [%llu-%llu], original "
 			   "client csum %x (type %x), server csum %x (type %x),"
 			   " client csum now %x\n",
-			   aa->aa_cli->cl_import->imp_obd->obd_name,
-			   msg, libcfs_nid2str(peer->nid),
+			   obd_name, msg, libcfs_nid2str(peer->nid),
 			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_seq : (__u64)0,
 			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_oid : 0,
 			   oa->o_valid & OBD_MD_FLFID ? oa->o_parent_ver : 0,
 			   POSTID(&oa->o_oi), aa->aa_ppga[0]->off,
 			   aa->aa_ppga[aa->aa_page_count - 1]->off +
 				aa->aa_ppga[aa->aa_page_count-1]->count - 1,
-			   client_cksum, cksum_type_unpack(aa->aa_oa->o_flags),
+			   client_cksum,
+			   obd_cksum_type_unpack(aa->aa_oa->o_flags),
 			   server_cksum, cksum_type, new_cksum);
 	return 1;
 }
@@ -1483,11 +1647,12 @@ check_write_checksum(struct obdo *oa, const struct lnet_process_id *peer,
 /* Note rc enters this function as number of bytes transferred */
 static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 {
-        struct osc_brw_async_args *aa = (void *)&req->rq_async_args;
+	struct osc_brw_async_args *aa = (void *)&req->rq_async_args;
+	struct client_obd *cli = aa->aa_cli;
+	const char *obd_name = cli->cl_import->imp_obd->obd_name;
 	const struct lnet_process_id *peer =
-                        &req->rq_import->imp_connection->c_peer;
-        struct client_obd *cli = aa->aa_cli;
-        struct ost_body *body;
+		&req->rq_import->imp_connection->c_peer;
+	struct ost_body *body;
 	u32 client_cksum = 0;
         ENTRY;
 
@@ -1607,16 +1772,16 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		char      *via = "";
 		char      *router = "";
 		enum cksum_types cksum_type;
+		u32 o_flags = body->oa.o_valid & OBD_MD_FLFLAGS ?
+			body->oa.o_flags : 0;
 
-                cksum_type = cksum_type_unpack(body->oa.o_valid &OBD_MD_FLFLAGS?
-                                               body->oa.o_flags : 0);
-		rc = osc_checksum_bulk(rc, aa->aa_page_count, aa->aa_ppga,
-				       OST_READ, cksum_type, &client_cksum);
-		if (rc < 0) {
-			CDEBUG(D_PAGE,
-			       "failed to calculate checksum, rc = %d\n", rc);
+		cksum_type = obd_cksum_type_unpack(o_flags);
+		rc = osc_checksum_bulk_rw(obd_name, cksum_type, rc,
+					  aa->aa_page_count, aa->aa_ppga,
+					  OST_READ, &client_cksum);
+		if (rc < 0)
 			GOTO(out, rc);
-		}
+
 		if (req->rq_bulk != NULL &&
 		    peer->nid != req->rq_bulk->bd_sender) {
 			via = " via ";
@@ -1638,7 +1803,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 					   "%s%s%s inode "DFID" object "DOSTID
 					   " extent [%llu-%llu], client %x, "
 					   "server %x, cksum_type %x\n",
-					   req->rq_import->imp_obd->obd_name,
+					   obd_name,
 					   libcfs_nid2str(peer->nid),
 					   via, router,
 					   clbody->oa.o_valid & OBD_MD_FLFID ?

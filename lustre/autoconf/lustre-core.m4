@@ -1987,6 +1987,23 @@ file_function_iter, [
 ]) # LC_HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 
 #
+# LC_HAVE_INTERVAL_BLK_INTEGRITY
+#
+# 3.17 replace sector_size with interval in struct blk_integrity
+#
+AC_DEFUN([LC_HAVE_INTERVAL_BLK_INTEGRITY], [
+LB_CHECK_COMPILE([if 'blk_integrity.interval' exist],
+interval_blk_integrity, [
+	#include <linux/blkdev.h>
+],[
+	((struct blk_integrity *)0)->interval = 0;
+],[
+	AC_DEFINE(HAVE_INTERVAL_BLK_INTEGRITY, 1,
+		[blk_integrity.interval exist])
+])
+]) # LC_HAVE_INTERVAL_BLK_INTEGRITY
+
+#
 # LC_KEY_MATCH_DATA
 #
 # 3.17	replaces key_type::match with match_preparse
@@ -2239,6 +2256,25 @@ bio_endio, [
 		[bio_endio takes only one argument])
 ])
 ]) # LC_BIO_ENDIO_USES_ONE_ARG
+
+#
+# LC_HAVE_INTERVAL_EXP_BLK_INTEGRITY
+#
+# 4.3 replace interval with interval_exp in 'struct blk_integrity'
+# 'struct blk_integrity_profile' is also added in this version,
+# thus use this to determine whether 'struct blk_integrity' has profile
+#
+AC_DEFUN([LC_HAVE_INTERVAL_EXP_BLK_INTEGRITY], [
+LB_CHECK_COMPILE([if 'blk_integrity.interval_exp' exist],
+blk_integrity_interval_exp, [
+	#include <linux/blkdev.h>
+],[
+	((struct blk_integrity *)0)->interval_exp = 0;
+],[
+	AC_DEFINE(HAVE_INTERVAL_EXP_BLK_INTEGRITY, 1,
+		[blk_integrity.interval_exp exist])
+])
+]) # LC_HAVE_INTERVAL_EXP_BLK_INTEGRITY
 
 #
 # LC_HAVE_LOOP_CTL_GET_FREE
@@ -2952,6 +2988,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_HAVE_FILE_OPERATIONS_READ_WRITE_ITER
 
 	# 3.17
+	LC_HAVE_INTERVAL_BLK_INTEGRITY
 	LC_KEY_MATCH_DATA
 
 	# 3.18
@@ -2979,6 +3016,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_SYMLINK_OPS_USE_NAMEIDATA
 
 	# 4.3
+	LC_HAVE_INTERVAL_EXP_BLK_INTEGRITY
 	LC_HAVE_CACHE_HEAD_HLIST
 	LC_HAVE_XATTR_HANDLER_SIMPLIFIED
 
