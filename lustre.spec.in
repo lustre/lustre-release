@@ -490,6 +490,7 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 %files osd-zfs-mount
 %defattr(-,root,root)
 %{_libdir}/@PACKAGE@/mount_osd_zfs.so
+%{_sysconfdir}/zfs/zed.d/*
 %endif
 %endif
 %endif

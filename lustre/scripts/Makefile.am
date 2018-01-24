@@ -63,6 +63,11 @@ bin_SCRIPTS  += lustre_req_history
 hadir = $(sysconfdir)/ha.d/resource.d
 ha_SCRIPTS = Lustre.ha_v2
 
+if ZFS_ENABLED
+zedletdir = $(sysconfdir)/zfs/zed.d/
+zedlet_SCRIPTS = statechange-lustre.sh
+endif
+
 scriptlibdir = @libexecdir@/@PACKAGE@
 scriptlib_SCRIPTS = haconfig
 scriptlib_DATA = lc_common
@@ -78,7 +83,7 @@ EXTRA_DIST = license-status lustre_rmmod ldev lc_mon lhbadm \
 	     lc_servip lustre_routes_config lustre_routes_conversion \
 	     $(addsuffix .in,$(genscripts)) lfs_migrate lustre_req_history \
 	     lustre lsvcgss lc_common haconfig Lustre.ha_v2 dkms.mkconf \
-	     zfsobj2fid ko2iblnd-probe
+	     zfsobj2fid ko2iblnd-probe statechange-lustre.sh
 
 CLEANFILES = $(genscripts)
 
