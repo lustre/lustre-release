@@ -1382,12 +1382,14 @@ test_41() {
 	local tf=$DIR/$tfile
 
 	rm -f $tf $tf-1
+	echo " **create two FLR files $tf $tf-1"
 	$LFS mirror create -N -E2m -E4m -E-1 -N -E1m -E2m -E3m -E-1 $tf ||
 		error "create PFLR file $tf failed"
-	$LFS mirror create -N -E4m -E-1 -N -E2m -E3m -E-1 $tf-1 ||
-		error "create PFLR file $tf-1 failed"
+	$LFS mirror create -N -E2m -Eeof -N -E1m -Eeof --flags prefer \
+		-N -E4m -Eeof $tf-1 || error "create PFLR file $tf-1 failed"
 
 	# file should be in ro status
+	echo " **verify files be RDONLY"
 	verify_flr_state $tf "ro"
 	verify_flr_state $tf-1 "ro"
 
@@ -1397,24 +1399,58 @@ test_41() {
 	dd if=/dev/zero of=$tf-1 bs=1M count=4 conv=notrunc ||
 		error "writing $tf-1 failed"
 
+	echo " **verify files be WRITE_PENDING"
 	verify_flr_state $tf "wp"
 	verify_flr_state $tf-1 "wp"
 
 	# file should have stale component
+	echo " **verify files have stale component"
 	$LFS getstripe $tf | grep lcme_flags | grep stale > /dev/null ||
 		error "after writing $tf, it does not contain stale component"
 	$LFS getstripe $tf-1 | grep lcme_flags | grep stale > /dev/null ||
 		error "after writing $tf-1, it does not contain stale component"
 
+	echo " **full resync"
 	$LFS mirror resync $tf $tf-1 || error "mirror resync $tf $tf-1 failed"
 
+	echo " **verify files be RDONLY"
 	verify_flr_state $tf "ro"
 	verify_flr_state $tf-1 "ro"
 
 	# file should not have stale component
+	echo " **verify files do not contain stale component"
 	$LFS getstripe $tf | grep lcme_flags | grep stale &&
 		error "after resyncing $tf, it contains stale component"
 	$LFS getstripe $tf-1 | grep lcme_flags | grep stale &&
+		error "after resyncing $tf, it contains stale component"
+
+	# verify partial resync
+	echo " **write $tf-1 for partial resync test"
+	dd if=/dev/zero of=$tf-1 bs=1M count=2 conv=notrunc ||
+		error "writing $tf-1 failed"
+
+	echo " **only resync mirror 2"
+	verify_flr_state $tf-1 "wp"
+	$LFS mirror resync --only 2 $tf-1 ||
+		error "resync mirror 2 of $tf-1 failed"
+	verify_flr_state $tf "ro"
+
+	# resync synced mirror
+	echo " **resync mirror 2 again"
+	$LFS mirror resync --only 2 $tf-1 ||
+		error "resync mirror 2 of $tf-1 failed"
+	verify_flr_state $tf "ro"
+	echo " **verify $tf-1 contains stale component"
+	$LFS getstripe $tf-1 | grep lcme_flags | grep stale > /dev/null ||
+		error "after writing $tf-1, it does not contain stale component"
+
+	echo " **full resync $tf-1"
+	$LFS mirror resync $tf-1 || error "resync of $tf-1 failed"
+	verify_flr_state $tf "ro"
+	echo " **full resync $tf-1 again"
+	$LFS mirror resync $tf-1 || error "resync of $tf-1 failed"
+	echo " **verify $tf-1 does not contain stale component"
+	$LFS getstripe $tf | grep lcme_flags | grep stale &&
 		error "after resyncing $tf, it contains stale component"
 
 	return 0

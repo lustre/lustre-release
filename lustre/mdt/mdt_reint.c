@@ -2259,7 +2259,7 @@ static int mdt_reint_resync(struct mdt_thread_info *info,
 	layout.mlc_opc = MD_LAYOUT_RESYNC;
 	rc = mdt_layout_change(info, mo, &layout);
 	if (rc)
-		GOTO(out_unlock, rc = -EBUSY);
+		GOTO(out_unlock, rc);
 
 	ma->ma_need = MA_INODE;
 	ma->ma_valid = 0;

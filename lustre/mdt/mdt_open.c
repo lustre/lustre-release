@@ -2130,8 +2130,6 @@ static int mdt_close_resync_done(struct mdt_thread_info *info,
 		GOTO(out_unlock, rc = -ESTALE);
 
 	resync_count = data->cd_resync.resync_count;
-	if (!resync_count)
-		GOTO(out_unlock, rc = 0);
 
 	if (resync_count > INLINE_RESYNC_ARRAY_SIZE) {
 		void *data;

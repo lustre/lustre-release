@@ -2509,11 +2509,10 @@ mdd_layout_update_rdonly(const struct lu_env *env, struct mdd_object *obj,
 	/* Verify acceptable operations */
 	switch (mlc->mlc_opc) {
 	case MD_LAYOUT_WRITE:
-		break;
 	case MD_LAYOUT_RESYNC:
 		/* these are legal operations - this represents the case that
-		 * a few mirrors were missed in the last resync.
-		 * XXX: it will be supported later */
+		 * a few mirrors were missed in the last resync. */
+		break;
 	case MD_LAYOUT_RESYNC_DONE:
 	default:
 		RETURN(0);

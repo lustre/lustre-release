@@ -7268,16 +7268,6 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		goto error;
 	}
 
-	ioc->lil_mode = LL_LEASE_WRLCK;
-	ioc->lil_flags = LL_LEASE_RESYNC;
-	rc = llapi_lease_set(fd, ioc);
-	if (rc < 0) {
-		fprintf(stderr,
-			"%s: '%s' llapi_lease_set resync failed: %s.\n",
-			progname, fname, strerror(errno));
-		goto close_fd;
-	}
-
 	layout = llapi_layout_get_by_fd(fd, 0);
 	if (layout == NULL) {
 		fprintf(stderr, "%s: '%s' llapi_layout_get_by_fd failed: %s.\n",
@@ -7291,28 +7281,37 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		fprintf(stderr, "%s: '%s' llapi_layout_flags_get failed: %s.\n",
 			progname, fname, strerror(errno));
 		rc = -errno;
-		goto close_fd;
+		goto free_layout;
 	}
 
 	flr_state &= LCM_FL_FLR_MASK;
-	switch (flr_state) {
-	case LCM_FL_NONE:
+	if (flr_state == LCM_FL_NONE) {
 		rc = -EINVAL;
-	case LCM_FL_RDONLY:
-		fprintf(stderr, "%s: '%s' file state error: %s\n", progname,
-			fname, llapi_layout_flags_string(flr_state));
-		goto close_fd;
-	default:
-		break;
+		fprintf(stderr, "%s: '%s' is not a FLR file.\n",
+			progname, fname);
+		goto free_layout;
 	}
 
 	/* get stale component info */
 	comp_size = llapi_mirror_find_stale(layout, comp_array,
 					    ARRAY_SIZE(comp_array),
 					    mirror_ids, ids_nr);
-	if (comp_size < 0) {
+	if (comp_size <= 0) {
 		rc = comp_size;
-		goto close_fd;
+		goto free_layout;
+	}
+
+	ioc->lil_mode = LL_LEASE_WRLCK;
+	ioc->lil_flags = LL_LEASE_RESYNC;
+	rc = llapi_lease_set(fd, ioc);
+	if (rc < 0) {
+		if (rc == -EALREADY)
+			rc = 0;
+		else
+			fprintf(stderr,
+			    "%s: '%s' llapi_lease_get_ext resync failed: %s.\n",
+				progname, fname, strerror(errno));
+		goto free_layout;
 	}
 
 	idx = 0;
@@ -7326,7 +7325,7 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		if (rc != LL_LEASE_WRLCK) {
 			fprintf(stderr, "%s: '%s' lost lease lock.\n",
 				progname, fname);
-			goto close_fd;
+			goto free_layout;
 		}
 
 		mirror_id = comp_array[idx].lrc_mirror_id;
@@ -7347,7 +7346,7 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			fprintf(stderr, "%s: '%s' llapi_mirror_resync_one: "
 				"%ld.\n", progname, fname, result);
 			rc = result;
-			goto close_fd;
+			goto unlock;
 		} else if (result > 0) {
 			int j;
 
@@ -7359,6 +7358,7 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		idx = i;
 	}
 
+unlock:
 	/* prepare ioc for lease put */
 	ioc->lil_mode = LL_LEASE_UNLCK;
 	ioc->lil_flags = LL_LEASE_RESYNC_DONE;
@@ -7370,15 +7370,13 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 		}
 	}
 
-	llapi_layout_free(layout);
-
 	rc = llapi_lease_set(fd, ioc);
 	if (rc <= 0) {
 		if (rc == 0) /* lost lease lock */
 			rc = -EBUSY;
 		fprintf(stderr, "%s: resync file '%s' failed: %s.\n",
 			progname, fname, strerror(errno));
-		goto close_fd;
+		goto free_layout;
 	}
 	/**
 	 * llapi_lease_set returns lease mode when it request to unlock
@@ -7386,6 +7384,8 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 	 */
 	rc = 0;
 
+free_layout:
+	llapi_layout_free(layout);
 close_fd:
 	close(fd);
 error:
