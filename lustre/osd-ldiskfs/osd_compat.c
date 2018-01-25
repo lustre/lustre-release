@@ -67,9 +67,14 @@ static void osd_push_ctxt(const struct osd_device *dev,
 }
 
 /* utility to make a directory */
-static struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt,
-				   const char *name, int mode, int fix)
+static struct dentry *
+simple_mkdir(const struct lu_env *env, struct osd_device *osd,
+	     struct dentry *dir, const struct lu_fid *fid,
+	     const char *name, __u32 compat, int mode, bool *created)
 {
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lu_fid *tfid = &info->oti_fid3;
+	struct inode *inode;
 	struct dentry *dchild;
 	int err = 0;
 	ENTRY;
@@ -78,30 +83,64 @@ static struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt,
 	CDEBUG(D_INODE, "creating directory %.*s\n", (int)strlen(name), name);
 	dchild = ll_lookup_one_len(name, dir, strlen(name));
 	if (IS_ERR(dchild))
-		GOTO(out_up, dchild);
+		RETURN(dchild);
 
-	if (dchild->d_inode) {
-		int old_mode = dchild->d_inode->i_mode;
+	inode = dchild->d_inode;
+	if (inode) {
+		struct lustre_mdt_attrs *lma = &info->oti_ost_attrs.loa_lma;
+		int old_mode = inode->i_mode;
+
+		if (created)
+			*created = false;
+
 		if (!S_ISDIR(old_mode)) {
 			CERROR("found %s (%lu/%u) is mode %o\n", name,
-			       dchild->d_inode->i_ino,
-			       dchild->d_inode->i_generation, old_mode);
+			       inode->i_ino, inode->i_generation, old_mode);
 			GOTO(out_err, err = -ENOTDIR);
 		}
 
+		if (unlikely(osd->od_dt_dev.dd_rdonly))
+			RETURN(dchild);
+
 		/* Fixup directory permissions if necessary */
-		if (fix && (old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
+		if ((old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
 			CDEBUG(D_CONFIG,
 			       "fixing permissions on %s from %o to %o\n",
 			       name, old_mode, mode);
-			dchild->d_inode->i_mode = (mode & S_IALLUGO) |
-						  (old_mode & ~S_IALLUGO);
-			mark_inode_dirty(dchild->d_inode);
+			inode->i_mode = (mode & S_IALLUGO) |
+					(old_mode & ~S_IALLUGO);
+			mark_inode_dirty(inode);
 		}
-		GOTO(out_up, dchild);
+
+		err = osd_get_lma(info, inode, &info->oti_obj_dentry,
+				  &info->oti_ost_attrs);
+		if (err == -ENODATA)
+			goto set_fid;
+
+		if (err)
+			GOTO(out_err, err);
+
+		if ((fid && !lu_fid_eq(fid, &lma->lma_self_fid)) ||
+		    lma->lma_compat != compat)
+			goto set_fid;
+
+		RETURN(dchild);
 	}
 
 	err = vfs_mkdir(dir->d_inode, dchild, mode);
+	if (err)
+		GOTO(out_err, err);
+
+	inode = dchild->d_inode;
+	if (created)
+		*created = true;
+
+set_fid:
+	if (fid)
+		*tfid = *fid;
+	else
+		lu_igif_build(tfid, inode->i_ino, inode->i_generation);
+	err = osd_ea_fid_set(info, inode, tfid, compat, 0);
 	if (err)
 		GOTO(out_err, err);
 
@@ -109,9 +148,7 @@ static struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt,
 
 out_err:
 	dput(dchild);
-	dchild = ERR_PTR(err);
-out_up:
-	return dchild;
+	return ERR_PTR(err);
 }
 
 static int osd_last_rcvd_subdir_count(struct osd_device *osd)
@@ -173,18 +210,15 @@ static int osd_mdt_init(const struct lu_env *env, struct osd_device *dev)
 	parent = osd_sb(dev)->s_root;
 	osd_push_ctxt(dev, &new, &save);
 
-	d = simple_mkdir(parent, dev->od_mnt, REMOTE_PARENT_DIR,
-			 0755, 1);
+	lu_local_obj_fid(fid, REMOTE_PARENT_DIR_OID);
+	d = simple_mkdir(env, dev, parent, fid, REMOTE_PARENT_DIR,
+			 LMAC_NOT_IN_OI, 0755, NULL);
 	if (IS_ERR(d))
 		GOTO(cleanup, rc = PTR_ERR(d));
 
 	omm->omm_remote_parent = d;
 
-	/* Set LMA for remote parent inode */
-	lu_local_obj_fid(fid, REMOTE_PARENT_DIR_OID);
-	rc = osd_ea_fid_set(info, d->d_inode, fid, LMAC_NOT_IN_OI, 0);
-
-	GOTO(cleanup, rc);
+	GOTO(cleanup, rc = 0);
 
 cleanup:
 	pop_ctxt(&save, &new);
@@ -377,14 +411,11 @@ int osd_lookup_in_remote_parent(struct osd_thread_info *oti,
  */
 static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 {
-	struct lvfs_run_ctxt	 new;
-	struct lvfs_run_ctxt	 save;
-	struct dentry		*rootd = osd_sb(dev)->s_root;
-	struct dentry		*d;
-	struct osd_thread_info	*info = osd_oti_get(env);
-	struct inode		*inode;
-	struct lu_fid		*fid = &info->oti_fid3;
-	int			 rc;
+	struct lvfs_run_ctxt new;
+	struct lvfs_run_ctxt save;
+	struct dentry *d;
+	int rc;
+	bool created = false;
 	ENTRY;
 
 	OBD_ALLOC_PTR(dev->od_ost_map);
@@ -397,46 +428,25 @@ static int osd_ost_init(const struct lu_env *env, struct osd_device *dev)
 		GOTO(cleanup_alloc, rc);
 
 	dev->od_ost_map->om_subdir_count = rc;
-        rc = 0;
-
 	INIT_LIST_HEAD(&dev->od_ost_map->om_seq_list);
 	rwlock_init(&dev->od_ost_map->om_seq_list_lock);
 	mutex_init(&dev->od_ost_map->om_dir_init_mutex);
 
-        osd_push_ctxt(dev, &new, &save);
-
-	d = ll_lookup_one_len("O", rootd, strlen("O"));
+	osd_push_ctxt(dev, &new, &save);
+	d = simple_mkdir(env, dev, osd_sb(dev)->s_root, NULL, "O",
+			 LMAC_NOT_IN_OI | LMAC_FID_ON_OST, 0755, &created);
 	if (IS_ERR(d))
 		GOTO(cleanup_ctxt, rc = PTR_ERR(d));
-	if (d->d_inode == NULL) {
-		dput(d);
-		/* The lookup() may be called again inside simple_mkdir().
-		 * Since the repeated lookup() only be called for "/O" at
-		 * mount time, it will not affect the whole performance. */
-		d = simple_mkdir(rootd, dev->od_mnt, "O", 0755, 1);
-		if (IS_ERR(d))
-			GOTO(cleanup_ctxt, rc = PTR_ERR(d));
 
+	if (created)
 		/* It is quite probably that the device is new formatted. */
 		dev->od_maybe_new = 1;
-	}
 
-	inode = d->d_inode;
 	dev->od_ost_map->om_root = d;
-
-	/* 'What the @fid is' is not imporatant, because the object
-	 * has no OI mapping, and only is visible inside the OSD.*/
-	lu_igif_build(fid, inode->i_ino, inode->i_generation);
-	rc = osd_ea_fid_set(info, inode, fid,
-		    LMAC_NOT_IN_OI | LMAC_FID_ON_OST, 0);
-	if (rc)
-		GOTO(cleanup_dentry, rc);
 
 	pop_ctxt(&save, &new);
 	RETURN(0);
 
-cleanup_dentry:
-	dput(d);
 cleanup_ctxt:
 	pop_ctxt(&save, &new);
 cleanup_alloc:
@@ -489,22 +499,65 @@ static void osd_ost_fini(struct osd_device *osd)
 	EXIT;
 }
 
+static int osd_index_backup_dir_init(const struct lu_env *env,
+				     struct osd_device *dev)
+{
+	struct lu_fid *fid = &osd_oti_get(env)->oti_fid;
+	struct lvfs_run_ctxt new;
+	struct lvfs_run_ctxt save;
+	struct dentry *dentry;
+	int rc = 0;
+	ENTRY;
+
+	lu_local_obj_fid(fid, INDEX_BACKUP_OID);
+	osd_push_ctxt(dev, &new, &save);
+	dentry = simple_mkdir(env, dev, osd_sb(dev)->s_root, fid,
+			      INDEX_BACKUP_DIR, LMAC_NOT_IN_OI, 0755, NULL);
+	if (IS_ERR(dentry)) {
+		rc = PTR_ERR(dentry);
+	} else {
+		dev->od_index_backup_inode = igrab(dentry->d_inode);
+		dput(dentry);
+	}
+	pop_ctxt(&save, &new);
+
+	RETURN(rc);
+}
+
+static void osd_index_backup_dir_fini(struct osd_device *dev)
+{
+	if (dev->od_index_backup_inode) {
+		iput(dev->od_index_backup_inode);
+		dev->od_index_backup_inode = NULL;
+	}
+}
+
 int osd_obj_map_init(const struct lu_env *env, struct osd_device *dev)
 {
 	int rc;
+	bool ost_init = false;
+	bool mdt_init = false;
 	ENTRY;
 
-	/* prepare structures for OST */
 	rc = osd_ost_init(env, dev);
 	if (rc)
 		RETURN(rc);
 
-	/* prepare structures for MDS */
+	ost_init = true;
 	rc = osd_mdt_init(env, dev);
-	if (rc)
-		osd_ost_fini(dev);
+	if (!rc) {
+		mdt_init = true;
+		rc = osd_index_backup_dir_init(env, dev);
+	}
 
-        RETURN(rc);
+	if (rc) {
+		if (ost_init)
+			osd_ost_fini(dev);
+		if (mdt_init)
+			osd_mdt_fini(dev);
+	}
+
+	RETURN(rc);
 }
 
 static struct osd_obj_seq *osd_seq_find_locked(struct osd_obj_map *map, u64 seq)
@@ -530,6 +583,7 @@ static struct osd_obj_seq *osd_seq_find(struct osd_obj_map *map, u64 seq)
 
 void osd_obj_map_fini(struct osd_device *dev)
 {
+	osd_index_backup_dir_fini(dev);
 	osd_ost_fini(dev);
 	osd_mdt_fini(dev);
 }
@@ -798,8 +852,6 @@ static int osd_seq_load_locked(struct osd_thread_info *info,
 {
 	struct osd_obj_map  *map = osd->od_ost_map;
 	struct dentry       *seq_dir;
-	struct inode	    *inode;
-	struct lu_fid	    *fid = &info->oti_fid3;
 	int		    rc = 0;
 	int		    i;
 	char		    dir_name[32];
@@ -813,22 +865,14 @@ static int osd_seq_load_locked(struct osd_thread_info *info,
 
 	osd_seq_name(dir_name, sizeof(dir_name), osd_seq->oos_seq);
 
-	seq_dir = simple_mkdir(map->om_root, osd->od_mnt, dir_name, 0755, 1);
+	seq_dir = simple_mkdir(info->oti_env, osd, map->om_root, NULL, dir_name,
+			       LMAC_NOT_IN_OI | LMAC_FID_ON_OST, 0755, NULL);
 	if (IS_ERR(seq_dir))
 		GOTO(out_err, rc = PTR_ERR(seq_dir));
 	else if (seq_dir->d_inode == NULL)
 		GOTO(out_put, rc = -EFAULT);
 
-	inode = seq_dir->d_inode;
 	osd_seq->oos_root = seq_dir;
-
-	/* 'What the @fid is' is not imporatant, because the object
-	 * has no OI mapping, and only is visible inside the OSD.*/
-	lu_igif_build(fid, inode->i_ino, inode->i_generation);
-	rc = osd_ea_fid_set(info, inode, fid,
-			    LMAC_NOT_IN_OI | LMAC_FID_ON_OST, 0);
-	if (rc != 0)
-		GOTO(out_put, rc);
 
 	LASSERT(osd_seq->oos_dirs == NULL);
 	OBD_ALLOC(osd_seq->oos_dirs,
@@ -840,8 +884,9 @@ static int osd_seq_load_locked(struct osd_thread_info *info,
 		struct dentry   *dir;
 
 		snprintf(dir_name, sizeof(dir_name), "d%u", i);
-		dir = simple_mkdir(osd_seq->oos_root, osd->od_mnt, dir_name,
-				   0700, 1);
+		dir = simple_mkdir(info->oti_env, osd, osd_seq->oos_root, NULL,
+				   dir_name, LMAC_NOT_IN_OI | LMAC_FID_ON_OST,
+				   0700, NULL);
 		if (IS_ERR(dir)) {
 			GOTO(out_free, rc = PTR_ERR(dir));
 		} else if (dir->d_inode == NULL) {
@@ -849,16 +894,7 @@ static int osd_seq_load_locked(struct osd_thread_info *info,
 			GOTO(out_free, rc = -EFAULT);
 		}
 
-		inode = dir->d_inode;
 		osd_seq->oos_dirs[i] = dir;
-
-		/* 'What the @fid is' is not imporatant, because the object
-		 * has no OI mapping, and only is visible inside the OSD.*/
-		lu_igif_build(fid, inode->i_ino, inode->i_generation);
-		rc = osd_ea_fid_set(info, inode, fid,
-				    LMAC_NOT_IN_OI | LMAC_FID_ON_OST, 0);
-		if (rc != 0)
-			GOTO(out_free, rc);
 	}
 
 	if (rc != 0) {

@@ -1671,6 +1671,19 @@ static const struct osd_lf_map osd_lf_maps[] = {
 		.olm_name	= LUSTRE_NODEMAP_NAME,
 	},
 
+	/* index_backup */
+	{
+		.olm_name	= INDEX_BACKUP_DIR,
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= INDEX_BACKUP_OID,
+		},
+		.olm_flags	= OLF_SCAN_SUBITEMS | OLF_NOT_BACKUP,
+		.olm_namelen	= sizeof(INDEX_BACKUP_DIR) - 1,
+		.olm_scandir	= osd_ios_general_scan,
+		.olm_filldir	= osd_ios_varfid_fill,
+	},
+
 	{
 		.olm_name	= NULL
 	}
@@ -1767,6 +1780,119 @@ osd_ios_new_item(struct osd_device *dev, struct dentry *dentry,
 	RETURN(0);
 }
 
+static bool osd_index_need_recreate(const struct lu_env *env,
+				    struct osd_device *dev, struct inode *inode)
+{
+	struct osd_directory *iam = &osd_oti_get(env)->oti_iam;
+	struct iam_container *bag = &iam->od_container;
+	int rc;
+	ENTRY;
+
+	rc = iam_container_init(bag, &iam->od_descr, inode);
+	if (rc)
+		RETURN(true);
+
+	rc = iam_container_setup(bag);
+	iam_container_fini(bag);
+	if (rc)
+		RETURN(true);
+
+	RETURN(false);
+}
+
+static void osd_ios_index_register(const struct lu_env *env,
+				   struct osd_device *osd,
+				   const struct lu_fid *fid,
+				   struct inode *inode)
+{
+	struct osd_directory *iam = &osd_oti_get(env)->oti_iam;
+	struct iam_container *bag = &iam->od_container;
+	struct super_block *sb = osd_sb(osd);
+	struct iam_descr *descr;
+	__u32 keysize = 0;
+	__u32 recsize = 0;
+	int rc;
+	ENTRY;
+
+	/* Index must be a regular file. */
+	if (!S_ISREG(inode->i_mode))
+		RETURN_EXIT;
+
+	/* Index's size must be block aligned. */
+	if (inode->i_size < sb->s_blocksize ||
+	    (inode->i_size & (sb->s_blocksize - 1)) != 0)
+		RETURN_EXIT;
+
+	iam_container_init(bag, &iam->od_descr, inode);
+	rc = iam_container_setup(bag);
+	if (rc)
+		GOTO(fini, rc = 1);
+
+	descr = bag->ic_descr;
+	/* May be regular file with IAM_LFIX_ROOT_MAGIC matched
+	 * coincidentally, or corrupted index object, skip it. */
+	if (descr->id_ptr_size != 4)
+		GOTO(fini, rc = 1);
+
+	keysize = descr->id_key_size;
+	recsize = descr->id_rec_size;
+	rc = osd_index_register(osd, fid, keysize, recsize);
+
+	GOTO(fini, rc);
+
+fini:
+	iam_container_fini(bag);
+	if (!rc)
+		CDEBUG(D_LFSCK, "%s: index object "DFID" (%u/%u) registered\n",
+		       osd_name(osd), PFID(fid), keysize, recsize);
+}
+
+static void osd_index_restore(const struct lu_env *env, struct osd_device *dev,
+			      struct lustre_index_restore_unit *liru,
+			      void *buf, int bufsize)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct osd_inode_id *id = &info->oti_id;
+	struct lu_fid *tgt_fid = &liru->liru_cfid;
+	struct inode *bak_inode = NULL;
+	struct ldiskfs_dir_entry_2 *de = NULL;
+	struct buffer_head *bh = NULL;
+	struct dentry *dentry;
+	char *name = buf;
+	struct lu_fid bak_fid;
+	int rc;
+	ENTRY;
+
+	lustre_fid2lbx(name, tgt_fid, bufsize);
+	dentry = osd_child_dentry_by_inode(env, dev->od_index_backup_inode,
+					   name, strlen(name));
+	bh = osd_ldiskfs_find_entry(dev->od_index_backup_inode,
+				    &dentry->d_name, &de, NULL, NULL);
+	if (IS_ERR(bh))
+		GOTO(log, rc = PTR_ERR(bh));
+
+	osd_id_gen(id, le32_to_cpu(de->inode), OSD_OII_NOGEN);
+	brelse(bh);
+	bak_inode = osd_iget_fid(info, dev, id, &bak_fid);
+	if (IS_ERR(bak_inode))
+		GOTO(log, rc = PTR_ERR(bak_inode));
+
+	iput(bak_inode);
+	/* The OI mapping for index may be invalid, since it will be
+	 * re-created, not update the OI mapping, just cache it in RAM. */
+	osd_id_gen(id, liru->liru_clid, OSD_OII_NOGEN);
+	osd_add_oi_cache(info, dev, id, tgt_fid);
+	rc = lustre_index_restore(env, &dev->od_dt_dev, &liru->liru_pfid,
+				  tgt_fid, &bak_fid, liru->liru_name,
+				  &dev->od_index_backup_list, &dev->od_lock,
+				  buf, bufsize);
+	GOTO(log, rc);
+
+log:
+	CDEBUG(D_WARNING, "%s: restore index '%s' with "DFID": rc = %d\n",
+	       osd_name(dev), liru->liru_name, PFID(tgt_fid), rc);
+}
+
 /**
  * osd_ios_scan_one() - check/fix LMA FID and OI entry for one inode
  *
@@ -1776,7 +1902,9 @@ osd_ios_new_item(struct osd_device *dev, struct dentry *dentry,
  */
 static int
 osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
-		 struct inode *inode, const struct lu_fid *fid, int flags)
+		 struct inode *parent, struct inode *inode,
+		 const struct lu_fid *fid, const char *name,
+		 int namelen, int flags)
 {
 	struct lustre_mdt_attrs	*lma	= &info->oti_ost_attrs.loa_lma;
 	struct osd_inode_id	*id	= &info->oti_id;
@@ -1820,6 +1948,28 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 			RETURN(0);
 
 		tfid = lma->lma_self_fid;
+		if (lma->lma_compat & LMAC_IDX_BACKUP &&
+		    osd_index_need_recreate(info->oti_env, dev, inode)) {
+			struct lu_fid *pfid = &info->oti_fid3;
+
+			if (parent == osd_sb(dev)->s_root->d_inode) {
+				lu_local_obj_fid(pfid, OSD_FS_ROOT_OID);
+			} else {
+				rc = osd_scrub_get_fid(info, dev, parent, pfid,
+						       false);
+				if (rc)
+					RETURN(rc);
+			}
+
+			rc = lustre_liru_new(&dev->od_index_restore_list, pfid,
+					&tfid, inode->i_ino, name, namelen);
+
+			RETURN(rc);
+		}
+
+		if (!(flags & OLF_NOT_BACKUP))
+			osd_ios_index_register(info->oti_env, dev, &tfid,
+					       inode);
 	}
 
 	rc = osd_oi_lookup(info, dev, &tfid, id2, 0);
@@ -1959,8 +2109,9 @@ static int osd_ios_varfid_fill(void *buf,
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
-	rc = osd_ios_scan_one(fill_buf->oifb_info, dev, child->d_inode,
-			      NULL, 0);
+	rc = osd_ios_scan_one(fill_buf->oifb_info, dev,
+			      fill_buf->oifb_dentry->d_inode, child->d_inode,
+			      NULL, name, namelen, 0);
 	if (rc == 0 && S_ISDIR(child->d_inode->i_mode))
 		rc = osd_ios_new_item(dev, child, osd_ios_general_scan,
 				      osd_ios_varfid_fill);
@@ -2006,8 +2157,9 @@ static int osd_ios_dl_fill(void *buf,
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
-	rc = osd_ios_scan_one(fill_buf->oifb_info, dev, child->d_inode,
-			      &map->olm_fid, map->olm_flags);
+	rc = osd_ios_scan_one(fill_buf->oifb_info, dev,
+			      fill_buf->oifb_dentry->d_inode, child->d_inode,
+			      &map->olm_fid, name, namelen, map->olm_flags);
 	dput(child);
 
 	RETURN(rc);
@@ -2042,7 +2194,8 @@ static int osd_ios_uld_fill(void *buf,
 	sscanf(&name[1], SFID, RFID(&tfid));
 	if (fid_is_sane(&tfid))
 		rc = osd_ios_scan_one(fill_buf->oifb_info, fill_buf->oifb_dev,
-				      child->d_inode, &tfid, 0);
+				      fill_buf->oifb_dentry->d_inode,
+				      child->d_inode, &tfid, name, namelen, 0);
 	else
 		rc = -EIO;
 	dput(child);
@@ -2088,8 +2241,9 @@ static int osd_ios_root_fill(void *buf,
 		RETURN(PTR_ERR(child));
 
 	if (!(map->olm_flags & OLF_NO_OI))
-		rc = osd_ios_scan_one(fill_buf->oifb_info, dev, child->d_inode,
-				      &map->olm_fid, map->olm_flags);
+		rc = osd_ios_scan_one(fill_buf->oifb_info, dev,
+				fill_buf->oifb_dentry->d_inode, child->d_inode,
+				&map->olm_fid, name, namelen, map->olm_flags);
 	if (rc == 0 && map->olm_flags & OLF_SCAN_SUBITEMS)
 		rc = osd_ios_new_item(dev, child, map->olm_scandir,
 				      map->olm_filldir);
@@ -2205,8 +2359,10 @@ osd_ios_ROOT_scan(struct osd_thread_info *info, struct osd_device *dev,
 		 * Usually, it is rare case for the old connected clients
 		 * to access the ".lustre" with cached IGIF. So we prefer
 		 * to the solution 2). */
-		rc = osd_ios_scan_one(info, dev, child->d_inode,
-				      &LU_DOT_LUSTRE_FID, 0);
+		rc = osd_ios_scan_one(info, dev, dentry->d_inode,
+				      child->d_inode, &LU_DOT_LUSTRE_FID,
+				      dot_lustre_name,
+				      strlen(dot_lustre_name), 0);
 		if (rc == 0)
 			rc = osd_ios_new_item(dev, child, osd_ios_general_scan,
 					      osd_ios_dl_fill);
@@ -2235,7 +2391,9 @@ osd_ios_OBJECTS_scan(struct osd_thread_info *info, struct osd_device *dev,
 
 	child = osd_ios_lookup_one_len(ADMIN_USR, dentry, strlen(ADMIN_USR));
 	if (!IS_ERR(child)) {
-		rc = osd_ios_scan_one(info, dev, child->d_inode, NULL, 0);
+		rc = osd_ios_scan_one(info, dev, dentry->d_inode,
+				      child->d_inode, NULL, ADMIN_USR,
+				      strlen(ADMIN_USR), 0);
 		dput(child);
 	} else {
 		rc = PTR_ERR(child);
@@ -2246,7 +2404,9 @@ osd_ios_OBJECTS_scan(struct osd_thread_info *info, struct osd_device *dev,
 
 	child = osd_ios_lookup_one_len(ADMIN_GRP, dentry, strlen(ADMIN_GRP));
 	if (!IS_ERR(child)) {
-		rc = osd_ios_scan_one(info, dev, child->d_inode, NULL, 0);
+		rc = osd_ios_scan_one(info, dev, dentry->d_inode,
+				      child->d_inode, NULL, ADMIN_GRP,
+				      strlen(ADMIN_GRP), 0);
 		dput(child);
 	} else {
 		rc = PTR_ERR(child);
@@ -2258,29 +2418,25 @@ osd_ios_OBJECTS_scan(struct osd_thread_info *info, struct osd_device *dev,
 	RETURN(rc);
 }
 
-static int osd_initial_OI_scrub(struct osd_thread_info *info,
-				struct osd_device *dev)
+static void osd_initial_OI_scrub(struct osd_thread_info *info,
+				 struct osd_device *dev)
 {
 	struct osd_ios_item	*item    = NULL;
 	scandir_t		 scandir = osd_ios_general_scan;
 	filldir_t		 filldir = osd_ios_root_fill;
 	struct dentry		*dentry  = osd_sb(dev)->s_root;
 	const struct osd_lf_map *map     = osd_lf_maps;
-	int			 rc;
 	ENTRY;
 
 	/* Lookup IGIF in OI by force for initial OI scrub. */
 	dev->od_igif_inoi = 1;
 
 	while (1) {
-		rc = scandir(info, dev, dentry, filldir);
+		scandir(info, dev, dentry, filldir);
 		if (item != NULL) {
 			dput(item->oii_dentry);
 			OBD_FREE_PTR(item);
 		}
-
-		if (rc != 0)
-			break;
 
 		if (list_empty(&dev->od_ios_list))
 			break;
@@ -2294,17 +2450,6 @@ static int osd_initial_OI_scrub(struct osd_thread_info *info,
 		filldir = item->oii_filldir;
 		dentry = item->oii_dentry;
 	}
-
-	while (!list_empty(&dev->od_ios_list)) {
-		item = list_entry(dev->od_ios_list.next,
-				  struct osd_ios_item, oii_list);
-		list_del_init(&item->oii_list);
-		dput(item->oii_dentry);
-		OBD_FREE_PTR(item);
-	}
-
-	if (rc != 0)
-		RETURN(rc);
 
 	/* There maybe the case that the object has been removed, but its OI
 	 * mapping is still in the OI file, such as the "CATALOGS" after MDT
@@ -2329,7 +2474,32 @@ static int osd_initial_OI_scrub(struct osd_thread_info *info,
 		map++;
 	}
 
-	RETURN(0);
+	if (!list_empty(&dev->od_index_restore_list)) {
+		char *buf;
+
+		OBD_ALLOC_LARGE(buf, INDEX_BACKUP_BUFSIZE);
+		if (!buf)
+			CERROR("%s: not enough RAM for rebuild index\n",
+			       osd_name(dev));
+
+		while (!list_empty(&dev->od_index_restore_list)) {
+			struct lustre_index_restore_unit *liru;
+
+			liru = list_entry(dev->od_index_restore_list.next,
+					  struct lustre_index_restore_unit,
+					  liru_link);
+			list_del(&liru->liru_link);
+			if (buf)
+				osd_index_restore(info->oti_env, dev, liru,
+						  buf, INDEX_BACKUP_BUFSIZE);
+			OBD_FREE(liru, liru->liru_len);
+		}
+
+		if (buf)
+			OBD_FREE_LARGE(buf, INDEX_BACKUP_BUFSIZE);
+	}
+
+	EXIT;
 }
 
 char *osd_lf_fid2name(const struct lu_fid *fid)
@@ -2405,7 +2575,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	struct file *filp;
 	struct inode *inode;
 	struct lu_fid *fid = &info->oti_fid;
-	struct lu_object_conf conf;
+	struct osd_inode_id *id = &info->oti_id;
 	struct dt_object *obj;
 	bool dirty = false;
 	bool restored = false;
@@ -2445,18 +2615,15 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 		}
 	}
 
-	igrab(inode);
+	osd_id_gen(id, inode->i_ino, inode->i_generation);
+	osd_add_oi_cache(info, dev, id, fid);
 	filp_close(filp, NULL);
 	pop_ctxt(&saved, ctxt);
 
-	conf.loc_flags = LOC_F_NEW;
-	obj = lu2dt(lu_object_find_slice(env, osd2lu_dev(dev), fid, &conf));
-	if (IS_ERR_OR_NULL(obj)) {
-		iput(inode);
-		RETURN(obj == NULL ? -ENOENT : PTR_ERR(obj));
-	}
+	obj = lu2dt(lu_object_find_slice(env, osd2lu_dev(dev), fid, NULL));
+	if (IS_ERR_OR_NULL(obj))
+		RETURN(obj ? PTR_ERR(obj) : -ENOENT);
 
-	osd_dt_obj(obj)->oo_inode = inode;
 	scrub->os_obj = obj;
 	rc = scrub_file_load(env, scrub);
 	if (rc == -ENOENT || rc == -EFAULT) {
@@ -2533,11 +2700,8 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	if (rc < 0)
 		GOTO(cleanup_obj, rc);
 
-	if (!dev->od_dt_dev.dd_rdonly) {
-		rc = osd_initial_OI_scrub(info, dev);
-		if (rc)
-			GOTO(cleanup_oi, rc);
-	}
+	if (!dev->od_dt_dev.dd_rdonly)
+		osd_initial_OI_scrub(info, dev);
 
 	if (sf->sf_flags & SF_UPGRADE ||
 	    !(sf->sf_internal_flags & SIF_NO_HANDLE_OLD_FID ||

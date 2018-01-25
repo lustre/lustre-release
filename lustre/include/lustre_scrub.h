@@ -257,7 +257,6 @@ struct scrub_file {
 };
 
 struct lustre_scrub {
-	struct lu_object_header os_obj_header;
 	/* Object for the scrub file. */
 	struct dt_object       *os_obj;
 

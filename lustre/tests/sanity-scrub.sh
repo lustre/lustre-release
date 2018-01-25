@@ -1227,9 +1227,6 @@ test_15() {
 run_test 15 "Dryrun mode OI scrub"
 
 test_16() {
-	[ $(facet_fstype $SINGLEMDS) != "zfs" ] &&
-		skip "only support zfs temporarily" && return
-
 	check_mount_and_prep
 	scrub_enable_index_backup
 

@@ -154,6 +154,7 @@ struct osd_object {
 #endif
 
 	struct list_head	oo_xattr_list;
+	struct lu_object_header *oo_header;
 };
 
 struct osd_obj_seq {
@@ -259,6 +260,7 @@ struct osd_device {
 				  od_igif_inoi:1,
 				  od_check_ff:1,
 				  od_is_ost:1,
+				  od_in_init:1,
 				  od_index_in_idif:1;
 
 	__s64			  od_auto_scrub_interval;
@@ -309,6 +311,12 @@ struct osd_device {
 
 	/* a list of orphaned agent inodes, protected with od_osfs_lock */
 	struct list_head	 od_orphan_list;
+	struct list_head	 od_index_backup_list;
+	struct list_head	 od_index_restore_list;
+	spinlock_t		 od_lock;
+	struct inode		*od_index_backup_inode;
+	enum lustre_index_backup_policy od_index_backup_policy;
+	int			 od_index_backup_stop;
 };
 
 enum osd_full_scrub_ratio {
@@ -627,6 +635,7 @@ struct osd_thread_info {
 	unsigned int		oti_declare_ops[OSD_OT_MAX];
 	unsigned int		oti_declare_ops_cred[OSD_OT_MAX];
 	unsigned int		oti_declare_ops_used[OSD_OT_MAX];
+	struct osd_directory	oti_iam;
 };
 
 extern int ldiskfs_pdo;
@@ -670,6 +679,9 @@ int osd_statfs(const struct lu_env *env, struct dt_device *dev,
                struct obd_statfs *sfs);
 struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		       struct osd_inode_id *id);
+struct inode *
+osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
+	     struct osd_inode_id *id, struct lu_fid *fid);
 int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 		   const struct lu_fid *fid, __u32 compat, __u32 incompat);
 int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
@@ -1300,5 +1312,31 @@ void ldiskfs_dec_count(handle_t *handle, struct inode *inode);
 
 void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf);
 
+static inline int
+osd_index_register(struct osd_device *osd, const struct lu_fid *fid,
+		   __u32 keysize, __u32 recsize)
+{
+	return lustre_index_register(&osd->od_dt_dev, osd_name(osd),
+				     &osd->od_index_backup_list, &osd->od_lock,
+				     &osd->od_index_backup_stop,
+				     fid, keysize, recsize);
+}
+
+static inline void
+osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lu_fid *fid = &info->oti_fid3;
+	struct osd_inode_id *id = &info->oti_id3;
+
+	lu_local_obj_fid(fid, INDEX_BACKUP_OID);
+	osd_id_gen(id, osd->od_index_backup_inode->i_ino,
+		   osd->od_index_backup_inode->i_generation);
+	osd_add_oi_cache(info, osd, id, fid);
+
+	lustre_index_backup(env, &osd->od_dt_dev, osd_name(osd),
+			    &osd->od_index_backup_list, &osd->od_lock,
+			    &osd->od_index_backup_stop, backup);
+}
 
 #endif /* _OSD_INTERNAL_H */

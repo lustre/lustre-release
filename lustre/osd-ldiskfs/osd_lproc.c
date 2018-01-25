@@ -645,6 +645,41 @@ int osd_register_proc_index_in_idif(struct osd_device *osd)
 }
 #endif
 
+static int ldiskfs_osd_index_backup_seq_show(struct seq_file *m, void *data)
+{
+	struct osd_device *dev = osd_dt_dev((struct dt_device *)m->private);
+
+	LASSERT(dev != NULL);
+	if (unlikely(dev->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	seq_printf(m, "%d\n", dev->od_index_backup_policy);
+	return 0;
+}
+
+static ssize_t ldiskfs_osd_index_backup_seq_write(struct file *file,
+						  const char __user *buffer,
+						  size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct dt_device *dt = m->private;
+	struct osd_device *dev = osd_dt_dev(dt);
+	__s64 val;
+	int rc;
+
+	LASSERT(dev != NULL);
+	if (unlikely(dev->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	rc = lprocfs_str_to_s64(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	dev->od_index_backup_policy = val;
+	return count;
+}
+LPROC_SEQ_FOPS(ldiskfs_osd_index_backup);
+
 LPROC_SEQ_FOPS_RO_TYPE(ldiskfs, dt_blksize);
 LPROC_SEQ_FOPS_RO_TYPE(ldiskfs, dt_kbytestotal);
 LPROC_SEQ_FOPS_RO_TYPE(ldiskfs, dt_kbytesfree);
@@ -687,6 +722,8 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
 	  .fops	=	&ldiskfs_osd_wcache_fops	},
 	{ .name	=	"readcache_max_filesize",
 	  .fops	=	&ldiskfs_osd_readcache_fops	},
+	{ .name	=	"index_backup",
+	  .fops	=	&ldiskfs_osd_index_backup_fops	},
 	{ NULL }
 };
 

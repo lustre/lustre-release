@@ -329,17 +329,25 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
         if (mo != NULL) {
                 struct lu_object *l;
 		struct lu_object_header *h;
+		struct osd_device *o = osd_dev(d);
 
 		l = &mo->oo_dt.do_lu;
-		h = &osd_dev(d)->od_scrub.os_scrub.os_obj_header;
-		if (unlikely(fid_is_zero(&h->loh_fid))) {
-			/* For the OI_scrub object during OSD device init. */
+		if (unlikely(o->od_in_init)) {
+			OBD_ALLOC_PTR(h);
+			if (!h) {
+				OBD_FREE_PTR(mo);
+				return NULL;
+			}
+
 			lu_object_header_init(h);
 			lu_object_init(l, h, d);
 			lu_object_add_top(h, l);
+			mo->oo_header = h;
 		} else {
 			dt_object_init(&mo->oo_dt, NULL, d);
+			mo->oo_header = NULL;
 		}
+
 		mo->oo_dt.do_ops = &osd_obj_ops;
 		l->lo_ops = &osd_lu_obj_ops;
 		init_rwsem(&mo->oo_sem);
@@ -484,7 +492,7 @@ int osd_ldiskfs_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 }
 
 
-static struct inode *
+struct inode *
 osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
 	     struct osd_inode_id *id, struct lu_fid *fid)
 {
@@ -1164,8 +1172,11 @@ join:
 	goto found;
 
 check_lma:
-	result = osd_check_lma(env, obj);
 	checked = true;
+	if (unlikely(obj->oo_header))
+		goto found;
+
+	result = osd_check_lma(env, obj);
 	if (!result)
 		goto found;
 
@@ -1321,19 +1332,15 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 	}
 
 	result = osd_fid_lookup(env, obj, lu_object_fid(l), conf);
-	if (unlikely(l->lo_header ==
-		     &osd_obj2dev(obj)->od_scrub.os_scrub.os_obj_header)) {
-		/* For the OI_scrub object during OSD device init. */
-		l->lo_header->loh_attr |= LOHA_EXISTS;
-		obj->oo_dt.do_body_ops = &osd_body_ops;
-	} else {
-		obj->oo_dt.do_body_ops = &osd_body_ops_new;
-	}
+	obj->oo_dt.do_body_ops = &osd_body_ops_new;
 	if (result == 0 && obj->oo_inode != NULL) {
 		struct osd_thread_info *oti = osd_oti_get(env);
 		struct lustre_ost_attrs *loa = &oti->oti_ost_attrs;
 
 		osd_object_init0(obj);
+		if (unlikely(obj->oo_header))
+			return 0;
+
 		result = osd_get_lma(oti, obj->oo_inode,
 				     &oti->oti_obj_dentry, loa);
 		if (!result) {
@@ -1488,21 +1495,19 @@ static void osd_oxc_fini(struct osd_object *obj)
 static void osd_object_free(const struct lu_env *env, struct lu_object *l)
 {
 	struct osd_object *obj = osd_obj(l);
-	struct lu_object_header *h = NULL;
+	struct lu_object_header *h = obj->oo_header;
 
 	LINVRNT(osd_invariant(obj));
-
-	if (unlikely(l->lo_header ==
-		     &osd_obj2dev(obj)->od_scrub.os_scrub.os_obj_header))
-		h = l->lo_header;
 
 	osd_oxc_fini(obj);
 	dt_object_fini(&obj->oo_dt);
 	if (obj->oo_hl_head != NULL)
 		ldiskfs_htree_lock_head_free(obj->oo_hl_head);
 	OBD_FREE_PTR(obj);
-	if (unlikely(h))
+	if (unlikely(h)) {
 		lu_object_header_fini(h);
+		OBD_FREE_PTR(h);
+	}
 }
 
 /*
@@ -1993,10 +1998,9 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 		qid_t			 uid = i_uid_read(inode);
 		qid_t			 gid = i_gid_read(inode);
 
-                iput(inode);
-                obj->oo_inode = NULL;
-
-		if (qsd != NULL) {
+		obj->oo_inode = NULL;
+		iput(inode);
+		if (!obj->oo_header && qsd) {
 			struct osd_thread_info	*info = osd_oti_get(env);
 			struct lquota_id_info	*qi = &info->oti_qi;
 
@@ -4498,11 +4502,13 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		dt->do_index_ops = &osd_acct_index_ops;
 		result = 0;
 		skip_iam = 1;
-        } else if (!osd_has_index(obj)) {
-                struct osd_directory *dir;
+	} else if (!osd_has_index(obj)) {
+		struct osd_directory *dir;
+		struct osd_device *osd = osd_obj2dev(obj);
+		const struct lu_fid *fid = lu_object_fid(&dt->do_lu);
 
-                OBD_ALLOC_PTR(dir);
-                if (dir != NULL) {
+		OBD_ALLOC_PTR(dir);
+		if (dir) {
 
 			spin_lock(&obj->oo_guard);
 			if (obj->oo_dir == NULL)
@@ -4521,11 +4527,35 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 			/*
 			 * recheck under lock.
 			 */
-			if (!osd_has_index(obj))
-				result = osd_iam_container_init(env, obj,
-								obj->oo_dir);
-			else
+
+			if (osd_has_index(obj)) {
 				result = 0;
+				goto unlock;
+			}
+
+			result = osd_iam_container_init(env, obj, obj->oo_dir);
+			if (result || feat == &dt_lfsck_namespace_features ||
+			    feat == &dt_lfsck_layout_orphan_features ||
+			    feat == &dt_lfsck_layout_dangling_features)
+				goto unlock;
+
+			result = osd_index_register(osd, fid,
+						    feat->dif_keysize_max,
+						    feat->dif_recsize_max);
+			if (result < 0)
+				CWARN("%s: failed to register index "
+				      DFID": rc = %d\n",
+				      osd_name(osd), PFID(fid), result);
+			else if (result > 0)
+				result = 0;
+			else
+				CDEBUG(D_LFSCK, "%s: index object "DFID
+				       " (%d/%d) registered\n",
+				       osd_name(osd), PFID(fid),
+				       (int)feat->dif_keysize_max,
+				       (int)feat->dif_recsize_max);
+
+unlock:
 			up_write(&obj->oo_ext_idx_sem);
                 } else {
                         result = -ENOMEM;
@@ -7023,8 +7053,10 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 
 	/* shutdown quota slave instance associated with the device */
 	if (o->od_quota_slave != NULL) {
-		qsd_fini(env, o->od_quota_slave);
+		struct qsd_instance *qsd = o->od_quota_slave;
+
 		o->od_quota_slave = NULL;
+		qsd_fini(env, qsd);
 	}
 
 	osd_fid_fini(env, o);
@@ -7277,6 +7309,10 @@ static int osd_device_init0(const struct lu_env *env,
 	spin_lock_init(&o->od_osfs_lock);
 	mutex_init(&o->od_otable_mutex);
 	INIT_LIST_HEAD(&o->od_orphan_list);
+	INIT_LIST_HEAD(&o->od_index_backup_list);
+	INIT_LIST_HEAD(&o->od_index_restore_list);
+	spin_lock_init(&o->od_lock);
+	o->od_index_backup_policy = LIBP_NONE;
 
 	o->od_read_cache = 1;
 	o->od_writethrough_cache = 1;
@@ -7290,6 +7326,7 @@ static int osd_device_init0(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
+	o->od_index_backup_stop = 0;
 	o->od_index = -1; /* -1 means index is invalid */
 	rc = server_name2index(o->od_svname, &o->od_index, NULL);
 	if (rc == LDD_F_SV_TYPE_OST)
@@ -7316,7 +7353,9 @@ static int osd_device_init0(const struct lu_env *env,
 
 	INIT_LIST_HEAD(&o->od_ios_list);
 	/* setup scrub, including OI files initialization */
+	o->od_in_init = 1;
 	rc = osd_scrub_setup(env, o);
+	o->od_in_init = 0;
 	if (rc < 0)
 		GOTO(out_site, rc);
 
@@ -7413,6 +7452,9 @@ static int osd_process_config(const struct lu_env *env,
 		rc = osd_mount(env, o, cfg);
 		break;
 	case LCFG_CLEANUP:
+		/* For the case LCFG_PRE_CLEANUP is not called in advance,
+		 * that may happend if hit failure during mount process. */
+		osd_index_backup(env, o, false);
 		lu_dev_del_linkage(d->ld_site, d);
 		rc = osd_shutdown(env, o);
 		break;
@@ -7427,6 +7469,11 @@ static int osd_process_config(const struct lu_env *env,
 			if (rc > 0)
 				rc = 0;
 		}
+		break;
+	case LCFG_PRE_CLEANUP:
+		osd_index_backup(env, o,
+				 o->od_index_backup_policy != LIBP_NONE);
+		rc = 0;
 		break;
 	default:
 		rc = -ENOSYS;
