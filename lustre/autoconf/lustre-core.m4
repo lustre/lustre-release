@@ -1526,8 +1526,12 @@ LB_CHECK_COMPILE([if 'dir_context' exist],
 dir_context, [
 	#include <linux/fs.h>
 ],[
+#ifdef FMODE_KABI_ITERATE
+#error "back to use readdir in kabi_extand mode"
+#else
 	struct dir_context ctx;
 	ctx.pos = 0;
+#endif
 ],[
 	AC_DEFINE(HAVE_DIR_CONTEXT, 1,
 		[dir_context exist])
