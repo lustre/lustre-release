@@ -163,6 +163,7 @@ enum osd_lf_flags {
 	OLF_SHOW_NAME		= 0x0004,
 	OLF_NO_OI		= 0x0008,
 	OLF_IDX_IN_FID		= 0x0010,
+	OLF_NOT_BACKUP		= 0x0020,
 };
 
 /* There are some overhead to detect OI inconsistency automatically
@@ -297,6 +298,42 @@ struct lustre_scrub {
 				os_full_scrub:1;
 };
 
+#define INDEX_BACKUP_MAGIC_V1	0x1E41F208
+#define INDEX_BACKUP_BUFSIZE	(4096 * 4)
+
+enum lustre_index_backup_policy {
+	/* By default, do not backup the index */
+	LIBP_NONE	= 0,
+
+	/* Backup the dirty index objects when umount */
+	LIBP_AUTO	= 1,
+};
+
+struct lustre_index_backup_header {
+	__u32		libh_magic;
+	__u32		libh_count;
+	__u32		libh_keysize;
+	__u32		libh_recsize;
+	struct lu_fid	libh_owner;
+	__u64		libh_pad[60]; /* keep header 512 bytes aligned */
+};
+
+struct lustre_index_backup_unit {
+	struct list_head	libu_link;
+	struct lu_fid		libu_fid;
+	__u32			libu_keysize;
+	__u32			libu_recsize;
+};
+
+struct lustre_index_restore_unit {
+	struct list_head	liru_link;
+	struct lu_fid		liru_pfid;
+	struct lu_fid		liru_cfid;
+	__u64			liru_clid;
+	int			liru_len;
+	char			liru_name[0];
+};
+
 void scrub_file_init(struct lustre_scrub *scrub, __u8 *uuid);
 void scrub_file_reset(struct lustre_scrub *scrub, __u8 *uuid, __u64 flags);
 int scrub_file_load(const struct lu_env *env, struct lustre_scrub *scrub);
@@ -306,6 +343,30 @@ int scrub_start(int (*threadfn)(void *data), struct lustre_scrub *scrub,
 		void *data, __u32 flags);
 void scrub_stop(struct lustre_scrub *scrub);
 void scrub_dump(struct seq_file *m, struct lustre_scrub *scrub);
+
+int lustre_liru_new(struct list_head *head, const struct lu_fid *pfid,
+		    const struct lu_fid *cfid, __u64 child,
+		    const char *name, int namelen);
+
+int lustre_index_register(struct dt_device *dev, const char *devname,
+			  struct list_head *head, spinlock_t *lock, int *guard,
+			  const struct lu_fid *fid,
+			  __u32 keysize, __u32 recsize);
+
+void lustre_index_backup(const struct lu_env *env, struct dt_device *dev,
+			 const char *devname, struct list_head *head,
+			 spinlock_t *lock, int *guard, bool backup);
+int lustre_index_restore(const struct lu_env *env, struct dt_device *dev,
+			 const struct lu_fid *parent_fid,
+			 const struct lu_fid *tgt_fid,
+			 const struct lu_fid *bak_fid, const char *name,
+			 struct list_head *head, spinlock_t *lock,
+			 char *buf, int bufsize);
+
+static inline void lustre_fid2lbx(char *buf, const struct lu_fid *fid, int len)
+{
+	snprintf(buf, len, DFID_NOBRACE".lbx", PFID(fid));
+}
 
 static inline const char *osd_scrub2name(struct lustre_scrub *scrub)
 {

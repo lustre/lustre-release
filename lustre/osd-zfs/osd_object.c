@@ -1937,20 +1937,18 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 
 	zapid = osd_get_name_n_idx(env, osd, fid, buf,
 				   sizeof(info->oti_str), &zdn);
-	if (!CFS_FAIL_CHECK(OBD_FAIL_OSD_NO_OI_ENTRY)) {
-		if (osd->od_is_ost &&
-		    OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_INVALID_ENTRY))
-			zde->zde_dnode++;
+	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_NO_OI_ENTRY) ||
+	    (osd->od_is_ost && OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_NO_ENTRY)))
+		goto skip_add;
 
-		if (!osd->od_is_ost ||
-		    !OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_NO_ENTRY)) {
-			rc = osd_zap_add(osd, zapid, zdn, buf, 8, 1,
-					 zde, oh->ot_tx);
-			if (rc)
-				GOTO(out, rc);
-		}
-	}
+	if (osd->od_is_ost && OBD_FAIL_CHECK(OBD_FAIL_OSD_COMPAT_INVALID_ENTRY))
+		zde->zde_dnode++;
 
+	rc = osd_zap_add(osd, zapid, zdn, buf, 8, 1, zde, oh->ot_tx);
+	if (rc)
+		GOTO(out, rc);
+
+skip_add:
 	obj->oo_dn = dn;
 	/* Now add in all of the "SA" attributes */
 	rc = osd_sa_handle_get(obj);

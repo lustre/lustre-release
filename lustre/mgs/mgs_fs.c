@@ -222,6 +222,26 @@ out:
 
 int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *mgs)
 {
+	struct lustre_cfg_bufs bufs;
+	struct lustre_cfg *lcfg;
+
+	/* For the MGS on independent device from MDT, it notifies the lower
+	 * layer OSD to backup index before the umount via LCFG_PRE_CLEANUP. */
+	lustre_cfg_bufs_reset(&bufs, mgs->mgs_obd->obd_name);
+	lustre_cfg_bufs_set_string(&bufs, 1, NULL);
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
+	if (!lcfg) {
+		CERROR("%s: failed to trigger LCFG_PRE_CLEANUP\n",
+		       mgs->mgs_obd->obd_name);
+	} else {
+		struct lu_device *l = &mgs->mgs_bottom->dd_lu_dev;
+
+		lustre_cfg_init(lcfg, LCFG_PRE_CLEANUP, &bufs);
+		l->ld_ops->ldo_process_config(env, l, lcfg);
+		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
+					      lcfg->lcfg_buflens));
+	}
+
 	if (mgs->mgs_configs_dir) {
 		dt_object_put(env, mgs->mgs_configs_dir);
 		mgs->mgs_configs_dir = NULL;

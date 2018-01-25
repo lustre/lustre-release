@@ -752,7 +752,8 @@ static int osd_oi_probe(const struct lu_env *env, struct osd_device *o)
 	 * power of two and this is checked for basic sanity.
 	 */
 	for (count = 0; count < max; count++) {
-		snprintf(name, 15, "%s.%d", DMU_OSD_OI_NAME_BASE, count);
+		snprintf(name, sizeof(name) - 1, "%s.%d",
+			 DMU_OSD_OI_NAME_BASE, count);
 		rc = osd_oi_lookup(env, o, o->od_root, name, &oi);
 		if (!rc)
 			continue;
@@ -807,6 +808,20 @@ osd_oi_init_compat(const struct lu_env *env, struct osd_device *o)
 	RETURN(rc);
 }
 
+static int
+osd_oi_init_index_backup(const struct lu_env *env, struct osd_device *o)
+{
+	struct lu_fid *fid = &osd_oti_get(env)->oti_fid;
+	int rc;
+	ENTRY;
+
+	lu_local_obj_fid(fid, INDEX_BACKUP_OID);
+	rc = osd_obj_find_or_create(env, o, o->od_root, INDEX_BACKUP_DIR,
+				    &o->od_index_backup_id, fid, true);
+
+	RETURN(rc);
+}
+
 static void
 osd_oi_init_remote_parent(const struct lu_env *env, struct osd_device *o)
 {
@@ -843,6 +858,10 @@ int osd_oi_init(const struct lu_env *env, struct osd_device *o)
 
 	LASSERTF((sf->sf_oi_count & (sf->sf_oi_count - 1)) == 0,
 		 "Invalid OI count in scrub file %d\n", sf->sf_oi_count);
+
+	rc = osd_oi_init_index_backup(env, o);
+	if (rc)
+		RETURN(rc);
 
 	osd_oi_init_remote_parent(env, o);
 

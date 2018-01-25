@@ -331,6 +331,16 @@ full_scrub_threshold_rate() {
 		osd-*.*.full_scrub_threshold_rate=$rate
 }
 
+scrub_enable_index_backup() {
+	do_nodes $(comma_list $(all_server_nodes)) $LCTL set_param -n \
+		osd-*.*.index_backup=1
+}
+
+scrub_disable_index_backup() {
+	do_nodes $(comma_list $(all_server_nodes)) $LCTL set_param -n \
+		osd-*.*.index_backup=0
+}
+
 test_0() {
 	scrub_prep 0
 	echo "starting MDTs without disabling OI scrub"
@@ -1215,6 +1225,26 @@ test_15() {
 	scrub_check_repaired 24 0 0
 }
 run_test 15 "Dryrun mode OI scrub"
+
+test_16() {
+	[ $(facet_fstype $SINGLEMDS) != "zfs" ] &&
+		skip "only support zfs temporarily" && return
+
+	check_mount_and_prep
+	scrub_enable_index_backup
+
+	#define OBD_FAIL_OSD_INDEX_CRASH	0x199
+	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0x199
+	scrub_prep 0
+	do_nodes $(comma_list $(mdts_nodes)) $LCTL set_param fail_loc=0
+
+	echo "starting MDTs without disabling OI scrub"
+	scrub_start_mds 1 "$MOUNT_OPTS_SCRUB"
+	mount_client $MOUNT || error "(2) Fail to start client!"
+	scrub_check_data 3
+	scrub_disable_index_backup
+}
+run_test 16 "Initial OI scrub can rebuild crashed index objects"
 
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}

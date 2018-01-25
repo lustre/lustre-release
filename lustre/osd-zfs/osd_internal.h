@@ -54,6 +54,7 @@
 #include <sys/zap.h>
 #include <sys/dbuf.h>
 #include <sys/dmu_objset.h>
+#include <lustre_scrub.h>
 
 /**
  * By design including kmem.h overrides the Linux slab interfaces to provide
@@ -241,6 +242,7 @@ struct osd_thread_info {
 	struct lu_attr		 oti_la;
 	struct osa_attr		 oti_osa;
 	zap_attribute_t		 oti_za;
+	zap_attribute_t		 oti_za2;
 	dmu_object_info_t	 oti_doi;
 	struct luz_direntry	 oti_zde;
 
@@ -253,6 +255,7 @@ struct osd_thread_info {
 	int		       oti_ins_cache_used;
 	struct lu_buf	       oti_xattr_lbuf;
 	zap_cursor_t	       oti_zc;
+	zap_cursor_t	       oti_zc2;
 };
 
 extern struct lu_context_key osd_key;
@@ -319,6 +322,7 @@ struct osd_device {
 	struct lprocfs_stats	*od_stats;
 
 	uint64_t		 od_remote_parent_dir;
+	uint64_t		 od_index_backup_id;
 	uint64_t		 od_max_blksz;
 	uint64_t		 od_root;
 	uint64_t		 od_O_id;
@@ -333,7 +337,9 @@ struct osd_device {
 				 od_in_init:1,
 				 od_posix_acl:1;
 	unsigned int		 od_dnsize;
+	int			 od_index_backup_stop;
 
+	enum lustre_index_backup_policy od_index_backup_policy;
 	char			 od_mntdev[128];
 	char			 od_svname[128];
 	char			 od_uuid[16];
@@ -372,6 +378,9 @@ struct osd_device {
 	struct osd_otable_it	*od_otable_it;
 	struct lustre_scrub	 od_scrub;
 	struct list_head	 od_ios_list;
+	struct list_head	 od_index_backup_list;
+	struct list_head	 od_index_restore_list;
+	spinlock_t		 od_lock;
 };
 
 enum osd_destroy_type {
@@ -630,6 +639,8 @@ int osd_obj_find_or_create(const struct lu_env *env, struct osd_device *o,
 extern unsigned int osd_oi_count;
 
 /* osd_index.c */
+int osd_get_fid_by_oid(const struct lu_env *env, struct osd_device *osd,
+		       uint64_t oid, struct lu_fid *fid);
 int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		  const struct dt_index_features *feat);
 int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
@@ -721,6 +732,12 @@ osd_find_dnsize(struct osd_device *osd, int ea_in_bonus)
 	return DN_MAX_BONUSLEN;
 }
 #endif
+
+static inline int osd_object_is_zap(dnode_t *dn)
+{
+	return (dn->dn_type == DMU_OT_DIRECTORY_CONTENTS ||
+		dn->dn_type == DMU_OT_USERGROUP_USED);
+}
 
 /* XXX: f_ver is not counted, but may differ too */
 static inline void osd_fid2str(char *buf, const struct lu_fid *fid, int len)
@@ -1041,5 +1058,32 @@ static inline int osd_dmu_read(struct osd_device *osd, dnode_t *dn,
 #define osd_dmu_objset_disown(os, decrypt, tag)	\
 	dmu_objset_disown((os), (tag))
 #endif
+
+static inline int
+osd_index_register(struct osd_device *osd, const struct lu_fid *fid,
+		   __u32 keysize, __u32 recsize)
+{
+	return lustre_index_register(&osd->od_dt_dev, osd_name(osd),
+				     &osd->od_index_backup_list, &osd->od_lock,
+				     &osd->od_index_backup_stop,
+				     fid, keysize, recsize);
+}
+
+static inline void
+osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
+{
+	struct lu_fid *fid = &osd_oti_get(env)->oti_fid;
+	int rc;
+
+	lu_local_obj_fid(fid, INDEX_BACKUP_OID);
+	rc = osd_idc_find_and_init_with_oid(env, osd, fid,
+					    osd->od_index_backup_id);
+	if (rc)
+		backup = false;
+
+	lustre_index_backup(env, &osd->od_dt_dev, osd_name(osd),
+			    &osd->od_index_backup_list, &osd->od_lock,
+			    &osd->od_index_backup_stop, backup);
+}
 
 #endif /* _OSD_INTERNAL_H */

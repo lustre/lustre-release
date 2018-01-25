@@ -46,6 +46,9 @@
 #include <obd_class.h>
 #include <lustre_nodemap.h>
 #include <sys/dsl_dataset.h>
+#include <sys/zap_impl.h>
+#include <sys/zap.h>
+#include <sys/zap_leaf.h>
 
 #include "osd_internal.h"
 
@@ -749,7 +752,7 @@ static const struct osd_lf_map osd_lf_maps[] = {
 	/* LFSCK */
 	{
 		.olm_name		= LFSCK_DIR,
-		.olm_flags		= OLF_SCAN_SUBITEMS,
+		.olm_flags		= OLF_SCAN_SUBITEMS | OLF_NOT_BACKUP,
 		.olm_scan_dir		= osd_ios_general_sd,
 		.olm_handle_dirent	= osd_ios_varfid_hd,
 	},
@@ -801,6 +804,18 @@ static const struct osd_lf_map osd_lf_maps[] = {
 	/* nodemap */
 	{
 		.olm_name		= LUSTRE_NODEMAP_NAME,
+	},
+
+	/* index_backup */
+	{
+		.olm_name		= INDEX_BACKUP_DIR,
+		.olm_fid		= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= INDEX_BACKUP_OID,
+		},
+		.olm_flags		= OLF_SCAN_SUBITEMS | OLF_NOT_BACKUP,
+		.olm_scan_dir		= osd_ios_general_sd,
+		.olm_handle_dirent	= osd_ios_varfid_hd,
 	},
 
 	{
@@ -864,6 +879,130 @@ static int osd_ios_new_item(struct osd_device *dev, uint64_t parent,
 	return 0;
 }
 
+static bool osd_index_need_recreate(const struct lu_env *env,
+				    struct osd_device *dev, uint64_t oid)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	zap_attribute_t *za = &info->oti_za2;
+	zap_cursor_t *zc = &info->oti_zc2;
+	int rc;
+	ENTRY;
+
+	zap_cursor_init_serialized(zc, dev->od_os, oid, 0);
+	rc = -zap_cursor_retrieve(zc, za);
+	zap_cursor_fini(zc);
+	if (rc && rc != -ENOENT)
+		RETURN(true);
+
+	RETURN(false);
+}
+
+static void osd_ios_index_register(const struct lu_env *env,
+				   struct osd_device *osd,
+				   const struct lu_fid *fid, uint64_t oid)
+{
+	struct osd_thread_info *info = osd_oti_get(env);
+	zap_attribute_t *za = &info->oti_za2;
+	zap_cursor_t *zc = &info->oti_zc2;
+	struct zap_leaf_entry *le;
+	dnode_t *dn = NULL;
+	sa_handle_t *hdl;
+	__u64 mode = 0;
+	__u32 keysize = 0;
+	__u32 recsize = 0;
+	int rc;
+	ENTRY;
+
+	rc = __osd_obj2dnode(osd->od_os, oid, &dn);
+	if (rc == -EEXIST || rc == -ENOENT)
+		RETURN_EXIT;
+
+	if (rc < 0)
+		GOTO(log, rc);
+
+	if (!osd_object_is_zap(dn))
+		GOTO(log, rc = 1);
+
+	rc = -sa_handle_get(osd->od_os, oid, NULL, SA_HDL_PRIVATE, &hdl);
+	if (rc)
+		GOTO(log, rc);
+
+	rc = -sa_lookup(hdl, SA_ZPL_MODE(osd), &mode, sizeof(mode));
+	sa_handle_destroy(hdl);
+	if (rc)
+		GOTO(log, rc);
+
+	if (!S_ISREG(mode))
+		GOTO(log, rc = 1);
+
+	zap_cursor_init_serialized(zc, osd->od_os, oid, 0);
+	rc = -zap_cursor_retrieve(zc, za);
+	if (rc)
+		/* Skip empty index object */
+		GOTO(fini, rc = (rc == -ENOENT ? 1 : rc));
+
+	if (zc->zc_zap->zap_ismicro ||
+	    !(zap_f_phys(zc->zc_zap)->zap_flags & ZAP_FLAG_UINT64_KEY))
+		GOTO(fini, rc = 1);
+
+	le = ZAP_LEAF_ENTRY(zc->zc_leaf, 0);
+	keysize = le->le_name_numints * 8;
+	recsize = za->za_integer_length * za->za_num_integers;
+	if (likely(keysize && recsize))
+		rc = osd_index_register(osd, fid, keysize, recsize);
+
+	GOTO(fini, rc);
+
+fini:
+	zap_cursor_fini(zc);
+
+log:
+	if (dn)
+		osd_dnode_rele(dn);
+	if (rc < 0)
+		CWARN("%s: failed to register index "DFID" (%u/%u): rc = %d\n",
+		      osd_name(osd), PFID(fid), keysize, recsize, rc);
+	else if (!rc)
+		CDEBUG(D_LFSCK, "%s: registered index "DFID" (%u/%u)\n",
+		       osd_name(osd), PFID(fid), keysize, recsize);
+}
+
+static void osd_index_restore(const struct lu_env *env, struct osd_device *dev,
+			      struct lustre_index_restore_unit *liru, void *buf,
+			      int bufsize)
+{
+	struct luz_direntry *zde = &osd_oti_get(env)->oti_zde;
+	struct lu_fid *tgt_fid = &liru->liru_cfid;
+	struct lu_fid bak_fid;
+	int rc;
+	ENTRY;
+
+	lustre_fid2lbx(buf, tgt_fid, bufsize);
+	rc = -zap_lookup(dev->od_os, dev->od_index_backup_id, buf, 8,
+			 sizeof(*zde) / 8, (void *)zde);
+	if (rc)
+		GOTO(log, rc);
+
+	rc = osd_get_fid_by_oid(env, dev, zde->lzd_reg.zde_dnode, &bak_fid);
+	if (rc)
+		GOTO(log, rc);
+
+	/* The OI mapping for index may be invalid, since it will be
+	 * re-created, not update the OI mapping, just cache it in RAM. */
+	rc = osd_idc_find_and_init_with_oid(env, dev, tgt_fid,
+					    liru->liru_clid);
+	if (!rc)
+		rc = lustre_index_restore(env, &dev->od_dt_dev,
+				&liru->liru_pfid, tgt_fid, &bak_fid,
+				liru->liru_name, &dev->od_index_backup_list,
+				&dev->od_lock, buf, bufsize);
+	GOTO(log, rc);
+
+log:
+	CDEBUG(D_WARNING, "%s: restore index '%s' with "DFID": rc = %d\n",
+	       osd_name(dev), liru->liru_name, PFID(tgt_fid), rc);
+}
+
 /**
  * verify FID-in-LMA and OI entry for one object
  *
@@ -912,7 +1051,31 @@ static int osd_ios_scan_one(const struct lu_env *env, struct osd_device *dev,
 				RETURN(0);
 			}
 
+			if (lma->lma_compat & LMAC_IDX_BACKUP &&
+			    osd_index_need_recreate(env, dev, oid)) {
+				if (parent == dev->od_root) {
+					lu_local_obj_fid(&tfid,
+							 OSD_FS_ROOT_OID);
+				} else {
+					rc = osd_get_fid_by_oid(env, dev,
+								parent, &tfid);
+					if (rc) {
+						nvlist_free(nvbuf);
+						RETURN(rc);
+					}
+				}
+
+				rc = lustre_liru_new(
+						&dev->od_index_restore_list,
+						&tfid, &lma->lma_self_fid, oid,
+						name, strlen(name));
+				nvlist_free(nvbuf);
+				RETURN(rc);
+			}
+
 			tfid = lma->lma_self_fid;
+			if (!(flags & OLF_NOT_BACKUP))
+				osd_ios_index_register(env, dev, &tfid, oid);
 		}
 		nvlist_free(nvbuf);
 	}
@@ -1174,6 +1337,31 @@ static void osd_initial_OI_scrub(const struct lu_env *env,
 		item->oii_scan_dir(env, dev, item->oii_parent,
 				   item->oii_handle_dirent, item->oii_flags);
 		OBD_FREE_PTR(item);
+	}
+
+	if (!list_empty(&dev->od_index_restore_list)) {
+		char *buf;
+
+		OBD_ALLOC_LARGE(buf, INDEX_BACKUP_BUFSIZE);
+		if (!buf)
+			CERROR("%s: not enough RAM for rebuild index\n",
+			       osd_name(dev));
+
+		while (!list_empty(&dev->od_index_restore_list)) {
+			struct lustre_index_restore_unit *liru;
+
+			liru = list_entry(dev->od_index_restore_list.next,
+					  struct lustre_index_restore_unit,
+					  liru_link);
+			list_del(&liru->liru_link);
+			if (buf)
+				osd_index_restore(env, dev, liru, buf,
+						  INDEX_BACKUP_BUFSIZE);
+			OBD_FREE(liru, liru->liru_len);
+		}
+
+		if (buf)
+			OBD_FREE_LARGE(buf, INDEX_BACKUP_BUFSIZE);
 	}
 
 	EXIT;

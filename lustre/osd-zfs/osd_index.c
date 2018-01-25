@@ -58,12 +58,7 @@
 #include <sys/dsl_prop.h>
 #include <sys/sa_impl.h>
 #include <sys/txg.h>
-
-static inline int osd_object_is_zap(dnode_t *dn)
-{
-	return (dn->dn_type == DMU_OT_DIRECTORY_CONTENTS ||
-			dn->dn_type == DMU_OT_USERGROUP_USED);
-}
+#include <lustre_scrub.h>
 
 /* We don't actually have direct access to the zap_hashbits() function
  * so just pretend like we do for now.  If this ever breaks we can look at
@@ -247,8 +242,8 @@ int __osd_xattr_load_by_oid(struct osd_device *osd, uint64_t oid, nvlist_t **sa)
  * \retval		0 for success
  * \retval		negative error number on failure
  */
-static int osd_get_fid_by_oid(const struct lu_env *env, struct osd_device *osd,
-			      uint64_t oid, struct lu_fid *fid)
+int osd_get_fid_by_oid(const struct lu_env *env, struct osd_device *osd,
+		       uint64_t oid, struct lu_fid *fid)
 {
 	struct objset		*os	  = osd->od_os;
 	struct osd_thread_info	*oti	  = osd_oti_get(env);
@@ -2012,6 +2007,8 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		const struct dt_index_features *feat)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
+	const struct lu_fid *fid = lu_object_fid(&dt->do_lu);
 	int rc = 0;
 	ENTRY;
 
@@ -2036,7 +2033,7 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 		else
 			GOTO(out, rc = -ENOTDIR);
 	} else if (unlikely(feat == &dt_acct_features)) {
-		LASSERT(fid_is_acct(lu_object_fid(&dt->do_lu)));
+		LASSERT(fid_is_acct(fid));
 		dt->do_index_ops = &osd_acct_index_ops;
 	} else if (dt->do_index_ops == NULL) {
 		/* For index file, we don't support variable key & record sizes
@@ -2067,6 +2064,24 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 			obj->oo_recusize = 8;
 		}
 		dt->do_index_ops = &osd_index_ops;
+
+		if (feat == &dt_lfsck_layout_orphan_features ||
+		    feat == &dt_lfsck_layout_dangling_features ||
+		    feat == &dt_lfsck_namespace_features)
+			GOTO(out, rc = 0);
+
+		rc = osd_index_register(osd, fid, obj->oo_keysize,
+					obj->oo_recusize * obj->oo_recsize);
+		if (rc < 0)
+			CWARN("%s: failed to register index "DFID": rc = %d\n",
+			      osd_name(osd), PFID(fid), rc);
+		else if (rc > 0)
+			rc = 0;
+		else
+			CDEBUG(D_LFSCK, "%s: index object "DFID
+			       " (%u/%u/%u) registered\n",
+			       osd_name(osd), PFID(fid), obj->oo_keysize,
+			       obj->oo_recusize, obj->oo_recsize);
 	}
 
 out:

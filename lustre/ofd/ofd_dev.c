@@ -245,6 +245,11 @@ static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
 	top->ld_ops->ldo_process_config(env, top, lcfg);
 	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 
+	if (m->ofd_los != NULL) {
+		local_oid_storage_fini(env, m->ofd_los);
+		m->ofd_los = NULL;
+	}
+
 	lu_site_purge(env, top->ld_site, ~0);
 	if (!cfs_hash_is_empty(top->ld_site->ls_obj_hash)) {
 		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_OTHER, NULL);
@@ -253,6 +258,30 @@ static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
 
 	LASSERT(m->ofd_osd_exp);
 	obd_disconnect(m->ofd_osd_exp);
+
+	EXIT;
+}
+
+static void ofd_stack_pre_fini(const struct lu_env *env, struct ofd_device *m,
+			       struct lu_device *top)
+{
+	struct lustre_cfg_bufs bufs;
+	struct lustre_cfg *lcfg;
+	ENTRY;
+
+	LASSERT(top);
+
+	lustre_cfg_bufs_reset(&bufs, ofd_name(m));
+	lustre_cfg_bufs_set_string(&bufs, 1, NULL);
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
+	if (!lcfg) {
+		CERROR("%s: failed to trigger LCFG_PRE_CLEANUP\n", ofd_name(m));
+	} else {
+		lustre_cfg_init(lcfg, LCFG_PRE_CLEANUP, &bufs);
+		top->ld_ops->ldo_process_config(env, top, lcfg);
+		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
+					      lcfg->lcfg_buflens));
+	}
 
 	EXIT;
 }
@@ -3027,6 +3056,7 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	stop.ls_status = LS_PAUSED;
 	stop.ls_flags = 0;
 	lfsck_stop(env, m->ofd_osd, &stop);
+	ofd_stack_pre_fini(env, m, &m->ofd_dt_dev.dd_lu_dev);
 	target_recovery_fini(obd);
 	if (m->ofd_namespace != NULL)
 		ldlm_namespace_free_prior(m->ofd_namespace, NULL,
@@ -3041,11 +3071,6 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	ofd_fs_cleanup(env, m);
 	nm_config_file_deregister_tgt(env, obd->u.obt.obt_nodemap_config_file);
 	obd->u.obt.obt_nodemap_config_file = NULL;
-
-	if (m->ofd_los != NULL) {
-		local_oid_storage_fini(env, m->ofd_los);
-		m->ofd_los = NULL;
-	}
 
 	if (m->ofd_namespace != NULL) {
 		ldlm_namespace_free_post(m->ofd_namespace);

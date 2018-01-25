@@ -1058,6 +1058,7 @@ static int osd_mount(const struct lu_env *env,
 	if (rc >= sizeof(o->od_svname))
 		RETURN(-E2BIG);
 
+	o->od_index_backup_stop = 0;
 	o->od_index = -1; /* -1 means index is invalid */
 	rc = server_name2index(o->od_svname, &o->od_index, NULL);
 	str = strstr(str, ":");
@@ -1255,6 +1256,10 @@ static struct lu_device *osd_device_alloc(const struct lu_env *env,
 	INIT_LIST_HEAD(&osl->osl_seq_list);
 	rwlock_init(&osl->osl_seq_list_lock);
 	sema_init(&osl->osl_seq_init_sem, 1);
+	INIT_LIST_HEAD(&dev->od_index_backup_list);
+	INIT_LIST_HEAD(&dev->od_index_restore_list);
+	spin_lock_init(&dev->od_lock);
+	dev->od_index_backup_policy = LIBP_NONE;
 
 	rc = dt_device_init(&dev->od_dt_dev, type);
 	if (rc == 0) {
@@ -1349,6 +1354,9 @@ static int osd_process_config(const struct lu_env *env,
 		rc = osd_mount(env, o, cfg);
 		break;
 	case LCFG_CLEANUP:
+		/* For the case LCFG_PRE_CLEANUP is not called in advance,
+		 * that may happend if hit failure during mount process. */
+		osd_index_backup(env, o, false);
 		rc = osd_shutdown(env, o);
 		break;
 	case LCFG_PARAM: {
@@ -1364,6 +1372,11 @@ static int osd_process_config(const struct lu_env *env,
 		}
 		break;
 	}
+	case LCFG_PRE_CLEANUP:
+		osd_index_backup(env, o,
+				 o->od_index_backup_policy != LIBP_NONE);
+		rc = 0;
+		break;
 	default:
 		rc = -ENOTTY;
 	}

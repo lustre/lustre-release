@@ -216,6 +216,7 @@ enum lma_compat {
 				       * under /O/<seq>/d<x>. */
 	LMAC_STRIPE_INFO = 0x00000010, /* stripe info in the LMA EA. */
 	LMAC_COMP_INFO	 = 0x00000020, /* Component info in the LMA EA. */
+	LMAC_IDX_BACKUP  = 0x00000040, /* Has index backup. */
 };
 
 /**
