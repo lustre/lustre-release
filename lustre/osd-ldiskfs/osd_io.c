@@ -1533,8 +1533,7 @@ static inline int osd_extents_enabled(struct super_block *sb,
 	if (inode != NULL) {
 		if (LDISKFS_I(inode)->i_flags & LDISKFS_EXTENTS_FL)
 			return 1;
-	} else if (LDISKFS_HAS_INCOMPAT_FEATURE(sb,
-				LDISKFS_FEATURE_INCOMPAT_EXTENTS)) {
+	} else if (ldiskfs_has_feature_extents(sb)) {
 		return 1;
 	}
 	return 0;

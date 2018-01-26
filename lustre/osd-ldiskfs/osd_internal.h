@@ -630,6 +630,22 @@ struct osd_thread_info {
 
 extern int ldiskfs_pdo;
 
+#ifndef HAVE_VFS_SETXATTR
+#define osd_setxattr(dentry, inode, name, buf, len, flag) \
+		((inode)->i_op->setxattr(dentry, name, buf, len, flag))
+#define osd_getxattr(dentry, inode, name, buf, len) \
+		((inode)->i_op->getxattr(dentry, name, buf, len))
+#define osd_removexattr(dentry, inode, name) \
+		((inode)->i_op->removexattr(dentry, name))
+#else /* HAVE_VFS_SETXATTR */
+#define osd_setxattr(dentry, inode, name, buf, len, flag) \
+		__vfs_setxattr(dentry, inode, name, buf, len, flag)
+#define osd_getxattr(dentry, inode, name, buf, len) \
+		__vfs_getxattr(dentry, inode, name, buf, len)
+#define osd_removexattr(dentry, inode, name) \
+		__vfs_removexattr(dentry, name)
+#endif /* !HAVE_VFS_SETXATTR */
+
 static inline int __osd_xattr_get(struct inode *inode, struct dentry *dentry,
 				  const char *name, void *buf, int len)
 {
@@ -638,7 +654,7 @@ static inline int __osd_xattr_get(struct inode *inode, struct dentry *dentry,
 
 	dentry->d_inode = inode;
 	dentry->d_sb = inode->i_sb;
-	return inode->i_op->getxattr(dentry, name, buf, len);
+	return osd_getxattr(dentry, inode, name, buf, len);
 }
 
 static inline int __osd_xattr_set(struct osd_thread_info *info,
@@ -650,7 +666,7 @@ static inline int __osd_xattr_set(struct osd_thread_info *info,
 	ll_vfs_dq_init(inode);
 	dentry->d_inode = inode;
 	dentry->d_sb = inode->i_sb;
-	return inode->i_op->setxattr(dentry, name, buf, buflen, fl);
+	return osd_setxattr(dentry, inode, name, buf, buflen, fl);
 }
 
 #ifdef CONFIG_PROC_FS
@@ -1310,5 +1326,34 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf);
  * This limit is arbitrary, but is reasonable for the xattr API.
  */
 #define LDISKFS_XATTR_MAX_LARGE_EA_SIZE    (1024 * 1024)
+
+#ifdef LDISKFS_HAS_INCOMPAT_FEATURE
+
+# ifdef LDISKFS_FEATURE_INCOMPAT_EXTENTS
+# define ldiskfs_has_feature_extents(sb) \
+	LDISKFS_HAS_INCOMPAT_FEATURE(sb, LDISKFS_FEATURE_INCOMPAT_EXTENTS)
+# endif
+# ifdef LDISKFS_FEATURE_INCOMPAT_EA_INODE
+# define ldiskfs_has_feature_ea_inode(sb) \
+	LDISKFS_HAS_INCOMPAT_FEATURE(sb, LDISKFS_FEATURE_INCOMPAT_EA_INODE)
+# endif
+# ifdef LDISKFS_FEATURE_INCOMPAT_DIRDATA
+# define ldiskfs_has_feature_dirdata(sb) \
+	LDISKFS_HAS_INCOMPAT_FEATURE(sb, LDISKFS_FEATURE_INCOMPAT_DIRDATA)
+# endif
+# ifdef LDISKFS_FEATURE_COMPAT_HAS_JOURNAL
+# define ldiskfs_has_feature_journal(sb) \
+	LDISKFS_HAS_COMPAT_FEATURE(sb, LDISKFS_FEATURE_COMPAT_HAS_JOURNAL)
+# endif
+# ifdef LDISKFS_FEATURE_RO_COMPAT_QUOTA
+# define ldiskfs_has_feature_quota(sb) \
+	LDISKFS_HAS_RO_COMPAT_FEATURE(sb, LDISKFS_FEATURE_RO_COMPAT_QUOTA)
+# endif
+# ifdef LDISKFS_FEATURE_RO_COMPAT_PROJECT
+# define ldiskfs_has_feature_project(sb) \
+	LDISKFS_HAS_RO_COMPAT_FEATURE(sb, LDISKFS_FEATURE_RO_COMPAT_PROJECT)
+# endif
+
+#endif
 
 #endif /* _OSD_INTERNAL_H */

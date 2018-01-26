@@ -72,8 +72,7 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 	ENTRY;
 	LASSERT(fid_is_acct(fid));
 
-	if (!LDISKFS_HAS_RO_COMPAT_FEATURE(sb,
-					   LDISKFS_FEATURE_RO_COMPAT_QUOTA))
+	if (!ldiskfs_has_feature_quota(sb))
 		RETURN(-ENOENT);
 
 	id->oii_gen = OSD_OII_NOGEN;
@@ -88,8 +87,7 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		break;
 	case PRJQUOTA:
  #ifdef HAVE_PROJECT_QUOTA
-		if (LDISKFS_HAS_RO_COMPAT_FEATURE(sb,
-					LDISKFS_FEATURE_RO_COMPAT_PROJECT))
+		if (ldiskfs_has_feature_project(sb))
 			id->oii_ino =
 				le32_to_cpu(LDISKFS_SB(sb)->s_es->s_prj_quota_inum);
 		else

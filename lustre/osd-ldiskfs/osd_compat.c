@@ -244,14 +244,14 @@ int osd_add_to_remote_parent(const struct lu_env *env, struct osd_device *osd,
 	sprintf(name, DFID_NOBRACE, PFID(lu_object_fid(&obj->oo_dt.do_lu)));
 	dentry = osd_child_dentry_by_inode(env, parent->d_inode,
 					   name, strlen(name));
-	mutex_lock(&parent->d_inode->i_mutex);
+	inode_lock(parent->d_inode);
 	rc = osd_ldiskfs_add_entry(info, osd, oh->ot_handle, dentry,
 				   obj->oo_inode, NULL);
 	CDEBUG(D_INODE, "%s: add %s:%lu to remote parent %lu.\n", osd_name(osd),
 	       name, obj->oo_inode->i_ino, parent->d_inode->i_ino);
 	ldiskfs_inc_count(oh->ot_handle, parent->d_inode);
 	mark_inode_dirty(parent->d_inode);
-	mutex_unlock(&parent->d_inode->i_mutex);
+	inode_unlock(parent->d_inode);
 	RETURN(rc);
 }
 
@@ -287,11 +287,11 @@ int osd_delete_from_remote_parent(const struct lu_env *env,
 	sprintf(name, DFID_NOBRACE, PFID(lu_object_fid(&obj->oo_dt.do_lu)));
 	dentry = osd_child_dentry_by_inode(env, parent->d_inode,
 					   name, strlen(name));
-	mutex_lock(&parent->d_inode->i_mutex);
+	inode_lock(parent->d_inode);
 	bh = osd_ldiskfs_find_entry(parent->d_inode, &dentry->d_name, &de,
 				    NULL, NULL);
 	if (IS_ERR(bh)) {
-		mutex_unlock(&parent->d_inode->i_mutex);
+		inode_unlock(parent->d_inode);
 		RETURN(PTR_ERR(bh));
 	}
 	CDEBUG(D_INODE, "%s: el %s:%lu to remote parent %lu.\n", osd_name(osd),
@@ -331,7 +331,7 @@ int osd_lookup_in_remote_parent(struct osd_thread_info *oti,
 	sprintf(name, DFID_NOBRACE, PFID(fid));
 	dentry = osd_child_dentry_by_inode(oti->oti_env, parent->d_inode,
 					   name, strlen(name));
-	mutex_lock(&parent->d_inode->i_mutex);
+	inode_lock(parent->d_inode);
 	bh = osd_ldiskfs_find_entry(parent->d_inode, &dentry->d_name, &de,
 				    NULL, NULL);
 	if (IS_ERR(bh)) {
@@ -351,7 +351,7 @@ int osd_lookup_in_remote_parent(struct osd_thread_info *oti,
 			rc = 0;
 		}
 	}
-	mutex_unlock(&parent->d_inode->i_mutex);
+	inode_unlock(parent->d_inode);
 	if (rc == 0)
 		osd_add_oi_cache(oti, osd, id, fid);
 	RETURN(rc);
@@ -563,7 +563,7 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 	child->d_name.len = strlen(name);
 
 	ll_vfs_dq_init(parent);
-	mutex_lock(&parent->i_mutex);
+	inode_lock(parent);
 	bh = osd_ldiskfs_find_entry(parent, &child->d_name, &de, NULL, NULL);
 	if (IS_ERR(bh))
 		GOTO(out, rc = PTR_ERR(bh));
@@ -670,7 +670,7 @@ update:
 out:
 	if (!IS_ERR(bh))
 		brelse(bh);
-	mutex_unlock(&parent->i_mutex);
+	inode_unlock(parent);
 	return rc;
 }
 
@@ -698,7 +698,7 @@ static int osd_obj_del_entry(struct osd_thread_info *info,
 	child->d_inode = NULL;
 
 	ll_vfs_dq_init(dir);
-	mutex_lock(&dir->i_mutex);
+	inode_lock(dir);
 	bh = osd_ldiskfs_find_entry(dir, &child->d_name, &de, NULL, NULL);
 	if (IS_ERR(bh)) {
 		rc = PTR_ERR(bh);
@@ -706,7 +706,7 @@ static int osd_obj_del_entry(struct osd_thread_info *info,
 		rc = ldiskfs_delete_entry(th, dir, de, bh);
 		brelse(bh);
 	}
-	mutex_unlock(&dir->i_mutex);
+	inode_unlock(dir);
 
 	RETURN(rc);
 }
@@ -753,9 +753,9 @@ static int osd_obj_add_entry(struct osd_thread_info *info,
 		inode->i_ino++;
 
 	ll_vfs_dq_init(dir->d_inode);
-	mutex_lock(&dir->d_inode->i_mutex);
+	inode_lock(dir->d_inode);
 	rc = osd_ldiskfs_add_entry(info, osd, th, child, inode, NULL);
-	mutex_unlock(&dir->d_inode->i_mutex);
+	inode_unlock(dir->d_inode);
 
 	RETURN(rc);
 }
@@ -967,9 +967,9 @@ int osd_obj_map_lookup(struct osd_thread_info *info, struct osd_device *dev,
 	child->d_name.len = strlen(name);
 
 	dir = d_seq->d_inode;
-	mutex_lock(&dir->i_mutex);
+	inode_lock(dir);
 	bh = osd_ldiskfs_find_entry(dir, &child->d_name, &de, NULL, NULL);
-	mutex_unlock(&dir->i_mutex);
+	inode_unlock(dir);
 
 	if (IS_ERR(bh))
 		RETURN(PTR_ERR(bh));
@@ -1151,8 +1151,8 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 	ll_vfs_dq_init(src_parent);
 	ll_vfs_dq_init(dir);
 
-	mutex_lock(&src_parent->i_mutex);
-	mutex_lock(&dir->i_mutex);
+	inode_lock(src_parent);
+	inode_lock(dir);
 	bh = osd_ldiskfs_find_entry(dir, &tgt_child->d_name, &de, NULL, NULL);
 	if (!IS_ERR(bh)) {
 		/* XXX: If some other object occupied the same slot. And If such
@@ -1173,8 +1173,8 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 		 *
 		 * 	So keep it there before we have suitable solution. */
 		brelse(bh);
-		mutex_unlock(&dir->i_mutex);
-		mutex_unlock(&src_parent->i_mutex);
+		inode_unlock(dir);
+		inode_unlock(src_parent);
 		ldiskfs_journal_stop(jh);
 
 		rc = -EEXIST;
@@ -1203,8 +1203,8 @@ int osd_obj_map_recover(struct osd_thread_info *info,
 	GOTO(unlock, rc);
 
 unlock:
-	mutex_unlock(&dir->i_mutex);
-	mutex_unlock(&src_parent->i_mutex);
+	inode_unlock(dir);
+	inode_unlock(src_parent);
 	ldiskfs_journal_stop(jh);
 	return rc;
 }
