@@ -1539,6 +1539,20 @@ int llapi_layout_flags_set(struct llapi_layout *layout, uint32_t flags)
 	return 0;
 }
 
+const char *llapi_layout_flags_string(uint32_t flags)
+{
+	switch (flags & LCM_FL_FLR_MASK) {
+	case LCM_FL_RDONLY:
+		return "ro";
+	case LCM_FL_WRITE_PENDING:
+		return "wp";
+	case LCM_FL_SYNC_PENDING:
+		return "sp";
+	}
+
+	return "0";
+}
+
 /**
  * llapi_layout_mirror_count_is_valid() - Check the validity of mirror count.
  * @count: Mirror count value to be checked.

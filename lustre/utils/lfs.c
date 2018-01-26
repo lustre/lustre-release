@@ -7094,10 +7094,10 @@ int verify_mirror_ids(const char *fname, __u16 *mirror_ids, int ids_nr)
 
 	flr_state &= LCM_FL_FLR_MASK;
 	switch (flr_state) {
-	case LCM_FL_NOT_FLR:
+	case LCM_FL_NONE:
 		rc = -EINVAL;
 		fprintf(stderr, "%s: '%s' file state error: %s.\n",
-			progname, fname, lcm_flags_string(flr_state));
+			progname, fname, llapi_layout_flags_string(flr_state));
 		goto free_layout;
 	default:
 		break;
@@ -7198,11 +7198,11 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 
 	flr_state &= LCM_FL_FLR_MASK;
 	switch (flr_state) {
-	case LCM_FL_NOT_FLR:
+	case LCM_FL_NONE:
 		rc = -EINVAL;
 	case LCM_FL_RDONLY:
-		fprintf(stderr, "%s: '%s' file state error: %s.\n",
-			progname, fname, lcm_flags_string(flr_state));
+		fprintf(stderr, "%s: '%s' file state error: %s\n", progname,
+			fname, llapi_layout_flags_string(flr_state));
 		goto close_fd;
 	default:
 		break;
@@ -7826,10 +7826,10 @@ int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
 
 	flr_state &= LCM_FL_FLR_MASK;
 	switch (flr_state) {
-	case LCM_FL_NOT_FLR:
+	case LCM_FL_NONE:
 		rc = -EINVAL;
 		fprintf(stderr, "%s: '%s' file state error: %s.\n",
-			progname, fname, lcm_flags_string(flr_state));
+			progname, fname, llapi_layout_flags_string(flr_state));
 		goto free_layout;
 	default:
 		break;

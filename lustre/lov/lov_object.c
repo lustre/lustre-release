@@ -657,7 +657,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 	comp->lo_entry_count = lsm->lsm_entry_count;
 	comp->lo_preferred_mirror = -1;
 
-	if (equi(flr_state == LCM_FL_NOT_FLR, comp->lo_mirror_count > 1))
+	if (equi(flr_state == LCM_FL_NONE, comp->lo_mirror_count > 1))
 		RETURN(-EINVAL);
 
 	OBD_ALLOC(comp->lo_mirrors,
@@ -695,7 +695,7 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		lle->lle_extent = &lle->lle_lsme->lsme_extent;
 		lle->lle_valid = !(lle->lle_lsme->lsme_flags & LCME_FL_STALE);
 
-		if (flr_state != LCM_FL_NOT_FLR)
+		if (flr_state != LCM_FL_NONE)
 			mirror_id = mirror_id_of(lle->lle_lsme->lsme_id);
 
 		lre = &comp->lo_mirrors[j];

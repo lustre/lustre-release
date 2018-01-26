@@ -352,14 +352,14 @@ static inline struct lov_stripe_md_entry *lov_lse(struct lov_object *lov, int i)
 static inline unsigned lov_flr_state(const struct lov_object *lov)
 {
 	if (lov->lo_type != LLT_COMP)
-		return LCM_FL_NOT_FLR;
+		return LCM_FL_NONE;
 
 	return lov->u.composite.lo_flags & LCM_FL_FLR_MASK;
 }
 
 static inline bool lov_is_flr(const struct lov_object *lov)
 {
-	return lov_flr_state(lov) != LCM_FL_NOT_FLR;
+	return lov_flr_state(lov) != LCM_FL_NONE;
 }
 
 static inline struct lov_layout_entry *lov_entry(struct lov_object *lov, int i)

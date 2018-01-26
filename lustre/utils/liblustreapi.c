@@ -2840,8 +2840,8 @@ static void lov_dump_comp_v1_header(struct find_param *param, char *path,
 							"mirrored" : "");
 		else
 			llapi_printf(LLAPI_MSG_NORMAL,
-				     "%2slcm_flags:         %s\n",
-				     " ", lcm_flags_string(comp_v1->lcm_flags));
+				     "%2slcm_flags:         %s\n", " ",
+				llapi_layout_flags_string(comp_v1->lcm_flags));
 	}
 
 	if (verbose & VERBOSE_GENERATION) {

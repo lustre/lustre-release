@@ -481,22 +481,6 @@ int llapi_ladvise(int fd, unsigned long long flags, int num_advise,
 
 /* llapi_layout user interface */
 
-static inline const char *lcm_flags_string(__u16 flags)
-{
-	switch (flags & LCM_FL_FLR_MASK) {
-	case LCM_FL_NOT_FLR:
-		return "not_flr";
-	case LCM_FL_RDONLY:
-		return "ro";
-	case LCM_FL_WRITE_PENDING:
-		return "wp";
-	case LCM_FL_SYNC_PENDING:
-		return "sp";
-	default:
-		return "";
-	}
-}
-
 /**
  * An array element storing component info to be resynced during mirror
  * resynchronization.
@@ -806,6 +790,7 @@ int llapi_layout_file_create(const char *path, int open_flags, int mode,
  */
 int llapi_layout_flags_set(struct llapi_layout *layout, uint32_t flags);
 int llapi_layout_flags_get(struct llapi_layout *layout, uint32_t *flags);
+const char *llapi_layout_flags_string(uint32_t flags);
 
 /**
  * llapi_layout_mirror_count_get() - Get mirror count from the header of

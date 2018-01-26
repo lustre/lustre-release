@@ -2339,7 +2339,7 @@ static int lod_declare_layout_add(const struct lu_env *env,
 
 	LASSERT(lo->ldo_is_composite);
 
-	if (lo->ldo_flr_state != LCM_FL_NOT_FLR)
+	if (lo->ldo_flr_state != LCM_FL_NONE)
 		RETURN(-EBUSY);
 
 	rc = lod_verify_striping(d, lo, buf, false);
@@ -2549,7 +2549,7 @@ static int lod_declare_layout_del(const struct lu_env *env,
 
 	LASSERT(lo->ldo_is_composite);
 
-	if (lo->ldo_flr_state != LCM_FL_NOT_FLR)
+	if (lo->ldo_flr_state != LCM_FL_NONE)
 		RETURN(-EBUSY);
 
 	magic = comp_v1->lcm_magic;
@@ -2764,7 +2764,7 @@ static int lod_layout_convert(struct lod_thread_info *info)
 	lcm->lcm_size = cpu_to_le32(size);
 	lcm->lcm_layout_gen = cpu_to_le32(le16_to_cpu(
 						lmm_save->lmm_layout_gen));
-	lcm->lcm_flags = cpu_to_le16(LCM_FL_NOT_FLR);
+	lcm->lcm_flags = cpu_to_le16(LCM_FL_NONE);
 	lcm->lcm_entry_count = cpu_to_le16(1);
 	lcm->lcm_mirror_count = 0;
 
@@ -2913,7 +2913,7 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	lcm->lcm_size = cpu_to_le32(size);
 	lcm->lcm_entry_count = cpu_to_le16(cur_entry_count + merge_entry_count);
 	lcm->lcm_mirror_count = cpu_to_le16(mirror_count);
-	if ((le16_to_cpu(lcm->lcm_flags) & LCM_FL_FLR_MASK) == LCM_FL_NOT_FLR)
+	if ((le16_to_cpu(lcm->lcm_flags) & LCM_FL_FLR_MASK) == LCM_FL_NONE)
 		lcm->lcm_flags = cpu_to_le32(LCM_FL_RDONLY);
 
 	LASSERT(dt_write_locked(env, dt_object_child(dt)));
@@ -5415,7 +5415,7 @@ static int lod_declare_update_plain(const struct lu_env *env,
 	int i, rc;
 	ENTRY;
 
-	LASSERT(lo->ldo_flr_state == LCM_FL_NOT_FLR);
+	LASSERT(lo->ldo_flr_state == LCM_FL_NONE);
 
 	/*
 	 * In case the client is passing lovea, which only happens during
@@ -5961,7 +5961,7 @@ static int lod_declare_layout_change(const struct lu_env *env,
 		GOTO(out, rc);
 
 	switch (lo->ldo_flr_state) {
-	case LCM_FL_NOT_FLR:
+	case LCM_FL_NONE:
 		rc = lod_declare_update_plain(env, lo, mlc->mlc_intent,
 					      &mlc->mlc_buf, th);
 		break;

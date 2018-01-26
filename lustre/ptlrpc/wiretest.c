@@ -1734,8 +1734,8 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_entries[0]) == 48, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_v1 *)0)->lcm_entries[0]));
 	CLASSERT(LOV_MAGIC_COMP_V1 == (0x0BD60000 | 0x0BD0));
-	LASSERTF(LCM_FL_NOT_FLR == 0, "found %lld\n",
-		 (long long)LCM_FL_NOT_FLR);
+	LASSERTF(LCM_FL_NONE == 0, "found %lld\n",
+		 (long long)LCM_FL_NONE);
 	LASSERTF(LCM_FL_RDONLY == 1, "found %lld\n",
 		 (long long)LCM_FL_RDONLY);
 	LASSERTF(LCM_FL_WRITE_PENDING == 2, "found %lld\n",

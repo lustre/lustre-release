@@ -636,7 +636,7 @@ static inline __u16 mirror_id_of(__u32 id)
  */
 enum lov_comp_md_flags {
 	/* the least 2 bits are used by FLR to record file state */
-	LCM_FL_NOT_FLR          = 0,
+	LCM_FL_NONE          = 0,
 	LCM_FL_RDONLY           = 1,
 	LCM_FL_WRITE_PENDING    = 2,
 	LCM_FL_SYNC_PENDING     = 3,
