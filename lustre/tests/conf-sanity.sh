@@ -8046,6 +8046,44 @@ test_115() {
 }
 run_test 115 "Access large xattr with inodes number over 2TB"
 
+test_116() {
+	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
+		skip "ldiskfs only test" && return
+
+	stopall
+	load_modules
+
+	local tmpmnt=/mnt/$tdir
+	local mdtimg=$tfile-mdt0
+
+	do_facet $SINGLEMDS mkdir -p $tmpmnt
+	stack_trap "do_facet $SINGLEMDS rmdir $tmpmnt" EXIT
+
+	do_facet $SINGLEMDS touch $TMP/$mdtimg
+	stack_trap "do_facet $SINGLEMDS rm -f $TMP/$mdtimg" EXIT
+	do_facet $SINGLEMDS mkfs -t xfs -d file,size=1t,name=$TMP/$mdtimg ||
+		error "mkfs temporary xfs image"
+
+	do_facet $SINGLEMDS mount $TMP/$mdtimg $tmpmnt ||
+		error "mount temporary xfs image"
+	stack_trap "do_facet $SINGLEMDS umount $tmpmnt" EXIT
+	local old_mdssize=$MDSSIZE
+	local old_mdsisize=$MDSISIZE
+
+	MDSSIZE=$((17 * 1024 * 1024 * 1024)) # 17T MDT
+	MDSISIZE=$((16 << 20))
+	local opts17t="$(mkfs_opts $SINGLEMDS)"
+
+	MDSSIZE=$old_mdssize
+	MDSISIZE=$old_mdsisize
+	do_facet $SINGLEMDS $MKFS $opts17t $tmpmnt/$mdtimg ||
+		error "failed to mkfs for $tmpmnt/$mdtimg"
+
+	do_facet $SINGLEMDS $TUNE2FS -l $tmpmnt/$mdtimg |
+		grep -qw 'features.*extent' || error "extent should be enabled"
+}
+run_test 116 "big size MDT support"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

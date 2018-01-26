@@ -542,6 +542,13 @@ static void append_unique(char *buf, char *prefix, char *key, char *val,
 static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 					size_t maxbuflen, int user_spec)
 {
+	int enable_64bit = 0;
+
+	/* Enable large block addresses if the LUN is over 2^32 blocks. */
+	if ((mop->mo_device_kb / (L_BLOCK_SIZE >> 10) > UINT32_MAX) &&
+	     is_e2fsprogs_feature_supp("-O 64bit") == 0)
+		enable_64bit = 1;
+
 	if (IS_OST(&mop->mo_ldd)) {
 		append_unique(anchor, user_spec ? "," : " -O ",
 			      "extents", NULL, maxbuflen);
@@ -550,7 +557,10 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 		append_unique(anchor, user_spec ? "," : " -O ",
 			      "dirdata", NULL, maxbuflen);
 		append_unique(anchor, ",", "uninit_bg", NULL, maxbuflen);
-		append_unique(anchor, ",", "^extents", NULL, maxbuflen);
+		if (enable_64bit)
+			append_unique(anchor, ",", "extents", NULL, maxbuflen);
+		else
+			append_unique(anchor, ",", "^extents", NULL, maxbuflen);
 	} else {
 		append_unique(anchor, user_spec ? "," : " -O ",
 			      "uninit_bg", NULL, maxbuflen);
@@ -587,9 +597,7 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 	if (is_e2fsprogs_feature_supp("-O huge_file") == 0)
 		append_unique(anchor, ",", "huge_file", NULL, maxbuflen);
 
-	/* Enable large block addresses if the LUN is over 2^32 blocks. */
-	if (mop->mo_device_kb / (L_BLOCK_SIZE >> 10) >= 0x100002000ULL &&
-	    is_e2fsprogs_feature_supp("-O 64bit") == 0)
+	if (enable_64bit)
 		append_unique(anchor, ",", "64bit", NULL, maxbuflen);
 
 	/* Cluster inode/block bitmaps and inode table for more efficient IO.
@@ -816,6 +824,7 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 				sprintf(buf, " -i %ld", bytes_per_inode);
 				strscat(mop->mo_mkfsopts, buf,
 					sizeof(mop->mo_mkfsopts));
+				mop->mo_inode_size = bytes_per_inode;
 			}
 		}
 

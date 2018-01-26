@@ -121,6 +121,7 @@ struct mkfs_opts {
 	int	mo_stripe_count;
 	int	mo_flags;
 	int	mo_mgs_failnodes;
+	int	mo_inode_size;
 };
 #endif
 
