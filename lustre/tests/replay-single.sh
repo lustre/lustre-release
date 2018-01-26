@@ -36,6 +36,13 @@ if [ $(facet_fstype $SINGLEMDS) = "zfs" ]; then
 		ALWAYS_EXCEPT+=" 2d       70d      80c     80d"
 	fi
 fi
+if $SHARED_KEY; then
+# bug number for skipped tests: LU-9795 (all below)
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	0b	0c	0d	34	45"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	47	58b	58c	71a	85a"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	85b	86	88	89	90"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	93a	100a	100b	120"
+fi
 
 build_test_filter
 

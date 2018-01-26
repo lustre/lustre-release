@@ -9,10 +9,6 @@ set -e
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test:
 ALWAYS_EXCEPT="              $SANITY_SEC_EXCEPT"
-if $SHARED_KEY; then
-# bug number for skipped test: 9145 9145 9671 9145 9145 9145 9145 9245
-	ALWAYS_EXCEPT="        17   18   19   20   21   22   23   27 $ALWAYS_EXCEPT"
-fi
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=$(dirname $0)
@@ -1751,10 +1747,11 @@ test_23a() {
 run_test 23a "test mapped regular ACLs"
 
 test_23b() { #LU-9929
-	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+	[ $num_clients -lt 2 ] && skip "Need 2 clients at least" && return
 	[ $(lustre_version_code mgs) -lt $(version_code 2.10.53) ] &&
 		skip "Need MGS >= 2.10.53" && return
 
+	export SK_UNIQUE_NM=true
 	nodemap_test_setup
 	trap nodemap_test_cleanup EXIT
 
@@ -1766,11 +1763,16 @@ test_23b() { #LU-9929
 
 	do_facet mgs $LCTL nodemap_modify --name c0 --property admin --value 1
 	wait_nm_sync c0 admin_nodemap
+	do_facet mgs $LCTL nodemap_modify --name c1 --property admin --value 1
+	wait_nm_sync c1 admin_nodemap
+	do_facet mgs $LCTL nodemap_modify --name c1 --property trusted --value 1
+	wait_nm_sync c1 trusted_nodemap
 
 	# Add idmap $ID0:$fs_id (500:60010)
 	do_facet mgs $LCTL nodemap_add_idmap --name c0 --idtype gid \
 		--idmap $ID0:$fs_id ||
 		error "add idmap $ID0:$fs_id to nodemap c0 failed"
+	wait_nm_sync c0 idmap
 
 	# set/getfacl default acl on client0 (unmapped gid=500)
 	rm -rf $testdir
@@ -1783,20 +1785,18 @@ test_23b() { #LU-9929
 	[ "$unmapped_id" = "$USER0" ] ||
 		error "gid=$ID0 was not unmapped correctly on ${clients_arr[0]}"
 
-	# getfacl default acl on MGS (mapped gid=60010)
-	zconf_mount $mgs_HOST $MOUNT
-	do_rpc_nodes $mgs_HOST is_mounted $MOUNT ||
-		error "mount lustre on MGS failed"
-	mapped_id=$(do_node $mgs_HOST getfacl $testdir |
+	# getfacl default acl on client2 (mapped gid=60010)
+	mapped_id=$(do_node ${clients_arr[1]} getfacl $testdir |
 			grep -E "default:group:.*:rwx" | awk -F: '{print $3}')
-	fs_user=$(do_facet mgs getent passwd |
+	fs_user=$(do_node ${clients_arr[1]} getent passwd |
 			grep :$fs_id:$fs_id: | cut -d: -f1)
+	[ -z "$fs_user" ] && fs_user=$fs_id
 	[ $mapped_id -eq $fs_id -o "$mapped_id" = "$fs_user" ] ||
-		error "Should return gid=$fs_id or $fs_user on MGS"
+		error "Should return gid=$fs_id or $fs_user on client2"
 
 	rm -rf $testdir
-	do_facet mgs umount $MOUNT
 	nodemap_test_cleanup
+	export SK_UNIQUE_NM=false
 }
 run_test 23b "test mapped default ACLs"
 
@@ -1996,6 +1996,11 @@ test_27a() {
 	for nm in "default" "c0"; do
 		local subdir="subdir_${nm}"
 		local subsubdir="subsubdir_${nm}"
+
+		if [ "$nm" == "default" ] && [ "$SHARED_KEY" == "true" ]; then
+			echo "Skipping nodemap $nm with SHARED_KEY";
+			continue;
+		fi
 
 		echo "Exercising fileset for nodemap $nm"
 		nodemap_exercise_fileset "$nm"

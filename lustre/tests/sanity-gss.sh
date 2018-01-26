@@ -10,6 +10,10 @@ ONLY=${ONLY:-"$*"}
 # bug number for skipped test:
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$SANITY_GSS_EXCEPT"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+if $SHARED_KEY; then
+# bug number for skipped tests:	LU-9795	LU-9795
+	ALWAYS_EXCEPT="		8	90	$ALWAYS_EXCEPT"
+fi
 
 SRCDIR=`dirname $0`
 
@@ -101,6 +105,9 @@ stop_dbench()
 
 calc_connection_cnt
 umask 077
+
+# Stop previously existing gss daemons
+stop_gss_daemons
 
 echo "bring up gss daemons..."
 # start gss daemon with -z flag for gssnull
@@ -588,6 +595,11 @@ test_151() {
 run_test 151 "secure mgs connection: server flavor control"
 
 stop_gss_daemons
+if $GSS_KRB5 || $GSS_SK; then
+	start_gss_daemons
+fi
+
+restore_to_default_flavor
 
 complete $SECONDS
 check_and_cleanup_lustre

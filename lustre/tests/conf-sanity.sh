@@ -11,6 +11,12 @@ ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT"
 # bug number for skipped test:
 # a tool to create lustre filesystem images
 ALWAYS_EXCEPT="32newtarball $ALWAYS_EXCEPT"
+if $SHARED_KEY; then
+# bug number for skipped tests:		LU-9795	(all below)
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	0	31	32a	32d	35a"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	53a	53b	54b	76a	76b"
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	76c	76d	78	103"
+fi
 
 SRCDIR=$(dirname $0)
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH

@@ -15,9 +15,13 @@ ALWAYS_EXCEPT="$SANITY_EXCEPT  42a     42b     42c     77k"
 # skipped tests: LU-8411 LU-9096 LU-9054 ..
 ALWAYS_EXCEPT="  407     253     312     $ALWAYS_EXCEPT"
 
+if $SHARED_KEY; then
+# bug number for skipped tests:	LU-9795 (all below)
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT	17n	60a	133g	300f"
+fi
+
 # Check Grants after these tests
 GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c"
-
 SRCDIR=$(cd $(dirname $0); echo $PWD)
 export PATH=$PATH:/sbin
 

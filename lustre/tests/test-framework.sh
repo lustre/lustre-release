@@ -22,6 +22,7 @@ export SK_UNIQUE_NM=${SK_UNIQUE_NM:-false}
 export SK_S2S=${SK_S2S:-false}
 export SK_S2SNM=${SK_S2SNM:-TestFrameNM}
 export SK_S2SNMCLI=${SK_S2SNMCLI:-TestFrameNMCli}
+export SK_SKIPFIRST=${SK_SKIPFIRST:-true}
 export IDENTITY_UPCALL=default
 export QUOTA_AUTO=1
 export FLAKEY=${FLAKEY:-true}
@@ -943,7 +944,11 @@ init_gss() {
 		# security ctx config for keyring
 		SK_NO_KEY=false
 		mkdir -p $SK_OM_PATH
-		mount -o bind $SK_OM_PATH /etc/request-key.d/
+		if grep -q request-key /proc/mounts > /dev/null; then
+			echo "SSK: Request key already mounted."
+		else
+			mount -o bind $SK_OM_PATH /etc/request-key.d/
+		fi
 		local lgssc_conf_line='create lgssc * * '
 		lgssc_conf_line+=$(which lgss_keyring)
 		lgssc_conf_line+=' %o %k %t %d %c %u %g %T %P %S'
@@ -1054,9 +1059,12 @@ cleanup_sk() {
 		$RPC_MODE || echo "Cleaning up Shared Key.."
 		do_nodes $(comma_list $(all_nodes)) "rm -f \
 			$SK_PATH/$FSNAME*.key $SK_PATH/nodemap/$FSNAME*.key"
+		do_nodes $(comma_list $(all_nodes)) "keyctl show | \
+		  awk '/lustre/ { print \\\$1 }' | xargs -IX keyctl unlink X"
 		# Remove the mount and clean up the files we added to SK_PATH
-		do_nodes $(comma_list $(all_nodes)) "umount \
-			/etc/request-key.d/"
+		do_nodes $(comma_list $(all_nodes)) "while grep -q \
+			request-key.d /proc/mounts; do umount \
+			/etc/request-key.d/; done"
 		do_nodes $(comma_list $(all_nodes)) "rm -f \
 			$SK_OM_PATH/lgssc.conf"
 		do_nodes $(comma_list $(all_nodes)) "rmdir $SK_OM_PATH"
@@ -4631,8 +4639,17 @@ setupall() {
 		if $GSS_SK; then
 			set_rule $FSNAME any cli2mdt $SK_FLAVOR
 			set_rule $FSNAME any cli2ost $SK_FLAVOR
-			wait_flavor cli2mdt $SK_FLAVOR
-			wait_flavor cli2ost $SK_FLAVOR
+			if $SK_SKIPFIRST; then
+				export SK_SKIPFIRST=false
+
+				sleep 30
+				do_nodes $CLIENTS \
+					 "lctl set_param osc.*.idle_connect=1"
+				return
+			else
+				wait_flavor cli2mdt $SK_FLAVOR
+				wait_flavor cli2ost $SK_FLAVOR
+			fi
 		else
 			set_flavor_all $SEC
 		fi
@@ -5043,7 +5060,6 @@ check_and_setup_lustre() {
 		fi
 	fi
 
-	init_gss
 	if $GSS_SK; then
 		set_flavor_all null
 	elif $GSS; then
@@ -7609,6 +7625,8 @@ flvr_cnt_cli2ost()
     local clients=${CLIENTS:-$HOSTNAME}
 
     for c in ${clients//,/ }; do
+	# reconnect if idle
+	do_node $c lctl set_param osc.*.idle_connect=1 >/dev/null 2>&1
 	local output=$(do_node $c lctl get_param -n \
 		 osc.*OST*-osc-[^M][^D][^T]*.$PROC_CLI 2>/dev/null)
 	local tmpcnt=$(count_flvr "$output" $flavor)

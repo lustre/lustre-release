@@ -27,6 +27,10 @@ remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 [[ $(facet_fstype $SINGLEMDS) == zfs ]] &&
 # bug number for skipped test:	      LU-2230
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 21b"
+if $SHARED_KEY; then
+# bug number for skipped tests:	LU-9795	LU-9795
+	ALWAYS_EXCEPT="		0a	0b	$ALWAYS_EXCEPT"
+fi
 
 build_test_filter
 

@@ -14,6 +14,10 @@ ONLY=${ONLY:-"$*"}
 # bug number for skipped test:
 ALWAYS_EXCEPT="$SANITY_HSM_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+if $SHARED_KEY; then
+# bug number for skipped tests:	LU-9795 LU-9795
+	ALWAYS_EXCEPT="		13	402b	$ALWAYS_EXCEPT"
+fi
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 
