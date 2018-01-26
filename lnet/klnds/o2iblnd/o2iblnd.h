@@ -188,7 +188,7 @@ typedef struct
 	char			ibd_ifname[KIB_IFNAME_SIZE];
 	int			ibd_nnets;	/* # nets extant */
 
-	cfs_time_t		ibd_next_failover;
+	time64_t		ibd_next_failover;
 	/* # failover failures */
 	int			ibd_failed_failover;
 	/* failover in progress */
@@ -254,7 +254,7 @@ typedef struct kib_poolset
 	/* failed pool list */
 	struct list_head	ps_failed_pool_list;
 	/* time stamp for retry if failed to allocate */
-	cfs_time_t		ps_next_retry;
+	time64_t		ps_next_retry;
 	/* is allocating new pool */
 	int			ps_increasing;
 	/* new pool size */
@@ -281,7 +281,7 @@ typedef struct kib_pool
 	/* pool_set of this pool */
 	kib_poolset_t	       *po_owner;
 	/* deadline of this pool */
-	cfs_time_t		po_deadline;
+	time64_t		po_deadline;
 	/* # of elements in use */
 	int			po_allocated;
 	/* pool is created on failed HCA */
@@ -316,7 +316,7 @@ typedef struct
 	/* is allocating new pool */
 	int			fps_increasing;
 	/* time stamp for retry if failed to allocate */
-	cfs_time_t		fps_next_retry;
+	time64_t		fps_next_retry;
 } kib_fmr_poolset_t;
 
 #ifndef HAVE_IB_RDMA_WR
@@ -352,7 +352,7 @@ typedef struct
 			int		  fpo_pool_size;
 		} fast_reg;
 	};
-	cfs_time_t		fpo_deadline;	/* deadline of this pool */
+	time64_t		fpo_deadline;	/* deadline of this pool */
 	int			fpo_failed;	/* fmr pool is failed */
 	int			fpo_map_count;	/* # of mapped FMR */
 	bool			fpo_is_fmr; /* True if FMR pools allocated */
@@ -612,7 +612,7 @@ typedef struct kib_tx                           /* transmit message */
 	/* LNET completion status */
 	int			tx_status;
 	/* completion deadline */
-	unsigned long		tx_deadline;
+	ktime_t			tx_deadline;
 	/* completion cookie */
 	__u64			tx_cookie;
 	/* lnet msgs to finalize on completion */
@@ -700,7 +700,7 @@ typedef struct kib_conn
 	/* CQ callback fired */
 	unsigned int		ibc_ready:1;
 	/* time of last send */
-	unsigned long		ibc_last_send;
+	ktime_t			ibc_last_send;
 	/** link chain for kiblnd_check_conns only */
 	struct list_head	ibc_connd_list;
 	/** rxs completed before ESTABLISHED */
@@ -754,7 +754,7 @@ typedef struct kib_peer
 	struct list_head	ibp_tx_queue;
 	/* incarnation of peer_ni */
 	__u64			ibp_incarnation;
-	/* when (in jiffies) I was last alive */
+	/* when (in seconds) I was last alive */
 	time64_t		ibp_last_alive;
 	/* # users */
 	atomic_t		ibp_refcount;
@@ -919,10 +919,11 @@ kiblnd_get_conn_locked (kib_peer_ni_t *peer_ni)
 static inline int
 kiblnd_send_keepalive(kib_conn_t *conn)
 {
+	s64 keepalive_ns = *kiblnd_tunables.kib_keepalive * NSEC_PER_SEC;
+
 	return (*kiblnd_tunables.kib_keepalive > 0) &&
-		cfs_time_after(jiffies, conn->ibc_last_send +
-			       msecs_to_jiffies(*kiblnd_tunables.kib_keepalive *
-						MSEC_PER_SEC));
+		ktime_after(ktime_get(),
+			    ktime_add_ns(conn->ibc_last_send, keepalive_ns));
 }
 
 static inline int

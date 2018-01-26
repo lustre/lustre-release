@@ -941,7 +941,7 @@ __must_hold(&conn->ibc_lock)
 		rc = ib_post_send(conn->ibc_cmid->qp, wr, &bad);
 	}
 
-        conn->ibc_last_send = jiffies;
+	conn->ibc_last_send = ktime_get();
 
         if (rc == 0)
                 return 0;
@@ -1239,15 +1239,15 @@ static void
 kiblnd_queue_tx_locked(kib_tx_t *tx, kib_conn_t *conn)
 {
 	struct list_head *q;
+	s64 timeout_ns;
 
 	LASSERT(tx->tx_nwrq > 0);	/* work items set up */
 	LASSERT(!tx->tx_queued);	/* not queued for sending already */
 	LASSERT(conn->ibc_state >= IBLND_CONN_ESTABLISHED);
 
+	timeout_ns = *kiblnd_tunables.kib_timeout * NSEC_PER_SEC;
 	tx->tx_queued = 1;
-	tx->tx_deadline = jiffies +
-			  msecs_to_jiffies(*kiblnd_tunables.kib_timeout *
-					   MSEC_PER_SEC);
+	tx->tx_deadline = ktime_add_ns(ktime_get(), timeout_ns);
 
         if (tx->tx_conn == NULL) {
                 kiblnd_conn_addref(conn);
@@ -2227,7 +2227,7 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
         /* connection established */
 	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-        conn->ibc_last_send = jiffies;
+	conn->ibc_last_send = ktime_get();
         kiblnd_set_conn_state(conn, IBLND_CONN_ESTABLISHED);
         kiblnd_peer_alive(peer_ni);
 
@@ -3244,10 +3244,11 @@ kiblnd_check_txs_locked(kib_conn_t *conn, struct list_head *txs)
 			LASSERT(tx->tx_waiting || tx->tx_sending != 0);
 		}
 
-		if (cfs_time_aftereq(jiffies, tx->tx_deadline)) {
-			CERROR("Timed out tx: %s, %lu seconds\n",
+		if (ktime_compare(ktime_get(), tx->tx_deadline) >= 0) {
+			CERROR("Timed out tx: %s, %lld seconds\n",
 			       kiblnd_queue2str(conn, txs),
-			       cfs_duration_sec(jiffies - tx->tx_deadline));
+			       ktime_ms_delta(ktime_get(),
+					      tx->tx_deadline) / MSEC_PER_SEC);
 			return 1;
 		}
 	}
@@ -3289,10 +3290,11 @@ kiblnd_check_conns (int idx)
 
 		/* Check tx_deadline */
 		list_for_each_entry_safe(tx, tx_tmp, &peer_ni->ibp_tx_queue, tx_list) {
-			if (cfs_time_aftereq(jiffies, tx->tx_deadline)) {
-				CWARN("Timed out tx for %s: %lu seconds\n",
+			if (ktime_compare(ktime_get(), tx->tx_deadline) >= 0) {
+				CWARN("Timed out tx for %s: %lld seconds\n",
 				      libcfs_nid2str(peer_ni->ibp_nid),
-				      cfs_duration_sec(jiffies - tx->tx_deadline));
+				      ktime_ms_delta(ktime_get(),
+						     tx->tx_deadline) / MSEC_PER_SEC);
 				list_move(&tx->tx_list, &timedout_txs);
 			}
 		}
@@ -3800,8 +3802,7 @@ kiblnd_failover_thread(void *arg)
 
 		list_for_each_entry(dev, &kiblnd_data.kib_failed_devs,
                                     ibd_fail_list) {
-                        if (cfs_time_before(cfs_time_current(),
-                                            dev->ibd_next_failover))
+			if (ktime_get_seconds() < dev->ibd_next_failover)
                                 continue;
                         do_failover = 1;
                         break;
@@ -3819,13 +3820,13 @@ kiblnd_failover_thread(void *arg)
                         LASSERT (dev->ibd_failover);
                         dev->ibd_failover = 0;
                         if (rc >= 0) { /* Device is OK or failover succeed */
-                                dev->ibd_next_failover = cfs_time_shift(3);
+				dev->ibd_next_failover = ktime_get_seconds() + 3;
                                 continue;
                         }
 
                         /* failed to failover, retry later */
-                        dev->ibd_next_failover =
-                                cfs_time_shift(min(dev->ibd_failed_failover, 10));
+			dev->ibd_next_failover = ktime_get_seconds() +
+						 min(dev->ibd_failed_failover, 10);
                         if (kiblnd_dev_can_failover(dev)) {
 				list_add_tail(&dev->ibd_fail_list,
                                               &kiblnd_data.kib_failed_devs);

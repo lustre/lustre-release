@@ -578,10 +578,10 @@ kiblnd_debug_rx (kib_rx_t *rx)
 static void
 kiblnd_debug_tx (kib_tx_t *tx)
 {
-        CDEBUG(D_CONSOLE, "      %p snd %d q %d w %d rc %d dl %lx "
+	CDEBUG(D_CONSOLE, "      %p snd %d q %d w %d rc %d dl %lld "
 	       "cookie %#llx msg %s%s type %x cred %d\n",
                tx, tx->tx_sending, tx->tx_queued, tx->tx_waiting,
-               tx->tx_status, tx->tx_deadline, tx->tx_cookie,
+	       tx->tx_status, ktime_to_ns(tx->tx_deadline), tx->tx_cookie,
                tx->tx_lntmsg[0] == NULL ? "-" : "!",
                tx->tx_lntmsg[1] == NULL ? "-" : "!",
                tx->tx_msg->ibm_type, tx->tx_msg->ibm_credits);
@@ -1667,8 +1667,8 @@ kiblnd_create_fmr_pool(kib_fmr_poolset_t *fps, kib_fmr_pool_t **pp_fpo)
 	if (rc)
 		goto out_fpo;
 
-	fpo->fpo_deadline = cfs_time_shift(IBLND_POOL_DEADLINE);
-	fpo->fpo_owner    = fps;
+	fpo->fpo_deadline = ktime_get_seconds() + IBLND_POOL_DEADLINE;
+	fpo->fpo_owner = fps;
 	*pp_fpo = fpo;
 
 	return 0;
@@ -1739,13 +1739,13 @@ kiblnd_init_fmr_poolset(kib_fmr_poolset_t *fps, int cpt, int ncpts,
 }
 
 static int
-kiblnd_fmr_pool_is_idle(kib_fmr_pool_t *fpo, cfs_time_t now)
+kiblnd_fmr_pool_is_idle(kib_fmr_pool_t *fpo, time64_t now)
 {
         if (fpo->fpo_map_count != 0) /* still in use */
                 return 0;
         if (fpo->fpo_failed)
                 return 1;
-        return cfs_time_aftereq(now, fpo->fpo_deadline);
+	return now >= fpo->fpo_deadline;
 }
 
 static int
@@ -1774,11 +1774,11 @@ void
 kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status)
 {
 	struct list_head   zombies = LIST_HEAD_INIT(zombies);
-	kib_fmr_pool_t    *fpo = fmr->fmr_pool;
+	kib_fmr_pool_t *fpo = fmr->fmr_pool;
 	kib_fmr_poolset_t *fps;
-	cfs_time_t         now = cfs_time_current();
-	kib_fmr_pool_t    *tmp;
-	int                rc;
+	time64_t now = ktime_get_seconds();
+	kib_fmr_pool_t *tmp;
+	int rc;
 
 	if (!fpo)
 		return;
@@ -1843,7 +1843,7 @@ again:
 	spin_lock(&fps->fps_lock);
 	version = fps->fps_version;
 	list_for_each_entry(fpo, &fps->fps_pool_list, fpo_list) {
-		fpo->fpo_deadline = cfs_time_shift(IBLND_POOL_DEADLINE);
+		fpo->fpo_deadline = ktime_get_seconds() + IBLND_POOL_DEADLINE;
 		fpo->fpo_map_count++;
 
 		if (fpo->fpo_is_fmr) {
@@ -1993,7 +1993,7 @@ again:
 
 	}
 
-	if (cfs_time_before(cfs_time_current(), fps->fps_next_retry)) {
+	if (ktime_get_seconds() < fps->fps_next_retry) {
 		/* someone failed recently */
 		spin_unlock(&fps->fps_lock);
 		return -EAGAIN;
@@ -2010,7 +2010,7 @@ again:
 		fps->fps_version++;
 		list_add_tail(&fpo->fpo_list, &fps->fps_pool_list);
 	} else {
-		fps->fps_next_retry = cfs_time_shift(IBLND_POOL_RETRY);
+		fps->fps_next_retry = ktime_get_seconds() + IBLND_POOL_RETRY;
 	}
 	spin_unlock(&fps->fps_lock);
 
@@ -2033,9 +2033,9 @@ kiblnd_init_pool(kib_poolset_t *ps, kib_pool_t *pool, int size)
 
 	memset(pool, 0, sizeof(kib_pool_t));
 	INIT_LIST_HEAD(&pool->po_free_list);
-	pool->po_deadline = cfs_time_shift(IBLND_POOL_DEADLINE);
-	pool->po_owner	  = ps;
-	pool->po_size	  = size;
+	pool->po_deadline = ktime_get_seconds() + IBLND_POOL_DEADLINE;
+	pool->po_owner = ps;
+	pool->po_size = size;
 }
 
 static void
@@ -2118,22 +2118,22 @@ kiblnd_init_poolset(kib_poolset_t *ps, int cpt,
 }
 
 static int
-kiblnd_pool_is_idle(kib_pool_t *pool, cfs_time_t now)
+kiblnd_pool_is_idle(kib_pool_t *pool, time64_t now)
 {
         if (pool->po_allocated != 0) /* still in use */
                 return 0;
         if (pool->po_failed)
                 return 1;
-        return cfs_time_aftereq(now, pool->po_deadline);
+	return now >= pool->po_deadline;
 }
 
 void
 kiblnd_pool_free_node(kib_pool_t *pool, struct list_head *node)
 {
 	struct list_head zombies = LIST_HEAD_INIT(zombies);
-	kib_poolset_t	*ps = pool->po_owner;
-	kib_pool_t	*tmp;
-	cfs_time_t	 now = cfs_time_current();
+	kib_poolset_t *ps = pool->po_owner;
+	kib_pool_t *tmp;
+	time64_t now = ktime_get_seconds();
 
 	spin_lock(&ps->ps_lock);
 
@@ -2165,8 +2165,8 @@ kiblnd_pool_alloc_node(kib_poolset_t *ps)
 	kib_pool_t		*pool;
 	int			rc;
 	unsigned int		interval = 1;
-	cfs_time_t		time_before;
-	unsigned int		trips = 0;
+	ktime_t time_before;
+	unsigned int trips = 0;
 
 again:
 	spin_lock(&ps->ps_lock);
@@ -2175,7 +2175,8 @@ again:
 			continue;
 
 		pool->po_allocated++;
-		pool->po_deadline = cfs_time_shift(IBLND_POOL_DEADLINE);
+		pool->po_deadline = ktime_get_seconds() +
+				    IBLND_POOL_DEADLINE;
 		node = pool->po_free_list.next;
 		list_del(node);
 
@@ -2205,7 +2206,7 @@ again:
                 goto again;
         }
 
-	if (cfs_time_before(cfs_time_current(), ps->ps_next_retry)) {
+	if (ktime_get_seconds() < ps->ps_next_retry) {
 		/* someone failed recently */
 		spin_unlock(&ps->ps_lock);
 		return NULL;
@@ -2215,17 +2216,17 @@ again:
 	spin_unlock(&ps->ps_lock);
 
 	CDEBUG(D_NET, "%s pool exhausted, allocate new pool\n", ps->ps_name);
-	time_before = cfs_time_current();
+	time_before = ktime_get();
 	rc = ps->ps_pool_create(ps, ps->ps_pool_size, &pool);
-	CDEBUG(D_NET, "ps_pool_create took %lu HZ to complete",
-	       cfs_time_current() - time_before);
+	CDEBUG(D_NET, "ps_pool_create took %lld ms to complete",
+	       ktime_ms_delta(ktime_get(), time_before));
 
 	spin_lock(&ps->ps_lock);
 	ps->ps_increasing = 0;
 	if (rc == 0) {
 		list_add_tail(&pool->po_list, &ps->ps_pool_list);
 	} else {
-		ps->ps_next_retry = cfs_time_shift(IBLND_POOL_RETRY);
+		ps->ps_next_retry = ktime_get_seconds() + IBLND_POOL_RETRY;
 		CERROR("Can't allocate new %s pool because out of memory\n",
 		       ps->ps_name);
 	}
