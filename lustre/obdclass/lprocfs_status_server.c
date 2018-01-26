@@ -57,7 +57,8 @@ struct dentry *ldebugfs_add_symlink(const char *name, const char *target,
 
 	dname.name = target;
 	dname.len = strlen(dname.name);
-	dname.hash = ll_full_name_hash(parent, dname.name, dname.len);
+	dname.hash = ll_full_name_hash(debugfs_lustre_root,
+				       dname.name, dname.len);
 	parent = d_lookup(debugfs_lustre_root, &dname);
 	if (!parent)
 		return NULL;

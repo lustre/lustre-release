@@ -2103,8 +2103,7 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 	statfs_pack(sfs, ksfs);
 	if (unlikely(sb->s_flags & MS_RDONLY))
 		sfs->os_state |= OS_STATE_READONLY;
-	if (LDISKFS_HAS_INCOMPAT_FEATURE(sb,
-					 LDISKFS_FEATURE_INCOMPAT_EXTENTS))
+	if (ldiskfs_has_feature_extents(sb))
 		sfs->os_maxbytes = sb->s_maxbytes;
 	else
 		sfs->os_maxbytes = LDISKFS_SB(sb)->s_bitmap_maxbytes;
@@ -2160,7 +2159,7 @@ static void osd_conf_get(const struct lu_env *env,
         param->ddp_max_nlink    = LDISKFS_LINK_MAX;
 	param->ddp_symlink_max  = sb->s_blocksize;
 	param->ddp_mount_type     = LDD_MT_LDISKFS;
-	if (LDISKFS_HAS_INCOMPAT_FEATURE(sb, LDISKFS_FEATURE_INCOMPAT_EXTENTS))
+	if (ldiskfs_has_feature_extents(sb))
 		param->ddp_maxbytes = sb->s_maxbytes;
 	else
 		param->ddp_maxbytes = LDISKFS_SB(sb)->s_bitmap_maxbytes;
@@ -2187,7 +2186,7 @@ static void osd_conf_get(const struct lu_env *env,
 		      LDISKFS_XATTR_LEN(XATTR_NAME_MAX_LEN);
 
 #if defined(LDISKFS_FEATURE_INCOMPAT_EA_INODE)
-	if (LDISKFS_HAS_INCOMPAT_FEATURE(sb, LDISKFS_FEATURE_INCOMPAT_EA_INODE))
+	if (ldiskfs_has_feature_ea_inode(sb))
 		param->ddp_max_ea_size = LDISKFS_XATTR_MAX_LARGE_EA_SIZE -
 								ea_overhead;
 	else
@@ -3909,7 +3908,9 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(!dt_object_remote(dt));
 	LASSERT(inode->i_op != NULL);
+#ifdef HAVE_IOP_XATTR
 	LASSERT(inode->i_op->getxattr != NULL);
+#endif
 
 	if (strcmp(name, XATTR_NAME_LOV) == 0 ||
 	    strcmp(name, XATTR_NAME_DEFAULT_LMV) == 0)
@@ -4112,7 +4113,7 @@ static int osd_xattr_set_pfid(const struct lu_env *env, struct osd_object *obj,
 
 		/* Remove old PFID EA entry firstly. */
 		ll_vfs_dq_init(inode);
-		rc = inode->i_op->removexattr(dentry, XATTR_NAME_FID);
+		rc = osd_removexattr(dentry, inode, XATTR_NAME_FID);
 		if (rc == -ENODATA) {
 			if ((fl & LU_XATTR_REPLACE) && !(fl & LU_XATTR_CREATE))
 				RETURN(rc);
@@ -4384,8 +4385,10 @@ static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(!dt_object_remote(dt));
 	LASSERT(inode->i_op != NULL);
-	LASSERT(inode->i_op->removexattr != NULL);
 	LASSERT(handle != NULL);
+#ifdef HAVE_IOP_XATTR
+	LASSERT(inode->i_op->removexattr != NULL);
+#endif
 
 	osd_trans_exec_op(env, handle, OSD_OT_XATTR_SET);
 
@@ -4408,7 +4411,7 @@ static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		ll_vfs_dq_init(inode);
 		dentry->d_inode = inode;
 		dentry->d_sb = inode->i_sb;
-		rc = inode->i_op->removexattr(dentry, name);
+		rc = osd_removexattr(dentry, inode, name);
 	}
 
 	osd_trans_exec_check(env, handle, OSD_OT_XATTR_SET);
@@ -6387,8 +6390,7 @@ osd_dirent_reinsert(const struct lu_env *env, struct osd_device *dev,
 	struct osd_thread_info     *info	= osd_oti_get(env);
 	ENTRY;
 
-	if (!LDISKFS_HAS_INCOMPAT_FEATURE(inode->i_sb,
-					  LDISKFS_FEATURE_INCOMPAT_DIRDATA))
+	if (!ldiskfs_has_feature_dirdata(inode->i_sb))
 		RETURN(0);
 
 	/* There is enough space to hold the FID-in-dirent. */
@@ -7264,15 +7266,13 @@ static int osd_mount(const struct lu_env *env,
 		GOTO(out_mnt, rc = -EROFS);
 	}
 
-	if (!LDISKFS_HAS_COMPAT_FEATURE(o->od_mnt->mnt_sb,
-					LDISKFS_FEATURE_COMPAT_HAS_JOURNAL)) {
+	if (!ldiskfs_has_feature_journal(o->od_mnt->mnt_sb)) {
 		CERROR("%s: device %s is mounted w/o journal\n", name, dev);
 		GOTO(out_mnt, rc = -EINVAL);
 	}
 
 #ifdef LDISKFS_MOUNT_DIRDATA
-	if (LDISKFS_HAS_INCOMPAT_FEATURE(o->od_mnt->mnt_sb,
-					 LDISKFS_FEATURE_INCOMPAT_DIRDATA))
+	if (ldiskfs_has_feature_dirdata(o->od_mnt->mnt_sb))
 		LDISKFS_SB(osd_sb(o))->s_mount_opt |= LDISKFS_MOUNT_DIRDATA;
 	else if (strstr(name, "MDT")) /* don't complain for MGT or OSTs */
 		CWARN("%s: device %s was upgraded from Lustre-1.x without "
