@@ -5206,9 +5206,7 @@ test_56wb() {
 	echo "done."
 
 	echo -n "Detecting existing pools..."
-	while IFS='' read thispool; do
-		pool_list+=("$thispool")
-	done < <($LFS pool_list $MOUNT | awk -F '.' 'NR>=2 { print $2 }')
+	pool_list=($($LFS pool_list $FSNAME | grep "$FSNAME\." | cut -d. -f2))
 
 	if [ ${#pool_list[@]} -gt 0 ]; then
 		echo "${pool_list[@]}"
