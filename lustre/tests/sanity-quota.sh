@@ -2983,6 +2983,47 @@ test_54() {
 }
 run_test 54 "basic lfs project interface test"
 
+test_55() {
+	setup_quota_test || error "setup quota failed with $?"
+
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+	quota_init
+
+	#add second group to TSTUSR
+	usermod -G $TSTUSR,$TSTUSR2 $TSTUSR
+
+	#prepare test file
+	$RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1024 count=100000 ||
+	error "failed to dd"
+
+	cancel_lru_locks osc
+	sync; sync_all_data || true
+
+	$LFS setquota -g $TSTUSR2 -b 0 -B 50M $DIR ||
+	error "failed to setquota on group $TSTUSR2"
+
+	$LFS quota -v -g $TSTUSR2 $DIR
+
+	runas -u $TSTUSR -g $TSTUSR2 chgrp $TSTUSR2 $DIR/$tdir/$tfile &&
+	error "chgrp should failed with -EDQUOT"
+
+	USED=$(getquota -g $TSTUSR2 global curspace)
+	echo "$USED"
+
+	$LFS setquota -g $TSTUSR2 -b 0 -B 300M $DIR ||
+	error "failed to setquota on group $TSTUSR2"
+
+	$LFS quota -v -g $TSTUSR2 $DIR
+
+	runas -u $TSTUSR -g $TSTUSR2 chgrp $TSTUSR2 $DIR/$tdir/$tfile ||
+	error "chgrp should succeed"
+
+	$LFS quota -v -g $TSTUSR2 $DIR
+
+	cleanup_quota_test
+}
+run_test 55 "Chgrp should be affected by group quota"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"

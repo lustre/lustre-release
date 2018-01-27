@@ -1037,7 +1037,7 @@ static inline int qsd_transfer(const struct lu_env *env,
 			       struct qsd_instance *qsd,
 			       struct lquota_trans *trans, int qtype,
 			       __u64 orig_id, __u64 new_id, __u64 bspace,
-			       struct lquota_id_info *qi)
+			       struct lquota_id_info *qi, bool ignore_edquot)
 {
 	int	rc;
 
@@ -1054,7 +1054,7 @@ static inline int qsd_transfer(const struct lu_env *env,
 	qi->lqi_id.qid_uid = new_id;
 	qi->lqi_space      = 1;
 	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
-	if (rc == -EDQUOT || rc == -EINPROGRESS)
+	if (ignore_edquot && (rc == -EDQUOT || rc == -EINPROGRESS))
 		rc = 0;
 	if (rc)
 		return rc;
@@ -1076,7 +1076,7 @@ static inline int qsd_transfer(const struct lu_env *env,
 	qi->lqi_id.qid_uid = new_id;
 	qi->lqi_space      = bspace;
 	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
-	if (rc == -EDQUOT || rc == -EINPROGRESS)
+	if (ignore_edquot && (rc == -EDQUOT || rc == -EINPROGRESS))
 		rc = 0;
 	if (rc)
 		return rc;
@@ -1146,7 +1146,11 @@ static int osd_declare_attr_set(const struct lu_env *env,
 
 	if (attr && (attr->la_valid & (LA_UID | LA_GID | LA_PROJID))) {
 		sa_object_size(obj->oo_sa_hdl, &blksize, &bspace);
-		bspace = toqb(bspace * blksize);
+		bspace = toqb(bspace * 512);
+
+		CDEBUG(D_QUOTA, "%s: enforce quota on UID %u, GID %u,"
+		       "the quota space is %lld (%u)\n", osd->od_svname,
+		       attr->la_uid, attr->la_gid, bspace, blksize);
 	}
 
 	if (attr && attr->la_valid & LA_UID) {
@@ -1155,7 +1159,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 			rc = qsd_transfer(env, osd->od_quota_slave,
 					  &oh->ot_quota_trans, USRQUOTA,
 					  obj->oo_attr.la_uid, attr->la_uid,
-					  bspace, &info->oti_qi);
+					  bspace, &info->oti_qi, true);
 			if (rc)
 				GOTO(out, rc);
 		}
@@ -1166,7 +1170,9 @@ static int osd_declare_attr_set(const struct lu_env *env,
 			rc = qsd_transfer(env, osd->od_quota_slave,
 					  &oh->ot_quota_trans, GRPQUOTA,
 					  obj->oo_attr.la_gid, attr->la_gid,
-					  bspace, &info->oti_qi);
+					  bspace, &info->oti_qi,
+					  !(attr->la_flags &
+							LUSTRE_SET_SYNC_FL));
 			if (rc)
 				GOTO(out, rc);
 		}
@@ -1197,7 +1203,7 @@ static int osd_declare_attr_set(const struct lu_env *env,
 					  &oh->ot_quota_trans, PRJQUOTA,
 					  obj->oo_attr.la_projid,
 					  attr->la_projid, bspace,
-					  &info->oti_qi);
+					  &info->oti_qi, true);
 			if (rc)
 				GOTO(out, rc);
 		}
