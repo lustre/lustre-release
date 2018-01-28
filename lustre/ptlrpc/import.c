@@ -985,7 +985,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
         __u64 old_connect_flags;
         int msg_flags;
 	struct obd_connect_data *ocd;
-	struct obd_export *exp;
+	struct obd_export *exp = NULL;
 	int ret;
 	ENTRY;
 
@@ -1110,6 +1110,8 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 	rc = ptlrpc_connect_set_flags(imp, ocd, old_connect_flags, exp,
 				      aa->pcaa_initial_connect);
 	class_export_put(exp);
+	exp = NULL;
+
 	if (rc != 0)
 		GOTO(out, rc);
 
@@ -1280,6 +1282,9 @@ out:
 	imp->imp_connected = 0;
 	imp->imp_connect_tried = 1;
 	spin_unlock(&imp->imp_lock);
+
+	if (exp != NULL)
+		class_export_put(exp);
 
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
