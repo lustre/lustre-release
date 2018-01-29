@@ -84,7 +84,8 @@ test_2a() {
 	touch $DIR1/f2a
 	ls -l $DIR2/f2a
 	chmod 777 $DIR2/f2a
-	$CHECKSTAT -t file -p 0777 $DIR1/f2a || error
+	$CHECKSTAT -t file -p 0777 $DIR1/f2a ||
+		error "Either not file type or perms not 0777"
 }
 run_test 2a "check cached attribute updates on 2 mtpt's ========"
 
@@ -92,20 +93,23 @@ test_2b() {
 	touch $DIR1/f2b
 	ls -l $DIR2/f2b
 	chmod 777 $DIR1/f2b
-	$CHECKSTAT -t file -p 0777 $DIR2/f2b || error
+	$CHECKSTAT -t file -p 0777 $DIR2/f2b ||
+		error "Either not file type or perms not 0777"
 }
 run_test 2b "check cached attribute updates on 2 mtpt's ========"
 
 # NEED TO SAVE ROOT DIR MODE
 test_2c() {
 	chmod 777 $DIR1
-	$CHECKSTAT -t dir -p 0777 $DIR2 || error
+	$CHECKSTAT -t dir -p 0777 $DIR2 ||
+		error "Either not dir type or perms not 0777"
 }
 run_test 2c "check cached attribute updates on 2 mtpt's root ==="
 
 test_2d() {
 	chmod 755 $DIR1
-	$CHECKSTAT -t dir -p 0755 $DIR2 || error
+	$CHECKSTAT -t dir -p 0755 $DIR2 ||
+		error "Either not file type or perms not 0775"
 }
 run_test 2d "check cached attribute updates on 2 mtpt's root ==="
 
@@ -114,7 +118,8 @@ test_2e() {
         ls -l $DIR1
         ls -l $DIR2
         chmod 777 $DIR1
-        $RUNAS dd if=/dev/zero of=$DIR2/$tfile count=1 || error
+		$RUNAS dd if=/dev/zero of=$DIR2/$tfile count=1 ||
+			error "dd failed"
 }
 run_test 2e "check chmod on root is propagated to others"
 
@@ -161,7 +166,7 @@ test_2g() {
 	local block2=$(stat $DIR2/$tfile | awk '/Blocks/ {print $4} ')
 	echo "$DIR1/$tfile has $block1 blocks"
 	echo "$DIR2/$tfile has $block2 blocks"
-	[ $block1 -eq $block2 ] || error
+	[ $block1 -eq $block2 ] || error "$block1 not equal to $block2"
 }
 run_test 2g "check blocks update on sync write"
 
@@ -181,7 +186,8 @@ run_test 4 "fstat validation on multiple mount points =========="
 test_5() {
 	mcreate $DIR1/f5
 	$TRUNCATE $DIR2/f5 100
-	$CHECKSTAT -t file -s 100 $DIR1/f5 || error
+	$CHECKSTAT -t file -s 100 $DIR1/f5 ||
+		error "Either not file type or size not equal to 100 bytes"
 	rm $DIR1/f5
 }
 run_test 5 "create a file on one mount, truncate it on the other"
@@ -260,7 +266,7 @@ test_11() {
 	$DIR2/d11/f
 	RC=$?
 	kill -USR1 $MULTIPID
-	wait $MULTIPID || error
+	wait $MULTIPID || error "wait for PID $MULTIPID failed"
 	[ $RC -eq 0 ] && error || true
 }
 run_test 11 "execution of file opened for write should return error ===="
@@ -272,16 +278,16 @@ run_test 12 "test lock ordering (link, stat, unlink)"
 
 test_13() {	# bug 2451 - directory coherency
 	test_mkdir $DIR1/d13
-	cd $DIR1/d13 || error
+	cd $DIR1/d13 || error "cd to $DIR1/d13 failed"
 	ls
 	( touch $DIR1/d13/f13 ) # needs to be a separate shell
 	ls
-	rm -f $DIR2/d13/f13 || error
+	rm -f $DIR2/d13/f13 || error "Cannot remove $DIR2/d13/f13"
 	ls 2>&1 | grep f13 && error "f13 shouldn't return an error (1)" || true
 	# need to run it twice
 	( touch $DIR1/d13/f13 ) # needs to be a separate shell
 	ls
-	rm -f $DIR2/d13/f13 || error
+	rm -f $DIR2/d13/f13 || error "Cannot remove $DIR2/d13/f13"
 	ls 2>&1 | grep f13 && error "f13 shouldn't return an error (2)" || true
 }
 run_test 13 "test directory page revocation"
@@ -606,7 +612,7 @@ test_25b() {
 run_test 25b "change ACL under remote dir on one mountpoint be seen on another"
 
 test_26a() {
-        utime $DIR1/f26a -s $DIR2/f26a || error
+	utime $DIR1/f26a -s $DIR2/f26a || error "utime failed for $DIR1/f26a"
 }
 run_test 26a "allow mtime to get older"
 
@@ -670,16 +676,17 @@ test_28() { # bug 9977
 	EOF
 
 	# reading of 1st stripe should pass
-	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 || error
+	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 || error "dd failed"
 	# reading of 2nd stripe should fail (this stripe was destroyed)
 	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 skip=1 && error
 
 	# now, recreating test file
-	dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2 || error
+	dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2 || error "dd failed"
 	# reading of 1st stripe should pass
-	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 || error
+	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 || error "dd failed"
 	# reading of 2nd stripe should pass
-	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 skip=1 || error
+	dd if=$DIR2/$tfile of=/dev/null bs=1024k count=1 skip=1 ||
+		error "dd failed"
 }
 run_test 28 "read/write/truncate file with lost stripes"
 
@@ -2526,7 +2533,7 @@ test_51d() {
 	local ar=$(grep -A 10 $tfile /proc/$PID/smaps | awk '/^Rss/{print $2}')
 
 	kill -USR1 $PID
-	wait $PID || error
+	wait $PID || error "wait PID $PID failed"
 
 	[ $ar -eq 0 ] || error "rss before: $br, after $ar, some pages remained"
 }

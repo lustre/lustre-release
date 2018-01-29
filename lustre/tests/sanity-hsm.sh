@@ -2560,7 +2560,7 @@ test_26c() {
 	kill -USR1 $pid || error "multiop early exit"
 	# should reach autotest timeout if multiop fails to trap
 	# signal, close file, and exit ...
-	wait $pid || error
+	wait $pid || error "wait PID $PID failed"
 
 	set_hsm_param remove_archive_on_last_unlink 0
 

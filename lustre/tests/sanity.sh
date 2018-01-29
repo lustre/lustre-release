@@ -902,8 +902,8 @@ test_24e() {
 	test_mkdir $DIR/R5b
 	touch $DIR/R5a/f
 	mv $DIR/R5a/f $DIR/R5b/g
-	$CHECKSTAT -a $DIR/R5a/f || error
-	$CHECKSTAT -t file $DIR/R5b/g || error
+	$CHECKSTAT -a $DIR/R5a/f || error "$DIR/R5a/f exists"
+	$CHECKSTAT -t file $DIR/R5b/g || error "$DIR/R5b/g not file type"
 }
 run_test 24e "touch .../R5a/f; rename .../R5a/f .../R5b/g ======"
 
@@ -912,8 +912,8 @@ test_24f() {
 	test_mkdir $DIR/R6b
 	touch $DIR/R6a/f $DIR/R6b/g
 	mv $DIR/R6a/f $DIR/R6b/g
-	$CHECKSTAT -a $DIR/R6a/f || error
-	$CHECKSTAT -t file $DIR/R6b/g || error
+	$CHECKSTAT -a $DIR/R6a/f || error "$DIR/R6a/f exists"
+	$CHECKSTAT -t file $DIR/R6b/g || error "$DIR/R6b/g not file type"
 }
 run_test 24f "touch .../R6a/f R6b/g; mv .../R6a/f .../R6b/g ===="
 
@@ -922,8 +922,8 @@ test_24g() {
 	test_mkdir $DIR/R7b
 	test_mkdir $DIR/R7a/d
 	mv $DIR/R7a/d $DIR/R7b/e
-	$CHECKSTAT -a $DIR/R7a/d || error
-	$CHECKSTAT -t dir $DIR/R7b/e || error
+	$CHECKSTAT -a $DIR/R7a/d || error "$DIR/R7a/d exists"
+	$CHECKSTAT -t dir $DIR/R7b/e || error "$DIR/R7b/e not dir type"
 }
 run_test 24g "mkdir .../R7{a,b}/d; mv .../R7a/d .../R7b/e ======"
 
@@ -933,8 +933,8 @@ test_24h() {
 	test_mkdir -c1 $DIR/R8a/d
 	test_mkdir -c1 $DIR/R8b/e
 	mrename $DIR/R8a/d $DIR/R8b/e
-	$CHECKSTAT -a $DIR/R8a/d || error
-	$CHECKSTAT -t dir $DIR/R8b/e || error
+	$CHECKSTAT -a $DIR/R8a/d || error "$DIR/R8a/d exists"
+	$CHECKSTAT -t dir $DIR/R8b/e || error "$DIR/R8b/e not dir type"
 }
 run_test 24h "mkdir .../R8{a,b}/{d,e}; rename .../R8a/d .../R8b/e"
 
@@ -944,18 +944,18 @@ test_24i() {
 	test_mkdir $DIR/R9/a
 	touch $DIR/R9/f
 	mrename $DIR/R9/f $DIR/R9/a
-	$CHECKSTAT -t file $DIR/R9/f || error
-	$CHECKSTAT -t dir  $DIR/R9/a || error
-	$CHECKSTAT -a $DIR/R9/a/f || error
+	$CHECKSTAT -t file $DIR/R9/f || error "$DIR/R9/f not file type"
+	$CHECKSTAT -t dir  $DIR/R9/a || error "$DIR/R9/a not dir type"
+	$CHECKSTAT -a $DIR/R9/a/f || error "$DIR/R9/a/f exists"
 }
 run_test 24i "rename file to dir error: touch f ; mkdir a ; rename f a"
 
 test_24j() {
 	test_mkdir $DIR/R10
 	mrename $DIR/R10/f $DIR/R10/g
-	$CHECKSTAT -t dir $DIR/R10 || error
-	$CHECKSTAT -a $DIR/R10/f || error
-	$CHECKSTAT -a $DIR/R10/g || error
+	$CHECKSTAT -t dir $DIR/R10 || error "$DIR/R10 not dir type"
+	$CHECKSTAT -a $DIR/R10/f || error "$DIR/R10/f exists"
+	$CHECKSTAT -a $DIR/R10/g || error "$DIR/R10/g exists"
 }
 run_test 24j "source does not exist ============================"
 
@@ -964,15 +964,15 @@ test_24k() {
 	test_mkdir $DIR/R11a/d
 	touch $DIR/R11a/f
 	mv $DIR/R11a/f $DIR/R11a/d
-        $CHECKSTAT -a $DIR/R11a/f || error
-        $CHECKSTAT -t file $DIR/R11a/d/f || error
+	$CHECKSTAT -a $DIR/R11a/f || error "$DIR/R11a/f exists"
+	$CHECKSTAT -t file $DIR/R11a/d/f || error "$DIR/R11a/d/f not file type"
 }
 run_test 24k "touch .../R11a/f; mv .../R11a/f .../R11a/d ======="
 
 # bug 2429 - rename foo foo foo creates invalid file
 test_24l() {
 	f="$DIR/f24l"
-	$MULTIOP $f OcNs || error
+	$MULTIOP $f OcNs || error "rename of ${f} to itself failed"
 }
 run_test 24l "Renaming a file to itself ========================"
 
@@ -990,10 +990,10 @@ test_24n() {
     f="$DIR/f24n"
     # this stats the old file after it was renamed, so it should fail
     touch ${f}
-    $CHECKSTAT ${f}
+    $CHECKSTAT ${f} || error "${f} missing"
     mv ${f} ${f}.rename
-    $CHECKSTAT ${f}.rename
-    $CHECKSTAT -a ${f}
+    $CHECKSTAT ${f}.rename || error "${f}.rename missing"
+    $CHECKSTAT -a ${f} || error "${f} exists"
 }
 run_test 24n "Statting the old file after renaming (Posix rename 2)"
 
@@ -1008,8 +1008,8 @@ test_24p() {
 	test_mkdir $DIR/R12b
 	DIRINO=`ls -lid $DIR/R12a | awk '{ print $1 }'`
 	mrename $DIR/R12a $DIR/R12b
-	$CHECKSTAT -a $DIR/R12a || error
-	$CHECKSTAT -t dir $DIR/R12b || error
+	$CHECKSTAT -a $DIR/R12a || error "$DIR/R12a exists"
+	$CHECKSTAT -t dir $DIR/R12b || error "$DIR/R12b not dir type"
 	DIRINO2=`ls -lid $DIR/R12b | awk '{ print $1 }'`
 	[ "$DIRINO" = "$DIRINO2" ] || error "R12a $DIRINO != R12b $DIRINO2"
 }
@@ -1068,7 +1068,7 @@ test_24t() {
 run_test 24t "mkdir .../R16a/b/c; rename .../R16a/b/c .../R16a ="
 
 test_24u() { # bug12192
-	$MULTIOP $DIR/$tfile C2w$((2048 * 1024))c || error
+	$MULTIOP $DIR/$tfile C2w$((2048 * 1024))c || error "multiop failed"
 	$CHECKSTAT -s $((2048 * 1024)) $DIR/$tfile || error "wrong file size"
 }
 run_test 24u "create stripe file"
@@ -1329,13 +1329,14 @@ test_25a() {
 
 	test_mkdir $DIR/d25
 	ln -s d25 $DIR/s25
-	touch $DIR/s25/foo || error
+	touch $DIR/s25/foo ||
+		error "File creation in symlinked directory failed"
 }
 run_test 25a "create file in symlinked directory ==============="
 
 test_25b() {
 	[ ! -d $DIR/d25 ] && test_25a
-	$CHECKSTAT -t file $DIR/s25/foo || error
+	$CHECKSTAT -t file $DIR/s25/foo || error "$DIR/s25/foo not file type"
 }
 run_test 25b "lookup file in symlinked directory ==============="
 
@@ -1343,14 +1344,14 @@ test_26a() {
 	test_mkdir $DIR/d26
 	test_mkdir $DIR/d26/d26-2
 	ln -s d26/d26-2 $DIR/s26
-	touch $DIR/s26/foo || error
+	touch $DIR/s26/foo || error "File creation failed"
 }
 run_test 26a "multiple component symlink ======================="
 
 test_26b() {
 	test_mkdir -p $DIR/$tdir/d26-2
 	ln -s $tdir/d26-2/foo $DIR/s26-2
-	touch $DIR/s26-2 || error
+	touch $DIR/s26-2 || error "File creation failed"
 }
 run_test 26b "multiple component symlink at end of lookup ======"
 
@@ -1399,7 +1400,7 @@ test_27a() {
 	$LFS getstripe $DIR/$tdir
 	$LFS setstripe -c 1 $DIR/$tdir/$tfile || error "setstripe failed"
 	$CHECKSTAT -t file $DIR/$tdir/$tfile || error "checkstat failed"
-	cp /etc/hosts $DIR/$tdir/$tfile || error
+	cp /etc/hosts $DIR/$tdir/$tfile || error "Can't copy to one stripe file"
 }
 run_test 27a "one stripe file"
 
@@ -1591,8 +1592,8 @@ test_27n() {
 	reset_enospc
 	rm -f $DIR/$tdir/$tfile
 	exhaust_precreations 0 0x80000215
-	$LFS setstripe -c -1 $DIR/$tdir
-	touch $DIR/$tdir/$tfile || error
+	$LFS setstripe -c -1 $DIR/$tdir || error "setstripe failed"
+	touch $DIR/$tdir/$tfile || error "touch failed"
 	$LFS getstripe $DIR/$tdir/$tfile
 	reset_enospc
 }
@@ -1672,7 +1673,7 @@ test_27r() {
 	rm -f $DIR/$tdir/$tfile
 	exhaust_precreations 0 0x80000215
 
-	$LFS setstripe -i 0 -c 2 $DIR/$tdir/$tfile # && error
+	$LFS setstripe -i 0 -c 2 $DIR/$tdir/$tfile || error "setstripe failed"
 
 	reset_enospc
 }
@@ -2202,7 +2203,7 @@ run_test 27F "Client resend delayed layout creation with non-zero size"
 # then visible correctly (#2091)
 test_28() { # bug 2091
 	test_mkdir $DIR/d28
-	$CREATETEST $DIR/d28/ct || error
+	$CREATETEST $DIR/d28/ct || error "createtest failed"
 }
 run_test 28 "create/mknod/mkdir with bad file types ============"
 
@@ -2258,7 +2259,7 @@ run_test 29 "IT_GETATTR regression  ============================"
 
 test_30a() { # was test_30
 	cp $(which ls) $DIR || cp /bin/ls $DIR
-	$DIR/ls / || error
+	$DIR/ls / || error "Can't execute binary from lustre"
 	rm $DIR/ls
 }
 run_test 30a "execute binary from Lustre (execve) =============="
@@ -2266,7 +2267,7 @@ run_test 30a "execute binary from Lustre (execve) =============="
 test_30b() {
 	cp `which ls` $DIR || cp /bin/ls $DIR
 	chmod go+rx $DIR/ls
-	$RUNAS $DIR/ls / || error
+	$RUNAS $DIR/ls / || error "Can't execute binary from lustre as non-root"
 	rm $DIR/ls
 }
 run_test 30b "execute binary from Lustre as non-root ==========="
@@ -2277,29 +2278,30 @@ test_30c() { # b=22376
 	chmod a-rw $DIR/ls
 	cancel_lru_locks mdc
 	cancel_lru_locks osc
-	$RUNAS $DIR/ls / || error
+	$RUNAS $DIR/ls / || error "Can't execute binary from lustre"
 	rm -f $DIR/ls
 }
 run_test 30c "execute binary from Lustre without read perms ===="
 
 test_31a() {
-	$OPENUNLINK $DIR/f31 $DIR/f31 || error
-	$CHECKSTAT -a $DIR/f31 || error
+	$OPENUNLINK $DIR/f31 $DIR/f31 || error "openunlink failed"
+	$CHECKSTAT -a $DIR/f31 || error "$DIR/f31 exists"
 }
 run_test 31a "open-unlink file =================================="
 
 test_31b() {
-	touch $DIR/f31 || error
-	ln $DIR/f31 $DIR/f31b || error
-	$MULTIOP $DIR/f31b Ouc || error
-	$CHECKSTAT -t file $DIR/f31 || error
+	touch $DIR/f31 || error "touch $DIR/f31 failed"
+	ln $DIR/f31 $DIR/f31b || error "ln failed"
+	$MULTIOP $DIR/f31b Ouc || error "multiop failed"
+	$CHECKSTAT -t file $DIR/f31 || error "$DIR/f31 not file type"
 }
 run_test 31b "unlink file with multiple links while open ======="
 
 test_31c() {
-	touch $DIR/f31 || error
-	ln $DIR/f31 $DIR/f31c || error
-	multiop_bg_pause $DIR/f31 O_uc || return 1
+	touch $DIR/f31 || error "touch $DIR/f31 failed"
+	ln $DIR/f31 $DIR/f31c || error "ln failed"
+	multiop_bg_pause $DIR/f31 O_uc ||
+		error "multiop_bg_pause for $DIR/f31 failed"
 	MULTIPID=$!
 	$MULTIOP $DIR/f31c Ouc
 	kill -USR1 $MULTIPID
@@ -2308,13 +2310,13 @@ test_31c() {
 run_test 31c "open-unlink file with multiple links ============="
 
 test_31d() {
-	opendirunlink $DIR/d31d $DIR/d31d || error
-	$CHECKSTAT -a $DIR/d31d || error
+	opendirunlink $DIR/d31d $DIR/d31d || error "opendirunlink failed"
+	$CHECKSTAT -a $DIR/d31d || error "$DIR/d31d exists"
 }
 run_test 31d "remove of open directory ========================="
 
 test_31e() { # bug 2904
-	openfilleddirunlink $DIR/d31e || error
+	openfilleddirunlink $DIR/d31e || error "openfilleddirunlink failed"
 }
 run_test 31e "remove of open non-empty directory ==============="
 
@@ -2505,8 +2507,10 @@ test_32a() {
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
-	$CHECKSTAT -t dir $DIR/$tdir/ext2-mountpoint/.. || error
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint ||
+		error "mount failed for $EXT2_DEV $DIR/$tdir/ext2-mountpoint"
+	$CHECKSTAT -t dir $DIR/$tdir/ext2-mountpoint/.. ||
+		error "$DIR/$tdir/ext2-mountpoint/.. not dir type"
 	cleanup_test32_mount
 }
 run_test 32a "stat d32a/ext2-mountpoint/.. ====================="
@@ -2516,8 +2520,10 @@ test_32b() {
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
-	ls -al $DIR/$tdir/ext2-mountpoint/.. || error
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint ||
+		error "mount failed for $EXT2_DEV $DIR/$tdir/ext2-mountpoint"
+	ls -al $DIR/$tdir/ext2-mountpoint/.. ||
+		error "Can't list $DIR/$tdir/ext2-mountpoint/.."
 	cleanup_test32_mount
 }
 run_test 32b "open d32b/ext2-mountpoint/.. ====================="
@@ -2527,9 +2533,11 @@ test_32c() {
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint ||
+		error "mount failed for $EXT2_DEV $DIR/$tdir/ext2-mountpoint"
 	test_mkdir -p $DIR/$tdir/d2/test_dir
-	$CHECKSTAT -t dir $DIR/$tdir/ext2-mountpoint/../d2/test_dir || error
+	$CHECKSTAT -t dir $DIR/$tdir/ext2-mountpoint/../d2/test_dir ||
+		error "$DIR/$tdir/ext2-mountpoint/../d2/test_dir not dir type"
 	cleanup_test32_mount
 }
 run_test 32c "stat d32c/ext2-mountpoint/../d2/test_dir ========="
@@ -2539,9 +2547,11 @@ test_32d() {
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint ||
+		error "mount failed for $EXT2_DEV $DIR/$tdir/ext2-mountpoint"
 	test_mkdir -p $DIR/$tdir/d2/test_dir
-	ls -al $DIR/$tdir/ext2-mountpoint/../d2/test_dir || error
+	ls -al $DIR/$tdir/ext2-mountpoint/../d2/test_dir ||
+		error "Can't list $DIR/$tdir/ext2-mountpoint/../d2/test_dir"
 	cleanup_test32_mount
 }
 run_test 32d "open d32d/ext2-mountpoint/../d2/test_dir"
@@ -2598,9 +2608,11 @@ test_32i() {
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint ||
+		error "mount failed for $EXT2_DEV $DIR/$tdir/ext2-mountpoint"
 	touch $DIR/$tdir/test_file
-	$CHECKSTAT -t file $DIR/$tdir/ext2-mountpoint/../test_file || error
+	$CHECKSTAT -t file $DIR/$tdir/ext2-mountpoint/../test_file ||
+		error "$DIR/$tdir/ext2-mountpoint/../test_file not file type"
 	cleanup_test32_mount
 }
 run_test 32i "stat d32i/ext2-mountpoint/../test_file ==========="
@@ -2610,9 +2622,11 @@ test_32j() {
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint ||
+		error "mount failed for $EXT2_DEV $DIR/$tdir/ext2-mountpoint"
 	touch $DIR/$tdir/test_file
-	cat $DIR/$tdir/ext2-mountpoint/../test_file || error
+	cat $DIR/$tdir/ext2-mountpoint/../test_file ||
+		error "Can't open $DIR/$tdir/ext2-mountpoint/../test_file"
 	cleanup_test32_mount
 }
 run_test 32j "open d32j/ext2-mountpoint/../test_file ==========="
@@ -2622,10 +2636,12 @@ test_32k() {
 	rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint ||
+		error "mount failed for $EXT2_DEV $DIR/$tdir/ext2-mountpoint"
 	test_mkdir -p $DIR/$tdir/d2
-	touch $DIR/$tdir/d2/test_file || error
-	$CHECKSTAT -t file $DIR/$tdir/ext2-mountpoint/../d2/test_file || error
+	touch $DIR/$tdir/d2/test_file || error "touch failed"
+	$CHECKSTAT -t file $DIR/$tdir/ext2-mountpoint/../d2/test_file ||
+		error "$DIR/$tdir/ext2-mountpoint/../d2/test_file not file type"
 	cleanup_test32_mount
 }
 run_test 32k "stat d32k/ext2-mountpoint/../d2/test_file ========"
@@ -2635,10 +2651,12 @@ test_32l() {
 	rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint ||
+		error "mount failed for $EXT2_DEV $DIR/$tdir/ext2-mountpoint"
 	test_mkdir -p $DIR/$tdir/d2
-	touch $DIR/$tdir/d2/test_file
-	cat  $DIR/$tdir/ext2-mountpoint/../d2/test_file || error
+	touch $DIR/$tdir/d2/test_file || error "touch failed"
+	cat  $DIR/$tdir/ext2-mountpoint/../d2/test_file ||
+		error "Can't open $DIR/$tdir/ext2-mountpoint/../d2/test_file"
 	cleanup_test32_mount
 }
 run_test 32l "open d32l/ext2-mountpoint/../d2/test_file ========"
@@ -2649,8 +2667,10 @@ test_32m() {
 	TMP_DIR=$DIR/d32m/tmp
 	ln -s $DIR $TMP_DIR/symlink11
 	ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01
-	$CHECKSTAT -t link $DIR/d32m/tmp/symlink11 || error
-	$CHECKSTAT -t link $DIR/d32m/symlink01 || error
+	$CHECKSTAT -t link $DIR/d32m/tmp/symlink11 ||
+		error "symlink11 not a link"
+	$CHECKSTAT -t link $DIR/d32m/symlink01 ||
+		error "symlink01 not a link"
 }
 run_test 32m "stat d32m/symlink->tmp/symlink->lustre-root ======"
 
@@ -2660,8 +2680,8 @@ test_32n() {
 	TMP_DIR=$DIR/d32n/tmp
 	ln -s $DIR $TMP_DIR/symlink11
 	ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01
-	ls -l $DIR/d32n/tmp/symlink11  || error
-	ls -l $DIR/d32n/symlink01 || error
+	ls -l $DIR/d32n/tmp/symlink11  || error "listing symlink11"
+	ls -l $DIR/d32n/symlink01 || error "listing symlink01"
 }
 run_test 32n "open d32n/symlink->tmp/symlink->lustre-root ======"
 
@@ -2671,10 +2691,13 @@ test_32o() {
 	TMP_DIR=$DIR/d32o/tmp
 	ln -s $DIR/$tfile $TMP_DIR/symlink12
 	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02
-	$CHECKSTAT -t link $DIR/d32o/tmp/symlink12 || error
-	$CHECKSTAT -t link $DIR/d32o/symlink02 || error
-	$CHECKSTAT -t file -f $DIR/d32o/tmp/symlink12 || error
-	$CHECKSTAT -t file -f $DIR/d32o/symlink02 || error
+	$CHECKSTAT -t link $DIR/d32o/tmp/symlink12 ||
+		error "symlink12 not a link"
+	$CHECKSTAT -t link $DIR/d32o/symlink02 || error "symlink02 not a link"
+	$CHECKSTAT -t file -f $DIR/d32o/tmp/symlink12 ||
+		error "$DIR/d32o/tmp/symlink12 not file type"
+	$CHECKSTAT -t file -f $DIR/d32o/symlink02 ||
+		error "$DIR/d32o/symlink02 not file type"
 }
 run_test 32o "stat d32o/symlink->tmp/symlink->lustre-root/$tfile"
 
@@ -2694,9 +2717,10 @@ test_32p() {
 	log 32p_7
 	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02
 	log 32p_8
-	cat $DIR/d32p/tmp/symlink12 || error
+	cat $DIR/d32p/tmp/symlink12 ||
+		error "Can't open $DIR/d32p/tmp/symlink12"
 	log 32p_9
-	cat $DIR/d32p/symlink02 || error
+	cat $DIR/d32p/symlink02 || error "Can't open $DIR/d32p/symlink02"
 	log 32p_10
 }
 run_test 32p "open d32p/symlink->tmp/symlink->lustre-root/$tfile"
@@ -2706,8 +2730,9 @@ test_32q() {
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
-	touch $DIR/$tdir/ext2-mountpoint/under_the_mount
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint
+	touch $DIR/$tdir/ext2-mountpoint/under_the_mount || error "touch failed"
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint ||
+		error "mount failed for $EXT2_DEV $DIR/$tdir/ext2-mountpoint"
 	ls $DIR/$tdir/ext2-mountpoint | grep "\<under_the_mount\>" && error
 	cleanup_test32_mount
 }
@@ -2718,8 +2743,9 @@ test_32r() {
 	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
 	trap cleanup_test32_mount EXIT
 	test_mkdir -p $DIR/$tdir/ext2-mountpoint
-	touch $DIR/$tdir/ext2-mountpoint/under_the_mount
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint
+	touch $DIR/$tdir/ext2-mountpoint/under_the_mount || error "touch failed"
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint ||
+		error "mount failed for $EXT2_DEV $DIR/$tdir/ext2-mountpoint"
 	ls $DIR/$tdir/ext2-mountpoint | grep -q under_the_mount && error || true
 	cleanup_test32_mount
 }
@@ -2934,47 +2960,59 @@ run_test 33g "nonroot user create already existing root created file"
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
 	rm -f $DIR/f34
-	$MCREATE $DIR/f34 || error
-	$GETSTRIPE $DIR/f34 2>&1 | grep -q "no stripe info" || error
-	$TRUNCATE $DIR/f34 $TEST_34_SIZE || error
-	$GETSTRIPE $DIR/f34 2>&1 | grep -q "no stripe info" || error
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
+	$MCREATE $DIR/f34 || error "mcreate failed"
+	$GETSTRIPE $DIR/f34 2>&1 | grep -q "no stripe info" ||
+		error "getstripe failed"
+	$TRUNCATE $DIR/f34 $TEST_34_SIZE || error "truncate failed"
+	$GETSTRIPE $DIR/f34 2>&1 | grep -q "no stripe info" ||
+		error "getstripe failed"
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 ||
+		error "Size of $DIR/f34 not equal to $TEST_34_SIZE bytes"
 }
 run_test 34a "truncate file that has not been opened ==========="
 
 test_34b() {
 	[ ! -f $DIR/f34 ] && test_34a
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 ||
+		error "Size of $DIR/f34 not equal to $TEST_34_SIZE bytes"
 	$OPENFILE -f O_RDONLY $DIR/f34
-	$GETSTRIPE $DIR/f34 2>&1 | grep -q "no stripe info" || error
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
+	$GETSTRIPE $DIR/f34 2>&1 | grep -q "no stripe info" ||
+		error "getstripe failed"
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 ||
+		error "Size of $DIR/f34 not equal to $TEST_34_SIZE bytes"
 }
 run_test 34b "O_RDONLY opening file doesn't create objects ====="
 
 test_34c() {
 	[ ! -f $DIR/f34 ] && test_34a
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 ||
+		error "Size of $DIR/f34 not equal to $TEST_34_SIZE bytes"
 	$OPENFILE -f O_RDWR $DIR/f34
 	$GETSTRIPE $DIR/f34 2>&1 | grep -q "no stripe info" && error
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 ||
+		error "Size of $DIR/f34 not equal to $TEST_34_SIZE bytes"
 }
 run_test 34c "O_RDWR opening file-with-size works =============="
 
 test_34d() {
 	[ ! -f $DIR/f34 ] && test_34a
-	dd if=/dev/zero of=$DIR/f34 conv=notrunc bs=4k count=1 || error
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
+	dd if=/dev/zero of=$DIR/f34 conv=notrunc bs=4k count=1 ||
+		error "dd failed"
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 ||
+		error "Size of $DIR/f34 not equal to $TEST_34_SIZE bytes"
 	rm $DIR/f34
 }
 run_test 34d "write to sparse file ============================="
 
 test_34e() {
 	rm -f $DIR/f34e
-	$MCREATE $DIR/f34e || error
-	$TRUNCATE $DIR/f34e 1000 || error
-	$CHECKSTAT -s 1000 $DIR/f34e || error
+	$MCREATE $DIR/f34e || error "mcreate failed"
+	$TRUNCATE $DIR/f34e 1000 || error "truncate failed"
+	$CHECKSTAT -s 1000 $DIR/f34e ||
+		error "Size of $DIR/f34e not equal to 1000 bytes"
 	$OPENFILE -f O_RDWR $DIR/f34e
-	$CHECKSTAT -s 1000 $DIR/f34e || error
+	$CHECKSTAT -s 1000 $DIR/f34e ||
+		error "Size of $DIR/f34e not equal to 1000 bytes"
 }
 run_test 34e "create objects, some with size and some without =="
 
@@ -2982,7 +3020,7 @@ test_34f() { # bug 6242, 6243
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	SIZE34F=48000
 	rm -f $DIR/f34f
-	$MCREATE $DIR/f34f || error
+	$MCREATE $DIR/f34f || error "mcreate failed"
 	$TRUNCATE $DIR/f34f $SIZE34F || error "truncating $DIR/f3f to $SIZE34F"
 	dd if=$DIR/f34f of=$TMP/f34f
 	$CHECKSTAT -s $SIZE34F $TMP/f34f || error "$TMP/f34f not $SIZE34F bytes"
@@ -2995,18 +3033,20 @@ run_test 34f "read from a file with no objects until EOF ======="
 
 test_34g() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	dd if=/dev/zero of=$DIR/$tfile bs=1 count=100 seek=$TEST_34_SIZE || error
-	$TRUNCATE $DIR/$tfile $((TEST_34_SIZE / 2))|| error
-	$CHECKSTAT -s $((TEST_34_SIZE / 2)) $DIR/$tfile || error "truncate failed"
+	dd if=/dev/zero of=$DIR/$tfile bs=1 count=100 seek=$TEST_34_SIZE ||
+		error "dd failed"
+	$TRUNCATE $DIR/$tfile $((TEST_34_SIZE / 2))|| error "truncate failed"
+	$CHECKSTAT -s $((TEST_34_SIZE / 2)) $DIR/$tfile ||
+		error "Size of $DIR/$tfile not equal to $((TEST_34_SIZE / 2))"
 	cancel_lru_locks osc
-	$CHECKSTAT -s $((TEST_34_SIZE / 2)) $DIR/$tfile || \
+	$CHECKSTAT -s $((TEST_34_SIZE / 2)) $DIR/$tfile ||
 		error "wrong size after lock cancel"
 
-	$TRUNCATE $DIR/$tfile $TEST_34_SIZE || error
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/$tfile || \
+	$TRUNCATE $DIR/$tfile $TEST_34_SIZE || error "truncate failed"
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/$tfile ||
 		error "expanding truncate failed"
 	cancel_lru_locks osc
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/$tfile || \
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/$tfile ||
 		error "wrong expanded size after lock cancel"
 }
 run_test 34g "truncate long file ==============================="
@@ -3016,7 +3056,7 @@ test_34h() {
 	local gid=10
 	local sz=1000
 
-	dd if=/dev/zero of=$DIR/$tfile bs=1M count=10 || error
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=10 || error "dd failed"
 	sync # Flush the cache so that multiop below does not block on cache
 	     # flush when getting the group lock
 	$MULTIOP $DIR/$tfile OG${gid}T${sz}g${gid}c &
@@ -3050,13 +3090,13 @@ run_test 35a "exec file with mode 444 (should return and not leak)"
 
 test_36a() {
 	rm -f $DIR/f36
-	utime $DIR/f36 || error
+	utime $DIR/f36 || error "utime failed for MDS"
 }
 run_test 36a "MDS utime check (mknod, utime)"
 
 test_36b() {
 	echo "" > $DIR/f36
-	utime $DIR/f36 || error
+	utime $DIR/f36 || error "utime failed for OST"
 }
 run_test 36b "OST utime check (open, utime)"
 
@@ -3064,14 +3104,14 @@ test_36c() {
 	rm -f $DIR/d36/f36
 	test_mkdir $DIR/d36
 	chown $RUNAS_ID $DIR/d36
-	$RUNAS utime $DIR/d36/f36 || error
+	$RUNAS utime $DIR/d36/f36 || error "utime failed for MDS as non-root"
 }
 run_test 36c "non-root MDS utime check (mknod, utime)"
 
 test_36d() {
 	[ ! -d $DIR/d36 ] && test_36c
 	echo "" > $DIR/d36/f36
-	$RUNAS utime $DIR/d36/f36 || error
+	$RUNAS utime $DIR/d36/f36 || error "utime failed for OST as non-root"
 }
 run_test 36d "non-root OST utime check (open, utime)"
 
@@ -16906,7 +16946,8 @@ prepare_remote_file() {
 	mkdir $DIR/$tdir/src_dir ||
 		error "create remote source failed"
 
-	cp /etc/hosts $DIR/$tdir/src_dir/a || error
+	cp /etc/hosts $DIR/$tdir/src_dir/a ||
+		 error "cp to remote source failed"
 	touch $DIR/$tdir/src_dir/a
 
 	$LFS mkdir -i 1 $DIR/$tdir/tgt_dir ||
@@ -16937,8 +16978,9 @@ test_310a() {
 	prepare_remote_file || error "prepare remote file failed"
 
 	#open-unlink file
-	$OPENUNLINK $remote_file $remote_file || error
-	$CHECKSTAT -a $remote_file || error
+	$OPENUNLINK $remote_file $remote_file ||
+		error "openunlink $remote_file failed"
+	$CHECKSTAT -a $remote_file || error "$remote_file exists"
 }
 run_test 310a "open unlink remote file"
 
