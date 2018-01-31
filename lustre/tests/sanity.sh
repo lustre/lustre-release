@@ -16227,6 +16227,39 @@ test_271c() {
 }
 run_test 271c "DoM: IO lock at open saves enqueue RPCs"
 
+test_275() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	[ $(lustre_version_code ost1) -lt $(version_code 2.10.57) ] &&
+		skip "Need OST version >= 2.10.57" && return 0
+
+	local file=$DIR/$tfile
+	local oss
+
+	oss=$(comma_list $(osts_nodes))
+
+	dd if=/dev/urandom of=$file bs=1M count=2 ||
+		error "failed to create a file"
+	cancel_lru_locks osc
+
+	#lock 1
+	dd if=$file of=/dev/null bs=1M count=1 iflag=direct ||
+		error "failed to read a file"
+
+#define OBD_FAIL_LDLM_PAUSE_CANCEL2      0x31f
+	$LCTL set_param fail_loc=0x8000031f
+
+	cancel_lru_locks osc &
+	sleep 1
+
+#define OBD_FAIL_LDLM_PROLONG_PAUSE      0x32b
+	do_nodes $oss $LCTL set_param fail_loc=0x8000032b
+	#IO takes another lock, but matches the PENDING one
+	#and places it to the IO RPC
+	dd if=$file of=/dev/null bs=1M count=1 iflag=direct ||
+		error "failed to read a file with PENDING lock"
+}
+run_test 275 "Read on a canceled duplicate lock"
+
 test_276() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	local pid

@@ -678,6 +678,8 @@ void ldlm_lock_prolong_one(struct ldlm_lock *lock,
 {
 	time64_t timeout;
 
+	OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_PROLONG_PAUSE, 3);
+
 	if (arg->lpa_export != lock->l_export ||
 	    lock->l_flags & LDLM_FL_DESTROYED)
 		/* ignore unrelated locks */
