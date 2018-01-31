@@ -135,23 +135,20 @@ struct osd_object {
 	/** protects inode attributes. */
 	spinlock_t		oo_guard;
 
+	/**
+	 * Following two members *compat_dot* are used to indicate
+	 * the presence of dot and dotdot in the given directory.
+	 * This is required for interop mode (b11826).
+	 */
 	__u32			oo_destroyed:1,
-				oo_pfid_in_lma:1;
+				oo_pfid_in_lma:1,
+				oo_compat_dot_created:1,
+				oo_compat_dotdot_created:1;
 
 	/* the i_flags in LMA */
-	__u32			oo_lma_flags;
-        /**
-         * Following two members are used to indicate the presence of dot and
-         * dotdot in the given directory. This is required for interop mode
-         * (b11826).
-         */
-        int                     oo_compat_dot_created;
-        int                     oo_compat_dotdot_created;
+	__u32                   oo_lma_flags;
 
         const struct lu_env    *oo_owner;
-#ifdef CONFIG_LOCKDEP
-        struct lockdep_map      oo_dep_map;
-#endif
 
 	struct list_head	oo_xattr_list;
 	struct lu_object_header *oo_header;
