@@ -323,7 +323,7 @@ AS_IF([test "x$enable_gss" != xno], [
 		gss_conf_test="failure"
 	])
 
-	AS_IF([test "x$gss_conf_test" = xsuccess], [
+	AS_IF([test "x$gss_conf_test" = xsuccess && "x$enable_gss" != xno], [
 		AC_DEFINE([HAVE_GSS], [1], [Define this is if you enable gss])
 		enable_gss="yes"
 	], [
