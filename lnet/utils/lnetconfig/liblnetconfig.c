@@ -4217,12 +4217,13 @@ static int handle_yaml_config_peer(struct cYAML *tree, struct cYAML **show_rc,
 {
 	char **nids = NULL;
 	int num, rc;
-	struct cYAML *seq_no, *prim_nid, *non_mr, *ip2nets, *peer_nis;
+	struct cYAML *seq_no, *prim_nid, *mr, *ip2nets, *peer_nis;
 	char err_str[LNET_MAX_STR_LEN];
+	bool mr_value;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
 	prim_nid = cYAML_get_object_item(tree, "primary nid");
-	non_mr = cYAML_get_object_item(tree, "non_mr");
+	mr = cYAML_get_object_item(tree, "Multi-Rail");
 	ip2nets = cYAML_get_object_item(tree, "ip2nets");
 	peer_nis = cYAML_get_object_item(tree, "peer ni");
 
@@ -4234,6 +4235,22 @@ static int handle_yaml_config_peer(struct cYAML *tree, struct cYAML **show_rc,
 		cYAML_build_error(rc, (seq_no) ? seq_no->cy_valueint : -1,
 				  ADD_CMD, "peer", err_str, err_rc);
 		return rc;
+	}
+
+	if (!mr)
+		mr_value = true;
+	else {
+		if (!mr->cy_valuestring || !strcmp(mr->cy_valuestring, "True"))
+			mr_value = true;
+		else if (!strcmp(mr->cy_valuestring, "False"))
+			mr_value = false;
+		else {
+			rc = LUSTRE_CFG_RC_BAD_PARAM;
+			snprintf(err_str, sizeof(err_str), "Bad MR value");
+			cYAML_build_error(rc, (seq_no) ? seq_no->cy_valueint : -1,
+					  ADD_CMD, "peer", err_str, err_rc);
+			return rc;
+		}
 	}
 
 	num = yaml_copy_peer_nids((ip2nets) ? ip2nets : peer_nis, &nids,
@@ -4249,8 +4266,7 @@ static int handle_yaml_config_peer(struct cYAML *tree, struct cYAML **show_rc,
 	}
 
 	rc = lustre_lnet_config_peer_nid((prim_nid) ? prim_nid->cy_valuestring : NULL,
-					 nids, num,
-					 (non_mr) ? false : true,
+					 nids, num, mr_value,
 					 (ip2nets) ? true : false,
 					 (seq_no) ? seq_no->cy_valueint : -1,
 					 err_rc);
