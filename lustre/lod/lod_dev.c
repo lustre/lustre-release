@@ -1031,11 +1031,6 @@ static int lod_process_config(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 	case LCFG_PRE_CLEANUP: {
-		if (lod->lod_md_root != NULL) {
-			dt_object_put(env, &lod->lod_md_root->ldo_obj);
-			lod->lod_md_root = NULL;
-		}
-
 		lod_sub_process_config(env, lod, &lod->lod_mdt_descs, lcfg);
 		lod_sub_process_config(env, lod, &lod->lod_ost_descs, lcfg);
 		next = &lod->lod_child->dd_lu_dev;
@@ -1050,6 +1045,11 @@ static int lod_process_config(const struct lu_env *env,
 		break;
 	}
 	case LCFG_CLEANUP: {
+		if (lod->lod_md_root != NULL) {
+			dt_object_put(env, &lod->lod_md_root->ldo_obj);
+			lod->lod_md_root = NULL;
+		}
+
 		/*
 		 * do cleanup on underlying storage only when
 		 * all OSPs are cleaned up, as they use that OSD as well
@@ -1669,6 +1669,11 @@ static struct lu_device *lod_device_free(const struct lu_env *env,
 	struct lu_device  *next = &lod->lod_child->dd_lu_dev;
 	ENTRY;
 
+	if (atomic_read(&lu->ld_ref) > 0 &&
+	    !cfs_hash_is_empty(lu->ld_site->ls_obj_hash)) {
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
+		lu_site_print(env, lu->ld_site, &msgdata, lu_cdebug_printer);
+	}
 	LASSERTF(atomic_read(&lu->ld_ref) == 0, "lu is %p\n", lu);
 	dt_device_fini(&lod->lod_dt_dev);
 	OBD_FREE_PTR(lod);
