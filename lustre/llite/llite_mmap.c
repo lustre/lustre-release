@@ -30,20 +30,10 @@
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
 
+#include <linux/errno.h>
+#include <linux/delay.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/unistd.h>
-#include <linux/version.h>
-#include <asm/uaccess.h>
-
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <linux/mm.h>
-#include <linux/pagemap.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
