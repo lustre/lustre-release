@@ -394,11 +394,11 @@ static int cfs_ptengine_padata_init(struct cfs_ptask_engine *engine,
 	{
 		char *pa_mask_buff, *cb_mask_buff;
 
-		pa_mask_buff = (char *)__get_free_page(GFP_TEMPORARY);
+		pa_mask_buff = (char *)__get_free_page(GFP_KERNEL);
 		if (pa_mask_buff == NULL)
 			GOTO(err_free_par_mask, rc = -ENOMEM);
 
-		cb_mask_buff = (char *)__get_free_page(GFP_TEMPORARY);
+		cb_mask_buff = (char *)__get_free_page(GFP_KERNEL);
 		if (cb_mask_buff == NULL) {
 			free_page((unsigned long)pa_mask_buff);
 			GOTO(err_free_par_mask, rc = -ENOMEM);
