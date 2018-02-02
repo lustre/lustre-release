@@ -34,27 +34,22 @@
  * Lustre Lite I/O page cache routines for the 2.5/2.6 kernel version
  */
 
+#include <linux/buffer_head.h>
+#include <linux/errno.h>
+#include <linux/fs.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
+#include <linux/mpage.h>
+#include <linux/pagemap.h>
 #include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
 #include <linux/unistd.h>
-#include <asm/uaccess.h>
+#include <linux/writeback.h>
 
 #ifdef HAVE_MIGRATE_H
 #include <linux/migrate.h>
 #elif defined(HAVE_MIGRATE_MODE_H)
 #include <linux/migrate_mode.h>
 #endif
-#include <linux/fs.h>
-#include <linux/buffer_head.h>
-#include <linux/mpage.h>
-#include <linux/writeback.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <linux/mm.h>
-#include <linux/pagemap.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
