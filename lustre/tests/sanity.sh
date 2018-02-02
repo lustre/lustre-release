@@ -6310,6 +6310,9 @@ test_64d() {
 		[[ $? -ne 0 ]] && break;
 		sleep 2
 	done
+
+	rm -f $DIR/$tfile
+	wait_delete_completed
 	$LCTL set_param debug="$olddebug" 2> /dev/null || true
 }
 run_test 64d "check grant limit exceed"
@@ -6450,6 +6453,19 @@ test_65j() { # bug6367
 }
 run_test 65j "set default striping on root directory (bug 6367)="
 
+cleaup_65k() {
+	rm -rf $DIR/$tdir
+	wait_delete_completed
+	do_facet $SINGLEMDS "lctl set_param -n \
+		osp.$ost*MDT0000.max_create_count=$max_count"
+	do_facet $SINGLEMDS "lctl set_param -n \
+		osp.$ost*MDT0000.create_count=$count"
+	do_facet $SINGLEMDS lctl --device  %$INACTIVE_OSC activate
+	echo $INACTIVE_OSC "is Activate"
+
+	wait_osc_import_state mds ost$ostnum FULL
+}
+
 test_65k() { # bug11679
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs" && return
@@ -6493,7 +6509,8 @@ test_65k() { # bug11679
 			[ -f $DIR/$tdir/$idx ] && continue
 			echo "$SETSTRIPE -i $idx -c 1 $DIR/$tdir/$idx"
 			$SETSTRIPE -i $idx -c 1 $DIR/$tdir/$idx ||
-				error "setstripe $idx should succeed"
+				{ cleanup_65k;
+				  error "setstripe $idx should succeed"; }
 			rm -f $DIR/$tdir/$idx || error "rm $idx failed"
 		done
 		unlinkmany $DIR/$tdir/$tfile.$ostnum. 1000
