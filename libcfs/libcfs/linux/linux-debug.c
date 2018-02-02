@@ -34,34 +34,23 @@
  * Author: Phil Schwan <phil@clusterfs.com>
  */
 
-#include <linux/module.h>
-#include <linux/kmod.h>
-#include <linux/notifier.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/stat.h>
 #include <linux/errno.h>
+#include <linux/interrupt.h>
+#include <linux/kallsyms.h>
+#include <linux/kmod.h>
+#include <linux/module.h>
+#include <linux/notifier.h>
 #ifdef HAVE_KERNEL_LOCKED
 #include <linux/smp_lock.h>
 #endif
+#include <linux/string.h>
 #include <linux/unistd.h>
-#include <linux/interrupt.h>
-#include <asm/uaccess.h>
-#include <linux/completion.h>
-
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <linux/version.h>
 
 # define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
 
 #include "tracefile.h"
-
-#include <linux/kallsyms.h>
 
 char lnet_debug_log_upcall[1024] = "/usr/lib/lustre/lnet_debug_log_upcall";
 
