@@ -273,7 +273,8 @@ static inline bool fid_is_last_id(const struct lu_fid *fid)
 		return false;
 
 	if (fid_seq(fid) == FID_SEQ_UPDATE_LOG ||
-	    fid_seq(fid) == FID_SEQ_UPDATE_LOG_DIR)
+	    fid_seq(fid) == FID_SEQ_UPDATE_LOG_DIR ||
+	    fid_seq_is_igif(fid_seq(fid)))
 		return false;
 
 	return true;
