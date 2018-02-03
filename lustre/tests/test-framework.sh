@@ -756,8 +756,10 @@ fs_log_size() {
 
 	case $(facet_fstype $facet) in
 		ldiskfs) size=50;; # largest seen is 44, leave some headroom
-		zfs)     size=$(lctl get_param osc.$FSNAME-OST*.import |
-			awk '/grant_block_size:/ { print $2 * 2; exit; }');;
+		# grant_block_size is in bytes, allow at least 2x max blocksize
+		zfs)     size=$(lctl get_param osc.$FSNAME*.import |
+				awk '/grant_block_size:/ {print $2/512; exit;}')
+			  ;;
 	esac
 
 	echo -n $size

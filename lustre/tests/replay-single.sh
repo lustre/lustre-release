@@ -499,7 +499,7 @@ test_20b() { # bug 10480
 		(( $beforeused + $extra >= $afterused )) && break
 		n_attempts=$((n_attempts + 1))
 		[ $n_attempts -gt 3 ] &&
-			error "after $afterused > before $beforeused"
+			error "after $afterused > before $beforeused + $extra"
 
 		wait_zfs_commit $SINGLEMDS 5
 		sync_all_data
@@ -3299,9 +3299,12 @@ test_89() {
 	rm -f $DIR/$tdir/$tfile
 	wait_mds_ost_sync || error "initial MDS-OST sync timed out"
 	wait_delete_completed || error "initial wait delete timed out"
-	BLOCKS1=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
+	local blocks1=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
+	local write_size=$(fs_log_size)
+
 	$SETSTRIPE -i 0 -c 1 $DIR/$tdir/$tfile
-	dd if=/dev/zero bs=1M count=10 of=$DIR/$tdir/$tfile
+	[ $write_size -lt 1024 ] && write_size=1024
+	dd if=/dev/zero bs=${write_size}k count=10 of=$DIR/$tdir/$tfile
 	sync
 	stop ost1
 	facet_failover $SINGLEMDS
@@ -3312,9 +3315,10 @@ test_89() {
 	client_up || error "client_up failed"
 	wait_mds_ost_sync || error "MDS-OST sync timed out"
 	wait_delete_completed || error "wait delete timed out"
-	BLOCKS2=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
-	[ $((BLOCKS2 - BLOCKS1)) -le 4  ] ||
-		error $((BLOCKS2 - BLOCKS1)) blocks leaked
+	local blocks2=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
+
+	[ $((blocks2 - blocks1)) -le $(fs_log_size)  ] ||
+		error $((blocks2 - blocks1)) blocks leaked
 }
 run_test 89 "no disk space leak on late ost connection"
 
