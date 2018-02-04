@@ -1773,12 +1773,15 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 }
 
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
-		       time64_t max_age, __u32 flags)
+		       u32 flags)
 {
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct obd_statfs obd_osfs;
-        int rc;
-        ENTRY;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct obd_statfs obd_osfs;
+	time64_t max_age;
+	int rc;
+
+	ENTRY;
+	max_age = ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS;
 
         rc = obd_statfs(NULL, sbi->ll_md_exp, osfs, max_age, flags);
         if (rc) {
@@ -1831,12 +1834,10 @@ int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 	CDEBUG(D_VFSTRACE, "VFS Op: at %llu jiffies\n", get_jiffies_64());
         ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STAFS, 1);
 
-        /* Some amount of caching on the client is allowed */
-        rc = ll_statfs_internal(sb, &osfs,
-				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
-                                0);
-        if (rc)
-                return rc;
+	/* Some amount of caching on the client is allowed */
+	rc = ll_statfs_internal(sb, &osfs, 0);
+	if (rc)
+		return rc;
 
         statfs_unpack(sfs, &osfs);
 

@@ -276,7 +276,8 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod)
 		RETURN_EXIT;
 
 	down_write(&lod->lod_qos.lq_rw_sem);
-	if (max_age <= obd->obd_osfs_age)
+
+	if (obd->obd_osfs_age > max_age)
 		goto out;
 
 	for (i = 0; i < osts->op_count; i++) {

@@ -59,9 +59,7 @@ static int ll_blksize_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(sb, &osfs,
-				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
-				OBD_STATFS_NODELAY);
+	rc = ll_statfs_internal(sb, &osfs, OBD_STATFS_NODELAY);
 	if (!rc)
 		seq_printf(m, "%u\n", osfs.os_bsize);
 	return rc;
@@ -106,9 +104,7 @@ static int ll_kbytestotal_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(sb, &osfs,
-				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
-				OBD_STATFS_NODELAY);
+	rc = ll_statfs_internal(sb, &osfs, OBD_STATFS_NODELAY);
 	if (!rc) {
 		__u32 blk_size = osfs.os_bsize >> 10;
 		__u64 result = osfs.os_blocks;
@@ -129,9 +125,7 @@ static int ll_kbytesfree_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(sb, &osfs,
-				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
-				OBD_STATFS_NODELAY);
+	rc = ll_statfs_internal(sb, &osfs, OBD_STATFS_NODELAY);
 	if (!rc) {
 		__u32 blk_size = osfs.os_bsize >> 10;
 		__u64 result = osfs.os_bfree;
@@ -152,9 +146,7 @@ static int ll_kbytesavail_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(sb, &osfs,
-				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
-				OBD_STATFS_NODELAY);
+	rc = ll_statfs_internal(sb, &osfs, OBD_STATFS_NODELAY);
 	if (!rc) {
 		__u32 blk_size = osfs.os_bsize >> 10;
 		__u64 result = osfs.os_bavail;
@@ -175,9 +167,7 @@ static int ll_filestotal_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(sb, &osfs,
-				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
-				OBD_STATFS_NODELAY);
+	rc = ll_statfs_internal(sb, &osfs, OBD_STATFS_NODELAY);
 	if (!rc)
 		seq_printf(m, "%llu\n", osfs.os_files);
 	return rc;
@@ -191,9 +181,7 @@ static int ll_filesfree_seq_show(struct seq_file *m, void *v)
 	int rc;
 
 	LASSERT(sb != NULL);
-	rc = ll_statfs_internal(sb, &osfs,
-				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
-				OBD_STATFS_NODELAY);
+	rc = ll_statfs_internal(sb, &osfs, OBD_STATFS_NODELAY);
 	if (!rc)
 		seq_printf(m, "%llu\n", osfs.os_ffree);
 	return rc;
