@@ -1008,6 +1008,9 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count);
 int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst,
 		       off_t pos, size_t count);
 
+int llapi_heat_get(int fd, struct lu_heat *heat);
+int llapi_heat_set(int fd, __u64 flags);
+
 /** @} llapi */
 
 #if defined(__cplusplus)

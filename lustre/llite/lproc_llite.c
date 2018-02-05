@@ -1098,6 +1098,109 @@ static ssize_t fast_read_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(fast_read);
 
+static ssize_t file_heat_show(struct kobject *kobj,
+			      struct attribute *attr,
+			      char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+			!!(sbi->ll_flags & LL_SBI_FILE_HEAT));
+}
+
+static ssize_t file_heat_store(struct kobject *kobj,
+			       struct attribute *attr,
+			       const char *buffer,
+			       size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	spin_lock(&sbi->ll_lock);
+	if (val)
+		sbi->ll_flags |= LL_SBI_FILE_HEAT;
+	else
+		sbi->ll_flags &= ~LL_SBI_FILE_HEAT;
+	spin_unlock(&sbi->ll_lock);
+
+	return count;
+}
+LUSTRE_RW_ATTR(file_heat);
+
+static ssize_t heat_decay_percentage_show(struct kobject *kobj,
+					  struct attribute *attr,
+					  char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+		       (sbi->ll_heat_decay_weight * 100 + 128) / 256);
+}
+
+static ssize_t heat_decay_percentage_store(struct kobject *kobj,
+					   struct attribute *attr,
+					   const char *buffer,
+					   size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	unsigned long val;
+	int rc;
+
+	rc = kstrtoul(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	if (val < 0 || val > 100)
+		return -ERANGE;
+
+	sbi->ll_heat_decay_weight = (val * 256 + 50) / 100;
+
+	return count;
+}
+LUSTRE_RW_ATTR(heat_decay_percentage);
+
+static ssize_t heat_period_second_show(struct kobject *kobj,
+				       struct attribute *attr,
+				       char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return snprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_heat_period_second);
+}
+
+static ssize_t heat_period_second_store(struct kobject *kobj,
+					struct attribute *attr,
+					const char *buffer,
+					size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	unsigned long val;
+	int rc;
+
+	rc = kstrtoul(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	if (val <= 0)
+		return -ERANGE;
+
+	sbi->ll_heat_period_second = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(heat_period_second);
+
 static int ll_unstable_stats_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block	*sb    = m->private;
@@ -1270,6 +1373,9 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_xattr_cache.attr,
 	&lustre_attr_fast_read.attr,
 	&lustre_attr_tiny_write.attr,
+	&lustre_attr_file_heat.attr,
+	&lustre_attr_heat_decay_percentage.attr,
+	&lustre_attr_heat_period_second.attr,
 	NULL,
 };
 

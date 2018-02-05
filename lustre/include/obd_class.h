@@ -1844,4 +1844,15 @@ extern struct miscdevice obd_psdev;
 int obd_ioctl_getdata(char **buf, int *len, void __user *arg);
 int class_procfs_init(void);
 int class_procfs_clean(void);
+
+extern void obd_heat_add(struct obd_heat_instance *instance,
+			 unsigned int time_second, __u64 count,
+			 unsigned int weight, unsigned int period_second);
+extern void obd_heat_decay(struct obd_heat_instance *instance,
+			   __u64 time_second, unsigned int weight,
+			   unsigned int period_second);
+extern __u64 obd_heat_get(struct obd_heat_instance *instance,
+			  unsigned int time_second, unsigned int weight,
+			  unsigned int period_second);
+extern void obd_heat_clear(struct obd_heat_instance *instance, int count);
 #endif /* __LINUX_OBD_CLASS_H */

@@ -20409,6 +20409,177 @@ test_812() {
 }
 run_test 812 "do not drop reqs generated when imp is going to idle (LU-11951)"
 
+test_813() {
+	local file_heat_sav=$($LCTL get_param -n llite.*.file_heat 2>/dev/null)
+	[ -z "$file_heat_sav" ] && skip "no file heat support"
+
+	local readsample
+	local writesample
+	local readbyte
+	local writebyte
+	local readsample1
+	local writesample1
+	local readbyte1
+	local writebyte1
+
+	local period_second=$($LCTL get_param -n llite.*.heat_period_second)
+	local decay_pct=$($LCTL get_param -n llite.*.heat_decay_percentage)
+
+	$LCTL set_param -n llite.*.file_heat=1
+	echo "Turn on file heat"
+	echo "Period second: $period_second, Decay percentage: $decay_pct"
+
+	echo "QQQQ" > $DIR/$tfile
+	echo "QQQQ" > $DIR/$tfile
+	echo "QQQQ" > $DIR/$tfile
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+
+	local out=$($LFS heat_get $DIR/$tfile)
+
+	$LFS heat_get $DIR/$tfile
+	readsample=$(echo "$out" | grep 'readsample' | awk '{ print $2 }')
+	writesample=$(echo "$out" | grep 'writesample' | awk '{ print $2 }')
+	readbyte=$(echo "$out" | grep 'readbyte' | awk '{ print $2 }')
+	writebyte=$(echo "$out" | grep 'writebyte' | awk '{ print $2 }')
+
+	[ $readsample -le 4 ] || error "read sample ($readsample) is wrong"
+	[ $writesample -le 3 ] || error "write sample ($writesample) is wrong"
+	[ $readbyte -le 20 ] || error "read bytes ($readbyte) is wrong"
+	[ $writebyte -le 15 ] || error "write bytes ($writebyte) is wrong"
+
+	sleep $((period_second + 3))
+	echo "Sleep $((period_second + 3)) seconds..."
+	# The recursion formula to calculate the heat of the file f is as
+	# follow:
+	# Hi+1(f) = (1-P)*Hi(f)+ P*Ci
+	# Where Hi is the heat value in the period between time points i*I and
+	# (i+1)*I; Ci is the access count in the period; the symbol P refers
+	# to the weight of Ci.
+	out=$($LFS heat_get $DIR/$tfile)
+	$LFS heat_get $DIR/$tfile
+	readsample=$(echo "$out" | grep 'readsample' | awk '{ print $2 }')
+	writesample=$(echo "$out" | grep 'writesample' | awk '{ print $2 }')
+	readbyte=$(echo "$out" | grep 'readbyte' | awk '{ print $2 }')
+	writebyte=$(echo "$out" | grep 'writebyte' | awk '{ print $2 }')
+
+	[ $(bc <<< "$readsample <= 4 * $decay_pct / 100") -eq 1 ] ||
+		error "read sample ($readsample) is wrong"
+	[ $(bc <<< "$writesample <= 3 * $decay_pct / 100") -eq 1 ] ||
+		error "write sample ($writesample) is wrong"
+	[ $(bc <<< "$readbyte <= 20 * $decay_pct / 100") -eq 1 ] ||
+		error "read bytes ($readbyte) is wrong"
+	[ $(bc <<< "$writebyte <= 15 * $decay_pct / 100") -eq 1 ] ||
+		error "write bytes ($writebyte) is wrong"
+
+	echo "QQQQ" > $DIR/$tfile
+	echo "QQQQ" > $DIR/$tfile
+	echo "QQQQ" > $DIR/$tfile
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+
+	sleep $((period_second + 3))
+	echo "Sleep $((period_second + 3)) seconds..."
+
+	out=$($LFS heat_get $DIR/$tfile)
+	$LFS heat_get $DIR/$tfile
+	readsample1=$(echo "$out" | grep 'readsample' | awk '{ print $2 }')
+	writesample1=$(echo "$out" | grep 'writesample' | awk '{ print $2 }')
+	readbyte1=$(echo "$out" | grep 'readbyte' | awk '{ print $2 }')
+	writebyte1=$(echo "$out" | grep 'writebyte' | awk '{ print $2 }')
+
+	[ $(bc <<< "$readsample1 <= ($readsample * (100 - $decay_pct) + \
+		4 * $decay_pct) / 100") -eq 1 ] ||
+		error "read sample ($readsample1) is wrong"
+	[ $(bc <<< "$writesample1 <= ($writesample * (100 - $decay_pct) + \
+		3 * $decay_pct) / 100") -eq 1 ] ||
+		error "write sample ($writesample1) is wrong"
+	[ $(bc <<< "$readbyte1 <= ($readbyte * (100 - $decay_pct) + \
+		20 * $decay_pct) / 100") -eq 1 ] ||
+		error "read bytes ($readbyte1) is wrong"
+	[ $(bc <<< "$writebyte1 <= ($writebyte * (100 - $decay_pct) + \
+		15 * $decay_pct) / 100") -eq 1 ] ||
+		error "write bytes ($writebyte1) is wrong"
+
+	echo "Turn off file heat for the file $DIR/$tfile"
+	$LFS heat_set -o $DIR/$tfile
+
+	echo "QQQQ" > $DIR/$tfile
+	echo "QQQQ" > $DIR/$tfile
+	echo "QQQQ" > $DIR/$tfile
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+
+	out=$($LFS heat_get $DIR/$tfile)
+	$LFS heat_get $DIR/$tfile
+	readsample=$(echo "$out" | grep 'readsample' | awk '{ print $2 }')
+	writesample=$(echo "$out" | grep 'writesample' | awk '{ print $2 }')
+	readbyte=$(echo "$out" | grep 'readbyte' | awk '{ print $2 }')
+	writebyte=$(echo "$out" | grep 'writebyte' | awk '{ print $2 }')
+
+	[ $readsample -eq 0 ] || error "read sample ($readsample) is wrong"
+	[ $writesample -eq 0 ] || error "write sample ($writesample) is wrong"
+	[ $readbyte -eq 0 ] || error "read bytes ($readbyte) is wrong"
+	[ $writebyte -eq 0 ] || error "write bytes ($writebyte) is wrong"
+
+	echo "Trun on file heat for the file $DIR/$tfile"
+	$LFS heat_set -O $DIR/$tfile
+
+	echo "QQQQ" > $DIR/$tfile
+	echo "QQQQ" > $DIR/$tfile
+	echo "QQQQ" > $DIR/$tfile
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+
+	out=$($LFS heat_get $DIR/$tfile)
+	$LFS heat_get $DIR/$tfile
+	readsample=$(echo "$out" | grep 'readsample' | awk '{ print $2 }')
+	writesample=$(echo "$out" | grep 'writesample' | awk '{ print $2 }')
+	readbyte=$(echo "$out" | grep 'readbyte' | awk '{ print $2 }')
+	writebyte=$(echo "$out" | grep 'writebyte' | awk '{ print $2 }')
+
+	[ $readsample -gt 0 ] || error "read sample ($readsample) is wrong"
+	[ $writesample -gt 0 ] || error "write sample ($writesample) is wrong"
+	[ $readbyte -gt 0 ] || error "read bytes ($readbyte) is wrong"
+	[ $writebyte -gt 0 ] || error "write bytes ($writebyte) is wrong"
+
+	$LFS heat_set -c $DIR/$tfile
+	$LCTL set_param -n llite.*.file_heat=0
+	echo "Turn off file heat support for the Lustre filesystem"
+
+	echo "QQQQ" > $DIR/$tfile
+	echo "QQQQ" > $DIR/$tfile
+	echo "QQQQ" > $DIR/$tfile
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+	cat $DIR/$tfile > /dev/null
+
+	out=$($LFS heat_get $DIR/$tfile)
+	$LFS heat_get $DIR/$tfile
+	readsample=$(echo "$out" | grep 'readsample' | awk '{ print $2 }')
+	writesample=$(echo "$out" | grep 'writesample' | awk '{ print $2 }')
+	readbyte=$(echo "$out" | grep 'readbyte' | awk '{ print $2 }')
+	writebyte=$(echo "$out" | grep 'writebyte' | awk '{ print $2 }')
+
+	[ $readsample -eq 0 ] || error "read sample ($readsample) is wrong"
+	[ $writesample -eq 0 ] || error "write sample ($writesample) is wrong"
+	[ $readbyte -eq 0 ] || error "read bytes ($readbyte) is wrong"
+	[ $writebyte -eq 0 ] || error "write bytes ($writebyte) is wrong"
+
+	$LCTL set_param -n llite.*.file_heat=$file_heat_sav
+	rm -f $DIR/$tfile
+}
+run_test 813 "File heat verfication"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

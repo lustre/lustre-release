@@ -142,6 +142,9 @@ static struct ll_sb_info *ll_init_sbi(void)
 	INIT_LIST_HEAD(&sbi->ll_squash.rsi_nosquash_nids);
 	init_rwsem(&sbi->ll_squash.rsi_sem);
 
+	/* Per-filesystem file heat */
+	sbi->ll_heat_decay_weight = SBI_DEFAULT_HEAT_DECAY_WEIGHT;
+	sbi->ll_heat_period_second = SBI_DEFAULT_HEAT_PERIOD_SECOND;
 	RETURN(sbi);
 }
 
@@ -973,6 +976,9 @@ void ll_lli_init(struct ll_inode_info *lli)
 		INIT_LIST_HEAD(&lli->lli_agl_list);
 		lli->lli_agl_index = 0;
 		lli->lli_async_rc = 0;
+		spin_lock_init(&lli->lli_heat_lock);
+		obd_heat_clear(lli->lli_heat_instances, OBD_HEAT_COUNT);
+		lli->lli_heat_flags = 0;
 	}
 	mutex_init(&lli->lli_layout_mutex);
 	memset(lli->lli_jobid, 0, sizeof(lli->lli_jobid));

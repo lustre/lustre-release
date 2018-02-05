@@ -945,4 +945,10 @@ static inline int lustre_to_lma_flags(__u32 la_flags)
 	return (la_flags & LUSTRE_ORPHAN_FL) ? LMAI_ORPHAN : 0;
 }
 
+struct obd_heat_instance {
+	__u64 ohi_heat;
+	__u64 ohi_time_second;
+	__u64 ohi_count;
+};
+
 #endif

@@ -119,6 +119,8 @@ static int lfs_swap_layouts(int argc, char **argv);
 static int lfs_mv(int argc, char **argv);
 static int lfs_ladvise(int argc, char **argv);
 static int lfs_getsom(int argc, char **argv);
+static int lfs_heat_get(int argc, char **argv);
+static int lfs_heat_set(int argc, char **argv);
 static int lfs_mirror(int argc, char **argv);
 static int lfs_mirror_list_commands(int argc, char **argv);
 static int lfs_list_commands(int argc, char **argv);
@@ -605,6 +607,15 @@ command_t cmdlist[] = {
 	 "\t-s: Only show the size value of the SOM data for a given file\n"
 	 "\t-b: Only show the blocks value of the SOM data for a given file\n"
 	 "\t-f: Only show the flags value of the SOM data for a given file\n"},
+	{"heat_get", lfs_heat_get, 0,
+	 "To get heat of files.\n"
+	 "usage: heat_get <file> ...\n"},
+	{"heat_set", lfs_heat_set, 0,
+	 "To set heat flags of files.\n"
+	 "usage: heat_set [--clear|-c] [--off|-o] [--on|-O] <file> ...\n"
+	 "\t--clear|-c:	Clear file heat for given files\n"
+	 "\t--off|-o:	Turn off file heat for given files\n"
+	 "\t--on|-O:	Turn on file heat for given files\n"},
 	{"help", Parser_help, 0, "help"},
 	{"exit", Parser_quit, 0, "quit"},
 	{"quit", Parser_quit, 0, "quit"},
@@ -7890,6 +7901,131 @@ static int lfs_ladvise(int argc, char **argv)
 			goto next;
 		}
 
+next:
+		if (rc == 0 && rc2 < 0)
+			rc = rc2;
+	}
+	return rc;
+}
+
+
+static const char *const heat_names[] = LU_HEAT_NAMES;
+
+static int lfs_heat_get(int argc, char **argv)
+{
+	struct lu_heat	*heat;
+	int		 rc = 0, rc2;
+	char		*path;
+	int		 fd;
+	int		 i;
+
+	if (argc <= 1)
+		return CMD_HELP;
+
+	heat = calloc(sizeof(*heat) + sizeof(__u64) * OBD_HEAT_COUNT, 1);
+	if (!heat) {
+		fprintf(stderr, "%s: memory allocation failed\n", argv[0]);
+		return -ENOMEM;
+	}
+
+	optind = 1;
+	while (optind < argc) {
+		path = argv[optind++];
+
+		fd = open(path, O_RDONLY);
+		if (fd < 0) {
+			fprintf(stderr, "%s: cannot open file '%s': %s\n",
+				argv[0], path, strerror(errno));
+			rc2 = -errno;
+			goto next;
+		}
+
+		heat->lh_count = OBD_HEAT_COUNT;
+		rc2 = llapi_heat_get(fd, heat);
+		close(fd);
+		if (rc2 < 0) {
+			fprintf(stderr, "%s: cannot get heat of file '%s'"
+				": %s\n", argv[0], path, strerror(errno));
+			goto next;
+		}
+
+		printf("flags: %x\n", heat->lh_flags);
+		for (i = 0; i < heat->lh_count; i++)
+			printf("%s: %llu\n", heat_names[i], heat->lh_heat[i]);
+next:
+		if (rc == 0 && rc2 < 0)
+			rc = rc2;
+	}
+
+	free(heat);
+	return rc;
+}
+
+static int lfs_heat_set(int argc, char **argv)
+{
+	struct option	 long_opts[] = {
+		{"clear", no_argument, 0, 'c'},
+		{"off", no_argument, 0, 'o'},
+		{"on", no_argument, 0, 'O'},
+		{0, 0, 0, 0}
+	};
+	char		 short_opts[] = "coO";
+	int		 rc = 0, rc2;
+	char		*path;
+	int		 fd;
+	__u64		 flags = 0;
+	int		 c;
+
+	if (argc <= 1)
+		return CMD_HELP;
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, short_opts,
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'c':
+			flags |= LU_HEAT_FLAG_CLEAR;
+			break;
+		case 'o':
+			flags |= LU_HEAT_FLAG_CLEAR;
+			flags |= LU_HEAT_FLAG_OFF;
+			break;
+		case 'O':
+			flags &= ~LU_HEAT_FLAG_OFF;
+			break;
+		case '?':
+			return CMD_HELP;
+		default:
+			fprintf(stderr, "%s: option '%s' unrecognized\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
+
+	if (argc <= optind) {
+		fprintf(stderr, "%s: please give one or more file names\n",
+			argv[0]);
+		return CMD_HELP;
+	}
+
+	while (optind < argc) {
+		path = argv[optind++];
+
+		fd = open(path, O_RDONLY);
+		if (fd < 0) {
+			fprintf(stderr, "%s: cannot open file '%s': %s\n",
+				argv[0], path, strerror(errno));
+			rc2 = -errno;
+			goto next;
+		}
+
+		rc2 = llapi_heat_set(fd, flags);
+		close(fd);
+		if (rc2 < 0) {
+			fprintf(stderr, "%s: cannot setflags heat of file '%s'"
+				": %s\n", argv[0], path, strerror(errno));
+			goto next;
+		}
 next:
 		if (rc == 0 && rc2 < 0)
 			rc = rc2;

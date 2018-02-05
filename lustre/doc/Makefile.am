@@ -42,6 +42,7 @@ MANFILES =					\
 	lfs-find.1				\
 	lfs-getstripe.1				\
 	lfs-getdirstripe.1			\
+	lfs-heat.1				\
 	lfs-hsm.1				\
 	lfs-ladvise.1				\
 	lfs_migrate.1				\
@@ -66,6 +67,8 @@ MANFILES =					\
 	llapi_file_open.3			\
 	llapi_group_lock.3			\
 	llapi_group_unlock.3			\
+	llapi_heat_get.3			\
+	llapi_heat_set.3			\
 	llapi_hsm_action_begin.3		\
 	llapi_hsm_action_end.3			\
 	llapi_hsm_action_get_dfid.3		\

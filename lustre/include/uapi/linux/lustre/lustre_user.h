@@ -477,6 +477,8 @@ struct ll_ioc_lease_id {
 #define LL_IOC_FID2MDTIDX		_IOWR('f', 248, struct lu_fid)
 #define LL_IOC_GETPARENT		_IOWR('f', 249, struct getparent)
 #define LL_IOC_LADVISE			_IOR('f', 250, struct llapi_lu_ladvise)
+#define LL_IOC_HEAT_GET			_IOWR('f', 251, struct lu_heat)
+#define LL_IOC_HEAT_SET			_IOW('f', 252, long)
 
 #ifndef	FS_IOC_FSGETXATTR
 /*
@@ -2184,6 +2186,36 @@ enum lockahead_results {
 	LLA_RESULT_SENT = 0,
 	LLA_RESULT_DIFFERENT,
 	LLA_RESULT_SAME,
+};
+
+enum lu_heat_flag_bit {
+	LU_HEAT_FLAG_BIT_INVALID = 0,
+	LU_HEAT_FLAG_BIT_OFF,
+	LU_HEAT_FLAG_BIT_CLEAR,
+};
+
+#define LU_HEAT_FLAG_CLEAR	(1 << LU_HEAT_FLAG_BIT_CLEAR)
+#define LU_HEAT_FLAG_OFF	(1 << LU_HEAT_FLAG_BIT_OFF)
+
+enum obd_heat_type {
+	OBD_HEAT_READSAMPLE	= 0,
+	OBD_HEAT_WRITESAMPLE	= 1,
+	OBD_HEAT_READBYTE	= 2,
+	OBD_HEAT_WRITEBYTE	= 3,
+	OBD_HEAT_COUNT
+};
+
+#define LU_HEAT_NAMES {					\
+	[OBD_HEAT_READSAMPLE]	= "readsample",		\
+	[OBD_HEAT_WRITESAMPLE]	= "writesample",	\
+	[OBD_HEAT_READBYTE]	= "readbyte",		\
+	[OBD_HEAT_WRITEBYTE]	= "writebyte",		\
+}
+
+struct lu_heat {
+	__u32 lh_count;
+	__u32 lh_flags;
+	__u64 lh_heat[0];
 };
 
 #if defined(__cplusplus)

@@ -1,0 +1,65 @@
+.TH llapi_heat_get 3 "2019 Feb 09" "Lustre User API"
+.SH NAME
+llapi_heat_get, llapi_heat_set \- get and clear heat for a file
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_heat_get(int " fd ", struct lu_heat *" heat ");"
+
+.BI "int llapi_heat_set(int " fd ", __u64 " flags ");"
+.fi
+.SH DESCRIPTION
+.PP
+The function
+.B llapi_heat_get()
+returns file access frequency information on the file descriptor
+.BR fd .
+Information is returned in the
+.I heat
+argument which should already be allocated,  which is a
+.B lu_heat
+data structure, which contains the following fields:
+.nf
+.LP
+struct lu_heat {
+	__u32 lh_heat_count;
+	__u32 lh_padding1;
+	__u64 lh_heat[0];
+};
+.fi
+The function
+.B llapi_heat_set()
+mainly clears the heat information on the file descriptor
+.I fd
+according to the parameter
+.I flags
+which gives options for file heat, currently one of:
+.TP
+LU_HEAT_FLAG_CLEAR
+Clear the heat information for a given file.
+.TP
+LU_HEAT_FLAG_OFF
+Turn off the file heat support for a given file.
+
+.SH RETURN VALUES
+.LP
+.B llapi_heat_get()
+and
+.B llapi_heat_set()
+return 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -ENOMEM
+Insufficient memory to complete operation.
+.TP
+.SM -EFAULT
+Memory region is not properly mapped.
+.TP
+.SM -EINVAL
+One or more invalid arguments are given.
+.TP
+.SM EOPNOTSUPP
+File heat operation is not supported.
+.SH "SEE ALSO"
+.BR lustreapi (7)

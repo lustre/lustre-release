@@ -199,6 +199,11 @@ struct ll_inode_info {
 			/* for writepage() only to communicate to fsync */
 			int			lli_async_rc;
 
+			/* protect the file heat fields */
+			spinlock_t			lli_heat_lock;
+			__u32				lli_heat_flags;
+			struct obd_heat_instance	lli_heat_instances[OBD_HEAT_COUNT];
+
 			/*
 			 * Whenever a process try to read/write the file, the
 			 * jobid of the process will be saved here, and it'll
@@ -456,7 +461,7 @@ enum stats_track_type {
 /*	LL_SBI_PIO	    0x1000000    parallel IO support, introduced in
 					 2.10, abandoned */
 #define LL_SBI_TINY_WRITE   0x2000000 /* tiny write support */
-
+#define LL_SBI_FILE_HEAT    0x4000000 /* file heat support */
 #define LL_SBI_FLAGS { 	\
 	"nolck",	\
 	"checksum",	\
@@ -484,6 +489,7 @@ enum stats_track_type {
 	"file_secctx",	\
 	"pio",		\
 	"tiny_write",	\
+	"file_heat",	\
 }
 
 /* This is embedded into llite super-blocks to keep track of connect
@@ -572,8 +578,14 @@ struct ll_sb_info {
 
 	struct kset		  ll_kset;	/* sysfs object */
 	struct completion	  ll_kobj_unregister;
+
+	/* File heat */
+	unsigned int		  ll_heat_decay_weight;
+	unsigned int		  ll_heat_period_second;
 };
 
+#define SBI_DEFAULT_HEAT_DECAY_WEIGHT	((80 * 256 + 50) / 100)
+#define SBI_DEFAULT_HEAT_PERIOD_SECOND	(60)
 /*
  * per file-descriptor read-ahead data.
  */
@@ -729,6 +741,11 @@ static inline bool ll_sbi_has_fast_read(struct ll_sb_info *sbi)
 static inline bool ll_sbi_has_tiny_write(struct ll_sb_info *sbi)
 {
 	return !!(sbi->ll_flags & LL_SBI_TINY_WRITE);
+}
+
+static inline bool ll_sbi_has_file_heat(struct ll_sb_info *sbi)
+{
+	return !!(sbi->ll_flags & LL_SBI_FILE_HEAT);
 }
 
 void ll_ras_enter(struct file *f);
