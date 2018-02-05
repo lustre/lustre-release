@@ -804,6 +804,7 @@ run_write_disjoint() {
     # threads per client
     wdisjoint_THREADS=${wdisjoint_THREADS:-4}
     wdisjoint_REP=${wdisjoint_REP:-10000}
+	chunk_size_limit=$1
 
     if [ "$NFSCLIENT" ]; then
         skip "skipped for NFSCLIENT mode"
@@ -823,7 +824,8 @@ run_write_disjoint() {
     # mpi_run uses mpiuser
     chmod 0777 $testdir
 
-    local cmd="$WRITE_DISJOINT -f $testdir/file -n $wdisjoint_REP"
+	local cmd="$WRITE_DISJOINT -f $testdir/file -n $wdisjoint_REP -m "\
+			  "$chunk_size_limit"
 
 	echo "+ $cmd"
 	mpi_run ${MACHINEFILE_OPTION} ${MACHINEFILE} \

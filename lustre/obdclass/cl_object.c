@@ -844,13 +844,11 @@ EXPORT_SYMBOL(cl_env_put);
  */
 void cl_attr2lvb(struct ost_lvb *lvb, const struct cl_attr *attr)
 {
-        ENTRY;
         lvb->lvb_size   = attr->cat_size;
         lvb->lvb_mtime  = attr->cat_mtime;
         lvb->lvb_atime  = attr->cat_atime;
         lvb->lvb_ctime  = attr->cat_ctime;
         lvb->lvb_blocks = attr->cat_blocks;
-        EXIT;
 }
 
 /**
@@ -860,13 +858,11 @@ void cl_attr2lvb(struct ost_lvb *lvb, const struct cl_attr *attr)
  */
 void cl_lvb2attr(struct cl_attr *attr, const struct ost_lvb *lvb)
 {
-        ENTRY;
         attr->cat_size   = lvb->lvb_size;
         attr->cat_mtime  = lvb->lvb_mtime;
         attr->cat_atime  = lvb->lvb_atime;
         attr->cat_ctime  = lvb->lvb_ctime;
         attr->cat_blocks = lvb->lvb_blocks;
-        EXIT;
 }
 EXPORT_SYMBOL(cl_lvb2attr);
 

@@ -385,7 +385,7 @@ else
 	FSXP=100
 fi
 
-test_16() {
+test_16a() {
 	local file1=$DIR1/$tfile
 	local file2=$DIR2/$tfile
 
@@ -404,7 +404,26 @@ test_16() {
 	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 -Z -r 4096 \
 		-w 4096 $file1 $file2 || error "fsx with O_DIRECT failed."
 }
-run_test 16 "$FSXNUM iterations of dual-mount fsx"
+run_test 16a "$FSXNUM iterations of dual-mount fsx"
+
+# Consistency check for tiny writes, LU-9409
+test_16b() {
+	local file1=$DIR1/$tfile
+	local file2=$DIR2/$tfile
+
+	# to allocate grant because it may run out due to test_15.
+	lfs setstripe -c -1 $file1
+	dd if=/dev/zero of=$file1 bs=$STRIPE_BYTES count=$OSTCOUNT oflag=sync
+	dd if=/dev/zero of=$file2 bs=$STRIPE_BYTES count=$OSTCOUNT oflag=sync
+	rm -f $file1
+
+	lfs setstripe -c -1 $file1 # b=10919
+	# -o is set to 8192 because writes < 1 page and between 1 and 2 pages
+	# create a mix of tiny writes & normal writes
+	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -o 8192 -S 0 $file1 \
+	$file2
+}
+run_test 16b "$FSXNUM iterations of dual-mount fsx at small size"
 
 test_17() { # bug 3513, 3667
 	remote_ost_nodsh && skip "remote OST with nodsh" && return

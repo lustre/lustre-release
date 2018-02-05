@@ -214,34 +214,28 @@ int osc_io_submit(const struct lu_env *env, const struct cl_io_slice *ios,
 EXPORT_SYMBOL(osc_io_submit);
 
 /**
- * This is called when a page is accessed within file in a way that creates
- * new page, if one were missing (i.e., if there were a hole at that place in
- * the file, or accessed page is beyond the current file size).
+ * This is called to update the attributes when modifying a specific page,
+ * both when making new pages and when doing updates to existing cached pages.
  *
  * Expand stripe KMS if necessary.
  */
-static void osc_page_touch_at(const struct lu_env *env,
-			      struct cl_object *obj, pgoff_t idx, size_t to)
+void osc_page_touch_at(const struct lu_env *env, struct cl_object *obj,
+		       pgoff_t idx, size_t to)
 {
-        struct lov_oinfo  *loi  = cl2osc(obj)->oo_oinfo;
-        struct cl_attr    *attr = &osc_env_info(env)->oti_attr;
-        int valid;
-        __u64 kms;
+	struct lov_oinfo  *loi  = cl2osc(obj)->oo_oinfo;
+	struct cl_attr    *attr = &osc_env_info(env)->oti_attr;
+	int valid;
+	__u64 kms;
 
-        /* offset within stripe */
-        kms = cl_offset(obj, idx) + to;
+	ENTRY;
 
-        cl_object_attr_lock(obj);
-        /*
-         * XXX old code used
-         *
-         *         ll_inode_size_lock(inode, 0); lov_stripe_lock(lsm);
-         *
-         * here
-         */
+	/* offset within stripe */
+	kms = cl_offset(obj, idx) + to;
+
+	cl_object_attr_lock(obj);
 	CDEBUG(D_INODE, "stripe KMS %sincreasing %llu->%llu %llu\n",
-               kms > loi->loi_kms ? "" : "not ", loi->loi_kms, kms,
-               loi->loi_lvb.lvb_size);
+	       kms > loi->loi_kms ? "" : "not ", loi->loi_kms, kms,
+	       loi->loi_lvb.lvb_size);
 
 	attr->cat_mtime = attr->cat_ctime = ktime_get_real_seconds();
 	valid = CAT_MTIME | CAT_CTIME;
@@ -255,6 +249,8 @@ static void osc_page_touch_at(const struct lu_env *env,
 	}
 	cl_object_attr_update(env, obj, attr, valid);
 	cl_object_attr_unlock(obj);
+
+	EXIT;
 }
 
 int osc_io_commit_async(const struct lu_env *env,

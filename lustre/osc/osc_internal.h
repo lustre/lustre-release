@@ -160,6 +160,8 @@ int osc_quotactl(struct obd_device *unused, struct obd_export *exp,
 void osc_inc_unstable_pages(struct ptlrpc_request *req);
 void osc_dec_unstable_pages(struct ptlrpc_request *req);
 bool osc_over_unstable_soft_limit(struct client_obd *cli);
+void osc_page_touch_at(const struct lu_env *env, struct cl_object *obj,
+		       pgoff_t idx, size_t to);
 
 struct ldlm_lock *osc_obj_dlmlock_at_pgoff(const struct lu_env *env,
 					   struct osc_object *obj,

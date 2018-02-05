@@ -53,9 +53,11 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <time.h>
 #include "mpi.h"
 
-#define CHUNK_MAX_SIZE 123456
+/* Chosen arbitrarily.  Actually running this large will take a long time.*/
+#define CHUNK_MAX_SIZE (1024*1024*16)
 
 void rprintf(int rank, int loop, const char *fmt, ...)
 {
@@ -84,20 +86,34 @@ int main (int argc, char *argv[]) {
         ssize_t ret;
         char *filename = "/mnt/lustre/write_disjoint";
         int numloops = 1000;
+	int max_size = CHUNK_MAX_SIZE;
         int random = 0;
+	unsigned int seed = 0;
+	int seed_provided = 0;
 
         error = MPI_Init(&argc, &argv);
         if (error != MPI_SUCCESS)
                 rprintf(-1, -1, "MPI_Init failed: %d\n", error);
         /* Parse command line options */
-        while ((c = getopt(argc, argv, "f:n:")) != EOF) {
+	while ((c = getopt(argc, argv, "f:n:m:s:")) != EOF) {
+		errno = 0;
                 switch (c) {
                 case 'f':
                         filename = optarg;
                         break;
                 case 'n':
                         numloops = strtoul(optarg, NULL, 0);
+			break;
+		case 'm':
+			max_size = strtoul(optarg, NULL, 0);
+			if (max_size > CHUNK_MAX_SIZE)
+				rprintf(-1, -1, "Chunk size larger than %d.\n",
+					CHUNK_MAX_SIZE);
                         break;
+		case 's':
+			seed = strtoul(optarg, NULL, 0);
+			seed_provided = 1;
+			break;
                 }
         }
 
@@ -106,10 +122,10 @@ int main (int argc, char *argv[]) {
 
         chunk_buf = malloc(noProcessors * sizeof(chunk_buf[0]));
         for (i=0; i < noProcessors; i++) {
-                chunk_buf[i] = malloc(CHUNK_MAX_SIZE);
-                memset(chunk_buf[i], 'A'+ i, CHUNK_MAX_SIZE);
+		chunk_buf[i] = malloc(max_size);
+		memset(chunk_buf[i], 'A' + i, max_size);
         }
-        read_buf = malloc(noProcessors * CHUNK_MAX_SIZE);
+	read_buf = malloc(noProcessors * max_size);
 
         if (rank == 0) {
                 fd = open(filename, O_WRONLY|O_CREAT|O_TRUNC, 0666);
@@ -123,6 +139,14 @@ int main (int argc, char *argv[]) {
         if (fd < 0)
                 rprintf(rank, -1, "open() returned %s\n", strerror(errno));
 
+	if (rank == 0) {
+		if (!seed_provided)
+			seed = (unsigned int) time(NULL);
+		printf("random seed: %d\n", seed);
+		srand(seed);
+	}
+
+
         for (n = 0; n < numloops; n++) {
                 /* reset the environment */
                 if (rank == 0) {
@@ -130,10 +154,11 @@ int main (int argc, char *argv[]) {
                         if (ret != 0)
                                 rprintf(rank, n, "truncate() returned %s\n",
                                         strerror(errno) );
+
                         random = rand();
                 }
                 MPI_Bcast(&random, 1, MPI_INT, 0, MPI_COMM_WORLD);
-                CHUNK_SIZE(n) = random % CHUNK_MAX_SIZE;
+		CHUNK_SIZE(n) = random % max_size;
 
                 if (n % 1000 == 0 && rank == 0)
                         printf("loop %d: chunk_size %lu\n", n, CHUNK_SIZE(n));

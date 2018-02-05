@@ -858,6 +858,38 @@ test_23b() { # bug 18988
 }
 run_test 23b "O_APPEND check"
 
+# LU-9409, size with O_APPEND and tiny writes
+test_23c() {
+	local file=$DIR/$tfile
+
+	# single dd
+	dd conv=notrunc oflag=append if=/dev/zero of=$file bs=8 count=800
+	$CHECKSTAT -s 6400 $file || error "wrong size, expected 6400"
+	rm -f $file
+
+	# racing tiny writes
+	dd conv=notrunc oflag=append if=/dev/zero of=$file bs=8 count=800 &
+	dd conv=notrunc oflag=append if=/dev/zero of=$file bs=8 count=800 &
+	wait
+	$CHECKSTAT -s 12800 $file || error "wrong size, expected 12800"
+	rm -f $file
+
+	#racing tiny & normal writes
+	dd conv=notrunc oflag=append if=/dev/zero of=$file bs=4096 count=4 &
+	dd conv=notrunc oflag=append if=/dev/zero of=$file bs=8 count=100 &
+	wait
+	$CHECKSTAT -s 17184 $file || error "wrong size, expected 17184"
+	rm -f $file
+
+	#racing tiny & normal writes 2, ugly numbers
+	dd conv=notrunc oflag=append if=/dev/zero of=$file bs=4099 count=11 &
+	dd conv=notrunc oflag=append if=/dev/zero of=$file bs=17 count=173 &
+	wait
+	$CHECKSTAT -s 48030 $file || error "wrong size, expected 48030"
+	rm -f $file
+}
+run_test 23c "O_APPEND size checks for tiny writes"
+
 # rename sanity
 test_24a() {
 	echo '-- same directory rename'

@@ -1563,6 +1563,101 @@ out:
 	return result;
 }
 
+/**
+ * Similar trick to ll_do_fast_read, this improves write speed for tiny writes.
+ * If a page is already in the page cache and dirty (and some other things -
+ * See ll_tiny_write_begin for the instantiation of these rules), then we can
+ * write to it without doing a full I/O, because Lustre already knows about it
+ * and will write it out.  This saves a lot of processing time.
+ *
+ * All writes here are within one page, so exclusion is handled by the page
+ * lock on the vm page.  Exception is appending, which requires locking the
+ * full file to handle size issues.  We do not do tiny writes for writes which
+ * touch multiple pages because it's very unlikely multiple sequential pages
+ * are already dirty.
+ *
+ * We limit these to < PAGE_SIZE because PAGE_SIZE writes are relatively common
+ * and are unlikely to be to already dirty pages.
+ *
+ * Attribute updates are important here, we do it in ll_tiny_write_end.
+ */
+static ssize_t ll_do_tiny_write(struct kiocb *iocb, struct iov_iter *iter)
+{
+	ssize_t count = iov_iter_count(iter);
+	struct file *file = iocb->ki_filp;
+	struct inode *inode = file_inode(file);
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct range_lock range;
+	ssize_t result = 0;
+	bool append = false;
+
+	ENTRY;
+
+	/* NB: we can't do direct IO for tiny writes because they use the page
+	 * cache, and we can't do sync writes because tiny writes can't flush
+	 * pages.
+	 */
+	if (file->f_flags & (O_DIRECT | O_SYNC))
+		RETURN(0);
+
+	/* It is relatively unlikely we will overwrite a full dirty page, so
+	 * limit tiny writes to < PAGE_SIZE
+	 */
+	if (count >= PAGE_SIZE)
+		RETURN(0);
+
+	/* For append writes, we must take the range lock to protect size
+	 * and also move pos to current size before writing.
+	 */
+	if (file->f_flags & O_APPEND) {
+		struct lu_env *env;
+		__u16 refcheck;
+
+		append = true;
+		range_lock_init(&range, 0, LUSTRE_EOF);
+		result = range_lock(&lli->lli_write_tree, &range);
+		if (result)
+			RETURN(result);
+		env = cl_env_get(&refcheck);
+		if (IS_ERR(env))
+			GOTO(out, result = PTR_ERR(env));
+		ll_merge_attr(env, inode);
+		cl_env_put(env, &refcheck);
+		iocb->ki_pos = i_size_read(inode);
+	}
+
+	/* Does this write touch multiple pages?
+	 *
+	 * This partly duplicates the PAGE_SIZE check above, but must come
+	 * after range locking for append writes because it depends on the
+	 * write position (ki_pos).
+	 */
+	if ((iocb->ki_pos & (PAGE_SIZE-1)) + count > PAGE_SIZE)
+		goto out;
+
+	result = __generic_file_write_iter(iocb, iter);
+
+	/* If the page is not already dirty, ll_tiny_write_begin returns
+	 * -ENODATA.  We continue on to normal write.
+	 */
+	if (result == -ENODATA)
+		result = 0;
+
+	if (result > 0) {
+		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_WRITE_BYTES,
+				   result);
+		ll_file_set_flag(ll_i2info(inode), LLIF_DATA_MODIFIED);
+	}
+
+out:
+	if (append)
+		range_unlock(&lli->lli_write_tree, &range);
+
+	CDEBUG(D_VFSTRACE, "result: %zu, original count %zu\n", result, count);
+
+	RETURN(result);
+}
+
 /*
  * Write to a file (through the page cache).
  */
@@ -1570,8 +1665,18 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
 	struct vvp_io_args *args;
 	struct lu_env *env;
-	ssize_t result;
+	ssize_t rc_tiny, rc_normal;
 	__u16 refcheck;
+
+	ENTRY;
+
+	rc_tiny = ll_do_tiny_write(iocb, from);
+
+	/* In case of error, go on and try normal write - Only stop if tiny
+	 * write completed I/O.
+	 */
+	if (iov_iter_count(from) == 0)
+		GOTO(out, rc_normal = rc_tiny);
 
 	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
@@ -1581,10 +1686,21 @@ static ssize_t ll_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	args->u.normal.via_iter = from;
 	args->u.normal.via_iocb = iocb;
 
-	result = ll_file_io_generic(env, args, iocb->ki_filp, CIT_WRITE,
+	rc_normal = ll_file_io_generic(env, args, iocb->ki_filp, CIT_WRITE,
 				    &iocb->ki_pos, iov_iter_count(from));
+
+	/* On success, combine bytes written. */
+	if (rc_tiny >= 0 && rc_normal > 0)
+		rc_normal += rc_tiny;
+	/* On error, only return error from normal write if tiny write did not
+	 * write any bytes.  Otherwise return bytes written by tiny write.
+	 */
+	else if (rc_tiny > 0)
+		rc_normal = rc_tiny;
+
 	cl_env_put(env, &refcheck);
-	return result;
+out:
+	RETURN(rc_normal);
 }
 
 #ifndef HAVE_FILE_OPERATIONS_READ_WRITE_ITER
@@ -1694,31 +1810,24 @@ static ssize_t ll_file_aio_write(struct kiocb *iocb, const struct iovec *iov,
 static ssize_t ll_file_write(struct file *file, const char __user *buf,
 			     size_t count, loff_t *ppos)
 {
-	struct lu_env *env;
 	struct iovec   iov = { .iov_base = (void __user *)buf,
 			       .iov_len = count };
-        struct kiocb  *kiocb;
-        ssize_t        result;
-	__u16          refcheck;
-        ENTRY;
+	struct kiocb   kiocb;
+	ssize_t        result;
 
-        env = cl_env_get(&refcheck);
-        if (IS_ERR(env))
-                RETURN(PTR_ERR(env));
+	ENTRY;
 
-	kiocb = &ll_env_info(env)->lti_kiocb;
-        init_sync_kiocb(kiocb, file);
-        kiocb->ki_pos = *ppos;
+	init_sync_kiocb(&kiocb, file);
+	kiocb.ki_pos = *ppos;
 #ifdef HAVE_KIOCB_KI_LEFT
-	kiocb->ki_left = count;
+	kiocb.ki_left = count;
 #elif defined(HAVE_KI_NBYTES)
-	kiocb->ki_nbytes = count;
+	kiocb.ki_nbytes = count;
 #endif
 
-	result = ll_file_aio_write(kiocb, &iov, 1, kiocb->ki_pos);
-	*ppos = kiocb->ki_pos;
+	result = ll_file_aio_write(&kiocb, &iov, 1, kiocb.ki_pos);
+	*ppos = kiocb.ki_pos;
 
-	cl_env_put(env, &refcheck);
 	RETURN(result);
 }
 #endif /* !HAVE_FILE_OPERATIONS_READ_WRITE_ITER */

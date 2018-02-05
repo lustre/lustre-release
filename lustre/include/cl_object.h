@@ -869,6 +869,13 @@ struct cl_page_operations {
          */
         int (*cpo_is_vmlocked)(const struct lu_env *env,
                                const struct cl_page_slice *slice);
+
+	/**
+	 * Update file attributes when all we have is this page.  Used for tiny
+	 * writes to update attributes when we don't have a full cl_io.
+	 */
+	void (*cpo_page_touch)(const struct lu_env *env,
+			       const struct cl_page_slice *slice, size_t to);
         /**
          * Page destruction.
          */
@@ -2227,6 +2234,8 @@ void    cl_page_discard(const struct lu_env *env, struct cl_io *io,
 void    cl_page_delete(const struct lu_env *env, struct cl_page *pg);
 int     cl_page_is_vmlocked(const struct lu_env *env,
 			    const struct cl_page *pg);
+void	cl_page_touch(const struct lu_env *env, const struct cl_page *pg,
+		      size_t to);
 void    cl_page_export(const struct lu_env *env,
 		       struct cl_page *pg, int uptodate);
 loff_t  cl_offset(const struct cl_object *obj, pgoff_t idx);

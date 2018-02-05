@@ -136,10 +136,17 @@ test_write_append_truncate() {
 }
 run_test write_append_truncate "write_append_truncate"
 
+# Argument is chunk size limit, the upper bound on write size
 test_write_disjoint() {
-    run_write_disjoint
+    run_write_disjoint 123456
 }
 run_test write_disjoint "write_disjoint"
+
+# Make sure to exercise the tiny write code
+test_write_disjoint() {
+    run_write_disjoint 16384
+}
+run_test write_disjoint "write_disjoint_tiny"
 
 test_parallel_grouplock() {
     run_parallel_grouplock

@@ -250,12 +250,22 @@ static int osc_page_flush(const struct lu_env *env,
 	RETURN(rc);
 }
 
+static void osc_page_touch(const struct lu_env *env,
+			  const struct cl_page_slice *slice, size_t to)
+{
+	struct osc_page *opg = cl2osc_page(slice);
+	struct cl_object *obj = opg->ops_cl.cpl_obj;
+
+	osc_page_touch_at(env, obj, osc_index(opg), to);
+}
+
 static const struct cl_page_operations osc_page_ops = {
 	.cpo_print         = osc_page_print,
 	.cpo_delete        = osc_page_delete,
 	.cpo_clip           = osc_page_clip,
 	.cpo_cancel         = osc_page_cancel,
-	.cpo_flush          = osc_page_flush
+	.cpo_flush          = osc_page_flush,
+	.cpo_page_touch	   = osc_page_touch,
 };
 
 int osc_page_init(const struct lu_env *env, struct cl_object *obj,
