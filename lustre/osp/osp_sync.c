@@ -314,7 +314,7 @@ static inline int osp_sync_can_process_new(struct osp_device *d,
  * \retval negative	negated errno on error
  */
 int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
-			 llog_op_type type, struct thandle *th)
+			 enum llog_op_type type, struct thandle *th)
 {
 	struct osp_thread_info	*osi = osp_env_info(env);
 	struct osp_device	*d = lu2osp_dev(o->opo_obj.do_lu.lo_dev);
@@ -374,7 +374,7 @@ int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
  * \retval negative	negated errno on error
  */
 static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
-			    const struct lu_fid *fid, llog_op_type type,
+			    const struct lu_fid *fid, enum llog_op_type type,
 			    int count, struct thandle *th,
 			    const struct lu_attr *attr)
 {
@@ -462,7 +462,7 @@ static int osp_sync_add_rec(const struct lu_env *env, struct osp_device *d,
 }
 
 int osp_sync_add(const struct lu_env *env, struct osp_object *o,
-		 llog_op_type type, struct thandle *th,
+		 enum llog_op_type type, struct thandle *th,
 		 const struct lu_attr *attr)
 {
 	return osp_sync_add_rec(env, lu2osp_dev(o->opo_obj.do_lu.lo_dev),
@@ -674,7 +674,7 @@ static void osp_sync_send_new_rpc(struct osp_device *d,
  * \retval ERR_PTR(errno)	on error
  */
 static struct ptlrpc_request *osp_sync_new_job(struct osp_device *d,
-					       ost_cmd_t op,
+					       enum ost_cmd op,
 					       const struct req_format *format)
 {
 	struct ptlrpc_request	*req;

@@ -80,21 +80,24 @@ extern "C" {
 };
 #define PRJQUOTA 2
 
-#if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__) || \
-    defined(__craynv) || defined(__mips64__) || defined(__powerpc64__) || \
-    defined(__aarch64__)
-typedef struct stat	lstat_t;
-# define lstat_f	lstat
-# define fstat_f	fstat
-# define fstatat_f	fstatat
-# define HAVE_LOV_USER_MDS_DATA
-#elif defined(__USE_LARGEFILE64) || defined(__KERNEL__)
-typedef struct stat64	lstat_t;
-# define lstat_f	lstat64
-# define fstat_f	fstat64
-# define fstatat_f	fstatat64
-# define HAVE_LOV_USER_MDS_DATA
+/*
+ * We need to always use 64bit version because the structure
+ * is shared across entire cluster where 32bit and 64bit machines
+ * are co-existing.
+ */
+#if __BITS_PER_LONG != 64 || defined(__ARCH_WANT_STAT64)
+typedef struct stat64   lstat_t;
+#define lstat_f  lstat64
+#define fstat_f         fstat64
+#define fstatat_f       fstatat64
+#else
+typedef struct stat     lstat_t;
+#define lstat_f  lstat
+#define fstat_f         fstat
+#define fstatat_f       fstatat
 #endif
+
+#define HAVE_LOV_USER_MDS_DATA
 
 #define LUSTRE_EOF 0xffffffffffffffffULL
 
@@ -892,9 +895,9 @@ struct identity_downcall_data {
 #define LUSTRE_VOLATILE_HDR	".\x0c\x13\x14\x12:VOLATILE"
 #define LUSTRE_VOLATILE_HDR_LEN	14
 
-typedef enum lustre_quota_version {
+enum lustre_quota_version {
 	LUSTRE_QUOTA_V2 = 1
-} lustre_quota_version_t;
+};
 
 /* XXX: same as if_dqinfo struct in kernel */
 struct obd_dqinfo {

@@ -956,18 +956,18 @@ struct obd_connect_data {
  * Please update DECLARE_CKSUM_NAME/OBD_CKSUM_ALL in obd.h when adding a new
  * algorithm and also the OBD_FL_CKSUM* flags.
  */
-typedef enum cksum_types {
+enum cksum_types {
         OBD_CKSUM_CRC32 = 0x00000001,
         OBD_CKSUM_ADLER = 0x00000002,
         OBD_CKSUM_CRC32C= 0x00000004,
-} cksum_type_t;
+};
 
 /*
  *   OST requests: OBDO & OBD request records
  */
 
 /* opcodes */
-typedef enum {
+enum ost_cmd {
         OST_REPLY      =  0,       /* reply ? */
         OST_GETATTR    =  1,
         OST_SETATTR    =  2,
@@ -989,7 +989,7 @@ typedef enum {
 	OST_QUOTA_ADJUST_QUNIT = 20, /* not used since 2.4 */
 	OST_LADVISE    = 21,
 	OST_LAST_OPC /* must be < 33 to avoid MDS_GETATTR */
-} ost_cmd_t;
+};
 #define OST_FIRST_OPC  OST_REPLY
 
 enum obdo_flags {
@@ -1521,11 +1521,11 @@ struct lquota_lvb {
 #define lvb_glb_ver  lvb_id_may_rel /* current version of the global index */
 
 /* op codes */
-typedef enum {
+enum quota_cmd {
 	QUOTA_DQACQ	= 601,
 	QUOTA_DQREL	= 602,
 	QUOTA_LAST_OPC
-} quota_cmd_t;
+};
 #define QUOTA_FIRST_OPC	QUOTA_DQACQ
 
 /*
@@ -1533,7 +1533,7 @@ typedef enum {
  */
 
 /* opcodes */
-typedef enum {
+enum mds_cmd {
 	MDS_GETATTR		= 33,
 	MDS_GETATTR_NAME	= 34,
 	MDS_CLOSE		= 35,
@@ -1564,16 +1564,16 @@ typedef enum {
 	MDS_HSM_CT_UNREGISTER	= 60,
 	MDS_SWAP_LAYOUTS	= 61,
 	MDS_LAST_OPC
-} mds_cmd_t;
+};
 
 #define MDS_FIRST_OPC    MDS_GETATTR
 
 
 /* opcodes for object update */
-typedef enum {
+enum update_cmd {
 	OUT_UPDATE	= 1000,
 	OUT_UPDATE_LAST_OPC
-} update_cmd_t;
+};
 
 #define OUT_UPDATE_FIRST_OPC    OUT_UPDATE
 
@@ -2214,12 +2214,12 @@ enum fld_op {
 };
 
 /* LFSCK opcodes */
-typedef enum {
+enum lfsck_cmd {
 	LFSCK_NOTIFY		= 1101,
 	LFSCK_QUERY		= 1102,
 	LFSCK_LAST_OPC,
-	LFSCK_FIRST_OPC 	= LFSCK_NOTIFY
-} lfsck_cmd_t;
+	LFSCK_FIRST_OPC		= LFSCK_NOTIFY
+};
 
 /*
  *  LOV data structures
@@ -2255,7 +2255,7 @@ struct lov_desc {
  *   LDLM requests:
  */
 /* opcodes -- MUST be distinct from OST/MDS opcodes */
-typedef enum {
+enum ldlm_cmd {
         LDLM_ENQUEUE     = 101,
         LDLM_CONVERT     = 102,
         LDLM_CANCEL      = 103,
@@ -2264,7 +2264,7 @@ typedef enum {
         LDLM_GL_CALLBACK = 106,
         LDLM_SET_INFO    = 107,
         LDLM_LAST_OPC
-} ldlm_cmd_t;
+};
 #define LDLM_FIRST_OPC LDLM_ENQUEUE
 
 #define RES_NAME_SIZE 4
@@ -2279,7 +2279,7 @@ struct ldlm_res_id {
 			(unsigned long long)(res)->lr_name.name[3]
 
 /* lock types */
-typedef enum ldlm_mode {
+enum ldlm_mode {
 	LCK_MINMODE	= 0,
 	LCK_EX		= 1,
 	LCK_PW		= 2,
@@ -2290,17 +2290,17 @@ typedef enum ldlm_mode {
 	LCK_GROUP	= 64,
 	LCK_COS		= 128,
 	LCK_MAXMODE
-} ldlm_mode_t;
+};
 
 #define LCK_MODE_NUM    8
 
-typedef enum ldlm_type {
+enum ldlm_type {
 	LDLM_PLAIN	= 10,
 	LDLM_EXTENT	= 11,
 	LDLM_FLOCK	= 12,
 	LDLM_IBITS	= 13,
 	LDLM_MAX_TYPE
-} ldlm_type_t;
+};
 
 #define LDLM_MIN_TYPE LDLM_PLAIN
 
@@ -2335,11 +2335,11 @@ struct ldlm_flock_wire {
  * this ever changes we will need to swab the union differently based
  * on the resource type. */
 
-typedef union ldlm_wire_policy_data {
+union ldlm_wire_policy_data {
 	struct ldlm_extent	l_extent;
 	struct ldlm_flock_wire	l_flock;
 	struct ldlm_inodebits	l_inodebits;
-} ldlm_wire_policy_data_t;
+};
 
 struct barrier_lvb {
 	__u32	lvb_status;
@@ -2420,7 +2420,7 @@ struct ldlm_reply {
 /*
  * Opcodes for mountconf (mgs and mgc)
  */
-typedef enum {
+enum mgs_cmd {
         MGS_CONNECT = 250,
         MGS_DISCONNECT,
         MGS_EXCEPTION,         /* node died, etc. */
@@ -2429,7 +2429,7 @@ typedef enum {
         MGS_SET_INFO,
         MGS_CONFIG_READ,
         MGS_LAST_OPC
-} mgs_cmd_t;
+};
 #define MGS_FIRST_OPC MGS_CONNECT
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 13, 53, 0)
@@ -2522,14 +2522,13 @@ struct cfg_marker {
 /*
  * Opcodes for multiple servers.
  */
-
-typedef enum {
+enum obd_cmd {
         OBD_PING = 400,
         OBD_LOG_CANCEL,
 	OBD_QC_CALLBACK, /* not used since 2.4 */
 	OBD_IDX_READ,
         OBD_LAST_OPC
-} obd_cmd_t;
+};
 #define OBD_FIRST_OPC OBD_PING
 
 /**
@@ -2579,7 +2578,7 @@ struct llog_catid {
 #define LLOG_OP_MAGIC 0x10600000
 #define LLOG_OP_MASK  0xfff00000
 
-typedef enum {
+enum llog_op_type {
 	LLOG_PAD_MAGIC		= LLOG_OP_MAGIC | 0x00000,
 	OST_SZ_REC		= LLOG_OP_MAGIC | 0x00f00,
 	/* OST_RAID1_REC	= LLOG_OP_MAGIC | 0x01000, never used */
@@ -2600,7 +2599,7 @@ typedef enum {
 	UPDATE_REC		= LLOG_OP_MAGIC | 0xa0000,
 	LLOG_HDR_MAGIC		= LLOG_OP_MAGIC | 0x45539,
 	LLOG_LOGID_MAGIC	= LLOG_OP_MAGIC | 0x4553b,
-} llog_op_type;
+};
 
 #define LLOG_REC_HDR_NEEDS_SWABBING(r) \
 	(((r)->lrh_type & __swab32(LLOG_OP_MASK)) == __swab32(LLOG_OP_MAGIC))
@@ -3107,13 +3106,13 @@ union lu_page {
 };
 
 /* security opcodes */
-typedef enum {
+enum sec_cmd {
         SEC_CTX_INIT            = 801,
         SEC_CTX_INIT_CONT       = 802,
         SEC_CTX_FINI            = 803,
         SEC_LAST_OPC,
         SEC_FIRST_OPC           = SEC_CTX_INIT
-} sec_cmd_t;
+};
 
 /*
  * capa related definitions
