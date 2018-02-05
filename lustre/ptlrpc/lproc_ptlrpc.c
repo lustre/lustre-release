@@ -1196,6 +1196,9 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
 		{ .name = "nrs_policies",
 		  .fops = &ptlrpc_lprocfs_nrs_fops,
 		  .data = svc },
+		{ .name = "req_buffers_max",
+		  .fops = &ptlrpc_lprocfs_req_buffers_max_fops,
+		  .data = svc },
 		{ NULL }
         };
         static struct file_operations req_history_fops = {
