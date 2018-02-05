@@ -46,8 +46,6 @@
 #define SCRUB_CHECKPOINT_INTERVAL	60
 #define SCRUB_WINDOW_SIZE		1024
 
-#define HALF_SEC			msecs_to_jiffies(MSEC_PER_SEC >> 1)
-
 enum scrub_next_status {
 	/* exit current loop and process next group */
 	SCRUB_NEXT_BREAK	= 1,
@@ -202,13 +200,13 @@ struct scrub_file {
 	__u16   sf_param;
 
 	/* The time for the last OI scrub completed. */
-	__u64   sf_time_last_complete;
+	time64_t sf_time_last_complete;
 
-	/* The time for the latest OI scrub ran. */
-	__u64   sf_time_latest_start;
+	/* The ttime for the latest OI scrub ran. */
+	time64_t sf_time_latest_start;
 
 	/* The time for the last OI scrub checkpoint. */
-	__u64   sf_time_last_checkpoint;
+	time64_t sf_time_last_checkpoint;
 
 	/* The position for the latest OI scrub started from. */
 	__u64   sf_pos_latest_start;
@@ -237,8 +235,11 @@ struct scrub_file {
 	/* How many IGIF objects. */
 	__u64   sf_items_igif;
 
-	/* How long the OI scrub has run. */
-	__u32   sf_run_time;
+	/* How long the OI scrub has run in seconds. Do NOT change
+	 * to time64_t since this breaks backwards compatibility.
+	 * It shouldn't take more than 136 years to complete :-)
+	 */
+	time_t	sf_run_time;
 
 	/* How many completed OI scrub ran on the device. */
 	__u32   sf_success_count;
@@ -276,11 +277,11 @@ struct lustre_scrub {
 
 	const char	       *os_name;
 
-	/* The time for last checkpoint, jiffies */
-	cfs_time_t		os_time_last_checkpoint;
+	/* The time for last checkpoint, seconds */
+	time64_t		os_time_last_checkpoint;
 
-	/* The time for next checkpoint, jiffies */
-	cfs_time_t		os_time_next_checkpoint;
+	/* The time for next checkpoint, seconds */
+	time64_t		os_time_next_checkpoint;
 
 	/* How many objects have been checked since last checkpoint. */
 	__u64			os_new_checked;

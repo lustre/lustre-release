@@ -238,9 +238,9 @@ log:
 		CDEBUG(D_LFSCK, "%s: store scrub file: rc = %d\n",
 		       scrub->os_name, rc);
 
-	scrub->os_time_last_checkpoint = cfs_time_current();
+	scrub->os_time_last_checkpoint = ktime_get_seconds();
 	scrub->os_time_next_checkpoint = scrub->os_time_last_checkpoint +
-				cfs_time_seconds(SCRUB_CHECKPOINT_INTERVAL);
+					 SCRUB_CHECKPOINT_INTERVAL;
 	return rc;
 }
 EXPORT_SYMBOL(scrub_file_store);
@@ -248,10 +248,10 @@ EXPORT_SYMBOL(scrub_file_store);
 int scrub_checkpoint(const struct lu_env *env, struct lustre_scrub *scrub)
 {
 	struct scrub_file *sf = &scrub->os_file;
+	time64_t now = ktime_get_seconds();
 	int rc;
 
-	if (likely(cfs_time_before(cfs_time_current(),
-				   scrub->os_time_next_checkpoint) ||
+	if (likely(now < scrub->os_time_next_checkpoint ||
 		   scrub->os_new_checked == 0))
 		return 0;
 
@@ -262,9 +262,8 @@ int scrub_checkpoint(const struct lu_env *env, struct lustre_scrub *scrub)
 	sf->sf_items_checked += scrub->os_new_checked;
 	scrub->os_new_checked = 0;
 	sf->sf_pos_last_checkpoint = scrub->os_pos_current;
-	sf->sf_time_last_checkpoint = cfs_time_current_sec();
-	sf->sf_run_time += cfs_duration_sec(cfs_time_current() + HALF_SEC -
-					    scrub->os_time_last_checkpoint);
+	sf->sf_time_last_checkpoint = ktime_get_real_seconds();
+	sf->sf_run_time += now - scrub->os_time_last_checkpoint;
 	rc = scrub_file_store(env, scrub);
 	up_write(&scrub->os_rwsem);
 
@@ -390,11 +389,12 @@ static void scrub_bits_dump(struct seq_file *m, int bits, const char *names[],
 	}
 }
 
-static void scrub_time_dump(struct seq_file *m, __u64 time, const char *prefix)
+static void scrub_time_dump(struct seq_file *m, time64_t time,
+			    const char *prefix)
 {
 	if (time != 0)
 		seq_printf(m, "%s: %llu seconds\n", prefix,
-			   cfs_time_current_sec() - time);
+			   ktime_get_real_seconds() - time);
 	else
 		seq_printf(m, "%s: N/A\n", prefix);
 }
@@ -410,8 +410,8 @@ static void scrub_pos_dump(struct seq_file *m, __u64 pos, const char *prefix)
 void scrub_dump(struct seq_file *m, struct lustre_scrub *scrub)
 {
 	struct scrub_file *sf = &scrub->os_file;
-	__u64 checked;
-	__u64 speed;
+	u64 checked;
+	s64 speed;
 
 	down_read(&scrub->os_rwsem);
 	seq_printf(m, "name: OI_scrub\n"
@@ -460,33 +460,40 @@ void scrub_dump(struct seq_file *m, struct lustre_scrub *scrub)
 
 	speed = checked;
 	if (thread_is_running(&scrub->os_thread)) {
-		cfs_duration_t duration = cfs_time_current() -
-					  scrub->os_time_last_checkpoint;
-		__u64 new_checked = msecs_to_jiffies(scrub->os_new_checked *
-						     MSEC_PER_SEC);
-		__u32 rtime = sf->sf_run_time +
-			      cfs_duration_sec(duration + HALF_SEC);
+		s64 new_checked = scrub->os_new_checked;
+		time64_t duration;
+		time64_t rtime;
 
+		/* Since the time resolution is in seconds for new system
+		 * or small devices it ismore likely that duration will be
+		 * zero which will lead to inaccurate results.
+		 */
+		duration = ktime_get_seconds() -
+			   scrub->os_time_last_checkpoint;
 		if (duration != 0)
-			do_div(new_checked, duration);
+			new_checked = div_s64(new_checked, duration);
+
+		rtime = sf->sf_run_time + duration;
 		if (rtime != 0)
-			do_div(speed, rtime);
-		seq_printf(m, "run_time: %u seconds\n"
-			   "average_speed: %llu objects/sec\n"
-			   "real-time_speed: %llu objects/sec\n"
+			speed = div_s64(speed, rtime);
+
+		seq_printf(m, "run_time: %lld seconds\n"
+			   "average_speed: %lld objects/sec\n"
+			   "real-time_speed: %lld objects/sec\n"
 			   "current_position: %llu\n"
 			   "scrub_in_prior: %s\n"
 			   "scrub_full_speed: %s\n"
 			   "partial_scan: %s\n",
-			   rtime, speed, new_checked, scrub->os_pos_current,
+			   rtime, speed, new_checked,
+			   scrub->os_pos_current,
 			   scrub->os_in_prior ? "yes" : "no",
 			   scrub->os_full_speed ? "yes" : "no",
 			   scrub->os_partial_scan ? "yes" : "no");
 	} else {
 		if (sf->sf_run_time != 0)
-			do_div(speed, sf->sf_run_time);
-		seq_printf(m, "run_time: %u seconds\n"
-			   "average_speed: %llu objects/sec\n"
+			speed = div_s64(speed, sf->sf_run_time);
+		seq_printf(m, "run_time: %ld seconds\n"
+			   "average_speed: %lld objects/sec\n"
 			   "real-time_speed: N/A\n"
 			   "current_position: N/A\n",
 			   sf->sf_run_time, speed);

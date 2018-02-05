@@ -109,17 +109,16 @@ static void record_end_io(struct osd_device *osd, int rw,
 static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 			struct lu_buf *buf, loff_t *pos)
 {
-	struct osd_object *obj  = osd_dt_obj(dt);
+	struct osd_object *obj = osd_dt_obj(dt);
 	struct osd_device *osd = osd_obj2dev(obj);
-	uint64_t	   old_size;
-	int		   size = buf->lb_len;
-	int		   rc;
-	unsigned long	   start;
+	int size = buf->lb_len;
+	uint64_t old_size;
+	ktime_t start;
+	s64 delta_ms;
+	int rc;
 
 	LASSERT(dt_object_exists(dt));
 	LASSERT(obj->oo_dn);
-
-	start = cfs_time_current();
 
 	read_lock(&obj->oo_attr_lock);
 	old_size = obj->oo_attr.la_size;
@@ -132,13 +131,14 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 			size = old_size - *pos;
 	}
 
+	start = ktime_get();
 	record_start_io(osd, READ, 0);
 
 	rc = osd_dmu_read(osd, obj->oo_dn, *pos, size, buf->lb_buf,
 			  DMU_READ_PREFETCH);
 
-	record_end_io(osd, READ, cfs_time_current() - start, size,
-		      size >> PAGE_SHIFT);
+	delta_ms = ktime_ms_delta(ktime_get(), start);
+	record_end_io(osd, READ, delta_ms, size, size >> PAGE_SHIFT);
 	if (rc == 0) {
 		rc = size;
 		*pos += size;
@@ -315,11 +315,12 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 			     loff_t off, ssize_t len, struct niobuf_local *lnb)
 {
 	struct osd_device *osd = osd_obj2dev(obj);
-	unsigned long	   start = cfs_time_current();
-	int                rc, i, numbufs, npages = 0;
-	dmu_buf_t	 **dbp;
-	ENTRY;
+	int rc, i, numbufs, npages = 0;
+	ktime_t start = ktime_get();
+	dmu_buf_t **dbp;
+	s64 delta_ms;
 
+	ENTRY;
 	record_start_io(osd, READ, 0);
 
 	/* grab buffers for read:
@@ -390,8 +391,8 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 		dmu_buf_rele_array(dbp, numbufs, osd_0copy_tag);
 	}
 
-	record_end_io(osd, READ, cfs_time_current() - start,
-		      npages * PAGE_SIZE, npages);
+	delta_ms = ktime_ms_delta(ktime_get(), start);
+	record_end_io(osd, READ, delta_ms, npages * PAGE_SIZE, npages);
 
 	RETURN(npages);
 

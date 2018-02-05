@@ -567,9 +567,9 @@ osd_consistency_check(const struct lu_env *env, struct osd_device *osd,
 	} else if (osd->od_auto_scrub_interval == AS_NEVER) {
 		RETURN(0);
 	} else {
-		if (cfs_time_before(cfs_time_current_sec(),
-				    scrub->os_file.sf_time_last_complete +
-				    osd->od_auto_scrub_interval))
+		if (ktime_get_real_seconds() <
+		    scrub->os_file.sf_time_last_complete +
+		    osd->od_auto_scrub_interval)
 			RETURN(0);
 	}
 

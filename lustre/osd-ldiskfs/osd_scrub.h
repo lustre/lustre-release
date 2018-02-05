@@ -68,7 +68,7 @@ struct osd_scrub {
 	__u64			os_lf_failed;
 
 	__u64			os_bad_oimap_count;
-	__u64			os_bad_oimap_time;
+	time64_t		os_bad_oimap_time;
 };
 
 #endif /* _OSD_SCRUB_H */

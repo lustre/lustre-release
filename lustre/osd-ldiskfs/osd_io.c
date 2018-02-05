@@ -73,7 +73,7 @@ static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
 	iobuf->dr_error = 0;
 	iobuf->dr_dev = d;
 	iobuf->dr_frags = 0;
-	iobuf->dr_elapsed = 0;
+	iobuf->dr_elapsed = ktime_set(0, 0);
 	/* must be counted before, so assert */
 	iobuf->dr_rw = rw;
 	iobuf->dr_init_at = line;
@@ -132,8 +132,8 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
                 lprocfs_oh_tally(&d->od_brw_stats.
                                  hist[BRW_R_DIO_FRAGS+rw],
                                  iobuf->dr_frags);
-                lprocfs_oh_tally_log2(&d->od_brw_stats.hist[BRW_R_IO_TIME+rw],
-                                      iobuf->dr_elapsed);
+		lprocfs_oh_tally_log2(&d->od_brw_stats.hist[BRW_R_IO_TIME+rw],
+				      ktime_to_ms(iobuf->dr_elapsed));
         }
 }
 
@@ -210,7 +210,9 @@ static void dio_complete_routine(struct bio *bio, int error)
 	 * call to OSD.
 	 */
 	if (atomic_read(&iobuf->dr_numreqs) == 1) {
-		iobuf->dr_elapsed = jiffies - iobuf->dr_start_time;
+		ktime_t now = ktime_get();
+
+		iobuf->dr_elapsed = ktime_sub(now, iobuf->dr_start_time);
 		iobuf->dr_elapsed_valid = 1;
 	}
 	if (atomic_dec_and_test(&iobuf->dr_numreqs))
@@ -293,8 +295,8 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 
         LASSERT(iobuf->dr_npages == npages);
 
-        osd_brw_stats_update(osd, iobuf);
-        iobuf->dr_start_time = cfs_time_current();
+	osd_brw_stats_update(osd, iobuf);
+	iobuf->dr_start_time = ktime_get();
 
 	blk_start_plug(&plug);
         for (page_idx = 0, block_idx = 0;

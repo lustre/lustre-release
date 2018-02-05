@@ -332,7 +332,7 @@ static int osd_scrub_prep(const struct lu_env *env, struct osd_device *dev)
 
 	scrub->os_pos_current = sf->sf_pos_latest_start;
 	sf->sf_status = SS_SCANNING;
-	sf->sf_time_latest_start = cfs_time_current_sec();
+	sf->sf_time_latest_start = ktime_get_real_seconds();
 	sf->sf_time_last_checkpoint = sf->sf_time_latest_start;
 	sf->sf_pos_last_checkpoint = sf->sf_pos_latest_start - 1;
 	rc = scrub_file_store(env, scrub);
@@ -367,7 +367,7 @@ static int osd_scrub_post(const struct lu_env *env, struct osd_device *dev,
 		scrub->os_new_checked = 0;
 		sf->sf_pos_last_checkpoint = scrub->os_pos_current;
 	}
-	sf->sf_time_last_checkpoint = cfs_time_current_sec();
+	sf->sf_time_last_checkpoint = ktime_get_real_seconds();
 	if (result > 0) {
 		sf->sf_status = SS_COMPLETED;
 		if (!(sf->sf_param & SP_DRYRUN)) {
@@ -385,8 +385,9 @@ static int osd_scrub_post(const struct lu_env *env, struct osd_device *dev,
 	} else {
 		sf->sf_status = SS_FAILED;
 	}
-	sf->sf_run_time += cfs_duration_sec(cfs_time_current() + HALF_SEC -
-					    scrub->os_time_last_checkpoint);
+	sf->sf_run_time += ktime_get_seconds() -
+			   scrub->os_time_last_checkpoint;
+
 	rc = scrub_file_store(env, scrub);
 	up_write(&scrub->os_rwsem);
 

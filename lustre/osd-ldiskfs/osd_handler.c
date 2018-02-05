@@ -5229,9 +5229,8 @@ osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 		RETURN(0);
 
 	if (dev->od_auto_scrub_interval == AS_NEVER ||
-	    cfs_time_before(ktime_get_real_seconds(),
-			    scrub->os_file.sf_time_last_complete +
-			    dev->od_auto_scrub_interval))
+	    ktime_get_real_seconds() <
+	    scrub->os_file.sf_time_last_complete + dev->od_auto_scrub_interval)
 		RETURN(0);
 
 again:

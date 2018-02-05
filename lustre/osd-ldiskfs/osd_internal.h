@@ -518,8 +518,8 @@ struct osd_iobuf {
 	struct page      **dr_pages;
 	struct lu_buf	   dr_bl_buf;
 	sector_t	  *dr_blocks;
-	unsigned long      dr_start_time;
-	unsigned long      dr_elapsed;  /* how long io took */
+	ktime_t		   dr_start_time;
+	ktime_t		   dr_elapsed;	/* how long io took */
 	struct osd_device *dr_dev;
 	unsigned int	   dr_init_at;	/* the line iobuf was initialized */
 };
