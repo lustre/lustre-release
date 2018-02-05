@@ -42,13 +42,7 @@ DOM="yes"
 DOM_SIZE=${DOM_SIZE:-"$((1024*1024))"}
 OSC="mdc"
 
-trap restore_default_layout EXIT
-restore_default_layout() {
-	[ -n "$saved_layout" ] && restore_layout $DIR1 $saved_layout ||
-		$LFS setstripe -d $DIR1
-}
-
-saved_layout=$(save_layout $DIR1)
+save_layout_restore_at_exit $DIR1
 $LFS setstripe -E $DOM_SIZE -L mdt -E EOF $DIR1
 
 mkdir -p $MOUNT2

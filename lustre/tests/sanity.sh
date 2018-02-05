@@ -2016,9 +2016,9 @@ run_test 27z "check SEQ/OID on the MDT and OST filesystems"
 
 test_27A() { # b=19102
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        local restore_size=$($GETSTRIPE -S $MOUNT)
-        local restore_count=$($GETSTRIPE -c $MOUNT)
-        local restore_offset=$($GETSTRIPE -i $MOUNT)
+
+	save_layout_restore_at_exit $MOUNT
+
         $SETSTRIPE -c 0 -i -1 -S 0 $MOUNT
         wait_update $HOSTNAME "$GETSTRIPE -c $MOUNT | sed 's/  *//g'" "1" 20 ||
                 error "stripe count $($GETSTRIPE -c $MOUNT) != 1"
@@ -2028,7 +2028,6 @@ test_27A() { # b=19102
         [ $default_size -eq $dsize ] ||
                 error "stripe size $default_size != $dsize"
         [ $default_offset -eq -1 ] ||error "stripe offset $default_offset != -1"
-        $SETSTRIPE -c $restore_count -i $restore_offset -S $restore_size $MOUNT
 }
 run_test 27A "check filesystem-wide default LOV EA values"
 
@@ -6269,40 +6268,38 @@ test_65h() {
 }
 run_test 65h "directory stripe info inherit ===================="
 
-test_65i() { # bug6367
+test_65i() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-        $SETSTRIPE -S 65536 -c -1 $MOUNT
-}
-run_test 65i "set non-default striping on root directory (bug 6367)="
 
-test_65ia() { # bug12836
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GETSTRIPE $MOUNT || error "getstripe $MOUNT failed"
-}
-run_test 65ia "getstripe on -1 default directory striping"
+	save_layout_restore_at_exit $MOUNT
 
-test_65ib() { # bug12836
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	$GETSTRIPE -v $MOUNT || error "getstripe -v $MOUNT failed"
-}
-run_test 65ib "getstripe -v on -1 default directory striping"
+	# bug6367: set non-default striping on root directory
+	$LFS setstripe -S 65536 -c -1 $MOUNT || error "error setting stripe"
 
-test_65ic() { # bug12836
-	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
+	# bug12836: getstripe on -1 default directory striping
+	$LFS getstripe $MOUNT || error "getstripe $MOUNT failed"
+
+	# bug12836: getstripe -v on -1 default directory striping
+	$LFS getstripe -v $MOUNT || error "getstripe -v $MOUNT failed"
+
+	# bug12836: new find on -1 default directory striping
 	$LFS find -mtime -1 $MOUNT > /dev/null || error "find $MOUNT failed"
 }
-run_test 65ic "new find on -1 default directory striping"
+run_test 65i "various tests to set root directory striping"
 
 test_65j() { # bug6367
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-	[ $($LFS getstripe --component-count $MOUNT) -gt 1 ] &&
-		skip "don't delete default PFL layout" && return
+
 	sync; sleep 1
+
 	# if we aren't already remounting for each test, do so for this test
 	if [ "$CLEANUP" = ":" -a "$I_MOUNTED" = "yes" ]; then
 		cleanup || error "failed to unmount"
 		setup
 	fi
+
+	save_layout_restore_at_exit $MOUNT
+
 	$SETSTRIPE -d $MOUNT || error "setstripe failed"
 }
 run_test 65j "set default striping on root directory (bug 6367)="
@@ -6377,7 +6374,11 @@ test_65l() { # bug 12836
 run_test 65l "lfs find on -1 stripe dir ========================"
 
 test_65m() {
-	$RUNAS $SETSTRIPE -c 2 $MOUNT && error "setstripe should fail"
+	local layout=$(save_layout $MOUNT)
+	$RUNAS $SETSTRIPE -c 2 $MOUNT && {
+		restore_layout $MOUNT $layout
+		error "setstripe should fail by non-root users"
+	}
 	true
 }
 run_test 65m "normal user can't set filesystem default stripe"
@@ -17500,10 +17501,7 @@ test_406() {
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.50) ] &&
 		skip "Need MDS version at least 2.8.50" && return
 
-	local def_stripe_count=$($GETSTRIPE -c $MOUNT)
-	local def_stripe_size=$($GETSTRIPE -S $MOUNT)
-	local def_stripe_offset=$($GETSTRIPE -i $MOUNT)
-	local def_pool=$($GETSTRIPE -p $MOUNT)
+	local def_stripe_size=$($LFS getstripe -S $MOUNT)
 	local test_pool=$TESTNAME
 
 	if ! combined_mgs_mds ; then
@@ -17513,59 +17511,50 @@ test_406() {
 	pool_add_targets $test_pool 0 $(($OSTCOUNT - 1)) 1 ||
 		error "pool_add_targets failed"
 
+	save_layout_restore_at_exit $MOUNT
+
 	# parent set default stripe count only, child will stripe from both
 	# parent and fs default
-	$SETSTRIPE -c 1 -i 1 -S $((def_stripe_size * 2)) -p $test_pool $MOUNT ||
+	$LFS setstripe -c 1 -i 1 -S $((def_stripe_size * 2)) -p $test_pool $MOUNT ||
 		error "setstripe $MOUNT failed"
 	$LFS mkdir -c $MDSCOUNT $DIR/$tdir || error "mkdir $tdir failed"
-	$SETSTRIPE -c $OSTCOUNT $DIR/$tdir || error "setstripe $tdir failed"
+	$LFS setstripe -c $OSTCOUNT $DIR/$tdir || error "setstripe $tdir failed"
 	for i in $(seq 10); do
 		local f=$DIR/$tdir/$tfile.$i
 		touch $f || error "touch failed"
-		local count=$($GETSTRIPE -c $f)
+		local count=$($LFS getstripe -c $f)
 		[ $count -eq $OSTCOUNT ] ||
 			error "$f stripe count $count != $OSTCOUNT"
-		local offset=$($GETSTRIPE -i $f)
+		local offset=$($LFS getstripe -i $f)
 		[ $offset -eq 1 ] || error "$f stripe offset $offset != 1"
-		local size=$($GETSTRIPE -S $f)
+		local size=$($LFS getstripe -S $f)
 		[ $size -eq $((def_stripe_size * 2)) ] ||
 			error "$f stripe size $size != $((def_stripe_size * 2))"
-		local pool=$($GETSTRIPE -p $f)
+		local pool=$($LFS getstripe -p $f)
 		[ $pool == $test_pool ] || error "$f pool $pool != $test_pool"
 	done
 
 	# change fs default striping, delete parent default striping, now child
 	# will stripe from new fs default striping only
-	$SETSTRIPE -c 1 -S $def_stripe_size -i 0 $MOUNT ||
+	$LFS setstripe -c 1 -S $def_stripe_size -i 0 $MOUNT ||
 		error "change $MOUNT default stripe failed"
-	$SETSTRIPE -c 0 $DIR/$tdir || error "delete $tdir default stripe failed"
+	$LFS setstripe -c 0 $DIR/$tdir ||
+		error "delete $tdir default stripe failed"
 	for i in $(seq 11 20); do
 		local f=$DIR/$tdir/$tfile.$i
 		touch $f || error "touch $f failed"
-		local count=$($GETSTRIPE -c $f)
+		local count=$($LFS getstripe -c $f)
 		[ $count -eq 1 ] || error "$f stripe count $count != 1"
-		local offset=$($GETSTRIPE -i $f)
+		local offset=$($LFS getstripe -i $f)
 		[ $offset -eq 0 ] || error "$f stripe offset $offset != 0"
-		local size=$($GETSTRIPE -S $f)
+		local size=$($LFS getstripe -S $f)
 		[ $size -eq $def_stripe_size ] ||
 			error "$f stripe size $size != $def_stripe_size"
-		local pool=$($GETSTRIPE -p $f)
+		local pool=$($LFS getstripe -p $f)
 		[ $pool == $test_pool ] || error "$f pool $pool isn't set"
-
 	done
 
 	unlinkmany $DIR/$tdir/$tfile. 1 20
-
-	# restore FS default striping
-	if [ -z $def_pool ]; then
-		$SETSTRIPE -c $def_stripe_count -S $def_stripe_size \
-			-i $def_stripe_offset $MOUNT ||
-			error "restore default striping failed"
-	else
-		$SETSTRIPE -c $def_stripe_count -S $def_stripe_size \
-			-i $def_stripe_offset -p $def_pool $MOUNT ||
-			error "restore default striping with $def_pool failed"
-	fi
 
 	local f=$DIR/$tdir/$tfile
 	pool_remove_all_targets $test_pool $f

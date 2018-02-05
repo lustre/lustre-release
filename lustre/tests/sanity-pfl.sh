@@ -374,8 +374,8 @@ component_dump() {
 
 test_10() {
 	local parent=$DIR/$tdir
-	local root_layout=$(get_layout_param $MOUNT)
-	echo "$MOUNT layout: $root_layout"
+
+	save_layout_restore_at_exit $MOUNT
 
 	rm -rf $parent
 	$LFS setstripe -d $MOUNT || error "clear root layout"
@@ -414,7 +414,6 @@ test_10() {
 	[  x$f2_expect != x$f2_entry ] &&
 		error "$parent/file2 does not inherite root layout"
 
-	$LFS setstripe $root_layout $MOUNT
 	return 0
 }
 run_test 10 "Inherit composite template from root"
