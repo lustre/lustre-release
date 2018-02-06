@@ -140,6 +140,9 @@ struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 				     const char *new_name);
 void print_lustre_cfg(struct lustre_cfg *lcfg);
 int class_process_config(struct lustre_cfg *lcfg);
+ssize_t class_set_global(const char *param);
+ssize_t class_modify_config(struct lustre_cfg *lcfg, const char *prefix,
+			    struct kobject *kobj);
 int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
 			     struct lustre_cfg *lcfg, void *data);
 int class_attach(struct lustre_cfg *lcfg);
@@ -1868,10 +1871,6 @@ int tgt_name2lwp_name(const char *tgt_name, char *lwp_name, int len, __u32 idx);
 int lustre_register_fs(void);
 int lustre_unregister_fs(void);
 int lustre_check_exclusion(struct super_block *sb, char *svname);
-
-/* sysctl.c */
-extern int obd_sysctl_init(void);
-extern void obd_sysctl_clean(void);
 
 typedef __u8 class_uuid_t[16];
 static inline void class_uuid_unparse(class_uuid_t uu, struct obd_uuid *out)

@@ -1,6 +1,6 @@
 MODULES := obdclass llog_test
 
-obdclass-linux-objs := linux-module.o linux-obdo.o linux-sysctl.o
+obdclass-linux-objs := linux-module.o linux-obdo.o
 obdclass-linux-objs := $(addprefix linux/,$(obdclass-linux-objs))
 
 default: all

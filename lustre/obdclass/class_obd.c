@@ -529,7 +529,6 @@ cleanup_lu_global:
 	lu_global_fini();
 
 cleanup_class_procfs:
-	obd_sysctl_clean();
 	class_procfs_clean();
 
 cleanup_caches:
@@ -599,7 +598,6 @@ static void __exit obdclass_exit(void)
 	lu_global_fini();
 
         obd_cleanup_caches();
-        obd_sysctl_clean();
 
         class_procfs_clean();
 

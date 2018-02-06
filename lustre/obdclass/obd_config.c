@@ -36,6 +36,7 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/kobject.h>
 #include <linux/string.h>
 
 #include <llog_swab.h>
@@ -947,34 +948,13 @@ void class_del_profiles(void)
 }
 EXPORT_SYMBOL(class_del_profiles);
 
-static int class_set_global(char *ptr, int val, struct lustre_cfg *lcfg)
-{
-	ENTRY;
-	if (class_match_param(ptr, PARAM_AT_MIN, NULL) == 0)
-		at_min = val;
-	else if (class_match_param(ptr, PARAM_AT_MAX, NULL) == 0)
-		at_max = val;
-	else if (class_match_param(ptr, PARAM_AT_EXTRA, NULL) == 0)
-		at_extra = val;
-	else if (class_match_param(ptr, PARAM_AT_EARLY_MARGIN, NULL) == 0)
-		at_early_margin = val;
-	else if (class_match_param(ptr, PARAM_AT_HISTORY, NULL) == 0)
-		at_history = val;
-	else if (class_match_param(ptr, PARAM_JOBID_VAR, NULL) == 0)
-		strlcpy(obd_jobid_var, lustre_cfg_string(lcfg, 2),
-			JOBSTATS_JOBID_VAR_MAX_LEN + 1);
-	else
-		RETURN(-EINVAL);
-
-	CDEBUG(D_IOCTL, "global %s = %d\n", ptr, val);
-	RETURN(0);
-}
-
-
 /* We can't call ll_process_config or lquota_process_config directly because
- * it lives in a module that must be loaded after this one. */
+ * it lives in a module that must be loaded after this one.
+ */
 static int (*client_process_config)(struct lustre_cfg *lcfg) = NULL;
+#ifdef HAVE_SERVER_SUPPORT
 static int (*quota_process_config)(struct lustre_cfg *lcfg) = NULL;
+#endif /* HAVE_SERVER_SUPPORT */
 
 void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg))
 {
@@ -1057,10 +1037,12 @@ out_nocfg:
 }
 EXPORT_SYMBOL(lustre_cfg_rename);
 
-static int process_param2_config(struct lustre_cfg *lcfg)
+static ssize_t process_param2_config(struct lustre_cfg *lcfg)
 {
 	char *param = lustre_cfg_string(lcfg, 1);
 	char *upcall = lustre_cfg_string(lcfg, 2);
+	struct kobject *kobj = NULL;
+	const char *subsys = param;
 	char *argv[] = {
 		[0] = "/usr/sbin/lctl",
 		[1] = "set_param",
@@ -1069,8 +1051,44 @@ static int process_param2_config(struct lustre_cfg *lcfg)
 	};
 	ktime_t start;
 	ktime_t end;
-	int		rc;
+	size_t len;
+	int rc;
+
 	ENTRY;
+	print_lustre_cfg(lcfg);
+
+	len = strcspn(param, ".=");
+	if (!len)
+		return -EINVAL;
+
+	/* If we find '=' then its the top level sysfs directory */
+	if (param[len] == '=')
+		return class_set_global(param);
+
+	subsys = kstrndup(param, len, GFP_KERNEL);
+	if (!subsys)
+		return -ENOMEM;
+
+	kobj = kset_find_obj(lustre_kset, subsys);
+	kfree(subsys);
+	if (kobj) {
+		char *value = param;
+		char *envp[3];
+		int i;
+
+		param = strsep(&value, "=");
+		envp[0] = kasprintf(GFP_KERNEL, "PARAM=%s", param);
+		envp[1] = kasprintf(GFP_KERNEL, "SETTING=%s", value);
+		envp[2] = NULL;
+
+		rc = kobject_uevent_env(kobj, KOBJ_CHANGE, envp);
+		for (i = 0; i < ARRAY_SIZE(envp); i++)
+			kfree(envp[i]);
+
+		kobject_put(kobj);
+
+		RETURN(rc);
+	}
 
 	/* Add upcall processing here. Now only lctl is supported */
 	if (strcmp(upcall, LCTL_UPCALL) != 0) {
@@ -1096,11 +1114,13 @@ static int process_param2_config(struct lustre_cfg *lcfg)
 	RETURN(rc);
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 void lustre_register_quota_process_config(int (*qpc)(struct lustre_cfg *lcfg))
 {
 	quota_process_config = qpc;
 }
 EXPORT_SYMBOL(lustre_register_quota_process_config);
+#endif /* HAVE_SERVER_SUPPORT */
 
 /** Process configuration commands given in lustre_cfg form.
  * These may come from direct calls (e.g. class_manual_cleanup)
@@ -1196,20 +1216,22 @@ int class_process_config(struct lustre_cfg *lcfg)
                 } else if ((class_match_param(lustre_cfg_string(lcfg, 1),
                                               PARAM_SYS, &tmp) == 0)) {
                         /* Global param settings */
-			err = class_set_global(tmp, lcfg->lcfg_num, lcfg);
+			err = class_set_global(tmp);
 			/*
 			 * Client or server should not fail to mount if
 			 * it hits an unknown configuration parameter.
 			 */
-			if (err != 0)
+			if (err < 0)
 				CWARN("Ignoring unknown param %s\n", tmp);
 
 			GOTO(out, err = 0);
+#ifdef HAVE_SERVER_SUPPORT
 		} else if ((class_match_param(lustre_cfg_string(lcfg, 1),
 					      PARAM_QUOTA, &tmp) == 0) &&
 			   quota_process_config) {
 			err = (*quota_process_config)(lcfg);
 			GOTO(out, err);
+#endif /* HAVE_SERVER_SUPPORT */
 		}
 
 		break;
@@ -1319,6 +1341,90 @@ out:
         return err;
 }
 EXPORT_SYMBOL(class_process_config);
+
+ssize_t class_modify_config(struct lustre_cfg *lcfg, const char *prefix,
+			    struct kobject *kobj)
+{
+	struct kobj_type *typ;
+	ssize_t count = 0;
+	int i;
+
+	if (lcfg->lcfg_command != LCFG_PARAM) {
+		CERROR("Unknown command: %d\n", lcfg->lcfg_command);
+		return -EINVAL;
+	}
+
+	typ = get_ktype(kobj);
+	if (!typ || !typ->default_attrs)
+		return -ENODEV;
+
+	print_lustre_cfg(lcfg);
+
+	/*
+	 * e.g. tunefs.lustre --param mdt.group_upcall=foo /r/tmp/lustre-mdt
+	 * or   lctl conf_param lustre-MDT0000.mdt.group_upcall=bar
+	 * or   lctl conf_param lustre-OST0000.osc.max_dirty_mb=36
+	 */
+	for (i = 1; i < lcfg->lcfg_bufcount; i++) {
+		struct attribute *attr;
+		size_t keylen;
+		char *value;
+		char *key;
+		int j;
+
+		key = lustre_cfg_buf(lcfg, i);
+		/* Strip off prefix */
+		if (class_match_param(key, prefix, &key))
+			/* If the prefix doesn't match, return error so we
+			 * can pass it down the stack
+			 */
+			return -ENOSYS;
+
+		value = strchr(key, '=');
+		if (!value || *(value + 1) == 0) {
+			CERROR("%s: can't parse param '%s' (missing '=')\n",
+			       lustre_cfg_string(lcfg, 0),
+			       lustre_cfg_string(lcfg, i));
+			/* continue parsing other params */
+			continue;
+		}
+		keylen = value - key;
+		value++;
+
+		attr = NULL;
+		for (j = 0; typ->default_attrs[j]; j++) {
+			if (!strncmp(typ->default_attrs[j]->name, key,
+				     keylen)) {
+				attr = typ->default_attrs[j];
+				break;
+			}
+		}
+
+		if (!attr) {
+			char *envp[3];
+
+			envp[0] = kasprintf(GFP_KERNEL, "PARAM=%s.%s.%.*s",
+					    kobject_name(kobj->parent),
+					    kobject_name(kobj),
+					    (int) keylen, key);
+			envp[1] = kasprintf(GFP_KERNEL, "SETTING=%s", value);
+			envp[2] = NULL;
+
+			if (kobject_uevent_env(kobj, KOBJ_CHANGE, envp)) {
+				CERROR("%s: failed to send uevent %s\n",
+				       kobject_name(kobj), key);
+			}
+
+			for (i = 0; i < ARRAY_SIZE(envp); i++)
+				kfree(envp[i]);
+		} else {
+			count += lustre_attr_store(kobj, attr, value,
+						   strlen(value));
+		}
+	}
+	return count;
+}
+EXPORT_SYMBOL(class_modify_config);
 
 int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
 			     struct lustre_cfg *lcfg, void *data)

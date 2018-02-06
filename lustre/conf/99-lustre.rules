@@ -1,1 +1,3 @@
 KERNEL=="obd", MODE="0666"
+# set sysfs values on client
+SUBSYSTEM=="lustre", ACTION=="change", ENV{PARAM}=="?*", RUN+="/usr/sbin/lctl set_param $env{PARAM}=$env{SETTING}"
