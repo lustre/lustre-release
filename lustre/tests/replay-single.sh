@@ -1155,6 +1155,10 @@ test_48() {
 	do_facet ost1 "lctl set_param fail_loc=0x80000216"
 	client_up || error "client_up failed"
 
+	# let the MDS discover the OST failure, attempt to recover, fail
+	# and recover again.
+	sleep $((3 * TIMEOUT))
+
 	createmany -o $DIR/$tfile 20 20 ||
 		error "createmany recraete $DIR/$tfile failed"
 	unlinkmany $DIR/$tfile 40 || error "unlinkmany $DIR/$tfile failed"
