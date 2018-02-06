@@ -148,7 +148,49 @@ static int qsd_enabled_seq_show(struct seq_file *m, void *data)
 	seq_printf(m, "%s\n", enabled);
 	return 0;
 }
-LPROC_SEQ_FOPS_RO(qsd_enabled);
+
+static ssize_t qsd_enabled_seq_write(struct file *file,
+				     const char __user *buffer,
+				     size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct qsd_instance *qsd = m->private;
+	char fsname[LUSTRE_MAXFSNAME];
+	int enabled = 0;
+	char valstr[5];
+	int pool, rc;
+
+	if (count > 4)
+		return -E2BIG;
+
+	if (copy_from_user(valstr, buffer, count))
+		GOTO(out, count = -EFAULT);
+
+	if (strchr(valstr, 'u'))
+		enabled |= BIT(USRQUOTA);
+	if (strchr(valstr, 'g'))
+		enabled |= BIT(GRPQUOTA);
+	if (strchr(valstr, 'p'))
+		enabled |= BIT(PRJQUOTA);
+
+	if (enabled == 0 && strcmp(valstr, "none"))
+		GOTO(out, count = -EINVAL);
+
+	if (qsd->qsd_is_md)
+		pool = LQUOTA_RES_MD;
+	else
+		pool = LQUOTA_RES_DT;
+
+	if (server_name2fsname(qsd->qsd_svname, fsname, NULL))
+		GOTO(out, count = -EINVAL);
+
+	rc = qsd_config(valstr, fsname, pool);
+	if (rc)
+		count = rc;
+out:
+	return count;
+}
+LPROC_SEQ_FOPS(qsd_enabled);
 
 /* force reintegration procedure to be executed.
  * Used for test/debugging purpose */

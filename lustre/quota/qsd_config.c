@@ -119,35 +119,13 @@ out:
 	RETURN(qfs);
 }
 
-/*
- * Quota configuration handlers in charge of processing all per-filesystem quota
- * parameters set via conf_param.
- *
- * \param lcfg - quota configuration log to be processed
- */
-int qsd_process_config(struct lustre_cfg *lcfg)
+int qsd_config(char *valstr, char *fsname, int pool)
 {
-	struct qsd_fsinfo	*qfs;
-	char			*fsname = lustre_cfg_string(lcfg, 0);
-	char			*cfgstr = lustre_cfg_string(lcfg, 1);
-	char			*keystr, *valstr;
-	int			 rc, pool, enabled = 0;
-	bool			 reint = false;
+	struct qsd_fsinfo *qfs;
+	int rc, enabled = 0;
+	bool reint = false;
+
 	ENTRY;
-
-	CDEBUG(D_QUOTA, "processing quota parameter: fs:%s cfgstr:%s\n", fsname,
-	       cfgstr);
-
-	if (class_match_param(cfgstr, PARAM_QUOTA, &keystr) != 0)
-		RETURN(-EINVAL);
-
-	if (!class_match_param(keystr, QUOTA_METAPOOL_NAME, &valstr))
-		pool = LQUOTA_RES_MD;
-	else if (!class_match_param(keystr, QUOTA_DATAPOOL_NAME, &valstr))
-		pool = LQUOTA_RES_DT;
-	else
-		RETURN(-EINVAL);
-
 	qfs = qsd_get_fsinfo(fsname, 0);
 	if (qfs == NULL) {
 		CERROR("failed to find quota filesystem information for %s\n",
@@ -210,4 +188,34 @@ out:
 	mutex_unlock(&qfs->qfs_mutex);
 	qsd_put_fsinfo(qfs);
 	RETURN(0);
+}
+
+/*
+ * Quota configuration handlers in charge of processing all per-filesystem quota
+ * parameters set via conf_param.
+ *
+ * \param lcfg - quota configuration log to be processed
+ */
+int qsd_process_config(struct lustre_cfg *lcfg)
+{
+	char *fsname = lustre_cfg_string(lcfg, 0);
+	char *cfgstr = lustre_cfg_string(lcfg, 1);
+	char *keystr, *valstr;
+	int pool;
+
+	ENTRY;
+	CDEBUG(D_QUOTA, "processing quota parameter: fs:%s cfgstr:%s\n", fsname,
+	       cfgstr);
+
+	if (class_match_param(cfgstr, PARAM_QUOTA, &keystr) != 0)
+		RETURN(-EINVAL);
+
+	if (!class_match_param(keystr, QUOTA_METAPOOL_NAME, &valstr))
+		pool = LQUOTA_RES_MD;
+	else if (!class_match_param(keystr, QUOTA_DATAPOOL_NAME, &valstr))
+		pool = LQUOTA_RES_DT;
+	else
+		RETURN(-EINVAL);
+
+	return qsd_config(valstr, fsname, pool);
 }

@@ -379,6 +379,7 @@ void qsd_upd_schedule(struct qsd_qtype_info *, struct lquota_entry *,
 /* qsd_config.c */
 struct qsd_fsinfo *qsd_get_fsinfo(char *, bool);
 void qsd_put_fsinfo(struct qsd_fsinfo *);
+int qsd_config(char *valstr, char *fsname, int pool);
 int qsd_process_config(struct lustre_cfg *);
 
 /* qsd_handler.c */
