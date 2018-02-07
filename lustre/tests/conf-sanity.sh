@@ -31,7 +31,9 @@ init_test_env $@
 STORED_MDSSIZE=$MDSSIZE
 STORED_OSTSIZE=$OSTSIZE
 MDSSIZE=200000
+[ $(facet_fstype $SINGLEMDS) = "zfs" ] && MDSSIZE=400000
 OSTSIZE=200000
+[ $(facet_fstype ost1) = "zfs" ] && OSTSIZE=400000
 
 fs2mds_HOST=$mds_HOST
 fs2ost_HOST=$ost_HOST
