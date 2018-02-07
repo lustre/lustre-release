@@ -97,7 +97,6 @@ run_test fsx "Dual-mount fsx with DoM files"
 
 test_sanity()
 {
-	[[ -f sanity.sh ]] || { skip "sanity.sh doesn't exist"; return 0; }
 	# XXX: to fix 45. Add 42a, c when LU-9693 fixed.
 	# Add 42b when LU-6493 fixed
 	ONLY="36 39 40 41 42d 42e 43 46 56r 101e 119a 131 150 155a 155b 155c \
@@ -107,7 +106,6 @@ run_test sanity "Run sanity with Data-on-MDT files"
 
 test_sanityn()
 {
-	[[ -f sanityn.sh ]] || { skip "sanityn.sh doesn't exist"; return 0; }
 	# XXX: to fix 60
 	ONLY="1 2 4 5 6 7 8 9 10 11 12 14 17 19 20 23 27 39 51a 51c 51d" \
 		OSC="mdc" DOM="yes" bash sanityn.sh
