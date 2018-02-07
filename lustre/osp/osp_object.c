@@ -431,11 +431,13 @@ static int osp_get_attr_from_reply(const struct lu_env *env,
 		lustre_swab_obdo(wobdo);
 
 	lustre_get_wire_obdo(NULL, lobdo, wobdo);
-	spin_lock(&obj->opo_lock);
-	la_from_obdo(&obj->opo_attr, lobdo, lobdo->o_valid);
-	if (attr != NULL)
-		*attr = obj->opo_attr;
-	spin_unlock(&obj->opo_lock);
+	if (obj) {
+		spin_lock(&obj->opo_lock);
+		la_from_obdo(&obj->opo_attr, lobdo, lobdo->o_valid);
+		spin_unlock(&obj->opo_lock);
+	}
+	if (attr)
+		la_from_obdo(attr, lobdo, lobdo->o_valid);
 
 	return 0;
 }
@@ -542,7 +544,7 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 	struct osp_update_request	*update;
 	struct object_update_reply	*reply;
 	struct ptlrpc_request		*req = NULL;
-	int				rc = 0;
+	int				invalidated, cache = 0, rc = 0;
 	ENTRY;
 
 	if (is_ost_obj(&dt->do_lu) && obj->opo_non_exist)
@@ -568,14 +570,24 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 		       dev->dd_lu_dev.ld_obd->obd_name,
 		       PFID(lu_object_fid(&dt->do_lu)), rc);
 
-		GOTO(out, rc);
+		GOTO(out_req, rc);
 	}
 
+	invalidated = atomic_read(&obj->opo_invalidate_seq);
+
 	rc = osp_remote_sync(env, osp, update, &req);
+
+	down_read(&obj->opo_invalidate_sem);
+	if (invalidated == atomic_read(&obj->opo_invalidate_seq)) {
+		/* no invalited has came so far, we can cache the attrs */
+		cache = 1;
+	}
+
 	if (rc != 0) {
 		if (rc == -ENOENT) {
 			osp2lu_obj(obj)->lo_header->loh_attr &= ~LOHA_EXISTS;
-			obj->opo_non_exist = 1;
+			if (cache)
+				obj->opo_non_exist = 1;
 		} else {
 			CERROR("%s:osp_attr_get update error "DFID": rc = %d\n",
 			       dev->dd_lu_dev.ld_obd->obd_name,
@@ -593,17 +605,22 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 	if (reply == NULL || reply->ourp_magic != UPDATE_REPLY_MAGIC)
 		GOTO(out, rc = -EPROTO);
 
-	rc = osp_get_attr_from_reply(env, reply, req, attr, obj, 0);
+	rc = osp_get_attr_from_reply(env, reply, req, attr,
+				     cache ? obj : NULL, 0);
 	if (rc != 0)
 		GOTO(out, rc);
 
 	spin_lock(&obj->opo_lock);
-	obj->opo_stale = 0;
+	if (cache)
+		obj->opo_stale = 0;
 	spin_unlock(&obj->opo_lock);
 
 	GOTO(out, rc);
 
 out:
+	up_read(&obj->opo_invalidate_sem);
+
+out_req:
 	if (req != NULL)
 		ptlrpc_req_finished(req);
 
@@ -938,7 +955,7 @@ int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	struct object_update_reply *reply;
 	struct osp_xattr_entry	*oxe	= NULL;
 	const char *dname = osp_dto2name(obj);
-	int rc = 0;
+	int invalidated, rc = 0;
 	ENTRY;
 
 	LASSERT(buf != NULL);
@@ -957,6 +974,8 @@ int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 
 	if (unlikely(obj->opo_non_exist))
 		RETURN(-ENOENT);
+
+	invalidated = atomic_read(&obj->opo_invalidate_seq);
 
 	oxe = osp_oac_xattr_find(obj, name, false);
 	if (oxe != NULL) {
@@ -986,17 +1005,40 @@ unlock:
 	}
 	update = osp_update_request_create(dev);
 	if (IS_ERR(update))
-		GOTO(out, rc = PTR_ERR(update));
+		GOTO(out_req, rc = PTR_ERR(update));
 
 	rc = OSP_UPDATE_RPC_PACK(env, out_xattr_get_pack, update,
 				 lu_object_fid(&dt->do_lu), name, buf->lb_len);
 	if (rc != 0) {
 		CERROR("%s: Insert update error "DFID": rc = %d\n",
 		       dname, PFID(lu_object_fid(&dt->do_lu)), rc);
-		GOTO(out, rc);
+		GOTO(out_req, rc);
 	}
 
 	rc = osp_remote_sync(env, osp, update, &req);
+
+	down_read(&obj->opo_invalidate_sem);
+	if (invalidated != atomic_read(&obj->opo_invalidate_seq)) {
+		/* invalidated has been requested, we can't cache the result */
+		if (rc < 0) {
+			if (rc == -ENOENT)
+				dt->do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;
+			GOTO(out, rc);
+		}
+		reply = req_capsule_server_sized_get(&req->rq_pill,
+						     &RMF_OUT_UPDATE_REPLY,
+				OUT_UPDATE_REPLY_SIZE);
+		if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
+			CERROR("%s: Wrong version %x expected %x "DFID
+			       ": rc = %d\n", dname, reply->ourp_magic,
+			       UPDATE_REPLY_MAGIC,
+			       PFID(lu_object_fid(&dt->do_lu)), -EPROTO);
+			GOTO(out, rc = -EPROTO);
+		}
+		rc = object_update_result_data_get(reply, rbuf, 0);
+		GOTO(out, rc);
+	}
+
 	if (rc < 0) {
 		if (rc == -ENOENT) {
 			dt->do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;
@@ -1084,6 +1126,9 @@ unlock:
 	GOTO(out, rc);
 
 out:
+	up_read(&obj->opo_invalidate_sem);
+
+out_req:
 	if (rc > 0 && buf->lb_buf) {
 		if (unlikely(buf->lb_len < rbuf->lb_len))
 			rc = -ERANGE;
@@ -1300,11 +1345,23 @@ int osp_invalidate(const struct lu_env *env, struct dt_object *dt)
 
 	CDEBUG(D_HA, "Invalidate osp_object "DFID"\n",
 	       PFID(lu_object_fid(&dt->do_lu)));
-	osp_obj_invalidate_cache(obj);
+
+	/* serialize attr/EA set vs. invalidation */
+	down_write(&obj->opo_invalidate_sem);
+
+	/* this should invalidate all in-flights */
+	atomic_inc(&obj->opo_invalidate_seq);
 
 	spin_lock(&obj->opo_lock);
-	obj->opo_stale = 1;
+	/* do not mark new objects stale */
+	if (obj->opo_attr.la_valid)
+		obj->opo_stale = 1;
+	obj->opo_non_exist = 0;
 	spin_unlock(&obj->opo_lock);
+
+	osp_obj_invalidate_cache(obj);
+
+	up_write(&obj->opo_invalidate_sem);
 
 	RETURN(0);
 }
@@ -2196,6 +2253,7 @@ static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 	o->lo_header->loh_attr |= LOHA_REMOTE;
 	INIT_LIST_HEAD(&po->opo_xattr_list);
 	INIT_LIST_HEAD(&po->opo_invalidate_cb_list);
+	init_rwsem(&po->opo_invalidate_sem);
 
 	if (is_ost_obj(o)) {
 		po->opo_obj.do_ops = &osp_obj_ops;

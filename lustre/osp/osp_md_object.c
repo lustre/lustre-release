@@ -178,6 +178,7 @@ int osp_md_create(const struct lu_env *env, struct dt_object *dt,
 
 	dt->do_lu.lo_header->loh_attr |= LOHA_EXISTS | (attr->la_mode & S_IFMT);
 	dt2osp_obj(dt)->opo_non_exist = 0;
+	obj->opo_stale = 0;
 
 	obj->opo_attr = *attr;
 out:

@@ -318,6 +318,9 @@ struct osp_object {
 	struct list_head	opo_invalidate_cb_list;
 	/* Protect opo_ooa. */
 	spinlock_t		opo_lock;
+	/* to implement in-flight invalidation */
+	atomic_t		opo_invalidate_seq;
+	struct rw_semaphore	opo_invalidate_sem;
 };
 
 extern struct lu_object_operations osp_lu_obj_ops;

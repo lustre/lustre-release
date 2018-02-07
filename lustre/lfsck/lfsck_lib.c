@@ -379,6 +379,12 @@ static int __lfsck_ibits_lock(const struct lu_env *env,
 		einfo->ei_res_id = resid;
 
 		rc = dt_object_lock(env, obj, lh, einfo, policy);
+		/* for regular checks LFSCK doesn't use LDLM locking,
+		 * so the state isn't coherent. here we just took LDLM
+		 * lock for coherency and it's time to invalidate
+		 * previous state */
+		if (rc == ELDLM_OK)
+			dt_invalidate(env, obj);
 	} else {
 		rc = ldlm_cli_enqueue_local(env, lfsck->li_namespace, resid,
 					    LDLM_IBITS, policy, mode,

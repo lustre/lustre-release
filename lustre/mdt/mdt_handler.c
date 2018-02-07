@@ -3051,6 +3051,10 @@ mdt_object_lock_internal(struct mdt_thread_info *info, struct mdt_object *o,
 		}
 	}
 
+	/* other components like LFSCK can use lockless access
+	 * and populate cache, so we better invalidate it */
+	mo_invalidate(info->mti_env, mdt_object_child(o));
+
 	RETURN(0);
 }
 
