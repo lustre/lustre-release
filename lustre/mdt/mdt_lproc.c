@@ -213,7 +213,7 @@ static int mdt_identity_expire_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", mdt->mdt_identity_cache->uc_entry_expire);
+	seq_printf(m, "%lld\n", mdt->mdt_identity_cache->uc_entry_expire);
 	return 0;
 }
 
@@ -224,12 +224,13 @@ mdt_identity_expire_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file	  *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	time64_t val;
 	int rc;
-	__s64 val;
 
 	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
+
 	if (val < 0 || val > INT_MAX)
 		return -ERANGE;
 
@@ -244,7 +245,7 @@ static int mdt_identity_acquire_expire_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
-	seq_printf(m, "%u\n", mdt->mdt_identity_cache->uc_acquire_expire);
+	seq_printf(m, "%lld\n", mdt->mdt_identity_cache->uc_acquire_expire);
 	return 0;
 }
 
@@ -256,12 +257,13 @@ mdt_identity_acquire_expire_seq_write(struct file *file,
 	struct seq_file	  *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	time64_t val;
 	int rc;
-	__s64 val;
 
 	rc = lprocfs_str_to_s64(buffer, count, &val);
 	if (rc)
 		return rc;
+
 	if (val < 0 || val > INT_MAX)
 		return -ERANGE;
 

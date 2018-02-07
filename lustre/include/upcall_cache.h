@@ -85,8 +85,8 @@ struct upcall_cache_entry {
 	atomic_t		ue_refcount;
 	int			ue_flags;
 	wait_queue_head_t	ue_waitq;
-	cfs_time_t		ue_acquire_expire;
-	cfs_time_t		ue_expire;
+	time64_t		ue_acquire_expire;
+	time64_t		ue_expire;
 	union {
 		struct md_identity	identity;
 	} u;
@@ -121,8 +121,8 @@ struct upcall_cache {
 
 	char			uc_name[40];		/* for upcall */
 	char			uc_upcall[UC_CACHE_UPCALL_MAXPATH];
-	int			uc_acquire_expire;	/* seconds */
-	int			uc_entry_expire;	/* seconds */
+	time64_t		uc_acquire_expire;	/* seconds */
+	time64_t		uc_entry_expire;	/* seconds */
 	struct upcall_cache_ops	*uc_ops;
 };
 

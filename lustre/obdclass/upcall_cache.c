@@ -115,14 +115,14 @@ static inline void put_entry(struct upcall_cache *cache,
 static int check_unlink_entry(struct upcall_cache *cache,
 			      struct upcall_cache_entry *entry)
 {
-	if (UC_CACHE_IS_VALID(entry) &&
-	    cfs_time_before(cfs_time_current(), entry->ue_expire))
+	time64_t now = ktime_get_seconds();
+
+	if (UC_CACHE_IS_VALID(entry) && now < entry->ue_expire)
 		return 0;
 
 	if (UC_CACHE_IS_ACQUIRING(entry)) {
 		if (entry->ue_acquire_expire == 0 ||
-		    cfs_time_before(cfs_time_current(),
-				    entry->ue_acquire_expire))
+		    now < entry->ue_acquire_expire)
 			return 0;
 
 		UC_CACHE_SET_EXPIRED(entry);
@@ -198,8 +198,8 @@ find_again:
 		spin_unlock(&cache->uc_lock);
 		rc = refresh_entry(cache, entry);
 		spin_lock(&cache->uc_lock);
-		entry->ue_acquire_expire =
-			cfs_time_shift(cache->uc_acquire_expire);
+		entry->ue_acquire_expire = ktime_get_seconds() +
+					   cache->uc_acquire_expire;
 		if (rc < 0) {
 			UC_CACHE_CLEAR_ACQUIRING(entry);
 			UC_CACHE_SET_INVALID(entry);
@@ -340,7 +340,7 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u32 err, __u64 key,
 	if (rc)
 		GOTO(out, rc);
 
-	entry->ue_expire = cfs_time_shift(cache->uc_entry_expire);
+	entry->ue_expire = ktime_get_seconds() + cache->uc_entry_expire;
 	UC_CACHE_SET_VALID(entry);
 	CDEBUG(D_OTHER, "%s: created upcall cache entry %p for key %llu\n",
 	       cache->uc_name, entry, entry->ue_key);
@@ -400,10 +400,10 @@ void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args)
 
 	if (found) {
 		CWARN("%s: flush entry %p: key %llu, ref %d, fl %x, "
-		      "cur %lu, ex %ld/%ld\n",
+		      "cur %lld, ex %lld/%lld\n",
 		      cache->uc_name, entry, entry->ue_key,
 		      atomic_read(&entry->ue_refcount), entry->ue_flags,
-		      cfs_time_current_sec(), entry->ue_acquire_expire,
+		      ktime_get_real_seconds(), entry->ue_acquire_expire,
 		      entry->ue_expire);
 		UC_CACHE_SET_EXPIRED(entry);
 		if (!atomic_read(&entry->ue_refcount))
