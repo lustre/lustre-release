@@ -136,16 +136,16 @@ struct hsm_scan_request {
 };
 
 struct hsm_scan_data {
-	struct mdt_thread_info		*mti;
-	char				 fs_name[MTI_NAME_MAXLEN+1];
+	struct mdt_thread_info	*hsd_mti;
+	char			 hsd_fsname[MTI_NAME_MAXLEN + 1];
 	/* are we scanning the logs for housekeeping, or just looking
 	 * for new work?
 	 */
-	bool				 housekeeping;
-	/* request to be send to agents */
-	int				 max_requests;	/** vector size */
-	int				 request_cnt;	/** used count */
-	struct hsm_scan_request		*request;
+	bool			 hsd_housekeeping;
+	int			 hsd_action_count;
+	int			 hsd_request_len; /* array alloc len */
+	int			 hsd_request_count; /* array used count */
+	struct hsm_scan_request	*hsd_request;
 };
 
 static int mdt_cdt_waiting_cb(const struct lu_env *env,
@@ -160,16 +160,30 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 	int i;
 
 	/* Are agents full? */
-	if (atomic_read(&cdt->cdt_request_count) >= cdt->cdt_max_requests)
-		RETURN(0);
+	if (hsd->hsd_action_count + atomic_read(&cdt->cdt_request_count) >=
+	    cdt->cdt_max_requests) {
+		if (hsd->hsd_housekeeping) {
+			/* Unknown request and no more room for a new
+			 * request. Continue to scan to find other
+			 * entries for already existing requests. */
+			RETURN(0);
+		} else {
+			/* We cannot send and more requests, stop
+			 * here. There might be more known requests
+			 * that could be merged, but this avoid
+			 * analyzing too many llogs for minor
+			 * gains. */
+			RETURN(LLOG_PROC_BREAK);
+		}
+	}
 
 	/* first search whether the request is found in the list we
 	 * have built. */
 	request = NULL;
-	for (i = 0; i < hsd->request_cnt; i++) {
-		if (hsd->request[i].hal->hal_compound_id ==
+	for (i = 0; i < hsd->hsd_request_count; i++) {
+		if (hsd->hsd_request[i].hal->hal_compound_id ==
 		    larr->arr_compound_id) {
-			request = &hsd->request[i];
+			request = &hsd->hsd_request[i];
 			break;
 		}
 	}
@@ -177,24 +191,15 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 	if (!request) {
 		struct hsm_action_list *hal;
 
-		if (hsd->request_cnt == hsd->max_requests) {
-			if (!hsd->housekeeping) {
-				/* The request array is full, stop
-				 * here. There might be more known
-				 * requests that could be merged, but
-				 * this avoid analyzing too many llogs
-				 * for minor gains. */
-				RETURN(LLOG_PROC_BREAK);
-			} else {
-				/* Unknown request and no more room
-				 * for a new request. Continue to scan
-				 * to find other entries for already
-				 * existing requests. */
+		if (hsd->hsd_request_count == hsd->hsd_request_len) {
+			/* Logic as above. */
+			if (hsd->hsd_housekeeping)
 				RETURN(0);
-			}
+			else
+				RETURN(LLOG_PROC_BREAK);
 		}
 
-		request = &hsd->request[hsd->request_cnt];
+		request = &hsd->hsd_request[hsd->hsd_request_count];
 
 		/* allocates hai vector size just needs to be large
 		 * enough */
@@ -206,14 +211,14 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 			RETURN(-ENOMEM);
 
 		hal->hal_version = HAL_VERSION;
-		strlcpy(hal->hal_fsname, hsd->fs_name, MTI_NAME_MAXLEN + 1);
+		strlcpy(hal->hal_fsname, hsd->hsd_fsname, MTI_NAME_MAXLEN + 1);
 		hal->hal_compound_id = larr->arr_compound_id;
 		hal->hal_archive_id = larr->arr_archive_id;
 		hal->hal_flags = larr->arr_flags;
 		hal->hal_count = 0;
 		request->hal_used_sz = hal_size(hal);
 		request->hal = hal;
-		hsd->request_cnt++;
+		hsd->hsd_request_count++;
 		hai = hai_first(hal);
 	} else {
 		/* request is known */
@@ -254,6 +259,8 @@ static int mdt_cdt_waiting_cb(const struct lu_env *env,
 	request->hal_used_sz += cfs_size_round(hai->hai_len);
 	request->hal->hal_count++;
 
+	hsd->hsd_action_count++;
+
 	if (hai->hai_action != HSMA_CANCEL)
 		cdt_agent_record_hash_add(cdt, hai->hai_cookie,
 					  llh->lgh_hdr->llh_cat_idx,
@@ -276,7 +283,7 @@ static int mdt_cdt_started_cb(const struct lu_env *env,
 	int cl_flags;
 	int rc;
 
-	if (!hsd->housekeeping)
+	if (!hsd->hsd_housekeeping)
 		RETURN(0);
 
 	/* we search for a running request
@@ -332,11 +339,11 @@ static int mdt_cdt_started_cb(const struct lu_env *env,
 			     &hai->hai_fid);
 
 	if (hai->hai_action == HSMA_RESTORE)
-		cdt_restore_handle_del(hsd->mti, cdt, &hai->hai_fid);
+		cdt_restore_handle_del(hsd->hsd_mti, cdt, &hai->hai_fid);
 
 	larr->arr_status = ARS_CANCELED;
 	larr->arr_req_change = now;
-	rc = llog_write(hsd->mti->mti_env, llh, &larr->arr_hdr,
+	rc = llog_write(hsd->hsd_mti->mti_env, llh, &larr->arr_hdr,
 			larr->arr_hdr.lrh_index);
 	if (rc < 0) {
 		CERROR("%s: cannot update agent log: rc = %d\n",
@@ -372,7 +379,7 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 {
 	struct llog_agent_req_rec *larr = (struct llog_agent_req_rec *)hdr;
 	struct hsm_scan_data *hsd = data;
-	struct mdt_device *mdt = hsd->mti->mti_mdt;
+	struct mdt_device *mdt = hsd->hsd_mti->mti_mdt;
 	struct coordinator *cdt = &mdt->mdt_coordinator;
 	ENTRY;
 
@@ -384,7 +391,7 @@ static int mdt_coordinator_cb(const struct lu_env *env,
 	case ARS_STARTED:
 		RETURN(mdt_cdt_started_cb(env, mdt, llh, larr, hsd));
 	default:
-		if (!hsd->housekeeping)
+		if (!hsd->hsd_housekeeping)
 			RETURN(0);
 
 		if ((larr->arr_req_change + cdt->cdt_grace_delay) <
@@ -563,8 +570,9 @@ static int mdt_coordinator(void *data)
 	CDEBUG(D_HSM, "%s: coordinator thread starting, pid=%d\n",
 	       mdt_obd_name(mdt), current_pid());
 
-	hsd.mti = mti;
-	obd_uuid2fsname(hsd.fs_name, mdt_obd_name(mdt), MTI_NAME_MAXLEN);
+	hsd.hsd_mti = mti;
+	obd_uuid2fsname(hsd.hsd_fsname, mdt_obd_name(mdt),
+			sizeof(hsd.hsd_fsname));
 
 	set_cdt_state(cdt, CDT_RUNNING);
 
@@ -608,9 +616,9 @@ static int mdt_coordinator(void *data)
 		if (last_housekeeping + cdt->cdt_loop_period <=
 		    ktime_get_real_seconds()) {
 			last_housekeeping = ktime_get_real_seconds();
-			hsd.housekeeping = true;
+			hsd.hsd_housekeeping = true;
 		} else if (cdt->cdt_event) {
-			hsd.housekeeping = false;
+			hsd.hsd_housekeeping = false;
 		} else {
 			continue;
 		}
@@ -619,7 +627,7 @@ static int mdt_coordinator(void *data)
 
 		CDEBUG(D_HSM, "coordinator starts reading llog\n");
 
-		if (hsd.max_requests != cdt->cdt_max_requests) {
+		if (hsd.hsd_request_len != cdt->cdt_max_requests) {
 			/* cdt_max_requests has changed,
 			 * we need to allocate a new buffer
 			 */
@@ -630,26 +638,29 @@ static int mdt_coordinator(void *data)
 			if (!tmp) {
 				CERROR("Failed to resize request buffer, "
 				       "keeping it at %d\n",
-				       hsd.max_requests);
+				       hsd.hsd_request_len);
 			} else {
-				if (hsd.request != NULL)
-					OBD_FREE_LARGE(hsd.request, request_sz);
+				if (hsd.hsd_request != NULL)
+					OBD_FREE_LARGE(hsd.hsd_request,
+						       request_sz);
 
-				hsd.max_requests = max_requests;
-				request_sz = hsd.max_requests *
+				hsd.hsd_request_len = max_requests;
+				request_sz = hsd.hsd_request_len *
 					sizeof(struct hsm_scan_request);
-				hsd.request = tmp;
+				hsd.hsd_request = tmp;
 			}
 		}
 
-		hsd.request_cnt = 0;
+		hsd.hsd_action_count = 0;
+		hsd.hsd_request_count = 0;
 
 		rc = cdt_llog_process(mti->mti_env, mdt, mdt_coordinator_cb,
 				      &hsd, 0, 0, WRITE);
 		if (rc < 0)
 			goto clean_cb_alloc;
 
-		CDEBUG(D_HSM, "found %d requests to send\n", hsd.request_cnt);
+		CDEBUG(D_HSM, "found %d requests to send\n",
+		       hsd.hsd_request_count);
 
 		if (list_empty(&cdt->cdt_agents)) {
 			CDEBUG(D_HSM, "no agent available, "
@@ -659,9 +670,9 @@ static int mdt_coordinator(void *data)
 
 		/* Compute how many HAI we have in all the requests */
 		updates_cnt = 0;
-		for (i = 0; i < hsd.request_cnt; i++) {
+		for (i = 0; i < hsd.hsd_request_count; i++) {
 			const struct hsm_scan_request *request =
-				&hsd.request[i];
+				&hsd.hsd_request[i];
 
 			updates_cnt += request->hal->hal_count;
 		}
@@ -678,8 +689,8 @@ static int mdt_coordinator(void *data)
 		}
 
 		/* here hsd contains a list of requests to be started */
-		for (i = 0; i < hsd.request_cnt; i++) {
-			struct hsm_scan_request *request = &hsd.request[i];
+		for (i = 0; i < hsd.hsd_request_count; i++) {
+			struct hsm_scan_request *request = &hsd.hsd_request[i];
 			struct hsm_action_list	*hal = request->hal;
 			struct hsm_action_item	*hai;
 			int			 j;
@@ -722,15 +733,15 @@ static int mdt_coordinator(void *data)
 
 clean_cb_alloc:
 		/* free hal allocated by callback */
-		for (i = 0; i < hsd.request_cnt; i++) {
-			struct hsm_scan_request *request = &hsd.request[i];
+		for (i = 0; i < hsd.hsd_request_count; i++) {
+			struct hsm_scan_request *request = &hsd.hsd_request[i];
 
 			OBD_FREE(request->hal, request->hal_sz);
 		}
 	}
 
-	if (hsd.request)
-		OBD_FREE_LARGE(hsd.request, request_sz);
+	if (hsd.hsd_request != NULL)
+		OBD_FREE_LARGE(hsd.hsd_request, request_sz);
 
 	mdt_hsm_cdt_cleanup(mdt);
 
