@@ -148,11 +148,6 @@ struct hsm_scan_data {
 	struct hsm_scan_request		*request;
 };
 
-struct hsm_thread_data {
-	struct mdt_thread_info	*cdt_mti;
-	struct hsm_scan_request	*request;
-};
-
 static int mdt_cdt_waiting_cb(const struct lu_env *env,
 			      struct mdt_device *mdt,
 			      struct llog_handle *llh,
@@ -556,20 +551,14 @@ static int set_cdt_state(struct coordinator *cdt, enum cdt_states new_state)
  */
 static int mdt_coordinator(void *data)
 {
-	struct hsm_thread_data	*thread_data = data;
-	struct mdt_thread_info	*mti = thread_data->cdt_mti;
+	struct mdt_thread_info	*mti = data;
 	struct mdt_device	*mdt = mti->mti_mdt;
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
 	struct hsm_scan_data	 hsd = { NULL };
 	time64_t		 last_housekeeping = 0;
-	int			 rc = 0;
-	int			 request_sz;
+	size_t request_sz = 0;
+	int rc;
 	ENTRY;
-
-	/* set up hsd->request and max_requests */
-	hsd.max_requests = cdt->cdt_max_requests;
-	request_sz = hsd.max_requests * sizeof(*hsd.request);
-	hsd.request = thread_data->request;
 
 	CDEBUG(D_HSM, "%s: coordinator thread starting, pid=%d\n",
 	       mdt_obd_name(mdt), current_pid());
@@ -642,9 +631,10 @@ static int mdt_coordinator(void *data)
 				CERROR("Failed to resize request buffer, "
 				       "keeping it at %d\n",
 				       hsd.max_requests);
-				cdt->cdt_max_requests = hsd.max_requests;
 			} else {
-				OBD_FREE_LARGE(hsd.request, request_sz);
+				if (hsd.request != NULL)
+					OBD_FREE_LARGE(hsd.request, request_sz);
+
 				hsd.max_requests = max_requests;
 				request_sz = hsd.max_requests *
 					sizeof(struct hsm_scan_request);
@@ -1085,11 +1075,10 @@ int  mdt_hsm_cdt_fini(struct mdt_device *mdt)
 static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 {
 	struct coordinator	*cdt = &mdt->mdt_coordinator;
+	struct mdt_thread_info *cdt_mti;
 	int			 rc;
 	void			*ptr;
 	struct task_struct	*task;
-	int			 request_sz;
-	struct hsm_thread_data	 thread_data;
 	ENTRY;
 
 	/* functions defined but not yet used
@@ -1122,9 +1111,8 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	 * /proc entries are created by the coordinator thread */
 
 	/* set up list of started restore requests */
-	thread_data.cdt_mti =
-		lu_context_key_get(&cdt->cdt_env.le_ctx, &mdt_thread_key);
-	rc = mdt_hsm_pending_restore(thread_data.cdt_mti);
+	cdt_mti = lu_context_key_get(&cdt->cdt_env.le_ctx, &mdt_thread_key);
+	rc = mdt_hsm_pending_restore(cdt_mti);
 	if (rc)
 		CERROR("%s: cannot take the layout locks needed"
 		       " for registered restore: %d\n",
@@ -1133,19 +1121,10 @@ static int mdt_hsm_cdt_start(struct mdt_device *mdt)
 	if (mdt->mdt_bottom->dd_rdonly)
 		RETURN(0);
 
-	/* Allocate the initial hsd.request[] vector*/
-	request_sz = cdt->cdt_max_requests * sizeof(struct hsm_scan_request);
-	OBD_ALLOC_LARGE(thread_data.request, request_sz);
-	if (!thread_data.request) {
-		set_cdt_state(cdt, CDT_STOPPED);
-		RETURN(-ENOMEM);
-	}
-
-	task = kthread_run(mdt_coordinator, &thread_data, "hsm_cdtr");
+	task = kthread_run(mdt_coordinator, cdt_mti, "hsm_cdtr");
 	if (IS_ERR(task)) {
 		rc = PTR_ERR(task);
 		set_cdt_state(cdt, CDT_STOPPED);
-		OBD_FREE(thread_data.request, request_sz);
 		CERROR("%s: error starting coordinator thread: %d\n",
 		       mdt_obd_name(mdt), rc);
 	} else {
