@@ -197,6 +197,7 @@ struct find_param {
 				 fp_comp_start_sign:2,
 				 fp_comp_end_sign:2,
 				 fp_comp_count_sign:2,
+				 fp_mirror_count_sign:2,
 				 fp_mdt_count_sign:2;
 	unsigned long long	 fp_size;
 	unsigned long long	 fp_size_units;
@@ -232,7 +233,10 @@ struct find_param {
 				 fp_exclude_projid:1,
 				 fp_check_comp_count:1,
 				 fp_exclude_comp_count:1,
+				 fp_check_mirror_count:1,
+				 fp_exclude_mirror_count:1,
 				 fp_check_comp_flags:1,
+				 fp_check_mirror_state:1,
 				 fp_check_comp_start:1,
 				 fp_exclude_comp_start:1,
 				 fp_check_comp_end:1,
@@ -278,8 +282,11 @@ struct find_param {
 	__u32			 fp_layout;
 
 	__u32			 fp_comp_count;
+	__u32			 fp_mirror_count;
 	__u32			 fp_comp_flags;
 	__u32			 fp_comp_neg_flags;
+	__u16			 fp_mirror_state;
+	__u16			 fp_mirror_neg_state;
 	__u32			 fp_comp_id;
 	unsigned long long	 fp_comp_start;
 	unsigned long long	 fp_comp_start_units;
@@ -791,6 +798,7 @@ int llapi_layout_file_create(const char *path, int open_flags, int mode,
 int llapi_layout_flags_set(struct llapi_layout *layout, uint32_t flags);
 int llapi_layout_flags_get(struct llapi_layout *layout, uint32_t *flags);
 const char *llapi_layout_flags_string(uint32_t flags);
+const __u16 llapi_layout_string_flags(char *string);
 
 /**
  * llapi_layout_mirror_count_get() - Get mirror count from the header of

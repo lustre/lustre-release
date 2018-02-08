@@ -365,6 +365,8 @@ command_t cmdlist[] = {
 	 "     [[!] --component-start [+-]N[kMGTPE]]\n"
 	 "     [[!] --component-end|-E [+-]N[kMGTPE]]\n"
 	 "     [[!] --component-flags <comp_flags>]\n"
+	 "     [[!] --mirror-count|-N [+-]<n>]\n"
+	 "     [[!] --mirror-state <[^]state>]\n"
 	 "     [[!] --mdt-count|-T [+-]<stripes>]\n"
 	 "     [[!] --mdt-hash|-H <hashtype>\n"
          "\t !: used before an option indicates 'NOT' requested attribute\n"
@@ -1103,6 +1105,30 @@ static int comp_str2flags(char *string, __u32 *flags, __u32 *neg_flags)
 		return -EINVAL;
 
 	return 0;
+}
+
+static int mirror_str2state(char *string, __u16 *state, __u16 *neg_state)
+{
+	if (string == NULL)
+		return -EINVAL;
+
+	*state = 0;
+	*neg_state = 0;
+
+	if (strncmp(string, "^", 1) == 0) {
+		*neg_state = llapi_layout_string_flags(string + 1);
+		if (*neg_state != 0)
+			return 0;
+	} else {
+		*state = llapi_layout_string_flags(string);
+		if (*state != 0)
+			return 0;
+	}
+
+	llapi_printf(LLAPI_MSG_ERROR,
+		     "%s: mirrored file state '%s' not supported\n",
+		     progname, string);
+	return -EINVAL;
 }
 
 /**
@@ -2262,6 +2288,7 @@ enum {
 	LFS_PROJID_OPT,
 	LFS_MIRROR_FLAGS_OPT,
 	LFS_MIRROR_ID_OPT,
+	LFS_MIRROR_STATE_OPT,
 };
 
 /* functions */
@@ -3099,6 +3126,8 @@ static int lfs_find(int argc, char **argv)
 	{ .val = LFS_COMP_START_OPT,
 			.name = "component-start",
 						.has_arg = required_argument },
+	{ .val = LFS_MIRROR_STATE_OPT,
+			.name = "mirror-state",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument },
 	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument },
@@ -3120,6 +3149,7 @@ static int lfs_find(int argc, char **argv)
 	{ .val = 'm',	.name = "mdt_index",	.has_arg = required_argument },
 	{ .val = 'M',	.name = "mtime",	.has_arg = required_argument },
 	{ .val = 'n',	.name = "name",		.has_arg = required_argument },
+	{ .val = 'N',	.name = "mirror-count",	.has_arg = required_argument },
 /* find	{ .val = 'o'	.name = "or", .has_arg = no_argument }, like find(1) */
 	{ .val = 'O',	.name = "obd",		.has_arg = required_argument },
 	{ .val = 'O',	.name = "ost",		.has_arg = required_argument },
@@ -3155,7 +3185,7 @@ static int lfs_find(int argc, char **argv)
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
-			"-0A:c:C:D:E:g:G:H:i:L:m:M:n:O:Ppqrs:S:t:T:u:U:v",
+			"-0A:c:C:D:E:g:G:H:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:v",
 			long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
@@ -3269,6 +3299,23 @@ static int lfs_find(int argc, char **argv)
 			param.fp_check_comp_start = 1;
 			param.fp_exclude_comp_start = !!neg_opt;
 			break;
+		case LFS_MIRROR_STATE_OPT:
+			rc = mirror_str2state(optarg, &param.fp_mirror_state,
+					      &param.fp_mirror_neg_state);
+			if (rc) {
+				fprintf(stderr,
+					"error: bad mirrored file state '%s'\n",
+					optarg);
+				goto err;
+			}
+			param.fp_check_mirror_state = 1;
+			if (neg_opt) {
+				__u16 state = param.fp_mirror_neg_state;
+				param.fp_mirror_neg_state =
+					param.fp_mirror_state;
+				param.fp_mirror_state = state;
+			}
+			break;
                 case 'c':
                         if (optarg[0] == '+') {
 				param.fp_stripe_count_sign = -1;
@@ -3369,6 +3416,25 @@ static int lfs_find(int argc, char **argv)
 			param.fp_pattern = (char *)optarg;
 			param.fp_exclude_pattern = !!neg_opt;
                         break;
+		case 'N':
+			if (optarg[0] == '+') {
+				param.fp_mirror_count_sign = -1;
+				optarg++;
+			} else if (optarg[0] == '-') {
+				param.fp_mirror_count_sign =  1;
+				optarg++;
+			}
+
+			param.fp_mirror_count = strtoul(optarg, &endptr, 0);
+			if (*endptr != '\0') {
+				fprintf(stderr,
+					"error: bad mirror count '%s'\n",
+					optarg);
+				goto err;
+			}
+			param.fp_check_mirror_count = 1;
+			param.fp_exclude_mirror_count = !!neg_opt;
+			break;
                 case 'm':
                 case 'i':
                 case 'O': {

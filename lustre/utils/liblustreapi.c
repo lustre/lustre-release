@@ -3845,12 +3845,47 @@ out:
 	return ret;
 }
 
+static int find_check_mirror_options(struct find_param *param)
+{
+	struct lov_comp_md_v1 *comp_v1;
+	struct lov_user_md_v1 *v1 = &param->fp_lmd->lmd_lmm;
+	int ret = 0;
+
+	if (v1->lmm_magic != LOV_USER_MAGIC_COMP_V1)
+		return -1;
+
+	comp_v1 = (struct lov_comp_md_v1 *)v1;
+
+	if (param->fp_check_mirror_count) {
+		ret = find_value_cmp(comp_v1->lcm_mirror_count + 1,
+				     param->fp_mirror_count,
+				     param->fp_mirror_count_sign,
+				     param->fp_exclude_mirror_count, 1, 0);
+		if (ret == -1)
+			return ret;
+	}
+
+	if (param->fp_check_mirror_state) {
+		ret = 1;
+		__u16 file_state = comp_v1->lcm_flags & LCM_FL_FLR_MASK;
+
+		if ((param->fp_mirror_state != 0 &&
+		    file_state != param->fp_mirror_state) ||
+		    file_state == param->fp_mirror_neg_state)
+			return -1;
+	}
+
+	return ret;
+}
+
 static bool find_check_lmm_info(struct find_param *param)
 {
 	return param->fp_check_pool || param->fp_check_stripe_count ||
 	       param->fp_check_stripe_size || param->fp_check_layout ||
 	       param->fp_check_comp_count || param->fp_check_comp_end ||
 	       param->fp_check_comp_start || param->fp_check_comp_flags ||
+	       param->fp_check_mirror_count ||
+	       param->fp_check_mirror_state ||
 	       param->fp_check_projid;
 }
 
@@ -4144,6 +4179,12 @@ obd_matches:
 	if (param->fp_check_comp_count || param->fp_check_comp_flags ||
 	    param->fp_check_comp_start || param->fp_check_comp_end) {
 		decision = find_check_comp_options(param);
+		if (decision == -1)
+			goto decided;
+	}
+
+	if (param->fp_check_mirror_count || param->fp_check_mirror_state) {
+		decision = find_check_mirror_options(param);
 		if (decision == -1)
 			goto decided;
 	}

@@ -5802,6 +5802,80 @@ test_56ba() {
 }
 run_test 56ba "test lfs find --component-end, -start, -count, and -flags"
 
+test_56ca() {
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.57) ]] ||
+		{ skip "Need MDS version at least 2.10.57"; return 0; }
+
+	local td=$DIR/$tdir
+	local tf=$td/$tfile
+	local dir
+	local nfiles
+	local cmd
+	local i
+	local j
+
+	# create mirrored directories and mirrored files
+	mkdir $td || error "mkdir $td failed"
+	$LFS mirror create -N3 $td || error "create mirrored dir $td failed"
+	createmany -o $tf- 10 || error "create $tf- failed"
+
+	for i in $(seq 2); do
+		dir=$td/dir$i
+		mkdir $dir || error "mkdir $dir failed"
+		$LFS mirror create -N$((3 + i)) $dir ||
+			error "create mirrored dir $dir failed"
+		createmany -o $dir/$tfile- 10 ||
+			error "create $dir/$tfile- failed"
+	done
+
+	# change the states of some mirrored files
+	echo foo > $tf-6
+	for i in $(seq 2); do
+		dir=$td/dir$i
+		for j in $(seq 4 9); do
+			echo foo > $dir/$tfile-$j
+		done
+	done
+
+	# find mirrored files with specific mirror count
+	cmd="$LFS find --mirror-count 3 --type f $td"
+	nfiles=$($cmd | wc -l)
+	[[ $nfiles = 10 ]] || error "$cmd: $nfiles != 10 files"
+
+	cmd="$LFS find ! --mirror-count 3 --type f $td"
+	nfiles=$($cmd | wc -l)
+	[[ $nfiles = 20 ]] || error "$cmd: $nfiles != 20 files"
+
+	cmd="$LFS find --mirror-count +2 --type f $td"
+	nfiles=$($cmd | wc -l)
+	[[ $nfiles = 30 ]] || error "$cmd: $nfiles != 30 files"
+
+	cmd="$LFS find --mirror-count -6 --type f $td"
+	nfiles=$($cmd | wc -l)
+	[[ $nfiles = 30 ]] || error "$cmd: $nfiles != 30 files"
+
+	# find mirrored files with specific file state
+	cmd="$LFS find --maxdepth 1 --mirror-state=^ro --type f $td"
+	[[ $($cmd) = $tf-6 ]] || error "$cmd: didn't return $tf-6"
+
+	cmd="$LFS find --mirror-state=ro --type f $td"
+	nfiles=$($cmd | wc -l)
+	[[ $nfiles = 17 ]] || error "$cmd: $nfiles != 17 files"
+
+	cmd="$LFS find ! --mirror-state=ro --type f $td"
+	nfiles=$($cmd | wc -l)
+	[[ $nfiles = 13 ]] || error "$cmd: $nfiles != 13 files"
+
+	cmd="$LFS find --mirror-state=wp --type f $td"
+	nfiles=$($cmd | wc -l)
+	[[ $nfiles = 13 ]] || error "$cmd: $nfiles != 13 files"
+
+	cmd="$LFS find ! --mirror-state=sp --type f $td"
+	nfiles=$($cmd | wc -l)
+	[[ $nfiles = 30 ]] || error "$cmd: $nfiles != 30 files"
+}
+run_test 56ca "check lfs find --mirror-count|-N and --mirror-state"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	# note test will not do anything if MDS is not local

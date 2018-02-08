@@ -1553,6 +1553,18 @@ const char *llapi_layout_flags_string(uint32_t flags)
 	return "0";
 }
 
+const __u16 llapi_layout_string_flags(char *string)
+{
+	if (strncmp(string, "ro", strlen(string)) == 0)
+		return LCM_FL_RDONLY;
+	if (strncmp(string, "wp", strlen(string)) == 0)
+		return LCM_FL_WRITE_PENDING;
+	if (strncmp(string, "sp", strlen(string)) == 0)
+		return LCM_FL_SYNC_PENDING;
+
+	return 0;
+}
+
 /**
  * llapi_layout_mirror_count_is_valid() - Check the validity of mirror count.
  * @count: Mirror count value to be checked.

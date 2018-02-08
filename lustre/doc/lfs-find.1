@@ -9,6 +9,8 @@ lfs-find \- Lustre client utility to list files with specific attributes
       [[\fB!\fR] \fB--component-end|\fB--comp-end\fR|\fB-E\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
       [[\fB!\fR] \fB--component-flags|\fB--comp-flags\fR <[^]\fIflag\fB,\fR...>]
       [[\fB!\fR] \fB--component-start|\fB--comp-start\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
+      [[\fB!\fR] \fB--mirror-count|\fB-N\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--mirror-state\fR <[^]\fIstate\fR>]
       [[\fB!\fR] \fB--gid\fR|\fB-g\fR|\fB--group\fR|\fB-G\fR <\fIgname\fR>|<\fIgid\fR>]
       [[\fB!\fR] \fB--layout\fR|\fB-L mdt\fR,\fBraid0\fR,\fBreleased\fR]
 [\fB--maxdepth\fR|\fB-D\fI n\fR]
@@ -77,9 +79,34 @@ before they can be accessed again.
 Replicated (mirrored) components that are preferred for read or write.
 For example, because they are located on SSD-based OSTs, or are more
 local on the network to clients.
+.RE
 .TP
 .BR --component-start | --comp-start
 The file has component start offset \fIn\fR (in bytes) for any component.
+.TP
+.BR --mirror-count | -N
+The file has \fIn\fR mirrors in its layout.
+.TP
+.BR --mirror-state
+The file has a state of
+.I state.
+If
+.BI ^ state
+is used, print only files not matching
+.IR state.
+Only one state can be specified. Valid state name is:
+.RS 1.2i
+.TP
+.B ro
+The mirrored file is in read-only state. All of the mirrors contain
+the up-to-date data.
+.TP
+.B wp
+The mirrored file is in a state of being written.
+.TP
+.B sp
+The mirrored file is in a state of being resynchronized.
+.RE
 .TP
 .BR --gid | -g
 File has specified numeric group ID.
@@ -238,6 +265,12 @@ that have more than 3 components.
 .B $ lfs find --component-flags=init,prefer,^stale /mnt/lustre
 Recursively list all files that have at least one component with both 'init'
 and 'prefer' flags set, and doesn't have flag 'stale' set.
+.TP
+.B $ lfs find --mirror-count +2 /mnt/lustre
+Recursively list all mirrored files that have more than 2 mirrors.
+.TP
+.B $ lfs find ! --mirror-state=ro /mnt/lustre
+Recursively list all out-of-sync mirrored files.
 .SH BUGS
 The
 .B lfs find
