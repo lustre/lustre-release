@@ -7068,9 +7068,9 @@ int verify_mirror_ids(const char *fname, __u16 *mirror_ids, int ids_nr)
 		goto error;
 	}
 
-	rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
+	rc = llapi_lease_acquire(fd, LL_LEASE_RDLCK);
 	if (rc < 0) {
-		fprintf(stderr, "%s: '%s' llapi_lease_get failed: %s.\n",
+		fprintf(stderr, "%s: '%s' llapi_lease_acquire failed: %s.\n",
 			progname, fname, strerror(errno));
 		goto close_fd;
 	}
@@ -7080,7 +7080,7 @@ int verify_mirror_ids(const char *fname, __u16 *mirror_ids, int ids_nr)
 		fprintf(stderr, "%s: '%s' llapi_layout_get_by_fd failed: %s.\n",
 			progname, fname, strerror(errno));
 		rc = -errno;
-		llapi_lease_put(fd);
+		llapi_lease_release(fd);
 		goto close_fd;
 	}
 
@@ -7129,7 +7129,7 @@ int verify_mirror_ids(const char *fname, __u16 *mirror_ids, int ids_nr)
 
 free_layout:
 	llapi_layout_free(layout);
-	llapi_lease_put(fd);
+	llapi_lease_release(fd);
 close_fd:
 	close(fd);
 error:
@@ -7800,9 +7800,9 @@ int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
 		goto error;
 	}
 
-	rc = llapi_lease_get(fd, LL_LEASE_RDLCK);
+	rc = llapi_lease_acquire(fd, LL_LEASE_RDLCK);
 	if (rc < 0) {
-		fprintf(stderr, "%s: '%s' llapi_lease_get failed: %s.\n",
+		fprintf(stderr, "%s: '%s' llapi_lease_acquire failed: %s.\n",
 			progname, fname, strerror(errno));
 		goto close_fd;
 	}
@@ -7812,7 +7812,7 @@ int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
 		fprintf(stderr, "%s: '%s' llapi_layout_get_by_fd failed: %s.\n",
 			progname, fname, strerror(errno));
 		rc = -errno;
-		llapi_lease_put(fd);
+		llapi_lease_release(fd);
 		goto close_fd;
 	}
 
@@ -7909,7 +7909,7 @@ int lfs_mirror_verify_file(const char *fname, __u16 *mirror_ids, int ids_nr,
 
 free_layout:
 	llapi_layout_free(layout);
-	llapi_lease_put(fd);
+	llapi_lease_release(fd);
 close_fd:
 	close(fd);
 error:
