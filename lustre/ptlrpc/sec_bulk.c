@@ -540,7 +540,7 @@ EXPORT_SYMBOL(pool_is_at_full_capacity);
  */
 int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
 {
-	wait_queue_t waitlink;
+	wait_queue_entry_t waitlink;
 	unsigned long this_idle = -1;
 	u64 tick_ns = 0;
 	time64_t now;

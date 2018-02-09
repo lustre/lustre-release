@@ -935,7 +935,7 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	struct ptlrpc_reply_state *rs;
 	struct rsc                *rsci = NULL;
 	struct rsi                *rsip = NULL, rsikey;
-	wait_queue_t             wait;
+	wait_queue_entry_t wait;
 	int                        replen = sizeof(struct ptlrpc_body);
 	struct gss_rep_header     *rephdr;
 	int                        first_check = 1;

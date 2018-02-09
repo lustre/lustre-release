@@ -35,6 +35,7 @@
  */
 #define DEBUG_SUBSYSTEM S_SEC
 
+#include <libcfs/linux/linux-misc.h>
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lnet/lnet-types.h>
 #include <upcall_cache.h>
@@ -148,7 +149,7 @@ struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *cache,
 {
 	struct upcall_cache_entry *entry = NULL, *new = NULL, *next;
 	struct list_head *head;
-	wait_queue_t wait;
+	wait_queue_entry_t wait;
 	int rc, found;
 	ENTRY;
 

@@ -130,5 +130,6 @@ tempnam||mkstemp
 f_dentry||f_path.dentry
 = seq_printf||seq_printf
 return seq_printf||seq_printf
+wait_queue_t|wait_queue_entry_t
 DN_MAX_BONUSLEN||DN_BONUS_SIZE(dnodesize)
 DN_OLD_MAX_BONUSLEN||DN_BONUS_SIZE(DNODE_MIN_SIZE)

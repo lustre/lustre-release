@@ -46,6 +46,7 @@
 #include <linux/pagemap.h>
 #include <linux/uaccess.h>
 #include <libcfs/linux/linux-fs.h>
+#include <libcfs/linux/linux-misc.h>
 #include <libcfs/libcfs.h>
 
 /* XXX move things up to the top, comment */
@@ -951,7 +952,7 @@ static int tracefiled(void *arg)
 	complete(&tctl->tctl_start);
 
 	while (1) {
-		wait_queue_t __wait;
+		wait_queue_entry_t __wait;
 
                 pc.pc_want_daemon_pages = 0;
                 collect_pages(&pc);

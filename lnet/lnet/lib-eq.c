@@ -323,7 +323,7 @@ lnet_eq_wait_locked(signed long *timeout)
 __must_hold(&the_lnet.ln_eq_wait_lock)
 {
 	signed long tms = *timeout;
-	wait_queue_t wl;
+	wait_queue_entry_t wl;
 	int wait;
 
 	if (tms == 0)

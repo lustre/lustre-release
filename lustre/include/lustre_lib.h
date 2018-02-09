@@ -47,6 +47,7 @@
 #include <linux/sched/mm.h>
 #endif
 
+#include <libcfs/linux/linux-misc.h>
 #include <libcfs/libcfs.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <uapi/linux/lustre/lustre_ver.h>
@@ -221,7 +222,7 @@ struct l_wait_info {
 /*
  * Wait Queue
  */
-#ifndef HAVE___ADD_WAIT_QUEUE_EXCLUSIVE
+#if !defined(HAVE___ADD_WAIT_QUEUE_EXCLUSIVE) && !defined(HAVE_WAIT_QUEUE_ENTRY)
 static inline void __add_wait_queue_exclusive(wait_queue_head_t *q,
 					      wait_queue_t *wait)
 {
@@ -258,7 +259,7 @@ static inline void __add_wait_queue_exclusive(wait_queue_head_t *q,
  */
 #define __l_wait_event(wq, condition, info, ret, l_add_wait)                   \
 do {                                                                           \
-	wait_queue_t __wait;                                                   \
+	wait_queue_entry_t __wait;                                             \
 	cfs_duration_t __timeout = info->lwi_timeout;                          \
 	sigset_t   __blocked;                                              \
 	int   __allow_intr = info->lwi_allow_intr;                             \

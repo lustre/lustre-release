@@ -41,6 +41,7 @@
 # error This include is only for kernel use.
 #endif
 
+#include <libcfs/linux/linux-misc.h>
 #include <libcfs/libcfs.h>
 #include <lnet/api.h>
 #include <lnet/lib-types.h>

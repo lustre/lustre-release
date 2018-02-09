@@ -568,7 +568,7 @@ static inline wait_queue_head_t *sk_sleep(struct sock *sk)
 int
 lnet_sock_accept(struct socket **newsockp, struct socket *sock)
 {
-	wait_queue_t   wait;
+	wait_queue_entry_t wait;
 	struct socket *newsock;
 	int	       rc;
 

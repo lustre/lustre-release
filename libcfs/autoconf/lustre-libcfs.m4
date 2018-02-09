@@ -817,6 +817,24 @@ LB_CHECK_LINUX_HEADER([linux/sched/signal.h], [
 ]) # LIBCFS_SCHED_HEADERS
 
 #
+# LIBCFS_WAIT_QUEUE_ENTRY
+#
+# Kernel version 4.13 ac6424b981bce1c4bc55675c6ce11bfe1bbfa64f
+# Rename wait_queue_t => wait_queue_entry_t
+#
+AC_DEFUN([LIBCFS_WAIT_QUEUE_ENTRY], [
+LB_CHECK_COMPILE([if 'wait_queue_entry_t' exists],
+wait_queue_entry, [
+	#include <linux/wait.h>
+],[
+	wait_queue_entry_t e;
+],[
+	AC_DEFINE(HAVE_WAIT_QUEUE_ENTRY, 1,
+		['wait_queue_entry_t' is available])
+])
+]) # LIBCFS_WAIT_QUEUE_ENTRY
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -895,6 +913,8 @@ LIBCFS_GET_USER_PAGES_GUP_FLAGS
 LIBCFS_HOTPLUG_STATE_MACHINE
 # 4.11
 LIBCFS_SCHED_HEADERS
+# 4.13
+LIBCFS_WAIT_QUEUE_ENTRY
 ]) # LIBCFS_PROG_LINUX
 
 #

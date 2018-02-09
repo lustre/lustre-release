@@ -474,7 +474,7 @@ struct lov_thread_info {
 	struct ost_lvb          lti_lvb;
 	struct cl_2queue        lti_cl2q;
 	struct cl_page_list     lti_plist;
-	wait_queue_t		lti_waiter;
+	wait_queue_entry_t      lti_waiter;
 };
 
 /**

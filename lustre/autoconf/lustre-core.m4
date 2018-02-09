@@ -506,7 +506,8 @@ __add_wait_queue_exclusive, [
 	#include <linux/wait.h>
 ],[
 	wait_queue_head_t queue;
-	wait_queue_t	  wait;
+	wait_queue_t wait;
+
 	__add_wait_queue_exclusive(&queue, &wait);
 ],[
 	AC_DEFINE(HAVE___ADD_WAIT_QUEUE_EXCLUSIVE, 1,

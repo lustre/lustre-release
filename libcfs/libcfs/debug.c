@@ -409,8 +409,8 @@ static int libcfs_debug_dumplog_thread(void *arg)
 
 void libcfs_debug_dumplog(void)
 {
-	wait_queue_t wait;
-	struct task_struct    *dumper;
+	wait_queue_entry_t wait;
+	struct task_struct *dumper;
 	ENTRY;
 
 	/* we're being careful to ensure that the kernel thread is
