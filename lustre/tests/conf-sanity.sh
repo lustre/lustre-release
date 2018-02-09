@@ -1082,7 +1082,7 @@ test_27b() {
 }
 run_test 27b "Reacquire MGS lock after failover"
 
-test_28() {
+test_28A() { # was test_28
 	setup
 	TEST="$LCTL get_param -n llite.$FSNAME-*.max_read_ahead_whole_mb"
 	PARAM="$FSNAME.llite.max_read_ahead_whole_mb"
@@ -1105,7 +1105,7 @@ test_28() {
 		error "third set_conf_param_and_check client failed"
 	cleanup || error "cleanup failed with rc $?"
 }
-run_test 28 "permanent parameter setting"
+run_test 28A "permanent parameter setting"
 
 test_28a() { # LU-4221
 	[[ $(lustre_version_code ost1) -ge $(version_code 2.5.52) ]] ||

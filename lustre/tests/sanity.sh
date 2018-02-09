@@ -14936,7 +14936,7 @@ test_238() {
 }
 run_test 238 "Verify linkea consistency"
 
-test_239() {
+test_239A() { # was test_239
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.5.60) ] &&
 		skip "Need MDS version at least 2.5.60" && return
 	local list=$(comma_list $(mdts_nodes))
@@ -14950,7 +14950,7 @@ test_239() {
 			osp.*MDT*.sync_in_flight" | calc_sum)
 	[ "$changes" -eq 0 ] || error "$changes not synced"
 }
-run_test 239 "osp_sync test"
+run_test 239A "osp_sync test"
 
 test_239a() { #LU-5297
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return

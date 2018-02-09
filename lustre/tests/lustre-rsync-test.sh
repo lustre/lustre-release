@@ -161,7 +161,7 @@ stop_procs() {
 }
 
 # Test 1 - test basic operations
-test_1() {
+test_1A() { # was test_1
     init_src
     init_changelog
     local xattr=$(check_xattr $TGT/foo)
@@ -244,7 +244,7 @@ test_1() {
     cleanup_src_tgt
     return $RC
 }
-run_test 1 "Simple Replication"
+run_test 1A "Simple Replication"
 
 # Test 1a - test create/delete operations in ROOT directory
 test_1a() { # LU-5005

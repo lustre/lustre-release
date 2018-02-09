@@ -1012,7 +1012,7 @@ cdt_set_sanity_policy
 # finished requests are quickly removed from list
 set_hsm_param grace_delay 10
 
-test_1() {
+test_1A() { # was test_1
 	mkdir -p $DIR/$tdir
 	chmod 777 $DIR/$tdir
 
@@ -1045,7 +1045,7 @@ test_1() {
 	check_hsm_flags_user $f "0x00000000"
 
 }
-run_test 1 "lfs hsm flags root/non-root access"
+run_test 1A "lfs hsm flags root/non-root access"
 
 test_1a() {
 	local f=$DIR/$tdir/$tfile
@@ -1246,7 +1246,7 @@ test_8() {
 }
 run_test 8 "Test default archive number"
 
-test_9() {
+test_9A() { # was test_9
 	# we do not use the default one to be sure
 	local archive_id=$((HSM_ARCHIVE_NUMBER + 1))
 	copytool setup --archive-id $archive_id
@@ -1264,7 +1264,7 @@ test_9() {
 
 	check_hsm_flags $f "0x00000009"
 }
-run_test 9 "Use of explicit archive number, with dedicated copytool"
+run_test 9A "Use of explicit archive number, with dedicated copytool"
 
 test_9a() {
 	needclients 3 || return 0
@@ -2413,7 +2413,7 @@ test_25b() {
 run_test 25b "Restore lost file (HS_LOST flag) after release"\
 	     " (Operation not permitted)"
 
-test_26() {
+test_26A() { # was test_26
 	# test needs a running copytool
 	copytool setup
 
@@ -2430,7 +2430,7 @@ test_26() {
 
 	check_hsm_flags $f "0x00000000"
 }
-run_test 26 "Remove the archive of a valid file"
+run_test 26A "Remove the archive of a valid file"
 
 test_26a() {
 	local raolu=$(get_hsm_param remove_archive_on_last_unlink)
@@ -4178,7 +4178,7 @@ test_202() {
 }
 run_test 202 "Register/Cancel remove"
 
-test_220() {
+test_220A() { # was test_220
 	# test needs a running copytool
 	copytool setup
 
@@ -4198,7 +4198,7 @@ test_220() {
 	local target=0x0
 	[[ $flags == $target ]] || error "Changelog flag is $flags not $target"
 }
-run_test 220 "Changelog for archive"
+run_test 220A "Changelog for archive"
 
 test_220a() {
 	# test needs a running copytool
@@ -4431,7 +4431,7 @@ test_223b() {
 }
 run_test 223b "Changelog for restore canceled (release case)"
 
-test_224() {
+test_224A() { # was test_224
 	# test needs a running copytool
 	copytool setup
 
@@ -4453,7 +4453,7 @@ test_224() {
 	[[ $flags == $target ]] ||
 		error "Changelog flag is $flags not $target"
 }
-run_test 224 "Changelog for remove"
+run_test 224A "Changelog for remove"
 
 test_224a() {
 	# test needs a running copytool
