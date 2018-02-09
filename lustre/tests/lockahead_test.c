@@ -70,12 +70,11 @@
 		rc = testfn();						\
 		fprintf(stderr, "Finishing test " #testfn " at %lld\n",	\
 			(unsigned long long)time(NULL));		\
-		cleanup();						\
 	} while (0)
 
 /* Name of file/directory. Will be set once and will not change. */
 static char mainpath[PATH_MAX];
-static const char *mainfile = "lockahead_test_654";
+static char *mainfile;
 
 static char fsmountdir[PATH_MAX];	/* Lustre mountpoint */
 static char *lustre_dir;		/* Test directory inside Lustre */
@@ -1088,8 +1087,11 @@ static void process_args(int argc, char *argv[])
 {
 	int c;
 
-	while ((c = getopt(argc, argv, "d:t:")) != -1) {
+	while ((c = getopt(argc, argv, "d:f:t:")) != -1) {
 		switch (c) {
+		case 'f':
+			mainfile = optarg;
+			break;
 		case 'd':
 			lustre_dir = optarg;
 			break;
@@ -1113,6 +1115,8 @@ int main(int argc, char *argv[])
 	process_args(argc, argv);
 	if (lustre_dir == NULL)
 		lustre_dir = "/mnt/lustre";
+	if (mainfile == NULL)
+		mainfile = "lockahead_test_654";
 
 	rc = llapi_search_mounts(lustre_dir, 0, fsmountdir, fsname);
 	if (rc != 0) {
@@ -1130,8 +1134,6 @@ int main(int argc, char *argv[])
 		      mainfile);
 	ASSERTF(rc > 0 && rc < sizeof(mainpath), "invalid name for mainpath");
 	cleanup();
-
-	atexit(cleanup);
 
 	switch (single_test) {
 	case 0:

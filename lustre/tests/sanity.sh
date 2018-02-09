@@ -15775,7 +15775,7 @@ test_255c() {
 
 	#test 10 returns only success/failure
 	i=10
-	lockahead_test -d $DIR/$tdir -t $i
+	lockahead_test -d $DIR/$tdir -t $i -f $tfile
 	rc=$?
 	if [ $rc -eq 255 ]; then
 		error "Ladvise test${i} failed, ${rc}"
@@ -15787,7 +15787,7 @@ test_255c() {
 		$LCTL get_param -n ost.OSS.ost.stats)
 	count=$(echo "$count" | grep ldlm_extent_enqueue | awk '{ print $2 }')
 
-	lockahead_test -d $DIR/$tdir -t $i
+	lockahead_test -d $DIR/$tdir -t $i -f $tfile
 	rc=$?
 	if [ $rc -eq 255 ]; then
 		error "Ladvise test${i} failed, ${rc}"
@@ -15813,7 +15813,7 @@ test_255c() {
 		count=$($LCTL get_param -n \
 		       ldlm.namespaces.$FSNAME-OST0000*osc-f*.lock_unused_count)
 
-		lockahead_test -d $DIR/$tdir -t $i
+		lockahead_test -d $DIR/$tdir -t $i -f $tfile
 		rc=$?
 		if [ $rc -eq 255 ]; then
 			error "Ladvise test ${i} failed, ${rc}"
@@ -15836,12 +15836,11 @@ test_255c() {
 
 	#test 22 returns only success/failure
 	i=22
-	lockahead_test -d $DIR/$tdir -t $i
+	lockahead_test -d $DIR/$tdir -t $i -f $tfile
 	rc=$?
 	if [ $rc -eq 255 ]; then
 		error "Ladvise test${i} failed, ${rc}"
 	fi
-
 }
 run_test 255c "suite of ladvise lockahead tests"
 
