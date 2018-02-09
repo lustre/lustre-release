@@ -23,7 +23,13 @@ kernel_srpm_location() {
     4.4)
 	kminor=${lnxmin##.}
 	kdir=updates-sles12.2-src
-	if [ $kminor -eq 103 ]
+	if [ $kminor -eq 114 ]
+	then
+		if [ ${lnxrel%%.*} -gt 92 ]
+		then
+			kdir=updates-sles12.3-src
+		fi
+	elif [ $kminor -eq 103 ]
 	then
 		if [ ${lnxrel%%.*} -lt 90 ]
 		then
@@ -160,7 +166,13 @@ find_linux_rpm-sles12() {
     4.4)
 	kminor=${lnxmin##.}
 	kdir=updates-sles12.2-x86_64
-	if [ $kminor -eq 103 ]
+	if [ $kminor -eq 114 ]
+	then
+		if [ ${lnxrel%%.*} -gt 92 ]
+		then
+			kdir=updates-sles12.3-x86_64
+		fi
+	elif [ $kminor -eq 103 ]
 	then
 		if [ ${lnxrel%%.*} -lt 90 ]
 		then
