@@ -2081,7 +2081,12 @@ out:
 		res = ldlm_resource_get(ns, NULL, &tsi->tsi_resid,
 				        LDLM_EXTENT, 0);
 		if (!IS_ERR(res)) {
+			struct ost_lvb *res_lvb;
+
 			ldlm_res_lvbo_update(res, NULL, 0);
+			res_lvb = res->lr_lvb_data;
+			repbody->oa.o_valid |= OBD_MD_FLBLOCKS;
+			repbody->oa.o_blocks = res_lvb->lvb_blocks;
 			ldlm_resource_putref(res);
 		}
 	}

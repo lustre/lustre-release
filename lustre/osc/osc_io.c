@@ -593,25 +593,37 @@ void osc_io_setattr_end(const struct lu_env *env,
 	struct osc_io    *oio = cl2osc_io(env, slice);
 	struct cl_object *obj = slice->cis_obj;
 	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
-        int result = 0;
+	struct cl_attr  *attr = &osc_env_info(env)->oti_attr;
+	struct obdo *oa = &oio->oi_oa;
+	unsigned int cl_valid = 0;
+	int result = 0;
 
 	if (cbargs->opc_rpc_sent) {
 		wait_for_completion(&cbargs->opc_sync);
 		result = io->ci_result = cbargs->opc_rc;
 	}
-        if (result == 0) {
-                if (oio->oi_lockless) {
-                        /* lockless truncate */
-                        struct osc_device *osd = lu2osc_dev(obj->co_lu.lo_dev);
 
-                        LASSERT(cl_io_is_trunc(io));
-                        /* XXX: Need a lock. */
-                        osd->od_stats.os_lockless_truncates++;
-                }
-        }
+	if (result == 0) {
+		if (oio->oi_lockless) {
+			/* lockless truncate */
+			struct osc_device *osd = lu2osc_dev(obj->co_lu.lo_dev);
+
+			LASSERT(cl_io_is_trunc(io));
+			/* XXX: Need a lock. */
+			osd->od_stats.os_lockless_truncates++;
+		}
+	}
 
 	if (cl_io_is_trunc(io)) {
 		__u64 size = io->u.ci_setattr.sa_attr.lvb_size;
+		cl_object_attr_lock(obj);
+		if (oa->o_valid & OBD_MD_FLBLOCKS) {
+			attr->cat_blocks = oa->o_blocks;
+			cl_valid |= CAT_BLOCKS;
+		}
+
+		cl_object_attr_update(env, obj, attr, cl_valid);
+		cl_object_attr_unlock(obj);
 		osc_trunc_check(env, io, oio, size);
 		osc_cache_truncate_end(env, oio->oi_trunc);
 		oio->oi_trunc = NULL;

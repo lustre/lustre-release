@@ -17920,6 +17920,73 @@ test_316() {
 }
 run_test 316 "lfs mv"
 
+test_317() {
+	local trunc_sz
+	local grant_blk_size
+
+	if [ "$(facet_fstype $facet)" == "zfs" ]; then
+		skip "LU-10370: no implementation for ZFS" && return
+	fi
+
+	stack_trap "rm -f $DIR/$tfile" EXIT
+	grant_blk_size=$($LCTL get_param osc.$FSNAME*.import |
+			awk '/grant_block_size:/ { print $2; exit; }')
+	#
+	# Create File of size 5M. Truncate it to below size's and verify
+	# blocks count.
+	#
+	dd if=/dev/zero of=$DIR/$tfile bs=5M count=1 conv=fsync ||
+		error "Create file : $DIR/$tfile"
+
+	for trunc_sz in 2097152 4097 4000 509 0; do
+		$TRUNCATE $DIR/$tfile $trunc_sz ||
+			error "truncate $tfile to $trunc_sz failed"
+		local sz=$(stat --format=%s $DIR/$tfile)
+		local blk=$(stat --format=%b $DIR/$tfile)
+		local trunc_blk=$((((trunc_sz + (grant_blk_size - 1) ) /
+				     grant_blk_size) * 8))
+
+		if [[ $blk -ne $trunc_blk ]]; then
+			$(which stat) $DIR/$tfile
+			error "Expected Block $trunc_blk got $blk for $tfile"
+		fi
+
+		$CHECKSTAT -s $trunc_sz $DIR/$tfile ||
+			error "Expected Size $trunc_sz got $sz for $tfile"
+	done
+
+	#
+	# sparse file test
+	# Create file with a hole and write actual two blocks. Block count
+	# must be 16.
+	#
+	dd if=/dev/zero of=$DIR/$tfile bs=$grant_blk_size count=2 seek=5 \
+		conv=fsync || error "Create file : $DIR/$tfile"
+
+	# Calculate the final truncate size.
+	trunc_sz=$(($(stat --format=%s $DIR/$tfile) - (grant_blk_size + 1)))
+
+	#
+	# truncate to size $trunc_sz bytes. Strip the last block
+	# The block count must drop to 8
+	#
+	$TRUNCATE $DIR/$tfile $trunc_sz ||
+		error "truncate $tfile to $trunc_sz failed"
+
+	local trunc_bsz=$((grant_blk_size / $(stat --format=%B $DIR/$tfile)))
+	sz=$(stat --format=%s $DIR/$tfile)
+	blk=$(stat --format=%b $DIR/$tfile)
+
+	if [[ $blk -ne $trunc_bsz ]]; then
+		$(which stat) $DIR/$tfile
+		error "Expected Block $trunc_bsz got $blk for $tfile"
+	fi
+
+	$CHECKSTAT -s $trunc_sz $DIR/$tfile ||
+		error "Expected Size $trunc_sz got $sz for $tfile"
+}
+run_test 317 "Verify blocks get correctly update after truncate"
+
 test_fake_rw() {
 	local read_write=$1
 	if [ "$read_write" = "write" ]; then
