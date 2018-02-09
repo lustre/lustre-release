@@ -16373,6 +16373,25 @@ test_271c() {
 }
 run_test 271c "DoM: IO lock at open saves enqueue RPCs"
 
+test_276() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	local pid
+
+	do_facet ost1 "(while true; do \
+		$LCTL get_param obdfilter.*.filesfree > /dev/null 2>&1; \
+		done) & pid=\\\$!; echo \\\$pid > $TMP/sanity_276_pid" &
+	pid=$!
+
+	for LOOP in $(seq 20); do
+		stop ost1
+		start ost1 $(ostdevname 1) $OST_MOUNT_OPTS
+	done
+	kill -9 $pid
+	do_facet ost1 "pid=\\\$(cat $TMP/sanity_276_pid); kill -9 \\\$pid; \
+		rm $TMP/sanity_276_pid"
+}
+run_test 276 "Race between mount and obd_statfs"
+
 cleanup_test_300() {
 	trap 0
 	umask $SAVE_UMASK
