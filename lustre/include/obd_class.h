@@ -1097,6 +1097,7 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
                 RETURN(-EINVAL);
 
         OBD_CHECK_DT_OP(obd, statfs, -EOPNOTSUPP);
+	OBD_CHECK_DEV_ACTIVE(obd);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
 	CDEBUG(D_SUPER, "osfs %llu, max_age %llu\n",
