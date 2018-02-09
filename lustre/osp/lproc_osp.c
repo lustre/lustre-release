@@ -75,21 +75,19 @@ osp_active_seq_write(struct file *file, const char __user *buffer,
 {
 	struct seq_file *m = file->private_data;
 	struct obd_device *dev = m->private;
+	bool val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
-	if (val < 0 || val > 1)
-		return -ERANGE;
 
 	LPROCFS_CLIMP_CHECK(dev);
 	/* opposite senses */
 	if (dev->u.cli.cl_import->imp_deactive == val)
 		rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
 	else
-		CDEBUG(D_CONFIG, "activate %lld: ignoring repeat request\n",
+		CDEBUG(D_CONFIG, "activate %d: ignoring repeat request\n",
 		       val);
 
 	LPROCFS_CLIMP_EXIT(dev);
@@ -227,17 +225,17 @@ osp_max_rpcs_in_flight_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct obd_device *dev = m->private;
 	struct osp_device *osp = lu2osp_dev(dev->obd_lu_dev);
+	unsigned int val;
 	int rc;
-	__s64 val;
 
 	if (osp == NULL)
 		return -EINVAL;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
-	if (val < 1 || val > INT_MAX)
+	if (val == 0)
 		return -ERANGE;
 
 	osp->opd_sync_max_rpcs_in_flight = val;
@@ -282,17 +280,17 @@ osp_max_rpcs_in_progress_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct obd_device *dev = m->private;
 	struct osp_device *osp = lu2osp_dev(dev->obd_lu_dev);
+	unsigned int val;
 	int rc;
-	__s64 val;
 
 	if (osp == NULL)
 		return -EINVAL;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
-	if (val < 1 || val > INT_MAX)
+	if (val == 0)
 		return -ERANGE;
 
 	osp->opd_sync_max_rpcs_in_progress = val;
@@ -338,13 +336,13 @@ osp_create_count_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+	unsigned int val;
 	int rc, i;
-	__s64 val;
 
 	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
@@ -408,13 +406,13 @@ osp_max_create_count_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+	unsigned int val;
 	int rc;
-	__s64 val;
 
 	if (osp == NULL || osp->opd_pre == NULL)
 		return 0;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
@@ -599,17 +597,17 @@ osp_maxage_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct obd_device *dev = m->private;
 	struct osp_device *osp = lu2osp_dev(dev->obd_lu_dev);
+	unsigned int val;
 	int rc;
-	__s64 val;
 
 	if (osp == NULL)
 		return -EINVAL;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
-	if (val < 1 || val > INT_MAX)
+	if (val == 0)
 		return -ERANGE;
 
 	osp->opd_statfs_maxage = val;
@@ -727,18 +725,14 @@ osp_lfsck_max_rpcs_in_flight_seq_write(struct file *file,
 {
 	struct seq_file	  *m = file->private_data;
 	struct obd_device *dev = m->private;
-	__s64 val;
+	unsigned int val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc == 0) {
-		if (val < 0)
-			return -ERANGE;
-
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
+	if (!rc)
 		rc = obd_set_max_rpcs_in_flight(&dev->u.cli, val);
-	} else {
+	else
 		count = rc;
-	}
 
 	return count;
 }

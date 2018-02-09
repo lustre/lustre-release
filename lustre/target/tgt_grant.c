@@ -1629,17 +1629,14 @@ ssize_t tgt_grant_compat_disable_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct tg_grants_data *tgd = &obd->u.obt.obt_lut->lut_tgd;
-	__s64 val;
+	bool val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
-	if (val < 0)
-		return -EINVAL;
-
-	tgd->tgd_grant_compat_disable = !!val;
+	tgd->tgd_grant_compat_disable = val;
 
 	return count;
 }

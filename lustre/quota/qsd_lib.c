@@ -246,14 +246,15 @@ qsd_timeout_seq_write(struct file *file, const char __user *buffer,
 			size_t count, loff_t *off)
 {
 	struct qsd_instance *qsd = ((struct seq_file *)file->private_data)->private;
+	time64_t timeout;
 	int rc;
-	__s64 timeout;
-	LASSERT(qsd != NULL);
 
-	rc = lprocfs_str_to_s64(buffer, count, &timeout);
+	LASSERT(qsd != NULL);
+	rc = kstrtoll_from_user(buffer, count, 0, &timeout);
 	if (rc)
 		return rc;
-	if (timeout < 0 || timeout > INT_MAX)
+
+	if (timeout < 0)
 		return -EINVAL;
 
 	qsd->qsd_timeout = timeout;

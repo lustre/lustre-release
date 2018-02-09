@@ -81,10 +81,10 @@ static ssize_t ll_stat_blksize_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
-	__s64 val;
+	unsigned int val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
@@ -233,17 +233,14 @@ static ssize_t ll_xattr_cache_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
-	__s64 val;
+	bool val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
-	if (val != 0 && val != 1)
-		return -ERANGE;
-
-	if (val == 1 && !(sbi->ll_flags & LL_SBI_XATTR_CACHE))
+	if (val && !(sbi->ll_flags & LL_SBI_XATTR_CACHE))
 		return -ENOTSUPP;
 
 	sbi->ll_xattr_cache_enabled = val;
@@ -558,23 +555,25 @@ static ssize_t ll_checksum_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
+	bool val;
+	int tmp;
 	int rc;
-	__s64 val;
 
 	if (!sbi->ll_dt_exp)
 		/* Not set up yet */
 		return -EAGAIN;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 	if (val)
 		sbi->ll_flags |= LL_SBI_CHECKSUM;
 	else
 		sbi->ll_flags &= ~LL_SBI_CHECKSUM;
+	tmp = val;
 
 	rc = obd_set_info_async(NULL, sbi->ll_dt_exp, sizeof(KEY_CHECKSUM),
-				KEY_CHECKSUM, sizeof(val), &val, NULL);
+				KEY_CHECKSUM, sizeof(tmp), &tmp, NULL);
 	if (rc)
 		CWARN("Failed to set OSC checksum flags: %d\n", rc);
 
@@ -601,14 +600,12 @@ static int ll_wr_track_id(const char __user *buffer, unsigned long count,
 			  void *data, enum stats_track_type type)
 {
 	struct super_block *sb = data;
+	unsigned int pid;
 	int rc;
-	__s64 pid;
 
-	rc = lprocfs_str_to_s64(buffer, count, &pid);
+	rc = kstrtouint_from_user(buffer, count, 0, &pid);
 	if (rc)
 		return rc;
-	if (pid > INT_MAX || pid < 0)
-		return -ERANGE;
 
 	ll_s2sbi(sb)->ll_stats_track_id = pid;
 	if (pid == 0)
@@ -676,17 +673,17 @@ static ssize_t ll_statahead_max_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
+	unsigned int val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
-	if (val >= 0 && val <= LL_SA_RPC_MAX)
+	if (val <= LL_SA_RPC_MAX)
 		sbi->ll_sa_max = val;
 	else
-		CERROR("Bad statahead_max value %lld. Valid values are in "
+		CERROR("Bad statahead_max value %u. Valid values are in "
 		       "the range [0, %d]\n", val, LL_SA_RPC_MAX);
 
 	return count;
@@ -709,10 +706,10 @@ static ssize_t ll_statahead_agl_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
+	bool val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
@@ -756,10 +753,10 @@ static ssize_t ll_lazystatfs_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)m->private);
+	bool val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
@@ -837,17 +834,15 @@ static ssize_t ll_default_easize_seq_write(struct file *file,
 	struct seq_file	*seq = file->private_data;
 	struct super_block *sb = (struct super_block *)seq->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	__s64 val;
+	unsigned int val;
 	int rc;
 
 	if (count == 0)
 		return 0;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
-	if (val < 0 || val > INT_MAX)
-		return -ERANGE;
 
 	rc = ll_set_default_mdsize(sbi, val);
 	if (rc)
@@ -897,15 +892,15 @@ ll_fast_read_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	bool val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
 	spin_lock(&sbi->ll_lock);
-	if (val == 1)
+	if (val)
 		sbi->ll_flags |= LL_SBI_FAST_READ;
 	else
 		sbi->ll_flags &= ~LL_SBI_FAST_READ;
@@ -930,15 +925,15 @@ static ssize_t ll_pio_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct super_block *sb = m->private;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	bool val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
 	spin_lock(&sbi->ll_lock);
-	if (val == 1)
+	if (val)
 		sbi->ll_flags |= LL_SBI_PIO;
 	else
 		sbi->ll_flags &= ~LL_SBI_PIO;
@@ -973,8 +968,8 @@ static ssize_t ll_unstable_stats_seq_write(struct file *file,
 	struct seq_file *seq = file->private_data;
 	struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)seq->private);
 	char kernbuf[128];
+	bool val;
 	int rc;
-	__s64 val;
 
 	if (count == 0)
 		return 0;
@@ -987,13 +982,13 @@ static ssize_t ll_unstable_stats_seq_write(struct file *file,
 
 	buffer += lprocfs_find_named_value(kernbuf, "unstable_check:", &count) -
 		  kernbuf;
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc < 0)
 		return rc;
 
 	/* borrow lru lock to set the value */
 	spin_lock(&sbi->ll_cache->ccc_lru_lock);
-	sbi->ll_cache->ccc_unstable_check = !!val;
+	sbi->ll_cache->ccc_unstable_check = val;
 	spin_unlock(&sbi->ll_cache->ccc_lru_lock);
 
 	return count;
@@ -1756,12 +1751,11 @@ static ssize_t ll_rw_offset_stats_seq_write(struct file *file,
  */
 static __s64 ll_stats_pid_write(const char __user *buf, size_t len)
 {
-	__s64 value = 1;
+	unsigned long long value = 1;
 	int rc;
 	char kernbuf[16];
 
-	rc = lprocfs_str_to_s64(buf, len, &value);
-
+	rc = kstrtoull_from_user(buf, len, 0, &value);
 	if (rc < 0 && len < sizeof(kernbuf)) {
 
 		if (copy_from_user(kernbuf, buf, len))

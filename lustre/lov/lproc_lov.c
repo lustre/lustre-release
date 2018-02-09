@@ -57,12 +57,12 @@ static ssize_t lov_stripesize_seq_write(struct file *file,
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
 	struct lov_desc *desc;
-	__s64 val;
+	s64 val;
 	int rc;
 
 	LASSERT(dev != NULL);
 	desc = &dev->u.lov.desc;
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
 	if (rc)
 		return rc;
 	if (val < 0)
@@ -92,15 +92,15 @@ static ssize_t lov_stripeoffset_seq_write(struct file *file,
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
 	struct lov_desc *desc;
-	__s64 val;
+	long val;
 	int rc;
 
 	LASSERT(dev != NULL);
 	desc = &dev->u.lov.desc;
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtol_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
-	if (val < -1)
+	if (val < -1 || val > LOV_MAX_STRIPE_COUNT)
 		return -ERANGE;
 
 	desc->ld_default_stripe_offset = val;
@@ -126,18 +126,15 @@ static ssize_t lov_stripetype_seq_write(struct file *file,
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
 	struct lov_desc *desc;
-	int pattern, rc;
-	__s64 val;
+	u32 pattern;
+	int rc;
 
 	LASSERT(dev != NULL);
 	desc = &dev->u.lov.desc;
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &pattern);
 	if (rc)
 		return rc;
-	if (val < INT_MIN || val > INT_MAX)
-		return -ERANGE;
 
-	pattern = val;
 	lov_fix_desc_pattern(&pattern);
 	desc->ld_pattern = pattern;
 
@@ -163,19 +160,18 @@ static ssize_t lov_stripecount_seq_write(struct file *file,
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
 	struct lov_desc *desc;
+	int stripe_count;
 	int rc;
-	__u32 stripe_count;
-	__s64 val;
 
 	LASSERT(dev != NULL);
 	desc = &dev->u.lov.desc;
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoint_from_user(buffer, count, 0, &stripe_count);
 	if (rc)
 		return rc;
-	if (val < -1)
+
+	if (stripe_count < -1)
 		return -ERANGE;
 
-	stripe_count = val;
 	lov_fix_desc_stripe_count(&stripe_count);
 	desc->ld_default_stripe_count = stripe_count;
 

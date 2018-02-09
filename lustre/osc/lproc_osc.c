@@ -57,14 +57,12 @@ static ssize_t osc_active_seq_write(struct file *file,
 				    size_t count, loff_t *off)
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
+	bool val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
-	if (val < 0 || val > 1)
-		return -ERANGE;
 
 	/* opposite senses */
 	if (dev->u.cli.cl_import->imp_deactive == val)
@@ -94,14 +92,15 @@ static ssize_t osc_max_rpcs_in_flight_seq_write(struct file *file,
 {
 	struct obd_device *dev = ((struct seq_file *)file->private_data)->private;
 	struct client_obd *cli = &dev->u.cli;
-	int rc;
 	int adding, added, req_count;
-	__s64 val;
+	unsigned int val;
+	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
-	if (val < 1 || val > OSC_MAX_RIF_MAX)
+
+	if (val == 0 || val > OSC_MAX_RIF_MAX)
 		return -ERANGE;
 
 	LPROCFS_CLIMP_CHECK(dev);
@@ -265,8 +264,8 @@ static ssize_t osc_cur_grant_bytes_seq_write(struct file *file,
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
 	struct client_obd *cli = &obd->u.cli;
-	int                rc;
-	__s64              val;
+	s64 val;
+	int rc;
 
 	if (obd == NULL)
 		return 0;
@@ -336,17 +335,17 @@ static ssize_t osc_grant_shrink_interval_seq_write(struct file *file,
 						   size_t count, loff_t *off)
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
+	unsigned int val;
 	int rc;
-	__s64 val;
 
 	if (obd == NULL)
 		return 0;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
-	if (val <= 0 || val > INT_MAX)
+	if (val == 0)
 		return -ERANGE;
 
 	obd->u.cli.cl_grant_shrink_interval = val;
@@ -371,17 +370,17 @@ static ssize_t osc_checksum_seq_write(struct file *file,
 				      size_t count, loff_t *off)
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
+	bool val;
 	int rc;
-	__s64 val;
 
 	if (obd == NULL)
 		return 0;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
-	obd->u.cli.cl_checksum = !!val;
+	obd->u.cli.cl_checksum = val;
 
 	return count;
 }
@@ -454,15 +453,12 @@ static ssize_t osc_resend_count_seq_write(struct file *file,
 					  size_t count, loff_t *off)
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
+	unsigned int val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
-
-	if (val < 0 || val > INT_MAX)
-		return -EINVAL;
 
 	atomic_set(&obd->u.cli.cl_resends, val);
 
@@ -486,18 +482,18 @@ static ssize_t osc_checksum_dump_seq_write(struct file *file,
 					   size_t count, loff_t *off)
 {
 	struct obd_device *obd;
+	bool val;
 	int rc;
-	__s64 val;
 
 	obd = ((struct seq_file *)file->private_data)->private;
 	if (obd == NULL)
 		return 0;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
-	obd->u.cli.cl_checksum_dump = (val ? 1 : 0);
+	obd->u.cli.cl_checksum_dump = val;
 
 	return count;
 }
@@ -518,10 +514,10 @@ static ssize_t osc_contention_seconds_seq_write(struct file *file,
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
 	struct osc_device *od  = obd2osc_dev(obd);
+	unsigned int val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 	if (val < 0 || val > INT_MAX)
@@ -548,16 +544,14 @@ static ssize_t osc_lockless_truncate_seq_write(struct file *file,
 {
 	struct obd_device *obd = ((struct seq_file *)file->private_data)->private;
         struct osc_device *od  = obd2osc_dev(obd);
+	bool val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
-	if (val < 0)
-		return -ERANGE;
 
-	od->od_lockless_truncate = !!val;
+	od->od_lockless_truncate = val;
 
 	return count;
 }

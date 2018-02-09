@@ -56,21 +56,19 @@ static ssize_t mdc_active_seq_write(struct file *file,
 				    size_t count, loff_t *off)
 {
 	struct obd_device *dev;
+	bool val;
 	int rc;
-	__s64 val;
 
 	dev = ((struct seq_file *)file->private_data)->private;
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
-	if (val < 0 || val > 1)
-		return -ERANGE;
 
 	/* opposite senses */
 	if (dev->u.cli.cl_import->imp_deactive == val)
 		rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
 	else
-		CDEBUG(D_CONFIG, "activate %llu: ignoring repeat request\n",
+		CDEBUG(D_CONFIG, "activate %u: ignoring repeat request\n",
 		       val);
 
 	return count;
@@ -201,14 +199,12 @@ static ssize_t mdc_contention_seconds_seq_write(struct file *file,
 	struct seq_file *sfl = file->private_data;
 	struct obd_device *obd = sfl->private;
 	struct osc_device *od  = obd2osc_dev(obd);
+	time64_t val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoll_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
-	if (val < 0 || val > INT_MAX)
-		return -ERANGE;
 
 	od->od_contention_time = val;
 
@@ -248,16 +244,13 @@ static ssize_t mdc_max_rpcs_in_flight_seq_write(struct file *file,
 						size_t count, loff_t *off)
 {
 	struct obd_device *dev;
-	__s64 val;
+	unsigned int val;
 	int rc;
 
 	dev = ((struct seq_file *)file->private_data)->private;
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
-
-	if (val < 0 || val > UINT_MAX)
-		return -ERANGE;
 
 	rc = obd_set_max_rpcs_in_flight(&dev->u.cli, val);
 	if (rc)
@@ -283,16 +276,13 @@ static ssize_t mdc_max_mod_rpcs_in_flight_seq_write(struct file *file,
 						    size_t count, loff_t *off)
 {
 	struct obd_device *dev;
-	__s64 val;
+	u16 val;
 	int rc;
 
 	dev =  ((struct seq_file *)file->private_data)->private;
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtou16_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
-
-	if (val < 0 || val > USHRT_MAX)
-		return -ERANGE;
 
 	rc = obd_set_max_mod_rpcs_in_flight(&dev->u.cli, val);
 	if (rc)

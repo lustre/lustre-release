@@ -133,11 +133,11 @@ struct mdd_device {
 	struct proc_dir_entry            *mdd_proc_entry;
         struct mdd_changelog             mdd_cl;
 	unsigned int			 mdd_changelog_gc;
-	unsigned int			 mdd_changelog_max_idle_time;
+	time64_t			 mdd_changelog_max_idle_time;
 	unsigned long			 mdd_changelog_max_idle_indexes;
-	unsigned int			 mdd_changelog_min_gc_interval;
+	time64_t			 mdd_changelog_min_gc_interval;
 	unsigned int			 mdd_changelog_min_free_cat_entries;
-        unsigned long                    mdd_atime_diff;
+	time64_t			 mdd_atime_diff;
         struct mdd_object               *mdd_dot_lustre;
         struct mdd_dot_lustre_objs       mdd_dot_lustre_objs;
 	unsigned int			 mdd_sync_permission;

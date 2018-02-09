@@ -122,6 +122,7 @@ LPLD||%ld
 LPLX||%#lx
 LPPID||%d
 LPROCFS||CONFIG_PROC_FS
+lprocfs_str_to_s64||kstrtoxxx_from_user
 mktemp||mkstemp
 sprintf||snprintf
 strcpy||strncpy

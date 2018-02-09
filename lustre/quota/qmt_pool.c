@@ -184,9 +184,9 @@ static ssize_t
 qpi_soft_least_qunit_seq_write(struct file *file, const char __user *buffer,
 			       size_t count, loff_t *off)
 {
-	struct qmt_pool_info	*pool;
-	int	qunit, rc;
-	s64	least_qunit;
+	struct qmt_pool_info *pool;
+	long long least_qunit;
+	int qunit, rc;
 
 	pool = ((struct seq_file *)file->private_data)->private;
 	LASSERT(pool != NULL);
@@ -195,7 +195,7 @@ qpi_soft_least_qunit_seq_write(struct file *file, const char __user *buffer,
 	if (pool->qpi_key >> 16 != LQUOTA_RES_DT)
 		return -EINVAL;
 
-	rc = lprocfs_str_to_s64(buffer, count, &least_qunit);
+	rc = kstrtoll_from_user(buffer, count, 0, &least_qunit);
 	if (rc)
 		return rc;
 

@@ -2814,7 +2814,7 @@ int lfsck_get_windows(struct seq_file *m, struct dt_device *key)
 }
 EXPORT_SYMBOL(lfsck_get_windows);
 
-int lfsck_set_windows(struct dt_device *key, int val)
+int lfsck_set_windows(struct dt_device *key, unsigned int val)
 {
 	struct lu_env		env;
 	struct lfsck_instance  *lfsck;

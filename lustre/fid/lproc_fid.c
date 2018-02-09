@@ -162,29 +162,21 @@ static ssize_t
 lprocfs_server_fid_width_seq_write(struct file *file, const char __user *buffer,
 					size_t count, loff_t *off)
 {
-	struct lu_server_seq *seq = ((struct seq_file *)file->private_data)->private;
+	struct seq_file *m = file->private_data;
+	struct lu_server_seq *seq = m->private;
 	int rc;
-	__s64 val;
 	ENTRY;
 
 	LASSERT(seq != NULL);
 
 	mutex_lock(&seq->lss_mutex);
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoull_from_user(buffer, count, 0, &seq->lss_width);
 	if (rc) {
 		CERROR("%s: invalid FID sequence width: rc = %d\n",
 		       seq->lss_name, rc);
 		GOTO(out_unlock, count = rc);
 	}
-
-	if (val < 0) {
-		CERROR("%s: invalid FID sequence width: rc = %d\n",
-		       seq->lss_name, -ERANGE);
-		GOTO(out_unlock, count = -ERANGE);
-	}
-
-	seq->lss_width = val;
 
 	CDEBUG(D_INFO, "%s: Width: %llu\n",
 	       seq->lss_name, seq->lss_width);
@@ -549,17 +541,18 @@ static ssize_t
 lprocfs_client_fid_width_seq_write(struct file *file, const char __user *buffer,
 				   size_t count, loff_t *off)
 {
-	struct lu_client_seq *seq = ((struct seq_file *)file->private_data)->private;
-	__u64 max;
+	struct seq_file *m = file->private_data;
+	struct lu_client_seq *seq = m->private;
+	u64 val;
+	u64 max;
 	int rc;
-	__s64 val;
-	ENTRY;
 
+	ENTRY;
 	LASSERT(seq != NULL);
 
 	mutex_lock(&seq->lcs_mutex);
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoull_from_user(buffer, count, 0, &val);
 	if (rc) {
 		GOTO(out_unlock, count = rc);
 	}
@@ -569,7 +562,7 @@ lprocfs_client_fid_width_seq_write(struct file *file, const char __user *buffer,
 	else
 		max = LUSTRE_METADATA_SEQ_MAX_WIDTH;
 
-	if (val <= max && val > 0) {
+	if (val <= max) {
 		seq->lcs_width = val;
 
 		CDEBUG(D_INFO, "%s: Sequence size: %llu\n",

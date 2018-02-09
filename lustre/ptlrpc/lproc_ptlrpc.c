@@ -305,11 +305,11 @@ ptlrpc_lprocfs_req_history_max_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct ptlrpc_service *svc = m->private;
+	unsigned long long val;
 	int bufpages;
-	__s64 val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoull_from_user(buffer, count, 0, &val);
 	if (rc < 0)
 		return rc;
 
@@ -358,15 +358,12 @@ ptlrpc_lprocfs_req_buffers_max_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct ptlrpc_service *svc = m->private;
-	__s64 val;
+	int val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoint_from_user(buffer, count, 0, &val);
 	if (rc < 0)
 		return rc;
-
-	if (val < 0 || val > INT_MAX)
-		return -ERANGE;
 
 	if (val < svc->srv_nbuf_per_group)
 		return -ERANGE;
@@ -1414,15 +1411,12 @@ lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
 	struct obd_device *obd = m->private;
 	struct client_obd *cli = &obd->u.cli;
 	struct obd_import *imp = cli->cl_import;
+	bool val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc < 0)
 		return rc;
-
-	if (val != 0 && val != 1)
-		return -ERANGE;
 
 	LPROCFS_CLIMP_CHECK(obd);
 	spin_lock(&imp->imp_lock);

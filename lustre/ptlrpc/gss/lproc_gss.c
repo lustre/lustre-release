@@ -158,14 +158,14 @@ static ssize_t
 gss_lk_proc_dl_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
+	unsigned int val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc < 0)
 		return rc;
 
-	if (val < 0 || val > 4)
+	if (val > 4)
 		return -ERANGE;
 
 	gss_lk_debug_level = val;

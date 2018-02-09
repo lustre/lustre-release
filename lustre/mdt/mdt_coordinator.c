@@ -2087,14 +2087,15 @@ mdt_hsm_##VAR##_seq_write(struct file *file, const char __user *buffer,	\
 	struct seq_file		*m = file->private_data;		\
 	struct mdt_device	*mdt = m->private;			\
 	struct coordinator	*cdt = &mdt->mdt_coordinator;		\
-	__s64			 val;					\
-	int			 rc;					\
-	ENTRY;								\
+	unsigned int val;						\
+	int rc;								\
 									\
-	rc = lprocfs_str_to_s64(buffer, count, &val);			\
+	ENTRY;								\
+	rc = kstrtouint_from_user(buffer, count, 0, &val);		\
 	if (rc)								\
 		RETURN(rc);						\
-	if (val > 0 && val < INT_MAX) {					\
+									\
+	if (val !=  0) {						\
 		cdt->VAR = val;						\
 		RETURN(count);						\
 	}								\
@@ -2364,11 +2365,11 @@ mdt_hsm_cdt_raolu_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct mdt_device *mdt = m->private;
 	struct coordinator *cdt = &mdt->mdt_coordinator;
-	__s64 val;
+	bool val;
 	int rc;
-	ENTRY;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	ENTRY;
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc < 0)
 		RETURN(rc);
 

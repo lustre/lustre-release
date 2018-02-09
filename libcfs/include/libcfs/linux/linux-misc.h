@@ -160,4 +160,10 @@ static inline int kstrtoul(const char *s, unsigned int base, unsigned long *res)
 }
 #endif /* !HAVE_KSTRTOUL */
 
+#ifndef HAVE_KSTRTOBOOL_FROM_USER
+
+#define kstrtobool strtobool
+
+int kstrtobool_from_user(const char __user *s, size_t count, bool *res);
+#endif
 #endif

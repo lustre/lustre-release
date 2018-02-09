@@ -277,18 +277,18 @@ ldiskfs_osd_cache_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *osd = osd_dt_dev(dt);
+	bool val;
 	int rc;
-	__s64 val;
 
 	LASSERT(osd != NULL);
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
-	osd->od_read_cache = !!val;
+	osd->od_read_cache = val;
 	return count;
 }
 LPROC_SEQ_FOPS(ldiskfs_osd_cache);
@@ -312,18 +312,18 @@ ldiskfs_osd_wcache_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *osd = osd_dt_dev(dt);
+	bool val;
 	int rc;
-	__s64 val;
 
 	LASSERT(osd != NULL);
 	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
-	osd->od_writethrough_cache = !!val;
+	osd->od_writethrough_cache = val;
 	return count;
 }
 LPROC_SEQ_FOPS(ldiskfs_osd_wcache);
@@ -362,14 +362,14 @@ static ssize_t
 ldiskfs_osd_pdo_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off)
 {
+	bool pdo;
 	int rc;
-	__s64 pdo;
 
-	rc = lprocfs_str_to_s64(buffer, count, &pdo);
+	rc = kstrtobool_from_user(buffer, count, &pdo);
 	if (rc != 0)
 		return rc;
 
-	ldiskfs_pdo = !!pdo;
+	ldiskfs_pdo = pdo;
 
 	return count;
 }
@@ -394,14 +394,14 @@ ldiskfs_osd_auto_scrub_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *dev = osd_dt_dev(dt);
+	s64 val;
 	int rc;
-	__s64 val;
 
 	LASSERT(dev != NULL);
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoll_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
@@ -430,14 +430,14 @@ ldiskfs_osd_full_scrub_ratio_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *dev = osd_dt_dev(dt);
+	s64 val;
 	int rc;
-	__s64 val;
 
 	LASSERT(dev != NULL);
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoll_from_user(buffer, count, 0, &val);
 	if (rc != 0)
 		return rc;
 
@@ -471,19 +471,16 @@ ldiskfs_osd_full_scrub_threshold_rate_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *dev = osd_dt_dev(dt);
+	u64 val;
 	int rc;
-	__s64 val;
 
 	LASSERT(dev != NULL);
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoull_from_user(buffer, count, 0, &val);
 	if (rc != 0)
 		return rc;
-
-	if (val < 0)
-		return -EINVAL;
 
 	dev->od_full_scrub_threshold_rate = val;
 	return count;
@@ -502,14 +499,14 @@ ldiskfs_osd_track_declares_assert_seq_write(struct file *file,
 						const char __user *buffer,
 						size_t count, loff_t *off)
 {
-	__s64 track_declares_assert;
+	bool track_declares_assert;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &track_declares_assert);
-	if (rc != 0)
+	rc = kstrtobool_from_user(buffer, count, &track_declares_assert);
+	if (rc)
 		return rc;
 
-	ldiskfs_track_declares_assert = !!track_declares_assert;
+	ldiskfs_track_declares_assert = track_declares_assert;
 
 	return count;
 }
@@ -547,7 +544,7 @@ ldiskfs_osd_readcache_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *osd = osd_dt_dev(dt);
-	__s64 val;
+	s64 val;
 	int rc;
 
 	LASSERT(osd != NULL);
@@ -589,19 +586,19 @@ ldiskfs_osd_index_in_idif_seq_write(struct file *file,
 	struct dt_device *dt = m->private;
 	struct osd_device *dev = osd_dt_dev(dt);
 	struct lu_target *tgt;
-	__s64 val;
+	bool val;
 	int rc;
 
 	LASSERT(dev != NULL);
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc != 0)
 		return rc;
 
 	if (dev->od_index_in_idif) {
-		if (val != 0)
+		if (val)
 			return count;
 
 		LCONSOLE_WARN("%s: OST-index in IDIF has been enabled, "
@@ -609,7 +606,7 @@ ldiskfs_osd_index_in_idif_seq_write(struct file *file,
 		return -EPERM;
 	}
 
-	if (val == 0)
+	if (!val)
 		return count;
 
 	rc = lu_env_init(&env, LCT_DT_THREAD);
@@ -664,14 +661,14 @@ static ssize_t ldiskfs_osd_index_backup_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *dev = osd_dt_dev(dt);
-	__s64 val;
+	int val;
 	int rc;
 
 	LASSERT(dev != NULL);
 	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 

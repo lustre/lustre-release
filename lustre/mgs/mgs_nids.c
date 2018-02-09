@@ -831,14 +831,15 @@ int lprocfs_rd_ir_state(struct seq_file *seq, void *data)
 
 int lprocfs_ir_timeout_seq_show(struct seq_file *m, void *data)
 {
-	return lprocfs_u64_seq_show(m, &ir_timeout);
+	seq_printf(m, "%lld\n", ir_timeout);
+	return 0;
 }
 
 ssize_t lprocfs_ir_timeout_seq_write(struct file *file,
 				     const char __user *buffer,
 				     size_t count, loff_t *off)
 {
-        return lprocfs_wr_uint(file, buffer, count, &ir_timeout);
+	return kstrtoll_from_user(buffer, count, 0, &ir_timeout);
 }
 
 /* --------------- Handle non IR support clients --------------- */

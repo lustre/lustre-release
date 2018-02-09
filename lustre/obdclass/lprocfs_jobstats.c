@@ -645,8 +645,8 @@ lprocfs_job_interval_seq_write(struct file *file, const char __user *buffer,
 {
 	struct obd_device *obd;
 	struct obd_job_stats *stats;
+	unsigned int val;
 	int rc;
-	__s64 val;
 
 	obd = ((struct seq_file *)file->private_data)->private;
 	if (obd == NULL)
@@ -654,11 +654,9 @@ lprocfs_job_interval_seq_write(struct file *file, const char __user *buffer,
 
 	stats = &obd->u.obt.obt_jobstats;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
-	if (val < 0 || val > UINT_MAX)
-		return -ERANGE;
 
 	stats->ojs_cleanup_interval = val;
 	lprocfs_job_cleanup(stats, stats->ojs_cleanup_interval);

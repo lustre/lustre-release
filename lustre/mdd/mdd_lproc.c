@@ -51,20 +51,12 @@ mdd_atime_diff_seq_write(struct file *file, const char __user *buffer,
 {
 	struct seq_file *m = file->private_data;
 	struct mdd_device *mdd = m->private;
-	char kernbuf[20], *end;
-	unsigned long diff = 0;
+	time64_t diff = 0;
+	int rc;
 
-        if (count > (sizeof(kernbuf) - 1))
-                return -EINVAL;
-
-	if (copy_from_user(kernbuf, buffer, count))
-                return -EFAULT;
-
-        kernbuf[count] = '\0';
-
-        diff = simple_strtoul(kernbuf, &end, 0);
-        if (kernbuf == end)
-                return -EINVAL;
+	rc = kstrtoll_from_user(buffer, count, 0, &diff);
+	if (rc)
+		return rc;
 
         mdd->mdd_atime_diff = diff;
         return count;
@@ -74,7 +66,7 @@ static int mdd_atime_diff_seq_show(struct seq_file *m, void *data)
 {
 	struct mdd_device *mdd = m->private;
 
-	seq_printf(m, "%lu\n", mdd->mdd_atime_diff);
+	seq_printf(m, "%lld\n", mdd->mdd_atime_diff);
 	return 0;
 }
 LPROC_SEQ_FOPS(mdd_atime_diff);
@@ -242,15 +234,15 @@ mdd_changelog_gc_seq_write(struct file *file, const char __user *buffer,
 {
 	struct seq_file *m = file->private_data;
 	struct mdd_device *mdd = m->private;
+	bool val;
 	int rc;
-	__s64 val;
 
 	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
-	mdd->mdd_changelog_gc = !!val;
+	mdd->mdd_changelog_gc = val;
 
 	return count;
 }
@@ -261,7 +253,7 @@ static int mdd_changelog_max_idle_time_seq_show(struct seq_file *m, void *data)
 	struct mdd_device *mdd = m->private;
 
 	LASSERT(mdd != NULL);
-	seq_printf(m, "%u\n", mdd->mdd_changelog_max_idle_time);
+	seq_printf(m, "%lld\n", mdd->mdd_changelog_max_idle_time);
 	return 0;
 }
 
@@ -272,16 +264,17 @@ mdd_changelog_max_idle_time_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct mdd_device *mdd = m->private;
+	time64_t val;
 	int rc;
-	__s64 val;
 
 	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+
+	rc = kstrtoll_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
 	/* XXX may need to limit with reasonable elapsed/idle times */
-	if (val < 1 || val > INT_MAX)
+	if (val < 1)
 		return -ERANGE;
 
 	mdd->mdd_changelog_max_idle_time = val;
@@ -307,11 +300,11 @@ mdd_changelog_max_idle_indexes_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct mdd_device *mdd = m->private;
+	unsigned long val;
 	int rc;
-	__s64 val;
 
 	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoul_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
@@ -330,7 +323,7 @@ static int mdd_changelog_min_gc_interval_seq_show(struct seq_file *m,
 	struct mdd_device *mdd = m->private;
 
 	LASSERT(mdd != NULL);
-	seq_printf(m, "%u\n", mdd->mdd_changelog_min_gc_interval);
+	seq_printf(m, "%lld\n", mdd->mdd_changelog_min_gc_interval);
 	return 0;
 }
 
@@ -341,16 +334,16 @@ mdd_changelog_min_gc_interval_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct mdd_device *mdd = m->private;
+	time64_t val;
 	int rc;
-	__s64 val;
 
 	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoll_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
 	/* XXX may need to limit with reasonable elapsed/interval times */
-	if (val < 1 || val > UINT_MAX)
+	if (val < 1)
 		return -ERANGE;
 
 	mdd->mdd_changelog_min_gc_interval = val;
@@ -376,16 +369,16 @@ mdd_changelog_min_free_cat_entries_seq_write(struct file *file,
 {
 	struct seq_file *m = file->private_data;
 	struct mdd_device *mdd = m->private;
+	unsigned int val;
 	int rc;
-	__s64 val;
 
 	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
 	/* XXX may need to limit with more reasonable number of free entries */
-	if (val < 1 || (__u64)val > UINT_MAX)
+	if (val < 1)
 		return -ERANGE;
 
 	mdd->mdd_changelog_min_free_cat_entries = val;
@@ -444,15 +437,15 @@ mdd_sync_perm_seq_write(struct file *file, const char __user *buffer,
 {
 	struct seq_file *m = file->private_data;
 	struct mdd_device *mdd = m->private;
+	bool val;
 	int rc;
-	__s64 val;
 
 	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
-	mdd->mdd_sync_permission = !!val;
+	mdd->mdd_sync_permission = val;
 
 	return count;
 }
@@ -472,15 +465,13 @@ mdd_lfsck_speed_limit_seq_write(struct file *file, const char __user *buffer,
 {
 	struct seq_file *m = file->private_data;
 	struct mdd_device *mdd = m->private;
-	__s64 val;
+	unsigned int val;
 	int rc;
 
 	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc != 0)
 		return rc;
-	if (val < 0 || val > INT_MAX)
-		return -ERANGE;
 
 	rc = lfsck_set_speed(mdd->mdd_bottom, val);
 	return rc != 0 ? rc : count;
@@ -499,17 +490,15 @@ static ssize_t
 mdd_lfsck_async_windows_seq_write(struct file *file, const char __user *buffer,
 				  size_t count, loff_t *off)
 {
-	struct seq_file   *m = file->private_data;
+	struct seq_file *m = file->private_data;
 	struct mdd_device *mdd = m->private;
-	__s64		   val;
-	int		   rc;
+	unsigned int val;
+	int rc;
 
 	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtouint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
-	if (val < 0 || val > INT_MAX)
-		return -ERANGE;
 
 	rc = lfsck_set_windows(mdd->mdd_bottom, val);
 

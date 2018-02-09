@@ -688,6 +688,23 @@ LB_CHECK_LINUX_HEADER([asm/fpu/api.h], [
 ]) # LIBCFS_FPU_API
 
 #
+# Kernel version 4.4 commit ef951599074ba4fad2d0efa0a977129b41e6d203
+# introduced kstrtobool and kstrtobool_from_user.
+#
+AC_DEFUN([LIBCFS_KSTRTOBOOL_FROM_USER], [
+LB_CHECK_COMPILE([if Linux kernel has 'kstrtobool_from_user'],
+kstrtobool_from_user, [
+	#include <linux/kernel.h>
+],[
+	bool result;
+	return kstrtobool_from_user(NULL, 0, &result);
+],[
+	AC_DEFINE(HAVE_KSTRTOBOOL_FROM_USER, 1,
+		[kernel has kstrtobool_from_user])
+])
+]) # LIBCFS_KSTRTOBOOL_FROM_USER
+
+#
 # Kernel version 4.5-rc1 commit d12481bc58fba89427565f8592e88446ec084a24
 # added crypto hash helpers
 #
@@ -899,6 +916,8 @@ LIBCFS_KERNEL_PARAM_LOCK
 # 4.2
 LIBCFS_HAVE_TOPOLOGY_SIBLING_CPUMASK
 LIBCFS_FPU_API
+# 4.4
+LIBCFS_KSTRTOBOOL_FROM_USER
 # 4.5
 LIBCFS_CRYPTO_HASH_HELPERS
 LIBCFS_EXPORT_KSET_FIND_OBJ

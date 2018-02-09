@@ -573,17 +573,6 @@ extern int lprocfs_obd_seq_create(struct obd_device *dev, const char *name,
 				  void *data);
 
 /* Generic callbacks */
-extern int lprocfs_u64_seq_show(struct seq_file *m, void *data);
-extern int lprocfs_atomic_seq_show(struct seq_file *m, void *data);
-extern ssize_t lprocfs_atomic_seq_write(struct file *file,
-					const char __user *buffer,
-					size_t count, loff_t *off);
-extern int lprocfs_uint_seq_show(struct seq_file *m, void *data);
-extern ssize_t lprocfs_uint_seq_write(struct file *file,
-				      const char __user *buffer,
-				      size_t count, loff_t *off);
-extern int lprocfs_wr_uint(struct file *file, const char __user *buffer,
-			   unsigned long count, void *data);
 extern int lprocfs_uuid_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_name_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_server_uuid_seq_show(struct seq_file *m, void *data);
@@ -620,8 +609,6 @@ lprocfs_pinger_recov_seq_write(struct file *file, const char __user *buffer,
 extern int lprocfs_seq_read_frac_helper(struct seq_file *m, long val, int mult);
 extern int lprocfs_read_frac_helper(char *buffer, unsigned long count,
                                     long val, int mult);
-extern int lprocfs_str_to_s64(const char __user *buffer, unsigned long count,
-			      __s64 *val);
 extern int lprocfs_str_with_units_to_s64(const char __user *buffer,
 					 unsigned long count, __s64 *val,
 					 char defunit);

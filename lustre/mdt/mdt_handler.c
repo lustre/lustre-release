@@ -6706,12 +6706,12 @@ struct lu_ucred *mdt_ucred_check(const struct mdt_thread_info *info)
  * \param mdt mdt device
  * \param val 0 disables COS, other values enable COS
  */
-void mdt_enable_cos(struct mdt_device *mdt, int val)
+void mdt_enable_cos(struct mdt_device *mdt, bool val)
 {
         struct lu_env env;
         int rc;
 
-        mdt->mdt_opts.mo_cos = !!val;
+	mdt->mdt_opts.mo_cos = val;
         rc = lu_env_init(&env, LCT_LOCAL);
 	if (unlikely(rc != 0)) {
 		CWARN("%s: lu_env initialization failed, cannot "

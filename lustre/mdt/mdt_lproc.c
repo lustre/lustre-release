@@ -227,11 +227,11 @@ mdt_identity_expire_seq_write(struct file *file, const char __user *buffer,
 	time64_t val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoll_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
-	if (val < 0 || val > INT_MAX)
+	if (val < 0)
 		return -ERANGE;
 
 	mdt->mdt_identity_cache->uc_entry_expire = val;
@@ -260,7 +260,7 @@ mdt_identity_acquire_expire_seq_write(struct file *file,
 	time64_t val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoll_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
@@ -338,14 +338,12 @@ lprocfs_identity_flush_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file   *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	int uid;
 	int rc;
-	__s64 uid;
 
-	rc = lprocfs_str_to_s64(buffer, count, &uid);
+	rc = kstrtoint_from_user(buffer, count, 0, &uid);
 	if (rc)
 		return rc;
-	if (uid < INT_MIN || uid > INT_MAX)
-		return -ERANGE;
 
 	mdt_flush_identity(mdt->mdt_identity_cache, uid);
 	return count;
@@ -501,13 +499,14 @@ mdt_evict_tgt_nids_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file   *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	__s64 val;
+	bool val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
-	mdt->mdt_opts.mo_evict_tgt_nids = !!val;
+
+	mdt->mdt_opts.mo_evict_tgt_nids = val;
 	return count;
 }
 LPROC_SEQ_FOPS(mdt_evict_tgt_nids);
@@ -528,14 +527,12 @@ mdt_cos_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file   *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	bool val;
 	int rc;
-	__s64 val;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
-	if (val < INT_MIN || val > INT_MAX)
-		return -ERANGE;
 
 	mdt_enable_cos(mdt, val);
 	return count;
@@ -617,15 +614,12 @@ mdt_enable_remote_dir_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file   *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	__s64 val;
+	bool val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
-
-	if (val > 1 || val < 0)
-		return -ERANGE;
 
 	mdt->mdt_enable_remote_dir = val;
 	return count;
@@ -650,10 +644,10 @@ mdt_enable_remote_dir_gid_seq_write(struct file *file,
 	struct seq_file   *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	__s64 val;
+	int val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
@@ -707,15 +701,12 @@ mdt_async_commit_count_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	__s64 val;
+	int val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
-
-	if (val < INT_MIN || val > INT_MAX)
-		return -ERANGE;
 
 	atomic_set(&mdt->mdt_async_commit_count, val);
 
@@ -748,15 +739,12 @@ mdt_sync_count_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct lu_target *tgt = obd->u.obt.obt_lut;
-	__s64 val;
+	int val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
-
-	if (val < INT_MIN || val > INT_MAX)
-		return -ERANGE;
 
 	atomic_set(&tgt->lut_sync_count, val);
 
@@ -780,14 +768,14 @@ mdt_dom_lock_seq_write(struct file *file, const char __user *buffer,
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	__s64 val;
+	bool val;
 	int rc;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtobool_from_user(buffer, count, &val);
 	if (rc)
 		return rc;
 
-	mdt->mdt_opts.mo_dom_lock = !!val;
+	mdt->mdt_opts.mo_dom_lock = val;
 	return count;
 }
 LPROC_SEQ_FOPS(mdt_dom_lock);

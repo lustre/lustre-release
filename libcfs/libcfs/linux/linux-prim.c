@@ -121,6 +121,21 @@ struct kobject *kset_find_obj(struct kset *kset, const char *name)
 EXPORT_SYMBOL_GPL(kset_find_obj);
 #endif
 
+#ifndef HAVE_KSTRTOBOOL_FROM_USER
+int kstrtobool_from_user(const char __user *s, size_t count, bool *res)
+{
+	/* Longest string needed to differentiate, newline, terminator */
+	char buf[4];
+
+	count = min(count, sizeof(buf) - 1);
+	if (copy_from_user(buf, s, count))
+		return -EFAULT;
+	buf[count] = '\0';
+	return strtobool(buf, res);
+}
+EXPORT_SYMBOL(kstrtobool_from_user);
+#endif /* !HAVE_KSTRTOBOOL_FROM_USER */
+
 sigset_t
 cfs_block_allsigs(void)
 {

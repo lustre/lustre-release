@@ -1149,7 +1149,7 @@ int mdt_dom_lvb_is_valid(struct ldlm_resource *res);
 int mdt_dom_lvbo_update(struct ldlm_resource *res, struct ldlm_lock *lock,
 			struct ptlrpc_request *req, bool increase_only);
 
-void mdt_enable_cos(struct mdt_device *, int);
+void mdt_enable_cos(struct mdt_device *dev, bool enable);
 int mdt_cos_is_enabled(struct mdt_device *);
 
 /* lprocfs stuff */

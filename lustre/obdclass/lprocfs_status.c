@@ -346,93 +346,6 @@ lprocfs_register(const char *name, struct proc_dir_entry *parent,
 EXPORT_SYMBOL(lprocfs_register);
 
 /* Generic callbacks */
-int lprocfs_uint_seq_show(struct seq_file *m, void *data)
-{
-	seq_printf(m, "%u\n", *(unsigned int *)data);
-	return 0;
-}
-EXPORT_SYMBOL(lprocfs_uint_seq_show);
-
-int lprocfs_wr_uint(struct file *file, const char __user *buffer,
-                    unsigned long count, void *data)
-{
-	unsigned	*p = data;
-	char		 dummy[MAX_STRING_SIZE + 1];
-	char		*end;
-	unsigned long	 tmp;
-
-	if (count >= sizeof(dummy))
-		return -EINVAL;
-
-	if (count == 0)
-		return 0;
-
-	if (copy_from_user(dummy, buffer, count))
-		return -EFAULT;
-
-	dummy[count] = 0;
-
-	tmp = simple_strtoul(dummy, &end, 0);
-	if (dummy == end)
-		return -EINVAL;
-
-	*p = (unsigned int)tmp;
-	return count;
-}
-EXPORT_SYMBOL(lprocfs_wr_uint);
-
-ssize_t lprocfs_uint_seq_write(struct file *file, const char __user *buffer,
-			       size_t count, loff_t *off)
-{
-	int *data = ((struct seq_file *)file->private_data)->private;
-	int rc;
-	__s64 val = 0;
-
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc < 0)
-		return rc;
-
-	return lprocfs_wr_uint(file, buffer, count, data);
-}
-EXPORT_SYMBOL(lprocfs_uint_seq_write);
-
-int lprocfs_u64_seq_show(struct seq_file *m, void *data)
-{
-	LASSERT(data != NULL);
-	seq_printf(m, "%llu\n", *(__u64 *)data);
-	return 0;
-}
-EXPORT_SYMBOL(lprocfs_u64_seq_show);
-
-int lprocfs_atomic_seq_show(struct seq_file *m, void *data)
-{
-	atomic_t *atom = data;
-	LASSERT(atom != NULL);
-	seq_printf(m, "%d\n", atomic_read(atom));
-	return 0;
-}
-EXPORT_SYMBOL(lprocfs_atomic_seq_show);
-
-ssize_t
-lprocfs_atomic_seq_write(struct file *file, const char __user *buffer,
-			size_t count, loff_t *off)
-{
-	atomic_t *atm = ((struct seq_file *)file->private_data)->private;
-	__s64 val = 0;
-	int rc;
-
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc < 0)
-		return rc;
-
-	if (val <= 0 || val > INT_MAX)
-		return -ERANGE;
-
-	atomic_set(atm, val);
-	return count;
-}
-EXPORT_SYMBOL(lprocfs_atomic_seq_write);
-
 int lprocfs_uuid_seq_show(struct seq_file *m, void *data)
 {
 	struct obd_device *obd = data;
@@ -2170,26 +2083,6 @@ static int str_to_s64_internal(const char __user *buffer, unsigned long count,
 
 /**
  * Convert a user string into a signed 64 bit number. This function produces
- * an error when the value parsed from the string underflows or
- * overflows. This function accepts strings which contain digits and
- * optionally a decimal or hex strings which are prefixed with "0x".
- *
- * \param[in] buffer	string consisting of numbers and optionally a decimal
- * \param[in] count	buffer length
- * \param[in] val	if successful, the value represented by the string
- *
- * \retval		0 on success
- * \retval		negative number on error
- */
-int lprocfs_str_to_s64(const char __user *buffer, unsigned long count,
-		       __s64 *val)
-{
-	return str_to_s64_internal(buffer, count, val, 1, false);
-}
-EXPORT_SYMBOL(lprocfs_str_to_s64);
-
-/**
- * Convert a user string into a signed 64 bit number. This function produces
  * an error when the value parsed from the string times multiplier underflows or
  * overflows. This function only accepts strings that contains digits, an
  * optional decimal, and a char representing a unit at the end. If a unit is
@@ -2401,7 +2294,7 @@ ssize_t lprocfs_obd_max_pages_per_rpc_seq_write(struct file *file,
 	struct client_obd *cli = &dev->u.cli;
 	struct obd_connect_data *ocd = &cli->cl_import->imp_connect_data;
 	int chunk_mask, rc;
-	__s64 val;
+	s64 val;
 
 	rc = lprocfs_str_with_units_to_s64(buffer, count, &val, '1');
 	if (rc)
@@ -2445,7 +2338,6 @@ int lprocfs_obd_short_io_bytes_seq_show(struct seq_file *m, void *data)
 }
 EXPORT_SYMBOL(lprocfs_obd_short_io_bytes_seq_show);
 
-
 /* Used to catch people who think they're specifying pages. */
 #define MIN_SHORT_IO_BYTES 64
 
@@ -2456,16 +2348,16 @@ ssize_t lprocfs_obd_short_io_bytes_seq_write(struct file *file,
 	struct obd_device *dev = ((struct seq_file *)
 						file->private_data)->private;
 	struct client_obd *cli = &dev->u.cli;
+	int val;
 	int rc;
-	__u64 val;
 
 	LPROCFS_CLIMP_CHECK(dev);
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoint_from_user(buffer, count, 0, &val);
 	if (rc)
 		GOTO(out, rc);
 
-	if (val > OBD_MAX_SHORT_IO_BYTES || val < MIN_SHORT_IO_BYTES)
+	if (val < MIN_SHORT_IO_BYTES || val > OBD_MAX_SHORT_IO_BYTES)
 		GOTO(out, rc = -ERANGE);
 
 	rc = count;

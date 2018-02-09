@@ -77,7 +77,26 @@ lprocfs_dump_ns_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS_WR_ONLY(ldlm, dump_ns);
 
-LPROC_SEQ_FOPS_RW_TYPE(ldlm_rw, uint);
+static int ldlm_rw_uint_seq_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "%u\n", *(unsigned int *)m->private);
+	return 0;
+}
+
+static ssize_t
+ldlm_rw_uint_seq_write(struct file *file, const char __user *buffer,
+		       size_t count, loff_t *off)
+{
+	struct seq_file *seq = file->private_data;
+
+	if (!count)
+		return 0;
+
+	return kstrtouint_from_user(buffer, count, 0,
+				    (unsigned int *)seq->private);
+}
+
+LPROC_SEQ_FOPS(ldlm_rw_uint);
 
 #ifdef HAVE_SERVER_SUPPORT
 

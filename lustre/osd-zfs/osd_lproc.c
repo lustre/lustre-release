@@ -237,7 +237,7 @@ zfs_osd_auto_scrub_seq_write(struct file *file, const char __user *buffer,
 	if (!dev->od_os)
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoull_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
@@ -314,14 +314,14 @@ static ssize_t zfs_osd_index_backup_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	struct dt_device *dt = m->private;
 	struct osd_device *dev = osd_dt_dev(dt);
-	__s64 val;
+	int val;
 	int rc;
 
 	LASSERT(dev != NULL);
 	if (!dev->od_os)
 		return -EINPROGRESS;
 
-	rc = lprocfs_str_to_s64(buffer, count, &val);
+	rc = kstrtoint_from_user(buffer, count, 0, &val);
 	if (rc)
 		return rc;
 
