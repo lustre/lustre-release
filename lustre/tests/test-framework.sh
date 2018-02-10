@@ -1628,7 +1628,7 @@ stop() {
     [ -z $HOST ] && echo stop: no host for $facet && return 0
 
     local mntpt=$(facet_mntpt $facet)
-    running=$(do_facet ${facet} "grep -c $mntpt' ' /proc/mounts") || true
+	running=$(do_facet ${facet} "grep -c $mntpt' ' /proc/mounts || true")
     if [ ${running} -ne 0 ]; then
         echo "Stopping $mntpt (opts:$@) on $HOST"
 	do_facet ${facet} $UMOUNT $@ $mntpt
@@ -2753,7 +2753,8 @@ wait_exit_ST () {
     local running
     # conf-sanity 31 takes a long time cleanup
     while [ $WAIT -lt 300 ]; do
-        running=$(do_facet ${facet} "lsmod | grep lnet > /dev/null && lctl dl | grep ' ST '") || true
+	running=$(do_facet ${facet} "lsmod | grep lnet > /dev/null &&
+lctl dl | grep ' ST ' || true")
         [ -z "${running}" ] && return 0
         echo "waited $WAIT for${running}"
         [ $INTERVAL -lt 64 ] && INTERVAL=$((INTERVAL + INTERVAL))
