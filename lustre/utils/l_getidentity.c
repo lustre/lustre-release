@@ -46,7 +46,6 @@
 #include <syslog.h>
 
 #include <libcfs/util/param.h>
-#include <libcfs/util/string.h>
 #include <linux/lnet/nidstr.h>
 #include <linux/lustre/lustre_user.h>
 #include <linux/lustre/lustre_idl.h>
@@ -105,8 +104,6 @@ int get_groups_local(struct identity_downcall_data *data,
 	unsigned int ngroups = 0;
 	int ngroups_tmp;
 	struct passwd *pw;
-	char *pw_name;
-	int namelen;
 	int i;
 
 	pw = getpwuid(data->idd_uid);
@@ -117,25 +114,13 @@ int get_groups_local(struct identity_downcall_data *data,
 	}
 
 	data->idd_gid = pw->pw_gid;
-	namelen = sysconf(_SC_LOGIN_NAME_MAX);
-	if (namelen < _POSIX_LOGIN_NAME_MAX)
-		namelen = _POSIX_LOGIN_NAME_MAX;
 
-	pw_name = malloc(namelen);
-	if (!pw_name) {
-		errlog("malloc error\n");
-		data->idd_err = errno;
-		return -1;
-	}
-
-	strlcpy(pw_name, pw->pw_name, namelen);
 	groups = data->idd_groups;
 
 	/* Allocate array of size maxgroups instead of handling two
 	 * consecutive and potentially racy getgrouplist() calls. */
 	groups_tmp = malloc(maxgroups * sizeof(gid_t));
 	if (groups_tmp == NULL) {
-		free(pw_name);
 		data->idd_err = errno ? errno : ENOMEM;
 		errlog("malloc error=%u\n",data->idd_err);
 		return -1;
@@ -144,7 +129,6 @@ int get_groups_local(struct identity_downcall_data *data,
 	ngroups_tmp = maxgroups;
 	if (getgrouplist(pw->pw_name, pw->pw_gid, groups_tmp, &ngroups_tmp) <
 	    0) {
-		free(pw_name);
 		free(groups_tmp);
 		data->idd_err = errno ? errno : EIDRM;
 		errlog("getgrouplist() error for uid %u: error=%u\n",
@@ -161,7 +145,6 @@ int get_groups_local(struct identity_downcall_data *data,
 		qsort(groups, ngroups, sizeof(*groups), compare_u32);
 	data->idd_ngroups = ngroups;
 
-	free(pw_name);
 	free(groups_tmp);
 	return 0;
 }

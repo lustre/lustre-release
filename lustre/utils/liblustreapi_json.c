@@ -276,7 +276,7 @@ int llapi_json_add_item(struct llapi_json_item_list **json_items,
 	if (new_item->lji_key == NULL)
 		return -ENOMEM;
 
-	strlcpy(new_item->lji_key, key, len);
+	snprintf(new_item->lji_key, len, "%s", key);
 	new_item->lji_type = type;
 	new_item->lji_next = NULL;
 
@@ -295,7 +295,7 @@ int llapi_json_add_item(struct llapi_json_item_list **json_items,
 		new_item->lji_string = calloc(len, sizeof(char));
 		if (new_item->lji_string == NULL)
 			return -ENOMEM;
-		strlcpy(new_item->lji_string, (char *)val, len);
+		snprintf(new_item->lji_string, len, "%s", (char *)val);
 		break;
 	default:
 		llapi_err_noerrno(LLAPI_MSG_ERROR, "Unknown JSON type: %d",

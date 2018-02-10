@@ -279,7 +279,7 @@ int main(int argc, char **argv)
 
 	rc = llapi_file_get_stripe(argv[1], lum_dir);
 	if (rc == -ENODATA) {
-		char root[PATH_MAX];
+		char root[PATH_MAX], path[PATH_MAX + 2];
 
 		rc = llapi_search_mounts(argv[1], 0, root, NULL);
 		if (rc) {
@@ -288,14 +288,14 @@ int main(int argc, char **argv)
 			goto cleanup;
 		}
 
-		strlcat(root, "/.", PATH_MAX);
-		rc = llapi_file_get_stripe(root, lum_dir);
+		snprintf(path, sizeof(path), "%s/.", root);
+		rc = llapi_file_get_stripe(path, lum_dir);
 		if (rc == -ENODATA) {
 			free(lum_dir);
 			lum_dir = NULL;
 		} else if (rc) {
 			llapi_error(LLAPI_MSG_ERROR, rc, "error: cant't get "
-				    "root's LOVEA for %s\n", root);
+				    "root's LOVEA for %s\n", path);
 			goto cleanup;
 		}
 	} else if (rc) {

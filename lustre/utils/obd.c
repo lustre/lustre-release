@@ -3909,7 +3909,7 @@ static int extract_fsname_poolname(const char *arg, char *fsname,
 	char *ptr;
 	int rc;
 
-	strlcpy(fsname, arg, PATH_MAX + 1);
+	snprintf(fsname, PATH_MAX + 1, "%s", arg);
 	ptr = strchr(fsname, '.');
 	if (ptr == NULL) {
 		fprintf(stderr, ". is missing in %s\n", fsname);

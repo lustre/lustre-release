@@ -45,44 +45,6 @@
 #include <unistd.h>
 #include <libcfs/util/string.h>
 
-/*
- * According manual of strlcpy() and strlcat() the functions should return
- * the total length of the string they tried to create. For strlcpy() that
- * means the length of src. For strlcat() that means the initial length of
- * dst plus the length of src. So, the function strnlen() cannot be used
- * otherwise the return value will be wrong.
- */
-#ifndef HAVE_STRLCPY /* not in glibc for RHEL 5.x, remove when obsolete */
-size_t strlcpy(char *dst, const char *src, size_t size)
-{
-	size_t ret = strlen(src);
-
-	if (size) {
-		size_t len = (ret >= size) ? size - 1 : ret;
-		memcpy(dst, src, len);
-		dst[len] = '\0';
-	}
-	return ret;
-}
-#endif
-
-#ifndef HAVE_STRLCAT /* not in glibc for RHEL 5.x, remove when obsolete */
-size_t strlcat(char *dst, const char *src, size_t size)
-{
-	size_t dsize = strlen(dst);
-	size_t len = strlen(src);
-	size_t ret = dsize + len;
-
-	dst  += dsize;
-	size -= dsize;
-	if (len >= size)
-		len = size-1;
-	memcpy(dst, src, len);
-	dst[len] = '\0';
-	return ret;
-}
-#endif
-
 /**
  * Extracts tokens from strings.
  *

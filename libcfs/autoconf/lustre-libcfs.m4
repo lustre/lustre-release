@@ -934,38 +934,6 @@ AC_DEFUN([LIBCFS_CONFIGURE], [
 AC_MSG_NOTICE([LibCFS core checks
 ==============================================================================])
 
-# lnet/utils/portals.c
-AC_CHECK_HEADERS([asm/types.h endian.h sys/ioctl.h])
-
-# lnet/utils/debug.c
-AC_CHECK_HEADERS([linux/version.h])
-
-AC_CHECK_TYPE([spinlock_t],
-	[AC_DEFINE(HAVE_SPINLOCK_T, 1, [spinlock_t is defined])],
-	[],
-	[#include <linux/spinlock.h>])
-
-# lnet/utils/wirecheck.c
-AC_CHECK_FUNCS([strnlen])
-
-# lnet/libcfs/user-prim.c, missing for RHEL5 and earlier userspace
-AC_CHECK_FUNCS([strlcpy])
-
-# libcfs/libcfs/user-prim.c, missing for RHEL5 and earlier userspace
-AC_CHECK_FUNCS([strlcat])
-
-# libcfs/include/libcfs/linux/linux-prim.h, ...
-AC_CHECK_HEADERS([linux/types.h sys/types.h linux/unistd.h unistd.h])
-
-# libcfs/include/libcfs/linux/linux-prim.h
-AC_CHECK_HEADERS([linux/random.h], [], [],
-		 [#ifdef HAVE_LINUX_TYPES_H
-		  #include <linux/types.h>
-		  #endif
-		 ])
-
-# libcfs/include/libcfs/linux/libcfs.h
-# libcfs/include/libcfs/byteorder.h
 # libcfs/libcfs/util/nidstrings.c
 AC_CHECK_HEADERS([netdb.h asm/types.h endian.h])
 AC_CHECK_FUNCS([gethostbyname])

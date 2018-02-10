@@ -1274,30 +1274,37 @@ int llapi_search_fsname(const char *pathname, char *fsname)
 
         path = realpath(pathname, NULL);
         if (path == NULL) {
-		char buf[PATH_MAX], *ptr;
+		char tmp[PATH_MAX - 1];
+		char buf[PATH_MAX];
+		char *ptr;
 
+		tmp[0] = '\0';
 		buf[0] = '\0';
 		if (pathname[0] != '/') {
 			/* Need an absolute path, but realpath() only works for
 			 * pathnames that actually exist.  We go through the
 			 * extra hurdle of dirname(getcwd() + pathname) in
 			 * case the relative pathname contains ".." in it. */
-			if (getcwd(buf, sizeof(buf) - 2) == NULL) {
+			char realpath[PATH_MAX - 1];
+
+			if (getcwd(realpath, sizeof(realpath) - 2) == NULL) {
 				rc = -errno;
 				llapi_error(LLAPI_MSG_ERROR, rc,
 					    "cannot get current working directory");
 				return rc;
 			}
-			rc = strlcat(buf, "/", sizeof(buf));
-			if (rc >= sizeof(buf)) {
+
+			rc = snprintf(tmp, sizeof(tmp), "%s/", realpath);
+			if (rc >= sizeof(tmp)) {
 				rc = -E2BIG;
 				llapi_error(LLAPI_MSG_ERROR, rc,
 					    "invalid parent path '%s'",
-					    buf);
+					    tmp);
 				return rc;
 			}
 		}
-		rc = strlcat(buf, pathname, sizeof(buf));
+
+		rc = snprintf(buf, sizeof(buf), "%s%s", tmp, pathname);
 		if (rc >= sizeof(buf)) {
 			rc = -E2BIG;
 			llapi_error(LLAPI_MSG_ERROR, rc,
@@ -1385,7 +1392,8 @@ int llapi_get_poolmembers(const char *poolname, char **members,
 	/* name is FSNAME.POOLNAME */
 	if (strlen(poolname) >= sizeof(fsname))
 		return -EOVERFLOW;
-	strlcpy(fsname, poolname, sizeof(fsname));
+
+	snprintf(fsname, sizeof(fsname), "%s", poolname);
 	pool = strchr(fsname, '.');
 	if (pool == NULL)
 		return -EINVAL;
@@ -1761,7 +1769,7 @@ static int get_lmd_info(char *path, DIR *parent, DIR *dir,
 		 * a large filesystem.  */
 		fname = (fname == NULL ? path : fname + 1);
 		/* retrieve needed file info */
-		strlcpy((char *)lmd, fname, lumlen);
+		snprintf((char *)lmd, lumlen, "%s", fname);
 		ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO, (void *)lmd);
         }
 
@@ -1914,7 +1922,7 @@ static int param_callback(char *path, semantic_func_t sem_init,
         if (!buf)
                 return -ENOMEM;
 
-	strlcpy(buf, path, PATH_MAX + 1);
+	snprintf(buf, PATH_MAX + 1, "%s", path);
         ret = common_param_init(param, buf);
         if (ret)
                 goto out;
@@ -2381,7 +2389,7 @@ int sattr_cache_get_defaults(const char *const fsname,
                 if (rc)
                         return rc;
         } else {
-		strlcpy(fsname_buf, fsname, sizeof(fsname_buf));
+		snprintf(fsname_buf, sizeof(fsname_buf), "%s", fsname);
         }
 
 	if (strncmp(fsname_buf, cache.fsname, sizeof(fsname_buf) - 1) != 0) {
@@ -2397,7 +2405,7 @@ int sattr_cache_get_defaults(const char *const fsname,
                 cache.stripecount = tmp[0];
                 cache.stripesize = tmp[1];
                 cache.stripeoffset = tmp[2];
-		strlcpy(cache.fsname, fsname_buf, sizeof(cache.fsname));
+		snprintf(cache.fsname, sizeof(cache.fsname), "%s", fsname_buf);
         }
 
         if (scount)
@@ -3051,8 +3059,8 @@ static inline void
 lov_v1v3_pool_name(struct lov_user_md *v1, char *pool_name)
 {
 	if (v1->lmm_magic == LOV_USER_MAGIC_V3)
-		strlcpy(pool_name, ((struct lov_user_md_v3 *)v1)->lmm_pool_name,
-			LOV_MAXPOOLNAME);
+		snprintf(pool_name, LOV_MAXPOOLNAME, "%s",
+			 ((struct lov_user_md_v3 *)v1)->lmm_pool_name);
 	else
 		pool_name[0] = '\0';
 }
@@ -3371,7 +3379,8 @@ static void lov_dump_plain_user_lmm(struct find_param *param, char *path,
 		struct lov_user_ost_data_v1 *objects;
 		struct lov_user_md_v3 *lmmv3 = (void *)&param->fp_lmd->lmd_lmm;
 
-		strlcpy(pool_name, lmmv3->lmm_pool_name, sizeof(pool_name));
+		snprintf(pool_name, sizeof(pool_name), "%s",
+			 lmmv3->lmm_pool_name);
 		objects = lmmv3->lmm_objects;
 		lov_dump_user_lmm_v1v3(&param->fp_lmd->lmd_lmm, pool_name,
 				       objects, path, param->fp_obd_index,
@@ -3406,7 +3415,8 @@ static void llapi_lov_dump_user_lmm(struct find_param *param, char *path,
 		struct lmv_user_md *lum;
 
 		lum = (struct lmv_user_md *)param->fp_lmv_md;
-		strlcpy(pool_name, lum->lum_pool_name, sizeof(pool_name));
+		snprintf(pool_name, sizeof(pool_name), "%s",
+			 lum->lum_pool_name);
 		lmv_dump_user_lmm(lum, pool_name, path, param->fp_obd_index,
 				  param->fp_max_depth, param->fp_verbose,
 				  flags);
@@ -4497,8 +4507,8 @@ static int cb_getstripe(char *path, DIR *parent, DIR **dirp, void *data,
 		char *fname = strrchr(path, '/');
 		fname = (fname == NULL ? path : fname + 1);
 
-		strlcpy((char *)&param->fp_lmd->lmd_lmm, fname,
-			param->fp_lum_size);
+		snprintf((char *)&param->fp_lmd->lmd_lmm, param->fp_lum_size,
+			 "%s", fname);
 
 		ret = ioctl(dirfd(parent), IOC_MDC_GETFILESTRIPE,
 			    (void *)&param->fp_lmd->lmd_lmm);

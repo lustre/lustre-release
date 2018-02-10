@@ -5813,7 +5813,7 @@ quota_type:
                         break;
                 case 'o':
                         valid = qctl.qc_valid = QC_UUID;
-			strlcpy(obd_uuid, optarg, sizeof(qctl.obd_uuid));
+			snprintf(obd_uuid, sizeof(qctl.obd_uuid), "%s", optarg);
                         break;
 		case 'i':
 			valid = qctl.qc_valid = QC_MDTIDX;

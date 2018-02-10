@@ -62,10 +62,10 @@
 #include "krb5_util.h"
 #include "lsupport.h"
 
-char pipefs_dir[PATH_MAX] = GSSD_PIPEFS_DIR;
+char *pipefs_dir = GSSD_PIPEFS_DIR;
 char pipefs_nfsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
-char keytabfile[PATH_MAX] = GSSD_DEFAULT_KEYTAB_FILE;
-char ccachedir[PATH_MAX] = GSSD_DEFAULT_CRED_DIR;
+char *keytabfile = GSSD_DEFAULT_KEYTAB_FILE;
+char *ccachedir = GSSD_DEFAULT_CRED_DIR;
 int  use_memcache = 0;
 int  lgssd_mutex_downcall = -1;
 
@@ -201,19 +201,19 @@ main(int argc, char *argv[])
 				verbosity++;
 				break;
 			case 'p':
-				strlcpy(pipefs_dir, optarg, sizeof(pipefs_dir));
-				if (pipefs_dir[sizeof(pipefs_dir)-1] != '\0')
-					errx(1, "pipefs path name too long");
+				pipefs_dir = strdup(optarg);
+				if (!pipe_dir)
+					errx(1, "pipefs path name not aquired");
 				break;
 			case 'k':
-				strlcpy(keytabfile, optarg, sizeof(keytabfile));
-				if (keytabfile[sizeof(keytabfile)-1] != '\0')
-					errx(1, "keytab path name too long");
+				keytabfile = strdup(optarg);
+				if (!keytab_file)
+					errx(1, "keytab path name not aquired");
 				break;
 			case 'd':
-				strlcpy(ccachedir, optarg, sizeof(ccachedir));
-				if (ccachedir[sizeof(ccachedir)-1] != '\0')
-					errx(1, "ccachedir path name too long");
+				ccachedir = strdup(optarg);
+				if (!ccachedir)
+					errx(1, "ccachedir path name not aquired");
 				break;
 			default:
 				usage(argv[0]);

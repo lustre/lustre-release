@@ -8,8 +8,6 @@
 	mdt_hash_name;
 	Parser_*;
 	register_ioc_*;
-	strlcat;
-	strlcpy;
     local:
 	*;
 };

@@ -886,7 +886,8 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 {
 	struct hsm_copyaction_private	*hcp = NULL;
 	char				 src[PATH_MAX];
-	char				 dst[PATH_MAX] = "";
+	char				 dst[PATH_MAX + 4] = "";
+	char				 root[PATH_MAX] = "";
 	int				 rc;
 	int				 rcf = 0;
 	bool				 rename_needed = false;
@@ -904,14 +905,16 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 	 * destination = lustre FID
 	 */
 	ct_path_lustre(src, sizeof(src), opt.o_mnt, &hai->hai_dfid);
-	ct_path_archive(dst, sizeof(dst), opt.o_hsm_root, &hai->hai_fid);
+	ct_path_archive(root, sizeof(root), opt.o_hsm_root, &hai->hai_fid);
 	if (hai->hai_extent.length == -1) {
 		/* whole file, write it to tmp location and atomically
 		 * replace old archived file */
-		strlcat(dst, "_tmp", sizeof(dst));
+		snprintf(dst, sizeof(dst), "%s_tmp", root);
 		/* we cannot rely on the same test because ct_copy_data()
 		 * updates hai_extent.length */
 		rename_needed = true;
+	} else {
+		snprintf(dst, sizeof(dst), "%s", root);
 	}
 
 	CT_TRACE("archiving '%s' to '%s'", src, dst);
@@ -1242,7 +1245,7 @@ fini:
 static int ct_remove(const struct hsm_action_item *hai, const long hal_flags)
 {
 	struct hsm_copyaction_private	*hcp = NULL;
-	char				 dst[PATH_MAX];
+	char				 dst[PATH_MAX], attr[PATH_MAX + 4];
 	int				 rc;
 
 	rc = ct_begin(&hcp, hai);
@@ -1266,11 +1269,11 @@ static int ct_remove(const struct hsm_action_item *hai, const long hal_flags)
 		goto fini;
 	}
 
-	strlcat(dst, ".lov", sizeof(dst));
-	rc = unlink(dst);
+	snprintf(attr, sizeof(attr), "%s.lov", dst);
+	rc = unlink(attr);
 	if (rc < 0) {
 		rc = -errno;
-		CT_ERROR(rc, "cannot unlink '%s'", dst);
+		CT_ERROR(rc, "cannot unlink '%s'", attr);
 		err_minor++;
 		goto fini;
 	}
@@ -1576,6 +1579,9 @@ static int ct_rebind_one(const struct lu_fid *old_fid,
 	ct_path_archive(dst, sizeof(dst), opt.o_hsm_root, new_fid);
 
 	if (!opt.o_dry_run) {
+		char src_attr[PATH_MAX + 4];
+		char dst_attr[PATH_MAX + 4];
+
 		ct_mkdir_p(dst);
 		if (rename(src, dst)) {
 			rc = -errno;
@@ -1583,10 +1589,11 @@ static int ct_rebind_one(const struct lu_fid *old_fid,
 			return -errno;
 		}
 		/* rename lov file */
-		strlcat(src, ".lov", sizeof(src));
-		strlcat(dst, ".lov", sizeof(dst));
-		if (rename(src, dst))
-			CT_ERROR(errno, "cannot rename '%s' to '%s'", src, dst);
+		snprintf(src_attr, sizeof(src_attr), "%s.lov", src);
+		snprintf(dst_attr, sizeof(dst_attr), "%s.lov", dst);
+		if (rename(src_attr, dst_attr))
+			CT_ERROR(errno, "cannot rename '%s' to '%s'",
+				 src_attr, dst_attr);
 
 	}
 	return 0;
@@ -1752,7 +1759,7 @@ static int ct_max_sequence(void)
 	__u64	seq = 0;
 	__u16	subseq;
 
-	strlcpy(path, opt.o_hsm_root, sizeof(path));
+	snprintf(path, sizeof(path), "%s", opt.o_hsm_root);
 	/* FID sequence is stored in top-level directory names:
 	 * hsm_root/16bits (high weight)/16 bits/16 bits/16 bits (low weight).
 	 */
@@ -1958,7 +1965,7 @@ int main(int argc, char **argv)
 {
 	int	rc;
 
-	strlcpy(cmd_name, basename(argv[0]), sizeof(cmd_name));
+	snprintf(cmd_name, sizeof(cmd_name), "%s", basename(argv[0]));
 	rc = ct_parseopts(argc, argv);
 	if (rc < 0) {
 		CT_WARN("try '%s --help' for more information", cmd_name);

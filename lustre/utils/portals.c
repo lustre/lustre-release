@@ -35,13 +35,13 @@
 #include <time.h>
 #include <linux/types.h>
 
-#include <libcfs/util/string.h>
 #include <libcfs/util/ioctl.h>
 #include <linux/lnet/libcfs_debug.h>
 #include <linux/lnet/lnet-dlc.h>
 #include <linux/lnet/lnetctl.h>
 #include <linux/lnet/nidstr.h>
 #include <linux/lnet/socklnd.h>
+#include <lustre/lustreapi.h>
 
 unsigned int libcfs_debug;
 unsigned int libcfs_printk = D_CANTMASK;
@@ -177,7 +177,7 @@ ptl_ipaddr_2_str(__u32 ipaddr, char *str, size_t strsize, int lookup)
                 net_ip = htonl (ipaddr);
                 he = gethostbyaddr (&net_ip, sizeof (net_ip), AF_INET);
                 if (he != NULL) {
-			strlcpy(str, he->h_name, strsize);
+			snprintf(str, strsize, "%s", he->h_name);
                         return (str);
                 }
         }

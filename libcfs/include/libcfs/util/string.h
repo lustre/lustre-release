@@ -44,14 +44,6 @@
 #include <linux/types.h>
 #include <libcfs/util/list.h>
 
-#ifndef HAVE_STRLCPY /* not in glibc for RHEL 5.x, remove when obsolete */
-size_t strlcpy(char *tgt, const char *src, size_t tgt_len);
-#endif
-
-#ifndef HAVE_STRLCAT /* not in glibc for RHEL 5.x, remove when obsolete */
-size_t strlcat(char *tgt, const char *src, size_t tgt_len);
-#endif
-
 /**
  * Structure to represent NULL-less strings.
  */

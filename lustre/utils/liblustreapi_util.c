@@ -41,7 +41,6 @@
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <lustre/lustreapi.h>
-#include <libcfs/util/string.h>	/* only needed for compat strlcpy() */
 #include <linux/lustre/lustre_ver.h>	/* only until LUSTRE_VERSION_CODE is gone */
 #include "lustreapi_internal.h"
 
@@ -137,7 +136,7 @@ int llapi_get_version_string(char *version, unsigned int version_size)
 		return -1;
 	}
 
-	if (strlcpy(version, ptr, version_size) >= version_size) {
+	if (snprintf(version, version_size, "%s", ptr) >= version_size) {
 		errno = EOVERFLOW;
 		return -1;
 	}

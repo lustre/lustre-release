@@ -328,11 +328,11 @@ static char *iam_convert(int size, int need_convert, char *source)
         if (source == NULL)
                 return NULL;
 
-        ptr = calloc(size + 1, sizeof(char));
-        if (ptr == NULL)
-                return NULL;
+	if (need_convert) {
+		ptr = calloc(size + 1, sizeof(char));
+		if (ptr == NULL)
+			return NULL;
 
-        if (need_convert) {
                 opt = packdigit((unsigned char*)source);
                 if (opt == NULL) {
                         free(ptr);
@@ -342,7 +342,7 @@ static char *iam_convert(int size, int need_convert, char *source)
                         free(opt);
                 }
         } else {
-		strlcpy(ptr, source, size + 1);
+		ptr = strdup(source);
         }
 
         return ptr;

@@ -64,10 +64,10 @@
 int
 cfs_get_param_paths(glob_t *paths, const char *pattern, ...)
 {
-	char path[PATH_MAX] = "{/sys/{fs,kernel/debug}/{lnet,lustre}/,"
-			       "/proc/{fs,sys}/{lnet,lustre}/}";
+	char topdir[PATH_MAX] = "{/sys/{fs,kernel/debug}/{lnet,lustre},"
+				"/proc/{fs,sys}/{lnet,lustre}}";
 	static bool test_mounted = false;
-	size_t len = strlen(path);
+	char path[PATH_MAX];
 	char buf[PATH_MAX];
 	struct statfs statfsbuf;
 	va_list args;
@@ -127,9 +127,9 @@ skip_mounting:
 		errno = EINVAL;
 		return -1;
 	}
-	len += rc;
 
-	if (strlcat(path, buf, sizeof(path)) != len) {
+	if (snprintf(path, sizeof(path), "%s/%s", topdir, buf) >=
+	    sizeof(path)) {
 		errno = E2BIG;
 		return -1;
 	}

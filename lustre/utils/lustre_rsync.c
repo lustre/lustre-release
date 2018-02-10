@@ -571,8 +571,9 @@ int lr_get_symlink(struct lr_info *info)
         } else {
                 link = info->linktmp;
         }
-	strlcpy(info->link, link, sizeof(info->link));
-
+	rc = snprintf(info->link, sizeof(info->link), "%s", link);
+	if (rc >= sizeof(info->link))
+		rc = -E2BIG;
 	return rc;
 }
 
@@ -640,13 +641,16 @@ int lr_add_pc(const char *pfid, const char *tfid, const char *name)
 	p = calloc(1, sizeof(*p));
 	if (p == NULL)
 		return -ENOMEM;
-	len = strlcpy(p->pc_log.pcl_pfid, pfid, sizeof(p->pc_log.pcl_pfid));
+	len = snprintf(p->pc_log.pcl_pfid, sizeof(p->pc_log.pcl_pfid),
+		       "%s", pfid);
 	if (len >= sizeof(p->pc_log.pcl_pfid))
 		goto out_err;
-	len = strlcpy(p->pc_log.pcl_tfid, tfid, sizeof(p->pc_log.pcl_tfid));
+	len = snprintf(p->pc_log.pcl_tfid, sizeof(p->pc_log.pcl_tfid),
+		       "%s", tfid);
 	if (len >= sizeof(p->pc_log.pcl_tfid))
 		goto out_err;
-	len = strlcpy(p->pc_log.pcl_name, name, sizeof(p->pc_log.pcl_name));
+	len = snprintf(p->pc_log.pcl_name, sizeof(p->pc_log.pcl_name),
+		       "%s", name);
 	if (len >= sizeof(p->pc_log.pcl_name))
 		goto out_err;
 
@@ -1058,7 +1062,8 @@ int lr_link(struct lr_info *info)
 				 info->path);
 
 			if (strcmp(srcpath, info->dest) != 0) {
-				strlcpy(info->src, srcpath, sizeof(info->src));
+				snprintf(info->src, sizeof(info->src), "%s",
+					 srcpath);
 				lr_debug(DINFO, "link source is %s\n",
 					 info->src);
 			}
@@ -1171,7 +1176,7 @@ int lr_parse_line(void *priv, struct lr_info *info)
 	namelen = strnlen(changelog_rec_name(rec), rec->cr_namelen);
 	if (copylen > namelen + 1)
 		copylen = namelen + 1;
-	strlcpy(info->name, changelog_rec_name(rec), copylen);
+	snprintf(info->name, copylen, "%s", changelog_rec_name(rec));
 
 	/* Don't use rnm if CLF_RENAME isn't set */
 	rnm = changelog_rec_rename(rec);
@@ -1185,7 +1190,7 @@ int lr_parse_line(void *priv, struct lr_info *info)
 		namelen = changelog_rec_snamelen(rec);
 		if (copylen > namelen + 1)
 			copylen = namelen + 1;
-		strlcpy(info->sname, changelog_rec_sname(rec), copylen);
+		snprintf(info->sname, copylen, "%s", changelog_rec_sname(rec));
 
 		if (verbose > 1)
 			printf("Rec %lld: %d %s %s\n", info->recno, info->type,
@@ -1359,20 +1364,24 @@ int lr_read_log()
                 status->ls_last_recno = s->ls_last_recno;
 
 	if (status->ls_registration[0] == '\0')
-		strlcpy(status->ls_registration, s->ls_registration,
-			sizeof(status->ls_registration));
+		snprintf(status->ls_registration,
+			 sizeof(status->ls_registration), "%s",
+			 s->ls_registration);
 
 	if (status->ls_mdt_device[0] == '\0')
-		strlcpy(status->ls_mdt_device, s->ls_mdt_device,
-			sizeof(status->ls_mdt_device));
+		snprintf(status->ls_mdt_device,
+			 sizeof(status->ls_mdt_device), "%s",
+			 s->ls_mdt_device);
 
 	if (status->ls_source_fs[0] == '\0')
-		strlcpy(status->ls_source_fs, s->ls_source_fs,
-			sizeof(status->ls_source_fs));
+		snprintf(status->ls_source_fs,
+			 sizeof(status->ls_source_fs), "%s",
+			 s->ls_source_fs);
 
 	if (status->ls_source[0] == '\0')
-		strlcpy(status->ls_source, s->ls_source,
-			sizeof(status->ls_source));
+		snprintf(status->ls_source,
+			 sizeof(status->ls_source), "%s",
+			 s->ls_source);
 
  out:
         if (fd != -1)
@@ -1399,9 +1408,9 @@ int lr_clear_cl(struct lr_info *info, int force)
                         /* llapi_changelog_clear modifies the mdt
                          * device name so make a copy of it until this
                          * is fixed.
-                        */
-			strlcpy(mdt_device, status->ls_mdt_device,
-				sizeof(mdt_device));
+			 */
+			snprintf(mdt_device, sizeof(mdt_device), "%s",
+				 status->ls_mdt_device);
                         rc = llapi_changelog_clear(mdt_device,
                                                    status->ls_registration,
                                                    rec);
@@ -1597,8 +1606,10 @@ int lr_replicate()
 			memcpy(info->spfid, info->pfid, sizeof(info->spfid));
 			memcpy(info->tfid, ext->tfid, sizeof(info->tfid));
 			memcpy(info->pfid, ext->pfid, sizeof(info->pfid));
-			strlcpy(info->sname, info->name, sizeof(info->sname));
-			strlcpy(info->name, ext->name, sizeof(info->name));
+			snprintf(info->sname, sizeof(info->sname), "%s",
+				 info->name);
+			snprintf(info->name, sizeof(info->name), "%s",
+				 ext->name);
 			info->is_extended = 1;
 		}
 
@@ -1713,8 +1724,8 @@ int main(int argc, char *argv[])
                         break;
                 case 's':
                         /* Assume absolute paths */
-			strlcpy(status->ls_source, optarg,
-				sizeof(status->ls_source));
+			snprintf(status->ls_source, sizeof(status->ls_source),
+				 "%s", optarg);
                         break;
                 case 't':
                         status->ls_num_targets++;
@@ -1735,16 +1746,18 @@ int main(int argc, char *argv[])
                                 if (status == NULL)
                                         return -ENOMEM;
                         }
-			strlcpy(status->ls_targets[status->ls_num_targets - 1],
-				optarg, sizeof(status->ls_targets[0]));
+			snprintf(status->ls_targets[status->ls_num_targets - 1],
+				 sizeof(status->ls_targets[0]), "%s", optarg);
 			break;
 		case 'm':
-			strlcpy(status->ls_mdt_device, optarg,
-				sizeof(status->ls_mdt_device));
+			snprintf(status->ls_mdt_device,
+				 sizeof(status->ls_mdt_device),
+				 "%s", optarg);
 			break;
 		case 'u':
-			strlcpy(status->ls_registration, optarg,
-				sizeof(status->ls_registration));
+			snprintf(status->ls_registration,
+				 sizeof(status->ls_registration),
+				 "%s", optarg);
                         break;
                 case 'l':
                         statuslog = optarg;

@@ -850,7 +850,7 @@ static int parse_callout_info(const char *coinfo,
 	       data[6], data[7], data[8], data[9], data[10]);
 
 	uparam->kup_secid = strtol(data[0], NULL, 0);
-	strlcpy(uparam->kup_mech, data[1], sizeof(uparam->kup_mech));
+	snprintf(uparam->kup_mech, sizeof(uparam->kup_mech), "%s", data[1]);
 	uparam->kup_uid = strtol(data[2], NULL, 0);
 	uparam->kup_gid = strtol(data[3], NULL, 0);
 	if (strchr(data[4], 'r'))
@@ -862,7 +862,7 @@ static int parse_callout_info(const char *coinfo,
 	uparam->kup_svc_type = data[5][0];
 	uparam->kup_svc = strtol(data[6], NULL, 0);
 	uparam->kup_nid = strtoll(data[7], NULL, 0);
-	strlcpy(uparam->kup_tgt, data[8], sizeof(uparam->kup_tgt));
+	snprintf(uparam->kup_tgt, sizeof(uparam->kup_tgt), "%s", data[8]);
 	uparam->kup_selfnid = strtoll(data[9], NULL, 0);
 	uparam->kup_pid = strtol(data[10], NULL, 0);
 

@@ -235,20 +235,38 @@ static int parse_one_option(const char *check, int *flagp)
         return 0;
 }
 
+static size_t merge_strings(char *dst, const char *src, size_t size)
+{
+	size_t dsize = strlen(dst);
+	size_t len = strlen(src);
+	size_t ret = dsize + len;
+
+	dst  += dsize;
+	size -= dsize;
+	if (len >= size)
+		len = size - 1;
+	memcpy(dst, src, len);
+	dst[len] = '\0';
+	return ret;
+}
+
 static int append_option(char *options, size_t options_len,
 			 const char *param, const char *value)
 {
 	int rc;
+
 	if (options[0] != '\0') {
-		rc = strlcat(options, ",", options_len);
+		rc = merge_strings(options, ",", options_len);
 		if (rc >= options_len)
 			goto out_err;
 	}
-	rc = strlcat(options, param, options_len);
+
+	rc = merge_strings(options, param, options_len);
 	if (rc >= options_len)
 		goto out_err;
+
 	if (value != NULL) {
-		rc = strlcat(options, value, options_len);
+		rc = merge_strings(options, value, options_len);
 		if (rc >= options_len)
 			goto out_err;
 	}
