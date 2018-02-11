@@ -685,6 +685,8 @@ static int jt_add_route(int argc, char **argv)
 				continue;
 			}
 			break;
+		case '?':
+			print_help(route_cmds, "route", "add");
 		default:
 			return 0;
 		}
@@ -786,6 +788,8 @@ static int jt_add_ni(int argc, char **argv)
 						     strlen(optarg), 0,
 						     UINT_MAX, &global_cpts);
 			break;
+		case '?':
+			print_help(net_cmds, "net", "add");
 		default:
 			return 0;
 		}
@@ -841,6 +845,8 @@ static int jt_del_route(int argc, char **argv)
 		case 'g':
 			gateway = optarg;
 			break;
+		case '?':
+			print_help(route_cmds, "route", "del");
 		default:
 			return 0;
 		}
@@ -889,6 +895,8 @@ static int jt_del_ni(int argc, char **argv)
 				goto out;
 			}
 			break;
+		case '?':
+			print_help(net_cmds, "net", "del");
 		default:
 			return 0;
 		}
@@ -953,6 +961,8 @@ static int jt_show_route(int argc, char **argv)
 		case 'v':
 			detail = 1;
 			break;
+		case '?':
+			print_help(route_cmds, "route", "show");
 		default:
 			return 0;
 		}
@@ -1101,6 +1111,8 @@ static int jt_show_net(int argc, char **argv)
 				detail = 1;
 			}
 			break;
+		case '?':
+			print_help(net_cmds, "net", "show");
 		default:
 			return 0;
 		}
@@ -1568,6 +1580,8 @@ static int jt_add_peer_nid(int argc, char **argv)
 		case 'm':
 			non_mr = true;
 			break;
+		case '?':
+			print_help(peer_cmds, "peer", "add");
 		default:
 			return 0;
 		}
@@ -1655,6 +1669,8 @@ static int jt_del_peer_nid(int argc, char **argv)
 			nids = nids2;
 			rc = LUSTRE_CFG_RC_OUT_OF_MEM;
 			break;
+		case '?':
+			print_help(peer_cmds, "peer", "del");
 		default:
 			return 0;
 		}
@@ -1718,6 +1734,8 @@ static int jt_show_peer(int argc, char **argv)
 				detail = 1;
 			}
 			break;
+		case '?':
+			print_help(peer_cmds, "peer", "show");
 		default:
 			return 0;
 		}
