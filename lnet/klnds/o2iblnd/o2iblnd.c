@@ -982,7 +982,8 @@ kiblnd_create_conn(kib_peer_ni_t *peer_ni, struct rdma_cm_id *cmid,
         return conn;
 
  failed_2:
-	kiblnd_destroy_conn(conn, true);
+	kiblnd_destroy_conn(conn);
+	LIBCFS_FREE(conn, sizeof(*conn));
  failed_1:
         LIBCFS_FREE(init_qp_attr, sizeof(*init_qp_attr));
  failed_0:
@@ -990,7 +991,7 @@ kiblnd_create_conn(kib_peer_ni_t *peer_ni, struct rdma_cm_id *cmid,
 }
 
 void
-kiblnd_destroy_conn(kib_conn_t *conn, bool free_conn)
+kiblnd_destroy_conn(kib_conn_t *conn)
 {
 	struct rdma_cm_id *cmid = conn->ibc_cmid;
 	kib_peer_ni_t        *peer_ni = conn->ibc_peer;
@@ -1052,9 +1053,6 @@ kiblnd_destroy_conn(kib_conn_t *conn, bool free_conn)
 		rdma_destroy_id(cmid);
 		atomic_dec(&net->ibn_nconns);
 	}
-
-	if (free_conn)
-		LIBCFS_FREE(conn, sizeof(*conn));
 }
 
 int

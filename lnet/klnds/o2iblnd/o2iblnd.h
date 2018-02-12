@@ -1180,7 +1180,7 @@ int  kiblnd_close_peer_conns_locked (kib_peer_ni_t *peer_ni, int why);
 
 kib_conn_t *kiblnd_create_conn(kib_peer_ni_t *peer_ni, struct rdma_cm_id *cmid,
 			       int state, int version);
-void kiblnd_destroy_conn(kib_conn_t *conn, bool free_conn);
+void kiblnd_destroy_conn(kib_conn_t *conn);
 void kiblnd_close_conn (kib_conn_t *conn, int error);
 void kiblnd_close_conn_locked (kib_conn_t *conn, int error);
 

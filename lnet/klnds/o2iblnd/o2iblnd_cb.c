@@ -3392,11 +3392,13 @@ kiblnd_connd (void *arg)
 			spin_unlock_irqrestore(lock, flags);
 			dropped_lock = 1;
 
-			kiblnd_destroy_conn(conn, !peer_ni);
+			kiblnd_destroy_conn(conn);
 
 			spin_lock_irqsave(lock, flags);
-			if (!peer_ni)
+			if (!peer_ni) {
+				LIBCFS_FREE(conn, sizeof(*conn));
 				continue;
+			}
 
 			conn->ibc_peer = peer_ni;
 			if (peer_ni->ibp_reconnected < KIB_RECONN_HIGH_RACE)
