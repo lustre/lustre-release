@@ -587,6 +587,8 @@ struct osd_thread_info {
 	struct osd_idmap_cache *oti_ins_cache;
 	int		       oti_ins_cache_size;
 	int		       oti_ins_cache_used;
+	/* inc by osd_trans_create and dec by osd_trans_stop */
+	int		       oti_ins_cache_depth;
 
         int                    oti_r_locks;
         int                    oti_w_locks;

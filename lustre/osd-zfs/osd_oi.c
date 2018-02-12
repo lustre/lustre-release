@@ -1059,10 +1059,16 @@ struct osd_idmap_cache *osd_idc_find_or_init(const struct lu_env *env,
 	if (idc != NULL)
 		return idc;
 
+	CDEBUG(D_INODE, "%s: FID "DFID" not in the id map cache\n",
+	       osd->od_svname, PFID(fid));
+
 	/* new mapping is needed */
 	idc = osd_idc_add(env, osd, fid);
-	if (IS_ERR(idc))
+	if (IS_ERR(idc)) {
+		CERROR("%s: FID "DFID" add id map cache failed: %ld\n",
+		       osd->od_svname, PFID(fid), PTR_ERR(idc));
 		return idc;
+	}
 
 	/* initialize it */
 	rc = osd_remote_fid(env, osd, fid);
@@ -1107,10 +1113,16 @@ int osd_idc_find_and_init(const struct lu_env *env, struct osd_device *osd,
 		return 0;
 	}
 
+	CDEBUG(D_INODE, "%s: FID "DFID" not in the id map cache\n",
+	       osd->od_svname, PFID(fid));
+
 	/* new mapping is needed */
 	idc = osd_idc_add(env, osd, fid);
-	if (IS_ERR(idc))
+	if (IS_ERR(idc)) {
+		CERROR("%s: FID "DFID" add id map cache failed: %ld\n",
+		       osd->od_svname, PFID(fid), PTR_ERR(idc));
 		return PTR_ERR(idc);
+	}
 
 	if (obj->oo_dn)
 		idc->oic_dnode = obj->oo_dn->dn_object;

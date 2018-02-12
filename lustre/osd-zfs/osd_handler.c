@@ -284,8 +284,11 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	oh = container_of0(th, struct osd_thandle, ot_super);
 	INIT_LIST_HEAD(&unlinked);
 	list_splice_init(&oh->ot_unlinked_list, &unlinked);
+
+	osd_oti_get(env)->oti_ins_cache_depth--;
 	/* reset OI cache for safety */
-	osd_oti_get(env)->oti_ins_cache_used = 0;
+	if (osd_oti_get(env)->oti_ins_cache_depth == 0)
+		osd_oti_get(env)->oti_ins_cache_used = 0;
 
 	if (oh->ot_assigned == 0) {
 		LASSERT(oh->ot_tx);
@@ -364,6 +367,9 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	th = &oh->ot_super;
 	th->th_dev = dt;
 	th->th_result = 0;
+
+	osd_oti_get(env)->oti_ins_cache_depth++;
+
 	RETURN(th);
 }
 

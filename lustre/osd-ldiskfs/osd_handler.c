@@ -251,10 +251,16 @@ osd_idc_find_or_init(const struct lu_env *env, struct osd_device *osd,
 	if (idc != NULL)
 		return idc;
 
+	CDEBUG(D_INODE, "%s: FID "DFID" not in the id map cache\n",
+	       osd->od_svname, PFID(fid));
+
 	/* new mapping is needed */
 	idc = osd_idc_add(env, osd, fid);
-	if (IS_ERR(idc))
+	if (IS_ERR(idc)) {
+		CERROR("%s: FID "DFID" add id map cache failed: %ld\n",
+		       osd->od_svname, PFID(fid), PTR_ERR(idc));
 		return idc;
+	}
 
 	/* initialize it */
 	rc = osd_remote_fid(env, osd, fid);
@@ -302,10 +308,16 @@ static int osd_idc_find_and_init(const struct lu_env *env,
 		return 0;
 	}
 
+	CDEBUG(D_INODE, "%s: FID "DFID" not in the id map cache\n",
+	       osd->od_svname, PFID(fid));
+
 	/* new mapping is needed */
 	idc = osd_idc_add(env, osd, fid);
-	if (IS_ERR(idc))
+	if (IS_ERR(idc)) {
+		CERROR("%s: FID "DFID" add id map cache failed: %ld\n",
+		       osd->od_svname, PFID(fid), PTR_ERR(idc));
 		return PTR_ERR(idc);
+	}
 
 	if (obj->oo_inode != NULL) {
 		idc->oic_lid.oii_ino = obj->oo_inode->i_ino;
@@ -1685,27 +1697,30 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	sb_start_write(osd_sb(osd_dt_dev(d)));
 
 	OBD_ALLOC_GFP(oh, sizeof *oh, GFP_NOFS);
-	if (oh != NULL) {
-		oh->ot_quota_trans = &oti->oti_quota_trans;
-		memset(oh->ot_quota_trans, 0, sizeof(*oh->ot_quota_trans));
-		th = &oh->ot_super;
-		th->th_dev = d;
-		th->th_result = 0;
-		oh->ot_credits = 0;
-		INIT_LIST_HEAD(&oh->ot_commit_dcb_list);
-		INIT_LIST_HEAD(&oh->ot_stop_dcb_list);
-		osd_th_alloced(oh);
-
-		memset(oti->oti_declare_ops, 0,
-		       sizeof(oti->oti_declare_ops));
-		memset(oti->oti_declare_ops_cred, 0,
-		       sizeof(oti->oti_declare_ops_cred));
-		memset(oti->oti_declare_ops_used, 0,
-		       sizeof(oti->oti_declare_ops_used));
-	} else {
+	if (!oh) {
 		sb_end_write(osd_sb(osd_dt_dev(d)));
-		th = ERR_PTR(-ENOMEM);
+		RETURN(ERR_PTR(-ENOMEM));
 	}
+
+	oh->ot_quota_trans = &oti->oti_quota_trans;
+	memset(oh->ot_quota_trans, 0, sizeof(*oh->ot_quota_trans));
+	th = &oh->ot_super;
+	th->th_dev = d;
+	th->th_result = 0;
+	oh->ot_credits = 0;
+	INIT_LIST_HEAD(&oh->ot_commit_dcb_list);
+	INIT_LIST_HEAD(&oh->ot_stop_dcb_list);
+	osd_th_alloced(oh);
+
+	memset(oti->oti_declare_ops, 0,
+	       sizeof(oti->oti_declare_ops));
+	memset(oti->oti_declare_ops_cred, 0,
+	       sizeof(oti->oti_declare_ops_cred));
+	memset(oti->oti_declare_ops_used, 0,
+	       sizeof(oti->oti_declare_ops_used));
+
+	oti->oti_ins_cache_depth++;
+
 	RETURN(th);
 }
 
@@ -1954,8 +1969,10 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	if (unlikely(remove_agents != 0))
 		osd_process_scheduled_agent_removals(env, osd);
 
+	oti->oti_ins_cache_depth--;
 	/* reset OI cache for safety */
-	oti->oti_ins_cache_used = 0;
+	if (oti->oti_ins_cache_depth == 0)
+		oti->oti_ins_cache_used = 0;
 
 	sb_end_write(osd_sb(osd));
 
