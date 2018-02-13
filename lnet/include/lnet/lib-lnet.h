@@ -937,6 +937,19 @@ lnet_is_peer_healthy_locked(struct lnet_peer *peer)
 	return false;
 }
 
+static inline struct lnet_peer_net *
+lnet_find_peer_net_locked(struct lnet_peer *peer, __u32 net_id)
+{
+	struct lnet_peer_net *peer_net;
+
+	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_peer_nets) {
+		if (peer_net->lpn_net_id == net_id)
+			return peer_net;
+	}
+
+	return NULL;
+}
+
 static inline void
 lnet_peer_set_alive(struct lnet_peer_ni *lp)
 {
