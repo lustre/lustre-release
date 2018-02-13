@@ -1431,7 +1431,13 @@ test_24() {
 			[[ "$pool" != "$pool1" ]] &&
 				error "Pool '$pool' not on $file:$pool1"
 			[[ "$count" != "$count1" ]] &&
-				error "Stripe count $count not on $file:$count1"
+				[[ "$count" != "-1" ]] &&
+					error "Stripe count $count not on"\
+						"$file:$count1"
+			[[ "$count1" != "$OSTCOUNT" ]] &&
+				[[ "$count" = "-1" ]] &&
+					error "Stripe count $count1 not on"\
+						"$file:$OSTCOUNT"
 			[[ "$size" != "$size1" ]] && [[ "$size" != "0" ]] &&
 				error "Stripe size $size not on $file:$size1"
 		done
