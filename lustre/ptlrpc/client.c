@@ -1467,7 +1467,8 @@ static int after_reply(struct ptlrpc_request *req)
 	    ptlrpc_no_resend(req) == 0 && !req->rq_no_retry_einprogress) {
 		time64_t now = ktime_get_real_seconds();
 
-		DEBUG_REQ(D_RPCTRACE, req, "Resending request on EINPROGRESS");
+		DEBUG_REQ(req->rq_nr_resend > 0 ? D_ERROR : D_RPCTRACE, req,
+			  "Resending request on EINPROGRESS");
 		spin_lock(&req->rq_lock);
 		req->rq_resend = 1;
 		spin_unlock(&req->rq_lock);
