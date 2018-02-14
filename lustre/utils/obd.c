@@ -1712,6 +1712,7 @@ int jt_obd_destroy(int argc, char **argv)
         if (argc < 2 || argc > 4)
                 return CMD_HELP;
 
+	errno = 0;
         id = strtoull(argv[1], &end, 0);
         if (*end || id == 0 || errno != 0) {
                 fprintf(stderr, "error: %s: invalid objid '%s'\n",
