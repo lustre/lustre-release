@@ -10621,8 +10621,6 @@ run_test 133e "Verifying OST {read,write}_bytes nid stats ================="
 proc_regexp="/{proc,sys}/{fs,sys,kernel/debug}/{lustre,lnet}/"
 
 test_133f() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	# First without trusting modes.
 	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
 	echo "proc_dirs='$proc_dirs'"
@@ -10632,10 +10630,27 @@ test_133f() {
 	# Second verifying readability.
 	$LCTL get_param -R '*' &> /dev/null || error "proc file read failed"
 
+	# Verifing writability with badarea_io.
+	find $proc_dirs \
+		-ignore_readdir_race \
+		-type f \
+		-not -name force_lbug \
+		-not -name changelog_mask \
+		-exec badarea_io '{}' \; ||
+			error "find $proc_dirs failed"
+}
+run_test 133f "Check reads/writes of client lustre proc files with bad area io"
+
+test_133g() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
 	# eventually, this can also be replaced with "lctl get_param -R",
 	# but not until that option is always available on the server
 	local facet
 	for facet in mds1 ost1; do
+		[ $(lustre_version_code $facet) -le $(version_code 2.5.54) ] &&
+			skip "Too old lustre on $facet" && continue
 		local facet_proc_dirs=$(do_facet $facet \
 					\\\ls -d $proc_regexp 2>/dev/null)
 		echo "${facet}_proc_dirs='$facet_proc_dirs'"
@@ -10649,33 +10664,7 @@ test_133f() {
 			-type f \
 			-exec cat '{}' \\\; &> /dev/null ||
 				error "proc file read failed"
-	done
-}
-run_test 133f "Check for LBUGs/Oopses/unreadable files in /proc"
 
-test_133g() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
-	# Second verifying writability.
-	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
-	echo "proc_dirs='$proc_dirs'"
-	[ -n "$proc_dirs" ] || error "no proc_dirs on $HOSTNAME"
-	find $proc_dirs \
-		-ignore_readdir_race \
-		-type f \
-		-not -name force_lbug \
-		-not -name changelog_mask \
-		-exec badarea_io '{}' \; ||
-		error "find $proc_dirs failed"
-
-	local facet
-	for facet in mds1 ost1; do
-		[ $(lustre_version_code $facet) -le $(version_code 2.5.54) ] &&
-			skip "Too old lustre on $facet" && continue
-		local facet_proc_dirs=$(do_facet $facet \
-					\\\ls -d $proc_regexp 2> /dev/null)
-		echo "${facet}_proc_dirs='$facet_proc_dirs'"
-		[ -z "$facet_proc_dirs" ] && error "no proc_dirs on $facet"
 		do_facet $facet find $facet_proc_dirs \
 			-ignore_readdir_race \
 			-type f \
@@ -10690,7 +10679,7 @@ test_133g() {
 	setup || error "failed to setup"
 	true
 }
-run_test 133g "Check for Oopses on bad io area writes/reads in /proc"
+run_test 133g "Check reads/writes of server lustre proc files with bad area io"
 
 test_133h() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
