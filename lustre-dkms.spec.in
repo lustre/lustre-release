@@ -69,6 +69,8 @@ Requires:       zfs-dkms >= 0.6.5
 Requires:	@PACKAGE@-osd-zfs-mount
 Conflicts:	@PACKAGE@-ldiskfs-dkms
 Conflicts:	@PACKAGE@-client-dkms
+# lustre-zfs-dkms replicates the functionality old lustre-dkms package
+Provides:	@PACKAGE@-dkms
 Obsoletes:	@PACKAGE@-dkms
 %endif
 %if %{with ldiskfs}
