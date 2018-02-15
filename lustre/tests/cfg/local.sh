@@ -17,7 +17,7 @@ TMP=${TMP:-/tmp}
 DAEMONSIZE=${DAEMONSIZE:-500}
 MDSCOUNT=${MDSCOUNT:-1}
 MDSDEVBASE=${MDSDEVBASE:-$TMP/${FSNAME}-mdt}
-MDSSIZE=${MDSSIZE:-200000}
+MDSSIZE=${MDSSIZE:-250000}
 #
 # Format options of facets can be specified with these variables:
 #

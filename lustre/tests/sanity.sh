@@ -652,6 +652,7 @@ test_17m() {
 	df $MOUNT > /dev/null 2>&1
 	[ $rc -eq 0 ] ||
 		error "e2fsck detected error for short/long symlink: rc=$rc"
+	rm -f $wdir/*
 }
 run_test 17m "run e2fsck against MDT which contains short/long symlink"
 
@@ -6312,6 +6313,7 @@ test_64d() {
 		skip "OST < 2.10.55 doesn't limit grants enough" && return 0
 
 	local tgt=$($LCTL dl | grep "0000-osc-[^mM]" | awk '{print $4}')
+	local file=$DIR/$tfile
 
 	[[ $($LCTL get_param osc.${tgt}.import |
 		    grep "connect_flags:.*grant_param") ]] || \
@@ -6322,9 +6324,10 @@ test_64d() {
 	$LCTL set_param debug="$OLDDEBUG" 2> /dev/null || true
 
 	local max_cur_granted=$(($(want_grant $tgt) + $(grant_chunk $tgt)))
+	stack_trap "rm -f $file" EXIT
 
-	$SETSTRIPE $DIR/$tfile -i 0 -c 1
-	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1000 &
+	$SETSTRIPE $file -i 0 -c 1
+	dd if=/dev/zero of=$file bs=1M count=1000 &
 	ddpid=$!
 
 	while true
@@ -6998,11 +7001,14 @@ test_77g() { # bug 10889
 
 	[ ! -f $F77_TMP ] && setup_f77
 
-	$SETSTRIPE -c 1 -i 0 $DIR/$tfile
+	local file=$DIR/$tfile
+	stack_trap "rm -f $file" EXIT
+
+	$SETSTRIPE -c 1 -i 0 $file
 	#define OBD_FAIL_OST_CHECKSUM_RECEIVE       0x21a
 	do_facet ost1 lctl set_param fail_loc=0x8000021a
 	set_checksums 1
-	dd if=$F77_TMP of=$DIR/$tfile bs=1M count=$F77SZ ||
+	dd if=$F77_TMP of=$file bs=1M count=$F77SZ ||
 		error "write error: rc=$?"
 	do_facet ost1 lctl set_param fail_loc=0
 	set_checksums 0
@@ -7011,7 +7017,7 @@ test_77g() { # bug 10889
 	#define OBD_FAIL_OST_CHECKSUM_SEND          0x21b
 	do_facet ost1 lctl set_param fail_loc=0x8000021b
 	set_checksums 1
-	cmp $F77_TMP $DIR/$tfile || error "file compare failed"
+	cmp $F77_TMP $file || error "file compare failed"
 	do_facet ost1 lctl set_param fail_loc=0
 	set_checksums 0
 }
@@ -7214,6 +7220,7 @@ run_test 82 "Basic grouplock test"
 
 test_83() {
 	local sfile="/boot/System.map-$(uname -r)"
+	[ ! -f $sfile ] && skip "No $sfile found" && return
 	# define OBD_FAIL_LLITE_PTASK_IO_FAIL 0x140d
 	$LCTL set_param fail_loc=0x140d
 	cp $sfile $DIR/$tfile || error "write failed"
@@ -7582,6 +7589,7 @@ run_test 101f "check mmap read performance"
 test_101g_brw_size_test() {
 	local mb=$1
 	local pages=$((mb * 1048576 / $(page_size)))
+	local file=$DIR/$tfile
 
 	$LCTL set_param osc.*.max_pages_per_rpc=${mb}M ||
 		{ error "unable to set max_pages_per_rpc=${mb}M"; return 1; }
@@ -7590,14 +7598,15 @@ test_101g_brw_size_test() {
 			return 2
 	done
 
+	stack_trap "rm -f $file" EXIT
 	$LCTL set_param -n osc.*.rpc_stats=0
 
 	# 10 RPCs should be enough for the test
 	local count=10
-	dd if=/dev/zero of=$DIR/$tfile bs=${mb}M count=$count ||
+	dd if=/dev/zero of=$file bs=${mb}M count=$count ||
 		{ error "dd write ${mb} MB blocks failed"; return 3; }
 	cancel_lru_locks osc
-	dd of=/dev/null if=$DIR/$tfile bs=${mb}M count=$count ||
+	dd of=/dev/null if=$file bs=${mb}M count=$count ||
 		{ error "dd write ${mb} MB blocks failed"; return 4; }
 
 	# calculate number of full-sized read and write RPCs
