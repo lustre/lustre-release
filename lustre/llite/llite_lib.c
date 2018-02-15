@@ -997,7 +997,7 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 {
 	struct	lustre_profile *lprof = NULL;
 	struct	lustre_sb_info *lsi = s2lsi(sb);
-	struct	ll_sb_info *sbi;
+	struct	ll_sb_info *sbi = NULL;
 	char	*dt = NULL, *md = NULL;
 	char	*profilenm = get_profile_name(sb);
 	struct config_llog_instance *cfg;
@@ -1010,19 +1010,16 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 
 	CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
 
+	try_module_get(THIS_MODULE);
+
 	OBD_ALLOC_PTR(cfg);
 	if (cfg == NULL)
-		RETURN(-ENOMEM);
-
-	try_module_get(THIS_MODULE);
+		GOTO(out_free, err = -ENOMEM);
 
 	/* client additional sb info */
 	lsi->lsi_llsbi = sbi = ll_init_sbi();
-	if (!sbi) {
-		module_put(THIS_MODULE);
-		OBD_FREE_PTR(cfg);
-		RETURN(-ENOMEM);
-	}
+	if (!sbi)
+		GOTO(out_free, err = -ENOMEM);
 
 	err = ll_options(lsi->lsi_lmd->lmd_opts, &sbi->ll_flags);
 	if (err)
@@ -1100,12 +1097,12 @@ out_free:
 		OBD_FREE(dt, dt_len);
 	if (lprof != NULL)
 		class_put_profile(lprof);
+	if (cfg)
+		OBD_FREE_PTR(cfg);
 	if (err)
 		ll_put_super(sb);
 	else if (sbi->ll_flags & LL_SBI_VERBOSE)
 		LCONSOLE_WARN("Mounted %s\n", profilenm);
-
-	OBD_FREE_PTR(cfg);
 	RETURN(err);
 } /* ll_fill_super */
 
@@ -1119,6 +1116,9 @@ void ll_put_super(struct super_block *sb)
 	long ccc_count;
 	int next, force = 1, rc = 0;
         ENTRY;
+
+	if (!sbi)
+		GOTO(out_no_sbi, 0);
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p - %s\n", sb, profilenm);
 
@@ -1182,7 +1182,7 @@ void ll_put_super(struct super_block *sb)
 
         ll_free_sbi(sb);
         lsi->lsi_llsbi = NULL;
-
+out_no_sbi:
 	lustre_common_put_super(sb);
 
 	cl_env_cache_purge(~0);
