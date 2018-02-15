@@ -34,7 +34,7 @@
 
 EXTRA_DIST = lustre.dtd slapd-lustre.conf lustre2ldif.xsl top.ldif \
              99-lustre.rules lustre ldev.conf ko2iblnd.conf lsvcgss \
-             lnet_routes.conf lnet.conf
+             lnet_routes.conf lnet.conf lgssc.conf
 ldapconfdir = $(sysconfdir)/openldap
 
 sysconf_DATA = lnet.conf
@@ -63,3 +63,8 @@ endif
 
 modprobedir = $(sysconfdir)/modprobe.d
 modprobe_DATA = ko2iblnd.conf
+
+if GSS_KEYRING
+requestkeydir = $(sysconfdir)/request-key.d
+requestkey_DATA = lgssc.conf
+endif

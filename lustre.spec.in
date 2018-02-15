@@ -379,6 +379,11 @@ echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
 %endif
 %endif
 
+CONFIGURE_ARGS="%{?configure_args}"
+if [ -z "$(echo $CONFIGURE_ARGS | grep "\-\-disable\-gss\-keyring")" ]; then
+    echo '%config(noreplace) %{_sysconfdir}/request-key.d/lgssc.conf' >>lustre.files
+fi
+
 %if %{with servers}
 mkdir -p $RPM_BUILD_ROOT%{_prefix}/lib/ocf/resource.d/lustre/
 install -m 0755 contrib/scripts/pacemaker/* $RPM_BUILD_ROOT%{_prefix}/lib/ocf/resource.d/lustre/
