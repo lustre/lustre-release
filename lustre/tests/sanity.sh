@@ -4661,9 +4661,14 @@ test_56a() {
 	local ostidx=1
 	local obduuid=$(ostuuid_from_index $ostidx)
 	local found=$($LFS getstripe -r --obd $obduuid $dir |
-		      egrep -c "obdidx|l_ost_idx")
+		grep 'lmm_stripe_offset:' | grep -c " $ostidx\$")
 
-	filenum=$($LFS getstripe -ir $dir | grep "^$ostidx\$" | wc -l)
+	filenum=$($LFS getstripe -ir $dir | grep -c "^$ostidx\$")
+	[[ $($LFS getstripe -id $dir) -ne $ostidx ]] ||
+		((filenum--))
+	[[ $($LFS getstripe -id $dir/dir) -ne $ostidx ]] ||
+		((filenum--))
+
 	[[ $found -eq $filenum ]] ||
 		error "$LFS getstripe --obd: found $found expect $filenum"
 	[[ $($LFS getstripe -r -v --obd $obduuid $dir |
