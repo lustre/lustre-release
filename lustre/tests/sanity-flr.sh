@@ -1522,22 +1522,22 @@ run_test 42 "lfs mirror verify"
 write_file_43() {
 	local file=$1
 	local ost=$2
-	local PARAM="osc.${FSNAME}-OST000${ost}-osc-M*.active"
+	local PARAM="osp.${FSNAME}-OST000${ost}-osc-M*.active"
 	local wait
 
 	wait=$(do_facet $SINGLEMDS \
 		"$LCTL get_param -n lod.*MDT0000-*.qos_maxage")
 	wait=${wait%%[^0-9]*}
 
-	echo "deactivate OST$ost, waiting for $((wait*2)) seconds"
+	echo "  **deactivate OST$ost, waiting for $((wait*2+2)) seconds"
 	$(do_facet $SINGLEMDS "$LCTL set_param -n $PARAM 0")
 	# lod_qos_statfs_update needs 2*$wait seconds to refresh targets statfs
-	sleep $(($wait * 2))
-	echo "write $file"
+	sleep $(($wait * 2 + 2))
+	echo "  **write $file"
 	dd if=/dev/zero of=$file bs=1M count=1 || error "write $file failed"
-	echo "restore activating OST$ost, waiting for $((wait*2)) seconds"
+	echo "  **restore activating OST$ost, waiting for $((wait*2+2)) seconds"
 	$(do_facet $SINGLEMDS "$LCTL set_param -n $PARAM 1")
-	sleep $((wait * 2))
+	sleep $((wait * 2 + 2))
 
 	local flags=$($LFS getstripe -v $file | awk '/lcm_flags:/ { print $2 }')
 	[ $flags = wp ] || error "file mirror state $flags != wp"
@@ -1559,30 +1559,33 @@ test_43() {
 
 	################## OST0 ###########################################
 	write_file_43 $tf 0
+	echo "  **verify components"
 	verify_comp_attr lcme_flags $tf 0x10001 init,stale
 	verify_comp_attr lcme_flags $tf 0x20002 init
 	verify_comp_attr lcme_flags $tf 0x30003 init,stale
 
 	# resync
-	echo "resync $tf"
+	echo "  **resync $tf"
 	$LFS mirror resync $tf
 	flags=$($LFS getstripe -v $tf | awk '/lcm_flags:/ { print $2 }')
 	[ $flags = ro ] || error "file mirror state $flags != ro"
 
 	################## OST1 ###########################################
 	write_file_43 $tf 1
+	echo "  **verify components"
 	verify_comp_attr lcme_flags $tf 0x10001 init,stale
 	verify_comp_attr lcme_flags $tf 0x20002 init,stale
 	verify_comp_attr lcme_flags $tf 0x30003 init
 
 	# resync
-	echo "resync $tf"
+	echo "  **resync $tf"
 	$LFS mirror resync $tf
 	flags=$($LFS getstripe -v $tf | awk '/lcm_flags:/ { print $2 }')
 	[ $flags = ro ] || error "file mirror state $flags != ro"
 
 	################## OST2 ###########################################
 	write_file_43 $tf 2
+	echo "  **verify components"
 	verify_comp_attr lcme_flags $tf 0x10001 init
 	verify_comp_attr lcme_flags $tf 0x20002 init,stale
 	verify_comp_attr lcme_flags $tf 0x30003 init,stale
