@@ -978,6 +978,129 @@ run_statahead () {
     cleanup_statahead $clients $mntpt_root $num_mntpts
 }
 
+cleanup_rr_alloc () {
+	trap 0
+	local clients="$1"
+	local mntpt_root="$2"
+	local rr_alloc_MNTPTS="$3"
+	local mntpt_dir=$(dirname ${mntpt_root})
+
+	for i in $(seq 0 $((rr_alloc_MNTPTS - 1))); do
+		zconf_umount_clients $clients ${mntpt_root}$i ||
+		error_exit "Failed to umount lustre on ${mntpt_root}$i"
+	done
+	do_nodes $clients "rm -rf $mntpt_dir"
+}
+
+run_rr_alloc() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	echo "===Test gives more reproduction percentage if number of "\
+		"client and ost are more. Test with 44 or more clients "\
+		"and 73 or more OSTs gives 100% reproduction rate=="
+
+	RR_ALLOC=${RR_ALLOC:-$(which rr_alloc 2> /dev/null || true)}
+	[ x$RR_ALLOC = x ] && { skip_env "rr_alloc not found" && return; }
+	declare -a diff_max_min_arr
+	# foeo = file on each ost. calc = calculated.
+	local ost_idx
+	local foeo_calc
+	local qos_prec_objs="${TMP}/qos_and_precreated_objects"
+	local rr_alloc_NFILES=${rr_alloc_NFILES:-555}
+	local rr_alloc_MNTPTS=${rr_alloc_MNTPTS:-11}
+	local total_MNTPTS=$((rr_alloc_MNTPTS * num_clients))
+	local mntpt_root="${TMP}/rr_alloc_mntpt/lustre"
+	if [ $MDSCOUNT -lt 2 ]; then
+		[ -e $DIR/$tdir ] || mkdir -p $DIR/$tdir
+	else
+		[ -e $DIR/$tdir ] || $LFS mkdir -i 0 $DIR/$tdir
+	fi
+	chmod 0777 $DIR/$tdir
+	$SETSTRIPE -c 1 /$DIR/$tdir
+
+	trap "cleanup_rr_alloc $clients $mntpt_root $rr_alloc_MNTPTS" EXIT ERR
+	for i in $(seq 0 $((rr_alloc_MNTPTS - 1))); do
+		zconf_mount_clients $clients ${mntpt_root}$i $MOUNT_OPTS ||
+		error_exit "Failed to mount lustre on ${mntpt_root}$i $clients"
+	done
+
+	local cmd="$RR_ALLOC $mntpt_root/$tdir/ash $rr_alloc_NFILES \
+		$num_clients"
+
+	# Save mdt values, set threshold to 100% i.e always Round Robin,
+	# restore the saved values again after creating files...
+	save_lustre_params mds1 \
+		"lov.lustre-MDT0000*.qos_threshold_rr" > $qos_prec_objs
+	save_lustre_params mds1 \
+		"osp.lustre-OST*-osc-MDT0000.create_count" >> $qos_prec_objs
+
+	local old_create_count=$(grep -e "create_count" $qos_prec_objs |
+		cut -d'=' -f 2 | sort -nr | head -n1)
+
+	# Make sure that every osp has enough precreated objects for the file
+	# creation app
+
+	# create_count is always set to the power of 2 only, so if the files
+	# per OST are not multiple of that then it will be set to nearest
+	# lower power of 2. So set 'create_count' to the upper power of 2.
+
+	foeo_calc=$((rr_alloc_NFILES * total_MNTPTS / OSTCOUNT))
+	local create_count=$((2 * foeo_calc))
+	do_facet mds1 "$LCTL set_param -n \
+		lov.lustre-MDT0000*.qos_threshold_rr 100 \
+		osp.lustre-OST*-osc-MDT0000.create_count $create_count" ||
+		error "failed while setting qos_threshold_rr & creat_count"
+
+	# Create few temporary files in order to increase the precreated objects
+	# to a desired value, before starting 'rr_alloc' app. Due to default
+	# value 32 of precreation count (OST_MIN_PRECREATE=32), precreated
+	# objects available are 32 initially, these gets exhausted very soon,
+	# which causes skip of some osps when very large number of files
+	# is created per OSTs.
+	createmany -o $DIR/$tdir/foo- $(((old_create_count + 1) * OSTCOUNT)) \
+		> /dev/null
+	rm -f /$DIR/$tdir/foo*
+
+	# Check for enough precreated objects... We should not
+	# fail here because code(osp_precreate.c) also takes care of it.
+	# So we have good chances of passing test even if this check fails.
+	local mdt_idx=0
+	for ost_idx in $(seq 0 $((OSTCOUNT - 1))); do
+		[[ $(precreated_ost_obj_count $mdt_idx $ost_idx) -ge \
+			$foeo_calc ]] || echo "Warning: test may fail because" \
+			"of lack of precreated objects on OST${ost_idx}"
+	done
+
+	if [[ $total_MNTPTS -ne 0 ]]; then
+		# Now start the actual file creation app.
+		mpi_run "-np $total_MNTPTS" $cmd || return
+	else
+		error "No mount point"
+	fi
+
+	restore_lustre_params < $qos_prec_objs
+	rm -f $qos_prec_objs
+
+	diff_max_min_arr=($($GETSTRIPE -r $DIR/$tdir/ |
+		grep "lmm_stripe_offset:" | awk '{print $2}' | sort -n |
+		uniq -c | awk 'NR==1 {min=max=$1} \
+		{ $1<min ? min=$1 : min; $1>max ? max=$1 : max} \
+		END {print max-min, max, min}'))
+
+	rm -rf $DIR/$tdir
+
+	# In-case of fairly large number of file creation using RR (round-robin)
+	# there can be two cases in which deviation will occur than the regular
+	# RR algo behaviour-
+	# 1- When rr_alloc does not start right with 'lqr_start_count' reseeded,
+	# 2- When rr_alloc does not finish with 'lqr_start_count == 0'.
+	# So the difference of files b/w any 2 OST should not be more than 2.
+	[[ ${diff_max_min_arr[0]} -le 2 ]] ||
+		error "Uneven distribution detected: difference between" \
+		"maximum files per OST (${diff_max_min_arr[1]}) and" \
+		"minimum files per OST (${diff_max_min_arr[2]}) must not be" \
+		"greater than 2"
+}
+
 run_fs_test() {
 	# fs_test.x is the default name for exe
 	FS_TEST=${FS_TEST:=$(which fs_test.x 2> /dev/null || true)}
