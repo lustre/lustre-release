@@ -1660,7 +1660,8 @@ echo_md_dir_stripe_choose(const struct lu_env *env, struct echo_device *ed,
 	LASSERT(idx < le32_to_cpu(lmv->lmv_stripe_count));
 	fid_le_to_cpu(&stripe_fid, &lmv->lmv_stripe_fids[idx]);
 
-	stripe_obj = lu_object_find_at(env, ld, &stripe_fid, NULL);
+	stripe_obj = lu_object_find_at(env, &ed->ed_cl.cd_lu_dev, &stripe_fid,
+				       NULL);
 	if (IS_ERR(stripe_obj)) {
 		rc = PTR_ERR(stripe_obj);
 		CERROR("Can not find the parent "DFID": rc = %d\n",
