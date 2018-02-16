@@ -3083,8 +3083,13 @@ nrs_write_read() {
 }
 
 test_77a() { #LU-3266
+	local rc
+
 	oss=$(comma_list $(osts_nodes))
-	do_nodes $oss lctl set_param ost.OSS.*.nrs_policies="fifo"
+	do_nodes $oss lctl set_param ost.OSS.*.nrs_policies="fifo" ||
+		rc=$?
+	[[ $rc -eq 3 ]] && skip "no NRS exists" && return
+	[[ $rc -ne 0 ]] && error "failed to set fifo policy"
 	nrs_write_read
 
 	return 0
@@ -3092,21 +3097,29 @@ test_77a() { #LU-3266
 run_test 77a "check FIFO NRS policy"
 
 test_77b() { #LU-3266
+	local rc
+
 	oss=$(comma_list $(osts_nodes))
 
 	do_nodes $oss lctl set_param ost.OSS.*.nrs_policies="crrn" \
-			   ost.OSS.*.nrs_crrn_quantum=1
+		ost.OSS.*.nrs_crrn_quantum=1 || rc=$?
+	[[ $rc -eq 3 ]] && skip "no NRS exists" && return
+	[[ $rc -ne 0 ]] && error "failed to set crrn_quantum to 1"
 
 	echo "policy: crr-n, crrn_quantum 1"
 	nrs_write_read
 
-	do_nodes $oss lctl set_param ost.OSS.*.nrs_crrn_quantum=64
+	do_nodes $oss lctl set_param \
+		ost.OSS.*.nrs_crrn_quantum=64 || rc=$?
+	[[ $rc -ne 0 ]] && error "failed to set crrn_quantum to 64"
 
 	echo "policy: crr-n, crrn_quantum 64"
 	nrs_write_read
 
 	# cleanup
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
+	do_nodes $oss lctl set_param \
+		ost.OSS.ost_io.nrs_policies="fifo" || rc=$?
+	[[ $rc -ne 0 ]] && error "failed to set fifo policy"
 	return 0
 }
 run_test 77b "check CRR-N NRS policy"
@@ -3117,37 +3130,49 @@ orr_trr() {
 	oss=$(comma_list $(osts_nodes))
 
 	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies=$policy \
-				     ost.OSS.*.nrs_"$policy"_quantum=1 \
-				     ost.OSS.*.nrs_"$policy"_offset_type="physical" \
-				     ost.OSS.*.nrs_"$policy"_supported="reads"
+		ost.OSS.*.nrs_"$policy"_quantum=1 \
+		ost.OSS.*.nrs_"$policy"_offset_type="physical" \
+		ost.OSS.*.nrs_"$policy"_supported="reads" || return $?
 
-	echo "policy: $policy, ${policy}_quantum 1, ${policy}_offset_type physical, ${policy}_supported reads"
+	echo "policy: $policy, ${policy}_quantum 1, ${policy}_offset_type " \
+		"physical, ${policy}_supported reads"
 	nrs_write_read
 
-	do_nodes $oss lctl set_param ost.OSS.*.nrs_${policy}_supported="writes" \
-				     ost.OSS.*.nrs_${policy}_quantum=64
+	do_nodes $oss lctl set_param \
+		ost.OSS.*.nrs_${policy}_supported="writes" \
+		ost.OSS.*.nrs_${policy}_quantum=64 || return $?
 
-	echo "policy: $policy, ${policy}_quantum 64, ${policy}_offset_type physical, ${policy}_supported writes"
+	echo "policy: $policy, ${policy}_quantum 64, ${policy}_offset_type " \
+		"physical, ${policy}_supported writes"
 	nrs_write_read
 
-	do_nodes $oss lctl set_param ost.OSS.*.nrs_${policy}_supported="reads_and_writes" \
-				     ost.OSS.*.nrs_${policy}_offset_type="logical"
-	echo "policy: $policy, ${policy}_quantum 64, ${policy}_offset_type logical, ${policy}_supported reads_and_writes"
+	do_nodes $oss lctl set_param \
+		ost.OSS.*.nrs_${policy}_supported="reads_and_writes" \
+		ost.OSS.*.nrs_${policy}_offset_type="logical" || return $?
+	echo "policy: $policy, ${policy}_quantum 64, ${policy}_offset_type " \
+		"logical, ${policy}_supported reads_and_writes"
 	nrs_write_read
 
 	# cleanup
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="fifo"
+	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="fifo" ||
+		return $?
 	return 0
 }
 
 test_77c() { #LU-3266
-	orr_trr "orr"
+	local rc
+	orr_trr "orr" || rc=$?
+	[[ $rc -eq 3 ]] && skip "no NRS exists" && return
+	[[ $rc -ne 0 ]] && error "orr_trr failed rc:$rc"
 	return 0
 }
 run_test 77c "check ORR NRS policy"
 
 test_77d() { #LU-3266
-	orr_trr "trr"
+	local rc
+	orr_trr "trr" || rc=$?
+	[[ $rc -eq 3 ]] && skip "no NRS exists" && return
+	[[ $rc -ne 0 ]] && error "orr_trr failed rc:$rc"
 	return 0
 }
 run_test 77d "check TRR nrs policy"
@@ -3220,14 +3245,14 @@ tbf_verify() {
 }
 
 test_77e() {
-	local server_version=$(lustre_version_code ost1)
-	[[ $server_version -ge $(version_code 2.7.58) ]] ||
-		{ skip "Need server version newer than 2.7.57"; return 0; }
+	local rc
 
 	oss=$(comma_list $(osts_nodes))
 
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ nid"
-	[ $? -ne 0 ] && error "failed to set TBF policy"
+	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ nid" ||
+		rc=$?
+	[[ $rc -eq 3 ]] && skip "no NRS TBF exists" && return
+	[[ $rc -ne 0 ]] && error "failed to set TBF NID policy"
 
 	local idis
 	local rateis
@@ -3266,22 +3291,25 @@ test_77e() {
 run_test 77e "check TBF NID nrs policy"
 
 test_77f() {
-	local server_version=$(lustre_version_code ost1)
-	[[ $server_version -ge $(version_code 2.7.58) ]] ||
-		{ skip "Need server version newer than 2.7.57"; return 0; }
+	local rc
 
 	oss=$(comma_list $(osts_nodes))
 
+	do_nodes $oss $LCTL set_param \
+		ost.OSS.ost_io.nrs_policies="tbf\ jobid" || rc=$?
+	[[ $rc -eq 3 ]] && skip "no NRS TBF exists" && return
+	[[ $rc -ne 0 ]] && error "failed to set TBF JOBID policy"
+
 	# Configure jobid_var
 	local saved_jobid_var=$($LCTL get_param -n jobid_var)
+	rc=$?
+	[[ $rc -eq 3 ]] && skip "jobid_var not found" && return
+	[[ $rc -ne 0 ]] && error "failed to get param jobid_var"
 	if [ $saved_jobid_var != procname_uid ]; then
 		set_conf_param_and_check client			\
 			"$LCTL get_param -n jobid_var"		\
 			"$FSNAME.sys.jobid_var" procname_uid
 	fi
-
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ jobid"
-	[ $? -ne 0 ] && error "failed to set TBF policy"
 
 	local idis
 	local rateis
@@ -3315,6 +3343,7 @@ test_77f() {
 	nrs_write_read "$RUNAS"
 
 	local current_jobid_var=$($LCTL get_param -n jobid_var)
+	[[ $? -ne 0 ]] && error "failed to get param jobid_var"
 	if [ $saved_jobid_var != $current_jobid_var ]; then
 		set_conf_param_and_check client			\
 			"$LCTL get_param -n jobid_var"		\
@@ -3325,17 +3354,18 @@ test_77f() {
 run_test 77f "check TBF JobID nrs policy"
 
 test_77g() {
-	local server_version=$(lustre_version_code ost1)
-	[[ $server_version -ge $(version_code 2.7.58) ]] ||
-		{ skip "Need server version newer than 2.7.57"; return 0; }
+	local rc=0
 
 	oss=$(comma_list $(osts_nodes))
 
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ nid"
-	[ $? -ne 0 ] && error "failed to set TBF policy"
+	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ nid" ||
+		rc=$?
+	[[ $rc -eq 3 ]] && skip "no NRS TBF exists" && return
+	[[ $rc -ne 0 ]] && error "failed to set TBF NID policy"
 
-	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="tbf\ jobid"
-	[ $? -ne 0 ] && error "failed to set TBF policy"
+	do_nodes $oss lctl set_param \
+		ost.OSS.ost_io.nrs_policies="tbf\ jobid" || rc=$?
+	[[ $rc -ne 0 ]] && error "failed to set TBF JOBID policy"
 
 	local idis
 	local rateis
@@ -3621,16 +3651,13 @@ test_77m() {
 run_test 77m "check NRS Delay slows write RPC processing"
 
 test_78() { #LU-6673
-	local server_version=$(lustre_version_code ost1)
-	[[ $server_version -ge $(version_code 2.7.58) ]] ||
-		{ skip "Need server version newer than 2.7.57"; return 0; }
-
 	local rc
 
 	oss=$(comma_list $(osts_nodes))
 	do_nodes $oss lctl set_param ost.OSS.ost_io.nrs_policies="orr" &
 	do_nodes $oss lctl set_param ost.OSS.*.nrs_orr_quantum=1
 	rc=$?
+	[[ $rc -eq 3 ]] && skip "no NRS exists" && return
 	# Valid return codes are:
 	# 0: Tuning succeeded
 	# ENODEV: Policy is still stopped
