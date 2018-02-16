@@ -1912,7 +1912,7 @@ test_66b() #bug 3055
 	$LCTL set_param fail_val=$(($ORIG + 5))
 	#define OBD_FAIL_PTLRPC_PAUSE_REP      0x50c
 	$LCTL set_param fail_loc=0x50c
-	ls $DIR/$tfile > /dev/null 2>&1
+	touch $DIR/$tfile > /dev/null 2>&1
 	$LCTL set_param fail_loc=0
 	CUR=$(lctl get_param -n mdc.${FSNAME}-MDT0000*.timeouts |
 		awk '/network/ {print $4}')
