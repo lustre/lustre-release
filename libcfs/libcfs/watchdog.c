@@ -335,6 +335,7 @@ static void lcw_dispatch_stop(void)
 	wake_up(&lcw_event_waitq);
 
 	wait_for_completion(&lcw_stop_completion);
+	clear_bit(LCW_FLAG_STOP, &lcw_flags);
 
 	CDEBUG(D_INFO, "watchdog dispatcher has shut down.\n");
 
