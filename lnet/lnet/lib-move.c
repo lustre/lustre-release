@@ -1452,6 +1452,7 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 	struct lnet_ni *ni = NULL;
 	unsigned int shortest_distance;
 	int best_credits;
+	int best_healthv;
 
 	/*
 	 * If there is no peer_ni that we can send to on this network,
@@ -1463,20 +1464,21 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 	if (best_ni == NULL) {
 		shortest_distance = UINT_MAX;
 		best_credits = INT_MIN;
+		best_healthv = 0;
 	} else {
 		shortest_distance = cfs_cpt_distance(lnet_cpt_table(), md_cpt,
 						     best_ni->ni_dev_cpt);
 		best_credits = atomic_read(&best_ni->ni_tx_credits);
+		best_healthv = atomic_read(&best_ni->ni_healthv);
 	}
 
 	while ((ni = lnet_get_next_ni_locked(local_net, ni))) {
 		unsigned int distance;
 		int ni_credits;
-
-		if (!lnet_is_ni_healthy_locked(ni))
-			continue;
+		int ni_healthv;
 
 		ni_credits = atomic_read(&ni->ni_tx_credits);
+		ni_healthv = atomic_read(&ni->ni_healthv);
 
 		/*
 		 * calculate the distance from the CPT on which
@@ -1501,21 +1503,24 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 			distance = lnet_numa_range;
 
 		/*
-		 * Select on shorter distance, then available
+		 * Select on health, shorter distance, available
 		 * credits, then round-robin.
 		 */
-		if (distance > shortest_distance) {
+		if (ni_healthv < best_healthv) {
+			continue;
+		} else if (distance > shortest_distance) {
 			continue;
 		} else if (distance < shortest_distance) {
 			shortest_distance = distance;
 		} else if (ni_credits < best_credits) {
 			continue;
 		} else if (ni_credits == best_credits) {
-			if (best_ni && (best_ni)->ni_seq <= ni->ni_seq)
+			if (best_ni && best_ni->ni_seq <= ni->ni_seq)
 				continue;
 		}
 		best_ni = ni;
 		best_credits = ni_credits;
+		best_healthv = ni_healthv;
 	}
 
 	CDEBUG(D_NET, "selected best_ni %s\n",

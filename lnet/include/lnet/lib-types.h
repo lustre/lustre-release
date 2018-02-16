@@ -55,6 +55,12 @@
 
 #define LNET_MAX_IOV		(LNET_MAX_PAYLOAD >> PAGE_SHIFT)
 
+/*
+ * This is the maximum health value.
+ * All local and peer NIs created have their health default to this value.
+ */
+#define LNET_MAX_HEALTH_VALUE 1000
+
 /* forward refs */
 struct lnet_libmd;
 
@@ -408,6 +414,15 @@ struct lnet_ni {
 
 	/* sequence number used to round robin over nis within a net */
 	__u32			ni_seq;
+
+	/*
+	 * health value
+	 *	initialized to LNET_MAX_HEALTH_VALUE
+	 * Value is decremented every time we fail to send a message over
+	 * this NI because of a NI specific failure.
+	 * Value is incremented if we successfully send a message.
+	 */
+	atomic_t		ni_healthv;
 
 	/*
 	 * equivalent interfaces to use

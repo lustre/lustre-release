@@ -1833,6 +1833,7 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
 
 	atomic_set(&ni->ni_tx_credits,
 		   lnet_ni_tq_credits(ni) * ni->ni_ncpts);
+	atomic_set(&ni->ni_healthv, LNET_MAX_HEALTH_VALUE);
 
 	CDEBUG(D_LNI, "Added LNI %s [%d/%d/%d/%d]\n",
 		libcfs_nid2str(ni->ni_nid),
