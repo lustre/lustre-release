@@ -62,6 +62,9 @@ if [ "$SLOW" = "no" ]; then
 	fs_test_nobj=${fs_test_nobj:-2}
 fi
 
+# xdd
+[ "$SLOW" = "no" ] && xdd_passes=${xdd_passes:-15}
+
 . $LUSTRE/tests/functions.sh
 
 build_test_filter
@@ -167,6 +170,11 @@ test_fio () {
 	run_fio
 }
 run_test fio "fio"
+
+test_xdd () {
+	run_xdd
+}
+run_test xdd "xdd"
 
 [ $(facet_fstype $SINGLEMDS) = zfs -o $(facet_fstype "ost1") = zfs ] &&
 	SLOW=$ZFSSLOW

@@ -1142,3 +1142,56 @@ EOF
 	rm -rf $testdir
 }
 
+run_xdd() {
+	XDD=${XDD:=$(which xdd 2> /dev/null || true)}
+
+	local clients=${CLIENTS:-$(hostname)}
+	local testdir=$DIR/d0.xdd
+	xdd_queuedepth=${xdd_queuedepth:-4}
+	xdd_blocksize=${xdd_blocksize:-512}
+	xdd_reqsize=${xdd_reqsize:-128}
+	xdd_mbytes=${xdd_mbytes:-100}
+	xdd_passes=${xdd_passes:-40}
+	xdd_rwratio=${xdd_rwratio:-0}
+	xdd_ntargets=${xdd_ntargets:-6}
+	local xdd_custom_params=${xdd_custom_params:-"-dio -stoponerror \
+		-maxpri -minall -noproclock -nomemlock"}
+
+	[ x$XDD = x ] &&
+		{ skip "XDD not found" && return; }
+
+	print_opts XDD clients xdd_queuedepth xdd_blocksize xdd_reqsize \
+		xdd_mbytes xdd_passes xdd_rwratio
+
+	mkdir -p $testdir
+
+	local files=""
+	# Target files creates based on the given number of targets
+	for (( i=0; i < $xdd_ntargets; i++ ))
+	do
+		files+="${testdir}/xdd"$i" "
+	done
+
+	# -targets      specifies the devices or files to perform operation
+	# -reqsize      number of 'blocks' per operation
+	# -mbytes       number of 1024*1024-byte blocks to transfer
+	# -blocksize    size of a single 'block'
+	# -passes       number of times to read mbytes
+	# -queuedepth   number of commands to queue on the target
+	# -rwratio      percentage of read to write operations
+	# -verbose      will print out statistics on each pass
+
+	local cmd="$XDD -targets $xdd_ntargets $files -reqsize $xdd_reqsize \
+		-mbytes $xdd_mbytes -blocksize $xdd_blocksize \
+		-passes $xdd_passes -queuedepth $xdd_queuedepth \
+		-rwratio $xdd_rwratio -verbose $xdd_custom_params"
+	echo "+ $cmd"
+
+	local rc=0
+	do_nodesv $clients "$cmd "
+	rc=$?
+
+	[ $rc = 0 ] || error "xdd failed: $rc"
+
+	rm -rf $testdir
+}
