@@ -939,7 +939,7 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 	struct llog_ctxt	*ctxt;
 	struct thandle		*llog_th;
 	int			 rc;
-	bool			 run_gc_task;
+	bool			 run_gc_task = false;
 
 	rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) +
 					    changelog_rec_varsize(&rec->cr));
