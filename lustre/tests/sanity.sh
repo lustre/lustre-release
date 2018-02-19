@@ -1611,6 +1611,9 @@ run_test 27l "check setstripe permissions (should return error)"
 test_27m() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
 
+	[ -n "$RCLIENTS" -o -n "$MOUNT_2" ] &&
+		skip_env "multiple clients -- skipping"
+
 	ORIGFREE=$($LCTL get_param -n lov.$FSNAME-clilov-*.kbytesavail |
 		   head -n1)
 	if [[ $ORIGFREE -gt $MAXFREE ]]; then
