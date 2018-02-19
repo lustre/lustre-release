@@ -2340,8 +2340,8 @@ static int do_activate(int argc, char **argv, int flag)
  * are skipped and recorded with new nids and uuid.
  *
  * \see mgs_replace_nids
- * \see mgs_replace_nids_log
- * \see mgs_replace_handler
+ * \see mgs_replace_log
+ * \see mgs_replace_nids_handler
  */
 int jt_replace_nids(int argc, char **argv)
 {
@@ -2368,6 +2368,52 @@ int jt_replace_nids(int argc, char **argv)
 	}
 
 	rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_REPLACE_NIDS, buf);
+	if (rc < 0) {
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+			strerror(rc = errno));
+	}
+
+	return rc;
+}
+
+/**
+ * Clear config logs for given device or filesystem.
+ * lctl clear_conf <devicename|fsname>
+ * Command has to be run on MGS node having MGS device mounted with -o
+ * nosvc.
+ *
+ * Configuration logs for filesystem or one particular log is
+ * processed. New log is created, original log is read, its records
+ * marked SKIP do not get copied to new log. Others are copied as-is.
+ * Original file is renamed to log.${time}.bak.
+ *
+ * \see mgs_clear_configs
+ * \see mgs_replace_log
+ * \see mgs_clear_config_handler
+ **/
+int jt_lcfg_clear(int argc, char **argv)
+{
+	int rc;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	struct obd_ioctl_data data;
+
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = get_mgs_device();
+	if (argc != 2)
+		return CMD_HELP;
+
+	data.ioc_inllen1 = strlen(argv[1]) + 1;
+	data.ioc_inlbuf1 = argv[1];
+
+	memset(buf, 0, sizeof(rawbuf));
+	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+
+	rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_CLEAR_CONFIGS, buf);
 	if (rc < 0) {
 		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
 			strerror(rc = errno));

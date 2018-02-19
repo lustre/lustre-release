@@ -114,7 +114,7 @@ command_t cmdlist[] = {
 	 "usage: net_drop_add <-s | --source NID>\n"
 	 "		      <-d | --dest NID>\n"
 	 "		      <<-r | --rate DROP_RATE> |\n"
-	 "		       <-i | --interval SECONDS>>\n"
+	 "		      <-i | --interval SECONDS>>\n"
 	 "		      [<-p | --portal> PORTAL...]\n"
 	 "		      [<-m | --message> <PUT|ACK|GET|REPLY>...]\n"},
 	{"net_drop_del", jt_ptl_drop_del, 0, "remove LNet drop rule\n"
@@ -355,6 +355,9 @@ command_t cmdlist[] = {
 	 "usage: setup <args...>"},
 	{"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
 	 "usage: cleanup [force | failover]"},
+	{"clear_conf", jt_lcfg_clear, 0,
+	 "drop unused config logs for a device or filesystem\n"
+	 "usage: clear_conf <device|fsname>"},
 	{"fork_lcfg", jt_lcfg_fork, 0,
 	 "copy configuration files for named filesystem with given name\n"
 	 "usage: fork_lcfg <fsname> <newname>"},

@@ -217,6 +217,7 @@ static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
 #define OBD_IOC_LLOG_CHECK	_IOWR('f', 195, OBD_IOC_DATA_TYPE)
 /*	OBD_IOC_LLOG_CATINFO	_IOWR('f', 196, OBD_IOC_DATA_TYPE) */
 #define OBD_IOC_NODEMAP		_IOWR('f', 197, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_CLEAR_CONFIGS   _IOWR('f', 198, OBD_IOC_DATA_TYPE)
 
 /*	ECHO_IOC_GET_STRIPE	_IOWR('f', 200, OBD_IOC_DATA_TYPE) */
 /*	ECHO_IOC_SET_STRIPE	_IOWR('f', 201, OBD_IOC_DATA_TYPE) */

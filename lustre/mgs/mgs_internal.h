@@ -214,6 +214,8 @@ int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs,
 			 struct mgs_target_info *mti, struct fs_db *fsdb);
 int mgs_replace_nids(const struct lu_env *env, struct mgs_device *mgs,
 		     char *devname, char *nids);
+int mgs_clear_configs(const struct lu_env *env, struct mgs_device *mgs,
+		      const char *devname);
 int mgs_erase_log(const struct lu_env *env, struct mgs_device *mgs,
 		  char *name);
 int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs,

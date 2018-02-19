@@ -355,7 +355,16 @@ Delete an existing UID or GID mapping from a nodemap.
 .RS 4
 Modify a nodemap property.
 .RE
-
+.SS Configuration logs
+.TP
+.BI clear_conf " <device|fsname>"
+This command runs on MGS node having MGS device mounted with -o
+nosvc. It cleans up configuration files stored in the CONFIGS/ directory
+of any records marked SKIP. If the device name is given, then the
+specific logs for that filesystem (e.g. testfs-MDT0000) is processed.
+Otherwise, if a filesystem name is given then all configuration files for the
+specified filesystem are cleared.
+.PP
 .SS LFSCK
 An on-line Lustre consistency check and repair tool. It is used for totally
 replacing the old lfsck tool for kinds of Lustre inconsistency verification,
