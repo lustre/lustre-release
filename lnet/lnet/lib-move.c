@@ -1508,6 +1508,17 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		 */
 		if (ni_healthv < best_healthv) {
 			continue;
+		} else if (ni_healthv > best_healthv) {
+			best_healthv = ni_healthv;
+			/*
+			 * If we're going to prefer this ni because it's
+			 * the healthiest, then we should set the
+			 * shortest_distance in the algorithm in case
+			 * there are multiple NIs with the same health but
+			 * different distances.
+			 */
+			if (distance < shortest_distance)
+				shortest_distance = distance;
 		} else if (distance > shortest_distance) {
 			continue;
 		} else if (distance < shortest_distance) {
@@ -1520,7 +1531,6 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		}
 		best_ni = ni;
 		best_credits = ni_credits;
-		best_healthv = ni_healthv;
 	}
 
 	CDEBUG(D_NET, "selected best_ni %s\n",

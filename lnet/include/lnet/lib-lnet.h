@@ -534,6 +534,7 @@ void lnet_lib_exit(void);
 
 extern unsigned lnet_transaction_timeout;
 extern unsigned int lnet_numa_range;
+extern unsigned int lnet_health_sensitivity;
 extern unsigned int lnet_peer_discovery_disabled;
 extern int portal_rotor;
 

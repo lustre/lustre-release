@@ -78,6 +78,28 @@ module_param(lnet_numa_range, uint, 0444);
 MODULE_PARM_DESC(lnet_numa_range,
 		"NUMA range to consider during Multi-Rail selection");
 
+/*
+ * lnet_health_sensitivity determines by how much we decrement the health
+ * value on sending error. The value defaults to 0, which means health
+ * checking is turned off by default.
+ */
+unsigned int lnet_health_sensitivity = 0;
+static int sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp);
+static struct kernel_param_ops param_ops_health_sensitivity = {
+	.set = sensitivity_set,
+	.get = param_get_int,
+};
+#define param_check_health_sensitivity(name, p) \
+		__param_check(name, p, int)
+#ifdef HAVE_KERNEL_PARAM_OPS
+module_param(lnet_health_sensitivity, health_sensitivity, S_IRUGO|S_IWUSR);
+#else
+module_param_call(lnet_health_sensitivity, sensitivity_set, param_get_int,
+		  &lnet_health_sensitivity, S_IRUGO|S_IWUSR);
+#endif
+MODULE_PARM_DESC(lnet_health_sensitivity,
+		"Value to decrement the health value by on error");
+
 static int lnet_interfaces_max = LNET_INTERFACES_MAX_DEFAULT;
 static int intf_max_set(const char *val, cfs_kernel_param_arg_t *kp);
 
@@ -136,6 +158,42 @@ static int lnet_ping(struct lnet_process_id id, signed long timeout,
 
 static int lnet_discover(struct lnet_process_id id, __u32 force,
 			 struct lnet_process_id __user *ids, int n_ids);
+
+static int
+sensitivity_set(const char *val, cfs_kernel_param_arg_t *kp)
+{
+	int rc;
+	unsigned *sensitivity = (unsigned *)kp->arg;
+	unsigned long value;
+
+	rc = kstrtoul(val, 0, &value);
+	if (rc) {
+		CERROR("Invalid module parameter value for 'lnet_health_sensitivity'\n");
+		return rc;
+	}
+
+	/*
+	 * The purpose of locking the api_mutex here is to ensure that
+	 * the correct value ends up stored properly.
+	 */
+	mutex_lock(&the_lnet.ln_api_mutex);
+
+	if (the_lnet.ln_state != LNET_STATE_RUNNING) {
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return 0;
+	}
+
+	if (value == *sensitivity) {
+		mutex_unlock(&the_lnet.ln_api_mutex);
+		return 0;
+	}
+
+	*sensitivity = value;
+
+	mutex_unlock(&the_lnet.ln_api_mutex);
+
+	return 0;
+}
 
 static int
 discovery_set(const char *val, cfs_kernel_param_arg_t *kp)
