@@ -289,6 +289,8 @@ ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
 	int overlaps = 0;
 	int splitted = 0;
 	const struct ldlm_callback_suite null_cbs = { NULL };
+	struct list_head *grant_work = intention == LDLM_PROCESS_ENQUEUE ?
+							NULL : work_list;
 	ENTRY;
 
 	CDEBUG(D_DLMTRACE, "flags %#llx owner %llu pid %u mode %u start "
@@ -348,7 +350,7 @@ reprocess:
 				reprocess_failed = 1;
 				if (ldlm_flock_deadlock(req, lock)) {
 					ldlm_flock_cancel_on_deadlock(req,
-							work_list);
+							grant_work);
 					RETURN(LDLM_ITER_CONTINUE);
 				}
 				continue;
@@ -590,7 +592,7 @@ restart:
                        }
                 } else {
                         LASSERT(req->l_completion_ast);
-                        ldlm_add_ast_work_item(req, NULL, work_list);
+			ldlm_add_ast_work_item(req, NULL, grant_work);
                 }
 #else /* !HAVE_SERVER_SUPPORT */
                 /* The only one possible case for client-side calls flock

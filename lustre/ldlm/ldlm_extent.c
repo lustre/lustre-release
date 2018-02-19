@@ -786,15 +786,15 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 			     enum ldlm_error *err, struct list_head *work_list)
 {
 	struct ldlm_resource *res = lock->l_resource;
-	struct list_head rpc_list;
 	int rc, rc2;
 	int contended_locks = 0;
+	struct list_head *grant_work = intention == LDLM_PROCESS_ENQUEUE ?
+							NULL : work_list;
 	ENTRY;
 
 	LASSERT(lock->l_granted_mode != lock->l_req_mode);
 	LASSERT(!(*flags & LDLM_FL_DENY_ON_CONTENTION) ||
 		!ldlm_is_ast_discard_data(lock));
-	INIT_LIST_HEAD(&rpc_list);
 	check_res_locked(res);
 	*err = ELDLM_OK;
 
@@ -819,49 +819,38 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 
                 if (!OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_EVICT_RACE))
                         ldlm_extent_policy(res, lock, flags);
-                ldlm_grant_lock(lock, work_list);
+		ldlm_grant_lock(lock, grant_work);
                 RETURN(LDLM_ITER_CONTINUE);
         }
 
-	LASSERT((intention == LDLM_PROCESS_ENQUEUE && work_list == NULL) ||
-		(intention == LDLM_PROCESS_RECOVERY && work_list != NULL));
- restart:
         contended_locks = 0;
         rc = ldlm_extent_compat_queue(&res->lr_granted, lock, flags, err,
-                                      &rpc_list, &contended_locks);
+				      work_list, &contended_locks);
 	if (rc < 0)
 		GOTO(out_rpc_list, rc);
 
 	rc2 = 0;
 	if (rc != 2) {
 		rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock,
-					       flags, err, &rpc_list,
+					       flags, err, work_list,
 					       &contended_locks);
 		if (rc2 < 0)
 			GOTO(out_rpc_list, rc = rc2);
 	}
 
-	if (rc + rc2 != 2) {
-		/* Adding LDLM_FL_NO_TIMEOUT flag to granted lock to force
-		 * client to wait for the lock endlessly once the lock is
-		 * enqueued -bzzz */
-		rc = ldlm_handle_conflict_lock(lock, flags, &rpc_list,
-					       LDLM_FL_NO_TIMEOUT);
-		if (rc == -ERESTART)
-			GOTO(restart, rc);
-		*err = rc;
-	} else {
+	if (rc + rc2 == 2) {
 		ldlm_extent_policy(res, lock, flags);
 		ldlm_resource_unlink_lock(lock);
-		ldlm_grant_lock(lock, work_list);
-		rc = 0;
+		ldlm_grant_lock(lock, grant_work);
+	} else {
+		/* Adding LDLM_FL_NO_TIMEOUT flag to granted lock to
+		 * force client to wait for the lock endlessly once
+		 * the lock is enqueued -bzzz */
+		*flags |= LDLM_FL_NO_TIMEOUT;
 	}
+	rc = LDLM_ITER_CONTINUE;
 
 out_rpc_list:
-	if (!list_empty(&rpc_list)) {
-		LASSERT(!ldlm_is_ast_discard_data(lock));
-		ldlm_discard_bl_list(&rpc_list);
-	}
 	RETURN(rc);
 }
 #endif /* HAVE_SERVER_SUPPORT */

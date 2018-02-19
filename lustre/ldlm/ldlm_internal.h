@@ -158,7 +158,7 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 			 struct list_head *work_list,
 			 enum ldlm_process_intention intention);
 int ldlm_handle_conflict_lock(struct ldlm_lock *lock, __u64 *flags,
-			      struct list_head *rpc_list, __u64 grant_flags);
+			      struct list_head *rpc_list);
 void ldlm_discard_bl_list(struct list_head *bl_list);
 #endif
 int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list,

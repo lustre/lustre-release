@@ -129,13 +129,14 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
 			    enum ldlm_error *err, struct list_head *work_list)
 {
 	struct ldlm_resource *res = lock->l_resource;
-	struct list_head rpc_list;
+	struct list_head *grant_work = intention == LDLM_PROCESS_ENQUEUE ?
+							NULL : work_list;
 	int rc;
 	ENTRY;
 
 	LASSERT(lock->l_granted_mode != lock->l_req_mode);
 	check_res_locked(res);
-	INIT_LIST_HEAD(&rpc_list);
+	*err = ELDLM_OK;
 
 	if (intention == LDLM_PROCESS_RESCAN) {
                 LASSERT(work_list != NULL);
@@ -147,31 +148,19 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
                         RETURN(LDLM_ITER_STOP);
 
                 ldlm_resource_unlink_lock(lock);
-                ldlm_grant_lock(lock, work_list);
+		ldlm_grant_lock(lock, grant_work);
                 RETURN(LDLM_ITER_CONTINUE);
         }
 
-	LASSERT((intention == LDLM_PROCESS_ENQUEUE && work_list == NULL) ||
-		(intention == LDLM_PROCESS_RECOVERY && work_list != NULL));
- restart:
-        rc = ldlm_plain_compat_queue(&res->lr_granted, lock, &rpc_list);
-        rc += ldlm_plain_compat_queue(&res->lr_waiting, lock, &rpc_list);
+	rc = ldlm_plain_compat_queue(&res->lr_granted, lock, work_list);
+	rc += ldlm_plain_compat_queue(&res->lr_waiting, lock, work_list);
 
-        if (rc != 2) {
-		rc = ldlm_handle_conflict_lock(lock, flags, &rpc_list, 0);
-		if (rc == -ERESTART)
-			GOTO(restart, rc);
-		*err = rc;
-	} else {
+	if (rc == 2) {
 		ldlm_resource_unlink_lock(lock);
-		ldlm_grant_lock(lock, work_list);
-		rc = 0;
+		ldlm_grant_lock(lock, grant_work);
 	}
 
-	if (!list_empty(&rpc_list))
-		ldlm_discard_bl_list(&rpc_list);
-
-	RETURN(rc);
+	RETURN(LDLM_ITER_CONTINUE);
 }
 #endif /* HAVE_SERVER_SUPPORT */
 

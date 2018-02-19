@@ -203,13 +203,13 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 				struct list_head *work_list)
 {
 	struct ldlm_resource *res = lock->l_resource;
-	struct list_head rpc_list;
+	struct list_head *grant_work = intention == LDLM_PROCESS_ENQUEUE ?
+							NULL : work_list;
 	int rc;
 
 	ENTRY;
 
 	LASSERT(lock->l_granted_mode != lock->l_req_mode);
-	INIT_LIST_HEAD(&rpc_list);
 	check_res_locked(res);
 
 	if (intention == LDLM_PROCESS_RESCAN) {
@@ -232,30 +232,23 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 			*flags |= LDLM_FL_LOCK_CHANGED;
 		}
 		ldlm_resource_unlink_lock(lock);
-		ldlm_grant_lock(lock, work_list);
+		ldlm_grant_lock(lock, grant_work);
 
 		*err = ELDLM_OK;
 		RETURN(LDLM_ITER_CONTINUE);
 	}
 
-	LASSERT((intention == LDLM_PROCESS_ENQUEUE && work_list == NULL) ||
-		(intention == LDLM_PROCESS_RECOVERY && work_list != NULL));
-restart:
-	rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, &rpc_list);
-	rc += ldlm_inodebits_compat_queue(&res->lr_waiting, lock, &rpc_list);
+	rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, work_list);
+	rc += ldlm_inodebits_compat_queue(&res->lr_waiting, lock, work_list);
 
 	if (rc != 2) {
 		/* if there were only bits to try and all are conflicting */
 		if ((lock->l_policy_data.l_inodebits.bits |
 		     lock->l_policy_data.l_inodebits.try_bits) == 0) {
-			rc = ELDLM_LOCK_WOULDBLOCK;
+			*err = ELDLM_LOCK_WOULDBLOCK;
 		} else {
-			rc = ldlm_handle_conflict_lock(lock, flags,
-						       &rpc_list, 0);
-			if (rc == -ERESTART)
-				GOTO(restart, rc);
+			*err = ELDLM_OK;
 		}
-		*err = rc;
 	} else {
 		/* grant also all remaining try_bits */
 		if (lock->l_policy_data.l_inodebits.try_bits != 0) {
@@ -266,14 +259,11 @@ restart:
 		}
 		LASSERT(lock->l_policy_data.l_inodebits.bits);
 		ldlm_resource_unlink_lock(lock);
-		ldlm_grant_lock(lock, work_list);
-		rc = 0;
+		ldlm_grant_lock(lock, grant_work);
+		*err = ELDLM_OK;
 	}
 
-	if (!list_empty(&rpc_list))
-		ldlm_discard_bl_list(&rpc_list);
-
-	RETURN(rc);
+	RETURN(LDLM_ITER_CONTINUE);
 }
 #endif /* HAVE_SERVER_SUPPORT */
 
