@@ -110,8 +110,8 @@ reformat() {
 }
 
 start_mgs () {
-	echo "start mgs"
-	start mgs $(mgsdevname) $MGS_MOUNT_OPTS
+	echo "start mgs service on $(facet_active_host mgs)"
+	start mgs $(mgsdevname) $MGS_MOUNT_OPTS $@
 }
 
 start_mdt() {
@@ -7789,6 +7789,189 @@ test_108b() {
 	t_108_cleanup
 }
 run_test 108b "migrate from ZFS to ldiskfs"
+
+
+#
+# set number of permanent parameters
+#
+test_109_set_params() {
+	local fsname=$1
+
+	set_conf_param_and_check mds				    \
+	    "$LCTL get_param -n mdd.$fsname-MDT0000.atime_diff"	    \
+	    "$fsname-MDT0000.mdd.atime_diff"			    \
+	    "62"
+	set_conf_param_and_check mds				    \
+	    "$LCTL get_param -n mdd.$fsname-MDT0000.atime_diff"	    \
+	    "$fsname-MDT0000.mdd.atime_diff"			    \
+	    "63"
+	set_conf_param_and_check client				    \
+	    "$LCTL get_param -n llite.$fsname*.max_read_ahead_mb"   \
+	    "$fsname.llite.max_read_ahead_mb"			    \
+	    "32"
+	set_conf_param_and_check client                             \
+	    "$LCTL get_param -n llite.$fsname*.max_read_ahead_mb"   \
+	    "$fsname.llite.max_read_ahead_mb"                       \
+	    "64"
+	create_pool $fsname.pool1 || error "create pool failed"
+	do_facet mgs $LCTL pool_add $fsname.pool1 OST0000 ||
+		error "pool_add failed"
+	do_facet mgs $LCTL pool_remove $fsname.pool1 OST0000 ||
+		error "pool_remove failed"
+	do_facet mgs $LCTL pool_add $fsname.pool1 OST0000 ||
+		error "pool_add failed"
+}
+
+#
+# check permanent parameters
+#
+test_109_test_params() {
+	local fsname=$1
+
+	local atime_diff=$(do_facet mds $LCTL \
+		get_param -n mdd.$fsname-MDT0000.atime_diff)
+	[ $atime_diff == 63 ] || error "wrong mdd parameter after clear_conf"
+	local max_read_ahead_mb=$(do_facet client $LCTL \
+		get_param -n llite.$fsname*.max_read_ahead_mb)
+	[ $max_read_ahead_mb == 64 ] ||
+		error "wrong llite parameter after clear_conf"
+	local ost_in_pool=$(do_facet mds $LCTL pool_list $fsname.pool1 |
+		grep -v "^Pool:" | sed 's/_UUID//')
+	[ $ost_in_pool = "$fsname-OST0000" ] ||
+		error "wrong pool after clear_conf"
+}
+
+#
+# run lctl clear_conf, store CONFIGS before and after that
+#
+test_109_clear_conf()
+{
+	local clear_conf_arg=$1
+
+	local mgsdev
+	if ! combined_mgs_mds ; then
+		mgsdev=$MGSDEV
+		stop_mgs || error "stop_mgs failed"
+		start_mgs "-o nosvc" || error "start_mgs nosvc failed"
+	else
+		mgsdev=$(mdsdevname 1)
+		start_mdt 1 "-o nosvc" || error "start_mdt 1 nosvc failed"
+	fi
+
+	do_facet mgs "rm -rf $TMP/${tdir}/conf1; mkdir -p $TMP/${tdir}/conf1;" \
+		"$DEBUGFS -c -R \\\"rdump CONFIGS $TMP/${tdir}/conf1\\\" \
+		$mgsdev"
+
+	#
+	# the command being tested
+	#
+	do_facet mgs $LCTL clear_conf $clear_conf_arg ||
+		error "clear_conf failed"
+	if ! combined_mgs_mds ; then
+		stop_mgs || error "stop_mgs failed"
+	else
+		stop_mdt 1 || error "stop_mdt 1 failed"
+	fi
+
+	do_facet mgs "rm -rf $TMP/${tdir}/conf2; mkdir -p $TMP/${tdir}/conf2;" \
+		"$DEBUGFS -c -R \\\"rdump CONFIGS $TMP/${tdir}/conf2\\\" \
+		$mgsdev"
+}
+
+test_109_file_shortened() {
+	local file=$1
+	local sizes=($(do_facet mgs "stat -c %s " \
+		"$TMP/${tdir}/conf1/CONFIGS/$file" \
+		"$TMP/${tdir}/conf2/CONFIGS/$file"))
+	[ ${sizes[1]} -lt ${sizes[0]} ] && return 0
+	return 1
+}
+
+test_109a()
+{
+	[ "$(facet_fstype mgs)" == "zfs" ] &&
+		skip "LU-8727: no implementation for ZFS" && return
+	stopall
+	reformat
+	setup_noconfig
+	client_up || error "client_up failed"
+
+	#
+	# set number of permanent parameters
+	#
+	test_109_set_params $FSNAME
+
+	umount_client $MOUNT || error "umount_client failed"
+	stop_ost || error "stop_ost failed"
+	stop_mds || error "stop_mds failed"
+
+	test_109_clear_conf $FSNAME
+	#
+	# make sure that all configs are cleared
+	#
+	test_109_file_shortened $FSNAME-MDT0000 ||
+		error "failed to clear MDT0000 config"
+	test_109_file_shortened $FSNAME-client ||
+		error "failed to clear client config"
+
+	setup_noconfig
+
+	#
+	# check that configurations are intact
+	#
+	test_109_test_params $FSNAME
+
+	#
+	# Destroy pool.
+	#
+	destroy_test_pools || error "destroy test pools failed"
+
+	cleanup
+}
+run_test 109a "test lctl clear_conf fsname"
+
+test_109b()
+{
+	[ "$(facet_fstype mgs)" == "zfs" ] &&
+		skip "LU-8727: no implementation for ZFS" && return
+	stopall
+	reformat
+	setup_noconfig
+	client_up || error "client_up failed"
+
+	#
+	# set number of permanent parameters
+	#
+	test_109_set_params $FSNAME
+
+	umount_client $MOUNT || error "umount_client failed"
+	stop_ost || error "stop_ost failed"
+	stop_mds || error "stop_mds failed"
+
+	test_109_clear_conf $FSNAME-MDT0000
+	#
+	# make sure that only one config is cleared
+	#
+	test_109_file_shortened $FSNAME-MDT0000 ||
+		error "failed to clear MDT0000 config"
+	test_109_file_shortened $FSNAME-client &&
+		error "failed to clear client config"
+
+	setup_noconfig
+
+	#
+	# check that configurations are intact
+	#
+	test_109_test_params $FSNAME
+
+	#
+	# Destroy pool.
+	#
+	destroy_test_pools || error "destroy test pools failed"
+
+	cleanup
+}
+run_test 109b "test lctl clear_conf one config"
 
 cleanup_115()
 {

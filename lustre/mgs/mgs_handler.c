@@ -1046,32 +1046,37 @@ out_free:
 
 	case OBD_IOC_REPLACE_NIDS: {
 		if (!data->ioc_inllen1 || !data->ioc_inlbuf1) {
-			CERROR("No device name specified!\n");
 			rc = -EINVAL;
+			CERROR("%s: no device or fsname specified: rc = %d\n",
+			       exp->exp_obd->obd_name, rc);
+			break;
+		}
+
+		if (data->ioc_inllen1 > MTI_NAME_MAXLEN) {
+			rc = -EOVERFLOW;
+			CERROR("%s: device or fsname is too long: rc = %d\n",
+			       exp->exp_obd->obd_name, rc);
 			break;
 		}
 
 		if (data->ioc_inlbuf1[data->ioc_inllen1 - 1] != 0) {
-			CERROR("Device name is not NUL terminated!\n");
 			rc = -EINVAL;
-			break;
-		}
-
-		if (data->ioc_plen1 > MTI_NAME_MAXLEN) {
-			CERROR("Device name is too long\n");
-			rc = -EOVERFLOW;
+			CERROR("%s: device or fsname is not NUL terminated: "
+			       "rc = %d\n", exp->exp_obd->obd_name, rc);
 			break;
 		}
 
 		if (!data->ioc_inllen2 || !data->ioc_inlbuf2) {
-			CERROR("No NIDs were specified!\n");
 			rc = -EINVAL;
+			CERROR("%s: no NIDs specified: rc = %d\n",
+			       exp->exp_obd->obd_name, rc);
 			break;
 		}
 
 		if (data->ioc_inlbuf2[data->ioc_inllen2 - 1] != 0) {
-			CERROR("NID list is not NUL terminated!\n");
 			rc = -EINVAL;
+			CERROR("%s: NID list is not NUL terminated: "
+			       "rc = %d\n", exp->exp_obd->obd_name, rc);
 			break;
 		}
 
@@ -1080,6 +1085,37 @@ out_free:
 				      data->ioc_inlbuf2);
 		if (rc)
 			CERROR("%s: error replacing nids: rc = %d\n",
+			       exp->exp_obd->obd_name, rc);
+
+		break;
+	}
+
+	case OBD_IOC_CLEAR_CONFIGS: {
+		if (!data->ioc_inllen1 || !data->ioc_inlbuf1) {
+			rc = -EINVAL;
+			CERROR("%s: no device or fsname specified: rc = %d\n",
+			       exp->exp_obd->obd_name, rc);
+			break;
+		}
+
+		if (data->ioc_inllen1 > MTI_NAME_MAXLEN) {
+			rc = -EOVERFLOW;
+			CERROR("%s: device or fsname is too long: rc = %d\n",
+			       exp->exp_obd->obd_name, rc);
+			break;
+		}
+
+		if (data->ioc_inlbuf1[data->ioc_inllen1 - 1] != 0) {
+			rc = -EINVAL;
+			CERROR("%s: device or fsname is not NUL terminated: "
+			       "rc = %d\n", exp->exp_obd->obd_name, rc);
+			break;
+		}
+
+		/* remove records marked SKIP from config logs */
+		rc = mgs_clear_configs(&env, mgs, data->ioc_inlbuf1);
+		if (rc)
+			CERROR("%s: error clearing config log: rc = %d\n",
 			       exp->exp_obd->obd_name, rc);
 
 		break;
