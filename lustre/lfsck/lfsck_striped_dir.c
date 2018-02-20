@@ -839,11 +839,27 @@ out:
 int lfsck_read_stripe_lmv(const struct lu_env *env, struct dt_object *obj,
 			  struct lmv_mds_md_v1 *lmv)
 {
+	struct lfsck_thread_info *info = lfsck_env_info(env);
+	struct lu_buf *buf = &info->lti_buf;
+	int size = sizeof(*lmv) + sizeof(struct lu_fid) * 2;
 	int rc;
 
 	dt_read_lock(env, obj, 0);
-	rc = dt_xattr_get(env, obj, lfsck_buf_get(env, lmv, sizeof(*lmv)),
-			  XATTR_NAME_LMV);
+	buf->lb_buf = lmv;
+	buf->lb_len = sizeof(*lmv);
+	rc = dt_xattr_get(env, obj, buf, XATTR_NAME_LMV);
+	if (unlikely(rc == -ERANGE)) {
+		buf = &info->lti_big_buf;
+		lu_buf_check_and_alloc(buf, size);
+		rc = dt_xattr_get(env, obj, buf, XATTR_NAME_LMV);
+		/* For the in-migration directory, its LMV EA contains
+		 * not only the LMV header, but also the FIDs for both
+		 * source and target. So the LMV EA size is larger. */
+		if (rc == size) {
+			rc = sizeof(*lmv);
+			memcpy(lmv, buf->lb_buf, rc);
+		}
+	}
 	dt_read_unlock(env, obj);
 	if (rc != sizeof(*lmv))
 		return rc > 0 ? -EINVAL : rc;
