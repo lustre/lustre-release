@@ -2130,6 +2130,10 @@ run_test 110g "drop reply during migration"
 
 test_110h () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local server_version=$(lustre_version_code mds1)
+	[[ $server_version -ge $(version_code 2.7.56) ]] ||
+		{ skip "Need MDS version at least 2.7.56"; return 0; }
+
 	local src_dir=$DIR/$tdir/source_dir
 	local tgt_dir=$DIR/$tdir/target_dir
 	local MDTIDX=1
@@ -2154,6 +2158,10 @@ run_test 110h "drop update reply during cross-MDT file rename"
 
 test_110i () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local server_version=$(lustre_version_code mds1)
+	[[ $server_version -ge $(version_code 2.7.56) ]] ||
+		{ skip "Need MDS version at least 2.7.56"; return 0; }
+
 	local src_dir=$DIR/$tdir/source_dir
 	local tgt_dir=$DIR/$tdir/target_dir
 	local MDTIDX=1
@@ -2181,6 +2189,10 @@ run_test 110i "drop update reply during cross-MDT dir rename"
 
 test_110j () {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local server_version=$(lustre_version_code mds1)
+	[[ $server_version -ge $(version_code 2.7.56) ]] ||
+		{ skip "Need MDS version at least 2.7.56"; return 0; }
+
 	local remote_dir=$DIR/$tdir/remote_dir
 	local local_dir=$DIR/$tdir/local_dir
 	local MDTIDX=1
