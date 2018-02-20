@@ -205,18 +205,56 @@ verify_comp_attr_with_parent() {
 }
 
 #
-# Verify component attributes with parent directory for a given file
+# Verify component attribute with filesystem-wide default value for a given file
+# and component ID.
+#
+verify_comp_attr_with_default() {
+	local attr=$1
+	local tf=$2
+	local comp_id=$3
+	local tf_cmd="$LFS getstripe -I$comp_id"
+	local opt
+	local expected
+	local value
+
+	case $attr in
+		stripe-size)
+			opt="-S"
+			expected=$($LCTL get_param -n \
+				   lov.$FSNAME-clilov-*.stripesize)
+			;;
+		stripe-count)
+			opt="-c"
+			expected=$($LCTL get_param -n \
+				   lov.$FSNAME-clilov-*.stripecount)
+			[[ $expected = -1 ]] && expected=$OSTCOUNT
+			;;
+		*) error "invalid attribute $attr";;
+	esac
+
+	value=$($tf_cmd $opt $tf)
+	[[ $value = -1 ]] && value=$OSTCOUNT
+
+	[[ $value = $expected ]] || {
+		$tf_cmd -v $tf
+		error "verify $attr failed with default value on $tf:" \
+		      "$value != $expected"
+	}
+}
+
+#
+# Verify unspecified component attributes for a given file
 # and component ID.
 #
 # This will only verify the inherited attributes:
 # stripe size, stripe count and OST pool name
 #
-verify_comp_attrs_with_parent() {
+verify_comp_attrs() {
 	local tf=$1
 	local comp_id=$2
 
-	verify_comp_attr_with_parent stripe-size $tf $comp_id
-	verify_comp_attr_with_parent stripe-count $tf $comp_id
+	verify_comp_attr_with_default stripe-size $tf $comp_id
+	verify_comp_attr_with_default stripe-count $tf $comp_id
 	verify_comp_attr_with_parent pool $tf $comp_id
 }
 
@@ -238,7 +276,7 @@ test_0a() {
 	$mirror_cmd -N $tf || error "create mirrored file $tf failed"
 	verify_mirror_count $tf 1
 	id=$($LFS getstripe -I $tf)
-	verify_comp_attrs_with_parent $tf $id
+	verify_comp_attrs $tf $id
 	verify_comp_extent $tf $id 0 EOF
 
 	$mirror_cmd -N0 $tf-1 &> /dev/null && error "invalid mirror count 0"
@@ -250,7 +288,7 @@ test_0a() {
 	verify_mirror_count $tf-1 $mirror_count
 	ids=($($LFS getstripe $tf-1 | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 	for ((i = 0; i < $mirror_count; i++)); do
-		verify_comp_attrs_with_parent $tf-1 ${ids[$i]}
+		verify_comp_attrs $tf-1 ${ids[$i]}
 		verify_comp_extent $tf-1 ${ids[$i]} 0 EOF
 	done
 
@@ -259,7 +297,7 @@ test_0a() {
 	verify_mirror_count $tf-2 10
 	ids=($($LFS getstripe $tf-2 | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 	for ((i = 0; i < 10; i++)); do
-		verify_comp_attrs_with_parent $tf-2 ${ids[$i]}
+		verify_comp_attrs $tf-2 ${ids[$i]}
 		verify_comp_extent $tf-2 ${ids[$i]} 0 EOF
 	done
 }
@@ -274,42 +312,61 @@ test_0b() {
 	local ids
 	local i
 
+	# create a new OST pool
+	local pool_name=$TESTNAME
+	create_pool $FSNAME.$pool_name ||
+		error "create OST pool $pool_name failed"
+
+	# add OSTs into the pool
+	pool_add_targets $pool_name 0 $((OSTCOUNT - 1)) ||
+		error "add OSTs into pool $pool_name failed"
+
 	# create parent directory
 	mkdir $td || error "mkdir $td failed"
+	$LFS setstripe -S 8M -c -1 -p $pool_name $td ||
+		error "$LFS setstripe $td failed"
 
 	# create a mirrored file with plain layout mirrors
-	$mirror_cmd -N -S 4M -c 2 -p flash -i 2 -o 2,3 \
-		    -N -S 16M -N -c -1 -N -p archive -N --parent $tf ||
+	$mirror_cmd -N -N -S 4M -c 2 -p flash -i 2 -o 2,3 \
+		    -N -S 16M -N -c -1 -N -p archive -N -p none $tf ||
 		error "create mirrored file $tf failed"
-	verify_mirror_count $tf 5
+	verify_mirror_count $tf 6
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
-	for ((i = 0; i < 5; i++)); do
+	for ((i = 0; i < 6; i++)); do
 		verify_comp_extent $tf ${ids[$i]} 0 EOF
 	done
 
 	# verify component ${ids[0]}
-	verify_comp_attr stripe-size $tf ${ids[0]} 4194304
-	verify_comp_attr stripe-count $tf ${ids[0]} 2
-	verify_comp_attr stripe-index $tf ${ids[0]} 2
-	verify_comp_attr pool $tf ${ids[0]} flash
+	verify_comp_attrs $tf ${ids[0]}
 
 	# verify component ${ids[1]}
-	verify_comp_attr stripe-size $tf ${ids[1]} 16777216
+	verify_comp_attr stripe-size $tf ${ids[1]} 4194304
 	verify_comp_attr stripe-count $tf ${ids[1]} 2
+	verify_comp_attr stripe-index $tf ${ids[1]} 2
 	verify_comp_attr pool $tf ${ids[1]} flash
 
 	# verify component ${ids[2]}
 	verify_comp_attr stripe-size $tf ${ids[2]} 16777216
-	verify_comp_attr stripe-count $tf ${ids[2]} $OSTCOUNT
+	verify_comp_attr stripe-count $tf ${ids[2]} 2
 	verify_comp_attr pool $tf ${ids[2]} flash
 
 	# verify component ${ids[3]}
 	verify_comp_attr stripe-size $tf ${ids[3]} 16777216
 	verify_comp_attr stripe-count $tf ${ids[3]} $OSTCOUNT
-	verify_comp_attr pool $tf ${ids[3]} archive
+	verify_comp_attr pool $tf ${ids[3]} flash
 
 	# verify component ${ids[4]}
-	verify_comp_attrs_with_parent $tf ${ids[4]}
+	verify_comp_attr stripe-size $tf ${ids[4]} 16777216
+	verify_comp_attr stripe-count $tf ${ids[4]} $OSTCOUNT
+	verify_comp_attr pool $tf ${ids[4]} archive
+
+	# verify component ${ids[5]}
+	verify_comp_attr stripe-size $tf ${ids[5]} 16777216
+	verify_comp_attr stripe-count $tf ${ids[5]} $OSTCOUNT
+	verify_comp_attr_with_parent pool $tf ${ids[5]}
+
+	# destroy OST pool
+	destroy_test_pools
 }
 run_test 0b "lfs mirror create plain layout mirrors"
 
@@ -322,12 +379,23 @@ test_0c() {
 	local ids
 	local i
 
+	# create a new OST pool
+	local pool_name=$TESTNAME
+	create_pool $FSNAME.$pool_name ||
+		error "create OST pool $pool_name failed"
+
+	# add OSTs into the pool
+	pool_add_targets $pool_name 0 $((OSTCOUNT - 1)) ||
+		error "add OSTs into pool $pool_name failed"
+
 	# create parent directory
 	mkdir $td || error "mkdir $td failed"
+	$LFS setstripe -E 32M -S 8M -c -1 -p $pool_name -E eof -S 16M $td ||
+		error "$LFS setstripe $td failed"
 
 	# create a mirrored file with composite layout mirrors
 	$mirror_cmd -N2 -E 4M -c 2 -p flash -i 1 -o 1,3 -E eof -S 4M \
-		    -N --parent \
+		    -N -c 4 -p none \
 		    -N3 -E 512M -S 16M -p archive -E -1 -i -1 -c -1 $tf ||
 		error "create mirrored file $tf failed"
 	verify_mirror_count $tf 6
@@ -335,7 +403,7 @@ test_0c() {
 
 	# verify components ${ids[0]} and ${ids[2]}
 	for i in 0 2; do
-		verify_comp_attr_with_parent stripe-size $tf ${ids[$i]}
+		verify_comp_attr_with_default stripe-size $tf ${ids[$i]}
 		verify_comp_attr stripe-count $tf ${ids[$i]} 2
 		verify_comp_attr stripe-index $tf ${ids[$i]} 1
 		verify_comp_attr pool $tf ${ids[$i]} flash
@@ -351,13 +419,15 @@ test_0c() {
 	done
 
 	# verify component ${ids[4]}
-	verify_comp_attrs_with_parent $tf ${ids[4]}
+	verify_comp_attr stripe-size $tf ${ids[4]} 4194304
+	verify_comp_attr stripe-count $tf ${ids[4]} 4
+	verify_comp_attr_with_parent pool $tf ${ids[4]}
 	verify_comp_extent $tf ${ids[4]} 0 EOF
 
 	# verify components ${ids[5]}, ${ids[7]} and ${ids[9]}
 	for i in 5 7 9; do
 		verify_comp_attr stripe-size $tf ${ids[$i]} 16777216
-		verify_comp_attr_with_parent stripe-count $tf ${ids[$i]}
+		verify_comp_attr stripe-count $tf ${ids[$i]} 4
 		verify_comp_attr pool $tf ${ids[$i]} archive
 		verify_comp_extent $tf ${ids[$i]} 0 536870912
 	done
@@ -369,6 +439,9 @@ test_0c() {
 		verify_comp_attr pool $tf ${ids[$i]} archive
 		verify_comp_extent $tf ${ids[$i]} 536870912 EOF
 	done
+
+	# destroy OST pool
+	destroy_test_pools
 }
 run_test 0c "lfs mirror create composite layout mirrors"
 
@@ -392,7 +465,7 @@ test_0d() {
 	verify_mirror_count $tf 2
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 	for ((i = 0; i < 2; i++)); do
-		verify_comp_attrs_with_parent $tf ${ids[$i]}
+		verify_comp_attrs $tf ${ids[$i]}
 		verify_comp_extent $tf ${ids[$i]} 0 EOF
 	done
 
@@ -405,15 +478,12 @@ test_0d() {
 	$mirror_cmd -N -S 4M -N -f $tf-2 $tf-1 &> /dev/null &&
 		error "setstripe options should not be specified with -f option"
 
-	$mirror_cmd -N -f $tf-2 -N --parent $tf-1 &> /dev/null &&
-		error "--parent option should not be specified with -f option"
-
 	$mirror_cmd -N$((mirror_count - 1)) $tf-1 ||
 		error "extend mirrored file $tf-1 failed"
 	verify_mirror_count $tf-1 $mirror_count
 	ids=($($LFS getstripe $tf-1 | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 	for ((i = 0; i < $mirror_count; i++)); do
-		verify_comp_attrs_with_parent $tf-1 ${ids[$i]}
+		verify_comp_attrs $tf-1 ${ids[$i]}
 		verify_comp_extent $tf-1 ${ids[$i]} 0 EOF
 	done
 
@@ -440,7 +510,7 @@ test_0e() {
 
 	# extend the mirrored file with plain layout mirrors
 	$mirror_cmd -N -S 4M -c 2 -p flash -i 2 -o 2,3 \
-		    -N -S 16M -N -c -1 -N -p archive -N --parent $tf ||
+		    -N -S 16M -N -c -1 -N -p archive -N -p none $tf ||
 		error "extend mirrored file $tf failed"
 	verify_mirror_count $tf 6
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
@@ -476,7 +546,9 @@ test_0e() {
 	verify_comp_attr pool $tf ${ids[4]} archive
 
 	# verify component ${ids[5]}
-	verify_comp_attrs_with_parent $tf ${ids[5]}
+	verify_comp_attr stripe-size $tf ${ids[5]} 16777216
+	verify_comp_attr stripe-count $tf ${ids[5]} $OSTCOUNT
+	verify_comp_attr_with_parent pool $tf ${ids[5]}
 }
 run_test 0e "lfs mirror extend plain layout mirrors"
 
@@ -498,7 +570,7 @@ test_0f() {
 
 	# extend the mirrored file with composite layout mirrors
 	$mirror_cmd -N2 -E 4M -c 2 -p flash -i 1 -o 1,3 -E eof -S 4M \
-		    -N --parent \
+		    -N -c -1 -p none \
 		    -N3 -E 512M -S 16M -p archive -E -1 -i -1 -c -1 $tf ||
 		error "extend mirrored file $tf failed"
 	verify_mirror_count $tf 7
@@ -506,19 +578,19 @@ test_0f() {
 
 	# verify component ${ids[0]}
 	verify_comp_attr stripe-size $tf ${ids[0]} 16777216
-	verify_comp_attr_with_parent stripe-count $tf ${ids[0]}
+	verify_comp_attr_with_default stripe-count $tf ${ids[0]}
 	verify_comp_attr pool $tf ${ids[0]} ssd
 	verify_comp_extent $tf ${ids[0]} 0 33554432
 
 	# verify component ${ids[1]}
 	verify_comp_attr stripe-size $tf ${ids[1]} 33554432
-	verify_comp_attr_with_parent stripe-count $tf ${ids[1]}
+	verify_comp_attr_with_default stripe-count $tf ${ids[1]}
 	verify_comp_attr pool $tf ${ids[1]} ssd
 	verify_comp_extent $tf ${ids[1]} 33554432 EOF
 
 	# verify components ${ids[2]} and ${ids[4]}
 	for i in 2 4; do
-		verify_comp_attr_with_parent stripe-size $tf ${ids[$i]}
+		verify_comp_attr_with_default stripe-size $tf ${ids[$i]}
 		verify_comp_attr stripe-count $tf ${ids[$i]} 2
 		verify_comp_attr stripe-index $tf ${ids[$i]} 1
 		verify_comp_attr pool $tf ${ids[$i]} flash
@@ -534,13 +606,15 @@ test_0f() {
 	done
 
 	# verify component ${ids[6]}
-	verify_comp_attrs_with_parent $tf ${ids[6]}
+	verify_comp_attr stripe-size $tf ${ids[6]} 4194304
+	verify_comp_attr stripe-count $tf ${ids[6]} $OSTCOUNT
+	verify_comp_attr_with_parent pool $tf ${ids[6]}
 	verify_comp_extent $tf ${ids[6]} 0 EOF
 
 	# verify components ${ids[7]}, ${ids[9]} and ${ids[11]}
 	for i in 7 9 11; do
 		verify_comp_attr stripe-size $tf ${ids[$i]} 16777216
-		verify_comp_attr_with_parent stripe-count $tf ${ids[$i]}
+		verify_comp_attr stripe-count $tf ${ids[$i]} $OSTCOUNT
 		verify_comp_attr pool $tf ${ids[$i]} archive
 		verify_comp_extent $tf ${ids[$i]} 0 536870912
 	done

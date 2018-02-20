@@ -5,7 +5,7 @@ lfs mirror extend \- add mirror(s) to an existing file
 .B lfs mirror extend
 [\fB\-\-no\-verify\fR]
 <\fB\-\-mirror\-count\fR|\fB\-N\fR[\fImirror_count\fR]>
-[\fIsetstripe_options\fR|\fB\-\-parent\fR|\fB\-f\fR <\fIvictim_file\fR>] ...
+[\fIsetstripe_options\fR|\fB\-f\fR <\fIvictim_file\fR>] ...
 <\fIfilename\fR>
 .SH DESCRIPTION
 This command adds mirror(s) to an existing file specified by the path name
@@ -25,17 +25,14 @@ The \fIsetstripe_options\fR specify the specific layout for the mirror. It can
 be a plain layout with specific striping pattern or a composite layout like
 Progressive File Layout (PFL) (see \fBlfs-setstripe\fR(1)).
 If \fIsetstripe_options\fR are not specified,
-then the stripe options inherited from the previous component will be used. If
-\fB\-\-parent\fR option is specified, then the default stripe options inherited
-from parent directory will be used. For stripe options, only \fIstripe_count\fR,
-\fIstripe_size\fR and OST \fIpool_name\fR can be inherited.
+then the stripe options inherited from the previous component will be used.
 If \fIvictim_file\fR exists, then the
 command will split the layout from that file and use it as a mirror added to the
 mirrored file. After the command is finished, the victim file will be removed.
-The \fIsetstripe_options\fR and \fB\-\-parent\fR option cannot be specified with
+The \fIsetstripe_options\fR cannot be specified with
 \fB\-f\fR <\fIvictim_file\fR> option in one command line.
 .br
-If \fIvictim_file\R is specified, the utility will verify that the file contents
+If \fIvictim_file\fR is specified, the utility will verify that the file contents
 from \fIvictim_file\fR are the same as \fIfilename\fR. Otherwise the command
 will return failure. However, option \fB\-\-no\-verify\fR can be used to
 override this verification. The option can save siginificant time on file
@@ -58,15 +55,10 @@ If \fIsetstripe_options\fR are not specified, then the stripe options inherited
 from the previous component will be used. This option cannot be specified with
 \fB\-f\fR <\fIvictim_file\fR> option.
 .TP
-.BR \-\-parent
-This option indicates that the default stripe options inherited from parent
-directory will be used.
-It cannot be specified with \fB\-f\fR <\fIvictim_file\fR> option.
-.TP
 .BR \-f\fR\ <\fIvictim_file\fR>
 The layout of \fIvictim_file\fR will be split and used as a mirror added to the
-mirrored file. This option cannot be specified with \fIsetstripe_options\fR or
-\fB\-\-parent\fR option.
+mirrored file. This option cannot be specified with \fIsetstripe_options\fR
+option.
 .TP
 .BR \-\-no\-verify
 This option indicates not to verify the mirror(s) from victim file(s) in case
@@ -76,20 +68,25 @@ the victim file(s) contains the same data as the original mirrored file.
 .B lfs mirror extend -N2 /mnt/lustre/file1
 Add 2 mirrors to /mnt/lustre/file1. If file1 is a non-mirrored file, then the
 command will convert it to a mirrored file first and then add mirrors. Each
-mirror has the same striping pattern inherited from parent directory.
+mirror has the same default striping pattern with \fIstripe_count\fR and
+\fIstripe_size\fR inherited from filesystem-wide default values, and
+OST \fIpool_name\fR inherited from parent directory.
 .LP
 .B lfs mirror extend -N3 -E 1M -c 1 -E 32M -c 4 -S 16M -E eof -c -1
 .B /mnt/lustre/file1
 .in
 Add 3 PFL mirrors to /mnt/lustre/file1. Each mirror has the same specified PFL
 layout.
-.TP
-.B lfs mirror extend -N -c 1 -S 4M -N -c 2 -o 2,3 -N --parent /mnt/lustre/file1
+.LP
+.B lfs mirror extend -N -c 1 -S 4M -N -c 2 -o 2,3 -p flash
+.B -N -p none /mnt/lustre/file1
+.in
 Add 3 plain layout mirrors to /mnt/lustre/file1. The first mirror has a single
 stripe and 4MB stripe size. The second mirror has two stripes and locates on
-OSTs with indices 2 and 3. It also has 4MB stripe size inherited from the first
-mirror. The third mirror has default striping pattern inherited from parent
-directory.
+OSTs with indices 2 and 3 allocated from the \fBflash\fR OST pool.
+It also has 4MB stripe size inherited from the first mirror.
+The third mirror has two stripes and 4MB stripe size inherited from the previous
+mirror, and also has inherited OST \fIpool_name\fR from parent directory.
 .LP
 .B lfs mirror extend -N2 -E 4M -c 2 --pool flash -E eof -c 4 -N3 -E 16M -c 4
 .B -S 16M --pool archive -E eof -c -1 /mnt/lustre/file1

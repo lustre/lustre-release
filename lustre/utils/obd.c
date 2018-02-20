@@ -3934,6 +3934,11 @@ static int extract_fsname_poolname(const char *arg, char *fsname,
 
 	strncpy(poolname, ptr, LOV_MAXPOOLNAME);
 	poolname[LOV_MAXPOOLNAME] = '\0';
+
+	if (strncmp(poolname, "none", LOV_MAXPOOLNAME) == 0) {
+		fprintf(stderr, "poolname cannot be 'none'\n");
+		return -EINVAL;
+	}
 	return 0;
 
 err:

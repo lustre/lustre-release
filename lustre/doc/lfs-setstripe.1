@@ -166,6 +166,9 @@ and
 will be used as well; the
 .I start_ost_index
 must be part of the pool or an error will be returned.
+If <\fIpool_name\fR> is
+.BR none
+, then the OST pool name will be cleared and inherit from parent directory.
 .TP
 .B -L, --layout <\fIlayout type\fB>\fR
 The type of stripe layout, can be

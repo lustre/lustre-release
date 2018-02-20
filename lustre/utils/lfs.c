@@ -193,7 +193,6 @@ static inline int lfs_mirror_split(int argc, char **argv)
 	"\t              It can be a plain layout or a composite layout.\n"    \
 	"\t              If not specified, the stripe options inherited\n"     \
 	"\t              from the previous component will be used.\n"          \
-	"\tparent:       Use default stripe options from parent directory\n"   \
 	"\tflags:        set flags to the component of the current mirror.\n"  \
 	"\t              Only \"prefer\" flag is supported so far.\n"
 
@@ -208,7 +207,7 @@ static inline int lfs_mirror_split(int argc, char **argv)
 
 #define MIRROR_EXTEND_USAGE						       \
 	"                 <--mirror-count|-N[mirror_count]>\n"		       \
-	"                 [setstripe options|--parent|-f <victim_file>]\n"     \
+	"                 [setstripe options|-f <victim_file>]\n"	       \
 	"                 [--no-verify]\n"
 
 #define SETSTRIPE_USAGE							\
@@ -251,13 +250,13 @@ command_t mirror_cmdlist[] = {
 	  .pc_help = "Create a mirrored file.\n"
 		"usage: lfs mirror create "
 		"<--mirror-count|-N[mirror_count]> "
-		"[setstripe options|--parent] ... <filename|directory>\n"
+		"[setstripe options] ... <filename|directory>\n"
 	  MIRROR_CREATE_HELP },
 	{ .pc_name = "extend", .pc_func = lfs_mirror_extend,
 	  .pc_help = "Extend a mirrored file.\n"
 		"usage: lfs mirror extend "
 		"<--mirror-count|-N[mirror_count]> [--no-verify] "
-		"[setstripe options|--parent|-f <victim_file>] ... <filename>\n"
+		"[setstripe options|-f <victim_file>] ... <filename>\n"
 	  MIRROR_EXTEND_HELP },
 	{ .pc_name = "split", .pc_func = lfs_mirror_split,
 	  .pc_help = "Split a mirrored file.\n"
@@ -1306,9 +1305,9 @@ static int mirror_create_sanity_check(const char *fname,
 	}
 
 	if (has_m_file && has_m_layout) {
-		fprintf(stderr, "error: %s: -f <victim_file> option should not "
-			"be specified with setstripe options or "
-			"--parent option\n", progname);
+		fprintf(stderr,
+			"error: %s: -f <victim_file> option should not be specified with setstripe options\n",
+			progname);
 		return -EINVAL;
 	}
 
@@ -2295,7 +2294,6 @@ enum {
 	LFS_COMP_DEL_OPT,
 	LFS_COMP_SET_OPT,
 	LFS_COMP_ADD_OPT,
-	LFS_COMP_USE_PARENT_OPT,
 	LFS_COMP_NO_VERIFY_OPT,
 	LFS_PROJID_OPT,
 	LFS_MIRROR_FLAGS_OPT,
@@ -2362,8 +2360,6 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	{ .val = LFS_COMP_SET_OPT,
 			.name = "component-set",
 						.has_arg = no_argument},
-	{ .val = LFS_COMP_USE_PARENT_OPT,
-			.name = "parent",	.has_arg = no_argument},
 	{ .val = LFS_COMP_NO_VERIFY_OPT,
 			.name = "no-verify",	.has_arg = no_argument},
 	{ .val = LFS_MIRROR_FLAGS_OPT,
@@ -2457,15 +2453,6 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			break;
 		case LFS_COMP_SET_OPT:
 			comp_set = 1;
-			break;
-		case LFS_COMP_USE_PARENT_OPT:
-			if (!mirror_mode) {
-				fprintf(stderr, "error: %s: --parent must be "
-					"specified with --mirror-count|-N "
-					"option\n", progname);
-				goto usage_error;
-			}
-			setstripe_args_init(&lsa);
 			break;
 		case LFS_COMP_NO_VERIFY_OPT:
 			mirror_flags |= MF_NO_VERIFY;
@@ -2732,6 +2719,11 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			if (optarg == NULL)
 				goto usage_error;
 			lsa.lsa_pool_name = optarg;
+
+			if (strlen(lsa.lsa_pool_name) == 0 ||
+			    strncmp(lsa.lsa_pool_name, "none",
+				    LOV_MAXPOOLNAME) == 0)
+				lsa.lsa_pool_name = NULL;
 			break;
 		case 'S':
 			result = llapi_parse_size(optarg, &lsa.lsa_stripe_size,
