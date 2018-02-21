@@ -3778,6 +3778,7 @@ static int lod_xattr_set(const struct lu_env *env,
 		struct lod_default_striping *lds = &info->lti_def_striping;
 		struct lov_user_md_v1 *v1 = buf->lb_buf;
 		char pool[LOV_MAXPOOLNAME + 1];
+		bool is_del;
 
 		/* get existing striping config */
 		rc = lod_get_default_lov_striping(env, lod_dt_obj(dt), lds);
@@ -3790,8 +3791,14 @@ static int lod_xattr_set(const struct lu_env *env,
 					    lds->lds_def_comp_cnt, pool,
 					    sizeof(pool));
 
+		is_del = LOVEA_DELETE_VALUES(v1->lmm_stripe_size,
+					     v1->lmm_stripe_count,
+					     v1->lmm_stripe_offset,
+					     NULL);
+
 		/* Retain the pool name if it is not given */
-		if (v1->lmm_magic == LOV_USER_MAGIC_V1 && pool[0] != '\0') {
+		if (v1->lmm_magic == LOV_USER_MAGIC_V1 && pool[0] != '\0' &&
+			!is_del) {
 			struct lod_thread_info *info = lod_env_info(env);
 			struct lov_user_md_v3 *v3  = info->lti_ea_store;
 
