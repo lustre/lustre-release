@@ -505,7 +505,9 @@ kgnilnd_destroy_conn(kgn_conn_t *conn)
 void
 kgnilnd_peer_alive(kgn_peer_t *peer)
 {
-	set_mb(peer->gnp_last_alive, jiffies);
+	time64_t now = ktime_get_seconds();
+
+	set_mb(peer->gnp_last_alive, now);
 }
 
 void
@@ -601,9 +603,9 @@ kgnilnd_peer_notify(kgn_peer_t *peer, int error, int alive)
 			peer_nid = kgnilnd_lnd2lnetnid(net->gnn_ni->ni_nid,
 								 peer->gnp_nid);
 
-			CDEBUG(D_NET, "peer 0x%p->%s last_alive %lu (%lus ago)\n",
+			CDEBUG(D_NET, "peer 0x%p->%s last_alive %lld (%llds ago)\n",
 				peer, libcfs_nid2str(peer_nid), peer->gnp_last_alive,
-				cfs_duration_sec(jiffies - peer->gnp_last_alive));
+				ktime_get_seconds() - peer->gnp_last_alive);
 
 			lnet_notify(net->gnn_ni, peer_nid, alive,
 				    peer->gnp_last_alive);

@@ -789,7 +789,7 @@ typedef struct kgn_peer {
 	short               gnp_connecting;             /* connection forming */
 	short               gnp_pending_unlink;         /* need last conn close to trigger unlink */
 	int                 gnp_last_errno;             /* last error conn saw */
-	unsigned long       gnp_last_alive;             /* last time I had valid comms */
+	time64_t	    gnp_last_alive;             /* last time I had valid comms */
 	int                 gnp_last_dgram_errno;       /* last error dgrams saw */
 	unsigned long       gnp_last_dgram_time;        /* last time I tried to connect */
 	unsigned long       gnp_reconnect_time;         /* get_seconds() when reconnect OK */

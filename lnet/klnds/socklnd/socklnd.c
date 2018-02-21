@@ -1536,7 +1536,7 @@ ksocknal_peer_failed(struct ksock_peer_ni *peer_ni)
 
 	if (notify)
 		lnet_notify(peer_ni->ksnp_ni, peer_ni->ksnp_id.nid, 0,
-			    cfs_time_seconds(last_alive)); /* to jiffies */
+			    last_alive);
 }
 
 void

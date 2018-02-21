@@ -1267,7 +1267,7 @@ kgnilnd_peer_seq_show(struct seq_file *s, void *iter)
 
 	read_unlock(&kgnilnd_data.kgn_peer_conn_lock);
 
-	seq_printf(s, "%p->%s [%d] %s NIC 0x%x q %d conn %c purg %d last %d@%dms dgram %d@%dms reconn %dms to %lus \n",
+	seq_printf(s, "%p->%s [%d] %s NIC 0x%x q %d conn %c purg %d last %d@%lldms dgram %d@%dms reconn %dms to %lus \n",
 		peer, libcfs_nid2str(peer->gnp_nid),
 		atomic_read(&peer->gnp_refcount),
 		(peer->gnp_state == GNILND_PEER_DOWN) ? "down" :
@@ -1277,7 +1277,7 @@ kgnilnd_peer_seq_show(struct seq_file *s, void *iter)
 		conn_str,
 		purg_count,
 		peer->gnp_last_errno,
-		jiffies_to_msecs(jiffies - peer->gnp_last_alive),
+		(ktime_get_seconds() - peer->gnp_last_alive) * MSEC_PER_SEC,
 		peer->gnp_last_dgram_errno,
 		jiffies_to_msecs(jiffies - peer->gnp_last_dgram_time),
 		peer->gnp_reconnect_interval != 0

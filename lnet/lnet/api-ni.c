@@ -3282,6 +3282,11 @@ LNetCtl(unsigned int cmd, void *arg)
 	case IOC_LIBCFS_NOTIFY_ROUTER: {
 		time64_t deadline = ktime_get_real_seconds() - data->ioc_u64[0];
 
+		/* The deadline passed in by the user should be some time in
+		 * seconds in the future since the UNIX epoch. We have to map
+		 * that deadline to the wall clock.
+		 */
+		deadline += ktime_get_seconds();
 		return lnet_notify(NULL, data->ioc_nid, data->ioc_flags,
 				   deadline);
 	}
