@@ -44,21 +44,12 @@
 #include "mdt_internal.h"
 
 /**
- * data passed to llog_cat_process() callback
- * to find compatible requests
- */
-struct hsm_compat_data_cb {
-	struct coordinator	*cdt;
-	struct hsm_action_list	*hal;
-};
-
-/**
  * llog_cat_process() callback, used to find record
  * compatibles with a new hsm_action_list
  * \param env [IN] environment
  * \param llh [IN] llog handle
  * \param hdr [IN] llog record
- * \param data [IN] cb data = hsm_compat_data_cb
+ * \param data [IN] cb data = hal
  * \retval 0 success
  * \retval -ve failure
  */
@@ -66,14 +57,12 @@ static int hsm_find_compatible_cb(const struct lu_env *env,
 				  struct llog_handle *llh,
 				  struct llog_rec_hdr *hdr, void *data)
 {
-	struct llog_agent_req_rec	*larr;
-	struct hsm_compat_data_cb	*hcdcb;
-	struct hsm_action_item		*hai;
-	int				 i;
+	struct llog_agent_req_rec *larr = (struct llog_agent_req_rec *)hdr;
+	struct hsm_action_list *hal = data;
+	struct hsm_action_item *hai;
+	int i;
 	ENTRY;
 
-	larr = (struct llog_agent_req_rec *)hdr;
-	hcdcb = data;
 	/* a compatible request must be WAITING or STARTED
 	 * and not a cancel */
 	if ((larr->arr_status != ARS_WAITING &&
@@ -81,8 +70,8 @@ static int hsm_find_compatible_cb(const struct lu_env *env,
 	    larr->arr_hai.hai_action == HSMA_CANCEL)
 		RETURN(0);
 
-	hai = hai_first(hcdcb->hal);
-	for (i = 0; i < hcdcb->hal->hal_count; i++, hai = hai_next(hai)) {
+	hai = hai_first(hal);
+	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
 		/* if request is a CANCEL:
 		 * if cookie set in the request, there is no need to find a
 		 * compatible one, the cookie in the request is directly used.
@@ -99,8 +88,8 @@ static int hsm_find_compatible_cb(const struct lu_env *env,
 
 		/* HSMA_NONE is used to find running request for some FID */
 		if (hai->hai_action == HSMA_NONE) {
-			hcdcb->hal->hal_archive_id = larr->arr_archive_id;
-			hcdcb->hal->hal_flags = larr->arr_flags;
+			hal->hal_archive_id = larr->arr_archive_id;
+			hal->hal_flags = larr->arr_flags;
 			*hai = larr->arr_hai;
 			continue;
 		}
@@ -109,9 +98,8 @@ static int hsm_find_compatible_cb(const struct lu_env *env,
 		 */
 		hai->hai_cookie = larr->arr_hai.hai_cookie;
 		/* we read the archive number from the request we cancel */
-		if (hai->hai_action == HSMA_CANCEL &&
-		    hcdcb->hal->hal_archive_id == 0)
-			hcdcb->hal->hal_archive_id = larr->arr_archive_id;
+		if (hai->hai_action == HSMA_CANCEL && hal->hal_archive_id == 0)
+			hal->hal_archive_id = larr->arr_archive_id;
 	}
 	RETURN(0);
 }
@@ -129,9 +117,8 @@ static int hsm_find_compatible_cb(const struct lu_env *env,
 static int hsm_find_compatible(const struct lu_env *env, struct mdt_device *mdt,
 			       struct hsm_action_list *hal)
 {
-	struct hsm_action_item		*hai;
-	struct hsm_compat_data_cb	 hcdcb;
-	int				 rc, i, ok_cnt;
+	struct hsm_action_item *hai;
+	int rc, i, ok_cnt;
 	ENTRY;
 
 	ok_cnt = 0;
@@ -151,10 +138,7 @@ static int hsm_find_compatible(const struct lu_env *env, struct mdt_device *mdt,
 	if (ok_cnt == hal->hal_count)
 		RETURN(0);
 
-	hcdcb.cdt = &mdt->mdt_coordinator;
-	hcdcb.hal = hal;
-
-	rc = cdt_llog_process(env, mdt, hsm_find_compatible_cb, &hcdcb, 0, 0,
+	rc = cdt_llog_process(env, mdt, hsm_find_compatible_cb, hal, 0, 0,
 			      READ);
 
 	RETURN(rc);
