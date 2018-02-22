@@ -939,8 +939,11 @@ int mdt_hsm_agent_send(struct mdt_thread_info *mti, struct hsm_action_list *hal,
 /* mdt/mdt_hsm_cdt_client.c */
 int mdt_hsm_add_actions(struct mdt_thread_info *info,
 			struct hsm_action_list *hal);
-int mdt_hsm_get_actions(struct mdt_thread_info *mti,
-			struct hsm_action_list *hal);
+int mdt_hsm_get_action(struct mdt_thread_info *mti,
+		       const struct lu_fid *fid,
+		       enum hsm_copytool_action *action,
+		       enum agent_req_status *status,
+		       struct hsm_extent *extent);
 bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
 				const struct lu_fid *fid);
 /* mdt/mdt_hsm_cdt_requests.c */

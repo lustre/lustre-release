@@ -86,13 +86,6 @@ static int hsm_find_compatible_cb(const struct lu_env *env,
 		if (!lu_fid_eq(&hai->hai_fid, &larr->arr_hai.hai_fid))
 			continue;
 
-		/* HSMA_NONE is used to find running request for some FID */
-		if (hai->hai_action == HSMA_NONE) {
-			hal->hal_archive_id = larr->arr_archive_id;
-			hal->hal_flags = larr->arr_flags;
-			*hai = larr->arr_hai;
-			continue;
-		}
 		/* in V1 we do not manage partial transfer
 		 * so extent is always whole file
 		 */
@@ -124,6 +117,10 @@ static int hsm_find_compatible(const struct lu_env *env, struct mdt_device *mdt,
 	ok_cnt = 0;
 	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
+		/* We only support ARCHIVE, RESTORE, REMOVE and CANCEL here. */
+		if (hai->hai_action == HSMA_NONE)
+			RETURN(-EINVAL);
+
 		/* in a cancel request hai_cookie may be set by caller to
 		 * show the request to be canceled
 		 * if not we need to search by FID
@@ -471,63 +468,83 @@ bool mdt_hsm_restore_is_running(struct mdt_thread_info *mti,
 	RETURN(is_running);
 }
 
+struct hsm_get_action_data {
+	const struct lu_fid *hgad_fid;
+	struct hsm_action_item hgad_hai;
+	enum agent_req_status hgad_status;
+};
+
+static int hsm_get_action_cb(const struct lu_env *env,
+			     struct llog_handle *llh,
+			     struct llog_rec_hdr *hdr, void *data)
+{
+	struct llog_agent_req_rec *larr = (struct llog_agent_req_rec *)hdr;
+	struct hsm_get_action_data *hgad = data;
+
+	/* A compatible request must be WAITING or STARTED and not a
+	 * cancel. */
+	if ((larr->arr_status != ARS_WAITING &&
+	     larr->arr_status != ARS_STARTED) ||
+	    larr->arr_hai.hai_action == HSMA_CANCEL ||
+	    !lu_fid_eq(&larr->arr_hai.hai_fid, hgad->hgad_fid))
+		RETURN(0);
+
+	hgad->hgad_hai = larr->arr_hai;
+	hgad->hgad_status = larr->arr_status;
+
+	RETURN(LLOG_PROC_BREAK);
+}
+
 /**
- * get registered action on a FID list
+ * get registered action on a FID
  * \param mti [IN]
- * \param hal [IN/OUT] requests
+ * \param fid [IN]
+ * \param action [OUT]
+ * \param status [OUT]
+ * \param extent [OUT]
  * \retval 0 success
  * \retval -ve failure
  */
-int mdt_hsm_get_actions(struct mdt_thread_info *mti,
-			struct hsm_action_list *hal)
+int mdt_hsm_get_action(struct mdt_thread_info *mti,
+		       const struct lu_fid *fid,
+		       enum hsm_copytool_action *action,
+		       enum agent_req_status *status,
+		       struct hsm_extent *extent)
 {
-	struct mdt_device	*mdt = mti->mti_mdt;
-	struct coordinator	*cdt = &mdt->mdt_coordinator;
-	struct hsm_action_item	*hai;
-	int			 i, rc;
+	const struct lu_env *env = mti->mti_env;
+	struct mdt_device *mdt = mti->mti_mdt;
+	struct coordinator *cdt = &mdt->mdt_coordinator;
+	struct hsm_get_action_data hgad = {
+		.hgad_fid = fid,
+		.hgad_hai.hai_action = HSMA_NONE,
+	};
+	struct cdt_agent_req *car;
+	int rc;
 	ENTRY;
 
-	hai = hai_first(hal);
-	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
-		hai->hai_action = HSMA_NONE;
-		if (!fid_is_sane(&hai->hai_fid))
-			RETURN(-EINVAL);
-	}
-
 	/* 1st we search in recorded requests */
-	rc = hsm_find_compatible(mti->mti_env, mdt, hal);
-	/* if llog file is not created, no action is recorded */
-	if (rc == -ENOENT)
-		RETURN(0);
-
-	if (rc)
+	rc = cdt_llog_process(env, mdt, hsm_get_action_cb, &hgad, 0, 0, READ);
+	if (rc < 0)
 		RETURN(rc);
 
-	/* 2nd we search if the request are running
-	 * cookie is cleared to tell to caller, the request is
-	 * waiting
-	 * we could in place use the record status, but in the future
-	 * we may want do give back dynamic informations on the
-	 * running request
-	 */
-	hai = hai_first(hal);
-	for (i = 0; i < hal->hal_count; i++, hai = hai_next(hai)) {
-		struct cdt_agent_req *car;
+	*action = hgad.hgad_hai.hai_action;
+	*extent = hgad.hgad_hai.hai_extent;
+	*status = hgad.hgad_status;
 
-		car = mdt_cdt_find_request(cdt, hai->hai_cookie);
-		if (car == NULL) {
-			hai->hai_cookie = 0;
-		} else {
-			__u64 data_moved;
+	if (*action == HSMA_NONE || *status != ARS_STARTED)
+		RETURN(0);
 
-			mdt_cdt_get_work_done(car, &data_moved);
-			/* this is just to give the volume of data moved
-			 * it means data_moved data have been moved from the
-			 * original request but we do not know which one
-			 */
-			hai->hai_extent.length = data_moved;
-			mdt_cdt_put_request(car);
-		}
+	car = mdt_cdt_find_request(cdt, hgad.hgad_hai.hai_cookie);
+	if (car != NULL) {
+		__u64 data_moved;
+
+		mdt_cdt_get_work_done(car, &data_moved);
+		/* this is just to give the volume of data moved
+		 * it means data_moved data have been moved from the
+		 * original request but we do not know which one
+		 */
+		extent->length = data_moved;
+		mdt_cdt_put_request(car);
 	}
 
 	RETURN(0);

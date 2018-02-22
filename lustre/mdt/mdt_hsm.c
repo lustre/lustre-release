@@ -371,12 +371,12 @@ out:
  */
 int mdt_hsm_action(struct tgt_session_info *tsi)
 {
-	struct mdt_thread_info		*info;
-	struct hsm_current_action	*hca;
-	struct hsm_action_list		*hal = NULL;
-	struct hsm_action_item		*hai;
-	int				 hal_size;
-	int				 rc;
+	struct mdt_thread_info *info;
+	struct hsm_current_action *hca;
+	enum hsm_copytool_action action; /* HSMA_* */
+	enum agent_req_status status; /* ARS_* */
+	struct hsm_extent extent;
+	int rc;
 	ENTRY;
 
 	hca = req_capsule_server_get(tsi->tsi_pill,
@@ -390,42 +390,15 @@ int mdt_hsm_action(struct tgt_session_info *tsi)
 	info = tsi2mdt_info(tsi);
 	/* Only valid if client is remote */
 	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
-	if (rc)
+	if (rc < 0)
 		GOTO(out, rc = err_serious(rc));
 
-	/* Coordinator information */
-	hal_size = sizeof(*hal) +
-		   cfs_size_round(MTI_NAME_MAXLEN) /* fsname */ +
-		   cfs_size_round(sizeof(*hai));
+	rc = mdt_hsm_get_action(info, &info->mti_body->mbo_fid1, &action,
+				&status, &extent);
+	if (rc < 0)
+		GOTO(out_ucred, rc);
 
-	MDT_HSM_ALLOC(hal, hal_size);
-	if (hal == NULL)
-		GOTO(out_ucred, rc = -ENOMEM);
-
-	hal->hal_version = HAL_VERSION;
-	hal->hal_archive_id = 0;
-	hal->hal_flags = 0;
-	obd_uuid2fsname(hal->hal_fsname, mdt_obd_name(info->mti_mdt),
-			MTI_NAME_MAXLEN);
-	hal->hal_count = 1;
-	hai = hai_first(hal);
-	hai->hai_action = HSMA_NONE;
-	hai->hai_cookie = 0;
-	hai->hai_gid = 0;
-	hai->hai_fid = info->mti_body->mbo_fid1;
-	hai->hai_len = sizeof(*hai);
-
-	rc = mdt_hsm_get_actions(info, hal);
-	if (rc)
-		GOTO(out_free, rc);
-
-	/* cookie is used to give back request status */
-	if (hai->hai_cookie == 0)
-		hca->hca_state = HPS_WAITING;
-	else
-		hca->hca_state = HPS_RUNNING;
-
-	switch (hai->hai_action) {
+	switch (action) {
 	case HSMA_NONE:
 		hca->hca_action = HUA_NONE;
 		break;
@@ -444,16 +417,26 @@ int mdt_hsm_action(struct tgt_session_info *tsi)
 	default:
 		hca->hca_action = HUA_NONE;
 		CERROR("%s: Unknown hsm action: %d on "DFID"\n",
-		       mdt_obd_name(info->mti_mdt),
-		       hai->hai_action, PFID(&hai->hai_fid));
+		       mdt_obd_name(info->mti_mdt), action,
+		       PFID(&info->mti_body->mbo_fid1));
 		break;
 	}
 
-	hca->hca_location = hai->hai_extent;
+	switch (status) {
+	case ARS_WAITING:
+		hca->hca_state = HPS_WAITING;
+		break;
+	case ARS_STARTED:
+		hca->hca_state = HPS_RUNNING;
+		break;
+	default:
+		hca->hca_state = HPS_NONE;
+		break;
+	}
+
+	hca->hca_location = extent;
 
 	EXIT;
-out_free:
-	MDT_HSM_FREE(hal, hal_size);
 out_ucred:
 	mdt_exit_ucred(info);
 out:

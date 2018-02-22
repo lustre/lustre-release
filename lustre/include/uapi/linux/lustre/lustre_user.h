@@ -1646,14 +1646,14 @@ enum hsm_states {
 #define HSM_FLAGS_MASK  (HSM_USER_MASK | HSM_STATUS_MASK)
 
 /**
- * HSM request progress state
+ * HSM request progress state
  */
 enum hsm_progress_states {
+	HPS_NONE	= 0,
 	HPS_WAITING	= 1,
 	HPS_RUNNING	= 2,
 	HPS_DONE	= 3,
 };
-#define HPS_NONE	0
 
 static inline const char *hsm_progress_state2name(enum hsm_progress_states s)
 {
