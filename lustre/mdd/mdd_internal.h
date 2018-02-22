@@ -83,6 +83,14 @@
 
 #define LLOG_CHANGELOG_HDR_SZ (sizeof(struct llog_changelog_rec) - \
 			       sizeof(struct changelog_rec))
+/* mc_gc_task values */
+/** no GC thread to be started **/
+#define MDD_CHLG_GC_NONE NULL
+/** a GC thread need to be started **/
+#define MDD_CHLG_GC_NEED (struct task_struct *)(-1)
+/** a GC thread will be started now **/
+#define MDD_CHLG_GC_START (struct task_struct *)(-2)
+/** else the started task_struct address when running **/
 
 struct mdd_changelog {
 	spinlock_t		mc_lock;	/* for index */
@@ -94,7 +102,7 @@ struct mdd_changelog {
 	int			mc_lastuser;
 	int			mc_users;      /* registered users number */
 	struct task_struct	*mc_gc_task;
-	time64_t		mc_gc_time;
+	time64_t		mc_gc_time;    /* last GC check or run time */
 	unsigned int		mc_deniednext; /* interval for recording denied
 						* accesses
 						*/

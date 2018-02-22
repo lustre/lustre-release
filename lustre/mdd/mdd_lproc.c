@@ -273,8 +273,11 @@ mdd_changelog_max_idle_time_seq_write(struct file *file,
 	if (rc)
 		return rc;
 
-	/* XXX may need to limit with reasonable elapsed/idle times */
-	if (val < 1)
+	/* as it sounds reasonable, do not allow a user to be idle since
+	 * more than about 68 years, this will allow to use 32bits
+	 * timestamps for comparison
+	 */
+	if (val < 1 || val > INT_MAX)
 		return -ERANGE;
 
 	mdd->mdd_changelog_max_idle_time = val;

@@ -152,7 +152,7 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 	mdd->mdd_changelog_max_idle_indexes = CHLOG_MAX_IDLE_INDEXES;
 	/* with a reasonable interval between each check */
 	mdd->mdd_changelog_min_gc_interval = CHLOG_MIN_GC_INTERVAL;
-	/* with a very few number of free entries */
+	/* with a very few number of free catalog entries */
 	mdd->mdd_changelog_min_free_cat_entries = CHLOG_MIN_FREE_CAT_ENTRIES;
 
 	dt_conf_get(env, mdd->mdd_child, &mdd->mdd_dt_conf);
@@ -223,13 +223,90 @@ static int changelog_user_init_cb(const struct lu_env *env,
 	return LLOG_PROC_BREAK;
 }
 
+struct changelog_orphan_data {
+	__u64 index;
+	struct mdd_device *mdd;
+};
+
+/* find oldest changelog record index */
+static int changelog_detect_orphan_cb(const struct lu_env *env,
+				      struct llog_handle *llh,
+				      struct llog_rec_hdr *hdr, void *data)
+{
+	struct mdd_device *mdd = ((struct changelog_orphan_data *)data)->mdd;
+	struct llog_changelog_rec *rec = container_of(hdr,
+						      struct llog_changelog_rec,
+						      cr_hdr);
+
+	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
+
+	if (rec->cr_hdr.lrh_type != CHANGELOG_REC) {
+		CWARN("%s: invalid record at index %d in log "DFID"\n",
+		      mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
+		      PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		/* try to find some next valid record and thus allow to recover
+		 * from a corrupted LLOG, instead to assert and force a crash
+		 */
+		return 0;
+	}
+
+	CDEBUG(D_INFO, "%s: seeing record at index %d/%d/%llu t=%x %.*s in log "
+	       DFID"\n", mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
+	       rec->cr_hdr.lrh_index, rec->cr.cr_index, rec->cr.cr_type,
+	       rec->cr.cr_namelen, changelog_rec_name(&rec->cr),
+	       PFID(&llh->lgh_id.lgl_oi.oi_fid));
+
+	((struct changelog_orphan_data *)data)->index = rec->cr.cr_index;
+	return LLOG_PROC_BREAK;
+}
+
+/* find oldest changelog user index */
+static int changelog_user_detect_orphan_cb(const struct lu_env *env,
+					   struct llog_handle *llh,
+					   struct llog_rec_hdr *hdr, void *data)
+{
+	struct mdd_device *mdd = ((struct changelog_orphan_data *)data)->mdd;
+	struct llog_changelog_user_rec *rec = container_of(hdr,
+						struct llog_changelog_user_rec,
+						cur_hdr);
+
+	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
+
+	if (rec->cur_hdr.lrh_type != CHANGELOG_USER_REC) {
+		CWARN("%s: invalid user at index %d in log "DFID"\n",
+		      mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
+		      PFID(&llh->lgh_id.lgl_oi.oi_fid));
+		/* try to find some next valid record and thus allow to recover
+		 * from a corrupted LLOG, instead to assert and force a crash
+		 */
+		return 0;
+	}
+
+	CDEBUG(D_INFO, "%s: seeing user at index %d/%d id=%d endrec=%llu in "
+	       "log "DFID"\n", mdd2obd_dev(mdd)->obd_name, hdr->lrh_index,
+	       rec->cur_hdr.lrh_index, rec->cur_id, rec->cur_endrec,
+	       PFID(&llh->lgh_id.lgl_oi.oi_fid));
+
+	if (((struct changelog_orphan_data *)data)->index == 0 ||
+	    rec->cur_endrec < ((struct changelog_orphan_data *)data)->index)
+		((struct changelog_orphan_data *)data)->index = rec->cur_endrec;
+
+	return 0;
+}
+
+struct changelog_cancel_cookie {
+	long long endrec;
+	struct mdd_device *mdd;
+};
+
 static int llog_changelog_cancel_cb(const struct lu_env *env,
 				    struct llog_handle *llh,
 				    struct llog_rec_hdr *hdr, void *data)
 {
 	struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
 	struct llog_cookie	 cookie;
-	long long		 endrec = *(long long *)data;
+	struct changelog_cancel_cookie *cl_cookie =
+		(struct changelog_cancel_cookie *)data;
 	int			 rc;
 
 	ENTRY;
@@ -237,7 +314,26 @@ static int llog_changelog_cancel_cb(const struct lu_env *env,
 	/* This is always a (sub)log, not the catalog */
 	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
 
-	if (rec->cr.cr_index > endrec)
+	/* if current context is GC-thread allow it to stop upon umount
+	 * remaining records cleanup will occur upon next mount
+	 *
+	 * also during testing, wait for GC-thread to be released
+	 *
+	 * XXX this requires the GC-thread to not fork a sub-thread via
+	 * llog[_cat]_process_or_fork() and we may think to also implement
+	 * this shutdown mechanism for manually started user unregister which
+	 * can also take a long time if huge backlog of records
+	 */
+	if (unlikely(cl_cookie->mdd->mdd_cl.mc_gc_task == current)) {
+		/* wait to be released */
+		while (CFS_FAIL_CHECK_QUIET(OBD_FAIL_FORCE_GC_THREAD))
+			schedule();
+
+		if (kthread_should_stop())
+			RETURN(LLOG_PROC_BREAK);
+	}
+
+	if (rec->cr.cr_index > cl_cookie->endrec)
 		/* records are in order, so we're done */
 		RETURN(LLOG_PROC_BREAK);
 
@@ -254,7 +350,7 @@ static int llog_changelog_cancel_cb(const struct lu_env *env,
 
 static int llog_changelog_cancel(const struct lu_env *env,
 				 struct llog_ctxt *ctxt,
-				 long long endrec)
+				 struct changelog_cancel_cookie *cookie)
 {
 	struct llog_handle	*cathandle = ctxt->loc_handle;
 	int			 rc;
@@ -265,7 +361,7 @@ static int llog_changelog_cancel(const struct lu_env *env,
 	LASSERT(cathandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
 
 	rc = llog_cat_process(env, cathandle, llog_changelog_cancel_cb,
-			      &endrec, 0, 0);
+			      cookie, 0, 0);
 	if (rc >= 0)
 		/* 0 or 1 means we're done */
 		rc = 0;
@@ -328,6 +424,10 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 {
 	struct obd_device	*obd = mdd2obd_dev(mdd);
 	struct llog_ctxt	*ctxt = NULL, *uctxt = NULL;
+	struct changelog_orphan_data changelog_orphan = { .index = 0,
+							  .mdd = mdd },
+				     user_orphan = { .index = 0,
+						     .mdd = mdd };
 	int			 rc;
 
 	ENTRY;
@@ -408,6 +508,51 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 		if (rc < 0)
 			GOTO(out_uclose, rc);
 	}
+
+	/* find and clear any orphan changelog records (1st record index <
+	 * smallest of all users current index), likely to come from an
+	 * interrupted manual or GC-thread purge, as its user record had
+	 * been deleted first
+	 * XXX we may wait for a still registered user clear operation to
+	 * do the job, but it may then take a long time to reach the user's
+	 * real targetted records if a huge purge backlog is still to be
+	 * processed as a long time idle user record could have been deleted
+	 * XXX we may need to run end of purge as a separate thread
+	 */
+	rc = llog_cat_process(env, ctxt->loc_handle, changelog_detect_orphan_cb,
+			      &changelog_orphan, 0, 0);
+	if (rc < 0) {
+		CERROR("%s: changelog detect orphan failed: rc = %d\n",
+		       obd->obd_name, rc);
+		GOTO(out_uclose, rc);
+	}
+	rc = llog_cat_process(env, uctxt->loc_handle,
+			      changelog_user_detect_orphan_cb,
+			      &user_orphan, 0, 0);
+	if (rc < 0) {
+		CERROR("%s: changelog user detect orphan failed: rc = %d\n",
+		       obd->obd_name, rc);
+		GOTO(out_uclose, rc);
+	}
+	if (unlikely(changelog_orphan.index < user_orphan.index)) {
+		struct changelog_cancel_cookie cl_cookie = {
+			.endrec = user_orphan.index,
+			.mdd = mdd,
+		};
+
+		CWARN("%s : orphan changelog records found, starting from "
+		      "index %llu to index %llu, being cleared now\n",
+		      obd->obd_name, changelog_orphan.index, user_orphan.index);
+
+		/* XXX we may need to run end of purge as a separate thread */
+		rc = llog_changelog_cancel(env, ctxt, &cl_cookie);
+		if (rc < 0) {
+			CERROR("%s: purge of changelog orphan records failed: "
+			       "rc = %d\n", obd->obd_name, rc);
+			GOTO(out_uclose, rc);
+		}
+	}
+
 	llog_ctxt_put(ctxt);
 	llog_ctxt_put(uctxt);
 	RETURN(0);
@@ -433,6 +578,10 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 	spin_lock_init(&mdd->mdd_cl.mc_user_lock);
 	mdd->mdd_cl.mc_lastuser = 0;
 
+	/* ensure a GC check will, and a thread run may, occur upon start */
+	mdd->mdd_cl.mc_gc_time = 0;
+	mdd->mdd_cl.mc_gc_task = MDD_CHLG_GC_NONE;
+
 	rc = mdd_changelog_llog_init(env, mdd);
 	if (rc) {
 		CERROR("%s: changelog setup during init failed: rc = %d\n",
@@ -450,6 +599,38 @@ static void mdd_changelog_fini(const struct lu_env *env,
 	struct llog_ctxt	*ctxt;
 
 	mdd->mdd_cl.mc_flags = 0;
+
+again:
+	/* stop GC-thread if running */
+	spin_lock(&mdd->mdd_cl.mc_lock);
+	if (likely(mdd->mdd_cl.mc_gc_task == MDD_CHLG_GC_NONE)) {
+		/* avoid any attempt to run a GC-thread */
+		mdd->mdd_cl.mc_gc_task = current;
+		spin_unlock(&mdd->mdd_cl.mc_lock);
+	} else {
+		struct task_struct *gc_task;
+
+		if (unlikely(mdd->mdd_cl.mc_gc_task == MDD_CHLG_GC_NEED ||
+			     mdd->mdd_cl.mc_gc_task == MDD_CHLG_GC_START)) {
+			/* need to wait for birthing GC-thread to be started
+			 * and to have set mc_gc_task to itself
+			 */
+			spin_unlock(&mdd->mdd_cl.mc_lock);
+			schedule_timeout(usecs_to_jiffies(10));
+			/* go back to fully check if GC-thread has started or
+			 * even already exited or if a new one is starting...
+			 */
+			goto again;
+		}
+		/* take a reference on task_struct to avoid it to be freed
+		 * upon exit
+		 */
+		gc_task = mdd->mdd_cl.mc_gc_task;
+		get_task_struct(gc_task);
+		spin_unlock(&mdd->mdd_cl.mc_lock);
+		kthread_stop(gc_task);
+		put_task_struct(gc_task);
+	}
 
 	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
 	if (ctxt) {
@@ -476,6 +657,7 @@ mdd_changelog_llog_cancel(const struct lu_env *env, struct mdd_device *mdd,
         struct obd_device *obd = mdd2obd_dev(mdd);
         struct llog_ctxt *ctxt;
         long long unsigned cur;
+	struct changelog_cancel_cookie cookie;
         int rc;
 
         ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
@@ -508,7 +690,9 @@ mdd_changelog_llog_cancel(const struct lu_env *env, struct mdd_device *mdd,
            changed since the last purge) */
 	mdd->mdd_cl.mc_starttime = ktime_get();
 
-	rc = llog_changelog_cancel(env, ctxt, endrec);
+	cookie.endrec = endrec;
+	cookie.mdd = mdd;
+	rc = llog_changelog_cancel(env, ctxt, &cookie);
 out:
         llog_ctxt_put(ctxt);
         return rc;
@@ -1347,7 +1531,7 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 	mdd->mdd_cl.mc_users++;
 	rec->cur_endrec = mdd->mdd_cl.mc_index;
 
-	rec->cur_time = (__u32)get_seconds();
+	rec->cur_time = (__u32)ktime_get_real_seconds();
 	if (OBD_FAIL_CHECK(OBD_FAIL_TIME_IN_CHLOG_USER))
 		rec->cur_time = 0;
 
@@ -1550,7 +1734,7 @@ static int mdd_changelog_clear_cb(const struct lu_env *env,
 	 */
 	rec->cur_endrec = mcuc->mcuc_endrec;
 
-	rec->cur_time = (__u32)get_seconds();
+	rec->cur_time = (__u32)ktime_get_real_seconds();
 	if (OBD_FAIL_CHECK(OBD_FAIL_TIME_IN_CHLOG_USER))
 		rec->cur_time = 0;
 

@@ -12,8 +12,8 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="$SANITY_EXCEPT  42a     42b     42c     77k"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-# skipped tests: LU-8411 LU-9096 LU-9054 LU-10680 ..
-ALWAYS_EXCEPT="  407     253     312     160f	160g	$ALWAYS_EXCEPT"
+# skipped tests: LU-8411 LU-9096 LU-9054 LU-10734 ..
+ALWAYS_EXCEPT="  407     253     312     160g     $ALWAYS_EXCEPT"
 
 # Check Grants after these tests
 GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c"
@@ -12254,18 +12254,21 @@ test_160e() {
 run_test 160e "changelog negative testing (should return errors)"
 
 test_160f() {
-	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
-		skip "Need MDS version at least 2.10.56"
+		{ skip "Need MDS version at least 2.10.56"; return 0; }
 
 	local mdts=$(comma_list $(mdts_nodes))
 
 	# Create a user
 	changelog_register || error "first changelog_register failed"
 	changelog_register || error "second changelog_register failed"
-	local cl_users=(${CL_USERS[$SINGLEMDS]})
-	local cl_user1="${cl_users[0]}"
-	local cl_user2="${cl_users[1]}"
+	local cl_users
+	declare -A cl_user1
+	declare -A cl_user2
+	local user_rec1
+	local user_rec2
+	local i
 
 	# generate some changelog records to accumulate on each MDT
 	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "test_mkdir $tdir failed"
@@ -12273,11 +12276,11 @@ test_160f() {
 		error "create $DIR/$tdir/$tfile failed"
 
 	# check changelogs have been generated
-	nbcl=$(changelog_dump | wc -l)
+	local nbcl=$(changelog_dump | wc -l)
 	[[ $nbcl -eq 0 ]] && error "no changelogs found"
 
-	# changelog_gc=1 should be set by default
 	for param in "changelog_max_idle_time=10" \
+		     "changelog_gc=1" \
 		     "changelog_min_gc_interval=2" \
 		     "changelog_min_free_cat_entries=3"; do
 		local MDT0=$(facet_svc $SINGLEMDS)
@@ -12288,44 +12291,79 @@ test_160f() {
 		do_nodes $mdts $LCTL set_param mdd.*.$param
 	done
 
+	# force cl_user2 to be idle (1st part)
+	sleep 9
+
 	# simulate changelog catalog almost full
 	#define OBD_FAIL_CAT_FREE_RECORDS	0x1313
 	do_nodes $mdts $LCTL set_param fail_loc=0x1313 fail_val=3
 
-	sleep 6
-	local user_rec1=$(changelog_user_rec $SINGLEMDS $cl_user1)
-	[ -n "$user_rec1" ] ||
-		error "User $cl_user1 not found in changelog_users"
-	__changelog_clear $SINGLEMDS $cl_user1 +2
-	local user_rec2=$(changelog_user_rec $SINGLEMDS $cl_user1)
-	[ -n "$user_rec2" ] ||
-		error "User $cl_user1 not found in changelog_users"
-	echo "verifying user clear: $user_rec1 + 2 == $user_rec2"
-	[ $((user_rec1 + 2)) == $user_rec2 ] ||
-		error "user index expected $user_rec1 + 2, but is $user_rec2"
-	sleep 5
+	for i in $(seq $MDSCOUNT); do
+		cl_users=(${CL_USERS[mds$i]})
+		cl_user1[mds$i]="${cl_users[0]}"
+		cl_user2[mds$i]="${cl_users[1]}"
+
+		[ -n "${cl_user1[mds$i]}" ] ||
+			error "mds$i: no user registered"
+		[ -n "${cl_user2[mds$i]}" ] ||
+			error "mds$i: only ${cl_user2[mds$i]} is registered"
+
+		user_rec1=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
+		[ -n "$user_rec1" ] ||
+			error "mds$i: User ${cl_user1[mds$i]} not registered"
+		__changelog_clear mds$i ${cl_user1[mds$i]} +2
+		user_rec2=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
+		[ -n "$user_rec2" ] ||
+			error "mds$i: User ${cl_user1[mds$i]} not registered"
+		echo "mds$i: verifying user ${cl_user1[mds$i]} clear: " \
+		     "$user_rec1 + 2 == $user_rec2"
+		[ $((user_rec1 + 2)) == $user_rec2 ] ||
+			error "mds$i: user ${cl_user1[mds$i]} index expected " \
+			      "$user_rec1 + 2, but is $user_rec2"
+		user_rec2=$(changelog_user_rec mds$i ${cl_user2[mds$i]})
+		[ -n "$user_rec2" ] ||
+			error "mds$i: User ${cl_user2[mds$i]} not registered"
+		[ $user_rec1 == $user_rec2 ] ||
+			error "mds$i: user ${cl_user2[mds$i]} index expected " \
+			      "$user_rec1, but is $user_rec2"
+	done
+
+	# force cl_user2 to be idle (2nd part) and to reach
+	# changelog_max_idle_time
+	sleep 2
 
 	# generate one more changelog to trigger fail_loc
-	rm -rf $DIR/$tdir || error "rm -rf $tdir failed"
+	createmany -m $DIR/$tdir/${tfile}bis $((MDSCOUNT * 2)) ||
+		error "create $DIR/$tdir/${tfile}bis failed"
 
 	# ensure gc thread is done
-	wait_update_facet $SINGLEMDS \
-			  "ps -e -o comm= | grep chlg_gc_thread" "" 20
+	for i in $(mdts_nodes); do
+		wait_update $i \
+			"ps -e -o comm= | grep chlg_gc_thread" "" 20 ||
+			error "$i: GC-thread not done"
+	done
 
-	# check user still registered
-	changelog_users $SINGLEMDS | grep -q "$cl_user1" ||
-		error "User $cl_user1 not found in changelog_users"
-	# check user2 unregistered
-	changelog_users $SINGLEMDS | grep -q "$cl_user2" &&
-		error "User $cl_user2 still found in changelog_users"
+	local first_rec
+	for i in $(seq $MDSCOUNT); do
+		# check cl_user1 still registered
+		changelog_users mds$i | grep -q "${cl_user1[mds$i]}" ||
+			error "mds$i: User ${cl_user1[mds$i]} not registered"
+		# check cl_user2 unregistered
+		changelog_users mds$i | grep -q "${cl_user2[mds$i]}" &&
+			error "mds$i: User ${cl_user2[mds$i]} still registered"
 
-	# check changelogs are present and starting at $user_rec2 + 1
-	local first_rec=$($LFS changelog $(facet_svc $SINGLEMDS) |
-			  awk '{ print $1; exit; }')
+		# check changelogs are present and starting at $user_rec1 + 1
+		user_rec1=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
+		[ -n "$user_rec1" ] ||
+			error "mds$i: User ${cl_user1[mds$i]} not registered"
+		first_rec=$($LFS changelog $(facet_svc mds$i) |
+			    awk '{ print $1; exit; }')
 
-	echo "verifying min purge: $user_rec2 + 1 == $first_rec"
-	[ $((user_rec2 + 1)) == $first_rec ] ||
-		error "first index should be $user_rec2 + 1, but is $first_rec"
+		echo "mds$i: verifying first index $user_rec1 + 1 == $first_rec"
+		[ $((user_rec1 + 1)) == $first_rec ] ||
+			error "mds$i: first index should be $user_rec1 + 1, " \
+			      "but is $first_rec"
+	done
 }
 run_test 160f "changelog garbage collect (timestamped users)"
 
@@ -12407,6 +12445,166 @@ test_160g() {
 run_test 160g "changelog garbage collect (old users)"
 
 test_160h() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
+		{ skip "Need MDS version at least 2.10.56"; return 0; }
+
+	local mdts=$(comma_list $(mdts_nodes))
+
+	# Create a user
+	changelog_register || error "first changelog_register failed"
+	changelog_register || error "second changelog_register failed"
+	local cl_users
+	declare -A cl_user1
+	declare -A cl_user2
+	local user_rec1
+	local user_rec2
+	local i
+
+	# generate some changelog records to accumulate on each MDT
+	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "test_mkdir $tdir failed"
+	createmany -m $DIR/$tdir/$tfile $((MDSCOUNT * 2)) ||
+		error "create $DIR/$tdir/$tfile failed"
+
+	# check changelogs have been generated
+	local nbcl=$(changelog_dump | wc -l)
+	[[ $nbcl -eq 0 ]] && error "no changelogs found"
+
+	for param in "changelog_max_idle_time=10" \
+		     "changelog_gc=1" \
+		     "changelog_min_gc_interval=2"; do
+		local MDT0=$(facet_svc $SINGLEMDS)
+		local var="${param%=*}"
+		local old=$(do_facet mds1 "$LCTL get_param -n mdd.$MDT0.$var")
+
+		stack_trap "do_nodes $mdts $LCTL set_param mdd.*.$var=$old" EXIT
+		do_nodes $mdts $LCTL set_param mdd.*.$param
+	done
+
+	# force cl_user2 to be idle (1st part)
+	sleep 9
+
+	for i in $(seq $MDSCOUNT); do
+		cl_users=(${CL_USERS[mds$i]})
+		cl_user1[mds$i]="${cl_users[0]}"
+		cl_user2[mds$i]="${cl_users[1]}"
+
+		[ -n "${cl_user1[mds$i]}" ] ||
+			error "mds$i: no user registered"
+		[ -n "${cl_user2[mds$i]}" ] ||
+			error "mds$i: only ${cl_user2[mds$i]} is registered"
+
+		user_rec1=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
+		[ -n "$user_rec1" ] ||
+			error "mds$i: User ${cl_user1[mds$i]} not registered"
+		__changelog_clear mds$i ${cl_user1[mds$i]} +2
+		user_rec2=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
+		[ -n "$user_rec2" ] ||
+			error "mds$i: User ${cl_user1[mds$i]} not registered"
+		echo "mds$i: verifying user ${cl_user1[mds$i]} clear: " \
+		     "$user_rec1 + 2 == $user_rec2"
+		[ $((user_rec1 + 2)) == $user_rec2 ] ||
+			error "mds$i: user ${cl_user1[mds$i]} index expected " \
+			      "$user_rec1 + 2, but is $user_rec2"
+		user_rec2=$(changelog_user_rec mds$i ${cl_user2[mds$i]})
+		[ -n "$user_rec2" ] ||
+			error "mds$i: User ${cl_user2[mds$i]} not registered"
+		[ $user_rec1 == $user_rec2 ] ||
+			error "mds$i: user ${cl_user2[mds$i]} index expected " \
+			      "$user_rec1, but is $user_rec2"
+	done
+
+	# force cl_user2 to be idle (2nd part) and to reach
+	# changelog_max_idle_time
+	sleep 2
+
+	# force each GC-thread start and block then
+	# one per MDT/MDD, set fail_val accordingly
+	#define OBD_FAIL_FORCE_GC_THREAD 0x1316
+	do_nodes $mdts $LCTL set_param fail_loc=0x1316
+
+	# generate more changelogs to trigger fail_loc
+	createmany -m $DIR/$tdir/${tfile}bis $((MDSCOUNT * 2)) ||
+		error "create $DIR/$tdir/${tfile}bis failed"
+
+	# stop MDT to stop GC-thread, should be done in back-ground as it will
+	# block waiting for the thread to be released and exit
+	declare -A stop_pids
+	for i in $(seq $MDSCOUNT); do
+		stop mds$i &
+		stop_pids[mds$i]=$!
+	done
+
+	for i in $(mdts_nodes); do
+		local facet
+		local nb=0
+		local facets=$(facets_up_on_host $i)
+
+		for facet in ${facets//,/ }; do
+			if [[ $facet == mds* ]]; then
+				nb=$((nb + 1))
+			fi
+		done
+		# ensure each MDS's gc threads are still present and all in "R"
+		# state (OBD_FAIL_FORCE_GC_THREAD effect!)
+		[[ $(do_node $i pgrep chlg_gc_thread | wc -l) -eq $nb ]] ||
+			error "$i: expected $nb GC-thread"
+		wait_update $i \
+			"ps -C chlg_gc_thread -o state --no-headers | uniq" \
+			"R" 20 ||
+			error "$i: GC-thread not found in R-state"
+		# check umounts of each MDT on MDS have reached kthread_stop()
+		[[ $(do_node $i pgrep umount | wc -l) -eq $nb ]] ||
+			error "$i: expected $nb umount"
+		wait_update $i \
+			"ps -C umount -o state --no-headers | uniq" "D" 20 ||
+			error "$i: umount not found in D-state"
+	done
+
+	# release all GC-threads
+	do_nodes $mdts $LCTL set_param fail_loc=0
+
+	# wait for MDT stop to complete
+	for i in $(seq $MDSCOUNT); do
+		wait ${stop_pids[mds$i]} || error "mds$i: stop failed"
+	done
+
+	# XXX
+	# may try to check if any orphan changelog records are present
+	# via ldiskfs/zfs and llog_reader...
+
+	# re-start/mount MDTs
+	for i in $(seq $MDSCOUNT); do
+		start mds$i $(mdsdevname $i) $MDS_MOUNT_OPTS ||
+			error "Fail to start mds$i"
+	done
+
+	local first_rec
+	for i in $(seq $MDSCOUNT); do
+		# check cl_user1 still registered
+		changelog_users mds$i | grep -q "${cl_user1[mds$i]}" ||
+			error "mds$i: User ${cl_user1[mds$i]} not registered"
+		# check cl_user2 unregistered
+		changelog_users mds$i | grep -q "${cl_user2[mds$i]}" &&
+			error "mds$i: User ${cl_user2[mds$i]} still registered"
+
+		# check changelogs are present and starting at $user_rec1 + 1
+		user_rec1=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
+		[ -n "$user_rec1" ] ||
+			error "mds$i: User ${cl_user1[mds$i]} not registered"
+		first_rec=$($LFS changelog $(facet_svc mds$i) |
+			    awk '{ print $1; exit; }')
+
+		echo "mds$i: verifying first index $user_rec1 + 1 == $first_rec"
+		[ $((user_rec1 + 1)) == $first_rec ] ||
+			error "mds$i: first index should be $user_rec1 + 1, " \
+			      "but is $first_rec"
+	done
+}
+run_test 160h "changelog gc thread stop upon umount, orphan records delete " \
+	      "during mount"
+
+test_160i() {
 
 	local mdts=$(comma_list $(mdts_nodes))
 
@@ -12464,7 +12662,7 @@ test_160h() {
 			error "changelogs are off on mds$i"
 	done
 }
-run_test 160h "changelog user register/unregister race"
+run_test 160i "changelog user register/unregister race"
 
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
