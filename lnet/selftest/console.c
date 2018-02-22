@@ -93,13 +93,13 @@ lstcon_node_find(struct lnet_process_id id, struct lstcon_node **ndpp,
 
 	ndl = (struct lstcon_ndlink *)(*ndpp + 1);
 
-        ndl->ndl_node = *ndpp;
+	ndl->ndl_node = *ndpp;
 
-        ndl->ndl_node->nd_ref   = 1;
-        ndl->ndl_node->nd_id    = id;
-        ndl->ndl_node->nd_stamp = cfs_time_current();
-        ndl->ndl_node->nd_state = LST_NODE_UNKNOWN;
-        ndl->ndl_node->nd_timeout = 0;
+	ndl->ndl_node->nd_ref   = 1;
+	ndl->ndl_node->nd_id    = id;
+	ndl->ndl_node->nd_stamp = ktime_get();
+	ndl->ndl_node->nd_state = LST_NODE_UNKNOWN;
+	ndl->ndl_node->nd_timeout = 0;
 	memset(&ndl->ndl_node->nd_ping, 0, sizeof(ndl->ndl_node->nd_ping));
 
 	/* queued in global hash & list, no refcount is taken by
@@ -1704,11 +1704,11 @@ lstcon_new_session_id(struct lst_sid *sid)
 {
 	struct lnet_process_id id;
 
-        LASSERT (console_session.ses_state == LST_SESSION_NONE);
+	LASSERT(console_session.ses_state == LST_SESSION_NONE);
 
-        LNetGetId(1, &id);
-        sid->ses_nid   = id.nid;
-        sid->ses_stamp = cfs_time_current();
+	LNetGetId(1, &id);
+	sid->ses_nid = id.nid;
+	sid->ses_stamp = ktime_get_ns() / NSEC_PER_MSEC;
 }
 
 int

@@ -53,7 +53,7 @@ struct lstcon_node {
         int                  nd_ref;         /* reference count */
         int                  nd_state;       /* state of the node */
         int                  nd_timeout;     /* session timeout */
-        cfs_time_t           nd_stamp;       /* timestamp of last replied RPC */
+	ktime_t			nd_stamp;	/* last RPC reply timestamp */
 	struct lstcon_rpc	nd_ping;	/* ping rpc */
 };
 

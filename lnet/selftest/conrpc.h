@@ -70,7 +70,7 @@ struct lstcon_rpc {
 	/** RPC is embedded in other structure and can't free it */
 	unsigned int		 crp_embedded:1;
         int                      crp_status;     /* console rpc errors */
-        cfs_time_t               crp_stamp;      /* replied time stamp */
+	s64			 crp_stamp_ns;	 /* replied time stamp */
 };
 
 struct lstcon_rpc_trans {

@@ -65,7 +65,7 @@
 
 struct lst_sid {
 	lnet_nid_t	ses_nid;	/* nid of console node */
-	__u64		ses_stamp;	/* time stamp */
+	__s64		ses_stamp;	/* time stamp in milliseconds */
 };					/*** session id */
 
 extern struct lst_sid LST_INVALID_SID;
