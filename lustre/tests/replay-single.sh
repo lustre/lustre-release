@@ -29,8 +29,8 @@ ALWAYS_EXCEPT="$REPLAY_SINGLE_EXCEPT "
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="44b"
 
 [ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
-# bug number for skipped test:		LU-5761
-	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 	89"
+# bug number for skipped test:
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT "
 
 build_test_filter
 
@@ -3297,8 +3297,8 @@ test_89() {
 	cancel_lru_locks osc
 	mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	rm -f $DIR/$tdir/$tfile
-	wait_mds_ost_sync
-	wait_delete_completed
+	wait_mds_ost_sync || error "initial MDS-OST sync timed out"
+	wait_delete_completed || error "initial wait delete timed out"
 	BLOCKS1=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
 	$SETSTRIPE -i 0 -c 1 $DIR/$tdir/$tfile
 	dd if=/dev/zero bs=1M count=10 of=$DIR/$tdir/$tfile
@@ -3310,8 +3310,8 @@ test_89() {
 	mount_facet ost1
 	zconf_mount $(hostname) $MOUNT || error "mount fails"
 	client_up || error "client_up failed"
-	wait_mds_ost_sync
-	wait_delete_completed
+	wait_mds_ost_sync || error "MDS-OST sync timed out"
+	wait_delete_completed || error "wait delete timed out"
 	BLOCKS2=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
 	[ $((BLOCKS2 - BLOCKS1)) -le 4  ] ||
 		error $((BLOCKS2 - BLOCKS1)) blocks leaked

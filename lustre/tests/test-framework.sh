@@ -2526,18 +2526,18 @@ sync_all_data() {
 }
 
 wait_zfs_commit() {
+	local zfs_wait=${2:-5}
+
 	# the occupied disk space will be released
-	# only after DMUs are committed
+	# only after TXGs are committed
 	if [[ $(facet_fstype $1) == zfs ]]; then
-		echo "sleep $2 for ZFS OSD"
-		sleep $2
+		echo "sleep $zfs_wait for ZFS $(facet_fstype $1)"
+		sleep $zfs_wait
 	fi
 }
 
 wait_delete_completed_mds() {
-	local MAX_WAIT=${1:-20}
-	# for ZFS, waiting more time for DMUs to be committed
-	local ZFS_WAIT=${2:-5}
+	local max_wait=${1:-20}
 	local mds2sync=""
 	local stime=$(date +%s)
 	local etime
@@ -2554,8 +2554,8 @@ wait_delete_completed_mds() {
 		mds2sync="$mds2sync $node"
 	done
 	if [ -z "$mds2sync" ]; then
-		wait_zfs_commit $SINGLEMDS $ZFS_WAIT
-		return
+		wait_zfs_commit $SINGLEMDS
+		return 0
 	fi
 	mds2sync=$(comma_list $mds2sync)
 
@@ -2567,21 +2567,26 @@ wait_delete_completed_mds() {
 	# do this upon commit
 
 	local WAIT=0
-	while [[ $WAIT -ne $MAX_WAIT ]]; do
+	while [[ $WAIT -ne $max_wait ]]; do
 		changes=$(do_nodes $mds2sync \
 			"$LCTL get_param -n osc.*MDT*.sync_*" | calc_sum)
 		#echo "$node: $changes changes on all"
 		if [[ $changes -eq 0 ]]; then
-			wait_zfs_commit $SINGLEMDS $ZFS_WAIT
-			return
+			wait_zfs_commit $SINGLEMDS
+
+			# the occupied disk space will be released
+			# only after TXGs are committed
+			wait_zfs_commit ost1
+			return 0
 		fi
 		sleep 1
-		WAIT=$(( WAIT + 1))
+		WAIT=$((WAIT + 1))
 	done
 
 	etime=$(date +%s)
 	echo "Delete is not completed in $((etime - stime)) seconds"
 	do_nodes $mds2sync "$LCTL get_param osc.*MDT*.sync_*"
+	return 1
 }
 
 wait_for_host() {
@@ -2689,6 +2694,7 @@ wait_mds_ost_sync () {
 	done
 
 	# show which nodes are not finished.
+	cmd=$(echo $cmd | sed '/-n//')
 	do_nodes $list "$cmd"
 	echo "$facet recovery node $i not done in $WAIT_TIMEOUT sec. $STATUS"
 	return 1
@@ -2736,7 +2742,7 @@ wait_destroy_complete () {
 
 wait_delete_completed() {
 	wait_delete_completed_mds $1 || return $?
-	wait_destroy_complete
+	wait_destroy_complete || return $?
 }
 
 wait_exit_ST () {
