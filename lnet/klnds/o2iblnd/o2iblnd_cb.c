@@ -2219,8 +2219,8 @@ kiblnd_connreq_done(kib_conn_t *conn, int status)
         }
 
 	/* grab pending txs while I have the lock */
-	list_add(&txs, &peer_ni->ibp_tx_queue);
-	list_del_init(&peer_ni->ibp_tx_queue);
+	INIT_LIST_HEAD(&txs);
+	list_splice_init(&peer_ni->ibp_tx_queue, &txs);
 
         if (!kiblnd_peer_active(peer_ni) ||        /* peer_ni has been deleted */
             conn->ibc_comms_error != 0) {       /* error has happened already */
