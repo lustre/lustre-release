@@ -250,6 +250,7 @@ struct osp_device {
 	time64_t			 opd_statfs_maxage;
 
 	struct proc_dir_entry		*opd_symlink;
+	struct dentry			*opd_debugfs;
 
 	/* If the caller wants to do some idempotent async operations on
 	 * remote server, it can append the async remote requests on the
@@ -805,6 +806,7 @@ int osp_init_pre_fid(struct osp_device *osp);
 
 /* lproc_osp.c */
 void osp_lprocfs_init(struct osp_device *osp);
+void osp_lprocfs_fini(struct osp_device *osp);
 
 /* osp_sync.c */
 int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,

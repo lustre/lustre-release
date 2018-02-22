@@ -1296,6 +1296,30 @@ void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)
 }
 EXPORT_SYMBOL(ptlrpc_lprocfs_unregister_obd);
 
+ssize_t ping_store(struct kobject *kobj, struct attribute *attr,
+		   const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ptlrpc_request *req;
+	int rc;
+
+	ENTRY;
+	LPROCFS_CLIMP_CHECK(obd);
+	req = ptlrpc_prep_ping(obd->u.cli.cl_import);
+	LPROCFS_CLIMP_EXIT(obd);
+	if (!req)
+		RETURN(-ENOMEM);
+
+	req->rq_send_state = LUSTRE_IMP_FULL;
+
+	rc = ptlrpc_queue_wait(req);
+	ptlrpc_req_finished(req);
+
+	RETURN(rc >= 0 ? count : rc);
+}
+EXPORT_SYMBOL(ping_store);
+
 ssize_t
 lprocfs_ping_seq_write(struct file *file, const char __user *buffer,
 		       size_t count, loff_t *off)

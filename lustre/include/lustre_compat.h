@@ -392,6 +392,16 @@ static inline void truncate_inode_pages_final(struct address_space *map)
 }
 #endif
 
+#ifndef HAVE_PTR_ERR_OR_ZERO
+static inline int __must_check PTR_ERR_OR_ZERO(__force const void *ptr)
+{
+	if (IS_ERR(ptr))
+		return PTR_ERR(ptr);
+	else
+		return 0;
+}
+#endif
+
 #ifndef SIZE_MAX
 #define SIZE_MAX	(~(size_t)0)
 #endif

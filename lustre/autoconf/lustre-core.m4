@@ -1593,6 +1593,24 @@ truncate_pagecache_old_size, [
 ]) # LC_OLDSIZE_TRUNCATE_PAGECACHE
 
 #
+# LC_PTR_ERR_OR_ZERO
+#
+# For some reason SLES11SP4 is missing the PTR_ERR_OR_ZERO macro
+# It was added to linux kernel 3.12
+#
+AC_DEFUN([LC_PTR_ERR_OR_ZERO_MISSING], [
+LB_CHECK_COMPILE([if 'PTR_ERR_OR_ZERO' is missing],
+is_err_or_null, [
+	#include <linux/err.h>
+],[
+	if (PTR_ERR_OR_ZERO(NULL)) return 0;
+],[
+	AC_DEFINE(HAVE_PTR_ERR_OR_ZERO, 1,
+		['PTR_ERR_OR_ZERO' exist])
+])
+]) # LC_PTR_ERR_OR_ZERO_MISSING
+
+#
 # LC_HAVE_DENTRY_D_U_D_ALIAS
 #
 # 3.11 kernel moved d_alias to the union d_u in struct dentry
@@ -2836,6 +2854,7 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 3.12
 	LC_OLDSIZE_TRUNCATE_PAGECACHE
+	LC_PTR_ERR_OR_ZERO_MISSING
 	LC_KIOCB_KI_LEFT
 
 	# 3.13

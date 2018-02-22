@@ -165,10 +165,7 @@ void class_put_type(struct obd_type *type)
 
 static void class_sysfs_release(struct kobject *kobj)
 {
-	struct obd_type *type = container_of(kobj, struct obd_type,
-					     typ_kobj);
-
-	complete(&type->typ_kobj_unregister);
+	OBD_FREE(kobj, sizeof(*kobj));
 }
 
 static struct kobj_type class_ktype = {
@@ -176,18 +173,46 @@ static struct kobj_type class_ktype = {
 	.release        = class_sysfs_release,
 };
 
+struct kobject *class_setup_tunables(const char *name)
+{
+	struct kobject *kobj;
+	int rc;
+
+#ifdef HAVE_SERVER_SUPPORT
+	kobj = kset_find_obj(lustre_kset, name);
+	if (kobj)
+		return kobj;
+#endif
+	OBD_ALLOC(kobj, sizeof(*kobj));
+	if (!kobj)
+		return ERR_PTR(-ENOMEM);
+
+	kobj->kset = lustre_kset;
+	kobject_init(kobj, &class_ktype);
+	rc = kobject_add(kobj, &lustre_kset->kobj, "%s", name);
+	if (rc) {
+		kobject_put(kobj);
+		return ERR_PTR(rc);
+	}
+	return kobj;
+}
+EXPORT_SYMBOL(class_setup_tunables);
+
 #define CLASS_MAX_NAME 1024
 
 int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 			bool enable_proc, struct lprocfs_vars *vars,
 			const char *name, struct lu_device_type *ldt)
 {
-        struct obd_type *type;
-        int rc = 0;
-        ENTRY;
+	struct obd_type *type;
+#ifdef HAVE_SERVER_SUPPORT
+	struct qstr dname;
+#endif /* HAVE_SERVER_SUPPORT */
+	int rc = 0;
 
-        /* sanity check */
-        LASSERT(strnlen(name, CLASS_MAX_NAME) < CLASS_MAX_NAME);
+	ENTRY;
+	/* sanity check */
+	LASSERT(strnlen(name, CLASS_MAX_NAME) < CLASS_MAX_NAME);
 
         if (class_search_type(name)) {
                 CDEBUG(D_IOCTL, "Type %s already registered\n", name);
@@ -227,18 +252,40 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 		}
 	}
 #endif
-	type->typ_kobj.kset = lustre_kset;
-	init_completion(&type->typ_kobj_unregister);
-	rc = kobject_init_and_add(&type->typ_kobj, &class_ktype,
-				  &lustre_kset->kobj, "%s", type->typ_name);
-	if (rc)
+#ifdef HAVE_SERVER_SUPPORT
+	dname.name = name;
+	dname.len = strlen(dname.name);
+	dname.hash = ll_full_name_hash(debugfs_lustre_root, dname.name,
+				       dname.len);
+	type->typ_debugfs_entry = d_lookup(debugfs_lustre_root, &dname);
+	if (type->typ_debugfs_entry) {
+		dput(type->typ_debugfs_entry);
+		type->typ_sym_filter = true;
+		goto dir_exist;
+	}
+#endif /* HAVE_SERVER_SUPPORT */
+
+	type->typ_debugfs_entry = ldebugfs_register(type->typ_name,
+						    debugfs_lustre_root,
+						    NULL, type);
+	if (IS_ERR_OR_NULL(type->typ_debugfs_entry)) {
+		rc = type->typ_debugfs_entry ? PTR_ERR(type->typ_debugfs_entry)
+					     : -ENOMEM;
+		type->typ_debugfs_entry = NULL;
 		GOTO(failed, rc);
+	}
+#ifdef HAVE_SERVER_SUPPORT
+dir_exist:
+#endif
+	type->typ_kobj = class_setup_tunables(type->typ_name);
+	if (IS_ERR(type->typ_kobj))
+		GOTO(failed, rc = PTR_ERR(type->typ_kobj));
 
 	if (ldt) {
 		type->typ_lu = ldt;
 		rc = lu_device_type_init(ldt);
 		if (rc) {
-			kobject_put(&type->typ_kobj);
+			kobject_put(type->typ_kobj);
 			GOTO(failed, rc);
 		}
 	}
@@ -250,6 +297,12 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
 	RETURN(0);
 
 failed:
+#ifdef HAVE_SERVER_SUPPORT
+	if (type->typ_sym_filter)
+		type->typ_debugfs_entry = NULL;
+#endif
+	if (!IS_ERR_OR_NULL(type->typ_debugfs_entry))
+		ldebugfs_remove(&type->typ_debugfs_entry);
 	if (type->typ_name != NULL) {
 #ifdef CONFIG_PROC_FS
 		if (type->typ_procroot != NULL)
@@ -285,8 +338,7 @@ int class_unregister_type(const char *name)
                 RETURN(-EBUSY);
         }
 
-	kobject_put(&type->typ_kobj);
-	wait_for_completion(&type->typ_kobj_unregister);
+	kobject_put(type->typ_kobj);
 
 	/* we do not use type->typ_procroot as for compatibility purposes
 	 * other modules can share names (i.e. lod can use lov entry). so
@@ -298,6 +350,13 @@ int class_unregister_type(const char *name)
 	if (type->typ_procsym != NULL)
 		lprocfs_remove(&type->typ_procsym);
 #endif
+#ifdef HAVE_SERVER_SUPPORT
+	if (type->typ_sym_filter)
+		type->typ_debugfs_entry = NULL;
+#endif
+	if (!IS_ERR_OR_NULL(type->typ_debugfs_entry))
+		ldebugfs_remove(&type->typ_debugfs_entry);
+
         if (type->typ_lu)
                 lu_device_type_fini(type->typ_lu);
 

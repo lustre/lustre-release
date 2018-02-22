@@ -2057,9 +2057,14 @@ static struct obd_ops lod_obd_device_ops = {
 	.o_pool_del     = lod_pool_del,
 };
 
+static struct obd_type sym;
+
 static int __init lod_init(void)
 {
+	struct dentry *symlink;
 	struct obd_type	*type;
+	struct kobject *kobj;
+	struct qstr dname;
 	int rc;
 
 	rc = lu_kmem_init(lod_caches);
@@ -2073,10 +2078,42 @@ static int __init lod_init(void)
 		return rc;
 	}
 
-	/* create "lov" entry in procfs for compatibility purposes */
+	/* create "lov" entry for compatibility purposes */
+	dname.name = "lov";
+	dname.len = strlen(dname.name);
+	dname.hash = ll_full_name_hash(debugfs_lustre_root, dname.name,
+				       dname.len);
+	symlink = d_lookup(debugfs_lustre_root, &dname);
+	if (!symlink) {
+		symlink = debugfs_create_dir(dname.name, debugfs_lustre_root);
+		if (IS_ERR_OR_NULL(symlink)) {
+			rc = symlink ? PTR_ERR(symlink) : -ENOMEM;
+			GOTO(no_lov, rc);
+		}
+		sym.typ_debugfs_entry = symlink;
+	} else {
+		dput(symlink);
+	}
+
+	kobj = kset_find_obj(lustre_kset, dname.name);
+	if (kobj) {
+		kobject_put(kobj);
+		goto try_proc;
+	}
+
+	kobj = class_setup_tunables(dname.name);
+	if (IS_ERR(kobj)) {
+		rc = PTR_ERR(kobj);
+		if (sym.typ_debugfs_entry)
+			ldebugfs_remove(&sym.typ_debugfs_entry);
+		GOTO(no_lov, rc);
+	}
+	sym.typ_kobj = kobj;
+
+try_proc:
 	type = class_search_type(LUSTRE_LOV_NAME);
 	if (type != NULL && type->typ_procroot != NULL)
-		return rc;
+		GOTO(no_lov, rc);
 
 	type = class_search_type(LUSTRE_LOD_NAME);
 	type->typ_procsym = lprocfs_register("lov", proc_lustre_root,
@@ -2086,11 +2123,14 @@ static int __init lod_init(void)
 		       (int)PTR_ERR(type->typ_procsym));
 		type->typ_procsym = NULL;
 	}
+no_lov:
 	return rc;
 }
 
 static void __exit lod_exit(void)
 {
+	ldebugfs_remove(&sym.typ_debugfs_entry);
+	kobject_put(sym.typ_kobj);
 	class_unregister_type(LUSTRE_LOD_NAME);
 	lu_kmem_fini(lod_caches);
 }

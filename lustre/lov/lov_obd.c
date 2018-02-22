@@ -793,8 +793,8 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
 		GOTO(out, rc);
 
-#ifdef CONFIG_PROC_FS
 	obd->obd_vars = lprocfs_lov_obd_vars;
+#ifdef CONFIG_PROC_FS
 	/* If this is true then both client (lov) and server
 	 * (lod) are on the same node. The lod layer if loaded
 	 * first will register the lov proc directory. In that
@@ -813,26 +813,27 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			obd->obd_proc_entry = NULL;
 		}
 	}
+#endif
 
 	rc = lprocfs_obd_setup(obd, false);
-	if (!rc) {
-		rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd",
-					0444, &lov_proc_target_fops, obd);
-		if (rc)
-			CWARN("Error adding the target_obd file\n");
+	if (rc)
+		GOTO(out, rc);
 
-		lov->lov_pool_proc_entry = lprocfs_register("pools",
-							    obd->obd_proc_entry,
-							    NULL, NULL);
-		if (IS_ERR(lov->lov_pool_proc_entry)) {
-			rc = PTR_ERR(lov->lov_pool_proc_entry);
-			CERROR("error %d setting up lprocfs for pools\n", rc);
-			lov->lov_pool_proc_entry = NULL;
-		}
+	rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd", 0444,
+				&lov_proc_target_fops, obd);
+	if (rc)
+		CWARN("%s: Error adding the target_obd file : rc %d\n",
+		      obd->obd_name, rc);
+
+	lov->lov_pool_proc_entry = lprocfs_register("pools",
+						    obd->obd_proc_entry,
+						    NULL, NULL);
+	if (IS_ERR(lov->lov_pool_proc_entry)) {
+		rc = PTR_ERR(lov->lov_pool_proc_entry);
+		CERROR("%s: error setting up ldebugfs for pools : rc %d\n",
+		       obd->obd_name, rc);
+		lov->lov_pool_proc_entry = NULL;
 	}
-#endif
-	RETURN(0);
-
 out:
 	return rc;
 }

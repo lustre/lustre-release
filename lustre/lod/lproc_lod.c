@@ -847,10 +847,11 @@ static const struct file_operations lod_proc_target_fops = {
  */
 int lod_procfs_init(struct lod_device *lod)
 {
-	struct obd_device	*obd = lod2obd(lod);
-	struct proc_dir_entry	*lov_proc_dir = NULL;
-	struct obd_type		*type;
-	int			 rc;
+	struct obd_device *obd = lod2obd(lod);
+	struct proc_dir_entry *lov_proc_dir;
+	struct obd_type *type;
+	struct kobject *lov;
+	int rc;
 
 	obd->obd_vars = lprocfs_lod_obd_vars;
 	rc = lprocfs_obd_setup(obd, true);
@@ -887,6 +888,19 @@ int lod_procfs_init(struct lod_device *lod)
 		GOTO(out, rc);
 	}
 
+	lov = kset_find_obj(lustre_kset, "lov");
+	if (lov) {
+		rc = sysfs_create_link(lov, &obd->obd_kset.kobj,
+				       obd->obd_name);
+		kobject_put(lov);
+	}
+
+	lod->lod_debugfs = ldebugfs_add_symlink(obd->obd_name, "lov",
+						"../lod/%s", obd->obd_name);
+	if (!lod->lod_debugfs)
+		CERROR("%s: failed to create LOV debugfs symlink\n",
+		       obd->obd_name);
+
 	/* If the real LOV is present which is the case for setups
 	 * with both server and clients on the same node then use
 	 * the LOV's proc root */
@@ -921,16 +935,21 @@ out:
 void lod_procfs_fini(struct lod_device *lod)
 {
 	struct obd_device *obd = lod2obd(lod);
+	struct kobject *lov;
 
 	if (lod->lod_symlink != NULL) {
 		lprocfs_remove(&lod->lod_symlink);
 		lod->lod_symlink = NULL;
 	}
 
-	if (lod->lod_pool_proc_entry != NULL) {
-		lprocfs_remove(&lod->lod_pool_proc_entry);
-		lod->lod_pool_proc_entry = NULL;
+	lov = kset_find_obj(lustre_kset, "lov");
+	if (lov) {
+		sysfs_remove_link(lov, obd->obd_name);
+		kobject_put(lov);
 	}
+
+	if (!IS_ERR_OR_NULL(lod->lod_debugfs))
+		ldebugfs_remove(&lod->lod_debugfs);
 
 	lprocfs_obd_cleanup(obd);
 }

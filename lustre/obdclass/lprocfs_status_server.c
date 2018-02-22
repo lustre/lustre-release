@@ -41,6 +41,49 @@
 #include <lprocfs_status.h>
 #include <lustre_nodemap.h>
 
+#define MAX_STRING_SIZE 128
+
+struct dentry *ldebugfs_add_symlink(const char *name, const char *target,
+				    const char *format, ...)
+{
+	struct dentry *entry = NULL;
+	struct dentry *parent;
+	struct qstr dname;
+	va_list ap;
+	char *dest;
+
+	if (!target || !format)
+		return NULL;
+
+	dname.name = target;
+	dname.len = strlen(dname.name);
+	dname.hash = ll_full_name_hash(parent, dname.name, dname.len);
+	parent = d_lookup(debugfs_lustre_root, &dname);
+	if (!parent)
+		return NULL;
+
+	OBD_ALLOC_WAIT(dest, MAX_STRING_SIZE + 1);
+	if (!dest)
+		goto no_entry;
+
+	va_start(ap, format);
+	vsnprintf(dest, MAX_STRING_SIZE, format, ap);
+	va_end(ap);
+
+	entry = debugfs_create_symlink(name, parent, dest);
+	if (IS_ERR_OR_NULL(entry)) {
+		CERROR("LdebugFS: Could not create symbolic link from %s to %s\n",
+		       name, dest);
+		entry = NULL;
+	}
+
+	OBD_FREE(dest, MAX_STRING_SIZE + 1);
+no_entry:
+	dput(parent);
+	return entry;
+}
+EXPORT_SYMBOL(ldebugfs_add_symlink);
+
 #ifdef CONFIG_PROC_FS
 
 int lprocfs_evict_client_open(struct inode *inode, struct file *f)

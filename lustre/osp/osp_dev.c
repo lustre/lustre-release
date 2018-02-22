@@ -1232,9 +1232,7 @@ out_last_used:
 out_fid:
 	obd_fid_fini(osp->opd_obd);
 out_proc:
-	ptlrpc_lprocfs_unregister_obd(obd);
-	if (osp->opd_symlink)
-		lprocfs_remove(&osp->opd_symlink);
+	osp_lprocfs_fini(osp);
 	client_obd_cleanup(obd);
 out_ref:
 	ptlrpcd_decref();
@@ -1348,11 +1346,8 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 		obd_disconnect(osp->opd_storage_exp);
 	}
 
-	if (osp->opd_symlink)
-		lprocfs_remove(&osp->opd_symlink);
-
 	LASSERT(osp->opd_obd);
-	ptlrpc_lprocfs_unregister_obd(osp->opd_obd);
+	osp_lprocfs_fini(osp);
 
 	if (osp->opd_connect_mdt) {
 		struct client_obd *cli = &osp->opd_obd->u.cli;
@@ -1914,6 +1909,8 @@ static struct obd_ops osp_obd_device_ops = {
 
 struct llog_operations osp_mds_ost_orig_logops;
 
+static struct obd_type sym;
+
 /**
  * Initialize OSP module.
  *
@@ -1928,13 +1925,15 @@ struct llog_operations osp_mds_ost_orig_logops;
  */
 static int __init osp_init(void)
 {
+	struct dentry *symlink;
 	struct obd_type *type;
+	struct kobject *kobj;
+	struct qstr dname;
 	int rc;
 
 	rc = lu_kmem_init(osp_caches);
 	if (rc)
 		return rc;
-
 
 	rc = class_register_type(&osp_obd_device_ops, NULL, true, NULL,
 				 LUSTRE_OSP_NAME, &osp_device_type);
@@ -1956,10 +1955,42 @@ static int __init osp_init(void)
 	osp_mds_ost_orig_logops.lop_add = llog_cat_add_rec;
 	osp_mds_ost_orig_logops.lop_declare_add = llog_cat_declare_add_rec;
 
-	/* create "osc" entry in procfs for compatibility purposes */
+	/* create "osc" entry for compatibility purposes */
+	dname.name = "osc";
+	dname.len = strlen(dname.name);
+	dname.hash = ll_full_name_hash(debugfs_lustre_root, dname.name,
+				       dname.len);
+	symlink = d_lookup(debugfs_lustre_root, &dname);
+	if (!symlink) {
+		symlink = debugfs_create_dir(dname.name, debugfs_lustre_root);
+		if (IS_ERR_OR_NULL(symlink)) {
+			rc = symlink ? PTR_ERR(symlink) : -ENOMEM;
+			GOTO(no_osc, rc);
+		}
+		sym.typ_debugfs_entry = symlink;
+	} else {
+		dput(symlink);
+	}
+
+	kobj = kset_find_obj(lustre_kset, dname.name);
+	if (kobj) {
+		kobject_put(kobj);
+		goto try_proc;
+	}
+
+	kobj = class_setup_tunables(dname.name);
+	if (IS_ERR(kobj)) {
+		rc = PTR_ERR(kobj);
+		if (sym.typ_debugfs_entry)
+			ldebugfs_remove(&sym.typ_debugfs_entry);
+		GOTO(no_osc, rc);
+	}
+	sym.typ_kobj = kobj;
+
+try_proc:
 	type = class_search_type(LUSTRE_OSC_NAME);
 	if (type != NULL && type->typ_procroot != NULL)
-		return rc;
+		GOTO(no_osc, rc);
 
 	type = class_search_type(LUSTRE_OSP_NAME);
 	type->typ_procsym = lprocfs_register("osc", proc_lustre_root,
@@ -1969,6 +2000,7 @@ static int __init osp_init(void)
 		       (int) PTR_ERR(type->typ_procsym));
 		type->typ_procsym = NULL;
 	}
+no_osc:
 	return rc;
 }
 
@@ -1980,6 +2012,8 @@ static int __init osp_init(void)
  */
 static void __exit osp_exit(void)
 {
+	ldebugfs_remove(&sym.typ_debugfs_entry);
+	kobject_put(sym.typ_kobj);
 	class_unregister_type(LUSTRE_LWP_NAME);
 	class_unregister_type(LUSTRE_OSP_NAME);
 	lu_kmem_fini(osp_caches);

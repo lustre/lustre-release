@@ -1009,6 +1009,25 @@ static struct lprocfs_vars lprocfs_osp_osd_vars[] = {
 	{ NULL }
 };
 
+void osp_lprocfs_fini(struct osp_device *osp)
+{
+	struct obd_device *obd = osp->opd_obd;
+	struct kobject *osc;
+
+	osc = kset_find_obj(lustre_kset, "osc");
+	if (osc) {
+		sysfs_remove_link(osc, obd->obd_name);
+		kobject_put(osc);
+	}
+
+	if (!IS_ERR_OR_NULL(osp->opd_debugfs))
+		ldebugfs_remove(&osp->opd_debugfs);
+
+	ptlrpc_lprocfs_unregister_obd(obd);
+	if (osp->opd_symlink)
+		lprocfs_remove(&osp->opd_symlink);
+}
+
 /**
  * Initialize OSP lprocfs
  *
@@ -1016,10 +1035,11 @@ static struct lprocfs_vars lprocfs_osp_osd_vars[] = {
  */
 void osp_lprocfs_init(struct osp_device *osp)
 {
-	struct obd_device	*obd = osp->opd_obd;
-	struct proc_dir_entry	*osc_proc_dir = NULL;
-	struct obd_type		*type;
-	int			 rc;
+	struct obd_device *obd = osp->opd_obd;
+	struct proc_dir_entry *osc_proc_dir = NULL;
+	struct obd_type	*type;
+	struct kobject *osc;
+	int rc;
 
 	if (osp->opd_connect_mdt)
 		obd->obd_vars = lprocfs_osp_md_vars;
@@ -1041,6 +1061,23 @@ void osp_lprocfs_init(struct osp_device *osp)
 
 	if (osp->opd_connect_mdt || !strstr(obd->obd_name, "osc"))
 		return;
+
+	/* If the real OSC is present which is the case for setups
+	 * with both server and clients on the same node then use
+	 * the OSC's proc root
+	 */
+	osc = kset_find_obj(lustre_kset, "osc");
+	if (osc) {
+		rc = sysfs_create_link(osc, &obd->obd_kset.kobj,
+				       obd->obd_name);
+		kobject_put(osc);
+	}
+
+	osp->opd_debugfs = ldebugfs_add_symlink(obd->obd_name, "osc",
+						"../osp/%s", obd->obd_name);
+	if (!osp->opd_debugfs)
+		CERROR("%s: failed to create OSC debugfs symlink\n",
+		       obd->obd_name);
 
 	/* If the real OSC is present which is the case for setups
 	 * with both server and clients on the same node then use

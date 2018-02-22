@@ -231,13 +231,13 @@ int lproc_mgs_setup(struct mgs_device *mgs, const char *osd_name)
 	if (rc != 0)
 		GOTO(out, rc);
 
-        rc = lprocfs_obd_seq_create(obd, "filesystems", 0444,
-                                    &mgs_fs_fops, obd);
+	rc = ldebugfs_seq_create(obd->obd_debugfs_entry, "filesystems", 0444,
+				 &mgs_fs_fops, obd);
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = lprocfs_obd_seq_create(obd, "srpc_rules", 0400,
-				    &mgsself_srpc_fops, obd);
+	rc = ldebugfs_seq_create(obd->obd_debugfs_entry, "srpc_rules", 0400,
+				 &mgsself_srpc_fops, obd);
 	if (rc != 0)
 		GOTO(out, rc);
 

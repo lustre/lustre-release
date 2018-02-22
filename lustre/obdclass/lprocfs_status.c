@@ -59,6 +59,29 @@ int lprocfs_seq_release(struct inode *inode, struct file *file)
 }
 EXPORT_SYMBOL(lprocfs_seq_release);
 
+struct dentry *ldebugfs_add_simple(struct dentry *root,
+				   char *name, void *data,
+				   const struct file_operations *fops)
+{
+	struct dentry *entry;
+	umode_t mode = 0;
+
+	if (!root || !name || !fops)
+		return ERR_PTR(-EINVAL);
+
+	if (fops->read)
+		mode = 0444;
+	if (fops->write)
+		mode |= 0200;
+	entry = debugfs_create_file(name, mode, root, data, fops);
+	if (IS_ERR_OR_NULL(entry)) {
+		CERROR("LprocFS: No memory to create <debugfs> entry %s", name);
+		return entry ?: ERR_PTR(-ENOMEM);
+	}
+	return entry;
+}
+EXPORT_SYMBOL(ldebugfs_add_simple);
+
 struct proc_dir_entry *
 lprocfs_add_simple(struct proc_dir_entry *root, char *name,
 		   void *data, const struct file_operations *fops)
@@ -504,6 +527,25 @@ static ssize_t filesfree_show(struct kobject *kobj, struct attribute *attr,
 	return rc;
 }
 LUSTRE_RO_ATTR(filesfree);
+
+ssize_t conn_uuid_show(struct kobject *kobj, struct attribute *attr, char *buf)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct ptlrpc_connection *conn;
+	ssize_t count;
+
+	LPROCFS_CLIMP_CHECK(obd);
+	conn = obd->u.cli.cl_import->imp_connection;
+	if (conn && obd->u.cli.cl_import)
+		count = sprintf(buf, "%s\n", conn->c_remote_uuid.uuid);
+	else
+		count = sprintf(buf, "%s\n", "<none>");
+
+	LPROCFS_CLIMP_EXIT(obd);
+	return count;
+}
+EXPORT_SYMBOL(conn_uuid_show);
 
 int lprocfs_server_uuid_seq_show(struct seq_file *m, void *data)
 {
@@ -1163,6 +1205,7 @@ static void obd_sysfs_release(struct kobject *kobj)
 
 int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 {
+	struct lprocfs_vars *debugfs_vars = NULL;
 	int rc;
 
 	if (!obd || obd->obd_magic != OBD_DEVICE_MAGIC)
@@ -1177,7 +1220,7 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 	if (obd->obd_attrs)
 		obd->obd_ktype.default_attrs = obd->obd_attrs;
 
-	obd->obd_kset.kobj.parent = &obd->obd_type->typ_kobj;
+	obd->obd_kset.kobj.parent = obd->obd_type->typ_kobj;
 	obd->obd_kset.kobj.ktype = &obd->obd_ktype;
 	init_completion(&obd->obd_kobj_unregister);
 	rc = kset_register(&obd->obd_kset);
@@ -1195,10 +1238,23 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 		return rc;
 	}
 
-	if (obd->obd_proc_entry)
-		GOTO(already_registered, rc);
+	if (!obd->obd_type->typ_procroot)
+		debugfs_vars = obd->obd_vars;
+	obd->obd_debugfs_entry = ldebugfs_register(obd->obd_name,
+						   obd->obd_type->typ_debugfs_entry,
+						   debugfs_vars, obd);
+	if (IS_ERR_OR_NULL(obd->obd_debugfs_entry)) {
+		rc = obd->obd_debugfs_entry ? PTR_ERR(obd->obd_debugfs_entry)
+					    : -ENOMEM;
+		CERROR("error %d setting up debugfs for %s\n",
+		       rc, obd->obd_name);
+		obd->obd_debugfs_entry = NULL;
+		lprocfs_obd_cleanup(obd);
+		return rc;
+	}
 
-	LASSERT(obd->obd_type->typ_procroot != NULL);
+	if (obd->obd_proc_entry || !obd->obd_type->typ_procroot)
+		GOTO(already_registered, rc);
 
 	obd->obd_proc_entry = lprocfs_register(obd->obd_name,
 					       obd->obd_type->typ_procroot,
@@ -1229,6 +1285,9 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
 		lprocfs_remove(&obd->obd_proc_entry);
 		obd->obd_proc_entry = NULL;
 	}
+
+	if (!IS_ERR_OR_NULL(obd->obd_debugfs_entry))
+		ldebugfs_remove(&obd->obd_debugfs_entry);
 
 	sysfs_remove_group(&obd->obd_kset.kobj, &obd->obd_attrs_group);
 	kset_unregister(&obd->obd_kset);
@@ -1498,7 +1557,7 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
 	if (rc)
 		return rc;
 	seq = file->private_data;
-	seq->private = inode->i_private ? : PDE_DATA(inode);
+	seq->private = inode->i_private ? inode->i_private : PDE_DATA(inode);
 	return 0;
 }
 

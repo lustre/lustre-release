@@ -490,10 +490,14 @@ extern int lprocfs_add_clear_entry(struct obd_device * obd,
 #ifdef HAVE_SERVER_SUPPORT
 extern int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *peer_nid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
+struct dentry *ldebugfs_add_symlink(const char *name, const char *target,
+				    const char *format, ...);
 #else
 static inline int lprocfs_exp_cleanup(struct obd_export *exp)
 { return 0; }
 #endif
+struct dentry *ldebugfs_add_simple(struct dentry *root, char *name, void *data,
+				   const struct file_operations *fops);
 extern struct proc_dir_entry *
 lprocfs_add_simple(struct proc_dir_entry *root, char *name,
 		   void *data, const struct file_operations *fops);
@@ -553,16 +557,14 @@ static inline int LPROCFS_ENTRY_CHECK(struct inode *inode)
 { return 0; }
 #endif
 
-extern int lprocfs_obd_setup(struct obd_device *dev, bool uuid_only);
+extern int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
 #ifdef HAVE_SERVER_SUPPORT
 extern const struct file_operations lprocfs_evict_client_fops;
 #endif
 
-extern int ldebugfs_seq_create(struct dentry *parent, const char *name,
-			       umode_t mode,
-			       const struct file_operations *seq_fops,
-			       void *data);
+int ldebugfs_seq_create(struct dentry *parent, const char *name, umode_t mode,
+			const struct file_operations *seq_fops, void *data);
 extern int lprocfs_seq_create(struct proc_dir_entry *parent, const char *name,
 			      mode_t mode,
 			      const struct file_operations *seq_fops,
@@ -577,6 +579,7 @@ extern int lprocfs_uuid_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_name_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_server_uuid_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_conn_uuid_seq_show(struct seq_file *m, void *data);
+ssize_t conn_uuid_show(struct kobject *kobj, struct attribute *attr, char *buf);
 extern int lprocfs_import_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_state_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_connect_flags_seq_show(struct seq_file *m, void *data);
@@ -595,6 +598,8 @@ extern ssize_t
 lprocfs_evict_client_seq_write(struct file *file, const char __user *buffer,
 				size_t count, loff_t *off);
 #endif
+ssize_t ping_store(struct kobject *kobj, struct attribute *attr,
+		   const char *buffer, size_t count);
 extern ssize_t
 lprocfs_ping_seq_write(struct file *file, const char __user *buffer,
 		       size_t count, loff_t *off);
@@ -658,10 +663,75 @@ extern int lprocfs_seq_release(struct inode *, struct file *);
 #define LPROCFS_CLIMP_EXIT(obd)                 \
 	up_read(&(obd)->u.cli.cl_sem);
 
+/* write the name##_seq_show function, call LDEBUGFS_SEQ_FOPS_RO for read-only
+ * debugfs entries; otherwise, you will define name##_seq_write function also
+ * for a read-write debugfs entry, and then call LDEBUGFS_SEQ_FOPS instead.
+ * Finally, call ldebugfs_seq_create(obd, filename, 0444, &name#_fops, data);
+ */
+#define __LDEBUGFS_SEQ_FOPS(name, custom_seq_write)			\
+static int name##_single_open(struct inode *inode, struct file *file)	\
+{									\
+	return single_open(file, name##_seq_show, inode->i_private);	\
+}									\
+static const struct file_operations name##_fops = {			\
+	.owner	 = THIS_MODULE,						\
+	.open	 = name##_single_open,					\
+	.read	 = seq_read,						\
+	.write	 = custom_seq_write,					\
+	.llseek	 = seq_lseek,						\
+	.release = single_release,					\
+}
+
+#define LDEBUGFS_SEQ_FOPS_RO(name)	__LDEBUGFS_SEQ_FOPS(name, NULL)
+#define LDEBUGFS_SEQ_FOPS(name)		__LDEBUGFS_SEQ_FOPS(name, \
+							    name##_seq_write)
+
+#define LDEBUGFS_SEQ_FOPS_RO_TYPE(name, type)				\
+	static int name##_##type##_seq_show(struct seq_file *m, void *v)\
+	{								\
+		return lprocfs_##type##_seq_show(m, m->private);	\
+	}								\
+	LDEBUGFS_SEQ_FOPS_RO(name##_##type)
+
+#define LDEBUGFS_SEQ_FOPS_RW_TYPE(name, type)				\
+	static int name##_##type##_seq_show(struct seq_file *m, void *v)\
+	{								\
+		return lprocfs_##type##_seq_show(m, m->private);	\
+	}								\
+	static ssize_t name##_##type##_seq_write(struct file *file,	\
+			const char __user *buffer, size_t count,	\
+			loff_t *off)					\
+	{								\
+		struct seq_file *seq = file->private_data;		\
+		return ldebugfs_##type##_seq_write(file, buffer, count,	\
+						   seq->private);	\
+	}								\
+	LDEBUGFS_SEQ_FOPS(name##_##type);
+
+#define LDEBUGFS_FOPS_WR_ONLY(name, type)				\
+	static ssize_t name##_##type##_write(struct file *file,		\
+			const char __user *buffer, size_t count,	\
+			loff_t *off)					\
+	{								\
+		return ldebugfs_##type##_seq_write(file, buffer, count,	\
+						   off);		\
+	}								\
+	static int name##_##type##_open(struct inode *inode,		\
+					struct file *file)		\
+	{								\
+		return single_open(file, NULL, inode->i_private);	\
+	}								\
+	static const struct file_operations name##_##type##_fops = {	\
+		.open	 = name##_##type##_open,			\
+		.write	 = name##_##type##_write,			\
+		.release = single_release,				\
+	};
+
 /* write the name##_seq_show function, call LPROC_SEQ_FOPS_RO for read-only
-  proc entries; otherwise, you will define name##_seq_write function also for
-  a read-write proc entry, and then call LPROC_SEQ_SEQ instead. Finally,
-  call lprocfs_obd_seq_create(obd, filename, 0444, &name#_fops, data); */
+ * proc entries; otherwise, you will define name##_seq_write function also for
+ * a read-write proc entry, and then call LPROC_SEQ_FOPS instead. Finally,
+ * call ldebugfs_obd_seq_create(obd, filename, 0444, &name#_fops, data);
+ */
 #define __LPROC_SEQ_FOPS(name, custom_seq_write)			\
 static int name##_single_open(struct inode *inode, struct file *file)	\
 {									\

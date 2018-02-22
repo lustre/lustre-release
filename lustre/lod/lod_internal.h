@@ -167,7 +167,6 @@ struct lod_device {
 	struct dt_device      lod_dt_dev;
 	struct obd_export    *lod_child_exp;
 	struct dt_device     *lod_child;
-	struct proc_dir_entry *lod_proc_entry;
 	struct lprocfs_stats *lod_stats;
 	spinlock_t	      lod_connects_lock;
 	int		      lod_connects;
@@ -211,6 +210,7 @@ struct lod_device {
 	enum lustre_sec_part   lod_sp_me;
 
 	struct proc_dir_entry *lod_symlink;
+	struct dentry	       *lod_debugfs;
 
 	/* ROOT object, used to fetch FS default striping */
 	struct lod_object      *lod_md_root;

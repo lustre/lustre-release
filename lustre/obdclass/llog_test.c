@@ -2133,7 +2133,7 @@ static struct obd_ops llog_obd_ops = {
 
 static int __init llog_test_init(void)
 {
-	return class_register_type(&llog_obd_ops, NULL, true, NULL,
+	return class_register_type(&llog_obd_ops, NULL, false, NULL,
 				   "llog_test", NULL);
 }
 
