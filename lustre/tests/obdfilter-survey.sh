@@ -33,28 +33,28 @@ if [ $(( size * 1024 )) -ge $minsize  ]; then
     echo min kbytesavail: $minsize using size=${size} MBytes per obd instance
 fi
 
-get_devs() {
-        echo $(do_nodes $1 'lctl dl | grep obdfilter' | \
-             awk '{print $4}' | sort -u)
-}
-
 get_targets () {
-        local targets
-        local devs
-        local nid
-        local oss
+	local targets
+	local target
+	local dev
+	local nid
+	local osc
 
-        for oss in $(osts_nodes); do
-                devs=$(get_devs $oss)
-                nid=$(host_nids_address $oss $NETTYPE)
-                for d in $devs; do
-                        # if oss is local -- obdfilter-survey needs dev wo/ host
-                        target=$d
-                        [[ $oss = `hostname` && "$1" == "disk" ]] || target=$nid:$target
-                        targets="$targets $target"
-                done
-        done
+	for osc in $($LCTL get_param -N osc.${FSNAME}-*osc-*); do
+		nid=$($LCTL get_param $osc.import |
+			awk '/current_connection:/ {sub(/@.*/,""); print $2}')
+		dev=$(echo $osc | sed -e 's/^osc\.//' -e 's/-osc.*//')
+		target=$dev
 
+		# For local disk obdfilter-survey requires target devs w/o nid.
+		# obdfilter-survey :
+		# case 1 (local disk):
+		#    $ nobjhi=2 thrhi=2 size=1024
+		#         targets="lustre-OST0000 lustre-OST0001 ..."
+		#                 sh obdfilter-survey
+		local_node && [ "$1" == "disk" ] || target=$nid:$target
+		targets="$targets $target"
+	done
 	echo $targets
 }
 
@@ -202,10 +202,16 @@ run_test 2b "Stripe F/S over the Network, async journal"
 
 # README.obdfilter-survey: In network test only automated run is supported.
 test_3a () {
+	# obdfilter-survey Prerequisite:
+	#    For "network" case  you need to have all
+	#    modules (those llmount.sh loads) loaded in kernel. And the
+	#    'lctl dl' output must be blank.
+	# Skipping test for CLIENTONLY mode because of
+	# cleanupall()->stopall() does not cleanup the servers on this mode.
+	[ "$CLIENTONLY" ] && skip "CLIENTONLY mode" && return
+
 	remote_servers || { skip "Local servers" && return 0; }
 
-	# The Network survey test needs:
-	# Start lctl and check for the device list. The device list must be empty.
 	cleanupall
 
 	obdflter_survey_run network

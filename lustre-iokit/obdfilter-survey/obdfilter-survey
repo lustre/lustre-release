@@ -14,7 +14,7 @@ set -e
 # one can specify only case=disk or case=network or case=netdisk through
 # command line.
 
-# Perquisite: For "disk" case and "netdisk" case you need to have lustre setup
+# Prerequisite: For "disk" case and "netdisk" case you need to have lustre setup
 #             with one or more ost's. For "network" case  you need to have all
 #             modules (those llmount.sh loades) loaded in kernel. And the
 #             'lctl dl' output must be blank.
