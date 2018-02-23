@@ -285,6 +285,9 @@ int parse_options(struct mount_opts *mop, char *orig_options,
 	int rc = 0;
 
 	options = calloc(strlen(orig_options) + 1, 1);
+	if (options == NULL)
+		return ENOMEM;
+
 	*flagp = 0;
 	nextopt = orig_options;
 	while ((opt = strsep(&nextopt, ","))) {
@@ -292,8 +295,7 @@ int parse_options(struct mount_opts *mop, char *orig_options,
 			/* empty option */
 			continue;
 
-		/* Handle retries in a slightly different
-		 * manner */
+		/* Handle retries in a slightly different manner */
 		arg = opt;
 		val = strchr(opt, '=');
 		/* please note that some ldiskfs mount options are also in
@@ -330,7 +332,7 @@ int parse_options(struct mount_opts *mop, char *orig_options,
 					"%s: shared key path too long\n",
 					progname);
 				free(options);
-				return -1;
+				return EINVAL;
 			}
 			strncpy(mop->mo_skpath, val + 1, strlen(val + 1));
 #endif
@@ -805,7 +807,6 @@ int main(int argc, char *const argv[])
         if (rc) {
                 fprintf(stderr, "%s: can't parse options: %s\n",
                         progname, options);
-		rc = EINVAL;
 		goto out_options;
         }
 
