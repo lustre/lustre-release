@@ -340,6 +340,28 @@ AC_SUBST(EXTRA_KCFLAGS)
 ]) # LB_PROG_CC
 
 #
+# Check if gcc supports -Wno-format-truncation
+#
+# To supress many warnings with gcc7
+#
+AC_DEFUN([LB_CC_NO_FORMAT_TRUNCATION], [
+	AC_MSG_CHECKING([for -Wno-format-truncation support])
+
+	saved_flags="$CFLAGS"
+	CFLAGS="$CFLAGS -Wno-format-truncation"
+
+	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([], [])], [
+		EXTRA_KCFLAGS="$EXTRA_KCFLAGS -Wno-format-truncation"
+		AC_SUBST(EXTRA_KCFLAGS)
+		AC_MSG_RESULT([yes])
+	], [
+		AC_MSG_RESULT([no])
+	])
+
+	CFLAGS="$saved_flags"
+])
+
+#
 # LB_CONDITIONALS
 #
 # AM_CONDITIONAL instances for everything
@@ -551,6 +573,7 @@ LB_INCLUDE_RULES
 LB_PATH_DEFAULTS
 
 LB_PROG_CC
+LB_CC_NO_FORMAT_TRUNCATION
 
 LC_OSD_ADDON
 

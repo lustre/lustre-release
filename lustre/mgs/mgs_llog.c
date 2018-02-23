@@ -3020,13 +3020,14 @@ out_end:
         /* Add ost to all MDT lov defs */
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
 		if (test_bit(i, fsdb->fsdb_mdt_index_map)) {
-                        char mdt_index[9];
+			char mdt_index[13];
 
 			rc = name_create_mdt_and_lov(&logname, &lovname, fsdb,
 						     i);
 			if (rc)
 				RETURN(rc);
-                        sprintf(mdt_index, "-MDT%04x", i);
+
+			snprintf(mdt_index, sizeof(mdt_index), "-MDT%04x", i);
 			rc = mgs_write_log_osc_to_lov(env, mgs, fsdb, mti,
 						      logname, mdt_index,
 						      lovname, LUSTRE_SP_MDT,

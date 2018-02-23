@@ -57,6 +57,7 @@
 #include <sys/stat.h>
 #include <sys/mount.h>
 #include <sys/utsname.h>
+#include <sys/sysmacros.h>
 
 #include <string.h>
 #include <getopt.h>
@@ -191,7 +192,7 @@ static int is_feature_enabled(const char *feature, const char *devpath)
 int ldiskfs_write_ldd(struct mkfs_opts *mop)
 {
 	char mntpt[] = "/tmp/mntXXXXXX";
-	char filepnm[128];
+	char filepnm[192];
 	char *dev;
 	FILE *filep;
 	int ret = 0;
