@@ -1373,6 +1373,7 @@ static int osd_process_config(const struct lu_env *env,
 		break;
 	}
 	case LCFG_PRE_CLEANUP:
+		osd_scrub_stop(o);
 		osd_index_backup(env, o,
 				 o->od_index_backup_policy != LIBP_NONE);
 		rc = 0;

@@ -538,7 +538,7 @@ osd_get_name_n_idx_compat(const struct lu_env *env, struct osd_device *osd,
 	if (zdn != NULL)
 		*zdn = NULL;
 
-	if (fid_is_on_ost(env, osd, fid) == 1 || fid_seq(fid) == FID_SEQ_ECHO) {
+	if (fid_is_echo(fid) || fid_is_on_ost(env, osd, fid)) {
 		zapid = osd_get_idx_for_ost_obj_compat(env, osd, fid,
 						       buf, bufsize);
 	} else if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
@@ -572,8 +572,8 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 	if (zdn != NULL)
 		*zdn = NULL;
 
-	if (fid_is_on_ost(env, osd, fid) == 1 || fid_seq(fid) == FID_SEQ_ECHO ||
-	    fid_is_last_id(fid)) {
+	if (fid_is_echo(fid) || fid_is_last_id(fid) ||
+	    fid_is_on_ost(env, osd, fid)) {
 		zapid = osd_get_idx_for_ost_obj(env, osd, fid, buf, bufsize);
 	} else if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
 		/* special objects with fixed known fids get their name */

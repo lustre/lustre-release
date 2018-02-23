@@ -1387,7 +1387,7 @@ int osd_scrub_start(const struct lu_env *env, struct osd_device *dev,
 	RETURN(rc == -EALREADY ? 0 : rc);
 }
 
-static void osd_scrub_stop(struct osd_device *dev)
+void osd_scrub_stop(struct osd_device *dev)
 {
 	struct lustre_scrub *scrub = &dev->od_scrub;
 	ENTRY;

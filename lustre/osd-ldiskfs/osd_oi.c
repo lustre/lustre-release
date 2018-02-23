@@ -635,7 +635,7 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 	if (unlikely(fid_is_last_id(fid)))
 		return osd_obj_spec_lookup(info, osd, fid, id);
 
-	if (fid_is_on_ost(info, osd, fid, flags) || fid_is_llog(fid))
+	if (fid_is_llog(fid) || fid_is_on_ost(info, osd, fid, flags))
 		return osd_obj_map_lookup(info, osd, fid, id);
 
 
@@ -706,7 +706,7 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 	if (unlikely(fid_is_last_id(fid)))
 		return osd_obj_spec_insert(info, osd, fid, id, th);
 
-	if (fid_is_on_ost(info, osd, fid, flags) || fid_is_llog(fid))
+	if (fid_is_llog(fid) || fid_is_on_ost(info, osd, fid, flags))
 		return osd_obj_map_insert(info, osd, fid, id, th);
 
 	fid_cpu_to_be(oi_fid, fid);
@@ -818,7 +818,7 @@ int osd_oi_delete(struct osd_thread_info *info,
 	if (fid_is_last_id(fid))
 		return 0;
 
-	if (fid_is_on_ost(info, osd, fid, flags) || fid_is_llog(fid))
+	if (fid_is_llog(fid) || fid_is_on_ost(info, osd, fid, flags))
 		return osd_obj_map_delete(info, osd, fid, th);
 
 	fid_cpu_to_be(oi_fid, fid);
@@ -837,7 +837,7 @@ int osd_oi_update(struct osd_thread_info *info, struct osd_device *osd,
 	if (unlikely(fid_is_last_id(fid)))
 		return osd_obj_spec_update(info, osd, fid, id, th);
 
-	if (fid_is_on_ost(info, osd, fid, flags) || fid_is_llog(fid))
+	if (fid_is_llog(fid) || fid_is_on_ost(info, osd, fid, flags))
 		return osd_obj_map_update(info, osd, fid, id, th);
 
 	fid_cpu_to_be(oi_fid, fid);
