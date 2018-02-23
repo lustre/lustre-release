@@ -198,7 +198,8 @@ struct find_param {
 				 fp_comp_end_sign:2,
 				 fp_comp_count_sign:2,
 				 fp_mirror_count_sign:2,
-				 fp_mdt_count_sign:2;
+				 fp_mdt_count_sign:2,
+				 fp_blocks_sign:2;
 	unsigned long long	 fp_size;
 	unsigned long long	 fp_size_units;
 
@@ -247,7 +248,9 @@ struct find_param {
 				 fp_exclude_mdt_count:1,
 				 fp_check_hash_type:1,
 				 fp_exclude_hash_type:1,
-				 fp_yaml:1;	/* output layout in YAML */
+				 fp_yaml:1,	/* output layout in YAML */
+				 fp_check_blocks:1,
+				 fp_exclude_blocks:1;
 
 	int			 fp_verbose;
 	int			 fp_quiet;
@@ -294,6 +297,8 @@ struct find_param {
 	unsigned long long	 fp_comp_end_units;
 	unsigned long long	 fp_mdt_count;
 	unsigned		 fp_projid;
+	unsigned long long	 fp_blocks;
+	unsigned long long	 fp_blocks_units;
 
 	/* In-process parameters. */
 	unsigned long		 fp_got_uuids:1,

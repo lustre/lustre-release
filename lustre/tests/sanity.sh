@@ -5732,11 +5732,34 @@ test_56aa() { # LU-5937
 	$LFS setdirstripe -c$MDSCOUNT $dir/striped_dir
 
 	createmany -o $dir/striped_dir/${tfile}- 1024
-	local dirs=$(lfs find --size +8k $dir/)
+	local dirs=$($LFS find --size +8k $dir/)
 
 	[ -n "$dirs" ] || error "lfs find --size wrong under striped dir"
 }
 run_test 56aa "lfs find --size under striped dir"
+
+test_56ab() { # LU-10705
+	test_mkdir $DIR/$tdir
+	dd if=/dev/zero of=$DIR/$tdir/$tfile.1 bs=8k count=1 seek=2k
+	dd if=/dev/zero of=$DIR/$tdir/$tfile.2 bs=4k count=1 seek=4k
+	dd if=/dev/zero of=$DIR/$tdir/$tfile.3 bs=1M count=2 seek=16
+	# Flush writes to ensure valid blocks.  Need to be more thorough for
+	# ZFS, since blocks are not allocated/returned to client immediately.
+	sync_all_data
+	wait_zfs_commit ost1 2
+	cancel_lru_locks osc
+	ls -ls $DIR/$tdir
+
+	local files=$($LFS find --size +16M $DIR/$tdir | wc -l)
+
+	[[ $files == 3 ]] || error ">16M size files $files isn't 3 as expected"
+
+	files=$($LFS find --blocks +1M $DIR/$tdir | wc -l)
+	[[ $files == 1 ]] || error ">1M blocks files $files isn't 1 as expected"
+
+	rm -f $DIR/$tdir/$tfile.[123]
+}
+run_test 56ab "lfs find --blocks"
 
 test_56ba() {
 	# Create composite files with one component

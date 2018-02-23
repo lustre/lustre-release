@@ -3963,7 +3963,8 @@ static int cb_find_init(char *path, DIR *parent, DIR **dirp,
 	if (param->fp_obd_uuid || param->fp_mdt_uuid ||
 	    param->fp_check_uid || param->fp_check_gid ||
 	    param->fp_atime || param->fp_mtime || param->fp_ctime ||
-	    param->fp_check_size || find_check_lmm_info(param) ||
+	    param->fp_check_size || param->fp_check_blocks ||
+	    find_check_lmm_info(param) ||
 	    param->fp_check_mdt_count || param->fp_check_hash_type)
 		decision = 0;
 
@@ -4215,10 +4216,8 @@ obd_matches:
            The regular stat is almost of the same speed as some new
            'glimpse-size-ioctl'. */
 
-	if (param->fp_check_size && S_ISREG(st->st_mode) && stripe_count)
-		decision = 0;
-
-	if (param->fp_check_size && S_ISDIR(st->st_mode))
+	if ((param->fp_check_size || param->fp_check_blocks) &&
+	    ((S_ISREG(st->st_mode) && stripe_count) || S_ISDIR(st->st_mode)))
 		decision = 0;
 
 	if (!decision) {
@@ -4259,19 +4258,29 @@ obd_matches:
 			goto decided;
 	}
 
-	if (param->fp_check_size)
+	if (param->fp_check_size) {
 		decision = find_value_cmp(st->st_size, param->fp_size,
 					  param->fp_size_sign,
 					  param->fp_exclude_size,
 					  param->fp_size_units, 0);
-
-	if (decision != -1) {
-		llapi_printf(LLAPI_MSG_NORMAL, "%s", path);
-		if (param->fp_zero_end)
-			llapi_printf(LLAPI_MSG_NORMAL, "%c", '\0');
-		else
-			llapi_printf(LLAPI_MSG_NORMAL, "\n");
+		if (decision == -1)
+			goto decided;
 	}
+
+	if (param->fp_check_blocks) { /* convert st_blocks to bytes */
+		decision = find_value_cmp(st->st_blocks * 512, param->fp_blocks,
+					  param->fp_blocks_sign,
+					  param->fp_exclude_blocks,
+					  param->fp_blocks_units, 0);
+		if (decision == -1)
+			goto decided;
+	}
+
+	llapi_printf(LLAPI_MSG_NORMAL, "%s", path);
+	if (param->fp_zero_end)
+		llapi_printf(LLAPI_MSG_NORMAL, "%c", '\0');
+	else
+		llapi_printf(LLAPI_MSG_NORMAL, "\n");
 
 decided:
 	ret = 0;

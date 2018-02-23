@@ -361,7 +361,7 @@ command_t cmdlist[] = {
 	 "find files matching given attributes recursively in directory tree.\n"
 	 "usage: find <directory|filename> ...\n"
 	 "     [[!] --atime|-A [+-]N] [[!] --ctime|-C [+-]N]\n"
-	 "     [[!] --mtime|-M [+-]N] [--maxdepth|-D N]\n"
+	 "     [[!] --mtime|-M [+-]N] [--maxdepth|-D N] [[!] --blocks|-b N]\n"
 	 "     [[!] --mdt-index|--mdt|-m <uuid|index,...>]\n"
 	 "     [[!] --name|-n <pattern>] [[!] --ost|-O <uuid|index,...>]\n"
 	 "     [--print|-P] [--print0|-0] [[!] --size|-s [+-]N[bkMGTPE]]\n"
@@ -3340,6 +3340,7 @@ static int lfs_find(int argc, char **argv)
 	};
         struct option long_opts[] = {
 	{ .val = 'A',	.name = "atime",	.has_arg = required_argument },
+	{ .val = 'b',	.name = "blocks",	.has_arg = required_argument },
 	{ .val = LFS_COMP_COUNT_OPT,
 			.name = "comp-count",	.has_arg = required_argument },
 	{ .val = LFS_COMP_COUNT_OPT,
@@ -3414,7 +3415,7 @@ static int lfs_find(int argc, char **argv)
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
 	while ((c = getopt_long_only(argc, argv,
-			"-0A:c:C:D:E:g:G:H:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:v",
+			"-0A:b:c:C:D:E:g:G:H:i:L:m:M:n:N:O:Ppqrs:S:t:T:u:U:v",
 			long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
@@ -3475,6 +3476,26 @@ static int lfs_find(int argc, char **argv)
 			}
 			if (rc)
 				*xsign = rc;
+			break;
+		case 'b':
+			if (optarg[0] == '+') {
+				param.fp_blocks_sign = -1;
+				optarg++;
+			} else if (optarg[0] == '-') {
+				param.fp_blocks_sign =  1;
+				optarg++;
+			}
+
+			param.fp_blocks_units = 1024;
+			ret = llapi_parse_size(optarg, &param.fp_blocks,
+					       &param.fp_blocks_units, 0);
+			if (ret) {
+				fprintf(stderr, "error: bad blocks '%s'\n",
+					optarg);
+				goto err;
+			}
+			param.fp_check_blocks = 1;
+			param.fp_exclude_blocks = !!neg_opt;
 			break;
 		case LFS_COMP_COUNT_OPT:
 			if (optarg[0] == '+') {
@@ -3914,6 +3935,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 {
 	struct option long_opts[] = {
 /* find	{ .val = 'A',	.name = "atime",	.has_arg = required_argument }*/
+/* find	{ .val = 'b',	.name = "blocks",	.has_arg = required_argument }*/
 	{ .val = LFS_COMP_COUNT_OPT,
 			.name = "comp-count",	.has_arg = no_argument },
 	{ .val = LFS_COMP_COUNT_OPT,

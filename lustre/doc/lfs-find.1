@@ -4,7 +4,8 @@ lfs-find \- Lustre client utility to list files with specific attributes
 .SH SYNOPSIS
 .B lfs find \fR<\fIdirectory\fR|\fIfilename \fR...>
       [[\fB!\fR] \fB--atime\fR|\fB-A\fR [\fB-+\fR]\fIn\fR]
-[[\fB!\fR] \fB--ctime\fR|\fB-C\fR [\fB+-\fR]\fIn\fR]
+[[\fB!\fR] \fB--blocks\fR|\fB-b\fR [\fB+-\fR]\fIn\fR]
+      [[\fB!\fR] \fB--ctime\fR|\fB-C\fR [\fB+-\fR]\fIn\fR]
       [[\fB!\fR] \fB--component-count|\fB--comp-count\fR [\fB+-\fR]\fIn\fR]
       [[\fB!\fR] \fB--component-end|\fB--comp-end\fR|\fB-E\fR [\fB+-\fR]\fIn\fR[\fBKMGTPE\fR]]
       [[\fB!\fR] \fB--component-flags|\fB--comp-flags\fR <[^]\fIflag\fB,\fR...>]
@@ -45,6 +46,11 @@ OST and MDT location, and composite layout attributes.
 .TP
 .BR --atime | -A
 File was last accessed \fIn\fR*24 hours ago.
+.TP
+.BR --blocks | -b
+Blocks allocated by the file is \fIn\fR kibibytes (if no units are given),
+\fIn\fR 512-byte \fBb\fRlocks, or \fBK\fRibi-, \fBM\fRebi-, \fBG\fRibi-,
+\fBT\fRebi-, \fBP\fRebi-, or \fBE\fRbi-bytes if that suffix is given.
 .TP
 .BR --ctime | -C
 File's status was last changed \fIn\fR*24 hours ago.
