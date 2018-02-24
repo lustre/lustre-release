@@ -1742,7 +1742,7 @@ static int mirror_split(const char *fname, __u16 mirror_id,
 		fprintf(stderr, "error %s: file name of '%s' too long\n",
 			progname, fname);
 		rc = -ERANGE;
-		goto free_layout;
+		goto close_fd;
 	}
 	strncpy(parent, fname, sizeof(parent));
 	ptr = strrchr(parent, '/');
@@ -1751,7 +1751,7 @@ static int mirror_split(const char *fname, __u16 mirror_id,
 			fprintf(stderr, "error %s: getcwd failed: %s\n",
 				progname, strerror(errno));
 			rc = -errno;
-			goto free_layout;
+			goto close_fd;
 		}
 	} else {
 		if (ptr == parent)
@@ -1763,7 +1763,7 @@ static int mirror_split(const char *fname, __u16 mirror_id,
 	if (rc < 0) {
 		fprintf(stderr, "%s: cannot get MDT index of '%s'\n",
 			progname, fname);
-		goto free_layout;
+		goto close_fd;
 	}
 
 	if (victim_file == NULL) {
