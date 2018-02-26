@@ -5636,6 +5636,9 @@ check_migrate_links() {
 }
 
 test_56xb() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.55) ] &&
+		skip "Need MDS version at least 2.10.55" && return
+
 	local dir="$DIR/$tdir"
 
 	test_mkdir "$dir" || error "cannot create dir $dir"
