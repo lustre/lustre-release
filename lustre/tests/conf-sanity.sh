@@ -7667,6 +7667,9 @@ test_108a() {
 	[ $(facet_fstype $SINGLEMDS) != "zfs" ] &&
 		skip "zfs only test" && return
 
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
+		skip "Need server version at least 2.10.58" && return
+
 	stopall
 	load_modules
 
@@ -7730,6 +7733,9 @@ test_108b() {
 
 	[ $(facet_fstype $SINGLEMDS) != "ldiskfs" ] &&
 		skip "ldiskfs only test" && return
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
+		skip "Need server version at least 2.10.58" && return
 
 	stopall
 	load_modules
