@@ -6155,7 +6155,7 @@ test_86() {
 run_test 86 "Replacing mkfs.lustre -G option"
 
 test_87() { #LU-6544
-	[[ $(lustre_version_code $SINGLEMDS1) -ge $(version_code 2.9.51) ]] ||
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.9.51) ]] ||
 		{ skip "Need MDS version at least 2.9.51" && return; }
 	[[ $(facet_fstype $SINGLEMDS) != ldiskfs ]] &&
 		{ skip "ldiskfs only test" && return; }
