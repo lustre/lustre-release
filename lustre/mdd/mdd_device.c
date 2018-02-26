@@ -141,18 +141,8 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 		RETURN(rc);
 
 	mdd->mdd_atime_diff = MAX_ATIME_DIFF;
-	/* sync permission changes */
-	mdd->mdd_sync_permission = 1;
-	/* enable changelog garbage collection */
-	mdd->mdd_changelog_gc = 1;
-	/* with a significant amount of idle time */
-	mdd->mdd_changelog_max_idle_time = CHLOG_MAX_IDLE_TIME;
-	/* or a significant amount of late indexes */
-	mdd->mdd_changelog_max_idle_indexes = CHLOG_MAX_IDLE_INDEXES;
-	/* with a reasonable interval between each check */
-	mdd->mdd_changelog_min_gc_interval = CHLOG_MIN_GC_INTERVAL;
-	/* with a very few number of free entries */
-	mdd->mdd_changelog_min_free_cat_entries = CHLOG_MIN_FREE_CAT_ENTRIES;
+        /* sync permission changes */
+        mdd->mdd_sync_permission = 1;
 
 	dt_conf_get(env, mdd->mdd_child, &mdd->mdd_dt_conf);
 
@@ -1350,11 +1340,6 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 	}
 	*id = rec->cur_id = ++mdd->mdd_cl.mc_lastuser;
 	rec->cur_endrec = mdd->mdd_cl.mc_index;
-
-	rec->cur_time = (__u32)get_seconds();
-	if (OBD_FAIL_CHECK(OBD_FAIL_TIME_IN_CHLOG_USER))
-		rec->cur_time = 0;
-
 	spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
 	rc = llog_cat_add(env, ctxt->loc_handle, &rec->cur_hdr, NULL);
@@ -1421,8 +1406,8 @@ static int mdd_changelog_user_purge_cb(const struct lu_env *env,
 	RETURN(rc);
 }
 
-int mdd_changelog_user_purge(const struct lu_env *env,
-			     struct mdd_device *mdd, __u32 id)
+static int mdd_changelog_user_purge(const struct lu_env *env,
+				    struct mdd_device *mdd, __u32 id)
 {
 	struct mdd_changelog_user_purge mcup = {
 		.mcup_id = id,
@@ -1528,11 +1513,6 @@ static int mdd_changelog_clear_cb(const struct lu_env *env,
 	 * We now know the record to flush.
 	 */
 	rec->cur_endrec = mcuc->mcuc_endrec;
-
-	rec->cur_time = (__u32)get_seconds();
-	if (OBD_FAIL_CHECK(OBD_FAIL_TIME_IN_CHLOG_USER))
-		rec->cur_time = 0;
-
 	mcuc->mcuc_flush = true;
 
 	CDEBUG(D_IOCTL, "Rewriting changelog user %u endrec to %llu\n",

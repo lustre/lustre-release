@@ -2692,13 +2692,11 @@ struct llog_changelog_rec {
 #define CHANGELOG_USER_PREFIX "cl"
 
 struct llog_changelog_user_rec {
-	struct llog_rec_hdr   cur_hdr;
-	__u32                 cur_id;
-	/* only intended to be used in relative time comparisons to
-	 * detect idle users */
-	__u32                 cur_time;
-	__u64                 cur_endrec;
-	struct llog_rec_tail  cur_tail;
+        struct llog_rec_hdr   cur_hdr;
+        __u32                 cur_id;
+        __u32                 cur_padding;
+        __u64                 cur_endrec;
+        struct llog_rec_tail  cur_tail;
 } __attribute__((packed));
 
 enum agent_req_status {

@@ -134,9 +134,8 @@ static int lprocfs_changelog_users_cb(const struct lu_env *env,
 
 	rec = (struct llog_changelog_user_rec *)hdr;
 
-	seq_printf(m, CHANGELOG_USER_PREFIX"%-3d %llu (%u)\n",
-		   rec->cur_id, rec->cur_endrec, (__u32)get_seconds() -
-						 rec->cur_time);
+	seq_printf(m, CHANGELOG_USER_PREFIX"%-3d %llu\n",
+		   rec->cur_id, rec->cur_endrec);
 	return 0;
 }
 
@@ -165,7 +164,7 @@ static int mdd_changelog_users_seq_show(struct seq_file *m, void *data)
 	spin_unlock(&mdd->mdd_cl.mc_lock);
 
 	seq_printf(m, "current index: %llu\n", cur);
-	seq_printf(m, "%-5s %s %s\n", "ID", "index", "(idle seconds)");
+	seq_printf(m, "%-5s %s\n", "ID", "index");
 
 	llog_cat_process(&env, ctxt->loc_handle, lprocfs_changelog_users_cb,
 			 m, 0, 0);
@@ -226,173 +225,6 @@ static int mdd_changelog_size_seq_show(struct seq_file *m, void *data)
 	return rc;
 }
 LPROC_SEQ_FOPS_RO(mdd_changelog_size);
-
-static int mdd_changelog_gc_seq_show(struct seq_file *m, void *data)
-{
-	struct mdd_device *mdd = m->private;
-
-	LASSERT(mdd != NULL);
-	seq_printf(m, "%u\n", mdd->mdd_changelog_gc);
-	return 0;
-}
-
-static ssize_t
-mdd_changelog_gc_seq_write(struct file *file, const char __user *buffer,
-			   size_t count, loff_t *off)
-{
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
-	int rc;
-	__s64 val;
-
-	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	mdd->mdd_changelog_gc = !!val;
-
-	return count;
-}
-LPROC_SEQ_FOPS(mdd_changelog_gc);
-
-static int mdd_changelog_max_idle_time_seq_show(struct seq_file *m, void *data)
-{
-	struct mdd_device *mdd = m->private;
-
-	LASSERT(mdd != NULL);
-	seq_printf(m, "%u\n", mdd->mdd_changelog_max_idle_time);
-	return 0;
-}
-
-static ssize_t
-mdd_changelog_max_idle_time_seq_write(struct file *file,
-				      const char __user *buffer, size_t count,
-				      loff_t *off)
-{
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
-	int rc;
-	__s64 val;
-
-	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	/* XXX may need to limit with reasonable elapsed/idle times */
-	if (val < 1 || val > INT_MAX)
-		return -ERANGE;
-
-	mdd->mdd_changelog_max_idle_time = val;
-
-	return count;
-}
-LPROC_SEQ_FOPS(mdd_changelog_max_idle_time);
-
-static int mdd_changelog_max_idle_indexes_seq_show(struct seq_file *m,
-						   void *data)
-{
-	struct mdd_device *mdd = m->private;
-
-	LASSERT(mdd != NULL);
-	seq_printf(m, "%lu\n", mdd->mdd_changelog_max_idle_indexes);
-	return 0;
-}
-
-static ssize_t
-mdd_changelog_max_idle_indexes_seq_write(struct file *file,
-					 const char __user *buffer,
-					 size_t count, loff_t *off)
-{
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
-	int rc;
-	__s64 val;
-
-	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	/* XXX may need to limit/check with reasonable elapsed/idle indexes */
-	/* XXX may better allow to specify a % of full ChangeLogs */
-
-	mdd->mdd_changelog_max_idle_indexes = val;
-
-	return count;
-}
-LPROC_SEQ_FOPS(mdd_changelog_max_idle_indexes);
-
-static int mdd_changelog_min_gc_interval_seq_show(struct seq_file *m,
-						  void *data)
-{
-	struct mdd_device *mdd = m->private;
-
-	LASSERT(mdd != NULL);
-	seq_printf(m, "%u\n", mdd->mdd_changelog_min_gc_interval);
-	return 0;
-}
-
-static ssize_t
-mdd_changelog_min_gc_interval_seq_write(struct file *file,
-					const char __user *buffer,
-					size_t count, loff_t *off)
-{
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
-	int rc;
-	__s64 val;
-
-	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	/* XXX may need to limit with reasonable elapsed/interval times */
-	if (val < 1 || val > UINT_MAX)
-		return -ERANGE;
-
-	mdd->mdd_changelog_min_gc_interval = val;
-
-	return count;
-}
-LPROC_SEQ_FOPS(mdd_changelog_min_gc_interval);
-
-static int mdd_changelog_min_free_cat_entries_seq_show(struct seq_file *m,
-						       void *data)
-{
-	struct mdd_device *mdd = m->private;
-
-	LASSERT(mdd != NULL);
-	seq_printf(m, "%u\n", mdd->mdd_changelog_min_free_cat_entries);
-	return 0;
-}
-
-static ssize_t
-mdd_changelog_min_free_cat_entries_seq_write(struct file *file,
-					     const char __user *buffer,
-					     size_t count, loff_t *off)
-{
-	struct seq_file *m = file->private_data;
-	struct mdd_device *mdd = m->private;
-	int rc;
-	__s64 val;
-
-	LASSERT(mdd != NULL);
-	rc = lprocfs_str_to_s64(buffer, count, &val);
-	if (rc)
-		return rc;
-
-	/* XXX may need to limit with more reasonable number of free entries */
-	if (val < 1 || (__u64)val > UINT_MAX)
-		return -ERANGE;
-
-	mdd->mdd_changelog_min_free_cat_entries = val;
-
-	return count;
-}
-LPROC_SEQ_FOPS(mdd_changelog_min_free_cat_entries);
 
 static int mdd_sync_perm_seq_show(struct seq_file *m, void *data)
 {
@@ -511,16 +343,6 @@ static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {
 	  .fops =	&mdd_changelog_users_fops	},
 	{ .name =	"changelog_size",
 	  .fops =	&mdd_changelog_size_fops	},
-	{ .name =	"changelog_gc",
-	  .fops =	&mdd_changelog_gc_fops		},
-	{ .name =	"changelog_max_idle_time",
-	  .fops =	&mdd_changelog_max_idle_time_fops	},
-	{ .name =	"changelog_max_idle_indexes",
-	  .fops =	&mdd_changelog_max_idle_indexes_fops	},
-	{ .name =	"changelog_min_gc_interval",
-	  .fops =	&mdd_changelog_min_gc_interval_fops	},
-	{ .name =	"changelog_min_free_cat_entries",
-	  .fops =	&mdd_changelog_min_free_cat_entries_fops	},
 	{ .name =	"sync_permission",
 	  .fops =	&mdd_sync_perm_fops		},
 	{ .name =	"lfsck_speed_limit",

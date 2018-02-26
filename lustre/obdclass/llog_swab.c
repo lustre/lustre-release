@@ -214,7 +214,6 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 
                 __swab32s(&cur->cur_id);
                 __swab64s(&cur->cur_endrec);
-		__swab32s(&cur->cur_time);
 		tail = &cur->cur_tail;
                 break;
         }
