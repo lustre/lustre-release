@@ -42,6 +42,7 @@
  * @{
  */
 
+#include <linux/kernel.h>
 #include <linux/types.h>
 
 #ifdef __KERNEL__
@@ -60,6 +61,12 @@
 # include <sys/stat.h>
 # include <linux/lustre/lustre_fiemap.h>
 #endif /* __KERNEL__ */
+
+/* Handle older distros */
+#ifndef __ALIGN_KERNEL
+# define __ALIGN_KERNEL(x, a)   __ALIGN_KERNEL_MASK(x, (typeof(x))(a) - 1)
+# define __ALIGN_KERNEL_MASK(x, mask)   (((x) + (mask)) & ~(mask))
+#endif
 
 #if defined(__cplusplus)
 extern "C" {
@@ -1211,9 +1218,9 @@ enum changelog_send_extra_flag {
 	CHANGELOG_EXTRA_FLAG_XATTR  = 0x08,
 };
 
-#define CR_MAXSIZE cfs_size_round(2 * NAME_MAX + 2 + \
+#define CR_MAXSIZE __ALIGN_KERNEL(2 * NAME_MAX + 2 + \
 				  changelog_rec_offset(CLF_SUPPORTED, \
-							CLFE_SUPPORTED))
+						       CLFE_SUPPORTED), 8)
 
 /* 31 usable bytes string + null terminator. */
 #define LUSTRE_JOBID_SIZE	32
@@ -1880,27 +1887,20 @@ struct hsm_action_list {
 	   boundaries. See hai_zero */
 } __attribute__((packed));
 
-#ifndef HAVE_CFS_SIZE_ROUND
-static inline int cfs_size_round (int val)
-{
-	return (val + 7) & (~0x7);
-}
-#define HAVE_CFS_SIZE_ROUND
-#endif
-
 /* Return pointer to first hai in action list */
 static inline struct hsm_action_item *hai_first(struct hsm_action_list *hal)
 {
-	return (struct hsm_action_item *)(hal->hal_fsname +
-					  cfs_size_round(strlen(hal-> \
-								hal_fsname)
-							 + 1));
+	size_t offset = __ALIGN_KERNEL(strlen(hal->hal_fsname) + 1, 8);
+
+	return (struct hsm_action_item *)(hal->hal_fsname + offset);
 }
+
 /* Return pointer to next hai */
 static inline struct hsm_action_item * hai_next(struct hsm_action_item *hai)
 {
-	return (struct hsm_action_item *)((char *)hai +
-					  cfs_size_round(hai->hai_len));
+	size_t offset = __ALIGN_KERNEL(hai->hai_len, 8);
+
+	return (struct hsm_action_item *)((char *)hai + offset);
 }
 
 /* Return size of an hsm_action_list */
@@ -1910,10 +1910,10 @@ static inline size_t hal_size(struct hsm_action_list *hal)
 	size_t sz;
 	struct hsm_action_item *hai;
 
-	sz = sizeof(*hal) + cfs_size_round(strlen(hal->hal_fsname) + 1);
+	sz = sizeof(*hal) + __ALIGN_KERNEL(strlen(hal->hal_fsname) + 1, 8);
 	hai = hai_first(hal);
 	for (i = 0; i < hal->hal_count ; i++, hai = hai_next(hai))
-		sz += cfs_size_round(hai->hai_len);
+		sz += __ALIGN_KERNEL(hai->hai_len, 8);
 
 	return sz;
 }

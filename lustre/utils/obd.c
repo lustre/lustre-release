@@ -2603,7 +2603,7 @@ int jt_llog_catlist(int argc, char **argv)
 
         memset(&data, 0, sizeof(data));
         data.ioc_dev = cur_device;
-        data.ioc_inllen1 = sizeof(rawbuf) - cfs_size_round(sizeof(data));
+	data.ioc_inllen1 = sizeof(rawbuf) - __ALIGN_KERNEL(sizeof(data), 8);
         memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
@@ -2634,8 +2634,8 @@ int jt_llog_info(int argc, char **argv)
         data.ioc_dev = cur_device;
         data.ioc_inllen1 = strlen(argv[1]) + 1;
         data.ioc_inlbuf1 = argv[1];
-        data.ioc_inllen2 = sizeof(rawbuf) - cfs_size_round(sizeof(data)) -
-                cfs_size_round(data.ioc_inllen1);
+	data.ioc_inllen2 = sizeof(rawbuf) - __ALIGN_KERNEL(sizeof(data), 8) -
+			   __ALIGN_KERNEL(data.ioc_inllen1, 8);
         memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
@@ -2679,10 +2679,10 @@ int jt_llog_print(int argc, char **argv)
                 data.ioc_inllen3 = strlen(to) + 1;
                 data.ioc_inlbuf3 = to;
         }
-        data.ioc_inllen4 = sizeof(rawbuf) - cfs_size_round(sizeof(data)) -
-                cfs_size_round(data.ioc_inllen1) -
-                cfs_size_round(data.ioc_inllen2) -
-                cfs_size_round(data.ioc_inllen3);
+	data.ioc_inllen4 = sizeof(rawbuf) - __ALIGN_KERNEL(sizeof(data), 8) -
+			   __ALIGN_KERNEL(data.ioc_inllen1, 8) -
+			   __ALIGN_KERNEL(data.ioc_inllen2, 8) -
+			   __ALIGN_KERNEL(data.ioc_inllen3, 8);
         memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
@@ -2837,10 +2837,10 @@ int jt_llog_check(int argc, char **argv)
                 data.ioc_inllen3 = strlen(to) + 1;
                 data.ioc_inlbuf3 = to;
         }
-        data.ioc_inllen4 = sizeof(rawbuf) - cfs_size_round(sizeof(data)) -
-                cfs_size_round(data.ioc_inllen1) -
-                cfs_size_round(data.ioc_inllen2) -
-                cfs_size_round(data.ioc_inllen3);
+	data.ioc_inllen4 = sizeof(rawbuf) - __ALIGN_KERNEL(sizeof(data), 8) -
+			   __ALIGN_KERNEL(data.ioc_inllen1, 8) -
+			   __ALIGN_KERNEL(data.ioc_inllen2, 8) -
+			   __ALIGN_KERNEL(data.ioc_inllen3, 8);
         memset(buf, 0, sizeof(rawbuf));
 	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
         if (rc) {
