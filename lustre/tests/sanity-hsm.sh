@@ -2504,8 +2504,6 @@ test_26a() {
 
 	rm -f $f2
 
-	set_hsm_param remove_archive_on_last_unlink 0
-
 	wait_request_state $fid2 REMOVE SUCCEED
 
 	assert_request_count $fid REMOVE 0 \
@@ -2533,8 +2531,6 @@ test_26b() {
 	cdt_check_state stopped
 
 	rm -f $f
-
-	set_hsm_param remove_archive_on_last_unlink 0
 
 	wait_request_state $fid REMOVE WAITING
 
@@ -2592,8 +2588,6 @@ test_26c() {
 	# signal, close file, and exit ...
 	wait $pid || error "wait PID $PID failed"
 
-	set_hsm_param remove_archive_on_last_unlink 0
-
 	wait_request_state $fid REMOVE SUCCEED
 }
 run_test 26c "RAoLU effective when file closed"
@@ -2626,8 +2620,6 @@ test_26d() {
 	rm -f $f
 
 	mds_evict_client
-
-	set_hsm_param remove_archive_on_last_unlink 0
 
 	wait_request_state $fid REMOVE SUCCEED
 
