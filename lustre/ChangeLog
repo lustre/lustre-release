@@ -12,7 +12,7 @@
          3.0.101-0.47.71     (SLES11 SP3)
          3.0.101-107         (SLES11 SP4)
          3.12.74-60.64.40    (SLES12 SP1)
-         4.4.114-92.64       (SLES12 SP2)
+         4.4.114-92.67       (SLES12 SP2)
          4.4.114-94.14       (SLES12 SP3)
          vanilla linux 4.6.7 (ZFS only)
        * Client known to build on unpatched kernels:
@@ -25,7 +25,7 @@
          3.0.101-0.47.71     (SLES11 SP3)
          3.0.101-107         (SLES11 SP4)
          3.12.74-60.64.40    (SLES12 SP1)
-         4.4.114-92.64       (SLES12 SP2)
+         4.4.114-92.67       (SLES12 SP2)
          4.4.114-94.14       (SLES12 SP3)
          vanilla linux 4.6.7
        * Recommended e2fsprogs version: 1.42.13.wc4 or newer

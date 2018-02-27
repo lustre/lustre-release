@@ -22,7 +22,7 @@ PATCH SERIES FOR SERVER KERNELS:
 3.0-sles11sp3.series    3.0.101-0.47.71     (SLES11 SP3)
 3.0-sles11sp3.series    3.0.101-107         (SLES11 SP4)
 3.12-sles12.series      3.12.74-60.64.40    (SLES12 SP1)
-4.4-sles12.series       4.4.114-92.64       (SLES12 SP2)
+4.4-sles12.series       4.4.114-92.67       (SLES12 SP2)
 4.4-sles12sp3.series    4.4.114-94.14       (SLES12 SP3)
 
 See lustre/ChangeLog for supported client kernel versions.
