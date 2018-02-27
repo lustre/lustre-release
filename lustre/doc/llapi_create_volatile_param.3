@@ -1,0 +1,54 @@
+.TH llapi_create_volatile_param 3 "2015-01-14" "" "Lustre User API"
+.SH NAME
+llapi_create_volatile_param \- Lustre API file management
+.SH SYNOPSIS
+.sp
+\fB#include <lustre/lustreapi.h>\fP
+.sp
+\fBint llapi_create_volatile_param(const char *\fPdirectory\fB,
+int\fP mdt_idx\fB, int\fP open_flags\fB, mode_t\fP mode\fB, const
+struct llapi_stripe_param *\fPstripe_param\fB)\fP
+.sp
+\fBint llapi_create_volatile_idx(char *\fPdirectory\fB, int\fP idx\fB, int\fP open_flags\fB)\fP
+.sp
+\fBint llapi_create_volatile(char *\fPdirectory\fB, int\fP mode\fB)\fP
+.SH DESCRIPTION
+.sp
+These three functions create an anonymous, temporary, volatile file on
+a Lustre filesystem. The created file is not visible with
+\fBls(1)\fP\&. Once the file is closed, or the owning process dies, the
+file is permanently removed from the filesystem.
+.sp
+These functions will also work on a non\-Lustre filesystem, where the
+file is created then unlinked, leaving only the file descriptor to
+access the file. This is not strictly equivalent because there is a
+small window during which the file is visible to users (provided they
+have access to the \fIdirectory\fP).
+.sp
+The \fIdirectory\fP parameter indicates where to create the file on the
+Lustre filesystem.
+.sp
+\fImdt_idx\fP is the MDT index onto which to create the file. To use a
+default MDT, set mdt_idx to \-1.
+.sp
+\fIopen_flags\fP and \fImode\fP are the same as \fBopen(2)\fP\&.
+.sp
+\fIstripe_param\fP describes the striping information. If it is NULL, then
+the default for the directory is used.
+.SH RETURN VALUE
+.sp
+\fBllapi_create_volatile_param\fP, \fBllapi_create_volatile_idx\fP and
+\fBllapi_create_volatile\fP return a file descriptor on success. They
+all return a negative errno on failure.
+.SH ERRORS
+.sp
+The negative errno can be, but is not limited to:
+.sp
+\fB\-EINVAL\fP An invalid value was passed.
+.sp
+\fB\-ENOMEM\fP Not enough memory to allocate a resource.
+.SH SEE ALSO
+.sp
+\fBlustreapi\fP(7)
+.SH AUTHOR
+Frank Zago for Cray Inc.

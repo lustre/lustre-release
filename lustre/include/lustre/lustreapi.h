@@ -404,11 +404,15 @@ void llapi_hsm_log_error(enum llapi_message_level level, int _rc,
 			 const char *fmt, va_list args);
 
 int llapi_get_agent_uuid(char *path, char *buf, size_t bufsize);
-int llapi_create_volatile_idx(char *directory, int idx, int mode);
+int llapi_create_volatile_idx(const char *directory, int mdt_idx,
+			      int open_flags);
+int llapi_create_volatile_param(const char *directory, int mdt_idx,
+				int open_flags, mode_t mode,
+				const struct llapi_stripe_param *stripe_param);
 
-static inline int llapi_create_volatile(char *directory, int mode)
+static inline int llapi_create_volatile(char *directory, int open_flags)
 {
-	return llapi_create_volatile_idx(directory, -1, mode);
+	return llapi_create_volatile_idx(directory, -1, open_flags);
 }
 
 
