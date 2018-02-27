@@ -18325,52 +18325,6 @@ test_804() {
 }
 run_test 804 "verify agent entry for remote entry"
 
-cleanup_805() {
-	do_facet $SINGLEMDS zfs set quota=$old $fsset
-	unlinkmany $DIR/$tdir/f- 1000000
-	trap 0
-}
-
-test_805() {
-	local zfs_version=$(do_node $SINGLEMDS cat /sys/module/zfs/version)
-	[ "$(facet_fstype mds1)" != "zfs" ] &&
-		skip "ZFS specific test" && return
-	[ $(version_code $zfs_version) -lt $(version_code 0.7.2) ] &&
-		skip "netfree not implemented before 0.7" && return
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.57) ]] ||
-		{ skip "Need MDS version at least 2.10.57" && return 0; }
-
-	local fsset
-	local freekb
-	local usedkb
-	local old
-	local quota
-	local pref="osd-zfs.lustre-MDT0000."
-
-	# limit available space on MDS dataset to meet nospace issue
-	# quickly. then ZFS 0.7.2 can use reserved space if asked
-	# properly (using netfree flag in osd_declare_destroy()
-	fsset=$(do_facet $SINGLEMDS lctl get_param -n $pref.mntdev)
-	old=$(do_facet $SINGLEMDS zfs get -H quota $fsset | \
-		gawk '{print $3}')
-	freekb=$(do_facet $SINGLEMDS lctl get_param -n $pref.kbytesfree)
-	usedkb=$(do_facet $SINGLEMDS lctl get_param -n $pref.kbytestotal)
-	let "usedkb=usedkb-freekb"
-	let "freekb=freekb/2"
-	if let "freekb > 5000"; then
-		let "freekb=5000"
-	fi
-	do_facet $SINGLEMDS zfs set quota=$(((usedkb+freekb)*1024)) $fsset
-	trap cleanup_805 EXIT
-	mkdir $DIR/$tdir
-	$LFS setstripe -E 1M -L mdt $DIR/$tdir || error "DoM not working"
-	createmany -m $DIR/$tdir/f- 1000000 && error "ENOSPC wasn't met"
-	rm -rf $DIR/$tdir || error "not able to remove"
-	do_facet $SINGLEMDS zfs set quota=$old $fsset
-	trap 0
-}
-run_test 805 "ZFS can remove from full fs"
-
 #
 # tests that do cleanup/setup should be run at the end
 #

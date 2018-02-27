@@ -1086,8 +1086,4 @@ osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
 			    &osd->od_index_backup_stop, backup);
 }
 
-#ifndef HAVE_DMU_TX_MARK_NETFREE
-#define dmu_tx_mark_netfree(tx)
-#endif
-
 #endif /* _OSD_INTERNAL_H */
