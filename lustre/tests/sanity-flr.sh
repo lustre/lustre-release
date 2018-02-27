@@ -635,8 +635,8 @@ run_test 0f "lfs mirror extend composite layout mirrors"
 test_0g() {
 	local tf=$DIR/$tfile
 
-	$LFS mirror create -N -E 1M -o0 --flags=prefer -E eof -o1 -N -o1 $tf ||
-		error "create mirrored file $tf failed"
+	$LFS mirror create -N -E 1M -S 1M -o0 --flags=prefer -E eof -o1 \
+			   -N -o1 $tf || error "create mirrored file $tf failed"
 
 	verify_comp_attr lcme_flags $tf 0x10001 prefer
 	verify_comp_attr lcme_flags $tf 0x10002 prefer
@@ -663,7 +663,7 @@ run_test 0g "lfs mirror create flags support"
 test_0h() {
 	local tf=$DIR/$tfile
 
-	$LFS mirror create -N -E 1M --flags=prefer -E eof -N2 $tf ||
+	$LFS mirror create -N -E 1M -S 1M --flags=prefer -E eof -N2 $tf ||
 		error "create mirrored file $tf failed"
 
 	verify_comp_attr lcme_flags $tf 0x10001 prefer
@@ -727,8 +727,8 @@ test_2() {
 	local tf=$DIR/$tfile
 	local tf2=$DIR/$tfile-2
 
-	$LFS setstripe -E 1M -E EOF -c 1 $tf
-	$LFS setstripe -E 2M -E EOF -c -1 $tf2
+	$LFS setstripe -E 1M -S 1M -E EOF -c 1 $tf
+	$LFS setstripe -E 2M -S 1M -E EOF -c -1 $tf2
 
 	local layout=$($LFS getstripe $tf2 | grep -A 4 lmm_objects)
 
@@ -772,7 +772,7 @@ test_4() {
 	test_mkdir $DIR/$tdir
 
 	# set mirror with setstripe options to directory
-	$LFS mirror create -N2 -E 1M -E eof $DIR/$tdir ||
+	$LFS mirror create -N2 -E 1M -S 1M -E eof $DIR/$tdir ||
 		error "set mirror to directory error"
 
 	[ x$($LFS getstripe -v $DIR/$tdir | awk '/lcm_flags/{print $2}') = \
@@ -817,17 +817,17 @@ run_test 5 "Make sure init size work for mirrored layout"
 test_6() {
 	local tf=$DIR/$tfile
 
-	$LFS mirror create -N -E 1M -L mdt -E eof -N -E eof $tf &&
+	$LFS mirror create -N -E 1M -S 1M -L mdt -E eof -N -E eof $tf &&
 		error "expect failure to create mirrored file with DoM"
 
-	$LFS mirror create -N -E 1M -E eof -N -E 1M -L mdt -E eof $tf &&
+	$LFS mirror create -N -E 1M -S 1M -E eof -N -E 1M -L mdt -E eof $tf &&
 		error "expect failure to create mirrored file with DoM"
 
-	$LFS setstripe -E 1M -L mdt -E eof $tf
+	$LFS setstripe -E 1M -S 1M -L mdt -E eof $tf
 	$LFS mirror extend -N2 $tf &&
 		error "expect failure to extend mirror with DoM"
 
-	$LFS mirror create -N2 -E 1M -E eof $tf-2
+	$LFS mirror create -N2 -E 1M -S 1M -E eof $tf-2
 	$LFS mirror extend -N -f $tf $tf-2 &&
 		error "expect failure to extend mirrored file with DoM extent"
 
@@ -1170,8 +1170,8 @@ create_file_36() {
 	local tf
 
 	for tf in "$@"; do
-		$LFS setstripe -E 1M -E 2M -E 4M -E eof -c -1 $tf
-		$LFS setstripe -E 3M -E 6M -E eof -c -1 $tf-tmp
+		$LFS setstripe -E 1M -S 1M -E 2M -E 4M -E eof -c -1 $tf
+		$LFS setstripe -E 3M -S 1M -E 6M -E eof -c -1 $tf-tmp
 
 		$LFS mirror extend -N -f $tf-tmp $tf ||
 			error "merging $tf-tmp into $tf failed"
@@ -1241,7 +1241,7 @@ create_files_37() {
 
 	shift
 	for tf in "$@"; do
-		$LFS setstripe -E 1M -c 1 -E eof -c -1 $tf
+		$LFS setstripe -E 1M -S 1M -c 1 -E eof -c -1 $tf
 
 		dd if=/dev/urandom of=$tf bs=1M count=16 &> /dev/null
 		$TRUNCATE $tf $fsize
@@ -1323,9 +1323,12 @@ test_38() {
 	local tf=$DIR/$tfile
 	local ref=$DIR/${tfile}-ref
 
-	$LFS setstripe -E 1M -c 1 -E 4M -c 2 -E eof -c -1 $tf
-	$LFS setstripe -E 2M -c 1 -E 6M -c 2 -E 8M -c -1 -E eof -c -1 $tf-2
-	$LFS setstripe -E 4M -c 1 -E 8M -c 2 -E eof -c -1 $tf-3
+	$LFS setstripe -E 1M -S 1M -c 1 -E 4M -c 2 -E eof -c -1 $tf ||
+		error "creating $tf failed"
+	$LFS setstripe -E 2M -S 1M -c 1 -E 6M -c 2 -E 8M -c -1 -E eof -c -1 \
+		$tf-2 || error "creating $tf-2 failed"
+	$LFS setstripe -E 4M -c 1 -E 8M -c 2 -E eof -c -1 $tf-3 ||
+		error "creating $tf-3 failed"
 
 	# instantiate all components
 	$LFS mirror extend -N -f $tf-2 $tf ||
@@ -1417,8 +1420,8 @@ test_40() {
 	for ops in "conv=notrunc" ""; do
 		rm -f $tf
 
-		$LFS mirror create -N -E2m -E4m -E-1  --flags=prefer \
-				-N -E1m -E2m -E4m -E-1 $tf ||
+		$LFS mirror create -N -E 2M -S 1M -E 4M -E -1 --flags=prefer \
+				   -N -E 1M -E 2M -E 4M -E -1 $tf ||
 			error "create PFLR file $tf failed"
 		dd if=/dev/zero of=$tf $ops bs=1M seek=2 count=1 ||
 			error "write PFLR file $tf failed"
@@ -1460,10 +1463,13 @@ test_41() {
 
 	rm -f $tf $tf-1
 	echo " **create two FLR files $tf $tf-1"
-	$LFS mirror create -N -E2m -E4m -E-1 -N -E1m -E2m -E3m -E-1 $tf ||
+	$LFS mirror create -N -E 2M -S 1M -E 4M -E -1 \
+			   -N -E 1M -E 2M -E 3M -E -1 $tf ||
 		error "create PFLR file $tf failed"
-	$LFS mirror create -N -E2m -Eeof -N -E1m -Eeof --flags prefer \
-		-N -E4m -Eeof $tf-1 || error "create PFLR file $tf-1 failed"
+	$LFS mirror create -N -E 2M -S 1M -E eof \
+			   -N -E 1M -E eof --flags prefer \
+			   -N -E 4m -E eof $tf-1 ||
+		error "create PFLR file $tf-1 failed"
 
 	# file should be in ro status
 	echo " **verify files be RDONLY"
@@ -1550,13 +1556,13 @@ test_42() {
 	$mirror_cmd $td &> /dev/null && error "$td is not a regular file"
 
 	# create mirrored files
-	$LFS mirror create -N -E 4M -E 10M -E EOF $tf ||
+	$LFS mirror create -N -E 4M -S 1M -E 10M -E EOF $tf ||
 		error "create mirrored file $tf failed"
-	$LFS mirror create -N -E 2M -E EOF \
+	$LFS mirror create -N -E 2M -S 1M -E EOF \
 			   -N -E 6M -E 8M -E EOF \
 			   -N -E 16M -E EOF $tf-1 ||
 		error "create mirrored file $tf-1 failed"
-	$LFS mirror create -N -c 2 -o 1,3 -N -S 4M -c -1 $tf-2 ||
+	$LFS mirror create -N -c 2 -o 1,3 -N -S 2M -c -1 $tf-2 ||
 		error "create mirrored file $tf-2 failed"
 
 	# write data in [0, 10M)
@@ -1718,7 +1724,8 @@ test_44() {
 		error "create remote directory failed"
 	rm -f $tf $tf1 $tf.mirror~2
 	# create file with 4 mirrors
-	$LFS mirror create -N -E2m -E4m -E-1 -N -E1m -E2m -E3m -E-1 -N2 $tf ||
+	$LFS mirror create -N -E 2M -S 1M -E 4M -E -1 \
+			   -N -E 1M -E 2M -E 3M -E -1 -N2 $tf ||
 		error "create PFLR file $tf failed"
 
 	# file should be in ro status
@@ -1932,8 +1939,8 @@ test_200() {
 	local tf2=$DIR2/$tfile
 	local tf3=$DIR3/$tfile
 
-	$LFS setstripe -E 1M -E 2M -c 2 -E 4M -E 16M -E eof $tf
-	$LFS setstripe -E 2M -E 6M -c 2 -E 8M -E 32M -E eof $tf-2
+	$LFS setstripe -E 1M -S 1M -E 2M -c 2 -E 4M -E 16M -E eof $tf
+	$LFS setstripe -E 2M -S 1M -E 6M -c 2 -E 8M -E 32M -E eof $tf-2
 	$LFS setstripe -E 4M -c 2 -E 8M -E 64M -E eof $tf-3
 
 	$LFS mirror extend -N -f $tf-2 $tf ||
@@ -2055,7 +2062,7 @@ test_202() {
 	local tf=$DIR/$tfile
 	local ids
 
-	$LFS setstripe -E 1M -c 1 $tf
+	$LFS setstripe -E 1M -S 1M -c 1 $tf
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 	verify_comp_attr stripe-count $tf ${ids[0]} 1
 
@@ -2070,7 +2077,6 @@ test_202() {
 	verify_comp_attr stripe-count $tf ${ids[1]} $OSTCOUNT
 }
 run_test 202 "lfs setstripe --add-component wide striping"
-
 
 complete $SECONDS
 check_and_cleanup_lustre

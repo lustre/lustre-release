@@ -94,8 +94,8 @@ ZFS_MKFS_OPTS=${ZFS_MKFS_OPTS:-}
 
 LOAD_MODULES_REMOTE=${LOAD_MODULES_REMOTE:-false}
 
-STRIPE_BYTES=${STRIPE_BYTES:-1048576}
-STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}
+DEF_STRIPE_SIZE=${DEF_STRIPE_SIZE:-}   # filesystem default stripe size in bytes
+DEF_STRIPE_COUNT=${DEF_STRIPE_COUNT:-} # filesystem default stripe count
 SINGLEMDS=${SINGLEMDS:-"mds1"}
 TIMEOUT=${TIMEOUT:-20}
 PTLDEBUG=${PTLDEBUG:-"vfstrace rpctrace dlmtrace neterror ha config \

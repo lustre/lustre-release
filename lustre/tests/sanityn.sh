@@ -388,11 +388,13 @@ fi
 test_16a() {
 	local file1=$DIR1/$tfile
 	local file2=$DIR2/$tfile
+	local stripe_size=$(do_facet $SINGLEMDS \
+		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
 
 	# to allocate grant because it may run out due to test_15.
 	$LFS setstripe -c -1 $file1
-	dd if=/dev/zero of=$file1 bs=$STRIPE_BYTES count=$OSTCOUNT oflag=sync
-	dd if=/dev/zero of=$file2 bs=$STRIPE_BYTES count=$OSTCOUNT oflag=sync
+	dd if=/dev/zero of=$file1 bs=$stripe_size count=$OSTCOUNT oflag=sync
+	dd if=/dev/zero of=$file2 bs=$stripe_size count=$OSTCOUNT oflag=sync
 	rm -f $file1
 
 	$LFS setstripe -c -1 $file1 # b=10919
@@ -763,13 +765,15 @@ enable_lockless_truncate() {
 
 test_32a() { # bug 11270
 	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local stripe_size=$(do_facet $SINGLEMDS \
+		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
 
 	save_lustre_params client "$OSC.*.lockless_truncate" > $p
 	cancel_lru_locks $OSC
 	enable_lockless_truncate 1
 	rm -f $DIR1/$tfile
 	lfs setstripe -c -1 $DIR1/$tfile
-	dd if=/dev/zero of=$DIR1/$tfile count=$OSTCOUNT bs=$STRIPE_BYTES > \
+	dd if=/dev/zero of=$DIR1/$tfile count=$OSTCOUNT bs=$stripe_size > \
 		/dev/null 2>&1
 	clear_stats $OSC.*.${OSC}_stats
 

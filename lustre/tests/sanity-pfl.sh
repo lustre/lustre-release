@@ -112,7 +112,7 @@ test_2() {
 	dd if=$comp_file of=/dev/null bs=1M count=2 > /dev/null 2>&1 ||
 		error "Read beyond component should short read, not fail"
 
-	$LFS setstripe --component-add -E 2M -c 1 $comp_file ||
+	$LFS setstripe --component-add -E 2M -S 1M -c 1 $comp_file ||
 		error "Add component to $comp_file failed"
 
 	comp_cnt=$($LFS getstripe --component-count $comp_file)
@@ -159,7 +159,7 @@ test_3() {
 	test_mkdir $DIR/$tdir
 	rm -f $comp_file
 
-	$LFS setstripe -E 1M -E 64M -c 2 -E -1 -c 3 $comp_file ||
+	$LFS setstripe -E 1M -S 1M -E 64M -c 2 -E -1 -c 3 $comp_file ||
 		error "Create $comp_file failed"
 
 	local comp_cnt=$($LFS getstripe --component-count $comp_file)
@@ -176,7 +176,7 @@ test_3() {
 
 	rm -f $comp_file || error "Delete $comp_file failed"
 
-	$LFS setstripe -E 1M -E 16M -E -1 $comp_file ||
+	$LFS setstripe -E 1M -S 1M -E 16M -E -1 $comp_file ||
 		error "Create second $comp_file failed"
 
 	del_comp_and_verify $comp_file "^init" 1 0
@@ -307,7 +307,7 @@ test_7() {
 	chmod 0777 $DIR/$tdir || error "chmod $tdir failed"
 
 	local comp_file=$DIR/$tdir/$tfile
-	$RUNAS $LFS setstripe -E 1M -c 1 $comp_file ||
+	$RUNAS $LFS setstripe -E 1M -S 1M -c 1 $comp_file ||
 		error "Create composite file $comp_file failed"
 
 	$RUNAS $LFS setstripe --component-add -E 64M -c 4 $comp_file ||
@@ -345,7 +345,7 @@ test_9() {
 	test_mkdir $DIR/$tdir
 	rm -f $comp_file
 
-	$LFS setstripe -E 1m -S 1m -E 2M -c 1 $comp_file ||
+	$LFS setstripe -E 1M -S 1M -E 2M -c 1 $comp_file ||
 		error "Create $comp_file failed"
 
 	local comp_cnt=$($LFS getstripe --component-count $comp_file)
@@ -427,7 +427,7 @@ test_11() {
 	rm -f $comp_file
 
 	# only 1st component instantiated
-	$LFS setstripe -E 1m -E 2m -E 3m -E -1 $comp_file ||
+	$LFS setstripe -E 1M -S 1M -E 2M -E 3M -E -1 $comp_file ||
 		error "Create $comp_file failed"
 
 	local f1=$($LFS getstripe -I1 $comp_file | grep "l_fid")
@@ -481,8 +481,8 @@ test_12() {
 	rm -f $file
 
 	# specify ost list for component
-	$LFS setstripe -E1m -c2 -o0,1 -E2m -c2 -o1,2 -E3m -c2 -o2,1 \
-		-E4m -c1 -i2 -E-1 $file ||
+	$LFS setstripe -E 1M -S 1M -c 2 -o 0,1 -E 2M -c 2 -o 1,2 \
+		-E 3M -c 2 -o 2,1 -E 4M -c 1 -i 2 -E -1 $file ||
 		error "Create $file failed"
 
 	# clear lod component cache
@@ -523,7 +523,7 @@ test_13() { # LU-9311
 	local real_size
 
 	rm -f $file
-	$LFS setstripe -E 1M -c 1 -E 2M -c 2 -E -1 -c -1 -i 1 $file ||
+	$LFS setstripe -E 1M -S 1M -c 1 -E 2M -c 2 -E -1 -c -1 -i 1 $file ||
 		error "Create $file failed"
 	dd if=/dev/zero of=$file bs=1M count=$dd_count
 	real_size=$(stat -c %s $file)
@@ -583,10 +583,10 @@ test_15() {
 
 	$LFS setstripe -d $parent || error "delete default layout"
 
-	$LFS setstripe -E 1M -E 10M -E eof $parent/f1 || error "create f1"
+	$LFS setstripe -E 1M -S 1M -E 10M -E eof $parent/f1 || error "create f1"
 	$LFS setstripe -E 4M -E 20M -E eof $parent/f2 || error "create f2"
 	test_mkdir $parent/subdir
-	$LFS setstripe -E 6M -E 30M -E eof $parent/subdir ||
+	$LFS setstripe -E 6M -S 1M -E 30M -E eof $parent/subdir ||
 		error "setstripe to subdir"
 	$LFS setstripe -E 8M -E eof $parent/subdir/f3 || error "create f3"
 	$LFS setstripe -c 1 $parent/subdir/f4 || error "create f4"
@@ -713,7 +713,7 @@ test_17() {
 	test_mkdir -p $DIR/$tdir
 	rm -f $file
 
-	$LFS setstripe -E1m -E2m -c2 -E-1 -c-1 $file ||
+	$LFS setstripe -E 1M -S 1M -E 2M -c 2 -E -1 -c -1 $file ||
 		error "Create $file failed"
 
 	local s1=$($LFS getstripe -I1 -v $file | awk '/lcme_size:/{print $2}')

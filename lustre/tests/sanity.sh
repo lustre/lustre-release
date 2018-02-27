@@ -40,7 +40,7 @@ SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
 MEMHOG=${MEMHOG:-memhog}
 DIRECTIO=${DIRECTIO:-directio}
 ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
-STRIPES_PER_OBJ=-1
+DEF_STRIPE_COUNT=-1
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
 export PARALLEL=${PARALLEL:-"no"}
@@ -2047,7 +2047,8 @@ test_27A() { # b=19102
                 error "stripe count $($GETSTRIPE -c $MOUNT) != 1"
         local default_size=$($GETSTRIPE -S $MOUNT)
         local default_offset=$($GETSTRIPE -i $MOUNT)
-        local dsize=$((1024 * 1024))
+	local dsize=$(do_facet $SINGLEMDS \
+		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
         [ $default_size -eq $dsize ] ||
                 error "stripe size $default_size != $dsize"
         [ $default_offset -eq -1 ] ||error "stripe offset $default_offset != -1"
@@ -5056,11 +5057,11 @@ test_56t() { # LU-611 #LU-9369
 
 	setup_56 $dir 0 $NUMDIRS
 	for i in $(seq $NUMDIRS); do
-		$LFS setstripe -S 4M $dir/dir$i/$tfile
+		$LFS setstripe -S 8M $dir/dir$i/$tfile
 	done
 
 	local expected=$NUMDIRS
-	local cmd="$LFS find -S 4M $dir"
+	local cmd="$LFS find -S 8M $dir"
 	local nums=$($cmd | wc -l)
 
 	[ $nums -eq $expected ] || {
@@ -5372,6 +5373,7 @@ test_56wc() {
 
 	echo -n "Creating test dir..."
 	test_mkdir $DIR/$tdir &> /dev/null || error "cannot create dir"
+	local def_stripe_size=$($LFS getstripe -S $DIR/$tdir 2>/dev/null)
 	$LFS setstripe -S 1M -c 1 "$DIR/$tdir" &> /dev/null ||
 		error "cannot set stripe"
 	echo "done"
@@ -5436,7 +5438,7 @@ test_56wc() {
 	echo -n "Verifying restripe option uses parent stripe settings..."
 	$LFS_MIGRATE -y -R "$file1" &> /dev/null ||
 		error "migrate failed"
-	[ $($LFS getstripe -S "$file1") -eq 1048576 ] ||
+	[ $($LFS getstripe -S "$file1") -eq $def_stripe_size ] ||
 		error "file not restriped to parent settings"
 	[ $($LFS getstripe -c "$file1") -eq 1 ] ||
 		error "file not restriped to parent settings"
@@ -5447,11 +5449,12 @@ test_56wc() {
 	# Ensure striping is preserved if -R is not set, and no stripe
 	# count or size is specified
 	echo -n "Verifying striping size preserved when not specified..."
+	local orig_stripe_size=$($LFS getstripe -S "$file1" 2>/dev/null)
 	$LFS setstripe -S 2M -c 1 "$DIR/$tdir" &> /dev/null ||
 		error "cannot set stripe on parent directory"
 	$LFS_MIGRATE -y "$file1" &> /dev/null ||
 		error "migrate failed"
-	[ $($LFS getstripe -S "$file1") -eq 1048576 ] ||
+	[ $($LFS getstripe -S "$file1") -eq $orig_stripe_size ] ||
 		error "file was restriped"
 	echo "done."
 
@@ -5737,9 +5740,9 @@ test_56ba() {
 	# Create composite files with one component
 	local dir=$DIR/$tdir
 
-	setup_56 $dir/1Mfiles 5 1 "--component-end 1M"
+	setup_56 $dir/1Mfiles 5 1 "-S 1M --component-end 1M"
 	# Create composite files with three components
-	setup_56 $dir/2Mfiles 5 2 "-E 2M -E 4M -E 6M"
+	setup_56 $dir/2Mfiles 5 2 "-E 2M -S 1M -E 4M -E 6M"
 	# Create non-composite files
 	createmany -o $dir/${tfile}- 10
 

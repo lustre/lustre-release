@@ -6244,7 +6244,7 @@ test_87() { #LU-6544
 	check_mount || error "check client $MOUNT failed"
 
 	#set xattr
-	$SETSTRIPE -E 1M -c 1 -E 64M -c 1 -E -1 -c -1 $file ||
+	$SETSTRIPE -E 1M -S 1M -c 1 -E 64M -c 1 -E -1 -c -1 $file ||
 		error "Create file with 3 components failed"
 	$TRUNCATE $file $((1024*1024*64+1)) || error "truncate file failed"
 	i=$($GETSTRIPE -I3 -c $file) || error "get 3rd stripe count failed"

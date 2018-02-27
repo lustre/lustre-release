@@ -1527,7 +1527,7 @@ test_13() {
 	#define OBD_FAIL_LFSCK_BAD_LMMOI	0x160f
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x160f
 	createmany -o $DIR/$tdir/f 1
-	$LFS setstripe -E 1M -E -1 $DIR/$tdir/f1 ||
+	$LFS setstripe -E 1M -S 1M -E -1 $DIR/$tdir/f1 ||
 		error "(0) Fail to create PFL $DIR/$tdir/f1"
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 
@@ -2835,7 +2835,7 @@ test_18h() {
 
 	check_mount_and_prep
 
-	$LFS setstripe -E 2M -c 1 -E -1 $DIR/$tdir/f0 ||
+	$LFS setstripe -E 2M -S 1M -c 1 -E -1 $DIR/$tdir/f0 ||
 		error "(0) Fail to create PFL $DIR/$tdir/f0"
 
 	cat $LUSTRE/tests/test-framework.sh > $DIR/$tdir/f0 ||

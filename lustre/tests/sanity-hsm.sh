@@ -1067,7 +1067,7 @@ run_test 1a "mmap & cat a HSM released file"
 
 test_1b() {
 	mkdir -p $DIR/$tdir
-	$LFS setstripe -E 1M -E 64M -c 2 -E -1 -c 4 $DIR/$tdir ||
+	$LFS setstripe -E 1M -S 1M -E 64M -c 2 -E -1 -c 4 $DIR/$tdir ||
 		error "failed to set default stripe"
 	local f=$DIR/$tdir/$tfile
 	rm -f $f

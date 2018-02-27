@@ -3860,8 +3860,8 @@ mkfs_opts() {
 
 	if [ $type == MDS ]; then
 		opts+=${MDSCAPA:+" --param-mdt.capa=$MDSCAPA"}
-		opts+=${STRIPE_BYTES:+" --param=lov.stripesize=$STRIPE_BYTES"}
-		opts+=${STRIPES_PER_OBJ:+" --param=lov.stripecount=$STRIPES_PER_OBJ"}
+		opts+=${DEF_STRIPE_SIZE:+" --param=lov.stripesize=$DEF_STRIPE_SIZE"}
+		opts+=${DEF_STRIPE_COUNT:+" --param=lov.stripecount=$DEF_STRIPE_COUNT"}
 		opts+=${L_GETIDENTITY:+" --param=mdt.identity_upcall=$L_GETIDENTITY"}
 
 		if [ $fstype == ldiskfs ]; then
