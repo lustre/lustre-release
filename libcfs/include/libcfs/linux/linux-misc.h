@@ -33,6 +33,7 @@
 #ifndef __LIBCFS_LINUX_MISC_H__
 #define __LIBCFS_LINUX_MISC_H__
 
+#include <linux/fs.h>
 #include <linux/mutex.h>
 #include <linux/user_namespace.h>
 
@@ -115,6 +116,8 @@ int cfs_get_environ(const char *key, char *value, int *val_len);
 #ifndef HAVE_WAIT_QUEUE_ENTRY
 #define wait_queue_entry_t wait_queue_t
 #endif
+
+int cfs_kernel_write(struct file *filp, char *buf, size_t count, loff_t *pos);
 
 /*
  * For RHEL6 struct kernel_parm_ops doesn't exist. Also

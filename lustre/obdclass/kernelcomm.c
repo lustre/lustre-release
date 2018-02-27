@@ -41,30 +41,6 @@
 #include <obd_support.h>
 #include <lustre_kernelcomm.h>
 
-/* write a userspace buffer to disk.
- * NOTE: this returns 0 on success, not the number of bytes written. */
-static ssize_t
-filp_user_write(struct file *filp, const void *buf, size_t count,
-		loff_t *offset)
-{
-	mm_segment_t fs;
-	ssize_t size = 0;
-
-	fs = get_fs();
-	set_fs(KERNEL_DS);
-	while ((ssize_t)count > 0) {
-		size = vfs_write(filp, (const void __user *)buf, count, offset);
-		if (size < 0)
-			break;
-		count -= size;
-		buf += size;
-		size = 0;
-	}
-	set_fs(fs);
-
-	return size;
-}
-
 /**
  * libcfs_kkuc_msg_put - send an message from kernel to userspace
  * @param fp to send the message to
@@ -74,10 +50,11 @@ filp_user_write(struct file *filp, const void *buf, size_t count,
 int libcfs_kkuc_msg_put(struct file *filp, void *payload)
 {
 	struct kuc_hdr *kuch = (struct kuc_hdr *)payload;
-	int rc = -ENOSYS;
+	ssize_t count = kuch->kuc_msglen;
 	loff_t offset = 0;
+	int rc = 0;
 
-	if (filp == NULL || IS_ERR(filp))
+	if (IS_ERR_OR_NULL(filp))
 		return -EBADF;
 
 	if (kuch->kuc_magic != KUC_MAGIC) {
@@ -85,7 +62,15 @@ int libcfs_kkuc_msg_put(struct file *filp, void *payload)
 		return -ENOSYS;
 	}
 
-	rc = filp_user_write(filp, payload, kuch->kuc_msglen, &offset);
+	while (count > 0) {
+		rc = cfs_kernel_write(filp, payload, count, &offset);
+		if (rc < 0)
+			break;
+		count -= rc;
+		payload += rc;
+		rc = 0;
+	}
+
 	if (rc < 0)
 		CWARN("message send failed (%d)\n", rc);
 	else

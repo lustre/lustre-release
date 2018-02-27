@@ -666,7 +666,6 @@ int cfs_tracefile_dump_all_pages(char *filename)
 	struct file		*filp;
 	struct cfs_trace_page	*tage;
 	struct cfs_trace_page	*tmp;
-	mm_segment_t		__oldfs;
 	char			*buf;
 	int rc;
 
@@ -687,8 +686,6 @@ int cfs_tracefile_dump_all_pages(char *filename)
                 rc = 0;
                 goto close;
         }
-	__oldfs = get_fs();
-	set_fs(get_ds());
 
 	/* ok, for now, just write the pages.  in the future we'll be building
 	 * iobufs with the pages and calling generic_direct_IO */
@@ -697,8 +694,7 @@ int cfs_tracefile_dump_all_pages(char *filename)
 		__LASSERT_TAGE_INVARIANT(tage);
 
 		buf = kmap(tage->page);
-		rc = vfs_write(filp, (__force const char __user *)buf,
-			       tage->used, &filp->f_pos);
+		rc = cfs_kernel_write(filp, buf, tage->used, &filp->f_pos);
 		kunmap(tage->page);
 		if (rc != (int)tage->used) {
 			printk(KERN_WARNING "wanted to write %u but wrote "
@@ -710,7 +706,7 @@ int cfs_tracefile_dump_all_pages(char *filename)
 		list_del(&tage->linkage);
                 cfs_tage_free(tage);
         }
-	set_fs(__oldfs);
+
 	rc = ll_vfs_fsync_range(filp, 0, LLONG_MAX, 1);
 	if (rc)
 		printk(KERN_ERR "sync returns %d\n", rc);
@@ -940,7 +936,6 @@ static int tracefiled(void *arg)
 	struct tracefiled_ctl *tctl = arg;
 	struct cfs_trace_page *tage;
 	struct cfs_trace_page *tmp;
-	mm_segment_t __oldfs;
 	struct file *filp;
 	char *buf;
 	int last_loop = 0;
@@ -978,8 +973,6 @@ static int tracefiled(void *arg)
 			__LASSERT(list_empty(&pc.pc_pages));
                         goto end_loop;
                 }
-		__oldfs = get_fs();
-		set_fs(get_ds());
 
 		list_for_each_entry_safe(tage, tmp, &pc.pc_pages, linkage) {
 			struct dentry *de = file_dentry(filp);
@@ -993,8 +986,7 @@ static int tracefiled(void *arg)
 				f_pos = i_size_read(de->d_inode);
 
 			buf = kmap(tage->page);
-			rc = vfs_write(filp, (__force const char __user *)buf,
-				       tage->used, &f_pos);
+			rc = cfs_kernel_write(filp, buf, tage->used, &f_pos);
 			kunmap(tage->page);
 			if (rc != (int)tage->used) {
 				printk(KERN_WARNING "wanted to write %u "
@@ -1004,7 +996,6 @@ static int tracefiled(void *arg)
 				break;
 			}
                 }
-		set_fs(__oldfs);
 
 		filp_close(filp, NULL);
                 put_pages_on_daemon_list(&pc);

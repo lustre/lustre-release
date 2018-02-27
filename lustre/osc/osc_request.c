@@ -1365,7 +1365,6 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 	int rc, i;
 	unsigned int len;
 	char *buf;
-	mm_segment_t oldfs;
 
 	/* will only keep dump of pages on first error for the same range in
 	 * file/fid, not during the resends/retries. */
@@ -1394,14 +1393,11 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 		return;
 	}
 
-	oldfs = get_fs();
-	set_fs(KERNEL_DS);
 	for (i = 0; i < page_count; i++) {
 		len = pga[i]->count;
 		buf = kmap(pga[i]->pg);
 		while (len != 0) {
-			rc = vfs_write(filp, (__force const char __user *)buf,
-				       len, &filp->f_pos);
+			rc = cfs_kernel_write(filp, buf, len, &filp->f_pos);
 			if (rc < 0) {
 				CERROR("%s: wanted to write %u but got %d "
 				       "error\n", dbgcksum_file_name, len, rc);
@@ -1414,7 +1410,6 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 		}
 		kunmap(pga[i]->pg);
 	}
-	set_fs(oldfs);
 
 	rc = ll_vfs_fsync_range(filp, 0, LLONG_MAX, 1);
 	if (rc)

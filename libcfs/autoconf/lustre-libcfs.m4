@@ -852,6 +852,30 @@ wait_queue_entry, [
 ]) # LIBCFS_WAIT_QUEUE_ENTRY
 
 #
+# LIBCFS_NEW_KERNEL_WRITE
+#
+# Kernel version 4.14 e13ec939e96b13e664bb6cee361cc976a0ee621a
+# changed kernel_write prototype to make is plug compatible
+# with the unexported vfs_write()
+#
+AC_DEFUN([LIBCFS_NEW_KERNEL_WRITE], [
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_CHECK_COMPILE([if 'kernel_write' matches other read/write helpers],
+kernel_write_match, [
+	#include <linux/fs.h>
+],[
+	const void *buf = NULL;
+	loff_t pos = 0;
+	return kernel_write(NULL, buf, 0, &pos);
+],[
+	AC_DEFINE(HAVE_NEW_KERNEL_WRITE, 1,
+		['kernel_write' aligns with read/write helpers])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+]) # LIBCFS_NEW_KERNEL_WRITE
+
+#
 # LIBCFS_PROG_LINUX
 #
 # LibCFS linux kernel checks
@@ -934,6 +958,8 @@ LIBCFS_HOTPLUG_STATE_MACHINE
 LIBCFS_SCHED_HEADERS
 # 4.13
 LIBCFS_WAIT_QUEUE_ENTRY
+# 4.14
+LIBCFS_NEW_KERNEL_WRITE
 ]) # LIBCFS_PROG_LINUX
 
 #

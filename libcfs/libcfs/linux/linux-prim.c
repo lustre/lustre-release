@@ -33,12 +33,14 @@
 #define DEBUG_SUBSYSTEM S_LNET
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/fs.h>
 #include <linux/fs_struct.h>
 #include <linux/sched.h>
 #ifdef HAVE_SCHED_HEADERS
 #include <linux/sched/signal.h>
 #include <linux/sched/mm.h>
 #endif
+#include <linux/uaccess.h>
 #include <libcfs/libcfs.h>
 
 #if defined(CONFIG_KGDB)
@@ -98,6 +100,24 @@ time64_t ktime_get_seconds(void)
 }
 EXPORT_SYMBOL(ktime_get_seconds);
 #endif /* HAVE_KTIME_GET_SECONDS */
+
+int cfs_kernel_write(struct file *filp, const void *buf, size_t count,
+		     loff_t *pos)
+{
+#ifdef HAVE_NEW_KERNEL_WRITE
+	return kernel_write(filp, buf, count, pos);
+#else
+	mm_segment_t __old_fs = get_fs();
+	int rc;
+
+	set_fs(get_ds());
+	rc = vfs_write(filp, (__force const char __user *)buf, count, pos);
+	set_fs(__old_fs);
+
+	return rc;
+#endif
+}
+EXPORT_SYMBOL(cfs_kernel_write);
 
 #ifndef HAVE_KSET_FIND_OBJ
 struct kobject *kset_find_obj(struct kset *kset, const char *name)
