@@ -1,3 +1,7 @@
 KERNEL=="obd", MODE="0666"
+
+# Ensure block devices re-added to the system allow for large writes (LU-9551)
+ACTION=="add|change", SUBSYSTEM=="block", RUN+="/usr/sbin/l_tunedisk /dev/%k"
+
 # set sysfs values on client
 SUBSYSTEM=="lustre", ACTION=="change", ENV{PARAM}=="?*", RUN+="/usr/sbin/lctl set_param $env{PARAM}=$env{SETTING}"
