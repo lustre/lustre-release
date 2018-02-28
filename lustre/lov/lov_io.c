@@ -956,7 +956,7 @@ lov_io_data_version_end(const struct lu_env *env, const struct cl_io_slice *ios)
 	list_for_each_entry(sub, &lio->lis_active, sub_linkage) {
 		struct cl_data_version_io *sdv = &sub->sub_io.u.ci_data_version;
 
-		lov_io_end_wrapper(env, &sub->sub_io);
+		lov_io_end_wrapper(sub->sub_env, &sub->sub_io);
 
 		pdv->dv_data_version += sdv->dv_data_version;
 		if (pdv->dv_layout_version > sdv->dv_layout_version)
