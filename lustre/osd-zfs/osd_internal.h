@@ -97,6 +97,8 @@
 
 #define OSD_GRANT_FOR_LOCAL_OIDS (2ULL << 20) /* 2MB for last_rcvd, ... */
 
+extern struct dt_body_operations osd_body_scrub_ops;
+
 /**
  * Iterator's in-memory data structure for quota file.
  */

@@ -1448,6 +1448,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	if (IS_ERR_OR_NULL(obj))
 		RETURN(obj ? PTR_ERR(obj) : -ENOENT);
 
+	obj->do_body_ops = &osd_body_scrub_ops;
 	scrub->os_obj = obj;
 	rc = scrub_file_load(env, scrub);
 	if (rc == -ENOENT || rc == -EFAULT) {

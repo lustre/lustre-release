@@ -106,15 +106,11 @@ static void record_end_io(struct osd_device *osd, int rw,
 	}
 }
 
-static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
-			struct lu_buf *buf, loff_t *pos)
+static ssize_t __osd_read(const struct lu_env *env, struct dt_object *dt,
+			  struct lu_buf *buf, loff_t *pos, size_t *size)
 {
 	struct osd_object *obj = osd_dt_obj(dt);
-	struct osd_device *osd = osd_obj2dev(obj);
-	int size = buf->lb_len;
 	uint64_t old_size;
-	ktime_t start;
-	s64 delta_ms;
 	int rc;
 
 	LASSERT(dt_object_exists(dt));
@@ -124,26 +120,48 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 	old_size = obj->oo_attr.la_size;
 	read_unlock(&obj->oo_attr_lock);
 
-	if (*pos + size > old_size) {
+	if (*pos + *size > old_size) {
 		if (old_size < *pos)
 			return 0;
-		else
-			size = old_size - *pos;
+
+		*size = old_size - *pos;
 	}
+
+	rc = osd_dmu_read(osd_obj2dev(obj), obj->oo_dn, *pos, *size,
+			  buf->lb_buf, DMU_READ_PREFETCH);
+	if (!rc) {
+		rc = *size;
+		*pos += *size;
+	}
+
+	return rc;
+}
+
+static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
+			struct lu_buf *buf, loff_t *pos)
+{
+	struct osd_device *osd = osd_obj2dev(osd_dt_obj(dt));
+	size_t size = buf->lb_len;
+	ktime_t start;
+	s64 delta_ms;
+	int rc;
 
 	start = ktime_get();
 	record_start_io(osd, READ, 0);
-
-	rc = osd_dmu_read(osd, obj->oo_dn, *pos, size, buf->lb_buf,
-			  DMU_READ_PREFETCH);
-
+	rc = __osd_read(env, dt, buf, pos, &size);
 	delta_ms = ktime_ms_delta(ktime_get(), start);
 	record_end_io(osd, READ, delta_ms, size, size >> PAGE_SHIFT);
-	if (rc == 0) {
-		rc = size;
-		*pos += size;
-	}
+
 	return rc;
+}
+
+static inline ssize_t osd_read_no_record(const struct lu_env *env,
+					 struct dt_object *dt,
+					 struct lu_buf *buf, loff_t *pos)
+{
+	size_t size = buf->lb_len;
+
+	return __osd_read(env, dt, buf, pos, &size);
 }
 
 static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
@@ -1048,4 +1066,10 @@ struct dt_body_operations osd_body_ops = {
 	.dbo_declare_punch		= osd_declare_punch,
 	.dbo_punch			= osd_punch,
 	.dbo_ladvise			= osd_ladvise,
+};
+
+struct dt_body_operations osd_body_scrub_ops = {
+	.dbo_read			= osd_read_no_record,
+	.dbo_declare_write		= osd_declare_write,
+	.dbo_write			= osd_write,
 };
