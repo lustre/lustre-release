@@ -1027,11 +1027,11 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
         return (p1->off + p1->count == p2->off);
 }
 
-static u32 osc_checksum_bulk(int nob, size_t pg_count,
+static int osc_checksum_bulk(int nob, size_t pg_count,
 			     struct brw_page **pga, int opc,
-			     enum cksum_types cksum_type)
+			     enum cksum_types cksum_type,
+			     u32 *cksum)
 {
-	u32				cksum;
 	int				i = 0;
 	struct cfs_crypto_hash_desc	*hdesc;
 	unsigned int			bufsize;
@@ -1070,15 +1070,15 @@ static u32 osc_checksum_bulk(int nob, size_t pg_count,
 		i++;
 	}
 
-	bufsize = sizeof(cksum);
-	cfs_crypto_hash_final(hdesc, (unsigned char *)&cksum, &bufsize);
+	bufsize = sizeof(*cksum);
+	cfs_crypto_hash_final(hdesc, (unsigned char *)cksum, &bufsize);
 
 	/* For sending we only compute the wrong checksum instead
 	 * of corrupting the data so it is still correct on a redo */
 	if (opc == OST_WRITE && OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND))
-		cksum++;
+		(*cksum)++;
 
-	return cksum;
+	return 0;
 }
 
 static int
@@ -1283,12 +1283,18 @@ no_bulk:
 
                         body->oa.o_flags |= cksum_type_pack(cksum_type);
                         body->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
-                        body->oa.o_cksum = osc_checksum_bulk(requested_nob,
-                                                             page_count, pga,
-                                                             OST_WRITE,
-                                                             cksum_type);
+
+			rc = osc_checksum_bulk(requested_nob, page_count,
+					       pga, OST_WRITE, cksum_type,
+					       &body->oa.o_cksum);
+			if (rc < 0) {
+				CDEBUG(D_PAGE, "failed to checksum, rc = %d\n",
+				       rc);
+				GOTO(out, rc);
+			}
                         CDEBUG(D_PAGE, "checksum at write origin: %x\n",
                                body->oa.o_cksum);
+
                         /* save this in 'oa', too, for later checking */
                         oa->o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
                         oa->o_flags |= cksum_type_pack(cksum_type);
@@ -1416,6 +1422,7 @@ check_write_checksum(struct obdo *oa, const struct lnet_process_id *peer,
         __u32 new_cksum;
         char *msg;
 	enum cksum_types cksum_type;
+	int rc;
 
         if (server_cksum == client_cksum) {
                 CDEBUG(D_PAGE, "checksum %x confirmed\n", client_cksum);
@@ -1428,10 +1435,13 @@ check_write_checksum(struct obdo *oa, const struct lnet_process_id *peer,
 
 	cksum_type = cksum_type_unpack(oa->o_valid & OBD_MD_FLFLAGS ?
 				       oa->o_flags : 0);
-	new_cksum = osc_checksum_bulk(aa->aa_requested_nob, aa->aa_page_count,
-				      aa->aa_ppga, OST_WRITE, cksum_type);
+	rc = osc_checksum_bulk(aa->aa_requested_nob, aa->aa_page_count,
+			       aa->aa_ppga, OST_WRITE, cksum_type,
+			       &new_cksum);
 
-	if (cksum_type != cksum_type_unpack(aa->aa_oa->o_flags))
+	if (rc < 0)
+		msg = "failed to calculate the client write checksum";
+	else if (cksum_type != cksum_type_unpack(aa->aa_oa->o_flags))
                 msg = "the server did not use the checksum type specified in "
                       "the original request - likely a protocol problem";
         else if (new_cksum == server_cksum)
@@ -1590,10 +1600,13 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 
                 cksum_type = cksum_type_unpack(body->oa.o_valid &OBD_MD_FLFLAGS?
                                                body->oa.o_flags : 0);
-                client_cksum = osc_checksum_bulk(rc, aa->aa_page_count,
-                                                 aa->aa_ppga, OST_READ,
-                                                 cksum_type);
-
+		rc = osc_checksum_bulk(rc, aa->aa_page_count, aa->aa_ppga,
+				       OST_READ, cksum_type, &client_cksum);
+		if (rc < 0) {
+			CDEBUG(D_PAGE,
+			       "failed to calculate checksum, rc = %d\n", rc);
+			GOTO(out, rc);
+		}
 		if (req->rq_bulk != NULL &&
 		    peer->nid != req->rq_bulk->bd_sender) {
 			via = " via ";

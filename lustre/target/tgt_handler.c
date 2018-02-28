@@ -1712,15 +1712,15 @@ static void tgt_brw_unlock(struct obd_ioobj *obj, struct niobuf_remote *niob,
 		tgt_extent_unlock(lh, mode);
 	EXIT;
 }
-static __u32 tgt_checksum_niobuf(struct lu_target *tgt,
+static int tgt_checksum_niobuf(struct lu_target *tgt,
 				 struct niobuf_local *local_nb, int npages,
-				 int opc, enum cksum_types cksum_type)
+				 int opc, enum cksum_types cksum_type,
+				 __u32 *cksum)
 {
 	struct cfs_crypto_hash_desc	*hdesc;
 	unsigned int			bufsize;
 	int				i, err;
 	unsigned char			cfs_alg = cksum_obd2cfs(cksum_type);
-	__u32				cksum;
 
 	hdesc = cfs_crypto_hash_init(cfs_alg, NULL, 0);
 	if (IS_ERR(hdesc)) {
@@ -1795,10 +1795,10 @@ static __u32 tgt_checksum_niobuf(struct lu_target *tgt,
 		}
 	}
 
-	bufsize = sizeof(cksum);
-	err = cfs_crypto_hash_final(hdesc, (unsigned char *)&cksum, &bufsize);
+	bufsize = sizeof(*cksum);
+	err = cfs_crypto_hash_final(hdesc, (unsigned char *)cksum, &bufsize);
 
-	return cksum;
+	return 0;
 }
 
 char dbgcksum_file_name[PATH_MAX];
@@ -2084,9 +2084,12 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 
 		repbody->oa.o_flags = cksum_type_pack(cksum_type);
 		repbody->oa.o_valid = OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
-		repbody->oa.o_cksum = tgt_checksum_niobuf(tsi->tsi_tgt,
-							 local_nb, npages_read,
-							 OST_READ, cksum_type);
+		rc = tgt_checksum_niobuf(tsi->tsi_tgt, local_nb,
+					 npages_read, OST_READ, cksum_type,
+					 &repbody->oa.o_cksum);
+		if (rc < 0)
+			GOTO(out_commitrw, rc);
+
 		CDEBUG(D_PAGE, "checksum at read origin: %x\n",
 		       repbody->oa.o_cksum);
 
@@ -2426,10 +2429,12 @@ skip_transfer:
 		repbody->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
 		repbody->oa.o_flags &= ~OBD_FL_CKSUM_ALL;
 		repbody->oa.o_flags |= cksum_type_pack(cksum_type);
-		repbody->oa.o_cksum = tgt_checksum_niobuf(tsi->tsi_tgt,
-							  local_nb, npages,
-							  OST_WRITE,
-							  cksum_type);
+		rc = tgt_checksum_niobuf(tsi->tsi_tgt, local_nb,
+					 npages, OST_WRITE, cksum_type,
+					 &repbody->oa.o_cksum);
+		if (rc < 0)
+			GOTO(out_commitrw, rc);
+
 		cksum_counter++;
 
 		if (unlikely(body->oa.o_cksum != repbody->oa.o_cksum)) {
@@ -2448,6 +2453,7 @@ skip_transfer:
 		}
 	}
 
+out_commitrw:
 	/* Must commit after prep above in all cases */
 	rc = obd_commitrw(tsi->tsi_env, OBD_BRW_WRITE, exp, &repbody->oa,
 			  objcount, ioo, remote_nb, npages, local_nb, rc);
