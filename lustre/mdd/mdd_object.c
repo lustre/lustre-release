@@ -434,7 +434,7 @@ static int mdd_xattr_get(const struct lu_env *env,
 		int rc2;
 
 		/* Not recording */
-		if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+		if (!recording_changelog(env, mdd))
 			RETURN(rc);
 		if (!(mdd->mdd_cl.mc_mask & (1 << CL_GETXATTR)))
 			RETURN(rc);
@@ -960,7 +960,7 @@ static int mdd_changelog_data_store_xattr(const struct lu_env *env,
 	LASSERT(handle != NULL);
 
 	/* Not recording */
-	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+	if (!recording_changelog(env, mdd))
 		RETURN(0);
 	if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
 		RETURN(0);
@@ -2900,7 +2900,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 		mdd_obj->mod_count++;
 
 	/* Not recording */
-	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+	if (!recording_changelog(env, mdd))
 		GOTO(out, rc);
 	if (!(mdd->mdd_cl.mc_mask & (1 << type)))
 		GOTO(out, rc);
