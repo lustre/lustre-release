@@ -86,10 +86,6 @@ union lmv_mds_md;
 
 void lmv_free_memmd(struct lmv_stripe_md *lsm);
 
-int lmvea_load_shards(const struct lu_env *env, struct dt_object *obj,
-		      struct lu_dirent *ent, struct lu_buf *buf,
-		      bool resize);
-
 static inline void lmv1_le_to_cpu(struct lmv_mds_md_v1 *lmv_dst,
 				  const struct lmv_mds_md_v1 *lmv_src)
 {

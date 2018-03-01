@@ -58,6 +58,9 @@ int lmv_revalidate_slaves(struct obd_export *exp,
 			  ldlm_blocking_callback cb_blocking,
 			  int extra_lock_flags);
 
+int lmv_getattr_name(struct obd_export *exp, struct md_op_data *op_data,
+		     struct ptlrpc_request **preq);
+
 static inline struct obd_device *lmv2obd_dev(struct lmv_obd *lmv)
 {
 	return container_of0(lmv, struct obd_device, u.lmv);
@@ -125,15 +128,20 @@ static inline int lmv_stripe_md_size(int stripe_count)
 /* for file under migrating directory, return the target stripe info */
 static inline const struct lmv_oinfo *
 lsm_name_to_stripe_info(const struct lmv_stripe_md *lsm, const char *name,
-			int namelen)
+			int namelen, bool post_migrate)
 {
 	__u32 hash_type = lsm->lsm_md_hash_type;
 	__u32 stripe_count = lsm->lsm_md_stripe_count;
 	int stripe_index;
 
 	if (hash_type & LMV_HASH_FLAG_MIGRATION) {
-		hash_type &= ~LMV_HASH_FLAG_MIGRATION;
-		stripe_count = lsm->lsm_md_migrate_offset;
+		if (post_migrate) {
+			hash_type &= ~LMV_HASH_FLAG_MIGRATION;
+			stripe_count = lsm->lsm_md_migrate_offset;
+		} else {
+			hash_type = lsm->lsm_md_migrate_hash;
+			stripe_count -= lsm->lsm_md_migrate_offset;
+		}
 	}
 
 	stripe_index = lmv_name_to_stripe_index(hash_type, stripe_count,
@@ -141,23 +149,65 @@ lsm_name_to_stripe_info(const struct lmv_stripe_md *lsm, const char *name,
 	if (stripe_index < 0)
 		return ERR_PTR(stripe_index);
 
-	LASSERTF(stripe_index < lsm->lsm_md_stripe_count,
-		 "stripe_index = %d, stripe_count = %d hash_type = %x"
-		 "name = %.*s\n", stripe_index, lsm->lsm_md_stripe_count,
-		 lsm->lsm_md_hash_type, namelen, name);
+	if ((lsm->lsm_md_hash_type & LMV_HASH_FLAG_MIGRATION) && !post_migrate)
+		stripe_index += lsm->lsm_md_migrate_offset;
+
+	if (stripe_index >= lsm->lsm_md_stripe_count) {
+		CERROR("stripe_index %d stripe_count %d hash_type %#x "
+			"migrate_offset %d migrate_hash %#x name %.*s\n",
+			stripe_index, lsm->lsm_md_stripe_count,
+			lsm->lsm_md_hash_type, lsm->lsm_md_migrate_offset,
+			lsm->lsm_md_migrate_hash, namelen, name);
+		return ERR_PTR(-EBADF);
+	}
 
 	return &lsm->lsm_md_oinfo[stripe_index];
 }
 
-static inline bool lmv_need_try_all_stripes(const struct lmv_stripe_md *lsm)
+static inline bool lmv_is_dir_migrating(const struct lmv_stripe_md *lsm)
 {
-	return !lmv_is_known_hash_type(lsm->lsm_md_hash_type) ||
-	       lsm->lsm_md_hash_type & LMV_HASH_FLAG_MIGRATION;
+	return lsm ? lsm->lsm_md_hash_type & LMV_HASH_FLAG_MIGRATION : false;
 }
 
-struct lmv_tgt_desc
-*lmv_locate_mds(struct lmv_obd *lmv, struct md_op_data *op_data,
-		struct lu_fid *fid);
+static inline bool lmv_is_dir_bad_hash(const struct lmv_stripe_md *lsm)
+{
+	if (!lsm)
+		return false;
+
+	if (lmv_is_dir_migrating(lsm)) {
+		if (lsm->lsm_md_stripe_count - lsm->lsm_md_migrate_offset > 1)
+			return !lmv_is_known_hash_type(
+					lsm->lsm_md_migrate_hash);
+		return false;
+	}
+
+	return !lmv_is_known_hash_type(lsm->lsm_md_hash_type);
+}
+
+static inline bool lmv_dir_retry_check_update(struct md_op_data *op_data)
+{
+	const struct lmv_stripe_md *lsm = op_data->op_mea1;
+
+	if (!lsm)
+		return false;
+
+	if (lmv_is_dir_migrating(lsm) && !op_data->op_post_migrate) {
+		op_data->op_post_migrate = true;
+		return true;
+	}
+
+	if (lmv_is_dir_bad_hash(lsm) &&
+	    op_data->op_stripe_index < lsm->lsm_md_stripe_count - 1) {
+		op_data->op_stripe_index++;
+		return true;
+	}
+
+	return false;
+}
+
+struct lmv_tgt_desc *lmv_locate_tgt(struct lmv_obd *lmv,
+				    struct md_op_data *op_data,
+				    struct lu_fid *fid);
 /* lproc_lmv.c */
 int lmv_tunables_init(struct obd_device *obd);
 

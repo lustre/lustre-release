@@ -14,8 +14,6 @@ ALWAYS_EXCEPT="$SANITY_EXCEPT  42a     42b     42c     77k"
 
 # skipped tests: LU-8411 LU-9096 LU-9054 ..
 ALWAYS_EXCEPT="  407     253     312     $ALWAYS_EXCEPT"
-# skipped tests: LU-4684
-ALWAYS_EXCEPT="  17n 160d 230 316	$ALWAYS_EXCEPT"
 
 # Check Grants after these tests
 GRANT_CHECK_LIST="$GRANT_CHECK_LIST 42a 42b 42c 42d 42e 63a 63b 64a 64b 64c"
@@ -15086,6 +15084,7 @@ test_230c() {
 		skip "Need MDS version at least 2.11.52"
 
 	local MDTIDX=1
+	local total=3
 	local mdt_index
 	local file
 	local migrate_dir=$DIR/$tdir/migrate_dir
@@ -15094,37 +15093,47 @@ test_230c() {
 	#the directory is still accessiable.
 	test_mkdir $DIR/$tdir
 	test_mkdir -i0 -c1 $migrate_dir
+	test_mkdir -i1 -c1 $DIR/$tdir/remote_dir
 	stat $migrate_dir
-	createmany -o $migrate_dir/f 10 ||
+	createmany -o $migrate_dir/f $total ||
 		error "create files under ${migrate_dir} failed"
 
-	# fail after migrating top dir, and this will fail only once, so one
-	# sub file migration will fail, others succeed.
+	# fail after migrating top dir, and this will fail only once, so the
+	# first sub file migration will fail (currently f3), others succeed.
 	#OBD_FAIL_MIGRATE_ENTRIES	0x1801
 	do_facet mds1 lctl set_param fail_loc=0x1801
 	local t=$(ls $migrate_dir | wc -l)
 	$LFS migrate --mdt-index $MDTIDX $migrate_dir &&
 		error "migrate should fail"
+	local u=$(ls $migrate_dir | wc -l)
+	[ "$u" == "$t" ] || error "$u != $t during migration"
 
 	# add new dir/file should succeed
 	mkdir $migrate_dir/dir ||
 		error "mkdir failed under migrating directory"
 	touch $migrate_dir/file ||
-		error "touch file failed under migrating directory"
+		error "create file failed under migrating directory"
+
 	# add file with existing name should fail
-	$OPENFILE -f O_CREAT:O_EXCL $migrate_dir/f1 &&
-		error "open(O_CREAT|O_EXCL) f1 should fail"
-	$MULTIOP $migrate_dir/f1 m &&
-		error "create f1 should fail"
-	$MULTIOP $migrate_dir/f3 m &&
-		error "create f3 should fail"
-
-	local u=$(ls $migrate_dir | wc -l)
-	u=$((u - 2))
-	[ "$u" == "$t" ] || error "$u != $t during migration"
-
-	for file in $(find $migrate_dir); do
-		stat $file || error "stat $file failed"
+	for file in $migrate_dir/f*; do
+		stat $file > /dev/null || error "stat $file failed"
+		$OPENFILE -f O_CREAT:O_EXCL $file &&
+			error "open(O_CREAT|O_EXCL) $file should fail"
+		$MULTIOP $file m && error "create $file should fail"
+		touch $DIR/$tdir/remote_dir/$tfile ||
+			error "touch $tfile failed"
+		ln $DIR/$tdir/remote_dir/$tfile $file &&
+			error "link $file should fail"
+		mdt_index=$($LFS getstripe -m $file)
+		if [ $mdt_index == 0 ]; then
+			# file failed to migrate is not allowed to rename to
+			mv $DIR/$tdir/remote_dir/$tfile $file &&
+				error "rename to $file should fail"
+		else
+			mv $DIR/$tdir/remote_dir/$tfile $file ||
+				error "rename to $file failed"
+		fi
+		echo hello >> $file || error "write $file failed"
 	done
 
 	# resume migration with different options should fail
@@ -15154,6 +15163,8 @@ test_230d() {
 	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.11.52) ] &&
 		skip "Need MDS version at least 2.11.52"
+	# LU-11235
+	[ "$(facet_fstype mds1)" == "zfs" ] && skip "skip ZFS backend"
 
 	local migrate_dir=$DIR/$tdir/migrate_dir
 	local old_index

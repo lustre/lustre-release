@@ -8,8 +8,8 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-#Bug number for excepting test      LU-4684 LU-10406
-ALWAYS_EXCEPT="$SANITY_LFSCK_EXCEPT 15c 29c 31c"
+#Bug number for excepting test      LU-10406
+ALWAYS_EXCEPT="$SANITY_LFSCK_EXCEPT 31c"
 
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
