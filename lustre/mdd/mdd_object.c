@@ -394,7 +394,7 @@ static int mdd_xattr_get(const struct lu_env *env,
                          const char *name)
 {
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
-	struct md_device *md_dev = lu2md_dev(mdd2lu_dev(mdo2mdd(obj)));
+	struct mdd_device *mdd;
 	int rc;
 
 	ENTRY;
@@ -425,20 +425,16 @@ static int mdd_xattr_get(const struct lu_env *env,
 	rc = mdo_xattr_get(env, mdd_obj, buf, name);
 	mdd_read_unlock(env, mdd_obj);
 
+	mdd = mdo2mdd(obj);
+
 	/* record only getting user xattrs and acls */
 	if (rc >= 0 &&
+	    mdd_changelog_enabled(env, mdd, CL_GETXATTR) &&
 	    (has_prefix(name, XATTR_USER_PREFIX) ||
 	     has_prefix(name, XATTR_NAME_POSIX_ACL_ACCESS) ||
 	     has_prefix(name, XATTR_NAME_POSIX_ACL_DEFAULT))) {
 		struct thandle *handle;
-		struct mdd_device *mdd = lu2mdd_dev(&md_dev->md_lu_dev);
 		int rc2;
-
-		/* Not recording */
-		if (!recording_changelog(env, mdd))
-			RETURN(rc);
-		if (!(mdd->mdd_cl.mc_mask & (1 << CL_GETXATTR)))
-			RETURN(rc);
 
 		LASSERT(mdo2fid(mdd_obj) != NULL);
 
@@ -446,7 +442,8 @@ static int mdd_xattr_get(const struct lu_env *env,
 		if (IS_ERR(handle))
 			RETURN(PTR_ERR(handle));
 
-		rc2 = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+		rc2 = mdd_declare_changelog_store(env, mdd, CL_GETXATTR, NULL,
+						  NULL, handle);
 		if (rc2)
 			GOTO(stop, rc2);
 
@@ -923,10 +920,7 @@ int mdd_changelog_data_store(const struct lu_env *env, struct mdd_device *mdd,
 	LASSERT(mdd_obj != NULL);
 	LASSERT(handle != NULL);
 
-	/* Not recording */
-	if (!recording_changelog(env, mdd))
-		RETURN(0);
-	if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
+	if (!mdd_changelog_enabled(env, mdd, type))
 		RETURN(0);
 
 	if (mdd_is_volatile_obj(mdd_obj))
@@ -960,10 +954,7 @@ static int mdd_changelog_data_store_xattr(const struct lu_env *env,
 	LASSERT(mdd_obj != NULL);
 	LASSERT(handle != NULL);
 
-	/* Not recording */
-	if (!recording_changelog(env, mdd))
-		RETURN(0);
-	if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
+	if (!mdd_changelog_enabled(env, mdd, type))
 		RETURN(0);
 
 	if (mdd_is_volatile_obj(mdd_obj))
@@ -995,19 +986,18 @@ static int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
 	int rc;
 	ENTRY;
 
-	/* Not recording */
-	if (!recording_changelog(env, mdd))
-		RETURN(0);
-	if (!(mdd->mdd_cl.mc_mask & (1 << type)))
-		RETURN(0);
-
 	LASSERT(fid != NULL);
+
+	/* We'll check this again below, but we check now before we
+	 * start a transaction. */
+	if (!mdd_changelog_enabled(env, mdd, type))
+		RETURN(0);
 
 	handle = mdd_trans_create(env, mdd);
 	if (IS_ERR(handle))
 		RETURN(PTR_ERR(handle));
 
-	rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+	rc = mdd_declare_changelog_store(env, mdd, type, NULL, NULL, handle);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -1095,7 +1085,8 @@ static int mdd_declare_attr_set(const struct lu_env *env,
         }
 #endif
 
-	rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+	rc = mdd_declare_changelog_store(env, mdd, CL_SETXATTR, NULL, NULL,
+					 handle);
 	return rc;
 }
 
@@ -1308,16 +1299,18 @@ static int mdd_declare_xattr_set(const struct lu_env *env,
 				 const char *name,
 				 int fl, struct thandle *handle)
 {
-	int	rc;
+	enum changelog_rec_type type;
+	int rc;
 
 	rc = mdo_declare_xattr_set(env, obj, buf, name, fl, handle);
 	if (rc)
 		return rc;
 
-	if (mdd_xattr_changelog_type(env, mdd, name) < 0)
+	type = mdd_xattr_changelog_type(env, mdd, name);
+	if (type < 0)
 		return 0; /* no changelog to store */
 
-	return mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+	return mdd_declare_changelog_store(env, mdd, type, NULL, NULL, handle);
 }
 
 /*
@@ -1880,16 +1873,18 @@ static int mdd_declare_xattr_del(const struct lu_env *env,
                                  const char *name,
                                  struct thandle *handle)
 {
+	enum changelog_rec_type type;
 	int rc;
 
 	rc = mdo_declare_xattr_del(env, obj, name, handle);
 	if (rc)
 		return rc;
 
-	if (mdd_xattr_changelog_type(env, mdd, name) < 0)
+	type = mdd_xattr_changelog_type(env, mdd, name);
+	if (type < 0)
 		return 0; /* no changelog to store */
 
-	return mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+	return mdd_declare_changelog_store(env, mdd, type, NULL, NULL, handle);
 }
 
 /**
@@ -2451,7 +2446,8 @@ static int mdd_declare_layout_change(const struct lu_env *env,
 	if (rc)
 		return rc;
 
-	return mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+	return mdd_declare_changelog_store(env, mdd, CL_LAYOUT, NULL, NULL,
+					   handle);
 }
 
 /* For PFL, this is used to instantiate necessary component objects. */
@@ -2528,7 +2524,7 @@ mdd_layout_update_rdonly(const struct lu_env *env, struct mdd_object *obj,
 		GOTO(out, rc);
 
 	/* record a changelog for data mover to consume */
-	rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+	rc = mdd_declare_changelog_store(env, mdd, CL_FLRW, NULL, NULL, handle);
 	if (rc)
 		GOTO(out, rc);
 
@@ -2668,7 +2664,8 @@ mdd_object_update_sync_pending(const struct lu_env *env, struct mdd_object *obj,
 		GOTO(out, rc);
 
 	/* record a changelog for the completion of resync */
-	rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+	rc = mdd_declare_changelog_store(env, mdd, CL_RESYNC, NULL, NULL,
+					 handle);
 	if (rc)
 		GOTO(out, rc);
 
@@ -2883,7 +2880,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 	struct mdd_object_user *mou = NULL;
 	const struct lu_ucred *uc = lu_ucred(env);
 	struct mdd_device *mdd = mdo2mdd(obj);
-	int type = CL_OPEN;
+	enum changelog_rec_type type = CL_OPEN;
 	int rc = 0;
 
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
@@ -2900,10 +2897,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 	else
 		mdd_obj->mod_count++;
 
-	/* Not recording */
-	if (!recording_changelog(env, mdd))
-		GOTO(out, rc);
-	if (!(mdd->mdd_cl.mc_mask & (1 << type)))
+	if (!mdd_changelog_enabled(env, mdd, type))
 		GOTO(out, rc);
 
 find:
@@ -3031,7 +3025,8 @@ again:
 		if (rc)
 			GOTO(stop, rc);
 
-		rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+		rc = mdd_declare_changelog_store(env, mdd, CL_CLOSE, NULL, NULL,
+						 handle);
 		if (rc)
 			GOTO(stop, rc);
 
@@ -3064,8 +3059,7 @@ cont:
 
 	/* under mdd write lock */
 	/* If recording, see if we need to remove UID from list */
-	if ((mdd->mdd_cl.mc_flags & CLM_ON) &&
-	    (mdd->mdd_cl.mc_mask & (1 << CL_OPEN))) {
+	if (mdd_changelog_enabled(env, mdd, CL_OPEN)) {
 		struct mdd_object_user *mou;
 
 		/* look for UID in list */
@@ -3121,14 +3115,17 @@ cont:
 out:
 	mdd_write_unlock(env, mdd_obj);
 
+	if (rc != 0 || blocked ||
+	    !mdd_changelog_enabled(env, mdd, CL_CLOSE))
+		GOTO(stop, rc);
+
 	/* Record CL_CLOSE in changelog only if file was opened in write mode,
 	 * or if CL_OPEN was recorded and it's last close by user.
 	 * Changelogs mask may change between open and close operations, but
 	 * this is not a big deal if we have a CL_CLOSE entry with no matching
 	 * CL_OPEN. Plus Changelogs mask may not change often.
 	 */
-	if (!rc && !blocked &&
-	    ((!(mdd->mdd_cl.mc_mask & (1 << CL_OPEN)) &&
+	if (((!(mdd->mdd_cl.mc_mask & (1 << CL_OPEN)) &&
 	      (mode & (MDS_FMODE_WRITE | MDS_OPEN_APPEND | MDS_OPEN_TRUNC))) ||
 	     ((mdd->mdd_cl.mc_mask & (1 << CL_OPEN)) && last_close_by_uid)) &&
 	    !(ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_RECOV_OPEN)) {
@@ -3137,8 +3134,8 @@ out:
 			if (IS_ERR(handle))
 				GOTO(stop, rc = PTR_ERR(handle));
 
-			rc = mdd_declare_changelog_store(env, mdd, NULL, NULL,
-							 handle);
+			rc = mdd_declare_changelog_store(env, mdd, CL_CLOSE,
+							 NULL, NULL, handle);
 			if (rc)
 				GOTO(stop, rc);
 

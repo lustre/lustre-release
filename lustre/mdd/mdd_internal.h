@@ -302,10 +302,11 @@ struct mdd_object *mdd_object_find(const struct lu_env *env,
 int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                  const struct lu_rdpg *rdpg);
 int mdd_declare_changelog_store(const struct lu_env *env,
-				       struct mdd_device *mdd,
-				       const struct lu_name *tname,
-				       const struct lu_name *sname,
-				       struct thandle *handle);
+				struct mdd_device *mdd,
+				enum changelog_rec_type type,
+				const struct lu_name *tname,
+				const struct lu_name *sname,
+				struct thandle *handle);
 void mdd_changelog_rec_ext_jobid(struct changelog_rec *rec, const char *jobid);
 void mdd_changelog_rec_ext_extra_flags(struct changelog_rec *rec, __u64 eflags);
 void mdd_changelog_rec_extra_uidgid(struct changelog_rec *rec,
@@ -740,13 +741,20 @@ int mdo_destroy(const struct lu_env *env, struct mdd_object *o,
         return dt_destroy(env, next, handle);
 }
 
-static inline int recording_changelog(const struct lu_env *env,
-				      struct mdd_device *mdd)
+static inline bool mdd_changelog_enabled(const struct lu_env *env,
+					struct mdd_device *mdd,
+					enum changelog_rec_type type)
 {
-	const struct lu_ucred *uc = lu_ucred_check(env);
+	const struct lu_ucred *uc;
 
-	return (mdd->mdd_cl.mc_flags & CLM_ON) &&
-		(uc ? uc->uc_enable_audit : 1);
+	if ((mdd->mdd_cl.mc_flags & CLM_ON) &&
+	    (mdd->mdd_cl.mc_mask & (1 << type))) {
+		uc = lu_ucred_check(env);
+
+		return uc != NULL ? uc->uc_enable_audit : true;
+	} else {
+		return false;
+	}
 }
 
 #endif

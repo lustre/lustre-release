@@ -754,6 +754,7 @@ static int mdd_llog_record_calc_size(const struct lu_env *env,
 
 int mdd_declare_changelog_store(const struct lu_env *env,
 				struct mdd_device *mdd,
+				enum changelog_rec_type type,
 				const struct lu_name *tname,
 				const struct lu_name *sname,
 				struct thandle *handle)
@@ -766,8 +767,7 @@ int mdd_declare_changelog_store(const struct lu_env *env,
 	int				 reclen;
 	int				 rc;
 
-	/* Not recording */
-	if (!recording_changelog(env, mdd))
+	if (!mdd_changelog_enabled(env, mdd, type))
 		return 0;
 
 	reclen = mdd_llog_record_calc_size(env, tname, sname);
@@ -1108,11 +1108,7 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	int				 rc;
 	ENTRY;
 
-	/* Not recording */
-	if (!recording_changelog(env, mdd))
-		RETURN(0);
-
-	if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
+	if (!mdd_changelog_enabled(env, mdd, type))
 		RETURN(0);
 
 	LASSERT(tpfid != NULL);
@@ -1478,7 +1474,8 @@ static int mdd_declare_link(const struct lu_env *env,
 	if (rc != 0)
 		return rc;
 
-	rc = mdd_declare_changelog_store(env, mdd, name, NULL, handle);
+	rc = mdd_declare_changelog_store(env, mdd, CL_HARDLINK, name, NULL,
+					 handle);
 
 	return rc;
 }
@@ -1753,7 +1750,8 @@ static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
 			return rc;
 
 		/* FIXME: need changelog for remove entry */
-		rc = mdd_declare_changelog_store(env, mdd, name, NULL, handle);
+		rc = mdd_declare_changelog_store(env, mdd, CL_UNLINK, name,
+						 NULL, handle);
 	}
 
 	return rc;
@@ -2030,7 +2028,8 @@ static int mdd_create_data(const struct lu_env *env,
 	if (rc)
 		GOTO(stop, rc);
 
-	rc = mdd_declare_changelog_store(env, mdd, NULL, NULL, handle);
+	rc = mdd_declare_changelog_store(env, mdd, CL_LAYOUT, NULL, NULL,
+					 handle);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -2340,6 +2339,7 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 			GOTO(out, rc);
 	} else {
 		struct lu_attr *la = &mdd_env_info(env)->mti_la_for_fix;
+		enum changelog_rec_type type;
 
 		rc = mdo_declare_index_insert(env, p, mdo2fid(c), attr->la_mode,
 					      name->ln_name, handle);
@@ -2356,7 +2356,12 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 		if (rc)
 			return rc;
 
-		rc = mdd_declare_changelog_store(env, mdd, name, NULL, handle);
+		type = S_ISDIR(attr->la_mode) ? CL_MKDIR :
+		       S_ISREG(attr->la_mode) ? CL_CREATE :
+		       S_ISLNK(attr->la_mode) ? CL_SOFTLINK : CL_MKNOD;
+
+		rc = mdd_declare_changelog_store(env, mdd, type, name, NULL,
+						 handle);
 		if (rc)
 			return rc;
 	}
@@ -2992,7 +2997,8 @@ static int mdd_declare_rename(const struct lu_env *env,
 			return rc;
         }
 
-	rc = mdd_declare_changelog_store(env, mdd, tname, sname, handle);
+	rc = mdd_declare_changelog_store(env, mdd, CL_RENAME, tname, sname,
+					 handle);
         if (rc)
                 return rc;
 
@@ -4163,7 +4169,8 @@ static int mdd_declare_migrate_update_name(const struct lu_env *env,
 	if (rc != 0)
 		return rc;
 
-	rc = mdd_declare_changelog_store(env, mdd, lname, NULL, handle);
+	rc = mdd_declare_changelog_store(env, mdd, CL_MIGRATE, lname, NULL,
+					 handle);
 
 	return rc;
 }
