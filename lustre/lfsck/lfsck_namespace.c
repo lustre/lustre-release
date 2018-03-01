@@ -6537,7 +6537,7 @@ static void lfsck_namespace_assistant_sync_failures(const struct lu_env *env,
 			continue;
 
 		laia->laia_ltd = ltd;
-		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+		rc = lfsck_async_request(env, ltd, lr, set,
 			lfsck_namespace_assistant_sync_failures_interpret,
 			laia, LFSCK_NOTIFY);
 		if (rc != 0)

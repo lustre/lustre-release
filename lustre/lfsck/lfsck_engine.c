@@ -1214,7 +1214,7 @@ again:
 		atomic_inc(&ltd->ltd_ref);
 		laia->laia_ltd = ltd;
 		spin_unlock(&ltds->ltd_lock);
-		rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+		rc = lfsck_async_request(env, ltd, lr, set,
 					 lfsck_async_interpret_common,
 					 laia, LFSCK_QUERY);
 		if (rc != 0) {
@@ -1310,7 +1310,7 @@ static int lfsck_assistant_notify_others(const struct lu_env *env,
 			LASSERT(ltd != NULL);
 
 			laia->laia_ltd = ltd;
-			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+			rc = lfsck_async_request(env, ltd, lr, set,
 					lfsck_async_interpret_common,
 					laia, LFSCK_NOTIFY);
 			if (rc != 0) {
@@ -1440,7 +1440,7 @@ again:
 			atomic_inc(&ltd->ltd_ref);
 			laia->laia_ltd = ltd;
 			spin_unlock(&ltds->ltd_lock);
-			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+			rc = lfsck_async_request(env, ltd, lr, set,
 					lfsck_async_interpret_common,
 					laia, LFSCK_NOTIFY);
 			if (rc != 0) {
@@ -1510,7 +1510,7 @@ again:
 			atomic_inc(&ltd->ltd_ref);
 			laia->laia_ltd = ltd;
 			spin_unlock(&ltds->ltd_lock);
-			rc = lfsck_async_request(env, ltd->ltd_exp, lr, set,
+			rc = lfsck_async_request(env, ltd, lr, set,
 					lfsck_async_interpret_common,
 					laia, LFSCK_NOTIFY);
 			if (rc != 0) {
