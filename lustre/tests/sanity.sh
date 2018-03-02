@@ -2119,6 +2119,7 @@ test_27E() {
 run_test 27E "check that default extended attribute size properly increases"
 
 test_27F() { # LU-5346/LU-7975
+	[[ $OSTCOUNT -lt 2 ]] && skip "needs >= 2 OSTs" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.51) ]] &&
 		skip "Need MDS version at least 2.8.51" && return
@@ -15885,6 +15886,7 @@ run_test 310c "open-unlink remote file with multiple links"
 
 #LU-4825
 test_311() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
 	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.8.54) ] &&
 		skip "lustre < 2.8.54 does not contain LU-4825 fix" && return
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
@@ -16055,6 +16057,8 @@ test_313() {
 run_test 313 "io should fail after last_rcvd update fail"
 
 test_314() {
+	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs" && return
+
 	$SETSTRIPE -c 2 -i 0 $DIR/$tfile || error "setstripe failed"
 	do_facet ost1 "$LCTL set_param fail_loc=0x720"
 	rm -f $DIR/$tfile
