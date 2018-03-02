@@ -14645,6 +14645,8 @@ test_232a() {
 run_test 232a "failed lock should not block umount"
 
 test_232b() {
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.58) ] ||
+		{ skip "Need MDS version at least 2.10.58"; return; }
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -c1 -i0 $DIR/$tdir/$tfile
 	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1
