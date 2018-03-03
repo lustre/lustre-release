@@ -431,6 +431,7 @@ enum stats_track_type {
 #define LL_SBI_FAST_READ     0x400000 /* fast read support */
 #define LL_SBI_FILE_SECCTX   0x800000 /* set file security context at create */
 #define LL_SBI_PIO          0x1000000 /* parallel IO support */
+#define LL_SBI_TINY_WRITE   0x2000000 /* tiny write support */
 
 #define LL_SBI_FLAGS { 	\
 	"nolck",	\
@@ -458,6 +459,7 @@ enum stats_track_type {
 	"fast_read",	\
 	"file_secctx",	\
 	"pio",		\
+	"tiny_write",		\
 }
 
 /* This is embedded into llite super-blocks to keep track of connect
@@ -689,6 +691,11 @@ static inline int ll_need_32bit_api(struct ll_sb_info *sbi)
 static inline bool ll_sbi_has_fast_read(struct ll_sb_info *sbi)
 {
 	return !!(sbi->ll_flags & LL_SBI_FAST_READ);
+}
+
+static inline bool ll_sbi_has_tiny_write(struct ll_sb_info *sbi)
+{
+	return !!(sbi->ll_flags & LL_SBI_TINY_WRITE);
 }
 
 void ll_ras_enter(struct file *f);

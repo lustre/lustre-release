@@ -211,7 +211,7 @@ test_8() {
 }
 run_test 8 "remove of open special file on other node =========="
 
-test_9() {
+test_9a() {
 	MTPT=1
 	local dir
 	> $DIR2/f9
@@ -223,7 +223,23 @@ test_9() {
 	[ "`cat $DIR1/f9`" = "abcdefghijkl" ] || \
 		error "`od -a $DIR1/f9` != abcdefghijkl"
 }
-run_test 9 "append of file with sub-page size on multiple mounts"
+run_test 9a "append of file with sub-page size on multiple mounts"
+
+#LU-10681 - tiny writes & appending to sparse striped file
+test_9b() {
+	[[ $OSTCOUNT -ge 2 ]] || { skip "needs >= 2 OSTs"; return; }
+
+	$LFS setstripe -c 2 -S 1M $DIR/$tfile
+	echo "foo" >> $DIR/$tfile
+	dd if=/dev/zero of=$DIR2/$tfile bs=1M count=1 seek=1 conv=notrunc ||
+		error "sparse dd $DIR2/$tfile failed"
+	echo "foo" >> $DIR/$tfile
+
+	data=$(dd if=$DIR2/$tfile bs=1 count=3 skip=$((2 * 1048576)) conv=notrunc)
+	echo "Data read (expecting 'foo')": $data
+	[ "$data" = "foo" ] || error "append to sparse striped file failed"
+}
+run_test 9b "append to striped sparse file"
 
 test_10a() {
 	MTPT=1

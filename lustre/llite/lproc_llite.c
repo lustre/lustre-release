@@ -876,6 +876,39 @@ static int ll_sbi_flags_seq_show(struct seq_file *m, void *v)
 }
 LPROC_SEQ_FOPS_RO(ll_sbi_flags);
 
+static int ll_tiny_write_seq_show(struct seq_file *m, void *v)
+{
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+	seq_printf(m, "%u\n", !!(sbi->ll_flags & LL_SBI_TINY_WRITE));
+	return 0;
+}
+
+static ssize_t ll_tiny_write_seq_write(
+	struct file *file, const char __user *buffer, size_t count, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct super_block *sb = m->private;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	bool val;
+	int rc;
+
+	rc = kstrtobool_from_user(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	spin_lock(&sbi->ll_lock);
+	if (val)
+		sbi->ll_flags |= LL_SBI_TINY_WRITE;
+	else
+		sbi->ll_flags &= ~LL_SBI_TINY_WRITE;
+	spin_unlock(&sbi->ll_lock);
+
+	return count;
+}
+LPROC_SEQ_FOPS(ll_tiny_write);
+
 static int ll_fast_read_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
@@ -1126,6 +1159,8 @@ struct lprocfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops =	&ll_fast_read_fops,			},
 	{ .name =	"pio",
 	  .fops =	&ll_pio_fops,				},
+	{ .name =	"tiny_write",
+	  .fops =	&ll_tiny_write_fops,			},
 	{ NULL }
 };
 
