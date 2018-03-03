@@ -663,7 +663,7 @@ test_10() {
         error_noexit "e2fsck $MMP_OSTDEV on $MMP_OSS_FAILOVER returned $rc"
     fi
 
-    stop_services primary || return ${PIPESTATUS[0]}
+    CLEANUP_DM_DEV=true stop_services primary || return ${PIPESTATUS[0]}
     return 0
 }
 run_test 10 "e2fsck with mounted filesystem"
@@ -673,4 +673,5 @@ FAIL_ON_ERROR=$SAVED_FAIL_ON_ERROR
 
 complete $SECONDS
 $MMP_RESTORE_MOUNT && setupall
+check_and_cleanup_lustre
 exit_status

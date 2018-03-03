@@ -27,7 +27,7 @@ if ! check_versions; then
 	exit 0
 fi
 
-stopall
+cleanupall
 
 SAVED_MDSSIZE=${MDSSIZE}
 SAVED_OSTSIZE=${OSTSIZE}
@@ -43,8 +43,7 @@ OSTSIZE=200000
 [ $OSTCOUNT -gt 4 ] && OSTCOUNT=4
 
 # build up a clean test environment.
-formatall
-setupall
+REFORMAT="yes" check_and_setup_lustre
 
 build_test_filter
 
@@ -1249,7 +1248,8 @@ OSTSIZE=${SAVED_OSTSIZE}
 OSTCOUNT=${SAVED_OSTCOUNT}
 
 # cleanup the system at last
-formatall
+REFORMAT="yes" cleanup_and_setup_lustre
 
 complete $SECONDS
+check_and_cleanup_lustre
 exit_status

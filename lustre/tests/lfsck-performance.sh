@@ -90,7 +90,7 @@ lfsck_create() {
 
 lfsck_cleanup() {
 	do_rpc_nodes $(facet_active_host $SINGLEMDS) unload_modules
-	formatall
+	REFORMAT="yes" cleanup_and_setup_lustre
 }
 
 lfsck_create_nfiles() {
@@ -1041,4 +1041,5 @@ run_test 8 "lfsck namespace impact on create performance"
 # cleanup the system at last
 lfsck_cleanup
 complete $SECONDS
+check_and_cleanup_lustre
 exit_status

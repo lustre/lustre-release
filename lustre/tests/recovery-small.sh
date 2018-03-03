@@ -2217,13 +2217,14 @@ test_111 ()
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.62) ]] ||
 		{ skip "Need MDS version at least 2.3.62"; return 0; }
 
-	local mdsdev=$(mdsdevname ${SINGLEMDS//mds/})
 #define OBD_FAIL_MDS_CHANGELOG_INIT 0x151
 	do_facet $SINGLEMDS lctl set_param fail_loc=0x151
 	stop $SINGLEMDS || error "stop MDS failed"
-	start $SINGLEMDS $mdsdev && error "start MDS should fail"
+	start $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) &&
+		error "start MDS should fail"
 	do_facet $SINGLEMDS lctl set_param fail_loc=0
-	start $SINGLEMDS $mdsdev || error "start MDS failed"
+	start $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) ||
+		error "start MDS failed"
 }
 run_test 111 "mdd setup fail should not cause umount oops"
 

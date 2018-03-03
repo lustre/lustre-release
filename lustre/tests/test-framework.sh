@@ -154,6 +154,7 @@ init_test_env() {
 	export RPC_MODE=${RPC_MODE:-false}
 	export DO_CLEANUP=${DO_CLEANUP:-true}
 	export KEEP_ZPOOL=${KEEP_ZPOOL:-false}
+	export CLEANUP_DM_DEV=false
 
 	export MKE2FS=$MKE2FS
 	if [ -z "$MKE2FS" ]; then
@@ -315,6 +316,10 @@ init_test_env() {
 	export LDEV=${LDEV:-"$LUSTRE/scripts/ldev"}
 	[ ! -f "$LDEV" ] && export LDEV=$(which ldev 2> /dev/null)
 
+	export DMSETUP=${DMSETUP:-dmsetup}
+	export DM_DEV_PATH=${DM_DEV_PATH:-/dev/mapper}
+	export LOSETUP=${LOSETUP:-losetup}
+
 	if [ "$ACCEPTOR_PORT" ]; then
 		export PORT_OPT="--port $ACCEPTOR_PORT"
 	fi
@@ -353,6 +358,7 @@ init_test_env() {
 	export RLUSTRE=${RLUSTRE:-$LUSTRE}
 	export RPWD=${RPWD:-$PWD}
 	export I_MOUNTED=${I_MOUNTED:-"no"}
+	export AUSTER_CLEANUP=${AUSTER_CLEANUP:-false}
 	if [ ! -f /lib/modules/$(uname -r)/kernel/fs/lustre/mdt.ko -a \
 	     ! -f /lib/modules/$(uname -r)/updates/kernel/fs/lustre/mdt.ko -a \
 	     ! -f /lib/modules/$(uname -r)/extra/kernel/fs/lustre/mdt.ko -a \
@@ -1495,50 +1501,381 @@ csa_add() {
 	echo -n "$opts"
 }
 
+#
+# Associate loop device with a given regular file.
+# Return the loop device.
+#
+setup_loop_device() {
+	local facet=$1
+	local file=$2
+
+	do_facet $facet "loop_dev=\\\$($LOSETUP -j $file | cut -d : -f 1);
+			 if [[ -z \\\$loop_dev ]]; then
+				loop_dev=\\\$($LOSETUP -f);
+				$LOSETUP \\\$loop_dev $file || loop_dev=;
+			 fi;
+			 echo -n \\\$loop_dev"
+}
+
+#
+# Detach a loop device.
+#
+cleanup_loop_device() {
+	local facet=$1
+	local loop_dev=$2
+
+	do_facet $facet "! $LOSETUP $loop_dev >/dev/null 2>&1 ||
+			 $LOSETUP -d $loop_dev"
+}
+
+#
+# Check if a given device is a block device.
+#
+is_blkdev() {
+	local facet=$1
+	local dev=$2
+	local size=${3:-""}
+
+	[[ -n "$dev" ]] || return 1
+	do_facet $facet "test -b $dev" || return 1
+	if [[ -n "$size" ]]; then
+		local in=$(do_facet $facet "dd if=$dev of=/dev/null bs=1k \
+					    count=1 skip=$size 2>&1" |
+					    awk '($3 == "in") { print $1 }')
+		[[ "$in" = "1+0" ]] || return 1
+	fi
+}
+
+#
+# Check if a given device is a device-mapper device.
+#
+is_dm_dev() {
+	local facet=$1
+	local dev=$2
+
+	[[ -n "$dev" ]] || return 1
+	do_facet $facet "$DMSETUP status $dev >/dev/null 2>&1"
+}
+
+#
+# Check if a given device is a device-mapper flakey device.
+#
+is_dm_flakey_dev() {
+	local facet=$1
+	local dev=$2
+	local type
+
+	[[ -n "$dev" ]] || return 1
+
+	type=$(do_facet $facet "$DMSETUP status $dev 2>&1" |
+	       awk '{print $3}')
+	[[ $type = flakey ]] && return 0 || return 1
+}
+
+#
+# Check if device-mapper flakey device is supported by the kernel
+# of $facet node or not.
+#
+dm_flakey_supported() {
+	local facet=$1
+
+	do_facet $facet "modprobe dm-flakey;
+			 $DMSETUP targets | grep -q flakey" &> /dev/null
+}
+
+#
+# Get the device-mapper flakey device name of a given facet.
+#
+dm_facet_devname() {
+	local facet=$1
+	[[ $facet = mgs ]] && combined_mgs_mds && facet=mds1
+
+	echo -n ${facet}_flakey
+}
+
+#
+# Get the device-mapper flakey device of a given facet.
+# A device created by dmsetup will appear as /dev/mapper/<device-name>.
+#
+dm_facet_devpath() {
+	local facet=$1
+
+	echo -n $DM_DEV_PATH/$(dm_facet_devname $facet)
+}
+
+#
+# Set a device-mapper device with a new table.
+#
+# The table has the following format:
+# <logical_start_sector> <num_sectors> <target_type> <target_args>
+#
+# flakey <target_args> includes:
+# <destination_device> <offset> <up_interval> <down_interval> \
+# [<num_features> [<feature_arguments>]]
+#
+# linear <target_args> includes:
+# <destination_device> <start_sector>
+#
+dm_set_dev_table() {
+	local facet=$1
+	local dm_dev=$2
+	local target_type=$3
+	local num_sectors
+	local real_dev
+	local tmp
+	local table
+
+	read tmp num_sectors tmp real_dev tmp \
+		<<< $(do_facet $facet "$DMSETUP table $dm_dev")
+
+	case $target_type in
+	flakey)
+		table="0 $num_sectors flakey $real_dev 0 0 1800 1 drop_writes"
+		;;
+	linear)
+		table="0 $num_sectors linear $real_dev 0"
+		;;
+	*) error "invalid target type $target_type" ;;
+	esac
+
+	do_facet $facet "$DMSETUP suspend --nolockfs --noflush $dm_dev" ||
+		error "failed to suspend $dm_dev"
+	do_facet $facet "$DMSETUP load $dm_dev --table \\\"$table\\\"" ||
+		error "failed to load $target_type table into $dm_dev"
+	do_facet $facet "$DMSETUP resume $dm_dev" ||
+		error "failed to resume $dm_dev"
+}
+
+#
+# Set a device-mapper flakey device as "read-only" by using the "drop_writes"
+# feature parameter.
+#
+# drop_writes:
+#	All write I/O is silently ignored.
+#	Read I/O is handled correctly.
+#
+dm_set_dev_readonly() {
+	local facet=$1
+	local dm_dev=${2:-$(dm_facet_devpath $facet)}
+
+	dm_set_dev_table $facet $dm_dev flakey
+}
+
+#
+# Set a device-mapper device to traditional linear mapping mode.
+#
+dm_clear_dev_readonly() {
+	local facet=$1
+	local dm_dev=${2:-$(dm_facet_devpath $facet)}
+
+	dm_set_dev_table $facet $dm_dev linear
+}
+
+#
+# Set the device of a given facet as "read-only".
+#
+set_dev_readonly() {
+	local facet=$1
+	local svc=${facet}_svc
+
+	if [[ $(facet_fstype $facet) = zfs ]] ||
+	   ! dm_flakey_supported $facet; then
+		do_facet $facet $LCTL --device ${!svc} readonly
+	else
+		dm_set_dev_readonly $facet
+	fi
+}
+
+#
+# Get size in 512-byte sectors (BLKGETSIZE64 / 512) of a given device.
+#
+get_num_sectors() {
+	local facet=$1
+	local dev=$2
+	local num_sectors
+
+	num_sectors=$(do_facet $facet "blockdev --getsz $dev 2>/dev/null")
+	[[ ${PIPESTATUS[0]} = 0 && -n "$num_sectors" ]] || num_sectors=0
+	echo -n $num_sectors
+}
+
+#
+# Create a device-mapper device with a given block device or regular file (will
+# be associated with loop device).
+# Return the full path of the device-mapper device.
+#
+dm_create_dev() {
+	local facet=$1
+	local real_dev=$2				   # destination device
+	local dm_dev_name=${3:-$(dm_facet_devname $facet)} # device name
+	local dm_dev=$DM_DEV_PATH/$dm_dev_name		  # device-mapper device
+
+	# check if the device-mapper device to be created already exists
+	if is_dm_dev $facet $dm_dev; then
+		# if the existing device was set to "read-only", then clear it
+		! is_dm_flakey_dev $facet $dm_dev ||
+			dm_clear_dev_readonly $facet $dm_dev
+
+		echo -n $dm_dev
+		return 0
+	fi
+
+	# check if the destination device is a block device, and if not,
+	# associate it with a loop device
+	is_blkdev $facet $real_dev ||
+		real_dev=$(setup_loop_device $facet $real_dev)
+	[[ -n "$real_dev" ]] || { echo -n $real_dev; return 2; }
+
+	# now create the device-mapper device
+	local num_sectors=$(get_num_sectors $facet $real_dev)
+	local table="0 $num_sectors linear $real_dev 0"
+	local rc=0
+
+	do_facet $facet "$DMSETUP create $dm_dev_name --table \\\"$table\\\"" ||
+		{ rc=${PIPESTATUS[0]}; dm_dev=; }
+	do_facet $facet "$DMSETUP mknodes >/dev/null 2>&1"
+
+	echo -n $dm_dev
+	return $rc
+}
+
+#
+# Map the facet name to its device variable name.
+#
+facet_device_alias() {
+	local facet=$1
+	local dev_alias=$facet
+
+	case $facet in
+		fs2mds) dev_alias=mds1_2 ;;
+		fs2ost) dev_alias=ost1_2 ;;
+		fs3ost) dev_alias=ost2_2 ;;
+		*) ;;
+	esac
+
+	echo -n $dev_alias
+}
+
+#
+# Save the original value of the facet device and export the new value.
+#
+export_dm_dev() {
+	local facet=$1
+	local dm_dev=$2
+
+	local active_facet=$(facet_active $facet)
+	local dev_alias=$(facet_device_alias $active_facet)
+	local dev_name=${dev_alias}_dev
+	local dev=${!dev_name}
+
+	if [[ $active_facet = $facet ]]; then
+		local failover_dev=${dev_alias}failover_dev
+		if [[ ${!failover_dev} = $dev ]]; then
+			eval export ${failover_dev}_saved=$dev
+			eval export ${failover_dev}=$dm_dev
+		fi
+	else
+		dev_alias=$(facet_device_alias $facet)
+		local facet_dev=${dev_alias}_dev
+		if [[ ${!facet_dev} = $dev ]]; then
+			eval export ${facet_dev}_saved=$dev
+			eval export ${facet_dev}=$dm_dev
+		fi
+	fi
+
+	eval export ${dev_name}_saved=$dev
+	eval export ${dev_name}=$dm_dev
+}
+
+#
+# Restore the saved value of the facet device.
+#
+unexport_dm_dev() {
+	local facet=$1
+
+	[[ $facet = mgs ]] && combined_mgs_mds && facet=mds1
+	local dev_alias=$(facet_device_alias $facet)
+
+	local saved_dev=${dev_alias}_dev_saved
+	[[ -z ${!saved_dev} ]] ||
+		eval export ${dev_alias}_dev=${!saved_dev}
+
+	saved_dev=${dev_alias}failover_dev_saved
+	[[ -z ${!saved_dev} ]] ||
+		eval export ${dev_alias}failover_dev=${!saved_dev}
+}
+
+#
+# Remove a device-mapper device.
+# If the destination device is a loop device, then also detach it.
+#
+dm_cleanup_dev() {
+	local facet=$1
+	local dm_dev=${2:-$(dm_facet_devpath $facet)}
+	local major
+	local minor
+
+	is_dm_dev $facet $dm_dev || return 0
+
+	read major minor <<< $(do_facet $facet "$DMSETUP table $dm_dev" |
+		awk '{ print $4 }' | awk -F: '{ print $1" "$2 }')
+
+	do_facet $facet "$DMSETUP remove $dm_dev"
+	do_facet $facet "$DMSETUP mknodes >/dev/null 2>&1"
+
+	unexport_dm_dev $facet
+
+	# detach a loop device
+	[[ $major -ne 7 ]] || cleanup_loop_device $facet /dev/loop$minor
+}
+
 mount_facet() {
 	local facet=$1
 	shift
-	local dev=$(facet_active $facet)_dev
+	local active_facet=$(facet_active $facet)
+	local dev_alias=$(facet_device_alias $active_facet)
+	local dev=${dev_alias}_dev
 	local opt=${facet}_opt
 	local mntpt=$(facet_mntpt $facet)
 	local opts="${!opt} $@"
 	local fstype=$(facet_fstype $facet)
 	local devicelabel
+	local dm_dev=${!dev}
 
 	module_loaded lustre || load_modules
 
-	if [ $(facet_fstype $facet) == ldiskfs ] &&
-	   ! do_facet $facet test -b ${!dev}; then
-		opts=$(csa_add "$opts" -o loop)
-	fi
-
-	if [[ $(facet_fstype $facet) == zfs ]]; then
-		# import ZFS storage pool
-		import_zpool $facet || return ${PIPESTATUS[0]}
-	fi
-
 	case $fstype in
 	ldiskfs)
-		devicelabel=$(do_facet ${facet} "$E2LABEL ${!dev}");;
+		if dm_flakey_supported $facet; then
+			dm_dev=$(dm_create_dev $facet ${!dev})
+			[[ -n "$dm_dev" ]] || dm_dev=${!dev}
+		fi
+
+		is_blkdev $facet $dm_dev || opts=$(csa_add "$opts" -o loop)
+
+		devicelabel=$(do_facet ${facet} "$E2LABEL $dm_dev");;
 	zfs)
+		# import ZFS storage pool
+		import_zpool $facet || return ${PIPESTATUS[0]}
+
 		devicelabel=$(do_facet ${facet} "$ZFS get -H -o value \
-						lustre:svname ${!dev}");;
+						lustre:svname $dm_dev");;
 	*)
 		error "unknown fstype!";;
 	esac
 
-	echo "Starting ${facet}: $opts ${!dev} $mntpt"
+	echo "Starting ${facet}: $opts $dm_dev $mntpt"
 	# for testing LU-482 error handling in mount_facets() and test_0a()
 	if [ -f $TMP/test-lu482-trigger ]; then
 		RC=2
 	else
-		do_facet ${facet} "mkdir -p $mntpt; $MOUNT_CMD $opts \
-		                   ${!dev} $mntpt"
+		do_facet ${facet} \
+			"mkdir -p $mntpt; $MOUNT_CMD $opts $dm_dev $mntpt"
 		RC=${PIPESTATUS[0]}
 	fi
 
 	if [ $RC -ne 0 ]; then
-		echo "Start of ${!dev} on ${facet} failed ${RC}"
+		echo "Start of $dm_dev on ${facet} failed ${RC}"
 		return $RC
 	fi
 
@@ -1555,19 +1892,19 @@ mount_facet() {
 	fi
 
 	if [[ $opts =~ .*nosvc.* ]]; then
-		echo "Start ${!dev} without service"
+		echo "Start $dm_dev without service"
 	else
 
 		case $fstype in
 		ldiskfs)
-			wait_update_facet ${facet} "$E2LABEL ${!dev} \
+			wait_update_facet ${facet} "$E2LABEL $dm_dev \
 				2>/dev/null | grep -E ':[a-zA-Z]{3}[0-9]{4}'" \
-				"" || error "${!dev} failed to initialize!";;
+				"" || error "$dm_dev failed to initialize!";;
 		zfs)
 			wait_update_facet ${facet} "$ZFS get -H -o value \
-				lustre:svname ${!dev} 2>/dev/null | \
+				lustre:svname $dm_dev 2>/dev/null | \
 				grep -E ':[a-zA-Z]{3}[0-9]{4}'" "" ||
-				error "${!dev} failed to initialize!";;
+				error "$dm_dev failed to initialize!";;
 
 		*)
 			error "unknown fstype!";;
@@ -1581,10 +1918,12 @@ mount_facet() {
 	fi
 
 
-	label=$(devicelabel ${facet} ${!dev})
-	[ -z "$label" ] && echo no label for ${!dev} && exit 1
+	label=$(devicelabel ${facet} $dm_dev)
+	[ -z "$label" ] && echo no label for $dm_dev && exit 1
 	eval export ${facet}_svc=${label}
 	echo Started ${label}
+
+	export_dm_dev $facet $dm_dev
 
 	return $RC
 }
@@ -1595,14 +1934,16 @@ start() {
 	shift
 	local device=$1
 	shift
-	eval export ${facet}_dev=${device}
+	local dev_alias=$(facet_device_alias $facet)
+
+	eval export ${dev_alias}_dev=${device}
 	eval export ${facet}_opt=\"$@\"
 
-	local varname=${facet}failover_dev
+	local varname=${dev_alias}failover_dev
 	if [ -n "${!varname}" ] ; then
-		eval export ${facet}failover_dev=${!varname}
+		eval export ${dev_alias}failover_dev=${!varname}
 	else
-		eval export ${facet}failover_dev=$device
+		eval export ${dev_alias}failover_dev=$device
 	fi
 
 	local mntpt=$(facet_mntpt $facet)
@@ -1621,18 +1962,18 @@ start() {
 }
 
 stop() {
-    local running
-    local facet=$1
-    shift
-    local HOST=`facet_active_host $facet`
-    [ -z $HOST ] && echo stop: no host for $facet && return 0
+	local running
+	local facet=$1
+	shift
+	local HOST=$(facet_active_host $facet)
+	[[ -z $HOST ]] && echo stop: no host for $facet && return 0
 
-    local mntpt=$(facet_mntpt $facet)
+	local mntpt=$(facet_mntpt $facet)
 	running=$(do_facet ${facet} "grep -c $mntpt' ' /proc/mounts || true")
-    if [ ${running} -ne 0 ]; then
-        echo "Stopping $mntpt (opts:$@) on $HOST"
-	do_facet ${facet} $UMOUNT $@ $mntpt
-    fi
+	if [ ${running} -ne 0 ]; then
+		echo "Stopping $mntpt (opts:$@) on $HOST"
+		do_facet ${facet} $UMOUNT $@ $mntpt
+	fi
 
 	# umount should block, but we should wait for unrelated obd's
 	# like the MGS or MGC to also stop.
@@ -1641,6 +1982,13 @@ stop() {
 	if [[ $(facet_fstype $facet) == zfs ]]; then
 		# export ZFS storage pool
 		[ "$KEEP_ZPOOL" = "true" ] || export_zpool $facet
+	elif dm_flakey_supported $facet; then
+		local host=${facet}_HOST
+		local failover_host=${facet}failover_HOST
+		if [[ -n ${!failover_host} && ${!failover_host} != ${!host} ]]||
+			$CLEANUP_DM_DEV || [[ $facet = fs* ]]; then
+			dm_cleanup_dev $facet
+		fi
 	fi
 }
 
@@ -2159,13 +2507,23 @@ facets_up_on_host () {
 }
 
 shutdown_facet() {
-    local facet=$1
+	local facet=$1
+	local affected_facet
+	local affected_facets
 
-    if [ "$FAILURE_MODE" = HARD ]; then
-        shutdown_node_hard $(facet_active_host $facet)
-    else
-        stop $facet
-    fi
+	if [[ "$FAILURE_MODE" = HARD ]]; then
+		if [[ $(facet_fstype $facet) = ldiskfs ]] &&
+			dm_flakey_supported $facet; then
+			affected_facets=$(affected_facets $facet)
+			for affected_facet in ${affected_facets//,/ }; do
+				unexport_dm_dev $affected_facet
+			done
+		fi
+
+		shutdown_node_hard $(facet_active_host $facet)
+	else
+		stop $facet
+	fi
 }
 
 reboot_node() {
@@ -2956,7 +3314,7 @@ replay_barrier() {
 	# handled by stop() and mount_facet() separately, which are used
 	# inside fail() and fail_abort().
 	#
-	do_facet $facet $LCTL --device ${!svc} readonly
+	set_dev_readonly $facet
 	do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
 	$LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
@@ -2967,7 +3325,7 @@ replay_barrier_nodf() {
 	local svc=${facet}_svc
 	echo Replay barrier on ${!svc}
 	do_facet $facet $LCTL --device ${!svc} notransno
-	do_facet $facet $LCTL --device ${!svc} readonly
+	set_dev_readonly $facet
 	do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
 	$LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
@@ -2977,7 +3335,7 @@ replay_barrier_nosync() {
 	local svc=${facet}_svc
 	echo Replay barrier on ${!svc}
 	do_facet $facet $LCTL --device ${!svc} notransno
-	do_facet $facet $LCTL --device ${!svc} readonly
+	set_dev_readonly $facet
 	do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
 	$LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
@@ -3348,16 +3706,20 @@ do_node() {
         $myPDSH $HOST "$LCTL mark \"$@\"" > /dev/null 2>&1 || :
     fi
 
-    if [ "$myPDSH" = "rsh" ]; then
-# we need this because rsh does not return exit code of an executed command
-        local command_status="$TMP/cs"
-        rsh $HOST ":> $command_status"
-        rsh $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests:/sbin:/usr/sbin;
-                    cd $RPWD; LUSTRE=\"$RLUSTRE\" sh -c \"$@\") ||
-                    echo command failed >$command_status"
-        [ -n "$($myPDSH $HOST cat $command_status)" ] && return 1 || true
-        return 0
-    fi
+	if [[ "$myPDSH" == "rsh" ]] ||
+	   [[ "$myPDSH" == *pdsh* && "$myPDSH" != *-S* ]]; then
+		# we need this because rsh and pdsh do not return
+		# exit code of an executed command
+		local command_status="$TMP/cs"
+		eval $myPDSH $HOST ":> $command_status"
+		eval $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests;
+				     PATH=\$PATH:/sbin:/usr/sbin;
+				     cd $RPWD;
+				     LUSTRE=\"$RLUSTRE\" sh -c \"$@\") ||
+				     echo command failed >$command_status"
+		[[ -n "$($myPDSH $HOST cat $command_status)" ]] && return 1 ||
+			return 0
+	fi
 
     if $verbose ; then
         # print HOSTNAME for myPDSH="no_dsh"
@@ -3534,6 +3896,8 @@ ostdevname() {
 
 	case $fstype in
 		ldiskfs )
+			local dev=ost${num}_dev
+			[[ -n ${!dev} ]] && eval DEVPTR=${!dev} ||
 			#if $OSTDEVn isn't defined, default is $OSTDEVBASE + num
 			eval DEVPTR=${!DEVNAME:=${OSTDEVBASE}${num}};;
 		zfs )
@@ -3580,6 +3944,8 @@ mdsdevname() {
 
 	case $fstype in
 		ldiskfs )
+			local dev=mds${num}_dev
+			[[ -n ${!dev} ]] && eval DEVPTR=${!dev} ||
 			#if $MDSDEVn isn't defined, default is $MDSDEVBASE{n}
 			eval DEVPTR=${!DEVNAME:=${MDSDEVBASE}${num}};;
 		zfs )
@@ -3622,9 +3988,10 @@ mgsdevname() {
 	case $fstype in
 	ldiskfs )
 		if [ $(facet_host mgs) = $(facet_host mds1) ] &&
-		   ( [ -z "$MGSDEV" ] || [ $MGSDEV = $(mdsdevname 1) ] ); then
+		   ( [ -z "$MGSDEV" ] || [ $MGSDEV = $MDSDEV1 ] ); then
 			DEVPTR=$(mdsdevname 1)
 		else
+			[[ -n $mgs_dev ]] && DEVPTR=$mgs_dev ||
 			DEVPTR=$MGSDEV
 		fi;;
 	zfs )
@@ -3681,11 +4048,16 @@ mount_ldiskfs() {
 	local dev=$(facet_device $facet)
 	local mnt=${2:-$(facet_mntpt $facet)}
 	local opts
+	local dm_dev=$dev
 
-	if ! do_facet $facet test -b $dev; then
-		opts="-o loop"
+	if dm_flakey_supported $facet; then
+		dm_dev=$(dm_create_dev $facet $dev)
+		[[ -n "$dm_dev" ]] || dm_dev=$dev
 	fi
-	do_facet $facet mount -t ldiskfs $opts $dev $mnt
+	is_blkdev $facet $dm_dev || opts=$(csa_add "$opts" -o loop)
+	export_dm_dev $facet $dm_dev
+
+	do_facet $facet mount -t ldiskfs $opts $dm_dev $mnt
 }
 
 unmount_ldiskfs() {
@@ -3804,7 +4176,7 @@ cleanupall() {
 	nfs_client_mode && return
 	cifs_client_mode && return
 
-	stopall $*
+	CLEANUP_DM_DEV=true stopall $*
 	cleanup_echo_devs
 
 	unload_modules
@@ -4132,18 +4504,23 @@ mountmgs() {
 }
 
 mountmds() {
+	local num
+	local devname
+	local host
+	local varname
 	for num in $(seq $MDSCOUNT); do
-		DEVNAME=$(mdsdevname $num)
-		start mds$num $DEVNAME $MDS_MOUNT_OPTS
+		devname=$(mdsdevname $num)
+		start mds$num $devname $MDS_MOUNT_OPTS
 
-		# We started mds, now we should set failover variables properly.
-		# Set mds${num}failover_HOST if unset (the default
-		# failnode).
-		local varname=mds${num}failover_HOST
-		if [ -z "${!varname}" ]; then
-			eval mds${num}failover_HOST=$(facet_host mds$num)
-		fi
-
+		# We started mds$num, now we should set mds${num}_HOST
+		# and mds${num}failover_HOST variables properly if they
+		# are not set.
+		host=$(facet_host mds$num)
+		for varname in mds${num}_HOST mds${num}failover_HOST; do
+			if [[ -z "${!varname}" ]]; then
+				eval $varname=$host
+			fi
+		done
 		if [ $IDENTITY_UPCALL != "default" ]; then
 			switch_identity $num $IDENTITY_UPCALL
 		fi
@@ -4151,18 +4528,23 @@ mountmds() {
 }
 
 mountoss() {
+	local num
+	local devname
+	local host
+	local varname
 	for num in $(seq $OSTCOUNT); do
-		DEVNAME=$(ostdevname $num)
-		start ost$num $DEVNAME $OST_MOUNT_OPTS
+		devname=$(ostdevname $num)
+		start ost$num $devname $OST_MOUNT_OPTS
 
-		# We started ost$num, now we should set ost${num}failover
-		# variable properly. Set ost${num}failover_HOST if it is not
-		# set (the default failnode).
-		varname=ost${num}failover_HOST
-		if [ -z "${!varname}" ]; then
-			eval ost${num}failover_HOST=$(facet_host ost${num})
-		fi
-
+		# We started ost$num, now we should set ost${num}_HOST
+		# and ost${num}failover_HOST variables properly if they
+		# are not set.
+		host=$(facet_host ost$num)
+		for varname in ost${num}_HOST ost${num}failover_HOST; do
+			if [[ -z "${!varname}" ]]; then
+				eval $varname=$host
+			fi
+		done
 	done
 }
 
@@ -4567,7 +4949,7 @@ check_and_setup_lustre() {
 	# 1.
 	# both MOUNT and MOUNT2 are not mounted
 	if ! is_mounted $MOUNT && ! is_mounted $MOUNT2; then
-		[ "$REFORMAT" = "yes" ] && formatall
+		[ "$REFORMAT" = "yes" ] && CLEANUP_DM_DEV=true formatall
 		# setupall mounts both MOUNT and MOUNT2 (if MOUNT_2 is set)
 		setupall
 		is_mounted $MOUNT || error "NAME=$NAME not mounted"
@@ -4881,7 +5263,7 @@ check_and_cleanup_lustre() {
 		cleanup_mount $MOUNT2
 	fi
 
-	if [ "$I_MOUNTED" = "yes" ]; then
+	if [[ "$I_MOUNTED" = "yes" ]] && ! $AUSTER_CLEANUP; then
 		cleanupall -f || error "cleanup failed"
 		unset I_MOUNTED
 	fi
@@ -7624,15 +8006,20 @@ run_sgpdd () {
 
 # returns the canonical name for an ldiskfs device
 ldiskfs_canon() {
-        local dev="$1"
-        local facet="$2"
+	local dev="$1"
+	local facet="$2"
 
-        do_facet $facet "dv=\\\$(lctl get_param -n $dev);
-if foo=\\\$(lvdisplay -c \\\$dv 2>/dev/null); then
-    echo dm-\\\${foo##*:};
-else
-    echo \\\$(basename \\\$dv);
-fi;"
+	do_facet $facet "dv=\\\$($LCTL get_param -n $dev);
+			 if foo=\\\$(lvdisplay -c \\\$dv 2>/dev/null); then
+				echo dm-\\\${foo##*:};
+			 else
+				name=\\\$(basename \\\$dv);
+				if [[ \\\$name = *flakey* ]]; then
+					name=\\\$(lsblk -o NAME,KNAME |
+						awk /\\\$name/'{print \\\$NF}');
+				fi;
+				echo \\\$name;
+			 fi;"
 }
 
 is_sanity_benchmark() {

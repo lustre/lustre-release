@@ -131,33 +131,33 @@ print_summary () {
 
 
 setup_if_needed() {
-    nfs_client_mode && return
-    auster_cleanup=false
+	nfs_client_mode && return
+	AUSTER_CLEANUP=false
 
-    local MOUNTED=$(mounted_lustre_filesystems)
-    if $(echo $MOUNTED' ' | grep -w -q $MOUNT' '); then
-        check_config_clients $MOUNT
-       # init_facets_vars
-       # init_param_vars
-        return
-    fi
+	local MOUNTED=$(mounted_lustre_filesystems)
+	if $(echo $MOUNTED' ' | grep -w -q $MOUNT' '); then
+		check_config_clients $MOUNT
+		# init_facets_vars
+		# init_param_vars
+		return
+	fi
 
-    echo "Lustre is not mounted, trying to do setup ... "
-    $reformat && formatall
-    setupall
+	echo "Lustre is not mounted, trying to do setup ... "
+	$reformat && CLEANUP_DM_DEV=true formatall
+	setupall
 
-    MOUNTED=$(mounted_lustre_filesystems)
-    if ! $(echo $MOUNTED' ' | grep -w -q $MOUNT' '); then
-        echo "Lustre is not mounted after setup! "
-        exit 1
-    fi
-    auster_cleanup=true
+	MOUNTED=$(mounted_lustre_filesystems)
+	if ! $(echo $MOUNTED' ' | grep -w -q $MOUNT' '); then
+		echo "Lustre is not mounted after setup! "
+		exit 1
+	fi
+	AUSTER_CLEANUP=true
 }
 
 cleanup_if_needed() {
-    if $auster_cleanup; then
-        cleanupall
-    fi
+	if $AUSTER_CLEANUP; then
+		cleanupall
+	fi
 }
 
 find_script_in_path() {

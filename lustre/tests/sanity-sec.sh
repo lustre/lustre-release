@@ -81,18 +81,7 @@ FOPS_IDMAPS=(
 
 check_and_setup_lustre
 
-sec_cleanup() {
-	if [ "$I_MOUNTED" = "yes" ]; then
-		cleanupall -f || error "sec_cleanup"
-	fi
-}
-
-DIR=${DIR:-$MOUNT}
-[ -z "$(echo $DIR | grep $MOUNT)" ] &&
-	error "$DIR not in $MOUNT" && sec_cleanup && exit 1
-
-[ $(echo $MOUNT | wc -w) -gt 1 ] &&
-	echo "NAME=$MOUNT mounted more than once" && sec_cleanup && exit 0
+assert_DIR
 
 # for GSS_SUP
 GSS_REF=$(lsmod | grep ^ptlrpc_gss | awk '{print $3}')
@@ -2085,7 +2074,6 @@ sec_unsetup() {
 }
 sec_unsetup
 
-sec_cleanup
-
 complete $SECONDS
+check_and_cleanup_lustre
 exit_status
