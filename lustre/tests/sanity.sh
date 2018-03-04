@@ -4697,6 +4697,8 @@ test_56b() {
 run_test 56b "check $LFS getdirstripe"
 
 test_56c() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
 	local ost_idx=0
 	local ost_name=$(ostname_from_index $ost_idx)
 	local old_status=$(ost_dev_status $ost_idx)
@@ -6065,6 +6067,8 @@ test_60a() {
 run_test 60a "llog_test run from kernel module and test llog_reader"
 
 test_60aa() {
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
+
 	# test old logid format
 	if [ $(lustre_version_code mgs) -le $(version_code 3.1.53) ]; then
 		do_facet mgs $LCTL dl | grep MGS
@@ -6838,6 +6842,8 @@ cleanup_77c() {
 }
 
 test_77c() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	$GSS && skip "could not run with gss" && return
 
@@ -7579,6 +7585,8 @@ test_101g_brw_size_test() {
 }
 
 test_101g() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+
 	local rpcs
 	local osts=$(get_facets OST)
 	local list=$(comma_list $(osts_nodes))
@@ -11928,6 +11936,10 @@ test_160e() {
 run_test 160e "changelog negative testing (should return errors)"
 
 test_160f() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
+		{ skip "Need MDS version at least 2.10.56"; return 0; }
+
 	local mdts=$(comma_list $(mdts_nodes))
 
 	# Create a user
@@ -12000,6 +12012,10 @@ test_160f() {
 run_test 160f "changelog garbage collect (timestamped users)"
 
 test_160g() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.10.56) ]] ||
+		{ skip "Need MDS version at least 2.10.56"; return 0; }
+
 	local mdts=$(comma_list $(mdts_nodes))
 
 	#define OBD_FAIL_TIME_IN_CHLOG_USER	0x1314
@@ -12238,6 +12254,8 @@ test_161c() {
 run_test 161c "check CL_RENME[UNLINK] changelog record flags"
 
 test_161d() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
 	local pid
 	local fid
 
