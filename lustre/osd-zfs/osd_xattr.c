@@ -206,8 +206,8 @@ out_rele:
  * \retval 0           on success
  * \retval negative    negated errno on failure
  */
-int __osd_xattr_get(const struct lu_env *env, struct osd_object *obj,
-		    struct lu_buf *buf, const char *name, int *sizep)
+int osd_xattr_get_internal(const struct lu_env *env, struct osd_object *obj,
+			   struct lu_buf *buf, const char *name, int *sizep)
 {
 	int rc;
 
@@ -239,7 +239,7 @@ int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		RETURN(-EOPNOTSUPP);
 
 	down_read(&obj->oo_guard);
-	rc = __osd_xattr_get(env, obj, buf, name, &size);
+	rc = osd_xattr_get_internal(env, obj, buf, name, &size);
 	up_read(&obj->oo_guard);
 
 	if (rc == -ENOENT)

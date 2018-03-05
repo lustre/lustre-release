@@ -187,8 +187,8 @@ osd_object_sa_bulk_update(struct osd_object *obj, sa_bulk_attr_t *attrs,
 /*
  * Retrieve the attributes of a DMU object
  */
-int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
-			  struct osd_object *obj, struct lu_attr *la)
+static int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
+				 struct osd_object *obj, struct lu_attr *la)
 {
 	struct osa_attr	*osa = &osd_oti_get(env)->oti_osa;
 	sa_bulk_attr_t	*bulk = osd_oti_get(env)->oti_attr_bulk;
@@ -330,7 +330,7 @@ struct lu_object *osd_object_alloc(const struct lu_env *env,
 /*
  * Concurrency: shouldn't matter.
  */
-int osd_object_init0(const struct lu_env *env, struct osd_object *obj)
+static int osd_object_init0(const struct lu_env *env, struct osd_object *obj)
 {
 	struct osd_device	*osd = osd_obj2dev(obj);
 	const struct lu_fid	*fid = lu_object_fid(&obj->oo_dt.do_lu);
@@ -1057,15 +1057,21 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	if (valid & LA_FLAGS) {
 		struct lustre_mdt_attrs *lma;
 		struct lu_buf buf;
+		int size = 0;
 
 		if (la->la_flags & LUSTRE_LMA_FL_MASKS) {
 			CLASSERT(sizeof(info->oti_buf) >= sizeof(*lma));
 			lma = (struct lustre_mdt_attrs *)&info->oti_buf;
 			buf.lb_buf = lma;
 			buf.lb_len = sizeof(info->oti_buf);
-			rc = osd_xattr_get(env, &obj->oo_dt, &buf,
-					   XATTR_NAME_LMA);
-			if (rc > 0) {
+
+			/* Please NOT call osd_xattr_get() directly, that
+			 * will cause recursively down_read() on oo_gurad. */
+			rc = osd_xattr_get_internal(env, obj, &buf,
+						    XATTR_NAME_LMA, &size);
+			if (!rc && unlikely(size < sizeof(*lma)))
+				rc = -EINVAL;
+			if (!rc) {
 				lma->lma_incompat =
 					le32_to_cpu(lma->lma_incompat);
 				lma->lma_incompat |=

@@ -566,6 +566,8 @@ int __osd_xattr_load(struct osd_device *osd, sa_handle_t *hdl,
 int __osd_xattr_get_large(const struct lu_env *env, struct osd_device *osd,
 			  uint64_t xattr, struct lu_buf *buf,
 			  const char *name, int *sizep);
+int osd_xattr_get_internal(const struct lu_env *env, struct osd_object *obj,
+			   struct lu_buf *buf, const char *name, int *sizep);
 int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		  struct lu_buf *buf, const char *name);
 int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
