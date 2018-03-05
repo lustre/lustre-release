@@ -2984,6 +2984,8 @@ test_54() {
 run_test 54 "basic lfs project interface test"
 
 test_55() {
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.10.58) ] &&
+		skip "Not supported before 2.10.58." && return
 	setup_quota_test || error "setup quota failed with $?"
 
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
