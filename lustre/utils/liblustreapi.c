@@ -1034,7 +1034,7 @@ int llapi_dir_create(const char *name, mode_t mode,
 
 	namepath = strdup(name);
 	if (!namepath) {
-		free(namepath);
+		free(dirpath);
 		free(lmu);
 		return -ENOMEM;
 	}
