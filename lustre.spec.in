@@ -9,6 +9,7 @@
 %bcond_without lustre_iokit
 %bcond_without lustre_modules
 %bcond_with snmp
+%bcond_without gss_keyring
 %bcond_without manpages
 %bcond_without shared
 %bcond_without static
@@ -309,6 +310,7 @@ fi
 	%{!?with_servers:--disable-server} \
 	%{!?with_zfs:--without-zfs} \
 	%{!?with_snmp:--disable-snmp} \
+	%{!?with_gss_keyring:--disable-gss-keyring} \
 	%{!?with_manpages:--disable-manpages} \
 	%{!?with_systemd:--with-systemdsystemunitdir=no} \
 	%{?with_systemd:--with-systemdsystemunitdir=%{_unitdir}} \
@@ -364,16 +366,17 @@ echo '%{_unitdir}/lnet.service' >>lustre.files
 %if %{_vendor}=="redhat"
 # The following scripts are Red Hat specific
 %if %{with servers}
-echo '%{_sysconfdir}/sysconfig/lustre' >>lustre.files
-echo '%{_sysconfdir}/sysconfig/lsvcgss' >>lustre.files
 echo '%{_sysconfdir}/init.d/lustre' >>lustre.files
+echo '%{_sysconfdir}/sysconfig/lustre' >>lustre.files
+%if %{with gss_keyring}
+echo '%{_sysconfdir}/init.d/lsvcgss' >>lustre.files
+echo '%{_sysconfdir}/sysconfig/lsvcgss' >>lustre.files
+%endif
 %endif
 
 %if %{without systemd}
 echo '%{_sysconfdir}/init.d/lnet' >>lustre.files
 %endif
-
-echo '%{_sysconfdir}/init.d/lsvcgss' >>lustre.files
 %endif
 
 %if %{with servers}

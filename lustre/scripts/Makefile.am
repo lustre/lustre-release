@@ -41,7 +41,7 @@ sbin_SCRIPTS = lustre_rmmod ko2iblnd-probe
 
 if RHEL
 initdir = $(sysconfdir)/init.d
-init_SCRIPTS  = lsvcgss
+init_SCRIPTS  =
 
 if !HAVE_SYSTEMD
 init_SCRIPTS += lnet
@@ -49,6 +49,9 @@ endif
 
 if SERVER
 init_SCRIPTS += lustre
+if GSS_KEYRING
+init_SCRIPTS += lsvcgss
+endif
 endif
 endif
 

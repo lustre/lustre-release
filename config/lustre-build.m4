@@ -530,6 +530,9 @@ fi
 if test x$enable_zfs = xyes ; then
 	RPMBINARGS="$RPMBINARGS --with zfs"
 fi
+if test x$enable_gss_keyring == xno ; then
+	RPMBINARGS="$RPMBINARGS --without gss_keyring"
+fi
 if test x$enable_iokit != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_iokit"
 fi
