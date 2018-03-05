@@ -1299,6 +1299,8 @@ struct hsm_state_set {
 
 #define OBD_BRW_LOCALS (OBD_BRW_LOCAL1)
 
+#define OBD_MAX_GRANT 0x7fffffffUL /* Max grant allowed to one client: 2 GiB */
+
 #define OBD_OBJECT_EOF LUSTRE_EOF
 
 #define OST_MIN_PRECREATE 32

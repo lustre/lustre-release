@@ -894,9 +894,10 @@ static long tgt_grant_alloc(struct obd_export *exp, u64 curgrant,
 	     tgd->tgd_grant_compat_disable) || left == 0 || exp->exp_failed)
 		RETURN(0);
 
-	if (want > 0x7fffffff) {
-		CERROR("%s: client %s/%p requesting > 2GB grant %llu\n",
-		       obd->obd_name, exp->exp_client_uuid.uuid, exp, want);
+	if (want > OBD_MAX_GRANT) {
+		CERROR("%s: client %s/%p requesting > max (%lu), %llu\n",
+		       obd->obd_name, exp->exp_client_uuid.uuid, exp,
+		       OBD_MAX_GRANT, want);
 		RETURN(0);
 	}
 

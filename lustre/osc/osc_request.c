@@ -671,11 +671,12 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 		oa->o_undirty = 0;
 	} else {
 		unsigned long nrpages;
+		unsigned long undirty;
 
 		nrpages = cli->cl_max_pages_per_rpc;
 		nrpages *= cli->cl_max_rpcs_in_flight + 1;
 		nrpages = max(nrpages, cli->cl_dirty_max_pages);
-		oa->o_undirty = nrpages << PAGE_SHIFT;
+		undirty = nrpages << PAGE_SHIFT;
 		if (OCD_HAS_FLAG(&cli->cl_import->imp_connect_data,
 				 GRANT_PARAM)) {
 			int nrextents;
@@ -684,8 +685,13 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 			 * grant space */
 			nrextents = (nrpages + cli->cl_max_extent_pages - 1)  /
 				     cli->cl_max_extent_pages;
-			oa->o_undirty += nrextents * cli->cl_grant_extent_tax;
+			undirty += nrextents * cli->cl_grant_extent_tax;
 		}
+		/* Do not ask for more than OBD_MAX_GRANT - a margin for server
+		 * to add extent tax, etc.
+		 */
+		oa->o_undirty = min(undirty, OBD_MAX_GRANT -
+				    (PTLRPC_MAX_BRW_PAGES << PAGE_SHIFT)*4UL);
         }
 	oa->o_grant = cli->cl_avail_grant + cli->cl_reserved_grant;
         oa->o_dropped = cli->cl_lost_grant;
