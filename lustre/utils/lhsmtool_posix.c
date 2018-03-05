@@ -1089,10 +1089,10 @@ static int ct_archive(const struct hsm_action_item *hai, const long hal_flags)
 						 src);
 					rcf = rcf ? rcf : -errno;
 					goto fini_minor;
+				}
 				/* unlink old symlink done */
 				CT_TRACE("remove old symlink '%s' pointing"
 					 " to '%s'", src, buf);
-				}
 			} else {
 				/* symlink already ok */
 				CT_TRACE("symlink '%s' already pointing"
