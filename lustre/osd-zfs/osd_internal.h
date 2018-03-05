@@ -609,7 +609,6 @@ int __osd_attr_init(const struct lu_env *env, struct osd_device *osd,
 		    struct lu_attr *la, uint64_t parent, nvlist_t *);
 int osd_find_new_dnode(const struct lu_env *env, dmu_tx_t *tx,
 		       uint64_t oid, dnode_t **dnp);
-int osd_object_init0(const struct lu_env *env, struct osd_object *obj);
 
 /* osd_oi.c */
 int osd_oi_init(const struct lu_env *env, struct osd_device *o);
