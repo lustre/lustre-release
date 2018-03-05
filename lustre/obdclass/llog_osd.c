@@ -822,8 +822,26 @@ static void changelog_block_trim_ext(struct llog_rec_hdr *hdr,
 				extra_flags;
 		}
 
+		if (unlikely(hdr->lrh_len == 0)) {
+			/* It is corruption case, we cannot know the next rec,
+			 * jump to the last one directly to avoid dead loop. */
+			LCONSOLE(D_WARNING, "Hit invalid llog record: "
+				 "idx %u, type %u, id %u\n",
+				 hdr->lrh_index, hdr->lrh_type, hdr->lrh_id);
+			hdr = llog_rec_hdr_next(last_hdr);
+			if (unlikely(hdr == last_hdr))
+				LCONSOLE(D_WARNING, "The last record crashed: "
+					 "idx %u, type %u, id %u\n",
+					 hdr->lrh_index, hdr->lrh_type,
+					 hdr->lrh_id);
+			break;
+		}
+
 		changelog_remap_rec(rec, rec->cr_flags & flags, xflag);
 		hdr = llog_rec_hdr_next(hdr);
+		/* Yield CPU to avoid soft-lockup if there are too many records
+		 * to be handled. */
+		cond_resched();
 	} while ((char *)hdr <= (char *)last_hdr);
 }
 
