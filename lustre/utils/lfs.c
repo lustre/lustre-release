@@ -2255,59 +2255,64 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 	int rc = 0;
 
 	while (node) {
-		string = node->cy_string;
-		/* skip leading lmm_ if present, to simplify parsing */
-		if (string != NULL && strncmp(string, "lmm_", 4) == 0)
-			string += 4;
-
-		if (node->cy_type == CYAML_TYPE_STRING) {
-			if (!strcmp(string, "lcme_extent.e_end")) {
-				if (!strcmp(node->cy_valuestring, "EOF") ||
-				    !strcmp(node->cy_valuestring, "eof"))
-					lsa->lsa_comp_end = LUSTRE_EOF;
-			} else if (!strcmp(string, "pool")) {
-				lsa->lsa_pool_name = node->cy_valuestring;
-			} else if (!strcmp(string, "pattern")) {
-				if (!strcmp(node->cy_valuestring, "mdt"))
-					lsa->lsa_pattern = LLAPI_LAYOUT_MDT;
-			}
-		} else if (node->cy_type == CYAML_TYPE_NUMBER) {
-			if (!strcmp(string, "lcm_mirror_count")) {
-				lsa->lsa_mirror_count = node->cy_valueint;
-			} else if (!strcmp(string, "lcme_extent.e_start")) {
-				if (node->cy_valueint != 0 || *layout != NULL) {
-					rc = build_component(layout, lsa, true);
-					if (rc)
-						return rc;
-				}
-
-				if (node->cy_valueint == 0)
-					lsa->lsa_first_comp = true;
-
-				/* initialize lsa */
-				setstripe_args_init(lsa);
-				lsa->lsa_tgts = osts;
-			} else if (!strcmp(string, "lcme_extent.e_end")) {
-				if (node->cy_valueint == -1)
-					lsa->lsa_comp_end = LUSTRE_EOF;
-				else
-					lsa->lsa_comp_end = node->cy_valueint;
-			} else if (!strcmp(string, "stripe_count")) {
-				lsa->lsa_stripe_count = node->cy_valueint;
-			} else if (!strcmp(string, "stripe_size")) {
-				lsa->lsa_stripe_size = node->cy_valueint;
-			} else if (!strcmp(string, "stripe_offset")) {
-				lsa->lsa_stripe_off = node->cy_valueint;
-			} else if (!strcmp(string, "l_ost_idx")) {
-				osts[lsa->lsa_nr_tgts] = node->cy_valueint;
-				lsa->lsa_nr_tgts++;
-			}
-		} else if (node->cy_type == CYAML_TYPE_OBJECT) {
+		if (node->cy_type == CYAML_TYPE_OBJECT) {
 			/* go deep to sub blocks */
 			rc = build_layout_from_yaml_node(node->cy_child, layout,
 							 lsa, osts);
 			if (rc)
 				return rc;
+		} else {
+			if (node->cy_string == NULL)
+				return -EINVAL;
+
+			string = node->cy_string;
+			/* skip leading lmm_ if present, to simplify parsing */
+			if (strncmp(string, "lmm_", 4) == 0)
+				string += 4;
+
+			if (node->cy_type == CYAML_TYPE_STRING) {
+				if (!strcmp(string, "lcme_extent.e_end")) {
+					if (!strcmp(node->cy_valuestring, "EOF") ||
+					    !strcmp(node->cy_valuestring, "eof"))
+						lsa->lsa_comp_end = LUSTRE_EOF;
+				} else if (!strcmp(string, "pool")) {
+					lsa->lsa_pool_name = node->cy_valuestring;
+				} else if (!strcmp(string, "pattern")) {
+					if (!strcmp(node->cy_valuestring, "mdt"))
+						lsa->lsa_pattern = LLAPI_LAYOUT_MDT;
+				}
+			} else if (node->cy_type == CYAML_TYPE_NUMBER) {
+				if (!strcmp(string, "lcm_mirror_count")) {
+					lsa->lsa_mirror_count = node->cy_valueint;
+				} else if (!strcmp(string, "lcme_extent.e_start")) {
+					if (node->cy_valueint != 0 || *layout != NULL) {
+						rc = build_component(layout, lsa, true);
+						if (rc)
+							return rc;
+					}
+
+					if (node->cy_valueint == 0)
+						lsa->lsa_first_comp = true;
+
+					/* initialize lsa */
+					setstripe_args_init(lsa);
+					lsa->lsa_tgts = osts;
+				} else if (!strcmp(string, "lcme_extent.e_end")) {
+					if (node->cy_valueint == -1)
+						lsa->lsa_comp_end = LUSTRE_EOF;
+					else
+						lsa->lsa_comp_end = node->cy_valueint;
+				} else if (!strcmp(string, "stripe_count")) {
+					lsa->lsa_stripe_count = node->cy_valueint;
+				} else if (!strcmp(string, "stripe_size")) {
+					lsa->lsa_stripe_size = node->cy_valueint;
+				} else if (!strcmp(string, "stripe_offset")) {
+					lsa->lsa_stripe_off = node->cy_valueint;
+				} else if (!strcmp(string, "l_ost_idx")) {
+					osts[lsa->lsa_nr_tgts] = node->cy_valueint;
+					lsa->lsa_nr_tgts++;
+				}
+			}
 		}
 		node = node->cy_next;
 	}
